@@ -1,0 +1,46 @@
+@import "tailwindcss";
+
+@theme {
+  /* ブランドカラー（lib/brand.ts と同期） */
+  --color-primary: #7b3ff2;
+  --color-primary-deep: #5a2ed6;
+  --color-primary-soft: #f3ecfe;
+  --color-navy: #0f1120;
+  --color-navy-soft: #1c1f33;
+  --color-surface: #f2f4f7;
+  --color-success: #15803d;
+  --color-success-soft: #ecfdf3;
+  --color-warning: #ea580c;
+  --color-warning-soft: #fff4ec;
+  --color-danger: #dc2626;
+  --color-danger-soft: #fdecec;
+
+  --font-sans: var(--font-noto-sans-jp), "Noto Sans JP", "Inter", system-ui, sans-serif;
+}
+
+body {
+  background-color: var(--color-surface);
+  color: #111827;
+  font-feature-settings: "palt";
+}
+
+/* 数値の等幅表示（金額・集計） */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* 印刷: レシートのみを出力 */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .print-area,
+  .print-area * {
+    visibility: visible;
+  }
+  .print-area {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+  }
+}
