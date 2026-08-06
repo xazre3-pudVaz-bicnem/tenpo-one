@@ -1,0 +1,13 @@
+{
+  "name": "TENPO ONE",
+  "short_name": "TENPO ONE",
+  "description": "店舗運営を、ひとつに。飲食店向けオールインワン店舗管理",
+  "start_url": "/app/dashboard",
+  "display": "standalone",
+  "background_color": "#F2F4F7",
+  "theme_color": "#0F1120",
+  "lang": "ja",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

@@ -219,7 +219,6 @@ async function main() {
   const { data: sources } = await db.from('reservation_sources').select('*').is('organization_id', null);
   const srcWeb = sources.find((s) => s.code === 'web').id;
   const srcPhone = sources.find((s) => s.code === 'phone').id;
-  const srcWalkIn = sources.find((s) => s.code === 'walk_in').id;
 
   // ---- レジ ----
   const registers = [];
