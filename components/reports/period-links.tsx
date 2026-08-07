@@ -13,11 +13,14 @@ export function PeriodLinks({
   presets,
   currentFrom,
   currentTo,
+  extra,
 }: {
   basePath: string;
   presets: PeriodPreset[];
   currentFrom: string;
   currentTo: string;
+  /** 追加で維持するクエリ文字列（例: "&store=xxxx"） */
+  extra?: string;
 }) {
   return (
     <div className="flex flex-wrap gap-1.5" role="group" aria-label="期間プリセット">
@@ -26,7 +29,7 @@ export function PeriodLinks({
         return (
           <Link
             key={p.label}
-            href={`${basePath}?from=${p.from}&to=${p.to}`}
+            href={`${basePath}?from=${p.from}&to=${p.to}${extra ?? ''}`}
             className={cn(
               'rounded-full px-3 py-1.5 text-xs font-medium transition-colors',
               active ? 'bg-primary text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'

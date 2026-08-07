@@ -6,44 +6,43 @@ import { can } from '@/lib/permissions';
 import { yen, todayJst, daysAgoJst, formatTime, weekdayJa } from '@/lib/format';
 import { METHOD_LABELS } from '@/components/cash/labels';
 import { PageHeader } from '@/components/ui/page-header';
-import { StatCard } from '@/components/ui/stat-card';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/state';
 import { TableWrap, Table, THead, TBody, Tr, Th, Td } from '@/components/ui/table';
 import { buttonVariants } from '@/components/ui/button';
 import { PeriodLinks, type PeriodPreset } from '@/components/reports/period-links';
+import { PeriodForm } from '@/components/reports/period-form';
 import { DailySalesChart } from '@/components/reports/daily-sales-chart';
 import { HourlySalesChart } from '@/components/reports/hourly-sales-chart';
 import { WeekdaySalesChart } from '@/components/reports/weekday-sales-chart';
 import { PaymentMethodChart } from '@/components/reports/payment-method-chart';
 import { CategorySalesChart } from '@/components/reports/category-sales-chart';
+import { LinkStatCard } from '@/components/reports/stat-link';
+import { DeltaBadge } from '@/components/reports/delta-badge';
+import { PlCascade, type PlStep } from '@/components/reports/pl-cascade';
+import { calcDelta } from '@/components/reports/compare';
+import {
+  addDaysStr,
+  dateSequence,
+  diffDaysStr,
+  monthBounds,
+  mondayOfStr,
+  previousPeriod,
+  comparisonLabel,
+} from '@/components/reports/period';
+import { resolveUnitCost, summarizeItemCosts, type CostableOrderItem } from '@/components/reports/cost';
+import { estimateLaborCost, type TimeEntryForLabor, type PayrollRuleForLabor } from '@/components/reports/labor';
+import { fetchIngredientLinesByMenuItems } from '@/components/costing/data';
+import { calcWasteAmount } from '@/lib/costing';
 
-export const metadata: Metadata = { title: 'レポート' };
+export const metadata: Metadata = { title: 'レポート・経営分析' };
 
 const WEEKDAY_ORDER = ['月', '火', '水', '木', '金', '土', '日'];
-
-function monthBounds(offsetMonths: number, todayStr: string) {
-  const [y, m] = todayStr.split('-').map(Number);
-  const first = new Date(Date.UTC(y, m - 1 + offsetMonths, 1));
-  const last = new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + 1, 0));
-  return { first: first.toISOString().slice(0, 10), last: last.toISOString().slice(0, 10) };
-}
-
-function dateSequence(fromStr: string, toStr: string): string[] {
-  const dates: string[] = [];
-  let cursor = new Date(`${fromStr}T00:00:00Z`);
-  const end = new Date(`${toStr}T00:00:00Z`);
-  while (cursor <= end && dates.length < 400) {
-    dates.push(cursor.toISOString().slice(0, 10));
-    cursor = new Date(cursor.getTime() + 86400000);
-  }
-  return dates;
-}
 
 export default async function ReportsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ from?: string; to?: string }>;
+  searchParams: Promise<{ from?: string; to?: string; store?: string }>;
 }) {
   const ctx = await requirePermission('reports.view');
 
@@ -52,24 +51,25 @@ export default async function ReportsPage({
   let from = sp.from || daysAgoJst(29);
   let to = sp.to || today;
   if (from > to) [from, to] = [to, from];
-  const spanDays = Math.round((new Date(`${to}T00:00:00Z`).getTime() - new Date(`${from}T00:00:00Z`).getTime()) / 86400000);
-  if (spanDays > 366) {
-    from = new Date(new Date(`${to}T00:00:00Z`).getTime() - 366 * 86400000).toISOString().slice(0, 10);
-  }
-
-  const thisMonth = monthBounds(0, today);
-  const lastMonth = monthBounds(-1, today);
-  const presets: PeriodPreset[] = [
-    { label: '今日', from: today, to: today },
-    { label: '7日', from: daysAgoJst(6), to: today },
-    { label: '30日', from: daysAgoJst(29), to: today },
-    { label: '今月', from: thisMonth.first, to: today },
-    { label: '先月', from: lastMonth.first, to: lastMonth.last },
-  ];
+  const spanDays = diffDaysStr(from, to);
+  if (spanDays > 366) from = addDaysStr(to, -366);
 
   const supabase = await createClient();
-  const storeIds = ctx.currentStore ? [ctx.currentStore.id] : ctx.stores.map((s) => s.id);
-  const scopeLabel = ctx.currentStore ? ctx.currentStore.name : '全店舗';
+
+  // 店舗スコープ。HQロールが store= を指定した場合は一時的にその店舗へ絞り込む
+  // （本社ダッシュボードの店舗ランキングからのドリルダウン用。cookieの店舗選択自体は変更しない）
+  let storeIds = ctx.currentStore ? [ctx.currentStore.id] : ctx.stores.map((s) => s.id);
+  let scopeLabel = ctx.currentStore ? ctx.currentStore.name : '全店舗';
+  let storeOverrideId: string | null = null;
+  if (!ctx.currentStore && sp.store) {
+    const match = ctx.stores.find((s) => s.id === sp.store);
+    if (match) {
+      storeIds = [match.id];
+      scopeLabel = `${match.name}（全店舗から絞込中）`;
+      storeOverrideId = match.id;
+    }
+  }
+  const extraQ = storeOverrideId ? `&store=${storeOverrideId}` : '';
 
   if (storeIds.length === 0) {
     return (
@@ -80,76 +80,243 @@ export default async function ReportsPage({
     );
   }
 
-  const [{ data: orders }, { data: reservations }, { data: payments }, { data: orderItems }, { data: menuCategories }] =
-    await Promise.all([
-      supabase
-        .from('orders')
-        .select('id, total, guest_count, status, store_id, staff_id, discount_total, business_date, opened_at')
-        .in('store_id', storeIds)
-        .gte('business_date', from)
-        .lte('business_date', to)
-        .in('status', ['paid', 'refunded']),
-      supabase
-        .from('reservations')
-        .select('id, status, created_via, store_id, reservation_sources(name)')
-        .in('store_id', storeIds)
-        .gte('reserved_date', from)
-        .lte('reserved_date', to),
-      supabase
-        .from('payments')
-        .select('method, amount, store_id, business_date, status')
-        .in('store_id', storeIds)
-        .gte('business_date', from)
-        .lte('business_date', to)
-        .eq('status', 'completed'),
-      supabase
-        .from('order_items')
-        .select('menu_item_id, name, quantity, line_total, menu_items(name, cost, category_id), orders!inner(status, business_date)')
-        .in('store_id', storeIds)
-        .eq('status', 'active')
-        .eq('orders.status', 'paid')
-        .gte('orders.business_date', from)
-        .lte('orders.business_date', to),
-      supabase.from('menu_categories').select('id, name').eq('organization_id', ctx.organizationId),
-    ]);
+  // ---- 期間プリセット ----
+  const thisMonth = monthBounds(0, today);
+  const lastMonth = monthBounds(-1, today);
+  const yesterday = daysAgoJst(1);
+  const thisWeekMonday = mondayOfStr(today);
+  const lastWeekMonday = addDaysStr(thisWeekMonday, -7);
+  const presets: PeriodPreset[] = [
+    { label: '今日', from: today, to: today },
+    { label: '昨日', from: yesterday, to: yesterday },
+    { label: '今週', from: thisWeekMonday, to: today },
+    { label: '先週', from: lastWeekMonday, to: addDaysStr(lastWeekMonday, 6) },
+    { label: '今月', from: thisMonth.first, to: today },
+    { label: '先月', from: lastMonth.first, to: lastMonth.last },
+    { label: '過去7日', from: daysAgoJst(6), to: today },
+    { label: '過去30日', from: daysAgoJst(29), to: today },
+  ];
+
+  // 比較期間（前日比/前週比/前月比を選択期間の長さから自動選択）
+  const prev = previousPeriod(from, to);
+  const compareLabel = comparisonLabel(prev.days);
+
+  // ---- データ取得（当期間） ----
+  const [
+    { data: orders },
+    { data: reservations },
+    { data: payments },
+    { data: orderItems },
+    { data: menuCategories },
+    { data: timeEntriesData },
+    { data: payrollRulesData },
+    { data: expensesData },
+    { data: tablesData },
+    { data: wasteMovements },
+    { data: customersData },
+  ] = await Promise.all([
+    supabase
+      .from('orders')
+      .select('id, total, guest_count, status, store_id, staff_id, customer_id, table_id, discount_total, business_date, opened_at')
+      .in('store_id', storeIds)
+      .gte('business_date', from)
+      .lte('business_date', to)
+      .in('status', ['paid', 'refunded']),
+    supabase
+      .from('reservations')
+      .select('id, status, created_via, store_id, reservation_sources(id, name)')
+      .in('store_id', storeIds)
+      .gte('reserved_date', from)
+      .lte('reserved_date', to),
+    supabase
+      .from('payments')
+      .select('method, amount, store_id, business_date, status')
+      .in('store_id', storeIds)
+      .gte('business_date', from)
+      .lte('business_date', to)
+      .eq('status', 'completed'),
+    supabase
+      .from('order_items')
+      .select('menu_item_id, name, quantity, line_total, menu_items(name, cost, category_id), orders!inner(status, business_date)')
+      .in('store_id', storeIds)
+      .eq('status', 'active')
+      .eq('orders.status', 'paid')
+      .gte('orders.business_date', from)
+      .lte('orders.business_date', to),
+    supabase.from('menu_categories').select('id, name').eq('organization_id', ctx.organizationId),
+    supabase
+      .from('time_entries')
+      .select('profile_id, store_id, work_date, clock_in_at, clock_out_at, break_minutes, entry_type')
+      .in('store_id', storeIds)
+      .gte('work_date', from)
+      .lte('work_date', to),
+    supabase
+      .from('payroll_rules')
+      .select('profile_id, store_id, pay_type, base_amount, effective_from, effective_to')
+      .eq('organization_id', ctx.organizationId)
+      .eq('status', 'active'),
+    supabase
+      .from('expenses')
+      .select('amount')
+      .in('store_id', storeIds)
+      .eq('status', 'active')
+      .eq('approval_status', 'approved')
+      .gte('business_date', from)
+      .lte('business_date', to),
+    supabase.from('restaurant_tables').select('id, capacity_max').in('store_id', storeIds).eq('status', 'active'),
+    supabase
+      .from('stock_movements')
+      .select('quantity, unit_cost')
+      .in('store_id', storeIds)
+      .eq('movement_type', 'waste')
+      .gte('business_date', from)
+      .lte('business_date', to),
+    storeOverrideId
+      ? supabase.from('customers').select('total_spent').eq('primary_store_id', storeOverrideId).eq('status', 'active')
+      : ctx.currentStore
+        ? supabase.from('customers').select('total_spent').eq('primary_store_id', ctx.currentStore.id).eq('status', 'active')
+        : supabase.from('customers').select('total_spent').eq('organization_id', ctx.organizationId).eq('status', 'active'),
+  ]);
+
+  // ---- データ取得（比較期間） ----
+  const [{ data: prevOrders }, { data: prevOrderItems }, { data: prevTimeEntriesData }, { data: prevExpensesData }] = await Promise.all([
+    supabase
+      .from('orders')
+      .select('total, guest_count, status')
+      .in('store_id', storeIds)
+      .gte('business_date', prev.from)
+      .lte('business_date', prev.to)
+      .in('status', ['paid', 'refunded']),
+    supabase
+      .from('order_items')
+      .select('menu_item_id, quantity, line_total, menu_items(cost), orders!inner(status, business_date)')
+      .in('store_id', storeIds)
+      .eq('status', 'active')
+      .eq('orders.status', 'paid')
+      .gte('orders.business_date', prev.from)
+      .lte('orders.business_date', prev.to),
+    supabase
+      .from('time_entries')
+      .select('profile_id, store_id, work_date, clock_in_at, clock_out_at, break_minutes, entry_type')
+      .in('store_id', storeIds)
+      .gte('work_date', prev.from)
+      .lte('work_date', prev.to),
+    supabase
+      .from('expenses')
+      .select('amount')
+      .in('store_id', storeIds)
+      .eq('status', 'active')
+      .eq('approval_status', 'approved')
+      .gte('business_date', prev.from)
+      .lte('business_date', prev.to),
+  ]);
 
   const allOrders = orders ?? [];
   const paidOrders = allOrders.filter((o) => o.status === 'paid');
   const allReservations = reservations ?? [];
   const allOrderItems = orderItems ?? [];
   const categoryNameById = new Map((menuCategories ?? []).map((c) => [c.id, c.name]));
+  const timeEntries = (timeEntriesData ?? []) as TimeEntryForLabor[];
+  const payrollRules = (payrollRulesData ?? []) as PayrollRuleForLabor[];
+  const prevTimeEntries = (prevTimeEntriesData ?? []) as TimeEntryForLabor[];
 
-  // ---- KPI ----
+  // ---- 原価（レシピ原価優先、なければ menu_items.cost）----
+  const menuItemIds = [
+    ...new Set(
+      [...allOrderItems, ...(prevOrderItems ?? [])].map((i) => i.menu_item_id).filter((v): v is string => !!v)
+    ),
+  ];
+  const linesByItem = await fetchIngredientLinesByMenuItems(supabase, menuItemIds);
+  const costSummary = summarizeItemCosts(allOrderItems as unknown as CostableOrderItem[], linesByItem);
+  const prevCostSummary = summarizeItemCosts((prevOrderItems ?? []) as unknown as CostableOrderItem[], linesByItem);
+
+  // ---- 人件費（概算）----
+  const laborResult = estimateLaborCost(timeEntries, payrollRules);
+  const prevLaborResult = estimateLaborCost(prevTimeEntries, payrollRules);
+
+  // ---- 経費 ----
+  const expenseTotal = (expensesData ?? []).reduce((a, e) => a + e.amount, 0);
+  const prevExpenseTotal = (prevExpensesData ?? []).reduce((a, e) => a + e.amount, 0);
+
+  // ---- KPI（基本）----
   const salesTotal = paidOrders.reduce((a, o) => a + o.total, 0);
   const transactionCount = allOrders.length;
   const guestCount = allOrders.reduce((a, o) => a + o.guest_count, 0);
   const avgSpend = guestCount > 0 ? Math.floor(salesTotal / guestCount) : 0;
   const discountTotal = paidOrders.reduce((a, o) => a + o.discount_total, 0);
 
+  const prevAllOrders = prevOrders ?? [];
+  const prevPaidOrders = prevAllOrders.filter((o) => o.status === 'paid');
+  const prevSalesTotal = prevPaidOrders.reduce((a, o) => a + o.total, 0);
+  const prevGuestCount = prevAllOrders.reduce((a, o) => a + o.guest_count, 0);
+  const prevAvgSpend = prevGuestCount > 0 ? Math.floor(prevSalesTotal / prevGuestCount) : 0;
+
+  // ---- P/L カスケード ----
+  const grossProfit = salesTotal - costSummary.totalCost;
+  const storeProfit = grossProfit - laborResult.total - expenseTotal;
+  const prevGrossProfit = prevSalesTotal - prevCostSummary.totalCost;
+  const prevStoreProfit = prevGrossProfit - prevLaborResult.total - prevExpenseTotal;
+
+  const costRatePct = salesTotal > 0 ? (costSummary.totalCost / salesTotal) * 100 : 0;
+  const laborRatePct = salesTotal > 0 ? (laborResult.total / salesTotal) * 100 : 0;
+  const prevCostRatePct = prevSalesTotal > 0 ? (prevCostSummary.totalCost / prevSalesTotal) * 100 : 0;
+  const prevLaborRatePct = prevSalesTotal > 0 ? (prevLaborResult.total / prevSalesTotal) * 100 : 0;
+  const flCost = costSummary.totalCost + laborResult.total;
+  const flRatePct = salesTotal > 0 ? (flCost / salesTotal) * 100 : 0;
+
+  // ---- 客数・売上関連の指標 ----
+  const tables = tablesData ?? [];
+  const totalSeats = tables.reduce((a, t) => a + t.capacity_max, 0);
+  const totalTableCount = tables.length;
+  const turnoverRate = totalSeats > 0 ? guestCount / totalSeats : 0;
+
+  const tablesByDate = new Map<string, Set<string>>();
+  for (const o of paidOrders) {
+    if (!o.table_id) continue;
+    const set = tablesByDate.get(o.business_date) ?? new Set<string>();
+    set.add(o.table_id);
+    tablesByDate.set(o.business_date, set);
+  }
+  const periodDates = dateSequence(from, to);
+  const tableUtilizationPct =
+    totalTableCount > 0 && periodDates.length > 0
+      ? (periodDates.reduce((a, d) => a + (tablesByDate.get(d)?.size ?? 0) / totalTableCount, 0) / periodDates.length) * 100
+      : 0;
+
+  // ---- 予約系KPI ----
   const reservationCount = allReservations.length;
-  const reservationCancelled = allReservations.filter((r) => r.status === 'cancelled' || r.status === 'no_show').length;
-  const reservationCancelRate = reservationCount > 0 ? (reservationCancelled / reservationCount) * 100 : 0;
+  const reservationCompleted = allReservations.filter((r) => r.status === 'completed').length;
+  const reservationCancelled = allReservations.filter((r) => r.status === 'cancelled').length;
+  const reservationNoShow = allReservations.filter((r) => r.status === 'no_show').length;
+  const reservationWaitlisted = allReservations.filter((r) => r.status === 'waitlisted').length;
+  const reservationCompletionBase = reservationCount - reservationWaitlisted;
+  const reservationCompletionRate = reservationCompletionBase > 0 ? (reservationCompleted / reservationCompletionBase) * 100 : 0;
+  const cancelRatePct = reservationCount > 0 ? (reservationCancelled / reservationCount) * 100 : 0;
+  const noShowRatePct = reservationCount > 0 ? (reservationNoShow / reservationCount) * 100 : 0;
   const walkInCount = allReservations.filter((r) => r.created_via === 'walk_in').length;
 
-  let profitableRevenue = 0;
-  let totalCost = 0;
-  let hasExcludedCost = false;
-  for (const oi of allOrderItems) {
-    const mi = oi.menu_items as unknown as { cost: number | null } | null;
-    if (mi?.cost != null) {
-      profitableRevenue += oi.line_total;
-      totalCost += mi.cost * oi.quantity;
-    } else {
-      hasExcludedCost = true;
-    }
+  // ---- 再来店率（期間内に2回以上来店した顧客 ÷ 来店顧客）----
+  const customerOrderCounts = new Map<string, number>();
+  for (const o of paidOrders) {
+    if (!o.customer_id) continue;
+    customerOrderCounts.set(o.customer_id, (customerOrderCounts.get(o.customer_id) ?? 0) + 1);
   }
-  const grossProfit = profitableRevenue - totalCost;
-  const grossMargin = profitableRevenue > 0 ? (grossProfit / profitableRevenue) * 100 : 0;
+  const visitedCustomerCount = customerOrderCounts.size;
+  const repeatCustomerCount = [...customerOrderCounts.values()].filter((c) => c >= 2).length;
+  const repeatRatePct = visitedCustomerCount > 0 ? (repeatCustomerCount / visitedCustomerCount) * 100 : 0;
+
+  // ---- LTV平均 ----
+  const customerRows = customersData ?? [];
+  const ltvAverage = customerRows.length > 0 ? Math.floor(customerRows.reduce((a, c) => a + c.total_spent, 0) / customerRows.length) : 0;
+
+  // ---- 廃棄率 ----
+  const wasteAmount = calcWasteAmount((wasteMovements ?? []).map((m) => ({ quantity: m.quantity, unitCost: m.unit_cost })));
+  const wasteRatePct = salesTotal > 0 ? (wasteAmount / salesTotal) * 100 : 0;
 
   // ---- 日別売上 ----
   const salesByDate = new Map<string, number>();
   for (const o of paidOrders) salesByDate.set(o.business_date, (salesByDate.get(o.business_date) ?? 0) + o.total);
-  const dailyRows = dateSequence(from, to).map((date) => ({ date, sales: salesByDate.get(date) ?? 0 }));
+  const dailyRows = periodDates.map((date) => ({ date, sales: salesByDate.get(date) ?? 0 }));
   const dailyChartData = dailyRows.map((r) => ({ date: `${Number(r.date.slice(5, 7))}/${Number(r.date.slice(8, 10))}`, sales: r.sales }));
 
   // ---- 時間帯別売上 ----
@@ -188,8 +355,9 @@ export default async function ReportsPage({
   for (const oi of allOrderItems) {
     const mi = oi.menu_items as unknown as { name: string; cost: number | null; category_id: string | null } | null;
     const key = oi.menu_item_id ?? `custom:${oi.name}`;
+    const unitCost = resolveUnitCost(oi.menu_item_id, mi?.cost ?? null, linesByItem);
     const existing = productMap.get(key);
-    const lineCost = mi?.cost != null ? mi.cost * oi.quantity : null;
+    const lineCost = unitCost != null ? unitCost * oi.quantity : null;
     if (existing) {
       existing.quantity += oi.quantity;
       existing.revenue += oi.line_total;
@@ -209,7 +377,9 @@ export default async function ReportsPage({
   // ---- スタッフ別 ----
   const staffIds = [...new Set(paidOrders.map((o) => o.staff_id).filter((v): v is string => !!v))];
   const { data: staffProfiles } =
-    staffIds.length > 0 ? await supabase.from('profiles').select('id, display_name').in('id', staffIds) : { data: [] as { id: string; display_name: string }[] };
+    staffIds.length > 0
+      ? await supabase.from('profiles').select('id, display_name').in('id', staffIds)
+      : { data: [] as { id: string; display_name: string }[] };
   const staffNameById = new Map((staffProfiles ?? []).map((p) => [p.id, p.display_name]));
   const staffAgg = new Map<string, { count: number; sales: number; guests: number }>();
   for (const o of paidOrders) {
@@ -230,31 +400,33 @@ export default async function ReportsPage({
     .sort((a, b) => b.sales - a.sales);
 
   // ---- 予約経路別 ----
-  const sourceAgg = new Map<string, { total: number; completed: number; cancelled: number }>();
+  const sourceAgg = new Map<string, { id: string | null; total: number; completed: number; cancelled: number }>();
   for (const r of allReservations) {
-    const src = (r.reservation_sources as unknown as { name: string } | null)?.name ?? '未設定';
-    const cur = sourceAgg.get(src) ?? { total: 0, completed: 0, cancelled: 0 };
+    const src = r.reservation_sources as unknown as { id: string; name: string } | null;
+    const key = src?.name ?? '未設定';
+    const cur = sourceAgg.get(key) ?? { id: src?.id ?? null, total: 0, completed: 0, cancelled: 0 };
     cur.total += 1;
     if (r.status === 'completed') cur.completed += 1;
     if (r.status === 'cancelled' || r.status === 'no_show') cur.cancelled += 1;
-    sourceAgg.set(src, cur);
+    sourceAgg.set(key, cur);
   }
   const sourceRows = [...sourceAgg.entries()]
     .map(([name, v]) => ({
       name,
-      total: v.total,
+      ...v,
       completionRate: v.total > 0 ? (v.completed / v.total) * 100 : 0,
       cancelRate: v.total > 0 ? (v.cancelled / v.total) * 100 : 0,
     }))
     .sort((a, b) => b.total - a.total);
 
-  // ---- 店舗別比較（全店舗表示時のみ）----
-  let storeComparison: { name: string; sales: number; count: number; guests: number }[] = [];
-  if (!ctx.currentStore && ctx.stores.length > 1) {
+  // ---- 店舗別比較（全店舗表示かつ絞込なしの場合のみ）----
+  let storeComparison: { id: string; name: string; sales: number; count: number; guests: number }[] = [];
+  if (!ctx.currentStore && !storeOverrideId && ctx.stores.length > 1) {
     storeComparison = ctx.stores.map((s) => {
       const storeOrders = allOrders.filter((o) => o.store_id === s.id);
       const storePaid = storeOrders.filter((o) => o.status === 'paid');
       return {
+        id: s.id,
         name: s.name,
         sales: storePaid.reduce((a, o) => a + o.total, 0),
         count: storeOrders.length,
@@ -262,6 +434,18 @@ export default async function ReportsPage({
       };
     });
   }
+
+  const ordersHref = `/app/orders?from=${from}&to=${to}`;
+  const reservationsHref = `/app/reservations/list?from=${from}&to=${to}`;
+
+  const plSteps: PlStep[] = [
+    { label: '売上', amount: salesTotal, href: ordersHref, emphasis: true },
+    { label: '原価', amount: costSummary.totalCost, isDeduction: true, href: '/app/costing?tab=items', note: costSummary.excludedCount > 0 ? `原価未設定の品目${costSummary.excludedCount}件（売上${yen(costSummary.excludedRevenue)}）は計算から除外` : undefined },
+    { label: '粗利益', amount: grossProfit, href: '/app/reports', emphasis: true },
+    { label: '人件費（概算）', amount: laborResult.total, isDeduction: true, href: '/app/payroll', note: '時給ルール×実働時間の概算（月給者は月給÷21日で日割り）。割増・手当は含みません' },
+    { label: '経費', amount: expenseTotal, isDeduction: true, href: `/app/expenses?from=${from}&to=${to}`, note: '承認済み経費のみ（請求書・支払管理は含みません）' },
+    { label: '店舗利益', amount: storeProfit, href: '/app/reports', emphasis: true },
+  ];
 
   return (
     <div>
@@ -277,26 +461,82 @@ export default async function ReportsPage({
         }
       />
 
-      <PeriodLinks basePath="/app/reports" presets={presets} currentFrom={from} currentTo={to} />
-
-      <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-5">
-        <StatCard label="売上" value={yen(salesTotal)} tone="primary" />
-        <StatCard label="会計件数" value={`${transactionCount.toLocaleString('ja-JP')}件`} />
-        <StatCard label="客数" value={`${guestCount.toLocaleString('ja-JP')}名`} />
-        <StatCard label="客単価" value={yen(avgSpend)} />
-        <StatCard label="予約数" value={`${reservationCount.toLocaleString('ja-JP')}件`} />
-        <StatCard
-          label="予約キャンセル率"
-          value={`${reservationCancelRate.toFixed(1)}%`}
-          tone={reservationCancelRate > 0 ? 'warning' : 'default'}
-          sub={`${reservationCancelled}件`}
-        />
-        <StatCard label="ウォークイン数" value={`${walkInCount.toLocaleString('ja-JP')}件`} />
-        <StatCard label="値引き額合計" value={yen(discountTotal)} />
-        <StatCard label="粗利益" value={yen(grossProfit)} tone="success" />
-        <StatCard label="粗利率" value={`${grossMargin.toFixed(1)}%`} />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <PeriodLinks basePath="/app/reports" presets={presets} currentFrom={from} currentTo={to} extra={extraQ} />
+        <PeriodForm action="/app/reports" from={from} to={to} hidden={{ store: storeOverrideId ?? undefined }} />
       </div>
-      {hasExcludedCost && <p className="mt-2 text-xs text-gray-500">※ 原価未設定品目は粗利計算から除外しています</p>}
+      {storeOverrideId && (
+        <p className="mt-2 text-xs text-gray-500">
+          {scopeLabel.replace('（全店舗から絞込中）', '')} に絞り込み中です。
+          <Link href={`/app/reports?from=${from}&to=${to}`} className="ml-1 font-medium text-primary hover:underline">
+            全店舗表示に戻す
+          </Link>
+        </p>
+      )}
+
+      {/* ---- P/Lカスケード ---- */}
+      <Card className="mt-5">
+        <CardHeader>
+          <CardTitle>P/Lカスケード（売上 − 原価 = 粗利益 − 人件費 − 経費 = 店舗利益）</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <PlCascade steps={plSteps} />
+          <div className="mt-4 flex flex-wrap gap-x-6 gap-y-1">
+            <DeltaBadge delta={calcDelta(salesTotal, prevSalesTotal)} label={`売上 ${compareLabel}`} />
+            <DeltaBadge delta={calcDelta(grossProfit, prevGrossProfit)} label={`粗利益 ${compareLabel}`} />
+            <DeltaBadge delta={calcDelta(storeProfit, prevStoreProfit)} label={`店舗利益 ${compareLabel}`} />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ---- KPIグリッド ---- */}
+      <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-6">
+        <LinkStatCard
+          href={ordersHref}
+          label="客単価"
+          value={yen(avgSpend)}
+          sub={<DeltaBadge delta={calcDelta(avgSpend, prevAvgSpend)} label={compareLabel} />}
+        />
+        <LinkStatCard
+          href={ordersHref}
+          label="客数"
+          value={`${guestCount.toLocaleString('ja-JP')}名`}
+          sub={<DeltaBadge delta={calcDelta(guestCount, prevGuestCount)} label={compareLabel} />}
+        />
+        <LinkStatCard href="/app/costing?tab=items" label="FLコスト" value={yen(flCost)} sub="原価+人件費" />
+        <LinkStatCard href="/app/costing?tab=items" label="FL比率" value={`${flRatePct.toFixed(1)}%`} tone={flRatePct > 60 ? 'warning' : 'default'} />
+        <LinkStatCard
+          href="/app/costing?tab=items"
+          label="原価率"
+          value={`${costRatePct.toFixed(1)}%`}
+          sub={<DeltaBadge delta={calcDelta(costRatePct, prevCostRatePct)} label={compareLabel} positiveIsGood={false} />}
+        />
+        <LinkStatCard
+          href="/app/payroll"
+          label="人件費率"
+          value={`${laborRatePct.toFixed(1)}%`}
+          sub={<DeltaBadge delta={calcDelta(laborRatePct, prevLaborRatePct)} label={compareLabel} positiveIsGood={false} />}
+        />
+        <LinkStatCard href={reservationsHref} label="回転率" value={`${turnoverRate.toFixed(2)}回`} sub={`客数÷総席数(${totalSeats}席)`} />
+        <LinkStatCard href={ordersHref} label="テーブル稼働率" value={`${tableUtilizationPct.toFixed(1)}%`} sub="簡易計算（日別利用テーブル数の平均）" />
+        <LinkStatCard href={`${reservationsHref}&status=completed`} label="予約成約率" value={`${reservationCompletionRate.toFixed(1)}%`} sub={`${reservationCompleted}/${reservationCompletionBase}件`} />
+        <LinkStatCard href={`${reservationsHref}&status=cancelled`} label="キャンセル率" value={`${cancelRatePct.toFixed(1)}%`} tone={cancelRatePct > 10 ? 'warning' : 'default'} />
+        <LinkStatCard href={`${reservationsHref}&status=no_show`} label="無断キャンセル率" value={`${noShowRatePct.toFixed(1)}%`} tone={noShowRatePct > 3 ? 'danger' : 'default'} />
+        <LinkStatCard href="/app/customers?segment=repeater" label="再来店率" value={`${repeatRatePct.toFixed(1)}%`} sub={`${repeatCustomerCount}/${visitedCustomerCount}人（期間内）`} />
+        <LinkStatCard href="/app/customers?sort=total_spent_desc" label="LTV平均" value={yen(ltvAverage)} sub={`累計購入額の平均（${customerRows.length}人）`} />
+        <LinkStatCard href={`/app/costing?tab=waste&from=${from}&to=${to}`} label="廃棄率" value={`${wasteRatePct.toFixed(1)}%`} tone={wasteRatePct > 3 ? 'warning' : 'default'} sub={yen(wasteAmount)} />
+      </div>
+      <p className="mt-2 text-xs text-gray-400">
+        ※ テーブル稼働率＝期間内の各日について「注文のあったテーブル数÷店舗のテーブル数」を算出し、日数で平均した簡易指標です。再来店率は選択期間内の来店回数（2回以上）で判定した近似値です。
+      </p>
+
+      <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-5">
+        <LinkStatCard href={ordersHref} label="会計件数" value={`${transactionCount.toLocaleString('ja-JP')}件`} />
+        <LinkStatCard href={reservationsHref} label="予約数" value={`${reservationCount.toLocaleString('ja-JP')}件`} />
+        <LinkStatCard href={reservationsHref} label="ウォークイン数" value={`${walkInCount.toLocaleString('ja-JP')}件`} />
+        <LinkStatCard href={ordersHref} label="値引き額合計" value={yen(discountTotal)} />
+        <LinkStatCard href={ordersHref} label="粗利率（対売上）" value={`${salesTotal > 0 ? ((grossProfit / salesTotal) * 100).toFixed(1) : '0.0'}%`} tone="success" />
+      </div>
 
       <div className="mt-5 grid gap-5 xl:grid-cols-3">
         <Card className="xl:col-span-2">
@@ -307,7 +547,9 @@ export default async function ReportsPage({
             {salesTotal === 0 ? (
               <EmptyState title="この期間の売上データがありません" className="border-0 py-10" />
             ) : (
-              <DailySalesChart data={dailyChartData} />
+              <Link href={ordersHref} className="block">
+                <DailySalesChart data={dailyChartData} />
+              </Link>
             )}
           </CardContent>
         </Card>
@@ -320,7 +562,9 @@ export default async function ReportsPage({
             {paymentChartData.length === 0 ? (
               <EmptyState title="支払データがありません" className="border-0 py-10" />
             ) : (
-              <PaymentMethodChart data={paymentChartData} />
+              <Link href={ordersHref} className="block">
+                <PaymentMethodChart data={paymentChartData} />
+              </Link>
             )}
           </CardContent>
         </Card>
@@ -330,7 +574,9 @@ export default async function ReportsPage({
             <CardTitle>時間帯別売上</CardTitle>
           </CardHeader>
           <CardContent>
-            <HourlySalesChart data={hourlyChartData} />
+            <Link href={ordersHref} className="block">
+              <HourlySalesChart data={hourlyChartData} />
+            </Link>
           </CardContent>
         </Card>
 
@@ -339,7 +585,9 @@ export default async function ReportsPage({
             <CardTitle>曜日別売上</CardTitle>
           </CardHeader>
           <CardContent>
-            <WeekdaySalesChart data={weekdayChartData} />
+            <Link href={ordersHref} className="block">
+              <WeekdaySalesChart data={weekdayChartData} />
+            </Link>
           </CardContent>
         </Card>
 
@@ -351,7 +599,9 @@ export default async function ReportsPage({
             {categoryChartData.length === 0 ? (
               <EmptyState title="商品データがありません" className="border-0 py-10" />
             ) : (
-              <CategorySalesChart data={categoryChartData} />
+              <Link href="/app/costing?tab=items" className="block">
+                <CategorySalesChart data={categoryChartData} />
+              </Link>
             )}
           </CardContent>
         </Card>
@@ -371,15 +621,21 @@ export default async function ReportsPage({
                     <Th className="text-right">売上</Th>
                     <Th className="text-right">会計件数</Th>
                     <Th className="text-right">客数</Th>
+                    <Th />
                   </Tr>
                 </THead>
                 <TBody>
                   {storeComparison.map((s) => (
-                    <Tr key={s.name}>
+                    <Tr key={s.id}>
                       <Td className="font-medium text-navy">{s.name}</Td>
                       <Td className="text-right tabular-nums">{yen(s.sales)}</Td>
                       <Td className="text-right tabular-nums">{s.count}件</Td>
                       <Td className="text-right tabular-nums">{s.guests}名</Td>
+                      <Td>
+                        <Link href={`/app/reports?store=${s.id}&from=${from}&to=${to}`} className="text-xs font-medium text-primary hover:underline whitespace-nowrap">
+                          この店舗を見る
+                        </Link>
+                      </Td>
                     </Tr>
                   ))}
                 </TBody>
@@ -409,6 +665,7 @@ export default async function ReportsPage({
                       <Th className="text-right">売上</Th>
                       <Th className="text-right">原価</Th>
                       <Th className="text-right">粗利</Th>
+                      <Th />
                     </Tr>
                   </THead>
                   <TBody>
@@ -419,6 +676,11 @@ export default async function ReportsPage({
                         <Td className="text-right tabular-nums">{yen(p.revenue)}</Td>
                         <Td className="text-right tabular-nums">{p.cost == null ? '—' : yen(p.cost)}</Td>
                         <Td className="text-right tabular-nums">{p.cost == null ? '—' : yen(p.revenue - p.cost)}</Td>
+                        <Td>
+                          <Link href={`/app/costing?tab=items&q=${encodeURIComponent(p.name)}`} className="text-xs font-medium text-primary hover:underline whitespace-nowrap">
+                            原価
+                          </Link>
+                        </Td>
                       </Tr>
                     ))}
                   </TBody>
@@ -487,7 +749,11 @@ export default async function ReportsPage({
                   <TBody>
                     {sourceRows.map((s) => (
                       <Tr key={s.name}>
-                        <Td className="font-medium text-navy">{s.name}</Td>
+                        <Td>
+                          <Link href={`${reservationsHref}${s.id ? `&source=${s.id}` : ''}`} className="font-medium text-primary hover:underline">
+                            {s.name}
+                          </Link>
+                        </Td>
                         <Td className="text-right tabular-nums">{s.total}件</Td>
                         <Td className="text-right tabular-nums">{s.completionRate.toFixed(1)}%</Td>
                         <Td className="text-right tabular-nums">{s.cancelRate.toFixed(1)}%</Td>
