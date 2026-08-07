@@ -1,7 +1,11 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
-export async function middleware(request: NextRequest) {
+/**
+ * Next.js 16 の proxy 規約（旧 middleware）。
+ * Supabaseセッションの更新と /app・/admin の認証ガードを行う。
+ */
+export default async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(
