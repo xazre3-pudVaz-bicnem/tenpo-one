@@ -10,8 +10,14 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useToast } from '@/components/ui/toast';
-import { CheckoutDialog, type CheckoutOrder } from './checkout-dialog';
+import {
+  CheckoutDialog,
+  type CheckoutOrder,
+  type PosPaymentAvailability,
+  type PosTerminalReader,
+} from './checkout-dialog';
 import type { CheckoutPayment } from '@/app/app/pos/actions';
+import type { TerminalPaymentState } from '@/app/app/pos/payment-actions';
 
 const ORDER_TYPE_LABELS: Record<string, string> = {
   dine_in: '店内',
@@ -71,11 +77,16 @@ export function PosScreen({
   tableName,
   staffName,
   canDiscount,
+  terminalReaders,
+  paymentAvailability,
   addItemAction,
   updateQtyAction,
   cancelItemAction,
   setDiscountAction,
   checkoutAction,
+  startTerminalPaymentAction,
+  checkTerminalPaymentAction,
+  cancelTerminalPaymentAction,
 }: {
   order: PosOrder;
   items: PosOrderItem[];
@@ -84,6 +95,8 @@ export function PosScreen({
   tableName: string | null;
   staffName: string | null;
   canDiscount: boolean;
+  terminalReaders: PosTerminalReader[];
+  paymentAvailability: PosPaymentAvailability;
   addItemAction: (orderId: string, menuItemId: string) => Promise<void>;
   updateQtyAction: (orderId: string, orderItemId: string, delta: number) => Promise<void>;
   cancelItemAction: (orderId: string, orderItemId: string, reason: string) => Promise<void>;
@@ -92,6 +105,9 @@ export function PosScreen({
     orderId: string,
     payments: CheckoutPayment[]
   ) => Promise<{ ok: true; warning: string | null }>;
+  startTerminalPaymentAction: (orderId: string, readerId: string) => Promise<TerminalPaymentState>;
+  checkTerminalPaymentAction: (localIntentId: string) => Promise<TerminalPaymentState>;
+  cancelTerminalPaymentAction: (localIntentId: string) => Promise<TerminalPaymentState>;
 }) {
   const router = useRouter();
   const { toast } = useToast();
@@ -141,6 +157,11 @@ export function PosScreen({
   const handleCheckout = async (payments: CheckoutPayment[]) => {
     const result = await checkoutAction(order.id, payments);
     toast(result.warning ?? '会計が完了しました', result.warning ? 'error' : 'success');
+    router.push(`/app/pos/receipt/${order.id}`);
+  };
+
+  const handleTerminalPaymentFinalized = () => {
+    toast('決済が完了しました', 'success');
     router.push(`/app/pos/receipt/${order.id}`);
   };
 
@@ -332,6 +353,12 @@ export function PosScreen({
         discountReason={order.discountReason}
         setDiscountAction={setDiscountAction}
         onCheckout={handleCheckout}
+        terminalReaders={terminalReaders}
+        paymentAvailability={paymentAvailability}
+        startTerminalPaymentAction={startTerminalPaymentAction}
+        checkTerminalPaymentAction={checkTerminalPaymentAction}
+        cancelTerminalPaymentAction={cancelTerminalPaymentAction}
+        onTerminalPaymentFinalized={handleTerminalPaymentFinalized}
       />
     </div>
   );

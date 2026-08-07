@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
 import { yen, todayJst } from '@/lib/format';
 import { bookingErrorMessage, type BookingStore, type BookingSlot, type CreateReservationResult } from './types';
+import { createBookingCheckout } from '@/app/(public)/booking-payment-actions';
 
 const SEAT_OPTIONS = [
   { value: '', label: '指定なし' },
@@ -91,6 +92,8 @@ export function BookingWizard({ store }: { store: BookingStore }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [paymentOffer, setPaymentOffer] = useState<{ code: string; url: string; amount: number } | null>(null);
+
   const partySize = adults + children;
   const maxDate = addDaysJst(store.booking_window_days);
   const partyValid = partySize >= 1 && partySize <= store.max_party_size;
@@ -150,12 +153,58 @@ export function BookingWizard({ store }: { store: BookingStore }) {
         return;
       }
       const result = data as CreateReservationResult;
+
+      // 予約は成立済み。オンライン決済が必要な店舗設定であれば決済案内を挟む。
+      // 決済案内の取得に失敗しても予約自体は成立しているため、通常の完了ページへ進む。
+      try {
+        const checkout = await createBookingCheckout(result.code, phone.trim());
+        if (checkout.ok && checkout.url) {
+          setPaymentOffer({ code: result.code, url: checkout.url, amount: checkout.amount ?? 0 });
+          setSubmitting(false);
+          return;
+        }
+      } catch {
+        // 決済案内なしで完了ページへ進める
+      }
       router.push(`/book/${store.slug}/complete?code=${encodeURIComponent(result.code)}`);
     } catch {
       setError(bookingErrorMessage(null));
       setSubmitting(false);
     }
   };
+
+  if (paymentOffer) {
+    return (
+      <div className="mx-auto max-w-lg px-4 py-10 text-center">
+        <h2 className="text-lg font-bold text-navy">ご予約を承りました</h2>
+        <p className="mt-2 text-sm text-gray-600">
+          予約コード{' '}
+          <span className="font-bold tracking-wider text-primary-deep tabular-nums">{paymentOffer.code}</span>
+        </p>
+        <div className="mt-6 rounded-xl border border-gray-200 bg-white p-6">
+          <p className="text-sm text-gray-700">
+            このご予約はオンライン決済が必要です。以下のボタンからお進みください。
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              window.location.href = paymentOffer.url;
+            }}
+            className="mt-4 h-12 w-full rounded-lg bg-primary text-sm font-semibold text-white"
+          >
+            オンライン決済へ進む（{yen(paymentOffer.amount)}）
+          </button>
+          <button
+            type="button"
+            onClick={() => router.push(`/book/${store.slug}/complete?code=${encodeURIComponent(paymentOffer.code)}`)}
+            className="mt-4 text-xs text-gray-400 underline"
+          >
+            決済をスキップして完了ページへ進む
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-lg pb-28">

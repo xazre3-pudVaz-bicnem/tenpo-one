@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import {
-  Store, Clock, LayoutGrid, UtensilsCrossed, Percent, CalendarClock, Printer, ScrollText, ChevronRight,
+  Store, Clock, LayoutGrid, UtensilsCrossed, Percent, CalendarClock, Printer, CreditCard, ScrollText, ChevronRight,
 } from 'lucide-react';
 import { requirePermission } from '@/lib/auth';
 import { can } from '@/lib/permissions';
@@ -69,6 +69,13 @@ export default async function SettingsHubPage() {
       title: 'レジ・プリンター',
       description: 'レジ端末とレシート・厨房プリンターの設定',
       icon: Printer,
+      visible: true,
+    },
+    {
+      href: '/app/settings/payments',
+      title: '決済・端末',
+      description: 'Stripe接続・決済端末・予約事前決済',
+      icon: CreditCard,
       visible: true,
     },
     {

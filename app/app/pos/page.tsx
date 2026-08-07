@@ -8,6 +8,7 @@ import { EmptyState } from '@/components/ui/state';
 import { OrderPicker } from '@/components/pos/order-picker';
 import { PosScreen } from '@/components/pos/pos-screen';
 import { addItem, updateQty, cancelItem, setDiscount, checkout, startTakeout } from './actions';
+import { startTerminalPayment, checkTerminalPayment, cancelTerminalPayment, getPaymentAvailability } from './payment-actions';
 
 export const metadata: Metadata = { title: 'POSレジ' };
 
@@ -111,6 +112,42 @@ export default async function PosPage({
   const table = order.restaurant_tables as unknown as { name: string } | null;
   const staff = order.profiles as unknown as { display_name: string } | null;
 
+  const canCheckout = can(ctx.role, 'pos.checkout');
+  let paymentAvailability = { configured: false, testMode: false };
+  let terminalReaders: {
+    id: string;
+    label: string;
+    deviceType: string | null;
+    isSimulated: boolean;
+    status: string;
+    lastSeenAt: string | null;
+  }[] = [];
+
+  if (canCheckout) {
+    const [availability, { data: readers }] = await Promise.all([
+      getPaymentAvailability(),
+      supabase
+        .from('terminal_readers')
+        .select('id, label, device_type, is_simulated, status, last_seen_at')
+        .eq('store_id', store.id),
+    ]);
+    paymentAvailability = availability;
+    const statusOrder: Record<string, number> = { online: 0, unknown: 1, offline: 2 };
+    terminalReaders = (readers ?? [])
+      .map((r) => ({
+        id: r.id,
+        label: r.label,
+        deviceType: r.device_type,
+        isSimulated: r.is_simulated,
+        status: r.status,
+        lastSeenAt: r.last_seen_at,
+      }))
+      .sort(
+        (a, b) =>
+          (statusOrder[a.status] ?? 1) - (statusOrder[b.status] ?? 1) || a.label.localeCompare(b.label, 'ja')
+      );
+  }
+
   return (
     <div className="-m-4 lg:-m-6">
       <PosScreen
@@ -132,11 +169,16 @@ export default async function PosPage({
         tableName={table?.name ?? null}
         staffName={staff?.display_name ?? null}
         canDiscount={can(ctx.role, 'pos.discount')}
+        terminalReaders={terminalReaders}
+        paymentAvailability={paymentAvailability}
         addItemAction={addItem}
         updateQtyAction={updateQty}
         cancelItemAction={cancelItem}
         setDiscountAction={setDiscount}
         checkoutAction={checkout}
+        startTerminalPaymentAction={startTerminalPayment}
+        checkTerminalPaymentAction={checkTerminalPayment}
+        cancelTerminalPaymentAction={cancelTerminalPayment}
       />
     </div>
   );

@@ -3,7 +3,15 @@
 import { useMemo, useState } from 'react';
 import { Loader2, Phone, XCircle } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
+import { yen } from '@/lib/format';
 import { bookingErrorMessage, type PublicReservation } from './types';
+import { createBookingCheckout, getBookingPaymentStatus } from '@/app/(public)/booking-payment-actions';
+
+interface BookingPaymentStatus {
+  paid: boolean;
+  amount: number | null;
+  required: boolean;
+}
 
 const STATUS_LABEL: Record<string, string> = {
   pending: '確認中',
@@ -23,7 +31,17 @@ function isPastDeadline(deadline: Date): boolean {
   return Date.now() >= deadline.getTime();
 }
 
-export function BookingLookup({ code: initialCode }: { code?: string }) {
+export function BookingLookup({
+  code: initialCode,
+  paid = false,
+  paymentCancelled = false,
+}: {
+  code?: string;
+  /** 決済完了後のリダイレクト（?paid=1） */
+  paid?: boolean;
+  /** 決済キャンセル後のリダイレクト（?payment=cancelled） */
+  paymentCancelled?: boolean;
+}) {
   const supabase = useMemo(() => createClient(), []);
 
   const [code, setCode] = useState(initialCode ?? '');
@@ -31,6 +49,10 @@ export function BookingLookup({ code: initialCode }: { code?: string }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reservation, setReservation] = useState<PublicReservation | null>(null);
+
+  const [paymentStatus, setPaymentStatus] = useState<BookingPaymentStatus | null>(null);
+  const [checkoutPending, setCheckoutPending] = useState(false);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
 
   const [cancelReason, setCancelReason] = useState('');
   const [cancelling, setCancelling] = useState(false);
@@ -45,6 +67,7 @@ export function BookingLookup({ code: initialCode }: { code?: string }) {
     setLoading(true);
     setError(null);
     setReservation(null);
+    setPaymentStatus(null);
     const { data, error: rpcError } = await supabase.rpc('get_public_reservation', {
       p_code: code.trim(),
       p_phone: phone.trim(),
@@ -54,7 +77,32 @@ export function BookingLookup({ code: initialCode }: { code?: string }) {
       setError(bookingErrorMessage(rpcError?.message ?? 'NOT_FOUND'));
       return;
     }
-    setReservation(data as PublicReservation);
+    const res = data as PublicReservation;
+    setReservation(res);
+    try {
+      const status = await getBookingPaymentStatus(res.code, phone.trim());
+      setPaymentStatus(status);
+    } catch {
+      // 決済状態の取得に失敗しても予約閲覧は継続できる
+    }
+  };
+
+  const handlePayNow = async () => {
+    if (!reservation) return;
+    setCheckoutPending(true);
+    setCheckoutError(null);
+    try {
+      const result = await createBookingCheckout(reservation.code, phone.trim());
+      if (result.ok && result.url) {
+        window.location.href = result.url;
+        return;
+      }
+      setCheckoutError(result.error ?? '決済ページの作成に失敗しました');
+    } catch {
+      setCheckoutError('決済ページの作成に失敗しました');
+    } finally {
+      setCheckoutPending(false);
+    }
   };
 
   const handleCancel = async () => {
@@ -124,6 +172,30 @@ export function BookingLookup({ code: initialCode }: { code?: string }) {
               <dd className="font-semibold text-navy">{STATUS_LABEL[status] ?? status}</dd>
             </div>
           </dl>
+
+          {paymentStatus?.paid && (
+            <div className="mt-5 rounded-lg bg-success-soft px-4 py-3 text-sm font-medium text-success">
+              事前決済済み（{yen(paymentStatus.amount ?? 0)}）
+            </div>
+          )}
+
+          {paymentStatus && !paymentStatus.paid && paymentStatus.required && (
+            <div className="mt-5 space-y-2 rounded-lg border border-warning/30 bg-warning-soft px-4 py-3">
+              <p className="text-xs text-warning">
+                オンライン決済が未完了です{paymentStatus.amount ? `（${yen(paymentStatus.amount)}）` : ''}。
+              </p>
+              {checkoutError && <p className="text-xs text-danger">{checkoutError}</p>}
+              <button
+                type="button"
+                onClick={handlePayNow}
+                disabled={checkoutPending}
+                className="flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-primary text-sm font-semibold text-white disabled:opacity-50"
+              >
+                {checkoutPending && <Loader2 className="h-4 w-4 animate-spin" />}
+                オンライン決済へ進む
+              </button>
+            </div>
+          )}
 
           {cancelled && (
             <div className="mt-5 rounded-lg bg-success-soft px-4 py-3 text-sm font-medium text-success">
@@ -199,6 +271,17 @@ export function BookingLookup({ code: initialCode }: { code?: string }) {
 
   return (
     <div className="mx-auto max-w-md px-4 py-10">
+      {paid && (
+        <div className="mb-4 rounded-xl bg-success-soft px-4 py-3 text-center text-sm font-medium text-success">
+          お支払いが完了しました。
+        </div>
+      )}
+      {paymentCancelled && (
+        <div className="mb-4 rounded-xl bg-warning-soft px-4 py-3 text-center text-sm font-medium text-warning">
+          お支払いは完了していません。予約は保持されています。
+        </div>
+      )}
+
       <h1 className="text-center text-lg font-bold text-navy">ご予約の確認・キャンセル</h1>
       <p className="mt-2 text-center text-sm text-gray-500">予約コードとお電話番号を入力してください。</p>
 

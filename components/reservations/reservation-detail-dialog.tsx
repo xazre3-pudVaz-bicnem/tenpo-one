@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useEffect, useMemo, useState, useTransition } from 'react';
 import { Dialog } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Label, Textarea } from '@/components/ui/input';
 import { useToast } from '@/components/ui/toast';
-import { formatDate, formatTime } from '@/lib/format';
+import { createClient } from '@/lib/supabase/client';
+import { formatDate, formatTime, yen } from '@/lib/format';
 import { updateReservationMemo } from '@/app/app/reservations/actions';
 import { STATUS_LABEL, STATUS_BADGE_TONE, CREATED_VIA_LABEL } from './status';
 import type { ReservationListRow } from './list-types';
@@ -28,8 +29,34 @@ export function ReservationDetailDialog({
   onClose: () => void;
 }) {
   const { toast } = useToast();
+  const supabase = useMemo(() => createClient(), []);
   const [memo, setMemo] = useState(reservation?.memo ?? '');
   const [pending, startTransition] = useTransition();
+  const [prepay, setPrepay] = useState<{ reservationId: string; amount: number } | null>(null);
+
+  useEffect(() => {
+    if (!reservation) return;
+    const reservationId = reservation.id;
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from('payment_intents')
+        .select('amount')
+        .eq('reservation_id', reservationId)
+        .in('purpose', ['booking_prepay', 'booking_deposit'])
+        .eq('status', 'succeeded')
+        .limit(1)
+        .maybeSingle();
+      if (!cancelled) {
+        setPrepay(data ? { reservationId, amount: data.amount } : null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [reservation, supabase]);
+
+  const activePrepay = reservation && prepay?.reservationId === reservation.id ? prepay : null;
 
   if (!reservation) return null;
 
@@ -46,9 +73,12 @@ export function ReservationDetailDialog({
 
   return (
     <Dialog open={!!reservation} onClose={onClose} title="予約詳細" wide>
-      <div className="mb-3 flex items-center justify-between">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <span className="text-lg font-bold tracking-wider text-primary-deep tabular-nums">{reservation.code}</span>
-        <Badge tone={STATUS_BADGE_TONE[reservation.status]}>{STATUS_LABEL[reservation.status]}</Badge>
+        <div className="flex items-center gap-2">
+          {activePrepay && <Badge tone="success">事前決済済み {yen(activePrepay.amount)}</Badge>}
+          <Badge tone={STATUS_BADGE_TONE[reservation.status]}>{STATUS_LABEL[reservation.status]}</Badge>
+        </div>
       </div>
       <dl>
         <Row label="日時" value={`${formatDate(reservation.reservedDate)} ${formatTime(reservation.startAt)}〜${formatTime(reservation.endAt)}`} />

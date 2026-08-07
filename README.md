@@ -126,6 +126,21 @@ e2e/               # Playwright（Supabase環境接続時に実行）
 
 詳細は `docs/` を参照。未確定の仕様と仮定は `docs/open-questions.md` に記録している。
 
+## 決済（Stripe・テストモード）
+
+`payment_provider` 抽象化レイヤー（`lib/payments/`）の第一対応プロバイダーとしてStripeを実装。
+設計・Dashboard設定・実機導入手順は `docs/payment-stripe.md` を参照。
+
+- POS対面決済: Stripe Terminal（サーバー駆動・simulated readerで検証）
+- 予約の事前決済/予約金: Stripe Checkout（hosted）
+- Webhook: `/api/webhooks/stripe`（署名検証+イベントID冪等化）
+- カード情報は一切保存しない。`STRIPE_SECRET_KEY` はサーバー専用（テストキーから開始）
+
+```bash
+# Stripeテストキー設定後の疎通検証（simulated reader → 決済 → 返金 → Checkout）
+node --env-file=.env.local scripts/verify-stripe.mjs
+```
+
 ## E2Eテスト（Playwright）
 
 Supabase環境とseed投入が前提。`e2e/README.md` を参照。
