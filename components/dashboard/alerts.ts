@@ -2,14 +2,18 @@
  * 本社ダッシュボード・店舗ダッシュボード共通のアラート収集。
  * 該当するものだけを返す（呼び出し側は空配列なら何も表示しない）。
  * 各アラートは該当画面への絞込リンクを持つ。
+ * 閾値は alert_rules（店舗override > 企業既定 > コード既定値）から解決する（components/dashboard/alert-rules.ts）。
  */
 import type { createClient } from '@/lib/supabase/server';
 import { daysAgoJst, todayJst, weekdayJa } from '@/lib/format';
 import { addDaysStr, mondayOfStr } from '@/components/reports/period';
-import { isSpike } from '@/components/reports/compare';
 import { UNPAID_INVOICE_STATUSES } from '@/components/invoices/labels';
 import { OCCUPYING_STATUSES } from '@/components/reservations/constants';
 import { calcWasteAmount } from '@/lib/costing';
+import { summarizeItemCosts, type CostableOrderItem } from '@/components/reports/cost';
+import { estimateLaborCost, type TimeEntryForLabor, type PayrollRuleForLabor } from '@/components/reports/labor';
+import { fetchIngredientLinesByMenuItems } from '@/components/costing/data';
+import { loadResolvedThresholds } from './alert-rules';
 
 type SupabaseClient = Awaited<ReturnType<typeof createClient>>;
 
@@ -47,7 +51,6 @@ export async function collectDashboardAlerts(
   const today = todayJst();
   const yesterday = daysAgoJst(1);
   const weekAgo = daysAgoJst(6);
-  const twoWeeksAgo = daysAgoJst(13);
   const fourWeeksAgo = daysAgoJst(27);
   const in3Days = addDaysStr(today, 2);
   const in7Days = addDaysStr(today, 6);
@@ -62,13 +65,16 @@ export async function collectDashboardAlerts(
     openEntriesRes,
     lowStockRes,
     wasteRes,
-    refundsThisWeekRes,
-    refundsLastWeekRes,
-    discountOrdersRes,
+    refundsRes,
+    weekOrdersRes,
+    weekOrderItemsRes,
+    weekTimeEntriesRes,
+    payrollRulesRes,
     tablesRes,
     upcomingReservationsRes,
     shiftReqRes,
     upcomingShiftsRes,
+    thresholdsByStore,
   ] = await Promise.all([
     supabase
       .from('daily_closings')
@@ -115,17 +121,35 @@ export async function collectDashboardAlerts(
       .select('store_id, business_date, quantity, unit_cost')
       .in('store_id', storeIds)
       .eq('movement_type', 'waste')
-      .gte('business_date', twoWeeksAgo)
+      .gte('business_date', weekAgo)
       .lte('business_date', yesterday),
-    supabase.from('refunds').select('id', { count: 'exact', head: true }).in('store_id', storeIds).gte('business_date', weekAgo).lte('business_date', today),
-    supabase.from('refunds').select('id', { count: 'exact', head: true }).in('store_id', storeIds).gte('business_date', twoWeeksAgo).lt('business_date', weekAgo),
+    supabase.from('refunds').select('store_id').in('store_id', storeIds).gte('business_date', weekAgo).lte('business_date', today),
     supabase
       .from('orders')
-      .select('discount_total, business_date')
+      .select('id, store_id, total, discount_total, status, business_date')
       .in('store_id', storeIds)
-      .eq('status', 'paid')
-      .gte('business_date', twoWeeksAgo)
+      .in('status', ['paid', 'refunded'])
+      .gte('business_date', weekAgo)
       .lte('business_date', today),
+    supabase
+      .from('order_items')
+      .select('menu_item_id, quantity, line_total, store_id, menu_items(cost), orders!inner(status, business_date)')
+      .in('store_id', storeIds)
+      .eq('status', 'active')
+      .eq('orders.status', 'paid')
+      .gte('orders.business_date', weekAgo)
+      .lte('orders.business_date', today),
+    supabase
+      .from('time_entries')
+      .select('profile_id, store_id, work_date, clock_in_at, clock_out_at, break_minutes, entry_type')
+      .in('store_id', storeIds)
+      .gte('work_date', weekAgo)
+      .lte('work_date', today),
+    supabase
+      .from('payroll_rules')
+      .select('profile_id, store_id, pay_type, base_amount, effective_from, effective_to')
+      .eq('organization_id', organizationId)
+      .eq('status', 'active'),
     supabase.from('restaurant_tables').select('store_id, capacity_max').in('store_id', storeIds).eq('status', 'active'),
     supabase
       .from('reservations')
@@ -141,15 +165,18 @@ export async function collectDashboardAlerts(
       .gte('shift_date', today)
       .lte('shift_date', in7Days)
       .in('status', ['published', 'confirmed']),
+    loadResolvedThresholds(supabase, organizationId, storeIds),
   ]);
 
   const storeName = new Map(stores.map((s) => [s.id, s.name]));
 
-  // ---- 売上低下: 昨日の売上が過去4週同曜日平均の70%未満 ----
+  // ---- 売上低下: 昨日の売上が過去4週同曜日平均のX%未満（既定70%・alert_rules: sales_drop_percent） ----
   const closings = closingsRes.data ?? [];
   const targetWeekday = weekdayJa(yesterday);
   const compareDates = [7, 14, 21, 28].map((n) => daysAgoJst(n));
   for (const s of stores) {
+    const rule = thresholdsByStore.get(s.id)?.sales_drop_percent;
+    if (!rule?.enabled) continue;
     const yc = closings.find((c) => c.store_id === s.id && c.business_date === yesterday);
     if (!yc) continue;
     const history = closings.filter(
@@ -157,25 +184,31 @@ export async function collectDashboardAlerts(
     );
     if (history.length === 0) continue;
     const avg = history.reduce((a, c) => a + c.sales_total, 0) / history.length;
-    if (avg > 0 && yc.sales_total < avg * 0.7) {
+    if (avg > 0 && yc.sales_total < avg * (rule.value / 100)) {
       alerts.push({
         id: `sales-drop-${s.id}`,
         tone: 'warning',
-        title: `${s.name}: 昨日の売上が過去4週同曜日平均の70%未満です`,
+        title: `${s.name}: 昨日の売上が過去4週同曜日平均の${rule.value}%未満です`,
         href: `/app/reports?from=${yesterday}&to=${yesterday}${withStore(s.id)}`,
       });
     }
   }
 
-  // ---- 現金差異: 過去7日 ----
-  const cashDiffCount = closings.filter((c) => c.business_date >= weekAgo && c.cash_difference !== 0).length;
-  if (cashDiffCount > 0) {
-    alerts.push({
-      id: 'cash-diff',
-      tone: 'warning',
-      title: `過去7日で現金差異が${cashDiffCount}日発生しています`,
-      href: '/app/cash?tab=closings',
-    });
+  // ---- 現金差異（店舗別・過去7日・alert_rules: cash_difference_yen） ----
+  for (const s of stores) {
+    const rule = thresholdsByStore.get(s.id)?.cash_difference_yen;
+    if (!rule?.enabled) continue;
+    const overCount = closings.filter(
+      (c) => c.store_id === s.id && c.business_date >= weekAgo && Math.abs(c.cash_difference) > rule.value
+    ).length;
+    if (overCount > 0) {
+      alerts.push({
+        id: `cash-diff-${s.id}`,
+        tone: 'warning',
+        title: `${s.name}: 過去7日で現金差異が${rule.value.toLocaleString('ja-JP')}円を超えた日が${overCount}日あります`,
+        href: `/app/cash?tab=closings${withStore(s.id)}`,
+      });
+    }
   }
 
   // ---- 在庫不足（店舗別）----
@@ -194,21 +227,22 @@ export async function collectDashboardAlerts(
     });
   }
 
-  // ---- 廃棄増加: 今週(直近7日) vs 先週(その前7日) ----
+  // ---- 廃棄額（店舗別・過去7日・絶対額・alert_rules: waste_amount_yen） ----
   const wasteMovements = wasteRes.data ?? [];
-  const wasteThisWeek = calcWasteAmount(
-    wasteMovements.filter((m) => m.business_date >= weekAgo).map((m) => ({ quantity: m.quantity, unitCost: m.unit_cost }))
-  );
-  const wasteLastWeek = calcWasteAmount(
-    wasteMovements.filter((m) => m.business_date >= twoWeeksAgo && m.business_date < weekAgo).map((m) => ({ quantity: m.quantity, unitCost: m.unit_cost }))
-  );
-  if (isSpike(wasteThisWeek, wasteLastWeek, 1.5)) {
-    alerts.push({
-      id: 'waste-spike',
-      tone: 'warning',
-      title: `今週の廃棄額が先週比150%を超えています（${wasteLastWeek.toLocaleString('ja-JP')}円→${wasteThisWeek.toLocaleString('ja-JP')}円）`,
-      href: `/app/costing?tab=waste&from=${weekAgo}&to=${today}`,
-    });
+  for (const s of stores) {
+    const rule = thresholdsByStore.get(s.id)?.waste_amount_yen;
+    if (!rule?.enabled) continue;
+    const wasteAmount = calcWasteAmount(
+      wasteMovements.filter((m) => m.store_id === s.id).map((m) => ({ quantity: m.quantity, unitCost: m.unit_cost }))
+    );
+    if (wasteAmount > rule.value) {
+      alerts.push({
+        id: `waste-${s.id}`,
+        tone: 'warning',
+        title: `${s.name}: 過去7日の廃棄額が${rule.value.toLocaleString('ja-JP')}円を超えています（${wasteAmount.toLocaleString('ja-JP')}円）`,
+        href: `/app/costing?tab=waste&from=${weekAgo}&to=${today}${withStore(s.id)}`,
+      });
+    }
   }
 
   // ---- 支払期限超過の請求書 ----
@@ -321,29 +355,83 @@ export async function collectDashboardAlerts(
     });
   }
 
-  // ---- 異常な取消・値引き: 今週(直近7日) vs 先週(その前7日) ----
-  const refundsThisWeek = refundsThisWeekRes.count ?? 0;
-  const refundsLastWeek = refundsLastWeekRes.count ?? 0;
-  if (isSpike(refundsThisWeek, refundsLastWeek, 2)) {
-    alerts.push({
-      id: 'refund-spike',
-      tone: 'warning',
-      title: `今週の返金件数が先週比200%を超えています（${refundsLastWeek}件→${refundsThisWeek}件）`,
-      href: `/app/orders?from=${weekAgo}&to=${today}&status=refunded`,
-    });
+  // ---- 取消（返金）件数（店舗別・過去7日・alert_rules: void_count） ----
+  const refunds = refundsRes.data ?? [];
+  for (const s of stores) {
+    const rule = thresholdsByStore.get(s.id)?.void_count;
+    if (!rule?.enabled) continue;
+    const count = refunds.filter((r) => r.store_id === s.id).length;
+    if (count > rule.value) {
+      alerts.push({
+        id: `void-count-${s.id}`,
+        tone: 'warning',
+        title: `${s.name}: 過去7日の取消（返金）件数が${rule.value}件を超えています（${count}件）`,
+        href: `/app/orders?from=${weekAgo}&to=${today}&status=refunded${withStore(s.id)}`,
+      });
+    }
   }
-  const discountOrders = discountOrdersRes.data ?? [];
-  const discountThisWeek = discountOrders.filter((o) => o.business_date >= weekAgo).reduce((a, o) => a + o.discount_total, 0);
-  const discountLastWeek = discountOrders
-    .filter((o) => o.business_date >= twoWeeksAgo && o.business_date < weekAgo)
-    .reduce((a, o) => a + o.discount_total, 0);
-  if (isSpike(discountThisWeek, discountLastWeek, 2)) {
-    alerts.push({
-      id: 'discount-spike',
-      tone: 'warning',
-      title: `今週の値引き額合計が先週比200%を超えています（${discountLastWeek.toLocaleString('ja-JP')}円→${discountThisWeek.toLocaleString('ja-JP')}円）`,
-      href: `/app/orders?from=${weekAgo}&to=${today}`,
-    });
+
+  // ---- 値引率（店舗別・過去7日・alert_rules: discount_rate_percent） ----
+  const weekOrders = weekOrdersRes.data ?? [];
+  for (const s of stores) {
+    const rule = thresholdsByStore.get(s.id)?.discount_rate_percent;
+    if (!rule?.enabled) continue;
+    const storeOrders = weekOrders.filter((o) => o.store_id === s.id && o.status === 'paid');
+    const sales = storeOrders.reduce((a, o) => a + o.total, 0);
+    const discount = storeOrders.reduce((a, o) => a + o.discount_total, 0);
+    const base = sales + discount;
+    const rate = base > 0 ? (discount / base) * 100 : 0;
+    if (base > 0 && rate > rule.value) {
+      alerts.push({
+        id: `discount-rate-${s.id}`,
+        tone: 'warning',
+        title: `${s.name}: 過去7日の値引率が${rule.value}%を超えています（${rate.toFixed(1)}%）`,
+        href: `/app/orders?from=${weekAgo}&to=${today}${withStore(s.id)}`,
+      });
+    }
+  }
+
+  // ---- 原価率・人件費率（店舗別・過去7日・alert_rules: cost_rate_percent / labor_rate_percent） ----
+  const weekOrderItems = weekOrderItemsRes.data ?? [];
+  const menuItemIds = [...new Set(weekOrderItems.map((i) => i.menu_item_id).filter((v): v is string => !!v))];
+  const linesByItem = await fetchIngredientLinesByMenuItems(supabase, menuItemIds);
+  const weekTimeEntries = (weekTimeEntriesRes.data ?? []) as TimeEntryForLabor[];
+  const payrollRules = (payrollRulesRes.data ?? []) as PayrollRuleForLabor[];
+
+  for (const s of stores) {
+    const storeOrders = weekOrders.filter((o) => o.store_id === s.id && o.status === 'paid');
+    const sales = storeOrders.reduce((a, o) => a + o.total, 0);
+    if (sales <= 0) continue;
+
+    const costRule = thresholdsByStore.get(s.id)?.cost_rate_percent;
+    if (costRule?.enabled) {
+      const storeItems = weekOrderItems.filter((i) => i.store_id === s.id);
+      const costSummary = summarizeItemCosts(storeItems as unknown as CostableOrderItem[], linesByItem);
+      const costRate = (costSummary.totalCost / sales) * 100;
+      if (costRate > costRule.value) {
+        alerts.push({
+          id: `cost-rate-${s.id}`,
+          tone: 'warning',
+          title: `${s.name}: 過去7日の原価率が${costRule.value}%を超えています（${costRate.toFixed(1)}%）`,
+          href: `/app/costing?tab=items${withStore(s.id)}`,
+        });
+      }
+    }
+
+    const laborRule = thresholdsByStore.get(s.id)?.labor_rate_percent;
+    if (laborRule?.enabled) {
+      const storeEntries = weekTimeEntries.filter((e) => e.store_id === s.id);
+      const laborResult = estimateLaborCost(storeEntries, payrollRules);
+      const laborRate = (laborResult.total / sales) * 100;
+      if (laborRate > laborRule.value) {
+        alerts.push({
+          id: `labor-rate-${s.id}`,
+          tone: 'warning',
+          title: `${s.name}: 過去7日の人件費率が${laborRule.value}%を超えています（${laborRate.toFixed(1)}%）`,
+          href: `/app/payroll${storeParam ? `?store=${s.id}` : ''}`,
+        });
+      }
+    }
   }
 
   return alerts;

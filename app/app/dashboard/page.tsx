@@ -3,12 +3,14 @@ import Link from 'next/link';
 import { AlertTriangle } from 'lucide-react';
 import { requireMember } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
+import { can } from '@/lib/permissions';
 import { yen, todayJst, daysAgoJst, formatTime, weekdayJa } from '@/lib/format';
 import { PageHeader } from '@/components/ui/page-header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/ui/state';
 import { SalesChart, type DailyPoint } from '@/components/dashboard/sales-chart';
+import { SetupProgressCard } from '@/components/dashboard/setup-progress-card';
 import { TableWrap, Table, THead, TBody, Tr, Th, Td } from '@/components/ui/table';
 import { LinkStatCard } from '@/components/reports/stat-link';
 import { WeekdaySalesChart } from '@/components/reports/weekday-sales-chart';
@@ -20,6 +22,8 @@ import { summarizeItemCosts, type CostableOrderItem } from '@/components/reports
 import { estimateLaborCost, type TimeEntryForLabor, type PayrollRuleForLabor } from '@/components/reports/labor';
 import { fetchIngredientLinesByMenuItems } from '@/components/costing/data';
 import { collectDashboardAlerts } from '@/components/dashboard/alerts';
+import { AnnouncementBanner } from '@/components/dashboard/announcement-banner';
+import { StoreRankingTable } from '@/components/dashboard/store-ranking-table';
 
 export const metadata: Metadata = { title: 'ダッシュボード' };
 
@@ -28,14 +32,33 @@ function dateOnlyJst(iso: string | null): string | null {
   return new Date(iso).toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' });
 }
 
+/**
+ * オンボーディング完了率（完了済み・かつ100%未満のときのみ数値を返す）。
+ * organizations.onboarding.data.completedSteps（実データを保存したステップ）を10ステップに対する割合で算出する。
+ */
+async function getSetupProgressPercent(organizationId: string): Promise<number | null> {
+  const supabase = await createClient();
+  const { data: org } = await supabase
+    .from('organizations')
+    .select('onboarding')
+    .eq('id', organizationId)
+    .maybeSingle();
+  const onboarding = (org?.onboarding ?? {}) as { completed?: boolean; data?: { completedSteps?: number[] } };
+  if (!onboarding.completed) return null;
+  const completedSteps = Array.isArray(onboarding.data?.completedSteps) ? onboarding.data.completedSteps : [];
+  const percent = Math.round((new Set(completedSteps).size / 10) * 100);
+  return percent < 100 ? percent : null;
+}
+
 export default async function DashboardPage() {
   const ctx = await requireMember();
   const today = todayJst();
+  const setupPercent = ctx.organizationId && can(ctx.role, 'org.settings') ? await getSetupProgressPercent(ctx.organizationId) : null;
 
   if (ctx.currentStore) {
-    return <StoreDashboard ctx={ctx} today={today} />;
+    return <StoreDashboard ctx={ctx} today={today} setupPercent={setupPercent} />;
   }
-  return <HqDashboard ctx={ctx} today={today} />;
+  return <HqDashboard ctx={ctx} today={today} setupPercent={setupPercent} />;
 }
 
 // =====================================================================
@@ -45,9 +68,11 @@ export default async function DashboardPage() {
 async function HqDashboard({
   ctx,
   today,
+  setupPercent,
 }: {
   ctx: Awaited<ReturnType<typeof requireMember>>;
   today: string;
+  setupPercent: number | null;
 }) {
   const supabase = await createClient();
   const stores = ctx.stores;
@@ -331,6 +356,8 @@ async function HqDashboard({
     <div>
       <PageHeader title="ダッシュボード" description={`全店舗（${stores.length}店舗）｜${today.replaceAll('-', '/')}（${weekdayJa(today)}）本社サマリー`} />
 
+      {setupPercent != null && <SetupProgressCard percent={setupPercent} />}
+      <AnnouncementBanner supabase={supabase} organizationId={ctx.organizationId} userId={ctx.userId} storeIds={storeIds} />
       <AlertList alerts={alerts} />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
@@ -352,65 +379,16 @@ async function HqDashboard({
 
       <Card className="mt-5">
         <CardHeader>
-          <CardTitle>店舗ランキング（今月・売上順）</CardTitle>
+          <CardTitle>店舗ランキング（今月・{stores.length}店舗）</CardTitle>
         </CardHeader>
-        <CardContent className="p-0">
+        <CardContent>
           {storeRanking.length === 0 ? (
-            <div className="p-5">
-              <EmptyState title="今月の実績データがありません" className="border-0 py-8" />
-            </div>
+            <EmptyState title="今月の実績データがありません" className="border-0 py-8" />
           ) : (
-            <TableWrap className="border-0">
-              <Table>
-                <THead>
-                  <Tr>
-                    <Th>店舗</Th>
-                    <Th className="text-right">売上</Th>
-                    <Th className="text-right">前月同期間比</Th>
-                    <Th className="text-right">粗利益</Th>
-                    <Th className="text-right">利益</Th>
-                    <Th className="text-right">客数</Th>
-                    <Th className="text-right">客単価</Th>
-                    <Th />
-                  </Tr>
-                </THead>
-                <TBody>
-                  {storeRanking.map((s) => (
-                    <Tr key={s.id}>
-                      <Td>
-                        <Link href={`/app/reports?store=${s.id}&from=${monthFrom}&to=${today}`} className="font-medium text-primary hover:underline">
-                          {s.name}
-                        </Link>
-                      </Td>
-                      <Td className="text-right tabular-nums font-semibold text-navy">{yen(s.sales)}</Td>
-                      <Td className="text-right tabular-nums">
-                        {s.changePct == null ? (
-                          <span className="text-gray-400">—</span>
-                        ) : (
-                          <span className={s.changePct >= 0 ? 'text-success' : 'text-danger'}>
-                            {s.changePct >= 0 ? '+' : ''}
-                            {s.changePct.toFixed(1)}%
-                          </span>
-                        )}
-                      </Td>
-                      <Td className="text-right tabular-nums">{yen(s.grossProfit)}</Td>
-                      <Td className={`text-right tabular-nums font-medium ${s.profit >= 0 ? 'text-success' : 'text-danger'}`}>{yen(s.profit)}</Td>
-                      <Td className="text-right tabular-nums">{s.guests}名</Td>
-                      <Td className="text-right tabular-nums">{yen(s.avgSpend)}</Td>
-                      <Td>
-                        <Link href={`/app/reports?store=${s.id}&from=${monthFrom}&to=${today}`} className="text-xs font-medium text-primary hover:underline whitespace-nowrap">
-                          レポートを見る
-                        </Link>
-                      </Td>
-                    </Tr>
-                  ))}
-                </TBody>
-              </Table>
-            </TableWrap>
+            <StoreRankingTable rows={storeRanking} monthFrom={monthFrom} today={today} exportHref={`/app/dashboard/export?from=${monthFrom}&to=${today}`} />
           )}
         </CardContent>
       </Card>
-      <p className="mt-1.5 text-xs text-gray-400">※ 利益 = 売上 − 原価 − 人件費（概算） − 経費。前月同期間比は選択期間と同じ日数の直前期間との比較です。</p>
 
       <div className="mt-5 grid gap-5 xl:grid-cols-2">
         <Card>
@@ -639,9 +617,11 @@ function AlertList({ alerts }: { alerts: { id: string; tone: 'danger' | 'warning
 async function StoreDashboard({
   ctx,
   today,
+  setupPercent,
 }: {
   ctx: Awaited<ReturnType<typeof requireMember>>;
   today: string;
+  setupPercent: number | null;
 }) {
   const supabase = await createClient();
   const store = ctx.currentStore!;
@@ -688,6 +668,8 @@ async function StoreDashboard({
     <div>
       <PageHeader title="ダッシュボード" description={`${store.name}｜${today.replaceAll('-', '/')}（${weekdayJa(today)}）の状況`} />
 
+      {setupPercent != null && <SetupProgressCard percent={setupPercent} />}
+      <AnnouncementBanner supabase={supabase} organizationId={ctx.organizationId} userId={ctx.userId} storeIds={storeIds} />
       <AlertList alerts={alerts} />
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">

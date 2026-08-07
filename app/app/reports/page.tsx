@@ -436,6 +436,71 @@ export default async function ReportsPage({
     });
   }
 
+  // ---- 月別損益推移（当月/前月/前々月の3ヶ月比較）+ 予算対比 ----
+  // 本社共通費の配賦は将来機能: 現状は店舗（または選択スコープ）に紐づく経費のみを集計しており、
+  // 本社の間接費（家賃・システム利用料等）は各店舗のP/Lに配賦されていない点に留意。
+  async function computeMonthPl(offset: number) {
+    const { first, last } = monthBounds(offset, today);
+    const monthTo = today < last ? today : last;
+    const [oRes, oiRes, teRes, exRes, budgetRes] = await Promise.all([
+      supabase
+        .from('orders')
+        .select('total, status, store_id')
+        .in('store_id', storeIds)
+        .gte('business_date', first)
+        .lte('business_date', monthTo)
+        .in('status', ['paid', 'refunded']),
+      supabase
+        .from('order_items')
+        .select('menu_item_id, quantity, line_total, orders!inner(status, business_date)')
+        .in('store_id', storeIds)
+        .eq('status', 'active')
+        .eq('orders.status', 'paid')
+        .gte('orders.business_date', first)
+        .lte('orders.business_date', monthTo),
+      supabase
+        .from('time_entries')
+        .select('profile_id, store_id, work_date, clock_in_at, clock_out_at, break_minutes, entry_type')
+        .in('store_id', storeIds)
+        .gte('work_date', first)
+        .lte('work_date', monthTo),
+      supabase
+        .from('expenses')
+        .select('amount')
+        .in('store_id', storeIds)
+        .eq('status', 'active')
+        .eq('approval_status', 'approved')
+        .gte('business_date', first)
+        .lte('business_date', monthTo),
+      storeOverrideId || ctx.currentStore
+        ? supabase.from('budgets').select('sales_budget, profit_target').eq('organization_id', ctx.organizationId).eq('month', first).eq('store_id', storeOverrideId ?? ctx.currentStore!.id).maybeSingle()
+        : supabase.from('budgets').select('sales_budget, profit_target').eq('organization_id', ctx.organizationId).eq('month', first).is('store_id', null).maybeSingle(),
+    ]);
+    const mOrders = oRes.data ?? [];
+    const mPaid = mOrders.filter((o) => o.status === 'paid');
+    const mSales = mPaid.reduce((a, o) => a + o.total, 0);
+    const mItems = oiRes.data ?? [];
+    const mMenuItemIds = [...new Set(mItems.map((i) => i.menu_item_id).filter((v): v is string => !!v))];
+    const mLines = await fetchIngredientLinesByMenuItems(supabase, mMenuItemIds);
+    const mCost = summarizeItemCosts(mItems as unknown as CostableOrderItem[], mLines);
+    const mLabor = estimateLaborCost((teRes.data ?? []) as TimeEntryForLabor[], payrollRules);
+    const mExpense = (exRes.data ?? []).reduce((a, e) => a + e.amount, 0);
+    const mGrossProfit = mSales - mCost.totalCost;
+    const mStoreProfit = mGrossProfit - mLabor.total - mExpense;
+    return {
+      label: `${Number(first.slice(5, 7))}月`,
+      sales: mSales,
+      cost: mCost.totalCost,
+      grossProfit: mGrossProfit,
+      labor: mLabor.total,
+      expense: mExpense,
+      profit: mStoreProfit,
+      budgetSales: budgetRes.data?.sales_budget ?? null,
+      budgetProfit: budgetRes.data?.profit_target ?? null,
+    };
+  }
+  const monthlyPl = await Promise.all([-2, -1, 0].map((offset) => computeMonthPl(offset)));
+
   const ordersHref = `/app/orders?from=${from}&to=${to}`;
   const reservationsHref = `/app/reservations/list?from=${from}&to=${to}`;
 
@@ -489,6 +554,92 @@ export default async function ReportsPage({
           </div>
         </CardContent>
       </Card>
+
+      {/* ---- 月別損益推移（3ヶ月） ---- */}
+      <Card className="mt-5">
+        <CardHeader>
+          <CardTitle>月別損益推移（前々月・前月・当月）</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <TableWrap className="border-0">
+            <Table>
+              <THead>
+                <Tr>
+                  <Th>項目</Th>
+                  {monthlyPl.map((m) => (
+                    <Th key={m.label} className="text-right">
+                      {m.label}
+                    </Th>
+                  ))}
+                </Tr>
+              </THead>
+              <TBody>
+                <Tr>
+                  <Td className="font-medium text-navy">売上</Td>
+                  {monthlyPl.map((m) => (
+                    <Td key={m.label} className="text-right tabular-nums">
+                      {yen(m.sales)}
+                      {m.budgetSales != null && (
+                        <span className={`ml-1.5 text-xs ${m.sales >= m.budgetSales ? 'text-success' : 'text-danger'}`}>
+                          （予算比{m.budgetSales > 0 ? ((m.sales / m.budgetSales) * 100).toFixed(0) : '0'}%）
+                        </span>
+                      )}
+                    </Td>
+                  ))}
+                </Tr>
+                <Tr>
+                  <Td className="font-medium text-navy">原価</Td>
+                  {monthlyPl.map((m) => (
+                    <Td key={m.label} className="text-right tabular-nums">
+                      {yen(m.cost)}
+                    </Td>
+                  ))}
+                </Tr>
+                <Tr>
+                  <Td className="font-medium text-navy">粗利益</Td>
+                  {monthlyPl.map((m) => (
+                    <Td key={m.label} className="text-right tabular-nums">
+                      {yen(m.grossProfit)}
+                    </Td>
+                  ))}
+                </Tr>
+                <Tr>
+                  <Td className="font-medium text-navy">人件費（概算）</Td>
+                  {monthlyPl.map((m) => (
+                    <Td key={m.label} className="text-right tabular-nums">
+                      {yen(m.labor)}
+                    </Td>
+                  ))}
+                </Tr>
+                <Tr>
+                  <Td className="font-medium text-navy">経費</Td>
+                  {monthlyPl.map((m) => (
+                    <Td key={m.label} className="text-right tabular-nums">
+                      {yen(m.expense)}
+                    </Td>
+                  ))}
+                </Tr>
+                <Tr>
+                  <Td className="font-semibold text-navy">店舗利益</Td>
+                  {monthlyPl.map((m) => (
+                    <Td key={m.label} className={`text-right tabular-nums font-semibold ${m.profit >= 0 ? 'text-success' : 'text-danger'}`}>
+                      {yen(m.profit)}
+                      {m.budgetProfit != null && (
+                        <span className={`ml-1.5 text-xs font-normal ${m.profit >= m.budgetProfit ? 'text-success' : 'text-danger'}`}>
+                          （予算比{m.budgetProfit !== 0 ? ((m.profit / m.budgetProfit) * 100).toFixed(0) : '0'}%）
+                        </span>
+                      )}
+                    </Td>
+                  ))}
+                </Tr>
+              </TBody>
+            </Table>
+          </TableWrap>
+        </CardContent>
+      </Card>
+      <p className="mt-1.5 text-xs text-gray-400">
+        ※ 予算対比は「予算管理」（/app/budgets）に登録された値がある月のみ表示します。本社共通費（家賃・システム利用料等）の店舗への配賦は将来機能で、現状の経費は店舗（または選択スコープ）に直接紐づく経費のみを集計しています。
+      </p>
 
       {/* ---- KPIグリッド ---- */}
       <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-6">
