@@ -6,6 +6,15 @@ import { summarizeEntry } from '@/lib/payroll';
 import { toCsv, csvResponse } from '@/lib/csv';
 import { formatMinutes, todayJst } from '@/lib/format';
 
+const ENTRY_TYPE_LABEL: Record<string, string> = {
+  normal: '通常',
+  late: '遅刻',
+  early_leave: '早退',
+  absent: '欠勤',
+  paid_leave: '有給',
+  holiday_work: '休日出勤',
+};
+
 function monthRange(month: string) {
   const [y, m] = month.split('-').map(Number);
   const start = `${month}-01`;
@@ -38,7 +47,7 @@ export async function GET(request: NextRequest) {
 
   const { data: entries } = await query;
 
-  const headers = ['日付', 'スタッフ', '出勤', '退勤', '休憩(分)', '実働', '残業', '深夜', '状態'];
+  const headers = ['日付', 'スタッフ', '区分', '出勤', '退勤', '休憩(分)', '実働', '残業', '深夜', '休日', '状態'];
   const rows = (entries ?? []).map((row) => {
     const profile = row.profiles as unknown as { display_name: string } | null;
     const summary =
@@ -47,18 +56,21 @@ export async function GET(request: NextRequest) {
             clockInAt: new Date(row.clock_in_at),
             clockOutAt: new Date(row.clock_out_at),
             breakMinutes: row.break_minutes,
+            isHolidayWork: row.entry_type === 'holiday_work',
           })
         : null;
     const statusLabel = row.status === 'approved' ? '承認済' : row.status === 'closed' ? '打刻済' : '勤務中';
     return [
       row.work_date,
       profile?.display_name ?? '',
+      ENTRY_TYPE_LABEL[row.entry_type] ?? row.entry_type,
       row.clock_in_at ? new Date(row.clock_in_at).toLocaleTimeString('ja-JP', { timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit' }) : '',
       row.clock_out_at ? new Date(row.clock_out_at).toLocaleTimeString('ja-JP', { timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit' }) : '',
       row.break_minutes,
       summary ? formatMinutes(summary.workMinutes) : '',
       summary ? formatMinutes(summary.overtimeMinutes) : '',
       summary ? formatMinutes(summary.nightMinutes) : '',
+      summary ? formatMinutes(summary.holidayMinutes ?? 0) : '',
       statusLabel,
     ];
   });

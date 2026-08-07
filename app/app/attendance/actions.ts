@@ -5,8 +5,11 @@ import { requireMember, requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { can } from '@/lib/permissions';
+import { todayJst } from '@/lib/format';
 
 export type PunchEventType = 'clock_in' | 'clock_out' | 'break_start' | 'break_end';
+
+export type EntryType = 'normal' | 'late' | 'early_leave' | 'absent' | 'paid_leave' | 'holiday_work';
 
 type ActionResult = { ok: boolean; message: string };
 
@@ -30,15 +33,67 @@ function mapPunchError(message: string): string {
 export async function punch(storeId: string, eventType: PunchEventType): Promise<ActionResult> {
   const ctx = await requirePermission('attendance.punch');
   const supabase = await createClient();
-  const { error } = await supabase.rpc('apply_punch', {
+  const { data, error } = await supabase.rpc('apply_punch', {
     p_store_id: storeId,
     p_profile_id: ctx.userId,
     p_event_type: eventType,
     p_source: 'personal',
   });
   if (error) return { ok: false, message: mapPunchError(error.message) };
+
+  // シフトとの突合: 出勤打刻のみ対象。確定・公開済みシフトの開始時刻より15分を超えて
+  // 遅れて出勤した場合は自動的に entry_type='late'（遅刻）へ変更する。
+  if (eventType === 'clock_in') {
+    const entryId = (data as { entry_id?: string } | null)?.entry_id;
+    if (entryId) await autoFlagLateEntry(storeId, ctx.userId, entryId);
+  }
+
   revalidatePath('/app/attendance');
   return { ok: true, message: `${EVENT_LABELS[eventType]}を記録しました` };
+}
+
+/**
+ * 出勤打刻がシフト開始時刻より15分超遅れていれば entry_type を'late'に更新する。
+ * time_entries への更新は attendance.approve 相当のロール限定（RLS）のため、
+ * 本人（一般スタッフ）打刻からの自動区分変更は管理クライアントで行う。
+ */
+async function autoFlagLateEntry(storeId: string, profileId: string, entryId: string): Promise<void> {
+  const supabase = await createClient();
+  const today = todayJst();
+
+  const { data: shift } = await supabase
+    .from('shifts')
+    .select('start_time')
+    .eq('store_id', storeId)
+    .eq('profile_id', profileId)
+    .eq('shift_date', today)
+    .eq('kind', 'confirmed')
+    .eq('status', 'published')
+    .order('start_time')
+    .limit(1)
+    .maybeSingle();
+  if (!shift) return;
+
+  const toMinutes = (t: string) => {
+    const [h, m] = t.slice(0, 5).split(':').map(Number);
+    return h * 60 + m;
+  };
+  const nowHHmm = new Date().toLocaleTimeString('sv-SE', {
+    timeZone: 'Asia/Tokyo',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+  const lateMinutes = toMinutes(nowHHmm) - toMinutes(shift.start_time);
+  if (lateMinutes <= 15) return;
+
+  const admin = createAdminClient();
+  await admin
+    .from('time_entries')
+    .update({
+      entry_type: 'late',
+      note: `シフト開始(${shift.start_time.slice(0, 5)})より${lateMinutes}分遅れて出勤したため自動的に「遅刻」区分に設定しました`,
+    })
+    .eq('id', entryId);
 }
 
 /** 共用端末モード: PINでスタッフを特定して打刻する */
@@ -260,4 +315,107 @@ export async function rejectRequest(requestId: string, reason: string): Promise<
 
   revalidatePath('/app/attendance');
   return { ok: true, message: '申請を却下しました' };
+}
+
+// ---------------------------------------------------------------
+// 勤怠区分の管理
+// ---------------------------------------------------------------
+
+export interface ChangeEntryTypeInput {
+  timeEntryId: string;
+  entryType: EntryType;
+  reason: string;
+}
+
+/** 勤怠区分の変更（attendance.approve 権限者のみ）。監査ログに記録する。 */
+export async function changeEntryType(input: ChangeEntryTypeInput): Promise<ActionResult> {
+  const ctx = await requirePermission('attendance.approve');
+  if (!input.reason.trim()) return { ok: false, message: '理由を入力してください' };
+
+  const supabase = await createClient();
+  const { data: before } = await supabase
+    .from('time_entries')
+    .select('id, store_id, entry_type')
+    .eq('id', input.timeEntryId)
+    .single();
+  if (!before) return { ok: false, message: '勤怠記録が見つかりません' };
+
+  const { error } = await supabase
+    .from('time_entries')
+    .update({ entry_type: input.entryType, note: input.reason.trim(), updated_by: ctx.userId })
+    .eq('id', input.timeEntryId);
+  if (error) return { ok: false, message: '区分の変更に失敗しました' };
+
+  await supabase.rpc('log_audit', {
+    p_org: ctx.organizationId,
+    p_store: before.store_id,
+    p_action: 'attendance.change_entry_type',
+    p_target_table: 'time_entries',
+    p_target_id: input.timeEntryId,
+    p_before: { entry_type: before.entry_type },
+    p_after: { entry_type: input.entryType },
+    p_note: input.reason.trim(),
+  });
+
+  revalidatePath('/app/attendance');
+  return { ok: true, message: '区分を変更しました' };
+}
+
+export interface ManualEntryInput {
+  storeId: string;
+  profileId: string;
+  workDate: string;
+  entryType: 'paid_leave' | 'absent';
+  reason: string;
+}
+
+/**
+ * 打刻なしの勤怠（有給・欠勤）を手動追加する（attendance.approve 権限者のみ）。
+ * clock_in_at / clock_out_at は null のまま status='approved' で登録する。
+ */
+export async function addManualEntry(input: ManualEntryInput): Promise<ActionResult> {
+  const ctx = await requirePermission('attendance.approve');
+  if (!input.profileId) return { ok: false, message: '対象スタッフを選択してください' };
+  if (!input.workDate) return { ok: false, message: '日付を入力してください' };
+  if (input.entryType !== 'paid_leave' && input.entryType !== 'absent') {
+    return { ok: false, message: '区分が正しくありません' };
+  }
+  if (!input.reason.trim()) return { ok: false, message: '理由を入力してください' };
+
+  const supabase = await createClient();
+  const { data: inserted, error } = await supabase
+    .from('time_entries')
+    .insert({
+      organization_id: ctx.organizationId,
+      store_id: input.storeId,
+      profile_id: input.profileId,
+      work_date: input.workDate,
+      clock_in_at: null,
+      clock_out_at: null,
+      break_minutes: 0,
+      entry_type: input.entryType,
+      status: 'approved',
+      source: 'manual',
+      note: input.reason.trim(),
+      approved_by: ctx.userId,
+      approved_at: new Date().toISOString(),
+      created_by: ctx.userId,
+    })
+    .select('id')
+    .single();
+  if (error || !inserted) return { ok: false, message: '勤怠の追加に失敗しました' };
+
+  await supabase.rpc('log_audit', {
+    p_org: ctx.organizationId,
+    p_store: input.storeId,
+    p_action: 'attendance.manual_add',
+    p_target_table: 'time_entries',
+    p_target_id: inserted.id,
+    p_before: null,
+    p_after: { work_date: input.workDate, entry_type: input.entryType },
+    p_note: input.reason.trim(),
+  });
+
+  revalidatePath('/app/attendance');
+  return { ok: true, message: '勤怠を追加しました' };
 }

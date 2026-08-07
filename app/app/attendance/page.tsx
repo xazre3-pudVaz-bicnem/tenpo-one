@@ -16,10 +16,31 @@ import { ClockSection } from '@/components/attendance/clock-section';
 import { PeriodFilters } from '@/components/attendance/period-filters';
 import { CorrectionDialog } from '@/components/attendance/correction-dialog';
 import { RequestReview } from '@/components/attendance/request-review';
+import { EntryTypeDialog } from '@/components/attendance/entry-type-dialog';
+import { ManualEntryDialog } from '@/components/attendance/manual-entry-dialog';
+import type { EntryType } from './actions';
 
 export const metadata: Metadata = { title: '勤怠' };
 
 type Tab = 'punch' | 'list' | 'requests';
+
+const ENTRY_TYPE_LABEL: Record<EntryType, string> = {
+  normal: '通常',
+  late: '遅刻',
+  early_leave: '早退',
+  absent: '欠勤',
+  paid_leave: '有給',
+  holiday_work: '休日出勤',
+};
+
+const ENTRY_TYPE_TONE: Record<EntryType, 'gray' | 'warning' | 'danger' | 'primary' | 'success'> = {
+  normal: 'gray',
+  late: 'warning',
+  early_leave: 'warning',
+  absent: 'danger',
+  paid_leave: 'primary',
+  holiday_work: 'success',
+};
 
 function monthRange(month: string) {
   const [y, m] = month.split('-').map(Number);
@@ -112,6 +133,19 @@ async function PunchTab({ storeId, profileId, displayName }: { storeId: string; 
     .limit(1)
     .maybeSingle();
 
+  // シフトとの突合表示: 当日の確定・公開済みシフトがあれば表示する
+  const { data: todayShift } = await supabase
+    .from('shifts')
+    .select('start_time, end_time')
+    .eq('store_id', storeId)
+    .eq('profile_id', profileId)
+    .eq('shift_date', today)
+    .eq('kind', 'confirmed')
+    .eq('status', 'published')
+    .order('start_time')
+    .limit(1)
+    .maybeSingle();
+
   let lastEventType: string | null = null;
   if (entry?.id) {
     const { data: lastEvent } = await supabase
@@ -128,16 +162,23 @@ async function PunchTab({ storeId, profileId, displayName }: { storeId: string; 
   const onBreak = open && lastEventType === 'break_start';
 
   return (
-    <ClockSection
-      storeId={storeId}
-      displayName={displayName}
-      punchState={{
-        canClockIn: !open,
-        canClockOut: open && !onBreak,
-        canBreakStart: open && !onBreak,
-        canBreakEnd: open && onBreak,
-      }}
-    />
+    <div>
+      {todayShift && (
+        <div className="mx-auto mb-4 max-w-md rounded-xl border border-primary/30 bg-primary-soft px-4 py-3 text-center text-sm font-medium text-primary-deep">
+          本日のシフト: {todayShift.start_time.slice(0, 5)}〜{todayShift.end_time.slice(0, 5)}
+        </div>
+      )}
+      <ClockSection
+        storeId={storeId}
+        displayName={displayName}
+        punchState={{
+          canClockIn: !open,
+          canClockOut: open && !onBreak,
+          canBreakStart: open && !onBreak,
+          canBreakEnd: open && onBreak,
+        }}
+      />
+    </div>
   );
 }
 
@@ -201,7 +242,12 @@ async function ListTab({
 
   return (
     <div className="space-y-4">
-      <PeriodFilters month={month} staffId={staffId} staffOptions={isApprover ? staffOptions : []} />
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <PeriodFilters month={month} staffId={staffId} staffOptions={isApprover ? staffOptions : []} />
+        {isApprover && (
+          <ManualEntryDialog storeId={storeId} staffOptions={staffOptions} defaultDate={today} />
+        )}
+      </div>
 
       {rows.length === 0 ? (
         <EmptyState title="この期間の勤怠記録はありません" description="打刻タブから出勤を記録してください" />
@@ -216,6 +262,7 @@ async function ListTab({
                 <Th>退勤</Th>
                 <Th className="text-right">休憩</Th>
                 <Th className="text-right">実働</Th>
+                <Th>区分</Th>
                 <Th>状態</Th>
                 <Th className="text-right">操作</Th>
               </Tr>
@@ -223,12 +270,14 @@ async function ListTab({
             <TBody>
               {rows.map((row) => {
                 const missing = !row.clock_out_at && row.work_date < today;
+                const entryType = (row.entry_type ?? 'normal') as EntryType;
                 const worked =
                   row.clock_in_at && row.clock_out_at
                     ? summarizeEntry({
                         clockInAt: new Date(row.clock_in_at),
                         clockOutAt: new Date(row.clock_out_at),
                         breakMinutes: row.break_minutes,
+                        isHolidayWork: entryType === 'holiday_work',
                       })
                     : null;
                 return (
@@ -244,6 +293,9 @@ async function ListTab({
                     <Td className="text-right tabular-nums">{row.break_minutes}分</Td>
                     <Td className="text-right tabular-nums">{worked ? formatMinutes(worked.workMinutes) : '—'}</Td>
                     <Td>
+                      <Badge tone={ENTRY_TYPE_TONE[entryType]}>{ENTRY_TYPE_LABEL[entryType]}</Badge>
+                    </Td>
+                    <Td>
                       <div className="flex flex-wrap gap-1">
                         {missing && (
                           <Badge tone="danger" className="inline-flex items-center gap-1">
@@ -257,15 +309,20 @@ async function ListTab({
                       </div>
                     </Td>
                     <Td className="text-right">
-                      <CorrectionDialog
-                        storeId={storeId}
-                        profileId={row.profile_id}
-                        workDate={row.work_date}
-                        timeEntryId={row.id}
-                        defaultClockIn={toJstHHmm(row.clock_in_at)}
-                        defaultClockOut={toJstHHmm(row.clock_out_at)}
-                        defaultBreakMinutes={row.break_minutes}
-                      />
+                      <div className="flex flex-wrap justify-end gap-1.5">
+                        <CorrectionDialog
+                          storeId={storeId}
+                          profileId={row.profile_id}
+                          workDate={row.work_date}
+                          timeEntryId={row.id}
+                          defaultClockIn={toJstHHmm(row.clock_in_at)}
+                          defaultClockOut={toJstHHmm(row.clock_out_at)}
+                          defaultBreakMinutes={row.break_minutes}
+                        />
+                        {isApprover && (
+                          <EntryTypeDialog timeEntryId={row.id} currentType={entryType} workDate={row.work_date} />
+                        )}
+                      </div>
                     </Td>
                   </Tr>
                 );
