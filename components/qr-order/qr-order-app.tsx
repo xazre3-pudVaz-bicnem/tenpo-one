@@ -1,0 +1,161 @@
+'use client';
+
+import { useState } from 'react';
+import { createClient } from '@/lib/supabase/client';
+import { cn } from '@/lib/utils';
+import { MenuView } from './menu-view';
+import { ItemSheet } from './item-sheet';
+import { CartBar } from './cart-bar';
+import { ConfirmView } from './confirm-view';
+import { SuccessView } from './success-view';
+import { OrderStatusView } from './order-status-view';
+import { qrOrderErrorMessage, type CartLine, type QrMenuData, type QrMenuItem } from './types';
+
+type Screen = 'menu' | 'confirm' | 'success';
+type Tab = 'order' | 'status';
+
+export function QrOrderApp({
+  storeSlug,
+  tableToken,
+  menu,
+}: {
+  storeSlug: string;
+  tableToken: string;
+  menu: QrMenuData;
+}) {
+  const [screen, setScreen] = useState<Screen>('menu');
+  const [tab, setTab] = useState<Tab>('order');
+  const [cart, setCart] = useState<CartLine[]>([]);
+  const [selectedItem, setSelectedItem] = useState<QrMenuItem | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const addToCart = (item: QrMenuItem, quantity: number, memo: string) => {
+    setCart((prev) => {
+      const idx = prev.findIndex((l) => l.menuItemId === item.id && l.memo === memo);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = { ...next[idx], quantity: next[idx].quantity + quantity };
+        return next;
+      }
+      return [
+        ...prev,
+        {
+          key: `${item.id}_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+          menuItemId: item.id,
+          name: item.name,
+          price: item.price,
+          quantity,
+          memo,
+        },
+      ];
+    });
+  };
+
+  // カートが空になった状態で確認画面に留まらないようにする（削除操作の一環として画面遷移する）
+  const removeFromCart = (key: string) => {
+    setCart((prev) => {
+      const next = prev.filter((l) => l.key !== key);
+      if (next.length === 0) setScreen('menu');
+      return next;
+    });
+  };
+
+  const cartCount = cart.reduce((sum, l) => sum + l.quantity, 0);
+  const cartTotal = cart.reduce((sum, l) => sum + l.price * l.quantity, 0);
+
+  const handleSubmit = async () => {
+    setSubmitting(true);
+    setSubmitError(null);
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.rpc('create_qr_order', {
+        p_slug: storeSlug,
+        p_token: tableToken,
+        p_items: cart.map((l) => ({ menu_item_id: l.menuItemId, quantity: l.quantity, memo: l.memo || null })),
+      });
+      if (error) {
+        setSubmitError(qrOrderErrorMessage(error.message));
+        setSubmitting(false);
+        return;
+      }
+      setCart([]);
+      setSubmitting(false);
+      setScreen('success');
+    } catch {
+      setSubmitError(qrOrderErrorMessage(null));
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="flex min-h-screen flex-col bg-surface">
+      <div className="sticky top-0 z-30 bg-white shadow-sm">
+        <div className="px-4 py-3 text-center">
+          <p className="text-sm font-bold text-navy">{menu.store_name}</p>
+          <p className="text-xs text-gray-500">{menu.table_name}</p>
+        </div>
+        {screen === 'menu' && (
+          <div className="flex border-t border-gray-100">
+            {(['order', 'status'] as const).map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setTab(t)}
+                className={cn(
+                  'flex-1 py-2.5 text-sm font-semibold transition-colors',
+                  tab === t ? 'border-b-2 border-primary text-primary-deep' : 'text-gray-400'
+                )}
+              >
+                {t === 'order' ? 'メニュー' : '注文状況'}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <main className={cn('flex-1', screen === 'menu' && tab === 'order' && cart.length > 0 && 'pb-24')}>
+        {screen === 'menu' && tab === 'order' && <MenuView categories={menu.categories} onSelectItem={setSelectedItem} />}
+        {screen === 'menu' && tab === 'status' && <OrderStatusView storeSlug={storeSlug} tableToken={tableToken} />}
+        {screen === 'confirm' && (
+          <ConfirmView
+            cart={cart}
+            total={cartTotal}
+            submitting={submitting}
+            error={submitError}
+            onRemove={removeFromCart}
+            onBack={() => setScreen('menu')}
+            onSubmit={handleSubmit}
+          />
+        )}
+        {screen === 'success' && (
+          <SuccessView
+            onViewStatus={() => {
+              setTab('status');
+              setScreen('menu');
+            }}
+            onBackToMenu={() => {
+              setTab('order');
+              setScreen('menu');
+            }}
+          />
+        )}
+      </main>
+
+      {screen === 'menu' && tab === 'order' && cart.length > 0 && (
+        <CartBar count={cartCount} total={cartTotal} onOrder={() => setScreen('confirm')} />
+      )}
+
+      {selectedItem && (
+        <ItemSheet
+          item={selectedItem}
+          onClose={() => setSelectedItem(null)}
+          onAdd={(quantity, memo) => {
+            addToCart(selectedItem, quantity, memo);
+            setSelectedItem(null);
+          }}
+        />
+      )}
+    </div>
+  );
+}
