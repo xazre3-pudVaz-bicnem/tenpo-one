@@ -35,6 +35,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: '/app/floor', label: 'フロアマップ', icon: 'grid', permission: 'tables.operate' },
       { href: '/app/pos', label: 'POSレジ', icon: 'pos', permission: 'pos.order' },
       { href: '/app/orders', label: '注文・取引履歴', icon: 'receipt', permission: 'pos.order' },
+      { href: '/app/kitchen', label: 'キッチン', icon: 'clipboard', permission: 'pos.order' },
     ],
   },
   {

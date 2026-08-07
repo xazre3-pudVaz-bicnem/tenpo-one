@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { Plus, Pencil, Trash2, Ban, RotateCcw } from 'lucide-react';
+import { Plus, Pencil, Trash2, Ban, RotateCcw, QrCode } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { TableWrap, Table, THead, TBody, Tr, Th, Td } from '@/components/ui/table';
@@ -10,6 +10,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useToast } from '@/components/ui/toast';
 import { toggleTableAvailability, deleteTable } from '@/app/app/settings/tables/actions';
 import { TableDialog, type TableRow } from './table-dialog';
+import { TableQrDialog } from './table-qr-dialog';
 import type { FloorRow } from './floors-panel';
 
 export interface TableListRow extends TableRow {
@@ -31,6 +32,7 @@ export function TablesPanel({
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<TableListRow | null>(null);
   const [deleting, setDeleting] = useState<TableListRow | null>(null);
+  const [qrTarget, setQrTarget] = useState<TableListRow | null>(null);
   const [pending, startTransition] = useTransition();
   const { toast } = useToast();
 
@@ -100,6 +102,14 @@ export function TablesPanel({
                     <div className="flex justify-end gap-1">
                       <button
                         type="button"
+                        onClick={() => setQrTarget(t)}
+                        aria-label="QRコード"
+                        className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100"
+                      >
+                        <QrCode className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => handleToggle(t)}
                         disabled={pending}
                         aria-label={t.currentStatus === 'unavailable' ? '利用再開' : '利用停止'}
@@ -141,6 +151,10 @@ export function TablesPanel({
 
       {dialogOpen && (
         <TableDialog storeId={storeId} floors={floors} editing={editing} onClose={() => setDialogOpen(false)} />
+      )}
+
+      {qrTarget && (
+        <TableQrDialog tableId={qrTarget.id} tableName={qrTarget.name} onClose={() => setQrTarget(null)} />
       )}
 
       {deleting && (
