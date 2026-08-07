@@ -95,6 +95,12 @@ export interface CommissionRuleInput {
 export async function saveCommissionRule(input: CommissionRuleInput): Promise<ActionResult> {
   const ctx = await requirePermission('payroll.manage');
   if (!input.name.trim()) return { ok: false, message: 'ルール名を入力してください' };
+  // 店舗目標達成ボーナス: 店舗売上が目標額(min_amount)以上の月に固定額(fixed_amount)を支給する仕様のため、
+  // 目標額・支給額とも必須とする（createPayrollRun の store_target 処理と対応）。
+  if (input.targetType === 'store_target') {
+    if (input.minAmount == null || input.minAmount <= 0) return { ok: false, message: '目標額を入力してください' };
+    if (input.fixedAmount == null || input.fixedAmount <= 0) return { ok: false, message: '支給額を入力してください' };
+  }
 
   const supabase = await createClient();
   const payload = {
@@ -152,13 +158,44 @@ function pickRule<T extends { profile_id: string; store_id: string | null; effec
   return scored[0].rule;
 }
 
+/**
+ * calcCommission の段階料率(tiered)ロジックの内訳版。
+ * lib/payroll.ts は変更禁止のため、明細表示用に帯域ごとの内訳（対象売上→適用率→金額）を
+ * ここでのみ複製して算出する（合計額は calcCommission の結果と一致する）。
+ */
+function tierBreakdownOf(
+  tiers: { from: number; to: number | null; rate: number }[],
+  salesAmount: number
+): { from: number; to: number | null; rate: number; bandAmount: number; amount: number }[] {
+  const rows: { from: number; to: number | null; rate: number; bandAmount: number; amount: number }[] = [];
+  for (const tier of tiers) {
+    const upper = tier.to ?? Infinity;
+    if (salesAmount <= tier.from) continue;
+    const bandAmount = Math.min(salesAmount, upper) - tier.from;
+    if (bandAmount <= 0) continue;
+    rows.push({ from: tier.from, to: tier.to, rate: tier.rate, bandAmount, amount: Math.floor((bandAmount * tier.rate) / 100) });
+  }
+  return rows;
+}
+
+export interface CommissionBreakdownItem {
+  name: string;
+  basis: 'tax_excluded' | 'tax_included' | 'store_target';
+  method: 'fixed' | 'rate' | 'tiered';
+  salesAmount: number;
+  rate?: number | null;
+  tiers?: { from: number; to: number | null; rate: number; bandAmount: number; amount: number }[];
+  achieved?: boolean;
+  amount: number;
+}
+
 /** 期間内の勤怠・売上・ルールから payroll_items を生成する（作成／再計算で共用） */
 async function generatePayrollItems(supabase: SupabaseClient, ctx: { organizationId: string; userId: string }, run: RunRow) {
   await supabase.from('payroll_items').delete().eq('payroll_run_id', run.id);
 
   let entriesQuery = supabase
     .from('time_entries')
-    .select('profile_id, store_id, work_date, clock_in_at, clock_out_at, break_minutes')
+    .select('profile_id, store_id, work_date, clock_in_at, clock_out_at, break_minutes, entry_type')
     .eq('organization_id', ctx.organizationId)
     .in('status', ['closed', 'approved'])
     .gte('work_date', run.period_start)
@@ -213,6 +250,43 @@ async function generatePayrollItems(supabase: SupabaseClient, ctx: { organizatio
     .lte('effective_from', run.period_end)
     .or(`effective_to.is.null,effective_to.gte.${run.period_start}`);
 
+  // 店舗目標ボーナス（target_type='store_target'）:
+  // 「店舗売上が目標額(min_amount)以上の月に固定額(fixed_amount)を支給」という仕様。
+  // calcCommission の fixed/min_amount はクランプ（下限保証）用のため、この閾値判定は
+  // ここで専用に実装する（店舗売上 >= 目標額 なら fixed_amount、未満なら0円）。
+  const { data: storeTargetRules } = await supabase
+    .from('commission_rules')
+    .select('*')
+    .eq('organization_id', ctx.organizationId)
+    .eq('target_type', 'store_target')
+    .eq('status', 'active')
+    .lte('effective_from', run.period_end)
+    .or(`effective_to.is.null,effective_to.gte.${run.period_start}`);
+
+  // 主な勤務店舗（最頻値）を先に確定する（店舗目標ボーナスの判定に使うため）
+  const primaryStoreByProfile = new Map<string, string | null>();
+  for (const profileId of candidateIds) {
+    const myEntries = (entries ?? []).filter((e) => e.profile_id === profileId);
+    const storeCounts = new Map<string, number>();
+    for (const e of myEntries) storeCounts.set(e.store_id, (storeCounts.get(e.store_id) ?? 0) + 1);
+    primaryStoreByProfile.set(profileId, run.store_id ?? [...storeCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null);
+  }
+  const relevantStoreIds = [...new Set([...primaryStoreByProfile.values()].filter((s): s is string => !!s))];
+  const storeSalesTotal = new Map<string, number>();
+  if (relevantStoreIds.length > 0 && (storeTargetRules ?? []).length > 0) {
+    const { data: closings } = await supabase
+      .from('daily_closings')
+      .select('store_id, sales_total')
+      .eq('organization_id', ctx.organizationId)
+      .in('store_id', relevantStoreIds)
+      .in('status', ['closed', 'approved'])
+      .gte('business_date', run.period_start)
+      .lte('business_date', run.period_end);
+    for (const c of closings ?? []) {
+      storeSalesTotal.set(c.store_id, (storeSalesTotal.get(c.store_id) ?? 0) + c.sales_total);
+    }
+  }
+
   const skipped: string[] = [];
   const items: Record<string, unknown>[] = [];
 
@@ -229,6 +303,7 @@ async function generatePayrollItems(supabase: SupabaseClient, ctx: { organizatio
         clockInAt: new Date(e.clock_in_at as string),
         clockOutAt: new Date(e.clock_out_at as string),
         breakMinutes: e.break_minutes,
+        isHolidayWork: e.entry_type === 'holiday_work',
       })
     );
     const dailyBreakdown = myEntries.map((e, i) => ({
@@ -236,9 +311,11 @@ async function generatePayrollItems(supabase: SupabaseClient, ctx: { organizatio
       clockIn: formatTime(e.clock_in_at),
       clockOut: formatTime(e.clock_out_at),
       breakMinutes: e.break_minutes,
+      entryType: e.entry_type,
       workMinutes: formatMinutes(days[i].workMinutes),
       overtimeMinutes: formatMinutes(days[i].overtimeMinutes),
       nightMinutes: formatMinutes(days[i].nightMinutes),
+      holidayMinutes: formatMinutes(days[i].holidayMinutes ?? 0),
     }));
 
     const sales = salesByProfile.get(profileId) ?? { taxExcluded: 0, taxIncluded: 0 };
@@ -247,7 +324,7 @@ async function generatePayrollItems(supabase: SupabaseClient, ctx: { organizatio
         (r.profile_id === null || r.profile_id === profileId) &&
         (r.store_id === null || r.store_id === run.store_id)
     );
-    const commissionBreakdown: { name: string; basis: string; salesAmount: number; amount: number }[] = [];
+    const commissionBreakdown: CommissionBreakdownItem[] = [];
     let commissionTotal = 0;
     for (const cr of applicableCommissions) {
       const salesAmount = cr.basis === 'tax_excluded' ? sales.taxExcluded : sales.taxIncluded;
@@ -264,7 +341,38 @@ async function generatePayrollItems(supabase: SupabaseClient, ctx: { organizatio
         salesAmount
       );
       if (amount !== 0) {
-        commissionBreakdown.push({ name: cr.name, basis: cr.basis, salesAmount, amount });
+        commissionBreakdown.push({
+          name: cr.name,
+          basis: cr.basis,
+          method: cr.method,
+          salesAmount,
+          rate: cr.method === 'rate' ? cr.rate : undefined,
+          tiers: cr.method === 'tiered' && cr.tiers ? tierBreakdownOf(cr.tiers, salesAmount) : undefined,
+          amount,
+        });
+        commissionTotal += amount;
+      }
+    }
+
+    // 店舗目標ボーナス: 対象スタッフ（profile_id null=全員 or 一致）かつ店舗（store_id null=主勤務店舗 or 一致）
+    const effectiveStoreId = primaryStoreByProfile.get(profileId) ?? null;
+    const applicableStoreTargets = (storeTargetRules ?? []).filter(
+      (r) => (r.profile_id === null || r.profile_id === profileId) && (r.store_id === null || r.store_id === effectiveStoreId)
+    );
+    for (const cr of applicableStoreTargets) {
+      const storeSales = effectiveStoreId ? storeSalesTotal.get(effectiveStoreId) ?? 0 : 0;
+      const targetAmount = cr.min_amount ?? 0;
+      const achieved = storeSales >= targetAmount;
+      const amount = achieved ? cr.fixed_amount ?? 0 : 0;
+      if (amount !== 0) {
+        commissionBreakdown.push({
+          name: cr.name,
+          basis: 'store_target',
+          method: 'fixed',
+          salesAmount: storeSales,
+          achieved,
+          amount,
+        });
         commissionTotal += amount;
       }
     }
@@ -275,6 +383,7 @@ async function generatePayrollItems(supabase: SupabaseClient, ctx: { organizatio
         baseAmount: rule.base_amount,
         overtimeRate: rule.overtime_rate,
         nightRate: rule.night_rate,
+        holidayRate: rule.holiday_rate,
         commuteAllowance: rule.commute_allowance,
         allowances: rule.allowances ?? [],
       },
@@ -282,10 +391,7 @@ async function generatePayrollItems(supabase: SupabaseClient, ctx: { organizatio
       commissionTotal
     );
 
-    // 主な勤務店舗（最頻値）を明細の店舗として記録
-    const storeCounts = new Map<string, number>();
-    for (const e of myEntries) storeCounts.set(e.store_id, (storeCounts.get(e.store_id) ?? 0) + 1);
-    const primaryStore = run.store_id ?? [...storeCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+    const primaryStore = primaryStoreByProfile.get(profileId) ?? null;
 
     items.push({
       organization_id: ctx.organizationId,
@@ -296,11 +402,11 @@ async function generatePayrollItems(supabase: SupabaseClient, ctx: { organizatio
       work_minutes: preview.workMinutes,
       overtime_minutes: preview.overtimeMinutes,
       night_minutes: preview.nightMinutes,
-      holiday_minutes: 0,
+      holiday_minutes: preview.holidayMinutes,
       base_pay: preview.basePay,
       overtime_pay: preview.overtimePay,
       night_pay: preview.nightPay,
-      holiday_pay: 0,
+      holiday_pay: preview.holidayPay,
       commute_pay: preview.commutePay,
       allowance_total: preview.allowanceTotal,
       commission_total: preview.commissionTotal,
@@ -311,6 +417,7 @@ async function generatePayrollItems(supabase: SupabaseClient, ctx: { organizatio
         hourlyBase: preview.hourlyBase,
         payType: rule.pay_type,
         baseAmount: rule.base_amount,
+        holidayRate: rule.holiday_rate,
         sales,
         commissions: commissionBreakdown,
       },

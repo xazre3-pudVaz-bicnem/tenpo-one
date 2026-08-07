@@ -5,6 +5,17 @@ import { ChevronDown, ChevronRight } from 'lucide-react';
 import { yen, formatMinutes } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
+export interface PayrollCommissionBreakdown {
+  name: string;
+  basis: 'tax_excluded' | 'tax_included' | 'store_target';
+  method: 'fixed' | 'rate' | 'tiered';
+  salesAmount: number;
+  rate?: number | null;
+  tiers?: { from: number; to: number | null; rate: number; bandAmount: number; amount: number }[];
+  achieved?: boolean;
+  amount: number;
+}
+
 export interface PayrollItemView {
   id: string;
   profileName: string;
@@ -12,6 +23,7 @@ export interface PayrollItemView {
   workMinutes: number;
   overtimeMinutes: number;
   nightMinutes: number;
+  holidayMinutes: number;
   basePay: number;
   overtimePay: number;
   nightPay: number;
@@ -26,15 +38,18 @@ export interface PayrollItemView {
       clockIn: string;
       clockOut: string;
       breakMinutes: number;
+      entryType?: string;
       workMinutes: string;
       overtimeMinutes: string;
       nightMinutes: string;
+      holidayMinutes?: string;
     }[];
     hourlyBase: number;
     payType: 'monthly' | 'hourly' | 'daily';
     baseAmount: number;
+    holidayRate?: number;
     sales: { taxExcluded: number; taxIncluded: number };
-    commissions: { name: string; basis: string; salesAmount: number; amount: number }[];
+    commissions: PayrollCommissionBreakdown[];
   };
 }
 
@@ -49,20 +64,24 @@ export function PayrollItemsTable({ items }: { items: PayrollItemView[] }) {
       workMinutes: a.workMinutes + i.workMinutes,
       overtimeMinutes: a.overtimeMinutes + i.overtimeMinutes,
       nightMinutes: a.nightMinutes + i.nightMinutes,
+      holidayMinutes: a.holidayMinutes + i.holidayMinutes,
       basePay: a.basePay + i.basePay,
       overtimePay: a.overtimePay + i.overtimePay,
       nightPay: a.nightPay + i.nightPay,
+      holidayPay: a.holidayPay + i.holidayPay,
       commutePay: a.commutePay + i.commutePay,
       allowanceTotal: a.allowanceTotal + i.allowanceTotal,
       commissionTotal: a.commissionTotal + i.commissionTotal,
       grossTotal: a.grossTotal + i.grossTotal,
     }),
     {
-      workDays: 0, workMinutes: 0, overtimeMinutes: 0, nightMinutes: 0,
-      basePay: 0, overtimePay: 0, nightPay: 0, commutePay: 0,
+      workDays: 0, workMinutes: 0, overtimeMinutes: 0, nightMinutes: 0, holidayMinutes: 0,
+      basePay: 0, overtimePay: 0, nightPay: 0, holidayPay: 0, commutePay: 0,
       allowanceTotal: 0, commissionTotal: 0, grossTotal: 0,
     }
   );
+
+  const columnCount = 16;
 
   return (
     <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
@@ -75,9 +94,11 @@ export function PayrollItemsTable({ items }: { items: PayrollItemView[] }) {
             <th className="px-4 py-3 text-right font-medium whitespace-nowrap">実働</th>
             <th className="px-4 py-3 text-right font-medium whitespace-nowrap">残業</th>
             <th className="px-4 py-3 text-right font-medium whitespace-nowrap">深夜</th>
+            <th className="px-4 py-3 text-right font-medium whitespace-nowrap">休日</th>
             <th className="px-4 py-3 text-right font-medium whitespace-nowrap">基本給</th>
             <th className="px-4 py-3 text-right font-medium whitespace-nowrap">残業代</th>
             <th className="px-4 py-3 text-right font-medium whitespace-nowrap">深夜手当</th>
+            <th className="px-4 py-3 text-right font-medium whitespace-nowrap">休日手当</th>
             <th className="px-4 py-3 text-right font-medium whitespace-nowrap">交通費</th>
             <th className="px-4 py-3 text-right font-medium whitespace-nowrap">手当</th>
             <th className="px-4 py-3 text-right font-medium whitespace-nowrap">歩合</th>
@@ -99,9 +120,11 @@ export function PayrollItemsTable({ items }: { items: PayrollItemView[] }) {
                 <td className="px-4 py-3 text-right tabular-nums">{formatMinutes(item.workMinutes)}</td>
                 <td className="px-4 py-3 text-right tabular-nums">{formatMinutes(item.overtimeMinutes)}</td>
                 <td className="px-4 py-3 text-right tabular-nums">{formatMinutes(item.nightMinutes)}</td>
+                <td className="px-4 py-3 text-right tabular-nums">{formatMinutes(item.holidayMinutes)}</td>
                 <td className="px-4 py-3 text-right tabular-nums">{yen(item.basePay)}</td>
                 <td className="px-4 py-3 text-right tabular-nums">{yen(item.overtimePay)}</td>
                 <td className="px-4 py-3 text-right tabular-nums">{yen(item.nightPay)}</td>
+                <td className="px-4 py-3 text-right tabular-nums">{yen(item.holidayPay)}</td>
                 <td className="px-4 py-3 text-right tabular-nums">{yen(item.commutePay)}</td>
                 <td className="px-4 py-3 text-right tabular-nums">{yen(item.allowanceTotal)}</td>
                 <td className="px-4 py-3 text-right tabular-nums">{yen(item.commissionTotal)}</td>
@@ -109,7 +132,7 @@ export function PayrollItemsTable({ items }: { items: PayrollItemView[] }) {
               </tr>
               {expanded === item.id && (
                 <tr className="bg-gray-50/60">
-                  <td colSpan={13} className="px-6 py-4">
+                  <td colSpan={columnCount} className="px-6 py-4">
                     <div className="grid gap-4 lg:grid-cols-2">
                       <div>
                         <p className="mb-2 text-xs font-semibold text-gray-500">計算根拠</p>
@@ -134,10 +157,48 @@ export function PayrollItemsTable({ items }: { items: PayrollItemView[] }) {
                               {formatMinutes(item.nightMinutes)} = {yen(item.nightPay)}
                             </li>
                           )}
+                          {item.holidayPay > 0 && (
+                            <li>
+                              休日手当 = 割増基礎時給¥{item.breakdown.hourlyBase.toLocaleString('ja-JP')} ×{' '}
+                              {(
+                                item.breakdown.payType === 'hourly'
+                                  ? (item.breakdown.holidayRate ?? 1.35) - 1
+                                  : item.breakdown.holidayRate ?? 1.35
+                              ).toFixed(2)}{' '}
+                              × 休日{formatMinutes(item.holidayMinutes)} = {yen(item.holidayPay)}
+                            </li>
+                          )}
                           {item.commutePay > 0 && <li>交通費 = {item.workDays}日分 = {yen(item.commutePay)}</li>}
                           {item.breakdown.commissions.map((c, i) => (
                             <li key={i}>
-                              歩合（{c.name}） = {c.basis === 'tax_excluded' ? '税抜' : '税込'}売上{yen(c.salesAmount)} → {yen(c.amount)}
+                              {c.basis === 'store_target' ? (
+                                <>
+                                  ボーナス（{c.name}） = 店舗売上{yen(c.salesAmount)}
+                                  {c.achieved ? ' ≧ 目標達成' : ' ＜ 目標未達'} → {yen(c.amount)}
+                                </>
+                              ) : c.method === 'tiered' && c.tiers ? (
+                                <>
+                                  歩合（{c.name}・段階料率） = {c.basis === 'tax_excluded' ? '税抜' : '税込'}売上{yen(c.salesAmount)}
+                                  <ul className="ml-4 mt-0.5 list-disc space-y-0.5 text-xs text-gray-500">
+                                    {c.tiers.map((t, ti) => (
+                                      <li key={ti}>
+                                        {yen(t.from)}〜{t.to != null ? yen(t.to) : '上限なし'}：{yen(t.bandAmount)} × {t.rate}% ={' '}
+                                        {yen(t.amount)}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                  <span className="font-medium">→ 合計 {yen(c.amount)}</span>
+                                </>
+                              ) : c.method === 'rate' ? (
+                                <>
+                                  歩合（{c.name}） = {c.basis === 'tax_excluded' ? '税抜' : '税込'}売上{yen(c.salesAmount)} × {c.rate}% →{' '}
+                                  {yen(c.amount)}
+                                </>
+                              ) : (
+                                <>
+                                  歩合（{c.name}） = {c.basis === 'tax_excluded' ? '税抜' : '税込'}売上{yen(c.salesAmount)} → {yen(c.amount)}
+                                </>
+                              )}
                             </li>
                           ))}
                           <li className="font-semibold text-navy">総支給 = {yen(item.grossTotal)}</li>
@@ -157,6 +218,7 @@ export function PayrollItemsTable({ items }: { items: PayrollItemView[] }) {
                                   <th className="px-2 py-1.5 text-right">実働</th>
                                   <th className="px-2 py-1.5 text-right">残業</th>
                                   <th className="px-2 py-1.5 text-right">深夜</th>
+                                  <th className="px-2 py-1.5 text-right">休日</th>
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-gray-100">
@@ -169,6 +231,7 @@ export function PayrollItemsTable({ items }: { items: PayrollItemView[] }) {
                                     <td className="px-2 py-1.5 text-right tabular-nums">{d.workMinutes}</td>
                                     <td className="px-2 py-1.5 text-right tabular-nums">{d.overtimeMinutes}</td>
                                     <td className="px-2 py-1.5 text-right tabular-nums">{d.nightMinutes}</td>
+                                    <td className="px-2 py-1.5 text-right tabular-nums">{d.holidayMinutes ?? '0:00'}</td>
                                   </tr>
                                 ))}
                               </tbody>
@@ -192,9 +255,11 @@ export function PayrollItemsTable({ items }: { items: PayrollItemView[] }) {
             <td className="px-4 py-3 text-right tabular-nums">{formatMinutes(totals.workMinutes)}</td>
             <td className="px-4 py-3 text-right tabular-nums">{formatMinutes(totals.overtimeMinutes)}</td>
             <td className="px-4 py-3 text-right tabular-nums">{formatMinutes(totals.nightMinutes)}</td>
+            <td className="px-4 py-3 text-right tabular-nums">{formatMinutes(totals.holidayMinutes)}</td>
             <td className="px-4 py-3 text-right tabular-nums">{yen(totals.basePay)}</td>
             <td className="px-4 py-3 text-right tabular-nums">{yen(totals.overtimePay)}</td>
             <td className="px-4 py-3 text-right tabular-nums">{yen(totals.nightPay)}</td>
+            <td className="px-4 py-3 text-right tabular-nums">{yen(totals.holidayPay)}</td>
             <td className="px-4 py-3 text-right tabular-nums">{yen(totals.commutePay)}</td>
             <td className="px-4 py-3 text-right tabular-nums">{yen(totals.allowanceTotal)}</td>
             <td className="px-4 py-3 text-right tabular-nums">{yen(totals.commissionTotal)}</td>

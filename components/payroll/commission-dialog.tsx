@@ -1,11 +1,13 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useMemo, useState, useTransition } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { Dialog } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input, Label, Select, FieldError } from '@/components/ui/input';
 import { useToast } from '@/components/ui/toast';
+import { yen } from '@/lib/format';
+import { calcCommission } from '@/lib/payroll';
 import { saveCommissionRule, type CommissionRuleInput, type TierInput } from '@/app/app/payroll/actions';
 
 export interface CommissionRuleRow {
@@ -77,6 +79,31 @@ export function CommissionRuleDialog({
   const update = <K extends keyof CommissionRuleInput>(key: K, value: CommissionRuleInput[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
 
+  /** 店舗目標達成ボーナスは常に固定額支給のため、対象タイプ切替時に method を強制する */
+  const onTargetTypeChange = (v: CommissionRuleInput['targetType']) => {
+    setForm((f) => ({ ...f, targetType: v, method: v === 'store_target' ? 'fixed' : f.method }));
+  };
+
+  const [previewSales, setPreviewSales] = useState(0);
+  const previewAmount = useMemo(() => {
+    if (form.targetType === 'store_target') {
+      // 店舗売上 >= 目標額(min_amount) なら fixed_amount、未満なら0円（createPayrollRun と同一仕様）
+      return previewSales >= (form.minAmount ?? 0) ? form.fixedAmount ?? 0 : 0;
+    }
+    return calcCommission(
+      {
+        targetType: form.targetType,
+        method: form.method,
+        rate: form.rate,
+        fixedAmount: form.fixedAmount,
+        tiers: form.tiers,
+        minAmount: form.minAmount,
+        maxAmount: form.maxAmount,
+      },
+      previewSales
+    );
+  }, [form, previewSales]);
+
   const tiers = form.tiers ?? [];
   const addTier = () => update('tiers', [...tiers, { from: 0, to: null, rate: 0 }]);
   const updateTier = (i: number, patch: Partial<TierInput>) =>
@@ -120,7 +147,7 @@ export function CommissionRuleDialog({
               <Select
                 id="cr-target"
                 value={form.targetType}
-                onChange={(e) => update('targetType', e.target.value as CommissionRuleInput['targetType'])}
+                onChange={(e) => onTargetTypeChange(e.target.value as CommissionRuleInput['targetType'])}
               >
                 <option value="personal_sales">個人売上</option>
                 <option value="store_target">店舗目標達成</option>
@@ -150,124 +177,178 @@ export function CommissionRuleDialog({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div>
-              <Label htmlFor="cr-method">計算方法</Label>
-              <Select id="cr-method" value={form.method} onChange={(e) => update('method', e.target.value as CommissionRuleInput['method'])}>
-                <option value="rate">料率（%）</option>
-                <option value="fixed">固定額</option>
-                <option value="tiered">段階料率</option>
-              </Select>
-            </div>
-            <div>
-              <Label htmlFor="cr-basis">売上基準</Label>
-              <Select id="cr-basis" value={form.basis} onChange={(e) => update('basis', e.target.value as CommissionRuleInput['basis'])}>
-                <option value="tax_excluded">税抜売上</option>
-                <option value="tax_included">税込売上</option>
-              </Select>
-            </div>
+          {form.targetType === 'store_target' ? (
+            <>
+              <p className="rounded-lg border border-primary/20 bg-primary-soft px-3 py-2 text-xs text-primary-deep">
+                店舗売上が目標額以上の月に固定額を支給します（店舗売上が「目標額」に達していない月は支給されません）。
+              </p>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div>
+                  <Label htmlFor="cr-fixed">支給額（円）</Label>
+                  <Input
+                    id="cr-fixed"
+                    type="number"
+                    value={form.fixedAmount ?? 0}
+                    onChange={(e) => update('fixedAmount', Number(e.target.value))}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="cr-min">目標額（円・必須）</Label>
+                  <Input
+                    id="cr-min"
+                    type="number"
+                    value={form.minAmount ?? ''}
+                    onChange={(e) => update('minAmount', e.target.value === '' ? null : Number(e.target.value))}
+                    placeholder="例: 3000000"
+                  />
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div>
+                  <Label htmlFor="cr-method">計算方法</Label>
+                  <Select id="cr-method" value={form.method} onChange={(e) => update('method', e.target.value as CommissionRuleInput['method'])}>
+                    <option value="rate">料率（%）</option>
+                    <option value="fixed">固定額</option>
+                    <option value="tiered">段階料率</option>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="cr-basis">売上基準</Label>
+                  <Select id="cr-basis" value={form.basis} onChange={(e) => update('basis', e.target.value as CommissionRuleInput['basis'])}>
+                    <option value="tax_excluded">税抜売上</option>
+                    <option value="tax_included">税込売上</option>
+                  </Select>
+                </div>
+              </div>
+
+              {form.method === 'rate' && (
+                <div>
+                  <Label htmlFor="cr-rate">料率（%）</Label>
+                  <Input
+                    id="cr-rate"
+                    type="number"
+                    step="0.001"
+                    value={form.rate ?? 0}
+                    onChange={(e) => update('rate', Number(e.target.value))}
+                  />
+                </div>
+              )}
+              {form.method === 'fixed' && (
+                <div>
+                  <Label htmlFor="cr-fixed">固定額（円）</Label>
+                  <Input
+                    id="cr-fixed"
+                    type="number"
+                    value={form.fixedAmount ?? 0}
+                    onChange={(e) => update('fixedAmount', Number(e.target.value))}
+                  />
+                </div>
+              )}
+              {form.method === 'tiered' && (
+                <div>
+                  <div className="mb-2 flex items-center justify-between">
+                    <Label className="mb-0">段階（売上帯域ごとの料率）</Label>
+                    <Button variant="secondary" size="sm" onClick={addTier}>
+                      <Plus className="h-3.5 w-3.5" />
+                      段階を追加
+                    </Button>
+                  </div>
+                  <p className="mb-2 text-xs text-gray-400">
+                    例: 0〜30万円 0% / 30〜50万円 3% / 50〜80万円 5% / 80万円〜 8%
+                  </p>
+                  <div className="space-y-2">
+                    {tiers.map((t, i) => (
+                      <div key={i} className="flex items-center gap-2">
+                        <Input
+                          type="number"
+                          placeholder="下限(円)"
+                          value={t.from}
+                          onChange={(e) => updateTier(i, { from: Number(e.target.value) })}
+                          className="w-28"
+                        />
+                        <span className="text-xs text-gray-400">〜</span>
+                        <Input
+                          type="number"
+                          placeholder="上限(円・空欄=上限なし)"
+                          value={t.to ?? ''}
+                          onChange={(e) => updateTier(i, { to: e.target.value === '' ? null : Number(e.target.value) })}
+                          className="w-36"
+                        />
+                        <Input
+                          type="number"
+                          step="0.001"
+                          placeholder="料率(%)"
+                          value={t.rate}
+                          onChange={(e) => updateTier(i, { rate: Number(e.target.value) })}
+                          className="w-24"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeTier(i)}
+                          className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-danger"
+                          aria-label="削除"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ))}
+                    {tiers.length === 0 && <p className="text-xs text-gray-400">段階が設定されていません</p>}
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div>
+                  <Label htmlFor="cr-min">下限額（円・任意）</Label>
+                  <Input
+                    id="cr-min"
+                    type="number"
+                    value={form.minAmount ?? ''}
+                    onChange={(e) => update('minAmount', e.target.value === '' ? null : Number(e.target.value))}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="cr-max">上限額（円・任意）</Label>
+                  <Input
+                    id="cr-max"
+                    type="number"
+                    value={form.maxAmount ?? ''}
+                    onChange={(e) => update('maxAmount', e.target.value === '' ? null : Number(e.target.value))}
+                  />
+                </div>
+              </div>
+            </>
+          )}
+
+          <div>
+            <Label htmlFor="cr-effective">適用開始日</Label>
+            <Input
+              id="cr-effective"
+              type="date"
+              value={form.effectiveFrom}
+              onChange={(e) => update('effectiveFrom', e.target.value)}
+            />
           </div>
 
-          {form.method === 'rate' && (
-            <div>
-              <Label htmlFor="cr-rate">料率（%）</Label>
+          <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-3">
+            <Label htmlFor="cr-preview" className="mb-1">
+              {form.targetType === 'store_target' ? 'プレビュー用店舗売上額（円）' : 'プレビュー用売上額（円）'}
+            </Label>
+            <div className="flex items-center gap-3">
               <Input
-                id="cr-rate"
+                id="cr-preview"
                 type="number"
-                step="0.001"
-                value={form.rate ?? 0}
-                onChange={(e) => update('rate', Number(e.target.value))}
+                min={0}
+                value={previewSales}
+                onChange={(e) => setPreviewSales(Number(e.target.value) || 0)}
+                className="max-w-48"
               />
-            </div>
-          )}
-          {form.method === 'fixed' && (
-            <div>
-              <Label htmlFor="cr-fixed">固定額（円）</Label>
-              <Input
-                id="cr-fixed"
-                type="number"
-                value={form.fixedAmount ?? 0}
-                onChange={(e) => update('fixedAmount', Number(e.target.value))}
-              />
-            </div>
-          )}
-          {form.method === 'tiered' && (
-            <div>
-              <div className="mb-2 flex items-center justify-between">
-                <Label className="mb-0">段階（売上帯域ごとの料率）</Label>
-                <Button variant="secondary" size="sm" onClick={addTier}>
-                  <Plus className="h-3.5 w-3.5" />
-                  段階を追加
-                </Button>
-              </div>
-              <div className="space-y-2">
-                {tiers.map((t, i) => (
-                  <div key={i} className="flex items-center gap-2">
-                    <Input
-                      type="number"
-                      placeholder="下限(円)"
-                      value={t.from}
-                      onChange={(e) => updateTier(i, { from: Number(e.target.value) })}
-                      className="w-28"
-                    />
-                    <span className="text-xs text-gray-400">〜</span>
-                    <Input
-                      type="number"
-                      placeholder="上限(円・空欄=上限なし)"
-                      value={t.to ?? ''}
-                      onChange={(e) => updateTier(i, { to: e.target.value === '' ? null : Number(e.target.value) })}
-                      className="w-36"
-                    />
-                    <Input
-                      type="number"
-                      step="0.001"
-                      placeholder="料率(%)"
-                      value={t.rate}
-                      onChange={(e) => updateTier(i, { rate: Number(e.target.value) })}
-                      className="w-24"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => removeTier(i)}
-                      className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-danger"
-                      aria-label="削除"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                ))}
-                {tiers.length === 0 && <p className="text-xs text-gray-400">段階が設定されていません</p>}
-              </div>
-            </div>
-          )}
-
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <div>
-              <Label htmlFor="cr-min">下限額（円・任意）</Label>
-              <Input
-                id="cr-min"
-                type="number"
-                value={form.minAmount ?? ''}
-                onChange={(e) => update('minAmount', e.target.value === '' ? null : Number(e.target.value))}
-              />
-            </div>
-            <div>
-              <Label htmlFor="cr-max">上限額（円・任意）</Label>
-              <Input
-                id="cr-max"
-                type="number"
-                value={form.maxAmount ?? ''}
-                onChange={(e) => update('maxAmount', e.target.value === '' ? null : Number(e.target.value))}
-              />
-            </div>
-            <div>
-              <Label htmlFor="cr-effective">適用開始日</Label>
-              <Input
-                id="cr-effective"
-                type="date"
-                value={form.effectiveFrom}
-                onChange={(e) => update('effectiveFrom', e.target.value)}
-              />
+              <p className="text-sm text-gray-700">
+                支給額試算: <span className="font-semibold text-navy">{yen(previewAmount)}</span>
+              </p>
             </div>
           </div>
 

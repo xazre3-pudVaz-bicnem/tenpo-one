@@ -22,8 +22,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ run
     .order('created_at');
 
   const headers = [
-    'スタッフ', '店舗', '勤務日数', '実働(分)', '残業(分)', '深夜(分)',
-    '基本給', '残業代', '深夜手当', '交通費', '手当', '歩合', '控除', '総支給',
+    'スタッフ', '店舗', '勤務日数', '実働(分)', '残業(分)', '深夜(分)', '休日(分)',
+    '基本給', '残業代', '深夜手当', '休日手当', '交通費', '手当', '歩合', '控除', '総支給',
   ];
   const rows = (items ?? []).map((row) => {
     const profile = row.profiles as unknown as { display_name: string } | null;
@@ -35,9 +35,11 @@ export async function GET(_request: Request, { params }: { params: Promise<{ run
       row.work_minutes,
       row.overtime_minutes,
       row.night_minutes,
+      row.holiday_minutes,
       row.base_pay,
       row.overtime_pay,
       row.night_pay,
+      row.holiday_pay,
       row.commute_pay,
       row.allowance_total,
       row.commission_total,

@@ -343,6 +343,7 @@ function toItemView(row: Record<string, unknown>, profileName: string): PayrollI
     workMinutes: row.work_minutes as number,
     overtimeMinutes: row.overtime_minutes as number,
     nightMinutes: row.night_minutes as number,
+    holidayMinutes: row.holiday_minutes as number,
     basePay: row.base_pay as number,
     overtimePay: row.overtime_pay as number,
     nightPay: row.night_pay as number,

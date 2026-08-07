@@ -58,6 +58,7 @@ export default async function PayrollRunDetailPage({
       workMinutes: row.work_minutes,
       overtimeMinutes: row.overtime_minutes,
       nightMinutes: row.night_minutes,
+      holidayMinutes: row.holiday_minutes,
       basePay: row.base_pay,
       overtimePay: row.overtime_pay,
       nightPay: row.night_pay,

@@ -82,6 +82,26 @@ describe('calcPayroll（給与試算）', () => {
     const p = calcPayroll(hourlyRule, [{ workMinutes: 480, overtimeMinutes: 0, nightMinutes: 0 }], 12000);
     expect(p.grossTotal).toBe(1300 * 8 + 500 + 12000);
   });
+
+  it('休日出勤: 時給者は差分(1.35-1)を加算', () => {
+    const p = calcPayroll(
+      { ...hourlyRule, holidayRate: 1.35 },
+      [{ workMinutes: 480, overtimeMinutes: 0, nightMinutes: 0, holidayMinutes: 480 }],
+      0
+    );
+    expect(p.holidayPay).toBe(3640); // 時給1300×0.35×8h
+    expect(p.holidayMinutes).toBe(480);
+  });
+
+  it('休日出勤フラグ付きの勤怠は全実働が休日時間になる', () => {
+    const r = summarizeEntry({
+      clockInAt: new Date('2026-08-02T10:00:00+09:00'),
+      clockOutAt: new Date('2026-08-02T18:00:00+09:00'),
+      breakMinutes: 60,
+      isHolidayWork: true,
+    });
+    expect(r.holidayMinutes).toBe(420);
+  });
 });
 
 describe('calcCommission（歩合計算）', () => {

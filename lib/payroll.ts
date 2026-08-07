@@ -12,15 +12,18 @@ export interface TimeEntryLike {
   clockInAt: Date;
   clockOutAt: Date;
   breakMinutes: number;
+  /** 休日出勤（entry_type='holiday_work'）。実働全時間が休日割増の対象 */
+  isHolidayWork?: boolean;
 }
 
 export interface DayAttendance {
   workMinutes: number; // 休憩控除後
   overtimeMinutes: number; // 8時間超
   nightMinutes: number; // 22-5時の勤務（休憩は日中から控除したとみなす簡易計算）
+  holidayMinutes?: number; // 休日出勤の実働時間
 }
 
-/** 1勤務の実働・残業・深夜時間を分単位で集計する */
+/** 1勤務の実働・残業・深夜・休日時間を分単位で集計する */
 export function summarizeEntry(entry: TimeEntryLike): DayAttendance {
   const totalMinutes = Math.max(
     0,
@@ -38,7 +41,12 @@ export function summarizeEntry(entry: TimeEntryLike): DayAttendance {
     cursor.setTime(cursor.getTime() + 60000);
   }
   nightMinutes = Math.min(nightMinutes, totalMinutes);
-  return { workMinutes: totalMinutes, overtimeMinutes, nightMinutes };
+  return {
+    workMinutes: totalMinutes,
+    overtimeMinutes,
+    nightMinutes,
+    holidayMinutes: entry.isHolidayWork ? totalMinutes : 0,
+  };
 }
 
 export interface PayrollRuleLike {
@@ -46,6 +54,7 @@ export interface PayrollRuleLike {
   baseAmount: number;
   overtimeRate: number; // 1.25
   nightRate: number; // 0.25（加算分）
+  holidayRate?: number; // 1.35（休日出勤）
   commuteAllowance: number; // 円/日
   allowances: { name: string; amount: number; per: 'month' | 'day' }[];
 }
@@ -55,9 +64,11 @@ export interface PayrollPreview {
   workMinutes: number;
   overtimeMinutes: number;
   nightMinutes: number;
+  holidayMinutes: number;
   basePay: number;
   overtimePay: number;
   nightPay: number;
+  holidayPay: number;
   commutePay: number;
   allowanceTotal: number;
   commissionTotal: number;
@@ -78,6 +89,7 @@ export function calcPayroll(
   const workMinutes = days.reduce((a, d) => a + d.workMinutes, 0);
   const overtimeMinutes = days.reduce((a, d) => a + d.overtimeMinutes, 0);
   const nightMinutes = days.reduce((a, d) => a + d.nightMinutes, 0);
+  const holidayMinutes = days.reduce((a, d) => a + (d.holidayMinutes ?? 0), 0);
 
   let basePay = 0;
   let hourlyBase = 0;
@@ -96,16 +108,21 @@ export function calcPayroll(
   const overtimeMultiplier = rule.payType === 'hourly' ? rule.overtimeRate - 1 : rule.overtimeRate;
   const overtimePay = Math.floor((hourlyBase * overtimeMultiplier * overtimeMinutes) / 60);
   const nightPay = Math.floor((hourlyBase * rule.nightRate * nightMinutes) / 60);
+  // 休日割増: 時給者は基本給に含まれる1.0倍分を除いた差分(holidayRate-1)、月給者は全額
+  const holidayRate = rule.holidayRate ?? 1.35;
+  const holidayMultiplier = rule.payType === 'hourly' ? holidayRate - 1 : holidayRate;
+  const holidayPay = Math.floor((hourlyBase * holidayMultiplier * holidayMinutes) / 60);
   const commutePay = rule.commuteAllowance * workDays;
   const allowanceTotal = rule.allowances.reduce(
     (a, al) => a + (al.per === 'month' ? al.amount : al.amount * workDays),
     0
   );
 
-  const grossTotal = basePay + overtimePay + nightPay + commutePay + allowanceTotal + commissionTotal;
+  const grossTotal =
+    basePay + overtimePay + nightPay + holidayPay + commutePay + allowanceTotal + commissionTotal;
   return {
-    workDays, workMinutes, overtimeMinutes, nightMinutes,
-    basePay, overtimePay, nightPay, commutePay, allowanceTotal,
+    workDays, workMinutes, overtimeMinutes, nightMinutes, holidayMinutes,
+    basePay, overtimePay, nightPay, holidayPay, commutePay, allowanceTotal,
     commissionTotal, grossTotal, hourlyBase,
   };
 }
