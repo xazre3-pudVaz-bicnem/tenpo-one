@@ -1,5 +1,8 @@
 # 権限マトリクス
 
+> 実装（`lib/permissions.ts`）との1:1対応表とrequireFeature/機能フラグとの関係は
+> `docs/permissions.md` を参照。本書は機能軸のマトリクス（UI設計視点）として残す。
+
 凡例: ✓=可 / R=閲覧のみ / 承=承認可 / -=不可
 ロール: OW=org_owner, HQ=hq_admin, AC=hq_accounting, AM=area_manager, SM=店長, ASM=副店長, ST=スタッフ, PT=アルバイト, EX=外部会計
 

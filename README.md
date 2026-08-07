@@ -1,9 +1,29 @@
 # TENPO ONE — 店舗運営を、ひとつに。
 
-飲食店の予約・POS・会計・レジ締め・小口現金・請求書・勤怠・給与試算・顧客管理・レポートを、
+飲食店の予約・POS・会計・レジ締め・小口現金・請求書・仕入/在庫・原価・勤怠・給与試算・
+顧客管理（CRM）・QRオーダー・キッチンディスプレイ（KDS）・レポートを、
 **ひとつのデータベースとひとつの操作画面**に統合したマルチテナント型クラウドSaaS。
 
 One Platform. Every Store. — 運営: 株式会社サイプレス
+
+## 主な機能
+
+| 機能 | 概要 |
+|---|---|
+| 予約管理 | 公開予約ページ（匿名RPC）・予約台帳・キャンセル待ち・貸切対応。`docs/reservation-flow.md` |
+| POS・会計 | 注文入力・複数支払方法併用会計・伝票分割/統合・返金。`docs/pos-flow.md` |
+| QRオーダー | テーブル別トークンでの匿名セルフオーダー、オプション対応。`docs/qr-order.md` |
+| KDS | 厨房ディスプレイ、ステーション別振り分け、経過時間警告。`docs/kds.md` |
+| 顧客管理（CRM） | 来店・売上集計、セグメント分類、RFM/LTV算出 |
+| 仕入・在庫 | 発注→入荷（単位変換・加重平均原価）→レシピ連動販売減算→棚卸。`docs/inventory-flow.md` |
+| レシピ・原価管理 | メニュー原価・原価率・粗利、仕入単価変更の影響シミュレーション |
+| 会計（経理） | 請求書ワークフロー・経費・小口現金・レジ締め |
+| 勤怠・シフト | 打刻（本人/PIN/管理者代理）・シフト管理 |
+| 給与・歩合 | 勤怠集計→給与ルール適用→段階式歩合→試算プレビュー→承認。`docs/payroll-flow.md`（法定計算は対象外） |
+| レポート・分析 | 期間/店舗/軸別レポート、CSVエクスポート |
+| 決済 | Stripe抽象化レイヤー（POS対面決済+予約事前決済）。テストモード。`docs/payment-stripe.md` |
+
+機能はすべて組織単位の機能フラグ（`lib/features.ts`）でON/OFF可能。運営コンソールで管理する。
 
 ## 技術構成
 
@@ -11,10 +31,13 @@ One Platform. Every Store. — 運営: 株式会社サイプレス
 |---|---|
 | フロントエンド | Next.js 16 (App Router) / TypeScript / Tailwind CSS v4 |
 | UI | 自作UIキット（components/ui）/ lucide-react / Recharts |
-| バックエンド | Supabase (PostgreSQL / Auth / Storage / RLS) |
+| バックエンド | Supabase (PostgreSQL / Auth / Storage / Realtime / RLS) |
 | フォーム・検証 | React Hook Form / Zod |
+| 決済 | Stripe（`stripe` SDK） |
 | テスト | Vitest（単体）/ Playwright（E2E・要環境） |
 | デプロイ | Vercel |
+
+詳細は `docs/architecture.md` を参照。
 
 ## セットアップ
 
@@ -28,10 +51,8 @@ npm install
 
 1. [Supabase](https://supabase.com) でプロジェクトを作成
 2. SQL Editor（または `supabase db push`）で `supabase/migrations/` を**番号順に**実行
-   - `00001_schema.sql` — 全テーブル・インデックス・トリガー
-   - `00002_functions.sql` — RLSヘルパー・予約RPC・会計確定・レジ締め・打刻関数
-   - `00003_rls.sql` — RLSポリシー・Storageバケット（documents）
-   - `00004_auth_trigger.sql` — auth.users → profiles 自動生成トリガー
+   （`00001_schema.sql` 〜 `00014_realtime_indexes.sql` の14本。各ファイルの要約は
+   `docs/database.md` の「Migration一覧」を参照）
 3. Authentication → Providers で Email を有効化（Confirm email はオフ推奨。招待制のため）
 
 ### 3. 環境変数
@@ -48,6 +69,12 @@ cp .env.example .env.local
 | `SUPABASE_URL` | seedスクリプト用（NEXT_PUBLIC_SUPABASE_URLと同値でよい） |
 | `NEXT_PUBLIC_SITE_URL` | 本番URL。未設定時は robots noindex（プレビュー誤インデックス防止） |
 | `DEMO_PASSWORD` | seedのデモアカウント初期パスワード（省略時 `TenpoOne-Demo1!`） |
+| `STRIPE_SECRET_KEY` | Stripeシークレット（決済機能を使う場合のみ。**テストモードキーから開始**） |
+| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Stripe公開可能キー（決済機能を使う場合のみ） |
+| `STRIPE_WEBHOOK_SECRET` | Webhook署名検証用（決済機能を使う場合のみ） |
+
+実際の値（秘密鍵等）は本READMEには記載しない。`.env.example` を参照し、各自のSupabase/Stripe
+プロジェクトから取得すること。
 
 ### 4. デモデータ投入
 
@@ -72,7 +99,8 @@ node scripts/seed.mjs
 | staff2@demo.tenpo.one | アルバイト（渋谷） |
 | zeirishi@demo.tenpo.one | 外部税理士・会計担当 |
 
-CYPRESS運営管理者は Supabase 上で対象ユーザーの `profiles.is_cypress_admin` を `true` に更新して作成する。
+CYPRESS運営管理者は Supabase 上で対象ユーザーの `profiles.is_cypress_admin` を `true` に更新して作成する
+（UIからの昇格経路は無い）。ロール一覧・権限詳細は `docs/user-roles.md` / `docs/permissions.md`。
 
 ### 5. 起動
 
@@ -82,16 +110,37 @@ npm run dev
 
 - 公開LP: http://localhost:3000
 - 公開予約ページ: http://localhost:3000/book/tenpoone-shibuya
+- QRオーダー（要トークン。seed後にDBで`restaurant_tables.qr_token`を確認）: `http://localhost:3000/order/tenpoone-shibuya/[token]`
 - 業務画面: http://localhost:3000/app/dashboard
 - 運営コンソール: http://localhost:3000/admin/organizations
 
-## 開発コマンド
+### 6. テスト・検証
 
 ```bash
 npm run typecheck   # TypeScript型チェック
 npm run lint        # ESLint
-npm run test        # Vitest単体テスト（金額・税・予約枠・給与歩合・権限）
-npm run build       # 本番ビルド
+npm run test        # Vitest単体テスト（金額・税・予約枠・給与歩合・原価・単位変換・CRM・権限・決済）
+npm run test:watch  # Vitest watchモード
+npm run build        # 本番ビルド
+```
+
+E2E（Playwright、Supabase環境+seed投入が前提。`e2e/README.md`参照）:
+
+```bash
+npx playwright install chromium
+npx playwright test
+```
+
+業務フロー・テナント分離の統合検証（実データ、`docs/tenant-isolation.md`参照）:
+
+```bash
+node --env-file=.env.local scripts/verify-flow.mjs
+```
+
+Stripeテストモードの疎通検証（`STRIPE_SECRET_KEY`設定後）:
+
+```bash
+node --env-file=.env.local scripts/verify-stripe.mjs
 ```
 
 ## ディレクトリ構成
@@ -100,52 +149,77 @@ npm run build       # 本番ビルド
 app/
   (public)/        # LP・料金・法務・公開予約（/book, /booking）
   (auth)/          # ログイン・パスワード再設定
-  app/             # 業務画面（サイドバー+店舗切替）
-  admin/           # CYPRESS運営コンソール
+  app/              # 業務画面（サイドバー+店舗切替、requireSession必須）
+  admin/            # CYPRESS運営コンソール（requireCypressAdmin必須）
+  order/[storeSlug]/[tableToken]/  # QRオーダー（匿名・トークン制）
+  api/webhooks/stripe/             # 唯一の app/api ルート（Stripe Webhook）
 components/
-  ui/              # UIキット / layout/ # シェル / <feature>/ # 機能別
-lib/               # brand・auth・permissions・ドメインロジック（純関数）
+  ui/              # UIキット / layout/ シェル / kitchen/ KDS / qr-order/ 客側UI / <feature>/ 機能別
+lib/               # brand・auth・permissions・features・payments・ドメインロジック（純関数）
 supabase/
-  migrations/      # スキーマ・関数・RLS
-scripts/seed.mjs   # デモデータ
-docs/              # 設計資料（要件・スコープ・権限・DB・業務フロー・セキュリティ）
+  migrations/      # スキーマ・関数・RLS（00001〜00014、唯一の正式なDB定義）
+scripts/           # seed.mjs / verify-flow.mjs / verify-stripe.mjs
+docs/              # 設計資料（下記索引）
 tests/             # Vitest
 e2e/               # Playwright（Supabase環境接続時に実行）
 ```
 
+## docs 索引
+
+### アーキテクチャ・DB・権限
+
+- `docs/architecture.md` — 技術スタック・レイヤー構成・データ連動の中核・Realtime・機能フラグ・決済抽象化
+- `docs/database.md` — Migration一覧（00001〜00014）・テーブル群・命名規約・インデックス
+- `docs/permissions.md` — 10ロール×権限マトリクス・requireFeatureとの関係
+- `docs/tenant-isolation.md` — マルチテナント分離の実装（RLSヘルパー関数・検証方法）
+
+### 業務フロー
+
+- `docs/pos-flow.md` — 注文〜会計〜連動更新〜分割/統合/返金
+- `docs/reservation-flow.md` — 公開予約RPC〜台帳〜ステータス遷移〜貸切〜キャンセル待ち
+- `docs/inventory-flow.md` — 仕入→発注→入荷→販売→棚卸→原価
+- `docs/payroll-flow.md` — 勤怠→集計→給与ルール→歩合→プレビュー→承認
+- `docs/qr-order.md` — QRオーダーのトークン設計・匿名RPC・レート制限
+- `docs/kds.md` — キッチンディスプレイのステーション・状態遷移・警告しきい値
+
+### 運用・品質
+
+- `docs/production-checklist.md` — 本番公開前チェックリスト
+- `docs/operations.md` — 日常運用（seed・verify-flow・企業作成・機能フラグ・サポートアクセス）
+- `docs/known-limitations.md` — 既知の制限
+- `docs/future-integrations.md` — 外部連携の状態表（Stripeは基盤実装済み・本番未接続、他は未実装）
+- `docs/deployment.md` — Vercel+Supabaseデプロイ手順
+- `docs/payment-stripe.md` — Stripe決済の詳細設計
+
+### 企画・要件（初期設計時の記録として保持）
+
+- `docs/product-requirements.md` / `docs/business-flows.md` / `docs/information-architecture.md` /
+  `docs/security-design.md` / `docs/user-roles.md` / `docs/mvp-scope.md` / `docs/open-questions.md` /
+  `docs/implementation-plan.md`
+
 ## 設計の要点
 
-- **単一データ連動**: 会計確定は DB関数 `finalize_order()` が売上・現金・顧客履歴・在庫・
-  スタッフ実績・予約状態をトランザクションで一括更新する
+- **単一データ連動**: 会計確定は DB関数 `finalize_order()` が売上・現金・顧客履歴・在庫（商品直結+
+  レシピ連動）・スタッフ実績・予約状態をトランザクションで一括更新する（`docs/architecture.md`）
 - **マルチテナント**: 全テーブルに organization_id。Supabase RLS で企業間を完全分離
-  （URL直接指定でも他社データ取得不可）
-- **権限**: 10ロール × アクションを `lib/permissions.ts` に単一定義し、UI・Server Action・RLSの3層で適用
+  （URL直接指定でも他社データ取得不可、`docs/tenant-isolation.md`）
+- **権限**: 9つの組織内ロール + CYPRESS運営（is_cypress_admin）× アクションを `lib/permissions.ts` に
+  単一定義し、UI・Server Action・RLSの3層で適用（`docs/permissions.md`）
 - **金額**: 円単位の整数のみ（浮動小数禁止）。日時はUTC保存・JST表示
-- **監査**: 取消・返金・値引き・締め後修正・承認・権限変更は `audit_logs` に記録。決済済み取引は物理削除不可（DBトリガー）
-- **正直表示**: 未実装の外部連携（プリンターSDK・LINE・OCR等）を「対応済み」と表示しない。給与は「試算」と明示
+- **監査**: 取消・返金・値引き・締め後修正・承認・権限変更・サポートアクセスは `audit_logs` に記録。
+  決済済み取引は物理削除不可（DBトリガー）
+- **正直表示**: 未実装の外部連携（プリンターSDK・LINE・OCR等）を「対応済み」と表示しない
+  （`docs/future-integrations.md`）。給与は「試算」と明示（`docs/payroll-flow.md`）
 
-詳細は `docs/` を参照。未確定の仕様と仮定は `docs/open-questions.md` に記録している。
+未確定の仕様と仮定は `docs/open-questions.md` に記録している。
 
 ## 決済（Stripe・テストモード）
 
 `payment_provider` 抽象化レイヤー（`lib/payments/`）の第一対応プロバイダーとしてStripeを実装。
-設計・Dashboard設定・実機導入手順は `docs/payment-stripe.md` を参照。
+設計・Dashboard設定・実機導入手順は `docs/payment-stripe.md`、現在の対応範囲は
+`docs/future-integrations.md` を参照（本番接続は未実施）。
 
 - POS対面決済: Stripe Terminal（サーバー駆動・simulated readerで検証）
 - 予約の事前決済/予約金: Stripe Checkout（hosted）
 - Webhook: `/api/webhooks/stripe`（署名検証+イベントID冪等化）
 - カード情報は一切保存しない。`STRIPE_SECRET_KEY` はサーバー専用（テストキーから開始）
-
-```bash
-# Stripeテストキー設定後の疎通検証（simulated reader → 決済 → 返金 → Checkout）
-node --env-file=.env.local scripts/verify-stripe.mjs
-```
-
-## E2Eテスト（Playwright）
-
-Supabase環境とseed投入が前提。`e2e/README.md` を参照。
-
-```bash
-npx playwright install chromium
-npx playwright test
-```

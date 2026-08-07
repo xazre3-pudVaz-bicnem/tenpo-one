@@ -24,6 +24,16 @@
 | 16 | プラン・課金 | plansテーブルの下地のみ。決済連携なし | フェーズ2 |
 | 17 | 予約経路 | マスタにGoogle/LINE/グルメサイトを用意（記録のみ、API連携なし） | reservation_sources |
 
+## 実装状況の補足（最新実装との差分）
+
+- **項目14（在庫の自動減算）**: `menu_item_ingredients`（`supabase/migrations/00010_recipes.sql`）が
+  実装済みで、レシピ登録済みのメニューは会計確定時に自動でレシピ連動の在庫減算が行われる
+  （`docs/inventory-flow.md`）。「第2段階」ではなく実装済み
+- **項目16（プラン・課金）**: POS対面決済・予約事前決済（Stripe Terminal/Checkout）は
+  `docs/payment-stripe.md`・`docs/future-integrations.md`の通り実装済み（テストモード、本番未接続）。
+  一方、契約企業向けSaaS課金（サブスクリプション、`saas_subscriptions`テーブル）は引き続き
+  決済連携なしの設計のみ。「決済連携なし」は後者の意味に限定して読み替えること
+
 ## 発注者に確認したい事項
 
 1. 契約企業のプラン体系と料金（/pricing の確定内容）

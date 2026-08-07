@@ -1,5 +1,9 @@
 # 業務フロー定義
 
+> より詳細な実装ベースのフローは `docs/pos-flow.md`（注文〜会計〜分割/統合/返金）、
+> `docs/reservation-flow.md`（予約〜貸切〜キャンセル待ち）、`docs/inventory-flow.md`
+> （仕入〜原価）、`docs/payroll-flow.md`（勤怠〜歩合〜承認）を参照。
+
 ## 1. 予約〜会計の縦フロー（コア）
 
 ```

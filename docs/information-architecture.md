@@ -1,5 +1,10 @@
 # 画面構成・情報設計
 
+> 本書は初期設計時のIA。以降追加された `/app/kitchen`（KDS）・`/app/onboarding`・`/app/menu`・
+> `/app/costing/[menuItemId]`・`/app/settings/payments`・`/order/[storeSlug]/[tableToken]`（QRオーダー）
+> は未反映。最新のルート構成は `docs/architecture.md`、各機能の詳細は `docs/kds.md` /
+> `docs/qr-order.md` / `docs/inventory-flow.md` を参照。
+
 ## 公開画面（未ログイン）
 
 | パス | 内容 |

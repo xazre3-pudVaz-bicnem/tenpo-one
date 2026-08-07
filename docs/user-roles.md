@@ -1,5 +1,7 @@
 # ユーザー・ロール定義
 
+> `lib/permissions.ts`との1:1対応表・機能フラグ(`requireFeature`)との関係は `docs/permissions.md` を参照。
+
 ## 階層
 
 ```
