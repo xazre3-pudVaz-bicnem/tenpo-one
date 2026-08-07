@@ -4,6 +4,9 @@ import { requireMember } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { can } from '@/lib/permissions';
 import { yen, formatDate, formatDateTime } from '@/lib/format';
+import { classifyCustomer, calcRfm, calcLtv, type CustomerMetrics } from '@/lib/crm';
+import { RESERVATION_STATUS, type ReservationStatus } from '@/lib/reservations';
+import { METHOD_LABELS } from '@/components/cash/labels';
 import { PageHeader } from '@/components/ui/page-header';
 import { StatCard } from '@/components/ui/stat-card';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -17,13 +20,8 @@ import { TagsEditor } from '@/components/customers/tags-editor';
 import { NotesSection, type NoteRow } from '@/components/customers/notes-section';
 import { RecalcButton } from '@/components/customers/recalc-button';
 import { DeleteCustomerButton } from '@/components/customers/delete-customer-button';
-import {
-  CONSENT_TYPES,
-  RESERVATION_STATUS_LABELS,
-  RESERVATION_STATUS_TONES,
-  type ConsentType,
-  type ReservationStatus,
-} from '@/components/customers/labels';
+import { SegmentBadges, RfmBadge } from '@/components/customers/segment-badges';
+import { CONSENT_TYPES, type ConsentType } from '@/components/customers/labels';
 
 export const metadata: Metadata = { title: '顧客詳細' };
 
@@ -85,8 +83,10 @@ export default async function CustomerDetailPage({
     { data: tagLinkRows },
     { data: allTagRows },
     { data: noteRows },
-    { data: reservationRows },
+    { data: reservationRows, count: reservationCount },
     { data: orderRows },
+    { data: orderItemRows },
+    { data: paymentRows },
   ] = await Promise.all([
     supabase.from('customer_consents').select('consent_type, granted, granted_at').eq('customer_id', id),
     supabase.from('customer_tag_links').select('customer_tags(id, name, color)').eq('customer_id', id),
@@ -98,16 +98,30 @@ export default async function CustomerDetailPage({
       .order('created_at', { ascending: false }),
     supabase
       .from('reservations')
-      .select('id, start_at, party_size, status, cancel_reason, stores(name)')
+      .select('id, start_at, party_size, status, cancel_reason, stores(name)', { count: 'exact' })
       .eq('customer_id', id)
       .order('start_at', { ascending: false })
       .limit(20),
+    // 店舗別集計・注文履歴の両方に使うため、来店として確定した全注文を取得する
     supabase
       .from('orders')
-      .select('id, opened_at, total, stores(name)')
+      .select('id, opened_at, total, store_id, stores(name)')
       .eq('customer_id', id)
       .in('status', ['paid', 'refunded'])
       .order('opened_at', { ascending: false })
+      .limit(2000),
+    supabase
+      .from('order_items')
+      .select('name, quantity, line_total, orders!inner(customer_id, status)')
+      .eq('status', 'active')
+      .eq('orders.customer_id', id)
+      .in('orders.status', ['paid', 'refunded'])
+      .limit(5000),
+    supabase
+      .from('payments')
+      .select('id, method, amount, paid_at, stores(name), orders!inner(customer_id)')
+      .eq('orders.customer_id', id)
+      .order('paid_at', { ascending: false })
       .limit(20),
   ]);
 
@@ -150,17 +164,77 @@ export default async function CustomerDetailPage({
     stores: { name: string } | null;
   }[];
 
-  const orders = (orderRows ?? []) as unknown as {
+  const allOrders = (orderRows ?? []) as unknown as {
     id: string;
     opened_at: string;
     total: number;
+    store_id: string;
+    stores: { name: string } | null;
+  }[];
+  const orders = allOrders.slice(0, 20);
+
+  const orderItems = (orderItemRows ?? []) as unknown as { name: string; quantity: number; line_total: number }[];
+
+  const payments = (paymentRows ?? []) as unknown as {
+    id: string;
+    method: string;
+    amount: number;
+    paid_at: string;
     stores: { name: string } | null;
   }[];
 
+  // ---- 分析（lib/crm.ts の純関数を使用） ----
+  const metrics: CustomerMetrics = {
+    visitCount: customer.visit_count,
+    totalSpent: customer.total_spent,
+    cancelCount: customer.cancel_count,
+    noShowCount: customer.no_show_count,
+    firstVisitAt: customer.first_visit_at ? new Date(customer.first_visit_at) : null,
+    lastVisitAt: customer.last_visit_at ? new Date(customer.last_visit_at) : null,
+  };
+  const now = new Date();
+  const segments = classifyCustomer(metrics, now);
+  const rfm = calcRfm(metrics, now);
+  const ltv = calcLtv(metrics, now);
+
   const avgSpend = customer.visit_count > 0 ? Math.round(customer.total_spent / customer.visit_count) : 0;
   const daysSinceLastVisit = customer.last_visit_at ? daysSince(customer.last_visit_at) : null;
-  const cancelDenominator = customer.visit_count + customer.cancel_count;
-  const cancelRate = cancelDenominator > 0 ? (customer.cancel_count / cancelDenominator) * 100 : 0;
+
+  // ---- 利用店舗の集計 ----
+  interface StoreBreakdown {
+    storeId: string;
+    storeName: string;
+    visitCount: number;
+    totalSpent: number;
+  }
+  const storeMap = new Map<string, StoreBreakdown>();
+  for (const o of allOrders) {
+    const cur = storeMap.get(o.store_id) ?? {
+      storeId: o.store_id,
+      storeName: o.stores?.name ?? '—',
+      visitCount: 0,
+      totalSpent: 0,
+    };
+    cur.visitCount += 1;
+    cur.totalSpent += o.total;
+    storeMap.set(o.store_id, cur);
+  }
+  const storeBreakdown = [...storeMap.values()].sort((a, b) => b.totalSpent - a.totalSpent);
+
+  // ---- よく注文する商品TOP5 ----
+  interface ProductAgg {
+    name: string;
+    quantity: number;
+    amount: number;
+  }
+  const productMap = new Map<string, ProductAgg>();
+  for (const oi of orderItems) {
+    const cur = productMap.get(oi.name) ?? { name: oi.name, quantity: 0, amount: 0 };
+    cur.quantity += oi.quantity;
+    cur.amount += oi.line_total;
+    productMap.set(oi.name, cur);
+  }
+  const topProducts = [...productMap.values()].sort((a, b) => b.quantity - a.quantity).slice(0, 5);
 
   return (
     <div>
@@ -176,27 +250,21 @@ export default async function CustomerDetailPage({
         }
       />
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-        <StatCard label="来店回数" value={`${customer.visit_count}回`} />
-        <StatCard label="累計利用額" value={yen(customer.total_spent)} tone="primary" />
-        <StatCard label="平均客単価" value={yen(avgSpend)} />
-        <StatCard label="最終来店からの日数" value={daysSinceLastVisit == null ? '—' : `${daysSinceLastVisit}日`} />
-        <StatCard
-          label="キャンセル率"
-          value={`${cancelRate.toFixed(1)}%`}
-          tone={cancelRate > 0 ? 'warning' : 'default'}
-          sub={`キャンセル${customer.cancel_count}件・無断キャンセル${customer.no_show_count}件`}
-        />
+      <div className="mb-5 flex flex-wrap items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-3">
+        <span className="text-xs font-medium text-gray-500">自動分類</span>
+        <SegmentBadges segments={segments} />
+        <span className="mx-1 hidden h-4 w-px bg-gray-200 sm:block" />
+        <RfmBadge rfm={rfm} showDetail />
       </div>
 
-      <div className="mt-5 grid gap-5 xl:grid-cols-3">
-        <div className="space-y-5 xl:col-span-2">
+      <div className="grid gap-5 lg:grid-cols-3">
+        <div className="space-y-5 lg:col-span-1">
           <Card>
             <CardHeader className="flex items-center justify-between">
               <CardTitle>基本情報</CardTitle>
             </CardHeader>
             <CardContent>
-              <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <dl className="grid grid-cols-1 gap-4">
                 <div>
                   <dt className="text-xs font-medium text-gray-500">電話番号</dt>
                   <dd className="mt-0.5 text-sm text-navy">{customer.phone || '—'}</dd>
@@ -215,7 +283,7 @@ export default async function CustomerDetailPage({
                     {customer.gender === 'male' ? '男性' : customer.gender === 'female' ? '女性' : customer.gender === 'other' ? 'その他' : '—'}
                   </dd>
                 </div>
-                <div className="sm:col-span-2">
+                <div>
                   <dt className="text-xs font-medium text-gray-500">住所</dt>
                   <dd className="mt-0.5 text-sm text-navy">
                     {customer.postal_code ? `〒${customer.postal_code} ` : ''}
@@ -240,6 +308,159 @@ export default async function CustomerDetailPage({
           />
 
           <NotesSection customerId={customer.id} notes={notes} canEdit={canWrite} />
+
+          <TagsEditor customerId={customer.id} allTags={allTagRows ?? []} attached={attachedTags} canEdit={canWrite} />
+
+          <ConsentPanel customerId={customer.id} consents={consents} canEdit={canWrite} />
+        </div>
+
+        <div className="space-y-5 lg:col-span-2">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <StatCard label="来店回数" value={`${customer.visit_count}回`} />
+            <StatCard label="予約回数" value={`${(reservationCount ?? 0).toLocaleString('ja-JP')}回`} />
+            <StatCard
+              label="キャンセル回数"
+              value={`${customer.cancel_count}回`}
+              tone={customer.cancel_count > 0 ? 'warning' : 'default'}
+            />
+            <StatCard
+              label="無断キャンセル"
+              value={`${customer.no_show_count}回`}
+              tone={customer.no_show_count > 0 ? 'danger' : 'default'}
+            />
+            <StatCard label="累計利用額" value={yen(customer.total_spent)} tone="primary" />
+            <StatCard label="平均客単価" value={yen(avgSpend)} />
+            <StatCard label="最終来店からの日数" value={daysSinceLastVisit == null ? '—' : `${daysSinceLastVisit}日`} />
+          </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>LTV（顧客生涯価値）</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <p className="text-xs font-medium text-gray-500">実績LTV（累計利用額）</p>
+                  <p className="mt-1 text-2xl font-bold tabular-nums text-primary-deep">{yen(ltv.actual)}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-gray-500">12ヶ月予測LTV（参考値）</p>
+                  <p className="mt-1 text-2xl font-bold tabular-nums text-navy">
+                    {ltv.projected12m == null ? '算出中' : yen(ltv.projected12m)}
+                  </p>
+                </div>
+              </div>
+              <p className="mt-3 text-xs text-gray-500">
+                {ltv.projected12m == null
+                  ? '来店実績が2回未満のため予測は算出されません。来店実績が蓄積すると表示されます。'
+                  : `平均客単価 ${yen(ltv.avgSpend)} × 月間来店頻度 ${ltv.visitsPerMonth}回 × 12ヶ月で算出した参考値です。実績を保証するものではありません。`}
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>利用店舗</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              {storeBreakdown.length === 0 ? (
+                <div className="p-5">
+                  <EmptyState title="利用店舗の実績はありません" className="border-0 py-8" />
+                </div>
+              ) : (
+                <TableWrap className="border-0">
+                  <Table>
+                    <THead>
+                      <Tr>
+                        <Th>店舗</Th>
+                        <Th className="text-right">来店回数</Th>
+                        <Th className="text-right">利用額</Th>
+                      </Tr>
+                    </THead>
+                    <TBody>
+                      {storeBreakdown.map((s) => (
+                        <Tr key={s.storeId}>
+                          <Td>{s.storeName}</Td>
+                          <Td className="text-right tabular-nums">{s.visitCount}回</Td>
+                          <Td className="text-right tabular-nums">{yen(s.totalSpent)}</Td>
+                        </Tr>
+                      ))}
+                    </TBody>
+                  </Table>
+                </TableWrap>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>よく注文する商品 TOP5</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              {topProducts.length === 0 ? (
+                <div className="p-5">
+                  <EmptyState title="注文実績はありません" className="border-0 py-8" />
+                </div>
+              ) : (
+                <TableWrap className="border-0">
+                  <Table>
+                    <THead>
+                      <Tr>
+                        <Th>商品名</Th>
+                        <Th className="text-right">数量</Th>
+                        <Th className="text-right">金額</Th>
+                      </Tr>
+                    </THead>
+                    <TBody>
+                      {topProducts.map((p) => (
+                        <Tr key={p.name}>
+                          <Td>{p.name}</Td>
+                          <Td className="text-right tabular-nums">{p.quantity}点</Td>
+                          <Td className="text-right tabular-nums">{yen(p.amount)}</Td>
+                        </Tr>
+                      ))}
+                    </TBody>
+                  </Table>
+                </TableWrap>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>決済履歴（直近20件）</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              {payments.length === 0 ? (
+                <div className="p-5">
+                  <EmptyState title="決済履歴はありません" className="border-0 py-8" />
+                </div>
+              ) : (
+                <TableWrap className="border-0">
+                  <Table>
+                    <THead>
+                      <Tr>
+                        <Th>日時</Th>
+                        <Th>店舗</Th>
+                        <Th>方法</Th>
+                        <Th className="text-right">金額</Th>
+                      </Tr>
+                    </THead>
+                    <TBody>
+                      {payments.map((p) => (
+                        <Tr key={p.id}>
+                          <Td>{formatDateTime(p.paid_at)}</Td>
+                          <Td>{p.stores?.name ?? '—'}</Td>
+                          <Td>{METHOD_LABELS[p.method] ?? p.method}</Td>
+                          <Td className="text-right tabular-nums">{yen(p.amount)}</Td>
+                        </Tr>
+                      ))}
+                    </TBody>
+                  </Table>
+                </TableWrap>
+              )}
+            </CardContent>
+          </Card>
 
           <Card>
             <CardHeader>
@@ -269,9 +490,7 @@ export default async function CustomerDetailPage({
                           <Td>{r.stores?.name ?? '—'}</Td>
                           <Td className="text-right tabular-nums">{r.party_size}名</Td>
                           <Td>
-                            <Badge tone={RESERVATION_STATUS_TONES[r.status] ?? 'gray'}>
-                              {RESERVATION_STATUS_LABELS[r.status] ?? r.status}
-                            </Badge>
+                            <Badge tone={RESERVATION_STATUS[r.status].tone}>{RESERVATION_STATUS[r.status].label}</Badge>
                           </Td>
                           <Td className="text-gray-500">{r.cancel_reason || '—'}</Td>
                         </Tr>
@@ -322,11 +541,6 @@ export default async function CustomerDetailPage({
               )}
             </CardContent>
           </Card>
-        </div>
-
-        <div className="space-y-5">
-          <ConsentPanel customerId={customer.id} consents={consents} canEdit={canWrite} />
-          <TagsEditor customerId={customer.id} allTags={allTagRows ?? []} attached={attachedTags} canEdit={canWrite} />
         </div>
       </div>
     </div>

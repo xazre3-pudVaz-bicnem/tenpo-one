@@ -4,7 +4,7 @@ import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Search } from 'lucide-react';
 import { Input, Select } from '@/components/ui/input';
-import { SEGMENT_LABELS, type CustomerSegment } from '@/components/customers/labels';
+import { SEGMENT_LABELS, type CustomerSegment } from '@/lib/crm';
 
 export interface CustomerTagOption {
   id: string;
@@ -93,9 +93,9 @@ export function CustomerFilters({
           className="min-w-[200px]"
         >
           <option value="">すべて</option>
-          {(Object.entries(SEGMENT_LABELS) as [CustomerSegment, string][]).map(([key, label]) => (
+          {(Object.entries(SEGMENT_LABELS) as [CustomerSegment, { label: string }][]).map(([key, info]) => (
             <option key={key} value={key}>
-              {label}
+              {info.label}
             </option>
           ))}
         </Select>
