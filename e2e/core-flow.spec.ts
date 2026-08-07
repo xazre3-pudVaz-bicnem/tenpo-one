@@ -12,19 +12,19 @@ test.describe('認証・権限', () => {
 
   test('本社ユーザーは店舗切替に全店舗が表示される', async ({ page }) => {
     await login(page, ACCOUNTS.hq);
-    const switcher = page.getByLabel('店舗切替');
+    // 店舗切替はPC用とモバイル用の2要素がDOMに存在するため最初の要素を対象にする
+    const switcher = page.getByLabel('店舗切替').first();
     await expect(switcher).toBeVisible();
-    await expect(switcher.locator('option')).toContainText([
-      '全店舗',
-      'TENPO ONE 渋谷店',
-      'TENPO ONE 新宿店',
-      'TENPO ONE 横浜店',
-    ]);
+    // 表示順はDBの照合順に依存するため、順序非依存で全店舗が含まれることを検証する
+    const options = await switcher.locator('option').allTextContents();
+    for (const name of ['全店舗', 'TENPO ONE 渋谷店', 'TENPO ONE 新宿店', 'TENPO ONE 横浜店']) {
+      expect(options).toContain(name);
+    }
   });
 
   test('店舗ユーザーの切替には自店舗のみ表示される（他店舗アクセス拒否）', async ({ page }) => {
     await login(page, ACCOUNTS.staff);
-    const switcher = page.getByLabel('店舗切替');
+    const switcher = page.getByLabel('店舗切替').first();
     const options = await switcher.locator('option').allTextContents();
     expect(options.join()).toContain('渋谷');
     expect(options.join()).not.toContain('横浜');
@@ -34,7 +34,7 @@ test.describe('認証・権限', () => {
 test.describe('公開予約 → 台帳 → POS → 会計（縦フロー）', () => {
   test('公開予約ページから予約を作成できる', async ({ page }) => {
     await page.goto('/book/tenpoone-shibuya');
-    await expect(page.getByText('TENPO ONE 渋谷店')).toBeVisible();
+    await expect(page.getByRole('heading', { name: /TENPO ONE 渋谷店/ })).toBeVisible();
     // ウィザードの詳細操作はUI実装に依存するため、表示検証まで
   });
 
