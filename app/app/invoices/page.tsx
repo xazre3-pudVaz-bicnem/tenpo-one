@@ -1,10 +1,14 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { Download } from 'lucide-react';
 import { requireMember } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
+import { can } from '@/lib/permissions';
 import { PageHeader } from '@/components/ui/page-header';
+import { StatCard } from '@/components/ui/stat-card';
 import { Select } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { yen, todayJst } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { InvoiceForm } from '@/components/invoices/invoice-form';
 import { InvoiceTable, type InvoiceRow } from '@/components/invoices/invoice-table';
@@ -16,6 +20,7 @@ import {
   INVOICE_STATUS_LABELS,
   INVOICE_STATUS_OPTIONS,
   TRIAGE_DOC_TYPE_OPTIONS,
+  UNPAID_INVOICE_STATUSES,
   type DocType,
   type InvoiceStatus,
 } from '@/components/invoices/labels';
@@ -48,12 +53,17 @@ export default async function InvoicesPage({
     ym?: string;
     docType?: string;
     store?: string;
+    expense?: string;
+    overdue?: string;
   }>;
 }) {
   const ctx = await requireMember();
   const supabase = await createClient();
   const sp = await searchParams;
   const tab: Tab = sp.tab === 'inbox' || sp.tab === 'documents' ? sp.tab : 'invoices';
+  const canWrite = can(ctx.role, 'documents.write');
+  const canApprove = can(ctx.role, 'invoices.approve');
+  const today = todayJst();
 
   const { data: vendorsData } = await supabase
     .from('vendors')
@@ -63,21 +73,37 @@ export default async function InvoicesPage({
     .order('name');
   const vendors = vendorsData ?? [];
 
+  const { data: accountsData } = await supabase
+    .from('expense_accounts')
+    .select('id, name')
+    .eq('organization_id', ctx.organizationId)
+    .eq('status', 'active')
+    .order('sort_order');
+  const accounts = accountsData ?? [];
+
   let invoiceRows: InvoiceRow[] = [];
   let inboxDocs: InboxDoc[] = [];
   let documentRows: DocumentRow[] = [];
+  let unpaidTotal = 0;
+  let scheduledThisMonthTotal = 0;
+  let overdueCount = 0;
+  let overdueTotal = 0;
 
   if (tab === 'invoices') {
     let q = supabase
       .from('invoices')
-      .select('id, status, vendor_name, due_date, amount, store_id, stores(name)')
+      .select('id, status, vendor_name, due_date, amount, store_id, stores(name), expense_accounts(name)')
       .eq('organization_id', ctx.organizationId);
     if (ctx.currentStore) q = q.eq('store_id', ctx.currentStore.id);
     if (sp.status) q = q.eq('status', sp.status);
     if (sp.vendor) q = q.eq('vendor_id', sp.vendor);
+    if (sp.expense) q = q.eq('expense_account_id', sp.expense);
     if (sp.ym) {
       const { start, end } = ymRange(sp.ym);
       q = q.gte('issue_date', start).lt('issue_date', end);
+    }
+    if (sp.overdue === '1') {
+      q = q.lt('due_date', today).in('status', UNPAID_INVOICE_STATUSES);
     }
     const { data } = await q.order('due_date', { ascending: true, nullsFirst: false }).limit(300);
     invoiceRows = (data ?? []).map((r) => ({
@@ -87,7 +113,34 @@ export default async function InvoicesPage({
       dueDate: r.due_date as string | null,
       amount: r.amount as number,
       storeName: (r.stores as unknown as { name: string } | null)?.name ?? null,
+      expenseAccountName: (r.expense_accounts as unknown as { name: string } | null)?.name ?? null,
     }));
+
+    // サマリー用集計（絞込条件に影響されない全体像）
+    let summaryQ = supabase
+      .from('invoices')
+      .select('status, due_date, amount')
+      .eq('organization_id', ctx.organizationId);
+    if (ctx.currentStore) summaryQ = summaryQ.eq('store_id', ctx.currentStore.id);
+    const { data: summaryData } = await summaryQ.limit(2000);
+    const monthStart = `${today.slice(0, 7)}-01`;
+    const nextMonthDate = new Date(Number(today.slice(0, 4)), Number(today.slice(5, 7)), 1);
+    const monthEnd = `${nextMonthDate.getFullYear()}-${String(nextMonthDate.getMonth() + 1).padStart(2, '0')}-01`;
+    for (const r of summaryData ?? []) {
+      const status = r.status as InvoiceStatus;
+      const dueDate = r.due_date as string | null;
+      const amount = r.amount as number;
+      if (UNPAID_INVOICE_STATUSES.includes(status)) {
+        unpaidTotal += amount;
+        if (dueDate && dueDate < today) {
+          overdueCount += 1;
+          overdueTotal += amount;
+        }
+      }
+      if (status === 'scheduled' && dueDate && dueDate >= monthStart && dueDate < monthEnd) {
+        scheduledThisMonthTotal += amount;
+      }
+    }
   }
 
   if (tab === 'inbox') {
@@ -136,7 +189,30 @@ export default async function InvoicesPage({
       <PageHeader
         title="請求書・書類"
         description="請求書の承認・支払管理と、書類（領収書・納品書等）の保存を行います"
-        actions={tab === 'invoices' ? <InvoiceForm organizationId={ctx.organizationId} currentStoreId={ctx.currentStore?.id ?? null} stores={storeOptions} vendors={vendors} /> : undefined}
+        actions={
+          tab === 'invoices' ? (
+            <>
+              {can(ctx.role, 'csv.export') && (
+                <Link
+                  href={`/app/invoices/export${sp.status ? `?status=${encodeURIComponent(sp.status)}` : ''}`}
+                  className="inline-flex h-10 items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 text-sm font-medium text-navy hover:bg-gray-50"
+                >
+                  <Download className="h-4 w-4" />
+                  請求書CSV
+                </Link>
+              )}
+              {canWrite && (
+                <InvoiceForm
+                  organizationId={ctx.organizationId}
+                  currentStoreId={ctx.currentStore?.id ?? null}
+                  stores={storeOptions}
+                  vendors={vendors}
+                  accounts={accounts}
+                />
+              )}
+            </>
+          ) : undefined
+        }
       />
 
       <div className="mb-5 flex gap-1 border-b border-gray-200">
@@ -156,6 +232,28 @@ export default async function InvoicesPage({
 
       {tab === 'invoices' && (
         <div className="space-y-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <StatCard label="未払合計" value={yen(unpaidTotal)} tone="primary" />
+            <StatCard label="今月支払予定合計" value={yen(scheduledThisMonthTotal)} />
+            <StatCard
+              label="期限超過合計"
+              value={yen(overdueTotal)}
+              sub={`${overdueCount}件`}
+              tone={overdueCount > 0 ? 'danger' : 'default'}
+            />
+          </div>
+
+          {overdueCount > 0 && (
+            <div className="flex items-center justify-between rounded-xl border border-danger/30 bg-danger-soft px-4 py-3 text-sm">
+              <p className="font-medium text-danger">
+                支払期限を過ぎた請求書が {overdueCount}件・合計 {yen(overdueTotal)} あります。至急確認してください。
+              </p>
+              <Link href="/app/invoices?tab=invoices&overdue=1" className="whitespace-nowrap font-medium text-danger underline">
+                期限超過のみ表示
+              </Link>
+            </div>
+          )}
+
           <form method="GET" className="flex flex-wrap items-end gap-2">
             <input type="hidden" name="tab" value="invoices" />
             <div>
@@ -181,6 +279,17 @@ export default async function InvoicesPage({
               </Select>
             </div>
             <div>
+              <label className="mb-1 block text-xs font-medium text-gray-500">費目</label>
+              <Select name="expense" defaultValue={sp.expense ?? ''} className="w-40">
+                <option value="">すべて</option>
+                {accounts.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div>
               <label className="mb-1 block text-xs font-medium text-gray-500">年月（発行日）</label>
               <input
                 type="month"
@@ -189,12 +298,16 @@ export default async function InvoicesPage({
                 className="h-10 rounded-lg border border-gray-300 px-3 text-sm"
               />
             </div>
+            <label className="mb-0.5 flex h-10 items-center gap-1.5 text-sm text-gray-700">
+              <input type="checkbox" name="overdue" value="1" defaultChecked={sp.overdue === '1'} />
+              期限超過のみ
+            </label>
             <Button type="submit" variant="secondary" size="md">
               絞り込む
             </Button>
           </form>
 
-          <InvoiceTable rows={invoiceRows} />
+          <InvoiceTable rows={invoiceRows} accounts={accounts} canWrite={canWrite} canApprove={canApprove} />
         </div>
       )}
 

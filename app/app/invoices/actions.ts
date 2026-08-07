@@ -110,6 +110,7 @@ export async function createInvoice(input: {
   taxAmount: number;
   registrationNumber: string | null;
   paymentMethod: PaymentMethod | null;
+  expenseAccountId: string | null;
   note: string | null;
   file: UploadedFileRef | null;
 }) {
@@ -156,6 +157,7 @@ export async function createInvoice(input: {
     tax_amount: input.taxAmount,
     registration_number: input.registrationNumber,
     payment_method: input.paymentMethod,
+    expense_account_id: input.expenseAccountId,
     status: 'open',
     document_id: documentId,
     note: input.note,
@@ -167,17 +169,77 @@ export async function createInvoice(input: {
   revalidatePath(PATH);
 }
 
-type InvoiceAction = 'review' | 'approve' | 'schedule' | 'pay' | 'reject';
+/** 請求書の編集（支払済みは編集不可）。取引先の紐付け(vendor_id)は変更しない */
+export async function updateInvoice(
+  invoiceId: string,
+  input: {
+    vendorName: string;
+    invoiceNo: string | null;
+    issueDate: string | null;
+    dueDate: string | null;
+    amount: number;
+    taxAmount: number;
+    registrationNumber: string | null;
+    paymentMethod: PaymentMethod | null;
+    expenseAccountId: string | null;
+    note: string | null;
+  }
+) {
+  const ctx = await requirePermission('documents.write');
+  if (!input.vendorName.trim()) throw new Error('取引先を入力してください');
+  if (!Number.isFinite(input.amount) || input.amount < 0) throw new Error('金額を正しく入力してください');
+  const supabase = await createClient();
 
+  const { data: invoice, error } = await supabase
+    .from('invoices')
+    .select('id, status')
+    .eq('id', invoiceId)
+    .single();
+  if (error || !invoice) throw new Error('請求書が見つかりません');
+  if (invoice.status === 'paid') throw new Error('支払済みの請求書は編集できません');
+
+  const { error: updErr } = await supabase
+    .from('invoices')
+    .update({
+      vendor_name: input.vendorName.trim(),
+      invoice_no: input.invoiceNo,
+      issue_date: input.issueDate,
+      due_date: input.dueDate,
+      amount: Math.round(input.amount),
+      tax_amount: Math.round(input.taxAmount),
+      registration_number: input.registrationNumber,
+      payment_method: input.paymentMethod,
+      expense_account_id: input.expenseAccountId,
+      note: input.note,
+      updated_by: ctx.userId,
+    })
+    .eq('id', invoiceId);
+  if (updErr) throw new Error(updErr.message);
+
+  revalidatePath(PATH);
+}
+
+type InvoiceAction = 'review' | 'submit' | 'approve' | 'schedule' | 'pay' | 'reject';
+
+/**
+ * 状態遷移の定義。open→review→pending_approval→approved→scheduled→paid が基本の流れ。
+ * pending_approval からの approve/reject のみ invoices.approve 権限（監査ログ必須）。
+ * review→approved の直行は廃止し、必ず pending_approval（承認へ回す）を経由する。
+ */
 const TRANSITIONS: Record<
   InvoiceAction,
   { from: InvoiceStatus[]; to: InvoiceStatus; permission: PermissionAction }
 > = {
   review: { from: ['open'], to: 'review', permission: 'documents.write' },
-  approve: { from: ['review'], to: 'approved', permission: 'invoices.approve' },
+  submit: { from: ['review'], to: 'pending_approval', permission: 'documents.write' },
+  approve: { from: ['pending_approval'], to: 'approved', permission: 'invoices.approve' },
   schedule: { from: ['approved'], to: 'scheduled', permission: 'invoices.approve' },
   pay: { from: ['scheduled', 'approved'], to: 'paid', permission: 'invoices.approve' },
-  reject: { from: ['open', 'review', 'approved', 'scheduled'], to: 'rejected', permission: 'invoices.approve' },
+  reject: {
+    from: ['open', 'review', 'pending_approval', 'approved', 'scheduled'],
+    to: 'rejected',
+    permission: 'invoices.approve',
+  },
 };
 
 /** 請求書の状態遷移（承認・差戻し・支払確定を含む）。すべて監査ログに記録する */
@@ -235,7 +297,7 @@ export async function getInvoiceDetail(invoiceId: string) {
   const supabase = await createClient();
   const { data: invoice, error } = await supabase
     .from('invoices')
-    .select('*, vendors(name), stores(name), documents(id, file_name, mime_type, doc_type)')
+    .select('*, vendors(name), stores(name), expense_accounts(id, name), documents(id, file_name, mime_type, doc_type)')
     .eq('id', invoiceId)
     .single();
   if (error || !invoice) throw new Error('請求書が見つかりません');

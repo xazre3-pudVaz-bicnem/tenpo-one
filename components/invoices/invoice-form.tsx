@@ -28,17 +28,24 @@ interface StoreOption {
   name: string;
 }
 
+interface ExpenseAccountOption {
+  id: string;
+  name: string;
+}
+
 /** 「請求書を登録」ダイアログ。ファイル添付は任意で、Storageへ直接アップロードしてからserver actionを呼ぶ */
 export function InvoiceForm({
   organizationId,
   currentStoreId,
   stores,
   vendors,
+  accounts,
 }: {
   organizationId: string;
   currentStoreId: string | null;
   stores: StoreOption[];
   vendors: VendorOption[];
+  accounts: ExpenseAccountOption[];
 }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -47,6 +54,7 @@ export function InvoiceForm({
   const [vendorId, setVendorId] = useState('');
   const [vendorName, setVendorName] = useState('');
   const [storeId, setStoreId] = useState(currentStoreId ?? '');
+  const [expenseAccountId, setExpenseAccountId] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
   const { toast } = useToast();
@@ -104,12 +112,16 @@ export function InvoiceForm({
         taxAmount: Math.round(taxAmount),
         registrationNumber: (formData.get('registrationNumber') as string) || null,
         paymentMethod: (formData.get('paymentMethod') as PaymentMethod) || null,
+        expenseAccountId: expenseAccountId || null,
         note: null,
         file: fileRef_,
       });
 
       toast('請求書を登録しました');
       setOpen(false);
+      setVendorId('');
+      setVendorName('');
+      setExpenseAccountId('');
       router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : '登録に失敗しました');
@@ -222,6 +234,17 @@ export function InvoiceForm({
             <div className="col-span-2">
               <Label htmlFor="registrationNumber">インボイス登録番号</Label>
               <Input id="registrationNumber" name="registrationNumber" placeholder="T1234567890123" />
+            </div>
+            <div className="col-span-2">
+              <Label htmlFor="expenseAccount">費目</Label>
+              <Select id="expenseAccount" value={expenseAccountId} onChange={(e) => setExpenseAccountId(e.target.value)}>
+                <option value="">未設定</option>
+                {accounts.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name}
+                  </option>
+                ))}
+              </Select>
             </div>
           </div>
 

@@ -1,11 +1,13 @@
 /** 請求書・書類・仕入・在庫モジュール共通の表示ラベル定義 */
 import type { BadgeTone } from '@/components/ui/badge';
 
-export type InvoiceStatus = 'open' | 'review' | 'approved' | 'scheduled' | 'paid' | 'rejected';
+export type InvoiceStatus =
+  | 'open' | 'review' | 'pending_approval' | 'approved' | 'scheduled' | 'paid' | 'rejected';
 
 export const INVOICE_STATUS_LABELS: Record<InvoiceStatus, string> = {
   open: '未処理',
   review: '確認待ち',
+  pending_approval: '承認待ち',
   approved: '承認済み',
   scheduled: '支払予定',
   paid: '支払済み',
@@ -15,6 +17,7 @@ export const INVOICE_STATUS_LABELS: Record<InvoiceStatus, string> = {
 export const INVOICE_STATUS_TONES: Record<InvoiceStatus, BadgeTone> = {
   open: 'gray',
   review: 'warning',
+  pending_approval: 'navy',
   approved: 'primary',
   scheduled: 'primary',
   paid: 'success',
@@ -22,7 +25,12 @@ export const INVOICE_STATUS_TONES: Record<InvoiceStatus, BadgeTone> = {
 };
 
 export const INVOICE_STATUS_OPTIONS: InvoiceStatus[] = [
-  'open', 'review', 'approved', 'scheduled', 'paid', 'rejected',
+  'open', 'review', 'pending_approval', 'approved', 'scheduled', 'paid', 'rejected',
+];
+
+/** 未払（支払完了・差戻し以外）とみなすステータス。期限超過・未払合計の判定に使う */
+export const UNPAID_INVOICE_STATUSES: InvoiceStatus[] = [
+  'open', 'review', 'pending_approval', 'approved', 'scheduled',
 ];
 
 export type DocType =

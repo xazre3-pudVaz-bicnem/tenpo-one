@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/ui/state';
 import { yen, formatDate, todayJst } from '@/lib/format';
 import { InvoiceDetailDialog } from './invoice-detail';
-import { INVOICE_STATUS_LABELS, INVOICE_STATUS_TONES, type InvoiceStatus } from './labels';
+import { INVOICE_STATUS_LABELS, INVOICE_STATUS_TONES, UNPAID_INVOICE_STATUSES, type InvoiceStatus } from './labels';
 
 export interface InvoiceRow {
   id: string;
@@ -15,11 +15,25 @@ export interface InvoiceRow {
   dueDate: string | null;
   amount: number;
   storeName: string | null;
+  expenseAccountName: string | null;
 }
 
-const OPEN_STATUSES: InvoiceStatus[] = ['open', 'review', 'approved', 'scheduled'];
+interface ExpenseAccountOption {
+  id: string;
+  name: string;
+}
 
-export function InvoiceTable({ rows }: { rows: InvoiceRow[] }) {
+export function InvoiceTable({
+  rows,
+  accounts,
+  canWrite,
+  canApprove,
+}: {
+  rows: InvoiceRow[];
+  accounts: ExpenseAccountOption[];
+  canWrite: boolean;
+  canApprove: boolean;
+}) {
   const [selected, setSelected] = useState<string | null>(null);
   const today = todayJst();
 
@@ -40,6 +54,7 @@ export function InvoiceTable({ rows }: { rows: InvoiceRow[] }) {
             <Tr>
               <Th>状態</Th>
               <Th>取引先</Th>
+              <Th>費目</Th>
               <Th>支払期限</Th>
               <Th className="text-right">金額</Th>
               <Th>店舗</Th>
@@ -47,13 +62,17 @@ export function InvoiceTable({ rows }: { rows: InvoiceRow[] }) {
           </THead>
           <TBody>
             {rows.map((r) => {
-              const overdue = !!r.dueDate && r.dueDate < today && OPEN_STATUSES.includes(r.status);
+              const overdue = !!r.dueDate && r.dueDate < today && UNPAID_INVOICE_STATUSES.includes(r.status);
               return (
                 <Tr key={r.id} className="cursor-pointer" onClick={() => setSelected(r.id)}>
                   <Td>
-                    <Badge tone={INVOICE_STATUS_TONES[r.status]}>{INVOICE_STATUS_LABELS[r.status]}</Badge>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <Badge tone={INVOICE_STATUS_TONES[r.status]}>{INVOICE_STATUS_LABELS[r.status]}</Badge>
+                      {overdue && <Badge tone="danger">期限超過</Badge>}
+                    </div>
                   </Td>
                   <Td className="font-medium text-navy">{r.vendorName}</Td>
+                  <Td>{r.expenseAccountName ?? '—'}</Td>
                   <Td className={overdue ? 'font-semibold text-danger' : ''}>{formatDate(r.dueDate)}</Td>
                   <Td className="text-right tabular-nums">{yen(r.amount)}</Td>
                   <Td>{r.storeName ?? '全店舗'}</Td>
@@ -63,7 +82,14 @@ export function InvoiceTable({ rows }: { rows: InvoiceRow[] }) {
           </TBody>
         </Table>
       </TableWrap>
-      <InvoiceDetailDialog key={selected ?? 'closed'} invoiceId={selected} onClose={() => setSelected(null)} />
+      <InvoiceDetailDialog
+        key={selected ?? 'closed'}
+        invoiceId={selected}
+        onClose={() => setSelected(null)}
+        accounts={accounts}
+        canWrite={canWrite}
+        canApprove={canApprove}
+      />
     </>
   );
 }

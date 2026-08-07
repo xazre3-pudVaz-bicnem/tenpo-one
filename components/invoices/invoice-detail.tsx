@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Dialog } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Input, Label, Textarea, FieldError } from '@/components/ui/input';
+import { Input, Label, Select, Textarea, FieldError } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/state';
 import { useToast } from '@/components/ui/toast';
 import { yen, formatDate, formatDateTime, todayJst } from '@/lib/format';
@@ -14,8 +14,21 @@ import {
   changeInvoiceStatus,
   getDocumentSignedUrl,
   getInvoiceDetail,
+  updateInvoice,
 } from '@/app/app/invoices/actions';
-import { INVOICE_STATUS_LABELS, INVOICE_STATUS_TONES, PAYMENT_METHOD_LABELS, type InvoiceStatus } from './labels';
+import {
+  INVOICE_STATUS_LABELS,
+  INVOICE_STATUS_TONES,
+  PAYMENT_METHOD_LABELS,
+  PAYMENT_METHOD_OPTIONS,
+  type InvoiceStatus,
+  type PaymentMethod,
+} from './labels';
+
+interface ExpenseAccountOption {
+  id: string;
+  name: string;
+}
 
 interface InvoiceDetail {
   id: string;
@@ -28,15 +41,31 @@ interface InvoiceDetail {
   tax_amount: number;
   registration_number: string | null;
   payment_method: string | null;
+  expense_account_id: string | null;
   paid_at: string | null;
   note: string | null;
   document_id: string | null;
   store_id: string | null;
   stores: { name: string } | null;
+  expense_accounts: { id: string; name: string } | null;
   documents: { id: string; file_name: string; mime_type: string; doc_type: string } | null;
 }
 
-export function InvoiceDetailDialog({ invoiceId, onClose }: { invoiceId: string | null; onClose: () => void }) {
+const today = () => todayJst();
+
+export function InvoiceDetailDialog({
+  invoiceId,
+  onClose,
+  accounts,
+  canWrite,
+  canApprove,
+}: {
+  invoiceId: string | null;
+  onClose: () => void;
+  accounts: ExpenseAccountOption[];
+  canWrite: boolean;
+  canApprove: boolean;
+}) {
   const [detail, setDetail] = useState<InvoiceDetail | null>(null);
   const [comments, setComments] = useState<{ id: string; body: string; createdAt: string; author: string }[]>([]);
   const [loading, setLoading] = useState(false);
@@ -44,10 +73,23 @@ export function InvoiceDetailDialog({ invoiceId, onClose }: { invoiceId: string 
   const [commentBody, setCommentBody] = useState('');
   const [rejectReason, setRejectReason] = useState('');
   const [showReject, setShowReject] = useState(false);
-  const [paidAt, setPaidAt] = useState(todayJst());
+  const [paidAt, setPaidAt] = useState(today());
   const [showPay, setShowPay] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [editing, setEditing] = useState(false);
+  const [editVendorName, setEditVendorName] = useState('');
+  const [editInvoiceNo, setEditInvoiceNo] = useState('');
+  const [editIssueDate, setEditIssueDate] = useState('');
+  const [editDueDate, setEditDueDate] = useState('');
+  const [editAmount, setEditAmount] = useState('0');
+  const [editTaxAmount, setEditTaxAmount] = useState('0');
+  const [editRegistrationNumber, setEditRegistrationNumber] = useState('');
+  const [editPaymentMethod, setEditPaymentMethod] = useState('');
+  const [editExpenseAccountId, setEditExpenseAccountId] = useState('');
+  const [editNote, setEditNote] = useState('');
+
   const router = useRouter();
   const { toast } = useToast();
 
@@ -109,6 +151,13 @@ export function InvoiceDetailDialog({ invoiceId, onClose }: { invoiceId: string 
       toast('確認待ちにしました');
     });
 
+  const handleSubmitForApproval = () =>
+    run(async () => {
+      if (!detail) return;
+      await changeInvoiceStatus(detail.id, 'submit');
+      toast('承認へ回しました');
+    });
+
   const handleApprove = () =>
     run(async () => {
       if (!detail) return;
@@ -140,7 +189,53 @@ export function InvoiceDetailDialog({ invoiceId, onClose }: { invoiceId: string 
       toast('差戻しました');
     });
 
+  const startEdit = () => {
+    if (!detail) return;
+    setEditVendorName(detail.vendor_name);
+    setEditInvoiceNo(detail.invoice_no ?? '');
+    setEditIssueDate(detail.issue_date ?? '');
+    setEditDueDate(detail.due_date ?? '');
+    setEditAmount(String(detail.amount));
+    setEditTaxAmount(String(detail.tax_amount));
+    setEditRegistrationNumber(detail.registration_number ?? '');
+    setEditPaymentMethod(detail.payment_method ?? '');
+    setEditExpenseAccountId(detail.expense_account_id ?? '');
+    setEditNote(detail.note ?? '');
+    setEditing(true);
+  };
+
+  const handleSaveEdit = () =>
+    run(async () => {
+      if (!detail) return;
+      if (!editVendorName.trim()) {
+        setError('取引先を入力してください');
+        return;
+      }
+      const amountValue = Number(editAmount);
+      const taxValue = Number(editTaxAmount);
+      if (!Number.isFinite(amountValue) || amountValue < 0) {
+        setError('金額を正しく入力してください');
+        return;
+      }
+      await updateInvoice(detail.id, {
+        vendorName: editVendorName.trim(),
+        invoiceNo: editInvoiceNo.trim() || null,
+        issueDate: editIssueDate || null,
+        dueDate: editDueDate || null,
+        amount: Math.round(amountValue),
+        taxAmount: Math.round(taxValue || 0),
+        registrationNumber: editRegistrationNumber.trim() || null,
+        paymentMethod: (editPaymentMethod as PaymentMethod) || null,
+        expenseAccountId: editExpenseAccountId || null,
+        note: editNote.trim() || null,
+      });
+      setEditing(false);
+      toast('請求書を更新しました');
+    });
+
   if (!invoiceId) return null;
+
+  const canEdit = canWrite && !!detail && detail.status !== 'paid';
 
   return (
     <Dialog open={!!invoiceId} onClose={onClose} title="請求書の詳細" wide>
@@ -148,11 +243,88 @@ export function InvoiceDetailDialog({ invoiceId, onClose }: { invoiceId: string 
         <div className="flex justify-center py-10">
           <Spinner />
         </div>
+      ) : editing ? (
+        <div className="space-y-4">
+          <div>
+            <Label htmlFor="edit-vendor">取引先</Label>
+            <Input id="edit-vendor" value={editVendorName} onChange={(e) => setEditVendorName(e.target.value)} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label htmlFor="edit-invoiceNo">請求書番号</Label>
+              <Input id="edit-invoiceNo" value={editInvoiceNo} onChange={(e) => setEditInvoiceNo(e.target.value)} />
+            </div>
+            <div>
+              <Label htmlFor="edit-paymentMethod">支払方法</Label>
+              <Select id="edit-paymentMethod" value={editPaymentMethod} onChange={(e) => setEditPaymentMethod(e.target.value)}>
+                <option value="">未設定</option>
+                {PAYMENT_METHOD_OPTIONS.map((m) => (
+                  <option key={m} value={m}>
+                    {PAYMENT_METHOD_LABELS[m]}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="edit-issueDate">発行日</Label>
+              <Input id="edit-issueDate" type="date" value={editIssueDate} onChange={(e) => setEditIssueDate(e.target.value)} />
+            </div>
+            <div>
+              <Label htmlFor="edit-dueDate">支払期限</Label>
+              <Input id="edit-dueDate" type="date" value={editDueDate} onChange={(e) => setEditDueDate(e.target.value)} />
+            </div>
+            <div>
+              <Label htmlFor="edit-amount">金額（円）</Label>
+              <Input id="edit-amount" type="number" min={0} step={1} value={editAmount} onChange={(e) => setEditAmount(e.target.value)} />
+            </div>
+            <div>
+              <Label htmlFor="edit-taxAmount">税額（円）</Label>
+              <Input id="edit-taxAmount" type="number" min={0} step={1} value={editTaxAmount} onChange={(e) => setEditTaxAmount(e.target.value)} />
+            </div>
+            <div className="col-span-2">
+              <Label htmlFor="edit-registrationNumber">インボイス登録番号</Label>
+              <Input id="edit-registrationNumber" value={editRegistrationNumber} onChange={(e) => setEditRegistrationNumber(e.target.value)} />
+            </div>
+            <div className="col-span-2">
+              <Label htmlFor="edit-expenseAccount">費目</Label>
+              <Select id="edit-expenseAccount" value={editExpenseAccountId} onChange={(e) => setEditExpenseAccountId(e.target.value)}>
+                <option value="">未設定</option>
+                {accounts.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div className="col-span-2">
+              <Label htmlFor="edit-note">メモ</Label>
+              <Textarea id="edit-note" value={editNote} onChange={(e) => setEditNote(e.target.value)} />
+            </div>
+          </div>
+
+          <FieldError message={error ?? undefined} />
+
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="secondary" onClick={() => setEditing(false)} disabled={busy}>
+              キャンセル
+            </Button>
+            <Button type="button" onClick={handleSaveEdit} disabled={busy}>
+              {busy ? '保存中…' : '保存する'}
+            </Button>
+          </div>
+        </div>
       ) : (
         <div className="space-y-5">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <Badge tone={INVOICE_STATUS_TONES[detail.status]}>{INVOICE_STATUS_LABELS[detail.status]}</Badge>
-            <p className="text-2xl font-bold tabular-nums text-navy">{yen(detail.amount)}</p>
+            <div className="flex items-center gap-3">
+              <p className="text-2xl font-bold tabular-nums text-navy">{yen(detail.amount)}</p>
+              {canEdit && (
+                <Button size="sm" variant="secondary" onClick={startEdit} disabled={busy}>
+                  編集する
+                </Button>
+              )}
+            </div>
           </div>
 
           <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
@@ -188,7 +360,11 @@ export function InvoiceDetailDialog({ invoiceId, onClose }: { invoiceId: string 
               <dt className="text-xs text-gray-500">支払日</dt>
               <dd>{formatDate(detail.paid_at)}</dd>
             </div>
-            <div className="col-span-2">
+            <div>
+              <dt className="text-xs text-gray-500">費目</dt>
+              <dd>{detail.expense_accounts?.name ?? '未設定'}</dd>
+            </div>
+            <div>
               <dt className="text-xs text-gray-500">インボイス登録番号</dt>
               <dd>{detail.registration_number ?? '—'}</dd>
             </div>
@@ -262,30 +438,40 @@ export function InvoiceDetailDialog({ invoiceId, onClose }: { invoiceId: string 
           <div className="border-t border-gray-100 pt-4">
             <p className="mb-2 text-xs font-medium text-gray-500">状態を変更</p>
             <div className="flex flex-wrap gap-2">
-              {detail.status === 'open' && (
+              {detail.status === 'open' && canWrite && (
                 <Button size="sm" onClick={handleReview} disabled={busy}>
                   確認待ちへ
                 </Button>
               )}
-              {detail.status === 'review' && (
+              {detail.status === 'review' && canWrite && (
+                <Button size="sm" onClick={handleSubmitForApproval} disabled={busy}>
+                  承認へ回す
+                </Button>
+              )}
+              {detail.status === 'pending_approval' && canApprove && (
                 <Button size="sm" variant="success" onClick={handleApprove} disabled={busy}>
                   承認する
                 </Button>
               )}
-              {detail.status === 'approved' && (
+              {detail.status === 'approved' && canApprove && (
                 <Button size="sm" onClick={handleSchedule} disabled={busy}>
                   支払予定にする
                 </Button>
               )}
-              {(detail.status === 'scheduled' || detail.status === 'approved') && !showPay && (
+              {(detail.status === 'scheduled' || detail.status === 'approved') && canApprove && !showPay && (
                 <Button size="sm" variant="success" onClick={() => setShowPay(true)} disabled={busy}>
                   支払済みにする
                 </Button>
               )}
-              {['open', 'review', 'approved', 'scheduled'].includes(detail.status) && !showReject && (
-                <Button size="sm" variant="danger" onClick={() => setShowReject(true)} disabled={busy}>
-                  差戻す
-                </Button>
+              {['open', 'review', 'pending_approval', 'approved', 'scheduled'].includes(detail.status) &&
+                canApprove &&
+                !showReject && (
+                  <Button size="sm" variant="danger" onClick={() => setShowReject(true)} disabled={busy}>
+                    差戻す
+                  </Button>
+                )}
+              {!canWrite && !canApprove && (
+                <p className="text-xs text-gray-400">状態を変更する権限がありません</p>
               )}
             </div>
 

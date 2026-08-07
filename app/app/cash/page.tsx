@@ -16,6 +16,9 @@ import { PeriodFilter } from '@/components/cash/period-filter';
 import { OpenRegisterForm } from '@/components/cash/open-register-form';
 import { SessionCard, type SessionCardData } from '@/components/cash/session-card';
 import { PettyCashAddDialog } from '@/components/cash/petty-cash-add-dialog';
+import { PettyOpeningBalanceDialog } from '@/components/cash/petty-opening-balance-dialog';
+import { PettyCashCountDialog } from '@/components/cash/petty-cash-count-dialog';
+import { PettyCashCountApprove } from '@/components/cash/petty-cash-count-approve';
 import { ApprovalActions } from '@/components/cash/approval-actions';
 import { ClosingRow, type ClosingRowData } from '@/components/cash/closing-row';
 import { approvePettyCash, rejectPettyCash } from '@/app/app/cash/actions';
@@ -26,9 +29,13 @@ import {
   CLOSING_STATUS_LABELS,
   CLOSING_STATUS_TONES,
   METHOD_LABELS,
+  PETTY_KINDS,
+  PETTY_COUNT_STATUS_LABELS,
+  PETTY_COUNT_STATUS_TONES,
   type CashKind,
   type ApprovalStatus,
   type ClosingStatus,
+  type PettyCountStatus,
 } from '@/components/cash/labels';
 
 export const metadata: Metadata = { title: 'レジ締め・小口現金' };
@@ -78,6 +85,7 @@ export default async function CashPage({
           status={sp.status ?? ''}
           canApprove={can(ctx.role, 'cash.approve')}
           canWrite={can(ctx.role, 'cash.write')}
+          multiStore={!ctx.currentStore && ctx.stores.length > 1}
         />
       ) : (
         <ClosingsTab
@@ -232,6 +240,7 @@ async function PettyTab({
   status,
   canApprove,
   canWrite,
+  multiStore,
 }: {
   storeIds: string[];
   defaultStoreId: string;
@@ -241,6 +250,7 @@ async function PettyTab({
   status: string;
   canApprove: boolean;
   canWrite: boolean;
+  multiStore: boolean;
 }) {
   const supabase = await createClient();
 
@@ -248,7 +258,7 @@ async function PettyTab({
     .from('cash_transactions')
     .select('id, business_date, kind, amount, purpose, approval_status, expense_accounts(name), stores(name)')
     .in('store_id', storeIds)
-    .in('kind', ['petty_in', 'petty_out'])
+    .in('kind', PETTY_KINDS)
     .gte('business_date', from)
     .lte('business_date', to)
     .order('business_date', { ascending: false });
@@ -262,27 +272,79 @@ async function PettyTab({
     .eq('status', 'active')
     .order('sort_order');
 
-  const monthStart = `${todayJst().slice(0, 7)}-01`;
-  const { data: monthTx } = await supabase
+  // 開始残高（店舗設定）
+  const { data: settings } = await supabase
+    .from('store_settings')
+    .select('petty_opening_balance')
+    .eq('store_id', defaultStoreId)
+    .maybeSingle();
+  const openingBalance = settings?.petty_opening_balance ?? 0;
+
+  // 理論残高・立替残高は運用開始からの累計で計算する（期間絞込の影響を受けない）
+  const { data: allTx } = await supabase
     .from('cash_transactions')
     .select('kind, amount')
-    .in('store_id', storeIds)
-    .in('kind', ['petty_in', 'petty_out'])
+    .eq('store_id', defaultStoreId)
+    .in('kind', PETTY_KINDS)
+    .eq('approval_status', 'approved');
+  const sumOf = (kind: string) => (allTx ?? []).filter((t) => t.kind === kind).reduce((a, t) => a + t.amount, 0);
+  const totalIn = sumOf('petty_in');
+  const totalOut = sumOf('petty_out');
+  const totalSettlement = sumOf('petty_settlement');
+  const totalAdvance = sumOf('petty_advance');
+  const theoreticalBalance = openingBalance + totalIn - totalOut - totalSettlement;
+  const advanceBalance = totalAdvance - totalSettlement;
+
+  // 精算ダイアログ用：承認済みの立替一覧（厳密な消込は行わないため参考表示）
+  const { data: advanceRows } = await supabase
+    .from('cash_transactions')
+    .select('id, purpose, amount, business_date')
+    .eq('store_id', defaultStoreId)
+    .eq('kind', 'petty_advance')
     .eq('approval_status', 'approved')
-    .gte('business_date', monthStart)
-    .lte('business_date', todayJst());
-  const monthIn = (monthTx ?? []).filter((t) => t.kind === 'petty_in').reduce((a, t) => a + t.amount, 0);
-  const monthOut = (monthTx ?? []).filter((t) => t.kind === 'petty_out').reduce((a, t) => a + t.amount, 0);
+    .order('business_date', { ascending: false })
+    .limit(50);
+  const advances = (advanceRows ?? []).map((a) => ({
+    id: a.id as string,
+    purpose: a.purpose as string | null,
+    amount: a.amount as number,
+    businessDate: a.business_date as string,
+  }));
+
+  // 実査履歴
+  const { data: countRows } = await supabase
+    .from('petty_cash_counts')
+    .select('id, count_date, expected_amount, counted_amount, difference, status')
+    .in('store_id', storeIds)
+    .gte('count_date', from)
+    .lte('count_date', to)
+    .order('count_date', { ascending: false });
 
   return (
     <div className="space-y-5">
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <StatCard label="当月小口残高" value={yen(monthIn - monthOut)} tone="primary" />
-        <StatCard label="当月入金" value={yen(monthIn)} />
-        <StatCard label="当月出金" value={yen(monthOut)} />
+      <div className="rounded-xl border border-primary/20 bg-primary-soft px-4 py-3 text-sm text-primary-deep">
+        POSの現金売上はレジ台帳（レジタブ）で管理されます。小口現金は釣銭・経費用の別台帳です。同じ現金を両方に入力しないでください。
       </div>
 
-      {canWrite && <PettyCashAddDialog storeId={defaultStoreId} accounts={accounts ?? []} />}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <StatCard
+          label="開始残高"
+          value={yen(openingBalance)}
+          sub={canApprove ? <PettyOpeningBalanceDialog storeId={defaultStoreId} currentAmount={openingBalance} /> : undefined}
+        />
+        <StatCard label="理論残高" value={yen(theoreticalBalance)} tone="primary" sub={multiStore ? '基準店舗のみ' : undefined} />
+        <StatCard
+          label="立替残高（未精算）"
+          value={yen(advanceBalance)}
+          tone={advanceBalance > 0 ? 'warning' : 'default'}
+          sub="承認済み立替 − 精算の概算（個別の消込は未対応）"
+        />
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        {canWrite && <PettyCashAddDialog storeId={defaultStoreId} accounts={accounts ?? []} advances={advances} />}
+        {canWrite && <PettyCashCountDialog storeId={defaultStoreId} expectedAmount={theoreticalBalance} />}
+      </div>
 
       <PeriodFilter action="/app/cash" hidden={{ tab: 'petty' }} from={from} to={to}>
         <div>
@@ -325,7 +387,12 @@ async function PettyTab({
                 <Tr key={r.id}>
                   <Td>{formatDate(r.business_date)}</Td>
                   <Td>{(r.stores as unknown as { name: string } | null)?.name ?? '—'}</Td>
-                  <Td>{KIND_LABELS[r.kind as CashKind]}</Td>
+                  <Td>
+                    <div className="flex items-center gap-1.5">
+                      {KIND_LABELS[r.kind as CashKind]}
+                      {r.kind === 'petty_advance' && <Badge tone="gray">現金移動なし</Badge>}
+                    </div>
+                  </Td>
                   <Td className="text-right tabular-nums">{yen(r.amount)}</Td>
                   <Td>{r.purpose ?? '—'}</Td>
                   <Td>{(r.expense_accounts as unknown as { name: string } | null)?.name ?? '—'}</Td>
@@ -349,6 +416,47 @@ async function PettyTab({
           </Table>
         </TableWrap>
       )}
+
+      <div>
+        <h3 className="mb-2 text-sm font-semibold text-navy">実査履歴</h3>
+        {(countRows ?? []).length === 0 ? (
+          <EmptyState title="実査の記録はありません" description="「実残高を数える」から実査を記録してください。" />
+        ) : (
+          <TableWrap>
+            <Table>
+              <THead>
+                <Tr>
+                  <Th>実査日</Th>
+                  <Th className="text-right">理論残高</Th>
+                  <Th className="text-right">実残高</Th>
+                  <Th className="text-right">差異</Th>
+                  <Th>状態</Th>
+                  <Th>操作</Th>
+                </Tr>
+              </THead>
+              <TBody>
+                {(countRows ?? []).map((c) => (
+                  <Tr key={c.id}>
+                    <Td>{formatDate(c.count_date)}</Td>
+                    <Td className="text-right tabular-nums">{yen(c.expected_amount)}</Td>
+                    <Td className="text-right tabular-nums">{yen(c.counted_amount)}</Td>
+                    <Td className={`text-right tabular-nums font-medium ${c.difference !== 0 ? 'text-danger' : ''}`}>
+                      {c.difference > 0 ? '+' : ''}
+                      {yen(c.difference)}
+                    </Td>
+                    <Td>
+                      <Badge tone={PETTY_COUNT_STATUS_TONES[c.status as PettyCountStatus]}>
+                        {PETTY_COUNT_STATUS_LABELS[c.status as PettyCountStatus]}
+                      </Badge>
+                    </Td>
+                    <Td>{canApprove && c.status === 'recorded' && <PettyCashCountApprove id={c.id} />}</Td>
+                  </Tr>
+                ))}
+              </TBody>
+            </Table>
+          </TableWrap>
+        )}
+      </div>
     </div>
   );
 }
