@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation';
+import { headers } from 'next/headers';
 import { requireSession } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { visibleNavGroups, MOBILE_NAV } from '@/lib/nav';
@@ -19,6 +20,22 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   }
 
   const supabase = await createClient();
+
+  // 初期導入ウィザード未完了の企業オーナー/本社管理者を /app/onboarding へ誘導
+  // （ウィザード自身とハンバーガーメニュー画面は無限リダイレクトを避けるため除外）
+  if (ctx.role === 'org_owner' || ctx.role === 'hq_admin') {
+    const pathname = (await headers()).get('x-pathname') ?? '';
+    if (pathname !== '/app/onboarding' && !pathname.startsWith('/app/menu')) {
+      const { data: org } = await supabase
+        .from('organizations')
+        .select('onboarding')
+        .eq('id', ctx.organizationId)
+        .maybeSingle();
+      const onboarding = (org?.onboarding ?? null) as { completed?: boolean } | null;
+      if (!onboarding?.completed) redirect('/app/onboarding');
+    }
+  }
+
   const { count: unreadCount } = await supabase
     .from('notifications')
     .select('id', { count: 'exact', head: true })

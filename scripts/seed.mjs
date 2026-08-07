@@ -116,6 +116,8 @@ async function main() {
         status: 'active',
         contact_email: 'demo@tenpo-one.example.com',
         is_demo: true,
+        // デモ企業は初期導入ウィザードをスキップ（データ投入済みのため）
+        onboarding: { completed: true },
       }]);
       console.log('企業: 作成 —', org.name);
     }

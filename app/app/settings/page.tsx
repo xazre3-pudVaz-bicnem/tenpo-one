@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import {
   Store, Clock, LayoutGrid, UtensilsCrossed, Percent, CalendarClock, Printer, CreditCard, ScrollText, ChevronRight,
+  Building2,
 } from 'lucide-react';
 import { requirePermission } from '@/lib/auth';
 import { can } from '@/lib/permissions';
@@ -22,6 +23,13 @@ export default async function SettingsHubPage() {
   const ctx = await requirePermission('store.settings');
 
   const cards: SettingsCard[] = [
+    {
+      href: '/app/settings/company',
+      title: '企業情報',
+      description: '会社名・住所・連絡先・請求情報の管理',
+      icon: Building2,
+      visible: can(ctx.role, 'org.settings'),
+    },
     {
       href: '/app/settings/store',
       title: '店舗情報',

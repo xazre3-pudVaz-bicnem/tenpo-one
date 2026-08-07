@@ -3,10 +3,18 @@ import { NextResponse, type NextRequest } from 'next/server';
 
 /**
  * Next.js 16 の proxy 規約（旧 middleware）。
- * Supabaseセッションの更新と /app・/admin の認証ガードを行う。
+ * - Supabaseセッションの更新と /app・/admin の認証ガード
+ * - x-pathname ヘッダーの付与（レイアウトでの現在パス判定に使用。
+ *   オンボーディング未完了リダイレクトの無限ループ防止）
  */
 export default async function proxy(request: NextRequest) {
-  let response = NextResponse.next({ request });
+  const withPathname = () => {
+    const h = new Headers(request.headers);
+    h.set('x-pathname', request.nextUrl.pathname);
+    return h;
+  };
+
+  let response = NextResponse.next({ request: { headers: withPathname() } });
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -18,7 +26,7 @@ export default async function proxy(request: NextRequest) {
         },
         setAll(cookiesToSet) {
           cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
-          response = NextResponse.next({ request });
+          response = NextResponse.next({ request: { headers: withPathname() } });
           cookiesToSet.forEach(({ name, value, options }) =>
             response.cookies.set(name, value, options)
           );
