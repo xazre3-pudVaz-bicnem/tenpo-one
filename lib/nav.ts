@@ -57,6 +57,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: '/app/vendors', label: '仕入先', icon: 'truck', permission: 'vendors.manage' },
       { href: '/app/purchases', label: '発注', icon: 'clipboard', permission: 'vendors.manage' },
       { href: '/app/inventory', label: '在庫', icon: 'package', permission: 'inventory.view' },
+      { href: '/app/costing', label: '原価管理', icon: 'yen', permission: 'menu.manage' },
     ],
   },
   {
