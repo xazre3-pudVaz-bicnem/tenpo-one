@@ -12,6 +12,7 @@ const ITEMS = [
   { href: '/admin/feature-flags', label: '機能フラグ' },
   { href: '/admin/support', label: 'サポート' },
   { href: '/admin/audit-logs', label: '監査ログ' },
+  { href: '/admin/status', label: '状態' },
 ];
 
 /** CYPRESS運営管理コンソールの水平ナビゲーション。モバイルは横スクロール。 */

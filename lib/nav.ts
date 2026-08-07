@@ -43,6 +43,7 @@ export const NAV_GROUPS: NavGroup[] = [
     label: '顧客',
     items: [
       { href: '/app/customers', label: '顧客管理', icon: 'users', permission: 'customers.view' },
+      { href: '/app/coupons', label: 'クーポン', icon: 'file', permission: 'menu.manage' },
     ],
   },
   {
@@ -74,6 +75,16 @@ export const NAV_GROUPS: NavGroup[] = [
     label: '分析',
     items: [
       { href: '/app/reports', label: 'レポート', icon: 'chart', permission: 'reports.view' },
+      { href: '/app/budgets', label: '予算管理', icon: 'yen', permission: 'reports.view' },
+      { href: '/app/daily-reports', label: '日報', icon: 'clipboard', permission: 'dashboard.view' },
+    ],
+  },
+  {
+    label: '店舗コミュニケーション',
+    items: [
+      { href: '/app/tasks', label: 'タスク・引継ぎ', icon: 'list', permission: 'dashboard.view' },
+      { href: '/app/announcements', label: 'お知らせ', icon: 'file', permission: 'dashboard.view' },
+      { href: '/app/manuals', label: 'マニュアル', icon: 'book', permission: 'dashboard.view' },
     ],
   },
   {

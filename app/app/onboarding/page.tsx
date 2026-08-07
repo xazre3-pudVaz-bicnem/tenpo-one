@@ -26,7 +26,7 @@ export default async function OnboardingPage() {
 
   const { data: store } = await supabase
     .from('stores')
-    .select('id, name, address, phone')
+    .select('id, name, address, phone, slug')
     .eq('organization_id', ctx.organizationId)
     .order('created_at')
     .limit(1)
@@ -93,7 +93,9 @@ export default async function OnboardingPage() {
       address: org?.address ?? '',
       phone: org?.phone ?? '',
     },
-    store: store ? { id: store.id, name: store.name, address: store.address ?? '', phone: store.phone ?? '' } : null,
+    store: store
+      ? { id: store.id, name: store.name, address: store.address ?? '', phone: store.phone ?? '', slug: store.slug }
+      : null,
     hours,
     existingTablesCount,
     existingCategories: categories ?? [],

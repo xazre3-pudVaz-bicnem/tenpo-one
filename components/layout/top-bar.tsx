@@ -3,6 +3,8 @@ import { Bell, LogOut } from 'lucide-react';
 import type { SessionContext } from '@/lib/auth';
 import { ROLE_LABELS } from '@/lib/permissions';
 import { signOut } from '@/app/app/actions';
+import { CommandPaletteTrigger, CommandPaletteIconTrigger } from '@/components/search/command-palette';
+import { HelpPopover } from '@/components/help/help-popover';
 import { StoreSwitcher } from './store-switcher';
 import { BrandLogo } from './brand-logo';
 
@@ -23,6 +25,10 @@ export function TopBar({ ctx, unreadCount }: { ctx: SessionContext; unreadCount:
       </div>
 
       <div className="flex items-center gap-1 sm:gap-3">
+        <CommandPaletteTrigger />
+        <CommandPaletteIconTrigger />
+        <HelpPopover />
+
         <Link
           href="/app/notifications"
           className="relative rounded-lg p-2 text-gray-600 hover:bg-gray-100"

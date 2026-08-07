@@ -1,10 +1,10 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, AlertTriangle } from 'lucide-react';
 import { requireCypressAdmin } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { formatDate, formatDateTime } from '@/lib/format';
+import { formatDate, formatDateTime, todayJst } from '@/lib/format';
 import { ROLE_LABELS } from '@/lib/permissions';
 import { PageHeader } from '@/components/ui/page-header';
 import { Badge, type BadgeTone } from '@/components/ui/badge';
@@ -16,7 +16,26 @@ import { AddOrgMemberDialog } from '@/components/admin/add-org-member-dialog';
 import { FeatureFlagMatrix } from '@/components/admin/feature-flag-matrix';
 import { OrgPlanForm } from '@/components/admin/org-plan-form';
 import { OrganizationRowActions } from '@/components/admin/organization-row-actions';
+import { SubscriptionMockForm } from '@/components/admin/subscription-mock-form';
+import { ApplyPlanDefaultsButton } from '@/components/admin/apply-plan-defaults-button';
+import type { SaasSubscriptionStatus } from '../actions';
 import { listAllAuthUsers } from '../../_utils';
+
+const SUBSCRIPTION_STATUS_LABEL: Record<SaasSubscriptionStatus, { label: string; tone: BadgeTone }> = {
+  inactive: { label: '未契約', tone: 'gray' },
+  trialing: { label: 'トライアル中', tone: 'primary' },
+  active: { label: '契約中', tone: 'success' },
+  past_due: { label: '支払遅延', tone: 'danger' },
+  canceled: { label: '解約済み', tone: 'gray' },
+};
+
+function formatBytes(bytes: number): string {
+  if (bytes <= 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.min(units.length - 1, Math.floor(Math.log(bytes) / Math.log(1024)));
+  const value = bytes / 1024 ** i;
+  return `${i === 0 ? value : value.toFixed(1)} ${units[i]}`;
+}
 
 export const metadata: Metadata = { title: '企業詳細' };
 
@@ -61,7 +80,7 @@ export default async function OrganizationDetailPage({ params }: { params: Promi
         )
         .eq('id', id)
         .maybeSingle(),
-      admin.from('plans').select('code, name').eq('is_active', true).order('sort_order'),
+      admin.from('plans').select('code, name, features').eq('is_active', true).order('sort_order'),
       admin
         .from('stores')
         .select('id, name, slug, status, booking_enabled, created_at')
@@ -78,6 +97,41 @@ export default async function OrganizationDetailPage({ params }: { params: Promi
 
   if (!org) notFound();
 
+  const today = todayJst();
+  const monthStart = `${today.slice(0, 7)}-01`;
+
+  const [
+    { count: activeUserCount },
+    { count: monthReservationsCount },
+    { count: monthOrdersCount },
+    { count: documentsCount },
+    { data: documentSizeRows },
+    { data: subscription },
+  ] = await Promise.all([
+    admin.from('memberships').select('id', { count: 'exact', head: true }).eq('organization_id', id).eq('status', 'active'),
+    admin
+      .from('reservations')
+      .select('id', { count: 'exact', head: true })
+      .eq('organization_id', id)
+      .gte('reserved_date', monthStart)
+      .lte('reserved_date', today),
+    admin
+      .from('orders')
+      .select('id', { count: 'exact', head: true })
+      .eq('organization_id', id)
+      .gte('business_date', monthStart)
+      .lte('business_date', today),
+    admin.from('documents').select('id', { count: 'exact', head: true }).eq('organization_id', id).neq('status', 'deleted'),
+    admin.from('documents').select('size_bytes').eq('organization_id', id).neq('status', 'deleted'),
+    admin
+      .from('saas_subscriptions')
+      .select('status, plan_code, current_period_start, current_period_end')
+      .eq('organization_id', id)
+      .maybeSingle(),
+  ]);
+
+  const totalStorageBytes = (documentSizeRows ?? []).reduce((sum, d) => sum + (d.size_bytes ?? 0), 0);
+
   const planNameByCode = new Map((plans ?? []).map((p) => [p.code, p.name]));
   const statusMeta = STATUS_LABEL[org.status] ?? { label: org.status, tone: 'gray' as BadgeTone };
   const memberRows = (memberships ?? []) as unknown as MembershipRow[];
@@ -87,6 +141,22 @@ export default async function OrganizationDetailPage({ params }: { params: Promi
 
   const onboarding = (org.onboarding ?? {}) as { step?: number; completed?: boolean };
   const billing = (org.billing_info ?? {}) as { name?: string; email?: string; note?: string };
+
+  const currentPlan = (plans ?? []).find((p) => p.code === org.plan_code);
+  const planFeatures = (currentPlan?.features ?? {}) as { store_limit?: number | null; user_limit?: number | null };
+  const storeCount = (stores ?? []).length;
+  const storeLimit = planFeatures.store_limit ?? null;
+  const userLimit = planFeatures.user_limit ?? null;
+  const storeOverLimit = storeLimit != null && storeCount > storeLimit;
+  const userOverLimit = userLimit != null && (activeUserCount ?? 0) > userLimit;
+
+  const subscriptionInitial = {
+    status: (subscription?.status ?? 'inactive') as SaasSubscriptionStatus,
+    planCode: subscription?.plan_code ?? org.plan_code,
+    currentPeriodStart: subscription?.current_period_start ?? null,
+    currentPeriodEnd: subscription?.current_period_end ?? null,
+  };
+  const subscriptionStatusMeta = SUBSCRIPTION_STATUS_LABEL[subscriptionInitial.status];
 
   return (
     <div>
@@ -259,6 +329,31 @@ export default async function OrganizationDetailPage({ params }: { params: Promi
               <div>
                 <p className="mb-1.5 text-xs text-gray-500">プラン</p>
                 <OrgPlanForm organizationId={org.id} currentPlanCode={org.plan_code} plans={plans ?? []} />
+                {(storeLimit != null || userLimit != null) && (
+                  <div className="mt-2 space-y-1 text-xs text-gray-500">
+                    <p className="flex items-center gap-1.5">
+                      店舗数: {storeCount}
+                      {storeLimit != null ? ` / 上限${storeLimit}` : '（上限なし）'}
+                      {storeOverLimit && (
+                        <Badge tone="warning">
+                          <AlertTriangle className="mr-1 h-3 w-3" />
+                          上限超過
+                        </Badge>
+                      )}
+                    </p>
+                    <p className="flex items-center gap-1.5">
+                      ユーザー数: {activeUserCount ?? 0}
+                      {userLimit != null ? ` / 上限${userLimit}` : '（上限なし）'}
+                      {userOverLimit && (
+                        <Badge tone="warning">
+                          <AlertTriangle className="mr-1 h-3 w-3" />
+                          上限超過
+                        </Badge>
+                      )}
+                    </p>
+                    <p className="text-[11px] text-gray-400">上限超過時の制御はプラン運用ポリシー確定後に実装します（現時点ではハードブロックしません）。</p>
+                  </div>
+                )}
               </div>
               <div>
                 <p className="mb-1.5 text-xs text-gray-500">契約状態</p>
@@ -269,7 +364,53 @@ export default async function OrganizationDetailPage({ params }: { params: Promi
 
           <Card>
             <CardHeader>
+              <CardTitle>利用量メータリング（今月）</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 gap-3 text-center">
+                <div className="rounded-lg bg-surface px-3 py-3">
+                  <p className="text-xl font-bold text-navy tabular-nums">{storeCount}</p>
+                  <p className="mt-1 text-[11px] text-gray-500">店舗数</p>
+                </div>
+                <div className="rounded-lg bg-surface px-3 py-3">
+                  <p className="text-xl font-bold text-navy tabular-nums">{activeUserCount ?? 0}</p>
+                  <p className="mt-1 text-[11px] text-gray-500">ユーザー数</p>
+                </div>
+                <div className="rounded-lg bg-surface px-3 py-3">
+                  <p className="text-xl font-bold text-navy tabular-nums">{monthReservationsCount ?? 0}</p>
+                  <p className="mt-1 text-[11px] text-gray-500">今月の予約数</p>
+                </div>
+                <div className="rounded-lg bg-surface px-3 py-3">
+                  <p className="text-xl font-bold text-navy tabular-nums">{monthOrdersCount ?? 0}</p>
+                  <p className="mt-1 text-[11px] text-gray-500">今月の注文数</p>
+                </div>
+                <div className="col-span-2 rounded-lg bg-surface px-3 py-3">
+                  <p className="text-xl font-bold text-navy tabular-nums">
+                    {documentsCount ?? 0}件 / {formatBytes(totalStorageBytes)}
+                  </p>
+                  <p className="mt-1 text-[11px] text-gray-500">書類ストレージ（documents）</p>
+                </div>
+              </div>
+              <p className="mt-3 text-[11px] text-gray-400">
+                将来の課金計算の基礎データです。外部送信はしません。
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex items-center justify-between gap-2">
+              <CardTitle>サブスクリプション</CardTitle>
+              <Badge tone={subscriptionStatusMeta.tone}>{subscriptionStatusMeta.label}</Badge>
+            </CardHeader>
+            <CardContent>
+              <SubscriptionMockForm organizationId={org.id} plans={plans ?? []} initial={subscriptionInitial} />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex items-center justify-between gap-2">
               <CardTitle>機能フラグ</CardTitle>
+              <ApplyPlanDefaultsButton organizationId={org.id} />
             </CardHeader>
             <CardContent>
               <FeatureFlagMatrix organizationId={org.id} disabledKeys={disabledFeatureKeys} />

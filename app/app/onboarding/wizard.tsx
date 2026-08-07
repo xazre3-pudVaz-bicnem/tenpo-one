@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -27,7 +28,7 @@ export interface OnboardingInitialData {
   step: number;
   completed: boolean;
   company: { name: string; nameKana: string; postalCode: string; address: string; phone: string };
-  store: { id: string; name: string; address: string; phone: string } | null;
+  store: { id: string; name: string; address: string; phone: string; slug: string } | null;
   hours: BusinessHourStepInput[];
   existingTablesCount: number;
   existingCategories: { id: string; name: string }[];
@@ -94,7 +95,9 @@ export function OnboardingWizard({ initial }: { initial: OnboardingInitialData }
       {step === 9 && (
         <StepRegister storeId={storeId} existingCount={initial.existingRegisterCount} onAdvance={setStep} />
       )}
-      {step === 10 && <StepComplete onDone={() => router.push('/app/dashboard')} />}
+      {step === 10 && (
+        <StepComplete storeSlug={initial.store?.slug ?? null} onDone={() => router.push('/app/dashboard')} />
+      )}
     </div>
   );
 }
@@ -465,7 +468,7 @@ function StepRegister({
 // ---------------------------------------------------------------
 // STEP10: 完了
 // ---------------------------------------------------------------
-function StepComplete({ onDone }: { onDone: () => void }) {
+function StepComplete({ storeSlug, onDone }: { storeSlug: string | null; onDone: () => void }) {
   const [pending, startTransition] = useTransition();
   const [done, setDone] = useState(false);
   const { toast } = useToast();
@@ -482,6 +485,13 @@ function StepComplete({ onDone }: { onDone: () => void }) {
     });
   };
 
+  const NEXT_ACTIONS = [
+    storeSlug ? { label: '予約を試す', href: `/book/${storeSlug}`, external: true } : null,
+    { label: 'POSを試す', href: '/app/pos', external: false },
+    { label: 'スタッフ打刻', href: '/app/attendance', external: false },
+    { label: 'QRコードを表示（テーブル）', href: '/app/settings/tables', external: false },
+  ].filter((a): a is { label: string; href: string; external: boolean } => a !== null);
+
   return (
     <Card>
       <CardHeader>
@@ -493,6 +503,34 @@ function StepComplete({ onDone }: { onDone: () => void }) {
           初期設定はこれで完了です
         </p>
         <p>会社情報・店舗・営業時間・テーブル・商品・スタッフなどは、いつでも「設定」画面から変更できます。</p>
+
+        {done && (
+          <div className="rounded-xl border border-gray-200 bg-surface p-4">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">次にやること</p>
+            <ul className="space-y-1.5">
+              {NEXT_ACTIONS.map((a) =>
+                a.external ? (
+                  <li key={a.href}>
+                    <a
+                      href={a.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm font-medium text-primary hover:underline"
+                    >
+                      {a.label} →
+                    </a>
+                  </li>
+                ) : (
+                  <li key={a.href}>
+                    <Link href={a.href} className="text-sm font-medium text-primary hover:underline">
+                      {a.label} →
+                    </Link>
+                  </li>
+                )
+              )}
+            </ul>
+          </div>
+        )}
       </CardContent>
       <div className="px-5 pb-5">
         <div className="flex justify-end">

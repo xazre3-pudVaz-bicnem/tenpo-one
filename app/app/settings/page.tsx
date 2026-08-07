@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import {
   Store, Clock, LayoutGrid, UtensilsCrossed, Percent, CalendarClock, Printer, CreditCard, ScrollText, ChevronRight,
-  Building2,
+  Building2, ShieldCheck, Plug, Upload, AlertTriangle,
 } from 'lucide-react';
 import { requirePermission } from '@/lib/auth';
 import { can } from '@/lib/permissions';
@@ -87,11 +87,46 @@ export default async function SettingsHubPage() {
       visible: true,
     },
     {
+      href: '/app/settings/integrations',
+      title: '連携',
+      description: '決済・プリンター・外部サービス連携の状態確認',
+      icon: Plug,
+      visible: true,
+    },
+    {
       href: '/app/settings/audit',
       title: '監査ログ',
       description: '権限変更・停止・設定変更などの操作履歴',
       icon: ScrollText,
       visible: can(ctx.role, 'audit.view'),
+    },
+    {
+      href: '/app/settings/loyalty',
+      title: '会員・ポイント',
+      description: 'ポイント付与率・利用設定（例: 100円=1pt）',
+      icon: ShieldCheck,
+      visible: can(ctx.role, 'org.settings'),
+    },
+    {
+      href: '/app/settings/approvals',
+      title: '承認ルール',
+      description: '金額帯別の必要承認ロール・自己承認可否の設定',
+      icon: ShieldCheck,
+      visible: can(ctx.role, 'org.settings'),
+    },
+    {
+      href: '/app/settings/import',
+      title: 'データ取込',
+      description: 'CSVから商品・顧客・仕入先・在庫品目をまとめて登録',
+      icon: Upload,
+      visible: can(ctx.role, 'org.settings'),
+    },
+    {
+      href: '/app/settings/alerts',
+      title: '異常検知の閾値',
+      description: '現金差異・値引率・原価率・人件費率などアラート判定の閾値設定',
+      icon: AlertTriangle,
+      visible: true,
     },
   ];
 

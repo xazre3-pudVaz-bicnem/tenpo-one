@@ -44,4 +44,10 @@
 Stripe鍵/Webhook/Terminal実機、プリンター・ドロア実機、freee/KOT/LINE/予約サイトAPI、本番ドメイン/デプロイ、正式税・社保計算、メール/SMS送信
 
 ## コミット済みログ（追記していく）
-- checkpoint: chore: checkpoint before v0.3 code complete
+- checkpoint: chore: checkpoint before v0.3 code complete（75053b7）
+- 4b96732 feat: v0.3 foundation（migration 00015/00016適用済・lib9本+22テスト・health/headers/PWA/gen types/停止ユーザー遮断）
+
+## 実行中
+- W1起動済み（4体）: A1 POS完成 / A2 在庫 / A3 予約フロアWaitlist / A4 CRM
+- nav/features に新ルート登録済み（**未コミット**。/app/coupons /app/budgets /app/daily-reports /app/tasks /app/announcements /app/manuals はW1-A4/W2-B3がページ作成後にまとめてコミットする。W1コミット時に lib/nav.ts lib/features.ts をaddしないこと）
+- W2-B3 への追加割当: 項目31 マニュアル管理（/app/manuals、manualsテーブルはmigration済み）

@@ -7,7 +7,15 @@ import { Dialog } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input, Label, Textarea, FieldError } from '@/components/ui/input';
 import { useToast } from '@/components/ui/toast';
+import { FEATURE_KEYS, FEATURE_LABELS, type FeatureKey } from '@/lib/features';
+import { cn } from '@/lib/utils';
 import { createPlan, updatePlan, type PlanInput } from '@/app/admin/plans/actions';
+
+interface PlanFeaturesShape {
+  store_limit?: number | null;
+  user_limit?: number | null;
+  features?: Partial<Record<FeatureKey, boolean>>;
+}
 
 interface PlanRow {
   id: string;
@@ -17,6 +25,7 @@ interface PlanRow {
   description: string | null;
   sort_order: number;
   is_active: boolean;
+  features?: unknown;
 }
 
 export function PlanDialog({ plan }: { plan?: PlanRow }) {
@@ -26,12 +35,19 @@ export function PlanDialog({ plan }: { plan?: PlanRow }) {
   const { toast } = useToast();
   const router = useRouter();
 
+  const planFeatures = (plan?.features ?? {}) as PlanFeaturesShape;
+
   const [code, setCode] = useState(plan?.code ?? '');
   const [name, setName] = useState(plan?.name ?? '');
   const [monthlyPrice, setMonthlyPrice] = useState(String(plan?.monthly_price ?? 0));
   const [description, setDescription] = useState(plan?.description ?? '');
   const [sortOrder, setSortOrder] = useState(String(plan?.sort_order ?? 0));
   const [isActive, setIsActive] = useState(plan?.is_active ?? true);
+  const [storeLimit, setStoreLimit] = useState(planFeatures.store_limit != null ? String(planFeatures.store_limit) : '');
+  const [userLimit, setUserLimit] = useState(planFeatures.user_limit != null ? String(planFeatures.user_limit) : '');
+  const [disabledFeatures, setDisabledFeatures] = useState<Set<FeatureKey>>(
+    () => new Set(FEATURE_KEYS.filter((k) => planFeatures.features?.[k] === false))
+  );
   const [error, setError] = useState<string | null>(null);
 
   const close = () => {
@@ -39,9 +55,20 @@ export function PlanDialog({ plan }: { plan?: PlanRow }) {
     setError(null);
   };
 
+  const toggleFeature = (key: FeatureKey) => {
+    setDisabledFeatures((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    const features: Partial<Record<FeatureKey, boolean>> = {};
+    for (const key of disabledFeatures) features[key] = false;
     const input: PlanInput = {
       code,
       name,
@@ -49,6 +76,9 @@ export function PlanDialog({ plan }: { plan?: PlanRow }) {
       description,
       sortOrder: Number(sortOrder) || 0,
       isActive,
+      storeLimit: storeLimit.trim() === '' ? null : Math.max(0, Number(storeLimit) || 0),
+      userLimit: userLimit.trim() === '' ? null : Math.max(0, Number(userLimit) || 0),
+      features,
     };
     startTransition(async () => {
       try {
@@ -133,6 +163,63 @@ export function PlanDialog({ plan }: { plan?: PlanRow }) {
             />
             有効（料金ページに表示する）
           </label>
+
+          <div className="grid grid-cols-2 gap-4 border-t border-gray-100 pt-4">
+            <div>
+              <Label htmlFor="plan-store-limit">店舗数上限</Label>
+              <Input
+                id="plan-store-limit"
+                type="number"
+                min={0}
+                placeholder="上限なし"
+                value={storeLimit}
+                onChange={(e) => setStoreLimit(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="plan-user-limit">ユーザー数上限</Label>
+              <Input
+                id="plan-user-limit"
+                type="number"
+                min={0}
+                placeholder="上限なし"
+                value={userLimit}
+                onChange={(e) => setUserLimit(e.target.value)}
+              />
+            </div>
+          </div>
+          <p className="text-[11px] text-gray-400">
+            空欄は上限なし。上限超過はハードブロックせず、企業詳細に警告表示のみ行います（制御方針は今後確定）。
+          </p>
+
+          <div>
+            <p className="mb-2 text-sm font-medium text-gray-700">機能の既定値</p>
+            <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+              {FEATURE_KEYS.map((key) => {
+                const enabled = !disabledFeatures.has(key);
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => toggleFeature(key)}
+                    className={cn(
+                      'flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-left text-xs',
+                      enabled ? 'border-gray-200 bg-white text-navy' : 'border-gray-200 bg-gray-50 text-gray-400'
+                    )}
+                  >
+                    <span>{FEATURE_LABELS[key]}</span>
+                    <span className={cn('font-medium', enabled ? 'text-success' : 'text-gray-400')}>
+                      {enabled ? 'ON' : 'OFF'}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            <p className="mt-1.5 text-[11px] text-gray-400">
+              OFFにした機能は、企業詳細の「プラン既定を適用」ボタンでその企業のfeature_flagsへ反映できます（自動では反映されません）。
+            </p>
+          </div>
+
           <FieldError message={error ?? undefined} />
           <div className="flex justify-end gap-2">
             <Button type="button" variant="secondary" onClick={close} disabled={pending}>

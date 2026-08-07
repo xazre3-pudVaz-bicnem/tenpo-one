@@ -9,20 +9,31 @@ export interface ActionResult {
   error?: string;
 }
 
+interface OnboardingData {
+  /** 実際にデータを保存して完了したステップ番号（「後で設定する」でスキップした場合は含まない） */
+  completedSteps?: number[];
+  [key: string]: unknown;
+}
+
 interface OnboardingState {
   step: number;
   completed: boolean;
-  data: Record<string, unknown>;
+  data: OnboardingData;
 }
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
-/** organizations.onboarding を読み書きする。進捗は後退させず、常に最大値を保持する */
+/**
+ * organizations.onboarding を読み書きする。進捗は後退させず、常に最大値を保持する。
+ * completedStep を渡すと、その回で実データを保存したステップとして data.completedSteps に記録する
+ * （dashboard のセットアップ進捗カードの完了率計算に使用）。
+ */
 async function bumpOnboardingStep(
   supabase: SupabaseServerClient,
   organizationId: string,
   nextStep: number,
-  dataPatch?: Record<string, unknown>
+  dataPatch?: Record<string, unknown>,
+  completedStep?: number
 ): Promise<void> {
   const { data: org } = await supabase
     .from('organizations')
@@ -30,10 +41,12 @@ async function bumpOnboardingStep(
     .eq('id', organizationId)
     .single();
   const current = (org?.onboarding ?? {}) as Partial<OnboardingState>;
+  const completedSteps = new Set<number>(Array.isArray(current.data?.completedSteps) ? current.data.completedSteps : []);
+  if (completedStep) completedSteps.add(completedStep);
   const next: OnboardingState = {
     step: Math.max(current.step ?? 1, nextStep),
     completed: current.completed ?? false,
-    data: { ...(current.data ?? {}), ...(dataPatch ?? {}) },
+    data: { ...(current.data ?? {}), ...(dataPatch ?? {}), completedSteps: Array.from(completedSteps).sort((a, b) => a - b) },
   };
   await supabase.from('organizations').update({ onboarding: next }).eq('id', organizationId);
 }
@@ -88,7 +101,7 @@ export async function saveCompanyStep(input: CompanyStepInput): Promise<ActionRe
     .eq('id', ctx.organizationId);
   if (error) return { error: `会社情報の保存に失敗しました: ${error.message}` };
 
-  await bumpOnboardingStep(supabase, ctx.organizationId, 2);
+  await bumpOnboardingStep(supabase, ctx.organizationId, 2, undefined, 1);
   revalidatePath('/app/onboarding');
   return {};
 }
@@ -128,7 +141,7 @@ export async function saveStoreStep(input: StoreStepInput): Promise<StoreStepRes
       .eq('organization_id', ctx.organizationId);
     if (error) return { error: `店舗情報の保存に失敗しました: ${error.message}` };
 
-    await bumpOnboardingStep(supabase, ctx.organizationId, 3);
+    await bumpOnboardingStep(supabase, ctx.organizationId, 3, undefined, 2);
     revalidatePath('/app/onboarding');
     return { storeId: input.storeId };
   }
@@ -157,7 +170,7 @@ export async function saveStoreStep(input: StoreStepInput): Promise<StoreStepRes
         .insert({ organization_id: ctx.organizationId, store_id: store.id, created_by: ctx.userId, updated_by: ctx.userId });
       if (settingsErr) return { error: `店舗設定の作成に失敗しました: ${settingsErr.message}` };
 
-      await bumpOnboardingStep(supabase, ctx.organizationId, 3);
+      await bumpOnboardingStep(supabase, ctx.organizationId, 3, undefined, 2);
       revalidatePath('/app/onboarding');
       return { storeId: store.id as string };
     }
@@ -212,7 +225,7 @@ export async function saveHoursStep(storeId: string, hours: BusinessHourStepInpu
   const { error } = await supabase.from('business_hours').upsert(rows, { onConflict: 'store_id,day_of_week' });
   if (error) return { error: `営業時間の保存に失敗しました: ${error.message}` };
 
-  await bumpOnboardingStep(supabase, ctx.organizationId, 4);
+  await bumpOnboardingStep(supabase, ctx.organizationId, 4, undefined, 3);
   revalidatePath('/app/onboarding');
   return {};
 }
@@ -254,7 +267,7 @@ export async function saveTablesStep(storeId: string, tables: TableStepInput[]):
     if (error) return { error: `テーブルの登録に失敗しました: ${error.message}` };
   }
 
-  await bumpOnboardingStep(supabase, ctx.organizationId, 5);
+  await bumpOnboardingStep(supabase, ctx.organizationId, 5, undefined, 4);
   revalidatePath('/app/onboarding');
   return {};
 }
@@ -296,7 +309,7 @@ export async function saveCategoriesStep(storeId: string, categories: CategorySt
     created = data ?? [];
   }
 
-  await bumpOnboardingStep(supabase, ctx.organizationId, 6);
+  await bumpOnboardingStep(supabase, ctx.organizationId, 6, undefined, 5);
   revalidatePath('/app/onboarding');
   return { created };
 }
@@ -389,7 +402,7 @@ export async function saveMenuItemsStep(storeId: string, items: MenuItemStepInpu
     if (error) return { error: `商品の登録に失敗しました: ${error.message}` };
   }
 
-  await bumpOnboardingStep(supabase, ctx.organizationId, 7);
+  await bumpOnboardingStep(supabase, ctx.organizationId, 7, undefined, 6);
   revalidatePath('/app/onboarding');
   return {};
 }
@@ -462,7 +475,7 @@ export async function saveStaffStep(entries: StaffInviteStepInput[]): Promise<St
     invited.push({ email, password });
   }
 
-  await bumpOnboardingStep(supabase, ctx.organizationId, 8);
+  await bumpOnboardingStep(supabase, ctx.organizationId, 8, undefined, 7);
   revalidatePath('/app/onboarding');
   return { invited };
 }
@@ -474,7 +487,7 @@ export async function saveStaffStep(entries: StaffInviteStepInput[]): Promise<St
 export async function advancePaymentsStep(): Promise<ActionResult> {
   const ctx = await requirePermission('org.settings');
   const supabase = await createClient();
-  await bumpOnboardingStep(supabase, ctx.organizationId, 9);
+  await bumpOnboardingStep(supabase, ctx.organizationId, 9, undefined, 8);
   revalidatePath('/app/onboarding');
   return {};
 }
@@ -513,7 +526,7 @@ export async function saveRegisterStep(storeId: string): Promise<ActionResult> {
     if (error) return { error: `レジの作成に失敗しました: ${error.message}` };
   }
 
-  await bumpOnboardingStep(supabase, ctx.organizationId, 10);
+  await bumpOnboardingStep(supabase, ctx.organizationId, 10, undefined, 9);
   revalidatePath('/app/onboarding');
   return {};
 }
@@ -528,7 +541,13 @@ export async function completeOnboarding(): Promise<ActionResult> {
 
   const { data: org } = await supabase.from('organizations').select('onboarding').eq('id', ctx.organizationId).single();
   const current = (org?.onboarding ?? {}) as Partial<OnboardingState>;
-  const next: OnboardingState = { step: 10, completed: true, data: current.data ?? {} };
+  const completedSteps = new Set<number>(Array.isArray(current.data?.completedSteps) ? current.data.completedSteps : []);
+  completedSteps.add(10);
+  const next: OnboardingState = {
+    step: 10,
+    completed: true,
+    data: { ...(current.data ?? {}), completedSteps: Array.from(completedSteps).sort((a, b) => a - b) },
+  };
 
   const { error } = await supabase.from('organizations').update({ onboarding: next }).eq('id', ctx.organizationId);
   if (error) return { error: `完了処理に失敗しました: ${error.message}` };

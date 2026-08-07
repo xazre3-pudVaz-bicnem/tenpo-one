@@ -370,3 +370,119 @@ export async function setOrgFeatureFlag(organizationId: string, flagKey: string,
 
   revalidatePath(`/admin/organizations/${organizationId}`);
 }
+
+// =============================================================
+// SaaS課金（Stripe Billing接続前のモック管理。実課金は発生しない）
+// =============================================================
+
+const SUBSCRIPTION_STATUSES = ['inactive', 'trialing', 'active', 'past_due', 'canceled'] as const;
+export type SaasSubscriptionStatus = (typeof SUBSCRIPTION_STATUSES)[number];
+
+export interface SubscriptionMockInput {
+  status: SaasSubscriptionStatus;
+  planCode: string;
+  currentPeriodStart: string | null; // 'YYYY-MM-DD'
+  currentPeriodEnd: string | null; // 'YYYY-MM-DD'
+}
+
+/** saas_subscriptions の手動更新（Stripe Billing接続前のモック管理）。実課金は発生しない */
+export async function updateOrgSubscriptionMock(organizationId: string, input: SubscriptionMockInput) {
+  await requireCypressAdmin();
+  if (!(SUBSCRIPTION_STATUSES as readonly string[]).includes(input.status)) {
+    throw new Error('不正な状態です');
+  }
+  const admin = createAdminClient();
+
+  const { data: plan } = await admin.from('plans').select('code').eq('code', input.planCode).maybeSingle();
+  if (!plan) throw new Error('不正なプランです');
+
+  const { data: before } = await admin
+    .from('saas_subscriptions')
+    .select('status, plan_code, current_period_start, current_period_end')
+    .eq('organization_id', organizationId)
+    .maybeSingle();
+
+  const payload = {
+    organization_id: organizationId,
+    provider: 'stripe',
+    plan_code: input.planCode,
+    status: input.status,
+    current_period_start: input.currentPeriodStart ? new Date(`${input.currentPeriodStart}T00:00:00+09:00`).toISOString() : null,
+    current_period_end: input.currentPeriodEnd ? new Date(`${input.currentPeriodEnd}T00:00:00+09:00`).toISOString() : null,
+  };
+
+  const { error } = await admin.from('saas_subscriptions').upsert(payload, { onConflict: 'organization_id' });
+  if (error) throw new Error(error.message);
+
+  const supabase = await createClient();
+  await supabase.rpc('log_audit', {
+    p_org: organizationId,
+    p_store: null,
+    p_action: 'organization.subscription_mock_update',
+    p_target_table: 'saas_subscriptions',
+    p_target_id: organizationId,
+    p_before: before ?? null,
+    p_after: payload,
+    p_note: 'Stripe Billing接続前のモック管理です（実課金は発生しません）',
+  });
+
+  revalidatePath(`/admin/organizations/${organizationId}`);
+}
+
+// =============================================================
+// プラン既定値の企業への適用（機能フラグ初期化）
+// =============================================================
+
+interface PlanFeaturesShape {
+  storeLimit?: number | null;
+  userLimit?: number | null;
+  features?: Partial<Record<string, boolean>>;
+}
+
+/**
+ * プランの features.features でfalseになっている機能を、企業のfeature_flagsへ反映する。
+ * true側（有効）は既存の企業別設定を尊重し変更しない。
+ */
+export async function applyPlanDefaultsToOrg(organizationId: string): Promise<{ disabledKeys: string[] }> {
+  await requireCypressAdmin();
+  const admin = createAdminClient();
+
+  const { data: org } = await admin.from('organizations').select('plan_code').eq('id', organizationId).single();
+  if (!org) throw new Error('企業が見つかりません');
+
+  const { data: plan } = await admin.from('plans').select('code, features').eq('code', org.plan_code).maybeSingle();
+  if (!plan) throw new Error('プランが見つかりません');
+
+  const planFeatures = (plan.features ?? {}) as PlanFeaturesShape;
+  const defaults = planFeatures.features ?? {};
+  const disabledKeys = (FEATURE_KEYS as readonly string[]).filter((k) => defaults[k] === false);
+
+  for (const key of disabledKeys) {
+    const { data: existing } = await admin
+      .from('feature_flags')
+      .select('id')
+      .eq('organization_id', organizationId)
+      .eq('flag_key', key)
+      .maybeSingle();
+    if (existing) {
+      await admin.from('feature_flags').update({ enabled: false }).eq('id', existing.id);
+    } else {
+      await admin.from('feature_flags').insert({ organization_id: organizationId, flag_key: key, enabled: false });
+    }
+  }
+
+  const supabase = await createClient();
+  await supabase.rpc('log_audit', {
+    p_org: organizationId,
+    p_store: null,
+    p_action: 'organization.apply_plan_defaults',
+    p_target_table: 'feature_flags',
+    p_target_id: organizationId,
+    p_before: null,
+    p_after: { plan_code: org.plan_code, disabled_keys: disabledKeys },
+    p_note: null,
+  });
+
+  revalidatePath(`/admin/organizations/${organizationId}`);
+  return { disabledKeys };
+}

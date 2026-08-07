@@ -91,6 +91,34 @@ export default async function PaymentsSettingsPage() {
           </CardContent>
         </Card>
 
+        <Card>
+          <CardHeader>
+            <CardTitle>対応決済プロバイダー</CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <ul className="divide-y divide-gray-100">
+              <li className="flex items-center justify-between gap-3 px-5 py-3">
+                <span className="text-sm font-medium text-navy">Stripe</span>
+                <Badge tone={!configured ? 'danger' : testMode ? 'warning' : 'success'}>
+                  {!configured ? '未接続' : testMode ? 'テストモード' : '接続済み'}
+                </Badge>
+              </li>
+              <li className="flex items-center justify-between gap-3 px-5 py-3">
+                <span className="text-sm font-medium text-navy">Square</span>
+                <Badge tone="gray">未対応</Badge>
+              </li>
+              <li className="flex items-center justify-between gap-3 px-5 py-3">
+                <span className="text-sm font-medium text-navy">AirPAY</span>
+                <Badge tone="gray">未対応</Badge>
+              </li>
+              <li className="flex items-center justify-between gap-3 px-5 py-3">
+                <span className="text-sm font-medium text-navy">stera</span>
+                <Badge tone="gray">未対応</Badge>
+              </li>
+            </ul>
+          </CardContent>
+        </Card>
+
         <PaymentReadersPanel storeId={targetStore.id} testMode={testMode} initial={readerRows} />
 
         <BookingPaymentSettingsForm
