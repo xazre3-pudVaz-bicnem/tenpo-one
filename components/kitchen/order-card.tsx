@@ -6,11 +6,11 @@ import { Badge, type BadgeTone } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast';
 import {
-  KDS_DANGER_MINUTES,
-  KDS_WARNING_MINUTES,
+  getElapsedTone,
   KITCHEN_STATUS_LABELS,
   ORDER_SOURCE_LABELS,
   type KdsOrderGroup,
+  type KdsSettings,
   type KitchenStatus,
 } from './types';
 
@@ -33,16 +33,32 @@ const STATUS_TONES: Record<KitchenStatus, BadgeTone> = {
   served: 'navy',
 };
 
+/** 4段階の警告レベル→カード枠線・経過時間文字色 */
+const TONE_BORDER: Record<'default' | 'info' | 'warning' | 'danger', string> = {
+  default: 'border-gray-200',
+  info: 'border-primary',
+  warning: 'border-warning',
+  danger: 'border-danger',
+};
+const TONE_TEXT: Record<'default' | 'info' | 'warning' | 'danger', string> = {
+  default: 'text-gray-500',
+  info: 'text-primary-deep',
+  warning: 'text-warning',
+  danger: 'text-danger',
+};
+
 export function OrderCard({
   group,
   now,
   showServed,
+  kdsSettings,
   setItemStatusAction,
   markOrderServedAction,
 }: {
   group: KdsOrderGroup;
   now: number;
   showServed: boolean;
+  kdsSettings: KdsSettings;
   setItemStatusAction: (orderItemId: string, nextStatus: KitchenStatus) => Promise<void>;
   markOrderServedAction: (orderId: string, onlyItemIds?: string[]) => Promise<void>;
 }) {
@@ -50,8 +66,7 @@ export function OrderCard({
   const { toast } = useToast();
 
   const elapsedMinutes = Math.max(0, Math.floor((now - new Date(group.orderTime).getTime()) / 60000));
-  const isDanger = elapsedMinutes >= KDS_DANGER_MINUTES;
-  const isWarning = !isDanger && elapsedMinutes >= KDS_WARNING_MINUTES;
+  const tone = getElapsedTone(elapsedMinutes, kdsSettings);
 
   const visibleItems = showServed ? group.items : group.items.filter((i) => i.kitchenStatus !== 'served');
   const hasActiveItems = group.items.some((i) => i.kitchenStatus !== 'served');
@@ -85,10 +100,7 @@ export function OrderCard({
 
   return (
     <div
-      className={cn(
-        'flex flex-col rounded-2xl border-2 bg-white p-4 shadow-sm',
-        isDanger ? 'border-danger' : isWarning ? 'border-warning' : 'border-gray-200'
-      )}
+      className={cn('flex flex-col rounded-2xl border-2 bg-white p-4 shadow-sm', TONE_BORDER[tone])}
     >
       <div className="flex items-start justify-between gap-2">
         <div>
@@ -98,10 +110,7 @@ export function OrderCard({
               {ORDER_SOURCE_LABELS[group.orderSource]}
             </Badge>
             <span
-              className={cn(
-                'text-sm font-bold tabular-nums',
-                isDanger ? 'text-danger' : isWarning ? 'text-warning' : 'text-gray-500'
-              )}
+              className={cn('text-sm font-bold tabular-nums', TONE_TEXT[tone])}
             >
               経過 {elapsedMinutes}分
             </span>

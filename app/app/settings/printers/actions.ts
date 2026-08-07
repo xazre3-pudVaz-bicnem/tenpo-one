@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
+import type { PrintResultStatus } from '@/lib/printing/types';
 
 export interface ActionResult {
   error?: string;
@@ -235,5 +236,90 @@ export async function markPrintJobPrinted(jobId: string): Promise<ActionResult> 
     .update({ status: 'printed', printed_at: new Date().toISOString() })
     .eq('id', jobId);
   if (error) return { error: error.message };
+  return {};
+}
+
+/**
+ * Mock障害シミュレーション（createMockPrintProvider）の結果を print_jobs へ記録する。
+ * print_jobs.status は('queued','printed','failed')のみのため、successのみprinted・
+ * それ以外（paper_out/offline/timeout/error）はfailedとしてerrorに日本語理由を残す。
+ */
+export async function finalizeTestPrintJob(
+  jobId: string,
+  status: PrintResultStatus,
+  message?: string
+): Promise<ActionResult> {
+  await requirePermission('store.settings');
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from('print_jobs')
+    .update({
+      status: status === 'success' ? 'printed' : 'failed',
+      error: status === 'success' ? null : (message ?? status),
+      printed_at: status === 'success' ? new Date().toISOString() : null,
+    })
+    .eq('id', jobId);
+  if (error) return { error: error.message };
+  return {};
+}
+
+export interface DrawerSettings {
+  autoOpenOnCash: boolean;
+  openOnCashless: boolean;
+}
+
+/** ドロア設定を取得する（store_settings.settings jsonb の drawer キー） */
+export async function getDrawerSettings(storeId: string): Promise<DrawerSettings> {
+  const ctx = await requirePermission('store.settings');
+  const err = assertStoreAccess(ctx.stores.map((s) => s.id), storeId);
+  if (err) return { autoOpenOnCash: true, openOnCashless: false };
+
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from('store_settings')
+    .select('settings')
+    .eq('store_id', storeId)
+    .maybeSingle();
+  const drawer = (data?.settings as { drawer?: Partial<DrawerSettings> } | null)?.drawer;
+  return {
+    autoOpenOnCash: drawer?.autoOpenOnCash ?? true,
+    openOnCashless: drawer?.openOnCashless ?? false,
+  };
+}
+
+/** ドロア設定を保存する（他のsettingsキーを壊さないよう既存jsonbへマージする） */
+export async function saveDrawerSettings(storeId: string, drawer: DrawerSettings): Promise<ActionResult> {
+  const ctx = await requirePermission('store.settings');
+  const err = assertStoreAccess(ctx.stores.map((s) => s.id), storeId);
+  if (err) return { error: err };
+
+  const supabase = await createClient();
+  const { data: existing } = await supabase
+    .from('store_settings')
+    .select('settings')
+    .eq('store_id', storeId)
+    .maybeSingle();
+  const nextSettings = { ...((existing?.settings as Record<string, unknown> | null) ?? {}), drawer };
+
+  const { error } = await supabase
+    .from('store_settings')
+    .upsert(
+      { organization_id: ctx.organizationId, store_id: storeId, settings: nextSettings, updated_by: ctx.userId },
+      { onConflict: 'store_id' }
+    );
+  if (error) return { error: `ドロア設定の保存に失敗しました: ${error.message}` };
+
+  await supabase.rpc('log_audit', {
+    p_org: ctx.organizationId,
+    p_store: storeId,
+    p_action: 'settings.printers.drawer_update',
+    p_target_table: 'store_settings',
+    p_target_id: storeId,
+    p_before: null,
+    p_after: drawer,
+    p_note: null,
+  });
+
+  revalidatePath('/app/settings/printers');
   return {};
 }

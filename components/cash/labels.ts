@@ -43,6 +43,7 @@ export const METHOD_LABELS: Record<string, string> = {
   emoney: '電子マネー',
   voucher: '商品券',
   on_account: '掛売',
+  points: 'ポイント',
 };
 
 export type ApprovalStatus = 'pending' | 'approved' | 'rejected';

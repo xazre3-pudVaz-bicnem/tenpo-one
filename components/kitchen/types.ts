@@ -45,9 +45,31 @@ export interface KdsOrderGroup {
   items: KdsItem[];
 }
 
-/** 経過時間のしきい値（分）。ここを超えるとカードの警告色が変わる */
-export const KDS_WARNING_MINUTES = 15;
-export const KDS_DANGER_MINUTES = 25;
+/** store_settings.kds_settings jsonb。警告しきい値（分）と表示モードを店舗単位で可変にする */
+export interface KdsSettings {
+  /** 0段階目→1段階目の境界（分） */
+  warn1: number;
+  /** 1段階目→2段階目の境界（分） */
+  warn2: number;
+  /** 2段階目→3段階目（最も危険）の境界（分） */
+  warn3: number;
+  /** 注文カード表示ではなく品目集約表示にするか */
+  aggregate: boolean;
+  /** 新規未着手品目の検知時にビープ音を鳴らすか */
+  sound: boolean;
+}
+
+export const DEFAULT_KDS_SETTINGS: KdsSettings = { warn1: 10, warn2: 15, warn3: 25, aggregate: false, sound: false };
+
+export type ElapsedTone = 'default' | 'info' | 'warning' | 'danger';
+
+/** 経過時間としきい値設定から4段階の警告レベルを決める */
+export function getElapsedTone(elapsedMinutes: number, settings: KdsSettings): ElapsedTone {
+  if (elapsedMinutes >= settings.warn3) return 'danger';
+  if (elapsedMinutes >= settings.warn2) return 'warning';
+  if (elapsedMinutes >= settings.warn1) return 'info';
+  return 'default';
+}
 
 export const ORDER_SOURCE_LABELS: Record<KdsOrderGroup['orderSource'], string> = {
   pos: 'POS',
@@ -61,3 +83,45 @@ export const KITCHEN_STATUS_LABELS: Record<KitchenStatus, string> = {
   ready: '完成',
   served: '提供済',
 };
+
+/** 集約表示（「品目名 ×数量」）1行分。未提供品目のみを station×品目名×オプションでグループ化する */
+export interface AggregatedKdsItem {
+  key: string;
+  name: string;
+  modifiers: KdsModifier[];
+  quantity: number;
+  station: Station;
+  oldestCreatedAt: string;
+  itemIds: string[];
+  pendingCount: number;
+  preparingCount: number;
+  readyCount: number;
+}
+
+export function aggregateKdsItems(groups: KdsOrderGroup[]): AggregatedKdsItem[] {
+  const map = new Map<string, AggregatedKdsItem>();
+  for (const g of groups) {
+    for (const it of g.items) {
+      if (it.kitchenStatus === 'served') continue;
+      const modSignature = [...it.modifiers].map((m) => m.name).sort().join('+');
+      const key = `${it.station}::${it.name}::${modSignature}`;
+      let row = map.get(key);
+      if (!row) {
+        row = {
+          key, name: it.name, modifiers: it.modifiers, quantity: 0, station: it.station,
+          oldestCreatedAt: it.createdAt, itemIds: [], pendingCount: 0, preparingCount: 0, readyCount: 0,
+        };
+        map.set(key, row);
+      }
+      row.quantity += it.quantity;
+      row.itemIds.push(it.id);
+      if (new Date(it.createdAt).getTime() < new Date(row.oldestCreatedAt).getTime()) row.oldestCreatedAt = it.createdAt;
+      if (it.kitchenStatus === 'pending') row.pendingCount += it.quantity;
+      else if (it.kitchenStatus === 'preparing') row.preparingCount += it.quantity;
+      else if (it.kitchenStatus === 'ready') row.readyCount += it.quantity;
+    }
+  }
+  return [...map.values()].sort(
+    (a, b) => new Date(a.oldestCreatedAt).getTime() - new Date(b.oldestCreatedAt).getTime()
+  );
+}

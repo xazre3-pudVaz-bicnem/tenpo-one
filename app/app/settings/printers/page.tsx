@@ -7,6 +7,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { SettingsBackLink } from '@/components/settings/back-link';
 import { RegistersPanel } from '@/components/settings/registers-panel';
 import { PrintersPanel } from '@/components/settings/printers-panel';
+import { DrawerPanel } from '@/components/settings/drawer-panel';
 
 export const metadata: Metadata = { title: 'レジ・プリンター | 設定' };
 
@@ -39,6 +40,18 @@ export default async function PrintersSettingsPage() {
     .eq('status', 'active')
     .order('name');
 
+  const { data: settingsRow } = await supabase
+    .from('store_settings')
+    .select('settings')
+    .eq('store_id', targetStore.id)
+    .maybeSingle();
+  const drawer = (settingsRow?.settings as { drawer?: { autoOpenOnCash?: boolean; openOnCashless?: boolean } } | null)
+    ?.drawer;
+  const drawerInitial = {
+    autoOpenOnCash: drawer?.autoOpenOnCash ?? true,
+    openOnCashless: drawer?.openOnCashless ?? false,
+  };
+
   const registerRows = (registers ?? []).map((r) => ({ id: r.id, name: r.name, status: r.status as 'active' | 'inactive' }));
 
   const printerRows = (printers ?? []).map((p) => ({
@@ -61,15 +74,19 @@ export default async function PrintersSettingsPage() {
       <PageHeader title="レジ・プリンター" description={targetStore.name} />
 
       <div className="grid gap-5 lg:grid-cols-3">
-        <div className="lg:col-span-1">
+        <div className="space-y-5 lg:col-span-1">
           <RegistersPanel storeId={targetStore.id} initial={registerRows} />
+          <DrawerPanel storeId={targetStore.id} initial={drawerInitial} />
         </div>
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-2 space-y-5">
           <Card>
             <CardContent>
               <PrintersPanel storeId={targetStore.id} initial={printerRows} />
             </CardContent>
           </Card>
+          <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 px-4 py-3 text-xs text-gray-500">
+            現在はブラウザ印刷（シミュレーション）のみ対応しています。「検証済み」表示は登録情報の確認状況を示すもので、実機プリンターとの接続保証ではありません。実機との直接接続は今後のアップデートで対応予定です。
+          </div>
         </div>
       </div>
     </div>

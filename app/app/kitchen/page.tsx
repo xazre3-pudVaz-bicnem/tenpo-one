@@ -1,11 +1,12 @@
 import type { Metadata } from 'next';
 import { requireFeature, requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
+import { can } from '@/lib/permissions';
 import { PageHeader } from '@/components/ui/page-header';
 import { EmptyState } from '@/components/ui/state';
 import { KdsBoard } from '@/components/kitchen/kds-board';
-import { setItemKitchenStatus, markOrderServed } from './actions';
-import type { KdsItem, KdsOrderGroup, Station } from '@/components/kitchen/types';
+import { setItemKitchenStatus, markOrderServed, updateKdsSettings } from './actions';
+import { DEFAULT_KDS_SETTINGS, type KdsItem, type KdsOrderGroup, type KdsSettings, type Station } from '@/components/kitchen/types';
 
 export const metadata: Metadata = { title: 'キッチン（KDS）' };
 
@@ -45,6 +46,20 @@ export default async function KitchenPage() {
 
   const supabase = await createClient();
   const sinceIso = new Date(new Date().getTime() - RECENT_SERVED_WINDOW_MS).toISOString();
+
+  const { data: storeSettings } = await supabase
+    .from('store_settings')
+    .select('kds_settings')
+    .eq('store_id', store.id)
+    .maybeSingle();
+  const savedKdsSettings = storeSettings?.kds_settings as Partial<KdsSettings> | null;
+  const kdsSettings: KdsSettings = {
+    warn1: savedKdsSettings?.warn1 ?? DEFAULT_KDS_SETTINGS.warn1,
+    warn2: savedKdsSettings?.warn2 ?? DEFAULT_KDS_SETTINGS.warn2,
+    warn3: savedKdsSettings?.warn3 ?? DEFAULT_KDS_SETTINGS.warn3,
+    aggregate: savedKdsSettings?.aggregate ?? DEFAULT_KDS_SETTINGS.aggregate,
+    sound: savedKdsSettings?.sound ?? DEFAULT_KDS_SETTINGS.sound,
+  };
 
   const { data: rows } = await supabase
     .from('order_items')
@@ -141,8 +156,11 @@ export default async function KitchenPage() {
         now={now}
         unservedCount={unservedCount}
         avgElapsedMinutes={avgElapsedMinutes}
+        kdsSettings={kdsSettings}
+        canManageSettings={can(ctx.role, 'store.settings')}
         setItemStatusAction={setItemKitchenStatus}
         markOrderServedAction={markOrderServed}
+        updateKdsSettingsAction={updateKdsSettings}
       />
     </div>
   );

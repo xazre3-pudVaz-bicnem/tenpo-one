@@ -4,8 +4,21 @@ import { revalidatePath } from 'next/cache';
 import { requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { applicableTaxRate } from '@/lib/tax';
+import { validateCoupon, COUPON_REJECT_LABELS, type CouponLike } from '@/lib/coupons';
+
+const COUPON_PREFIX = 'クーポン: ';
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
+
+/** JSTの'HH:MM'（クーポンの時間帯判定用） */
+function jstTimeHHMM(d: Date): string {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit', hour12: false,
+  }).formatToParts(d);
+  const h = parts.find((p) => p.type === 'hour')?.value ?? '00';
+  const m = parts.find((p) => p.type === 'minute')?.value ?? '00';
+  return `${h}:${m}`;
+}
 
 async function assertStoreAccess(
   ctx: { isHq: boolean; stores: { id: string }[] },
@@ -172,9 +185,16 @@ export async function setDiscount(orderId: string, discountTotal: number, reason
   const supabase = await createClient();
   const order = await loadOpenOrder(supabase, ctx, orderId);
 
+  // 手動値引きはクーポン枠と排他（discount_total/reasonを共有するため、手動設定時はクーポン紐付けを外す）
   const { error } = await supabase
     .from('orders')
-    .update({ discount_total: discountTotal, discount_reason: reason || null, updated_by: ctx.userId })
+    .update({
+      discount_total: discountTotal,
+      discount_reason: reason || null,
+      coupon_id: null,
+      coupon_code: null,
+      updated_by: ctx.userId,
+    })
     .eq('id', orderId);
   if (error) throw new Error(error.message);
 
@@ -194,7 +214,7 @@ export async function setDiscount(orderId: string, discountTotal: number, reason
 }
 
 export interface CheckoutPayment {
-  method: 'cash' | 'credit' | 'qr' | 'emoney' | 'voucher' | 'on_account';
+  method: 'cash' | 'credit' | 'qr' | 'emoney' | 'voucher' | 'on_account' | 'points';
   amount: number;
   tendered?: number;
 }
@@ -204,6 +224,8 @@ export interface CheckoutOutcome {
   /** true の場合は二重会計等で既に確定済み。エラーではなく案内として扱う */
   alreadyPaid?: boolean;
   warning?: string | null;
+  /** finalize_order が返す今回付与ポイント数（0以下は付与なし） */
+  pointsEarned?: number;
 }
 
 /**
@@ -232,7 +254,7 @@ export async function checkout(orderId: string, payments: CheckoutPayment[]): Pr
     .limit(1)
     .maybeSingle();
 
-  const { error } = await supabase.rpc('finalize_order', {
+  const { data, error } = await supabase.rpc('finalize_order', {
     p_order_id: orderId,
     p_payments: payments,
     p_register_session_id: session?.id ?? null,
@@ -245,6 +267,12 @@ export async function checkout(orderId: string, payments: CheckoutPayment[]): Pr
     if (error.message?.includes('PAYMENT_MISMATCH')) {
       throw new Error('お預かり金額の合計が会計金額と一致しません。金額をご確認ください');
     }
+    if (error.message?.includes('INSUFFICIENT_POINTS')) {
+      throw new Error('ポイント残高が不足しています');
+    }
+    if (error.message?.includes('POINTS_REQUIRE_CUSTOMER') || error.message?.includes('LOYALTY_DISABLED')) {
+      throw new Error('ポイント払いには顧客紐付け・会員機能の有効化が必要です');
+    }
     console.error('[pos.checkout] finalize_order failed:', error);
     throw new Error('会計の確定に失敗しました。通信状態を確認して再度お試しください');
   }
@@ -256,7 +284,8 @@ export async function checkout(orderId: string, payments: CheckoutPayment[]): Pr
   const hasCash = payments.some((p) => p.method === 'cash');
   const warning =
     !session && hasCash ? '現金がレジ台帳に計上されていません。レジを開局してください' : null;
-  return { ok: true, warning };
+  const result = data as { points_earned?: number } | null;
+  return { ok: true, warning, pointsEarned: result?.points_earned ?? 0 };
 }
 
 export interface SplitMove {
@@ -536,4 +565,206 @@ export async function logPrintJob(orderId: string, jobType: 'receipt' | 'ryoshus
     printed_at: new Date().toISOString(),
     created_by: ctx.userId,
   });
+}
+
+export interface ApplyCouponResult {
+  ok: boolean;
+  error?: string;
+  /** stackable=false のクーポンで既存の値引きがある場合、force:true での再送を促す */
+  requiresReplace?: boolean;
+  discount?: number;
+  name?: string;
+}
+
+/**
+ * クーポンコードを検証して適用する（lib/coupons の validateCoupon を必ず通す）。
+ * discount_total/discount_reason はこの1本の値引き枠を共有するため、適用時に置き換える
+ * （stackable=falseで既存の値引きがある場合は force:true が渡されるまで確認を促す）。
+ */
+export async function applyCoupon(orderId: string, code: string, force = false): Promise<ApplyCouponResult> {
+  const ctx = await requirePermission('pos.discount');
+  const trimmedCode = code.trim();
+  if (!trimmedCode) return { ok: false, error: 'クーポンコードを入力してください' };
+  const supabase = await createClient();
+  const order = await loadOpenOrder(supabase, ctx, orderId);
+
+  const { data: coupon } = await supabase
+    .from('coupons')
+    .select('*')
+    .eq('organization_id', order.organization_id)
+    .eq('code', trimmedCode)
+    .maybeSingle();
+  if (!coupon) return { ok: false, error: '指定のクーポンコードが見つかりません' };
+
+  if (order.discount_total > 0 && !coupon.stackable && !force) {
+    return { ok: false, requiresReplace: true, error: '既存の値引きがあります。置き換えて適用しますか' };
+  }
+
+  const [{ count: totalRedemptions }, customerRow] = await Promise.all([
+    supabase
+      .from('coupon_redemptions')
+      .select('id', { count: 'exact', head: true })
+      .eq('coupon_id', coupon.id),
+    order.customer_id
+      ? supabase.from('customers').select('visit_count').eq('id', order.customer_id).maybeSingle()
+      : Promise.resolve({ data: null }),
+  ]);
+  let customerRedemptions = 0;
+  if (order.customer_id) {
+    const { count } = await supabase
+      .from('coupon_redemptions')
+      .select('id', { count: 'exact', head: true })
+      .eq('coupon_id', coupon.id)
+      .eq('customer_id', order.customer_id);
+    customerRedemptions = count ?? 0;
+  }
+
+  const couponLike: CouponLike = {
+    id: coupon.id,
+    kind: coupon.kind,
+    value: coupon.value,
+    minTotal: coupon.min_total,
+    startsAt: coupon.starts_at ? new Date(coupon.starts_at) : null,
+    endsAt: coupon.ends_at ? new Date(coupon.ends_at) : null,
+    timeFrom: coupon.time_from,
+    timeTo: coupon.time_to,
+    maxUses: coupon.max_uses,
+    perCustomerLimit: coupon.per_customer_limit,
+    firstVisitOnly: coupon.first_visit_only,
+    storeId: coupon.store_id,
+    status: coupon.status,
+  };
+  const now = new Date();
+  const result = validateCoupon(couponLike, {
+    now,
+    jstTime: jstTimeHHMM(now),
+    orderTotal: order.total,
+    storeId: order.store_id,
+    customerVisitCount: order.customer_id ? ((customerRow.data as { visit_count: number } | null)?.visit_count ?? 0) : null,
+    totalRedemptions: totalRedemptions ?? 0,
+    customerRedemptions,
+  });
+  if (!result.valid) {
+    return { ok: false, error: COUPON_REJECT_LABELS[result.reason!] };
+  }
+
+  const { error } = await supabase
+    .from('orders')
+    .update({
+      coupon_id: coupon.id,
+      coupon_code: coupon.code,
+      discount_total: result.discount,
+      discount_reason: `${COUPON_PREFIX}${coupon.name}`,
+      updated_by: ctx.userId,
+    })
+    .eq('id', orderId);
+  if (error) throw new Error(error.message);
+
+  await supabase.rpc('log_audit', {
+    p_org: order.organization_id,
+    p_store: order.store_id,
+    p_action: 'order.coupon_apply',
+    p_target_table: 'orders',
+    p_target_id: orderId,
+    p_before: { discount_total: order.discount_total },
+    p_after: { coupon_code: coupon.code, discount_total: result.discount },
+    p_note: null,
+  });
+
+  await supabase.rpc('recalc_order_totals', { p_order_id: orderId });
+  revalidatePath('/app/pos');
+  return { ok: true, discount: result.discount, name: coupon.name };
+}
+
+/** クーポン解除（適用時に discount_total/reason を占有しているため、解除時は値引きごと外す） */
+export async function clearCoupon(orderId: string): Promise<void> {
+  const ctx = await requirePermission('pos.discount');
+  const supabase = await createClient();
+  const order = await loadOpenOrder(supabase, ctx, orderId);
+  if (!order.coupon_id) return;
+
+  const { error } = await supabase
+    .from('orders')
+    .update({
+      coupon_id: null,
+      coupon_code: null,
+      discount_total: 0,
+      discount_reason: null,
+      updated_by: ctx.userId,
+    })
+    .eq('id', orderId);
+  if (error) throw new Error(error.message);
+
+  await supabase.rpc('log_audit', {
+    p_org: order.organization_id,
+    p_store: order.store_id,
+    p_action: 'order.coupon_clear',
+    p_target_table: 'orders',
+    p_target_id: orderId,
+    p_before: { coupon_code: order.coupon_code },
+    p_after: { coupon_code: null },
+    p_note: null,
+  });
+
+  await supabase.rpc('recalc_order_totals', { p_order_id: orderId });
+  revalidatePath('/app/pos');
+}
+
+export interface PosCustomerSearchResult {
+  id: string;
+  name: string;
+  phone: string | null;
+  pointBalance: number;
+}
+
+/** 電話番号（部分一致）で顧客を検索する。伝票への顧客紐付けUIから使用 */
+export async function searchCustomerByPhone(phone: string): Promise<PosCustomerSearchResult[]> {
+  const ctx = await requirePermission('pos.order');
+  const query = phone.trim();
+  if (query.length < 2) return [];
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from('customers')
+    .select('id, name, phone, point_balance')
+    .eq('organization_id', ctx.organizationId)
+    .eq('status', 'active')
+    .ilike('phone', `%${query}%`)
+    .limit(10);
+  return (data ?? []).map((c) => ({ id: c.id, name: c.name, phone: c.phone, pointBalance: c.point_balance }));
+}
+
+export interface SetOrderCustomerResult {
+  customerName: string | null;
+  pointBalance: number | null;
+}
+
+/** 伝票へ顧客を紐付ける（customerId=null で解除） */
+export async function setOrderCustomer(orderId: string, customerId: string | null): Promise<SetOrderCustomerResult> {
+  const ctx = await requirePermission('pos.order');
+  const supabase = await createClient();
+  const order = await loadOpenOrder(supabase, ctx, orderId);
+
+  let customerName: string | null = null;
+  let pointBalance: number | null = null;
+  if (customerId) {
+    const { data: customer } = await supabase
+      .from('customers')
+      .select('id, name, point_balance, organization_id')
+      .eq('id', customerId)
+      .single();
+    if (!customer || customer.organization_id !== order.organization_id) {
+      throw new Error('顧客が見つかりません');
+    }
+    customerName = customer.name;
+    pointBalance = customer.point_balance;
+  }
+
+  const { error } = await supabase
+    .from('orders')
+    .update({ customer_id: customerId, updated_by: ctx.userId })
+    .eq('id', orderId);
+  if (error) throw new Error(error.message);
+
+  revalidatePath('/app/pos');
+  return { customerName, pointBalance };
 }

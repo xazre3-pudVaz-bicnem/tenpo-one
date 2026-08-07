@@ -1,9 +1,11 @@
 'use client';
 
-import { useMemo, useState, useTransition } from 'react';
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Minus, Plus, X, ArrowLeft, Split, Combine, ArrowRightLeft } from 'lucide-react';
+import {
+  Minus, Plus, X, ArrowLeft, Split, Combine, ArrowRightLeft, Search, Star, Flame, User,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { yen } from '@/lib/format';
 import { Button } from '@/components/ui/button';
@@ -11,16 +13,24 @@ import { Badge } from '@/components/ui/badge';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useToast } from '@/components/ui/toast';
 import { useStoreRealtimeRefresh } from '@/components/realtime/use-store-refresh';
+import { createMockDrawerProvider } from '@/lib/printing/providers';
+import { shouldOpenDrawer, type DrawerResultStatus } from '@/lib/printing/types';
 import {
   CheckoutDialog,
   type CheckoutOrder,
   type PosPaymentAvailability,
   type PosTerminalReader,
+  type PointsAvailability,
 } from './checkout-dialog';
 import { SplitDialog } from './split-dialog';
 import { MergeDialog, type MergeCandidate } from './merge-dialog';
 import { TableMoveDialog, type AvailableTable } from './table-move-dialog';
-import type { CheckoutPayment, CheckoutOutcome, SplitMove } from '@/app/app/pos/actions';
+import { CustomerLinkDialog } from './customer-link-dialog';
+import { POS_SHORTCUTS } from './shortcuts';
+import type {
+  CheckoutPayment, CheckoutOutcome, SplitMove, ApplyCouponResult,
+  PosCustomerSearchResult, SetOrderCustomerResult,
+} from '@/app/app/pos/actions';
 import type { TerminalPaymentState } from '@/app/app/pos/payment-actions';
 
 const ORDER_TYPE_LABELS: Record<string, string> = {
@@ -31,6 +41,16 @@ const ORDER_TYPE_LABELS: Record<string, string> = {
   pre_order: '事前注文',
 };
 
+/** ドロア開放結果の表示ラベル（プリンター実機未接続のためシミュレーション結果） */
+const DRAWER_STATUS_LABELS: Record<DrawerResultStatus, string> = {
+  opened: 'ドロアを開きました（シミュレーション）',
+  failed: 'ドロアが開きませんでした（シミュレーション）',
+  offline: 'ドロアがオフラインです（シミュレーション）',
+};
+
+const FAVORITES_TAB = '__favorites__';
+const BESTSELLERS_TAB = '__bestsellers__';
+
 export interface PosOrder {
   id: string;
   orderNo: number;
@@ -38,6 +58,7 @@ export interface PosOrder {
   guestCount: number;
   discountTotal: number;
   discountReason: string | null;
+  couponCode: string | null;
   subtotal: number;
   taxTotal: number;
   serviceCharge: number;
@@ -67,11 +88,31 @@ export interface PosMenuItem {
   id: string;
   category_id: string | null;
   name: string;
+  name_kana: string | null;
   price: number;
   takeout_price: number | null;
   item_type: string;
   is_sold_out: boolean;
+  is_recommended: boolean;
   sort_order: number;
+}
+
+export interface PosCustomer {
+  id: string;
+  name: string;
+  phone: string | null;
+  pointBalance: number;
+}
+
+export interface DrawerConfig {
+  autoOpenOnCash: boolean;
+  openOnCashless: boolean;
+}
+
+function matchesQuery(item: PosMenuItem, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  return item.name.toLowerCase().includes(q) || (item.name_kana ?? '').toLowerCase().includes(q);
 }
 
 export function PosScreen({
@@ -80,8 +121,12 @@ export function PosScreen({
   items,
   categories,
   menuItems,
+  bestSellerIds,
   tableName,
   staffName,
+  customer,
+  pointsAvailability,
+  drawerConfig,
   canDiscount,
   canCheckout,
   terminalReaders,
@@ -99,14 +144,23 @@ export function PosScreen({
   startTerminalPaymentAction,
   checkTerminalPaymentAction,
   cancelTerminalPaymentAction,
+  applyCouponAction,
+  clearCouponAction,
+  searchCustomerAction,
+  setOrderCustomerAction,
 }: {
   storeId: string;
   order: PosOrder;
   items: PosOrderItem[];
   categories: PosCategory[];
   menuItems: PosMenuItem[];
+  /** 過去30日の販売数量TOP12（menu_item_id）。多い順 */
+  bestSellerIds: string[];
   tableName: string | null;
   staffName: string | null;
+  customer: PosCustomer | null;
+  pointsAvailability: PointsAvailability;
+  drawerConfig: DrawerConfig;
   canDiscount: boolean;
   canCheckout: boolean;
   terminalReaders: PosTerminalReader[];
@@ -124,29 +178,64 @@ export function PosScreen({
   startTerminalPaymentAction: (orderId: string, readerId: string) => Promise<TerminalPaymentState>;
   checkTerminalPaymentAction: (localIntentId: string) => Promise<TerminalPaymentState>;
   cancelTerminalPaymentAction: (localIntentId: string) => Promise<TerminalPaymentState>;
+  applyCouponAction: (orderId: string, code: string, force?: boolean) => Promise<ApplyCouponResult>;
+  clearCouponAction: (orderId: string) => Promise<void>;
+  searchCustomerAction: (phone: string) => Promise<PosCustomerSearchResult[]>;
+  setOrderCustomerAction: (orderId: string, customerId: string | null) => Promise<SetOrderCustomerResult>;
 }) {
   const router = useRouter();
   const { toast } = useToast();
   const [pending, startTransition] = useTransition();
   const [activeCategory, setActiveCategory] = useState<string>(categories[0]?.id ?? '');
+  const [searchQuery, setSearchQuery] = useState('');
   const [cancelTarget, setCancelTarget] = useState<PosOrderItem | null>(null);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [splitOpen, setSplitOpen] = useState(false);
   const [mergeOpen, setMergeOpen] = useState(false);
   const [tableMoveOpen, setTableMoveOpen] = useState(false);
+  const [customerOpen, setCustomerOpen] = useState(false);
+  const [linkedCustomer, setLinkedCustomer] = useState(customer);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   // QRからの追加注文が同じ order_items を更新するため、変更をRealtimeで検知して伝票へ反映する。
   // order_idまでは絞り込まず、store_id単位で購読する（filter仕様上のシンプルさを優先）。
   useStoreRealtimeRefresh({ storeId, tables: ['order_items'] });
 
+  // キーボードショートカット（F2=検索フォーカス / F4=会計を開く）。Escでのダイアログ閉じは
+  // components/ui/dialog.tsx 側で共通実装済みのためここでは扱わない。
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'F2') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      } else if (e.key === 'F4') {
+        e.preventDefault();
+        if (items.length > 0) setCheckoutOpen(true);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [items.length]);
+
   const isTakeoutLike = order.orderType === 'takeout' || order.orderType === 'delivery';
-  const visibleItems = useMemo(
-    () =>
-      activeCategory
-        ? menuItems.filter((m) => m.category_id === activeCategory)
-        : menuItems.filter((m) => !m.category_id),
-    [menuItems, activeCategory]
-  );
+  const bestSellerRank = useMemo(() => new Map(bestSellerIds.map((id, i) => [id, i])), [bestSellerIds]);
+
+  const visibleItems = useMemo(() => {
+    if (searchQuery.trim()) {
+      return menuItems.filter((m) => matchesQuery(m, searchQuery));
+    }
+    if (activeCategory === FAVORITES_TAB) {
+      return menuItems.filter((m) => m.is_recommended);
+    }
+    if (activeCategory === BESTSELLERS_TAB) {
+      return menuItems
+        .filter((m) => bestSellerRank.has(m.id))
+        .sort((a, b) => bestSellerRank.get(a.id)! - bestSellerRank.get(b.id)!);
+    }
+    return activeCategory
+      ? menuItems.filter((m) => m.category_id === activeCategory)
+      : menuItems.filter((m) => !m.category_id);
+  }, [menuItems, activeCategory, searchQuery, bestSellerRank]);
 
   const handleAdd = (menuItemId: string) => {
     startTransition(async () => {
@@ -168,12 +257,28 @@ export function PosScreen({
     });
   };
 
+  const handleQtyDirectInput = (item: PosOrderItem, nextValue: number) => {
+    const next = Math.max(1, Math.floor(nextValue) || 1);
+    if (next === item.quantity) return;
+    handleQty(item.id, next - item.quantity);
+  };
+
   const handleCancel = async (reason: string) => {
     if (!cancelTarget) return;
     try {
       await cancelItemAction(order.id, cancelTarget.id, reason);
     } catch (e) {
       toast(e instanceof Error ? e.message : '取消に失敗しました', 'error');
+    }
+  };
+
+  const attemptOpenDrawer = async (methods: string[]) => {
+    if (!shouldOpenDrawer(methods, drawerConfig)) return;
+    try {
+      const result = await createMockDrawerProvider('opened').open();
+      toast(DRAWER_STATUS_LABELS[result.status], result.status === 'opened' ? 'success' : 'error');
+    } catch {
+      // ドロア開放はベストエフォート（失敗しても会計自体は完了済み）
     }
   };
 
@@ -185,12 +290,16 @@ export function PosScreen({
       router.push(`/app/pos/receipt/${order.id}`);
       return;
     }
-    toast(result.warning ?? '会計が完了しました', result.warning ? 'error' : 'success');
+    const earned = result.pointsEarned ?? 0;
+    const base = result.warning ?? '会計が完了しました';
+    toast(earned > 0 ? `${base}（+${earned}ポイント付与）` : base, result.warning ? 'error' : 'success');
+    void attemptOpenDrawer(payments.map((p) => p.method));
     router.push(`/app/pos/receipt/${order.id}`);
   };
 
   const handleTerminalPaymentFinalized = () => {
     toast('決済が完了しました', 'success');
+    void attemptOpenDrawer(['credit']);
     router.push(`/app/pos/receipt/${order.id}`);
   };
 
@@ -200,12 +309,13 @@ export function PosScreen({
     taxTotal: order.taxTotal,
     serviceCharge: order.serviceCharge,
     discountTotal: order.discountTotal,
+    couponCode: order.couponCode,
     total: order.total,
   };
 
   return (
     <div className="flex h-[calc(100vh-4rem)] flex-col lg:flex-row">
-      {/* 左: カテゴリ + 商品グリッド */}
+      {/* 左: 検索・カテゴリ + 商品グリッド */}
       <div className="flex min-w-0 flex-1 flex-col border-b border-gray-200 lg:border-b-0 lg:border-r">
         <div className="flex items-center gap-3 border-b border-gray-200 bg-white px-4 py-3">
           <Link href="/app/floor" className="flex items-center gap-1 text-sm font-medium text-gray-600 hover:text-primary">
@@ -216,29 +326,80 @@ export function PosScreen({
             <Badge tone="navy">{tableName ?? ORDER_TYPE_LABELS[order.orderType] ?? order.orderType}</Badge>
             <span className="text-gray-500">{order.guestCount}名</span>
             {staffName && <span className="text-gray-500">担当: {staffName}</span>}
+            <button
+              type="button"
+              onClick={() => setCustomerOpen(true)}
+              className={cn(
+                'flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold transition-colors',
+                linkedCustomer ? 'bg-primary-soft text-primary-deep' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+              )}
+            >
+              <User className="h-3.5 w-3.5" />
+              {linkedCustomer ? linkedCustomer.name : '顧客未設定'}
+            </button>
           </div>
         </div>
 
-        <div className="flex gap-2 overflow-x-auto border-b border-gray-200 bg-white px-3 py-2">
-          {categories.map((c) => (
-            <button
-              key={c.id}
-              type="button"
-              onClick={() => setActiveCategory(c.id)}
-              className={cn(
-                'shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition-colors',
-                activeCategory === c.id ? 'text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              )}
-              style={activeCategory === c.id ? { backgroundColor: c.color ?? '#7B3FF2' } : undefined}
-            >
-              {c.name}
-            </button>
-          ))}
+        <div className="border-b border-gray-200 bg-white px-3 py-2">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            <input
+              ref={searchInputRef}
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="商品名・カナで検索（F2）"
+              className="h-10 w-full rounded-lg border border-gray-300 bg-white pl-9 pr-3 text-sm text-gray-900 placeholder:text-gray-400 focus:border-primary focus:outline-2 focus:outline-primary/30"
+            />
+          </div>
         </div>
+
+        {!searchQuery.trim() && (
+          <div className="flex gap-2 overflow-x-auto border-b border-gray-200 bg-white px-3 py-2">
+            <button
+              type="button"
+              onClick={() => setActiveCategory(FAVORITES_TAB)}
+              className={cn(
+                'flex shrink-0 items-center gap-1 rounded-full px-4 py-2 text-sm font-semibold transition-colors',
+                activeCategory === FAVORITES_TAB ? 'bg-warning text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              )}
+            >
+              <Star className="h-3.5 w-3.5" />
+              おすすめ
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveCategory(BESTSELLERS_TAB)}
+              className={cn(
+                'flex shrink-0 items-center gap-1 rounded-full px-4 py-2 text-sm font-semibold transition-colors',
+                activeCategory === BESTSELLERS_TAB ? 'bg-danger text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              )}
+            >
+              <Flame className="h-3.5 w-3.5" />
+              売れ筋
+            </button>
+            {categories.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => setActiveCategory(c.id)}
+                className={cn(
+                  'shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition-colors',
+                  activeCategory === c.id ? 'text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                )}
+                style={activeCategory === c.id ? { backgroundColor: c.color ?? '#7B3FF2' } : undefined}
+              >
+                {c.name}
+              </button>
+            ))}
+          </div>
+        )}
 
         <div className="flex-1 overflow-y-auto p-3">
           {visibleItems.length === 0 ? (
-            <p className="p-6 text-center text-sm text-gray-400">このカテゴリに商品がありません</p>
+            <p className="p-6 text-center text-sm text-gray-400">
+              {searchQuery.trim() ? '該当する商品が見つかりません' : 'このカテゴリに商品がありません'}
+            </p>
           ) : (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
               {visibleItems.map((m) => {
@@ -256,7 +417,10 @@ export function PosScreen({
                     )}
                     style={!m.is_sold_out && category?.color ? { borderLeft: `6px solid ${category.color}` } : undefined}
                   >
-                    <span className="text-sm font-bold text-navy">{m.name}</span>
+                    <span className="flex items-center gap-1 text-sm font-bold text-navy">
+                      {m.is_recommended && <Star className="h-3.5 w-3.5 shrink-0 fill-warning text-warning" />}
+                      {m.name}
+                    </span>
                     {m.is_sold_out ? (
                       <Badge tone="gray">売切</Badge>
                     ) : (
@@ -270,7 +434,7 @@ export function PosScreen({
         </div>
       </div>
 
-      {/* 右: 伝票 */}
+      {/* 右: 伝票（会計ボタン・合計は常時表示。スクロールは品目リストのみ） */}
       <div className="flex w-full flex-col bg-white lg:w-[380px] lg:shrink-0">
         <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
           <h2 className="text-sm font-bold text-navy">伝票 #{order.orderNo}</h2>
@@ -305,7 +469,19 @@ export function PosScreen({
                       >
                         <Minus className="h-3.5 w-3.5" />
                       </button>
-                      <span className="w-6 text-center text-sm font-semibold tabular-nums">{it.quantity}</span>
+                      <input
+                        key={it.quantity}
+                        type="number"
+                        min={1}
+                        disabled={pending}
+                        defaultValue={it.quantity}
+                        onBlur={(e) => handleQtyDirectInput(it, Number(e.target.value))}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') e.currentTarget.blur();
+                        }}
+                        aria-label={`${it.name}の数量`}
+                        className="w-12 rounded-lg border border-gray-300 py-1 text-center text-sm font-semibold tabular-nums focus:border-primary focus:outline-2 focus:outline-primary/30"
+                      />
                       <button
                         type="button"
                         disabled={pending}
@@ -342,7 +518,7 @@ export function PosScreen({
           )}
           {order.discountTotal > 0 && (
             <div className="flex justify-between text-warning">
-              <span>値引き</span>
+              <span>値引き{order.couponCode ? `（${order.couponCode}）` : ''}</span>
               <span className="tabular-nums">-{yen(order.discountTotal)}</span>
             </div>
           )}
@@ -390,6 +566,9 @@ export function PosScreen({
           >
             会計へ（{yen(order.total)}）
           </Button>
+          <p className="text-center text-[11px] text-gray-400">
+            {POS_SHORTCUTS.map((s) => `${s.label}:${s.description}`).join('　')}
+          </p>
         </div>
       </div>
 
@@ -410,13 +589,32 @@ export function PosScreen({
         canDiscount={canDiscount}
         discountReason={order.discountReason}
         setDiscountAction={setDiscountAction}
+        applyCouponAction={applyCouponAction}
+        clearCouponAction={clearCouponAction}
         onCheckout={handleCheckout}
         terminalReaders={terminalReaders}
         paymentAvailability={paymentAvailability}
+        pointsAvailability={pointsAvailability}
         startTerminalPaymentAction={startTerminalPaymentAction}
         checkTerminalPaymentAction={checkTerminalPaymentAction}
         cancelTerminalPaymentAction={cancelTerminalPaymentAction}
         onTerminalPaymentFinalized={handleTerminalPaymentFinalized}
+      />
+
+      <CustomerLinkDialog
+        open={customerOpen}
+        onClose={() => setCustomerOpen(false)}
+        orderId={order.id}
+        currentCustomer={linkedCustomer ? { id: linkedCustomer.id, name: linkedCustomer.name } : null}
+        searchCustomerAction={searchCustomerAction}
+        setOrderCustomerAction={setOrderCustomerAction}
+        onLinked={(result) => {
+          if (!result.id || !result.customerName) {
+            setLinkedCustomer(null);
+          } else {
+            setLinkedCustomer({ id: result.id, name: result.customerName, phone: null, pointBalance: result.pointBalance ?? 0 });
+          }
+        }}
       />
 
       {canCheckout && (

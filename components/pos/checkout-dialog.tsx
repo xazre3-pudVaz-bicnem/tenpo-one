@@ -1,20 +1,23 @@
 'use client';
 
 import { useEffect, useRef, useState, useTransition } from 'react';
-import { Loader2, Trash2 } from 'lucide-react';
+import { Loader2, Trash2, Ticket, X as XIcon } from 'lucide-react';
 import { Dialog } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input, Label, Select } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useToast } from '@/components/ui/toast';
 import { cn } from '@/lib/utils';
 import { yen } from '@/lib/format';
 import { calcChange } from '@/lib/money';
 import { METHOD_LABELS } from '@/components/cash/labels';
-import type { CheckoutPayment } from '@/app/app/pos/actions';
+import { Tenkey, appendTenkeyDigit, appendTenkeyDoubleZero } from './tenkey';
+import type { CheckoutPayment, ApplyCouponResult } from '@/app/app/pos/actions';
 import type { TerminalPaymentState } from '@/app/app/pos/payment-actions';
 
 const COUPON_PREFIX = 'クーポン: ';
+const QUICK_CASH_AMOUNTS = [1000, 5000, 10000] as const;
 
 export interface CheckoutOrder {
   id: string;
@@ -22,6 +25,7 @@ export interface CheckoutOrder {
   taxTotal: number;
   serviceCharge: number;
   discountTotal: number;
+  couponCode: string | null;
   total: number;
 }
 
@@ -39,7 +43,15 @@ export interface PosPaymentAvailability {
   testMode: boolean;
 }
 
-const METHODS: CheckoutPayment['method'][] = ['cash', 'credit', 'qr', 'emoney', 'voucher', 'on_account'];
+/** ポイント払いの活性条件（顧客紐付け・会員機能有効・残高>0）はサーバーで判定してprops経由で渡す */
+export interface PointsAvailability {
+  available: boolean;
+  balance: number;
+  /** 1pt=何円か（loyalty_settings.point_value） */
+  pointValue: number;
+}
+
+const BASE_METHODS: CheckoutPayment['method'][] = ['cash', 'credit', 'qr', 'emoney', 'voucher', 'on_account'];
 
 /** 端末決済ポーリングの上限（60秒 ÷ 2秒間隔） */
 const TERMINAL_POLL_INTERVAL_MS = 2000;
@@ -58,9 +70,12 @@ export function CheckoutDialog({
   canDiscount,
   discountReason,
   setDiscountAction,
+  applyCouponAction,
+  clearCouponAction,
   onCheckout,
   terminalReaders,
   paymentAvailability,
+  pointsAvailability,
   startTerminalPaymentAction,
   checkTerminalPaymentAction,
   cancelTerminalPaymentAction,
@@ -72,9 +87,12 @@ export function CheckoutDialog({
   canDiscount: boolean;
   discountReason: string | null;
   setDiscountAction: (orderId: string, discountTotal: number, reason: string) => Promise<void>;
+  applyCouponAction: (orderId: string, code: string, force?: boolean) => Promise<ApplyCouponResult>;
+  clearCouponAction: (orderId: string) => Promise<void>;
   onCheckout: (payments: CheckoutPayment[]) => Promise<void>;
   terminalReaders: PosTerminalReader[];
   paymentAvailability: PosPaymentAvailability;
+  pointsAvailability: PointsAvailability;
   startTerminalPaymentAction: (orderId: string, readerId: string) => Promise<TerminalPaymentState>;
   checkTerminalPaymentAction: (localIntentId: string) => Promise<TerminalPaymentState>;
   cancelTerminalPaymentAction: (localIntentId: string) => Promise<TerminalPaymentState>;
@@ -82,13 +100,13 @@ export function CheckoutDialog({
 }) {
   const { toast } = useToast();
   const [discountPending, startDiscount] = useTransition();
+  const [couponPending, startCoupon] = useTransition();
   const [checkoutPending, startCheckout] = useTransition();
   const [discountInput, setDiscountInput] = useState(String(order.discountTotal || ''));
   const isCouponReason = (discountReason ?? '').startsWith(COUPON_PREFIX);
   const [couponMode, setCouponMode] = useState(isCouponReason);
-  const [couponName, setCouponName] = useState(
-    isCouponReason ? (discountReason as string).slice(COUPON_PREFIX.length) : ''
-  );
+  const [couponCodeInput, setCouponCodeInput] = useState(order.couponCode ?? '');
+  const [couponConfirmOpen, setCouponConfirmOpen] = useState(false);
   const [discountReasonInput, setDiscountReasonInput] = useState(
     isCouponReason ? '' : (discountReason ?? '')
   );
@@ -105,6 +123,7 @@ export function CheckoutDialog({
 
   const paid = payments.reduce((a, p) => a + p.amount, 0);
   const remaining = order.total - paid;
+  const maxPointsUsable = Math.min(pointsAvailability.balance * pointsAvailability.pointValue, order.total);
   // 端末決済が進行中/未解決の間は、他の支払方法の操作を排他する
   const terminalBlocking = terminalStatus === 'sending' || terminalStatus === 'polling' || terminalStatus === 'timeout';
 
@@ -202,25 +221,60 @@ export function CheckoutDialog({
 
   const applyDiscount = () => {
     const amount = Math.max(0, Number(discountInput) || 0);
-    if (amount > 0 && couponMode && !couponName.trim()) {
-      toast('クーポン名を入力してください', 'error');
+    if (amount > 0 && !discountReasonInput.trim()) {
+      toast('値引き理由を入力してください', 'error');
       return;
     }
-    const reason = couponMode ? `${COUPON_PREFIX}${couponName.trim()}` : discountReasonInput;
     startDiscount(async () => {
       try {
-        await setDiscountAction(order.id, amount, reason);
+        await setDiscountAction(order.id, amount, discountReasonInput);
       } catch (e) {
         toast(e instanceof Error ? e.message : '値引きの適用に失敗しました', 'error');
       }
     });
   };
 
+  const runApplyCoupon = (force: boolean) => {
+    const code = couponCodeInput.trim();
+    if (!code) {
+      toast('クーポンコードを入力してください', 'error');
+      return;
+    }
+    startCoupon(async () => {
+      try {
+        const result = await applyCouponAction(order.id, code, force);
+        if (!result.ok) {
+          if (result.requiresReplace) {
+            setCouponConfirmOpen(true);
+            return;
+          }
+          toast(result.error ?? 'クーポンの適用に失敗しました', 'error');
+          return;
+        }
+        toast(`クーポン「${result.name}」を適用しました（-${yen(result.discount ?? 0)}）`, 'success');
+      } catch (e) {
+        toast(e instanceof Error ? e.message : 'クーポンの適用に失敗しました', 'error');
+      }
+    });
+  };
+
+  const handleClearCoupon = () => {
+    startCoupon(async () => {
+      try {
+        await clearCouponAction(order.id);
+        setCouponCodeInput('');
+        toast('クーポンを解除しました', 'success');
+      } catch (e) {
+        toast(e instanceof Error ? e.message : 'クーポンの解除に失敗しました', 'error');
+      }
+    });
+  };
+
   const addPayment = (method: CheckoutPayment['method']) => {
-    const amount = Math.max(0, remaining);
+    const cap = method === 'points' ? Math.min(maxPointsUsable, Math.max(0, remaining)) : Math.max(0, remaining);
     setPayments((rows) => [
       ...rows,
-      { key: `${method}-${Date.now()}`, method, amount, tendered: method === 'cash' ? amount : undefined },
+      { key: `${method}-${Date.now()}`, method, amount: cap, tendered: method === 'cash' ? cap : undefined },
     ]);
   };
 
@@ -407,40 +461,75 @@ export function CheckoutDialog({
                 </button>
               </div>
             </div>
-            <div className="flex flex-wrap items-end gap-2">
-              <div>
-                <Label htmlFor="discount-amount">値引き額</Label>
-                <Input
-                  id="discount-amount"
-                  type="number"
-                  min={0}
-                  value={discountInput}
-                  onChange={(e) => setDiscountInput(e.target.value)}
-                  className="w-32"
-                />
+
+            {couponMode ? (
+              isCouponReason ? (
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-primary-soft/50 px-3 py-2">
+                  <div className="flex items-center gap-2 text-sm text-primary-deep">
+                    <Ticket className="h-4 w-4" />
+                    <span className="font-medium">{(discountReason as string).slice(COUPON_PREFIX.length)}</span>
+                    <span className="tabular-nums">-{yen(order.discountTotal)}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleClearCoupon}
+                    disabled={couponPending}
+                    className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-danger hover:bg-danger-soft"
+                  >
+                    <XIcon className="h-3.5 w-3.5" />
+                    解除
+                  </button>
+                </div>
+              ) : (
+                <div className="flex flex-wrap items-end gap-2">
+                  <div className="flex-1 min-w-[180px]">
+                    <Label htmlFor="coupon-code">クーポンコード</Label>
+                    <Input
+                      id="coupon-code"
+                      value={couponCodeInput}
+                      onChange={(e) => setCouponCodeInput(e.target.value)}
+                      placeholder="例: WELCOME500"
+                    />
+                  </div>
+                  <Button variant="secondary" onClick={() => runApplyCoupon(false)} disabled={couponPending}>
+                    {couponPending ? '確認中…' : 'クーポンを適用'}
+                  </Button>
+                </div>
+              )
+            ) : (
+              <div className="flex flex-wrap items-end gap-2">
+                <div>
+                  <Label htmlFor="discount-amount">値引き額</Label>
+                  <Input
+                    id="discount-amount"
+                    type="number"
+                    min={0}
+                    value={discountInput}
+                    onChange={(e) => setDiscountInput(e.target.value)}
+                    className="w-32"
+                  />
+                </div>
+                <div className="flex-1 min-w-[180px]">
+                  <Label htmlFor="discount-reason">理由</Label>
+                  <Input
+                    id="discount-reason"
+                    value={discountReasonInput}
+                    onChange={(e) => setDiscountReasonInput(e.target.value)}
+                    placeholder="端数調整・サービス等"
+                  />
+                </div>
+                <Button variant="secondary" onClick={applyDiscount} disabled={discountPending}>
+                  {discountPending ? '処理中…' : '値引きを適用'}
+                </Button>
               </div>
-              <div className="flex-1 min-w-[180px]">
-                <Label htmlFor="discount-reason">{couponMode ? 'クーポン名' : '理由'}</Label>
-                <Input
-                  id="discount-reason"
-                  value={couponMode ? couponName : discountReasonInput}
-                  onChange={(e) =>
-                    couponMode ? setCouponName(e.target.value) : setDiscountReasonInput(e.target.value)
-                  }
-                  placeholder={couponMode ? '例: 誕生日クーポン500円引き' : '端数調整・サービス等'}
-                />
-              </div>
-              <Button variant="secondary" onClick={applyDiscount} disabled={discountPending}>
-                {discountPending ? '処理中…' : '値引きを適用'}
-              </Button>
-            </div>
+            )}
           </div>
         )}
 
         <div>
           <p className="mb-2 text-sm font-semibold text-navy">支払方法</p>
-          <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
-            {METHODS.map((m) => (
+          <div className="grid grid-cols-4 gap-2 sm:grid-cols-7">
+            {BASE_METHODS.map((m) => (
               <Button
                 key={m}
                 variant="secondary"
@@ -451,48 +540,97 @@ export function CheckoutDialog({
                 {METHOD_LABELS[m]}
               </Button>
             ))}
+            <Button
+              variant="secondary"
+              size="pos"
+              disabled={terminalBlocking || !pointsAvailability.available}
+              title={
+                pointsAvailability.available
+                  ? `残高 ${pointsAvailability.balance}pt`
+                  : '顧客紐付け・会員機能有効・残高が必要です'
+              }
+              onClick={() => addPayment('points')}
+            >
+              {METHOD_LABELS.points}
+            </Button>
           </div>
         </div>
 
         {payments.length > 0 && (
           <div className="space-y-2">
             {payments.map((p) => (
-              <div key={p.key} className="flex flex-wrap items-center gap-2 rounded-xl border border-gray-200 p-3">
-                <Badge tone="navy" className="shrink-0">
-                  {METHOD_LABELS[p.method]}
-                </Badge>
-                <Input
-                  type="number"
-                  min={0}
-                  value={p.amount}
-                  onChange={(e) => updatePayment(p.key, { amount: Math.max(0, Number(e.target.value) || 0) })}
-                  className="w-28"
-                />
+              <div key={p.key} className="rounded-xl border border-gray-200 p-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge tone="navy" className="shrink-0">
+                    {METHOD_LABELS[p.method]}
+                  </Badge>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={p.method === 'points' ? maxPointsUsable : undefined}
+                    value={p.amount}
+                    onChange={(e) => {
+                      const cap = p.method === 'points' ? maxPointsUsable : Number.MAX_SAFE_INTEGER;
+                      const v = Math.max(0, Math.min(cap, Number(e.target.value) || 0));
+                      updatePayment(p.key, { amount: v, tendered: p.method === 'cash' ? p.tendered : undefined });
+                    }}
+                    className="w-28"
+                  />
+                  {p.method === 'points' && (
+                    <span className="text-xs text-gray-500 tabular-nums">上限 {yen(maxPointsUsable)}</span>
+                  )}
+                  <button
+                    type="button"
+                    aria-label="削除"
+                    onClick={() => removePayment(p.key)}
+                    className="ml-auto rounded p-1.5 text-gray-400 hover:bg-danger-soft hover:text-danger"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+
                 {p.method === 'cash' && (
-                  <>
-                    <Label className="mb-0 whitespace-nowrap text-xs">預り金</Label>
-                    <Input
-                      type="number"
-                      min={0}
-                      value={p.tendered ?? 0}
-                      onChange={(e) =>
-                        updatePayment(p.key, { tendered: Math.max(0, Number(e.target.value) || 0) })
-                      }
-                      className="w-28"
+                  <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_auto]">
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label className="mb-0">預り金</Label>
+                        <span className="text-sm font-bold tabular-nums text-navy">{yen(p.tendered ?? 0)}</span>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {QUICK_CASH_AMOUNTS.map((amt) => (
+                          <button
+                            key={amt}
+                            type="button"
+                            onClick={() =>
+                              updatePayment(p.key, { tendered: (p.tendered ?? 0) + amt })
+                            }
+                            className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-navy hover:bg-gray-50"
+                          >
+                            +{yen(amt)}
+                          </button>
+                        ))}
+                        <button
+                          type="button"
+                          onClick={() => updatePayment(p.key, { tendered: p.amount })}
+                          className="rounded-lg border border-primary/40 bg-primary-soft px-3 py-1.5 text-xs font-semibold text-primary-deep hover:bg-primary-soft/70"
+                        >
+                          ちょうど
+                        </button>
+                      </div>
+                      <p className="text-xs text-gray-500 tabular-nums">
+                        お釣り {yen(calcChange(p.amount, p.tendered ?? 0))}
+                      </p>
+                    </div>
+                    <Tenkey
+                      onKey={(k) => {
+                        const current = p.tendered ?? 0;
+                        if (k === 'C') updatePayment(p.key, { tendered: 0 });
+                        else if (k === '00') updatePayment(p.key, { tendered: appendTenkeyDoubleZero(current) });
+                        else updatePayment(p.key, { tendered: appendTenkeyDigit(current, k) });
+                      }}
                     />
-                    <span className="text-xs text-gray-500 tabular-nums">
-                      お釣り {yen(calcChange(p.amount, p.tendered ?? 0))}
-                    </span>
-                  </>
+                  </div>
                 )}
-                <button
-                  type="button"
-                  aria-label="削除"
-                  onClick={() => removePayment(p.key)}
-                  className="ml-auto rounded p-1.5 text-gray-400 hover:bg-danger-soft hover:text-danger"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
               </div>
             ))}
           </div>
@@ -519,6 +657,16 @@ export function CheckoutDialog({
           )}
         </Button>
       </div>
+
+      <ConfirmDialog
+        open={couponConfirmOpen}
+        onClose={() => setCouponConfirmOpen(false)}
+        title="既存の値引きを置き換えますか"
+        message="このクーポンは他の値引きと併用できません。現在設定されている値引きを置き換えて適用します。"
+        confirmLabel="置き換えて適用"
+        destructive={false}
+        onConfirm={() => runApplyCoupon(true)}
+      />
     </Dialog>
   );
 }

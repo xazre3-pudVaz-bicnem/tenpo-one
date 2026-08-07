@@ -17,8 +17,13 @@ import {
   splitOrder,
   mergeOrders,
   moveTable,
+  applyCoupon,
+  clearCoupon,
+  searchCustomerByPhone,
+  setOrderCustomer,
 } from './actions';
 import { startTerminalPayment, checkTerminalPayment, cancelTerminalPayment, getPaymentAvailability } from './payment-actions';
+import { daysAgoJst } from '@/lib/format';
 
 export const metadata: Metadata = { title: 'POSレジ' };
 
@@ -78,7 +83,7 @@ export default async function PosPage({
   const { data: order, error: orderError } = await supabase
     .from('orders')
     .select(
-      'id, order_no, order_type, status, guest_count, discount_total, discount_reason, subtotal, tax_total, service_charge, total, store_id, table_id, staff_id, restaurant_tables(name), profiles(display_name)'
+      'id, order_no, order_type, status, guest_count, discount_total, discount_reason, coupon_code, customer_id, subtotal, tax_total, service_charge, total, store_id, table_id, staff_id, restaurant_tables(name), profiles(display_name)'
     )
     .eq('id', orderId)
     .single();
@@ -120,7 +125,7 @@ export default async function PosPage({
 
   const { data: menuItems, error: menuItemsError } = await supabase
     .from('menu_items')
-    .select('id, category_id, name, price, takeout_price, item_type, is_sold_out, sort_order')
+    .select('id, category_id, name, name_kana, price, takeout_price, item_type, is_sold_out, is_recommended, sort_order')
     .eq('organization_id', ctx.organizationId)
     .or(`store_id.is.null,store_id.eq.${store.id}`)
     .eq('status', 'active')
@@ -133,6 +138,58 @@ export default async function PosPage({
 
   const table = order.restaurant_tables as unknown as { name: string } | null;
   const staff = order.profiles as unknown as { display_name: string } | null;
+
+  // 売れ筋TOP12（過去30日・支払済注文の販売数量集計）。集計RPCは無いためサーバー側でJS集計する。
+  const { data: recentSales } = await supabase
+    .from('order_items')
+    .select('menu_item_id, quantity, orders!inner(store_id, status, business_date)')
+    .eq('orders.store_id', store.id)
+    .eq('orders.status', 'paid')
+    .eq('status', 'active')
+    .not('menu_item_id', 'is', null)
+    .gte('orders.business_date', daysAgoJst(30));
+  const salesByItem = new Map<string, number>();
+  for (const row of recentSales ?? []) {
+    const id = row.menu_item_id as string;
+    salesByItem.set(id, (salesByItem.get(id) ?? 0) + row.quantity);
+  }
+  const bestSellerIds = [...salesByItem.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 12)
+    .map(([id]) => id);
+
+  // 顧客紐付け・ポイント払いの活性判定はサーバーで完結させ、クライアントには結果のみ渡す
+  let customer: { id: string; name: string; phone: string | null; pointBalance: number } | null = null;
+  if (order.customer_id) {
+    const { data: c } = await supabase
+      .from('customers')
+      .select('id, name, phone, point_balance')
+      .eq('id', order.customer_id)
+      .maybeSingle();
+    if (c) customer = { id: c.id, name: c.name, phone: c.phone, pointBalance: c.point_balance };
+  }
+  const { data: loyalty } = await supabase
+    .from('loyalty_settings')
+    .select('enabled, point_value')
+    .eq('organization_id', ctx.organizationId)
+    .maybeSingle();
+  const pointsAvailability = {
+    available: !!customer && !!loyalty?.enabled && customer.pointBalance > 0,
+    balance: customer?.pointBalance ?? 0,
+    pointValue: loyalty?.point_value ?? 1,
+  };
+
+  const { data: storeSettings } = await supabase
+    .from('store_settings')
+    .select('settings')
+    .eq('store_id', store.id)
+    .maybeSingle();
+  const drawerSettings = (storeSettings?.settings as { drawer?: { autoOpenOnCash?: boolean; openOnCashless?: boolean } } | null)
+    ?.drawer;
+  const drawerConfig = {
+    autoOpenOnCash: drawerSettings?.autoOpenOnCash ?? true,
+    openOnCashless: drawerSettings?.openOnCashless ?? false,
+  };
 
   const canCheckout = can(ctx.role, 'pos.checkout');
   let paymentAvailability = { configured: false, testMode: false };
@@ -215,6 +272,7 @@ export default async function PosPage({
           guestCount: order.guest_count,
           discountTotal: order.discount_total,
           discountReason: order.discount_reason,
+          couponCode: order.coupon_code,
           subtotal: order.subtotal,
           taxTotal: order.tax_total,
           serviceCharge: order.service_charge,
@@ -224,8 +282,12 @@ export default async function PosPage({
         items={items ?? []}
         categories={categories ?? []}
         menuItems={menuItems ?? []}
+        bestSellerIds={bestSellerIds}
         tableName={table?.name ?? null}
         staffName={staff?.display_name ?? null}
+        customer={customer}
+        pointsAvailability={pointsAvailability}
+        drawerConfig={drawerConfig}
         canDiscount={can(ctx.role, 'pos.discount')}
         canCheckout={canCheckout}
         terminalReaders={terminalReaders}
@@ -243,6 +305,10 @@ export default async function PosPage({
         startTerminalPaymentAction={startTerminalPayment}
         checkTerminalPaymentAction={checkTerminalPayment}
         cancelTerminalPaymentAction={cancelTerminalPayment}
+        applyCouponAction={applyCoupon}
+        clearCouponAction={clearCoupon}
+        searchCustomerAction={searchCustomerByPhone}
+        setOrderCustomerAction={setOrderCustomer}
       />
     </div>
   );

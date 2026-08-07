@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
+import type { KdsSettings } from '@/components/kitchen/types';
 
 type KitchenStatus = 'pending' | 'preparing' | 'ready' | 'served';
 
@@ -96,6 +97,41 @@ export async function markOrderServed(orderId: string, onlyItemIds?: string[]) {
         .eq('id', it.id)
     )
   );
+
+  revalidatePath('/app/kitchen');
+}
+
+/**
+ * KDS表示設定（警告しきい値・集約表示・音通知）を保存する。
+ * store_settings.kds_settings は1つのjsonb列にまとめて保存するため、
+ * 一部の値だけを変える場合も呼び出し側で現在値とマージした完全なオブジェクトを渡すこと。
+ */
+export async function updateKdsSettings(storeId: string, settings: KdsSettings): Promise<void> {
+  const ctx = await requirePermission('store.settings');
+  assertStoreAccess(ctx, storeId);
+  if (!(settings.warn1 > 0 && settings.warn1 < settings.warn2 && settings.warn2 < settings.warn3)) {
+    throw new Error('しきい値は 0 < 段階1 < 段階2 < 段階3 の順で指定してください');
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from('store_settings')
+    .upsert(
+      { organization_id: ctx.organizationId, store_id: storeId, kds_settings: settings, updated_by: ctx.userId },
+      { onConflict: 'store_id' }
+    );
+  if (error) throw new Error(error.message);
+
+  await supabase.rpc('log_audit', {
+    p_org: ctx.organizationId,
+    p_store: storeId,
+    p_action: 'kitchen.kds_settings_update',
+    p_target_table: 'store_settings',
+    p_target_id: storeId,
+    p_before: null,
+    p_after: settings,
+    p_note: null,
+  });
 
   revalidatePath('/app/kitchen');
 }
