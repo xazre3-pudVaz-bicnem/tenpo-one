@@ -199,14 +199,29 @@ export interface CheckoutPayment {
   tendered?: number;
 }
 
-/** 会計確定。レジ未開局の場合は register_session_id=null で確定し warning を返す */
-export async function checkout(
-  orderId: string,
-  payments: CheckoutPayment[]
-): Promise<{ ok: true; warning: string | null }> {
+export interface CheckoutOutcome {
+  ok: boolean;
+  /** true の場合は二重会計等で既に確定済み。エラーではなく案内として扱う */
+  alreadyPaid?: boolean;
+  warning?: string | null;
+}
+
+/**
+ * 会計確定。レジ未開局の場合は register_session_id=null で確定し warning を返す。
+ * finalize_order は status<>'open' をDB層で拒否する（二重会計防止）。
+ * 既に会計済みだった場合はエラーにせず alreadyPaid:true を返し、呼び出し側でレシートへ誘導する。
+ */
+export async function checkout(orderId: string, payments: CheckoutPayment[]): Promise<CheckoutOutcome> {
   const ctx = await requirePermission('pos.checkout');
   const supabase = await createClient();
-  const order = await loadOpenOrder(supabase, ctx, orderId);
+
+  const { data: order } = await supabase.from('orders').select('*').eq('id', orderId).single();
+  if (!order) throw new Error('注文が見つかりません');
+  await assertStoreAccess(ctx, order.store_id);
+
+  if (order.status !== 'open') {
+    return { ok: false, alreadyPaid: true };
+  }
 
   const { data: session } = await supabase
     .from('register_sessions')
@@ -222,7 +237,17 @@ export async function checkout(
     p_payments: payments,
     p_register_session_id: session?.id ?? null,
   });
-  if (error) throw new Error(error.message);
+
+  if (error) {
+    if (error.message?.includes('ORDER_NOT_OPEN')) {
+      return { ok: false, alreadyPaid: true };
+    }
+    if (error.message?.includes('PAYMENT_MISMATCH')) {
+      throw new Error('お預かり金額の合計が会計金額と一致しません。金額をご確認ください');
+    }
+    console.error('[pos.checkout] finalize_order failed:', error);
+    throw new Error('会計の確定に失敗しました。通信状態を確認して再度お試しください');
+  }
 
   revalidatePath('/app/pos');
   revalidatePath('/app/orders');
@@ -232,6 +257,261 @@ export async function checkout(
   const warning =
     !session && hasCash ? '現金がレジ台帳に計上されていません。レジを開局してください' : null;
   return { ok: true, warning };
+}
+
+export interface SplitMove {
+  orderItemId: string;
+  /** 移動する数量（元品目の数量以下）。全量を指定すると品目ごと移動する */
+  quantity: number;
+}
+
+/**
+ * 伝票分割: 選択した品目（数量の一部指定可）を新しい注文へ移動する。
+ * 個別会計はこの機能で実現する（分割後、両伝票をそれぞれ会計できる）。
+ */
+export async function splitOrder(
+  orderId: string,
+  moves: SplitMove[]
+): Promise<{ newOrderId: string }> {
+  const ctx = await requirePermission('pos.checkout');
+  if (!moves || moves.length === 0) throw new Error('移動する品目を選択してください');
+  const supabase = await createClient();
+  const order = await loadOpenOrder(supabase, ctx, orderId);
+
+  const targetIds = moves.map((m) => m.orderItemId);
+  const { data: lines } = await supabase
+    .from('order_items')
+    .select('*')
+    .eq('order_id', orderId)
+    .eq('status', 'active')
+    .in('id', targetIds);
+  if (!lines || lines.length !== new Set(targetIds).size) {
+    throw new Error('品目が見つかりません');
+  }
+  for (const m of moves) {
+    const line = lines.find((l) => l.id === m.orderItemId);
+    if (!line) throw new Error('品目が見つかりません');
+    if (!Number.isInteger(m.quantity) || m.quantity <= 0) {
+      throw new Error('移動数量が不正です');
+    }
+    if (m.quantity > line.quantity) {
+      throw new Error(`「${line.name}」の移動数量が保有数を超えています`);
+    }
+  }
+
+  const { data: newOrder, error: insErr } = await supabase
+    .from('orders')
+    .insert({
+      organization_id: order.organization_id,
+      store_id: order.store_id,
+      reservation_id: order.reservation_id,
+      customer_id: order.customer_id,
+      table_id: order.table_id,
+      order_type: order.order_type,
+      status: 'open',
+      guest_count: 1,
+      staff_id: ctx.userId,
+      source_order_id: order.id,
+      created_by: ctx.userId,
+    })
+    .select('id')
+    .single();
+  if (insErr || !newOrder) {
+    console.error('[pos.splitOrder] failed to create new order:', insErr);
+    throw new Error('伝票分割に失敗しました。通信状態を確認して再度お試しください');
+  }
+  const newOrderId = newOrder.id as string;
+
+  const movedSummary: { name: string; quantity: number }[] = [];
+  for (const m of moves) {
+    const line = lines.find((l) => l.id === m.orderItemId)!;
+    movedSummary.push({ name: line.name, quantity: m.quantity });
+
+    if (m.quantity === line.quantity) {
+      const { error } = await supabase
+        .from('order_items')
+        .update({ order_id: newOrderId, updated_by: ctx.userId })
+        .eq('id', line.id);
+      if (error) {
+        console.error('[pos.splitOrder] failed to move item:', error);
+        throw new Error('伝票分割に失敗しました。通信状態を確認して再度お試しください');
+      }
+    } else {
+      const remainingQty = line.quantity - m.quantity;
+      const { error: updErr } = await supabase
+        .from('order_items')
+        .update({
+          quantity: remainingQty,
+          line_total: line.unit_price * remainingQty,
+          updated_by: ctx.userId,
+        })
+        .eq('id', line.id);
+      if (updErr) {
+        console.error('[pos.splitOrder] failed to shrink item:', updErr);
+        throw new Error('伝票分割に失敗しました。通信状態を確認して再度お試しください');
+      }
+      const { error: insLineErr } = await supabase.from('order_items').insert({
+        organization_id: line.organization_id,
+        store_id: line.store_id,
+        order_id: newOrderId,
+        menu_item_id: line.menu_item_id,
+        name: line.name,
+        unit_price: line.unit_price,
+        quantity: m.quantity,
+        tax_rate: line.tax_rate,
+        tax_included: line.tax_included,
+        modifiers: line.modifiers,
+        memo: line.memo,
+        line_total: line.unit_price * m.quantity,
+        staff_id: ctx.userId,
+        status: 'active',
+        created_by: ctx.userId,
+      });
+      if (insLineErr) {
+        console.error('[pos.splitOrder] failed to insert moved item:', insLineErr);
+        throw new Error('伝票分割に失敗しました。通信状態を確認して再度お試しください');
+      }
+    }
+  }
+
+  await supabase.rpc('recalc_order_totals', { p_order_id: orderId });
+  await supabase.rpc('recalc_order_totals', { p_order_id: newOrderId });
+
+  await supabase.rpc('log_audit', {
+    p_org: order.organization_id,
+    p_store: order.store_id,
+    p_action: 'order.split',
+    p_target_table: 'orders',
+    p_target_id: orderId,
+    p_before: { order_id: orderId },
+    p_after: { new_order_id: newOrderId, moved_items: movedSummary },
+    p_note: `伝票分割（新伝票 #${newOrderId}）`,
+  });
+
+  revalidatePath('/app/pos');
+  revalidatePath('/app/orders');
+  return { newOrderId };
+}
+
+/**
+ * 伝票統合: 他の会計前伝票のactiveな品目を自伝票へ移動し、相手伝票はvoidにする（物理削除しない）。
+ */
+export async function mergeOrders(targetOrderId: string, sourceOrderId: string): Promise<void> {
+  const ctx = await requirePermission('pos.checkout');
+  if (targetOrderId === sourceOrderId) throw new Error('同じ伝票は統合できません');
+  const supabase = await createClient();
+  const target = await loadOpenOrder(supabase, ctx, targetOrderId);
+  const source = await loadOpenOrder(supabase, ctx, sourceOrderId);
+  if (source.store_id !== target.store_id) throw new Error('他店舗の伝票とは統合できません');
+
+  const { data: sourceItems } = await supabase
+    .from('order_items')
+    .select('id, name, quantity, line_total')
+    .eq('order_id', sourceOrderId)
+    .eq('status', 'active');
+
+  const { error: moveErr } = await supabase
+    .from('order_items')
+    .update({ order_id: targetOrderId, updated_by: ctx.userId })
+    .eq('order_id', sourceOrderId)
+    .eq('status', 'active');
+  if (moveErr) {
+    console.error('[pos.mergeOrders] failed to move items:', moveErr);
+    throw new Error('伝票統合に失敗しました。通信状態を確認して再度お試しください');
+  }
+
+  const { error: voidErr } = await supabase
+    .from('orders')
+    .update({
+      status: 'void',
+      void_reason: '伝票統合のため',
+      source_order_id: targetOrderId,
+      closed_at: new Date().toISOString(),
+      updated_by: ctx.userId,
+    })
+    .eq('id', sourceOrderId);
+  if (voidErr) {
+    console.error('[pos.mergeOrders] failed to void source order:', voidErr);
+    throw new Error('伝票統合に失敗しました。通信状態を確認して再度お試しください');
+  }
+
+  await supabase
+    .from('orders')
+    .update({ guest_count: target.guest_count + source.guest_count, updated_by: ctx.userId })
+    .eq('id', targetOrderId);
+
+  await supabase.rpc('recalc_order_totals', { p_order_id: targetOrderId });
+
+  await supabase.rpc('log_audit', {
+    p_org: target.organization_id,
+    p_store: target.store_id,
+    p_action: 'order.merge',
+    p_target_table: 'orders',
+    p_target_id: targetOrderId,
+    p_before: { source_order_id: sourceOrderId, source_total: source.total },
+    p_after: { merged_from: sourceOrderId, moved_items: sourceItems ?? [] },
+    p_note: '伝票統合のため',
+  });
+
+  revalidatePath('/app/pos');
+  revalidatePath('/app/orders');
+  revalidatePath('/app/floor');
+}
+
+/** テーブル移動: 空きテーブルへ席替え。旧テーブルはcleaning・新テーブルはseatedにする */
+export async function moveTable(orderId: string, newTableId: string): Promise<{ tableName: string }> {
+  const ctx = await requirePermission('pos.checkout');
+  const supabase = await createClient();
+  const order = await loadOpenOrder(supabase, ctx, orderId);
+  if (!order.table_id) throw new Error('この注文にはテーブルが割り当てられていません');
+  if (order.table_id === newTableId) throw new Error('現在と同じテーブルです');
+
+  const { data: newTable } = await supabase
+    .from('restaurant_tables')
+    .select('id, store_id, current_status, name')
+    .eq('id', newTableId)
+    .single();
+  if (!newTable) throw new Error('移動先テーブルが見つかりません');
+  if (newTable.store_id !== order.store_id) throw new Error('他店舗のテーブルへは移動できません');
+  if (newTable.current_status !== 'available') throw new Error('このテーブルは現在空席ではありません');
+
+  const oldTableId = order.table_id as string;
+
+  const { error } = await supabase
+    .from('orders')
+    .update({ table_id: newTableId, updated_by: ctx.userId })
+    .eq('id', orderId);
+  if (error) {
+    console.error('[pos.moveTable] failed to update order:', error);
+    throw new Error('テーブル移動に失敗しました。通信状態を確認して再度お試しください');
+  }
+
+  await supabase.from('restaurant_tables').update({ current_status: 'cleaning' }).eq('id', oldTableId);
+  await supabase.from('restaurant_tables').update({ current_status: 'seated' }).eq('id', newTableId);
+
+  if (order.reservation_id) {
+    // フロア表示整合のためのベストエフォート更新（失敗しても本処理は継続）
+    await supabase
+      .from('reservation_tables')
+      .update({ table_id: newTableId })
+      .eq('reservation_id', order.reservation_id)
+      .eq('table_id', oldTableId);
+  }
+
+  await supabase.rpc('log_audit', {
+    p_org: order.organization_id,
+    p_store: order.store_id,
+    p_action: 'order.move_table',
+    p_target_table: 'orders',
+    p_target_id: orderId,
+    p_before: { table_id: oldTableId },
+    p_after: { table_id: newTableId },
+    p_note: null,
+  });
+
+  revalidatePath('/app/pos');
+  revalidatePath('/app/floor');
+  return { tableName: newTable.name };
 }
 
 /** 印刷実行を記録する */

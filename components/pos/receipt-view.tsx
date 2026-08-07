@@ -26,6 +26,8 @@ export interface ReceiptOrder {
   discountTotal: number;
   discountReason: string | null;
   total: number;
+  /** 返金合計（返金がある場合のみ0より大きい） */
+  refundTotal?: number;
   closedAt: string | null;
   businessDate: string;
 }
@@ -224,6 +226,18 @@ export function ReceiptView({
                     <span className="tabular-nums">
                       {yen(payments.reduce((a, p) => a + (p.change_amount ?? 0), 0))}
                     </span>
+                  </div>
+                </>
+              )}
+              {!!order.refundTotal && order.refundTotal > 0 && (
+                <>
+                  <div className="flex justify-between text-danger">
+                    <span>返金</span>
+                    <span className="tabular-nums">-{yen(order.refundTotal)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm font-bold">
+                    <span>実質お支払い額</span>
+                    <span className="tabular-nums">{yen(order.total - order.refundTotal)}</span>
                   </div>
                 </>
               )}

@@ -14,7 +14,8 @@ import { TableWrap, Table, THead, TBody, Tr, Th, Td } from '@/components/ui/tabl
 import { OrderStatusBadge } from '@/components/orders/status-badge';
 import { METHOD_LABELS } from '@/components/cash/labels';
 import { RefundDialog } from '@/components/orders/refund-dialog';
-import { refundOrder } from '../actions';
+import { ReopenDialog } from '@/components/orders/reopen-dialog';
+import { refundOrder, reopenOrder } from '../actions';
 
 export const metadata: Metadata = { title: '注文詳細' };
 
@@ -38,7 +39,7 @@ export default async function OrderDetailPage({
   const { data: order } = await supabase
     .from('orders')
     .select(
-      'id, order_no, order_type, status, guest_count, subtotal, tax_total, service_charge, discount_total, discount_reason, total, opened_at, closed_at, store_id, restaurant_tables(name), profiles(display_name), customers(name)'
+      'id, order_no, order_type, status, guest_count, subtotal, tax_total, service_charge, discount_total, discount_reason, total, opened_at, closed_at, store_id, source_order_id, restaurant_tables(name), profiles(display_name), customers(name)'
     )
     .eq('id', id)
     .single();
@@ -58,29 +59,37 @@ export default async function OrderDetailPage({
     );
   }
 
-  const [{ data: items }, { data: payments }, { data: refunds }] = await Promise.all([
-    supabase
-      .from('order_items')
-      .select('id, name, unit_price, quantity, line_total, status, cancel_reason')
-      .eq('order_id', id)
-      .order('created_at'),
-    supabase
-      .from('payments')
-      .select('id, method, amount, tendered, change_amount, paid_at, status')
-      .eq('order_id', id)
-      .order('paid_at'),
-    supabase
-      .from('refunds')
-      .select('id, amount, method, reason, refunded_at')
-      .eq('order_id', id)
-      .order('refunded_at'),
-  ]);
+  const [{ data: items }, { data: payments }, { data: refunds }, { data: sourceOrder }, { data: derivedOrders }] =
+    await Promise.all([
+      supabase
+        .from('order_items')
+        .select('id, name, unit_price, quantity, line_total, status, cancel_reason')
+        .eq('order_id', id)
+        .order('created_at'),
+      supabase
+        .from('payments')
+        .select('id, method, amount, tendered, change_amount, paid_at, status')
+        .eq('order_id', id)
+        .order('paid_at'),
+      supabase
+        .from('refunds')
+        .select('id, amount, method, reason, refunded_at')
+        .eq('order_id', id)
+        .order('refunded_at'),
+      order.source_order_id
+        ? supabase.from('orders').select('id, order_no, status').eq('id', order.source_order_id).single()
+        : Promise.resolve({ data: null }),
+      supabase.from('orders').select('id, order_no, status').eq('source_order_id', id).order('created_at'),
+    ]);
 
   const totalPaid = (payments ?? [])
     .filter((p) => p.status === 'completed')
     .reduce((a, p) => a + p.amount, 0);
   const totalRefunded = (refunds ?? []).reduce((a, r) => a + r.amount, 0);
   const refundable = Math.max(0, totalPaid - totalRefunded);
+  const canReopen = can(ctx.role, 'pos.refund') && ['paid', 'refunded'].includes(order.status);
+  const fullyRefunded = order.status === 'refunded' && refundable === 0 && totalPaid > 0;
+  const openDerived = (derivedOrders ?? []).find((d) => d.status === 'open');
 
   const table = order.restaurant_tables as unknown as { name: string } | null;
   const staff = order.profiles as unknown as { display_name: string } | null;
@@ -294,6 +303,62 @@ export default async function OrderDetailPage({
                 ) : (
                   <RefundDialog orderId={order.id} refundable={refundable} refundOrderAction={refundOrder} />
                 )}
+              </CardContent>
+            </Card>
+          )}
+
+          {canReopen && (
+            <Card>
+              <CardHeader>
+                <CardTitle>再会計</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {openDerived ? (
+                  <div className="space-y-2">
+                    <p className="text-sm text-gray-500">
+                      再会計伝票 #{openDerived.order_no} が作成済みです。
+                    </p>
+                    <Link
+                      href={`/app/pos?order=${openDerived.id}`}
+                      className={cn(buttonVariants({ variant: 'navy' }), 'w-full')}
+                    >
+                      POSで開く
+                    </Link>
+                  </div>
+                ) : fullyRefunded ? (
+                  <ReopenDialog orderId={order.id} reopenOrderAction={reopenOrder} />
+                ) : (
+                  <p className="text-sm text-gray-500">
+                    再会計するには先に全額返金してください
+                    {refundable > 0 && `（未返金 ${yen(refundable)}）`}
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {(sourceOrder || (derivedOrders ?? []).length > 0) && (
+            <Card>
+              <CardHeader>
+                <CardTitle>関連取引</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 text-sm">
+                {sourceOrder && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-500">元取引</span>
+                    <Link href={`/app/orders/${sourceOrder.id}`} className="font-medium text-primary hover:underline">
+                      #{sourceOrder.order_no}
+                    </Link>
+                  </div>
+                )}
+                {(derivedOrders ?? []).map((d) => (
+                  <div key={d.id} className="flex items-center justify-between">
+                    <span className="text-gray-500">派生取引</span>
+                    <Link href={`/app/orders/${d.id}`} className="font-medium text-primary hover:underline">
+                      #{d.order_no}
+                    </Link>
+                  </div>
+                ))}
               </CardContent>
             </Card>
           )}

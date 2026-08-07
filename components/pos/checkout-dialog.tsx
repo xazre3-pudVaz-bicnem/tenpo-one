@@ -7,11 +7,14 @@ import { Button } from '@/components/ui/button';
 import { Input, Label, Select } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/components/ui/toast';
+import { cn } from '@/lib/utils';
 import { yen } from '@/lib/format';
 import { calcChange } from '@/lib/money';
 import { METHOD_LABELS } from '@/components/cash/labels';
 import type { CheckoutPayment } from '@/app/app/pos/actions';
 import type { TerminalPaymentState } from '@/app/app/pos/payment-actions';
+
+const COUPON_PREFIX = 'クーポン: ';
 
 export interface CheckoutOrder {
   id: string;
@@ -81,8 +84,17 @@ export function CheckoutDialog({
   const [discountPending, startDiscount] = useTransition();
   const [checkoutPending, startCheckout] = useTransition();
   const [discountInput, setDiscountInput] = useState(String(order.discountTotal || ''));
-  const [discountReasonInput, setDiscountReasonInput] = useState(discountReason ?? '');
+  const isCouponReason = (discountReason ?? '').startsWith(COUPON_PREFIX);
+  const [couponMode, setCouponMode] = useState(isCouponReason);
+  const [couponName, setCouponName] = useState(
+    isCouponReason ? (discountReason as string).slice(COUPON_PREFIX.length) : ''
+  );
+  const [discountReasonInput, setDiscountReasonInput] = useState(
+    isCouponReason ? '' : (discountReason ?? '')
+  );
   const [payments, setPayments] = useState<PaymentRow[]>([]);
+  // 二度押し・連打対策: pending state に加えて同期フラグでも多重送信を防ぐ
+  const checkoutInFlightRef = useRef(false);
 
   const [selectedReaderId, setSelectedReaderId] = useState(terminalReaders[0]?.id ?? '');
   const [terminalStatus, setTerminalStatus] = useState<TerminalStatus>('idle');
@@ -190,9 +202,14 @@ export function CheckoutDialog({
 
   const applyDiscount = () => {
     const amount = Math.max(0, Number(discountInput) || 0);
+    if (amount > 0 && couponMode && !couponName.trim()) {
+      toast('クーポン名を入力してください', 'error');
+      return;
+    }
+    const reason = couponMode ? `${COUPON_PREFIX}${couponName.trim()}` : discountReasonInput;
     startDiscount(async () => {
       try {
-        await setDiscountAction(order.id, amount, discountReasonInput);
+        await setDiscountAction(order.id, amount, reason);
       } catch (e) {
         toast(e instanceof Error ? e.message : '値引きの適用に失敗しました', 'error');
       }
@@ -219,6 +236,9 @@ export function CheckoutDialog({
     !terminalBlocking && payments.length > 0 && paid === order.total && payments.every((p) => p.amount > 0);
 
   const handleConfirm = () => {
+    // disabled属性の反映を待たず、同一フレーム内の連打でも1回しか送信しない
+    if (checkoutInFlightRef.current) return;
+    checkoutInFlightRef.current = true;
     startCheckout(async () => {
       try {
         await onCheckout(
@@ -231,7 +251,12 @@ export function CheckoutDialog({
         onClose();
         setPayments([]);
       } catch (e) {
-        toast(e instanceof Error ? e.message : '会計の確定に失敗しました', 'error');
+        toast(
+          e instanceof Error ? e.message : '処理に失敗しました。通信状態を確認して再度お試しください',
+          'error'
+        );
+      } finally {
+        checkoutInFlightRef.current = false;
       }
     });
   };
@@ -357,7 +382,31 @@ export function CheckoutDialog({
 
         {canDiscount && (
           <div className="rounded-xl border border-gray-200 p-4">
-            <p className="mb-2 text-sm font-semibold text-navy">値引き</p>
+            <div className="mb-2 flex items-center justify-between">
+              <p className="text-sm font-semibold text-navy">値引き・クーポン</p>
+              <div className="flex gap-1 rounded-full bg-gray-100 p-0.5 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setCouponMode(false)}
+                  className={cn(
+                    'rounded-full px-3 py-1 font-medium transition-colors',
+                    !couponMode ? 'bg-white text-navy shadow-sm' : 'text-gray-500'
+                  )}
+                >
+                  値引き
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCouponMode(true)}
+                  className={cn(
+                    'rounded-full px-3 py-1 font-medium transition-colors',
+                    couponMode ? 'bg-white text-navy shadow-sm' : 'text-gray-500'
+                  )}
+                >
+                  クーポン
+                </button>
+              </div>
+            </div>
             <div className="flex flex-wrap items-end gap-2">
               <div>
                 <Label htmlFor="discount-amount">値引き額</Label>
@@ -371,16 +420,18 @@ export function CheckoutDialog({
                 />
               </div>
               <div className="flex-1 min-w-[180px]">
-                <Label htmlFor="discount-reason">理由</Label>
+                <Label htmlFor="discount-reason">{couponMode ? 'クーポン名' : '理由'}</Label>
                 <Input
                   id="discount-reason"
-                  value={discountReasonInput}
-                  onChange={(e) => setDiscountReasonInput(e.target.value)}
-                  placeholder="端数調整・サービス等"
+                  value={couponMode ? couponName : discountReasonInput}
+                  onChange={(e) =>
+                    couponMode ? setCouponName(e.target.value) : setDiscountReasonInput(e.target.value)
+                  }
+                  placeholder={couponMode ? '例: 誕生日クーポン500円引き' : '端数調整・サービス等'}
                 />
               </div>
               <Button variant="secondary" onClick={applyDiscount} disabled={discountPending}>
-                値引きを適用
+                {discountPending ? '処理中…' : '値引きを適用'}
               </Button>
             </div>
           </div>
@@ -458,7 +509,14 @@ export function CheckoutDialog({
           disabled={!canConfirm || checkoutPending}
           onClick={handleConfirm}
         >
-          {checkoutPending ? '処理中…' : '会計を確定'}
+          {checkoutPending ? (
+            <>
+              <Loader2 className="h-5 w-5 animate-spin" />
+              処理中…
+            </>
+          ) : (
+            '会計を確定'
+          )}
         </Button>
       </div>
     </Dialog>

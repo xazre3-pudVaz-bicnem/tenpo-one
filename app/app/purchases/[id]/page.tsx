@@ -34,6 +34,22 @@ export default async function PurchaseOrderDetailPage({ params }: { params: Prom
     .order('created_at');
   const items = itemsData ?? [];
 
+  // 在庫連動明細の変換情報（仕入単位・在庫単位・変換係数）を入荷プレビュー用に取得
+  const invItemIds = [...new Set(items.map((i) => i.inventory_item_id).filter((v): v is string => !!v))];
+  let conversionMap = new Map<string, { stockUnit: string; purchaseUnit: string | null; factor: number }>();
+  if (invItemIds.length > 0) {
+    const { data: invItems } = await supabase
+      .from('inventory_items')
+      .select('id, unit, purchase_unit, purchase_to_stock_factor')
+      .in('id', invItemIds);
+    conversionMap = new Map(
+      (invItems ?? []).map((i) => [
+        i.id as string,
+        { stockUnit: i.unit as string, purchaseUnit: i.purchase_unit as string | null, factor: Number(i.purchase_to_stock_factor) || 1 },
+      ])
+    );
+  }
+
   const status = po.status as PoStatus;
   const vendorName = (po.vendors as unknown as { name: string } | null)?.name ?? '';
   const storeInfo = po.stores as unknown as { name: string; address: string | null; phone: string | null } | null;
@@ -50,14 +66,19 @@ export default async function PurchaseOrderDetailPage({ params }: { params: Prom
             {(status === 'ordered' || status === 'partially_received') && (
               <ReceiveForm
                 poId={po.id}
-                items={items.map((i) => ({
-                  id: i.id,
-                  name: i.name,
-                  unit: i.unit,
-                  quantity: Number(i.quantity),
-                  receivedQuantity: Number(i.received_quantity),
-                  unitCost: i.unit_cost,
-                }))}
+                items={items.map((i) => {
+                  const conv = i.inventory_item_id ? conversionMap.get(i.inventory_item_id) : undefined;
+                  return {
+                    id: i.id,
+                    name: i.name,
+                    unit: i.unit,
+                    quantity: Number(i.quantity),
+                    receivedQuantity: Number(i.received_quantity),
+                    unitCost: i.unit_cost,
+                    stockUnit: conv?.stockUnit ?? i.unit,
+                    factor: conv?.factor ?? 1,
+                  };
+                })}
               />
             )}
             <PoStatusActions poId={po.id} status={status} />

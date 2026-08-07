@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
+import { purchaseToStockQty, purchaseToStockUnitCost } from '@/lib/units';
 
 const LIST_PATH = '/app/purchases';
 const detailPath = (id: string) => `/app/purchases/${id}`;
@@ -194,6 +195,17 @@ export async function receiveItems(
   const validReceipts = receipts.filter((r) => r.quantity > 0 && byId.has(r.itemId));
   if (validReceipts.length === 0) throw new Error('入荷数量を入力してください');
 
+  // 在庫連動明細の変換係数（発注明細の単位=仕入単位あたりの数量・単価 → 在庫単位）を取得
+  const invItemIds = [...new Set(validReceipts.map((r) => byId.get(r.itemId)!.inventory_item_id).filter((v): v is string => !!v))];
+  let factorMap = new Map<string, number>();
+  if (invItemIds.length > 0) {
+    const { data: invItems } = await supabase
+      .from('inventory_items')
+      .select('id, purchase_to_stock_factor')
+      .in('id', invItemIds);
+    factorMap = new Map((invItems ?? []).map((i) => [i.id as string, Number(i.purchase_to_stock_factor) || 1]));
+  }
+
   for (const r of validReceipts) {
     const item = byId.get(r.itemId)!;
     const newReceived = Number(item.received_quantity) + r.quantity;
@@ -209,10 +221,14 @@ export async function receiveItems(
     if (updItemErr) throw new Error(updItemErr.message);
 
     if (item.inventory_item_id) {
+      // 発注明細の数量・単価は仕入単位あたりの値のため、lib/units で在庫単位へ変換してから反映する
+      const factor = factorMap.get(item.inventory_item_id) ?? 1;
+      const stockQuantity = purchaseToStockQty(r.quantity, factor);
+      const stockUnitCost = purchaseToStockUnitCost(unitCost, factor);
       const { error: rpcErr } = await supabase.rpc('apply_stock_receipt', {
         p_inventory_item_id: item.inventory_item_id,
-        p_quantity: r.quantity,
-        p_unit_cost: unitCost,
+        p_quantity: stockQuantity,
+        p_unit_cost: stockUnitCost,
         p_purchase_order_id: poId,
       });
       if (rpcErr) throw new Error(rpcErr.message);

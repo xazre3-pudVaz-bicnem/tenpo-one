@@ -29,6 +29,8 @@ export interface ItemRow {
   optimalQuantity: number | null;
   avgCost: number | null;
   lastPurchaseCost: number | null;
+  purchaseUnit: string | null;
+  purchaseToStockFactor: number;
 }
 
 interface StoreOption {
@@ -53,6 +55,7 @@ export function ItemTable({ rows, otherStores }: { rows: ItemRow[]; otherStores:
               <Th>種別</Th>
               <Th className="text-right">現在庫</Th>
               <Th>単位</Th>
+              <Th>仕入単位</Th>
               <Th className="text-right">発注点</Th>
               <Th className="text-right">最低在庫</Th>
               <Th className="text-right">適正在庫</Th>
@@ -76,6 +79,7 @@ export function ItemTable({ rows, otherStores }: { rows: ItemRow[]; otherStores:
                   <Td>{ITEM_KIND_LABELS[r.itemKind]}</Td>
                   <Td className="text-right tabular-nums">{r.currentQuantity}</Td>
                   <Td>{r.unit}</Td>
+                  <Td>{r.purchaseUnit ?? '—'}</Td>
                   <Td className="text-right tabular-nums">{r.reorderPoint ?? '—'}</Td>
                   <Td className="text-right tabular-nums">{r.minQuantity ?? '—'}</Td>
                   <Td className="text-right tabular-nums">{r.optimalQuantity ?? '—'}</Td>

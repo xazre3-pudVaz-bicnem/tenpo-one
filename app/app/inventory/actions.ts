@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { requireMember, requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { todayJst } from '@/lib/format';
+import { purchaseToStockQty, purchaseToStockUnitCost } from '@/lib/units';
 import type { ItemKind, ManualMovementType, MovementType } from '@/components/inventory/labels';
 
 const LIST_PATH = '/app/inventory';
@@ -21,9 +22,12 @@ export async function createItem(input: {
   minQuantity: number | null;
   optimalQuantity: number | null;
   avgCost: number | null;
+  purchaseUnit: string | null;
+  purchaseToStockFactor: number;
 }) {
   const ctx = await requirePermission('inventory.write');
   if (!input.name.trim()) throw new Error('名前を入力してください');
+  if (!(input.purchaseToStockFactor > 0)) throw new Error('変換係数は正の数で指定してください');
   const supabase = await createClient();
   const { error } = await supabase.from('inventory_items').insert({
     organization_id: ctx.organizationId,
@@ -37,6 +41,8 @@ export async function createItem(input: {
     min_quantity: input.minQuantity,
     optimal_quantity: input.optimalQuantity,
     avg_cost: input.avgCost,
+    purchase_unit: input.purchaseUnit,
+    purchase_to_stock_factor: input.purchaseToStockFactor,
     created_by: ctx.userId,
     updated_by: ctx.userId,
   });
@@ -44,7 +50,7 @@ export async function createItem(input: {
   revalidatePath(LIST_PATH);
 }
 
-/** 品目の編集（発注点・最低在庫・適正在庫などの属性のみ。数量・原価は入出庫/入荷から更新する） */
+/** 品目の編集（発注点・最低在庫・適正在庫・仕入単位/変換係数などの属性のみ。数量・原価は入出庫/入荷から更新する） */
 export async function updateItem(
   itemId: string,
   input: {
@@ -55,10 +61,13 @@ export async function updateItem(
     reorderPoint: number | null;
     minQuantity: number | null;
     optimalQuantity: number | null;
+    purchaseUnit: string | null;
+    purchaseToStockFactor: number;
   }
 ) {
   const ctx = await requirePermission('inventory.write');
   if (!input.name.trim()) throw new Error('名前を入力してください');
+  if (!(input.purchaseToStockFactor > 0)) throw new Error('変換係数は正の数で指定してください');
   const supabase = await createClient();
   const { error } = await supabase
     .from('inventory_items')
@@ -70,6 +79,8 @@ export async function updateItem(
       reorder_point: input.reorderPoint,
       min_quantity: input.minQuantity,
       optimal_quantity: input.optimalQuantity,
+      purchase_unit: input.purchaseUnit,
+      purchase_to_stock_factor: input.purchaseToStockFactor,
       updated_by: ctx.userId,
     })
     .eq('id', itemId);
@@ -99,15 +110,20 @@ export async function addMovement(input: {
   if (error || !item) throw new Error('品目が見つかりません');
 
   if (input.movementType === 'in') {
-    const unitCost =
+    // 入力値は「仕入単位」（品目に仕入単位が未設定なら係数1=在庫単位と同一）とみなし、
+    // lib/units の変換関数で在庫単位の数量・単価に変換してから apply_stock_receipt を呼ぶ
+    const factor = Number(item.purchase_to_stock_factor) > 0 ? Number(item.purchase_to_stock_factor) : 1;
+    const purchaseUnitCost =
       input.unitCost != null && input.unitCost >= 0
-        ? Math.round(input.unitCost)
+        ? input.unitCost
         : (item.avg_cost ?? item.last_purchase_cost ?? 0);
+    const stockQuantity = purchaseToStockQty(input.quantity, factor);
+    const stockUnitCost = purchaseToStockUnitCost(purchaseUnitCost, factor);
 
     const { error: rpcErr } = await supabase.rpc('apply_stock_receipt', {
       p_inventory_item_id: input.itemId,
-      p_quantity: input.quantity,
-      p_unit_cost: unitCost,
+      p_quantity: stockQuantity,
+      p_unit_cost: stockUnitCost,
     });
     if (rpcErr) throw new Error(rpcErr.message);
 
@@ -118,7 +134,7 @@ export async function addMovement(input: {
       p_target_table: 'inventory_items',
       p_target_id: input.itemId,
       p_before: { current_quantity: item.current_quantity, avg_cost: item.avg_cost },
-      p_after: { quantity_added: input.quantity, unit_cost: unitCost },
+      p_after: { quantity_added: stockQuantity, unit_cost: stockUnitCost },
       p_note: input.reason,
     });
 

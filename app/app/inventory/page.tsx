@@ -76,6 +76,8 @@ export default async function InventoryPage({
       optimalQuantity: i.optimal_quantity != null ? Number(i.optimal_quantity) : null,
       avgCost: i.avg_cost,
       lastPurchaseCost: i.last_purchase_cost,
+      purchaseUnit: i.purchase_unit,
+      purchaseToStockFactor: Number(i.purchase_to_stock_factor ?? 1),
     }));
     if (sortWarning) {
       const rank = (r: ItemRow) => {

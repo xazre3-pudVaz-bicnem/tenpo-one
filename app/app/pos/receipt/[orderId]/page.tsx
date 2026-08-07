@@ -43,7 +43,7 @@ export default async function ReceiptPage({
     );
   }
 
-  const [{ data: items }, { data: payments }, { data: settings }] = await Promise.all([
+  const [{ data: items }, { data: payments }, { data: settings }, { data: refunds }] = await Promise.all([
     supabase
       .from('order_items')
       .select('id, name, unit_price, quantity, tax_rate, tax_included, line_total')
@@ -60,7 +60,10 @@ export default async function ReceiptPage({
       .select('receipt_header, receipt_footer, invoice_registration_number')
       .eq('store_id', order.store_id)
       .maybeSingle(),
+    supabase.from('refunds').select('amount').eq('order_id', orderId),
   ]);
+
+  const refundTotal = (refunds ?? []).reduce((a, r) => a + r.amount, 0);
 
   const storeInfo = order.stores as unknown as { name: string; address: string | null; phone: string | null } | null;
 
@@ -85,6 +88,7 @@ export default async function ReceiptPage({
           discountTotal: order.discount_total,
           discountReason: order.discount_reason,
           total: order.total,
+          refundTotal,
           closedAt: order.closed_at,
           businessDate: order.business_date,
         }}

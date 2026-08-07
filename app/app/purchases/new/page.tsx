@@ -37,7 +37,7 @@ export default async function NewPurchaseOrderPage({
       .order('name'),
     supabase
       .from('inventory_items')
-      .select('id, name, unit, avg_cost')
+      .select('id, name, unit, avg_cost, purchase_unit')
       .eq('organization_id', ctx.organizationId)
       .eq('store_id', ctx.currentStore.id)
       .eq('status', 'active')
@@ -50,7 +50,13 @@ export default async function NewPurchaseOrderPage({
       <PoForm
         storeId={ctx.currentStore.id}
         vendors={vendorsData ?? []}
-        inventoryItems={(itemsData ?? []).map((i) => ({ id: i.id, name: i.name, unit: i.unit, avgCost: i.avg_cost }))}
+        inventoryItems={(itemsData ?? []).map((i) => ({
+          id: i.id,
+          name: i.name,
+          unit: i.unit,
+          avgCost: i.avg_cost,
+          purchaseUnit: i.purchase_unit,
+        }))}
         initialItemId={sp.item}
       />
     </div>

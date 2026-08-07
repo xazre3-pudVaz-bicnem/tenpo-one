@@ -13,7 +13,9 @@ export async function GET(request: NextRequest) {
 
   let query = supabase
     .from('inventory_items')
-    .select('name, item_kind, unit, current_quantity, reorder_point, min_quantity, optimal_quantity, avg_cost, last_purchase_cost')
+    .select(
+      'name, item_kind, unit, purchase_unit, current_quantity, reorder_point, min_quantity, optimal_quantity, avg_cost, last_purchase_cost'
+    )
     .eq('organization_id', ctx.organizationId)
     .eq('status', 'active');
   if (storeId) query = query.eq('store_id', storeId);
@@ -31,6 +33,7 @@ export async function GET(request: NextRequest) {
       i.name,
       ITEM_KIND_LABELS[i.item_kind as ItemKind] ?? i.item_kind,
       i.unit,
+      i.purchase_unit ?? '',
       currentQuantity,
       i.reorder_point,
       i.min_quantity,
@@ -43,7 +46,7 @@ export async function GET(request: NextRequest) {
   });
 
   const csv = toCsv(
-    ['品目', '種別', '単位', '現在庫', '発注点', '最低在庫', '適正在庫', '平均仕入単価', '最終仕入単価', '在庫金額', '警告状態'],
+    ['品目', '種別', '単位', '仕入単位', '現在庫', '発注点', '最低在庫', '適正在庫', '平均仕入単価', '最終仕入単価', '在庫金額', '警告状態'],
     rows
   );
   return csvResponse(`inventory_${new Date().toISOString().slice(0, 10)}.csv`, csv);

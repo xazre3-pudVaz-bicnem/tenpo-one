@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Minus, Plus, X, ArrowLeft } from 'lucide-react';
+import { Minus, Plus, X, ArrowLeft, Split, Combine, ArrowRightLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { yen } from '@/lib/format';
 import { Button } from '@/components/ui/button';
@@ -16,7 +16,10 @@ import {
   type PosPaymentAvailability,
   type PosTerminalReader,
 } from './checkout-dialog';
-import type { CheckoutPayment } from '@/app/app/pos/actions';
+import { SplitDialog } from './split-dialog';
+import { MergeDialog, type MergeCandidate } from './merge-dialog';
+import { TableMoveDialog, type AvailableTable } from './table-move-dialog';
+import type { CheckoutPayment, CheckoutOutcome, SplitMove } from '@/app/app/pos/actions';
 import type { TerminalPaymentState } from '@/app/app/pos/payment-actions';
 
 const ORDER_TYPE_LABELS: Record<string, string> = {
@@ -38,6 +41,7 @@ export interface PosOrder {
   taxTotal: number;
   serviceCharge: number;
   total: number;
+  tableId: string | null;
 }
 
 export interface PosOrderItem {
@@ -77,13 +81,19 @@ export function PosScreen({
   tableName,
   staffName,
   canDiscount,
+  canCheckout,
   terminalReaders,
   paymentAvailability,
+  otherOpenOrders,
+  availableTables,
   addItemAction,
   updateQtyAction,
   cancelItemAction,
   setDiscountAction,
   checkoutAction,
+  splitOrderAction,
+  mergeOrdersAction,
+  moveTableAction,
   startTerminalPaymentAction,
   checkTerminalPaymentAction,
   cancelTerminalPaymentAction,
@@ -95,16 +105,19 @@ export function PosScreen({
   tableName: string | null;
   staffName: string | null;
   canDiscount: boolean;
+  canCheckout: boolean;
   terminalReaders: PosTerminalReader[];
   paymentAvailability: PosPaymentAvailability;
+  otherOpenOrders: MergeCandidate[];
+  availableTables: AvailableTable[];
   addItemAction: (orderId: string, menuItemId: string) => Promise<void>;
   updateQtyAction: (orderId: string, orderItemId: string, delta: number) => Promise<void>;
   cancelItemAction: (orderId: string, orderItemId: string, reason: string) => Promise<void>;
   setDiscountAction: (orderId: string, discountTotal: number, reason: string) => Promise<void>;
-  checkoutAction: (
-    orderId: string,
-    payments: CheckoutPayment[]
-  ) => Promise<{ ok: true; warning: string | null }>;
+  checkoutAction: (orderId: string, payments: CheckoutPayment[]) => Promise<CheckoutOutcome>;
+  splitOrderAction: (orderId: string, moves: SplitMove[]) => Promise<{ newOrderId: string }>;
+  mergeOrdersAction: (targetOrderId: string, sourceOrderId: string) => Promise<void>;
+  moveTableAction: (orderId: string, newTableId: string) => Promise<{ tableName: string }>;
   startTerminalPaymentAction: (orderId: string, readerId: string) => Promise<TerminalPaymentState>;
   checkTerminalPaymentAction: (localIntentId: string) => Promise<TerminalPaymentState>;
   cancelTerminalPaymentAction: (localIntentId: string) => Promise<TerminalPaymentState>;
@@ -115,6 +128,9 @@ export function PosScreen({
   const [activeCategory, setActiveCategory] = useState<string>(categories[0]?.id ?? '');
   const [cancelTarget, setCancelTarget] = useState<PosOrderItem | null>(null);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const [splitOpen, setSplitOpen] = useState(false);
+  const [mergeOpen, setMergeOpen] = useState(false);
+  const [tableMoveOpen, setTableMoveOpen] = useState(false);
 
   const isTakeoutLike = order.orderType === 'takeout' || order.orderType === 'delivery';
   const visibleItems = useMemo(
@@ -156,6 +172,12 @@ export function PosScreen({
 
   const handleCheckout = async (payments: CheckoutPayment[]) => {
     const result = await checkoutAction(order.id, payments);
+    if (result.alreadyPaid) {
+      // エラーではなく案内: 二重会計はDB層で拒否済みのため、レシートへ誘導する
+      toast('この注文は既に会計済みです。レシートをご確認ください', 'success');
+      router.push(`/app/pos/receipt/${order.id}`);
+      return;
+    }
     toast(result.warning ?? '会計が完了しました', result.warning ? 'error' : 'success');
     router.push(`/app/pos/receipt/${order.id}`);
   };
@@ -323,7 +345,36 @@ export function PosScreen({
           </div>
         </div>
 
-        <div className="border-t border-gray-200 p-3">
+        <div className="space-y-2 border-t border-gray-200 p-3">
+          {canCheckout && (
+            <div className="flex gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                className="flex-1"
+                disabled={items.length === 0}
+                onClick={() => setSplitOpen(true)}
+              >
+                <Split className="h-4 w-4" />
+                伝票分割
+              </Button>
+              <Button variant="secondary" size="sm" className="flex-1" onClick={() => setMergeOpen(true)}>
+                <Combine className="h-4 w-4" />
+                伝票統合
+              </Button>
+              {order.tableId && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="flex-1"
+                  onClick={() => setTableMoveOpen(true)}
+                >
+                  <ArrowRightLeft className="h-4 w-4" />
+                  テーブル移動
+                </Button>
+              )}
+            </div>
+          )}
           <Button
             size="pos"
             className="w-full"
@@ -360,6 +411,35 @@ export function PosScreen({
         cancelTerminalPaymentAction={cancelTerminalPaymentAction}
         onTerminalPaymentFinalized={handleTerminalPaymentFinalized}
       />
+
+      {canCheckout && (
+        <>
+          <SplitDialog
+            open={splitOpen}
+            onClose={() => setSplitOpen(false)}
+            orderId={order.id}
+            items={items}
+            splitOrderAction={splitOrderAction}
+          />
+          <MergeDialog
+            open={mergeOpen}
+            onClose={() => setMergeOpen(false)}
+            orderId={order.id}
+            candidates={otherOpenOrders}
+            mergeOrdersAction={mergeOrdersAction}
+          />
+          {order.tableId && (
+            <TableMoveDialog
+              open={tableMoveOpen}
+              onClose={() => setTableMoveOpen(false)}
+              orderId={order.id}
+              currentTableName={tableName}
+              availableTables={availableTables}
+              moveTableAction={moveTableAction}
+            />
+          )}
+        </>
+      )}
     </div>
   );
 }

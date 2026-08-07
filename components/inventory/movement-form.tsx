@@ -6,17 +6,32 @@ import { Dialog } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input, Label, Select, Textarea, FieldError } from '@/components/ui/input';
 import { useToast } from '@/components/ui/toast';
+import { yen } from '@/lib/format';
+import { purchaseToStockQty, purchaseToStockUnitCost, hasCostPrecisionRisk } from '@/lib/units';
 import { addMovement } from '@/app/app/inventory/actions';
 import { MANUAL_MOVEMENT_OPTIONS, MOVEMENT_TYPE_LABELS, type ManualMovementType } from './labels';
 
+export interface MovementFormItem {
+  id: string;
+  name: string;
+  unit: string;
+  avgCost: number | null;
+  purchaseUnit: string | null;
+  purchaseToStockFactor: number;
+}
+
 /**
  * 入出庫登録ダイアログ。
- * in=入荷（rpc apply_stock_receipt。単価入力あり・加重平均原価を自動更新）
+ * in=入荷（rpc apply_stock_receipt。単価入力あり・加重平均原価を自動更新）。
+ * 品目に仕入単位が設定されている場合、数量・単価は仕入単位で入力し、
+ * lib/units の変換関数で在庫単位へ変換してから addMovement を呼ぶ。
  * out/waste/count_adjust=在庫減
  */
-export function MovementForm({ item }: { item: { id: string; name: string; unit: string; avgCost: number | null } }) {
+export function MovementForm({ item }: { item: MovementFormItem }) {
   const [open, setOpen] = useState(false);
   const [movementType, setMovementType] = useState<ManualMovementType>('in');
+  const [quantityInput, setQuantityInput] = useState('');
+  const [unitCostInput, setUnitCostInput] = useState(item.avgCost != null ? String(item.avgCost) : '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
@@ -24,6 +39,17 @@ export function MovementForm({ item }: { item: { id: string; name: string; unit:
 
   const needsReason = movementType === 'waste' || movementType === 'count_adjust';
   const isReceipt = movementType === 'in';
+  const factor = item.purchaseToStockFactor > 0 ? item.purchaseToStockFactor : 1;
+  const usesPurchaseUnit = isReceipt && !!item.purchaseUnit && factor !== 1;
+  const receiptQtyLabel = usesPurchaseUnit ? `仕入数量（${item.purchaseUnit}）` : `数量（${item.unit}）`;
+  const receiptCostLabel = usesPurchaseUnit ? `単価（円/${item.purchaseUnit}）` : '単価（円）';
+
+  const qtyNum = Number(quantityInput);
+  const costNum = Number(unitCostInput);
+  const previewValid = isReceipt && Number.isFinite(qtyNum) && qtyNum > 0 && Number.isFinite(costNum) && costNum >= 0;
+  const previewStockQty = previewValid ? purchaseToStockQty(qtyNum, factor) : null;
+  const previewStockCost = previewValid ? purchaseToStockUnitCost(costNum, factor) : null;
+  const priceRisk = previewValid && hasCostPrecisionRisk(costNum, factor);
 
   const close = () => {
     if (busy) return;
@@ -93,24 +119,48 @@ export function MovementForm({ item }: { item: { id: string; name: string; unit:
           </div>
           <div className={isReceipt ? 'grid grid-cols-2 gap-3' : ''}>
             <div>
-              <Label htmlFor="mv-qty">数量（{item.unit}）</Label>
-              <Input id="mv-qty" name="quantity" type="number" min={0} step="0.01" required />
+              <Label htmlFor="mv-qty">{isReceipt ? receiptQtyLabel : `数量（${item.unit}）`}</Label>
+              <Input
+                id="mv-qty"
+                name="quantity"
+                type="number"
+                min={0}
+                step="0.01"
+                required
+                value={quantityInput}
+                onChange={(e) => setQuantityInput(e.target.value)}
+              />
             </div>
             {isReceipt && (
               <div>
-                <Label htmlFor="mv-cost">単価（円）</Label>
+                <Label htmlFor="mv-cost">{receiptCostLabel}</Label>
                 <Input
                   id="mv-cost"
                   name="unitCost"
                   type="number"
                   min={0}
                   step="1"
-                  defaultValue={item.avgCost ?? ''}
                   required
+                  value={unitCostInput}
+                  onChange={(e) => setUnitCostInput(e.target.value)}
                 />
               </div>
             )}
           </div>
+          {isReceipt && previewValid && (
+            <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs text-gray-600">
+              <p>
+                変換プレビュー: {qtyNum}
+                {usesPurchaseUnit ? item.purchaseUnit : item.unit} → {previewStockQty}
+                {item.unit} ／ {yen(costNum)}/{usesPurchaseUnit ? item.purchaseUnit : item.unit} → {yen(previewStockCost)}/{item.unit}
+              </p>
+              {priceRisk && (
+                <p className="mt-1 font-medium text-warning">
+                  変換後の在庫単価の丸め誤差が大きくなります。在庫単位の見直しを推奨します
+                </p>
+              )}
+            </div>
+          )}
           <div>
             <Label htmlFor="mv-reason">理由{needsReason ? '（必須）' : '（任意）'}</Label>
             <Textarea id="mv-reason" name="reason" />

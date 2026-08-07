@@ -15,6 +15,7 @@ interface InventoryItemOption {
   name: string;
   unit: string;
   avgCost: number | null;
+  purchaseUnit: string | null;
 }
 
 interface VendorOption {
@@ -67,7 +68,7 @@ export function PoForm({
         ? newLine({
             inventoryItemId: initialItem.id,
             name: initialItem.name,
-            unit: initialItem.unit,
+            unit: initialItem.purchaseUnit || initialItem.unit,
             unitCost: initialItem.avgCost != null ? String(initialItem.avgCost) : '0',
           })
         : newLine(),
@@ -95,7 +96,8 @@ export function PoForm({
               ...l,
               inventoryItemId: itemId,
               name: item ? item.name : l.name,
-              unit: item ? item.unit : l.unit,
+              // 品目に仕入単位が設定されていればそれを使う（発注・単価は仕入単位あたりで扱う）
+              unit: item ? item.purchaseUnit || item.unit : l.unit,
               unitCost: item?.avgCost != null ? String(item.avgCost) : l.unitCost,
             }
           : l
@@ -208,7 +210,7 @@ export function PoForm({
                 <Input value={l.unit} onChange={(e) => updateLine(l.key, { unit: e.target.value })} />
               </div>
               <div className="col-span-2">
-                <Label className="text-[11px]">単価（税抜）</Label>
+                <Label className="text-[11px]">単価（単位あたり・税抜）</Label>
                 <Input
                   type="number"
                   min={0}

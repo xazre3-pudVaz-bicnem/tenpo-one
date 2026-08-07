@@ -25,6 +25,8 @@ export interface OpenOrderRow {
   guestCount: number;
   openedAt: string;
   tableName: string | null;
+  /** 伝票分割・再会計で作成された伝票か（source_order_id が設定されている） */
+  isDerived: boolean;
 }
 
 export function OrderPicker({
@@ -72,7 +74,10 @@ export function OrderPicker({
                   </p>
                   <p className="mt-0.5 text-xs text-gray-500">#{o.orderNo}　{formatDateTime(o.openedAt)}</p>
                 </div>
-                <Badge tone="primary">{o.guestCount}名</Badge>
+                <div className="flex flex-col items-end gap-1">
+                  <Badge tone="primary">{o.guestCount}名</Badge>
+                  {o.isDerived && <Badge tone="warning">分割伝票</Badge>}
+                </div>
               </div>
               <Button
                 variant="secondary"

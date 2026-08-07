@@ -6,6 +6,8 @@ import { Dialog } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input, Label, FieldError } from '@/components/ui/input';
 import { useToast } from '@/components/ui/toast';
+import { yen } from '@/lib/format';
+import { purchaseToStockQty, purchaseToStockUnitCost, hasCostPrecisionRisk } from '@/lib/units';
 import { receiveItems } from '@/app/app/purchases/actions';
 
 export interface ReceivableItem {
@@ -15,6 +17,9 @@ export interface ReceivableItem {
   quantity: number;
   receivedQuantity: number;
   unitCost: number;
+  /** 在庫連動明細のみ: 在庫単位・仕入単位→在庫単位への変換係数（在庫非連動なら1） */
+  stockUnit: string;
+  factor: number;
 }
 
 interface LineValue {
@@ -71,42 +76,69 @@ export function ReceiveForm({ poId, items }: { poId: string; items: ReceivableIt
       <Button onClick={() => setOpen(true)}>入荷登録</Button>
       <Dialog open={open} onClose={() => !busy && setOpen(false)} title="入荷登録" wide>
         <div className="space-y-3">
-          {items.map((item) => (
-            <div key={item.id} className="grid grid-cols-12 items-end gap-2 rounded-lg border border-gray-200 p-2">
-              <div className="col-span-5 min-w-0">
-                <p className="truncate text-sm font-medium text-navy">{item.name}</p>
-                <p className="text-xs text-gray-500">
-                  発注 {item.quantity}
-                  {item.unit}／入荷済み {item.receivedQuantity}
-                  {item.unit}／残り {remaining(item)}
-                  {item.unit}
-                </p>
+          {items.map((item) => {
+            const qtyStr = values[item.id]?.quantity ?? '';
+            const costStr = values[item.id]?.unitCost ?? '';
+            const qtyNum = Number(qtyStr);
+            const costNum = Number(costStr);
+            const showsConversion = item.factor !== 1;
+            const previewValid = showsConversion && Number.isFinite(qtyNum) && qtyNum > 0 && Number.isFinite(costNum) && costNum >= 0;
+            const stockQty = previewValid ? purchaseToStockQty(qtyNum, item.factor) : null;
+            const stockCost = previewValid ? purchaseToStockUnitCost(costNum, item.factor) : null;
+            const priceRisk = previewValid && hasCostPrecisionRisk(costNum, item.factor);
+            return (
+              <div key={item.id} className="rounded-lg border border-gray-200 p-2">
+                <div className="grid grid-cols-12 items-end gap-2">
+                  <div className="col-span-5 min-w-0">
+                    <p className="truncate text-sm font-medium text-navy">{item.name}</p>
+                    <p className="text-xs text-gray-500">
+                      発注 {item.quantity}
+                      {item.unit}／入荷済み {item.receivedQuantity}
+                      {item.unit}／残り {remaining(item)}
+                      {item.unit}
+                    </p>
+                  </div>
+                  <div className="col-span-3">
+                    <Label className="text-[11px]">今回入荷数量（{item.unit}）</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      placeholder="0"
+                      disabled={remaining(item) <= 0}
+                      value={qtyStr}
+                      onChange={(e) => updateValue(item.id, { quantity: e.target.value })}
+                    />
+                  </div>
+                  <div className="col-span-4">
+                    <Label className="text-[11px]">単価（円/{item.unit}・変更可）</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      step="1"
+                      disabled={remaining(item) <= 0}
+                      value={costStr}
+                      onChange={(e) => updateValue(item.id, { unitCost: e.target.value })}
+                    />
+                  </div>
+                </div>
+                {previewValid && (
+                  <div className="mt-2 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-600">
+                    <p>
+                      変換プレビュー: {qtyNum}
+                      {item.unit} → {stockQty}
+                      {item.stockUnit} ／ {yen(costNum)}/{item.unit} → {yen(stockCost)}/{item.stockUnit}
+                    </p>
+                    {priceRisk && (
+                      <p className="mt-1 font-medium text-warning">
+                        変換後の在庫単価の丸め誤差が大きくなります。在庫単位の見直しを推奨します
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
-              <div className="col-span-3">
-                <Label className="text-[11px]">今回入荷数量</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  placeholder="0"
-                  disabled={remaining(item) <= 0}
-                  value={values[item.id]?.quantity ?? ''}
-                  onChange={(e) => updateValue(item.id, { quantity: e.target.value })}
-                />
-              </div>
-              <div className="col-span-4">
-                <Label className="text-[11px]">単価（円・変更可）</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  step="1"
-                  disabled={remaining(item) <= 0}
-                  value={values[item.id]?.unitCost ?? ''}
-                  onChange={(e) => updateValue(item.id, { unitCost: e.target.value })}
-                />
-              </div>
-            </div>
-          ))}
+            );
+          })}
           <FieldError message={error ?? undefined} />
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="secondary" onClick={() => setOpen(false)} disabled={busy}>
