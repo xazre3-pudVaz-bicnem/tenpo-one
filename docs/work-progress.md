@@ -1,4 +1,9 @@
-# v0.3 CODE COMPLETE 作業進捗（コンテキスト圧縮後はまずこれを読む）
+# v0.3 CODE COMPLETE 作業進捗 — **完了（v0.3.0タグ済み）**
+
+最終結果: 全ワークストリーム完了。tsc/eslint 0・Vitest 129・build成功・Playwright 11（56ルート巡回console error 0）・実環境verify-flow 103/103・migration 18本local=remote一致。
+成果物: docs/v0.3-code-complete-report.md（16項目報告）/ code-complete-audit.md / v0.3-manual-test.md / demo-script.md / external-blockers.md。
+以下は作業時の計画記録（履歴として保持）。
+
 
 目標: TENPO ONE v0.3.0 CODE COMPLETE（90項目指示。外部依存のみBLOCKED、他は完遂）
 復帰点: タグ `checkpoint-pre-v03`。禁止事項: 本番デプロイ/Stripe実決済/外部API/秘密鍵変更/force push/migration書換/機能削除。
