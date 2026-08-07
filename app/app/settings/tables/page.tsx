@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { SettingsBackLink } from '@/components/settings/back-link';
 import { FloorsPanel } from '@/components/settings/floors-panel';
 import { TablesPanel, type TableListRow } from '@/components/settings/tables-panel';
+import { PlacementEditorPanel, type PlacementTableRow } from '@/components/settings/placement-editor-panel';
 
 export const metadata: Metadata = { title: 'フロア・テーブル | 設定' };
 
@@ -35,7 +36,7 @@ export default async function TablesSettingsPage() {
   const { data: tables } = await supabase
     .from('restaurant_tables')
     .select(
-      'id, name, floor_id, capacity_min, capacity_max, is_private_room, is_counter, smoking_allowed, sort_order, current_status, floors(name)'
+      'id, name, floor_id, capacity_min, capacity_max, is_private_room, is_counter, smoking_allowed, sort_order, current_status, pos_x, pos_y, shape, floors(name)'
     )
     .eq('store_id', targetStore.id)
     .eq('status', 'active')
@@ -57,6 +58,17 @@ export default async function TablesSettingsPage() {
     currentStatus: t.current_status,
   }));
 
+  const placementRows: PlacementTableRow[] = (tables ?? []).map((t) => ({
+    id: t.id,
+    name: t.name,
+    floorId: t.floor_id,
+    capacityMin: t.capacity_min,
+    capacityMax: t.capacity_max,
+    posX: t.pos_x,
+    posY: t.pos_y,
+    shape: t.shape as 'square' | 'round' | 'counter',
+  }));
+
   return (
     <div>
       <SettingsBackLink />
@@ -76,6 +88,17 @@ export default async function TablesSettingsPage() {
             </CardContent>
           </Card>
         </div>
+      </div>
+
+      <div className="mt-5">
+        <Card>
+          <CardHeader>
+            <CardTitle>配置エディタ</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <PlacementEditorPanel storeId={targetStore.id} floors={floorRows} tables={placementRows} />
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

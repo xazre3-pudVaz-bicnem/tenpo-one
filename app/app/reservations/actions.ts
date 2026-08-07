@@ -6,6 +6,7 @@ import { requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { canTransition, RESERVATION_STATUS, type ReservationStatus } from '@/lib/reservations';
 import { MOVABLE_STATUSES, OCCUPYING_STATUSES } from '@/components/reservations/constants';
+import { todayJst } from '@/lib/format';
 
 interface ReservationRow {
   id: string;
@@ -110,6 +111,43 @@ export async function assignTables(reservationId: string, tableIds: string[]) {
     if ((validTables?.length ?? 0) !== uniqueIds.length) {
       throw new Error('この店舗のテーブルではありません');
     }
+
+    // 競合検証: 清掃バッファを含めた占有時間帯で他予約とテーブルが重複していないか確認する
+    const { data: settings } = await supabase
+      .from('store_settings')
+      .select('cleaning_buffer_minutes')
+      .eq('store_id', reservation.store_id)
+      .maybeSingle();
+    const bufferMs = (settings?.cleaning_buffer_minutes ?? 0) * 60000;
+    const windowStart = new Date(new Date(reservation.start_at).getTime() - bufferMs).toISOString();
+    const windowEnd = new Date(new Date(reservation.end_at).getTime() + bufferMs).toISOString();
+
+    const { data: overlapping } = await supabase
+      .from('reservations')
+      .select('id, start_at, reservation_tables(table_id, restaurant_tables(name))')
+      .eq('store_id', reservation.store_id)
+      .in('status', OCCUPYING_STATUSES)
+      .neq('id', reservationId)
+      .lt('start_at', windowEnd)
+      .gt('end_at', windowStart);
+
+    for (const other of overlapping ?? []) {
+      const links = (other.reservation_tables ?? []) as unknown as {
+        table_id: string;
+        restaurant_tables: { name: string } | null;
+      }[];
+      for (const link of links) {
+        if (uniqueIds.includes(link.table_id)) {
+          const timeLabel = new Date(other.start_at as string).toLocaleTimeString('ja-JP', {
+            timeZone: 'Asia/Tokyo',
+            hour: '2-digit',
+            minute: '2-digit',
+          });
+          const tableName = link.restaurant_tables?.name ?? 'このテーブル';
+          throw new Error(`${tableName} は ${timeLabel} の予約と重複しています`);
+        }
+      }
+    }
   }
 
   await supabase.from('reservation_tables').delete().eq('reservation_id', reservationId);
@@ -133,13 +171,22 @@ export async function getOccupiedTableIds(
   await requirePermission('reservations.view');
   const supabase = await createClient();
 
+  const { data: settings } = await supabase
+    .from('store_settings')
+    .select('cleaning_buffer_minutes')
+    .eq('store_id', storeId)
+    .maybeSingle();
+  const bufferMs = (settings?.cleaning_buffer_minutes ?? 0) * 60000;
+  const windowStart = new Date(new Date(startAtIso).getTime() - bufferMs).toISOString();
+  const windowEnd = new Date(new Date(endAtIso).getTime() + bufferMs).toISOString();
+
   let query = supabase
     .from('reservations')
     .select('id, reservation_tables(table_id)')
     .eq('store_id', storeId)
     .in('status', OCCUPYING_STATUSES)
-    .lt('start_at', endAtIso)
-    .gt('end_at', startAtIso);
+    .lt('start_at', windowEnd)
+    .gt('end_at', windowStart);
   if (excludeReservationId) query = query.neq('id', excludeReservationId);
 
   const { data } = await query;
@@ -584,7 +631,7 @@ export interface WalkInInput {
 }
 
 /** ウォークイン即時登録: status=seated / テーブル=seated */
-export async function createWalkInReservation(input: WalkInInput) {
+export async function createWalkInReservation(input: WalkInInput): Promise<{ reservationId: string }> {
   const ctx = await requirePermission('reservations.write');
   if (!ctx.stores.some((s) => s.id === input.storeId)) throw new Error('この店舗へのアクセス権限がありません');
   const partySize = input.adults + input.children;
@@ -657,6 +704,7 @@ export async function createWalkInReservation(input: WalkInInput) {
   await supabase.from('restaurant_tables').update({ current_status: 'seated' }).eq('id', input.tableId);
 
   revalidateAll();
+  return { reservationId };
 }
 
 export interface WaitlistInput {
@@ -737,4 +785,159 @@ export async function cancelWaitlistEntry(id: string) {
   const { error } = await supabase.from('waitlist_entries').update({ status: 'cancelled', updated_by: ctx.userId }).eq('id', id);
   if (error) throw new Error('更新に失敗しました');
   revalidatePath('/app/reservations');
+}
+
+// ---------------------------------------------------------------
+// 店頭ウェイティング（当日受付・呼出・案内）
+// waitlist_entries を ticket_no 付きで使い、上記のキャンセル待ち（desired_date が先の日程）とは
+// 「ticket_no が設定されているか」で区別する。
+// ---------------------------------------------------------------
+
+export interface WaitingTicketInput {
+  storeId: string;
+  name: string;
+  partySize: number;
+  phone?: string;
+  seatPreference?: string;
+}
+
+/** 店頭受付の登録。当日・店舗内で受付番号(ticket_no)をmax+1で採番する */
+export async function createWaitingTicket(input: WaitingTicketInput): Promise<{ id: string; ticketNo: number }> {
+  const ctx = await requirePermission('reservations.write');
+  if (!ctx.stores.some((s) => s.id === input.storeId)) throw new Error('この店舗へのアクセス権限がありません');
+  if (!input.name.trim()) throw new Error('お名前を入力してください');
+  if (input.partySize < 1) throw new Error('ご人数をご確認ください');
+
+  const supabase = await createClient();
+  const today = todayJst();
+
+  const { data: maxRow } = await supabase
+    .from('waitlist_entries')
+    .select('ticket_no')
+    .eq('store_id', input.storeId)
+    .eq('desired_date', today)
+    .not('ticket_no', 'is', null)
+    .order('ticket_no', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const ticketNo = (maxRow?.ticket_no ?? 0) + 1;
+
+  const { data: created, error } = await supabase
+    .from('waitlist_entries')
+    .insert({
+      organization_id: ctx.organizationId,
+      store_id: input.storeId,
+      guest_name: input.name.trim(),
+      guest_phone: input.phone?.trim() || '',
+      party_size: input.partySize,
+      desired_date: today,
+      seat_preference: input.seatPreference?.trim() || null,
+      ticket_no: ticketNo,
+      status: 'waiting',
+      created_by: ctx.userId,
+    })
+    .select('id, ticket_no')
+    .single();
+  if (error || !created) throw new Error('受付の登録に失敗しました');
+
+  revalidatePath('/app/reservations');
+  return { id: created.id as string, ticketNo: created.ticket_no as number };
+}
+
+async function loadWaitingTicket(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  organizationId: string,
+  id: string
+) {
+  const { data, error } = await supabase
+    .from('waitlist_entries')
+    .select('id, organization_id, store_id, guest_name, guest_phone, party_size, status, ticket_no')
+    .eq('id', id)
+    .eq('organization_id', organizationId)
+    .single();
+  if (error || !data) throw new Error('受付が見つかりません');
+  return data;
+}
+
+/** 呼出: status='called' + called_at。一覧側でこの行を強調表示する（システム内呼出UI） */
+export async function callWaitingTicket(id: string) {
+  const ctx = await requirePermission('reservations.write');
+  const supabase = await createClient();
+  const entry = await loadWaitingTicket(supabase, ctx.organizationId, id);
+  if (entry.status !== 'waiting') throw new Error('この受付は呼出できる状態ではありません');
+
+  const { error } = await supabase
+    .from('waitlist_entries')
+    .update({ status: 'called', called_at: new Date().toISOString(), updated_by: ctx.userId })
+    .eq('id', id);
+  if (error) throw new Error('呼出処理に失敗しました');
+  revalidatePath('/app/reservations');
+}
+
+/** 不在: 呼出後に応答がなかった場合の記録 */
+export async function markWaitingNoShow(id: string) {
+  const ctx = await requirePermission('reservations.write');
+  const supabase = await createClient();
+  const entry = await loadWaitingTicket(supabase, ctx.organizationId, id);
+  if (entry.status !== 'waiting' && entry.status !== 'called') {
+    throw new Error('この受付は不在にできる状態ではありません');
+  }
+  const { error } = await supabase.from('waitlist_entries').update({ status: 'no_show', updated_by: ctx.userId }).eq('id', id);
+  if (error) throw new Error('処理に失敗しました');
+  revalidatePath('/app/reservations');
+}
+
+/**
+ * 案内: テーブルを選択し、既存の createWalkInReservation（電話・名前引継ぎ）で
+ * 予約(walk_in/seated)を作成したうえで注文(open)も作成し、POSへ遷移する。
+ */
+export async function guideWaitingTicket(id: string, tableId: string) {
+  const ctx = await requirePermission('reservations.write');
+  const supabase = await createClient();
+  const entry = await loadWaitingTicket(supabase, ctx.organizationId, id);
+  if (entry.status !== 'waiting' && entry.status !== 'called') {
+    throw new Error('この受付は案内できる状態ではありません');
+  }
+
+  const { data: table } = await supabase
+    .from('restaurant_tables')
+    .select('id')
+    .eq('id', tableId)
+    .eq('store_id', entry.store_id)
+    .maybeSingle();
+  if (!table) throw new Error('テーブルを選択してください');
+
+  const { reservationId } = await createWalkInReservation({
+    storeId: entry.store_id,
+    tableId,
+    adults: entry.party_size,
+    children: 0,
+    name: entry.guest_name,
+    phone: entry.guest_phone || undefined,
+  });
+
+  const { data: order, error: orderError } = await supabase
+    .from('orders')
+    .insert({
+      organization_id: ctx.organizationId,
+      store_id: entry.store_id,
+      reservation_id: reservationId,
+      table_id: tableId,
+      order_type: 'dine_in',
+      guest_count: entry.party_size,
+      staff_id: ctx.userId,
+      created_by: ctx.userId,
+    })
+    .select('id')
+    .single();
+  if (orderError || !order) throw new Error('注文の作成に失敗しました');
+
+  const { error: updateError } = await supabase
+    .from('waitlist_entries')
+    .update({ status: 'seated', seated_at: new Date().toISOString(), updated_by: ctx.userId })
+    .eq('id', id);
+  if (updateError) throw new Error('受付状態の更新に失敗しました');
+
+  revalidatePath('/app/reservations');
+  redirect(`/app/pos?order=${order.id}`);
 }

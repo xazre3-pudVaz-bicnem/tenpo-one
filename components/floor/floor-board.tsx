@@ -23,7 +23,16 @@ export interface FloorTable {
   is_private_room: boolean;
   is_counter: boolean;
   current_status: string;
+  pos_x: number | null;
+  pos_y: number | null;
+  shape: string;
 }
+
+const SHAPE_CLASS: Record<string, string> = {
+  square: 'rounded-xl',
+  round: 'rounded-full aspect-square',
+  counter: 'rounded-md',
+};
 
 export interface FloorRow {
   id: string;
@@ -84,6 +93,44 @@ export function FloorBoard({
     : [{ floor: { id: '_', name: 'テーブル', sort_order: 0 }, tables }];
   const unassigned = tables.filter((t) => !floors.some((f) => f.id === t.floor_id));
 
+  const renderTile = (t: FloorTable, style?: React.CSSProperties) => {
+    const chip = reservationByTable[t.id];
+    return (
+      <button
+        key={t.id}
+        type="button"
+        onClick={() => setSelected(t)}
+        style={style}
+        className={cn(
+          'flex min-h-[92px] flex-col items-start justify-between border p-3 text-left shadow-sm transition-transform active:scale-[0.97]',
+          STATUS_STYLES[t.current_status] ?? STATUS_STYLES.available,
+          style ? SHAPE_CLASS[t.shape] ?? SHAPE_CLASS.square : 'rounded-xl'
+        )}
+      >
+        <div className="flex w-full items-start justify-between gap-1">
+          <span className="text-sm font-bold">{t.name}</span>
+          {t.current_status === 'unavailable' && <Lock className="h-3.5 w-3.5 shrink-0" />}
+        </div>
+        <div className="flex items-center gap-1 text-[11px] opacity-80">
+          <Users className="h-3 w-3" />
+          {t.capacity_min}〜{t.capacity_max}名
+          {t.is_private_room && '・個室'}
+          {t.is_counter && '・カウンター'}
+        </div>
+        <div className="flex w-full items-center justify-between gap-1">
+          <Badge tone="gray" className="bg-white/70 text-[10px]">
+            {STATUS_LABELS[t.current_status] ?? t.current_status}
+          </Badge>
+          {chip && (
+            <span className="truncate text-[10px] font-medium">
+              {chip.time} {chip.guestName}
+            </span>
+          )}
+        </div>
+      </button>
+    );
+  };
+
   return (
     <div className="space-y-6">
       {/* 凡例 */}
@@ -98,73 +145,44 @@ export function FloorBoard({
           ))}
       </div>
 
-      {grouped.map(({ floor, tables: floorTables }) => (
-        <Card key={floor.id} className="p-4">
-          <h2 className="mb-3 text-sm font-semibold text-navy">{floor.name}</h2>
-          {floorTables.length === 0 ? (
-            <p className="text-xs text-gray-400">このフロアにテーブルはありません</p>
-          ) : (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-              {floorTables.map((t) => {
-                const chip = reservationByTable[t.id];
-                return (
-                  <button
-                    key={t.id}
-                    type="button"
-                    onClick={() => setSelected(t)}
-                    className={cn(
-                      'flex min-h-[92px] flex-col items-start justify-between rounded-xl border p-3 text-left shadow-sm transition-transform active:scale-[0.97]',
-                      STATUS_STYLES[t.current_status] ?? STATUS_STYLES.available
-                    )}
-                  >
-                    <div className="flex w-full items-start justify-between gap-1">
-                      <span className="text-sm font-bold">{t.name}</span>
-                      {t.current_status === 'unavailable' && <Lock className="h-3.5 w-3.5 shrink-0" />}
-                    </div>
-                    <div className="flex items-center gap-1 text-[11px] opacity-80">
-                      <Users className="h-3 w-3" />
-                      {t.capacity_min}〜{t.capacity_max}名
-                      {t.is_private_room && '・個室'}
-                      {t.is_counter && '・カウンター'}
-                    </div>
-                    <div className="flex w-full items-center justify-between gap-1">
-                      <Badge tone="gray" className="bg-white/70 text-[10px]">
-                        {STATUS_LABELS[t.current_status] ?? t.current_status}
-                      </Badge>
-                      {chip && (
-                        <span className="truncate text-[10px] font-medium">
-                          {chip.time} {chip.guestName}
-                        </span>
+      {grouped.map(({ floor, tables: floorTables }) => {
+        const placed = floorTables.filter((t) => t.pos_x != null && t.pos_y != null);
+        const unplaced = floorTables.filter((t) => t.pos_x == null || t.pos_y == null);
+        return (
+          <Card key={floor.id} className="p-4">
+            <h2 className="mb-3 text-sm font-semibold text-navy">{floor.name}</h2>
+            {floorTables.length === 0 ? (
+              <p className="text-xs text-gray-400">このフロアにテーブルはありません</p>
+            ) : (
+              <>
+                {placed.length > 0 && (
+                  <div className="mb-4 overflow-x-auto">
+                    <div
+                      className="grid min-w-[40rem] gap-2"
+                      style={{ gridTemplateColumns: 'repeat(8, minmax(0, 1fr))', gridAutoRows: '5.5rem' }}
+                    >
+                      {placed.map((t) =>
+                        renderTile(t, { gridColumnStart: (t.pos_x as number) + 1, gridRowStart: (t.pos_y as number) + 1 })
                       )}
                     </div>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </Card>
-      ))}
+                  </div>
+                )}
+                {unplaced.length > 0 && (
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+                    {unplaced.map((t) => renderTile(t))}
+                  </div>
+                )}
+              </>
+            )}
+          </Card>
+        );
+      })}
 
       {floors.length > 0 && unassigned.length > 0 && (
         <Card className="p-4">
           <h2 className="mb-3 text-sm font-semibold text-navy">未分類</h2>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-            {unassigned.map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() => setSelected(t)}
-                className={cn(
-                  'flex min-h-[92px] flex-col items-start justify-between rounded-xl border p-3 text-left shadow-sm',
-                  STATUS_STYLES[t.current_status] ?? STATUS_STYLES.available
-                )}
-              >
-                <span className="text-sm font-bold">{t.name}</span>
-                <Badge tone="gray" className="bg-white/70 text-[10px]">
-                  {STATUS_LABELS[t.current_status] ?? t.current_status}
-                </Badge>
-              </button>
-            ))}
+            {unassigned.map((t) => renderTile(t))}
           </div>
         </Card>
       )}

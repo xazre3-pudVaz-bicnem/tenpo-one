@@ -18,6 +18,7 @@ export async function updateBookingSettings(input: {
   bookingWindowDays: number;
   maxPartySize: number;
   cancelDeadlineHours: number;
+  cleaningBufferMinutes: number;
 }): Promise<ActionResult> {
   const ctx = await requirePermission('store.settings');
   if (!ctx.stores.some((s) => s.id === input.storeId)) {
@@ -32,6 +33,9 @@ export async function updateBookingSettings(input: {
   if (input.maxPartySize <= 0 || input.cancelDeadlineHours < 0) {
     return { error: '数値の指定が正しくありません' };
   }
+  if (input.cleaningBufferMinutes < 0 || input.cleaningBufferMinutes > 120) {
+    return { error: '清掃バッファは0〜120分で指定してください' };
+  }
 
   const supabase = await createClient();
   const { error } = await supabase.from('store_settings').upsert(
@@ -44,6 +48,7 @@ export async function updateBookingSettings(input: {
       booking_window_days: input.bookingWindowDays,
       max_party_size: input.maxPartySize,
       cancel_deadline_hours: input.cancelDeadlineHours,
+      cleaning_buffer_minutes: input.cleaningBufferMinutes,
       updated_by: ctx.userId,
     },
     { onConflict: 'store_id' }
@@ -62,6 +67,7 @@ export async function updateBookingSettings(input: {
       default_stay_minutes: input.defaultStayMinutes,
       max_party_size: input.maxPartySize,
       cancel_deadline_hours: input.cancelDeadlineHours,
+      cleaning_buffer_minutes: input.cleaningBufferMinutes,
     },
     p_note: null,
   });

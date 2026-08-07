@@ -37,7 +37,7 @@ export default async function FloorPage() {
     supabase
       .from('restaurant_tables')
       .select(
-        'id, floor_id, name, capacity_min, capacity_max, is_private_room, is_counter, current_status'
+        'id, floor_id, name, capacity_min, capacity_max, is_private_room, is_counter, current_status, pos_x, pos_y, shape'
       )
       .eq('store_id', store.id)
       .eq('status', 'active')

@@ -15,6 +15,7 @@ export interface BookingSettingsData {
   bookingWindowDays: number;
   maxPartySize: number;
   cancelDeadlineHours: number;
+  cleaningBufferMinutes: number;
 }
 
 export function BookingSettingsForm({ initial }: { initial: BookingSettingsData }) {
@@ -104,6 +105,22 @@ export function BookingSettingsForm({ initial }: { initial: BookingSettingsData 
               onChange={(e) => set('cancelDeadlineHours', Number(e.target.value))}
             />
           </div>
+        </div>
+
+        <div>
+          <Label htmlFor="cleaning-buffer">清掃バッファ（分）</Label>
+          <Input
+            id="cleaning-buffer"
+            type="number"
+            min={0}
+            max={120}
+            value={form.cleaningBufferMinutes}
+            onChange={(e) => set('cleaningBufferMinutes', Number(e.target.value))}
+            className="max-w-[10rem]"
+          />
+          <p className="mt-1 text-xs text-gray-500">
+            予約の間に清掃時間を確保します。空席判定で滞在時間+バッファが占有扱いになります。
+          </p>
         </div>
 
         <FieldError message={error ?? undefined} />

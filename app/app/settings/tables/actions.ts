@@ -242,6 +242,81 @@ export async function deleteTable(tableId: string, storeId: string): Promise<Act
 }
 
 // ---------------------------------------------------------------
+// フロアマップ配置エディタ（座標・形状）
+// ---------------------------------------------------------------
+
+const TABLE_SHAPES = ['square', 'round', 'counter'] as const;
+export type TableShape = (typeof TABLE_SHAPES)[number];
+
+/** グリッド座標にテーブルを配置する（8×6グリッド。x:0-7 / y:0-5）。posX/posYがnullなら配置解除。 */
+export async function saveTablePlacement(
+  tableId: string,
+  storeId: string,
+  posX: number | null,
+  posY: number | null
+): Promise<ActionResult> {
+  const ctx = await requirePermission('store.settings');
+  const err = assertStoreAccess(
+    ctx.stores.map((s) => s.id),
+    storeId
+  );
+  if (err) return { error: err };
+  if (posX != null && (posX < 0 || posX > 7)) return { error: '配置位置が不正です' };
+  if (posY != null && (posY < 0 || posY > 5)) return { error: '配置位置が不正です' };
+
+  const supabase = await createClient();
+
+  if (posX != null && posY != null) {
+    const { data: target } = await supabase.from('restaurant_tables').select('floor_id').eq('id', tableId).eq('store_id', storeId).maybeSingle();
+    if (!target) return { error: 'テーブルが見つかりません' };
+    let conflictQuery = supabase
+      .from('restaurant_tables')
+      .select('id')
+      .eq('store_id', storeId)
+      .eq('pos_x', posX)
+      .eq('pos_y', posY)
+      .neq('id', tableId);
+    conflictQuery = target.floor_id ? conflictQuery.eq('floor_id', target.floor_id) : conflictQuery.is('floor_id', null);
+    const { data: conflict } = await conflictQuery.maybeSingle();
+    if (conflict) return { error: 'このマスは既に使用されています' };
+  }
+
+  const { error } = await supabase
+    .from('restaurant_tables')
+    .update({ pos_x: posX, pos_y: posY, updated_by: ctx.userId })
+    .eq('id', tableId)
+    .eq('store_id', storeId);
+  if (error) return { error: `配置の保存に失敗しました: ${error.message}` };
+
+  revalidatePath('/app/settings/tables');
+  revalidatePath('/app/floor');
+  return {};
+}
+
+/** テーブルの形状（square/round/counter）を保存する */
+export async function saveTableShape(tableId: string, storeId: string, shape: TableShape): Promise<ActionResult> {
+  const ctx = await requirePermission('store.settings');
+  const err = assertStoreAccess(
+    ctx.stores.map((s) => s.id),
+    storeId
+  );
+  if (err) return { error: err };
+  if (!TABLE_SHAPES.includes(shape)) return { error: '形状の指定が不正です' };
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from('restaurant_tables')
+    .update({ shape, updated_by: ctx.userId })
+    .eq('id', tableId)
+    .eq('store_id', storeId);
+  if (error) return { error: `形状の保存に失敗しました: ${error.message}` };
+
+  revalidatePath('/app/settings/tables');
+  revalidatePath('/app/floor');
+  return {};
+}
+
+// ---------------------------------------------------------------
 // QRオーダー用QRコードの発行（PHASE 10）
 // テーブルの qr_token は一覧には出さず、ダイアログを開いたときのみ取得する
 // ---------------------------------------------------------------
@@ -250,6 +325,8 @@ export interface TableQrResult {
   error?: string;
   url?: string;
   dataUrl?: string;
+  /** QRトークンがnull（無効化済み）の状態 */
+  invalidated?: boolean;
 }
 
 /** リクエストの origin（本番は NEXT_PUBLIC_SITE_URL を優先） */
@@ -267,7 +344,7 @@ async function loadTableForQr(
   tableId: string
 ): Promise<
   | { error: string }
-  | { table: { id: string; name: string; qr_token: string; store_id: string; slug: string } }
+  | { table: { id: string; name: string; qr_token: string | null; store_id: string; slug: string } }
 > {
   const supabase = await createClient();
   const { data: table } = await supabase
@@ -275,7 +352,7 @@ async function loadTableForQr(
     .select('id, name, qr_token, store_id, stores(slug)')
     .eq('id', tableId)
     .single();
-  if (!table || !table.qr_token) return { error: 'テーブルが見つかりません' };
+  if (!table) return { error: 'テーブルが見つかりません' };
 
   const err = assertStoreAccess(
     ctx.stores.map((s) => s.id),
@@ -295,16 +372,47 @@ async function buildTableQr(url: string): Promise<string> {
   return QRCode.toDataURL(url, { width: 320, margin: 1 });
 }
 
-/** テーブルのQRコード（注文ページURL・QR画像）を取得する */
+/** テーブルのQRコード（注文ページURL・QR画像）を取得する。無効化済み（qr_token=null）の場合は invalidated を返す */
 export async function getTableQr(tableId: string): Promise<TableQrResult> {
   const ctx = await requirePermission('store.settings');
   const result = await loadTableForQr(ctx, tableId);
   if ('error' in result) return { error: result.error };
+  if (!result.table.qr_token) return { invalidated: true };
 
   const origin = await resolveOrigin();
   const url = `${origin}/order/${result.table.slug}/${result.table.qr_token}`;
   const dataUrl = await buildTableQr(url);
   return { url, dataUrl };
+}
+
+/** テーブルのQRトークンを無効化する（QR注文の即時停止・再開は再発行で行う） */
+export async function invalidateTableQrToken(tableId: string): Promise<TableQrResult> {
+  const ctx = await requirePermission('store.settings');
+  const result = await loadTableForQr(ctx, tableId);
+  if ('error' in result) return { error: result.error };
+  if (!result.table.qr_token) return { invalidated: true };
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from('restaurant_tables')
+    .update({ qr_token: null, updated_by: ctx.userId })
+    .eq('id', tableId)
+    .eq('store_id', result.table.store_id);
+  if (error) return { error: `無効化に失敗しました: ${error.message}` };
+
+  await supabase.rpc('log_audit', {
+    p_org: ctx.organizationId,
+    p_store: result.table.store_id,
+    p_action: 'table.qr_token_invalidate',
+    p_target_table: 'restaurant_tables',
+    p_target_id: tableId,
+    p_before: { qr_token: result.table.qr_token },
+    p_after: { qr_token: null },
+    p_note: 'QR注文を停止しました',
+  });
+
+  revalidatePath('/app/settings/tables');
+  return { invalidated: true };
 }
 
 /** テーブルのQRトークンを再発行する（旧QRコードは即時に無効化される） */

@@ -15,8 +15,11 @@ import { ReservationCard, type ReservationCardData } from '@/components/reservat
 import type { AssignableTable } from '@/components/reservations/assign-table-dialog';
 import { WaitlistDialog } from '@/components/reservations/waitlist-dialog';
 import { WaitlistPanel, type WaitlistRow, type WaitlistStatus } from '@/components/reservations/waitlist-panel';
+import { WaitingTicketDialog } from '@/components/reservations/waiting-ticket-dialog';
+import { WaitingQueuePanel, type WaitingTicketRow, type WaitingHint } from '@/components/reservations/waiting-queue-panel';
+import type { GuideTableOption } from '@/components/reservations/guide-table-dialog';
 import { ACTIVE_TIMELINE_STATUSES, ASSIGNABLE_STATUSES, statusBlockClass } from '@/components/reservations/constants';
-import type { ReservationStatus } from '@/lib/reservations';
+import { suggestTables, type TableLike, type ReservationStatus } from '@/lib/reservations';
 import { cn } from '@/lib/utils';
 
 export const metadata: Metadata = { title: '予約台帳' };
@@ -145,10 +148,19 @@ function mapReservationRow(r: RawReservation, storeName: string | null): Reserva
   };
 }
 
-type GridCell = { kind: 'empty' } | { kind: 'skip' } | { kind: 'block'; span: number; reservation: ReservationCardData };
+type GridCell =
+  | { kind: 'empty' }
+  | { kind: 'skip' }
+  | { kind: 'block'; span: number; reservation: ReservationCardData }
+  | { kind: 'buffer' };
 
-function buildRow(reservations: ReservationCardData[], startMin: number, slotCount: number): GridCell[] {
+/**
+ * バッファ>0のとき、各予約ブロックの直後（清掃バッファ分のスロット）に
+ * 'buffer' セルを重ねる。既に別の予約が入っている枠は上書きしない。
+ */
+function buildRow(reservations: ReservationCardData[], startMin: number, slotCount: number, bufferMinutes: number): GridCell[] {
   const cells: GridCell[] = Array.from({ length: slotCount }, () => ({ kind: 'empty' }));
+  const blockEnds: number[] = [];
   for (const r of [...reservations].sort((a, b) => a.startAt.localeCompare(b.startAt))) {
     const startIdx = Math.max(0, Math.min(slotCount - 1, Math.floor((jstMinutes(r.startAt) - startMin) / SLOT)));
     const endIdx = Math.max(startIdx + 1, Math.min(slotCount, Math.ceil((jstMinutes(r.endAt) - startMin) / SLOT)));
@@ -160,6 +172,15 @@ function buildRow(reservations: ReservationCardData[], startMin: number, slotCou
     }
     cells[startIdx] = { kind: 'block', span, reservation: r };
     for (let i = startIdx + 1; i < startIdx + span; i++) cells[i] = { kind: 'skip' };
+    blockEnds.push(startIdx + span);
+  }
+  if (bufferMinutes > 0) {
+    const bufferSlots = Math.ceil(bufferMinutes / SLOT);
+    for (const end of blockEnds) {
+      for (let i = end; i < Math.min(slotCount, end + bufferSlots); i++) {
+        if (cells[i]?.kind === 'empty') cells[i] = { kind: 'buffer' };
+      }
+    }
   }
   return cells;
 }
@@ -190,7 +211,7 @@ export default async function ReservationsLedgerPage({ searchParams }: { searchP
 
   const supabase = await createClient();
 
-  const [{ data: tablesData }, { data: businessHoursData }, { data: staffData }] = await Promise.all([
+  const [{ data: tablesData }, { data: businessHoursData }, { data: staffData }, { data: bookingSettings }] = await Promise.all([
     supabase
       .from('restaurant_tables')
       .select('id, name, capacity_min, capacity_max')
@@ -204,7 +225,9 @@ export default async function ReservationsLedgerPage({ searchParams }: { searchP
       .eq('organization_id', ctx.organizationId)
       .eq('status', 'active')
       .eq('membership_stores.store_id', store.id),
+    supabase.from('store_settings').select('cleaning_buffer_minutes').eq('store_id', store.id).maybeSingle(),
   ]);
+  const bufferMinutes = bookingSettings?.cleaning_buffer_minutes ?? 0;
 
   const tables: AssignableTable[] = (tablesData ?? []).map((t) => ({
     id: t.id,
@@ -224,7 +247,7 @@ export default async function ReservationsLedgerPage({ searchParams }: { searchP
     { key: 'month', label: '月', href: '/app/reservations/calendar' },
     { key: 'list', label: 'リスト', href: '/app/reservations/list' },
     { key: 'floor', label: 'フロア', href: '/app/floor' },
-    { key: 'waitlist', label: 'キャンセル待ち', href: '/app/reservations?view=waitlist' },
+    { key: 'waitlist', label: 'ウェイティング', href: '/app/reservations?view=waitlist' },
   ];
 
   let body: React.ReactNode;
@@ -340,7 +363,7 @@ export default async function ReservationsLedgerPage({ searchParams }: { searchP
               <tbody>
                 {tables.map((table) => {
                   const rowReservations = reservations.filter((r) => r.tableIds.includes(table.id));
-                  const cells = buildRow(rowReservations, startMin, slotCount);
+                  const cells = buildRow(rowReservations, startMin, slotCount, bufferMinutes);
                   return (
                     <tr key={table.id}>
                       <th className="sticky left-0 z-10 border-b border-gray-100 bg-white px-3 py-2 text-left align-top font-medium text-navy whitespace-nowrap">
@@ -364,6 +387,19 @@ export default async function ReservationsLedgerPage({ searchParams }: { searchP
                             </td>
                           );
                         }
+                        if (cell.kind === 'buffer') {
+                          return (
+                            <td
+                              key={i}
+                              title="清掃時間（バッファ）"
+                              className="border-b border-l border-gray-100 p-1"
+                              style={{
+                                backgroundImage:
+                                  'repeating-linear-gradient(45deg, #e5e7eb 0, #e5e7eb 4px, transparent 4px, transparent 8px)',
+                              }}
+                            />
+                          );
+                        }
                         return <td key={i} className="border-b border-l border-gray-100 p-1" />;
                       })}
                     </tr>
@@ -382,6 +418,18 @@ export default async function ReservationsLedgerPage({ searchParams }: { searchP
               {s === 'confirmed' ? '予約確定' : s === 'seated' ? '着席中' : s === 'billing' ? '会計待ち' : s === 'completed' ? '会計済み' : 'キャンセル'}
             </span>
           ))}
+          {bufferMinutes > 0 && (
+            <span className="inline-flex items-center gap-1">
+              <span
+                className="inline-block h-2.5 w-2.5 rounded-sm border border-gray-300"
+                style={{
+                  backgroundImage:
+                    'repeating-linear-gradient(45deg, #e5e7eb 0, #e5e7eb 2px, transparent 2px, transparent 4px)',
+                }}
+              />
+              清掃バッファ（{bufferMinutes}分）
+            </span>
+          )}
         </p>
       </>
     );
@@ -489,6 +537,66 @@ export default async function ReservationsLedgerPage({ searchParams }: { searchP
   } else {
     const storeIds = ctx.currentStore ? [ctx.currentStore.id] : ctx.stores.map((s) => s.id);
     const showStore = !ctx.currentStore && ctx.stores.length > 1;
+    const today = todayJst();
+
+    // ---- 本日の店頭ウェイティング（ticket_no採番済み）----
+    const [{ data: queueData }, { data: availableTablesData }] = await Promise.all([
+      supabase
+        .from('waitlist_entries')
+        .select('id, store_id, guest_name, guest_phone, party_size, seat_preference, ticket_no, status, created_at, stores(name)')
+        .in('store_id', storeIds)
+        .eq('desired_date', today)
+        .not('ticket_no', 'is', null)
+        .order('ticket_no', { ascending: true }),
+      supabase
+        .from('restaurant_tables')
+        .select('id, store_id, name, capacity_min, capacity_max')
+        .in('store_id', storeIds)
+        .eq('status', 'active')
+        .eq('current_status', 'available')
+        .order('sort_order'),
+    ]);
+
+    const queueEntries: WaitingTicketRow[] = (queueData ?? []).map((w) => ({
+      id: w.id,
+      storeId: w.store_id,
+      storeName: (w.stores as unknown as { name: string } | null)?.name ?? null,
+      ticketNo: w.ticket_no as number,
+      guestName: w.guest_name,
+      guestPhone: w.guest_phone,
+      partySize: w.party_size,
+      seatPreference: w.seat_preference,
+      status: w.status as WaitingTicketRow['status'],
+      createdAt: w.created_at,
+    }));
+
+    const tablesByStore: Record<string, GuideTableOption[]> = {};
+    for (const t of availableTablesData ?? []) {
+      (tablesByStore[t.store_id] ??= []).push({ id: t.id, name: t.name, capacityMax: t.capacity_max });
+    }
+
+    // 空席発生時の案内候補ヒント（現在availableなテーブルにsuggestTablesを適用）
+    const hints: WaitingHint[] = [];
+    const usedTableIds = new Set<string>();
+    for (const w of queueEntries) {
+      if (w.status !== 'waiting') continue;
+      const storeTables = (availableTablesData ?? []).filter((t) => t.store_id === w.storeId && !usedTableIds.has(t.id));
+      const tableLikes: TableLike[] = storeTables.map((t) => ({
+        id: t.id,
+        name: t.name,
+        capacityMin: t.capacity_min,
+        capacityMax: t.capacity_max,
+        isActive: true,
+        isOccupied: false,
+      }));
+      const suggestion = suggestTables(tableLikes, w.partySize)[0];
+      if (suggestion) {
+        hints.push({ ticketNo: w.ticketNo, guestName: w.guestName, partySize: w.partySize, label: suggestion.label });
+        for (const id of suggestion.tableIds) usedTableIds.add(id);
+      }
+    }
+
+    // ---- キャンセル待ち（満席時登録・ticket_noなし）----
     const wstatusOptions: { key: WaitlistStatus | ''; label: string }[] = [
       { key: 'waiting', label: '連絡待ち' },
       { key: 'contacted', label: '連絡済み' },
@@ -503,6 +611,7 @@ export default async function ReservationsLedgerPage({ searchParams }: { searchP
       .from('waitlist_entries')
       .select('id, store_id, guest_name, guest_phone, party_size, desired_date, desired_time_from, desired_time_to, note, status, stores(name)')
       .in('store_id', storeIds)
+      .is('ticket_no', null)
       .order('desired_date', { ascending: true });
     if (wstatus) waitlistQuery = waitlistQuery.eq('status', wstatus);
 
@@ -521,24 +630,33 @@ export default async function ReservationsLedgerPage({ searchParams }: { searchP
       status: w.status as WaitlistStatus,
     }));
 
-    description = `${store.name}｜キャンセル待ち`;
+    description = `${store.name}｜ウェイティング`;
 
     body = (
       <>
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap gap-1 rounded-xl border border-gray-200 bg-white p-1">
-            {wstatusOptions.map((o) => (
-              <Link
-                key={o.key || 'all'}
-                href={`/app/reservations?view=waitlist${o.key ? `&wstatus=${o.key}` : ''}`}
-                className={cn(
-                  'rounded-lg px-3 py-1.5 text-center text-xs font-medium transition-colors',
-                  wstatus === o.key ? 'bg-navy text-white' : 'text-gray-600 hover:bg-gray-100'
-                )}
-              >
-                {o.label}
-              </Link>
-            ))}
+          <h2 className="text-sm font-semibold text-navy">本日のウェイティング</h2>
+          <WaitingTicketDialog stores={ctx.stores} defaultStoreId={store.id} />
+        </div>
+        <WaitingQueuePanel entries={queueEntries} tablesByStore={tablesByStore} hints={hints} showStore={showStore} />
+
+        <div className="mt-8 mb-4 flex flex-wrap items-center justify-between gap-3 border-t border-gray-200 pt-6">
+          <div>
+            <h2 className="mb-2 text-sm font-semibold text-navy">キャンセル待ち（満席時の登録）</h2>
+            <div className="flex flex-wrap gap-1 rounded-xl border border-gray-200 bg-white p-1">
+              {wstatusOptions.map((o) => (
+                <Link
+                  key={o.key || 'all'}
+                  href={`/app/reservations?view=waitlist${o.key ? `&wstatus=${o.key}` : ''}`}
+                  className={cn(
+                    'rounded-lg px-3 py-1.5 text-center text-xs font-medium transition-colors',
+                    wstatus === o.key ? 'bg-navy text-white' : 'text-gray-600 hover:bg-gray-100'
+                  )}
+                >
+                  {o.label}
+                </Link>
+              ))}
+            </div>
           </div>
           <WaitlistDialog stores={ctx.stores} defaultStoreId={store.id} />
         </div>
@@ -549,8 +667,8 @@ export default async function ReservationsLedgerPage({ searchParams }: { searchP
 
   return (
     <div>
-      {/* 予約の追加・変更・キャンセルをRealtimeで検知し、台帳（日/週/キャンセル待ち）を自動更新する */}
-      <StoreRealtimeRefresh storeId={store.id} tables={['reservations']} />
+      {/* 予約・ウェイティングの追加・変更・キャンセルをRealtimeで検知し、台帳（日/週/ウェイティング）を自動更新する */}
+      <StoreRealtimeRefresh storeId={store.id} tables={['reservations', 'waitlist_entries']} />
       <PageHeader
         title="予約台帳"
         description={description}

@@ -29,7 +29,7 @@ export default async function BookingSettingsPage() {
     supabase.from('stores').select('slug').eq('id', targetStore.id).single(),
     supabase
       .from('store_settings')
-      .select('slot_minutes, default_stay_minutes, booking_cutoff_minutes, booking_window_days, max_party_size, cancel_deadline_hours')
+      .select('slot_minutes, default_stay_minutes, booking_cutoff_minutes, booking_window_days, max_party_size, cancel_deadline_hours, cleaning_buffer_minutes')
       .eq('store_id', targetStore.id)
       .maybeSingle(),
   ]);
@@ -62,6 +62,7 @@ export default async function BookingSettingsPage() {
           bookingWindowDays: settings?.booking_window_days ?? 90,
           maxPartySize: settings?.max_party_size ?? 12,
           cancelDeadlineHours: settings?.cancel_deadline_hours ?? 24,
+          cleaningBufferMinutes: settings?.cleaning_buffer_minutes ?? 0,
         }}
       />
     </div>
