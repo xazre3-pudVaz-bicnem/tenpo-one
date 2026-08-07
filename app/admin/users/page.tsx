@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { requireCypressAdmin } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { formatDateTime } from '@/lib/format';
 import { ROLE_LABELS, ROLES } from '@/lib/permissions';
 import { PageHeader } from '@/components/ui/page-header';
 import { Badge } from '@/components/ui/badge';
@@ -8,6 +9,7 @@ import { Input, Select } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { TableWrap, Table, THead, TBody, Tr, Th, Td } from '@/components/ui/table';
 import { EmptyState } from '@/components/ui/state';
+import { listAllAuthUsers } from '../_utils';
 
 export const metadata: Metadata = { title: '全ユーザー' };
 
@@ -35,15 +37,16 @@ export default async function UsersPage({
   const { q, role } = await searchParams;
   const admin = createAdminClient();
 
-  const [{ data: memberships }, { data: userList }] = await Promise.all([
+  const [{ data: memberships }, authUsers] = await Promise.all([
     admin
       .from('memberships')
       .select('id, profile_id, organization_id, role, status, profiles(display_name, is_cypress_admin), organizations(name)')
       .order('created_at', { ascending: false }),
-    admin.auth.admin.listUsers({ perPage: 200 }),
+    listAllAuthUsers(admin),
   ]);
 
-  const emailById = new Map((userList?.users ?? []).map((u) => [u.id, u.email ?? '—']));
+  const emailById = new Map(authUsers.users.map((u) => [u.id, u.email ?? '—']));
+  const lastLoginById = new Map(authUsers.users.map((u) => [u.id, u.lastSignInAt]));
 
   let rows = (memberships ?? []) as unknown as MembershipRow[];
   if (q) {
@@ -57,6 +60,12 @@ export default async function UsersPage({
   return (
     <div>
       <PageHeader title="全ユーザー" description="全契約企業に所属するユーザーを横断検索できます。" />
+
+      {authUsers.truncated && (
+        <p className="mb-3 text-xs text-warning">
+          ユーザー数が上限（2,000人）を超えたため、一部のユーザーのメールアドレス・最終ログインが表示されない場合があります。
+        </p>
+      )}
 
       <form className="mb-4 flex flex-wrap gap-2" method="get">
         <Input name="q" defaultValue={q ?? ''} placeholder="氏名で検索" className="w-full sm:w-56" />
@@ -83,6 +92,7 @@ export default async function UsersPage({
                 <Th>企業名</Th>
                 <Th>ロール</Th>
                 <Th>状態</Th>
+                <Th>最終ログイン</Th>
               </Tr>
             </THead>
             <TBody>
@@ -105,6 +115,7 @@ export default async function UsersPage({
                         {m.status === 'active' ? '有効' : m.status === 'invited' ? '招待中' : '停止中'}
                       </Badge>
                     </Td>
+                    <Td className="text-xs text-gray-500">{formatDateTime(lastLoginById.get(m.profile_id) ?? null)}</Td>
                   </Tr>
                 );
               })}
