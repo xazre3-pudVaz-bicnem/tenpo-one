@@ -5,7 +5,7 @@ import { PageHeader } from '@/components/ui/page-header';
 import { EmptyState } from '@/components/ui/state';
 import { KdsBoard } from '@/components/kitchen/kds-board';
 import { setItemKitchenStatus, markOrderServed } from './actions';
-import type { KdsItem, KdsOrderGroup } from '@/components/kitchen/types';
+import type { KdsItem, KdsOrderGroup, Station } from '@/components/kitchen/types';
 
 export const metadata: Metadata = { title: 'キッチン（KDS）' };
 
@@ -15,9 +15,11 @@ const RECENT_SERVED_WINDOW_MS = 60 * 60 * 1000;
 interface OrderItemRow {
   id: string;
   order_id: string;
+  menu_item_id: string | null;
   name: string;
   quantity: number;
   memo: string | null;
+  modifiers: { name: string; price: number }[] | null;
   kitchen_status: string;
   created_at: string;
   orders: {
@@ -46,7 +48,7 @@ export default async function KitchenPage() {
   const { data: rows } = await supabase
     .from('order_items')
     .select(
-      `id, order_id, name, quantity, memo, kitchen_status, created_at,
+      `id, order_id, menu_item_id, name, quantity, memo, modifiers, kitchen_status, created_at,
        orders!inner(order_no, order_source, status, restaurant_tables(name))`
     )
     .eq('store_id', store.id)
@@ -55,16 +57,36 @@ export default async function KitchenPage() {
     .or(`kitchen_status.neq.served,served_at.gt.${sinceIso}`)
     .order('created_at', { ascending: true });
 
+  const typedRows = (rows ?? []) as unknown as OrderItemRow[];
+
+  // menu_item_id → menu_categories.station を解決する（未紐付けは「キッチン」扱い）
+  const menuItemIds = [...new Set(typedRows.map((r) => r.menu_item_id).filter((v): v is string => !!v))];
+  const stationByItem = new Map<string, Station>();
+  if (menuItemIds.length > 0) {
+    const { data: menuItemRows } = await supabase.from('menu_items').select('id, category_id').in('id', menuItemIds);
+    const categoryIds = [...new Set((menuItemRows ?? []).map((m) => m.category_id).filter((v): v is string => !!v))];
+    let stationByCategory = new Map<string, Station>();
+    if (categoryIds.length > 0) {
+      const { data: categoryRows } = await supabase.from('menu_categories').select('id, station').in('id', categoryIds);
+      stationByCategory = new Map((categoryRows ?? []).map((c) => [c.id as string, c.station as Station]));
+    }
+    for (const m of menuItemRows ?? []) {
+      stationByItem.set(m.id as string, (m.category_id && stationByCategory.get(m.category_id)) || 'kitchen');
+    }
+  }
+
   const groupsMap = new Map<string, KdsOrderGroup>();
   const activeTimesMap = new Map<string, number[]>();
 
-  for (const r of (rows ?? []) as unknown as OrderItemRow[]) {
+  for (const r of typedRows) {
     const order = r.orders;
     const item: KdsItem = {
       id: r.id,
       name: r.name,
       quantity: r.quantity,
       memo: r.memo,
+      modifiers: r.modifiers ?? [],
+      station: r.menu_item_id ? (stationByItem.get(r.menu_item_id) ?? 'kitchen') : 'kitchen',
       kitchenStatus: r.kitchen_status as KdsItem['kitchenStatus'],
       createdAt: r.created_at,
     };

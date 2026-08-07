@@ -44,7 +44,7 @@ export function OrderCard({
   now: number;
   showServed: boolean;
   setItemStatusAction: (orderItemId: string, nextStatus: KitchenStatus) => Promise<void>;
-  markOrderServedAction: (orderId: string) => Promise<void>;
+  markOrderServedAction: (orderId: string, onlyItemIds?: string[]) => Promise<void>;
 }) {
   const [pending, startTransition] = useTransition();
   const { toast } = useToast();
@@ -71,9 +71,12 @@ export function OrderCard({
   };
 
   const handleAllServed = () => {
+    // group.items は呼び出し元（KdsBoard）で表示中のステーション・提供済表示設定により
+    // 絞り込まれた品目のため、そのIDのみを対象にする（他ステーションの品目を誤って提供済にしない）
+    const activeItemIds = group.items.filter((i) => i.kitchenStatus !== 'served').map((i) => i.id);
     startTransition(async () => {
       try {
-        await markOrderServedAction(group.orderId);
+        await markOrderServedAction(group.orderId, activeItemIds);
       } catch (e) {
         toast(e instanceof Error ? e.message : '更新に失敗しました', 'error');
       }
@@ -119,7 +122,23 @@ export function OrderCard({
                 >
                   {item.name} × {item.quantity}
                 </p>
-                {item.memo && <p className="mt-0.5 text-sm text-warning">{item.memo}</p>}
+                {item.modifiers.length > 0 && (
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {item.modifiers.map((m, i) => (
+                      <span
+                        key={i}
+                        className="rounded-full bg-primary-soft px-2 py-0.5 text-xs font-medium text-primary-deep"
+                      >
+                        {m.name}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {item.memo && (
+                  <p className="mt-1 rounded-md bg-yellow-100 px-2 py-1 text-sm font-medium text-yellow-800">
+                    {item.memo}
+                  </p>
+                )}
               </div>
               <Badge tone={STATUS_TONES[item.kitchenStatus]}>{KITCHEN_STATUS_LABELS[item.kitchenStatus]}</Badge>
             </div>

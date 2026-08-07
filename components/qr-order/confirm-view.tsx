@@ -2,7 +2,8 @@
 
 import { X, Loader2 } from 'lucide-react';
 import { yen } from '@/lib/format';
-import type { CartLine } from './types';
+import { qrStrings } from './strings';
+import { cartLineUnitPrice, type CartLine } from './types';
 
 /** 注文確定前の明細確認画面 */
 export function ConfirmView({
@@ -25,8 +26,8 @@ export function ConfirmView({
   return (
     <div className="pb-28">
       <div className="px-4 py-4">
-        <h2 className="text-base font-bold text-navy">ご注文内容の確認</h2>
-        <p className="mt-1 text-xs text-gray-500">内容をご確認のうえ、注文を確定してください。</p>
+        <h2 className="text-base font-bold text-navy">{qrStrings.confirm.title}</h2>
+        <p className="mt-1 text-xs text-gray-500">{qrStrings.confirm.description}</p>
       </div>
 
       {error && (
@@ -40,14 +41,19 @@ export function ConfirmView({
               <p className="text-sm font-bold text-navy">
                 {line.name} × {line.quantity}
               </p>
+              {line.modifiers.length > 0 && (
+                <p className="mt-0.5 text-xs text-gray-500">
+                  {line.modifiers.map((m) => m.name).join('、')}
+                </p>
+              )}
               {line.memo && <p className="mt-0.5 text-xs text-gray-500">{line.memo}</p>}
               <p className="mt-1 text-sm font-semibold tabular-nums text-primary-deep">
-                {yen(line.price * line.quantity)}
+                {yen(cartLineUnitPrice(line) * line.quantity)}
               </p>
             </div>
             <button
               type="button"
-              aria-label={`${line.name}をカートから削除`}
+              aria-label={qrStrings.confirm.removeAria(line.name)}
               onClick={() => onRemove(line.key)}
               disabled={submitting}
               className="rounded p-1.5 text-gray-400 hover:bg-danger-soft hover:text-danger disabled:opacity-40"
@@ -59,7 +65,7 @@ export function ConfirmView({
       </ul>
 
       <div className="mx-4 mt-4 flex justify-between rounded-xl bg-gray-50 px-4 py-3 text-base font-bold text-navy">
-        <span>合計</span>
+        <span>{qrStrings.confirm.total}</span>
         <span className="tabular-nums">{yen(total)}</span>
       </div>
 
@@ -71,7 +77,7 @@ export function ConfirmView({
             disabled={submitting}
             className="h-12 flex-1 rounded-lg border border-gray-300 text-sm font-semibold text-navy disabled:opacity-40"
           >
-            戻る
+            {qrStrings.confirm.back}
           </button>
           <button
             type="button"
@@ -80,7 +86,7 @@ export function ConfirmView({
             className="flex h-12 flex-1 items-center justify-center gap-2 rounded-lg bg-primary text-sm font-semibold text-white disabled:opacity-40"
           >
             {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
-            この内容で注文する
+            {qrStrings.confirm.submit}
           </button>
         </div>
       </div>

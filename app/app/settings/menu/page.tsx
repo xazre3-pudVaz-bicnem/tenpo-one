@@ -8,6 +8,7 @@ import { SettingsBackLink } from '@/components/settings/back-link';
 import { CategoryPanel } from '@/components/settings/category-panel';
 import { MenuItemsPanel } from '@/components/settings/menu-items-panel';
 import type { MenuItemRow } from '@/components/settings/menu-item-dialog';
+import { StationPanel } from './station-panel';
 
 export const metadata: Metadata = { title: 'メニュー | 設定' };
 
@@ -29,7 +30,7 @@ export default async function MenuSettingsPage() {
 
   const { data: categories } = await supabase
     .from('menu_categories')
-    .select('id, name, color, sort_order')
+    .select('id, name, color, sort_order, station')
     .eq('organization_id', ctx.organizationId)
     .eq('status', 'active')
     .or(`store_id.is.null,store_id.eq.${targetStore.id}`)
@@ -80,10 +81,15 @@ export default async function MenuSettingsPage() {
       <PageHeader title="メニュー" description={targetStore.name} />
 
       <div className="grid gap-5 lg:grid-cols-4">
-        <div className="lg:col-span-1">
+        <div className="space-y-5 lg:col-span-1">
           <Card>
             <CardContent>
               <CategoryPanel storeId={targetStore.id} initial={categoryRows} />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent>
+              <StationPanel categories={(categories ?? []).map((c) => ({ id: c.id, name: c.name, station: c.station }))} />
             </CardContent>
           </Card>
         </div>

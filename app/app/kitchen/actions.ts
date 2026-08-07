@@ -55,8 +55,14 @@ export async function setItemKitchenStatus(orderItemId: string, nextStatus: Kitc
   revalidatePath('/app/kitchen');
 }
 
-/** カード単位で未提供の品目をすべて提供済にする */
-export async function markOrderServed(orderId: string) {
+/**
+ * カード単位で未提供の品目をすべて提供済にする。
+ * KDSはステーション（キッチン/ドリンク/デザート）タブで品目を絞り込んで表示するため、
+ * onlyItemIds を渡した場合はその品目のみを対象にする（未指定時は注文内の全品目）。
+ * これにより、ドリンク担当が「すべて提供済」を押してもキッチン担当の品目まで
+ * 誤って提供済にしてしまわないようにする。
+ */
+export async function markOrderServed(orderId: string, onlyItemIds?: string[]) {
   const ctx = await requirePermission('pos.order');
   const supabase = await createClient();
 
@@ -64,12 +70,14 @@ export async function markOrderServed(orderId: string) {
   if (!order) throw new Error('注文が見つかりません');
   assertStoreAccess(ctx, order.store_id);
 
-  const { data: items } = await supabase
+  let query = supabase
     .from('order_items')
     .select('id, kitchen_status, kitchen_started_at, kitchen_ready_at')
     .eq('order_id', orderId)
     .eq('status', 'active')
     .neq('kitchen_status', 'served');
+  if (onlyItemIds && onlyItemIds.length > 0) query = query.in('id', onlyItemIds);
+  const { data: items } = await query;
   if (!items || items.length === 0) return;
 
   const now = new Date().toISOString();

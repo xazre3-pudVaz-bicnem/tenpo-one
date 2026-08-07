@@ -9,7 +9,16 @@ import { CartBar } from './cart-bar';
 import { ConfirmView } from './confirm-view';
 import { SuccessView } from './success-view';
 import { OrderStatusView } from './order-status-view';
-import { qrOrderErrorMessage, type CartLine, type QrMenuData, type QrMenuItem } from './types';
+import { qrStrings } from './strings';
+import {
+  cartLineUnitPrice,
+  qrOrderErrorMessage,
+  sameModifiers,
+  type CartLine,
+  type QrMenuData,
+  type QrMenuItem,
+  type QrMenuModifier,
+} from './types';
 
 type Screen = 'menu' | 'confirm' | 'success';
 type Tab = 'order' | 'status';
@@ -30,9 +39,9 @@ export function QrOrderApp({
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const addToCart = (item: QrMenuItem, quantity: number, memo: string) => {
+  const addToCart = (item: QrMenuItem, quantity: number, memo: string, modifiers: QrMenuModifier[]) => {
     setCart((prev) => {
-      const idx = prev.findIndex((l) => l.menuItemId === item.id && l.memo === memo);
+      const idx = prev.findIndex((l) => l.menuItemId === item.id && l.memo === memo && sameModifiers(l.modifiers, modifiers));
       if (idx >= 0) {
         const next = [...prev];
         next[idx] = { ...next[idx], quantity: next[idx].quantity + quantity };
@@ -47,6 +56,7 @@ export function QrOrderApp({
           price: item.price,
           quantity,
           memo,
+          modifiers,
         },
       ];
     });
@@ -62,7 +72,7 @@ export function QrOrderApp({
   };
 
   const cartCount = cart.reduce((sum, l) => sum + l.quantity, 0);
-  const cartTotal = cart.reduce((sum, l) => sum + l.price * l.quantity, 0);
+  const cartTotal = cart.reduce((sum, l) => sum + cartLineUnitPrice(l) * l.quantity, 0);
 
   const handleSubmit = async () => {
     setSubmitting(true);
@@ -72,7 +82,12 @@ export function QrOrderApp({
       const { error } = await supabase.rpc('create_qr_order', {
         p_slug: storeSlug,
         p_token: tableToken,
-        p_items: cart.map((l) => ({ menu_item_id: l.menuItemId, quantity: l.quantity, memo: l.memo || null })),
+        p_items: cart.map((l) => ({
+          menu_item_id: l.menuItemId,
+          quantity: l.quantity,
+          memo: l.memo || null,
+          modifier_ids: l.modifiers.map((m) => m.id),
+        })),
       });
       if (error) {
         setSubmitError(qrOrderErrorMessage(error.message));
@@ -107,7 +122,7 @@ export function QrOrderApp({
                   tab === t ? 'border-b-2 border-primary text-primary-deep' : 'text-gray-400'
                 )}
               >
-                {t === 'order' ? 'メニュー' : '注文状況'}
+                {t === 'order' ? qrStrings.header.orderTab : qrStrings.header.statusTab}
               </button>
             ))}
           </div>
@@ -150,8 +165,8 @@ export function QrOrderApp({
         <ItemSheet
           item={selectedItem}
           onClose={() => setSelectedItem(null)}
-          onAdd={(quantity, memo) => {
-            addToCart(selectedItem, quantity, memo);
+          onAdd={(quantity, memo, modifiers) => {
+            addToCart(selectedItem, quantity, memo, modifiers);
             setSelectedItem(null);
           }}
         />

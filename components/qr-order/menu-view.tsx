@@ -1,10 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { yen } from '@/lib/format';
 import { Badge } from '@/components/ui/badge';
-import type { QrMenuCategory, QrMenuItem } from './types';
+import { qrStrings } from './strings';
+import { isPublicImageUrl, type QrMenuCategory, type QrMenuItem } from './types';
+
+/** カテゴリタブの先頭に差し込む「おすすめ」擬似カテゴリのID */
+const RECOMMENDED_TAB_ID = '__recommended__';
 
 export function MenuView({
   categories,
@@ -13,21 +17,27 @@ export function MenuView({
   categories: QrMenuCategory[];
   onSelectItem: (item: QrMenuItem) => void;
 }) {
-  const [activeId, setActiveId] = useState(categories[0]?.id ?? '');
-  const active = categories.find((c) => c.id === activeId) ?? categories[0] ?? null;
+  const recommendedItems = useMemo(() => categories.flatMap((c) => c.items.filter((i) => i.is_recommended)), [categories]);
 
-  if (categories.length === 0) {
-    return (
-      <p className="px-4 py-16 text-center text-sm text-gray-400">
-        現在ご注文いただけるメニューがありません。店員にお声がけください。
-      </p>
-    );
+  const tabs: QrMenuCategory[] = useMemo(() => {
+    if (recommendedItems.length === 0) return categories;
+    return [
+      { id: RECOMMENDED_TAB_ID, name: qrStrings.menu.recommendedCategoryName, color: '#CA8A04', items: recommendedItems },
+      ...categories,
+    ];
+  }, [categories, recommendedItems]);
+
+  const [activeId, setActiveId] = useState(tabs[0]?.id ?? '');
+  const active = tabs.find((c) => c.id === activeId) ?? tabs[0] ?? null;
+
+  if (tabs.length === 0) {
+    return <p className="px-4 py-16 text-center text-sm text-gray-400">{qrStrings.menu.empty}</p>;
   }
 
   return (
     <div>
       <div className="flex gap-2 overflow-x-auto border-b border-gray-100 bg-white px-3 py-2">
-        {categories.map((c) => (
+        {tabs.map((c) => (
           <button
             key={c.id}
             type="button"
@@ -45,7 +55,7 @@ export function MenuView({
 
       <ul className="divide-y divide-gray-100 bg-white">
         {(active?.items ?? []).length === 0 ? (
-          <li className="px-4 py-12 text-center text-sm text-gray-400">このカテゴリに商品がありません</li>
+          <li className="px-4 py-12 text-center text-sm text-gray-400">{qrStrings.menu.categoryEmpty}</li>
         ) : (
           active!.items.map((item) => (
             <li key={item.id}>
@@ -58,15 +68,24 @@ export function MenuView({
                   item.is_sold_out ? 'opacity-50' : 'active:bg-gray-50'
                 )}
               >
-                <div className="min-w-0">
-                  <p className={cn('text-sm font-bold', item.is_sold_out ? 'text-gray-400' : 'text-navy')}>
-                    {item.name}
-                  </p>
-                  {item.description && <p className="mt-0.5 text-xs text-gray-500">{item.description}</p>}
+                <div className="flex min-w-0 gap-3">
+                  {isPublicImageUrl(item.image_path) && (
+                    // eslint-disable-next-line @next/next/no-img-element -- 匿名向け公開URLのみ許可されるため next/image の最適化対象外
+                    <img src={item.image_path} alt="" className="h-14 w-14 shrink-0 rounded-lg object-cover" />
+                  )}
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <p className={cn('text-sm font-bold', item.is_sold_out ? 'text-gray-400' : 'text-navy')}>
+                        {item.name}
+                      </p>
+                      {item.is_recommended && <Badge tone="warning">{qrStrings.menu.recommendedBadge}</Badge>}
+                    </div>
+                    {item.description && <p className="mt-0.5 text-xs text-gray-500">{item.description}</p>}
+                  </div>
                 </div>
                 <div className="shrink-0 text-right">
                   {item.is_sold_out ? (
-                    <Badge tone="gray">品切れ</Badge>
+                    <Badge tone="gray">{qrStrings.menu.soldOutBadge}</Badge>
                   ) : (
                     <span className="text-sm font-bold tabular-nums text-primary-deep">{yen(item.price)}</span>
                   )}

@@ -1,11 +1,20 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useRouter, usePathname, useSearchParams } from 'next/navigation';
+import { Maximize2 } from 'lucide-react';
 import { StatCard } from '@/components/ui/stat-card';
 import { EmptyState } from '@/components/ui/state';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { OrderCard } from './order-card';
-import type { KdsOrderGroup, KitchenStatus } from './types';
+import {
+  STATION_FILTER_LABELS,
+  STATION_FILTER_OPTIONS,
+  type KdsOrderGroup,
+  type KitchenStatus,
+  type StationFilter,
+} from './types';
 
 /**
  * KDSの自動更新間隔（ミリ秒）。現状はポーリング（router.refresh）で実装している。
@@ -14,6 +23,11 @@ import type { KdsOrderGroup, KitchenStatus } from './types';
  * router.refresh() を呼ぶ形へ置き換える余地がある。
  */
 const AUTO_REFRESH_MS = 10000;
+
+/** URLの?stationパラメータからステーションタブを読み取る（不正値は「すべて」扱い） */
+function parseStation(value: string | null): StationFilter {
+  return (STATION_FILTER_OPTIONS as string[]).includes(value ?? '') ? (value as StationFilter) : 'all';
+}
 
 export function KdsBoard({
   groups,
@@ -28,20 +42,90 @@ export function KdsBoard({
   unservedCount: number;
   avgElapsedMinutes: number;
   setItemStatusAction: (orderItemId: string, nextStatus: KitchenStatus) => Promise<void>;
-  markOrderServedAction: (orderId: string) => Promise<void>;
+  markOrderServedAction: (orderId: string, onlyItemIds?: string[]) => Promise<void>;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [showServed, setShowServed] = useState(false);
+
+  // タブの選択状態はURLパラメータ（?station=）で保持する。10秒ごとの router.refresh() は
+  // URLを変更しないため、この値は自動更新をまたいで維持される。
+  const station = parseStation(searchParams.get('station'));
+
+  const setStation = useCallback(
+    (next: StationFilter) => {
+      const params = new URLSearchParams(searchParams.toString());
+      if (next === 'all') params.delete('station');
+      else params.set('station', next);
+      const qs = params.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    },
+    [pathname, router, searchParams]
+  );
 
   useEffect(() => {
     const id = setInterval(() => router.refresh(), AUTO_REFRESH_MS);
     return () => clearInterval(id);
   }, [router]);
 
-  const visibleGroups = groups.filter((g) => showServed || g.items.some((i) => i.kitchenStatus !== 'served'));
+  const stationCounts = useMemo(() => {
+    const counts: Record<StationFilter, number> = { all: 0, kitchen: 0, drink: 0, dessert: 0 };
+    for (const g of groups) {
+      for (const i of g.items) {
+        if (!showServed && i.kitchenStatus === 'served') continue;
+        counts.all += 1;
+        counts[i.station] += 1;
+      }
+    }
+    return counts;
+  }, [groups, showServed]);
+
+  const visibleGroups = groups
+    .map((g) => ({
+      ...g,
+      items: g.items.filter((i) => (showServed || i.kitchenStatus !== 'served') && (station === 'all' || i.station === station)),
+    }))
+    .filter((g) => g.items.length > 0);
+
+  const requestFullscreen = () => {
+    document.documentElement.requestFullscreen().catch(() => {
+      // 全画面化がブロックされた場合は何もしない（ブラウザ設定・権限による）
+    });
+  };
 
   return (
     <div className="space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex gap-1 overflow-x-auto rounded-xl border border-gray-200 bg-white p-1">
+          {STATION_FILTER_OPTIONS.map((s) => (
+            <button
+              key={s}
+              type="button"
+              onClick={() => setStation(s)}
+              className={cn(
+                'flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors',
+                station === s ? 'bg-primary text-white' : 'text-gray-500 hover:bg-gray-100'
+              )}
+            >
+              {STATION_FILTER_LABELS[s]}
+              <span
+                className={cn(
+                  'rounded-full px-1.5 text-xs tabular-nums',
+                  station === s ? 'bg-white/20' : 'bg-gray-100 text-gray-500'
+                )}
+              >
+                {stationCounts[s]}
+              </span>
+            </button>
+          ))}
+        </div>
+        <Button variant="secondary" size="sm" onClick={requestFullscreen}>
+          <Maximize2 className="h-4 w-4" />
+          全画面（解除はEsc）
+        </Button>
+      </div>
+
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <StatCard label="未提供品目" value={`${unservedCount}件`} tone={unservedCount > 0 ? 'primary' : 'default'} />
         <StatCard

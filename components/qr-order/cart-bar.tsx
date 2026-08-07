@@ -1,6 +1,7 @@
 'use client';
 
 import { yen } from '@/lib/format';
+import { qrStrings } from './strings';
 
 /** 下部固定のカートバー。タップで確認画面へ */
 export function CartBar({
@@ -19,9 +20,12 @@ export function CartBar({
         onClick={onOrder}
         className="flex h-14 w-full items-center justify-between rounded-lg bg-primary px-5 text-white active:scale-[0.98]"
       >
-        <span className="text-sm font-semibold">{count}点</span>
+        <span className="text-sm font-semibold">
+          {count}
+          {qrStrings.cartBar.unit}
+        </span>
         <span className="text-base font-bold tabular-nums">{yen(total)}</span>
-        <span className="text-sm font-semibold">注文する</span>
+        <span className="text-sm font-semibold">{qrStrings.cartBar.order}</span>
       </button>
     </div>
   );

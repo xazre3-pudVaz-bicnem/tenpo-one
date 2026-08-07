@@ -133,6 +133,24 @@ export async function saveMenuItem(input: MenuItemInput): Promise<ActionResult> 
   return {};
 }
 
+const STATIONS = ['kitchen', 'drink', 'dessert'] as const;
+
+/** カテゴリのKDS振り分け先（station）を変更する。ここで設定した値が /app/kitchen のタブ振り分けに使われる */
+export async function updateCategoryStation(id: string, station: string): Promise<ActionResult> {
+  const ctx = await requirePermission('menu.manage');
+  if (!(STATIONS as readonly string[]).includes(station)) return { error: 'ステーションの指定が不正です' };
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from('menu_categories')
+    .update({ station, updated_by: ctx.userId })
+    .eq('id', id)
+    .eq('organization_id', ctx.organizationId);
+  if (error) return { error: `ステーションの更新に失敗しました: ${error.message}` };
+
+  revalidatePath('/app/settings/menu');
+  return {};
+}
+
 /** 商品の削除（論理削除） */
 export async function deleteMenuItem(id: string): Promise<ActionResult> {
   const ctx = await requirePermission('menu.manage');
