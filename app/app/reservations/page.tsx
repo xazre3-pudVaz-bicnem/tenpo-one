@@ -9,6 +9,7 @@ import { PageHeader } from '@/components/ui/page-header';
 import { EmptyState } from '@/components/ui/state';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { StoreRealtimeRefresh } from '@/components/realtime/store-realtime-refresh';
 import { DateNav } from '@/components/reservations/date-nav';
 import { ReservationCard, type ReservationCardData } from '@/components/reservations/reservation-card';
 import type { AssignableTable } from '@/components/reservations/assign-table-dialog';
@@ -548,6 +549,8 @@ export default async function ReservationsLedgerPage({ searchParams }: { searchP
 
   return (
     <div>
+      {/* 予約の追加・変更・キャンセルをRealtimeで検知し、台帳（日/週/キャンセル待ち）を自動更新する */}
+      <StoreRealtimeRefresh storeId={store.id} tables={['reservations']} />
       <PageHeader
         title="予約台帳"
         description={description}

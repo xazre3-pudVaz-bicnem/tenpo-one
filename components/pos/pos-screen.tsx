@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useToast } from '@/components/ui/toast';
+import { useStoreRealtimeRefresh } from '@/components/realtime/use-store-refresh';
 import {
   CheckoutDialog,
   type CheckoutOrder,
@@ -74,6 +75,7 @@ export interface PosMenuItem {
 }
 
 export function PosScreen({
+  storeId,
   order,
   items,
   categories,
@@ -98,6 +100,7 @@ export function PosScreen({
   checkTerminalPaymentAction,
   cancelTerminalPaymentAction,
 }: {
+  storeId: string;
   order: PosOrder;
   items: PosOrderItem[];
   categories: PosCategory[];
@@ -131,6 +134,10 @@ export function PosScreen({
   const [splitOpen, setSplitOpen] = useState(false);
   const [mergeOpen, setMergeOpen] = useState(false);
   const [tableMoveOpen, setTableMoveOpen] = useState(false);
+
+  // QRからの追加注文が同じ order_items を更新するため、変更をRealtimeで検知して伝票へ反映する。
+  // order_idまでは絞り込まず、store_id単位で購読する（filter仕様上のシンプルさを優先）。
+  useStoreRealtimeRefresh({ storeId, tables: ['order_items'] });
 
   const isTakeoutLike = order.orderType === 'takeout' || order.orderType === 'delivery';
   const visibleItems = useMemo(

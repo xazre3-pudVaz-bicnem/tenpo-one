@@ -59,6 +59,7 @@ export default async function PosPage({
       <div>
         <PageHeader title="POSレジ" description={`${store.name}｜会計する注文を選択してください`} />
         <OrderPicker
+          storeId={store.id}
           orders={(openOrders ?? []).map((o) => ({
             id: o.id,
             orderNo: o.order_no,
@@ -206,6 +207,7 @@ export default async function PosPage({
   return (
     <div className="-m-4 lg:-m-6">
       <PosScreen
+        storeId={store.id}
         order={{
           id: order.id,
           orderNo: order.order_no,

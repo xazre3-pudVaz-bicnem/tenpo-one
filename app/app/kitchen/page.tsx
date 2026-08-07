@@ -136,6 +136,7 @@ export default async function KitchenPage() {
     <div>
       <PageHeader title="キッチン" description={`${store.name}｜注文の古い順に表示`} />
       <KdsBoard
+        storeId={store.id}
         groups={groups}
         now={now}
         unservedCount={unservedCount}

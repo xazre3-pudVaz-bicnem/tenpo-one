@@ -9,7 +9,13 @@ import { yen } from '@/lib/format';
 import { qrStrings } from './strings';
 import { KITCHEN_STATUS_LABELS, qrOrderErrorMessage, type KitchenStatus, type QrOrderStatus } from './types';
 
-/** 注文状況の自動更新間隔（ミリ秒） */
+/**
+ * 注文状況の自動更新間隔（ミリ秒）。
+ * この画面はQRから匿名アクセスするお客様向けで、Supabaseの認証セッションを持たない
+ * （テーブルトークンで get_qr_order_status RPCを都度呼び出す方式）。Supabase Realtimeの
+ * postgres_changes購読はRLS評価にauth.uid()等のセッションを要するため匿名では利用できず、
+ * 本画面はKDS/フロア/POS/予約台帳と異なりRealtime化の対象外。現状の10秒ポーリングを維持する。
+ */
 const REFRESH_INTERVAL_MS = 10000;
 
 // 注: get_qr_order_status（RPC）は品目ごとの選択オプション(modifiers)を返さないため、

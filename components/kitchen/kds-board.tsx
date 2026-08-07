@@ -1,12 +1,14 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { Maximize2 } from 'lucide-react';
 import { StatCard } from '@/components/ui/stat-card';
 import { EmptyState } from '@/components/ui/state';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { useStoreRealtimeRefresh } from '@/components/realtime/use-store-refresh';
+import { LiveIndicator } from '@/components/realtime/live-indicator';
 import { OrderCard } from './order-card';
 import {
   STATION_FILTER_LABELS,
@@ -16,20 +18,13 @@ import {
   type StationFilter,
 } from './types';
 
-/**
- * KDSの自動更新間隔（ミリ秒）。現状はポーリング（router.refresh）で実装している。
- * POS/QR双方の注文が同じ order_items を更新するため、将来的には
- * Supabase Realtime で order_items の変更を subscribe し、変更検知時にのみ
- * router.refresh() を呼ぶ形へ置き換える余地がある。
- */
-const AUTO_REFRESH_MS = 10000;
-
 /** URLの?stationパラメータからステーションタブを読み取る（不正値は「すべて」扱い） */
 function parseStation(value: string | null): StationFilter {
   return (STATION_FILTER_OPTIONS as string[]).includes(value ?? '') ? (value as StationFilter) : 'all';
 }
 
 export function KdsBoard({
+  storeId,
   groups,
   now,
   unservedCount,
@@ -37,6 +32,7 @@ export function KdsBoard({
   setItemStatusAction,
   markOrderServedAction,
 }: {
+  storeId: string;
   groups: KdsOrderGroup[];
   now: number;
   unservedCount: number;
@@ -48,6 +44,14 @@ export function KdsBoard({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [showServed, setShowServed] = useState(false);
+
+  // POS/QR双方の注文が同じ order_items を更新するため、orders/order_items の変更を
+  // Supabase Realtimeで購読し、変更検知時にrouter.refresh()する（切断時は30秒ごとのフォールバックへ）。
+  const { lastEventAt } = useStoreRealtimeRefresh({
+    storeId,
+    tables: ['order_items', 'orders'],
+    fallbackMs: 30000,
+  });
 
   // タブの選択状態はURLパラメータ（?station=）で保持する。10秒ごとの router.refresh() は
   // URLを変更しないため、この値は自動更新をまたいで維持される。
@@ -63,11 +67,6 @@ export function KdsBoard({
     },
     [pathname, router, searchParams]
   );
-
-  useEffect(() => {
-    const id = setInterval(() => router.refresh(), AUTO_REFRESH_MS);
-    return () => clearInterval(id);
-  }, [router]);
 
   const stationCounts = useMemo(() => {
     const counts: Record<StationFilter, number> = { all: 0, kitchen: 0, drink: 0, dessert: 0 };
@@ -120,10 +119,13 @@ export function KdsBoard({
             </button>
           ))}
         </div>
-        <Button variant="secondary" size="sm" onClick={requestFullscreen}>
-          <Maximize2 className="h-4 w-4" />
-          全画面（解除はEsc）
-        </Button>
+        <div className="flex items-center gap-3">
+          <LiveIndicator lastEventAt={lastEventAt} />
+          <Button variant="secondary" size="sm" onClick={requestFullscreen}>
+            <Maximize2 className="h-4 w-4" />
+            全画面（解除はEsc）
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">

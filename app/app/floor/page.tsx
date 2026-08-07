@@ -79,6 +79,7 @@ export default async function FloorPage() {
         />
       ) : (
         <FloorBoard
+          storeId={store.id}
           floors={floors ?? []}
           tables={tables ?? []}
           reservationByTable={reservationByTable}

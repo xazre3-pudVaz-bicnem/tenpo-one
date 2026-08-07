@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/ui/state';
 import { useToast } from '@/components/ui/toast';
 import { formatDateTime } from '@/lib/format';
+import { useStoreRealtimeRefresh } from '@/components/realtime/use-store-refresh';
 
 const ORDER_TYPE_LABELS: Record<string, string> = {
   dine_in: '店内',
@@ -30,15 +31,20 @@ export interface OpenOrderRow {
 }
 
 export function OrderPicker({
+  storeId,
   orders,
   startTakeoutAction,
 }: {
+  storeId: string;
   orders: OpenOrderRow[];
   startTakeoutAction: () => Promise<{ orderId: string }>;
 }) {
   const router = useRouter();
   const { toast } = useToast();
   const [pending, startTransition] = useTransition();
+
+  // 会計待ち注文の一覧はフロア・KDS側の操作でも変わるため、ordersの変更をRealtimeで検知して更新する。
+  useStoreRealtimeRefresh({ storeId, tables: ['orders'] });
 
   const handleTakeout = () => {
     startTransition(async () => {

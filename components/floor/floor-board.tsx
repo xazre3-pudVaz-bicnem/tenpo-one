@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Users, Lock } from 'lucide-react';
+import { useStoreRealtimeRefresh } from '@/components/realtime/use-store-refresh';
 import { TableSheet } from './table-sheet';
 
 export interface ReservationChip {
@@ -53,6 +54,7 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 export function FloorBoard({
+  storeId,
   floors,
   tables,
   reservationByTable,
@@ -62,6 +64,7 @@ export function FloorBoard({
   completeCleaningAction,
   setTableAvailabilityAction,
 }: {
+  storeId: string;
   floors: FloorRow[];
   tables: FloorTable[];
   reservationByTable: Record<string, ReservationChip>;
@@ -72,6 +75,9 @@ export function FloorBoard({
   setTableAvailabilityAction: (tableId: string, unavailable: boolean) => Promise<void>;
 }) {
   const [selected, setSelected] = useState<FloorTable | null>(null);
+
+  // テーブル状態（着席・清掃中など）と、テーブルに紐づく注文の変化をRealtimeで検知して画面を更新する。
+  useStoreRealtimeRefresh({ storeId, tables: ['restaurant_tables', 'orders'] });
 
   const grouped = floors.length > 0
     ? floors.map((f) => ({ floor: f, tables: tables.filter((t) => t.floor_id === f.id) }))
