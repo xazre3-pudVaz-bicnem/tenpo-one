@@ -9,8 +9,12 @@ import { useToast } from '@/components/ui/toast';
 import { addMovement } from '@/app/app/inventory/actions';
 import { MANUAL_MOVEMENT_OPTIONS, MOVEMENT_TYPE_LABELS, type ManualMovementType } from './labels';
 
-/** 入出庫登録ダイアログ（in=入庫、out/waste/count_adjust=在庫減） */
-export function MovementForm({ item }: { item: { id: string; name: string; unit: string } }) {
+/**
+ * 入出庫登録ダイアログ。
+ * in=入荷（rpc apply_stock_receipt。単価入力あり・加重平均原価を自動更新）
+ * out/waste/count_adjust=在庫減
+ */
+export function MovementForm({ item }: { item: { id: string; name: string; unit: string; avgCost: number | null } }) {
   const [open, setOpen] = useState(false);
   const [movementType, setMovementType] = useState<ManualMovementType>('in');
   const [busy, setBusy] = useState(false);
@@ -19,6 +23,7 @@ export function MovementForm({ item }: { item: { id: string; name: string; unit:
   const { toast } = useToast();
 
   const needsReason = movementType === 'waste' || movementType === 'count_adjust';
+  const isReceipt = movementType === 'in';
 
   const close = () => {
     if (busy) return;
@@ -38,10 +43,19 @@ export function MovementForm({ item }: { item: { id: string; name: string; unit:
       setError('理由を入力してください');
       return;
     }
+    let unitCost: number | null = null;
+    if (isReceipt) {
+      const raw = formData.get('unitCost');
+      unitCost = raw != null && raw !== '' ? Number(raw) : null;
+      if (unitCost == null || !Number.isFinite(unitCost) || unitCost < 0) {
+        setError('単価を正しく入力してください');
+        return;
+      }
+    }
     setBusy(true);
     try {
-      await addMovement({ itemId: item.id, movementType, quantity, reason });
-      toast('在庫を更新しました');
+      await addMovement({ itemId: item.id, movementType, quantity, reason, unitCost });
+      toast(isReceipt ? '入荷を登録しました' : '在庫を更新しました');
       setOpen(false);
       router.refresh();
     } catch (e) {
@@ -77,9 +91,25 @@ export function MovementForm({ item }: { item: { id: string; name: string; unit:
               ))}
             </Select>
           </div>
-          <div>
-            <Label htmlFor="mv-qty">数量（{item.unit}）</Label>
-            <Input id="mv-qty" name="quantity" type="number" min={0} step="0.01" required />
+          <div className={isReceipt ? 'grid grid-cols-2 gap-3' : ''}>
+            <div>
+              <Label htmlFor="mv-qty">数量（{item.unit}）</Label>
+              <Input id="mv-qty" name="quantity" type="number" min={0} step="0.01" required />
+            </div>
+            {isReceipt && (
+              <div>
+                <Label htmlFor="mv-cost">単価（円）</Label>
+                <Input
+                  id="mv-cost"
+                  name="unitCost"
+                  type="number"
+                  min={0}
+                  step="1"
+                  defaultValue={item.avgCost ?? ''}
+                  required
+                />
+              </div>
+            )}
           </div>
           <div>
             <Label htmlFor="mv-reason">理由{needsReason ? '（必須）' : '（任意）'}</Label>

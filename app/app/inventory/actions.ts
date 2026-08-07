@@ -18,6 +18,8 @@ export async function createItem(input: {
   unit: string;
   initialQuantity: number;
   reorderPoint: number | null;
+  minQuantity: number | null;
+  optimalQuantity: number | null;
   avgCost: number | null;
 }) {
   const ctx = await requirePermission('inventory.write');
@@ -32,6 +34,8 @@ export async function createItem(input: {
     unit: input.unit || '個',
     current_quantity: input.initialQuantity,
     reorder_point: input.reorderPoint,
+    min_quantity: input.minQuantity,
+    optimal_quantity: input.optimalQuantity,
     avg_cost: input.avgCost,
     created_by: ctx.userId,
     updated_by: ctx.userId,
@@ -40,12 +44,50 @@ export async function createItem(input: {
   revalidatePath(LIST_PATH);
 }
 
-/** 手動の入出庫登録。out/waste/count_adjustは減少（負のquantity）として記録する */
+/** 品目の編集（発注点・最低在庫・適正在庫などの属性のみ。数量・原価は入出庫/入荷から更新する） */
+export async function updateItem(
+  itemId: string,
+  input: {
+    name: string;
+    itemKind: ItemKind;
+    category: string | null;
+    unit: string;
+    reorderPoint: number | null;
+    minQuantity: number | null;
+    optimalQuantity: number | null;
+  }
+) {
+  const ctx = await requirePermission('inventory.write');
+  if (!input.name.trim()) throw new Error('名前を入力してください');
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from('inventory_items')
+    .update({
+      name: input.name.trim(),
+      item_kind: input.itemKind,
+      category: input.category,
+      unit: input.unit || '個',
+      reorder_point: input.reorderPoint,
+      min_quantity: input.minQuantity,
+      optimal_quantity: input.optimalQuantity,
+      updated_by: ctx.userId,
+    })
+    .eq('id', itemId);
+  if (error) throw new Error(error.message);
+  revalidatePath(LIST_PATH);
+}
+
+/**
+ * 手動の入出庫登録。
+ * in（入荷）は加重平均仕入単価の一貫性のため、必ず rpc apply_stock_receipt を使う。
+ * out/waste/count_adjust は減少（負のquantity）として直接記録する。
+ */
 export async function addMovement(input: {
   itemId: string;
   movementType: ManualMovementType;
   quantity: number;
   reason: string | null;
+  unitCost?: number | null;
 }) {
   const ctx = await requirePermission('inventory.write');
   if (input.quantity <= 0) throw new Error('数量は正の値で入力してください');
@@ -56,7 +98,35 @@ export async function addMovement(input: {
   const { data: item, error } = await supabase.from('inventory_items').select('*').eq('id', input.itemId).single();
   if (error || !item) throw new Error('品目が見つかりません');
 
-  const signedQuantity = input.movementType === 'in' ? input.quantity : -input.quantity;
+  if (input.movementType === 'in') {
+    const unitCost =
+      input.unitCost != null && input.unitCost >= 0
+        ? Math.round(input.unitCost)
+        : (item.avg_cost ?? item.last_purchase_cost ?? 0);
+
+    const { error: rpcErr } = await supabase.rpc('apply_stock_receipt', {
+      p_inventory_item_id: input.itemId,
+      p_quantity: input.quantity,
+      p_unit_cost: unitCost,
+    });
+    if (rpcErr) throw new Error(rpcErr.message);
+
+    await supabase.rpc('log_audit', {
+      p_org: ctx.organizationId,
+      p_store: item.store_id,
+      p_action: 'inventory.receive',
+      p_target_table: 'inventory_items',
+      p_target_id: input.itemId,
+      p_before: { current_quantity: item.current_quantity, avg_cost: item.avg_cost },
+      p_after: { quantity_added: input.quantity, unit_cost: unitCost },
+      p_note: input.reason,
+    });
+
+    revalidatePath(LIST_PATH);
+    return;
+  }
+
+  const signedQuantity = -input.quantity;
 
   const { error: moveErr } = await supabase.from('stock_movements').insert({
     organization_id: ctx.organizationId,
@@ -93,21 +163,56 @@ export async function addMovement(input: {
   revalidatePath(LIST_PATH);
 }
 
+/**
+ * 店舗間移動。rpc apply_stock_transfer を使う（出庫/入庫の2行を対で記録・受け側品目は自動作成されうる）。
+ * RPC側の権限チェック（store_manager以上）に合わせて vendors.manage で権限判定する。
+ */
+export async function transferStock(input: {
+  fromItemId: string;
+  toStoreId: string;
+  quantity: number;
+  reason: string | null;
+}) {
+  await requirePermission('vendors.manage');
+  if (input.quantity <= 0) throw new Error('数量は正の値で入力してください');
+  if (!input.toStoreId) throw new Error('移動先店舗を選択してください');
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('apply_stock_transfer', {
+    p_from_item_id: input.fromItemId,
+    p_to_store_id: input.toStoreId,
+    p_quantity: input.quantity,
+    p_reason: input.reason,
+  });
+  if (error) throw new Error(error.message);
+  revalidatePath(LIST_PATH);
+  return data as { ok: boolean; transfer_group_id: string; to_item_id: string };
+}
+
 export async function getMovementHistory(itemId: string) {
   await requireMember();
   const supabase = await createClient();
   const { data } = await supabase
     .from('stock_movements')
-    .select('id, movement_type, quantity, reason, occurred_at')
+    .select('id, movement_type, quantity, reason, occurred_at, to_store_id')
     .eq('inventory_item_id', itemId)
     .order('occurred_at', { ascending: false })
     .limit(50);
-  return (data ?? []).map((r) => ({
+  const rows = data ?? [];
+
+  const storeIds = [...new Set(rows.map((r) => r.to_store_id).filter((v): v is string => !!v))];
+  let storeNames = new Map<string, string>();
+  if (storeIds.length > 0) {
+    const { data: stores } = await supabase.from('stores').select('id, name').in('id', storeIds);
+    storeNames = new Map((stores ?? []).map((s) => [s.id as string, s.name as string]));
+  }
+
+  return rows.map((r) => ({
     id: r.id as string,
     movementType: r.movement_type as MovementType,
     quantity: Number(r.quantity),
     reason: r.reason as string | null,
     occurredAt: r.occurred_at as string,
+    toStoreName: r.to_store_id ? (storeNames.get(r.to_store_id) ?? null) : null,
   }));
 }
 

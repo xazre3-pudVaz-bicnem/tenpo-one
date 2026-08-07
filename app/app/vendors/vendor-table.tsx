@@ -11,10 +11,12 @@ import { useToast } from '@/components/ui/toast';
 import { yen } from '@/lib/format';
 import { deleteVendor } from './actions';
 import { VendorForm, type VendorFormData } from './vendor-form';
+import { VendorHistoryDialog } from './vendor-history-dialog';
 
 export interface VendorRow extends VendorFormData {
   status: 'active' | 'inactive' | 'deleted';
   monthlyInvoiceTotal: number;
+  monthlyPurchaseTotal: number;
   activePoCount: number;
 }
 
@@ -23,6 +25,7 @@ const STATUS_TONES: Record<VendorRow['status'], BadgeTone> = { active: 'success'
 
 export function VendorTable({ rows }: { rows: VendorRow[] }) {
   const [target, setTarget] = useState<VendorRow | null>(null);
+  const [historyVendor, setHistoryVendor] = useState<VendorRow | null>(null);
   const router = useRouter();
   const { toast } = useToast();
 
@@ -41,6 +44,7 @@ export function VendorTable({ rows }: { rows: VendorRow[] }) {
               <Th>電話番号</Th>
               <Th>状態</Th>
               <Th className="text-right">当月請求額</Th>
+              <Th className="text-right">今月仕入額</Th>
               <Th className="text-right">進行中発注</Th>
               <Th />
             </Tr>
@@ -58,9 +62,13 @@ export function VendorTable({ rows }: { rows: VendorRow[] }) {
                   <Badge tone={STATUS_TONES[v.status]}>{STATUS_LABELS[v.status]}</Badge>
                 </Td>
                 <Td className="text-right tabular-nums">{yen(v.monthlyInvoiceTotal)}</Td>
+                <Td className="text-right tabular-nums">{yen(v.monthlyPurchaseTotal)}</Td>
                 <Td className="text-right tabular-nums">{v.activePoCount}件</Td>
                 <Td>
                   <div className="flex justify-end gap-2">
+                    <Button size="sm" variant="secondary" onClick={() => setHistoryVendor(v)}>
+                      発注履歴
+                    </Button>
                     <VendorForm vendor={v} />
                     {v.status !== 'deleted' && (
                       <Button size="sm" variant="danger" onClick={() => setTarget(v)}>
@@ -88,6 +96,7 @@ export function VendorTable({ rows }: { rows: VendorRow[] }) {
           router.refresh();
         }}
       />
+      <VendorHistoryDialog vendor={historyVendor} onClose={() => setHistoryVendor(null)} />
     </>
   );
 }

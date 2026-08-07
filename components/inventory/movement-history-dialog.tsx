@@ -14,6 +14,7 @@ interface HistoryRow {
   quantity: number;
   reason: string | null;
   occurredAt: string;
+  toStoreName: string | null;
 }
 
 /** 品目行クリックで開く、直近50件の入出庫履歴 */
@@ -71,7 +72,10 @@ export function MovementHistoryDialog({
                     {r.quantity}
                     {item.unit}
                   </Td>
-                  <Td>{r.reason ?? '—'}</Td>
+                  <Td>
+                    {r.reason ?? '—'}
+                    {r.toStoreName && <span className="text-gray-500">（→ {r.toStoreName}）</span>}
+                  </Td>
                 </Tr>
               ))}
             </TBody>

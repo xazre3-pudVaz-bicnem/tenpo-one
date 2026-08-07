@@ -13,9 +13,10 @@ export interface PoLineInput {
   quantity: number;
   unit: string;
   unitCost: number;
+  taxRate: number;
 }
 
-/** 発注書の作成（status='draft'） */
+/** 発注書の作成（status='draft'）。明細ごとの税率から税抜小計・税額・税込合計を算出して保存する */
 export async function createPurchaseOrder(input: {
   storeId: string;
   vendorId: string;
@@ -28,7 +29,14 @@ export async function createPurchaseOrder(input: {
   if (input.lines.length === 0) throw new Error('明細を1件以上入力してください');
   const supabase = await createClient();
 
-  const total = input.lines.reduce((sum, l) => sum + Math.round(l.quantity * l.unitCost), 0);
+  let subtotal = 0;
+  let taxTotal = 0;
+  for (const l of input.lines) {
+    const lineSubtotal = Math.round(l.quantity * l.unitCost);
+    subtotal += lineSubtotal;
+    taxTotal += Math.round((lineSubtotal * l.taxRate) / 100);
+  }
+  const total = subtotal + taxTotal;
 
   const { data: po, error } = await supabase
     .from('purchase_orders')
@@ -39,6 +47,7 @@ export async function createPurchaseOrder(input: {
       status: 'draft',
       expected_at: input.expectedAt,
       total,
+      tax_total: taxTotal,
       note: input.note,
       requested_by: ctx.userId,
       created_by: ctx.userId,
@@ -57,6 +66,7 @@ export async function createPurchaseOrder(input: {
       quantity: l.quantity,
       unit: l.unit,
       unit_cost: l.unitCost,
+      tax_rate: l.taxRate,
     }))
   );
   if (itemsErr) throw new Error(itemsErr.message);
@@ -154,8 +164,14 @@ export async function cancelPurchaseOrder(poId: string, reason: string) {
   revalidatePath(detailPath(poId));
 }
 
-/** 入荷登録: received_quantity加算・在庫連動品目は在庫移動記録+在庫数量加算。全量入荷でstatus='received' */
-export async function receiveItems(poId: string, receipts: { itemId: string; quantity: number }[]) {
+/**
+ * 入荷登録: received_quantity加算・在庫連動品目は rpc apply_stock_receipt で在庫数量と加重平均仕入単価を更新する。
+ * 全量入荷でstatus='received'
+ */
+export async function receiveItems(
+  poId: string,
+  receipts: { itemId: string; quantity: number; unitCost?: number }[]
+) {
   const ctx = await requirePermission('vendors.manage');
   const supabase = await createClient();
   const { data: po, error } = await supabase
@@ -184,6 +200,7 @@ export async function receiveItems(poId: string, receipts: { itemId: string; qua
     if (newReceived > Number(item.quantity) + 0.0001) {
       throw new Error(`「${item.name}」の入荷数量が発注数量を超えています`);
     }
+    const unitCost = r.unitCost != null && r.unitCost >= 0 ? Math.round(r.unitCost) : item.unit_cost;
 
     const { error: updItemErr } = await supabase
       .from('purchase_order_items')
@@ -192,28 +209,13 @@ export async function receiveItems(poId: string, receipts: { itemId: string; qua
     if (updItemErr) throw new Error(updItemErr.message);
 
     if (item.inventory_item_id) {
-      await supabase.from('stock_movements').insert({
-        organization_id: ctx.organizationId,
-        store_id: po.store_id,
-        inventory_item_id: item.inventory_item_id,
-        movement_type: 'in',
-        quantity: r.quantity,
-        unit_cost: item.unit_cost,
-        ref_purchase_order_id: poId,
-        created_by: ctx.userId,
+      const { error: rpcErr } = await supabase.rpc('apply_stock_receipt', {
+        p_inventory_item_id: item.inventory_item_id,
+        p_quantity: r.quantity,
+        p_unit_cost: unitCost,
+        p_purchase_order_id: poId,
       });
-
-      const { data: invItem } = await supabase
-        .from('inventory_items')
-        .select('current_quantity')
-        .eq('id', item.inventory_item_id)
-        .single();
-      if (invItem) {
-        await supabase
-          .from('inventory_items')
-          .update({ current_quantity: Number(invItem.current_quantity) + r.quantity, updated_by: ctx.userId })
-          .eq('id', item.inventory_item_id);
-      }
+      if (rpcErr) throw new Error(rpcErr.message);
     }
   }
 

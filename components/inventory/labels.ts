@@ -31,11 +31,11 @@ export const MANUAL_MOVEMENT_OPTIONS: ManualMovementType[] = ['in', 'out', 'wast
 
 export const PO_STATUS_LABELS = {
   draft: '下書き',
-  requested: '申請中',
+  requested: '承認待ち',
   approved: '承認済み',
   ordered: '発注済み',
   partially_received: '一部入荷',
-  received: '入荷完了',
+  received: '入荷済み',
   cancelled: '取消',
 } as const;
 
@@ -70,3 +70,30 @@ export const VENDOR_STATUS_LABELS: Record<string, string> = {
   inactive: '休止',
   deleted: '削除済み',
 };
+
+/** 発注明細の消費税率（%） */
+export const TAX_RATE_OPTIONS = [10, 8] as const;
+export type TaxRate = (typeof TAX_RATE_OPTIONS)[number];
+
+/** 在庫の警告レベル。danger=最低在庫以下、warning=発注点以下、null=通常 */
+export type StockWarningLevel = 'danger' | 'warning' | null;
+
+export const STOCK_WARNING_LABELS: Record<'danger' | 'warning', string> = {
+  danger: '在庫切れ間近',
+  warning: '要発注',
+};
+
+export const STOCK_WARNING_TONES: Record<'danger' | 'warning', BadgeTone> = {
+  danger: 'danger',
+  warning: 'warning',
+};
+
+export function stockWarningLevel(row: {
+  currentQuantity: number;
+  minQuantity: number | null;
+  reorderPoint: number | null;
+}): StockWarningLevel {
+  if (row.minQuantity != null && row.currentQuantity <= row.minQuantity) return 'danger';
+  if (row.reorderPoint != null && row.currentQuantity <= row.reorderPoint) return 'warning';
+  return null;
+}

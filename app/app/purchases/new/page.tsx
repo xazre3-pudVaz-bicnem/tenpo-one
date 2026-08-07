@@ -7,8 +7,13 @@ import { PoForm } from '@/components/inventory/po-form';
 
 export const metadata: Metadata = { title: '発注書を作成' };
 
-export default async function NewPurchaseOrderPage() {
+export default async function NewPurchaseOrderPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ item?: string }>;
+}) {
   const ctx = await requireMember();
+  const sp = await searchParams;
 
   if (!ctx.currentStore) {
     return (
@@ -46,6 +51,7 @@ export default async function NewPurchaseOrderPage() {
         storeId={ctx.currentStore.id}
         vendors={vendorsData ?? []}
         inventoryItems={(itemsData ?? []).map((i) => ({ id: i.id, name: i.name, unit: i.unit, avgCost: i.avg_cost }))}
+        initialItemId={sp.item}
       />
     </div>
   );

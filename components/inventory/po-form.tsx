@@ -8,6 +8,7 @@ import { Input, Label, Select, FieldError } from '@/components/ui/input';
 import { useToast } from '@/components/ui/toast';
 import { yen } from '@/lib/format';
 import { createPurchaseOrder } from '@/app/app/purchases/actions';
+import { TAX_RATE_OPTIONS } from './labels';
 
 interface InventoryItemOption {
   id: string;
@@ -28,37 +29,58 @@ interface Line {
   quantity: string;
   unit: string;
   unitCost: string;
+  taxRate: string;
 }
 
 let seq = 0;
-function newLine(): Line {
+function newLine(overrides?: Partial<Line>): Line {
   seq += 1;
-  return { key: `l${seq}`, inventoryItemId: '', name: '', quantity: '1', unit: '個', unitCost: '0' };
+  return { key: `l${seq}`, inventoryItemId: '', name: '', quantity: '1', unit: '個', unitCost: '0', taxRate: '10', ...overrides };
 }
 
-/** 発注書作成フォーム。明細行を動的に追加・削除でき、合計金額を自動計算する */
+function lineSubtotal(l: Line): number {
+  return Math.round((Number(l.quantity) || 0) * (Number(l.unitCost) || 0));
+}
+function lineTax(l: Line): number {
+  return Math.round((lineSubtotal(l) * (Number(l.taxRate) || 0)) / 100);
+}
+
+/** 発注書作成フォーム。明細行を動的に追加・削除でき、税率を含めた合計金額を自動計算する */
 export function PoForm({
   storeId,
   vendors,
   inventoryItems,
+  initialItemId,
 }: {
   storeId: string;
   vendors: VendorOption[];
   inventoryItems: InventoryItemOption[];
+  initialItemId?: string;
 }) {
   const [vendorId, setVendorId] = useState('');
   const [expectedAt, setExpectedAt] = useState('');
   const [note, setNote] = useState('');
-  const [lines, setLines] = useState<Line[]>([newLine()]);
+  const [lines, setLines] = useState<Line[]>(() => {
+    const initialItem = initialItemId ? inventoryItems.find((i) => i.id === initialItemId) : undefined;
+    return [
+      initialItem
+        ? newLine({
+            inventoryItemId: initialItem.id,
+            name: initialItem.name,
+            unit: initialItem.unit,
+            unitCost: initialItem.avgCost != null ? String(initialItem.avgCost) : '0',
+          })
+        : newLine(),
+    ];
+  });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
   const { toast } = useToast();
 
-  const total = useMemo(
-    () => lines.reduce((sum, l) => sum + Math.round((Number(l.quantity) || 0) * (Number(l.unitCost) || 0)), 0),
-    [lines]
-  );
+  const subtotal = useMemo(() => lines.reduce((sum, l) => sum + lineSubtotal(l), 0), [lines]);
+  const taxTotal = useMemo(() => lines.reduce((sum, l) => sum + lineTax(l), 0), [lines]);
+  const total = subtotal + taxTotal;
 
   const updateLine = (key: string, patch: Partial<Line>) => {
     setLines((prev) => prev.map((l) => (l.key === key ? { ...l, ...patch } : l)));
@@ -106,6 +128,7 @@ export function PoForm({
           quantity: Number(l.quantity),
           unit: l.unit || '個',
           unitCost: Math.round(Number(l.unitCost) || 0),
+          taxRate: Number(l.taxRate) || 0,
         })),
       });
       toast('発注書を作成しました');
@@ -151,7 +174,7 @@ export function PoForm({
         <div className="space-y-2">
           {lines.map((l) => (
             <div key={l.key} className="grid grid-cols-12 items-end gap-2 rounded-lg border border-gray-200 p-2">
-              <div className="col-span-4">
+              <div className="col-span-3">
                 <Label className="text-[11px]">品目</Label>
                 <Select value={l.inventoryItemId} onChange={(e) => selectInventoryItem(l.key, e.target.value)}>
                   <option value="">自由入力</option>
@@ -180,12 +203,12 @@ export function PoForm({
                   onChange={(e) => updateLine(l.key, { quantity: e.target.value })}
                 />
               </div>
-              <div className="col-span-2">
+              <div className="col-span-1">
                 <Label className="text-[11px]">単位</Label>
                 <Input value={l.unit} onChange={(e) => updateLine(l.key, { unit: e.target.value })} />
               </div>
               <div className="col-span-2">
-                <Label className="text-[11px]">単価</Label>
+                <Label className="text-[11px]">単価（税抜）</Label>
                 <Input
                   type="number"
                   min={0}
@@ -194,9 +217,17 @@ export function PoForm({
                   onChange={(e) => updateLine(l.key, { unitCost: e.target.value })}
                 />
               </div>
-              <div className="col-span-1 text-right text-xs tabular-nums text-gray-500">
-                {yen(Math.round((Number(l.quantity) || 0) * (Number(l.unitCost) || 0)))}
+              <div className="col-span-2">
+                <Label className="text-[11px]">税率</Label>
+                <Select value={l.taxRate} onChange={(e) => updateLine(l.key, { taxRate: e.target.value })}>
+                  {TAX_RATE_OPTIONS.map((r) => (
+                    <option key={r} value={r}>
+                      {r}%
+                    </option>
+                  ))}
+                </Select>
               </div>
+              <div className="col-span-1 text-right text-xs tabular-nums text-gray-500">{yen(lineSubtotal(l))}</div>
               <div className="col-span-1 flex justify-end">
                 <Button
                   type="button"
@@ -214,9 +245,19 @@ export function PoForm({
         </div>
       </div>
 
-      <div className="flex items-center justify-between rounded-lg bg-gray-50 px-4 py-3">
-        <span className="text-sm font-medium text-gray-600">合計金額</span>
-        <span className="text-lg font-bold tabular-nums text-navy">{yen(total)}</span>
+      <div className="ml-auto w-full max-w-xs space-y-1 rounded-lg bg-gray-50 px-4 py-3">
+        <div className="flex items-center justify-between text-sm text-gray-600">
+          <span>小計（税抜）</span>
+          <span className="tabular-nums">{yen(subtotal)}</span>
+        </div>
+        <div className="flex items-center justify-between text-sm text-gray-600">
+          <span>消費税</span>
+          <span className="tabular-nums">{yen(taxTotal)}</span>
+        </div>
+        <div className="flex items-center justify-between border-t border-gray-200 pt-1">
+          <span className="text-sm font-medium text-gray-600">合計（税込）</span>
+          <span className="text-lg font-bold tabular-nums text-navy">{yen(total)}</span>
+        </div>
       </div>
 
       <FieldError message={error ?? undefined} />

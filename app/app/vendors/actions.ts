@@ -1,7 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { requirePermission } from '@/lib/auth';
+import { requireMember, requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 
 const PATH = '/app/vendors';
@@ -92,4 +92,23 @@ export async function deleteVendor(vendorId: string, reason: string) {
   });
 
   revalidatePath(PATH);
+}
+
+/** 直近の発注履歴5件（発注履歴ダイアログ用） */
+export async function getVendorRecentOrders(vendorId: string) {
+  await requireMember();
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from('purchase_orders')
+    .select('id, po_no, status, total, expected_at, created_at')
+    .eq('vendor_id', vendorId)
+    .order('created_at', { ascending: false })
+    .limit(5);
+  return (data ?? []).map((r) => ({
+    id: r.id as string,
+    poNo: r.po_no as number,
+    status: r.status as string,
+    total: r.total as number,
+    expectedAt: r.expected_at as string | null,
+  }));
 }
