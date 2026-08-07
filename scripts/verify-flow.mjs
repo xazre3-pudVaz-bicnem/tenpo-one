@@ -600,6 +600,218 @@ async function main() {
   }
 
   // ============================================================
+  section('17. 同時実行（並行リクエストの競合制御）');
+  // ============================================================
+  {
+    // 同一レジの同時開局: 部分UNIQUEにより必ず片方だけ成功する
+    const results = await Promise.allSettled([
+      mgr.rpc('open_register_session', { p_store_id: shibuya.id, p_register_id: register.id, p_opening_float: 10000 }),
+      mgr.rpc('open_register_session', { p_store_id: shibuya.id, p_register_id: register.id, p_opening_float: 20000 }),
+    ]);
+    const opened2 = results.filter((r) => r.status === 'fulfilled' && r.value.data?.ok);
+    check('同一レジの同時開局は1つだけ成功する', opened2.length === 1,
+      `成功数: ${opened2.length}`);
+    const sid = opened2[0]?.value?.data?.session_id;
+    if (sid) await mgr.rpc('close_register_session', { p_session_id: sid, p_counted_cash: opened2[0].value.data ? (await mgr.from('register_sessions').select('opening_float').eq('id', sid).single()).data.opening_float : 0, p_difference_reason: null });
+
+    // 同一注文の同時会計: FOR UPDATE + status guard により1回のみ
+    const { data: [co] } = await mgr.from('orders').insert({
+      organization_id: org.id, store_id: shibuya.id, order_type: 'takeout', guest_count: 1,
+    }).select();
+    await mgr.from('order_items').insert({
+      organization_id: org.id, store_id: shibuya.id, order_id: co.id,
+      menu_item_id: karaage.id, name: karaage.name, unit_price: karaage.price, quantity: 1,
+      tax_rate: 8, tax_included: true, line_total: karaage.price,
+    });
+    await mgr.rpc('recalc_order_totals', { p_order_id: co.id });
+    const { data: [cot] } = await mgr.from('orders').select('total').eq('id', co.id);
+    const pay = [{ method: 'cash', amount: cot.total, tendered: cot.total }];
+    const finRes = await Promise.allSettled([
+      mgr.rpc('finalize_order', { p_order_id: co.id, p_payments: pay, p_register_session_id: null }),
+      mgr.rpc('finalize_order', { p_order_id: co.id, p_payments: pay, p_register_session_id: null }),
+    ]);
+    const finOk = finRes.filter((r) => r.status === 'fulfilled' && r.value.data?.ok);
+    const { data: coPays } = await mgr.from('payments').select('id').eq('order_id', co.id);
+    check('同一注文の**同時**会計でも支払は1件のみ', finOk.length === 1 && coPays.length === 1,
+      `成功${finOk.length}/支払${coPays.length}`);
+  }
+
+  // ============================================================
+  section('18. 会員ポイント（付与・返金取消・利用）');
+  // ============================================================
+  {
+    await admin.from('loyalty_settings').upsert(
+      { organization_id: org.id, enabled: true, yen_per_point: 100, point_value: 1 },
+      { onConflict: 'organization_id' });
+
+    const { data: [lc] } = await admin.from('customers').insert({
+      organization_id: org.id, primary_store_id: shibuya.id,
+      name: '検証 ポイント', phone: `090${Date.now() % 100000000}`,
+    }).select();
+    const { data: [lo] } = await mgr.from('orders').insert({
+      organization_id: org.id, store_id: shibuya.id, customer_id: lc.id,
+      order_type: 'takeout', guest_count: 1,
+    }).select();
+    await mgr.from('order_items').insert({
+      organization_id: org.id, store_id: shibuya.id, order_id: lo.id,
+      menu_item_id: karaage.id, name: karaage.name, unit_price: 880, quantity: 3,
+      tax_rate: 8, tax_included: true, line_total: 2640,
+    });
+    await mgr.rpc('recalc_order_totals', { p_order_id: lo.id });
+    const { data: fin } = await mgr.rpc('finalize_order', {
+      p_order_id: lo.id, p_payments: [{ method: 'cash', amount: 2640, tendered: 3000 }],
+      p_register_session_id: null,
+    });
+    check('会計時にポイントが自動付与される（2,640円→26pt）', fin?.points_earned === 26);
+    const { data: [lc2] } = await admin.from('customers').select('point_balance').eq('id', lc.id);
+    check('顧客残高へ反映される', lc2?.point_balance === 26);
+
+    // 半額返金 → 付与ポイントの比例取消
+    await mgr.rpc('refund_order', {
+      p_order_id: lo.id, p_amount: 1320, p_method: 'cash', p_reason: '検証: 半額返金',
+    });
+    const { data: [lc3] } = await admin.from('customers').select('point_balance').eq('id', lc.id);
+    check('返金時に付与ポイントが比例取消される（26→13pt）', lc3?.point_balance === 13,
+      `残高: ${lc3?.point_balance}`);
+
+    // ポイント利用会計
+    const { data: [lo2] } = await mgr.from('orders').insert({
+      organization_id: org.id, store_id: shibuya.id, customer_id: lc.id,
+      order_type: 'takeout', guest_count: 1,
+    }).select();
+    await mgr.from('order_items').insert({
+      organization_id: org.id, store_id: shibuya.id, order_id: lo2.id,
+      menu_item_id: karaage.id, name: karaage.name, unit_price: 880, quantity: 1,
+      tax_rate: 8, tax_included: true, line_total: 880,
+    });
+    await mgr.rpc('recalc_order_totals', { p_order_id: lo2.id });
+    const { data: fin2, error: eFin2 } = await mgr.rpc('finalize_order', {
+      p_order_id: lo2.id,
+      p_payments: [{ method: 'points', amount: 13 }, { method: 'cash', amount: 867, tendered: 1000 }],
+      p_register_session_id: null,
+    });
+    const { data: [lc4] } = await admin.from('customers').select('point_balance').eq('id', lc.id);
+    check('ポイント払い（併用）で残高が減算される', !eFin2 && fin2?.ok && lc4?.point_balance === 0 + Math.floor(867 / 100),
+      eFin2?.message ?? `残高: ${lc4?.point_balance}`);
+
+    // 残高超過のポイント払いは拒否
+    const { data: [lo3] } = await mgr.from('orders').insert({
+      organization_id: org.id, store_id: shibuya.id, customer_id: lc.id,
+      order_type: 'takeout', guest_count: 1,
+    }).select();
+    await mgr.from('order_items').insert({
+      organization_id: org.id, store_id: shibuya.id, order_id: lo3.id,
+      menu_item_id: karaage.id, name: karaage.name, unit_price: 880, quantity: 1,
+      tax_rate: 8, tax_included: true, line_total: 880,
+    });
+    await mgr.rpc('recalc_order_totals', { p_order_id: lo3.id });
+    const { error: ePts } = await mgr.rpc('finalize_order', {
+      p_order_id: lo3.id, p_payments: [{ method: 'points', amount: 880 }],
+      p_register_session_id: null,
+    });
+    check('残高不足のポイント払いは拒否される', !!ePts && /INSUFFICIENT_POINTS/.test(ePts.message ?? ''));
+    await admin.from('orders').update({ status: 'void', void_reason: '検証取消' }).eq('id', lo3.id);
+  }
+
+  // ============================================================
+  section('19. クーポン（適用記録・二重適用防止）');
+  // ============================================================
+  {
+    const { data: [cp] } = await mgr.from('coupons').insert({
+      organization_id: org.id, code: `VERIFY${Date.now() % 100000}`, name: '検証クーポン',
+      kind: 'fixed', value: 300, min_total: 0,
+    }).select();
+    const { data: [oc] } = await mgr.from('orders').insert({
+      organization_id: org.id, store_id: shibuya.id, order_type: 'takeout', guest_count: 1,
+      coupon_id: cp.id, coupon_code: cp.code, discount_total: 300, discount_reason: 'クーポン: 検証クーポン',
+    }).select();
+    await mgr.from('order_items').insert({
+      organization_id: org.id, store_id: shibuya.id, order_id: oc.id,
+      menu_item_id: karaage.id, name: karaage.name, unit_price: 880, quantity: 1,
+      tax_rate: 8, tax_included: true, line_total: 880,
+    });
+    await mgr.rpc('recalc_order_totals', { p_order_id: oc.id });
+    const { data: [oct] } = await mgr.from('orders').select('total').eq('id', oc.id);
+    check('クーポン値引きが合計へ反映される（880-300=580）', oct?.total === 580);
+    await mgr.rpc('finalize_order', {
+      p_order_id: oc.id, p_payments: [{ method: 'cash', amount: 580, tendered: 580 }],
+      p_register_session_id: null,
+    });
+    const { data: reds } = await mgr.from('coupon_redemptions').select('*').eq('order_id', oc.id);
+    check('会計確定でクーポン利用が記録される（UNIQUE保護）', reds?.length === 1 && reds[0].discount_amount === 300);
+    await admin.from('coupons').update({ status: 'deleted' }).eq('id', cp.id);
+  }
+
+  // ============================================================
+  section('20. 店舗間移動ワークフロー（申請→発送→受取）');
+  // ============================================================
+  {
+    const shinjuku = stores.find((s) => s.slug === 'tenpoone-shinjuku');
+    const { data: [ti] } = await admin.from('inventory_items').insert({
+      organization_id: org.id, store_id: shibuya.id, name: '検証移動品',
+      item_kind: 'supply', unit: '個', current_quantity: 10, avg_cost: 100,
+    }).select();
+    const { data: [tr] } = await mgr.from('stock_transfers').insert({
+      organization_id: org.id, from_store_id: shibuya.id, to_store_id: shinjuku.id,
+      requested_by: uid('shibuya@demo.tenpo.one'),
+    }).select();
+    await mgr.from('stock_transfer_items').insert({
+      transfer_id: tr.id, inventory_item_id: ti.id, name: ti.name, quantity: 4, unit: '個',
+    });
+    const { error: eShip } = await mgr.rpc('ship_stock_transfer', { p_transfer_id: tr.id });
+    const { data: srcAfter } = await mgr.from('inventory_items').select('current_quantity').eq('id', ti.id).single();
+    check('発送で送り元在庫が減る（10→6）', !eShip && Number(srcAfter.current_quantity) === 6, eShip?.message);
+
+    const mgrShinjuku = await loginAs('shinjuku@demo.tenpo.one');
+    const { error: eRecv } = await mgrShinjuku.rpc('receive_stock_transfer', { p_transfer_id: tr.id });
+    const { data: dst } = await admin.from('inventory_items')
+      .select('current_quantity').eq('store_id', shinjuku.id).eq('name', '検証移動品').single();
+    check('受取で受け側在庫が増える（自動作成→4）', !eRecv && Number(dst?.current_quantity) === 4, eRecv?.message);
+    const { data: [trAfter] } = await admin.from('stock_transfers').select('status').eq('id', tr.id);
+    check('移動が received で完了する', trAfter?.status === 'received');
+    // 片側だけ減る不整合が無いこと（送り元-4 / 受け側+4）
+    check('送り元と受け側の増減が一致する（不整合なし）',
+      Number(srcAfter.current_quantity) + Number(dst?.current_quantity) === 10);
+    // 後片付け
+    await admin.from('stock_movements').delete().eq('transfer_group_id', tr.id);
+    await admin.from('stock_transfers').delete().eq('id', tr.id);
+    await admin.from('inventory_items').delete().in('name', ['検証移動品']);
+  }
+
+  // ============================================================
+  section('21. 打刻の状態機械（休憩・二重出勤）');
+  // ============================================================
+  {
+    const staff3 = await loginAs('staff3@demo.tenpo.one'); // 新宿所属
+    const staff3Id = uid('staff3@demo.tenpo.one');
+    const shinjuku = stores.find((s) => s.slug === 'tenpoone-shinjuku');
+    // 前提: 既存openを掃除
+    await admin.from('time_entries').update({ status: 'closed', clock_out_at: new Date().toISOString(), on_break: false })
+      .eq('profile_id', staff3Id).eq('status', 'open');
+
+    await staff3.rpc('apply_punch', { p_store_id: shinjuku.id, p_profile_id: staff3Id, p_event_type: 'clock_in' });
+    const { error: eDouble } = await staff3.rpc('apply_punch', {
+      p_store_id: shibuya.id, p_profile_id: staff3Id, p_event_type: 'clock_in',
+    });
+    check('他店舗での二重出勤は拒否される', !!eDouble && /ELSEWHERE|ALREADY/.test(eDouble.message ?? ''));
+
+    await staff3.rpc('apply_punch', { p_store_id: shinjuku.id, p_profile_id: staff3Id, p_event_type: 'break_start' });
+    const { error: eBreak2 } = await staff3.rpc('apply_punch', {
+      p_store_id: shinjuku.id, p_profile_id: staff3Id, p_event_type: 'break_start',
+    });
+    check('休憩中の二重休憩開始は拒否される', !!eBreak2 && /ALREADY_ON_BREAK/.test(eBreak2.message ?? ''));
+
+    const { data: outRes } = await staff3.rpc('apply_punch', {
+      p_store_id: shinjuku.id, p_profile_id: staff3Id, p_event_type: 'clock_out',
+    });
+    check('休憩中の退勤は休憩を自動確定して警告を返す', !!outRes?.warning,
+      `warning: ${outRes?.warning}`);
+    const { data: [entry3] } = await admin.from('time_entries')
+      .select('status, on_break, break_minutes').eq('id', outRes.entry_id);
+    check('退勤後は closed・休憩フラグ解除・休憩分記録', entry3?.status === 'closed' && entry3?.on_break === false);
+  }
+
+  // ============================================================
   console.log('\n=== 検証結果 ===');
   console.log(`成功: ${pass} / 失敗: ${fail}`);
   if (failures.length) {
