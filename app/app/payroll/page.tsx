@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { requireMember } from '@/lib/auth';
+import { requireFeature } from '@/lib/auth';
 import { can } from '@/lib/permissions';
 import { createClient } from '@/lib/supabase/server';
 import { yen, formatDate } from '@/lib/format';
@@ -32,7 +32,7 @@ export default async function PayrollPage({
   searchParams: Promise<{ tab?: string }>;
 }) {
   const sp = await searchParams;
-  const ctx = await requireMember();
+  const ctx = await requireFeature('payroll');
   const canManage = can(ctx.role, 'payroll.manage');
   const supabase = await createClient();
 

@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { requirePermission } from '@/lib/auth';
+import { requireFeature, requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { can } from '@/lib/permissions';
 import { yen, todayJst, daysAgoJst, formatTime, weekdayJa } from '@/lib/format';
@@ -44,6 +44,7 @@ export default async function ReportsPage({
 }: {
   searchParams: Promise<{ from?: string; to?: string; store?: string }>;
 }) {
+  await requireFeature('reports');
   const ctx = await requirePermission('reports.view');
 
   const sp = await searchParams;

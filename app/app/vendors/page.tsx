@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { requireMember } from '@/lib/auth';
+import { requireFeature } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { todayJst } from '@/lib/format';
 import { PageHeader } from '@/components/ui/page-header';
@@ -15,7 +15,7 @@ export default async function VendorsPage({
 }: {
   searchParams: Promise<{ q?: string; status?: string }>;
 }) {
-  const ctx = await requireMember();
+  const ctx = await requireFeature('inventory');
   const supabase = await createClient();
   const sp = await searchParams;
 

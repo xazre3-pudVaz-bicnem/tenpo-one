@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { requirePermission } from '@/lib/auth';
+import { requireFeature, requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { calcRecipeCost, calcPriceChangeImpact, calcWasteAmount, type PriceImpactInput } from '@/lib/costing';
 import { yen, todayJst, daysAgoJst } from '@/lib/format';
@@ -33,6 +33,7 @@ export default async function CostingPage({
 }: {
   searchParams: Promise<{ tab?: string; category?: string; q?: string; ingredient?: string; from?: string; to?: string }>;
 }) {
+  await requireFeature('costing');
   const ctx = await requirePermission('menu.manage');
   const sp = await searchParams;
   const tab: Tab = sp.tab === 'impact' ? 'impact' : sp.tab === 'waste' ? 'waste' : 'items';

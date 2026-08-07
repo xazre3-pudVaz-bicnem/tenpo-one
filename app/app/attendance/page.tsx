@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { AlertTriangle } from 'lucide-react';
-import { requireMember } from '@/lib/auth';
+import { requireFeature } from '@/lib/auth';
 import { can } from '@/lib/permissions';
 import { createClient } from '@/lib/supabase/server';
 import { summarizeEntry } from '@/lib/payroll';
@@ -61,7 +61,7 @@ export default async function AttendancePage({
   searchParams: Promise<{ tab?: string; month?: string; staffId?: string }>;
 }) {
   const sp = await searchParams;
-  const ctx = await requireMember();
+  const ctx = await requireFeature('attendance');
   const store = ctx.currentStore ?? ctx.stores[0];
   const isApprover = can(ctx.role, 'attendance.approve');
   const tab: Tab = sp.tab === 'list' ? 'list' : sp.tab === 'requests' && isApprover ? 'requests' : sp.tab === 'punch' || !sp.tab ? 'punch' : 'list';

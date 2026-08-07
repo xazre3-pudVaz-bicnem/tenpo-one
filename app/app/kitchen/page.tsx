@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { requirePermission } from '@/lib/auth';
+import { requireFeature, requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { PageHeader } from '@/components/ui/page-header';
 import { EmptyState } from '@/components/ui/state';
@@ -30,6 +30,7 @@ interface OrderItemRow {
 }
 
 export default async function KitchenPage() {
+  await requireFeature('kds');
   const ctx = await requirePermission('pos.order');
   const store = ctx.currentStore ?? ctx.stores[0];
 

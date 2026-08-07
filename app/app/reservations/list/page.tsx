@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Download } from 'lucide-react';
-import { requireMember } from '@/lib/auth';
+import { requireFeature } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { can } from '@/lib/permissions';
 import { todayJst } from '@/lib/format';
@@ -70,7 +70,7 @@ interface SearchParams {
 }
 
 export default async function ReservationListPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
-  const ctx = await requireMember();
+  const ctx = await requireFeature('reservations');
   if (ctx.stores.length === 0) {
     return (
       <div>

@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { requireMember } from '@/lib/auth';
+import { requireFeature } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { can } from '@/lib/permissions';
 import { todayJst, formatTime } from '@/lib/format';
@@ -11,7 +11,7 @@ import { startWalkIn, goToOrder, completeCleaning, setTableAvailability } from '
 export const metadata: Metadata = { title: 'フロアマップ' };
 
 export default async function FloorPage() {
-  const ctx = await requireMember();
+  const ctx = await requireFeature('pos');
   const supabase = await createClient();
   const store = ctx.currentStore ?? ctx.stores[0];
 

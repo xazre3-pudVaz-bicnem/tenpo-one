@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Download } from 'lucide-react';
-import { requireMember } from '@/lib/auth';
+import { requireFeature } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { can } from '@/lib/permissions';
 import { PageHeader } from '@/components/ui/page-header';
@@ -57,7 +57,7 @@ export default async function InvoicesPage({
     overdue?: string;
   }>;
 }) {
-  const ctx = await requireMember();
+  const ctx = await requireFeature('accounting');
   const supabase = await createClient();
   const sp = await searchParams;
   const tab: Tab = sp.tab === 'inbox' || sp.tab === 'documents' ? sp.tab : 'invoices';

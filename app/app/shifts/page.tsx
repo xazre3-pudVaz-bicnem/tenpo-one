@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { AlertTriangle } from 'lucide-react';
-import { requireMember } from '@/lib/auth';
+import { requireFeature } from '@/lib/auth';
 import { can } from '@/lib/permissions';
 import { createClient } from '@/lib/supabase/server';
 import { todayJst, yen, weekdayJa } from '@/lib/format';
@@ -55,7 +55,7 @@ export default async function ShiftsPage({
   searchParams: Promise<{ week?: string }>;
 }) {
   const sp = await searchParams;
-  const ctx = await requireMember();
+  const ctx = await requireFeature('attendance');
   const supabase = await createClient();
   const store = ctx.currentStore ?? ctx.stores[0];
   const canManage = can(ctx.role, 'shifts.manage');

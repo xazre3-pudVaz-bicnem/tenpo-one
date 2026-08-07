@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { requireMember } from '@/lib/auth';
+import { requireFeature } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { can } from '@/lib/permissions';
 import { yen, formatDate, formatDateTime } from '@/lib/format';
@@ -36,7 +36,7 @@ export default async function CustomerDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const ctx = await requireMember();
+  const ctx = await requireFeature('crm');
 
   if (!can(ctx.role, 'customers.view')) {
     return (

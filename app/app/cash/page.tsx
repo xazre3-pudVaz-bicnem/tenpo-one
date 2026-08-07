@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Download } from 'lucide-react';
-import { requireMember } from '@/lib/auth';
+import { requireFeature } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { can } from '@/lib/permissions';
 import { yen, formatDate, todayJst, daysAgoJst } from '@/lib/format';
@@ -45,7 +45,7 @@ export default async function CashPage({
 }: {
   searchParams: Promise<{ tab?: string; from?: string; to?: string; status?: string }>;
 }) {
-  const ctx = await requireMember();
+  const ctx = await requireFeature('accounting');
   const sp = await searchParams;
 
   const tab: CashTab = sp.tab === 'petty' || sp.tab === 'closings' ? sp.tab : 'register';

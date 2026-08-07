@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { requireMember } from '@/lib/auth';
+import { requireFeature } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { PageHeader } from '@/components/ui/page-header';
 import { Input, Select } from '@/components/ui/input';
@@ -33,7 +33,7 @@ export default async function InventoryPage({
 }: {
   searchParams: Promise<{ tab?: string; kind?: string; q?: string; sort?: string }>;
 }) {
-  const ctx = await requireMember();
+  const ctx = await requireFeature('inventory');
   const sp = await searchParams;
   const tab: Tab = sp.tab === 'counts' ? 'counts' : 'items';
   const sortWarning = sp.sort === 'warning';

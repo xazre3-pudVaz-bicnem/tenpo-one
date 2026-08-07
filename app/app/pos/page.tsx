@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { requireMember } from '@/lib/auth';
+import { requireFeature } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { can } from '@/lib/permissions';
 import { PageHeader } from '@/components/ui/page-header';
@@ -28,7 +28,7 @@ export default async function PosPage({
   searchParams: Promise<{ order?: string }>;
 }) {
   const { order: orderId } = await searchParams;
-  const ctx = await requireMember();
+  const ctx = await requireFeature('pos');
   const supabase = await createClient();
   const store = ctx.currentStore ?? ctx.stores[0];
 

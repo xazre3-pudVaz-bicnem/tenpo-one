@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { requireMember } from '@/lib/auth';
+import { requireFeature } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { PageHeader } from '@/components/ui/page-header';
 import { EmptyState } from '@/components/ui/state';
@@ -37,7 +37,7 @@ export default async function ReservationsCalendarPage({
 }: {
   searchParams: Promise<{ month?: string }>;
 }) {
-  const ctx = await requireMember();
+  const ctx = await requireFeature('reservations');
   const store = ctx.currentStore ?? ctx.stores[0];
 
   if (!store) {

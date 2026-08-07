@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { requireMember } from '@/lib/auth';
+import { requireFeature } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { can } from '@/lib/permissions';
 import { PageHeader } from '@/components/ui/page-header';
@@ -19,7 +19,7 @@ export default async function PurchasesPage({
 }: {
   searchParams: Promise<{ status?: string; vendor?: string; from?: string; to?: string }>;
 }) {
-  const ctx = await requireMember();
+  const ctx = await requireFeature('inventory');
   const supabase = await createClient();
   const sp = await searchParams;
   const storeIds = ctx.currentStore ? [ctx.currentStore.id] : ctx.stores.map((s) => s.id);
