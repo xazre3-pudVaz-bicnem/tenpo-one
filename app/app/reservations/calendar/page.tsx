@@ -5,7 +5,7 @@ import { requireMember } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { PageHeader } from '@/components/ui/page-header';
 import { EmptyState } from '@/components/ui/state';
-import { ACTIVE_TIMELINE_STATUSES } from '@/components/reservations/status';
+import { ACTIVE_TIMELINE_STATUSES } from '@/components/reservations/constants';
 import { cn } from '@/lib/utils';
 
 export const metadata: Metadata = { title: '予約カレンダー' };

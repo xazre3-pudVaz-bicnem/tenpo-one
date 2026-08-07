@@ -5,11 +5,25 @@ import { TableWrap, Table, THead, TBody, Tr, Th, Td } from '@/components/ui/tabl
 import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/ui/state';
 import { formatDate, formatTime } from '@/lib/format';
-import { STATUS_LABEL, STATUS_BADGE_TONE, CREATED_VIA_LABEL } from './status';
+import { RESERVATION_STATUS } from '@/lib/reservations';
+import { CREATED_VIA_LABEL } from './constants';
 import { ReservationDetailDialog } from './reservation-detail-dialog';
+import type { AssignableTable } from './assign-table-dialog';
 import type { ReservationListRow } from './list-types';
 
-export function ReservationListTable({ reservations, showStore }: { reservations: ReservationListRow[]; showStore: boolean }) {
+export function ReservationListTable({
+  reservations,
+  showStore,
+  storeAssignableTables,
+  staffByStore,
+  canManagePrivateHire,
+}: {
+  reservations: ReservationListRow[];
+  showStore: boolean;
+  storeAssignableTables: Record<string, AssignableTable[]>;
+  staffByStore: Record<string, { id: string; name: string }[]>;
+  canManagePrivateHire: boolean;
+}) {
   const [selected, setSelected] = useState<ReservationListRow | null>(null);
 
   if (reservations.length === 0) {
@@ -27,6 +41,7 @@ export function ReservationListTable({ reservations, showStore }: { reservations
               <Th>氏名</Th>
               <Th className="text-right">人数</Th>
               {showStore && <Th>店舗</Th>}
+              <Th>担当者</Th>
               <Th>経路</Th>
               <Th>登録方法</Th>
               <Th>状態</Th>
@@ -39,15 +54,19 @@ export function ReservationListTable({ reservations, showStore }: { reservations
                 <Td>{formatDate(r.reservedDate)}</Td>
                 <Td className="tabular-nums">{formatTime(r.startAt)}</Td>
                 <Td className="font-medium text-navy">
-                  {r.guestName} 様
+                  <span className="flex items-center gap-1.5">
+                    {r.guestName} 様
+                    {r.isPrivateHire && <Badge tone="primary">貸切</Badge>}
+                  </span>
                   <div className="text-xs text-gray-400">{r.guestPhone}</div>
                 </Td>
                 <Td className="text-right tabular-nums">{r.partySize}名</Td>
                 {showStore && <Td>{r.storeName ?? '—'}</Td>}
+                <Td>{r.staffName ?? '—'}</Td>
                 <Td>{r.sourceName ?? '—'}</Td>
                 <Td>{CREATED_VIA_LABEL[r.createdVia] ?? r.createdVia}</Td>
                 <Td>
-                  <Badge tone={STATUS_BADGE_TONE[r.status]}>{STATUS_LABEL[r.status]}</Badge>
+                  <Badge tone={RESERVATION_STATUS[r.status].tone}>{RESERVATION_STATUS[r.status].label}</Badge>
                 </Td>
                 <Td>{r.tableNames.length > 0 ? r.tableNames.join('、') : '未割当'}</Td>
               </Tr>
@@ -55,7 +74,13 @@ export function ReservationListTable({ reservations, showStore }: { reservations
           </TBody>
         </Table>
       </TableWrap>
-      <ReservationDetailDialog reservation={selected} onClose={() => setSelected(null)} />
+      <ReservationDetailDialog
+        reservation={selected}
+        onClose={() => setSelected(null)}
+        tables={selected ? (storeAssignableTables[selected.storeId] ?? []) : []}
+        staffOptions={selected ? (staffByStore[selected.storeId] ?? []) : []}
+        canManagePrivateHire={canManagePrivateHire}
+      />
     </>
   );
 }

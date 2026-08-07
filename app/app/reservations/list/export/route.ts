@@ -3,7 +3,8 @@ import { requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { toCsv, csvResponse } from '@/lib/csv';
 import { formatDate, formatTime, todayJst } from '@/lib/format';
-import { STATUS_LABEL, CREATED_VIA_LABEL, type ReservationStatus } from '@/components/reservations/status';
+import { RESERVATION_STATUS, type ReservationStatus } from '@/lib/reservations';
+import { CREATED_VIA_LABEL } from '@/components/reservations/constants';
 
 interface ExportRow {
   code: string;
@@ -24,6 +25,8 @@ interface ExportRow {
   request_note: string | null;
   memo: string | null;
   created_via: string;
+  is_private_hire: boolean;
+  profiles: { display_name: string } | null;
   stores: { name: string } | null;
   course: { name: string } | null;
   reservation_sources: { name: string } | null;
@@ -47,6 +50,7 @@ export async function GET(request: NextRequest) {
     .select(
       `code, reserved_date, start_at, end_at, guest_name, guest_name_kana, guest_phone, guest_email,
        party_size, adults, children, status, seat_type, purpose, allergy_note, request_note, memo, created_via,
+       is_private_hire, profiles(display_name),
        stores(name), course:menu_items(name), reservation_sources(name)`
     )
     .in('store_id', storeIds)
@@ -59,7 +63,7 @@ export async function GET(request: NextRequest) {
   const headers = [
     '予約コード', '予約日', '時間', '氏名', 'フリガナ', '電話番号', 'メール',
     '人数', '大人', '子ども', 'コース', '希望席種', '利用目的', 'アレルギー', 'ご要望', '内部メモ',
-    '状態', '経路', '登録方法', '店舗',
+    '状態', '経路', '登録方法', '担当者', '貸切', '店舗',
   ];
   const csvRows = rows.map((r) => [
     r.code,
@@ -78,9 +82,11 @@ export async function GET(request: NextRequest) {
     r.allergy_note,
     r.request_note,
     r.memo,
-    STATUS_LABEL[r.status] ?? r.status,
+    RESERVATION_STATUS[r.status]?.label ?? r.status,
     r.reservation_sources?.name ?? '',
     CREATED_VIA_LABEL[r.created_via] ?? r.created_via,
+    r.profiles?.display_name ?? '',
+    r.is_private_hire ? '貸切' : '',
     r.stores?.name ?? '',
   ]);
 

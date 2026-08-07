@@ -1,8 +1,9 @@
-import type { ReservationStatus } from './status';
+import type { ReservationStatus } from '@/lib/reservations';
 
 export interface ReservationListRow {
   id: string;
   code: string;
+  storeId: string;
   reservedDate: string;
   startAt: string;
   endAt: string;
@@ -23,5 +24,9 @@ export interface ReservationListRow {
   sourceName: string | null;
   createdVia: string;
   storeName: string | null;
+  tableIds: string[];
   tableNames: string[];
+  staffId: string | null;
+  staffName: string | null;
+  isPrivateHire: boolean;
 }

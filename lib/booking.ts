@@ -15,6 +15,8 @@ export interface ExistingReservation {
   startAt: Date;
   endAt: Date;
   partySize: number;
+  /** 貸切予約（重複時間帯は満席扱い） */
+  isPrivateHire?: boolean;
 }
 
 export interface SlotOptions {
@@ -74,10 +76,13 @@ export function computeSlots(opts: SlotOptions): Slot[] {
       slots.push({ time, available: false });
       continue;
     }
-    // 滞在時間が重複する予約の合計人数
-    const used = opts.reservations
-      .filter((r) => r.startAt < slotEnd && r.endAt > slotStart)
-      .reduce((acc, r) => acc + r.partySize, 0);
+    // 滞在時間が重複する予約を判定（貸切は全容量ブロック）
+    const overlapping = opts.reservations.filter((r) => r.startAt < slotEnd && r.endAt > slotStart);
+    if (overlapping.some((r) => r.isPrivateHire)) {
+      slots.push({ time, available: false });
+      continue;
+    }
+    const used = overlapping.reduce((acc, r) => acc + r.partySize, 0);
     slots.push({ time, available: used + opts.partySize <= opts.capacity });
   }
   return slots;

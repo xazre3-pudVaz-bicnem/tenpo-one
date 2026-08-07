@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react';
 import { Phone, Loader2 } from 'lucide-react';
 import { Dialog } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
+import { Button, type ButtonProps } from '@/components/ui/button';
 import { Input, Label, Textarea, Select } from '@/components/ui/input';
 import { useToast } from '@/components/ui/toast';
 import { todayJst } from '@/lib/format';
@@ -23,11 +23,44 @@ const EMPTY = {
   note: '',
 };
 
-export function ManualReservationDialog({ stores, defaultStoreId }: { stores: StoreRef[]; defaultStoreId: string | null }) {
+export interface ManualReservationPrefill {
+  storeId?: string;
+  date?: string;
+  time?: string;
+  adults?: number;
+  children?: number;
+  name?: string;
+  kana?: string;
+  phone?: string;
+  email?: string;
+  note?: string;
+}
+
+export function ManualReservationDialog({
+  stores,
+  defaultStoreId,
+  prefill,
+  /** キャンセル待ちからの変換の場合に指定。登録成功時に waitlist_entries を converted にする */
+  waitlistEntryId,
+  triggerLabel = '電話予約を登録',
+  triggerVariant = 'secondary',
+  triggerSize = 'sm',
+  onCreated,
+}: {
+  stores: StoreRef[];
+  defaultStoreId: string | null;
+  prefill?: ManualReservationPrefill;
+  waitlistEntryId?: string;
+  triggerLabel?: string;
+  triggerVariant?: NonNullable<ButtonProps['variant']>;
+  triggerSize?: NonNullable<ButtonProps['size']>;
+  onCreated?: () => void;
+}) {
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
-  const [form, setForm] = useState({ ...EMPTY, storeId: defaultStoreId ?? stores[0]?.id ?? '' });
+  const initialStoreId = prefill?.storeId ?? defaultStoreId ?? stores[0]?.id ?? '';
+  const [form, setForm] = useState({ ...EMPTY, ...prefill, storeId: initialStoreId });
 
   const set = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) => setForm((f) => ({ ...f, [key]: value }));
 
@@ -45,10 +78,12 @@ export function ManualReservationDialog({ stores, defaultStoreId }: { stores: St
           phone: form.phone,
           email: form.email || undefined,
           note: form.note || undefined,
+          waitlistEntryId,
         });
-        toast('電話予約を登録しました');
-        setForm({ ...EMPTY, storeId: defaultStoreId ?? stores[0]?.id ?? '' });
+        toast(waitlistEntryId ? '予約へ変換しました' : '電話予約を登録しました');
+        setForm({ ...EMPTY, ...prefill, storeId: initialStoreId });
         setOpen(false);
+        onCreated?.();
       } catch (e) {
         toast(e instanceof Error ? e.message : '登録に失敗しました', 'error');
       }
@@ -57,11 +92,11 @@ export function ManualReservationDialog({ stores, defaultStoreId }: { stores: St
 
   return (
     <>
-      <Button variant="secondary" size="sm" onClick={() => setOpen(true)}>
+      <Button variant={triggerVariant} size={triggerSize} onClick={() => setOpen(true)}>
         <Phone className="h-4 w-4" />
-        電話予約を登録
+        {triggerLabel}
       </Button>
-      <Dialog open={open} onClose={() => setOpen(false)} title="電話予約の登録">
+      <Dialog open={open} onClose={() => setOpen(false)} title={waitlistEntryId ? '予約へ変換' : '電話予約の登録'}>
         <div className="space-y-3">
           {stores.length > 1 && (
             <div>

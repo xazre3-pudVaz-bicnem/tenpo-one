@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { Download } from 'lucide-react';
 import { requireMember } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
+import { can } from '@/lib/permissions';
 import { todayJst } from '@/lib/format';
 import { PageHeader } from '@/components/ui/page-header';
 import { EmptyState } from '@/components/ui/state';
@@ -11,7 +12,7 @@ import { buttonVariants } from '@/components/ui/button';
 import { ManualReservationDialog } from '@/components/reservations/manual-reservation-dialog';
 import { WalkInDialog, type TableOption } from '@/components/reservations/walk-in-dialog';
 import { ReservationListTable } from '@/components/reservations/reservation-list-table';
-import { STATUS_LABEL, type ReservationStatus } from '@/components/reservations/status';
+import { RESERVATION_STATUS, type ReservationStatus } from '@/lib/reservations';
 import type { ReservationListRow } from '@/components/reservations/list-types';
 import { cn } from '@/lib/utils';
 
@@ -44,10 +45,18 @@ interface RawListRow {
   memo: string | null;
   created_via: string;
   store_id: string;
+  is_private_hire: boolean;
+  staff_id: string | null;
+  profiles: { display_name: string } | null;
   stores: { name: string } | null;
   course: { name: string } | null;
   reservation_sources: { name: string } | null;
-  reservation_tables: { restaurant_tables: { name: string } | null }[];
+  reservation_tables: { table_id: string; restaurant_tables: { name: string } | null }[];
+}
+
+interface StaffMembershipRow {
+  store_id: string;
+  memberships: { profile_id: string; profiles: { display_name: string } | null } | null;
 }
 
 interface SearchParams {
@@ -90,7 +99,8 @@ export default async function ReservationListPage({ searchParams }: { searchPara
     .select(
       `id, code, reserved_date, start_at, end_at, guest_name, guest_name_kana, guest_phone, guest_email,
        party_size, adults, children, status, seat_type, purpose, allergy_note, request_note, memo, created_via, store_id,
-       stores(name), course:menu_items(name), reservation_sources(name), reservation_tables(restaurant_tables(name))`,
+       is_private_hire, staff_id, profiles(display_name),
+       stores(name), course:menu_items(name), reservation_sources(name), reservation_tables(table_id, restaurant_tables(name))`,
       { count: 'exact' }
     )
     .in('store_id', storeIds)
@@ -111,6 +121,7 @@ export default async function ReservationListPage({ searchParams }: { searchPara
   const reservations: ReservationListRow[] = raw.map((r) => ({
     id: r.id,
     code: r.code,
+    storeId: r.store_id,
     reservedDate: r.reserved_date,
     startAt: r.start_at,
     endAt: r.end_at,
@@ -131,9 +142,13 @@ export default async function ReservationListPage({ searchParams }: { searchPara
     sourceName: r.reservation_sources?.name ?? null,
     createdVia: r.created_via,
     storeName: r.stores?.name ?? null,
+    tableIds: (r.reservation_tables ?? []).map((t) => t.table_id),
     tableNames: (r.reservation_tables ?? [])
       .map((t) => t.restaurant_tables?.name)
       .filter((n): n is string => !!n),
+    staffId: r.staff_id,
+    staffName: r.profiles?.display_name ?? null,
+    isPrivateHire: r.is_private_hire,
   }));
 
   const { data: sources } = await supabase
@@ -145,14 +160,33 @@ export default async function ReservationListPage({ searchParams }: { searchPara
 
   const { data: tablesData } = await supabase
     .from('restaurant_tables')
-    .select('id, name, capacity_max, store_id')
+    .select('id, name, capacity_min, capacity_max, store_id')
     .in('store_id', storeIds)
     .eq('status', 'active')
     .order('sort_order');
   const storeTables: Record<string, TableOption[]> = {};
+  const storeAssignableTables: Record<string, { id: string; name: string; capacityMin: number; capacityMax: number }[]> = {};
   for (const t of tablesData ?? []) {
     (storeTables[t.store_id] ??= []).push({ id: t.id, name: t.name, capacityMax: t.capacity_max });
+    (storeAssignableTables[t.store_id] ??= []).push({ id: t.id, name: t.name, capacityMin: t.capacity_min, capacityMax: t.capacity_max });
   }
+
+  const { data: staffRows } = await supabase
+    .from('membership_stores')
+    .select('store_id, memberships!inner(profile_id, organization_id, status, profiles(display_name))')
+    .in('store_id', storeIds)
+    .eq('memberships.organization_id', ctx.organizationId)
+    .eq('memberships.status', 'active');
+  const staffByStore: Record<string, { id: string; name: string }[]> = {};
+  for (const row of (staffRows ?? []) as unknown as StaffMembershipRow[]) {
+    if (!row.memberships) continue;
+    (staffByStore[row.store_id] ??= []).push({
+      id: row.memberships.profile_id,
+      name: row.memberships.profiles?.display_name ?? '不明',
+    });
+  }
+
+  const canManagePrivateHire = can(ctx.role, 'store.settings');
 
   const total = count ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -208,9 +242,9 @@ export default async function ReservationListPage({ searchParams }: { searchPara
             </label>
             <select id="f-status" name="status" defaultValue={status} className="h-9 w-full rounded-lg border border-gray-300 px-2 text-sm">
               <option value="">すべて</option>
-              {(Object.keys(STATUS_LABEL) as ReservationStatus[]).map((s) => (
+              {(Object.keys(RESERVATION_STATUS) as ReservationStatus[]).map((s) => (
                 <option key={s} value={s}>
-                  {STATUS_LABEL[s]}
+                  {RESERVATION_STATUS[s].label}
                 </option>
               ))}
             </select>
@@ -254,7 +288,13 @@ export default async function ReservationListPage({ searchParams }: { searchPara
         </form>
       </Card>
 
-      <ReservationListTable reservations={reservations} showStore={showStore} />
+      <ReservationListTable
+        reservations={reservations}
+        showStore={showStore}
+        storeAssignableTables={storeAssignableTables}
+        staffByStore={staffByStore}
+        canManagePrivateHire={canManagePrivateHire}
+      />
 
       {totalPages > 1 && (
         <div className="mt-4 flex items-center justify-center gap-1">
