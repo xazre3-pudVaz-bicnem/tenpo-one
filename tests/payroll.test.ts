@@ -126,6 +126,27 @@ describe('calcCommission（歩合計算）', () => {
     expect(calcCommission(rule, 800000)).toBe(14000);
   });
 
+  it('段階式歩合の境界値（0-30万0% / 30-50万3% / 50-80万5% / 80万-8%）', () => {
+    const rule = {
+      targetType: 'personal_sales' as const,
+      method: 'tiered' as const,
+      tiers: [
+        { from: 0, to: 300_000, rate: 0 },
+        { from: 300_000, to: 500_000, rate: 3 },
+        { from: 500_000, to: 800_000, rate: 5 },
+        { from: 800_000, to: null, rate: 8 },
+      ],
+    };
+    expect(calcCommission(rule, 0)).toBe(0);
+    expect(calcCommission(rule, 300_000)).toBe(0); // 境界: 30万ちょうどは0%帯まで
+    expect(calcCommission(rule, 300_001)).toBe(0); // 1円×3% → floor 0
+    expect(calcCommission(rule, 400_000)).toBe(3_000); // 10万×3%
+    expect(calcCommission(rule, 500_000)).toBe(6_000); // 20万×3%
+    expect(calcCommission(rule, 500_001)).toBe(6_000); // +1円×5% → floor
+    expect(calcCommission(rule, 800_000)).toBe(6_000 + 15_000); // +30万×5%
+    expect(calcCommission(rule, 1_000_000)).toBe(6_000 + 15_000 + 16_000); // +20万×8%
+  });
+
   it('上限・下限の適用', () => {
     expect(
       calcCommission({ targetType: 'personal_sales', method: 'rate', rate: 10, maxAmount: 5000 }, 100000)

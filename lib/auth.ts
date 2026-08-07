@@ -26,6 +26,8 @@ export interface SessionContext {
   currentStore: StoreRef | null;
   /** 本社系ロール（全店舗閲覧可）か */
   isHq: boolean;
+  /** 企業単位で無効化された機能キー（feature_flags で enabled=false のもの） */
+  disabledFeatures: ReadonlySet<string>;
 }
 
 /**
@@ -84,6 +86,17 @@ export const getSessionContext = cache(async (): Promise<SessionContext | null> 
     }
   }
 
+  // 企業単位の機能フラグ（enabled=false の行のみ無効化。行なし=有効）
+  const disabledFeatures = new Set<string>();
+  if (organizationId) {
+    const { data: flags } = await supabase
+      .from('feature_flags')
+      .select('flag_key, enabled')
+      .eq('organization_id', organizationId)
+      .eq('enabled', false);
+    for (const f of flags ?? []) disabledFeatures.add(f.flag_key);
+  }
+
   const cookieStore = await cookies();
   const selectedId = cookieStore.get(STORE_COOKIE)?.value;
   let currentStore: StoreRef | null = null;
@@ -104,6 +117,7 @@ export const getSessionContext = cache(async (): Promise<SessionContext | null> 
     stores,
     currentStore,
     isHq: isHqRole(role),
+    disabledFeatures,
   };
 });
 
@@ -129,6 +143,20 @@ export async function requirePermission(action: PermissionAction) {
   const ctx = await requireMember();
   if (!can(ctx.role, action)) {
     throw new Error(`権限がありません: ${action}`);
+  }
+  return ctx;
+}
+
+/**
+ * 機能フラグ必須（企業単位で無効化された機能のページを塞ぐ）。
+ * ナビ非表示（lib/nav.ts）に加えたサーバー側の強制。
+ */
+export async function requireFeature(
+  feature: import('@/lib/features').FeatureKey
+): Promise<SessionContext & { organizationId: string; role: Role }> {
+  const ctx = await requireMember();
+  if (ctx.disabledFeatures.has(feature)) {
+    redirect('/app/dashboard?feature_disabled=1');
   }
   return ctx;
 }

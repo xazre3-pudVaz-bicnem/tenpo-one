@@ -474,6 +474,132 @@ async function main() {
   await admin.from('customers').delete().eq('id', newCust.id);
 
   // ============================================================
+  section('13. 会計の二重実行防止（連打・並行リクエスト対策）');
+  // ============================================================
+  {
+    const { data: [o2] } = await mgr.from('orders').insert({
+      organization_id: org.id, store_id: shibuya.id, order_type: 'takeout',
+      guest_count: 1, staff_id: staff1Id,
+    }).select();
+    await mgr.from('order_items').insert({
+      organization_id: org.id, store_id: shibuya.id, order_id: o2.id,
+      menu_item_id: karaage.id, name: karaage.name, unit_price: karaage.price, quantity: 1,
+      tax_rate: 8, tax_included: true, line_total: karaage.price, staff_id: staff1Id,
+    });
+    await mgr.rpc('recalc_order_totals', { p_order_id: o2.id });
+    const { data: [o2c] } = await mgr.from('orders').select('total').eq('id', o2.id);
+    const pay2 = [{ method: 'cash', amount: o2c.total, tendered: o2c.total }];
+    const { data: fin1 } = await mgr.rpc('finalize_order', {
+      p_order_id: o2.id, p_payments: pay2, p_register_session_id: null,
+    });
+    const { error: finTwice } = await mgr.rpc('finalize_order', {
+      p_order_id: o2.id, p_payments: pay2, p_register_session_id: null,
+    });
+    check('1回目の会計は成功する', fin1?.ok === true);
+    check('同一注文の2回目会計はDB層で拒否される（ORDER_NOT_OPEN）',
+      !!finTwice && /ORDER_NOT_OPEN/.test(finTwice.message ?? ''));
+    const { data: dupPays } = await mgr.from('payments').select('id').eq('order_id', o2.id);
+    check('支払レコードは1件のみ（二重paidなし）', dupPays?.length === 1);
+  }
+
+  // ============================================================
+  section('14. QRオーダー（匿名・トークン検証・オプション）');
+  // ============================================================
+  let qrOrderId = null;
+  {
+    const { data: qrTable } = await admin.from('restaurant_tables')
+      .select('id, qr_token, name').eq('store_id', shibuya.id).eq('name', 'T2').single();
+
+    const { data: qrMenu, error: eQ1 } = await anon.rpc('get_qr_menu', {
+      p_slug: 'tenpoone-shibuya', p_token: qrTable.qr_token,
+    });
+    check('QRメニューを取得できる（トークン照合）', !eQ1 && qrMenu?.store_name === 'TENPO ONE 渋谷店', eQ1?.message);
+
+    const { data: badMenu } = await anon.rpc('get_qr_menu', {
+      p_slug: 'tenpoone-shibuya', p_token: 'invalid-token-0000',
+    });
+    check('不正トークンではメニューを取得できない', badMenu == null);
+
+    const { error: eBadMod } = await anon.rpc('create_qr_order', {
+      p_slug: 'tenpoone-shibuya', p_token: qrTable.qr_token,
+      p_items: [{ menu_item_id: beer.id, quantity: 1, modifier_ids: [org.id] }],
+    });
+    check('不正なオプションIDは拒否される', !!eBadMod);
+
+    const { data: qrRes, error: eQ2 } = await anon.rpc('create_qr_order', {
+      p_slug: 'tenpoone-shibuya', p_token: qrTable.qr_token,
+      p_items: [{ menu_item_id: beer.id, quantity: 2, memo: '検証QR注文' }],
+    });
+    check('QR注文を作成できる', !eQ2 && qrRes?.ok, eQ2?.message);
+    qrOrderId = qrRes?.order_id ?? null;
+
+    const { data: qrOrder } = await mgr.from('orders').select('*').eq('id', qrOrderId).single();
+    check('QR注文がPOS（店舗側）から見える・order_source=qr',
+      qrOrder?.order_source === 'qr' && qrOrder?.status === 'open');
+
+    const { data: qrStatus } = await anon.rpc('get_qr_order_status', {
+      p_slug: 'tenpoone-shibuya', p_token: qrTable.qr_token,
+    });
+    check('客側から注文履歴と合計を確認できる',
+      (qrStatus?.items ?? []).length >= 1 && (qrStatus?.total ?? 0) > 0);
+  }
+
+  // ============================================================
+  section('15. KDS（厨房ステータス遷移）');
+  // ============================================================
+  {
+    const { data: [kdsItem] } = await staff1.from('order_items')
+      .select('*').eq('order_id', qrOrderId).limit(1);
+    check('KDS: 新規注文は未着手（pending）', kdsItem?.kitchen_status === 'pending');
+    await staff1.from('order_items').update({
+      kitchen_status: 'preparing', kitchen_started_at: new Date().toISOString(),
+    }).eq('id', kdsItem.id);
+    await staff1.from('order_items').update({
+      kitchen_status: 'ready', kitchen_ready_at: new Date().toISOString(),
+    }).eq('id', kdsItem.id);
+    await staff1.from('order_items').update({
+      kitchen_status: 'served', served_at: new Date().toISOString(),
+    }).eq('id', kdsItem.id);
+    const { data: [afterKds] } = await staff1.from('order_items')
+      .select('kitchen_status, served_at').eq('id', kdsItem.id);
+    check('KDS: 調理中→完成→提供済へ遷移し保存される',
+      afterKds?.kitchen_status === 'served' && !!afterKds?.served_at);
+
+    // 後片付け: QR検証注文をvoid・テーブルを空席へ（未会計のため取消可能）
+    await admin.from('orders').update({ status: 'void', void_reason: '検証データの取消' }).eq('id', qrOrderId);
+    const { data: t2 } = await admin.from('restaurant_tables')
+      .select('id').eq('store_id', shibuya.id).eq('name', 'T2').single();
+    await admin.from('restaurant_tables').update({ current_status: 'available' }).eq('id', t2.id);
+  }
+
+  // ============================================================
+  section('16. 在庫の単位変換（仕入kg→在庫g）');
+  // ============================================================
+  {
+    const { data: [tempItem] } = await admin.from('inventory_items').insert({
+      organization_id: org.id, store_id: shibuya.id, name: '検証用鶏肉',
+      item_kind: 'ingredient', unit: 'g', purchase_unit: 'kg',
+      purchase_to_stock_factor: 1000, current_quantity: 0, avg_cost: null,
+    }).select();
+    // 5kg・1200円/kg 入荷 → 在庫5000g・在庫単価1円/g（呼び出し側で変換して渡す）
+    const { error: eRcv } = await mgr.rpc('apply_stock_receipt', {
+      p_inventory_item_id: tempItem.id, p_quantity: 5 * 1000,
+      p_unit_cost: Math.round(1200 / 1000),
+    });
+    const { data: afterRcv } = await mgr.from('inventory_items')
+      .select('current_quantity, avg_cost').eq('id', tempItem.id).single();
+    check('5kg入荷（係数1000）で在庫が5000g増える',
+      !eRcv && Number(afterRcv?.current_quantity) === 5000, eRcv?.message);
+    check('在庫単価が在庫単位あたりで記録される（1円/g）', afterRcv?.avg_cost === 1);
+    // レシピ理論: 200g×25食 = 5000g がこの在庫と一致
+    check('レシピ理論消費（200g×25食=5000g）が在庫単位で成立する',
+      200 * 25 === Number(afterRcv?.current_quantity));
+    // 後片付け
+    await admin.from('stock_movements').delete().eq('inventory_item_id', tempItem.id);
+    await admin.from('inventory_items').delete().eq('id', tempItem.id);
+  }
+
+  // ============================================================
   console.log('\n=== 検証結果 ===');
   console.log(`成功: ${pass} / 失敗: ${fail}`);
   if (failures.length) {

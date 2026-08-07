@@ -1,5 +1,6 @@
 import type { PermissionAction, Role } from '@/lib/permissions';
 import { can } from '@/lib/permissions';
+import { featureForRoute } from '@/lib/features';
 
 export interface NavItem {
   href: string;
@@ -84,10 +85,20 @@ export const NAV_GROUPS: NavGroup[] = [
   },
 ];
 
-export function visibleNavGroups(role: Role | null): NavGroup[] {
+export function visibleNavGroups(
+  role: Role | null,
+  disabledFeatures?: ReadonlySet<string>
+): NavGroup[] {
   return NAV_GROUPS.map((g) => ({
     ...g,
-    items: g.items.filter((i) => !i.permission || can(role, i.permission)),
+    items: g.items.filter((i) => {
+      if (i.permission && !can(role, i.permission)) return false;
+      if (disabledFeatures) {
+        const feature = featureForRoute(i.href);
+        if (feature && disabledFeatures.has(feature)) return false;
+      }
+      return true;
+    }),
   })).filter((g) => g.items.length > 0);
 }
 

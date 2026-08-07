@@ -3,6 +3,7 @@ import { requireSession } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { visibleNavGroups, MOBILE_NAV } from '@/lib/nav';
 import { can } from '@/lib/permissions';
+import { featureForRoute } from '@/lib/features';
 import { Sidebar } from '@/components/layout/sidebar';
 import { TopBar } from '@/components/layout/top-bar';
 import { MobileNav } from '@/components/layout/mobile-nav';
@@ -24,8 +25,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     .eq('recipient_id', ctx.userId)
     .is('read_at', null);
 
-  const groups = visibleNavGroups(ctx.role);
-  const mobileItems = MOBILE_NAV.filter((i) => !i.permission || can(ctx.role, i.permission));
+  const groups = visibleNavGroups(ctx.role, ctx.disabledFeatures);
+  const mobileItems = MOBILE_NAV.filter((i) => {
+    if (i.permission && !can(ctx.role, i.permission)) return false;
+    const feature = featureForRoute(i.href);
+    return !feature || !ctx.disabledFeatures.has(feature);
+  });
 
   return (
     <div className="min-h-screen">
