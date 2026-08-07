@@ -1,10 +1,13 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Search } from 'lucide-react';
 import { Input, Select } from '@/components/ui/input';
-import { SEGMENT_LABELS, type CustomerSegment } from '@/lib/crm';
+import { SEGMENT_LABELS, EXTENDED_SEGMENT_LABELS, type CustomerSegment } from '@/lib/crm';
+
+/** セグメント絞込に追加する拡張分（休眠30/60/90・誕生月・2回目のみ。詳細な来店時間帯等は一覧では扱わない） */
+const FILTERABLE_EXTENDED_SEGMENTS = ['dormant_30', 'dormant_60', 'dormant_90', 'birthday_month', 'second_visit'] as const;
 
 export interface CustomerTagOption {
   id: string;
@@ -26,6 +29,7 @@ export function CustomerFilters({
   };
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [q, setQ] = useState(initial.q);
   const [, startTransition] = useTransition();
 
@@ -36,6 +40,9 @@ export function CustomerFilters({
     if (merged.tag) params.set('tag', merged.tag);
     if (merged.segment) params.set('segment', merged.segment);
     if (merged.sort && merged.sort !== 'last_visit_desc') params.set('sort', merged.sort);
+    // 条件ビルダー（audience-builder）のURL条件は、他フィルタ変更後も維持する
+    const aud = searchParams.get('aud');
+    if (aud) params.set('aud', aud);
     startTransition(() => {
       router.push(`${basePath}${params.toString() ? `?${params.toString()}` : ''}`);
     });
@@ -93,11 +100,20 @@ export function CustomerFilters({
           className="min-w-[200px]"
         >
           <option value="">すべて</option>
-          {(Object.entries(SEGMENT_LABELS) as [CustomerSegment, { label: string }][]).map(([key, info]) => (
-            <option key={key} value={key}>
-              {info.label}
-            </option>
-          ))}
+          <optgroup label="基本分類">
+            {(Object.entries(SEGMENT_LABELS) as [CustomerSegment, { label: string }][]).map(([key, info]) => (
+              <option key={key} value={key}>
+                {info.label}
+              </option>
+            ))}
+          </optgroup>
+          <optgroup label="拡張分類">
+            {FILTERABLE_EXTENDED_SEGMENTS.map((key) => (
+              <option key={key} value={key}>
+                {EXTENDED_SEGMENT_LABELS[key].label}
+              </option>
+            ))}
+          </optgroup>
         </Select>
       </div>
 

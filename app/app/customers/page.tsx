@@ -6,10 +6,13 @@ import { can } from '@/lib/permissions';
 import { yen, formatDate } from '@/lib/format';
 import {
   classifyCustomer,
+  classifyExtended,
   calcRfm,
   SEGMENT_THRESHOLDS,
+  EXTENDED_SEGMENT_LABELS,
   type CustomerMetrics,
   type CustomerSegment,
+  type ExtendedSegment,
 } from '@/lib/crm';
 import { PageHeader } from '@/components/ui/page-header';
 import { Badge } from '@/components/ui/badge';
@@ -22,11 +25,19 @@ import { CustomerTabs } from '@/components/customers/customer-tabs';
 import { SegmentBadges, RfmBadge } from '@/components/customers/segment-badges';
 import { SegmentSummaryBar } from '@/components/customers/segment-summary-bar';
 import { RfmView, type RfmCustomerRow } from '@/components/customers/rfm-view';
+import { AudienceBuilder, type AudienceCustomerRow } from '@/components/customers/audience-builder';
+import { DuplicatesView, type DuplicateGroup, type DuplicateCandidate } from '@/components/customers/duplicates-view';
 
 export const metadata: Metadata = { title: '顧客管理' };
 
 const PAGE_SIZE = 50;
 const BASE_PATH = '/app/customers';
+
+/** セグメント絞込に追加する拡張分（休眠30/60/90・誕生月・2回目のみ） */
+const EXTENDED_FILTER_SEGMENTS: ExtendedSegment[] = ['dormant_30', 'dormant_60', 'dormant_90', 'birthday_month', 'second_visit'];
+function isExtendedFilterSegment(value: string): value is ExtendedSegment {
+  return (EXTENDED_FILTER_SEGMENTS as string[]).includes(value);
+}
 
 /** n日前のISO日時（休眠顧客セグメントの絞込用） */
 function isoDaysAgo(n: number): string {
@@ -38,6 +49,8 @@ interface CustomerRow {
   name: string;
   name_kana: string | null;
   phone: string | null;
+  birthday: string | null;
+  point_balance: number;
   visit_count: number;
   total_spent: number;
   cancel_count: number;
@@ -85,11 +98,16 @@ export default async function CustomersPage({
   }
 
   const sp = await searchParams;
-  const view = sp.view === 'rfm' ? 'rfm' : 'list';
+  const view = sp.view === 'rfm' ? 'rfm' : sp.view === 'duplicates' ? 'duplicates' : 'list';
   const supabase = await createClient();
 
   const headerActions = (
     <>
+      {can(ctx.role, 'menu.manage') && (
+        <Link href="/app/coupons" className={buttonVariants({ variant: 'secondary' })}>
+          クーポン管理
+        </Link>
+      )}
       {can(ctx.role, 'csv.export') && (
         // eslint-disable-next-line @next/next/no-html-link-for-pages -- CSVダウンロードはRoute Handlerへの直接リンクが正当
         <a href="/app/customers/export" className={buttonVariants({ variant: 'secondary' })}>
@@ -147,6 +165,54 @@ export default async function CustomersPage({
     );
   }
 
+  if (view === 'duplicates') {
+    // 重複候補: 電話番号（:merged: を除く）またはメールアドレスが一致するactive顧客をグルーピングする
+    const { data: dupRows } = await supabase
+      .from('customers')
+      .select('id, name, phone, email, visit_count, total_spent, last_visit_at')
+      .eq('organization_id', ctx.organizationId)
+      .eq('status', 'active')
+      .limit(5000);
+
+    const phoneMap = new Map<string, DuplicateCandidate[]>();
+    const emailMap = new Map<string, DuplicateCandidate[]>();
+    for (const c of dupRows ?? []) {
+      const cand: DuplicateCandidate = {
+        id: c.id,
+        name: c.name,
+        phone: c.phone,
+        email: c.email,
+        visitCount: c.visit_count,
+        totalSpent: c.total_spent,
+        lastVisitAt: c.last_visit_at,
+      };
+      if (c.phone && c.phone.trim() && !c.phone.includes(':merged:')) {
+        const key = c.phone.trim();
+        phoneMap.set(key, [...(phoneMap.get(key) ?? []), cand]);
+      }
+      if (c.email && c.email.trim()) {
+        const key = c.email.trim().toLowerCase();
+        emailMap.set(key, [...(emailMap.get(key) ?? []), cand]);
+      }
+    }
+    const groups: DuplicateGroup[] = [
+      ...[...phoneMap.entries()]
+        .filter(([, v]) => v.length > 1)
+        .map(([key, dupCustomers]) => ({ key, matchType: 'phone' as const, customers: dupCustomers })),
+      ...[...emailMap.entries()]
+        .filter(([, v]) => v.length > 1)
+        .map(([key, dupCustomers]) => ({ key, matchType: 'email' as const, customers: dupCustomers })),
+    ];
+
+    return (
+      <div>
+        <PageHeader title="顧客管理" description="電話番号・メールアドレスが一致する重複候補です" actions={headerActions} />
+        <CustomerTabs active="duplicates" />
+        <DuplicatesView groups={groups} canMerge={can(ctx.role, 'customers.delete')} />
+      </div>
+    );
+  }
+
   const q = (sp.q ?? '').trim();
   const tag = sp.tag ?? '';
   const segment = sp.segment ?? '';
@@ -159,7 +225,14 @@ export default async function CustomersPage({
     .eq('organization_id', ctx.organizationId)
     .order('name');
 
-  // セグメント別人数のサマリー（絞込条件に関わらず組織内全active顧客が対象の概数）
+  const { data: loyaltyRow } = await supabase
+    .from('loyalty_settings')
+    .select('enabled')
+    .eq('organization_id', ctx.organizationId)
+    .maybeSingle();
+  const loyaltyEnabled = loyaltyRow?.enabled ?? false;
+
+  // セグメント別人数のサマリー（絞込条件に関わらず組織内全active顧客が対象の概数。基本分類のみ）
   const { data: allMetricsRows } = await supabase
     .from('customers')
     .select('visit_count, total_spent, cancel_count, no_show_count, last_visit_at')
@@ -177,7 +250,7 @@ export default async function CustomersPage({
   let query = supabase
     .from('customers')
     .select(
-      'id, name, name_kana, phone, visit_count, total_spent, cancel_count, no_show_count, last_visit_at, customer_tag_links(customer_tags(id, name, color))',
+      'id, name, name_kana, phone, birthday, point_balance, visit_count, total_spent, cancel_count, no_show_count, last_visit_at, customer_tag_links(customer_tags(id, name, color))',
       { count: 'exact' }
     )
     .eq('organization_id', ctx.organizationId)
@@ -196,7 +269,7 @@ export default async function CustomersPage({
     query = query.in('id', ids.length ? ids : ['00000000-0000-0000-0000-000000000000']);
   }
 
-  // セグメント絞込は集計列でのSQL近似 → 取得後に classifyCustomer で正確に絞り込む（2段階）
+  // セグメント絞込は集計列でのSQL近似 → 取得後に classifyCustomer/classifyExtended で正確に絞り込む（2段階）
   const thresholds = SEGMENT_THRESHOLDS;
   if (segment === 'new') query = query.lte('visit_count', 1);
   else if (segment === 'repeater') query = query.gte('visit_count', 2).lt('visit_count', thresholds.regularVisits);
@@ -206,6 +279,14 @@ export default async function CustomersPage({
   else if (segment === 'high_spender') query = query.gte('total_spent', thresholds.highSpenderAvg); // 累計額の下限（客単価はJS側で精緻化）
   else if (segment === 'cancel_risk') query = query.gte('cancel_count', thresholds.cancelRisk);
   else if (segment === 'no_show_risk') query = query.gte('no_show_count', thresholds.noShowRisk);
+  else if (segment === 'dormant_30') query = query.lt('last_visit_at', isoDaysAgo(30)).gt('visit_count', 0);
+  else if (segment === 'dormant_60') query = query.lt('last_visit_at', isoDaysAgo(60)).gt('visit_count', 0);
+  else if (segment === 'dormant_90') query = query.lt('last_visit_at', isoDaysAgo(90)).gt('visit_count', 0);
+  else if (segment === 'second_visit') query = query.eq('visit_count', 2);
+  else if (segment === 'birthday_month') {
+    const month = Number(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tokyo', month: 'numeric' }));
+    query = query.filter('birthday::text', 'like', `%-${String(month).padStart(2, '0')}-%`);
+  }
 
   const sortMap: Record<string, { column: string; ascending: boolean }> = {
     last_visit_desc: { column: 'last_visit_at', ascending: false },
@@ -221,18 +302,38 @@ export default async function CustomersPage({
   const customers = (data ?? []) as unknown as CustomerRow[];
 
   const now = new Date();
-  const withAnalysis = customers.map((c) => ({
-    customer: c,
-    segments: classifyCustomer(toMetrics(c), now),
-    rfm: calcRfm(toMetrics(c), now),
-  }));
+  const withAnalysis = customers.map((c) => {
+    const metrics = toMetrics(c);
+    return {
+      customer: c,
+      segments: classifyCustomer(metrics, now),
+      extSegments: classifyExtended(metrics, { birthday: c.birthday ? new Date(c.birthday) : null }, now),
+      rfm: calcRfm(metrics, now),
+    };
+  });
 
-  // セグメント絞込の精緻化（SQL近似で取得した候補から正確に該当するものだけ残す）
-  const rows = segment ? withAnalysis.filter((w) => w.segments.includes(segment as CustomerSegment)) : withAnalysis;
+  // セグメント絞込の精緻化（SQL近似で取得した候補から正確に該当するものだけ残す。拡張分は classifyExtended で判定）
+  const rows = segment
+    ? withAnalysis.filter((w) =>
+        isExtendedFilterSegment(segment) ? w.extSegments.includes(segment) : w.segments.includes(segment as CustomerSegment)
+      )
+    : withAnalysis;
 
   const total = count ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const hasFilters = !!(q || tag || segment);
+
+  const audienceCustomers: AudienceCustomerRow[] = rows.map(({ customer: c }) => ({
+    id: c.id,
+    name: c.name,
+    phone: c.phone,
+    visitCount: c.visit_count,
+    totalSpent: c.total_spent,
+    cancelCount: c.cancel_count,
+    noShowCount: c.no_show_count,
+    lastVisitAt: c.last_visit_at,
+    pointBalance: c.point_balance,
+  }));
 
   const buildHref = (overrides: { q?: string; tag?: string; segment?: string; sort?: string; page?: number }) => {
     const merged = { q, tag, segment, sort, page: 1, ...overrides };
@@ -268,6 +369,8 @@ export default async function CustomersPage({
         initial={{ q, tag, segment, sort }}
       />
 
+      <AudienceBuilder customers={audienceCustomers} />
+
       {rows.length === 0 ? (
         <EmptyState
           title={hasFilters ? '条件に一致する顧客がいません' : 'まだ顧客が登録されていません'}
@@ -286,16 +389,18 @@ export default async function CustomersPage({
                   <Th className="text-right">来店回数</Th>
                   <Th className="text-right">累計利用額</Th>
                   <Th className="text-right">平均客単価</Th>
+                  {loyaltyEnabled && <Th className="text-right">ポイント</Th>}
                   <Th>最終来店</Th>
                   <Th>タグ</Th>
                 </Tr>
               </THead>
               <TBody>
-                {rows.map(({ customer: c, segments, rfm }) => {
+                {rows.map(({ customer: c, segments, extSegments, rfm }) => {
                   const avgSpend = c.visit_count > 0 ? Math.round(c.total_spent / c.visit_count) : 0;
                   const tags = (c.customer_tag_links ?? [])
                     .map((l) => l.customer_tags)
                     .filter((t): t is { id: string; name: string; color: string } => !!t);
+                  const isBirthdayMonth = extSegments.includes('birthday_month');
                   return (
                     <Tr key={c.id}>
                       <Td>
@@ -306,7 +411,14 @@ export default async function CustomersPage({
                       </Td>
                       <Td className="text-gray-600">{c.phone || '—'}</Td>
                       <Td>
-                        <SegmentBadges segments={segments} limit={2} />
+                        <div className="flex flex-wrap items-center gap-1">
+                          <SegmentBadges segments={segments} limit={2} />
+                          {isBirthdayMonth && (
+                            <Badge tone={EXTENDED_SEGMENT_LABELS.birthday_month.tone}>
+                              {EXTENDED_SEGMENT_LABELS.birthday_month.label}
+                            </Badge>
+                          )}
+                        </div>
                       </Td>
                       <Td>
                         <RfmBadge rfm={rfm} />
@@ -314,6 +426,9 @@ export default async function CustomersPage({
                       <Td className="text-right tabular-nums">{c.visit_count}回</Td>
                       <Td className="text-right tabular-nums">{yen(c.total_spent)}</Td>
                       <Td className="text-right tabular-nums">{yen(avgSpend)}</Td>
+                      {loyaltyEnabled && (
+                        <Td className="text-right tabular-nums">{c.point_balance.toLocaleString('ja-JP')}pt</Td>
+                      )}
                       <Td className="text-gray-600">{c.last_visit_at ? formatDate(c.last_visit_at) : '—'}</Td>
                       <Td>
                         {tags.length === 0 ? (

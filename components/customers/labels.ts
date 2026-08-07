@@ -14,3 +14,29 @@ export const CONSENT_LABELS: Record<ConsentType, string> = {
 };
 
 export const CONSENT_TYPES: ConsentType[] = ['privacy', 'marketing_email', 'marketing_line'];
+
+// -------------------------------------------------------------
+// 会員・ポイント（v0.3 項目13）
+// -------------------------------------------------------------
+
+export type MemberRank = 'regular' | 'silver' | 'gold' | 'vip';
+
+export const MEMBER_RANK_LABELS: Record<MemberRank, string> = {
+  regular: 'レギュラー',
+  silver: 'シルバー',
+  gold: 'ゴールド',
+  vip: 'VIP',
+};
+
+export const MEMBER_RANKS: MemberRank[] = ['regular', 'silver', 'gold', 'vip'];
+
+export type PointTransactionKind = 'earn' | 'redeem' | 'revoke' | 'refund_return' | 'adjust' | 'expire';
+
+export const POINT_KIND_LABELS: Record<PointTransactionKind, string> = {
+  earn: '獲得',
+  redeem: '利用',
+  revoke: '付与取消（返金）',
+  refund_return: '返還（返金）',
+  adjust: '手動調整',
+  expire: '失効',
+};

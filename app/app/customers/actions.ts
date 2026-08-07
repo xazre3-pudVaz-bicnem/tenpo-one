@@ -256,3 +256,152 @@ export async function detachCustomerTag(customerId: string, tagId: string) {
 
   revalidatePath(`/app/customers/${customerId}`);
 }
+
+// -------------------------------------------------------------
+// 重複候補・統合（v0.3 項目12）
+// -------------------------------------------------------------
+
+export interface MergeCandidateResult {
+  id: string;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  visitCount: number;
+  totalSpent: number;
+  lastVisitAt: string | null;
+}
+
+/** 電話番号での重複候補検索（顧客詳細の「この顧客と統合」用） */
+export async function searchCustomersForMerge(phone: string, excludeId: string): Promise<MergeCandidateResult[]> {
+  const ctx = await requirePermission('customers.delete');
+  const trimmed = phone.trim().replace(/[%,()]/g, '');
+  if (!trimmed) return [];
+
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from('customers')
+    .select('id, name, phone, email, visit_count, total_spent, last_visit_at')
+    .eq('organization_id', ctx.organizationId)
+    .eq('status', 'active')
+    .neq('id', excludeId)
+    .ilike('phone', `%${trimmed}%`)
+    .limit(20);
+
+  return (data ?? []).map((c) => ({
+    id: c.id,
+    name: c.name,
+    phone: c.phone,
+    email: c.email,
+    visitCount: c.visit_count,
+    totalSpent: c.total_spent,
+    lastVisitAt: c.last_visit_at,
+  }));
+}
+
+/**
+ * 重複顧客の統合。merge_customers RPC（migration 00016）を対象IDごとに順次呼び出す。
+ * 予約・注文・ポイント・タグ等の引き継ぎと統合元の論理削除はRPC側で行われる。
+ */
+export async function mergeCustomers(keepId: string, mergeIds: string[]) {
+  await requirePermission('customers.delete');
+  const targets = mergeIds.filter((id) => id !== keepId);
+  if (targets.length === 0) throw new Error('統合対象がありません');
+
+  const supabase = await createClient();
+  for (const mergeId of targets) {
+    const { error } = await supabase.rpc('merge_customers', { p_keep_id: keepId, p_merge_id: mergeId });
+    if (error) throw new Error(error.message);
+  }
+
+  revalidatePath('/app/customers');
+  revalidatePath(`/app/customers/${keepId}`);
+  for (const mergeId of targets) revalidatePath(`/app/customers/${mergeId}`);
+}
+
+// -------------------------------------------------------------
+// ポイント・会員（v0.3 項目13）
+// -------------------------------------------------------------
+
+/** 会員番号の更新（組織内でユニーク。重複時はDB制約エラーを分かりやすく変換） */
+export async function updateCustomerMemberNo(customerId: string, memberNo: string) {
+  const ctx = await requirePermission('customers.write');
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from('customers')
+    .update({ member_no: nullIfEmpty(memberNo), updated_by: ctx.userId })
+    .eq('id', customerId)
+    .eq('organization_id', ctx.organizationId);
+  if (error) {
+    if (error.code === '23505') throw new Error('この会員番号は既に他の顧客で使用されています');
+    throw new Error(error.message);
+  }
+  revalidatePath(`/app/customers/${customerId}`);
+}
+
+/** 会員ランクの更新 */
+export async function updateCustomerMemberRank(customerId: string, rank: string) {
+  const ctx = await requirePermission('customers.write');
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from('customers')
+    .update({ member_rank: rank, updated_by: ctx.userId })
+    .eq('id', customerId)
+    .eq('organization_id', ctx.organizationId);
+  if (error) throw new Error(error.message);
+  revalidatePath(`/app/customers/${customerId}`);
+}
+
+/**
+ * ポイントの手動調整。point_transactions(kind='adjust') を記録し customers.point_balance を更新する。
+ * 残高がマイナスになる調整は拒否する（テーブルのcheck制約と整合）。
+ */
+export async function adjustCustomerPoints(customerId: string, delta: number, reason: string) {
+  const ctx = await requirePermission('cash.approve');
+  const trimmedReason = reason.trim();
+  if (!trimmedReason) throw new Error('調整理由を入力してください');
+  if (!Number.isFinite(delta) || delta === 0) throw new Error('増減ポイントを入力してください');
+
+  const supabase = await createClient();
+  const { data: customer, error: fetchError } = await supabase
+    .from('customers')
+    .select('point_balance')
+    .eq('id', customerId)
+    .eq('organization_id', ctx.organizationId)
+    .single();
+  if (fetchError || !customer) throw new Error('顧客が見つかりません');
+
+  const nextBalance = customer.point_balance + delta;
+  if (nextBalance < 0) throw new Error('ポイント残高が不足しています');
+
+  const { error: updateError } = await supabase
+    .from('customers')
+    .update({ point_balance: nextBalance, updated_by: ctx.userId })
+    .eq('id', customerId)
+    .eq('organization_id', ctx.organizationId);
+  if (updateError) throw new Error(updateError.message);
+
+  const { error: txError } = await supabase.from('point_transactions').insert({
+    organization_id: ctx.organizationId,
+    store_id: ctx.currentStore?.id ?? null,
+    customer_id: customerId,
+    kind: 'adjust',
+    points: delta,
+    balance_after: nextBalance,
+    note: trimmedReason,
+    created_by: ctx.userId,
+  });
+  if (txError) throw new Error(txError.message);
+
+  await supabase.rpc('log_audit', {
+    p_org: ctx.organizationId,
+    p_store: ctx.currentStore?.id ?? null,
+    p_action: 'customer.points_adjust',
+    p_target_table: 'customers',
+    p_target_id: customerId,
+    p_before: { point_balance: customer.point_balance },
+    p_after: { point_balance: nextBalance, delta },
+    p_note: trimmedReason,
+  });
+
+  revalidatePath(`/app/customers/${customerId}`);
+}

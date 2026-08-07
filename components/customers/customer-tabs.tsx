@@ -1,11 +1,12 @@
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 
-export type CustomerView = 'list' | 'rfm';
+export type CustomerView = 'list' | 'rfm' | 'duplicates';
 
 const TABS: { key: CustomerView; label: string; href: string }[] = [
   { key: 'list', label: '顧客一覧', href: '/app/customers' },
   { key: 'rfm', label: 'RFM分析', href: '/app/customers?view=rfm' },
+  { key: 'duplicates', label: '重複候補', href: '/app/customers?view=duplicates' },
 ];
 
 /** /app/customers のタブナビゲーション（一覧 / RFM分析） */
