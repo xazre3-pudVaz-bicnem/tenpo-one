@@ -52,7 +52,7 @@ export function PinPad({ storeId }: { storeId: string }) {
             key={opt.type}
             type="button"
             onClick={() => setEventType(opt.type)}
-            className={`rounded-lg border px-2 py-2 text-xs font-semibold transition-colors ${
+            className={`min-h-14 rounded-lg border px-2 py-2 text-sm font-semibold transition-colors active:scale-95 ${
               eventType === opt.type
                 ? 'border-primary bg-primary text-white'
                 : 'border-gray-300 bg-white text-navy hover:bg-gray-50'
@@ -63,16 +63,16 @@ export function PinPad({ storeId }: { storeId: string }) {
         ))}
       </div>
 
-      <div className="mt-4 flex justify-center gap-2">
+      <div className="mt-4 flex justify-center gap-3">
         {Array.from({ length: 6 }).map((_, i) => (
           <span
             key={i}
-            className={`h-3 w-3 rounded-full border border-gray-400 ${i < pin.length ? 'bg-navy' : 'bg-white'}`}
+            className={`h-4 w-4 rounded-full border border-gray-400 ${i < pin.length ? 'bg-navy' : 'bg-white'}`}
           />
         ))}
       </div>
 
-      <div className="mt-4 grid grid-cols-3 gap-2">
+      <div className="mt-4 grid grid-cols-3 gap-3">
         {KEYS.map((key, i) =>
           key === '' ? (
             <div key={i} />
@@ -82,15 +82,20 @@ export function PinPad({ storeId }: { storeId: string }) {
               type="button"
               onClick={() => press(key)}
               disabled={pending}
-              className="flex h-14 items-center justify-center rounded-xl border border-gray-300 bg-white text-xl font-semibold text-navy hover:bg-gray-50 disabled:opacity-50"
+              className="flex min-h-20 items-center justify-center rounded-xl border border-gray-300 bg-white text-2xl font-semibold text-navy transition-transform hover:bg-gray-50 active:scale-95 disabled:opacity-50 disabled:active:scale-100"
             >
-              {key === 'del' ? <Delete className="h-5 w-5" /> : key}
+              {key === 'del' ? <Delete className="h-7 w-7" /> : key}
             </button>
           )
         )}
       </div>
 
-      <Button className="mt-4 w-full" size="lg" disabled={pending || pin.length < 4} onClick={submit}>
+      <Button
+        className="mt-4 min-h-16 w-full text-xl transition-transform active:scale-95 disabled:active:scale-100"
+        size="lg"
+        disabled={pending || pin.length < 4}
+        onClick={submit}
+      >
         {pending ? '確認中…' : `${EVENT_OPTIONS.find((o) => o.type === eventType)?.label}を記録する`}
       </Button>
     </div>

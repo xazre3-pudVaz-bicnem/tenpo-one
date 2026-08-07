@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Dialog } from '@/components/ui/dialog';
-import { Spinner } from '@/components/ui/state';
+import { Spinner, EmptyState } from '@/components/ui/state';
 import { TableWrap, Table, THead, TBody, Tr, Th, Td } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { yen, formatDate } from '@/lib/format';
@@ -51,7 +51,7 @@ export function VendorHistoryDialog({
           <Spinner />
         </div>
       ) : rows.length === 0 ? (
-        <p className="py-6 text-center text-sm text-gray-400">発注履歴はありません</p>
+        <EmptyState title="発注履歴はありません" className="border-0 py-6" />
       ) : (
         <TableWrap>
           <Table>

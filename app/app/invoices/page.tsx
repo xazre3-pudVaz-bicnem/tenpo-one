@@ -232,7 +232,7 @@ export default async function InvoicesPage({
 
       {tab === 'invoices' && (
         <div className="space-y-4">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             <StatCard label="未払合計" value={yen(unpaidTotal)} tone="primary" />
             <StatCard label="今月支払予定合計" value={yen(scheduledThisMonthTotal)} />
             <StatCard

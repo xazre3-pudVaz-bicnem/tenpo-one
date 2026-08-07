@@ -35,6 +35,17 @@ export async function addFloor(storeId: string, name: string): Promise<ActionRes
   });
   if (error) return { error: `フロアの追加に失敗しました: ${error.message}` };
 
+  await supabase.rpc('log_audit', {
+    p_org: ctx.organizationId,
+    p_store: storeId,
+    p_action: 'settings.tables.floor_add',
+    p_target_table: 'floors',
+    p_target_id: storeId,
+    p_before: null,
+    p_after: { name: name.trim() },
+    p_note: null,
+  });
+
   revalidatePath('/app/settings/tables');
   return {};
 }
@@ -57,6 +68,17 @@ export async function renameFloor(floorId: string, storeId: string, name: string
     .eq('organization_id', ctx.organizationId);
   if (error) return { error: `フロア名の変更に失敗しました: ${error.message}` };
 
+  await supabase.rpc('log_audit', {
+    p_org: ctx.organizationId,
+    p_store: storeId,
+    p_action: 'settings.tables.floor_rename',
+    p_target_table: 'floors',
+    p_target_id: floorId,
+    p_before: null,
+    p_after: { name: name.trim() },
+    p_note: null,
+  });
+
   revalidatePath('/app/settings/tables');
   return {};
 }
@@ -77,6 +99,17 @@ export async function deleteFloor(floorId: string, storeId: string): Promise<Act
     .eq('id', floorId)
     .eq('organization_id', ctx.organizationId);
   if (error) return { error: `フロアの削除に失敗しました: ${error.message}` };
+
+  await supabase.rpc('log_audit', {
+    p_org: ctx.organizationId,
+    p_store: storeId,
+    p_action: 'settings.tables.floor_delete',
+    p_target_table: 'floors',
+    p_target_id: floorId,
+    p_before: null,
+    p_after: { status: 'deleted' },
+    p_note: null,
+  });
 
   revalidatePath('/app/settings/tables');
   return {};
@@ -131,6 +164,17 @@ export async function saveTable(input: TableInput): Promise<ActionResult> {
     if (error) return { error: `テーブルの追加に失敗しました: ${error.message}` };
   }
 
+  await supabase.rpc('log_audit', {
+    p_org: ctx.organizationId,
+    p_store: input.storeId,
+    p_action: input.id ? 'settings.tables.table_update' : 'settings.tables.table_add',
+    p_target_table: 'restaurant_tables',
+    p_target_id: input.id ?? input.storeId,
+    p_before: null,
+    p_after: { name: input.name.trim(), capacity_min: input.capacityMin, capacity_max: input.capacityMax },
+    p_note: null,
+  });
+
   revalidatePath('/app/settings/tables');
   return {};
 }
@@ -151,6 +195,17 @@ export async function toggleTableAvailability(tableId: string, storeId: string, 
     .eq('id', tableId);
   if (error) return { error: `更新に失敗しました: ${error.message}` };
 
+  await supabase.rpc('log_audit', {
+    p_org: ctx.organizationId,
+    p_store: storeId,
+    p_action: 'settings.tables.table_availability',
+    p_target_table: 'restaurant_tables',
+    p_target_id: tableId,
+    p_before: null,
+    p_after: { current_status: available ? 'available' : 'unavailable' },
+    p_note: null,
+  });
+
   revalidatePath('/app/settings/tables');
   return {};
 }
@@ -170,6 +225,17 @@ export async function deleteTable(tableId: string, storeId: string): Promise<Act
     .update({ status: 'deleted', updated_by: ctx.userId })
     .eq('id', tableId);
   if (error) return { error: `テーブルの削除に失敗しました: ${error.message}` };
+
+  await supabase.rpc('log_audit', {
+    p_org: ctx.organizationId,
+    p_store: storeId,
+    p_action: 'settings.tables.table_delete',
+    p_target_table: 'restaurant_tables',
+    p_target_id: tableId,
+    p_before: null,
+    p_after: { status: 'deleted' },
+    p_note: null,
+  });
 
   revalidatePath('/app/settings/tables');
   return {};

@@ -79,6 +79,17 @@ export async function updateStoreInfo(input: {
     );
   if (settingsErr) return { error: `店舗設定の更新に失敗しました: ${settingsErr.message}` };
 
+  await supabase.rpc('log_audit', {
+    p_org: ctx.organizationId,
+    p_store: input.storeId,
+    p_action: 'settings.store.update',
+    p_target_table: 'stores',
+    p_target_id: input.storeId,
+    p_before: null,
+    p_after: { name, seat_count: input.seatCount, booking_enabled: input.bookingEnabled, service_charge_rate: input.serviceChargeRate, rounding: input.rounding },
+    p_note: null,
+  });
+
   revalidatePath('/app/settings/store');
   return {};
 }

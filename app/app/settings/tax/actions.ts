@@ -57,6 +57,17 @@ export async function saveTaxRate(input: TaxRateInput): Promise<ActionResult> {
     if (error) return { error: `税率の追加に失敗しました: ${error.message}` };
   }
 
+  await supabase.rpc('log_audit', {
+    p_org: ctx.organizationId,
+    p_store: null,
+    p_action: input.id ? 'settings.tax.update' : 'settings.tax.add',
+    p_target_table: 'tax_rates',
+    p_target_id: input.id ?? ctx.organizationId,
+    p_before: null,
+    p_after: { name, rate: input.rate, is_default: input.isDefault },
+    p_note: null,
+  });
+
   revalidatePath('/app/settings/tax');
   return {};
 }
@@ -72,6 +83,17 @@ export async function deleteTaxRate(id: string): Promise<ActionResult> {
     .eq('id', id)
     .eq('organization_id', ctx.organizationId);
   if (error) return { error: `税率の削除に失敗しました: ${error.message}` };
+
+  await supabase.rpc('log_audit', {
+    p_org: ctx.organizationId,
+    p_store: null,
+    p_action: 'settings.tax.delete',
+    p_target_table: 'tax_rates',
+    p_target_id: id,
+    p_before: null,
+    p_after: { status: 'deleted' },
+    p_note: null,
+  });
 
   revalidatePath('/app/settings/tax');
   return {};

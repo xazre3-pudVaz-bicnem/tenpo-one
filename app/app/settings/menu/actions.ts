@@ -48,6 +48,17 @@ export async function saveCategory(input: CategoryInput): Promise<ActionResult> 
     if (error) return { error: `カテゴリの追加に失敗しました: ${error.message}` };
   }
 
+  await supabase.rpc('log_audit', {
+    p_org: ctx.organizationId,
+    p_store: input.storeId,
+    p_action: input.id ? 'settings.menu.category_update' : 'settings.menu.category_add',
+    p_target_table: 'menu_categories',
+    p_target_id: input.id ?? input.storeId,
+    p_before: null,
+    p_after: { name, color: input.color, sort_order: input.sortOrder },
+    p_note: null,
+  });
+
   revalidatePath('/app/settings/menu');
   return {};
 }
@@ -62,6 +73,17 @@ export async function deleteCategory(id: string): Promise<ActionResult> {
     .eq('id', id)
     .eq('organization_id', ctx.organizationId);
   if (error) return { error: `カテゴリの削除に失敗しました: ${error.message}` };
+
+  await supabase.rpc('log_audit', {
+    p_org: ctx.organizationId,
+    p_store: null,
+    p_action: 'settings.menu.category_delete',
+    p_target_table: 'menu_categories',
+    p_target_id: id,
+    p_before: null,
+    p_after: { status: 'deleted' },
+    p_note: null,
+  });
 
   revalidatePath('/app/settings/menu');
   return {};
@@ -129,6 +151,17 @@ export async function saveMenuItem(input: MenuItemInput): Promise<ActionResult> 
     if (error) return { error: `商品の追加に失敗しました: ${error.message}` };
   }
 
+  await supabase.rpc('log_audit', {
+    p_org: ctx.organizationId,
+    p_store: input.storeId,
+    p_action: input.id ? 'settings.menu.item_update' : 'settings.menu.item_add',
+    p_target_table: 'menu_items',
+    p_target_id: input.id ?? input.storeId,
+    p_before: null,
+    p_after: { name, item_type: input.itemType, price: input.price, status: input.status },
+    p_note: null,
+  });
+
   revalidatePath('/app/settings/menu');
   return {};
 }
@@ -147,6 +180,17 @@ export async function updateCategoryStation(id: string, station: string): Promis
     .eq('organization_id', ctx.organizationId);
   if (error) return { error: `ステーションの更新に失敗しました: ${error.message}` };
 
+  await supabase.rpc('log_audit', {
+    p_org: ctx.organizationId,
+    p_store: null,
+    p_action: 'settings.menu.category_station',
+    p_target_table: 'menu_categories',
+    p_target_id: id,
+    p_before: null,
+    p_after: { station },
+    p_note: null,
+  });
+
   revalidatePath('/app/settings/menu');
   return {};
 }
@@ -161,6 +205,17 @@ export async function deleteMenuItem(id: string): Promise<ActionResult> {
     .eq('id', id)
     .eq('organization_id', ctx.organizationId);
   if (error) return { error: `商品の削除に失敗しました: ${error.message}` };
+
+  await supabase.rpc('log_audit', {
+    p_org: ctx.organizationId,
+    p_store: null,
+    p_action: 'settings.menu.item_delete',
+    p_target_table: 'menu_items',
+    p_target_id: id,
+    p_before: null,
+    p_after: { status: 'deleted' },
+    p_note: null,
+  });
 
   revalidatePath('/app/settings/menu');
   return {};

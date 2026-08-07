@@ -326,7 +326,7 @@ async function PettyTab({
         POSの現金売上はレジ台帳（レジタブ）で管理されます。小口現金は釣銭・経費用の別台帳です。同じ現金を両方に入力しないでください。
       </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <StatCard
           label="開始残高"
           value={yen(openingBalance)}

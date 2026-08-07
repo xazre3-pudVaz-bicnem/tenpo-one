@@ -33,6 +33,17 @@ export async function addRegister(storeId: string, name: string): Promise<Action
   });
   if (error) return { error: `レジの追加に失敗しました: ${error.message}` };
 
+  await supabase.rpc('log_audit', {
+    p_org: ctx.organizationId,
+    p_store: storeId,
+    p_action: 'settings.printers.register_add',
+    p_target_table: 'registers',
+    p_target_id: storeId,
+    p_before: null,
+    p_after: { name: name.trim() },
+    p_note: null,
+  });
+
   revalidatePath('/app/settings/printers');
   return {};
 }
@@ -52,6 +63,17 @@ export async function renameRegister(id: string, storeId: string, name: string):
     .eq('organization_id', ctx.organizationId);
   if (error) return { error: `レジ名の変更に失敗しました: ${error.message}` };
 
+  await supabase.rpc('log_audit', {
+    p_org: ctx.organizationId,
+    p_store: storeId,
+    p_action: 'settings.printers.register_rename',
+    p_target_table: 'registers',
+    p_target_id: id,
+    p_before: null,
+    p_after: { name: name.trim() },
+    p_note: null,
+  });
+
   revalidatePath('/app/settings/printers');
   return {};
 }
@@ -69,6 +91,17 @@ export async function toggleRegisterActive(id: string, storeId: string, active: 
     .eq('id', id)
     .eq('organization_id', ctx.organizationId);
   if (error) return { error: `更新に失敗しました: ${error.message}` };
+
+  await supabase.rpc('log_audit', {
+    p_org: ctx.organizationId,
+    p_store: storeId,
+    p_action: 'settings.printers.register_toggle',
+    p_target_table: 'registers',
+    p_target_id: id,
+    p_before: null,
+    p_after: { status: active ? 'active' : 'inactive' },
+    p_note: null,
+  });
 
   revalidatePath('/app/settings/printers');
   return {};
@@ -123,6 +156,17 @@ export async function savePrinterConfig(input: PrinterConfigInput): Promise<Acti
     if (error) return { error: `プリンター設定の追加に失敗しました: ${error.message}` };
   }
 
+  await supabase.rpc('log_audit', {
+    p_org: ctx.organizationId,
+    p_store: input.storeId,
+    p_action: input.id ? 'settings.printers.config_update' : 'settings.printers.config_add',
+    p_target_table: 'printer_configs',
+    p_target_id: input.id ?? input.storeId,
+    p_before: null,
+    p_after: { name: input.name.trim(), usage: input.usage, connection_type: input.connectionType || null },
+    p_note: null,
+  });
+
   revalidatePath('/app/settings/printers');
   return {};
 }
@@ -140,6 +184,17 @@ export async function deletePrinterConfig(id: string, storeId: string): Promise<
     .eq('id', id)
     .eq('organization_id', ctx.organizationId);
   if (error) return { error: `プリンター設定の削除に失敗しました: ${error.message}` };
+
+  await supabase.rpc('log_audit', {
+    p_org: ctx.organizationId,
+    p_store: storeId,
+    p_action: 'settings.printers.config_delete',
+    p_target_table: 'printer_configs',
+    p_target_id: id,
+    p_before: null,
+    p_after: { status: 'deleted' },
+    p_note: null,
+  });
 
   revalidatePath('/app/settings/printers');
   return {};

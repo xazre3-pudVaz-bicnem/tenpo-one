@@ -130,7 +130,7 @@ async function ItemsTabContent({
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <StatCard label="平均原価率" value={avgCostRate != null ? `${avgCostRate}%` : '—'} tone="primary" />
         <StatCard label="レシピ設定済み商品数" value={`${recipeSetCount} / ${rows.length}件`} />
         <StatCard
@@ -320,7 +320,7 @@ async function ImpactTabContent({
 
       {selected && (
         <>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             <StatCard label="対象食材" value={selected.name} />
             <StatCard label="現在の平均仕入単価" value={yen(selected.avgCost)} />
             <StatCard
@@ -513,7 +513,7 @@ async function WasteTabContent({
         </form>
       </div>
 
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <StatCard label="合計廃棄額" value={yen(totalWasteAmount)} tone="danger" sub={`${rangeFrom} 〜 ${rangeTo}`} />
         <StatCard label="廃棄品目数" value={`${wasteRows.length}件`} />
         <StatCard label="直近の棚卸" value={latestCount ? String(latestCount.count_date) : '未実施'} />

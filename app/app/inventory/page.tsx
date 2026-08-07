@@ -135,7 +135,7 @@ export default async function InventoryPage({
 
       {tab === 'items' && (
         <div className="space-y-4">
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             <StatCard label="総在庫金額" value={yen(totalStockValue)} tone="primary" />
             <StatCard label="要発注品目数" value={`${reorderCount}件`} tone={reorderCount > 0 ? 'warning' : 'default'} />
             <StatCard

@@ -50,6 +50,22 @@ export async function updateBookingSettings(input: {
   );
   if (error) return { error: `予約設定の保存に失敗しました: ${error.message}` };
 
+  await supabase.rpc('log_audit', {
+    p_org: ctx.organizationId,
+    p_store: input.storeId,
+    p_action: 'settings.booking.update',
+    p_target_table: 'store_settings',
+    p_target_id: input.storeId,
+    p_before: null,
+    p_after: {
+      slot_minutes: input.slotMinutes,
+      default_stay_minutes: input.defaultStayMinutes,
+      max_party_size: input.maxPartySize,
+      cancel_deadline_hours: input.cancelDeadlineHours,
+    },
+    p_note: null,
+  });
+
   revalidatePath('/app/settings/booking');
   return {};
 }

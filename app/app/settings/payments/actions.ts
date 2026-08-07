@@ -40,6 +40,17 @@ export async function registerSimulatedReader(storeId: string, label: string): P
       updated_by: ctx.userId,
     });
     if (error) return { error: `決済端末の登録に失敗しました: ${error.message}` };
+
+    await supabase.rpc('log_audit', {
+      p_org: ctx.organizationId,
+      p_store: storeId,
+      p_action: 'settings.payments.reader_add',
+      p_target_table: 'terminal_readers',
+      p_target_id: storeId,
+      p_before: null,
+      p_after: { label: reader.label, is_simulated: true },
+      p_note: null,
+    });
   } catch (e) {
     return { error: e instanceof Error ? e.message : '決済端末の登録に失敗しました' };
   }
@@ -62,6 +73,17 @@ export async function deleteTerminalReader(id: string, storeId: string): Promise
     .eq('organization_id', ctx.organizationId)
     .eq('store_id', storeId);
   if (error) return { error: `決済端末の削除に失敗しました: ${error.message}` };
+
+  await supabase.rpc('log_audit', {
+    p_org: ctx.organizationId,
+    p_store: storeId,
+    p_action: 'settings.payments.reader_delete',
+    p_target_table: 'terminal_readers',
+    p_target_id: id,
+    p_before: null,
+    p_after: null,
+    p_note: null,
+  });
 
   revalidatePath('/app/settings/payments');
   return {};
@@ -101,6 +123,17 @@ export async function updateBookingPaymentSettings(input: BookingPaymentSettings
     { onConflict: 'store_id' }
   );
   if (error) return { error: `予約決済設定の保存に失敗しました: ${error.message}` };
+
+  await supabase.rpc('log_audit', {
+    p_org: ctx.organizationId,
+    p_store: input.storeId,
+    p_action: 'settings.payments.booking_update',
+    p_target_table: 'store_settings',
+    p_target_id: input.storeId,
+    p_before: null,
+    p_after: { booking_payment_mode: input.bookingPaymentMode, booking_deposit_amount: input.bookingDepositAmount },
+    p_note: null,
+  });
 
   revalidatePath('/app/settings/payments');
   return {};

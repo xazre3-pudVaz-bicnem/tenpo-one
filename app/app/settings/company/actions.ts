@@ -50,6 +50,17 @@ export async function updateCompanyInfo(input: CompanyInfoInput): Promise<Action
     .eq('id', ctx.organizationId);
   if (error) return { error: `企業情報の保存に失敗しました: ${error.message}` };
 
+  await supabase.rpc('log_audit', {
+    p_org: ctx.organizationId,
+    p_store: null,
+    p_action: 'org.settings.update',
+    p_target_table: 'organizations',
+    p_target_id: ctx.organizationId,
+    p_before: null,
+    p_after: { name, billing_email: billingEmail || null },
+    p_note: null,
+  });
+
   revalidatePath('/app/settings/company');
   return {};
 }

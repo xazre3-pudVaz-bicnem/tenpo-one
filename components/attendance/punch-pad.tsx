@@ -40,7 +40,7 @@ export function PunchPad({ storeId, state }: { storeId: string; state: PunchStat
   };
 
   return (
-    <div className="grid grid-cols-2 gap-3">
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
       {BUTTONS.map(({ type, label, icon: Icon, variant }) => (
         <Button
           key={type}
@@ -48,9 +48,9 @@ export function PunchPad({ storeId, state }: { storeId: string; state: PunchStat
           variant={variant}
           disabled={pending || !enabledMap[type]}
           onClick={() => handlePunch(type)}
-          className="h-24 flex-col gap-2 text-lg"
+          className="min-h-24 flex-col gap-2 text-2xl transition-transform active:scale-95 disabled:active:scale-100"
         >
-          <Icon className="h-7 w-7" />
+          <Icon className="h-8 w-8" />
           {label}
         </Button>
       ))}

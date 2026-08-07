@@ -46,6 +46,17 @@ export async function saveBusinessHours(storeId: string, hours: BusinessHourInpu
   const { error } = await supabase.from('business_hours').upsert(rows, { onConflict: 'store_id,day_of_week' });
   if (error) return { error: `営業時間の保存に失敗しました: ${error.message}` };
 
+  await supabase.rpc('log_audit', {
+    p_org: ctx.organizationId,
+    p_store: storeId,
+    p_action: 'settings.hours.update',
+    p_target_table: 'business_hours',
+    p_target_id: storeId,
+    p_before: null,
+    p_after: { hours },
+    p_note: null,
+  });
+
   revalidatePath('/app/settings/hours');
   return {};
 }
@@ -80,6 +91,17 @@ export async function addHoliday(input: {
     return { error: `休業日の登録に失敗しました: ${error.message}` };
   }
 
+  await supabase.rpc('log_audit', {
+    p_org: ctx.organizationId,
+    p_store: input.storeId,
+    p_action: 'settings.hours.holiday_add',
+    p_target_table: 'holidays',
+    p_target_id: input.storeId,
+    p_before: null,
+    p_after: { holiday_date: input.holidayDate, name: input.name.trim() || null, is_temporary: input.isTemporary },
+    p_note: null,
+  });
+
   revalidatePath('/app/settings/hours');
   return {};
 }
@@ -98,6 +120,17 @@ export async function deleteHoliday(holidayId: string, storeId: string): Promise
     .eq('id', holidayId)
     .eq('organization_id', ctx.organizationId);
   if (error) return { error: `休業日の削除に失敗しました: ${error.message}` };
+
+  await supabase.rpc('log_audit', {
+    p_org: ctx.organizationId,
+    p_store: storeId,
+    p_action: 'settings.hours.holiday_delete',
+    p_target_table: 'holidays',
+    p_target_id: holidayId,
+    p_before: null,
+    p_after: null,
+    p_note: null,
+  });
 
   revalidatePath('/app/settings/hours');
   return {};
