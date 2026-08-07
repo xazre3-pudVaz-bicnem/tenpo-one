@@ -16,6 +16,22 @@ export interface PayrollCommissionBreakdown {
   amount: number;
 }
 
+/** 適用期間（給与ルールの effective_from/effective_to）ごとの内訳。期間中に時給等が変わった場合に複数件になる。 */
+export interface PayrollPeriodBreakdown {
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  rangeStart: string;
+  rangeEnd: string;
+  payType: 'monthly' | 'hourly' | 'daily';
+  baseAmount: number;
+  hourlyBase: number;
+  workDays: number;
+  basePay: number;
+  overtimePay: number;
+  nightPay: number;
+  holidayPay: number;
+}
+
 export interface PayrollItemView {
   id: string;
   profileName: string;
@@ -50,6 +66,9 @@ export interface PayrollItemView {
     holidayRate?: number;
     sales: { taxExcluded: number; taxIncluded: number };
     commissions: PayrollCommissionBreakdown[];
+    /** 期間跨ぎ昇給などで適用ルールが複数区間に分かれる場合の内訳（v2計算のみ） */
+    periods?: PayrollPeriodBreakdown[];
+    calcVersion?: string;
   };
 }
 
@@ -137,6 +156,23 @@ export function PayrollItemsTable({ items }: { items: PayrollItemView[] }) {
                       <div>
                         <p className="mb-2 text-xs font-semibold text-gray-500">計算根拠</p>
                         <ul className="space-y-1 text-sm text-gray-700">
+                          {item.breakdown.periods && item.breakdown.periods.length > 1 && (
+                            <li>
+                              <p className="text-xs font-semibold text-gray-500">適用期間の内訳（期間中に給与ルールが変更されています）</p>
+                              <ul className="ml-4 mt-0.5 list-disc space-y-0.5 text-xs text-gray-600">
+                                {item.breakdown.periods.map((p, i) => (
+                                  <li key={i}>
+                                    適用期間: {p.rangeStart}〜{p.rangeEnd}（ルール適用開始{p.effectiveFrom}
+                                    {p.effectiveTo ? `〜${p.effectiveTo}` : ''}） {PAY_TYPE_LABEL[p.payType]}¥
+                                    {p.baseAmount.toLocaleString('ja-JP')} → 基本給{yen(p.basePay)}
+                                    {p.overtimePay > 0 && `／残業代${yen(p.overtimePay)}`}
+                                    {p.nightPay > 0 && `／深夜手当${yen(p.nightPay)}`}
+                                    {p.holidayPay > 0 && `／休日手当${yen(p.holidayPay)}`}
+                                  </li>
+                                ))}
+                              </ul>
+                            </li>
+                          )}
                           <li>
                             基本給 = {PAY_TYPE_LABEL[item.breakdown.payType]}
                             {item.breakdown.payType === 'hourly'

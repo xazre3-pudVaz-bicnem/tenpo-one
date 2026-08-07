@@ -39,7 +39,7 @@ export function PinPad({ storeId }: { storeId: string }) {
     }
     startTransition(async () => {
       const result = await punchByPin(storeId, pin, eventType);
-      toast(result.message, result.ok ? 'success' : 'error');
+      toast(result.message, result.warning ? 'warning' : result.ok ? 'success' : 'error');
       setPin('');
     });
   };

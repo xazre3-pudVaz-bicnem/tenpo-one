@@ -3,8 +3,9 @@
 import { revalidatePath } from 'next/cache';
 import { requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
-import { calcPayroll, calcCommission, summarizeEntry, type DayAttendance } from '@/lib/payroll';
+import { calcPayroll, calcCommission, summarizeEntry, type DayAttendance, type PayrollPreview } from '@/lib/payroll';
 import { formatTime, formatMinutes } from '@/lib/format';
+import { groupDaysByRule, type PayrollRuleCandidate } from './rule-periods';
 
 type ActionResult = { ok: boolean; message: string };
 
@@ -143,21 +144,6 @@ interface RunRow {
   period_end: string;
 }
 
-function pickRule<T extends { profile_id: string; store_id: string | null; effective_from: string }>(
-  rules: T[],
-  profileId: string,
-  runStoreId: string | null
-): T | null {
-  const candidates = rules.filter((r) => r.profile_id === profileId);
-  if (candidates.length === 0) return null;
-  const scored = candidates.map((r) => ({
-    rule: r,
-    score: runStoreId && r.store_id === runStoreId ? 2 : r.store_id === null ? 1 : 0,
-  }));
-  scored.sort((a, b) => b.score - a.score || b.rule.effective_from.localeCompare(a.rule.effective_from));
-  return scored[0].rule;
-}
-
 /**
  * calcCommission の段階料率(tiered)ロジックの内訳版。
  * lib/payroll.ts は変更禁止のため、明細表示用に帯域ごとの内訳（対象売上→適用率→金額）を
@@ -291,32 +277,141 @@ async function generatePayrollItems(supabase: SupabaseClient, ctx: { organizatio
   const items: Record<string, unknown>[] = [];
 
   for (const profileId of candidateIds) {
-    const rule = pickRule(rules ?? [], profileId, run.store_id);
-    if (!rule) {
+    const myEntries = (entries ?? []).filter((e) => e.profile_id === profileId && e.clock_in_at && e.clock_out_at);
+
+    // 給与ルールの適用期間（effective_from/effective_to）を日単位で解決し、
+    // 期間中に時給が変わる場合はルールごとにグループ化して計算する（app/app/payroll/rule-periods.ts）。
+    const ruleCandidates: PayrollRuleCandidate[] = (rules ?? [])
+      .filter((r) => r.profile_id === profileId)
+      .map((r) => ({
+        id: r.id,
+        profileId: r.profile_id,
+        storeId: r.store_id,
+        effectiveFrom: r.effective_from,
+        effectiveTo: r.effective_to,
+        payType: r.pay_type as PayrollRuleCandidate['payType'],
+        baseAmount: r.base_amount,
+        overtimeRate: r.overtime_rate,
+        nightRate: r.night_rate,
+        holidayRate: r.holiday_rate,
+        commuteAllowance: r.commute_allowance,
+        allowances: (r.allowances ?? []) as PayrollRuleCandidate['allowances'],
+      }));
+
+    const entryDays = myEntries.map((e) => ({ workDate: e.work_date as string, entry: e }));
+    const { groups } = groupDaysByRule(entryDays, ruleCandidates, profileId, run.store_id);
+
+    if (groups.length === 0) {
       skipped.push(nameById.get(profileId) ?? profileId);
       continue;
     }
 
-    const myEntries = (entries ?? []).filter((e) => e.profile_id === profileId && e.clock_in_at && e.clock_out_at);
-    const days: DayAttendance[] = myEntries.map((e) =>
-      summarizeEntry({
-        clockInAt: new Date(e.clock_in_at as string),
-        clockOutAt: new Date(e.clock_out_at as string),
-        breakMinutes: e.break_minutes,
-        isHolidayWork: e.entry_type === 'holiday_work',
-      })
-    );
-    const dailyBreakdown = myEntries.map((e, i) => ({
-      date: e.work_date,
-      clockIn: formatTime(e.clock_in_at),
-      clockOut: formatTime(e.clock_out_at),
-      breakMinutes: e.break_minutes,
-      entryType: e.entry_type,
-      workMinutes: formatMinutes(days[i].workMinutes),
-      overtimeMinutes: formatMinutes(days[i].overtimeMinutes),
-      nightMinutes: formatMinutes(days[i].nightMinutes),
-      holidayMinutes: formatMinutes(days[i].holidayMinutes ?? 0),
-    }));
+    // 区間（ルール）ごとに勤怠集計・給与試算を行い、歩合を含まない金額を合算する
+    // （歩合は集計対象期間全体で1回だけ計算し、最後に加算する）。
+    type DailyBreakdownRow = {
+      date: string;
+      clockIn: string;
+      clockOut: string;
+      breakMinutes: number;
+      entryType: string;
+      workMinutes: string;
+      overtimeMinutes: string;
+      nightMinutes: string;
+      holidayMinutes: string;
+    };
+    const dailyBreakdown: DailyBreakdownRow[] = [];
+    const periodBreakdown: {
+      effectiveFrom: string;
+      effectiveTo: string | null;
+      rangeStart: string;
+      rangeEnd: string;
+      payType: PayrollRuleCandidate['payType'];
+      baseAmount: number;
+      hourlyBase: number;
+      workDays: number;
+      basePay: number;
+      overtimePay: number;
+      nightPay: number;
+      holidayPay: number;
+    }[] = [];
+
+    let combined: Omit<PayrollPreview, 'commissionTotal' | 'grossTotal'> = {
+      workDays: 0, workMinutes: 0, overtimeMinutes: 0, nightMinutes: 0, holidayMinutes: 0,
+      basePay: 0, overtimePay: 0, nightPay: 0, holidayPay: 0, commutePay: 0, allowanceTotal: 0,
+      hourlyBase: 0,
+    };
+
+    for (const group of groups) {
+      const groupDayAttendance: DayAttendance[] = group.days.map((d) =>
+        summarizeEntry({
+          clockInAt: new Date(d.entry.clock_in_at as string),
+          clockOutAt: new Date(d.entry.clock_out_at as string),
+          breakMinutes: d.entry.break_minutes,
+          isHolidayWork: d.entry.entry_type === 'holiday_work',
+        })
+      );
+      // 歩合(commissionTotal)は区間ごとではなく合算後に一度だけ加算するため 0 を渡す
+      const groupPreview = calcPayroll(
+        {
+          payType: group.rule.payType,
+          baseAmount: group.rule.baseAmount,
+          overtimeRate: group.rule.overtimeRate,
+          nightRate: group.rule.nightRate,
+          holidayRate: group.rule.holidayRate,
+          commuteAllowance: group.rule.commuteAllowance,
+          allowances: group.rule.allowances,
+        },
+        groupDayAttendance,
+        0
+      );
+
+      combined = {
+        workDays: combined.workDays + groupPreview.workDays,
+        workMinutes: combined.workMinutes + groupPreview.workMinutes,
+        overtimeMinutes: combined.overtimeMinutes + groupPreview.overtimeMinutes,
+        nightMinutes: combined.nightMinutes + groupPreview.nightMinutes,
+        holidayMinutes: combined.holidayMinutes + groupPreview.holidayMinutes,
+        basePay: combined.basePay + groupPreview.basePay,
+        overtimePay: combined.overtimePay + groupPreview.overtimePay,
+        nightPay: combined.nightPay + groupPreview.nightPay,
+        holidayPay: combined.holidayPay + groupPreview.holidayPay,
+        commutePay: combined.commutePay + groupPreview.commutePay,
+        allowanceTotal: combined.allowanceTotal + groupPreview.allowanceTotal,
+        // 直近の適用ルールの割増基礎時給を代表値として保持する（内訳は periodBreakdown を参照）
+        hourlyBase: groupPreview.hourlyBase,
+      };
+
+      periodBreakdown.push({
+        effectiveFrom: group.rule.effectiveFrom,
+        effectiveTo: group.rule.effectiveTo,
+        rangeStart: group.rangeStart,
+        rangeEnd: group.rangeEnd,
+        payType: group.rule.payType,
+        baseAmount: group.rule.baseAmount,
+        hourlyBase: groupPreview.hourlyBase,
+        workDays: groupPreview.workDays,
+        basePay: groupPreview.basePay,
+        overtimePay: groupPreview.overtimePay,
+        nightPay: groupPreview.nightPay,
+        holidayPay: groupPreview.holidayPay,
+      });
+
+      dailyBreakdown.push(
+        ...group.days.map((d, i) => ({
+          date: d.entry.work_date as string,
+          clockIn: formatTime(d.entry.clock_in_at),
+          clockOut: formatTime(d.entry.clock_out_at),
+          breakMinutes: d.entry.break_minutes as number,
+          entryType: d.entry.entry_type as string,
+          workMinutes: formatMinutes(groupDayAttendance[i].workMinutes),
+          overtimeMinutes: formatMinutes(groupDayAttendance[i].overtimeMinutes),
+          nightMinutes: formatMinutes(groupDayAttendance[i].nightMinutes),
+          holidayMinutes: formatMinutes(groupDayAttendance[i].holidayMinutes ?? 0),
+        }))
+      );
+    }
+    dailyBreakdown.sort((a, b) => a.date.localeCompare(b.date));
+    const lastRule = groups[groups.length - 1].rule;
 
     const sales = salesByProfile.get(profileId) ?? { taxExcluded: 0, taxIncluded: 0 };
     const applicableCommissions = (commissionRules ?? []).filter(
@@ -377,19 +472,15 @@ async function generatePayrollItems(supabase: SupabaseClient, ctx: { organizatio
       }
     }
 
-    const preview = calcPayroll(
-      {
-        payType: rule.pay_type,
-        baseAmount: rule.base_amount,
-        overtimeRate: rule.overtime_rate,
-        nightRate: rule.night_rate,
-        holidayRate: rule.holiday_rate,
-        commuteAllowance: rule.commute_allowance,
-        allowances: rule.allowances ?? [],
-      },
-      days,
-      commissionTotal
-    );
+    // 歩合を合算した最終値（区間ごとの計算では歩合を含めていないため、ここで一度だけ加算する）
+    const grossTotal =
+      combined.basePay +
+      combined.overtimePay +
+      combined.nightPay +
+      combined.holidayPay +
+      combined.commutePay +
+      combined.allowanceTotal +
+      commissionTotal;
 
     const primaryStore = primaryStoreByProfile.get(profileId) ?? null;
 
@@ -398,28 +489,33 @@ async function generatePayrollItems(supabase: SupabaseClient, ctx: { organizatio
       payroll_run_id: run.id,
       profile_id: profileId,
       store_id: primaryStore,
-      work_days: preview.workDays,
-      work_minutes: preview.workMinutes,
-      overtime_minutes: preview.overtimeMinutes,
-      night_minutes: preview.nightMinutes,
-      holiday_minutes: preview.holidayMinutes,
-      base_pay: preview.basePay,
-      overtime_pay: preview.overtimePay,
-      night_pay: preview.nightPay,
-      holiday_pay: preview.holidayPay,
-      commute_pay: preview.commutePay,
-      allowance_total: preview.allowanceTotal,
-      commission_total: preview.commissionTotal,
+      work_days: combined.workDays,
+      work_minutes: combined.workMinutes,
+      overtime_minutes: combined.overtimeMinutes,
+      night_minutes: combined.nightMinutes,
+      holiday_minutes: combined.holidayMinutes,
+      base_pay: combined.basePay,
+      overtime_pay: combined.overtimePay,
+      night_pay: combined.nightPay,
+      holiday_pay: combined.holidayPay,
+      commute_pay: combined.commutePay,
+      allowance_total: combined.allowanceTotal,
+      commission_total: commissionTotal,
       deduction_total: 0,
-      gross_total: preview.grossTotal,
+      gross_total: grossTotal,
       breakdown: {
         days: dailyBreakdown,
-        hourlyBase: preview.hourlyBase,
-        payType: rule.pay_type,
-        baseAmount: rule.base_amount,
-        holidayRate: rule.holiday_rate,
+        // 単一区間だった時代の互換用に、最新（直近）の適用ルールの値を代表値として残す。
+        // 期間中に時給等が変わった場合の内訳は periods を参照する。
+        hourlyBase: combined.hourlyBase,
+        payType: lastRule.payType,
+        baseAmount: lastRule.baseAmount,
+        holidayRate: lastRule.holidayRate,
         sales,
         commissions: commissionBreakdown,
+        periods: periodBreakdown,
+        // payroll_runs 自体には内訳カラムが無いため、算出方式のバージョンは各 payroll_items.breakdown 内に記録する
+        calcVersion: 'v2',
       },
       created_by: ctx.userId,
     });

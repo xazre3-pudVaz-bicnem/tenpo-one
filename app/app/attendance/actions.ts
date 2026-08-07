@@ -7,13 +7,42 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { can } from '@/lib/permissions';
 import { todayJst } from '@/lib/format';
 
+type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
+
+/**
+ * 締め後ロック: 指定店舗・指定日が確定済み(confirmed)/承認済み(approved)の給与計算(payroll_runs)の
+ * 対象期間に含まれるかを判定する。含まれる場合、time_entries を書き換える操作
+ * （修正申請の承認・区分変更・手動追加）はサーバー側で拒否する。
+ * payroll_runs.store_id が null の run は「全社」対象のため、その run の期間も対象に含める。
+ */
+async function isPayrollLocked(
+  supabase: SupabaseServerClient,
+  organizationId: string,
+  storeId: string,
+  workDate: string
+): Promise<boolean> {
+  const { data } = await supabase
+    .from('payroll_runs')
+    .select('id')
+    .eq('organization_id', organizationId)
+    .in('status', ['confirmed', 'approved'])
+    .lte('period_start', workDate)
+    .gte('period_end', workDate)
+    .or(`store_id.is.null,store_id.eq.${storeId}`)
+    .limit(1);
+  return (data?.length ?? 0) > 0;
+}
+
+const PAYROLL_LOCKED_MESSAGE = 'この期間は給与計算が確定済みのためロックされています';
+
 export type PunchEventType = 'clock_in' | 'clock_out' | 'break_start' | 'break_end';
 
 export type EntryType = 'normal' | 'late' | 'early_leave' | 'absent' | 'paid_leave' | 'holiday_work';
 
-type ActionResult = { ok: boolean; message: string };
+/** warning=true の場合、呼び出し側は toast を warning 色で表示する（例: 休憩中退勤の自動確定） */
+type ActionResult = { ok: boolean; message: string; warning?: boolean };
 
-const EVENT_LABELS: Record<PunchEventType, string> = {
+export const EVENT_LABELS: Record<PunchEventType, string> = {
   clock_in: '出勤',
   clock_out: '退勤',
   break_start: '休憩開始',
@@ -21,7 +50,11 @@ const EVENT_LABELS: Record<PunchEventType, string> = {
 };
 
 function mapPunchError(message: string): string {
+  // ALREADY_CLOCKED_IN_ELSEWHERE は ALREADY_CLOCKED_IN の部分文字列を含むため先に判定する
+  if (message.includes('ALREADY_CLOCKED_IN_ELSEWHERE')) return '他店舗で出勤打刻が残っています';
   if (message.includes('ALREADY_CLOCKED_IN')) return 'すでに出勤打刻済みです';
+  if (message.includes('ALREADY_ON_BREAK')) return 'すでに休憩中です';
+  if (message.includes('NOT_ON_BREAK')) return '休憩中ではありません';
   if (message.includes('NOT_CLOCKED_IN')) return '出勤打刻がされていません';
   if (message.includes('STORE_NOT_FOUND')) return '店舗情報が見つかりません';
   if (message.includes('FORBIDDEN')) return 'この操作を行う権限がありません';
@@ -48,8 +81,13 @@ export async function punch(storeId: string, eventType: PunchEventType): Promise
     if (entryId) await autoFlagLateEntry(storeId, ctx.userId, entryId);
   }
 
+  // apply_punch は休憩中のまま退勤した場合など、休憩を自動確定した際に warning を返す
+  const warningNote = (data as { warning?: string | null } | null)?.warning ?? null;
+
   revalidatePath('/app/attendance');
-  return { ok: true, message: `${EVENT_LABELS[eventType]}を記録しました` };
+  return warningNote
+    ? { ok: true, message: `${EVENT_LABELS[eventType]}を記録しました（${warningNote}）`, warning: true }
+    : { ok: true, message: `${EVENT_LABELS[eventType]}を記録しました` };
 }
 
 /**
@@ -122,7 +160,7 @@ export async function punchByPin(
     return { ok: false, message: 'PINが正しくありません' };
   }
 
-  const { error } = await admin.rpc('apply_punch', {
+  const { data, error } = await admin.rpc('apply_punch', {
     p_store_id: storeId,
     p_profile_id: match.profile_id,
     p_event_type: eventType,
@@ -130,8 +168,16 @@ export async function punchByPin(
     p_via_pin: true,
   });
   if (error) return { ok: false, message: mapPunchError(error.message) };
+
+  const warningNote = (data as { warning?: string | null } | null)?.warning ?? null;
   revalidatePath('/app/attendance');
-  return { ok: true, message: `${match.profiles.display_name}さん ${EVENT_LABELS[eventType]}を記録しました` };
+  return warningNote
+    ? {
+        ok: true,
+        message: `${match.profiles.display_name}さん ${EVENT_LABELS[eventType]}を記録しました（${warningNote}）`,
+        warning: true,
+      }
+    : { ok: true, message: `${match.profiles.display_name}さん ${EVENT_LABELS[eventType]}を記録しました` };
 }
 
 /** JST の日付+時刻文字列を ISO(UTC) に変換する */
@@ -208,6 +254,10 @@ export async function approveRequest(requestId: string): Promise<ActionResult> {
     clock_out_at: string;
     break_minutes: number;
   };
+
+  if (await isPayrollLocked(supabase, ctx.organizationId, request.store_id, changes.work_date)) {
+    return { ok: false, message: PAYROLL_LOCKED_MESSAGE };
+  }
 
   let before: unknown = null;
   let targetId = request.time_entry_id as string | null;
@@ -335,10 +385,14 @@ export async function changeEntryType(input: ChangeEntryTypeInput): Promise<Acti
   const supabase = await createClient();
   const { data: before } = await supabase
     .from('time_entries')
-    .select('id, store_id, entry_type')
+    .select('id, store_id, entry_type, work_date')
     .eq('id', input.timeEntryId)
     .single();
   if (!before) return { ok: false, message: '勤怠記録が見つかりません' };
+
+  if (await isPayrollLocked(supabase, ctx.organizationId, before.store_id, before.work_date)) {
+    return { ok: false, message: PAYROLL_LOCKED_MESSAGE };
+  }
 
   const { error } = await supabase
     .from('time_entries')
@@ -383,6 +437,11 @@ export async function addManualEntry(input: ManualEntryInput): Promise<ActionRes
   if (!input.reason.trim()) return { ok: false, message: '理由を入力してください' };
 
   const supabase = await createClient();
+
+  if (await isPayrollLocked(supabase, ctx.organizationId, input.storeId, input.workDate)) {
+    return { ok: false, message: PAYROLL_LOCKED_MESSAGE };
+  }
+
   const { data: inserted, error } = await supabase
     .from('time_entries')
     .insert({

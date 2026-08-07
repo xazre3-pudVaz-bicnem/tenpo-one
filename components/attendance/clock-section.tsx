@@ -10,10 +10,13 @@ export function ClockSection({
   storeId,
   displayName,
   punchState,
+  onBreak = false,
 }: {
   storeId: string;
   displayName: string;
   punchState: PunchState;
+  /** 休憩中フラグ（time_entries.on_break）。個人打刻モードの退勤ボタン付近に注意書きを表示する */
+  onBreak?: boolean;
 }) {
   const [shared, setShared] = useState(false);
   const [now, setNow] = useState<Date | null>(() => new Date());
@@ -35,7 +38,16 @@ export function ClockSection({
       <div className="rounded-2xl bg-navy px-6 py-8 text-center text-white">
         <p className="text-base text-gray-300">{dateText}</p>
         <p className="mt-1 text-6xl font-bold tabular-nums tracking-tight sm:text-7xl">{timeText}</p>
-        {!shared && <p className="mt-3 text-base text-gray-300">{displayName} さん</p>}
+        {!shared && (
+          <p className="mt-3 text-base text-gray-300">
+            {displayName} さん
+            {onBreak && (
+              <span className="ml-2 inline-flex items-center rounded-full bg-warning px-2.5 py-0.5 text-xs font-medium text-white align-middle">
+                休憩中
+              </span>
+            )}
+          </p>
+        )}
       </div>
 
       <div className="mt-4 flex justify-center">
@@ -50,7 +62,7 @@ export function ClockSection({
       </div>
 
       <div className="mt-6">
-        {shared ? <PinPad storeId={storeId} /> : <PunchPad storeId={storeId} state={punchState} />}
+        {shared ? <PinPad storeId={storeId} /> : <PunchPad storeId={storeId} state={punchState} onBreak={onBreak} />}
       </div>
     </div>
   );

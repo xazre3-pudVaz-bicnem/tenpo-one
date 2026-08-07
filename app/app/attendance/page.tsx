@@ -1,46 +1,26 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { AlertTriangle } from 'lucide-react';
 import { requireFeature } from '@/lib/auth';
 import { can } from '@/lib/permissions';
 import { createClient } from '@/lib/supabase/server';
 import { summarizeEntry } from '@/lib/payroll';
-import { todayJst, formatTime, formatMinutes, weekdayJa } from '@/lib/format';
+import { todayJst, daysAgoJst, formatTime, formatMinutes, weekdayJa } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { PageHeader } from '@/components/ui/page-header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/ui/state';
-import { TableWrap, Table, THead, TBody, Tr, Th, Td } from '@/components/ui/table';
+import { TableWrap, Table, THead, TBody, Tr, Th } from '@/components/ui/table';
 import { ClockSection } from '@/components/attendance/clock-section';
 import { PeriodFilters } from '@/components/attendance/period-filters';
-import { CorrectionDialog } from '@/components/attendance/correction-dialog';
 import { RequestReview } from '@/components/attendance/request-review';
-import { EntryTypeDialog } from '@/components/attendance/entry-type-dialog';
 import { ManualEntryDialog } from '@/components/attendance/manual-entry-dialog';
+import { AttendanceRow, type TimeEntryEventView } from '@/components/attendance/attendance-row';
 import type { EntryType } from './actions';
 
 export const metadata: Metadata = { title: '勤怠' };
 
 type Tab = 'punch' | 'list' | 'requests';
-
-const ENTRY_TYPE_LABEL: Record<EntryType, string> = {
-  normal: '通常',
-  late: '遅刻',
-  early_leave: '早退',
-  absent: '欠勤',
-  paid_leave: '有給',
-  holiday_work: '休日出勤',
-};
-
-const ENTRY_TYPE_TONE: Record<EntryType, 'gray' | 'warning' | 'danger' | 'primary' | 'success'> = {
-  normal: 'gray',
-  late: 'warning',
-  early_leave: 'warning',
-  absent: 'danger',
-  paid_leave: 'primary',
-  holiday_work: 'success',
-};
 
 function monthRange(month: string) {
   const [y, m] = month.split('-').map(Number);
@@ -123,12 +103,16 @@ async function PunchTab({ storeId, profileId, displayName }: { storeId: string; 
   const supabase = await createClient();
   const today = todayJst();
 
+  // 日跨ぎ勤務中の可能性があるため apply_punch と同様に当日＋前日の open エントリも対象にする
+  const yesterday = daysAgoJst(1);
   const { data: entry } = await supabase
     .from('time_entries')
-    .select('id, clock_in_at, clock_out_at')
+    .select('id, clock_in_at, clock_out_at, on_break, work_date')
     .eq('profile_id', profileId)
     .eq('store_id', storeId)
-    .eq('work_date', today)
+    .in('work_date', [today, yesterday])
+    .eq('status', 'open')
+    .order('work_date', { ascending: false })
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -146,20 +130,22 @@ async function PunchTab({ storeId, profileId, displayName }: { storeId: string; 
     .limit(1)
     .maybeSingle();
 
-  let lastEventType: string | null = null;
-  if (entry?.id) {
-    const { data: lastEvent } = await supabase
-      .from('time_entry_events')
-      .select('event_type')
-      .eq('time_entry_id', entry.id)
-      .order('occurred_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    lastEventType = lastEvent?.event_type ?? null;
-  }
+  // 他店舗で開いたままの出勤（ALREADY_CLOCKED_IN_ELSEWHERE の事前警告表示用）
+  const { data: elsewhereEntry } = await supabase
+    .from('time_entries')
+    .select('id, stores(name)')
+    .eq('profile_id', profileId)
+    .neq('store_id', storeId)
+    .eq('status', 'open')
+    .in('work_date', [today, yesterday])
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const elsewhereStoreName =
+    (elsewhereEntry?.stores as unknown as { name: string } | null)?.name ?? null;
 
   const open = !!entry && !!entry.clock_in_at && !entry.clock_out_at;
-  const onBreak = open && lastEventType === 'break_start';
+  const onBreak = open && !!entry?.on_break;
 
   return (
     <div>
@@ -168,9 +154,15 @@ async function PunchTab({ storeId, profileId, displayName }: { storeId: string; 
           本日のシフト: {todayShift.start_time.slice(0, 5)}〜{todayShift.end_time.slice(0, 5)}
         </div>
       )}
+      {!open && elsewhereEntry && (
+        <div className="mx-auto mb-4 max-w-md rounded-xl border border-danger/30 bg-danger-soft px-4 py-3 text-center text-sm font-medium text-danger">
+          {elsewhereStoreName ?? '他店舗'}で出勤打刻が残っています。先にそちらで退勤してください。
+        </div>
+      )}
       <ClockSection
         storeId={storeId}
         displayName={displayName}
+        onBreak={onBreak}
         punchState={{
           canClockIn: !open,
           canClockOut: open && !onBreak,
@@ -240,6 +232,38 @@ async function ListTab({
 
   const rows = entries ?? [];
 
+  // 打刻履歴（行展開用）: 対象期間の time_entries に紐づく生イベントを一括取得
+  const entryIds = rows.map((r) => r.id);
+  const { data: eventRows } = entryIds.length
+    ? await supabase
+        .from('time_entry_events')
+        .select('id, time_entry_id, event_type, occurred_at, source, via_pin')
+        .in('time_entry_id', entryIds)
+        .order('occurred_at')
+    : { data: [] };
+  const eventsByEntry = new Map<string, TimeEntryEventView[]>();
+  for (const e of eventRows ?? []) {
+    if (!e.time_entry_id) continue;
+    const list = eventsByEntry.get(e.time_entry_id) ?? [];
+    list.push({ id: e.id, eventType: e.event_type, occurredAt: e.occurred_at, source: e.source, viaPin: e.via_pin });
+    eventsByEntry.set(e.time_entry_id, list);
+  }
+
+  // 締め後ロック（給与run確定済み）: 表示期間と重なる confirmed/approved の run 期間を取得し、
+  // 各行の work_date がロック対象かをここで判定してバッジ表示・操作ボタン非表示に反映する
+  // （実際の書込拒否は各サーバーアクション側の isPayrollLocked で行う）。
+  const { data: lockedRunRows } = await supabase
+    .from('payroll_runs')
+    .select('store_id, period_start, period_end')
+    .eq('organization_id', organizationId)
+    .in('status', ['confirmed', 'approved'])
+    .lte('period_start', end)
+    .gte('period_end', start)
+    .or(`store_id.is.null,store_id.eq.${storeId}`);
+  const lockedRanges = lockedRunRows ?? [];
+  const isLocked = (workDate: string) =>
+    lockedRanges.some((r) => r.period_start <= workDate && r.period_end >= workDate);
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -256,6 +280,7 @@ async function ListTab({
           <Table>
             <THead>
               <Tr>
+                <Th className="w-8"></Th>
                 <Th>日付</Th>
                 {isApprover && targetProfileIds.length > 1 && <Th>スタッフ</Th>}
                 <Th>出勤</Th>
@@ -281,50 +306,29 @@ async function ListTab({
                       })
                     : null;
                 return (
-                  <Tr key={row.id}>
-                    <Td className="font-medium text-navy">
-                      {row.work_date.slice(5).replace('-', '/')}（{weekdayJa(row.work_date)}）
-                    </Td>
-                    {isApprover && targetProfileIds.length > 1 && (
-                      <Td>{nameById.get(row.profile_id) ?? '—'}</Td>
-                    )}
-                    <Td>{formatTime(row.clock_in_at)}</Td>
-                    <Td>{row.clock_out_at ? formatTime(row.clock_out_at) : missing ? '未打刻' : '—'}</Td>
-                    <Td className="text-right tabular-nums">{row.break_minutes}分</Td>
-                    <Td className="text-right tabular-nums">{worked ? formatMinutes(worked.workMinutes) : '—'}</Td>
-                    <Td>
-                      <Badge tone={ENTRY_TYPE_TONE[entryType]}>{ENTRY_TYPE_LABEL[entryType]}</Badge>
-                    </Td>
-                    <Td>
-                      <div className="flex flex-wrap gap-1">
-                        {missing && (
-                          <Badge tone="danger" className="inline-flex items-center gap-1">
-                            <AlertTriangle className="h-3 w-3" />
-                            打刻漏れ
-                          </Badge>
-                        )}
-                        <Badge tone={row.status === 'approved' ? 'success' : row.status === 'closed' ? 'primary' : 'gray'}>
-                          {row.status === 'approved' ? '承認済' : row.status === 'closed' ? '打刻済' : '勤務中'}
-                        </Badge>
-                      </div>
-                    </Td>
-                    <Td className="text-right">
-                      <div className="flex flex-wrap justify-end gap-1.5">
-                        <CorrectionDialog
-                          storeId={storeId}
-                          profileId={row.profile_id}
-                          workDate={row.work_date}
-                          timeEntryId={row.id}
-                          defaultClockIn={toJstHHmm(row.clock_in_at)}
-                          defaultClockOut={toJstHHmm(row.clock_out_at)}
-                          defaultBreakMinutes={row.break_minutes}
-                        />
-                        {isApprover && (
-                          <EntryTypeDialog timeEntryId={row.id} currentType={entryType} workDate={row.work_date} />
-                        )}
-                      </div>
-                    </Td>
-                  </Tr>
+                  <AttendanceRow
+                    key={row.id}
+                    id={row.id}
+                    workDateLabel={`${row.work_date.slice(5).replace('-', '/')}（${weekdayJa(row.work_date)}）`}
+                    staffName={nameById.get(row.profile_id) ?? null}
+                    showStaffColumn={isApprover && targetProfileIds.length > 1}
+                    clockInLabel={formatTime(row.clock_in_at)}
+                    clockOutLabel={row.clock_out_at ? formatTime(row.clock_out_at) : missing ? '未打刻' : '—'}
+                    breakMinutes={row.break_minutes}
+                    workedLabel={worked ? formatMinutes(worked.workMinutes) : '—'}
+                    entryType={entryType}
+                    missing={missing}
+                    status={row.status}
+                    locked={isLocked(row.work_date)}
+                    isApprover={isApprover}
+                    storeId={storeId}
+                    profileId={row.profile_id}
+                    workDate={row.work_date}
+                    timeEntryId={row.id}
+                    defaultClockIn={toJstHHmm(row.clock_in_at)}
+                    defaultClockOut={toJstHHmm(row.clock_out_at)}
+                    events={eventsByEntry.get(row.id) ?? []}
+                  />
                 );
               })}
             </TBody>
