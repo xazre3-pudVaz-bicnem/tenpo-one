@@ -4,9 +4,34 @@ import { revalidatePath } from 'next/cache';
 import { requireMember, requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import type { PermissionAction } from '@/lib/permissions';
+import { ROLE_LABELS } from '@/lib/permissions';
+import { resolveApprovalRule, checkApproval, type ApprovalRuleLike } from '@/lib/approvals';
+import { rateLimiter, RATE_LIMITS } from '@/lib/rate-limit';
+import { validateUploadMeta } from '@/components/invoices/labels';
+import { mockOcrProvider, type DocumentExtraction } from '@/components/invoices/extraction';
 import type { DocType, InvoiceStatus, PaymentMethod } from '@/components/invoices/labels';
 
 const PATH = '/app/invoices';
+
+/** 組織の承認ルールから対象targetの一覧をApprovalRuleLike形式で取得 */
+async function loadApprovalRules(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  organizationId: string,
+  target: ApprovalRuleLike['target']
+): Promise<ApprovalRuleLike[]> {
+  const { data } = await supabase
+    .from('approval_rules')
+    .select('target, min_amount, max_amount, approver_role, allow_self_approve')
+    .eq('organization_id', organizationId)
+    .eq('target', target);
+  return (data ?? []).map((r) => ({
+    target: r.target as ApprovalRuleLike['target'],
+    minAmount: r.min_amount as number,
+    maxAmount: r.max_amount as number | null,
+    approverRole: r.approver_role as ApprovalRuleLike['approverRole'],
+    allowSelfApprove: r.allow_self_approve as boolean,
+  }));
+}
 
 /** アップロード済みファイルの参照情報（クライアントでStorageへ先にアップロード済み） */
 interface UploadedFileRef {
@@ -19,6 +44,12 @@ interface UploadedFileRef {
 /** 保存ボックスへファイルメタデータを登録（ファイル本体はクライアントから直接Storageへアップロード済み） */
 export async function createInboxDocument(input: UploadedFileRef) {
   const ctx = await requirePermission('documents.write');
+  if (!rateLimiter.check(`upload:${ctx.userId}`, RATE_LIMITS.upload.limit, RATE_LIMITS.upload.windowMs)) {
+    throw new Error('アップロードが多すぎます。しばらく待ってから再試行してください');
+  }
+  const metaError = validateUploadMeta(input);
+  if (metaError) throw new Error(metaError);
+
   const supabase = await createClient();
   const { error } = await supabase.from('documents').insert({
     organization_id: ctx.organizationId,
@@ -34,6 +65,54 @@ export async function createInboxDocument(input: UploadedFileRef) {
   });
   if (error) throw new Error(error.message);
   revalidatePath(PATH);
+}
+
+/**
+ * 重複アップロードの可能性チェック（同一組織・同一ファイル名+サイズの書類が既存か）。
+ * アップロード前にクライアントから呼び出し、警告表示の判断に使う（拒否はしない＝続行を選べる）。
+ */
+export async function checkDuplicateDocument(fileName: string, sizeBytes: number): Promise<{ duplicate: boolean }> {
+  const ctx = await requirePermission('documents.write');
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from('documents')
+    .select('id')
+    .eq('organization_id', ctx.organizationId)
+    .eq('file_name', fileName)
+    .eq('size_bytes', sizeBytes)
+    .neq('status', 'deleted')
+    .limit(1);
+  return { duplicate: (data?.length ?? 0) > 0 };
+}
+
+/**
+ * OCRで読み取り（モック・未接続）。ファイル名から日付らしき文字列を拾う程度の決定的モックを実行し、
+ * documents.ocr_status/ocr_payload へ保存する。結果はUI側で下書きプリフィルにのみ使用し、自動確定はしない。
+ */
+export async function runDocumentOcr(documentId: string): Promise<DocumentExtraction> {
+  const ctx = await requirePermission('documents.write');
+  const supabase = await createClient();
+  const { data: doc, error } = await supabase
+    .from('documents')
+    .select('id, organization_id, file_name, mime_type, size_bytes')
+    .eq('id', documentId)
+    .single();
+  if (error || !doc) throw new Error('書類が見つかりません');
+
+  const extraction = await mockOcrProvider.extract({
+    fileName: doc.file_name as string,
+    mimeType: doc.mime_type as string,
+    sizeBytes: doc.size_bytes as number,
+  });
+
+  const { error: updErr } = await supabase
+    .from('documents')
+    .update({ ocr_status: 'done', ocr_payload: extraction, updated_by: ctx.userId })
+    .eq('id', documentId);
+  if (updErr) throw new Error(updErr.message);
+
+  revalidatePath(PATH);
+  return extraction;
 }
 
 /** 保存ボックスの書類を仕分け（種別=invoiceなら請求書も同時作成） */
@@ -120,6 +199,12 @@ export async function createInvoice(input: {
 
   let documentId: string | null = null;
   if (input.file) {
+    if (!rateLimiter.check(`upload:${ctx.userId}`, RATE_LIMITS.upload.limit, RATE_LIMITS.upload.windowMs)) {
+      throw new Error('アップロードが多すぎます。しばらく待ってから再試行してください');
+    }
+    const metaError = validateUploadMeta(input.file);
+    if (metaError) throw new Error(metaError);
+
     const { data: doc, error } = await supabase
       .from('documents')
       .insert({
@@ -256,12 +341,25 @@ export async function changeInvoiceStatus(
   const supabase = await createClient();
   const { data: invoice, error } = await supabase
     .from('invoices')
-    .select('id, organization_id, store_id, status, note')
+    .select('id, organization_id, store_id, status, note, amount, created_by')
     .eq('id', invoiceId)
     .single();
   if (error || !invoice) throw new Error('請求書が見つかりません');
   if (!def.from.includes(invoice.status as InvoiceStatus)) {
     throw new Error('この状態からは操作できません');
+  }
+
+  // pending_approval からの承認・差戻し（=承認判断）は approval_rules（金額帯×必要ロール×自己承認可否）で判定する
+  if (invoice.status === 'pending_approval' && (action === 'approve' || action === 'reject')) {
+    const rules = await loadApprovalRules(supabase, ctx.organizationId, 'invoice');
+    const rule = resolveApprovalRule(rules, 'invoice', invoice.amount as number);
+    const check = checkApproval(rule, ctx.role, invoice.created_by === ctx.userId);
+    if (!check.allowed) {
+      if (check.reason === 'insufficient_role') {
+        throw new Error(`この金額は${check.requiredRoleLabel}の承認が必要です`);
+      }
+      throw new Error('自分の登録した請求書は承認できません（設定で変更可能）');
+    }
   }
 
   const update: Record<string, unknown> = { status: def.to, updated_by: ctx.userId };
@@ -293,11 +391,13 @@ export async function changeInvoiceStatus(
 
 /** 書類・請求書の詳細（添付情報・コメント込み）を取得 */
 export async function getInvoiceDetail(invoiceId: string) {
-  await requireMember();
+  const ctx = await requireMember();
   const supabase = await createClient();
   const { data: invoice, error } = await supabase
     .from('invoices')
-    .select('*, vendors(name), stores(name), expense_accounts(id, name), documents(id, file_name, mime_type, doc_type)')
+    .select(
+      '*, vendors(name), stores(name), expense_accounts(id, name), documents(id, file_name, mime_type, doc_type, ocr_status)'
+    )
     .eq('id', invoiceId)
     .single();
   if (error || !invoice) throw new Error('請求書が見つかりません');
@@ -317,7 +417,16 @@ export async function getInvoiceDetail(invoiceId: string) {
       author: (x.profiles as unknown as { display_name: string } | null)?.display_name ?? '不明',
     }));
   }
-  return { invoice, comments };
+
+  // 承認待ちの場合、金額から必要承認ロールを解決してヒント表示用に返す（ルール該当時のみ）
+  let requiredApprovalRoleLabel: string | null = null;
+  if (invoice.status === 'pending_approval') {
+    const rules = await loadApprovalRules(supabase, ctx.organizationId, 'invoice');
+    const rule = resolveApprovalRule(rules, 'invoice', invoice.amount as number);
+    requiredApprovalRoleLabel = rule ? ROLE_LABELS[rule.approverRole] : null;
+  }
+
+  return { invoice, comments, requiredApprovalRoleLabel };
 }
 
 /** 添付ファイルの閲覧用署名URLを発行（1時間有効） */

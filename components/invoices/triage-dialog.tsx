@@ -1,11 +1,13 @@
 'use client';
 
 import { useState } from 'react';
+import { ScanText } from 'lucide-react';
 import { Dialog } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input, Label, Select, FieldError } from '@/components/ui/input';
 import { useToast } from '@/components/ui/toast';
-import { triageDocument } from '@/app/app/invoices/actions';
+import { triageDocument, runDocumentOcr } from '@/app/app/invoices/actions';
+import { OCR_NOT_CONNECTED_NOTE } from './extraction';
 import { TRIAGE_DOC_TYPE_OPTIONS, DOC_TYPE_LABELS, type DocType } from './labels';
 import type { InboxDoc } from './inbox-list';
 
@@ -33,13 +35,37 @@ export function TriageDialog({
   const [storeId, setStoreId] = useState(currentStoreId ?? '');
   const [vendorId, setVendorId] = useState('');
   const [vendorName, setVendorName] = useState('');
+  const [docDate, setDocDate] = useState('');
+  const [amount, setAmount] = useState('');
+  const [taxAmount, setTaxAmount] = useState('');
+  const [memo, setMemo] = useState('');
   const [busy, setBusy] = useState(false);
+  const [ocrBusy, setOcrBusy] = useState(false);
+  const [ocrNote, setOcrNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
 
   if (!doc) return null;
 
-  const handleSubmit = async (formData: FormData) => {
+  const handleOcr = async () => {
+    setOcrBusy(true);
+    setError(null);
+    try {
+      const extraction = await runDocumentOcr(doc.id);
+      if (extraction.issuedDate) setDocDate(extraction.issuedDate);
+      if (extraction.total != null) setAmount(String(extraction.total));
+      if (extraction.tax != null) setTaxAmount(String(extraction.tax));
+      if (extraction.vendor) setVendorName(extraction.vendor);
+      setOcrNote(OCR_NOT_CONNECTED_NOTE);
+      toast('OCR（モック）を実行しました');
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'OCRの実行に失敗しました', 'error');
+    } finally {
+      setOcrBusy(false);
+    }
+  };
+
+  const handleSubmit = async () => {
     setBusy(true);
     setError(null);
     try {
@@ -49,10 +75,10 @@ export function TriageDialog({
         storeId: storeId || null,
         vendorId: vendorId || null,
         vendorName: vendorId ? vendors.find((v) => v.id === vendorId)?.name ?? null : vendorName.trim() || null,
-        docDate: (formData.get('docDate') as string) || null,
-        amount: formData.get('amount') ? Math.round(Number(formData.get('amount'))) : null,
-        taxAmount: formData.get('taxAmount') ? Math.round(Number(formData.get('taxAmount'))) : null,
-        memo: (formData.get('memo') as string) || null,
+        docDate: docDate || null,
+        amount: amount ? Math.round(Number(amount)) : null,
+        taxAmount: taxAmount ? Math.round(Number(taxAmount)) : null,
+        memo: memo || null,
       });
       toast('仕分けしました');
       onDone();
@@ -67,11 +93,18 @@ export function TriageDialog({
   return (
     <Dialog open={!!doc} onClose={onClose} title={`仕分け：${doc.fileName}`}>
       <form
-        action={(fd) => {
-          void handleSubmit(fd);
+        action={() => {
+          void handleSubmit();
         }}
         className="space-y-4"
       >
+        <div className="flex items-center justify-between gap-2">
+          <Button type="button" size="sm" variant="secondary" onClick={() => void handleOcr()} disabled={ocrBusy}>
+            <ScanText className="h-4 w-4" />
+            {ocrBusy ? '読み取り中…' : 'OCRで読み取り（未接続）'}
+          </Button>
+        </div>
+        {ocrNote && <p className="rounded-lg bg-warning-soft px-3 py-2 text-xs text-warning">{ocrNote}</p>}
         <div>
           <Label htmlFor="triage-docType">種別</Label>
           <Select id="triage-docType" value={docType} onChange={(e) => setDocType(e.target.value as DocType)}>
@@ -115,20 +148,34 @@ export function TriageDialog({
         <div className="grid grid-cols-3 gap-3">
           <div>
             <Label htmlFor="triage-date">日付</Label>
-            <Input id="triage-date" name="docDate" type="date" />
+            <Input id="triage-date" type="date" value={docDate} onChange={(e) => setDocDate(e.target.value)} />
           </div>
           <div>
             <Label htmlFor="triage-amount">金額（円）</Label>
-            <Input id="triage-amount" name="amount" type="number" min={0} step={1} />
+            <Input
+              id="triage-amount"
+              type="number"
+              min={0}
+              step={1}
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+            />
           </div>
           <div>
             <Label htmlFor="triage-tax">税額（円）</Label>
-            <Input id="triage-tax" name="taxAmount" type="number" min={0} step={1} />
+            <Input
+              id="triage-tax"
+              type="number"
+              min={0}
+              step={1}
+              value={taxAmount}
+              onChange={(e) => setTaxAmount(e.target.value)}
+            />
           </div>
         </div>
         <div>
           <Label htmlFor="triage-memo">メモ</Label>
-          <Input id="triage-memo" name="memo" />
+          <Input id="triage-memo" value={memo} onChange={(e) => setMemo(e.target.value)} />
         </div>
         <FieldError message={error ?? undefined} />
         <div className="flex justify-end gap-2 pt-2">

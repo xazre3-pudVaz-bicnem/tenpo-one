@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { ScanText } from 'lucide-react';
 import { Dialog } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -14,14 +15,19 @@ import {
   changeInvoiceStatus,
   getDocumentSignedUrl,
   getInvoiceDetail,
+  runDocumentOcr,
   updateInvoice,
 } from '@/app/app/invoices/actions';
+import { OCR_NOT_CONNECTED_NOTE } from './extraction';
 import {
   INVOICE_STATUS_LABELS,
   INVOICE_STATUS_TONES,
+  OCR_STATUS_LABELS,
+  OCR_STATUS_TONES,
   PAYMENT_METHOD_LABELS,
   PAYMENT_METHOD_OPTIONS,
   type InvoiceStatus,
+  type OcrStatus,
   type PaymentMethod,
 } from './labels';
 
@@ -48,7 +54,7 @@ interface InvoiceDetail {
   store_id: string | null;
   stores: { name: string } | null;
   expense_accounts: { id: string; name: string } | null;
-  documents: { id: string; file_name: string; mime_type: string; doc_type: string } | null;
+  documents: { id: string; file_name: string; mime_type: string; doc_type: string; ocr_status: OcrStatus } | null;
 }
 
 const today = () => todayJst();
@@ -68,6 +74,7 @@ export function InvoiceDetailDialog({
 }) {
   const [detail, setDetail] = useState<InvoiceDetail | null>(null);
   const [comments, setComments] = useState<{ id: string; body: string; createdAt: string; author: string }[]>([]);
+  const [requiredApprovalRoleLabel, setRequiredApprovalRoleLabel] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [preview, setPreview] = useState<{ url: string; mimeType: string } | null>(null);
   const [commentBody, setCommentBody] = useState('');
@@ -77,6 +84,8 @@ export function InvoiceDetailDialog({
   const [showPay, setShowPay] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [ocrBusy, setOcrBusy] = useState(false);
+  const [ocrNote, setOcrNote] = useState<string | null>(null);
 
   const [editing, setEditing] = useState(false);
   const [editVendorName, setEditVendorName] = useState('');
@@ -102,6 +111,7 @@ export function InvoiceDetailDialog({
         const inv = res.invoice as unknown as InvoiceDetail;
         setDetail(inv);
         setComments(res.comments);
+        setRequiredApprovalRoleLabel(res.requiredApprovalRoleLabel);
         if (inv.documents) {
           try {
             const signed = await getDocumentSignedUrl(inv.documents.id);
@@ -128,6 +138,7 @@ export function InvoiceDetailDialog({
         const res = await getInvoiceDetail(invoiceId);
         setDetail(res.invoice as unknown as InvoiceDetail);
         setComments(res.comments);
+        setRequiredApprovalRoleLabel(res.requiredApprovalRoleLabel);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : '操作に失敗しました');
@@ -189,8 +200,29 @@ export function InvoiceDetailDialog({
       toast('差戻しました');
     });
 
+  const handleOcr = async () => {
+    if (!detail?.document_id) return;
+    setOcrBusy(true);
+    try {
+      const extraction = await runDocumentOcr(detail.document_id);
+      if (extraction.issuedDate) setEditIssueDate(extraction.issuedDate);
+      if (extraction.dueDate) setEditDueDate(extraction.dueDate);
+      if (extraction.total != null) setEditAmount(String(extraction.total));
+      if (extraction.tax != null) setEditTaxAmount(String(extraction.tax));
+      if (extraction.registrationNumber) setEditRegistrationNumber(extraction.registrationNumber);
+      if (extraction.vendor) setEditVendorName(extraction.vendor);
+      setOcrNote(OCR_NOT_CONNECTED_NOTE);
+      toast('OCR（モック）を実行しました');
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'OCRの実行に失敗しました', 'error');
+    } finally {
+      setOcrBusy(false);
+    }
+  };
+
   const startEdit = () => {
     if (!detail) return;
+    setOcrNote(null);
     setEditVendorName(detail.vendor_name);
     setEditInvoiceNo(detail.invoice_no ?? '');
     setEditIssueDate(detail.issue_date ?? '');
@@ -245,6 +277,15 @@ export function InvoiceDetailDialog({
         </div>
       ) : editing ? (
         <div className="space-y-4">
+          {detail.document_id && (
+            <div className="flex items-center justify-between gap-2">
+              <Button type="button" size="sm" variant="secondary" onClick={() => void handleOcr()} disabled={ocrBusy}>
+                <ScanText className="h-4 w-4" />
+                {ocrBusy ? '読み取り中…' : 'OCRで読み取り（未接続）'}
+              </Button>
+            </div>
+          )}
+          {ocrNote && <p className="rounded-lg bg-warning-soft px-3 py-2 text-xs text-warning">{ocrNote}</p>}
           <div>
             <Label htmlFor="edit-vendor">取引先</Label>
             <Input id="edit-vendor" value={editVendorName} onChange={(e) => setEditVendorName(e.target.value)} />
@@ -377,7 +418,14 @@ export function InvoiceDetailDialog({
           </dl>
 
           <div>
-            <p className="mb-2 text-xs font-medium text-gray-500">添付ファイル</p>
+            <div className="mb-2 flex items-center gap-2">
+              <p className="text-xs font-medium text-gray-500">添付ファイル</p>
+              {detail.documents && (
+                <Badge tone={OCR_STATUS_TONES[detail.documents.ocr_status]}>
+                  OCR: {OCR_STATUS_LABELS[detail.documents.ocr_status]}
+                </Badge>
+              )}
+            </div>
             {detail.documents && preview ? (
               preview.mimeType === 'application/pdf' ? (
                 <a
@@ -437,6 +485,9 @@ export function InvoiceDetailDialog({
 
           <div className="border-t border-gray-100 pt-4">
             <p className="mb-2 text-xs font-medium text-gray-500">状態を変更</p>
+            {detail.status === 'pending_approval' && requiredApprovalRoleLabel && (
+              <p className="mb-2 text-xs text-primary-deep">この金額の承認には「{requiredApprovalRoleLabel}」以上のロールが必要です</p>
+            )}
             <div className="flex flex-wrap gap-2">
               {detail.status === 'open' && canWrite && (
                 <Button size="sm" onClick={handleReview} disabled={busy}>

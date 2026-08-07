@@ -3,7 +3,8 @@ import Link from 'next/link';
 import { Download } from 'lucide-react';
 import { requireFeature } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
-import { can } from '@/lib/permissions';
+import { can, ROLE_LABELS } from '@/lib/permissions';
+import { resolveApprovalRule, type ApprovalRuleLike } from '@/lib/approvals';
 import { yen, formatDate, todayJst, daysAgoJst } from '@/lib/format';
 import { PageHeader } from '@/components/ui/page-header';
 import { StatCard } from '@/components/ui/stat-card';
@@ -272,6 +273,19 @@ async function PettyTab({
     .eq('status', 'active')
     .order('sort_order');
 
+  const { data: approvalRulesData } = await supabase
+    .from('approval_rules')
+    .select('target, min_amount, max_amount, approver_role, allow_self_approve')
+    .eq('organization_id', organizationId)
+    .eq('target', 'petty_cash');
+  const approvalRules: ApprovalRuleLike[] = (approvalRulesData ?? []).map((r) => ({
+    target: r.target as ApprovalRuleLike['target'],
+    minAmount: r.min_amount as number,
+    maxAmount: r.max_amount as number | null,
+    approverRole: r.approver_role as ApprovalRuleLike['approverRole'],
+    allowSelfApprove: r.allow_self_approve as boolean,
+  }));
+
   // 開始残高（店舗設定）
   const { data: settings } = await supabase
     .from('store_settings')
@@ -403,11 +417,19 @@ async function PettyTab({
                   </Td>
                   <Td>
                     {canApprove && r.approval_status === 'pending' && (
-                      <ApprovalActions
-                        onApprove={approvePettyCash.bind(null, r.id)}
-                        onReject={rejectPettyCash.bind(null, r.id)}
-                        rejectTitle="小口現金の差戻し"
-                      />
+                      <div className="space-y-1">
+                        <ApprovalActions
+                          onApprove={approvePettyCash.bind(null, r.id)}
+                          onReject={rejectPettyCash.bind(null, r.id)}
+                          rejectTitle="小口現金の差戻し"
+                        />
+                        {(() => {
+                          const rule = resolveApprovalRule(approvalRules, 'petty_cash', r.amount);
+                          return rule ? (
+                            <p className="text-xs text-gray-500">要承認: {ROLE_LABELS[rule.approverRole]}</p>
+                          ) : null;
+                        })()}
+                      </div>
                     )}
                   </Td>
                 </Tr>

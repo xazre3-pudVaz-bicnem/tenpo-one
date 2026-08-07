@@ -52,6 +52,31 @@ const ROLE_LABELS: Record<ApprovalRuleLike['approverRole'], string> = {
   org_owner: '企業オーナー',
 };
 
+/**
+ * 同一target内で金額帯が重なるルールの組を返す（設定画面の重複警告表示用）。
+ * [min,max) の半開区間として重なりを判定する（max=null は上限なし=∞扱い）。
+ */
+export function findOverlappingRules<T extends ApprovalRuleLike & { id: string }>(rules: T[]): [T, T][] {
+  const pairs: [T, T][] = [];
+  const byTarget = new Map<string, T[]>();
+  for (const r of rules) {
+    const arr = byTarget.get(r.target) ?? [];
+    arr.push(r);
+    byTarget.set(r.target, arr);
+  }
+  for (const arr of byTarget.values()) {
+    for (let i = 0; i < arr.length; i++) {
+      for (let j = i + 1; j < arr.length; j++) {
+        const a = arr[i];
+        const b = arr[j];
+        const overlap = a.minAmount < (b.maxAmount ?? Infinity) && b.minAmount < (a.maxAmount ?? Infinity);
+        if (overlap) pairs.push([a, b]);
+      }
+    }
+  }
+  return pairs;
+}
+
 /** 承認可否の判定 */
 export function checkApproval(
   rule: ApprovalRuleLike | null,

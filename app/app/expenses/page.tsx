@@ -3,7 +3,8 @@ import Link from 'next/link';
 import { Download } from 'lucide-react';
 import { requireFeature } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
-import { can } from '@/lib/permissions';
+import { can, ROLE_LABELS } from '@/lib/permissions';
+import { resolveApprovalRule, type ApprovalRuleLike } from '@/lib/approvals';
 import { yen, formatDate, todayJst, daysAgoJst } from '@/lib/format';
 import { PageHeader } from '@/components/ui/page-header';
 import { StatCard } from '@/components/ui/stat-card';
@@ -45,6 +46,19 @@ export default async function ExpensesPage({
         .eq('status', 'active')
         .order('sort_order')
     : { data: [] as { id: string; name: string }[] };
+
+  const { data: approvalRulesData } = await supabase
+    .from('approval_rules')
+    .select('target, min_amount, max_amount, approver_role, allow_self_approve')
+    .eq('organization_id', ctx.organizationId)
+    .eq('target', 'expense');
+  const approvalRules: ApprovalRuleLike[] = (approvalRulesData ?? []).map((r) => ({
+    target: r.target as ApprovalRuleLike['target'],
+    minAmount: r.min_amount as number,
+    maxAmount: r.max_amount as number | null,
+    approverRole: r.approver_role as ApprovalRuleLike['approverRole'],
+    allowSelfApprove: r.allow_self_approve as boolean,
+  }));
 
   let query = supabase
     .from('expenses')
@@ -178,11 +192,19 @@ export default async function ExpensesPage({
                       </Td>
                       <Td>
                         {canApprove && r.approval_status === 'pending' && (
-                          <ApprovalActions
-                            onApprove={approveExpense.bind(null, r.id)}
-                            onReject={rejectExpense.bind(null, r.id)}
-                            rejectTitle="経費の差戻し"
-                          />
+                          <div className="space-y-1">
+                            <ApprovalActions
+                              onApprove={approveExpense.bind(null, r.id)}
+                              onReject={rejectExpense.bind(null, r.id)}
+                              rejectTitle="経費の差戻し"
+                            />
+                            {(() => {
+                              const rule = resolveApprovalRule(approvalRules, 'expense', r.amount);
+                              return rule ? (
+                                <p className="text-xs text-gray-500">要承認: {ROLE_LABELS[rule.approverRole]}</p>
+                              ) : null;
+                            })()}
+                          </div>
                         )}
                       </Td>
                     </Tr>

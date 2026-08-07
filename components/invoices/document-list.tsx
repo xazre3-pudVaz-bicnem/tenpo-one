@@ -10,7 +10,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useToast } from '@/components/ui/toast';
 import { yen, formatDate } from '@/lib/format';
 import { getDocumentSignedUrl, deleteDocument } from '@/app/app/invoices/actions';
-import { DOC_TYPE_LABELS, type DocType } from './labels';
+import { DOC_TYPE_LABELS, OCR_STATUS_LABELS, OCR_STATUS_TONES, type DocType, type OcrStatus } from './labels';
 
 export interface DocumentRow {
   id: string;
@@ -20,6 +20,7 @@ export interface DocumentRow {
   amount: number | null;
   vendorName: string | null;
   storeName: string | null;
+  ocrStatus: OcrStatus;
 }
 
 export function DocumentList({ rows }: { rows: DocumentRow[] }) {
@@ -52,6 +53,7 @@ export function DocumentList({ rows }: { rows: DocumentRow[] }) {
               <Th>取引先</Th>
               <Th>店舗</Th>
               <Th className="text-right">金額</Th>
+              <Th>OCR</Th>
               <Th />
             </Tr>
           </THead>
@@ -74,6 +76,9 @@ export function DocumentList({ rows }: { rows: DocumentRow[] }) {
                 <Td>{r.vendorName ?? '—'}</Td>
                 <Td>{r.storeName ?? '全店舗'}</Td>
                 <Td className="text-right tabular-nums">{yen(r.amount)}</Td>
+                <Td>
+                  <Badge tone={OCR_STATUS_TONES[r.ocrStatus]}>{OCR_STATUS_LABELS[r.ocrStatus]}</Badge>
+                </Td>
                 <Td>
                   <Button size="sm" variant="danger" onClick={() => setTarget(r)}>
                     削除

@@ -69,7 +69,13 @@ export const PAYMENT_METHOD_OPTIONS: PaymentMethod[] = [
 
 export const ACCEPTED_FILE_TYPES = ['application/pdf', 'image/png', 'image/jpeg', 'image/webp'];
 export const ACCEPTED_FILE_ACCEPT = '.pdf,.png,.jpg,.jpeg,.webp';
+export const ACCEPTED_FILE_EXTENSIONS = ['pdf', 'png', 'jpg', 'jpeg', 'webp'];
 export const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
+
+/** 拡張子偽装（二重拡張子等）対策のため明示的に拒否するもの */
+export const DANGEROUS_EXTENSIONS = [
+  'exe', 'js', 'mjs', 'cjs', 'html', 'htm', 'php', 'sh', 'bat', 'cmd', 'vbs', 'msi', 'ps1', 'jar', 'com', 'scr', 'app',
+];
 
 export function extFromFile(file: { name: string; type: string }): string {
   const fromName = file.name.split('.').pop();
@@ -83,6 +89,7 @@ export function extFromFile(file: { name: string; type: string }): string {
   return map[file.type] ?? 'bin';
 }
 
+/** クライアント側の一次検証（UXのための即時フィードバック用） */
 export function validateAttachedFile(file: { name: string; type: string; size: number }): string | null {
   if (!ACCEPTED_FILE_TYPES.includes(file.type)) {
     return 'PDF・PNG・JPEG・WebPのみアップロードできます';
@@ -92,3 +99,44 @@ export function validateAttachedFile(file: { name: string; type: string; size: n
   }
   return null;
 }
+
+/**
+ * サーバー側でのアップロードメタ再検証（クライアント検証はバイパスされうるため必須）。
+ * MIME・拡張子・サイズ・危険拡張子（二重拡張子含む）をチェックする。
+ */
+export function validateUploadMeta(input: { fileName: string; mimeType: string; sizeBytes: number }): string | null {
+  const parts = input.fileName.toLowerCase().split('.');
+  const ext = parts.length > 1 ? parts[parts.length - 1] : '';
+  if (!ext || DANGEROUS_EXTENSIONS.some((d) => parts.includes(d))) {
+    return 'このファイル形式はアップロードできません';
+  }
+  if (!ACCEPTED_FILE_EXTENSIONS.includes(ext)) {
+    return '許可されていない拡張子です（PDF・PNG・JPEG・WebPのみ）';
+  }
+  if (!ACCEPTED_FILE_TYPES.includes(input.mimeType)) {
+    return 'PDF・PNG・JPEG・WebPのみアップロードできます';
+  }
+  if (!Number.isFinite(input.sizeBytes) || input.sizeBytes <= 0) {
+    return 'ファイルサイズが不正です';
+  }
+  if (input.sizeBytes > MAX_FILE_SIZE) {
+    return 'ファイルサイズは20MBまでです';
+  }
+  return null;
+}
+
+export type OcrStatus = 'none' | 'pending' | 'done' | 'failed';
+
+export const OCR_STATUS_LABELS: Record<OcrStatus, string> = {
+  none: '未実行',
+  pending: '解析中',
+  done: '読取済（モック）',
+  failed: '失敗',
+};
+
+export const OCR_STATUS_TONES: Record<OcrStatus, BadgeTone> = {
+  none: 'gray',
+  pending: 'warning',
+  done: 'success',
+  failed: 'danger',
+};

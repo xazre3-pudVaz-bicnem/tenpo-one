@@ -163,7 +163,7 @@ export default async function InvoicesPage({
   if (tab === 'documents') {
     let q = supabase
       .from('documents')
-      .select('id, doc_type, file_name, doc_date, amount, store_id, vendors(name), stores(name)')
+      .select('id, doc_type, file_name, doc_date, amount, store_id, ocr_status, vendors(name), stores(name)')
       .eq('organization_id', ctx.organizationId)
       .eq('status', 'filed');
     const storeFilter = sp.store ?? ctx.currentStore?.id ?? '';
@@ -179,6 +179,7 @@ export default async function InvoicesPage({
       amount: d.amount as number | null,
       vendorName: (d.vendors as unknown as { name: string } | null)?.name ?? null,
       storeName: (d.stores as unknown as { name: string } | null)?.name ?? null,
+      ocrStatus: d.ocr_status as DocumentRow['ocrStatus'],
     }));
   }
 

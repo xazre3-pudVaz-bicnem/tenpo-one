@@ -3,11 +3,31 @@
 import { revalidatePath } from 'next/cache';
 import { requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
+import { resolveApprovalRule, checkApproval, type ApprovalRuleLike } from '@/lib/approvals';
 
 function assertPositiveInt(value: number, label: string) {
   if (!Number.isInteger(value) || value <= 0) {
     throw new Error(`${label}は1円以上の整数で入力してください`);
   }
+}
+
+/** 組織の承認ルール（target='petty_cash'）をApprovalRuleLike形式で取得 */
+async function loadPettyCashApprovalRules(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  organizationId: string
+): Promise<ApprovalRuleLike[]> {
+  const { data } = await supabase
+    .from('approval_rules')
+    .select('target, min_amount, max_amount, approver_role, allow_self_approve')
+    .eq('organization_id', organizationId)
+    .eq('target', 'petty_cash');
+  return (data ?? []).map((r) => ({
+    target: r.target as ApprovalRuleLike['target'],
+    minAmount: r.min_amount as number,
+    maxAmount: r.max_amount as number | null,
+    approverRole: r.approver_role as ApprovalRuleLike['approverRole'],
+    allowSelfApprove: r.allow_self_approve as boolean,
+  }));
 }
 
 /** レジ開局（open_register_session RPC） */
@@ -111,11 +131,19 @@ export async function approvePettyCash(id: string) {
   const supabase = await createClient();
   const { data: tx } = await supabase
     .from('cash_transactions')
-    .select('organization_id, store_id, approval_status')
+    .select('organization_id, store_id, approval_status, amount, created_by')
     .eq('id', id)
     .single();
   if (!tx) throw new Error('対象の入出金が見つかりません');
   if (tx.approval_status !== 'pending') throw new Error('承認待ちの入出金のみ承認できます');
+
+  const rules = await loadPettyCashApprovalRules(supabase, tx.organization_id);
+  const rule = resolveApprovalRule(rules, 'petty_cash', tx.amount);
+  const check = checkApproval(rule, ctx.role, tx.created_by === ctx.userId);
+  if (!check.allowed) {
+    if (check.reason === 'insufficient_role') throw new Error(`この金額は${check.requiredRoleLabel}の承認が必要です`);
+    throw new Error('自分の登録した入出金は承認できません（設定で変更可能）');
+  }
 
   const { error } = await supabase
     .from('cash_transactions')
@@ -144,11 +172,19 @@ export async function rejectPettyCash(id: string, reason: string) {
   const supabase = await createClient();
   const { data: tx } = await supabase
     .from('cash_transactions')
-    .select('organization_id, store_id, approval_status')
+    .select('organization_id, store_id, approval_status, amount, created_by')
     .eq('id', id)
     .single();
   if (!tx) throw new Error('対象の入出金が見つかりません');
   if (tx.approval_status !== 'pending') throw new Error('承認待ちの入出金のみ差戻しできます');
+
+  const rules = await loadPettyCashApprovalRules(supabase, tx.organization_id);
+  const rule = resolveApprovalRule(rules, 'petty_cash', tx.amount);
+  const check = checkApproval(rule, ctx.role, tx.created_by === ctx.userId);
+  if (!check.allowed) {
+    if (check.reason === 'insufficient_role') throw new Error(`この金額は${check.requiredRoleLabel}の承認が必要です`);
+    throw new Error('自分の登録した入出金は差戻しできません（設定で変更可能）');
+  }
 
   const { error } = await supabase
     .from('cash_transactions')
