@@ -43,10 +43,15 @@ export const getSessionContext = cache(async (): Promise<SessionContext | null> 
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('id, display_name, is_cypress_admin')
+    .select('id, display_name, is_cypress_admin, status')
     .eq('id', user.id)
     .single();
   if (!profile) return null;
+  // 停止ユーザーは既存セッションでも利用不可（次のリクエストで即時遮断）
+  if (profile.status === 'suspended') {
+    await supabase.auth.signOut();
+    return null;
+  }
 
   const { data: membership } = await supabase
     .from('memberships')
