@@ -32,7 +32,7 @@ export default async function StoreSettingsPage() {
 
   const { data: settings } = await supabase
     .from('store_settings')
-    .select('receipt_header, receipt_footer, invoice_registration_number, service_charge_rate, rounding')
+    .select('receipt_header, receipt_footer, invoice_registration_number, service_charge_rate, rounding, allow_negative_stock')
     .eq('store_id', targetStore.id)
     .maybeSingle();
 
@@ -65,6 +65,7 @@ export default async function StoreSettingsPage() {
     invoiceRegistrationNumber: settings?.invoice_registration_number ?? '',
     serviceChargeRate: settings?.service_charge_rate ?? 0,
     rounding: settings?.rounding ?? 'floor',
+    allowNegativeStock: settings?.allow_negative_stock ?? true,
   };
 
   return (

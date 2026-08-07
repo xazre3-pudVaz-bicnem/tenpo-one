@@ -2,6 +2,8 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { requireMember } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
+import { ROLE_LABELS } from '@/lib/permissions';
+import { resolveApprovalRule, type ApprovalRuleLike } from '@/lib/approvals';
 import { PageHeader } from '@/components/ui/page-header';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -56,6 +58,25 @@ export default async function PurchaseOrderDetailPage({ params }: { params: Prom
   const storeName = storeInfo?.name ?? '';
   const subtotal = po.total - po.tax_total;
 
+  // 承認待ち（requested）の場合、金額から必要承認ロールを解決してヒント表示する
+  let requiredApprovalRoleLabel: string | null = null;
+  if (status === 'requested') {
+    const { data: rulesData } = await supabase
+      .from('approval_rules')
+      .select('target, min_amount, max_amount, approver_role, allow_self_approve')
+      .eq('organization_id', ctx.organizationId)
+      .eq('target', 'purchase_order');
+    const rules: ApprovalRuleLike[] = (rulesData ?? []).map((r) => ({
+      target: r.target as ApprovalRuleLike['target'],
+      minAmount: r.min_amount as number,
+      maxAmount: r.max_amount as number | null,
+      approverRole: r.approver_role as ApprovalRuleLike['approverRole'],
+      allowSelfApprove: r.allow_self_approve as boolean,
+    }));
+    const rule = resolveApprovalRule(rules, 'purchase_order', po.total);
+    requiredApprovalRoleLabel = rule ? ROLE_LABELS[rule.approverRole] : null;
+  }
+
   return (
     <div>
       <PageHeader
@@ -86,6 +107,12 @@ export default async function PurchaseOrderDetailPage({ params }: { params: Prom
           </div>
         }
       />
+
+      {status === 'requested' && requiredApprovalRoleLabel && (
+        <p className="mb-3 text-xs text-primary-deep print:hidden">
+          この金額の承認には「{requiredApprovalRoleLabel}」以上のロールが必要です
+        </p>
+      )}
 
       <div className="mb-5 grid gap-4 sm:grid-cols-3 lg:grid-cols-5 print:hidden">
         <Card className="p-4">

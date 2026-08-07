@@ -14,7 +14,10 @@ interface StoreOption {
   name: string;
 }
 
-/** 店舗間移動ダイアログ。rpc apply_stock_transfer を使う（受け側の同名品目がなければ自動作成される） */
+/**
+ * 即時移動（発送・受取を同時に記録）ダイアログ。rpc apply_stock_transfer を使う
+ * （受け側の同名品目がなければ自動作成される）。申請→発送→受取のワークフローを経ずに即座に記録したい場合に使う。
+ */
 export function TransferForm({
   item,
   stores,
@@ -71,15 +74,18 @@ export function TransferForm({
     <>
       <Button size="sm" variant="secondary" onClick={() => setOpen(true)}>
         <ArrowLeftRight className="h-3.5 w-3.5" />
-        移動
+        即時移動
       </Button>
-      <Dialog open={open} onClose={close} title={`店舗間移動：${item.name}`}>
+      <Dialog open={open} onClose={close} title={`即時移動（発送・受取を同時に記録）：${item.name}`}>
         <form
           action={(fd) => {
             void handleSubmit(fd);
           }}
           className="space-y-4"
         >
+          <p className="rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-500">
+            発送と受取を同時に記録します。承認や追跡が必要な移動は「移動」タブの「移動を申請」をご利用ください
+          </p>
           <div>
             <Label htmlFor="tr-store">移動先店舗</Label>
             <Select id="tr-store" value={toStoreId} onChange={(e) => setToStoreId(e.target.value)}>

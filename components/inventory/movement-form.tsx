@@ -9,7 +9,7 @@ import { useToast } from '@/components/ui/toast';
 import { yen } from '@/lib/format';
 import { purchaseToStockQty, purchaseToStockUnitCost, hasCostPrecisionRisk } from '@/lib/units';
 import { addMovement } from '@/app/app/inventory/actions';
-import { MANUAL_MOVEMENT_OPTIONS, MOVEMENT_TYPE_LABELS, type ManualMovementType } from './labels';
+import { MANUAL_MOVEMENT_OPTIONS, MOVEMENT_TYPE_LABELS, movementNeedsReason, type ManualMovementType } from './labels';
 
 export interface MovementFormItem {
   id: string;
@@ -37,7 +37,7 @@ export function MovementForm({ item }: { item: MovementFormItem }) {
   const router = useRouter();
   const { toast } = useToast();
 
-  const needsReason = movementType === 'waste' || movementType === 'count_adjust';
+  const needsReason = movementNeedsReason(movementType);
   const isReceipt = movementType === 'in';
   const factor = item.purchaseToStockFactor > 0 ? item.purchaseToStockFactor : 1;
   const usesPurchaseUnit = isReceipt && !!item.purchaseUnit && factor !== 1;

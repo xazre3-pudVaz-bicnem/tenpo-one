@@ -5,10 +5,22 @@ import { requireMember, requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { todayJst } from '@/lib/format';
 import { purchaseToStockQty, purchaseToStockUnitCost } from '@/lib/units';
-import type { ItemKind, ManualMovementType, MovementType } from '@/components/inventory/labels';
+import { movementNeedsReason, type ItemKind, type ManualMovementType, type MovementType } from '@/components/inventory/labels';
 
 const LIST_PATH = '/app/inventory';
 const countPath = (id: string) => `/app/inventory/counts/${id}`;
+
+/** stock_transfers RPC（ship/receive）のエラーコードを日本語メッセージへ変換する */
+function mapTransferError(message: string): string {
+  if (message.startsWith('INSUFFICIENT_STOCK')) {
+    const name = message.split(':').slice(1).join(':').trim();
+    return `在庫が不足しています: ${name}`;
+  }
+  if (message.includes('INVALID_STATUS')) return 'この状態では操作できません（画面を更新してご確認ください）';
+  if (message.includes('FORBIDDEN')) return 'この操作を行う権限がありません';
+  if (message.includes('TRANSFER_NOT_FOUND')) return '移動が見つかりません';
+  return '処理に失敗しました。時間をおいて再度お試しください';
+}
 
 /** 品目の新規追加 */
 export async function createItem(input: {
@@ -102,7 +114,7 @@ export async function addMovement(input: {
 }) {
   const ctx = await requirePermission('inventory.write');
   if (input.quantity <= 0) throw new Error('数量は正の値で入力してください');
-  if ((input.movementType === 'waste' || input.movementType === 'count_adjust') && !input.reason?.trim()) {
+  if (movementNeedsReason(input.movementType) && !input.reason?.trim()) {
     throw new Error('理由を入力してください');
   }
   const supabase = await createClient();
@@ -144,6 +156,18 @@ export async function addMovement(input: {
 
   const signedQuantity = -input.quantity;
 
+  if (input.movementType === 'out' || input.movementType === 'waste') {
+    const { data: settings } = await supabase
+      .from('store_settings')
+      .select('allow_negative_stock')
+      .eq('store_id', item.store_id)
+      .maybeSingle();
+    const allowNegative = settings?.allow_negative_stock ?? true;
+    if (!allowNegative && Number(item.current_quantity) + signedQuantity < 0) {
+      throw new Error(`在庫が不足しています: ${item.name}`);
+    }
+  }
+
   const { error: moveErr } = await supabase.from('stock_movements').insert({
     organization_id: ctx.organizationId,
     store_id: item.store_id,
@@ -163,7 +187,7 @@ export async function addMovement(input: {
     .eq('id', input.itemId);
   if (updErr) throw new Error(updErr.message);
 
-  if (input.movementType === 'waste' || input.movementType === 'count_adjust') {
+  if (movementNeedsReason(input.movementType)) {
     await supabase.rpc('log_audit', {
       p_org: ctx.organizationId,
       p_store: item.store_id,
@@ -202,6 +226,121 @@ export async function transferStock(input: {
   if (error) throw new Error(error.message);
   revalidatePath(LIST_PATH);
   return data as { ok: boolean; transfer_group_id: string; to_item_id: string };
+}
+
+/**
+ * 店舗間移動ワークフロー（申請→発送→受取）。
+ * 申請: 自店（from）から他店（to）への移動をstock_transfers + stock_transfer_itemsとして起票する。
+ * 在庫は発送（ship_stock_transfer）まで動かない。
+ */
+export async function requestStockTransfer(input: {
+  fromStoreId: string;
+  toStoreId: string;
+  note: string | null;
+  lines: { inventoryItemId: string; quantity: number }[];
+}): Promise<string> {
+  const ctx = await requirePermission('vendors.manage');
+  if (!input.toStoreId) throw new Error('移動先店舗を選択してください');
+  if (input.toStoreId === input.fromStoreId) throw new Error('自店舗には移動できません');
+  const lines = input.lines.filter((l) => l.inventoryItemId && l.quantity > 0);
+  if (lines.length === 0) throw new Error('品目を1件以上選択してください');
+
+  const supabase = await createClient();
+  const ids = [...new Set(lines.map((l) => l.inventoryItemId))];
+  const { data: items, error: itemsErr } = await supabase
+    .from('inventory_items')
+    .select('id, name, unit, store_id')
+    .in('id', ids);
+  if (itemsErr || !items) throw new Error('品目の取得に失敗しました');
+  const itemMap = new Map(items.map((i) => [i.id as string, i]));
+  for (const l of lines) {
+    const item = itemMap.get(l.inventoryItemId);
+    if (!item || item.store_id !== input.fromStoreId) throw new Error('選択した品目が自店舗に見つかりません');
+  }
+
+  const { data: transfer, error } = await supabase
+    .from('stock_transfers')
+    .insert({
+      organization_id: ctx.organizationId,
+      from_store_id: input.fromStoreId,
+      to_store_id: input.toStoreId,
+      status: 'requested',
+      note: input.note,
+      requested_by: ctx.userId,
+      created_by: ctx.userId,
+      updated_by: ctx.userId,
+    })
+    .select('id')
+    .single();
+  if (error || !transfer) throw new Error(error?.message ?? '移動申請の作成に失敗しました');
+
+  const { error: linesErr } = await supabase.from('stock_transfer_items').insert(
+    lines.map((l) => {
+      const item = itemMap.get(l.inventoryItemId)!;
+      return {
+        transfer_id: transfer.id,
+        inventory_item_id: l.inventoryItemId,
+        name: item.name as string,
+        quantity: l.quantity,
+        unit: item.unit as string,
+      };
+    })
+  );
+  if (linesErr) throw new Error(linesErr.message);
+
+  revalidatePath(LIST_PATH);
+  return transfer.id as string;
+}
+
+/** 発送: rpc ship_stock_transfer（送り元在庫を減算。負在庫禁止設定を尊重） */
+export async function shipStockTransfer(transferId: string) {
+  await requirePermission('vendors.manage');
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('ship_stock_transfer', { p_transfer_id: transferId });
+  if (error) throw new Error(mapTransferError(error.message));
+  revalidatePath(LIST_PATH);
+}
+
+/** 受取: rpc receive_stock_transfer（受取店の在庫を加算。同名品目がなければ自動作成） */
+export async function receiveStockTransfer(transferId: string) {
+  await requirePermission('vendors.manage');
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('receive_stock_transfer', { p_transfer_id: transferId });
+  if (error) throw new Error(mapTransferError(error.message));
+  revalidatePath(LIST_PATH);
+}
+
+/** 取消（申請中のみ・理由必須・監査ログ） */
+export async function cancelStockTransfer(transferId: string, reason: string) {
+  const ctx = await requirePermission('vendors.manage');
+  if (!reason.trim()) throw new Error('理由を入力してください');
+  const supabase = await createClient();
+  const { data: transfer, error } = await supabase
+    .from('stock_transfers')
+    .select('id, organization_id, from_store_id, status')
+    .eq('id', transferId)
+    .single();
+  if (error || !transfer) throw new Error('移動が見つかりません');
+  if (transfer.status !== 'requested') throw new Error('申請中の移動のみ取消できます');
+
+  const { error: updErr } = await supabase
+    .from('stock_transfers')
+    .update({ status: 'cancelled', updated_by: ctx.userId })
+    .eq('id', transferId);
+  if (updErr) throw new Error(updErr.message);
+
+  await supabase.rpc('log_audit', {
+    p_org: ctx.organizationId,
+    p_store: transfer.from_store_id,
+    p_action: 'inventory.transfer.cancel',
+    p_target_table: 'stock_transfers',
+    p_target_id: transferId,
+    p_before: { status: 'requested' },
+    p_after: { status: 'cancelled' },
+    p_note: reason,
+  });
+
+  revalidatePath(LIST_PATH);
 }
 
 export async function getMovementHistory(itemId: string) {

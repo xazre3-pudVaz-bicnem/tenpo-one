@@ -23,6 +23,7 @@ export interface StoreFormData {
   invoiceRegistrationNumber: string;
   serviceChargeRate: number;
   rounding: string;
+  allowNegativeStock: boolean;
 }
 
 const ROUNDING_OPTIONS = [
@@ -171,6 +172,26 @@ export function StoreForm({ initial }: { initial: StoreFormData }) {
               </Select>
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>在庫設定</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <label className="flex items-center gap-2 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+              checked={form.allowNegativeStock}
+              onChange={(e) => set('allowNegativeStock', e.target.checked)}
+            />
+            マイナス在庫を許可する
+          </label>
+          <p className="text-xs text-gray-500">
+            OFFにすると在庫不足時の発送・出庫がエラーになります
+          </p>
         </CardContent>
       </Card>
 

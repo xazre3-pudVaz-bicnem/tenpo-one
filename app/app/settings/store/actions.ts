@@ -27,6 +27,7 @@ export async function updateStoreInfo(input: {
   invoiceRegistrationNumber: string;
   serviceChargeRate: number;
   rounding: string;
+  allowNegativeStock: boolean;
 }): Promise<ActionResult> {
   const ctx = await requirePermission('store.settings');
 
@@ -73,6 +74,7 @@ export async function updateStoreInfo(input: {
         invoice_registration_number: input.invoiceRegistrationNumber.trim() || null,
         service_charge_rate: input.serviceChargeRate,
         rounding: input.rounding as Rounding,
+        allow_negative_stock: input.allowNegativeStock,
         updated_by: ctx.userId,
       },
       { onConflict: 'store_id' }
@@ -86,7 +88,14 @@ export async function updateStoreInfo(input: {
     p_target_table: 'stores',
     p_target_id: input.storeId,
     p_before: null,
-    p_after: { name, seat_count: input.seatCount, booking_enabled: input.bookingEnabled, service_charge_rate: input.serviceChargeRate, rounding: input.rounding },
+    p_after: {
+      name,
+      seat_count: input.seatCount,
+      booking_enabled: input.bookingEnabled,
+      service_charge_rate: input.serviceChargeRate,
+      rounding: input.rounding,
+      allow_negative_stock: input.allowNegativeStock,
+    },
     p_note: null,
   });
 

@@ -52,16 +52,35 @@ export function PoForm({
   vendors,
   inventoryItems,
   initialItemId,
+  initialItems,
 }: {
   storeId: string;
   vendors: VendorOption[];
   inventoryItems: InventoryItemOption[];
   initialItemId?: string;
+  /** 発注提案タブから複数品目＋推奨数を引き継ぐ場合に使う（initialItemIdより優先） */
+  initialItems?: { id: string; qty: number }[];
 }) {
   const [vendorId, setVendorId] = useState('');
   const [expectedAt, setExpectedAt] = useState('');
   const [note, setNote] = useState('');
   const [lines, setLines] = useState<Line[]>(() => {
+    if (initialItems && initialItems.length > 0) {
+      const built = initialItems
+        .map(({ id, qty }) => {
+          const item = inventoryItems.find((i) => i.id === id);
+          if (!item) return null;
+          return newLine({
+            inventoryItemId: item.id,
+            name: item.name,
+            unit: item.purchaseUnit || item.unit,
+            quantity: String(qty),
+            unitCost: item.avgCost != null ? String(item.avgCost) : '0',
+          });
+        })
+        .filter((l): l is Line => l !== null);
+      if (built.length > 0) return built;
+    }
     const initialItem = initialItemId ? inventoryItems.find((i) => i.id === initialItemId) : undefined;
     return [
       initialItem

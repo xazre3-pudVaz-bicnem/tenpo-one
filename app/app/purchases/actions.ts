@@ -3,7 +3,27 @@
 import { revalidatePath } from 'next/cache';
 import { requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
+import { resolveApprovalRule, checkApproval, type ApprovalRuleLike } from '@/lib/approvals';
 import { purchaseToStockQty, purchaseToStockUnitCost } from '@/lib/units';
+
+/** 組織の承認ルール（target='purchase_order'）をApprovalRuleLike形式で取得 */
+async function loadPurchaseOrderApprovalRules(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  organizationId: string
+): Promise<ApprovalRuleLike[]> {
+  const { data } = await supabase
+    .from('approval_rules')
+    .select('target, min_amount, max_amount, approver_role, allow_self_approve')
+    .eq('organization_id', organizationId)
+    .eq('target', 'purchase_order');
+  return (data ?? []).map((r) => ({
+    target: r.target as ApprovalRuleLike['target'],
+    minAmount: r.min_amount as number,
+    maxAmount: r.max_amount as number | null,
+    approverRole: r.approver_role as ApprovalRuleLike['approverRole'],
+    allowSelfApprove: r.allow_self_approve as boolean,
+  }));
+}
 
 const LIST_PATH = '/app/purchases';
 const detailPath = (id: string) => `/app/purchases/${id}`;
@@ -90,11 +110,21 @@ export async function changePurchaseOrderStatus(poId: string, action: PoAction) 
   const supabase = await createClient();
   const { data: po, error } = await supabase
     .from('purchase_orders')
-    .select('id, organization_id, store_id, status')
+    .select('id, organization_id, store_id, status, total, created_by')
     .eq('id', poId)
     .single();
   if (error || !po) throw new Error('発注書が見つかりません');
   if (!def.from.includes(po.status)) throw new Error('この状態からは操作できません');
+
+  if (action === 'approve') {
+    const rules = await loadPurchaseOrderApprovalRules(supabase, ctx.organizationId);
+    const rule = resolveApprovalRule(rules, 'purchase_order', po.total);
+    const check = checkApproval(rule, ctx.role, po.created_by === ctx.userId);
+    if (!check.allowed) {
+      if (check.reason === 'insufficient_role') throw new Error(`この金額は${check.requiredRoleLabel}の承認が必要です`);
+      throw new Error('自分が作成した発注書は承認できません（設定で変更可能）');
+    }
+  }
 
   const update: Record<string, unknown> = { status: def.to, updated_by: ctx.userId };
   if (action === 'order') update.ordered_at = new Date().toISOString();
