@@ -16,6 +16,7 @@ import { PayrollItemsTable, type PayrollItemView } from '@/components/payroll/br
 import { BonusItemsTable, type BonusItemView } from '@/components/payroll/bonus-items-table';
 import { RunActions } from '@/components/payroll/run-actions';
 import { Payslip, type PayslipData } from '@/components/payroll/payslip';
+import { RulesSnapshotPanel, type RulesSnapshot } from '@/components/payroll/rules-snapshot-panel';
 
 export const metadata: Metadata = { title: '給与計算 詳細' };
 
@@ -134,6 +135,10 @@ export default async function PayrollRunDetailPage({
     .eq('payroll_run_id', runId)
     .order('created_at');
 
+  const nameByProfile = new Map(
+    (items ?? []).map((row) => [row.profile_id as string, (row.profiles as unknown as { display_name: string } | null)?.display_name ?? '不明'])
+  );
+
   const views: PayrollItemView[] = (items ?? []).map((row) => {
     const profile = row.profiles as unknown as { display_name: string } | null;
     return {
@@ -178,6 +183,9 @@ export default async function PayrollRunDetailPage({
               <Download className="h-3.5 w-3.5" />
               CSVエクスポート
             </Link>
+            <Link href={`/app/accounting?source_type=payroll&source_id=${runId}`} className={buttonVariants({ variant: 'secondary', size: 'sm' })}>
+              この給与の仕訳を見る
+            </Link>
           </>
         }
       />
@@ -193,6 +201,12 @@ export default async function PayrollRunDetailPage({
       <div className="mb-4">
         <RunActions runId={runId} status={run.status} runType={runType} />
       </div>
+
+      {run.status === 'approved' && run.rules_snapshot && (
+        <div className="mb-4">
+          <RulesSnapshotPanel snapshot={run.rules_snapshot as RulesSnapshot} profileNameById={nameByProfile} />
+        </div>
+      )}
 
       {runType === 'bonus' ? (
         bonusViews.length === 0 ? (

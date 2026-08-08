@@ -13,6 +13,10 @@ import { EmptyState } from '@/components/ui/state';
 import { TableWrap, Table, THead, TBody, Tr, Th, Td } from '@/components/ui/table';
 import { LeaveGrantDialog } from '@/components/leave/grant-dialog';
 import { LeavePolicyForm } from '@/components/leave/policy-form';
+import { LeaveRequestDialog } from '@/components/leave/request-dialog';
+import { WithdrawLeaveRequestButton } from '@/components/leave/withdraw-button';
+import { LeaveRequestReview } from '@/components/leave/request-review';
+import { canReviewRequests } from '@/app/app/attendance/shared';
 
 export const metadata: Metadata = { title: '有給休暇' };
 
@@ -70,7 +74,9 @@ export default async function LeavePage({
       </div>
 
       {tab === 'mine' && <MineTab ctx={ctx} />}
-      {tab === 'admin' && isApprover && <AdminTab ctx={ctx} canSetPolicy={canSetPolicy} />}
+      {tab === 'admin' && isApprover && (
+        <AdminTab ctx={ctx} canSetPolicy={canSetPolicy} canReview={canReviewRequests(ctx.role)} />
+      )}
     </div>
   );
 }
@@ -93,14 +99,36 @@ async function MineTab({ ctx }: { ctx: Ctx }) {
     .eq('entry_type', 'paid_leave')
     .in('status', ['approved', 'closed'])
     .order('work_date', { ascending: false });
+  const { data: myRequests } = await supabase
+    .from('leave_requests')
+    .select('*')
+    .eq('organization_id', ctx.organizationId)
+    .eq('profile_id', ctx.userId)
+    .order('leave_date', { ascending: false });
 
   const grantRows = (grants ?? []) as { id: string; granted_on: string; days: number; expires_on: string; reason: string }[];
   const takenRows = (takenEntries ?? []) as { id: string; work_date: string; leave_fraction: number | null; note: string | null }[];
+  const requestRows = (myRequests ?? []) as {
+    id: string;
+    leave_date: string;
+    fraction: number;
+    reason: string | null;
+    status: string;
+    review_note: string | null;
+  }[];
 
   const activeGranted = grantRows.filter((g) => g.expires_on >= today).reduce((a, g) => a + Number(g.days), 0);
   const expiredTotal = grantRows.filter((g) => g.expires_on < today).reduce((a, g) => a + Number(g.days), 0);
   const taken = takenRows.reduce((a, e) => a + Number(e.leave_fraction ?? 1), 0);
   const remaining = activeGranted - taken;
+
+  const REQUEST_STATUS_LABEL: Record<string, string> = { pending: '承認待ち', approved: '承認済み', rejected: '却下', cancelled: '取下げ済み' };
+  const REQUEST_STATUS_TONE: Record<string, 'gray' | 'warning' | 'success' | 'danger'> = {
+    pending: 'warning',
+    approved: 'success',
+    rejected: 'danger',
+    cancelled: 'gray',
+  };
 
   return (
     <div className="space-y-5">
@@ -110,6 +138,54 @@ async function MineTab({ ctx }: { ctx: Ctx }) {
         <StatCard label="取得合計" value={`${taken}日`} />
         <StatCard label="失効分" value={`${expiredTotal}日`} tone={expiredTotal > 0 ? 'warning' : 'default'} />
       </div>
+
+      <Card>
+        <CardHeader className="flex flex-wrap items-center justify-between gap-2">
+          <CardTitle>有給申請</CardTitle>
+          <LeaveRequestDialog defaultDate={today} />
+        </CardHeader>
+        <CardContent className="p-0">
+          {requestRows.length === 0 ? (
+            <div className="p-5">
+              <EmptyState title="申請履歴はありません" className="border-0 py-8" />
+            </div>
+          ) : (
+            <TableWrap className="border-0">
+              <Table>
+                <THead>
+                  <Tr>
+                    <Th>取得日</Th>
+                    <Th>区分</Th>
+                    <Th>理由</Th>
+                    <Th>状態</Th>
+                    <Th className="text-right">操作</Th>
+                  </Tr>
+                </THead>
+                <TBody>
+                  {requestRows.map((r) => (
+                    <Tr key={r.id}>
+                      <Td>{formatDate(r.leave_date)}</Td>
+                      <Td>{Number(r.fraction) === 0.5 ? '半休' : '全休'}</Td>
+                      <Td className="text-gray-500">
+                        {r.reason || '—'}
+                        {r.status === 'rejected' && r.review_note && (
+                          <span className="mt-0.5 block text-xs text-danger">却下理由: {r.review_note}</span>
+                        )}
+                      </Td>
+                      <Td>
+                        <Badge tone={REQUEST_STATUS_TONE[r.status] ?? 'gray'}>{REQUEST_STATUS_LABEL[r.status] ?? r.status}</Badge>
+                      </Td>
+                      <Td className="text-right">
+                        {r.status === 'pending' && <WithdrawLeaveRequestButton requestId={r.id} />}
+                      </Td>
+                    </Tr>
+                  ))}
+                </TBody>
+              </Table>
+            </TableWrap>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
@@ -188,7 +264,7 @@ async function MineTab({ ctx }: { ctx: Ctx }) {
   );
 }
 
-async function AdminTab({ ctx, canSetPolicy }: { ctx: Ctx; canSetPolicy: boolean }) {
+async function AdminTab({ ctx, canSetPolicy, canReview }: { ctx: Ctx; canSetPolicy: boolean; canReview: boolean }) {
   const supabase = await createClient();
   const today = todayJst();
   const soonThreshold = addDays(today, 60);
@@ -235,9 +311,25 @@ async function AdminTab({ ctx, canSetPolicy }: { ctx: Ctx; canSetPolicy: boolean
   const { data: orgRow } = canSetPolicy
     ? await supabase.from('organizations').select('leave_policy').eq('id', ctx.organizationId).maybeSingle()
     : { data: null };
+  const { data: pendingRequestRows } = profileIds.length
+    ? await supabase
+        .from('leave_requests')
+        .select('*')
+        .eq('organization_id', ctx.organizationId)
+        .in('profile_id', profileIds)
+        .eq('status', 'pending')
+        .order('leave_date')
+    : { data: [] };
 
   const grantRows = (allGrants ?? []) as { id: string; profile_id: string; days: number; expires_on: string }[];
   const takenRows = (allTaken ?? []) as { profile_id: string; leave_fraction: number | null }[];
+  const pendingRequests = (pendingRequestRows ?? []) as {
+    id: string;
+    profile_id: string;
+    leave_date: string;
+    fraction: number;
+    reason: string | null;
+  }[];
 
   const grantsByProfile = new Map<string, { granted: number; expired: number }>();
   for (const g of grantRows) {
@@ -263,6 +355,45 @@ async function AdminTab({ ctx, canSetPolicy }: { ctx: Ctx; canSetPolicy: boolean
       <div className="flex justify-end">
         <LeaveGrantDialog staffOptions={staffOptions} defaultExpiryYears={orgPolicy.expiry_years ?? 2} />
       </div>
+
+      {pendingRequests.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>承認待ちの有給申請</CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            {!canReview && (
+              <p className="px-4 pt-3 text-xs text-gray-500">
+                この申請の承認・却下は店長以上のロールのみ行えます。閲覧のみ可能です。
+              </p>
+            )}
+            <TableWrap className="border-0">
+              <Table>
+                <THead>
+                  <Tr>
+                    <Th>スタッフ</Th>
+                    <Th>取得日</Th>
+                    <Th>区分</Th>
+                    <Th>理由</Th>
+                    <Th className="text-right">操作</Th>
+                  </Tr>
+                </THead>
+                <TBody>
+                  {pendingRequests.map((r) => (
+                    <Tr key={r.id}>
+                      <Td className="font-medium text-navy">{nameByProfile.get(r.profile_id) ?? '—'}</Td>
+                      <Td>{formatDate(r.leave_date)}</Td>
+                      <Td>{Number(r.fraction) === 0.5 ? '半休' : '全休'}</Td>
+                      <Td className="text-gray-500">{r.reason || '—'}</Td>
+                      <Td className="text-right">{canReview && <LeaveRequestReview requestId={r.id} />}</Td>
+                    </Tr>
+                  ))}
+                </TBody>
+              </Table>
+            </TableWrap>
+          </CardContent>
+        </Card>
+      )}
 
       {expiringSoon.length > 0 && (
         <Card>

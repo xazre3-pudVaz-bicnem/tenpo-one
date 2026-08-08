@@ -9,6 +9,13 @@ import { groupDaysByRule, type PayrollRuleCandidate } from './rule-periods';
 
 type ActionResult = { ok: boolean; message: string };
 
+/** DB例外メッセージ（PostgreSQLの RAISE EXCEPTION／トリガー）を日本語UIメッセージへ変換する */
+function mapPayrollError(message: string | undefined | null): string {
+  if (!message) return '処理に失敗しました';
+  if (message.includes('PAYROLL_RUN_LOCKED')) return '確定済みの給与計算は変更できません';
+  return message;
+}
+
 // ---------------------------------------------------------------
 // 給与ルール
 // ---------------------------------------------------------------
@@ -171,6 +178,7 @@ function tierBreakdownOf(
 }
 
 export interface CommissionBreakdownItem {
+  ruleId: string;
   name: string;
   basis: 'tax_excluded' | 'tax_included' | 'store_target';
   method: 'fixed' | 'rate' | 'tiered';
@@ -181,9 +189,16 @@ export interface CommissionBreakdownItem {
   amount: number;
 }
 
+type GenerateResult = { ok: true } | { ok: false; message: string };
+
 /** 期間内の勤怠・売上・ルールから payroll_items を生成する（作成／再計算で共用） */
-async function generatePayrollItems(supabase: SupabaseClient, ctx: { organizationId: string; userId: string }, run: RunRow) {
-  await supabase.from('payroll_items').delete().eq('payroll_run_id', run.id);
+async function generatePayrollItems(
+  supabase: SupabaseClient,
+  ctx: { organizationId: string; userId: string },
+  run: RunRow
+): Promise<GenerateResult> {
+  const { error: deleteError } = await supabase.from('payroll_items').delete().eq('payroll_run_id', run.id);
+  if (deleteError) return { ok: false, message: mapPayrollError(deleteError.message) };
 
   let entriesQuery = supabase
     .from('time_entries')
@@ -198,7 +213,7 @@ async function generatePayrollItems(supabase: SupabaseClient, ctx: { organizatio
   const candidateIds = [...new Set((entries ?? []).map((e) => e.profile_id))];
   if (candidateIds.length === 0) {
     await supabase.from('payroll_runs').update({ note: '対象期間に勤怠記録がありませんでした' }).eq('id', run.id);
-    return;
+    return { ok: true };
   }
 
   const { data: profiles } = await supabase.from('profiles').select('id, display_name').in('id', candidateIds);
@@ -327,6 +342,7 @@ async function generatePayrollItems(supabase: SupabaseClient, ctx: { organizatio
     };
     const dailyBreakdown: DailyBreakdownRow[] = [];
     const periodBreakdown: {
+      ruleId: string;
       effectiveFrom: string;
       effectiveTo: string | null;
       rangeStart: string;
@@ -388,6 +404,7 @@ async function generatePayrollItems(supabase: SupabaseClient, ctx: { organizatio
       };
 
       periodBreakdown.push({
+        ruleId: group.rule.id,
         effectiveFrom: group.rule.effectiveFrom,
         effectiveTo: group.rule.effectiveTo,
         rangeStart: group.rangeStart,
@@ -443,6 +460,7 @@ async function generatePayrollItems(supabase: SupabaseClient, ctx: { organizatio
       );
       if (amount !== 0) {
         commissionBreakdown.push({
+          ruleId: cr.id,
           name: cr.name,
           basis: cr.basis,
           method: cr.method,
@@ -467,6 +485,7 @@ async function generatePayrollItems(supabase: SupabaseClient, ctx: { organizatio
       const amount = achieved ? cr.fixed_amount ?? 0 : 0;
       if (amount !== 0) {
         commissionBreakdown.push({
+          ruleId: cr.id,
           name: cr.name,
           basis: 'store_target',
           method: 'fixed',
@@ -528,7 +547,8 @@ async function generatePayrollItems(supabase: SupabaseClient, ctx: { organizatio
   }
 
   if (items.length > 0) {
-    await supabase.from('payroll_items').insert(items);
+    const { error: insertError } = await supabase.from('payroll_items').insert(items);
+    if (insertError) return { ok: false, message: mapPayrollError(insertError.message) };
   }
 
   await supabase
@@ -537,6 +557,7 @@ async function generatePayrollItems(supabase: SupabaseClient, ctx: { organizatio
       note: skipped.length > 0 ? `給与ルール未設定のため対象外: ${skipped.join('、')}` : null,
     })
     .eq('id', run.id);
+  return { ok: true };
 }
 
 export interface CreateRunInput {
@@ -571,7 +592,12 @@ export async function createPayrollRun(input: CreateRunInput): Promise<ActionRes
 
   if (error || !run) return { ok: false, message: '給与計算の作成に失敗しました' };
 
-  await generatePayrollItems(supabase, ctx, run);
+  const genResult = await generatePayrollItems(supabase, ctx, run);
+  if (!genResult.ok) {
+    // 明細生成に失敗した場合、空のrunだけが残ると紛らわしいため作成自体を取り消す
+    await supabase.from('payroll_runs').delete().eq('id', run.id);
+    return { ok: false, message: `給与計算の作成に失敗しました: ${genResult.message}` };
+  }
   revalidatePath('/app/payroll');
   return { ok: true, message: '給与計算を作成しました', runId: run.id };
 }
@@ -585,14 +611,57 @@ export async function recalcPayrollRun(runId: string): Promise<ActionResult> {
     .eq('id', runId)
     .single();
   if (!run) return { ok: false, message: '給与計算が見つかりません' };
-  if (run.status !== 'draft') return { ok: false, message: '下書き状態のみ再計算できます' };
   if (run.run_type === 'bonus') {
     return { ok: false, message: '賞与は勤怠から自動計算されないため再計算できません。金額を確認のうえ確定してください' };
   }
+  // 給与確定の不変性: 承認済みrunは再計算不可（DBトリガー PAYROLL_RUN_LOCKED でも二重に防止される）。
+  // 確定済み（承認前）runは、意図せぬ金額変更を避けるため一旦「下書きに戻す」操作を経由させる。
+  if (run.status === 'approved') {
+    return { ok: false, message: mapPayrollError('PAYROLL_RUN_LOCKED') };
+  }
+  if (run.status === 'confirmed') {
+    return { ok: false, message: 'この給与計算は確定済み（承認前）です。再計算するには一旦「下書きに戻す」操作をしてください' };
+  }
 
-  await generatePayrollItems(supabase, ctx, run);
+  const result = await generatePayrollItems(supabase, ctx, run);
+  if (!result.ok) return { ok: false, message: result.message };
   revalidatePath(`/app/payroll/${runId}`);
   return { ok: true, message: '再計算しました' };
+}
+
+/**
+ * 確定済み（承認前）の給与計算を下書きに戻す。承認済み(approved)runはDBトリガー
+ * prevent_approved_payroll_run_mutation により status 変更自体が拒否されるため対象外。
+ * 戻した後は再計算（recalcPayrollRun）で最新の勤怠を反映できる。
+ */
+export async function revertPayrollRunToDraft(runId: string): Promise<ActionResult> {
+  const ctx = await requirePermission('payroll.manage');
+  const supabase = await createClient();
+  const { data: run } = await supabase
+    .from('payroll_runs')
+    .select('status, organization_id, store_id, title')
+    .eq('id', runId)
+    .single();
+  if (!run) return { ok: false, message: '給与計算が見つかりません' };
+  if (run.status !== 'confirmed') return { ok: false, message: '確定済み（承認前）の給与計算のみ下書きに戻せます' };
+
+  const { error } = await supabase.from('payroll_runs').update({ status: 'draft', updated_by: ctx.userId }).eq('id', runId);
+  if (error) return { ok: false, message: mapPayrollError(error.message) };
+
+  await supabase.rpc('log_audit', {
+    p_org: run.organization_id,
+    p_store: run.store_id,
+    p_action: 'payroll.revert_to_draft',
+    p_target_table: 'payroll_runs',
+    p_target_id: runId,
+    p_before: { status: 'confirmed' },
+    p_after: { status: 'draft' },
+    p_note: `給与計算「${run.title}」を下書きに戻しました`,
+  });
+
+  revalidatePath(`/app/payroll/${runId}`);
+  revalidatePath('/app/payroll');
+  return { ok: true, message: '下書きに戻しました。内容を確認し、必要に応じて再計算してください' };
 }
 
 // ---------------------------------------------------------------
@@ -687,22 +756,113 @@ export async function confirmPayrollRun(runId: string): Promise<ActionResult> {
   return { ok: true, message: '給与計算を確定しました' };
 }
 
+/**
+ * runで実際に使用された payroll_rules / commission_rules を payroll_items.breakdown（periods/commissions
+ * に付与した ruleId）から特定し、確定時点の内容をそのまま複製したスナップショットを作る。
+ * 承認後にルール（時給・歩合率）を変更しても、このrunの計算根拠は変わらないことを保証する。
+ */
+interface BreakdownForSnapshot {
+  periods?: { ruleId?: string }[];
+  commissions?: { ruleId?: string }[];
+}
+
+async function buildRulesSnapshot(
+  supabase: SupabaseClient,
+  organizationId: string,
+  runId: string,
+  runType: string,
+  ruleVersion: string
+): Promise<Record<string, unknown>> {
+  const generatedAt = new Date().toISOString();
+  if (runType === 'bonus') {
+    return {
+      calcVersion: 'bonus',
+      generatedAt,
+      note: '賞与は手入力のため計算ルール（時給・歩合率等）は使用していません',
+      payrollRules: [],
+      commissionRules: [],
+    };
+  }
+
+  const { data: items } = await supabase.from('payroll_items').select('breakdown').eq('payroll_run_id', runId);
+  const ruleIds = new Set<string>();
+  const commissionRuleIds = new Set<string>();
+  for (const item of items ?? []) {
+    const breakdown = item.breakdown as BreakdownForSnapshot | null;
+    for (const p of breakdown?.periods ?? []) if (p.ruleId) ruleIds.add(p.ruleId);
+    for (const c of breakdown?.commissions ?? []) if (c.ruleId) commissionRuleIds.add(c.ruleId);
+  }
+
+  const ruleIdList = [...ruleIds];
+  const commissionRuleIdList = [...commissionRuleIds];
+  const payrollRules = ruleIdList.length
+    ? ((await supabase.from('payroll_rules').select('*').eq('organization_id', organizationId).in('id', ruleIdList)).data ?? [])
+    : [];
+  const commissionRules = commissionRuleIdList.length
+    ? ((await supabase.from('commission_rules').select('*').eq('organization_id', organizationId).in('id', commissionRuleIdList)).data ?? [])
+    : [];
+
+  return {
+    calcVersion: ruleVersion,
+    generatedAt,
+    payrollRules: payrollRules.map((r) => ({
+      id: r.id,
+      profileId: r.profile_id,
+      storeId: r.store_id,
+      payType: r.pay_type,
+      baseAmount: r.base_amount,
+      overtimeRate: r.overtime_rate,
+      nightRate: r.night_rate,
+      holidayRate: r.holiday_rate,
+      commuteAllowance: r.commute_allowance,
+      allowances: r.allowances,
+      effectiveFrom: r.effective_from,
+      effectiveTo: r.effective_to,
+      closingDay: r.closing_day,
+      paymentDay: r.payment_day,
+    })),
+    commissionRules: commissionRules.map((r) => ({
+      id: r.id,
+      name: r.name,
+      targetType: r.target_type,
+      profileId: r.profile_id,
+      storeId: r.store_id,
+      method: r.method,
+      rate: r.rate,
+      fixedAmount: r.fixed_amount,
+      tiers: r.tiers,
+      basis: r.basis,
+      minAmount: r.min_amount,
+      maxAmount: r.max_amount,
+      effectiveFrom: r.effective_from,
+      effectiveTo: r.effective_to,
+    })),
+  };
+}
+
 export async function approvePayrollRun(runId: string): Promise<ActionResult> {
   const ctx = await requirePermission('payroll.manage');
   const supabase = await createClient();
   const { data: run } = await supabase
     .from('payroll_runs')
-    .select('status, organization_id, store_id, title')
+    .select('status, organization_id, store_id, title, run_type, rule_version')
     .eq('id', runId)
     .single();
   if (!run) return { ok: false, message: '給与計算が見つかりません' };
   if (run.status !== 'confirmed') return { ok: false, message: '確定済みの給与計算のみ承認できます' };
 
+  const rulesSnapshot = await buildRulesSnapshot(supabase, ctx.organizationId, runId, run.run_type, run.rule_version);
+
   const { error } = await supabase
     .from('payroll_runs')
-    .update({ status: 'approved', approved_by: ctx.userId, approved_at: new Date().toISOString() })
+    .update({
+      status: 'approved',
+      approved_by: ctx.userId,
+      approved_at: new Date().toISOString(),
+      rules_snapshot: rulesSnapshot,
+    })
     .eq('id', runId);
-  if (error) return { ok: false, message: '承認に失敗しました' };
+  if (error) return { ok: false, message: mapPayrollError(error.message) };
 
   await supabase.rpc('log_audit', {
     p_org: run.organization_id,

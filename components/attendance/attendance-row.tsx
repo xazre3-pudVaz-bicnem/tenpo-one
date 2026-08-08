@@ -130,22 +130,19 @@ export function AttendanceRow({
           </div>
         </Td>
         <Td className="text-right">
-          {locked ? (
-            <span className="text-xs text-gray-400">確定済みのため編集不可</span>
-          ) : (
-            <div className="flex flex-wrap justify-end gap-1.5">
-              <CorrectionDialog
-                storeId={storeId}
-                profileId={profileId}
-                workDate={workDate}
-                timeEntryId={timeEntryId || null}
-                defaultClockIn={defaultClockIn}
-                defaultClockOut={defaultClockOut}
-                defaultBreakMinutes={breakMinutes}
-              />
-              {isApprover && <EntryTypeDialog timeEntryId={timeEntryId} currentType={entryType} workDate={workDate} />}
-            </div>
-          )}
+          <div className="flex flex-wrap items-center justify-end gap-1.5">
+            {locked && <span className="text-xs text-gray-400">確定済み（修正申請のみ可）</span>}
+            <CorrectionDialog
+              storeId={storeId}
+              profileId={profileId}
+              workDate={workDate}
+              timeEntryId={timeEntryId || null}
+              defaultClockIn={defaultClockIn}
+              defaultClockOut={defaultClockOut}
+              defaultBreakMinutes={breakMinutes}
+            />
+            {isApprover && !locked && <EntryTypeDialog timeEntryId={timeEntryId} currentType={entryType} workDate={workDate} />}
+          </div>
         </Td>
       </Tr>
       {open && (

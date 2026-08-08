@@ -6,34 +6,16 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { can } from '@/lib/permissions';
 import { todayJst } from '@/lib/format';
-
-type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
-
-/**
- * 締め後ロック: 指定店舗・指定日が確定済み(confirmed)/承認済み(approved)の給与計算(payroll_runs)の
- * 対象期間に含まれるかを判定する。含まれる場合、time_entries を書き換える操作
- * （修正申請の承認・区分変更・手動追加）はサーバー側で拒否する。
- * payroll_runs.store_id が null の run は「全社」対象のため、その run の期間も対象に含める。
- */
-async function isPayrollLocked(
-  supabase: SupabaseServerClient,
-  organizationId: string,
-  storeId: string,
-  workDate: string
-): Promise<boolean> {
-  const { data } = await supabase
-    .from('payroll_runs')
-    .select('id')
-    .eq('organization_id', organizationId)
-    .in('status', ['confirmed', 'approved'])
-    .lte('period_start', workDate)
-    .gte('period_end', workDate)
-    .or(`store_id.is.null,store_id.eq.${storeId}`)
-    .limit(1);
-  return (data?.length ?? 0) > 0;
-}
-
-const PAYROLL_LOCKED_MESSAGE = 'この期間は給与計算が確定済みのためロックされています';
+import {
+  isPayrollLocked,
+  findLockingPayrollRun,
+  PAYROLL_LOCKED_MESSAGE,
+  jstToIso,
+  insertLeaveTimeEntry,
+  calcLeaveRemaining,
+  canReviewRequests,
+  mapDbErrorMessage,
+} from './shared';
 
 export type PunchEventType = 'clock_in' | 'clock_out' | 'break_start' | 'break_end';
 
@@ -190,11 +172,6 @@ export async function punchByPin(
     : { ok: true, message: `${match.profiles.display_name}さん ${EVENT_LABELS[eventType]}を記録しました` };
 }
 
-/** JST の日付+時刻文字列を ISO(UTC) に変換する */
-function jstToIso(workDate: string, hhmm: string): string {
-  return new Date(`${workDate}T${hhmm}:00+09:00`).toISOString();
-}
-
 export interface CorrectionInput {
   storeId: string;
   profileId: string;
@@ -206,7 +183,11 @@ export interface CorrectionInput {
   reason: string;
 }
 
-/** 勤怠修正申請の作成（本人 or attendance.approve 権限者が代理登録） */
+/**
+ * 勤怠修正申請の作成（本人 or attendance.approve 権限者が代理登録）。
+ * 給与確定期間ロック後の唯一の修正経路のため、ロック中の日でも申請自体は常に可能にする
+ * （ロック判定・実際の反映可否は承認時に行う）。
+ */
 export async function requestCorrection(input: CorrectionInput): Promise<ActionResult> {
   const ctx = await requireMember();
   if (!can(ctx.role, 'attendance.punch')) {
@@ -224,53 +205,75 @@ export async function requestCorrection(input: CorrectionInput): Promise<ActionR
 
   const supabase = await createClient();
   const requestedChanges = {
-    work_date: input.workDate,
     clock_in_at: jstToIso(input.workDate, input.desiredClockIn),
     clock_out_at: jstToIso(input.workDate, input.desiredClockOut),
     break_minutes: input.breakMinutes,
   };
 
-  const { error } = await supabase.from('attendance_requests').insert({
-    organization_id: ctx.organizationId,
-    store_id: input.storeId,
-    profile_id: input.profileId,
-    time_entry_id: input.timeEntryId,
-    request_type: 'correction',
-    requested_changes: requestedChanges,
-    reason: input.reason.trim(),
-    status: 'pending',
-    created_by: ctx.userId,
+  const { data: inserted, error } = await supabase
+    .from('attendance_correction_requests')
+    .insert({
+      organization_id: ctx.organizationId,
+      store_id: input.storeId,
+      profile_id: input.profileId,
+      time_entry_id: input.timeEntryId,
+      work_date: input.workDate,
+      requested_changes: requestedChanges,
+      reason: input.reason.trim(),
+      status: 'pending',
+    })
+    .select('id')
+    .single();
+
+  if (error || !inserted) return { ok: false, message: '修正申請の送信に失敗しました' };
+
+  await supabase.rpc('log_audit', {
+    p_org: ctx.organizationId,
+    p_store: input.storeId,
+    p_action: 'attendance.correction_request',
+    p_target_table: 'attendance_correction_requests',
+    p_target_id: inserted.id,
+    p_before: null,
+    p_after: requestedChanges,
+    p_note: input.reason.trim(),
   });
 
-  if (error) return { ok: false, message: '修正申請の送信に失敗しました' };
   revalidatePath('/app/attendance');
   return { ok: true, message: '修正申請を送信しました' };
 }
 
-/** 修正申請の承認: time_entries を反映し監査ログを記録する */
+/**
+ * 修正申請の承認: time_entries を反映し監査ログを記録する。
+ * 対象日が給与確定期間ロック中の場合でも、この経路（修正申請の承認）に限り time_entries の
+ * 更新自体は行う（＝締め後の唯一の修正経路）。ただし対象runの状態に応じて案内メッセージを変える。
+ *   - ロック対象runなし／下書き: 通常反映（下書きなら再計算が必要）
+ *   - confirmed（承認前）: 反映するが、再計算するには一旦下書きに戻す操作が必要と案内
+ *   - approved（確定済み）: 反映するが、確定済みの給与額自体は変わらないため次回給与での
+ *     調整を促す（給与明細を勝手に書き換えない）
+ */
 export async function approveRequest(requestId: string): Promise<ActionResult> {
-  const ctx = await requirePermission('attendance.approve');
+  const ctx = await requireMember();
+  if (!canReviewRequests(ctx.role)) return { ok: false, message: 'この操作を行う権限がありません' };
   const supabase = await createClient();
 
   const { data: request, error: fetchError } = await supabase
-    .from('attendance_requests')
+    .from('attendance_correction_requests')
     .select('*')
     .eq('id', requestId)
     .eq('organization_id', ctx.organizationId)
     .single();
   if (fetchError || !request) return { ok: false, message: '申請が見つかりません' };
+  if (!ctx.stores.some((s) => s.id === request.store_id)) return { ok: false, message: '担当外の店舗です' };
   if (request.status !== 'pending') return { ok: false, message: 'この申請はすでに処理済みです' };
 
   const changes = request.requested_changes as {
-    work_date: string;
     clock_in_at: string;
     clock_out_at: string;
     break_minutes: number;
   };
+  const workDate = request.work_date as string;
 
-  if (await isPayrollLocked(supabase, ctx.organizationId, request.store_id, changes.work_date)) {
-    return { ok: false, message: PAYROLL_LOCKED_MESSAGE };
-  }
+  const lockingRun = await findLockingPayrollRun(supabase, ctx.organizationId, request.store_id, workDate);
 
   let before: unknown = null;
   let targetId = request.time_entry_id as string | null;
@@ -290,7 +293,7 @@ export async function approveRequest(requestId: string): Promise<ActionResult> {
         updated_by: ctx.userId,
       })
       .eq('id', targetId);
-    if (updateError) return { ok: false, message: '勤怠記録の更新に失敗しました' };
+    if (updateError) return { ok: false, message: mapDbErrorMessage(updateError.message, '勤怠記録の更新に失敗しました') };
   } else {
     const { data: inserted, error: insertError } = await supabase
       .from('time_entries')
@@ -298,7 +301,7 @@ export async function approveRequest(requestId: string): Promise<ActionResult> {
         organization_id: ctx.organizationId,
         store_id: request.store_id,
         profile_id: request.profile_id,
-        work_date: changes.work_date,
+        work_date: workDate,
         clock_in_at: changes.clock_in_at,
         clock_out_at: changes.clock_out_at,
         break_minutes: changes.break_minutes,
@@ -310,12 +313,12 @@ export async function approveRequest(requestId: string): Promise<ActionResult> {
       })
       .select('id')
       .single();
-    if (insertError || !inserted) return { ok: false, message: '勤怠記録の作成に失敗しました' };
+    if (insertError || !inserted) return { ok: false, message: mapDbErrorMessage(insertError?.message, '勤怠記録の作成に失敗しました') };
     targetId = inserted.id;
   }
 
   await supabase
-    .from('attendance_requests')
+    .from('attendance_correction_requests')
     .update({
       status: 'approved',
       time_entry_id: targetId,
@@ -327,35 +330,54 @@ export async function approveRequest(requestId: string): Promise<ActionResult> {
   await supabase.rpc('log_audit', {
     p_org: ctx.organizationId,
     p_store: request.store_id,
-    p_action: 'attendance.approve_request',
-    p_target_table: 'attendance_requests',
+    p_action: 'attendance.correction_approve',
+    p_target_table: 'attendance_correction_requests',
     p_target_id: requestId,
     p_before: before,
     p_after: changes,
-    p_note: `勤怠修正申請を承認 (${changes.work_date})`,
+    p_note: `勤怠修正申請を承認 (${workDate})`,
   });
 
   revalidatePath('/app/attendance');
-  return { ok: true, message: '修正申請を承認しました' };
+  revalidatePath('/app/payroll');
+
+  if (!lockingRun) {
+    return { ok: true, message: '修正申請を承認し、勤怠記録に反映しました' };
+  }
+  if (lockingRun.status === 'confirmed') {
+    return {
+      ok: true,
+      warning: true,
+      message: `勤怠記録に反映しました。給与計算「${lockingRun.title}」は確定済み（承認前）のため、金額に反映するには一旦「下書きに戻す」操作をしてから再計算してください`,
+    };
+  }
+  // approved
+  return {
+    ok: true,
+    warning: true,
+    message: `勤怠記録のみ反映しました。給与計算「${lockingRun.title}」はすでに承認済みのため金額は自動的には変わりません。差額は次回の給与計算での調整をご検討ください`,
+  };
 }
 
 /** 修正申請の却下 */
 export async function rejectRequest(requestId: string, reason: string): Promise<ActionResult> {
-  const ctx = await requirePermission('attendance.approve');
+  const ctx = await requireMember();
+  if (!canReviewRequests(ctx.role)) return { ok: false, message: 'この操作を行う権限がありません' };
   if (!reason.trim()) return { ok: false, message: '却下理由を入力してください' };
   const supabase = await createClient();
 
   const { data: request } = await supabase
-    .from('attendance_requests')
+    .from('attendance_correction_requests')
     .select('id, store_id, status')
     .eq('id', requestId)
     .eq('organization_id', ctx.organizationId)
     .single();
   if (!request) return { ok: false, message: '申請が見つかりません' };
+  if (!ctx.stores.some((s) => s.id === request.store_id)) return { ok: false, message: '担当外の店舗です' };
   if (request.status !== 'pending') return { ok: false, message: 'この申請はすでに処理済みです' };
 
   const { error } = await supabase
-    .from('attendance_requests')
+    .from('attendance_correction_requests')
     .update({
       status: 'rejected',
       reviewed_by: ctx.userId,
@@ -368,8 +390,8 @@ export async function rejectRequest(requestId: string, reason: string): Promise<
   await supabase.rpc('log_audit', {
     p_org: ctx.organizationId,
     p_store: request.store_id,
-    p_action: 'attendance.reject_request',
-    p_target_table: 'attendance_requests',
+    p_action: 'attendance.correction_reject',
+    p_target_table: 'attendance_correction_requests',
     p_target_id: requestId,
     p_before: null,
     p_after: null,
@@ -466,35 +488,51 @@ export async function addManualEntry(input: ManualEntryInput): Promise<ActionRes
 
   const leaveFraction = input.entryType === 'paid_leave' ? (input.leaveFraction ?? 1) : null;
 
-  const { data: inserted, error } = await supabase
-    .from('time_entries')
-    .insert({
-      organization_id: ctx.organizationId,
-      store_id: input.storeId,
-      profile_id: input.profileId,
-      work_date: input.workDate,
-      clock_in_at: null,
-      clock_out_at: null,
-      break_minutes: 0,
-      entry_type: input.entryType,
-      leave_fraction: leaveFraction,
-      status: 'approved',
-      source: 'manual',
+  let insertedId: string;
+  if (input.entryType === 'paid_leave') {
+    const result = await insertLeaveTimeEntry(supabase, {
+      organizationId: ctx.organizationId,
+      storeId: input.storeId,
+      profileId: input.profileId,
+      workDate: input.workDate,
+      leaveFraction: leaveFraction as 1 | 0.5,
       note: input.reason.trim(),
-      approved_by: ctx.userId,
-      approved_at: new Date().toISOString(),
-      created_by: ctx.userId,
-    })
-    .select('id')
-    .single();
-  if (error || !inserted) return { ok: false, message: '勤怠の追加に失敗しました' };
+      approvedBy: ctx.userId,
+    });
+    if ('error' in result) return { ok: false, message: mapDbErrorMessage(result.error, '勤怠の追加に失敗しました') };
+    insertedId = result.id;
+  } else {
+    const { data: inserted, error } = await supabase
+      .from('time_entries')
+      .insert({
+        organization_id: ctx.organizationId,
+        store_id: input.storeId,
+        profile_id: input.profileId,
+        work_date: input.workDate,
+        clock_in_at: null,
+        clock_out_at: null,
+        break_minutes: 0,
+        entry_type: input.entryType,
+        leave_fraction: null,
+        status: 'approved',
+        source: 'manual',
+        note: input.reason.trim(),
+        approved_by: ctx.userId,
+        approved_at: new Date().toISOString(),
+        created_by: ctx.userId,
+      })
+      .select('id')
+      .single();
+    if (error || !inserted) return { ok: false, message: '勤怠の追加に失敗しました' };
+    insertedId = inserted.id;
+  }
 
   await supabase.rpc('log_audit', {
     p_org: ctx.organizationId,
     p_store: input.storeId,
     p_action: 'attendance.manual_add',
     p_target_table: 'time_entries',
-    p_target_id: inserted.id,
+    p_target_id: insertedId,
     p_before: null,
     p_after: { work_date: input.workDate, entry_type: input.entryType, leave_fraction: leaveFraction },
     p_note: input.reason.trim(),
@@ -506,22 +544,8 @@ export async function addManualEntry(input: ManualEntryInput): Promise<ActionRes
   // 有給の場合、残日数不足の簡易チェック（登録は妨げない・注記のみ）。
   // 残日数 = 有効な付与合計（失効日が本日以降）− 取得合計（本追加分を含む）
   if (input.entryType === 'paid_leave') {
-    const today = todayJst();
-    const [{ data: grants }, { data: takenEntries }] = await Promise.all([
-      supabase.from('leave_grants').select('days, expires_on').eq('organization_id', ctx.organizationId).eq('profile_id', input.profileId),
-      supabase
-        .from('time_entries')
-        .select('leave_fraction')
-        .eq('organization_id', ctx.organizationId)
-        .eq('profile_id', input.profileId)
-        .eq('entry_type', 'paid_leave')
-        .in('status', ['approved', 'closed']),
-    ]);
-    const activeGranted = (grants ?? [])
-      .filter((g) => g.expires_on >= today)
-      .reduce((a, g) => a + Number(g.days), 0);
-    const taken = (takenEntries ?? []).reduce((a, e) => a + Number(e.leave_fraction ?? 1), 0);
-    if (taken > activeGranted) {
+    const remaining = await calcLeaveRemaining(supabase, ctx.organizationId, input.profileId, todayJst());
+    if (remaining < 0) {
       return { ok: true, message: '勤怠を追加しました（有給の残日数が不足している可能性があります）', warning: true };
     }
   }

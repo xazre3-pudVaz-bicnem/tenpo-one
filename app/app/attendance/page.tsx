@@ -16,6 +16,7 @@ import { PeriodFilters } from '@/components/attendance/period-filters';
 import { RequestReview } from '@/components/attendance/request-review';
 import { ManualEntryDialog } from '@/components/attendance/manual-entry-dialog';
 import { AttendanceRow, type TimeEntryEventView } from '@/components/attendance/attendance-row';
+import { canReviewRequests } from './shared';
 import type { EntryType } from './actions';
 
 export const metadata: Metadata = { title: '勤怠' };
@@ -94,7 +95,7 @@ export default async function AttendancePage({
           today={today}
         />
       )}
-      {tab === 'requests' && isApprover && <RequestsTab storeId={store.id} />}
+      {tab === 'requests' && isApprover && <RequestsTab storeId={store.id} canReview={canReviewRequests(ctx.role)} />}
     </div>
   );
 }
@@ -339,10 +340,10 @@ async function ListTab({
   );
 }
 
-async function RequestsTab({ storeId }: { storeId: string }) {
+async function RequestsTab({ storeId, canReview }: { storeId: string; canReview: boolean }) {
   const supabase = await createClient();
   const { data: requests } = await supabase
-    .from('attendance_requests')
+    .from('attendance_correction_requests')
     .select('*, profiles(display_name), time_entries(clock_in_at, clock_out_at, break_minutes)')
     .eq('store_id', storeId)
     .eq('status', 'pending')
@@ -356,9 +357,13 @@ async function RequestsTab({ storeId }: { storeId: string }) {
 
   return (
     <div className="space-y-3">
+      {!canReview && (
+        <p className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-500">
+          この申請の承認・却下は店長以上のロールのみ行えます。閲覧のみ可能です。
+        </p>
+      )}
       {rows.map((r) => {
         const changes = r.requested_changes as {
-          work_date: string;
           clock_in_at: string;
           clock_out_at: string;
           break_minutes: number;
@@ -371,7 +376,7 @@ async function RequestsTab({ storeId }: { storeId: string }) {
           <Card key={r.id}>
             <CardHeader className="flex flex-wrap items-center justify-between gap-2">
               <CardTitle>
-                {profile?.display_name ?? '不明'} さん — {changes.work_date}
+                {profile?.display_name ?? '不明'} さん — {r.work_date}
               </CardTitle>
               <Badge tone="warning">承認待ち</Badge>
             </CardHeader>
@@ -395,9 +400,11 @@ async function RequestsTab({ storeId }: { storeId: string }) {
               </div>
               <p className="mt-3 text-xs text-gray-500">理由</p>
               <p className="text-sm text-gray-700">{r.reason}</p>
-              <div className="mt-4">
-                <RequestReview requestId={r.id} />
-              </div>
+              {canReview && (
+                <div className="mt-4">
+                  <RequestReview requestId={r.id} />
+                </div>
+              )}
             </CardContent>
           </Card>
         );
