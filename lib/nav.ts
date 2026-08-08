@@ -57,6 +57,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: '/app/accounting/ledger', label: '帳簿', icon: 'list', permission: 'csv.export' },
       { href: '/app/accounting/statements', label: '財務レポート', icon: 'chart', permission: 'csv.export' },
       { href: '/app/accounting/banks', label: '銀行口座', icon: 'cash', permission: 'csv.export' },
+      { href: '/app/reconciliation', label: '照合', icon: 'chart', permission: 'csv.export' },
     ],
   },
   {

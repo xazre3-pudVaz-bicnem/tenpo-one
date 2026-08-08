@@ -57,6 +57,7 @@ export const ROUTE_FEATURES: [string, FeatureKey][] = [
   ['/app/employees', 'payroll'],
   ['/app/payroll', 'payroll'],
   ['/app/accounting', 'accounting'],
+  ['/app/reconciliation', 'accounting'],
   ['/app/reports', 'reports'],
 ];
 
