@@ -2,12 +2,13 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import {
   Store, Clock, LayoutGrid, UtensilsCrossed, Percent, CalendarClock, Printer, CreditCard, ScrollText, ChevronRight,
-  Building2, ShieldCheck, Plug, Upload, AlertTriangle,
+  Building2, ShieldCheck, Plug, Upload, AlertTriangle, BookOpen,
 } from 'lucide-react';
 import { requirePermission } from '@/lib/auth';
 import { can } from '@/lib/permissions';
 import { PageHeader } from '@/components/ui/page-header';
 import { Card } from '@/components/ui/card';
+import { canWriteAccounting } from '@/components/accounting/roles';
 
 export const metadata: Metadata = { title: '設定' };
 
@@ -64,6 +65,13 @@ export default async function SettingsHubPage() {
       description: '税率マスタの登録・既定税率の設定',
       icon: Percent,
       visible: true,
+    },
+    {
+      href: '/app/settings/accounts',
+      title: '勘定科目',
+      description: '複式簿記の勘定科目マスタ（資産・負債・純資産・収益・費用）の登録',
+      icon: BookOpen,
+      visible: canWriteAccounting(ctx.role),
     },
     {
       href: '/app/settings/booking',
