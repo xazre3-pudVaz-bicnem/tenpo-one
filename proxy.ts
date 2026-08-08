@@ -14,6 +14,17 @@ export default async function proxy(request: NextRequest) {
     return h;
   };
 
+  // 環境変数未設定（デプロイ直後など）でも全リクエストを500にしない。
+  // 認証ガードは各ページ側の requireSession が二重に守っているため、
+  // ここでは素通しにして分かりやすいエラー表示に委ねる。
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    console.error(
+      '[TENPO ONE] NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY が未設定です。' +
+        'Vercelの環境変数を設定して再デプロイしてください（docs/deployment.md参照）'
+    );
+    return NextResponse.next({ request: { headers: withPathname() } });
+  }
+
   let response = NextResponse.next({ request: { headers: withPathname() } });
 
   const supabase = createServerClient(
