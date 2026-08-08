@@ -34,7 +34,15 @@ import { resolveUnitCost, summarizeItemCosts, type CostableOrderItem } from '@/c
 import { estimateLaborCost, type TimeEntryForLabor, type PayrollRuleForLabor } from '@/components/reports/labor';
 import { fetchIngredientLinesByMenuItems } from '@/components/costing/data';
 import { calcWasteAmount } from '@/lib/costing';
-import { computeSalesMetrics, computeCostVariance, SETTLED_ORDER_STATUSES, type RefundLike, type SettledOrderLike } from '@/lib/metrics';
+import {
+  computeSalesMetrics,
+  computeCostVariance,
+  computePurchasePriceVariance,
+  SETTLED_ORDER_STATUSES,
+  type RefundLike,
+  type SettledOrderLike,
+  type SalesMetricsOptions,
+} from '@/lib/metrics';
 import { CostVarianceCard } from '@/components/reports/cost-variance-card';
 
 export const metadata: Metadata = { title: 'レポート・経営分析' };
@@ -83,6 +91,16 @@ export default async function ReportsPage({
     );
   }
 
+  // 客数KPI設定（organizations.kpi_settings.includeTakeoutGuests。省略時true）。lib/metrics.ts参照
+  const { data: orgKpiRow } = await supabase
+    .from('organizations')
+    .select('kpi_settings')
+    .eq('id', ctx.organizationId)
+    .maybeSingle();
+  const metricsOpts: SalesMetricsOptions = {
+    includeTakeoutGuests: (orgKpiRow?.kpi_settings as { includeTakeoutGuests?: boolean } | null)?.includeTakeoutGuests ?? true,
+  };
+
   // ---- 期間プリセット ----
   const thisMonth = monthBounds(0, today);
   const lastMonth = monthBounds(-1, today);
@@ -122,7 +140,7 @@ export default async function ReportsPage({
   ] = await Promise.all([
     supabase
       .from('orders')
-      .select('id, total, guest_count, status, store_id, staff_id, customer_id, table_id, discount_total, business_date, opened_at')
+      .select('id, total, guest_count, status, store_id, staff_id, customer_id, table_id, discount_total, business_date, opened_at, order_type')
       .in('store_id', storeIds)
       .gte('business_date', from)
       .lte('business_date', to)
@@ -200,7 +218,7 @@ export default async function ReportsPage({
   const [{ data: prevOrders }, { data: prevRefunds }, { data: prevOrderItems }, { data: prevTimeEntriesData }, { data: prevExpensesData }] = await Promise.all([
     supabase
       .from('orders')
-      .select('total, guest_count, status')
+      .select('total, guest_count, status, order_type')
       .in('store_id', storeIds)
       .gte('business_date', prev.from)
       .lte('business_date', prev.to)
@@ -268,7 +286,7 @@ export default async function ReportsPage({
   // ---- KPI（基本。lib/metrics.ts の正式定義に統一）----
   // gross_sales=settled(paid+refunded)のtotal合計・refunds=返金営業日基準・net_sales=gross−refunds・
   // 会計件数/客数=settled件数・客単価=net÷客数。ダッシュボード/予算/日報と同一の関数・同一のクエリ条件を使う。
-  const mainMetrics = computeSalesMetrics(allOrders as SettledOrderLike[], allRefunds as RefundLike[]);
+  const mainMetrics = computeSalesMetrics(allOrders as SettledOrderLike[], allRefunds as RefundLike[], metricsOpts);
   const grossSalesTotal = mainMetrics.grossSales;
   const refundsTotal = mainMetrics.refunds;
   const salesTotal = mainMetrics.netSales; // 純売上。以降「売上」と呼ぶ値はすべてこれ
@@ -279,7 +297,7 @@ export default async function ReportsPage({
 
   const prevAllOrders = prevOrders ?? [];
   const prevAllRefunds = prevRefunds ?? [];
-  const prevMetrics = computeSalesMetrics(prevAllOrders as SettledOrderLike[], prevAllRefunds as RefundLike[]);
+  const prevMetrics = computeSalesMetrics(prevAllOrders as SettledOrderLike[], prevAllRefunds as RefundLike[], metricsOpts);
   const prevSalesTotal = prevMetrics.netSales;
   const prevGuestCount = prevMetrics.guests;
   const prevAvgSpend = prevMetrics.avgSpend;
@@ -361,6 +379,53 @@ export default async function ReportsPage({
     wasteAmount,
     countAdjustmentAmount,
   });
+
+  // ---- 仕入価格変動（参考指標。差異内訳とは独立・二重計上しない）----
+  // 期間内の入荷（stock_movements 'in'）を、期首時点の平均仕入単価（期間開始前の'in'実績を数量加重平均した近似値）と比較する。
+  const { data: periodReceiptMovements } = await supabase
+    .from('stock_movements')
+    .select('inventory_item_id, quantity, unit_cost')
+    .in('store_id', storeIds)
+    .eq('movement_type', 'in')
+    .gte('business_date', from)
+    .lte('business_date', to)
+    .limit(5000);
+  const receiptItemIds = [...new Set((periodReceiptMovements ?? []).map((m) => m.inventory_item_id as string))];
+  const { data: priorReceiptMovements } =
+    receiptItemIds.length > 0
+      ? await supabase
+          .from('stock_movements')
+          .select('inventory_item_id, quantity, unit_cost')
+          .in('store_id', storeIds)
+          .eq('movement_type', 'in')
+          .in('inventory_item_id', receiptItemIds)
+          .lt('business_date', from)
+          .limit(5000)
+      : { data: [] as { inventory_item_id: string; quantity: number; unit_cost: number | null }[] };
+  const baselineUnitCostByItem = new Map<string, number>();
+  {
+    const sums = new Map<string, { qty: number; amount: number }>();
+    for (const m of priorReceiptMovements ?? []) {
+      if (m.unit_cost == null) continue;
+      const key = m.inventory_item_id as string;
+      const cur = sums.get(key) ?? { qty: 0, amount: 0 };
+      cur.qty += Number(m.quantity);
+      cur.amount += Number(m.quantity) * (m.unit_cost as number);
+      sums.set(key, cur);
+    }
+    for (const [key, s] of sums) {
+      if (s.qty > 0) baselineUnitCostByItem.set(key, s.amount / s.qty);
+    }
+  }
+  const purchasePriceVariance = computePurchasePriceVariance(
+    (periodReceiptMovements ?? [])
+      .filter((m) => m.unit_cost != null)
+      .map((m) => ({
+        quantity: Number(m.quantity),
+        unitCost: m.unit_cost as number,
+        baselineUnitCost: baselineUnitCostByItem.get(m.inventory_item_id as string) ?? null,
+      }))
+  );
 
   // ---- 日別売上（総売上・返金・純売上）----
   const grossByDate = new Map<string, number>();
@@ -480,7 +545,7 @@ export default async function ReportsPage({
     storeComparison = ctx.stores.map((s) => {
       const storeOrders = allOrders.filter((o) => o.store_id === s.id);
       const storeRefunds = allRefunds.filter((r) => r.store_id === s.id);
-      const storeMetrics = computeSalesMetrics(storeOrders as SettledOrderLike[], storeRefunds as RefundLike[]);
+      const storeMetrics = computeSalesMetrics(storeOrders as SettledOrderLike[], storeRefunds as RefundLike[], metricsOpts);
       return {
         id: s.id,
         name: s.name,
@@ -500,7 +565,7 @@ export default async function ReportsPage({
     const [oRes, rRes, oiRes, teRes, exRes, budgetRes] = await Promise.all([
       supabase
         .from('orders')
-        .select('total, guest_count, status, store_id')
+        .select('total, guest_count, status, store_id, order_type')
         .in('store_id', storeIds)
         .gte('business_date', first)
         .lte('business_date', monthTo)
@@ -539,7 +604,7 @@ export default async function ReportsPage({
     ]);
     const mOrders = oRes.data ?? [];
     const mRefunds = rRes.data ?? [];
-    const mMetrics = computeSalesMetrics(mOrders as SettledOrderLike[], mRefunds as RefundLike[]);
+    const mMetrics = computeSalesMetrics(mOrders as SettledOrderLike[], mRefunds as RefundLike[], metricsOpts);
     const mSales = mMetrics.netSales;
     const mItems = oiRes.data ?? [];
     const mMenuItemIds = [...new Set(mItems.map((i) => i.menu_item_id).filter((v): v is string => !!v))];
@@ -631,7 +696,7 @@ export default async function ReportsPage({
         </CardContent>
       </Card>
 
-      <CostVarianceCard variance={costVariance} salesTotal={salesTotal} />
+      <CostVarianceCard variance={costVariance} salesTotal={salesTotal} purchaseVariance={purchasePriceVariance} />
 
       {/* ---- 月別損益推移（3ヶ月） ---- */}
       <Card className="mt-5">
@@ -758,6 +823,7 @@ export default async function ReportsPage({
       </div>
       <p className="mt-2 text-xs text-gray-400">
         ※ テーブル稼働率＝期間内の各日について「注文のあったテーブル数÷店舗のテーブル数」を算出し、日数で平均した簡易指標です。再来店率は選択期間内の来店回数（2回以上）で判定した近似値です。
+        {metricsOpts.includeTakeoutGuests === false && '　客数・客単価は店内飲食（テーブル会計・コース）のみで算出しています（設定 > 企業情報 > KPI設定）。'}
       </p>
 
       <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-5">

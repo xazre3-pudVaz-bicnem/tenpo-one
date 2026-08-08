@@ -9,7 +9,7 @@ import { yen } from '@/lib/format';
 import { METHOD_LABELS } from '@/components/cash/labels';
 import type { RefundItemInput, RefundKind, RefundMethod } from '@/app/app/orders/actions';
 
-const METHODS: RefundMethod[] = ['cash', 'credit', 'qr', 'emoney', 'voucher', 'on_account'];
+const METHODS: RefundMethod[] = ['cash', 'credit', 'qr', 'emoney', 'voucher', 'on_account', 'other'];
 
 /** 返金可能な品目1件分（ページ側で「注文数量 − 返金済み数量」等を計算済みのもの） */
 export interface RefundableItem {
@@ -19,6 +19,18 @@ export interface RefundableItem {
   remainingQty: number;
   /** 未返金の残額（line_total − refund_itemsの返金済み金額。line_totalベースの単価で按分） */
   remainingAmount: number;
+}
+
+/**
+ * 支払方法別の内訳（ページ側で payments/refunds を method 別に集計済みのもの）。
+ * 混合支払（現金＋カード＋ポイント等）の際、どの支払方法にいくら残額があるかを確認するために使う。
+ */
+export interface PaymentMethodBreakdown {
+  method: RefundMethod;
+  /** この方法での支払済み合計（status='completed'のpayments） */
+  paid: number;
+  /** この方法での返金済み合計（refunds） */
+  refunded: number;
 }
 
 type Mode = 'amount' | 'items';
@@ -43,11 +55,14 @@ export function RefundDialog({
   orderId,
   refundable,
   items,
+  paymentBreakdown,
   refundOrderAction,
 }: {
   orderId: string;
   refundable: number;
   items: RefundableItem[];
+  /** 支払方法別の支払内訳（この取引に紐づく方法のみ）。返金元の確認UXに使用 */
+  paymentBreakdown: PaymentMethodBreakdown[];
   refundOrderAction: (
     orderId: string,
     amount: number,
@@ -124,6 +139,12 @@ export function RefundDialog({
   const effectiveAmount = mode === 'items' ? itemsAmount : amount;
   const isVoid = kind === 'void';
 
+  // 返金元の支払方法確認: 選択した方法の支払残額（支払済み−返金済み）を超える場合は警告のみ（ブロックしない）。
+  // 現金で受けてカードで返す等、支払方法と返金方法が一致しない運用があるため。
+  const selectedBreakdown = paymentBreakdown.find((b) => b.method === method);
+  const selectedMethodRemaining = selectedBreakdown ? selectedBreakdown.paid - selectedBreakdown.refunded : 0;
+  const showMethodMismatchWarning = effectiveAmount > 0 && effectiveAmount > selectedMethodRemaining;
+
   const canSubmit =
     !pending &&
     reason.trim().length > 0 &&
@@ -160,6 +181,42 @@ export function RefundDialog({
       <Dialog open={open} onClose={() => setOpen(false)} title="返金・取消" wide>
         <div className="space-y-4">
           <p className="text-sm text-gray-600">返金可能額: {yen(refundable)}</p>
+
+          {paymentBreakdown.length > 0 && (
+            <div>
+              <Label>この取引の支払内訳</Label>
+              <div className="overflow-hidden rounded-lg border border-gray-200">
+                <table className="w-full text-xs">
+                  <thead className="bg-surface text-gray-500">
+                    <tr>
+                      <th className="px-3 py-1.5 text-left font-medium">支払方法</th>
+                      <th className="px-3 py-1.5 text-right font-medium">支払額</th>
+                      <th className="px-3 py-1.5 text-right font-medium">返金済み</th>
+                      <th className="px-3 py-1.5 text-right font-medium">残額</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {paymentBreakdown.map((b) => {
+                      const remaining = b.paid - b.refunded;
+                      return (
+                        <tr key={b.method}>
+                          <td className="px-3 py-1.5 text-gray-700">{METHOD_LABELS[b.method] ?? b.method}</td>
+                          <td className="px-3 py-1.5 text-right tabular-nums text-gray-700">{yen(b.paid)}</td>
+                          <td className="px-3 py-1.5 text-right tabular-nums text-gray-500">
+                            {b.refunded > 0 ? `-${yen(b.refunded)}` : yen(0)}
+                          </td>
+                          <td className="px-3 py-1.5 text-right tabular-nums font-medium text-navy">{yen(remaining)}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <p className="mt-1 text-xs text-gray-400">
+                混合支払の場合、返金する金額がどの支払方法から発生したものかをここで確認してください。
+              </p>
+            </div>
+          )}
 
           <div>
             <Label>区分</Label>
@@ -295,6 +352,11 @@ export function RefundDialog({
                 </option>
               ))}
             </Select>
+            {showMethodMismatchWarning && (
+              <p className="mt-1.5 rounded-lg bg-warning-soft px-3 py-2 text-xs text-warning">
+                選択した支払方法（{METHOD_LABELS[method]}）の残額（{yen(Math.max(0, selectedMethodRemaining))}）を超えています。返金元の支払方法を確認してください。
+              </p>
+            )}
           </div>
           <div>
             <Label htmlFor="refund-reason">理由（必須・操作履歴に記録されます）</Label>

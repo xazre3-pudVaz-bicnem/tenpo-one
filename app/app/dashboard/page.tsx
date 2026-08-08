@@ -27,7 +27,7 @@ import { AnnouncementBanner } from '@/components/dashboard/announcement-banner';
 import { AlertSummary } from '@/components/dashboard/alert-summary';
 import { StoreRankingTable } from '@/components/dashboard/store-ranking-table';
 import { KpiStrip, type KpiCell } from '@/components/dashboard/kpi-strip';
-import { computeSalesMetrics, SETTLED_ORDER_STATUSES, type RefundLike, type SettledOrderLike } from '@/lib/metrics';
+import { computeSalesMetrics, SETTLED_ORDER_STATUSES, type RefundLike, type SettledOrderLike, type SalesMetricsOptions } from '@/lib/metrics';
 
 export const metadata: Metadata = { title: 'ダッシュボード' };
 
@@ -61,15 +61,31 @@ async function getSetupProgressPercent(organizationId: string): Promise<number |
   return percent < 100 ? percent : null;
 }
 
+/**
+ * 客数KPI設定（organizations.kpi_settings.includeTakeoutGuests）を取得し、
+ * computeSalesMetrics へ渡す opts に変換する（省略時true。lib/metrics.ts参照）。
+ */
+async function getSalesMetricsOptions(organizationId: string): Promise<SalesMetricsOptions> {
+  const supabase = await createClient();
+  const { data: org } = await supabase
+    .from('organizations')
+    .select('kpi_settings')
+    .eq('id', organizationId)
+    .maybeSingle();
+  const kpiSettings = (org?.kpi_settings ?? {}) as { includeTakeoutGuests?: boolean };
+  return { includeTakeoutGuests: kpiSettings.includeTakeoutGuests ?? true };
+}
+
 export default async function DashboardPage() {
   const ctx = await requireMember();
   const today = todayJst();
   const setupPercent = ctx.organizationId && can(ctx.role, 'org.settings') ? await getSetupProgressPercent(ctx.organizationId) : null;
+  const metricsOpts = await getSalesMetricsOptions(ctx.organizationId);
 
   if (ctx.currentStore) {
-    return <StoreDashboard ctx={ctx} today={today} setupPercent={setupPercent} />;
+    return <StoreDashboard ctx={ctx} today={today} setupPercent={setupPercent} metricsOpts={metricsOpts} />;
   }
-  return <HqDashboard ctx={ctx} today={today} setupPercent={setupPercent} />;
+  return <HqDashboard ctx={ctx} today={today} setupPercent={setupPercent} metricsOpts={metricsOpts} />;
 }
 
 // =====================================================================
@@ -80,10 +96,12 @@ async function HqDashboard({
   ctx,
   today,
   setupPercent,
+  metricsOpts,
 }: {
   ctx: Awaited<ReturnType<typeof requireMember>>;
   today: string;
   setupPercent: number | null;
+  metricsOpts: SalesMetricsOptions;
 }) {
   const supabase = await createClient();
   const stores = ctx.stores;
@@ -124,7 +142,7 @@ async function HqDashboard({
   ] = await Promise.all([
     supabase
       .from('orders')
-      .select('total, guest_count, status, store_id')
+      .select('total, guest_count, status, store_id, order_type')
       .in('store_id', storeIds)
       .eq('business_date', today)
       .in('status', SETTLED_ORDER_STATUSES),
@@ -135,7 +153,7 @@ async function HqDashboard({
       .eq('business_date', today),
     supabase
       .from('orders')
-      .select('total, guest_count, status, store_id, business_date')
+      .select('total, guest_count, status, store_id, business_date, order_type')
       .in('store_id', storeIds)
       .in('business_date', [yesterday, sameWeekdayLastWeek])
       .in('status', SETTLED_ORDER_STATUSES),
@@ -146,7 +164,7 @@ async function HqDashboard({
       .in('business_date', [yesterday, sameWeekdayLastWeek]),
     supabase
       .from('orders')
-      .select('id, total, guest_count, discount_total, staff_id, customer_id, store_id, business_date, opened_at, status')
+      .select('id, total, guest_count, discount_total, staff_id, customer_id, store_id, business_date, opened_at, status, order_type')
       .in('store_id', storeIds)
       .gte('business_date', monthFrom)
       .lte('business_date', today)
@@ -199,7 +217,7 @@ async function HqDashboard({
       .lte('business_date', today),
     supabase
       .from('orders')
-      .select('total, guest_count, store_id')
+      .select('total, guest_count, store_id, order_type')
       .in('store_id', storeIds)
       .gte('business_date', prev.from)
       .lte('business_date', prev.to)
@@ -238,7 +256,7 @@ async function HqDashboard({
   // ---- 本日 ----
   // KPI母集団の正式定義（lib/metrics.ts）: gross_sales=settled(paid+refunded)のtotal合計・refunds=返金営業日基準・
   // net_sales=gross−refunds・客数/会計件数=settled件数・客単価=net÷客数。全画面でこの層のみを使う。
-  const todayMetrics = computeSalesMetrics(todayOrders as SettledOrderLike[], todayRefunds as RefundLike[]);
+  const todayMetrics = computeSalesMetrics(todayOrders as SettledOrderLike[], todayRefunds as RefundLike[], metricsOpts);
   const todaySales = todayMetrics.netSales;
   const todayCount = todayMetrics.transactionCount;
   const todayGuests = todayMetrics.guests;
@@ -248,14 +266,14 @@ async function HqDashboard({
   const lastWeekOrders = compareOrders.filter((o) => o.business_date === sameWeekdayLastWeek);
   const yesterdayRefunds = compareRefunds.filter((r) => r.business_date === yesterday);
   const lastWeekRefunds = compareRefunds.filter((r) => r.business_date === sameWeekdayLastWeek);
-  const yesterdayMetrics = computeSalesMetrics(yesterdayOrders as SettledOrderLike[], yesterdayRefunds as RefundLike[]);
-  const lastWeekMetrics = computeSalesMetrics(lastWeekOrders as SettledOrderLike[], lastWeekRefunds as RefundLike[]);
+  const yesterdayMetrics = computeSalesMetrics(yesterdayOrders as SettledOrderLike[], yesterdayRefunds as RefundLike[], metricsOpts);
+  const lastWeekMetrics = computeSalesMetrics(lastWeekOrders as SettledOrderLike[], lastWeekRefunds as RefundLike[], metricsOpts);
   const todaySalesDeltaVsYesterday = calcDelta(todaySales, yesterdayMetrics.netSales);
   const todaySalesDeltaVsLastWeek = calcDelta(todaySales, lastWeekMetrics.netSales);
   const todayGuestsDeltaVsYesterday = calcDelta(todayGuests, yesterdayMetrics.guests);
 
   // ---- 今月: 前月同期間の売上・客数（今月売上・客単価の前月比に使用） ----
-  const prevMonthMetrics = computeSalesMetrics(prevOrders as SettledOrderLike[], prevRefunds as RefundLike[]);
+  const prevMonthMetrics = computeSalesMetrics(prevOrders as SettledOrderLike[], prevRefunds as RefundLike[], metricsOpts);
   const prevMonthSales = prevMonthMetrics.netSales;
   const prevMonthAvgSpend = prevMonthMetrics.avgSpend;
 
@@ -270,7 +288,7 @@ async function HqDashboard({
   // ---- 今月: 売上・粗利・利益率 ----
   // monthPaidOrders は商品ランキング・スタッフランキング等、items/staff単位の集計で使う（原価計算はpaidのみ対象の既存仕様を維持）
   const monthPaidOrders = monthOrders.filter((o) => o.status === 'paid');
-  const monthMetrics = computeSalesMetrics(monthOrders as SettledOrderLike[], monthRefunds as RefundLike[]);
+  const monthMetrics = computeSalesMetrics(monthOrders as SettledOrderLike[], monthRefunds as RefundLike[], metricsOpts);
   const monthGrossSalesTotal = monthMetrics.grossSales;
   const monthRefundsTotal = monthMetrics.refunds;
   const monthSalesTotal = monthMetrics.netSales; // 純売上（gross − refunds）。KPI「今月売上」の主表示値
@@ -566,6 +584,7 @@ async function HqDashboard({
         人件費は時給ルール×実働時間の概算（月給者は月給÷21日で日割り）で、残業・深夜等の割増は含みません
         {laborResult.missingRuleCount > 0 && `（給与ルール未設定の勤務${laborResult.missingRuleCount}件は概算から除外）`}。
         粗利率（売上−原価。人件費・経費は含まない）・人件費率の目標比は全社予算（未設定時は店舗別予算の合算）に基づく概算です。
+        {metricsOpts.includeTakeoutGuests === false && '　客数・客単価は店内飲食（テーブル会計・コース）のみで算出しています（設定 > 企業情報 > KPI設定）。'}
       </p>
 
       <Card className="mt-5" id="ranking">
@@ -789,10 +808,12 @@ async function StoreDashboard({
   ctx,
   today,
   setupPercent,
+  metricsOpts,
 }: {
   ctx: Awaited<ReturnType<typeof requireMember>>;
   today: string;
   setupPercent: number | null;
+  metricsOpts: SalesMetricsOptions;
 }) {
   const supabase = await createClient();
   const store = ctx.currentStore!;
@@ -801,7 +822,7 @@ async function StoreDashboard({
   const [todayOrdersRes, todayRefundsRes, todayReservationsRes, closingsRes, alerts] = await Promise.all([
     supabase
       .from('orders')
-      .select('total, guest_count, status, store_id')
+      .select('total, guest_count, status, store_id, order_type')
       .in('store_id', storeIds)
       .eq('business_date', today)
       .in('status', SETTLED_ORDER_STATUSES),
@@ -825,7 +846,7 @@ async function StoreDashboard({
 
   const todayOrders = todayOrdersRes.data ?? [];
   const todayRefunds = todayRefundsRes.data ?? [];
-  const todayMetrics = computeSalesMetrics(todayOrders as SettledOrderLike[], todayRefunds as RefundLike[]);
+  const todayMetrics = computeSalesMetrics(todayOrders as SettledOrderLike[], todayRefunds as RefundLike[], metricsOpts);
   const todaySales = todayMetrics.netSales;
   const todayCount = todayMetrics.transactionCount;
   const todayGuests = todayMetrics.guests;
@@ -860,7 +881,12 @@ async function StoreDashboard({
           sub={todayMetrics.refunds > 0 ? `総売上${yen(todayMetrics.grossSales)}／返金${yen(todayMetrics.refunds)}` : undefined}
         />
         <LinkStatCard href="/app/orders" label="会計件数" value={`${todayCount}件`} />
-        <LinkStatCard href="/app/orders" label="客数" value={`${todayGuests}名`} />
+        <LinkStatCard
+          href="/app/orders"
+          label="客数"
+          value={`${todayGuests}名`}
+          sub={metricsOpts.includeTakeoutGuests === false ? '店内飲食のみ' : undefined}
+        />
         <LinkStatCard href="/app/reports" label="客単価" value={yen(avgSpend)} />
       </div>
 

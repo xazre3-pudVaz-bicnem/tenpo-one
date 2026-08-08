@@ -8,7 +8,13 @@ import { monthBounds, previousPeriod } from '@/components/reports/period';
 import { summarizeItemCosts, type CostableOrderItem } from '@/components/reports/cost';
 import { estimateLaborCost, type TimeEntryForLabor, type PayrollRuleForLabor } from '@/components/reports/labor';
 import { fetchIngredientLinesByMenuItems } from '@/components/costing/data';
-import { computeSalesMetrics, SETTLED_ORDER_STATUSES, type RefundLike, type SettledOrderLike } from '@/lib/metrics';
+import {
+  computeSalesMetrics,
+  SETTLED_ORDER_STATUSES,
+  type RefundLike,
+  type SettledOrderLike,
+  type SalesMetricsOptions,
+} from '@/lib/metrics';
 
 /** 本社ダッシュボードの店舗別ランキングCSV（既定: 今月〜本日） */
 export async function GET(request: NextRequest) {
@@ -33,10 +39,20 @@ export async function GET(request: NextRequest) {
 
   const prev = previousPeriod(from, to);
 
+  // 客数KPI設定（organizations.kpi_settings.includeTakeoutGuests。省略時true）。lib/metrics.ts参照
+  const { data: orgKpiRow } = await supabase
+    .from('organizations')
+    .select('kpi_settings')
+    .eq('id', ctx.organizationId)
+    .maybeSingle();
+  const metricsOpts: SalesMetricsOptions = {
+    includeTakeoutGuests: (orgKpiRow?.kpi_settings as { includeTakeoutGuests?: boolean } | null)?.includeTakeoutGuests ?? true,
+  };
+
   const [ordersRes, refundsRes, orderItemsRes, timeEntriesRes, payrollRulesRes, expensesRes, prevOrdersRes, prevRefundsRes] = await Promise.all([
     supabase
       .from('orders')
-      .select('total, guest_count, status, store_id')
+      .select('total, guest_count, status, store_id, order_type')
       .in('store_id', storeIds)
       .gte('business_date', from)
       .lte('business_date', to)
@@ -76,7 +92,7 @@ export async function GET(request: NextRequest) {
       .lte('business_date', to),
     supabase
       .from('orders')
-      .select('total, guest_count, store_id')
+      .select('total, guest_count, store_id, order_type')
       .in('store_id', storeIds)
       .gte('business_date', prev.from)
       .lte('business_date', prev.to)
@@ -106,7 +122,7 @@ export async function GET(request: NextRequest) {
     .map((s) => {
       const storeOrders = orders.filter((o) => o.store_id === s.id);
       const storeRefunds = refunds.filter((r) => r.store_id === s.id);
-      const metrics = computeSalesMetrics(storeOrders as SettledOrderLike[], storeRefunds as RefundLike[]);
+      const metrics = computeSalesMetrics(storeOrders as SettledOrderLike[], storeRefunds as RefundLike[], metricsOpts);
       const grossSales = metrics.grossSales;
       const refundTotal = metrics.refunds;
       const sales = metrics.netSales;
@@ -126,7 +142,8 @@ export async function GET(request: NextRequest) {
 
       const prevMetrics = computeSalesMetrics(
         prevOrders.filter((o) => o.store_id === s.id) as SettledOrderLike[],
-        prevRefunds.filter((r) => r.store_id === s.id) as RefundLike[]
+        prevRefunds.filter((r) => r.store_id === s.id) as RefundLike[],
+        metricsOpts
       );
       const changePct = prevMetrics.netSales > 0 ? ((sales - prevMetrics.netSales) / prevMetrics.netSales) * 100 : null;
 

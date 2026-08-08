@@ -7,7 +7,13 @@ import { linearLandingForecast } from '@/lib/forecast';
 import { summarizeItemCosts, type CostableOrderItem } from '@/components/reports/cost';
 import { estimateLaborCost, type TimeEntryForLabor, type PayrollRuleForLabor } from '@/components/reports/labor';
 import { fetchIngredientLinesByMenuItems } from '@/components/costing/data';
-import { computeSalesMetrics, SETTLED_ORDER_STATUSES, type RefundLike, type SettledOrderLike } from '@/lib/metrics';
+import {
+  computeSalesMetrics,
+  SETTLED_ORDER_STATUSES,
+  type RefundLike,
+  type SettledOrderLike,
+  type SalesMetricsOptions,
+} from '@/lib/metrics';
 import { PageHeader } from '@/components/ui/page-header';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge, type BadgeTone } from '@/components/ui/badge';
@@ -57,6 +63,16 @@ export default async function BudgetsPage({
     );
   }
 
+  // 客数KPI設定（organizations.kpi_settings.includeTakeoutGuests。省略時true）。lib/metrics.ts参照
+  const { data: orgKpiRow } = await supabase
+    .from('organizations')
+    .select('kpi_settings')
+    .eq('id', ctx.organizationId)
+    .maybeSingle();
+  const metricsOpts: SalesMetricsOptions = {
+    includeTakeoutGuests: (orgKpiRow?.kpi_settings as { includeTakeoutGuests?: boolean } | null)?.includeTakeoutGuests ?? true,
+  };
+
   const [budgetsRes, ordersRes, refundsRes, orderItemsRes, timeEntriesRes, payrollRulesRes, expensesRes] = await Promise.all([
     supabase
       .from('budgets')
@@ -66,7 +82,7 @@ export default async function BudgetsPage({
       .or(showAllStoresRow ? `store_id.is.null,store_id.in.(${storeIds.join(',')})` : `store_id.in.(${storeIds.join(',')})`),
     supabase
       .from('orders')
-      .select('total, guest_count, status, store_id')
+      .select('total, guest_count, status, store_id, order_type')
       .in('store_id', storeIds)
       .gte('business_date', monthFirst)
       .lte('business_date', toDate)
@@ -136,7 +152,7 @@ export default async function BudgetsPage({
     // ダッシュボード・レポートと同一の関数・同一のクエリ条件（SETTLED_ORDER_STATUSES）を使う。
     const oList = sId ? orders.filter((o) => o.store_id === sId) : orders;
     const rList = sId ? refunds.filter((r) => r.store_id === sId) : refunds;
-    const metrics = computeSalesMetrics(oList as SettledOrderLike[], rList as RefundLike[]);
+    const metrics = computeSalesMetrics(oList as SettledOrderLike[], rList as RefundLike[], metricsOpts);
     const sales = metrics.netSales;
     const guests = metrics.guests;
     const avgSpend = metrics.avgSpend;
@@ -306,6 +322,7 @@ export default async function BudgetsPage({
       </Card>
       <p className="mt-2 text-xs text-gray-400">
         ※ 売上実績は純売上（会計成立注文の合計 − 期間内の返金額）。原価・人件費は「レポート」画面と同じ概算ロジック（原価はレシピ原価優先、人件費は時給ルール×実働時間の概算）。全社行は本社管理者（org_owner/hq_admin）のみ編集できます。
+        {metricsOpts.includeTakeoutGuests === false && '　客数は店内飲食（テーブル会計・コース）のみで算出しています（設定 > 企業情報 > KPI設定）。'}
       </p>
     </div>
   );

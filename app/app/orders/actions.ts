@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 
-export type RefundMethod = 'cash' | 'credit' | 'qr' | 'emoney' | 'voucher' | 'on_account';
+export type RefundMethod = 'cash' | 'credit' | 'qr' | 'emoney' | 'voucher' | 'on_account' | 'other';
 export type RefundKind = 'refund' | 'void';
 
 /** 商品単位返金の1明細（refund_order RPC v3の p_items 1要素に対応） */
@@ -37,7 +37,22 @@ function translateRefundError(message: string): string {
   for (const [code, ja] of Object.entries(REFUND_ERROR_MESSAGES)) {
     if (message.includes(code)) return ja;
   }
-  return message;
+  return translateOrderError(message) ?? message;
+}
+
+/**
+ * 注文の作成・複製で共通して起きうるDBエラー（トリガー由来）の日本語化。
+ * 一致しなければ null を返す（呼び出し側は既存の汎用メッセージにフォールバック）。
+ */
+const ORDER_ERROR_MESSAGES: Record<string, string> = {
+  GUEST_COUNT_REQUIRED: '店内飲食の客数は1名以上で入力してください',
+};
+
+function translateOrderError(message: string): string | null {
+  for (const [code, ja] of Object.entries(ORDER_ERROR_MESSAGES)) {
+    if (message.includes(code)) return ja;
+  }
+  return null;
 }
 
 /**
@@ -156,7 +171,8 @@ export async function reopenOrder(orderId: string, reason: string): Promise<{ or
     .single();
   if (insErr || !newOrder) {
     console.error('[orders.reopenOrder] failed to create new order:', insErr);
-    throw new Error('再会計に失敗しました。通信状態を確認して再度お試しください');
+    const translated = insErr ? translateOrderError(insErr.message) : null;
+    throw new Error(translated ?? '再会計に失敗しました。通信状態を確認して再度お試しください');
   }
   const newOrderId = newOrder.id as string;
 

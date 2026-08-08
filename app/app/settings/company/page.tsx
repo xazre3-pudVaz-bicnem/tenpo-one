@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server';
 import { PageHeader } from '@/components/ui/page-header';
 import { SettingsBackLink } from '@/components/settings/back-link';
 import { CompanyForm, type CompanyFormData } from '@/components/settings/company-form';
+import { KpiSettingsForm } from '@/components/settings/kpi-settings-form';
 
 export const metadata: Metadata = { title: '企業情報 | 設定' };
 
@@ -13,11 +14,13 @@ export default async function CompanySettingsPage() {
 
   const { data: org } = await supabase
     .from('organizations')
-    .select('name, name_kana, postal_code, address, phone, billing_info')
+    .select('name, name_kana, postal_code, address, phone, billing_info, kpi_settings')
     .eq('id', ctx.organizationId)
     .single();
 
   const billing = (org?.billing_info ?? {}) as { name?: string; email?: string; note?: string };
+  const kpiSettings = (org?.kpi_settings ?? {}) as { includeTakeoutGuests?: boolean };
+  const includeTakeoutGuests = kpiSettings.includeTakeoutGuests ?? true;
 
   const initial: CompanyFormData = {
     name: org?.name ?? '',
@@ -35,6 +38,9 @@ export default async function CompanySettingsPage() {
       <SettingsBackLink />
       <PageHeader title="企業情報" description="契約企業の基本情報と請求情報を管理します。" />
       <CompanyForm initial={initial} />
+      <div className="mt-5">
+        <KpiSettingsForm initialIncludeTakeoutGuests={includeTakeoutGuests} />
+      </div>
     </div>
   );
 }

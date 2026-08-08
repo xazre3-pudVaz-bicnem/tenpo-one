@@ -14,10 +14,10 @@ import { TableWrap, Table, THead, TBody, Tr, Th, Td } from '@/components/ui/tabl
 import { Badge } from '@/components/ui/badge';
 import { OrderStatusBadge } from '@/components/orders/status-badge';
 import { METHOD_LABELS } from '@/components/cash/labels';
-import { RefundDialog, type RefundableItem } from '@/components/orders/refund-dialog';
+import { RefundDialog, type RefundableItem, type PaymentMethodBreakdown } from '@/components/orders/refund-dialog';
 import { ReopenDialog } from '@/components/orders/reopen-dialog';
 import { JournalSourceLink } from '@/components/accounting/journal-source-link';
-import { refundOrder, reopenOrder } from '../actions';
+import { refundOrder, reopenOrder, type RefundMethod } from '../actions';
 
 const REFUND_KIND_LABELS: Record<string, string> = { refund: '返金', void: '取消（VOID）' };
 
@@ -43,7 +43,7 @@ export default async function OrderDetailPage({
   const { data: order } = await supabase
     .from('orders')
     .select(
-      'id, order_no, order_type, status, guest_count, subtotal, tax_total, service_charge, discount_total, discount_reason, total, opened_at, closed_at, store_id, source_order_id, restaurant_tables(name), profiles(display_name), customers(name)'
+      'id, order_no, order_type, status, guest_count, subtotal, tax_total, service_charge, discount_total, discount_reason, total, opened_at, closed_at, created_at, store_id, source_order_id, reservation_id, customer_id, restaurant_tables(name), profiles(display_name), customers(name)'
     )
     .eq('id', id)
     .single();
@@ -77,7 +77,7 @@ export default async function OrderDetailPage({
         .order('paid_at'),
       supabase
         .from('refunds')
-        .select('id, amount, method, reason, refunded_at, kind')
+        .select('id, amount, method, reason, refunded_at, kind, business_date')
         .eq('order_id', id)
         .order('refunded_at'),
       order.source_order_id
@@ -85,6 +85,28 @@ export default async function OrderDetailPage({
         : Promise.resolve({ data: null }),
       supabase.from('orders').select('id, order_no, status').eq('source_order_id', id).order('created_at'),
     ]);
+
+  // ---- 取引トレース用の追加データ（予約・在庫移動・ポイント）----
+  const [{ data: reservation }, { data: stockMovements }, { data: pointTransactions }] = await Promise.all([
+    order.reservation_id
+      ? supabase
+          .from('reservations')
+          .select('id, code, guest_name, party_size, start_at, created_at')
+          .eq('id', order.reservation_id)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
+    supabase
+      .from('stock_movements')
+      .select('id, movement_type, quantity, occurred_at, inventory_items(name)')
+      .eq('ref_order_id', id)
+      .in('movement_type', ['sale', 'return'])
+      .order('occurred_at'),
+    supabase
+      .from('point_transactions')
+      .select('id, kind, points, balance_after, note, created_at')
+      .eq('order_id', id)
+      .order('created_at'),
+  ]);
 
   const refundIds = (refunds ?? []).map((r) => r.id);
   const { data: refundItemRows } =
@@ -100,6 +122,25 @@ export default async function OrderDetailPage({
     .reduce((a, p) => a + p.amount, 0);
   const totalRefunded = (refunds ?? []).reduce((a, r) => a + r.amount, 0);
   const refundable = Math.max(0, totalPaid - totalRefunded);
+
+  // 支払方法別の内訳（返金ダイアログの「返金元の確認UX」用）。
+  // 支払済み(completed)・返金済みをmethod別に集計し、混合支払（現金+カード+ポイント等）でも
+  // どの方法にいくら残額があるかを一目で確認できるようにする。
+  const paidByMethod = new Map<string, number>();
+  for (const p of (payments ?? []).filter((p) => p.status === 'completed')) {
+    paidByMethod.set(p.method, (paidByMethod.get(p.method) ?? 0) + p.amount);
+  }
+  const refundedByMethod = new Map<string, number>();
+  for (const r of refunds ?? []) {
+    refundedByMethod.set(r.method, (refundedByMethod.get(r.method) ?? 0) + r.amount);
+  }
+  const paymentBreakdown: PaymentMethodBreakdown[] = [...new Set([...paidByMethod.keys(), ...refundedByMethod.keys()])].map(
+    (method) => ({
+      method: method as RefundMethod,
+      paid: paidByMethod.get(method) ?? 0,
+      refunded: refundedByMethod.get(method) ?? 0,
+    })
+  );
   const canReopen = can(ctx.role, 'pos.refund') && ['paid', 'refunded'].includes(order.status);
   const fullyRefunded = order.status === 'refunded' && refundable === 0 && totalPaid > 0;
   const openDerived = (derivedOrders ?? []).find((d) => d.status === 'open');
@@ -141,20 +182,123 @@ export default async function OrderDetailPage({
   const staff = order.profiles as unknown as { display_name: string } | null;
   const customer = order.customers as unknown as { name: string } | null;
 
-  // 会計連動: 売上仕訳は日次・店舗単位の集計（{storeId}:{businessDate}）のため、
-  // この注文の完了済み支払の営業日から該当する集計仕訳が存在するかを確認する。
+  // 会計連動: 売上・返金の仕訳は日次・店舗単位の集計（{storeId}:{businessDate}）のため、
+  // この注文の完了済み支払／返金の営業日から該当する集計仕訳が存在するかを確認する。
   const businessDates = [...new Set((payments ?? []).filter((p) => p.status === 'completed').map((p) => p.business_date as string))];
+  const refundBusinessDates = [...new Set((refunds ?? []).map((r) => r.business_date as string))];
   let journaledDates: string[] = [];
-  if (businessDates.length > 0) {
-    const candidateSourceIds = businessDates.map((d) => `${order.store_id}:${d}`);
-    const { data: matchedJournals } = await supabase
-      .from('journal_entries')
-      .select('source_id')
-      .eq('organization_id', ctx.organizationId)
-      .eq('source_type', 'pos_sales')
-      .in('source_id', candidateSourceIds);
-    journaledDates = businessDates.filter((d) => (matchedJournals ?? []).some((j) => j.source_id === `${order.store_id}:${d}`));
+  type JournalRow = { id: string; source_type: string; source_id: string; entry_date: string; posted_at: string | null; created_at: string };
+  let matchedJournalRows: JournalRow[] = [];
+  const salesSourceIds = businessDates.map((d) => `${order.store_id}:${d}`);
+  const refundSourceIds = refundBusinessDates.map((d) => `${order.store_id}:${d}`);
+  const [{ data: matchedSalesJournals }, { data: matchedRefundJournals }] = await Promise.all([
+    salesSourceIds.length > 0
+      ? supabase
+          .from('journal_entries')
+          .select('id, source_type, source_id, entry_date, posted_at, created_at')
+          .eq('organization_id', ctx.organizationId)
+          .eq('source_type', 'pos_sales')
+          .in('source_id', salesSourceIds)
+      : Promise.resolve({ data: [] as JournalRow[] }),
+    refundSourceIds.length > 0
+      ? supabase
+          .from('journal_entries')
+          .select('id, source_type, source_id, entry_date, posted_at, created_at')
+          .eq('organization_id', ctx.organizationId)
+          .eq('source_type', 'pos_refund')
+          .in('source_id', refundSourceIds)
+      : Promise.resolve({ data: [] as JournalRow[] }),
+  ]);
+  matchedJournalRows = [...(matchedSalesJournals ?? []), ...(matchedRefundJournals ?? [])];
+  journaledDates = businessDates.filter((d) =>
+    (matchedSalesJournals ?? []).some((j) => j.source_id === `${order.store_id}:${d}`)
+  );
+
+  // ---- 取引トレース: 予約→注文作成→支払→返金→在庫移動→仕訳→ポイントを時系列で一覧化 ----
+  interface TraceEvent {
+    key: string;
+    category: string;
+    label: string;
+    detail: string;
+    timestamp: string;
+    href?: string | null;
   }
+  const traceEvents: TraceEvent[] = [];
+  if (reservation) {
+    traceEvents.push({
+      key: `reservation-${reservation.id}`,
+      category: '予約',
+      label: `予約 ${reservation.code}`,
+      detail: `${reservation.guest_name} 様・${reservation.party_size}名`,
+      timestamp: reservation.created_at,
+    });
+  }
+  traceEvents.push({
+    key: `order-created-${order.id}`,
+    category: '注文作成',
+    label: `注文 #${order.order_no} 作成`,
+    detail: `${ORDER_TYPE_LABELS[order.order_type] ?? order.order_type}・客数${order.guest_count}名`,
+    timestamp: order.created_at,
+  });
+  for (const p of payments ?? []) {
+    traceEvents.push({
+      key: `payment-${p.id}`,
+      category: '支払',
+      label: `${METHOD_LABELS[p.method] ?? p.method}で支払`,
+      detail: `${yen(p.amount)}${p.status !== 'completed' ? `（${p.status}）` : ''}`,
+      timestamp: p.paid_at,
+    });
+  }
+  for (const r of refunds ?? []) {
+    traceEvents.push({
+      key: `refund-${r.id}`,
+      category: r.kind === 'void' ? '取消' : '返金',
+      label: `${METHOD_LABELS[r.method] ?? r.method}へ${r.kind === 'void' ? '取消' : '返金'}`,
+      detail: `${yen(r.amount)}・理由: ${r.reason}`,
+      timestamp: r.refunded_at,
+    });
+  }
+  const stockMovementLabels: Record<string, string> = { sale: '販売による在庫減', return: '返品による在庫戻し' };
+  for (const m of stockMovements ?? []) {
+    const inv = m.inventory_items as unknown as { name: string } | null;
+    traceEvents.push({
+      key: `stock-${m.id}`,
+      category: '在庫移動',
+      label: stockMovementLabels[m.movement_type] ?? m.movement_type,
+      detail: `${inv?.name ?? '不明な品目'}　数量 ${m.quantity}`,
+      timestamp: m.occurred_at,
+      href: '/app/inventory',
+    });
+  }
+  for (const j of matchedJournalRows) {
+    traceEvents.push({
+      key: `journal-${j.id}`,
+      category: '仕訳',
+      label: j.source_type === 'pos_refund' ? '返金仕訳（日次集計）' : '売上仕訳（日次集計）',
+      detail: `${j.source_id}`,
+      timestamp: j.posted_at ?? j.created_at,
+      href: `/app/accounting?source_type=${j.source_type}&source_id=${encodeURIComponent(j.source_id)}`,
+    });
+  }
+  const pointKindLabels: Record<string, string> = {
+    earn: 'ポイント付与',
+    redeem: 'ポイント利用',
+    revoke: 'ポイント取消',
+    refund_return: 'ポイント返却',
+    adjust: 'ポイント調整',
+    expire: 'ポイント失効',
+  };
+  for (const pt of pointTransactions ?? []) {
+    traceEvents.push({
+      key: `point-${pt.id}`,
+      category: 'ポイント',
+      label: pointKindLabels[pt.kind] ?? pt.kind,
+      detail: `${pt.points > 0 ? '+' : ''}${pt.points}pt（残高 ${pt.balance_after}pt）${pt.note ? `・${pt.note}` : ''}`,
+      timestamp: pt.created_at,
+      href: order.customer_id ? `/app/customers/${order.customer_id}` : null,
+    });
+  }
+  traceEvents.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 
   return (
     <div>
@@ -414,6 +558,7 @@ export default async function OrderDetailPage({
                     orderId={order.id}
                     refundable={refundable}
                     items={refundableItems}
+                    paymentBreakdown={paymentBreakdown}
                     refundOrderAction={refundOrder}
                   />
                 )}
@@ -478,6 +623,52 @@ export default async function OrderDetailPage({
           )}
         </div>
       </div>
+
+      <Card className="mt-5">
+        <CardHeader>
+          <CardTitle>トレース（監査証跡）</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          {traceEvents.length === 0 ? (
+            <div className="p-5">
+              <EmptyState title="トレース対象のイベントがありません" className="border-0 py-6" />
+            </div>
+          ) : (
+            <TableWrap className="border-0">
+              <Table>
+                <THead>
+                  <Tr>
+                    <Th>日時</Th>
+                    <Th>区分</Th>
+                    <Th>内容</Th>
+                    <Th>詳細</Th>
+                  </Tr>
+                </THead>
+                <TBody>
+                  {traceEvents.map((ev) => (
+                    <Tr key={ev.key}>
+                      <Td className="whitespace-nowrap text-xs text-gray-500">{formatDateTime(ev.timestamp)}</Td>
+                      <Td>
+                        <Badge tone="gray">{ev.category}</Badge>
+                      </Td>
+                      <Td className="font-medium text-navy">{ev.label}</Td>
+                      <Td className="text-sm text-gray-600">
+                        {ev.href ? (
+                          <Link href={ev.href} className="text-primary hover:underline">
+                            {ev.detail}
+                          </Link>
+                        ) : (
+                          ev.detail
+                        )}
+                      </Td>
+                    </Tr>
+                  ))}
+                </TBody>
+              </Table>
+            </TableWrap>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

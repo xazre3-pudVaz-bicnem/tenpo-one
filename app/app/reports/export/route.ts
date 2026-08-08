@@ -7,7 +7,14 @@ import { todayJst, daysAgoJst, weekdayJa } from '@/lib/format';
 import { summarizeItemCosts, type CostableOrderItem } from '@/components/reports/cost';
 import { estimateLaborCost, type TimeEntryForLabor, type PayrollRuleForLabor } from '@/components/reports/labor';
 import { fetchIngredientLinesByMenuItems } from '@/components/costing/data';
-import { computeSalesMetrics, SETTLED_ORDER_STATUSES, type RefundLike, type SettledOrderLike } from '@/lib/metrics';
+import {
+  computeSalesMetrics,
+  isGuestCountedOrder,
+  SETTLED_ORDER_STATUSES,
+  type RefundLike,
+  type SettledOrderLike,
+  type SalesMetricsOptions,
+} from '@/lib/metrics';
 
 function dateSequence(fromStr: string, toStr: string): string[] {
   const dates: string[] = [];
@@ -35,9 +42,19 @@ export async function GET(request: NextRequest) {
   const supabase = await createClient();
   const storeIds = ctx.currentStore ? [ctx.currentStore.id] : ctx.stores.map((s) => s.id);
 
+  // 客数KPI設定（organizations.kpi_settings.includeTakeoutGuests。省略時true）。lib/metrics.ts参照
+  const { data: orgKpiRow } = await supabase
+    .from('organizations')
+    .select('kpi_settings')
+    .eq('id', ctx.organizationId)
+    .maybeSingle();
+  const metricsOpts: SalesMetricsOptions = {
+    includeTakeoutGuests: (orgKpiRow?.kpi_settings as { includeTakeoutGuests?: boolean } | null)?.includeTakeoutGuests ?? true,
+  };
+
   const { data: orders } = await supabase
     .from('orders')
-    .select('total, guest_count, discount_total, status, store_id, business_date')
+    .select('total, guest_count, discount_total, status, store_id, business_date, order_type')
     .in('store_id', storeIds)
     .gte('business_date', from)
     .lte('business_date', to)
@@ -61,7 +78,9 @@ export async function GET(request: NextRequest) {
   const discountByDate = new Map<string, number>();
   for (const o of allOrders) {
     grossByDate.set(o.business_date, (grossByDate.get(o.business_date) ?? 0) + o.total);
-    guestsByDate.set(o.business_date, (guestsByDate.get(o.business_date) ?? 0) + o.guest_count);
+    if (isGuestCountedOrder(o as SettledOrderLike, metricsOpts)) {
+      guestsByDate.set(o.business_date, (guestsByDate.get(o.business_date) ?? 0) + o.guest_count);
+    }
     countByDate.set(o.business_date, (countByDate.get(o.business_date) ?? 0) + 1);
     discountByDate.set(o.business_date, (discountByDate.get(o.business_date) ?? 0) + o.discount_total);
   }
@@ -81,7 +100,7 @@ export async function GET(request: NextRequest) {
   const dailyCsv = toCsv(['日付', '曜日', '総売上', '返金', '純売上', '会計件数', '客数', '客単価', '値引き額'], rows);
 
   // ---- P/L行（総売上/値引/返金/純売上/原価/粗利/人件費/経費/利益）----
-  const mainMetrics = computeSalesMetrics(allOrders as SettledOrderLike[], allRefunds as RefundLike[]);
+  const mainMetrics = computeSalesMetrics(allOrders as SettledOrderLike[], allRefunds as RefundLike[], metricsOpts);
   const grossSalesTotal = mainMetrics.grossSales;
   const refundsTotal = mainMetrics.refunds;
   const discountTotal = mainMetrics.discounts;

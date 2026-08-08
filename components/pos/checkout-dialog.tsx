@@ -51,7 +51,7 @@ export interface PointsAvailability {
   pointValue: number;
 }
 
-const BASE_METHODS: CheckoutPayment['method'][] = ['cash', 'credit', 'qr', 'emoney', 'voucher', 'on_account'];
+const BASE_METHODS: CheckoutPayment['method'][] = ['cash', 'credit', 'qr', 'emoney', 'voucher', 'on_account', 'other'];
 
 /** 端末決済ポーリングの上限（60秒 ÷ 2秒間隔） */
 const TERMINAL_POLL_INTERVAL_MS = 2000;
@@ -533,7 +533,7 @@ export function CheckoutDialog({
 
         <div>
           <p className="mb-2 text-sm font-semibold text-navy">支払方法</p>
-          <div className="grid grid-cols-4 gap-2 sm:grid-cols-7">
+          <div className="grid grid-cols-4 gap-2 sm:grid-cols-8">
             {BASE_METHODS.map((m) => (
               <Button
                 key={m}

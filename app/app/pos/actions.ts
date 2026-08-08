@@ -218,7 +218,7 @@ export async function setDiscount(orderId: string, discountTotal: number, reason
 }
 
 export interface CheckoutPayment {
-  method: 'cash' | 'credit' | 'qr' | 'emoney' | 'voucher' | 'on_account' | 'points';
+  method: 'cash' | 'credit' | 'qr' | 'emoney' | 'voucher' | 'on_account' | 'points' | 'other';
   amount: number;
   tendered?: number;
 }

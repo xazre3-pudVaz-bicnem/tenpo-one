@@ -5,7 +5,13 @@ import { requireMember } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { calcWasteAmount } from '@/lib/costing';
 import { estimateLaborCost, type TimeEntryForLabor, type PayrollRuleForLabor } from '@/components/reports/labor';
-import { computeSalesMetrics, SETTLED_ORDER_STATUSES, type SettledOrderLike, type RefundLike } from '@/lib/metrics';
+import {
+  computeSalesMetrics,
+  SETTLED_ORDER_STATUSES,
+  type SettledOrderLike,
+  type RefundLike,
+  type SalesMetricsOptions,
+} from '@/lib/metrics';
 import type { Role } from '@/lib/permissions';
 
 const PATH = '/app/daily-reports';
@@ -54,10 +60,10 @@ async function buildMetrics(
   storeId: string,
   businessDate: string
 ): Promise<DailyMetrics> {
-  const [ordersRes, refundsRes, closingRes, reservationsRes, wasteRes, timeEntriesRes, payrollRulesRes] = await Promise.all([
+  const [ordersRes, refundsRes, closingRes, reservationsRes, wasteRes, timeEntriesRes, payrollRulesRes, orgRes] = await Promise.all([
     supabase
       .from('orders')
-      .select('total, discount_total, guest_count, status')
+      .select('total, discount_total, guest_count, status, order_type')
       .eq('store_id', storeId)
       .eq('business_date', businessDate)
       .in('status', SETTLED_ORDER_STATUSES),
@@ -76,11 +82,17 @@ async function buildMetrics(
       .select('profile_id, store_id, pay_type, base_amount, effective_from, effective_to')
       .eq('organization_id', organizationId)
       .eq('status', 'active'),
+    // 客数KPI設定（organizations.kpi_settings.includeTakeoutGuests。省略時true）。lib/metrics.ts参照
+    supabase.from('organizations').select('kpi_settings').eq('id', organizationId).maybeSingle(),
   ]);
 
   const orders = (ordersRes.data ?? []) as SettledOrderLike[];
   const refunds = (refundsRes.data ?? []) as RefundLike[];
-  const sales = computeSalesMetrics(orders, refunds); // gross/discounts/refunds/netSales/guests/avgSpendの正式定義
+  const metricsOpts: SalesMetricsOptions = {
+    includeTakeoutGuests:
+      (orgRes.data?.kpi_settings as { includeTakeoutGuests?: boolean } | null)?.includeTakeoutGuests ?? true,
+  };
+  const sales = computeSalesMetrics(orders, refunds, metricsOpts); // gross/discounts/refunds/netSales/guests/avgSpendの正式定義
 
   const reservations = reservationsRes.data ?? [];
   const cancelCount = reservations.filter((r) => r.status === 'cancelled' || r.status === 'no_show').length;
