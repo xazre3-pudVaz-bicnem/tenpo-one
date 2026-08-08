@@ -1,6 +1,5 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { AlertTriangle } from 'lucide-react';
 import { requireMember } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { can } from '@/lib/permissions';
@@ -18,18 +17,29 @@ import { HourlySalesChart } from '@/components/reports/hourly-sales-chart';
 import { PaymentMethodChart } from '@/components/reports/payment-method-chart';
 import { METHOD_LABELS } from '@/components/cash/labels';
 import { monthBounds, previousPeriod } from '@/components/reports/period';
+import { calcDelta } from '@/components/reports/compare';
+import { DeltaBadge } from '@/components/reports/delta-badge';
 import { summarizeItemCosts, type CostableOrderItem } from '@/components/reports/cost';
 import { estimateLaborCost, type TimeEntryForLabor, type PayrollRuleForLabor } from '@/components/reports/labor';
 import { fetchIngredientLinesByMenuItems } from '@/components/costing/data';
 import { collectDashboardAlerts } from '@/components/dashboard/alerts';
 import { AnnouncementBanner } from '@/components/dashboard/announcement-banner';
+import { AlertSummary } from '@/components/dashboard/alert-summary';
 import { StoreRankingTable } from '@/components/dashboard/store-ranking-table';
+import { KpiStrip, type KpiCell } from '@/components/dashboard/kpi-strip';
 
 export const metadata: Metadata = { title: 'ダッシュボード' };
 
 function dateOnlyJst(iso: string | null): string | null {
   if (!iso) return null;
   return new Date(iso).toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' });
+}
+
+/** 予算達成率のバッジ色（100%以上=success・90%以上=warning・それ未満=danger） */
+function achievementTone(pct: number): 'success' | 'warning' | 'danger' {
+  if (pct >= 100) return 'success';
+  if (pct >= 90) return 'warning';
+  return 'danger';
 }
 
 /**
@@ -90,9 +100,12 @@ async function HqDashboard({
   const thisMonth = monthBounds(0, today);
   const monthFrom = thisMonth.first;
   const prev = previousPeriod(monthFrom, today);
+  const yesterday = daysAgoJst(1);
+  const sameWeekdayLastWeek = daysAgoJst(7);
 
   const [
     todayOrdersRes,
+    compareOrdersRes,
     monthOrdersRes,
     monthItemsRes,
     paymentsRes,
@@ -101,6 +114,7 @@ async function HqDashboard({
     reservationsRes,
     expensesRes,
     prevOrdersRes,
+    budgetsRes,
     alerts,
   ] = await Promise.all([
     supabase
@@ -108,6 +122,12 @@ async function HqDashboard({
       .select('total, guest_count, status, store_id')
       .in('store_id', storeIds)
       .eq('business_date', today)
+      .in('status', ['paid', 'refunded']),
+    supabase
+      .from('orders')
+      .select('total, guest_count, status, store_id, business_date')
+      .in('store_id', storeIds)
+      .in('business_date', [yesterday, sameWeekdayLastWeek])
       .in('status', ['paid', 'refunded']),
     supabase
       .from('orders')
@@ -158,15 +178,22 @@ async function HqDashboard({
       .lte('business_date', today),
     supabase
       .from('orders')
-      .select('total, store_id')
+      .select('total, guest_count, store_id')
       .in('store_id', storeIds)
       .gte('business_date', prev.from)
       .lte('business_date', prev.to)
       .eq('status', 'paid'),
+    supabase
+      .from('budgets')
+      .select('store_id, sales_budget, cost_rate_target, labor_rate_target')
+      .eq('organization_id', ctx.organizationId)
+      .eq('month', monthFrom)
+      .or(`store_id.is.null,store_id.in.(${storeIds.join(',')})`),
     collectDashboardAlerts(supabase, ctx.organizationId, stores, true),
   ]);
 
   const todayOrders = todayOrdersRes.data ?? [];
+  const compareOrders = compareOrdersRes.data ?? [];
   const monthOrders = monthOrdersRes.data ?? [];
   const monthItems = monthItemsRes.data ?? [];
   const payments = paymentsRes.data ?? [];
@@ -175,12 +202,27 @@ async function HqDashboard({
   const reservations = reservationsRes.data ?? [];
   const expenses = expensesRes.data ?? [];
   const prevOrders = prevOrdersRes.data ?? [];
+  const budgetRows = budgetsRes.data ?? [];
 
   // ---- 本日 ----
   const todaySales = todayOrders.filter((o) => o.status === 'paid').reduce((a, o) => a + o.total, 0);
   const todayCount = todayOrders.filter((o) => o.status === 'paid').length;
   const todayGuests = todayOrders.reduce((a, o) => a + o.guest_count, 0);
-  const todayAvgSpend = todayGuests > 0 ? Math.floor(todaySales / todayGuests) : 0;
+
+  // ---- 本日: 前日比・前週同曜日比 ----
+  const yesterdayOrders = compareOrders.filter((o) => o.business_date === yesterday);
+  const lastWeekOrders = compareOrders.filter((o) => o.business_date === sameWeekdayLastWeek);
+  const yesterdaySales = yesterdayOrders.filter((o) => o.status === 'paid').reduce((a, o) => a + o.total, 0);
+  const yesterdayGuests = yesterdayOrders.reduce((a, o) => a + o.guest_count, 0);
+  const lastWeekSales = lastWeekOrders.filter((o) => o.status === 'paid').reduce((a, o) => a + o.total, 0);
+  const todaySalesDeltaVsYesterday = calcDelta(todaySales, yesterdaySales);
+  const todaySalesDeltaVsLastWeek = calcDelta(todaySales, lastWeekSales);
+  const todayGuestsDeltaVsYesterday = calcDelta(todayGuests, yesterdayGuests);
+
+  // ---- 今月: 前月同期間の売上・客数（今月売上・客単価の前月比に使用） ----
+  const prevMonthSales = prevOrders.reduce((a, o) => a + o.total, 0);
+  const prevMonthGuests = prevOrders.reduce((a, o) => a + o.guest_count, 0);
+  const prevMonthAvgSpend = prevMonthGuests > 0 ? Math.floor(prevMonthSales / prevMonthGuests) : 0;
 
   // ---- 今月: 原価（レシピ優先） ----
   const menuItemIds = [...new Set(monthItems.map((i) => i.menu_item_id).filter((v): v is string => !!v))];
@@ -196,6 +238,23 @@ async function HqDashboard({
   const monthGrossProfit = monthSalesTotal - costSummary.totalCost;
   const monthProfitRate = monthSalesTotal > 0 ? (monthGrossProfit / monthSalesTotal) * 100 : 0;
   const laborRate = monthSalesTotal > 0 ? (laborResult.total / monthSalesTotal) * 100 : 0;
+  const monthGuestsTotal = monthOrders.reduce((a, o) => a + o.guest_count, 0);
+  const monthAvgSpend = monthGuestsTotal > 0 ? Math.floor(monthSalesTotal / monthGuestsTotal) : 0;
+
+  // ---- 今月: 予算目標（全社行を優先。全社行が無ければ売上予算のみ店舗行を合算） ----
+  const orgBudgetRow = budgetRows.find((b) => b.store_id === null) ?? null;
+  const storeBudgetSalesSum = budgetRows.filter((b) => b.store_id !== null).reduce((a, b) => a + b.sales_budget, 0);
+  const salesBudget = orgBudgetRow?.sales_budget ?? (storeBudgetSalesSum > 0 ? storeBudgetSalesSum : null);
+  const costRateTarget = orgBudgetRow?.cost_rate_target ?? null;
+  const laborRateTarget = orgBudgetRow?.labor_rate_target ?? null;
+  const profitRateTarget = costRateTarget != null ? 100 - costRateTarget : null;
+
+  // ---- 今月: KPIの比較（前月比・目標比） ----
+  const monthSalesDeltaVsPrev = calcDelta(monthSalesTotal, prevMonthSales);
+  const salesAchievementPct = salesBudget && salesBudget > 0 ? (monthSalesTotal / salesBudget) * 100 : null;
+  const monthAvgSpendDeltaVsPrev = calcDelta(monthAvgSpend, prevMonthAvgSpend);
+  const profitRateDeltaVsTarget = profitRateTarget != null ? calcDelta(monthProfitRate, profitRateTarget) : null;
+  const laborRateDeltaVsTarget = laborRateTarget != null ? calcDelta(laborRate, laborRateTarget) : null;
 
   // ---- 店舗別ランキング ----
   const salesByStore = new Map<string, number>();
@@ -350,7 +409,93 @@ async function HqDashboard({
     .sort((a, b) => b.total - a.total);
 
   const reportsHref = (extra?: string) => `/app/reports?from=${monthFrom}&to=${today}${extra ?? ''}`;
-  const todayReportsHref = `/app/reports?from=${today}&to=${today}`;
+  const todayOrdersHref = `/app/orders?from=${today}&to=${today}`;
+
+  const mainKpiCells: KpiCell[] = [
+    {
+      key: 'month-sales',
+      label: '今月売上',
+      value: yen(monthSalesTotal),
+      href: reportsHref(),
+      tone: 'primary',
+      compare: (
+        <>
+          <DeltaBadge delta={monthSalesDeltaVsPrev} label="前月比" />
+          {salesAchievementPct != null ? (
+            <Badge tone={achievementTone(salesAchievementPct)}>予算比 {salesAchievementPct.toFixed(1)}%</Badge>
+          ) : (
+            <span className="text-xs text-gray-400">
+              予算未設定 <Link href="/app/budgets" className="underline">設定する</Link>
+            </span>
+          )}
+        </>
+      ),
+    },
+    {
+      key: 'month-gross-profit',
+      label: '粗利益（今月）',
+      value: yen(monthGrossProfit),
+      href: reportsHref(),
+      compare: <span className="text-xs text-gray-400">前月同期間の原価データなし</span>,
+    },
+    {
+      key: 'profit-rate',
+      label: '利益率',
+      value: `${monthProfitRate.toFixed(1)}%`,
+      href: reportsHref(),
+      compare: profitRateDeltaVsTarget ? (
+        <DeltaBadge delta={profitRateDeltaVsTarget} label="目標比" />
+      ) : (
+        <span className="text-xs text-gray-400">
+          目標未設定 <Link href="/app/budgets" className="underline">設定する</Link>
+        </span>
+      ),
+    },
+    {
+      key: 'labor-rate',
+      label: '人件費率',
+      value: `${laborRate.toFixed(1)}%`,
+      href: '/app/payroll',
+      compare: laborRateDeltaVsTarget ? (
+        <DeltaBadge delta={laborRateDeltaVsTarget} label="目標比" positiveIsGood={false} />
+      ) : (
+        <span className="text-xs text-gray-400">
+          目標未設定 <Link href="/app/budgets" className="underline">設定する</Link>
+        </span>
+      ),
+    },
+    {
+      key: 'avg-spend',
+      label: '客単価（今月）',
+      value: yen(monthAvgSpend),
+      href: reportsHref(),
+      compare: <DeltaBadge delta={monthAvgSpendDeltaVsPrev} label="前月比" />,
+    },
+  ];
+
+  const subKpiCells: KpiCell[] = [
+    {
+      key: 'today-sales',
+      label: '本日売上',
+      value: yen(todaySales),
+      href: todayOrdersHref,
+      compare: (
+        <>
+          <DeltaBadge delta={todaySalesDeltaVsYesterday} label="前日比" />
+          <DeltaBadge delta={todaySalesDeltaVsLastWeek} label="先週同曜日比" />
+        </>
+      ),
+    },
+    {
+      key: 'today-guests',
+      label: '本日客数',
+      value: `${todayGuests}名（会計${todayCount}件）`,
+      href: todayOrdersHref,
+      compare: <DeltaBadge delta={todayGuestsDeltaVsYesterday} label="前日比" />,
+    },
+    { key: 'store-count', label: '店舗数', value: `${stores.length}店舗`, href: '#ranking' },
+    { key: 'labor-cost', label: '今月人件費（概算）', value: yen(laborResult.total), href: '/app/payroll' },
+  ];
 
   return (
     <div>
@@ -358,26 +503,18 @@ async function HqDashboard({
 
       {setupPercent != null && <SetupProgressCard percent={setupPercent} />}
       <AnnouncementBanner supabase={supabase} organizationId={ctx.organizationId} userId={ctx.userId} storeIds={storeIds} />
-      <AlertList alerts={alerts} />
+      <AlertSummary alerts={alerts} />
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        <LinkStatCard href={todayReportsHref} label="本日売上" value={yen(todaySales)} tone="primary" />
-        <LinkStatCard href={reportsHref()} label="今月売上" value={yen(monthSalesTotal)} tone="primary" />
-        <LinkStatCard href={reportsHref()} label="今月粗利益" value={yen(monthGrossProfit)} tone="success" />
-        <LinkStatCard href={reportsHref()} label="利益率" value={`${monthProfitRate.toFixed(1)}%`} />
-        <LinkStatCard href={todayReportsHref} label="本日客数" value={`${todayGuests}名`} sub={`会計${todayCount}件`} />
-        <LinkStatCard href={todayReportsHref} label="客単価" value={yen(todayAvgSpend)} />
-        <LinkStatCard label="店舗数" value={`${stores.length}店舗`} />
-        <LinkStatCard href="/app/payroll" label="今月人件費（概算）" value={yen(laborResult.total)} />
-        <LinkStatCard href="/app/payroll" label="人件費率" value={`${laborRate.toFixed(1)}%`} tone={laborRate > 35 ? 'warning' : 'default'} />
-      </div>
+      <KpiStrip cells={mainKpiCells} />
+      <KpiStrip cells={subKpiCells} size="sm" className="mt-3" />
       <p className="mt-2 text-xs text-gray-400">
         ※ 原価はレシピ原価を優先し、無ければ商品原価（menu_items.cost）を使用。どちらも未設定の品目（{costSummary.excludedCount}件・売上{yen(costSummary.excludedRevenue)}）は原価計算から除外しています。
         人件費は時給ルール×実働時間の概算（月給者は月給÷21日で日割り）で、残業・深夜等の割増は含みません
         {laborResult.missingRuleCount > 0 && `（給与ルール未設定の勤務${laborResult.missingRuleCount}件は概算から除外）`}。
+        利益率・人件費率の目標比は全社予算（未設定時は店舗別予算の合算）に基づく概算です。
       </p>
 
-      <Card className="mt-5">
+      <Card className="mt-5" id="ranking">
         <CardHeader>
           <CardTitle>店舗ランキング（今月・{stores.length}店舗）</CardTitle>
         </CardHeader>
@@ -590,26 +727,6 @@ async function HqDashboard({
   );
 }
 
-function AlertList({ alerts }: { alerts: { id: string; tone: 'danger' | 'warning'; title: string; href: string }[] }) {
-  if (alerts.length === 0) return null;
-  return (
-    <div className="mb-5 space-y-2">
-      {alerts.map((a) => (
-        <Link
-          key={a.id}
-          href={a.href}
-          className={`flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-medium ${
-            a.tone === 'danger' ? 'bg-danger-soft text-danger' : 'bg-warning-soft text-warning'
-          }`}
-        >
-          <AlertTriangle className="h-4 w-4 shrink-0" />
-          {a.title}
-        </Link>
-      ))}
-    </div>
-  );
-}
-
 // =====================================================================
 // 店舗ダッシュボード（店舗選択時）
 // =====================================================================
@@ -670,7 +787,7 @@ async function StoreDashboard({
 
       {setupPercent != null && <SetupProgressCard percent={setupPercent} />}
       <AnnouncementBanner supabase={supabase} organizationId={ctx.organizationId} userId={ctx.userId} storeIds={storeIds} />
-      <AlertList alerts={alerts} />
+      <AlertSummary alerts={alerts} />
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <LinkStatCard href="/app/orders" label="本日売上" value={yen(todaySales)} tone="primary" />
