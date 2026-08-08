@@ -25,6 +25,17 @@ export default async function proxy(request: NextRequest) {
     return NextResponse.next({ request: { headers: withPathname() } });
   }
 
+  const { pathname } = request.nextUrl;
+
+  // 認証が関係しないルート（LP・公開予約・QRオーダー・Webhook・ヘルスチェック等）は
+  // Supabaseへのセッション照会を行わない（公開ページのTTFB改善。
+  // /app・/admin は下のガードで検証し、各ページの requireSession が最終防衛線）。
+  const needsAuth =
+    pathname.startsWith('/app') || pathname.startsWith('/admin') || pathname === '/login';
+  if (!needsAuth) {
+    return NextResponse.next({ request: { headers: withPathname() } });
+  }
+
   let response = NextResponse.next({ request: { headers: withPathname() } });
 
   const supabase = createServerClient(
@@ -50,7 +61,6 @@ export default async function proxy(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const { pathname } = request.nextUrl;
   const isProtected = pathname.startsWith('/app') || pathname.startsWith('/admin');
 
   if (isProtected && !user) {

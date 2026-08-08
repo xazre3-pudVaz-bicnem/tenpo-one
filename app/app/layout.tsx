@@ -23,26 +23,34 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   const supabase = await createClient();
 
+  // オンボーディング状態と未読通知数を並列取得（往復回数削減）
+  const needsOnboardingCheck = ctx.role === 'org_owner' || ctx.role === 'hq_admin';
+  const [orgRes, unreadRes] = await Promise.all([
+    needsOnboardingCheck
+      ? supabase
+          .from('organizations')
+          .select('onboarding')
+          .eq('id', ctx.organizationId)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
+    supabase
+      .from('notifications')
+      .select('id', { count: 'exact', head: true })
+      .eq('recipient_id', ctx.userId)
+      .is('read_at', null),
+  ]);
+
   // 初期導入ウィザード未完了の企業オーナー/本社管理者を /app/onboarding へ誘導
   // （ウィザード自身とハンバーガーメニュー画面は無限リダイレクトを避けるため除外）
-  if (ctx.role === 'org_owner' || ctx.role === 'hq_admin') {
+  if (needsOnboardingCheck) {
     const pathname = (await headers()).get('x-pathname') ?? '';
     if (pathname !== '/app/onboarding' && !pathname.startsWith('/app/menu')) {
-      const { data: org } = await supabase
-        .from('organizations')
-        .select('onboarding')
-        .eq('id', ctx.organizationId)
-        .maybeSingle();
-      const onboarding = (org?.onboarding ?? null) as { completed?: boolean } | null;
+      const onboarding = (orgRes.data?.onboarding ?? null) as { completed?: boolean } | null;
       if (!onboarding?.completed) redirect('/app/onboarding');
     }
   }
 
-  const { count: unreadCount } = await supabase
-    .from('notifications')
-    .select('id', { count: 'exact', head: true })
-    .eq('recipient_id', ctx.userId)
-    .is('read_at', null);
+  const unreadCount = 'count' in unreadRes ? unreadRes.count : 0;
 
   const groups = visibleNavGroups(ctx.role, ctx.disabledFeatures);
   const mobileItems = MOBILE_NAV.filter((i) => {

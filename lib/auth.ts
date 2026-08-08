@@ -41,11 +41,21 @@ export const getSessionContext = cache(async (): Promise<SessionContext | null> 
   } = await supabase.auth.getUser();
   if (!user) return null;
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('id, display_name, is_cypress_admin, status')
-    .eq('id', user.id)
-    .single();
+  // プロフィールとメンバーシップを並列取得（往復回数削減）
+  const [{ data: profile }, { data: membership }] = await Promise.all([
+    supabase
+      .from('profiles')
+      .select('id, display_name, is_cypress_admin, status')
+      .eq('id', user.id)
+      .single(),
+    supabase
+      .from('memberships')
+      .select('id, organization_id, role, organizations(id, name)')
+      .eq('profile_id', user.id)
+      .eq('status', 'active')
+      .limit(1)
+      .maybeSingle(),
+  ]);
   if (!profile) return null;
   // 停止ユーザーは既存セッションでも利用不可（次のリクエストで即時遮断）
   if (profile.status === 'suspended') {
@@ -53,18 +63,11 @@ export const getSessionContext = cache(async (): Promise<SessionContext | null> 
     return null;
   }
 
-  const { data: membership } = await supabase
-    .from('memberships')
-    .select('id, organization_id, role, organizations(id, name)')
-    .eq('profile_id', user.id)
-    .eq('status', 'active')
-    .limit(1)
-    .maybeSingle();
-
   let stores: StoreRef[] = [];
   let role: Role | null = null;
   let organizationId: string | null = null;
   let organizationName: string | null = null;
+  const disabledFeatures = new Set<string>();
 
   if (membership) {
     role = membership.role as Role;
@@ -72,34 +75,34 @@ export const getSessionContext = cache(async (): Promise<SessionContext | null> 
     const org = membership.organizations as unknown as { id: string; name: string } | null;
     organizationName = org?.name ?? null;
 
-    if (isHqRole(role)) {
-      const { data } = await supabase
-        .from('stores')
-        .select('id, name, slug')
-        .eq('organization_id', organizationId)
-        .eq('status', 'active')
-        .order('name');
-      stores = data ?? [];
-    } else {
-      const { data } = await supabase
-        .from('membership_stores')
-        .select('stores(id, name, slug)')
-        .eq('membership_id', membership.id);
-      stores = (data ?? [])
-        .map((r) => r.stores as unknown as StoreRef | null)
-        .filter((s): s is StoreRef => !!s);
-    }
-  }
-
-  // 企業単位の機能フラグ（enabled=false の行のみ無効化。行なし=有効）
-  const disabledFeatures = new Set<string>();
-  if (organizationId) {
-    const { data: flags } = await supabase
+    // 店舗一覧と機能フラグを並列取得（往復回数削減）
+    const storesPromise = isHqRole(role)
+      ? supabase
+          .from('stores')
+          .select('id, name, slug')
+          .eq('organization_id', organizationId)
+          .eq('status', 'active')
+          .order('name')
+      : supabase
+          .from('membership_stores')
+          .select('stores(id, name, slug)')
+          .eq('membership_id', membership.id);
+    const flagsPromise = supabase
       .from('feature_flags')
       .select('flag_key, enabled')
       .eq('organization_id', organizationId)
       .eq('enabled', false);
-    for (const f of flags ?? []) disabledFeatures.add(f.flag_key);
+
+    const [storesRes, flagsRes] = await Promise.all([storesPromise, flagsPromise]);
+
+    if (isHqRole(role)) {
+      stores = (storesRes.data ?? []) as StoreRef[];
+    } else {
+      stores = ((storesRes.data ?? []) as { stores: unknown }[])
+        .map((r) => r.stores as StoreRef | null)
+        .filter((s): s is StoreRef => !!s);
+    }
+    for (const f of flagsRes.data ?? []) disabledFeatures.add(f.flag_key);
   }
 
   const cookieStore = await cookies();
