@@ -26,6 +26,27 @@ export interface SettledOrderLike {
   guest_count?: number;
   /** 'paid' | 'refunded'（それ以外は集計前に除外しておくこと） */
   status?: string;
+  /** 'dine_in' | 'course' | 'takeout' | 'delivery' | 'pre_order'。客数KPIのテイクアウト包含判定に使用 */
+  order_type?: string;
+}
+
+export interface SalesMetricsOptions {
+  /**
+   * 客数KPIにテイクアウト/デリバリー/事前注文の guest_count を含めるか。
+   * organizations.kpi_settings.includeTakeoutGuests（省略時 true）。
+   * order_type が無いデータは店内扱い（常に含める）。
+   */
+  includeTakeoutGuests?: boolean;
+}
+
+const OFF_PREMISE_TYPES = new Set(['takeout', 'delivery', 'pre_order']);
+
+/** 客数KPIの対象判定（有効客数）。店内飲食は常に対象。 */
+export function isGuestCountedOrder(order: SettledOrderLike, opts?: SalesMetricsOptions): boolean {
+  if (opts?.includeTakeoutGuests === false && order.order_type && OFF_PREMISE_TYPES.has(order.order_type)) {
+    return false;
+  }
+  return true;
 }
 
 export interface RefundLike {
@@ -47,17 +68,24 @@ export interface SalesMetrics {
   avgSpend: number;
 }
 
-/** 正式定義に基づく売上指標の集計。orders は paid/refunded のみを渡すこと。 */
+/**
+ * 正式定義に基づく売上指標の集計。orders は paid/refunded のみを渡すこと。
+ * 客数は有効客数（isGuestCountedOrder。企業設定でテイクアウトを除外可能）で、
+ * 客単価 = net_sales ÷ 有効客数。
+ */
 export function computeSalesMetrics(
   orders: SettledOrderLike[],
-  refunds: RefundLike[]
+  refunds: RefundLike[],
+  opts?: SalesMetricsOptions
 ): SalesMetrics {
   const grossSales = orders.reduce((a, o) => a + o.total, 0);
   const discounts = orders.reduce((a, o) => a + (o.discount_total ?? 0), 0);
   const refundTotal = refunds.reduce((a, r) => a + r.amount, 0);
   const voidAmount = refunds.filter((r) => r.kind === 'void').reduce((a, r) => a + r.amount, 0);
   const netSales = grossSales - refundTotal;
-  const guests = orders.reduce((a, o) => a + (o.guest_count ?? 0), 0);
+  const guests = orders
+    .filter((o) => isGuestCountedOrder(o, opts))
+    .reduce((a, o) => a + (o.guest_count ?? 0), 0);
   return {
     grossSales,
     discounts,
@@ -147,6 +175,65 @@ export function computeCostVariance(input: CostVarianceInput): CostVariance {
       other,
     },
   };
+}
+
+// -------------------------------------------------------------
+// 仕入価格変動（分析用の参考指標）
+// -------------------------------------------------------------
+
+export interface PurchaseReceiptLike {
+  quantity: number;
+  /** 今回の仕入単価（在庫単位あたり・円） */
+  unitCost: number;
+  /** 基準単価（期首時点の平均仕入単価等。nullなら比較不能で除外） */
+  baselineUnitCost: number | null;
+}
+
+export interface PurchasePriceVariance {
+  /** Σ 数量 × (今回単価 − 基準単価)。正=値上がりによる原価増 */
+  totalVariance: number;
+  /** 比較可能だった仕入額（基準単価×数量の合計） */
+  baselineAmount: number;
+  /** totalVariance ÷ baselineAmount ×100 */
+  varianceRate: number;
+  /** 基準単価が無く比較できなかった受入件数 */
+  excludedCount: number;
+}
+
+/**
+ * 仕入価格変動 = Σ 数量×(今回単価−基準単価)。
+ * 注意: 実原価（理論+廃棄+棚卸差異）の恒等式とは**独立した参考指標**。
+ * 理論原価は平均仕入単価を使うため価格変動は理論側にも徐々に反映される。
+ * 差異内訳に加算して二重計上しないこと。
+ */
+export function computePurchasePriceVariance(receipts: PurchaseReceiptLike[]): PurchasePriceVariance {
+  let totalVariance = 0;
+  let baselineAmount = 0;
+  let excludedCount = 0;
+  for (const r of receipts) {
+    if (r.baselineUnitCost == null) {
+      excludedCount += 1;
+      continue;
+    }
+    totalVariance += Math.round(r.quantity * (r.unitCost - r.baselineUnitCost));
+    baselineAmount += Math.round(r.quantity * r.baselineUnitCost);
+  }
+  return {
+    totalVariance,
+    baselineAmount,
+    varianceRate: baselineAmount > 0 ? (totalVariance / baselineAmount) * 100 : 0,
+    excludedCount,
+  };
+}
+
+/** 値上がり検出（前期比 rate% 以上の上昇）。ルールベースの単純判定 */
+export function isPriceIncreaseSignificant(
+  currentUnitCost: number,
+  previousUnitCost: number | null,
+  thresholdPct = 10
+): boolean {
+  if (previousUnitCost == null || previousUnitCost <= 0) return false;
+  return ((currentUnitCost - previousUnitCost) / previousUnitCost) * 100 >= thresholdPct;
 }
 
 // -------------------------------------------------------------

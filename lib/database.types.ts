@@ -1618,8 +1618,10 @@ export type Database = {
           petty_out_total: number
           refund_breakdown: Json
           refund_total: number
+          register_breakdown: Json
           register_session_id: string | null
           sales_total: number
+          sessions_count: number
           status: string
           store_id: string
           updated_at: string
@@ -1647,8 +1649,10 @@ export type Database = {
           petty_out_total?: number
           refund_breakdown?: Json
           refund_total?: number
+          register_breakdown?: Json
           register_session_id?: string | null
           sales_total?: number
+          sessions_count?: number
           status?: string
           store_id: string
           updated_at?: string
@@ -1676,8 +1680,10 @@ export type Database = {
           petty_out_total?: number
           refund_breakdown?: Json
           refund_total?: number
+          register_breakdown?: Json
           register_session_id?: string | null
           sales_total?: number
+          sessions_count?: number
           status?: string
           store_id?: string
           updated_at?: string
@@ -4133,6 +4139,7 @@ export type Database = {
           created_by: string | null
           id: string
           is_demo: boolean
+          kpi_settings: Json
           leave_policy: Json
           logo_path: string | null
           name: string
@@ -4154,6 +4161,7 @@ export type Database = {
           created_by?: string | null
           id?: string
           is_demo?: boolean
+          kpi_settings?: Json
           leave_policy?: Json
           logo_path?: string | null
           name: string
@@ -4175,6 +4183,7 @@ export type Database = {
           created_by?: string | null
           id?: string
           is_demo?: boolean
+          kpi_settings?: Json
           leave_policy?: Json
           logo_path?: string | null
           name?: string
@@ -7435,6 +7444,10 @@ export type Database = {
         }
         Returns: Json
       }
+      close_store_day: {
+        Args: { p_business_date: string; p_store_id: string }
+        Returns: Json
+      }
       create_public_reservation: {
         Args: {
           p_adults: number
@@ -7531,6 +7544,10 @@ export type Database = {
       }
       reopen_accounting_period: {
         Args: { p_month: string; p_org: string; p_reason: string }
+        Returns: Json
+      }
+      reopen_store_day: {
+        Args: { p_business_date: string; p_reason: string; p_store_id: string }
         Returns: Json
       }
       ship_stock_transfer: { Args: { p_transfer_id: string }; Returns: Json }

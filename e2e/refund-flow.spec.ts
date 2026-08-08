@@ -331,8 +331,20 @@ test('CASE2: レジ締め → 締め履歴に純売上snapshotが表示される
   });
   expect(error).toBeNull();
   expect(closeRes.difference).toBe(0);
+
+  // v0.4.3: 店舗日次締め（2段階目）でsnapshotが確定する
+  const { data: sessRow } = await admin
+    .from('register_sessions')
+    .select('business_date')
+    .eq('id', sessionId)
+    .single();
+  const { data: dayRes, error: dayErr } = await mgr.rpc('close_store_day', {
+    p_store_id: storeId,
+    p_business_date: sessRow!.business_date,
+  });
+  expect(dayErr).toBeNull();
   // snapshotに純売上が保存される（gross − refund）
-  expect(closeRes.net_sales).toBe(closeRes.sales_total - closeRes.refund_total);
+  expect(dayRes.net_sales).toBe(dayRes.sales_total - dayRes.refund_total);
 
   await login(page, ACCOUNTS.shibuyaManager);
   await page.goto('/app/cash?tab=closings');

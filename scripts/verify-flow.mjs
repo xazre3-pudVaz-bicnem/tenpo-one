@@ -259,7 +259,7 @@ async function main() {
   check('会計済み注文の物理削除は拒否される', !!eDelOrder || stillThere?.length === 1);
 
   // ============================================================
-  section('8. レジ締め → 日次締め → レポート反映');
+  section('8. レジ締め → 店舗日次締め（2段階） → レポート反映');
   // ============================================================
   const expectedCash = 30000 + cashPart - 500;
   const { data: closed, error: e11 } = await mgr.rpc('close_register_session', {
@@ -270,11 +270,23 @@ async function main() {
     closed?.expected === expectedCash, `実際: ${closed?.expected}`);
   check('差異0で締まる', closed?.difference === 0);
 
+  // v0.4.3: レジ締めは daily_closings を書かない。店舗日次締め（close_store_day）が集約する
+  const { data: dayRes, error: eDay } = await mgr.rpc('close_store_day', {
+    p_store_id: shibuya.id, p_business_date: todayJst(),
+  });
+  check('店舗日次締めができる（全レジ集約）', !eDay && dayRes?.ok, eDay?.message);
+  check('店舗日次締めにレジ台数が記録される', (dayRes?.sessions_count ?? 0) >= 1);
+
   const { data: [closing] } = await mgr.from('daily_closings')
     .select('*').eq('store_id', shibuya.id).eq('business_date', todayJst());
   check('日次締めサマリが作成される', !!closing && closing.sales_total >= expectedTotal);
   check('支払方法別内訳が記録される',
     (closing?.payment_breakdown?.cash ?? 0) >= cashPart && (closing?.payment_breakdown?.credit ?? 0) >= creditPart);
+  check('レジ別内訳（register_breakdown）が保存される',
+    Array.isArray(closing?.register_breakdown) && closing.register_breakdown.length >= 1
+      && closing.register_breakdown.some((r) => r.session_id === sessionId));
+  check('純売上（net_sales）= 総売上 − 返金 で保存される',
+    closing?.net_sales === closing?.sales_total - closing?.refund_total);
 
   // ダッシュボード・レポートのデータソース検証（当日売上に反映されているか）
   const { data: todayOrders } = await mgr.from('orders')

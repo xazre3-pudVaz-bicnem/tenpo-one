@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest';
 import {
   computeSalesMetrics,
   computeCostVariance,
+  computePurchasePriceVariance,
   expectedCash,
+  isGuestCountedOrder,
+  isPriceIncreaseSignificant,
   refundableAmount,
 } from '@/lib/metrics';
 import { buildRefundJournal, validateJournalBalance, STD } from '@/lib/accounting';
@@ -50,6 +53,53 @@ describe('売上指標の正式定義（gross/refunds/net）', () => {
     const m = computeSalesMetrics([], []);
     expect(m.netSales).toBe(0);
     expect(m.avgSpend).toBe(0);
+  });
+});
+
+describe('有効客数（テイクアウトのKPI包含設定）', () => {
+  const orders = [
+    { total: 5000, guest_count: 2, order_type: 'dine_in' },
+    { total: 1500, guest_count: 1, order_type: 'takeout' },
+    { total: 2000, guest_count: 1, order_type: 'delivery' },
+  ];
+  it('既定（含める）: 全注文の客数がKPI対象', () => {
+    const m = computeSalesMetrics(orders, []);
+    expect(m.guests).toBe(4);
+    expect(m.avgSpend).toBe(Math.floor(8500 / 4));
+  });
+  it('includeTakeoutGuests=false: 店内飲食のみ客数対象・売上は全注文', () => {
+    const m = computeSalesMetrics(orders, [], { includeTakeoutGuests: false });
+    expect(m.guests).toBe(2);
+    expect(m.grossSales).toBe(8500); // 売上からは除外しない
+    expect(m.avgSpend).toBe(Math.floor(8500 / 2));
+  });
+  it('order_typeが無い旧データは常に客数対象', () => {
+    expect(isGuestCountedOrder({ total: 0, guest_count: 1 }, { includeTakeoutGuests: false })).toBe(true);
+  });
+});
+
+describe('仕入価格変動（参考指標・差異内訳と独立）', () => {
+  it('数量×(今回単価−基準単価)の合計と変動率', () => {
+    const v = computePurchasePriceVariance([
+      { quantity: 10, unitCost: 1120, baselineUnitCost: 1000 }, // +1,200
+      { quantity: 5, unitCost: 900, baselineUnitCost: 1000 },   // -500
+    ]);
+    expect(v.totalVariance).toBe(700);
+    expect(v.baselineAmount).toBe(15000);
+    expect(v.varianceRate).toBeCloseTo((700 / 15000) * 100);
+    expect(v.excludedCount).toBe(0);
+  });
+  it('基準単価が無い受入は除外してカウント', () => {
+    const v = computePurchasePriceVariance([
+      { quantity: 3, unitCost: 500, baselineUnitCost: null },
+    ]);
+    expect(v.totalVariance).toBe(0);
+    expect(v.excludedCount).toBe(1);
+  });
+  it('値上がり検出: 前回比12%上昇は閾値10%で検出・9%は非検出', () => {
+    expect(isPriceIncreaseSignificant(1120, 1000, 10)).toBe(true);
+    expect(isPriceIncreaseSignificant(1090, 1000, 10)).toBe(false);
+    expect(isPriceIncreaseSignificant(1120, null, 10)).toBe(false);
   });
 });
 
