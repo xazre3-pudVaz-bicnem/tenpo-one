@@ -8,12 +8,13 @@ import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useToast } from '@/components/ui/toast';
 import { yen, formatDate } from '@/lib/format';
-import { approveClosing, reopenClosing } from '@/app/app/cash/actions';
+import { approveClosing, reopenClosing, reopenStoreDay } from '@/app/app/cash/actions';
 import { CLOSING_STATUS_LABELS, CLOSING_STATUS_TONES, type ClosingStatus } from '@/components/cash/labels';
-import { ClosingSnapshot } from '@/components/cash/closing-snapshot';
+import { ClosingSnapshot, type RegisterBreakdownRow } from '@/components/cash/closing-snapshot';
 
 export interface ClosingRowData {
   id: string;
+  storeId: string;
   businessDate: string;
   storeName?: string;
   salesTotal: number;
@@ -33,11 +34,25 @@ export interface ClosingRowData {
   expectedCash: number | null;
   countedCash: number | null;
   note: string | null;
+  /** レジ別内訳（v0.4.3 close_store_day）。旧データは空配列 */
+  registerBreakdown: RegisterBreakdownRow[];
 }
 
-export function ClosingRow({ closing, showStore, canApprove }: { closing: ClosingRowData; showStore: boolean; canApprove: boolean }) {
+export function ClosingRow({
+  closing,
+  showStore,
+  canApprove,
+  canReopenStoreDay,
+}: {
+  closing: ClosingRowData;
+  showStore: boolean;
+  canApprove: boolean;
+  /** reopen_store_day（org_owner/hq_admin/area_managerのみ）を実行できるか */
+  canReopenStoreDay: boolean;
+}) {
   const [expanded, setExpanded] = useState(false);
   const [reopenOpen, setReopenOpen] = useState(false);
+  const [reopenStoreDayOpen, setReopenStoreDayOpen] = useState(false);
   const [pending, setPending] = useState(false);
   const { toast } = useToast();
 
@@ -77,16 +92,23 @@ export function ClosingRow({ closing, showStore, canApprove }: { closing: Closin
           <Badge tone={CLOSING_STATUS_TONES[closing.status]}>{CLOSING_STATUS_LABELS[closing.status]}</Badge>
         </Td>
         <Td onClick={(e) => e.stopPropagation()}>
-          {canApprove && (closing.status === 'closed' || closing.status === 'reopened') && (
-            <Button size="sm" variant="success" onClick={handleApprove} disabled={pending}>
-              承認する
-            </Button>
-          )}
-          {canApprove && closing.status === 'approved' && (
-            <Button size="sm" variant="secondary" onClick={() => setReopenOpen(true)} disabled={pending}>
-              締め後修正
-            </Button>
-          )}
+          <div className="flex flex-wrap gap-1.5">
+            {canApprove && (closing.status === 'closed' || closing.status === 'reopened') && (
+              <Button size="sm" variant="success" onClick={handleApprove} disabled={pending}>
+                承認する
+              </Button>
+            )}
+            {canApprove && closing.status === 'approved' && (
+              <Button size="sm" variant="secondary" onClick={() => setReopenOpen(true)} disabled={pending}>
+                締め後修正
+              </Button>
+            )}
+            {canReopenStoreDay && (closing.status === 'closed' || closing.status === 'approved') && (
+              <Button size="sm" variant="danger" onClick={() => setReopenStoreDayOpen(true)} disabled={pending}>
+                店舗日次締めを再オープン
+              </Button>
+            )}
+          </div>
         </Td>
       </Tr>
       {expanded && (
@@ -106,6 +128,7 @@ export function ClosingRow({ closing, showStore, canApprove }: { closing: Closin
                   expectedCash: closing.expectedCash,
                   countedCash: closing.countedCash,
                   cashDifference: closing.cashDifference,
+                  registerBreakdown: closing.registerBreakdown,
                 }}
               />
               {closing.note && (
@@ -115,6 +138,23 @@ export function ClosingRow({ closing, showStore, canApprove }: { closing: Closin
           </Td>
         </Tr>
       )}
+      <ConfirmDialog
+        open={reopenStoreDayOpen}
+        onClose={() => setReopenStoreDayOpen(false)}
+        title="店舗日次締めを再オープン"
+        message="この日の店舗日次締め（daily_closings）を再オープン（reopened）状態に戻します。レジ締めをやり直してから、再度「店舗日次締めを実行」してください。理由は監査ログに記録されます（reopen_store_day）。"
+        confirmLabel="再オープンする"
+        requireReason
+        onConfirm={async (reason) => {
+          try {
+            await reopenStoreDay(closing.storeId, closing.businessDate, reason);
+            toast('店舗日次締めを再オープンしました');
+          } catch (err) {
+            toast(err instanceof Error ? err.message : '再オープンに失敗しました', 'error');
+            throw err;
+          }
+        }}
+      />
       <ConfirmDialog
         open={reopenOpen}
         onClose={() => setReopenOpen(false)}

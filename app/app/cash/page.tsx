@@ -15,7 +15,8 @@ import { EmptyState } from '@/components/ui/state';
 import { TableWrap, Table, THead, TBody, Tr, Th, Td } from '@/components/ui/table';
 import { CashTabs, type CashTab } from '@/components/cash/tabs';
 import { PeriodFilter } from '@/components/cash/period-filter';
-import { OpenRegisterForm } from '@/components/cash/open-register-form';
+import { RegisterOpenCard } from '@/components/cash/register-open-card';
+import { RegisterClosedCard } from '@/components/cash/register-closed-card';
 import { SessionCard, type SessionCardData } from '@/components/cash/session-card';
 import { PettyCashAddDialog } from '@/components/cash/petty-cash-add-dialog';
 import { PettyOpeningBalanceDialog } from '@/components/cash/petty-opening-balance-dialog';
@@ -23,7 +24,9 @@ import { PettyCashCountDialog } from '@/components/cash/petty-cash-count-dialog'
 import { PettyCashCountApprove } from '@/components/cash/petty-cash-count-approve';
 import { ApprovalActions } from '@/components/cash/approval-actions';
 import { ClosingRow, type ClosingRowData } from '@/components/cash/closing-row';
-import { ClosingSnapshot } from '@/components/cash/closing-snapshot';
+import { ClosingSnapshot, type RegisterBreakdownRow } from '@/components/cash/closing-snapshot';
+import { ChecklistCard, type ChecklistItem } from '@/components/cash/checklist-card';
+import { StoreDayClosePanel } from '@/components/cash/store-day-close-panel';
 import { approvePettyCash, rejectPettyCash } from '@/app/app/cash/actions';
 import {
   KIND_LABELS,
@@ -39,6 +42,48 @@ import {
   type ClosingStatus,
   type PettyCountStatus,
 } from '@/components/cash/labels';
+
+/** 店舗日次締め（close_store_day）を実行できるロール。app/app/cash/actions.tsのSTORE_DAY_CLOSE_ROLESと一致させること */
+const STORE_DAY_CLOSE_ROLES = ['org_owner', 'hq_admin', 'area_manager', 'store_manager', 'assistant_manager'];
+/** 店舗日次締めの再オープン（reopen_store_day）を実行できるロール */
+const STORE_DAY_REOPEN_ROLES = ['org_owner', 'hq_admin', 'area_manager'];
+
+/** 予約が「本日まだ有効」とみなせるステータス（仮予約・キャンセル・無断キャンセル・会計済み・キャンセル待ちは除く） */
+const ACTIVE_RESERVATION_STATUSES = ['confirmed', 'waiting', 'arrived', 'seated', 'billing'];
+
+/** register_breakdown（jsonb）の1要素の生の型。supabase/migrations/00027の close_store_day が生成する */
+interface RawRegisterBreakdownEntry {
+  register_id: string;
+  register_name: string;
+  session_id: string;
+  opening_float: number;
+  cash_sales: number;
+  cash_refunds: number;
+  cash_in: number;
+  cash_out: number;
+  expected_cash: number;
+  counted_cash: number;
+  difference: number;
+  closed_by: string | null;
+}
+
+function mapRegisterBreakdown(
+  raw: unknown,
+  nameById: Map<string, string>
+): RegisterBreakdownRow[] {
+  return ((raw as RawRegisterBreakdownEntry[] | null) ?? []).map((e) => ({
+    registerName: e.register_name,
+    openingFloat: e.opening_float,
+    cashSales: e.cash_sales,
+    cashRefunds: e.cash_refunds,
+    cashIn: e.cash_in,
+    cashOut: e.cash_out,
+    expectedCash: e.expected_cash,
+    countedCash: e.counted_cash,
+    difference: e.difference,
+    closedByName: e.closed_by ? (nameById.get(e.closed_by) ?? '—') : '—',
+  }));
+}
 
 export const metadata: Metadata = { title: 'レジ締め・小口現金' };
 
@@ -76,7 +121,7 @@ export default async function CashPage({
       {!store ? (
         <EmptyState title="所属店舗がありません" description="レジ操作には店舗への割当が必要です。管理者に確認してください。" />
       ) : tab === 'register' ? (
-        <RegisterTab storeId={store.id} />
+        <RegisterTab storeId={store.id} role={ctx.role} />
       ) : tab === 'petty' ? (
         <PettyTab
           storeIds={ctx.currentStore ? [ctx.currentStore.id] : ctx.stores.map((s) => s.id)}
@@ -96,6 +141,7 @@ export default async function CashPage({
           from={sp.from ?? daysAgoJst(30)}
           to={sp.to ?? todayJst()}
           canApprove={can(ctx.role, 'register.approve')}
+          canReopenStoreDay={STORE_DAY_REOPEN_ROLES.includes(ctx.role ?? '')}
         />
       )}
     </div>
@@ -106,31 +152,98 @@ export default async function CashPage({
 // レジタブ
 // ---------------------------------------------------------------
 
-async function RegisterTab({ storeId }: { storeId: string }) {
+async function RegisterTab({ storeId, role }: { storeId: string; role: string | null }) {
   const supabase = await createClient();
   const today = todayJst();
 
-  const { data: registers } = await supabase
-    .from('registers')
-    .select('id, name')
-    .eq('store_id', storeId)
-    .eq('status', 'active')
-    .order('name');
+  const [
+    { data: registers },
+    { data: todaySessions },
+    { data: todayClosing },
+    { count: unpaidOrdersCount },
+    { data: unservedKdsRows },
+    { count: unclockedStaffCount },
+    { count: pendingPettyCount },
+    { count: reservationsCount },
+    { count: shiftsCount },
+    { data: lowStockRows },
+    { count: openTasksCount },
+    { count: printerCount },
+  ] = await Promise.all([
+    supabase.from('registers').select('id, name').eq('store_id', storeId).eq('status', 'active').order('name'),
+    supabase
+      .from('register_sessions')
+      .select(
+        'id, register_id, status, opened_at, opened_by, opening_float, closed_at, closed_by, counted_cash, expected_cash, difference, registers(name)'
+      )
+      .eq('store_id', storeId)
+      .eq('business_date', today)
+      .order('opened_at'),
+    supabase.from('daily_closings').select('*').eq('store_id', storeId).eq('business_date', today).maybeSingle(),
+    supabase
+      .from('orders')
+      .select('id', { count: 'exact', head: true })
+      .eq('store_id', storeId)
+      .eq('business_date', today)
+      .eq('status', 'open'),
+    supabase
+      .from('order_items')
+      .select('id, orders!inner(status, business_date)')
+      .eq('store_id', storeId)
+      .eq('status', 'active')
+      .neq('kitchen_status', 'served')
+      .eq('orders.status', 'open')
+      .eq('orders.business_date', today),
+    supabase
+      .from('time_entries')
+      .select('id', { count: 'exact', head: true })
+      .eq('store_id', storeId)
+      .eq('work_date', today)
+      .not('clock_in_at', 'is', null)
+      .is('clock_out_at', null),
+    supabase
+      .from('cash_transactions')
+      .select('id', { count: 'exact', head: true })
+      .eq('store_id', storeId)
+      .in('kind', PETTY_KINDS)
+      .eq('approval_status', 'pending'),
+    supabase
+      .from('reservations')
+      .select('id', { count: 'exact', head: true })
+      .eq('store_id', storeId)
+      .eq('reserved_date', today)
+      .in('status', ACTIVE_RESERVATION_STATUSES),
+    supabase
+      .from('shifts')
+      .select('id', { count: 'exact', head: true })
+      .eq('store_id', storeId)
+      .eq('shift_date', today)
+      .neq('status', 'cancelled'),
+    supabase
+      .from('inventory_items')
+      .select('id, current_quantity, reorder_point')
+      .eq('store_id', storeId)
+      .eq('status', 'active')
+      .not('reorder_point', 'is', null),
+    supabase
+      .from('store_tasks')
+      .select('id', { count: 'exact', head: true })
+      .eq('store_id', storeId)
+      .in('status', ['open', 'in_progress']),
+    supabase.from('printer_configs').select('id', { count: 'exact', head: true }).eq('store_id', storeId).eq('status', 'active'),
+  ]);
 
-  const { data: sessions } = await supabase
-    .from('register_sessions')
-    .select('id, register_id, opened_at, opened_by, opening_float, registers(name)')
-    .eq('store_id', storeId)
-    .eq('status', 'open')
-    .order('opened_at');
-
-  const openedByIds = [...new Set((sessions ?? []).map((s) => s.opened_by).filter((v): v is string => !!v))];
-  const { data: openers } = openedByIds.length
-    ? await supabase.from('profiles').select('id, display_name').in('id', openedByIds)
+  // 開局・締め担当者名の解決（今日のセッションに登場する opened_by / closed_by のみ）
+  const profileIds = [
+    ...new Set((todaySessions ?? []).flatMap((s) => [s.opened_by, s.closed_by]).filter((v): v is string => !!v)),
+  ];
+  const { data: profiles } = profileIds.length
+    ? await supabase.from('profiles').select('id, display_name').in('id', profileIds)
     : { data: [] as { id: string; display_name: string }[] };
-  const nameById = new Map((openers ?? []).map((p) => [p.id, p.display_name]));
+  const nameById = new Map((profiles ?? []).map((p) => [p.id, p.display_name]));
 
-  const sessionIds = (sessions ?? []).map((s) => s.id);
+  const openSessions = (todaySessions ?? []).filter((s) => s.status === 'open');
+  const sessionIds = openSessions.map((s) => s.id);
   const { data: sessionTx } = sessionIds.length
     ? await supabase
         .from('cash_transactions')
@@ -148,53 +261,180 @@ async function RegisterTab({ storeId }: { storeId: string }) {
     breakdownBySession.set(t.register_session_id, bucket);
   }
 
-  const openRegisterIds = new Set((sessions ?? []).map((s) => s.register_id));
-  const availableRegisters = (registers ?? []).filter((r) => !openRegisterIds.has(r.id));
+  // レジごとの「本日の最新セッション」（開局中があればそれを優先。無ければ最後に締めたもの）
+  type TodaySession = NonNullable<typeof todaySessions>[number];
+  const sessionsByRegister = new Map<string, TodaySession[]>();
+  for (const s of todaySessions ?? []) {
+    const arr = sessionsByRegister.get(s.register_id) ?? [];
+    arr.push(s);
+    sessionsByRegister.set(s.register_id, arr);
+  }
+  const latestSessionFor = (registerId: string) => {
+    const arr = sessionsByRegister.get(registerId) ?? [];
+    if (arr.length === 0) return null;
+    return arr.find((s) => s.status === 'open') ?? arr[arr.length - 1];
+  };
 
-  const { data: todayClosing } = await supabase
-    .from('daily_closings')
-    .select('*')
-    .eq('store_id', storeId)
-    .eq('business_date', today)
-    .maybeSingle();
+  const unservedKdsCount = (unservedKdsRows ?? []).length;
+  const lowStockCount = (lowStockRows ?? []).filter(
+    (i) => i.reorder_point != null && Number(i.current_quantity) <= Number(i.reorder_point)
+  ).length;
+  const openRegistersCount = openSessions.length;
+  const totalRegistersCount = (registers ?? []).length;
+
+  // ---- 開店チェックリスト ----
+  const openingItems: ChecklistItem[] = [
+    {
+      key: 'registers-open',
+      label: 'レジ開局状態',
+      valueLabel: totalRegistersCount === 0 ? '未登録' : `${openRegistersCount}/${totalRegistersCount}台 開局中`,
+      status: totalRegistersCount > 0 && openRegistersCount === totalRegistersCount ? 'ok' : 'warn',
+    },
+    {
+      key: 'reservations',
+      label: '本日の予約組数',
+      valueLabel: `${reservationsCount ?? 0}組`,
+      status: 'info',
+      href: '/app/reservations',
+    },
+    {
+      key: 'shifts',
+      label: '本日の出勤予定',
+      valueLabel: `${shiftsCount ?? 0}名`,
+      status: 'info',
+      href: '/app/shifts',
+    },
+    {
+      key: 'inventory',
+      label: '発注点割れの重要在庫',
+      valueLabel: `${lowStockCount}品`,
+      status: lowStockCount === 0 ? 'ok' : 'warn',
+      href: '/app/inventory?sort=warning',
+    },
+    {
+      key: 'tasks',
+      label: '未完了タスク',
+      valueLabel: `${openTasksCount ?? 0}件`,
+      status: (openTasksCount ?? 0) === 0 ? 'ok' : 'warn',
+      href: '/app/tasks',
+    },
+    {
+      key: 'printer',
+      label: 'レシートプリンター',
+      valueLabel: (printerCount ?? 0) > 0 ? `${printerCount}台登録（Simulation）` : '未登録（Simulation）',
+      status: 'info',
+      href: '/app/settings/printers',
+    },
+  ];
+
+  // ---- 店舗日次締め 実行前チェック ----
+  const preCloseItems: ChecklistItem[] = [
+    {
+      key: 'unpaid-orders',
+      label: '未会計伝票（当営業日）',
+      valueLabel: `${unpaidOrdersCount ?? 0}件`,
+      status: (unpaidOrdersCount ?? 0) === 0 ? 'ok' : 'warn',
+      href: '/app/orders',
+    },
+    {
+      key: 'unserved-kds',
+      label: '未提供KDS',
+      valueLabel: `${unservedKdsCount}件`,
+      status: unservedKdsCount === 0 ? 'ok' : 'warn',
+      href: '/app/kitchen',
+    },
+    {
+      key: 'unclocked-staff',
+      label: '未退勤スタッフ',
+      valueLabel: `${unclockedStaffCount ?? 0}名`,
+      status: (unclockedStaffCount ?? 0) === 0 ? 'ok' : 'warn',
+      href: '/app/attendance',
+    },
+    {
+      key: 'open-registers',
+      label: '未締めレジ',
+      valueLabel: `${openRegistersCount}台`,
+      status: openRegistersCount === 0 ? 'ok' : 'warn',
+    },
+    {
+      key: 'pending-petty',
+      label: '承認待ち小口現金',
+      valueLabel: `${pendingPettyCount ?? 0}件`,
+      status: (pendingPettyCount ?? 0) === 0 ? 'ok' : 'warn',
+      href: '/app/cash?tab=petty',
+    },
+  ];
+
+  const registerBreakdown = mapRegisterBreakdown(todayClosing?.register_breakdown, nameById);
 
   return (
     <div className="space-y-5">
+      <ChecklistCard
+        title="開店チェックリスト"
+        description="開局・本日の見込み・重要在庫・未完了タスクをまとめて確認できます。"
+        items={openingItems}
+      />
+
       {(registers ?? []).length === 0 ? (
         <EmptyState title="レジが登録されていません" description="設定からレジを登録すると開局操作ができるようになります。" />
       ) : (
-        availableRegisters.length > 0 && <OpenRegisterForm storeId={storeId} registers={availableRegisters} />
-      )}
-
-      {(sessions ?? []).length === 0 ? (
-        <EmptyState title="開局中のレジはありません" description="レジを開局すると営業中のセッションがここに表示されます。" />
-      ) : (
-        <div className="space-y-4">
-          {(sessions ?? []).map((s) => {
-            const breakdown = breakdownBySession.get(s.id) ?? {};
-            const sale = breakdown.sale ?? 0;
-            const refund = breakdown.refund ?? 0;
-            const deposit = (breakdown.deposit ?? 0) + (breakdown.petty_in ?? 0);
-            const withdrawal = (breakdown.withdrawal ?? 0) + (breakdown.petty_out ?? 0);
-            const theoreticalCash = expectedCash({
-              openingFloat: s.opening_float,
-              cashSales: sale,
-              cashIn: deposit,
-              cashRefunds: refund,
-              cashOut: withdrawal,
-            });
-            const data: SessionCardData = {
-              id: s.id,
-              storeId,
-              registerName: (s.registers as unknown as { name: string } | null)?.name ?? '—',
-              openedByName: s.opened_by ? (nameById.get(s.opened_by) ?? '—') : '—',
-              openedAt: s.opened_at,
-              openingFloat: s.opening_float,
-            };
-            return <SessionCard key={s.id} session={data} breakdown={breakdown} theoreticalCash={theoreticalCash} />;
+        <div className="grid gap-4 lg:grid-cols-2">
+          {(registers ?? []).map((r) => {
+            const session = latestSessionFor(r.id);
+            if (!session) {
+              return <RegisterOpenCard key={r.id} storeId={storeId} registerId={r.id} registerName={r.name} />;
+            }
+            if (session.status === 'open') {
+              const breakdown = breakdownBySession.get(session.id) ?? {};
+              const sale = breakdown.sale ?? 0;
+              const refund = breakdown.refund ?? 0;
+              const deposit = (breakdown.deposit ?? 0) + (breakdown.petty_in ?? 0);
+              const withdrawal = (breakdown.withdrawal ?? 0) + (breakdown.petty_out ?? 0);
+              const theoreticalCash = expectedCash({
+                openingFloat: session.opening_float,
+                cashSales: sale,
+                cashIn: deposit,
+                cashRefunds: refund,
+                cashOut: withdrawal,
+              });
+              const data: SessionCardData = {
+                id: session.id,
+                storeId,
+                registerName: (session.registers as unknown as { name: string } | null)?.name ?? r.name,
+                openedByName: session.opened_by ? (nameById.get(session.opened_by) ?? '—') : '—',
+                openedAt: session.opened_at,
+                openingFloat: session.opening_float,
+              };
+              return <SessionCard key={session.id} session={data} breakdown={breakdown} theoreticalCash={theoreticalCash} />;
+            }
+            return (
+              <RegisterClosedCard
+                key={session.id}
+                storeDayClosed={!!todayClosing}
+                session={{
+                  registerName: (session.registers as unknown as { name: string } | null)?.name ?? r.name,
+                  openedByName: session.opened_by ? (nameById.get(session.opened_by) ?? '—') : '—',
+                  closedByName: session.closed_by ? (nameById.get(session.closed_by) ?? '—') : '—',
+                  openedAt: session.opened_at,
+                  closedAt: session.closed_at,
+                  openingFloat: session.opening_float,
+                  expectedCash: session.expected_cash,
+                  countedCash: session.counted_cash,
+                  difference: session.difference,
+                }}
+              />
+            );
           })}
         </div>
       )}
+
+      <StoreDayClosePanel
+        storeId={storeId}
+        businessDate={today}
+        items={preCloseItems}
+        alreadyClosed={!!todayClosing}
+        canClose={STORE_DAY_CLOSE_ROLES.includes(role ?? '')}
+      />
 
       {todayClosing && (
         <Card>
@@ -218,6 +458,7 @@ async function RegisterTab({ storeId }: { storeId: string }) {
                 expectedCash: todayClosing.expected_cash,
                 countedCash: todayClosing.counted_cash,
                 cashDifference: todayClosing.cash_difference,
+                registerBreakdown,
               }}
             />
           </CardContent>
@@ -492,23 +733,37 @@ async function ClosingsTab({
   from,
   to,
   canApprove,
+  canReopenStoreDay,
 }: {
   storeIds: string[];
   showStore: boolean;
   from: string;
   to: string;
   canApprove: boolean;
+  canReopenStoreDay: boolean;
 }) {
   const supabase = await createClient();
   const { data: rows } = await supabase
     .from('daily_closings')
     .select(
-      'id, business_date, sales_total, orders_count, guests_count, discount_total, refund_total, net_sales, payment_breakdown, refund_breakdown, petty_in_total, petty_out_total, expected_cash, counted_cash, cash_difference, status, note, stores(name)'
+      'id, store_id, business_date, sales_total, orders_count, guests_count, discount_total, refund_total, net_sales, payment_breakdown, refund_breakdown, petty_in_total, petty_out_total, expected_cash, counted_cash, cash_difference, status, note, register_breakdown, stores(name)'
     )
     .in('store_id', storeIds)
     .gte('business_date', from)
     .lte('business_date', to)
     .order('business_date', { ascending: false });
+
+  // レジ別内訳の締め担当名を一括解決（全行分のclosed_byをまとめて1回で問い合わせる）
+  const closedByIds = new Set<string>();
+  for (const r of rows ?? []) {
+    for (const e of (r.register_breakdown as RawRegisterBreakdownEntry[] | null) ?? []) {
+      if (e.closed_by) closedByIds.add(e.closed_by);
+    }
+  }
+  const { data: profiles } = closedByIds.size
+    ? await supabase.from('profiles').select('id, display_name').in('id', [...closedByIds])
+    : { data: [] as { id: string; display_name: string }[] };
+  const nameById = new Map((profiles ?? []).map((p) => [p.id, p.display_name]));
 
   return (
     <div className="space-y-5">
@@ -541,6 +796,7 @@ async function ClosingsTab({
               {(rows ?? []).map((r) => {
                 const data: ClosingRowData = {
                   id: r.id,
+                  storeId: r.store_id,
                   businessDate: r.business_date,
                   storeName: (r.stores as unknown as { name: string } | null)?.name,
                   salesTotal: r.sales_total,
@@ -558,8 +814,17 @@ async function ClosingsTab({
                   expectedCash: r.expected_cash,
                   countedCash: r.counted_cash,
                   note: r.note,
+                  registerBreakdown: mapRegisterBreakdown(r.register_breakdown, nameById),
                 };
-                return <ClosingRow key={r.id} closing={data} showStore={showStore} canApprove={canApprove} />;
+                return (
+                  <ClosingRow
+                    key={r.id}
+                    closing={data}
+                    showStore={showStore}
+                    canApprove={canApprove}
+                    canReopenStoreDay={canReopenStoreDay}
+                  />
+                );
               })}
             </TBody>
           </Table>

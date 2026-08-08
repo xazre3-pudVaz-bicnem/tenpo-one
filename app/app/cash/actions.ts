@@ -1,9 +1,15 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { requirePermission } from '@/lib/auth';
+import { requirePermission, requireMember } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { resolveApprovalRule, checkApproval, type ApprovalRuleLike } from '@/lib/approvals';
+import type { Role } from '@/lib/permissions';
+
+/** 店舗日次締め（close_store_day）を実行できるロール。DB側 close_store_day のapp_role_inと一致させること。 */
+const STORE_DAY_CLOSE_ROLES: Role[] = ['org_owner', 'hq_admin', 'area_manager', 'store_manager', 'assistant_manager'];
+/** 店舗日次締めの再オープン（reopen_store_day）を実行できるロール。DB側と一致させること。 */
+const STORE_DAY_REOPEN_ROLES: Role[] = ['org_owner', 'hq_admin', 'area_manager'];
 
 function assertPositiveInt(value: number, label: string) {
   if (!Number.isInteger(value) || value <= 0) {
@@ -411,5 +417,63 @@ export async function approvePettyCashCount(id: string) {
     p_after: { status: 'approved' },
     p_note: null,
   });
+  revalidatePath('/app/cash');
+}
+
+// ---------------------------------------------------------------
+// 店舗日次締め（2段階目・v0.4.3）
+// ---------------------------------------------------------------
+
+/** close_store_dayのraise exceptionメッセージを日本語化する */
+function translateCloseStoreDayError(message: string): string {
+  const openMatch = message.match(/OPEN_SESSIONS_REMAIN:\s*(\d+)/);
+  if (openMatch) return `未締めのレジが${openMatch[1]}台あります。すべてのレジを締めてから実行してください。`;
+  if (message.includes('NO_CLOSED_SESSIONS')) return '本日締めたレジがありません。レジ締めを行ってから実行してください。';
+  if (message.includes('STORE_NOT_FOUND')) return '店舗が見つかりません';
+  if (message.includes('FORBIDDEN')) return '店舗日次締めの実行権限がありません';
+  return message;
+}
+
+/** 店舗日次締め（close_store_day RPC）。全レジのセッションを集約してdaily_closingsを確定する */
+export async function closeStoreDay(storeId: string, businessDate: string) {
+  const ctx = await requireMember();
+  if (!STORE_DAY_CLOSE_ROLES.includes(ctx.role)) {
+    throw new Error('店舗日次締めの実行権限がありません');
+  }
+  if (!ctx.stores.some((s) => s.id === storeId)) {
+    throw new Error('対象店舗にアクセス権がありません');
+  }
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('close_store_day', {
+    p_store_id: storeId,
+    p_business_date: businessDate,
+  });
+  if (error) throw new Error(translateCloseStoreDayError(error.message));
+  revalidatePath('/app/cash');
+}
+
+/** close_store_dayの再オープン（reopen_store_day RPC）。理由必須・org_owner/hq_admin/area_managerのみ */
+export async function reopenStoreDay(storeId: string, businessDate: string, reason: string) {
+  const ctx = await requireMember();
+  if (!STORE_DAY_REOPEN_ROLES.includes(ctx.role)) {
+    throw new Error('店舗日次締めの再オープンは契約企業オーナー・本社管理者・エリアマネージャーのみ実行できます');
+  }
+  if (!ctx.stores.some((s) => s.id === storeId)) {
+    throw new Error('対象店舗にアクセス権がありません');
+  }
+  if (!reason.trim()) throw new Error('再オープン理由を入力してください');
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('reopen_store_day', {
+    p_store_id: storeId,
+    p_business_date: businessDate,
+    p_reason: reason.trim(),
+  });
+  if (error) {
+    if (error.message.includes('REASON_REQUIRED')) throw new Error('再オープン理由を入力してください');
+    if (error.message.includes('CLOSING_NOT_FOUND')) throw new Error('対象の締めデータが見つかりません');
+    if (error.message.includes('FORBIDDEN')) throw new Error('店舗日次締めの再オープン権限がありません');
+    throw new Error(error.message);
+  }
   revalidatePath('/app/cash');
 }

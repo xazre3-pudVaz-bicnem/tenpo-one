@@ -4,8 +4,23 @@
  * 「今日の締めサマリ」カードと締め履歴の展開行の両方から使う共通表示。
  */
 import { StatCard } from '@/components/ui/stat-card';
+import { TableWrap, Table, THead, TBody, Tr, Th, Td } from '@/components/ui/table';
 import { yen } from '@/lib/format';
 import { METHOD_LABELS } from './labels';
+
+/** 店舗日次締め（v0.4.3 close_store_day）のレジ別内訳1行。旧データ（migration前の締め）では常に空配列 */
+export interface RegisterBreakdownRow {
+  registerName: string;
+  openingFloat: number;
+  cashSales: number;
+  cashRefunds: number;
+  cashIn: number;
+  cashOut: number;
+  expectedCash: number;
+  countedCash: number;
+  difference: number;
+  closedByName: string;
+}
 
 export interface ClosingSnapshotData {
   salesTotal: number;
@@ -21,6 +36,8 @@ export interface ClosingSnapshotData {
   expectedCash: number | null;
   countedCash: number | null;
   cashDifference: number;
+  /** 複数レジの内訳（v0.4.3 close_store_day）。旧データ・register_breakdown=[]の場合は表示しない */
+  registerBreakdown?: RegisterBreakdownRow[];
 }
 
 export function ClosingSnapshot({ data }: { data: ClosingSnapshotData }) {
@@ -29,6 +46,8 @@ export function ClosingSnapshot({ data }: { data: ClosingSnapshotData }) {
   const isLegacy = data.expectedCash == null;
   const paymentEntries = Object.entries(data.paymentBreakdown).filter(([, v]) => v);
   const refundEntries = Object.entries(data.refundBreakdown).filter(([, v]) => v);
+  const registerBreakdown = data.registerBreakdown ?? [];
+  const sumOf = (pick: (r: RegisterBreakdownRow) => number) => registerBreakdown.reduce((a, r) => a + pick(r), 0);
 
   return (
     <div className="space-y-4">
@@ -88,6 +107,66 @@ export function ClosingSnapshot({ data }: { data: ClosingSnapshotData }) {
           value={data.countedCash == null ? '—' : yen(data.countedCash)}
         />
       </div>
+
+      {registerBreakdown.length > 0 && (
+        <div>
+          <p className="mb-2 text-xs font-medium text-gray-500">レジ別内訳（{registerBreakdown.length}台）</p>
+          <TableWrap>
+            <Table>
+              <THead>
+                <Tr>
+                  <Th>レジ</Th>
+                  <Th className="text-right">開始現金</Th>
+                  <Th className="text-right">現金売上</Th>
+                  <Th className="text-right">現金返金</Th>
+                  <Th className="text-right">入金</Th>
+                  <Th className="text-right">出金</Th>
+                  <Th className="text-right">理論現金</Th>
+                  <Th className="text-right">実現金</Th>
+                  <Th className="text-right">差異</Th>
+                  <Th>締め担当</Th>
+                </Tr>
+              </THead>
+              <TBody>
+                {registerBreakdown.map((r, i) => (
+                  <Tr key={i}>
+                    <Td className="font-medium text-navy">{r.registerName}</Td>
+                    <Td className="text-right tabular-nums">{yen(r.openingFloat)}</Td>
+                    <Td className="text-right tabular-nums">{yen(r.cashSales)}</Td>
+                    <Td className="text-right tabular-nums">{yen(r.cashRefunds)}</Td>
+                    <Td className="text-right tabular-nums">{yen(r.cashIn)}</Td>
+                    <Td className="text-right tabular-nums">{yen(r.cashOut)}</Td>
+                    <Td className="text-right tabular-nums">{yen(r.expectedCash)}</Td>
+                    <Td className="text-right tabular-nums">{yen(r.countedCash)}</Td>
+                    <Td className={`text-right tabular-nums font-medium ${r.difference !== 0 ? 'text-danger' : ''}`}>
+                      {r.difference > 0 ? '+' : ''}
+                      {yen(r.difference)}
+                    </Td>
+                    <Td>{r.closedByName}</Td>
+                  </Tr>
+                ))}
+                <Tr className="bg-gray-50 font-semibold text-navy">
+                  <Td>店舗合計</Td>
+                  <Td className="text-right tabular-nums">{yen(sumOf((r) => r.openingFloat))}</Td>
+                  <Td className="text-right tabular-nums">{yen(sumOf((r) => r.cashSales))}</Td>
+                  <Td className="text-right tabular-nums">{yen(sumOf((r) => r.cashRefunds))}</Td>
+                  <Td className="text-right tabular-nums">{yen(sumOf((r) => r.cashIn))}</Td>
+                  <Td className="text-right tabular-nums">{yen(sumOf((r) => r.cashOut))}</Td>
+                  <Td className="text-right tabular-nums">{yen(sumOf((r) => r.expectedCash))}</Td>
+                  <Td className="text-right tabular-nums">{yen(sumOf((r) => r.countedCash))}</Td>
+                  <Td
+                    className={`text-right tabular-nums ${sumOf((r) => r.difference) !== 0 ? 'text-danger' : ''}`}
+                  >
+                    {sumOf((r) => r.difference) > 0 ? '+' : ''}
+                    {yen(sumOf((r) => r.difference))}
+                  </Td>
+                  <Td />
+                </Tr>
+              </TBody>
+            </Table>
+          </TableWrap>
+        </div>
+      )}
 
       <div className="space-y-1 rounded-lg bg-gray-50 p-3 text-xs text-gray-600">
         <p>クレジット／QRコード決済等の返金は現金残高へ影響しません。理論現金の計算に含まれるのは現金返金のみです。</p>
