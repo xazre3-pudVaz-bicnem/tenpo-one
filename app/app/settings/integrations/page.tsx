@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { ExternalLink } from 'lucide-react';
 import { requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
@@ -29,6 +30,13 @@ interface IntegrationRow {
   href?: string;
   hrefLabel?: string;
   docPath?: string;
+}
+
+/** 会計・勤怠SaaSからの移行・互換情報（#21）。TENPO ONE単独稼働が前提のため契約を促す文言は置かない。 */
+interface MigrationRow {
+  key: string;
+  name: string;
+  note: string;
 }
 
 function StatusBadge({ status }: { status: IntegrationStatus }) {
@@ -86,20 +94,6 @@ export default async function IntegrationsSettingsPage() {
       hrefLabel: 'レジ・プリンターの設定へ',
     },
     {
-      key: 'freee',
-      name: 'freee会計',
-      status: '未対応',
-      note: '請求書・経費データの連携は開発予定です。現時点では利用できません。',
-      docPath: 'docs/future-integrations.md',
-    },
-    {
-      key: 'king_of_time',
-      name: 'KING OF TIME',
-      status: '未対応',
-      note: '勤怠データの連携は開発予定です。現時点では利用できません。',
-      docPath: 'docs/future-integrations.md',
-    },
-    {
       key: 'line',
       name: 'LINE',
       status: '未対応',
@@ -112,6 +106,24 @@ export default async function IntegrationsSettingsPage() {
       status: '未対応',
       note: '外部予約サイトとの在庫・予約連携は開発予定です。現時点では利用できません。',
       docPath: 'docs/future-integrations.md',
+    },
+  ];
+
+  const migrationRows: MigrationRow[] = [
+    {
+      key: 'freee',
+      name: 'freee会計',
+      note: '請求書・経費・仕訳データをTENPO ONE側で入力・管理しています。freeeとのAPI連携は現時点では未実装のため、既存のfreeeデータを移す・freee側へ出す場合はCSVでのやり取りになります。',
+    },
+    {
+      key: 'moneyforward',
+      name: 'MoneyForward クラウド',
+      note: '会計・給与どちらもTENPO ONE単独で完結します。MoneyForwardからの乗り換え・併用時のデータのやり取りはCSVで行えます（API連携は未実装）。',
+    },
+    {
+      key: 'king_of_time',
+      name: 'KING OF TIME（勤怠）',
+      note: '打刻・勤怠集計・給与計算はTENPO ONE単独で完結します。KING OF TIMEとのAPI連携は現時点では未実装のため、データのやり取りはCSVになります。',
     },
   ];
 
@@ -144,6 +156,58 @@ export default async function IntegrationsSettingsPage() {
             </CardContent>
           </Card>
         ))}
+      </div>
+
+      <div className="mt-8">
+        <h2 className="text-sm font-semibold text-navy">会計・勤怠ソフトからの移行・互換（オプション）</h2>
+        <p className="mt-1.5 text-xs leading-relaxed text-gray-500">
+          TENPO ONE単独で会計・勤怠・給与の業務が完結します。freee・MoneyForward・KING OF TIME等の
+          外部会計・勤怠SaaSの契約は不要です。以下は、これらのソフトを既に使っている店舗が乗り換える
+          場合や、併用する場合のデータ移行に関する現状のみを示すもので、契約や導入を促すものでは
+          ありません。
+        </p>
+
+        <div className="mt-3 space-y-3">
+          {migrationRows.map((m) => (
+            <Card key={m.key} className="border-dashed">
+              <CardContent className="flex flex-wrap items-start justify-between gap-3 py-4">
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="font-semibold text-navy">{m.name}</p>
+                    <Badge tone="gray">データ移行・互換用（オプション）</Badge>
+                  </div>
+                  <p className="mt-1.5 text-xs leading-relaxed text-gray-500">{m.note}</p>
+                  <p className="mt-1 font-mono text-[11px] text-gray-400">docs/future-integrations.md</p>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        <Card className="mt-3 border-primary/20 bg-primary-soft">
+          <CardContent className="py-4">
+            <p className="text-xs leading-relaxed text-primary-deep">
+              現在利用できるCSVエクスポート（事実）: 仕訳データは
+              <Link href="/app/accounting" className="mx-1 font-medium underline">
+                会計
+              </Link>
+              画面から、勤怠データは
+              <Link href="/app/attendance" className="mx-1 font-medium underline">
+                勤怠
+              </Link>
+              画面から、給与明細データは
+              <Link href="/app/payroll" className="mx-1 font-medium underline">
+                給与
+              </Link>
+              画面の各確定済みrunから、請求書・経費データは
+              <Link href="/app/invoices" className="mx-1 font-medium underline">
+                請求書
+              </Link>
+              画面から、それぞれCSVで出力できます。外部ソフトへの取込・突合はこのCSVファイルを
+              使用してください。
+            </p>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
