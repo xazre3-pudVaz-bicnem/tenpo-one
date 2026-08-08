@@ -14,6 +14,126 @@ export type Database = {
   }
   public: {
     Tables: {
+      accounting_periods: {
+        Row: {
+          closed_at: string | null
+          closed_by: string | null
+          created_at: string
+          id: string
+          month: string
+          organization_id: string
+          reopened_at: string | null
+          reopened_by: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          closed_at?: string | null
+          closed_by?: string | null
+          created_at?: string
+          id?: string
+          month: string
+          organization_id: string
+          reopened_at?: string | null
+          reopened_by?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          closed_at?: string | null
+          closed_by?: string | null
+          created_at?: string
+          id?: string
+          month?: string
+          organization_id?: string
+          reopened_at?: string | null
+          reopened_by?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "accounting_periods_closed_by_fkey"
+            columns: ["closed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "accounting_periods_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "accounting_periods_reopened_by_fkey"
+            columns: ["reopened_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      accounts: {
+        Row: {
+          category: string
+          code: string
+          created_at: string
+          created_by: string | null
+          default_tax_treatment: string
+          id: string
+          is_system: boolean
+          name: string
+          organization_id: string
+          sort_order: number
+          status: string
+          sub_type: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          category: string
+          code: string
+          created_at?: string
+          created_by?: string | null
+          default_tax_treatment?: string
+          id?: string
+          is_system?: boolean
+          name: string
+          organization_id: string
+          sort_order?: number
+          status?: string
+          sub_type?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          category?: string
+          code?: string
+          created_at?: string
+          created_by?: string | null
+          default_tax_treatment?: string
+          id?: string
+          is_system?: boolean
+          name?: string
+          organization_id?: string
+          sort_order?: number
+          status?: string
+          sub_type?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "accounts_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       alert_rules: {
         Row: {
           created_at: string
@@ -214,6 +334,93 @@ export type Database = {
           },
         ]
       }
+      attendance_correction_requests: {
+        Row: {
+          created_at: string
+          id: string
+          organization_id: string
+          profile_id: string
+          reason: string
+          requested_changes: Json
+          review_note: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          store_id: string
+          time_entry_id: string | null
+          updated_at: string
+          work_date: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          organization_id: string
+          profile_id: string
+          reason: string
+          requested_changes: Json
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          store_id: string
+          time_entry_id?: string | null
+          updated_at?: string
+          work_date: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          organization_id?: string
+          profile_id?: string
+          reason?: string
+          requested_changes?: Json
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          store_id?: string
+          time_entry_id?: string | null
+          updated_at?: string
+          work_date?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "attendance_correction_requests_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "attendance_correction_requests_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "attendance_correction_requests_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "attendance_correction_requests_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "attendance_correction_requests_time_entry_id_fkey"
+            columns: ["time_entry_id"]
+            isOneToOne: false
+            referencedRelation: "time_entries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       attendance_requests: {
         Row: {
           created_at: string
@@ -366,6 +573,143 @@ export type Database = {
             columns: ["store_id"]
             isOneToOne: false
             referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bank_accounts: {
+        Row: {
+          account_id: string | null
+          account_last4: string | null
+          account_type: string
+          bank_name: string
+          branch_name: string | null
+          created_at: string
+          created_by: string | null
+          holder_name: string | null
+          id: string
+          organization_id: string
+          status: string
+          store_id: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          account_id?: string | null
+          account_last4?: string | null
+          account_type?: string
+          bank_name: string
+          branch_name?: string | null
+          created_at?: string
+          created_by?: string | null
+          holder_name?: string | null
+          id?: string
+          organization_id: string
+          status?: string
+          store_id?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          account_id?: string | null
+          account_last4?: string | null
+          account_type?: string
+          bank_name?: string
+          branch_name?: string | null
+          created_at?: string
+          created_by?: string | null
+          holder_name?: string | null
+          id?: string
+          organization_id?: string
+          status?: string
+          store_id?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bank_accounts_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bank_accounts_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bank_accounts_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bank_transactions: {
+        Row: {
+          bank_account_id: string
+          created_at: string
+          created_by: string | null
+          deposit: number
+          description: string
+          id: string
+          import_hash: string | null
+          journal_entry_id: string | null
+          organization_id: string
+          transacted_on: string
+          withdrawal: number
+        }
+        Insert: {
+          bank_account_id: string
+          created_at?: string
+          created_by?: string | null
+          deposit?: number
+          description: string
+          id?: string
+          import_hash?: string | null
+          journal_entry_id?: string | null
+          organization_id: string
+          transacted_on: string
+          withdrawal?: number
+        }
+        Update: {
+          bank_account_id?: string
+          created_at?: string
+          created_by?: string | null
+          deposit?: number
+          description?: string
+          id?: string
+          import_hash?: string | null
+          journal_entry_id?: string | null
+          organization_id?: string
+          transacted_on?: string
+          withdrawal?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bank_transactions_bank_account_id_fkey"
+            columns: ["bank_account_id"]
+            isOneToOne: false
+            referencedRelation: "bank_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bank_transactions_journal_entry_id_fkey"
+            columns: ["journal_entry_id"]
+            isOneToOne: false
+            referencedRelation: "journal_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bank_transactions_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
@@ -748,6 +1092,39 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      consumption_tax_rates: {
+        Row: {
+          created_at: string
+          effective_from: string
+          effective_to: string | null
+          id: string
+          note: string | null
+          rate: number
+          treatment: string
+          version: string
+        }
+        Insert: {
+          created_at?: string
+          effective_from: string
+          effective_to?: string | null
+          id?: string
+          note?: string | null
+          rate: number
+          treatment: string
+          version: string
+        }
+        Update: {
+          created_at?: string
+          effective_from?: string
+          effective_to?: string | null
+          id?: string
+          note?: string | null
+          rate?: number
+          treatment?: string
+          version?: string
+        }
+        Relationships: []
       }
       coupon_redemptions: {
         Row: {
@@ -1454,6 +1831,7 @@ export type Database = {
       documents: {
         Row: {
           amount: number | null
+          content_hash: string | null
           created_at: string
           created_by: string | null
           doc_date: string | null
@@ -1461,6 +1839,7 @@ export type Database = {
           file_name: string
           file_path: string
           id: string
+          journal_entry_id: string | null
           memo: string | null
           mime_type: string
           ocr_payload: Json | null
@@ -1478,6 +1857,7 @@ export type Database = {
         }
         Insert: {
           amount?: number | null
+          content_hash?: string | null
           created_at?: string
           created_by?: string | null
           doc_date?: string | null
@@ -1485,6 +1865,7 @@ export type Database = {
           file_name: string
           file_path: string
           id?: string
+          journal_entry_id?: string | null
           memo?: string | null
           mime_type: string
           ocr_payload?: Json | null
@@ -1502,6 +1883,7 @@ export type Database = {
         }
         Update: {
           amount?: number | null
+          content_hash?: string | null
           created_at?: string
           created_by?: string | null
           doc_date?: string | null
@@ -1509,6 +1891,7 @@ export type Database = {
           file_name?: string
           file_path?: string
           id?: string
+          journal_entry_id?: string | null
           memo?: string | null
           mime_type?: string
           ocr_payload?: Json | null
@@ -1525,6 +1908,13 @@ export type Database = {
           year_month?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "documents_journal_entry_id_fkey"
+            columns: ["journal_entry_id"]
+            isOneToOne: false
+            referencedRelation: "journal_entries"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "documents_organization_id_fkey"
             columns: ["organization_id"]
@@ -1548,8 +1938,178 @@ export type Database = {
           },
         ]
       }
+      employee_insurance: {
+        Row: {
+          acquired_on: string | null
+          care_insurance: boolean
+          created_at: string
+          created_by: string | null
+          employee_id: string
+          employment_insurance: boolean
+          health_insurance: boolean
+          id: string
+          lost_on: string | null
+          note: string | null
+          organization_id: string
+          pension: boolean
+          region: string | null
+          standard_monthly_remuneration: number | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          acquired_on?: string | null
+          care_insurance?: boolean
+          created_at?: string
+          created_by?: string | null
+          employee_id: string
+          employment_insurance?: boolean
+          health_insurance?: boolean
+          id?: string
+          lost_on?: string | null
+          note?: string | null
+          organization_id: string
+          pension?: boolean
+          region?: string | null
+          standard_monthly_remuneration?: number | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          acquired_on?: string | null
+          care_insurance?: boolean
+          created_at?: string
+          created_by?: string | null
+          employee_id?: string
+          employment_insurance?: boolean
+          health_insurance?: boolean
+          id?: string
+          lost_on?: string | null
+          note?: string | null
+          organization_id?: string
+          pension?: boolean
+          region?: string | null
+          standard_monthly_remuneration?: number | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_insurance_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: true
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employee_insurance_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      employees: {
+        Row: {
+          address: string | null
+          bank_transfer_info: Json | null
+          birth_date: string | null
+          created_at: string
+          created_by: string | null
+          emergency_contact: Json | null
+          employee_no: string | null
+          employment_type: string
+          hired_on: string | null
+          id: string
+          legal_name: string | null
+          legal_name_kana: string | null
+          note: string | null
+          organization_id: string
+          position: string | null
+          postal_code: string | null
+          primary_store_id: string | null
+          profile_id: string
+          status: string
+          terminated_on: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          address?: string | null
+          bank_transfer_info?: Json | null
+          birth_date?: string | null
+          created_at?: string
+          created_by?: string | null
+          emergency_contact?: Json | null
+          employee_no?: string | null
+          employment_type?: string
+          hired_on?: string | null
+          id?: string
+          legal_name?: string | null
+          legal_name_kana?: string | null
+          note?: string | null
+          organization_id: string
+          position?: string | null
+          postal_code?: string | null
+          primary_store_id?: string | null
+          profile_id: string
+          status?: string
+          terminated_on?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          address?: string | null
+          bank_transfer_info?: Json | null
+          birth_date?: string | null
+          created_at?: string
+          created_by?: string | null
+          emergency_contact?: Json | null
+          employee_no?: string | null
+          employment_type?: string
+          hired_on?: string | null
+          id?: string
+          legal_name?: string | null
+          legal_name_kana?: string | null
+          note?: string | null
+          organization_id?: string
+          position?: string | null
+          postal_code?: string | null
+          primary_store_id?: string | null
+          profile_id?: string
+          status?: string
+          terminated_on?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employees_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employees_primary_store_id_fkey"
+            columns: ["primary_store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employees_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       expense_accounts: {
         Row: {
+          account_id: string | null
           code: string
           created_at: string
           created_by: string | null
@@ -1562,6 +2122,7 @@ export type Database = {
           updated_by: string | null
         }
         Insert: {
+          account_id?: string | null
           code: string
           created_at?: string
           created_by?: string | null
@@ -1574,6 +2135,7 @@ export type Database = {
           updated_by?: string | null
         }
         Update: {
+          account_id?: string | null
           code?: string
           created_at?: string
           created_by?: string | null
@@ -1586,6 +2148,13 @@ export type Database = {
           updated_by?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "expense_accounts_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "expense_accounts_organization_id_fkey"
             columns: ["organization_id"]
@@ -1747,6 +2316,78 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fixed_assets: {
+        Row: {
+          acquired_on: string
+          acquisition_cost: number
+          created_at: string
+          created_by: string | null
+          depreciation_method: string
+          depreciation_rule_version: string | null
+          disposed_on: string | null
+          id: string
+          name: string
+          note: string | null
+          organization_id: string
+          status: string
+          store_id: string | null
+          updated_at: string
+          updated_by: string | null
+          useful_life_years: number | null
+        }
+        Insert: {
+          acquired_on: string
+          acquisition_cost: number
+          created_at?: string
+          created_by?: string | null
+          depreciation_method?: string
+          depreciation_rule_version?: string | null
+          disposed_on?: string | null
+          id?: string
+          name: string
+          note?: string | null
+          organization_id: string
+          status?: string
+          store_id?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          useful_life_years?: number | null
+        }
+        Update: {
+          acquired_on?: string
+          acquisition_cost?: number
+          created_at?: string
+          created_by?: string | null
+          depreciation_method?: string
+          depreciation_rule_version?: string | null
+          disposed_on?: string | null
+          id?: string
+          name?: string
+          note?: string | null
+          organization_id?: string
+          status?: string
+          store_id?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          useful_life_years?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fixed_assets_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fixed_assets_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
             referencedColumns: ["id"]
           },
         ]
@@ -2083,6 +2724,386 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      journal_entries: {
+        Row: {
+          correction_of: string | null
+          created_at: string
+          created_by: string | null
+          description: string
+          entry_date: string
+          entry_no: number
+          id: string
+          organization_id: string
+          posted_at: string | null
+          posted_by: string | null
+          source_id: string | null
+          source_type: string
+          status: string
+          store_id: string | null
+          updated_at: string
+          updated_by: string | null
+          void_reason: string | null
+        }
+        Insert: {
+          correction_of?: string | null
+          created_at?: string
+          created_by?: string | null
+          description: string
+          entry_date: string
+          entry_no?: number
+          id?: string
+          organization_id: string
+          posted_at?: string | null
+          posted_by?: string | null
+          source_id?: string | null
+          source_type?: string
+          status?: string
+          store_id?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          void_reason?: string | null
+        }
+        Update: {
+          correction_of?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string
+          entry_date?: string
+          entry_no?: number
+          id?: string
+          organization_id?: string
+          posted_at?: string | null
+          posted_by?: string | null
+          source_id?: string | null
+          source_type?: string
+          status?: string
+          store_id?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          void_reason?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "journal_entries_correction_of_fkey"
+            columns: ["correction_of"]
+            isOneToOne: false
+            referencedRelation: "journal_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "journal_entries_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "journal_entries_posted_by_fkey"
+            columns: ["posted_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "journal_entries_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      journal_entry_lines: {
+        Row: {
+          account_id: string
+          amount: number
+          created_at: string
+          entry_id: string
+          id: string
+          line_no: number
+          memo: string | null
+          organization_id: string
+          side: string
+          store_id: string | null
+          tax_amount: number
+          tax_treatment: string
+          vendor_id: string | null
+        }
+        Insert: {
+          account_id: string
+          amount: number
+          created_at?: string
+          entry_id: string
+          id?: string
+          line_no?: number
+          memo?: string | null
+          organization_id: string
+          side: string
+          store_id?: string | null
+          tax_amount?: number
+          tax_treatment?: string
+          vendor_id?: string | null
+        }
+        Update: {
+          account_id?: string
+          amount?: number
+          created_at?: string
+          entry_id?: string
+          id?: string
+          line_no?: number
+          memo?: string | null
+          organization_id?: string
+          side?: string
+          store_id?: string | null
+          tax_amount?: number
+          tax_treatment?: string
+          vendor_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "journal_entry_lines_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "journal_entry_lines_entry_id_fkey"
+            columns: ["entry_id"]
+            isOneToOne: false
+            referencedRelation: "journal_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "journal_entry_lines_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "journal_entry_lines_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "journal_entry_lines_vendor_id_fkey"
+            columns: ["vendor_id"]
+            isOneToOne: false
+            referencedRelation: "vendors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      leave_grants: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          days: number
+          expires_on: string
+          granted_on: string
+          id: string
+          note: string | null
+          organization_id: string
+          profile_id: string
+          reason: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          days: number
+          expires_on: string
+          granted_on: string
+          id?: string
+          note?: string | null
+          organization_id: string
+          profile_id: string
+          reason?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          days?: number
+          expires_on?: string
+          granted_on?: string
+          id?: string
+          note?: string | null
+          organization_id?: string
+          profile_id?: string
+          reason?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "leave_grants_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leave_grants_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      leave_requests: {
+        Row: {
+          created_at: string
+          fraction: number
+          hours: number | null
+          id: string
+          leave_date: string
+          organization_id: string
+          profile_id: string
+          reason: string | null
+          review_note: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          store_id: string
+          time_entry_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          fraction?: number
+          hours?: number | null
+          id?: string
+          leave_date: string
+          organization_id: string
+          profile_id: string
+          reason?: string | null
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          store_id: string
+          time_entry_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          fraction?: number
+          hours?: number | null
+          id?: string
+          leave_date?: string
+          organization_id?: string
+          profile_id?: string
+          reason?: string | null
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          store_id?: string
+          time_entry_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "leave_requests_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leave_requests_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leave_requests_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leave_requests_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leave_requests_time_entry_id_fkey"
+            columns: ["time_entry_id"]
+            isOneToOne: false
+            referencedRelation: "time_entries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      legal_rule_versions: {
+        Row: {
+          activated_at: string | null
+          activated_by: string | null
+          basis: string | null
+          created_at: string
+          created_by: string | null
+          effective_from: string
+          effective_to: string | null
+          id: string
+          note: string | null
+          parameters: Json
+          region: string | null
+          reviewed_at: string | null
+          reviewed_by_name: string | null
+          rule_type: string
+          status: string
+          updated_at: string
+          version: string
+          year: number
+        }
+        Insert: {
+          activated_at?: string | null
+          activated_by?: string | null
+          basis?: string | null
+          created_at?: string
+          created_by?: string | null
+          effective_from: string
+          effective_to?: string | null
+          id?: string
+          note?: string | null
+          parameters?: Json
+          region?: string | null
+          reviewed_at?: string | null
+          reviewed_by_name?: string | null
+          rule_type: string
+          status?: string
+          updated_at?: string
+          version: string
+          year: number
+        }
+        Update: {
+          activated_at?: string | null
+          activated_by?: string | null
+          basis?: string | null
+          created_at?: string
+          created_by?: string | null
+          effective_from?: string
+          effective_to?: string | null
+          id?: string
+          note?: string | null
+          parameters?: Json
+          region?: string | null
+          reviewed_at?: string | null
+          reviewed_by_name?: string | null
+          rule_type?: string
+          status?: string
+          updated_at?: string
+          version?: string
+          year?: number
+        }
+        Relationships: []
       }
       loyalty_settings: {
         Row: {
@@ -2658,6 +3679,82 @@ export type Database = {
           },
         ]
       }
+      nencho_declarations: {
+        Row: {
+          confirmed_at: string | null
+          created_at: string
+          created_by: string | null
+          data: Json
+          id: string
+          organization_id: string
+          profile_id: string
+          review_note: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          submitted_at: string | null
+          updated_at: string
+          updated_by: string | null
+          year: number
+        }
+        Insert: {
+          confirmed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          data?: Json
+          id?: string
+          organization_id: string
+          profile_id: string
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          submitted_at?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          year: number
+        }
+        Update: {
+          confirmed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          data?: Json
+          id?: string
+          organization_id?: string
+          profile_id?: string
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          submitted_at?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nencho_declarations_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nencho_declarations_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nencho_declarations_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notifications: {
         Row: {
           body: string | null
@@ -3018,6 +4115,7 @@ export type Database = {
           created_by: string | null
           id: string
           is_demo: boolean
+          leave_policy: Json
           logo_path: string | null
           name: string
           name_kana: string | null
@@ -3038,6 +4136,7 @@ export type Database = {
           created_by?: string | null
           id?: string
           is_demo?: boolean
+          leave_policy?: Json
           logo_path?: string | null
           name: string
           name_kana?: string | null
@@ -3058,6 +4157,7 @@ export type Database = {
           created_by?: string | null
           id?: string
           is_demo?: boolean
+          leave_policy?: Json
           logo_path?: string | null
           name?: string
           name_kana?: string | null
@@ -3550,8 +4650,12 @@ export type Database = {
           id: string
           note: string | null
           organization_id: string
+          payment_date: string | null
           period_end: string
           period_start: string
+          rule_version: string
+          rules_snapshot: Json | null
+          run_type: string
           status: string
           store_id: string | null
           title: string
@@ -3566,8 +4670,12 @@ export type Database = {
           id?: string
           note?: string | null
           organization_id: string
+          payment_date?: string | null
           period_end: string
           period_start: string
+          rule_version?: string
+          rules_snapshot?: Json | null
+          run_type?: string
           status?: string
           store_id?: string | null
           title: string
@@ -3582,8 +4690,12 @@ export type Database = {
           id?: string
           note?: string | null
           organization_id?: string
+          payment_date?: string | null
           period_end?: string
           period_start?: string
+          rule_version?: string
+          rules_snapshot?: Json | null
+          run_type?: string
           status?: string
           store_id?: string | null
           title?: string
@@ -5403,6 +6515,7 @@ export type Database = {
           id: string
           invoice_registration_number: string | null
           kds_settings: Json
+          leave_settings: Json
           max_party_size: number
           organization_id: string
           petty_opening_balance: number
@@ -5433,6 +6546,7 @@ export type Database = {
           id?: string
           invoice_registration_number?: string | null
           kds_settings?: Json
+          leave_settings?: Json
           max_party_size?: number
           organization_id: string
           petty_opening_balance?: number
@@ -5463,6 +6577,7 @@ export type Database = {
           id?: string
           invoice_registration_number?: string | null
           kds_settings?: Json
+          leave_settings?: Json
           max_party_size?: number
           organization_id?: string
           petty_opening_balance?: number
@@ -5821,6 +6936,7 @@ export type Database = {
           created_by: string | null
           entry_type: string
           id: string
+          leave_fraction: number | null
           note: string | null
           on_break: boolean
           organization_id: string
@@ -5842,6 +6958,7 @@ export type Database = {
           created_by?: string | null
           entry_type?: string
           id?: string
+          leave_fraction?: number | null
           note?: string | null
           on_break?: boolean
           organization_id: string
@@ -5863,6 +6980,7 @@ export type Database = {
           created_by?: string | null
           entry_type?: string
           id?: string
+          leave_fraction?: number | null
           note?: string | null
           on_break?: boolean
           organization_id?: string
@@ -6209,6 +7327,10 @@ export type Database = {
         Args: { p_code: string; p_phone: string; p_reason: string }
         Returns: Json
       }
+      close_accounting_period: {
+        Args: { p_month: string; p_org: string }
+        Returns: Json
+      }
       close_register_session: {
         Args: {
           p_counted_cash: number
@@ -6266,6 +7388,7 @@ export type Database = {
         Args: { p_slug: string; p_token: string }
         Returns: Json
       }
+      install_standard_accounts: { Args: { p_org: string }; Returns: number }
       log_audit: {
         Args: {
           p_action: string
@@ -6291,6 +7414,7 @@ export type Database = {
         }
         Returns: Json
       }
+      post_journal_entry: { Args: { p_entry_id: string }; Returns: Json }
       recalc_customer_stats: {
         Args: { p_customer_id: string }
         Returns: undefined
@@ -6307,7 +7431,15 @@ export type Database = {
         }
         Returns: Json
       }
+      reopen_accounting_period: {
+        Args: { p_month: string; p_org: string; p_reason: string }
+        Returns: Json
+      }
       ship_stock_transfer: { Args: { p_transfer_id: string }; Returns: Json }
+      void_journal_entry: {
+        Args: { p_entry_id: string; p_reason: string }
+        Returns: Json
+      }
     }
     Enums: {
       [_ in never]: never

@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
   aggregateTrialBalance,
+  aggregateTrialBalanceWithOpening,
   buildBalanceSheet,
   buildExpenseJournal,
+  buildOperatingStatement,
   buildPayrollJournal,
   buildProfitAndLoss,
   buildPurchaseJournal,
   buildSalesJournal,
+  classifyExpense,
   validateJournalBalance,
   STD,
   type AccountInfo,
@@ -123,5 +126,90 @@ describe('試算表・損益計算書・貸借対照表', () => {
     expect(bs.liabilityTotal).toBe(60000);
     expect(bs.netIncome).toBe(90000);
     expect(bs.balanced).toBe(true);
+  });
+});
+
+describe('期首残高付き試算表（v0.4.1）', () => {
+  const accounts: AccountInfo[] = [
+    { id: 'a1', code: '100', name: '現金', category: 'asset' },
+    { id: 'r1', code: '400', name: '売上高', category: 'revenue' },
+    { id: 'l1', code: '200', name: '買掛金', category: 'liability' },
+  ];
+  // 前期: 現金売上30,000。当期: 現金売上20,000
+  const openingLines: PostedLine[] = [
+    { accountId: 'a1', side: 'debit', amount: 30000 },
+    { accountId: 'r1', side: 'credit', amount: 30000 },
+  ];
+  const periodLines: PostedLine[] = [
+    { accountId: 'a1', side: 'debit', amount: 20000 },
+    { accountId: 'r1', side: 'credit', amount: 20000 },
+  ];
+
+  it('期首 + 期中増減 = 期末', () => {
+    const tb = aggregateTrialBalanceWithOpening(openingLines, periodLines, accounts);
+    const cash = tb.find((r) => r.account.code === '100')!;
+    expect(cash.openingBalance).toBe(30000);
+    expect(cash.debitTotal).toBe(20000);
+    expect(cash.closingBalance).toBe(50000);
+  });
+  it('期中に動きがなくても期首残高がある科目は出力される', () => {
+    const tb = aggregateTrialBalanceWithOpening(openingLines, [], accounts);
+    const cash = tb.find((r) => r.account.code === '100')!;
+    expect(cash.openingBalance).toBe(30000);
+    expect(cash.debitTotal).toBe(0);
+    expect(cash.closingBalance).toBe(30000);
+    // 期首も期中もゼロの科目（買掛金）は出力されない
+    expect(tb.find((r) => r.account.code === '200')).toBeUndefined();
+  });
+  it('期中の借方合計と貸方合計は全体で一致する（複式簿記の恒等式）', () => {
+    const tb = aggregateTrialBalanceWithOpening(openingLines, periodLines, accounts);
+    const debit = tb.reduce((a, r) => a + r.debitTotal, 0);
+    const credit = tb.reduce((a, r) => a + r.creditTotal, 0);
+    expect(debit).toBe(credit);
+  });
+});
+
+describe('段階損益（売上原価・人件費区分）', () => {
+  const accounts: AccountInfo[] = [
+    { id: 'r1', code: '400', name: '売上高', category: 'revenue' },
+    { id: 'e1', code: '500', name: '仕入高', category: 'expense' },
+    { id: 'e2', code: '510', name: '給与手当', category: 'expense' },
+    { id: 'e3', code: '520', name: '地代家賃', category: 'expense' },
+    { id: 'a1', code: '100', name: '現金', category: 'asset' },
+    { id: 'l1', code: '211', name: '未払費用', category: 'liability' },
+  ];
+  // 売上100万 / 仕入30万 / 給与25万 / 家賃15万
+  const lines: PostedLine[] = [
+    { accountId: 'a1', side: 'debit', amount: 1_000_000 },
+    { accountId: 'r1', side: 'credit', amount: 1_000_000 },
+    { accountId: 'e1', side: 'debit', amount: 300_000 },
+    { accountId: 'l1', side: 'credit', amount: 300_000 },
+    { accountId: 'e2', side: 'debit', amount: 250_000 },
+    { accountId: 'l1', side: 'credit', amount: 250_000 },
+    { accountId: 'e3', side: 'debit', amount: 150_000 },
+    { accountId: 'l1', side: 'credit', amount: 150_000 },
+  ];
+
+  it('classifyExpense: 500-509=原価 / 510-519=人件費 / それ以外=経費', () => {
+    expect(classifyExpense('500')).toBe('cogs');
+    expect(classifyExpense('509')).toBe('cogs');
+    expect(classifyExpense('510')).toBe('labor');
+    expect(classifyExpense('519')).toBe('labor');
+    expect(classifyExpense('520')).toBe('opex');
+    expect(classifyExpense('599')).toBe('opex');
+    expect(classifyExpense('ABC')).toBe('opex');
+  });
+  it('売上100万 − 原価30万 = 粗利70万 − 人件費25万 − 経費15万 = 営業利益30万', () => {
+    const st = buildOperatingStatement(aggregateTrialBalance(lines, accounts));
+    expect(st.revenueTotal).toBe(1_000_000);
+    expect(st.cogsTotal).toBe(300_000);
+    expect(st.grossProfit).toBe(700_000);
+    expect(st.laborTotal).toBe(250_000);
+    expect(st.opexTotal).toBe(150_000);
+    expect(st.operatingIncome).toBe(300_000);
+  });
+  it('段階損益の営業利益はP/L純利益と一致する（費用が原価/人件費/経費のみの場合）', () => {
+    const tb = aggregateTrialBalance(lines, accounts);
+    expect(buildOperatingStatement(tb).operatingIncome).toBe(buildProfitAndLoss(tb).netIncome);
   });
 });

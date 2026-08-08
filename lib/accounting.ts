@@ -189,6 +189,101 @@ export function aggregateTrialBalance(lines: PostedLine[], accounts: AccountInfo
     .sort((a, b) => a.account.code.localeCompare(b.account.code));
 }
 
+export interface TrialBalanceRowWithOpening extends TrialBalanceRow {
+  /** 期首残高（期間開始前の全確定仕訳から算出した正規残高） */
+  openingBalance: number;
+  /** 期末残高 = 期首 + 期中の正規残高増減 */
+  closingBalance: number;
+}
+
+/**
+ * 期首残高付き試算表。
+ * openingLines = 期間開始日より前の全確定仕訳行、periodLines = 期間内の確定仕訳行。
+ * 期中に動きがなくても期首残高がある科目は行として出力する。
+ */
+export function aggregateTrialBalanceWithOpening(
+  openingLines: PostedLine[],
+  periodLines: PostedLine[],
+  accounts: AccountInfo[]
+): TrialBalanceRowWithOpening[] {
+  const opening = new Map(aggregateTrialBalance(openingLines, accounts).map((r) => [r.account.id, r.balance]));
+  const period = new Map(aggregateTrialBalance(periodLines, accounts).map((r) => [r.account.id, r]));
+  return accounts
+    .filter((a) => opening.has(a.id) || period.has(a.id))
+    .map((a) => {
+      const openingBalance = opening.get(a.id) ?? 0;
+      const p = period.get(a.id);
+      const debitTotal = p?.debitTotal ?? 0;
+      const creditTotal = p?.creditTotal ?? 0;
+      const balance = p?.balance ?? 0;
+      return {
+        account: a,
+        openingBalance,
+        debitTotal,
+        creditTotal,
+        balance,
+        closingBalance: openingBalance + balance,
+      };
+    })
+    .sort((a, b) => a.account.code.localeCompare(b.account.code));
+}
+
+// -------------------------------------------------------------
+// 段階損益（売上高 − 売上原価 = 売上総利益 − 人件費 − 経費 = 営業利益）
+// -------------------------------------------------------------
+
+export type ExpenseClass = 'cogs' | 'labor' | 'opex';
+
+/**
+ * 費用科目の区分。標準テンプレートのコード体系に基づく既定分類:
+ * 500-509=売上原価（仕入高）、510-519=人件費（給与手当・法定福利費等）、それ以外=経費。
+ * カスタム科目体系の企業は分類関数を差し替え可能。
+ */
+export function classifyExpense(code: string): ExpenseClass {
+  const n = Number.parseInt(code, 10);
+  if (Number.isInteger(n)) {
+    if (n >= 500 && n <= 509) return 'cogs';
+    if (n >= 510 && n <= 519) return 'labor';
+  }
+  return 'opex';
+}
+
+export interface OperatingStatement {
+  revenues: TrialBalanceRow[];
+  cogs: TrialBalanceRow[];
+  labor: TrialBalanceRow[];
+  opex: TrialBalanceRow[];
+  revenueTotal: number;
+  cogsTotal: number;
+  /** 売上総利益 */
+  grossProfit: number;
+  laborTotal: number;
+  opexTotal: number;
+  /** 営業利益 */
+  operatingIncome: number;
+}
+
+export function buildOperatingStatement(
+  tb: TrialBalanceRow[],
+  classify: (code: string) => ExpenseClass = classifyExpense
+): OperatingStatement {
+  const revenues = tb.filter((r) => r.account.category === 'revenue');
+  const expenses = tb.filter((r) => r.account.category === 'expense');
+  const cogs = expenses.filter((r) => classify(r.account.code) === 'cogs');
+  const labor = expenses.filter((r) => classify(r.account.code) === 'labor');
+  const opex = expenses.filter((r) => classify(r.account.code) === 'opex');
+  const revenueTotal = revenues.reduce((a, r) => a + r.balance, 0);
+  const cogsTotal = cogs.reduce((a, r) => a + r.balance, 0);
+  const laborTotal = labor.reduce((a, r) => a + r.balance, 0);
+  const opexTotal = opex.reduce((a, r) => a + r.balance, 0);
+  const grossProfit = revenueTotal - cogsTotal;
+  return {
+    revenues, cogs, labor, opex,
+    revenueTotal, cogsTotal, grossProfit, laborTotal, opexTotal,
+    operatingIncome: grossProfit - laborTotal - opexTotal,
+  };
+}
+
 export interface ProfitAndLoss {
   revenues: TrialBalanceRow[];
   expenses: TrialBalanceRow[];
