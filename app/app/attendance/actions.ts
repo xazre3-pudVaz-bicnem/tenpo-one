@@ -434,11 +434,14 @@ export interface ManualEntryInput {
   workDate: string;
   entryType: 'paid_leave' | 'absent';
   reason: string;
+  /** 有給の取得区分（entryType='paid_leave' の場合のみ）。全休=1 / 半休=0.5。未指定時は全休扱い */
+  leaveFraction?: 1 | 0.5;
 }
 
 /**
  * 打刻なしの勤怠（有給・欠勤）を手動追加する（attendance.approve 権限者のみ）。
  * clock_in_at / clock_out_at は null のまま status='approved' で登録する。
+ * entryType='paid_leave' の場合は time_entries.leave_fraction に取得区分（全休1.0/半休0.5）を保存する。
  */
 export async function addManualEntry(input: ManualEntryInput): Promise<ActionResult> {
   const ctx = await requirePermission('attendance.approve');
@@ -451,12 +454,17 @@ export async function addManualEntry(input: ManualEntryInput): Promise<ActionRes
     return { ok: false, message: '区分が正しくありません' };
   }
   if (!input.reason.trim()) return { ok: false, message: '理由を入力してください' };
+  if (input.leaveFraction != null && input.leaveFraction !== 1 && input.leaveFraction !== 0.5) {
+    return { ok: false, message: '取得区分が正しくありません' };
+  }
 
   const supabase = await createClient();
 
   if (await isPayrollLocked(supabase, ctx.organizationId, input.storeId, input.workDate)) {
     return { ok: false, message: PAYROLL_LOCKED_MESSAGE };
   }
+
+  const leaveFraction = input.entryType === 'paid_leave' ? (input.leaveFraction ?? 1) : null;
 
   const { data: inserted, error } = await supabase
     .from('time_entries')
@@ -469,6 +477,7 @@ export async function addManualEntry(input: ManualEntryInput): Promise<ActionRes
       clock_out_at: null,
       break_minutes: 0,
       entry_type: input.entryType,
+      leave_fraction: leaveFraction,
       status: 'approved',
       source: 'manual',
       note: input.reason.trim(),
@@ -487,10 +496,35 @@ export async function addManualEntry(input: ManualEntryInput): Promise<ActionRes
     p_target_table: 'time_entries',
     p_target_id: inserted.id,
     p_before: null,
-    p_after: { work_date: input.workDate, entry_type: input.entryType },
+    p_after: { work_date: input.workDate, entry_type: input.entryType, leave_fraction: leaveFraction },
     p_note: input.reason.trim(),
   });
 
   revalidatePath('/app/attendance');
+  revalidatePath('/app/leave');
+
+  // 有給の場合、残日数不足の簡易チェック（登録は妨げない・注記のみ）。
+  // 残日数 = 有効な付与合計（失効日が本日以降）− 取得合計（本追加分を含む）
+  if (input.entryType === 'paid_leave') {
+    const today = todayJst();
+    const [{ data: grants }, { data: takenEntries }] = await Promise.all([
+      supabase.from('leave_grants').select('days, expires_on').eq('organization_id', ctx.organizationId).eq('profile_id', input.profileId),
+      supabase
+        .from('time_entries')
+        .select('leave_fraction')
+        .eq('organization_id', ctx.organizationId)
+        .eq('profile_id', input.profileId)
+        .eq('entry_type', 'paid_leave')
+        .in('status', ['approved', 'closed']),
+    ]);
+    const activeGranted = (grants ?? [])
+      .filter((g) => g.expires_on >= today)
+      .reduce((a, g) => a + Number(g.days), 0);
+    const taken = (takenEntries ?? []).reduce((a, e) => a + Number(e.leave_fraction ?? 1), 0);
+    if (taken > activeGranted) {
+      return { ok: true, message: '勤怠を追加しました（有給の残日数が不足している可能性があります）', warning: true };
+    }
+  }
+
   return { ok: true, message: '勤怠を追加しました' };
 }

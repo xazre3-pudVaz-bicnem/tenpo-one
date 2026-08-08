@@ -3,10 +3,11 @@ import Link from 'next/link';
 import { requireFeature } from '@/lib/auth';
 import { can } from '@/lib/permissions';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { yen, formatDate } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { PageHeader } from '@/components/ui/page-header';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/ui/state';
 import { Button } from '@/components/ui/button';
@@ -15,7 +16,6 @@ import { PayrollDisclaimer } from '@/components/payroll/disclaimer';
 import { PayrollRuleDialog, type PayrollRuleRow } from '@/components/payroll/rule-dialog';
 import { CommissionRuleDialog, type CommissionRuleRow } from '@/components/payroll/commission-dialog';
 import { RunDialog } from '@/components/payroll/run-dialog';
-import { PayrollItemsTable, type PayrollItemView } from '@/components/payroll/breakdown-panel';
 
 export const metadata: Metadata = { title: '給与・歩合' };
 
@@ -25,6 +25,8 @@ const RUN_STATUS_TONE: Record<string, 'gray' | 'warning' | 'success'> = {
   confirmed: 'warning',
   approved: 'success',
 };
+const RUN_TYPE_LABEL: Record<string, string> = { salary: '給与', bonus: '賞与' };
+const RUN_TYPE_TONE: Record<string, 'primary' | 'navy'> = { salary: 'primary', bonus: 'navy' };
 
 export default async function PayrollPage({
   searchParams,
@@ -37,46 +39,7 @@ export default async function PayrollPage({
   const supabase = await createClient();
 
   if (!canManage) {
-    const { data: items } = await supabase
-      .from('payroll_items')
-      .select('*, payroll_runs!inner(id, title, period_start, period_end, status)')
-      .eq('profile_id', ctx.userId)
-      .in('payroll_runs.status', ['confirmed', 'approved'])
-      .order('created_at', { ascending: false });
-
-    return (
-      <div>
-        <PageHeader title="給与明細" description="ご自身の給与・歩合の明細です" />
-        <PayrollDisclaimer className="mb-5" />
-        {(items ?? []).length === 0 ? (
-          <EmptyState title="表示できる給与明細はまだありません" />
-        ) : (
-          <div className="space-y-5">
-            {(items ?? []).map((row) => {
-              const run = row.payroll_runs as unknown as {
-                id: string; title: string; period_start: string; period_end: string; status: string;
-              };
-              const view = toItemView(row, ctx.displayName);
-              return (
-                <Card key={row.id}>
-                  <CardHeader className="flex flex-wrap items-center justify-between gap-2">
-                    <CardTitle>
-                      {run.title}（{formatDate(run.period_start)} 〜 {formatDate(run.period_end)}）
-                    </CardTitle>
-                    <Badge tone={RUN_STATUS_TONE[run.status]}>{RUN_STATUS_LABEL[run.status]}</Badge>
-                  </CardHeader>
-                  <CardContent className="p-0">
-                    <div className="p-5">
-                      <PayrollItemsTable items={[view]} />
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    );
+    return <MyPayslipsTab ctx={ctx} />;
   }
 
   const tab = sp.tab === 'runs' ? 'runs' : 'rules';
@@ -102,7 +65,14 @@ export default async function PayrollPage({
       <PageHeader
         title="給与・歩合"
         description="給与ルール・歩合ルールの設定と、期間ごとの給与計算"
-        actions={tab === 'runs' ? <RunDialog storeOptions={storeOptions} /> : undefined}
+        actions={
+          <>
+            <Link href="/app/payroll/nencho" className="text-sm font-medium text-primary hover:underline">
+              年末調整はこちら
+            </Link>
+            {tab === 'runs' && <RunDialog storeOptions={storeOptions} staffOptions={staffOptions} />}
+          </>
+        }
       />
       <PayrollDisclaimer className="mb-5" />
 
@@ -302,8 +272,9 @@ async function RunsTab({
       <Table>
         <THead>
           <Tr>
+            <Th>種別</Th>
             <Th>タイトル</Th>
-            <Th>期間</Th>
+            <Th>期間 / 支給日</Th>
             <Th>対象</Th>
             <Th>状態</Th>
             <Th>作成日</Th>
@@ -311,47 +282,116 @@ async function RunsTab({
           </Tr>
         </THead>
         <TBody>
-          {(runs ?? []).map((r) => (
-            <Tr key={r.id}>
-              <Td className="font-medium text-navy">{r.title}</Td>
-              <Td>
-                {formatDate(r.period_start)} 〜 {formatDate(r.period_end)}
-              </Td>
-              <Td>{r.store_id ? storeNameById.get(r.store_id) ?? '—' : '全社'}</Td>
-              <Td>
-                <Badge tone={RUN_STATUS_TONE[r.status]}>{RUN_STATUS_LABEL[r.status]}</Badge>
-              </Td>
-              <Td>{formatDate(r.created_at)}</Td>
-              <Td className="text-right">
-                <Link href={`/app/payroll/${r.id}`} className="text-sm font-medium text-primary hover:underline">
-                  詳細を見る
-                </Link>
-              </Td>
-            </Tr>
-          ))}
+          {(runs ?? []).map((r) => {
+            const runType = (r.run_type ?? 'salary') as string;
+            return (
+              <Tr key={r.id}>
+                <Td>
+                  <Badge tone={RUN_TYPE_TONE[runType] ?? 'primary'}>{RUN_TYPE_LABEL[runType] ?? runType}</Badge>
+                </Td>
+                <Td className="font-medium text-navy">{r.title}</Td>
+                <Td>
+                  {runType === 'bonus'
+                    ? `支給日: ${formatDate(r.payment_date)}`
+                    : `${formatDate(r.period_start)} 〜 ${formatDate(r.period_end)}`}
+                </Td>
+                <Td>{r.store_id ? storeNameById.get(r.store_id) ?? '—' : '全社'}</Td>
+                <Td>
+                  <Badge tone={RUN_STATUS_TONE[r.status]}>{RUN_STATUS_LABEL[r.status]}</Badge>
+                </Td>
+                <Td>{formatDate(r.created_at)}</Td>
+                <Td className="text-right">
+                  <Link href={`/app/payroll/${r.id}`} className="text-sm font-medium text-primary hover:underline">
+                    詳細を見る
+                  </Link>
+                </Td>
+              </Tr>
+            );
+          })}
         </TBody>
       </Table>
     </TableWrap>
   );
 }
 
-function toItemView(row: Record<string, unknown>, profileName: string): PayrollItemView {
-  return {
-    id: row.id as string,
-    profileName,
-    workDays: row.work_days as number,
-    workMinutes: row.work_minutes as number,
-    overtimeMinutes: row.overtime_minutes as number,
-    nightMinutes: row.night_minutes as number,
-    holidayMinutes: row.holiday_minutes as number,
-    basePay: row.base_pay as number,
-    overtimePay: row.overtime_pay as number,
-    nightPay: row.night_pay as number,
-    holidayPay: row.holiday_pay as number,
-    commutePay: row.commute_pay as number,
-    allowanceTotal: row.allowance_total as number,
-    commissionTotal: row.commission_total as number,
-    grossTotal: row.gross_total as number,
-    breakdown: row.breakdown as PayrollItemView['breakdown'],
-  };
+/**
+ * 本人ビュー: 給与明細一覧（サマリーカード）。
+ * payroll_runs は payroll.view_all ロールのみ閲覧可能な RLS のため、本人が payroll_items を
+ * 保有していること（RLS: profile_id = auth.uid()）を先に確認したうえで、
+ * admin client により表示用の非機密フィールドのみを取得する（実データの露出は自分の分のみ）。
+ */
+async function MyPayslipsTab({ ctx }: { ctx: { userId: string; organizationId: string } }) {
+  const supabase = await createClient();
+  const { data: items } = await supabase
+    .from('payroll_items')
+    .select('id, payroll_run_id, gross_total, breakdown')
+    .eq('organization_id', ctx.organizationId)
+    .eq('profile_id', ctx.userId)
+    .order('created_at', { ascending: false });
+
+  const myItems = items ?? [];
+  const runIds = [...new Set(myItems.map((i) => i.payroll_run_id as string))];
+
+  let runs: { id: string; title: string; run_type: string; period_start: string; period_end: string; payment_date: string | null; status: string }[] = [];
+  if (runIds.length > 0) {
+    const admin = createAdminClient();
+    const { data } = await admin
+      .from('payroll_runs')
+      .select('id, title, run_type, period_start, period_end, payment_date, status')
+      .eq('organization_id', ctx.organizationId)
+      .in('id', runIds)
+      .in('status', ['confirmed', 'approved'])
+      .order('period_start', { ascending: false });
+    runs = data ?? [];
+  }
+
+  const itemByRunId = new Map(myItems.map((i) => [i.payroll_run_id as string, i]));
+
+  return (
+    <div>
+      <PageHeader
+        title="給与明細"
+        description="ご自身の給与・賞与の明細です"
+        actions={
+          <Link href="/app/payroll/nencho" className="text-sm font-medium text-primary hover:underline">
+            年末調整はこちら
+          </Link>
+        }
+      />
+      <PayrollDisclaimer className="mb-5" />
+      {runs.length === 0 ? (
+        <EmptyState title="表示できる給与明細はまだありません" description="給与計算が確定すると表示されます" />
+      ) : (
+        <div className="space-y-3">
+          {runs.map((run) => {
+            const item = itemByRunId.get(run.id);
+            const runType = run.run_type ?? 'salary';
+            return (
+              <Card key={run.id}>
+                <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <Badge tone={RUN_TYPE_TONE[runType] ?? 'primary'}>{RUN_TYPE_LABEL[runType] ?? runType}</Badge>
+                      <p className="font-medium text-navy">{run.title}</p>
+                    </div>
+                    <p className="mt-1 text-xs text-gray-500">
+                      {runType === 'bonus'
+                        ? `支給日: ${formatDate(run.payment_date)}`
+                        : `${formatDate(run.period_start)} 〜 ${formatDate(run.period_end)}`}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <p className="text-lg font-bold tabular-nums text-navy">{yen(item?.gross_total)}</p>
+                    <Link href={`/app/payroll/${run.id}`} className="text-sm font-medium text-primary hover:underline">
+                      明細を見る
+                    </Link>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
 }

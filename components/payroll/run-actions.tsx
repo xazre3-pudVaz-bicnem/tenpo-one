@@ -7,7 +7,15 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useToast } from '@/components/ui/toast';
 import { recalcPayrollRun, confirmPayrollRun, approvePayrollRun } from '@/app/app/payroll/actions';
 
-export function RunActions({ runId, status }: { runId: string; status: 'draft' | 'confirmed' | 'approved' }) {
+export function RunActions({
+  runId,
+  status,
+  runType = 'salary',
+}: {
+  runId: string;
+  status: 'draft' | 'confirmed' | 'approved';
+  runType?: 'salary' | 'bonus';
+}) {
   const [dialog, setDialog] = useState<'confirm' | 'approve' | null>(null);
   const [pending, startTransition] = useTransition();
   const { toast } = useToast();
@@ -35,10 +43,12 @@ export function RunActions({ runId, status }: { runId: string; status: 'draft' |
     <div className="flex flex-wrap gap-2">
       {status === 'draft' && (
         <>
-          <Button variant="secondary" onClick={recalc} disabled={pending}>
-            <RefreshCw className="h-4 w-4" />
-            再計算
-          </Button>
+          {runType === 'salary' && (
+            <Button variant="secondary" onClick={recalc} disabled={pending}>
+              <RefreshCw className="h-4 w-4" />
+              再計算
+            </Button>
+          )}
           <Button onClick={() => setDialog('confirm')} disabled={pending}>
             <CheckCircle2 className="h-4 w-4" />
             確定

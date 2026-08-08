@@ -581,15 +581,93 @@ export async function recalcPayrollRun(runId: string): Promise<ActionResult> {
   const supabase = await createClient();
   const { data: run } = await supabase
     .from('payroll_runs')
-    .select('id, organization_id, store_id, period_start, period_end, status')
+    .select('id, organization_id, store_id, period_start, period_end, status, run_type')
     .eq('id', runId)
     .single();
   if (!run) return { ok: false, message: '給与計算が見つかりません' };
   if (run.status !== 'draft') return { ok: false, message: '下書き状態のみ再計算できます' };
+  if (run.run_type === 'bonus') {
+    return { ok: false, message: '賞与は勤怠から自動計算されないため再計算できません。金額を確認のうえ確定してください' };
+  }
 
   await generatePayrollItems(supabase, ctx, run);
   revalidatePath(`/app/payroll/${runId}`);
   return { ok: true, message: '再計算しました' };
+}
+
+// ---------------------------------------------------------------
+// 賞与run（期間の勤怠集計は行わず、支給日＋スタッフ別金額の手入力で作成する）
+// ---------------------------------------------------------------
+
+export interface CreateBonusRunInput {
+  title: string;
+  paymentDate: string;
+  storeId: string | null;
+  items: { profileId: string; amount: number }[];
+}
+
+export async function createBonusRun(input: CreateBonusRunInput): Promise<ActionResult & { runId?: string }> {
+  const ctx = await requirePermission('payroll.manage');
+  if (input.storeId !== null && !ctx.stores.some((s) => s.id === input.storeId)) {
+    return { ok: false, message: '対象店舗にアクセス権がありません' };
+  }
+  if (!input.title.trim()) return { ok: false, message: 'タイトルを入力してください' };
+  if (!input.paymentDate) return { ok: false, message: '支給日を入力してください' };
+  const items = input.items.filter((i) => i.profileId && i.amount > 0);
+  if (items.length === 0) return { ok: false, message: '対象スタッフと支給額を1件以上入力してください' };
+  if (items.some((i) => !Number.isFinite(i.amount) || i.amount < 0)) {
+    return { ok: false, message: '支給額は0以上の数値で入力してください' };
+  }
+
+  const supabase = await createClient();
+  const { data: run, error } = await supabase
+    .from('payroll_runs')
+    .insert({
+      organization_id: ctx.organizationId,
+      store_id: input.storeId,
+      title: input.title.trim(),
+      run_type: 'bonus',
+      payment_date: input.paymentDate,
+      // period_start/period_end は NOT NULL のため支給日を設定する（賞与runは期間集計を行わない）
+      period_start: input.paymentDate,
+      period_end: input.paymentDate,
+      status: 'draft',
+      created_by: ctx.userId,
+    })
+    .select('id')
+    .single();
+  if (error || !run) return { ok: false, message: `賞与計算の作成に失敗しました: ${error?.message ?? '不明なエラー'}` };
+
+  const rows = items.map((i) => ({
+    organization_id: ctx.organizationId,
+    payroll_run_id: run.id,
+    profile_id: i.profileId,
+    store_id: input.storeId,
+    work_days: 0,
+    work_minutes: 0,
+    overtime_minutes: 0,
+    night_minutes: 0,
+    holiday_minutes: 0,
+    base_pay: 0,
+    overtime_pay: 0,
+    night_pay: 0,
+    holiday_pay: 0,
+    commute_pay: 0,
+    allowance_total: 0,
+    commission_total: 0,
+    deduction_total: 0,
+    gross_total: Math.round(i.amount),
+    breakdown: { type: 'bonus' },
+    created_by: ctx.userId,
+  }));
+  const { error: itemsError } = await supabase.from('payroll_items').insert(rows);
+  if (itemsError) {
+    await supabase.from('payroll_runs').delete().eq('id', run.id);
+    return { ok: false, message: `支給内訳の作成に失敗しました: ${itemsError.message}` };
+  }
+
+  revalidatePath('/app/payroll');
+  return { ok: true, message: '賞与計算を作成しました', runId: run.id };
 }
 
 export async function confirmPayrollRun(runId: string): Promise<ActionResult> {

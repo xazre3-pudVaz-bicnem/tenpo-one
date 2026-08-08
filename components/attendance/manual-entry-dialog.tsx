@@ -22,6 +22,7 @@ export function ManualEntryDialog({
   const [profileId, setProfileId] = useState('');
   const [workDate, setWorkDate] = useState(defaultDate);
   const [entryType, setEntryType] = useState<'paid_leave' | 'absent'>('paid_leave');
+  const [leaveUnit, setLeaveUnit] = useState<'full' | 'half'>('full');
   const [reason, setReason] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -43,12 +44,20 @@ export function ManualEntryDialog({
     }
     setError(null);
     startTransition(async () => {
-      const result = await addManualEntry({ storeId, profileId, workDate, entryType, reason: reason.trim() });
-      toast(result.message, result.ok ? 'success' : 'error');
+      const result = await addManualEntry({
+        storeId,
+        profileId,
+        workDate,
+        entryType,
+        reason: reason.trim(),
+        leaveFraction: entryType === 'paid_leave' ? (leaveUnit === 'half' ? 0.5 : 1) : undefined,
+      });
+      toast(result.message, result.warning ? 'warning' : result.ok ? 'success' : 'error');
       if (result.ok) {
         close();
         setReason('');
         setProfileId('');
+        setLeaveUnit('full');
       }
     });
   };
@@ -85,6 +94,16 @@ export function ManualEntryDialog({
               <option value="absent">欠勤</option>
             </Select>
           </div>
+          {entryType === 'paid_leave' && (
+            <div>
+              <Label htmlFor="manual-leave-unit">取得区分</Label>
+              <Select id="manual-leave-unit" value={leaveUnit} onChange={(e) => setLeaveUnit(e.target.value as 'full' | 'half')}>
+                <option value="full">全休（1.0日）</option>
+                <option value="half">半休（0.5日）</option>
+              </Select>
+              <p className="mt-1 text-xs text-gray-400">時間単位の有給（時間休）は今後対応予定です</p>
+            </div>
+          )}
           <div>
             <Label htmlFor="manual-reason">理由（必須）</Label>
             <Textarea
