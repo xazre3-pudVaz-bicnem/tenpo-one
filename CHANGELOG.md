@@ -1,5 +1,25 @@
 # Changelog — TENPO ONE
 
+## v0.4.2 — TRANSACTION & ACCOUNTING CONSISTENCY（2026-08-08）
+
+返金を含む全取引が POS→帳簿→P/L まで1円もズレずにつながる状態へ
+（`docs/v0.4.2-accounting-consistency-report.md`・「1円の売上の流れ」全体図付き）。
+
+- **部分返金の完全対応**（migration 00025/00026・refund_order v3）: gross/refunds/net を正式定義
+  （`lib/metrics.ts` shared metrics layer）としてダッシュボード/レポート/予算/日報/レジ締め/CSV/LTVを統一。
+  元取引は上書きせずgross保持。返金可能額超過・同時実行はFOR UPDATEで拒否
+- **商品単位返金**（refund_items）: 数量・金額・「在庫に戻す」選択（①menu_item直結+②レシピの
+  2経路をfinalizeの鏡写しで'return'戻し・二重戻し不可）。**VOID（取引取消・全額のみ）とREFUNDを分離**
+- **返金仕訳**: 自動仕訳の第6ソース（source_type='pos_refund'・返金営業日で計上・元注文の税率比率で按分・
+  冪等・refunds.journal_entry_id相互リンク）→ P/Lの売上高が純売上と一致
+- **レジ締め再設計**: 理論現金=開始現金+現金売上+入金−現金返金−小口出金（カード/QR返金は現金非影響）。
+  daily_closingsへgross/返金/純売上/方法別内訳/小口/理論・実現金をsnapshot保存。締め後の返金は
+  返金発生日側へ計上され過去締めは不変。返金レコード自体も不変（REFUND_IMMUTABLE）
+- **理論原価と実原価の分離**: 実原価=理論+廃棄+棚卸差異。レポートに原価差異分析
+  （差異率・内訳・ドリルダウン）を追加。原価率・粗利率に「理論」を明示
+- 検証: Vitest 162・verify-accounting-consistency.mjs（新規64チェック・**在庫戻しの直接リンク経路
+  欠落バグを検出→00026で修正**）・Playwright 17（返金フロー6 CASE追加）・既存verify 103+54維持
+
 ## v0.4.1 — NATIVE BACK OFFICE HARDENING（2026-08-08）
 
 外部SaaSなしでTENPO ONE単独で日常業務（売上→在庫→原価→勤怠→給与→仕訳→P/L）が一周することを
