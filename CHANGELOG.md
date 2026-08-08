@@ -1,5 +1,26 @@
 # Changelog — TENPO ONE
 
+## v0.4.1 — NATIVE BACK OFFICE HARDENING（2026-08-08）
+
+外部SaaSなしでTENPO ONE単独で日常業務（売上→在庫→原価→勤怠→給与→仕訳→P/L）が一周することを
+実データで検証・修正（`docs/v0.4.1-native-backoffice-report.md`）。実環境検証 verify-backoffice.mjs 54/54。
+
+- **会計縦フロー**: 仕訳一覧の商用品質化（借方/貸方・元取引・自動/手動・状態）・仕訳⇔元取引の双方向リンク
+  （`?source_type=&source_id=`規約）・元帳の相手科目/諸口・期首残高付き試算表（4列+セル毎ドリルダウン+貸借不一致検知）・
+  段階損益（売上原価/人件費区分・店舗別/月別/期間比較）・B/S不一致警告
+- **月次締め**: 12ヶ月一覧・解除理由必須+audit履歴表示・下書き残数案内。**確定仕訳の物理削除をDB層で禁止**
+  （migration 00023/00024・service roleでも`JOURNAL_IMMUTABLE`）
+- **銀行CSV**: 疑わしい重複（同日同額・摘要違い）の行別確認UI・売掛回収/買掛支払の消込ショートカット・残高参考表示
+- **給与**: 確定時に使用ルールをsnapshot保存（`payroll_runs.rules_snapshot`）・確定後の明細変更をDBトリガーで拒否
+  （`PAYROLL_RUN_LOCKED`）・計算根拠の明細表示拡張・給与仕訳への導線
+- **申請フロー**: 有給申請（付与→残数→申請→承認→time_entries連動→残数減）・勤怠修正申請（給与確定期間ロック後の
+  唯一の修正経路・approved給与は書き換えず次回調整を案内）・ダッシュボードアラート連動
+- **法定ルール**: 根拠/確認者/確認日の必須化とDB遷移強制（draft→reviewed→active→superseded・migration 00022）・
+  有効化のaudit記録・**専門家レビュー用一覧**（`/admin/legal-rules/review`・CSV/印刷）。法定数値の投入なし
+- **数字の共通化**: KPI母集団を「paid のみ」に全画面統一（ダッシュボード/レポート/予算/日報/CSV）・
+  月別損益の原価クエリ欠落バグ修正・「利益率」→「粗利率」正名・日報のorgフィルタ欠落修正
+- 外部SaaS（freee/MoneyForward/KING OF TIME）は連携センターで「移行・互換用オプション」に位置付け（契約誘導なし）
+
 ## v0.4.0 — ネイティブ会計・ネイティブ労務（2026-08-08）
 
 外部会計・勤怠SaaS（freee / KING OF TIME等）を必須依存から外し、TENPO ONE単独で会計・勤怠・
