@@ -11,6 +11,8 @@ import { BankAccountDelete } from '@/components/accounting/bank-account-delete';
 import { BankManualTxForm } from '@/components/accounting/bank-manual-tx-form';
 import { BankCsvImport } from '@/components/accounting/bank-csv-import';
 import { BankTxTable, type BankTxRow, type AccountOption } from '@/components/accounting/bank-tx-table';
+import { loadReceivablePayableBalances } from '../balances';
+import { yen } from '@/lib/format';
 
 export const metadata: Metadata = { title: '銀行口座 明細' };
 
@@ -60,7 +62,7 @@ export default async function BankAccountDetailPage({ params }: { params: Promis
 
   const { data: accountsData } = await supabase
     .from('accounts')
-    .select('id, code, name')
+    .select('id, code, name, sub_type')
     .eq('organization_id', ctx.organizationId)
     .eq('status', 'active')
     .order('code');
@@ -68,6 +70,7 @@ export default async function BankAccountDetailPage({ params }: { params: Promis
     id: a.id as string,
     code: a.code as string,
     name: a.name as string,
+    subType: a.sub_type as string | null,
   }));
   const bankAccountOptions: BankAccountOption[] = accountOptions.filter((a) => a.code === '110');
 
@@ -82,6 +85,8 @@ export default async function BankAccountDetailPage({ params }: { params: Promis
     (subTypeBankAccounts ?? []).length > 0
       ? (subTypeBankAccounts ?? []).map((a) => ({ id: a.id as string, code: a.code as string, name: a.name as string }))
       : bankAccountOptions;
+
+  const { receivableTotal, payableTotal } = await loadReceivablePayableBalances(supabase, ctx.organizationId);
 
   return (
     <div className="space-y-5">
@@ -129,6 +134,19 @@ export default async function BankAccountDetailPage({ params }: { params: Promis
 
       <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-xs text-gray-500">
         銀行API連携は行いません（手入力・CSV取込で完結。将来のAPI接続はオプション）。
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="rounded-xl border border-gray-200 bg-white px-4 py-3">
+          <p className="text-xs text-gray-500">売掛金残高（参考・全社合計）</p>
+          <p className="mt-1 text-lg font-semibold text-navy">{yen(receivableTotal)}</p>
+          <p className="mt-1 text-[11px] text-gray-400">入金取引を「売掛金の回収」として消込むと減少します</p>
+        </div>
+        <div className="rounded-xl border border-gray-200 bg-white px-4 py-3">
+          <p className="text-xs text-gray-500">買掛金残高（参考・全社合計）</p>
+          <p className="mt-1 text-lg font-semibold text-navy">{yen(payableTotal)}</p>
+          <p className="mt-1 text-[11px] text-gray-400">出金取引を「買掛金の支払」として消込むと減少します</p>
+        </div>
       </div>
 
       <BankCsvImport bankAccountId={bankAccount.id as string} />

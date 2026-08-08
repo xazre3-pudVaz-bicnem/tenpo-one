@@ -27,6 +27,7 @@ export interface AccountOption {
   id: string;
   code: string;
   name: string;
+  subType?: string | null;
 }
 
 const DEFAULT_DEPOSIT_CODE = '130'; // 売掛金（回収）
@@ -50,6 +51,16 @@ export function BankTxTable({
     const code = deposit > 0 ? DEFAULT_DEPOSIT_CODE : DEFAULT_WITHDRAWAL_CODE;
     return codeToId.get(code) ?? accountOptions[0]?.id ?? '';
   };
+
+  // 消込ショートカット: 入金=売掛金の回収(sub_type=receivable) / 出金=買掛金の支払(sub_type=payable)
+  const receivableAccounts = useMemo(() => accountOptions.filter((a) => a.subType === 'receivable'), [accountOptions]);
+  const payableAccounts = useMemo(() => accountOptions.filter((a) => a.subType === 'payable'), [accountOptions]);
+  function reconciliationOptionsFor(deposit: number) {
+    const shortcuts = deposit > 0 ? receivableAccounts : payableAccounts;
+    const shortcutIds = new Set(shortcuts.map((a) => a.id));
+    const rest = accountOptions.filter((a) => !shortcutIds.has(a.id));
+    return { shortcuts, rest, label: deposit > 0 ? '売掛金の回収' : '買掛金の支払' };
+  }
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [accountByTx, setAccountByTx] = useState<Record<string, string>>(
@@ -108,6 +119,12 @@ export function BankTxTable({
 
   return (
     <div className="space-y-3">
+      {pendingRows.length > 0 && (receivableAccounts.length > 0 || payableAccounts.length > 0) && (
+        <div className="rounded-xl border border-primary/20 bg-primary-soft/30 px-4 py-3 text-xs text-primary-deep">
+          消込: 入金取引の対応科目に「売掛金の回収」を選ぶと売掛金が減り、出金取引で「買掛金の支払」を選ぶと買掛金が減ります（各行の対応科目の先頭候補）。
+        </div>
+      )}
+
       {pendingRows.length > 0 && accountOptions.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
           <span className="text-xs font-medium text-gray-600">選択行に一括適用:</span>
@@ -177,18 +194,38 @@ export function BankTxTable({
                 <Td>
                   {!r.journalEntryId &&
                     (accountOptions.length > 0 ? (
-                      <Select
-                        value={accountByTx[r.id] ?? ''}
-                        onChange={(e) => setAccountByTx((prev) => ({ ...prev, [r.id]: e.target.value }))}
-                        className="w-48"
-                      >
-                        <option value="">選択してください</option>
-                        {accountOptions.map((a) => (
-                          <option key={a.id} value={a.id}>
-                            {a.code} {a.name}
-                          </option>
-                        ))}
-                      </Select>
+                      (() => {
+                        const { shortcuts, rest, label } = reconciliationOptionsFor(r.deposit);
+                        const isReconciliation = shortcuts.some((a) => a.id === (accountByTx[r.id] ?? ''));
+                        return (
+                          <div className="space-y-1">
+                            <Select
+                              value={accountByTx[r.id] ?? ''}
+                              onChange={(e) => setAccountByTx((prev) => ({ ...prev, [r.id]: e.target.value }))}
+                              className="w-52"
+                            >
+                              <option value="">選択してください</option>
+                              {shortcuts.length > 0 && (
+                                <optgroup label={`消込ショートカット（${label}）`}>
+                                  {shortcuts.map((a) => (
+                                    <option key={a.id} value={a.id}>
+                                      {label}（{a.code} {a.name}）
+                                    </option>
+                                  ))}
+                                </optgroup>
+                              )}
+                              <optgroup label="その他の勘定科目">
+                                {rest.map((a) => (
+                                  <option key={a.id} value={a.id}>
+                                    {a.code} {a.name}
+                                  </option>
+                                ))}
+                              </optgroup>
+                            </Select>
+                            {isReconciliation && <Badge tone="primary">消込（{label}）</Badge>}
+                          </div>
+                        );
+                      })()
                     ) : (
                       <span className="text-xs text-gray-400">勘定科目未導入</span>
                     ))}

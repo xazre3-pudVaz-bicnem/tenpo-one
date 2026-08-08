@@ -11,7 +11,12 @@ import { Table, TableWrap, THead, TBody, Tr, Th, Td } from '@/components/ui/tabl
 import { useToast } from '@/components/ui/toast';
 import { yen, formatDate } from '@/lib/format';
 import { CsvEncodingError, MAX_IMPORT_ROWS, decodeCsvFile, parseCsv } from '@/components/import/csv-parser';
-import { checkBankCsvDuplicates, importBankTransactionsCsv, type BankCsvRow } from '@/app/app/accounting/banks/actions';
+import {
+  checkBankCsvDuplicates,
+  importBankTransactionsCsv,
+  type BankCsvRow,
+  type ImportCsvSummary,
+} from '@/app/app/accounting/banks/actions';
 
 type Step = 'upload' | 'mapping' | 'preview' | 'result';
 
@@ -27,7 +32,13 @@ interface PreviewRow {
   raw: string[];
   parsed: BankCsvRow | null;
   error: string | null;
-  duplicate: boolean;
+  /** 完全一致（自動スキップ対象） */
+  exactDuplicate: boolean;
+  /** 疑わしい重複（同一日付+同一金額・摘要が異なる既存行あり。取込/スキップを選択可能） */
+  suspiciousDuplicate: boolean;
+  suspiciousDescriptions: string[];
+  /** 疑わしい重複行のみ利用者が切り替え可能（既定=取り込む） */
+  include: boolean;
 }
 
 /** 日付表記のゆらぎ（区切り文字違い）を吸収して 'YYYY-MM-DD' へ正規化する */
@@ -65,7 +76,7 @@ export function BankCsvImport({ bankAccountId }: { bankAccountId: string }) {
   const [mapping, setMapping] = useState<ColumnMapping>({ date: null, description: null, deposit: null, withdrawal: null });
   const [previewRows, setPreviewRows] = useState<PreviewRow[]>([]);
   const [checkingDup, setCheckingDup] = useState(false);
-  const [result, setResult] = useState<{ inserted: number; skipped: number } | null>(null);
+  const [result, setResult] = useState<ImportCsvSummary | null>(null);
   const [pending, startTransition] = useTransition();
 
   function resetAll() {
@@ -119,7 +130,7 @@ export function BankCsvImport({ bankAccountId }: { bankAccountId: string }) {
   const mappingComplete = mapping.date != null && mapping.description != null && (mapping.deposit != null || mapping.withdrawal != null);
 
   async function handleProceedToPreview() {
-    const rows: PreviewRow[] = dataRows.map((cells, i) => {
+    const rows: PreviewRow[] = dataRows.map((cells, i): PreviewRow => {
       const rowNumber = i + 1;
       const dateRaw = mapping.date != null ? cells[mapping.date] ?? '' : '';
       const descRaw = mapping.description != null ? cells[mapping.description] ?? '' : '';
@@ -130,15 +141,23 @@ export function BankCsvImport({ bankAccountId }: { bankAccountId: string }) {
       const deposit = normalizeAmount(depositRaw);
       const withdrawal = normalizeAmount(withdrawalRaw);
 
-      if (!date) return { rowNumber, raw: cells, parsed: null, error: `日付を解釈できません（${dateRaw}）`, duplicate: false };
-      if (!descRaw.trim()) return { rowNumber, raw: cells, parsed: null, error: '摘要が空です', duplicate: false };
+      const base = {
+        rowNumber,
+        raw: cells,
+        exactDuplicate: false,
+        suspiciousDuplicate: false,
+        suspiciousDescriptions: [] as string[],
+        include: true,
+      };
+      if (!date) return { ...base, parsed: null, error: `日付を解釈できません（${dateRaw}）` };
+      if (!descRaw.trim()) return { ...base, parsed: null, error: '摘要が空です' };
       if (Number.isNaN(deposit) || Number.isNaN(withdrawal)) {
-        return { rowNumber, raw: cells, parsed: null, error: '金額を解釈できません', duplicate: false };
+        return { ...base, parsed: null, error: '金額を解釈できません' };
       }
-      if (deposit === 0 && withdrawal === 0) return { rowNumber, raw: cells, parsed: null, error: '入金・出金がいずれも0円です', duplicate: false };
-      if (deposit > 0 && withdrawal > 0) return { rowNumber, raw: cells, parsed: null, error: '入金・出金が両方入力されています', duplicate: false };
+      if (deposit === 0 && withdrawal === 0) return { ...base, parsed: null, error: '入金・出金がいずれも0円です' };
+      if (deposit > 0 && withdrawal > 0) return { ...base, parsed: null, error: '入金・出金が両方入力されています' };
 
-      return { rowNumber, raw: cells, parsed: { date, description: descRaw.trim(), deposit, withdrawal }, error: null, duplicate: false };
+      return { ...base, parsed: { date, description: descRaw.trim(), deposit, withdrawal }, error: null };
     });
     setPreviewRows(rows);
     setStep('preview');
@@ -152,9 +171,16 @@ export function BankCsvImport({ bankAccountId }: { bankAccountId: string }) {
       setPreviewRows((prev) =>
         prev.map((r) => {
           if (!r.parsed) return r;
-          const duplicate = flags[idx];
+          const flag = flags[idx];
           idx += 1;
-          return { ...r, duplicate };
+          return {
+            ...r,
+            exactDuplicate: flag.exactDuplicate,
+            suspiciousDuplicate: flag.suspiciousDuplicate,
+            suspiciousDescriptions: flag.suspiciousDescriptions,
+            // 疑わしい重複は既定で取込済み（利用者が明示的にスキップへ切替できる）
+            include: true,
+          };
         })
       );
     } catch (err) {
@@ -164,12 +190,22 @@ export function BankCsvImport({ bankAccountId }: { bankAccountId: string }) {
     }
   }
 
-  const importable = previewRows.filter((r) => r.parsed && !r.duplicate);
+  const newRows = previewRows.filter((r) => r.parsed && !r.exactDuplicate && !r.suspiciousDuplicate);
+  const suspiciousRows = previewRows.filter((r) => r.parsed && r.suspiciousDuplicate);
+  const suspiciousIncludedRows = suspiciousRows.filter((r) => r.include);
   const errorCount = previewRows.filter((r) => !r.parsed).length;
-  const duplicateCount = previewRows.filter((r) => r.duplicate).length;
+  const exactDuplicateCount = previewRows.filter((r) => r.exactDuplicate).length;
+  const importable = [...newRows, ...suspiciousIncludedRows];
+
+  function toggleInclude(rowNumber: number) {
+    setPreviewRows((prev) => prev.map((r) => (r.rowNumber === rowNumber ? { ...r, include: !r.include } : r)));
+  }
 
   function handleImport() {
-    const rows = importable.map((r) => r.parsed as BankCsvRow);
+    const rows = [
+      ...newRows.map((r) => ({ ...(r.parsed as BankCsvRow), category: 'new' as const })),
+      ...suspiciousIncludedRows.map((r) => ({ ...(r.parsed as BankCsvRow), category: 'suspicious' as const })),
+    ];
     startTransition(async () => {
       try {
         const res = await importBankTransactionsCsv(bankAccountId, rows);
@@ -266,15 +302,24 @@ export function BankCsvImport({ bankAccountId }: { bankAccountId: string }) {
         {step === 'preview' && (
           <div className="space-y-4">
             <div className="flex flex-wrap gap-2">
-              <Badge tone="success">取込対象 {importable.length}件</Badge>
+              <Badge tone="success">新規 {newRows.length}件</Badge>
+              <Badge tone="warning">要確認（疑わしい重複） {suspiciousRows.length}件</Badge>
+              <Badge tone="gray">完全重複（自動スキップ） {exactDuplicateCount}件</Badge>
               <Badge tone="danger">エラー {errorCount}件</Badge>
-              <Badge tone="warning">重複（スキップ） {duplicateCount}件</Badge>
               {checkingDup && (
                 <span className="inline-flex items-center gap-1 text-xs text-gray-500">
                   <Loader2 className="h-3.5 w-3.5 animate-spin" /> 重複を確認中…
                 </span>
               )}
             </div>
+            {suspiciousRows.length > 0 && (
+              <div className="flex items-start gap-2 rounded-lg border border-warning/30 bg-warning-soft px-4 py-3 text-xs text-warning">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>
+                  同じ日付・同じ金額で摘要が異なる既存の取引があります。二重記帳の可能性があるため、行ごとに「取り込む/スキップ」を確認してください（既定は取り込む）。
+                </span>
+              </div>
+            )}
             <TableWrap>
               <Table>
                 <THead>
@@ -285,6 +330,7 @@ export function BankCsvImport({ bankAccountId }: { bankAccountId: string }) {
                     <Th className="text-right">入金</Th>
                     <Th className="text-right">出金</Th>
                     <Th>状態</Th>
+                    <Th>取込</Th>
                   </Tr>
                 </THead>
                 <TBody>
@@ -302,8 +348,29 @@ export function BankCsvImport({ bankAccountId }: { bankAccountId: string }) {
                             <span className="text-xs text-danger">{r.error}</span>
                           </span>
                         )}
-                        {r.parsed && r.duplicate && <Badge tone="warning">重複</Badge>}
-                        {r.parsed && !r.duplicate && <Badge tone="success">OK</Badge>}
+                        {r.parsed && r.exactDuplicate && <Badge tone="gray">完全重複</Badge>}
+                        {r.parsed && r.suspiciousDuplicate && (
+                          <span className="inline-flex flex-col gap-0.5">
+                            <Badge tone="warning">要確認</Badge>
+                            <span className="text-[11px] text-gray-500">
+                              類似取引: {r.suspiciousDescriptions.join('、')}
+                            </span>
+                          </span>
+                        )}
+                        {r.parsed && !r.exactDuplicate && !r.suspiciousDuplicate && <Badge tone="success">OK</Badge>}
+                      </Td>
+                      <Td>
+                        {r.parsed && r.suspiciousDuplicate ? (
+                          <Button type="button" size="sm" variant={r.include ? 'secondary' : 'danger'} onClick={() => toggleInclude(r.rowNumber)}>
+                            {r.include ? '取り込む' : 'スキップ'}
+                          </Button>
+                        ) : r.parsed && !r.exactDuplicate ? (
+                          <span className="text-xs text-gray-500">取込対象</span>
+                        ) : r.parsed && r.exactDuplicate ? (
+                          <span className="text-xs text-gray-400">自動スキップ</span>
+                        ) : (
+                          <span className="text-xs text-gray-400">—</span>
+                        )}
                       </Td>
                     </Tr>
                   ))}
@@ -329,7 +396,8 @@ export function BankCsvImport({ bankAccountId }: { bankAccountId: string }) {
               <div className="text-sm">
                 <p className="font-semibold text-navy">取込が完了しました</p>
                 <p className="mt-1 text-gray-600">
-                  取込 {result.inserted}件 / スキップ（重複） {result.skipped}件
+                  新規 {result.newInserted}件 ・ 完全重複スキップ {result.exactDuplicateSkipped}件 ・ 要確認{' '}
+                  {suspiciousRows.length}件のうち取込 {result.suspiciousInserted}件
                 </p>
               </div>
             </div>

@@ -156,31 +156,79 @@ function rowHashInput(r: BankCsvRow): string {
   return `${r.date}|${r.description}|${r.deposit}|${r.withdrawal}`;
 }
 
-/** プレビュー用: 各行のハッシュと重複有無（bank_transactions.import_hash との照合）を返す */
-export async function checkBankCsvDuplicates(bankAccountId: string, rows: BankCsvRow[]): Promise<boolean[]> {
+export interface DuplicateCheckResult {
+  /** 同一date+description+amountのimport_hashが既存行にある（完全一致・自動スキップ対象） */
+  exactDuplicate: boolean;
+  /** 同一date+amountだが摘要が異なる既存行がある（「疑わしい重複」・要確認） */
+  suspiciousDuplicate: boolean;
+  /** 疑わしい重複と判定された既存行の摘要（重複表示防止のためユニーク化） */
+  suspiciousDescriptions: string[];
+}
+
+/**
+ * プレビュー用: 各行の重複有無を判定する。
+ * - 完全一致（date+description+amountのimport_hash一致）は自動スキップ対象
+ * - 疑わしい重複（同一date+amountだが摘要が異なる既存行）は利用者が行ごとに取込/スキップを選べるよう警告として返す
+ */
+export async function checkBankCsvDuplicates(bankAccountId: string, rows: BankCsvRow[]): Promise<DuplicateCheckResult[]> {
   const ctx = await requirePermission('csv.export');
   const supabase = await createClient();
   await assertBankAccount(supabase, ctx.organizationId, bankAccountId);
   if (rows.length === 0) return [];
+
   const hashes = await Promise.all(rows.map((r) => sha256Hex(rowHashInput(r))));
-  const { data } = await supabase
-    .from('bank_transactions')
-    .select('import_hash')
-    .eq('bank_account_id', bankAccountId)
-    .in('import_hash', hashes);
-  const existing = new Set((data ?? []).map((d) => d.import_hash as string));
-  return hashes.map((h) => existing.has(h));
+  const dates = rows.map((r) => r.date);
+  const minDate = dates.reduce((a, b) => (a < b ? a : b));
+  const maxDate = dates.reduce((a, b) => (a > b ? a : b));
+
+  const [{ data: hashMatches }, { data: sameRangeRows }] = await Promise.all([
+    supabase.from('bank_transactions').select('import_hash').eq('bank_account_id', bankAccountId).in('import_hash', hashes),
+    supabase
+      .from('bank_transactions')
+      .select('transacted_on, description, deposit, withdrawal')
+      .eq('bank_account_id', bankAccountId)
+      .gte('transacted_on', minDate)
+      .lte('transacted_on', maxDate),
+  ]);
+  const exactSet = new Set((hashMatches ?? []).map((d) => d.import_hash as string));
+  const existing = sameRangeRows ?? [];
+
+  return rows.map((r, i) => {
+    const exactDuplicate = exactSet.has(hashes[i]);
+    const matches = exactDuplicate
+      ? []
+      : existing.filter(
+          (e) =>
+            (e.transacted_on as string) === r.date &&
+            (e.deposit as number) === r.deposit &&
+            (e.withdrawal as number) === r.withdrawal &&
+            (e.description as string) !== r.description
+        );
+    return {
+      exactDuplicate,
+      suspiciousDuplicate: matches.length > 0,
+      suspiciousDescriptions: [...new Set(matches.map((m) => m.description as string))],
+    };
+  });
 }
 
-/** CSV取込の確定。重複（同一date+desc+amountのimport_hash）は自動スキップする */
-export async function importBankTransactionsCsv(
-  bankAccountId: string,
-  rows: BankCsvRow[]
-): Promise<{ inserted: number; skipped: number }> {
+export interface BankCsvImportRow extends BankCsvRow {
+  /** 取込結果サマリの内訳集計用（新規行 / 要確認だが利用者が取込を選んだ行） */
+  category: 'new' | 'suspicious';
+}
+
+export interface ImportCsvSummary {
+  newInserted: number;
+  suspiciousInserted: number;
+  exactDuplicateSkipped: number;
+}
+
+/** CSV取込の確定。完全重複（同一date+desc+amountのimport_hash）は自動スキップする */
+export async function importBankTransactionsCsv(bankAccountId: string, rows: BankCsvImportRow[]): Promise<ImportCsvSummary> {
   const ctx = await requirePermission('csv.export');
   const supabase = await createClient();
   await assertBankAccount(supabase, ctx.organizationId, bankAccountId);
-  if (rows.length === 0) return { inserted: 0, skipped: 0 };
+  if (rows.length === 0) return { newInserted: 0, suspiciousInserted: 0, exactDuplicateSkipped: 0 };
 
   const hashes = await Promise.all(rows.map((r) => sha256Hex(rowHashInput(r))));
   const { data: existingRows } = await supabase
@@ -193,8 +241,9 @@ export async function importBankTransactionsCsv(
   const toInsert = rows
     .map((r, i) => ({ row: r, hash: hashes[i] }))
     .filter(({ hash }) => !existing.has(hash));
+  const exactDuplicateSkipped = rows.length - toInsert.length;
 
-  if (toInsert.length === 0) return { inserted: 0, skipped: rows.length };
+  if (toInsert.length === 0) return { newInserted: 0, suspiciousInserted: 0, exactDuplicateSkipped };
 
   const { error } = await supabase.from('bank_transactions').insert(
     toInsert.map(({ row, hash }) => ({
@@ -210,7 +259,11 @@ export async function importBankTransactionsCsv(
   );
   if (error) throw new Error(friendlyJournalError(error.message));
   revalidatePath(`${LIST_PATH}/${bankAccountId}`);
-  return { inserted: toInsert.length, skipped: rows.length - toInsert.length };
+  return {
+    newInserted: toInsert.filter(({ row }) => row.category === 'new').length,
+    suspiciousInserted: toInsert.filter(({ row }) => row.category === 'suspicious').length,
+    exactDuplicateSkipped,
+  };
 }
 
 // -------------------------------------------------------------
