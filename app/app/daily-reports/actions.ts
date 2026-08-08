@@ -35,6 +35,7 @@ export interface DailyMetrics {
 
 async function buildMetrics(
   supabase: Awaited<ReturnType<typeof createClient>>,
+  organizationId: string,
   storeId: string,
   businessDate: string
 ): Promise<DailyMetrics> {
@@ -51,13 +52,14 @@ async function buildMetrics(
     supabase
       .from('payroll_rules')
       .select('profile_id, store_id, pay_type, base_amount, effective_from, effective_to')
+      .eq('organization_id', organizationId)
       .eq('status', 'active'),
   ]);
 
   const orders = ordersRes.data ?? [];
   const paid = orders.filter((o) => o.status === 'paid');
   const sales = paid.reduce((a, o) => a + o.total, 0);
-  const guests = orders.reduce((a, o) => a + o.guest_count, 0);
+  const guests = paid.reduce((a, o) => a + o.guest_count, 0);
   const avgSpend = guests > 0 ? Math.floor(sales / guests) : 0;
 
   const reservations = reservationsRes.data ?? [];
@@ -96,7 +98,7 @@ export async function generateDailyReport(storeId: string, businessDate: string)
     .maybeSingle();
   if (existing?.status === 'approved') throw new Error('承認済みの日報は再生成できません');
 
-  const metrics = await buildMetrics(supabase, storeId, businessDate);
+  const metrics = await buildMetrics(supabase, ctx.organizationId, storeId, businessDate);
 
   if (existing) {
     const { error } = await supabase

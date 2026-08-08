@@ -91,7 +91,7 @@ export async function GET(request: NextRequest) {
       const storeOrders = orders.filter((o) => o.store_id === s.id);
       const storePaid = storeOrders.filter((o) => o.status === 'paid');
       const sales = storePaid.reduce((a, o) => a + o.total, 0);
-      const guests = storeOrders.reduce((a, o) => a + o.guest_count, 0);
+      const guests = storePaid.reduce((a, o) => a + o.guest_count, 0);
       const avgSpend = guests > 0 ? Math.floor(sales / guests) : 0;
 
       const storeItems = orderItems.filter((i) => i.store_id === s.id);

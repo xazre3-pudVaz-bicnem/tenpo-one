@@ -205,15 +205,17 @@ async function HqDashboard({
   const budgetRows = budgetsRes.data ?? [];
 
   // ---- 本日 ----
-  const todaySales = todayOrders.filter((o) => o.status === 'paid').reduce((a, o) => a + o.total, 0);
-  const todayCount = todayOrders.filter((o) => o.status === 'paid').length;
-  const todayGuests = todayOrders.reduce((a, o) => a + o.guest_count, 0);
+  // KPI母集団の統一定義: 売上・件数・客数・客単価は paid（会計成立）のみ。返金済みは別掲（レポート/予算/日報と同一定義）
+  const todayPaidOrders = todayOrders.filter((o) => o.status === 'paid');
+  const todaySales = todayPaidOrders.reduce((a, o) => a + o.total, 0);
+  const todayCount = todayPaidOrders.length;
+  const todayGuests = todayPaidOrders.reduce((a, o) => a + o.guest_count, 0);
 
   // ---- 本日: 前日比・前週同曜日比 ----
   const yesterdayOrders = compareOrders.filter((o) => o.business_date === yesterday);
   const lastWeekOrders = compareOrders.filter((o) => o.business_date === sameWeekdayLastWeek);
   const yesterdaySales = yesterdayOrders.filter((o) => o.status === 'paid').reduce((a, o) => a + o.total, 0);
-  const yesterdayGuests = yesterdayOrders.reduce((a, o) => a + o.guest_count, 0);
+  const yesterdayGuests = yesterdayOrders.filter((o) => o.status === 'paid').reduce((a, o) => a + o.guest_count, 0);
   const lastWeekSales = lastWeekOrders.filter((o) => o.status === 'paid').reduce((a, o) => a + o.total, 0);
   const todaySalesDeltaVsYesterday = calcDelta(todaySales, yesterdaySales);
   const todaySalesDeltaVsLastWeek = calcDelta(todaySales, lastWeekSales);
@@ -238,7 +240,7 @@ async function HqDashboard({
   const monthGrossProfit = monthSalesTotal - costSummary.totalCost;
   const monthProfitRate = monthSalesTotal > 0 ? (monthGrossProfit / monthSalesTotal) * 100 : 0;
   const laborRate = monthSalesTotal > 0 ? (laborResult.total / monthSalesTotal) * 100 : 0;
-  const monthGuestsTotal = monthOrders.reduce((a, o) => a + o.guest_count, 0);
+  const monthGuestsTotal = monthPaidOrders.reduce((a, o) => a + o.guest_count, 0);
   const monthAvgSpend = monthGuestsTotal > 0 ? Math.floor(monthSalesTotal / monthGuestsTotal) : 0;
 
   // ---- 今月: 予算目標（全社行を優先。全社行が無ければ売上予算のみ店舗行を合算） ----
@@ -440,7 +442,7 @@ async function HqDashboard({
     },
     {
       key: 'profit-rate',
-      label: '利益率',
+      label: '粗利率',
       value: `${monthProfitRate.toFixed(1)}%`,
       href: reportsHref(),
       compare: profitRateDeltaVsTarget ? (
@@ -511,7 +513,7 @@ async function HqDashboard({
         ※ 原価はレシピ原価を優先し、無ければ商品原価（menu_items.cost）を使用。どちらも未設定の品目（{costSummary.excludedCount}件・売上{yen(costSummary.excludedRevenue)}）は原価計算から除外しています。
         人件費は時給ルール×実働時間の概算（月給者は月給÷21日で日割り）で、残業・深夜等の割増は含みません
         {laborResult.missingRuleCount > 0 && `（給与ルール未設定の勤務${laborResult.missingRuleCount}件は概算から除外）`}。
-        利益率・人件費率の目標比は全社予算（未設定時は店舗別予算の合算）に基づく概算です。
+        粗利率（売上−原価。人件費・経費は含まない）・人件費率の目標比は全社予算（未設定時は店舗別予算の合算）に基づく概算です。
       </p>
 
       <Card className="mt-5" id="ranking">
@@ -769,9 +771,10 @@ async function StoreDashboard({
   ]);
 
   const todayOrders = todayOrdersRes.data ?? [];
-  const todaySales = todayOrders.filter((o) => o.status === 'paid').reduce((a, o) => a + o.total, 0);
-  const todayCount = todayOrders.filter((o) => o.status === 'paid').length;
-  const todayGuests = todayOrders.reduce((a, o) => a + o.guest_count, 0);
+  const todayPaidOrders = todayOrders.filter((o) => o.status === 'paid');
+  const todaySales = todayPaidOrders.reduce((a, o) => a + o.total, 0);
+  const todayCount = todayPaidOrders.length;
+  const todayGuests = todayPaidOrders.reduce((a, o) => a + o.guest_count, 0);
   const avgSpend = todayGuests > 0 ? Math.floor(todaySales / todayGuests) : 0;
 
   const byDate = new Map<string, number>();

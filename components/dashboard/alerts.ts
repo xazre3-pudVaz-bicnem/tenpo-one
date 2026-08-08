@@ -62,6 +62,7 @@ export async function collectDashboardAlerts(
     pendingInvoicesRes,
     pendingPettyRes,
     pendingAttendanceRes,
+    pendingLeaveRes,
     openEntriesRes,
     lowStockRes,
     wasteRes,
@@ -99,7 +100,12 @@ export async function collectDashboardAlerts(
       .in('store_id', storeIds)
       .eq('approval_status', 'pending'),
     supabase
-      .from('attendance_requests')
+      .from('attendance_correction_requests')
+      .select('id', { count: 'exact', head: true })
+      .in('store_id', storeIds)
+      .eq('status', 'pending'),
+    supabase
+      .from('leave_requests')
       .select('id', { count: 'exact', head: true })
       .in('store_id', storeIds)
       .eq('status', 'pending'),
@@ -282,6 +288,15 @@ export async function collectDashboardAlerts(
       tone: 'warning',
       title: `承認待ちの勤怠修正申請が${pendingAttendanceCount}件あります`,
       href: '/app/attendance?tab=requests',
+    });
+  }
+  const pendingLeaveCount = pendingLeaveRes.count ?? 0;
+  if (pendingLeaveCount > 0) {
+    alerts.push({
+      id: 'pending-leave',
+      tone: 'warning',
+      title: `承認待ちの有給申請が${pendingLeaveCount}件あります`,
+      href: '/app/leave',
     });
   }
 

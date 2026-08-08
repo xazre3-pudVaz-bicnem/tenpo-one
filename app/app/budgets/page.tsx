@@ -127,7 +127,7 @@ export default async function BudgetsPage({
     const oList = sId ? orders.filter((o) => o.store_id === sId) : orders;
     const paid = oList.filter((o) => o.status === 'paid');
     const sales = paid.reduce((a, o) => a + o.total, 0);
-    const guests = oList.reduce((a, o) => a + o.guest_count, 0);
+    const guests = paid.reduce((a, o) => a + o.guest_count, 0);
     const avgSpend = guests > 0 ? Math.floor(sales / guests) : 0;
 
     const iList = sId ? orderItems.filter((i) => i.store_id === sId) : orderItems;

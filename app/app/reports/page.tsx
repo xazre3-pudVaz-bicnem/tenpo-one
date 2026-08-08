@@ -240,16 +240,18 @@ export default async function ReportsPage({
   const prevExpenseTotal = (prevExpensesData ?? []).reduce((a, e) => a + e.amount, 0);
 
   // ---- KPI（基本）----
+  // KPI母集団の統一定義: 売上・件数・客数・客単価はすべて paid（会計成立）のみを対象とする。
+  // 返金済み(refunded)は返金額・アラートとして別掲する（ダッシュボード/予算/日報も同一定義）。
   const salesTotal = paidOrders.reduce((a, o) => a + o.total, 0);
-  const transactionCount = allOrders.length;
-  const guestCount = allOrders.reduce((a, o) => a + o.guest_count, 0);
+  const transactionCount = paidOrders.length;
+  const guestCount = paidOrders.reduce((a, o) => a + o.guest_count, 0);
   const avgSpend = guestCount > 0 ? Math.floor(salesTotal / guestCount) : 0;
   const discountTotal = paidOrders.reduce((a, o) => a + o.discount_total, 0);
 
   const prevAllOrders = prevOrders ?? [];
   const prevPaidOrders = prevAllOrders.filter((o) => o.status === 'paid');
   const prevSalesTotal = prevPaidOrders.reduce((a, o) => a + o.total, 0);
-  const prevGuestCount = prevAllOrders.reduce((a, o) => a + o.guest_count, 0);
+  const prevGuestCount = prevPaidOrders.reduce((a, o) => a + o.guest_count, 0);
   const prevAvgSpend = prevGuestCount > 0 ? Math.floor(prevSalesTotal / prevGuestCount) : 0;
 
   // ---- P/L カスケード ----
@@ -430,8 +432,8 @@ export default async function ReportsPage({
         id: s.id,
         name: s.name,
         sales: storePaid.reduce((a, o) => a + o.total, 0),
-        count: storeOrders.length,
-        guests: storeOrders.reduce((a, o) => a + o.guest_count, 0),
+        count: storePaid.length,
+        guests: storePaid.reduce((a, o) => a + o.guest_count, 0),
       };
     });
   }
@@ -452,7 +454,7 @@ export default async function ReportsPage({
         .in('status', ['paid', 'refunded']),
       supabase
         .from('order_items')
-        .select('menu_item_id, quantity, line_total, orders!inner(status, business_date)')
+        .select('menu_item_id, quantity, line_total, menu_items(cost), orders!inner(status, business_date)')
         .in('store_id', storeIds)
         .eq('status', 'active')
         .eq('orders.status', 'paid')

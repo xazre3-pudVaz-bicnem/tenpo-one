@@ -42,15 +42,15 @@ export async function GET(request: NextRequest) {
     .lte('business_date', to)
     .in('status', ['paid', 'refunded']);
 
+  // KPI母集団の統一定義: 売上・件数・客数・客単価は paid のみ（画面側と同一）
   const byDate = new Map<string, { sales: number; count: number; guests: number; discount: number }>();
   for (const o of orders ?? []) {
+    if (o.status !== 'paid') continue;
     const cur = byDate.get(o.business_date) ?? { sales: 0, count: 0, guests: 0, discount: 0 };
     cur.count += 1;
     cur.guests += o.guest_count;
-    if (o.status === 'paid') {
-      cur.sales += o.total;
-      cur.discount += o.discount_total;
-    }
+    cur.sales += o.total;
+    cur.discount += o.discount_total;
     byDate.set(o.business_date, cur);
   }
 
