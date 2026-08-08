@@ -18,7 +18,8 @@ export interface ForecastResult {
 }
 
 function weekdayOf(dateStr: string): number {
-  return new Date(`${dateStr}T00:00:00+09:00`).getDay();
+  // サーバーTZに依存しないカレンダー日付の曜日（getDayはUTC環境で1日ズレるため使用禁止）
+  return new Date(`${dateStr}T00:00:00Z`).getUTCDay();
 }
 
 /**

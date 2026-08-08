@@ -32,7 +32,7 @@ export function CountForm({ countId, items }: { countId: string; items: CountIte
     Object.entries(values)
       .filter(([, v]) => v !== '')
       .map(([id, v]) => ({ id, countedQuantity: Number(v) }))
-      .filter((e) => Number.isFinite(e.countedQuantity));
+      .filter((e) => Number.isFinite(e.countedQuantity) && e.countedQuantity >= 0);
 
   const handleSave = async () => {
     setError(null);

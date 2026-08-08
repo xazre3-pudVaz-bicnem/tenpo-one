@@ -42,6 +42,9 @@ export async function saveCategory(input: CategoryInput): Promise<ActionResult> 
       .eq('organization_id', ctx.organizationId);
     if (error) return { error: `カテゴリの更新に失敗しました: ${error.message}` };
   } else {
+    if (!ctx.stores.some((s) => s.id === input.storeId)) {
+      return { error: '対象店舗にアクセス権がありません' };
+    }
     const { error } = await supabase
       .from('menu_categories')
       .insert({ ...basePayload, store_id: input.storeId, created_by: ctx.userId });
@@ -145,6 +148,9 @@ export async function saveMenuItem(input: MenuItemInput): Promise<ActionResult> 
       .eq('organization_id', ctx.organizationId);
     if (error) return { error: `商品の更新に失敗しました: ${error.message}` };
   } else {
+    if (!ctx.stores.some((s) => s.id === input.storeId)) {
+      return { error: '対象店舗にアクセス権がありません' };
+    }
     const { error } = await supabase
       .from('menu_items')
       .insert({ ...basePayload, store_id: input.storeId, created_by: ctx.userId });

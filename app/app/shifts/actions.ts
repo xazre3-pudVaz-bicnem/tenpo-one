@@ -26,6 +26,9 @@ export async function upsertShift(input: UpsertShiftInput): Promise<ActionResult
   if (input.startTime >= input.endTime) {
     return { ok: false, message: '終了時刻は開始時刻より後にしてください' };
   }
+  if (!input.id && !ctx.stores.some((s) => s.id === input.storeId)) {
+    return { ok: false, message: '担当外の店舗です' };
+  }
   const supabase = await createClient();
 
   if (input.id) {
@@ -74,7 +77,10 @@ export async function deleteShift(id: string): Promise<ActionResult> {
 
 /** 当週分の draft シフトを一括公開する */
 export async function publishWeek(storeId: string, weekStart: string, weekEnd: string): Promise<ActionResult> {
-  await requirePermission('shifts.manage');
+  const ctx = await requirePermission('shifts.manage');
+  if (!ctx.stores.some((s) => s.id === storeId)) {
+    return { ok: false, message: '担当外の店舗です' };
+  }
   const supabase = await createClient();
   const { error } = await supabase
     .from('shifts')
@@ -101,6 +107,9 @@ export async function requestShift(input: RequestShiftInput): Promise<ActionResu
   const ctx = await requireMember();
   if (input.startTime >= input.endTime) {
     return { ok: false, message: '終了時刻は開始時刻より後にしてください' };
+  }
+  if (!input.id && !ctx.stores.some((s) => s.id === input.storeId)) {
+    return { ok: false, message: '担当外の店舗です' };
   }
   const supabase = await createClient();
 
@@ -213,6 +222,9 @@ export interface ShiftRequirementInput {
 /** 曜日・時間帯ごとの必要人数を追加する（shifts.manage 権限者のみ） */
 export async function saveShiftRequirement(input: ShiftRequirementInput): Promise<ActionResult> {
   const ctx = await requirePermission('shifts.manage');
+  if (!ctx.stores.some((s) => s.id === input.storeId)) {
+    return { ok: false, message: '担当外の店舗です' };
+  }
   if (input.timeFrom >= input.timeTo) return { ok: false, message: '終了時刻は開始時刻より後にしてください' };
   if (input.requiredCount < 1) return { ok: false, message: '必要人数は1以上で入力してください' };
 

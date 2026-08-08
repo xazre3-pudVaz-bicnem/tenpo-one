@@ -65,6 +65,11 @@ function mapPunchError(message: string): string {
 /** 本人打刻 */
 export async function punch(storeId: string, eventType: PunchEventType): Promise<ActionResult> {
   const ctx = await requirePermission('attendance.punch');
+  // apply_punch はSECURITY DEFINERで、本人打刻(p_profile_id=auth.uid())の場合は
+  // 店舗の組織所属を検証しないため、ここでアクセス可能店舗かを必ず確認する
+  if (!ctx.stores.some((s) => s.id === storeId)) {
+    return { ok: false, message: 'この店舗での打刻はできません' };
+  }
   const supabase = await createClient();
   const { data, error } = await supabase.rpc('apply_punch', {
     p_store_id: storeId,
@@ -141,6 +146,11 @@ export async function punchByPin(
   eventType: PunchEventType
 ): Promise<ActionResult> {
   const ctx = await requirePermission('attendance.punch');
+  // p_via_pin=true の場合 apply_punch は組織所属チェックを一切行わないため、
+  // 共用端末を操作している本人がアクセス可能な店舗かを必ずここで検証する
+  if (!ctx.stores.some((s) => s.id === storeId)) {
+    return { ok: false, message: 'この店舗での打刻はできません' };
+  }
   const admin = createAdminClient();
 
   const { data: memberships, error: findError } = await admin
@@ -204,6 +214,9 @@ export async function requestCorrection(input: CorrectionInput): Promise<ActionR
   }
   if (input.profileId !== ctx.userId && !can(ctx.role, 'attendance.approve')) {
     return { ok: false, message: '本人以外の修正申請はできません' };
+  }
+  if (!ctx.stores.some((s) => s.id === input.storeId)) {
+    return { ok: false, message: '担当外の店舗です' };
   }
   if (!input.reason.trim()) {
     return { ok: false, message: '理由を入力してください' };
@@ -429,6 +442,9 @@ export interface ManualEntryInput {
  */
 export async function addManualEntry(input: ManualEntryInput): Promise<ActionResult> {
   const ctx = await requirePermission('attendance.approve');
+  if (!ctx.stores.some((s) => s.id === input.storeId)) {
+    return { ok: false, message: '担当外の店舗です' };
+  }
   if (!input.profileId) return { ok: false, message: '対象スタッフを選択してください' };
   if (!input.workDate) return { ok: false, message: '日付を入力してください' };
   if (input.entryType !== 'paid_leave' && input.entryType !== 'absent') {

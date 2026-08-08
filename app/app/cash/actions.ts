@@ -55,6 +55,9 @@ export async function addCashTransaction(input: {
   purpose: string;
 }) {
   const ctx = await requirePermission('register.operate');
+  if (!ctx.stores.some((s) => s.id === input.storeId)) {
+    throw new Error('対象店舗にアクセス権がありません');
+  }
   assertPositiveInt(input.amount, '金額');
   if (!input.purpose.trim()) throw new Error('用途を入力してください');
 
@@ -105,6 +108,9 @@ export async function addPettyCash(input: {
   expenseAccountId: string | null;
 }) {
   const ctx = await requirePermission('cash.write');
+  if (!ctx.stores.some((s) => s.id === input.storeId)) {
+    throw new Error('対象店舗にアクセス権がありません');
+  }
   assertPositiveInt(input.amount, '金額');
   if (!input.purpose.trim()) throw new Error('用途を入力してください');
 
@@ -281,6 +287,9 @@ export async function reopenClosing(id: string, reason: string) {
 /** 小口現金の開始残高を変更（店舗設定）。理論残高の起点となるため監査ログに記録する */
 export async function updatePettyOpeningBalance(storeId: string, amount: number) {
   const ctx = await requirePermission('cash.approve');
+  if (!ctx.stores.some((s) => s.id === storeId)) {
+    throw new Error('対象店舗にアクセス権がありません');
+  }
   if (!Number.isInteger(amount) || amount < 0) {
     throw new Error('開始残高は0以上の整数で入力してください');
   }
@@ -328,6 +337,9 @@ export async function recordPettyCashCount(input: {
   note: string | null;
 }) {
   const ctx = await requirePermission('cash.write');
+  if (!ctx.stores.some((s) => s.id === input.storeId)) {
+    throw new Error('対象店舗にアクセス権がありません');
+  }
   if (!input.countDate) throw new Error('実査日を入力してください');
   if (!Number.isInteger(input.countedAmount) || input.countedAmount < 0) {
     throw new Error('実残高は0以上の整数で入力してください');

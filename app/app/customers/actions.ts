@@ -231,10 +231,29 @@ export async function createCustomerTag(name: string, color: string): Promise<{ 
   return { id: data.id as string };
 }
 
+/**
+ * customer_tag_links の RLS は親テーブル(customers)の存在のみを見ており組織スコープが無いため、
+ * customerId・tagId が自組織のものであることを必ずここで検証してから操作する。
+ */
+async function assertOwnCustomerAndTag(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  organizationId: string,
+  customerId: string,
+  tagId: string
+) {
+  const [{ data: customer }, { data: tag }] = await Promise.all([
+    supabase.from('customers').select('id').eq('id', customerId).eq('organization_id', organizationId).maybeSingle(),
+    supabase.from('customer_tags').select('id').eq('id', tagId).eq('organization_id', organizationId).maybeSingle(),
+  ]);
+  if (!customer) throw new Error('顧客が見つかりません');
+  if (!tag) throw new Error('タグが見つかりません');
+}
+
 /** 顧客へのタグ付け */
 export async function attachCustomerTag(customerId: string, tagId: string) {
-  await requirePermission('customers.write');
+  const ctx = await requirePermission('customers.write');
   const supabase = await createClient();
+  await assertOwnCustomerAndTag(supabase, ctx.organizationId, customerId, tagId);
   const { error } = await supabase
     .from('customer_tag_links')
     .insert({ customer_id: customerId, tag_id: tagId });
@@ -245,8 +264,9 @@ export async function attachCustomerTag(customerId: string, tagId: string) {
 
 /** 顧客からのタグ取り外し */
 export async function detachCustomerTag(customerId: string, tagId: string) {
-  await requirePermission('customers.write');
+  const ctx = await requirePermission('customers.write');
   const supabase = await createClient();
+  await assertOwnCustomerAndTag(supabase, ctx.organizationId, customerId, tagId);
   const { error } = await supabase
     .from('customer_tag_links')
     .delete()

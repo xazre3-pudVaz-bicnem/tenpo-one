@@ -217,7 +217,10 @@ export function PosScreen({
     return () => window.removeEventListener('keydown', handler);
   }, [items.length]);
 
-  const isTakeoutLike = order.orderType === 'takeout' || order.orderType === 'delivery';
+  // サーバー側（app/app/pos/actions.ts の addItem）と同じ判定にする。pre_order（事前注文）も
+  // テイクアウト価格・軽減税率の対象（lib/tax.ts の applicableTaxRate 参照）。
+  const isTakeoutLike =
+    order.orderType === 'takeout' || order.orderType === 'delivery' || order.orderType === 'pre_order';
   const bestSellerRank = useMemo(() => new Map(bestSellerIds.map((id, i) => [id, i])), [bestSellerIds]);
 
   const visibleItems = useMemo(() => {

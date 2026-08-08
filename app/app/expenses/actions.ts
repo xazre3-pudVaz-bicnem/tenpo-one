@@ -45,6 +45,9 @@ export async function addExpense(input: {
   businessDate: string;
 }) {
   const ctx = await requirePermission('cash.write');
+  if (!ctx.stores.some((s) => s.id === input.storeId)) {
+    throw new Error('対象店舗にアクセス権がありません');
+  }
   if (!Number.isInteger(input.amount) || input.amount <= 0) {
     throw new Error('金額は1円以上の整数で入力してください');
   }

@@ -40,6 +40,9 @@ export async function generateCouponCode(): Promise<string> {
 /** クーポンの作成・更新 */
 export async function saveCoupon(input: CouponInput): Promise<ActionResult> {
   const ctx = await requirePermission('menu.manage');
+  if (input.storeId !== null && !ctx.stores.some((s) => s.id === input.storeId)) {
+    return { error: '対象店舗にアクセス権がありません' };
+  }
 
   const code = input.code.trim().toUpperCase();
   const name = input.name.trim();

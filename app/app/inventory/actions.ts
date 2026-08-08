@@ -38,6 +38,9 @@ export async function createItem(input: {
   purchaseToStockFactor: number;
 }) {
   const ctx = await requirePermission('inventory.write');
+  if (!ctx.stores.some((s) => s.id === input.storeId)) {
+    throw new Error('対象店舗にアクセス権がありません');
+  }
   if (!input.name.trim()) throw new Error('名前を入力してください');
   if (!(input.purchaseToStockFactor > 0)) throw new Error('変換係数は正の数で指定してください');
   const supabase = await createClient();
@@ -374,6 +377,9 @@ export async function getMovementHistory(itemId: string) {
 /** 棚卸を開始: 対象店舗の全active品目の現在庫をスナップショットする */
 export async function startCount(storeId: string): Promise<string> {
   const ctx = await requirePermission('inventory.write');
+  if (!ctx.stores.some((s) => s.id === storeId)) {
+    throw new Error('対象店舗にアクセス権がありません');
+  }
   const supabase = await createClient();
   const { data: items } = await supabase
     .from('inventory_items')

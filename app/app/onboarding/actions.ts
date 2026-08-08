@@ -293,6 +293,14 @@ export async function saveCategoriesStep(storeId: string, categories: CategorySt
   const ctx = await requirePermission('org.settings');
   const supabase = await createClient();
 
+  const { data: store } = await supabase
+    .from('stores')
+    .select('id')
+    .eq('id', storeId)
+    .eq('organization_id', ctx.organizationId)
+    .maybeSingle();
+  if (!store) return { error: '対象店舗が見つかりません' };
+
   const valid = categories.filter((c) => c.name.trim());
   let created: CategorySummary[] = [];
   if (valid.length > 0) {
@@ -380,6 +388,14 @@ export interface MenuItemStepInput {
 export async function saveMenuItemsStep(storeId: string, items: MenuItemStepInput[]): Promise<ActionResult> {
   const ctx = await requirePermission('org.settings');
   const supabase = await createClient();
+
+  const { data: store } = await supabase
+    .from('stores')
+    .select('id')
+    .eq('id', storeId)
+    .eq('organization_id', ctx.organizationId)
+    .maybeSingle();
+  if (!store) return { error: '対象店舗が見つかりません' };
 
   const valid = items.filter((i) => i.name.trim());
   if (valid.length > 0) {

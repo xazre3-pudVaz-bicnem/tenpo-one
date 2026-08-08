@@ -123,7 +123,9 @@ export async function globalSearch(query: string): Promise<SearchResultGroup[]> 
         id: r.id,
         title: `${r.guest_name} 様`,
         subtitle: `${r.code}｜${r.reserved_date}`,
-        href: `/app/reservations/list?q=${encodeURIComponent(r.code)}&from=${WIDE_FROM}&to=${WIDE_TO}`,
+        // 予約リストの q は guest_name / guest_phone のみを対象にフィルタするため、
+        // 検索結果からの遷移も guest_name（code は対象外）で絞り込む
+        href: `/app/reservations/list?q=${encodeURIComponent(r.guest_name)}&from=${WIDE_FROM}&to=${WIDE_TO}`,
       })),
     });
   }

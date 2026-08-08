@@ -100,7 +100,7 @@ export function PayrollItemsTable({ items }: { items: PayrollItemView[] }) {
     }
   );
 
-  const columnCount = 16;
+  const columnCount = 15;
 
   return (
     <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">

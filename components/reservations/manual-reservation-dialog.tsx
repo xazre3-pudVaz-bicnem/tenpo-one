@@ -128,7 +128,7 @@ export function ManualReservationDialog({
                 type="number"
                 min={0}
                 value={form.adults}
-                onChange={(e) => set('adults', Number(e.target.value))}
+                onChange={(e) => set('adults', Math.max(0, Math.trunc(Number(e.target.value)) || 0))}
               />
             </div>
             <div>
@@ -138,7 +138,7 @@ export function ManualReservationDialog({
                 type="number"
                 min={0}
                 value={form.children}
-                onChange={(e) => set('children', Number(e.target.value))}
+                onChange={(e) => set('children', Math.max(0, Math.trunc(Number(e.target.value)) || 0))}
               />
             </div>
           </div>

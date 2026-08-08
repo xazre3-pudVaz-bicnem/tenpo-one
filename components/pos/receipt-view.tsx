@@ -286,7 +286,9 @@ export function ReceiptView({
             <p className="border-b border-gray-400 pb-1 text-sm">
               {recipientName ? `${recipientName} 様` : '　　　　　　　様'}
             </p>
-            <p className="mt-3 text-center text-lg font-bold tabular-nums">{yen(receipt.total)}−</p>
+            {/* 一部返金がある場合は実質お支払い額（netPaid）を表示する。receipt.total のままだと
+                返金分を含んだ金額が「領収」した金額として証憑に残ってしまう */}
+            <p className="mt-3 text-center text-lg font-bold tabular-nums">{yen(receipt.netPaid)}−</p>
             <p className="mt-1 text-center text-[10px] text-gray-500">（税込）</p>
             <div className="my-2 border-t border-dashed border-gray-300" />
             <p>但し {purpose} として</p>

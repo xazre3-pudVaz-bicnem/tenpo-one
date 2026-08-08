@@ -286,8 +286,13 @@ export function CheckoutDialog({
     setPayments((rows) => rows.filter((r) => r.key !== key));
   };
 
+  // 合計0円（値引き・クーポンで満額オフになった等）の場合は支払行なしで確定できるようにする。
+  // 従来は「支払行が1件以上」かつ「各行の金額>0」を必須としていたため、0円会計が
+  // 支払方法を追加できず（追加しても上限0円で金額>0にできない）会計を確定できなかった。
   const canConfirm =
-    !terminalBlocking && payments.length > 0 && paid === order.total && payments.every((p) => p.amount > 0);
+    !terminalBlocking &&
+    paid === order.total &&
+    (order.total === 0 ? payments.length === 0 : payments.length > 0 && payments.every((p) => p.amount > 0));
 
   const handleConfirm = () => {
     // disabled属性の反映を待たず、同一フレーム内の連打でも1回しか送信しない

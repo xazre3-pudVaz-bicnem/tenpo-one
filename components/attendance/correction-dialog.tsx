@@ -58,7 +58,7 @@ export function CorrectionDialog({
         workDate,
         desiredClockIn: clockIn,
         desiredClockOut: clockOut,
-        breakMinutes: Number(breakMinutes) || 0,
+        breakMinutes: Math.max(0, Number(breakMinutes) || 0),
         reason: reason.trim(),
       });
       toast(result.message, result.ok ? 'success' : 'error');

@@ -46,6 +46,9 @@ export async function createPurchaseOrder(input: {
   lines: PoLineInput[];
 }): Promise<string> {
   const ctx = await requirePermission('vendors.manage');
+  if (!ctx.stores.some((s) => s.id === input.storeId)) {
+    throw new Error('対象店舗にアクセス権がありません');
+  }
   if (!input.vendorId) throw new Error('仕入先を選択してください');
   if (input.lines.length === 0) throw new Error('明細を1件以上入力してください');
   const supabase = await createClient();

@@ -37,6 +37,9 @@ export interface PayrollRuleInput {
 
 export async function savePayrollRule(input: PayrollRuleInput): Promise<ActionResult> {
   const ctx = await requirePermission('payroll.manage');
+  if (input.storeId !== null && !ctx.stores.some((s) => s.id === input.storeId)) {
+    return { ok: false, message: '対象店舗にアクセス権がありません' };
+  }
   if (!input.profileId) return { ok: false, message: '対象スタッフを選択してください' };
   if (input.baseAmount < 0) return { ok: false, message: '基本額は0以上で入力してください' };
 
@@ -95,6 +98,9 @@ export interface CommissionRuleInput {
 
 export async function saveCommissionRule(input: CommissionRuleInput): Promise<ActionResult> {
   const ctx = await requirePermission('payroll.manage');
+  if (input.storeId !== null && !ctx.stores.some((s) => s.id === input.storeId)) {
+    return { ok: false, message: '対象店舗にアクセス権がありません' };
+  }
   if (!input.name.trim()) return { ok: false, message: 'ルール名を入力してください' };
   // 店舗目標達成ボーナス: 店舗売上が目標額(min_amount)以上の月に固定額(fixed_amount)を支給する仕様のため、
   // 目標額・支給額とも必須とする（createPayrollRun の store_target 処理と対応）。
@@ -542,6 +548,9 @@ export interface CreateRunInput {
 
 export async function createPayrollRun(input: CreateRunInput): Promise<ActionResult & { runId?: string }> {
   const ctx = await requirePermission('payroll.manage');
+  if (input.storeId !== null && !ctx.stores.some((s) => s.id === input.storeId)) {
+    return { ok: false, message: '対象店舗にアクセス権がありません' };
+  }
   if (!input.title.trim()) return { ok: false, message: 'タイトルを入力してください' };
   if (input.periodStart > input.periodEnd) return { ok: false, message: '期間の指定が正しくありません' };
 

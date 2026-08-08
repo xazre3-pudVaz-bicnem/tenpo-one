@@ -13,6 +13,13 @@ import type { DocType, InvoiceStatus, PaymentMethod } from '@/components/invoice
 
 const PATH = '/app/invoices';
 
+/** storeId が null(全社共通)でなければアクセス可能店舗であることを検証する */
+function assertNullableStoreAccess(ctx: { stores: { id: string }[] }, storeId: string | null) {
+  if (storeId !== null && !ctx.stores.some((s) => s.id === storeId)) {
+    throw new Error('対象店舗にアクセス権がありません');
+  }
+}
+
 /** 組織の承認ルールから対象targetの一覧をApprovalRuleLike形式で取得 */
 async function loadApprovalRules(
   supabase: Awaited<ReturnType<typeof createClient>>,
@@ -128,6 +135,7 @@ export async function triageDocument(input: {
   memo: string | null;
 }) {
   const ctx = await requirePermission('documents.write');
+  assertNullableStoreAccess(ctx, input.storeId);
   const supabase = await createClient();
 
   const { data: doc, error: fetchErr } = await supabase
@@ -194,6 +202,7 @@ export async function createInvoice(input: {
   file: UploadedFileRef | null;
 }) {
   const ctx = await requirePermission('documents.write');
+  assertNullableStoreAccess(ctx, input.storeId);
   if (!input.vendorName.trim()) throw new Error('取引先を入力してください');
   const supabase = await createClient();
 

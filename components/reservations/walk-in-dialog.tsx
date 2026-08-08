@@ -108,11 +108,23 @@ export function WalkInDialog({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label htmlFor="wi-adults">大人</Label>
-              <Input id="wi-adults" type="number" min={0} value={adults} onChange={(e) => setAdults(Number(e.target.value))} />
+              <Input
+                id="wi-adults"
+                type="number"
+                min={0}
+                value={adults}
+                onChange={(e) => setAdults(Math.max(0, Math.trunc(Number(e.target.value)) || 0))}
+              />
             </div>
             <div>
               <Label htmlFor="wi-children">子ども</Label>
-              <Input id="wi-children" type="number" min={0} value={children} onChange={(e) => setChildren(Number(e.target.value))} />
+              <Input
+                id="wi-children"
+                type="number"
+                min={0}
+                value={children}
+                onChange={(e) => setChildren(Math.max(0, Math.trunc(Number(e.target.value)) || 0))}
+              />
             </div>
           </div>
           <div>

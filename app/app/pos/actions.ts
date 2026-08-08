@@ -83,10 +83,14 @@ export async function addItem(orderId: string, menuItemId: string) {
   if (item.is_sold_out) throw new Error('この商品は売り切れです');
 
   const taxRateRow = item.tax_rates as unknown as { rate: number; is_inclusive: boolean } | null;
-  const isTakeoutLike = order.order_type === 'takeout' || order.order_type === 'delivery';
+  // pre_order（事前注文）もテイクアウト同様の受け渡し形態のため、価格・軽減税率判定に含める
+  // （lib/tax.ts の applicableTaxRate は pre_order を takeout/delivery と同じ扱いにしている。ここが漏れていると
+  //  事前注文の商品が店内飲食価格・標準税率10%で計算されてしまう）
+  const isTakeoutLike =
+    order.order_type === 'takeout' || order.order_type === 'delivery' || order.order_type === 'pre_order';
   const unitPrice = isTakeoutLike ? (item.takeout_price ?? item.price) : item.price;
   const taxRate = isTakeoutLike
-    ? applicableTaxRate(order.order_type as 'takeout' | 'delivery', item.item_type === 'drink')
+    ? applicableTaxRate(order.order_type as 'takeout' | 'delivery' | 'pre_order', item.item_type === 'drink')
     : (taxRateRow?.rate ?? 10);
   const taxIncluded = taxRateRow?.is_inclusive ?? true;
 
@@ -307,7 +311,23 @@ export async function splitOrder(
   const supabase = await createClient();
   const order = await loadOpenOrder(supabase, ctx, orderId);
 
-  const targetIds = moves.map((m) => m.orderItemId);
+  // 同一 orderItemId が複数回渡された場合（多重送信やクライアントの不具合）に備え、
+  // 品目ごとの移動数量を合算してから保有数量を検証する。合算せず個別に検証すると、
+  // 「5個中3個」の指定を2回渡すだけで合計6個（保有数超過）が素通りし、
+  // 新伝票側に品目が二重生成されてしまう（実在しない在庫・売上が生まれるバグ）。
+  const movesByItem = new Map<string, number>();
+  for (const m of moves) {
+    if (!Number.isInteger(m.quantity) || m.quantity <= 0) {
+      throw new Error('移動数量が不正です');
+    }
+    movesByItem.set(m.orderItemId, (movesByItem.get(m.orderItemId) ?? 0) + m.quantity);
+  }
+  const mergedMoves: SplitMove[] = [...movesByItem.entries()].map(([orderItemId, quantity]) => ({
+    orderItemId,
+    quantity,
+  }));
+
+  const targetIds = mergedMoves.map((m) => m.orderItemId);
   const { data: lines } = await supabase
     .from('order_items')
     .select('*')
@@ -317,12 +337,9 @@ export async function splitOrder(
   if (!lines || lines.length !== new Set(targetIds).size) {
     throw new Error('品目が見つかりません');
   }
-  for (const m of moves) {
+  for (const m of mergedMoves) {
     const line = lines.find((l) => l.id === m.orderItemId);
     if (!line) throw new Error('品目が見つかりません');
-    if (!Number.isInteger(m.quantity) || m.quantity <= 0) {
-      throw new Error('移動数量が不正です');
-    }
     if (m.quantity > line.quantity) {
       throw new Error(`「${line.name}」の移動数量が保有数を超えています`);
     }
@@ -352,7 +369,7 @@ export async function splitOrder(
   const newOrderId = newOrder.id as string;
 
   const movedSummary: { name: string; quantity: number }[] = [];
-  for (const m of moves) {
+  for (const m of mergedMoves) {
     const line = lines.find((l) => l.id === m.orderItemId)!;
     movedSummary.push({ name: line.name, quantity: m.quantity });
 
@@ -638,7 +655,12 @@ export async function applyCoupon(orderId: string, code: string, force = false):
   const result = validateCoupon(couponLike, {
     now,
     jstTime: jstTimeHHMM(now),
-    orderTotal: order.total,
+    // order.total は既存の値引き（手動値引き or 別クーポン）を差し引いた後の金額。
+    // クーポンの最低利用額判定・割引率の計算は「値引き前の会計額」に対して行うべきなので、
+    // discount_total を足し戻した額（= subtotal+tax+service_charge）を渡す。
+    // order.total をそのまま渡すと、既存値引きがある状態でクーポンを置き換えたときに
+    // 割引額が実際より小さく計算されてしまう（二重値引き分を誤って差し引くバグ）。
+    orderTotal: order.total + order.discount_total,
     storeId: order.store_id,
     customerVisitCount: order.customer_id ? ((customerRow.data as { visit_count: number } | null)?.visit_count ?? 0) : null,
     totalRedemptions: totalRedemptions ?? 0,

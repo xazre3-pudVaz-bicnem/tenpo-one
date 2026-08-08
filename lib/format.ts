@@ -45,7 +45,15 @@ export function formatMinutes(minutes: number): string {
 }
 
 const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
+/**
+ * 曜日（日本語）。サーバーTZに依存せず「JSTのカレンダー日付」の曜日を返す。
+ * 注意: getDay() はローカルTZ評価のため本番（UTC）では1日ズレる。必ずUTC演算で求める。
+ */
 export function weekdayJa(value: string | Date): string {
-  const d = typeof value === 'string' ? new Date(`${value}T00:00:00+09:00`) : value;
-  return WEEKDAYS[d.getDay()];
+  if (typeof value === 'string') {
+    // 'YYYY-MM-DD' はカレンダー日付として解釈（TZ非依存）
+    return WEEKDAYS[new Date(`${value.slice(0, 10)}T00:00:00Z`).getUTCDay()];
+  }
+  // Date は JST の日付に変換してから曜日を取る
+  return WEEKDAYS[new Date(value.getTime() + 9 * 3600000).getUTCDay()];
 }
