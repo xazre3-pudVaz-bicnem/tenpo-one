@@ -10,6 +10,7 @@ const ITEMS = [
   { href: '/admin/users', label: 'ユーザー' },
   { href: '/admin/plans', label: 'プラン' },
   { href: '/admin/feature-flags', label: '機能フラグ' },
+  { href: '/admin/legal-rules', label: '法定ルール' },
   { href: '/admin/support', label: 'サポート' },
   { href: '/admin/audit-logs', label: '監査ログ' },
   { href: '/admin/status', label: '状態' },

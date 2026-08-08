@@ -1,8 +1,10 @@
 # TENPO ONE — 店舗運営を、ひとつに。
 
-飲食店の予約・POS・会計・レジ締め・小口現金・請求書・仕入/在庫・原価・勤怠・給与試算・
-顧客管理（CRM）・QRオーダー・キッチンディスプレイ（KDS）・レポートを、
-**ひとつのデータベースとひとつの操作画面**に統合したマルチテナント型クラウドSaaS。
+飲食店の予約・POS・会計（仕訳・帳簿・財務諸表）・レジ締め・小口現金・請求書・仕入/在庫・原価・
+勤怠・従業員台帳・有給・給与試算・顧客管理（CRM）・QRオーダー・キッチンディスプレイ（KDS）・
+レポートを、**ひとつのデータベースとひとつの操作画面**に統合したマルチテナント型クラウドSaaS。
+freee・KING OF TIME等の外部会計・勤怠SaaSを必須とせず、**外部SaaS不要の完全統合**で業務が
+完結する構成を目指す（`docs/native-accounting.md` / `docs/native-payroll.md`）。
 
 One Platform. Every Store. — 運営: 株式会社サイプレス
 
@@ -18,8 +20,10 @@ One Platform. Every Store. — 運営: 株式会社サイプレス
 | 仕入・在庫 | 発注→入荷（単位変換・加重平均原価）→レシピ連動販売減算→棚卸。`docs/inventory-flow.md` |
 | レシピ・原価管理 | メニュー原価・原価率・粗利、仕入単価変更の影響シミュレーション |
 | 会計（経理） | 請求書ワークフロー・経費・小口現金・レジ締め |
+| 会計（仕訳・帳簿・財務諸表） | 複式簿記の仕訳（借方=貸方をDB RPCで強制）・自動仕訳（POS/仕入/経費/給与連動）・月次締め・試算表/損益計算書/貸借対照表の集計。`docs/native-accounting.md` / `docs/accounting-flow.md`（法令適合の自動保証は対象外） |
+| 従業員台帳・有給 | 従業員台帳（雇用区分・所属店舗・銀行情報）・有給休暇の付与/取得管理・年末調整ワークフロー。`docs/native-payroll.md`（法定の付与日数・税額計算は対象外） |
 | 勤怠・シフト | 打刻（本人/PIN/管理者代理）・シフト管理 |
-| 給与・歩合 | 勤怠集計→給与ルール適用→段階式歩合→試算プレビュー→承認。`docs/payroll-flow.md`（法定計算は対象外） |
+| 給与・歩合 | 勤怠集計→期間別ルール解決→段階式歩合→試算プレビュー→承認→仕訳連動。`docs/payroll-flow.md` / `docs/payroll-flow-v2.md`（法定計算は対象外） |
 | レポート・分析 | 期間/店舗/軸別レポート、CSVエクスポート |
 | 決済 | Stripe抽象化レイヤー（POS対面決済+予約事前決済）。テストモード。`docs/payment-stripe.md` |
 
@@ -172,13 +176,18 @@ e2e/               # Playwright（Supabase環境接続時に実行）
 - `docs/database.md` — Migration一覧（00001〜00014）・テーブル群・命名規約・インデックス
 - `docs/permissions.md` — 10ロール×権限マトリクス・requireFeatureとの関係
 - `docs/tenant-isolation.md` — マルチテナント分離の実装（RLSヘルパー関数・検証方法）
+- `docs/legal-rule-versioning.md` — 消費税率・法定ルールのバージョン管理設計（`/admin/legal-rules`・cypress専任管理）
 
 ### 業務フロー
 
 - `docs/pos-flow.md` — 注文〜会計〜連動更新〜分割/統合/返金
 - `docs/reservation-flow.md` — 公開予約RPC〜台帳〜ステータス遷移〜貸切〜キャンセル待ち
 - `docs/inventory-flow.md` — 仕入→発注→入荷→販売→棚卸→原価
-- `docs/payroll-flow.md` — 勤怠→集計→給与ルール→歩合→プレビュー→承認
+- `docs/payroll-flow.md` — 勤怠→集計→給与ルール→歩合→プレビュー→承認（v1）
+- `docs/payroll-flow-v2.md` — 勤怠確定→期間別ルール解決→プレビュー→承認→確定ロック→仕訳連動→明細閲覧
+- `docs/native-accounting.md` — ネイティブ会計の設計（勘定科目・仕訳・自動仕訳・月次締め・帳簿/財務諸表・固定資産・証憑連携）
+- `docs/accounting-flow.md` — 業務（POS/仕入/経費/給与/銀行）→会計仕訳の連動図と冪等性
+- `docs/native-payroll.md` — ネイティブ労務の設計（従業員台帳・有給・社保構造・年末調整ワークフロー）
 - `docs/qr-order.md` — QRオーダーのトークン設計・匿名RPC・レート制限
 - `docs/kds.md` — キッチンディスプレイのステーション・状態遷移・警告しきい値
 
@@ -188,6 +197,7 @@ e2e/               # Playwright（Supabase環境接続時に実行）
 - `docs/operations.md` — 日常運用（seed・verify-flow・企業作成・機能フラグ・サポートアクセス）
 - `docs/known-limitations.md` — 既知の制限
 - `docs/future-integrations.md` — 外部連携の状態表（Stripeは基盤実装済み・本番未接続、他は未実装）
+- `docs/external-blockers.md` — 外部依存ブロッカー registry（必須Blocker / Optional Integration・Migrationを区別）
 - `docs/deployment.md` — Vercel+Supabaseデプロイ手順
 - `docs/payment-stripe.md` — Stripe決済の詳細設計
 
@@ -210,6 +220,10 @@ e2e/               # Playwright（Supabase環境接続時に実行）
   決済済み取引は物理削除不可（DBトリガー）
 - **正直表示**: 未実装の外部連携（プリンターSDK・LINE・OCR等）を「対応済み」と表示しない
   （`docs/future-integrations.md`）。給与は「試算」と明示（`docs/payroll-flow.md`）
+- **法定数値のバージョン管理**: 消費税率・所得税・社会保険料は `legal_rule_versions` /
+  `consumption_tax_rates` で版数管理し、コードにハードコードしない。専門家レビュー前の値は
+  投入せず、状態`draft/reviewed/active/superseded`で計算エンジンからの参照可否を制御する
+  （`/admin/legal-rules`・cypress専任・`docs/legal-rule-versioning.md`）
 
 未確定の仕様と仮定は `docs/open-questions.md` に記録している。
 

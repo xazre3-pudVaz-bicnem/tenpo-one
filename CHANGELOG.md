@@ -1,5 +1,34 @@
 # Changelog — TENPO ONE
 
+## v0.4.0 — ネイティブ会計・ネイティブ労務（2026-08-08）
+
+外部会計・勤怠SaaS（freee / KING OF TIME等）を必須依存から外し、TENPO ONE単独で会計・勤怠・
+給与の業務が完結する構成へ拡張（`docs/native-accounting.md` / `docs/native-payroll.md`）。
+
+- **ネイティブ会計基盤**（migration `00020_native_accounting.sql`）: 勘定科目（標準テンプレート
+  導入RPC）・仕訳（借方=貸方をDB RPCで強制・確定後は不変）・月次締め・自動仕訳（POS売上/仕入/
+  経費/小口現金/給与、`source_type`による冪等生成）・帳簿/財務諸表の集計純関数
+  （試算表・損益計算書・貸借対照表）・固定資産（構造のみ）・銀行口座/取引（CSV重複防止の
+  一意インデックス）・証憑の会計連携とハッシュ改変検知トリガー
+- **ネイティブ労務基盤**（migration `00021_native_hr.sql`）: 従業員台帳（`employees`）・
+  社会保険構造（`employee_insurance`）・有給休暇（`leave_grants`・半休/時間単位対応）・
+  賞与run（`payroll_runs.run_type`）・給与ルールversion追跡（`payroll_runs.rule_version`）・
+  年末調整ワークフロー（`nencho_declarations`・draft→submitted→reviewing→needs_fix→confirmed）
+- **法定ルールのバージョン管理**（`consumption_tax_rates` / `legal_rule_versions`）: 消費税率
+  ・所得税・社会保険等の法定パラメータをコードにハードコードせず、cypress運営専任で版数管理。
+  状態遷移`draft→reviewed→active→superseded`により、未確認の数値が計算エンジンに使われる
+  事故を防止。**現時点で投入済みなのは消費税10%/8%（2019-10-01施行）のみ**。所得税・社会保険
+  パラメータは専門家レビュー待ちで空のまま管理
+- **法定ルール管理画面**（`/admin/legal-rules`）: CYPRESS運営コンソールに追加。消費税率の
+  改正登録（旧行の自動締め・影響範囲の警告表示）、法定ルールversionの追加・編集
+  （parametersはJSONエディタ+zod検証）。一般企業ユーザーはアクセス不可（RLS+UIの二重制御）
+- `docs/external-blockers.md`: freee / KING OF TIME等を「必須Blocker」から「Optional
+  Integration / Migration」へ再分類（既存利用者の移行・データ取込用途と明記）
+- ドキュメント5本を新規追加: `docs/native-accounting.md` / `docs/native-payroll.md` /
+  `docs/legal-rule-versioning.md` / `docs/accounting-flow.md` / `docs/payroll-flow-v2.md`
+- 給与・税額の法定計算（所得税源泉徴収・社会保険料・年末調整）は引き続き対象外。専門家レビュー
+  完了後、`legal_rule_versions`への値投入とあわせて実装する方針は変更なし
+
 ## v0.3.0 — CODE COMPLETE（2026-08-08）
 
 外部サービス・実機・本番環境を除き「コードでできることはほぼ全部終わった」状態。
