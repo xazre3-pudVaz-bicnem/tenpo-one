@@ -6,11 +6,20 @@
  */
 import Link from 'next/link';
 import { yen } from '@/lib/format';
-import type { CostVariance } from '@/lib/metrics';
+import type { CostVariance, PurchasePriceVariance } from '@/lib/metrics';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 
-export function CostVarianceCard({ variance, salesTotal }: { variance: CostVariance; salesTotal: number }) {
+export function CostVarianceCard({
+  variance,
+  salesTotal,
+  purchaseVariance,
+}: {
+  variance: CostVariance;
+  salesTotal: number;
+  /** 仕入価格変動（参考指標。v0.4.3）。差異内訳とは独立で、渡さない画面では非表示 */
+  purchaseVariance?: PurchasePriceVariance;
+}) {
   const actualCostRatePct = salesTotal > 0 ? (variance.actualCost / salesTotal) * 100 : 0;
   const varianceTone = variance.variance > 0 ? 'danger' : variance.variance < 0 ? 'success' : 'gray';
 
@@ -52,7 +61,7 @@ export function CostVarianceCard({ variance, salesTotal }: { variance: CostVaria
         </div>
 
         <div className="mt-4">
-          <p className="mb-2 text-xs font-medium text-gray-500">差異の内訳</p>
+          <p className="mb-2 text-xs font-medium text-gray-500">差異の内訳（廃棄 / 棚卸差異 / その他調整）</p>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
             <Link
               href="/app/inventory"
@@ -72,7 +81,7 @@ export function CostVarianceCard({ variance, salesTotal }: { variance: CostVaria
               </span>
             </Link>
             <div className="flex items-center justify-between rounded-lg border border-gray-200 bg-white px-4 py-3">
-              <span className="text-sm text-gray-600">その他</span>
+              <span className="text-sm text-gray-600">その他調整</span>
               <span className="tabular-nums font-semibold text-navy">{yen(variance.breakdown.other)}</span>
             </div>
           </div>
@@ -80,6 +89,33 @@ export function CostVarianceCard({ variance, salesTotal }: { variance: CostVaria
             棚卸差異は「実棚卸数−期待在庫数」がマイナス（実数不足）の場合を費用（プラス表示）、プラス（実数超過）の場合を差異縮小（マイナス表示）として計上しています。単価未設定の品目は集計から除外しています。
           </p>
         </div>
+
+        {purchaseVariance && (
+          <div className="mt-4 border-t border-dashed border-gray-200 pt-4">
+            <p className="mb-2 text-xs font-medium text-gray-500">参考: 仕入価格変動</p>
+            <Link
+              href="/app/inventory?tab=items"
+              className="flex items-center justify-between rounded-lg border border-dashed border-gray-300 bg-gray-50 px-4 py-3 transition-colors hover:border-primary/40 hover:bg-primary-soft/30"
+            >
+              <span className="text-sm text-gray-600">
+                期間内の入荷における値上がり・値下がりの影響額
+                {purchaseVariance.baselineAmount > 0 && (
+                  <span className="ml-1 text-gray-400">（変動率 {purchaseVariance.varianceRate.toFixed(1)}%）</span>
+                )}
+              </span>
+              <span
+                className={`tabular-nums font-semibold ${purchaseVariance.totalVariance > 0 ? 'text-danger' : purchaseVariance.totalVariance < 0 ? 'text-success' : 'text-navy'}`}
+              >
+                {purchaseVariance.totalVariance > 0 ? '+' : ''}
+                {yen(purchaseVariance.totalVariance)}
+              </span>
+            </Link>
+            <p className="mt-2 text-xs text-gray-400">
+              差異合計には含まれません（理論原価は平均単価を使うため価格変動は徐々に理論側へ反映されます）。期首時点の平均仕入単価と比較できなかった入荷
+              {purchaseVariance.excludedCount}件は集計から除外しています。詳細は在庫の「仕入履歴」から品目ごとに確認できます。
+            </p>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

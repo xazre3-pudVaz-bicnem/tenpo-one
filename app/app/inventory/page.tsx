@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils';
 import { yen, formatDate, daysAgoJst, todayJst } from '@/lib/format';
 import { suggestReorder } from '@/lib/reorder';
 import { forecastUsage, type DailyQty } from '@/lib/forecast';
+import { isPriceIncreaseSignificant } from '@/lib/metrics';
 import { ItemForm } from '@/components/inventory/item-form';
 import { ItemTable, type ItemRow } from '@/components/inventory/item-table';
 import { StartCountButton } from '@/components/inventory/start-count-button';
@@ -69,6 +70,8 @@ export default async function InventoryPage({
 
   const supabase = await createClient();
   let itemRows: ItemRow[] = [];
+  /** isPriceIncreaseSignificant（前回比10%以上値上がり）に該当する品目ID（v0.4.3 仕入価格履歴） */
+  const priceIncreaseItemIds = new Set<string>();
   let countsData: { id: string; countDate: string; status: CountStatus }[] = [];
   let transferRows: TransferRow[] = [];
   let transferItemOptions: { id: string; name: string; unit: string; currentQuantity: number }[] = [];
@@ -111,6 +114,34 @@ export default async function InventoryPage({
         return w === 'danger' ? 0 : w === 'warning' ? 1 : 2;
       };
       itemRows = [...itemRows].sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name, 'ja'));
+    }
+
+    // 値上がり品目の判定: 品目ごと直近2件の入荷単価（'in'）を isPriceIncreaseSignificant で比較する
+    const itemIds = itemRows.map((r) => r.id);
+    if (itemIds.length > 0) {
+      const { data: recentReceipts } = await supabase
+        .from('stock_movements')
+        .select('inventory_item_id, unit_cost, occurred_at')
+        .eq('store_id', currentStore.id)
+        .eq('movement_type', 'in')
+        .in('inventory_item_id', itemIds)
+        .order('occurred_at', { ascending: false })
+        .limit(2000);
+      const lastTwoByItem = new Map<string, number[]>();
+      for (const m of recentReceipts ?? []) {
+        if (m.unit_cost == null) continue;
+        const key = m.inventory_item_id as string;
+        const list = lastTwoByItem.get(key) ?? [];
+        if (list.length < 2) {
+          list.push(m.unit_cost as number);
+          lastTwoByItem.set(key, list);
+        }
+      }
+      for (const [itemId, costs] of lastTwoByItem) {
+        if (costs.length === 2 && isPriceIncreaseSignificant(costs[0], costs[1])) {
+          priceIncreaseItemIds.add(itemId);
+        }
+      }
     }
   } else if (tab === 'counts') {
     const { data } = await supabase
@@ -354,13 +385,19 @@ export default async function InventoryPage({
 
       {tab === 'items' && (
         <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <StatCard label="総在庫金額" value={yen(totalStockValue)} tone="primary" />
             <StatCard label="要発注品目数" value={`${reorderCount}件`} tone={reorderCount > 0 ? 'warning' : 'default'} />
             <StatCard
               label="在庫切れ間近品目数"
               value={`${dangerCount}件`}
               tone={dangerCount > 0 ? 'danger' : 'default'}
+            />
+            <StatCard
+              label="値上がり品目数"
+              value={`${priceIncreaseItemIds.size}件`}
+              tone={priceIncreaseItemIds.size > 0 ? 'danger' : 'default'}
+              sub="前回仕入が前々回比10%以上値上がり"
             />
           </div>
 
@@ -417,7 +454,7 @@ export default async function InventoryPage({
               絞り込む
             </Button>
           </form>
-          <ItemTable rows={itemRows} otherStores={otherStores} />
+          <ItemTable rows={itemRows} otherStores={otherStores} priceIncreaseItemIds={priceIncreaseItemIds} />
         </div>
       )}
 

@@ -5,6 +5,7 @@ import { requireMember, requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { todayJst } from '@/lib/format';
 import { purchaseToStockQty, purchaseToStockUnitCost } from '@/lib/units';
+import { isPriceIncreaseSignificant } from '@/lib/metrics';
 import { movementNeedsReason, type ItemKind, type ManualMovementType, type MovementType } from '@/components/inventory/labels';
 
 const LIST_PATH = '/app/inventory';
@@ -372,6 +373,91 @@ export async function getMovementHistory(itemId: string) {
     occurredAt: r.occurred_at as string,
     toStoreName: r.to_store_id ? (storeNames.get(r.to_store_id) ?? null) : null,
   }));
+}
+
+export interface PurchaseHistoryRow {
+  id: string;
+  businessDate: string;
+  vendorName: string | null;
+  unitCost: number | null;
+  quantity: number;
+}
+
+export interface PurchaseHistoryResult {
+  unit: string;
+  /** 現在平均単価（inventory_items.avg_cost。加重平均・apply_stock_receiptが更新） */
+  currentAvgCost: number | null;
+  /** 前回仕入単価（直近の入荷） */
+  previousUnitCost: number | null;
+  /** 前々回仕入単価 */
+  priorUnitCost: number | null;
+  /** 前回比の変化率（%）。前々回が無い/0以下なら null */
+  changeRatePct: number | null;
+  /** isPriceIncreaseSignificant(前回, 前々回) 既定10%以上の値上がり */
+  isSignificantIncrease: boolean;
+  rows: PurchaseHistoryRow[];
+}
+
+/**
+ * 品目の仕入価格履歴（直近30件の入荷）。仕入先は stock_movements.ref_purchase_order_id →
+ * purchase_orders.vendor_id → vendors.name で解決する（発注書経由の入荷のみ判明。手動入荷はnull）。
+ */
+export async function getPurchaseHistory(itemId: string): Promise<PurchaseHistoryResult> {
+  await requireMember();
+  const supabase = await createClient();
+
+  const { data: item } = await supabase.from('inventory_items').select('unit, avg_cost').eq('id', itemId).single();
+
+  const { data: movementsData } = await supabase
+    .from('stock_movements')
+    .select('id, quantity, unit_cost, business_date, occurred_at, ref_purchase_order_id')
+    .eq('inventory_item_id', itemId)
+    .eq('movement_type', 'in')
+    .order('occurred_at', { ascending: false })
+    .limit(30);
+  const movements = movementsData ?? [];
+
+  const poIds = [...new Set(movements.map((m) => m.ref_purchase_order_id).filter((v): v is string => !!v))];
+  let vendorNameByPoId = new Map<string, string>();
+  if (poIds.length > 0) {
+    const { data: pos } = await supabase.from('purchase_orders').select('id, vendor_id').in('id', poIds);
+    const vendorIds = [...new Set((pos ?? []).map((p) => p.vendor_id).filter((v): v is string => !!v))];
+    let vendorNameById = new Map<string, string>();
+    if (vendorIds.length > 0) {
+      const { data: vendors } = await supabase.from('vendors').select('id, name').in('id', vendorIds);
+      vendorNameById = new Map((vendors ?? []).map((v) => [v.id as string, v.name as string]));
+    }
+    vendorNameByPoId = new Map(
+      (pos ?? [])
+        .filter((p) => p.vendor_id)
+        .map((p) => [p.id as string, vendorNameById.get(p.vendor_id as string) ?? '不明な仕入先'])
+    );
+  }
+
+  const rows: PurchaseHistoryRow[] = movements.map((m) => ({
+    id: m.id as string,
+    businessDate: m.business_date as string,
+    vendorName: m.ref_purchase_order_id ? (vendorNameByPoId.get(m.ref_purchase_order_id as string) ?? null) : null,
+    unitCost: m.unit_cost as number | null,
+    quantity: Number(m.quantity),
+  }));
+
+  const previousUnitCost = rows[0]?.unitCost ?? null;
+  const priorUnitCost = rows[1]?.unitCost ?? null;
+  const changeRatePct =
+    previousUnitCost != null && priorUnitCost != null && priorUnitCost > 0
+      ? ((previousUnitCost - priorUnitCost) / priorUnitCost) * 100
+      : null;
+
+  return {
+    unit: (item?.unit as string) ?? '',
+    currentAvgCost: item?.avg_cost ?? null,
+    previousUnitCost,
+    priorUnitCost,
+    changeRatePct,
+    isSignificantIncrease: isPriceIncreaseSignificant(previousUnitCost ?? 0, priorUnitCost),
+    rows,
+  };
 }
 
 /** 棚卸を開始: 対象店舗の全active品目の現在庫をスナップショットする */

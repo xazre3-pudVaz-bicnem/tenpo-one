@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { yen } from '@/lib/format';
 import { TableWrap, Table, THead, TBody, Tr, Th, Td } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/state';
 import {
   ITEM_KIND_LABELS,
@@ -14,6 +15,7 @@ import {
 } from './labels';
 import { MovementForm } from './movement-form';
 import { MovementHistoryDialog } from './movement-history-dialog';
+import { PurchaseHistoryDialog } from './purchase-history-dialog';
 import { TransferForm } from './transfer-form';
 import { ItemForm } from './item-form';
 
@@ -38,8 +40,18 @@ interface StoreOption {
   name: string;
 }
 
-export function ItemTable({ rows, otherStores }: { rows: ItemRow[]; otherStores: StoreOption[] }) {
+export function ItemTable({
+  rows,
+  otherStores,
+  priceIncreaseItemIds,
+}: {
+  rows: ItemRow[];
+  otherStores: StoreOption[];
+  /** isPriceIncreaseSignificant（前回比10%以上値上がり）に該当する品目ID（v0.4.3） */
+  priceIncreaseItemIds?: ReadonlySet<string>;
+}) {
   const [historyItem, setHistoryItem] = useState<ItemRow | null>(null);
+  const [purchaseHistoryItem, setPurchaseHistoryItem] = useState<ItemRow | null>(null);
 
   if (rows.length === 0) {
     return <EmptyState title="品目が登録されていません" description="「品目を追加」から在庫品目を登録してください" />;
@@ -87,13 +99,28 @@ export function ItemTable({ rows, otherStores }: { rows: ItemRow[]; otherStores:
                   <Td className="text-right tabular-nums">{yen(r.lastPurchaseCost)}</Td>
                   <Td className="text-right tabular-nums">{yen(stockValue)}</Td>
                   <Td>
-                    {warning && <Badge tone={STOCK_WARNING_TONES[warning]}>{STOCK_WARNING_LABELS[warning]}</Badge>}
+                    <div className="flex flex-wrap gap-1">
+                      {warning && <Badge tone={STOCK_WARNING_TONES[warning]}>{STOCK_WARNING_LABELS[warning]}</Badge>}
+                      {priceIncreaseItemIds?.has(r.id) && (
+                        <button
+                          type="button"
+                          onClick={() => setPurchaseHistoryItem(r)}
+                          className="inline-flex"
+                          title="仕入価格履歴を見る"
+                        >
+                          <Badge tone="danger">値上がり</Badge>
+                        </button>
+                      )}
+                    </div>
                   </Td>
                   <Td>
                     <div className="flex justify-end gap-1.5">
                       <ItemForm item={r} />
                       <MovementForm item={r} />
                       <TransferForm item={r} stores={otherStores} />
+                      <Button size="sm" variant="secondary" onClick={() => setPurchaseHistoryItem(r)}>
+                        仕入履歴
+                      </Button>
                     </div>
                   </Td>
                 </Tr>
@@ -103,6 +130,7 @@ export function ItemTable({ rows, otherStores }: { rows: ItemRow[]; otherStores:
         </Table>
       </TableWrap>
       <MovementHistoryDialog item={historyItem} onClose={() => setHistoryItem(null)} />
+      <PurchaseHistoryDialog item={purchaseHistoryItem} onClose={() => setPurchaseHistoryItem(null)} />
     </>
   );
 }
