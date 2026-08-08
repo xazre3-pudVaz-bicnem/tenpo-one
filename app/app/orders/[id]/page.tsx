@@ -15,6 +15,7 @@ import { OrderStatusBadge } from '@/components/orders/status-badge';
 import { METHOD_LABELS } from '@/components/cash/labels';
 import { RefundDialog } from '@/components/orders/refund-dialog';
 import { ReopenDialog } from '@/components/orders/reopen-dialog';
+import { JournalSourceLink } from '@/components/accounting/journal-source-link';
 import { refundOrder, reopenOrder } from '../actions';
 
 export const metadata: Metadata = { title: '注文詳細' };
@@ -68,7 +69,7 @@ export default async function OrderDetailPage({
         .order('created_at'),
       supabase
         .from('payments')
-        .select('id, method, amount, tendered, change_amount, paid_at, status')
+        .select('id, method, amount, tendered, change_amount, paid_at, status, business_date')
         .eq('order_id', id)
         .order('paid_at'),
       supabase
@@ -94,6 +95,21 @@ export default async function OrderDetailPage({
   const table = order.restaurant_tables as unknown as { name: string } | null;
   const staff = order.profiles as unknown as { display_name: string } | null;
   const customer = order.customers as unknown as { name: string } | null;
+
+  // 会計連動: 売上仕訳は日次・店舗単位の集計（{storeId}:{businessDate}）のため、
+  // この注文の完了済み支払の営業日から該当する集計仕訳が存在するかを確認する。
+  const businessDates = [...new Set((payments ?? []).filter((p) => p.status === 'completed').map((p) => p.business_date as string))];
+  let journaledDates: string[] = [];
+  if (businessDates.length > 0) {
+    const candidateSourceIds = businessDates.map((d) => `${order.store_id}:${d}`);
+    const { data: matchedJournals } = await supabase
+      .from('journal_entries')
+      .select('source_id')
+      .eq('organization_id', ctx.organizationId)
+      .eq('source_type', 'pos_sales')
+      .in('source_id', candidateSourceIds);
+    journaledDates = businessDates.filter((d) => (matchedJournals ?? []).some((j) => j.source_id === `${order.store_id}:${d}`));
+  }
 
   return (
     <div>
@@ -287,6 +303,18 @@ export default async function OrderDetailPage({
                 <div className="flex justify-between text-danger">
                   <span>返金済み</span>
                   <span className="tabular-nums">-{yen(totalRefunded)}</span>
+                </div>
+              )}
+              {journaledDates.length > 0 && (
+                <div className="mt-2 space-y-1 border-t border-gray-100 pt-2">
+                  {journaledDates.map((d) => (
+                    <JournalSourceLink
+                      key={d}
+                      sourceType="pos_sales"
+                      sourceId={`${order.store_id}:${d}`}
+                      label={`会計仕訳を見る（${d}の売上仕訳）`}
+                    />
+                  ))}
                 </div>
               )}
             </CardContent>

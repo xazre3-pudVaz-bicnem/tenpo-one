@@ -13,8 +13,9 @@ import { EmptyState } from '@/components/ui/state';
 import { cn } from '@/lib/utils';
 import { yen, formatDate, todayJst } from '@/lib/format';
 import { TAX_TREATMENT_LABELS, type AccountCategory, type TaxTreatment } from '@/lib/accounting';
-import { SUB_TYPE_LABELS, type SubType } from '@/components/accounting/labels';
-import { computeOpeningBalance, buildLedgerRows, type LedgerEntryLine } from '@/components/accounting/ledger';
+import { SUB_TYPE_LABELS, type SubType, type SourceType } from '@/components/accounting/labels';
+import { computeOpeningBalance, buildLedgerRows, resolveCounterLabel, type LedgerEntryLine } from '@/components/accounting/ledger';
+import { ORIGIN_LINK_LABELS, resolveSourceOriginHref } from '@/components/accounting/journal-source-link';
 
 export const metadata: Metadata = { title: '帳簿 | 会計' };
 
@@ -195,7 +196,9 @@ export default async function LedgerPage({
       const buildLineQuery = () => {
         let q = supabase
           .from('journal_entry_lines')
-          .select('id, entry_id, line_no, side, amount, memo, journal_entries!inner(entry_date, description, status, store_id)')
+          .select(
+            'id, entry_id, line_no, side, amount, memo, journal_entries!inner(entry_date, description, status, store_id, source_type, source_id, stores(name))'
+          )
           .eq('account_id', selectedAccountId)
           .eq('organization_id', ctx.organizationId)
           .eq('journal_entries.status', 'posted');
@@ -215,7 +218,7 @@ export default async function LedgerPage({
       const opening = computeOpeningBalance((beforeLines ?? []).map((l) => ({ side: l.side as 'debit' | 'credit', amount: l.amount as number })), account.category);
 
       const periodEntryIds = [...new Set((periodLinesRaw ?? []).map((l) => l.entry_id as string))];
-      let counterByEntry = new Map<string, string>();
+      let counterNamesByEntry = new Map<string, string[]>();
       if (periodEntryIds.length > 0) {
         const { data: allLines } = await supabase
           .from('journal_entry_lines')
@@ -229,11 +232,17 @@ export default async function LedgerPage({
           if (acc) arr.push(acc.name);
           byEntry.set(l.entry_id as string, arr);
         }
-        counterByEntry = new Map([...byEntry.entries()].map(([id, names]) => [id, [...new Set(names)].join('・') || '(相手科目複数)']));
+        counterNamesByEntry = byEntry;
       }
 
       const periodLines: LedgerEntryLine[] = (periodLinesRaw ?? []).map((l) => {
-        const je = l.journal_entries as unknown as { entry_date: string; description: string };
+        const je = l.journal_entries as unknown as {
+          entry_date: string;
+          description: string;
+          source_type: SourceType;
+          source_id: string | null;
+          stores: { name: string } | null;
+        };
         return {
           entryId: l.entry_id as string,
           entryDate: je.entry_date,
@@ -241,10 +250,15 @@ export default async function LedgerPage({
           side: l.side as 'debit' | 'credit',
           amount: l.amount as number,
           memo: l.memo as string | null,
+          storeName: je.stores?.name ?? null,
+          sourceType: je.source_type,
+          sourceId: je.source_id,
         };
       });
 
-      const rows = buildLedgerRows(periodLines, account.category, opening, (entryId) => counterByEntry.get(entryId) ?? '—');
+      const rows = buildLedgerRows(periodLines, account.category, opening, (entryId) =>
+        resolveCounterLabel(counterNamesByEntry.get(entryId) ?? [])
+      );
 
       body = (
         <TableWrap>
@@ -257,6 +271,8 @@ export default async function LedgerPage({
                 <Th className="text-right">入金・借方</Th>
                 <Th className="text-right">出金・貸方</Th>
                 <Th className="text-right">残高</Th>
+                <Th>店舗</Th>
+                <Th>元取引</Th>
               </Tr>
             </THead>
             <TBody>
@@ -265,24 +281,39 @@ export default async function LedgerPage({
                   繰越残高
                 </Td>
                 <Td className="text-right font-medium tabular-nums">{yen(opening)}</Td>
+                <Td />
+                <Td />
               </Tr>
               {rows.length === 0 ? (
                 <Tr>
-                  <Td colSpan={6} className="text-center text-gray-400">
+                  <Td colSpan={8} className="text-center text-gray-400">
                     期間内の明細はありません
                   </Td>
                 </Tr>
               ) : (
-                rows.map((r, idx) => (
-                  <Tr key={idx}>
-                    <Td className="whitespace-nowrap text-xs text-gray-500">{formatDate(r.date)}</Td>
-                    <Td className="max-w-xs truncate">{r.description}</Td>
-                    <Td className="max-w-[10rem] truncate text-gray-500">{r.counter}</Td>
-                    <Td className="text-right tabular-nums">{r.debit > 0 ? yen(r.debit) : ''}</Td>
-                    <Td className="text-right tabular-nums">{r.credit > 0 ? yen(r.credit) : ''}</Td>
-                    <Td className="text-right font-medium tabular-nums">{yen(r.balance)}</Td>
-                  </Tr>
-                ))
+                rows.map((r, idx) => {
+                  const originHref = r.sourceType ? resolveSourceOriginHref(r.sourceType, r.sourceId ?? null) : null;
+                  return (
+                    <Tr key={idx}>
+                      <Td className="whitespace-nowrap text-xs text-gray-500">{formatDate(r.date)}</Td>
+                      <Td className="max-w-xs truncate">{r.description}</Td>
+                      <Td className="max-w-[10rem] truncate text-gray-500">{r.counter}</Td>
+                      <Td className="text-right tabular-nums">{r.debit > 0 ? yen(r.debit) : ''}</Td>
+                      <Td className="text-right tabular-nums">{r.credit > 0 ? yen(r.credit) : ''}</Td>
+                      <Td className="text-right font-medium tabular-nums">{yen(r.balance)}</Td>
+                      <Td className="whitespace-nowrap text-xs text-gray-500">{r.storeName ?? '全社'}</Td>
+                      <Td>
+                        {originHref ? (
+                          <Link href={originHref} className="text-xs font-medium text-primary-deep hover:underline">
+                            {(r.sourceType && ORIGIN_LINK_LABELS[r.sourceType]) ?? '元取引を見る'}
+                          </Link>
+                        ) : (
+                          <span className="text-xs text-gray-300">—</span>
+                        )}
+                      </Td>
+                    </Tr>
+                  );
+                })
               )}
             </TBody>
           </Table>

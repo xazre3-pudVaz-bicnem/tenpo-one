@@ -5,6 +5,7 @@ import { TableWrap, Table, THead, TBody, Tr, Th, Td } from '@/components/ui/tabl
 import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/ui/state';
 import { yen, formatDate, todayJst } from '@/lib/format';
+import { JournalSourceLink } from '@/components/accounting/journal-source-link';
 import { InvoiceDetailDialog } from './invoice-detail';
 import { INVOICE_STATUS_LABELS, INVOICE_STATUS_TONES, UNPAID_INVOICE_STATUSES, type InvoiceStatus } from './labels';
 
@@ -16,6 +17,8 @@ export interface InvoiceRow {
   amount: number;
   storeName: string | null;
   expenseAccountName: string | null;
+  /** 会計連動: この請求書から仕入仕訳（source_type='purchase'）が作成済みか */
+  journaled: boolean;
 }
 
 interface ExpenseAccountOption {
@@ -58,6 +61,7 @@ export function InvoiceTable({
               <Th>支払期限</Th>
               <Th className="text-right">金額</Th>
               <Th>店舗</Th>
+              <Th>仕訳</Th>
             </Tr>
           </THead>
           <TBody>
@@ -76,6 +80,13 @@ export function InvoiceTable({
                   <Td className={overdue ? 'font-semibold text-danger' : ''}>{formatDate(r.dueDate)}</Td>
                   <Td className="text-right tabular-nums">{yen(r.amount)}</Td>
                   <Td>{r.storeName ?? '全店舗'}</Td>
+                  <Td onClick={(e) => e.stopPropagation()}>
+                    {r.journaled ? (
+                      <JournalSourceLink sourceType="purchase" sourceId={r.id} label="見る" />
+                    ) : (
+                      <span className="text-xs text-gray-300">未仕訳</span>
+                    )}
+                  </Td>
                 </Tr>
               );
             })}

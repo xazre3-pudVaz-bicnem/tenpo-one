@@ -1,5 +1,7 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { FileText } from 'lucide-react';
 import { requireMember } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { ROLE_LABELS } from '@/lib/permissions';
@@ -8,6 +10,8 @@ import { PageHeader } from '@/components/ui/page-header';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { TableWrap, Table, THead, TBody, Tr, Th, Td } from '@/components/ui/table';
+import { buttonVariants } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { yen, formatDate } from '@/lib/format';
 import { PO_STATUS_LABELS, PO_STATUS_TONES, type PoStatus } from '@/components/inventory/labels';
 import { ReceiveForm } from '@/components/inventory/receive-form';
@@ -104,6 +108,18 @@ export default async function PurchaseOrderDetailPage({ params }: { params: Prom
             )}
             <PoStatusActions poId={po.id} status={status} />
             <PoPrintButton />
+            {/*
+              発注書と仕入請求書（会計連動元）は別データのため、この発注に1対1で対応する仕訳は存在しない。
+              誤解を避けるため「この発注の仕訳」ではなく、店舗の仕入仕訳一覧への案内として控えめに提示する。
+            */}
+            <Link
+              href={`/app/accounting?source_type=purchase&store=${po.store_id}`}
+              className={cn(buttonVariants({ variant: 'secondary' }))}
+              title="この店舗の仕入（請求書）仕訳の一覧を開きます（この発注専用ではありません）"
+            >
+              <FileText className="h-4 w-4" />
+              仕入仕訳一覧（店舗）
+            </Link>
           </div>
         }
       />

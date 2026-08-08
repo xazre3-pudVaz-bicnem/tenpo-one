@@ -14,6 +14,7 @@ import { TableWrap, Table, THead, TBody, Tr, Th, Td } from '@/components/ui/tabl
 import { PeriodFilter } from '@/components/cash/period-filter';
 import { ExpenseFormDialog } from '@/components/cash/expense-form-dialog';
 import { ApprovalActions } from '@/components/cash/approval-actions';
+import { JournalSourceLink } from '@/components/accounting/journal-source-link';
 import { approveExpense, rejectExpense } from '@/app/app/expenses/actions';
 import { APPROVAL_LABELS, APPROVAL_TONES, PAID_VIA_LABELS, type ApprovalStatus, type PaidVia } from '@/components/cash/labels';
 
@@ -72,6 +73,19 @@ export default async function ExpensesPage({
   if (accountFilter) query = query.eq('expense_account_id', accountFilter);
   if (statusFilter) query = query.eq('approval_status', statusFilter);
   const { data: rows } = await query;
+
+  // 会計連動: 経費→仕訳（source_type='expense', source_id=expenses.id）の対応を一覧表示用にまとめて取得
+  const expenseIds = (rows ?? []).map((r) => r.id);
+  let journaledExpenseIds = new Set<string>();
+  if (ctx.organizationId && expenseIds.length > 0) {
+    const { data: journaled } = await supabase
+      .from('journal_entries')
+      .select('source_id')
+      .eq('organization_id', ctx.organizationId)
+      .eq('source_type', 'expense')
+      .in('source_id', expenseIds);
+    journaledExpenseIds = new Set((journaled ?? []).map((j) => j.source_id as string));
+  }
 
   // 科目別当月合計
   const monthStart = `${todayJst().slice(0, 7)}-01`;
@@ -172,6 +186,7 @@ export default async function ExpensesPage({
                     <Th>支払元</Th>
                     <Th>支払先</Th>
                     <Th>承認状態</Th>
+                    <Th>仕訳</Th>
                     <Th>操作</Th>
                   </Tr>
                 </THead>
@@ -189,6 +204,13 @@ export default async function ExpensesPage({
                         <Badge tone={APPROVAL_TONES[r.approval_status as ApprovalStatus]}>
                           {APPROVAL_LABELS[r.approval_status as ApprovalStatus]}
                         </Badge>
+                      </Td>
+                      <Td>
+                        {journaledExpenseIds.has(r.id) ? (
+                          <JournalSourceLink sourceType="expense" sourceId={r.id} label="見る" />
+                        ) : (
+                          <span className="text-xs text-gray-300">未仕訳</span>
+                        )}
                       </Td>
                       <Td>
                         {canApprove && r.approval_status === 'pending' && (

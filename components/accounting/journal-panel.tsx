@@ -1,6 +1,7 @@
 'use client';
 
 import { Fragment, useState } from 'react';
+import Link from 'next/link';
 import { Plus, ChevronDown, ChevronRight, Pencil, Trash2, CheckCircle2, Undo2, FileEdit } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -17,6 +18,7 @@ import { canWriteAccounting } from '@/components/accounting/roles';
 import type { Role } from '@/lib/permissions';
 import { deleteDraftEntry, postEntry, voidEntry, createCorrectionEntry } from '@/app/app/accounting/actions';
 import { JournalEntryDialog, type AccountOption, type StoreOption, type EditingEntry } from './journal-entry-dialog';
+import { ORIGIN_LINK_LABELS, resolveSourceOriginHref } from './journal-source-link';
 
 export interface JournalLineRow {
   accountId: string;
@@ -35,10 +37,19 @@ export interface JournalEntryRow {
   description: string;
   status: JournalStatus;
   sourceType: SourceType;
+  sourceId: string | null;
   storeId: string | null;
   storeName: string | null;
   voidReason: string | null;
   debitTotal: number;
+}
+
+/** 借方/貸方の科目要約。「現金」「現金 ほか2件」形式 */
+function summarizeAccounts(lines: JournalLineRow[], side: 'debit' | 'credit'): string {
+  const sideLines = lines.filter((l) => l.side === side);
+  if (sideLines.length === 0) return '—';
+  const first = sideLines[0].accountName;
+  return sideLines.length > 1 ? `${first} ほか${sideLines.length - 1}件` : first;
 }
 
 export function JournalPanel({
@@ -147,9 +158,12 @@ export function JournalPanel({
                 <Th>仕訳番号</Th>
                 <Th>日付</Th>
                 <Th>摘要</Th>
+                <Th>借方科目</Th>
+                <Th>貸方科目</Th>
+                <Th className="text-right">金額</Th>
                 <Th>店舗</Th>
+                <Th>元取引</Th>
                 <Th>区分</Th>
-                <Th className="text-right">借方合計</Th>
                 <Th>状態</Th>
                 {canWrite && <Th className="text-right">操作</Th>}
               </Tr>
@@ -158,6 +172,7 @@ export function JournalPanel({
               {entries.map((row) => {
                 const isOpen = expanded.has(row.id);
                 const lines = linesByEntry[row.id] ?? [];
+                const originHref = resolveSourceOriginHref(row.sourceType, row.sourceId);
                 return (
                   <Fragment key={row.id}>
                     <Tr className="cursor-pointer" onClick={() => toggle(row.id)}>
@@ -167,11 +182,27 @@ export function JournalPanel({
                       <Td className="font-mono text-xs">#{row.entryNo}</Td>
                       <Td className="whitespace-nowrap text-xs text-gray-500">{formatDate(row.entryDate)}</Td>
                       <Td className="max-w-xs truncate font-medium text-navy">{row.description}</Td>
-                      <Td>{row.storeName ?? '全社'}</Td>
-                      <Td>
-                        <Badge tone="gray">{SOURCE_TYPE_LABELS[row.sourceType]}</Badge>
-                      </Td>
+                      <Td className="max-w-[10rem] truncate text-gray-600">{summarizeAccounts(lines, 'debit')}</Td>
+                      <Td className="max-w-[10rem] truncate text-gray-600">{summarizeAccounts(lines, 'credit')}</Td>
                       <Td className="text-right tabular-nums">{yen(row.debitTotal)}</Td>
+                      <Td>{row.storeName ?? '全社'}</Td>
+                      <Td onClick={(e) => e.stopPropagation()}>
+                        {originHref ? (
+                          <Link href={originHref} className="text-xs font-medium text-primary-deep hover:underline">
+                            {ORIGIN_LINK_LABELS[row.sourceType] ?? '元取引を見る'}
+                          </Link>
+                        ) : (
+                          <span className="text-xs text-gray-300">—</span>
+                        )}
+                      </Td>
+                      <Td>
+                        <div className="space-y-1">
+                          <Badge tone={row.sourceType === 'manual' ? 'gray' : 'primary'}>
+                            {row.sourceType === 'manual' ? '手動' : '自動仕訳'}
+                          </Badge>
+                          <p className="text-[11px] text-gray-400">{SOURCE_TYPE_LABELS[row.sourceType]}</p>
+                        </div>
+                      </Td>
                       <Td>
                         <Badge tone={JOURNAL_STATUS_TONES[row.status]}>{JOURNAL_STATUS_LABELS[row.status]}</Badge>
                       </Td>
@@ -237,7 +268,7 @@ export function JournalPanel({
                     {isOpen && (
                       <Tr className="bg-gray-50 hover:bg-gray-50">
                         <Td />
-                        <Td colSpan={canWrite ? 8 : 7} className="py-3">
+                        <Td colSpan={canWrite ? 11 : 10} className="py-3">
                           {row.status === 'voided' && row.voidReason && (
                             <p className="mb-2 text-xs text-danger">取消理由: {row.voidReason}</p>
                           )}

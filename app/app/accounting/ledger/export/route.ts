@@ -3,10 +3,11 @@ import { requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { toCsv, csvResponse } from '@/lib/csv';
 import { TAX_TREATMENT_LABELS, type AccountCategory, type TaxTreatment } from '@/lib/accounting';
-import { computeOpeningBalance, buildLedgerRows, type LedgerEntryLine } from '@/components/accounting/ledger';
+import { SOURCE_TYPE_LABELS, type SourceType } from '@/components/accounting/labels';
+import { computeOpeningBalance, buildLedgerRows, resolveCounterLabel, type LedgerEntryLine } from '@/components/accounting/ledger';
 
 const JOURNAL_HEADERS = ['仕訳番号', '日付', '摘要', '店舗', '勘定科目コード', '勘定科目名', '借方', '貸方', '税区分', 'メモ'];
-const LEDGER_HEADERS = ['日付', '摘要', '相手科目', '借方', '貸方', '残高'];
+const LEDGER_HEADERS = ['日付', '摘要', '相手科目', '借方', '貸方', '残高', '店舗', '区分'];
 
 const LEDGER_TYPES = ['journal', 'general', 'cash', 'bank', 'receivable', 'payable'] as const;
 type LedgerType = (typeof LEDGER_TYPES)[number];
@@ -95,7 +96,9 @@ export async function GET(request: NextRequest) {
   const buildLineQuery = () => {
     let q = supabase
       .from('journal_entry_lines')
-      .select('id, entry_id, line_no, side, amount, memo, journal_entries!inner(entry_date, description, status, store_id)')
+      .select(
+        'id, entry_id, line_no, side, amount, memo, journal_entries!inner(entry_date, description, status, store_id, source_type, source_id, stores(name))'
+      )
       .eq('account_id', accountId)
       .eq('organization_id', ctx.organizationId)
       .eq('journal_entries.status', 'posted');
@@ -115,7 +118,7 @@ export async function GET(request: NextRequest) {
   const opening = computeOpeningBalance((beforeLines ?? []).map((l) => ({ side: l.side as 'debit' | 'credit', amount: l.amount as number })), category);
 
   const periodEntryIds = [...new Set((periodLinesRaw ?? []).map((l) => l.entry_id as string))];
-  let counterByEntry = new Map<string, string>();
+  let counterNamesByEntry = new Map<string, string[]>();
   if (periodEntryIds.length > 0) {
     const { data: allLines } = await supabase.from('journal_entry_lines').select('entry_id, account_id').in('entry_id', periodEntryIds);
     const otherAccountIds = [...new Set((allLines ?? []).map((l) => l.account_id as string).filter((id) => id !== accountId))];
@@ -132,11 +135,17 @@ export async function GET(request: NextRequest) {
       if (name) arr.push(name);
       byEntry.set(l.entry_id as string, arr);
     }
-    counterByEntry = new Map([...byEntry.entries()].map(([id, names]) => [id, [...new Set(names)].join('・') || '(相手科目複数)']));
+    counterNamesByEntry = byEntry;
   }
 
   const periodLines: LedgerEntryLine[] = (periodLinesRaw ?? []).map((l) => {
-    const je = l.journal_entries as unknown as { entry_date: string; description: string };
+    const je = l.journal_entries as unknown as {
+      entry_date: string;
+      description: string;
+      source_type: SourceType;
+      source_id: string | null;
+      stores: { name: string } | null;
+    };
     return {
       entryId: l.entry_id as string,
       entryDate: je.entry_date,
@@ -144,13 +153,27 @@ export async function GET(request: NextRequest) {
       side: l.side as 'debit' | 'credit',
       amount: l.amount as number,
       memo: l.memo as string | null,
+      storeName: je.stores?.name ?? null,
+      sourceType: je.source_type,
+      sourceId: je.source_id,
     };
   });
-  const ledgerRows = buildLedgerRows(periodLines, category, opening, (entryId) => counterByEntry.get(entryId) ?? '—');
+  const ledgerRows = buildLedgerRows(periodLines, category, opening, (entryId) =>
+    resolveCounterLabel(counterNamesByEntry.get(entryId) ?? [])
+  );
 
-  const rows: (string | number)[][] = [['', '繰越残高', '', '', '', opening]];
+  const rows: (string | number)[][] = [['', '繰越残高', '', '', '', opening, '', '']];
   for (const r of ledgerRows) {
-    rows.push([r.date, r.description, r.counter, r.debit || '', r.credit || '', r.balance]);
+    rows.push([
+      r.date,
+      r.description,
+      r.counter,
+      r.debit || '',
+      r.credit || '',
+      r.balance,
+      r.storeName ?? '全社',
+      r.sourceType ? SOURCE_TYPE_LABELS[r.sourceType] : '',
+    ]);
   }
 
   return csvResponse(`ledger_${type}_${today}.csv`, toCsv(LEDGER_HEADERS, rows));

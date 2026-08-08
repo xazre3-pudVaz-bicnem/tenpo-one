@@ -29,7 +29,15 @@ function firstDayOfMonth(dateJst: string): string {
 export default async function AccountingJournalPage({
   searchParams,
 }: {
-  searchParams: Promise<{ from?: string; to?: string; status?: string; source?: string; store?: string; page?: string }>;
+  searchParams: Promise<{
+    from?: string;
+    to?: string;
+    status?: string;
+    source_type?: string;
+    source_id?: string;
+    store?: string;
+    page?: string;
+  }>;
 }) {
   await requirePermission('csv.export');
   const ctx = await requireFeature('accounting');
@@ -40,7 +48,8 @@ export default async function AccountingJournalPage({
   const from = sp.from || firstDayOfMonth(today);
   const to = sp.to || today;
   const status = JOURNAL_STATUS_OPTIONS.includes(sp.status as JournalStatus) ? (sp.status as JournalStatus) : '';
-  const source = SOURCE_TYPE_OPTIONS.includes(sp.source as SourceType) ? (sp.source as SourceType) : '';
+  const sourceType = SOURCE_TYPE_OPTIONS.includes(sp.source_type as SourceType) ? (sp.source_type as SourceType) : '';
+  const sourceId = sp.source_id || '';
   const storeId = sp.store || (ctx.isHq ? '' : (ctx.currentStore?.id ?? ''));
   const page = Math.max(1, Number(sp.page) || 1);
 
@@ -61,12 +70,13 @@ export default async function AccountingJournalPage({
 
   let query = supabase
     .from('journal_entries')
-    .select('id, entry_no, entry_date, description, status, source_type, void_reason, store_id, stores(name)', { count: 'exact' })
+    .select('id, entry_no, entry_date, description, status, source_type, source_id, void_reason, store_id, stores(name)', { count: 'exact' })
     .eq('organization_id', ctx.organizationId)
     .gte('entry_date', from)
     .lte('entry_date', to);
   if (status) query = query.eq('status', status);
-  if (source) query = query.eq('source_type', source);
+  if (sourceType) query = query.eq('source_type', sourceType);
+  if (sourceId) query = query.eq('source_id', sourceId);
   if (storeId) query = query.eq('store_id', storeId);
   query = query.order('entry_date', { ascending: false }).order('entry_no', { ascending: false });
 
@@ -109,6 +119,7 @@ export default async function AccountingJournalPage({
       description: e.description as string,
       status: e.status as JournalStatus,
       sourceType: e.source_type as SourceType,
+      sourceId: e.source_id as string | null,
       storeId: e.store_id as string | null,
       storeName: (e.stores as unknown as { name: string } | null)?.name ?? null,
       voidReason: e.void_reason as string | null,
@@ -118,10 +129,11 @@ export default async function AccountingJournalPage({
 
   const totalPages = Math.max(1, Math.ceil((count ?? 0) / PAGE_SIZE));
   const buildHref = (p: number) => {
-    const params = new URLSearchParams({ from, to, status, source, store: storeId, page: String(p) });
+    const params = new URLSearchParams({ from, to, status, source_type: sourceType, source_id: sourceId, store: storeId, page: String(p) });
     return `/app/accounting?${params.toString()}`;
   };
-  const exportQuery = new URLSearchParams({ from, to, status, source, store: storeId });
+  const exportQuery = new URLSearchParams({ from, to, status, source_type: sourceType, source_id: sourceId, store: storeId });
+  const clearSourceFilterQuery = new URLSearchParams({ from, to, status, store: storeId });
 
   return (
     <div>
@@ -160,8 +172,8 @@ export default async function AccountingJournalPage({
             </Select>
           </div>
           <div>
-            <Label htmlFor="source">区分</Label>
-            <Select id="source" name="source" defaultValue={source}>
+            <Label htmlFor="source_type">区分</Label>
+            <Select id="source_type" name="source_type" defaultValue={sourceType}>
               <option value="">すべて</option>
               {SOURCE_TYPE_OPTIONS.map((s) => (
                 <option key={s} value={s}>
@@ -170,6 +182,7 @@ export default async function AccountingJournalPage({
               ))}
             </Select>
           </div>
+          <input type="hidden" name="source_id" value={sourceId} />
           {ctx.isHq && (
             <div>
               <Label htmlFor="store">店舗</Label>
@@ -190,6 +203,17 @@ export default async function AccountingJournalPage({
           </div>
         </form>
       </Card>
+
+      {sourceId && (
+        <div className="mb-4 flex items-center justify-between rounded-xl border border-primary/30 bg-primary-soft/40 px-4 py-2.5 text-sm">
+          <span className="text-navy">
+            元取引で絞り込み中（区分: {sourceType ? SOURCE_TYPE_LABELS[sourceType] : 'すべて'}）
+          </span>
+          <Link href={`/app/accounting?${clearSourceFilterQuery.toString()}`} className="font-medium text-primary-deep hover:underline">
+            絞り込みを解除
+          </Link>
+        </div>
+      )}
 
       <JournalPanel entries={rows} linesByEntry={linesByEntry} accounts={accounts} stores={ctx.stores} role={ctx.role} />
 

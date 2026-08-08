@@ -4,10 +4,22 @@
  * lib/accounting の isDebitNormal に従う。ページ（表示）とCSV出力の双方から使う純関数。
  */
 import { isDebitNormal, type AccountCategory } from '@/lib/accounting';
+import type { SourceType } from './labels';
 
 export interface LedgerSourceLine {
   side: 'debit' | 'credit';
   amount: number;
+}
+
+/**
+ * 相手科目名の一覧から表示ラベルを求める。
+ * 1科目のみなら科目名、複数科目にまたがる場合は簿記の慣例に従い「諸口」と表示する。
+ */
+export function resolveCounterLabel(names: string[]): string {
+  const unique = [...new Set(names.filter((n) => n.length > 0))];
+  if (unique.length === 0) return '—';
+  if (unique.length === 1) return unique[0];
+  return '諸口';
 }
 
 /** 期首（表示期間より前）の累計から繰越残高を求める */
@@ -26,6 +38,9 @@ export interface LedgerEntryLine extends LedgerSourceLine {
   entryDate: string;
   description: string;
   memo: string | null;
+  storeName?: string | null;
+  sourceType?: SourceType;
+  sourceId?: string | null;
 }
 
 export interface LedgerRow {
@@ -37,6 +52,9 @@ export interface LedgerRow {
   debit: number;
   credit: number;
   balance: number;
+  storeName?: string | null;
+  sourceType?: SourceType;
+  sourceId?: string | null;
 }
 
 /** 期間内の明細を日付順に並べ、繰越残高から累計残高を計算する */
@@ -60,6 +78,9 @@ export function buildLedgerRows(
       debit: l.side === 'debit' ? l.amount : 0,
       credit: l.side === 'credit' ? l.amount : 0,
       balance,
+      storeName: l.storeName,
+      sourceType: l.sourceType,
+      sourceId: l.sourceId,
     };
   });
 }

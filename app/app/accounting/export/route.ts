@@ -15,7 +15,8 @@ export async function GET(request: NextRequest) {
   const from = searchParams.get('from');
   const to = searchParams.get('to');
   const status = searchParams.get('status');
-  const source = searchParams.get('source');
+  const sourceType = searchParams.get('source_type');
+  const sourceId = searchParams.get('source_id');
   const storeId = searchParams.get('store');
 
   let query = supabase
@@ -25,7 +26,8 @@ export async function GET(request: NextRequest) {
   if (from) query = query.gte('entry_date', from);
   if (to) query = query.lte('entry_date', to);
   if (status) query = query.eq('status', status);
-  if (source) query = query.eq('source_type', source);
+  if (sourceType) query = query.eq('source_type', sourceType);
+  if (sourceId) query = query.eq('source_id', sourceId);
   if (storeId) query = query.eq('store_id', storeId);
   const { data: entries } = await query.order('entry_date', { ascending: false }).order('entry_no', { ascending: false }).limit(5000);
   const list = entries ?? [];

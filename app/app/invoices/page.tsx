@@ -106,6 +106,20 @@ export default async function InvoicesPage({
       q = q.lt('due_date', today).in('status', UNPAID_INVOICE_STATUSES);
     }
     const { data } = await q.order('due_date', { ascending: true, nullsFirst: false }).limit(300);
+
+    // 会計連動: 請求書→仕入仕訳（source_type='purchase', source_id=invoices.id）の対応をまとめて取得
+    const invoiceIds = (data ?? []).map((r) => r.id as string);
+    let journaledInvoiceIds = new Set<string>();
+    if (invoiceIds.length > 0) {
+      const { data: journaled } = await supabase
+        .from('journal_entries')
+        .select('source_id')
+        .eq('organization_id', ctx.organizationId)
+        .eq('source_type', 'purchase')
+        .in('source_id', invoiceIds);
+      journaledInvoiceIds = new Set((journaled ?? []).map((j) => j.source_id as string));
+    }
+
     invoiceRows = (data ?? []).map((r) => ({
       id: r.id as string,
       status: r.status as InvoiceStatus,
@@ -114,6 +128,7 @@ export default async function InvoicesPage({
       amount: r.amount as number,
       storeName: (r.stores as unknown as { name: string } | null)?.name ?? null,
       expenseAccountName: (r.expense_accounts as unknown as { name: string } | null)?.name ?? null,
+      journaled: journaledInvoiceIds.has(r.id as string),
     }));
 
     // サマリー用集計（絞込条件に影響されない全体像）
