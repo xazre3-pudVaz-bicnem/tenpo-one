@@ -7,6 +7,7 @@ import { AutoMappingSection, type AccountOption, type ExpenseAccountMappingRow }
 import { InstallAccountsBanner } from '@/components/accounting/auto-install-accounts';
 import { yen } from '@/lib/format';
 import {
+  aggregateDailyRefunds,
   aggregateDailySales,
   fetchPendingExpenses,
   fetchPendingInvoices,
@@ -51,8 +52,9 @@ export default async function AutoJournalPage({
   const accountsInstalled = accounts.byCode.size > 0;
 
   // ---- サマリー集計（各カードの対象件数・合計額） ----
-  const [salesBuckets, invoices, expenses, pettyCash, payrollRuns] = await Promise.all([
+  const [salesBuckets, refundBuckets, invoices, expenses, pettyCash, payrollRuns] = await Promise.all([
     aggregateDailySales(supabase, ctx.organizationId, storeIds, from, to),
+    aggregateDailyRefunds(supabase, ctx.organizationId, storeIds, from, to),
     fetchPendingInvoices(supabase, ctx.organizationId),
     fetchPendingExpenses(supabase, ctx.organizationId),
     fetchPendingPettyCash(supabase, ctx.organizationId),
@@ -60,8 +62,10 @@ export default async function AutoJournalPage({
   ]);
 
   const salesSourceIds = salesBuckets.map((b) => `${b.storeId}:${b.date}`);
-  const [existingSales, existingPurchase, existingExpense, existingPetty, existingPayroll] = await Promise.all([
+  const refundSourceIds = refundBuckets.map((b) => `${b.storeId}:${b.date}`);
+  const [existingSales, existingRefund, existingPurchase, existingExpense, existingPetty, existingPayroll] = await Promise.all([
     loadExistingSourceIds(supabase, ctx.organizationId, 'pos_sales', salesSourceIds),
+    loadExistingSourceIds(supabase, ctx.organizationId, 'pos_refund', refundSourceIds),
     loadExistingSourceIds(supabase, ctx.organizationId, 'purchase', invoices.map((r) => r.id)),
     loadExistingSourceIds(supabase, ctx.organizationId, 'expense', expenses.map((r) => r.id)),
     loadExistingSourceIds(supabase, ctx.organizationId, 'petty_cash', pettyCash.map((r) => r.id)),
@@ -70,6 +74,9 @@ export default async function AutoJournalPage({
 
   const pendingSalesBuckets = salesBuckets.filter((b) => !existingSales.has(`${b.storeId}:${b.date}`));
   const salesTotal = pendingSalesBuckets.reduce((a, b) => a + b.cashStandard + b.cashReduced + b.cashlessStandard + b.cashlessReduced, 0);
+
+  const pendingRefundBuckets = refundBuckets.filter((b) => !existingRefund.has(`${b.storeId}:${b.date}`));
+  const refundTotal = pendingRefundBuckets.reduce((a, b) => a + b.cashStandard + b.cashReduced + b.cashlessStandard + b.cashlessReduced, 0);
 
   const pendingInvoices = invoices.filter((r) => !existingPurchase.has(r.id));
   const purchaseTotal = pendingInvoices.reduce((a, r) => a + r.amount, 0);
@@ -131,10 +138,14 @@ export default async function AutoJournalPage({
           type="submit"
           className="h-10 rounded-lg border border-gray-300 bg-white px-4 text-sm font-medium text-navy hover:bg-gray-50"
         >
-          期間を変更（売上のみ対象）
+          期間を変更（売上・返金のみ対象）
         </button>
         <p className="ml-2 text-xs text-gray-500">仕入・経費・小口現金・給与は状態（承認済み・未仕訳）のみで対象を判定します</p>
       </form>
+
+      <div className="rounded-xl border border-warning/30 bg-warning-soft px-4 py-3 text-xs text-warning">
+        返金の仕訳は「返金が発生した営業日」で計上します（元の売上の日ではありません）。そのため、元売上の月が月次締め済みでも、返金日が未締めの当月であれば当月の仕訳として作成され、締め済み月の帳簿を書き換えることはありません。
+      </div>
 
       <div className="space-y-4">
         <AutoSourceCard
@@ -143,6 +154,14 @@ export default async function AutoJournalPage({
           hint={`${from} 〜 ${to} の営業日ごとに、現金/キャッシュレス×標準/軽減税率で1日1仕訳を作成します`}
           pendingCount={pendingSalesBuckets.length}
           pendingTotal={salesTotal}
+          range={{ from, to }}
+        />
+        <AutoSourceCard
+          sourceType="pos_refund"
+          title="返金（POS）"
+          hint={`${from} 〜 ${to} の返金の営業日ごとに、借方に売上高、貸方に現金/売掛金（キャッシュレス）で1日1仕訳を作成します。取引取消（VOID）も金額として含みます。計上日は返金の営業日で、元売上の日ではありません`}
+          pendingCount={pendingRefundBuckets.length}
+          pendingTotal={refundTotal}
           range={{ from, to }}
         />
         <AutoSourceCard
@@ -182,8 +201,8 @@ export default async function AutoJournalPage({
       <AutoMappingSection rows={mappingRows} accountOptions={accountOptions} />
 
       <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-xs text-gray-500">
-        合計参考: 売上 {yen(salesTotal)} ・ 仕入 {yen(purchaseTotal)} ・ 経費 {yen(expenseTotal)} ・ 小口現金 {yen(pettyTotal)} ・ 給与{' '}
-        {yen(payrollTotal)}
+        合計参考: 売上 {yen(salesTotal)} ・ 返金 {yen(refundTotal)} ・ 仕入 {yen(purchaseTotal)} ・ 経費 {yen(expenseTotal)} ・ 小口現金{' '}
+        {yen(pettyTotal)} ・ 給与 {yen(payrollTotal)}
       </div>
     </div>
   );

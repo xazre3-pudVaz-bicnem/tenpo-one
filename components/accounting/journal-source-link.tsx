@@ -2,6 +2,7 @@
  * 仕訳⇔元取引の双方向リンク規約。
  * 元取引の source_id 形式（app/app/accounting/auto/actions.ts 準拠）:
  *   pos_sales  = `{storeId}:{businessDate}`（日次・店舗単位の集計仕訳。個々の注文には紐付かない）
+ *   pos_refund = `{storeId}:{businessDate}`（返金の営業日で集計。元売上の日ではない点に注意）
  *   purchase   = invoices.id（仕入請求書）
  *   expense    = expenses.id
  *   petty_cash = cash_transactions.id（小口現金）
@@ -41,6 +42,7 @@ export function JournalSourceLink({
 /** 仕訳行から元取引ページへのリンク先ラベル（区分ごと） */
 export const ORIGIN_LINK_LABELS: Partial<Record<SourceType, string>> = {
   pos_sales: '売上を見る',
+  pos_refund: '返金元の取引を見る',
   expense: '経費を見る',
   purchase: '請求書を見る',
   petty_cash: '小口現金を見る',
@@ -56,7 +58,8 @@ export const ORIGIN_LINK_LABELS: Partial<Record<SourceType, string>> = {
 export function resolveSourceOriginHref(sourceType: SourceType, sourceId: string | null): string | null {
   if (!sourceId) return null;
   switch (sourceType) {
-    case 'pos_sales': {
+    case 'pos_sales':
+    case 'pos_refund': {
       const sep = sourceId.indexOf(':');
       const date = sep >= 0 ? sourceId.slice(sep + 1) : null;
       return date ? `/app/orders?from=${date}&to=${date}` : '/app/orders';

@@ -40,12 +40,13 @@ export const JOURNAL_STATUS_TONES: Record<JournalStatus, BadgeTone> = {
 export const JOURNAL_STATUS_OPTIONS: JournalStatus[] = ['draft', 'posted', 'voided'];
 
 export type SourceType =
-  | 'manual' | 'pos_sales' | 'purchase' | 'expense' | 'petty_cash' | 'payroll' | 'bank' | 'fixed_asset'
+  | 'manual' | 'pos_sales' | 'pos_refund' | 'purchase' | 'expense' | 'petty_cash' | 'payroll' | 'bank' | 'fixed_asset'
   | 'correction' | 'opening';
 
 export const SOURCE_TYPE_LABELS: Record<SourceType, string> = {
   manual: '手入力',
   pos_sales: 'POS売上',
+  pos_refund: '売上返金',
   purchase: '仕入',
   expense: '経費',
   petty_cash: '小口現金',
@@ -57,8 +58,13 @@ export const SOURCE_TYPE_LABELS: Record<SourceType, string> = {
 };
 
 export const SOURCE_TYPE_OPTIONS: SourceType[] = [
-  'manual', 'pos_sales', 'purchase', 'expense', 'petty_cash', 'payroll', 'bank', 'fixed_asset', 'correction', 'opening',
+  'manual', 'pos_sales', 'pos_refund', 'purchase', 'expense', 'petty_cash', 'payroll', 'bank', 'fixed_asset', 'correction', 'opening',
 ];
+
+/** 一覧・自動仕訳カードでの区分バッジのトーン（未指定はBadgeの既定tone=grayを使う） */
+export const SOURCE_TYPE_TONES: Partial<Record<SourceType, BadgeTone>> = {
+  pos_refund: 'warning',
+};
 
 export type PeriodStatus = 'open' | 'closed';
 

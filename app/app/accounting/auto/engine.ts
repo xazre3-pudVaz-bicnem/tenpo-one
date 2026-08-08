@@ -9,6 +9,7 @@ import { createClient } from '@/lib/supabase/server';
 import {
   STD,
   buildSalesJournal,
+  buildRefundJournal,
   buildPurchaseJournal,
   buildExpenseJournal,
   buildPayrollJournal,
@@ -19,9 +20,9 @@ import {
 
 type Supabase = Awaited<ReturnType<typeof createClient>>;
 
-export type AutoSourceType = 'pos_sales' | 'purchase' | 'expense' | 'petty_cash' | 'payroll';
+export type AutoSourceType = 'pos_sales' | 'purchase' | 'expense' | 'petty_cash' | 'payroll' | 'pos_refund';
 
-/** journal_entries.source_type の全候補のうち、このモジュール群が書き込みうる値（自動仕訳5種 + 銀行取引） */
+/** journal_entries.source_type の全候補のうち、このモジュール群が書き込みうる値（自動仕訳6種 + 銀行取引） */
 export type JournalSourceType = AutoSourceType | 'bank';
 
 export interface AccountRef {
@@ -354,6 +355,130 @@ export function salesJournalLines(bucket: DailySalesBucket): JournalLineDraft[] 
     cashlessSalesStandard: bucket.cashlessStandard,
     cashlessSalesReduced: bucket.cashlessReduced,
   });
+}
+
+// -------------------------------------------------------------
+// 返金（refunds）: 営業日×店舗ごとに現金/キャッシュレス×標準/軽減税率を集計
+// 計上日は refunds.business_date（返金が発生した営業日）であり、元売上の日ではない。
+// 月次締め済みの過去月に元売上があっても、返金日が当月なら当月仕訳になる＝締めを壊さない。
+// -------------------------------------------------------------
+
+export interface DailyRefundBucket {
+  date: string;
+  storeId: string;
+  cashStandard: number;
+  cashReduced: number;
+  cashlessStandard: number;
+  cashlessReduced: number;
+  /** この営業日×店舗に含まれる返金件数（kind='refund'+'void'の合計） */
+  refundCount: number;
+  /** うち取引取消（kind='void'）の件数 */
+  voidCount: number;
+}
+
+/**
+ * refunds を元注文の order_items の税率タグ（8%/10%）比率で按分し、
+ * 営業日×店舗別の現金/キャッシュレス×税率区分バケットを作る（aggregateDailySalesと同じ按分手法）。
+ * 按分の端数は標準税率側へ寄せる（軽減税率側を四捨五入で先に確定し、標準側で残差を吸収して合計を一致させる）。
+ * VOID（取引取消）も金額として含める（仕訳上は区別しない。摘要件数のみ区別）。
+ */
+export async function aggregateDailyRefunds(
+  supabase: Supabase,
+  organizationId: string,
+  storeIds: string[],
+  from: string,
+  to: string
+): Promise<DailyRefundBucket[]> {
+  if (storeIds.length === 0) return [];
+  const { data: refunds } = await supabase
+    .from('refunds')
+    .select('id, order_id, store_id, method, amount, kind, business_date')
+    .eq('organization_id', organizationId)
+    .in('store_id', storeIds)
+    .gte('business_date', from)
+    .lte('business_date', to)
+    .limit(8000);
+  const rows = refunds ?? [];
+  if (rows.length === 0) return [];
+
+  const orderIds = [...new Set(rows.map((r) => r.order_id as string))];
+  const totalsByOrder = new Map<string, { standard: number; reduced: number }>();
+  const CHUNK = 300;
+  for (let i = 0; i < orderIds.length; i += CHUNK) {
+    const chunk = orderIds.slice(i, i + CHUNK);
+    const { data: items } = await supabase
+      .from('order_items')
+      .select('order_id, tax_rate, line_total')
+      .in('order_id', chunk)
+      .eq('status', 'active');
+    for (const it of items ?? []) {
+      const orderId = it.order_id as string;
+      const bucket = totalsByOrder.get(orderId) ?? { standard: 0, reduced: 0 };
+      const rate = Number(it.tax_rate);
+      if (rate > 0 && rate <= 9) bucket.reduced += it.line_total as number;
+      else bucket.standard += it.line_total as number;
+      totalsByOrder.set(orderId, bucket);
+    }
+  }
+
+  const buckets = new Map<string, DailyRefundBucket>();
+  for (const r of rows) {
+    const date = r.business_date as string;
+    const storeId = r.store_id as string;
+    const key = `${storeId}:${date}`;
+    const bucket =
+      buckets.get(key) ?? {
+        date,
+        storeId,
+        cashStandard: 0,
+        cashReduced: 0,
+        cashlessStandard: 0,
+        cashlessReduced: 0,
+        refundCount: 0,
+        voidCount: 0,
+      };
+    const amount = r.amount as number;
+    const totals = totalsByOrder.get(r.order_id as string);
+    let reduced = 0;
+    let std = amount;
+    if (totals && totals.standard + totals.reduced > 0) {
+      const ratio = totals.reduced / (totals.standard + totals.reduced);
+      reduced = Math.round(amount * ratio);
+      std = amount - reduced; // 端数は標準税率側へ寄せる
+    }
+    if (r.method === 'cash') {
+      bucket.cashStandard += std;
+      bucket.cashReduced += reduced;
+    } else {
+      bucket.cashlessStandard += std;
+      bucket.cashlessReduced += reduced;
+    }
+    bucket.refundCount += 1;
+    if (r.kind === 'void') bucket.voidCount += 1;
+    buckets.set(key, bucket);
+  }
+  return [...buckets.values()].sort((a, b) => (a.date === b.date ? a.storeId.localeCompare(b.storeId) : a.date.localeCompare(b.date)));
+}
+
+export function refundJournalLines(bucket: DailyRefundBucket): JournalLineDraft[] {
+  return buildRefundJournal({
+    cashRefundsStandard: bucket.cashStandard,
+    cashRefundsReduced: bucket.cashReduced,
+    cashlessRefundsStandard: bucket.cashlessStandard,
+    cashlessRefundsReduced: bucket.cashlessReduced,
+  });
+}
+
+/** 'YYYY-MM-DD' → 'M/D'（摘要用の短縮表記） */
+function shortDate(dateStr: string): string {
+  const [, m, d] = dateStr.split('-');
+  return `${Number(m)}/${Number(d)}`;
+}
+
+/** 返金仕訳の摘要（例: 「8/8 売上返金（渋谷店・2件）」。取消が含まれる場合は「うち取消N件」を付記） */
+export function refundJournalDescription(bucket: DailyRefundBucket, storeName: string | null): string {
+  const base = `${shortDate(bucket.date)} 売上返金（${storeName ?? '全社'}・${bucket.refundCount}件）`;
+  return bucket.voidCount > 0 ? `${base}・うち取消${bucket.voidCount}件` : base;
 }
 
 // -------------------------------------------------------------

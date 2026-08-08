@@ -5,6 +5,7 @@ import { requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { todayJst } from '@/lib/format';
 import {
+  aggregateDailyRefunds,
   aggregateDailySales,
   buildCandidateView,
   expenseJournalLines,
@@ -20,6 +21,8 @@ import {
   payrollJournalLines,
   pettyCashJournalLines,
   purchaseJournalLines,
+  refundJournalDescription,
+  refundJournalLines,
   resolveLines,
   salesJournalLines,
   type CreateResult,
@@ -136,6 +139,115 @@ export async function createSalesJournalEntriesBySourceIds(sourceIds: string[], 
     return { storeId: id.slice(0, sep), date: id.slice(sep + 1) };
   });
   return createSalesJournalEntries(keys, post);
+}
+
+// -------------------------------------------------------------
+// 返金（refunds）: 計上日は返金の営業日（元売上の日ではない）
+// -------------------------------------------------------------
+
+export async function previewRefundJournal(from: string, to: string, storeIds?: string[]): Promise<JournalCandidateView[]> {
+  const ctx = await requirePermission('csv.export');
+  const supabase = await createClient();
+  const targetStoreIds = resolveStoreIds(ctx, ctx.currentStore?.id ?? null, storeIds);
+  const storeNameById = new Map(ctx.stores.map((s) => [s.id, s.name]));
+
+  const accounts = await loadAccounts(supabase, ctx.organizationId);
+  const buckets = await aggregateDailyRefunds(supabase, ctx.organizationId, targetStoreIds, from, to);
+  const sourceIds = buckets.map((b) => `${b.storeId}:${b.date}`);
+  const existing = await loadExistingSourceIds(supabase, ctx.organizationId, 'pos_refund', sourceIds);
+
+  return buckets.map((b) => {
+    const sourceId = `${b.storeId}:${b.date}`;
+    const storeName = storeNameById.get(b.storeId) ?? null;
+    return buildCandidateView({
+      sourceType: 'pos_refund',
+      sourceId,
+      date: b.date,
+      description: refundJournalDescription(b, storeName),
+      storeId: b.storeId,
+      storeName,
+      lines: refundJournalLines(b),
+      accounts,
+      alreadyPosted: existing.has(sourceId),
+    });
+  });
+}
+
+export async function createRefundJournalEntries(
+  keys: { storeId: string; date: string }[],
+  post: boolean
+): Promise<CreateResult> {
+  const ctx = await requirePermission('csv.export');
+  if (!keys.every((k) => ctx.stores.some((s) => s.id === k.storeId))) {
+    throw new Error('対象店舗にアクセス権がありません');
+  }
+  const supabase = await createClient();
+  const accounts = await loadAccounts(supabase, ctx.organizationId);
+  const storeIds = [...new Set(keys.map((k) => k.storeId))];
+  const dates = keys.map((k) => k.date);
+  const from = dates.reduce((a, b) => (a < b ? a : b));
+  const to = dates.reduce((a, b) => (a > b ? a : b));
+  const buckets = await aggregateDailyRefunds(supabase, ctx.organizationId, storeIds, from, to);
+  const bucketByKey = new Map(buckets.map((b) => [`${b.storeId}:${b.date}`, b]));
+  const storeNameById = new Map(ctx.stores.map((s) => [s.id, s.name]));
+
+  const result: CreateResult = { ok: 0, skipped: 0, failed: [] };
+  for (const k of keys) {
+    const key = `${k.storeId}:${k.date}`;
+    try {
+      const existing = await loadExistingSourceIds(supabase, ctx.organizationId, 'pos_refund', [key]);
+      if (existing.has(key)) {
+        result.skipped += 1;
+        continue;
+      }
+      const bucket = bucketByKey.get(key);
+      if (!bucket) {
+        result.failed.push({ key, reason: '対象の返金データが見つかりません' });
+        continue;
+      }
+      const draftLines = refundJournalLines(bucket);
+      const { lines, missing } = resolveLines(draftLines, accounts);
+      if (missing.length > 0) {
+        result.failed.push({ key, reason: `勘定科目が未導入です（${missing.join('、')}）。標準科目を導入してください` });
+        continue;
+      }
+      const storeName = storeNameById.get(k.storeId) ?? null;
+      const { entryId } = await insertJournalEntry(supabase, {
+        organizationId: ctx.organizationId,
+        storeId: k.storeId,
+        entryDate: k.date,
+        description: refundJournalDescription(bucket, storeName),
+        sourceType: 'pos_refund',
+        sourceId: key,
+        lines,
+        userId: ctx.userId,
+        post,
+      });
+      // バックリンク: この店舗×営業日の返金レコードへ仕訳idを反映する（未設定分のみ）。
+      // 00025の不変トリガーは journal_entry_id の後付け更新を許可している。
+      await supabase
+        .from('refunds')
+        .update({ journal_entry_id: entryId, updated_by: ctx.userId })
+        .eq('organization_id', ctx.organizationId)
+        .eq('store_id', k.storeId)
+        .eq('business_date', k.date)
+        .is('journal_entry_id', null);
+      result.ok += 1;
+    } catch (err) {
+      result.failed.push({ key, reason: err instanceof Error ? err.message : '仕訳の作成に失敗しました' });
+    }
+  }
+  revalidatePath(PATH);
+  return result;
+}
+
+/** source_id（`{storeId}:{date}`形式）のリストから返金仕訳を作成する薄いアダプタ（UIからの汎用呼び出し用） */
+export async function createRefundJournalEntriesBySourceIds(sourceIds: string[], post: boolean): Promise<CreateResult> {
+  const keys = sourceIds.map((id) => {
+    const sep = id.indexOf(':');
+    return { storeId: id.slice(0, sep), date: id.slice(sep + 1) };
+  });
+  return createRefundJournalEntries(keys, post);
 }
 
 // -------------------------------------------------------------

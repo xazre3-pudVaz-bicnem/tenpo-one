@@ -13,6 +13,8 @@ import { yen, formatDate } from '@/lib/format';
 import {
   previewSalesJournal,
   createSalesJournalEntriesBySourceIds,
+  previewRefundJournal,
+  createRefundJournalEntriesBySourceIds,
   previewPurchaseJournal,
   createPurchaseJournalEntries,
   previewExpenseJournal,
@@ -23,11 +25,14 @@ import {
   createPayrollJournalEntries,
 } from '@/app/app/accounting/auto/actions';
 import type { AutoSourceType, CreateResult, JournalCandidateView } from '@/app/app/accounting/auto/engine';
+import { SOURCE_TYPE_TONES } from '@/components/accounting/labels';
 
 async function loadCandidates(sourceType: AutoSourceType, range: { from: string; to: string }): Promise<JournalCandidateView[]> {
   switch (sourceType) {
     case 'pos_sales':
       return previewSalesJournal(range.from, range.to);
+    case 'pos_refund':
+      return previewRefundJournal(range.from, range.to);
     case 'purchase':
       return previewPurchaseJournal();
     case 'expense':
@@ -43,6 +48,8 @@ async function createSelected(sourceType: AutoSourceType, keys: string[], post: 
   switch (sourceType) {
     case 'pos_sales':
       return createSalesJournalEntriesBySourceIds(keys, post);
+    case 'pos_refund':
+      return createRefundJournalEntriesBySourceIds(keys, post);
     case 'purchase':
       return createPurchaseJournalEntries(keys, post);
     case 'expense':
@@ -132,7 +139,10 @@ export function AutoSourceCard({
     <Card>
       <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3">
         <div>
-          <CardTitle>{title}</CardTitle>
+          <div className="flex items-center gap-2">
+            <CardTitle>{title}</CardTitle>
+            {SOURCE_TYPE_TONES[sourceType] && <Badge tone={SOURCE_TYPE_TONES[sourceType]}>マイナス計上</Badge>}
+          </div>
           <p className="mt-1 text-xs text-gray-500">{hint}</p>
         </div>
         <div className="flex items-center gap-3">
