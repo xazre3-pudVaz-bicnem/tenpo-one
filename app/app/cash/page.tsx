@@ -5,6 +5,7 @@ import { requireFeature } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { can, ROLE_LABELS } from '@/lib/permissions';
 import { resolveApprovalRule, type ApprovalRuleLike } from '@/lib/approvals';
+import { expectedCash } from '@/lib/metrics';
 import { yen, formatDate, todayJst, daysAgoJst } from '@/lib/format';
 import { PageHeader } from '@/components/ui/page-header';
 import { StatCard } from '@/components/ui/stat-card';
@@ -22,6 +23,7 @@ import { PettyCashCountDialog } from '@/components/cash/petty-cash-count-dialog'
 import { PettyCashCountApprove } from '@/components/cash/petty-cash-count-approve';
 import { ApprovalActions } from '@/components/cash/approval-actions';
 import { ClosingRow, type ClosingRowData } from '@/components/cash/closing-row';
+import { ClosingSnapshot } from '@/components/cash/closing-snapshot';
 import { approvePettyCash, rejectPettyCash } from '@/app/app/cash/actions';
 import {
   KIND_LABELS,
@@ -29,7 +31,6 @@ import {
   APPROVAL_TONES,
   CLOSING_STATUS_LABELS,
   CLOSING_STATUS_TONES,
-  METHOD_LABELS,
   PETTY_KINDS,
   PETTY_COUNT_STATUS_LABELS,
   PETTY_COUNT_STATUS_TONES,
@@ -175,7 +176,13 @@ async function RegisterTab({ storeId }: { storeId: string }) {
             const refund = breakdown.refund ?? 0;
             const deposit = (breakdown.deposit ?? 0) + (breakdown.petty_in ?? 0);
             const withdrawal = (breakdown.withdrawal ?? 0) + (breakdown.petty_out ?? 0);
-            const theoreticalCash = s.opening_float + sale - refund + deposit - withdrawal;
+            const theoreticalCash = expectedCash({
+              openingFloat: s.opening_float,
+              cashSales: sale,
+              cashIn: deposit,
+              cashRefunds: refund,
+              cashOut: withdrawal,
+            });
             const data: SessionCardData = {
               id: s.id,
               storeId,
@@ -198,29 +205,21 @@ async function RegisterTab({ storeId }: { storeId: string }) {
             </Badge>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <StatCard label="売上" value={yen(todayClosing.sales_total)} />
-              <StatCard label="会計件数" value={`${todayClosing.orders_count}件`} />
-              <StatCard label="客数" value={`${todayClosing.guests_count}名`} />
-              <StatCard
-                label="現金差異"
-                value={`${todayClosing.cash_difference > 0 ? '+' : ''}${yen(todayClosing.cash_difference)}`}
-                tone={todayClosing.cash_difference !== 0 ? 'danger' : 'success'}
-              />
-            </div>
-            {todayClosing.payment_breakdown && Object.keys(todayClosing.payment_breakdown).length > 0 && (
-              <div className="mt-4">
-                <p className="text-xs font-medium text-gray-500">支払方法内訳</p>
-                <ul className="mt-2 flex flex-wrap gap-x-6 gap-y-1 text-sm">
-                  {Object.entries(todayClosing.payment_breakdown as Record<string, number>).map(([method, amt]) => (
-                    <li key={method} className="flex gap-2">
-                      <span className="text-gray-600">{METHOD_LABELS[method] ?? method}</span>
-                      <span className="tabular-nums font-medium text-navy">{yen(amt)}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
+            <ClosingSnapshot
+              data={{
+                salesTotal: todayClosing.sales_total,
+                refundTotal: todayClosing.refund_total,
+                netSales: todayClosing.net_sales,
+                discountTotal: todayClosing.discount_total,
+                paymentBreakdown: (todayClosing.payment_breakdown as Record<string, number>) ?? {},
+                refundBreakdown: (todayClosing.refund_breakdown as Record<string, number>) ?? {},
+                pettyInTotal: todayClosing.petty_in_total,
+                pettyOutTotal: todayClosing.petty_out_total,
+                expectedCash: todayClosing.expected_cash,
+                countedCash: todayClosing.counted_cash,
+                cashDifference: todayClosing.cash_difference,
+              }}
+            />
           </CardContent>
         </Card>
       )}
@@ -504,7 +503,7 @@ async function ClosingsTab({
   const { data: rows } = await supabase
     .from('daily_closings')
     .select(
-      'id, business_date, sales_total, orders_count, guests_count, discount_total, refund_total, payment_breakdown, cash_difference, status, note, stores(name)'
+      'id, business_date, sales_total, orders_count, guests_count, discount_total, refund_total, net_sales, payment_breakdown, refund_breakdown, petty_in_total, petty_out_total, expected_cash, counted_cash, cash_difference, status, note, stores(name)'
     )
     .in('store_id', storeIds)
     .gte('business_date', from)
@@ -514,6 +513,10 @@ async function ClosingsTab({
   return (
     <div className="space-y-5">
       <PeriodFilter action="/app/cash" hidden={{ tab: 'closings' }} from={from} to={to} />
+
+      <div className="rounded-xl border border-primary/20 bg-primary-soft px-4 py-3 text-sm text-primary-deep">
+        締めはその時点のスナップショットです。締め後に発生した返金は、返金が発生した営業日側の集計に計上されます（過去の締めの数値は書き換えられません）。行を開くと純売上・返金内訳・小口入出金・理論現金／実現金の詳細を確認できます。
+      </div>
 
       {(rows ?? []).length === 0 ? (
         <EmptyState title="締め履歴はありません" description="期間を変更するか、レジ締めを行ってください。" />
@@ -525,7 +528,8 @@ async function ClosingsTab({
                 <Th />
                 <Th>営業日</Th>
                 {showStore && <Th>店舗</Th>}
-                <Th className="text-right">売上</Th>
+                <Th className="text-right">総売上</Th>
+                <Th className="text-right">純売上</Th>
                 <Th className="text-right">件数</Th>
                 <Th className="text-right">客数</Th>
                 <Th className="text-right">現金差異</Th>
@@ -544,9 +548,15 @@ async function ClosingsTab({
                   guestsCount: r.guests_count,
                   discountTotal: r.discount_total,
                   refundTotal: r.refund_total,
+                  netSales: r.net_sales,
                   cashDifference: r.cash_difference,
                   status: r.status as ClosingStatus,
                   paymentBreakdown: (r.payment_breakdown as Record<string, number>) ?? {},
+                  refundBreakdown: (r.refund_breakdown as Record<string, number>) ?? {},
+                  pettyInTotal: r.petty_in_total,
+                  pettyOutTotal: r.petty_out_total,
+                  expectedCash: r.expected_cash,
+                  countedCash: r.counted_cash,
                   note: r.note,
                 };
                 return <ClosingRow key={r.id} closing={data} showStore={showStore} canApprove={canApprove} />;

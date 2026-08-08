@@ -100,19 +100,36 @@ export function ReportDetailDialog({
               <Badge tone={STATUS_TONE[detail.status] ?? 'gray'}>{STATUS_LABEL[detail.status] ?? detail.status}</Badge>
             </div>
 
-            <div className="grid grid-cols-2 gap-2 rounded-lg bg-gray-50 p-3 text-sm sm:grid-cols-4">
-              <Metric label="売上" value={yen(detail.metrics.sales)} />
-              <Metric label="客数" value={`${detail.metrics.guests}名`} />
-              <Metric label="客単価" value={yen(detail.metrics.avgSpend)} />
-              <Metric
-                label="現金差異"
-                value={detail.metrics.cashDifference == null ? '未締め' : yen(detail.metrics.cashDifference)}
-              />
-              <Metric label="予約数" value={`${detail.metrics.reservationsCount}件`} />
-              <Metric label="キャンセル数" value={`${detail.metrics.cancelCount}件`} />
-              <Metric label="廃棄額" value={yen(detail.metrics.wasteAmount)} />
-              <Metric label="人件費概算" value={yen(detail.metrics.laborCost)} />
-            </div>
+            {(() => {
+              // v0.4.2以前に生成された日報は grossSales 等の新フィールドを持たない（旧フィールド sales のみ）。
+              // 新フィールド欠落時は「総売上」を旧sales値へフォールバックし、値引・返金・純売上は算出不能として「—」表示にする。
+              const isLegacyMetrics = detail.metrics.grossSales == null;
+              const grossDisplay = detail.metrics.grossSales ?? detail.metrics.sales;
+              return (
+                <>
+                  <div className="grid grid-cols-2 gap-2 rounded-lg bg-gray-50 p-3 text-sm sm:grid-cols-4">
+                    <Metric label="総売上" value={yen(grossDisplay)} />
+                    <Metric label="値引" value={isLegacyMetrics ? '—' : yen(detail.metrics.discounts)} />
+                    <Metric label="返金" value={isLegacyMetrics ? '—' : yen(detail.metrics.refunds)} />
+                    <Metric label="純売上" value={isLegacyMetrics ? '—' : yen(detail.metrics.netSales)} />
+                    <Metric label="客数" value={`${detail.metrics.guests}名`} />
+                    <Metric label="客単価" value={yen(detail.metrics.avgSpend)} />
+                    <Metric
+                      label="現金差異"
+                      value={detail.metrics.cashDifference == null ? '未締め' : yen(detail.metrics.cashDifference)}
+                    />
+                    <Metric label="予約数" value={`${detail.metrics.reservationsCount}件`} />
+                    <Metric label="キャンセル数" value={`${detail.metrics.cancelCount}件`} />
+                    <Metric label="廃棄額" value={yen(detail.metrics.wasteAmount)} />
+                    <Metric label="人件費概算" value={yen(detail.metrics.laborCost)} />
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    客単価は純売上（総売上−返金）÷客数で算出しています。
+                    {isLegacyMetrics && '　この日報はv0.4.2の項目追加より前に生成されたため、値引・返金・純売上は「—」表示です（未計上ではありません）。'}
+                  </p>
+                </>
+              );
+            })()}
 
             {detail.status === 'draft' && canSubmit ? (
               <div>

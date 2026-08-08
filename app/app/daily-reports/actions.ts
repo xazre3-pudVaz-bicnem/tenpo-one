@@ -5,6 +5,7 @@ import { requireMember } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { calcWasteAmount } from '@/lib/costing';
 import { estimateLaborCost, type TimeEntryForLabor, type PayrollRuleForLabor } from '@/components/reports/labor';
+import { computeSalesMetrics, SETTLED_ORDER_STATUSES, type SettledOrderLike, type RefundLike } from '@/lib/metrics';
 import type { Role } from '@/lib/permissions';
 
 const PATH = '/app/daily-reports';
@@ -22,9 +23,23 @@ async function requireDailyReportWriter(storeId: string) {
 }
 
 export interface DailyMetrics {
-  sales: number;
+  /** 総売上（gross = 会計成立注文(paid+refunded)のtotal合計。返金は控除しない。lib/metrics.ts正式定義） */
+  grossSales: number;
+  /** 値引（同注文のdiscount_total合計） */
+  discounts: number;
+  /** 返金（当営業日発生分のrefunds.amount合計。返金発生日の営業日側へ計上） */
+  refunds: number;
+  /** 純売上（net = grossSales − refunds） */
+  netSales: number;
+  /** 客数（settled注文=paid+refundedのguest_count合計） */
   guests: number;
+  /** 客単価（netSales ÷ guests。floor・guests=0なら0） */
   avgSpend: number;
+  /**
+   * @deprecated v0.4.2以前に生成された日報の総売上（paid状態のみ・返金非控除の旧定義）。
+   * 新規生成分では書き込まない。旧日報の表示フォールバック専用（grossSales欠落時のみ参照）。
+   */
+  sales?: number;
   cashDifference: number | null;
   closingExists: boolean;
   reservationsCount: number;
@@ -39,8 +54,15 @@ async function buildMetrics(
   storeId: string,
   businessDate: string
 ): Promise<DailyMetrics> {
-  const [ordersRes, closingRes, reservationsRes, wasteRes, timeEntriesRes, payrollRulesRes] = await Promise.all([
-    supabase.from('orders').select('total, guest_count, status').eq('store_id', storeId).eq('business_date', businessDate).in('status', ['paid', 'refunded']),
+  const [ordersRes, refundsRes, closingRes, reservationsRes, wasteRes, timeEntriesRes, payrollRulesRes] = await Promise.all([
+    supabase
+      .from('orders')
+      .select('total, discount_total, guest_count, status')
+      .eq('store_id', storeId)
+      .eq('business_date', businessDate)
+      .in('status', SETTLED_ORDER_STATUSES),
+    // 返金は「返金発生日」の営業日側へ計上する（元取引の営業日ではない。lib/metrics.ts正式定義）
+    supabase.from('refunds').select('amount, kind').eq('store_id', storeId).eq('business_date', businessDate),
     supabase.from('daily_closings').select('cash_difference').eq('store_id', storeId).eq('business_date', businessDate).maybeSingle(),
     supabase.from('reservations').select('status').eq('store_id', storeId).eq('reserved_date', businessDate),
     supabase.from('stock_movements').select('quantity, unit_cost').eq('store_id', storeId).eq('movement_type', 'waste').eq('business_date', businessDate),
@@ -56,11 +78,9 @@ async function buildMetrics(
       .eq('status', 'active'),
   ]);
 
-  const orders = ordersRes.data ?? [];
-  const paid = orders.filter((o) => o.status === 'paid');
-  const sales = paid.reduce((a, o) => a + o.total, 0);
-  const guests = paid.reduce((a, o) => a + o.guest_count, 0);
-  const avgSpend = guests > 0 ? Math.floor(sales / guests) : 0;
+  const orders = (ordersRes.data ?? []) as SettledOrderLike[];
+  const refunds = (refundsRes.data ?? []) as RefundLike[];
+  const sales = computeSalesMetrics(orders, refunds); // gross/discounts/refunds/netSales/guests/avgSpendの正式定義
 
   const reservations = reservationsRes.data ?? [];
   const cancelCount = reservations.filter((r) => r.status === 'cancelled' || r.status === 'no_show').length;
@@ -73,9 +93,12 @@ async function buildMetrics(
   );
 
   return {
-    sales,
-    guests,
-    avgSpend,
+    grossSales: sales.grossSales,
+    discounts: sales.discounts,
+    refunds: sales.refunds,
+    netSales: sales.netSales,
+    guests: sales.guests,
+    avgSpend: sales.avgSpend,
     cashDifference: closingRes.data ? closingRes.data.cash_difference : null,
     closingExists: !!closingRes.data,
     reservationsCount: reservations.length,

@@ -9,7 +9,8 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useToast } from '@/components/ui/toast';
 import { yen, formatDate } from '@/lib/format';
 import { approveClosing, reopenClosing } from '@/app/app/cash/actions';
-import { CLOSING_STATUS_LABELS, CLOSING_STATUS_TONES, METHOD_LABELS, type ClosingStatus } from '@/components/cash/labels';
+import { CLOSING_STATUS_LABELS, CLOSING_STATUS_TONES, type ClosingStatus } from '@/components/cash/labels';
+import { ClosingSnapshot } from '@/components/cash/closing-snapshot';
 
 export interface ClosingRowData {
   id: string;
@@ -20,9 +21,17 @@ export interface ClosingRowData {
   guestsCount: number;
   discountTotal: number;
   refundTotal: number;
+  /** 純売上（net_sales）。旧締め（expectedCashがnull）ではdefault 0のままなので信用しない */
+  netSales: number;
   cashDifference: number;
   status: ClosingStatus;
   paymentBreakdown: Record<string, number>;
+  refundBreakdown: Record<string, number>;
+  pettyInTotal: number;
+  pettyOutTotal: number;
+  /** null許容。null = v0.4.2以前の締め（新snapshot列は記録されていない） */
+  expectedCash: number | null;
+  countedCash: number | null;
   note: string | null;
 }
 
@@ -32,7 +41,7 @@ export function ClosingRow({ closing, showStore, canApprove }: { closing: Closin
   const [pending, setPending] = useState(false);
   const { toast } = useToast();
 
-  const breakdownEntries = Object.entries(closing.paymentBreakdown).filter(([, v]) => v);
+  const isLegacy = closing.expectedCash == null;
 
   const handleApprove = async () => {
     setPending(true);
@@ -57,6 +66,7 @@ export function ClosingRow({ closing, showStore, canApprove }: { closing: Closin
         <Td className="font-medium text-navy">{formatDate(closing.businessDate)}</Td>
         {showStore && <Td>{closing.storeName ?? '—'}</Td>}
         <Td className="text-right tabular-nums">{yen(closing.salesTotal)}</Td>
+        <Td className="text-right tabular-nums font-medium">{isLegacy ? '—' : yen(closing.netSales)}</Td>
         <Td className="text-right tabular-nums">{closing.ordersCount}件</Td>
         <Td className="text-right tabular-nums">{closing.guestsCount}名</Td>
         <Td className={`text-right tabular-nums font-medium ${closing.cashDifference !== 0 ? 'text-danger' : ''}`}>
@@ -81,36 +91,26 @@ export function ClosingRow({ closing, showStore, canApprove }: { closing: Closin
       </Tr>
       {expanded && (
         <Tr className="bg-gray-50">
-          <Td colSpan={showStore ? 9 : 8}>
-            <div className="grid gap-4 py-2 sm:grid-cols-2">
-              <div>
-                <p className="text-xs font-medium text-gray-500">支払方法内訳</p>
-                {breakdownEntries.length === 0 ? (
-                  <p className="mt-1 text-sm text-gray-400">データがありません</p>
-                ) : (
-                  <ul className="mt-1 space-y-1 text-sm">
-                    {breakdownEntries.map(([method, amt]) => (
-                      <li key={method} className="flex justify-between">
-                        <span className="text-gray-600">{METHOD_LABELS[method] ?? method}</span>
-                        <span className="tabular-nums font-medium text-navy">{yen(amt)}</span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-              <div className="text-sm">
-                <p className="flex justify-between py-0.5">
-                  <span className="text-gray-600">値引き合計</span>
-                  <span className="tabular-nums">{yen(closing.discountTotal)}</span>
-                </p>
-                <p className="flex justify-between py-0.5">
-                  <span className="text-gray-600">返金合計</span>
-                  <span className="tabular-nums">{yen(closing.refundTotal)}</span>
-                </p>
-                {closing.note && (
-                  <p className="mt-2 whitespace-pre-wrap rounded-lg bg-white p-2 text-xs text-gray-600">{closing.note}</p>
-                )}
-              </div>
+          <Td colSpan={showStore ? 10 : 9}>
+            <div className="py-2">
+              <ClosingSnapshot
+                data={{
+                  salesTotal: closing.salesTotal,
+                  refundTotal: closing.refundTotal,
+                  netSales: closing.netSales,
+                  discountTotal: closing.discountTotal,
+                  paymentBreakdown: closing.paymentBreakdown,
+                  refundBreakdown: closing.refundBreakdown,
+                  pettyInTotal: closing.pettyInTotal,
+                  pettyOutTotal: closing.pettyOutTotal,
+                  expectedCash: closing.expectedCash,
+                  countedCash: closing.countedCash,
+                  cashDifference: closing.cashDifference,
+                }}
+              />
+              {closing.note && (
+                <p className="mt-3 whitespace-pre-wrap rounded-lg bg-white p-2 text-xs text-gray-600">{closing.note}</p>
+              )}
             </div>
           </Td>
         </Tr>

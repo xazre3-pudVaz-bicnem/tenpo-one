@@ -76,6 +76,9 @@ export function SessionCard({
           <div className="flex flex-col justify-center rounded-xl bg-primary-soft p-4">
             <p className="text-xs font-medium text-primary-deep">現在の理論現金</p>
             <p className="mt-1 text-2xl font-bold tabular-nums text-primary-deep">{yen(theoreticalCash)}</p>
+            <p className="mt-1 text-[11px] text-primary-deep/80">
+              開始現金＋現金売上＋入金－現金返金－小口出金。クレジット／QR等の返金は現金残高へ影響しません。
+            </p>
           </div>
         </div>
       </CardContent>
@@ -216,8 +219,9 @@ function CloseRegisterDialog({
     <Dialog open={open} onClose={onClose} title={`レジ締め — ${registerName}`}>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="rounded-xl bg-primary-soft p-4">
-          <p className="text-xs font-medium text-primary-deep">理論現金（開局額＋現金売上－返金＋入金－出金）</p>
+          <p className="text-xs font-medium text-primary-deep">理論現金（開始現金＋現金売上＋入金－現金返金－小口出金）</p>
           <p className="mt-1 text-2xl font-bold tabular-nums text-primary-deep">{yen(theoreticalCash)}</p>
+          <p className="mt-1 text-[11px] text-primary-deep/80">クレジット／QR等の返金は現金残高へ影響しません。</p>
         </div>
         <div>
           <Label htmlFor="counted-cash">実残高（数えた現金）</Label>
