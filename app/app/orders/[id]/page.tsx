@@ -11,12 +11,15 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/state';
 import { buttonVariants } from '@/components/ui/button';
 import { TableWrap, Table, THead, TBody, Tr, Th, Td } from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
 import { OrderStatusBadge } from '@/components/orders/status-badge';
 import { METHOD_LABELS } from '@/components/cash/labels';
-import { RefundDialog } from '@/components/orders/refund-dialog';
+import { RefundDialog, type RefundableItem } from '@/components/orders/refund-dialog';
 import { ReopenDialog } from '@/components/orders/reopen-dialog';
 import { JournalSourceLink } from '@/components/accounting/journal-source-link';
 import { refundOrder, reopenOrder } from '../actions';
+
+const REFUND_KIND_LABELS: Record<string, string> = { refund: '返金', void: '取消（VOID）' };
 
 export const metadata: Metadata = { title: '注文詳細' };
 
@@ -74,7 +77,7 @@ export default async function OrderDetailPage({
         .order('paid_at'),
       supabase
         .from('refunds')
-        .select('id, amount, method, reason, refunded_at')
+        .select('id, amount, method, reason, refunded_at, kind')
         .eq('order_id', id)
         .order('refunded_at'),
       order.source_order_id
@@ -82,6 +85,15 @@ export default async function OrderDetailPage({
         : Promise.resolve({ data: null }),
       supabase.from('orders').select('id, order_no, status').eq('source_order_id', id).order('created_at'),
     ]);
+
+  const refundIds = (refunds ?? []).map((r) => r.id);
+  const { data: refundItemRows } =
+    refundIds.length > 0
+      ? await supabase
+          .from('refund_items')
+          .select('id, refund_id, order_item_id, quantity, amount, restock')
+          .in('refund_id', refundIds)
+      : { data: [] as { id: string; refund_id: string; order_item_id: string; quantity: number; amount: number; restock: boolean }[] };
 
   const totalPaid = (payments ?? [])
     .filter((p) => p.status === 'completed')
@@ -91,6 +103,39 @@ export default async function OrderDetailPage({
   const canReopen = can(ctx.role, 'pos.refund') && ['paid', 'refunded'].includes(order.status);
   const fullyRefunded = order.status === 'refunded' && refundable === 0 && totalPaid > 0;
   const openDerived = (derivedOrders ?? []).find((d) => d.status === 'open');
+  const hasVoid = (refunds ?? []).some((r) => r.kind === 'void');
+  const isSettled = order.status === 'paid' || order.status === 'refunded';
+
+  // 品目ごとの返金済み数量・金額（商品単位返金のrefund_itemsのみ。金額指定返金は品目に紐付かない）
+  const refundedByItem = new Map<string, { qty: number; amount: number }>();
+  for (const ri of refundItemRows ?? []) {
+    const cur = refundedByItem.get(ri.order_item_id) ?? { qty: 0, amount: 0 };
+    cur.qty += Number(ri.quantity);
+    cur.amount += ri.amount;
+    refundedByItem.set(ri.order_item_id, cur);
+  }
+  // 返金ごとの品目内訳（返金履歴の表示用）
+  const itemRowsByRefund = new Map<string, typeof refundItemRows>();
+  for (const ri of refundItemRows ?? []) {
+    const arr = itemRowsByRefund.get(ri.refund_id) ?? [];
+    arr.push(ri);
+    itemRowsByRefund.set(ri.refund_id, arr);
+  }
+  const itemNameById = new Map((items ?? []).map((it) => [it.id, it.name]));
+
+  // 返金ダイアログ用: 未返金の残数量・残額が残っているactive品目のみ（line_totalベースの単価で按分）
+  const refundableItems: RefundableItem[] = (items ?? [])
+    .filter((it) => it.status === 'active')
+    .map((it) => {
+      const already = refundedByItem.get(it.id) ?? { qty: 0, amount: 0 };
+      return {
+        orderItemId: it.id,
+        name: it.name,
+        remainingQty: Number(it.quantity) - already.qty,
+        remainingAmount: it.line_total - already.amount,
+      };
+    })
+    .filter((it) => it.remainingQty > 0.0001 && it.remainingAmount > 0);
 
   const table = order.restaurant_tables as unknown as { name: string } | null;
   const staff = order.profiles as unknown as { display_name: string } | null;
@@ -126,6 +171,7 @@ export default async function OrderDetailPage({
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <OrderStatusBadge status={order.status} />
+            {hasVoid && <Badge tone="gray">取消（VOID）あり</Badge>}
             {order.status === 'open' && (
               <Link href={`/app/pos?order=${order.id}`} className={cn(buttonVariants({ variant: 'primary' }))}>
                 POSで開く
@@ -231,21 +277,50 @@ export default async function OrderDetailPage({
                   <Table>
                     <THead>
                       <Tr>
+                        <Th>区分</Th>
                         <Th>方法</Th>
                         <Th className="text-right">金額</Th>
+                        <Th>明細内訳</Th>
+                        <Th>在庫戻し</Th>
                         <Th>理由</Th>
                         <Th>日時</Th>
                       </Tr>
                     </THead>
                     <TBody>
-                      {(refunds ?? []).map((r) => (
-                        <Tr key={r.id}>
-                          <Td>{METHOD_LABELS[r.method] ?? r.method}</Td>
-                          <Td className="text-right tabular-nums">{yen(r.amount)}</Td>
-                          <Td>{r.reason}</Td>
-                          <Td className="whitespace-nowrap text-xs text-gray-500">{formatDateTime(r.refunded_at)}</Td>
-                        </Tr>
-                      ))}
+                      {(refunds ?? []).map((r) => {
+                        const refundItemRowsForR = itemRowsByRefund.get(r.id) ?? [];
+                        const anyRestocked = refundItemRowsForR.some((ri) => ri.restock);
+                        return (
+                          <Tr key={r.id}>
+                            <Td>
+                              <Badge tone={r.kind === 'void' ? 'gray' : 'primary'}>
+                                {REFUND_KIND_LABELS[r.kind] ?? r.kind}
+                              </Badge>
+                            </Td>
+                            <Td>{METHOD_LABELS[r.method] ?? r.method}</Td>
+                            <Td className="text-right tabular-nums">{yen(r.amount)}</Td>
+                            <Td className="text-xs text-gray-600">
+                              {refundItemRowsForR.length > 0 ? (
+                                <ul className="space-y-0.5">
+                                  {refundItemRowsForR.map((ri) => (
+                                    <li key={ri.id}>
+                                      {itemNameById.get(ri.order_item_id) ?? '（削除済み品目）'}×{ri.quantity}
+                                      {ri.restock && <span className="ml-1 text-primary">（在庫戻し）</span>}
+                                    </li>
+                                  ))}
+                                </ul>
+                              ) : (
+                                '—（金額指定）'
+                              )}
+                            </Td>
+                            <Td className="text-xs">
+                              {refundItemRowsForR.length === 0 ? '—' : anyRestocked ? 'あり' : 'なし'}
+                            </Td>
+                            <Td>{r.reason}</Td>
+                            <Td className="whitespace-nowrap text-xs text-gray-500">{formatDateTime(r.refunded_at)}</Td>
+                          </Tr>
+                        );
+                      })}
                     </TBody>
                   </Table>
                 </TableWrap>
@@ -296,14 +371,20 @@ export default async function OrderDetailPage({
                 </div>
               )}
               <div className="flex justify-between border-t border-gray-100 pt-1.5 text-base font-bold text-navy">
-                <span>合計</span>
+                <span>{isSettled ? '総売上（元取引）' : '合計'}</span>
                 <span className="tabular-nums">{yen(order.total)}</span>
               </div>
-              {totalRefunded > 0 && (
-                <div className="flex justify-between text-danger">
-                  <span>返金済み</span>
-                  <span className="tabular-nums">-{yen(totalRefunded)}</span>
-                </div>
+              {isSettled && (
+                <>
+                  <div className="flex justify-between text-danger">
+                    <span>返金合計{hasVoid ? '（取消含む）' : ''}</span>
+                    <span className="tabular-nums">{totalRefunded > 0 ? `-${yen(totalRefunded)}` : yen(0)}</span>
+                  </div>
+                  <div className="flex justify-between border-t border-gray-100 pt-1.5 text-base font-bold text-navy">
+                    <span>純売上</span>
+                    <span className="tabular-nums">{yen(order.total - totalRefunded)}</span>
+                  </div>
+                </>
               )}
               {journaledDates.length > 0 && (
                 <div className="mt-2 space-y-1 border-t border-gray-100 pt-2">
@@ -323,13 +404,18 @@ export default async function OrderDetailPage({
           {can(ctx.role, 'pos.refund') && ['paid', 'refunded'].includes(order.status) && (
             <Card>
               <CardHeader>
-                <CardTitle>返金</CardTitle>
+                <CardTitle>返金・取消</CardTitle>
               </CardHeader>
               <CardContent>
                 {refundable <= 0 ? (
                   <p className="text-sm text-gray-500">これ以上返金できる金額はありません</p>
                 ) : (
-                  <RefundDialog orderId={order.id} refundable={refundable} refundOrderAction={refundOrder} />
+                  <RefundDialog
+                    orderId={order.id}
+                    refundable={refundable}
+                    items={refundableItems}
+                    refundOrderAction={refundOrder}
+                  />
                 )}
               </CardContent>
             </Card>

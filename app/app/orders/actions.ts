@@ -4,12 +4,53 @@ import { revalidatePath } from 'next/cache';
 import { requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 
-/** 返金（全額デフォルト・理由必須）。RPC refund_order を使用する */
+export type RefundMethod = 'cash' | 'credit' | 'qr' | 'emoney' | 'voucher' | 'on_account';
+export type RefundKind = 'refund' | 'void';
+
+/** 商品単位返金の1明細（refund_order RPC v3の p_items 1要素に対応） */
+export interface RefundItemInput {
+  orderItemId: string;
+  /** 返金数量（元明細の未返金分を超えないこと。超過はRPCがREFUND_ITEM_QTY_EXCEEDEDで拒否） */
+  quantity: number;
+  /** 返金金額（単価×数量。line_totalベース。超過はREFUND_ITEM_AMOUNT_EXCEEDEDで拒否） */
+  amount: number;
+  /** true の場合のみRPC内で在庫を戻す（既定false） */
+  restock: boolean;
+}
+
+/** refund_order RPCの例外コード → 日本語メッセージ */
+const REFUND_ERROR_MESSAGES: Record<string, string> = {
+  ORDER_NOT_FOUND: '注文が見つかりません',
+  ORDER_NOT_PAID: 'この注文は返金・取消ができる状態ではありません',
+  FORBIDDEN: 'この操作を行う権限がありません',
+  INVALID_AMOUNT: '返金額は1円以上で入力してください',
+  INVALID_KIND: '返金区分が不正です',
+  REFUND_EXCEEDS_PAID: '返金額が返金可能額（支払済み − 返金済み）を超えています',
+  VOID_MUST_BE_FULL: '取消（VOID）は残額全額のみ選択できます。金額を変更せずに実行してください',
+  REFUND_ITEM_INVALID: '選択した品目が見つからないか、返金の対象になりません',
+  REFUND_ITEM_QTY_EXCEEDED: '選択した数量が、その品目の返金可能な残数量を超えています',
+  REFUND_ITEM_AMOUNT_EXCEEDED: '選択した品目の返金額が、返金可能な残額を超えています',
+  REFUND_ITEMS_AMOUNT_MISMATCH: '品目ごとの返金額の合計が、返金総額と一致しません。もう一度お試しください',
+};
+
+function translateRefundError(message: string): string {
+  for (const [code, ja] of Object.entries(REFUND_ERROR_MESSAGES)) {
+    if (message.includes(code)) return ja;
+  }
+  return message;
+}
+
+/**
+ * 返金・取消（VOID）。RPC refund_order v3 を使用する。
+ * items を渡すと商品単位返金（数量・在庫戻しの明細付き）、省略すると金額指定返金になる。
+ */
 export async function refundOrder(
   orderId: string,
   amount: number,
-  method: 'cash' | 'credit' | 'qr' | 'emoney' | 'voucher' | 'on_account',
-  reason: string
+  method: RefundMethod,
+  reason: string,
+  kind: RefundKind = 'refund',
+  items?: RefundItemInput[]
 ) {
   const ctx = await requirePermission('pos.refund');
   if (amount <= 0) throw new Error('返金額が不正です');
@@ -41,8 +82,18 @@ export async function refundOrder(
     p_method: method,
     p_reason: reason,
     p_register_session_id: session?.id ?? null,
+    p_kind: kind,
+    p_items:
+      items && items.length > 0
+        ? items.map((it) => ({
+            order_item_id: it.orderItemId,
+            quantity: it.quantity,
+            amount: it.amount,
+            restock: it.restock,
+          }))
+        : null,
   });
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(translateRefundError(error.message));
 
   revalidatePath(`/app/orders/${orderId}`);
   revalidatePath('/app/orders');

@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils';
 import { EmptyState } from '@/components/ui/state';
 import { TableWrap, Table, THead, TBody, Tr, Th, Td } from '@/components/ui/table';
 import { OrderStatusBadge } from '@/components/orders/status-badge';
+import { Badge } from '@/components/ui/badge';
 import { METHOD_LABELS } from '@/components/cash/labels';
 
 export const metadata: Metadata = { title: '注文・取引履歴' };
@@ -81,6 +82,19 @@ export default async function OrdersPage({
 
   const rangeFrom = (page - 1) * PAGE_SIZE;
   const { data: orders, count } = await query.range(rangeFrom, rangeFrom + PAGE_SIZE - 1);
+
+  // 返金/取消バッジ・純額表示用（このページに表示される注文のみを対象にした軽量クエリ）
+  const orderIds = (orders ?? []).map((o) => o.id);
+  const { data: refundRows } =
+    orderIds.length > 0
+      ? await supabase.from('refunds').select('order_id, amount, kind').in('order_id', orderIds)
+      : { data: [] as { order_id: string; amount: number; kind: string }[] };
+  const refundTotalByOrder = new Map<string, number>();
+  const voidOrderIds = new Set<string>();
+  for (const r of refundRows ?? []) {
+    refundTotalByOrder.set(r.order_id, (refundTotalByOrder.get(r.order_id) ?? 0) + r.amount);
+    if (r.kind === 'void') voidOrderIds.add(r.order_id);
+  }
 
   const totalPages = Math.max(1, Math.ceil((count ?? 0) / PAGE_SIZE));
   const buildHref = (p: number) => {
@@ -172,6 +186,9 @@ export default async function OrdersPage({
                   const table = o.restaurant_tables as unknown as { name: string } | null;
                   const staff = o.profiles as unknown as { display_name: string } | null;
                   const itemCount = (o.order_items as unknown as { id: string }[] | null)?.length ?? 0;
+                  const refundTotal = refundTotalByOrder.get(o.id) ?? 0;
+                  const isVoided = voidOrderIds.has(o.id);
+                  const isPartiallyRefunded = !isVoided && o.status === 'paid' && refundTotal > 0;
                   return (
                     <Tr key={o.id}>
                       <Td>
@@ -183,9 +200,18 @@ export default async function OrdersPage({
                       <Td>{table?.name ?? '—'}</Td>
                       <Td>{staff?.display_name ?? '—'}</Td>
                       <Td className="text-right tabular-nums">{itemCount}</Td>
-                      <Td className="text-right font-medium tabular-nums">{yen(o.total)}</Td>
+                      <Td className="text-right font-medium tabular-nums">
+                        {yen(o.total)}
+                        {refundTotal > 0 && (
+                          <div className="text-xs font-normal text-danger">純額 {yen(o.total - refundTotal)}</div>
+                        )}
+                      </Td>
                       <Td>
-                        <OrderStatusBadge status={o.status} />
+                        <div className="flex flex-wrap items-center gap-1">
+                          <OrderStatusBadge status={o.status} />
+                          {isVoided && <Badge tone="gray">取消</Badge>}
+                          {isPartiallyRefunded && <Badge tone="warning">一部返金あり</Badge>}
+                        </div>
                       </Td>
                     </Tr>
                   );
