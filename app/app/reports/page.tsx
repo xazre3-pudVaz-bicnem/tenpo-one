@@ -34,6 +34,8 @@ import { resolveUnitCost, summarizeItemCosts, type CostableOrderItem } from '@/c
 import { estimateLaborCost, type TimeEntryForLabor, type PayrollRuleForLabor } from '@/components/reports/labor';
 import { fetchIngredientLinesByMenuItems } from '@/components/costing/data';
 import { calcWasteAmount } from '@/lib/costing';
+import { computeSalesMetrics, computeCostVariance, SETTLED_ORDER_STATUSES, type RefundLike, type SettledOrderLike } from '@/lib/metrics';
+import { CostVarianceCard } from '@/components/reports/cost-variance-card';
 
 export const metadata: Metadata = { title: 'レポート・経営分析' };
 
@@ -105,6 +107,7 @@ export default async function ReportsPage({
   // ---- データ取得（当期間） ----
   const [
     { data: orders },
+    { data: refunds },
     { data: reservations },
     { data: payments },
     { data: orderItems },
@@ -114,6 +117,7 @@ export default async function ReportsPage({
     { data: expensesData },
     { data: tablesData },
     { data: wasteMovements },
+    { data: countAdjustMovements },
     { data: customersData },
   ] = await Promise.all([
     supabase
@@ -122,7 +126,13 @@ export default async function ReportsPage({
       .in('store_id', storeIds)
       .gte('business_date', from)
       .lte('business_date', to)
-      .in('status', ['paid', 'refunded']),
+      .in('status', SETTLED_ORDER_STATUSES),
+    supabase
+      .from('refunds')
+      .select('amount, kind, store_id, business_date')
+      .in('store_id', storeIds)
+      .gte('business_date', from)
+      .lte('business_date', to),
     supabase
       .from('reservations')
       .select('id, status, created_via, store_id, reservation_sources(id, name)')
@@ -172,6 +182,13 @@ export default async function ReportsPage({
       .eq('movement_type', 'waste')
       .gte('business_date', from)
       .lte('business_date', to),
+    supabase
+      .from('stock_movements')
+      .select('quantity, unit_cost, inventory_items(avg_cost)')
+      .in('store_id', storeIds)
+      .eq('movement_type', 'count_adjust')
+      .gte('business_date', from)
+      .lte('business_date', to),
     storeOverrideId
       ? supabase.from('customers').select('total_spent').eq('primary_store_id', storeOverrideId).eq('status', 'active')
       : ctx.currentStore
@@ -180,14 +197,20 @@ export default async function ReportsPage({
   ]);
 
   // ---- データ取得（比較期間） ----
-  const [{ data: prevOrders }, { data: prevOrderItems }, { data: prevTimeEntriesData }, { data: prevExpensesData }] = await Promise.all([
+  const [{ data: prevOrders }, { data: prevRefunds }, { data: prevOrderItems }, { data: prevTimeEntriesData }, { data: prevExpensesData }] = await Promise.all([
     supabase
       .from('orders')
       .select('total, guest_count, status')
       .in('store_id', storeIds)
       .gte('business_date', prev.from)
       .lte('business_date', prev.to)
-      .in('status', ['paid', 'refunded']),
+      .in('status', SETTLED_ORDER_STATUSES),
+    supabase
+      .from('refunds')
+      .select('amount, kind, business_date')
+      .in('store_id', storeIds)
+      .gte('business_date', prev.from)
+      .lte('business_date', prev.to),
     supabase
       .from('order_items')
       .select('menu_item_id, quantity, line_total, menu_items(cost), orders!inner(status, business_date)')
@@ -213,7 +236,10 @@ export default async function ReportsPage({
   ]);
 
   const allOrders = orders ?? [];
+  // paidOrders は商品/カテゴリ/スタッフ別集計・時間帯/曜日別売上等、明細単位の内訳表示で使う（既存仕様を維持）。
+  // 全体売上KPI・P/Lカスケード・客数系はすべて allOrders（settled=paid+refunded）+ refunds から算出する（lib/metrics.ts）。
   const paidOrders = allOrders.filter((o) => o.status === 'paid');
+  const allRefunds = refunds ?? [];
   const allReservations = reservations ?? [];
   const allOrderItems = orderItems ?? [];
   const categoryNameById = new Map((menuCategories ?? []).map((c) => [c.id, c.name]));
@@ -239,20 +265,24 @@ export default async function ReportsPage({
   const expenseTotal = (expensesData ?? []).reduce((a, e) => a + e.amount, 0);
   const prevExpenseTotal = (prevExpensesData ?? []).reduce((a, e) => a + e.amount, 0);
 
-  // ---- KPI（基本）----
-  // KPI母集団の統一定義: 売上・件数・客数・客単価はすべて paid（会計成立）のみを対象とする。
-  // 返金済み(refunded)は返金額・アラートとして別掲する（ダッシュボード/予算/日報も同一定義）。
-  const salesTotal = paidOrders.reduce((a, o) => a + o.total, 0);
-  const transactionCount = paidOrders.length;
-  const guestCount = paidOrders.reduce((a, o) => a + o.guest_count, 0);
-  const avgSpend = guestCount > 0 ? Math.floor(salesTotal / guestCount) : 0;
-  const discountTotal = paidOrders.reduce((a, o) => a + o.discount_total, 0);
+  // ---- KPI（基本。lib/metrics.ts の正式定義に統一）----
+  // gross_sales=settled(paid+refunded)のtotal合計・refunds=返金営業日基準・net_sales=gross−refunds・
+  // 会計件数/客数=settled件数・客単価=net÷客数。ダッシュボード/予算/日報と同一の関数・同一のクエリ条件を使う。
+  const mainMetrics = computeSalesMetrics(allOrders as SettledOrderLike[], allRefunds as RefundLike[]);
+  const grossSalesTotal = mainMetrics.grossSales;
+  const refundsTotal = mainMetrics.refunds;
+  const salesTotal = mainMetrics.netSales; // 純売上。以降「売上」と呼ぶ値はすべてこれ
+  const transactionCount = mainMetrics.transactionCount;
+  const guestCount = mainMetrics.guests;
+  const avgSpend = mainMetrics.avgSpend;
+  const discountTotal = mainMetrics.discounts;
 
   const prevAllOrders = prevOrders ?? [];
-  const prevPaidOrders = prevAllOrders.filter((o) => o.status === 'paid');
-  const prevSalesTotal = prevPaidOrders.reduce((a, o) => a + o.total, 0);
-  const prevGuestCount = prevPaidOrders.reduce((a, o) => a + o.guest_count, 0);
-  const prevAvgSpend = prevGuestCount > 0 ? Math.floor(prevSalesTotal / prevGuestCount) : 0;
+  const prevAllRefunds = prevRefunds ?? [];
+  const prevMetrics = computeSalesMetrics(prevAllOrders as SettledOrderLike[], prevAllRefunds as RefundLike[]);
+  const prevSalesTotal = prevMetrics.netSales;
+  const prevGuestCount = prevMetrics.guests;
+  const prevAvgSpend = prevMetrics.avgSpend;
 
   // ---- P/L カスケード ----
   const grossProfit = salesTotal - costSummary.totalCost;
@@ -316,11 +346,33 @@ export default async function ReportsPage({
   const wasteAmount = calcWasteAmount((wasteMovements ?? []).map((m) => ({ quantity: m.quantity, unitCost: m.unit_cost })));
   const wasteRatePct = salesTotal > 0 ? (wasteAmount / salesTotal) * 100 : 0;
 
-  // ---- 日別売上 ----
-  const salesByDate = new Map<string, number>();
-  for (const o of paidOrders) salesByDate.set(o.business_date, (salesByDate.get(o.business_date) ?? 0) + o.total);
-  const dailyRows = periodDates.map((date) => ({ date, sales: salesByDate.get(date) ?? 0 }));
-  const dailyChartData = dailyRows.map((r) => ({ date: `${Number(r.date.slice(5, 7))}/${Number(r.date.slice(8, 10))}`, sales: r.sales }));
+  // ---- 原価差異分析: 理論原価（レシピ×平均仕入単価）と実原価（理論原価＋廃棄＋棚卸差異）----
+  // 棚卸差異額: stock_movements(count_adjust).quantity は「実棚卸数 − 期待数」（棚卸確定時にfinalizeCountが記録）。
+  // マイナス（実数不足）を正の費用として計上するため -quantity×単価で符号反転する。
+  // unit_cost は棚卸確定時に記録されないため inventory_items.avg_cost を確定額の代替として使う。
+  const countAdjustmentAmount = (countAdjustMovements ?? []).reduce((acc, m) => {
+    const inv = m.inventory_items as unknown as { avg_cost: number | null } | null;
+    const unitCost = m.unit_cost ?? inv?.avg_cost ?? null;
+    if (unitCost == null) return acc;
+    return acc + Math.round(-m.quantity * unitCost);
+  }, 0);
+  const costVariance = computeCostVariance({
+    theoreticalCost: costSummary.totalCost,
+    wasteAmount,
+    countAdjustmentAmount,
+  });
+
+  // ---- 日別売上（総売上・返金・純売上）----
+  const grossByDate = new Map<string, number>();
+  for (const o of allOrders) grossByDate.set(o.business_date, (grossByDate.get(o.business_date) ?? 0) + o.total);
+  const refundByDate = new Map<string, number>();
+  for (const r of allRefunds) refundByDate.set(r.business_date, (refundByDate.get(r.business_date) ?? 0) + r.amount);
+  const dailyRows = periodDates.map((date) => {
+    const gross = grossByDate.get(date) ?? 0;
+    const refund = refundByDate.get(date) ?? 0;
+    return { date, gross, refund, net: gross - refund };
+  });
+  const dailyChartData = dailyRows.map((r) => ({ date: `${Number(r.date.slice(5, 7))}/${Number(r.date.slice(8, 10))}`, sales: r.net }));
 
   // ---- 時間帯別売上 ----
   const salesByHour = new Map<number, number>();
@@ -422,18 +474,19 @@ export default async function ReportsPage({
     }))
     .sort((a, b) => b.total - a.total);
 
-  // ---- 店舗別比較（全店舗表示かつ絞込なしの場合のみ）----
+  // ---- 店舗別比較（全店舗表示かつ絞込なしの場合のみ。売上は純売上=gross−refunds）----
   let storeComparison: { id: string; name: string; sales: number; count: number; guests: number }[] = [];
   if (!ctx.currentStore && !storeOverrideId && ctx.stores.length > 1) {
     storeComparison = ctx.stores.map((s) => {
       const storeOrders = allOrders.filter((o) => o.store_id === s.id);
-      const storePaid = storeOrders.filter((o) => o.status === 'paid');
+      const storeRefunds = allRefunds.filter((r) => r.store_id === s.id);
+      const storeMetrics = computeSalesMetrics(storeOrders as SettledOrderLike[], storeRefunds as RefundLike[]);
       return {
         id: s.id,
         name: s.name,
-        sales: storePaid.reduce((a, o) => a + o.total, 0),
-        count: storePaid.length,
-        guests: storePaid.reduce((a, o) => a + o.guest_count, 0),
+        sales: storeMetrics.netSales,
+        count: storeMetrics.transactionCount,
+        guests: storeMetrics.guests,
       };
     });
   }
@@ -444,14 +497,20 @@ export default async function ReportsPage({
   async function computeMonthPl(offset: number) {
     const { first, last } = monthBounds(offset, today);
     const monthTo = today < last ? today : last;
-    const [oRes, oiRes, teRes, exRes, budgetRes] = await Promise.all([
+    const [oRes, rRes, oiRes, teRes, exRes, budgetRes] = await Promise.all([
       supabase
         .from('orders')
-        .select('total, status, store_id')
+        .select('total, guest_count, status, store_id')
         .in('store_id', storeIds)
         .gte('business_date', first)
         .lte('business_date', monthTo)
-        .in('status', ['paid', 'refunded']),
+        .in('status', SETTLED_ORDER_STATUSES),
+      supabase
+        .from('refunds')
+        .select('amount, kind')
+        .in('store_id', storeIds)
+        .gte('business_date', first)
+        .lte('business_date', monthTo),
       supabase
         .from('order_items')
         .select('menu_item_id, quantity, line_total, menu_items(cost), orders!inner(status, business_date)')
@@ -479,8 +538,9 @@ export default async function ReportsPage({
         : supabase.from('budgets').select('sales_budget, profit_target').eq('organization_id', ctx.organizationId).eq('month', first).is('store_id', null).maybeSingle(),
     ]);
     const mOrders = oRes.data ?? [];
-    const mPaid = mOrders.filter((o) => o.status === 'paid');
-    const mSales = mPaid.reduce((a, o) => a + o.total, 0);
+    const mRefunds = rRes.data ?? [];
+    const mMetrics = computeSalesMetrics(mOrders as SettledOrderLike[], mRefunds as RefundLike[]);
+    const mSales = mMetrics.netSales;
     const mItems = oiRes.data ?? [];
     const mMenuItemIds = [...new Set(mItems.map((i) => i.menu_item_id).filter((v): v is string => !!v))];
     const mLines = await fetchIngredientLinesByMenuItems(supabase, mMenuItemIds);
@@ -507,8 +567,19 @@ export default async function ReportsPage({
   const reservationsHref = `/app/reservations/list?from=${from}&to=${to}`;
 
   const plSteps: PlStep[] = [
-    { label: '売上', amount: salesTotal, href: ordersHref, emphasis: true },
-    { label: '原価', amount: costSummary.totalCost, isDeduction: true, href: '/app/costing?tab=items', note: costSummary.excludedCount > 0 ? `原価未設定の品目${costSummary.excludedCount}件（売上${yen(costSummary.excludedRevenue)}）は計算から除外` : undefined },
+    { label: '総売上', amount: grossSalesTotal, href: ordersHref, note: 'paid＋refunded注文のtotal合計（値引後・返金控除前）' },
+    { label: '値引（参考）', amount: discountTotal, isDeduction: true, note: '総売上には反映済みの参考表示（差引計算には使いません）' },
+    { label: '返金', amount: refundsTotal, isDeduction: true, href: ordersHref, note: '返金が発生した営業日で計上' },
+    { label: '純売上', amount: salesTotal, href: ordersHref, emphasis: true },
+    {
+      label: '原価（理論）',
+      amount: costSummary.totalCost,
+      isDeduction: true,
+      href: '/app/costing?tab=items',
+      note:
+        (costSummary.excludedCount > 0 ? `原価未設定の品目${costSummary.excludedCount}件（売上${yen(costSummary.excludedRevenue)}）は計算から除外。` : '') +
+        '販売数量×レシピ×平均仕入単価。実際の廃棄・棚卸差異は含みません（原価差異分析セクション参照）',
+    },
     { label: '粗利益', amount: grossProfit, href: '/app/reports', emphasis: true },
     { label: '人件費（概算）', amount: laborResult.total, isDeduction: true, href: '/app/payroll', note: '時給ルール×実働時間の概算（月給者は月給÷21日で日割り）。割増・手当は含みません' },
     { label: '経費', amount: expenseTotal, isDeduction: true, href: `/app/expenses?from=${from}&to=${to}`, note: '承認済み経費のみ（請求書・支払管理は含みません）' },
@@ -545,17 +616,22 @@ export default async function ReportsPage({
       {/* ---- P/Lカスケード ---- */}
       <Card className="mt-5">
         <CardHeader>
-          <CardTitle>P/Lカスケード（売上 − 原価 = 粗利益 − 人件費 − 経費 = 店舗利益）</CardTitle>
+          <CardTitle>P/Lカスケード（総売上 − 値引 − 返金 = 純売上 − 原価（理論） = 粗利益 − 人件費 − 経費 = 店舗利益）</CardTitle>
         </CardHeader>
         <CardContent>
           <PlCascade steps={plSteps} />
           <div className="mt-4 flex flex-wrap gap-x-6 gap-y-1">
-            <DeltaBadge delta={calcDelta(salesTotal, prevSalesTotal)} label={`売上 ${compareLabel}`} />
+            <DeltaBadge delta={calcDelta(salesTotal, prevSalesTotal)} label={`純売上 ${compareLabel}`} />
             <DeltaBadge delta={calcDelta(grossProfit, prevGrossProfit)} label={`粗利益 ${compareLabel}`} />
             <DeltaBadge delta={calcDelta(storeProfit, prevStoreProfit)} label={`店舗利益 ${compareLabel}`} />
           </div>
+          <p className="mt-2 text-xs text-gray-400">
+            純売上 = 総売上（会計成立注文の合計・値引後）− 返金。原価は理論原価（販売×レシピ×平均仕入単価）を使用しています。実際の原価（廃棄・棚卸差異を反映）は下記「原価差異分析」を参照してください。
+          </p>
         </CardContent>
       </Card>
+
+      <CostVarianceCard variance={costVariance} salesTotal={salesTotal} />
 
       {/* ---- 月別損益推移（3ヶ月） ---- */}
       <Card className="mt-5">
@@ -577,7 +653,7 @@ export default async function ReportsPage({
               </THead>
               <TBody>
                 <Tr>
-                  <Td className="font-medium text-navy">売上</Td>
+                  <Td className="font-medium text-navy">売上（純）</Td>
                   {monthlyPl.map((m) => (
                     <Td key={m.label} className="text-right tabular-nums">
                       {yen(m.sales)}
@@ -590,7 +666,7 @@ export default async function ReportsPage({
                   ))}
                 </Tr>
                 <Tr>
-                  <Td className="font-medium text-navy">原価</Td>
+                  <Td className="font-medium text-navy">原価（理論）</Td>
                   {monthlyPl.map((m) => (
                     <Td key={m.label} className="text-right tabular-nums">
                       {yen(m.cost)}
@@ -661,7 +737,7 @@ export default async function ReportsPage({
         <LinkStatCard href="/app/costing?tab=items" label="FL比率" value={`${flRatePct.toFixed(1)}%`} tone={flRatePct > 60 ? 'warning' : 'default'} />
         <LinkStatCard
           href="/app/costing?tab=items"
-          label="原価率"
+          label="原価率（理論）"
           value={`${costRatePct.toFixed(1)}%`}
           sub={<DeltaBadge delta={calcDelta(costRatePct, prevCostRatePct)} label={compareLabel} positiveIsGood={false} />}
         />
@@ -689,7 +765,7 @@ export default async function ReportsPage({
         <LinkStatCard href={reservationsHref} label="予約数" value={`${reservationCount.toLocaleString('ja-JP')}件`} />
         <LinkStatCard href={reservationsHref} label="ウォークイン数" value={`${walkInCount.toLocaleString('ja-JP')}件`} />
         <LinkStatCard href={ordersHref} label="値引き額合計" value={yen(discountTotal)} />
-        <LinkStatCard href={ordersHref} label="粗利率（対売上）" value={`${salesTotal > 0 ? ((grossProfit / salesTotal) * 100).toFixed(1) : '0.0'}%`} tone="success" />
+        <LinkStatCard href={ordersHref} label="粗利率（対純売上・理論原価）" value={`${salesTotal > 0 ? ((grossProfit / salesTotal) * 100).toFixed(1) : '0.0'}%`} tone="success" />
       </div>
 
       <div className="mt-5 grid gap-5 xl:grid-cols-3">
@@ -930,7 +1006,9 @@ export default async function ReportsPage({
                 <THead>
                   <Tr>
                     <Th>日付</Th>
-                    <Th className="text-right">売上</Th>
+                    <Th className="text-right">総売上</Th>
+                    <Th className="text-right">返金</Th>
+                    <Th className="text-right">純売上</Th>
                     <Th />
                   </Tr>
                 </THead>
@@ -940,7 +1018,9 @@ export default async function ReportsPage({
                       <Td>
                         {r.date.replaceAll('-', '/')}（{weekdayJa(r.date)}）
                       </Td>
-                      <Td className="text-right tabular-nums">{yen(r.sales)}</Td>
+                      <Td className="text-right tabular-nums">{yen(r.gross)}</Td>
+                      <Td className="text-right tabular-nums">{r.refund > 0 ? <span className="text-danger">−{yen(r.refund)}</span> : yen(0)}</Td>
+                      <Td className="text-right tabular-nums font-semibold text-navy">{yen(r.net)}</Td>
                       <Td>
                         <Link href={`/app/orders?from=${r.date}&to=${r.date}`} className="text-xs font-medium text-primary hover:underline">
                           明細を見る

@@ -7,6 +7,7 @@ import { linearLandingForecast } from '@/lib/forecast';
 import { summarizeItemCosts, type CostableOrderItem } from '@/components/reports/cost';
 import { estimateLaborCost, type TimeEntryForLabor, type PayrollRuleForLabor } from '@/components/reports/labor';
 import { fetchIngredientLinesByMenuItems } from '@/components/costing/data';
+import { computeSalesMetrics, SETTLED_ORDER_STATUSES, type RefundLike, type SettledOrderLike } from '@/lib/metrics';
 import { PageHeader } from '@/components/ui/page-header';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge, type BadgeTone } from '@/components/ui/badge';
@@ -56,7 +57,7 @@ export default async function BudgetsPage({
     );
   }
 
-  const [budgetsRes, ordersRes, orderItemsRes, timeEntriesRes, payrollRulesRes, expensesRes] = await Promise.all([
+  const [budgetsRes, ordersRes, refundsRes, orderItemsRes, timeEntriesRes, payrollRulesRes, expensesRes] = await Promise.all([
     supabase
       .from('budgets')
       .select('*')
@@ -69,7 +70,13 @@ export default async function BudgetsPage({
       .in('store_id', storeIds)
       .gte('business_date', monthFirst)
       .lte('business_date', toDate)
-      .in('status', ['paid', 'refunded']),
+      .in('status', SETTLED_ORDER_STATUSES),
+    supabase
+      .from('refunds')
+      .select('amount, kind, store_id')
+      .in('store_id', storeIds)
+      .gte('business_date', monthFirst)
+      .lte('business_date', toDate),
     supabase
       .from('order_items')
       .select('menu_item_id, quantity, line_total, store_id, menu_items(cost), orders!inner(status, business_date)')
@@ -103,6 +110,7 @@ export default async function BudgetsPage({
   const budgetByStore = new Map(budgets.map((b) => [b.store_id ?? '__all__', b]));
 
   const orders = ordersRes.data ?? [];
+  const refunds = refundsRes.data ?? [];
   const orderItems = orderItemsRes.data ?? [];
   const timeEntries = (timeEntriesRes.data ?? []) as TimeEntryForLabor[];
   const payrollRules = (payrollRulesRes.data ?? []) as PayrollRuleForLabor[];
@@ -124,11 +132,14 @@ export default async function BudgetsPage({
   }
 
   function computeActual(sId: string | null): Actual {
+    // 実績は lib/metrics.ts の正式定義（settled=paid+refunded・net=gross−refunds）に統一。
+    // ダッシュボード・レポートと同一の関数・同一のクエリ条件（SETTLED_ORDER_STATUSES）を使う。
     const oList = sId ? orders.filter((o) => o.store_id === sId) : orders;
-    const paid = oList.filter((o) => o.status === 'paid');
-    const sales = paid.reduce((a, o) => a + o.total, 0);
-    const guests = paid.reduce((a, o) => a + o.guest_count, 0);
-    const avgSpend = guests > 0 ? Math.floor(sales / guests) : 0;
+    const rList = sId ? refunds.filter((r) => r.store_id === sId) : refunds;
+    const metrics = computeSalesMetrics(oList as SettledOrderLike[], rList as RefundLike[]);
+    const sales = metrics.netSales;
+    const guests = metrics.guests;
+    const avgSpend = metrics.avgSpend;
 
     const iList = sId ? orderItems.filter((i) => i.store_id === sId) : orderItems;
     const costSummary = summarizeItemCosts(iList as unknown as CostableOrderItem[], linesByItem);
@@ -214,7 +225,7 @@ export default async function BudgetsPage({
                 <Tr>
                   <Th>店舗</Th>
                   <Th className="text-right">売上予算</Th>
-                  <Th className="text-right">売上実績</Th>
+                  <Th className="text-right">売上実績（純）</Th>
                   <Th className="text-right">達成率</Th>
                   <Th className="text-right">着地予測</Th>
                   <Th className="text-right">原価率(目標/実績)</Th>
@@ -294,7 +305,7 @@ export default async function BudgetsPage({
         </CardContent>
       </Card>
       <p className="mt-2 text-xs text-gray-400">
-        ※ 原価・人件費は「レポート」画面と同じ概算ロジック（原価はレシピ原価優先、人件費は時給ルール×実働時間の概算）。全社行は本社管理者（org_owner/hq_admin）のみ編集できます。
+        ※ 売上実績は純売上（会計成立注文の合計 − 期間内の返金額）。原価・人件費は「レポート」画面と同じ概算ロジック（原価はレシピ原価優先、人件費は時給ルール×実働時間の概算）。全社行は本社管理者（org_owner/hq_admin）のみ編集できます。
       </p>
     </div>
   );

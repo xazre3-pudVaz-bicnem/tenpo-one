@@ -27,6 +27,7 @@ import { AnnouncementBanner } from '@/components/dashboard/announcement-banner';
 import { AlertSummary } from '@/components/dashboard/alert-summary';
 import { StoreRankingTable } from '@/components/dashboard/store-ranking-table';
 import { KpiStrip, type KpiCell } from '@/components/dashboard/kpi-strip';
+import { computeSalesMetrics, SETTLED_ORDER_STATUSES, type RefundLike, type SettledOrderLike } from '@/lib/metrics';
 
 export const metadata: Metadata = { title: 'ダッシュボード' };
 
@@ -105,8 +106,11 @@ async function HqDashboard({
 
   const [
     todayOrdersRes,
+    todayRefundsRes,
     compareOrdersRes,
+    compareRefundsRes,
     monthOrdersRes,
+    monthRefundsRes,
     monthItemsRes,
     paymentsRes,
     timeEntriesRes,
@@ -114,6 +118,7 @@ async function HqDashboard({
     reservationsRes,
     expensesRes,
     prevOrdersRes,
+    prevRefundsRes,
     budgetsRes,
     alerts,
   ] = await Promise.all([
@@ -122,20 +127,36 @@ async function HqDashboard({
       .select('total, guest_count, status, store_id')
       .in('store_id', storeIds)
       .eq('business_date', today)
-      .in('status', ['paid', 'refunded']),
+      .in('status', SETTLED_ORDER_STATUSES),
+    supabase
+      .from('refunds')
+      .select('amount, kind, store_id, business_date')
+      .in('store_id', storeIds)
+      .eq('business_date', today),
     supabase
       .from('orders')
       .select('total, guest_count, status, store_id, business_date')
       .in('store_id', storeIds)
       .in('business_date', [yesterday, sameWeekdayLastWeek])
-      .in('status', ['paid', 'refunded']),
+      .in('status', SETTLED_ORDER_STATUSES),
+    supabase
+      .from('refunds')
+      .select('amount, kind, store_id, business_date')
+      .in('store_id', storeIds)
+      .in('business_date', [yesterday, sameWeekdayLastWeek]),
     supabase
       .from('orders')
       .select('id, total, guest_count, discount_total, staff_id, customer_id, store_id, business_date, opened_at, status')
       .in('store_id', storeIds)
       .gte('business_date', monthFrom)
       .lte('business_date', today)
-      .in('status', ['paid', 'refunded']),
+      .in('status', SETTLED_ORDER_STATUSES),
+    supabase
+      .from('refunds')
+      .select('amount, kind, store_id, business_date')
+      .in('store_id', storeIds)
+      .gte('business_date', monthFrom)
+      .lte('business_date', today),
     supabase
       .from('order_items')
       .select('menu_item_id, name, quantity, line_total, store_id, menu_items(name, cost), orders!inner(status, business_date)')
@@ -182,7 +203,13 @@ async function HqDashboard({
       .in('store_id', storeIds)
       .gte('business_date', prev.from)
       .lte('business_date', prev.to)
-      .eq('status', 'paid'),
+      .in('status', SETTLED_ORDER_STATUSES),
+    supabase
+      .from('refunds')
+      .select('amount, kind, store_id, business_date')
+      .in('store_id', storeIds)
+      .gte('business_date', prev.from)
+      .lte('business_date', prev.to),
     supabase
       .from('budgets')
       .select('store_id, sales_budget, cost_rate_target, labor_rate_target')
@@ -193,8 +220,11 @@ async function HqDashboard({
   ]);
 
   const todayOrders = todayOrdersRes.data ?? [];
+  const todayRefunds = todayRefundsRes.data ?? [];
   const compareOrders = compareOrdersRes.data ?? [];
+  const compareRefunds = compareRefundsRes.data ?? [];
   const monthOrders = monthOrdersRes.data ?? [];
+  const monthRefunds = monthRefundsRes.data ?? [];
   const monthItems = monthItemsRes.data ?? [];
   const payments = paymentsRes.data ?? [];
   const timeEntries = (timeEntriesRes.data ?? []) as TimeEntryForLabor[];
@@ -202,29 +232,32 @@ async function HqDashboard({
   const reservations = reservationsRes.data ?? [];
   const expenses = expensesRes.data ?? [];
   const prevOrders = prevOrdersRes.data ?? [];
+  const prevRefunds = prevRefundsRes.data ?? [];
   const budgetRows = budgetsRes.data ?? [];
 
   // ---- 本日 ----
-  // KPI母集団の統一定義: 売上・件数・客数・客単価は paid（会計成立）のみ。返金済みは別掲（レポート/予算/日報と同一定義）
-  const todayPaidOrders = todayOrders.filter((o) => o.status === 'paid');
-  const todaySales = todayPaidOrders.reduce((a, o) => a + o.total, 0);
-  const todayCount = todayPaidOrders.length;
-  const todayGuests = todayPaidOrders.reduce((a, o) => a + o.guest_count, 0);
+  // KPI母集団の正式定義（lib/metrics.ts）: gross_sales=settled(paid+refunded)のtotal合計・refunds=返金営業日基準・
+  // net_sales=gross−refunds・客数/会計件数=settled件数・客単価=net÷客数。全画面でこの層のみを使う。
+  const todayMetrics = computeSalesMetrics(todayOrders as SettledOrderLike[], todayRefunds as RefundLike[]);
+  const todaySales = todayMetrics.netSales;
+  const todayCount = todayMetrics.transactionCount;
+  const todayGuests = todayMetrics.guests;
 
   // ---- 本日: 前日比・前週同曜日比 ----
   const yesterdayOrders = compareOrders.filter((o) => o.business_date === yesterday);
   const lastWeekOrders = compareOrders.filter((o) => o.business_date === sameWeekdayLastWeek);
-  const yesterdaySales = yesterdayOrders.filter((o) => o.status === 'paid').reduce((a, o) => a + o.total, 0);
-  const yesterdayGuests = yesterdayOrders.filter((o) => o.status === 'paid').reduce((a, o) => a + o.guest_count, 0);
-  const lastWeekSales = lastWeekOrders.filter((o) => o.status === 'paid').reduce((a, o) => a + o.total, 0);
-  const todaySalesDeltaVsYesterday = calcDelta(todaySales, yesterdaySales);
-  const todaySalesDeltaVsLastWeek = calcDelta(todaySales, lastWeekSales);
-  const todayGuestsDeltaVsYesterday = calcDelta(todayGuests, yesterdayGuests);
+  const yesterdayRefunds = compareRefunds.filter((r) => r.business_date === yesterday);
+  const lastWeekRefunds = compareRefunds.filter((r) => r.business_date === sameWeekdayLastWeek);
+  const yesterdayMetrics = computeSalesMetrics(yesterdayOrders as SettledOrderLike[], yesterdayRefunds as RefundLike[]);
+  const lastWeekMetrics = computeSalesMetrics(lastWeekOrders as SettledOrderLike[], lastWeekRefunds as RefundLike[]);
+  const todaySalesDeltaVsYesterday = calcDelta(todaySales, yesterdayMetrics.netSales);
+  const todaySalesDeltaVsLastWeek = calcDelta(todaySales, lastWeekMetrics.netSales);
+  const todayGuestsDeltaVsYesterday = calcDelta(todayGuests, yesterdayMetrics.guests);
 
   // ---- 今月: 前月同期間の売上・客数（今月売上・客単価の前月比に使用） ----
-  const prevMonthSales = prevOrders.reduce((a, o) => a + o.total, 0);
-  const prevMonthGuests = prevOrders.reduce((a, o) => a + o.guest_count, 0);
-  const prevMonthAvgSpend = prevMonthGuests > 0 ? Math.floor(prevMonthSales / prevMonthGuests) : 0;
+  const prevMonthMetrics = computeSalesMetrics(prevOrders as SettledOrderLike[], prevRefunds as RefundLike[]);
+  const prevMonthSales = prevMonthMetrics.netSales;
+  const prevMonthAvgSpend = prevMonthMetrics.avgSpend;
 
   // ---- 今月: 原価（レシピ優先） ----
   const menuItemIds = [...new Set(monthItems.map((i) => i.menu_item_id).filter((v): v is string => !!v))];
@@ -235,13 +268,16 @@ async function HqDashboard({
   const laborResult = estimateLaborCost(timeEntries, payrollRules);
 
   // ---- 今月: 売上・粗利・利益率 ----
+  // monthPaidOrders は商品ランキング・スタッフランキング等、items/staff単位の集計で使う（原価計算はpaidのみ対象の既存仕様を維持）
   const monthPaidOrders = monthOrders.filter((o) => o.status === 'paid');
-  const monthSalesTotal = monthPaidOrders.reduce((a, o) => a + o.total, 0);
+  const monthMetrics = computeSalesMetrics(monthOrders as SettledOrderLike[], monthRefunds as RefundLike[]);
+  const monthGrossSalesTotal = monthMetrics.grossSales;
+  const monthRefundsTotal = monthMetrics.refunds;
+  const monthSalesTotal = monthMetrics.netSales; // 純売上（gross − refunds）。KPI「今月売上」の主表示値
   const monthGrossProfit = monthSalesTotal - costSummary.totalCost;
   const monthProfitRate = monthSalesTotal > 0 ? (monthGrossProfit / monthSalesTotal) * 100 : 0;
   const laborRate = monthSalesTotal > 0 ? (laborResult.total / monthSalesTotal) * 100 : 0;
-  const monthGuestsTotal = monthPaidOrders.reduce((a, o) => a + o.guest_count, 0);
-  const monthAvgSpend = monthGuestsTotal > 0 ? Math.floor(monthSalesTotal / monthGuestsTotal) : 0;
+  const monthAvgSpend = monthMetrics.avgSpend;
 
   // ---- 今月: 予算目標（全社行を優先。全社行が無ければ売上予算のみ店舗行を合算） ----
   const orgBudgetRow = budgetRows.find((b) => b.store_id === null) ?? null;
@@ -258,15 +294,17 @@ async function HqDashboard({
   const profitRateDeltaVsTarget = profitRateTarget != null ? calcDelta(monthProfitRate, profitRateTarget) : null;
   const laborRateDeltaVsTarget = laborRateTarget != null ? calcDelta(laborRate, laborRateTarget) : null;
 
-  // ---- 店舗別ランキング ----
-  const salesByStore = new Map<string, number>();
+  // ---- 店舗別ランキング（売上は純売上=gross−refunds。店舗単位でmetrics層と同じ式を適用） ----
+  const grossByStore = new Map<string, number>();
   const guestsByStore = new Map<string, number>();
   for (const o of monthOrders) {
     guestsByStore.set(o.store_id, (guestsByStore.get(o.store_id) ?? 0) + o.guest_count);
-    if (o.status === 'paid') {
-      salesByStore.set(o.store_id, (salesByStore.get(o.store_id) ?? 0) + o.total);
-    }
+    grossByStore.set(o.store_id, (grossByStore.get(o.store_id) ?? 0) + o.total);
   }
+  const refundByStore = new Map<string, number>();
+  for (const r of monthRefunds) refundByStore.set(r.store_id, (refundByStore.get(r.store_id) ?? 0) + r.amount);
+  const salesByStore = new Map<string, number>();
+  for (const s of stores) salesByStore.set(s.id, (grossByStore.get(s.id) ?? 0) - (refundByStore.get(s.id) ?? 0));
   const costByStore = new Map<string, number>();
   for (const oi of monthItems) {
     const mi = oi.menu_items as unknown as { cost: number | null } | null;
@@ -285,8 +323,12 @@ async function HqDashboard({
   }
   const expensesByStore = new Map<string, number>();
   for (const e of expenses) expensesByStore.set(e.store_id, (expensesByStore.get(e.store_id) ?? 0) + e.amount);
+  const prevGrossByStore = new Map<string, number>();
+  for (const o of prevOrders) prevGrossByStore.set(o.store_id, (prevGrossByStore.get(o.store_id) ?? 0) + o.total);
+  const prevRefundByStore = new Map<string, number>();
+  for (const r of prevRefunds) prevRefundByStore.set(r.store_id, (prevRefundByStore.get(r.store_id) ?? 0) + r.amount);
   const prevSalesByStore = new Map<string, number>();
-  for (const o of prevOrders) prevSalesByStore.set(o.store_id, (prevSalesByStore.get(o.store_id) ?? 0) + o.total);
+  for (const s of stores) prevSalesByStore.set(s.id, (prevGrossByStore.get(s.id) ?? 0) - (prevRefundByStore.get(s.id) ?? 0));
 
   const storeRanking = stores
     .map((s) => {
@@ -430,6 +472,11 @@ async function HqDashboard({
               予算未設定 <Link href="/app/budgets" className="underline">設定する</Link>
             </span>
           )}
+          {monthRefundsTotal > 0 && (
+            <span className="w-full text-xs text-gray-400">
+              内訳: 総売上{yen(monthGrossSalesTotal)}／返金{yen(monthRefundsTotal)}
+            </span>
+          )}
         </>
       ),
     },
@@ -485,6 +532,11 @@ async function HqDashboard({
         <>
           <DeltaBadge delta={todaySalesDeltaVsYesterday} label="前日比" />
           <DeltaBadge delta={todaySalesDeltaVsLastWeek} label="先週同曜日比" />
+          {todayMetrics.refunds > 0 && (
+            <span className="w-full text-xs text-gray-400">
+              内訳: 総売上{yen(todayMetrics.grossSales)}／返金{yen(todayMetrics.refunds)}
+            </span>
+          )}
         </>
       ),
     },
@@ -746,13 +798,14 @@ async function StoreDashboard({
   const store = ctx.currentStore!;
   const storeIds = [store.id];
 
-  const [todayOrdersRes, todayReservationsRes, closingsRes, alerts] = await Promise.all([
+  const [todayOrdersRes, todayRefundsRes, todayReservationsRes, closingsRes, alerts] = await Promise.all([
     supabase
       .from('orders')
       .select('total, guest_count, status, store_id')
       .in('store_id', storeIds)
       .eq('business_date', today)
-      .in('status', ['paid', 'refunded']),
+      .in('status', SETTLED_ORDER_STATUSES),
+    supabase.from('refunds').select('amount, kind, store_id, business_date').in('store_id', storeIds).eq('business_date', today),
     supabase
       .from('reservations')
       .select('id, start_at, party_size, guest_name, status')
@@ -763,7 +816,7 @@ async function StoreDashboard({
       .limit(8),
     supabase
       .from('daily_closings')
-      .select('business_date, sales_total')
+      .select('business_date, sales_total, net_sales, refund_total')
       .in('store_id', storeIds)
       .gte('business_date', daysAgoJst(30))
       .order('business_date'),
@@ -771,14 +824,20 @@ async function StoreDashboard({
   ]);
 
   const todayOrders = todayOrdersRes.data ?? [];
-  const todayPaidOrders = todayOrders.filter((o) => o.status === 'paid');
-  const todaySales = todayPaidOrders.reduce((a, o) => a + o.total, 0);
-  const todayCount = todayPaidOrders.length;
-  const todayGuests = todayPaidOrders.reduce((a, o) => a + o.guest_count, 0);
-  const avgSpend = todayGuests > 0 ? Math.floor(todaySales / todayGuests) : 0;
+  const todayRefunds = todayRefundsRes.data ?? [];
+  const todayMetrics = computeSalesMetrics(todayOrders as SettledOrderLike[], todayRefunds as RefundLike[]);
+  const todaySales = todayMetrics.netSales;
+  const todayCount = todayMetrics.transactionCount;
+  const todayGuests = todayMetrics.guests;
+  const avgSpend = todayMetrics.avgSpend;
 
+  // 30日推移は daily_closings.net_sales を使用。旧データ（v0.4.1以前に締めた行）は net_sales=0 のまま
+  // 保存されているため、sales_total > 0 かつ net_sales = 0 の行のみ sales_total − refund_total でフォールバックする
   const byDate = new Map<string, number>();
-  for (const c of closingsRes.data ?? []) byDate.set(c.business_date, (byDate.get(c.business_date) ?? 0) + c.sales_total);
+  for (const c of closingsRes.data ?? []) {
+    const net = c.net_sales > 0 || c.sales_total === 0 ? c.net_sales : c.sales_total - c.refund_total;
+    byDate.set(c.business_date, (byDate.get(c.business_date) ?? 0) + net);
+  }
   const chartData: DailyPoint[] = [...byDate.entries()].map(([date, sales]) => ({
     date: `${Number(date.slice(5, 7))}/${Number(date.slice(8, 10))}`,
     sales,
@@ -793,7 +852,13 @@ async function StoreDashboard({
       <AlertSummary alerts={alerts} />
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <LinkStatCard href="/app/orders" label="本日売上" value={yen(todaySales)} tone="primary" />
+        <LinkStatCard
+          href="/app/orders"
+          label="本日売上"
+          value={yen(todaySales)}
+          tone="primary"
+          sub={todayMetrics.refunds > 0 ? `総売上${yen(todayMetrics.grossSales)}／返金${yen(todayMetrics.refunds)}` : undefined}
+        />
         <LinkStatCard href="/app/orders" label="会計件数" value={`${todayCount}件`} />
         <LinkStatCard href="/app/orders" label="客数" value={`${todayGuests}名`} />
         <LinkStatCard href="/app/reports" label="客単価" value={yen(avgSpend)} />

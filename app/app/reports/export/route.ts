@@ -7,6 +7,7 @@ import { todayJst, daysAgoJst, weekdayJa } from '@/lib/format';
 import { summarizeItemCosts, type CostableOrderItem } from '@/components/reports/cost';
 import { estimateLaborCost, type TimeEntryForLabor, type PayrollRuleForLabor } from '@/components/reports/labor';
 import { fetchIngredientLinesByMenuItems } from '@/components/costing/data';
+import { computeSalesMetrics, SETTLED_ORDER_STATUSES, type RefundLike, type SettledOrderLike } from '@/lib/metrics';
 
 function dateSequence(fromStr: string, toStr: string): string[] {
   const dates: string[] = [];
@@ -40,29 +41,51 @@ export async function GET(request: NextRequest) {
     .in('store_id', storeIds)
     .gte('business_date', from)
     .lte('business_date', to)
-    .in('status', ['paid', 'refunded']);
+    .in('status', SETTLED_ORDER_STATUSES);
 
-  // KPI母集団の統一定義: 売上・件数・客数・客単価は paid のみ（画面側と同一）
-  const byDate = new Map<string, { sales: number; count: number; guests: number; discount: number }>();
-  for (const o of orders ?? []) {
-    if (o.status !== 'paid') continue;
-    const cur = byDate.get(o.business_date) ?? { sales: 0, count: 0, guests: 0, discount: 0 };
-    cur.count += 1;
-    cur.guests += o.guest_count;
-    cur.sales += o.total;
-    cur.discount += o.discount_total;
-    byDate.set(o.business_date, cur);
+  const { data: refunds } = await supabase
+    .from('refunds')
+    .select('amount, kind, store_id, business_date')
+    .in('store_id', storeIds)
+    .gte('business_date', from)
+    .lte('business_date', to);
+
+  const allOrders = orders ?? [];
+  const allRefunds = refunds ?? [];
+
+  // 正式定義（lib/metrics.ts）に統一: 会計件数・客数・客単価は settled(paid+refunded)基準、
+  // 売上は純売上（gross−refunds）。ダッシュボード/レポート画面と同一のクエリ条件・同一の関数を使う。
+  const grossByDate = new Map<string, number>();
+  const guestsByDate = new Map<string, number>();
+  const countByDate = new Map<string, number>();
+  const discountByDate = new Map<string, number>();
+  for (const o of allOrders) {
+    grossByDate.set(o.business_date, (grossByDate.get(o.business_date) ?? 0) + o.total);
+    guestsByDate.set(o.business_date, (guestsByDate.get(o.business_date) ?? 0) + o.guest_count);
+    countByDate.set(o.business_date, (countByDate.get(o.business_date) ?? 0) + 1);
+    discountByDate.set(o.business_date, (discountByDate.get(o.business_date) ?? 0) + o.discount_total);
   }
+  const refundByDate = new Map<string, number>();
+  for (const r of allRefunds) refundByDate.set(r.business_date, (refundByDate.get(r.business_date) ?? 0) + r.amount);
 
   const rows = dateSequence(from, to).map((date) => {
-    const v = byDate.get(date) ?? { sales: 0, count: 0, guests: 0, discount: 0 };
-    const avgSpend = v.guests > 0 ? Math.floor(v.sales / v.guests) : 0;
-    return [date, weekdayJa(date), v.sales, v.count, v.guests, avgSpend, v.discount];
+    const gross = grossByDate.get(date) ?? 0;
+    const refund = refundByDate.get(date) ?? 0;
+    const net = gross - refund;
+    const guests = guestsByDate.get(date) ?? 0;
+    const count = countByDate.get(date) ?? 0;
+    const discount = discountByDate.get(date) ?? 0;
+    const avgSpend = guests > 0 ? Math.floor(net / guests) : 0;
+    return [date, weekdayJa(date), gross, refund, net, count, guests, avgSpend, discount];
   });
-  const dailyCsv = toCsv(['日付', '曜日', '売上', '会計件数', '客数', '客単価', '値引き額'], rows);
+  const dailyCsv = toCsv(['日付', '曜日', '総売上', '返金', '純売上', '会計件数', '客数', '客単価', '値引き額'], rows);
 
-  // ---- P/L行（売上/原価/粗利/人件費/経費/利益）----
-  const salesTotal = (orders ?? []).filter((o) => o.status === 'paid').reduce((a, o) => a + o.total, 0);
+  // ---- P/L行（総売上/値引/返金/純売上/原価/粗利/人件費/経費/利益）----
+  const mainMetrics = computeSalesMetrics(allOrders as SettledOrderLike[], allRefunds as RefundLike[]);
+  const grossSalesTotal = mainMetrics.grossSales;
+  const refundsTotal = mainMetrics.refunds;
+  const discountTotal = mainMetrics.discounts;
+  const salesTotal = mainMetrics.netSales;
 
   const [{ data: orderItems }, { data: timeEntriesData }, { data: payrollRulesData }, { data: expensesData }] = await Promise.all([
     supabase
@@ -105,9 +128,12 @@ export async function GET(request: NextRequest) {
   const plCsvRaw = toCsv(
     ['項目', '金額', '備考'],
     [
-      ['売上', salesTotal, ''],
-      ['原価', costSummary.totalCost, `レシピ原価優先／menu_items.cost。原価未設定${costSummary.excludedCount}件は除外`],
-      ['粗利益', grossProfit, '売上−原価'],
+      ['総売上', grossSalesTotal, 'paid＋refunded注文のtotal合計（値引後・返金控除前）'],
+      ['値引（参考）', discountTotal, '総売上には反映済みの参考値'],
+      ['返金', refundsTotal, '返金が発生した営業日で計上'],
+      ['純売上', salesTotal, '総売上−返金'],
+      ['原価（理論）', costSummary.totalCost, `レシピ原価優先／menu_items.cost。原価未設定${costSummary.excludedCount}件は除外。廃棄・棚卸差異は含まない`],
+      ['粗利益', grossProfit, '純売上−原価（理論）'],
       ['人件費（概算）', laborResult.total, '時給ルール×実働時間の概算。割増・手当は含まない'],
       ['経費', expenseTotal, '承認済み経費のみ（請求書は含まない）'],
       ['店舗利益', storeProfit, '粗利益−人件費−経費'],

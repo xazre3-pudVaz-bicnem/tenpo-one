@@ -432,7 +432,7 @@ export default async function CustomerDetailPage({
               value={`${customer.no_show_count}回`}
               tone={customer.no_show_count > 0 ? 'danger' : 'default'}
             />
-            <StatCard label="累計利用額" value={yen(customer.total_spent)} tone="primary" />
+            <StatCard label="累計利用額" value={yen(customer.total_spent)} tone="primary" sub="返金控除後（純額）" />
             <StatCard label="平均客単価" value={yen(avgSpend)} />
             <StatCard label="最終来店からの日数" value={daysSinceLastVisit == null ? '—' : `${daysSinceLastVisit}日`} />
           </div>
@@ -444,7 +444,7 @@ export default async function CustomerDetailPage({
             <CardContent>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
-                  <p className="text-xs font-medium text-gray-500">実績LTV（累計利用額）</p>
+                  <p className="text-xs font-medium text-gray-500">実績LTV（累計利用額・返金控除後）</p>
                   <p className="mt-1 text-2xl font-bold tabular-nums text-primary-deep">{yen(ltv.actual)}</p>
                 </div>
                 <div>
