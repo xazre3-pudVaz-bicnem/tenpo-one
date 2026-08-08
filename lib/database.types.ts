@@ -1602,15 +1602,21 @@ export type Database = {
           business_date: string
           cash_difference: number
           closed_by: string | null
+          counted_cash: number | null
           created_at: string
           created_by: string | null
           discount_total: number
+          expected_cash: number | null
           guests_count: number
           id: string
+          net_sales: number
           note: string | null
           orders_count: number
           organization_id: string
           payment_breakdown: Json
+          petty_in_total: number
+          petty_out_total: number
+          refund_breakdown: Json
           refund_total: number
           register_session_id: string | null
           sales_total: number
@@ -1625,15 +1631,21 @@ export type Database = {
           business_date: string
           cash_difference?: number
           closed_by?: string | null
+          counted_cash?: number | null
           created_at?: string
           created_by?: string | null
           discount_total?: number
+          expected_cash?: number | null
           guests_count?: number
           id?: string
+          net_sales?: number
           note?: string | null
           orders_count?: number
           organization_id: string
           payment_breakdown?: Json
+          petty_in_total?: number
+          petty_out_total?: number
+          refund_breakdown?: Json
           refund_total?: number
           register_session_id?: string | null
           sales_total?: number
@@ -1648,15 +1660,21 @@ export type Database = {
           business_date?: string
           cash_difference?: number
           closed_by?: string | null
+          counted_cash?: number | null
           created_at?: string
           created_by?: string | null
           discount_total?: number
+          expected_cash?: number | null
           guests_count?: number
           id?: string
+          net_sales?: number
           note?: string | null
           orders_count?: number
           organization_id?: string
           payment_breakdown?: Json
+          petty_in_total?: number
+          petty_out_total?: number
+          refund_breakdown?: Json
           refund_total?: number
           register_session_id?: string | null
           sales_total?: number
@@ -5290,6 +5308,71 @@ export type Database = {
           },
         ]
       }
+      refund_items: {
+        Row: {
+          amount: number
+          created_at: string
+          id: string
+          order_item_id: string
+          organization_id: string
+          quantity: number
+          refund_id: string
+          restock: boolean
+          store_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          id?: string
+          order_item_id: string
+          organization_id: string
+          quantity: number
+          refund_id: string
+          restock?: boolean
+          store_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          id?: string
+          order_item_id?: string
+          organization_id?: string
+          quantity?: number
+          refund_id?: string
+          restock?: boolean
+          store_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "refund_items_order_item_id_fkey"
+            columns: ["order_item_id"]
+            isOneToOne: false
+            referencedRelation: "order_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "refund_items_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "refund_items_refund_id_fkey"
+            columns: ["refund_id"]
+            isOneToOne: false
+            referencedRelation: "refunds"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "refund_items_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       refunds: {
         Row: {
           amount: number
@@ -5298,6 +5381,8 @@ export type Database = {
           created_at: string
           created_by: string | null
           id: string
+          journal_entry_id: string | null
+          kind: string
           method: string
           order_id: string
           organization_id: string
@@ -5318,6 +5403,8 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          journal_entry_id?: string | null
+          kind?: string
           method: string
           order_id: string
           organization_id: string
@@ -5338,6 +5425,8 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          journal_entry_id?: string | null
+          kind?: string
           method?: string
           order_id?: string
           organization_id?: string
@@ -5357,6 +5446,13 @@ export type Database = {
             columns: ["approved_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "refunds_journal_entry_id_fkey"
+            columns: ["journal_entry_id"]
+            isOneToOne: false
+            referencedRelation: "journal_entries"
             referencedColumns: ["id"]
           },
           {
@@ -7424,6 +7520,8 @@ export type Database = {
       refund_order: {
         Args: {
           p_amount: number
+          p_items?: Json
+          p_kind?: string
           p_method: string
           p_order_id: string
           p_reason: string

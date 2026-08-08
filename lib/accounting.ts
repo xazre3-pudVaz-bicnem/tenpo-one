@@ -97,6 +97,37 @@ export function buildSalesJournal(input: {
   return lines;
 }
 
+/**
+ * 返金仕訳: 売上のマイナス（借方 売上高）/ 貸方 現金 or 売掛金。
+ * 日次・店舗別に集計して source_type='pos_refund'（source_id=`{storeId}:{date}`）で冪等生成する。
+ * 税区分別の按分は元注文の8%/10%比率から呼び出し側で算出して渡す。
+ */
+export function buildRefundJournal(input: {
+  cashRefundsStandard: number;
+  cashRefundsReduced: number;
+  cashlessRefundsStandard: number;
+  cashlessRefundsReduced: number;
+}): JournalLineDraft[] {
+  const lines: JournalLineDraft[] = [];
+  const std = input.cashRefundsStandard + input.cashlessRefundsStandard;
+  const reduced = input.cashRefundsReduced + input.cashlessRefundsReduced;
+  if (std > 0) {
+    lines.push({ accountCode: STD.sales, side: 'debit', amount: std, taxTreatment: 'taxable_standard', memo: '売上返金（標準税率）' });
+  }
+  if (reduced > 0) {
+    lines.push({ accountCode: STD.salesReduced, side: 'debit', amount: reduced, taxTreatment: 'taxable_reduced', memo: '売上返金（軽減税率）' });
+  }
+  const cash = input.cashRefundsStandard + input.cashRefundsReduced;
+  const cashless = input.cashlessRefundsStandard + input.cashlessRefundsReduced;
+  if (cash > 0) {
+    lines.push({ accountCode: STD.cash, side: 'credit', amount: cash, taxTreatment: 'out_of_scope', memo: '現金返金' });
+  }
+  if (cashless > 0) {
+    lines.push({ accountCode: STD.receivable, side: 'credit', amount: cashless, taxTreatment: 'out_of_scope', memo: 'キャッシュレス返金（売掛減）' });
+  }
+  return lines;
+}
+
 /** 仕入請求書仕訳: 仕入高 / 買掛金 */
 export function buildPurchaseJournal(input: {
   amount: number;
