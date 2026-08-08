@@ -57,7 +57,6 @@ async function main() {
   if (!org) throw new Error('デモ企業がありません。先に seed を実行してください');
   const { data: stores } = await admin.from('stores').select('*').eq('organization_id', org.id).order('slug');
   const shibuya = stores.find((s) => s.slug === 'tenpoone-shibuya');
-  const yokohama = stores.find((s) => s.slug === 'tenpoone-yokohama');
   const { data: [register] } = await admin.from('registers').select('*').eq('store_id', shibuya.id).limit(1);
   const { data: menuItems } = await admin.from('menu_items')
     .select('*').eq('organization_id', org.id).eq('status', 'active');

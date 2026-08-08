@@ -36,8 +36,9 @@ export function ClockSection({
   return (
     <div className="mx-auto max-w-md landscape:max-w-2xl">
       <div className="rounded-2xl bg-navy px-6 py-8 text-center text-white">
-        <p className="text-base text-gray-300">{dateText}</p>
-        <p className="mt-1 text-6xl font-bold tabular-nums tracking-tight sm:text-7xl">{timeText}</p>
+        {/* SSRとhydrationの間に秒が進むためテキスト差分を許容する（クライアント値で上書き） */}
+        <p className="text-base text-gray-300" suppressHydrationWarning>{dateText}</p>
+        <p className="mt-1 text-6xl font-bold tabular-nums tracking-tight sm:text-7xl" suppressHydrationWarning>{timeText}</p>
         {!shared && (
           <p className="mt-3 text-base text-gray-300">
             {displayName} さん

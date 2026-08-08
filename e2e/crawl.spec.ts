@@ -39,7 +39,17 @@ const APP_ROUTES = [
   '/app/attendance',
   '/app/attendance?tab=list',
   '/app/shifts',
+  '/app/leave',
+  '/app/employees',
   '/app/payroll',
+  '/app/payroll/nencho',
+  '/app/accounting',
+  '/app/accounting/ledger',
+  '/app/accounting/ledger?type=general',
+  '/app/accounting/statements',
+  '/app/accounting/assets',
+  '/app/accounting/auto',
+  '/app/accounting/banks',
   '/app/reports',
   '/app/budgets',
   '/app/daily-reports',
@@ -64,6 +74,7 @@ const APP_ROUTES = [
   '/app/settings/import',
   '/app/settings/company',
   '/app/settings/audit',
+  '/app/settings/accounts',
 ];
 
 // 実害のないノイズ（拡張・faviconなど）は除外

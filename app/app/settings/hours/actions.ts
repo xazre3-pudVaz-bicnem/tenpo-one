@@ -30,6 +30,14 @@ export async function saveBusinessHours(storeId: string, hours: BusinessHourInpu
   if (hours.length !== 7 || hours.some((h) => h.dayOfWeek < 0 || h.dayOfWeek > 6)) {
     return { error: '営業時間データが不正です' };
   }
+  // 営業日に開店/閉店が空のまま保存されると予約枠が生成されなくなるため必須とする
+  const dayNames = ['日', '月', '火', '水', '木', '金', '土'];
+  for (const h of hours) {
+    if (h.isClosed) continue;
+    if (!normalizeTime(h.openTime) || !normalizeTime(h.closeTime)) {
+      return { error: `${dayNames[h.dayOfWeek]}曜日の開店・閉店時刻を入力してください（休業の場合は定休日に設定）` };
+    }
+  }
 
   const supabase = await createClient();
   const rows = hours.map((h) => ({
