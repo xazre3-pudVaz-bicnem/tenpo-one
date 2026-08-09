@@ -1126,6 +1126,51 @@ export type Database = {
         }
         Relationships: []
       }
+      contact_requests: {
+        Row: {
+          company_name: string | null
+          contact_name: string
+          created_at: string
+          current_tools: string | null
+          email: string
+          id: string
+          message: string | null
+          phone: string | null
+          source: string
+          status: string
+          store_count: string | null
+          store_name: string | null
+        }
+        Insert: {
+          company_name?: string | null
+          contact_name: string
+          created_at?: string
+          current_tools?: string | null
+          email: string
+          id?: string
+          message?: string | null
+          phone?: string | null
+          source?: string
+          status?: string
+          store_count?: string | null
+          store_name?: string | null
+        }
+        Update: {
+          company_name?: string | null
+          contact_name?: string
+          created_at?: string
+          current_tools?: string | null
+          email?: string
+          id?: string
+          message?: string | null
+          phone?: string | null
+          source?: string
+          status?: string
+          store_count?: string | null
+          store_name?: string | null
+        }
+        Relationships: []
+      }
       coupon_redemptions: {
         Row: {
           coupon_id: string
@@ -7434,6 +7479,10 @@ export type Database = {
       app_business_date: { Args: { p_store_id: string }; Returns: string }
       app_can_view_customer_pii: { Args: { p_org: string }; Returns: boolean }
       app_can_view_payroll: { Args: { p_org: string }; Returns: boolean }
+      app_feature_enabled: {
+        Args: { p_flag: string; p_org: string }
+        Returns: boolean
+      }
       app_has_store_access: {
         Args: { p_org: string; p_store: string }
         Returns: boolean
@@ -7609,6 +7658,8 @@ export type Database = {
         Returns: Json
       }
       ship_stock_transfer: { Args: { p_transfer_id: string }; Returns: Json }
+      show_limit: { Args: never; Returns: number }
+      show_trgm: { Args: { "": string }; Returns: string[] }
       void_journal_entry: {
         Args: { p_entry_id: string; p_reason: string }
         Returns: Json

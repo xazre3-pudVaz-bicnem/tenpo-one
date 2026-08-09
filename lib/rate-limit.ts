@@ -59,4 +59,6 @@ export const RATE_LIMITS = {
   publicReservation: { limit: 10, windowMs: 60_000 },
   /** 検索系エンドポイント（IP/ユーザー単位）の連続実行を抑制するための予約枠 */
   search: { limit: 30, windowMs: 60_000 },
+  /** マーケティングサイトの問い合わせフォーム（IP単位・スパム抑制） */
+  contact: { limit: 5, windowMs: 10 * 60_000 },
 } as const;
