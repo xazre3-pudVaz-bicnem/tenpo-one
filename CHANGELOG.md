@@ -1,5 +1,25 @@
 # Changelog — TENPO ONE
 
+## v0.4.3 — REAL STORE PILOT HARDENING（2026-08-09）
+
+「実際の飲食店1店舗が1日・1週間・1か月TENPO ONEだけで営業しても数字とデータが壊れない」を
+専用テスト企業での営業シミュレーション281チェックで実証（`docs/v0.4.3-real-store-pilot-report.md`）。
+
+- **複数レジ正式対応・2段階締め**（migration 00027）: レジ締め（session単位）と店舗日次締め
+  （close_store_day・全レジ集約・register_breakdown保存）を分離。複数レジのdaily_closings上書き設計を廃止。
+  未締めレジ拒否・再オープン理由必須・閉店前チェック（未会計/未提供KDS/未退勤/未締め/小口）・開店チェックリスト
+- **支払方法別返金UX**: 返金元支払の方法別内訳（支払/返金済/残額）表示と残額超過警告（配分を推測しない）。
+  支払方法「その他」追加。取引トレースパネル（予約→注文→支払→返金→在庫→仕訳→ポイント）
+- **guest_count検証**: DB制約0-999・店内飲食1名以上トリガー・テイクアウト客数のKPI包含を企業設定化
+- **原価差異の本格化**: 仕入価格履歴（品目別・前回比値上がり検出）・仕入価格変動の参考指標（二重計上しない設計）
+- **照合ページ** `/app/reconciliation`: 売上（POS/決済/仕訳の3者）・現金（理論/実際/差異）・在庫（棚卸差異）
+- **確定済み棚卸のDB不変性**（migration 00028・STOCK_COUNT_LOCKED。監査で検出したAPI直叩きの穴を封鎖）
+- **営業シミュレーション**: verify-store-day 90（開局→予約20組→100会計→返金/VOID→深夜→4レジ締め→店舗締め→日報）・
+  verify-store-week 112（曜日変動・手組みvs実RPC一致）・verify-store-month 79（月末処理一周: 給与確定→仕訳→
+  棚卸→実原価→月次締め→試算表→P/L→B/S）— すべて1円・1個・1分単位の照合
+- **データ整合性監査** audit-data-integrity（13項目・read-only・--strict）: 現データ検出ゼロ
+- docs: first-store-pilot-checklist（非エンジニア向け導入手順）・data-scaling（将来のパーティション方針）
+
 ## v0.4.2 — TRANSACTION & ACCOUNTING CONSISTENCY（2026-08-08）
 
 返金を含む全取引が POS→帳簿→P/L まで1円もズレずにつながる状態へ
