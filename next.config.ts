@@ -68,6 +68,7 @@ const nextConfig: NextConfig = {
     return [{ source: '/(.*)', headers: securityHeaders }];
   },
   images: {
+    formats: ['image/avif', 'image/webp'],
     remotePatterns: [
       // Supabase Storage（環境変数のホストからの画像を許可）
       ...(process.env.NEXT_PUBLIC_SUPABASE_URL
