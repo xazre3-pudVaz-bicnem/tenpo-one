@@ -11,6 +11,7 @@ const ITEMS = [
   { href: '/admin/plans', label: 'プラン' },
   { href: '/admin/feature-flags', label: '機能フラグ' },
   { href: '/admin/legal-rules', label: '法定ルール' },
+  { href: '/admin/leads', label: 'お問い合わせ' },
   { href: '/admin/support', label: 'サポート' },
   { href: '/admin/audit-logs', label: '監査ログ' },
   { href: '/admin/status', label: '状態' },

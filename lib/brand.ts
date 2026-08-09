@@ -8,7 +8,7 @@ export const brand = {
   tagline: '店舗運営を、ひとつに。',
   taglineEn: 'One Platform. Every Store.',
   company: '株式会社サイプレス',
-  supportEmail: 'support@tenpo-one.example.com',
+  supportEmail: 'info@cypress-all.co.jp',
   colors: {
     primary: '#7B3FF2', // Primary Purple
     primaryDeep: '#5A2ED6', // Deep Purple

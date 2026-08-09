@@ -223,24 +223,36 @@ export default function TopPage() {
 
       {/* 2. PRODUCT OVERVIEW */}
       <section className="mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-20">
-        <SectionHeading
-          eyebrow="TENPO ONEとは"
-          title="単なるPOSではなく、飲食店運営全体を一元化する基幹プラットフォーム"
-          description="予約・フロア・POS・会計・QRオーダー・キッチンディスプレイ・顧客管理・在庫・原価・経費・勤怠・給与試算・本社の多店舗管理まで。すべての機能が、同じ会社・店舗・お客様・注文・スタッフのデータでつながっています。"
-        />
-        <div className="mt-10 grid gap-4 sm:grid-cols-3">
-          <div className="rounded-2xl border border-gray-200 bg-white p-6">
-            <p className="text-sm font-bold text-navy">フロント業務</p>
-            <p className="mt-2 text-sm leading-relaxed text-gray-500">予約・フロア・POS・QRオーダー・キッチンディスプレイ</p>
+        <div className="grid items-center gap-10 lg:grid-cols-2 lg:gap-14">
+          <div>
+            <SectionHeading
+              eyebrow="TENPO ONEとは"
+              title="単なるPOSではなく、飲食店運営全体を一元化する基幹プラットフォーム"
+              description="予約・フロア・POS・会計・QRオーダー・キッチンディスプレイ・顧客管理・在庫・原価・経費・勤怠・給与試算・本社の多店舗管理まで。すべての機能が、同じ会社・店舗・お客様・注文・スタッフのデータでつながっています。"
+              align="left"
+            />
+            <div className="mt-8 space-y-3">
+              <div className="rounded-2xl border border-gray-200 bg-white p-5">
+                <p className="text-sm font-bold text-navy">フロント業務</p>
+                <p className="mt-1.5 text-sm leading-relaxed text-gray-500">予約・フロア・POS・QRオーダー・キッチンディスプレイ</p>
+              </div>
+              <div className="rounded-2xl border border-gray-200 bg-white p-5">
+                <p className="text-sm font-bold text-navy">バックオフィス</p>
+                <p className="mt-1.5 text-sm leading-relaxed text-gray-500">在庫・原価・経費・請求書・小口現金・勤怠・給与試算</p>
+              </div>
+              <div className="rounded-2xl border border-gray-200 bg-white p-5">
+                <p className="text-sm font-bold text-navy">経営管理</p>
+                <p className="mt-1.5 text-sm leading-relaxed text-gray-500">会計帳簿・経営分析・多店舗の一元管理</p>
+              </div>
+            </div>
           </div>
-          <div className="rounded-2xl border border-gray-200 bg-white p-6">
-            <p className="text-sm font-bold text-navy">バックオフィス</p>
-            <p className="mt-2 text-sm leading-relaxed text-gray-500">在庫・原価・経費・請求書・小口現金・勤怠・給与試算</p>
-          </div>
-          <div className="rounded-2xl border border-gray-200 bg-white p-6">
-            <p className="text-sm font-bold text-navy">経営管理</p>
-            <p className="mt-2 text-sm leading-relaxed text-gray-500">会計帳簿・経営分析・多店舗の一元管理</p>
-          </div>
+          <Reveal>
+            <Screenshot
+              src="/lp-staff-portrait.png"
+              alt="店内でTENPO ONEのタブレットを手に接客するスタッフ"
+              device="plain"
+            />
+          </Reveal>
         </div>
       </section>
 
@@ -396,8 +408,23 @@ export default function TopPage() {
       {/* 9. ROLE BASED */}
       <section className="bg-navy py-16 sm:py-20">
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
-          <SectionHeading tone="dark" title="立場ごとに、必要な画面だけを" />
-          <div className="mt-10 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-5">
+          <SectionHeading
+            tone="dark"
+            title="立場ごとに、必要な画面だけを"
+            description="本社・店長・ホール・厨房・経理まで、それぞれの役割に必要な操作だけを、同じデータの上で。"
+          />
+          <Reveal className="mt-10">
+            <div className="overflow-hidden rounded-2xl ring-1 ring-white/10">
+              <Screenshot
+                src="/lp-staff-meeting.png"
+                alt="店舗でTENPO ONEの画面を見ながら打ち合わせるスタッフ"
+                device="plain"
+                className="shadow-none ring-0"
+                sizes="(max-width: 1024px) 100vw, 1152px"
+              />
+            </div>
+          </Reveal>
+          <div className="mt-8 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-5">
             {ROLES.map((r, i) => (
               <Reveal key={r.role} delay={i * 60}>
                 <div className="h-full rounded-2xl bg-navy-soft p-6">
@@ -427,21 +454,11 @@ export default function TopPage() {
             </Link>
           </div>
           <Reveal>
-            <div className="rounded-2xl border border-gray-200 bg-white p-6">
-              <div className="grid grid-cols-3 gap-3">
-                {['A店', 'B店', 'C店'].map((store) => (
-                  <div key={store} className="rounded-xl bg-surface p-4 text-center">
-                    <span className="mx-auto flex h-8 w-8 items-center justify-center rounded-full bg-primary-soft text-xs font-bold text-primary-deep">
-                      {store[0]}
-                    </span>
-                    <p className="mt-2 text-xs font-semibold text-navy">{store}</p>
-                  </div>
-                ))}
-              </div>
-              <p className="mt-4 text-center text-xs leading-relaxed text-gray-400">
-                店舗を切り替えず、並べて比較できます
-              </p>
-            </div>
+            <Screenshot
+              src="/lp-owner-desk.png"
+              alt="ノートPCでTENPO ONEの本社ダッシュボードを確認し全店舗を比較するオーナー"
+              device="browser"
+            />
           </Reveal>
         </div>
       </section>
