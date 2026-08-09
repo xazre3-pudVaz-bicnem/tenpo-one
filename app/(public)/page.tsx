@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import Image from 'next/image';
 import {
   Globe, BookOpen, MonitorSmartphone, CreditCard, Banknote, Wallet, FileText,
   Clock, JapaneseYen, Users, BarChart3, Building2, ShieldCheck, Lock, ScrollText,
@@ -66,18 +67,24 @@ const PERSPECTIVES = [
     role: '本社・オーナー',
     title: '全店ダッシュボードで比較する',
     desc: '選択した店舗、または全店舗の売上・客数・アラートを1画面で確認し、店舗間の実績を比較できます。',
+    image: '/lp-owner-analytics.png',
+    imageAlt: 'ノートPCでTENPO ONEの売上ダッシュボードを確認するオーナー',
   },
   {
     icon: UserCog,
     role: '店長',
     title: '台帳からPOSまで1台で',
     desc: '予約台帳・フロアマップ・レジ締め・発注・シフト作成までをタブレット1台で完結できます。',
+    image: '/lp-pos-checkout.png',
+    imageAlt: 'タブレットのTENPO ONE POSレジで会計するスタッフ',
   },
   {
     icon: Smartphone,
     role: 'ホールスタッフ',
     title: '迷わない打刻とPOS',
     desc: '出退勤の打刻と注文・会計の操作だけに絞った画面で、新人でもすぐに使いこなせます。',
+    image: '/lp-attendance.png',
+    imageAlt: 'TENPO ONEで出勤打刻をするホールスタッフ',
   },
 ];
 
@@ -155,32 +162,45 @@ export default function HomePage() {
       {/* ① ヒーロー */}
       <section className="bg-surface">
         <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-24">
-          <div className="max-w-2xl">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-400">
-              {brand.taglineEn}
-            </p>
-            <h1 className="mt-4 text-4xl font-bold leading-tight tracking-tight text-navy sm:text-5xl">
-              <span className="bg-gradient-to-r from-[#7B3FF2] to-[#5A2ED6] bg-clip-text text-transparent">
-                店舗運営を、
-              </span>
-              ひとつに。
-            </h1>
-            <p className="mt-5 text-base leading-relaxed text-gray-600 sm:text-lg">
-              オンライン予約・予約台帳・POS・会計・レジ締め・勤怠・給与・顧客管理・経営分析。
-              飲食店の運営に必要な業務を、同じデータでつながる1つのプラットフォームに統合します。
-            </p>
-            <div className="mt-8 flex flex-wrap gap-3">
-              <Link href="/login" className={buttonVariants({ size: 'lg' })}>
-                ログイン
-                <ArrowRight className="h-4 w-4" />
-              </Link>
-              <a
-                href={`mailto:${brand.supportEmail}`}
-                className={buttonVariants({ size: 'lg', variant: 'secondary' })}
-              >
-                <Mail className="h-4 w-4" />
-                お問い合わせ
-              </a>
+          <div className="grid items-center gap-10 lg:grid-cols-2 lg:gap-14">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-400">
+                {brand.taglineEn}
+              </p>
+              <h1 className="mt-4 text-4xl font-bold leading-tight tracking-tight text-navy sm:text-5xl">
+                <span className="bg-gradient-to-r from-[#7B3FF2] to-[#5A2ED6] bg-clip-text text-transparent">
+                  店舗運営を、
+                </span>
+                ひとつに。
+              </h1>
+              <p className="mt-5 text-base leading-relaxed text-gray-600 sm:text-lg">
+                オンライン予約・予約台帳・POS・会計・レジ締め・勤怠・給与・顧客管理・経営分析。
+                飲食店の運営に必要な業務を、同じデータでつながる1つのプラットフォームに統合します。
+              </p>
+              <div className="mt-8 flex flex-wrap gap-3">
+                <Link href="/login" className={buttonVariants({ size: 'lg' })}>
+                  ログイン
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+                <a
+                  href={`mailto:${brand.supportEmail}`}
+                  className={buttonVariants({ size: 'lg', variant: 'secondary' })}
+                >
+                  <Mail className="h-4 w-4" />
+                  お問い合わせ
+                </a>
+              </div>
+            </div>
+            <div className="relative overflow-hidden rounded-2xl shadow-xl ring-1 ring-black/5">
+              <Image
+                src="/lp-hero-pos.png"
+                alt="TENPO ONEのPOSダッシュボードを店舗カウンターで操作する様子"
+                width={1690}
+                height={950}
+                priority
+                sizes="(max-width: 1024px) 100vw, 50vw"
+                className="h-auto w-full"
+              />
             </div>
           </div>
         </div>
@@ -228,6 +248,44 @@ export default function HomePage() {
         <div className="mt-10">
           <FeatureGrid items={FEATURES} />
         </div>
+
+        {/* 店内での利用シーン（QRオーダー・キッチンディスプレイ） */}
+        <div className="mt-12 grid gap-5 sm:grid-cols-2">
+          <figure className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
+            <div className="relative aspect-[16/9] w-full">
+              <Image
+                src="/lp-qr-order.png"
+                alt="来店客がスマートフォンのQRコードからTENPO ONEでメニューを注文する様子"
+                fill
+                sizes="(max-width: 640px) 100vw, 50vw"
+                className="object-cover"
+              />
+            </div>
+            <figcaption className="px-5 py-4">
+              <p className="text-sm font-bold text-navy">QRオーダー</p>
+              <p className="mt-1 text-xs leading-relaxed text-gray-500">
+                テーブルのQRコードからお客様自身が注文。注文はそのままPOS・キッチンへ連携します。
+              </p>
+            </figcaption>
+          </figure>
+          <figure className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
+            <div className="relative aspect-[16/9] w-full">
+              <Image
+                src="/lp-kds.png"
+                alt="厨房のキッチンディスプレイでTENPO ONEの注文状況を確認する調理スタッフ"
+                fill
+                sizes="(max-width: 640px) 100vw, 50vw"
+                className="object-cover"
+              />
+            </div>
+            <figcaption className="px-5 py-4">
+              <p className="text-sm font-bold text-navy">キッチンディスプレイ（KDS）</p>
+              <p className="mt-1 text-xs leading-relaxed text-gray-500">
+                注文はリアルタイムで厨房のディスプレイに表示。調理状況を提供までタッチで管理します。
+              </p>
+            </figcaption>
+          </figure>
+        </div>
       </section>
 
       {/* ⑤ 3つの視点 */}
@@ -238,13 +296,24 @@ export default function HomePage() {
           </h2>
           <div className="mt-10 grid grid-cols-1 gap-5 sm:grid-cols-3">
             {PERSPECTIVES.map((p) => (
-              <div key={p.role} className="rounded-2xl bg-navy-soft p-6">
-                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/20 text-primary">
-                  <p.icon className="h-5 w-5" aria-hidden="true" />
-                </span>
-                <p className="mt-4 text-xs font-semibold uppercase tracking-wider text-primary">{p.role}</p>
-                <p className="mt-1 text-base font-bold text-white">{p.title}</p>
-                <p className="mt-2 text-sm leading-relaxed text-gray-400">{p.desc}</p>
+              <div key={p.role} className="overflow-hidden rounded-2xl bg-navy-soft">
+                <div className="relative aspect-[16/10] w-full">
+                  <Image
+                    src={p.image}
+                    alt={p.imageAlt}
+                    fill
+                    sizes="(max-width: 640px) 100vw, 33vw"
+                    className="object-cover"
+                  />
+                </div>
+                <div className="p-6">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/20 text-primary">
+                    <p.icon className="h-5 w-5" aria-hidden="true" />
+                  </span>
+                  <p className="mt-4 text-xs font-semibold uppercase tracking-wider text-primary">{p.role}</p>
+                  <p className="mt-1 text-base font-bold text-white">{p.title}</p>
+                  <p className="mt-2 text-sm leading-relaxed text-gray-400">{p.desc}</p>
+                </div>
               </div>
             ))}
           </div>
