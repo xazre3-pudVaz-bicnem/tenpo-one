@@ -21,6 +21,7 @@ const STATUS_LABEL: Record<string, { label: string; tone: BadgeTone }> = {
   active: { label: '契約中', tone: 'success' },
   suspended: { label: '停止中', tone: 'warning' },
   cancelled: { label: '解約済み', tone: 'danger' },
+  pending_deletion: { label: '削除待ち', tone: 'danger' },
 };
 
 export default async function OrganizationsPage({

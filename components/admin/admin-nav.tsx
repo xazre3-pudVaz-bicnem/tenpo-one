@@ -14,6 +14,7 @@ const ITEMS = [
   { href: '/admin/support', label: 'サポート' },
   { href: '/admin/audit-logs', label: '監査ログ' },
   { href: '/admin/status', label: '状態' },
+  { href: '/admin/system', label: 'システム' },
 ];
 
 /** CYPRESS運営管理コンソールの水平ナビゲーション。モバイルは横スクロール。 */

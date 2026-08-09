@@ -1,8 +1,11 @@
 import { NextResponse } from 'next/server';
+import pkg from '@/package.json';
 
 /**
  * ヘルスチェック（秘密情報は返さない）。
- * App稼働 + Supabase(DB)疎通の最小確認。運営コンソールの状態表示から参照する。
+ * App稼働 + Supabase(DB)疎通 + auth設定有無 + アプリバージョン/環境の最小確認。
+ * 運営コンソールの状態表示（/admin/status, /admin/system）から参照する。
+ * db/authの判定基準は既存踏襲（dbのみが200/503を左右する。authは参考情報）。
  */
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -30,6 +33,12 @@ export async function GET() {
     }
   }
 
+  // auth設定の存在確認（値そのものは返さず、有無のみ。service roleキーの有無も併記）
+  const auth: 'ok' | 'unconfigured' = url && anonKey ? 'ok' : 'unconfigured';
+  const authAdminConfigured = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  const environment = process.env.VERCEL_ENV || process.env.NODE_ENV || 'unknown';
+
   const healthy = db === 'ok';
   return NextResponse.json(
     {
@@ -37,6 +46,10 @@ export async function GET() {
       app: 'ok',
       db,
       dbLatencyMs,
+      auth,
+      authAdminConfigured,
+      version: pkg.version,
+      environment,
       responseMs: Date.now() - startedAt,
       timestamp: new Date().toISOString(),
     },

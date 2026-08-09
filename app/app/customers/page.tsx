@@ -56,6 +56,7 @@ interface CustomerRow {
   cancel_count: number;
   no_show_count: number;
   last_visit_at: string | null;
+  anonymized_at: string | null;
   customer_tag_links: { customer_tags: { id: string; name: string; color: string } | null }[] | null;
 }
 
@@ -250,7 +251,7 @@ export default async function CustomersPage({
   let query = supabase
     .from('customers')
     .select(
-      'id, name, name_kana, phone, birthday, point_balance, visit_count, total_spent, cancel_count, no_show_count, last_visit_at, customer_tag_links(customer_tags(id, name, color))',
+      'id, name, name_kana, phone, birthday, point_balance, visit_count, total_spent, cancel_count, no_show_count, last_visit_at, anonymized_at, customer_tag_links(customer_tags(id, name, color))',
       { count: 'exact' }
     )
     .eq('organization_id', ctx.organizationId)
@@ -404,9 +405,12 @@ export default async function CustomersPage({
                   return (
                     <Tr key={c.id}>
                       <Td>
-                        <Link href={`/app/customers/${c.id}`} className="font-medium text-navy hover:text-primary hover:underline">
-                          {c.name}
-                        </Link>
+                        <div className="flex items-center gap-1.5">
+                          <Link href={`/app/customers/${c.id}`} className="font-medium text-navy hover:text-primary hover:underline">
+                            {c.name}
+                          </Link>
+                          {c.anonymized_at && <Badge tone="gray">匿名化済み</Badge>}
+                        </div>
                         {c.name_kana && <p className="text-xs text-gray-500">{c.name_kana}</p>}
                       </Td>
                       <Td className="text-gray-600">{c.phone || '—'}</Td>

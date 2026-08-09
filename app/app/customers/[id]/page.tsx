@@ -30,6 +30,7 @@ import { NotesSection, type NoteRow } from '@/components/customers/notes-section
 import { RecalcButton } from '@/components/customers/recalc-button';
 import { DeleteCustomerButton } from '@/components/customers/delete-customer-button';
 import { MergeCustomerButton } from '@/components/customers/merge-customer-button';
+import { AnonymizeCustomerButton } from '@/components/customers/anonymize-customer-button';
 import { PointsCard } from '@/components/customers/points-card';
 import { SegmentBadges, RfmBadge } from '@/components/customers/segment-badges';
 import { CONSENT_TYPES, type ConsentType, POINT_KIND_LABELS, type PointTransactionKind } from '@/components/customers/labels';
@@ -77,7 +78,7 @@ export default async function CustomerDetailPage({
   const { data: customer } = await supabase
     .from('customers')
     .select(
-      'id, name, name_kana, phone, email, birthday, gender, postal_code, address, allergy_note, dislike_note, preference_note, seat_preference, anniversary_note, service_note, member_no, member_rank, point_balance, visit_count, total_spent, cancel_count, no_show_count, last_visit_at, first_visit_at, created_at'
+      'id, name, name_kana, phone, email, birthday, gender, postal_code, address, allergy_note, dislike_note, preference_note, seat_preference, anniversary_note, service_note, member_no, member_rank, point_balance, visit_count, total_spent, cancel_count, no_show_count, last_visit_at, first_visit_at, created_at, anonymized_at'
     )
     .eq('id', id)
     .eq('organization_id', ctx.organizationId)
@@ -104,6 +105,8 @@ export default async function CustomerDetailPage({
   const canDelete = can(ctx.role, 'customers.delete');
   const canAdjustPoints = can(ctx.role, 'cash.approve');
   const canExport = can(ctx.role, 'csv.export');
+  const canAnonymize = can(ctx.role, 'org.settings');
+  const isAnonymized = !!customer.anonymized_at;
 
   const [
     { data: consentRows },
@@ -307,7 +310,12 @@ export default async function CustomerDetailPage({
   return (
     <div>
       <PageHeader
-        title={customer.name}
+        title={
+          <span className="inline-flex items-center gap-2">
+            {customer.name}
+            {isAnonymized && <Badge tone="gray">匿名化済み</Badge>}
+          </span>
+        }
         description={`登録日 ${formatDate(customer.created_at)}${customer.name_kana ? `｜${customer.name_kana}` : ''}`}
         actions={
           <>
@@ -317,8 +325,11 @@ export default async function CustomerDetailPage({
                 データ書き出し
               </a>
             )}
-            {canDelete && <MergeCustomerButton customerId={customer.id} customerName={customer.name} />}
-            {canWrite && <EditCustomerDialog customer={customer} />}
+            {canDelete && !isAnonymized && <MergeCustomerButton customerId={customer.id} customerName={customer.name} />}
+            {canWrite && !isAnonymized && <EditCustomerDialog customer={customer} />}
+            {canAnonymize && !isAnonymized && (
+              <AnonymizeCustomerButton customerId={customer.id} customerName={customer.name} />
+            )}
             {canDelete && <DeleteCustomerButton customerId={customer.id} customerName={customer.name} />}
           </>
         }

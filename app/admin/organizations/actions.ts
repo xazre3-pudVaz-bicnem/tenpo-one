@@ -6,6 +6,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
 import { ROLES } from '@/lib/permissions';
 import { FEATURE_KEYS } from '@/lib/features';
+import { withErrorCapture } from '@/lib/observability-server';
 
 function randomPassword() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!#$%';
@@ -154,6 +155,89 @@ export async function reactivateOrganization(organizationId: string, reason: str
   });
 
   revalidatePath('/admin/organizations');
+}
+
+// =============================================================
+// テナントoffboarding（データ保護）
+// 状態遷移: active/trial ↔ suspended → cancelled → pending_deletion
+// cancelled / pending_deletion のいずれも物理削除は行わない。データの実削除は
+// 別途の運用手順（保持期限経過後にCYPRESS運営が個別に実施）に従う。本操作はステータス変更のみ。
+// =============================================================
+
+/** 契約解約（active/trial/suspendedのいずれからも遷移可）。物理削除は行わない。 */
+export async function cancelOrganization(organizationId: string, reason: string) {
+  const ctx = await requireCypressAdmin();
+  if (!reason.trim()) throw new Error('解約理由を入力してください');
+  const admin = createAdminClient();
+
+  const { data: before } = await admin.from('organizations').select('status').eq('id', organizationId).single();
+  if (!before) throw new Error('企業が見つかりません');
+  if (before.status === 'cancelled' || before.status === 'pending_deletion') {
+    throw new Error('既に解約済みです');
+  }
+
+  await withErrorCapture(
+    { route: 'admin.organizations.cancel', organizationId, userId: ctx.userId },
+    async () => {
+      const { error } = await admin.from('organizations').update({ status: 'cancelled' }).eq('id', organizationId);
+      if (error) throw new Error(error.message);
+
+      const supabase = await createClient();
+      await supabase.rpc('log_audit', {
+        p_org: organizationId,
+        p_store: null,
+        p_action: 'organization.cancel',
+        p_target_table: 'organizations',
+        p_target_id: organizationId,
+        p_before: before,
+        p_after: { status: 'cancelled' },
+        p_note: reason.trim(),
+      });
+    }
+  );
+
+  revalidatePath('/admin/organizations');
+  revalidatePath(`/admin/organizations/${organizationId}`);
+}
+
+/**
+ * 解約済み企業を「削除待ち」へ遷移する（cancelledからのみ）。
+ * データの物理削除はこの操作では行わない。保持期限経過後の実削除は別途の運用手順に従う。
+ */
+export async function markOrganizationPendingDeletion(organizationId: string, reason: string) {
+  const ctx = await requireCypressAdmin();
+  if (!reason.trim()) throw new Error('理由を入力してください');
+  const admin = createAdminClient();
+
+  const { data: before } = await admin.from('organizations').select('status').eq('id', organizationId).single();
+  if (!before) throw new Error('企業が見つかりません');
+  if (before.status !== 'cancelled') throw new Error('解約済みの企業のみ削除待ちに遷移できます');
+
+  await withErrorCapture(
+    { route: 'admin.organizations.mark_pending_deletion', organizationId, userId: ctx.userId },
+    async () => {
+      const { error } = await admin
+        .from('organizations')
+        .update({ status: 'pending_deletion' })
+        .eq('id', organizationId);
+      if (error) throw new Error(error.message);
+
+      const supabase = await createClient();
+      await supabase.rpc('log_audit', {
+        p_org: organizationId,
+        p_store: null,
+        p_action: 'organization.mark_pending_deletion',
+        p_target_table: 'organizations',
+        p_target_id: organizationId,
+        p_before: before,
+        p_after: { status: 'pending_deletion' },
+        p_note: reason.trim(),
+      });
+    }
+  );
+
+  revalidatePath('/admin/organizations');
+  revalidatePath(`/admin/organizations/${organizationId}`);
 }
 
 // =============================================================

@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server';
 import { calcPayroll, calcCommission, summarizeEntry, type DayAttendance, type PayrollPreview } from '@/lib/payroll';
 import { formatTime, formatMinutes } from '@/lib/format';
 import { groupDaysByRule, type PayrollRuleCandidate } from './rule-periods';
+import { captureServerError, userFacingError } from '@/lib/observability-server';
 
 type ActionResult = { ok: boolean; message: string };
 
@@ -750,7 +751,15 @@ export async function confirmPayrollRun(runId: string): Promise<ActionResult> {
     .from('payroll_runs')
     .update({ status: 'confirmed', updated_by: ctx.userId })
     .eq('id', runId);
-  if (error) return { ok: false, message: '確定に失敗しました' };
+  if (error) {
+    const errorId = await captureServerError(error, {
+      route: 'payroll.confirm_run',
+      organizationId: ctx.organizationId,
+      userId: ctx.userId,
+      detail: { runId },
+    });
+    return { ok: false, message: userFacingError(errorId, '確定に失敗しました') };
+  }
   revalidatePath(`/app/payroll/${runId}`);
   revalidatePath('/app/payroll');
   return { ok: true, message: '給与計算を確定しました' };

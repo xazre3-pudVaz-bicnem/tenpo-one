@@ -50,7 +50,7 @@ export const getSessionContext = cache(async (): Promise<SessionContext | null> 
       .single(),
     supabase
       .from('memberships')
-      .select('id, organization_id, role, organizations(id, name)')
+      .select('id, organization_id, role, organizations(id, name, status)')
       .eq('profile_id', user.id)
       .eq('status', 'active')
       .limit(1)
@@ -61,6 +61,15 @@ export const getSessionContext = cache(async (): Promise<SessionContext | null> 
   if (profile.status === 'suspended') {
     await supabase.auth.signOut();
     return null;
+  }
+  // 契約停止・解約・削除待ちの企業に属するユーザーは既存セッションでも遮断する
+  // （cypress運営は企業statusに関わらず運営コンソールを利用できるため除外）
+  if (!profile.is_cypress_admin && membership) {
+    const orgStatus = (membership.organizations as unknown as { status?: string } | null)?.status;
+    if (orgStatus && orgStatus !== 'active' && orgStatus !== 'trial') {
+      await supabase.auth.signOut();
+      return null;
+    }
   }
 
   let stores: StoreRef[] = [];

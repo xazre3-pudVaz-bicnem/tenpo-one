@@ -20,7 +20,11 @@ export default function PosError({
   return (
     <div className="p-4 lg:p-6">
       <ErrorState
-        message="通信状態を確認して再度お試しください。"
+        message={
+          error.digest
+            ? `通信状態を確認して再度お試しください。（エラーID: ${error.digest}）`
+            : '通信状態を確認して再度お試しください。'
+        }
         retry={
           <Button onClick={() => reset()} variant="primary">
             再試行する

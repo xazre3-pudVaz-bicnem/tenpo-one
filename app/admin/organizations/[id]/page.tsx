@@ -44,6 +44,7 @@ const STATUS_LABEL: Record<string, { label: string; tone: BadgeTone }> = {
   active: { label: '契約中', tone: 'success' },
   suspended: { label: '停止中', tone: 'warning' },
   cancelled: { label: '解約済み', tone: 'danger' },
+  pending_deletion: { label: '削除待ち', tone: 'danger' },
 };
 
 const STORE_STATUS_LABEL: Record<string, { label: string; tone: BadgeTone }> = {
@@ -358,6 +359,11 @@ export default async function OrganizationDetailPage({ params }: { params: Promi
               <div>
                 <p className="mb-1.5 text-xs text-gray-500">契約状態</p>
                 <OrganizationRowActions organizationId={org.id} status={org.status} />
+                {(org.status === 'cancelled' || org.status === 'pending_deletion') && (
+                  <p className="mt-2 text-[11px] text-gray-400">
+                    解約済み・削除待ちの企業データは物理削除されません。実削除は保持期限経過後にCYPRESS運営が別途の運用手順で実施します。
+                  </p>
+                )}
               </div>
             </CardContent>
           </Card>
