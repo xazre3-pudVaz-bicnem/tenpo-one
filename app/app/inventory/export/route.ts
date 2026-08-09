@@ -1,6 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
+import { resolveExportStore } from '@/lib/export-scope';
 import { toCsv, csvResponse } from '@/lib/csv';
 import { ITEM_KIND_LABELS, STOCK_WARNING_LABELS, stockWarningLevel, type ItemKind } from '@/components/inventory/labels';
 
@@ -9,7 +10,9 @@ export async function GET(request: NextRequest) {
   const ctx = await requirePermission('csv.export');
   const supabase = await createClient();
   const { searchParams } = new URL(request.url);
-  const storeId = searchParams.get('store') ?? ctx.currentStore?.id ?? null;
+  const storeScope = resolveExportStore(ctx, searchParams.get('store'), ctx.currentStore?.id ?? null);
+  if (!storeScope.ok) return new Response('指定された店舗へのアクセス権限がありません', { status: 403 });
+  const storeId = storeScope.storeId;
 
   let query = supabase
     .from('inventory_items')

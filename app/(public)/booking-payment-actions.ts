@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { getPaymentProvider, isPaymentConfigured } from '@/lib/payments';
 import { bookingIdempotencyKey, computeBookingCharge, isValidChargeAmount } from '@/lib/payments/types';
 import { rateLimiter, RATE_LIMITS } from '@/lib/rate-limit';
+import { newErrorId, logStructuredError, userFacingError } from '@/lib/observability';
 
 /** 匿名公開アクションのIPベースレート制限キー（x-forwarded-for優先、無ければx-real-ip） */
 async function requestIp(): Promise<string> {
@@ -132,7 +133,10 @@ export async function createBookingCheckout(
 
     return { ok: true, url: session.url, amount: amountYen };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : '決済ページの作成に失敗しました' };
+    // Stripe/内部エラーの生メッセージを匿名クライアントへ返さない。IDのみ提示しサーバーに記録。
+    const errorId = newErrorId();
+    logStructuredError(errorId, e instanceof Error ? e.message : String(e), { route: 'booking:create_payment_session', severity: 'error' });
+    return { ok: false, error: userFacingError(errorId, '決済ページの作成に失敗しました') };
   }
 }
 

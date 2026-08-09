@@ -65,3 +65,19 @@ export function logStructuredError(errorId: string, message: string, ctx: ErrorC
 export function userFacingError(errorId: string, base = '処理に失敗しました'): string {
   return `${base}（エラーID: ${errorId}）。解決しない場合はこのIDを添えてお問い合わせください`;
 }
+
+/**
+ * 公開（匿名）アクションでRPCエラーをクライアントへ返す際、内部エラーテキストの
+ * 漏洩を防ぐ。業務RPCが raise する契約コード（`^[A-Z][A-Z0-9_]+$` 形式）のみ通過させ、
+ * それ以外（Postgresの内部メッセージ・制約名・permission denied 等）はサーバーログへ
+ * 記録し 'UNKNOWN' を返す。呼び出し側UIはコード→日本語メッセージへ変換する。
+ */
+export function safePublicErrorCode(raw: string | null | undefined, ctx: ErrorContext = {}): string {
+  if (!raw) return 'UNKNOWN';
+  const code = raw.split(':')[0].trim();
+  if (/^[A-Z][A-Z0-9_]{1,39}$/.test(code)) return code;
+  // 契約コードでない＝想定外の内部エラー。IDを発行してサーバーにのみ残す。
+  const errorId = newErrorId();
+  logStructuredError(errorId, raw, { ...ctx, severity: ctx.severity ?? 'error' });
+  return 'UNKNOWN';
+}

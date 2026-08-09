@@ -199,13 +199,21 @@ export async function updateEmployeeConfidential(input: UpdateEmployeeConfidenti
   }
 
   const supabase = await createClient();
-  const { data: before } = await supabase
+  // 従業員本体の存在・所属確認（機密列は保持していない）
+  const { data: emp } = await supabase
     .from('employees')
-    .select('bank_transfer_info, emergency_contact')
+    .select('id, organization_id, profile_id')
     .eq('id', input.id)
     .eq('organization_id', ctx.organizationId)
     .maybeSingle();
-  if (!before) return { ok: false, message: '対象の従業員が見つかりません' };
+  if (!emp) return { ok: false, message: '対象の従業員が見つかりません' };
+
+  // 変更検知用に現行の機密情報を専用テーブルから取得
+  const { data: before } = await supabase
+    .from('employee_confidential')
+    .select('bank_transfer_info, emergency_contact')
+    .eq('employee_id', input.id)
+    .maybeSingle();
 
   const bankTransferInfo = {
     bank: input.bank.bank.trim() || null,
@@ -221,14 +229,22 @@ export async function updateEmployeeConfidential(input: UpdateEmployeeConfidenti
   };
 
   const changedFields: string[] = [];
-  if (JSON.stringify(before.bank_transfer_info ?? null) !== JSON.stringify(bankTransferInfo)) changedFields.push('bank_transfer_info');
-  if (JSON.stringify(before.emergency_contact ?? null) !== JSON.stringify(emergencyContact)) changedFields.push('emergency_contact');
+  if (JSON.stringify(before?.bank_transfer_info ?? null) !== JSON.stringify(bankTransferInfo)) changedFields.push('bank_transfer_info');
+  if (JSON.stringify(before?.emergency_contact ?? null) !== JSON.stringify(emergencyContact)) changedFields.push('emergency_contact');
 
   const { error } = await supabase
-    .from('employees')
-    .update({ bank_transfer_info: bankTransferInfo, emergency_contact: emergencyContact, updated_by: ctx.userId })
-    .eq('id', input.id)
-    .eq('organization_id', ctx.organizationId);
+    .from('employee_confidential')
+    .upsert(
+      {
+        employee_id: input.id,
+        organization_id: ctx.organizationId,
+        profile_id: emp.profile_id,
+        bank_transfer_info: bankTransferInfo,
+        emergency_contact: emergencyContact,
+        updated_by: ctx.userId,
+      },
+      { onConflict: 'employee_id' }
+    );
   if (error) return { ok: false, message: `更新に失敗しました: ${error.message}` };
 
   // 機密フィールドの値は監査ログへ保存しない（変更されたフィールド名のみ記録）
@@ -236,7 +252,7 @@ export async function updateEmployeeConfidential(input: UpdateEmployeeConfidenti
     p_org: ctx.organizationId,
     p_store: null,
     p_action: 'employee.update',
-    p_target_table: 'employees',
+    p_target_table: 'employee_confidential',
     p_target_id: input.id,
     p_before: null,
     p_after: { changed_fields: changedFields },

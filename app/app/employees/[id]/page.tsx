@@ -29,10 +29,13 @@ interface EmployeeDetailRow {
   position: string | null;
   primary_store_id: string | null;
   status: string;
-  bank_transfer_info: { bank?: string; branch?: string; type?: string; last4?: string; holder?: string } | null;
-  emergency_contact: { name?: string; relation?: string; phone?: string } | null;
   profiles: { display_name: string } | null;
   stores: { name: string } | null;
+}
+
+interface ConfidentialRow {
+  bank_transfer_info: { bank?: string; branch?: string; type?: string; last4?: string; holder?: string } | null;
+  emergency_contact: { name?: string; relation?: string; phone?: string } | null;
 }
 
 export default async function EmployeeDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -100,19 +103,26 @@ export default async function EmployeeDetailPage({ params }: { params: Promise<{
   let confidentialInitial: ConfidentialData | null = null;
   let insuranceInitial: InsuranceData | null = null;
   if (canViewConfidential) {
+    // 機密情報は専用テーブル（RLSで給与ロール＋本人に限定）から取得
+    const { data: confRaw } = await supabase
+      .from('employee_confidential')
+      .select('bank_transfer_info, emergency_contact')
+      .eq('employee_id', employee.id)
+      .maybeSingle();
+    const conf = confRaw as ConfidentialRow | null;
     confidentialInitial = {
       employeeId: employee.id,
       bank: {
-        bank: employee.bank_transfer_info?.bank ?? '',
-        branch: employee.bank_transfer_info?.branch ?? '',
-        type: employee.bank_transfer_info?.type ?? '',
-        last4: employee.bank_transfer_info?.last4 ?? '',
-        holder: employee.bank_transfer_info?.holder ?? '',
+        bank: conf?.bank_transfer_info?.bank ?? '',
+        branch: conf?.bank_transfer_info?.branch ?? '',
+        type: conf?.bank_transfer_info?.type ?? '',
+        last4: conf?.bank_transfer_info?.last4 ?? '',
+        holder: conf?.bank_transfer_info?.holder ?? '',
       },
       emergency: {
-        name: employee.emergency_contact?.name ?? '',
-        relation: employee.emergency_contact?.relation ?? '',
-        phone: employee.emergency_contact?.phone ?? '',
+        name: conf?.emergency_contact?.name ?? '',
+        relation: conf?.emergency_contact?.relation ?? '',
+        phone: conf?.emergency_contact?.phone ?? '',
       },
     };
 

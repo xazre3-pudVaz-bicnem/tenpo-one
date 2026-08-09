@@ -3,6 +3,7 @@
 import { headers } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
 import { rateLimiter, RATE_LIMITS } from '@/lib/rate-limit';
+import { safePublicErrorCode } from '@/lib/observability';
 import type { CreateReservationResult } from '@/components/booking/types';
 
 /** 匿名公開アクションのIPベースレート制限キー（x-forwarded-for優先、無ければx-real-ip） */
@@ -78,6 +79,6 @@ export async function createPublicReservation(
     p_consent: input.consent,
   });
 
-  if (error) return { data: null, errorMessage: error.message };
+  if (error) return { data: null, errorMessage: safePublicErrorCode(error.message, { route: 'booking:create_public_reservation' }) };
   return { data: data as CreateReservationResult, errorMessage: null };
 }

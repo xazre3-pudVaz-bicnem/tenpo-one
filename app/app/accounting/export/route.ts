@@ -1,6 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
+import { resolveExportStore } from '@/lib/export-scope';
 import { toCsv, csvResponse } from '@/lib/csv';
 import { TAX_TREATMENT_LABELS, type TaxTreatment } from '@/lib/accounting';
 import { JOURNAL_STATUS_LABELS, SOURCE_TYPE_LABELS, type JournalStatus, type SourceType } from '@/components/accounting/labels';
@@ -17,7 +18,9 @@ export async function GET(request: NextRequest) {
   const status = searchParams.get('status');
   const sourceType = searchParams.get('source_type');
   const sourceId = searchParams.get('source_id');
-  const storeId = searchParams.get('store');
+  const storeScope = resolveExportStore(ctx, searchParams.get('store'));
+  if (!storeScope.ok) return new Response('指定された店舗へのアクセス権限がありません', { status: 403 });
+  const storeId = storeScope.storeId;
 
   let query = supabase
     .from('journal_entries')

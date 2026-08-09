@@ -123,8 +123,9 @@ async function main() {
       afterPin.data?.pin_code === before.data?.pin_code, `実際: ${afterPin.data?.pin_code}`);
 
     // 正常系: 機密列以外（display_name）は本人が変更できる（トリガーが過剰拒否していないことの確認）
+    // 00038でprofilesはカラム単位SELECT（pin_code非公開）のため、返却表現は許可列のみを指定する
     const { error: eName } = await staff1.from('profiles')
-      .update({ display_name: before.data.display_name }).eq('id', staff1Id).select().single();
+      .update({ display_name: before.data.display_name }).eq('id', staff1Id).select('display_name').single();
     check('機密列以外（display_name）の自己更新は許可される（過剰拒否でない）', !eName, eName?.message);
   }
 

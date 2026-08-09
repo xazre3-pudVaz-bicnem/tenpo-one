@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import { safeNextPath } from '@/lib/safe-redirect';
 import { Button } from '@/components/ui/button';
 import { Input, Label, FieldError } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
@@ -25,7 +26,7 @@ export function LoginForm({ next }: { next?: string }) {
       setBusy(false);
       return;
     }
-    router.push(next && next.startsWith('/') ? next : '/app/dashboard');
+    router.push(safeNextPath(next));
     router.refresh();
   };
 

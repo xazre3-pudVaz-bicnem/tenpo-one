@@ -1,6 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
+import { resolveExportStore } from '@/lib/export-scope';
 import { toCsv, csvResponse } from '@/lib/csv';
 import { PO_STATUS_LABELS, type PoStatus } from '@/components/inventory/labels';
 
@@ -30,7 +31,9 @@ export async function GET(request: NextRequest) {
   const status = searchParams.get('status');
   const from = searchParams.get('from');
   const to = searchParams.get('to');
-  const storeId = searchParams.get('store') ?? ctx.currentStore?.id ?? null;
+  const storeScope = resolveExportStore(ctx, searchParams.get('store'), ctx.currentStore?.id ?? null);
+  if (!storeScope.ok) return new Response('指定された店舗へのアクセス権限がありません', { status: 403 });
+  const storeId = storeScope.storeId;
 
   let query = supabase
     .from('purchase_orders')

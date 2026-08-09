@@ -17,7 +17,7 @@ interface MembershipRow {
   role: Role;
   status: 'active' | 'invited' | 'suspended';
   profile_id: string;
-  profiles: { id: string; display_name: string; display_name_kana: string | null; pin_code: string | null } | null;
+  profiles: { id: string; display_name: string; display_name_kana: string | null; has_pin: boolean | null } | null;
   membership_stores: { store_id: string; stores: { id: string; name: string } | null }[];
 }
 
@@ -41,7 +41,7 @@ export default async function StaffPage({
     .from('memberships')
     .select(
       `id, role, status, profile_id,
-       profiles ( id, display_name, display_name_kana, pin_code ),
+       profiles ( id, display_name, display_name_kana, has_pin ),
        membership_stores ( store_id, stores ( id, name ) )`
     )
     .eq('organization_id', ctx.organizationId)
@@ -121,7 +121,7 @@ export default async function StaffPage({
                       <Badge tone={STATUS_TONE[r.status]}>{STATUS_LABEL[r.status]}</Badge>
                     </Td>
                     <Td>
-                      {r.profiles?.pin_code ? <Badge tone="success">設定済</Badge> : <Badge tone="gray">未設定</Badge>}
+                      {r.profiles?.has_pin ? <Badge tone="success">設定済</Badge> : <Badge tone="gray">未設定</Badge>}
                     </Td>
                     <Td className="text-right">
                       <StaffRowMenu

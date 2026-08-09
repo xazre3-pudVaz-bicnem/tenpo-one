@@ -1,6 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
+import { resolveExportStore } from '@/lib/export-scope';
 import { toCsv, csvResponse } from '@/lib/csv';
 import { aggregateTrialBalanceWithOpening, type AccountInfo, type PostedLine } from '@/lib/accounting';
 import { ACCOUNT_CATEGORY_LABELS } from '@/components/accounting/labels';
@@ -21,7 +22,9 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const from = searchParams.get('from') || '1900-01-01';
   const to = searchParams.get('to') || new Date().toISOString().slice(0, 10);
-  const storeId = searchParams.get('store');
+  const storeScope = resolveExportStore(ctx, searchParams.get('store'));
+  if (!storeScope.ok) return new Response('指定された店舗へのアクセス権限がありません', { status: 403 });
+  const storeId = storeScope.storeId;
 
   const { data: accountsData } = await supabase
     .from('accounts')

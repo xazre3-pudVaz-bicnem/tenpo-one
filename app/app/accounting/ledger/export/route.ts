@@ -1,6 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
+import { resolveExportStore } from '@/lib/export-scope';
 import { toCsv, csvResponse } from '@/lib/csv';
 import { TAX_TREATMENT_LABELS, type AccountCategory, type TaxTreatment } from '@/lib/accounting';
 import { SOURCE_TYPE_LABELS, type SourceType } from '@/components/accounting/labels';
@@ -21,7 +22,9 @@ export async function GET(request: NextRequest) {
   const type: LedgerType = (LEDGER_TYPES as readonly string[]).includes(typeParam ?? '') ? (typeParam as LedgerType) : 'journal';
   const from = searchParams.get('from') ?? '';
   const to = searchParams.get('to') ?? '';
-  const storeId = searchParams.get('store');
+  const storeScope = resolveExportStore(ctx, searchParams.get('store'));
+  if (!storeScope.ok) return new Response('指定された店舗へのアクセス権限がありません', { status: 403 });
+  const storeId = storeScope.storeId;
   const today = new Date().toISOString().slice(0, 10);
 
   if (type === 'journal') {

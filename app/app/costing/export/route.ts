@@ -1,6 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
+import { resolveExportStore } from '@/lib/export-scope';
 import { toCsv, csvResponse } from '@/lib/csv';
 import { fetchMenuItemCostRows } from '@/components/costing/data';
 import { COST_RATE_DANGER_THRESHOLD, COST_RATE_WARNING_THRESHOLD, ITEM_TYPE_LABELS, type CostableItemType } from '@/components/costing/labels';
@@ -10,7 +11,9 @@ export async function GET(request: NextRequest) {
   const ctx = await requirePermission('csv.export');
   const supabase = await createClient();
   const { searchParams } = new URL(request.url);
-  const storeId = searchParams.get('store') ?? ctx.currentStore?.id ?? ctx.stores[0]?.id ?? null;
+  const storeScope = resolveExportStore(ctx, searchParams.get('store'), ctx.currentStore?.id ?? ctx.stores[0]?.id ?? null);
+  if (!storeScope.ok) return new Response('指定された店舗へのアクセス権限がありません', { status: 403 });
+  const storeId = storeScope.storeId;
   if (!storeId || !ctx.organizationId) {
     return csvResponse('menu_item_costs.csv', toCsv(['商品', '売価', 'レシピ原価', '原価率', '粗利', '粗利率', '食材数', '警告'], []));
   }

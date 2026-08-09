@@ -14,6 +14,7 @@ const ITEMS = [
   { href: '/admin/leads', label: 'お問い合わせ' },
   { href: '/admin/support', label: 'サポート' },
   { href: '/admin/audit-logs', label: '監査ログ' },
+  { href: '/admin/security', label: 'セキュリティ' },
   { href: '/admin/status', label: '状態' },
   { href: '/admin/system', label: 'システム' },
 ];

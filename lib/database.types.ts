@@ -1,4 +1,4 @@
-﻿export type Json =
+export type Json =
   | string
   | number
   | boolean
@@ -2010,6 +2010,51 @@ export type Database = {
           },
         ]
       }
+      employee_confidential: {
+        Row: {
+          bank_transfer_info: Json | null
+          emergency_contact: Json | null
+          employee_id: string
+          organization_id: string
+          profile_id: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          bank_transfer_info?: Json | null
+          emergency_contact?: Json | null
+          employee_id: string
+          organization_id: string
+          profile_id?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          bank_transfer_info?: Json | null
+          emergency_contact?: Json | null
+          employee_id?: string
+          organization_id?: string
+          profile_id?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_confidential_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: true
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employee_confidential_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       employee_insurance: {
         Row: {
           acquired_on: string | null
@@ -2085,11 +2130,9 @@ export type Database = {
       employees: {
         Row: {
           address: string | null
-          bank_transfer_info: Json | null
           birth_date: string | null
           created_at: string
           created_by: string | null
-          emergency_contact: Json | null
           employee_no: string | null
           employment_type: string
           hired_on: string | null
@@ -2109,11 +2152,9 @@ export type Database = {
         }
         Insert: {
           address?: string | null
-          bank_transfer_info?: Json | null
           birth_date?: string | null
           created_at?: string
           created_by?: string | null
-          emergency_contact?: Json | null
           employee_no?: string | null
           employment_type?: string
           hired_on?: string | null
@@ -2133,11 +2174,9 @@ export type Database = {
         }
         Update: {
           address?: string | null
-          bank_transfer_info?: Json | null
           birth_date?: string | null
           created_at?: string
           created_by?: string | null
-          emergency_contact?: Json | null
           employee_no?: string | null
           employment_type?: string
           hired_on?: string | null
@@ -5168,6 +5207,7 @@ export type Database = {
           created_at: string
           display_name: string
           display_name_kana: string | null
+          has_pin: boolean | null
           id: string
           is_cypress_admin: boolean
           phone: string | null
@@ -5179,6 +5219,7 @@ export type Database = {
           created_at?: string
           display_name: string
           display_name_kana?: string | null
+          has_pin?: boolean | null
           id: string
           is_cypress_admin?: boolean
           phone?: string | null
@@ -5190,6 +5231,7 @@ export type Database = {
           created_at?: string
           display_name?: string
           display_name_kana?: string | null
+          has_pin?: boolean | null
           id?: string
           is_cypress_admin?: boolean
           phone?: string | null
