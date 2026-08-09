@@ -50,6 +50,7 @@ const APP_ROUTES = [
   '/app/accounting/assets',
   '/app/accounting/auto',
   '/app/accounting/banks',
+  '/app/reconciliation',
   '/app/reports',
   '/app/budgets',
   '/app/daily-reports',

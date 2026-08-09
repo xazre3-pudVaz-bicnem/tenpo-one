@@ -575,6 +575,12 @@ async function main() {
     closed8?.expected === expectedCash8, `期待:${expectedCash8} 実際:${closed8?.expected}`);
   check('差異0で締まる（実現金=理論現金で渡した）', closed8?.difference === 0);
 
+  // v0.4.3: レジ締めは daily_closings を書かない。店舗日次締め（close_store_day）でsnapshotを確定する
+  const { data: dayRes8, error: eDay8 } = await mgr.rpc('close_store_day', {
+    p_store_id: shibuya.id, p_business_date: todayJst(),
+  });
+  check('店舗日次締めでsnapshotを確定できる', !eDay8 && dayRes8?.ok, eDay8?.message);
+
   const { data: [closingRow8] } = await mgr.from('daily_closings')
     .select('*').eq('store_id', shibuya.id).eq('business_date', todayJst());
   check('sales_total（gross）がクエリ集計と一致する', closingRow8?.sales_total === aggBefore8.salesTotal,
@@ -587,8 +593,20 @@ async function main() {
   check('refund_breakdown（cash）がクエリ集計と一致する',
     (closingRow8?.refund_breakdown?.cash ?? 0) === (aggBefore8.refundBreakdown.cash ?? 0),
     `snapshot:${closingRow8?.refund_breakdown?.cash} query:${aggBefore8.refundBreakdown.cash}`);
-  check('expected_cashが保存される（理論現金と一致）', closingRow8?.expected_cash === expectedCash8);
-  check('counted_cashが保存される（渡した実現金と一致）', closingRow8?.counted_cash === expectedCash8);
+  // 店舗レベルの理論/実現金は「当営業日の全締めセッション合計」。自セッション分はregister_breakdownで照合
+  const { data: allSessions8 } = await admin.from('register_sessions')
+    .select('expected_cash, counted_cash')
+    .eq('store_id', shibuya.id).eq('business_date', todayJst()).in('status', ['closed', 'approved']);
+  const sumExpected8 = (allSessions8 ?? []).reduce((a, s) => a + (s.expected_cash ?? 0), 0);
+  const sumCounted8 = (allSessions8 ?? []).reduce((a, s) => a + (s.counted_cash ?? 0), 0);
+  check('expected_cashが全セッション合計で保存される', closingRow8?.expected_cash === sumExpected8,
+    `snapshot:${closingRow8?.expected_cash} sum:${sumExpected8}`);
+  check('counted_cashが全セッション合計で保存される', closingRow8?.counted_cash === sumCounted8,
+    `snapshot:${closingRow8?.counted_cash} sum:${sumCounted8}`);
+  const ownBreakdown8 = (closingRow8?.register_breakdown ?? []).find((r) => r.session_id === sessionId);
+  check('register_breakdownに自セッションの理論現金が記録される',
+    ownBreakdown8?.expected_cash === expectedCash8 && ownBreakdown8?.counted_cash === expectedCash8,
+    `breakdown:${JSON.stringify(ownBreakdown8 ?? null)}`);
 
   // ============================================================
   section('CASE9: 締め後返金の日付分離（過去締めの不変）');

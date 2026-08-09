@@ -522,3 +522,19 @@ export async function cleanupPilotDay(orgId, businessDate) {
 
   return report;
 }
+
+/**
+ * PostgRESTの既定1000行上限を回避する全件取得。
+ * buildQuery はページ毎に新しいクエリビルダーを返す関数（.range()はこちらで付与する）。
+ * 例: const rows = await fetchAllRows(() => admin.from('orders').select('total').eq(...));
+ */
+export async function fetchAllRows(buildQuery, pageSize = 1000) {
+  const rows = [];
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await buildQuery().range(from, from + pageSize - 1);
+    if (error) throw new Error(`fetchAllRows: ${error.message}`);
+    rows.push(...(data ?? []));
+    if (!data || data.length < pageSize) break;
+  }
+  return rows;
+}

@@ -24,7 +24,7 @@
  *    ここでは式を手で再実装せず本物の共有関数を「期待値エンジン」として使用する。
  */
 import { createClient } from '@supabase/supabase-js';
-import { ensurePilotOrg, cleanupPilotDay, loginPilotUser } from './pilot-org.mjs';
+import { ensurePilotOrg, cleanupPilotDay, loginPilotUser, fetchAllRows } from './pilot-org.mjs';
 import { computeSalesMetrics, expectedCash, SETTLED_ORDER_STATUSES } from '../lib/metrics.ts';
 import { summarizeEntry, calcPayroll, calcCommission } from '../lib/payroll.ts';
 
@@ -191,9 +191,11 @@ async function main() {
   const publicCount = Math.min(4, openSlots.length);
   for (let i = 0; i < publicCount; i++) {
     const c = customers[i];
+    // レート制限（同一電話番号1時間5回）を反復実行で踏まないよう、公開予約はrun毎にランダム番号を使う
+    const randomPhone = `090${String(10000000 + Math.floor(Math.random() * 89999999))}`;
     const { data: created, error } = await anon.rpc('create_public_reservation', {
       p_slug: store.slug, p_date: businessDate, p_time: openSlots[i], p_party: 2, p_adults: 2, p_children: 0,
-      p_name: c.name, p_kana: null, p_phone: c.phone, p_email: c.email ?? null,
+      p_name: c.name, p_kana: null, p_phone: randomPhone, p_email: c.email ?? null,
       p_allergy: null, p_request: `[PILOT] 検証予約${i + 1}`, p_consent: true,
     });
     check(`公開予約RPCで予約作成 #${i + 1}`, !error && !!created?.code, error?.message);
@@ -345,13 +347,13 @@ async function main() {
 
   // --- 6: 会計100件以上・4レジへの分散を確認 ---
   {
-    const { data: payRows } = await admin.from('payments')
+    const payRows = await fetchAllRows(() => admin.from('payments')
       .select('id, register_session_id').eq('store_id', store.id).eq('business_date', bizDate)
-      .gte('created_at', invSnapshotAt);
+      .gte('created_at', invSnapshotAt));
     const distinctSessions = new Set((payRows ?? []).map((p) => p.register_session_id).filter(Boolean));
     check('会計（payments）が100件以上生成された（本実行分）', (payRows?.length ?? 0) >= 100, `件数:${payRows?.length}`);
     check('支払がレジ4台へ分散している', distinctSessions.size === 4, `分散数:${distinctSessions.size}`);
-    const { data: methodRows } = await admin.from('payments').select('method').eq('store_id', store.id).gte('created_at', invSnapshotAt);
+    const methodRows = await fetchAllRows(() => admin.from('payments').select('method').eq('store_id', store.id).gte('created_at', invSnapshotAt));
     const methods = new Set((methodRows ?? []).map((p) => p.method));
     check('現金/カード/QR/電子マネー等が混在している（3種類以上）', methods.size >= 3, [...methods].join(','));
   }
@@ -600,8 +602,8 @@ async function main() {
 
     // 歩合（staff1の個人売上2%）
     const { data: [commissionRule] } = await admin.from('commission_rules').select('*').eq('organization_id', org.id).eq('profile_id', staff.staff1.id);
-    const { data: staff1Orders } = await admin.from('orders').select('subtotal, staff_id, status')
-      .eq('store_id', store.id).eq('business_date', bizDate).eq('staff_id', staff.staff1.id).in('status', SETTLED_ORDER_STATUSES);
+    const staff1Orders = await fetchAllRows(() => admin.from('orders').select('subtotal, staff_id, status')
+      .eq('store_id', store.id).eq('business_date', bizDate).eq('staff_id', staff.staff1.id).in('status', SETTLED_ORDER_STATUSES));
     const staff1Sales = (staff1Orders ?? []).reduce((a, o) => a + o.subtotal, 0);
     const commission = calcCommission(
       { targetType: commissionRule.target_type, method: commissionRule.method, rate: Number(commissionRule.rate), fixedAmount: commissionRule.fixed_amount },
@@ -665,9 +667,9 @@ async function main() {
   // ============================================================
   section('14. 日報生成（daily_reportsへ直接同条件で集計・記録）');
   // ============================================================
-  const { data: dayOrders } = await admin.from('orders').select('total, discount_total, guest_count, status, order_type')
-    .eq('store_id', store.id).eq('business_date', bizDate).in('status', SETTLED_ORDER_STATUSES);
-  const { data: dayRefunds } = await admin.from('refunds').select('amount, kind').eq('store_id', store.id).eq('business_date', bizDate);
+  const dayOrders = await fetchAllRows(() => admin.from('orders').select('total, discount_total, guest_count, status, order_type')
+    .eq('store_id', store.id).eq('business_date', bizDate).in('status', SETTLED_ORDER_STATUSES));
+  const dayRefunds = await fetchAllRows(() => admin.from('refunds').select('amount, kind').eq('store_id', store.id).eq('business_date', bizDate));
   const metrics = computeSalesMetrics(dayOrders ?? [], dayRefunds ?? []);
   const { data: [report14], error: eReport14 } = await mgr.from('daily_reports').upsert({
     organization_id: org.id, store_id: store.id, business_date: bizDate,
@@ -686,9 +688,9 @@ async function main() {
   // ============================================================
   // POS売上 = payments合計（completed）
   {
-    const { data: settledOrders } = await admin.from('orders').select('total').eq('store_id', store.id).eq('business_date', bizDate).in('status', SETTLED_ORDER_STATUSES);
+    const settledOrders = await fetchAllRows(() => admin.from('orders').select('total').eq('store_id', store.id).eq('business_date', bizDate).in('status', SETTLED_ORDER_STATUSES));
     const orderSum = (settledOrders ?? []).reduce((a, o) => a + o.total, 0);
-    const { data: completedPayments } = await admin.from('payments').select('amount').eq('store_id', store.id).eq('business_date', bizDate).eq('status', 'completed');
+    const completedPayments = await fetchAllRows(() => admin.from('payments').select('amount').eq('store_id', store.id).eq('business_date', bizDate).eq('status', 'completed'));
     const paySum = (completedPayments ?? []).reduce((a, p) => a + p.amount, 0);
     check('POS売上（paid+refunded注文合計）= payments合計（completed）', orderSum === paySum, `orders:${orderSum} payments:${paySum}`);
   }
