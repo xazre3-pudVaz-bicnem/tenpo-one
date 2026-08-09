@@ -834,7 +834,7 @@ export default async function ReportsPage({
         <LinkStatCard href={ordersHref} label="粗利率（対純売上・理論原価）" value={`${salesTotal > 0 ? ((grossProfit / salesTotal) * 100).toFixed(1) : '0.0'}%`} tone="success" />
       </div>
 
-      <div className="mt-5 grid gap-5 xl:grid-cols-3">
+      <div className="mt-5 grid gap-5 xl:grid-cols-3 [&>*]:min-w-0">
         <Card className="xl:col-span-2">
           <CardHeader>
             <CardTitle>日別売上推移</CardTitle>
@@ -941,7 +941,7 @@ export default async function ReportsPage({
         </Card>
       )}
 
-      <div className="mt-5 grid gap-5 xl:grid-cols-2">
+      <div className="mt-5 grid gap-5 xl:grid-cols-2 [&>*]:min-w-0">
         <Card>
           <CardHeader>
             <CardTitle>商品別売上 TOP20</CardTitle>

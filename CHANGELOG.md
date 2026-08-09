@@ -1,5 +1,28 @@
 # Changelog — TENPO ONE
 
+## v0.5.0 — PRODUCTION READINESS（2026-08-09）
+
+新業務機能を追加せず、既存機能を本番品質へ（`docs/v0.5-production-readiness-report.md`）。
+セキュリティ全体監査で発見した脆弱性を修正し、障害耐性・大量データ耐性・観測性・データ保護・
+リリース安全性・UX全端末巡回を整備。
+
+- **セキュリティ（CRITICAL 3件封鎖・migration 00031）**: 自己スーパー管理者昇格(C1)・自己org_owner昇格(C2)・
+  監査ログ汚染(M2)をDBトリガー/RLSで封鎖。アプリ層IDOR 15件・role ceiling(canAssignRole)・manager store-scope・
+  PIN scryptハッシュ化+ブルートフォース制限・file_path検証・CSP強化・feature flagのQR注文トリガー強制(migration 00032)
+- **観測性（migration 00029）**: エラーID(ERR-XXXXXX)↔system_errors↔構造化ログ・/api/health拡張・
+  /admin/system画面・captureServerError
+- **大量データ耐性（migration 00030）**: refunds等のindex・pg_trgm検索index。N+1ゼロ確認・段階対応をdocs化
+- **障害耐性**: トランザクション/冪等の再監査・error boundaryのエラーID表示・タイムアウト
+- **データ保護**: 顧客匿名化(PII除去+取引保持)・テナントoffboarding(pending_deletion・物理削除なし)・
+  企業statusでのログイン遮断
+- **テスト追加**: verify-security 45・security-idor 5・ux-sweep 50(5viewport×10route)・benchmark下地・
+  reports iPhone横スクロール修正
+- **docs 15本**: security/tenant-security/storage-security/resilience/performance/backup-restore/
+  disaster-recovery/incident-response/observability/production-runbook/privacy-operations/
+  migration-policy/release-strategy/v0.5報告・索引
+- 検証: 既存全スイートGREEN維持（Vitest168・verify-flow107・backoffice54・consistency66・store-day90・
+  Playwright72）+ 新規セキュリティ/UX。migration 32本同期
+
 ## v0.4.3 — REAL STORE PILOT HARDENING（2026-08-09）
 
 「実際の飲食店1店舗が1日・1週間・1か月TENPO ONEだけで営業しても数字とデータが壊れない」を
