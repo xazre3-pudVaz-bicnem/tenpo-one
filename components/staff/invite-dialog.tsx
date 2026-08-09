@@ -1,22 +1,13 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { UserPlus, RefreshCw, Copy, Check } from 'lucide-react';
+import { UserPlus, Copy, Check } from 'lucide-react';
 import { Dialog } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input, Label, Select, FieldError } from '@/components/ui/input';
 import { ROLES, ROLE_LABELS, HQ_ROLES, type Role } from '@/lib/permissions';
 import type { StoreRef } from '@/lib/auth';
 import { inviteStaff } from '@/app/app/staff/actions';
-
-const PASSWORD_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
-
-function generatePassword(length = 12): string {
-  if (typeof window === 'undefined' || !window.crypto) return '';
-  const values = new Uint32Array(length);
-  window.crypto.getRandomValues(values);
-  return Array.from(values, (v) => PASSWORD_CHARS[v % PASSWORD_CHARS.length]).join('');
-}
 
 function isStoreScopedRole(role: Role): boolean {
   return !HQ_ROLES.includes(role);
@@ -41,7 +32,6 @@ function InviteDialog({ stores, onClose }: { stores: StoreRef[]; onClose: () => 
   const [displayNameKana, setDisplayNameKana] = useState('');
   const [role, setRole] = useState<Role>('staff');
   const [selectedStoreIds, setSelectedStoreIds] = useState<string[]>([]);
-  const [password, setPassword] = useState(() => generatePassword());
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<{ password: string } | null>(null);
   const [copied, setCopied] = useState(false);
@@ -64,25 +54,26 @@ function InviteDialog({ stores, onClose }: { stores: StoreRef[]; onClose: () => 
       return;
     }
     startTransition(async () => {
+      // 初期パスワードはサーバー側で生成される（クライアントからは送らない）
       const result = await inviteStaff({
         email,
         displayName,
         displayNameKana,
         role,
         storeIds: selectedStoreIds,
-        password,
       });
       if (result.error) {
         setError(result.error);
         return;
       }
-      setSuccess({ password });
+      setSuccess({ password: result.initialPassword ?? '' });
     });
   };
 
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(success?.password ?? password);
+      if (!success?.password) return;
+      await navigator.clipboard.writeText(success.password);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
@@ -171,20 +162,9 @@ function InviteDialog({ stores, onClose }: { stores: StoreRef[]; onClose: () => 
           </div>
         )}
 
-        <div>
-          <div className="flex items-center justify-between">
-            <Label htmlFor="invite-password">初期パスワード（自動生成）</Label>
-            <button
-              type="button"
-              onClick={() => setPassword(generatePassword())}
-              className="mb-1 flex items-center gap-1 text-xs font-medium text-primary hover:underline"
-            >
-              <RefreshCw className="h-3 w-3" />
-              再生成
-            </button>
-          </div>
-          <Input id="invite-password" readOnly value={password} className="font-mono" />
-        </div>
+        <p className="text-xs text-gray-500">
+          初期パスワードは招待完了時にサーバー側で自動生成されます。招待後に表示されるパスワードを本人へ安全な方法で伝えてください。
+        </p>
 
         <FieldError message={error ?? undefined} />
 

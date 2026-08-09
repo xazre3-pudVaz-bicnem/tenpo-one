@@ -1,10 +1,13 @@
 'use server';
 
+import { scryptSync, timingSafeEqual } from 'node:crypto';
+import { headers } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 import { requireMember, requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { can } from '@/lib/permissions';
+import { rateLimiter, RATE_LIMITS } from '@/lib/rate-limit';
 import { todayJst } from '@/lib/format';
 import {
   isPayrollLocked,
@@ -30,6 +33,44 @@ export const EVENT_LABELS: Record<PunchEventType, string> = {
   break_start: '休憩開始',
   break_end: '休憩終了',
 };
+
+/** IPベースのレート制限キー取得用（x-forwarded-for優先、無ければx-real-ip） */
+async function requestIp(): Promise<string> {
+  const h = await headers();
+  return h.get('x-forwarded-for')?.split(',')[0]?.trim() || h.get('x-real-ip') || 'unknown';
+}
+
+const PIN_HASH_PREFIX = 'scrypt';
+
+function isHashedPin(value: string): boolean {
+  return value.startsWith(`${PIN_HASH_PREFIX}$`);
+}
+
+/**
+ * 打刻用PINの照合。profiles.pin_code はハッシュ形式（`scrypt$<saltHex>$<hashHex>`）で保存されるが、
+ * 未移行の既存レコードは平文のままの可能性があるため後方互換で平文比較にフォールバックする
+ * （store/staff/actions.ts の setMemberPin で次回PIN設定時に自動的にハッシュへ移行される）。
+ */
+function verifyPin(inputPin: string, stored: string): boolean {
+  if (!isHashedPin(stored)) {
+    // レガシー平文PIN: タイミング攻撃を避けるため timingSafeEqual で比較する
+    const a = Buffer.from(inputPin);
+    const b = Buffer.from(stored);
+    if (a.length !== b.length) return false;
+    return timingSafeEqual(a, b);
+  }
+  const parts = stored.split('$');
+  if (parts.length !== 3) return false;
+  const [, saltHex, hashHex] = parts;
+  try {
+    const salt = Buffer.from(saltHex, 'hex');
+    const expected = Buffer.from(hashHex, 'hex');
+    const actual = scryptSync(inputPin, salt, expected.length);
+    return actual.length === expected.length && timingSafeEqual(actual, expected);
+  } catch {
+    return false;
+  }
+}
 
 function mapPunchError(message: string): string {
   // ALREADY_CLOCKED_IN_ELSEWHERE は ALREADY_CLOCKED_IN の部分文字列を含むため先に判定する
@@ -133,6 +174,17 @@ export async function punchByPin(
   if (!ctx.stores.some((s) => s.id === storeId)) {
     return { ok: false, message: 'この店舗での打刻はできません' };
   }
+
+  // ブルートフォース対策: 店舗×時間窓で試行回数を制限する（PIN空間が4〜6桁と狭いため）。
+  // ※ インメモリ実装のため複数インスタンス構成では制限が不完全（lib/rate-limit.ts参照）。
+  const ip = await requestIp();
+  if (
+    !rateLimiter.check(`pin-punch:${storeId}`, RATE_LIMITS.pinPunch.limit, RATE_LIMITS.pinPunch.windowMs) ||
+    !rateLimiter.check(`pin-punch-ip:${ip}`, RATE_LIMITS.pinPunch.limit, RATE_LIMITS.pinPunch.windowMs)
+  ) {
+    return { ok: false, message: '試行回数が多すぎます。しばらく待ってから再度お試しください' };
+  }
+
   const admin = createAdminClient();
 
   const { data: memberships, error: findError } = await admin
@@ -145,7 +197,7 @@ export async function punchByPin(
 
   type Row = { profile_id: string; profiles: { id: string; display_name: string; pin_code: string | null; status: string } | null };
   const match = ((memberships ?? []) as unknown as Row[]).find(
-    (m) => m.profiles && m.profiles.status === 'active' && m.profiles.pin_code && m.profiles.pin_code === pin
+    (m) => m.profiles && m.profiles.status === 'active' && m.profiles.pin_code && verifyPin(pin, m.profiles.pin_code)
   );
 
   if (!match || !match.profiles) {

@@ -30,6 +30,7 @@ export function ManualForm({ organizationId, storeId, storeName, canTargetAllSto
     setError(null);
     try {
       let filePath: string | null = null;
+      let fileMeta: { fileName: string; mimeType: string; sizeBytes: number } | null = null;
       const url = mode === 'url' ? ((formData.get('url') as string) || null) : null;
 
       if (mode === 'file') {
@@ -41,6 +42,7 @@ export function ManualForm({ organizationId, storeId, storeName, canTargetAllSto
         filePath = `${organizationId}/manuals/${crypto.randomUUID()}.${extFromFile(file)}`;
         const { error: uploadError } = await supabase.storage.from('documents').upload(filePath, file, { contentType: file.type, upsert: false });
         if (uploadError) throw new Error('アップロードに失敗しました');
+        fileMeta = { fileName: file.name, mimeType: file.type, sizeBytes: file.size };
       } else if (!url?.trim()) {
         throw new Error('URLを入力してください');
       }
@@ -51,6 +53,9 @@ export function ManualForm({ organizationId, storeId, storeName, canTargetAllSto
         category: formData.get('category') as (typeof MANUAL_CATEGORIES)[number],
         storeId: target === 'all' ? null : storeId,
         filePath,
+        fileName: fileMeta?.fileName ?? null,
+        mimeType: fileMeta?.mimeType ?? null,
+        sizeBytes: fileMeta?.sizeBytes ?? null,
         url,
         note: (formData.get('note') as string) || null,
       });

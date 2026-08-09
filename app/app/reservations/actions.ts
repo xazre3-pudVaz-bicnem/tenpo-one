@@ -29,16 +29,19 @@ function revalidateAll() {
 
 async function loadReservation(
   supabase: Awaited<ReturnType<typeof createClient>>,
-  organizationId: string,
+  ctx: { organizationId: string; isHq: boolean; stores: { id: string }[] },
   reservationId: string
 ): Promise<ReservationRow> {
   const { data, error } = await supabase
     .from('reservations')
     .select('id, organization_id, store_id, customer_id, party_size, status, reserved_date, start_at, end_at, is_private_hire')
     .eq('id', reservationId)
-    .eq('organization_id', organizationId)
+    .eq('organization_id', ctx.organizationId)
     .single();
   if (error || !data) throw new Error('予約が見つかりません');
+  if (!ctx.isHq && !ctx.stores.some((s) => s.id === data.store_id)) {
+    throw new Error('この店舗の予約は操作できません');
+  }
   return data as ReservationRow;
 }
 
@@ -99,7 +102,7 @@ async function findOrCreateCustomer(
 export async function assignTables(reservationId: string, tableIds: string[]) {
   const ctx = await requirePermission('reservations.write');
   const supabase = await createClient();
-  const reservation = await loadReservation(supabase, ctx.organizationId, reservationId);
+  const reservation = await loadReservation(supabase, ctx, reservationId);
 
   const uniqueIds = [...new Set(tableIds)];
   if (uniqueIds.length > 0) {
@@ -168,7 +171,10 @@ export async function getOccupiedTableIds(
   endAtIso: string,
   excludeReservationId?: string
 ): Promise<string[]> {
-  await requirePermission('reservations.view');
+  const ctx = await requirePermission('reservations.view');
+  if (!ctx.isHq && !ctx.stores.some((s) => s.id === storeId)) {
+    throw new Error('この店舗の予約は操作できません');
+  }
   const supabase = await createClient();
 
   const { data: settings } = await supabase
@@ -210,7 +216,7 @@ export async function transitionReservationStatus(reservationId: string, toStatu
   }
   const ctx = await requirePermission('reservations.write');
   const supabase = await createClient();
-  const reservation = await loadReservation(supabase, ctx.organizationId, reservationId);
+  const reservation = await loadReservation(supabase, ctx, reservationId);
   if (!canTransition(reservation.status, toStatus)) {
     throw new Error(
       `「${RESERVATION_STATUS[reservation.status].label}」から「${RESERVATION_STATUS[toStatus].label}」には変更できません`
@@ -250,7 +256,7 @@ export async function transitionReservationStatus(reservationId: string, toStatu
 export async function markNoShow(reservationId: string, reason?: string) {
   const ctx = await requirePermission('reservations.write');
   const supabase = await createClient();
-  const reservation = await loadReservation(supabase, ctx.organizationId, reservationId);
+  const reservation = await loadReservation(supabase, ctx, reservationId);
   if (!canTransition(reservation.status, 'no_show')) {
     throw new Error(`「${RESERVATION_STATUS[reservation.status].label}」から無断キャンセルには変更できません`);
   }
@@ -289,7 +295,7 @@ export async function cancelReservation(reservationId: string, reason: string) {
   const ctx = await requirePermission('reservations.cancel');
   if (!reason || !reason.trim()) throw new Error('キャンセル理由を入力してください');
   const supabase = await createClient();
-  const reservation = await loadReservation(supabase, ctx.organizationId, reservationId);
+  const reservation = await loadReservation(supabase, ctx, reservationId);
   if (!canTransition(reservation.status, 'cancelled')) {
     throw new Error(`「${RESERVATION_STATUS[reservation.status].label}」からキャンセルには変更できません`);
   }
@@ -339,7 +345,7 @@ export interface MoveReservationInput {
 export async function moveReservation(reservationId: string, input: MoveReservationInput) {
   const ctx = await requirePermission('reservations.write');
   const supabase = await createClient();
-  const reservation = await loadReservation(supabase, ctx.organizationId, reservationId);
+  const reservation = await loadReservation(supabase, ctx, reservationId);
   if (!MOVABLE_STATUSES.includes(reservation.status)) {
     throw new Error(`「${RESERVATION_STATUS[reservation.status].label}」の予約は日時を変更できません`);
   }
@@ -379,7 +385,7 @@ export async function moveReservation(reservationId: string, input: MoveReservat
 export async function updateReservationStaff(reservationId: string, staffId: string | null) {
   const ctx = await requirePermission('reservations.write');
   const supabase = await createClient();
-  await loadReservation(supabase, ctx.organizationId, reservationId);
+  await loadReservation(supabase, ctx, reservationId);
 
   if (staffId) {
     const { data: membership } = await supabase
@@ -408,7 +414,7 @@ export async function updateReservationStaff(reservationId: string, staffId: str
 export async function updateReservationPrivateHire(reservationId: string, isPrivateHire: boolean) {
   const ctx = await requirePermission('store.settings');
   const supabase = await createClient();
-  const reservation = await loadReservation(supabase, ctx.organizationId, reservationId);
+  const reservation = await loadReservation(supabase, ctx, reservationId);
 
   const { error } = await supabase
     .from('reservations')
@@ -449,7 +455,7 @@ export async function updateReservationDetails(reservationId: string, input: Res
   if (partySize < 1) throw new Error('ご人数をご確認ください');
 
   const supabase = await createClient();
-  await loadReservation(supabase, ctx.organizationId, reservationId);
+  await loadReservation(supabase, ctx, reservationId);
 
   const { error } = await supabase
     .from('reservations')
@@ -475,7 +481,7 @@ export async function updateReservationDetails(reservationId: string, input: Res
 export async function updateReservationMemo(reservationId: string, memo: string) {
   const ctx = await requirePermission('reservations.write');
   const supabase = await createClient();
-  await loadReservation(supabase, ctx.organizationId, reservationId);
+  await loadReservation(supabase, ctx, reservationId);
   const { error } = await supabase
     .from('reservations')
     .update({ memo: memo.trim() || null, updated_by: ctx.userId })
@@ -492,7 +498,7 @@ export async function updateReservationMemo(reservationId: string, memo: string)
 export async function createOrderFromReservation(reservationId: string) {
   const ctx = await requirePermission('pos.order');
   const supabase = await createClient();
-  const reservation = await loadReservation(supabase, ctx.organizationId, reservationId);
+  const reservation = await loadReservation(supabase, ctx, reservationId);
 
   const { data: existingOrder } = await supabase
     .from('orders')
@@ -744,16 +750,19 @@ export async function createWaitlistEntry(input: WaitlistInput) {
 
 async function loadWaitlistEntry(
   supabase: Awaited<ReturnType<typeof createClient>>,
-  organizationId: string,
+  ctx: { organizationId: string; isHq: boolean; stores: { id: string }[] },
   id: string
 ) {
   const { data, error } = await supabase
     .from('waitlist_entries')
-    .select('id, organization_id, status')
+    .select('id, organization_id, store_id, status')
     .eq('id', id)
-    .eq('organization_id', organizationId)
+    .eq('organization_id', ctx.organizationId)
     .single();
   if (error || !data) throw new Error('キャンセル待ちが見つかりません');
+  if (!ctx.isHq && !ctx.stores.some((s) => s.id === data.store_id)) {
+    throw new Error('この店舗のキャンセル待ちは操作できません');
+  }
   return data;
 }
 
@@ -761,7 +770,7 @@ async function loadWaitlistEntry(
 export async function markWaitlistContacted(id: string) {
   const ctx = await requirePermission('reservations.write');
   const supabase = await createClient();
-  await loadWaitlistEntry(supabase, ctx.organizationId, id);
+  await loadWaitlistEntry(supabase, ctx, id);
   const { error } = await supabase.from('waitlist_entries').update({ status: 'contacted', updated_by: ctx.userId }).eq('id', id);
   if (error) throw new Error('更新に失敗しました');
   revalidatePath('/app/reservations');
@@ -771,7 +780,7 @@ export async function markWaitlistContacted(id: string) {
 export async function markWaitlistExpired(id: string) {
   const ctx = await requirePermission('reservations.write');
   const supabase = await createClient();
-  await loadWaitlistEntry(supabase, ctx.organizationId, id);
+  await loadWaitlistEntry(supabase, ctx, id);
   const { error } = await supabase.from('waitlist_entries').update({ status: 'expired', updated_by: ctx.userId }).eq('id', id);
   if (error) throw new Error('更新に失敗しました');
   revalidatePath('/app/reservations');
@@ -781,7 +790,7 @@ export async function markWaitlistExpired(id: string) {
 export async function cancelWaitlistEntry(id: string) {
   const ctx = await requirePermission('reservations.write');
   const supabase = await createClient();
-  await loadWaitlistEntry(supabase, ctx.organizationId, id);
+  await loadWaitlistEntry(supabase, ctx, id);
   const { error } = await supabase.from('waitlist_entries').update({ status: 'cancelled', updated_by: ctx.userId }).eq('id', id);
   if (error) throw new Error('更新に失敗しました');
   revalidatePath('/app/reservations');
@@ -846,16 +855,19 @@ export async function createWaitingTicket(input: WaitingTicketInput): Promise<{ 
 
 async function loadWaitingTicket(
   supabase: Awaited<ReturnType<typeof createClient>>,
-  organizationId: string,
+  ctx: { organizationId: string; isHq: boolean; stores: { id: string }[] },
   id: string
 ) {
   const { data, error } = await supabase
     .from('waitlist_entries')
     .select('id, organization_id, store_id, guest_name, guest_phone, party_size, status, ticket_no')
     .eq('id', id)
-    .eq('organization_id', organizationId)
+    .eq('organization_id', ctx.organizationId)
     .single();
   if (error || !data) throw new Error('受付が見つかりません');
+  if (!ctx.isHq && !ctx.stores.some((s) => s.id === data.store_id)) {
+    throw new Error('この店舗の受付は操作できません');
+  }
   return data;
 }
 
@@ -863,7 +875,7 @@ async function loadWaitingTicket(
 export async function callWaitingTicket(id: string) {
   const ctx = await requirePermission('reservations.write');
   const supabase = await createClient();
-  const entry = await loadWaitingTicket(supabase, ctx.organizationId, id);
+  const entry = await loadWaitingTicket(supabase, ctx, id);
   if (entry.status !== 'waiting') throw new Error('この受付は呼出できる状態ではありません');
 
   const { error } = await supabase
@@ -878,7 +890,7 @@ export async function callWaitingTicket(id: string) {
 export async function markWaitingNoShow(id: string) {
   const ctx = await requirePermission('reservations.write');
   const supabase = await createClient();
-  const entry = await loadWaitingTicket(supabase, ctx.organizationId, id);
+  const entry = await loadWaitingTicket(supabase, ctx, id);
   if (entry.status !== 'waiting' && entry.status !== 'called') {
     throw new Error('この受付は不在にできる状態ではありません');
   }
@@ -894,7 +906,7 @@ export async function markWaitingNoShow(id: string) {
 export async function guideWaitingTicket(id: string, tableId: string) {
   const ctx = await requirePermission('reservations.write');
   const supabase = await createClient();
-  const entry = await loadWaitingTicket(supabase, ctx.organizationId, id);
+  const entry = await loadWaitingTicket(supabase, ctx, id);
   if (entry.status !== 'waiting' && entry.status !== 'called') {
     throw new Error('この受付は案内できる状態ではありません');
   }

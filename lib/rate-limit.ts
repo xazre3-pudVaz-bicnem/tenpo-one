@@ -46,4 +46,17 @@ export const RATE_LIMITS = {
   bookingCheckout: { limit: 10, windowMs: 60_000 },
   /** ファイルアップロードのメタ登録 */
   upload: { limit: 30, windowMs: 60_000 },
+  /**
+   * ログイン試行（IP単位）。SupabaseAuthはメール単位のブルートフォース対策を内部的に持つが、
+   * アプリ側からは直接制御できない。現状ログインはクライアントから直接 signInWithPassword を
+   * 呼んでおりServer Actionを経由しないため、この値は未適用（将来ログインをServer Action化した
+   * 際にIP単位の追加防御として使う想定）。
+   */
+  login: { limit: 10, windowMs: 60_000 },
+  /** 共用端末PIN打刻（店舗単位）。総当たり（ブルートフォース）防止のため試行回数を制限する */
+  pinPunch: { limit: 20, windowMs: 5 * 60_000 },
+  /** 公開予約フォームからの新規予約作成（IP単位）。DB側 booking_request_logs と併用する二層防御 */
+  publicReservation: { limit: 10, windowMs: 60_000 },
+  /** 検索系エンドポイント（IP/ユーザー単位）の連続実行を抑制するための予約枠 */
+  search: { limit: 30, windowMs: 60_000 },
 } as const;

@@ -8,6 +8,16 @@ export interface ActionResult {
   error?: string;
 }
 
+/**
+ * coupons テーブルのRLS（coupons_write）は組織内ロールのみで店舗を絞り込まないため、
+ * 店舗系ロール（store_manager等）が他店のクーポンを操作できないようアプリ層で検証する。
+ */
+function assertCouponStoreAccess(ctx: { stores: { id: string }[] }, storeId: string | null) {
+  if (storeId !== null && !ctx.stores.some((s) => s.id === storeId)) {
+    throw new Error('対象店舗にアクセス権がありません');
+  }
+}
+
 export interface CouponInput {
   id?: string;
   code: string;
@@ -78,6 +88,15 @@ export async function saveCoupon(input: CouponInput): Promise<ActionResult> {
   };
 
   if (input.id) {
+    const { data: existing } = await supabase
+      .from('coupons')
+      .select('id, store_id')
+      .eq('id', input.id)
+      .eq('organization_id', ctx.organizationId)
+      .maybeSingle();
+    if (!existing) return { error: 'クーポンが見つかりません' };
+    assertCouponStoreAccess(ctx, existing.store_id);
+
     const { error } = await supabase.from('coupons').update(payload).eq('id', input.id).eq('organization_id', ctx.organizationId);
     if (error) {
       if (error.code === '23505') return { error: 'このコードは既に使用されています' };
@@ -110,6 +129,15 @@ export async function saveCoupon(input: CouponInput): Promise<ActionResult> {
 export async function setCouponStatus(id: string, status: 'active' | 'paused' | 'deleted'): Promise<ActionResult> {
   const ctx = await requirePermission('menu.manage');
   const supabase = await createClient();
+  const { data: existing } = await supabase
+    .from('coupons')
+    .select('id, store_id')
+    .eq('id', id)
+    .eq('organization_id', ctx.organizationId)
+    .maybeSingle();
+  if (!existing) return { error: 'クーポンが見つかりません' };
+  assertCouponStoreAccess(ctx, existing.store_id);
+
   const { error } = await supabase
     .from('coupons')
     .update({ status, updated_by: ctx.userId })

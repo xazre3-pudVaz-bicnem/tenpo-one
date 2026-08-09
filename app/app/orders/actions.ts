@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
+import { withErrorCapture } from '@/lib/observability-server';
 
 export type RefundMethod = 'cash' | 'credit' | 'qr' | 'emoney' | 'voucher' | 'on_account' | 'other';
 export type RefundKind = 'refund' | 'void';
@@ -82,33 +83,37 @@ export async function refundOrder(
     throw new Error('この店舗の操作はできません');
   }
 
-  const { data: session } = await supabase
-    .from('register_sessions')
-    .select('id')
-    .eq('store_id', order.store_id)
-    .eq('status', 'open')
-    .order('opened_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  await withErrorCapture(
+    { route: 'orders.refund', organizationId: order.organization_id, storeId: order.store_id, userId: ctx.userId },
+    async () => {
+      const { data: session } = await supabase
+        .from('register_sessions')
+        .select('id')
+        .eq('store_id', order.store_id)
+        .order('opened_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
-  const { error } = await supabase.rpc('refund_order', {
-    p_order_id: orderId,
-    p_amount: amount,
-    p_method: method,
-    p_reason: reason,
-    p_register_session_id: session?.id ?? null,
-    p_kind: kind,
-    p_items:
-      items && items.length > 0
-        ? items.map((it) => ({
-            order_item_id: it.orderItemId,
-            quantity: it.quantity,
-            amount: it.amount,
-            restock: it.restock,
-          }))
-        : null,
-  });
-  if (error) throw new Error(translateRefundError(error.message));
+      const { error } = await supabase.rpc('refund_order', {
+        p_order_id: orderId,
+        p_amount: amount,
+        p_method: method,
+        p_reason: reason,
+        p_register_session_id: session?.id ?? null,
+        p_kind: kind,
+        p_items:
+          items && items.length > 0
+            ? items.map((it) => ({
+                order_item_id: it.orderItemId,
+                quantity: it.quantity,
+                amount: it.amount,
+                restock: it.restock,
+              }))
+            : null,
+      });
+      if (error) throw new Error(translateRefundError(error.message));
+    }
+  );
 
   revalidatePath(`/app/orders/${orderId}`);
   revalidatePath('/app/orders');

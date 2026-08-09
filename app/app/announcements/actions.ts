@@ -53,7 +53,13 @@ export async function deleteAnnouncement(announcementId: string) {
   const supabase = await createClient();
   const { data: a } = await supabase.from('announcements').select('id, store_id').eq('id', announcementId).single();
   if (!a) throw new Error('お知らせが見つかりません');
-  if (a.store_id !== null && !ctx.stores.some((s) => s.id === a.store_id)) throw new Error('担当外の店舗です');
+  if (a.store_id === null) {
+    if (ctx.role !== 'org_owner' && ctx.role !== 'hq_admin') {
+      throw new Error('全店舗向けお知らせの削除は本社管理者のみ行えます');
+    }
+  } else if (!ctx.stores.some((s) => s.id === a.store_id)) {
+    throw new Error('担当外の店舗です');
+  }
 
   const { error } = await supabase.from('announcements').delete().eq('id', announcementId);
   if (error) throw new Error(error.message);

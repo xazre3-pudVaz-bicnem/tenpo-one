@@ -112,3 +112,40 @@ export function can(role: Role | null | undefined, action: PermissionAction): bo
 export function isHqRole(role: Role | null | undefined): boolean {
   return !!role && HQ_ROLES.includes(role);
 }
+
+/**
+ * ロールの序列（数値が小さいほど上位）。
+ * 招待・ロール変更で「自分より上位のロールを付与/操作できない」（role ceiling）を強制するために使用する。
+ * external_accountant は業務階層に属さない別枠のロールとして扱う（付与はHQ相当ロールのみ）。
+ */
+export const ROLE_RANK: Record<Role, number> = {
+  org_owner: 0,
+  hq_admin: 1,
+  hq_accounting: 2,
+  area_manager: 3,
+  store_manager: 4,
+  assistant_manager: 5,
+  staff: 6,
+  part_time: 6,
+  external_accountant: 6,
+};
+
+/**
+ * actorRole が targetRole を付与（招待・ロール変更）できるかを判定する（role ceiling）。
+ * - org_owner のみ org_owner を付与できる
+ * - external_accountant は本社ロール（org_owner / hq_admin / hq_accounting）のみ付与できる
+ * - それ以外は ROLE_RANK が自分（actorRole）以上＝同格以下のロールのみ付与できる
+ *   （例: store_manager / area_manager は org_owner・hq_admin・hq_accounting を付与できない）
+ */
+export function canAssignRole(actorRole: Role, targetRole: Role): boolean {
+  if (targetRole === 'org_owner') return actorRole === 'org_owner';
+  if (targetRole === 'external_accountant') {
+    return actorRole === 'org_owner' || actorRole === 'hq_admin' || actorRole === 'hq_accounting';
+  }
+  return ROLE_RANK[targetRole] >= ROLE_RANK[actorRole];
+}
+
+/** targetRole が actorRole より上位（ROLE_RANK の数値が小さい）なら true。既存メンバーの操作可否判定に使用する。 */
+export function roleOutranks(actorRole: Role, targetRole: Role): boolean {
+  return ROLE_RANK[targetRole] < ROLE_RANK[actorRole];
+}

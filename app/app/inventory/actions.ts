@@ -217,10 +217,22 @@ export async function transferStock(input: {
   quantity: number;
   reason: string | null;
 }) {
-  await requirePermission('vendors.manage');
+  const ctx = await requirePermission('vendors.manage');
   if (input.quantity <= 0) throw new Error('数量は正の値で入力してください');
   if (!input.toStoreId) throw new Error('移動先店舗を選択してください');
+  if (!ctx.stores.some((s) => s.id === input.toStoreId)) {
+    throw new Error('移動先店舗にアクセス権がありません');
+  }
   const supabase = await createClient();
+  const { data: fromItem } = await supabase
+    .from('inventory_items')
+    .select('id, store_id')
+    .eq('id', input.fromItemId)
+    .eq('organization_id', ctx.organizationId)
+    .maybeSingle();
+  if (!fromItem || !ctx.stores.some((s) => s.id === fromItem.store_id)) {
+    throw new Error('移動元の品目が見つかりません');
+  }
   const { data, error } = await supabase.rpc('apply_stock_transfer', {
     p_from_item_id: input.fromItemId,
     p_to_store_id: input.toStoreId,
@@ -298,8 +310,17 @@ export async function requestStockTransfer(input: {
 
 /** 発送: rpc ship_stock_transfer（送り元在庫を減算。負在庫禁止設定を尊重） */
 export async function shipStockTransfer(transferId: string) {
-  await requirePermission('vendors.manage');
+  const ctx = await requirePermission('vendors.manage');
   const supabase = await createClient();
+  const { data: transfer } = await supabase
+    .from('stock_transfers')
+    .select('id, organization_id, from_store_id')
+    .eq('id', transferId)
+    .eq('organization_id', ctx.organizationId)
+    .maybeSingle();
+  if (!transfer || !ctx.stores.some((s) => s.id === transfer.from_store_id)) {
+    throw new Error('移動が見つかりません');
+  }
   const { error } = await supabase.rpc('ship_stock_transfer', { p_transfer_id: transferId });
   if (error) throw new Error(mapTransferError(error.message));
   revalidatePath(LIST_PATH);
@@ -307,8 +328,17 @@ export async function shipStockTransfer(transferId: string) {
 
 /** 受取: rpc receive_stock_transfer（受取店の在庫を加算。同名品目がなければ自動作成） */
 export async function receiveStockTransfer(transferId: string) {
-  await requirePermission('vendors.manage');
+  const ctx = await requirePermission('vendors.manage');
   const supabase = await createClient();
+  const { data: transfer } = await supabase
+    .from('stock_transfers')
+    .select('id, organization_id, to_store_id')
+    .eq('id', transferId)
+    .eq('organization_id', ctx.organizationId)
+    .maybeSingle();
+  if (!transfer || !ctx.stores.some((s) => s.id === transfer.to_store_id)) {
+    throw new Error('移動が見つかりません');
+  }
   const { error } = await supabase.rpc('receive_stock_transfer', { p_transfer_id: transferId });
   if (error) throw new Error(mapTransferError(error.message));
   revalidatePath(LIST_PATH);
@@ -323,6 +353,7 @@ export async function cancelStockTransfer(transferId: string, reason: string) {
     .from('stock_transfers')
     .select('id, organization_id, from_store_id, status')
     .eq('id', transferId)
+    .eq('organization_id', ctx.organizationId)
     .single();
   if (error || !transfer) throw new Error('移動が見つかりません');
   if (transfer.status !== 'requested') throw new Error('申請中の移動のみ取消できます');

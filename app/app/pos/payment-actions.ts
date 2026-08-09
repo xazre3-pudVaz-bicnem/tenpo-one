@@ -22,6 +22,10 @@ export interface TerminalPaymentState {
   finalized?: boolean;
 }
 
+function hasStoreAccess(ctx: { isHq: boolean; stores: { id: string }[] }, storeId: string | null | undefined): boolean {
+  return ctx.isHq || (!!storeId && ctx.stores.some((s) => s.id === storeId));
+}
+
 /** 端末決済を開始する（intent作成→端末へ送信→simulatedならテストカード提示） */
 export async function startTerminalPayment(
   orderId: string,
@@ -36,6 +40,7 @@ export async function startTerminalPayment(
 
   const { data: order } = await supabase.from('orders').select('*').eq('id', orderId).single();
   if (!order) return { ok: false, error: '注文が見つかりません' };
+  if (!hasStoreAccess(ctx, order.store_id)) return { ok: false, error: 'この店舗の操作はできません' };
   if (order.status !== 'open') return { ok: false, error: 'この注文は会計済みです' };
 
   await supabase.rpc('recalc_order_totals', { p_order_id: orderId });
@@ -45,6 +50,7 @@ export async function startTerminalPayment(
 
   const { data: reader } = await supabase.from('terminal_readers').select('*').eq('id', readerId).single();
   if (!reader) return { ok: false, error: '決済端末が見つかりません' };
+  if (reader.store_id !== order.store_id) return { ok: false, error: 'この決済端末は対象の注文の店舗と一致しません' };
 
   const key = posIdempotencyKey(orderId, amount);
 
@@ -137,12 +143,13 @@ export async function startTerminalPayment(
  * finalize_order が open 以外を拒否するため会計の二重確定は起きない。
  */
 export async function checkTerminalPayment(localIntentId: string): Promise<TerminalPaymentState> {
-  await requirePermission('pos.checkout');
+  const ctx = await requirePermission('pos.checkout');
   const supabase = await createClient();
   const provider = getPaymentProvider('stripe');
 
   const { data: local } = await supabase.from('payment_intents').select('*').eq('id', localIntentId).single();
   if (!local) return { ok: false, error: '決済が見つかりません' };
+  if (!hasStoreAccess(ctx, local.store_id)) return { ok: false, error: 'この店舗の操作はできません' };
 
   let status = local.status;
   let chargeId: string | null = local.provider_charge_id;
@@ -204,12 +211,13 @@ export async function checkTerminalPayment(localIntentId: string): Promise<Termi
 
 /** 端末決済のキャンセル（注文は open のまま。他の支払方法で会計可能） */
 export async function cancelTerminalPayment(localIntentId: string): Promise<TerminalPaymentState> {
-  await requirePermission('pos.checkout');
+  const ctx = await requirePermission('pos.checkout');
   const supabase = await createClient();
   const provider = getPaymentProvider('stripe');
 
   const { data: local } = await supabase.from('payment_intents').select('*').eq('id', localIntentId).single();
   if (!local) return { ok: false, error: '決済が見つかりません' };
+  if (!hasStoreAccess(ctx, local.store_id)) return { ok: false, error: 'この店舗の操作はできません' };
   if (local.status === 'succeeded') return { ok: false, error: '成功済みの決済はキャンセルできません（返金をご利用ください）' };
 
   try {

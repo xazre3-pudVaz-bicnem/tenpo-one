@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import type { ConsentType } from '@/components/customers/labels';
+import { withErrorCapture } from '@/lib/observability-server';
 
 function nullIfEmpty(value: string | null | undefined): string | null {
   const v = (value ?? '').trim();
@@ -124,8 +125,15 @@ export async function updateCustomerAttributes(customerId: string, input: Update
 
 /** 来店・累計額などの集計を再計算する（recalc_customer_stats RPC） */
 export async function recalcCustomerStats(customerId: string) {
-  await requirePermission('customers.write');
+  const ctx = await requirePermission('customers.write');
   const supabase = await createClient();
+  const { data: customer } = await supabase
+    .from('customers')
+    .select('id')
+    .eq('id', customerId)
+    .eq('organization_id', ctx.organizationId)
+    .maybeSingle();
+  if (!customer) throw new Error('顧客が見つかりません');
   const { error } = await supabase.rpc('recalc_customer_stats', { p_customer_id: customerId });
   if (error) throw new Error(error.message);
   revalidatePath(`/app/customers/${customerId}`);
@@ -323,11 +331,20 @@ export async function searchCustomersForMerge(phone: string, excludeId: string):
  * 予約・注文・ポイント・タグ等の引き継ぎと統合元の論理削除はRPC側で行われる。
  */
 export async function mergeCustomers(keepId: string, mergeIds: string[]) {
-  await requirePermission('customers.delete');
+  const ctx = await requirePermission('customers.delete');
   const targets = mergeIds.filter((id) => id !== keepId);
   if (targets.length === 0) throw new Error('統合対象がありません');
 
   const supabase = await createClient();
+  const { data: owned } = await supabase
+    .from('customers')
+    .select('id')
+    .eq('organization_id', ctx.organizationId)
+    .in('id', [keepId, ...targets]);
+  if ((owned?.length ?? 0) !== targets.length + 1) {
+    throw new Error('対象の顧客が見つかりません');
+  }
+
   for (const mergeId of targets) {
     const { error } = await supabase.rpc('merge_customers', { p_keep_id: keepId, p_merge_id: mergeId });
     if (error) throw new Error(error.message);
@@ -424,4 +441,74 @@ export async function adjustCustomerPoints(customerId: string, delta: number, re
   });
 
   revalidatePath(`/app/customers/${customerId}`);
+}
+
+// -------------------------------------------------------------
+// 個人情報の匿名化（データ保護 PHASE6）
+// -------------------------------------------------------------
+
+/**
+ * 顧客のPIIを匿名化する（org.settings権限が必要）。
+ * 取引集計（visit_count/total_spent等）・予約/注文/ポイント履歴との紐付けは保持したまま、
+ * 氏名・連絡先・住所・生年月日・自由記述メモ等の個人特定情報のみクリアする。
+ * 既に匿名化済みの顧客は再実行できない。監査ログに理由を記録する。
+ */
+export async function anonymizeCustomer(customerId: string, reason: string) {
+  const ctx = await requirePermission('org.settings');
+  const trimmedReason = reason.trim();
+  if (!trimmedReason) throw new Error('匿名化の理由を入力してください');
+
+  const supabase = await createClient();
+
+  const { data: before } = await supabase
+    .from('customers')
+    .select('name, anonymized_at')
+    .eq('id', customerId)
+    .eq('organization_id', ctx.organizationId)
+    .maybeSingle();
+  if (!before) throw new Error('顧客が見つかりません');
+  if (before.anonymized_at) throw new Error('この顧客は既に匿名化されています');
+
+  await withErrorCapture(
+    { route: 'customers.anonymize', organizationId: ctx.organizationId, userId: ctx.userId, detail: { customerId } },
+    async () => {
+      const { error } = await supabase
+        .from('customers')
+        .update({
+          name: '匿名顧客',
+          name_kana: null,
+          phone: null,
+          email: null,
+          birthday: null,
+          gender: null,
+          postal_code: null,
+          address: null,
+          allergy_note: null,
+          dislike_note: null,
+          preference_note: null,
+          seat_preference: null,
+          anniversary_note: null,
+          service_note: null,
+          anonymized_at: new Date().toISOString(),
+          updated_by: ctx.userId,
+        })
+        .eq('id', customerId)
+        .eq('organization_id', ctx.organizationId);
+      if (error) throw new Error(error.message);
+
+      await supabase.rpc('log_audit', {
+        p_org: ctx.organizationId,
+        p_store: ctx.currentStore?.id ?? null,
+        p_action: 'customer.anonymize',
+        p_target_table: 'customers',
+        p_target_id: customerId,
+        p_before: { name: before.name },
+        p_after: { name: '匿名顧客', anonymized: true },
+        p_note: trimmedReason,
+      });
+    }
+  );
+
+  revalidatePath(`/app/customers/${customerId}`);
+  revalidatePath('/app/customers');
 }

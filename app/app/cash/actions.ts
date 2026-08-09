@@ -5,6 +5,7 @@ import { requirePermission, requireMember } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { resolveApprovalRule, checkApproval, type ApprovalRuleLike } from '@/lib/approvals';
 import type { Role } from '@/lib/permissions';
+import { withErrorCapture } from '@/lib/observability-server';
 
 /** 店舗日次締め（close_store_day）を実行できるロール。DB側 close_store_day のapp_role_inと一致させること。 */
 const STORE_DAY_CLOSE_ROLES: Role[] = ['org_owner', 'hq_admin', 'area_manager', 'store_manager', 'assistant_manager'];
@@ -38,7 +39,10 @@ async function loadPettyCashApprovalRules(
 
 /** レジ開局（open_register_session RPC） */
 export async function openRegister(storeId: string, registerId: string, openingFloat: number) {
-  await requirePermission('register.operate');
+  const ctx = await requirePermission('register.operate');
+  if (!ctx.stores.some((s) => s.id === storeId)) {
+    throw new Error('対象店舗にアクセス権がありません');
+  }
   if (!Number.isInteger(openingFloat) || openingFloat < 0) {
     throw new Error('釣銭準備金は0以上の整数で入力してください');
   }
@@ -87,11 +91,19 @@ export async function addCashTransaction(input: {
 
 /** レジ締め（close_register_session RPC。理論現金・差異はDB側で計算） */
 export async function closeRegister(sessionId: string, countedCash: number, differenceReason: string | null) {
-  await requirePermission('register.operate');
+  const ctx = await requirePermission('register.operate');
   if (!Number.isInteger(countedCash) || countedCash < 0) {
     throw new Error('実残高は0以上の整数で入力してください');
   }
   const supabase = await createClient();
+  const { data: session } = await supabase
+    .from('register_sessions')
+    .select('id, store_id')
+    .eq('id', sessionId)
+    .maybeSingle();
+  if (!session || !ctx.stores.some((s) => s.id === session.store_id)) {
+    throw new Error('対象のレジセッションが見つかりません');
+  }
   const { error } = await supabase.rpc('close_register_session', {
     p_session_id: sessionId,
     p_counted_cash: countedCash,
@@ -444,11 +456,16 @@ export async function closeStoreDay(storeId: string, businessDate: string) {
     throw new Error('対象店舗にアクセス権がありません');
   }
   const supabase = await createClient();
-  const { error } = await supabase.rpc('close_store_day', {
-    p_store_id: storeId,
-    p_business_date: businessDate,
-  });
-  if (error) throw new Error(translateCloseStoreDayError(error.message));
+  await withErrorCapture(
+    { route: 'cash.close_store_day', organizationId: ctx.organizationId, storeId, userId: ctx.userId },
+    async () => {
+      const { error } = await supabase.rpc('close_store_day', {
+        p_store_id: storeId,
+        p_business_date: businessDate,
+      });
+      if (error) throw new Error(translateCloseStoreDayError(error.message));
+    }
+  );
   revalidatePath('/app/cash');
 }
 

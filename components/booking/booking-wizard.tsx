@@ -6,8 +6,9 @@ import { Loader2, Minus, Plus, Check } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
 import { yen, todayJst } from '@/lib/format';
-import { bookingErrorMessage, type BookingStore, type BookingSlot, type CreateReservationResult } from './types';
+import { bookingErrorMessage, type BookingStore, type BookingSlot } from './types';
 import { createBookingCheckout } from '@/app/(public)/booking-payment-actions';
+import { createPublicReservation } from '@/app/(public)/booking-actions';
 
 const SEAT_OPTIONS = [
   { value: '', label: '指定なし' },
@@ -128,31 +129,31 @@ export function BookingWizard({ store }: { store: BookingStore }) {
     setSubmitting(true);
     setError(null);
     try {
-      const { data, error: rpcError } = await supabase.rpc('create_public_reservation', {
-        p_slug: store.slug,
-        p_date: date,
-        p_time: time,
-        p_party: partySize,
-        p_adults: adults,
-        p_children: children,
-        p_name: name.trim(),
-        p_kana: kana.trim() || null,
-        p_phone: phone.trim(),
-        p_email: email.trim() || null,
-        p_course_id: courseId || null,
-        p_seat_type: seatType || null,
-        p_purpose: purpose || null,
-        p_allergy: allergy.trim() || null,
-        p_request: request.trim() || null,
-        p_source_code: 'web',
-        p_consent: consent,
+      const { data, errorMessage } = await createPublicReservation({
+        slug: store.slug,
+        date,
+        time,
+        party: partySize,
+        adults,
+        children,
+        name: name.trim(),
+        kana: kana.trim() || null,
+        phone: phone.trim(),
+        email: email.trim() || null,
+        courseId: courseId || null,
+        seatType: seatType || null,
+        purpose: purpose || null,
+        allergy: allergy.trim() || null,
+        request: request.trim() || null,
+        sourceCode: 'web',
+        consent,
       });
-      if (rpcError) {
-        setError(bookingErrorMessage(rpcError.message));
+      if (errorMessage || !data) {
+        setError(bookingErrorMessage(errorMessage));
         setSubmitting(false);
         return;
       }
-      const result = data as CreateReservationResult;
+      const result = data;
 
       // 予約は成立済み。オンライン決済が必要な店舗設定であれば決済案内を挟む。
       // 決済案内の取得に失敗しても予約自体は成立しているため、通常の完了ページへ進む。

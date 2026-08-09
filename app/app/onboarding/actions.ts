@@ -4,6 +4,28 @@ import { revalidatePath } from 'next/cache';
 import { requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { ROLES, type Role } from '@/lib/permissions';
+
+function isValidRole(role: string): role is Role {
+  return (ROLES as readonly string[]).includes(role);
+}
+
+/** ロールの序列（数値が小さいほど上位）。app/app/staff/actions.ts と同一の定義 */
+const ROLE_RANK: Record<Role, number> = {
+  org_owner: 0,
+  hq_admin: 1,
+  area_manager: 2,
+  hq_accounting: 2,
+  store_manager: 3,
+  assistant_manager: 4,
+  staff: 5,
+  part_time: 6,
+  external_accountant: 6,
+};
+
+function outranks(actorRole: Role, targetRole: Role): boolean {
+  return ROLE_RANK[targetRole] < ROLE_RANK[actorRole];
+}
 
 export interface ActionResult {
   error?: string;
@@ -463,6 +485,12 @@ export async function saveStaffStep(entries: StaffInviteStepInput[]): Promise<St
     const email = entry.email.trim().toLowerCase();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return { error: `メールアドレスの形式が正しくありません: ${entry.email}` };
+    }
+    if (!isValidRole(entry.role)) {
+      return { error: `不正なロールです: ${entry.role}` };
+    }
+    if (outranks(ctx.role, entry.role)) {
+      return { error: '自分より上位のロールを付与することはできません' };
     }
     const password = randomPassword();
     const { data: created, error: createErr } = await admin.auth.admin.createUser({

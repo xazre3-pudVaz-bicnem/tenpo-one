@@ -56,6 +56,9 @@ export async function createInboxDocument(input: UploadedFileRef) {
   }
   const metaError = validateUploadMeta(input);
   if (metaError) throw new Error(metaError);
+  if (!input.filePath.startsWith(`${ctx.organizationId}/`)) {
+    throw new Error('不正なファイルパスです');
+  }
 
   const supabase = await createClient();
   const { error } = await supabase.from('documents').insert({
@@ -213,6 +216,9 @@ export async function createInvoice(input: {
     }
     const metaError = validateUploadMeta(input.file);
     if (metaError) throw new Error(metaError);
+    if (!input.file.filePath.startsWith(`${ctx.organizationId}/`)) {
+      throw new Error('不正なファイルパスです');
+    }
 
     const { data: doc, error } = await supabase
       .from('documents')

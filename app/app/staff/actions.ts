@@ -1,10 +1,11 @@
 'use server';
 
+import { randomBytes, scrypt } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
 import { requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { ROLES, HQ_ROLES, type Role } from '@/lib/permissions';
+import { ROLES, HQ_ROLES, canAssignRole, roleOutranks, type Role } from '@/lib/permissions';
 
 export interface ActionResult {
   error?: string;
@@ -12,6 +13,8 @@ export interface ActionResult {
 
 export interface InviteResult extends ActionResult {
   membershipId?: string;
+  /** サーバー側で生成した初期パスワード（招待完了時に一度だけ呼び出し元へ返す。ログ・監査ログには残さない） */
+  initialPassword?: string;
 }
 
 function isStoreScopedRole(role: Role): boolean {
@@ -22,6 +25,61 @@ function isValidRole(role: string): role is Role {
   return (ROLES as readonly string[]).includes(role);
 }
 
+/** targetRole が actorRole より上位（序列上）なら true。既存メンバーの操作可否判定に使用する（役職序列は lib/permissions.ts に一元化）。 */
+function outranks(actorRole: Role, targetRole: Role): boolean {
+  return roleOutranks(actorRole, targetRole);
+}
+
+/**
+ * 対象メンバーの所属店舗と caller（ctx）の担当店舗が交差するかを検証する。
+ * HQ系ロール（org_owner/hq_admin/hq_accounting/external_accountant、ctx.isHq=true）は
+ * 全店舗アクセス権を持つため対象外。店舗系ロールの store_manager/area_manager が
+ * 自分の担当外の店舗のスタッフを操作できてしまう権限昇格（H2）を防ぐ。
+ */
+async function assertManageableMemberStores(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  ctx: { isHq: boolean; stores: { id: string }[] },
+  membershipId: string
+): Promise<string | null> {
+  if (ctx.isHq) return null;
+  const { data: rows } = await supabase
+    .from('membership_stores')
+    .select('store_id')
+    .eq('membership_id', membershipId);
+  const targetStoreIds = new Set((rows ?? []).map((r) => r.store_id as string));
+  // HQ系ロールのメンバー（店舗割当なし）は非HQのcallerからは操作不可
+  if (targetStoreIds.size === 0) return '担当外のスタッフです';
+  const overlaps = ctx.stores.some((s) => targetStoreIds.has(s.id));
+  return overlaps ? null : '担当外の店舗のスタッフです';
+}
+
+const INITIAL_PASSWORD_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+
+/** 初期パスワードをサーバー側で生成する（呼び出し側からは受け取らない）。node:crypto の暗号学的乱数を使用。 */
+function generateInitialPassword(length = 16): string {
+  const bytes = randomBytes(length);
+  let out = '';
+  for (let i = 0; i < length; i++) {
+    out += INITIAL_PASSWORD_CHARS[bytes[i] % INITIAL_PASSWORD_CHARS.length];
+  }
+  return out;
+}
+
+const PIN_HASH_PREFIX = 'scrypt';
+
+/**
+ * 共用端末打刻用PINをハッシュ化する（Node標準 crypto.scrypt・ソルト付き）。
+ * 既存カラム profiles.pin_code の型はそのままで、自己記述形式の文字列を格納する。
+ * 形式: `scrypt$<saltHex>$<hashHex>`
+ */
+async function hashPin(pin: string): Promise<string> {
+  const salt = randomBytes(16);
+  const hash = await new Promise<Buffer>((resolve, reject) => {
+    scrypt(pin, salt, 32, (err, derivedKey) => (err ? reject(err) : resolve(derivedKey as Buffer)));
+  });
+  return `${PIN_HASH_PREFIX}$${salt.toString('hex')}$${hash.toString('hex')}`;
+}
+
 /** スタッフ招待。auth.users作成→profiles(トリガー自動生成)→memberships/membership_storesをadmin clientで作成 */
 export async function inviteStaff(input: {
   email: string;
@@ -29,7 +87,6 @@ export async function inviteStaff(input: {
   displayNameKana: string;
   role: string;
   storeIds: string[];
-  password: string;
 }): Promise<InviteResult> {
   const ctx = await requirePermission('staff.manage');
 
@@ -46,9 +103,11 @@ export async function inviteStaff(input: {
   if (!isValidRole(input.role)) {
     return { error: '不正なロールです' };
   }
-  if (!input.password || input.password.length < 12) {
-    return { error: '初期パスワードの生成に失敗しました。もう一度お試しください' };
+  if (!canAssignRole(ctx.role, input.role)) {
+    return { error: '自分より上位のロールを付与することはできません' };
   }
+  // 初期パスワードは呼び出し側（クライアント）から受け取らず、サーバー側で暗号学的乱数から生成する
+  const initialPassword = generateInitialPassword();
 
   const storeScoped = isStoreScopedRole(input.role);
   const storeIds = Array.from(new Set(input.storeIds));
@@ -67,7 +126,7 @@ export async function inviteStaff(input: {
 
   const { data: created, error: createErr } = await admin.auth.admin.createUser({
     email,
-    password: input.password,
+    password: initialPassword,
     email_confirm: true,
     user_metadata: {
       display_name: displayName,
@@ -125,7 +184,9 @@ export async function inviteStaff(input: {
   });
 
   revalidatePath('/app/staff');
-  return { membershipId: membership.id as string };
+  // 初期パスワードはこのレスポンスでのみ呼び出し元（招待した管理者）に一度だけ返す。
+  // 監査ログ（log_audit）・サーバーログには一切出力しない。
+  return { membershipId: membership.id as string, initialPassword };
 }
 
 /** ロール変更（店舗系ロールの場合は所属店舗を同時指定） */
@@ -137,9 +198,6 @@ export async function changeMemberRole(input: {
 }): Promise<ActionResult> {
   const ctx = await requirePermission('staff.manage');
 
-  if (input.profileId === ctx.userId) {
-    return { error: '自分自身のロールは変更できません' };
-  }
   if (!isValidRole(input.newRole)) {
     return { error: '不正なロールです' };
   }
@@ -147,11 +205,26 @@ export async function changeMemberRole(input: {
   const supabase = await createClient();
   const { data: membership } = await supabase
     .from('memberships')
-    .select('id, role')
+    .select('id, role, profile_id')
     .eq('id', input.membershipId)
     .eq('organization_id', ctx.organizationId)
     .maybeSingle();
   if (!membership) return { error: '対象のスタッフが見つかりません' };
+  // profileIdはクライアント入力を信用せず、membershipIdから引いた実際の値と一致することを確認する
+  if (membership.profile_id !== input.profileId) {
+    return { error: '対象のスタッフが見つかりません' };
+  }
+  if (membership.profile_id === ctx.userId) {
+    return { error: '自分自身のロールは変更できません' };
+  }
+  if (outranks(ctx.role, membership.role as Role)) {
+    return { error: '自分より上位のロールのスタッフは変更できません' };
+  }
+  if (!canAssignRole(ctx.role, input.newRole)) {
+    return { error: '自分より上位のロールへ変更することはできません' };
+  }
+  const scopeError = await assertManageableMemberStores(supabase, ctx, input.membershipId);
+  if (scopeError) return { error: scopeError };
 
   const storeScoped = isStoreScopedRole(input.newRole);
   const storeIds = Array.from(new Set(input.storeIds));
@@ -206,14 +279,22 @@ export async function changeMemberStores(input: {
   const supabase = await createClient();
   const { data: membership } = await supabase
     .from('memberships')
-    .select('id, role')
+    .select('id, role, profile_id')
     .eq('id', input.membershipId)
     .eq('organization_id', ctx.organizationId)
     .maybeSingle();
   if (!membership) return { error: '対象のスタッフが見つかりません' };
+  if (membership.profile_id !== input.profileId) {
+    return { error: '対象のスタッフが見つかりません' };
+  }
+  if (outranks(ctx.role, membership.role as Role)) {
+    return { error: '自分より上位のロールのスタッフは変更できません' };
+  }
   if (!isStoreScopedRole(membership.role as Role)) {
     return { error: 'このロールは店舗割当の対象外です' };
   }
+  const scopeError = await assertManageableMemberStores(supabase, ctx, input.membershipId);
+  if (scopeError) return { error: scopeError };
 
   const storeIds = Array.from(new Set(input.storeIds));
   if (storeIds.length === 0) return { error: '所属店舗を1つ以上選択してください' };
@@ -264,14 +345,23 @@ export async function setMemberPin(input: {
   const supabase = await createClient();
   const { data: membership } = await supabase
     .from('memberships')
-    .select('id')
+    .select('id, role, profile_id')
     .eq('id', input.membershipId)
     .eq('organization_id', ctx.organizationId)
     .maybeSingle();
   if (!membership) return { error: '対象のスタッフが見つかりません' };
+  if (membership.profile_id !== input.profileId) {
+    return { error: '対象のスタッフが見つかりません' };
+  }
+  if (outranks(ctx.role, membership.role as Role)) {
+    return { error: '自分より上位のロールのスタッフは変更できません' };
+  }
+  const scopeError = await assertManageableMemberStores(supabase, ctx, input.membershipId);
+  if (scopeError) return { error: scopeError };
 
+  const hashedPin = await hashPin(input.pin);
   const admin = createAdminClient();
-  const { error } = await admin.from('profiles').update({ pin_code: input.pin }).eq('id', input.profileId);
+  const { error } = await admin.from('profiles').update({ pin_code: hashedPin }).eq('id', membership.profile_id);
   if (error) return { error: `PIN設定に失敗しました: ${error.message}` };
 
   await supabase.rpc('log_audit', {
@@ -298,18 +388,25 @@ export async function setMemberStatus(input: {
 }): Promise<ActionResult> {
   const ctx = await requirePermission('staff.manage');
 
-  if (input.profileId === ctx.userId) {
-    return { error: '自分自身の利用停止はできません' };
-  }
-
   const supabase = await createClient();
   const { data: membership } = await supabase
     .from('memberships')
-    .select('id, status')
+    .select('id, status, role, profile_id')
     .eq('id', input.membershipId)
     .eq('organization_id', ctx.organizationId)
     .maybeSingle();
   if (!membership) return { error: '対象のスタッフが見つかりません' };
+  if (membership.profile_id !== input.profileId) {
+    return { error: '対象のスタッフが見つかりません' };
+  }
+  if (membership.profile_id === ctx.userId) {
+    return { error: '自分自身の利用停止はできません' };
+  }
+  if (outranks(ctx.role, membership.role as Role)) {
+    return { error: '自分より上位のロールのスタッフは変更できません' };
+  }
+  const scopeError = await assertManageableMemberStores(supabase, ctx, input.membershipId);
+  if (scopeError) return { error: scopeError };
 
   const admin = createAdminClient();
   const { error } = await admin

@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server';
 import { validateJournalBalance, type TaxTreatment } from '@/lib/accounting';
 import { canWriteAccounting, canReopenPeriod } from '@/components/accounting/roles';
 import { mapAccountingError } from '@/components/accounting/labels';
+import { captureServerError, userFacingError } from '@/lib/observability-server';
 
 export interface ActionResult {
   error?: string;
@@ -171,19 +172,40 @@ export async function deleteDraftEntry(entryId: string): Promise<ActionResult> {
 
 /** 仕訳の確定（rpc post_journal_entry。借方=貸方の再検証・締め済み期間の拒否はDB側） */
 export async function postEntry(entryId: string): Promise<ActionResult> {
-  await requireAccountingWrite();
+  const ctx = await requireAccountingWrite();
   const supabase = await createClient();
+  const { data: entry } = await supabase
+    .from('journal_entries')
+    .select('id')
+    .eq('id', entryId)
+    .eq('organization_id', ctx.organizationId)
+    .maybeSingle();
+  if (!entry) return { error: '仕訳が見つかりません' };
   const { error } = await supabase.rpc('post_journal_entry', { p_entry_id: entryId });
-  if (error) return { error: mapAccountingError(error.message) };
+  if (error) {
+    const errorId = await captureServerError(error, {
+      route: 'accounting.post_entry',
+      organizationId: ctx.organizationId,
+      detail: { entryId },
+    });
+    return { error: userFacingError(errorId, mapAccountingError(error.message)) };
+  }
   revalidateAccounting();
   return {};
 }
 
 /** 確定済み仕訳の取消（理由必須。rpc void_journal_entry） */
 export async function voidEntry(entryId: string, reason: string): Promise<ActionResult> {
-  await requireAccountingWrite();
+  const ctx = await requireAccountingWrite();
   if (!reason.trim()) return { error: '理由を入力してください' };
   const supabase = await createClient();
+  const { data: entry } = await supabase
+    .from('journal_entries')
+    .select('id')
+    .eq('id', entryId)
+    .eq('organization_id', ctx.organizationId)
+    .maybeSingle();
+  if (!entry) return { error: '仕訳が見つかりません' };
   const { error } = await supabase.rpc('void_journal_entry', { p_entry_id: entryId, p_reason: reason.trim() });
   if (error) return { error: mapAccountingError(error.message) };
   revalidateAccounting();

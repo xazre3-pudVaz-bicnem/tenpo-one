@@ -4,6 +4,13 @@ import { headers } from 'next/headers';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getPaymentProvider, isPaymentConfigured } from '@/lib/payments';
 import { bookingIdempotencyKey, computeBookingCharge, isValidChargeAmount } from '@/lib/payments/types';
+import { rateLimiter, RATE_LIMITS } from '@/lib/rate-limit';
+
+/** 匿名公開アクションのIPベースレート制限キー（x-forwarded-for優先、無ければx-real-ip） */
+async function requestIp(): Promise<string> {
+  const h = await headers();
+  return h.get('x-forwarded-for')?.split(',')[0]?.trim() || h.get('x-real-ip') || 'unknown';
+}
 
 /**
  * 公開予約のオンライン決済（Stripe Checkout）。
@@ -26,6 +33,10 @@ export async function createBookingCheckout(
 ): Promise<BookingCheckoutResult> {
   if (!code || !phone || phone.length < 10) {
     return { ok: false, error: '予約コードと電話番号を確認してください' };
+  }
+  const ip = await requestIp();
+  if (!rateLimiter.check(`booking-checkout:${ip}`, RATE_LIMITS.bookingCheckout.limit, RATE_LIMITS.bookingCheckout.windowMs)) {
+    return { ok: false, error: 'リクエストが多すぎます。しばらく待ってから再試行してください' };
   }
   if (!isPaymentConfigured()) {
     return { ok: false, notRequired: true };
@@ -130,6 +141,10 @@ export async function getBookingPaymentStatus(
   code: string,
   phone: string
 ): Promise<{ paid: boolean; amount: number | null; required: boolean }> {
+  const ip = await requestIp();
+  if (!rateLimiter.check(`booking-status:${ip}`, RATE_LIMITS.bookingCheckout.limit, RATE_LIMITS.bookingCheckout.windowMs)) {
+    return { paid: false, amount: null, required: false };
+  }
   const admin = createAdminClient();
   const { data: reservation } = await admin
     .from('reservations')
