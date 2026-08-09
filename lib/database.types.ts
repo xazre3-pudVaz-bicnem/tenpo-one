@@ -1483,6 +1483,7 @@ export type Database = {
           address: string | null
           allergy_note: string | null
           anniversary_note: string | null
+          anonymized_at: string | null
           birthday: string | null
           cancel_count: number
           created_at: string
@@ -1516,6 +1517,7 @@ export type Database = {
           address?: string | null
           allergy_note?: string | null
           anniversary_note?: string | null
+          anonymized_at?: string | null
           birthday?: string | null
           cancel_count?: number
           created_at?: string
@@ -1549,6 +1551,7 @@ export type Database = {
           address?: string | null
           allergy_note?: string | null
           anniversary_note?: string | null
+          anonymized_at?: string | null
           birthday?: string | null
           cancel_count?: number
           created_at?: string
@@ -6854,6 +6857,48 @@ export type Database = {
           },
         ]
       }
+      system_errors: {
+        Row: {
+          created_at: string
+          detail: Json
+          error_id: string
+          id: string
+          message: string
+          organization_id: string | null
+          request_id: string | null
+          route: string | null
+          severity: string
+          store_id: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          detail?: Json
+          error_id: string
+          id?: string
+          message: string
+          organization_id?: string | null
+          request_id?: string | null
+          route?: string | null
+          severity?: string
+          store_id?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          detail?: Json
+          error_id?: string
+          id?: string
+          message?: string
+          organization_id?: string | null
+          request_id?: string | null
+          route?: string | null
+          severity?: string
+          store_id?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       table_combinations: {
         Row: {
           combined_capacity: number
@@ -7510,6 +7555,19 @@ export type Database = {
           p_target_table: string
         }
         Returns: string
+      }
+      log_system_error: {
+        Args: {
+          p_detail?: Json
+          p_error_id: string
+          p_message: string
+          p_org: string
+          p_request_id: string
+          p_route: string
+          p_severity: string
+          p_store: string
+        }
+        Returns: undefined
       }
       merge_customers: {
         Args: { p_keep_id: string; p_merge_id: string; p_note?: string }
