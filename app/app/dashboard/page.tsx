@@ -874,15 +874,13 @@ async function StoreDashboard({
     reservation_tables: { table_id: string }[] | null;
   };
   const todayReservations = (todayReservationsRes.data ?? []) as unknown as TodayReservation[];
-  const nowMs = Date.now();
   const reservationCount = todayReservations.length;
   const reservationCovers = todayReservations.reduce((a, r) => a + (r.party_size ?? 0), 0);
   const unassignedCount = todayReservations.filter(
     (r) => (r.reservation_tables?.length ?? 0) === 0 && (r.status === 'pending' || r.status === 'confirmed')
   ).length;
-  const nextReservation = todayReservations
-    .filter((r) => new Date(r.start_at).getTime() >= nowMs && (r.status === 'pending' || r.status === 'confirmed'))
-    .sort((a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime())[0];
+  // 次のご予約 = 開始時刻順で最初の未案内(pending/confirmed)予約（クエリはstart_at昇順）
+  const nextReservation = todayReservations.find((r) => r.status === 'pending' || r.status === 'confirmed');
   const reservationListView = todayReservations.slice(0, 8);
 
   return (

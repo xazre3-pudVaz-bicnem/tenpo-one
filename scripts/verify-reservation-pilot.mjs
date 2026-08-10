@@ -237,6 +237,9 @@ async function main() {
   await admin.from('reservation_tables').delete().eq('reservation_id', telRow?.id);
   await admin.from('reservations').delete().eq('id', telRow?.id);
   await admin.from('customers').delete().eq('id', telCustomer?.id);
+  // テスト用コースは他検証（verify-store-dayのメニュー15品検査等）へ干渉しないよう非表示化。
+  // 会計済み予約が course_id を参照するため物理削除せず status='deleted'（soft delete）にする。
+  await admin.from('menu_items').update({ status: 'deleted' }).eq('id', course.id);
   await cleanupPilotDay(org.id, businessDate);
   console.log('  後片付け完了');
 

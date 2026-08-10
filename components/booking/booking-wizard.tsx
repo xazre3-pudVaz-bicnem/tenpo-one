@@ -109,13 +109,9 @@ export function BookingWizard({ store }: { store: BookingStore }) {
     if (c.max_party != null) return `〜${c.max_party}名`;
     return '';
   };
-  // 人数変更で選択中コースが条件外になったら選択を解除する
-  useEffect(() => {
-    if (!courseId) return;
-    const c = store.courses.find((x) => x.id === courseId);
-    if (c && !courseFits(c)) setCourseId('');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [partySize]);
+  // 選択中コースが現在の人数条件に合わない場合は「未選択」として扱う（派生値。effectでのsetStateを避ける）
+  const selectedCourse = store.courses.find((x) => x.id === courseId) ?? null;
+  const effectiveCourseId = selectedCourse && !courseFits(selectedCourse) ? '' : courseId;
 
   useEffect(() => {
     if (!partyValid) return;
@@ -157,7 +153,7 @@ export function BookingWizard({ store }: { store: BookingStore }) {
         kana: kana.trim() || null,
         phone: phone.trim(),
         email: email.trim() || null,
-        courseId: courseId || null,
+        courseId: effectiveCourseId || null,
         seatType: seatType || null,
         purpose: purpose || null,
         allergy: allergy.trim() || null,
@@ -319,7 +315,7 @@ export function BookingWizard({ store }: { store: BookingStore }) {
               </label>
               <select
                 id="booking-course"
-                value={courseId}
+                value={effectiveCourseId}
                 onChange={(e) => setCourseId(e.target.value)}
                 className="h-11 w-full rounded-lg border border-gray-300 px-3 text-sm"
               >
@@ -334,11 +330,9 @@ export function BookingWizard({ store }: { store: BookingStore }) {
                   );
                 })}
               </select>
-              {courseId &&
-                (() => {
-                  const c = store.courses.find((x) => x.id === courseId);
-                  return c?.description ? <p className="mt-1.5 text-xs text-gray-500">{c.description}</p> : null;
-                })()}
+              {effectiveCourseId && selectedCourse?.description && (
+                <p className="mt-1.5 text-xs text-gray-500">{selectedCourse.description}</p>
+              )}
             </div>
           )}
 
