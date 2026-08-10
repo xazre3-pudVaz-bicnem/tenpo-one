@@ -829,12 +829,12 @@ async function StoreDashboard({
     supabase.from('refunds').select('amount, kind, store_id, business_date').in('store_id', storeIds).eq('business_date', today),
     supabase
       .from('reservations')
-      .select('id, start_at, party_size, guest_name, status')
+      .select('id, start_at, party_size, guest_name, status, reservation_tables(table_id)')
       .in('store_id', storeIds)
       .eq('reserved_date', today)
       .in('status', ['pending', 'confirmed', 'waiting', 'arrived', 'seated'])
       .order('start_at')
-      .limit(8),
+      .limit(200),
     supabase
       .from('daily_closings')
       .select('business_date, sales_total, net_sales, refund_total')
@@ -863,6 +863,27 @@ async function StoreDashboard({
     date: `${Number(date.slice(5, 7))}/${Number(date.slice(8, 10))}`,
     sales,
   }));
+
+  // 本日の予約サマリー（件数・人数・次の予約・未割当）
+  type TodayReservation = {
+    id: string;
+    start_at: string;
+    party_size: number;
+    guest_name: string;
+    status: string;
+    reservation_tables: { table_id: string }[] | null;
+  };
+  const todayReservations = (todayReservationsRes.data ?? []) as unknown as TodayReservation[];
+  const nowMs = Date.now();
+  const reservationCount = todayReservations.length;
+  const reservationCovers = todayReservations.reduce((a, r) => a + (r.party_size ?? 0), 0);
+  const unassignedCount = todayReservations.filter(
+    (r) => (r.reservation_tables?.length ?? 0) === 0 && (r.status === 'pending' || r.status === 'confirmed')
+  ).length;
+  const nextReservation = todayReservations
+    .filter((r) => new Date(r.start_at).getTime() >= nowMs && (r.status === 'pending' || r.status === 'confirmed'))
+    .sort((a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime())[0];
+  const reservationListView = todayReservations.slice(0, 8);
 
   return (
     <div>
@@ -914,24 +935,52 @@ async function StoreDashboard({
             </Link>
           </CardHeader>
           <CardContent className="p-0">
-            {(todayReservationsRes.data ?? []).length === 0 ? (
+            {reservationCount === 0 ? (
               <div className="p-5">
                 <EmptyState title="本日の予約はありません" className="border-0 py-8" />
               </div>
             ) : (
-              <ul className="divide-y divide-gray-100">
-                {(todayReservationsRes.data ?? []).map((r) => (
-                  <li key={r.id} className="flex items-center justify-between px-5 py-3">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-navy">
-                        {formatTime(r.start_at)}　{r.guest_name} 様
-                      </p>
-                      <p className="text-xs text-gray-500">{r.party_size}名</p>
-                    </div>
-                    <Badge tone={r.status === 'seated' ? 'success' : 'primary'}>{r.status === 'seated' ? '着席中' : '予約'}</Badge>
-                  </li>
-                ))}
-              </ul>
+              <>
+                {/* サマリー */}
+                <div className="grid grid-cols-3 divide-x divide-gray-100 border-b border-gray-100 px-2 py-3 text-center">
+                  <div>
+                    <p className="text-lg font-bold text-navy">{reservationCount}</p>
+                    <p className="text-[11px] text-gray-500">組</p>
+                  </div>
+                  <div>
+                    <p className="text-lg font-bold text-navy">{reservationCovers}</p>
+                    <p className="text-[11px] text-gray-500">予約人数</p>
+                  </div>
+                  <div>
+                    <p className={`text-lg font-bold ${unassignedCount > 0 ? 'text-warning' : 'text-navy'}`}>{unassignedCount}</p>
+                    <p className="text-[11px] text-gray-500">未割当</p>
+                  </div>
+                </div>
+                {nextReservation && (
+                  <div className="border-b border-gray-100 bg-primary-soft/40 px-5 py-2 text-xs text-primary-deep">
+                    次のご予約：<span className="font-semibold">{formatTime(nextReservation.start_at)}</span>
+                    {nextReservation.guest_name} 様（{nextReservation.party_size}名）
+                  </div>
+                )}
+                <ul className="divide-y divide-gray-100">
+                  {reservationListView.map((r) => {
+                    const assigned = (r.reservation_tables?.length ?? 0) > 0;
+                    return (
+                      <li key={r.id} className="flex items-center justify-between px-5 py-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium text-navy">
+                            {formatTime(r.start_at)}　{r.guest_name} 様
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            {r.party_size}名{!assigned && r.status !== 'seated' && '・テーブル未割当'}
+                          </p>
+                        </div>
+                        <Badge tone={r.status === 'seated' ? 'success' : 'primary'}>{r.status === 'seated' ? '着席中' : '予約'}</Badge>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </>
             )}
           </CardContent>
         </Card>

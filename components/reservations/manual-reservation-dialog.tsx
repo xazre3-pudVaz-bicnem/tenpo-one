@@ -21,7 +21,23 @@ const EMPTY = {
   phone: '',
   email: '',
   note: '',
+  sourceCode: 'phone',
+  courseId: '',
+  tableIds: [] as string[],
 };
+
+export interface ReservationSourceOption {
+  code: string;
+  name: string;
+}
+export interface ReservationCourseOption {
+  id: string;
+  name: string;
+}
+export interface ReservationTableOption {
+  id: string;
+  name: string;
+}
 
 export interface ManualReservationPrefill {
   storeId?: string;
@@ -40,6 +56,9 @@ export function ManualReservationDialog({
   stores,
   defaultStoreId,
   prefill,
+  sources,
+  courses,
+  tables,
   /** キャンセル待ちからの変換の場合に指定。登録成功時に waitlist_entries を converted にする */
   waitlistEntryId,
   triggerLabel = '電話予約を登録',
@@ -50,6 +69,9 @@ export function ManualReservationDialog({
   stores: StoreRef[];
   defaultStoreId: string | null;
   prefill?: ManualReservationPrefill;
+  sources?: ReservationSourceOption[];
+  courses?: ReservationCourseOption[];
+  tables?: ReservationTableOption[];
   waitlistEntryId?: string;
   triggerLabel?: string;
   triggerVariant?: NonNullable<ButtonProps['variant']>;
@@ -78,6 +100,9 @@ export function ManualReservationDialog({
           phone: form.phone,
           email: form.email || undefined,
           note: form.note || undefined,
+          sourceCode: form.sourceCode || undefined,
+          courseId: form.courseId || null,
+          tableIds: form.tableIds,
           waitlistEntryId,
         });
         toast(waitlistEntryId ? '予約へ変換しました' : '電話予約を登録しました');
@@ -104,6 +129,18 @@ export function ManualReservationDialog({
               <Select id="mr-store" value={form.storeId} onChange={(e) => set('storeId', e.target.value)}>
                 {stores.map((s) => (
                   <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          )}
+          {sources && sources.length > 0 && (
+            <div>
+              <Label htmlFor="mr-source">予約経路</Label>
+              <Select id="mr-source" value={form.sourceCode} onChange={(e) => set('sourceCode', e.target.value)}>
+                {sources.map((s) => (
+                  <option key={s.code} value={s.code}>
                     {s.name}
                   </option>
                 ))}
@@ -142,6 +179,48 @@ export function ManualReservationDialog({
               />
             </div>
           </div>
+          {courses && courses.length > 0 && (
+            <div>
+              <Label htmlFor="mr-course">コース（任意）</Label>
+              <Select id="mr-course" value={form.courseId} onChange={(e) => set('courseId', e.target.value)}>
+                <option value="">選択しない</option>
+                {courses.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          )}
+          {tables && tables.length > 0 && (
+            <div>
+              <Label>テーブル割当（任意・複数可）</Label>
+              <div className="mt-1 flex flex-wrap gap-1.5">
+                {tables.map((t) => {
+                  const selected = form.tableIds.includes(t.id);
+                  return (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() =>
+                        set(
+                          'tableIds',
+                          selected ? form.tableIds.filter((id) => id !== t.id) : [...form.tableIds, t.id]
+                        )
+                      }
+                      className={
+                        'rounded-lg border px-2.5 py-1 text-xs font-medium ' +
+                        (selected ? 'border-primary bg-primary-soft text-primary-deep' : 'border-gray-300 text-navy')
+                      }
+                    >
+                      {t.name}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="mt-1 text-xs text-gray-500">未割当のままでも登録できます（後でフロア/台帳から割当可）。</p>
+            </div>
+          )}
           <div>
             <Label htmlFor="mr-name">お名前</Label>
             <Input id="mr-name" value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="山田 太郎" />

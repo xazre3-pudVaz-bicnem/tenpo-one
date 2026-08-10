@@ -153,8 +153,17 @@ export default async function ReservationListPage({ searchParams }: { searchPara
 
   const { data: sources } = await supabase
     .from('reservation_sources')
-    .select('id, name')
+    .select('id, code, name')
     .or(`organization_id.is.null,organization_id.eq.${ctx.organizationId}`)
+    .eq('status', 'active')
+    .order('sort_order');
+
+  // 手動予約ダイアログ用のコース一覧（menu_items item_type='course'）
+  const { data: courseRows } = await supabase
+    .from('menu_items')
+    .select('id, name, store_id')
+    .eq('organization_id', ctx.organizationId)
+    .eq('item_type', 'course')
     .eq('status', 'active')
     .order('sort_order');
 
@@ -188,6 +197,16 @@ export default async function ReservationListPage({ searchParams }: { searchPara
 
   const canManagePrivateHire = can(ctx.role, 'store.settings');
 
+  // 手動予約ダイアログに渡す選択肢（対象店舗ベース）
+  const dialogStoreId = ctx.currentStore?.id ?? ctx.stores[0]?.id ?? '';
+  const manualSourceOptions = (sources ?? [])
+    .filter((s) => s.code !== 'web' && s.code !== 'walk_in') // web/ウォークインは自動付与のため手動選択から除外
+    .map((s) => ({ code: s.code as string, name: s.name as string }));
+  const manualCourseOptions = (courseRows ?? [])
+    .filter((c) => c.store_id == null || c.store_id === dialogStoreId)
+    .map((c) => ({ id: c.id as string, name: c.name as string }));
+  const manualTableOptions = (storeTables[dialogStoreId] ?? []).map((t) => ({ id: t.id, name: t.name }));
+
   const total = count ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const baseParams = new URLSearchParams();
@@ -212,7 +231,13 @@ export default async function ReservationListPage({ searchParams }: { searchPara
         description={`${from.replaceAll('-', '/')} 〜 ${to.replaceAll('-', '/')}｜${total}件`}
         actions={
           <>
-            <ManualReservationDialog stores={ctx.stores} defaultStoreId={ctx.currentStore?.id ?? null} />
+            <ManualReservationDialog
+              stores={ctx.stores}
+              defaultStoreId={ctx.currentStore?.id ?? null}
+              sources={manualSourceOptions}
+              courses={manualCourseOptions}
+              tables={manualTableOptions}
+            />
             <WalkInDialog stores={ctx.stores} defaultStoreId={ctx.currentStore?.id ?? null} storeTables={storeTables} />
             <a href={exportHref} className={buttonVariants({ variant: 'secondary', size: 'sm' })}>
               <Download className="h-4 w-4" />

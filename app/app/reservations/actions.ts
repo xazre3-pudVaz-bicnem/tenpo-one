@@ -551,6 +551,14 @@ export interface ManualReservationInput {
   phone: string;
   email?: string;
   note?: string;
+  /** 予約経路コード（reservation_sources.code）。未指定は 'phone' */
+  sourceCode?: string;
+  /** コース（menu_items.id, item_type='course'）。指定時は所要時間を滞在に反映 */
+  courseId?: string | null;
+  /** 割り当てるテーブル（reservation_tables）。未指定は未割当 */
+  tableIds?: string[];
+  /** 滞在時間の上書き（分）。未指定はコース所要時間 or 店舗既定 */
+  stayMinutes?: number | null;
   /** キャンセル待ちからの変換の場合に指定。作成成功時に waitlist_entries.status を converted にする */
   waitlistEntryId?: string;
 }
@@ -564,7 +572,20 @@ export async function createManualReservation(input: ManualReservationInput) {
   if (partySize < 1) throw new Error('ご人数をご確認ください');
 
   const supabase = await createClient();
-  const stayMinutes = await getDefaultStayMinutes(supabase, input.storeId);
+  const sourceCode = input.sourceCode?.trim() || 'phone';
+
+  // 滞在時間: 明示指定 > コース所要時間 > 店舗既定
+  let stayMinutes = input.stayMinutes && input.stayMinutes > 0 ? input.stayMinutes : null;
+  if (!stayMinutes && input.courseId) {
+    const { data: course } = await supabase
+      .from('menu_items')
+      .select('duration_minutes')
+      .eq('id', input.courseId)
+      .eq('item_type', 'course')
+      .maybeSingle();
+    if (course?.duration_minutes) stayMinutes = course.duration_minutes;
+  }
+  if (!stayMinutes) stayMinutes = await getDefaultStayMinutes(supabase, input.storeId);
   const startAt = new Date(`${input.date}T${input.time}:00+09:00`);
   const endAt = new Date(startAt.getTime() + stayMinutes * 60000);
 
@@ -581,35 +602,61 @@ export async function createManualReservation(input: ManualReservationInput) {
     .from('reservation_sources')
     .select('id')
     .is('organization_id', null)
-    .eq('code', 'phone')
+    .eq('code', sourceCode)
     .maybeSingle();
+
+  // スタッフ手入力は created_via='manual'（電話のみ従来どおり'phone'）。実際の経路は source_id が保持する。
+  const createdVia = sourceCode === 'phone' ? 'phone' : 'manual';
+
+  // 指定テーブルが対象店舗のものか検証（他店舗テーブルの割当を防止）
+  const tableIds = [...new Set((input.tableIds ?? []).filter(Boolean))];
+  if (tableIds.length > 0) {
+    const { data: validTables } = await supabase
+      .from('restaurant_tables')
+      .select('id')
+      .eq('store_id', input.storeId)
+      .in('id', tableIds);
+    if ((validTables?.length ?? 0) !== tableIds.length) {
+      throw new Error('指定されたテーブルが正しくありません');
+    }
+  }
 
   let lastError: unknown = null;
   for (let attempt = 0; attempt < 5; attempt++) {
     const code = `TEL-${randomDigits(6)}`;
-    const { error } = await supabase.from('reservations').insert({
-      organization_id: ctx.organizationId,
-      store_id: input.storeId,
-      customer_id: customerId,
-      code,
-      reserved_date: input.date,
-      start_at: startAt.toISOString(),
-      end_at: endAt.toISOString(),
-      party_size: partySize,
-      adults: input.adults,
-      children: input.children,
-      guest_name: input.name.trim(),
-      guest_name_kana: input.kana?.trim() || null,
-      guest_phone: input.phone.trim(),
-      guest_email: input.email?.trim() || null,
-      request_note: input.note?.trim() || null,
-      status: 'confirmed',
-      source_id: source?.id ?? null,
-      created_via: 'phone',
-      consent_accepted: false,
-      created_by: ctx.userId,
-    });
-    if (!error) {
+    const { data: inserted, error } = await supabase
+      .from('reservations')
+      .insert({
+        organization_id: ctx.organizationId,
+        store_id: input.storeId,
+        customer_id: customerId,
+        code,
+        reserved_date: input.date,
+        start_at: startAt.toISOString(),
+        end_at: endAt.toISOString(),
+        party_size: partySize,
+        adults: input.adults,
+        children: input.children,
+        course_id: input.courseId || null,
+        guest_name: input.name.trim(),
+        guest_name_kana: input.kana?.trim() || null,
+        guest_phone: input.phone.trim(),
+        guest_email: input.email?.trim() || null,
+        request_note: input.note?.trim() || null,
+        status: 'confirmed',
+        source_id: source?.id ?? null,
+        created_via: createdVia,
+        consent_accepted: false,
+        created_by: ctx.userId,
+      })
+      .select('id')
+      .single();
+    if (!error && inserted) {
+      if (tableIds.length > 0) {
+        await supabase
+          .from('reservation_tables')
+          .insert(tableIds.map((tableId) => ({ reservation_id: inserted.id, table_id: tableId })));
+      }
       if (input.waitlistEntryId) {
         await supabase
           .from('waitlist_entries')
@@ -620,10 +667,10 @@ export async function createManualReservation(input: ManualReservationInput) {
       return;
     }
     lastError = error;
-    if ((error as { code?: string }).code !== '23505') break;
+    if ((error as { code?: string })?.code !== '23505') break;
   }
   throw new Error(
-    lastError instanceof Error ? lastError.message : '電話予約の登録に失敗しました'
+    lastError instanceof Error ? lastError.message : '手動予約の登録に失敗しました'
   );
 }
 
