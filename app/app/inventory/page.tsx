@@ -215,50 +215,56 @@ export default async function InventoryPage({
       currentQuantity: Number(i.current_quantity),
     }));
   } else if (tab === 'reorder') {
-    const { data: activeItems } = await supabase
-      .from('inventory_items')
-      .select('id, name, unit, current_quantity, reorder_point, min_quantity, optimal_quantity')
-      .eq('organization_id', ctx.organizationId)
-      .eq('store_id', currentStore.id)
-      .eq('status', 'active')
-      .order('name');
+    // 在庫品目(activeItems)と発注中PO(openPos)は独立のため並列取得する。
+    const [{ data: activeItems }, { data: openPos }] = await Promise.all([
+      supabase
+        .from('inventory_items')
+        .select('id, name, unit, current_quantity, reorder_point, min_quantity, optimal_quantity')
+        .eq('organization_id', ctx.organizationId)
+        .eq('store_id', currentStore.id)
+        .eq('status', 'active')
+        .order('name'),
+      supabase
+        .from('purchase_orders')
+        .select('id')
+        .eq('organization_id', ctx.organizationId)
+        .eq('store_id', currentStore.id)
+        .in('status', ['approved', 'ordered', 'partially_received']),
+    ]);
     const items = activeItems ?? [];
     const itemIds = items.map((i) => i.id as string);
+    const openPoIds = (openPos ?? []).map((p) => p.id as string);
+
+    // 販売実績(sales)とPO明細(poItems)も相互に独立のため並列取得する。
+    const [{ data: sales }, { data: poItems }] = await Promise.all([
+      itemIds.length > 0
+        ? supabase
+            .from('stock_movements')
+            .select('inventory_item_id, quantity')
+            .eq('store_id', currentStore.id)
+            .eq('movement_type', 'sale')
+            .gte('business_date', daysAgoJst(30))
+            .in('inventory_item_id', itemIds)
+        : Promise.resolve({ data: [] as { inventory_item_id: string | null; quantity: number }[] }),
+      openPoIds.length > 0
+        ? supabase
+            .from('purchase_order_items')
+            .select('inventory_item_id, quantity, received_quantity')
+            .in('purchase_order_id', openPoIds)
+            .not('inventory_item_id', 'is', null)
+        : Promise.resolve({ data: [] as { inventory_item_id: string | null; quantity: number; received_quantity: number }[] }),
+    ]);
 
     const salesByItem = new Map<string, number>();
-    if (itemIds.length > 0) {
-      const { data: sales } = await supabase
-        .from('stock_movements')
-        .select('inventory_item_id, quantity')
-        .eq('store_id', currentStore.id)
-        .eq('movement_type', 'sale')
-        .gte('business_date', daysAgoJst(30))
-        .in('inventory_item_id', itemIds);
-      for (const s of sales ?? []) {
-        const key = s.inventory_item_id as string;
-        salesByItem.set(key, (salesByItem.get(key) ?? 0) - Number(s.quantity));
-      }
+    for (const s of sales ?? []) {
+      const key = s.inventory_item_id as string;
+      salesByItem.set(key, (salesByItem.get(key) ?? 0) - Number(s.quantity));
     }
-
     const incomingByItem = new Map<string, number>();
-    const { data: openPos } = await supabase
-      .from('purchase_orders')
-      .select('id')
-      .eq('organization_id', ctx.organizationId)
-      .eq('store_id', currentStore.id)
-      .in('status', ['approved', 'ordered', 'partially_received']);
-    const openPoIds = (openPos ?? []).map((p) => p.id as string);
-    if (openPoIds.length > 0) {
-      const { data: poItems } = await supabase
-        .from('purchase_order_items')
-        .select('inventory_item_id, quantity, received_quantity')
-        .in('purchase_order_id', openPoIds)
-        .not('inventory_item_id', 'is', null);
-      for (const pi of poItems ?? []) {
-        const key = pi.inventory_item_id as string;
-        const remaining = Math.max(0, Number(pi.quantity) - Number(pi.received_quantity));
-        incomingByItem.set(key, (incomingByItem.get(key) ?? 0) + remaining);
-      }
+    for (const pi of poItems ?? []) {
+      const key = pi.inventory_item_id as string;
+      const remaining = Math.max(0, Number(pi.quantity) - Number(pi.received_quantity));
+      incomingByItem.set(key, (incomingByItem.get(key) ?? 0) + remaining);
     }
 
     reorderRows = items.map((i) => {
@@ -288,23 +294,25 @@ export default async function InventoryPage({
       };
     });
   } else if (tab === 'forecast') {
-    const { data: activeItems } = await supabase
-      .from('inventory_items')
-      .select('id, name, unit')
-      .eq('organization_id', ctx.organizationId)
-      .eq('store_id', currentStore.id)
-      .eq('status', 'active')
-      .order('name');
+    // 在庫品目(activeItems)と販売実績(movements)は独立のため並列取得する。
+    const [{ data: activeItems }, { data: movements }] = await Promise.all([
+      supabase
+        .from('inventory_items')
+        .select('id, name, unit')
+        .eq('organization_id', ctx.organizationId)
+        .eq('store_id', currentStore.id)
+        .eq('status', 'active')
+        .order('name'),
+      supabase
+        .from('stock_movements')
+        .select('inventory_item_id, quantity, business_date')
+        .eq('store_id', currentStore.id)
+        .eq('movement_type', 'sale')
+        .gte('business_date', daysAgoJst(56)),
+    ]);
     const items = activeItems ?? [];
     forecastItemOptions = items.map((i) => ({ id: i.id, name: i.name }));
     const itemMap = new Map(items.map((i) => [i.id as string, i]));
-
-    const { data: movements } = await supabase
-      .from('stock_movements')
-      .select('inventory_item_id, quantity, business_date')
-      .eq('store_id', currentStore.id)
-      .eq('movement_type', 'sale')
-      .gte('business_date', daysAgoJst(56));
 
     const byItemDate = new Map<string, Map<string, number>>();
     const totalByItem = new Map<string, number>();

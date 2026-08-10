@@ -108,29 +108,53 @@ export default async function PosPage({
     );
   }
 
-  const { data: items, error: itemsError } = await supabase
-    .from('order_items')
-    .select('id, name, unit_price, quantity, tax_rate, tax_included, line_total, status')
-    .eq('order_id', orderId)
-    .eq('status', 'active')
-    .order('created_at');
-
-  const { data: categories, error: categoriesError } = await supabase
-    .from('menu_categories')
-    .select('id, name, color, sort_order')
-    .eq('organization_id', ctx.organizationId)
-    .or(`store_id.is.null,store_id.eq.${store.id}`)
-    .eq('status', 'active')
-    .order('sort_order');
-
-  const { data: menuItems, error: menuItemsError } = await supabase
-    .from('menu_items')
-    .select('id, category_id, name, name_kana, price, takeout_price, item_type, is_sold_out, is_recommended, sort_order')
-    .eq('organization_id', ctx.organizationId)
-    .or(`store_id.is.null,store_id.eq.${store.id}`)
-    .eq('status', 'active')
-    .neq('item_type', 'option')
-    .order('sort_order');
+  // order は取得済みのため、以降の7クエリ（明細・カテゴリ・商品・売れ筋・顧客・ロイヤリティ・店舗設定）は
+  // すべて相互に独立＝並列取得できる（customer も order.customer_id が判明済み）。
+  const [
+    { data: items, error: itemsError },
+    { data: categories, error: categoriesError },
+    { data: menuItems, error: menuItemsError },
+    { data: recentSales },
+    { data: customerRow },
+    { data: loyalty },
+    { data: storeSettings },
+  ] = await Promise.all([
+    supabase
+      .from('order_items')
+      .select('id, name, unit_price, quantity, tax_rate, tax_included, line_total, status')
+      .eq('order_id', orderId)
+      .eq('status', 'active')
+      .order('created_at'),
+    supabase
+      .from('menu_categories')
+      .select('id, name, color, sort_order')
+      .eq('organization_id', ctx.organizationId)
+      .or(`store_id.is.null,store_id.eq.${store.id}`)
+      .eq('status', 'active')
+      .order('sort_order'),
+    supabase
+      .from('menu_items')
+      .select('id, category_id, name, name_kana, price, takeout_price, item_type, is_sold_out, is_recommended, sort_order')
+      .eq('organization_id', ctx.organizationId)
+      .or(`store_id.is.null,store_id.eq.${store.id}`)
+      .eq('status', 'active')
+      .neq('item_type', 'option')
+      .order('sort_order'),
+    // 売れ筋TOP12（過去30日・支払済注文の販売数量集計）。集計RPCは無いためサーバー側でJS集計する。
+    supabase
+      .from('order_items')
+      .select('menu_item_id, quantity, orders!inner(store_id, status, business_date)')
+      .eq('orders.store_id', store.id)
+      .eq('orders.status', 'paid')
+      .eq('status', 'active')
+      .not('menu_item_id', 'is', null)
+      .gte('orders.business_date', daysAgoJst(30)),
+    order.customer_id
+      ? supabase.from('customers').select('id, name, phone, point_balance').eq('id', order.customer_id).maybeSingle()
+      : Promise.resolve({ data: null }),
+    supabase.from('loyalty_settings').select('enabled, point_value').eq('organization_id', ctx.organizationId).maybeSingle(),
+    supabase.from('store_settings').select('settings').eq('store_id', store.id).maybeSingle(),
+  ]);
 
   if (itemsError || categoriesError || menuItemsError) {
     throw new Error('注文内容の読み込みに失敗しました');
@@ -139,15 +163,6 @@ export default async function PosPage({
   const table = order.restaurant_tables as unknown as { name: string } | null;
   const staff = order.profiles as unknown as { display_name: string } | null;
 
-  // 売れ筋TOP12（過去30日・支払済注文の販売数量集計）。集計RPCは無いためサーバー側でJS集計する。
-  const { data: recentSales } = await supabase
-    .from('order_items')
-    .select('menu_item_id, quantity, orders!inner(store_id, status, business_date)')
-    .eq('orders.store_id', store.id)
-    .eq('orders.status', 'paid')
-    .eq('status', 'active')
-    .not('menu_item_id', 'is', null)
-    .gte('orders.business_date', daysAgoJst(30));
   const salesByItem = new Map<string, number>();
   for (const row of recentSales ?? []) {
     const id = row.menu_item_id as string;
@@ -159,31 +174,14 @@ export default async function PosPage({
     .map(([id]) => id);
 
   // 顧客紐付け・ポイント払いの活性判定はサーバーで完結させ、クライアントには結果のみ渡す
-  let customer: { id: string; name: string; phone: string | null; pointBalance: number } | null = null;
-  if (order.customer_id) {
-    const { data: c } = await supabase
-      .from('customers')
-      .select('id, name, phone, point_balance')
-      .eq('id', order.customer_id)
-      .maybeSingle();
-    if (c) customer = { id: c.id, name: c.name, phone: c.phone, pointBalance: c.point_balance };
-  }
-  const { data: loyalty } = await supabase
-    .from('loyalty_settings')
-    .select('enabled, point_value')
-    .eq('organization_id', ctx.organizationId)
-    .maybeSingle();
+  const customer: { id: string; name: string; phone: string | null; pointBalance: number } | null = customerRow
+    ? { id: customerRow.id, name: customerRow.name, phone: customerRow.phone, pointBalance: customerRow.point_balance }
+    : null;
   const pointsAvailability = {
     available: !!customer && !!loyalty?.enabled && customer.pointBalance > 0,
     balance: customer?.pointBalance ?? 0,
     pointValue: loyalty?.point_value ?? 1,
   };
-
-  const { data: storeSettings } = await supabase
-    .from('store_settings')
-    .select('settings')
-    .eq('store_id', store.id)
-    .maybeSingle();
   const drawerSettings = (storeSettings?.settings as { drawer?: { autoOpenOnCash?: boolean; openOnCashless?: boolean } } | null)
     ?.drawer;
   const drawerConfig = {

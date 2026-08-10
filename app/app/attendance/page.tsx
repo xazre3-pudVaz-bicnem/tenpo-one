@@ -106,42 +106,43 @@ async function PunchTab({ storeId, profileId, displayName }: { storeId: string; 
 
   // 日跨ぎ勤務中の可能性があるため apply_punch と同様に当日＋前日の open エントリも対象にする
   const yesterday = daysAgoJst(1);
-  const { data: entry } = await supabase
-    .from('time_entries')
-    .select('id, clock_in_at, clock_out_at, on_break, work_date')
-    .eq('profile_id', profileId)
-    .eq('store_id', storeId)
-    .in('work_date', [today, yesterday])
-    .eq('status', 'open')
-    .order('work_date', { ascending: false })
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  // シフトとの突合表示: 当日の確定・公開済みシフトがあれば表示する
-  const { data: todayShift } = await supabase
-    .from('shifts')
-    .select('start_time, end_time')
-    .eq('store_id', storeId)
-    .eq('profile_id', profileId)
-    .eq('shift_date', today)
-    .eq('kind', 'confirmed')
-    .eq('status', 'published')
-    .order('start_time')
-    .limit(1)
-    .maybeSingle();
-
-  // 他店舗で開いたままの出勤（ALREADY_CLOCKED_IN_ELSEWHERE の事前警告表示用）
-  const { data: elsewhereEntry } = await supabase
-    .from('time_entries')
-    .select('id, stores(name)')
-    .eq('profile_id', profileId)
-    .neq('store_id', storeId)
-    .eq('status', 'open')
-    .in('work_date', [today, yesterday])
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  // 3クエリは相互に独立のため並列取得（往復レイテンシを短縮）
+  const [{ data: entry }, { data: todayShift }, { data: elsewhereEntry }] = await Promise.all([
+    supabase
+      .from('time_entries')
+      .select('id, clock_in_at, clock_out_at, on_break, work_date')
+      .eq('profile_id', profileId)
+      .eq('store_id', storeId)
+      .in('work_date', [today, yesterday])
+      .eq('status', 'open')
+      .order('work_date', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    // シフトとの突合表示: 当日の確定・公開済みシフトがあれば表示する
+    supabase
+      .from('shifts')
+      .select('start_time, end_time')
+      .eq('store_id', storeId)
+      .eq('profile_id', profileId)
+      .eq('shift_date', today)
+      .eq('kind', 'confirmed')
+      .eq('status', 'published')
+      .order('start_time')
+      .limit(1)
+      .maybeSingle(),
+    // 他店舗で開いたままの出勤（ALREADY_CLOCKED_IN_ELSEWHERE の事前警告表示用）
+    supabase
+      .from('time_entries')
+      .select('id, stores(name)')
+      .eq('profile_id', profileId)
+      .neq('store_id', storeId)
+      .eq('status', 'open')
+      .in('work_date', [today, yesterday])
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
   const elsewhereStoreName =
     (elsewhereEntry?.stores as unknown as { name: string } | null)?.name ?? null;
 
@@ -222,14 +223,26 @@ async function ListTab({
 
   const nameById = new Map(staffOptions.map((s) => [s.id, s.name]));
 
-  const { data: entries } = await supabase
-    .from('time_entries')
-    .select('*')
-    .eq('store_id', storeId)
-    .in('profile_id', targetProfileIds)
-    .gte('work_date', start)
-    .lte('work_date', end)
-    .order('work_date', { ascending: false });
+  // entries と lockedRunRows（給与run締めロック）は相互に独立のため並列取得する。
+  // eventRows は entries.id に依存するため後段で取得する。
+  const [{ data: entries }, { data: lockedRunRows }] = await Promise.all([
+    supabase
+      .from('time_entries')
+      .select('*')
+      .eq('store_id', storeId)
+      .in('profile_id', targetProfileIds)
+      .gte('work_date', start)
+      .lte('work_date', end)
+      .order('work_date', { ascending: false }),
+    supabase
+      .from('payroll_runs')
+      .select('store_id, period_start, period_end')
+      .eq('organization_id', organizationId)
+      .in('status', ['confirmed', 'approved'])
+      .lte('period_start', end)
+      .gte('period_end', start)
+      .or(`store_id.is.null,store_id.eq.${storeId}`),
+  ]);
 
   const rows = entries ?? [];
 
@@ -250,17 +263,9 @@ async function ListTab({
     eventsByEntry.set(e.time_entry_id, list);
   }
 
-  // 締め後ロック（給与run確定済み）: 表示期間と重なる confirmed/approved の run 期間を取得し、
-  // 各行の work_date がロック対象かをここで判定してバッジ表示・操作ボタン非表示に反映する
-  // （実際の書込拒否は各サーバーアクション側の isPayrollLocked で行う）。
-  const { data: lockedRunRows } = await supabase
-    .from('payroll_runs')
-    .select('store_id, period_start, period_end')
-    .eq('organization_id', organizationId)
-    .in('status', ['confirmed', 'approved'])
-    .lte('period_start', end)
-    .gte('period_end', start)
-    .or(`store_id.is.null,store_id.eq.${storeId}`);
+  // 締め後ロック（給与run確定済み）: 表示期間と重なる confirmed/approved の run 期間で
+  // 各行の work_date がロック対象かを判定しバッジ表示・操作ボタン非表示に反映する
+  // （実際の書込拒否は各サーバーアクション側の isPayrollLocked で行う）。lockedRunRows は上で並列取得済み。
   const lockedRanges = lockedRunRows ?? [];
   const isLocked = (workDate: string) =>
     lockedRanges.some((r) => r.period_start <= workDate && r.period_end >= workDate);

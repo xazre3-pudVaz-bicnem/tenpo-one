@@ -85,26 +85,29 @@ async function MineTab({ ctx }: { ctx: Ctx }) {
   const supabase = await createClient();
   const today = todayJst();
 
-  const { data: grants } = await supabase
-    .from('leave_grants')
-    .select('*')
-    .eq('organization_id', ctx.organizationId)
-    .eq('profile_id', ctx.userId)
-    .order('granted_on', { ascending: false });
-  const { data: takenEntries } = await supabase
-    .from('time_entries')
-    .select('id, work_date, leave_fraction, note')
-    .eq('organization_id', ctx.organizationId)
-    .eq('profile_id', ctx.userId)
-    .eq('entry_type', 'paid_leave')
-    .in('status', ['approved', 'closed'])
-    .order('work_date', { ascending: false });
-  const { data: myRequests } = await supabase
-    .from('leave_requests')
-    .select('*')
-    .eq('organization_id', ctx.organizationId)
-    .eq('profile_id', ctx.userId)
-    .order('leave_date', { ascending: false });
+  // 付与(grants)・取得実績(takenEntries)・申請(myRequests)はすべて自分キーで独立のため並列取得する。
+  const [{ data: grants }, { data: takenEntries }, { data: myRequests }] = await Promise.all([
+    supabase
+      .from('leave_grants')
+      .select('*')
+      .eq('organization_id', ctx.organizationId)
+      .eq('profile_id', ctx.userId)
+      .order('granted_on', { ascending: false }),
+    supabase
+      .from('time_entries')
+      .select('id, work_date, leave_fraction, note')
+      .eq('organization_id', ctx.organizationId)
+      .eq('profile_id', ctx.userId)
+      .eq('entry_type', 'paid_leave')
+      .in('status', ['approved', 'closed'])
+      .order('work_date', { ascending: false }),
+    supabase
+      .from('leave_requests')
+      .select('*')
+      .eq('organization_id', ctx.organizationId)
+      .eq('profile_id', ctx.userId)
+      .order('leave_date', { ascending: false }),
+  ]);
 
   const grantRows = (grants ?? []) as { id: string; granted_on: string; days: number; expires_on: string; reason: string }[];
   const takenRows = (takenEntries ?? []) as { id: string; work_date: string; leave_fraction: number | null; note: string | null }[];
@@ -296,30 +299,33 @@ async function AdminTab({ ctx, canSetPolicy, canReview }: { ctx: Ctx; canSetPoli
   staffOptions.sort((a, b) => a.name.localeCompare(b.name, 'ja'));
 
   const profileIds = staffOptions.map((s) => s.id);
-  const { data: allGrants } = profileIds.length
-    ? await supabase.from('leave_grants').select('*').eq('organization_id', ctx.organizationId).in('profile_id', profileIds)
-    : { data: [] };
-  const { data: allTaken } = profileIds.length
-    ? await supabase
-        .from('time_entries')
-        .select('profile_id, leave_fraction')
-        .eq('organization_id', ctx.organizationId)
-        .eq('entry_type', 'paid_leave')
-        .in('status', ['approved', 'closed'])
-        .in('profile_id', profileIds)
-    : { data: [] };
-  const { data: orgRow } = canSetPolicy
-    ? await supabase.from('organizations').select('leave_policy').eq('id', ctx.organizationId).maybeSingle()
-    : { data: null };
-  const { data: pendingRequestRows } = profileIds.length
-    ? await supabase
-        .from('leave_requests')
-        .select('*')
-        .eq('organization_id', ctx.organizationId)
-        .in('profile_id', profileIds)
-        .eq('status', 'pending')
-        .order('leave_date')
-    : { data: [] };
+  // 付与・取得・組織ポリシー・承認待ち申請は相互に独立のため並列取得する。
+  const [{ data: allGrants }, { data: allTaken }, { data: orgRow }, { data: pendingRequestRows }] = await Promise.all([
+    profileIds.length
+      ? supabase.from('leave_grants').select('*').eq('organization_id', ctx.organizationId).in('profile_id', profileIds)
+      : Promise.resolve({ data: [] as unknown[] }),
+    profileIds.length
+      ? supabase
+          .from('time_entries')
+          .select('profile_id, leave_fraction')
+          .eq('organization_id', ctx.organizationId)
+          .eq('entry_type', 'paid_leave')
+          .in('status', ['approved', 'closed'])
+          .in('profile_id', profileIds)
+      : Promise.resolve({ data: [] as unknown[] }),
+    canSetPolicy
+      ? supabase.from('organizations').select('leave_policy').eq('id', ctx.organizationId).maybeSingle()
+      : Promise.resolve({ data: null }),
+    profileIds.length
+      ? supabase
+          .from('leave_requests')
+          .select('*')
+          .eq('organization_id', ctx.organizationId)
+          .in('profile_id', profileIds)
+          .eq('status', 'pending')
+          .order('leave_date')
+      : Promise.resolve({ data: [] as unknown[] }),
+  ]);
 
   const grantRows = (allGrants ?? []) as { id: string; profile_id: string; days: number; expires_on: string }[];
   const takenRows = (allTaken ?? []) as { profile_id: string; leave_fraction: number | null }[];

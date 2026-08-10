@@ -220,26 +220,19 @@ export default async function CustomersPage({
   const sort = sp.sort ?? 'last_visit_desc';
   const page = Math.max(1, Number(sp.page ?? '1') || 1);
 
-  const { data: tagRows } = await supabase
-    .from('customer_tags')
-    .select('id, name')
-    .eq('organization_id', ctx.organizationId)
-    .order('name');
-
-  const { data: loyaltyRow } = await supabase
-    .from('loyalty_settings')
-    .select('enabled')
-    .eq('organization_id', ctx.organizationId)
-    .maybeSingle();
+  // タグ・ロイヤリティ設定・セグメント集計用の全顧客概数は相互に独立のため並列取得する。
+  const [{ data: tagRows }, { data: loyaltyRow }, { data: allMetricsRows }] = await Promise.all([
+    supabase.from('customer_tags').select('id, name').eq('organization_id', ctx.organizationId).order('name'),
+    supabase.from('loyalty_settings').select('enabled').eq('organization_id', ctx.organizationId).maybeSingle(),
+    // セグメント別人数のサマリー（絞込条件に関わらず組織内全active顧客が対象の概数。基本分類のみ）
+    supabase
+      .from('customers')
+      .select('visit_count, total_spent, cancel_count, no_show_count, last_visit_at')
+      .eq('organization_id', ctx.organizationId)
+      .eq('status', 'active')
+      .limit(10000),
+  ]);
   const loyaltyEnabled = loyaltyRow?.enabled ?? false;
-
-  // セグメント別人数のサマリー（絞込条件に関わらず組織内全active顧客が対象の概数。基本分類のみ）
-  const { data: allMetricsRows } = await supabase
-    .from('customers')
-    .select('visit_count, total_spent, cancel_count, no_show_count, last_visit_at')
-    .eq('organization_id', ctx.organizationId)
-    .eq('status', 'active')
-    .limit(10000);
 
   const nowForSummary = new Date();
   const segmentCounts: Partial<Record<CustomerSegment, number>> = {};

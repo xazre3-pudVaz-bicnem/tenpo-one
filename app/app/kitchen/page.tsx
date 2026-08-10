@@ -47,11 +47,21 @@ export default async function KitchenPage() {
   const supabase = await createClient();
   const sinceIso = new Date(new Date().getTime() - RECENT_SERVED_WINDOW_MS).toISOString();
 
-  const { data: storeSettings } = await supabase
-    .from('store_settings')
-    .select('kds_settings')
-    .eq('store_id', store.id)
-    .maybeSingle();
+  // KDS設定と調理対象の注文明細は独立のため並列取得する。
+  const [{ data: storeSettings }, { data: rows }] = await Promise.all([
+    supabase.from('store_settings').select('kds_settings').eq('store_id', store.id).maybeSingle(),
+    supabase
+      .from('order_items')
+      .select(
+        `id, order_id, menu_item_id, name, quantity, memo, modifiers, kitchen_status, created_at,
+       orders!inner(order_no, order_source, status, restaurant_tables(name))`
+      )
+      .eq('store_id', store.id)
+      .eq('status', 'active')
+      .eq('orders.status', 'open')
+      .or(`kitchen_status.neq.served,served_at.gt.${sinceIso}`)
+      .order('created_at', { ascending: true }),
+  ]);
   const savedKdsSettings = storeSettings?.kds_settings as Partial<KdsSettings> | null;
   const kdsSettings: KdsSettings = {
     warn1: savedKdsSettings?.warn1 ?? DEFAULT_KDS_SETTINGS.warn1,
@@ -60,18 +70,6 @@ export default async function KitchenPage() {
     aggregate: savedKdsSettings?.aggregate ?? DEFAULT_KDS_SETTINGS.aggregate,
     sound: savedKdsSettings?.sound ?? DEFAULT_KDS_SETTINGS.sound,
   };
-
-  const { data: rows } = await supabase
-    .from('order_items')
-    .select(
-      `id, order_id, menu_item_id, name, quantity, memo, modifiers, kitchen_status, created_at,
-       orders!inner(order_no, order_source, status, restaurant_tables(name))`
-    )
-    .eq('store_id', store.id)
-    .eq('status', 'active')
-    .eq('orders.status', 'open')
-    .or(`kitchen_status.neq.served,served_at.gt.${sinceIso}`)
-    .order('created_at', { ascending: true });
 
   const typedRows = (rows ?? []) as unknown as OrderItemRow[];
 

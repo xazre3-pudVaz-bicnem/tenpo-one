@@ -88,8 +88,20 @@ export default async function ShiftsPage({
   });
   const rangeLabel = `${weekStart.slice(5).replace('-', '/')} 〜 ${weekEnd.slice(5).replace('-', '/')}`;
 
-  // 当店スタッフ
-  const { data: msRows } = await supabase.from('membership_stores').select('membership_id').eq('store_id', store.id);
+  // 当店スタッフ名簿(msRows)と当週シフト(shiftRows)は相互に独立のため並列取得する。
+  const [{ data: msRows }, { data: shiftRows }] = await Promise.all([
+    supabase.from('membership_stores').select('membership_id').eq('store_id', store.id),
+    // 当週の全シフト（他店舗スタッフによる店舗間ヘルプも含めて店舗単位で取得）
+    supabase
+      .from('shifts')
+      .select('id, profile_id, shift_date, start_time, end_time, kind, status, note')
+      .eq('store_id', store.id)
+      .gte('shift_date', weekStart)
+      .lte('shift_date', weekEnd)
+      .neq('status', 'cancelled')
+      .order('shift_date')
+      .order('start_time'),
+  ]);
   const membershipIds = (msRows ?? []).map((r) => r.membership_id);
   const { data: memberRows } = membershipIds.length
     ? await supabase
@@ -108,17 +120,6 @@ export default async function ShiftsPage({
     .sort((a, b) => a.name.localeCompare(b.name, 'ja'));
 
   const staffIds = staff.map((s) => s.id);
-
-  // 当週の全シフト（他店舗スタッフによる店舗間ヘルプも含めて店舗単位で取得）
-  const { data: shiftRows } = await supabase
-    .from('shifts')
-    .select('id, profile_id, shift_date, start_time, end_time, kind, status, note')
-    .eq('store_id', store.id)
-    .gte('shift_date', weekStart)
-    .lte('shift_date', weekEnd)
-    .neq('status', 'cancelled')
-    .order('shift_date')
-    .order('start_time');
 
   // 当店ロースター外のプロフィール = 店舗間ヘルプで入っているスタッフ
   const helperIds = [...new Set((shiftRows ?? []).map((r) => r.profile_id))].filter((id) => !staffIds.includes(id));
@@ -213,13 +214,35 @@ export default async function ShiftsPage({
   // 日別の予測売上 = 過去4週間の同曜日の daily_closings.sales_total 平均
   const lookbackStart = addDays(weekStart, -28);
   const lookbackEnd = addDays(weekStart, -1);
-  const { data: closingRows } = await supabase
-    .from('daily_closings')
-    .select('business_date, sales_total')
-    .eq('store_id', store.id)
-    .gte('business_date', lookbackStart)
-    .lte('business_date', lookbackEnd)
-    .in('status', ['closed', 'approved']);
+  const weekMonthStarts = [...new Set(weekDates.map((d) => `${d.date.slice(0, 7)}-01`))];
+  // 予測売上(closings)・予算(budgets)・必要人数(requirements)・営業時間(businessHours)は
+  // いずれも相互に独立の末端クエリ（取得後はローカル集計のみ）のため一括で並列取得する。
+  const [{ data: closingRows }, { data: budgetRows }, { data: requirementRows }, { data: businessHourRows }] =
+    await Promise.all([
+      supabase
+        .from('daily_closings')
+        .select('business_date, sales_total')
+        .eq('store_id', store.id)
+        .gte('business_date', lookbackStart)
+        .lte('business_date', lookbackEnd)
+        .in('status', ['closed', 'approved']),
+      supabase
+        .from('budgets')
+        .select('store_id, month, sales_budget, labor_rate_target')
+        .eq('organization_id', ctx.organizationId)
+        .in('month', weekMonthStarts)
+        .or(`store_id.eq.${store.id},store_id.is.null`),
+      supabase
+        .from('shift_requirements')
+        .select('*')
+        .eq('store_id', store.id)
+        .order('day_of_week')
+        .order('time_from'),
+      supabase
+        .from('business_hours')
+        .select('day_of_week, open_time, close_time, is_closed')
+        .eq('store_id', store.id),
+    ]);
   const salesByWeekday = new Map<number, number[]>();
   for (const row of closingRows ?? []) {
     const wd = weekdayOf(row.business_date);
@@ -228,17 +251,9 @@ export default async function ShiftsPage({
     salesByWeekday.set(wd, list);
   }
 
-  // 人件費シミュレーター（予算比較）: 週内に月をまたぐ場合に備え、該当する月すべての予算を取得する。
+  // 人件費シミュレーター（予算比較）: 週内に月をまたぐ場合に備え、該当する月すべての予算を対象にする。
   // 店舗別予算(store_id=store.id)が優先。全社予算(store_id=null)しかない場合はそちらを使う。
-  const weekMonthStarts = [...new Set(weekDates.map((d) => `${d.date.slice(0, 7)}-01`))];
-  const { data: budgetRows } = weekMonthStarts.length
-    ? await supabase
-        .from('budgets')
-        .select('store_id, month, sales_budget, labor_rate_target')
-        .eq('organization_id', ctx.organizationId)
-        .in('month', weekMonthStarts)
-        .or(`store_id.eq.${store.id},store_id.is.null`)
-    : { data: [] };
+  // budgetRows / weekMonthStarts は上の並列ブロックで取得・算出済み。
   const budgetByMonth = new Map<string, { salesBudget: number; laborRateTarget: number | null }>();
   for (const monthStart of weekMonthStarts) {
     const candidates = (budgetRows ?? []).filter((b) => b.month === monthStart);
@@ -273,14 +288,7 @@ export default async function ShiftsPage({
     };
   });
 
-  // 時間帯別必要人数と、当週の不足チェック
-  const { data: requirementRows } = await supabase
-    .from('shift_requirements')
-    .select('*')
-    .eq('store_id', store.id)
-    .order('day_of_week')
-    .order('time_from');
-
+  // 時間帯別必要人数と、当週の不足チェック（requirementRows は上の並列ブロックで取得済み）
   const shortages: { date: string; label: string; timeFrom: string; timeTo: string; required: number; actual: number }[] = [];
   for (const req of requirementRows ?? []) {
     const matchDate = weekDates.find((d) => weekdayOf(d.date) === req.day_of_week);
@@ -367,11 +375,7 @@ export default async function ShiftsPage({
     .filter(([, minutes]) => minutes > WEEKLY_MINUTES_WARNING_THRESHOLD)
     .map(([profileId, minutes]) => ({ profileId, name: nameByStaffId.get(profileId) ?? '不明', minutes }));
 
-  // 営業時間外シフトチェック
-  const { data: businessHourRows } = await supabase
-    .from('business_hours')
-    .select('day_of_week, open_time, close_time, is_closed')
-    .eq('store_id', store.id);
+  // 営業時間外シフトチェック（businessHourRows は上の並列ブロックで取得済み）
   const businessHoursByWeekday = new Map((businessHourRows ?? []).map((r) => [r.day_of_week, r]));
   const outOfHoursWarnings: { date: string; label: string; name: string; startTime: string; endTime: string; reason: string }[] = [];
   for (const row of shiftRows ?? []) {

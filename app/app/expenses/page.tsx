@@ -39,28 +39,7 @@ export default async function ExpensesPage({
   const canApprove = can(ctx.role, 'cash.approve');
   const canWrite = can(ctx.role, 'cash.write');
 
-  const { data: accounts } = ctx.organizationId
-    ? await supabase
-        .from('expense_accounts')
-        .select('id, name')
-        .eq('organization_id', ctx.organizationId)
-        .eq('status', 'active')
-        .order('sort_order')
-    : { data: [] as { id: string; name: string }[] };
-
-  const { data: approvalRulesData } = await supabase
-    .from('approval_rules')
-    .select('target, min_amount, max_amount, approver_role, allow_self_approve')
-    .eq('organization_id', ctx.organizationId)
-    .eq('target', 'expense');
-  const approvalRules: ApprovalRuleLike[] = (approvalRulesData ?? []).map((r) => ({
-    target: r.target as ApprovalRuleLike['target'],
-    minAmount: r.min_amount as number,
-    maxAmount: r.max_amount as number | null,
-    approverRole: r.approver_role as ApprovalRuleLike['approverRole'],
-    allowSelfApprove: r.allow_self_approve as boolean,
-  }));
-
+  const monthStart = `${todayJst().slice(0, 7)}-01`;
   let query = supabase
     .from('expenses')
     .select(
@@ -72,7 +51,39 @@ export default async function ExpensesPage({
     .order('business_date', { ascending: false });
   if (accountFilter) query = query.eq('expense_account_id', accountFilter);
   if (statusFilter) query = query.eq('approval_status', statusFilter);
-  const { data: rows } = await query;
+
+  // 費目マスタ・承認ルール・経費一覧・当月合計は相互に独立のため並列取得する。
+  const [{ data: accounts }, { data: approvalRulesData }, { data: rows }, { data: monthRows }] = await Promise.all([
+    ctx.organizationId
+      ? supabase
+          .from('expense_accounts')
+          .select('id, name')
+          .eq('organization_id', ctx.organizationId)
+          .eq('status', 'active')
+          .order('sort_order')
+      : Promise.resolve({ data: [] as { id: string; name: string }[] }),
+    supabase
+      .from('approval_rules')
+      .select('target, min_amount, max_amount, approver_role, allow_self_approve')
+      .eq('organization_id', ctx.organizationId)
+      .eq('target', 'expense'),
+    query,
+    supabase
+      .from('expenses')
+      .select('amount, expense_accounts(id, name)')
+      .in('store_id', storeIds)
+      .eq('status', 'active')
+      .gte('business_date', monthStart)
+      .lte('business_date', todayJst()),
+  ]);
+
+  const approvalRules: ApprovalRuleLike[] = (approvalRulesData ?? []).map((r) => ({
+    target: r.target as ApprovalRuleLike['target'],
+    minAmount: r.min_amount as number,
+    maxAmount: r.max_amount as number | null,
+    approverRole: r.approver_role as ApprovalRuleLike['approverRole'],
+    allowSelfApprove: r.allow_self_approve as boolean,
+  }));
 
   // 会計連動: 経費→仕訳（source_type='expense', source_id=expenses.id）の対応を一覧表示用にまとめて取得
   const expenseIds = (rows ?? []).map((r) => r.id);
@@ -86,16 +97,6 @@ export default async function ExpensesPage({
       .in('source_id', expenseIds);
     journaledExpenseIds = new Set((journaled ?? []).map((j) => j.source_id as string));
   }
-
-  // 科目別当月合計
-  const monthStart = `${todayJst().slice(0, 7)}-01`;
-  const { data: monthRows } = await supabase
-    .from('expenses')
-    .select('amount, expense_accounts(id, name)')
-    .in('store_id', storeIds)
-    .eq('status', 'active')
-    .gte('business_date', monthStart)
-    .lte('business_date', todayJst());
   const monthTotals = new Map<string, number>();
   for (const r of monthRows ?? []) {
     const name = (r.expense_accounts as unknown as { id: string; name: string } | null)?.name ?? '未分類';

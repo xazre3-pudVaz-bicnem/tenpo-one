@@ -495,7 +495,8 @@ async function PettyTab({
 }) {
   const supabase = await createClient();
 
-  let query = supabase
+  // 小口一覧・費目・承認ルール・店舗設定・累計・立替一覧・実査履歴はすべて相互に独立のため並列取得する。
+  let pettyQuery = supabase
     .from('cash_transactions')
     .select('id, business_date, kind, amount, purpose, approval_status, expense_accounts(name), stores(name)')
     .in('store_id', storeIds)
@@ -503,21 +504,61 @@ async function PettyTab({
     .gte('business_date', from)
     .lte('business_date', to)
     .order('business_date', { ascending: false });
-  if (status) query = query.eq('approval_status', status);
-  const { data: rows } = await query;
+  if (status) pettyQuery = pettyQuery.eq('approval_status', status);
 
-  const { data: accounts } = await supabase
-    .from('expense_accounts')
-    .select('id, name')
-    .eq('organization_id', organizationId)
-    .eq('status', 'active')
-    .order('sort_order');
+  const [
+    { data: rows },
+    { data: accounts },
+    { data: approvalRulesData },
+    { data: settings },
+    { data: allTx },
+    { data: advanceRows },
+    { data: countRows },
+  ] = await Promise.all([
+    pettyQuery,
+    supabase
+      .from('expense_accounts')
+      .select('id, name')
+      .eq('organization_id', organizationId)
+      .eq('status', 'active')
+      .order('sort_order'),
+    supabase
+      .from('approval_rules')
+      .select('target, min_amount, max_amount, approver_role, allow_self_approve')
+      .eq('organization_id', organizationId)
+      .eq('target', 'petty_cash'),
+    // 開始残高（店舗設定）
+    supabase
+      .from('store_settings')
+      .select('petty_opening_balance')
+      .eq('store_id', defaultStoreId)
+      .maybeSingle(),
+    // 理論残高・立替残高は運用開始からの累計で計算する（期間絞込の影響を受けない）
+    supabase
+      .from('cash_transactions')
+      .select('kind, amount')
+      .eq('store_id', defaultStoreId)
+      .in('kind', PETTY_KINDS)
+      .eq('approval_status', 'approved'),
+    // 精算ダイアログ用：承認済みの立替一覧（厳密な消込は行わないため参考表示）
+    supabase
+      .from('cash_transactions')
+      .select('id, purpose, amount, business_date')
+      .eq('store_id', defaultStoreId)
+      .eq('kind', 'petty_advance')
+      .eq('approval_status', 'approved')
+      .order('business_date', { ascending: false })
+      .limit(50),
+    // 実査履歴
+    supabase
+      .from('petty_cash_counts')
+      .select('id, count_date, expected_amount, counted_amount, difference, status')
+      .in('store_id', storeIds)
+      .gte('count_date', from)
+      .lte('count_date', to)
+      .order('count_date', { ascending: false }),
+  ]);
 
-  const { data: approvalRulesData } = await supabase
-    .from('approval_rules')
-    .select('target, min_amount, max_amount, approver_role, allow_self_approve')
-    .eq('organization_id', organizationId)
-    .eq('target', 'petty_cash');
   const approvalRules: ApprovalRuleLike[] = (approvalRulesData ?? []).map((r) => ({
     target: r.target as ApprovalRuleLike['target'],
     minAmount: r.min_amount as number,
@@ -525,22 +566,7 @@ async function PettyTab({
     approverRole: r.approver_role as ApprovalRuleLike['approverRole'],
     allowSelfApprove: r.allow_self_approve as boolean,
   }));
-
-  // 開始残高（店舗設定）
-  const { data: settings } = await supabase
-    .from('store_settings')
-    .select('petty_opening_balance')
-    .eq('store_id', defaultStoreId)
-    .maybeSingle();
   const openingBalance = settings?.petty_opening_balance ?? 0;
-
-  // 理論残高・立替残高は運用開始からの累計で計算する（期間絞込の影響を受けない）
-  const { data: allTx } = await supabase
-    .from('cash_transactions')
-    .select('kind, amount')
-    .eq('store_id', defaultStoreId)
-    .in('kind', PETTY_KINDS)
-    .eq('approval_status', 'approved');
   const sumOf = (kind: string) => (allTx ?? []).filter((t) => t.kind === kind).reduce((a, t) => a + t.amount, 0);
   const totalIn = sumOf('petty_in');
   const totalOut = sumOf('petty_out');
@@ -548,31 +574,12 @@ async function PettyTab({
   const totalAdvance = sumOf('petty_advance');
   const theoreticalBalance = openingBalance + totalIn - totalOut - totalSettlement;
   const advanceBalance = totalAdvance - totalSettlement;
-
-  // 精算ダイアログ用：承認済みの立替一覧（厳密な消込は行わないため参考表示）
-  const { data: advanceRows } = await supabase
-    .from('cash_transactions')
-    .select('id, purpose, amount, business_date')
-    .eq('store_id', defaultStoreId)
-    .eq('kind', 'petty_advance')
-    .eq('approval_status', 'approved')
-    .order('business_date', { ascending: false })
-    .limit(50);
   const advances = (advanceRows ?? []).map((a) => ({
     id: a.id as string,
     purpose: a.purpose as string | null,
     amount: a.amount as number,
     businessDate: a.business_date as string,
   }));
-
-  // 実査履歴
-  const { data: countRows } = await supabase
-    .from('petty_cash_counts')
-    .select('id, count_date, expected_amount, counted_amount, difference, status')
-    .in('store_id', storeIds)
-    .gte('count_date', from)
-    .lte('count_date', to)
-    .order('count_date', { ascending: false });
 
   return (
     <div className="space-y-5">

@@ -65,20 +65,17 @@ export default async function InvoicesPage({
   const canApprove = can(ctx.role, 'invoices.approve');
   const today = todayJst();
 
-  const { data: vendorsData } = await supabase
-    .from('vendors')
-    .select('id, name')
-    .eq('organization_id', ctx.organizationId)
-    .eq('status', 'active')
-    .order('name');
+  // 取引先と費目マスタは独立のため並列取得する。
+  const [{ data: vendorsData }, { data: accountsData }] = await Promise.all([
+    supabase.from('vendors').select('id, name').eq('organization_id', ctx.organizationId).eq('status', 'active').order('name'),
+    supabase
+      .from('expense_accounts')
+      .select('id, name')
+      .eq('organization_id', ctx.organizationId)
+      .eq('status', 'active')
+      .order('sort_order'),
+  ]);
   const vendors = vendorsData ?? [];
-
-  const { data: accountsData } = await supabase
-    .from('expense_accounts')
-    .select('id, name')
-    .eq('organization_id', ctx.organizationId)
-    .eq('status', 'active')
-    .order('sort_order');
   const accounts = accountsData ?? [];
 
   let invoiceRows: InvoiceRow[] = [];

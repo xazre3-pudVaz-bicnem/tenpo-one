@@ -122,18 +122,21 @@ async function RulesTab({
   storeNameById: Map<string, string>;
 }) {
   const supabase = await createClient();
-  const { data: rules } = await supabase
-    .from('payroll_rules')
-    .select('*')
-    .eq('organization_id', organizationId)
-    .eq('status', 'active')
-    .order('created_at', { ascending: false });
-  const { data: commissionRules } = await supabase
-    .from('commission_rules')
-    .select('*')
-    .eq('organization_id', organizationId)
-    .eq('status', 'active')
-    .order('created_at', { ascending: false });
+  // 給与ルール(rules)と歩合ルール(commissionRules)は独立のため並列取得する。
+  const [{ data: rules }, { data: commissionRules }] = await Promise.all([
+    supabase
+      .from('payroll_rules')
+      .select('*')
+      .eq('organization_id', organizationId)
+      .eq('status', 'active')
+      .order('created_at', { ascending: false }),
+    supabase
+      .from('commission_rules')
+      .select('*')
+      .eq('organization_id', organizationId)
+      .eq('status', 'active')
+      .order('created_at', { ascending: false }),
+  ]);
 
   const PAY_TYPE_LABEL: Record<string, string> = { monthly: '月給', hourly: '時給', daily: '日給' };
   const METHOD_LABEL: Record<string, string> = { fixed: '固定額', rate: '料率', tiered: '段階料率' };
