@@ -19,6 +19,9 @@ export async function updateBookingSettings(input: {
   maxPartySize: number;
   cancelDeadlineHours: number;
   cleaningBufferMinutes: number;
+  bookingPhotoUrl: string;
+  bookingNotes: string;
+  cancellationPolicy: string;
 }): Promise<ActionResult> {
   const ctx = await requirePermission('store.settings');
   if (!ctx.stores.some((s) => s.id === input.storeId)) {
@@ -36,6 +39,11 @@ export async function updateBookingSettings(input: {
   if (input.cleaningBufferMinutes < 0 || input.cleaningBufferMinutes > 120) {
     return { error: '清掃バッファは0〜120分で指定してください' };
   }
+  const photoUrl = input.bookingPhotoUrl.trim();
+  // 写真URLは同一オリジンの絶対パス（/...）またはhttpsのみ許可（javascript:等を排除）
+  if (photoUrl && !/^\/(?!\/)/.test(photoUrl) && !/^https:\/\//i.test(photoUrl)) {
+    return { error: '写真URLは「/」で始まるパスか https:// で始まるURLを指定してください' };
+  }
 
   const supabase = await createClient();
   const { error } = await supabase.from('store_settings').upsert(
@@ -49,6 +57,9 @@ export async function updateBookingSettings(input: {
       max_party_size: input.maxPartySize,
       cancel_deadline_hours: input.cancelDeadlineHours,
       cleaning_buffer_minutes: input.cleaningBufferMinutes,
+      booking_photo_url: photoUrl || null,
+      booking_notes: input.bookingNotes.trim() || null,
+      cancellation_policy: input.cancellationPolicy.trim() || null,
       updated_by: ctx.userId,
     },
     { onConflict: 'store_id' }

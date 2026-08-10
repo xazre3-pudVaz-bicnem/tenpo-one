@@ -3578,6 +3578,8 @@ export type Database = {
           allergy_info: string | null
           category_id: string | null
           cost: number | null
+          course_max_party: number | null
+          course_min_party: number | null
           created_at: string
           created_by: string | null
           description: string | null
@@ -3605,6 +3607,8 @@ export type Database = {
           allergy_info?: string | null
           category_id?: string | null
           cost?: number | null
+          course_max_party?: number | null
+          course_min_party?: number | null
           created_at?: string
           created_by?: string | null
           description?: string | null
@@ -3632,6 +3636,8 @@ export type Database = {
           allergy_info?: string | null
           category_id?: string | null
           cost?: number | null
+          course_max_party?: number | null
+          course_min_party?: number | null
           created_at?: string
           created_by?: string | null
           description?: string | null
@@ -6698,11 +6704,14 @@ export type Database = {
           attendance_settings: Json
           booking_cutoff_minutes: number
           booking_deposit_amount: number
+          booking_notes: string | null
           booking_payment_mode: string
+          booking_photo_url: string | null
           booking_window_days: number
           business_day_start_hour: number
           cancel_deadline_hours: number
           cancellation_fee_policy: Json
+          cancellation_policy: string | null
           cleaning_buffer_minutes: number
           created_at: string
           created_by: string | null
@@ -6729,11 +6738,14 @@ export type Database = {
           attendance_settings?: Json
           booking_cutoff_minutes?: number
           booking_deposit_amount?: number
+          booking_notes?: string | null
           booking_payment_mode?: string
+          booking_photo_url?: string | null
           booking_window_days?: number
           business_day_start_hour?: number
           cancel_deadline_hours?: number
           cancellation_fee_policy?: Json
+          cancellation_policy?: string | null
           cleaning_buffer_minutes?: number
           created_at?: string
           created_by?: string | null
@@ -6760,11 +6772,14 @@ export type Database = {
           attendance_settings?: Json
           booking_cutoff_minutes?: number
           booking_deposit_amount?: number
+          booking_notes?: string | null
           booking_payment_mode?: string
+          booking_photo_url?: string | null
           booking_window_days?: number
           business_day_start_hour?: number
           cancel_deadline_hours?: number
           cancellation_fee_policy?: Json
+          cancellation_policy?: string | null
           cleaning_buffer_minutes?: number
           created_at?: string
           created_by?: string | null

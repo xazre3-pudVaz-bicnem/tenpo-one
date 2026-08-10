@@ -6,7 +6,7 @@ import { Loader2, Minus, Plus, Check } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
 import { yen, todayJst } from '@/lib/format';
-import { bookingErrorMessage, type BookingStore, type BookingSlot } from './types';
+import { bookingErrorMessage, type BookingStore, type BookingSlot, type BookingCourse } from './types';
 import { createBookingCheckout } from '@/app/(public)/booking-payment-actions';
 import { createPublicReservation } from '@/app/(public)/booking-actions';
 
@@ -99,6 +99,23 @@ export function BookingWizard({ store }: { store: BookingStore }) {
   const maxDate = addDaysJst(store.booking_window_days);
   const partyValid = partySize >= 1 && partySize <= store.max_party_size;
   const visibleSlots = partyValid ? slots : [];
+
+  // コースの利用人数条件（任意）に現在の人数が合うか
+  const courseFits = (c: BookingCourse) =>
+    (c.min_party == null || partySize >= c.min_party) && (c.max_party == null || partySize <= c.max_party);
+  const coursePartyLabel = (c: BookingCourse) => {
+    if (c.min_party != null && c.max_party != null) return `${c.min_party}〜${c.max_party}名`;
+    if (c.min_party != null) return `${c.min_party}名〜`;
+    if (c.max_party != null) return `〜${c.max_party}名`;
+    return '';
+  };
+  // 人数変更で選択中コースが条件外になったら選択を解除する
+  useEffect(() => {
+    if (!courseId) return;
+    const c = store.courses.find((x) => x.id === courseId);
+    if (c && !courseFits(c)) setCourseId('');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [partySize]);
 
   useEffect(() => {
     if (!partyValid) return;
@@ -307,12 +324,21 @@ export function BookingWizard({ store }: { store: BookingStore }) {
                 className="h-11 w-full rounded-lg border border-gray-300 px-3 text-sm"
               >
                 <option value="">選択しない</option>
-                {store.courses.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}（{yen(c.price)}）
-                  </option>
-                ))}
+                {store.courses.map((c) => {
+                  const fits = courseFits(c);
+                  const partyLabel = coursePartyLabel(c);
+                  return (
+                    <option key={c.id} value={c.id} disabled={!fits}>
+                      {c.name}（{yen(c.price)}）{partyLabel && `／${partyLabel}`}{!fits ? '（人数対象外）' : ''}
+                    </option>
+                  );
+                })}
               </select>
+              {courseId &&
+                (() => {
+                  const c = store.courses.find((x) => x.id === courseId);
+                  return c?.description ? <p className="mt-1.5 text-xs text-gray-500">{c.description}</p> : null;
+                })()}
             </div>
           )}
 

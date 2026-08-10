@@ -16,6 +16,9 @@ export interface BookingSettingsData {
   maxPartySize: number;
   cancelDeadlineHours: number;
   cleaningBufferMinutes: number;
+  bookingPhotoUrl: string;
+  bookingNotes: string;
+  cancellationPolicy: string;
 }
 
 export function BookingSettingsForm({ initial }: { initial: BookingSettingsData }) {
@@ -121,6 +124,50 @@ export function BookingSettingsForm({ initial }: { initial: BookingSettingsData 
           <p className="mt-1 text-xs text-gray-500">
             予約の間に清掃時間を確保します。空席判定で滞在時間+バッファが占有扱いになります。
           </p>
+        </div>
+
+        <div className="border-t border-gray-100 pt-4">
+          <p className="mb-3 text-sm font-semibold text-navy">公開予約ページの表示内容</p>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="photo-url">店舗写真URL</Label>
+              <Input
+                id="photo-url"
+                type="text"
+                placeholder="/store-photo.jpg または https://..."
+                value={form.bookingPhotoUrl}
+                onChange={(e) => set('bookingPhotoUrl', e.target.value)}
+              />
+              <p className="mt-1 text-xs text-gray-500">
+                公開予約ページ上部に表示します。同一サイトのパス（/…）または https のURLを指定してください。
+              </p>
+            </div>
+            <div>
+              <Label htmlFor="booking-notes">ご予約時の注意事項</Label>
+              <textarea
+                id="booking-notes"
+                rows={3}
+                value={form.bookingNotes}
+                onChange={(e) => set('bookingNotes', e.target.value)}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                placeholder="例：コースは3日前までのご予約制です。お子様連れの場合は事前にご相談ください。"
+              />
+            </div>
+            <div>
+              <Label htmlFor="cancel-policy">キャンセルポリシー</Label>
+              <textarea
+                id="cancel-policy"
+                rows={3}
+                value={form.cancellationPolicy}
+                onChange={(e) => set('cancellationPolicy', e.target.value)}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                placeholder="例：前日以降のキャンセルはご連絡をお願いします。無断キャンセルはご遠慮ください。"
+              />
+              <p className="mt-1 text-xs text-gray-500">
+                キャンセル料の自動請求は行いません。ポリシーの明示のみ表示します。
+              </p>
+            </div>
+          </div>
         </div>
 
         <FieldError message={error ?? undefined} />

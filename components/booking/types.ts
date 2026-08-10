@@ -14,6 +14,8 @@ export interface BookingCourse {
   price: number;
   description: string | null;
   duration_minutes: number | null;
+  min_party: number | null;
+  max_party: number | null;
 }
 
 export interface BookingStore {
@@ -23,6 +25,9 @@ export interface BookingStore {
   address: string | null;
   phone: string | null;
   description: string | null;
+  photo_url: string | null;
+  booking_notes: string | null;
+  cancellation_policy: string | null;
   max_party_size: number;
   booking_window_days: number;
   slot_minutes: number;
@@ -65,8 +70,12 @@ const ERROR_MESSAGES: Record<string, string> = {
   STORE_NOT_FOUND: '店舗情報が見つかりませんでした。',
   RATE_LIMITED: '短時間に複数回のご予約申込みがありました。しばらく経ってから再度お試しください。',
   SLOT_UNAVAILABLE: '選択された時間帯は満席になりました。お手数ですが別の時間をお選びください。',
+  PARTY_TOO_LARGE: 'ご予約可能な人数を超えています。大人数のご予約はお電話にてお問い合わせください。',
+  COURSE_PARTY_INVALID: '選択されたコースのご利用人数条件に合いません。人数またはコースをご確認ください。',
+  COURSE_NOT_FOUND: '選択されたコースがご利用いただけません。別のコースをお選びください。',
   NOT_FOUND: '予約コードまたは電話番号が一致しません。ご確認のうえ再度お試しください。',
   NOT_CANCELLABLE: 'この予約はすでにキャンセルまたは変更ができない状態です。',
+  CANCEL_DEADLINE_PASSED: 'キャンセル受付期限を過ぎています。お手数ですが店舗へお電話ください。',
 };
 
 /** RPC のエラーメッセージ（Postgres RAISE EXCEPTION の文言）を日本語表示に変換する */
