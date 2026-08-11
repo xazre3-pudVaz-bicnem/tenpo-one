@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 
 const ITEMS = [
   { href: '/admin/organizations', label: '企業' },
+  { href: '/admin/tenants', label: '導入店舗' },
   { href: '/admin/stores', label: '店舗' },
   { href: '/admin/users', label: 'ユーザー' },
   { href: '/admin/plans', label: 'プラン' },

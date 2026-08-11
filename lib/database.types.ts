@@ -6698,6 +6698,135 @@ export type Database = {
           },
         ]
       }
+      store_hardware: {
+        Row: {
+          category: string
+          connection: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          ip_address: string | null
+          model: string | null
+          note: string | null
+          organization_id: string
+          provider: string | null
+          status: string
+          store_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          category: string
+          connection?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          ip_address?: string | null
+          model?: string | null
+          note?: string | null
+          organization_id: string
+          provider?: string | null
+          status?: string
+          store_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          category?: string
+          connection?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          ip_address?: string | null
+          model?: string | null
+          note?: string | null
+          organization_id?: string
+          provider?: string | null
+          status?: string
+          store_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "store_hardware_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "store_hardware_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      store_onboarding: {
+        Row: {
+          checklist: Json
+          created_at: string
+          created_by: string | null
+          enabled_modules: string[]
+          environment: string
+          go_live_at: string | null
+          go_live_by: string | null
+          opened_on: string | null
+          organization_id: string
+          stage: string
+          store_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          checklist?: Json
+          created_at?: string
+          created_by?: string | null
+          enabled_modules?: string[]
+          environment?: string
+          go_live_at?: string | null
+          go_live_by?: string | null
+          opened_on?: string | null
+          organization_id: string
+          stage?: string
+          store_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          checklist?: Json
+          created_at?: string
+          created_by?: string | null
+          enabled_modules?: string[]
+          environment?: string
+          go_live_at?: string | null
+          go_live_by?: string | null
+          opened_on?: string | null
+          organization_id?: string
+          stage?: string
+          store_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "store_onboarding_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "store_onboarding_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: true
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       store_settings: {
         Row: {
           allow_negative_stock: boolean
@@ -7107,6 +7236,48 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tenant_support_notes: {
+        Row: {
+          author_id: string | null
+          body: string
+          created_at: string
+          id: string
+          organization_id: string
+          store_id: string | null
+        }
+        Insert: {
+          author_id?: string | null
+          body: string
+          created_at?: string
+          id?: string
+          organization_id: string
+          store_id?: string | null
+        }
+        Update: {
+          author_id?: string | null
+          body?: string
+          created_at?: string
+          id?: string
+          organization_id?: string
+          store_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_support_notes_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tenant_support_notes_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
             referencedColumns: ["id"]
           },
         ]

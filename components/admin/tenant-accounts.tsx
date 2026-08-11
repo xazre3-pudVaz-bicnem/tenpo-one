@@ -1,0 +1,153 @@
+'use client';
+
+import { useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
+import { UserPlus, KeyRound, Ban, RotateCcw, Copy, Loader2 } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Dialog } from '@/components/ui/dialog';
+import { Input, Label, Select, FieldError } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { useToast } from '@/components/ui/toast';
+import { TableWrap, Table, THead, TBody, Tr, Th, Td } from '@/components/ui/table';
+import { issueStoreOwner, resetUserPassword, setMembershipStatus } from '@/app/admin/tenants/actions';
+import { ROLES, ROLE_LABELS, type Role } from '@/lib/permissions';
+
+interface Member {
+  membershipId: string;
+  profileId: string;
+  displayName: string;
+  role: string;
+  status: string;
+  email: string | null;
+  lastSignInAt: string | null;
+}
+
+export function TenantAccounts({ storeId, members }: { storeId: string; members: Member[] }) {
+  const router = useRouter();
+  const { toast } = useToast();
+  const [pending, startTransition] = useTransition();
+  const [issueOpen, setIssueOpen] = useState(false);
+  const [form, setForm] = useState({ email: '', displayName: '', role: 'org_owner' as string });
+  const [error, setError] = useState<string | null>(null);
+  const [oneTime, setOneTime] = useState<{ label: string; email?: string; password: string } | null>(null);
+
+  const run = (fn: () => Promise<unknown>, ok: string) =>
+    startTransition(async () => {
+      try { await fn(); toast(ok); router.refresh(); }
+      catch (e) { toast(e instanceof Error ? e.message : '操作に失敗しました', 'error'); }
+    });
+
+  const issue = () => {
+    setError(null);
+    startTransition(async () => {
+      try {
+        const res = await issueStoreOwner({ storeId, email: form.email, displayName: form.displayName, role: form.role });
+        setOneTime({ label: 'アカウントを発行しました', email: res.email, password: res.password });
+        setIssueOpen(false);
+        setForm({ email: '', displayName: '', role: 'org_owner' });
+        router.refresh();
+      } catch (e) { setError(e instanceof Error ? e.message : '発行に失敗しました'); }
+    });
+  };
+
+  const reset = (profileId: string) =>
+    startTransition(async () => {
+      try {
+        const res = await resetUserPassword({ storeId, profileId });
+        setOneTime({ label: 'パスワードを再発行しました', password: res.password });
+      } catch (e) { toast(e instanceof Error ? e.message : '再発行に失敗しました', 'error'); }
+    });
+
+  return (
+    <Card>
+      <CardHeader className="flex items-center justify-between">
+        <CardTitle>アカウント</CardTitle>
+        <Button size="sm" variant="secondary" onClick={() => { setError(null); setIssueOpen(true); }}>
+          <UserPlus className="h-4 w-4" />アカウント発行
+        </Button>
+      </CardHeader>
+      <CardContent>
+        {members.length === 0 ? (
+          <p className="text-sm text-amber-600">Ownerアカウント未設定。「アカウント発行」からOwnerを作成してください。</p>
+        ) : (
+          <TableWrap>
+            <Table>
+              <THead>
+                <Tr><Th>氏名</Th><Th>メール</Th><Th>ロール</Th><Th>状態</Th><Th>最終ログイン</Th><Th className="text-right">操作</Th></Tr>
+              </THead>
+              <TBody>
+                {members.map((m) => (
+                  <Tr key={m.membershipId}>
+                    <Td className="font-medium text-navy">{m.displayName}</Td>
+                    <Td className="text-gray-600">{m.email ?? '—'}</Td>
+                    <Td>{ROLE_LABELS[m.role as Role] ?? m.role}</Td>
+                    <Td>
+                      <Badge tone={m.status === 'active' ? 'success' : m.status === 'invited' ? 'primary' : 'danger'}>
+                        {m.status === 'active' ? '有効' : m.status === 'invited' ? '招待中' : '停止'}
+                      </Badge>
+                    </Td>
+                    <Td className="whitespace-nowrap text-xs text-gray-500">{m.lastSignInAt ? new Date(m.lastSignInAt).toLocaleString('ja-JP') : '未ログイン'}</Td>
+                    <Td className="text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <button type="button" disabled={pending} onClick={() => reset(m.profileId)} title="パスワード再発行" className="rounded p-1 text-gray-500 hover:bg-gray-100 disabled:opacity-50">
+                          <KeyRound className="h-4 w-4" />
+                        </button>
+                        {m.status === 'suspended' ? (
+                          <button type="button" disabled={pending} onClick={() => run(() => setMembershipStatus({ storeId, membershipId: m.membershipId, status: 'active' }), '再開しました')} title="再開" className="rounded p-1 text-emerald-600 hover:bg-gray-100 disabled:opacity-50">
+                            <RotateCcw className="h-4 w-4" />
+                          </button>
+                        ) : (
+                          <button type="button" disabled={pending} onClick={() => run(() => setMembershipStatus({ storeId, membershipId: m.membershipId, status: 'suspended' }), '停止しました')} title="停止" className="rounded p-1 text-danger hover:bg-gray-100 disabled:opacity-50">
+                            <Ban className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
+                    </Td>
+                  </Tr>
+                ))}
+              </TBody>
+            </Table>
+          </TableWrap>
+        )}
+      </CardContent>
+
+      {/* 発行ダイアログ */}
+      <Dialog open={issueOpen} onClose={() => setIssueOpen(false)} title="アカウント発行">
+        <div className="space-y-3">
+          <div><Label htmlFor="ta-email">メールアドレス</Label><Input id="ta-email" type="email" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} /></div>
+          <div><Label htmlFor="ta-name">氏名</Label><Input id="ta-name" value={form.displayName} onChange={(e) => setForm((f) => ({ ...f, displayName: e.target.value }))} /></div>
+          <div>
+            <Label htmlFor="ta-role">ロール</Label>
+            <Select id="ta-role" value={form.role} onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))}>
+              {ROLES.map((r) => (<option key={r} value={r}>{ROLE_LABELS[r]}</option>))}
+            </Select>
+          </div>
+          <FieldError message={error ?? undefined} />
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => setIssueOpen(false)} disabled={pending}>キャンセル</Button>
+            <Button onClick={issue} disabled={pending || !form.email.trim()}>{pending && <Loader2 className="h-4 w-4 animate-spin" />}発行する</Button>
+          </div>
+        </div>
+      </Dialog>
+
+      {/* 一度だけ表示するパスワード */}
+      <Dialog open={!!oneTime} onClose={() => setOneTime(null)} title="初期パスワード">
+        {oneTime && (
+          <div className="space-y-3 text-sm">
+            <p className="font-semibold text-navy">{oneTime.label}</p>
+            {oneTime.email && <p>メール：<span className="font-mono">{oneTime.email}</span></p>}
+            <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
+              <code className="font-mono text-amber-900">{oneTime.password}</code>
+              <button type="button" onClick={() => navigator.clipboard?.writeText(oneTime.password)} className="inline-flex items-center gap-1 text-xs text-amber-700 hover:underline">
+                <Copy className="h-3.5 w-3.5" />コピー
+              </button>
+            </div>
+            <p className="text-xs text-gray-500">この画面でしか表示されません。安全な方法で共有し、初回ログイン後の変更を案内してください。</p>
+            <div className="flex justify-end"><Button onClick={() => setOneTime(null)}>閉じる</Button></div>
+          </div>
+        )}
+      </Dialog>
+    </Card>
+  );
+}
