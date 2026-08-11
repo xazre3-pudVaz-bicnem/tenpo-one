@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { AlertTriangle } from 'lucide-react';
 import { requireCypressAdmin } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { formatDate } from '@/lib/format';
@@ -77,6 +78,19 @@ export default async function TenantsPage({
     total: allRes.count ?? 0,
   };
 
+  // Go Live未完了アラート: 本番/パイロットで未稼働(live/cancelled以外)の店舗
+  const { data: attentionRows } = await admin
+    .from('store_onboarding')
+    .select('store_id, environment, stage, created_at, stores!inner(name, organizations(name))')
+    .in('environment', ['production', 'pilot'])
+    .not('stage', 'in', '(live,cancelled)')
+    .order('created_at', { ascending: true })
+    .limit(50);
+  const attention = (attentionRows ?? []) as unknown as {
+    store_id: string; environment: Environment; stage: Stage; created_at: string;
+    stores: { name: string; organizations: { name: string } | null } | null;
+  }[];
+
   // 会社名検索のため、名称一致する org id を先に取得
   let orgIds: string[] = [];
   if (q) {
@@ -131,6 +145,32 @@ export default async function TenantsPage({
         <SummaryTile label="本番稼働中(live)" value={summary.live} tone="success" />
         <SummaryTile label="パイロット" value={summary.pilot} tone="warning" />
       </div>
+
+      {/* Go Live 未完了アラート */}
+      {attention.length > 0 && (
+        <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
+          <p className="flex items-center gap-1.5 text-sm font-bold text-amber-800">
+            <AlertTriangle className="h-4 w-4" />
+            Go Live 未完了（本番・パイロットで未稼働）：{attention.length}店舗
+          </p>
+          <ul className="mt-2 space-y-1">
+            {attention.slice(0, 8).map((a) => (
+              <li key={a.store_id} className="flex items-center justify-between gap-2 text-xs">
+                <Link href={`/admin/tenants/${a.store_id}`} className="font-medium text-amber-900 hover:underline">
+                  {a.stores?.name ?? '—'}
+                  <span className="ml-1 text-amber-700/70">（{a.stores?.organizations?.name ?? ''}）</span>
+                </Link>
+                <span className="flex items-center gap-2 text-amber-700">
+                  <Badge tone={ENV_TONE[a.environment]}>{ENVIRONMENT_LABELS[a.environment]}</Badge>
+                  <Badge tone={STAGE_TONE[a.stage]}>{STAGE_LABELS[a.stage]}</Badge>
+                </span>
+              </li>
+            ))}
+          </ul>
+          {attention.length > 8 && <p className="mt-1 text-xs text-amber-700/70">ほか {attention.length - 8} 店舗</p>}
+          <p className="mt-2 text-xs text-amber-700/80">各店舗の詳細で導入チェックリストを確認し、Critical項目を満たすと Go Live 承認ができます。</p>
+        </div>
+      )}
 
       <TenantFilters
         environments={ENVIRONMENTS.map((e) => ({ value: e, label: ENVIRONMENT_LABELS[e] }))}
