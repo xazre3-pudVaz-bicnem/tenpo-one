@@ -3578,14 +3578,18 @@ export type Database = {
           allergy_info: string | null
           category_id: string | null
           cost: number | null
+          course_includes_ayce: boolean | null
+          course_includes_drinks: boolean | null
           course_max_party: number | null
           course_min_party: number | null
+          course_notes: string | null
           created_at: string
           created_by: string | null
           description: string | null
           duration_minutes: number | null
           id: string
           image_path: string | null
+          imported_at: string | null
           is_recommended: boolean
           is_sold_out: boolean
           item_type: string
@@ -3593,9 +3597,13 @@ export type Database = {
           name_kana: string | null
           organization_id: string
           price: number
+          price_pending: boolean
           sell_end_time: string | null
           sell_start_time: string | null
           sort_order: number
+          source: string | null
+          source_key: string | null
+          source_url: string | null
           status: string
           store_id: string | null
           takeout_price: number | null
@@ -3607,14 +3615,18 @@ export type Database = {
           allergy_info?: string | null
           category_id?: string | null
           cost?: number | null
+          course_includes_ayce?: boolean | null
+          course_includes_drinks?: boolean | null
           course_max_party?: number | null
           course_min_party?: number | null
+          course_notes?: string | null
           created_at?: string
           created_by?: string | null
           description?: string | null
           duration_minutes?: number | null
           id?: string
           image_path?: string | null
+          imported_at?: string | null
           is_recommended?: boolean
           is_sold_out?: boolean
           item_type?: string
@@ -3622,9 +3634,13 @@ export type Database = {
           name_kana?: string | null
           organization_id: string
           price?: number
+          price_pending?: boolean
           sell_end_time?: string | null
           sell_start_time?: string | null
           sort_order?: number
+          source?: string | null
+          source_key?: string | null
+          source_url?: string | null
           status?: string
           store_id?: string | null
           takeout_price?: number | null
@@ -3636,14 +3652,18 @@ export type Database = {
           allergy_info?: string | null
           category_id?: string | null
           cost?: number | null
+          course_includes_ayce?: boolean | null
+          course_includes_drinks?: boolean | null
           course_max_party?: number | null
           course_min_party?: number | null
+          course_notes?: string | null
           created_at?: string
           created_by?: string | null
           description?: string | null
           duration_minutes?: number | null
           id?: string
           image_path?: string | null
+          imported_at?: string | null
           is_recommended?: boolean
           is_sold_out?: boolean
           item_type?: string
@@ -3651,9 +3671,13 @@ export type Database = {
           name_kana?: string | null
           organization_id?: string
           price?: number
+          price_pending?: boolean
           sell_end_time?: string | null
           sell_start_time?: string | null
           sort_order?: number
+          source?: string | null
+          source_key?: string | null
+          source_url?: string | null
           status?: string
           store_id?: string | null
           takeout_price?: number | null
@@ -6842,6 +6866,7 @@ export type Database = {
           cancellation_fee_policy: Json
           cancellation_policy: string | null
           cleaning_buffer_minutes: number
+          course_enabled: boolean
           created_at: string
           created_by: string | null
           default_stay_minutes: number
@@ -6855,6 +6880,7 @@ export type Database = {
           receipt_footer: string | null
           receipt_header: string | null
           rounding: string
+          seat_only_enabled: boolean
           service_charge_rate: number
           settings: Json
           slot_minutes: number
@@ -6876,6 +6902,7 @@ export type Database = {
           cancellation_fee_policy?: Json
           cancellation_policy?: string | null
           cleaning_buffer_minutes?: number
+          course_enabled?: boolean
           created_at?: string
           created_by?: string | null
           default_stay_minutes?: number
@@ -6889,6 +6916,7 @@ export type Database = {
           receipt_footer?: string | null
           receipt_header?: string | null
           rounding?: string
+          seat_only_enabled?: boolean
           service_charge_rate?: number
           settings?: Json
           slot_minutes?: number
@@ -6910,6 +6938,7 @@ export type Database = {
           cancellation_fee_policy?: Json
           cancellation_policy?: string | null
           cleaning_buffer_minutes?: number
+          course_enabled?: boolean
           created_at?: string
           created_by?: string | null
           default_stay_minutes?: number
@@ -6923,6 +6952,7 @@ export type Database = {
           receipt_footer?: string | null
           receipt_header?: string | null
           rounding?: string
+          seat_only_enabled?: boolean
           service_charge_rate?: number
           settings?: Json
           slot_minutes?: number
