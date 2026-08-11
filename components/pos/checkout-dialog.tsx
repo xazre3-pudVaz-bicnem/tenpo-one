@@ -51,7 +51,7 @@ export interface PointsAvailability {
   pointValue: number;
 }
 
-const BASE_METHODS: CheckoutPayment['method'][] = ['cash', 'credit', 'qr', 'emoney', 'voucher', 'on_account', 'other'];
+const BASE_METHODS: CheckoutPayment['method'][] = ['cash', 'credit', 'qr', 'emoney', 'voucher', 'on_account', 'external', 'other'];
 
 /** 端末決済ポーリングの上限（60秒 ÷ 2秒間隔） */
 const TERMINAL_POLL_INTERVAL_MS = 2000;
@@ -559,6 +559,11 @@ export function CheckoutDialog({
               {METHOD_LABELS.points}
             </Button>
           </div>
+          {payments.some((p) => p.method === 'external') && (
+            <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
+              外部端末（stera JT-C60 等）で決済してください。端末で決済成功を確認してから「会計を確定」を押してください。
+            </p>
+          )}
         </div>
 
         {payments.length > 0 && (
