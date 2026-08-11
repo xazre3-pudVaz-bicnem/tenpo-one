@@ -21,7 +21,13 @@ export const metadata: Metadata = {
   description:
     '予約・POSレジ・売上管理・勤怠・給与・請求書・顧客管理を、ひとつのデータでつなぐ飲食店向けクラウド。TENPO ONEは店舗運営のすべてを1画面に統合します。',
   manifest: '/manifest.webmanifest',
-  icons: { icon: '/icon.svg', apple: '/icon-192.png' },
+  icons: {
+    icon: [
+      { url: '/favicon-32.png', sizes: '32x32', type: 'image/png' },
+      { url: '/icon-192.png', sizes: '192x192', type: 'image/png' },
+    ],
+    apple: '/apple-icon.png',
+  },
   ...(siteUrl
     ? { metadataBase: new URL(siteUrl) }
     : { robots: { index: false, follow: false } }),
