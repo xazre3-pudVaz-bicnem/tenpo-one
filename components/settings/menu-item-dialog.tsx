@@ -12,6 +12,7 @@ export interface MenuItemRow {
   id: string;
   categoryId: string | null;
   name: string;
+  nameEn: string;
   nameKana: string;
   description: string;
   itemType: string;
@@ -40,6 +41,7 @@ function emptyItem(categoryId: string | null): MenuItemRow {
     id: '',
     categoryId,
     name: '',
+    nameEn: '',
     nameKana: '',
     description: '',
     itemType: 'food',
@@ -90,6 +92,7 @@ export function MenuItemDialog({
         storeId,
         categoryId: form.categoryId,
         name: form.name,
+        nameEn: form.nameEn,
         nameKana: form.nameKana,
         description: form.description,
         itemType: form.itemType,
@@ -123,6 +126,10 @@ export function MenuItemDialog({
           <div>
             <Label htmlFor="item-kana">フリガナ</Label>
             <Input id="item-kana" value={form.nameKana} onChange={(e) => set('nameKana', e.target.value)} />
+          </div>
+          <div>
+            <Label htmlFor="item-name-en">英語名（任意）</Label>
+            <Input id="item-name-en" value={form.nameEn} onChange={(e) => set('nameEn', e.target.value)} placeholder="e.g. Picanha (Beef)" />
           </div>
         </div>
 

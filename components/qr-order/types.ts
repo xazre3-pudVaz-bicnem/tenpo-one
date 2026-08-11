@@ -12,6 +12,7 @@ export interface QrMenuModifier {
 export interface QrMenuItem {
   id: string;
   name: string;
+  name_en: string | null;
   description: string | null;
   price: number;
   is_sold_out: boolean;
@@ -25,6 +26,7 @@ export interface QrMenuItem {
 export interface QrMenuCategory {
   id: string;
   name: string;
+  name_en: string | null;
   color: string | null;
   items: QrMenuItem[];
 }

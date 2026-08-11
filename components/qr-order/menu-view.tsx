@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { yen } from '@/lib/format';
 import { Badge } from '@/components/ui/badge';
-import { useQrStrings } from './strings-context';
+import { useQrStrings, useQrLocale, localizedName } from './strings-context';
 import { isPublicImageUrl, type QrMenuCategory, type QrMenuItem } from './types';
 
 /** カテゴリタブの先頭に差し込む「おすすめ」擬似カテゴリのID */
@@ -18,12 +18,13 @@ export function MenuView({
   onSelectItem: (item: QrMenuItem) => void;
 }) {
   const qrStrings = useQrStrings();
+  const locale = useQrLocale();
   const recommendedItems = useMemo(() => categories.flatMap((c) => c.items.filter((i) => i.is_recommended)), [categories]);
 
   const tabs: QrMenuCategory[] = useMemo(() => {
     if (recommendedItems.length === 0) return categories;
     return [
-      { id: RECOMMENDED_TAB_ID, name: qrStrings.menu.recommendedCategoryName, color: '#CA8A04', items: recommendedItems },
+      { id: RECOMMENDED_TAB_ID, name: qrStrings.menu.recommendedCategoryName, name_en: null, color: '#CA8A04', items: recommendedItems },
       ...categories,
     ];
   }, [categories, recommendedItems, qrStrings.menu.recommendedCategoryName]);
@@ -49,7 +50,7 @@ export function MenuView({
             )}
             style={active?.id === c.id ? { backgroundColor: c.color ?? '#7B3FF2' } : undefined}
           >
-            {c.name}
+            {c.id === RECOMMENDED_TAB_ID ? c.name : localizedName(locale, c.name, c.name_en)}
           </button>
         ))}
       </div>
@@ -77,7 +78,7 @@ export function MenuView({
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-1.5">
                       <p className={cn('text-sm font-bold', item.is_sold_out ? 'text-gray-400' : 'text-navy')}>
-                        {item.name}
+                        {localizedName(locale, item.name, item.name_en)}
                       </p>
                       {item.is_recommended && <Badge tone="warning">{qrStrings.menu.recommendedBadge}</Badge>}
                     </div>

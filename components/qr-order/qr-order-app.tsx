@@ -117,7 +117,7 @@ export function QrOrderApp({
   };
 
   return (
-    <QrStringsProvider value={qrStrings}>
+    <QrStringsProvider locale={locale}>
     <div className="flex min-h-screen flex-col bg-surface">
       <div className="sticky top-0 z-30 bg-white shadow-sm">
         <div className="relative px-4 py-3 text-center">

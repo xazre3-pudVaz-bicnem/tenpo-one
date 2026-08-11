@@ -13,6 +13,7 @@ import { saveCategory, deleteCategory, type CategoryInput } from '@/app/app/sett
 export interface CategoryRow {
   id: string;
   name: string;
+  nameEn: string;
   color: string;
   sortOrder: number;
 }
@@ -21,7 +22,7 @@ export const CATEGORY_COLORS = [
   '#7B3FF2', '#EA580C', '#15803D', '#DC2626', '#2563EB', '#CA8A04', '#DB2777', '#0891B2',
 ];
 
-const EMPTY: Omit<CategoryInput, 'storeId'> = { name: '', color: CATEGORY_COLORS[0], sortOrder: 0 };
+const EMPTY: Omit<CategoryInput, 'storeId'> = { name: '', nameEn: '', color: CATEGORY_COLORS[0], sortOrder: 0 };
 
 export function CategoryPanel({ storeId, initial }: { storeId: string; initial: CategoryRow[] }) {
   const rows = initial;
@@ -42,7 +43,7 @@ export function CategoryPanel({ storeId, initial }: { storeId: string; initial: 
   };
   const openEdit = (row: CategoryRow) => {
     setEditingId(row.id);
-    setForm({ name: row.name, color: row.color, sortOrder: row.sortOrder });
+    setForm({ name: row.name, nameEn: row.nameEn ?? '', color: row.color, sortOrder: row.sortOrder });
     setError(null);
     setDialogOpen(true);
   };
@@ -116,6 +117,15 @@ export function CategoryPanel({ storeId, initial }: { storeId: string; initial: 
                 id="category-name"
                 value={form.name}
                 onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+              />
+            </div>
+            <div>
+              <Label htmlFor="category-name-en">英語名（任意）</Label>
+              <Input
+                id="category-name-en"
+                value={form.nameEn}
+                onChange={(e) => setForm((f) => ({ ...f, nameEn: e.target.value }))}
+                placeholder="e.g. Churrasco (Beef)"
               />
             </div>
             <div>

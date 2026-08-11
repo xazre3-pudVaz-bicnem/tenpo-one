@@ -6,7 +6,7 @@ import { Dialog } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Textarea, Label } from '@/components/ui/input';
 import { yen } from '@/lib/format';
-import { useQrStrings } from './strings-context';
+import { useQrStrings, useQrLocale, localizedName } from './strings-context';
 import { isPublicImageUrl, type QrMenuItem, type QrMenuModifier } from './types';
 
 /** メニュー商品をタップした際に開く、数量・オプション・メモ入力シート */
@@ -20,6 +20,8 @@ export function ItemSheet({
   onAdd: (quantity: number, memo: string, modifiers: QrMenuModifier[]) => void;
 }) {
   const qrStrings = useQrStrings();
+  const locale = useQrLocale();
+  const displayName = localizedName(locale, item.name, item.name_en);
   const [quantity, setQuantity] = useState(1);
   const [memo, setMemo] = useState('');
   const [selectedModifierIds, setSelectedModifierIds] = useState<string[]>([]);
@@ -32,13 +34,13 @@ export function ItemSheet({
   };
 
   return (
-    <Dialog open onClose={onClose} title={item.name}>
+    <Dialog open onClose={onClose} title={displayName}>
       <div className="space-y-4">
         {isPublicImageUrl(item.image_path) && (
           // eslint-disable-next-line @next/next/no-img-element -- 匿名向け公開URLのみ許可されるため next/image の最適化対象外
           <img
             src={item.image_path}
-            alt={qrStrings.itemSheet.imageAlt(item.name)}
+            alt={qrStrings.itemSheet.imageAlt(displayName)}
             className="h-40 w-full rounded-xl object-cover"
           />
         )}

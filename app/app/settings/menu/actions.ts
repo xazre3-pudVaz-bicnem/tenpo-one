@@ -14,6 +14,7 @@ export interface CategoryInput {
   id?: string;
   storeId: string;
   name: string;
+  nameEn: string;
   color: string;
   sortOrder: number;
 }
@@ -29,6 +30,7 @@ export async function saveCategory(input: CategoryInput): Promise<ActionResult> 
   const basePayload = {
     organization_id: ctx.organizationId,
     name,
+    name_en: input.nameEn.trim() || null,
     color: input.color,
     sort_order: input.sortOrder,
     updated_by: ctx.userId,
@@ -97,6 +99,7 @@ export interface MenuItemInput {
   storeId: string;
   categoryId: string | null;
   name: string;
+  nameEn: string;
   nameKana: string;
   description: string;
   itemType: string;
@@ -125,6 +128,7 @@ export async function saveMenuItem(input: MenuItemInput): Promise<ActionResult> 
     organization_id: ctx.organizationId,
     category_id: input.categoryId,
     name,
+    name_en: input.nameEn.trim() || null,
     name_kana: input.nameKana.trim() || null,
     description: input.description.trim() || null,
     item_type: input.itemType,

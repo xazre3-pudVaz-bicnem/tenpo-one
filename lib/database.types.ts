@@ -3426,6 +3426,7 @@ export type Database = {
           created_by: string | null
           id: string
           name: string
+          name_en: string | null
           organization_id: string
           sort_order: number
           station: string
@@ -3440,6 +3441,7 @@ export type Database = {
           created_by?: string | null
           id?: string
           name: string
+          name_en?: string | null
           organization_id: string
           sort_order?: number
           station?: string
@@ -3454,6 +3456,7 @@ export type Database = {
           created_by?: string | null
           id?: string
           name?: string
+          name_en?: string | null
           organization_id?: string
           sort_order?: number
           station?: string
@@ -3594,6 +3597,7 @@ export type Database = {
           is_sold_out: boolean
           item_type: string
           name: string
+          name_en: string | null
           name_kana: string | null
           organization_id: string
           price: number
@@ -3631,6 +3635,7 @@ export type Database = {
           is_sold_out?: boolean
           item_type?: string
           name: string
+          name_en?: string | null
           name_kana?: string | null
           organization_id: string
           price?: number
@@ -3668,6 +3673,7 @@ export type Database = {
           is_sold_out?: boolean
           item_type?: string
           name?: string
+          name_en?: string | null
           name_kana?: string | null
           organization_id?: string
           price?: number
