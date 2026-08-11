@@ -24,11 +24,14 @@ export function TableDialog({
   storeId,
   floors,
   editing,
+  nextSortOrder = 0,
   onClose,
 }: {
   storeId: string;
   floors: FloorRow[];
   editing: TableRow | null;
+  /** 新規追加時の既定の表示順。既存テーブル数を渡すことで末尾に採番し、全テーブルが0で並びが崩れるのを防ぐ。 */
+  nextSortOrder?: number;
   onClose: () => void;
 }) {
   const [form, setForm] = useState<TableRow>(
@@ -41,7 +44,7 @@ export function TableDialog({
       isPrivateRoom: false,
       isCounter: false,
       smokingAllowed: false,
-      sortOrder: 0,
+      sortOrder: nextSortOrder,
     }
   );
   const [error, setError] = useState<string | null>(null);

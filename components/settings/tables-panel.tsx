@@ -150,7 +150,13 @@ export function TablesPanel({
       )}
 
       {dialogOpen && (
-        <TableDialog storeId={storeId} floors={floors} editing={editing} onClose={() => setDialogOpen(false)} />
+        <TableDialog
+          storeId={storeId}
+          floors={floors}
+          editing={editing}
+          nextSortOrder={tables.length}
+          onClose={() => setDialogOpen(false)}
+        />
       )}
 
       {qrTarget && (

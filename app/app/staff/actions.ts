@@ -17,6 +17,11 @@ export interface InviteResult extends ActionResult {
   initialPassword?: string;
 }
 
+export interface ResetPasswordResult extends ActionResult {
+  /** サーバー側で再生成した新パスワード（再発行時に一度だけ呼び出し元へ返す。ログ・監査ログには残さない） */
+  newPassword?: string;
+}
+
 function isStoreScopedRole(role: Role): boolean {
   return !HQ_ROLES.includes(role);
 }
@@ -428,4 +433,59 @@ export async function setMemberStatus(input: {
 
   revalidatePath('/app/staff');
   return {};
+}
+
+/**
+ * スタッフのログインパスワードを再発行する。
+ * 招待時の初期パスワードを取りこぼした・忘れた場合に、オーナー／管理者が新パスワードを再生成して
+ * 本人へ手渡すための導線。メール送信は行わない（外部メールプロバイダ未接続のため）。
+ * 新パスワードはこのレスポンスでのみ一度だけ返し、監査ログ・サーバーログには一切残さない。
+ */
+export async function resetMemberPassword(input: {
+  membershipId: string;
+  profileId: string;
+}): Promise<ResetPasswordResult> {
+  const ctx = await requirePermission('staff.manage');
+
+  const supabase = await createClient();
+  const { data: membership } = await supabase
+    .from('memberships')
+    .select('id, role, profile_id')
+    .eq('id', input.membershipId)
+    .eq('organization_id', ctx.organizationId)
+    .maybeSingle();
+  if (!membership) return { error: '対象のスタッフが見つかりません' };
+  if (membership.profile_id !== input.profileId) {
+    return { error: '対象のスタッフが見つかりません' };
+  }
+  if (membership.profile_id === ctx.userId) {
+    return { error: '自分自身のパスワードはプロフィール設定から変更してください' };
+  }
+  if (outranks(ctx.role, membership.role as Role)) {
+    return { error: '自分より上位のロールのスタッフは変更できません' };
+  }
+  const scopeError = await assertManageableMemberStores(supabase, ctx, input.membershipId);
+  if (scopeError) return { error: scopeError };
+
+  const newPassword = generateInitialPassword();
+  const admin = createAdminClient();
+  const { error } = await admin.auth.admin.updateUserById(membership.profile_id, {
+    password: newPassword,
+  });
+  if (error) return { error: `パスワード再発行に失敗しました: ${error.message}` };
+
+  await supabase.rpc('log_audit', {
+    p_org: ctx.organizationId,
+    p_store: null,
+    p_action: 'staff.password_reset',
+    p_target_table: 'profiles',
+    p_target_id: input.profileId,
+    p_before: null,
+    p_after: null,
+    p_note: 'ログインパスワードを再発行しました（新パスワードは監査ログに残しません）',
+  });
+
+  revalidatePath('/app/staff');
+  // 新パスワードはこのレスポンスでのみ一度だけ返す（ログ・監査ログには残さない）。
+  return { newPassword };
 }

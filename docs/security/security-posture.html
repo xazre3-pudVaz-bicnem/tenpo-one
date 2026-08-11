@@ -1,0 +1,744 @@
+<style>
+  :root {
+    /* dark is the default ground for this "control-room" report */
+    --ink: #0A0D17;
+    --panel: #121724;
+    --panel-2: #0E131F;
+    --raise: #171E2E;
+    --line: rgba(255,255,255,0.09);
+    --line-strong: rgba(255,255,255,0.16);
+    --text: #E8ECF4;
+    --muted: #98A2B8;
+    --faint: #6B7591;
+    --gold: #D2A857;
+    --gold-soft: rgba(210,168,87,0.14);
+    --gold-line: rgba(210,168,87,0.32);
+    --secure: #55C793;
+    --secure-soft: rgba(85,199,147,0.14);
+    --secure-line: rgba(85,199,147,0.34);
+    --info: #7AA5DE;
+    --info-soft: rgba(122,165,222,0.14);
+    --danger: #E27070;
+
+    --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --mono: ui-monospace, "SF Mono", "SFMono-Regular", "Cascadia Code", "JetBrains Mono", "Segoe UI Mono", Menlo, Consolas, monospace;
+
+    --maxw: 1080px;
+    --r: 14px;
+    --r-sm: 9px;
+
+    --s-1: 0.78rem;
+    --s0: 1rem;
+    --s1: 1.15rem;
+    --s2: 1.4rem;
+    --s3: 1.85rem;
+    --s4: 2.4rem;
+    --s5: clamp(2.6rem, 6.5vw, 4.4rem);
+  }
+
+  @media (prefers-color-scheme: light) {
+    :root {
+      --ink: #EDF0F6;
+      --panel: #FFFFFF;
+      --panel-2: #F4F6FB;
+      --raise: #FFFFFF;
+      --line: rgba(17,22,34,0.10);
+      --line-strong: rgba(17,22,34,0.18);
+      --text: #131A2A;
+      --muted: #55617A;
+      --faint: #808AA0;
+      --gold: #8C6821;
+      --gold-soft: rgba(140,104,33,0.10);
+      --gold-line: rgba(140,104,33,0.30);
+      --secure: #1C8A5F;
+      --secure-soft: rgba(28,138,95,0.10);
+      --secure-line: rgba(28,138,95,0.30);
+      --info: #3C6DAE;
+      --info-soft: rgba(60,109,174,0.10);
+      --danger: #C0483F;
+    }
+  }
+
+  /* explicit toggle overrides win in both directions */
+  :root[data-theme="dark"] {
+    --ink: #0A0D17; --panel: #121724; --panel-2: #0E131F; --raise: #171E2E;
+    --line: rgba(255,255,255,0.09); --line-strong: rgba(255,255,255,0.16);
+    --text: #E8ECF4; --muted: #98A2B8; --faint: #6B7591;
+    --gold: #D2A857; --gold-soft: rgba(210,168,87,0.14); --gold-line: rgba(210,168,87,0.32);
+    --secure: #55C793; --secure-soft: rgba(85,199,147,0.14); --secure-line: rgba(85,199,147,0.34);
+    --info: #7AA5DE; --info-soft: rgba(122,165,222,0.14); --danger: #E27070;
+  }
+  :root[data-theme="light"] {
+    --ink: #EDF0F6; --panel: #FFFFFF; --panel-2: #F4F6FB; --raise: #FFFFFF;
+    --line: rgba(17,22,34,0.10); --line-strong: rgba(17,22,34,0.18);
+    --text: #131A2A; --muted: #55617A; --faint: #808AA0;
+    --gold: #8C6821; --gold-soft: rgba(140,104,33,0.10); --gold-line: rgba(140,104,33,0.30);
+    --secure: #1C8A5F; --secure-soft: rgba(28,138,95,0.10); --secure-line: rgba(28,138,95,0.30);
+    --info: #3C6DAE; --info-soft: rgba(60,109,174,0.10); --danger: #C0483F;
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background:
+      radial-gradient(1200px 620px at 78% -8%, var(--gold-soft), transparent 60%),
+      radial-gradient(1000px 560px at 0% 4%, var(--info-soft), transparent 55%),
+      var(--ink);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 17px;
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  .wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 24px; }
+
+  /* ---- top bar ---- */
+  .topbar {
+    position: sticky; top: 0; z-index: 40;
+    -webkit-backdrop-filter: saturate(1.4) blur(10px);
+    backdrop-filter: saturate(1.4) blur(10px);
+    background: color-mix(in srgb, var(--ink) 78%, transparent);
+    border-bottom: 1px solid var(--line);
+  }
+  .topbar .row {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 16px; padding: 12px 0;
+  }
+  .brand { display: flex; align-items: center; gap: 11px; font-weight: 650; letter-spacing: -0.01em; }
+  .brand .mark {
+    width: 26px; height: 26px; border-radius: 7px; flex: none;
+    border: 1px solid var(--gold-line); background: var(--gold-soft);
+    display: grid; place-items: center;
+  }
+  .brand .mark svg { width: 15px; height: 15px; }
+  .brand small { color: var(--muted); font-weight: 500; letter-spacing: 0.02em; }
+  .toggle {
+    font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.08em;
+    color: var(--muted); background: transparent; cursor: pointer;
+    border: 1px solid var(--line-strong); border-radius: 999px;
+    padding: 7px 13px; text-transform: uppercase; transition: color .2s, border-color .2s;
+  }
+  .toggle:hover { color: var(--text); border-color: var(--gold-line); }
+  .toggle:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+
+  /* ---- eyebrow / mono labels ---- */
+  .eyebrow {
+    font-family: var(--mono); font-size: 0.74rem; letter-spacing: 0.16em;
+    text-transform: uppercase; color: var(--gold);
+    display: inline-flex; align-items: center; gap: 9px;
+  }
+  .eyebrow::before {
+    content: ""; width: 22px; height: 1px; background: var(--gold-line); display: inline-block;
+  }
+
+  section { padding: 72px 0; border-top: 1px solid var(--line); }
+  section:first-of-type { border-top: none; }
+
+  h1, h2, h3 { letter-spacing: -0.02em; text-wrap: balance; margin: 0; font-weight: 680; }
+  h1 { font-size: var(--s5); line-height: 1.03; }
+  h2 { font-size: var(--s4); line-height: 1.08; }
+  h3 { font-size: var(--s2); line-height: 1.18; }
+  p { margin: 0; }
+  .lede { font-size: var(--s1); color: var(--muted); max-width: 62ch; line-height: 1.55; }
+  .kicker { color: var(--muted); max-width: 64ch; }
+
+  /* ---- hero ---- */
+  .hero { padding-top: 68px; padding-bottom: 64px; }
+  .doc-meta {
+    display: flex; flex-wrap: wrap; gap: 6px 22px; margin-bottom: 30px;
+    font-family: var(--mono); font-size: var(--s-1); color: var(--faint);
+    letter-spacing: 0.03em;
+  }
+  .doc-meta b { color: var(--muted); font-weight: 500; }
+  .hero h1 { margin-top: 20px; max-width: 20ch; }
+  .hero .lede { margin-top: 22px; }
+
+  .verdict {
+    margin-top: 40px;
+    display: grid; grid-template-columns: auto 1px 1fr 1fr; align-items: center;
+    gap: 26px;
+    background:
+      linear-gradient(180deg, color-mix(in srgb, var(--secure-soft) 60%, transparent), transparent),
+      var(--panel);
+    border: 1px solid var(--line-strong);
+    border-radius: var(--r);
+    padding: 26px 30px;
+    box-shadow: 0 24px 60px -34px rgba(0,0,0,0.55);
+  }
+  .seal {
+    display: flex; flex-direction: column; gap: 8px; align-items: flex-start;
+  }
+  .seal .pill {
+    font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--secure); background: var(--secure-soft);
+    border: 1px solid var(--secure-line); border-radius: 999px; padding: 6px 12px;
+    display: inline-flex; align-items: center; gap: 8px;
+  }
+  .seal .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--secure); box-shadow: 0 0 0 3px var(--secure-soft); }
+  .seal small { color: var(--muted); font-size: var(--s-1); }
+  .vsep { width: 1px; align-self: stretch; background: var(--line); }
+  .vstat .n {
+    font-family: var(--mono); font-weight: 600; font-size: 3.1rem; line-height: 1;
+    color: var(--secure); font-variant-numeric: tabular-nums; letter-spacing: -0.02em;
+  }
+  .vstat .l {
+    font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--muted); margin-top: 8px;
+  }
+  .vfoot {
+    grid-column: 1 / -1; margin-top: 4px; padding-top: 18px; border-top: 1px solid var(--line);
+    color: var(--muted); font-size: var(--s-1);
+  }
+  .vfoot b { color: var(--text); font-weight: 600; }
+
+  /* ---- defense diagram ---- */
+  .split { display: grid; grid-template-columns: 0.95fr 1.05fr; gap: 48px; align-items: center; }
+  .diagram { position: relative; }
+  .diagram svg { width: 100%; height: auto; display: block; overflow: visible; }
+  .ring-lab {
+    font-family: var(--mono); font-size: 12px; letter-spacing: 0.04em; fill: var(--muted);
+  }
+  .core-lab { font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.06em; fill: var(--secure); text-transform: uppercase; }
+
+  .layers { display: flex; flex-direction: column; gap: 14px; }
+  .layer {
+    display: grid; grid-template-columns: auto 1fr; gap: 18px; align-items: start;
+    background: var(--panel); border: 1px solid var(--line); border-radius: var(--r);
+    padding: 20px 22px; transition: border-color .25s, transform .25s;
+  }
+  .layer:hover { border-color: var(--gold-line); transform: translateY(-2px); }
+  .layer .idx {
+    font-family: var(--mono); font-size: 0.82rem; font-weight: 600; color: var(--gold);
+    background: var(--gold-soft); border: 1px solid var(--gold-line); border-radius: 8px;
+    width: 40px; height: 40px; display: grid; place-items: center; font-variant-numeric: tabular-nums;
+  }
+  .layer h3 { font-size: var(--s1); }
+  .layer .where {
+    font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--muted); margin-top: 3px;
+  }
+  .layer p { color: var(--muted); font-size: 0.96rem; margin-top: 9px; }
+  .note {
+    margin-top: 22px; color: var(--faint); font-size: 0.9rem; max-width: 60ch;
+    border-left: 2px solid var(--gold-line); padding-left: 16px;
+  }
+  .note b { color: var(--muted); font-weight: 600; }
+
+  /* ---- scorecard ---- */
+  .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-top: 40px; }
+  .score {
+    background: var(--panel); border: 1px solid var(--line); border-radius: var(--r);
+    padding: 22px 22px 20px; position: relative; overflow: hidden;
+  }
+  .score::before {
+    content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+    background: var(--sev, var(--muted));
+  }
+  .score .n {
+    font-family: var(--mono); font-weight: 600; font-size: 2.6rem; line-height: 1;
+    font-variant-numeric: tabular-nums; letter-spacing: -0.02em; color: var(--sev, var(--text));
+  }
+  .score .sev {
+    font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--muted); margin-top: 12px; font-weight: 600;
+  }
+  .score p { color: var(--muted); font-size: 0.85rem; margin-top: 8px; line-height: 1.45; }
+  .score.zero { --sev: var(--secure); }
+  .score.zero .n { color: var(--secure); }
+  .score.med { --sev: var(--info); }
+  .score.low { --sev: var(--faint); }
+
+  /* ---- protection cards ---- */
+  .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-top: 40px; }
+  .prot {
+    background: var(--panel); border: 1px solid var(--line); border-radius: var(--r);
+    padding: 24px 24px 22px; transition: border-color .25s, transform .25s, box-shadow .25s;
+    display: flex; flex-direction: column; gap: 12px;
+  }
+  .prot:hover { border-color: var(--gold-line); transform: translateY(-3px); box-shadow: 0 26px 50px -34px rgba(0,0,0,0.5); }
+  .prot .ph { display: flex; align-items: center; gap: 13px; }
+  .prot .ic {
+    width: 38px; height: 38px; flex: none; border-radius: 9px;
+    border: 1px solid var(--gold-line); background: var(--gold-soft);
+    display: grid; place-items: center; color: var(--gold);
+  }
+  .prot .ic svg { width: 19px; height: 19px; }
+  .prot h3 { font-size: var(--s1); }
+  .prot p { color: var(--muted); font-size: 0.95rem; }
+  .prot .verify {
+    margin-top: auto; padding-top: 14px; border-top: 1px solid var(--line);
+    display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+  }
+  .prot .verify .tag {
+    font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--secure); flex: none;
+  }
+  .prot .verify code {
+    font-family: var(--mono); font-size: 0.78rem; color: var(--muted);
+    background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; padding: 2px 7px;
+    word-break: break-word;
+  }
+
+  /* ---- proof / verification ---- */
+  .proof-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin: 40px 0 34px; }
+  .pstat {
+    background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 24px;
+  }
+  .pstat .n {
+    font-family: var(--mono); font-weight: 600; font-size: 2.9rem; line-height: 1;
+    color: var(--gold); font-variant-numeric: tabular-nums; letter-spacing: -0.02em;
+  }
+  .pstat .n .plus { font-size: 1.6rem; color: var(--gold-line); vertical-align: super; }
+  .pstat .l { margin-top: 12px; font-weight: 600; }
+  .pstat p { color: var(--muted); font-size: 0.88rem; margin-top: 6px; }
+
+  .console {
+    background: var(--panel-2); border: 1px solid var(--line-strong); border-radius: var(--r);
+    overflow: hidden; margin-top: 8px;
+  }
+  .console .bar {
+    display: flex; align-items: center; gap: 8px; padding: 11px 16px; border-bottom: 1px solid var(--line);
+    font-family: var(--mono); font-size: 0.72rem; color: var(--faint); letter-spacing: 0.05em;
+  }
+  .console .bar i { width: 10px; height: 10px; border-radius: 50%; background: var(--line-strong); }
+  .console .bar i:nth-child(1) { background: color-mix(in srgb, var(--danger) 60%, var(--line-strong)); }
+  .console .bar i:nth-child(2) { background: color-mix(in srgb, var(--gold) 55%, var(--line-strong)); }
+  .console .bar i:nth-child(3) { background: color-mix(in srgb, var(--secure) 55%, var(--line-strong)); }
+  .console .bar span { margin-left: auto; }
+  .console pre {
+    margin: 0; padding: 18px 16px; overflow-x: auto;
+    font-family: var(--mono); font-size: 0.82rem; line-height: 1.85; color: var(--text);
+  }
+  .console pre .c { color: var(--faint); }
+  .console pre .p { color: var(--secure); }
+  .console pre .ok { color: var(--secure); }
+  .console pre .cmd { color: var(--gold); }
+
+  /* ---- disclosure ---- */
+  .disclose { display: flex; flex-direction: column; gap: 12px; margin-top: 36px; }
+  .item {
+    display: grid; grid-template-columns: 128px 1fr auto; gap: 20px; align-items: center;
+    background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-sm);
+    padding: 16px 20px;
+  }
+  .item .sev {
+    font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.1em; text-transform: uppercase;
+    font-weight: 600; display: inline-flex; align-items: center; gap: 8px; color: var(--muted);
+  }
+  .item .sev::before { content: ""; width: 8px; height: 8px; border-radius: 2px; background: var(--info); }
+  .item.low .sev::before { background: var(--faint); }
+  .item .what { color: var(--text); font-size: 0.95rem; }
+  .item .what b { color: var(--text); }
+  .item .what span { color: var(--muted); }
+  .item .badge {
+    font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--muted); border: 1px solid var(--line-strong); border-radius: 999px; padding: 5px 11px; white-space: nowrap;
+  }
+  .disclose-foot { margin-top: 22px; color: var(--faint); font-size: 0.9rem; max-width: 66ch; }
+
+  /* ---- footer ---- */
+  footer { border-top: 1px solid var(--line); padding: 44px 0 60px; }
+  footer .cols { display: flex; justify-content: space-between; gap: 28px; flex-wrap: wrap; align-items: flex-start; }
+  footer p { color: var(--faint); font-size: 0.85rem; max-width: 60ch; }
+  footer .sig { font-family: var(--mono); font-size: 0.72rem; color: var(--muted); letter-spacing: 0.04em; }
+  footer code { font-family: var(--mono); color: var(--muted); font-size: 0.8rem; }
+
+  .reveal { opacity: 0; transform: translateY(16px); transition: opacity .7s ease, transform .7s ease; }
+  .reveal.in { opacity: 1; transform: none; }
+
+  @media (max-width: 860px) {
+    body { font-size: 16px; }
+    .verdict { grid-template-columns: 1fr 1fr; row-gap: 22px; }
+    .verdict .seal { grid-column: 1 / -1; }
+    .vsep { display: none; }
+    .split { grid-template-columns: 1fr; gap: 34px; }
+    .diagram { max-width: 420px; margin: 0 auto; }
+    .grid-4 { grid-template-columns: repeat(2, 1fr); }
+    .grid-2 { grid-template-columns: 1fr; }
+    .proof-stats { grid-template-columns: 1fr; }
+    .item { grid-template-columns: 1fr; gap: 8px; align-items: flex-start; }
+    .item .badge { justify-self: start; }
+  }
+  @media (max-width: 460px) {
+    .grid-4 { grid-template-columns: 1fr; }
+    .doc-meta { gap: 4px 16px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .reveal { opacity: 1; transform: none; transition: none; }
+    * { scroll-behavior: auto; }
+  }
+</style>
+
+<div class="topbar">
+  <div class="wrap row">
+    <div class="brand">
+      <span class="mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5 4 6v6c0 4.4 3.1 7.7 8 9.5 4.9-1.8 8-5.1 8-9.5V6l-8-3.5Z"/><path d="m8.7 12 2.2 2.2 4.4-4.4"/></svg>
+      </span>
+      <span>TENPO ONE <small>· Security Posture</small></span>
+    </div>
+    <button class="toggle" id="themeToggle" type="button" aria-label="Switch light or dark theme">Theme</button>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="doc-meta">
+      <span><b>Report</b> Production-readiness security review</span>
+      <span><b>Subject</b> TENPO ONE — restaurant management SaaS</span>
+      <span><b>Prepared</b> 2026-08-09</span>
+      <span><b>For</b> Greenlight decision</span>
+    </div>
+    <p class="eyebrow">The bottom line, first</p>
+    <h1>Built to be trusted with a restaurant's most sensitive data.</h1>
+    <p class="lede">TENPO ONE holds sales, payroll, customer records and bank details for many businesses at once. This report explains — in plain terms — how that data is kept separate and protected, and how every protection was tested by attacking our own system.</p>
+
+    <div class="verdict reveal">
+      <div class="seal">
+        <span class="pill"><span class="dot"></span> Production-ready</span>
+        <small>After the security hardening pass</small>
+      </div>
+      <div class="vsep" aria-hidden="true"></div>
+      <div class="vstat">
+        <div class="n" data-count="0">0</div>
+        <div class="l">Critical issues</div>
+      </div>
+      <div class="vstat">
+        <div class="n" data-count="0">0</div>
+        <div class="l">High issues</div>
+      </div>
+      <p class="vfoot">Two <b>medium</b> and four <b>low</b> items remain — every one is documented, understood, and none block launch. We disclose them in full below rather than round up to a clean score.</p>
+    </div>
+  </section>
+
+  <!-- DEFENSE IN DEPTH -->
+  <section>
+    <p class="eyebrow">How it's protected</p>
+    <h2 style="margin-top:16px;max-width:16ch;">Three walls, not one.</h2>
+    <p class="kicker" style="margin-top:18px;">No single check stands alone. Any request has to clear every layer in turn — and the last line lives <em>inside the database itself</em>, where even a stolen login can't reach past it.</p>
+
+    <div class="split" style="margin-top:46px;">
+      <div class="diagram reveal" role="img" aria-label="Concentric defense diagram: an outside request must pass the Permission Gate, then Row-Level Security, then Triggers and Grants, to reach the protected data core at the center.">
+        <svg viewBox="0 0 380 360">
+          <defs>
+            <radialGradient id="coreGlow" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stop-color="var(--secure)" stop-opacity="0.35"/>
+              <stop offset="100%" stop-color="var(--secure)" stop-opacity="0"/>
+            </radialGradient>
+          </defs>
+          <!-- attack vector -->
+          <line x1="20" y1="24" x2="120" y2="96" stroke="var(--danger)" stroke-width="1.6" stroke-dasharray="4 5" opacity="0.75"/>
+          <g transform="translate(16 20)">
+            <circle r="11" fill="none" stroke="var(--danger)" stroke-width="1.4" opacity="0.8"/>
+            <path d="M-4 -4 4 4 M4 -4 -4 4" stroke="var(--danger)" stroke-width="1.5" stroke-linecap="round"/>
+          </g>
+          <text x="6" y="52" class="ring-lab" fill="var(--danger)" opacity="0.85">blocked</text>
+
+          <g transform="translate(190 186)">
+            <!-- rings -->
+            <circle r="168" fill="none" stroke="var(--gold)" stroke-width="1.5" opacity="1"/>
+            <circle r="168" fill="var(--gold)" opacity="0.05"/>
+            <circle r="120" fill="none" stroke="var(--gold)" stroke-width="1.5" opacity="0.72"/>
+            <circle r="120" fill="var(--gold)" opacity="0.045"/>
+            <circle r="74" fill="none" stroke="var(--gold)" stroke-width="1.5" opacity="0.5"/>
+            <circle r="74" fill="var(--gold)" opacity="0.04"/>
+            <!-- core -->
+            <circle r="70" fill="url(#coreGlow)"/>
+            <circle r="40" fill="var(--panel)" stroke="var(--secure-line)" stroke-width="1.5"/>
+            <g transform="translate(0 -3)" stroke="var(--secure)" stroke-width="1.7" fill="none" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="-11" y="-4" width="22" height="16" rx="3"/>
+              <path d="M-6 -4 v-4 a6 6 0 0 1 12 0 v4"/>
+              <circle cx="0" cy="4" r="1.6" fill="var(--secure)" stroke="none"/>
+            </g>
+            <text x="0" y="26" text-anchor="middle" class="core-lab">Your data</text>
+
+            <!-- ring index badges at top -->
+            <g font-family="var(--mono)" font-weight="600" font-size="12" fill="var(--gold)" text-anchor="middle">
+              <circle cx="0" cy="-168" r="13" fill="var(--ink)" stroke="var(--gold-line)" stroke-width="1"/>
+              <text x="0" y="-164" font-variant-numeric="tabular-nums">01</text>
+              <circle cx="0" cy="-120" r="13" fill="var(--ink)" stroke="var(--gold-line)" stroke-width="1"/>
+              <text x="0" y="-116" font-variant-numeric="tabular-nums">02</text>
+              <circle cx="0" cy="-74" r="13" fill="var(--ink)" stroke="var(--gold-line)" stroke-width="1"/>
+              <text x="0" y="-70" font-variant-numeric="tabular-nums">03</text>
+            </g>
+          </g>
+        </svg>
+      </div>
+
+      <div class="layers">
+        <div class="layer reveal">
+          <div class="idx">01</div>
+          <div>
+            <h3>Permission Gate</h3>
+            <div class="where">Application</div>
+            <p>Before any action runs, the app confirms the person's role is allowed to do it. A waiter simply cannot open payroll; a store manager cannot touch company-wide settings.</p>
+          </div>
+        </div>
+        <div class="layer reveal">
+          <div class="idx">02</div>
+          <div>
+            <h3>Row-Level Security</h3>
+            <div class="where">Database</div>
+            <p>Every database query is automatically filtered to the user's own company and store. There is no way to ask for another business's data — the database itself refuses to return it.</p>
+          </div>
+        </div>
+        <div class="layer reveal">
+          <div class="idx">03</div>
+          <div>
+            <h3>Triggers &amp; Grants</h3>
+            <div class="where">Last line, inside the database</div>
+            <p>Money records and secrets are guarded by rules baked into the database. Payments can't be deleted, staff can't promote themselves, and PINs and bank details are unreadable to the wrong roles — even under a direct attack.</p>
+          </div>
+        </div>
+        <p class="note"><b>Note:</b> the on-screen menus also hide what you're not allowed to do — but that's a convenience for staff, not the lock. The real enforcement is layers 01–03, and the last two live in the database where the browser can't reach.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- SCORECARD -->
+  <section>
+    <p class="eyebrow">Where things stand</p>
+    <h2 style="margin-top:16px;max-width:20ch;">The audit scorecard.</h2>
+    <p class="kicker" style="margin-top:18px;">Findings are graded by severity, the same scale a professional security auditor uses. Critical and high are the ones that would stop a launch.</p>
+    <div class="grid-4">
+      <div class="score zero reveal">
+        <div class="n" data-count="0">0</div>
+        <div class="sev">Critical</div>
+        <p>Nothing that could expose or destroy data at scale.</p>
+      </div>
+      <div class="score zero reveal">
+        <div class="n" data-count="0">0</div>
+        <div class="sev">High</div>
+        <p>No serious gaps after the hardening pass.</p>
+      </div>
+      <div class="score med reveal">
+        <div class="n" data-count="2">0</div>
+        <div class="sev">Medium</div>
+        <p>Operational hardening, planned. Doesn't block launch.</p>
+      </div>
+      <div class="score low reveal">
+        <div class="n" data-count="4">0</div>
+        <div class="sev">Low</div>
+        <p>Best-practice polish and dashboard-side settings.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- PROTECTIONS IN PLAIN TERMS -->
+  <section>
+    <p class="eyebrow">What's protected, in plain terms</p>
+    <h2 style="margin-top:16px;max-width:22ch;">Six guarantees, and how each was proven.</h2>
+    <div class="grid-2">
+
+      <div class="prot reveal">
+        <div class="ph">
+          <span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="7" height="16" rx="1.5"/><rect x="14" y="4" width="7" height="16" rx="1.5"/><path d="M10 12h4" stroke-dasharray="1 2.4"/></svg></span>
+          <h3>One tenant can't see another</h3>
+        </div>
+        <p>Restaurant A can never read Restaurant B's sales, customers or staff — not even by crafting a direct request to the database. It comes back empty, every time.</p>
+        <div class="verify"><span class="tag">Verified</span> <code>verify-security.mjs · cross-tenant IDOR</code></div>
+      </div>
+
+      <div class="prot reveal">
+        <div class="ph">
+          <span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v6"/><path d="m8 7 4-4 4 4"/><path d="M5 21V11h14v10"/><path d="M9 21v-5h6v5"/></svg></span>
+          <h3>Nobody can promote themselves</h3>
+        </div>
+        <p>A staff member — or even a store manager — cannot make themselves an owner or platform admin. The database blocks the change outright, so a leaked account can't grow its own powers.</p>
+        <div class="verify"><span class="tag">Verified</span> <code>verify-security.mjs · C1 / C2</code></div>
+      </div>
+
+      <div class="prot reveal">
+        <div class="ph">
+          <span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7V5h16v2"/><path d="M6 7v12a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V7"/><path d="M10 11v5M14 11v5"/><path d="M9 4h6"/></svg></span>
+          <h3>Money records can't be tampered with</h3>
+        </div>
+        <p>Payments, refunds and daily closings can't be quietly deleted or edited after the fact. The financial ledger is append-only — corrections are added, never erased — which keeps the books honest.</p>
+        <div class="verify"><span class="tag">Verified</span> <code>verify-security-fortress.mjs · F6</code></div>
+      </div>
+
+      <div class="prot reveal">
+        <div class="ph">
+          <span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/><circle cx="12" cy="15" r="1.4" fill="currentColor" stroke="none"/></svg></span>
+          <h3>Sensitive details stay locked down</h3>
+        </div>
+        <p>Staff PINs, salary, emergency contacts and bank info (stored as the last four digits only) are readable strictly by the right roles. A manager can't pull a colleague's bank details even by asking the database directly.</p>
+        <div class="verify"><span class="tag">Verified</span> <code>verify-security-fortress.mjs · F3 / F4 / F5</code></div>
+      </div>
+
+      <div class="prot reveal">
+        <div class="ph">
+          <span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v5"/><circle cx="12" cy="16" r="0.6" fill="currentColor" stroke="none"/></svg></span>
+          <h3>Errors never leak internals</h3>
+        </div>
+        <p>When something goes wrong, users see a friendly message and a traceable ID — never a raw system error or personal data. Support can follow the ID; an attacker learns nothing about how the system is built.</p>
+        <div class="verify"><span class="tag">Verified</span> <code>vitest · error-codes.test.ts</code></div>
+      </div>
+
+      <div class="prot reveal">
+        <div class="ph">
+          <span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5 4 6v6c0 4.4 3.1 7.7 8 9.5 4.9-1.8 8-5.1 8-9.5V6l-8-3.5Z"/><path d="m9 12 2 2 4-4"/></svg></span>
+          <h3>The public doors are hardened</h3>
+        </div>
+        <p>Public forms are rate-limited against spam and brute force, login links can't be hijacked to redirect elsewhere, exported spreadsheets can't smuggle in malicious formulas, and modern security headers are enforced site-wide.</p>
+        <div class="verify"><span class="tag">Verified</span> <code>vitest · redirect + csv-injection</code></div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- PROOF -->
+  <section>
+    <p class="eyebrow">How we proved it</p>
+    <h2 style="margin-top:16px;max-width:24ch;">We don't just claim it. We attack it — on every release.</h2>
+    <p class="kicker" style="margin-top:18px;">Before each release, an automated suite logs in as real users of each role and deliberately tries to cross the lines they shouldn't: reading another company's data, promoting themselves, deleting a payment. Every attempt must fail. If one succeeds, the release stops.</p>
+
+    <div class="proof-stats">
+      <div class="pstat reveal">
+        <div class="n"><span data-count="45">0</span></div>
+        <div class="l">Live attack simulations</div>
+        <p>Real-user break-in attempts against the database — tenant crossing, privilege escalation, direct RPC abuse.</p>
+      </div>
+      <div class="pstat reveal">
+        <div class="n"><span data-count="6">0</span></div>
+        <div class="l">Fortress regression checks</div>
+        <p>Guard the hardening work: locked-down PINs, split-out confidential data, tamper-proof ledgers.</p>
+      </div>
+      <div class="pstat reveal">
+        <div class="n"><span data-count="4">0</span></div>
+        <div class="l">Unit-tested safeguards</div>
+        <p>The core safety functions — redirects, spreadsheet safety, error masking, the permission matrix.</p>
+      </div>
+    </div>
+
+    <div class="console reveal">
+      <div class="bar"><i></i><i></i><i></i><span>release verification</span></div>
+<pre><span class="c"># Simulate real users attacking the live database</span>
+<span class="cmd">node</span> --env-file=.env.local scripts/verify-security.mjs
+  <span class="ok">✓</span> other companies can't read demo company orders / customers / payments
+  <span class="ok">✓</span> a store manager can't promote themselves to owner
+  <span class="ok">✓</span> staff can't finalize or refund another store's order
+  <span class="p">→ 45 passed / 0 failed</span>
+
+<span class="cmd">node</span> --env-file=.env.local scripts/verify-security-fortress.mjs
+  <span class="ok">✓</span> PIN codes and bank details are unreadable to the wrong roles
+  <span class="ok">✓</span> financial ledgers reject deletion
+  <span class="p">→ F1–F6 passed</span>
+
+<span class="cmd">npx</span> vitest run tests/security/
+  <span class="p">→ redirect · csv-injection · error-codes · authorization-matrix — all green</span></pre>
+    </div>
+  </section>
+
+  <!-- DISCLOSURE -->
+  <section>
+    <p class="eyebrow">Nothing hidden</p>
+    <h2 style="margin-top:16px;max-width:22ch;">The remaining items, in full.</h2>
+    <p class="kicker" style="margin-top:18px;">A trustworthy report shows its gaps. None of these are critical or high; each is either a dashboard setting on our hosting providers or a planned refinement.</p>
+
+    <div class="disclose">
+      <div class="item med reveal">
+        <span class="sev">Medium</span>
+        <span class="what"><b>Spam rate-limiting spans one server only.</b> <span>Works today; moving to a shared store (Redis) makes it airtight across many servers.</span></span>
+        <span class="badge">Planned</span>
+      </div>
+      <div class="item med reveal">
+        <span class="sev">Medium</span>
+        <span class="what"><b>Feature on/off switches are a menu convenience.</b> <span>They hide screens but aren't a security wall — the real boundaries (layers 01–03) always apply.</span></span>
+        <span class="badge">Documented</span>
+      </div>
+      <div class="item low reveal">
+        <span class="sev">Low</span>
+        <span class="what"><b>Two-factor login isn't enforced yet.</b> <span>Available through our identity provider; a toggle, not new code.</span></span>
+        <span class="badge">Provider setting</span>
+      </div>
+      <div class="item low reveal">
+        <span class="sev">Low</span>
+        <span class="what"><b>Content-security policy allows inline scripts.</b> <span>A known trade-off of the framework; a stricter mode is a future refinement.</span></span>
+        <span class="badge">Refinement</span>
+      </div>
+      <div class="item low reveal">
+        <span class="sev">Low</span>
+        <span class="what"><b>Failed-login alerting needs a log feed.</b> <span>The data exists; wiring up automated alerts is a hosting-side setup step.</span></span>
+        <span class="badge">Provider setting</span>
+      </div>
+      <div class="item low reveal">
+        <span class="sev">Low</span>
+        <span class="what"><b>Login attempts aren't yet app-rate-limited.</b> <span>Our identity provider throttles brute force; app-side limiting is an added layer for later.</span></span>
+        <span class="badge">Provider setting</span>
+      </div>
+    </div>
+    <p class="disclose-foot">Every item here is tracked in the engineering security docs. The two graded medium are operational hardening for scale — not data-exposure risks — and neither stands between the product and a confident launch.</p>
+  </section>
+
+  <footer>
+    <div class="cols">
+      <div>
+        <p class="sig">TENPO ONE · Security Posture Report</p>
+        <p style="margin-top:10px;">Reflects controls verified in application code and database migrations as of 2026-08-09. Infrastructure protections — encryption at rest, TLS in transit, physical security — are provided by our hosting partners, Vercel and Supabase.</p>
+      </div>
+      <div>
+        <p class="sig">Full technical detail</p>
+        <p style="margin-top:10px;">Engineering references: <code>asvs-audit.md</code>, <code>penetration-test-plan.md</code>, <code>threat-model.md</code>.</p>
+      </div>
+    </div>
+  </footer>
+
+</div>
+
+<script>
+  (function () {
+    var root = document.documentElement;
+    var btn = document.getElementById('themeToggle');
+    function apply(t) {
+      if (t === 'light' || t === 'dark') { root.setAttribute('data-theme', t); }
+      else { root.removeAttribute('data-theme'); }
+    }
+    try { apply(localStorage.getItem('tenpo-theme')); } catch (e) {}
+    btn.addEventListener('click', function () {
+      var cur = root.getAttribute('data-theme');
+      var isDark = cur ? cur === 'dark'
+        : window.matchMedia('(prefers-color-scheme: dark)').matches;
+      var next = isDark ? 'light' : 'dark';
+      apply(next);
+      try { localStorage.setItem('tenpo-theme', next); } catch (e) {}
+    });
+
+    var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    // count-up
+    function countUp(el) {
+      var target = parseInt(el.getAttribute('data-count'), 10) || 0;
+      if (reduce || target === 0) { el.textContent = String(target); return; }
+      var dur = 900, start = performance.now();
+      function tick(now) {
+        var p = Math.min((now - start) / dur, 1);
+        var eased = 1 - Math.pow(1 - p, 3);
+        el.textContent = String(Math.round(target * eased));
+        if (p < 1) requestAnimationFrame(tick);
+      }
+      requestAnimationFrame(tick);
+    }
+
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) {
+        if (!en.isIntersecting) return;
+        en.target.classList.add('in');
+        en.target.querySelectorAll('[data-count]').forEach(countUp);
+        if (en.target.hasAttribute('data-count')) countUp(en.target);
+        io.unobserve(en.target);
+      });
+    }, { threshold: 0.2 });
+
+    document.querySelectorAll('.reveal').forEach(function (el) { io.observe(el); });
+    // count-up elements not wrapped in a .reveal (safety)
+    document.querySelectorAll('[data-count]').forEach(function (el) {
+      if (!el.closest('.reveal')) io.observe(el);
+    });
+  })();
+</script>

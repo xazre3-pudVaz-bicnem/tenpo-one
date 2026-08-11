@@ -72,12 +72,22 @@ async function main() {
 
   // 5) テーブル15卓 get-or-create（名称でユニーク）
   let created = 0;
-  for (const t of TABLES) {
-    const { data: existing } = await admin.from('restaurant_tables').select('id').eq('store_id', store.id).eq('name', t.name).maybeSingle();
-    if (existing) continue;
+  // sort_order は TABLES の並び（T1..T15）に一致させる。全テーブル同値だとフロアの表示順が不定になるため必須。
+  for (let i = 0; i < TABLES.length; i++) {
+    const t = TABLES[i];
+    const sortOrder = i + 1;
+    const { data: existing } = await admin.from('restaurant_tables').select('id, sort_order').eq('store_id', store.id).eq('name', t.name).maybeSingle();
+    if (existing) {
+      // 既存店舗の sort_order をベキ等に補正（過去に未設定=0で作られた行の並びを正す）
+      if (existing.sort_order !== sortOrder) {
+        const { error } = await admin.from('restaurant_tables').update({ sort_order: sortOrder }).eq('id', existing.id);
+        if (error) throw new Error(`table ${t.name} sort_order: ${error.message}`);
+      }
+      continue;
+    }
     const { error } = await admin.from('restaurant_tables').insert({
       organization_id: org.id, store_id: store.id, name: t.name,
-      capacity_min: 1, capacity_max: t.cap, status: 'active',
+      capacity_min: 1, capacity_max: t.cap, status: 'active', sort_order: sortOrder,
     });
     if (error) throw new Error(`table ${t.name}: ${error.message}`);
     created++;

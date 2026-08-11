@@ -1,12 +1,13 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { MoreVertical, ShieldCheck, Building2, KeyRound, Ban, RotateCcw } from 'lucide-react';
+import { MoreVertical, ShieldCheck, Building2, KeyRound, LockKeyhole, Ban, RotateCcw } from 'lucide-react';
 import { HQ_ROLES, type Role } from '@/lib/permissions';
 import type { StoreRef } from '@/lib/auth';
 import { RoleDialog } from './role-dialog';
 import { StoresDialog } from './stores-dialog';
 import { PinDialog } from './pin-dialog';
+import { PasswordDialog } from './password-dialog';
 import { StatusDialog } from './status-dialog';
 
 export interface StaffRow {
@@ -22,7 +23,7 @@ function isStoreScopedRole(role: Role): boolean {
   return !HQ_ROLES.includes(role);
 }
 
-type DialogKind = 'role' | 'stores' | 'pin' | 'status';
+type DialogKind = 'role' | 'stores' | 'pin' | 'password' | 'status';
 
 export function StaffRowMenu({ row, stores, isSelf }: { row: StaffRow; stores: StoreRef[]; isSelf: boolean }) {
   const [open, setOpen] = useState(false);
@@ -88,6 +89,16 @@ export function StaffRowMenu({ row, stores, isSelf }: { row: StaffRow; stores: S
           {!isSelf && (
             <button
               type="button"
+              onClick={() => openDialog('password')}
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+            >
+              <LockKeyhole className="h-4 w-4 text-gray-400" />
+              パスワード再発行
+            </button>
+          )}
+          {!isSelf && (
+            <button
+              type="button"
               onClick={() => openDialog('status')}
               className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-danger hover:bg-danger-soft"
             >
@@ -128,6 +139,14 @@ export function StaffRowMenu({ row, stores, isSelf }: { row: StaffRow; stores: S
       )}
       {dialog === 'pin' && (
         <PinDialog membershipId={row.membershipId} profileId={row.profileId} onClose={() => setDialog(null)} />
+      )}
+      {dialog === 'password' && (
+        <PasswordDialog
+          membershipId={row.membershipId}
+          profileId={row.profileId}
+          displayName={row.displayName}
+          onClose={() => setDialog(null)}
+        />
       )}
       {dialog === 'status' && (
         <StatusDialog
