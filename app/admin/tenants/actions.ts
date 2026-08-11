@@ -233,6 +233,30 @@ export async function setMemberRole(input: { storeId: string; membershipId: stri
   revalidatePath(`/admin/tenants/${input.storeId}`);
 }
 
+/** メンバーの所属店舗割当（membership_stores を置換）。HQロールは全店舗アクセスのため主に店舗スコープロール向け。 */
+export async function setMemberStores(input: { storeId: string; membershipId: string; storeIds: string[] }) {
+  await requireCypressAdmin();
+  const admin = createAdminClient();
+  const { data: store } = await admin.from('stores').select('id, organization_id').eq('id', input.storeId).maybeSingle();
+  if (!store) throw new Error('店舗が見つかりません');
+  // メンバーが対象組織のものか確認
+  const { data: mem } = await admin.from('memberships').select('id').eq('id', input.membershipId).eq('organization_id', store.organization_id).maybeSingle();
+  if (!mem) throw new Error('メンバーが見つかりません');
+  // 指定店舗が対象組織のものか検証（他組織店舗の割当を防止）
+  const storeIds = [...new Set(input.storeIds.filter(Boolean))];
+  if (storeIds.length > 0) {
+    const { data: valid } = await admin.from('stores').select('id').eq('organization_id', store.organization_id).in('id', storeIds);
+    if ((valid?.length ?? 0) !== storeIds.length) throw new Error('指定された店舗が正しくありません');
+  }
+  // 置換
+  await admin.from('membership_stores').delete().eq('membership_id', input.membershipId);
+  if (storeIds.length > 0) {
+    await admin.from('membership_stores').insert(storeIds.map((sid, i) => ({ membership_id: input.membershipId, store_id: sid, is_primary: i === 0 })));
+  }
+  await audit(store.organization_id, store.id, 'tenant.member_stores', 'memberships', input.membershipId, { store_ids: storeIds });
+  revalidatePath(`/admin/tenants/${input.storeId}`);
+}
+
 /** メンバーの停止/再開（membership.status） */
 export async function setMembershipStatus(input: { storeId: string; membershipId: string; status: 'active' | 'suspended' }) {
   await requireCypressAdmin();

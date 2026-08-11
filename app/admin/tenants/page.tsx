@@ -61,6 +61,22 @@ export default async function TenantsPage({
     admin.from('plans').select('code, name').eq('is_active', true).order('sort_order'),
   ]);
 
+  // 本番店舗サマリー（環境・稼働状況）
+  const onboardingCountQuery = (col: string, val: string) =>
+    admin.from('store_onboarding').select('store_id', { count: 'exact', head: true }).eq(col, val);
+  const [prodRes, liveRes, pilotRes, allRes] = await Promise.all([
+    onboardingCountQuery('environment', 'production'),
+    onboardingCountQuery('stage', 'live'),
+    onboardingCountQuery('environment', 'pilot'),
+    admin.from('store_onboarding').select('store_id', { count: 'exact', head: true }),
+  ]);
+  const summary = {
+    production: prodRes.count ?? 0,
+    live: liveRes.count ?? 0,
+    pilot: pilotRes.count ?? 0,
+    total: allRes.count ?? 0,
+  };
+
   // 会社名検索のため、名称一致する org id を先に取得
   let orgIds: string[] = [];
   if (q) {
@@ -107,6 +123,14 @@ export default async function TenantsPage({
         description={`${total}店舗｜TENPO ONEは単一マルチテナントSaaS。店舗ごとのコード複製はしません`}
         actions={<CreateTenantTrigger organizations={orgOptions ?? []} plans={planOptions ?? []} />}
       />
+
+      {/* 本番店舗サマリー */}
+      <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <SummaryTile label="全店舗" value={summary.total} tone="navy" />
+        <SummaryTile label="本番(production)" value={summary.production} tone="success" />
+        <SummaryTile label="本番稼働中(live)" value={summary.live} tone="success" />
+        <SummaryTile label="パイロット" value={summary.pilot} tone="warning" />
+      </div>
 
       <TenantFilters
         environments={ENVIRONMENTS.map((e) => ({ value: e, label: ENVIRONMENT_LABELS[e] }))}
@@ -170,6 +194,16 @@ export default async function TenantsPage({
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+function SummaryTile({ label, value, tone }: { label: string; value: number; tone: 'navy' | 'success' | 'warning' }) {
+  const color = tone === 'success' ? 'text-success' : tone === 'warning' ? 'text-warning' : 'text-navy';
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white p-4">
+      <p className="text-xs text-gray-500">{label}</p>
+      <p className={`mt-1 text-2xl font-bold ${color}`}>{value}</p>
     </div>
   );
 }

@@ -42,15 +42,17 @@ export default async function TenantDetailPage({ params }: { params: Promise<{ s
   const enabledModules = onboarding.enabled_modules ?? [];
   const checklist = (onboarding.checklist as ChecklistState) ?? {};
 
-  const [signals, membersRes, hardwareRes, notesRes, flagsRes, auditRes, authUsers] = await Promise.all([
+  const [signals, membersRes, hardwareRes, notesRes, flagsRes, auditRes, authUsers, orgStoresRes] = await Promise.all([
     computeStoreSignals(admin, store),
-    admin.from('memberships').select('id, role, status, profile_id, profiles(display_name, has_pin)').eq('organization_id', store.organization_id).order('created_at'),
+    admin.from('memberships').select('id, role, status, profile_id, profiles(display_name, has_pin), membership_stores(store_id, stores(name))').eq('organization_id', store.organization_id).order('created_at'),
     admin.from('store_hardware').select('*').eq('store_id', storeId).order('created_at'),
     admin.from('tenant_support_notes').select('*').or(`store_id.eq.${storeId},and(organization_id.eq.${store.organization_id},store_id.is.null)`).order('created_at', { ascending: false }).limit(50),
     admin.from('feature_flags').select('flag_key, enabled, organization_id').or(`organization_id.eq.${store.organization_id},organization_id.is.null`),
     admin.from('audit_logs').select('id, action, actor_role, created_at, note').eq('store_id', storeId).order('created_at', { ascending: false }).limit(10),
     listAllAuthUsers(admin, { maxPages: 10 }),
+    admin.from('stores').select('id, name').eq('organization_id', store.organization_id).eq('status', 'active').order('name'),
   ]);
+  const orgStores = (orgStoresRes.data ?? []).map((s) => ({ id: s.id as string, name: s.name as string }));
 
   const progress = computeProgress(signals, checklist, enabledModules);
   const goLive = evaluateGoLive(signals, checklist, enabledModules);
@@ -59,6 +61,7 @@ export default async function TenantDetailPage({ params }: { params: Promise<{ s
   const members = (membersRes.data ?? []).map((m) => {
     const p = m.profiles as unknown as { display_name: string; has_pin: boolean | null } | null;
     const auth = emailById.get(m.profile_id);
+    const ms = (m.membership_stores as unknown as { store_id: string; stores: { name: string } | null }[] | null) ?? [];
     return {
       membershipId: m.id as string,
       profileId: m.profile_id as string,
@@ -67,6 +70,8 @@ export default async function TenantDetailPage({ params }: { params: Promise<{ s
       status: m.status as string,
       email: auth?.email ?? null,
       lastSignInAt: auth?.lastSignInAt ?? null,
+      storeIds: ms.map((x) => x.store_id),
+      storeNames: ms.map((x) => x.stores?.name).filter((n): n is string => !!n),
     };
   });
 
@@ -176,7 +181,7 @@ export default async function TenantDetailPage({ params }: { params: Promise<{ s
       </Card>
 
       {/* アカウント */}
-      <TenantAccounts storeId={storeId} members={members} />
+      <TenantAccounts storeId={storeId} members={members} orgStores={orgStores} />
 
       {/* ハードウェア */}
       <TenantHardware storeId={storeId} hardware={hardware} />
