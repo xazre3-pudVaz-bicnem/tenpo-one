@@ -1,7 +1,7 @@
 'use client';
 
 import { yen } from '@/lib/format';
-import { qrStrings } from './strings';
+import { useQrStrings } from './strings-context';
 
 /** 下部固定のカートバー。タップで確認画面へ */
 export function CartBar({
@@ -13,6 +13,7 @@ export function CartBar({
   total: number;
   onOrder: () => void;
 }) {
+  const qrStrings = useQrStrings();
   return (
     <div className="fixed inset-x-0 bottom-0 z-30 border-t border-gray-200 bg-white p-4 shadow-[0_-4px_12px_rgba(0,0,0,0.08)]">
       <button

@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { yen } from '@/lib/format';
 import { Badge } from '@/components/ui/badge';
-import { qrStrings } from './strings';
+import { useQrStrings } from './strings-context';
 import { isPublicImageUrl, type QrMenuCategory, type QrMenuItem } from './types';
 
 /** カテゴリタブの先頭に差し込む「おすすめ」擬似カテゴリのID */
@@ -17,6 +17,7 @@ export function MenuView({
   categories: QrMenuCategory[];
   onSelectItem: (item: QrMenuItem) => void;
 }) {
+  const qrStrings = useQrStrings();
   const recommendedItems = useMemo(() => categories.flatMap((c) => c.items.filter((i) => i.is_recommended)), [categories]);
 
   const tabs: QrMenuCategory[] = useMemo(() => {
@@ -25,7 +26,7 @@ export function MenuView({
       { id: RECOMMENDED_TAB_ID, name: qrStrings.menu.recommendedCategoryName, color: '#CA8A04', items: recommendedItems },
       ...categories,
     ];
-  }, [categories, recommendedItems]);
+  }, [categories, recommendedItems, qrStrings.menu.recommendedCategoryName]);
 
   const [activeId, setActiveId] = useState(tabs[0]?.id ?? '');
   const active = tabs.find((c) => c.id === activeId) ?? tabs[0] ?? null;

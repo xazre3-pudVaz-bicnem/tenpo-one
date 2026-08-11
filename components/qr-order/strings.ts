@@ -1,8 +1,10 @@
 /**
- * QRオーダーの表示文字列（ja）。ハードコードせずここに集約する。
- * 将来 en 追加時は `LOCALE` 引数を取る形へ拡張し、この構造をそのまま複製する想定。
+ * QRオーダーの表示文字列。ja / en を提供し、UI文言のみ切替可能にする。
+ * 商品名・カテゴリ名・価格は実データ（menu master）のため翻訳しない。
  */
-export const qrStrings = {
+export type QrLocale = 'ja' | 'en';
+
+const ja = {
   header: {
     orderTab: 'メニュー',
     statusTab: '注文状況',
@@ -23,7 +25,6 @@ export const qrStrings = {
     allergyLabel: 'アレルギー情報',
     modifiersLabel: 'オプション',
     addToCart: (total: string) => `カートに追加（${total}）`,
-    /** 内部Storageパスはanonから見えないため、画像は絶対URL(http/https)の場合のみ表示する */
     imageAlt: (name: string) => `${name}の写真`,
   },
   cartBar: {
@@ -54,4 +55,64 @@ export const qrStrings = {
     payNotice: 'お会計はレジまたは店員にお申し付けください',
     fetchError: '注文状況を取得できませんでした',
   },
-} as const;
+};
+
+export type QrStrings = typeof ja;
+
+const en: QrStrings = {
+  header: {
+    orderTab: 'Menu',
+    statusTab: 'Order Status',
+  },
+  menu: {
+    empty: 'No items are available right now. Please ask our staff.',
+    categoryEmpty: 'No items in this category',
+    recommendedCategoryName: 'Recommended',
+    recommendedBadge: 'Popular',
+    soldOutBadge: 'Sold out',
+  },
+  itemSheet: {
+    quantityLabel: 'Quantity',
+    decreaseAria: 'Decrease quantity',
+    increaseAria: 'Increase quantity',
+    memoLabel: 'Request (optional)',
+    memoPlaceholder: 'e.g. No green onions, please',
+    allergyLabel: 'Allergy info',
+    modifiersLabel: 'Options',
+    addToCart: (total: string) => `Add to cart (${total})`,
+    imageAlt: (name: string) => `Photo of ${name}`,
+  },
+  cartBar: {
+    unit: 'items',
+    order: 'Order',
+  },
+  confirm: {
+    title: 'Confirm your order',
+    description: 'Please review the details and place your order.',
+    removeAria: (name: string) => `Remove ${name} from cart`,
+    total: 'Total',
+    back: 'Back',
+    submit: 'Place order',
+  },
+  success: {
+    title: 'Order received',
+    description: 'Your food will be served shortly.',
+    viewStatus: 'View order status',
+    backToMenu: 'Back to menu',
+  },
+  status: {
+    titleSuffix: ' — Order',
+    empty: 'No orders yet',
+    orderedAtSuffix: 'ordered',
+    total: 'Current total',
+    callStaff: 'Call staff',
+    callNotice: 'Please let a nearby staff member know',
+    payNotice: 'Please pay at the register or ask our staff',
+    fetchError: 'Could not load order status',
+  },
+};
+
+export const QR_STRINGS: Record<QrLocale, QrStrings> = { ja, en };
+
+/** 既存インポート互換（ja 既定） */
+export const qrStrings = ja;

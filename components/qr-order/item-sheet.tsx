@@ -6,7 +6,7 @@ import { Dialog } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Textarea, Label } from '@/components/ui/input';
 import { yen } from '@/lib/format';
-import { qrStrings } from './strings';
+import { useQrStrings } from './strings-context';
 import { isPublicImageUrl, type QrMenuItem, type QrMenuModifier } from './types';
 
 /** メニュー商品をタップした際に開く、数量・オプション・メモ入力シート */
@@ -19,6 +19,7 @@ export function ItemSheet({
   onClose: () => void;
   onAdd: (quantity: number, memo: string, modifiers: QrMenuModifier[]) => void;
 }) {
+  const qrStrings = useQrStrings();
   const [quantity, setQuantity] = useState(1);
   const [memo, setMemo] = useState('');
   const [selectedModifierIds, setSelectedModifierIds] = useState<string[]>([]);

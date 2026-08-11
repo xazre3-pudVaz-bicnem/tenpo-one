@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase/client';
 import { Badge, type BadgeTone } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { yen } from '@/lib/format';
-import { qrStrings } from './strings';
+import { useQrStrings } from './strings-context';
 import { KITCHEN_STATUS_LABELS, qrOrderErrorMessage, type KitchenStatus, type QrOrderStatus } from './types';
 
 /**
@@ -30,6 +30,7 @@ const STATUS_TONES: Record<KitchenStatus, BadgeTone> = {
 };
 
 export function OrderStatusView({ storeSlug, tableToken }: { storeSlug: string; tableToken: string }) {
+  const qrStrings = useQrStrings();
   const [status, setStatus] = useState<QrOrderStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);

@@ -2,7 +2,7 @@
 
 import { CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { qrStrings } from './strings';
+import { useQrStrings } from './strings-context';
 
 /** 注文送信直後の完了画面 */
 export function SuccessView({
@@ -12,6 +12,7 @@ export function SuccessView({
   onViewStatus: () => void;
   onBackToMenu: () => void;
 }) {
+  const qrStrings = useQrStrings();
   return (
     <div className="flex flex-col items-center px-4 py-14 text-center">
       <div className="flex h-16 w-16 items-center justify-center rounded-full bg-success-soft">

@@ -2,7 +2,7 @@
 
 import { X, Loader2 } from 'lucide-react';
 import { yen } from '@/lib/format';
-import { qrStrings } from './strings';
+import { useQrStrings } from './strings-context';
 import { cartLineUnitPrice, type CartLine } from './types';
 
 /** 注文確定前の明細確認画面 */
@@ -23,6 +23,7 @@ export function ConfirmView({
   onBack: () => void;
   onSubmit: () => void;
 }) {
+  const qrStrings = useQrStrings();
   return (
     <div className="pb-28">
       <div className="px-4 py-4">
