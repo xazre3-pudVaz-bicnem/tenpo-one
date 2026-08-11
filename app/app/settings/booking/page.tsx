@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { SettingsBackLink } from '@/components/settings/back-link';
 import { BookingSettingsForm } from '@/components/settings/booking-settings-form';
 import { BookingUrlPanel } from '@/components/settings/booking-url-panel';
+import { StoreSlugEditor } from '@/components/settings/store-slug-editor';
 
 export const metadata: Metadata = { title: '予約設定 | 設定' };
 
@@ -73,7 +74,16 @@ export default async function BookingSettingsPage() {
 
       {siteUrl ? (
         <div className="mb-5">
-          <BookingUrlPanel url={bookingUrl} qrDataUrl={qrDataUrl} storeName={targetStore.name} />
+          <BookingUrlPanel
+            url={bookingUrl}
+            qrDataUrl={qrDataUrl}
+            storeName={targetStore.name}
+            slugEditor={
+              store?.slug ? (
+                <StoreSlugEditor storeId={targetStore.id} slug={store.slug} baseUrl={`${siteUrl}/book/`} />
+              ) : undefined
+            }
+          />
         </div>
       ) : (
         <div className="mb-5 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">

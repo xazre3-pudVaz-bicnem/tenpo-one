@@ -11,10 +11,13 @@ export function BookingUrlPanel({
   url,
   qrDataUrl,
   storeName,
+  slugEditor,
 }: {
   url: string;
   qrDataUrl: string | null;
   storeName: string;
+  /** スラッグ編集UI（サーバー側で組み立てて渡す） */
+  slugEditor?: React.ReactNode;
 }) {
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-5">
@@ -23,6 +26,7 @@ export function BookingUrlPanel({
         このURL・QRコードを Google ビジネスプロフィール／Instagram／LINE／店舗HP に掲出できます。
       </p>
       <CopyLink url={url} label="公開予約URL" />
+      {slugEditor && <div className="mt-3 border-t border-gray-100 pt-3">{slugEditor}</div>}
 
       {qrDataUrl && (
         <div className="mt-4 flex items-center gap-4">
