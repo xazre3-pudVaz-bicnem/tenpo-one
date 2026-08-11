@@ -25,6 +25,7 @@ export interface MenuItemRow {
   sortOrder: number;
   isSoldOut: boolean;
   status: 'active' | 'hidden' | 'deleted';
+  pricePending?: boolean;
 }
 
 const ITEM_TYPE_OPTIONS = [

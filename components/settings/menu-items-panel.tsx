@@ -144,6 +144,11 @@ export function MenuItemsPanel({
                 <Tr key={i.id}>
                   <Td className="font-medium text-navy">
                     {i.name}
+                    {i.pricePending && (
+                      <Badge tone="warning" className="ml-2">
+                        要価格設定
+                      </Badge>
+                    )}
                     {i.status === 'hidden' && (
                       <Badge tone="gray" className="ml-2">
                         非表示

@@ -40,7 +40,7 @@ export default async function MenuSettingsPage() {
     .from('menu_items')
     .select(
       `id, category_id, name, name_kana, description, item_type, price, takeout_price, cost, tax_rate_id,
-       duration_minutes, sell_start_time, sell_end_time, sort_order, is_sold_out, status`
+       duration_minutes, sell_start_time, sell_end_time, sort_order, is_sold_out, status, price_pending`
     )
     .eq('organization_id', ctx.organizationId)
     .neq('status', 'deleted')
@@ -73,6 +73,7 @@ export default async function MenuSettingsPage() {
     sortOrder: i.sort_order,
     isSoldOut: i.is_sold_out,
     status: i.status as 'active' | 'hidden' | 'deleted',
+    pricePending: i.price_pending ?? false,
   }));
 
   return (

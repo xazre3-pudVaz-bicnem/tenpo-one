@@ -137,6 +137,8 @@ export async function saveMenuItem(input: MenuItemInput): Promise<ActionResult> 
     sell_end_time: input.sellEndTime,
     sort_order: input.sortOrder,
     status: input.status,
+    // 価格を入力（>0）したら「価格未設定」フラグを解除。0以下は未設定のまま（公開不可）。
+    price_pending: input.price <= 0,
     updated_by: ctx.userId,
   };
 
