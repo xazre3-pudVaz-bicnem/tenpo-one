@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import { QrOrderApp } from '@/components/qr-order/qr-order-app';
+import { QrOrderApp, type ReservedCourse } from '@/components/qr-order/qr-order-app';
 import type { QrMenuData } from '@/components/qr-order/types';
 
 interface PageParams {
@@ -26,8 +26,19 @@ export async function generateMetadata({ params }: PageParams): Promise<Metadata
 
 export default async function QrOrderPage({ params }: PageParams) {
   const { storeSlug, tableToken } = await params;
-  const menu = await fetchMenu(storeSlug, tableToken);
+  const supabase = await createClient();
+  const [{ data: menu }, { data: reservedCourse }] = await Promise.all([
+    supabase.rpc('get_qr_menu', { p_slug: storeSlug, p_token: tableToken }),
+    supabase.rpc('get_qr_reserved_course', { p_slug: storeSlug, p_token: tableToken }),
+  ]);
   if (!menu) notFound();
 
-  return <QrOrderApp storeSlug={storeSlug} tableToken={tableToken} menu={menu} />;
+  return (
+    <QrOrderApp
+      storeSlug={storeSlug}
+      tableToken={tableToken}
+      menu={menu as QrMenuData}
+      reservedCourse={(reservedCourse as ReservedCourse | null) ?? null}
+    />
+  );
 }

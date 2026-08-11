@@ -10,8 +10,8 @@ import { Input, Label, Select, FieldError } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/components/ui/toast';
 import { TableWrap, Table, THead, TBody, Tr, Th, Td } from '@/components/ui/table';
-import { issueStoreOwner, resetUserPassword, setMembershipStatus } from '@/app/admin/tenants/actions';
-import { ROLES, ROLE_LABELS, type Role } from '@/lib/permissions';
+import { issueStoreOwner, resetUserPassword, setMembershipStatus, setMemberRole } from '@/app/admin/tenants/actions';
+import { ROLES, ROLE_LABELS } from '@/lib/permissions';
 
 interface Member {
   membershipId: string;
@@ -81,7 +81,16 @@ export function TenantAccounts({ storeId, members }: { storeId: string; members:
                   <Tr key={m.membershipId}>
                     <Td className="font-medium text-navy">{m.displayName}</Td>
                     <Td className="text-gray-600">{m.email ?? '—'}</Td>
-                    <Td>{ROLE_LABELS[m.role as Role] ?? m.role}</Td>
+                    <Td>
+                      <Select
+                        value={m.role}
+                        disabled={pending}
+                        onChange={(e) => run(() => setMemberRole({ storeId, membershipId: m.membershipId, role: e.target.value }), 'ロールを変更しました')}
+                        className="h-8 text-xs"
+                      >
+                        {ROLES.map((r) => (<option key={r} value={r}>{ROLE_LABELS[r]}</option>))}
+                      </Select>
+                    </Td>
                     <Td>
                       <Badge tone={m.status === 'active' ? 'success' : m.status === 'invited' ? 'primary' : 'danger'}>
                         {m.status === 'active' ? '有効' : m.status === 'invited' ? '招待中' : '停止'}

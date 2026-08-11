@@ -23,14 +23,24 @@ import {
 type Screen = 'menu' | 'confirm' | 'success';
 type Tab = 'order' | 'status';
 
+export interface ReservedCourse {
+  name: string;
+  includes_ayce: boolean | null;
+  includes_drinks: boolean | null;
+  duration_minutes: number | null;
+  notes: string | null;
+}
+
 export function QrOrderApp({
   storeSlug,
   tableToken,
   menu,
+  reservedCourse,
 }: {
   storeSlug: string;
   tableToken: string;
   menu: QrMenuData;
+  reservedCourse?: ReservedCourse | null;
 }) {
   const [screen, setScreen] = useState<Screen>('menu');
   const [tab, setTab] = useState<Tab>('order');
@@ -110,6 +120,21 @@ export function QrOrderApp({
           <p className="text-sm font-bold text-navy">{menu.store_name}</p>
           <p className="text-xs text-gray-500">{menu.table_name}</p>
         </div>
+        {reservedCourse && (
+          <div className="border-t border-primary/20 bg-primary-soft/60 px-4 py-2 text-center">
+            <p className="text-xs font-semibold text-primary-deep">
+              ご予約コース：{reservedCourse.name}
+            </p>
+            <p className="text-[11px] text-primary-deep/80">
+              {[
+                reservedCourse.includes_ayce && '食べ放題',
+                reservedCourse.includes_drinks && '飲み放題',
+                reservedCourse.duration_minutes && `${reservedCourse.duration_minutes}分`,
+              ].filter(Boolean).join('・')}
+              {' '}※コースは注文不要です。追加のご注文のみお選びください
+            </p>
+          </div>
+        )}
         {screen === 'menu' && (
           <div className="flex border-t border-gray-100">
             {(['order', 'status'] as const).map((t) => (

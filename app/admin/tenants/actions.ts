@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { requireCypressAdmin } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
+import { ROLES } from '@/lib/permissions';
 import {
   ENVIRONMENTS,
   STAGES,
@@ -215,6 +216,21 @@ export async function resetUserPassword(input: { storeId: string; profileId: str
   if (error) throw new Error(`パスワード再発行に失敗しました: ${error.message}`);
   await audit(store.organization_id, store.id, 'tenant.owner_password_reset', 'profiles', input.profileId, { reset: true });
   return { password };
+}
+
+/** メンバーのロール変更（CYPRESS運営のみ） */
+export async function setMemberRole(input: { storeId: string; membershipId: string; role: string }) {
+  await requireCypressAdmin();
+  const admin = createAdminClient();
+  const { data: store } = await admin.from('stores').select('id, organization_id').eq('id', input.storeId).maybeSingle();
+  if (!store) throw new Error('店舗が見つかりません');
+  if (!(ROLES as readonly string[]).includes(input.role)) throw new Error('不正なロールです');
+  const { data: before } = await admin.from('memberships').select('role').eq('id', input.membershipId).eq('organization_id', store.organization_id).maybeSingle();
+  if (!before) throw new Error('メンバーが見つかりません');
+  const { error } = await admin.from('memberships').update({ role: input.role }).eq('id', input.membershipId).eq('organization_id', store.organization_id);
+  if (error) throw new Error(error.message);
+  await audit(store.organization_id, store.id, 'tenant.member_role', 'memberships', input.membershipId, { from: before.role, to: input.role });
+  revalidatePath(`/admin/tenants/${input.storeId}`);
 }
 
 /** メンバーの停止/再開（membership.status） */
