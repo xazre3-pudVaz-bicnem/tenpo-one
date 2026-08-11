@@ -27,7 +27,7 @@ async function main() {
   const org = store.organization_id;
   const { data: orgRow } = await admin.from('organizations').select('is_demo').eq('id', org).single();
 
-  const cleanup = { hours: false, tax: false, reservationIds: [], customerIds: [], orderIds: [] };
+  const cleanup = { hours: false, tax: false, reservationIds: [], customerIds: [], orderIds: [], seatedTableIds: [] };
   // Web予約テストは未来日を使う（当日は現在時刻以降の枠しか空かないため時刻依存を避ける）
   const futureDate = new Date(Date.now() + 3 * 86400000).toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' });
 
@@ -81,6 +81,9 @@ async function main() {
     const qrOrder = await anon.rpc('create_qr_order', { p_slug: SLUG, p_token: tableRow.qr_token, p_items: [{ menu_item_id: foodItem.id, quantity: 2, price: 1 }, { menu_item_id: drinkItem.id, quantity: 1 }] });
     check('QR注文が作成できる', !qrOrder.error && !!qrOrder.data, qrOrder.error?.message);
     const orderId = qrOrder.data?.order_id;
+    // QR注文はcreate_qr_orderで卓をseatedにする。片付けで注文を直接削除すると
+    // current_statusがseatedのまま取り残されるため、復元対象として記録する。
+    cleanup.seatedTableIds.push(tableRow.id);
     if (orderId) {
       cleanup.orderIds.push(orderId);
       const { data: items } = await admin.from('order_items').select('menu_item_id, unit_price, line_total, quantity').eq('order_id', orderId);
@@ -198,6 +201,11 @@ async function main() {
     for (const id of cleanup.orderIds) {
       await admin.from('order_items').delete().eq('order_id', id);
       await admin.from('orders').delete().eq('id', id); // 未会計(open)のみ→削除可
+    }
+    // QR注文で着席化した卓の状態を復元（開伝票が残っていない場合のみavailableへ）
+    for (const tid of cleanup.seatedTableIds) {
+      const { count } = await admin.from('orders').select('id', { count: 'exact', head: true }).eq('table_id', tid).eq('status', 'open');
+      if ((count ?? 0) === 0) await admin.from('restaurant_tables').update({ current_status: 'available' }).eq('id', tid);
     }
     for (const id of cleanup.reservationIds) {
       await admin.from('reservation_tables').delete().eq('reservation_id', id);
