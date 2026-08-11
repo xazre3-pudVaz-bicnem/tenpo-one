@@ -40,6 +40,7 @@ export function ReservationListTable({
               <Th>時間</Th>
               <Th>氏名</Th>
               <Th className="text-right">人数</Th>
+              <Th>予約内容</Th>
               {showStore && <Th>店舗</Th>}
               <Th>担当者</Th>
               <Th>経路</Th>
@@ -61,6 +62,13 @@ export function ReservationListTable({
                   <div className="text-xs text-gray-400">{r.guestPhone}</div>
                 </Td>
                 <Td className="text-right tabular-nums">{r.partySize}名</Td>
+                <Td>
+                  {r.courseName ? (
+                    <span className="text-navy">{r.courseName}</span>
+                  ) : (
+                    <span className="text-gray-500">席のみ</span>
+                  )}
+                </Td>
                 {showStore && <Td>{r.storeName ?? '—'}</Td>}
                 <Td>{r.staffName ?? '—'}</Td>
                 <Td>{r.sourceName ?? '—'}</Td>

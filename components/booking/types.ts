@@ -16,6 +16,9 @@ export interface BookingCourse {
   duration_minutes: number | null;
   min_party: number | null;
   max_party: number | null;
+  includes_ayce: boolean | null;
+  includes_drinks: boolean | null;
+  notes: string | null;
 }
 
 export interface BookingStore {
@@ -28,6 +31,8 @@ export interface BookingStore {
   photo_url: string | null;
   booking_notes: string | null;
   cancellation_policy: string | null;
+  seat_only_enabled: boolean;
+  course_enabled: boolean;
   max_party_size: number;
   booking_window_days: number;
   slot_minutes: number;

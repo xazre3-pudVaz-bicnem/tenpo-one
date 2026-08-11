@@ -113,6 +113,17 @@ export function BookingWizard({ store }: { store: BookingStore }) {
   const selectedCourse = store.courses.find((x) => x.id === courseId) ?? null;
   const effectiveCourseId = selectedCourse && !courseFits(selectedCourse) ? '' : courseId;
 
+  // 予約タイプ（席のみ / コース）。店舗設定 seat_only_enabled / course_enabled で切替。
+  const hasCourses = store.courses.length > 0;
+  const seatOnlyAllowed = store.seat_only_enabled;
+  const courseAllowed = store.course_enabled && hasCourses;
+  const showTypeChoice = seatOnlyAllowed && courseAllowed;
+  const [reservationType, setReservationType] = useState<'seat_only' | 'course'>(
+    !seatOnlyAllowed && courseAllowed ? 'course' : 'seat_only'
+  );
+  const isCourseType = courseAllowed && reservationType === 'course';
+  const submittedCourseId = isCourseType ? effectiveCourseId : '';
+
   useEffect(() => {
     if (!partyValid) return;
     let cancelled = false;
@@ -153,7 +164,7 @@ export function BookingWizard({ store }: { store: BookingStore }) {
         kana: kana.trim() || null,
         phone: phone.trim(),
         email: email.trim() || null,
-        courseId: effectiveCourseId || null,
+        courseId: submittedCourseId || null,
         seatType: seatType || null,
         purpose: purpose || null,
         allergy: allergy.trim() || null,
@@ -307,11 +318,42 @@ export function BookingWizard({ store }: { store: BookingStore }) {
 
       {step === 2 && (
         <div className="space-y-4">
-          <h2 className="text-base font-bold text-navy">コース・お席のご希望</h2>
-          {store.courses.length > 0 && (
+          <h2 className="text-base font-bold text-navy">ご予約内容</h2>
+
+          {/* 席のみ / コース の選択（店舗が両方対応の場合） */}
+          {showTypeChoice && (
+            <div>
+              <p className="mb-1 text-sm font-medium text-gray-700">ご予約内容を選択</p>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setReservationType('seat_only')}
+                  className={cn(
+                    'h-12 rounded-lg border text-sm font-semibold',
+                    reservationType === 'seat_only' ? 'border-primary bg-primary-soft text-primary-deep' : 'border-gray-300 text-navy'
+                  )}
+                >
+                  席のみ予約
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setReservationType('course')}
+                  className={cn(
+                    'h-12 rounded-lg border text-sm font-semibold',
+                    reservationType === 'course' ? 'border-primary bg-primary-soft text-primary-deep' : 'border-gray-300 text-navy'
+                  )}
+                >
+                  コース予約
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* コース選択（コース予約時のみ・必須） */}
+          {isCourseType && (
             <div>
               <label htmlFor="booking-course" className="mb-1 block text-sm font-medium text-gray-700">
-                コース（任意）
+                コースを選択
               </label>
               <select
                 id="booking-course"
@@ -319,7 +361,7 @@ export function BookingWizard({ store }: { store: BookingStore }) {
                 onChange={(e) => setCourseId(e.target.value)}
                 className="h-11 w-full rounded-lg border border-gray-300 px-3 text-sm"
               >
-                <option value="">選択しない</option>
+                <option value="">コースをお選びください</option>
                 {store.courses.map((c) => {
                   const fits = courseFits(c);
                   const partyLabel = coursePartyLabel(c);
@@ -330,10 +372,21 @@ export function BookingWizard({ store }: { store: BookingStore }) {
                   );
                 })}
               </select>
-              {effectiveCourseId && selectedCourse?.description && (
-                <p className="mt-1.5 text-xs text-gray-500">{selectedCourse.description}</p>
+              {effectiveCourseId && selectedCourse && (
+                <div className="mt-1.5 space-y-0.5 text-xs text-gray-500">
+                  {selectedCourse.duration_minutes && <p>利用時間: 約{selectedCourse.duration_minutes}分</p>}
+                  {(selectedCourse.includes_ayce || selectedCourse.includes_drinks) && (
+                    <p>{[selectedCourse.includes_ayce && '食べ放題', selectedCourse.includes_drinks && '飲み放題'].filter(Boolean).join('・')}</p>
+                  )}
+                  {selectedCourse.notes && <p>{selectedCourse.notes}</p>}
+                </div>
               )}
+              {!effectiveCourseId && <p className="mt-1 text-xs text-amber-600">コースを選択してください。</p>}
             </div>
+          )}
+
+          {reservationType === 'seat_only' && (
+            <p className="rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-500">席のみのご予約です。ご来店後にご注文いただけます。</p>
           )}
 
           <div>
@@ -494,7 +547,7 @@ export function BookingWizard({ store }: { store: BookingStore }) {
           {step < 3 ? (
             <button
               type="button"
-              disabled={step === 1 && !canProceedStep1}
+              disabled={(step === 1 && !canProceedStep1) || (step === 2 && isCourseType && !effectiveCourseId)}
               onClick={() => setStep((s) => (s + 1) as 1 | 2 | 3)}
               className="h-12 flex-1 rounded-lg bg-primary text-sm font-semibold text-white disabled:opacity-40"
             >
