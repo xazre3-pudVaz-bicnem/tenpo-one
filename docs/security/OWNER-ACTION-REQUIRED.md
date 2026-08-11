@@ -57,8 +57,10 @@ Vercel / Supabase / GitHub の各ダッシュボードで**人が設定**する�
 - 場所: Settings → Environment Variables
 - `SUPABASE_SERVICE_ROLE_KEY`・`STRIPE_SECRET_KEY` 等の秘密値は **Production/Preview** に限定し、
   `NEXT_PUBLIC_*` でないことを確認（`NEXT_PUBLIC_` はブラウザへ露出する）。
-- `NEXT_PUBLIC_SITE_URL` を本番ドメインで設定（未設定だと canonical/OG/sitemap を出さず
-  robots を Disallow にする安全側動作になる）。
+- `NEXT_PUBLIC_SITE_URL` を本番ドメイン **`https://www.tenpo-one.com`**（末尾スラッシュなし）で設定。
+  未設定だと canonical/OG/sitemap を出さず robots を Disallow にする安全側動作になる。
+  この値が公開予約URL（`/book/{slug}`）・QRコード・SEOのcanonical/JSON-LDの基準になる。
+  変更後は **再デプロイ**（Redeploy）で反映する。
 
 ### 🟠 B-2. WAF / ファイアウォール
 - 場所: Settings → Firewall（Vercel WAF）
@@ -69,8 +71,12 @@ Vercel / Supabase / GitHub の各ダッシュボードで**人が設定**する�
 - 場所: Settings → Deployment Protection
 - 操作: Preview環境に Vercel Authentication を有効化（未公開URLの無断閲覧を防止）。
 
-### 🟡 B-4. ドメイン・HTTPS
-- 独自ドメインのHTTPS強制（Vercel既定で有効）。HSTSはアプリ側ヘッダでも付与済みか確認。
+### 🔴 B-4. 独自ドメイン `www.tenpo-one.com`
+- 場所: Settings → Domains
+- `www.tenpo-one.com` と apex `tenpo-one.com` の両方を追加し、Vercelの案内どおりDNS
+  （www は CNAME、apex は A/ALIAS）を設定。**apex → www へリダイレクト**（www を正）に設定する。
+- HTTPS は Vercel が自動発行（Let's Encrypt）。HSTS はアプリ側ヘッダで付与済み。
+- ドメイン確定後、B-1 の `NEXT_PUBLIC_SITE_URL` を `https://www.tenpo-one.com` にして再デプロイ。
 
 ---
 

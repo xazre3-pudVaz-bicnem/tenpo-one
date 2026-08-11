@@ -19,14 +19,17 @@ seedスクリプトはビルド・起動時に実行されない（`node scripts
 
 ## 2. Supabase Auth 設定（Vercel URL確定後）
 
+本番ドメイン: **`https://www.tenpo-one.com`**
+
 Supabase Dashboard → Authentication → URL Configuration:
 
-- **Site URL**: `https://<本番ドメイン>`
+- **Site URL**: `https://www.tenpo-one.com`
 - **Redirect URLs**（localhost と本番の両方を登録）:
-  - `https://<本番ドメイン>/**`
+  - `https://www.tenpo-one.com/**`
   - `http://localhost:3000/**`
 
 パスワード再設定メールのリンク先（`/reset-password/update`）が上記に含まれることを確認する。
+（`/reset-password` は `window.location.origin` を使うため、上記allowlistに本番ドメインが必要。）
 プレビューデプロイでも認証したい場合は `https://*-<team>.vercel.app/**` を追加する。
 
 ## 3. デプロイ後の本番 Smoke Test
