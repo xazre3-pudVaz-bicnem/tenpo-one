@@ -7839,7 +7839,12 @@ export type Database = {
       }
       generate_reservation_code: { Args: never; Returns: string }
       get_booking_availability: {
-        Args: { p_date: string; p_party: number; p_slug: string }
+        Args: {
+          p_course_id?: string
+          p_date: string
+          p_party: number
+          p_slug: string
+        }
         Returns: Json
       }
       get_booking_store: { Args: { p_slug: string }; Returns: Json }
@@ -7849,6 +7854,10 @@ export type Database = {
       }
       get_qr_menu: { Args: { p_slug: string; p_token: string }; Returns: Json }
       get_qr_order_status: {
+        Args: { p_slug: string; p_token: string }
+        Returns: Json
+      }
+      get_qr_reserved_course: {
         Args: { p_slug: string; p_token: string }
         Returns: Json
       }
