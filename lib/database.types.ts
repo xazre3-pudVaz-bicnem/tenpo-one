@@ -3902,6 +3902,76 @@ export type Database = {
           },
         ]
       }
+      notification_outbox: {
+        Row: {
+          body: string
+          channel: string
+          created_at: string
+          error: string | null
+          id: string
+          organization_id: string
+          recipient: string
+          reservation_id: string | null
+          scheduled_for: string | null
+          sent_at: string | null
+          status: string
+          store_id: string
+          subject: string | null
+        }
+        Insert: {
+          body: string
+          channel: string
+          created_at?: string
+          error?: string | null
+          id?: string
+          organization_id: string
+          recipient: string
+          reservation_id?: string | null
+          scheduled_for?: string | null
+          sent_at?: string | null
+          status?: string
+          store_id: string
+          subject?: string | null
+        }
+        Update: {
+          body?: string
+          channel?: string
+          created_at?: string
+          error?: string | null
+          id?: string
+          organization_id?: string
+          recipient?: string
+          reservation_id?: string | null
+          scheduled_for?: string | null
+          sent_at?: string | null
+          status?: string
+          store_id?: string
+          subject?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_outbox_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notification_outbox_reservation_id_fkey"
+            columns: ["reservation_id"]
+            isOneToOne: false
+            referencedRelation: "reservations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notification_outbox_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notifications: {
         Row: {
           body: string | null
@@ -6888,6 +6958,8 @@ export type Database = {
           petty_opening_balance: number
           receipt_footer: string | null
           receipt_header: string | null
+          reminder_enabled: boolean
+          reminder_hours_before: number
           rounding: string
           seat_only_enabled: boolean
           service_charge_rate: number
@@ -6924,6 +6996,8 @@ export type Database = {
           petty_opening_balance?: number
           receipt_footer?: string | null
           receipt_header?: string | null
+          reminder_enabled?: boolean
+          reminder_hours_before?: number
           rounding?: string
           seat_only_enabled?: boolean
           service_charge_rate?: number
@@ -6960,6 +7034,8 @@ export type Database = {
           petty_opening_balance?: number
           receipt_footer?: string | null
           receipt_header?: string | null
+          reminder_enabled?: boolean
+          reminder_hours_before?: number
           rounding?: string
           seat_only_enabled?: boolean
           service_charge_rate?: number

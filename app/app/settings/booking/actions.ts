@@ -78,6 +78,8 @@ export async function updateBookingSettings(input: {
   bookingPhotoUrl: string;
   bookingNotes: string;
   cancellationPolicy: string;
+  reminderEnabled: boolean;
+  reminderHoursBefore: number;
 }): Promise<ActionResult> {
   const ctx = await requirePermission('store.settings');
   if (!ctx.stores.some((s) => s.id === input.storeId)) {
@@ -116,6 +118,8 @@ export async function updateBookingSettings(input: {
       booking_photo_url: photoUrl || null,
       booking_notes: input.bookingNotes.trim() || null,
       cancellation_policy: input.cancellationPolicy.trim() || null,
+      reminder_enabled: input.reminderEnabled,
+      reminder_hours_before: input.reminderHoursBefore > 0 ? input.reminderHoursBefore : 24,
       updated_by: ctx.userId,
     },
     { onConflict: 'store_id' }

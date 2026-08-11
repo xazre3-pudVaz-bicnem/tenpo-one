@@ -10,6 +10,7 @@ import { SettingsBackLink } from '@/components/settings/back-link';
 import { BookingSettingsForm } from '@/components/settings/booking-settings-form';
 import { BookingUrlPanel } from '@/components/settings/booking-url-panel';
 import { StoreSlugEditor } from '@/components/settings/store-slug-editor';
+import { ReminderPanel } from '@/components/settings/reminder-panel';
 
 export const metadata: Metadata = { title: '予約設定 | 設定' };
 
@@ -32,7 +33,7 @@ export default async function BookingSettingsPage() {
     supabase.from('stores').select('slug, booking_enabled').eq('id', targetStore.id).single(),
     supabase
       .from('store_settings')
-      .select('slot_minutes, default_stay_minutes, booking_cutoff_minutes, booking_window_days, max_party_size, cancel_deadline_hours, cleaning_buffer_minutes, booking_photo_url, booking_notes, cancellation_policy')
+      .select('slot_minutes, default_stay_minutes, booking_cutoff_minutes, booking_window_days, max_party_size, cancel_deadline_hours, cleaning_buffer_minutes, booking_photo_url, booking_notes, cancellation_policy, reminder_enabled, reminder_hours_before')
       .eq('store_id', targetStore.id)
       .maybeSingle(),
   ]);
@@ -104,8 +105,16 @@ export default async function BookingSettingsPage() {
           bookingPhotoUrl: settings?.booking_photo_url ?? '',
           bookingNotes: settings?.booking_notes ?? '',
           cancellationPolicy: settings?.cancellation_policy ?? '',
+          reminderEnabled: settings?.reminder_enabled ?? false,
+          reminderHoursBefore: settings?.reminder_hours_before ?? 24,
         }}
       />
+
+      {settings?.reminder_enabled && (
+        <div className="mt-5">
+          <ReminderPanel storeId={targetStore.id} />
+        </div>
+      )}
     </div>
   );
 }

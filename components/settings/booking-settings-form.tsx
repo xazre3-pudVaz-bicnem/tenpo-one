@@ -19,6 +19,8 @@ export interface BookingSettingsData {
   bookingPhotoUrl: string;
   bookingNotes: string;
   cancellationPolicy: string;
+  reminderEnabled: boolean;
+  reminderHoursBefore: number;
 }
 
 export function BookingSettingsForm({ initial }: { initial: BookingSettingsData }) {
@@ -168,6 +170,33 @@ export function BookingSettingsForm({ initial }: { initial: BookingSettingsData 
               </p>
             </div>
           </div>
+        </div>
+
+        <div className="border-t border-gray-100 pt-4">
+          <p className="mb-3 text-sm font-semibold text-navy">予約リマインダー</p>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={form.reminderEnabled}
+              onChange={(e) => set('reminderEnabled', e.target.checked)}
+              className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+            />
+            リマインダーを有効にする
+          </label>
+          <div className="mt-3 max-w-[16rem]">
+            <Label htmlFor="reminder-hours">送信タイミング（来店何時間前）</Label>
+            <Input
+              id="reminder-hours"
+              type="number"
+              min={1}
+              value={form.reminderHoursBefore}
+              onChange={(e) => set('reminderHoursBefore', Number(e.target.value))}
+              disabled={!form.reminderEnabled}
+            />
+          </div>
+          <p className="mt-1 text-xs text-amber-600">
+            ※ 外部メール/SMSプロバイダは未接続です。リマインダーは送信キューに積まれますが、実送信は接続後に有効になります。
+          </p>
         </div>
 
         <FieldError message={error ?? undefined} />
