@@ -154,6 +154,45 @@ async function main() {
     const overMax = await anon.rpc('create_public_reservation', { p_slug: SLUG, p_date: futureDate, p_time: slot, p_party: 200, p_adults: 200, p_children: 0, p_name: 'x', p_kana: null, p_phone: randPhone(), p_email: null, p_consent: true });
     check('人数上限超過は拒否（PARTY_TOO_LARGE/INVALID_PARTY）', !!overMax.error && /PARTY_TOO_LARGE|INVALID_PARTY/.test(overMax.error.message), overMax.error?.message);
 
+    // ============================================================
+    section('CASE8: コース予約→POS引継（1回だけ計上・二重計上防止）');
+    // ============================================================
+    // createOrderFromReservation と同じ手順をDBレベルで再現（本番はfinalizeしない）
+    const { data: courseItem, error: eCourse } = await admin.from('menu_items').select('id, price, name').eq('organization_id', org).eq('item_type', 'course').eq('status', 'active').limit(1).maybeSingle();
+    if (eCourse || !courseItem) throw new Error('コース商品取得失敗: ' + (eCourse?.message ?? 'null'));
+    const cStart = new Date(`${futureDate}T19:00:00+09:00`);
+    const cPhone = randPhone();
+    const { data: cCust, error: eCCust } = await admin.from('customers').insert({ organization_id: org, primary_store_id: store.id, name: 'コース引継テスト', phone: cPhone }).select('id').single();
+    if (eCCust || !cCust) throw new Error('コース顧客作成失敗: ' + (eCCust?.message ?? 'null'));
+    cleanup.customerIds.push(cCust.id);
+    const { data: cRes, error: eCRes } = await admin.from('reservations').insert({ organization_id: org, store_id: store.id, customer_id: cCust.id, code: `CRS-${Date.now()}`, reserved_date: futureDate, start_at: cStart.toISOString(), end_at: new Date(cStart.getTime() + 120 * 60000).toISOString(), party_size: 4, adults: 4, children: 0, course_id: courseItem.id, guest_name: 'コース引継テスト', guest_phone: cPhone, status: 'seated', source_id: phoneSrc.id, created_via: 'phone', consent_accepted: false }).select('id, course_id, course_posted_at, party_size').single();
+    if (eCRes || !cRes) throw new Error('コース予約作成失敗: ' + (eCRes?.message ?? 'null'));
+    cleanup.reservationIds.push(cRes.id);
+
+    // 1回目: 注文作成＋コースを人数分1回計上＋course_posted_atを立てる
+    const postCourse = async (resId) => {
+      const { data: res } = await admin.from('reservations').select('id, store_id, customer_id, party_size, course_id, course_posted_at').eq('id', resId).single();
+      const { data: ord } = await admin.from('orders').insert({ organization_id: org, store_id: res.store_id, reservation_id: res.id, customer_id: res.customer_id, guest_count: res.party_size, order_type: 'dine_in' }).select('id').single();
+      cleanup.orderIds.push(ord.id);
+      if (res.course_id && !res.course_posted_at) {
+        const qty = Math.max(1, res.party_size);
+        await admin.from('order_items').insert({ organization_id: org, store_id: res.store_id, order_id: ord.id, menu_item_id: courseItem.id, name: courseItem.name, unit_price: courseItem.price, quantity: qty, tax_rate: 10, tax_included: true, line_total: courseItem.price * qty });
+        await admin.from('reservations').update({ course_posted_at: new Date().toISOString() }).eq('id', res.id);
+        await admin.rpc('recalc_order_totals', { p_order_id: ord.id });
+      }
+      return ord.id;
+    };
+    const o1 = await postCourse(cRes.id);
+    const { data: o1total } = await admin.from('orders').select('total').eq('id', o1).single();
+    check('コースが人数分1回だけ計上される', o1total.total === courseItem.price * 4, `total=${o1total.total} 期待=${courseItem.price * 4}`);
+    const { count: line1 } = await admin.from('order_items').select('id', { count: 'exact', head: true }).eq('order_id', o1).eq('menu_item_id', courseItem.id);
+    check('コース明細が1件', line1 === 1, `件数:${line1}`);
+
+    // 2回目: 再度引継しても course_posted_at 済みなので計上しない（二重計上防止）
+    const o2 = await postCourse(cRes.id);
+    const { count: line2 } = await admin.from('order_items').select('id', { count: 'exact', head: true }).eq('order_id', o2).eq('menu_item_id', courseItem.id);
+    check('再引継ではコースを二重計上しない（0件）', line2 === 0, `件数:${line2}`);
+
   } finally {
     section('後片付け（テストデータのみ削除・本番はfinalizeしない）');
     for (const id of cleanup.orderIds) {

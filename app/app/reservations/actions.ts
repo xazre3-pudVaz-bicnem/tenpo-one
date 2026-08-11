@@ -19,6 +19,8 @@ interface ReservationRow {
   start_at: string;
   end_at: string;
   is_private_hire: boolean;
+  course_id: string | null;
+  course_posted_at: string | null;
 }
 
 function revalidateAll() {
@@ -34,7 +36,7 @@ async function loadReservation(
 ): Promise<ReservationRow> {
   const { data, error } = await supabase
     .from('reservations')
-    .select('id, organization_id, store_id, customer_id, party_size, status, reserved_date, start_at, end_at, is_private_hire')
+    .select('id, organization_id, store_id, customer_id, party_size, status, reserved_date, start_at, end_at, is_private_hire, course_id, course_posted_at')
     .eq('id', reservationId)
     .eq('organization_id', ctx.organizationId)
     .single();
@@ -535,6 +537,42 @@ export async function createOrderFromReservation(reservationId: string) {
     .select('id')
     .single();
   if (error || !created) throw new Error('注文の作成に失敗しました');
+
+  // コース予約の引継: コースを注文へ「1回だけ」計上する（course_posted_at で二重計上防止）。
+  if (reservation.course_id && !reservation.course_posted_at) {
+    const { data: course } = await supabase
+      .from('menu_items')
+      .select('id, name, price, tax_rate_id')
+      .eq('id', reservation.course_id)
+      .maybeSingle();
+    if (course) {
+      // コース税率（未紐付けは標準10%）。人数分を計上（食べ放題等の人数課金コースを想定）。
+      let taxRate = 10;
+      if (course.tax_rate_id) {
+        const { data: tr } = await supabase.from('tax_rates').select('rate').eq('id', course.tax_rate_id).maybeSingle();
+        if (tr?.rate != null) taxRate = Number(tr.rate);
+      }
+      const qty = Math.max(1, reservation.party_size);
+      const { error: itemErr } = await supabase.from('order_items').insert({
+        organization_id: ctx.organizationId,
+        store_id: reservation.store_id,
+        order_id: created.id,
+        menu_item_id: course.id,
+        name: course.name,
+        unit_price: course.price,
+        quantity: qty,
+        tax_rate: taxRate,
+        tax_included: true,
+        line_total: course.price * qty,
+        staff_id: ctx.userId,
+      });
+      if (!itemErr) {
+        // 二重計上防止フラグを立ててから合計を再計算
+        await supabase.from('reservations').update({ course_posted_at: new Date().toISOString() }).eq('id', reservationId);
+        await supabase.rpc('recalc_order_totals', { p_order_id: created.id });
+      }
+    }
+  }
 
   revalidateAll();
   redirect(`/app/pos?order=${created.id}`);

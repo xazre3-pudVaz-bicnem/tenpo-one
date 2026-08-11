@@ -5877,6 +5877,7 @@ export type Database = {
           code: string
           consent_accepted: boolean
           course_id: string | null
+          course_posted_at: string | null
           created_at: string
           created_by: string | null
           created_via: string
@@ -5913,6 +5914,7 @@ export type Database = {
           code: string
           consent_accepted?: boolean
           course_id?: string | null
+          course_posted_at?: string | null
           created_at?: string
           created_by?: string | null
           created_via?: string
@@ -5949,6 +5951,7 @@ export type Database = {
           code?: string
           consent_accepted?: boolean
           course_id?: string | null
+          course_posted_at?: string | null
           created_at?: string
           created_by?: string | null
           created_via?: string
