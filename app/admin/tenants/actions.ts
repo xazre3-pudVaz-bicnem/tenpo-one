@@ -169,7 +169,7 @@ export async function createTenantStore(input: CreateTenantStoreInput): Promise<
 // ---------------------------------------------------------------
 // Owner/スタッフ発行（既存店舗へ）
 // ---------------------------------------------------------------
-export async function issueStoreOwner(input: { storeId: string; email: string; displayName: string; role?: string }): Promise<{ email: string; password: string }> {
+export async function issueStoreOwner(input: { storeId: string; email: string; displayName: string; role?: string; password?: string }): Promise<{ email: string; password: string }> {
   await requireCypressAdmin();
   const admin = createAdminClient();
   const { data: store } = await admin.from('stores').select('id, organization_id').eq('id', input.storeId).maybeSingle();
@@ -179,7 +179,10 @@ export async function issueStoreOwner(input: { storeId: string; email: string; d
   const role = input.role || 'org_owner';
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error('メールアドレス形式が正しくありません');
 
-  const password = randomPassword();
+  // パスワードは任意指定可（空欄なら強力なランダムを自動生成）。指定時は8文字以上。
+  const specified = input.password?.trim();
+  if (specified && specified.length < 8) throw new Error('パスワードは8文字以上で指定してください');
+  const password = specified || randomPassword();
   const { data: created, error: uErr } = await admin.auth.admin.createUser({
     email, password, email_confirm: true, user_metadata: { display_name: displayName },
   });
@@ -199,13 +202,15 @@ export async function issueStoreOwner(input: { storeId: string; email: string; d
   return { email, password };
 }
 
-/** パスワード再発行（新しいランダムパスワードを一度だけ返す。平文保存しない） */
-export async function resetUserPassword(input: { storeId: string; profileId: string }): Promise<{ password: string }> {
+/** パスワード再発行（任意指定可・空欄なら新しいランダム。平文保存しない） */
+export async function resetUserPassword(input: { storeId: string; profileId: string; password?: string }): Promise<{ password: string }> {
   await requireCypressAdmin();
   const admin = createAdminClient();
   const { data: store } = await admin.from('stores').select('id, organization_id').eq('id', input.storeId).maybeSingle();
   if (!store) throw new Error('店舗が見つかりません');
-  const password = randomPassword();
+  const specified = input.password?.trim();
+  if (specified && specified.length < 8) throw new Error('パスワードは8文字以上で指定してください');
+  const password = specified || randomPassword();
   const { error } = await admin.auth.admin.updateUserById(input.profileId, { password });
   if (error) throw new Error(`パスワード再発行に失敗しました: ${error.message}`);
   await audit(store.organization_id, store.id, 'tenant.owner_password_reset', 'profiles', input.profileId, { reset: true });

@@ -28,7 +28,7 @@ export function TenantAccounts({ storeId, members }: { storeId: string; members:
   const { toast } = useToast();
   const [pending, startTransition] = useTransition();
   const [issueOpen, setIssueOpen] = useState(false);
-  const [form, setForm] = useState({ email: '', displayName: '', role: 'org_owner' as string });
+  const [form, setForm] = useState({ email: '', displayName: '', role: 'org_owner' as string, password: '' });
   const [error, setError] = useState<string | null>(null);
   const [oneTime, setOneTime] = useState<{ label: string; email?: string; password: string } | null>(null);
 
@@ -42,10 +42,10 @@ export function TenantAccounts({ storeId, members }: { storeId: string; members:
     setError(null);
     startTransition(async () => {
       try {
-        const res = await issueStoreOwner({ storeId, email: form.email, displayName: form.displayName, role: form.role });
+        const res = await issueStoreOwner({ storeId, email: form.email, displayName: form.displayName, role: form.role, password: form.password || undefined });
         setOneTime({ label: 'アカウントを発行しました', email: res.email, password: res.password });
         setIssueOpen(false);
-        setForm({ email: '', displayName: '', role: 'org_owner' });
+        setForm({ email: '', displayName: '', role: 'org_owner', password: '' });
         router.refresh();
       } catch (e) { setError(e instanceof Error ? e.message : '発行に失敗しました'); }
     });
@@ -122,6 +122,11 @@ export function TenantAccounts({ storeId, members }: { storeId: string; members:
             <Select id="ta-role" value={form.role} onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))}>
               {ROLES.map((r) => (<option key={r} value={r}>{ROLE_LABELS[r]}</option>))}
             </Select>
+          </div>
+          <div>
+            <Label htmlFor="ta-pw">パスワード（任意・8文字以上）</Label>
+            <Input id="ta-pw" type="text" value={form.password} onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))} placeholder="空欄の場合は自動生成" />
+            <p className="mt-1 text-xs text-gray-500">IDはメール、パスワードはここで指定できます（空欄なら強力なパスワードを自動生成）。発行後にこの画面で一度だけ表示します。</p>
           </div>
           <FieldError message={error ?? undefined} />
           <div className="flex justify-end gap-2">
