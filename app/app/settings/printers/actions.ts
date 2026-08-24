@@ -323,3 +323,124 @@ export async function saveDrawerSettings(storeId: string, drawer: DrawerSettings
   revalidatePath('/app/settings/printers');
   return {};
 }
+
+// -------------------------------------------------------------
+// CloudPRNT（Star mC-Print3 等）連携
+// -------------------------------------------------------------
+
+/** CloudPRNTの有効化・ドロア命令・ポーリング間隔を更新する。 */
+export async function setCloudPrntConfig(input: {
+  id: string;
+  storeId: string;
+  enabled: boolean;
+  drawerCommand?: string;
+  pollIntervalSeconds?: number;
+}): Promise<ActionResult> {
+  const ctx = await requirePermission('store.settings');
+  const err = assertStoreAccess(ctx.stores.map((s) => s.id), input.storeId);
+  if (err) return { error: err };
+
+  const patch: Record<string, unknown> = { cloudprnt_enabled: input.enabled, updated_by: ctx.userId };
+  if (typeof input.drawerCommand === 'string' && input.drawerCommand.trim()) {
+    patch.drawer_command = input.drawerCommand.trim();
+  }
+  if (typeof input.pollIntervalSeconds === 'number' && input.pollIntervalSeconds > 0) {
+    patch.poll_interval_seconds = Math.min(60, Math.max(1, Math.round(input.pollIntervalSeconds)));
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from('printer_configs')
+    .update(patch)
+    .eq('id', input.id)
+    .eq('organization_id', ctx.organizationId)
+    .eq('store_id', input.storeId);
+  if (error) return { error: `CloudPRNT設定の保存に失敗しました: ${error.message}` };
+
+  await supabase.rpc('log_audit', {
+    p_org: ctx.organizationId,
+    p_store: input.storeId,
+    p_action: 'settings.printers.cloudprnt_update',
+    p_target_table: 'printer_configs',
+    p_target_id: input.id,
+    p_before: null,
+    p_after: { enabled: input.enabled },
+    p_note: null,
+  });
+
+  revalidatePath('/app/settings/printers');
+  return {};
+}
+
+/** CloudPRNTトークンを再発行する（漏洩時など。既存URLは無効になる）。 */
+export async function regenerateCloudPrntToken(id: string, storeId: string): Promise<ActionResult> {
+  const ctx = await requirePermission('store.settings');
+  const err = assertStoreAccess(ctx.stores.map((s) => s.id), storeId);
+  if (err) return { error: err };
+
+  // 推測不能なトークンをサーバ側で生成（node:crypto）。
+  const { randomBytes } = await import('node:crypto');
+  const token = randomBytes(24).toString('hex');
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from('printer_configs')
+    .update({ cloudprnt_token: token, updated_by: ctx.userId })
+    .eq('id', id)
+    .eq('organization_id', ctx.organizationId)
+    .eq('store_id', storeId);
+  if (error) return { error: `トークンの再発行に失敗しました: ${error.message}` };
+
+  revalidatePath('/app/settings/printers');
+  return {};
+}
+
+/** CloudPRNTのテスト印字（またはドロア開放）をキューに積む。プリンタが次のポーリングで取得・実行する。 */
+export async function enqueueCloudPrntTest(
+  id: string,
+  storeId: string,
+  kind: 'receipt' | 'drawer'
+): Promise<ActionResult> {
+  const ctx = await requirePermission('store.settings');
+  const err = assertStoreAccess(ctx.stores.map((s) => s.id), storeId);
+  if (err) return { error: err };
+
+  const supabase = await createClient();
+  const { data: printer } = await supabase
+    .from('printer_configs')
+    .select('id, cloudprnt_enabled, paper_width_mm, drawer_command')
+    .eq('id', id)
+    .eq('store_id', storeId)
+    .maybeSingle();
+  if (!printer) return { error: 'プリンタ設定が見つかりません' };
+  if (!printer.cloudprnt_enabled) return { error: '先にCloudPRNTを有効化してください' };
+
+  const { testPrintMarkup, drawerKickMarkup } = await import('@/lib/receipt-markup');
+  const { data: store } = await supabase.from('stores').select('name').eq('id', storeId).single();
+
+  const paper = printer.paper_width_mm === 58 ? 58 : 80;
+  const body =
+    kind === 'drawer'
+      ? drawerKickMarkup(printer.drawer_command ?? '[drawer: 1]')
+      : testPrintMarkup({
+          storeName: store?.name ?? 'TENPO ONE',
+          paperWidth: paper,
+          issuedAt: new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' }),
+        });
+
+  const { error } = await supabase.from('print_jobs').insert({
+    organization_id: ctx.organizationId,
+    store_id: storeId,
+    printer_config_id: printer.id,
+    job_type: 'test',
+    target: 'cloudprnt',
+    content_type: 'text/vnd.star.markup',
+    payload: { body, drawer: kind === 'drawer' },
+    status: 'queued',
+    created_by: ctx.userId,
+  });
+  if (error) return { error: `テストジョブの登録に失敗しました: ${error.message}` };
+
+  revalidatePath('/app/settings/printers');
+  return {};
+}

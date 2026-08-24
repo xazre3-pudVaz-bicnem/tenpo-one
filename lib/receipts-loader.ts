@@ -1,53 +1,28 @@
-import type { Metadata } from 'next';
-import Link from 'next/link';
-import QRCode from 'qrcode';
-import { ArrowLeft } from 'lucide-react';
-import { requireMember } from '@/lib/auth';
-import { createClient } from '@/lib/supabase/server';
-import { buildReceipt } from '@/lib/receipts';
+import 'server-only';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { buildReceipt, type ReceiptData } from '@/lib/receipts';
 import { METHOD_LABELS } from '@/components/cash/labels';
-import { EmptyState } from '@/components/ui/state';
-import { ReceiptView } from '@/components/pos/receipt-view';
-import { logPrintJob } from '@/app/app/pos/actions';
 
-export const metadata: Metadata = { title: 'レシート' };
-
-export default async function ReceiptPage({
-  params,
-  searchParams,
-}: {
-  params: Promise<{ orderId: string }>;
-  searchParams: Promise<{ reissue?: string }>;
-}) {
-  const { orderId } = await params;
-  const { reissue } = await searchParams;
-  const ctx = await requireMember();
-  const supabase = await createClient();
-  const store = ctx.currentStore ?? ctx.stores[0];
-
+/**
+ * 注文IDからレシート表示モデル(ReceiptData)を構築する（サーバ共用）。
+ * レシートページ表示・CloudPRNTジョブのMarkup生成の双方から利用する。
+ * 渡された supabase クライアントの権限で読む（セッション=RLS適用 / admin=全件）。
+ * 見つからない場合は null。
+ */
+export async function loadReceiptData(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: SupabaseClient<any, any, any>,
+  orderId: string,
+  opts: { isReissue?: boolean } = {}
+): Promise<{ receipt: ReceiptData; storeId: string; storeName: string } | null> {
   const { data: order } = await supabase
     .from('orders')
     .select(
-      'id, order_no, order_type, guest_count, subtotal, tax_total, service_charge, discount_total, coupon_code, customer_id, register_session_id, staff_id, total, closed_at, business_date, store_id, stores(name, address, phone), profiles(display_name)'
+      'id, order_no, subtotal, tax_total, service_charge, discount_total, coupon_code, customer_id, register_session_id, staff_id, total, closed_at, store_id, stores(name, address, phone), profiles(display_name)'
     )
     .eq('id', orderId)
     .single();
-
-  if (!order || (store && order.store_id !== store.id && !ctx.isHq)) {
-    return (
-      <div>
-        <EmptyState
-          title="レシートが見つかりません"
-          description="この注文は存在しないか、アクセスできません"
-          action={
-            <Link href="/app/pos" className="text-sm font-medium text-primary hover:underline">
-              POSへ戻る
-            </Link>
-          }
-        />
-      </div>
-    );
-  }
+  if (!order) return null;
 
   const [{ data: items }, { data: payments }, { data: settings }, { data: refunds }, { data: pointTx }] =
     await Promise.all([
@@ -90,9 +65,7 @@ export default async function ReceiptPage({
       .maybeSingle();
     pointBalance = cust?.point_balance ?? null;
   }
-  const pointsEarned = (pointTx ?? [])
-    .filter((t) => t.kind === 'earn')
-    .reduce((a, t) => a + t.points, 0);
+  const pointsEarned = (pointTx ?? []).filter((t) => t.kind === 'earn').reduce((a, t) => a + t.points, 0);
   const pointsUsed = Math.abs(
     (pointTx ?? []).filter((t) => t.kind === 'redeem').reduce((a, t) => a + t.points, 0)
   );
@@ -136,40 +109,10 @@ export default async function ReceiptPage({
     refunds: (refunds ?? []).map((r) => ({ amount: r.amount })),
     registerName,
     staffName: staff?.display_name ?? null,
-    isReissue: reissue === '1',
+    isReissue: opts.isReissue ?? false,
     methodLabels: METHOD_LABELS,
-    // 非会員注文ではポイント欄自体を出さない（buildReceiptは未指定でnull化する）
     points: order.customer_id ? { earned: pointsEarned, used: pointsUsed, balance: pointBalance } : undefined,
   });
 
-  const qrDataUrl = await QRCode.toDataURL(receipt.qrContent, { width: 160, margin: 1 });
-
-  // CloudPRNT有効なレシートプリンタが登録されていれば「プリンタで印刷」を表示
-  const { count: cloudPrntCount } = await supabase
-    .from('printer_configs')
-    .select('id', { count: 'exact', head: true })
-    .eq('store_id', order.store_id)
-    .eq('status', 'active')
-    .eq('usage', 'receipt')
-    .eq('cloudprnt_enabled', true);
-  const cloudPrntAvailable = (cloudPrntCount ?? 0) > 0;
-
-  return (
-    <div className="mx-auto max-w-2xl">
-      <div className="mb-4 flex items-center justify-between print:hidden">
-        <Link href="/app/pos" className="flex items-center gap-1 text-sm font-medium text-gray-600 hover:text-primary">
-          <ArrowLeft className="h-4 w-4" />
-          POSへ戻る
-        </Link>
-      </div>
-
-      <ReceiptView
-        receipt={receipt}
-        orderId={order.id}
-        qrDataUrl={qrDataUrl}
-        logPrintJobAction={logPrintJob}
-        cloudPrntAvailable={cloudPrntAvailable}
-      />
-    </div>
-  );
+  return { receipt, storeId: order.store_id, storeName: storeInfo?.name ?? '' };
 }

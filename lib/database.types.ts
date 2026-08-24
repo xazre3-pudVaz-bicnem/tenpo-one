@@ -5152,6 +5152,8 @@ export type Database = {
       }
       print_jobs: {
         Row: {
+          claimed_at: string | null
+          content_type: string | null
           created_at: string
           created_by: string | null
           error: string | null
@@ -5167,6 +5169,8 @@ export type Database = {
           target: string
         }
         Insert: {
+          claimed_at?: string | null
+          content_type?: string | null
           created_at?: string
           created_by?: string | null
           error?: string | null
@@ -5182,6 +5186,8 @@ export type Database = {
           target?: string
         }
         Update: {
+          claimed_at?: string | null
+          content_type?: string | null
           created_at?: string
           created_by?: string | null
           error?: string | null
@@ -5230,19 +5236,25 @@ export type Database = {
       printer_configs: {
         Row: {
           auto_print: boolean
+          cloudprnt_enabled: boolean
+          cloudprnt_token: string | null
           connection_type: string | null
           created_at: string
           created_by: string | null
+          drawer_command: string
           drawer_kick: boolean
           id: string
           ip_address: string | null
           is_verified: boolean
           last_connected_at: string | null
+          last_polled_at: string | null
+          mac_address: string | null
           maker: string | null
           model: string | null
           name: string
           organization_id: string
           paper_width_mm: number
+          poll_interval_seconds: number
           status: string
           store_id: string
           updated_at: string
@@ -5251,19 +5263,25 @@ export type Database = {
         }
         Insert: {
           auto_print?: boolean
+          cloudprnt_enabled?: boolean
+          cloudprnt_token?: string | null
           connection_type?: string | null
           created_at?: string
           created_by?: string | null
+          drawer_command?: string
           drawer_kick?: boolean
           id?: string
           ip_address?: string | null
           is_verified?: boolean
           last_connected_at?: string | null
+          last_polled_at?: string | null
+          mac_address?: string | null
           maker?: string | null
           model?: string | null
           name: string
           organization_id: string
           paper_width_mm?: number
+          poll_interval_seconds?: number
           status?: string
           store_id: string
           updated_at?: string
@@ -5272,19 +5290,25 @@ export type Database = {
         }
         Update: {
           auto_print?: boolean
+          cloudprnt_enabled?: boolean
+          cloudprnt_token?: string | null
           connection_type?: string | null
           created_at?: string
           created_by?: string | null
+          drawer_command?: string
           drawer_kick?: boolean
           id?: string
           ip_address?: string | null
           is_verified?: boolean
           last_connected_at?: string | null
+          last_polled_at?: string | null
+          mac_address?: string | null
           maker?: string | null
           model?: string | null
           name?: string
           organization_id?: string
           paper_width_mm?: number
+          poll_interval_seconds?: number
           status?: string
           store_id?: string
           updated_at?: string

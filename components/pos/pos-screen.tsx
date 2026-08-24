@@ -14,6 +14,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useToast } from '@/components/ui/toast';
 import { useStoreRealtimeRefresh } from '@/components/realtime/use-store-refresh';
 import { createMockDrawerProvider } from '@/lib/printing/providers';
+import { enqueueDrawerKick } from '@/app/app/pos/print-actions';
 import { shouldOpenDrawer, type DrawerResultStatus } from '@/lib/printing/types';
 import {
   CheckoutDialog,
@@ -278,6 +279,13 @@ export function PosScreen({
   const attemptOpenDrawer = async (methods: string[]) => {
     if (!shouldOpenDrawer(methods, drawerConfig)) return;
     try {
+      // CloudPRNT対応プリンタがあれば実機のドロアをキックする。
+      const res = await enqueueDrawerKick(storeId);
+      if (res.ok) {
+        toast('ドロアを開きます', 'success');
+        return;
+      }
+      // 未設定・非対応時は従来どおりシミュレーション表示にフォールバック。
       const result = await createMockDrawerProvider('opened').open();
       toast(DRAWER_STATUS_LABELS[result.status], result.status === 'opened' ? 'success' : 'error');
     } catch {

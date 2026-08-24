@@ -7,6 +7,7 @@ import { yen } from '@/lib/format';
 import { Input } from '@/components/ui/input';
 import type { ReceiptData } from '@/lib/receipts';
 import { PrintButton } from './print-button';
+import { CloudPrintButton } from './cloud-print-button';
 
 type PaperWidth = 58 | 80;
 
@@ -21,11 +22,13 @@ export function ReceiptView({
   orderId,
   qrDataUrl,
   logPrintJobAction,
+  cloudPrntAvailable = false,
 }: {
   receipt: ReceiptData;
   orderId: string;
   qrDataUrl: string;
   logPrintJobAction: (orderId: string, jobType: 'receipt' | 'ryoshusho') => Promise<void>;
+  cloudPrntAvailable?: boolean;
 }) {
   const [tab, setTab] = useState<'receipt' | 'invoice'>('receipt');
   const [paperWidth, setPaperWidth] = useState<PaperWidth>(80);
@@ -99,6 +102,14 @@ export function ReceiptView({
               印刷ダイアログの「PDFに保存」を選択して保存してください（専用のPDF生成は行っていません。ブラウザ標準の印刷機能を案内しています）
             </div>
           </div>
+
+          {cloudPrntAvailable && (
+            <CloudPrintButton
+              orderId={orderId}
+              jobType={tab === 'receipt' ? 'receipt' : 'ryoshusho'}
+              reissue={receipt.isReissue}
+            />
+          )}
 
           <PrintButton
             orderId={orderId}

@@ -8,6 +8,7 @@ import { SettingsBackLink } from '@/components/settings/back-link';
 import { RegistersPanel } from '@/components/settings/registers-panel';
 import { PrintersPanel } from '@/components/settings/printers-panel';
 import { DrawerPanel } from '@/components/settings/drawer-panel';
+import { CloudPrntPanel } from '@/components/settings/cloudprnt-panel';
 
 export const metadata: Metadata = { title: 'レジ・プリンター | 設定' };
 
@@ -35,10 +36,25 @@ export default async function PrintersSettingsPage() {
 
   const { data: printers } = await supabase
     .from('printer_configs')
-    .select('id, name, maker, model, connection_type, ip_address, usage, paper_width_mm, auto_print, drawer_kick, is_verified')
+    .select('id, name, maker, model, connection_type, ip_address, usage, paper_width_mm, auto_print, drawer_kick, is_verified, cloudprnt_enabled, cloudprnt_token, drawer_command, poll_interval_seconds, last_polled_at')
     .eq('store_id', targetStore.id)
     .eq('status', 'active')
     .order('name');
+
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? '';
+  const cloudPrntRows = (printers ?? [])
+    .filter((p) => p.usage === 'receipt')
+    .map((p) => ({
+      id: p.id,
+      name: p.name,
+      cloudprntEnabled: p.cloudprnt_enabled ?? false,
+      cloudprntToken: p.cloudprnt_token ?? null,
+      drawerKick: p.drawer_kick,
+      drawerCommand: p.drawer_command ?? '[drawer: 1]',
+      paperWidthMm: p.paper_width_mm,
+      pollIntervalSeconds: p.poll_interval_seconds ?? 5,
+      lastPolledAt: p.last_polled_at ?? null,
+    }));
 
   const { data: settingsRow } = await supabase
     .from('store_settings')
@@ -84,8 +100,9 @@ export default async function PrintersSettingsPage() {
               <PrintersPanel storeId={targetStore.id} initial={printerRows} />
             </CardContent>
           </Card>
+          <CloudPrntPanel storeId={targetStore.id} siteUrl={siteUrl} printers={cloudPrntRows} />
           <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 px-4 py-3 text-xs text-gray-500">
-            現在はブラウザ印刷（シミュレーション）のみ対応しています。「検証済み」表示は登録情報の確認状況を示すもので、実機プリンターとの接続保証ではありません。実機との直接接続は今後のアップデートで対応予定です。
+            レシート印字は上の「CloudPRNT」（Star mC-Print3 等）で実機印字に対応します。CloudPRNT未対応機や未設定時は、レシート画面からのブラウザ印刷が利用できます。
           </div>
         </div>
       </div>
