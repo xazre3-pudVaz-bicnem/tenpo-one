@@ -93,27 +93,44 @@ export default async function PaymentsSettingsPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>対応決済プロバイダー</CardTitle>
+            <CardTitle>決済プロバイダーの自動連携</CardTitle>
           </CardHeader>
-          <CardContent className="p-0">
-            <ul className="divide-y divide-gray-100">
-              <li className="flex items-center justify-between gap-3 px-5 py-3">
-                <span className="text-sm font-medium text-navy">Stripe</span>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-gray-600">
+              ここでの状態は<strong>自動連携</strong>（TENPO ONEから決済端末へ会計金額を送信し、決済結果を自動で取り込む）の対応状況です。
+              <strong>自動連携が「なし」のブランドでも、POSレジの「外部端末（stera等）」決済を選べば、端末を手動で操作して会計できます</strong>
+              （売上・レポートには正しく反映されます）。
+            </p>
+            <ul className="divide-y divide-gray-100 rounded-lg border border-gray-100">
+              <li className="flex items-center justify-between gap-3 px-4 py-3">
+                <div className="min-w-0">
+                  <span className="text-sm font-medium text-navy">Stripe（Terminal）</span>
+                  <p className="text-xs text-gray-500">カード端末との自動連携に対応（要APIキー設定）</p>
+                </div>
                 <Badge tone={!configured ? 'danger' : testMode ? 'warning' : 'success'}>
                   {!configured ? '未接続' : testMode ? 'テストモード' : '接続済み'}
                 </Badge>
               </li>
-              <li className="flex items-center justify-between gap-3 px-5 py-3">
-                <span className="text-sm font-medium text-navy">Square</span>
-                <Badge tone="gray">未対応</Badge>
+              <li className="flex items-center justify-between gap-3 px-4 py-3">
+                <div className="min-w-0">
+                  <span className="text-sm font-medium text-navy">stera（SMBC / stera pack）</span>
+                  <p className="text-xs text-gray-500">自動連携なし。POSの「外部端末（stera等）」決済で手動会計できます。</p>
+                </div>
+                <Badge tone="gray">手動運用</Badge>
               </li>
-              <li className="flex items-center justify-between gap-3 px-5 py-3">
-                <span className="text-sm font-medium text-navy">AirPAY</span>
-                <Badge tone="gray">未対応</Badge>
+              <li className="flex items-center justify-between gap-3 px-4 py-3">
+                <div className="min-w-0">
+                  <span className="text-sm font-medium text-navy">Square</span>
+                  <p className="text-xs text-gray-500">自動連携なし。「外部端末」決済で手動会計できます。</p>
+                </div>
+                <Badge tone="gray">手動運用</Badge>
               </li>
-              <li className="flex items-center justify-between gap-3 px-5 py-3">
-                <span className="text-sm font-medium text-navy">stera</span>
-                <Badge tone="gray">未対応</Badge>
+              <li className="flex items-center justify-between gap-3 px-4 py-3">
+                <div className="min-w-0">
+                  <span className="text-sm font-medium text-navy">AirPAY</span>
+                  <p className="text-xs text-gray-500">自動連携なし。「外部端末」決済で手動会計できます。</p>
+                </div>
+                <Badge tone="gray">手動運用</Badge>
               </li>
             </ul>
           </CardContent>
@@ -129,8 +146,14 @@ export default async function PaymentsSettingsPage() {
           }}
         />
 
-        <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 px-4 py-3 text-xs text-gray-500">
-          現在はStripeテストモードのみ対応しています。実機決済端末は今後のアップデートで対応予定です。
+        <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 px-4 py-3 text-xs text-gray-500 leading-relaxed">
+          <p>
+            <strong>自動連携</strong>（金額の自動送信・決済結果の自動取込）はStripe Terminalのみ対応（現在テストモード）。stera等は自動連携なしですが、
+            <strong>POSレジで「外部端末（stera等）」決済を選べば手動で会計できます</strong>。
+          </p>
+          <p className="mt-1">
+            レシートの実印字・キャッシュドロアは「レジ・プリンター」設定のCloudPRNT（Star mC-Print3 等）で対応しています。
+          </p>
         </div>
       </div>
     </div>
