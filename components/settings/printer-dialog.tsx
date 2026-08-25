@@ -130,14 +130,17 @@ export function PrinterDialog({
             ))}
           </Select>
           {form.connectionType !== 'browser' && (
-            <p className="mt-1.5 text-xs text-warning">
-              プリンターSDK連携は今後のアップデートで対応予定です。現在はブラウザ印刷をご利用ください。
+            <p className="mt-1.5 text-xs text-gray-500">
+              Wi-Fi / 有線LAN のどちらでもOK（有線が安定）。実機のレシート印字は、保存後に下の「レシートプリンター（CloudPRNT）」で有効化します。プリンタがインターネットに接続できれば利用できます。
             </p>
           )}
         </div>
         <div>
-          <Label htmlFor="printer-ip">IPアドレス</Label>
+          <Label htmlFor="printer-ip">IPアドレス（任意）</Label>
           <Input id="printer-ip" value={form.ipAddress} onChange={(e) => set('ipAddress', e.target.value)} placeholder="192.168.1.100" />
+          <p className="mt-1.5 text-xs text-gray-500">
+            メモ用（任意）。CloudPRNTはプリンタ側から通信するため、ここのIP登録は不要です。
+          </p>
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
