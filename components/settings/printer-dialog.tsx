@@ -19,6 +19,8 @@ export interface PrinterConfigRow {
   autoPrint: boolean;
   drawerKick: boolean;
   isVerified: boolean;
+  /** CloudPRNTで実機印字する設定になっているか（一覧の「シミュレーション動作」表示の判定に使う）。 */
+  cloudprntEnabled?: boolean;
 }
 
 const MAKER_OPTIONS = ['EPSON', 'Star', 'その他'];

@@ -1,41 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { receiptToStarMarkup, drawerKickMarkup, testPrintMarkup } from '@/lib/receipt-markup';
-import type { ReceiptData } from '@/lib/receipts';
+import { baseReceipt as base } from './fixtures/receipt';
 
-const base: ReceiptData = {
-  storeName: 'シュラスコテーブル FOGO',
-  storeAddress: '東京都新宿区',
-  storePhone: '03-1234-5678',
-  registrationNumber: 'T1234567890123',
-  headerMessage: null,
-  footerMessage: 'ありがとうございました',
-  registerName: 'レジ1',
-  staffName: '山田',
-  orderNo: '1001',
-  issuedAt: '2026/08/11 20:00',
-  isReissue: false,
-  isRefundReceipt: false,
-  lines: [
-    { name: 'シュラスコ食べ放題', quantity: 2, unitPrice: 5000, lineTotal: 10000, modifiers: [], cancelled: false },
-    { name: '生ビール', quantity: 3, unitPrice: 600, lineTotal: 1800, modifiers: [{ name: '大', price: 100 }], cancelled: false },
-    { name: 'キャンセル品', quantity: 1, unitPrice: 999, lineTotal: 999, modifiers: [], cancelled: true },
-  ],
-  subtotal: 10727,
-  taxRows: [{ rate: 10, taxable: 11800, tax: 1073 }],
-  serviceCharge: 0,
-  discount: 500,
-  couponCode: 'WELCOME',
-  total: 11300,
-  payments: [{ label: 'クレジット', amount: 11300 }],
-  tendered: null,
-  change: null,
-  refundTotal: 0,
-  netPaid: 11300,
-  pointsEarned: 113,
-  pointsUsed: 0,
-  pointBalance: 500,
-  qrContent: 'ORD-1001',
-};
+
 
 describe('receiptToStarMarkup', () => {
   it('主要な内容とMarkup命令を含む（80mm）', () => {

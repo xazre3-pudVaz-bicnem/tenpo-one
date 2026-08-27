@@ -416,17 +416,24 @@ export async function enqueueCloudPrntTest(
   if (!printer.cloudprnt_enabled) return { error: '先にCloudPRNTを有効化してください' };
 
   const { testPrintMarkup, drawerKickMarkup } = await import('@/lib/receipt-markup');
+  const { testPrintStarPrnt, drawerKickStarPrnt } = await import('@/lib/starprnt');
   const { data: store } = await supabase.from('stores').select('name').eq('id', storeId).single();
 
   const paper = printer.paper_width_mm === 58 ? 58 : 80;
+  const drawerCommand = printer.drawer_command ?? '[drawer: 1]';
+  const storeName = store?.name ?? 'TENPO ONE';
+  const issuedAt = new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
+
+  // Markup / StarPRNT の両表現を積み、対応形式はプリンタに選ばせる（Markup非対応ファーム対策）。
   const body =
     kind === 'drawer'
-      ? drawerKickMarkup(printer.drawer_command ?? '[drawer: 1]')
-      : testPrintMarkup({
-          storeName: store?.name ?? 'TENPO ONE',
-          paperWidth: paper,
-          issuedAt: new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' }),
-        });
+      ? drawerKickMarkup(drawerCommand)
+      : testPrintMarkup({ storeName, paperWidth: paper, issuedAt });
+  const starprnt = (
+    kind === 'drawer'
+      ? drawerKickStarPrnt(drawerCommand)
+      : testPrintStarPrnt({ storeName, paperWidth: paper, issuedAt })
+  ).toString('base64');
 
   const { error } = await supabase.from('print_jobs').insert({
     organization_id: ctx.organizationId,
@@ -435,7 +442,7 @@ export async function enqueueCloudPrntTest(
     job_type: 'test',
     target: 'cloudprnt',
     content_type: 'text/vnd.star.markup',
-    payload: { body, drawer: kind === 'drawer' },
+    payload: { body, starprnt, drawer: kind === 'drawer' },
     status: 'queued',
     created_by: ctx.userId,
   });

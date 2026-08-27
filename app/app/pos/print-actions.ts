@@ -4,7 +4,13 @@ import { requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { loadReceiptData } from '@/lib/receipts-loader';
 import { receiptToStarMarkup, drawerKickMarkup } from '@/lib/receipt-markup';
+import { receiptToStarPrnt, drawerKickStarPrnt } from '@/lib/starprnt';
 
+/**
+ * ジョブに載せる既定の形式。実際にどの形式で印字されるかはプリンタが
+ * CloudPRNT の mediaTypes ネゴシエーションで選ぶ（app/api/cloudprnt/[token]/route.ts）。
+ * この値は表示・互換のための「第一希望」に過ぎない。
+ */
 const RECEIPT_CONTENT_TYPE = 'text/vnd.star.markup';
 
 export interface EnqueueResult {
@@ -64,7 +70,9 @@ export async function enqueueReceiptPrint(
   if (!loaded) return { ok: false, error: 'レシートデータの取得に失敗しました' };
 
   const paper = printer.paper_width_mm === 58 ? 58 : 80;
+  // Markup / StarPRNT の両表現を持たせ、対応形式はプリンタに選ばせる。
   const markup = receiptToStarMarkup(loaded.receipt, { paperWidth: paper });
+  const starprnt = receiptToStarPrnt(loaded.receipt, { paperWidth: paper }).toString('base64');
 
   const rows: Record<string, unknown>[] = [
     {
@@ -75,7 +83,7 @@ export async function enqueueReceiptPrint(
       order_id: orderId,
       target: 'cloudprnt',
       content_type: RECEIPT_CONTENT_TYPE,
-      payload: { body: markup },
+      payload: { body: markup, starprnt },
       status: 'queued',
       created_by: ctx.userId,
     },
@@ -89,7 +97,11 @@ export async function enqueueReceiptPrint(
       order_id: orderId,
       target: 'cloudprnt',
       content_type: RECEIPT_CONTENT_TYPE,
-      payload: { body: drawerKickMarkup(printer.drawer_command), drawer: true },
+      payload: {
+        body: drawerKickMarkup(printer.drawer_command),
+        starprnt: drawerKickStarPrnt(printer.drawer_command).toString('base64'),
+        drawer: true,
+      },
       status: 'queued',
       created_by: ctx.userId,
     });
@@ -117,7 +129,11 @@ export async function enqueueDrawerKick(storeId: string): Promise<EnqueueResult>
     job_type: 'test',
     target: 'cloudprnt',
     content_type: RECEIPT_CONTENT_TYPE,
-    payload: { body: drawerKickMarkup(printer.drawer_command), drawer: true },
+    payload: {
+      body: drawerKickMarkup(printer.drawer_command),
+      starprnt: drawerKickStarPrnt(printer.drawer_command).toString('base64'),
+      drawer: true,
+    },
     status: 'queued',
     created_by: ctx.userId,
   });

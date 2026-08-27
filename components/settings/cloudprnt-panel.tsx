@@ -221,7 +221,7 @@ function CloudPrntRow({
             </Button>
           </div>
           <p className="text-xs text-amber-600">
-            ※ テスト印刷・ドロアはプリンタが次にポーリングした時（最大{pollInterval}秒後）に実行されます。日本語が文字化けする場合はプリンタのCloudPRNT文字コード設定をUTF-8にしてください。
+            ※ テスト印刷・ドロアはプリンタが次にポーリングした時（最大{pollInterval}秒後）に実行されます。文字コードはサーバー側で機種に合わせて送るため、プリンタ側の設定は不要です。
           </p>
         </div>
       )}
