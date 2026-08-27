@@ -53,6 +53,14 @@ export interface PointsAvailability {
 
 const BASE_METHODS: CheckoutPayment['method'][] = ['cash', 'credit', 'qr', 'emoney', 'voucher', 'on_account', 'external', 'other'];
 
+/**
+ * 外部の決済端末（stera 等）を操作してから確定する必要がある支払方法。
+ * stera は TENPO ONE と電子連携しておらず「端末で決済 → TENPO ONE に金額入力」の手動2オペになる。
+ * レポートの内訳を残すため実際の種別（クレジット/QR/電子マネー）を選ぶ運用のため、
+ * 'external' だけでなくキャッシュレス種別全般で注意喚起する（未決済のまま確定する事故を防ぐ）。
+ */
+const TERMINAL_METHODS: CheckoutPayment['method'][] = ['credit', 'qr', 'emoney', 'external'];
+
 /** 端末決済ポーリングの上限（60秒 ÷ 2秒間隔） */
 const TERMINAL_POLL_INTERVAL_MS = 2000;
 const TERMINAL_POLL_TIMEOUT_MS = 60000;
@@ -559,9 +567,9 @@ export function CheckoutDialog({
               {METHOD_LABELS.points}
             </Button>
           </div>
-          {payments.some((p) => p.method === 'external') && (
+          {payments.some((p) => TERMINAL_METHODS.includes(p.method)) && (
             <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
-              外部端末（stera JT-C60 等）で決済してください。端末で決済成功を確認してから「会計を確定」を押してください。
+              決済端末（stera JT-C60 等）で決済してください。端末で決済成功を確認してから「会計を確定」を押してください。
             </p>
           )}
         </div>
