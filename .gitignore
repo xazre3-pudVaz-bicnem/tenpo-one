@@ -39,3 +39,4 @@ supabase/.branches
 coverage/
 playwright-report/
 test-results/
+.env*
