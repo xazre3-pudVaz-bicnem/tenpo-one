@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Noto_Sans_JP } from 'next/font/google';
 import { brand } from '@/lib/brand';
 import { ToastProvider } from '@/components/ui/toast';
+import { ServiceWorkerRegister } from '@/components/pwa/service-worker-register';
 import './globals.css';
 
 const notoSansJp = Noto_Sans_JP({
@@ -28,6 +29,13 @@ export const metadata: Metadata = {
     ],
     apple: '/apple-icon.png',
   },
+  applicationName: brand.name,
+  // iOSでホーム画面から全画面起動するための指定（Safariは beforeinstallprompt 非対応のため手順は /install で案内）
+  appleWebApp: {
+    capable: true,
+    title: brand.name,
+    statusBarStyle: 'default',
+  },
   ...(siteUrl
     ? { metadataBase: new URL(siteUrl) }
     : { robots: { index: false, follow: false } }),
@@ -42,6 +50,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="ja">
       <body className={`${notoSansJp.variable} font-sans antialiased`}>
         <ToastProvider>{children}</ToastProvider>
+        <ServiceWorkerRegister />
       </body>
     </html>
   );

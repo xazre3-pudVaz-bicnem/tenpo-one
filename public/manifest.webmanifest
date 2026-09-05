@@ -1,15 +1,47 @@
 {
+  "id": "/app/dashboard",
   "name": "TENPO ONE",
   "short_name": "TENPO ONE",
   "description": "店舗運営を、ひとつに。飲食店向けオールインワン店舗管理",
   "start_url": "/app/dashboard",
+  "scope": "/",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "any",
   "background_color": "#F2F4F7",
   "theme_color": "#0F1120",
   "lang": "ja",
+  "dir": "ltr",
+  "categories": ["business", "productivity", "food"],
   "icons": [
     { "src": "/favicon-32.png", "sizes": "32x32", "type": "image/png", "purpose": "any" },
     { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
     { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    {
+      "name": "POSレジ",
+      "short_name": "POS",
+      "url": "/app/pos",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "フロアマップ",
+      "short_name": "フロア",
+      "url": "/app/floor",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "予約",
+      "short_name": "予約",
+      "url": "/app/reservations",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "キッチン",
+      "short_name": "キッチン",
+      "url": "/app/kitchen",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    }
   ]
 }
