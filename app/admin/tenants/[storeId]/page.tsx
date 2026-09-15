@@ -100,9 +100,16 @@ export default async function TenantDetailPage({ params }: { params: Promise<{ s
 
   return (
     <div className="space-y-5">
-      <Link href="/admin/tenants" className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-navy">
-        <ChevronLeft className="h-4 w-4" />導入店舗一覧へ戻る
-      </Link>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+        <Link href="/admin/tenants" className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-navy">
+          <ChevronLeft className="h-4 w-4" />導入店舗一覧へ戻る
+        </Link>
+        {store.organization_id && (
+          <Link href={`/admin/organizations/${store.organization_id}`} className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-navy">
+            <ChevronLeft className="h-4 w-4" />{org?.name ?? "契約企業"}の詳細へ
+          </Link>
+        )}
+      </div>
       <PageHeader
         title={store.name}
         description={`${org?.name ?? ''}｜プラン: ${org?.plan_code ?? '—'}`}

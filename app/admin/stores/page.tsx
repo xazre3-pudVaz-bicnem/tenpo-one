@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { requireCypressAdmin } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { formatDate } from '@/lib/format';
@@ -92,7 +93,9 @@ export default async function StoresPage({
                 return (
                   <Tr key={s.id}>
                     <Td>
-                      <p className="font-medium text-navy">{s.name}</p>
+                      <Link href={`/admin/tenants/${s.id}`} className="font-medium text-primary hover:underline">
+                        {s.name}
+                      </Link>
                       <p className="text-xs text-gray-400">/{s.slug}</p>
                     </Td>
                     <Td>{orgName(s)}</Td>

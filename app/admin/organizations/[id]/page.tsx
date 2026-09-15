@@ -254,7 +254,9 @@ export default async function OrganizationDetailPage({ params }: { params: Promi
                         return (
                           <Tr key={s.id}>
                             <Td>
-                              <p className="font-medium text-navy">{s.name}</p>
+                              <Link href={`/admin/tenants/${s.id}`} className="font-medium text-primary hover:underline">
+                                {s.name}
+                              </Link>
                               <p className="text-xs text-gray-400">/{s.slug}</p>
                             </Td>
                             <Td>
