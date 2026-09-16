@@ -83,7 +83,7 @@ export default async function PosPage({
   const { data: order, error: orderError } = await supabase
     .from('orders')
     .select(
-      'id, order_no, order_type, status, guest_count, discount_total, discount_reason, coupon_code, customer_id, subtotal, tax_total, service_charge, total, store_id, table_id, staff_id, restaurant_tables(name), profiles(display_name)'
+      'id, order_no, order_type, status, guest_count, discount_total, discount_reason, coupon_code, customer_id, subtotal, tax_total, service_charge, total, store_id, table_id, staff_id, clerk_id, restaurant_tables(name), profiles(display_name)'
     )
     .eq('id', orderId)
     .single();
@@ -189,6 +189,16 @@ export default async function PosPage({
     openOnCashless: drawerSettings?.openOnCashless ?? false,
   };
 
+  // 会計時に選べるPOS担当者（この店舗の有効な名前のみ）
+  const { data: clerks } = await supabase
+    .from('pos_clerks')
+    .select('id, name')
+    .eq('store_id', store.id)
+    .eq('status', 'active')
+    .order('sort_order')
+    .order('name');
+  const clerkOptions = (clerks ?? []).map((c) => ({ id: c.id, name: c.name }));
+
   const canCheckout = can(ctx.role, 'pos.checkout');
   let paymentAvailability = { configured: false, testMode: false };
   let terminalReaders: {
@@ -283,6 +293,8 @@ export default async function PosPage({
         bestSellerIds={bestSellerIds}
         tableName={table?.name ?? null}
         staffName={staff?.display_name ?? null}
+        clerks={clerkOptions}
+        currentClerkId={order.clerk_id ?? null}
         customer={customer}
         pointsAvailability={pointsAvailability}
         drawerConfig={drawerConfig}

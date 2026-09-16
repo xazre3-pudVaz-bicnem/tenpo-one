@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import {
-  Store, Clock, LayoutGrid, UtensilsCrossed, Percent, CalendarClock, Printer, CreditCard, ScrollText, ChevronRight,
+  Store, Clock, LayoutGrid, UtensilsCrossed, Percent, CalendarClock, Printer, CreditCard, ScrollText, ChevronRight, UserRound,
   Building2, ShieldCheck, Plug, Upload, AlertTriangle, BookOpen,
 } from 'lucide-react';
 import { requirePermission } from '@/lib/auth';
@@ -85,6 +85,13 @@ export default async function SettingsHubPage() {
       title: 'レジ・プリンター',
       description: 'レジ端末とレシート・厨房プリンターの設定',
       icon: Printer,
+      visible: true,
+    },
+    {
+      href: '/app/settings/clerks',
+      title: 'POS担当者',
+      description: '会計時に選ぶ担当者名の登録（アカウント不要）',
+      icon: UserRound,
       visible: true,
     },
     {

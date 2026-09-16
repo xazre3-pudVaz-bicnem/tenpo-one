@@ -18,7 +18,7 @@ export async function loadReceiptData(
   const { data: order } = await supabase
     .from('orders')
     .select(
-      'id, order_no, subtotal, tax_total, service_charge, discount_total, coupon_code, customer_id, register_session_id, staff_id, total, closed_at, store_id, stores(name, address, phone), profiles(display_name)'
+      'id, order_no, subtotal, tax_total, service_charge, discount_total, coupon_code, customer_id, register_session_id, staff_id, clerk_name, total, closed_at, store_id, stores(name, address, phone), profiles(display_name)'
     )
     .eq('id', orderId)
     .single();
@@ -108,7 +108,8 @@ export async function loadReceiptData(
     })),
     refunds: (refunds ?? []).map((r) => ({ amount: r.amount })),
     registerName,
-    staffName: staff?.display_name ?? null,
+    // 伝票でPOS担当者が選ばれていればその名前を優先する（未選択なら従来どおり操作アカウント名）
+    staffName: order.clerk_name ?? staff?.display_name ?? null,
     isReissue: opts.isReissue ?? false,
     methodLabels: METHOD_LABELS,
     points: order.customer_id ? { earned: pointsEarned, used: pointsUsed, balance: pointBalance } : undefined,

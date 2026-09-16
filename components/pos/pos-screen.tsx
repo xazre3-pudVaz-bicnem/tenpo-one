@@ -15,6 +15,7 @@ import { useToast } from '@/components/ui/toast';
 import { useStoreRealtimeRefresh } from '@/components/realtime/use-store-refresh';
 import { createMockDrawerProvider } from '@/lib/printing/providers';
 import { enqueueDrawerKick } from '@/app/app/pos/print-actions';
+import { ClerkSelector, type ClerkOption } from './clerk-selector';
 import { shouldOpenDrawer, type DrawerResultStatus } from '@/lib/printing/types';
 import {
   CheckoutDialog,
@@ -125,6 +126,8 @@ export function PosScreen({
   bestSellerIds,
   tableName,
   staffName,
+  clerks,
+  currentClerkId,
   customer,
   pointsAvailability,
   drawerConfig,
@@ -159,6 +162,9 @@ export function PosScreen({
   bestSellerIds: string[];
   tableName: string | null;
   staffName: string | null;
+  /** 店舗に登録されたPOS担当者（会計時に選ぶ名前。アカウントではない） */
+  clerks: ClerkOption[];
+  currentClerkId: string | null;
   customer: PosCustomer | null;
   pointsAvailability: PointsAvailability;
   drawerConfig: DrawerConfig;
@@ -336,7 +342,9 @@ export function PosScreen({
           <div className="ml-auto flex flex-wrap items-center gap-2 text-sm">
             <Badge tone="navy">{tableName ?? ORDER_TYPE_LABELS[order.orderType] ?? order.orderType}</Badge>
             <span className="text-gray-500">{order.guestCount}名</span>
-            {staffName && <span className="text-gray-500">担当: {staffName}</span>}
+            <ClerkSelector orderId={order.id} clerks={clerks} currentClerkId={currentClerkId} />
+            {/* 担当者が未登録の店舗では従来どおりログインユーザー名を表示する */}
+            {clerks.length === 0 && staffName && <span className="text-gray-500">担当: {staffName}</span>}
             <button
               type="button"
               onClick={() => setCustomerOpen(true)}
