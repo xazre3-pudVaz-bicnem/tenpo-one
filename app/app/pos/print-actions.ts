@@ -23,7 +23,10 @@ function assertStore(ctx: { isHq: boolean; stores: { id: string }[] }, storeId: 
   return ctx.isHq || ctx.stores.some((s) => s.id === storeId);
 }
 
-/** 店舗の CloudPRNT 有効レシートプリンタ設定を取得（usage=receipt優先）。無ければ null。 */
+/**
+ * 店舗のレシート用 CloudPRNT プリンタ設定を取得。無ければ null。
+ * usage='receipt' に限定する（厨房・ラベル用プリンタへレシートを出さないため）。
+ */
 async function getCloudPrntPrinter(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   supabase: any,
@@ -35,7 +38,8 @@ async function getCloudPrntPrinter(
     .eq('store_id', storeId)
     .eq('status', 'active')
     .eq('cloudprnt_enabled', true)
-    .order('usage', { ascending: true }) // 'receipt' が 'label'/'kitchen' より前に来る
+    .eq('usage', 'receipt')
+    .order('created_at', { ascending: true })
     .limit(1)
     .maybeSingle();
   return data ?? null;

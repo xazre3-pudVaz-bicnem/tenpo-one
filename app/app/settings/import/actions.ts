@@ -49,10 +49,13 @@ async function fetchExistingKeys(
   const keys = new Set<string>();
 
   if (type === 'menu_items') {
+    // 商品は店舗ごとに独立して持つ。重複判定も対象店舗内に限定する
+    // （他店舗に同名商品があっても取込をブロックしない）。
     const { data } = await supabase
       .from('menu_items')
       .select('name')
       .eq('organization_id', ctx.organizationId)
+      .eq('store_id', storeId as string)
       .neq('status', 'deleted');
     for (const r of data ?? []) keys.add(r.name.trim().toLowerCase());
   } else if (type === 'customers') {
@@ -104,10 +107,13 @@ async function resolveCategoryIds(
   const map = new Map<string, string>();
   if (categoryNames.length === 0) return map;
 
+  // カテゴリも店舗ごとに独立しているため、対象店舗のカテゴリだけを照合する。
+  // org全体で探すと他店舗のカテゴリIDを流用してしまい、商品が別店舗のカテゴリに紐づく。
   const { data: existing } = await supabase
     .from('menu_categories')
     .select('id, name')
     .eq('organization_id', ctx.organizationId)
+    .eq('store_id', storeId)
     .eq('status', 'active');
   const byLower = new Map((existing ?? []).map((c) => [c.name.trim().toLowerCase(), c.id]));
 

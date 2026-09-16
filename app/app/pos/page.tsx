@@ -23,7 +23,6 @@ import {
   setOrderCustomer,
 } from './actions';
 import { startTerminalPayment, checkTerminalPayment, cancelTerminalPayment, getPaymentAvailability } from './payment-actions';
-import { daysAgoJst } from '@/lib/format';
 
 export const metadata: Metadata = { title: 'POSレジ' };
 
@@ -140,15 +139,9 @@ export default async function PosPage({
       .eq('status', 'active')
       .neq('item_type', 'option')
       .order('sort_order'),
-    // 売れ筋TOP12（過去30日・支払済注文の販売数量集計）。集計RPCは無いためサーバー側でJS集計する。
-    supabase
-      .from('order_items')
-      .select('menu_item_id, quantity, orders!inner(store_id, status, business_date)')
-      .eq('orders.store_id', store.id)
-      .eq('orders.status', 'paid')
-      .eq('status', 'active')
-      .not('menu_item_id', 'is', null)
-      .gte('orders.business_date', daysAgoJst(30)),
+    // 売れ筋TOP12（過去30日・支払済注文の販売数量）。SQL側で集計し上位のみ受け取る
+    // （全明細を転送してJS集計すると繁忙店で数千行になるため）。
+    supabase.rpc('get_best_sellers', { p_store: store.id, p_days: 30, p_limit: 12 }),
     order.customer_id
       ? supabase.from('customers').select('id, name, phone, point_balance').eq('id', order.customer_id).maybeSingle()
       : Promise.resolve({ data: null }),
@@ -163,15 +156,8 @@ export default async function PosPage({
   const table = order.restaurant_tables as unknown as { name: string } | null;
   const staff = order.profiles as unknown as { display_name: string } | null;
 
-  const salesByItem = new Map<string, number>();
-  for (const row of recentSales ?? []) {
-    const id = row.menu_item_id as string;
-    salesByItem.set(id, (salesByItem.get(id) ?? 0) + row.quantity);
-  }
-  const bestSellerIds = [...salesByItem.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 12)
-    .map(([id]) => id);
+  // RPCは販売数量の多い順に返すため、そのままIDの配列にする
+  const bestSellerIds = ((recentSales ?? []) as { menu_item_id: string }[]).map((r) => r.menu_item_id);
 
   // 顧客紐付け・ポイント払いの活性判定はサーバーで完結させ、クライアントには結果のみ渡す
   const customer: { id: string; name: string; phone: string | null; pointBalance: number } | null = customerRow

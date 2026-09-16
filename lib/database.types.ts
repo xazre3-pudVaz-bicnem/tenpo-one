@@ -8011,6 +8011,13 @@ export type Database = {
         Returns: Json
       }
       generate_reservation_code: { Args: never; Returns: string }
+      get_best_sellers: {
+        Args: { p_days?: number; p_limit?: number; p_store: string }
+        Returns: {
+          menu_item_id: string
+          quantity: number
+        }[]
+      }
       get_booking_availability: {
         Args: {
           p_course_id?: string
