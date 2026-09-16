@@ -5,6 +5,7 @@ import { requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { applicableTaxRate } from '@/lib/tax';
 import { validateCoupon, COUPON_REJECT_LABELS, type CouponLike } from '@/lib/coupons';
+import { resolveOptionSelection } from '@/lib/menu-options';
 
 const COUPON_PREFIX = 'クーポン: ';
 
@@ -68,7 +69,72 @@ export async function startTakeout(): Promise<{ orderId: string }> {
 }
 
 /** 商品をタップして伝票に1品追加する（価格・税率をスナップショット） */
-export async function addItem(orderId: string, menuItemId: string) {
+/**
+ * 選択された選択肢を検証し、モディファイア表記と追加料金の合計を返す。
+ * - 選択肢は「対象商品に紐づくグループ」に属するものだけ受け付ける（他商品・他店舗の混入を防ぐ）
+ * - 必須グループは min_select 以上、各グループは max_select 以下であることを検証する
+ */
+async function resolveOptions(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  storeId: string,
+  menuItemId: string,
+  optionItemIds: string[]
+): Promise<{ modifiers: { name: string; price: number }[]; extraPrice: number }> {
+  const { data: links } = await supabase
+    .from('menu_item_option_groups')
+    .select('group_id, sort_order, menu_option_groups(id, name, is_required, min_select, max_select, status)')
+    .eq('menu_item_id', menuItemId)
+    .eq('store_id', storeId)
+    .order('sort_order');
+
+  const groups = (links ?? [])
+    .map((l: { menu_option_groups: unknown }) => l.menu_option_groups as {
+      id: string; name: string; is_required: boolean; min_select: number; max_select: number; status: string;
+    } | null)
+    .filter((g: { status: string } | null): g is { id: string; name: string; is_required: boolean; min_select: number; max_select: number; status: string } => !!g && g.status === 'active');
+
+  // グループが無い商品に選択肢を渡された場合は不正
+  if (groups.length === 0) {
+    if (optionItemIds.length > 0) throw new Error('この商品に選択肢は設定されていません');
+    return { modifiers: [], extraPrice: 0 };
+  }
+
+  const uniqueIds = Array.from(new Set(optionItemIds));
+  const { data: chosen } = uniqueIds.length
+    ? await supabase
+        .from('menu_option_items')
+        .select('id, name, price, group_id, status')
+        .in('id', uniqueIds)
+        .eq('store_id', storeId)
+        .eq('status', 'active')
+    : { data: [] };
+
+  const selected = (chosen ?? []) as { id: string; name: string; price: number; group_id: string }[];
+  // 指定IDのうち1件でも取得できなければ、他店舗・無効な選択肢が混ざっている
+  if (selected.length !== uniqueIds.length) {
+    throw new Error('選択された選択肢が正しくありません');
+  }
+
+  return resolveOptionSelection(
+    groups.map((g: { id: string; name: string; is_required: boolean; min_select: number; max_select: number }) => ({
+      id: g.id,
+      name: g.name,
+      isRequired: g.is_required,
+      minSelect: g.min_select,
+      maxSelect: g.max_select,
+    })),
+    selected.map((o) => ({ id: o.id, name: o.name, price: o.price, groupId: o.group_id }))
+  );
+}
+
+/**
+ * 注文に商品を追加する。
+ * optionItemIds を渡すと選択肢（トッピング等）を適用し、追加料金を単価に加算して
+ * order_items.modifiers に [{name, price}] として記録する（レシートにも印字される）。
+ * 必須・最小/最大の選択数はサーバー側で検証する（クライアントの表示崩れや改ざんに依存しない）。
+ */
+export async function addItem(orderId: string, menuItemId: string, optionItemIds: string[] = []) {
   const ctx = await requirePermission('pos.order');
   const supabase = await createClient();
   const order = await loadOpenOrder(supabase, ctx, orderId);
@@ -94,17 +160,22 @@ export async function addItem(orderId: string, menuItemId: string) {
     : (taxRateRow?.rate ?? 10);
   const taxIncluded = taxRateRow?.is_inclusive ?? true;
 
+  // 選択肢グループの検証と追加料金の算出
+  const { modifiers, extraPrice } = await resolveOptions(supabase, order.store_id, item.id, optionItemIds);
+  const finalUnitPrice = unitPrice + extraPrice;
+
   const { error } = await supabase.from('order_items').insert({
     organization_id: order.organization_id,
     store_id: order.store_id,
     order_id: orderId,
     menu_item_id: item.id,
     name: item.name,
-    unit_price: unitPrice,
+    unit_price: finalUnitPrice,
     quantity: 1,
     tax_rate: taxRate,
     tax_included: taxIncluded,
-    line_total: unitPrice,
+    line_total: finalUnitPrice,
+    modifiers: modifiers.length > 0 ? modifiers : null,
     staff_id: ctx.userId,
     status: 'active',
     created_by: ctx.userId,

@@ -95,6 +95,13 @@ export default async function SettingsHubPage() {
       visible: true,
     },
     {
+      href: '/app/settings/options',
+      title: 'メニュー選択肢',
+      description: 'サイズ・トッピング等の選択肢と追加料金',
+      icon: UtensilsCrossed,
+      visible: true,
+    },
+    {
       href: '/app/settings/payments',
       title: '決済・端末',
       description: 'Stripe接続・決済端末・予約事前決済',

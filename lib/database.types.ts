@@ -3576,6 +3576,74 @@ export type Database = {
           },
         ]
       }
+      menu_item_option_groups: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          group_id: string
+          id: string
+          menu_item_id: string
+          organization_id: string
+          sort_order: number
+          store_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          group_id: string
+          id?: string
+          menu_item_id: string
+          organization_id: string
+          sort_order?: number
+          store_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          group_id?: string
+          id?: string
+          menu_item_id?: string
+          organization_id?: string
+          sort_order?: number
+          store_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "menu_item_option_groups_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "menu_option_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "menu_item_option_groups_menu_item_id_fkey"
+            columns: ["menu_item_id"]
+            isOneToOne: false
+            referencedRelation: "menu_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "menu_item_option_groups_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "menu_item_option_groups_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       menu_items: {
         Row: {
           allergy_info: string | null
@@ -3765,6 +3833,136 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      menu_option_groups: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          is_required: boolean
+          max_select: number
+          min_select: number
+          name: string
+          organization_id: string
+          sort_order: number
+          status: string
+          store_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_required?: boolean
+          max_select?: number
+          min_select?: number
+          name: string
+          organization_id: string
+          sort_order?: number
+          status?: string
+          store_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_required?: boolean
+          max_select?: number
+          min_select?: number
+          name?: string
+          organization_id?: string
+          sort_order?: number
+          status?: string
+          store_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "menu_option_groups_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "menu_option_groups_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      menu_option_items: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          group_id: string
+          id: string
+          name: string
+          organization_id: string
+          price: number
+          sort_order: number
+          status: string
+          store_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          group_id: string
+          id?: string
+          name: string
+          organization_id: string
+          price?: number
+          sort_order?: number
+          status?: string
+          store_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          group_id?: string
+          id?: string
+          name?: string
+          organization_id?: string
+          price?: number
+          sort_order?: number
+          status?: string
+          store_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "menu_option_items_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "menu_option_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "menu_option_items_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "menu_option_items_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
             referencedColumns: ["id"]
           },
         ]

@@ -16,6 +16,7 @@ import { useStoreRealtimeRefresh } from '@/components/realtime/use-store-refresh
 import { createMockDrawerProvider } from '@/lib/printing/providers';
 import { enqueueDrawerKick } from '@/app/app/pos/print-actions';
 import { ClerkSelector, type ClerkOption } from './clerk-selector';
+import { OptionDialog, type PosOptionGroup } from './option-dialog';
 import { shouldOpenDrawer, type DrawerResultStatus } from '@/lib/printing/types';
 import {
   CheckoutDialog,
@@ -128,6 +129,7 @@ export function PosScreen({
   staffName,
   clerks,
   currentClerkId,
+  optionGroupsByItem,
   customer,
   pointsAvailability,
   drawerConfig,
@@ -165,6 +167,8 @@ export function PosScreen({
   /** 店舗に登録されたPOS担当者（会計時に選ぶ名前。アカウントではない） */
   clerks: ClerkOption[];
   currentClerkId: string | null;
+  /** 商品ID → 選択肢グループ。設定がある商品はタップ時に選択ダイアログを出す */
+  optionGroupsByItem: Record<string, PosOptionGroup[]>;
   customer: PosCustomer | null;
   pointsAvailability: PointsAvailability;
   drawerConfig: DrawerConfig;
@@ -174,7 +178,7 @@ export function PosScreen({
   paymentAvailability: PosPaymentAvailability;
   otherOpenOrders: MergeCandidate[];
   availableTables: AvailableTable[];
-  addItemAction: (orderId: string, menuItemId: string) => Promise<void>;
+  addItemAction: (orderId: string, menuItemId: string, optionItemIds?: string[]) => Promise<void>;
   updateQtyAction: (orderId: string, orderItemId: string, delta: number) => Promise<void>;
   cancelItemAction: (orderId: string, orderItemId: string, reason: string) => Promise<void>;
   setDiscountAction: (orderId: string, discountTotal: number, reason: string) => Promise<void>;
@@ -201,6 +205,7 @@ export function PosScreen({
   const [mergeOpen, setMergeOpen] = useState(false);
   const [tableMoveOpen, setTableMoveOpen] = useState(false);
   const [customerOpen, setCustomerOpen] = useState(false);
+  const [optionTarget, setOptionTarget] = useState<string | null>(null);
   const [linkedCustomer, setLinkedCustomer] = useState(customer);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -247,14 +252,24 @@ export function PosScreen({
       : menuItems.filter((m) => !m.category_id);
   }, [menuItems, activeCategory, searchQuery, bestSellerRank]);
 
-  const handleAdd = (menuItemId: string) => {
+  const addWithOptions = (menuItemId: string, optionItemIds: string[]) => {
     startTransition(async () => {
       try {
-        await addItemAction(order.id, menuItemId);
+        await addItemAction(order.id, menuItemId, optionItemIds);
       } catch (e) {
         toast(e instanceof Error ? e.message : '追加に失敗しました', 'error');
       }
     });
+  };
+
+  const handleAdd = (menuItemId: string) => {
+    // 選択肢グループが設定された商品は、先に選択ダイアログを出す
+    const groups = optionGroupsByItem[menuItemId];
+    if (groups && groups.length > 0) {
+      setOptionTarget(menuItemId);
+      return;
+    }
+    addWithOptions(menuItemId, []);
   };
 
   const handleQty = (orderItemId: string, delta: number) => {
@@ -619,6 +634,24 @@ export function PosScreen({
         cancelTerminalPaymentAction={cancelTerminalPaymentAction}
         onTerminalPaymentFinalized={handleTerminalPaymentFinalized}
       />
+
+      {optionTarget && (() => {
+        const target = menuItems.find((m) => m.id === optionTarget);
+        const groups = optionGroupsByItem[optionTarget] ?? [];
+        if (!target) return null;
+        return (
+          <OptionDialog
+            itemName={target.name}
+            basePrice={target.price}
+            groups={groups}
+            onCancel={() => setOptionTarget(null)}
+            onConfirm={(ids) => {
+              setOptionTarget(null);
+              addWithOptions(target.id, ids);
+            }}
+          />
+        );
+      })()}
 
       <CustomerLinkDialog
         open={customerOpen}
