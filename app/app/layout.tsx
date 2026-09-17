@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation';
 import { headers } from 'next/headers';
 import { requireSession } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
-import { visibleNavGroups, MOBILE_NAV } from '@/lib/nav';
+import { visibleNavGroups, visibleNavTiles, MOBILE_NAV } from '@/lib/nav';
 import { can } from '@/lib/permissions';
 import { featureForRoute } from '@/lib/features';
 import { Sidebar } from '@/components/layout/sidebar';
@@ -11,7 +11,11 @@ import { MobileNav } from '@/components/layout/mobile-nav';
 import { StoreSwitcher } from '@/components/layout/store-switcher';
 import { CommandPaletteProvider } from '@/components/search/command-palette';
 import { OfflineBanner } from '@/components/offline/offline-banner';
+import { ThemeBody } from '@/components/layout/theme-body';
 import { InstallPrompt } from '@/components/pwa/install-prompt';
+
+/** 店舗画面はブラウザのツールバー色も上部バー（濃紫）に合わせる */
+export const viewport = { themeColor: '#241436' };
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const ctx = await requireSession();
@@ -53,6 +57,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   const unreadCount = 'count' in unreadRes ? unreadRes.count : 0;
 
+  const tiles = visibleNavTiles(ctx.role, ctx.disabledFeatures);
   const groups = visibleNavGroups(ctx.role, ctx.disabledFeatures);
   const mobileItems = MOBILE_NAV.filter((i) => {
     if (i.permission && !can(ctx.role, i.permission)) return false;
@@ -62,21 +67,28 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <CommandPaletteProvider role={ctx.role}>
+      <ThemeBody />
       <OfflineBanner />
-      <div className="min-h-screen">
-        <Sidebar groups={groups} />
-        <div className="lg:pl-60">
-          <TopBar ctx={ctx} unreadCount={unreadCount ?? 0} />
+      <div className="theme-regi min-h-screen bg-lilac">
+        {/* 上部バー（全幅）→ その下に左メニュー（固定）と本文 */}
+        <TopBar ctx={ctx} unreadCount={unreadCount ?? 0} />
+        <Sidebar
+          tiles={tiles}
+          groups={groups}
+          alertCount={unreadCount ?? 0}
+          currentStoreId={ctx.currentStore?.id ?? null}
+        />
+        <div className="lg:pl-[250px]">
           <InstallPrompt />
-          {/* スマホは店舗切替をヘッダー下に表示 */}
-          <div className="border-b border-gray-200 bg-white px-4 py-2 sm:hidden">
+          {/* スマホは店舗切替を上部バーの下に表示 */}
+          <div className="border-b border-line bg-white px-4 py-2 sm:hidden">
             <StoreSwitcher
               stores={ctx.stores}
               currentStoreId={ctx.currentStore?.id ?? null}
               allowAll={ctx.isHq}
             />
           </div>
-          <main className="p-4 pb-24 lg:p-6 lg:pb-8">{children}</main>
+          <main className="px-4 pt-4 pb-24 lg:px-[22px] lg:pt-[18px] lg:pb-8">{children}</main>
         </div>
         <MobileNav items={mobileItems} />
       </div>

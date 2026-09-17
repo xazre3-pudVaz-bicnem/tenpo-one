@@ -28,7 +28,7 @@ export default async function LoyaltySettingsPage() {
   return (
     <div>
       <SettingsBackLink />
-      <PageHeader title="ポイント設定" description={ctx.organizationName ?? ''} />
+      <PageHeader title="ポイント設定" en="Loyalty" description={ctx.organizationName ?? ''} />
       <LoyaltySettingsForm initial={initial} />
     </div>
   );

@@ -2,7 +2,7 @@ import { cn } from '@/lib/utils';
 
 /** 一覧テーブル。必ず overflow-x-auto のラッパー内で使い、画面からはみ出さないこと。 */
 export function TableWrap({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn('overflow-x-auto rounded-xl border border-gray-200 bg-white', className)} {...props} />;
+  return <div className={cn('ui-table-wrap overflow-x-auto border border-gray-200 bg-white', className)} {...props} />;
 }
 
 export function Table({ className, ...props }: React.TableHTMLAttributes<HTMLTableElement>) {

@@ -22,7 +22,7 @@ export default async function BookingSettingsPage() {
     return (
       <div>
         <SettingsBackLink />
-        <PageHeader title="予約設定" />
+        <PageHeader title="予約設定" en="Booking rules" />
         <EmptyState title="対象の店舗がありません" description="店舗を選択してから設定を行ってください" />
       </div>
     );
@@ -56,6 +56,7 @@ export default async function BookingSettingsPage() {
       <SettingsBackLink />
       <PageHeader
         title="予約設定"
+        en="Booking rules"
         description={targetStore.name}
         actions={
           <a href={bookingUrl} target="_blank" rel="noopener noreferrer">

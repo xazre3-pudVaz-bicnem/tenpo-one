@@ -36,7 +36,7 @@ export default async function AccountsSettingsPage() {
   return (
     <div>
       <SettingsBackLink />
-      <PageHeader title="勘定科目" description={`${ctx.organizationName ?? ''}の勘定科目マスタ（複式簿記の仕訳で使用する科目一覧）`} />
+      <PageHeader title="勘定科目" en="Accounts" description={`${ctx.organizationName ?? ''}の勘定科目マスタ（複式簿記の仕訳で使用する科目一覧）`} />
       <AccountsPanel initial={rows} />
     </div>
   );

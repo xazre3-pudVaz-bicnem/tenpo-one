@@ -84,14 +84,19 @@ export function CommandPaletteTrigger() {
 }
 
 /** モバイル等、テキストヒントを出さない小さい検索ボタン */
-export function CommandPaletteIconTrigger() {
+export function CommandPaletteIconTrigger({ tone = 'mobile' }: { tone?: 'mobile' | 'dark' }) {
   const { open } = useCommandPalette();
   return (
     <button
       type="button"
       onClick={open}
       aria-label="検索を開く"
-      className="rounded-lg p-2 text-gray-600 hover:bg-gray-100 sm:hidden"
+      title="検索（Ctrl+K）"
+      className={
+        tone === 'dark'
+          ? 'rounded-lg p-2 text-white hover:bg-white/10'
+          : 'rounded-lg p-2 text-gray-600 hover:bg-gray-100 sm:hidden'
+      }
     >
       <Search className="h-5 w-5" />
     </button>

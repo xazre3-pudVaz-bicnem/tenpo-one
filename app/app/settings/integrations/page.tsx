@@ -51,7 +51,7 @@ export default async function IntegrationsSettingsPage() {
     return (
       <div>
         <SettingsBackLink />
-        <PageHeader title="連携" />
+        <PageHeader title="連携" en="Integrations" />
         <EmptyState title="対象の店舗がありません" description="店舗を選択してから確認してください" />
       </div>
     );
@@ -130,7 +130,7 @@ export default async function IntegrationsSettingsPage() {
   return (
     <div>
       <SettingsBackLink />
-      <PageHeader title="連携" description={`${targetStore.name}｜各連携の設定状況（虚偽の「接続済み」表示は行いません）`} />
+      <PageHeader title="連携" en="Integrations" description={`${targetStore.name}｜各連携の設定状況（虚偽の「接続済み」表示は行いません）`} />
 
       <div className="space-y-3">
         {rows.map((r) => (

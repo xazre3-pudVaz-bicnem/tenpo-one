@@ -1,0 +1,81 @@
+import { requireMember } from '@/lib/auth';
+import { can } from '@/lib/permissions';
+import { featureForRoute } from '@/lib/features';
+import { canWriteAccounting } from '@/components/accounting/roles';
+import { SettingsShell, type SettingsNavGroup, type SettingsNavItem } from '@/components/settings/settings-nav';
+
+type Row = SettingsNavItem & { visible: boolean };
+
+export default async function SettingsLayout({ children }: { children: React.ReactNode }) {
+  // 各設定ページ側で権限を強制するため、ここでは表示判定のみ行う
+  const ctx = await requireMember();
+  const role = ctx.role;
+  const featureOn = (href: string) => {
+    const f = featureForRoute(href);
+    return !f || !ctx.disabledFeatures.has(f);
+  };
+
+  const groups: { label: string; en: string; rows: Row[] }[] = [
+    {
+      label: '店舗',
+      en: 'Store',
+      rows: [
+        { href: '/app/settings/store', label: '店舗情報', en: 'Store', icon: 'store', description: '名称・住所・連絡先・紹介文・公開予約URL', visible: true, hubDefault: true },
+        { href: '/app/settings/company', label: '企業情報', en: 'Company', icon: 'company', description: '会社名・住所・連絡先・請求情報の管理', visible: can(role, 'org.settings') },
+        { href: '/app/settings/hours', label: '営業時間・休業日', en: 'Hours', icon: 'hours', description: '曜日別の営業時間、定休日、臨時休業の設定', visible: true },
+        { href: '/app/settings/menu', label: 'メニュー編集', en: 'Menu', icon: 'menu', description: 'カテゴリ・商品の登録、価格、売切管理', visible: can(role, 'menu.manage') },
+        { href: '/app/settings/options', label: 'メニュー選択肢', en: 'Menu options', icon: 'options', description: 'サイズ・トッピング等の選択肢と追加料金', visible: true },
+        { href: '/app/settings/clerks', label: 'POS担当者', en: 'Clerks', icon: 'clerks', description: '会計時に選ぶ担当者名の登録（アカウント不要）', visible: true },
+        { href: '/app/reports', label: '帳票管理・分析', en: 'Reports', icon: 'reports', description: '売上・客数などのレポートと帳票出力', visible: can(role, 'reports.view') && featureOn('/app/reports'), matchActive: false },
+      ],
+    },
+    {
+      label: 'デバイス管理',
+      en: 'Devices & management',
+      rows: [
+        { href: '/app/settings/printers', label: 'ハードウェア', en: 'Hardware', icon: 'printers', description: 'レジ端末とレシート・厨房プリンター、キャッシュドロアの設定', visible: true },
+        { href: '/app/settings/tables', label: 'テーブルQRコード', en: 'TableCode', icon: 'qr', description: 'テーブルごとのQR注文コードの発行・印刷（テーブル・フロアから）', visible: true, matchActive: false },
+      ],
+    },
+    {
+      label: '予約・顧客',
+      en: 'Booking',
+      rows: [
+        { href: '/app/settings/tables', label: 'テーブル・フロア', en: 'Tables', icon: 'tables', description: 'フロア構成、テーブルの席数・種別・利用停止', visible: true },
+        { href: '/app/staff', label: 'スタッフ・権限', en: 'Staff', icon: 'staff', description: 'スタッフの招待・役割（権限）・利用停止', visible: can(role, 'staff.manage') && featureOn('/app/staff'), matchActive: false },
+        { href: '/app/settings/booking', label: '予約受付ルール', en: 'Booking rules', icon: 'booking', description: '予約枠間隔・受付期間・キャンセル期限', visible: true },
+      ],
+    },
+    {
+      label: '会計',
+      en: 'Payments',
+      rows: [
+        { href: '/app/settings/payments', label: '決済・端末', en: 'Payments', icon: 'payments', description: 'Stripe接続・決済端末・予約事前決済', visible: true },
+        { href: '/app/settings/tax', label: '税率', en: 'Tax', icon: 'tax', description: '税率マスタの登録・既定税率の設定', visible: true },
+        { href: '/app/settings/accounts', label: '勘定科目', en: 'Accounts', icon: 'accounts', description: '複式簿記の勘定科目マスタの登録', visible: canWriteAccounting(role) },
+        { href: '/app/settings/approvals', label: '承認ルール', en: 'Approvals', icon: 'approvals', description: '金額帯別の必要承認ロール・自己承認可否の設定', visible: can(role, 'org.settings') },
+      ],
+    },
+    {
+      label: '運用・管理',
+      en: 'Operations',
+      rows: [
+        { href: '/app/settings/loyalty', label: '会員・ポイント', en: 'Loyalty', icon: 'loyalty', description: 'ポイント付与率・利用設定（例: 100円=1pt）', visible: can(role, 'org.settings') },
+        { href: '/app/settings/alerts', label: '異常検知の閾値', en: 'Alerts', icon: 'alerts', description: '現金差異・値引率・原価率・人件費率などの閾値', visible: true },
+        { href: '/app/settings/import', label: 'データ取込', en: 'Import', icon: 'import', description: 'CSVから商品・顧客・仕入先・在庫品目を一括登録', visible: can(role, 'org.settings') },
+        { href: '/app/settings/integrations', label: '連携', en: 'Integrations', icon: 'integrations', description: '決済・プリンター・外部サービス連携の状態確認', visible: true },
+        { href: '/app/settings/audit', label: '監査ログ', en: 'Audit log', icon: 'audit', description: '権限変更・停止・設定変更などの操作履歴', visible: can(role, 'audit.view') },
+      ],
+    },
+  ];
+
+  const navGroups: SettingsNavGroup[] = groups
+    .map((g) => ({
+      label: g.label,
+      en: g.en,
+      items: g.rows.filter((r) => r.visible).map(({ visible: _visible, ...item }) => item),
+    }))
+    .filter((g) => g.items.length > 0);
+
+  return <SettingsShell groups={navGroups}>{children}</SettingsShell>;
+}

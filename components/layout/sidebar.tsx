@@ -1,36 +1,47 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { NavGroup } from '@/lib/nav';
+import type { NavGroup, NavItem, NavTile } from '@/lib/nav';
+import { enqueueDrawerKick } from '@/app/app/pos/print-actions';
+import { useToast } from '@/components/ui/toast';
 import { NavIcon } from './nav-icons';
-import { BrandLogo } from './brand-logo';
 
 const STORAGE_KEY = 'tenpo-nav-collapsed';
 
 function isItemActive(pathname: string, href: string): boolean {
-  if (href === '/app/reservations' || href === '/app/accounting') {
+  if (href.startsWith('#')) return false;
+  if (href === '/app/accounting' || href === '/app/cash') {
     return pathname === href;
   }
   return pathname === href || pathname.startsWith(href + '/');
 }
 
 /**
- * PC用左サイドバー（濃紺）。
- * 機能増加に伴いグループを折りたたみ可能にし、現在地のグループは自動展開する。
- * 折りたたみ状態は localStorage に保持。
+ * PC用左メニュー（白地・日英併記）。D&DREAM レジ v32 の構成:
+ *   最上段に「オーダー・会計」「店舗台帳」の大きなタイル → レジ業務の行 → 業務ドメインの折りたたみグループ。
+ * 折りたたみ状態は localStorage に保持し、現在地を含むグループは常に展開する。
  */
-export function Sidebar({ groups }: { groups: NavGroup[] }) {
+export function Sidebar({
+  tiles,
+  groups,
+  alertCount,
+  currentStoreId,
+}: {
+  tiles: NavTile[];
+  groups: NavGroup[];
+  alertCount: number;
+  currentStoreId: string | null;
+}) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    // SSRとのhydration不一致を避けるためマウント後に復元する
-    // （effect本体での同期setStateを避けるためタスクへ遅延）
+    // SSRとのhydration不一致を避けるためマウント後に復元する（effect本体での同期setStateを避けてタスクへ遅延）
     const timer = setTimeout(() => {
       try {
         const raw = localStorage.getItem(STORAGE_KEY);
@@ -56,55 +67,79 @@ export function Sidebar({ groups }: { groups: NavGroup[] }) {
   };
 
   return (
-    <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col bg-navy lg:flex">
-      <div className="flex h-16 shrink-0 items-center px-5">
-        <Link href="/app/dashboard" aria-label="ダッシュボードへ">
-          <BrandLogo className="text-lg" light />
-        </Link>
-      </div>
-      <nav className="flex-1 overflow-y-auto px-3 pb-6" aria-label="メインナビゲーション">
+    <aside
+      className="fixed top-[58px] bottom-0 left-0 z-30 hidden w-[250px] flex-col border-r border-line bg-white lg:flex"
+      aria-label="メインナビゲーション"
+    >
+      <nav className="flex-1 overflow-y-auto">
+        {tiles.length > 0 && (
+          <div className="border-b border-line">
+            {tiles.map((t) => {
+              const active = t.match.some((m) => pathname === m || pathname.startsWith(m + '/'));
+              return (
+                <Link
+                  key={t.href}
+                  href={t.href}
+                  aria-current={active ? 'page' : undefined}
+                  className={cn(
+                    'flex items-center justify-between gap-3 border-b border-line px-[18px] py-4 text-royal transition-colors last:border-b-0',
+                    active ? 'bg-iris-soft' : 'hover:bg-lilac-soft'
+                  )}
+                >
+                  <span className="min-w-0">
+                    <span className="block text-[17px] leading-tight font-bold whitespace-nowrap">{t.label}</span>
+                    <span className="mt-0.5 block text-xs text-ink-3">{t.en}</span>
+                  </span>
+                  <span
+                    className={cn(
+                      'grid h-11 w-11 shrink-0 place-items-center rounded-xl',
+                      active ? 'bg-iris text-white' : 'bg-iris-soft text-iris'
+                    )}
+                  >
+                    <NavIcon name={t.icon} className="h-6 w-6" />
+                  </span>
+                </Link>
+              );
+            })}
+          </div>
+        )}
+
         {groups.map((group, gi) => {
           const hasActive = group.items.some((i) => isItemActive(pathname, i.href));
-          // 現在地を含むグループは折りたたみ設定に関わらず展開する
-          const isCollapsed = loaded && group.label ? (collapsed[group.label] ?? false) && !hasActive : false;
+          // 業務グループは既定で折りたたむ（保存値の読込前も同じ状態で描画してちらつきを防ぐ）。
+          // 現在地を含むグループは常に展開する。
+          const isCollapsed = group.label
+            ? (loaded ? (collapsed[group.label] ?? true) : true) && !hasActive
+            : false;
 
           return (
-            <div key={group.label ?? gi} className="mt-3 first:mt-1">
+            <div key={group.label ?? gi}>
               {group.label && (
                 <button
                   type="button"
                   onClick={() => toggle(group.label!)}
                   aria-expanded={!isCollapsed}
-                  className="flex w-full items-center justify-between rounded px-3 py-1 text-[11px] font-medium uppercase tracking-wider text-gray-500 hover:text-gray-300"
+                  className="flex w-full items-center justify-between border-b border-line bg-lilac-soft px-[18px] py-2 text-left text-xs font-bold text-ink-2 hover:text-royal"
                 >
-                  {group.label}
-                  <ChevronDown
-                    className={cn('h-3 w-3 transition-transform', isCollapsed && '-rotate-90')}
-                  />
+                  <span>
+                    {group.label}
+                    {group.en && <span className="en-inline">{group.en}</span>}
+                  </span>
+                  <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', isCollapsed && '-rotate-90')} />
                 </button>
               )}
               {!isCollapsed && (
-                <ul className="space-y-0.5">
-                  {group.items.map((item) => {
-                    const active = isItemActive(pathname, item.href);
-                    return (
-                      <li key={item.href}>
-                        <Link
-                          href={item.href}
-                          aria-current={active ? 'page' : undefined}
-                          className={cn(
-                            'flex items-center gap-3 rounded-lg px-3 py-1.5 text-sm transition-colors',
-                            active
-                              ? 'bg-primary text-white'
-                              : 'text-gray-300 hover:bg-navy-soft hover:text-white'
-                          )}
-                        >
-                          <NavIcon name={item.icon} className="h-4 w-4 shrink-0" />
-                          {item.label}
-                        </Link>
-                      </li>
-                    );
-                  })}
+                <ul>
+                  {group.items.map((item) => (
+                    <li key={item.href}>
+                      <NavRow
+                        item={item}
+                        active={isItemActive(pathname, item.href)}
+                        count={item.badge === 'alerts' ? alertCount : 0}
+                        storeId={currentStoreId}
+                      />
+                    </li>
+                  ))}
                 </ul>
               )}
             </div>
@@ -112,5 +147,69 @@ export function Sidebar({ groups }: { groups: NavGroup[] }) {
         })}
       </nav>
     </aside>
+  );
+}
+
+function RowBody({ item, count }: { item: NavItem; count: number }) {
+  return (
+    <>
+      <NavIcon name={item.icon} className="h-[21px] w-[21px] shrink-0 text-ink-3 transition-colors group-hover:text-iris group-aria-[current=page]:text-iris" />
+      <span className="min-w-0 flex-1">
+        <span className="block truncate">{item.label}</span>
+        <span className="en-sub group-aria-[current=page]:text-royal">{item.en}</span>
+      </span>
+      {count > 0 && (
+        <span className="grid h-5 min-w-5 place-items-center rounded-full bg-danger px-1.5 text-[11px] font-extrabold text-white tabular-nums">
+          {count > 99 ? '99+' : count}
+        </span>
+      )}
+      {!item.action && <ChevronRight className="h-[18px] w-[18px] shrink-0 text-wisteria" />}
+    </>
+  );
+}
+
+const rowClass =
+  'group flex w-full items-center gap-3 border-b border-line px-[18px] py-2.5 text-left text-[15px] leading-snug font-medium text-ink-2 transition-colors hover:bg-lilac-soft hover:text-royal aria-[current=page]:bg-iris-soft aria-[current=page]:font-bold aria-[current=page]:text-royal';
+
+function NavRow({
+  item,
+  active,
+  count,
+  storeId,
+}: {
+  item: NavItem;
+  active: boolean;
+  count: number;
+  storeId: string | null;
+}) {
+  if (item.action === 'drawer') return <DrawerRow item={item} storeId={storeId} />;
+  return (
+    <Link href={item.href} aria-current={active ? 'page' : undefined} className={rowClass}>
+      <RowBody item={item} count={count} />
+    </Link>
+  );
+}
+
+/** ドロアオープン（レシートプリンタ経由でキャッシュドロアを開く） */
+function DrawerRow({ item, storeId }: { item: NavItem; storeId: string | null }) {
+  const { toast } = useToast();
+  const [pending, startTransition] = useTransition();
+  return (
+    <button
+      type="button"
+      className={cn(rowClass, 'disabled:opacity-50')}
+      disabled={pending || !storeId}
+      title={storeId ? undefined : '店舗を選択してください'}
+      onClick={() =>
+        startTransition(async () => {
+          if (!storeId) return;
+          const res = await enqueueDrawerKick(storeId);
+          if (res.ok) toast('ドロアを開きます');
+          else toast(res.error ?? 'ドロアを開けませんでした', 'error');
+        })
+      }
+    >
+      <RowBody item={item} count={0} />
+    </button>
   );
 }

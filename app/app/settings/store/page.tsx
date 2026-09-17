@@ -17,7 +17,7 @@ export default async function StoreSettingsPage() {
     return (
       <div>
         <SettingsBackLink />
-        <PageHeader title="店舗情報" />
+        <PageHeader title="店舗情報" en="Store" />
         <EmptyState title="対象の店舗がありません" description="店舗を選択してから設定を行ってください" />
       </div>
     );
@@ -40,7 +40,7 @@ export default async function StoreSettingsPage() {
     return (
       <div>
         <SettingsBackLink />
-        <PageHeader title="店舗情報" />
+        <PageHeader title="店舗情報" en="Store" />
         <EmptyState title="店舗情報を取得できませんでした" />
       </div>
     );
@@ -71,7 +71,7 @@ export default async function StoreSettingsPage() {
   return (
     <div>
       <SettingsBackLink />
-      <PageHeader title="店舗情報" description={store.name} />
+      <PageHeader title="店舗情報" en="Store" description={store.name} />
 
       <div className="mb-5">
         <CopyLink url={bookingUrl} label="公開予約ページURL" />

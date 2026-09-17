@@ -36,7 +36,7 @@ export default async function CompanySettingsPage() {
   return (
     <div>
       <SettingsBackLink />
-      <PageHeader title="企業情報" description="契約企業の基本情報と請求情報を管理します。" />
+      <PageHeader title="企業情報" en="Company" description="契約企業の基本情報と請求情報を管理します。" />
       <CompanyForm initial={initial} />
       <div className="mt-5">
         <KpiSettingsForm initialIncludeTakeoutGuests={includeTakeoutGuests} />

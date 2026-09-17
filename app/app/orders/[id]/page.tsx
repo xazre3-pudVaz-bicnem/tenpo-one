@@ -21,7 +21,7 @@ import { refundOrder, reopenOrder, type RefundMethod } from '../actions';
 
 const REFUND_KIND_LABELS: Record<string, string> = { refund: '返金', void: '取消（VOID）' };
 
-export const metadata: Metadata = { title: '注文詳細' };
+export const metadata: Metadata = { title: '伝票詳細' };
 
 const ORDER_TYPE_LABELS: Record<string, string> = {
   dine_in: '店内',
@@ -303,14 +303,15 @@ export default async function OrderDetailPage({
   return (
     <div>
       <div className="mb-4">
-        <Link href="/app/orders" className="flex items-center gap-1 text-sm font-medium text-gray-600 hover:text-primary">
+        <Link href="/app/orders" className="inline-flex items-center gap-1 text-sm font-bold text-royal hover:underline">
           <ArrowLeft className="h-4 w-4" />
-          注文・取引履歴へ戻る
+          伝票明細へ戻る
         </Link>
       </div>
 
       <PageHeader
-        title={`注文 #${order.order_no}`}
+        title={`伝票 #${order.order_no}`}
+        en="Slip detail"
         description={`${table?.name ?? ORDER_TYPE_LABELS[order.order_type] ?? order.order_type}｜${formatDateTime(order.opened_at)}`}
         actions={
           <div className="flex flex-wrap items-center gap-2">
@@ -318,7 +319,7 @@ export default async function OrderDetailPage({
             {hasVoid && <Badge tone="gray">取消（VOID）あり</Badge>}
             {order.status === 'open' && (
               <Link href={`/app/pos?order=${order.id}`} className={cn(buttonVariants({ variant: 'primary' }))}>
-                POSで開く
+                注文・会計
               </Link>
             )}
             {order.status !== 'open' && (
@@ -332,14 +333,14 @@ export default async function OrderDetailPage({
 
       <div className="grid gap-5 lg:grid-cols-3">
         <div className="space-y-5 lg:col-span-2">
-          <Card>
+          <Card className="overflow-hidden">
             <CardHeader>
-              <CardTitle>品目明細</CardTitle>
+              <CardTitle en="Items">品目明細</CardTitle>
             </CardHeader>
             <CardContent className="p-0">
-              <TableWrap className="border-0">
+              <TableWrap className="rounded-none border-0 shadow-none">
                 <Table>
-                  <THead>
+                  <THead className="bg-lilac-soft text-ink-3">
                     <Tr>
                       <Th>品名</Th>
                       <Th className="text-right">単価</Th>
@@ -373,9 +374,9 @@ export default async function OrderDetailPage({
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="overflow-hidden">
             <CardHeader>
-              <CardTitle>支払</CardTitle>
+              <CardTitle en="Payments">支払</CardTitle>
             </CardHeader>
             <CardContent className="p-0">
               {(payments ?? []).length === 0 ? (
@@ -383,9 +384,9 @@ export default async function OrderDetailPage({
                   <EmptyState title="支払記録がありません" className="border-0 py-6" />
                 </div>
               ) : (
-                <TableWrap className="border-0">
+                <TableWrap className="rounded-none border-0 shadow-none">
                   <Table>
-                    <THead>
+                    <THead className="bg-lilac-soft text-ink-3">
                       <Tr>
                         <Th>方法</Th>
                         <Th className="text-right">金額</Th>
@@ -398,7 +399,7 @@ export default async function OrderDetailPage({
                       {(payments ?? []).map((p) => (
                         <Tr key={p.id}>
                           <Td>{METHOD_LABELS[p.method] ?? p.method}</Td>
-                          <Td className="text-right tabular-nums">{yen(p.amount)}</Td>
+                          <Td className="text-right font-bold tabular-nums">{yen(p.amount)}</Td>
                           <Td className="text-right tabular-nums">{p.tendered != null ? yen(p.tendered) : '—'}</Td>
                           <Td className="text-right tabular-nums">{p.change_amount != null ? yen(p.change_amount) : '—'}</Td>
                           <Td className="whitespace-nowrap text-xs text-gray-500">{formatDateTime(p.paid_at)}</Td>
@@ -412,14 +413,14 @@ export default async function OrderDetailPage({
           </Card>
 
           {(refunds ?? []).length > 0 && (
-            <Card>
+            <Card className="overflow-hidden">
               <CardHeader>
-                <CardTitle>返金履歴</CardTitle>
+                <CardTitle en="Refunds">返金履歴</CardTitle>
               </CardHeader>
               <CardContent className="p-0">
-                <TableWrap className="border-0">
+                <TableWrap className="rounded-none border-0 shadow-none">
                   <Table>
-                    <THead>
+                    <THead className="bg-lilac-soft text-ink-3">
                       <Tr>
                         <Th>区分</Th>
                         <Th>方法</Th>
@@ -476,7 +477,7 @@ export default async function OrderDetailPage({
         <div className="space-y-5">
           <Card>
             <CardHeader>
-              <CardTitle>会計情報</CardTitle>
+              <CardTitle en="Summary">会計情報</CardTitle>
             </CardHeader>
             <CardContent className="space-y-1.5 text-sm">
               <div className="flex justify-between text-gray-600">
@@ -548,7 +549,7 @@ export default async function OrderDetailPage({
           {can(ctx.role, 'pos.refund') && ['paid', 'refunded'].includes(order.status) && (
             <Card>
               <CardHeader>
-                <CardTitle>返金・取消</CardTitle>
+                <CardTitle en="Refund">返金・取消</CardTitle>
               </CardHeader>
               <CardContent>
                 {refundable <= 0 ? (
@@ -569,7 +570,7 @@ export default async function OrderDetailPage({
           {canReopen && (
             <Card>
               <CardHeader>
-                <CardTitle>再会計</CardTitle>
+                <CardTitle en="Reopen">再会計</CardTitle>
               </CardHeader>
               <CardContent>
                 {openDerived ? (
@@ -599,7 +600,7 @@ export default async function OrderDetailPage({
           {(sourceOrder || (derivedOrders ?? []).length > 0) && (
             <Card>
               <CardHeader>
-                <CardTitle>関連取引</CardTitle>
+                <CardTitle en="Related">関連取引</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2 text-sm">
                 {sourceOrder && (
@@ -624,9 +625,9 @@ export default async function OrderDetailPage({
         </div>
       </div>
 
-      <Card className="mt-5">
+      <Card className="mt-5 overflow-hidden">
         <CardHeader>
-          <CardTitle>トレース（監査証跡）</CardTitle>
+          <CardTitle en="Trace">トレース（監査証跡）</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           {traceEvents.length === 0 ? (
@@ -634,9 +635,9 @@ export default async function OrderDetailPage({
               <EmptyState title="トレース対象のイベントがありません" className="border-0 py-6" />
             </div>
           ) : (
-            <TableWrap className="border-0">
+            <TableWrap className="rounded-none border-0 shadow-none">
               <Table>
-                <THead>
+                <THead className="bg-lilac-soft text-ink-3">
                   <Tr>
                     <Th>日時</Th>
                     <Th>区分</Th>

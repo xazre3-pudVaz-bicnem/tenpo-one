@@ -4,7 +4,7 @@ export function Input({ className, ...props }: React.InputHTMLAttributes<HTMLInp
   return (
     <input
       className={cn(
-        'h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-900 placeholder:text-gray-400',
+        'ui-input h-10 w-full border border-gray-300 bg-white px-3 text-sm text-gray-900 placeholder:text-gray-400',
         'focus:border-primary focus:outline-2 focus:outline-primary/30 disabled:bg-gray-100 disabled:text-gray-500',
         className
       )}
@@ -17,7 +17,7 @@ export function Textarea({ className, ...props }: React.TextareaHTMLAttributes<H
   return (
     <textarea
       className={cn(
-        'w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400',
+        'ui-input w-full border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400',
         'focus:border-primary focus:outline-2 focus:outline-primary/30 disabled:bg-gray-100',
         className
       )}
@@ -31,7 +31,7 @@ export function Select({ className, children, ...props }: React.SelectHTMLAttrib
   return (
     <select
       className={cn(
-        'h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-900',
+        'ui-input h-10 w-full border border-gray-300 bg-white px-3 text-sm text-gray-900',
         'focus:border-primary focus:outline-2 focus:outline-primary/30 disabled:bg-gray-100',
         className
       )}

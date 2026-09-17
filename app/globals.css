@@ -1,7 +1,17 @@
 @import "tailwindcss";
 
+/*
+ * 配色は2系統ある。
+ *   既定（:root）      … これまでの TENPO ONE 配色。LP・ログイン・公開予約/QR・CYPRESS運営管理画面で使う。
+ *   .theme-regi 配下   … 店舗画面（/app）。D&DREAM レジ v32 準拠（濃紫の上部バー・薄紫の背景・アイリスのアクセント）。
+ * 既存画面は primary / navy / surface / gray-* を使っているため、.theme-regi でこれらの変数を上書きするだけで
+ * 店舗画面全体の配色が切り替わる。共通UI部品の形（角丸・影・太さ）は下の --ui-* 変数で切り替える。
+ * 店舗画面だけに付けたいユーティリティは `regi:` バリアントで書ける（例: regi:bg-lilac）。
+ */
+@custom-variant regi (&:where(.theme-regi, .theme-regi *));
+
 @theme {
-  /* ブランドカラー（lib/brand.ts と同期） */
+  /* 既定の役割色（lib/brand.ts と同期） */
   --color-primary: #7b3ff2;
   --color-primary-deep: #5a2ed6;
   --color-primary-soft: #f3ecfe;
@@ -15,7 +25,29 @@
   --color-danger: #dc2626;
   --color-danger-soft: #fdecec;
 
-  --font-sans: var(--font-noto-sans-jp), "Noto Sans JP", "Inter", system-ui, sans-serif;
+  /* 店舗画面（D&DREAM レジ v32）のパレット。店舗画面の部品だけが使う */
+  --color-plum: #241436;
+  --color-plum-2: #3a2356;
+  --color-royal: #5b2c8f;
+  --color-iris: #7b3fe4;
+  --color-iris-deep: #6630c7;
+  --color-iris-soft: #e9e0fa;
+  --color-wisteria: #c9b8ea;
+  --color-lilac: #efeaf8;
+  --color-lilac-soft: #f6f3fb;
+  --color-line: #e3dbf1;
+  --color-ink: #2a2138;
+  --color-ink-2: #5e5470;
+  --color-ink-3: #7a7090;
+  --color-saffron: #bd660f;
+  --color-saffron-soft: #fbefdf;
+  --color-gold: #f6c77a;
+
+  --shadow-card: 0 1px 2px rgba(36, 20, 54, 0.05), 0 8px 20px rgba(36, 20, 54, 0.07);
+
+  --font-sans: var(--font-noto-sans-jp), "Noto Sans JP", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", Meiryo, system-ui, sans-serif;
+  /* 数字・英字ラベル用 */
+  --font-num: var(--font-manrope), "Manrope", var(--font-noto-sans-jp), system-ui, sans-serif;
 }
 
 body {
@@ -24,9 +56,145 @@ body {
   font-feature-settings: "palt";
 }
 
+/* 店舗画面: 役割色と灰色階調を紫系に置き換える */
+.theme-regi {
+  --color-primary: #7b3fe4;
+  --color-primary-deep: #6630c7;
+  --color-primary-soft: #e9e0fa;
+  --color-navy: #241436;
+  --color-navy-soft: #3a2356;
+  --color-surface: #efeaf8;
+  --color-success: #1e8f62;
+  --color-success-soft: #dff3ea;
+  --color-warning: #bd660f;
+  --color-warning-soft: #fbefdf;
+  --color-danger: #b3341f;
+  --color-danger-soft: #fdebe7;
+
+  --color-gray-50: #f6f3fb;
+  --color-gray-100: #efeaf8;
+  --color-gray-200: #e3dbf1;
+  --color-gray-300: #d3c8e6;
+  --color-gray-400: #a69bbb;
+  --color-gray-500: #7a7090;
+  --color-gray-600: #5e5470;
+  --color-gray-700: #463d57;
+  --color-gray-800: #2a2138;
+  --color-gray-900: #1e1729;
+  --color-gray-950: #140e1c;
+
+  color: var(--color-ink);
+  -webkit-font-smoothing: antialiased;
+}
+body.theme-regi {
+  background-color: var(--color-lilac);
+}
+
+/*
+ * 共通UI部品の「形」（角丸・影・太さ）。値はテーマごとに切り替える。
+ * @layer components に置くので、各画面が className で渡すユーティリティ（rounded-none 等）が常に優先される。
+ */
+:root {
+  --ui-card-radius: 0.75rem;
+  --ui-card-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --ui-card-header-py: 1rem;
+  --ui-card-title-size: 0.875rem;
+  --ui-card-title-weight: 600;
+  --ui-card-title-lh: 1.4286;
+  --ui-table-shadow: none;
+  --ui-stat-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --ui-btn-radius: 0.5rem;
+  --ui-btn-weight: 500;
+  --ui-btn2-bg: #ffffff;
+  --ui-btn2-fg: #0f1120;
+  --ui-btn2-border: #d1d5db;
+  --ui-btn2-hover: #f9fafb;
+  --ui-input-radius: 0.5rem;
+}
+.theme-regi {
+  --ui-card-radius: 1rem;
+  --ui-card-shadow: var(--shadow-card);
+  --ui-card-header-py: 0.875rem;
+  --ui-card-title-size: 1rem;
+  --ui-card-title-weight: 700;
+  --ui-card-title-lh: 1.5;
+  --ui-table-shadow: var(--shadow-card);
+  --ui-stat-shadow: none;
+  --ui-btn-radius: 9px;
+  --ui-btn-weight: 700;
+  --ui-btn2-bg: #e9e0fa;
+  --ui-btn2-fg: #5b2c8f;
+  --ui-btn2-border: transparent;
+  --ui-btn2-hover: #c9b8ea;
+  --ui-input-radius: 10px;
+}
+
+@layer components {
+  .ui-card {
+    border-radius: var(--ui-card-radius);
+    box-shadow: var(--ui-card-shadow);
+  }
+  .ui-card-header {
+    padding-block: var(--ui-card-header-py);
+  }
+  .ui-card-title {
+    font-size: var(--ui-card-title-size);
+    font-weight: var(--ui-card-title-weight);
+    line-height: var(--ui-card-title-lh);
+  }
+  .ui-table-wrap {
+    border-radius: var(--ui-card-radius);
+    box-shadow: var(--ui-table-shadow);
+  }
+  .ui-stat {
+    box-shadow: var(--ui-stat-shadow);
+  }
+  .ui-btn {
+    border-radius: var(--ui-btn-radius);
+    font-weight: var(--ui-btn-weight);
+  }
+  .ui-btn-secondary {
+    background-color: var(--ui-btn2-bg);
+    color: var(--ui-btn2-fg);
+    border: 1px solid var(--ui-btn2-border);
+  }
+  .ui-btn-secondary:hover {
+    background-color: var(--ui-btn2-hover);
+  }
+  .ui-input {
+    border-radius: var(--ui-input-radius);
+  }
+}
+
 /* 数値の等幅表示（金額・集計） */
 .tabular-nums {
   font-variant-numeric: tabular-nums;
+}
+/* 店舗画面では数字を Manrope で表示する */
+.theme-regi .tabular-nums {
+  font-family: var(--font-num);
+}
+
+/* 日英併記の英語ラベル */
+.en-sub {
+  display: block;
+  font-family: var(--font-num);
+  font-weight: 600;
+  font-size: 10.5px;
+  line-height: 1.2;
+  letter-spacing: 0.03em;
+  color: var(--color-ink-3);
+}
+.en-inline {
+  display: inline-block;
+  margin-left: 6px;
+  font-family: var(--font-num);
+  font-weight: 600;
+  font-size: 11px;
+  line-height: 1;
+  letter-spacing: 0.03em;
+  color: var(--color-ink-3);
+  vertical-align: middle;
 }
 
 /* 印刷: レシートのみを出力 */

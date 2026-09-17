@@ -7,11 +7,12 @@ import { Button } from '@/components/ui/button';
 import { Input, Label } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/components/ui/toast';
-import type { FloorTable, ReservationChip } from './floor-board';
+import { yen } from '@/lib/format';
+import { TILE_LABEL, nextReservation, tileState, tileTime, type TableView } from './types';
 
 export function TableSheet({
   table,
-  reservation,
+  now,
   canOperate,
   onClose,
   startWalkInAction,
@@ -19,8 +20,8 @@ export function TableSheet({
   completeCleaningAction,
   setTableAvailabilityAction,
 }: {
-  table: FloorTable | null;
-  reservation: ReservationChip | undefined;
+  table: TableView | null;
+  now: number;
   canOperate: boolean;
   onClose: () => void;
   startWalkInAction: (tableId: string, partySize: number) => Promise<{ orderId: string }>;
@@ -57,10 +58,14 @@ export function TableSheet({
   };
 
   const status = table.current_status;
+  const order = table.order;
+  const next = nextReservation(table, now);
+  const tt = order ? tileTime(order, now) : null;
 
   return (
     <Dialog open onClose={onClose} title={table.name}>
       <div className="mb-4 flex flex-wrap items-center gap-2">
+        <Badge tone="primary">{TILE_LABEL[tileState(table, now)]}</Badge>
         <Badge tone="gray">
           {table.capacity_min}〜{table.capacity_max}名
           {table.is_private_room && '・個室'}
@@ -68,15 +73,43 @@ export function TableSheet({
         </Badge>
       </div>
 
-      {reservation && (
-        <div className="mb-4 rounded-lg bg-primary-soft px-3 py-2 text-sm text-primary-deep">
-          本日の予約: {reservation.time}　{reservation.guestName} 様（{reservation.partySize}名）
+      {order && tt && (
+        <div className="mb-4 rounded-xl bg-lilac-soft p-3">
+          <dl className="grid grid-cols-3 gap-2 text-center">
+          <div>
+            <dt className="text-[11px] text-ink-3">経過</dt>
+            <dd className="text-lg font-extrabold text-royal tabular-nums">{tt.elapsed}分</dd>
+          </div>
+          <div>
+            <dt className="text-[11px] text-ink-3">残り</dt>
+            <dd className={tt.left > 0 ? 'text-lg font-extrabold text-ink tabular-nums' : 'text-lg font-extrabold text-danger tabular-nums'}>
+              {tt.left > 0 ? `${tt.left}分` : `超過${-tt.left}分`}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-[11px] text-ink-3">お会計</dt>
+            <dd className="text-lg font-extrabold text-ink tabular-nums">{yen(order.total)}</dd>
+          </div>
+          </dl>
+          <p className="mt-2 text-xs text-ink-2">
+            {order.guestCount}名
+            {(order.customerName ?? order.guestName) && `・${order.customerName ?? order.guestName} 様`}
+            {`・${order.sourceLabel}`}
+            {order.course && `・${order.course.label}${order.course.minutes}分`}
+            {order.clerkName && `・担当 ${order.clerkName}`}
+          </p>
+        </div>
+      )}
+
+      {next && (
+        <div className="mb-4 rounded-lg bg-iris-soft px-3 py-2 text-sm text-royal">
+          次の予約: <span className="tabular-nums">{next.time}</span>　{next.name.replace(/ ?様$/, '')} 様（{next.partySize}名・{next.sourceLabel}）
         </div>
       )}
 
       <div className="space-y-3">
         {status === 'available' && (
-          <div className="rounded-xl border border-gray-200 p-4">
+          <div className="rounded-xl border border-line p-4">
             <Label htmlFor="party-size">人数</Label>
             <div className="flex items-center gap-2">
               <Input
@@ -88,7 +121,7 @@ export function TableSheet({
                 onChange={(e) => setPartySize(Math.max(1, Number(e.target.value) || 1))}
                 className="w-24"
               />
-              <span className="text-sm text-gray-500">名</span>
+              <span className="text-sm text-ink-3">名</span>
             </div>
             <Button
               size="pos"
@@ -108,7 +141,7 @@ export function TableSheet({
             disabled={pending}
             onClick={() => goPos(() => goToOrderAction(table.id))}
           >
-            注文画面へ
+            {status === 'billing' ? '注文・会計画面へ' : '注文画面へ'}
           </Button>
         )}
 

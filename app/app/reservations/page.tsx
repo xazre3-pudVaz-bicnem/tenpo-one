@@ -4,30 +4,42 @@ import { AlertTriangle } from 'lucide-react';
 import { requireFeature } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { can } from '@/lib/permissions';
-import { todayJst } from '@/lib/format';
 import { PageHeader } from '@/components/ui/page-header';
 import { EmptyState } from '@/components/ui/state';
-import { Card } from '@/components/ui/card';
+import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { StoreRealtimeRefresh } from '@/components/realtime/store-realtime-refresh';
 import { DateNav } from '@/components/reservations/date-nav';
-import { ReservationCard, type ReservationCardData } from '@/components/reservations/reservation-card';
-import type { AssignableTable } from '@/components/reservations/assign-table-dialog';
+import type { ReservationCardData } from '@/components/reservations/reservation-card';
 import { WaitlistDialog } from '@/components/reservations/waitlist-dialog';
 import { WaitlistPanel, type WaitlistRow, type WaitlistStatus } from '@/components/reservations/waitlist-panel';
 import { WaitingTicketDialog } from '@/components/reservations/waiting-ticket-dialog';
 import { WaitingQueuePanel, type WaitingTicketRow, type WaitingHint } from '@/components/reservations/waiting-queue-panel';
 import type { GuideTableOption } from '@/components/reservations/guide-table-dialog';
-import { ACTIVE_TIMELINE_STATUSES, ASSIGNABLE_STATUSES, statusBlockClass } from '@/components/reservations/constants';
+import { ACTIVE_TIMELINE_STATUSES } from '@/components/reservations/constants';
+import { loadLedgerChrome } from '@/components/reservations/ledger-data';
+import { LedgerTop, LedgerSummaryTiles, type LedgerTabKey } from '@/components/reservations/ledger-header';
+import { ScheduleBoard, BOARD_SLOT, type BoardTable } from '@/components/reservations/schedule-board';
 import { suggestTables, type TableLike, type ReservationStatus } from '@/lib/reservations';
 import { cn } from '@/lib/utils';
 
-export const metadata: Metadata = { title: '予約台帳' };
+export const metadata: Metadata = { title: '店舗台帳' };
 
-const SLOT = 30;
 const DEFAULT_START_MIN = 11 * 60;
 const DEFAULT_END_MIN = 23 * 60;
 const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
+
+/** テーブルの現在状態（restaurant_tables.current_status）の表示名 */
+const TABLE_STATUS_LABEL: Record<string, string> = {
+  available: '空席',
+  reserved: '予約あり',
+  waiting: 'キャンセル待ち',
+  seated: '着席中',
+  ordering: '注文中',
+  billing: '会計中',
+  cleaning: '清掃中',
+  unavailable: '利用停止',
+};
 
 // ---- 日付ユーティリティ（すべてJST暦日として純粋なUTC計算で扱い、サーバーのタイムゾーン設定に依存しない） ----
 
@@ -102,6 +114,7 @@ interface RawReservation {
   request_note: string | null;
   memo: string | null;
   created_via: string;
+  created_at: string;
   is_private_hire: boolean;
   staff_id: string | null;
   profiles: { display_name: string } | null;
@@ -111,7 +124,7 @@ interface RawReservation {
 }
 
 const RESERVATION_SELECT = `id, code, store_id, reserved_date, start_at, end_at, guest_name, guest_name_kana, guest_phone, guest_email,
-   party_size, adults, children, status, seat_type, purpose, allergy_note, request_note, memo, created_via, is_private_hire,
+   party_size, adults, children, status, seat_type, purpose, allergy_note, request_note, memo, created_via, created_at, is_private_hire,
    staff_id, profiles(display_name), course:menu_items(name), reservation_sources(name),
    reservation_tables(table_id, restaurant_tables(name))`;
 
@@ -145,44 +158,8 @@ function mapReservationRow(r: RawReservation, storeName: string | null): Reserva
     staffId: r.staff_id,
     staffName: r.profiles?.display_name ?? null,
     isPrivateHire: r.is_private_hire,
+    createdAt: r.created_at,
   };
-}
-
-type GridCell =
-  | { kind: 'empty' }
-  | { kind: 'skip' }
-  | { kind: 'block'; span: number; reservation: ReservationCardData }
-  | { kind: 'buffer' };
-
-/**
- * バッファ>0のとき、各予約ブロックの直後（清掃バッファ分のスロット）に
- * 'buffer' セルを重ねる。既に別の予約が入っている枠は上書きしない。
- */
-function buildRow(reservations: ReservationCardData[], startMin: number, slotCount: number, bufferMinutes: number): GridCell[] {
-  const cells: GridCell[] = Array.from({ length: slotCount }, () => ({ kind: 'empty' }));
-  const blockEnds: number[] = [];
-  for (const r of [...reservations].sort((a, b) => a.startAt.localeCompare(b.startAt))) {
-    const startIdx = Math.max(0, Math.min(slotCount - 1, Math.floor((jstMinutes(r.startAt) - startMin) / SLOT)));
-    const endIdx = Math.max(startIdx + 1, Math.min(slotCount, Math.ceil((jstMinutes(r.endAt) - startMin) / SLOT)));
-    if (cells[startIdx]?.kind !== 'empty') continue; // 重複割当は先勝ち
-    let span = 0;
-    for (let i = startIdx; i < endIdx; i++) {
-      if (cells[i]?.kind !== 'empty') break;
-      span++;
-    }
-    cells[startIdx] = { kind: 'block', span, reservation: r };
-    for (let i = startIdx + 1; i < startIdx + span; i++) cells[i] = { kind: 'skip' };
-    blockEnds.push(startIdx + span);
-  }
-  if (bufferMinutes > 0) {
-    const bufferSlots = Math.ceil(bufferMinutes / SLOT);
-    for (const end of blockEnds) {
-      for (let i = end; i < Math.min(slotCount, end + bufferSlots); i++) {
-        if (cells[i]?.kind === 'empty') cells[i] = { kind: 'buffer' };
-      }
-    }
-  }
-  return cells;
 }
 
 interface SearchParams {
@@ -198,23 +175,28 @@ export default async function ReservationsLedgerPage({ searchParams }: { searchP
   if (!store) {
     return (
       <div>
-        <PageHeader title="予約台帳" />
+        <PageHeader title="店舗台帳" en="Reservation" />
         <EmptyState title="アクセス可能な店舗がありません" description="管理者に店舗への招待を依頼してください。" />
       </div>
     );
   }
 
   const sp = await searchParams;
-  const date = /^\d{4}-\d{2}-\d{2}$/.test(sp.date ?? '') ? sp.date! : todayJst();
   const view = sp.view === 'week' || sp.view === 'waitlist' ? sp.view : 'day';
   const canManagePrivateHire = can(ctx.role, 'store.settings');
+
+  // 集計タイル・操作ボタン用の共通データ（today もここで算出）
+  const requestedDate = /^\d{4}-\d{2}-\d{2}$/.test(sp.date ?? '') ? sp.date! : undefined;
+  const chrome = await loadLedgerChrome(ctx, store, view === 'waitlist' ? undefined : requestedDate);
+  const today = chrome.today;
+  const date = requestedDate ?? today;
 
   const supabase = await createClient();
 
   const [{ data: tablesData }, { data: businessHoursData }, { data: staffData }, { data: bookingSettings }] = await Promise.all([
     supabase
       .from('restaurant_tables')
-      .select('id, name, capacity_min, capacity_max')
+      .select('id, name, capacity_min, capacity_max, current_status')
       .eq('store_id', store.id)
       .eq('status', 'active')
       .order('sort_order'),
@@ -229,48 +211,37 @@ export default async function ReservationsLedgerPage({ searchParams }: { searchP
   ]);
   const bufferMinutes = bookingSettings?.cleaning_buffer_minutes ?? 0;
 
-  const tables: AssignableTable[] = (tablesData ?? []).map((t) => ({
-    id: t.id,
-    name: t.name,
-    capacityMin: t.capacity_min,
-    capacityMax: t.capacity_max,
-  }));
-  const totalCapacity = tables.reduce((sum, t) => sum + t.capacityMax, 0);
+  const totalCapacity = (tablesData ?? []).reduce((sum, t) => sum + t.capacity_max, 0);
   const businessHoursMap = new Map<number, BusinessHourRow>((businessHoursData ?? []).map((b) => [b.day_of_week, b]));
   const staffOptions = (staffData ?? [])
     .map((m) => ({ id: m.profile_id as string, name: (m.profiles as unknown as { display_name: string } | null)?.display_name ?? '不明' }))
     .sort((a, b) => a.name.localeCompare(b.name, 'ja'));
 
-  const tabs: { key: string; label: string; href: string }[] = [
-    { key: 'day', label: '日', href: `/app/reservations?date=${date}` },
-    { key: 'week', label: '週', href: `/app/reservations?view=week&date=${date}` },
-    { key: 'month', label: '月', href: '/app/reservations/calendar' },
-    { key: 'list', label: 'リスト', href: '/app/reservations/list' },
-    { key: 'floor', label: 'フロア', href: '/app/floor' },
-    { key: 'waitlist', label: 'ウェイティング', href: '/app/reservations?view=waitlist' },
-  ];
-
   let body: React.ReactNode;
-  let description = `${store.name}｜${date.replaceAll('-', '/')}のタイムライン`;
+  let active: LedgerTabKey = 'schedule';
+  let nav: React.ReactNode = <DateNav date={date} basePath="/app/reservations" today={today} />;
 
   if (view === 'day') {
     const dow = dowOfDateStr(date);
     const bh = businessHoursMap.get(dow);
-    let startMin = DEFAULT_START_MIN;
-    let endMin = DEFAULT_END_MIN;
+    let openMin = DEFAULT_START_MIN;
+    let closeMin = DEFAULT_END_MIN;
     if (bh && !bh.is_closed) {
       const o = parseTimeToMinutes(bh.open_time);
       const c = parseTimeToMinutes(bh.close_time);
       if (o != null && c != null) {
-        startMin = o;
-        endMin = c > o ? c : c + 24 * 60;
+        openMin = o;
+        closeMin = c > o ? c : c + 24 * 60;
       }
     }
-    const slotCount = Math.max(1, Math.ceil((endMin - startMin) / SLOT));
-    const timeLabels = Array.from({ length: slotCount }, (_, i) => {
-      const min = startMin + i * SLOT;
-      return `${String(Math.floor((min / 60) % 24)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
-    });
+    // 営業時間の前後1時間まで表示し、営業時間外は斜線で示す
+    const viewStartMin = Math.max(0, Math.floor((openMin - 60) / 60) * 60);
+    const viewEndMin = Math.min(30 * 60, Math.ceil((closeMin + 60) / 60) * 60);
+    const isClosedDay = !!bh?.is_closed;
+    if (isClosedDay) {
+      openMin = viewEndMin;
+      closeMin = viewEndMin;
+    }
 
     const { data: reservationsData } = await supabase
       .from('reservations')
@@ -282,13 +253,25 @@ export default async function ReservationsLedgerPage({ searchParams }: { searchP
 
     const raw = (reservationsData ?? []) as unknown as RawReservation[];
     const reservations = raw.map((r) => mapReservationRow(r, null));
-    const unassigned = reservations.filter((r) => r.tableIds.length === 0 && ASSIGNABLE_STATUSES.includes(r.status));
+    const isToday = date === today;
+
+    const boardTables: BoardTable[] = (tablesData ?? []).map((t) => {
+      let statusLabel = '';
+      if (isToday) {
+        const onTable = reservations.filter((r) => r.tableIds.includes(t.id));
+        const seated = onTable.find((r) => r.status === 'seated' || r.status === 'arrived');
+        const billing = onTable.find((r) => r.status === 'billing');
+        if (billing) statusLabel = '会計待ち';
+        else if (seated) statusLabel = `着席中 ${seated.partySize}名 ・ ${seated.guestName} 様`;
+        else statusLabel = TABLE_STATUS_LABEL[t.current_status] ?? '';
+      }
+      return { id: t.id, name: t.name, capacityMin: t.capacity_min, capacityMax: t.capacity_max, statusLabel };
+    });
 
     let dayIsFull = false;
-    if (totalCapacity > 0) {
-      for (let i = 0; i < slotCount && !dayIsFull; i++) {
-        const slotStart = startMin + i * SLOT;
-        const slotEnd = slotStart + SLOT;
+    if (totalCapacity > 0 && !isClosedDay) {
+      for (let slotStart = openMin; slotStart < closeMin && !dayIsFull; slotStart += BOARD_SLOT) {
+        const slotEnd = slotStart + BOARD_SLOT;
         let guests = 0;
         for (const r of reservations) {
           const rs = jstMinutes(r.startAt);
@@ -305,138 +288,39 @@ export default async function ReservationsLedgerPage({ searchParams }: { searchP
       }
     }
 
-    if (bh?.is_closed) description += '（定休日設定あり）';
-
     body = (
       <>
         {dayIsFull && (
-          <Card className="mb-4 flex flex-wrap items-center justify-between gap-3 border-warning/40 bg-warning-soft p-4">
-            <p className="flex items-center gap-2 text-sm font-medium text-warning">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-warning/30 bg-warning-soft px-4 py-3 print:hidden">
+            <p className="flex items-center gap-2 text-sm font-bold text-warning">
               <AlertTriangle className="h-4 w-4 shrink-0" />
               この日は満席の時間帯があります。キャンセル待ちを承れます。
             </p>
             <WaitlistDialog stores={ctx.stores} defaultStoreId={store.id} defaultDate={date} />
-          </Card>
-        )}
-
-        {unassigned.length > 0 && (
-          <Card className="mb-4 p-4">
-            <p className="mb-3 text-sm font-semibold text-navy">未割当の予約（{unassigned.length}件）</p>
-            <div className="flex flex-wrap gap-3">
-              {unassigned.map((r) => (
-                <ReservationCard
-                  key={r.id}
-                  reservation={r}
-                  tables={tables}
-                  staffOptions={staffOptions}
-                  canManagePrivateHire={canManagePrivateHire}
-                  variant="list"
-                />
-              ))}
-            </div>
-          </Card>
-        )}
-
-        {tables.length === 0 ? (
-          <EmptyState title="テーブルが登録されていません" description="設定 &gt; テーブル管理からテーブルを登録してください。" />
-        ) : (
-          <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
-            <table className="w-full border-collapse text-xs">
-              <thead>
-                <tr>
-                  <th className="sticky left-0 z-10 min-w-[8rem] border-b border-gray-200 bg-gray-50 px-3 py-2 text-left font-medium text-gray-600">
-                    テーブル
-                  </th>
-                  {timeLabels.map((label, i) => (
-                    <th
-                      key={label}
-                      className={cn(
-                        'min-w-[3.25rem] border-b border-l border-gray-100 bg-gray-50 px-1 py-2 text-center font-medium whitespace-nowrap text-gray-500',
-                        i % 2 === 0 && 'bg-gray-100'
-                      )}
-                    >
-                      {label}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {tables.map((table) => {
-                  const rowReservations = reservations.filter((r) => r.tableIds.includes(table.id));
-                  const cells = buildRow(rowReservations, startMin, slotCount, bufferMinutes);
-                  return (
-                    <tr key={table.id}>
-                      <th className="sticky left-0 z-10 border-b border-gray-100 bg-white px-3 py-2 text-left align-top font-medium text-navy whitespace-nowrap">
-                        {table.name}
-                        <span className="ml-1 text-[10px] font-normal text-gray-400">
-                          {table.capacityMin}-{table.capacityMax}名
-                        </span>
-                      </th>
-                      {cells.map((cell, i) => {
-                        if (cell.kind === 'skip') return null;
-                        if (cell.kind === 'block') {
-                          return (
-                            <td key={i} colSpan={cell.span} className="border-b border-l border-gray-100 p-1 align-top">
-                              <ReservationCard
-                                reservation={cell.reservation}
-                                tables={tables}
-                                staffOptions={staffOptions}
-                                canManagePrivateHire={canManagePrivateHire}
-                                variant="grid"
-                              />
-                            </td>
-                          );
-                        }
-                        if (cell.kind === 'buffer') {
-                          return (
-                            <td
-                              key={i}
-                              title="清掃時間（バッファ）"
-                              className="border-b border-l border-gray-100 p-1"
-                              style={{
-                                backgroundImage:
-                                  'repeating-linear-gradient(45deg, #e5e7eb 0, #e5e7eb 4px, transparent 4px, transparent 8px)',
-                              }}
-                            />
-                          );
-                        }
-                        return <td key={i} className="border-b border-l border-gray-100 p-1" />;
-                      })}
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
           </div>
         )}
-
-        <p className="mt-3 flex flex-wrap items-center gap-3 text-xs text-gray-400">
-          凡例:
-          {(['confirmed', 'seated', 'billing', 'completed', 'cancelled'] as ReservationStatus[]).map((s) => (
-            <span key={s} className="inline-flex items-center gap-1">
-              <span className={cn('inline-block h-2.5 w-2.5 rounded-sm', statusBlockClass(s))} />
-              {s === 'confirmed' ? '予約確定' : s === 'seated' ? '着席中' : s === 'billing' ? '会計待ち' : s === 'completed' ? '会計済み' : 'キャンセル'}
-            </span>
-          ))}
-          {bufferMinutes > 0 && (
-            <span className="inline-flex items-center gap-1">
-              <span
-                className="inline-block h-2.5 w-2.5 rounded-sm border border-gray-300"
-                style={{
-                  backgroundImage:
-                    'repeating-linear-gradient(45deg, #e5e7eb 0, #e5e7eb 2px, transparent 2px, transparent 4px)',
-                }}
-              />
-              清掃バッファ（{bufferMinutes}分）
-            </span>
-          )}
-        </p>
+        <ScheduleBoard
+          reservations={reservations}
+          tables={boardTables}
+          viewStartMin={viewStartMin}
+          viewEndMin={viewEndMin}
+          openMin={openMin}
+          closeMin={closeMin}
+          isClosedDay={isClosedDay}
+          bufferMinutes={bufferMinutes}
+          staffOptions={staffOptions}
+          canManagePrivateHire={canManagePrivateHire}
+          isToday={isToday}
+          nowMs={chrome.nowMs}
+          updatedAt={chrome.updatedAt}
+        />
       </>
     );
   } else if (view === 'week') {
+    active = 'week';
+    nav = <DateNav date={date} basePath="/app/reservations" today={today} query="view=week" step={7} />;
     const weekStart = shiftDateStr(date, -dowOfDateStr(date));
     const weekDates = Array.from({ length: 7 }, (_, i) => shiftDateStr(weekStart, i));
-    description = `${store.name}｜${weekDates[0].replaceAll('-', '/')} 〜 ${weekDates[6].replaceAll('-', '/')}の週間概況`;
 
     const range = unionHourRange([...businessHoursMap.values()]);
     const bandStart = Math.floor(range.startMin / 60) * 60;
@@ -455,6 +339,7 @@ export default async function ReservationsLedgerPage({ searchParams }: { searchP
     const dayAgg = new Map<string, { count: number; guests: number; hasPrivate: boolean }>();
     for (const d of weekDates) dayAgg.set(d, { count: 0, guests: 0, hasPrivate: false });
     const cellAgg = new Map<string, { count: number; guests: number }>();
+    let maxCell = 0;
     for (const r of rows) {
       const agg = dayAgg.get(r.reserved_date);
       if (agg) {
@@ -470,74 +355,112 @@ export default async function ReservationsLedgerPage({ searchParams }: { searchP
         cur.count += 1;
         cur.guests += r.party_size;
         cellAgg.set(key, cur);
+        maxCell = Math.max(maxCell, cur.guests);
       }
     }
+    const weekCount = rows.length;
+    const weekGuests = rows.reduce((s, r) => s + r.party_size, 0);
 
     body = (
-      <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
-        <table className="w-full min-w-[54rem] border-collapse text-xs">
-          <thead>
-            <tr>
-              <th className="sticky left-0 z-10 min-w-[4rem] border-b border-gray-200 bg-gray-50 px-2 py-2 text-left font-medium text-gray-500">
-                時間帯
-              </th>
-              {weekDates.map((d, i) => {
-                const agg = dayAgg.get(d)!;
-                const occupancy = totalCapacity > 0 ? Math.min(100, Math.round((agg.guests / totalCapacity) * 100)) : null;
-                const day = Number(d.slice(8, 10));
-                return (
-                  <th key={d} className="border-b border-l border-gray-100 bg-gray-50 p-0 text-center font-medium">
-                    <Link href={`/app/reservations?date=${d}`} className="block px-2 py-2 hover:bg-primary-soft/40">
-                      <div className={cn('text-sm font-semibold', i === 0 ? 'text-danger' : i === 6 ? 'text-primary' : 'text-navy')}>
-                        {day}日（{WEEKDAYS[i]}）
-                      </div>
-                      <div className="mt-0.5 text-[11px] text-gray-500">
-                        {agg.count}件 / {agg.guests}名
-                      </div>
-                      <div className="text-[11px] font-medium text-primary-deep">{occupancy != null ? `満席率 ${occupancy}%` : '—'}</div>
-                      {agg.hasPrivate && (
-                        <Badge tone="primary" className="mt-1">
-                          貸切あり
-                        </Badge>
-                      )}
-                    </Link>
-                  </th>
-                );
-              })}
-            </tr>
-          </thead>
-          <tbody>
-            {bandLabels.map((label, bandIdx) => (
-              <tr key={label}>
-                <th className="sticky left-0 z-10 border-b border-gray-100 bg-white px-2 py-2 text-left font-medium whitespace-nowrap text-gray-500">
-                  {label}
+      <Card className="overflow-hidden">
+        <CardHeader className="flex flex-wrap items-center justify-between gap-3">
+          <CardTitle className="flex flex-wrap items-baseline">
+            週間
+            <span className="en-inline">Week</span>
+            <small className="ml-3 text-[13px] font-medium text-ink-2 tabular-nums">
+              {weekDates[0].slice(5).replace('-', '/')} 〜 {weekDates[6].slice(5).replace('-', '/')}
+            </small>
+          </CardTitle>
+          <span className="text-xs text-ink-3 tabular-nums">
+            {weekCount}組 {weekGuests}名 ・ 日付をタップ＝その日のスケジュール
+          </span>
+        </CardHeader>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[54rem] border-collapse text-[13px]">
+            <thead>
+              <tr>
+                <th className="sticky left-0 z-10 min-w-[5rem] border-r border-b border-line bg-lilac-soft px-3 py-2 text-left text-xs font-bold text-ink-2">
+                  時間帯
+                  <span className="en-sub">Time</span>
                 </th>
-                {weekDates.map((d) => {
-                  const cell = cellAgg.get(`${d}|${bandIdx}`);
+                {weekDates.map((d, i) => {
+                  const agg = dayAgg.get(d)!;
+                  const occupancy = totalCapacity > 0 ? Math.min(100, Math.round((agg.guests / totalCapacity) * 100)) : null;
+                  const day = Number(d.slice(8, 10));
+                  const isTodayCol = d === today;
+                  const isSelected = d === date;
                   return (
-                    <td key={d} className="border-b border-l border-gray-100 p-0 text-center">
-                      <Link href={`/app/reservations?date=${d}`} className="block px-2 py-2 hover:bg-primary-soft/40">
-                        {cell ? (
-                          <span className="font-medium text-navy">
-                            {cell.count}件 <span className="text-gray-400">{cell.guests}名</span>
-                          </span>
-                        ) : (
-                          <span className="text-gray-300">—</span>
+                    <th key={d} className="border-b border-l border-line bg-lilac-soft p-0 text-center font-medium">
+                      <Link
+                        href={`/app/reservations?date=${d}`}
+                        className={cn(
+                          'block px-2 py-2 transition-colors hover:bg-iris-soft',
+                          isSelected && 'bg-iris-soft',
+                          isTodayCol && 'shadow-[inset_0_-3px_0_var(--color-iris)]'
+                        )}
+                      >
+                        <div className={cn('text-sm font-bold', i === 0 ? 'text-danger' : i === 6 ? 'text-iris' : 'text-ink')}>
+                          <span className="tabular-nums">{day}</span>日（{WEEKDAYS[i]}）
+                          {isTodayCol && (
+                            <span className="ml-1 rounded-full bg-iris-soft px-1.5 py-px text-[10px] font-bold text-royal">今日</span>
+                          )}
+                        </div>
+                        <div className="mt-0.5 text-[11.5px] text-ink-2 tabular-nums">
+                          {agg.count}組 / {agg.guests}名
+                        </div>
+                        <div className="text-[11px] font-bold text-royal tabular-nums">
+                          {occupancy != null ? `満席率 ${occupancy}%` : '—'}
+                        </div>
+                        {agg.hasPrivate && (
+                          <Badge tone="primary" className="mt-1">
+                            貸切あり
+                          </Badge>
                         )}
                       </Link>
-                    </td>
+                    </th>
                   );
                 })}
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {bandLabels.map((label, bandIdx) => (
+                <tr key={label}>
+                  <th className="sticky left-0 z-10 border-r border-b border-line bg-white px-3 py-2 text-left font-[family-name:var(--font-num)] font-bold whitespace-nowrap text-ink-2 tabular-nums">
+                    {label}
+                  </th>
+                  {weekDates.map((d) => {
+                    const cell = cellAgg.get(`${d}|${bandIdx}`);
+                    const heat = cell && maxCell > 0 ? cell.guests / maxCell : 0;
+                    return (
+                      <td key={d} className="border-b border-l border-line p-0 text-center">
+                        <Link
+                          href={`/app/reservations?date=${d}`}
+                          className="block px-2 py-2 transition-colors hover:bg-lilac-soft"
+                          style={cell ? { backgroundColor: `rgba(123, 63, 228, ${(0.06 + heat * 0.22).toFixed(2)})` } : undefined}
+                        >
+                          {cell ? (
+                            <span className="font-bold text-royal tabular-nums">
+                              {cell.count}組 <span className="font-medium text-ink-2">{cell.guests}名</span>
+                            </span>
+                          ) : (
+                            <span className="text-wisteria">—</span>
+                          )}
+                        </Link>
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
     );
   } else {
+    active = 'waiting';
+    nav = null;
     const storeIds = ctx.currentStore ? [ctx.currentStore.id] : ctx.stores.map((s) => s.id);
     const showStore = !ctx.currentStore && ctx.stores.length > 1;
-    const today = todayJst();
 
     // ---- 本日の店頭ウェイティング（ticket_no採番済み）----
     const [{ data: queueData }, { data: availableTablesData }] = await Promise.all([
@@ -629,68 +552,70 @@ export default async function ReservationsLedgerPage({ searchParams }: { searchP
       note: w.note,
       status: w.status as WaitlistStatus,
     }));
-
-    description = `${store.name}｜ウェイティング`;
+    const waitingNow = queueEntries.filter((w) => w.status === 'waiting' || w.status === 'called').length;
 
     body = (
-      <>
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-sm font-semibold text-navy">本日のウェイティング</h2>
-          <WaitingTicketDialog stores={ctx.stores} defaultStoreId={store.id} />
-        </div>
-        <WaitingQueuePanel entries={queueEntries} tablesByStore={tablesByStore} hints={hints} showStore={showStore} />
-
-        <div className="mt-8 mb-4 flex flex-wrap items-center justify-between gap-3 border-t border-gray-200 pt-6">
-          <div>
-            <h2 className="mb-2 text-sm font-semibold text-navy">キャンセル待ち（満席時の登録）</h2>
-            <div className="flex flex-wrap gap-1 rounded-xl border border-gray-200 bg-white p-1">
-              {wstatusOptions.map((o) => (
-                <Link
-                  key={o.key || 'all'}
-                  href={`/app/reservations?view=waitlist${o.key ? `&wstatus=${o.key}` : ''}`}
-                  className={cn(
-                    'rounded-lg px-3 py-1.5 text-center text-xs font-medium transition-colors',
-                    wstatus === o.key ? 'bg-navy text-white' : 'text-gray-600 hover:bg-gray-100'
-                  )}
-                >
-                  {o.label}
-                </Link>
-              ))}
-            </div>
+      <div className="space-y-4">
+        <Card className="overflow-hidden">
+          <CardHeader className="flex flex-wrap items-center justify-between gap-3">
+            <CardTitle className="flex flex-wrap items-baseline">
+              本日のウェイティング
+              <span className="en-inline">Waiting</span>
+              <small className="ml-3 text-[13px] font-medium text-ink-2 tabular-nums">待ち {waitingNow}組</small>
+            </CardTitle>
+            <WaitingTicketDialog stores={ctx.stores} defaultStoreId={store.id} />
+          </CardHeader>
+          <div className="p-4">
+            <WaitingQueuePanel entries={queueEntries} tablesByStore={tablesByStore} hints={hints} showStore={showStore} embedded />
           </div>
-          <WaitlistDialog stores={ctx.stores} defaultStoreId={store.id} />
-        </div>
-        <WaitlistPanel entries={entries} showStore={showStore} allStores={ctx.stores} />
-      </>
+        </Card>
+
+        <Card className="overflow-hidden">
+          <CardHeader className="flex flex-wrap items-center justify-between gap-3">
+            <CardTitle>
+              キャンセル待ち（満席時の登録）
+              <span className="en-inline">Waitlist</span>
+            </CardTitle>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap gap-1.5">
+                {wstatusOptions.map((o) => (
+                  <Link
+                    key={o.key || 'all'}
+                    href={`/app/reservations?view=waitlist${o.key ? `&wstatus=${o.key}` : '&wstatus='}`}
+                    aria-current={wstatus === o.key ? 'page' : undefined}
+                    className={cn(
+                      'rounded-full border px-3.5 py-1.5 text-[13px] font-semibold transition-colors',
+                      wstatus === o.key ? 'border-royal bg-royal text-white' : 'border-line bg-white text-ink-2 hover:bg-lilac-soft'
+                    )}
+                  >
+                    {o.label}
+                  </Link>
+                ))}
+              </div>
+              <WaitlistDialog stores={ctx.stores} defaultStoreId={store.id} />
+            </div>
+          </CardHeader>
+          <WaitlistPanel entries={entries} showStore={showStore} allStores={ctx.stores} embedded />
+        </Card>
+      </div>
     );
   }
+
+  const isSummaryToday = chrome.summaryDate === today;
 
   return (
     <div>
       {/* 予約・ウェイティングの追加・変更・キャンセルをRealtimeで検知し、台帳（日/週/ウェイティング）を自動更新する */}
       <StoreRealtimeRefresh storeId={store.id} tables={['reservations', 'waitlist_entries']} />
-      <PageHeader
-        title="予約台帳"
-        description={description}
-        actions={view === 'day' ? <DateNav date={date} basePath="/app/reservations" /> : undefined}
-      />
-
-      <div className="mb-5 flex gap-1 overflow-x-auto border-b border-gray-200">
-        {tabs.map((t) => (
-          <Link
-            key={t.key}
-            href={t.href}
-            className={cn(
-              'shrink-0 border-b-2 px-4 py-2.5 text-sm font-medium whitespace-nowrap transition-colors',
-              view === t.key ? 'border-primary text-primary-deep' : 'border-transparent text-gray-500 hover:text-navy'
-            )}
-          >
-            {t.label}
-          </Link>
-        ))}
+      <h1 className="sr-only">店舗台帳（{store.name}）</h1>
+      <LedgerTop active={active} date={date} chrome={chrome} nav={nav} />
+      <div className="print-area">
+        <p className="mb-3 hidden text-base font-bold text-ink print:block">
+          店舗台帳 ／ {store.name} ／ {chrome.summaryDate.replaceAll('-', '/')}
+        </p>
+        <LedgerSummaryTiles chrome={chrome} isToday={isSummaryToday} />
+        {body}
       </div>
-
-      {body}
     </div>
   );
 }

@@ -73,11 +73,14 @@ export function WaitingQueuePanel({
   tablesByStore,
   hints,
   showStore,
+  embedded,
 }: {
   entries: WaitingTicketRow[];
   tablesByStore: Record<string, GuideTableOption[]>;
   hints: WaitingHint[];
   showStore: boolean;
+  /** カード内に置くとき true（枠線・影を控えめにする） */
+  embedded?: boolean;
 }) {
   const { toast } = useToast();
   const [pending, startTransition] = useTransition();
@@ -112,9 +115,13 @@ export function WaitingQueuePanel({
       )}
 
       {entries.length === 0 ? (
-        <EmptyState title="本日のウェイティングはありません" description="「受付」から店頭の待ちを登録できます。" />
+        <EmptyState
+          title="本日のウェイティングはありません"
+          description="「受付」から店頭の待ちを登録できます。"
+          className={embedded ? 'border-line bg-lilac-soft py-10' : undefined}
+        />
       ) : (
-        <TableWrap>
+        <TableWrap className={embedded ? 'shadow-none' : undefined}>
           <Table>
             <THead>
               <Tr>

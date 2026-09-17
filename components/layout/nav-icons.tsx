@@ -1,7 +1,8 @@
 import {
   Home, BookOpen, List, Calendar, CalendarDays, LayoutGrid, MonitorSmartphone,
   Receipt, Users, Banknote, Wallet, FileText, Truck, ClipboardList, Package,
-  Clock, JapaneseYen, BarChart3, UserCog, Settings, MoreHorizontal,
+  Clock, JapaneseYen, BarChart3, UserCog, Settings, MoreHorizontal, Lock, Bell,
+  Ticket, Landmark, Mail, Inbox, Camera, ConciergeBell, SlidersHorizontal,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -12,7 +13,8 @@ const ICONS: Record<string, LucideIcon> = {
   calendar: Calendar,
   calendarDays: CalendarDays,
   grid: LayoutGrid,
-  pos: MonitorSmartphone,
+  pos: ConciergeBell,
+  monitor: MonitorSmartphone,
   receipt: Receipt,
   users: Users,
   cash: Banknote,
@@ -25,8 +27,16 @@ const ICONS: Record<string, LucideIcon> = {
   yen: JapaneseYen,
   chart: BarChart3,
   userCog: UserCog,
-  settings: Settings,
+  settings: SlidersHorizontal,
+  gear: Settings,
   more: MoreHorizontal,
+  lock: Lock,
+  bell: Bell,
+  ticket: Ticket,
+  bank: Landmark,
+  mail: Mail,
+  drawer: Inbox,
+  camera: Camera,
 };
 
 export function NavIcon({ name, className }: { name: string; className?: string }) {

@@ -34,11 +34,15 @@ export function KpiStrip({
     <div className={cn('grid gap-px overflow-hidden rounded-xl border border-gray-200 bg-gray-100', colsClass, className)}>
       {cells.map((cell) =>
         cell.href ? (
-          <Link key={cell.key} href={cell.href} className={cn(cellClass, 'transition-colors hover:bg-gray-50')}>
-            <span className="text-xs font-medium text-gray-500">{cell.label}</span>
-            <span className={valueClass(cell.tone)}>{cell.value}</span>
-            {cell.compare && <div className="flex flex-wrap items-center gap-2">{cell.compare}</div>}
-          </Link>
+          // セル全体をリンクにしつつ、比較欄の中のリンク（「設定する」等）を入れ子の <a> にしないよう
+          // 「引き伸ばしリンク」（after で全面を覆う）にし、比較欄は前面に出す
+          <div key={cell.key} className={cn(cellClass, 'relative transition-colors hover:bg-gray-50')}>
+            <Link href={cell.href} className="flex flex-col gap-1 after:absolute after:inset-0 after:content-['']">
+              <span className="text-xs font-medium text-gray-500">{cell.label}</span>
+              <span className={valueClass(cell.tone)}>{cell.value}</span>
+            </Link>
+            {cell.compare && <div className="relative z-10 flex flex-wrap items-center gap-2">{cell.compare}</div>}
+          </div>
         ) : (
           <div key={cell.key} className={cellClass}>
             <span className="text-xs font-medium text-gray-500">{cell.label}</span>

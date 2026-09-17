@@ -5,10 +5,86 @@ import { can } from '@/lib/permissions';
 import { todayJst, formatTime } from '@/lib/format';
 import { PageHeader } from '@/components/ui/page-header';
 import { EmptyState } from '@/components/ui/state';
-import { FloorBoard, type ReservationChip } from '@/components/floor/floor-board';
+import { CREATED_VIA_LABEL } from '@/components/reservations/constants';
+import { FloorBoard } from '@/components/floor/floor-board';
+import type {
+  FloorTable,
+  PanelReservation,
+  TableOrderInfo,
+  TableView,
+  UpcomingReservation,
+} from '@/components/floor/types';
 import { startWalkIn, goToOrder, completeCleaning, setTableAvailability } from './actions';
 
-export const metadata: Metadata = { title: 'フロアマップ' };
+export const metadata: Metadata = { title: 'テーブル一覧' };
+
+/** 描画の基準時刻（リクエスト時点）。クライアントの時計のハイドレーション初期値にも使う */
+function requestTime() {
+  return Date.now();
+}
+
+function jstDate(iso: string) {
+  return new Date(iso).toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' });
+}
+
+/** 未来店として「次の予約」に出すステータス */
+const UPCOMING_STATUSES = ['pending', 'confirmed', 'waiting'];
+/** 右パネルに出すステータス（キャンセル・キャンセル待ちは除外） */
+const PANEL_STATUSES = ['pending', 'confirmed', 'waiting', 'arrived', 'seated', 'billing', 'completed', 'no_show'];
+
+type One<T> = T | T[] | null;
+const one = <T,>(v: One<T>): T | null => (Array.isArray(v) ? (v[0] ?? null) : v);
+
+interface ReservationSource {
+  created_via: string;
+  reservation_sources: One<{ name: string }>;
+}
+
+function sourceLabel(r: ReservationSource | null): string {
+  if (!r || r.created_via === 'walk_in') return '直接来店';
+  const src = one(r.reservation_sources);
+  return src?.name ?? CREATED_VIA_LABEL[r.created_via] ?? r.created_via;
+}
+
+function courseLabel(c: { course_includes_drinks: boolean | null; course_includes_ayce: boolean | null }) {
+  if (c.course_includes_ayce && c.course_includes_drinks) return '食飲放';
+  if (c.course_includes_ayce) return '食放';
+  if (c.course_includes_drinks) return '飲放';
+  return '時間制';
+}
+
+const isWalkInName = (name: string) => name === 'ウォークイン';
+
+interface OrderRow {
+  id: string;
+  table_id: string | null;
+  opened_at: string;
+  guest_count: number;
+  total: number;
+  clerk_name: string | null;
+  customers: One<{ name: string; visit_count: number }>;
+  reservations: One<
+    ReservationSource & {
+      guest_name: string;
+      end_at: string;
+      menu_items: One<{
+        duration_minutes: number | null;
+        course_includes_drinks: boolean | null;
+        course_includes_ayce: boolean | null;
+      }>;
+    }
+  >;
+}
+
+interface ReservationRow extends ReservationSource {
+  id: string;
+  start_at: string;
+  guest_name: string;
+  party_size: number;
+  status: string;
+  created_at: string;
+  reservation_tables: { table_id: string }[] | null;
+}
 
 export default async function FloorPage() {
   const ctx = await requireFeature('pos');
@@ -18,7 +94,7 @@ export default async function FloorPage() {
   if (!store) {
     return (
       <div>
-        <PageHeader title="フロアマップ" />
+        <PageHeader title="テーブル一覧" en="Tables" />
         <EmptyState
           title="アクセス可能な店舗がありません"
           description="管理者に店舗の割り当てを依頼してください"
@@ -27,52 +103,142 @@ export default async function FloorPage() {
     );
   }
 
-  const [{ data: floors }, { data: tables }] = await Promise.all([
-    supabase
-      .from('floors')
-      .select('id, name, sort_order')
-      .eq('store_id', store.id)
-      .eq('status', 'active')
-      .order('sort_order'),
-    supabase
-      .from('restaurant_tables')
-      .select(
-        'id, floor_id, name, capacity_min, capacity_max, is_private_room, is_counter, current_status, pos_x, pos_y, shape'
-      )
-      .eq('store_id', store.id)
-      .eq('status', 'active')
-      .order('sort_order'),
-  ]);
-
   const today = todayJst();
-  const { data: reservations } = await supabase
-    .from('reservations')
-    .select('id, start_at, guest_name, party_size, reservation_tables(table_id)')
-    .eq('store_id', store.id)
-    .eq('reserved_date', today)
-    .in('status', ['pending', 'confirmed', 'seated'])
-    .order('start_at');
+  const [{ data: floors }, { data: tables }, { data: settings }, { data: orderRows }, { data: reservationRows }] =
+    await Promise.all([
+      supabase
+        .from('floors')
+        .select('id, name, sort_order')
+        .eq('store_id', store.id)
+        .eq('status', 'active')
+        .order('sort_order'),
+      supabase
+        .from('restaurant_tables')
+        .select(
+          'id, floor_id, name, capacity_min, capacity_max, is_private_room, is_counter, current_status, pos_x, pos_y, shape'
+        )
+        .eq('store_id', store.id)
+        .eq('status', 'active')
+        .order('sort_order'),
+      supabase.from('store_settings').select('default_stay_minutes').eq('store_id', store.id).maybeSingle(),
+      supabase
+        .from('orders')
+        .select(
+          `id, table_id, opened_at, guest_count, total, clerk_name,
+           customers(name, visit_count),
+           reservations(guest_name, created_via, end_at, reservation_sources(name),
+             menu_items(duration_minutes, course_includes_drinks, course_includes_ayce))`
+        )
+        .eq('store_id', store.id)
+        .eq('status', 'open')
+        .not('table_id', 'is', null)
+        .order('opened_at'),
+      supabase
+        .from('reservations')
+        .select(
+          'id, start_at, guest_name, party_size, status, created_at, created_via, reservation_sources(name), reservation_tables(table_id)'
+        )
+        .eq('store_id', store.id)
+        .eq('reserved_date', today)
+        .in('status', PANEL_STATUSES)
+        .order('start_at'),
+    ]);
 
-  const reservationByTable: Record<string, ReservationChip> = {};
-  for (const r of reservations ?? []) {
-    const links = (r.reservation_tables ?? []) as unknown as { table_id: string }[];
-    for (const link of links) {
-      if (!reservationByTable[link.table_id]) {
-        reservationByTable[link.table_id] = {
-          time: formatTime(r.start_at),
-          guestName: r.guest_name,
-          partySize: r.party_size,
-        };
-      }
+  const serverNow = requestTime();
+  const stayMinutes = settings?.default_stay_minutes ?? 120;
+  const tableRows = (tables ?? []) as FloorTable[];
+  const tableName = new Map(tableRows.map((t) => [t.id, t.name]));
+
+  // テーブルごとの未会計注文（同一テーブルに複数あれば最も新しいものを代表にし、金額・人数は合算）
+  const orderByTable = new Map<string, TableOrderInfo>();
+  for (const o of (orderRows ?? []) as unknown as OrderRow[]) {
+    if (!o.table_id) continue;
+    const customer = one(o.customers);
+    const resv = one(o.reservations);
+    const course = resv ? one(resv.menu_items) : null;
+    const openedAtMs = new Date(o.opened_at).getTime();
+    const courseInfo =
+      course?.duration_minutes && course.duration_minutes > 0
+        ? { label: courseLabel(course), minutes: course.duration_minutes }
+        : null;
+    const endAtMs = courseInfo
+      ? openedAtMs + courseInfo.minutes * 60_000
+      : resv && new Date(resv.end_at).getTime() > openedAtMs
+        ? new Date(resv.end_at).getTime()
+        : openedAtMs + stayMinutes * 60_000;
+    const prev = orderByTable.get(o.table_id);
+    orderByTable.set(o.table_id, {
+      id: o.id,
+      // 経過時間は最初の注文の開始時刻から数える
+      openedAtMs: prev ? Math.min(prev.openedAtMs, openedAtMs) : openedAtMs,
+      guestCount: (prev?.guestCount ?? 0) + o.guest_count,
+      total: (prev?.total ?? 0) + Number(o.total ?? 0),
+      customerName: customer?.name ?? prev?.customerName ?? null,
+      visitCount: customer?.visit_count ?? prev?.visitCount ?? null,
+      guestName: resv && !isWalkInName(resv.guest_name) ? resv.guest_name : (prev?.guestName ?? null),
+      sourceLabel: resv ? sourceLabel(resv) : (prev?.sourceLabel ?? '直接来店'),
+      clerkName: o.clerk_name ?? prev?.clerkName ?? null,
+      course: courseInfo ?? prev?.course ?? null,
+      endAtMs: prev ? Math.max(prev.endAtMs, endAtMs) : endAtMs,
+    });
+  }
+
+  const reservationsToday = (reservationRows ?? []) as unknown as ReservationRow[];
+
+  // テーブルごとの未来店予約（開始時刻順）
+  const upcomingByTable = new Map<string, UpcomingReservation[]>();
+  for (const r of reservationsToday) {
+    if (!UPCOMING_STATUSES.includes(r.status)) continue;
+    for (const link of r.reservation_tables ?? []) {
+      const list = upcomingByTable.get(link.table_id) ?? [];
+      list.push({
+        id: r.id,
+        startMs: new Date(r.start_at).getTime(),
+        time: formatTime(r.start_at),
+        name: r.guest_name,
+        partySize: r.party_size,
+        sourceLabel: sourceLabel(r),
+      });
+      upcomingByTable.set(link.table_id, list);
     }
   }
+
+  const tableViews: TableView[] = tableRows.map((t) => ({
+    ...t,
+    order: orderByTable.get(t.id) ?? null,
+    upcoming: upcomingByTable.get(t.id) ?? [],
+  }));
+
+  // 右パネル: ウォークイン（直接来店）は予約ではないので除外
+  const panel: PanelReservation[] = reservationsToday
+    .filter((r) => r.created_via !== 'walk_in')
+    .map((r) => {
+      const names = (r.reservation_tables ?? [])
+        .map((l) => tableName.get(l.table_id))
+        .filter((n): n is string => !!n);
+      return {
+        id: r.id,
+        startMs: new Date(r.start_at).getTime(),
+        time: formatTime(r.start_at),
+        name: r.guest_name,
+        partySize: r.party_size,
+        tableLabel: names.length > 0 ? names.join(' + ') : '席未定',
+        status: r.status,
+        createdToday: jstDate(r.created_at) === today,
+      };
+    });
 
   const canOperate = can(ctx.role, 'tables.operate');
 
   return (
     <div>
-      <PageHeader title="フロアマップ" description={`${store.name}｜${today.replaceAll('-', '/')}の座席状況`} />
-      {(tables ?? []).length === 0 ? (
+      <PageHeader
+        title="テーブル一覧"
+        en="Tables"
+        description="テーブルを選んで注文・会計に進みます ／ Tap a table to order or pay"
+        actions={<Legend />}
+      />
+      {tableViews.length === 0 ? (
         <EmptyState
           title="テーブルが登録されていません"
           description="設定画面からフロア・テーブルを登録してください"
@@ -81,8 +247,9 @@ export default async function FloorPage() {
         <FloorBoard
           storeId={store.id}
           floors={floors ?? []}
-          tables={tables ?? []}
-          reservationByTable={reservationByTable}
+          tables={tableViews}
+          reservations={panel}
+          serverNow={serverNow}
           canOperate={canOperate}
           startWalkInAction={startWalkIn}
           goToOrderAction={goToOrder}
@@ -90,6 +257,29 @@ export default async function FloorPage() {
           setTableAvailabilityAction={setTableAvailability}
         />
       )}
+    </div>
+  );
+}
+
+const LEGEND = [
+  { label: '着席中', dot: 'bg-iris-soft border border-wisteria' },
+  { label: '注文済', dot: 'bg-iris' },
+  { label: 'L.O.済', dot: 'bg-[#F7C948]' },
+  { label: '時間超過', dot: 'bg-danger' },
+  { label: '会計待ち', dot: 'bg-saffron' },
+  { label: '空席', dot: 'bg-wisteria' },
+];
+
+function Legend() {
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 pt-1 text-xs font-medium text-ink-2">
+      {LEGEND.map((l) => (
+        <span key={l.label} className="inline-flex items-center">
+          <i className={`mr-[5px] inline-block h-[9px] w-[9px] rounded-full ${l.dot}`} aria-hidden />
+          {l.label}
+        </span>
+      ))}
+      <span className="text-ink-3">下の線＝残り時間</span>
     </div>
   );
 }

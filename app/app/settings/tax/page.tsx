@@ -31,7 +31,7 @@ export default async function TaxSettingsPage() {
   return (
     <div>
       <SettingsBackLink />
-      <PageHeader title="税率" description={ctx.organizationName ?? ''} />
+      <PageHeader title="税率" en="Tax" description={ctx.organizationName ?? ''} />
       <TaxRatesPanel initial={rows} />
     </div>
   );

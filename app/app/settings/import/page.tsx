@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { requirePermission } from '@/lib/auth';
 import { PageHeader } from '@/components/ui/page-header';
+import { SettingsBackLink } from '@/components/settings/back-link';
 import { ImportWizard } from '@/components/import/import-wizard';
 
 export const metadata: Metadata = { title: 'データ取込' };
@@ -11,8 +12,10 @@ export default async function DataImportPage() {
 
   return (
     <div>
+      <SettingsBackLink />
       <PageHeader
         title="データ取込"
+        en="Import"
         description="CSVファイルから商品・顧客・仕入先・在庫品目をまとめて登録します"
       />
       <ImportWizard targetStoreName={targetStore?.name ?? null} hasStore={ctx.stores.length > 0} />

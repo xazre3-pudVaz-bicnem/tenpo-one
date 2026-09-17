@@ -29,4 +29,6 @@ export interface ReservationListRow {
   staffId: string | null;
   staffName: string | null;
   isPrivateHire: boolean;
+  /** 予約の受付日時（当日予約の判定用。取得していない画面では省略） */
+  createdAt?: string;
 }

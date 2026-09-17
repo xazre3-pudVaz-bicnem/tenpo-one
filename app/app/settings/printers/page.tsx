@@ -21,7 +21,7 @@ export default async function PrintersSettingsPage() {
     return (
       <div>
         <SettingsBackLink />
-        <PageHeader title="レジ・プリンター" />
+        <PageHeader title="レジ・プリンター" en="Registers & printers" />
         <EmptyState title="対象の店舗がありません" description="店舗を選択してから設定を行ってください" />
       </div>
     );
@@ -123,14 +123,14 @@ export default async function PrintersSettingsPage() {
   return (
     <div>
       <SettingsBackLink />
-      <PageHeader title="レジ・プリンター" description={targetStore.name} />
+      <PageHeader title="レジ・プリンター" en="Registers & printers" description={targetStore.name} />
 
-      <div className="grid gap-5 lg:grid-cols-3">
-        <div className="space-y-5 lg:col-span-1">
+      <div className="grid gap-5 @5xl:grid-cols-3">
+        <div className="space-y-5 @5xl:col-span-1">
           <RegistersPanel storeId={targetStore.id} initial={registerRows} />
           <DrawerPanel storeId={targetStore.id} initial={drawerInitial} />
         </div>
-        <div className="lg:col-span-2 space-y-5">
+        <div className="@5xl:col-span-2 space-y-5">
           <Card>
             <CardContent>
               <PrintersPanel storeId={targetStore.id} initial={printerRows} />

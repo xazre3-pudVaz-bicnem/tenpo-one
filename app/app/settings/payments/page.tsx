@@ -21,7 +21,7 @@ export default async function PaymentsSettingsPage() {
     return (
       <div>
         <SettingsBackLink />
-        <PageHeader title="決済・端末" />
+        <PageHeader title="決済・端末" en="Payments" />
         <EmptyState title="対象の店舗がありません" description="店舗を選択してから設定を行ってください" />
       </div>
     );
@@ -56,7 +56,7 @@ export default async function PaymentsSettingsPage() {
   return (
     <div>
       <SettingsBackLink />
-      <PageHeader title="決済・端末" description={targetStore.name} />
+      <PageHeader title="決済・端末" en="Payments" description={targetStore.name} />
 
       <div className="space-y-5">
         <Card>

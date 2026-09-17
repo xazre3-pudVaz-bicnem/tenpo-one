@@ -1,39 +1,48 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { Download } from 'lucide-react';
+import { Camera, Download, Lock } from 'lucide-react';
 import { requireFeature } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { can, ROLE_LABELS } from '@/lib/permissions';
 import { resolveApprovalRule, type ApprovalRuleLike } from '@/lib/approvals';
-import { expectedCash } from '@/lib/metrics';
-import { yen, formatDate, todayJst, daysAgoJst } from '@/lib/format';
+import { yen, formatDate, formatTime, todayJst, daysAgoJst } from '@/lib/format';
+import { cn } from '@/lib/utils';
 import { PageHeader } from '@/components/ui/page-header';
 import { StatCard } from '@/components/ui/stat-card';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { buttonVariants } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/state';
+import { SegmentedTabs } from '@/components/ui/segmented-tabs';
 import { TableWrap, Table, THead, TBody, Tr, Th, Td } from '@/components/ui/table';
-import { CashTabs, type CashTab } from '@/components/cash/tabs';
 import { PeriodFilter } from '@/components/cash/period-filter';
 import { RegisterOpenCard } from '@/components/cash/register-open-card';
 import { RegisterClosedCard } from '@/components/cash/register-closed-card';
-import { SessionCard, type SessionCardData } from '@/components/cash/session-card';
+import { SessionCard } from '@/components/cash/session-card';
 import { PettyCashAddDialog } from '@/components/cash/petty-cash-add-dialog';
 import { PettyOpeningBalanceDialog } from '@/components/cash/petty-opening-balance-dialog';
 import { PettyCashCountDialog } from '@/components/cash/petty-cash-count-dialog';
 import { PettyCashCountApprove } from '@/components/cash/petty-cash-count-approve';
 import { ApprovalActions } from '@/components/cash/approval-actions';
 import { ClosingRow, type ClosingRowData } from '@/components/cash/closing-row';
-import { ClosingSnapshot, type RegisterBreakdownRow } from '@/components/cash/closing-snapshot';
-import { ChecklistCard, type ChecklistItem } from '@/components/cash/checklist-card';
+import { TodayClosingSummary } from '@/components/cash/today-closing-summary';
+import { ChecklistCard } from '@/components/cash/checklist-card';
 import { StoreDayClosePanel } from '@/components/cash/store-day-close-panel';
+import { CashEntryForm } from '@/components/cash/cash-entry-form';
+import { CashHistoryTable, splitPurpose } from '@/components/cash/cash-history';
 import { approvePettyCash, rejectPettyCash } from '@/app/app/cash/actions';
+import {
+  loadRegisterBoard,
+  loadTodayCashRows,
+  mapRegisterBreakdown,
+  STORE_DAY_CLOSE_ROLES,
+  STORE_DAY_REOPEN_ROLES,
+  type RawRegisterBreakdownEntry,
+} from '@/app/app/cash/close/data';
 import {
   KIND_LABELS,
   APPROVAL_LABELS,
   APPROVAL_TONES,
-  CLOSING_STATUS_LABELS,
-  CLOSING_STATUS_TONES,
   PETTY_KINDS,
   PETTY_COUNT_STATUS_LABELS,
   PETTY_COUNT_STATUS_TONES,
@@ -43,49 +52,15 @@ import {
   type PettyCountStatus,
 } from '@/components/cash/labels';
 
-/** 店舗日次締め（close_store_day）を実行できるロール。app/app/cash/actions.tsのSTORE_DAY_CLOSE_ROLESと一致させること */
-const STORE_DAY_CLOSE_ROLES = ['org_owner', 'hq_admin', 'area_manager', 'store_manager', 'assistant_manager'];
-/** 店舗日次締めの再オープン（reopen_store_day）を実行できるロール */
-const STORE_DAY_REOPEN_ROLES = ['org_owner', 'hq_admin', 'area_manager'];
+export const metadata: Metadata = { title: '入出金' };
 
-/** 予約が「本日まだ有効」とみなせるステータス（仮予約・キャンセル・無断キャンセル・会計済み・キャンセル待ちは除く） */
-const ACTIVE_RESERVATION_STATUSES = ['confirmed', 'waiting', 'arrived', 'seated', 'billing'];
+type CashTab = 'register' | 'petty' | 'closings';
 
-/** register_breakdown（jsonb）の1要素の生の型。supabase/migrations/00027の close_store_day が生成する */
-interface RawRegisterBreakdownEntry {
-  register_id: string;
-  register_name: string;
-  session_id: string;
-  opening_float: number;
-  cash_sales: number;
-  cash_refunds: number;
-  cash_in: number;
-  cash_out: number;
-  expected_cash: number;
-  counted_cash: number;
-  difference: number;
-  closed_by: string | null;
-}
-
-function mapRegisterBreakdown(
-  raw: unknown,
-  nameById: Map<string, string>
-): RegisterBreakdownRow[] {
-  return ((raw as RawRegisterBreakdownEntry[] | null) ?? []).map((e) => ({
-    registerName: e.register_name,
-    openingFloat: e.opening_float,
-    cashSales: e.cash_sales,
-    cashRefunds: e.cash_refunds,
-    cashIn: e.cash_in,
-    cashOut: e.cash_out,
-    expectedCash: e.expected_cash,
-    countedCash: e.counted_cash,
-    difference: e.difference,
-    closedByName: e.closed_by ? (nameById.get(e.closed_by) ?? '—') : '—',
-  }));
-}
-
-export const metadata: Metadata = { title: 'レジ締め・小口現金' };
+const CASH_TABS = [
+  { key: 'register', label: 'レジ入出金', en: 'Register', href: '/app/cash' },
+  { key: 'petty', label: '小口現金', en: 'Petty cash', href: '/app/cash?tab=petty' },
+  { key: 'closings', label: '締め履歴', en: 'Closings', href: '/app/cash?tab=closings' },
+];
 
 export default async function CashPage({
   searchParams,
@@ -101,27 +76,43 @@ export default async function CashPage({
   return (
     <div>
       <PageHeader
-        title="レジ締め・小口現金"
-        description={store ? `${store.name}を中心に表示しています` : '所属店舗がありません'}
+        title="入出金"
+        en="Cash in / out"
+        description={
+          store ? '現金の入金・出金を登録します（売上以外）' : '所属店舗がありません'
+        }
         actions={
-          can(ctx.role, 'csv.export') ? (
-            <Link
-              href={`/app/cash/export?from=${sp.from ?? daysAgoJst(30)}&to=${sp.to ?? todayJst()}`}
-              className="inline-flex h-10 items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 text-sm font-medium text-navy hover:bg-gray-50"
-            >
-              <Download className="h-4 w-4" />
-              現金台帳CSV
-            </Link>
-          ) : undefined
+          <>
+            {can(ctx.role, 'register.operate') && (
+              <Link href="/app/cash/close" className={cn(buttonVariants({ variant: 'secondary' }))}>
+                <Lock className="h-4 w-4" />
+                レジクローズ
+              </Link>
+            )}
+            {can(ctx.role, 'csv.export') && (
+              <Link
+                href={`/app/cash/export?from=${sp.from ?? daysAgoJst(30)}&to=${sp.to ?? todayJst()}`}
+                className={cn(buttonVariants({ variant: 'secondary' }))}
+              >
+                <Download className="h-4 w-4" />
+                現金台帳CSV
+              </Link>
+            )}
+          </>
         }
       />
 
-      <CashTabs active={tab} />
+      <SegmentedTabs tabs={CASH_TABS} active={tab} className="mb-4" />
 
       {!store ? (
         <EmptyState title="所属店舗がありません" description="レジ操作には店舗への割当が必要です。管理者に確認してください。" />
       ) : tab === 'register' ? (
-        <RegisterTab storeId={store.id} role={ctx.role} />
+        <RegisterTab
+          storeId={store.id}
+          role={ctx.role}
+          canScan={can(ctx.role, 'documents.write') && can(ctx.role, 'cash.write')}
+          canPetty={can(ctx.role, 'cash.write')}
+        />
       ) : tab === 'petty' ? (
         <PettyTab
           storeIds={ctx.currentStore ? [ctx.currentStore.id] : ctx.stores.map((s) => s.id)}
@@ -149,321 +140,177 @@ export default async function CashPage({
 }
 
 // ---------------------------------------------------------------
-// レジタブ
+// レジ入出金タブ（プロトタイプの「入出金」：左=登録 / 右=本日の履歴）
 // ---------------------------------------------------------------
 
-async function RegisterTab({ storeId, role }: { storeId: string; role: string | null }) {
-  const supabase = await createClient();
+async function RegisterTab({
+  storeId,
+  role,
+  canScan,
+  canPetty,
+}: {
+  storeId: string;
+  role: string | null;
+  canScan: boolean;
+  canPetty: boolean;
+}) {
   const today = todayJst();
-
-  const [
-    { data: registers },
-    { data: todaySessions },
-    { data: todayClosing },
-    { count: unpaidOrdersCount },
-    { data: unservedKdsRows },
-    { count: unclockedStaffCount },
-    { count: pendingPettyCount },
-    { count: reservationsCount },
-    { count: shiftsCount },
-    { data: lowStockRows },
-    { count: openTasksCount },
-    { count: printerCount },
-  ] = await Promise.all([
-    supabase.from('registers').select('id, name').eq('store_id', storeId).eq('status', 'active').order('name'),
-    supabase
-      .from('register_sessions')
-      .select(
-        'id, register_id, status, opened_at, opened_by, opening_float, closed_at, closed_by, counted_cash, expected_cash, difference, registers(name)'
-      )
-      .eq('store_id', storeId)
-      .eq('business_date', today)
-      .order('opened_at'),
-    supabase.from('daily_closings').select('*').eq('store_id', storeId).eq('business_date', today).maybeSingle(),
-    supabase
-      .from('orders')
-      .select('id', { count: 'exact', head: true })
-      .eq('store_id', storeId)
-      .eq('business_date', today)
-      .eq('status', 'open'),
-    supabase
-      .from('order_items')
-      .select('id, orders!inner(status, business_date)')
-      .eq('store_id', storeId)
-      .eq('status', 'active')
-      .neq('kitchen_status', 'served')
-      .eq('orders.status', 'open')
-      .eq('orders.business_date', today),
-    supabase
-      .from('time_entries')
-      .select('id', { count: 'exact', head: true })
-      .eq('store_id', storeId)
-      .eq('work_date', today)
-      .not('clock_in_at', 'is', null)
-      .is('clock_out_at', null),
-    supabase
-      .from('cash_transactions')
-      .select('id', { count: 'exact', head: true })
-      .eq('store_id', storeId)
-      .in('kind', PETTY_KINDS)
-      .eq('approval_status', 'pending'),
-    supabase
-      .from('reservations')
-      .select('id', { count: 'exact', head: true })
-      .eq('store_id', storeId)
-      .eq('reserved_date', today)
-      .in('status', ACTIVE_RESERVATION_STATUSES),
-    supabase
-      .from('shifts')
-      .select('id', { count: 'exact', head: true })
-      .eq('store_id', storeId)
-      .eq('shift_date', today)
-      .neq('status', 'cancelled'),
-    supabase
-      .from('inventory_items')
-      .select('id, current_quantity, reorder_point')
-      .eq('store_id', storeId)
-      .eq('status', 'active')
-      .not('reorder_point', 'is', null),
-    supabase
-      .from('store_tasks')
-      .select('id', { count: 'exact', head: true })
-      .eq('store_id', storeId)
-      .in('status', ['open', 'in_progress']),
-    supabase.from('printer_configs').select('id', { count: 'exact', head: true }).eq('store_id', storeId).eq('status', 'active'),
-  ]);
-
-  // 開局・締め担当者名の解決（今日のセッションに登場する opened_by / closed_by のみ）
-  const profileIds = [
-    ...new Set((todaySessions ?? []).flatMap((s) => [s.opened_by, s.closed_by]).filter((v): v is string => !!v)),
-  ];
-  const { data: profiles } = profileIds.length
-    ? await supabase.from('profiles').select('id, display_name').in('id', profileIds)
-    : { data: [] as { id: string; display_name: string }[] };
-  const nameById = new Map((profiles ?? []).map((p) => [p.id, p.display_name]));
-
-  const openSessions = (todaySessions ?? []).filter((s) => s.status === 'open');
-  const sessionIds = openSessions.map((s) => s.id);
-  const { data: sessionTx } = sessionIds.length
-    ? await supabase
-        .from('cash_transactions')
-        .select('register_session_id, kind, amount')
-        .in('register_session_id', sessionIds)
-        .eq('status', 'active')
-    : { data: [] as { register_session_id: string | null; kind: string; amount: number }[] };
-
-  const breakdownBySession = new Map<string, Partial<Record<CashKind, number>>>();
-  for (const t of sessionTx ?? []) {
-    if (!t.register_session_id) continue;
-    const bucket = breakdownBySession.get(t.register_session_id) ?? {};
-    const k = t.kind as CashKind;
-    bucket[k] = (bucket[k] ?? 0) + t.amount;
-    breakdownBySession.set(t.register_session_id, bucket);
-  }
-
-  // レジごとの「本日の最新セッション」（開局中があればそれを優先。無ければ最後に締めたもの）
-  type TodaySession = NonNullable<typeof todaySessions>[number];
-  const sessionsByRegister = new Map<string, TodaySession[]>();
-  for (const s of todaySessions ?? []) {
-    const arr = sessionsByRegister.get(s.register_id) ?? [];
-    arr.push(s);
-    sessionsByRegister.set(s.register_id, arr);
-  }
-  const latestSessionFor = (registerId: string) => {
-    const arr = sessionsByRegister.get(registerId) ?? [];
-    if (arr.length === 0) return null;
-    return arr.find((s) => s.status === 'open') ?? arr[arr.length - 1];
-  };
-
-  const unservedKdsCount = (unservedKdsRows ?? []).length;
-  const lowStockCount = (lowStockRows ?? []).filter(
-    (i) => i.reorder_point != null && Number(i.current_quantity) <= Number(i.reorder_point)
-  ).length;
-  const openRegistersCount = openSessions.length;
-  const totalRegistersCount = (registers ?? []).length;
-
-  // ---- 開店チェックリスト ----
-  const openingItems: ChecklistItem[] = [
-    {
-      key: 'registers-open',
-      label: 'レジ開局状態',
-      valueLabel: totalRegistersCount === 0 ? '未登録' : `${openRegistersCount}/${totalRegistersCount}台 開局中`,
-      status: totalRegistersCount > 0 && openRegistersCount === totalRegistersCount ? 'ok' : 'warn',
-    },
-    {
-      key: 'reservations',
-      label: '本日の予約組数',
-      valueLabel: `${reservationsCount ?? 0}組`,
-      status: 'info',
-      href: '/app/reservations',
-    },
-    {
-      key: 'shifts',
-      label: '本日の出勤予定',
-      valueLabel: `${shiftsCount ?? 0}名`,
-      status: 'info',
-      href: '/app/shifts',
-    },
-    {
-      key: 'inventory',
-      label: '発注点割れの重要在庫',
-      valueLabel: `${lowStockCount}品`,
-      status: lowStockCount === 0 ? 'ok' : 'warn',
-      href: '/app/inventory?sort=warning',
-    },
-    {
-      key: 'tasks',
-      label: '未完了タスク',
-      valueLabel: `${openTasksCount ?? 0}件`,
-      status: (openTasksCount ?? 0) === 0 ? 'ok' : 'warn',
-      href: '/app/tasks',
-    },
-    {
-      key: 'printer',
-      label: 'レシートプリンター',
-      valueLabel: (printerCount ?? 0) > 0 ? `${printerCount}台登録（Simulation）` : '未登録（Simulation）',
-      status: 'info',
-      href: '/app/settings/printers',
-    },
-  ];
-
-  // ---- 店舗日次締め 実行前チェック ----
-  const preCloseItems: ChecklistItem[] = [
-    {
-      key: 'unpaid-orders',
-      label: '未会計伝票（当営業日）',
-      valueLabel: `${unpaidOrdersCount ?? 0}件`,
-      status: (unpaidOrdersCount ?? 0) === 0 ? 'ok' : 'warn',
-      href: '/app/orders',
-    },
-    {
-      key: 'unserved-kds',
-      label: '未提供KDS',
-      valueLabel: `${unservedKdsCount}件`,
-      status: unservedKdsCount === 0 ? 'ok' : 'warn',
-      href: '/app/kitchen',
-    },
-    {
-      key: 'unclocked-staff',
-      label: '未退勤スタッフ',
-      valueLabel: `${unclockedStaffCount ?? 0}名`,
-      status: (unclockedStaffCount ?? 0) === 0 ? 'ok' : 'warn',
-      href: '/app/attendance',
-    },
-    {
-      key: 'open-registers',
-      label: '未締めレジ',
-      valueLabel: `${openRegistersCount}台`,
-      status: openRegistersCount === 0 ? 'ok' : 'warn',
-    },
-    {
-      key: 'pending-petty',
-      label: '承認待ち小口現金',
-      valueLabel: `${pendingPettyCount ?? 0}件`,
-      status: (pendingPettyCount ?? 0) === 0 ? 'ok' : 'warn',
-      href: '/app/cash?tab=petty',
-    },
-  ];
-
-  const registerBreakdown = mapRegisterBreakdown(todayClosing?.register_breakdown, nameById);
+  const [board, rows] = await Promise.all([loadRegisterBoard(storeId, today), loadTodayCashRows(storeId, today)]);
+  const { cards, openSessions, todayClosing } = board;
+  const theoretical = openSessions.reduce((a, s) => a + s.theoreticalCash, 0);
+  const openAdvances = rows.filter((r) => r.kind === 'petty_advance' && r.advanceOpen);
 
   return (
     <div className="space-y-5">
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
+        <Card>
+          <CardHeader>
+            <CardTitle en="Entry">登録</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {canScan && (
+              <Link
+                href="/app/scan"
+                className="flex items-center gap-3 rounded-xl border-2 border-dashed border-iris bg-iris-soft px-4 py-3.5 text-royal transition-colors hover:bg-lilac"
+              >
+                <Camera className="h-6 w-6 shrink-0" />
+                <span className="min-w-0">
+                  <b className="block text-[15px]">
+                    レシートを撮って保存<span className="en-inline">Snap receipt</span>
+                  </b>
+                  <span className="block text-xs text-ink-3">出金のレシート・請求書を撮影して書類ボックスへ。未スキャンの出金にも紐付けできます</span>
+                </span>
+              </Link>
+            )}
+            {canPetty && (
+              <div className="flex flex-wrap gap-2">
+                <Link
+                  href="/app/cash?tab=petty"
+                  className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'h-9 border-wisteria font-bold text-royal')}
+                >
+                  買い物に持ち出し（仮払い）<span className="en-inline">Advance</span>
+                </Link>
+              </div>
+            )}
+
+            {openAdvances.length > 0 && (
+              <div className="space-y-2">
+                {openAdvances.map((a) => {
+                  const { main, sub } = splitPurpose(a.purpose, a.kind);
+                  return (
+                    <div key={a.id} className="rounded-xl border border-dashed border-saffron bg-saffron-soft px-3 py-2.5 text-[12.5px]">
+                      <p className="text-[13.5px] font-bold text-ink">
+                        仮払い {a.createdByName} ・ <span className="tabular-nums">{formatTime(a.occurredAt)}</span> 持ち出し{' '}
+                        <span className="tabular-nums">{yen(a.amount)}</span>{' '}
+                        <span className="ml-1 rounded-full bg-white/70 px-2 py-0.5 text-[11px] text-saffron">精算待ち</span>
+                      </p>
+                      <p className="mt-0.5 text-ink-2">
+                        {main}
+                        {sub ? ` ・ ${sub}` : ''}
+                      </p>
+                      <div className="mt-1.5 flex flex-wrap gap-1.5">
+                        {canScan && (
+                          <Link href={`/app/scan?tx=${a.id}`} className={cn(buttonVariants({ size: 'sm' }), 'h-8 text-[12.5px]')}>
+                            レシートを撮る
+                          </Link>
+                        )}
+                        <Link
+                          href="/app/cash?tab=petty"
+                          className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'h-8 border-wisteria text-[12.5px] font-bold text-royal')}
+                        >
+                          精算する
+                        </Link>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            <CashEntryForm
+              storeId={storeId}
+              sessions={openSessions.map((s) => ({ id: s.id, registerName: s.registerName }))}
+            />
+          </CardContent>
+        </Card>
+
+        <Card className="overflow-hidden">
+          <CardHeader>
+            <CardTitle en="Today">本日の入出金履歴</CardTitle>
+          </CardHeader>
+          <div className="px-5 pt-5 pb-3">
+            <div className="flex flex-wrap items-baseline justify-between gap-2 rounded-xl bg-lilac-soft px-4 py-3.5">
+              <span className="text-sm text-ink">
+                現在の現金在高（理論値）
+                <small className="block text-[11px] text-ink-3">
+                  {openSessions.length > 0
+                    ? `釣銭準備金＋現金売上＋入金−出金−現金返金（開局中 ${openSessions.length}台）`
+                    : '開局中のレジがありません'}
+                </small>
+              </span>
+              <b className="text-[28px] font-extrabold text-royal tabular-nums">
+                {openSessions.length > 0 ? yen(theoretical) : '—'}
+              </b>
+            </div>
+          </div>
+          <CashHistoryTable rows={rows} canScan={canScan} canSettle={canPetty} />
+        </Card>
+      </div>
+
+      <section className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-base font-bold text-ink">
+            レジ<span className="en-inline">Registers</span>
+          </h2>
+          <Link href="/app/cash/close" className={cn(buttonVariants({ variant: 'secondary', size: 'sm' }))}>
+            <Lock className="h-3.5 w-3.5" />
+            レジクローズ（現金実査）へ
+          </Link>
+        </div>
+        {cards.length === 0 ? (
+          <EmptyState title="レジが登録されていません" description="設定からレジを登録すると開局操作ができるようになります。" />
+        ) : (
+          <div className="grid gap-4 lg:grid-cols-2">
+            {cards.map((c) =>
+              c.type === 'unopened' ? (
+                <RegisterOpenCard key={c.registerId} storeId={storeId} registerId={c.registerId} registerName={c.registerName} />
+              ) : c.type === 'open' ? (
+                <SessionCard
+                  key={c.session.id}
+                  session={{
+                    id: c.session.id,
+                    storeId,
+                    registerName: c.session.registerName,
+                    openedByName: c.session.openedByName,
+                    openedAt: c.session.openedAt,
+                    openingFloat: c.session.openingFloat,
+                  }}
+                  breakdown={c.session.breakdown}
+                  theoreticalCash={c.session.theoreticalCash}
+                />
+              ) : (
+                <RegisterClosedCard key={c.session.id} storeDayClosed={!!todayClosing} session={c.session} />
+              )
+            )}
+          </div>
+        )}
+      </section>
+
       <ChecklistCard
         title="開店チェックリスト"
         description="開局・本日の見込み・重要在庫・未完了タスクをまとめて確認できます。"
-        items={openingItems}
+        items={board.openingItems}
       />
-
-      {(registers ?? []).length === 0 ? (
-        <EmptyState title="レジが登録されていません" description="設定からレジを登録すると開局操作ができるようになります。" />
-      ) : (
-        <div className="grid gap-4 lg:grid-cols-2">
-          {(registers ?? []).map((r) => {
-            const session = latestSessionFor(r.id);
-            if (!session) {
-              return <RegisterOpenCard key={r.id} storeId={storeId} registerId={r.id} registerName={r.name} />;
-            }
-            if (session.status === 'open') {
-              const breakdown = breakdownBySession.get(session.id) ?? {};
-              const sale = breakdown.sale ?? 0;
-              const refund = breakdown.refund ?? 0;
-              const deposit = (breakdown.deposit ?? 0) + (breakdown.petty_in ?? 0);
-              const withdrawal = (breakdown.withdrawal ?? 0) + (breakdown.petty_out ?? 0);
-              const theoreticalCash = expectedCash({
-                openingFloat: session.opening_float,
-                cashSales: sale,
-                cashIn: deposit,
-                cashRefunds: refund,
-                cashOut: withdrawal,
-              });
-              const data: SessionCardData = {
-                id: session.id,
-                storeId,
-                registerName: (session.registers as unknown as { name: string } | null)?.name ?? r.name,
-                openedByName: session.opened_by ? (nameById.get(session.opened_by) ?? '—') : '—',
-                openedAt: session.opened_at,
-                openingFloat: session.opening_float,
-              };
-              return <SessionCard key={session.id} session={data} breakdown={breakdown} theoreticalCash={theoreticalCash} />;
-            }
-            return (
-              <RegisterClosedCard
-                key={session.id}
-                storeDayClosed={!!todayClosing}
-                session={{
-                  registerName: (session.registers as unknown as { name: string } | null)?.name ?? r.name,
-                  openedByName: session.opened_by ? (nameById.get(session.opened_by) ?? '—') : '—',
-                  closedByName: session.closed_by ? (nameById.get(session.closed_by) ?? '—') : '—',
-                  openedAt: session.opened_at,
-                  closedAt: session.closed_at,
-                  openingFloat: session.opening_float,
-                  expectedCash: session.expected_cash,
-                  countedCash: session.counted_cash,
-                  difference: session.difference,
-                }}
-              />
-            );
-          })}
-        </div>
-      )}
 
       <StoreDayClosePanel
         storeId={storeId}
         businessDate={today}
-        items={preCloseItems}
+        items={board.preCloseItems}
         alreadyClosed={!!todayClosing}
         canClose={STORE_DAY_CLOSE_ROLES.includes(role ?? '')}
       />
 
-      {todayClosing && (
-        <Card>
-          <CardHeader className="flex items-center justify-between">
-            <CardTitle>本日の締めサマリ</CardTitle>
-            <Badge tone={CLOSING_STATUS_TONES[todayClosing.status as ClosingStatus]}>
-              {CLOSING_STATUS_LABELS[todayClosing.status as ClosingStatus]}
-            </Badge>
-          </CardHeader>
-          <CardContent>
-            <ClosingSnapshot
-              data={{
-                salesTotal: todayClosing.sales_total,
-                refundTotal: todayClosing.refund_total,
-                netSales: todayClosing.net_sales,
-                discountTotal: todayClosing.discount_total,
-                paymentBreakdown: (todayClosing.payment_breakdown as Record<string, number>) ?? {},
-                refundBreakdown: (todayClosing.refund_breakdown as Record<string, number>) ?? {},
-                pettyInTotal: todayClosing.petty_in_total,
-                pettyOutTotal: todayClosing.petty_out_total,
-                expectedCash: todayClosing.expected_cash,
-                countedCash: todayClosing.counted_cash,
-                cashDifference: todayClosing.cash_difference,
-                registerBreakdown,
-              }}
-            />
-          </CardContent>
-        </Card>
-      )}
+      {todayClosing && <TodayClosingSummary closing={todayClosing} registerBreakdown={board.registerBreakdown} />}
     </div>
   );
 }
@@ -584,7 +431,7 @@ async function PettyTab({
   return (
     <div className="space-y-5">
       <div className="rounded-xl border border-primary/20 bg-primary-soft px-4 py-3 text-sm text-primary-deep">
-        POSの現金売上はレジ台帳（レジタブ）で管理されます。小口現金は釣銭・経費用の別台帳です。同じ現金を両方に入力しないでください。
+        POSの現金売上はレジ台帳（レジ入出金タブ）で管理されます。小口現金は釣銭・経費用の別台帳です。同じ現金を両方に入力しないでください。
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -687,7 +534,9 @@ async function PettyTab({
       )}
 
       <div>
-        <h3 className="mb-2 text-sm font-semibold text-navy">実査履歴</h3>
+        <h3 className="mb-2 text-base font-bold text-ink">
+          実査履歴<span className="en-inline">Counts</span>
+        </h3>
         {(countRows ?? []).length === 0 ? (
           <EmptyState title="実査の記録はありません" description="「実残高を数える」から実査を記録してください。" />
         ) : (

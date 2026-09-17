@@ -19,7 +19,7 @@ export default async function HoursSettingsPage() {
     return (
       <div>
         <SettingsBackLink />
-        <PageHeader title="営業時間・休業日" />
+        <PageHeader title="営業時間・休業日" en="Hours" />
         <EmptyState title="対象の店舗がありません" description="店舗を選択してから設定を行ってください" />
       </div>
     );
@@ -60,7 +60,7 @@ export default async function HoursSettingsPage() {
   return (
     <div>
       <SettingsBackLink />
-      <PageHeader title="営業時間・休業日" description={targetStore.name} />
+      <PageHeader title="営業時間・休業日" en="Hours" description={targetStore.name} />
 
       <div className="space-y-5">
         <BusinessHoursForm storeId={targetStore.id} initial={initialHours} />

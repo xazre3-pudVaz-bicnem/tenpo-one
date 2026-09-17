@@ -62,7 +62,7 @@ export default async function AuditLogPage({
   return (
     <div>
       <SettingsBackLink />
-      <PageHeader title="監査ログ" description="権限変更・停止・設定変更などの操作履歴（新しい順・最大100件）" />
+      <PageHeader title="監査ログ" en="Audit log" description="権限変更・停止・設定変更などの操作履歴（新しい順・最大100件）" />
 
       <AuditFilters current={{ from: from ?? '', to: to ?? '', action: action ?? '', targetTable: table ?? '' }} />
 

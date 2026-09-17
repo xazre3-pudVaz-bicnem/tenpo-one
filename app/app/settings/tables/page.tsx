@@ -19,7 +19,7 @@ export default async function TablesSettingsPage() {
     return (
       <div>
         <SettingsBackLink />
-        <PageHeader title="フロア・テーブル" />
+        <PageHeader title="フロア・テーブル" en="Tables" />
         <EmptyState title="対象の店舗がありません" description="店舗を選択してから設定を行ってください" />
       </div>
     );
@@ -72,13 +72,13 @@ export default async function TablesSettingsPage() {
   return (
     <div>
       <SettingsBackLink />
-      <PageHeader title="フロア・テーブル" description={targetStore.name} />
+      <PageHeader title="フロア・テーブル" en="Tables" description={targetStore.name} />
 
-      <div className="grid gap-5 lg:grid-cols-3">
-        <div className="lg:col-span-1">
+      <div className="grid gap-5 @5xl:grid-cols-3">
+        <div className="@5xl:col-span-1">
           <FloorsPanel storeId={targetStore.id} initial={floorRows} />
         </div>
-        <div className="lg:col-span-2">
+        <div className="@5xl:col-span-2">
           <Card>
             <CardHeader>
               <CardTitle>テーブル</CardTitle>

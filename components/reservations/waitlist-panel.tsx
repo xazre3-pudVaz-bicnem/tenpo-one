@@ -52,10 +52,13 @@ export function WaitlistPanel({
   entries,
   showStore,
   allStores,
+  embedded,
 }: {
   entries: WaitlistRow[];
   showStore: boolean;
   allStores: StoreRef[];
+  /** カード内に置くとき true（枠線・影を付けない） */
+  embedded?: boolean;
 }) {
   const { toast } = useToast();
   const [pending, startTransition] = useTransition();
@@ -72,11 +75,17 @@ export function WaitlistPanel({
   };
 
   if (entries.length === 0) {
-    return <EmptyState title="キャンセル待ちはありません" description="満席の日時に登録すると、ここに一覧表示されます。" />;
+    return (
+      <EmptyState
+        title="キャンセル待ちはありません"
+        description="満席の日時に登録すると、ここに一覧表示されます。"
+        className={embedded ? 'm-4 border-line bg-lilac-soft py-10' : undefined}
+      />
+    );
   }
 
   return (
-    <TableWrap>
+    <TableWrap className={embedded ? 'rounded-none border-0 shadow-none' : undefined}>
       <Table>
         <THead>
           <Tr>

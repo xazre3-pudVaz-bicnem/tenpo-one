@@ -1,24 +1,51 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { Download } from 'lucide-react';
+import { CalendarDays, ChevronDown, Download } from 'lucide-react';
 import { requireFeature } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { can } from '@/lib/permissions';
-import { yen, formatDateTime, todayJst } from '@/lib/format';
+import { yen, formatTime, todayJst, daysAgoJst, weekdayJa } from '@/lib/format';
 import { PageHeader } from '@/components/ui/page-header';
-import { Card } from '@/components/ui/card';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Input, Label, Select } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { EmptyState } from '@/components/ui/state';
 import { TableWrap, Table, THead, TBody, Tr, Th, Td } from '@/components/ui/table';
 import { OrderStatusBadge } from '@/components/orders/status-badge';
+import { LinkChips } from '@/components/orders/link-chips';
 import { Badge } from '@/components/ui/badge';
 import { METHOD_LABELS } from '@/components/cash/labels';
 
-export const metadata: Metadata = { title: '注文・取引履歴' };
+export const metadata: Metadata = { title: '伝票明細' };
 
 const PAGE_SIZE = 50;
+
+const STATUS_CHIPS: { key: string; label: string }[] = [
+  { key: '', label: 'すべて' },
+  { key: 'open', label: '未会計' },
+  { key: 'paid', label: '会計済' },
+  { key: 'refunded', label: '返金済' },
+  { key: 'cancelled', label: '取消' },
+  { key: 'void', label: '無効' },
+];
+
+/** 'YYYY-MM-DD' → '2026/09/16（水）' */
+function dayLabel(d: string) {
+  return `${d.replaceAll('-', '/')}（${weekdayJa(d)}）`;
+}
+
+/** 期間が複数日のときは日付付きで時刻を出す */
+function slipTime(value: string | null, withDate: boolean) {
+  if (!value) return null;
+  if (!withDate) return formatTime(value);
+  return new Date(value).toLocaleString('ja-JP', {
+    timeZone: 'Asia/Tokyo',
+    month: 'numeric',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
 
 export default async function OrdersPage({
   searchParams,
@@ -40,7 +67,7 @@ export default async function OrdersPage({
   if (!store) {
     return (
       <div>
-        <PageHeader title="注文・取引履歴" />
+        <PageHeader title="伝票明細" en="Slips / Receipts" />
         <EmptyState title="アクセス可能な店舗がありません" />
       </div>
     );
@@ -53,6 +80,7 @@ export default async function OrdersPage({
   const method = sp.method || '';
   const q = (sp.q || '').trim();
   const page = Math.max(1, Number(sp.page) || 1);
+  const multiDay = from !== to;
 
   let orderIdsByMethod: string[] | null = null;
   if (method) {
@@ -67,7 +95,7 @@ export default async function OrdersPage({
   let query = supabase
     .from('orders')
     .select(
-      'id, order_no, opened_at, closed_at, status, total, order_type, restaurant_tables(name), profiles(display_name), order_items(id)',
+      'id, order_no, opened_at, closed_at, status, total, guest_count, order_type, restaurant_tables(name), profiles(display_name)',
       { count: 'exact' }
     )
     .eq('store_id', store.id)
@@ -81,137 +109,244 @@ export default async function OrdersPage({
   if (orderNoQuery && /^\d+$/.test(orderNoQuery)) query = query.eq('order_no', Number(orderNoQuery));
 
   const rangeFrom = (page - 1) * PAGE_SIZE;
-  const { data: orders, count } = await query.range(rangeFrom, rangeFrom + PAGE_SIZE - 1);
+  const [{ data: orders, count }, { data: periodRows }] = await Promise.all([
+    query.range(rangeFrom, rangeFrom + PAGE_SIZE - 1),
+    // 見出しの集計（期間内・状態絞込に依存しない）
+    supabase
+      .from('orders')
+      .select('status, total')
+      .eq('store_id', store.id)
+      .gte('business_date', from)
+      .lte('business_date', to)
+      .in('status', ['open', 'paid', 'refunded'])
+      .limit(10000),
+  ]);
+  const settled = (periodRows ?? []).filter((o) => o.status === 'paid' || o.status === 'refunded');
+  const unsettled = (periodRows ?? []).filter((o) => o.status === 'open');
+  const sum = (rows: { total: number }[]) => rows.reduce((a, o) => a + o.total, 0);
 
-  // 返金/取消バッジ・純額表示用（このページに表示される注文のみを対象にした軽量クエリ）
+  // 返金/取消バッジ・純額表示・支払方法用（このページに表示される注文のみを対象にした軽量クエリ）
   const orderIds = (orders ?? []).map((o) => o.id);
-  const { data: refundRows } =
+  const [{ data: refundRows }, { data: paymentRows }] =
     orderIds.length > 0
-      ? await supabase.from('refunds').select('order_id, amount, kind').in('order_id', orderIds)
-      : { data: [] as { order_id: string; amount: number; kind: string }[] };
+      ? await Promise.all([
+          supabase.from('refunds').select('order_id, amount, kind').in('order_id', orderIds),
+          supabase.from('payments').select('order_id, method').in('order_id', orderIds).eq('status', 'completed'),
+        ])
+      : [
+          { data: [] as { order_id: string; amount: number; kind: string }[] },
+          { data: [] as { order_id: string; method: string }[] },
+        ];
   const refundTotalByOrder = new Map<string, number>();
   const voidOrderIds = new Set<string>();
   for (const r of refundRows ?? []) {
     refundTotalByOrder.set(r.order_id, (refundTotalByOrder.get(r.order_id) ?? 0) + r.amount);
     if (r.kind === 'void') voidOrderIds.add(r.order_id);
   }
+  const methodsByOrder = new Map<string, Set<string>>();
+  for (const p of paymentRows ?? []) {
+    const set = methodsByOrder.get(p.order_id) ?? new Set<string>();
+    set.add(p.method);
+    methodsByOrder.set(p.order_id, set);
+  }
 
   const totalPages = Math.max(1, Math.ceil((count ?? 0) / PAGE_SIZE));
-  const buildHref = (p: number) => {
-    const params = new URLSearchParams({ from, to, status, method, q, page: String(p) });
-    return `/app/orders?${params.toString()}`;
+  const buildHref = (patch: Record<string, string>) => {
+    const params = new URLSearchParams({ from, to, status, method, q, page: '1', ...patch });
+    for (const [k, v] of [...params.entries()]) if (!v || (k === 'page' && v === '1')) params.delete(k);
+    const s = params.toString();
+    return s ? `/app/orders?${s}` : '/app/orders';
   };
+
+  const periodLabel = multiDay ? `${from.replaceAll('-', '/')} 〜 ${to.slice(5).replaceAll('-', '/')}` : dayLabel(from);
+  const yesterday = daysAgoJst(1);
+  const presets = [
+    { label: '今日', from: today, to: today },
+    { label: '昨日', from: yesterday, to: yesterday },
+    { label: '過去7日', from: daysAgoJst(6), to: today },
+    { label: '過去30日', from: daysAgoJst(29), to: today },
+  ];
+  const hasAdvanced = !!method || !!q;
 
   return (
     <div>
       <PageHeader
-        title="注文・取引履歴"
-        description={store.name}
+        title="伝票明細"
+        en="Slips / Receipts"
+        description={`会計済 ${settled.length}件 ${yen(sum(settled))} ／ 未会計 ${unsettled.length}件 ${yen(sum(unsettled))}`}
         actions={
-          can(ctx.role, 'csv.export') ? (
-            <a
-              href={`/app/orders/export?${new URLSearchParams({ from, to }).toString()}`}
-              className={cn(buttonVariants({ variant: 'secondary' }))}
-            >
-              <Download className="h-4 w-4" />
-              CSV出力
-            </a>
-          ) : undefined
+          <>
+            <details className="group relative">
+              <summary
+                className={cn(
+                  buttonVariants({ variant: 'secondary', size: 'md' }),
+                  'cursor-pointer list-none px-4 text-[15px] tabular-nums [&::-webkit-details-marker]:hidden'
+                )}
+              >
+                <CalendarDays className="h-4 w-4" />
+                {periodLabel}
+                {hasAdvanced && <span className="h-2 w-2 rounded-full bg-iris" aria-label="詳細条件あり" />}
+                <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
+              </summary>
+              <div className="absolute left-0 z-30 mt-2 sm:right-0 sm:left-auto w-[min(calc(100vw-2rem),34rem)] rounded-2xl border border-line bg-white p-4 shadow-card">
+                <div className="mb-3 flex flex-wrap gap-2">
+                  {presets.map((p) => (
+                    <Link
+                      key={p.label}
+                      href={buildHref({ from: p.from, to: p.to })}
+                      className={cn(
+                        'rounded-full border px-3 py-1 text-[13px] font-semibold',
+                        p.from === from && p.to === to ? 'border-royal bg-royal text-white' : 'border-line text-ink-2 hover:bg-lilac-soft'
+                      )}
+                    >
+                      {p.label}
+                    </Link>
+                  ))}
+                </div>
+                <form method="get" action="/app/orders" className="grid grid-cols-2 gap-3">
+                  {status && <input type="hidden" name="status" value={status} />}
+                  <div>
+                    <Label htmlFor="from">開始日</Label>
+                    <Input id="from" type="date" name="from" defaultValue={from} />
+                  </div>
+                  <div>
+                    <Label htmlFor="to">終了日</Label>
+                    <Input id="to" type="date" name="to" defaultValue={to} />
+                  </div>
+                  <div>
+                    <Label htmlFor="method">支払方法</Label>
+                    <Select id="method" name="method" defaultValue={method}>
+                      <option value="">すべて</option>
+                      {Object.entries(METHOD_LABELS).map(([k, label]) => (
+                        <option key={k} value={k}>
+                          {label}
+                        </option>
+                      ))}
+                    </Select>
+                  </div>
+                  <div>
+                    <Label htmlFor="q">伝票No（注文番号）</Label>
+                    <Input id="q" name="q" defaultValue={q} placeholder="#123" inputMode="numeric" />
+                  </div>
+                  <div className="col-span-2 flex justify-end gap-2 pt-1">
+                    {(hasAdvanced || multiDay || from !== today) && (
+                      <Link href={status ? `/app/orders?status=${status}` : '/app/orders'} className={cn(buttonVariants({ variant: 'ghost' }))}>
+                        条件をクリア
+                      </Link>
+                    )}
+                    <Button type="submit">この条件で表示</Button>
+                  </div>
+                </form>
+              </div>
+            </details>
+            {can(ctx.role, 'csv.export') && (
+              <a
+                href={`/app/orders/export?${new URLSearchParams({ from, to }).toString()}`}
+                className={cn(buttonVariants({ variant: 'secondary', size: 'md' }), 'px-4 text-[15px]')}
+              >
+                <Download className="h-4 w-4" />
+                CSV出力
+              </a>
+            )}
+          </>
         }
       />
 
-      <Card className="mb-4 p-4">
-        <form method="get" className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-          <div>
-            <Label htmlFor="from">開始日</Label>
-            <Input id="from" type="date" name="from" defaultValue={from} />
-          </div>
-          <div>
-            <Label htmlFor="to">終了日</Label>
-            <Input id="to" type="date" name="to" defaultValue={to} />
-          </div>
-          <div>
-            <Label htmlFor="status">状態</Label>
-            <Select id="status" name="status" defaultValue={status}>
-              <option value="">すべて</option>
-              <option value="open">会計前</option>
-              <option value="paid">会計済</option>
-              <option value="refunded">返金済</option>
-              <option value="cancelled">取消</option>
-              <option value="void">無効</option>
-            </Select>
-          </div>
-          <div>
-            <Label htmlFor="method">支払方法</Label>
-            <Select id="method" name="method" defaultValue={method}>
-              <option value="">すべて</option>
-              {Object.entries(METHOD_LABELS).map(([k, label]) => (
-                <option key={k} value={k}>
-                  {label}
-                </option>
-              ))}
-            </Select>
-          </div>
-          <div className="col-span-2 sm:col-span-1">
-            <Label htmlFor="q">注文番号</Label>
-            <Input id="q" name="q" defaultValue={q} placeholder="#123" />
-          </div>
-          <div className="flex items-end">
-            <Button type="submit" className="w-full">
-              検索
-            </Button>
-          </div>
-        </form>
-      </Card>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <LinkChips
+          chips={STATUS_CHIPS.map((c) => ({ key: c.key, label: c.label, href: buildHref({ status: c.key }) }))}
+          active={status}
+        />
+        {hasAdvanced && (
+          <p className="text-xs text-ink-3">
+            {method && `支払方法: ${METHOD_LABELS[method] ?? method}`}
+            {method && q && '　'}
+            {q && `伝票No: ${q}`}
+            <Link href={buildHref({ method: '', q: '' })} className="ml-2 font-bold text-royal hover:underline">
+              解除
+            </Link>
+          </p>
+        )}
+      </div>
 
       {(orders ?? []).length === 0 ? (
-        <EmptyState title="該当する注文がありません" description="期間や条件を変更してお試しください" />
+        <EmptyState title="該当する伝票がありません" description="期間や条件を変更してお試しください" />
       ) : (
         <>
-          <TableWrap>
-            <Table>
-              <THead>
-                <Tr>
-                  <Th>注文番号</Th>
-                  <Th>日時</Th>
-                  <Th>テーブル</Th>
-                  <Th>担当</Th>
-                  <Th className="text-right">品目数</Th>
-                  <Th className="text-right">金額</Th>
-                  <Th>状態</Th>
+          <TableWrap className="border-line">
+            <Table className="text-[13.5px]">
+              <THead className="bg-lilac-soft text-ink-3">
+                <Tr className="hover:bg-transparent">
+                  <Th className="font-semibold">伝票No</Th>
+                  <Th className="font-semibold">テーブル</Th>
+                  <Th className="font-semibold">開始</Th>
+                  <Th className="font-semibold">会計</Th>
+                  <Th className="font-semibold">人数</Th>
+                  <Th className="font-semibold">支払方法</Th>
+                  <Th className="text-right font-semibold">金額</Th>
+                  <Th className="font-semibold">状態</Th>
+                  <Th>
+                    <span className="sr-only">操作</span>
+                  </Th>
                 </Tr>
               </THead>
-              <TBody>
+              <TBody className="divide-line">
                 {(orders ?? []).map((o) => {
                   const table = o.restaurant_tables as unknown as { name: string } | null;
                   const staff = o.profiles as unknown as { display_name: string } | null;
-                  const itemCount = (o.order_items as unknown as { id: string }[] | null)?.length ?? 0;
                   const refundTotal = refundTotalByOrder.get(o.id) ?? 0;
                   const isVoided = voidOrderIds.has(o.id);
                   const isPartiallyRefunded = !isVoided && o.status === 'paid' && refundTotal > 0;
+                  const methods = [...(methodsByOrder.get(o.id) ?? [])].map((m) => METHOD_LABELS[m] ?? m);
+                  const isOpen = o.status === 'open';
                   return (
-                    <Tr key={o.id}>
-                      <Td>
-                        <Link href={`/app/orders/${o.id}`} className="font-medium text-primary hover:underline">
+                    <Tr key={o.id} className="hover:bg-lilac-soft/60">
+                      <Td className="py-3.5">
+                        <Link href={`/app/orders/${o.id}`} className="font-bold text-royal tabular-nums hover:underline">
                           #{o.order_no}
                         </Link>
                       </Td>
-                      <Td className="whitespace-nowrap text-xs text-gray-500">{formatDateTime(o.opened_at)}</Td>
-                      <Td>{table?.name ?? '—'}</Td>
-                      <Td>{staff?.display_name ?? '—'}</Td>
-                      <Td className="text-right tabular-nums">{itemCount}</Td>
-                      <Td className="text-right font-medium tabular-nums">
+                      <Td className="py-3.5">
+                        <b className="text-ink">{table?.name ?? (o.order_type === 'takeout' ? 'テイクアウト' : '—')}</b>
+                        {staff?.display_name && <small className="block text-[11px] text-ink-3">担当 {staff.display_name}</small>}
+                      </Td>
+                      <Td className="py-3.5 tabular-nums">{slipTime(o.opened_at, multiDay)}</Td>
+                      <Td className="py-3.5 tabular-nums">
+                        {isOpen ? <span className="text-ink-3">—</span> : (slipTime(o.closed_at, multiDay) ?? <span className="text-ink-3">—</span>)}
+                      </Td>
+                      <Td className="py-3.5 tabular-nums">{o.guest_count}名</Td>
+                      <Td className="py-3.5">{methods.length > 0 ? methods.join('・') : <span className="text-ink-3">—</span>}</Td>
+                      <Td className="py-3.5 text-right font-bold text-ink tabular-nums">
                         {yen(o.total)}
                         {refundTotal > 0 && (
                           <div className="text-xs font-normal text-danger">純額 {yen(o.total - refundTotal)}</div>
                         )}
                       </Td>
-                      <Td>
+                      <Td className="py-3.5">
                         <div className="flex flex-wrap items-center gap-1">
                           <OrderStatusBadge status={o.status} />
                           {isVoided && <Badge tone="gray">取消</Badge>}
                           {isPartiallyRefunded && <Badge tone="warning">一部返金あり</Badge>}
                         </div>
+                      </Td>
+                      <Td className="py-2.5 text-right">
+                        {isOpen ? (
+                          <Link href={`/app/pos?order=${o.id}`} className={cn(buttonVariants({ size: 'md' }), 'h-9 px-3.5 text-[13px]')}>
+                            注文・会計
+                          </Link>
+                        ) : (
+                          <div className="flex justify-end gap-1.5">
+                            <Link
+                              href={`/app/pos/receipt/${o.id}`}
+                              className={cn(buttonVariants({ variant: 'outline', size: 'md' }), 'h-9 border-wisteria px-3 text-[13px] text-royal')}
+                            >
+                              レシート
+                            </Link>
+                            <Link href={`/app/orders/${o.id}`} className={cn(buttonVariants({ variant: 'secondary', size: 'md' }), 'h-9 px-3.5 text-[13px]')}>
+                              詳細
+                            </Link>
+                          </div>
+                        )}
                       </Td>
                     </Tr>
                   );
@@ -221,18 +356,18 @@ export default async function OrdersPage({
           </TableWrap>
 
           {totalPages > 1 && (
-            <div className="mt-4 flex items-center justify-between text-sm text-gray-600">
-              <span>
-                {count ?? 0}件中 {rangeFrom + 1}〜{Math.min((count ?? 0), rangeFrom + PAGE_SIZE)}件
+            <div className="mt-4 flex items-center justify-between text-sm text-ink-2">
+              <span className="tabular-nums">
+                {count ?? 0}件中 {rangeFrom + 1}〜{Math.min(count ?? 0, rangeFrom + PAGE_SIZE)}件
               </span>
               <div className="flex gap-2">
                 {page > 1 && (
-                  <Link href={buildHref(page - 1)} className={cn(buttonVariants({ variant: 'secondary', size: 'sm' }))}>
+                  <Link href={buildHref({ page: String(page - 1) })} className={cn(buttonVariants({ variant: 'secondary', size: 'sm' }))}>
                     前へ
                   </Link>
                 )}
                 {page < totalPages && (
-                  <Link href={buildHref(page + 1)} className={cn(buttonVariants({ variant: 'secondary', size: 'sm' }))}>
+                  <Link href={buildHref({ page: String(page + 1) })} className={cn(buttonVariants({ variant: 'secondary', size: 'sm' }))}>
                     次へ
                   </Link>
                 )}

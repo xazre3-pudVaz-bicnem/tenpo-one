@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { PageHeader } from '@/components/ui/page-header';
+import { SettingsBackLink } from '@/components/settings/back-link';
 import { Card, CardContent } from '@/components/ui/card';
 import { TableWrap, Table, THead, TBody, Tr, Th } from '@/components/ui/table';
 import {
@@ -53,8 +54,10 @@ export default async function AlertSettingsPage() {
 
   return (
     <div>
+      <SettingsBackLink />
       <PageHeader
         title="異常検知の閾値設定"
+        en="Alerts"
         description="ダッシュボードのアラート判定に使う閾値です。店舗設定は企業既定より優先されます。"
       />
 

@@ -11,7 +11,6 @@ import { EmptyState } from '@/components/ui/state';
 import { SalesChart, type DailyPoint } from '@/components/dashboard/sales-chart';
 import { SetupProgressCard } from '@/components/dashboard/setup-progress-card';
 import { TableWrap, Table, THead, TBody, Tr, Th, Td } from '@/components/ui/table';
-import { LinkStatCard } from '@/components/reports/stat-link';
 import { WeekdaySalesChart } from '@/components/reports/weekday-sales-chart';
 import { HourlySalesChart } from '@/components/reports/hourly-sales-chart';
 import { PaymentMethodChart } from '@/components/reports/payment-method-chart';
@@ -22,14 +21,21 @@ import { DeltaBadge } from '@/components/reports/delta-badge';
 import { summarizeItemCosts, type CostableOrderItem } from '@/components/reports/cost';
 import { estimateLaborCost, type TimeEntryForLabor, type PayrollRuleForLabor } from '@/components/reports/labor';
 import { fetchIngredientLinesByMenuItems } from '@/components/costing/data';
-import { collectDashboardAlerts } from '@/components/dashboard/alerts';
-import { AnnouncementBanner } from '@/components/dashboard/announcement-banner';
-import { AlertSummary } from '@/components/dashboard/alert-summary';
 import { StoreRankingTable } from '@/components/dashboard/store-ranking-table';
 import { KpiStrip, type KpiCell } from '@/components/dashboard/kpi-strip';
+import { loadHomeData } from '@/components/dashboard/home-data';
+import { HomeTop } from '@/components/dashboard/home-top';
 import { computeSalesMetrics, SETTLED_ORDER_STATUSES, type RefundLike, type SettledOrderLike, type SalesMetricsOptions } from '@/lib/metrics';
 
-export const metadata: Metadata = { title: 'ダッシュボード' };
+export const metadata: Metadata = { title: 'ホーム' };
+
+/** 予算カードの「(YYYY/MM/DD HH:MM時点)」用。サーバー描画時の時刻（Asia/Tokyo） */
+function nowStampJst(): string {
+  const d = new Date();
+  const date = d.toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' }).replaceAll('-', '/');
+  const time = d.toLocaleTimeString('ja-JP', { timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit', hour12: false });
+  return `${date} ${time}`;
+}
 
 function dateOnlyJst(iso: string | null): string | null {
   if (!iso) return null;
@@ -81,11 +87,35 @@ export default async function DashboardPage() {
   const today = todayJst();
   const setupPercent = ctx.organizationId && can(ctx.role, 'org.settings') ? await getSetupProgressPercent(ctx.organizationId) : null;
   const metricsOpts = await getSalesMetricsOptions(ctx.organizationId);
+  const asOf = nowStampJst();
 
   if (ctx.currentStore) {
-    return <StoreDashboard ctx={ctx} today={today} setupPercent={setupPercent} metricsOpts={metricsOpts} />;
+    return <StoreDashboard ctx={ctx} today={today} asOf={asOf} setupPercent={setupPercent} metricsOpts={metricsOpts} />;
   }
-  return <HqDashboard ctx={ctx} today={today} setupPercent={setupPercent} metricsOpts={metricsOpts} />;
+  return <HqDashboard ctx={ctx} today={today} asOf={asOf} setupPercent={setupPercent} metricsOpts={metricsOpts} />;
+}
+
+type Ctx = Awaited<ReturnType<typeof requireMember>>;
+
+function homeDataArgs(
+  ctx: Ctx,
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  stores: { id: string; name: string }[],
+  isAllStores: boolean,
+  today: string,
+  metricsOpts: SalesMetricsOptions
+) {
+  return {
+    supabase,
+    organizationId: ctx.organizationId,
+    userId: ctx.userId,
+    role: ctx.role,
+    accountingEnabled: !ctx.disabledFeatures.has('accounting'),
+    stores,
+    isAllStores,
+    today,
+    metricsOpts,
+  };
 }
 
 // =====================================================================
@@ -95,11 +125,13 @@ export default async function DashboardPage() {
 async function HqDashboard({
   ctx,
   today,
+  asOf,
   setupPercent,
   metricsOpts,
 }: {
-  ctx: Awaited<ReturnType<typeof requireMember>>;
+  ctx: Ctx;
   today: string;
+  asOf: string;
   setupPercent: number | null;
   metricsOpts: SalesMetricsOptions;
 }) {
@@ -110,7 +142,7 @@ async function HqDashboard({
   if (storeIds.length === 0) {
     return (
       <div>
-        <PageHeader title="ダッシュボード" />
+        <PageHeader title="ホーム" en="Home" />
         <EmptyState title="アクセス可能な店舗がありません" />
       </div>
     );
@@ -138,7 +170,7 @@ async function HqDashboard({
     prevOrdersRes,
     prevRefundsRes,
     budgetsRes,
-    alerts,
+    homeData,
   ] = await Promise.all([
     supabase
       .from('orders')
@@ -234,7 +266,7 @@ async function HqDashboard({
       .eq('organization_id', ctx.organizationId)
       .eq('month', monthFrom)
       .or(`store_id.is.null,store_id.in.(${storeIds.join(',')})`),
-    collectDashboardAlerts(supabase, ctx.organizationId, stores, true),
+    loadHomeData(homeDataArgs(ctx, supabase, stores, true, today, metricsOpts)),
   ]);
 
   const todayOrders = todayOrdersRes.data ?? [];
@@ -570,13 +602,24 @@ async function HqDashboard({
   ];
 
   return (
-    <div>
-      <PageHeader title="ダッシュボード" description={`全店舗（${stores.length}店舗）｜${today.replaceAll('-', '/')}（${weekdayJa(today)}）本社サマリー`} />
-
+    <div className="flex flex-col gap-4">
       {setupPercent != null && <SetupProgressCard percent={setupPercent} />}
-      <AnnouncementBanner supabase={supabase} organizationId={ctx.organizationId} userId={ctx.userId} storeIds={storeIds} />
-      <AlertSummary alerts={alerts} />
+      <HomeTop
+        data={homeData}
+        asOf={asOf}
+        ordersHref={todayOrdersHref}
+        guestsNote={metricsOpts.includeTakeoutGuests === false ? '店内飲食のみ' : undefined}
+      />
 
+      <section aria-label="全店舗サマリー" className="mt-2">
+      <div className="mb-3 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <h2 className="text-base font-bold text-ink">
+          全店舗サマリー<span className="en-inline">All stores</span>
+        </h2>
+        <p className="text-xs text-ink-3 tabular-nums">
+          {stores.length}店舗｜{today.replaceAll('-', '/')}（{weekdayJa(today)}）時点の今月実績
+        </p>
+      </div>
       <KpiStrip cells={mainKpiCells} />
       <KpiStrip cells={subKpiCells} size="sm" className="mt-3" />
       <p className="mt-2 text-xs text-gray-400">
@@ -796,6 +839,7 @@ async function HqDashboard({
           </CardContent>
         </Card>
       </div>
+      </section>
     </div>
   );
 }
@@ -807,11 +851,13 @@ async function HqDashboard({
 async function StoreDashboard({
   ctx,
   today,
+  asOf,
   setupPercent,
   metricsOpts,
 }: {
-  ctx: Awaited<ReturnType<typeof requireMember>>;
+  ctx: Ctx;
   today: string;
+  asOf: string;
   setupPercent: number | null;
   metricsOpts: SalesMetricsOptions;
 }) {
@@ -819,14 +865,7 @@ async function StoreDashboard({
   const store = ctx.currentStore!;
   const storeIds = [store.id];
 
-  const [todayOrdersRes, todayRefundsRes, todayReservationsRes, closingsRes, alerts] = await Promise.all([
-    supabase
-      .from('orders')
-      .select('total, guest_count, status, store_id, order_type')
-      .in('store_id', storeIds)
-      .eq('business_date', today)
-      .in('status', SETTLED_ORDER_STATUSES),
-    supabase.from('refunds').select('amount, kind, store_id, business_date').in('store_id', storeIds).eq('business_date', today),
+  const [todayReservationsRes, closingsRes, homeData] = await Promise.all([
     supabase
       .from('reservations')
       .select('id, start_at, party_size, guest_name, status, reservation_tables(table_id)')
@@ -841,16 +880,8 @@ async function StoreDashboard({
       .in('store_id', storeIds)
       .gte('business_date', daysAgoJst(30))
       .order('business_date'),
-    collectDashboardAlerts(supabase, ctx.organizationId, [store], false),
+    loadHomeData(homeDataArgs(ctx, supabase, [store], false, today, metricsOpts)),
   ]);
-
-  const todayOrders = todayOrdersRes.data ?? [];
-  const todayRefunds = todayRefundsRes.data ?? [];
-  const todayMetrics = computeSalesMetrics(todayOrders as SettledOrderLike[], todayRefunds as RefundLike[], metricsOpts);
-  const todaySales = todayMetrics.netSales;
-  const todayCount = todayMetrics.transactionCount;
-  const todayGuests = todayMetrics.guests;
-  const avgSpend = todayMetrics.avgSpend;
 
   // 30日推移は daily_closings.net_sales を使用。旧データ（v0.4.1以前に締めた行）は net_sales=0 のまま
   // 保存されているため、sales_total > 0 かつ net_sales = 0 の行のみ sales_total − refund_total でフォールバックする
@@ -884,39 +915,26 @@ async function StoreDashboard({
   const reservationListView = todayReservations.slice(0, 8);
 
   return (
-    <div>
-      <PageHeader title="ダッシュボード" description={`${store.name}｜${today.replaceAll('-', '/')}（${weekdayJa(today)}）の状況`} />
-
+    <div className="flex flex-col gap-4">
       {setupPercent != null && <SetupProgressCard percent={setupPercent} />}
-      <AnnouncementBanner supabase={supabase} organizationId={ctx.organizationId} userId={ctx.userId} storeIds={storeIds} />
-      <AlertSummary alerts={alerts} />
+      <HomeTop
+        data={homeData}
+        asOf={asOf}
+        ordersHref={`/app/orders?from=${today}&to=${today}`}
+        guestsNote={metricsOpts.includeTakeoutGuests === false ? '店内飲食のみ' : undefined}
+      />
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <LinkStatCard
-          href="/app/orders"
-          label="本日売上"
-          value={yen(todaySales)}
-          tone="primary"
-          sub={todayMetrics.refunds > 0 ? `総売上${yen(todayMetrics.grossSales)}／返金${yen(todayMetrics.refunds)}` : undefined}
-        />
-        <LinkStatCard href="/app/orders" label="会計件数" value={`${todayCount}件`} />
-        <LinkStatCard
-          href="/app/orders"
-          label="客数"
-          value={`${todayGuests}名`}
-          sub={metricsOpts.includeTakeoutGuests === false ? '店内飲食のみ' : undefined}
-        />
-        <LinkStatCard href="/app/reports" label="客単価" value={yen(avgSpend)} />
-      </div>
-
-      <div className="mt-5 grid gap-5 xl:grid-cols-3">
+      <div className="grid gap-4 xl:grid-cols-3">
         <Card className="xl:col-span-2">
-          <CardHeader>
-            <CardTitle>売上推移（過去30日）</CardTitle>
+          <CardHeader className="flex items-center justify-between gap-3">
+            <CardTitle en="Sales trend">売上推移（過去30日）</CardTitle>
+            <Link href="/app/reports" className="text-[13px] font-bold whitespace-nowrap text-iris hover:underline">
+              売上分析 ›
+            </Link>
           </CardHeader>
           <CardContent>
             {chartData.length === 0 ? (
-              <EmptyState title="売上データがまだありません" description="レジ締めを行うと日次売上が記録されます" />
+              <EmptyState title="売上データがまだありません" description="レジ締めを行うと日次売上が記録されます" className="py-10" />
             ) : (
               <Link href="/app/reports" className="block">
                 <SalesChart data={chartData} />
@@ -926,63 +944,70 @@ async function StoreDashboard({
         </Card>
 
         <Card>
-          <CardHeader className="flex items-center justify-between">
-            <CardTitle>本日の予約</CardTitle>
-            <Link href="/app/reservations" className="text-xs font-medium text-primary hover:underline">
-              台帳を見る
+          <CardHeader className="flex items-center justify-between gap-3">
+            <CardTitle en="Reservations">本日の予約</CardTitle>
+            <Link href="/app/reservations" className="text-[13px] font-bold whitespace-nowrap text-iris hover:underline">
+              台帳を見る ›
             </Link>
           </CardHeader>
           <CardContent className="p-0">
+            <div className="grid grid-cols-3 gap-2 px-4 pt-3">
+              <ResvSum label="組数" value={reservationCount} unit="組" />
+              <ResvSum label="予約人数" value={reservationCovers} unit="名" />
+              <ResvSum label="席未定" value={unassignedCount} unit="件" warn={unassignedCount > 0} />
+            </div>
             {reservationCount === 0 ? (
-              <div className="p-5">
-                <EmptyState title="本日の予約はありません" className="border-0 py-8" />
-              </div>
+              <p className="px-5 py-8 text-center text-sm text-ink-3">本日の予約はありません</p>
             ) : (
               <>
-                {/* サマリー */}
-                <div className="grid grid-cols-3 divide-x divide-gray-100 border-b border-gray-100 px-2 py-3 text-center">
-                  <div>
-                    <p className="text-lg font-bold text-navy">{reservationCount}</p>
-                    <p className="text-[11px] text-gray-500">組</p>
-                  </div>
-                  <div>
-                    <p className="text-lg font-bold text-navy">{reservationCovers}</p>
-                    <p className="text-[11px] text-gray-500">予約人数</p>
-                  </div>
-                  <div>
-                    <p className={`text-lg font-bold ${unassignedCount > 0 ? 'text-warning' : 'text-navy'}`}>{unassignedCount}</p>
-                    <p className="text-[11px] text-gray-500">未割当</p>
-                  </div>
-                </div>
                 {nextReservation && (
-                  <div className="border-b border-gray-100 bg-primary-soft/40 px-5 py-2 text-xs text-primary-deep">
-                    次のご予約：<span className="font-semibold">{formatTime(nextReservation.start_at)}</span>
+                  <div className="mx-4 mt-3 rounded-lg bg-iris-soft px-3 py-2 text-xs text-royal">
+                    次のご予約：<span className="font-bold tabular-nums">{formatTime(nextReservation.start_at)}</span>{' '}
                     {nextReservation.guest_name} 様（{nextReservation.party_size}名）
                   </div>
                 )}
-                <ul className="divide-y divide-gray-100">
+                <ul className="mt-2 divide-y divide-line">
                   {reservationListView.map((r) => {
                     const assigned = (r.reservation_tables?.length ?? 0) > 0;
                     return (
-                      <li key={r.id} className="flex items-center justify-between px-5 py-3">
+                      <li key={r.id} className="flex items-center justify-between gap-3 px-5 py-2.5">
                         <div className="min-w-0">
-                          <p className="truncate text-sm font-medium text-navy">
-                            {formatTime(r.start_at)}　{r.guest_name} 様
+                          <p className="truncate text-sm font-bold text-ink">
+                            <span className="tabular-nums">{formatTime(r.start_at)}</span>　{r.guest_name} 様
                           </p>
-                          <p className="text-xs text-gray-500">
-                            {r.party_size}名{!assigned && r.status !== 'seated' && '・テーブル未割当'}
+                          <p className="text-xs text-ink-3">
+                            <span className="tabular-nums">{r.party_size}</span>名
+                            {!assigned && r.status !== 'seated' && '・テーブル未割当'}
                           </p>
                         </div>
-                        <Badge tone={r.status === 'seated' ? 'success' : 'primary'}>{r.status === 'seated' ? '着席中' : '予約'}</Badge>
+                        <Badge tone={r.status === 'seated' ? 'success' : r.status === 'pending' ? 'warning' : 'primary'}>
+                          {r.status === 'seated' ? '着席中' : r.status === 'pending' ? '未確定' : '予約'}
+                        </Badge>
                       </li>
                     );
                   })}
                 </ul>
+                {reservationCount > reservationListView.length && (
+                  <p className="px-5 pb-3 text-xs text-ink-3">他 {reservationCount - reservationListView.length}件</p>
+                )}
               </>
             )}
           </CardContent>
         </Card>
       </div>
+    </div>
+  );
+}
+
+/** 本日の予約カードの集計タイル（プロトタイプの .sum） */
+function ResvSum({ label, value, unit, warn }: { label: string; value: number; unit: string; warn?: boolean }) {
+  return (
+    <div className="flex min-w-0 flex-col gap-0.5 rounded-[10px] bg-lilac-soft px-2.5 py-2">
+      <span className="text-[11.5px] font-medium whitespace-nowrap text-ink-3">{label}</span>
+      <span className={`text-xl leading-tight font-extrabold whitespace-nowrap tabular-nums ${warn ? 'text-saffron' : 'text-royal'}`}>
+        {value}
+        <small className="ml-px text-[11px] font-medium text-ink-3">{unit}</small>
+      </span>
     </div>
   );
 }

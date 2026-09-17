@@ -32,6 +32,7 @@ export default async function ApprovalRulesSettingsPage() {
       <SettingsBackLink />
       <PageHeader
         title="承認ルール"
+        en="Approvals"
         description="金額帯ごとに必要な承認ロール・自己承認可否を設定します。対象：請求書・経費・小口現金・発注。"
       />
       <ApprovalRulesPanel initial={rows} />

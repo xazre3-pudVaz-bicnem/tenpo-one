@@ -20,7 +20,7 @@ export default async function MenuSettingsPage() {
     return (
       <div>
         <SettingsBackLink />
-        <PageHeader title="メニュー" />
+        <PageHeader title="メニュー" en="Menu" />
         <EmptyState title="対象の店舗がありません" description="店舗を選択してから設定を行ってください" />
       </div>
     );
@@ -80,10 +80,10 @@ export default async function MenuSettingsPage() {
   return (
     <div>
       <SettingsBackLink />
-      <PageHeader title="メニュー" description={targetStore.name} />
+      <PageHeader title="メニュー" en="Menu" description={targetStore.name} />
 
-      <div className="grid gap-5 lg:grid-cols-4">
-        <div className="space-y-5 lg:col-span-1">
+      <div className="grid gap-5 @5xl:grid-cols-4">
+        <div className="space-y-5 @5xl:col-span-1">
           <Card>
             <CardContent>
               <CategoryPanel storeId={targetStore.id} initial={categoryRows} />
@@ -95,7 +95,7 @@ export default async function MenuSettingsPage() {
             </CardContent>
           </Card>
         </div>
-        <div className="lg:col-span-3">
+        <div className="order-first @5xl:order-none @5xl:col-span-3">
           <MenuItemsPanel
             storeId={targetStore.id}
             categories={categoryRows}

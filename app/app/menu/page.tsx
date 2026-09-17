@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { LogOut, ChevronRight } from 'lucide-react';
 import { requireMember } from '@/lib/auth';
-import { visibleNavGroups } from '@/lib/nav';
+import { visibleNavGroups, visibleNavTiles } from '@/lib/nav';
 import { ROLE_LABELS } from '@/lib/permissions';
 import { PageHeader } from '@/components/ui/page-header';
 import { NavIcon } from '@/components/layout/nav-icons';
@@ -12,7 +12,12 @@ export const metadata: Metadata = { title: 'メニュー' };
 
 export default async function MenuPage() {
   const ctx = await requireMember();
-  const groups = visibleNavGroups(ctx.role);
+  const tiles = visibleNavTiles(ctx.role, ctx.disabledFeatures);
+  const groups = visibleNavGroups(ctx.role, ctx.disabledFeatures).map((g) => ({
+    ...g,
+    // ドロアオープン等の操作行はレジ端末の左メニューでのみ扱う
+    items: g.items.filter((i) => !i.action),
+  }));
 
   return (
     <div>
@@ -25,6 +30,26 @@ export default async function MenuPage() {
           {ctx.organizationName ? `｜${ctx.organizationName}` : ''}
         </p>
       </div>
+
+      {tiles.length > 0 && (
+        <div className="mb-5 grid grid-cols-2 gap-3">
+          {tiles.map((t) => (
+            <Link
+              key={t.href}
+              href={t.href}
+              className="flex items-center justify-between gap-2 rounded-2xl border border-line bg-white px-4 py-4 text-royal shadow-card active:bg-iris-soft"
+            >
+              <span className="min-w-0">
+                <span className="block text-base font-bold">{t.label}</span>
+                <span className="block text-xs text-ink-3">{t.en}</span>
+              </span>
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-iris-soft text-iris">
+                <NavIcon name={t.icon} className="h-5 w-5" />
+              </span>
+            </Link>
+          ))}
+        </div>
+      )}
 
       <div className="space-y-5">
         {groups.map((group, gi) => (
@@ -43,7 +68,10 @@ export default async function MenuPage() {
                       className="flex items-center gap-3 px-4 py-3.5 text-sm font-medium text-navy active:bg-gray-50"
                     >
                       <NavIcon name={item.icon} className="h-5 w-5 shrink-0 text-gray-500" />
-                      <span className="flex-1">{item.label}</span>
+                      <span className="flex-1">
+                        {item.label}
+                        <span className="en-sub">{item.en}</span>
+                      </span>
                       <ChevronRight className="h-4 w-4 shrink-0 text-gray-300" aria-hidden="true" />
                     </Link>
                   </li>

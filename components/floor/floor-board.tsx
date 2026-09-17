@@ -1,72 +1,52 @@
 'use client';
 
 import { useState } from 'react';
+import { LayoutGrid, Map as MapIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Card } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Users, Lock } from 'lucide-react';
+import { ChipButton } from '@/components/ui/chip';
 import { useStoreRealtimeRefresh } from '@/components/realtime/use-store-refresh';
 import { TableSheet } from './table-sheet';
+import { TableCard } from './table-card';
+import { ReservationPanel } from './reservation-panel';
+import { useNow } from './use-now';
+import {
+  TILE_LABEL,
+  tileState,
+  type FloorRow,
+  type PanelReservation,
+  type TableView,
+  type TileState,
+} from './types';
 
-export interface ReservationChip {
-  time: string;
-  guestName: string;
-  partySize: number;
-}
-
-export interface FloorTable {
-  id: string;
-  floor_id: string | null;
-  name: string;
-  capacity_min: number;
-  capacity_max: number;
-  is_private_room: boolean;
-  is_counter: boolean;
-  current_status: string;
-  pos_x: number | null;
-  pos_y: number | null;
-  shape: string;
-}
+export type { FloorRow, FloorTable, ReservationChip, TableView, PanelReservation } from './types';
 
 const SHAPE_CLASS: Record<string, string> = {
   square: 'rounded-xl',
-  round: 'rounded-full aspect-square',
+  round: 'rounded-full',
   counter: 'rounded-md',
 };
 
-export interface FloorRow {
-  id: string;
-  name: string;
-  sort_order: number;
-}
-
-const STATUS_STYLES: Record<string, string> = {
-  available: 'border-gray-200 bg-white text-navy',
-  reserved: 'border-2 border-primary bg-white text-navy',
-  waiting: 'border-2 border-primary/60 bg-primary-soft text-primary-deep',
-  seated: 'border-success bg-success-soft text-success',
-  ordering: 'border-success bg-success-soft text-success',
-  billing: 'border-warning bg-warning-soft text-warning',
-  cleaning: 'border-slate-400 bg-slate-100 text-slate-600',
-  unavailable: 'border-gray-300 bg-gray-100 text-gray-400',
+const MAP_TONE: Record<TileState, string> = {
+  free: 'border-dashed border-wisteria bg-white text-ink-3',
+  reserved: 'border-dashed border-royal bg-white text-royal',
+  waiting: 'border-dashed border-royal bg-iris-soft text-royal',
+  seated: 'border-wisteria bg-iris-soft text-royal',
+  ordered: 'border-iris bg-iris-soft text-royal',
+  lo: 'border-[#E0AE00] bg-[#FFFBEB] text-[#8A6100]',
+  over: 'border-danger bg-danger-soft text-danger',
+  pay: 'border-saffron bg-saffron-soft text-saffron',
+  cleaning: 'border-line bg-lilac-soft text-ink-2',
+  unavailable: 'border-line bg-lilac-soft text-ink-3',
 };
 
-const STATUS_LABELS: Record<string, string> = {
-  available: '空席',
-  reserved: '予約あり',
-  waiting: 'キャンセル待ち',
-  seated: '着席中',
-  ordering: '注文中',
-  billing: '会計中',
-  cleaning: '清掃中',
-  unavailable: '利用停止',
-};
+type View = 'cards' | 'map';
 
 export function FloorBoard({
   storeId,
   floors,
   tables,
-  reservationByTable,
+  reservations,
+  serverNow,
   canOperate,
   startWalkInAction,
   goToOrderAction,
@@ -75,123 +55,172 @@ export function FloorBoard({
 }: {
   storeId: string;
   floors: FloorRow[];
-  tables: FloorTable[];
-  reservationByTable: Record<string, ReservationChip>;
+  tables: TableView[];
+  reservations: PanelReservation[];
+  serverNow: number;
   canOperate: boolean;
   startWalkInAction: (tableId: string, partySize: number) => Promise<{ orderId: string }>;
   goToOrderAction: (tableId: string) => Promise<{ orderId: string }>;
   completeCleaningAction: (tableId: string) => Promise<void>;
   setTableAvailabilityAction: (tableId: string, unavailable: boolean) => Promise<void>;
 }) {
-  const [selected, setSelected] = useState<FloorTable | null>(null);
+  const now = useNow(serverNow);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [floorFilter, setFloorFilter] = useState<string>('all');
+  const [view, setView] = useState<View>('cards');
 
-  // テーブル状態（着席・清掃中など）と、テーブルに紐づく注文の変化をRealtimeで検知して画面を更新する。
-  useStoreRealtimeRefresh({ storeId, tables: ['restaurant_tables', 'orders'] });
+  // テーブル状態（着席・清掃中など）と、テーブルに紐づく注文・予約の変化をRealtimeで検知して画面を更新する。
+  useStoreRealtimeRefresh({ storeId, tables: ['restaurant_tables', 'orders', 'reservations'] });
 
-  const grouped = floors.length > 0
-    ? floors.map((f) => ({ floor: f, tables: tables.filter((t) => t.floor_id === f.id) }))
-    : [{ floor: { id: '_', name: 'テーブル', sort_order: 0 }, tables }];
+  const selected = tables.find((t) => t.id === selectedId) ?? null;
   const unassigned = tables.filter((t) => !floors.some((f) => f.id === t.floor_id));
+  const hasPlacement = tables.some((t) => t.pos_x != null && t.pos_y != null);
 
-  const renderTile = (t: FloorTable, style?: React.CSSProperties) => {
-    const chip = reservationByTable[t.id];
-    return (
-      <button
-        key={t.id}
-        type="button"
-        onClick={() => setSelected(t)}
-        style={style}
-        className={cn(
-          'flex min-h-[92px] flex-col items-start justify-between border p-3 text-left shadow-sm transition-transform active:scale-[0.97]',
-          STATUS_STYLES[t.current_status] ?? STATUS_STYLES.available,
-          style ? SHAPE_CLASS[t.shape] ?? SHAPE_CLASS.square : 'rounded-xl'
-        )}
-      >
-        <div className="flex w-full items-start justify-between gap-1">
-          <span className="text-sm font-bold">{t.name}</span>
-          {t.current_status === 'unavailable' && <Lock className="h-3.5 w-3.5 shrink-0" />}
-        </div>
-        <div className="flex items-center gap-1 text-[11px] opacity-80">
-          <Users className="h-3 w-3" />
-          {t.capacity_min}〜{t.capacity_max}名
-          {t.is_private_room && '・個室'}
-          {t.is_counter && '・カウンター'}
-        </div>
-        <div className="flex w-full items-center justify-between gap-1">
-          <Badge tone="gray" className="bg-white/70 text-[10px]">
-            {STATUS_LABELS[t.current_status] ?? t.current_status}
-          </Badge>
-          {chip && (
-            <span className="truncate text-[10px] font-medium">
-              {chip.time} {chip.guestName}
-            </span>
-          )}
-        </div>
-      </button>
-    );
-  };
+  const visible =
+    floorFilter === 'all'
+      ? tables
+      : floorFilter === '_none'
+        ? unassigned
+        : tables.filter((t) => t.floor_id === floorFilter);
+
+  // 配置図はフロア単位で描く
+  const mapGroups =
+    floors.length > 0
+      ? [
+          ...floors.map((f) => ({ id: f.id, name: f.name, tables: tables.filter((t) => t.floor_id === f.id) })),
+          ...(unassigned.length > 0 ? [{ id: '_none', name: '未分類', tables: unassigned }] : []),
+        ].filter((g) => floorFilter === 'all' || g.id === floorFilter)
+      : [{ id: '_', name: 'テーブル', tables }];
+
+  const showToolbar = floors.length > 1 || (floors.length > 0 && unassigned.length > 0) || hasPlacement;
 
   return (
-    <div className="space-y-6">
-      {/* 凡例 */}
-      <div className="flex flex-wrap gap-3 text-xs text-gray-600">
-        {Object.entries(STATUS_LABELS)
-          .filter(([k]) => ['available', 'reserved', 'seated', 'billing', 'cleaning', 'unavailable'].includes(k))
-          .map(([k, label]) => (
-            <span key={k} className="flex items-center gap-1.5">
-              <span className={cn('h-3 w-3 rounded border', STATUS_STYLES[k])} />
-              {label}
-            </span>
-          ))}
+    <div className="grid items-start gap-3.5 lg:grid-cols-[minmax(0,1fr)_270px]">
+      <div className="min-w-0 space-y-3">
+        {showToolbar && (
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap gap-1.5">
+              {(floors.length > 1 || (floors.length > 0 && unassigned.length > 0)) && (
+                <>
+                  <ChipButton on={floorFilter === 'all'} onClick={() => setFloorFilter('all')}>
+                    すべて
+                  </ChipButton>
+                  {floors.map((f) => (
+                    <ChipButton key={f.id} on={floorFilter === f.id} onClick={() => setFloorFilter(f.id)}>
+                      {f.name}
+                    </ChipButton>
+                  ))}
+                  {unassigned.length > 0 && (
+                    <ChipButton on={floorFilter === '_none'} onClick={() => setFloorFilter('_none')}>
+                      未分類
+                    </ChipButton>
+                  )}
+                </>
+              )}
+            </div>
+            {hasPlacement && (
+              <div className="inline-flex overflow-hidden rounded-lg border border-line bg-white p-0.5">
+                {(
+                  [
+                    { key: 'cards', label: '一覧', Icon: LayoutGrid },
+                    { key: 'map', label: '配置図', Icon: MapIcon },
+                  ] as const
+                ).map(({ key, label, Icon }) => (
+                  <button
+                    key={key}
+                    type="button"
+                    aria-pressed={view === key}
+                    onClick={() => setView(key)}
+                    className={cn(
+                      'inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-[12.5px] font-semibold transition-colors',
+                      view === key ? 'bg-royal text-white' : 'text-ink-2 hover:bg-lilac-soft'
+                    )}
+                  >
+                    <Icon className="h-3.5 w-3.5" aria-hidden />
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {view === 'map' && hasPlacement ? (
+          <div className="space-y-3">
+            {mapGroups.map((g) => {
+              const placed = g.tables.filter((t) => t.pos_x != null && t.pos_y != null);
+              const unplaced = g.tables.filter((t) => t.pos_x == null || t.pos_y == null);
+              return (
+                <section key={g.id} className="ui-card border border-line bg-white p-4">
+                  <h2 className="mb-3 text-[13px] font-bold text-royal">{g.name}</h2>
+                  {g.tables.length === 0 ? (
+                    <p className="text-xs text-ink-3">このフロアにテーブルはありません</p>
+                  ) : (
+                    <>
+                      {placed.length > 0 && (
+                        <div className="overflow-x-auto">
+                          <div
+                            className="grid min-w-[40rem] gap-2"
+                            style={{ gridTemplateColumns: 'repeat(8, minmax(0, 1fr))', gridAutoRows: '5rem' }}
+                          >
+                            {placed.map((t) => {
+                              const st = tileState(t, now);
+                              return (
+                                <button
+                                  key={t.id}
+                                  type="button"
+                                  onClick={() => setSelectedId(t.id)}
+                                  style={{
+                                    gridColumnStart: (t.pos_x as number) + 1,
+                                    gridRowStart: (t.pos_y as number) + 1,
+                                  }}
+                                  className={cn(
+                                    'flex flex-col items-center justify-center gap-0.5 border p-1.5 text-center transition-transform active:scale-[0.97]',
+                                    MAP_TONE[st],
+                                    SHAPE_CLASS[t.shape] ?? SHAPE_CLASS.square
+                                  )}
+                                >
+                                  <b className="text-[13px] font-extrabold text-ink tabular-nums">{t.name}</b>
+                                  <span className="text-[10.5px] font-bold">{TILE_LABEL[st]}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                      {unplaced.length > 0 && (
+                        <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
+                          {unplaced.map((t) => (
+                            <TableCard key={t.id} table={t} now={now} onSelect={(x) => setSelectedId(x.id)} />
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </section>
+              );
+            })}
+          </div>
+        ) : visible.length === 0 ? (
+          <p className="rounded-[10px] border border-dashed border-wisteria bg-white px-4 py-10 text-center text-[13px] text-ink-3">
+            このフロアにテーブルはありません
+          </p>
+        ) : (
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
+            {visible.map((t) => (
+              <TableCard key={t.id} table={t} now={now} onSelect={(x) => setSelectedId(x.id)} />
+            ))}
+          </div>
+        )}
       </div>
 
-      {grouped.map(({ floor, tables: floorTables }) => {
-        const placed = floorTables.filter((t) => t.pos_x != null && t.pos_y != null);
-        const unplaced = floorTables.filter((t) => t.pos_x == null || t.pos_y == null);
-        return (
-          <Card key={floor.id} className="p-4">
-            <h2 className="mb-3 text-sm font-semibold text-navy">{floor.name}</h2>
-            {floorTables.length === 0 ? (
-              <p className="text-xs text-gray-400">このフロアにテーブルはありません</p>
-            ) : (
-              <>
-                {placed.length > 0 && (
-                  <div className="mb-4 overflow-x-auto">
-                    <div
-                      className="grid min-w-[40rem] gap-2"
-                      style={{ gridTemplateColumns: 'repeat(8, minmax(0, 1fr))', gridAutoRows: '5.5rem' }}
-                    >
-                      {placed.map((t) =>
-                        renderTile(t, { gridColumnStart: (t.pos_x as number) + 1, gridRowStart: (t.pos_y as number) + 1 })
-                      )}
-                    </div>
-                  </div>
-                )}
-                {unplaced.length > 0 && (
-                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-                    {unplaced.map((t) => renderTile(t))}
-                  </div>
-                )}
-              </>
-            )}
-          </Card>
-        );
-      })}
-
-      {floors.length > 0 && unassigned.length > 0 && (
-        <Card className="p-4">
-          <h2 className="mb-3 text-sm font-semibold text-navy">未分類</h2>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-            {unassigned.map((t) => renderTile(t))}
-          </div>
-        </Card>
-      )}
+      <ReservationPanel reservations={reservations} now={now} />
 
       <TableSheet
         table={selected}
-        reservation={selected ? reservationByTable[selected.id] : undefined}
+        now={now}
         canOperate={canOperate}
-        onClose={() => setSelected(null)}
+        onClose={() => setSelectedId(null)}
         startWalkInAction={startWalkInAction}
         goToOrderAction={goToOrderAction}
         completeCleaningAction={completeCleaningAction}

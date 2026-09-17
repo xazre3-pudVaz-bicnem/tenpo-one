@@ -16,7 +16,7 @@ export default async function ClerksSettingsPage() {
     return (
       <div>
         <SettingsBackLink />
-        <PageHeader title="POS担当者" />
+        <PageHeader title="POS担当者" en="Clerks" />
         <EmptyState title="対象の店舗がありません" description="店舗を選択してから設定を行ってください" />
       </div>
     );
@@ -39,7 +39,7 @@ export default async function ClerksSettingsPage() {
   return (
     <div>
       <SettingsBackLink />
-      <PageHeader title="POS担当者" description={targetStore.name} />
+      <PageHeader title="POS担当者" en="Clerks" description={targetStore.name} />
       <ClerksPanel storeId={targetStore.id} initial={rows} />
     </div>
   );

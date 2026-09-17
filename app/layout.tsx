@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { Noto_Sans_JP } from 'next/font/google';
+import { Manrope, Noto_Sans_JP } from 'next/font/google';
 import { brand } from '@/lib/brand';
 import { ToastProvider } from '@/components/ui/toast';
 import { ServiceWorkerRegister } from '@/components/pwa/service-worker-register';
@@ -9,6 +9,14 @@ const notoSansJp = Noto_Sans_JP({
   subsets: ['latin'],
   weight: ['400', '500', '700'],
   variable: '--font-noto-sans-jp',
+  display: 'swap',
+});
+
+// 数字・英字ラベル用（金額や時刻を見やすく）
+const manrope = Manrope({
+  subsets: ['latin'],
+  weight: ['500', '600', '700', '800'],
+  variable: '--font-manrope',
   display: 'swap',
 });
 
@@ -48,7 +56,7 @@ export const viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ja">
-      <body className={`${notoSansJp.variable} font-sans antialiased`}>
+      <body className={`${notoSansJp.variable} ${manrope.variable} font-sans antialiased`}>
         <ToastProvider>{children}</ToastProvider>
         <ServiceWorkerRegister />
       </body>

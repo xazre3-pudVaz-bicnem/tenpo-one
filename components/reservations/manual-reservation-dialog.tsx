@@ -64,6 +64,8 @@ export function ManualReservationDialog({
   triggerLabel = '電話予約を登録',
   triggerVariant = 'secondary',
   triggerSize = 'sm',
+  triggerClassName,
+  triggerContent,
   onCreated,
 }: {
   stores: StoreRef[];
@@ -76,6 +78,10 @@ export function ManualReservationDialog({
   triggerLabel?: string;
   triggerVariant?: NonNullable<ButtonProps['variant']>;
   triggerSize?: NonNullable<ButtonProps['size']>;
+  /** ボタンの見た目を上書き（店舗台帳の大きなタイルボタンなど） */
+  triggerClassName?: string;
+  /** ボタンの中身を上書き（未指定なら電話アイコン＋triggerLabel） */
+  triggerContent?: React.ReactNode;
   onCreated?: () => void;
 }) {
   const { toast } = useToast();
@@ -117,9 +123,13 @@ export function ManualReservationDialog({
 
   return (
     <>
-      <Button variant={triggerVariant} size={triggerSize} onClick={() => setOpen(true)}>
-        <Phone className="h-4 w-4" />
-        {triggerLabel}
+      <Button variant={triggerVariant} size={triggerSize} onClick={() => setOpen(true)} className={triggerClassName}>
+        {triggerContent ?? (
+          <>
+            <Phone className="h-4 w-4" />
+            {triggerLabel}
+          </>
+        )}
       </Button>
       <Dialog open={open} onClose={() => setOpen(false)} title={waitlistEntryId ? '予約へ変換' : '電話予約の登録'}>
         <div className="space-y-3">

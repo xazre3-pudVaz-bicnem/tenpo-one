@@ -19,10 +19,16 @@ export function WalkInDialog({
   stores,
   defaultStoreId,
   storeTables,
+  triggerClassName,
+  triggerContent,
 }: {
   stores: StoreRef[];
   defaultStoreId: string | null;
   storeTables: Record<string, TableOption[]>;
+  /** ボタンの見た目を上書き（店舗台帳の大きなタイルボタンなど） */
+  triggerClassName?: string;
+  /** ボタンの中身を上書き（未指定ならアイコン＋「ウォークイン登録」） */
+  triggerContent?: React.ReactNode;
 }) {
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
@@ -69,9 +75,13 @@ export function WalkInDialog({
 
   return (
     <>
-      <Button variant="secondary" size="sm" onClick={() => setOpen(true)}>
-        <UserPlus className="h-4 w-4" />
-        ウォークイン登録
+      <Button variant="secondary" size="sm" onClick={() => setOpen(true)} className={triggerClassName}>
+        {triggerContent ?? (
+          <>
+            <UserPlus className="h-4 w-4" />
+            ウォークイン登録
+          </>
+        )}
       </Button>
       <Dialog open={open} onClose={() => setOpen(false)} title="ウォークイン登録">
         <div className="space-y-3">

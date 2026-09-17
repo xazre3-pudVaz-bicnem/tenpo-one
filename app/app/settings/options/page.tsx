@@ -16,7 +16,7 @@ export default async function OptionsSettingsPage() {
     return (
       <div>
         <SettingsBackLink />
-        <PageHeader title="メニュー選択肢" />
+        <PageHeader title="メニュー選択肢" en="Menu options" />
         <EmptyState title="対象の店舗がありません" description="店舗を選択してから設定を行ってください" />
       </div>
     );
@@ -63,7 +63,7 @@ export default async function OptionsSettingsPage() {
   return (
     <div>
       <SettingsBackLink />
-      <PageHeader title="メニュー選択肢" description={targetStore.name} />
+      <PageHeader title="メニュー選択肢" en="Menu options" description={targetStore.name} />
       <OptionGroupsPanel
         storeId={targetStore.id}
         groups={rows}
