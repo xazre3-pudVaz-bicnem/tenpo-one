@@ -1,3 +1,5 @@
+pos-actions.txt: 32636 chars, 951 lines
+
 'use server';
 
 import { revalidatePath } from 'next/cache';
@@ -632,6 +634,92 @@ export async function moveTable(orderId: string, newTableId: string): Promise<{ 
   return { tableName: newTable.name };
 }
 
+/**
+ * 品目のない注文（会計前・¥0）を取消する。
+ * 誤ってウォークイン着席した／お客様が注文せずに退店した等で残った空の注文を「会計待ち」から消すための操作。
+ * - 有効な品目が1つでも残っていれば取消できない（先に品目取消 or 会計を行う）
+ * - 注文は status='cancelled'（取引履歴では「取消」）、理由は void_reason に記録
+ * - テーブルは他に会計前の注文が無ければ空席に戻す。紐づく予約（ウォークイン等）は取消扱い
+ */
+export async function cancelEmptyOrder(orderId: string, reason: string): Promise<void> {
+  const ctx = await requirePermission('pos.checkout');
+  if (!reason.trim()) throw new Error('取消理由を入力してください');
+  const supabase = await createClient();
+  const order = await loadOpenOrder(supabase, ctx, orderId);
+
+  const { count: activeItems } = await supabase
+    .from('order_items')
+    .select('id', { count: 'exact', head: true })
+    .eq('order_id', orderId)
+    .eq('status', 'active');
+  if ((activeItems ?? 0) > 0) {
+    throw new Error('品目が残っている注文は取消できません。先に品目を取消するか、会計してください');
+  }
+
+  const { count: paymentCount } = await supabase
+    .from('payments')
+    .select('id', { count: 'exact', head: true })
+    .eq('order_id', orderId);
+  if ((paymentCount ?? 0) > 0) {
+    throw new Error('支払記録のある注文は取消できません。取引履歴から返金・取消してください');
+  }
+
+  const now = new Date().toISOString();
+  const { data: updated, error } = await supabase
+    .from('orders')
+    .update({ status: 'cancelled', void_reason: reason.trim(), closed_at: now, updated_by: ctx.userId })
+    .eq('id', orderId)
+    .eq('status', 'open')
+    .select('id')
+    .maybeSingle();
+  if (error || !updated) {
+    console.error('[pos.cancelEmptyOrder] failed to cancel order:', error);
+    throw new Error('注文の取消に失敗しました。通信状態を確認して再度お試しください');
+  }
+
+  // テーブル: 同じテーブルに他の会計前注文が無ければ空席へ戻す（フロアマップ整合。失敗しても本処理は継続）
+  if (order.table_id) {
+    const { count: otherOpen } = await supabase
+      .from('orders')
+      .select('id', { count: 'exact', head: true })
+      .eq('table_id', order.table_id)
+      .eq('status', 'open')
+      .neq('id', orderId);
+    if ((otherOpen ?? 0) === 0) {
+      await supabase
+        .from('restaurant_tables')
+        .update({ current_status: 'available' })
+        .eq('id', order.table_id)
+        .in('current_status', ['seated', 'ordering', 'billing', 'cleaning']);
+    }
+  }
+
+  // 予約（ウォークイン含む）: 来店したが注文なしで終了 → 取消扱い。customers.cancel_count は加算しない（店側操作のため）
+  if (order.reservation_id) {
+    await supabase
+      .from('reservations')
+      .update({ status: 'cancelled', cancel_reason: `注文取消: ${reason.trim()}`, cancelled_at: now, updated_by: ctx.userId })
+      .eq('id', order.reservation_id)
+      .in('status', ['confirmed', 'waiting', 'arrived', 'seated', 'billing']);
+  }
+
+  await supabase.rpc('log_audit', {
+    p_org: order.organization_id,
+    p_store: order.store_id,
+    p_action: 'order.cancel_empty',
+    p_target_table: 'orders',
+    p_target_id: orderId,
+    p_before: { status: 'open', table_id: order.table_id, reservation_id: order.reservation_id },
+    p_after: { status: 'cancelled' },
+    p_note: reason.trim(),
+  });
+
+  revalidatePath('/app/pos');
+  revalidatePath('/app/orders');
+  revalidatePath('/app/floor');
+  revalidatePath('/app/reservations');
+}
+
 /** 印刷実行を記録する */
 export async function logPrintJob(orderId: string, jobType: 'receipt' | 'ryoshusho') {
   const ctx = await requirePermission('pos.checkout');
@@ -862,3 +950,4 @@ export async function setOrderCustomer(orderId: string, customerId: string | nul
   revalidatePath('/app/pos');
   return { customerName, pointBalance };
 }
+
