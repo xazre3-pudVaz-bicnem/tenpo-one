@@ -329,12 +329,16 @@ export async function saveDrawerSettings(storeId: string, drawer: DrawerSettings
 // -------------------------------------------------------------
 
 /** CloudPRNTの有効化・ドロア命令・ポーリング間隔を更新する。 */
+const KITCHEN_STATIONS = ['kitchen', 'drink', 'dessert'] as const;
+
 export async function setCloudPrntConfig(input: {
   id: string;
   storeId: string;
   enabled: boolean;
   drawerCommand?: string;
   pollIntervalSeconds?: number;
+  /** キッチン機が担当する厨房ステーション（kitchen / drink / dessert） */
+  kitchenStations?: string[];
 }): Promise<ActionResult> {
   const ctx = await requirePermission('store.settings');
   const err = assertStoreAccess(ctx.stores.map((s) => s.id), input.storeId);
@@ -346,6 +350,13 @@ export async function setCloudPrntConfig(input: {
   }
   if (typeof input.pollIntervalSeconds === 'number' && input.pollIntervalSeconds > 0) {
     patch.poll_interval_seconds = Math.min(60, Math.max(1, Math.round(input.pollIntervalSeconds)));
+  }
+  if (input.kitchenStations) {
+    const stations = Array.from(new Set(input.kitchenStations)).filter((s): s is (typeof KITCHEN_STATIONS)[number] =>
+      (KITCHEN_STATIONS as readonly string[]).includes(s)
+    );
+    if (stations.length === 0) return { error: '担当する厨房（キッチン／ドリンク／デザート）を1つ以上選んでください' };
+    patch.kitchen_stations = stations;
   }
 
   const supabase = await createClient();
@@ -408,12 +419,16 @@ export async function enqueueCloudPrntTest(
   const supabase = await createClient();
   const { data: printer } = await supabase
     .from('printer_configs')
-    .select('id, cloudprnt_enabled, paper_width_mm, drawer_command')
+    .select('id, cloudprnt_enabled, paper_width_mm, drawer_command, usage, drawer_kick')
     .eq('id', id)
     .eq('store_id', storeId)
     .maybeSingle();
   if (!printer) return { error: 'プリンタ設定が見つかりません' };
   if (!printer.cloudprnt_enabled) return { error: '先にCloudPRNTを有効化してください' };
+  // ドロアはレシート機につながる前提（キッチン機へ開放命令を送っても意味がない）
+  if (kind === 'drawer' && (printer.usage !== 'receipt' || !printer.drawer_kick)) {
+    return { error: 'ドロア開放はドロア連動が有効なレシート用プリンタでのみ使えます' };
+  }
 
   const { testPrintMarkup, drawerKickMarkup } = await import('@/lib/receipt-markup');
   const { testPrintStarPrnt, drawerKickStarPrnt } = await import('@/lib/starprnt');

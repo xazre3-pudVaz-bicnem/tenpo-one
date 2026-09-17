@@ -10,6 +10,7 @@
 import iconv from 'iconv-lite';
 import type { ReceiptData } from './receipts';
 import { colsFor, twoCol, yen, type PaperWidth } from './receipt-layout';
+import type { LayoutLine } from './kitchen-ticket';
 
 const ESC = 0x1b;
 const GS = 0x1d;
@@ -196,5 +197,32 @@ export function testPrintStarPrnt(opts: {
   b.line().line();
   b.cmd(CMD.cut);
 
+  return b.toBuffer();
+}
+
+/** 厨房伝票（StarPRNT）。行の組み立ては lib/kitchen-ticket.ts と共有する。 */
+export function kitchenTicketStarPrnt(
+  lines: LayoutLine[],
+  opts: { currency?: CurrencyStyle; encoding?: TextEncoding } = {}
+): Buffer {
+  const b = new StarBuffer(opts.currency ?? DEFAULT_CURRENCY, opts.encoding ?? DEFAULT_ENCODING);
+  b.cmd(CMD.init);
+  let align = '';
+  let size = '';
+  for (const l of lines) {
+    if (l.align !== align) {
+      b.cmd(l.align === 'center' ? CMD.alignCenter : CMD.alignLeft);
+      align = l.align;
+    }
+    if (l.size !== size) {
+      // magnify(w, h): 0=等倍 / 1=倍
+      b.cmd(l.size === 'large' ? CMD.magnify(1, 1) : l.size === 'tall' ? CMD.magnify(0, 1) : CMD.magnify(0, 0));
+      size = l.size;
+    }
+    b.line(l.text);
+  }
+  b.cmd(CMD.magnify(0, 0));
+  b.line().line();
+  b.cmd(CMD.cut);
   return b.toBuffer();
 }

@@ -1,9 +1,13 @@
 'use client';
 
-import { useState, useTransition } from 'react';
-import { Copy, Check, Printer, Inbox, RefreshCw, Loader2 } from 'lucide-react';
+import { useEffect, useState, useSyncExternalStore, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
+import {
+  Copy, Check, Printer, Inbox, RefreshCw, Loader2, Wifi, WifiOff, CircleAlert, Smartphone, ChefHat, Receipt,
+} from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Input, Label } from '@/components/ui/input';
 import { useToast } from '@/components/ui/toast';
 import {
@@ -15,6 +19,8 @@ import {
 export interface CloudPrntPrinter {
   id: string;
   name: string;
+  model: string;
+  usage: 'receipt' | 'kitchen';
   cloudprntEnabled: boolean;
   cloudprntToken: string | null;
   drawerKick: boolean;
@@ -22,77 +28,170 @@ export interface CloudPrntPrinter {
   paperWidthMm: number;
   pollIntervalSeconds: number;
   lastPolledAt: string | null;
+  macAddress: string | null;
+  kitchenStations: string[];
+  pendingJobs: number;
+}
+
+const STATIONS: { key: string; label: string }[] = [
+  { key: 'kitchen', label: 'キッチン（フード）' },
+  { key: 'drink', label: 'ドリンク' },
+  { key: 'dessert', label: 'デザート' },
+];
+
+/** 接続中とみなす最終通信からの経過（ポーリング間隔の数倍に余裕を持たせる） */
+const ONLINE_WITHIN_MS = 60_000;
+/** 画面を開いている間、接続状態を取り直す間隔 */
+const REFRESH_MS = 10_000;
+
+// 相対時刻の表示に使う時計。描画中に Date.now() を呼ばないよう外部ストアとして持つ。
+let clockNow = 0;
+function subscribeClock(onChange: () => void) {
+  const tick = () => {
+    clockNow = Date.now();
+    onChange();
+  };
+  const first = setTimeout(tick, 0);
+  const timer = setInterval(tick, 5_000);
+  return () => {
+    clearTimeout(first);
+    clearInterval(timer);
+  };
+}
+const getClock = () => clockNow;
+const getServerClock = () => 0;
+
+type Status = 'checking' | 'online' | 'offline' | 'never' | 'disabled';
+
+function statusOf(p: CloudPrntPrinter, now: number): Status {
+  if (!p.cloudprntEnabled) return 'disabled';
+  if (!p.lastPolledAt) return 'never';
+  if (now === 0) return 'checking';
+  return now - new Date(p.lastPolledAt).getTime() <= ONLINE_WITHIN_MS ? 'online' : 'offline';
+}
+
+function ago(iso: string, now: number): string {
+  const sec = Math.max(0, Math.round((now - new Date(iso).getTime()) / 1000));
+  if (sec < 60) return `${sec}秒前`;
+  if (sec < 3600) return `${Math.round(sec / 60)}分前`;
+  if (sec < 86400) return `${Math.round(sec / 3600)}時間前`;
+  return new Date(iso).toLocaleString('ja-JP');
 }
 
 export function CloudPrntPanel({
   storeId,
   siteUrl,
   printers,
+  setupQrById,
 }: {
   storeId: string;
   siteUrl: string;
   printers: CloudPrntPrinter[];
+  setupQrById: Record<string, string>;
 }) {
+  const router = useRouter();
+  const anyEnabled = printers.some((p) => p.cloudprntEnabled);
+
+  // 画面を開いている間は接続状態を定期的に取り直す（電源を入れると「接続中」に変わるのが見える）
+  useEffect(() => {
+    if (!anyEnabled) return;
+    const timer = setInterval(() => router.refresh(), REFRESH_MS);
+    return () => clearInterval(timer);
+  }, [anyEnabled, router]);
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle>レシートプリンター（CloudPRNT）</CardTitle>
+        <CardTitle>プリンター接続（CloudPRNT）</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <p className="text-sm text-gray-600">
-          Star mC-Print3 等の CloudPRNT 対応機を接続します。プリンタ側に下の<strong>ポーリングURL</strong>を設定すると、
-          プリンタが定期的にこのサーバへ問い合わせ、会計時のレシート印字・キャッシュドロア開放を実行します。
-          店舗LAN情報の登録は不要です（プリンタがインターネットに接続できればOK）。
+          Star mC-Print3 等を TENPO ONE につなぎます。レシート機は会計時のレシートとドロア開放、
+          キッチン機は注文が入ると厨房伝票を<strong>自動で</strong>印刷します（レジ端末が起動していなくてもQR注文の伝票が出ます）。
+          プリンタがインターネットにつながっていれば、店内LANの設定は不要です。
         </p>
         {!siteUrl && (
           <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-            公開URL（環境変数 <code className="font-mono">NEXT_PUBLIC_SITE_URL</code>）が未設定のため、ポーリングURLを生成できません。
+            公開URL（環境変数 <code className="font-mono">NEXT_PUBLIC_SITE_URL</code>）が未設定のため、接続用URLを生成できません。
           </div>
         )}
         {printers.length === 0 ? (
           <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 px-3 py-3 text-xs text-gray-500">
-            上の「プリンター」でレシート用プリンタを登録すると、ここでCloudPRNTを有効化できます。
+            上の「プリンター」で用途「レシート」または「厨房」のプリンタを登録すると、ここで接続できます。
           </div>
         ) : (
           printers.map((p) => (
-            <CloudPrntRow key={p.id} storeId={storeId} siteUrl={siteUrl} printer={p} />
+            <PrinterRow key={p.id} storeId={storeId} siteUrl={siteUrl} printer={p} setupQr={setupQrById[p.id] ?? null} />
           ))
         )}
-        <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-500 leading-relaxed">
-          <p className="font-semibold text-gray-600">プリンタ側の設定手順（mC-Print3）</p>
-          <p>1. プリンタをネットワーク接続（有線LAN/Wi-Fi）。</p>
-          <p>2. プリンタのWeb設定画面 → CloudPRNT を有効化。</p>
-          <p>3. サーバURLに上の「ポーリングURL」を貼付。ポーリング間隔を設定（例: 5秒）。</p>
-          <p>4. 「テスト印刷」を押し、数秒後にレシートが出れば接続成功です。</p>
-        </div>
       </CardContent>
     </Card>
   );
 }
 
-function CloudPrntRow({
+function StatusBadge({ status, printer, now }: { status: Status; printer: CloudPrntPrinter; now: number }) {
+  switch (status) {
+    case 'online':
+      return (
+        <Badge tone="success">
+          <Wifi className="mr-1 inline h-3 w-3" />
+          接続中
+        </Badge>
+      );
+    case 'offline':
+      return (
+        <Badge tone="warning">
+          <WifiOff className="mr-1 inline h-3 w-3" />
+          オフライン（最終通信 {printer.lastPolledAt ? ago(printer.lastPolledAt, now) : '-'}）
+        </Badge>
+      );
+    case 'never':
+      return (
+        <Badge tone="danger">
+          <CircleAlert className="mr-1 inline h-3 w-3" />
+          未接続（プリンタから一度も通信がありません）
+        </Badge>
+      );
+    case 'checking':
+      return <Badge tone="gray">確認中…</Badge>;
+    default:
+      return <Badge tone="gray">未使用</Badge>;
+  }
+}
+
+function PrinterRow({
   storeId,
   siteUrl,
   printer,
+  setupQr,
 }: {
   storeId: string;
   siteUrl: string;
   printer: CloudPrntPrinter;
+  setupQr: string | null;
 }) {
   const { toast } = useToast();
+  const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [enabled, setEnabled] = useState(printer.cloudprntEnabled);
   const [drawerCommand, setDrawerCommand] = useState(printer.drawerCommand);
   const [pollInterval, setPollInterval] = useState(printer.pollIntervalSeconds);
+  const [stations, setStations] = useState<string[]>(printer.kitchenStations);
   const [copied, setCopied] = useState(false);
+  const now = useSyncExternalStore(subscribeClock, getClock, getServerClock);
 
+  const isKitchen = printer.usage === 'kitchen';
+  const status = statusOf({ ...printer, cloudprntEnabled: enabled }, now);
   const pollUrl = siteUrl && printer.cloudprntToken ? `${siteUrl}/api/cloudprnt/${printer.cloudprntToken}` : '';
 
   const run = (fn: () => Promise<{ error?: string }>, okMsg: string) =>
     startTransition(async () => {
       const res = await fn();
       if (res.error) toast(res.error, 'error');
-      else toast(okMsg);
+      else {
+        toast(okMsg);
+        router.refresh();
+      }
     });
 
   const copyUrl = async () => {
@@ -105,17 +204,28 @@ function CloudPrntRow({
     }
   };
 
+  const toggleStation = (key: string) =>
+    setStations((prev) => (prev.includes(key) ? prev.filter((s) => s !== key) : [...prev, key]));
+
   return (
     <div className="rounded-xl border border-gray-200 p-4">
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <div>
-          <p className="font-semibold text-navy">{printer.name}</p>
-          <p className="text-xs text-gray-500">
-            用紙 {printer.paperWidthMm}mm ・ ドロア {printer.drawerKick ? '有効' : '無効'} ・{' '}
-            {printer.lastPolledAt
-              ? `最終通信 ${new Date(printer.lastPolledAt).toLocaleString('ja-JP')}`
-              : '未通信'}
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="flex items-center gap-1.5 font-semibold text-navy">
+            {isKitchen ? <ChefHat className="h-4 w-4 text-gray-400" /> : <Receipt className="h-4 w-4 text-gray-400" />}
+            {printer.name}
+            <span className="text-xs font-normal text-gray-400">
+              {isKitchen ? '厨房伝票' : 'レシート'}
+              {printer.model ? `・${printer.model}` : ''}
+            </span>
           </p>
+          <div className="mt-1 flex flex-wrap items-center gap-2">
+            <StatusBadge status={status} printer={printer} now={now} />
+            {printer.pendingJobs > 0 && <Badge tone="gray">印刷待ち {printer.pendingJobs}件</Badge>}
+            {status === 'online' && printer.macAddress && (
+              <span className="text-xs text-gray-400">MAC {printer.macAddress}</span>
+            )}
+          </div>
         </div>
         <label className="flex items-center gap-2 text-sm">
           <input
@@ -129,14 +239,22 @@ function CloudPrntRow({
             }}
             className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
           />
-          CloudPRNTを使う
+          このプリンタを使う
         </label>
       </div>
 
       {enabled && (
-        <div className="space-y-3">
+        <div className="space-y-4">
+          {status === 'never' && <SetupGuide setupQr={setupQr} />}
+          {status === 'offline' && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-800">
+              以前はつながっていましたが、現在プリンタから通信がありません。電源・LANケーブル・用紙切れ・
+              店舗のインターネット回線を確認してください。復旧すると自動で「接続中」に戻ります。
+            </div>
+          )}
+
           <div>
-            <Label>ポーリングURL（プリンタのCloudPRNT設定に貼付）</Label>
+            <Label>接続用URL（プリンタの CloudPRNT「サーバーURL」に設定）</Label>
             <div className="flex items-center gap-2">
               <Input readOnly value={pollUrl} className="font-mono text-xs" onFocus={(e) => e.currentTarget.select()} />
               <Button type="button" variant="secondary" size="sm" onClick={copyUrl} disabled={!pollUrl}>
@@ -145,9 +263,31 @@ function CloudPrntRow({
             </div>
           </div>
 
+          {isKitchen && (
+            <div>
+              <Label>このプリンタで印刷する伝票</Label>
+              <div className="flex flex-wrap gap-3">
+                {STATIONS.map((s) => (
+                  <label key={s.key} className="flex items-center gap-2 text-sm text-gray-700">
+                    <input
+                      type="checkbox"
+                      checked={stations.includes(s.key)}
+                      onChange={() => toggleStation(s.key)}
+                      className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                    />
+                    {s.label}
+                  </label>
+                ))}
+              </div>
+              <p className="mt-1 text-xs text-gray-500">
+                商品カテゴリの「提供場所」（メニュー設定）に合わせて振り分けます。追加・数量変更・取消も伝票に出ます。
+              </p>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
-              <Label htmlFor={`poll-${printer.id}`}>ポーリング間隔（秒）</Label>
+              <Label htmlFor={`poll-${printer.id}`}>問い合わせ間隔（秒）</Label>
               <Input
                 id={`poll-${printer.id}`}
                 type="number"
@@ -157,16 +297,18 @@ function CloudPrntRow({
                 onChange={(e) => setPollInterval(Number(e.target.value))}
               />
             </div>
-            <div>
-              <Label htmlFor={`drawer-${printer.id}`}>ドロア開放コマンド（機種で調整可）</Label>
-              <Input
-                id={`drawer-${printer.id}`}
-                value={drawerCommand}
-                onChange={(e) => setDrawerCommand(e.target.value)}
-                className="font-mono text-xs"
-                placeholder="[drawer: 1]"
-              />
-            </div>
+            {!isKitchen && printer.drawerKick && (
+              <div>
+                <Label htmlFor={`drawer-${printer.id}`}>ドロア開放コマンド（開かない場合に変更）</Label>
+                <Input
+                  id={`drawer-${printer.id}`}
+                  value={drawerCommand}
+                  onChange={(e) => setDrawerCommand(e.target.value)}
+                  className="font-mono text-xs"
+                  placeholder="[drawer: 1]"
+                />
+              </div>
+            )}
           </div>
 
           <div className="flex flex-wrap gap-2">
@@ -175,7 +317,15 @@ function CloudPrntRow({
               size="sm"
               onClick={() =>
                 run(
-                  () => setCloudPrntConfig({ id: printer.id, storeId, enabled: true, drawerCommand, pollIntervalSeconds: pollInterval }),
+                  () =>
+                    setCloudPrntConfig({
+                      id: printer.id,
+                      storeId,
+                      enabled: true,
+                      drawerCommand,
+                      pollIntervalSeconds: pollInterval,
+                      ...(isKitchen ? { kitchenStations: stations } : {}),
+                    }),
                   '保存しました'
                 )
               }
@@ -188,43 +338,100 @@ function CloudPrntRow({
               type="button"
               variant="secondary"
               size="sm"
-              onClick={() => run(() => enqueueCloudPrntTest(printer.id, storeId, 'receipt'), 'テスト印刷をキューに追加しました')}
+              onClick={() => run(() => enqueueCloudPrntTest(printer.id, storeId, 'receipt'), 'テスト印刷を送りました')}
               disabled={pending}
+              title={status === 'online' ? undefined : 'プリンタが接続されると印刷されます（10分以内）'}
             >
               <Printer className="h-4 w-4" />
               テスト印刷
             </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              onClick={() => run(() => enqueueCloudPrntTest(printer.id, storeId, 'drawer'), 'ドロア開放をキューに追加しました')}
-              disabled={pending || !printer.drawerKick}
-              title={printer.drawerKick ? undefined : 'このプリンタはドロアキックが無効です'}
-            >
-              <Inbox className="h-4 w-4" />
-              ドロアを開く
-            </Button>
+            {!isKitchen && printer.drawerKick && (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => run(() => enqueueCloudPrntTest(printer.id, storeId, 'drawer'), 'ドロア開放を送りました')}
+                disabled={pending}
+              >
+                <Inbox className="h-4 w-4" />
+                ドロアを開く
+              </Button>
+            )}
             <Button
               type="button"
               variant="ghost"
               size="sm"
               onClick={() => {
-                if (confirm('トークンを再発行すると現在のポーリングURLは無効になります。プリンタ側の再設定が必要です。続行しますか？')) {
-                  run(() => regenerateCloudPrntToken(printer.id, storeId), 'トークンを再発行しました');
+                if (confirm('再発行すると現在の接続用URLは使えなくなり、プリンタ側の再設定が必要です。続行しますか？')) {
+                  run(() => regenerateCloudPrntToken(printer.id, storeId), 'URLを再発行しました');
                 }
               }}
               disabled={pending}
             >
               <RefreshCw className="h-4 w-4" />
-              トークン再発行
+              URLを再発行
             </Button>
           </div>
-          <p className="text-xs text-amber-600">
-            ※ テスト印刷・ドロアはプリンタが次にポーリングした時（最大{pollInterval}秒後）に実行されます。文字コードはサーバー側で機種に合わせて送るため、プリンタ側の設定は不要です。
-          </p>
+          {status !== 'online' && (
+            <p className="text-xs text-gray-500">
+              ※ テスト印刷・ドロアはプリンタが接続されたときに実行されます。長時間つながらない場合は自動で取り消されます
+              （ドロア2分・テスト10分）。接続したとたんに何枚も出ることはありません。
+            </p>
+          )}
         </div>
       )}
+    </div>
+  );
+}
+
+/** 一度も通信が無いときの接続手順。原因の大半はプリンタ側のネットワーク設定。 */
+function SetupGuide({ setupQr }: { setupQr: string | null }) {
+  return (
+    <div className="rounded-xl border border-primary/30 bg-primary-soft/40 p-4">
+      <p className="mb-3 flex items-center gap-1.5 text-sm font-semibold text-navy">
+        <Smartphone className="h-4 w-4" />
+        スマホでプリンタを接続する（約3分）
+      </p>
+      <div className="flex flex-col gap-4 sm:flex-row">
+        <ol className="flex-1 list-decimal space-y-1.5 pl-4 text-sm text-gray-700">
+          <li>
+            スマホに Star 公式アプリ「<strong>Star Quick Setup Utility</strong>」を入れる（App Store / Google Play）
+          </li>
+          <li>
+            プリンタの電源を入れ、アプリから <strong>Bluetooth</strong> で接続する
+            <span className="block text-xs text-gray-500">Bluetooth非搭載の機種（例: MCP31L）は USB ケーブルで接続するか、下のパソコン手順で設定</span>
+          </li>
+          <li>
+            「ネットワーク」→ IPアドレスを <strong>自動取得（DHCP）</strong> にする
+            <span className="block text-xs text-gray-500">
+              以前の設置場所（dinii等）の固定IPが残っていると、店内では印刷できてもインターネットに出られず接続できません
+            </span>
+          </li>
+          <li>
+            「CloudPRNT」→ <strong>有効</strong>、サーバーURLに右のQRで開いたURLを貼り付け、間隔を5秒にする
+            <span className="block text-xs text-gray-500">ユーザー名・パスワードは空欄のまま</span>
+          </li>
+          <li>
+            設定を<strong>保存してプリンタを再起動</strong>
+          </li>
+          <li>数十秒でこの表示が「接続中」に変わります（画面は自動で更新されます）</li>
+        </ol>
+        {setupQr && (
+          <div className="flex shrink-0 flex-col items-center gap-1">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={setupQr} alt="接続用URLをスマホで開くQRコード" className="h-36 w-36 rounded-lg border border-gray-200 bg-white p-1" />
+            <p className="text-center text-xs text-gray-500">
+              スマホのカメラで読むと
+              <br />
+              URLのコピー画面が開きます
+            </p>
+          </div>
+        )}
+      </div>
+      <p className="mt-3 text-xs text-gray-500">
+        パソコンから設定する場合は、プリンタの設定画面（http://プリンタのIP、初期ID root / パスワード public）の
+        「クラウドプリント」で同じ内容を入力し、Submit → 左メニュー「保存」→ 再起動してください（Submitだけでは保存されません）。
+      </p>
     </div>
   );
 }

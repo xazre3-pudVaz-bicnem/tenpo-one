@@ -7,6 +7,7 @@
  */
 import type { ReceiptData } from './receipts';
 import { colsFor, twoCol, yen, type PaperWidth } from './receipt-layout';
+import type { LayoutLine } from './kitchen-ticket';
 
 /** Markup構文で意味を持つ文字を無害化（角括弧・バックスラッシュ）。 */
 function esc(s: string): string {
@@ -124,4 +125,33 @@ export function testPrintMarkup(opts: { storeName: string; paperWidth?: PaperWid
     '[cut: feed; partial]',
     '',
   ].join('\n');
+}
+
+/** 厨房伝票（Markup）。行の組み立ては lib/kitchen-ticket.ts と共有する。 */
+export function kitchenTicketMarkup(lines: LayoutLine[]): string {
+  const L: string[] = [];
+  let align = '';
+  let size = '';
+  for (const l of lines) {
+    const a = l.align === 'center' ? '[align: middle]' : '[align: left]';
+    if (a !== align) {
+      L.push(a);
+      align = a;
+    }
+    const s =
+      l.size === 'large'
+        ? '[magnify: width 2; height 2]'
+        : l.size === 'tall'
+          ? '[magnify: width 1; height 2]'
+          : '[magnify: width 1; height 1]';
+    if (s !== size) {
+      L.push(s);
+      size = s;
+    }
+    L.push(esc(l.text));
+  }
+  if (size !== '[magnify: width 1; height 1]') L.push('[magnify: width 1; height 1]');
+  L.push('[feed]');
+  L.push('[cut: feed; partial]');
+  return L.join('\n') + '\n';
 }

@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import QRCode from 'qrcode';
 import { requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { PageHeader } from '@/components/ui/page-header';
@@ -36,17 +37,34 @@ export default async function PrintersSettingsPage() {
 
   const { data: printers } = await supabase
     .from('printer_configs')
-    .select('id, name, maker, model, connection_type, ip_address, usage, paper_width_mm, auto_print, drawer_kick, is_verified, cloudprnt_enabled, cloudprnt_token, drawer_command, poll_interval_seconds, last_polled_at')
+    .select('id, name, maker, model, connection_type, ip_address, usage, paper_width_mm, auto_print, drawer_kick, is_verified, cloudprnt_enabled, cloudprnt_token, drawer_command, poll_interval_seconds, last_polled_at, mac_address, kitchen_stations')
     .eq('store_id', targetStore.id)
     .eq('status', 'active')
     .order('name');
 
+  // 未印刷のまま待っているジョブ数（プリンタ未接続の気付きのため）
+  const { data: pendingJobs } = await supabase
+    .from('print_jobs')
+    .select('printer_config_id')
+    .eq('store_id', targetStore.id)
+    .eq('target', 'cloudprnt')
+    .in('status', ['queued', 'claimed']);
+  const pendingByPrinter = new Map<string, number>();
+  for (const j of pendingJobs ?? []) {
+    if (!j.printer_config_id) continue;
+    pendingByPrinter.set(j.printer_config_id, (pendingByPrinter.get(j.printer_config_id) ?? 0) + 1);
+  }
+
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? '';
   const cloudPrntRows = (printers ?? [])
-    .filter((p) => p.usage === 'receipt')
+    .filter((p) => p.usage === 'receipt' || p.usage === 'kitchen')
+    // レシート機を先に並べる
+    .sort((a, b) => Number(a.usage !== 'receipt') - Number(b.usage !== 'receipt'))
     .map((p) => ({
       id: p.id,
       name: p.name,
+      model: p.model ?? '',
+      usage: p.usage as 'receipt' | 'kitchen',
       cloudprntEnabled: p.cloudprnt_enabled ?? false,
       cloudprntToken: p.cloudprnt_token ?? null,
       drawerKick: p.drawer_kick,
@@ -54,7 +72,25 @@ export default async function PrintersSettingsPage() {
       paperWidthMm: p.paper_width_mm,
       pollIntervalSeconds: p.poll_interval_seconds ?? 5,
       lastPolledAt: p.last_polled_at ?? null,
+      macAddress: p.mac_address ?? null,
+      kitchenStations: (p.kitchen_stations ?? ['kitchen']) as string[],
+      pendingJobs: pendingByPrinter.get(p.id) ?? 0,
     }));
+
+  // スマホで読み取ってポーリングURLをコピーするためのQR（トークンは # 以降に置き、サーバーへ送らない）
+  const setupQrById: Record<string, string> = {};
+  if (siteUrl) {
+    await Promise.all(
+      cloudPrntRows
+        .filter((p) => p.cloudprntEnabled && p.cloudprntToken)
+        .map(async (p) => {
+          setupQrById[p.id] = await QRCode.toDataURL(`${siteUrl}/setup/printer#${p.cloudprntToken}`, {
+            width: 200,
+            margin: 1,
+          });
+        })
+    );
+  }
 
   const { data: settingsRow } = await supabase
     .from('store_settings')
@@ -100,7 +136,7 @@ export default async function PrintersSettingsPage() {
               <PrintersPanel storeId={targetStore.id} initial={printerRows} />
             </CardContent>
           </Card>
-          <CloudPrntPanel storeId={targetStore.id} siteUrl={siteUrl} printers={cloudPrntRows} />
+          <CloudPrntPanel storeId={targetStore.id} siteUrl={siteUrl} printers={cloudPrntRows} setupQrById={setupQrById} />
           <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 px-4 py-3 text-xs text-gray-500">
             レシート印字は上の「CloudPRNT」（Star mC-Print3 等）で実機印字に対応します。CloudPRNT未対応機や未設定時は、レシート画面からのブラウザ印刷が利用できます。
           </div>

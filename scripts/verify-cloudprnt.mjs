@@ -20,7 +20,11 @@ const httpIdx = process.argv.indexOf('--http');
 const HTTP_BASE = httpIdx >= 0 ? process.argv[httpIdx + 1] : null;
 
 let pass = 0, fail = 0;
-const check = (label, ok, extra = '') => { console.log(`  ${ok ? '✓' : '✗'} ${label}${extra ? ` — ${extra}` : ''}`); ok ? pass++ : fail++; };
+const check = (label, ok, extra = '') => {
+  console.log(`  ${ok ? '✓' : '✗'} ${label}${extra ? ` — ${extra}` : ''}`);
+  if (ok) pass++;
+  else fail++;
+};
 
 const TEST_BODY = '[align: middle]\nCLOUDPRNT VERIFY\n[cut: feed; partial]\n';
 
