@@ -175,7 +175,8 @@ export async function addItem(orderId: string, menuItemId: string, optionItemIds
     tax_rate: taxRate,
     tax_included: taxIncluded,
     line_total: finalUnitPrice,
-    modifiers: modifiers.length > 0 ? modifiers : null,
+    // modifiers は NOT NULL（既定 '[]'）。選択肢なしでも null ではなく空配列を入れる
+    modifiers,
     staff_id: ctx.userId,
     status: 'active',
     created_by: ctx.userId,
