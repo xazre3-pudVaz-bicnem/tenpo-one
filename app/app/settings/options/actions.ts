@@ -103,6 +103,8 @@ export async function addOptionItem(input: {
   groupId: string;
   storeId: string;
   name: string;
+  /** 英語名（任意）。厨房伝票とレジ画面に英語で出す */
+  nameEn?: string;
   price: number;
 }): Promise<ActionResult> {
   const ctx = await requirePermission('store.settings');
@@ -124,6 +126,7 @@ export async function addOptionItem(input: {
     store_id: input.storeId,
     group_id: input.groupId,
     name,
+    name_en: (input.nameEn ?? '').trim() || null,
     price: Math.round(input.price),
     sort_order: count ?? 0,
     created_by: ctx.userId,
