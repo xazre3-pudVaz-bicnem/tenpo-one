@@ -121,6 +121,8 @@ export default async function PrintersSettingsPage() {
     autoPrint: p.auto_print,
     drawerKick: p.drawer_kick,
     isVerified: p.is_verified,
+    // 実機接続が有効かどうか（一覧のバッジとテスト印刷ボタンの出し分けに使う）
+    cloudprntEnabled: p.cloudprnt_enabled ?? false,
   }));
 
   return (

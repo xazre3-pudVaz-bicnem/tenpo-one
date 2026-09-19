@@ -81,11 +81,29 @@ export function PrintersPanel({ storeId, initial }: { storeId: string; initial: 
                   </Td>
                   <Td className="text-right">
                     <div className="flex justify-end gap-1">
+                      {/*
+                        ここのテスト印刷は画面（ブラウザ）で刷るシミュレーション。実機接続を有効にしている
+                        プリンタでこれを押すと「成功」と出て実機では何も出ず、接続できたと誤解される。
+                        そのため実機接続が有効なプリンタでは、下の「プリンター接続」のテスト印刷へ誘導する。
+                      */}
                       <button
                         type="button"
-                        onClick={() => setTesting(r)}
-                        aria-label="テスト印刷"
-                        className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100"
+                        onClick={() =>
+                          r.cloudprntEnabled
+                            ? toast('実機のテスト印刷は下の「プリンター接続」から行ってください', 'error')
+                            : setTesting(r)
+                        }
+                        aria-label={r.cloudprntEnabled ? 'テスト印刷（下のプリンター接続から）' : 'テスト印刷'}
+                        title={
+                          r.cloudprntEnabled
+                            ? '実機のテスト印刷は下の「プリンター接続」から'
+                            : 'テスト印刷（画面での確認）'
+                        }
+                        className={
+                          r.cloudprntEnabled
+                            ? 'rounded-lg p-1.5 text-gray-300'
+                            : 'rounded-lg p-1.5 text-gray-400 hover:bg-gray-100'
+                        }
                       >
                         <PrinterIcon className="h-4 w-4" />
                       </button>
