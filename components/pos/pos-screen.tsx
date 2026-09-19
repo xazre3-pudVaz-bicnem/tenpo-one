@@ -40,11 +40,11 @@ import type {
 import type { TerminalPaymentState } from '@/app/app/pos/payment-actions';
 
 const ORDER_TYPE_LABELS: Record<string, string> = {
-  dine_in: '店内',
-  takeout: 'テイクアウト',
-  delivery: 'デリバリー',
-  course: 'コース',
-  pre_order: '事前注文',
+  dine_in: '店内 / Dine-in',
+  takeout: 'テイクアウト / Takeout',
+  delivery: 'デリバリー / Delivery',
+  course: 'コース / Course',
+  pre_order: '事前注文 / Pre-order',
 };
 
 /** ドロア開放結果の表示ラベル（プリンター実機未接続のためシミュレーション結果） */
@@ -421,7 +421,7 @@ export function PosScreen({
         <div className="flex items-center gap-3 border-b border-gray-200 bg-white px-4 py-3">
           <Link href="/app/floor" className="flex items-center gap-1 text-sm font-medium text-gray-600 hover:text-primary">
             <ArrowLeft className="h-4 w-4" />
-            フロアへ戻る
+            フロアへ戻る / Floor
           </Link>
           <div className="ml-auto flex flex-wrap items-center gap-2 text-sm">
             <Badge tone="navy">{tableName ?? ORDER_TYPE_LABELS[order.orderType] ?? order.orderType}</Badge>
@@ -440,7 +440,7 @@ export function PosScreen({
             )}
             <ClerkSelector orderId={order.id} clerks={clerks} currentClerkId={currentClerkId} />
             {/* 担当者が未登録の店舗では従来どおりログインユーザー名を表示する */}
-            {clerks.length === 0 && staffName && <span className="text-gray-500">担当: {staffName}</span>}
+            {clerks.length === 0 && staffName && <span className="text-gray-500">担当 / Staff: {staffName}</span>}
             <button
               type="button"
               onClick={() => setCustomerOpen(true)}
@@ -450,7 +450,7 @@ export function PosScreen({
               )}
             >
               <User className="h-3.5 w-3.5" />
-              {linkedCustomer ? linkedCustomer.name : '顧客未設定'}
+              {linkedCustomer ? linkedCustomer.name : '顧客未設定 / No customer'}
             </button>
           </div>
         </div>
@@ -463,7 +463,7 @@ export function PosScreen({
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="商品名・カナ・英語で検索（F2）"
+              placeholder="商品名・カナ・英語で検索 / Search（F2）"
               className="h-10 w-full rounded-lg border border-gray-300 bg-white pl-9 pr-3 text-sm text-gray-900 placeholder:text-gray-400 focus:border-primary focus:outline-2 focus:outline-primary/30"
             />
           </div>
@@ -480,7 +480,7 @@ export function PosScreen({
               )}
             >
               <Star className="h-3.5 w-3.5" />
-              おすすめ
+              おすすめ / Picks
             </button>
             <button
               type="button"
@@ -491,7 +491,7 @@ export function PosScreen({
               )}
             >
               <Flame className="h-3.5 w-3.5" />
-              売れ筋
+              売れ筋 / Popular
             </button>
             {categories.map((c) => (
               <button
@@ -526,7 +526,7 @@ export function PosScreen({
         <div className="flex-1 overflow-y-auto p-3">
           {visibleItems.length === 0 ? (
             <p className="p-6 text-center text-sm text-gray-400">
-              {searchQuery.trim() ? '該当する商品が見つかりません' : 'このカテゴリに商品がありません'}
+              {searchQuery.trim() ? '該当する商品が見つかりません / No items found' : 'このカテゴリに商品がありません / No items in this category'}
             </p>
           ) : (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
@@ -558,7 +558,7 @@ export function PosScreen({
                       )}
                     </span>
                     {m.is_sold_out ? (
-                      <Badge tone="gray">売切</Badge>
+                      <Badge tone="gray">売切 / Sold out</Badge>
                     ) : (
                       <span className="text-base font-bold tabular-nums text-primary-deep">{yen(price)}</span>
                     )}
@@ -573,12 +573,12 @@ export function PosScreen({
       {/* 右: 伝票（会計ボタン・合計は常時表示。スクロールは品目リストのみ） */}
       <div className="flex w-full flex-col bg-white lg:w-[380px] lg:shrink-0">
         <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
-          <h2 className="text-sm font-bold text-navy">伝票 #{order.orderNo}</h2>
+          <h2 className="text-sm font-bold text-navy">伝票 / Slip #{order.orderNo}</h2>
         </div>
 
         <div className="flex-1 overflow-y-auto">
           {items.length === 0 ? (
-            <p className="p-6 text-center text-sm text-gray-400">商品をタップして追加してください</p>
+            <p className="p-6 text-center text-sm text-gray-400">商品をタップして追加してください / Tap an item to add</p>
           ) : (
             <ul className="divide-y divide-gray-100">
               {items.map((it) => (
@@ -646,27 +646,27 @@ export function PosScreen({
 
         <div className="space-y-1.5 border-t border-gray-200 px-4 py-3 text-sm">
           <div className="flex justify-between text-gray-600">
-            <span>小計</span>
+            <span>小計 / Subtotal</span>
             <span className="tabular-nums">{yen(order.subtotal)}</span>
           </div>
           <div className="flex justify-between text-gray-600">
-            <span>消費税</span>
+            <span>消費税 / Tax</span>
             <span className="tabular-nums">{yen(order.taxTotal)}</span>
           </div>
           {order.serviceCharge > 0 && (
             <div className="flex justify-between text-gray-600">
-              <span>サービス料</span>
+              <span>サービス料 / Service charge</span>
               <span className="tabular-nums">{yen(order.serviceCharge)}</span>
             </div>
           )}
           {order.discountTotal > 0 && (
             <div className="flex justify-between text-warning">
-              <span>値引き{order.couponCode ? `（${order.couponCode}）` : ''}</span>
+              <span>値引き / Discount{order.couponCode ? `（${order.couponCode}）` : ''}</span>
               <span className="tabular-nums">-{yen(order.discountTotal)}</span>
             </div>
           )}
           <div className="flex justify-between border-t border-gray-100 pt-1.5 text-base font-bold text-navy">
-            <span>合計</span>
+            <span>合計 / Total</span>
             <span className="tabular-nums">{yen(order.total)}</span>
           </div>
         </div>
@@ -681,23 +681,23 @@ export function PosScreen({
                 onClick={() => setSplitOpen(true)}
               >
                 <Split className="h-4 w-4" />
-                伝票分割
+                伝票分割 / Split
               </Button>
               {/* 別会計用に空の伝票をもう1枚作る（分割と違い、既存の品目は動かさない） */}
               {addSlipToTableAction && (
                 <Button variant="secondary" size="sm" disabled={pending} onClick={handleAddSlip}>
                   <FilePlus className="h-4 w-4" />
-                  伝票追加
+                  伝票追加 / Add slip
                 </Button>
               )}
               <Button variant="secondary" size="sm" onClick={() => setMergeOpen(true)}>
                 <Combine className="h-4 w-4" />
-                伝票統合
+                伝票統合 / Merge
               </Button>
               {order.tableId && (
                 <Button variant="secondary" size="sm" onClick={() => setTableMoveOpen(true)}>
                   <ArrowRightLeft className="h-4 w-4" />
-                  テーブル移動
+                  テーブル移動 / Move table
                 </Button>
               )}
             </div>
@@ -711,7 +711,7 @@ export function PosScreen({
             onClick={handleOrderSlipPrint}
           >
             <Printer className="h-4 w-4" />
-            お会計伝票を印刷
+            お会計伝票を印刷 / Print bill
           </Button>
           <Button
             size="pos"
@@ -719,7 +719,7 @@ export function PosScreen({
             disabled={items.length === 0 || pending}
             onClick={() => setCheckoutOpen(true)}
           >
-            会計へ（{yen(order.total)}）
+            会計へ / Checkout（{yen(order.total)}）
           </Button>
           {canCheckout && cancelEmptyOrderAction && items.length === 0 && (
             <Button
@@ -730,7 +730,7 @@ export function PosScreen({
               onClick={() => setCancelOrderOpen(true)}
             >
               <XCircle className="h-4 w-4" />
-              この注文を取消（品目なし）
+              この注文を取消 / Cancel order（品目なし）
             </Button>
           )}
           <p className="text-center text-[11px] text-gray-400">
@@ -742,9 +742,9 @@ export function PosScreen({
       <ConfirmDialog
         open={!!cancelTarget}
         onClose={() => setCancelTarget(null)}
-        title="品目を取消しますか"
+        title="品目を取消しますか / Cancel this item?"
         message={cancelTarget ? `「${cancelTarget.name}」を取消します。取消理由を記録してください。` : ''}
-        confirmLabel="取消する"
+        confirmLabel="取消する / Cancel item"
         requireReason
         onConfirm={handleCancel}
       />
@@ -752,9 +752,9 @@ export function PosScreen({
       <ConfirmDialog
         open={cancelOrderOpen}
         onClose={() => setCancelOrderOpen(false)}
-        title="この注文を取消しますか"
+        title="この注文を取消しますか / Cancel this order?"
         message={`注文 #${order.orderNo}（品目なし・¥0）を取消し、会計待ちから外します。${order.tableId ? 'テーブルは空席に戻ります。' : ''}取消理由を記録してください。`}
-        confirmLabel="注文を取消する"
+        confirmLabel="注文を取消する / Cancel order"
         requireReason
         onConfirm={handleCancelEmptyOrder}
       />

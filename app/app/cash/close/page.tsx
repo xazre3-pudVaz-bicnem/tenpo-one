@@ -17,25 +17,13 @@ import { StoreDayClosePanel } from '@/components/cash/store-day-close-panel';
 import { TodayClosingSummary } from '@/components/cash/today-closing-summary';
 import { RegisterCountCard } from '@/components/cash/register-count-card';
 import { ReceiptCell, splitPurpose } from '@/components/cash/cash-history';
-import { METHOD_LABELS } from '@/components/cash/labels';
+import { METHOD_LABELS, METHOD_LABELS_EN } from '@/components/cash/labels';
 import { loadRegisterBoard, loadTodayCashRows, receiptStateOf, STORE_DAY_CLOSE_ROLES } from './data';
 
 export const metadata: Metadata = { title: 'レジクローズ' };
 
 /** 支払方法別の表で常に表示する方法（プロトタイプ: 現金・クレジット・QR・電子マネー） */
 const BASE_METHODS = ['cash', 'credit', 'qr', 'emoney'];
-/** 支払方法の英語表記（日本語を読まないスタッフ向け。日本語の後に併記する） */
-const METHOD_LABELS_EN: Record<string, string> = {
-  cash: 'Cash',
-  credit: 'Card',
-  qr: 'QR (PayPay etc.)',
-  emoney: 'IC / e-money',
-  voucher: 'Voucher',
-  on_account: 'On account',
-  points: 'Points',
-  external: 'Terminal (stera)',
-  other: 'Other',
-};
 
 export default async function CashClosePage() {
   const ctx = await requireFeature('accounting');

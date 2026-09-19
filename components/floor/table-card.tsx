@@ -112,7 +112,7 @@ export function TableCard({
           <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-ink-3">
             {state === 'unavailable' && <Lock className="h-3.5 w-3.5" aria-hidden />}
             {state === 'cleaning' && <Sparkles className="h-3.5 w-3.5" aria-hidden />}
-            {state === 'seated' || state === 'pay' ? '注文なし' : TILE_LABEL[state]}
+            {state === 'seated' || state === 'pay' ? '注文なし / No order' : TILE_LABEL[state]}
           </span>
           {(t.is_private_room || t.is_counter) && (
             <span className="text-[10.5px] text-ink-3">

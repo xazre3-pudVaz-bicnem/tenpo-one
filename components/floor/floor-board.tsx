@@ -130,7 +130,7 @@ export function FloorBoard({
               {(floors.length > 1 || (floors.length > 0 && unassigned.length > 0)) && (
                 <>
                   <ChipButton on={floorFilter === 'all'} onClick={() => setFloorFilter('all')}>
-                    すべて
+                    すべて / All
                   </ChipButton>
                   {floors.map((f) => (
                     <ChipButton key={f.id} on={floorFilter === f.id} onClick={() => setFloorFilter(f.id)}>
@@ -149,8 +149,8 @@ export function FloorBoard({
               <div className="inline-flex overflow-hidden rounded-lg border border-line bg-white p-0.5">
                 {(
                   [
-                    { key: 'cards', label: '一覧', Icon: LayoutGrid },
-                    { key: 'map', label: '配置図', Icon: MapIcon },
+                    { key: 'cards', label: '一覧 / List', Icon: LayoutGrid },
+                    { key: 'map', label: '配置図 / Map', Icon: MapIcon },
                   ] as const
                 ).map(({ key, label, Icon }) => (
                   <button

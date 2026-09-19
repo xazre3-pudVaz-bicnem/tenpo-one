@@ -11,7 +11,7 @@ import { useToast } from '@/components/ui/toast';
 import { cn } from '@/lib/utils';
 import { yen } from '@/lib/format';
 import { calcChange } from '@/lib/money';
-import { METHOD_LABELS } from '@/components/cash/labels';
+import { METHOD_LABELS, METHOD_LABELS_EN } from '@/components/cash/labels';
 import { Tenkey, appendTenkeyDigit, appendTenkeyDoubleZero } from './tenkey';
 import type { CheckoutPayment, ApplyCouponResult } from '@/app/app/pos/actions';
 import type { TerminalPaymentState } from '@/app/app/pos/payment-actions';
@@ -373,31 +373,31 @@ export function CheckoutDialog({
   };
 
   return (
-    <Dialog open={open} onClose={handleDialogClose} title="会計" wide>
+    <Dialog open={open} onClose={handleDialogClose} title="会計 / Checkout" wide>
       <div className="space-y-5">
         <div className="rounded-xl bg-surface p-4 text-sm">
           <div className="flex justify-between text-gray-600">
-            <span>小計</span>
+            <span>小計 / Subtotal</span>
             <span className="tabular-nums">{yen(order.subtotal)}</span>
           </div>
           <div className="flex justify-between text-gray-600">
-            <span>消費税</span>
+            <span>消費税 / Tax</span>
             <span className="tabular-nums">{yen(order.taxTotal)}</span>
           </div>
           {order.serviceCharge > 0 && (
             <div className="flex justify-between text-gray-600">
-              <span>サービス料</span>
+              <span>サービス料 / Service charge</span>
               <span className="tabular-nums">{yen(order.serviceCharge)}</span>
             </div>
           )}
           {order.discountTotal > 0 && (
             <div className="flex justify-between text-warning">
-              <span>値引き</span>
+              <span>値引き / Discount</span>
               <span className="tabular-nums">-{yen(order.discountTotal)}</span>
             </div>
           )}
           <div className="mt-1 flex justify-between border-t border-gray-200 pt-1.5 text-lg font-bold text-navy">
-            <span>合計</span>
+            <span>合計 / Total</span>
             <span className="tabular-nums">{yen(order.total)}</span>
           </div>
         </div>
@@ -405,7 +405,7 @@ export function CheckoutDialog({
         {paymentAvailability.configured && (
           <div className="rounded-xl border border-primary/30 bg-primary-soft/40 p-4">
             <div className="mb-3 flex items-center justify-between">
-              <p className="text-sm font-semibold text-navy">カード端末で決済</p>
+              <p className="text-sm font-semibold text-navy">カード端末で決済 / Pay on terminal</p>
               {paymentAvailability.testMode && <Badge tone="warning">テストモード</Badge>}
             </div>
 
@@ -486,7 +486,7 @@ export function CheckoutDialog({
         {canDiscount && (
           <div className="rounded-xl border border-gray-200 p-4">
             <div className="mb-2 flex items-center justify-between">
-              <p className="text-sm font-semibold text-navy">値引き・クーポン</p>
+              <p className="text-sm font-semibold text-navy">値引き・クーポン / Discount・Coupon</p>
               <div className="flex gap-1 rounded-full bg-gray-100 p-0.5 text-xs">
                 <button
                   type="button"
@@ -577,7 +577,7 @@ export function CheckoutDialog({
 
         <div>
           <div className="mb-2 flex items-center justify-between gap-2">
-            <p className="text-base font-semibold text-navy">支払方法</p>
+            <p className="text-base font-semibold text-navy">支払方法 / Payment method</p>
             <button
               type="button"
               onClick={toggleSplitMode}
@@ -590,7 +590,7 @@ export function CheckoutDialog({
                   : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
               )}
             >
-              {splitMode ? '支払いを分ける：ON' : '支払いを分ける'}
+              {splitMode ? '支払いを分ける / Split：ON' : '支払いを分ける / Split'}
             </button>
           </div>
           <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
@@ -610,7 +610,8 @@ export function CheckoutDialog({
                       : 'border-gray-200 bg-white text-navy hover:bg-gray-50'
                   )}
                 >
-                  {METHOD_LABELS[m]}
+                  <span className="block">{METHOD_LABELS[m]}</span>
+                  <span className="block text-[11px] font-normal opacity-80">{METHOD_LABELS_EN[m]}</span>
                 </button>
               );
             })}
@@ -685,7 +686,7 @@ export function CheckoutDialog({
                   <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_auto]">
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
-                        <Label className="mb-0 text-base">預り金</Label>
+                        <Label className="mb-0 text-base">預り金 / Tendered</Label>
                         <span className="text-3xl font-bold tabular-nums text-navy">{yen(p.tendered ?? 0)}</span>
                       </div>
                       <div className="flex flex-wrap gap-1.5">
@@ -706,11 +707,11 @@ export function CheckoutDialog({
                           onClick={() => updatePayment(p.key, { tendered: p.amount })}
                           className="rounded-lg border border-primary/40 bg-primary-soft px-4 py-2.5 text-base font-semibold text-primary-deep hover:bg-primary-soft/70"
                         >
-                          ちょうど
+                          ちょうど / Exact
                         </button>
                       </div>
                       <p className="text-xl font-bold tabular-nums text-navy">
-                        お釣り {yen(calcChange(p.amount, p.tendered ?? 0))}
+                        お釣り / Change {yen(calcChange(p.amount, p.tendered ?? 0))}
                       </p>
                     </div>
                     <Tenkey
@@ -729,7 +730,7 @@ export function CheckoutDialog({
         )}
 
         <div className="flex items-center justify-between rounded-xl bg-navy px-4 py-3 text-white">
-          <span className="text-base">残額</span>
+          <span className="text-base">残額 / Remaining</span>
           <span className="text-2xl font-bold tabular-nums">{yen(remaining)}</span>
         </div>
 
@@ -745,7 +746,7 @@ export function CheckoutDialog({
               処理中…
             </>
           ) : (
-            '会計を確定'
+            '会計を確定 / Confirm payment'
           )}
         </Button>
       </div>

@@ -63,10 +63,10 @@ export function GuestCountDialog({
   };
 
   return (
-    <Dialog open={open} onClose={onClose} title="人数の変更">
+    <Dialog open={open} onClose={onClose} title="人数の変更 / Change guests">
       <div className="space-y-5">
         <p className="text-sm text-gray-600">
-          現在 {currentGuestCount}名。人数を変えても合計金額は変わりません。
+          現在 {currentGuestCount}名 / Now {currentGuestCount} guests。人数を変えても合計金額は変わりません / Total does not change.
         </p>
 
         <div className="flex items-center justify-center gap-6">
@@ -125,10 +125,10 @@ export function GuestCountDialog({
 
         <div className="flex justify-end gap-2">
           <Button variant="secondary" onClick={onClose} disabled={pending}>
-            キャンセル
+            キャンセル / Cancel
           </Button>
           <Button onClick={handleConfirm} disabled={pending}>
-            {pending ? '変更中…' : '変更する'}
+            {pending ? '変更中…' : '変更する / Update'}
           </Button>
         </div>
       </div>

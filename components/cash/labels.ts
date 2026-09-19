@@ -48,6 +48,29 @@ export const METHOD_LABELS: Record<string, string> = {
   other: 'その他',
 };
 
+/**
+ * 支払方法の英語表記（画面用）。日本語を読まないスタッフ向けに「日本語 / English」で併記する。
+ * レシート・領収書には使わない（お客様向けの紙は日本語のまま METHOD_LABELS を使う）。
+ */
+export const METHOD_LABELS_EN: Record<string, string> = {
+  cash: 'Cash',
+  credit: 'Card',
+  qr: 'QR (PayPay etc.)',
+  emoney: 'IC / e-money',
+  voucher: 'Voucher',
+  on_account: 'On account',
+  points: 'Points',
+  external: 'Terminal (stera)',
+  other: 'Other',
+};
+
+/** 画面表示用の「日本語 / English」ラベル。 */
+export function methodLabelBi(method: string): string {
+  const ja = METHOD_LABELS[method] ?? method;
+  const en = METHOD_LABELS_EN[method];
+  return en ? `${ja} / ${en}` : ja;
+}
+
 export type ApprovalStatus = 'pending' | 'approved' | 'rejected';
 
 export const APPROVAL_LABELS: Record<ApprovalStatus, string> = {
