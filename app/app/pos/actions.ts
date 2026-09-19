@@ -632,6 +632,191 @@ export async function moveTable(orderId: string, newTableId: string): Promise<{ 
   return { tableName: newTable.name };
 }
 
+/**
+ * 品目のない注文（会計前・¥0）を取消する。
+ * 誤ってウォークイン着席した／お客様が注文せずに退店した等で残った空の注文を「会計待ち」から消すための操作。
+ * - 有効な品目が1つでも残っていれば取消できない（先に品目取消 or 会計を行う）
+ * - 注文は status='cancelled'（取引履歴では「取消」）、理由は void_reason に記録
+ * - テーブルは他に会計前の注文が無ければ空席に戻す。紐づく予約（ウォークイン等）は取消扱い
+ */
+export async function cancelEmptyOrder(orderId: string, reason: string): Promise<void> {
+  const ctx = await requirePermission('pos.checkout');
+  if (!reason.trim()) throw new Error('取消理由を入力してください');
+  const supabase = await createClient();
+  const order = await loadOpenOrder(supabase, ctx, orderId);
+
+  const { count: activeItems } = await supabase
+    .from('order_items')
+    .select('id', { count: 'exact', head: true })
+    .eq('order_id', orderId)
+    .eq('status', 'active');
+  if ((activeItems ?? 0) > 0) {
+    throw new Error('品目が残っている注文は取消できません。先に品目を取消するか、会計してください');
+  }
+
+  const { count: paymentCount } = await supabase
+    .from('payments')
+    .select('id', { count: 'exact', head: true })
+    .eq('order_id', orderId);
+  if ((paymentCount ?? 0) > 0) {
+    throw new Error('支払記録のある注文は取消できません。取引履歴から返金・取消してください');
+  }
+
+  const now = new Date().toISOString();
+  const { data: updated, error } = await supabase
+    .from('orders')
+    .update({ status: 'cancelled', void_reason: reason.trim(), closed_at: now, updated_by: ctx.userId })
+    .eq('id', orderId)
+    .eq('status', 'open')
+    .select('id')
+    .maybeSingle();
+  if (error || !updated) {
+    console.error('[pos.cancelEmptyOrder] failed to cancel order:', error);
+    throw new Error('注文の取消に失敗しました。通信状態を確認して再度お試しください');
+  }
+
+  // テーブル: 同じテーブルに他の会計前注文が無ければ空席へ戻す（フロアマップ整合。失敗しても本処理は継続）
+  if (order.table_id) {
+    const { count: otherOpen } = await supabase
+      .from('orders')
+      .select('id', { count: 'exact', head: true })
+      .eq('table_id', order.table_id)
+      .eq('status', 'open')
+      .neq('id', orderId);
+    if ((otherOpen ?? 0) === 0) {
+      await supabase
+        .from('restaurant_tables')
+        .update({ current_status: 'available' })
+        .eq('id', order.table_id)
+        .in('current_status', ['seated', 'ordering', 'billing', 'cleaning']);
+    }
+  }
+
+  // 予約（ウォークイン含む）: 来店したが注文なしで終了 → 取消扱い。customers.cancel_count は加算しない（店側操作のため）
+  if (order.reservation_id) {
+    await supabase
+      .from('reservations')
+      .update({ status: 'cancelled', cancel_reason: `注文取消: ${reason.trim()}`, cancelled_at: now, updated_by: ctx.userId })
+      .eq('id', order.reservation_id)
+      .in('status', ['confirmed', 'waiting', 'arrived', 'seated', 'billing']);
+  }
+
+  await supabase.rpc('log_audit', {
+    p_org: order.organization_id,
+    p_store: order.store_id,
+    p_action: 'order.cancel_empty',
+    p_target_table: 'orders',
+    p_target_id: orderId,
+    p_before: { status: 'open', table_id: order.table_id, reservation_id: order.reservation_id },
+    p_after: { status: 'cancelled' },
+    p_note: reason.trim(),
+  });
+
+  revalidatePath('/app/pos');
+  revalidatePath('/app/orders');
+  revalidatePath('/app/floor');
+  revalidatePath('/app/reservations');
+}
+
+/**
+ * 会計前の注文の人数を変更する。
+ * 着席後に人数が変わる（後から合流した・先に帰った）ことは日常的に起きるため、
+ * 伝票・厨房伝票・フロア表示の人数を後から直せるようにする。
+ * 金額計算には人数を使っていないため、この操作で合計金額は変わらない。
+ */
+export async function setGuestCount(orderId: string, guestCount: number): Promise<void> {
+  const ctx = await requirePermission('pos.order');
+  if (!Number.isInteger(guestCount) || guestCount < 1 || guestCount > 999) {
+    throw new Error('人数は1〜999名で入力してください');
+  }
+  const supabase = await createClient();
+  const order = await loadOpenOrder(supabase, ctx, orderId);
+  if (order.guest_count === guestCount) return;
+
+  const { data: updated, error } = await supabase
+    .from('orders')
+    .update({ guest_count: guestCount, updated_by: ctx.userId })
+    .eq('id', orderId)
+    .eq('status', 'open')
+    .select('id')
+    .maybeSingle();
+  if (error || !updated) {
+    console.error('[pos.setGuestCount] failed to update order:', error);
+    throw new Error('人数の変更に失敗しました。通信状態を確認して再度お試しください');
+  }
+
+  // 予約（ウォークイン含む）の人数も揃える。予約表と伝票で人数が食い違うと席割りを誤るため。
+  // ベストエフォート（失敗しても人数変更自体は完了している）。
+  if (order.reservation_id) {
+    await supabase
+      .from('reservations')
+      .update({ party_size: guestCount, updated_by: ctx.userId })
+      .eq('id', order.reservation_id);
+  }
+
+  await supabase.rpc('log_audit', {
+    p_org: order.organization_id,
+    p_store: order.store_id,
+    p_action: 'order.set_guest_count',
+    p_target_table: 'orders',
+    p_target_id: orderId,
+    p_before: { guest_count: order.guest_count },
+    p_after: { guest_count: guestCount },
+    p_note: null,
+  });
+
+  revalidatePath('/app/pos');
+  revalidatePath('/app/floor');
+  revalidatePath('/app/reservations');
+}
+
+/**
+ * 伝票追加: 同じテーブル（またはテイクアウト）に、空の会計前伝票をもう1枚作る。
+ * 相席・別会計など「同じ席で財布を分ける」場合に、先に伝票を分けてから注文を取るための操作。
+ * 品目を後から分ける splitOrder と違い、既存伝票には一切手を触れない（source_order_id で関連だけ残す）。
+ */
+export async function addSlipToTable(orderId: string): Promise<{ newOrderId: string; orderNo: number }> {
+  const ctx = await requirePermission('pos.order');
+  const supabase = await createClient();
+  const order = await loadOpenOrder(supabase, ctx, orderId);
+
+  const { data: newOrder, error } = await supabase
+    .from('orders')
+    .insert({
+      organization_id: order.organization_id,
+      store_id: order.store_id,
+      // 予約・顧客は引き継がない（別会計＝別のお客様の財布のため）。席と注文種別のみ揃える。
+      table_id: order.table_id,
+      order_type: order.order_type,
+      status: 'open',
+      guest_count: 1,
+      staff_id: ctx.userId,
+      source_order_id: order.id,
+      created_by: ctx.userId,
+    })
+    .select('id, order_no')
+    .single();
+  if (error || !newOrder) {
+    console.error('[pos.addSlipToTable] failed to create order:', error);
+    throw new Error('伝票の追加に失敗しました。通信状態を確認して再度お試しください');
+  }
+
+  await supabase.rpc('log_audit', {
+    p_org: order.organization_id,
+    p_store: order.store_id,
+    p_action: 'order.add_slip',
+    p_target_table: 'orders',
+    p_target_id: newOrder.id as string,
+    p_before: { source_order_id: orderId },
+    p_after: { order_id: newOrder.id, table_id: order.table_id },
+    p_note: `伝票追加（元伝票 #${order.order_no}）`,
+  });
+
+  revalidatePath('/app/pos');
+  revalidatePath('/app/floor');
+  return { newOrderId: newOrder.id as string, orderNo: newOrder.order_no as number };
+}
+
 /** 印刷実行を記録する */
 export async function logPrintJob(orderId: string, jobType: 'receipt' | 'ryoshusho') {
   const ctx = await requirePermission('pos.checkout');

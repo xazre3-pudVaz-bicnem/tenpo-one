@@ -56,14 +56,16 @@ describe('layoutKitchenTicket', () => {
     const [t] = groupKitchenTickets([row({ delta: 2 })]);
     const lines = layoutKitchenTicket(t, opts);
     expect(lines.find((l) => l.text === 'T10')?.size).toBe('large');
-    expect(lines.find((l) => l.text.includes('チキンカレー'))).toMatchObject({ size: 'tall', text: 'チキンカレー  x2' });
+    // 厨房向けはローマ字を主・日本語を従で出す
+    expect(lines.find((l) => l.text.startsWith('Chikinkaree'))).toMatchObject({ size: 'tall', text: 'Chikinkaree  x2' });
+    expect(lines.some((l) => l.text === '   チキンカレー')).toBe(true);
     expect(lines.some((l) => l.text.includes('2名') && l.text.includes('担当 Ronnie'))).toBe(true);
   });
 
   it('取消は【取消】と絶対値で出す', () => {
     const [t] = groupKitchenTickets([row({ delta: -3 })]);
     const texts = layoutKitchenTicket(t, opts).map((l) => l.text);
-    expect(texts).toContain('【取消】チキンカレー  x3');
+    expect(texts).toContain('【取消/CANCEL】Chikinkaree  x3');
     expect(texts).toContain('*** 取消 ***');
   });
 
@@ -105,5 +107,23 @@ describe('kitchenTicketStarPrnt', () => {
     expect(buf.includes(iconv.encode('チキンカレー', 'Shift_JIS'))).toBe(true);
     // 縦倍（ESC i 1 0）を含む
     expect(buf.includes(Buffer.from([0x1b, 0x69, 0x01, 0x00]))).toBe(true);
+  });
+});
+
+describe('ローマ字印字', () => {
+  const opts = { title: 'キッチン', printedAt: '18:21', paperWidth: 80 as const };
+
+  it('カナ欄の英語名をそのまま見出しに使う', () => {
+    const [t] = groupKitchenTickets([row({ item_name: '本日のラッサム', item_name_kana: 'Rasam of the day' })]);
+    const texts = layoutKitchenTicket(t, opts).map((l) => l.text);
+    expect(texts).toContain('Rasam of the day  x1');
+    expect(texts).toContain('   本日のラッサム');
+  });
+
+  it('漢字のみでカナが無い商品は日本語だけ出す（重複しない）', () => {
+    const [t] = groupKitchenTickets([row({ item_name: '刺身盛合せ', item_name_kana: null })]);
+    const texts = layoutKitchenTicket(t, opts).map((l) => l.text);
+    expect(texts).toContain('刺身盛合せ  x1');
+    expect(texts.filter((x) => x.includes('刺身盛合せ'))).toHaveLength(1);
   });
 });

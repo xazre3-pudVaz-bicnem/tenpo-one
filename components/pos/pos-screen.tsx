@@ -4,7 +4,8 @@ import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
-  Minus, Plus, X, ArrowLeft, Split, Combine, ArrowRightLeft, Search, Star, Flame, User,
+  Minus, Plus, X, ArrowLeft, Split, Combine, ArrowRightLeft, Search, Star, Flame, User, XCircle,
+  FilePlus, Printer, Users,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { yen } from '@/lib/format';
@@ -14,7 +15,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useToast } from '@/components/ui/toast';
 import { useStoreRealtimeRefresh } from '@/components/realtime/use-store-refresh';
 import { createMockDrawerProvider } from '@/lib/printing/providers';
-import { enqueueDrawerKick } from '@/app/app/pos/print-actions';
+import { enqueueDrawerKick, enqueueOrderSlipPrint } from '@/app/app/pos/print-actions';
 import { ClerkSelector, type ClerkOption } from './clerk-selector';
 import { OptionDialog, type PosOptionGroup } from './option-dialog';
 import { shouldOpenDrawer, type DrawerResultStatus } from '@/lib/printing/types';
@@ -28,6 +29,7 @@ import {
 import { SplitDialog } from './split-dialog';
 import { MergeDialog, type MergeCandidate } from './merge-dialog';
 import { TableMoveDialog, type AvailableTable } from './table-move-dialog';
+import { GuestCountDialog } from './guest-count-dialog';
 import { CustomerLinkDialog } from './customer-link-dialog';
 import { POS_SHORTCUTS } from './shortcuts';
 import type {
@@ -147,6 +149,9 @@ export function PosScreen({
   splitOrderAction,
   mergeOrdersAction,
   moveTableAction,
+  cancelEmptyOrderAction,
+  setGuestCountAction,
+  addSlipToTableAction,
   startTerminalPaymentAction,
   checkTerminalPaymentAction,
   cancelTerminalPaymentAction,
@@ -186,6 +191,12 @@ export function PosScreen({
   splitOrderAction: (orderId: string, moves: SplitMove[]) => Promise<{ newOrderId: string }>;
   mergeOrdersAction: (targetOrderId: string, sourceOrderId: string) => Promise<void>;
   moveTableAction: (orderId: string, newTableId: string) => Promise<{ tableName: string }>;
+  /** 品目のない注文（会計前・¥0）を取消する。省略時はボタンを表示しない */
+  cancelEmptyOrderAction?: (orderId: string, reason: string) => Promise<void>;
+  /** 注文後の人数変更。省略時は人数バッジを押しても何も起きない */
+  setGuestCountAction?: (orderId: string, guestCount: number) => Promise<void>;
+  /** 同じテーブルに空の伝票をもう1枚作る（別会計用）。省略時はボタンを表示しない */
+  addSlipToTableAction?: (orderId: string) => Promise<{ newOrderId: string; orderNo: number }>;
   startTerminalPaymentAction: (orderId: string, readerId: string) => Promise<TerminalPaymentState>;
   checkTerminalPaymentAction: (localIntentId: string) => Promise<TerminalPaymentState>;
   cancelTerminalPaymentAction: (localIntentId: string) => Promise<TerminalPaymentState>;
@@ -204,6 +215,8 @@ export function PosScreen({
   const [splitOpen, setSplitOpen] = useState(false);
   const [mergeOpen, setMergeOpen] = useState(false);
   const [tableMoveOpen, setTableMoveOpen] = useState(false);
+  const [cancelOrderOpen, setCancelOrderOpen] = useState(false);
+  const [guestCountOpen, setGuestCountOpen] = useState(false);
   const [customerOpen, setCustomerOpen] = useState(false);
   const [optionTarget, setOptionTarget] = useState<string | null>(null);
   const [linkedCustomer, setLinkedCustomer] = useState(customer);
@@ -297,6 +310,44 @@ export function PosScreen({
     }
   };
 
+  // 品目のない注文の取消。成功したら注文一覧（会計待ち）へ戻る
+  const handleCancelEmptyOrder = async (reason: string) => {
+    if (!cancelEmptyOrderAction) return;
+    try {
+      await cancelEmptyOrderAction(order.id, reason);
+      toast(`注文 #${order.orderNo} を取消しました`, 'success');
+      router.push('/app/pos');
+    } catch (e) {
+      toast(e instanceof Error ? e.message : '注文の取消に失敗しました', 'error');
+    }
+  };
+
+  // 伝票追加: 同じテーブルに空の伝票をもう1枚作り、そのままその伝票へ切り替えて注文を取れるようにする
+  const handleAddSlip = () => {
+    if (!addSlipToTableAction) return;
+    startTransition(async () => {
+      try {
+        const { newOrderId, orderNo } = await addSlipToTableAction(order.id);
+        toast(`伝票 #${orderNo} を追加しました`, 'success');
+        router.push(`/app/pos?order=${newOrderId}`);
+      } catch (e) {
+        toast(e instanceof Error ? e.message : '伝票の追加に失敗しました', 'error');
+      }
+    });
+  };
+
+  // 注文伝票（会計前の確認用）をレシートプリンターへ。会計も売上も動かさない
+  const handleOrderSlipPrint = () => {
+    startTransition(async () => {
+      try {
+        const res = await enqueueOrderSlipPrint(order.id);
+        toast(res.ok ? '注文伝票を印刷します' : (res.error ?? '注文伝票の印刷に失敗しました'), res.ok ? 'success' : 'error');
+      } catch (e) {
+        toast(e instanceof Error ? e.message : '注文伝票の印刷に失敗しました', 'error');
+      }
+    });
+  };
+
   const attemptOpenDrawer = async (methods: string[]) => {
     if (!shouldOpenDrawer(methods, drawerConfig)) return;
     try {
@@ -356,7 +407,19 @@ export function PosScreen({
           </Link>
           <div className="ml-auto flex flex-wrap items-center gap-2 text-sm">
             <Badge tone="navy">{tableName ?? ORDER_TYPE_LABELS[order.orderType] ?? order.orderType}</Badge>
-            <span className="text-gray-500">{order.guestCount}名</span>
+            {setGuestCountAction ? (
+              <button
+                type="button"
+                onClick={() => setGuestCountOpen(true)}
+                aria-label="人数を変更する"
+                className="flex items-center gap-1 rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-200"
+              >
+                <Users className="h-3.5 w-3.5" />
+                {order.guestCount}名
+              </button>
+            ) : (
+              <span className="text-gray-500">{order.guestCount}名</span>
+            )}
             <ClerkSelector orderId={order.id} clerks={clerks} currentClerkId={currentClerkId} />
             {/* 担当者が未登録の店舗では従来どおりログインユーザー名を表示する */}
             {clerks.length === 0 && staffName && <span className="text-gray-500">担当: {staffName}</span>}
@@ -564,34 +627,46 @@ export function PosScreen({
 
         <div className="space-y-2 border-t border-gray-200 p-3">
           {canCheckout && (
-            <div className="flex gap-2">
+            <div className="grid grid-cols-2 gap-2">
               <Button
                 variant="secondary"
                 size="sm"
-                className="flex-1"
                 disabled={items.length === 0}
                 onClick={() => setSplitOpen(true)}
               >
                 <Split className="h-4 w-4" />
                 伝票分割
               </Button>
-              <Button variant="secondary" size="sm" className="flex-1" onClick={() => setMergeOpen(true)}>
+              {/* 別会計用に空の伝票をもう1枚作る（分割と違い、既存の品目は動かさない） */}
+              {addSlipToTableAction && (
+                <Button variant="secondary" size="sm" disabled={pending} onClick={handleAddSlip}>
+                  <FilePlus className="h-4 w-4" />
+                  伝票追加
+                </Button>
+              )}
+              <Button variant="secondary" size="sm" onClick={() => setMergeOpen(true)}>
                 <Combine className="h-4 w-4" />
                 伝票統合
               </Button>
               {order.tableId && (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  className="flex-1"
-                  onClick={() => setTableMoveOpen(true)}
-                >
+                <Button variant="secondary" size="sm" onClick={() => setTableMoveOpen(true)}>
                   <ArrowRightLeft className="h-4 w-4" />
                   テーブル移動
                 </Button>
               )}
             </div>
           )}
+          {/* 会計前に「いま何をいくつ・合計いくら」をお客様へ紙で出す。会計・売上には影響しない */}
+          <Button
+            variant="secondary"
+            size="sm"
+            className="w-full"
+            disabled={items.length === 0 || pending}
+            onClick={handleOrderSlipPrint}
+          >
+            <Printer className="h-4 w-4" />
+            注文伝票を印刷
+          </Button>
           <Button
             size="pos"
             className="w-full"
@@ -600,6 +675,18 @@ export function PosScreen({
           >
             会計へ（{yen(order.total)}）
           </Button>
+          {canCheckout && cancelEmptyOrderAction && items.length === 0 && (
+            <Button
+              variant="secondary"
+              size="sm"
+              className="w-full text-danger"
+              disabled={pending}
+              onClick={() => setCancelOrderOpen(true)}
+            >
+              <XCircle className="h-4 w-4" />
+              この注文を取消（品目なし）
+            </Button>
+          )}
           <p className="text-center text-[11px] text-gray-400">
             {POS_SHORTCUTS.map((s) => `${s.label}:${s.description}`).join('　')}
           </p>
@@ -615,6 +702,26 @@ export function PosScreen({
         requireReason
         onConfirm={handleCancel}
       />
+
+      <ConfirmDialog
+        open={cancelOrderOpen}
+        onClose={() => setCancelOrderOpen(false)}
+        title="この注文を取消しますか"
+        message={`注文 #${order.orderNo}（品目なし・¥0）を取消し、会計待ちから外します。${order.tableId ? 'テーブルは空席に戻ります。' : ''}取消理由を記録してください。`}
+        confirmLabel="注文を取消する"
+        requireReason
+        onConfirm={handleCancelEmptyOrder}
+      />
+
+      {setGuestCountAction && guestCountOpen && (
+        <GuestCountDialog
+          open
+          onClose={() => setGuestCountOpen(false)}
+          orderId={order.id}
+          currentGuestCount={order.guestCount}
+          setGuestCountAction={setGuestCountAction}
+        />
+      )}
 
       <CheckoutDialog
         open={checkoutOpen}

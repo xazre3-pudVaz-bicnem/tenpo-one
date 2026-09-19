@@ -108,6 +108,8 @@ export function ReceiptView({
               orderId={orderId}
               jobType={tab === 'receipt' ? 'receipt' : 'ryoshusho'}
               reissue={receipt.isReissue}
+              recipientName={recipientName}
+              purpose={purpose}
             />
           )}
 
@@ -302,7 +304,7 @@ export function ReceiptView({
             <p className="mt-3 text-center text-lg font-bold tabular-nums">{yen(receipt.netPaid)}−</p>
             <p className="mt-1 text-center text-[10px] text-gray-500">（税込）</p>
             <div className="my-2 border-t border-dashed border-gray-300" />
-            <p>但し {purpose} として</p>
+            <p>但し {purpose}</p>
             <p className="mt-1">上記正に領収いたしました</p>
             <div className="my-2 border-t border-dashed border-gray-300" />
             <div className="flex justify-between text-[10px] text-gray-500">

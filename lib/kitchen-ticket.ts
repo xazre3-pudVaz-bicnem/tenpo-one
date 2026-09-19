@@ -4,6 +4,7 @@
  * Markup / StarPRNT の両レンダラが共有する「行の並び」を組み立てる。
  */
 import { colsFor, twoCol, type PaperWidth } from './receipt-layout';
+import { romanItemName } from './romaji';
 
 export type KitchenStation = 'kitchen' | 'drink' | 'dessert';
 
@@ -21,6 +22,8 @@ export interface ClaimedKitchenItem {
   guest_count: number | null;
   clerk_name: string | null;
   item_name: string;
+  /** 商品のカナ（英語名を入れている店舗もある）。ローマ字印字の元にする */
+  item_name_kana?: string | null;
   modifiers: { name: string }[] | null;
   memo: string | null;
   station: string;
@@ -29,6 +32,8 @@ export interface ClaimedKitchenItem {
 
 export interface KitchenTicketLine {
   name: string;
+  /** ローマ字名。作れない場合は null（日本語名のみ印字する） */
+  nameRoman: string | null;
   /** 正=作る数（新規・追加）、負=取消数 */
   delta: number;
   modifiers: string[];
@@ -63,6 +68,7 @@ export function groupKitchenTickets(rows: ClaimedKitchenItem[]): KitchenTicket[]
     }
     t.lines.push({
       name: r.item_name,
+      nameRoman: romanItemName(r.item_name, r.item_name_kana ?? null),
       delta: r.delta,
       modifiers: (r.modifiers ?? []).map((m) => m.name).filter(Boolean),
       memo: r.memo,
@@ -112,11 +118,13 @@ export function layoutKitchenTicket(ticket: KitchenTicket, opts: KitchenLayoutOp
   out.push({ text: rule, size: 'normal', align: 'left', rule: true });
 
   for (const l of ticket.lines) {
-    if (l.delta < 0) {
-      push(`【取消】${l.name}  x${Math.abs(l.delta)}`, 'tall');
-    } else {
-      push(`${l.name}  x${l.delta}`, 'tall');
-    }
+    // 日本語を読まない厨房スタッフ向けに、ローマ字を主・日本語を従で並べる
+    // （ローマ字が作れない商品は日本語のみ。情報は落とさない）
+    const qty = `x${Math.abs(l.delta)}`;
+    const cancelled = l.delta < 0;
+    const head = l.nameRoman ?? l.name;
+    push(`${cancelled ? '【取消/CANCEL】' : ''}${head}  ${qty}`, 'tall');
+    if (l.nameRoman) push(`   ${l.name}`);
     for (const m of l.modifiers) push(`   ・${m}`);
     if (l.memo) push(`   ※${l.memo}`);
   }

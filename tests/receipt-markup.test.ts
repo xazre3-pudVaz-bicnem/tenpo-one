@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { receiptToStarMarkup, drawerKickMarkup, testPrintMarkup } from '@/lib/receipt-markup';
+import {
+  receiptToStarMarkup,
+  ryoshushoToStarMarkup,
+  orderSlipMarkup,
+  drawerKickMarkup,
+  testPrintMarkup,
+} from '@/lib/receipt-markup';
 import { baseReceipt as base } from './fixtures/receipt';
 
 
@@ -54,5 +60,87 @@ describe('testPrintMarkup', () => {
     expect(m).toContain('CloudPRNT テスト印刷');
     expect(m).toContain('日本語テスト');
     expect(m).toContain('[cut: feed; partial]');
+  });
+});
+
+describe('ryoshushoToStarMarkup（領収書）', () => {
+  it('見出しが「領収書」で、レシートとは別レイアウトになる', () => {
+    const m = ryoshushoToStarMarkup(base, { paperWidth: 80 });
+    expect(m).toContain('領 収 書');
+    expect(m).toContain('上記正に領収いたしました');
+    // レシート固有の要素は出さない（領収書がレシートのコピーになっていた不具合の再発防止）
+    expect(m).not.toContain('照会番号');
+    expect(m).not.toContain('ありがとうございました');
+    expect(m.trimEnd().endsWith('[cut: feed; partial]')).toBe(true);
+  });
+
+  it('宛名・但し書きは未指定なら「上様」「お品代として」', () => {
+    const m = ryoshushoToStarMarkup(base);
+    expect(m).toContain('上様 様');
+    expect(m).toContain('但 お品代として');
+  });
+
+  it('宛名・但し書きを指定すればそのまま印字する', () => {
+    const m = ryoshushoToStarMarkup(base, { recipientName: ' 株式会社D&DREAM ', purpose: '御飲食代として' });
+    expect(m).toContain('株式会社D&DREAM 様');
+    expect(m).toContain('但 御飲食代として');
+    expect(m).not.toContain('上様');
+  });
+
+  it('領収額は返金を差し引いた実受領額（netPaid）で、5万円未満は印紙欄を出さない', () => {
+    const m = ryoshushoToStarMarkup({ ...base, refundTotal: 1300, netPaid: 10000 });
+    expect(m).toContain('¥10,000');
+    expect(m).not.toContain('収入印紙');
+  });
+
+  it('5万円以上は収入印紙欄を出す', () => {
+    const m = ryoshushoToStarMarkup({ ...base, total: 50000, netPaid: 50000 });
+    expect(m).toContain('収入印紙');
+  });
+
+  it('適格請求書の要件（税率別の対象額・消費税額・登録番号）を残す', () => {
+    const m = ryoshushoToStarMarkup(base);
+    expect(m).toContain('税10%対象');
+    expect(m).toContain('登録番号 T1234567890123');
+  });
+});
+
+const slip = {
+  storeName: 'シュラスコテーブル FOGO',
+  orderNo: '1001',
+  tableName: 'T-3',
+  guestCount: 4,
+  clerkName: '山田',
+  issuedAt: '2026/09/19 19:30',
+  lines: [
+    { name: 'シュラスコ食べ放題', quantity: 2, unitPrice: 5000, lineTotal: 10000, modifiers: [] },
+    { name: '生ビール', quantity: 3, unitPrice: 600, lineTotal: 1800, modifiers: [{ name: '大', price: 100 }] },
+  ],
+  subtotal: 10727,
+  taxTotal: 1073,
+  serviceCharge: 0,
+  discount: 500,
+  total: 11300,
+};
+
+describe('orderSlipMarkup（注文伝票）', () => {
+  it('注文内容と合計金額を出し、領収書ではないと明記する', () => {
+    const m = orderSlipMarkup(slip, { paperWidth: 80 });
+    expect(m).toContain('注文伝票');
+    expect(m).toContain('T-3');
+    expect(m).toContain('4名');
+    expect(m).toContain('担当 山田');
+    expect(m).toContain('シュラスコ食べ放題');
+    expect(m).toContain('生ビール');
+    expect(m).toContain('大');
+    expect(m).toContain('¥11,300');
+    expect(m).toContain('※ これは領収書ではありません');
+    expect(m.trimEnd().endsWith('[cut: feed; partial]')).toBe(true);
+  });
+
+  it('テーブルが無い（テイクアウト）場合も生成できる', () => {
+    const m = orderSlipMarkup({ ...slip, tableName: null, guestCount: null, clerkName: null }, { paperWidth: 58 });
+    expect(m).toContain('テイクアウト');
+    expect(m).toContain('¥11,300');
   });
 });

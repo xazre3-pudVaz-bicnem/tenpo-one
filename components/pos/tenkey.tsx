@@ -21,13 +21,13 @@ export function Tenkey({ onKey, disabled }: { onKey: (key: TenkeyKey) => void; d
           disabled={disabled}
           onClick={() => onKey(k)}
           className={cn(
-            'flex h-12 items-center justify-center rounded-lg border text-lg font-bold tabular-nums transition-colors disabled:cursor-not-allowed disabled:opacity-50',
+            'flex h-16 items-center justify-center rounded-lg border text-2xl font-bold tabular-nums transition-colors disabled:cursor-not-allowed disabled:opacity-50',
             k === 'C'
               ? 'border-danger/30 bg-danger-soft text-danger hover:bg-danger-soft/70'
               : 'border-gray-300 bg-white text-navy hover:bg-gray-50 active:bg-gray-100'
           )}
         >
-          {k === 'C' ? <Delete className="h-5 w-5" /> : k}
+          {k === 'C' ? <Delete className="h-6 w-6" /> : k}
         </button>
       ))}
     </div>

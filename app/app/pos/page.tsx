@@ -17,6 +17,9 @@ import {
   splitOrder,
   mergeOrders,
   moveTable,
+  cancelEmptyOrder,
+  setGuestCount,
+  addSlipToTable,
   applyCoupon,
   clearCoupon,
   searchCustomerByPhone,
@@ -335,6 +338,9 @@ export default async function PosPage({
         splitOrderAction={splitOrder}
         mergeOrdersAction={mergeOrders}
         moveTableAction={moveTable}
+        cancelEmptyOrderAction={cancelEmptyOrder}
+        setGuestCountAction={setGuestCount}
+        addSlipToTableAction={addSlipToTable}
         startTerminalPaymentAction={startTerminalPayment}
         checkTerminalPaymentAction={checkTerminalPayment}
         cancelTerminalPaymentAction={cancelTerminalPayment}
