@@ -359,9 +359,9 @@ export function PosScreen({
     startTransition(async () => {
       try {
         const res = await enqueueOrderSlipPrint(order.id);
-        toast(res.ok ? '注文伝票を印刷します' : (res.error ?? '注文伝票の印刷に失敗しました'), res.ok ? 'success' : 'error');
+        toast(res.ok ? 'お会計伝票を印刷します' : (res.error ?? 'お会計伝票の印刷に失敗しました'), res.ok ? 'success' : 'error');
       } catch (e) {
-        toast(e instanceof Error ? e.message : '注文伝票の印刷に失敗しました', 'error');
+        toast(e instanceof Error ? e.message : 'お会計伝票の印刷に失敗しました', 'error');
       }
     });
   };
@@ -711,7 +711,7 @@ export function PosScreen({
             onClick={handleOrderSlipPrint}
           >
             <Printer className="h-4 w-4" />
-            注文伝票を印刷
+            お会計伝票を印刷
           </Button>
           <Button
             size="pos"

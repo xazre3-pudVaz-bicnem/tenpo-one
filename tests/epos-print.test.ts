@@ -137,7 +137,7 @@ describe('orderSlipEposXml', () => {
   it('注文伝票の見出し・卓・明細・合計・注意書きを含み、整形式', () => {
     const xml = orderSlipEposXml(slip, { paperWidth: 80 });
     expect(xmlErrors(xml)).toEqual([]);
-    expect(xml).toContain('注文伝票');
+    expect(xml).toContain('お会計伝票');
     expect(xml).toContain('T-3');
     expect(xml).toContain('No.123');
     expect(xml).toContain('カレーセット');

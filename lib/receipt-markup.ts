@@ -194,7 +194,7 @@ export function orderSlipMarkup(
 
   raw('[align: middle]');
   raw('[magnify: width 2; height 2]');
-  line('注文伝票');
+  line('お会計伝票');
   raw('[magnify: width 1; height 1]');
   line(slip.storeName);
   line('（会計前のご確認用）');

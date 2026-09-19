@@ -230,7 +230,7 @@ export function orderSlipStarPrnt(slip: OrderSlipData, options: StarPrntOptions 
   const b = new StarBuffer(options.currency ?? DEFAULT_CURRENCY, options.encoding ?? DEFAULT_ENCODING);
 
   b.cmd(CMD.init).cmd(CMD.alignCenter);
-  b.cmd(CMD.magnify(2, 2)).line('注文伝票').cmd(CMD.magnify(1, 1));
+  b.cmd(CMD.magnify(2, 2)).line('お会計伝票').cmd(CMD.magnify(1, 1));
   b.line(slip.storeName).line('（会計前のご確認用）');
   b.cmd(CMD.alignLeft).line(rule);
   b.line(twoCol(slip.tableName ?? 'テイクアウト', `No.${slip.orderNo}`, width));

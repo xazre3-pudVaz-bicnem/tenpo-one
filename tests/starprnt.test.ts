@@ -156,7 +156,7 @@ describe('orderSlipStarPrnt（注文伝票）', () => {
     expect(b.subarray(0, 2)).toEqual(Buffer.from([ESC, 0x40]));
     expect(b.subarray(-3)).toEqual(Buffer.from([ESC, 0x64, 0x03]));
     const t = asSjis(b);
-    expect(t).toContain('注文伝票');
+    expect(t).toContain('お会計伝票');
     expect(t).toContain('T-3');
     expect(t).toContain('シュラスコ食べ放題');
     expect(t).toContain(`${BACKSLASH}11,300`);

@@ -126,7 +126,7 @@ const slip = {
 describe('orderSlipMarkup（注文伝票）', () => {
   it('注文内容と合計金額を出し、領収書ではないと明記する', () => {
     const m = orderSlipMarkup(slip, { paperWidth: 80 });
-    expect(m).toContain('注文伝票');
+    expect(m).toContain('お会計伝票');
     expect(m).toContain('T-3');
     expect(m).toContain('4名');
     expect(m).toContain('担当 山田');
@@ -174,6 +174,6 @@ describe('お客様に渡す紙は日本語のまま（英語を混ぜない）'
     });
     expect(m).toContain('チキンカレー');
     expect(m).not.toContain('Chikinkaree');
-    expect(m).toContain('注文伝票');
+    expect(m).toContain('お会計伝票');
   });
 });
