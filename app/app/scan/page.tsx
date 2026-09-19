@@ -184,7 +184,7 @@ export default async function ScanPage({
               {target.receipt_document_id ? (
                 <span className={CHIP.ok}>✓ レシート登録済み（撮り直すと差し替え）</span>
               ) : (
-                <span className={CHIP.ng}>未スキャン</span>
+                <span className={CHIP.muted}>レシート未添付</span>
               )}
               <b className="text-2xl font-extrabold text-ink tabular-nums">{yen(target.amount)}</b>
             </div>
@@ -215,8 +215,8 @@ export default async function ScanPage({
           {store && (
             <Card className="overflow-hidden">
               <CardHeader className="flex flex-wrap items-center justify-between gap-2">
-                <CardTitle en="Needs receipt">未スキャンの出金</CardTitle>
-                <span className={cn('text-[13px] font-bold', needsReceipt.length > 0 ? 'text-danger' : 'text-success')}>
+                <CardTitle en="Needs receipt">レシート未添付の出金</CardTitle>
+                <span className={cn('text-[13px] font-bold', needsReceipt.length > 0 ? 'text-ink-2' : 'text-success')}>
                   本日 <span className="tabular-nums">{needsReceipt.length}</span>件
                   {needsReceipt.length > 0 && <span className="tabular-nums">（{yen(needsTotal)}）</span>}
                 </span>
