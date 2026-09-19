@@ -119,6 +119,12 @@ export function CheckoutDialog({
     isCouponReason ? '' : (discountReason ?? '')
   );
   const [payments, setPayments] = useState<PaymentRow[]>([]);
+  /**
+   * 支払いを複数に分けるモード。既定はOFF＝「タッチした支払方法だけ」を1つ表示する。
+   * 現場から「クレジットをタッチすると行がどんどん積み上がる」と指摘されたため、
+   * 積み上げ（現金+クレジットの併用など）は明示的にONにしたときだけの動作にした。
+   */
+  const [splitMode, setSplitMode] = useState(false);
   // 二度押し・連打対策: pending state に加えて同期フラグでも多重送信を防ぐ
   const checkoutInFlightRef = useRef(false);
 
@@ -286,6 +292,33 @@ export function CheckoutDialog({
     ]);
   };
 
+  /**
+   * 支払方法をタッチしたときの動作。
+   * 既定（splitMode=false）は単一選択：タッチした支払方法だけが下に出る。
+   * 別の方法をタッチすれば置き換わり、同じ方法をもう一度タッチすれば取り消す。
+   * splitMode=true のときだけ従来どおり行を積み上げて併用払いにできる。
+   */
+  const selectPayment = (method: CheckoutPayment['method']) => {
+    if (splitMode) {
+      addPayment(method);
+      return;
+    }
+    const cap = method === 'points' ? Math.min(maxPointsUsable, order.total) : order.total;
+    setPayments((rows) => {
+      // 同じ方法をもう一度タッチしたら取り消す（選択トグル）
+      if (rows.length === 1 && rows[0].method === method) return [];
+      return [
+        { key: `${method}-${Date.now()}`, method, amount: cap, tendered: method === 'cash' ? cap : undefined },
+      ];
+    });
+  };
+
+  // モードを切り替えたら入力済みの支払行は白紙に戻す（単一↔併用で金額の意味が変わるため）
+  const toggleSplitMode = () => {
+    setSplitMode((v) => !v);
+    setPayments([]);
+  };
+
   const updatePayment = (key: string, patch: Partial<PaymentRow>) => {
     setPayments((rows) => rows.map((r) => (r.key === key ? { ...r, ...patch } : r)));
   };
@@ -333,6 +366,9 @@ export function CheckoutDialog({
       toast('決済処理中は閉じられません。先にキャンセルしてください', 'error');
       return;
     }
+    // 次に開いたとき前のお客様の支払い入力が残らないようにする
+    setPayments([]);
+    setSplitMode(false);
     onClose();
   };
 
@@ -540,32 +576,68 @@ export function CheckoutDialog({
         )}
 
         <div>
-          <p className="mb-2 text-sm font-semibold text-navy">支払方法</p>
-          <div className="grid grid-cols-4 gap-2 sm:grid-cols-8">
-            {BASE_METHODS.map((m) => (
-              <Button
-                key={m}
-                variant="secondary"
-                size="pos"
-                disabled={terminalBlocking}
-                onClick={() => addPayment(m)}
-              >
-                {METHOD_LABELS[m]}
-              </Button>
-            ))}
-            <Button
-              variant="secondary"
-              size="pos"
-              disabled={terminalBlocking || !pointsAvailability.available}
-              title={
-                pointsAvailability.available
-                  ? `残高 ${pointsAvailability.balance}pt`
-                  : '顧客紐付け・会員機能有効・残高が必要です'
-              }
-              onClick={() => addPayment('points')}
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <p className="text-base font-semibold text-navy">支払方法</p>
+            <button
+              type="button"
+              onClick={toggleSplitMode}
+              disabled={terminalBlocking}
+              aria-pressed={splitMode}
+              className={cn(
+                'rounded-full px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-50',
+                splitMode
+                  ? 'bg-primary text-white'
+                  : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+              )}
             >
-              {METHOD_LABELS.points}
-            </Button>
+              {splitMode ? '支払いを分ける：ON' : '支払いを分ける'}
+            </button>
+          </div>
+          <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
+            {BASE_METHODS.map((m) => {
+              const selected = payments.some((p) => p.method === m);
+              return (
+                <button
+                  key={m}
+                  type="button"
+                  disabled={terminalBlocking}
+                  aria-pressed={selected}
+                  onClick={() => selectPayment(m)}
+                  className={cn(
+                    'flex h-16 items-center justify-center rounded-xl border px-2 text-center text-base font-bold leading-tight transition-colors disabled:cursor-not-allowed disabled:opacity-50',
+                    selected
+                      ? 'border-primary bg-primary text-white'
+                      : 'border-gray-200 bg-white text-navy hover:bg-gray-50'
+                  )}
+                >
+                  {METHOD_LABELS[m]}
+                </button>
+              );
+            })}
+            {(() => {
+              const selected = payments.some((p) => p.method === 'points');
+              return (
+                <button
+                  type="button"
+                  disabled={terminalBlocking || !pointsAvailability.available}
+                  aria-pressed={selected}
+                  title={
+                    pointsAvailability.available
+                      ? `残高 ${pointsAvailability.balance}pt`
+                      : '顧客紐付け・会員機能有効・残高が必要です'
+                  }
+                  onClick={() => selectPayment('points')}
+                  className={cn(
+                    'flex h-16 items-center justify-center rounded-xl border px-2 text-center text-base font-bold leading-tight transition-colors disabled:cursor-not-allowed disabled:opacity-50',
+                    selected
+                      ? 'border-primary bg-primary text-white'
+                      : 'border-gray-200 bg-white text-navy hover:bg-gray-50'
+                  )}
+                >
+                  {METHOD_LABELS.points}
+                </button>
+              );
+            })()}
           </div>
           {payments.some((p) => TERMINAL_METHODS.includes(p.method)) && (
             <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
@@ -579,11 +651,13 @@ export function CheckoutDialog({
             {payments.map((p) => (
               <div key={p.key} className="rounded-xl border border-gray-200 p-3">
                 <div className="flex flex-wrap items-center gap-2">
-                  <Badge tone="navy" className="shrink-0">
+                  <Badge tone="navy" className="shrink-0 text-sm">
                     {METHOD_LABELS[p.method]}
                   </Badge>
                   <Input
                     type="number"
+                    inputMode="numeric"
+                    aria-label={`${METHOD_LABELS[p.method]}の金額`}
                     min={0}
                     max={p.method === 'points' ? maxPointsUsable : undefined}
                     value={p.amount}
@@ -592,10 +666,10 @@ export function CheckoutDialog({
                       const v = Math.max(0, Math.min(cap, Number(e.target.value) || 0));
                       updatePayment(p.key, { amount: v, tendered: p.method === 'cash' ? p.tendered : undefined });
                     }}
-                    className="w-28"
+                    className="h-14 w-40 text-right text-2xl font-bold tabular-nums"
                   />
                   {p.method === 'points' && (
-                    <span className="text-xs text-gray-500 tabular-nums">上限 {yen(maxPointsUsable)}</span>
+                    <span className="text-sm text-gray-500 tabular-nums">上限 {yen(maxPointsUsable)}</span>
                   )}
                   <button
                     type="button"
@@ -611,8 +685,8 @@ export function CheckoutDialog({
                   <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_auto]">
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
-                        <Label className="mb-0">預り金</Label>
-                        <span className="text-sm font-bold tabular-nums text-navy">{yen(p.tendered ?? 0)}</span>
+                        <Label className="mb-0 text-base">預り金</Label>
+                        <span className="text-3xl font-bold tabular-nums text-navy">{yen(p.tendered ?? 0)}</span>
                       </div>
                       <div className="flex flex-wrap gap-1.5">
                         {QUICK_CASH_AMOUNTS.map((amt) => (
@@ -622,7 +696,7 @@ export function CheckoutDialog({
                             onClick={() =>
                               updatePayment(p.key, { tendered: (p.tendered ?? 0) + amt })
                             }
-                            className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-navy hover:bg-gray-50"
+                            className="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-base font-semibold text-navy hover:bg-gray-50"
                           >
                             +{yen(amt)}
                           </button>
@@ -630,12 +704,12 @@ export function CheckoutDialog({
                         <button
                           type="button"
                           onClick={() => updatePayment(p.key, { tendered: p.amount })}
-                          className="rounded-lg border border-primary/40 bg-primary-soft px-3 py-1.5 text-xs font-semibold text-primary-deep hover:bg-primary-soft/70"
+                          className="rounded-lg border border-primary/40 bg-primary-soft px-4 py-2.5 text-base font-semibold text-primary-deep hover:bg-primary-soft/70"
                         >
                           ちょうど
                         </button>
                       </div>
-                      <p className="text-xs text-gray-500 tabular-nums">
+                      <p className="text-xl font-bold tabular-nums text-navy">
                         お釣り {yen(calcChange(p.amount, p.tendered ?? 0))}
                       </p>
                     </div>
@@ -655,8 +729,8 @@ export function CheckoutDialog({
         )}
 
         <div className="flex items-center justify-between rounded-xl bg-navy px-4 py-3 text-white">
-          <span className="text-sm">残額</span>
-          <span className="text-lg font-bold tabular-nums">{yen(remaining)}</span>
+          <span className="text-base">残額</span>
+          <span className="text-2xl font-bold tabular-nums">{yen(remaining)}</span>
         </div>
 
         <Button

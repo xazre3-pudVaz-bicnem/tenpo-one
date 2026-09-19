@@ -10,12 +10,15 @@ import { yen } from '@/lib/format';
 export interface PosOptionItem {
   id: string;
   name: string;
+  /** 設定 > 選択肢 の英語名。無ければ日本語のみ表示する */
+  nameEn?: string | null;
   price: number;
 }
 
 export interface PosOptionGroup {
   id: string;
   name: string;
+  nameEn?: string | null;
   isRequired: boolean;
   minSelect: number;
   maxSelect: number;
@@ -28,12 +31,15 @@ export interface PosOptionGroup {
  */
 export function OptionDialog({
   itemName,
+  itemNameEn,
   basePrice,
   groups,
   onCancel,
   onConfirm,
 }: {
   itemName: string;
+  /** 英語名。日本語を読まないスタッフ向けに見出しの下へ併記する */
+  itemNameEn?: string | null;
   basePrice: number;
   groups: PosOptionGroup[];
   onCancel: () => void;
@@ -83,12 +89,16 @@ export function OptionDialog({
   return (
     <Dialog open onClose={onCancel} title={itemName}>
       <div className="space-y-4">
+        {itemNameEn && <p className="-mt-2 text-sm text-gray-500">{itemNameEn}</p>}
         {groups.map((g) => {
           const chosen = selected[g.id] ?? [];
           return (
             <div key={g.id}>
               <div className="mb-2 flex items-center gap-2">
-                <p className="text-sm font-semibold text-navy">{g.name}</p>
+                <p className="text-sm font-semibold text-navy">
+                  {g.name}
+                  {g.nameEn && <span className="ml-1 text-xs font-medium text-gray-500">{g.nameEn}</span>}
+                </p>
                 {g.isRequired ? <Badge tone="danger">必須</Badge> : <Badge tone="gray">任意</Badge>}
                 <span className="text-xs text-gray-500">
                   {g.maxSelect === 1 ? '1つ選択' : `${g.minSelect}〜${g.maxSelect}つ選択`}
@@ -113,6 +123,7 @@ export function OptionDialog({
                       ].join(' ')}
                     >
                       <span className="block">{o.name}</span>
+                      {o.nameEn && <span className="block text-xs text-gray-500">{o.nameEn}</span>}
                       {o.price !== 0 && <span className="text-xs text-gray-500">+{yen(o.price)}</span>}
                     </button>
                   );
