@@ -183,6 +183,9 @@ function PrinterRow({
   const isKitchen = printer.usage === 'kitchen';
   const status = statusOf({ ...printer, cloudprntEnabled: enabled }, now);
   const pollUrl = siteUrl && printer.cloudprntToken ? `${siteUrl}/api/cloudprnt/${printer.cloudprntToken}` : '';
+  // EPSON（TM-i 等）は Star の CloudPRNT が無いため、同じトークンで Server Direct Print 用のURLを出す
+  const eposUrl = siteUrl && printer.cloudprntToken ? `${siteUrl}/api/eposprint/${printer.cloudprntToken}` : '';
+  const [copiedEpos, setCopiedEpos] = useState(false);
 
   const run = (fn: () => Promise<{ error?: string }>, okMsg: string) =>
     startTransition(async () => {
@@ -193,6 +196,16 @@ function PrinterRow({
         router.refresh();
       }
     });
+
+  const copyEposUrl = async () => {
+    try {
+      await navigator.clipboard.writeText(eposUrl);
+      setCopiedEpos(true);
+      setTimeout(() => setCopiedEpos(false), 1500);
+    } catch {
+      toast('コピーできませんでした。URLを選択して手動でコピーしてください', 'error');
+    }
+  };
 
   const copyUrl = async () => {
     try {
@@ -254,13 +267,28 @@ function PrinterRow({
           )}
 
           <div>
-            <Label>接続用URL（プリンタの CloudPRNT「サーバーURL」に設定）</Label>
+            <Label>接続用URL（Star プリンタの CloudPRNT「サーバーURL」に設定）</Label>
             <div className="flex items-center gap-2">
               <Input readOnly value={pollUrl} className="font-mono text-xs" onFocus={(e) => e.currentTarget.select()} />
               <Button type="button" variant="secondary" size="sm" onClick={copyUrl} disabled={!pollUrl}>
                 {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
               </Button>
             </div>
+          </div>
+
+          <div>
+            <Label>EPSON プリンタの場合（WebConfig →「Server Direct Print」の URL に設定）</Label>
+            <div className="flex items-center gap-2">
+              <Input readOnly value={eposUrl} className="font-mono text-xs" onFocus={(e) => e.currentTarget.select()} />
+              <Button type="button" variant="secondary" size="sm" onClick={copyEposUrl} disabled={!eposUrl}>
+                {copiedEpos ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+              </Button>
+            </div>
+            <p className="mt-1 text-xs text-gray-500">
+              EPSON は Star の CloudPRNT が使えないため、こちらのURLを使います。対応機は TM-i シリーズ・TM-T88VI 等
+              （WebConfig に「Server Direct Print」の項目がある機種）。Server Direct Print を「有効」にし、URL を貼り付け、
+              間隔を 5 秒にして保存してください。ID は任意（空欄可）。
+            </p>
           </div>
 
           {isKitchen && (
