@@ -62,6 +62,11 @@ describe('receiptToEposXml', () => {
     expect(x.trimEnd().endsWith('<cut type="feed"/></epos-print>')).toBe(true);
   });
 
+  it('卓番号を出す（レジで卓を探せるように）', () => {
+    expect(receiptToEposXml(base, { paperWidth: 80 })).toContain('卓 T-3');
+    expect(receiptToEposXml({ ...base, tableName: null }, { paperWidth: 80 })).not.toContain('卓 ');
+  });
+
   it('改行はLFの実体参照で表す（テキスト要素をまたがない）', () => {
     const x = receiptToEposXml(base, { paperWidth: 58 });
     expectWellFormed(x);

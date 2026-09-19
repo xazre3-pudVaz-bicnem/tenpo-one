@@ -39,6 +39,7 @@ export function receiptToStarMarkup(receipt: ReceiptData, options: ReceiptMarkup
   line(rule);
   line(`発行 ${receipt.issuedAt}`);
   line(twoCol(`No.${receipt.orderNo}`, [receipt.registerName, receipt.staffName].filter(Boolean).join(' '), width));
+  if (receipt.tableName) line(`卓 ${receipt.tableName}`);
   line(rule);
 
   // 明細

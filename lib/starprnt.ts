@@ -109,6 +109,7 @@ export function receiptToStarPrnt(receipt: ReceiptData, options: StarPrntOptions
   b.line(rule);
   b.line(`発行 ${receipt.issuedAt}`);
   b.line(twoCol(`No.${receipt.orderNo}`, [receipt.registerName, receipt.staffName].filter(Boolean).join(' '), width));
+  if (receipt.tableName) b.line(`卓 ${receipt.tableName}`);
   b.line(rule);
 
   // 明細

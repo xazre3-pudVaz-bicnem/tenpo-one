@@ -123,6 +123,17 @@ const slip = {
   total: 11300,
 };
 
+describe('レシートの卓番号', () => {
+  it('卓があれば No. の下に「卓 T-3」を出す', () => {
+    const m = receiptToStarMarkup(base, { paperWidth: 80 });
+    expect(m).toContain('卓 T-3');
+  });
+  it('卓が無い（テイクアウト等）なら出さない', () => {
+    const m = receiptToStarMarkup({ ...base, tableName: null }, { paperWidth: 80 });
+    expect(m).not.toContain('卓 ');
+  });
+});
+
 describe('orderSlipMarkup（注文伝票）', () => {
   it('注文内容と合計金額を出し、領収書ではないと明記する', () => {
     const m = orderSlipMarkup(slip, { paperWidth: 80 });

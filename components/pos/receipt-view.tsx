@@ -156,7 +156,7 @@ export function ReceiptView({
               {receipt.headerMessage && <p className="mt-1 whitespace-pre-line">{receipt.headerMessage}</p>}
             </div>
             <div className="my-2 border-t border-dashed border-gray-300" />
-            <p>注文番号 #{receipt.orderNo}</p>
+            <p>注文番号 #{receipt.orderNo}{receipt.tableName && <>　卓 {receipt.tableName}</>}</p>
             <p>{receipt.issuedAt}</p>
             {(receipt.registerName || receipt.staffName) && (
               <p className="text-[10px] text-gray-500">
