@@ -144,3 +144,36 @@ describe('orderSlipMarkup（注文伝票）', () => {
     expect(m).toContain('¥11,300');
   });
 });
+
+describe('お客様に渡す紙は日本語のまま（英語を混ぜない）', () => {
+  // 厨房伝票だけを英語主体にする方針。レシート・領収書・注文伝票はお客様が受け取るため日本語。
+  // 将来ここに englishName を配線してしまったら落ちるようにしておく。
+  const jp = {
+    ...base,
+    lines: [{ name: 'チキンカレー', quantity: 1, unitPrice: 1000, lineTotal: 1000, modifiers: [], cancelled: false }],
+  };
+
+  it('レシートは日本語のみ', () => {
+    const m = receiptToStarMarkup(jp);
+    expect(m).toContain('チキンカレー');
+    expect(m).not.toContain('Chikinkaree');
+    expect(m).toContain('合計');
+  });
+
+  it('領収書は日本語のみ', () => {
+    const m = ryoshushoToStarMarkup(jp);
+    expect(m).toContain('領 収 書');
+    expect(m).not.toContain('Chikinkaree');
+    expect(m).not.toContain('RECEIPT');
+  });
+
+  it('注文伝票は日本語のみ', () => {
+    const m = orderSlipMarkup({
+      ...slip,
+      lines: [{ name: 'チキンカレー', quantity: 1, unitPrice: 1000, lineTotal: 1000, modifiers: [] }],
+    });
+    expect(m).toContain('チキンカレー');
+    expect(m).not.toContain('Chikinkaree');
+    expect(m).toContain('注文伝票');
+  });
+});

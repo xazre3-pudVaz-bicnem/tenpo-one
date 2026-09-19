@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { yen } from '@/lib/format';
+import { englishName } from '@/lib/romaji';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -73,6 +74,8 @@ export interface PosOrder {
 
 export interface PosOrderItem {
   id: string;
+  /** 英語名を引くための参照。削除済み商品や手入力行では null */
+  menu_item_id: string | null;
   name: string;
   unit_price: number;
   quantity: number;
@@ -85,6 +88,7 @@ export interface PosOrderItem {
 export interface PosCategory {
   id: string;
   name: string;
+  name_en: string | null;
   color: string | null;
   sort_order: number;
 }
@@ -93,6 +97,7 @@ export interface PosMenuItem {
   id: string;
   category_id: string | null;
   name: string;
+  name_en: string | null;
   name_kana: string | null;
   price: number;
   takeout_price: number | null;
@@ -117,7 +122,13 @@ export interface DrawerConfig {
 function matchesQuery(item: PosMenuItem, query: string): boolean {
   const q = query.trim().toLowerCase();
   if (!q) return true;
-  return item.name.toLowerCase().includes(q) || (item.name_kana ?? '').toLowerCase().includes(q);
+  // 日本語・カナに加えて英語名でも引けるようにする（英語しか読めないスタッフが打てるように）
+  const en = englishName(item.name, item.name_kana, item.name_en);
+  return (
+    item.name.toLowerCase().includes(q) ||
+    (item.name_kana ?? '').toLowerCase().includes(q) ||
+    (en ?? '').toLowerCase().includes(q)
+  );
 }
 
 export function PosScreen({
@@ -247,6 +258,13 @@ export function PosScreen({
   const isTakeoutLike =
     order.orderType === 'takeout' || order.orderType === 'delivery' || order.orderType === 'pre_order';
   const bestSellerRank = useMemo(() => new Map(bestSellerIds.map((id, i) => [id, i])), [bestSellerIds]);
+
+  // 商品ID → 英語名。伝票明細は商品名のスナップショットしか持たないため、ここから引く
+  // （メニューから消された商品は引けない＝日本語のみ表示になる）。
+  const englishByItemId = useMemo(
+    () => new Map(menuItems.map((m) => [m.id, englishName(m.name, m.name_kana, m.name_en)])),
+    [menuItems]
+  );
 
   const visibleItems = useMemo(() => {
     if (searchQuery.trim()) {
@@ -445,7 +463,7 @@ export function PosScreen({
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="商品名・カナで検索（F2）"
+              placeholder="商品名・カナ・英語で検索（F2）"
               className="h-10 w-full rounded-lg border border-gray-300 bg-white pl-9 pr-3 text-sm text-gray-900 placeholder:text-gray-400 focus:border-primary focus:outline-2 focus:outline-primary/30"
             />
           </div>
@@ -486,7 +504,20 @@ export function PosScreen({
                 )}
                 style={activeCategory === c.id ? { backgroundColor: c.color ?? '#7B3FF2' } : undefined}
               >
-                {c.name}
+                <span className="block leading-tight">{c.name}</span>
+                {(() => {
+                  const en = englishName(c.name, null, c.name_en);
+                  return en ? (
+                    <span
+                      className={cn(
+                        'block text-[11px] font-medium leading-tight',
+                        activeCategory === c.id ? 'text-white/80' : 'text-gray-500'
+                      )}
+                    >
+                      {en}
+                    </span>
+                  ) : null;
+                })()}
               </button>
             ))}
           </div>
@@ -514,9 +545,17 @@ export function PosScreen({
                     )}
                     style={!m.is_sold_out && category?.color ? { borderLeft: `6px solid ${category.color}` } : undefined}
                   >
-                    <span className="flex items-center gap-1 text-sm font-bold text-navy">
-                      {m.is_recommended && <Star className="h-3.5 w-3.5 shrink-0 fill-warning text-warning" />}
-                      {m.name}
+                    <span className="w-full">
+                      <span className="flex items-center gap-1 text-sm font-bold leading-tight text-navy">
+                        {m.is_recommended && <Star className="h-3.5 w-3.5 shrink-0 fill-warning text-warning" />}
+                        {m.name}
+                      </span>
+                      {/* 日本語を読まないスタッフ向けの英語。英語名が無ければカナからローマ字 */}
+                      {englishByItemId.get(m.id) && (
+                        <span className="mt-0.5 block text-xs leading-tight text-gray-500">
+                          {englishByItemId.get(m.id)}
+                        </span>
+                      )}
                     </span>
                     {m.is_sold_out ? (
                       <Badge tone="gray">売切</Badge>
@@ -545,7 +584,14 @@ export function PosScreen({
               {items.map((it) => (
                 <li key={it.id} className="px-4 py-3">
                   <div className="flex items-start justify-between gap-2">
-                    <p className="min-w-0 flex-1 text-sm font-medium text-navy">{it.name}</p>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium leading-tight text-navy">{it.name}</p>
+                      {it.menu_item_id && englishByItemId.get(it.menu_item_id) && (
+                        <p className="text-xs leading-tight text-gray-500">
+                          {englishByItemId.get(it.menu_item_id)}
+                        </p>
+                      )}
+                    </div>
                     <button
                       type="button"
                       aria-label="取消"
@@ -749,6 +795,7 @@ export function PosScreen({
         return (
           <OptionDialog
             itemName={target.name}
+            itemNameEn={englishByItemId.get(target.id)}
             basePrice={target.price}
             groups={groups}
             onCancel={() => setOptionTarget(null)}

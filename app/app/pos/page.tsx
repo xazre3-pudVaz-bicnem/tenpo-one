@@ -123,20 +123,20 @@ export default async function PosPage({
   ] = await Promise.all([
     supabase
       .from('order_items')
-      .select('id, name, unit_price, quantity, tax_rate, tax_included, line_total, status')
+      .select('id, menu_item_id, name, unit_price, quantity, tax_rate, tax_included, line_total, status')
       .eq('order_id', orderId)
       .eq('status', 'active')
       .order('created_at'),
     supabase
       .from('menu_categories')
-      .select('id, name, color, sort_order')
+      .select('id, name, name_en, color, sort_order')
       .eq('organization_id', ctx.organizationId)
       .or(`store_id.is.null,store_id.eq.${store.id}`)
       .eq('status', 'active')
       .order('sort_order'),
     supabase
       .from('menu_items')
-      .select('id, category_id, name, name_kana, price, takeout_price, item_type, is_sold_out, is_recommended, sort_order')
+      .select('id, category_id, name, name_en, name_kana, price, takeout_price, item_type, is_sold_out, is_recommended, sort_order')
       .eq('organization_id', ctx.organizationId)
       .or(`store_id.is.null,store_id.eq.${store.id}`)
       .eq('status', 'active')

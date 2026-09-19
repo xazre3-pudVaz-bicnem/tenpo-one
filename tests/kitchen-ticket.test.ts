@@ -50,33 +50,36 @@ describe('groupKitchenTickets', () => {
 });
 
 describe('layoutKitchenTicket', () => {
-  const opts = { title: 'キッチン', printedAt: '18:21', paperWidth: 80 as const };
+  const opts = { title: 'キッチン', titleEn: 'KITCHEN', printedAt: '18:21', paperWidth: 80 as const };
 
   it('卓名を大きく、明細を縦倍で出す', () => {
     const [t] = groupKitchenTickets([row({ delta: 2 })]);
     const lines = layoutKitchenTicket(t, opts);
     expect(lines.find((l) => l.text === 'T10')?.size).toBe('large');
-    // 厨房向けはローマ字を主・日本語を従で出す
+    // 厨房向けは英語を主・日本語を従で出す
     expect(lines.find((l) => l.text.startsWith('Chikinkaree'))).toMatchObject({ size: 'tall', text: 'Chikinkaree  x2' });
     expect(lines.some((l) => l.text === '   チキンカレー')).toBe(true);
-    expect(lines.some((l) => l.text.includes('2名') && l.text.includes('担当 Ronnie'))).toBe(true);
+    // 見出し・人数・担当も英語で読める
+    expect(lines.map((l) => l.text)).toContain('KITCHEN');
+    expect(lines.map((l) => l.text)).toContain('キッチン');
+    expect(lines.some((l) => l.text.includes('Guests 2') && l.text.includes('Staff Ronnie'))).toBe(true);
   });
 
-  it('取消は【取消】と絶対値で出す', () => {
+  it('取消は CANCEL と絶対値で出す', () => {
     const [t] = groupKitchenTickets([row({ delta: -3 })]);
     const texts = layoutKitchenTicket(t, opts).map((l) => l.text);
-    expect(texts).toContain('【取消/CANCEL】Chikinkaree  x3');
-    expect(texts).toContain('*** 取消 ***');
+    expect(texts).toContain('[CANCEL/取消] Chikinkaree  x3');
+    expect(texts).toContain('*** CANCEL / 取消 ***');
   });
 
   it('追加と取消が混在する場合は取消見出しを出さない', () => {
     const [t] = groupKitchenTickets([row({ delta: -1 }), row({ item_name: 'ナン', delta: 1 })]);
-    expect(layoutKitchenTicket(t, opts).map((l) => l.text)).not.toContain('*** 取消 ***');
+    expect(layoutKitchenTicket(t, opts).map((l) => l.text)).not.toContain('*** CANCEL / 取消 ***');
   });
 
-  it('卓なしはテイクアウト表記', () => {
+  it('卓なしはテイクアウト表記（英語併記）', () => {
     const [t] = groupKitchenTickets([row({ table_name: null })]);
-    expect(layoutKitchenTicket(t, opts).map((l) => l.text)).toContain('テイクアウト');
+    expect(layoutKitchenTicket(t, opts).map((l) => l.text)).toContain('TAKEOUT / テイクアウト');
   });
 
   it('選択肢とメモを明細の下に出す', () => {
@@ -110,10 +113,20 @@ describe('kitchenTicketStarPrnt', () => {
   });
 });
 
-describe('ローマ字印字', () => {
-  const opts = { title: 'キッチン', printedAt: '18:21', paperWidth: 80 as const };
+describe('英語印字', () => {
+  const opts = { title: 'キッチン', titleEn: 'KITCHEN', printedAt: '18:21', paperWidth: 80 as const };
 
-  it('カナ欄の英語名をそのまま見出しに使う', () => {
+  it('設定した英語名（name_en）を最優先で見出しに使う', () => {
+    const [t] = groupKitchenTickets([
+      row({ item_name: 'チキンカレー', item_name_kana: 'チキンカレー', item_name_en: 'Chicken Curry' }),
+    ]);
+    const texts = layoutKitchenTicket(t, opts).map((l) => l.text);
+    expect(texts).toContain('Chicken Curry  x1');
+    expect(texts).toContain('   チキンカレー');
+    expect(texts).not.toContain('Chikinkaree  x1');
+  });
+
+  it('英語名が無ければカナ欄の英語をそのまま使う', () => {
     const [t] = groupKitchenTickets([row({ item_name: '本日のラッサム', item_name_kana: 'Rasam of the day' })]);
     const texts = layoutKitchenTicket(t, opts).map((l) => l.text);
     expect(texts).toContain('Rasam of the day  x1');

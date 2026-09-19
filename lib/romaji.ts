@@ -147,3 +147,23 @@ export function romanItemName(name: string, kana?: string | null): string | null
   // 先頭だけ大文字（読みやすさ優先。全大文字は横幅を食うため避ける）
   return romaji.charAt(0).toUpperCase() + romaji.slice(1);
 }
+
+/**
+ * 画面・伝票に出す英語名を決める。
+ * 1) 設定 > メニュー の「英語名（name_en）」を最優先する（店舗が手で入れた正しい英語）
+ * 2) 無ければカナからローマ字を作る（データ入力ゼロで、とりあえず読めるようにするため）
+ * 3) それも作れなければ null（呼び出し側は日本語のみ表示する。情報は落とさない）
+ * @param name    商品・カテゴリ名（日本語のことが多い）
+ * @param nameKana カナ名
+ * @param nameEn  手入力の英語名
+ */
+export function englishName(
+  name: string,
+  nameKana?: string | null,
+  nameEn?: string | null
+): string | null {
+  const manual = (nameEn ?? '').trim();
+  // 日本語名と同じ文字列を英語名欄に入れている場合は「英語なし」と同じ扱いにする
+  if (manual && manual !== name.trim()) return manual;
+  return romanItemName(name, nameKana ?? null);
+}

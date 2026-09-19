@@ -28,12 +28,15 @@ export interface PosOptionGroup {
  */
 export function OptionDialog({
   itemName,
+  itemNameEn,
   basePrice,
   groups,
   onCancel,
   onConfirm,
 }: {
   itemName: string;
+  /** 英語名。日本語を読まないスタッフ向けに見出しの下へ併記する */
+  itemNameEn?: string | null;
   basePrice: number;
   groups: PosOptionGroup[];
   onCancel: () => void;
@@ -83,6 +86,7 @@ export function OptionDialog({
   return (
     <Dialog open onClose={onCancel} title={itemName}>
       <div className="space-y-4">
+        {itemNameEn && <p className="-mt-2 text-sm text-gray-500">{itemNameEn}</p>}
         {groups.map((g) => {
           const chosen = selected[g.id] ?? [];
           return (

@@ -1,5 +1,6 @@
--- 厨房伝票にローマ字を印字するため、claim_kitchen_items が商品のカナ（英語名を入れている店舗もある）を返すようにする。
--- 変更点は返却列 item_name_kana の追加のみ（差分確定ロジックは 00057 と同じ）。
+-- 厨房伝票を英語で印字するため、claim_kitchen_items が商品の英語名とカナを返すようにする。
+-- 表示側は 英語名(name_en) → 無ければカナからローマ字 → それも無ければ日本語、の順で選ぶ。
+-- 変更点は返却列 item_name_en / item_name_kana の追加のみ（差分確定ロジックは 00057 と同じ）。
 -- 戻り値の型が変わるため drop してから作り直す。
 drop function if exists public.claim_kitchen_items(uuid, integer, integer);
 
@@ -16,6 +17,7 @@ returns table (
   guest_count integer,
   clerk_name text,
   item_name text,
+  item_name_en text,
   item_name_kana text,
   modifiers jsonb,
   memo text,
@@ -49,6 +51,7 @@ begin
            case when oi.status = 'active' and o.status not in ('cancelled', 'void')
                 then oi.quantity else 0 end as eff,
            coalesce(mc.station, 'kitchen') as st,
+           mi.name_en as name_en,
            mi.name_kana as kana
       from public.order_items oi
       join public.orders o on o.id = oi.order_id
@@ -61,7 +64,7 @@ begin
      for update of oi skip locked
   ),
   diff as (
-    select c.id, c.eff, c.eff - c.printed as d, c.st, c.kana
+    select c.id, c.eff, c.eff - c.printed as d, c.st, c.name_en, c.kana
       from cand c
      where c.eff <> c.printed
   ),
@@ -73,7 +76,7 @@ begin
     returning oi.id
   )
   select oi.id, o.id, o.order_no, rt.name, o.guest_count, o.clerk_name,
-         oi.name, diff.kana, oi.modifiers, oi.memo, diff.st, diff.d, oi.updated_at
+         oi.name, diff.name_en, diff.kana, oi.modifiers, oi.memo, diff.st, diff.d, oi.updated_at
     from diff
     join upd on upd.id = diff.id
     join public.order_items oi on oi.id = diff.id
