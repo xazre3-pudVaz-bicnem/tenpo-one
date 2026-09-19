@@ -325,7 +325,17 @@ export async function importRows(type: string, rows: ImportRowInput[]): Promise<
       }
     }
   } else if (type === 'menu_option_groups') {
-    const r = await importOptionGroups(supabase, ctx, storeId as string, dedupe(validOptionRows));
+    // 登録済みの選択肢（同じグループ名＋選択肢名）は二重登録しないが、その行の「対象商品」への紐付けだけは行う。
+    // 一括変換ボタンで選択肢だけ作った後に、同じCSVで紐付けを追加できるようにするため（何度流しても同じ結果になる）。
+    const seen = new Set<string>();
+    const forImport = validOptionRows.map((item) => {
+      const exists = item.dupKey !== null && (seen.has(item.dupKey) || existingKeys.has(item.dupKey));
+      if (item.dupKey !== null) seen.add(item.dupKey);
+      if (!exists) return { rowNumber: item.rowNumber, data: item.data };
+      skipped += 1;
+      return { rowNumber: item.rowNumber, data: { ...item.data, optionName: '' } };
+    });
+    const r = await importOptionGroups(supabase, ctx, storeId as string, forImport);
     inserted = r.inserted;
     updated = r.linked;
     failed.push(...r.failed);
@@ -471,7 +481,7 @@ async function importOptionGroups(
     groupIdByName.set(key, created.id as string);
   }
 
-  // 選択肢を登録（既存分は fetchExistingKeys 側で除外済み。sort_order は既存件数の続き）
+  // 選択肢を登録（登録済み分は呼び出し側で optionName を空にして「紐付けだけの行」にしてある。sort_order は既存件数の続き）
   let inserted = 0;
   const optionRows: Record<string, unknown>[] = [];
   const countByGroup = new Map<string, number>();
