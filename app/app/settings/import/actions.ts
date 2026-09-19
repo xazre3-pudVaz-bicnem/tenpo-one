@@ -485,6 +485,7 @@ async function importOptionGroups(
       .eq('status', 'active');
     countByGroup.set(key, count ?? 0);
     for (const r of g.rows) {
+      if (!r.data.optionName) continue; // 紐付けだけの行
       const n = countByGroup.get(key) ?? 0;
       countByGroup.set(key, n + 1);
       optionRows.push({

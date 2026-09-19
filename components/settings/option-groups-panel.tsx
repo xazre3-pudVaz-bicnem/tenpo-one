@@ -18,6 +18,7 @@ import {
   addOptionItem,
   deleteOptionItem,
   setGroupMenuItems,
+  convertOptionProductsToGroups,
 } from '@/app/app/settings/options/actions';
 
 export interface OptionGroupRow {
@@ -92,6 +93,32 @@ export function OptionGroupsPanel({
               {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
               グループを追加
             </Button>
+          </div>
+          {/* dinii 移行時に「【グループ】選択肢」という商品として入れたオプションを、本物の選択肢に一括変換する */}
+          <div className="flex flex-wrap items-center gap-2 border-t border-gray-100 pt-3">
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={pending}
+              onClick={() =>
+                startTransition(async () => {
+                  const res = await convertOptionProductsToGroups(storeId);
+                  if (res.error) {
+                    toast(res.error, 'error');
+                    return;
+                  }
+                  toast(
+                    `変換しました: グループ ${res.groups ?? 0}件 / 選択肢 ${res.options ?? 0}件（登録済み ${res.skipped ?? 0}件はスキップ）。各グループの「対象商品」でセット商品に付けてください`
+                  );
+                  router.refresh();
+                })
+              }
+            >
+              「【グループ】選択肢」形式のオプション商品から一括作成
+            </Button>
+            <span className="text-xs text-gray-500">
+              dinii から移した「【Choice Curry】…」のような商品を、選択肢グループに変換します（元の商品は消しません）
+            </span>
           </div>
         </CardContent>
       </Card>

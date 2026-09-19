@@ -58,6 +58,16 @@ describe('validateOptionGroupRow（選択肢CSV）', () => {
     expect(validateOptionGroupRow({ groupName: 'g', optionName: 'x', minSelect: '2', maxSelect: '1' }).ok).toBe(false);
   });
 
+  it('選択肢名が空でも対象商品があれば「紐付けだけの行」として通る（重複判定なし）', () => {
+    const r = validateOptionGroupRow({ groupName: 'カレーを選ぶ', optionName: '', targetItems: 'カレーセット' });
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.data.optionName).toBe('');
+      expect(r.dupKey).toBeNull();
+    }
+    expect(validateOptionGroupRow({ groupName: 'g', optionName: '', targetItems: '' }).ok).toBe(false);
+  });
+
   it('「いいえ」「任意」は必須でない', () => {
     const r = validateOptionGroupRow({ groupName: 'トッピング', optionName: 'チーズ', isRequired: '任意', price: '200' });
     expect(r.ok && r.data.isRequired).toBe(false);

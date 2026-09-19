@@ -160,8 +160,10 @@ export function validateOptionGroupRow(values: Record<string, string>): Validate
   const errors: string[] = [];
   const group = requiredText(values, 'groupName', 'グループ名');
   if (!group.ok) errors.push(group.error);
-  const option = requiredText(values, 'optionName', '選択肢名');
-  if (!option.ok) errors.push(option.error);
+  // 選択肢名が空でも「対象商品」があれば、既存グループを商品に付けるだけの行として受け付ける
+  const optionText = optionalText(values, 'optionName');
+  const targets = cell(values, 'targetItems');
+  if (!optionText && !targets) errors.push('選択肢名（または対象商品）を入力してください');
   const price = optionalInt(values, 'price', '追加料金');
   if (!price.ok) errors.push(price.error);
   else if (price.value !== null && price.value < 0) errors.push('追加料金は0以上で入力してください');
@@ -176,7 +178,7 @@ export function validateOptionGroupRow(values: Record<string, string>): Validate
 
   const data: NormalizedOptionGroupRow = {
     groupName: group.ok ? group.value : '',
-    optionName: option.ok ? option.value : '',
+    optionName: optionText ?? '',
     optionNameEn: optionalText(values, 'optionNameEn'),
     price: price.ok && price.value !== null ? price.value : 0,
     isRequired: optionalBool(values, 'isRequired'),
@@ -187,7 +189,8 @@ export function validateOptionGroupRow(values: Record<string, string>): Validate
       .map((s) => s.trim())
       .filter(Boolean),
   };
-  return { ok: true, data, dupKey: `${data.groupName.toLowerCase()}|${data.optionName.toLowerCase()}` };
+  // 紐付けだけの行は重複判定しない（同じグループを何行にも書けるように）
+  return { ok: true, data, dupKey: data.optionName ? `${data.groupName.toLowerCase()}|${data.optionName.toLowerCase()}` : null };
 }
 
 // ---------------------------------------------------------------
