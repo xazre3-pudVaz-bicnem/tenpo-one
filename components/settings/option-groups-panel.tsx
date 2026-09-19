@@ -26,7 +26,7 @@ export interface OptionGroupRow {
   isRequired: boolean;
   minSelect: number;
   maxSelect: number;
-  items: { id: string; name: string; price: number }[];
+  items: { id: string; name: string; nameEn?: string | null; price: number }[];
   menuItemIds: string[];
 }
 
@@ -145,6 +145,7 @@ function GroupCard({
   const [minSelect, setMinSelect] = useState(group.minSelect);
   const [maxSelect, setMaxSelect] = useState(group.maxSelect);
   const [optName, setOptName] = useState('');
+  const [optNameEn, setOptNameEn] = useState('');
   const [optPrice, setOptPrice] = useState(0);
 
   const linkedNames = group.menuItemIds
@@ -234,6 +235,7 @@ function GroupCard({
                 <li key={o.id} className="flex items-center justify-between py-2">
                   <span className="text-sm text-navy">
                     {o.name}
+                    {o.nameEn && <span className="ml-2 text-xs text-gray-500">{o.nameEn}</span>}
                     {o.price !== 0 && <Badge tone="gray" className="ml-2">+{yen(o.price)}</Badge>}
                   </span>
                   <Button
@@ -260,6 +262,18 @@ function GroupCard({
               />
             </div>
             <div>
+              {/* 厨房伝票は英語を主に印字するため、セットの中身（カレーの種類・ナン/ご飯など）は
+                  ここに英語を入れておくと厨房で読める。空欄なら日本語のみ印字される。 */}
+              <Label htmlFor={`oe-${group.id}`}>英語名（任意）</Label>
+              <Input
+                id={`oe-${group.id}`}
+                value={optNameEn}
+                onChange={(e) => setOptNameEn(e.target.value)}
+                placeholder="e.g. Butter Chicken"
+                className="max-w-[12rem]"
+              />
+            </div>
+            <div>
               <Label htmlFor={`op-${group.id}`}>追加料金</Label>
               <Input
                 id={`op-${group.id}`}
@@ -273,10 +287,11 @@ function GroupCard({
               size="sm"
               onClick={() =>
                 run(
-                  () => addOptionItem({ groupId: group.id, storeId, name: optName, price: optPrice }),
+                  () => addOptionItem({ groupId: group.id, storeId, name: optName, nameEn: optNameEn, price: optPrice }),
                   '選択肢を追加しました',
                   () => {
                     setOptName('');
+                    setOptNameEn('');
                     setOptPrice(0);
                   }
                 )

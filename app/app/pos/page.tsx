@@ -17,6 +17,9 @@ import {
   splitOrder,
   mergeOrders,
   moveTable,
+  cancelEmptyOrder,
+  setGuestCount,
+  addSlipToTable,
   applyCoupon,
   clearCoupon,
   searchCustomerByPhone,
@@ -120,20 +123,20 @@ export default async function PosPage({
   ] = await Promise.all([
     supabase
       .from('order_items')
-      .select('id, name, unit_price, quantity, tax_rate, tax_included, line_total, status')
+      .select('id, menu_item_id, name, unit_price, quantity, tax_rate, tax_included, line_total, status')
       .eq('order_id', orderId)
       .eq('status', 'active')
       .order('created_at'),
     supabase
       .from('menu_categories')
-      .select('id, name, color, sort_order')
+      .select('id, name, name_en, color, sort_order')
       .eq('organization_id', ctx.organizationId)
       .or(`store_id.is.null,store_id.eq.${store.id}`)
       .eq('status', 'active')
       .order('sort_order'),
     supabase
       .from('menu_items')
-      .select('id, category_id, name, name_kana, price, takeout_price, item_type, is_sold_out, is_recommended, sort_order')
+      .select('id, category_id, name, name_en, name_kana, price, takeout_price, item_type, is_sold_out, is_recommended, sort_order')
       .eq('organization_id', ctx.organizationId)
       .or(`store_id.is.null,store_id.eq.${store.id}`)
       .eq('status', 'active')
@@ -190,30 +193,33 @@ export default async function PosPage({
   const { data: optionLinks } = await supabase
     .from('menu_item_option_groups')
     .select(
-      'menu_item_id, sort_order, menu_option_groups!inner(id, name, is_required, min_select, max_select, status, menu_option_items(id, name, price, sort_order, status))'
+      'menu_item_id, sort_order, menu_option_groups!inner(id, name, name_en, is_required, min_select, max_select, status, menu_option_items(id, name, name_en, price, sort_order, status))'
     )
     .eq('store_id', store.id)
     .eq('menu_option_groups.status', 'active')
     .order('sort_order');
 
   const optionGroupsByItem: Record<string, {
-    id: string; name: string; isRequired: boolean; minSelect: number; maxSelect: number;
-    items: { id: string; name: string; price: number }[];
+    id: string; name: string; nameEn: string | null; isRequired: boolean; minSelect: number; maxSelect: number;
+    items: { id: string; name: string; nameEn: string | null; price: number }[];
   }[]> = {};
   for (const link of optionLinks ?? []) {
     const g = link.menu_option_groups as unknown as {
-      id: string; name: string; is_required: boolean; min_select: number; max_select: number;
-      menu_option_items: { id: string; name: string; price: number; sort_order: number; status: string }[];
+      id: string; name: string; name_en: string | null; is_required: boolean; min_select: number; max_select: number;
+      menu_option_items: {
+        id: string; name: string; name_en: string | null; price: number; sort_order: number; status: string;
+      }[];
     } | null;
     if (!g) continue;
     const items = (g.menu_option_items ?? [])
       .filter((o) => o.status === 'active')
       .sort((a, b) => a.sort_order - b.sort_order)
-      .map((o) => ({ id: o.id, name: o.name, price: o.price }));
+      .map((o) => ({ id: o.id, name: o.name, nameEn: o.name_en, price: o.price }));
     if (items.length === 0) continue; // 選択肢が無いグループはダイアログを出さない
     (optionGroupsByItem[link.menu_item_id] ??= []).push({
       id: g.id,
       name: g.name,
+      nameEn: g.name_en,
       isRequired: g.is_required,
       minSelect: g.min_select,
       maxSelect: g.max_select,
@@ -335,6 +341,9 @@ export default async function PosPage({
         splitOrderAction={splitOrder}
         mergeOrdersAction={mergeOrders}
         moveTableAction={moveTable}
+        cancelEmptyOrderAction={cancelEmptyOrder}
+        setGuestCountAction={setGuestCount}
+        addSlipToTableAction={addSlipToTable}
         startTerminalPaymentAction={startTerminalPayment}
         checkTerminalPaymentAction={checkTerminalPayment}
         cancelTerminalPaymentAction={cancelTerminalPayment}

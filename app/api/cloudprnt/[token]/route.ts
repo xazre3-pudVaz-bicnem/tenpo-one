@@ -1,14 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import {
-  groupKitchenTickets,
-  layoutKitchenTicket,
-  STATION_LABELS,
-  type ClaimedKitchenItem,
-  type KitchenStation,
-} from '@/lib/kitchen-ticket';
-import { kitchenTicketMarkup } from '@/lib/receipt-markup';
-import { kitchenTicketStarPrnt } from '@/lib/starprnt';
+import { generateKitchenJobs } from '@/lib/kitchen-jobs';
 
 /**
  * Star CloudPRNT サーバーエンドポイント。
@@ -37,10 +29,6 @@ const RECLAIM_STALE_MS = 60_000; // claimed のまま確定されないジョブ
 const TTL_DRAWER_MS = 2 * 60_000; // 会計時のドロア開放は数分遅れたら意味がない
 const TTL_TEST_MS = 10 * 60_000;
 const TTL_PRINT_MS = 30 * 60_000; // レシート・厨房伝票（必要ならレシート画面から再印刷できる）
-
-/** キッチン伝票の生成パラメータ（claim_kitchen_items） */
-const KITCHEN_BATCH_DELAY_SECONDS = 3; // 連続タップを1枚にまとめる待ち
-const KITCHEN_WINDOW_MINUTES = 30; // これより古い変更は伝票にしない（TTL_PRINT_MS と揃える）
 
 const MARKUP = 'text/vnd.star.markup';
 const STARPRNT = 'application/vnd.star.starprnt';
@@ -112,59 +100,8 @@ async function expireStaleJobs(admin: ReturnType<typeof createAdminClient>, prin
   await Promise.all([
     base().eq('job_type', 'test').eq('payload->>drawer', 'true').lt('created_at', isoAgo(TTL_DRAWER_MS)),
     base().eq('job_type', 'test').lt('created_at', isoAgo(TTL_TEST_MS)),
-    base().in('job_type', ['receipt', 'ryoshusho', 'kitchen']).lt('created_at', isoAgo(TTL_PRINT_MS)),
+    base().in('job_type', ['receipt', 'ryoshusho', 'kitchen', 'order_slip']).lt('created_at', isoAgo(TTL_PRINT_MS)),
   ]);
-}
-
-/**
- * キッチン機のポーリング時に、担当ステーションの注文差分を確定して伝票ジョブにする。
- * 端末（iPad等）が起動していなくても、QR注文の伝票がプリンタから出る。
- */
-async function generateKitchenJobs(admin: ReturnType<typeof createAdminClient>, printer: PrinterRow) {
-  const { data, error } = await admin.rpc('claim_kitchen_items', {
-    p_printer: printer.id,
-    p_batch_delay_seconds: KITCHEN_BATCH_DELAY_SECONDS,
-    p_window_minutes: KITCHEN_WINDOW_MINUTES,
-  });
-  if (error) {
-    console.error('[cloudprnt] claim_kitchen_items failed', printer.id, error.message);
-    return;
-  }
-  const tickets = groupKitchenTickets((data ?? []) as ClaimedKitchenItem[]);
-  if (tickets.length === 0) return;
-
-  const stations = (printer.kitchen_stations ?? ['kitchen']) as KitchenStation[];
-  const title = `${stations.map((s) => STATION_LABELS[s] ?? s).join('・')} 伝票`;
-  const printedAt = new Date().toLocaleTimeString('ja-JP', {
-    timeZone: 'Asia/Tokyo',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-  const paperWidth = printer.paper_width_mm === 58 ? 58 : 80;
-
-  const rows = tickets.map((t) => {
-    const lines = layoutKitchenTicket(t, { title, printedAt, paperWidth });
-    return {
-      organization_id: printer.organization_id,
-      store_id: printer.store_id,
-      printer_config_id: printer.id,
-      job_type: 'kitchen',
-      order_id: t.orderId,
-      target: 'cloudprnt',
-      content_type: MARKUP,
-      payload: {
-        body: kitchenTicketMarkup(lines),
-        starprnt: kitchenTicketStarPrnt(lines).toString('base64'),
-      },
-      status: 'queued',
-    };
-  });
-
-  const { error: insErr } = await admin.from('print_jobs').insert(rows);
-  if (insErr) {
-    // 明細は伝達済みに更新済みのため、ここで失敗すると伝票が出ない。KDS画面で確認できるよう記録を残す。
-    console.error('[cloudprnt] kitchen job insert failed', printer.id, insErr.message);
-  }
 }
 
 /** POST: ポーリング。印刷可能ジョブの有無を返す。 */

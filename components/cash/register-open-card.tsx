@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input, Label } from '@/components/ui/input';
 import { useToast } from '@/components/ui/toast';
 import { openRegister } from '@/app/app/cash/actions';
+import { toUserMessage } from '@/lib/action-error';
 
 /**
  * 未開局のレジ1台分のカード。開始現金（釣銭準備金）を入力してそのレジだけを開局する。
@@ -34,11 +35,15 @@ export function RegisterOpenCard({
     }
     startTransition(async () => {
       try {
-        await openRegister(storeId, registerId, amount);
+        const result = await openRegister(storeId, registerId, amount);
+        if (!result.ok) {
+          toast(result.error, 'error');
+          return;
+        }
         toast(`${registerName}を開局しました`);
         setOpeningFloat('');
       } catch (err) {
-        toast(err instanceof Error ? err.message : '開局に失敗しました', 'error');
+        toast(toUserMessage(err, '開局に失敗しました'), 'error');
       }
     });
   };

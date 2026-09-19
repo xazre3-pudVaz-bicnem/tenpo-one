@@ -26,7 +26,7 @@ export default async function OptionsSettingsPage() {
   const [{ data: groups }, { data: links }, { data: menuItems }] = await Promise.all([
     supabase
       .from('menu_option_groups')
-      .select('id, name, is_required, min_select, max_select, sort_order, menu_option_items(id, name, price, sort_order, status)')
+      .select('id, name, is_required, min_select, max_select, sort_order, menu_option_items(id, name, name_en, price, sort_order, status)')
       .eq('store_id', targetStore.id)
       .eq('status', 'active')
       .order('sort_order'),
@@ -53,10 +53,14 @@ export default async function OptionsSettingsPage() {
     isRequired: g.is_required,
     minSelect: g.min_select,
     maxSelect: g.max_select,
-    items: ((g.menu_option_items ?? []) as { id: string; name: string; price: number; sort_order: number; status: string }[])
+    items: (
+      (g.menu_option_items ?? []) as {
+        id: string; name: string; name_en: string | null; price: number; sort_order: number; status: string;
+      }[]
+    )
       .filter((o) => o.status === 'active')
       .sort((a, b) => a.sort_order - b.sort_order)
-      .map((o) => ({ id: o.id, name: o.name, price: o.price })),
+      .map((o) => ({ id: o.id, name: o.name, nameEn: o.name_en, price: o.price })),
     menuItemIds: itemsByGroup.get(g.id) ?? [],
   }));
 
