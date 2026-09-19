@@ -432,6 +432,7 @@ export async function enqueueCloudPrntTest(
 
   const { testPrintMarkup, drawerKickMarkup } = await import('@/lib/receipt-markup');
   const { testPrintStarPrnt, drawerKickStarPrnt } = await import('@/lib/starprnt');
+  const { testPrintEposXml, drawerKickEposXml } = await import('@/lib/epos-print');
   const { data: store } = await supabase.from('stores').select('name').eq('id', storeId).single();
 
   const paper = printer.paper_width_mm === 58 ? 58 : 80;
@@ -449,6 +450,8 @@ export async function enqueueCloudPrntTest(
       ? drawerKickStarPrnt(drawerCommand)
       : testPrintStarPrnt({ storeName, paperWidth: paper, issuedAt })
   ).toString('base64');
+  // EPSON（Server Direct Print）用。プリンターがどちらのURLを叩くかで使われる表現が決まる
+  const epos = kind === 'drawer' ? drawerKickEposXml() : testPrintEposXml({ storeName, paperWidth: paper, issuedAt });
 
   const { error } = await supabase.from('print_jobs').insert({
     organization_id: ctx.organizationId,
@@ -457,7 +460,7 @@ export async function enqueueCloudPrntTest(
     job_type: 'test',
     target: 'cloudprnt',
     content_type: 'text/vnd.star.markup',
-    payload: { body, starprnt, drawer: kind === 'drawer' },
+    payload: { body, starprnt, epos, drawer: kind === 'drawer' },
     status: 'queued',
     created_by: ctx.userId,
   });
