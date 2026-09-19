@@ -147,8 +147,8 @@ export default async function CashClosePage() {
             <span className="text-[13px] text-ink-3">
               出金 <span className="tabular-nums">{receiptRows.length}</span>件 ・ レシートあり{' '}
               <span className="tabular-nums">{okRows.length}</span> ・{' '}
-              <b className={ngRows.length > 0 ? 'text-danger' : 'text-success'}>
-                未スキャン／未精算 <span className="tabular-nums">{ngRows.length}</span>件
+              <b className={ngRows.length > 0 ? 'text-ink-2' : 'text-success'}>
+                レシート未添付／未精算 <span className="tabular-nums">{ngRows.length}</span>件
                 {ngRows.length > 0 && <span className="tabular-nums">（{yen(ngTotal)}）</span>}
               </b>
             </span>
@@ -239,6 +239,7 @@ export default async function CashClosePage() {
                 session={s}
                 showRegisterName={openSessions.length > 1 || cards.length > 1}
                 canOperate={canOperate}
+                today={today}
               />
             ))}
             {openSessions.length === 0 && (
