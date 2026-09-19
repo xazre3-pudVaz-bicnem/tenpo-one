@@ -8,6 +8,7 @@ import { Input, Label, Select, Textarea, FieldError } from '@/components/ui/inpu
 import { useToast } from '@/components/ui/toast';
 import { yen, formatDateTime } from '@/lib/format';
 import { addCashTransaction, closeRegister } from '@/app/app/cash/actions';
+import { toUserMessage } from '@/lib/action-error';
 import { KIND_LABELS, IN_KINDS, type CashKind } from '@/components/cash/labels';
 
 export interface SessionCardData {
@@ -206,11 +207,15 @@ function CloseRegisterDialog({
     }
     startTransition(async () => {
       try {
-        await closeRegister(sessionId, counted, needsReason ? reason.trim() : null);
+        const result = await closeRegister(sessionId, counted, needsReason ? reason.trim() : null);
+        if (!result.ok) {
+          toast(result.error, 'error');
+          return;
+        }
         toast('レジを締めました');
         onClose();
       } catch (err) {
-        toast(err instanceof Error ? err.message : '締め処理に失敗しました', 'error');
+        toast(toUserMessage(err, '締め処理に失敗しました'), 'error');
       }
     });
   };

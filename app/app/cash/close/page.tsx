@@ -239,6 +239,7 @@ export default async function CashClosePage() {
                 session={s}
                 showRegisterName={openSessions.length > 1 || cards.length > 1}
                 canOperate={canOperate}
+                today={today}
               />
             ))}
             {openSessions.length === 0 && (

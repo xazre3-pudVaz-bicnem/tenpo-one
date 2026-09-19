@@ -8,10 +8,13 @@ import { useToast } from '@/components/ui/toast';
 import { cn } from '@/lib/utils';
 import { yen } from '@/lib/format';
 import { closeRegister } from '@/app/app/cash/actions';
+import { toUserMessage } from '@/lib/action-error';
 
 export interface CountSession {
   id: string;
   registerName: string;
+  /** このセッションの営業日。当日と違えば前営業日から開きっぱなし */
+  businessDate?: string;
   openingFloat: number;
   cashSales: number;
   cashIn: number;
@@ -28,10 +31,13 @@ export function RegisterCountCard({
   session,
   showRegisterName,
   canOperate,
+  today,
 }: {
   session: CountSession;
   showRegisterName: boolean;
   canOperate: boolean;
+  /** 当日の営業日。session.businessDate と違えば「前営業日から開きっぱなし」として警告する */
+  today?: string;
 }) {
   const [counted, setCounted] = useState('');
   const [reason, setReason] = useState('');
@@ -53,12 +59,16 @@ export function RegisterCountCard({
     }
     startTransition(async () => {
       try {
-        await closeRegister(session.id, countedValue, needsReason ? reason.trim() : null);
+        const result = await closeRegister(session.id, countedValue, needsReason ? reason.trim() : null);
+        if (!result.ok) {
+          toast(result.error, 'error');
+          return;
+        }
         toast(`${session.registerName}をクローズしました`);
         setCounted('');
         setReason('');
       } catch (err) {
-        toast(err instanceof Error ? err.message : 'クローズに失敗しました', 'error');
+        toast(toUserMessage(err, 'クローズに失敗しました'), 'error');
       }
     });
   };
@@ -69,6 +79,13 @@ export function RegisterCountCard({
         <CardTitle en="Cash count">現金実査{showRegisterName ? ` — ${session.registerName}` : ''}</CardTitle>
       </CardHeader>
       <CardContent className="pt-2">
+        {/* 前営業日から開きっぱなしのレジ。これを締めないと、そのレジは新しく開局できない */}
+        {today && session.businessDate && session.businessDate !== today && (
+          <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            このレジは <span className="font-bold">{session.businessDate}</span>{' '}
+            の営業日から開いたままです。先にこのレジを締めてください（締めるまで、このレジは新しく開局できません）。
+          </p>
+        )}
         <div className="flex items-center justify-between gap-3 border-b border-line py-4">
           <div className="min-w-0">
             <p className="text-sm font-medium text-ink">理論在高</p>

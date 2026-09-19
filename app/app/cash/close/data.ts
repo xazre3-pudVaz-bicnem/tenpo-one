@@ -57,6 +57,8 @@ export interface OpenSessionState {
   id: string;
   registerId: string;
   registerName: string;
+  /** このセッションの営業日。当日でなければ「前営業日から開きっぱなし」 */
+  businessDate: string;
   openedAt: string;
   openedByName: string;
   openingFloat: number;
@@ -105,13 +107,16 @@ export async function loadRegisterBoard(storeId: string, today: string) {
     { count: printerCount },
   ] = await Promise.all([
     supabase.from('registers').select('id, name').eq('store_id', storeId).eq('status', 'active').order('name'),
+    // 当日分に加えて、別の営業日から開きっぱなしのセッションも拾う。
+    // 当日分だけを見ると、前営業日から開いたままのレジが画面上「未開局」に見えるのに
+    // open_register_session は SESSION_ALREADY_OPEN で拒否する（＝開局も締めもできない）状態になる。
     supabase
       .from('register_sessions')
       .select(
-        'id, register_id, status, opened_at, opened_by, opening_float, closed_at, closed_by, counted_cash, expected_cash, difference, registers(name)'
+        'id, register_id, business_date, status, opened_at, opened_by, opening_float, closed_at, closed_by, counted_cash, expected_cash, difference, registers(name)'
       )
       .eq('store_id', storeId)
-      .eq('business_date', today)
+      .or(`business_date.eq.${today},status.eq.open`)
       .order('opened_at'),
     supabase.from('daily_closings').select('*').eq('store_id', storeId).eq('business_date', today).maybeSingle(),
     supabase
@@ -176,6 +181,7 @@ export async function loadRegisterBoard(storeId: string, today: string) {
     : { data: [] as { id: string; display_name: string }[] };
   const nameById = new Map((profiles ?? []).map((p) => [p.id, p.display_name]));
 
+  // todaySessions は「当日分 ∪ 開局中（営業日問わず）」
   const openSessionRows = (todaySessions ?? []).filter((s) => s.status === 'open');
   const sessionIds = openSessionRows.map((s) => s.id);
   const { data: sessionTx } = sessionIds.length
@@ -208,7 +214,11 @@ export async function loadRegisterBoard(storeId: string, today: string) {
   const openSessions: OpenSessionState[] = [];
   const cards: RegisterCardState[] = (registers ?? []).map((r) => {
     const arr = sessionsByRegister.get(r.id) ?? [];
-    const session = arr.length === 0 ? null : (arr.find((s) => s.status === 'open') ?? arr[arr.length - 1]);
+      // 開局中セッションは営業日を問わず最優先（前営業日から開きっぱなしのレジをここで締められるようにする）。
+    // 締め済みカードは当日分だけを見る（別日の締め済みセッションは今日の画面に出さない）。
+    const todayArr = arr.filter((s) => s.business_date === today);
+    const session =
+      arr.find((s) => s.status === 'open') ?? (todayArr.length === 0 ? null : todayArr[todayArr.length - 1]);
     if (!session) return { type: 'unopened', registerId: r.id, registerName: r.name };
     const registerName = (session.registers as unknown as { name: string } | null)?.name ?? r.name;
     if (session.status === 'open') {
@@ -221,6 +231,7 @@ export async function loadRegisterBoard(storeId: string, today: string) {
         id: session.id,
         registerId: r.id,
         registerName,
+        businessDate: session.business_date,
         openedAt: session.opened_at,
         openedByName: nameOf(session.opened_by),
         openingFloat: session.opening_float,
@@ -256,6 +267,9 @@ export async function loadRegisterBoard(storeId: string, today: string) {
     (i) => i.reorder_point != null && Number(i.current_quantity) <= Number(i.reorder_point)
   ).length;
   const openRegistersCount = openSessions.length;
+  /** 別の営業日から開きっぱなしのレジ（今日の画面では「未開局」に見えてしまっていたもの） */
+  const staleOpenCount = openSessions.filter((s) => s.businessDate !== today).length;
+  const closedTodayCount = cards.filter((c) => c.type === 'closed').length;
   const totalRegistersCount = (registers ?? []).length;
 
   // ---- 開店チェックリスト ----
@@ -317,8 +331,19 @@ export async function loadRegisterBoard(storeId: string, today: string) {
     {
       key: 'open-registers',
       label: '未締めレジ',
-      valueLabel: `${openRegistersCount}台`,
+      valueLabel:
+        staleOpenCount > 0
+          ? `${openRegistersCount}台（うち前営業日から${staleOpenCount}台）`
+          : `${openRegistersCount}台`,
       status: openRegistersCount === 0 ? 'ok' : 'warn',
+    },
+    {
+      // 「レジを1台も開けずに1日を終えた」場合、店舗日次締めは NO_CLOSED_SESSIONS で必ず失敗する。
+      // 押してから怒られるのではなく、押す前に気づけるようにしておく。
+      key: 'closed-registers',
+      label: '本日締めたレジ',
+      valueLabel: `${closedTodayCount}台`,
+      status: closedTodayCount > 0 ? 'ok' : 'warn',
     },
     {
       key: 'pending-petty',
@@ -332,6 +357,8 @@ export async function loadRegisterBoard(storeId: string, today: string) {
   return {
     cards,
     openSessions,
+    staleOpenCount,
+    closedTodayCount,
     totalRegistersCount,
     todayClosing,
     registerBreakdown: mapRegisterBreakdown(todayClosing?.register_breakdown, nameById),

@@ -9,6 +9,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useToast } from '@/components/ui/toast';
 import { yen, formatDate } from '@/lib/format';
 import { approveClosing, reopenClosing, reopenStoreDay } from '@/app/app/cash/actions';
+import { toUserMessage } from '@/lib/action-error';
 import { CLOSING_STATUS_LABELS, CLOSING_STATUS_TONES, type ClosingStatus } from '@/components/cash/labels';
 import { ClosingSnapshot, type RegisterBreakdownRow } from '@/components/cash/closing-snapshot';
 
@@ -147,10 +148,14 @@ export function ClosingRow({
         requireReason
         onConfirm={async (reason) => {
           try {
-            await reopenStoreDay(closing.storeId, closing.businessDate, reason);
+            const result = await reopenStoreDay(closing.storeId, closing.businessDate, reason);
+            if (!result.ok) {
+              toast(result.error, 'error');
+              throw new Error(result.error);
+            }
             toast('店舗日次締めを再オープンしました');
           } catch (err) {
-            toast(err instanceof Error ? err.message : '再オープンに失敗しました', 'error');
+            toast(toUserMessage(err, '再オープンに失敗しました'), 'error');
             throw err;
           }
         }}
