@@ -67,12 +67,12 @@ export function PrintersPanel({ storeId, initial }: { storeId: string; initial: 
                   </Td>
                   <Td>
                     {CONNECTION_LABEL[r.connectionType] ?? r.connectionType}
-                    {/* CloudPRNT有効時は実機印字するため「シミュレーション動作」は出さない。 */}
+                    {/* プリンタ接続が有効なときは実機印字するため「シミュレーション動作」は出さない。 */}
                     {r.connectionType !== 'browser' && !r.cloudprntEnabled && (
                       <Badge tone="warning" className="ml-1">シミュレーション動作</Badge>
                     )}
                     {r.cloudprntEnabled && (
-                      <Badge tone="success" className="ml-1">CloudPRNT</Badge>
+                      <Badge tone="success" className="ml-1">実機印字</Badge>
                     )}
                   </Td>
                   <Td>{USAGE_LABEL[r.usage] ?? r.usage}</Td>

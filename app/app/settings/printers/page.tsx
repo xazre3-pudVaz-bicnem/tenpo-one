@@ -63,6 +63,7 @@ export default async function PrintersSettingsPage() {
     .map((p) => ({
       id: p.id,
       name: p.name,
+      maker: p.maker ?? '',
       model: p.model ?? '',
       usage: p.usage as 'receipt' | 'kitchen',
       cloudprntEnabled: p.cloudprnt_enabled ?? false,
@@ -84,7 +85,9 @@ export default async function PrintersSettingsPage() {
       cloudPrntRows
         .filter((p) => p.cloudprntEnabled && p.cloudprntToken)
         .map(async (p) => {
-          setupQrById[p.id] = await QRCode.toDataURL(`${siteUrl}/setup/printer#${p.cloudprntToken}`, {
+          // メーカーで接続方式が変わる（EPSON=Server Direct Print / Star=CloudPRNT）ため、案内画面にも渡す
+          const query = /epson/i.test(p.maker) ? '?m=epson' : '';
+          setupQrById[p.id] = await QRCode.toDataURL(`${siteUrl}/setup/printer${query}#${p.cloudprntToken}`, {
             width: 200,
             margin: 1,
           });
@@ -126,11 +129,12 @@ export default async function PrintersSettingsPage() {
       <PageHeader title="レジ・プリンター" en="Registers & printers" description={targetStore.name} />
 
       <div className="grid gap-5 @5xl:grid-cols-3">
-        <div className="space-y-5 @5xl:col-span-1">
+        {/* min-w-0: 中の表（横スクロール）が列幅を押し広げて画面からはみ出すのを防ぐ */}
+        <div className="min-w-0 space-y-5 @5xl:col-span-1">
           <RegistersPanel storeId={targetStore.id} initial={registerRows} />
           <DrawerPanel storeId={targetStore.id} initial={drawerInitial} />
         </div>
-        <div className="@5xl:col-span-2 space-y-5">
+        <div className="min-w-0 space-y-5 @5xl:col-span-2">
           <Card>
             <CardContent>
               <PrintersPanel storeId={targetStore.id} initial={printerRows} />
@@ -138,7 +142,8 @@ export default async function PrintersSettingsPage() {
           </Card>
           <CloudPrntPanel storeId={targetStore.id} siteUrl={siteUrl} printers={cloudPrntRows} setupQrById={setupQrById} />
           <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 px-4 py-3 text-xs text-gray-500">
-            レシート印字は上の「CloudPRNT」（Star mC-Print3 等）で実機印字に対応します。CloudPRNT未対応機や未設定時は、レシート画面からのブラウザ印刷が利用できます。
+            レシート印字は上の「プリンター接続」で実機印字に対応します（Star mC-Print3 等の CloudPRNT 対応機、EPSON
+            TM-m30III-H 等の Server Direct Print 対応機）。非対応機や未設定時は、レシート画面からのブラウザ印刷が利用できます。
           </div>
         </div>
       </div>

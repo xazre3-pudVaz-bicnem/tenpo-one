@@ -8,7 +8,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Input, Label } from '@/components/ui/input';
+import { Input, Label, Select } from '@/components/ui/input';
 import { useToast } from '@/components/ui/toast';
 import {
   setCloudPrntConfig,
@@ -19,6 +19,8 @@ import {
 export interface CloudPrntPrinter {
   id: string;
   name: string;
+  /** メーカー名（'EPSON' / 'Star' 等）。接続方式の判定に使う。 */
+  maker: string;
   model: string;
   usage: 'receipt' | 'kitchen';
   cloudprntEnabled: boolean;
@@ -38,6 +40,25 @@ const STATIONS: { key: string; label: string }[] = [
   { key: 'drink', label: 'ドリンク' },
   { key: 'dessert', label: 'デザート' },
 ];
+
+/**
+ * メーカーごとの接続方式。
+ * Star は CloudPRNT、EPSON（TM-m30III-H 等のTMインテリジェント機）は Server Direct Print で、
+ * どちらも「プリンタが定期的にTENPO ONEへ問い合わせて印刷データを受け取る」同じ考え方。
+ */
+function makerKind(maker: string): 'epson' | 'star' {
+  return /epson/i.test(maker) ? 'epson' : 'star';
+}
+
+const PROTOCOL = {
+  star: { path: 'cloudprnt', label: 'CloudPRNT', urlField: 'CloudPRNT「サーバーURL」', app: 'Star Quick Setup Utility' },
+  epson: {
+    path: 'epson',
+    label: 'Server Direct Print',
+    urlField: 'Server Direct Print「サーバー1 URL」',
+    app: 'Epson TM Utility',
+  },
+} as const;
 
 /** 接続中とみなす最終通信からの経過（ポーリング間隔の数倍に余裕を持たせる） */
 const ONLINE_WITHIN_MS = 60_000;
@@ -102,11 +123,11 @@ export function CloudPrntPanel({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>プリンター接続（CloudPRNT）</CardTitle>
+        <CardTitle>プリンター接続</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <p className="text-sm text-gray-600">
-          Star mC-Print3 等を TENPO ONE につなぎます。レシート機は会計時のレシートとドロア開放、
+          Star mC-Print3（CloudPRNT）や EPSON TM-m30III-H（Server Direct Print）等を TENPO ONE につなぎます。レシート機は会計時のレシートとドロア開放、
           キッチン機は注文が入ると厨房伝票を<strong>自動で</strong>印刷します（レジ端末が起動していなくてもQR注文の伝票が出ます）。
           プリンタがインターネットにつながっていれば、店内LANの設定は不要です。
         </p>
@@ -182,7 +203,9 @@ function PrinterRow({
 
   const isKitchen = printer.usage === 'kitchen';
   const status = statusOf({ ...printer, cloudprntEnabled: enabled }, now);
-  const pollUrl = siteUrl && printer.cloudprntToken ? `${siteUrl}/api/cloudprnt/${printer.cloudprntToken}` : '';
+  const protocol = PROTOCOL[makerKind(printer.maker)];
+  const pollUrl =
+    siteUrl && printer.cloudprntToken ? `${siteUrl}/api/${protocol.path}/${printer.cloudprntToken}` : '';
 
   const run = (fn: () => Promise<{ error?: string }>, okMsg: string) =>
     startTransition(async () => {
@@ -245,7 +268,12 @@ function PrinterRow({
 
       {enabled && (
         <div className="space-y-4">
-          {status === 'never' && <SetupGuide setupQr={setupQr} />}
+          {status === 'never' &&
+            (makerKind(printer.maker) === 'epson' ? (
+              <EpsonSetupGuide setupQr={setupQr} />
+            ) : (
+              <SetupGuide setupQr={setupQr} />
+            ))}
           {status === 'offline' && (
             <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-800">
               以前はつながっていましたが、現在プリンタから通信がありません。電源・LANケーブル・用紙切れ・
@@ -254,7 +282,7 @@ function PrinterRow({
           )}
 
           <div>
-            <Label>接続用URL（プリンタの CloudPRNT「サーバーURL」に設定）</Label>
+            <Label>接続用URL（プリンタの {protocol.urlField} に設定）</Label>
             <div className="flex items-center gap-2">
               <Input readOnly value={pollUrl} className="font-mono text-xs" onFocus={(e) => e.currentTarget.select()} />
               <Button type="button" variant="secondary" size="sm" onClick={copyUrl} disabled={!pollUrl}>
@@ -297,18 +325,33 @@ function PrinterRow({
                 onChange={(e) => setPollInterval(Number(e.target.value))}
               />
             </div>
-            {!isKitchen && printer.drawerKick && (
-              <div>
-                <Label htmlFor={`drawer-${printer.id}`}>ドロア開放コマンド（開かない場合に変更）</Label>
-                <Input
-                  id={`drawer-${printer.id}`}
-                  value={drawerCommand}
-                  onChange={(e) => setDrawerCommand(e.target.value)}
-                  className="font-mono text-xs"
-                  placeholder="[drawer: 1]"
-                />
-              </div>
-            )}
+            {!isKitchen &&
+              printer.drawerKick &&
+              // EPSON機はピン番号で指定するため、コマンド文字列ではなく接続ピンを選ばせる
+              (protocol.path === 'epson' ? (
+                <div>
+                  <Label htmlFor={`drawer-${printer.id}`}>ドロアの接続ピン（開かない場合に変更）</Label>
+                  <Select
+                    id={`drawer-${printer.id}`}
+                    value={drawerCommand.includes('2') ? '[drawer: 2]' : '[drawer: 1]'}
+                    onChange={(e) => setDrawerCommand(e.target.value)}
+                  >
+                    <option value="[drawer: 1]">2番ピン（通常）</option>
+                    <option value="[drawer: 2]">5番ピン</option>
+                  </Select>
+                </div>
+              ) : (
+                <div>
+                  <Label htmlFor={`drawer-${printer.id}`}>ドロア開放コマンド（開かない場合に変更）</Label>
+                  <Input
+                    id={`drawer-${printer.id}`}
+                    value={drawerCommand}
+                    onChange={(e) => setDrawerCommand(e.target.value)}
+                    className="font-mono text-xs"
+                    placeholder="[drawer: 1]"
+                  />
+                </div>
+              ))}
           </div>
 
           <div className="flex flex-wrap gap-2">
@@ -380,6 +423,71 @@ function PrinterRow({
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * EPSON（TMインテリジェント機）の接続手順。
+ * Server Direct Print の設定はプリンタ内蔵の設定画面（Web Config）で行うため、
+ * まずプリンタをネットワークにつなぎ、IPアドレスをブラウザで開くところまでを案内する。
+ */
+function EpsonSetupGuide({ setupQr }: { setupQr: string | null }) {
+  return (
+    <div className="rounded-xl border border-primary/30 bg-primary-soft/40 p-4">
+      <p className="mb-3 flex items-center gap-1.5 text-sm font-semibold text-navy">
+        <Smartphone className="h-4 w-4" />
+        EPSONプリンタを接続する（約5分）
+      </p>
+      <div className="flex flex-col gap-4 sm:flex-row">
+        <ol className="flex-1 list-decimal space-y-1.5 pl-4 text-sm text-gray-700">
+          <li>
+            プリンタをネットワークにつなぐ
+            <span className="block text-xs text-gray-500">
+              LANケーブルを挿すのが確実です。Wi-Fiの場合はスマホアプリ「Epson TM Utility」の Wi-Fi Setup Wizard から設定します
+            </span>
+          </li>
+          <li>
+            プリンタの<strong>IPアドレス</strong>を調べる
+            <span className="block text-xs text-gray-500">
+              用紙をセットして電源を入れ直すと、IPアドレス入りのステータスシートが印字されます（Epson TM Utility の
+              View Printer Status でも確認できます）
+            </span>
+          </li>
+          <li>
+            同じネットワークのパソコン・スマホのブラウザで <strong>http://プリンタのIP</strong> を開く（Web Config）
+            <span className="block text-xs text-gray-500">初期ユーザー名 epson / パスワードはプリンタのシリアル番号（機種により異なります）</span>
+          </li>
+          <li>
+            「Server Direct Print」→ <strong>有効</strong>、サーバー1のURLに右のQRで開いたURLを貼り付け、間隔を
+            <strong>3秒</strong>にする
+            <span className="block text-xs text-gray-500">ID・パスワードは空欄のまま（TENPO ONE側はURLで認証します）</span>
+          </li>
+          <li>
+            設定を<strong>保存してプリンタを再起動</strong>
+          </li>
+          <li>数十秒でこの表示が「接続中」に変わります（画面は自動で更新されます）</li>
+        </ol>
+        {setupQr && (
+          <div className="flex shrink-0 flex-col items-center gap-1">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={setupQr}
+              alt="接続用URLをスマホで開くQRコード"
+              className="h-36 w-36 rounded-lg border border-gray-200 bg-white p-1"
+            />
+            <p className="text-center text-xs text-gray-500">
+              スマホのカメラで読むと
+              <br />
+              URLのコピー画面が開きます
+            </p>
+          </div>
+        )}
+      </div>
+      <p className="mt-3 text-xs text-gray-500">
+        プリンタがインターネットに出られることが必要です。以前の設置場所の固定IPが残っていると、店内では印刷できても
+        TENPO ONE につながりません。その場合はWeb Configの「TCP/IP」でIPアドレスを自動取得（DHCP）にしてください。
+      </p>
     </div>
   );
 }

@@ -7,15 +7,42 @@ const subscribe = (onChange: () => void) => {
   window.addEventListener('hashchange', onChange);
   return () => window.removeEventListener('hashchange', onChange);
 };
-/** # 以降のトークンから接続用URLを組み立てる（トークンは48桁の16進） */
-const getUrl = () => {
+/** # 以降のトークン（48桁の16進）。無効ならnull。 */
+const getToken = () => {
   const token = window.location.hash.slice(1);
-  return /^[0-9a-f]{48}$/i.test(token) ? `${window.location.origin}/api/cloudprnt/${token}` : '';
+  return /^[0-9a-f]{48}$/i.test(token) ? token : '';
 };
-const getServerUrl = () => '';
+const getServerToken = () => '';
+/** 表示するURLは絶対URLにするため、開いている画面のオリジンを使う（サーバー描画時は空）。 */
+const getOrigin = () => window.location.origin;
 
-export function PrinterUrlCopy() {
-  const url = useSyncExternalStore(subscribe, getUrl, getServerUrl);
+/** メーカーごとの接続方式と設定手順（プリンタ側の画面名に合わせる）。 */
+const GUIDE = {
+  star: {
+    path: 'cloudprnt',
+    steps: [
+      'Star Quick Setup Utility でプリンタに接続（Bluetooth）',
+      'ネットワーク → IPアドレスを「自動取得（DHCP）」',
+      'CloudPRNT → 有効、サーバーURLに貼り付け、間隔5秒',
+      'ユーザー名・パスワードは空欄のまま保存 → 再起動',
+    ],
+  },
+  epson: {
+    path: 'epson',
+    steps: [
+      'Epson TM Utility でプリンタに接続し、Wi-Fi（またはLAN）でネットワークにつなぐ',
+      'プリンタのIPアドレスをブラウザで開く（Web Config）',
+      'Server Direct Print → 有効、サーバー1のURLに貼り付け、間隔3秒',
+      'ID・パスワードは空欄のまま設定を保存 → 再起動',
+    ],
+  },
+} as const;
+
+export function PrinterUrlCopy({ maker = 'star' }: { maker?: 'star' | 'epson' }) {
+  const token = useSyncExternalStore(subscribe, getToken, getServerToken);
+  const origin = useSyncExternalStore(subscribe, getOrigin, getServerToken);
+  const guide = GUIDE[maker];
+  const url = token && origin ? `${origin}/api/${guide.path}/${token}` : '';
   const [copied, setCopied] = useState(false);
 
   if (!url) {
@@ -48,10 +75,9 @@ export function PrinterUrlCopy() {
         {copied ? 'コピーしました' : 'URLをコピー'}
       </button>
       <ol className="list-decimal space-y-1.5 rounded-xl bg-gray-50 p-4 pl-8 text-sm text-gray-700">
-        <li>Star Quick Setup Utility でプリンタに接続（Bluetooth）</li>
-        <li>ネットワーク → IPアドレスを「自動取得（DHCP）」</li>
-        <li>CloudPRNT → 有効、サーバーURLに貼り付け、間隔5秒</li>
-        <li>ユーザー名・パスワードは空欄のまま保存 → 再起動</li>
+        {guide.steps.map((s) => (
+          <li key={s}>{s}</li>
+        ))}
       </ol>
       <p className="text-xs text-gray-500">
         このURLはお店専用です。他の人に共有しないでください。

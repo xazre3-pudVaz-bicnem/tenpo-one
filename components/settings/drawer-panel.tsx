@@ -48,10 +48,10 @@ export function DrawerPanel({ storeId, initial }: { storeId: string; initial: Dr
       <CardContent className="space-y-4">
         <div className="flex items-center justify-between">
           <p className="text-sm font-semibold text-navy">キャッシュドロア</p>
-          <Badge tone="gray">CloudPRNT対応</Badge>
+          <Badge tone="gray">プリンタ連動</Badge>
         </div>
         <p className="text-xs text-gray-500">
-          ここでは「いつドロアを開くか」を設定します。実機のドロア開放は、下の「レシートプリンター（CloudPRNT）」でプリンタを有効化すると、プリンタ経由で実行されます（未設定時は動作確認用のシミュレーション表示になります）。
+          ここでは「いつドロアを開くか」を設定します。実機のドロア開放は、下の「プリンター接続」でプリンタを有効化すると、プリンタ経由で実行されます（未設定時は動作確認用のシミュレーション表示になります）。
         </p>
 
         <label className="flex items-center gap-2 text-sm text-gray-700">

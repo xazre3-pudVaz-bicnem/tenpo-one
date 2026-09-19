@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server';
 import { loadReceiptData } from '@/lib/receipts-loader';
 import { receiptToStarMarkup, drawerKickMarkup } from '@/lib/receipt-markup';
 import { receiptToStarPrnt, drawerKickStarPrnt } from '@/lib/starprnt';
+import { receiptToEposXml, drawerKickEpos } from '@/lib/epos-print';
 
 /**
  * ジョブに載せる既定の形式。実際にどの形式で印字されるかはプリンタが
@@ -74,9 +75,11 @@ export async function enqueueReceiptPrint(
   if (!loaded) return { ok: false, error: 'レシートデータの取得に失敗しました' };
 
   const paper = printer.paper_width_mm === 58 ? 58 : 80;
-  // Markup / StarPRNT の両表現を持たせ、対応形式はプリンタに選ばせる。
+  // Markup / StarPRNT / ePOS-Print XML の表現を持たせ、対応形式はプリンタ側に選ばせる
+  // （Star機はMarkupかStarPRNT、EPSON機はePOS-Print XMLを取りに来る）。
   const markup = receiptToStarMarkup(loaded.receipt, { paperWidth: paper });
   const starprnt = receiptToStarPrnt(loaded.receipt, { paperWidth: paper }).toString('base64');
+  const epos = receiptToEposXml(loaded.receipt, { paperWidth: paper });
 
   const rows: Record<string, unknown>[] = [
     {
@@ -87,7 +90,7 @@ export async function enqueueReceiptPrint(
       order_id: orderId,
       target: 'cloudprnt',
       content_type: RECEIPT_CONTENT_TYPE,
-      payload: { body: markup, starprnt },
+      payload: { body: markup, starprnt, epos },
       status: 'queued',
       created_by: ctx.userId,
     },
@@ -104,6 +107,7 @@ export async function enqueueReceiptPrint(
       payload: {
         body: drawerKickMarkup(printer.drawer_command),
         starprnt: drawerKickStarPrnt(printer.drawer_command).toString('base64'),
+        epos: drawerKickEpos(printer.drawer_command),
         drawer: true,
       },
       status: 'queued',
@@ -136,6 +140,7 @@ export async function enqueueDrawerKick(storeId: string): Promise<EnqueueResult>
     payload: {
       body: drawerKickMarkup(printer.drawer_command),
       starprnt: drawerKickStarPrnt(printer.drawer_command).toString('base64'),
+      epos: drawerKickEpos(printer.drawer_command),
       drawer: true,
     },
     status: 'queued',

@@ -432,6 +432,7 @@ export async function enqueueCloudPrntTest(
 
   const { testPrintMarkup, drawerKickMarkup } = await import('@/lib/receipt-markup');
   const { testPrintStarPrnt, drawerKickStarPrnt } = await import('@/lib/starprnt');
+  const { testPrintEpos, drawerKickEpos } = await import('@/lib/epos-print');
   const { data: store } = await supabase.from('stores').select('name').eq('id', storeId).single();
 
   const paper = printer.paper_width_mm === 58 ? 58 : 80;
@@ -439,7 +440,8 @@ export async function enqueueCloudPrntTest(
   const storeName = store?.name ?? 'TENPO ONE';
   const issuedAt = new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
 
-  // Markup / StarPRNT の両表現を積み、対応形式はプリンタに選ばせる（Markup非対応ファーム対策）。
+  // Markup / StarPRNT / ePOS-Print XML の表現を積み、対応形式はプリンタに選ばせる
+  // （Markup非対応ファーム対策 兼 EPSON機対応）。
   const body =
     kind === 'drawer'
       ? drawerKickMarkup(drawerCommand)
@@ -449,6 +451,8 @@ export async function enqueueCloudPrntTest(
       ? drawerKickStarPrnt(drawerCommand)
       : testPrintStarPrnt({ storeName, paperWidth: paper, issuedAt })
   ).toString('base64');
+  const epos =
+    kind === 'drawer' ? drawerKickEpos(drawerCommand) : testPrintEpos({ storeName, paperWidth: paper, issuedAt });
 
   const { error } = await supabase.from('print_jobs').insert({
     organization_id: ctx.organizationId,
@@ -457,7 +461,7 @@ export async function enqueueCloudPrntTest(
     job_type: 'test',
     target: 'cloudprnt',
     content_type: 'text/vnd.star.markup',
-    payload: { body, starprnt, drawer: kind === 'drawer' },
+    payload: { body, starprnt, epos, drawer: kind === 'drawer' },
     status: 'queued',
     created_by: ctx.userId,
   });
