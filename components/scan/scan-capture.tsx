@@ -141,12 +141,14 @@ export function ScanCapture({
           dragging ? 'bg-lilac' : 'bg-iris-soft'
         )}
       >
+        {/* capture は意図的に付けていない。付けるとスマホ・iPadで必ずカメラが開き、
+            あとから写真フォルダやファイルのPDFを選べなくなる（＝その場で撮るしかない）。
+            外すとOS標準の「撮影 / フォトライブラリ / ファイルを選択」が出る。 */}
         <input
           ref={inputRef}
           id={inputId}
           type="file"
           accept="image/*,application/pdf"
-          capture="environment"
           multiple={!txId}
           hidden
           onChange={(e) => {

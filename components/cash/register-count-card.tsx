@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useMemo, useState, useTransition } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/input';
@@ -9,6 +9,8 @@ import { cn } from '@/lib/utils';
 import { yen } from '@/lib/format';
 import { closeRegister } from '@/app/app/cash/actions';
 import { toUserMessage } from '@/lib/action-error';
+import { hasAnyCount, sumDenominations, type DenominationCounts } from '@/lib/cash-count';
+import { CashDenominationCounter } from '@/components/cash/cash-denomination-counter';
 
 export interface CountSession {
   id: string;
@@ -39,18 +41,20 @@ export function RegisterCountCard({
   /** 当日の営業日。session.businessDate と違えば「前営業日から開きっぱなし」として警告する */
   today?: string;
 }) {
-  const [counted, setCounted] = useState('');
+  // 金種別に数えた枚数。合計がそのまま実査額になる（電卓で足し算しなくてよい）
+  const [counts, setCounts] = useState<DenominationCounts>({});
   const [reason, setReason] = useState('');
   const [pending, startTransition] = useTransition();
   const { toast } = useToast();
 
-  const countedValue = counted === '' ? null : Number(counted);
-  const diff = countedValue == null ? null : countedValue - session.theoreticalCash;
+  const entered = hasAnyCount(counts);
+  const countedValue = useMemo(() => sumDenominations(counts), [counts]);
+  const diff = entered ? countedValue - session.theoreticalCash : null;
   const needsReason = diff != null && diff !== 0;
 
   const handleClose = () => {
-    if (countedValue == null || !Number.isInteger(countedValue) || countedValue < 0) {
-      toast('実査額（数えた現金）を入力してください', 'error');
+    if (!entered) {
+      toast('金種ごとの枚数を入力してください（0円のときは1円に0と入れてください）', 'error');
       return;
     }
     if (needsReason && !reason.trim()) {
@@ -65,7 +69,7 @@ export function RegisterCountCard({
           return;
         }
         toast(`${session.registerName}をクローズしました`);
-        setCounted('');
+        setCounts({});
         setReason('');
       } catch (err) {
         toast(toUserMessage(err, 'クローズに失敗しました'), 'error');
@@ -98,17 +102,15 @@ export function RegisterCountCard({
           <b className="shrink-0 text-xl font-extrabold text-ink tabular-nums">{yen(session.theoreticalCash)}</b>
         </div>
 
-        <label className="flex items-center justify-between gap-3 border-b border-line py-4">
-          <span className="text-sm font-medium text-ink">実査額（数えた現金）</span>
-          <input
-            inputMode="numeric"
-            value={counted}
-            onChange={(e) => setCounted(e.target.value.replace(/[^\d]/g, ''))}
-            placeholder="0"
+        <div className="border-b border-line py-4">
+          <p className="mb-2 text-sm font-medium text-ink">実査額（数えた現金）</p>
+          <CashDenominationCounter
+            idPrefix={`count-${session.id}`}
+            counts={counts}
+            onChange={setCounts}
             disabled={!canOperate}
-            className="h-14 w-full max-w-[19rem] min-w-0 rounded-lg border border-line bg-white px-4 text-right text-[26px] font-extrabold text-ink tabular-nums placeholder:text-ink-3 focus:border-iris focus:outline-2 focus:outline-iris/25"
           />
-        </label>
+        </div>
 
         <div className="flex items-center justify-between gap-3 border-b border-line py-4">
           <span className="text-sm font-medium text-ink">差額</span>

@@ -444,7 +444,10 @@ export async function loadTodayCashRows(storeId: string, today: string): Promise
   });
 }
 
-/** 出金レシートの状態。ok=レシートあり/精算済、scan=未スキャン、advance=仮払い未精算 */
+/**
+   * 出金レシートの状態。ok=レシートあり/精算済、scan=未添付、advance=仮払い未精算。
+   * 未添付でも登録・締めはできる（レシートは後から貼る運用。締めのブロック条件ではない）。
+   */
 export function receiptStateOf(row: Pick<TodayCashRow, 'kind' | 'receiptDocumentId' | 'advanceOpen'>): 'ok' | 'scan' | 'advance' | 'none' {
   if (!RECEIPT_CHECK_KINDS.includes(row.kind)) return 'none';
   if (row.kind === 'petty_advance') return row.advanceOpen ? 'advance' : 'ok';

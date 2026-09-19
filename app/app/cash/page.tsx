@@ -178,7 +178,7 @@ async function RegisterTab({
                   <b className="block text-[15px]">
                     レシートを撮って保存<span className="en-inline">Snap receipt</span>
                   </b>
-                  <span className="block text-xs text-ink-3">出金のレシート・請求書を撮影して書類ボックスへ。未スキャンの出金にも紐付けできます</span>
+                  <span className="block text-xs text-ink-3">出金のレシート・請求書を書類ボックスへ。その場で撮っても、あとから写真・PDFを選んで添付してもかまいません</span>
                 </span>
               </Link>
             )}

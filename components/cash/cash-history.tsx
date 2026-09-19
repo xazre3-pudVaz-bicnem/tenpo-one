@@ -36,7 +36,11 @@ export const CHIP = {
   muted: cn(chip, 'bg-lilac text-ink-2'),
 };
 
-/** 出金のレシート状態チップ＋操作（撮る／精算へ） */
+/**
+ * 出金のレシート状態チップ＋操作（添付／精算へ）。
+ * レシートは登録時に必須ではない。出金を先に記録しておき、レシートは後から添付する運用のため、
+ * 未添付は「エラー」ではなく「あとで貼る」ぶんとして落ち着いた色で出す。
+ */
 export function ReceiptCell({
   row,
   canScan,
@@ -67,10 +71,14 @@ export function ReceiptCell({
   if (row.receiptDocumentId) return <span className={CHIP.ok}>✓ {compact ? 'レシート' : '写真'}</span>;
   return (
     <span className={compact ? 'flex flex-col items-end gap-1' : 'inline-flex items-center gap-2'}>
-      <span className={compact ? 'text-[11.5px] font-bold text-danger' : CHIP.ng}>未スキャン</span>
+      <span className={compact ? 'text-[11.5px] font-bold text-ink-2' : CHIP.muted}>レシート未添付</span>
       {canScan && (
-        <Link href={`/app/scan?tx=${row.id}`} className={compact ? miniPrimary : mini}>
-          撮る
+        <Link
+          href={`/app/scan?tx=${row.id}`}
+          title="いま撮る／あとで写真・PDFを選んで添付する"
+          className={compact ? miniPrimary : mini}
+        >
+          添付する
         </Link>
       )}
     </span>

@@ -14,7 +14,7 @@ import type {
   TableView,
   UpcomingReservation,
 } from '@/components/floor/types';
-import { startWalkIn, goToOrder, completeCleaning, setTableAvailability } from './actions';
+import { startWalkIn, goToOrder, completeCleaning, setTableAvailability, releaseFinishedCleaning } from './actions';
 
 export const metadata: Metadata = { title: 'テーブル一覧' };
 
@@ -255,6 +255,7 @@ export default async function FloorPage() {
           goToOrderAction={goToOrder}
           completeCleaningAction={completeCleaning}
           setTableAvailabilityAction={setTableAvailability}
+          releaseFinishedCleaningAction={releaseFinishedCleaning}
         />
       )}
     </div>
