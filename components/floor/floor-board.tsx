@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { LayoutGrid, Map as MapIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ChipButton } from '@/components/ui/chip';
@@ -52,6 +53,7 @@ export function FloorBoard({
   goToOrderAction,
   completeCleaningAction,
   setTableAvailabilityAction,
+  releaseFinishedCleaningAction,
 }: {
   storeId: string;
   floors: FloorRow[];
@@ -63,7 +65,10 @@ export function FloorBoard({
   goToOrderAction: (tableId: string) => Promise<{ orderId: string }>;
   completeCleaningAction: (tableId: string) => Promise<void>;
   setTableAvailabilityAction: (tableId: string, unavailable: boolean) => Promise<void>;
+  /** 清掃中のまま時間が過ぎたテーブルを空席に戻す。省略時は自動解除しない */
+  releaseFinishedCleaningAction?: (storeId: string) => Promise<{ released: number }>;
 }) {
+  const router = useRouter();
   const now = useNow(serverNow);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [floorFilter, setFloorFilter] = useState<string>('all');
@@ -71,6 +76,28 @@ export function FloorBoard({
 
   // テーブル状態（着席・清掃中など）と、テーブルに紐づく注文・予約の変化をRealtimeで検知して画面を更新する。
   useStoreRealtimeRefresh({ storeId, tables: ['restaurant_tables', 'orders', 'reservations'] });
+
+  // 清掃中のまま放置されたテーブルを自動で空席に戻す。
+  // 「清掃完了」の押し忘れで席が埋まったままに見える、という現場の詰まりを防ぐ。
+  // テーブル一覧を開いている端末が1分ごとに片付ける（サーバー側でも時間を検証している）。
+  useEffect(() => {
+    if (!releaseFinishedCleaningAction) return;
+    let cancelled = false;
+    const sweep = async () => {
+      try {
+        const { released } = await releaseFinishedCleaningAction(storeId);
+        if (!cancelled && released > 0) router.refresh();
+      } catch {
+        // 自動解除は best effort（失敗しても手動の「清掃完了」で戻せる）
+      }
+    };
+    void sweep();
+    const timer = setInterval(() => void sweep(), 60_000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [storeId, releaseFinishedCleaningAction, router]);
 
   const selected = tables.find((t) => t.id === selectedId) ?? null;
   const unassigned = tables.filter((t) => !floors.some((f) => f.id === t.floor_id));
