@@ -4,6 +4,7 @@ import {
   groupKitchenTickets,
   layoutKitchenTicket,
   STATION_LABELS,
+  STATION_LABELS_EN,
   type ClaimedKitchenItem,
   type KitchenStation,
 } from '@/lib/kitchen-ticket';
@@ -112,7 +113,7 @@ async function expireStaleJobs(admin: ReturnType<typeof createAdminClient>, prin
   await Promise.all([
     base().eq('job_type', 'test').eq('payload->>drawer', 'true').lt('created_at', isoAgo(TTL_DRAWER_MS)),
     base().eq('job_type', 'test').lt('created_at', isoAgo(TTL_TEST_MS)),
-    base().in('job_type', ['receipt', 'ryoshusho', 'kitchen']).lt('created_at', isoAgo(TTL_PRINT_MS)),
+    base().in('job_type', ['receipt', 'ryoshusho', 'kitchen', 'order_slip']).lt('created_at', isoAgo(TTL_PRINT_MS)),
   ]);
 }
 
@@ -135,6 +136,8 @@ async function generateKitchenJobs(admin: ReturnType<typeof createAdminClient>, 
 
   const stations = (printer.kitchen_stations ?? ['kitchen']) as KitchenStation[];
   const title = `${stations.map((s) => STATION_LABELS[s] ?? s).join('・')} 伝票`;
+  // 厨房伝票は英語を主にする（日本語を読まないスタッフが作るため）
+  const titleEn = stations.map((s) => STATION_LABELS_EN[s] ?? String(s).toUpperCase()).join(' / ');
   const printedAt = new Date().toLocaleTimeString('ja-JP', {
     timeZone: 'Asia/Tokyo',
     hour: '2-digit',
@@ -143,7 +146,7 @@ async function generateKitchenJobs(admin: ReturnType<typeof createAdminClient>, 
   const paperWidth = printer.paper_width_mm === 58 ? 58 : 80;
 
   const rows = tickets.map((t) => {
-    const lines = layoutKitchenTicket(t, { title, printedAt, paperWidth });
+    const lines = layoutKitchenTicket(t, { title, titleEn, printedAt, paperWidth });
     return {
       organization_id: printer.organization_id,
       store_id: printer.store_id,
