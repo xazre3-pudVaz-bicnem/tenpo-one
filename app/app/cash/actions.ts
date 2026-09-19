@@ -5,12 +5,29 @@ import { requirePermission, requireMember } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { resolveApprovalRule, checkApproval, type ApprovalRuleLike } from '@/lib/approvals';
 import type { Role } from '@/lib/permissions';
-import { withErrorCapture } from '@/lib/observability-server';
+import { captureServerError } from '@/lib/observability-server';
+import { actionFail, actionOk, type ActionResult } from '@/lib/action-error';
 
 /** 店舗日次締め（close_store_day）を実行できるロール。DB側 close_store_day のapp_role_inと一致させること。 */
 const STORE_DAY_CLOSE_ROLES: Role[] = ['org_owner', 'hq_admin', 'area_manager', 'store_manager', 'assistant_manager'];
 /** 店舗日次締めの再オープン（reopen_store_day）を実行できるロール。DB側と一致させること。 */
 const STORE_DAY_REOPEN_ROLES: Role[] = ['org_owner', 'hq_admin', 'area_manager'];
+
+/**
+ * レジ開局・レジ締めRPCのエラーコードを現場の言葉にする。
+ * SESSION_ALREADY_OPEN は「画面では未開局なのに開局できない」＝前営業日から開きっぱなし、
+ * という分かりにくい状況で出るため、次に何をすればよいかまで書く。
+ */
+function translateRegisterError(message: string): string {
+  if (message.includes('SESSION_ALREADY_OPEN')) {
+    return 'このレジは既に開局しています。前営業日から開いたままの可能性があります。レジクローズ画面の「開局中のレジ」を締めてから、もう一度開局してください。';
+  }
+  if (message.includes('SESSION_NOT_FOUND')) return '対象のレジセッションが見つかりません';
+  if (message.includes('SESSION_NOT_OPEN')) return 'このレジは既に締められています';
+  if (message.includes('STORE_NOT_FOUND')) return '店舗が見つかりません';
+  if (message.includes('FORBIDDEN')) return 'レジ操作の権限がありません';
+  return message;
+}
 
 function assertPositiveInt(value: number, label: string) {
   if (!Number.isInteger(value) || value <= 0) {
@@ -38,13 +55,19 @@ async function loadPettyCashApprovalRules(
 }
 
 /** レジ開局（open_register_session RPC） */
-export async function openRegister(storeId: string, registerId: string, openingFloat: number) {
+export async function openRegister(
+  storeId: string,
+  registerId: string,
+  openingFloat: number
+): Promise<ActionResult> {
+  // 失敗を throw ではなく戻り値で返す（throw すると本番でメッセージが伏せられ、
+  // 画面には「Minified React error #441」しか出ない。lib/action-error.ts 参照）。
   const ctx = await requirePermission('register.operate');
   if (!ctx.stores.some((s) => s.id === storeId)) {
-    throw new Error('対象店舗にアクセス権がありません');
+    return actionFail('対象店舗にアクセス権がありません');
   }
   if (!Number.isInteger(openingFloat) || openingFloat < 0) {
-    throw new Error('釣銭準備金は0以上の整数で入力してください');
+    return actionFail('釣銭準備金は0以上の整数で入力してください');
   }
   const supabase = await createClient();
   const { error } = await supabase.rpc('open_register_session', {
@@ -52,8 +75,9 @@ export async function openRegister(storeId: string, registerId: string, openingF
     p_register_id: registerId,
     p_opening_float: openingFloat,
   });
-  if (error) throw new Error(error.message);
+  if (error) return actionFail(translateRegisterError(error.message));
   revalidatePath('/app/cash');
+  return actionOk();
 }
 
 /** 開局中セッションへの中間入出金（deposit/withdrawal） */
@@ -90,10 +114,14 @@ export async function addCashTransaction(input: {
 }
 
 /** レジ締め（close_register_session RPC。理論現金・差異はDB側で計算） */
-export async function closeRegister(sessionId: string, countedCash: number, differenceReason: string | null) {
+export async function closeRegister(
+  sessionId: string,
+  countedCash: number,
+  differenceReason: string | null
+): Promise<ActionResult> {
   const ctx = await requirePermission('register.operate');
   if (!Number.isInteger(countedCash) || countedCash < 0) {
-    throw new Error('実残高は0以上の整数で入力してください');
+    return actionFail('実残高は0以上の整数で入力してください');
   }
   const supabase = await createClient();
   const { data: session } = await supabase
@@ -102,15 +130,16 @@ export async function closeRegister(sessionId: string, countedCash: number, diff
     .eq('id', sessionId)
     .maybeSingle();
   if (!session || !ctx.stores.some((s) => s.id === session.store_id)) {
-    throw new Error('対象のレジセッションが見つかりません');
+    return actionFail('対象のレジセッションが見つかりません');
   }
   const { error } = await supabase.rpc('close_register_session', {
     p_session_id: sessionId,
     p_counted_cash: countedCash,
     p_difference_reason: differenceReason,
   });
-  if (error) throw new Error(error.message);
+  if (error) return actionFail(translateRegisterError(error.message));
   revalidatePath('/app/cash');
+  return actionOk();
 }
 
 /**
@@ -440,45 +469,56 @@ export async function approvePettyCashCount(id: string) {
 function translateCloseStoreDayError(message: string): string {
   const openMatch = message.match(/OPEN_SESSIONS_REMAIN:\s*(\d+)/);
   if (openMatch) return `未締めのレジが${openMatch[1]}台あります。すべてのレジを締めてから実行してください。`;
-  if (message.includes('NO_CLOSED_SESSIONS')) return '本日締めたレジがありません。レジ締めを行ってから実行してください。';
+  if (message.includes('NO_CLOSED_SESSIONS')) {
+    return '本日締めたレジが1台もありません。先に「このレジを開局」→ 現金を数えて「レジ締め」を行ってから、店舗日次締めを実行してください。';
+  }
   if (message.includes('STORE_NOT_FOUND')) return '店舗が見つかりません';
   if (message.includes('FORBIDDEN')) return '店舗日次締めの実行権限がありません';
   return message;
 }
 
 /** 店舗日次締め（close_store_day RPC）。全レジのセッションを集約してdaily_closingsを確定する */
-export async function closeStoreDay(storeId: string, businessDate: string) {
+export async function closeStoreDay(storeId: string, businessDate: string): Promise<ActionResult> {
   const ctx = await requireMember();
   if (!STORE_DAY_CLOSE_ROLES.includes(ctx.role)) {
-    throw new Error('店舗日次締めの実行権限がありません');
+    return actionFail('店舗日次締めの実行権限がありません');
   }
   if (!ctx.stores.some((s) => s.id === storeId)) {
-    throw new Error('対象店舗にアクセス権がありません');
+    return actionFail('対象店舗にアクセス権がありません');
   }
   const supabase = await createClient();
-  await withErrorCapture(
-    { route: 'cash.close_store_day', organizationId: ctx.organizationId, storeId, userId: ctx.userId },
-    async () => {
-      const { error } = await supabase.rpc('close_store_day', {
-        p_store_id: storeId,
-        p_business_date: businessDate,
-      });
-      if (error) throw new Error(translateCloseStoreDayError(error.message));
-    }
-  );
+  const { error } = await supabase.rpc('close_store_day', {
+    p_store_id: storeId,
+    p_business_date: businessDate,
+  });
+  if (error) {
+    // 想定内の拒否（未締めレジが残っている等）も含めて記録は残すが、画面には日本語で返す
+    await captureServerError(new Error(error.message), {
+      route: 'cash.close_store_day',
+      organizationId: ctx.organizationId,
+      storeId,
+      userId: ctx.userId,
+    });
+    return actionFail(translateCloseStoreDayError(error.message));
+  }
   revalidatePath('/app/cash');
+  return actionOk();
 }
 
 /** close_store_dayの再オープン（reopen_store_day RPC）。理由必須・org_owner/hq_admin/area_managerのみ */
-export async function reopenStoreDay(storeId: string, businessDate: string, reason: string) {
+export async function reopenStoreDay(
+  storeId: string,
+  businessDate: string,
+  reason: string
+): Promise<ActionResult> {
   const ctx = await requireMember();
   if (!STORE_DAY_REOPEN_ROLES.includes(ctx.role)) {
-    throw new Error('店舗日次締めの再オープンは契約企業オーナー・本社管理者・エリアマネージャーのみ実行できます');
+    return actionFail('店舗日次締めの再オープンは契約企業オーナー・本社管理者・エリアマネージャーのみ実行できます');
   }
   if (!ctx.stores.some((s) => s.id === storeId)) {
-    throw new Error('対象店舗にアクセス権がありません');
+    return actionFail('対象店舗にアクセス権がありません');
   }
-  if (!reason.trim()) throw new Error('再オープン理由を入力してください');
+  if (!reason.trim()) return actionFail('再オープン理由を入力してください');
 
   const supabase = await createClient();
   const { error } = await supabase.rpc('reopen_store_day', {
@@ -487,10 +527,11 @@ export async function reopenStoreDay(storeId: string, businessDate: string, reas
     p_reason: reason.trim(),
   });
   if (error) {
-    if (error.message.includes('REASON_REQUIRED')) throw new Error('再オープン理由を入力してください');
-    if (error.message.includes('CLOSING_NOT_FOUND')) throw new Error('対象の締めデータが見つかりません');
-    if (error.message.includes('FORBIDDEN')) throw new Error('店舗日次締めの再オープン権限がありません');
-    throw new Error(error.message);
+    if (error.message.includes('REASON_REQUIRED')) return actionFail('再オープン理由を入力してください');
+    if (error.message.includes('CLOSING_NOT_FOUND')) return actionFail('対象の締めデータが見つかりません');
+    if (error.message.includes('FORBIDDEN')) return actionFail('店舗日次締めの再オープン権限がありません');
+    return actionFail(error.message);
   }
   revalidatePath('/app/cash');
+  return actionOk();
 }
