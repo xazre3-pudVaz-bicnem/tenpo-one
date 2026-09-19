@@ -1,5 +1,11 @@
 import type { ImportFieldDef, ImportType, ParsedRow, RowIssue } from './types';
-import { validateCustomerRow, validateInventoryItemRow, validateMenuItemRow, validateVendorRow } from './validators';
+import {
+  validateCustomerRow,
+  validateInventoryItemRow,
+  validateMenuItemRow,
+  validateOptionGroupRow,
+  validateVendorRow,
+} from './validators';
 
 /** マッピング結果から、行ごとの {フィールドキー: セル文字列} を組み立てる */
 export function buildParsedRows(
@@ -22,6 +28,10 @@ function validateOne(type: ImportType, values: Record<string, string>): { ok: bo
   switch (type) {
     case 'menu_items': {
       const r = validateMenuItemRow(values);
+      return r.ok ? { ok: true, dupKey: r.dupKey } : { ok: false, errors: r.errors, dupKey: null };
+    }
+    case 'menu_option_groups': {
+      const r = validateOptionGroupRow(values);
       return r.ok ? { ok: true, dupKey: r.dupKey } : { ok: false, errors: r.errors, dupKey: null };
     }
     case 'customers': {
@@ -85,10 +95,14 @@ export function validateRowsLocally(type: ImportType, rows: ParsedRow[]): LocalV
 }
 
 /** サーバーの既存重複チェック結果（登録済みのdupKey集合）を反映し、最終ステータスを確定する */
-export function applyExistingDuplicates(issues: RowIssue[], existingKeys: Set<string>): RowIssue[] {
+export function applyExistingDuplicates(issues: RowIssue[], existingKeys: Set<string>, type?: ImportType): RowIssue[] {
+  const reason =
+    type === 'menu_items'
+      ? '登録済みの商品です。英語名・カナの列があればその項目だけ上書き更新、無ければスキップされます'
+      : '重複（登録済みのデータがあります）スキップされます';
   return issues.map((issue) => {
     if (issue.status === 'ok' && issue.dupKey && existingKeys.has(issue.dupKey)) {
-      return { ...issue, status: 'duplicate', reason: '重複（登録済みのデータがあります）スキップされます' };
+      return { ...issue, status: 'duplicate', reason };
     }
     return issue;
   });
