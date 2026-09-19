@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server';
 import { loadReceiptData } from '@/lib/receipts-loader';
 import { receiptToStarMarkup, ryoshushoToStarMarkup, orderSlipMarkup, drawerKickMarkup } from '@/lib/receipt-markup';
 import { receiptToStarPrnt, ryoshushoToStarPrnt, orderSlipStarPrnt, drawerKickStarPrnt } from '@/lib/starprnt';
+import { receiptToEposXml, ryoshushoToEposXml, orderSlipEposXml, drawerKickEposXml } from '@/lib/epos-print';
 
 /**
  * ジョブに載せる既定の形式。実際にどの形式で印字されるかはプリンタが
@@ -101,6 +102,14 @@ export async function enqueueReceiptPrint(
         })
       : receiptToStarPrnt(loaded.receipt, { paperWidth: paper })
   ).toString('base64');
+  // EPSON（Server Direct Print）用
+  const epos = isRyoshusho
+    ? ryoshushoToEposXml(loaded.receipt, {
+        paperWidth: paper,
+        recipientName: opts.recipientName ?? null,
+        purpose: opts.purpose ?? null,
+      })
+    : receiptToEposXml(loaded.receipt, { paperWidth: paper });
 
   const rows: Record<string, unknown>[] = [
     {
@@ -111,7 +120,7 @@ export async function enqueueReceiptPrint(
       order_id: orderId,
       target: 'cloudprnt',
       content_type: RECEIPT_CONTENT_TYPE,
-      payload: { body: markup, starprnt },
+      payload: { body: markup, starprnt, epos },
       status: 'queued',
       created_by: ctx.userId,
     },
@@ -128,6 +137,7 @@ export async function enqueueReceiptPrint(
       payload: {
         body: drawerKickMarkup(printer.drawer_command),
         starprnt: drawerKickStarPrnt(printer.drawer_command).toString('base64'),
+        epos: drawerKickEposXml(),
         drawer: true,
       },
       status: 'queued',
@@ -210,6 +220,7 @@ export async function enqueueOrderSlipPrint(orderId: string): Promise<EnqueueRes
     payload: {
       body: orderSlipMarkup(slip, { paperWidth: paper }),
       starprnt: orderSlipStarPrnt(slip, { paperWidth: paper }).toString('base64'),
+      epos: orderSlipEposXml(slip, { paperWidth: paper }),
     },
     status: 'queued',
     created_by: ctx.userId,
@@ -238,6 +249,7 @@ export async function enqueueDrawerKick(storeId: string): Promise<EnqueueResult>
     payload: {
       body: drawerKickMarkup(printer.drawer_command),
       starprnt: drawerKickStarPrnt(printer.drawer_command).toString('base64'),
+      epos: drawerKickEposXml(),
       drawer: true,
     },
     status: 'queued',
