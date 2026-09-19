@@ -33,7 +33,7 @@ export interface ClaimedKitchenItem {
   item_name_en?: string | null;
   /** 商品のカナ。英語名が無いときはここからローマ字を作る */
   item_name_kana?: string | null;
-  modifiers: { name: string }[] | null;
+  modifiers: { name: string; name_en?: string | null }[] | null;
   memo: string | null;
   station: string;
   delta: number;
@@ -45,6 +45,7 @@ export interface KitchenTicketLine {
   nameEn: string | null;
   /** 正=作る数（新規・追加）、負=取消数 */
   delta: number;
+  /** 選択肢。英語名があれば英語、無ければ日本語 */
   modifiers: string[];
   memo: string | null;
 }
@@ -79,7 +80,8 @@ export function groupKitchenTickets(rows: ClaimedKitchenItem[]): KitchenTicket[]
       name: r.item_name,
       nameEn: englishName(r.item_name, r.item_name_kana ?? null, r.item_name_en ?? null),
       delta: r.delta,
-      modifiers: (r.modifiers ?? []).map((m) => m.name).filter(Boolean),
+      // 選択肢（セットのカレー・ナン/ご飯など）も英語優先。厨房が作るものそのものなので特に重要
+      modifiers: (r.modifiers ?? []).map((m) => (m.name_en?.trim() || m.name)).filter(Boolean),
       memo: r.memo,
     });
   }

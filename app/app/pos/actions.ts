@@ -80,7 +80,7 @@ async function resolveOptions(
   storeId: string,
   menuItemId: string,
   optionItemIds: string[]
-): Promise<{ modifiers: { name: string; price: number }[]; extraPrice: number }> {
+): Promise<{ modifiers: { name: string; name_en?: string; price: number }[]; extraPrice: number }> {
   const { data: links } = await supabase
     .from('menu_item_option_groups')
     .select('group_id, sort_order, menu_option_groups(id, name, is_required, min_select, max_select, status)')
@@ -104,13 +104,19 @@ async function resolveOptions(
   const { data: chosen } = uniqueIds.length
     ? await supabase
         .from('menu_option_items')
-        .select('id, name, price, group_id, status')
+        .select('id, name, name_en, price, group_id, status')
         .in('id', uniqueIds)
         .eq('store_id', storeId)
         .eq('status', 'active')
     : { data: [] };
 
-  const selected = (chosen ?? []) as { id: string; name: string; price: number; group_id: string }[];
+  const selected = (chosen ?? []) as {
+    id: string;
+    name: string;
+    name_en: string | null;
+    price: number;
+    group_id: string;
+  }[];
   // 指定IDのうち1件でも取得できなければ、他店舗・無効な選択肢が混ざっている
   if (selected.length !== uniqueIds.length) {
     throw new Error('選択された選択肢が正しくありません');
@@ -124,14 +130,15 @@ async function resolveOptions(
       minSelect: g.min_select,
       maxSelect: g.max_select,
     })),
-    selected.map((o) => ({ id: o.id, name: o.name, price: o.price, groupId: o.group_id }))
+    selected.map((o) => ({ id: o.id, name: o.name, nameEn: o.name_en, price: o.price, groupId: o.group_id }))
   );
 }
 
 /**
  * 注文に商品を追加する。
  * optionItemIds を渡すと選択肢（トッピング等）を適用し、追加料金を単価に加算して
- * order_items.modifiers に [{name, price}] として記録する（レシートにも印字される）。
+ * order_items.modifiers に [{name, name_en?, price}] として記録する
+ * （レシートには日本語、厨房伝票には英語が出る）。
  * 必須・最小/最大の選択数はサーバー側で検証する（クライアントの表示崩れや改ざんに依存しない）。
  */
 export async function addItem(orderId: string, menuItemId: string, optionItemIds: string[] = []) {

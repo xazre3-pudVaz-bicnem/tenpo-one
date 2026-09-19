@@ -64,3 +64,22 @@ describe('resolveOptionSelection', () => {
     expect(r.modifiers.map((m) => m.name)).toEqual(['大盛り', 'チーズ']);
   });
 });
+
+describe('選択肢の英語名', () => {
+  const group = { id: 'g1', name: 'カレーを選ぶ', isRequired: true, minSelect: 1, maxSelect: 1 };
+
+  it('英語名があれば modifiers に name_en を入れる', () => {
+    const { modifiers } = resolveOptionSelection(
+      [group],
+      [{ id: 'o1', name: 'バターチキン', nameEn: 'Butter Chicken', price: 0, groupId: 'g1' }]
+    );
+    expect(modifiers).toEqual([{ name: 'バターチキン', name_en: 'Butter Chicken', price: 0 }]);
+  });
+
+  it('英語名が無い・空白・日本語と同じなら name_en を入れない', () => {
+    const base = { id: 'o1', name: 'ナン', price: 0, groupId: 'g1' };
+    expect(resolveOptionSelection([group], [base]).modifiers).toEqual([{ name: 'ナン', price: 0 }]);
+    expect(resolveOptionSelection([group], [{ ...base, nameEn: '  ' }]).modifiers).toEqual([{ name: 'ナン', price: 0 }]);
+    expect(resolveOptionSelection([group], [{ ...base, nameEn: 'ナン' }]).modifiers).toEqual([{ name: 'ナン', price: 0 }]);
+  });
+});

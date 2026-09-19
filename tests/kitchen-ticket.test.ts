@@ -140,3 +140,29 @@ describe('英語印字', () => {
     expect(texts.filter((x) => x.includes('刺身盛合せ'))).toHaveLength(1);
   });
 });
+
+describe('セットの選択肢（カレー・ナン/ご飯など）', () => {
+  const opts = { title: 'キッチン', titleEn: 'KITCHEN', printedAt: '18:21', paperWidth: 80 as const };
+
+  it('選択肢に英語名があれば英語で印字する（厨房が作るものそのもののため）', () => {
+    const [t] = groupKitchenTickets([
+      row({
+        item_name: 'カレーセット',
+        item_name_en: 'Curry Set',
+        modifiers: [
+          { name: 'バターチキン', name_en: 'Butter Chicken' },
+          { name: 'ナン', name_en: 'Naan' },
+        ],
+      }),
+    ]);
+    const texts = layoutKitchenTicket(t, opts).map((l) => l.text);
+    expect(texts).toContain('Curry Set  x1');
+    expect(texts).toContain('   ・Butter Chicken');
+    expect(texts).toContain('   ・Naan');
+  });
+
+  it('選択肢に英語名が無ければ日本語のまま出す', () => {
+    const [t] = groupKitchenTickets([row({ modifiers: [{ name: '大盛り' }] })]);
+    expect(layoutKitchenTicket(t, opts).map((l) => l.text)).toContain('   ・大盛り');
+  });
+});
