@@ -39,7 +39,7 @@ export const PETTY_KINDS: CashKind[] = ['petty_in', 'petty_out', 'petty_advance'
 export const METHOD_LABELS: Record<string, string> = {
   cash: '現金',
   credit: 'クレジット',
-  qr: 'QRコード決済',
+  qr: 'QRコード決済（PayPay等）',
   emoney: '電子マネー',
   voucher: '商品券',
   on_account: '掛売',

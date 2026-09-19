@@ -24,6 +24,18 @@ export const metadata: Metadata = { title: 'レジクローズ' };
 
 /** 支払方法別の表で常に表示する方法（プロトタイプ: 現金・クレジット・QR・電子マネー） */
 const BASE_METHODS = ['cash', 'credit', 'qr', 'emoney'];
+/** 支払方法の英語表記（日本語を読まないスタッフ向け。日本語の後に併記する） */
+const METHOD_LABELS_EN: Record<string, string> = {
+  cash: 'Cash',
+  credit: 'Card',
+  qr: 'QR (PayPay etc.)',
+  emoney: 'IC / e-money',
+  voucher: 'Voucher',
+  on_account: 'On account',
+  points: 'Points',
+  external: 'Terminal (stera)',
+  other: 'Other',
+};
 
 export default async function CashClosePage() {
   const ctx = await requireFeature('accounting');
@@ -137,6 +149,19 @@ export default async function CashClosePage() {
               <Kv label="客数" value={`${metrics.guests}名`} />
               <Kv label="客単価" value={yen(metrics.avgSpend)} />
             </div>
+            {/* 支払方法別（現場の要望: 締めのときに 現金・カード・PayPay 等の合計を一目で見たい） */}
+            <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
+              {[...byMethod.entries()]
+                .filter(([m, v]) => BASE_METHODS.includes(m) || v.count > 0)
+                .map(([method, v]) => (
+                  <Kv
+                    key={method}
+                    label={`${METHOD_LABELS[method] ?? method} / ${METHOD_LABELS_EN[method] ?? method}`}
+                    value={yen(v.amount)}
+                    sub={`${v.count}件`}
+                  />
+                ))}
+            </div>
           </CardContent>
         </Card>
 
@@ -213,7 +238,10 @@ export default async function CashClosePage() {
               <tbody>
                 {[...byMethod.entries()].map(([method, v]) => (
                   <tr key={method} className="border-b border-line last:border-b-0">
-                    <td className="px-4 py-3 text-ink sm:px-5">{METHOD_LABELS[method] ?? method}</td>
+                    <td className="px-4 py-3 text-ink sm:px-5">
+                      {METHOD_LABELS[method] ?? method}
+                      <span className="ml-1 text-[11px] text-ink-3">{METHOD_LABELS_EN[method] ?? ''}</span>
+                    </td>
                     <td className="px-4 py-3 text-[12.5px] text-ink-3 tabular-nums">{v.count}件</td>
                     <td className="px-4 py-3 text-right font-bold text-ink tabular-nums sm:px-5">{yen(v.amount)}</td>
                   </tr>
