@@ -8,6 +8,9 @@ import { Input, Label, Select, Textarea, FieldError } from '@/components/ui/inpu
 import { useToast } from '@/components/ui/toast';
 import { yen, formatDateTime } from '@/lib/format';
 import { addCashTransaction, closeRegister } from '@/app/app/cash/actions';
+import { toUserMessage } from '@/lib/action-error';
+import { hasAnyCount, sumDenominations, type DenominationCounts } from '@/lib/cash-count';
+import { CashDenominationCounter } from '@/components/cash/cash-denomination-counter';
 import { KIND_LABELS, IN_KINDS, type CashKind } from '@/components/cash/labels';
 
 export interface SessionCardData {
@@ -185,19 +188,21 @@ function CloseRegisterDialog({
   registerName: string;
   theoreticalCash: number;
 }) {
-  const [countedCash, setCountedCash] = useState('');
+  // 金種別に数えた枚数。合計がそのまま実残高になる
+  const [counts, setCounts] = useState<DenominationCounts>({});
   const [reason, setReason] = useState('');
   const [pending, startTransition] = useTransition();
   const { toast } = useToast();
 
-  const counted = countedCash === '' ? null : Number(countedCash);
-  const diff = counted == null || !Number.isFinite(counted) ? null : counted - theoreticalCash;
+  const entered = hasAnyCount(counts);
+  const counted = sumDenominations(counts);
+  const diff = entered ? counted - theoreticalCash : null;
   const needsReason = diff != null && diff !== 0;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (counted == null || !Number.isInteger(counted) || counted < 0) {
-      toast('実残高は0以上の整数で入力してください', 'error');
+    if (!entered) {
+      toast('金種ごとの枚数を入力してください（0円のときは1円に0と入れてください）', 'error');
       return;
     }
     if (needsReason && !reason.trim()) {
@@ -206,11 +211,15 @@ function CloseRegisterDialog({
     }
     startTransition(async () => {
       try {
-        await closeRegister(sessionId, counted, needsReason ? reason.trim() : null);
+        const result = await closeRegister(sessionId, counted, needsReason ? reason.trim() : null);
+        if (!result.ok) {
+          toast(result.error, 'error');
+          return;
+        }
         toast('レジを締めました');
         onClose();
       } catch (err) {
-        toast(err instanceof Error ? err.message : '締め処理に失敗しました', 'error');
+        toast(toUserMessage(err, '締め処理に失敗しました'), 'error');
       }
     });
   };
@@ -224,17 +233,8 @@ function CloseRegisterDialog({
           <p className="mt-1 text-[11px] text-primary-deep/80">クレジット／QR等の返金は現金残高へ影響しません。</p>
         </div>
         <div>
-          <Label htmlFor="counted-cash">実残高（数えた現金）</Label>
-          <Input
-            id="counted-cash"
-            type="number"
-            inputMode="numeric"
-            min={0}
-            step={1}
-            value={countedCash}
-            onChange={(e) => setCountedCash(e.target.value)}
-            placeholder="0"
-          />
+          <Label>実残高（数えた現金）</Label>
+          <CashDenominationCounter idPrefix={`session-${sessionId}`} counts={counts} onChange={setCounts} />
         </div>
         {diff != null && (
           <div className={`rounded-xl p-4 ${diff === 0 ? 'bg-success-soft' : 'bg-danger-soft'}`}>

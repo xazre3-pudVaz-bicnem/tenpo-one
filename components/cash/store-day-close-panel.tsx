@@ -4,6 +4,7 @@ import { useTransition } from 'react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast';
 import { closeStoreDay } from '@/app/app/cash/actions';
+import { toUserMessage } from '@/lib/action-error';
 import { ChecklistCard, type ChecklistItem } from '@/components/cash/checklist-card';
 
 /**
@@ -29,10 +30,14 @@ export function StoreDayClosePanel({
   const handleClose = () => {
     startTransition(async () => {
       try {
-        await closeStoreDay(storeId, businessDate);
+        const result = await closeStoreDay(storeId, businessDate);
+        if (!result.ok) {
+          toast(result.error, 'error');
+          return;
+        }
         toast(alreadyClosed ? '店舗日次締めを更新しました' : '店舗日次締めを実行しました');
       } catch (err) {
-        toast(err instanceof Error ? err.message : '店舗日次締めに失敗しました', 'error');
+        toast(toUserMessage(err, '店舗日次締めに失敗しました'), 'error');
       }
     });
   };
