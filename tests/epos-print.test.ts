@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   receiptToEposXml,
+  ryoshushoToEposXml,
+  orderSlipEposXml,
   drawerKickEpos,
   testPrintEpos,
   kitchenTicketEpos,
@@ -87,6 +89,68 @@ describe('receiptToEposXml', () => {
     const x = receiptToEposXml({ ...base, storeName: 'AB' });
     expectWellFormed(x);
     expect(x).toContain('AB');
+  });
+});
+
+describe('ryoshushoToEposXml', () => {
+  it('領収書の見出し・宛名・但し書き・領収額（netPaid）を含み、整形式', () => {
+    const xml = ryoshushoToEposXml(base, { paperWidth: 80, recipientName: '株式会社テスト', purpose: '飲食代として' });
+    expect(xmlErrors(xml)).toEqual([]);
+    expect(xml).toContain('領 収 書');
+    expect(xml).toContain('株式会社テスト 様');
+    expect(xml).toContain('但 飲食代として');
+    expect(xml).toContain('上記正に領収いたしました');
+    expect(xml).toContain('<cut type="feed"/>');
+  });
+
+  it('宛名・但し書きが空なら「上様」「お品代として」を使う', () => {
+    const xml = ryoshushoToEposXml(base, { paperWidth: 58 });
+    expect(xml).toContain('上様 様');
+    expect(xml).toContain('但 お品代として');
+  });
+
+  it('お客様に渡す紙なので英語の見出しを混ぜない', () => {
+    const xml = ryoshushoToEposXml(base, { paperWidth: 80 });
+    expect(xml).not.toMatch(/RECEIPT|Guests|Staff/);
+  });
+});
+
+describe('orderSlipEposXml', () => {
+  const slip = {
+    storeName: 'FULL MOoN 御茶ノ水',
+    orderNo: '123',
+    tableName: 'T-3',
+    guestCount: 2,
+    clerkName: 'Ronnie',
+    issuedAt: '2026/09/19 19:30',
+    lines: [
+      { name: 'カレーセット', quantity: 2, unitPrice: 1200, lineTotal: 2400, modifiers: [{ name: 'ナン', price: 0 }] },
+      { name: 'ラッシー', quantity: 1, unitPrice: 400, lineTotal: 400, modifiers: [] },
+    ],
+    subtotal: 2800,
+    taxTotal: 280,
+    serviceCharge: 0,
+    discount: 0,
+    total: 3080,
+  };
+
+  it('注文伝票の見出し・卓・明細・合計・注意書きを含み、整形式', () => {
+    const xml = orderSlipEposXml(slip, { paperWidth: 80 });
+    expect(xmlErrors(xml)).toEqual([]);
+    expect(xml).toContain('注文伝票');
+    expect(xml).toContain('T-3');
+    expect(xml).toContain('No.123');
+    expect(xml).toContain('カレーセット');
+    expect(xml).toContain('+ ナン');
+    expect(xml).toContain('2名');
+    expect(xml).toContain('担当 Ronnie');
+    expect(xml).toContain('これは領収書ではありません');
+    expect(xml).toContain('<cut type="feed"/>');
+  });
+
+  it('卓なしはテイクアウト表記', () => {
+    const xml = orderSlipEposXml({ ...slip, tableName: null, guestCount: null, clerkName: null }, { paperWidth: 58 });
+    expect(xml).toContain('テイクアウト');
   });
 });
 
