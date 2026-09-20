@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
+import { isMissingColumnError } from '@/lib/schema-compat';
 import { applicableTaxRate } from '@/lib/tax';
 import { validateCoupon, COUPON_REJECT_LABELS, type CouponLike } from '@/lib/coupons';
 import { resolveOptionSelection } from '@/lib/menu-options';
@@ -171,7 +172,7 @@ export async function addItem(orderId: string, menuItemId: string, optionItemIds
   const { modifiers, extraPrice } = await resolveOptions(supabase, order.store_id, item.id, optionItemIds);
   const finalUnitPrice = unitPrice + extraPrice;
 
-  const { error } = await supabase.from('order_items').insert({
+  const row = {
     organization_id: order.organization_id,
     store_id: order.store_id,
     order_id: orderId,
@@ -187,11 +188,64 @@ export async function addItem(orderId: string, menuItemId: string, optionItemIds
     staff_id: ctx.userId,
     status: 'active',
     created_by: ctx.userId,
-  });
+  };
+  // レジで貯めている途中（未送信）。「厨房へオーダー」を押すまで厨房伝票・KDS には出さない。
+  // タップした瞬間に厨房へ流れると押し間違いがそのまま厨房に届くため（店舗要望）。
+  let { error } = await supabase.from('order_items').insert({ ...row, kitchen_sent_at: null });
+  if (error && isMissingColumnError(error.message, 'kitchen_sent_at')) {
+    // migration 00063 未適用（列が無い）。従来どおり即時に厨房へ流す挙動で登録だけは通す
+    ({ error } = await supabase.from('order_items').insert(row));
+  }
   if (error) throw new Error(error.message);
 
   await supabase.rpc('recalc_order_totals', { p_order_id: orderId });
   revalidatePath(`/app/pos`);
+}
+
+export interface SendOrderResult {
+  /** 今回厨房へ送った品目数（行数） */
+  sent: number;
+}
+
+/**
+ * 伝票の未送信品目をまとめて厨房へ送る（kitchen_sent_at を立てる）。
+ * 厨房プリンターは claim_kitchen_items のポーリングで、送信済みの明細だけを伝票にする。
+ * KDS も送信済みだけを表示する。送るものが無ければ sent:0（エラーにはしない）。
+ */
+export async function sendOrderToKitchen(orderId: string): Promise<SendOrderResult> {
+  const ctx = await requirePermission('pos.order');
+  const supabase = await createClient();
+  await loadOpenOrder(supabase, ctx, orderId);
+  const sent = await markUnsentItemsSent(supabase, orderId, ctx.userId);
+  if (sent == null) {
+    throw new Error('厨房へのまとめ送信はまだ有効になっていません（DB更新待ち）。品目は追加時に厨房へ送られています');
+  }
+  revalidatePath(`/app/pos`);
+  revalidatePath(`/app/kitchen`);
+  return { sent };
+}
+
+/**
+ * 未送信（kitchen_sent_at null）の有効明細を送信済みにする。戻り値は更新行数。
+ * migration 00063 未適用（列が無い）のときは null（＝そもそも未送信という状態が無い）。
+ */
+async function markUnsentItemsSent(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  orderId: string,
+  userId: string
+): Promise<number | null> {
+  const { data, error } = await supabase
+    .from('order_items')
+    .update({ kitchen_sent_at: new Date().toISOString(), updated_by: userId })
+    .eq('order_id', orderId)
+    .eq('status', 'active')
+    .is('kitchen_sent_at', null)
+    .select('id');
+  if (error) {
+    if (isMissingColumnError(error.message, 'kitchen_sent_at')) return null;
+    throw new Error(error.message);
+  }
+  return (data ?? []).length;
 }
 
 /** 数量を+/-する（1未満にはしない。取消は cancelItem を使う） */
@@ -306,13 +360,17 @@ export interface CheckoutOutcome {
   ok: boolean;
   /** true の場合は二重会計等で既に確定済み。エラーではなく案内として扱う */
   alreadyPaid?: boolean;
+  /** true の場合はレジ未開局のため会計を受け付けなかった（先にレジを開局する） */
+  registerClosed?: boolean;
   warning?: string | null;
   /** finalize_order が返す今回付与ポイント数（0以下は付与なし） */
   pointsEarned?: number;
 }
 
 /**
- * 会計確定。レジ未開局の場合は register_session_id=null で確定し warning を返す。
+ * 会計確定。
+ * レジ未開局の場合は会計を受け付けない（registerClosed:true を返す）。毎日の開局時に釣銭準備金を数え、
+ * 締め時に精算するルールのため、レジを開けずに会計すると現金がレジ台帳に載らず締めの数字が合わなくなる。
  * finalize_order は status<>'open' をDB層で拒否する（二重会計防止）。
  * 既に会計済みだった場合はエラーにせず alreadyPaid:true を返し、呼び出し側でレシートへ誘導する。
  */
@@ -336,11 +394,18 @@ export async function checkout(orderId: string, payments: CheckoutPayment[]): Pr
     .order('opened_at', { ascending: false })
     .limit(1)
     .maybeSingle();
+  if (!session) {
+    return { ok: false, registerClosed: true };
+  }
+
+  // 未送信のまま会計する品目（先払い・テイクアウトなど）は、会計と同時に厨房へ送る。
+  // 送らずに会計すると、お金だけ受け取って厨房が知らない状態になる。
+  await markUnsentItemsSent(supabase, orderId, ctx.userId);
 
   const { data, error } = await supabase.rpc('finalize_order', {
     p_order_id: orderId,
     p_payments: payments,
-    p_register_session_id: session?.id ?? null,
+    p_register_session_id: session.id,
   });
 
   if (error) {
@@ -364,11 +429,8 @@ export async function checkout(orderId: string, payments: CheckoutPayment[]): Pr
   revalidatePath('/app/orders');
   revalidatePath('/app/floor');
 
-  const hasCash = payments.some((p) => p.method === 'cash');
-  const warning =
-    !session && hasCash ? '現金がレジ台帳に計上されていません。レジを開局してください' : null;
   const result = data as { points_earned?: number } | null;
-  return { ok: true, warning, pointsEarned: result?.points_earned ?? 0 };
+  return { ok: true, warning: null, pointsEarned: result?.points_earned ?? 0 };
 }
 
 export interface SplitMove {
@@ -490,6 +552,8 @@ export async function splitOrder(
         line_total: line.unit_price * m.quantity,
         staff_id: ctx.userId,
         status: 'active',
+        // 元の行がまだ厨房へ未送信なら、分けた側も未送信のまま（既定 now() で勝手に送られないように）
+        kitchen_sent_at: line.kitchen_sent_at,
         created_by: ctx.userId,
       });
       if (insLineErr) {

@@ -23,9 +23,16 @@ export async function switchStore(storeId: string) {
   revalidatePath('/app', 'layout');
 }
 
+/**
+ * ログアウト。scope:'local' で「この端末のセッションだけ」を終了する。
+ * 既定の scope:'global' は同じアカウントの全セッション（＝全店・全端末の iPad）を一斉に
+ * ログアウトさせてしまう。現状は全店が同じアカウントでログインしているため、1台で
+ * ログアウトすると営業中の他店のレジまで落ちる事故になっていた。
+ * （停止ユーザーの強制ログアウトは lib/auth.ts 側で従来どおり全セッションを切る）
+ */
 export async function signOut() {
   const supabase = await createClient();
-  await supabase.auth.signOut();
+  await supabase.auth.signOut({ scope: 'local' });
   redirect('/login');
 }
 

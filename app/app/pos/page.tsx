@@ -2,17 +2,19 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { requireFeature } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
+import { isMissingColumnError } from '@/lib/schema-compat';
 import { can } from '@/lib/permissions';
 import { PageHeader } from '@/components/ui/page-header';
 import { EmptyState } from '@/components/ui/state';
 import { OrderPicker } from '@/components/pos/order-picker';
-import { PosScreen } from '@/components/pos/pos-screen';
+import { PosScreen, type PosOrderItem } from '@/components/pos/pos-screen';
 import {
   addItem,
   updateQty,
   cancelItem,
   setDiscount,
   checkout,
+  sendOrderToKitchen,
   startTakeout,
   splitOrder,
   mergeOrders,
@@ -28,6 +30,20 @@ import {
 import { startTerminalPayment, checkTerminalPayment, cancelTerminalPayment, getPaymentAvailability } from './payment-actions';
 
 export const metadata: Metadata = { title: 'POSレジ' };
+
+const ORDER_ITEM_COLUMNS = 'id, menu_item_id, name, unit_price, quantity, tax_rate, tax_included, line_total, status';
+
+/**
+ * 伝票の明細。kitchen_sent_at（厨房へ送信済みか）も読むが、migration 00063 が未適用で列が無いときは
+ * 列なしで読み直す（その場合は全品「送信済み」扱いになり、レジは従来どおり動く）。
+ */
+async function loadOrderItems(supabase: Awaited<ReturnType<typeof createClient>>, orderId: string) {
+  const base = () => supabase.from('order_items').select(`${ORDER_ITEM_COLUMNS}, kitchen_sent_at`).eq('order_id', orderId).eq('status', 'active').order('created_at');
+  const first = await base();
+  if (!first.error || !isMissingColumnError(first.error.message, 'kitchen_sent_at')) return first;
+  const legacy = await supabase.from('order_items').select(ORDER_ITEM_COLUMNS).eq('order_id', orderId).eq('status', 'active').order('created_at');
+  return { data: (legacy.data ?? null) as (PosOrderItem[] | null), error: legacy.error };
+}
 
 export default async function PosPage({
   searchParams,
@@ -121,12 +137,7 @@ export default async function PosPage({
     { data: loyalty },
     { data: storeSettings },
   ] = await Promise.all([
-    supabase
-      .from('order_items')
-      .select('id, menu_item_id, name, unit_price, quantity, tax_rate, tax_included, line_total, status')
-      .eq('order_id', orderId)
-      .eq('status', 'active')
-      .order('created_at'),
+    loadOrderItems(supabase, orderId),
     supabase
       .from('menu_categories')
       .select('id, name, name_en, color, sort_order')
@@ -245,9 +256,11 @@ export default async function PosPage({
     guestCount: number;
   }[] = [];
   let availableTables: { id: string; name: string; capacityMax: number }[] = [];
+  // レジが開局しているか（未開局だと会計を受け付けない。画面にも先に出しておく）
+  let registerOpen = true;
 
   if (canCheckout) {
-    const [availability, { data: readers }, { data: otherOrders }] = await Promise.all([
+    const [availability, { data: readers }, { data: otherOrders }, { data: openSession }] = await Promise.all([
       getPaymentAvailability(),
       supabase
         .from('terminal_readers')
@@ -261,8 +274,10 @@ export default async function PosPage({
         .neq('id', orderId)
         .order('opened_at', { ascending: false })
         .limit(30),
+      supabase.from('register_sessions').select('id').eq('store_id', store.id).eq('status', 'open').limit(1).maybeSingle(),
     ]);
     paymentAvailability = availability;
+    registerOpen = !!openSession;
     const statusOrder: Record<string, number> = { online: 0, unknown: 1, offline: 2 };
     terminalReaders = (readers ?? [])
       .map((r) => ({
@@ -329,6 +344,7 @@ export default async function PosPage({
         drawerConfig={drawerConfig}
         canDiscount={can(ctx.role, 'pos.discount')}
         canCheckout={canCheckout}
+        registerOpen={registerOpen}
         terminalReaders={terminalReaders}
         paymentAvailability={paymentAvailability}
         otherOpenOrders={otherOpenOrders}
@@ -338,6 +354,7 @@ export default async function PosPage({
         cancelItemAction={cancelItem}
         setDiscountAction={setDiscount}
         checkoutAction={checkout}
+        sendOrderAction={sendOrderToKitchen}
         splitOrderAction={splitOrder}
         mergeOrdersAction={mergeOrders}
         moveTableAction={moveTable}

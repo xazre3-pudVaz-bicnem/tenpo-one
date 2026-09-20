@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { Camera, Download, Lock } from 'lucide-react';
 import { requireFeature } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
-import { can, ROLE_LABELS } from '@/lib/permissions';
+import { can, ROLE_LABELS, type Role } from '@/lib/permissions';
 import { resolveApprovalRule, type ApprovalRuleLike } from '@/lib/approvals';
 import { yen, formatDate, formatTime, todayJst, daysAgoJst } from '@/lib/format';
 import { cn } from '@/lib/utils';
@@ -289,7 +289,7 @@ async function RegisterTab({
                   theoreticalCash={c.session.theoreticalCash}
                 />
               ) : (
-                <RegisterClosedCard key={c.session.id} storeDayClosed={!!todayClosing} session={c.session} />
+                <RegisterClosedCard key={c.session.id} storeDayClosed={!!todayClosing} session={c.session} canOperate={can(role as Role | null, 'register.operate')} />
               )
             )}
           </div>

@@ -139,6 +139,10 @@ export function ImportWizard({
   const validCount = issues.filter((i) => i.status === 'ok').length;
   const errorCount = issues.filter((i) => i.status === 'error').length;
   const duplicateCount = issues.filter((i) => i.status === 'duplicate').length;
+  // 商品CSV（英語名・カナの上書き）と選択肢CSV（対象商品の紐付け）は「登録済み」の行だけでも実行する意味がある。
+  // 新規0件・登録済みだけのファイル（例: 全商品の英語名を後から付ける）でボタンが押せないと、その機能が使えない。
+  const updatesDuplicates = importType === 'menu_items' || importType === 'menu_option_groups';
+  const submitCount = updatesDuplicates ? validCount + duplicateCount : validCount;
 
   function handleExecute() {
     // 「重複」の行もサーバーへ送る。登録済みかどうかの最終判断はサーバー側が持っており、
@@ -242,6 +246,8 @@ export function ImportWizard({
                 validCount={validCount}
                 errorCount={errorCount}
                 duplicateCount={duplicateCount}
+                submitCount={submitCount}
+                updatesDuplicates={updatesDuplicates}
                 pending={pending}
                 resultError={resultError}
                 onBack={() => setStep('mapping')}
@@ -419,6 +425,8 @@ function PreviewStep({
   validCount,
   errorCount,
   duplicateCount,
+  submitCount,
+  updatesDuplicates,
   pending,
   resultError,
   onBack,
@@ -431,6 +439,9 @@ function PreviewStep({
   validCount: number;
   errorCount: number;
   duplicateCount: number;
+  /** 実行ボタンで送る行数（登録済み行を更新に使う種別では登録済みも含む） */
+  submitCount: number;
+  updatesDuplicates: boolean;
   pending: boolean;
   resultError: string | null;
   onBack: () => void;
@@ -504,11 +515,13 @@ function PreviewStep({
         <Button type="button" variant="secondary" onClick={onBack} disabled={pending}>
           <ArrowLeft className="h-4 w-4" /> 戻る
         </Button>
-        <Button type="button" onClick={onExecute} disabled={validCount === 0 || pending || checkingDuplicates}>
+        <Button type="button" onClick={onExecute} disabled={submitCount === 0 || pending || checkingDuplicates}>
           {pending ? (
             <>
               <Loader2 className="h-4 w-4 animate-spin" /> 登録中…
             </>
+          ) : updatesDuplicates && duplicateCount > 0 ? (
+            `${submitCount}件を登録・更新する`
           ) : (
             `${validCount}件を登録する`
           )}

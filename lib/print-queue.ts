@@ -97,7 +97,7 @@ export async function expireStaleJobs(admin: Admin, printerId: string) {
   await Promise.all([
     base().eq('job_type', 'test').eq('payload->>drawer', 'true').lt('created_at', isoAgo(TTL_DRAWER_MS)),
     base().eq('job_type', 'test').lt('created_at', isoAgo(TTL_TEST_MS)),
-    base().in('job_type', ['receipt', 'ryoshusho', 'kitchen', 'order_slip']).lt('created_at', isoAgo(TTL_PRINT_MS)),
+    base().in('job_type', ['receipt', 'ryoshusho', 'kitchen', 'order_slip', 'register_report']).lt('created_at', isoAgo(TTL_PRINT_MS)),
   ]);
 }
 
@@ -308,6 +308,26 @@ export async function claimNextJob(admin: Admin, printerId: string) {
     .update({ status: 'claimed', claimed_at: new Date().toISOString() })
     .eq('id', job.id);
   return job as { id: string; content_type: string | null; payload: JobPayload | null };
+}
+
+/**
+ * このプリンタが現在取りかかっている（claimed の）ジョブのうち最も古いもの。
+ * jobToken 非対応の旧ファーム（mC-Print3 3.2 未満、IFBD-HI01X/HI02X 1.8 未満）は GET/DELETE に
+ * ?token= を付けてこないため、POST で払い出した直後のジョブをこれで特定する。
+ * 「最も古い claimed」を GET と DELETE の両方で使えば、途中で次のジョブが claimed になっても
+ * 取得と確定が同じジョブを指す。
+ */
+export async function currentClaimedJob(admin: Admin, printerId: string) {
+  const { data: job } = await admin
+    .from('print_jobs')
+    .select('id, content_type, payload')
+    .eq('printer_config_id', printerId)
+    .eq('status', 'claimed')
+    .eq('target', 'cloudprnt')
+    .order('claimed_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  return (job as { id: string; content_type: string | null; payload: JobPayload | null } | null) ?? null;
 }
 
 /** 印字結果の確定。 */

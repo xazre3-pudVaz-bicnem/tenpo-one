@@ -27,6 +27,8 @@ export interface CheckoutOrder {
   discountTotal: number;
   couponCode: string | null;
   total: number;
+  /** 厨房へ未送信の品目数。会計と同時に厨房へ送られる旨を案内する */
+  unsentCount?: number;
 }
 
 export interface PosTerminalReader {
@@ -400,6 +402,13 @@ export function CheckoutDialog({
             <span>合計 / Total</span>
             <span className="tabular-nums">{yen(order.total)}</span>
           </div>
+          {(order.unsentCount ?? 0) > 0 && (
+            <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              厨房へ未送信の品目が {order.unsentCount} 品あります。会計を確定すると同時に厨房へ送信されます。
+              <br />
+              {order.unsentCount} item(s) not yet sent to the kitchen will be sent when you confirm payment.
+            </p>
+          )}
         </div>
 
         {paymentAvailability.configured && (
