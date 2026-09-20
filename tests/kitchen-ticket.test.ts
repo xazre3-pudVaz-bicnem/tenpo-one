@@ -52,12 +52,13 @@ describe('groupKitchenTickets', () => {
 describe('layoutKitchenTicket', () => {
   const opts = { title: 'キッチン', titleEn: 'KITCHEN', printedAt: '18:21', paperWidth: 80 as const };
 
-  it('卓名を大きく、明細を縦倍で出す', () => {
+  it('卓名を縦倍で出し、明細は等倍で出す（横2倍は使わない）', () => {
     const [t] = groupKitchenTickets([row({ delta: 2 })]);
     const lines = layoutKitchenTicket(t, opts);
-    expect(lines.find((l) => l.text === 'T10')?.size).toBe('large');
+    expect(lines.find((l) => l.text === 'T10')?.size).toBe('tall');
+    expect(lines.some((l) => l.size === 'large')).toBe(false);
     // 厨房向けは英語を主・日本語を従で出す
-    expect(lines.find((l) => l.text.startsWith('Chikinkaree'))).toMatchObject({ size: 'tall', text: 'Chikinkaree  x2' });
+    expect(lines.find((l) => l.text.startsWith('Chikinkaree'))).toMatchObject({ size: 'normal', text: 'Chikinkaree  x2' });
     expect(lines.some((l) => l.text === '   チキンカレー')).toBe(true);
     // 見出し・人数・担当も英語で読める
     expect(lines.map((l) => l.text)).toContain('KITCHEN');
@@ -94,8 +95,8 @@ describe('kitchenTicketMarkup', () => {
   it('サイズ切替とカットを含み、角括弧をエスケープする', () => {
     const [t] = groupKitchenTickets([row({ item_name: '[限定]カレー' })]);
     const m = kitchenTicketMarkup(layoutKitchenTicket(t, { title: 'キッチン', printedAt: '18:21' }));
-    expect(m).toContain('[magnify: width 2; height 2]');
-    expect(m).toContain('[magnify: width 1; height 2]');
+    expect(m).toContain('[magnify: width 1; height 2]'); // 卓名は縦2倍
+    expect(m).not.toContain('width 2'); // 横2倍は使わない
     expect(m).toContain('\\[限定\\]カレー');
     expect(m.trimEnd().endsWith('[cut: feed; partial]')).toBe(true);
   });

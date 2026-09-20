@@ -123,8 +123,9 @@ export function layoutKitchenTicket(ticket: KitchenTicket, opts: KitchenLayoutOp
   // 厨房は英語主体（日本語を読まないスタッフが作る）。日本語も残して両方読めるようにする。
   if (opts.titleEn) push(opts.titleEn, 'normal', 'center');
   push(opts.title, 'normal', 'center');
-  push(ticket.tableName ?? 'TAKEOUT / テイクアウト', 'large', 'center');
-  if (hasCancel && !hasAdd) push('*** CANCEL / 取消 ***', 'large', 'center');
+  // 卓名と取消の見出しは縦2倍まで（縦横2倍だと1行の桁数が半分になり、紙も文字も大きくなりすぎる）
+  push(ticket.tableName ?? 'TAKEOUT / テイクアウト', 'tall', 'center');
+  if (hasCancel && !hasAdd) push('*** CANCEL / 取消 ***', 'tall', 'center');
   push(twoCol(`No.${ticket.orderNo}`, opts.printedAt, width));
   const meta = [
     ticket.guestCount ? `Guests ${ticket.guestCount}` : null,
@@ -141,7 +142,7 @@ export function layoutKitchenTicket(ticket: KitchenTicket, opts: KitchenLayoutOp
     const qty = `x${Math.abs(l.delta)}`;
     const cancelled = l.delta < 0;
     const head = l.nameEn ?? l.name;
-    push(`${cancelled ? '[CANCEL/取消] ' : ''}${head}  ${qty}`, 'tall');
+    push(`${cancelled ? '[CANCEL/取消] ' : ''}${head}  ${qty}`, 'normal');
     if (l.nameEn) push(`   ${l.name}`);
     for (const m of l.modifiers) push(`   ・${m}`);
     if (l.memo) push(`   ※${l.memo}`);

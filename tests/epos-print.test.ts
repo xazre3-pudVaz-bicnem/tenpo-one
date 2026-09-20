@@ -196,11 +196,12 @@ describe('kitchenTicketEpos', () => {
     delta: 2,
   };
 
-  it('卓名を倍角で出し、明細と選択肢を含む', () => {
+  it('卓名を縦2倍で出し、明細と選択肢を含む', () => {
     const [t] = groupKitchenTickets([row]);
     const x = kitchenTicketEpos(layoutKitchenTicket(t, { title: 'キッチン', printedAt: '18:21', paperWidth: 80 }));
     expectWellFormed(x);
-    expect(x).toContain('<text width="2" height="2"/>');
+    expect(x).toContain('<text width="1" height="2"/>'); // 卓名
+    expect(x).not.toContain('width="2"'); // 横2倍は使わない
     expect(x).toContain('T10');
     expect(x).toContain('チキンカレー');
     expect(x).toContain('辛口');
