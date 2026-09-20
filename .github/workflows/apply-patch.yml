@@ -1,6 +1,12 @@
-# patch-inbox/** ブランチに *.patch を置くと、BASE の上に git am して BRANCH へ push する。
+# patch-inbox/** ブランチに *.patch（git format-patch --base=<sha> の出力）を置くと、
+# その base-commit の上に git am で当てて、対象ブランチへ force push する。
 # Claude の作業環境から GitHub へ直接 push できないときの搬入口。
 # 出来たブランチから main への Pull Request は GitHub の画面で作って merge する。
+#
+# 使い方:
+#   1. git format-patch --stdout --base=<mainの取り込み元sha> <sha>..HEAD > 0001-xxx.patch
+#   2. patch-inbox/<名前> ブランチの直下に置く（ファイル名の昇順に当たる。追加分は 0002-... で足せる）
+#   3. 対象ブランチ名は TARGET_BRANCH ファイル（1行）で指定。無ければ feat/inbox-<名前>
 name: apply-patch-inbox
 on:
   push:
@@ -11,14 +17,11 @@ permissions:
 jobs:
   apply:
     runs-on: ubuntu-latest
-    env:
-      BASE: '8600311'
-      BRANCH: 'feat/register-report-kitchen-send'
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Apply patches onto BASE and push BRANCH
+      - name: Apply patches onto their base-commit and push the target branch
         run: |
           set -euo pipefail
           shopt -s nullglob
@@ -27,11 +30,21 @@ jobs:
             echo "no *.patch in inbox yet"
             exit 0
           fi
+          if [ -f TARGET_BRANCH ]; then
+            BRANCH=$(head -1 TARGET_BRANCH | tr -d '[:space:]')
+          else
+            BRANCH="feat/inbox-${GITHUB_REF_NAME#patch-inbox/}"
+          fi
+          BASE=$(grep -h -m1 '^base-commit:' "${patches[@]}" | head -1 | awk '{print $2}')
+          if [ -z "$BASE" ]; then
+            echo "::error::patch に base-commit 行がありません（git format-patch --base=<sha> で作ってください）"
+            exit 1
+          fi
           mkdir -p /tmp/inbox
           cp "${patches[@]}" /tmp/inbox/
           git config user.name "tenpo-one patch bot"
           git config user.email "noreply@anthropic.com"
           git checkout -B "$BRANCH" "$BASE"
-          git am --3way /tmp/inbox/*.patch
+          git am --3way --ignore-whitespace /tmp/inbox/*.patch
           git push --force origin "$BRANCH"
           echo "pushed $BRANCH at $(git rev-parse --short HEAD) (base $BASE)"
