@@ -3,7 +3,7 @@
  * claim_kitchen_items（00057）が返した差分行を注文ごとの伝票にまとめ、
  * Markup / StarPRNT の両レンダラが共有する「行の並び」を組み立てる。
  */
-import { colsFor, twoCol, type PaperWidth } from './receipt-layout';
+import { colsFor, twoCol, wrapText, type PaperWidth } from './receipt-layout';
 import { englishName } from './romaji';
 
 export type KitchenStation = 'kitchen' | 'drink' | 'dessert';
@@ -116,8 +116,11 @@ export function layoutKitchenTicket(ticket: KitchenTicket, opts: KitchenLayoutOp
   const width = opts.columns ?? colsFor(opts.paperWidth);
   const rule = '-'.repeat(width);
   const out: LayoutLine[] = [];
-  const push = (text: string, size: LayoutLine['size'] = 'normal', align: LayoutLine['align'] = 'left') =>
-    out.push({ text, size, align });
+  // 長い商品名は桁数で折り返す（プリンタ任せだと1文字だけ次行に落ちて読みにくい）。
+  // 縦2倍は桁数が変わらないので、どのサイズでも同じ桁数で折り返してよい。
+  const push = (text: string, size: LayoutLine['size'] = 'normal', align: LayoutLine['align'] = 'left') => {
+    for (const w of wrapText(text, width)) out.push({ text: w, size, align });
+  };
 
   const hasCancel = ticket.lines.some((l) => l.delta < 0);
   const hasAdd = ticket.lines.some((l) => l.delta > 0);

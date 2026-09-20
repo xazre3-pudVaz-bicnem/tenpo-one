@@ -9,7 +9,7 @@
  */
 import iconv from 'iconv-lite';
 import type { ReceiptData } from './receipts';
-import { colsFor, twoCol, yen, type PaperWidth } from './receipt-layout';
+import { colsFor, twoCol, wrapText, yen, type PaperWidth } from './receipt-layout';
 import type { LayoutLine } from './kitchen-ticket';
 
 const ESC = 0x1b;
@@ -72,19 +72,23 @@ class StarBuffer {
   private parts: Buffer[] = [];
   constructor(
     private currency: CurrencyStyle,
-    private encoding: TextEncoding
+    private encoding: TextEncoding,
+    /** 1行の桁数。これを超える文章はこちらで折り返す（プリンタ任せだと1文字だけ次行に落ちる） */
+    private cols = 0
   ) {}
 
   cmd(bytes: readonly number[]): this {
     this.parts.push(Buffer.from(bytes));
     return this;
   }
-  /** 1行ぶんのテキスト（改行付き）。 */
+  /** 1行ぶんのテキスト（改行付き）。桁数を超える場合は折り返す。 */
   line(s = ''): this {
-    const text = applyCurrency(s, this.currency) + '\n';
-    this.parts.push(
-      this.encoding === 'utf8' ? Buffer.from(text, 'utf8') : iconv.encode(text, 'Shift_JIS')
-    );
+    for (const part of this.cols > 0 ? wrapText(s, this.cols) : [s]) {
+      const text = applyCurrency(part, this.currency) + '\n';
+      this.parts.push(
+        this.encoding === 'utf8' ? Buffer.from(text, 'utf8') : iconv.encode(text, 'Shift_JIS')
+      );
+    }
     return this;
   }
   toBuffer(): Buffer {
@@ -95,7 +99,7 @@ class StarBuffer {
 export function receiptToStarPrnt(receipt: ReceiptData, options: StarPrntOptions = {}): Buffer {
   const width = colsFor(options.paperWidth);
   const rule = '-'.repeat(width);
-  const b = new StarBuffer(options.currency ?? DEFAULT_CURRENCY, options.encoding ?? DEFAULT_ENCODING);
+  const b = new StarBuffer(options.currency ?? DEFAULT_CURRENCY, options.encoding ?? DEFAULT_ENCODING, width);
 
   b.cmd(CMD.init).cmd(CMD.alignCenter);
   if (receipt.isReissue) b.line('※ 再発行');
@@ -173,7 +177,7 @@ export function ryoshushoToStarPrnt(
 ): Buffer {
   const width = colsFor(options.paperWidth);
   const rule = '-'.repeat(width);
-  const b = new StarBuffer(options.currency ?? DEFAULT_CURRENCY, options.encoding ?? DEFAULT_ENCODING);
+  const b = new StarBuffer(options.currency ?? DEFAULT_CURRENCY, options.encoding ?? DEFAULT_ENCODING, width);
   const recipient = (options.recipientName ?? '').trim() || '上様';
   const purpose = (options.purpose ?? '').trim() || 'お品代として';
 
@@ -230,7 +234,7 @@ export interface OrderSlipData {
 export function orderSlipStarPrnt(slip: OrderSlipData, options: StarPrntOptions = {}): Buffer {
   const width = colsFor(options.paperWidth);
   const rule = '-'.repeat(width);
-  const b = new StarBuffer(options.currency ?? DEFAULT_CURRENCY, options.encoding ?? DEFAULT_ENCODING);
+  const b = new StarBuffer(options.currency ?? DEFAULT_CURRENCY, options.encoding ?? DEFAULT_ENCODING, width);
 
   b.cmd(CMD.init).cmd(CMD.alignCenter);
   b.cmd(CMD.magnify(0, 1)).line('お会計伝票').cmd(CMD.magnify(0, 0));
@@ -274,7 +278,7 @@ export function testPrintStarPrnt(opts: {
 }): Buffer {
   const width = colsFor(opts.paperWidth);
   const rule = '-'.repeat(width);
-  const b = new StarBuffer(opts.currency ?? DEFAULT_CURRENCY, opts.encoding ?? DEFAULT_ENCODING);
+  const b = new StarBuffer(opts.currency ?? DEFAULT_CURRENCY, opts.encoding ?? DEFAULT_ENCODING, width);
 
   b.cmd(CMD.init).cmd(CMD.alignCenter);
   b.cmd(CMD.magnify(0, 1)).line(opts.storeName || 'TENPO ONE').cmd(CMD.magnify(0, 0));
@@ -299,6 +303,7 @@ export function kitchenTicketStarPrnt(
   lines: LayoutLine[],
   opts: { currency?: CurrencyStyle; encoding?: TextEncoding } = {}
 ): Buffer {
+  // 厨房伝票の行は layoutKitchenTicket が桁数どおりに組んであるので、ここでは折り返さない
   const b = new StarBuffer(opts.currency ?? DEFAULT_CURRENCY, opts.encoding ?? DEFAULT_ENCODING);
   b.cmd(CMD.init);
   let align = '';

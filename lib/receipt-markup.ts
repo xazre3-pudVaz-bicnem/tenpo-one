@@ -6,7 +6,7 @@
  * キャッシュドロアはMarkupに機種依存があるため drawerKickMarkup() で別ジョブとして扱う。
  */
 import type { ReceiptData } from './receipts';
-import { colsFor, twoCol, yen, type PaperWidth } from './receipt-layout';
+import { colsFor, twoCol, wrapText, yen, type PaperWidth } from './receipt-layout';
 import type { LayoutLine } from './kitchen-ticket';
 
 /** Markup構文で意味を持つ文字を無害化（角括弧・バックスラッシュ）。 */
@@ -22,7 +22,7 @@ export function receiptToStarMarkup(receipt: ReceiptData, options: ReceiptMarkup
   const width = colsFor(options.paperWidth);
   const rule = '-'.repeat(width);
   const L: string[] = [];
-  const line = (s = '') => L.push(esc(s));
+  const line = (s = '') => { for (const w of wrapText(s, width)) L.push(esc(w)); };
   const raw = (s: string) => L.push(s); // Markup命令はエスケープしない
 
   raw('[align: middle]');
@@ -110,7 +110,7 @@ export function ryoshushoToStarMarkup(receipt: ReceiptData, options: RyoshushoOp
   const width = colsFor(options.paperWidth);
   const rule = '-'.repeat(width);
   const L: string[] = [];
-  const line = (s = '') => L.push(esc(s));
+  const line = (s = '') => { for (const w of wrapText(s, width)) L.push(esc(w)); };
   const raw = (s: string) => L.push(s);
 
   const recipient = (options.recipientName ?? '').trim() || '上様';
@@ -190,7 +190,7 @@ export function orderSlipMarkup(
   const width = colsFor(options.paperWidth);
   const rule = '-'.repeat(width);
   const L: string[] = [];
-  const line = (s = '') => L.push(esc(s));
+  const line = (s = '') => { for (const w of wrapText(s, width)) L.push(esc(w)); };
   const raw = (s: string) => L.push(s);
 
   raw('[align: middle]');
