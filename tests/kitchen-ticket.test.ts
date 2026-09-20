@@ -95,6 +95,7 @@ describe('kitchenTicketMarkup', () => {
   it('サイズ切替とカットを含み、角括弧をエスケープする', () => {
     const [t] = groupKitchenTickets([row({ item_name: '[限定]カレー' })]);
     const m = kitchenTicketMarkup(layoutKitchenTicket(t, { title: 'キッチン', printedAt: '18:21' }));
+    expect(m.startsWith('[bold: on]\n')).toBe(true); // 本文全体を太字
     expect(m).toContain('[magnify: width 1; height 2]'); // 卓名は縦2倍
     expect(m).not.toContain('width 2'); // 横2倍は使わない
     expect(m).toContain('\\[限定\\]カレー');

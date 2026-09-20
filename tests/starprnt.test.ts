@@ -43,8 +43,9 @@ describe('receiptToStarPrnt', () => {
     // 拡大は縦のみ2倍（ESC i n1=縦 n2=横 で 0=等倍）。横2倍にすると1行の桁数が半分になる
     expect(hasBytes(b, [ESC, 0x69, 0x01, 0x00])).toBe(true); // 拡大ON（縦のみ）
     expect(hasBytes(b, [ESC, 0x69, 0x01, 0x01])).toBe(false); // 縦横2倍は使わない
-    expect(hasBytes(b, [ESC, 0x45])).toBe(true); // 強調ON（合計行）
-    expect(hasBytes(b, [ESC, 0x46])).toBe(true); // 強調OFF
+    expect(hasBytes(b, [ESC, 0x45])).toBe(true); // 強調ON（本文全体を太字にする）
+    expect(hasBytes(b, [ESC, 0x46])).toBe(false); // 途中で強調を切らない（次ジョブの init で戻る）
+    expect([...b.subarray(0, 4)]).toEqual([ESC, 0x40, ESC, 0x45]); // 初期化の直後に強調ON
   });
 
   it('キャンセル品は出力しない', () => {

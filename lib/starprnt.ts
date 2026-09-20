@@ -26,6 +26,7 @@ const CMD = {
   alignCenter: [ESC, GS, 0x61, 0x01],
   /** 文字拡大 ESC i n1(縦) n2(横)。0=等倍。 */
   magnify: (w: number, h: number) => [ESC, 0x69, h, w],
+  /** 強調（太字）。本文全体に掛ける（店舗要望「文字を少し太く」）。init の直後に送る */
   emphasizeOn: [ESC, 0x45],
   emphasizeOff: [ESC, 0x46],
   /** フィードして部分カット。 */
@@ -101,7 +102,7 @@ export function receiptToStarPrnt(receipt: ReceiptData, options: StarPrntOptions
   const rule = '-'.repeat(width);
   const b = new StarBuffer(options.currency ?? DEFAULT_CURRENCY, options.encoding ?? DEFAULT_ENCODING, width);
 
-  b.cmd(CMD.init).cmd(CMD.alignCenter);
+  b.cmd(CMD.init).cmd(CMD.emphasizeOn).cmd(CMD.alignCenter);
   if (receipt.isReissue) b.line('※ 再発行');
   if (receipt.isRefundReceipt) b.line('※ 返金レシート');
 
@@ -136,7 +137,7 @@ export function receiptToStarPrnt(receipt: ReceiptData, options: StarPrntOptions
   if (receipt.discount > 0) {
     b.line(twoCol(`値引${receipt.couponCode ? ` (${receipt.couponCode})` : ''}`, `-${yen(receipt.discount)}`, width));
   }
-  b.cmd(CMD.emphasizeOn).line(twoCol('合計', yen(receipt.total), width)).cmd(CMD.emphasizeOff);
+  b.line(twoCol('合計', yen(receipt.total), width));
   b.line(rule);
 
   // 支払
@@ -181,7 +182,7 @@ export function ryoshushoToStarPrnt(
   const recipient = (options.recipientName ?? '').trim() || '上様';
   const purpose = (options.purpose ?? '').trim() || 'お品代として';
 
-  b.cmd(CMD.init);
+  b.cmd(CMD.init).cmd(CMD.emphasizeOn);
   b.cmd(CMD.alignCenter);
   if (receipt.isReissue) b.line('※ 再発行');
   // 拡大は magnify(横, 縦) で 0=等倍・1=2倍。見出しと金額は縦だけ伸ばし、横は等倍にする
@@ -236,7 +237,7 @@ export function orderSlipStarPrnt(slip: OrderSlipData, options: StarPrntOptions 
   const rule = '-'.repeat(width);
   const b = new StarBuffer(options.currency ?? DEFAULT_CURRENCY, options.encoding ?? DEFAULT_ENCODING, width);
 
-  b.cmd(CMD.init).cmd(CMD.alignCenter);
+  b.cmd(CMD.init).cmd(CMD.emphasizeOn).cmd(CMD.alignCenter);
   b.cmd(CMD.magnify(0, 1)).line('お会計伝票').cmd(CMD.magnify(0, 0));
   b.line(slip.storeName).line('（会計前のご確認用）');
   b.cmd(CMD.alignLeft).line(rule);
@@ -257,7 +258,7 @@ export function orderSlipStarPrnt(slip: OrderSlipData, options: StarPrntOptions 
   b.line(twoCol('消費税', yen(slip.taxTotal), width));
   if (slip.serviceCharge > 0) b.line(twoCol('サービス料', yen(slip.serviceCharge), width));
   if (slip.discount > 0) b.line(twoCol('値引', `-${yen(slip.discount)}`, width));
-  b.cmd(CMD.emphasizeOn).line(twoCol('合計', yen(slip.total), width)).cmd(CMD.emphasizeOff);
+  b.line(twoCol('合計', yen(slip.total), width));
   b.line(rule).cmd(CMD.alignCenter).line('※ これは領収書ではありません');
   b.line().line().cmd(CMD.cut);
   return b.toBuffer();
@@ -280,7 +281,7 @@ export function testPrintStarPrnt(opts: {
   const rule = '-'.repeat(width);
   const b = new StarBuffer(opts.currency ?? DEFAULT_CURRENCY, opts.encoding ?? DEFAULT_ENCODING, width);
 
-  b.cmd(CMD.init).cmd(CMD.alignCenter);
+  b.cmd(CMD.init).cmd(CMD.emphasizeOn).cmd(CMD.alignCenter);
   b.cmd(CMD.magnify(0, 1)).line(opts.storeName || 'TENPO ONE').cmd(CMD.magnify(0, 0));
   b.line('CloudPRNT テスト印刷 (StarPRNT)');
   b.cmd(CMD.alignLeft);
@@ -305,7 +306,7 @@ export function kitchenTicketStarPrnt(
 ): Buffer {
   // 厨房伝票の行は layoutKitchenTicket が桁数どおりに組んであるので、ここでは折り返さない
   const b = new StarBuffer(opts.currency ?? DEFAULT_CURRENCY, opts.encoding ?? DEFAULT_ENCODING);
-  b.cmd(CMD.init);
+  b.cmd(CMD.init).cmd(CMD.emphasizeOn);
   let align = '';
   let size = '';
   for (const l of lines) {
