@@ -5994,6 +5994,7 @@ export type Database = {
           closed_at: string | null
           closed_by: string | null
           counted_cash: number | null
+          counted_denominations: Json | null
           created_at: string
           created_by: string | null
           difference: number | null
@@ -6003,6 +6004,7 @@ export type Database = {
           note: string | null
           opened_at: string
           opened_by: string | null
+          opening_denominations: Json | null
           opening_float: number
           organization_id: string
           register_id: string
@@ -6018,6 +6020,7 @@ export type Database = {
           closed_at?: string | null
           closed_by?: string | null
           counted_cash?: number | null
+          counted_denominations?: Json | null
           created_at?: string
           created_by?: string | null
           difference?: number | null
@@ -6027,6 +6030,7 @@ export type Database = {
           note?: string | null
           opened_at?: string
           opened_by?: string | null
+          opening_denominations?: Json | null
           opening_float?: number
           organization_id: string
           register_id: string
@@ -6042,6 +6046,7 @@ export type Database = {
           closed_at?: string | null
           closed_by?: string | null
           counted_cash?: number | null
+          counted_denominations?: Json | null
           created_at?: string
           created_by?: string | null
           difference?: number | null
@@ -6051,6 +6056,7 @@ export type Database = {
           note?: string | null
           opened_at?: string
           opened_by?: string | null
+          opening_denominations?: Json | null
           opening_float?: number
           organization_id?: string
           register_id?: string
@@ -8165,6 +8171,7 @@ export type Database = {
       close_register_session: {
         Args: {
           p_counted_cash: number
+          p_counted_denominations?: Json
           p_difference_reason?: string
           p_session_id: string
         }
@@ -8272,6 +8279,7 @@ export type Database = {
       }
       open_register_session: {
         Args: {
+          p_opening_denominations?: Json
           p_opening_float: number
           p_register_id: string
           p_store_id: string

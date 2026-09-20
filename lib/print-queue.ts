@@ -97,7 +97,7 @@ export async function expireStaleJobs(admin: Admin, printerId: string) {
   await Promise.all([
     base().eq('job_type', 'test').eq('payload->>drawer', 'true').lt('created_at', isoAgo(TTL_DRAWER_MS)),
     base().eq('job_type', 'test').lt('created_at', isoAgo(TTL_TEST_MS)),
-    base().in('job_type', ['receipt', 'ryoshusho', 'kitchen', 'order_slip']).lt('created_at', isoAgo(TTL_PRINT_MS)),
+    base().in('job_type', ['receipt', 'ryoshusho', 'kitchen', 'order_slip', 'register_report']).lt('created_at', isoAgo(TTL_PRINT_MS)),
   ]);
 }
 

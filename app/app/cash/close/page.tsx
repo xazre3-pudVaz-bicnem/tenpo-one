@@ -286,7 +286,9 @@ export default async function CashClosePage() {
         {closedCards.length > 0 && (
           <div className="grid gap-4 lg:grid-cols-2">
             {closedCards.map((c) =>
-              c.type === 'closed' ? <RegisterClosedCard key={c.session.id} storeDayClosed={!!todayClosing} session={c.session} /> : null
+              c.type === 'closed' ? (
+                <RegisterClosedCard key={c.session.id} storeDayClosed={!!todayClosing} session={c.session} canOperate={canOperate} />
+              ) : null
             )}
           </div>
         )}

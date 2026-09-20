@@ -1,8 +1,17 @@
+'use client';
+
+import { useTransition } from 'react';
+import { Printer } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { useToast } from '@/components/ui/toast';
 import { yen, formatDateTime } from '@/lib/format';
+import { reprintRegisterReport } from '@/app/app/cash/actions';
+import { toUserMessage } from '@/lib/action-error';
 
 export interface ClosedRegisterCardData {
+  id: string;
   registerName: string;
   openedByName: string;
   closedByName: string;
@@ -14,14 +23,38 @@ export interface ClosedRegisterCardData {
   difference: number | null;
 }
 
-/** レジ締め済み（未開局ではないが店舗日次締めは未実施かもしれない）のレジ1台分のカード */
+/**
+ * レジ締め済み（未開局ではないが店舗日次締めは未実施かもしれない）のレジ1台分のカード。
+ * 締め時に自動で出るレジ精算レシートが出なかったとき（紙切れ・プリンター未接続）のために再印刷ボタンを持つ。
+ */
 export function RegisterClosedCard({
   session,
   storeDayClosed,
+  canOperate = false,
 }: {
   session: ClosedRegisterCardData;
   storeDayClosed: boolean;
+  /** レジ操作権限（再印刷ボタンの表示） */
+  canOperate?: boolean;
 }) {
+  const [pending, startTransition] = useTransition();
+  const { toast } = useToast();
+
+  const handleReprint = () => {
+    startTransition(async () => {
+      try {
+        const result = await reprintRegisterReport(session.id);
+        if (!result.ok) {
+          toast(result.error, 'error');
+          return;
+        }
+        toast('レジ精算レシートを印刷しています');
+      } catch (err) {
+        toast(toUserMessage(err, '再印刷に失敗しました'), 'error');
+      }
+    });
+  };
+
   return (
     <Card>
       <CardHeader className="flex flex-wrap items-center justify-between gap-2">
@@ -54,6 +87,14 @@ export function RegisterClosedCard({
             danger={!!session.difference}
           />
         </div>
+        {canOperate && (
+          <div className="mt-3 flex justify-end">
+            <Button type="button" variant="secondary" size="sm" onClick={handleReprint} disabled={pending}>
+              <Printer className="h-4 w-4" />
+              {pending ? '印刷中…' : '精算レシートを再印刷 / Reprint'}
+            </Button>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

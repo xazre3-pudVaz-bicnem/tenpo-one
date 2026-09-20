@@ -10,6 +10,7 @@ import { yen } from '@/lib/format';
 import { closeRegister } from '@/app/app/cash/actions';
 import { toUserMessage } from '@/lib/action-error';
 import { hasAnyCount, sumDenominations, type DenominationCounts } from '@/lib/cash-count';
+import { denominationsToJson } from '@/lib/register-report';
 import { CashDenominationCounter } from '@/components/cash/cash-denomination-counter';
 
 export interface CountSession {
@@ -28,6 +29,7 @@ export interface CountSession {
 /**
  * 現金実査（プロトタイプの close 右カード）。理論在高と実査額の差額を見てクローズする。
  * 締め処理は既存の closeRegister（close_register_session RPC）をそのまま呼ぶ。差額がある場合は理由必須。
+ * 金種別の枚数も一緒に保存し、締めと同時にレジ精算レシートがレシートプリンターから出る。
  */
 export function RegisterCountCard({
   session,
@@ -63,12 +65,21 @@ export function RegisterCountCard({
     }
     startTransition(async () => {
       try {
-        const result = await closeRegister(session.id, countedValue, needsReason ? reason.trim() : null);
+        const result = await closeRegister(
+          session.id,
+          countedValue,
+          needsReason ? reason.trim() : null,
+          denominationsToJson(counts)
+        );
         if (!result.ok) {
           toast(result.error, 'error');
           return;
         }
-        toast(`${session.registerName}をクローズしました`);
+        if (result.printWarning) {
+          toast(`${session.registerName}をクローズしました。${result.printWarning}`, 'error');
+        } else {
+          toast(`${session.registerName}をクローズしました。レジ精算レシートを印刷しています`);
+        }
         setCounts({});
         setReason('');
       } catch (err) {
@@ -146,10 +157,15 @@ export function RegisterCountCard({
             onClick={handleClose}
             disabled={pending || (needsReason && !reason.trim())}
           >
-            {pending ? 'クローズ中…' : 'レジをクローズする'}
+            {pending ? 'クローズ中…' : 'レジをクローズする / Close register'}
           </Button>
         ) : (
           <p className="mt-4 text-center text-xs text-ink-3">レジ操作の権限がありません</p>
+        )}
+        {canOperate && (
+          <p className="mt-2 text-center text-[11px] text-ink-3">
+            クローズすると、本日の売上・支払方法別・現金精算・入出金をまとめたレジ精算レシートがレシートプリンターから印刷されます
+          </p>
         )}
       </CardContent>
     </Card>

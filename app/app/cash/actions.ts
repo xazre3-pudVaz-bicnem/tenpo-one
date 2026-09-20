@@ -7,6 +7,8 @@ import { resolveApprovalRule, checkApproval, type ApprovalRuleLike } from '@/lib
 import type { Role } from '@/lib/permissions';
 import { captureServerError } from '@/lib/observability-server';
 import { actionFail, actionOk, type ActionResult } from '@/lib/action-error';
+import { enqueueRegisterReportPrint } from '@/lib/register-report-loader';
+import type { CloseRegisterResult, DenominationJson } from '@/lib/register-report';
 
 /** 店舗日次締め（close_store_day）を実行できるロール。DB側 close_store_day のapp_role_inと一致させること。 */
 const STORE_DAY_CLOSE_ROLES: Role[] = ['org_owner', 'hq_admin', 'area_manager', 'store_manager', 'assistant_manager'];
@@ -54,11 +56,34 @@ async function loadPettyCashApprovalRules(
   }));
 }
 
-/** レジ開局（open_register_session RPC） */
+/**
+ * 金種別枚数の引数（p_opening_denominations / p_counted_denominations）を DB 側がまだ知らない
+ * （migration 00062 未適用でコードだけ先に出た）ときの PostgREST エラーか。
+ * その場合は金種を付けずに旧シグネチャで呼び直す（開局・締め自体は止めない）。
+ */
+function isUnknownDenominationsArg(message: string): boolean {
+  return /denominations/.test(message) && /function|PGRST202|schema cache/i.test(message);
+}
+
+/** 金種別枚数（jsonb 保存用）の形式チェック。金種キーは 1〜10000、枚数は0以上の整数 */
+function validDenominations(raw: DenominationJson | null | undefined): boolean {
+  if (raw == null) return true;
+  if (typeof raw !== 'object') return false;
+  return Object.entries(raw).every(
+    ([k, v]) => /^\d+$/.test(k) && Number.isInteger(v) && v >= 0 && v <= 1_000_000
+  );
+}
+
+/**
+ * レジ開局（open_register_session RPC）。
+ * 釣銭準備金は金種別に数えた枚数（denominations）の合計で、枚数も一緒に保存する
+ * （毎日の開局時に「いくら入っているか」を必ず数える運用。締めの精算レシートと突き合わせられる）。
+ */
 export async function openRegister(
   storeId: string,
   registerId: string,
-  openingFloat: number
+  openingFloat: number,
+  denominations: DenominationJson | null = null
 ): Promise<ActionResult> {
   // 失敗を throw ではなく戻り値で返す（throw すると本番でメッセージが伏せられ、
   // 画面には「Minified React error #441」しか出ない。lib/action-error.ts 参照）。
@@ -69,14 +94,24 @@ export async function openRegister(
   if (!Number.isInteger(openingFloat) || openingFloat < 0) {
     return actionFail('釣銭準備金は0以上の整数で入力してください');
   }
+  if (!validDenominations(denominations)) return actionFail('金種別の枚数が正しくありません');
   const supabase = await createClient();
-  const { error } = await supabase.rpc('open_register_session', {
+  let { error } = await supabase.rpc('open_register_session', {
     p_store_id: storeId,
     p_register_id: registerId,
     p_opening_float: openingFloat,
+    p_opening_denominations: denominations ?? undefined,
   });
+  if (error && denominations && isUnknownDenominationsArg(error.message)) {
+    ({ error } = await supabase.rpc('open_register_session', {
+      p_store_id: storeId,
+      p_register_id: registerId,
+      p_opening_float: openingFloat,
+    }));
+  }
   if (error) return actionFail(translateRegisterError(error.message));
   revalidatePath('/app/cash');
+  revalidatePath('/app/pos');
   return actionOk();
 }
 
@@ -113,16 +148,22 @@ export async function addCashTransaction(input: {
   revalidatePath('/app/cash');
 }
 
-/** レジ締め（close_register_session RPC。理論現金・差異はDB側で計算） */
+/**
+ * レジ締め（close_register_session RPC。理論現金・差異はDB側で計算）。
+ * 締めが成功したら、その営業日のレジ精算レシート（売上・支払別・精算・入出金・業務履歴）を
+ * レシートプリンターから自動で出す。印刷だけ失敗しても締めは取り消さない（printWarning で知らせる）。
+ */
 export async function closeRegister(
   sessionId: string,
   countedCash: number,
-  differenceReason: string | null
-): Promise<ActionResult> {
+  differenceReason: string | null,
+  denominations: DenominationJson | null = null
+): Promise<CloseRegisterResult> {
   const ctx = await requirePermission('register.operate');
   if (!Number.isInteger(countedCash) || countedCash < 0) {
     return actionFail('実残高は0以上の整数で入力してください');
   }
+  if (!validDenominations(denominations)) return actionFail('金種別の枚数が正しくありません');
   const supabase = await createClient();
   const { data: session } = await supabase
     .from('register_sessions')
@@ -132,13 +173,56 @@ export async function closeRegister(
   if (!session || !ctx.stores.some((s) => s.id === session.store_id)) {
     return actionFail('対象のレジセッションが見つかりません');
   }
-  const { error } = await supabase.rpc('close_register_session', {
+  let { error } = await supabase.rpc('close_register_session', {
     p_session_id: sessionId,
     p_counted_cash: countedCash,
     p_difference_reason: differenceReason,
+    p_counted_denominations: denominations ?? undefined,
   });
+  if (error && denominations && isUnknownDenominationsArg(error.message)) {
+    ({ error } = await supabase.rpc('close_register_session', {
+      p_session_id: sessionId,
+      p_counted_cash: countedCash,
+      p_difference_reason: differenceReason,
+    }));
+  }
   if (error) return actionFail(translateRegisterError(error.message));
+
+  let printWarning: string | null = null;
+  try {
+    const printed = await enqueueRegisterReportPrint(supabase, sessionId, ctx.userId);
+    if (!printed.ok) printWarning = printed.error ?? 'レジ精算レシートを印刷できませんでした';
+  } catch (err) {
+    await captureServerError(err, {
+      route: 'cash.close_register.print',
+      organizationId: ctx.organizationId,
+      storeId: session.store_id,
+      userId: ctx.userId,
+    });
+    printWarning = 'レジ精算レシートを印刷できませんでした（締めは完了しています。「精算レシートを再印刷」で出せます）';
+  }
   revalidatePath('/app/cash');
+  revalidatePath('/app/pos');
+  return { ok: true, printWarning };
+}
+
+/**
+ * レジ精算レシートの再印刷（締め済み・開局中どちらでも可。開局中は「途中集計」として出る）。
+ * 紙詰まり・プリンター未接続で出なかったときと、本部が控えを取りたいとき用。
+ */
+export async function reprintRegisterReport(sessionId: string): Promise<ActionResult> {
+  const ctx = await requirePermission('register.operate');
+  const supabase = await createClient();
+  const { data: session } = await supabase
+    .from('register_sessions')
+    .select('id, store_id')
+    .eq('id', sessionId)
+    .maybeSingle();
+  if (!session || !ctx.stores.some((s) => s.id === session.store_id)) {
+    return actionFail('対象のレジセッションが見つかりません');
+  }
+  const printed = await enqueueRegisterReportPrint(supabase, sessionId, ctx.userId);
+  if (!printed.ok) return actionFail(printed.error ?? 'レジ精算レシートを印刷できませんでした');
   return actionOk();
 }
 
