@@ -46,7 +46,7 @@ export const ASSIGNABLE_STATUSES: ReservationStatus[] = [
   'waitlisted',
 ];
 
-/** 日時変更を許可するステータス */
+/** 日時変更を許可するステータス（会計済みは記録の訂正として変更できる） */
 export const MOVABLE_STATUSES: ReservationStatus[] = [
   'pending',
   'confirmed',
@@ -54,6 +54,7 @@ export const MOVABLE_STATUSES: ReservationStatus[] = [
   'arrived',
   'seated',
   'billing',
+  'completed',
   'waitlisted',
 ];
 
