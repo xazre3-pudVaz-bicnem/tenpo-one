@@ -2,7 +2,8 @@
  * ReceiptData → Star Document Markup（text/vnd.star.markup）変換（純関数・テスト対象）。
  * Star mC-Print3 等の CloudPRNT 対応機がこのMarkupを解釈して感熱レシートを印字する。
  * 使用するMarkup命令は公式確認済みのものに限定する:
- *   [align: middle|left|right] / [magnify: width N; height N] / [feed] / [cut: feed; partial]
+ *   [align: middle|left|right] / [magnify: width N; height N] / [bold: on|off] / [feed] / [cut: feed; partial]
+ * 本文は全体を [bold: on]（強調）で印字する（店舗要望「文字を少し太く」。感熱紙で読みやすくする）。
  * キャッシュドロアはMarkupに機種依存があるため drawerKickMarkup() で別ジョブとして扱う。
  */
 import type { ReceiptData } from './receipts';
@@ -25,6 +26,7 @@ export function receiptToStarMarkup(receipt: ReceiptData, options: ReceiptMarkup
   const line = (s = '') => { for (const w of wrapText(s, width)) L.push(esc(w)); };
   const raw = (s: string) => L.push(s); // Markup命令はエスケープしない
 
+  raw('[bold: on]');
   raw('[align: middle]');
   if (receipt.isReissue) line('※ 再発行');
   if (receipt.isRefundReceipt) line('※ 返金レシート');
@@ -116,6 +118,7 @@ export function ryoshushoToStarMarkup(receipt: ReceiptData, options: RyoshushoOp
   const recipient = (options.recipientName ?? '').trim() || '上様';
   const purpose = (options.purpose ?? '').trim() || 'お品代として';
 
+  raw('[bold: on]');
   raw('[align: middle]');
   if (receipt.isReissue) line('※ 再発行');
   raw('[magnify: width 1; height 2]');
@@ -193,6 +196,7 @@ export function orderSlipMarkup(
   const line = (s = '') => { for (const w of wrapText(s, width)) L.push(esc(w)); };
   const raw = (s: string) => L.push(s);
 
+  raw('[bold: on]');
   raw('[align: middle]');
   raw('[magnify: width 1; height 2]');
   line('お会計伝票');
@@ -245,6 +249,7 @@ export function testPrintMarkup(opts: { storeName: string; paperWidth?: PaperWid
   const width = colsFor(opts.paperWidth);
   const rule = '-'.repeat(width);
   return [
+    '[bold: on]',
     '[align: middle]',
     '[magnify: width 1; height 2]',
     esc(opts.storeName || 'TENPO ONE'),
@@ -267,7 +272,7 @@ export function testPrintMarkup(opts: { storeName: string; paperWidth?: PaperWid
 
 /** 厨房伝票（Markup）。行の組み立ては lib/kitchen-ticket.ts と共有する。 */
 export function kitchenTicketMarkup(lines: LayoutLine[]): string {
-  const L: string[] = [];
+  const L: string[] = ['[bold: on]'];
   let align = '';
   let size = '';
   for (const l of lines) {
