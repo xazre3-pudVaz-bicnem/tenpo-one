@@ -671,7 +671,9 @@ export function PosScreen({
           </div>
         </div>
 
-        <div className="space-y-2 border-t border-gray-200 p-3">
+        {/* lg 未満は下部ナビ（固定・約56px）が重なるので、その分だけ下に余白を取る。
+            取らないと最下段の「この注文を取消」やショートカット表示がナビの裏に隠れて押せない */}
+        <div className="space-y-2 border-t border-gray-200 p-3 pb-[calc(0.75rem+3.5rem+env(safe-area-inset-bottom))] lg:pb-3">
           {canCheckout && (
             <div className="grid grid-cols-2 gap-2">
               <Button
