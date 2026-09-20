@@ -7,7 +7,11 @@
  * キャッシュドロアはMarkupに機種依存があるため drawerKickMarkup() で別ジョブとして扱う。
  */
 import type { ReceiptData } from './receipts';
-import { colsFor, twoCol, wrapText, yen, type PaperWidth } from './receipt-layout';
+import { colsFor, twoCol as twoColBase, wrapText as wrapTextBase, yen, STAR_WIDTH_OPTIONS, type PaperWidth } from './receipt-layout';
+
+/** Star 機の全角幅（半角2桁よりわずかに広い）を見込んだ桁揃え・折り返し */
+const twoCol = (left: string, right: string, width: number) => twoColBase(left, right, width, STAR_WIDTH_OPTIONS);
+const wrapText = (text: string, width: number) => wrapTextBase(text, width, STAR_WIDTH_OPTIONS);
 import type { LayoutLine } from './kitchen-ticket';
 
 /** Markup構文で意味を持つ文字を無害化（角括弧・バックスラッシュ）。 */
@@ -261,6 +265,10 @@ export function testPrintMarkup(opts: { storeName: string; paperWidth?: PaperWid
     esc(twoCol('用紙幅', `${opts.paperWidth ?? 80}mm`, width)),
     esc(twoCol('発行', opts.issuedAt, width)),
     esc('日本語テスト：シュラスコ ¥1,234'),
+    rule,
+    // 全角幅の物差し（折り返さずに送る）。全角24文字＝半角48桁ぶん。末尾が次行に落ちる文字数で全角の実幅が分かる
+    '全角24文字（末尾が次行に落ちれば全角が半角2桁より広い機種）',
+    '田'.repeat(24),
     rule,
     '[align: middle]',
     'このレシートが正しく印字されれば接続成功です',

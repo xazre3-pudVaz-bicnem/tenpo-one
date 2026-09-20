@@ -5,6 +5,7 @@ import { formatDateTime, weekdayJa } from '@/lib/format';
 import { kitchenTicketMarkup } from '@/lib/receipt-markup';
 import { kitchenTicketStarPrnt } from '@/lib/starprnt';
 import { kitchenTicketEpos, eposCols } from '@/lib/epos-print';
+import { STAR_WIDTH_OPTIONS } from '@/lib/receipt-layout';
 import { isCheckViolation, isMissingColumnError } from '@/lib/schema-compat';
 import {
   layoutRegisterReport,
@@ -357,7 +358,7 @@ export async function enqueueRegisterReportPrint(
   if (!printer) return { ok: false, error: 'レシートプリンターが未設定のため、レジ精算レシートを印刷できません' };
 
   const paper = printer.paper_width_mm === 58 ? 58 : 80;
-  const lines = layoutRegisterReport(loaded.data, { paperWidth: paper });
+  const lines = layoutRegisterReport(loaded.data, { paperWidth: paper, ...STAR_WIDTH_OPTIONS });
   // EPSON機は1行の桁数が少なく「¥」が全角幅のため、専用の桁数で組み直す（厨房伝票と同じ扱い）
   const eposLines = layoutRegisterReport(loaded.data, { columns: eposCols(paper), yenFullWidth: true });
   const job = (jobType: 'register_report' | 'receipt') => ({

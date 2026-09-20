@@ -3,7 +3,7 @@
  * claim_kitchen_items（00057）が返した差分行を注文ごとの伝票にまとめ、
  * Markup / StarPRNT の両レンダラが共有する「行の並び」を組み立てる。
  */
-import { colsFor, twoCol, wrapText, type PaperWidth } from './receipt-layout';
+import { colsFor, twoCol, wrapText, type PaperWidth, type WidthOptions } from './receipt-layout';
 import { englishName } from './romaji';
 
 export type KitchenStation = 'kitchen' | 'drink' | 'dessert';
@@ -99,7 +99,7 @@ export interface LayoutLine {
   rule?: boolean;
 }
 
-export interface KitchenLayoutOptions {
+export interface KitchenLayoutOptions extends WidthOptions {
   paperWidth?: PaperWidth;
   /** 1行の桁数を直接指定する（EPSON機は用紙幅どおりだと右端で折り返すため少なくする） */
   columns?: number;
@@ -119,7 +119,7 @@ export function layoutKitchenTicket(ticket: KitchenTicket, opts: KitchenLayoutOp
   // 長い商品名は桁数で折り返す（プリンタ任せだと1文字だけ次行に落ちて読みにくい）。
   // 縦2倍は桁数が変わらないので、どのサイズでも同じ桁数で折り返してよい。
   const push = (text: string, size: LayoutLine['size'] = 'normal', align: LayoutLine['align'] = 'left') => {
-    for (const w of wrapText(text, width)) out.push({ text: w, size, align });
+    for (const w of wrapText(text, width, opts)) out.push({ text: w, size, align });
   };
 
   const hasCancel = ticket.lines.some((l) => l.delta < 0);
@@ -131,7 +131,7 @@ export function layoutKitchenTicket(ticket: KitchenTicket, opts: KitchenLayoutOp
   // 卓名と取消の見出しは縦2倍まで（縦横2倍だと1行の桁数が半分になり、紙も文字も大きくなりすぎる）
   push(ticket.tableName ?? 'TAKEOUT / テイクアウト', 'tall', 'center');
   if (hasCancel && !hasAdd) push('*** CANCEL / 取消 ***', 'tall', 'center');
-  push(twoCol(`No.${ticket.orderNo}`, opts.printedAt, width));
+  push(twoCol(`No.${ticket.orderNo}`, opts.printedAt, width, opts));
   const meta = [
     ticket.guestCount ? `Guests ${ticket.guestCount}` : null,
     ticket.clerkName ? `Staff ${ticket.clerkName}` : null,

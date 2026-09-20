@@ -9,7 +9,11 @@
  */
 import iconv from 'iconv-lite';
 import type { ReceiptData } from './receipts';
-import { colsFor, twoCol, wrapText, yen, type PaperWidth } from './receipt-layout';
+import { colsFor, twoCol as twoColBase, wrapText as wrapTextBase, yen, STAR_WIDTH_OPTIONS, type PaperWidth } from './receipt-layout';
+
+/** Star 機の全角幅（半角2桁よりわずかに広い）を見込んだ桁揃え・折り返し */
+const twoCol = (left: string, right: string, width: number) => twoColBase(left, right, width, STAR_WIDTH_OPTIONS);
+const wrapText = (text: string, width: number) => wrapTextBase(text, width, STAR_WIDTH_OPTIONS);
 import type { LayoutLine } from './kitchen-ticket';
 
 const ESC = 0x1b;
@@ -90,6 +94,12 @@ class StarBuffer {
         this.encoding === 'utf8' ? Buffer.from(text, 'utf8') : iconv.encode(text, 'Shift_JIS')
       );
     }
+    return this;
+  }
+  /** 折り返さずに1行出す（物差し用）。 */
+  rawLine(s: string): this {
+    const text = s + '\n';
+    this.parts.push(this.encoding === 'utf8' ? Buffer.from(text, 'utf8') : iconv.encode(text, 'Shift_JIS'));
     return this;
   }
   toBuffer(): Buffer {
@@ -291,6 +301,10 @@ export function testPrintStarPrnt(opts: {
   b.line(twoCol('用紙幅', `${opts.paperWidth ?? 80}mm`, width));
   b.line(twoCol('発行', opts.issuedAt, width));
   b.line(`日本語テスト：シュラスコ ${yen(1234)}`);
+  b.line(rule);
+  // 全角幅の物差し（折り返さずに送る）。全角24文字＝半角48桁ぶん。末尾が次行に落ちる文字数で全角の実幅が分かる
+  b.line('全角24文字（末尾が次行に落ちれば全角が半角2桁より広い機種）');
+  b.rawLine('田'.repeat(24));
   b.line(rule);
   b.cmd(CMD.alignCenter).line('このレシートが正しく印字されれば接続成功です');
   b.line().line();

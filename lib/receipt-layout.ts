@@ -23,7 +23,17 @@ export const yen = (n: number): string => `¥${Math.round(n).toLocaleString('ja-
 export interface WidthOptions {
   /** 「¥」を全角（2桁）として数える */
   yenFullWidth?: boolean;
+  /**
+   * 全角1文字に足す物理幅（半角桁）。
+   * Star mC-Print3 は全角文字が半角2桁よりわずかに広く印字されるため、全角を含む48桁ぴったりの行は
+   * 末尾の1文字だけが次行に落ちる（御茶ノ水の実機レシートで確認: 「小計 ¥10,54 / 5」「合計 ¥11,60 / 0」、
+   * 住所の「4F」の F だけが次行）。桁揃え・折り返しの計算でこの分を見込み、行を用紙幅に収める。
+   */
+  cjkExtra?: number;
 }
+
+/** Star 機（CloudPRNT の Markup / StarPRNT）向けの桁揃え前提。実機の折り返し位置から全角≒2.17桁と見積もった */
+export const STAR_WIDTH_OPTIONS: WidthOptions = { cjkExtra: 0.17 };
 
 /** 表示幅（CJK全角=2, その他=1）。二段組の桁揃えに使う。 */
 export function dispWidth(s: string, options: WidthOptions = {}): number {
@@ -31,7 +41,7 @@ export function dispWidth(s: string, options: WidthOptions = {}): number {
   for (const ch of s) {
     const c = ch.codePointAt(0) ?? 0;
     if (ch === '¥' || ch === '￥') {
-      w += options.yenFullWidth ? 2 : 1;
+      w += options.yenFullWidth ? 2 + (options.cjkExtra ?? 0) : 1;
       continue;
     }
     // CJK統合漢字/かな/全角記号/全角英数などを全角とみなす
@@ -42,7 +52,7 @@ export function dispWidth(s: string, options: WidthOptions = {}): number {
       (c >= 0xf900 && c <= 0xfaff) ||
       (c >= 0xff00 && c <= 0xff60) ||
       (c >= 0xffe0 && c <= 0xffe6);
-    w += wide ? 2 : 1;
+    w += wide ? 2 + (options.cjkExtra ?? 0) : 1;
   }
   return w;
 }
@@ -59,8 +69,15 @@ export function wrapText(text: string, width: number, options: WidthOptions = {}
     for (const ch of paragraph) {
       const next = line + ch;
       if (dispWidth(next, options) > width) {
-        out.push(line);
-        line = ch;
+        // 直前にスペースがあればそこで折る（住所の「4F」の F だけが次行に落ちる、を避ける）
+        const sp = breakAtSpace(line);
+        if (sp > 0) {
+          out.push(line.slice(0, sp).trimEnd());
+          line = line.slice(sp + 1) + ch;
+        } else {
+          out.push(line);
+          line = ch;
+        }
       } else {
         line = next;
       }
@@ -70,11 +87,27 @@ export function wrapText(text: string, width: number, options: WidthOptions = {}
   return out;
 }
 
+/**
+ * 折り返し位置に使うスペースの位置を返す（無ければ -1）。
+ * 末尾から16文字以内の最後のスペースを使う。その後ろが短すぎる（「4F」の「4」だけ等）ときは
+ * ひとつ前のスペースまで戻して「第87東京ビル 4F」ごと次行へ送る。
+ */
+function breakAtSpace(line: string): number {
+  let sp = line.lastIndexOf(' ');
+  if (sp <= 0 || line.length - sp > 16) return -1;
+  if (line.length - sp - 1 < 3) {
+    const prev = line.lastIndexOf(' ', sp - 1);
+    if (prev > 0 && line.length - prev <= 24) sp = prev;
+  }
+  return sp;
+}
+
 /** 左右2段組。1行に収まらなければ右側を次行の右寄せにする。 */
 export function twoCol(left: string, right: string, width: number, options: WidthOptions = {}): string {
-  const gap = width - dispWidth(left, options) - dispWidth(right, options);
+  // cjkExtra で幅が小数になるので、詰め物は切り捨てて用紙幅を超えないようにする
+  const gap = Math.floor(width - dispWidth(left, options) - dispWidth(right, options));
   if (gap >= 1) return left + ' '.repeat(gap) + right;
   // 収まらない場合は右を次行へ
-  const pad = Math.max(0, width - dispWidth(right, options));
+  const pad = Math.max(0, Math.floor(width - dispWidth(right, options)));
   return `${left}\n${' '.repeat(pad)}${right}`;
 }
