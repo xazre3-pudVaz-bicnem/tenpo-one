@@ -148,6 +148,7 @@ export function PosScreen({
   drawerConfig,
   canDiscount,
   canCheckout,
+  registerOpen = true,
   terminalReaders,
   paymentAvailability,
   otherOpenOrders,
@@ -190,6 +191,8 @@ export function PosScreen({
   drawerConfig: DrawerConfig;
   canDiscount: boolean;
   canCheckout: boolean;
+  /** レジが開局しているか。未開局だと会計は受け付けない（先にレジクローズ画面で開局する） */
+  registerOpen?: boolean;
   terminalReaders: PosTerminalReader[];
   paymentAvailability: PosPaymentAvailability;
   otherOpenOrders: MergeCandidate[];
@@ -385,6 +388,12 @@ export function PosScreen({
 
   const handleCheckout = async (payments: CheckoutPayment[]) => {
     const result = await checkoutAction(order.id, payments);
+    if (result.registerClosed) {
+      // 会計は確定していない。ダイアログ側の catch でトーストに出す
+      throw new Error(
+        'レジが未開局のため会計できません。「レジクローズ」画面で釣銭準備金を数えてレジを開局してから、もう一度会計してください / Register is not opened. Open the register (count the opening cash) first.'
+      );
+    }
     if (result.alreadyPaid) {
       // エラーではなく案内: 二重会計はDB層で拒否済みのため、レシートへ誘導する
       toast('この注文は既に会計済みです。レシートをご確認ください', 'success');
@@ -703,6 +712,18 @@ export function PosScreen({
                 </Button>
               )}
             </div>
+          )}
+          {/* レジ未開局。会計はサーバー側でも拒否されるが、押してから怒られる前にここで分かるようにする */}
+          {canCheckout && !registerOpen && (
+            <Link
+              href="/app/cash/close"
+              className="block rounded-lg border border-danger/40 bg-danger-soft px-3 py-2 text-xs text-danger"
+            >
+              <b>レジが未開局です。</b>
+              会計の前に「レジクローズ」画面で釣銭準備金を数えてレジを開局してください（タップで移動）
+              <br />
+              <span className="text-[11px]">Register is not opened. Count the opening cash and open the register first.</span>
+            </Link>
           )}
           {/* 会計前に「いま何をいくつ・合計いくら」をお客様へ紙で出す。会計・売上には影響しない */}
           <Button

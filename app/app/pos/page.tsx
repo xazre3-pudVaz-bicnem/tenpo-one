@@ -245,9 +245,11 @@ export default async function PosPage({
     guestCount: number;
   }[] = [];
   let availableTables: { id: string; name: string; capacityMax: number }[] = [];
+  // レジが開局しているか（未開局だと会計を受け付けない。画面にも先に出しておく）
+  let registerOpen = true;
 
   if (canCheckout) {
-    const [availability, { data: readers }, { data: otherOrders }] = await Promise.all([
+    const [availability, { data: readers }, { data: otherOrders }, { data: openSession }] = await Promise.all([
       getPaymentAvailability(),
       supabase
         .from('terminal_readers')
@@ -261,8 +263,10 @@ export default async function PosPage({
         .neq('id', orderId)
         .order('opened_at', { ascending: false })
         .limit(30),
+      supabase.from('register_sessions').select('id').eq('store_id', store.id).eq('status', 'open').limit(1).maybeSingle(),
     ]);
     paymentAvailability = availability;
+    registerOpen = !!openSession;
     const statusOrder: Record<string, number> = { online: 0, unknown: 1, offline: 2 };
     terminalReaders = (readers ?? [])
       .map((r) => ({
@@ -329,6 +333,7 @@ export default async function PosPage({
         drawerConfig={drawerConfig}
         canDiscount={can(ctx.role, 'pos.discount')}
         canCheckout={canCheckout}
+        registerOpen={registerOpen}
         terminalReaders={terminalReaders}
         paymentAvailability={paymentAvailability}
         otherOpenOrders={otherOpenOrders}

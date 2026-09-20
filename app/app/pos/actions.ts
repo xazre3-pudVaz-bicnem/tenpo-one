@@ -306,13 +306,17 @@ export interface CheckoutOutcome {
   ok: boolean;
   /** true の場合は二重会計等で既に確定済み。エラーではなく案内として扱う */
   alreadyPaid?: boolean;
+  /** true の場合はレジ未開局のため会計を受け付けなかった（先にレジを開局する） */
+  registerClosed?: boolean;
   warning?: string | null;
   /** finalize_order が返す今回付与ポイント数（0以下は付与なし） */
   pointsEarned?: number;
 }
 
 /**
- * 会計確定。レジ未開局の場合は register_session_id=null で確定し warning を返す。
+ * 会計確定。
+ * レジ未開局の場合は会計を受け付けない（registerClosed:true を返す）。毎日の開局時に釣銭準備金を数え、
+ * 締め時に精算するルールのため、レジを開けずに会計すると現金がレジ台帳に載らず締めの数字が合わなくなる。
  * finalize_order は status<>'open' をDB層で拒否する（二重会計防止）。
  * 既に会計済みだった場合はエラーにせず alreadyPaid:true を返し、呼び出し側でレシートへ誘導する。
  */
@@ -336,11 +340,14 @@ export async function checkout(orderId: string, payments: CheckoutPayment[]): Pr
     .order('opened_at', { ascending: false })
     .limit(1)
     .maybeSingle();
+  if (!session) {
+    return { ok: false, registerClosed: true };
+  }
 
   const { data, error } = await supabase.rpc('finalize_order', {
     p_order_id: orderId,
     p_payments: payments,
-    p_register_session_id: session?.id ?? null,
+    p_register_session_id: session.id,
   });
 
   if (error) {
@@ -364,11 +371,8 @@ export async function checkout(orderId: string, payments: CheckoutPayment[]): Pr
   revalidatePath('/app/orders');
   revalidatePath('/app/floor');
 
-  const hasCash = payments.some((p) => p.method === 'cash');
-  const warning =
-    !session && hasCash ? '現金がレジ台帳に計上されていません。レジを開局してください' : null;
   const result = data as { points_earned?: number } | null;
-  return { ok: true, warning, pointsEarned: result?.points_earned ?? 0 };
+  return { ok: true, warning: null, pointsEarned: result?.points_earned ?? 0 };
 }
 
 export interface SplitMove {
