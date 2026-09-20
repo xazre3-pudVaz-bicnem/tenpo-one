@@ -558,7 +558,8 @@ export function PosScreen({
               {searchQuery.trim() ? '該当する商品が見つかりません / No items found' : 'このカテゴリに商品がありません / No items in this category'}
             </p>
           ) : (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
+            // レジ画面は左メニューを出さない（app/app/layout.tsx）ので、iPad 横向きでも4列入る
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5">
               {visibleItems.map((m) => {
                 const price = isTakeoutLike ? (m.takeout_price ?? m.price) : m.price;
                 const category = categories.find((c) => c.id === m.category_id);

@@ -45,10 +45,15 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       .is('read_at', null),
   ]);
 
+  const pathname = (await headers()).get('x-pathname') ?? '';
+  // レジ（注文）画面は左メニューを出さず、商品グリッドと伝票に画面の幅を全部使う
+  // （iPad で左メニューが 250px 取り、商品が2列しか見えなかった店舗要望）。
+  // 他画面への移動は上部バーの「メニュー」「ホーム」と、画面内の「フロアへ戻る」から。
+  const posFullscreen = pathname === '/app/pos';
+
   // 初期導入ウィザード未完了の企業オーナー/本社管理者を /app/onboarding へ誘導
   // （ウィザード自身とハンバーガーメニュー画面は無限リダイレクトを避けるため除外）
   if (needsOnboardingCheck) {
-    const pathname = (await headers()).get('x-pathname') ?? '';
     if (pathname !== '/app/onboarding' && !pathname.startsWith('/app/menu')) {
       const onboarding = (orgRes.data?.onboarding ?? null) as { completed?: boolean } | null;
       if (!onboarding?.completed) redirect('/app/onboarding');
@@ -71,14 +76,16 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <OfflineBanner />
       <div className="theme-regi min-h-screen bg-lilac">
         {/* 上部バー（全幅）→ その下に左メニュー（固定）と本文 */}
-        <TopBar ctx={ctx} unreadCount={unreadCount ?? 0} />
-        <Sidebar
-          tiles={tiles}
-          groups={groups}
-          alertCount={unreadCount ?? 0}
-          currentStoreId={ctx.currentStore?.id ?? null}
-        />
-        <div className="lg:pl-[250px]">
+        <TopBar ctx={ctx} unreadCount={unreadCount ?? 0} showMenuLink={posFullscreen} />
+        {!posFullscreen && (
+          <Sidebar
+            tiles={tiles}
+            groups={groups}
+            alertCount={unreadCount ?? 0}
+            currentStoreId={ctx.currentStore?.id ?? null}
+          />
+        )}
+        <div className={posFullscreen ? undefined : 'lg:pl-[250px]'}>
           <InstallPrompt />
           {/* スマホは店舗切替を上部バーの下に表示 */}
           <div className="border-b border-line bg-white px-4 py-2 sm:hidden">
