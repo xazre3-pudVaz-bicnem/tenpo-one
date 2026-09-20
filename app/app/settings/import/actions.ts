@@ -457,15 +457,18 @@ async function importOptionGroups(
   for (const [key, g] of byGroup) {
     if (groupIdByName.has(key)) continue;
     const spec = g.rows.find((r) => r.data.isRequired !== null || r.data.minSelect !== null || r.data.maxSelect !== null)?.data;
-    const min = Math.max(0, spec?.minSelect ?? 1);
-    const max = Math.max(min, spec?.maxSelect ?? Math.max(1, min));
+    // 必須=いいえ なら最小は0（未指定のまま1にすると「任意」と表示しつつ選択を強制してしまう）。
+    // 最大は1以上でなければDBの制約（max_select >= 1）に反するため下限を1にする。
+    const isRequired = spec?.isRequired ?? true;
+    const min = Math.max(0, spec?.minSelect ?? (isRequired ? 1 : 0));
+    const max = Math.max(min, spec?.maxSelect ?? 1, 1);
     const { data: created, error } = await supabase
       .from('menu_option_groups')
       .insert({
         organization_id: ctx.organizationId,
         store_id: storeId,
         name: g.name,
-        is_required: spec?.isRequired ?? true,
+        is_required: isRequired,
         min_select: min,
         max_select: max,
         sort_order: sortBase++,
@@ -532,12 +535,12 @@ async function importOptionGroups(
   }
   let linked = 0;
   if (wanted.size > 0) {
-    const names = Array.from(new Set(Array.from(wanted.values()).map((w) => w.itemName)));
+    // 商品名は大文字小文字・前後の空白の違いを無視して突き合わせるため、店舗の商品を全件引いてから照合する。
+    // （.in('name', ...) はCSVの表記ゆれで一致せず「対象商品が見つかりません」になってしまう）
     const { data: items } = await supabase
       .from('menu_items')
       .select('id, name')
       .eq('store_id', storeId)
-      .in('name', names)
       .neq('status', 'deleted');
     const itemIdByName = new Map<string, string>(
       ((items ?? []) as { id: string; name: string }[]).map((i) => [i.name.trim().toLowerCase(), i.id])
@@ -551,7 +554,7 @@ async function importOptionGroups(
     const linkRows: Record<string, unknown>[] = [];
     for (const w of wanted.values()) {
       const groupId = groupIdByName.get(w.groupKey);
-      const itemId = itemIdByName.get(w.itemName.toLowerCase());
+      const itemId = itemIdByName.get(w.itemName.trim().toLowerCase());
       if (!groupId) continue;
       if (!itemId) {
         failed.push({ rowNumber: w.rowNumber, reason: `対象商品が見つかりません: ${w.itemName}` });

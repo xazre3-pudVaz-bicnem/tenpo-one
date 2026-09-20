@@ -25,7 +25,14 @@ export function sumDenominations(counts: DenominationCounts): number {
   return CASH_DENOMINATIONS.reduce((total, denom) => total + denominationSubtotal(denom, counts[denom]), 0);
 }
 
-/** 1枚でも入力されているか（未入力のままクローズするのを止めるため） */
+/**
+ * 金種欄に入力があるか（未入力のままクローズするのを止めるため）。
+ * 0 も「数えた結果0枚」という入力として扱う。0だけを入力として認めないと、
+ * 釣銭を全部引き上げた後の実査額0円のレジが永久にクローズできなくなる。
+ */
 export function hasAnyCount(counts: DenominationCounts): boolean {
-  return CASH_DENOMINATIONS.some((denom) => (counts[denom] ?? 0) > 0);
+  return CASH_DENOMINATIONS.some((denom) => {
+    const count = counts[denom];
+    return count != null && Number.isFinite(count) && count >= 0;
+  });
 }

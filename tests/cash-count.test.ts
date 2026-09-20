@@ -55,7 +55,11 @@ describe('sumDenominations', () => {
 describe('hasAnyCount', () => {
   it('1枚でも入っていればtrue', () => {
     expect(hasAnyCount({ 1: 1 })).toBe(true);
-    expect(hasAnyCount({ 10000: 0 })).toBe(false);
     expect(hasAnyCount({})).toBe(false);
+  });
+
+  it('0と入力した金種があれば入力済みとみなす（実査額0円のレジも締められるように）', () => {
+    expect(hasAnyCount({ 10000: 0 })).toBe(true);
+    expect(hasAnyCount({ 1: 0 })).toBe(true);
   });
 });

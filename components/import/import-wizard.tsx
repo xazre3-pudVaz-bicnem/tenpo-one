@@ -141,8 +141,14 @@ export function ImportWizard({
   const duplicateCount = issues.filter((i) => i.status === 'duplicate').length;
 
   function handleExecute() {
+    // 「重複」の行もサーバーへ送る。登録済みかどうかの最終判断はサーバー側が持っており、
+    // 商品CSVなら英語名・カナの上書き更新、選択肢CSVなら対象商品への紐付けを行う（それ以外はスキップ）。
+    // ここで除外すると、その2つの機能が動かなくなる。
     const payload: ImportRowInput[] = parsedRows
-      .filter((row) => issueByRow.get(row.rowNumber)?.status === 'ok')
+      .filter((row) => {
+        const status = issueByRow.get(row.rowNumber)?.status;
+        return status === 'ok' || status === 'duplicate';
+      })
       .map((row) => ({ rowNumber: row.rowNumber, values: row.values }));
 
     setResultError(null);

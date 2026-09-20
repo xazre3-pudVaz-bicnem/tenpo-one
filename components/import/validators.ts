@@ -171,6 +171,9 @@ export function validateOptionGroupRow(values: Record<string, string>): Validate
   if (!min.ok) errors.push(min.error);
   const max = optionalInt(values, 'maxSelect', '最大');
   if (!max.ok) errors.push(max.error);
+  // 最大0は「1つも選べないグループ」になってしまい、登録時にDBの制約で弾かれる
+  else if (max.value !== null && max.value < 1) errors.push('最大は1以上で入力してください');
+  if (min.ok && min.value !== null && min.value < 0) errors.push('最小は0以上で入力してください');
   if (min.ok && max.ok && min.value !== null && max.value !== null && min.value > max.value) {
     errors.push('最小は最大以下にしてください');
   }
