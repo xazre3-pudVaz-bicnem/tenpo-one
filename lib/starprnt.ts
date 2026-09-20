@@ -101,7 +101,7 @@ export function receiptToStarPrnt(receipt: ReceiptData, options: StarPrntOptions
   if (receipt.isReissue) b.line('※ 再発行');
   if (receipt.isRefundReceipt) b.line('※ 返金レシート');
 
-  b.cmd(CMD.magnify(1, 1)).line(receipt.storeName).cmd(CMD.magnify(0, 0));
+  b.cmd(CMD.magnify(0, 1)).line(receipt.storeName).cmd(CMD.magnify(0, 0));
   if (receipt.storeAddress) b.line(receipt.storeAddress);
   if (receipt.storePhone) b.line(`TEL ${receipt.storePhone}`);
   b.cmd(CMD.alignLeft);
@@ -180,11 +180,13 @@ export function ryoshushoToStarPrnt(
   b.cmd(CMD.init);
   b.cmd(CMD.alignCenter);
   if (receipt.isReissue) b.line('※ 再発行');
-  b.cmd(CMD.magnify(2, 2)).line('領 収 書').cmd(CMD.magnify(1, 1)).line();
+  // 拡大は magnify(横, 縦) で 0=等倍・1=2倍。見出しと金額は縦だけ伸ばし、横は等倍にする
+  // （横2倍だと1行に収まらず、紙も文字も大きくなりすぎる）
+  b.cmd(CMD.magnify(0, 1)).line('領 収 書').cmd(CMD.magnify(0, 0)).line();
   b.cmd(CMD.alignLeft).line(`${recipient} 様`).line(rule);
 
   // 一部返金がある場合は実際に受け取った額（netPaid）を領収額とする
-  b.cmd(CMD.alignCenter).cmd(CMD.magnify(2, 2)).line(yen(receipt.netPaid)).cmd(CMD.magnify(1, 1));
+  b.cmd(CMD.alignCenter).cmd(CMD.magnify(0, 1)).line(yen(receipt.netPaid)).cmd(CMD.magnify(0, 0));
   b.cmd(CMD.alignLeft).line(`但 ${purpose}`).line('上記正に領収いたしました').line(rule);
 
   b.line(twoCol('小計', yen(receipt.subtotal), width));
@@ -231,7 +233,7 @@ export function orderSlipStarPrnt(slip: OrderSlipData, options: StarPrntOptions 
   const b = new StarBuffer(options.currency ?? DEFAULT_CURRENCY, options.encoding ?? DEFAULT_ENCODING);
 
   b.cmd(CMD.init).cmd(CMD.alignCenter);
-  b.cmd(CMD.magnify(2, 2)).line('お会計伝票').cmd(CMD.magnify(1, 1));
+  b.cmd(CMD.magnify(0, 1)).line('お会計伝票').cmd(CMD.magnify(0, 0));
   b.line(slip.storeName).line('（会計前のご確認用）');
   b.cmd(CMD.alignLeft).line(rule);
   b.line(twoCol(slip.tableName ?? 'テイクアウト', `No.${slip.orderNo}`, width));
@@ -251,7 +253,7 @@ export function orderSlipStarPrnt(slip: OrderSlipData, options: StarPrntOptions 
   b.line(twoCol('消費税', yen(slip.taxTotal), width));
   if (slip.serviceCharge > 0) b.line(twoCol('サービス料', yen(slip.serviceCharge), width));
   if (slip.discount > 0) b.line(twoCol('値引', `-${yen(slip.discount)}`, width));
-  b.cmd(CMD.magnify(2, 1)).line(twoCol('合計', yen(slip.total), Math.floor(width / 2))).cmd(CMD.magnify(1, 1));
+  b.cmd(CMD.emphasizeOn).line(twoCol('合計', yen(slip.total), width)).cmd(CMD.emphasizeOff);
   b.line(rule).cmd(CMD.alignCenter).line('※ これは領収書ではありません');
   b.line().line().cmd(CMD.cut);
   return b.toBuffer();
@@ -275,7 +277,7 @@ export function testPrintStarPrnt(opts: {
   const b = new StarBuffer(opts.currency ?? DEFAULT_CURRENCY, opts.encoding ?? DEFAULT_ENCODING);
 
   b.cmd(CMD.init).cmd(CMD.alignCenter);
-  b.cmd(CMD.magnify(1, 1)).line(opts.storeName || 'TENPO ONE').cmd(CMD.magnify(0, 0));
+  b.cmd(CMD.magnify(0, 1)).line(opts.storeName || 'TENPO ONE').cmd(CMD.magnify(0, 0));
   b.line('CloudPRNT テスト印刷 (StarPRNT)');
   b.cmd(CMD.alignLeft);
   b.line(rule);

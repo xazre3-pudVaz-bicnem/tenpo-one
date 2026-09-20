@@ -40,7 +40,9 @@ describe('receiptToStarPrnt', () => {
     const b = receiptToStarPrnt(base);
     expect(hasBytes(b, [ESC, GS, 0x61, 0x01])).toBe(true); // 中央寄せ
     expect(hasBytes(b, [ESC, GS, 0x61, 0x00])).toBe(true); // 左寄せ
-    expect(hasBytes(b, [ESC, 0x69, 0x01, 0x01])).toBe(true); // 拡大ON
+    // 拡大は縦のみ2倍（ESC i n1=縦 n2=横 で 0=等倍）。横2倍にすると1行の桁数が半分になる
+    expect(hasBytes(b, [ESC, 0x69, 0x01, 0x00])).toBe(true); // 拡大ON（縦のみ）
+    expect(hasBytes(b, [ESC, 0x69, 0x01, 0x01])).toBe(false); // 縦横2倍は使わない
     expect(hasBytes(b, [ESC, 0x45])).toBe(true); // 強調ON（合計行）
     expect(hasBytes(b, [ESC, 0x46])).toBe(true); // 強調OFF
   });
@@ -130,6 +132,14 @@ describe('ryoshushoToStarPrnt（領収書）', () => {
     expect(b.toString('utf8')).not.toContain('領 収 書');
     expect(asSjis(b)).toContain('登録番号 T1234567890123');
   });
+
+  it('拡大は縦のみで、見出しのあとは等倍に戻す（以降が大きいまま印字されない）', () => {
+    const b = ryoshushoToStarPrnt(base, { paperWidth: 80 });
+    expect(hasBytes(b, [ESC, 0x69, 0x01, 0x00])).toBe(true); // 縦2倍
+    expect(hasBytes(b, [ESC, 0x69, 0x00, 0x00])).toBe(true); // 等倍に戻す
+    expect(hasBytes(b, [ESC, 0x69, 0x02, 0x02])).toBe(false); // 3倍は使わない
+    expect(hasBytes(b, [ESC, 0x69, 0x01, 0x01])).toBe(false); // 縦横2倍も使わない
+  });
 });
 
 const slip = {
@@ -161,5 +171,13 @@ describe('orderSlipStarPrnt（注文伝票）', () => {
     expect(t).toContain('シュラスコ食べ放題');
     expect(t).toContain(`${BACKSLASH}11,300`);
     expect(t).toContain('※ これは領収書ではありません');
+  });
+
+  it('拡大は縦のみで、見出しのあとは等倍に戻す（以降が大きいまま印字されない）', () => {
+    const b = orderSlipStarPrnt(slip, { paperWidth: 80 });
+    expect(hasBytes(b, [ESC, 0x69, 0x01, 0x00])).toBe(true);
+    expect(hasBytes(b, [ESC, 0x69, 0x00, 0x00])).toBe(true);
+    expect(hasBytes(b, [ESC, 0x69, 0x02, 0x02])).toBe(false);
+    expect(hasBytes(b, [ESC, 0x69, 0x01, 0x01])).toBe(false);
   });
 });

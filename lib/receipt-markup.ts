@@ -29,7 +29,7 @@ export function receiptToStarMarkup(receipt: ReceiptData, options: ReceiptMarkup
   if (receipt.isReissue) line('※ 再発行');
   if (receipt.isRefundReceipt) line('※ 返金レシート');
 
-  raw('[magnify: width 2; height 2]');
+  raw('[magnify: width 1; height 2]');
   line(receipt.storeName);
   raw('[magnify: width 1; height 1]');
   if (receipt.storeAddress) line(receipt.storeAddress);
@@ -62,8 +62,8 @@ export function receiptToStarMarkup(receipt: ReceiptData, options: ReceiptMarkup
   if (receipt.discount > 0) {
     line(twoCol(`値引${receipt.couponCode ? ` (${receipt.couponCode})` : ''}`, `-${yen(receipt.discount)}`, width));
   }
-  raw('[magnify: width 2; height 1]');
-  line(twoCol('合計', yen(receipt.total), Math.floor(width / 2)));
+  raw('[magnify: width 1; height 2]');
+  line(twoCol('合計', yen(receipt.total), width));
   raw('[magnify: width 1; height 1]');
   line(rule);
 
@@ -118,7 +118,7 @@ export function ryoshushoToStarMarkup(receipt: ReceiptData, options: RyoshushoOp
 
   raw('[align: middle]');
   if (receipt.isReissue) line('※ 再発行');
-  raw('[magnify: width 2; height 2]');
+  raw('[magnify: width 1; height 2]');
   line('領 収 書');
   raw('[magnify: width 1; height 1]');
   line();
@@ -129,7 +129,7 @@ export function ryoshushoToStarMarkup(receipt: ReceiptData, options: RyoshushoOp
 
   // 金額（いちばん大きく）。一部返金がある場合は実際に受け取った額（netPaid）を領収額とする
   raw('[align: middle]');
-  raw('[magnify: width 2; height 2]');
+  raw('[magnify: width 1; height 2]');
   line(`${yen(receipt.netPaid)}`);
   raw('[magnify: width 1; height 1]');
   raw('[align: left]');
@@ -194,7 +194,7 @@ export function orderSlipMarkup(
   const raw = (s: string) => L.push(s);
 
   raw('[align: middle]');
-  raw('[magnify: width 2; height 2]');
+  raw('[magnify: width 1; height 2]');
   line('お会計伝票');
   raw('[magnify: width 1; height 1]');
   line(slip.storeName);
@@ -219,8 +219,8 @@ export function orderSlipMarkup(
   line(twoCol('消費税', yen(slip.taxTotal), width));
   if (slip.serviceCharge > 0) line(twoCol('サービス料', yen(slip.serviceCharge), width));
   if (slip.discount > 0) line(twoCol('値引', `-${yen(slip.discount)}`, width));
-  raw('[magnify: width 2; height 1]');
-  line(twoCol('合計', yen(slip.total), Math.floor(width / 2)));
+  raw('[magnify: width 1; height 2]');
+  line(twoCol('合計', yen(slip.total), width));
   raw('[magnify: width 1; height 1]');
   line(rule);
   raw('[align: middle]');
@@ -246,7 +246,7 @@ export function testPrintMarkup(opts: { storeName: string; paperWidth?: PaperWid
   const rule = '-'.repeat(width);
   return [
     '[align: middle]',
-    '[magnify: width 2; height 2]',
+    '[magnify: width 1; height 2]',
     esc(opts.storeName || 'TENPO ONE'),
     '[magnify: width 1; height 1]',
     'CloudPRNT テスト印刷',

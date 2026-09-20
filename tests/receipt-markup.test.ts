@@ -14,7 +14,9 @@ describe('receiptToStarMarkup', () => {
   it('主要な内容とMarkup命令を含む（80mm）', () => {
     const m = receiptToStarMarkup(base, { paperWidth: 80 });
     expect(m).toContain('[align: middle]');
-    expect(m).toContain('[magnify: width 2; height 2]');
+    // 強調は縦2倍のみ（横2倍にすると1行が半分の桁数になり、文字が大きくなりすぎる）
+    expect(m).toContain('[magnify: width 1; height 2]');
+    expect(m).not.toContain('width 2');
     expect(m).toContain('シュラスコテーブル FOGO');
     expect(m).toContain('シュラスコ食べ放題');
     expect(m).toContain('合計');
