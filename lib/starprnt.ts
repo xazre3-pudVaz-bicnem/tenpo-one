@@ -109,6 +109,7 @@ export function receiptToStarPrnt(receipt: ReceiptData, options: StarPrntOptions
   b.line(rule);
   b.line(`発行 ${receipt.issuedAt}`);
   b.line(twoCol(`No.${receipt.orderNo}`, [receipt.registerName, receipt.staffName].filter(Boolean).join(' '), width));
+  if (receipt.tableName) b.line(`卓 ${receipt.tableName}`);
   b.line(rule);
 
   // 明細
@@ -165,6 +166,97 @@ export function receiptToStarPrnt(receipt: ReceiptData, options: StarPrntOptions
  * キャッシュドロア開放。設定値は Markup 記法（既定 '[drawer: 1]'）で保持しているため、
  * 末尾の番号だけを読み取って StarPRNT のドロア命令へ写像する。設定UIを二重に持たせない。
  */
+/** 領収書（StarPRNT）。Markup版 ryoshushoToStarMarkup と同じ並びにする。 */
+export function ryoshushoToStarPrnt(
+  receipt: ReceiptData,
+  options: StarPrntOptions & { recipientName?: string | null; purpose?: string | null } = {}
+): Buffer {
+  const width = colsFor(options.paperWidth);
+  const rule = '-'.repeat(width);
+  const b = new StarBuffer(options.currency ?? DEFAULT_CURRENCY, options.encoding ?? DEFAULT_ENCODING);
+  const recipient = (options.recipientName ?? '').trim() || '上様';
+  const purpose = (options.purpose ?? '').trim() || 'お品代として';
+
+  b.cmd(CMD.init);
+  b.cmd(CMD.alignCenter);
+  if (receipt.isReissue) b.line('※ 再発行');
+  b.cmd(CMD.magnify(2, 2)).line('領 収 書').cmd(CMD.magnify(1, 1)).line();
+  b.cmd(CMD.alignLeft).line(`${recipient} 様`).line(rule);
+
+  // 一部返金がある場合は実際に受け取った額（netPaid）を領収額とする
+  b.cmd(CMD.alignCenter).cmd(CMD.magnify(2, 2)).line(yen(receipt.netPaid)).cmd(CMD.magnify(1, 1));
+  b.cmd(CMD.alignLeft).line(`但 ${purpose}`).line('上記正に領収いたしました').line(rule);
+
+  b.line(twoCol('小計', yen(receipt.subtotal), width));
+  for (const t of receipt.taxRows) {
+    b.line(twoCol(`  (税${t.rate}%対象 ${yen(t.taxable)})`, `税${yen(t.tax)}`, width));
+  }
+  if (receipt.serviceCharge > 0) b.line(twoCol('サービス料', yen(receipt.serviceCharge), width));
+  if (receipt.discount > 0) b.line(twoCol('値引', `-${yen(receipt.discount)}`, width));
+  b.line(twoCol('合計', yen(receipt.total), width));
+  if (receipt.payments.length > 0) {
+    b.line(twoCol('お支払方法', receipt.payments.map((p) => p.label).join(' / '), width));
+  }
+  b.line(rule);
+
+  b.line(receipt.storeName);
+  if (receipt.storeAddress) b.line(receipt.storeAddress);
+  if (receipt.storePhone) b.line(`TEL ${receipt.storePhone}`);
+  if (receipt.registrationNumber) b.line(`登録番号 ${receipt.registrationNumber}`);
+  b.line(twoCol(`発行 ${receipt.issuedAt}`, `No.${receipt.orderNo}`, width));
+  if (receipt.netPaid >= 50000) b.line().line('[ 収入印紙 ]');
+  b.line().line().cmd(CMD.cut);
+  return b.toBuffer();
+}
+
+export interface OrderSlipData {
+  storeName: string;
+  orderNo: string;
+  tableName: string | null;
+  guestCount: number | null;
+  clerkName: string | null;
+  issuedAt: string;
+  lines: { name: string; quantity: number; unitPrice: number; lineTotal: number; modifiers: { name: string; price: number }[] }[];
+  subtotal: number;
+  taxTotal: number;
+  serviceCharge: number;
+  discount: number;
+  total: number;
+}
+
+/** 注文伝票（StarPRNT）。会計前の確認用。 */
+export function orderSlipStarPrnt(slip: OrderSlipData, options: StarPrntOptions = {}): Buffer {
+  const width = colsFor(options.paperWidth);
+  const rule = '-'.repeat(width);
+  const b = new StarBuffer(options.currency ?? DEFAULT_CURRENCY, options.encoding ?? DEFAULT_ENCODING);
+
+  b.cmd(CMD.init).cmd(CMD.alignCenter);
+  b.cmd(CMD.magnify(2, 2)).line('お会計伝票').cmd(CMD.magnify(1, 1));
+  b.line(slip.storeName).line('（会計前のご確認用）');
+  b.cmd(CMD.alignLeft).line(rule);
+  b.line(twoCol(slip.tableName ?? 'テイクアウト', `No.${slip.orderNo}`, width));
+  const meta = [slip.guestCount ? `${slip.guestCount}名` : null, slip.clerkName ? `担当 ${slip.clerkName}` : null]
+    .filter(Boolean)
+    .join('  ');
+  if (meta) b.line(meta);
+  b.line(`発行 ${slip.issuedAt}`).line(rule);
+
+  for (const it of slip.lines) {
+    b.line(it.name);
+    b.line(twoCol(`  ${it.quantity} x ${yen(it.unitPrice)}`, yen(it.lineTotal), width));
+    for (const m of it.modifiers) b.line(twoCol(`   + ${m.name}`, m.price ? yen(m.price) : '', width));
+  }
+  b.line(rule);
+  b.line(twoCol('小計', yen(slip.subtotal), width));
+  b.line(twoCol('消費税', yen(slip.taxTotal), width));
+  if (slip.serviceCharge > 0) b.line(twoCol('サービス料', yen(slip.serviceCharge), width));
+  if (slip.discount > 0) b.line(twoCol('値引', `-${yen(slip.discount)}`, width));
+  b.cmd(CMD.magnify(2, 1)).line(twoCol('合計', yen(slip.total), Math.floor(width / 2))).cmd(CMD.magnify(1, 1));
+  b.line(rule).cmd(CMD.alignCenter).line('※ これは領収書ではありません');
+  b.line().line().cmd(CMD.cut);
+  return b.toBuffer();
+}
+
 export function drawerKickStarPrnt(command: string): Buffer {
   const n = /2/.test(command ?? '') ? 2 : 1;
   return Buffer.from(n === 2 ? CMD.drawer2 : CMD.drawer1);

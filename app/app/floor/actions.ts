@@ -1,8 +1,15 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { requirePermission } from '@/lib/auth';
+import { requireMember, requirePermission } from '@/lib/auth';
+import { can } from '@/lib/permissions';
 import { createClient } from '@/lib/supabase/server';
+
+/**
+ * 会計後に「清掃中」になったテーブルを、自動で空席に戻すまでの分数。
+ * 片付けが終わっても「清掃完了」を押し忘れて席が空かない、という現場の詰まりを防ぐ。
+ */
+const CLEANING_AUTO_RELEASE_MINUTES = 5;
 
 /** アクセス可能な店舗か検証（HQ系は全店舗） */
 async function assertStoreAccess(
@@ -177,6 +184,34 @@ export async function completeCleaning(tableId: string) {
 
   await supabase.from('restaurant_tables').update({ current_status: 'available' }).eq('id', tableId);
   revalidatePath('/app/floor');
+}
+
+/**
+ * 清掃中のまま指定時間を過ぎたテーブルを空席に戻す。
+ * テーブル一覧を開いている端末から定期的に呼ばれる（押し忘れても席が自然に空く）。
+ * 権限が無いユーザーや他店舗のテーブルには何もしない（画面を見ているだけで失敗させない）。
+ */
+export async function releaseFinishedCleaning(storeId: string): Promise<{ released: number }> {
+  const ctx = await requireMember();
+  if (!can(ctx.role, 'tables.operate')) return { released: 0 };
+  if (!ctx.isHq && !ctx.stores.some((s) => s.id === storeId)) return { released: 0 };
+
+  const supabase = await createClient();
+  const threshold = new Date(Date.now() - CLEANING_AUTO_RELEASE_MINUTES * 60_000).toISOString();
+  const { data } = await supabase
+    .from('restaurant_tables')
+    .update({ current_status: 'available', updated_by: ctx.userId })
+    .eq('store_id', storeId)
+    .eq('current_status', 'cleaning')
+    .lt('updated_at', threshold)
+    .select('id');
+
+  const released = data?.length ?? 0;
+  if (released > 0) {
+    revalidatePath('/app/floor');
+    revalidatePath('/app/pos');
+  }
+  return { released };
 }
 
 /** 利用停止・再開の切替 */

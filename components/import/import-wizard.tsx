@@ -27,10 +27,10 @@ import { applyExistingDuplicates, buildParsedRows, validateRowsLocally } from '.
 import { checkExistingDuplicates, importRows } from '@/app/app/settings/import/actions';
 import type { ImportResult, ImportRowInput, ImportType, ParsedRow, RowIssue } from './types';
 
-const IMPORT_TYPES: ImportType[] = ['menu_items', 'customers', 'vendors', 'inventory_items'];
+const IMPORT_TYPES: ImportType[] = ['menu_items', 'menu_option_groups', 'customers', 'vendors', 'inventory_items'];
 
 function needsStore(type: ImportType): boolean {
-  return type === 'menu_items' || type === 'inventory_items';
+  return type === 'menu_items' || type === 'menu_option_groups' || type === 'inventory_items';
 }
 
 type Step = 'upload' | 'mapping' | 'preview' | 'result';
@@ -127,7 +127,7 @@ export function ImportWizard({
     setCheckingDuplicates(true);
     try {
       const existing = await checkExistingDuplicates(importType, dupKeysToCheck);
-      setIssues((prev) => applyExistingDuplicates(prev, new Set(existing)));
+      setIssues((prev) => applyExistingDuplicates(prev, new Set(existing), importType));
     } catch (err) {
       toast(err instanceof Error ? err.message : '重複確認に失敗しました', 'error');
     } finally {
@@ -141,8 +141,14 @@ export function ImportWizard({
   const duplicateCount = issues.filter((i) => i.status === 'duplicate').length;
 
   function handleExecute() {
+    // 「重複」の行もサーバーへ送る。登録済みかどうかの最終判断はサーバー側が持っており、
+    // 商品CSVなら英語名・カナの上書き更新、選択肢CSVなら対象商品への紐付けを行う（それ以外はスキップ）。
+    // ここで除外すると、その2つの機能が動かなくなる。
     const payload: ImportRowInput[] = parsedRows
-      .filter((row) => issueByRow.get(row.rowNumber)?.status === 'ok')
+      .filter((row) => {
+        const status = issueByRow.get(row.rowNumber)?.status;
+        return status === 'ok' || status === 'duplicate';
+      })
       .map((row) => ({ rowNumber: row.rowNumber, values: row.values }));
 
     setResultError(null);
@@ -435,7 +441,7 @@ function PreviewStep({
       <div className="flex flex-wrap gap-2">
         <Badge tone="success">登録対象 {validCount}件</Badge>
         <Badge tone="danger">エラー {errorCount}件</Badge>
-        <Badge tone="warning">重複（スキップ） {duplicateCount}件</Badge>
+        <Badge tone="warning">登録済み（更新またはスキップ） {duplicateCount}件</Badge>
         {checkingDuplicates && (
           <span className="inline-flex items-center gap-1 text-xs text-gray-500">
             <Loader2 className="h-3.5 w-3.5 animate-spin" /> 登録済みデータとの重複を確認中…
@@ -528,7 +534,7 @@ function ResultStep({
         <div className="text-sm">
           <p className="font-semibold text-navy">取込が完了しました</p>
           <p className="mt-1 text-gray-600">
-            登録 {result.inserted}件 / スキップ（重複） {result.skipped}件
+            登録 {result.inserted}件{result.updated ? ` / 更新 ${result.updated}件` : ''} / スキップ（重複） {result.skipped}件
             {result.failed.length > 0 && ` / 失敗 ${result.failed.length}件`}
           </p>
         </div>

@@ -1,6 +1,6 @@
 /** CSVインポート機能（v0.3 項目32）共通の型定義。クライアント（プレビュー）とサーバー（本検証）の両方から使う。 */
 
-export type ImportType = 'menu_items' | 'customers' | 'vendors' | 'inventory_items';
+export type ImportType = 'menu_items' | 'menu_option_groups' | 'customers' | 'vendors' | 'inventory_items';
 
 export type FieldKind = 'text' | 'kana' | 'phone' | 'email' | 'date' | 'int' | 'decimal' | 'select';
 
@@ -45,5 +45,7 @@ export interface ImportRowInput {
 export interface ImportResult {
   inserted: number;
   skipped: number;
+  /** 既存データを更新した件数（商品の英語名・カナの上書きなど）。無い種別では省略 */
+  updated?: number;
   failed: { rowNumber: number; reason: string }[];
 }

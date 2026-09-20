@@ -13,17 +13,28 @@ export function CloudPrintButton({
   orderId,
   jobType,
   reissue,
+  recipientName,
+  purpose,
 }: {
   orderId: string;
   jobType: 'receipt' | 'ryoshusho';
   reissue?: boolean;
+  /** 領収書の宛名。画面で入力した内容をそのまま印字する（空欄なら「上様」） */
+  recipientName?: string;
+  /** 領収書の但し書き。空欄なら「お品代として」 */
+  purpose?: string;
 }) {
   const { toast } = useToast();
   const [pending, startTransition] = useTransition();
 
   const handleClick = () =>
     startTransition(async () => {
-      const res = await enqueueReceiptPrint(orderId, { reissue, jobType });
+      // 領収書のときだけ宛名・但し書きを送る（レシートには存在しない項目のため）
+      const res = await enqueueReceiptPrint(orderId, {
+        reissue,
+        jobType,
+        ...(jobType === 'ryoshusho' ? { recipientName: recipientName ?? null, purpose: purpose ?? null } : {}),
+      });
       if (res.ok) toast('プリンタへ送信しました（数秒後に印字されます）');
       else toast(res.error ?? '送信に失敗しました', 'error');
     });
@@ -36,7 +47,7 @@ export function CloudPrintButton({
       className="flex h-14 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-white hover:bg-primary-deep disabled:opacity-60 print:hidden"
     >
       {pending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Printer className="h-5 w-5" />}
-      プリンタで印刷
+      {jobType === 'ryoshusho' ? '領収書をプリンタで印刷' : 'プリンタで印刷'}
     </button>
   );
 }

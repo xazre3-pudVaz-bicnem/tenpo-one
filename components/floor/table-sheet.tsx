@@ -110,7 +110,7 @@ export function TableSheet({
       <div className="space-y-3">
         {status === 'available' && (
           <div className="rounded-xl border border-line p-4">
-            <Label htmlFor="party-size">人数</Label>
+            <Label htmlFor="party-size">人数 / Guests</Label>
             <div className="flex items-center gap-2">
               <Input
                 id="party-size"
@@ -129,7 +129,7 @@ export function TableSheet({
               disabled={pending}
               onClick={() => goPos(() => startWalkInAction(table.id, partySize))}
             >
-              ウォークイン着席
+              ウォークイン着席 / Seat walk-in
             </Button>
           </div>
         )}
@@ -141,7 +141,7 @@ export function TableSheet({
             disabled={pending}
             onClick={() => goPos(() => goToOrderAction(table.id))}
           >
-            {status === 'billing' ? '注文・会計画面へ' : '注文画面へ'}
+            {status === 'billing' ? '注文・会計画面へ / Order & Pay' : '注文画面へ / Order'}
           </Button>
         )}
 
@@ -153,7 +153,7 @@ export function TableSheet({
             disabled={pending}
             onClick={() => run(() => completeCleaningAction(table.id))}
           >
-            清掃完了
+            清掃完了 / Cleaned
           </Button>
         )}
 
@@ -167,7 +167,7 @@ export function TableSheet({
               run(() => setTableAvailabilityAction(table.id, status !== 'unavailable'))
             }
           >
-            {status === 'unavailable' ? 'テーブルを再開する' : 'このテーブルを利用停止にする'}
+            {status === 'unavailable' ? 'テーブルを再開する / Reopen table' : 'このテーブルを利用停止にする / Close table'}
           </Button>
         )}
       </div>

@@ -10,6 +10,7 @@ export const baseReceipt: ReceiptData = {
   footerMessage: 'ありがとうございました',
   registerName: 'レジ1',
   staffName: '山田',
+  tableName: 'T-3',
   orderNo: '1001',
   issuedAt: '2026/08/11 20:00',
   isReissue: false,

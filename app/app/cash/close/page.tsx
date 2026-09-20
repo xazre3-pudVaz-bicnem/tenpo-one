@@ -17,7 +17,7 @@ import { StoreDayClosePanel } from '@/components/cash/store-day-close-panel';
 import { TodayClosingSummary } from '@/components/cash/today-closing-summary';
 import { RegisterCountCard } from '@/components/cash/register-count-card';
 import { ReceiptCell, splitPurpose } from '@/components/cash/cash-history';
-import { METHOD_LABELS } from '@/components/cash/labels';
+import { METHOD_LABELS, METHOD_LABELS_EN } from '@/components/cash/labels';
 import { loadRegisterBoard, loadTodayCashRows, receiptStateOf, STORE_DAY_CLOSE_ROLES } from './data';
 
 export const metadata: Metadata = { title: 'レジクローズ' };
@@ -137,6 +137,19 @@ export default async function CashClosePage() {
               <Kv label="客数" value={`${metrics.guests}名`} />
               <Kv label="客単価" value={yen(metrics.avgSpend)} />
             </div>
+            {/* 支払方法別（現場の要望: 締めのときに 現金・カード・PayPay 等の合計を一目で見たい） */}
+            <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
+              {[...byMethod.entries()]
+                .filter(([m, v]) => BASE_METHODS.includes(m) || v.count > 0)
+                .map(([method, v]) => (
+                  <Kv
+                    key={method}
+                    label={`${METHOD_LABELS[method] ?? method} / ${METHOD_LABELS_EN[method] ?? method}`}
+                    value={yen(v.amount)}
+                    sub={`${v.count}件`}
+                  />
+                ))}
+            </div>
           </CardContent>
         </Card>
 
@@ -147,8 +160,8 @@ export default async function CashClosePage() {
             <span className="text-[13px] text-ink-3">
               出金 <span className="tabular-nums">{receiptRows.length}</span>件 ・ レシートあり{' '}
               <span className="tabular-nums">{okRows.length}</span> ・{' '}
-              <b className={ngRows.length > 0 ? 'text-danger' : 'text-success'}>
-                未スキャン／未精算 <span className="tabular-nums">{ngRows.length}</span>件
+              <b className={ngRows.length > 0 ? 'text-ink-2' : 'text-success'}>
+                レシート未添付／未精算 <span className="tabular-nums">{ngRows.length}</span>件
                 {ngRows.length > 0 && <span className="tabular-nums">（{yen(ngTotal)}）</span>}
               </b>
             </span>
@@ -213,7 +226,10 @@ export default async function CashClosePage() {
               <tbody>
                 {[...byMethod.entries()].map(([method, v]) => (
                   <tr key={method} className="border-b border-line last:border-b-0">
-                    <td className="px-4 py-3 text-ink sm:px-5">{METHOD_LABELS[method] ?? method}</td>
+                    <td className="px-4 py-3 text-ink sm:px-5">
+                      {METHOD_LABELS[method] ?? method}
+                      <span className="ml-1 text-[11px] text-ink-3">{METHOD_LABELS_EN[method] ?? ''}</span>
+                    </td>
                     <td className="px-4 py-3 text-[12.5px] text-ink-3 tabular-nums">{v.count}件</td>
                     <td className="px-4 py-3 text-right font-bold text-ink tabular-nums sm:px-5">{yen(v.amount)}</td>
                   </tr>
@@ -239,6 +255,7 @@ export default async function CashClosePage() {
                 session={s}
                 showRegisterName={openSessions.length > 1 || cards.length > 1}
                 canOperate={canOperate}
+                today={today}
               />
             ))}
             {openSessions.length === 0 && (

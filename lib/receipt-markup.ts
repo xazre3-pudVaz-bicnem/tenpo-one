@@ -39,6 +39,7 @@ export function receiptToStarMarkup(receipt: ReceiptData, options: ReceiptMarkup
   line(rule);
   line(`発行 ${receipt.issuedAt}`);
   line(twoCol(`No.${receipt.orderNo}`, [receipt.registerName, receipt.staffName].filter(Boolean).join(' '), width));
+  if (receipt.tableName) line(`卓 ${receipt.tableName}`);
   line(rule);
 
   // 明細
@@ -87,6 +88,143 @@ export function receiptToStarMarkup(receipt: ReceiptData, options: ReceiptMarkup
     for (const fl of receipt.footerMessage.split('\n')) line(fl);
   }
   line(`照会番号 ${receipt.qrContent}`);
+  raw('[feed]');
+  raw('[cut: feed; partial]');
+
+  return L.join('\n') + '\n';
+}
+
+export interface RyoshushoOptions extends ReceiptMarkupOptions {
+  /** 宛名（空欄なら「上様」） */
+  recipientName?: string | null;
+  /** 但し書き（空欄なら「お品代として」） */
+  purpose?: string | null;
+}
+
+/**
+ * 領収書（Markup）。レシートとは別物として組む。
+ * 「領収書」の見出し・宛名・金額（大きく）・但し書き・内訳（税率別）・登録番号を印字する。
+ * 5万円以上は収入印紙欄を出す（印紙の貼付・消印は店舗側の運用）。
+ */
+export function ryoshushoToStarMarkup(receipt: ReceiptData, options: RyoshushoOptions = {}): string {
+  const width = colsFor(options.paperWidth);
+  const rule = '-'.repeat(width);
+  const L: string[] = [];
+  const line = (s = '') => L.push(esc(s));
+  const raw = (s: string) => L.push(s);
+
+  const recipient = (options.recipientName ?? '').trim() || '上様';
+  const purpose = (options.purpose ?? '').trim() || 'お品代として';
+
+  raw('[align: middle]');
+  if (receipt.isReissue) line('※ 再発行');
+  raw('[magnify: width 2; height 2]');
+  line('領 収 書');
+  raw('[magnify: width 1; height 1]');
+  line();
+
+  raw('[align: left]');
+  line(`${recipient} 様`);
+  line(rule);
+
+  // 金額（いちばん大きく）。一部返金がある場合は実際に受け取った額（netPaid）を領収額とする
+  raw('[align: middle]');
+  raw('[magnify: width 2; height 2]');
+  line(`${yen(receipt.netPaid)}`);
+  raw('[magnify: width 1; height 1]');
+  raw('[align: left]');
+  line(`但 ${purpose}`);
+  line('上記正に領収いたしました');
+  line(rule);
+
+  // 内訳（適格請求書の要件: 税率ごとの対象額と消費税額）
+  line(twoCol('小計', yen(receipt.subtotal), width));
+  for (const t of receipt.taxRows) {
+    line(twoCol(`  (税${t.rate}%対象 ${yen(t.taxable)})`, `税${yen(t.tax)}`, width));
+  }
+  if (receipt.serviceCharge > 0) line(twoCol('サービス料', yen(receipt.serviceCharge), width));
+  if (receipt.discount > 0) line(twoCol('値引', `-${yen(receipt.discount)}`, width));
+  line(twoCol('合計', yen(receipt.total), width));
+  if (receipt.payments.length > 0) {
+    line(twoCol('お支払方法', receipt.payments.map((p) => p.label).join(' / '), width));
+  }
+  line(rule);
+
+  // 発行元
+  line(receipt.storeName);
+  if (receipt.storeAddress) line(receipt.storeAddress);
+  if (receipt.storePhone) line(`TEL ${receipt.storePhone}`);
+  if (receipt.registrationNumber) line(`登録番号 ${receipt.registrationNumber}`);
+  line(twoCol(`発行 ${receipt.issuedAt}`, `No.${receipt.orderNo}`, width));
+  if (receipt.netPaid >= 50000) {
+    line();
+    line('[ 収入印紙 ]');
+  }
+  raw('[feed]');
+  raw('[cut: feed; partial]');
+
+  return L.join('\n') + '\n';
+}
+
+/**
+ * 注文伝票（会計前の中間伝票・お客様確認用）。
+ * 会計を確定せずに、現在の注文内容と合計をレシートプリンターに出す。
+ */
+export function orderSlipMarkup(
+  slip: {
+    storeName: string;
+    orderNo: string;
+    tableName: string | null;
+    guestCount: number | null;
+    clerkName: string | null;
+    issuedAt: string;
+    lines: { name: string; quantity: number; unitPrice: number; lineTotal: number; modifiers: { name: string; price: number }[] }[];
+    subtotal: number;
+    taxTotal: number;
+    serviceCharge: number;
+    discount: number;
+    total: number;
+  },
+  options: ReceiptMarkupOptions = {}
+): string {
+  const width = colsFor(options.paperWidth);
+  const rule = '-'.repeat(width);
+  const L: string[] = [];
+  const line = (s = '') => L.push(esc(s));
+  const raw = (s: string) => L.push(s);
+
+  raw('[align: middle]');
+  raw('[magnify: width 2; height 2]');
+  line('お会計伝票');
+  raw('[magnify: width 1; height 1]');
+  line(slip.storeName);
+  line('（会計前のご確認用）');
+  raw('[align: left]');
+  line(rule);
+  line(twoCol(slip.tableName ?? 'テイクアウト', `No.${slip.orderNo}`, width));
+  const meta = [slip.guestCount ? `${slip.guestCount}名` : null, slip.clerkName ? `担当 ${slip.clerkName}` : null]
+    .filter(Boolean)
+    .join('  ');
+  if (meta) line(meta);
+  line(`発行 ${slip.issuedAt}`);
+  line(rule);
+
+  for (const it of slip.lines) {
+    line(it.name);
+    line(twoCol(`  ${it.quantity} x ${yen(it.unitPrice)}`, yen(it.lineTotal), width));
+    for (const m of it.modifiers) line(twoCol(`   + ${m.name}`, m.price ? yen(m.price) : '', width));
+  }
+  line(rule);
+  line(twoCol('小計', yen(slip.subtotal), width));
+  line(twoCol('消費税', yen(slip.taxTotal), width));
+  if (slip.serviceCharge > 0) line(twoCol('サービス料', yen(slip.serviceCharge), width));
+  if (slip.discount > 0) line(twoCol('値引', `-${yen(slip.discount)}`, width));
+  raw('[magnify: width 2; height 1]');
+  line(twoCol('合計', yen(slip.total), Math.floor(width / 2)));
+  raw('[magnify: width 1; height 1]');
+  line(rule);
+  raw('[align: middle]');
+  line('※ これは領収書ではありません');
   raw('[feed]');
   raw('[cut: feed; partial]');
 

@@ -3,9 +3,9 @@
 import { requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { loadReceiptData } from '@/lib/receipts-loader';
-import { receiptToStarMarkup, drawerKickMarkup } from '@/lib/receipt-markup';
-import { receiptToStarPrnt, drawerKickStarPrnt } from '@/lib/starprnt';
-import { receiptToEposXml, drawerKickEpos } from '@/lib/epos-print';
+import { receiptToStarMarkup, ryoshushoToStarMarkup, orderSlipMarkup, drawerKickMarkup } from '@/lib/receipt-markup';
+import { receiptToStarPrnt, ryoshushoToStarPrnt, orderSlipStarPrnt, drawerKickStarPrnt } from '@/lib/starprnt';
+import { receiptToEposXml, ryoshushoToEposXml, orderSlipEposXml, drawerKickEpos } from '@/lib/epos-print';
 
 /**
  * ジョブに載せる既定の形式。実際にどの形式で印字されるかはプリンタが
@@ -53,7 +53,15 @@ async function getCloudPrntPrinter(
  */
 export async function enqueueReceiptPrint(
   orderId: string,
-  opts: { reissue?: boolean; drawer?: boolean; jobType?: 'receipt' | 'ryoshusho' } = {}
+  opts: {
+    reissue?: boolean;
+    drawer?: boolean;
+    jobType?: 'receipt' | 'ryoshusho';
+    /** 領収書の宛名（空欄なら「上様」） */
+    recipientName?: string | null;
+    /** 領収書の但し書き（空欄なら「お品代として」） */
+    purpose?: string | null;
+  } = {}
 ): Promise<EnqueueResult> {
   const ctx = await requirePermission('pos.checkout');
   const supabase = await createClient();
@@ -75,11 +83,26 @@ export async function enqueueReceiptPrint(
   if (!loaded) return { ok: false, error: 'レシートデータの取得に失敗しました' };
 
   const paper = printer.paper_width_mm === 58 ? 58 : 80;
-  // Markup / StarPRNT / ePOS-Print XML の表現を持たせ、対応形式はプリンタ側に選ばせる
+  // Markup / StarPRNT / ePOS-Print XML の3表現を持たせ、対応形式はプリンタ側に選ばせる
   // （Star機はMarkupかStarPRNT、EPSON機はePOS-Print XMLを取りに来る）。
-  const markup = receiptToStarMarkup(loaded.receipt, { paperWidth: paper });
-  const starprnt = receiptToStarPrnt(loaded.receipt, { paperWidth: paper }).toString('base64');
-  const epos = receiptToEposXml(loaded.receipt, { paperWidth: paper });
+  // 領収書はレシートとは別レイアウト（見出し「領収書」・宛名・但し書き・金額を大きく）。
+  const isRyoshusho = opts.jobType === 'ryoshusho';
+  const ryoshushoOpts = {
+    paperWidth: paper,
+    recipientName: opts.recipientName ?? null,
+    purpose: opts.purpose ?? null,
+  } as const;
+  const markup = isRyoshusho
+    ? ryoshushoToStarMarkup(loaded.receipt, ryoshushoOpts)
+    : receiptToStarMarkup(loaded.receipt, { paperWidth: paper });
+  const starprnt = (
+    isRyoshusho
+      ? ryoshushoToStarPrnt(loaded.receipt, ryoshushoOpts)
+      : receiptToStarPrnt(loaded.receipt, { paperWidth: paper })
+  ).toString('base64');
+  const epos = isRyoshusho
+    ? ryoshushoToEposXml(loaded.receipt, ryoshushoOpts)
+    : receiptToEposXml(loaded.receipt, { paperWidth: paper });
 
   const rows: Record<string, unknown>[] = [
     {
@@ -118,6 +141,85 @@ export async function enqueueReceiptPrint(
   const { error } = await supabase.from('print_jobs').insert(rows);
   if (error) return { ok: false, error: `印刷ジョブの登録に失敗しました: ${error.message}` };
   return { ok: true, queued: rows.length };
+}
+
+/**
+ * 注文伝票（会計前の中間伝票）をレシートプリンターへ積む。
+ * 会計を確定せずに「いま何をいくつ頼んでいるか」と合計をお客様に見せるための印字。
+ * 会計処理・売上には一切影響しない（print_jobs に job_type='order_slip' で積むだけ）。
+ */
+export async function enqueueOrderSlipPrint(orderId: string): Promise<EnqueueResult> {
+  const ctx = await requirePermission('pos.order');
+  const supabase = await createClient();
+
+  const { data: order } = await supabase
+    .from('orders')
+    .select(
+      'id, organization_id, store_id, order_no, guest_count, clerk_name, subtotal, tax_total, service_charge, discount_total, total, stores(name), restaurant_tables(name)'
+    )
+    .eq('id', orderId)
+    .single();
+  if (!order) return { ok: false, error: '注文が見つかりません' };
+  if (!assertStore(ctx, order.store_id)) return { ok: false, error: 'この店舗へのアクセス権がありません' };
+
+  const printer = await getCloudPrntPrinter(supabase, order.store_id);
+  if (!printer) {
+    return { ok: false, error: 'CloudPRNT対応プリンタが未設定です（設定 > プリンター で有効化してください）' };
+  }
+
+  const { data: items } = await supabase
+    .from('order_items')
+    .select('name, unit_price, quantity, line_total, modifiers')
+    .eq('order_id', orderId)
+    .eq('status', 'active')
+    .order('created_at');
+  if (!items || items.length === 0) return { ok: false, error: '印刷する注文明細がありません' };
+
+  const store = order.stores as unknown as { name: string } | null;
+  const table = order.restaurant_tables as unknown as { name: string } | null;
+  const slip = {
+    storeName: store?.name ?? '',
+    orderNo: String(order.order_no),
+    tableName: table?.name ?? null,
+    guestCount: order.guest_count ?? null,
+    clerkName: order.clerk_name ?? null,
+    issuedAt: new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo', dateStyle: 'short', timeStyle: 'short' }),
+    lines: items.map((it) => ({
+      name: it.name as string,
+      quantity: it.quantity as number,
+      unitPrice: it.unit_price as number,
+      lineTotal: it.line_total as number,
+      modifiers: ((it.modifiers ?? []) as { name: string; price?: number }[]).map((m) => ({
+        name: m.name,
+        price: m.price ?? 0,
+      })),
+    })),
+    subtotal: order.subtotal as number,
+    taxTotal: order.tax_total as number,
+    serviceCharge: order.service_charge as number,
+    discount: order.discount_total as number,
+    total: order.total as number,
+  };
+
+  const paper = printer.paper_width_mm === 58 ? 58 : 80;
+  const { error } = await supabase.from('print_jobs').insert({
+    organization_id: order.organization_id,
+    store_id: order.store_id,
+    printer_config_id: printer.id,
+    job_type: 'order_slip',
+    order_id: orderId,
+    target: 'cloudprnt',
+    content_type: RECEIPT_CONTENT_TYPE,
+    payload: {
+      body: orderSlipMarkup(slip, { paperWidth: paper }),
+      starprnt: orderSlipStarPrnt(slip, { paperWidth: paper }).toString('base64'),
+      epos: orderSlipEposXml(slip, { paperWidth: paper }),
+    },
+    status: 'queued',
+    created_by: ctx.userId,
+  });
+  if (error) return { ok: false, error: `印刷ジョブの登録に失敗しました: ${error.message}` };
+  return { ok: true, queued: 1 };
 }
 
 /** キャッシュドロアのみを開くジョブを積む（会計時の自動開放や手動開放ボタン用）。 */

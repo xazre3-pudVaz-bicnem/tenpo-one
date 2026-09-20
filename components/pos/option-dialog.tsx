@@ -10,12 +10,15 @@ import { yen } from '@/lib/format';
 export interface PosOptionItem {
   id: string;
   name: string;
+  /** 設定 > 選択肢 の英語名。無ければ日本語のみ表示する */
+  nameEn?: string | null;
   price: number;
 }
 
 export interface PosOptionGroup {
   id: string;
   name: string;
+  nameEn?: string | null;
   isRequired: boolean;
   minSelect: number;
   maxSelect: number;
@@ -28,12 +31,15 @@ export interface PosOptionGroup {
  */
 export function OptionDialog({
   itemName,
+  itemNameEn,
   basePrice,
   groups,
   onCancel,
   onConfirm,
 }: {
   itemName: string;
+  /** 英語名。日本語を読まないスタッフ向けに見出しの下へ併記する */
+  itemNameEn?: string | null;
   basePrice: number;
   groups: PosOptionGroup[];
   onCancel: () => void;
@@ -73,7 +79,7 @@ export function OptionDialog({
       const count = (selected[g.id] ?? []).length;
       const min = g.isRequired ? Math.max(1, g.minSelect) : g.minSelect;
       if (count < min) {
-        setError(`「${g.name}」は${min}つ以上選んでください`);
+        setError(`「${g.name}」は${min}つ以上選んでください / Choose at least ${min}`);
         return;
       }
     }
@@ -83,15 +89,19 @@ export function OptionDialog({
   return (
     <Dialog open onClose={onCancel} title={itemName}>
       <div className="space-y-4">
+        {itemNameEn && <p className="-mt-2 text-sm text-gray-500">{itemNameEn}</p>}
         {groups.map((g) => {
           const chosen = selected[g.id] ?? [];
           return (
             <div key={g.id}>
               <div className="mb-2 flex items-center gap-2">
-                <p className="text-sm font-semibold text-navy">{g.name}</p>
-                {g.isRequired ? <Badge tone="danger">必須</Badge> : <Badge tone="gray">任意</Badge>}
+                <p className="text-sm font-semibold text-navy">
+                  {g.name}
+                  {g.nameEn && <span className="ml-1 text-xs font-medium text-gray-500">{g.nameEn}</span>}
+                </p>
+                {g.isRequired ? <Badge tone="danger">必須 / Required</Badge> : <Badge tone="gray">任意 / Optional</Badge>}
                 <span className="text-xs text-gray-500">
-                  {g.maxSelect === 1 ? '1つ選択' : `${g.minSelect}〜${g.maxSelect}つ選択`}
+                  {g.maxSelect === 1 ? '1つ選択 / Choose 1' : `${g.minSelect}〜${g.maxSelect}つ選択 / Choose ${g.minSelect}–${g.maxSelect}`}
                 </span>
               </div>
               <div className="grid grid-cols-2 gap-2">
@@ -113,6 +123,7 @@ export function OptionDialog({
                       ].join(' ')}
                     >
                       <span className="block">{o.name}</span>
+                      {o.nameEn && <span className="block text-xs text-gray-500">{o.nameEn}</span>}
                       {o.price !== 0 && <span className="text-xs text-gray-500">+{yen(o.price)}</span>}
                     </button>
                   );
@@ -126,14 +137,14 @@ export function OptionDialog({
 
         <div className="flex items-center justify-between border-t border-gray-100 pt-3">
           <p className="text-sm text-gray-600">
-            小計 <span className="text-base font-bold text-navy">{yen(basePrice + extraPrice)}</span>
+            小計 / Subtotal <span className="text-base font-bold text-navy">{yen(basePrice + extraPrice)}</span>
             {extraPrice > 0 && <span className="ml-1 text-xs text-gray-500">（追加 +{yen(extraPrice)}）</span>}
           </p>
           <div className="flex gap-2">
             <Button variant="secondary" onClick={onCancel}>
-              キャンセル
+              キャンセル / Cancel
             </Button>
-            <Button onClick={handleConfirm}>追加する</Button>
+            <Button onClick={handleConfirm}>追加する / Add</Button>
           </div>
         </div>
       </div>

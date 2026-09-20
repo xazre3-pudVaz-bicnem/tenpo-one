@@ -128,15 +128,16 @@ export function tileState(t: TableView, now: number): TileState {
   return t.order.total > 0 ? 'ordered' : 'seated';
 }
 
+/** 卓の状態ラベル。日本語を読まないスタッフ向けに「日本語 / English」で併記する。 */
 export const TILE_LABEL: Record<TileState, string> = {
-  free: '空席',
-  reserved: '予約あり',
-  waiting: 'キャンセル待ち',
-  seated: '着席中',
-  ordered: '注文済',
-  lo: 'L.O.済',
-  over: '時間超過',
-  pay: '会計待ち',
-  cleaning: '清掃中',
-  unavailable: '利用停止',
+  free: '空席 / Free',
+  reserved: '予約あり / Reserved',
+  waiting: 'キャンセル待ち / Waitlist',
+  seated: '着席中 / Seated',
+  ordered: '注文済 / Ordered',
+  lo: 'L.O.済 / Last order',
+  over: '時間超過 / Over time',
+  pay: '会計待ち / To pay',
+  cleaning: '清掃中 / Cleaning',
+  unavailable: '利用停止 / Closed',
 };

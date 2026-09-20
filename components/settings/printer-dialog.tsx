@@ -172,7 +172,7 @@ export function PrinterDialog({
               checked={form.autoPrint}
               onChange={(e) => set('autoPrint', e.target.checked)}
             />
-            自動印刷
+            自動印刷（QR注文が入ったら、お会計伝票をこのレジプリンターから自動で出す）
           </label>
           <label className="flex items-center gap-2 text-sm text-gray-700">
             <input

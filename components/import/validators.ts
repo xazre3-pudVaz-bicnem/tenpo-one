@@ -88,7 +88,9 @@ export interface NormalizedMenuItemRow {
   categoryName: string | null;
   name: string;
   nameKana: string | null;
-  price: number;
+  nameEn: string | null;
+  /** 新規登録には必須。登録済み商品の英語名・カナ更新だけなら null でよい */
+  price: number | null;
   takeoutPrice: number | null;
   cost: number | null;
   itemType: 'food' | 'drink' | 'course' | 'option';
@@ -102,8 +104,7 @@ export function validateMenuItemRow(values: Record<string, string>): ValidateRes
   if (!name.ok) errors.push(name.error);
   const price = optionalInt(values, 'price', '価格');
   if (!price.ok) errors.push(price.error);
-  else if (price.value === null) errors.push('価格を入力してください');
-  else if (price.value < 0) errors.push('価格は0以上で入力してください');
+  else if (price.value !== null && price.value < 0) errors.push('価格は0以上で入力してください');
   const takeoutPrice = optionalInt(values, 'takeoutPrice', 'テイクアウト価格');
   if (!takeoutPrice.ok) errors.push(takeoutPrice.error);
   const cost = optionalInt(values, 'cost', '原価');
@@ -121,12 +122,78 @@ export function validateMenuItemRow(values: Record<string, string>): ValidateRes
     categoryName: optionalText(values, 'categoryName'),
     name: name.ok ? name.value : '',
     nameKana: optionalText(values, 'nameKana'),
-    price: price.ok && price.value !== null ? price.value : 0,
+    nameEn: optionalText(values, 'nameEn'),
+    price: price.ok ? price.value : null,
     takeoutPrice: takeoutPrice.ok ? takeoutPrice.value : null,
     cost: cost.ok ? cost.value : null,
     itemType: (itemTypeMatch?.value as NormalizedMenuItemRow['itemType']) ?? 'food',
   };
   return { ok: true, data, dupKey: data.name.toLowerCase() };
+}
+
+// ---------------------------------------------------------------
+// 選択肢グループ (menu_option_groups) — セットの中身（カレーを選ぶ／ご飯かナン／ドリンク）
+// ---------------------------------------------------------------
+
+export interface NormalizedOptionGroupRow {
+  groupName: string;
+  optionName: string;
+  optionNameEn: string | null;
+  price: number;
+  /** 行に指定が無ければ null（グループ作成時は既定: 必須・1〜1） */
+  isRequired: boolean | null;
+  minSelect: number | null;
+  maxSelect: number | null;
+  /** 「;」「；」「,」区切りの商品名 */
+  targetItems: string[];
+}
+
+function optionalBool(values: Record<string, string>, key: string): boolean | null {
+  const raw = cell(values, key).toLowerCase();
+  if (raw === '') return null;
+  if (['1', 'true', 'yes', 'y', 'はい', '必須', '○', '◯', 'o'].includes(raw)) return true;
+  if (['0', 'false', 'no', 'n', 'いいえ', '任意', '×', 'x', '-'].includes(raw)) return false;
+  return null;
+}
+
+export function validateOptionGroupRow(values: Record<string, string>): ValidateResult<NormalizedOptionGroupRow> {
+  const errors: string[] = [];
+  const group = requiredText(values, 'groupName', 'グループ名');
+  if (!group.ok) errors.push(group.error);
+  // 選択肢名が空でも「対象商品」があれば、既存グループを商品に付けるだけの行として受け付ける
+  const optionText = optionalText(values, 'optionName');
+  const targets = cell(values, 'targetItems');
+  if (!optionText && !targets) errors.push('選択肢名（または対象商品）を入力してください');
+  const price = optionalInt(values, 'price', '追加料金');
+  if (!price.ok) errors.push(price.error);
+  else if (price.value !== null && price.value < 0) errors.push('追加料金は0以上で入力してください');
+  const min = optionalInt(values, 'minSelect', '最小');
+  if (!min.ok) errors.push(min.error);
+  const max = optionalInt(values, 'maxSelect', '最大');
+  if (!max.ok) errors.push(max.error);
+  // 最大0は「1つも選べないグループ」になってしまい、登録時にDBの制約で弾かれる
+  else if (max.value !== null && max.value < 1) errors.push('最大は1以上で入力してください');
+  if (min.ok && min.value !== null && min.value < 0) errors.push('最小は0以上で入力してください');
+  if (min.ok && max.ok && min.value !== null && max.value !== null && min.value > max.value) {
+    errors.push('最小は最大以下にしてください');
+  }
+  if (errors.length > 0) return { ok: false, errors };
+
+  const data: NormalizedOptionGroupRow = {
+    groupName: group.ok ? group.value : '',
+    optionName: optionText ?? '',
+    optionNameEn: optionalText(values, 'optionNameEn'),
+    price: price.ok && price.value !== null ? price.value : 0,
+    isRequired: optionalBool(values, 'isRequired'),
+    minSelect: min.ok ? min.value : null,
+    maxSelect: max.ok ? max.value : null,
+    targetItems: cell(values, 'targetItems')
+      .split(/[;；,、]/)
+      .map((s) => s.trim())
+      .filter(Boolean),
+  };
+  // 紐付けだけの行は重複判定しない（同じグループを何行にも書けるように）
+  return { ok: true, data, dupKey: data.optionName ? `${data.groupName.toLowerCase()}|${data.optionName.toLowerCase()}` : null };
 }
 
 // ---------------------------------------------------------------

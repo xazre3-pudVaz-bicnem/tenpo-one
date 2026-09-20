@@ -15,12 +15,15 @@ export interface OptionGroup {
 export interface OptionItem {
   id: string;
   name: string;
+  /** 設定 > 選択肢 の英語名。厨房伝票に英語で出すために伝票へスナップショットする */
+  nameEn?: string | null;
   price: number;
   groupId: string;
 }
 
 export interface ResolvedOptions {
-  modifiers: { name: string; price: number }[];
+  /** order_items.modifiers に保存する形。name_en は英語名がある選択肢だけに入る */
+  modifiers: { name: string; name_en?: string; price: number }[];
   extraPrice: number;
 }
 
@@ -53,7 +56,13 @@ export function resolveOptionSelection(groups: OptionGroup[], selected: OptionIt
   const sorted = [...selected].sort((a, b) => (order.get(a.groupId) ?? 0) - (order.get(b.groupId) ?? 0));
 
   return {
-    modifiers: sorted.map((o) => ({ name: o.name, price: o.price })),
+    modifiers: sorted.map((o) => {
+      const nameEn = (o.nameEn ?? '').trim();
+      // 英語名が無い／日本語と同じ選択肢には name_en を入れない（伝票側で日本語のみ印字される）
+      return nameEn && nameEn !== o.name.trim()
+        ? { name: o.name, name_en: nameEn, price: o.price }
+        : { name: o.name, price: o.price };
+    }),
     extraPrice: sorted.reduce((sum, o) => sum + o.price, 0),
   };
 }

@@ -3,6 +3,7 @@ import type { ImportFieldDef, ImportType } from './types';
 
 export const IMPORT_TYPE_LABELS: Record<ImportType, string> = {
   menu_items: '商品',
+  menu_option_groups: '選択肢（セットの中身）',
   customers: '顧客',
   vendors: '仕入先',
   inventory_items: '在庫品目',
@@ -11,6 +12,7 @@ export const IMPORT_TYPE_LABELS: Record<ImportType, string> = {
 /** 完了画面から遷移する各一覧ページ */
 export const IMPORT_TYPE_LIST_PATH: Record<ImportType, string> = {
   menu_items: '/app/settings/menu',
+  menu_option_groups: '/app/settings/options',
   customers: '/app/customers',
   vendors: '/app/vendors',
   inventory_items: '/app/inventory',
@@ -37,7 +39,22 @@ export const FIELD_DEFS: Record<ImportType, ImportFieldDef[]> = {
     },
     { key: 'name', label: '商品名', required: true, kind: 'text', aliases: ['商品名', '名前', 'name', '品名'] },
     { key: 'nameKana', label: 'カナ', required: false, kind: 'kana', aliases: ['カナ', 'フリガナ', 'よみ', 'kana'] },
-    { key: 'price', label: '価格', required: true, kind: 'int', aliases: ['価格', '販売価格', 'price', '単価'] },
+    {
+      key: 'nameEn',
+      label: '英語名',
+      required: false,
+      kind: 'text',
+      aliases: ['英語名', '英語', 'english', 'name_en', 'en'],
+      hint: 'レジ画面・厨房伝票に日本語と並べて表示します。登録済みの商品名と一致する行は英語名・カナだけを上書き更新します',
+    },
+    {
+      key: 'price',
+      label: '価格',
+      required: false,
+      kind: 'int',
+      aliases: ['価格', '販売価格', 'price', '単価'],
+      hint: '新しい商品には必須。登録済みの商品（英語名・カナの更新）では省略できます',
+    },
     {
       key: 'takeoutPrice',
       label: 'テイクアウト価格',
@@ -54,6 +71,37 @@ export const FIELD_DEFS: Record<ImportType, ImportFieldDef[]> = {
       options: MENU_ITEM_TYPE_OPTIONS,
       aliases: ['種別', 'type', 'item_type', '区分'],
       hint: '未入力の場合は「フード」として登録します',
+    },
+  ],
+  menu_option_groups: [
+    {
+      key: 'groupName',
+      label: 'グループ名',
+      required: true,
+      kind: 'text',
+      aliases: ['グループ名', 'グループ', 'group', 'group_name', '選択肢グループ'],
+      hint: '例: カレーを選ぶ／ご飯かナン／ドリンクを選ぶ。同じ名前のグループが店舗にあればそこに追加します',
+    },
+    { key: 'optionName', label: '選択肢名', required: true, kind: 'text', aliases: ['選択肢名', '選択肢', 'option', 'option_name', '名前'] },
+    { key: 'optionNameEn', label: '英語名', required: false, kind: 'text', aliases: ['英語名', '英語', 'english', 'name_en', 'en'] },
+    { key: 'price', label: '追加料金', required: false, kind: 'int', aliases: ['追加料金', '価格', 'price', '差額'], hint: '未入力は 0 円' },
+    {
+      key: 'isRequired',
+      label: '必須',
+      required: false,
+      kind: 'text',
+      aliases: ['必須', 'required', 'is_required'],
+      hint: '1／はい／必須 で必須。未入力は必須扱い（セットの中身は必ず選ぶため）',
+    },
+    { key: 'minSelect', label: '最小', required: false, kind: 'int', aliases: ['最小', 'min', 'min_select'], hint: '未入力は 1' },
+    { key: 'maxSelect', label: '最大', required: false, kind: 'int', aliases: ['最大', 'max', 'max_select'], hint: '未入力は 1' },
+    {
+      key: 'targetItems',
+      label: '対象商品',
+      required: false,
+      kind: 'text',
+      aliases: ['対象商品', '対象', '商品名', 'items', 'target_items', 'menu_items'],
+      hint: 'このグループを付けるセット商品の商品名。複数は「;」区切り（例: カレーセット;ランチセット）',
     },
   ],
   customers: [

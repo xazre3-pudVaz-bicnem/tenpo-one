@@ -1,6 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import iconv from 'iconv-lite';
-import { receiptToStarPrnt, drawerKickStarPrnt, testPrintStarPrnt } from '@/lib/starprnt';
+import {
+  receiptToStarPrnt,
+  ryoshushoToStarPrnt,
+  orderSlipStarPrnt,
+  drawerKickStarPrnt,
+  testPrintStarPrnt,
+} from '@/lib/starprnt';
 import { baseReceipt as base } from './fixtures/receipt';
 
 const ESC = 0x1b;
@@ -98,5 +104,62 @@ describe('testPrintStarPrnt', () => {
 
   it('店舗名が空でも既定名で出力する', () => {
     expect(asSjis(testPrintStarPrnt({ storeName: '', issuedAt: 'now' }))).toContain('TENPO ONE');
+  });
+});
+
+describe('ryoshushoToStarPrnt（領収書）', () => {
+  it('初期化で始まりカットで終わり、見出しは「領収書」', () => {
+    const b = ryoshushoToStarPrnt(base, { paperWidth: 80 });
+    expect(b.subarray(0, 2)).toEqual(Buffer.from([ESC, 0x40]));
+    expect(b.subarray(-3)).toEqual(Buffer.from([ESC, 0x64, 0x03]));
+    const t = asSjis(b);
+    expect(t).toContain('領 収 書');
+    expect(t).toContain('上記正に領収いたしました');
+    expect(t).not.toContain('照会番号');
+  });
+
+  it('宛名・但し書きは未指定なら既定値、指定すればその値', () => {
+    expect(asSjis(ryoshushoToStarPrnt(base))).toContain('上様 様');
+    const t = asSjis(ryoshushoToStarPrnt(base, { recipientName: '株式会社D&DREAM', purpose: '御飲食代として' }));
+    expect(t).toContain('株式会社D&DREAM 様');
+    expect(t).toContain('但 御飲食代として');
+  });
+
+  it('CP932で出力する（実機mC-Print3はUTF-8を解釈しない）', () => {
+    const b = ryoshushoToStarPrnt(base);
+    expect(b.toString('utf8')).not.toContain('領 収 書');
+    expect(asSjis(b)).toContain('登録番号 T1234567890123');
+  });
+});
+
+const slip = {
+  storeName: 'シュラスコテーブル FOGO',
+  orderNo: '1001',
+  tableName: 'T-3',
+  guestCount: 4,
+  clerkName: '山田',
+  issuedAt: '2026/09/19 19:30',
+  lines: [
+    { name: 'シュラスコ食べ放題', quantity: 2, unitPrice: 5000, lineTotal: 10000, modifiers: [] },
+    { name: '生ビール', quantity: 3, unitPrice: 600, lineTotal: 1800, modifiers: [{ name: '大', price: 100 }] },
+  ],
+  subtotal: 10727,
+  taxTotal: 1073,
+  serviceCharge: 0,
+  discount: 500,
+  total: 11300,
+};
+
+describe('orderSlipStarPrnt（注文伝票）', () => {
+  it('注文内容・合計を含み、領収書ではないと明記してカットする', () => {
+    const b = orderSlipStarPrnt(slip, { paperWidth: 80 });
+    expect(b.subarray(0, 2)).toEqual(Buffer.from([ESC, 0x40]));
+    expect(b.subarray(-3)).toEqual(Buffer.from([ESC, 0x64, 0x03]));
+    const t = asSjis(b);
+    expect(t).toContain('お会計伝票');
+    expect(t).toContain('T-3');
+    expect(t).toContain('シュラスコ食べ放題');
+    expect(t).toContain(`${BACKSLASH}11,300`);
+    expect(t).toContain('※ これは領収書ではありません');
   });
 });
