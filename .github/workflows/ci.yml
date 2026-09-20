@@ -1,0 +1,38 @@
+# main への push と Pull Request で、型チェック・lint・テスト・本番ビルドを回す。
+# 本番デプロイは Vercel の GitHub 連携（main への merge で自動）なので、ここでは行わない。
+# ビルドに必要な Supabase の環境変数はダミー値（ビルドの通過確認のみ。実データには一切触れない）。
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Type check
+        run: npm run typecheck
+      - name: Lint
+        run: npm run lint
+      - name: Test
+        run: npm test
+      - name: Build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder
+          SUPABASE_SERVICE_ROLE_KEY: placeholder
+          NEXT_TELEMETRY_DISABLED: '1'
+        run: npm run build
