@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import {
   claimNextJob,
+  currentClaimedJob,
   expireStaleJobs,
   finishJob,
   generateKitchenJobs,
@@ -97,14 +98,18 @@ export async function GET(request: Request, { params }: { params: Promise<{ toke
   const url = new URL(request.url);
   const jobToken = url.searchParams.get('token');
   const requestedType = url.searchParams.get('type');
-  if (!jobToken) return new NextResponse('missing job token', { status: 400 });
 
-  const { data: job } = await admin
-    .from('print_jobs')
-    .select('id, content_type, payload')
-    .eq('id', jobToken)
-    .eq('printer_config_id', printer.id)
-    .maybeSingle();
+  // token 付き（3.2 以降）はそのジョブ、token 無し（旧ファーム）は払い出し済みの最も古いジョブ
+  const job = jobToken
+    ? (
+        await admin
+          .from('print_jobs')
+          .select('id, content_type, payload')
+          .eq('id', jobToken)
+          .eq('printer_config_id', printer.id)
+          .maybeSingle()
+      ).data
+    : await currentClaimedJob(admin, printer.id);
   if (!job) return new NextResponse('job not found', { status: 404 });
 
   const payload = job.payload as JobPayload | null;
@@ -127,9 +132,10 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ t
   if (!printer) return new NextResponse('not found', { status: 404 });
 
   const url = new URL(request.url);
-  const jobToken = url.searchParams.get('token');
   const code = url.searchParams.get('code') ?? '';
-  if (!jobToken) return new NextResponse('missing job token', { status: 400 });
+  // token 無し（旧ファーム）は GET で渡した「最も古い claimed ジョブ」を確定する
+  const jobToken = url.searchParams.get('token') ?? (await currentClaimedJob(admin, printer.id))?.id ?? null;
+  if (!jobToken) return new NextResponse('no job to confirm', { status: 404 });
 
   // code は HTTP風の結果コード（"200" 等が成功）。数値化して2xxを成功とみなす。
   const numeric = parseInt(code, 10);
