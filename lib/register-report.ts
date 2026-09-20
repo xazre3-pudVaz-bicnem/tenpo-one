@@ -134,7 +134,7 @@ const signedYen = (n: number): string => (n < 0 ? `-${yen(-n)}` : yen(n));
 /** レジ精算レシートの本文を組み立てる */
 export function layoutRegisterReport(data: RegisterReportData, options: RegisterReportOptions = {}): LayoutLine[] {
   const width = options.columns ?? colsFor(options.paperWidth);
-  const widthOpts: WidthOptions = { yenFullWidth: options.yenFullWidth };
+  const widthOpts: WidthOptions = { yenFullWidth: options.yenFullWidth, cjkExtra: options.cjkExtra };
   const rule = '-'.repeat(width);
   const dotted = '- '.repeat(Math.floor(width / 2)).trimEnd();
   const L: LayoutLine[] = [];

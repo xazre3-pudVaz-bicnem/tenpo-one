@@ -16,6 +16,7 @@ import {
   type KitchenStation,
 } from '@/lib/kitchen-ticket';
 import { kitchenTicketMarkup, orderSlipMarkup } from '@/lib/receipt-markup';
+import { STAR_WIDTH_OPTIONS } from '@/lib/receipt-layout';
 import { kitchenTicketStarPrnt, orderSlipStarPrnt } from '@/lib/starprnt';
 import { kitchenTicketEpos, orderSlipEposXml, eposCols } from '@/lib/epos-print';
 import { selectQrOrdersToPrint, QR_BILL_WINDOW_MS } from '@/lib/qr-bill';
@@ -141,7 +142,8 @@ export async function generateKitchenJobs(admin: Admin, printer: PrinterRow) {
   const paperWidth = printer.paper_width_mm === 58 ? 58 : 80;
 
   const rows = tickets.map((t) => {
-    const lines = layoutKitchenTicket(t, { title, titleEn, printedAt, paperWidth });
+    // Star 機向け: 全角がわずかに広い分を見込んで桁揃え（STAR_WIDTH_OPTIONS）
+    const lines = layoutKitchenTicket(t, { title, titleEn, printedAt, paperWidth, ...STAR_WIDTH_OPTIONS });
     // EPSON機は1行の桁数が少ないため、専用の桁数で組み直す（Star用の行をそのまま渡すと折り返す）
     const eposLines = layoutKitchenTicket(t, { title, titleEn, printedAt, columns: eposCols(paperWidth) });
     return {
