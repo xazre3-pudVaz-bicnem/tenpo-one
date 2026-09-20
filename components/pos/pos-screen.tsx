@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   Minus, Plus, X, ArrowLeft, Split, Combine, ArrowRightLeft, Search, Star, Flame, User, XCircle,
-  FilePlus, Printer, Users,
+  FilePlus, Printer, Users, ChefHat,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { yen } from '@/lib/format';
@@ -35,7 +35,7 @@ import { CustomerLinkDialog } from './customer-link-dialog';
 import { POS_SHORTCUTS } from './shortcuts';
 import type {
   CheckoutPayment, CheckoutOutcome, SplitMove, ApplyCouponResult,
-  PosCustomerSearchResult, SetOrderCustomerResult,
+  PosCustomerSearchResult, SetOrderCustomerResult, SendOrderResult,
 } from '@/app/app/pos/actions';
 import type { TerminalPaymentState } from '@/app/app/pos/payment-actions';
 
@@ -83,6 +83,8 @@ export interface PosOrderItem {
   tax_included: boolean;
   line_total: number;
   status: string;
+  /** 厨房へ送った時刻。null = 未送信（「厨房へオーダー」を押すまで厨房に届かない） */
+  kitchen_sent_at?: string | null;
 }
 
 export interface PosCategory {
@@ -158,6 +160,7 @@ export function PosScreen({
   cancelItemAction,
   setDiscountAction,
   checkoutAction,
+  sendOrderAction,
   splitOrderAction,
   mergeOrdersAction,
   moveTableAction,
@@ -202,6 +205,8 @@ export function PosScreen({
   cancelItemAction: (orderId: string, orderItemId: string, reason: string) => Promise<void>;
   setDiscountAction: (orderId: string, discountTotal: number, reason: string) => Promise<void>;
   checkoutAction: (orderId: string, payments: CheckoutPayment[]) => Promise<CheckoutOutcome>;
+  /** 未送信の品目をまとめて厨房へ送る */
+  sendOrderAction?: (orderId: string) => Promise<SendOrderResult>;
   splitOrderAction: (orderId: string, moves: SplitMove[]) => Promise<{ newOrderId: string }>;
   mergeOrdersAction: (targetOrderId: string, sourceOrderId: string) => Promise<void>;
   moveTableAction: (orderId: string, newTableId: string) => Promise<{ tableName: string }>;
@@ -369,6 +374,20 @@ export function PosScreen({
     });
   };
 
+  // 未送信（厨房にまだ伝えていない）品目。タップした瞬間ではなく、このボタンで初めて厨房伝票・KDS に出る
+  const unsentItems = items.filter((it) => it.kitchen_sent_at === null);
+  const handleSendOrder = () => {
+    if (!sendOrderAction || unsentItems.length === 0) return;
+    startTransition(async () => {
+      try {
+        const res = await sendOrderAction(order.id);
+        toast(res.sent > 0 ? `厨房へ ${res.sent} 品を送信しました / Sent to kitchen` : '送信する品目がありません', res.sent > 0 ? 'success' : 'error');
+      } catch (e) {
+        toast(e instanceof Error ? e.message : '厨房への送信に失敗しました', 'error');
+      }
+    });
+  };
+
   const attemptOpenDrawer = async (methods: string[]) => {
     if (!shouldOpenDrawer(methods, drawerConfig)) return;
     try {
@@ -421,6 +440,7 @@ export function PosScreen({
     discountTotal: order.discountTotal,
     couponCode: order.couponCode,
     total: order.total,
+    unsentCount: unsentItems.length,
   };
 
   return (
@@ -594,7 +614,14 @@ export function PosScreen({
                 <li key={it.id} className="px-4 py-3">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium leading-tight text-navy">{it.name}</p>
+                      <p className="text-sm font-medium leading-tight text-navy">
+                        {it.name}
+                        {it.kitchen_sent_at === null && (
+                          <span className="ml-1.5 inline-block rounded bg-amber-100 px-1.5 py-0.5 align-middle text-[10px] font-bold text-amber-800">
+                            未送信 / Not sent
+                          </span>
+                        )}
+                      </p>
                       {it.menu_item_id && englishByItemId.get(it.menu_item_id) && (
                         <p className="text-xs leading-tight text-gray-500">
                           {englishByItemId.get(it.menu_item_id)}
@@ -724,6 +751,21 @@ export function PosScreen({
               <br />
               <span className="text-[11px]">Register is not opened. Count the opening cash and open the register first.</span>
             </Link>
+          )}
+          {/* 品目はタップしただけでは厨房に届かない。ここでまとめて送る（押し間違いを厨房に流さないため） */}
+          {sendOrderAction && (
+            <Button
+              size="pos"
+              variant={unsentItems.length > 0 ? 'navy' : 'secondary'}
+              className="w-full"
+              disabled={unsentItems.length === 0 || pending}
+              onClick={handleSendOrder}
+            >
+              <ChefHat className="h-5 w-5" />
+              {unsentItems.length > 0
+                ? `厨房へオーダー / Send order（未送信 ${unsentItems.length}品）`
+                : '厨房へオーダー / Send order（未送信なし）'}
+            </Button>
           )}
           {/* 会計前に「いま何をいくつ・合計いくら」をお客様へ紙で出す。会計・売上には影響しない */}
           <Button

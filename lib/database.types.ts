@@ -4239,6 +4239,7 @@ export type Database = {
           created_by: string | null
           id: string
           kitchen_ready_at: string | null
+          kitchen_sent_at: string | null
           kitchen_started_at: string | null
           kitchen_status: string
           line_total: number
@@ -4266,6 +4267,7 @@ export type Database = {
           created_by?: string | null
           id?: string
           kitchen_ready_at?: string | null
+          kitchen_sent_at?: string | null
           kitchen_started_at?: string | null
           kitchen_status?: string
           line_total?: number
@@ -4293,6 +4295,7 @@ export type Database = {
           created_by?: string | null
           id?: string
           kitchen_ready_at?: string | null
+          kitchen_sent_at?: string | null
           kitchen_started_at?: string | null
           kitchen_status?: string
           line_total?: number

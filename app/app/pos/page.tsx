@@ -13,6 +13,7 @@ import {
   cancelItem,
   setDiscount,
   checkout,
+  sendOrderToKitchen,
   startTakeout,
   splitOrder,
   mergeOrders,
@@ -123,7 +124,7 @@ export default async function PosPage({
   ] = await Promise.all([
     supabase
       .from('order_items')
-      .select('id, menu_item_id, name, unit_price, quantity, tax_rate, tax_included, line_total, status')
+      .select('id, menu_item_id, name, unit_price, quantity, tax_rate, tax_included, line_total, status, kitchen_sent_at')
       .eq('order_id', orderId)
       .eq('status', 'active')
       .order('created_at'),
@@ -343,6 +344,7 @@ export default async function PosPage({
         cancelItemAction={cancelItem}
         setDiscountAction={setDiscount}
         checkoutAction={checkout}
+        sendOrderAction={sendOrderToKitchen}
         splitOrderAction={splitOrder}
         mergeOrdersAction={mergeOrders}
         moveTableAction={moveTable}

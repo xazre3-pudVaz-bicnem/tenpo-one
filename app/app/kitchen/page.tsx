@@ -58,6 +58,8 @@ export default async function KitchenPage() {
       )
       .eq('store_id', store.id)
       .eq('status', 'active')
+      // レジで貯めている途中（「厨房へオーダー」未押下）の品目は厨房に見せない
+      .not('kitchen_sent_at', 'is', null)
       .eq('orders.status', 'open')
       .or(`kitchen_status.neq.served,served_at.gt.${sinceIso}`)
       .order('created_at', { ascending: true }),

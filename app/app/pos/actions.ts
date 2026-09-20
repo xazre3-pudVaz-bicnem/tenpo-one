@@ -186,12 +186,52 @@ export async function addItem(orderId: string, menuItemId: string, optionItemIds
     modifiers,
     staff_id: ctx.userId,
     status: 'active',
+    // レジで貯めている途中（未送信）。「厨房へオーダー」を押すまで厨房伝票・KDS には出さない。
+    // タップした瞬間に厨房へ流れると押し間違いがそのまま厨房に届くため（店舗要望）。
+    kitchen_sent_at: null,
     created_by: ctx.userId,
   });
   if (error) throw new Error(error.message);
 
   await supabase.rpc('recalc_order_totals', { p_order_id: orderId });
   revalidatePath(`/app/pos`);
+}
+
+export interface SendOrderResult {
+  /** 今回厨房へ送った品目数（行数） */
+  sent: number;
+}
+
+/**
+ * 伝票の未送信品目をまとめて厨房へ送る（kitchen_sent_at を立てる）。
+ * 厨房プリンターは claim_kitchen_items のポーリングで、送信済みの明細だけを伝票にする。
+ * KDS も送信済みだけを表示する。送るものが無ければ sent:0（エラーにはしない）。
+ */
+export async function sendOrderToKitchen(orderId: string): Promise<SendOrderResult> {
+  const ctx = await requirePermission('pos.order');
+  const supabase = await createClient();
+  await loadOpenOrder(supabase, ctx, orderId);
+  const sent = await markUnsentItemsSent(supabase, orderId, ctx.userId);
+  revalidatePath(`/app/pos`);
+  revalidatePath(`/app/kitchen`);
+  return { sent };
+}
+
+/** 未送信（kitchen_sent_at null）の有効明細を送信済みにする。戻り値は更新行数 */
+async function markUnsentItemsSent(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  orderId: string,
+  userId: string
+): Promise<number> {
+  const { data, error } = await supabase
+    .from('order_items')
+    .update({ kitchen_sent_at: new Date().toISOString(), updated_by: userId })
+    .eq('order_id', orderId)
+    .eq('status', 'active')
+    .is('kitchen_sent_at', null)
+    .select('id');
+  if (error) throw new Error(error.message);
+  return (data ?? []).length;
 }
 
 /** 数量を+/-する（1未満にはしない。取消は cancelItem を使う） */
@@ -344,6 +384,10 @@ export async function checkout(orderId: string, payments: CheckoutPayment[]): Pr
     return { ok: false, registerClosed: true };
   }
 
+  // 未送信のまま会計する品目（先払い・テイクアウトなど）は、会計と同時に厨房へ送る。
+  // 送らずに会計すると、お金だけ受け取って厨房が知らない状態になる。
+  await markUnsentItemsSent(supabase, orderId, ctx.userId);
+
   const { data, error } = await supabase.rpc('finalize_order', {
     p_order_id: orderId,
     p_payments: payments,
@@ -494,6 +538,8 @@ export async function splitOrder(
         line_total: line.unit_price * m.quantity,
         staff_id: ctx.userId,
         status: 'active',
+        // 元の行がまだ厨房へ未送信なら、分けた側も未送信のまま（既定 now() で勝手に送られないように）
+        kitchen_sent_at: line.kitchen_sent_at,
         created_by: ctx.userId,
       });
       if (insLineErr) {
