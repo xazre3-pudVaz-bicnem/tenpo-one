@@ -5,6 +5,8 @@
 #
 # 使い方:
 #   1. git format-patch --stdout --base=<mainの取り込み元sha> <sha>..HEAD > 0001-xxx.patch
+#      大きいときは圧縮して base64 に: xz -9c 0001-xxx.patch | base64 -w76 > 0001-xxx.patch.xz.b64
+#      （*.patch / *.patch.gz.b64 / *.patch.xz.b64 のどれでも可。圧縮版は CRC で壊れを検知できる）
 #   2. patch-inbox/<名前> ブランチの直下に置く（ファイル名の昇順に当たる。追加分は 0002-... で足せる）
 #   3. 対象ブランチ名は TARGET_BRANCH ファイル（1行）で指定。無ければ feat/inbox-<名前>
 name: apply-patch-inbox
@@ -25,9 +27,13 @@ jobs:
         run: |
           set -euo pipefail
           shopt -s nullglob
-          patches=( *.patch )
+          mkdir -p /tmp/inbox
+          for f in *.patch; do cp "$f" "/tmp/inbox/$f"; done
+          for f in *.patch.gz.b64; do base64 -d "$f" | gunzip -c > "/tmp/inbox/${f%.gz.b64}"; done
+          for f in *.patch.xz.b64; do base64 -d "$f" | xz -dc > "/tmp/inbox/${f%.xz.b64}"; done
+          patches=( /tmp/inbox/*.patch )
           if [ "${#patches[@]}" -eq 0 ]; then
-            echo "no *.patch in inbox yet"
+            echo "no patch in inbox yet"
             exit 0
           fi
           if [ -f TARGET_BRANCH ]; then
@@ -40,11 +46,10 @@ jobs:
             echo "::error::patch に base-commit 行がありません（git format-patch --base=<sha> で作ってください）"
             exit 1
           fi
-          mkdir -p /tmp/inbox
-          cp "${patches[@]}" /tmp/inbox/
           git config user.name "tenpo-one patch bot"
           git config user.email "noreply@anthropic.com"
           git checkout -B "$BRANCH" "$BASE"
-          git am --3way --ignore-whitespace /tmp/inbox/*.patch
+          git am --3way --ignore-whitespace "${patches[@]}"
           git push --force origin "$BRANCH"
           echo "pushed $BRANCH at $(git rev-parse --short HEAD) (base $BASE)"
+          git log --oneline "$BASE..HEAD"
