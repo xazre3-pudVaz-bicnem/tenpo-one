@@ -52,6 +52,9 @@ describe('canTransition（予約ステータス遷移）', () => {
   });
   it('不正遷移は拒否: 会計済み→着席、キャンセル→確定', () => {
     expect(canTransition('completed', 'seated')).toBe(false);
+    // 会計済みでも取消（記録の訂正）はできる
+    expect(canTransition('completed', 'cancelled')).toBe(true);
+    expect(canTransition('cancelled', 'completed')).toBe(false);
     expect(canTransition('cancelled', 'confirmed')).toBe(false);
     expect(canTransition('no_show', 'seated')).toBe(false);
   });

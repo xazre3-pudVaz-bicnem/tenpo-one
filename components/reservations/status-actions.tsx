@@ -85,7 +85,7 @@ export function StatusActions({
       )}
       {canCancel && (
         <Button size={size} variant="danger" disabled={pending} onClick={() => setConfirmKind('cancel')} className={btnClass}>
-          キャンセル
+          {status === 'completed' ? '予約を取り消す' : 'キャンセル'}
         </Button>
       )}
 
@@ -101,8 +101,12 @@ export function StatusActions({
       <ConfirmDialog
         open={confirmKind === 'cancel'}
         onClose={() => setConfirmKind(null)}
-        title="予約をキャンセル"
-        message="この予約をキャンセルします。"
+        title={status === 'completed' ? '会計済みの予約を取り消す' : '予約をキャンセル'}
+        message={
+          status === 'completed'
+            ? '会計済みの予約を取り消します。会計・売上のデータはそのまま残り、予約の記録だけがキャンセルになります（お客様のキャンセル回数には数えません）。'
+            : 'この予約をキャンセルします。'
+        }
         confirmLabel="キャンセルする"
         requireReason
         onConfirm={(reason) => run(() => cancelReservation(reservationId, reason), 'キャンセルしました')}
