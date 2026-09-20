@@ -1,0 +1,37 @@
+# patch-inbox/** ブランチに *.patch を置くと、BASE の上に git am して BRANCH へ push する。
+# Claude の作業環境から GitHub へ直接 push できないときの搬入口。
+# 出来たブランチから main への Pull Request は GitHub の画面で作って merge する。
+name: apply-patch-inbox
+on:
+  push:
+    branches:
+      - 'patch-inbox/**'
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    env:
+      BASE: '8600311'
+      BRANCH: 'feat/register-report-kitchen-send'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply patches onto BASE and push BRANCH
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          patches=( *.patch )
+          if [ "${#patches[@]}" -eq 0 ]; then
+            echo "no *.patch in inbox yet"
+            exit 0
+          fi
+          mkdir -p /tmp/inbox
+          cp "${patches[@]}" /tmp/inbox/
+          git config user.name "tenpo-one patch bot"
+          git config user.email "noreply@anthropic.com"
+          git checkout -B "$BRANCH" "$BASE"
+          git am --3way /tmp/inbox/*.patch
+          git push --force origin "$BRANCH"
+          echo "pushed $BRANCH at $(git rev-parse --short HEAD) (base $BASE)"
