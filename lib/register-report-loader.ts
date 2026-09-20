@@ -40,10 +40,10 @@ const CREATED_VIA_LABELS: Record<string, string> = {
 
 const jstNowLabel = () => formatDateTime(new Date());
 
-/** 'YYYY-MM-DD' → '2026/09/20（日）' */
+/** 'YYYY-MM-DD' → '2026/9/20 (日)'（dinii のレジ精算と同じ表記） */
 function businessDateLabel(date: string): string {
   const [y, m, d] = date.slice(0, 10).split('-');
-  return `${y}/${m}/${d}（${weekdayJa(date)}）`;
+  return `${y}/${Number(m)}/${Number(d)} (${weekdayJa(date)})`;
 }
 
 /**
