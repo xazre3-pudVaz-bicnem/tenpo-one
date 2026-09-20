@@ -91,7 +91,8 @@ export const RESERVATION_TRANSITIONS: Record<ReservationStatus, ReservationStatu
   arrived: ['seated', 'cancelled'],
   seated: ['billing', 'completed'],
   billing: ['completed'],
-  completed: [],
+  // 会計済みでも取消できる（誤って会計済みにした・お客様の都合で記録を取り消したい等の訂正用。会計・売上のデータは変わらない）
+  completed: ['cancelled'],
   cancelled: [],
   no_show: [],
   waitlisted: ['pending', 'confirmed', 'cancelled'],

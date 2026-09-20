@@ -186,6 +186,11 @@ function ReservationDetailDialogContent({
         </div>
       </div>
 
+      {reservation.status === 'completed' && (
+        <p className="mb-2 text-xs text-gray-500">
+          会計済みの予約です。予約内容・日時の訂正と、予約の取り消し（記録の訂正。会計・売上は変わりません）ができます。
+        </p>
+      )}
       <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg bg-gray-50 p-3">
         <StatusActions reservationId={reservation.id} status={reservation.status} size="sm" />
         {ASSIGNABLE_STATUSES.includes(reservation.status) && (

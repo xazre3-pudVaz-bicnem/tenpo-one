@@ -308,7 +308,8 @@ export async function cancelReservation(reservationId: string, reason: string) {
     .eq('id', reservationId);
   if (error) throw new Error('キャンセル処理に失敗しました');
 
-  if (reservation.customer_id) {
+  // 会計済みの取消は記録の訂正（来店・会計は済んでいる）なので、顧客のキャンセル回数には数えない
+  if (reservation.customer_id && reservation.status !== 'completed') {
     const { data: customer } = await supabase
       .from('customers')
       .select('cancel_count')
