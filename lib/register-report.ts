@@ -13,7 +13,7 @@
  */
 import { CASH_DENOMINATIONS, type CashDenomination, type DenominationCounts } from './cash-count';
 import type { LayoutLine } from './kitchen-ticket';
-import { colsFor, dispWidth, twoCol, yen, type PaperWidth } from './receipt-layout';
+import { colsFor, dispWidth, twoCol, wrapText, yen, type PaperWidth, type WidthOptions } from './receipt-layout';
 
 export interface ReportCountAmount {
   label: string;
@@ -82,8 +82,10 @@ export interface RegisterReportData {
   note: string | null;
 }
 
-export interface RegisterReportOptions {
+export interface RegisterReportOptions extends WidthOptions {
   paperWidth?: PaperWidth;
+  /** 1行の桁数を直接指定する（EPSON機は用紙幅どおりだと右端で折り返すため少なくする。lib/epos-print.ts の eposCols） */
+  columns?: number;
 }
 
 /** 開局・締めで保存する金種別枚数（金種の文字列 → 枚数）。denominationsToJson が作る jsonb の形 */
@@ -107,21 +109,22 @@ export function denominationReportLabel(denom: CashDenomination): string {
 }
 
 /** 左・中（件数など）・右（金額）の3段組。中と右は右寄せ。 */
-export function threeCol(left: string, mid: string, right: string, width: number): string {
-  const rightW = Math.max(dispWidth(right), 10);
-  const midW = Math.max(dispWidth(mid), 6);
+export function threeCol(left: string, mid: string, right: string, width: number, options: WidthOptions = {}): string {
+  const w = (s: string) => dispWidth(s, options);
+  const rightW = Math.max(w(right), 10);
+  const midW = Math.max(w(mid), 6);
   const leftW = width - rightW - midW - 2;
-  if (dispWidth(left) > leftW) {
+  if (w(left) > leftW) {
     // 左が長いときは左を1行にして、次行に中・右を右寄せで出す
-    const tail = ' '.repeat(Math.max(0, midW - dispWidth(mid))) + mid + ' '.repeat(rightW + 1 - dispWidth(right)) + right;
-    return `${left}\n${' '.repeat(Math.max(0, width - dispWidth(tail)))}${tail}`;
+    const tail = ' '.repeat(Math.max(0, midW - w(mid))) + mid + ' '.repeat(rightW + 1 - w(right)) + right;
+    return `${left}\n${' '.repeat(Math.max(0, width - w(tail)))}${tail}`;
   }
   return (
     left +
-    ' '.repeat(leftW - dispWidth(left)) +
-    ' '.repeat(midW - dispWidth(mid)) +
+    ' '.repeat(leftW - w(left)) +
+    ' '.repeat(midW - w(mid)) +
     mid +
-    ' '.repeat(rightW + 2 - dispWidth(right)) +
+    ' '.repeat(rightW + 2 - w(right)) +
     right
   );
 }
@@ -130,15 +133,18 @@ const signedYen = (n: number): string => (n < 0 ? `-${yen(-n)}` : yen(n));
 
 /** レジ精算レシートの本文を組み立てる */
 export function layoutRegisterReport(data: RegisterReportData, options: RegisterReportOptions = {}): LayoutLine[] {
-  const width = colsFor(options.paperWidth);
+  const width = options.columns ?? colsFor(options.paperWidth);
+  const widthOpts: WidthOptions = { yenFullWidth: options.yenFullWidth };
   const rule = '-'.repeat(width);
   const dotted = '- '.repeat(Math.floor(width / 2)).trimEnd();
   const L: LayoutLine[] = [];
-  const line = (text: string, size: LayoutLine['size'] = 'normal', align: LayoutLine['align'] = 'left') =>
-    L.push({ text, align, size });
+  // 長い文章（備考・店名など）は桁数で折り返す（プリンタ任せだと1文字だけ次行に落ちる）
+  const line = (text: string, size: LayoutLine['size'] = 'normal', align: LayoutLine['align'] = 'left') => {
+    for (const w of wrapText(text, width, widthOpts)) L.push({ text: w, align, size });
+  };
   const center = (text: string, size: LayoutLine['size'] = 'normal') => line(text, size, 'center');
-  const kv = (label: string, value: string) => line(twoCol(label, value, width));
-  const kcv = (label: string, count: string, value: string) => line(threeCol(label, count, value, width));
+  const kv = (label: string, value: string) => line(twoCol(label, value, width, widthOpts));
+  const kcv = (label: string, count: string, value: string) => line(threeCol(label, count, value, width, widthOpts));
   const section = (title: string) => {
     line(rule);
     line(`【${title}】`);

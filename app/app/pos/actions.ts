@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
+import { isMissingColumnError } from '@/lib/schema-compat';
 import { applicableTaxRate } from '@/lib/tax';
 import { validateCoupon, COUPON_REJECT_LABELS, type CouponLike } from '@/lib/coupons';
 import { resolveOptionSelection } from '@/lib/menu-options';
@@ -171,7 +172,7 @@ export async function addItem(orderId: string, menuItemId: string, optionItemIds
   const { modifiers, extraPrice } = await resolveOptions(supabase, order.store_id, item.id, optionItemIds);
   const finalUnitPrice = unitPrice + extraPrice;
 
-  const { error } = await supabase.from('order_items').insert({
+  const row = {
     organization_id: order.organization_id,
     store_id: order.store_id,
     order_id: orderId,
@@ -186,11 +187,15 @@ export async function addItem(orderId: string, menuItemId: string, optionItemIds
     modifiers,
     staff_id: ctx.userId,
     status: 'active',
-    // レジで貯めている途中（未送信）。「厨房へオーダー」を押すまで厨房伝票・KDS には出さない。
-    // タップした瞬間に厨房へ流れると押し間違いがそのまま厨房に届くため（店舗要望）。
-    kitchen_sent_at: null,
     created_by: ctx.userId,
-  });
+  };
+  // レジで貯めている途中（未送信）。「厨房へオーダー」を押すまで厨房伝票・KDS には出さない。
+  // タップした瞬間に厨房へ流れると押し間違いがそのまま厨房に届くため（店舗要望）。
+  let { error } = await supabase.from('order_items').insert({ ...row, kitchen_sent_at: null });
+  if (error && isMissingColumnError(error.message, 'kitchen_sent_at')) {
+    // migration 00063 未適用（列が無い）。従来どおり即時に厨房へ流す挙動で登録だけは通す
+    ({ error } = await supabase.from('order_items').insert(row));
+  }
   if (error) throw new Error(error.message);
 
   await supabase.rpc('recalc_order_totals', { p_order_id: orderId });
@@ -212,17 +217,23 @@ export async function sendOrderToKitchen(orderId: string): Promise<SendOrderResu
   const supabase = await createClient();
   await loadOpenOrder(supabase, ctx, orderId);
   const sent = await markUnsentItemsSent(supabase, orderId, ctx.userId);
+  if (sent == null) {
+    throw new Error('厨房へのまとめ送信はまだ有効になっていません（DB更新待ち）。品目は追加時に厨房へ送られています');
+  }
   revalidatePath(`/app/pos`);
   revalidatePath(`/app/kitchen`);
   return { sent };
 }
 
-/** 未送信（kitchen_sent_at null）の有効明細を送信済みにする。戻り値は更新行数 */
+/**
+ * 未送信（kitchen_sent_at null）の有効明細を送信済みにする。戻り値は更新行数。
+ * migration 00063 未適用（列が無い）のときは null（＝そもそも未送信という状態が無い）。
+ */
 async function markUnsentItemsSent(
   supabase: Awaited<ReturnType<typeof createClient>>,
   orderId: string,
   userId: string
-): Promise<number> {
+): Promise<number | null> {
   const { data, error } = await supabase
     .from('order_items')
     .update({ kitchen_sent_at: new Date().toISOString(), updated_by: userId })
@@ -230,7 +241,10 @@ async function markUnsentItemsSent(
     .eq('status', 'active')
     .is('kitchen_sent_at', null)
     .select('id');
-  if (error) throw new Error(error.message);
+  if (error) {
+    if (isMissingColumnError(error.message, 'kitchen_sent_at')) return null;
+    throw new Error(error.message);
+  }
   return (data ?? []).length;
 }
 

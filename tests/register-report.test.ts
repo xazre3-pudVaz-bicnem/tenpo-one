@@ -12,7 +12,7 @@ import {
 import { dispWidth } from '@/lib/receipt-layout';
 import { kitchenTicketMarkup } from '@/lib/receipt-markup';
 import { kitchenTicketStarPrnt } from '@/lib/starprnt';
-import { kitchenTicketEpos } from '@/lib/epos-print';
+import { kitchenTicketEpos, eposCols } from '@/lib/epos-print';
 
 const sample = (over: Partial<RegisterReportData> = {}): RegisterReportData => ({
   storeName: 'FULL MOoN 御茶ノ水店',
@@ -223,6 +223,20 @@ describe('layoutRegisterReport', () => {
     }
   });
 
+  it('EPSON機向け（eposCols の桁数・¥を全角幅で数える）でも全行が桁数に収まり、金額の右端が揃う', () => {
+    const cols = eposCols(80);
+    expect(cols).toBeLessThan(48);
+    const lines = layoutRegisterReport(sample(), { columns: cols, yenFullWidth: true });
+    const opts = { yenFullWidth: true };
+    for (const l of lines.flatMap((x) => x.text.split('\n'))) {
+      expect(dispWidth(l, opts)).toBeLessThanOrEqual(cols);
+    }
+    // 2段組・3段組の金額行は右端（46桁目）で揃う
+    const amountLines = lines.map((x) => x.text).filter((t) => /¥[\d,]+$/.test(t) && !t.includes('\n'));
+    expect(amountLines.length).toBeGreaterThan(5);
+    for (const t of amountLines) expect(dispWidth(t, opts)).toBe(cols);
+  });
+
   it('差額があれば符号付き、実査が無ければ「未入力」、金種が無ければ金種表は出ない', () => {
     const lines = layoutRegisterReport(
       sample({
@@ -248,6 +262,14 @@ describe('layoutRegisterReport', () => {
     const open = layoutRegisterReport(sample({ cash: { ...sample().cash, counted: null, difference: null } }));
     const openText = open.map((l) => l.text).join('\n');
     expect(openText).toMatch(/在高実績\s+未入力/);
+  });
+
+  it('長い備考は桁数で折り返され、1行が用紙幅を超えない', () => {
+    const note = 'あ'.repeat(40) + 'い'.repeat(40);
+    const lines = layoutRegisterReport(sample({ note }), { paperWidth: 80 });
+    const noteLines = lines.filter((l) => l.text.includes('あ') || l.text.includes('い'));
+    expect(noteLines.length).toBeGreaterThanOrEqual(2);
+    for (const l of lines) expect(dispWidth(l.text)).toBeLessThanOrEqual(48);
   });
 
   it('返金があれば売上と支払の両方に返金行が出る', () => {

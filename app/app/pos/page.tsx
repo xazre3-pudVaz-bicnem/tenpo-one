@@ -2,11 +2,12 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { requireFeature } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
+import { isMissingColumnError } from '@/lib/schema-compat';
 import { can } from '@/lib/permissions';
 import { PageHeader } from '@/components/ui/page-header';
 import { EmptyState } from '@/components/ui/state';
 import { OrderPicker } from '@/components/pos/order-picker';
-import { PosScreen } from '@/components/pos/pos-screen';
+import { PosScreen, type PosOrderItem } from '@/components/pos/pos-screen';
 import {
   addItem,
   updateQty,
@@ -29,6 +30,20 @@ import {
 import { startTerminalPayment, checkTerminalPayment, cancelTerminalPayment, getPaymentAvailability } from './payment-actions';
 
 export const metadata: Metadata = { title: 'POSレジ' };
+
+const ORDER_ITEM_COLUMNS = 'id, menu_item_id, name, unit_price, quantity, tax_rate, tax_included, line_total, status';
+
+/**
+ * 伝票の明細。kitchen_sent_at（厨房へ送信済みか）も読むが、migration 00063 が未適用で列が無いときは
+ * 列なしで読み直す（その場合は全品「送信済み」扱いになり、レジは従来どおり動く）。
+ */
+async function loadOrderItems(supabase: Awaited<ReturnType<typeof createClient>>, orderId: string) {
+  const base = () => supabase.from('order_items').select(`${ORDER_ITEM_COLUMNS}, kitchen_sent_at`).eq('order_id', orderId).eq('status', 'active').order('created_at');
+  const first = await base();
+  if (!first.error || !isMissingColumnError(first.error.message, 'kitchen_sent_at')) return first;
+  const legacy = await supabase.from('order_items').select(ORDER_ITEM_COLUMNS).eq('order_id', orderId).eq('status', 'active').order('created_at');
+  return { data: (legacy.data ?? null) as (PosOrderItem[] | null), error: legacy.error };
+}
 
 export default async function PosPage({
   searchParams,
@@ -122,12 +137,7 @@ export default async function PosPage({
     { data: loyalty },
     { data: storeSettings },
   ] = await Promise.all([
-    supabase
-      .from('order_items')
-      .select('id, menu_item_id, name, unit_price, quantity, tax_rate, tax_included, line_total, status, kitchen_sent_at')
-      .eq('order_id', orderId)
-      .eq('status', 'active')
-      .order('created_at'),
+    loadOrderItems(supabase, orderId),
     supabase
       .from('menu_categories')
       .select('id, name, name_en, color, sort_order')

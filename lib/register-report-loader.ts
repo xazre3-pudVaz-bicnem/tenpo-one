@@ -4,7 +4,8 @@ import { METHOD_LABELS } from '@/components/cash/labels';
 import { formatDateTime, weekdayJa } from '@/lib/format';
 import { kitchenTicketMarkup } from '@/lib/receipt-markup';
 import { kitchenTicketStarPrnt } from '@/lib/starprnt';
-import { kitchenTicketEpos } from '@/lib/epos-print';
+import { kitchenTicketEpos, eposCols } from '@/lib/epos-print';
+import { isCheckViolation, isMissingColumnError } from '@/lib/schema-compat';
 import {
   layoutRegisterReport,
   parseDenominations,
@@ -54,13 +55,20 @@ export async function loadRegisterReportData(
   supabase: AnyClient,
   sessionId: string
 ): Promise<{ data: RegisterReportData; storeId: string; organizationId: string } | null> {
-  const { data: session } = await supabase
+  const SESSION_COLUMNS =
+    'id, organization_id, store_id, register_id, business_date, status, opened_at, opened_by, closed_at, closed_by, opening_float, expected_cash, counted_cash, difference, difference_reason, note, registers(name), stores(name)';
+  let sessionRes = await supabase
     .from('register_sessions')
-    .select(
-      'id, organization_id, store_id, register_id, business_date, status, opened_at, opened_by, closed_at, closed_by, opening_float, expected_cash, counted_cash, difference, difference_reason, counted_denominations, note, registers(name), stores(name)'
-    )
+    .select(`${SESSION_COLUMNS}, counted_denominations`)
     .eq('id', sessionId)
     .maybeSingle();
+  if (sessionRes.error && isMissingColumnError(sessionRes.error.message, 'counted_denominations')) {
+    // migration 00062 未適用（金種列が無い）。金種表なしで精算レシートを出す
+    sessionRes = await supabase.from('register_sessions').select(SESSION_COLUMNS).eq('id', sessionId).maybeSingle();
+  }
+  const session = sessionRes.data as
+    | (Record<string, unknown> & { counted_denominations?: unknown })
+    | null;
   if (!session) return null;
 
   const storeId = session.store_id as string;
@@ -350,22 +358,30 @@ export async function enqueueRegisterReportPrint(
 
   const paper = printer.paper_width_mm === 58 ? 58 : 80;
   const lines = layoutRegisterReport(loaded.data, { paperWidth: paper });
-  const { error } = await supabase.from('print_jobs').insert({
+  // EPSON機は1行の桁数が少なく「¥」が全角幅のため、専用の桁数で組み直す（厨房伝票と同じ扱い）
+  const eposLines = layoutRegisterReport(loaded.data, { columns: eposCols(paper), yenFullWidth: true });
+  const job = (jobType: 'register_report' | 'receipt') => ({
     organization_id: loaded.organizationId,
     store_id: loaded.storeId,
     printer_config_id: printer.id,
-    job_type: 'register_report',
+    job_type: jobType,
     target: 'cloudprnt',
     content_type: RECEIPT_CONTENT_TYPE,
     payload: {
       body: kitchenTicketMarkup(lines),
       starprnt: kitchenTicketStarPrnt(lines).toString('base64'),
-      epos: kitchenTicketEpos(lines),
+      epos: kitchenTicketEpos(eposLines),
+      kind: 'register_report',
       register_session_id: sessionId,
     },
     status: 'queued',
     created_by: userId,
   });
+  let { error } = await supabase.from('print_jobs').insert(job('register_report'));
+  if (error && isCheckViolation(error.message, 'print_jobs_job_type_check')) {
+    // migration 00062 未適用（job_type に register_report が無い）。receipt として積んでも印字経路は同じ
+    ({ error } = await supabase.from('print_jobs').insert(job('receipt')));
+  }
   if (error) return { ok: false, error: `印刷ジョブの登録に失敗しました: ${error.message}` };
   return { ok: true };
 }

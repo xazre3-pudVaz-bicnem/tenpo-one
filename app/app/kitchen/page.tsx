@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { requireFeature, requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
+import { isMissingColumnError } from '@/lib/schema-compat';
 import { can } from '@/lib/permissions';
 import { PageHeader } from '@/components/ui/page-header';
 import { EmptyState } from '@/components/ui/state';
@@ -48,22 +49,31 @@ export default async function KitchenPage() {
   const sinceIso = new Date(new Date().getTime() - RECENT_SERVED_WINDOW_MS).toISOString();
 
   // KDS設定と調理対象の注文明細は独立のため並列取得する。
-  const [{ data: storeSettings }, { data: rows }] = await Promise.all([
-    supabase.from('store_settings').select('kds_settings').eq('store_id', store.id).maybeSingle(),
-    supabase
+  const kdsItemsQuery = (filterUnsent: boolean) => {
+    let q = supabase
       .from('order_items')
       .select(
         `id, order_id, menu_item_id, name, quantity, memo, modifiers, kitchen_status, created_at,
        orders!inner(order_no, order_source, status, restaurant_tables(name))`
       )
       .eq('store_id', store.id)
-      .eq('status', 'active')
-      // レジで貯めている途中（「厨房へオーダー」未押下）の品目は厨房に見せない
-      .not('kitchen_sent_at', 'is', null)
+      .eq('status', 'active');
+    // レジで貯めている途中（「厨房へオーダー」未押下）の品目は厨房に見せない
+    if (filterUnsent) q = q.not('kitchen_sent_at', 'is', null);
+    return q
       .eq('orders.status', 'open')
       .or(`kitchen_status.neq.served,served_at.gt.${sinceIso}`)
-      .order('created_at', { ascending: true }),
+      .order('created_at', { ascending: true });
+  };
+  const [{ data: storeSettings }, itemsRes] = await Promise.all([
+    supabase.from('store_settings').select('kds_settings').eq('store_id', store.id).maybeSingle(),
+    kdsItemsQuery(true),
   ]);
+  // migration 00063 未適用（kitchen_sent_at 列が無い）なら絞り込みなしで読み直す（従来どおり全品表示）
+  const rows =
+    itemsRes.error && isMissingColumnError(itemsRes.error.message, 'kitchen_sent_at')
+      ? (await kdsItemsQuery(false)).data
+      : itemsRes.data;
   const savedKdsSettings = storeSettings?.kds_settings as Partial<KdsSettings> | null;
   const kdsSettings: KdsSettings = {
     warn1: savedKdsSettings?.warn1 ?? DEFAULT_KDS_SETTINGS.warn1,
