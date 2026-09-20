@@ -101,6 +101,8 @@ export interface LayoutLine {
 
 export interface KitchenLayoutOptions {
   paperWidth?: PaperWidth;
+  /** 1行の桁数を直接指定する（EPSON機は用紙幅どおりだと右端で折り返すため少なくする） */
+  columns?: number;
   /** 伝票見出し（日本語。例: キッチン・ドリンク 伝票） */
   title: string;
   /** 伝票見出しの英語（例: KITCHEN / DRINK）。厨房伝票はこちらを主に出す */
@@ -111,7 +113,7 @@ export interface KitchenLayoutOptions {
 
 /** 伝票1枚ぶんの行を組み立てる。 */
 export function layoutKitchenTicket(ticket: KitchenTicket, opts: KitchenLayoutOptions): LayoutLine[] {
-  const width = colsFor(opts.paperWidth);
+  const width = opts.columns ?? colsFor(opts.paperWidth);
   const rule = '-'.repeat(width);
   const out: LayoutLine[] = [];
   const push = (text: string, size: LayoutLine['size'] = 'normal', align: LayoutLine['align'] = 'left') =>

@@ -17,7 +17,7 @@ import {
 } from '@/lib/kitchen-ticket';
 import { kitchenTicketMarkup, orderSlipMarkup } from '@/lib/receipt-markup';
 import { kitchenTicketStarPrnt, orderSlipStarPrnt } from '@/lib/starprnt';
-import { kitchenTicketEpos, orderSlipEposXml } from '@/lib/epos-print';
+import { kitchenTicketEpos, orderSlipEposXml, eposCols } from '@/lib/epos-print';
 import { selectQrOrdersToPrint, QR_BILL_WINDOW_MS } from '@/lib/qr-bill';
 
 export const MARKUP = 'text/vnd.star.markup';
@@ -142,6 +142,8 @@ export async function generateKitchenJobs(admin: Admin, printer: PrinterRow) {
 
   const rows = tickets.map((t) => {
     const lines = layoutKitchenTicket(t, { title, titleEn, printedAt, paperWidth });
+    // EPSON機は1行の桁数が少ないため、専用の桁数で組み直す（Star用の行をそのまま渡すと折り返す）
+    const eposLines = layoutKitchenTicket(t, { title, titleEn, printedAt, columns: eposCols(paperWidth) });
     return {
       organization_id: printer.organization_id,
       store_id: printer.store_id,
@@ -153,7 +155,7 @@ export async function generateKitchenJobs(admin: Admin, printer: PrinterRow) {
       payload: {
         body: kitchenTicketMarkup(lines),
         starprnt: kitchenTicketStarPrnt(lines).toString('base64'),
-        epos: kitchenTicketEpos(lines),
+        epos: kitchenTicketEpos(eposLines),
       },
       status: 'queued',
     };

@@ -15,11 +15,25 @@ export function colsFor(paperWidth?: PaperWidth): number {
 
 export const yen = (n: number): string => `¥${Math.round(n).toLocaleString('ja-JP')}`;
 
+/**
+ * 桁揃えの前提。
+ * EPSON機（ePOS-Print / 日本語フォント）は「¥」を全角幅で印字するため、半角として数えると
+ * 行が1桁ずつはみ出して末尾が折り返す（御茶ノ水の実機で確認）。Star機はCP932の半角￥なので1桁。
+ */
+export interface WidthOptions {
+  /** 「¥」を全角（2桁）として数える */
+  yenFullWidth?: boolean;
+}
+
 /** 表示幅（CJK全角=2, その他=1）。二段組の桁揃えに使う。 */
-export function dispWidth(s: string): number {
+export function dispWidth(s: string, options: WidthOptions = {}): number {
   let w = 0;
   for (const ch of s) {
     const c = ch.codePointAt(0) ?? 0;
+    if (ch === '¥' || ch === '￥') {
+      w += options.yenFullWidth ? 2 : 1;
+      continue;
+    }
     // CJK統合漢字/かな/全角記号/全角英数などを全角とみなす
     const wide =
       (c >= 0x1100 && c <= 0x115f) ||
@@ -34,10 +48,10 @@ export function dispWidth(s: string): number {
 }
 
 /** 左右2段組。1行に収まらなければ右側を次行の右寄せにする。 */
-export function twoCol(left: string, right: string, width: number): string {
-  const gap = width - dispWidth(left) - dispWidth(right);
+export function twoCol(left: string, right: string, width: number, options: WidthOptions = {}): string {
+  const gap = width - dispWidth(left, options) - dispWidth(right, options);
   if (gap >= 1) return left + ' '.repeat(gap) + right;
   // 収まらない場合は右を次行へ
-  const pad = Math.max(0, width - dispWidth(right));
+  const pad = Math.max(0, width - dispWidth(right, options));
   return `${left}\n${' '.repeat(pad)}${right}`;
 }

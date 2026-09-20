@@ -9,6 +9,7 @@ import {
   serverDirectPrintResponse,
   parsePrintResultXml,
   escXml,
+  eposCols,
   EPOS_NS,
 } from '@/lib/epos-print';
 import { groupKitchenTickets, layoutKitchenTicket, type ClaimedKitchenItem } from '@/lib/kitchen-ticket';
@@ -253,5 +254,65 @@ describe('parsePrintResultXml', () => {
 describe('escXml', () => {
   it('XMLの特殊文字を実体参照にする', () => {
     expect(escXml(`&<>"'`)).toBe('&amp;&lt;&gt;&quot;&apos;');
+  });
+});
+
+describe('行の桁数', () => {
+  /** 実機と同じ数え方の表示幅（EPSONは「¥」も全角で印字される）。 */
+  const printedWidth = (s: string) =>
+    [...s].reduce((n, ch) => {
+      const c = ch.codePointAt(0) ?? 0;
+      if (ch === '¥' || ch === '￥') return n + 2;
+      const wide =
+        (c >= 0x1100 && c <= 0x115f) ||
+        (c >= 0x2e80 && c <= 0xa4cf) ||
+        (c >= 0xac00 && c <= 0xd7a3) ||
+        (c >= 0xf900 && c <= 0xfaff) ||
+        (c >= 0xff00 && c <= 0xff60) ||
+        (c >= 0xffe0 && c <= 0xffe6);
+      return n + (wide ? 2 : 1);
+    }, 0);
+
+  /** XMLから印字される文字列の各行を取り出す。 */
+  const printedLines = (xml: string) =>
+    (xml.match(/<text>([^<]*)<\/text>/g) ?? [])
+      .map((t) => t.replace(/<\/?text>/g, ''))
+      .join('')
+      .split('&#10;')
+      .map((l) =>
+        l
+          .replace(/&amp;/g, '&')
+          .replace(/&lt;/g, '<')
+          .replace(/&gt;/g, '>')
+          .replace(/&quot;/g, '"')
+          .replace(/&apos;/g, "'")
+      );
+
+  const cases = [
+    ['レシート', receiptToEposXml(base, { paperWidth: 80 })],
+    ['領収書', ryoshushoToEposXml(base, { paperWidth: 80 })],
+  ] as const;
+
+  for (const [name, xml] of cases) {
+    it(`${name}はどの行も桁数に収まる（右端で折り返さない）`, () => {
+      const over = printedLines(xml).filter((l) => printedWidth(l) > eposCols(80));
+      expect(over).toEqual([]);
+    });
+  }
+
+  it('テスト印刷には桁位置を測る物差しが入る（実機の桁数を確かめるため）', () => {
+    const xml = testPrintEpos({ storeName: 'FULL MOoN 御茶ノ水', paperWidth: 80, issuedAt: '2026/09/20 19:53' });
+    const ruler = printedLines(xml).find((l) => l.startsWith('....+....1'));
+    expect(ruler).toBeDefined();
+    expect(ruler).toHaveLength(48); // 48桁ぶん。折り返した位置でその機種の桁数が分かる
+    expect(ruler?.slice(0, 40)).toBe('....+....1....+....2....+....3....+....4'); // 10桁ごとに数字が入る
+  });
+
+  it('58mm指定では桁数が狭くなる', () => {
+    expect(eposCols(58)).toBeLessThan(eposCols(80));
+    const over = printedLines(receiptToEposXml(base, { paperWidth: 58 })).filter(
+      (l) => printedWidth(l) > eposCols(58)
+    );
+    expect(over).toEqual([]);
   });
 });
