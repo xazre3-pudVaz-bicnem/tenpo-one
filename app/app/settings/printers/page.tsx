@@ -12,7 +12,7 @@ import { DrawerPanel } from '@/components/settings/drawer-panel';
 import { CloudPrntPanel } from '@/components/settings/cloudprnt-panel';
 import Link from 'next/link';
 import { KitchenTicketPanel } from '@/components/settings/kitchen-ticket-panel';
-import { kitchenTicketSplitFrom, misroutedDrinkCategories } from '@/lib/kitchen-ticket';
+import { kitchenTicketSettingsFrom, misroutedDrinkCategories } from '@/lib/kitchen-ticket';
 
 export const metadata: Metadata = { title: 'レジ・プリンター | 設定' };
 
@@ -109,7 +109,7 @@ export default async function PrintersSettingsPage() {
     autoOpenOnCash: drawer?.autoOpenOnCash ?? true,
     openOnCashless: drawer?.openOnCashless ?? false,
   };
-  const kitchenTicketSplit = kitchenTicketSplitFrom(settingsRow?.settings ?? null);
+  const kitchenTicket = kitchenTicketSettingsFrom(settingsRow?.settings ?? null);
 
   // ドリンク機があるのに、ドリンク商品のカテゴリが「ドリンク」に振り分けられていないと、その伝票はドリンク機に出ない
   const hasDrinkPrinter = cloudPrntRows.some(
@@ -166,7 +166,7 @@ export default async function PrintersSettingsPage() {
         <div className="min-w-0 space-y-5 @5xl:col-span-1">
           <RegistersPanel storeId={targetStore.id} initial={registerRows} />
           <DrawerPanel storeId={targetStore.id} initial={drawerInitial} />
-          <KitchenTicketPanel storeId={targetStore.id} initial={kitchenTicketSplit} />
+          <KitchenTicketPanel storeId={targetStore.id} initial={kitchenTicket} />
         </div>
         <div className="min-w-0 space-y-5 @5xl:col-span-2">
           {drinkCategoryWarnings.length > 0 && (

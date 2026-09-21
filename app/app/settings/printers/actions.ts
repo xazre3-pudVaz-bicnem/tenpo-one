@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import type { PrintResultStatus } from '@/lib/printing/types';
-import type { KitchenTicketSplit } from '@/lib/kitchen-ticket';
+import type { KitchenTicketSettings } from '@/lib/kitchen-ticket';
 
 export interface ActionResult {
   error?: string;
@@ -326,14 +326,18 @@ export async function saveDrawerSettings(storeId: string, drawer: DrawerSettings
 }
 
 /**
- * 厨房伝票の分け方を保存する（store_settings.settings の kitchenTicket キー。他のキーは壊さない）。
- * item=商品の種類ごとに1枚 / order=1回の注文をまとめて1枚。次のポーリングから反映される。
+ * 厨房伝票の分け方・文字の大きさ（店舗ごと。store_settings.settings.kitchenTicket）。
+ * settings の他の項目（ドロア・印字文字など）と kitchenTicket の他の項目は消さずに上書きする。
  */
-export async function saveKitchenTicketSplit(storeId: string, split: KitchenTicketSplit): Promise<ActionResult> {
+export async function saveKitchenTicketSettings(
+  storeId: string,
+  next: KitchenTicketSettings
+): Promise<ActionResult> {
   const ctx = await requirePermission('store.settings');
   const err = assertStoreAccess(ctx.stores.map((s) => s.id), storeId);
   if (err) return { error: err };
-  if (split !== 'item' && split !== 'order') return { error: '伝票の分け方が正しくありません' };
+  if (next.split !== 'item' && next.split !== 'order') return { error: '伝票の分け方が正しくありません' };
+  if (next.textSize !== 'large' && next.textSize !== 'normal') return { error: '文字の大きさが正しくありません' };
 
   const supabase = await createClient();
   const { data: existing } = await supabase
@@ -342,8 +346,11 @@ export async function saveKitchenTicketSplit(storeId: string, split: KitchenTick
     .eq('store_id', storeId)
     .maybeSingle();
   const current = (existing?.settings as Record<string, unknown> | null) ?? {};
-  const before = (current.kitchenTicket as { split?: string } | undefined)?.split ?? null;
-  const nextSettings = { ...current, kitchenTicket: { split } };
+  const before = (current.kitchenTicket as Record<string, unknown> | undefined) ?? {};
+  const nextSettings = {
+    ...current,
+    kitchenTicket: { ...before, split: next.split, textSize: next.textSize },
+  };
 
   const { error } = await supabase
     .from('store_settings')
@@ -359,8 +366,8 @@ export async function saveKitchenTicketSplit(storeId: string, split: KitchenTick
     p_action: 'settings.printers.kitchen_ticket_update',
     p_target_table: 'store_settings',
     p_target_id: storeId,
-    p_before: { split: before },
-    p_after: { split },
+    p_before: { split: before.split ?? null, textSize: before.textSize ?? null },
+    p_after: { split: next.split, textSize: next.textSize },
     p_note: null,
   });
 

@@ -13,21 +13,10 @@ import {
 } from '@/components/handy/logic';
 import type { PosOptionGroup } from '@/components/pos/option-dialog';
 import { submitHandyOrder } from '@/app/app/handy/actions';
+import { filterMenuBook } from '@/lib/menu-book';
+import { jstNowHm, loadMenuBook, loadOrderPlanState } from '@/lib/menu-book-server';
 
 export const metadata: Metadata = { title: '注文' };
-
-/** JSTの 'HH:MM'（販売時間帯の判定用。描画中ではなくリクエスト時に1回だけ求める） */
-function nowHmJst(): string {
-  const parts = new Intl.DateTimeFormat('en-GB', {
-    timeZone: 'Asia/Tokyo',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  }).formatToParts(new Date());
-  const h = parts.find((p) => p.type === 'hour')?.value ?? '00';
-  const m = parts.find((p) => p.type === 'minute')?.value ?? '00';
-  return `${h}:${m}`;
-}
 
 function problem(tableId: string, message: string) {
   return (
@@ -80,7 +69,7 @@ export default async function HandyOrderPage({
     return problem(tableId, 'この伝票には注文できません。既に会計済み・取消済みの可能性があります。');
   }
 
-  const [{ data: categories }, { data: menuItems }, { data: optionLinks }] = await Promise.all([
+  const [{ data: categories }, { data: menuItems }, { data: optionLinks }, menuBook, plan] = await Promise.all([
     supabase
       .from('menu_categories')
       .select('id, name, name_en, station, sort_order')
@@ -108,6 +97,9 @@ export default async function HandyOrderPage({
       .eq('store_id', store.id)
       .eq('menu_option_groups.status', 'active')
       .order('sort_order'),
+    // メニューブック（店長が決めたカテゴリの出し方）と、この伝票に入っているプラン（飲み放題など）
+    loadMenuBook(supabase, store.id),
+    loadOrderPlanState(supabase, order.id),
   ]);
 
   // 商品ごとの選択肢グループ（POS画面と同じ構造・同じダイアログを使う）
@@ -166,7 +158,10 @@ export default async function HandyOrderPage({
     hasOptions: !!optionGroupsByItem[m.id],
   }));
 
-  const groups = buildMenuGroups(categoryInputs, itemInputs, nowHmJst());
+  // ハンディに出すカテゴリだけに絞る（アラカルトの伝票には飲み放題の F などを出さない。レジは今まで通り全部出す）
+  const nowHm = jstNowHm();
+  const visible = filterMenuBook(categoryInputs, itemInputs, menuBook, { channel: 'handy', plan, nowHm });
+  const groups = buildMenuGroups(visible.categories, visible.items, nowHm);
   const tableName = (order.restaurant_tables as unknown as { name: string } | null)?.name ?? '—';
 
   return (
