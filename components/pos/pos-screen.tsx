@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   Minus, Plus, X, ArrowLeft, Split, Combine, ArrowRightLeft, Search, Star, Flame, User, XCircle,
-  FilePlus, Printer, Users, ChefHat,
+  FilePlus, Printer, Users, ChefHat, Settings,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { yen } from '@/lib/format';
@@ -482,6 +482,15 @@ export function PosScreen({
               <User className="h-3.5 w-3.5" />
               {linkedCustomer ? linkedCustomer.name : '顧客未設定 / No customer'}
             </button>
+            {/* レジの設定（厨房伝票・品切れ・メニューなど）。戻るとこの伝票に戻る */}
+            <Link
+              href={`/app/pos/settings?order=${order.id}`}
+              aria-label="レジの設定"
+              className="flex items-center gap-1 rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-200"
+            >
+              <Settings className="h-3.5 w-3.5" aria-hidden />
+              設定
+            </Link>
           </div>
         </div>
 

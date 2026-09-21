@@ -21,6 +21,7 @@ import {
   PAGE_NAME_MAX,
   type MenuBookLunch,
   type MenuBookShow,
+  type MenuBookTab,
 } from '@/lib/menu-book';
 import { RESERVATION_TIME_OPTIONS } from '@/lib/reservation-time';
 import { MenuItemDialog, type MenuItemRow } from './menu-item-dialog';
@@ -55,7 +56,7 @@ export interface MenuBookPlanRow {
   categoryIds: string[] | null;
 }
 
-type Tab = 'categories' | 'pages' | 'items' | 'plans' | 'lunch';
+type Tab = MenuBookTab;
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'categories', label: 'カテゴリの順番・出し方' },
@@ -605,6 +606,7 @@ export function MenuBookEditor({
   joinPrev,
   pageNames,
   taxRates,
+  initialTab,
 }: {
   storeId: string;
   categories: MenuBookCategoryRow[];
@@ -614,8 +616,10 @@ export function MenuBookEditor({
   joinPrev: string[];
   pageNames: Record<string, string>;
   taxRates: { id: string; name: string }[];
+  /** 最初に開くタブ（?tab=。レジの設定から「ページ」「プラン」などを直接開く） */
+  initialTab?: MenuBookTab;
 }) {
-  const [tab, setTab] = useState<Tab>('categories');
+  const [tab, setTab] = useState<Tab>(initialTab ?? 'categories');
   const categoryKey = categories.map((c) => `${c.id}:${c.show}:${c.sortOrder}`).join('|');
   const pagesKey = `${joinPrev.join(',')}#${JSON.stringify(pageNames)}#${categoryKey}`;
   const planCategories = categories.filter((c) => effectiveShow(c.show, c.autoShow) === 'plan');
