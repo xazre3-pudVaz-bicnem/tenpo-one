@@ -10,6 +10,7 @@ import { EmptyState } from '@/components/ui/state';
 import { useToast } from '@/components/ui/toast';
 import { getOccupiedTableIds } from '@/app/app/reservations/actions';
 import { suggestTables, type TableLike } from '@/lib/reservations';
+import { RESERVATION_TIME_STEP, STAY_MINUTE_OPTIONS, stayOptionLabel } from '@/lib/reservation-time';
 import { cn } from '@/lib/utils';
 
 export interface FindSeatsTable {
@@ -19,7 +20,6 @@ export interface FindSeatsTable {
   capacityMax: number;
 }
 
-const STAY_OPTIONS = [60, 90, 120, 150, 180];
 const QUICK_TIMES = ['11:30', '12:00', '13:00', '17:00', '18:00', '19:00', '20:00', '21:00'];
 
 interface SearchResult {
@@ -109,7 +109,7 @@ export function FindSeatsDialog({
           </div>
           <div>
             <Label htmlFor="fs-time">時間</Label>
-            <Input id="fs-time" type="time" step={1800} value={time} onChange={(e) => setTime(e.target.value)} />
+            <Input id="fs-time" type="time" step={RESERVATION_TIME_STEP * 60} value={time} onChange={(e) => setTime(e.target.value)} />
           </div>
           <div>
             <Label htmlFor="fs-party">人数</Label>
@@ -124,9 +124,9 @@ export function FindSeatsDialog({
           <div>
             <Label htmlFor="fs-stay">滞在時間</Label>
             <Select id="fs-stay" value={stay} onChange={(e) => setStay(Number(e.target.value))}>
-              {STAY_OPTIONS.map((m) => (
+              {STAY_MINUTE_OPTIONS.map((m) => (
                 <option key={m} value={m}>
-                  {m}分
+                  {stayOptionLabel(m)}
                 </option>
               ))}
             </Select>

@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { canTransition, RESERVATION_STATUS, type ReservationStatus } from '@/lib/reservations';
+import { isValidStayMinutes } from '@/lib/reservation-time';
 import { MOVABLE_STATUSES, OCCUPYING_STATUSES } from '@/components/reservations/constants';
 import { todayJst } from '@/lib/format';
 
@@ -357,6 +358,8 @@ export async function moveReservation(reservationId: string, input: MoveReservat
   }
   const startAt = new Date(`${input.date}T${input.time}:00+09:00`);
   if (Number.isNaN(startAt.getTime())) throw new Error('日時の形式が正しくありません');
+  // 滞在時間は画面の選択肢（15分単位＋元の予約の値）から来る。壊れた値で終了時刻を作らない
+  if (!isValidStayMinutes(input.stayMinutes)) throw new Error('滞在時間が正しくありません');
   const endAt = new Date(startAt.getTime() + input.stayMinutes * 60000);
 
   const { error } = await supabase
