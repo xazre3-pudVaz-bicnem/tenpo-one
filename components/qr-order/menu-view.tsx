@@ -3,100 +3,185 @@
 import { useMemo, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { yen } from '@/lib/format';
-import { Badge } from '@/components/ui/badge';
 import { useQrStrings, useQrLocale, localizedName } from './strings-context';
-import { isPublicImageUrl, type QrMenuCategory, type QrMenuItem } from './types';
+import { itemQuantityInCart, orderableCategories, RECOMMENDED_TAB_ID } from './logic';
+import { isPublicImageUrl, type CartLine, type QrMenuCategory, type QrMenuItem } from './types';
+import { DishArt, QrEmpty, QrNote } from './ui';
 
-/** カテゴリタブの先頭に差し込む「おすすめ」擬似カテゴリのID */
-const RECOMMENDED_TAB_ID = '__recommended__';
-
+/**
+ * メニュータブ。承認済みレイアウトに合わせて
+ *   卓のカード → 分類の横スクロールタブ（濃いプラムの帯） → 写真つき商品カード2列
+ * の並びにする。商品が0件の分類はタブに出さない。
+ */
 export function MenuView({
+  tableName,
   categories,
+  cart,
   onSelectItem,
+  onQuickAdd,
 }: {
+  tableName: string;
   categories: QrMenuCategory[];
+  cart: CartLine[];
   onSelectItem: (item: QrMenuItem) => void;
+  onQuickAdd: (item: QrMenuItem) => void;
 }) {
   const qrStrings = useQrStrings();
   const locale = useQrLocale();
-  const recommendedItems = useMemo(() => categories.flatMap((c) => c.items.filter((i) => i.is_recommended)), [categories]);
 
-  const tabs: QrMenuCategory[] = useMemo(() => {
-    if (recommendedItems.length === 0) return categories;
-    return [
-      { id: RECOMMENDED_TAB_ID, name: qrStrings.menu.recommendedCategoryName, name_en: null, color: '#CA8A04', items: recommendedItems },
-      ...categories,
-    ];
-  }, [categories, recommendedItems, qrStrings.menu.recommendedCategoryName]);
+  const tabs = useMemo(
+    () => orderableCategories(categories, qrStrings.menu.recommendedCategoryName),
+    [categories, qrStrings.menu.recommendedCategoryName]
+  );
 
-  const [activeId, setActiveId] = useState(tabs[0]?.id ?? '');
+  const [activeId, setActiveId] = useState<string | null>(null);
   const active = tabs.find((c) => c.id === activeId) ?? tabs[0] ?? null;
 
-  if (tabs.length === 0) {
-    return <p className="px-4 py-16 text-center text-sm text-gray-400">{qrStrings.menu.empty}</p>;
+  if (!active) {
+    return <QrEmpty>{qrStrings.menu.empty}</QrEmpty>;
   }
 
   return (
     <div>
-      <div className="flex gap-2 overflow-x-auto border-b border-gray-100 bg-white px-3 py-2">
-        {tabs.map((c) => (
-          <button
-            key={c.id}
-            type="button"
-            onClick={() => setActiveId(c.id)}
-            className={cn(
-              'shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition-colors',
-              active?.id === c.id ? 'text-white' : 'bg-gray-100 text-gray-600'
-            )}
-            style={active?.id === c.id ? { backgroundColor: c.color ?? '#7B3FF2' } : undefined}
-          >
-            {c.id === RECOMMENDED_TAB_ID ? c.name : localizedName(locale, c.name, c.name_en)}
-          </button>
-        ))}
+      <section className="px-3 pb-2.5 pt-2.5">
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-line bg-white px-3 py-2.5">
+          <div className="min-w-0">
+            <b className="block truncate text-[11px] font-bold text-ink">{tableName}</b>
+            <small className="mt-0.5 block text-[9px] text-ink-3">{qrStrings.visit.hint}</small>
+          </div>
+          <span className="shrink-0 rounded-md bg-lilac px-2 py-1 text-[9px] font-semibold text-iris">
+            {qrStrings.visit.badge}
+          </span>
+        </div>
+      </section>
+
+      {/* 分類タブ：横スクロール。濃いプラムの帯の上に立つタブ */}
+      <div className="flex gap-1 overflow-x-auto border-b-[3px] border-iris bg-plum px-2.5 pt-2 [scrollbar-width:none]">
+        {tabs.map((category, index) => {
+          const selected = active.id === category.id;
+          return (
+            <button
+              key={category.id}
+              type="button"
+              aria-pressed={selected}
+              onClick={() => setActiveId(category.id)}
+              className={cn(
+                'flex min-h-[62px] w-[88px] shrink-0 flex-col items-center justify-center gap-0.5 rounded-t-xl border px-2.5 py-1.5 text-[11px] font-bold leading-tight',
+                selected
+                  ? 'border-line bg-lilac-soft text-iris'
+                  : 'border-[#59416f] bg-plum-2 text-[#c4afd8]'
+              )}
+            >
+              <b className="font-num text-lg leading-none">{index + 1}</b>
+              <span className="line-clamp-2 text-center">
+                {category.id === RECOMMENDED_TAB_ID
+                  ? category.name
+                  : localizedName(locale, category.name, category.name_en)}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
-      <ul className="divide-y divide-gray-100 bg-white">
-        {(active?.items ?? []).length === 0 ? (
-          <li className="px-4 py-12 text-center text-sm text-gray-400">{qrStrings.menu.categoryEmpty}</li>
+      <div className="bg-white">
+        <div className="flex items-center justify-between px-3 pb-2 pt-3.5">
+          <h2 className="text-sm font-bold text-ink">
+            {active.id === RECOMMENDED_TAB_ID ? active.name : localizedName(locale, active.name, active.name_en)}
+          </h2>
+          <span className="font-num text-[10px] text-ink-3">{qrStrings.menu.countSuffix(active.items.length)}</span>
+        </div>
+
+        {active.items.length === 0 ? (
+          <QrEmpty>{qrStrings.menu.categoryEmpty}</QrEmpty>
         ) : (
-          active!.items.map((item) => (
-            <li key={item.id}>
-              <button
-                type="button"
-                disabled={item.is_sold_out}
-                onClick={() => onSelectItem(item)}
-                className={cn(
-                  'flex w-full items-start justify-between gap-3 px-4 py-4 text-left',
-                  item.is_sold_out ? 'opacity-50' : 'active:bg-gray-50'
-                )}
-              >
-                <div className="flex min-w-0 gap-3">
-                  {isPublicImageUrl(item.image_path) && (
-                    // eslint-disable-next-line @next/next/no-img-element -- 匿名向け公開URLのみ許可されるため next/image の最適化対象外
-                    <img src={item.image_path} alt="" className="h-14 w-14 shrink-0 rounded-lg object-cover" />
-                  )}
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <p className={cn('text-sm font-bold', item.is_sold_out ? 'text-gray-400' : 'text-navy')}>
-                        {localizedName(locale, item.name, item.name_en)}
-                      </p>
-                      {item.is_recommended && <Badge tone="warning">{qrStrings.menu.recommendedBadge}</Badge>}
-                    </div>
-                    {item.description && <p className="mt-0.5 text-xs text-gray-500">{item.description}</p>}
-                  </div>
-                </div>
-                <div className="shrink-0 text-right">
-                  {item.is_sold_out ? (
-                    <Badge tone="gray">{qrStrings.menu.soldOutBadge}</Badge>
-                  ) : (
-                    <span className="text-sm font-bold tabular-nums text-primary-deep">{yen(item.price)}</span>
-                  )}
-                </div>
-              </button>
-            </li>
-          ))
+          <ul className="grid grid-cols-2 gap-2 px-2.5 pb-4">
+            {active.items.map((item) => (
+              <MenuCard
+                key={item.id}
+                item={item}
+                quantity={itemQuantityInCart(cart, item.id)}
+                onOpen={() => onSelectItem(item)}
+                onAdd={() => (item.modifiers.length > 0 ? onSelectItem(item) : onQuickAdd(item))}
+              />
+            ))}
+          </ul>
         )}
-      </ul>
+      </div>
+
+      <QrNote className="pt-3">{qrStrings.menu.note}</QrNote>
     </div>
+  );
+}
+
+function MenuCard({
+  item,
+  quantity,
+  onOpen,
+  onAdd,
+}: {
+  item: QrMenuItem;
+  quantity: number;
+  onOpen: () => void;
+  onAdd: () => void;
+}) {
+  const qrStrings = useQrStrings();
+  const locale = useQrLocale();
+  const displayName = localizedName(locale, item.name, item.name_en);
+
+  return (
+    <li
+      className={cn(
+        'relative rounded-[10px] border border-line bg-white p-2',
+        item.is_sold_out && 'opacity-55'
+      )}
+    >
+      <button
+        type="button"
+        disabled={item.is_sold_out}
+        onClick={onOpen}
+        className="block w-full text-left"
+      >
+        {isPublicImageUrl(item.image_path) ? (
+          // eslint-disable-next-line @next/next/no-img-element -- 匿名向け公開URLのみ許可されるため next/image の最適化対象外
+          <img
+            src={item.image_path}
+            alt={qrStrings.itemSheet.imageAlt(displayName)}
+            loading="lazy"
+            decoding="async"
+            className="aspect-[4/3] w-full rounded-lg object-cover"
+          />
+        ) : (
+          <DishArt />
+        )}
+        <div className="pb-9 pt-2">
+          <b className="block text-[11px] font-bold leading-snug text-ink [overflow-wrap:anywhere]">{displayName}</b>
+          {item.is_sold_out ? (
+            <span className="mt-1.5 inline-block rounded bg-lilac px-1.5 py-0.5 text-[9px] font-semibold text-ink-3">
+              {qrStrings.menu.soldOutBadge}
+            </span>
+          ) : (
+            <strong className="mt-1.5 block font-num text-[13px] font-bold text-[#5e4777]">
+              {yen(item.price)} <em className="text-[8px] font-medium not-italic text-ink-3">{qrStrings.menu.taxIncluded}</em>
+            </strong>
+          )}
+          {item.is_recommended && !item.is_sold_out && (
+            <span className="mt-1 inline-block rounded bg-saffron-soft px-1.5 py-0.5 text-[9px] font-semibold text-saffron">
+              {qrStrings.menu.recommendedBadge}
+            </span>
+          )}
+        </div>
+      </button>
+
+      {!item.is_sold_out && (
+        <button
+          type="button"
+          aria-label={qrStrings.menu.addAria(displayName)}
+          onClick={onAdd}
+          className="absolute bottom-2 right-2 flex h-9 w-9 items-center justify-center rounded-full border border-line bg-lilac font-num text-base font-bold leading-none text-iris active:scale-95"
+        >
+          {quantity > 0 ? quantity : '＋'}
+        </button>
+      )}
+    </li>
   );
 }

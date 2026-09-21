@@ -3907,6 +3907,7 @@ export type Database = {
           group_id: string
           id: string
           name: string
+          name_en: string | null
           organization_id: string
           price: number
           sort_order: number
@@ -3921,6 +3922,7 @@ export type Database = {
           group_id: string
           id?: string
           name: string
+          name_en?: string | null
           organization_id: string
           price?: number
           sort_order?: number
@@ -3935,6 +3937,7 @@ export type Database = {
           group_id?: string
           id?: string
           name?: string
+          name_en?: string | null
           organization_id?: string
           price?: number
           sort_order?: number
@@ -4238,6 +4241,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           id: string
+          kitchen_printed_qty: number
           kitchen_ready_at: string | null
           kitchen_sent_at: string | null
           kitchen_started_at: string | null
@@ -4266,6 +4270,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          kitchen_printed_qty?: number
           kitchen_ready_at?: string | null
           kitchen_sent_at?: string | null
           kitchen_started_at?: string | null
@@ -4294,6 +4299,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          kitchen_printed_qty?: number
           kitchen_ready_at?: string | null
           kitchen_sent_at?: string | null
           kitchen_started_at?: string | null
@@ -5514,6 +5520,7 @@ export type Database = {
           id: string
           ip_address: string | null
           is_verified: boolean
+          kitchen_stations: string[]
           last_connected_at: string | null
           last_polled_at: string | null
           mac_address: string | null
@@ -5541,6 +5548,7 @@ export type Database = {
           id?: string
           ip_address?: string | null
           is_verified?: boolean
+          kitchen_stations?: string[]
           last_connected_at?: string | null
           last_polled_at?: string | null
           mac_address?: string | null
@@ -5568,6 +5576,7 @@ export type Database = {
           id?: string
           ip_address?: string | null
           is_verified?: boolean
+          kitchen_stations?: string[]
           last_connected_at?: string | null
           last_polled_at?: string | null
           mac_address?: string | null
@@ -6598,6 +6607,84 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: true
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      service_calls: {
+        Row: {
+          created_at: string
+          id: string
+          kind: string
+          note: string | null
+          order_id: string | null
+          organization_id: string
+          resolved_at: string | null
+          resolved_by: string | null
+          status: string
+          store_id: string
+          table_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          kind: string
+          note?: string | null
+          order_id?: string | null
+          organization_id: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: string
+          store_id: string
+          table_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          kind?: string
+          note?: string | null
+          order_id?: string | null
+          organization_id?: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: string
+          store_id?: string
+          table_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_calls_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_calls_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_calls_resolved_by_fkey"
+            columns: ["resolved_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_calls_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_calls_table_id_fkey"
+            columns: ["table_id"]
+            isOneToOne: false
+            referencedRelation: "restaurant_tables"
             referencedColumns: ["id"]
           },
         ]
@@ -8167,6 +8254,29 @@ export type Database = {
         Args: { p_code: string; p_phone: string; p_reason: string }
         Returns: Json
       }
+      claim_kitchen_items: {
+        Args: {
+          p_batch_delay_seconds?: number
+          p_printer: string
+          p_window_minutes?: number
+        }
+        Returns: {
+          changed_at: string
+          clerk_name: string
+          delta: number
+          guest_count: number
+          item_name: string
+          item_name_en: string
+          item_name_kana: string
+          memo: string
+          modifiers: Json
+          order_id: string
+          order_item_id: string
+          order_no: number
+          station: string
+          table_name: string
+        }[]
+      }
       close_accounting_period: {
         Args: { p_month: string; p_org: string }
         Returns: Json
@@ -8210,6 +8320,10 @@ export type Database = {
         Args: { p_items: Json; p_slug: string; p_token: string }
         Returns: Json
       }
+      create_qr_service_call: {
+        Args: { p_kind: string; p_slug: string; p_token: string }
+        Returns: Json
+      }
       finalize_order: {
         Args: {
           p_order_id: string
@@ -8246,6 +8360,10 @@ export type Database = {
         Returns: Json
       }
       get_qr_reserved_course: {
+        Args: { p_slug: string; p_token: string }
+        Returns: Json
+      }
+      get_qr_service_calls: {
         Args: { p_slug: string; p_token: string }
         Returns: Json
       }

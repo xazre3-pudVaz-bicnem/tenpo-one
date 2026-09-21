@@ -1,28 +1,53 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Bell, LayoutGrid, ReceiptText, ShoppingCart } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
+import { yen } from '@/lib/format';
 import { MenuView } from './menu-view';
 import { ItemSheet } from './item-sheet';
-import { CartBar } from './cart-bar';
-import { ConfirmView } from './confirm-view';
-import { SuccessView } from './success-view';
-import { OrderStatusView } from './order-status-view';
+import { CartView } from './cart-view';
+import { HistoryView } from './history-view';
+import { CallView } from './call-view';
 import { QR_STRINGS, type QrLocale } from './strings';
 import { QrStringsProvider } from './strings-context';
 import {
-  cartLineUnitPrice,
+  addCartLine,
+  cartCount,
+  cartTotal,
+  changeCartQuantity,
+  openServiceCall,
+  parseServiceCalls,
+  removeCartLine,
+} from './logic';
+import {
   qrOrderErrorMessage,
-  sameModifiers,
+  qrServiceCallErrorMessage,
   type CartLine,
   type QrMenuData,
   type QrMenuItem,
   type QrMenuModifier,
+  type QrOrderStatus,
+  type QrServiceCall,
+  type ServiceCallKind,
 } from './types';
 
-type Screen = 'menu' | 'confirm' | 'success';
-type Tab = 'order' | 'status';
+/**
+ * お客様QR画面（承認済みレイアウト 2026-09-21）。
+ * ヘッダーは店名のみ、下部固定でメニュー／カート／履歴・会計／呼び出しの4タブ、最下部に Powered by。
+ * 配色は /app（.theme-regi）に依存しないよう、この画面内でプラム・藤色・アイリスを指定する。
+ */
+
+/**
+ * 注文状況と呼び出し状況の自動更新間隔（ミリ秒）。
+ * QRのお客様はSupabaseの認証セッションを持たない匿名アクセスで、Realtimeの postgres_changes 購読は
+ * RLS評価に auth.uid() 等を要するため利用できない。KDS/フロア等と異なりこの画面はポーリングを維持する。
+ */
+const REFRESH_INTERVAL_MS = 10000;
+const NOTICE_MS = 3200;
+
+type Tab = 'menu' | 'cart' | 'history' | 'call';
 
 export interface ReservedCourse {
   name: string;
@@ -30,6 +55,44 @@ export interface ReservedCourse {
   includes_drinks: boolean | null;
   duration_minutes: number | null;
   notes: string | null;
+}
+
+/** 送信済み注文（get_qr_order_status）と未対応の呼び出し（get_qr_service_calls）を同じ間隔で取得する */
+function useQrTableState(storeSlug: string, tableToken: string) {
+  const [status, setStatus] = useState<QrOrderStatus | null>(null);
+  const [calls, setCalls] = useState<QrServiceCall[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    const supabase = createClient();
+    const [statusResult, callsResult] = await Promise.all([
+      supabase.rpc('get_qr_order_status', { p_slug: storeSlug, p_token: tableToken }),
+      supabase.rpc('get_qr_service_calls', { p_slug: storeSlug, p_token: tableToken }),
+    ]);
+    if (statusResult.error || !statusResult.data) {
+      // 取得できなかったことを隠さない。直前に取れた内容はそのまま残す
+      setFetchError(qrOrderErrorMessage(statusResult.error?.message));
+    } else {
+      setStatus(statusResult.data as QrOrderStatus);
+      setFetchError(null);
+    }
+    if (!callsResult.error) setCalls(parseServiceCalls(callsResult.data));
+    setLoading(false);
+  }, [storeSlug, tableToken]);
+
+  useEffect(() => {
+    // 同期的な setState を避けるため、初回取得も非同期関数として呼ぶ
+    (async () => {
+      await refresh();
+    })();
+    const id = setInterval(() => {
+      void refresh();
+    }, REFRESH_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, [refresh]);
+
+  return { status, calls, setCalls, loading, fetchError, refresh };
 }
 
 export function QrOrderApp({
@@ -43,49 +106,41 @@ export function QrOrderApp({
   menu: QrMenuData;
   reservedCourse?: ReservedCourse | null;
 }) {
-  const [screen, setScreen] = useState<Screen>('menu');
-  const [tab, setTab] = useState<Tab>('order');
+  const [tab, setTab] = useState<Tab>('menu');
   const [locale, setLocale] = useState<QrLocale>('ja');
   const qrStrings = QR_STRINGS[locale];
   const [cart, setCart] = useState<CartLine[]>([]);
   const [selectedItem, setSelectedItem] = useState<QrMenuItem | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [calling, setCalling] = useState(false);
+  const [callError, setCallError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const mainRef = useRef<HTMLElement>(null);
+  // カート行のキー。描画中に値が変わらないよう、操作のたびに採番する
+  const lineSeq = useRef(0);
+
+  const { status, calls, setCalls, loading, fetchError, refresh } = useQrTableState(storeSlug, tableToken);
+
+  useEffect(() => {
+    if (!notice) return;
+    const id = setTimeout(() => setNotice(null), NOTICE_MS);
+    return () => clearTimeout(id);
+  }, [notice]);
+
+  const goToTab = (next: Tab) => {
+    setTab(next);
+    mainRef.current?.scrollTo({ top: 0 });
+  };
 
   const addToCart = (item: QrMenuItem, quantity: number, memo: string, modifiers: QrMenuModifier[]) => {
-    setCart((prev) => {
-      const idx = prev.findIndex((l) => l.menuItemId === item.id && l.memo === memo && sameModifiers(l.modifiers, modifiers));
-      if (idx >= 0) {
-        const next = [...prev];
-        next[idx] = { ...next[idx], quantity: next[idx].quantity + quantity };
-        return next;
-      }
-      return [
-        ...prev,
-        {
-          key: `${item.id}_${Date.now()}_${Math.random().toString(36).slice(2)}`,
-          menuItemId: item.id,
-          name: item.name,
-          price: item.price,
-          quantity,
-          memo,
-          modifiers,
-        },
-      ];
-    });
+    lineSeq.current += 1;
+    const key = `${item.id}_${lineSeq.current}`;
+    setCart((prev) => addCartLine(prev, item, quantity, memo, modifiers, key));
   };
 
-  // カートが空になった状態で確認画面に留まらないようにする（削除操作の一環として画面遷移する）
-  const removeFromCart = (key: string) => {
-    setCart((prev) => {
-      const next = prev.filter((l) => l.key !== key);
-      if (next.length === 0) setScreen('menu');
-      return next;
-    });
-  };
-
-  const cartCount = cart.reduce((sum, l) => sum + l.quantity, 0);
-  const cartTotal = cart.reduce((sum, l) => sum + cartLineUnitPrice(l) * l.quantity, 0);
+  const count = cartCount(cart);
+  const total = cartTotal(cart);
 
   const handleSubmit = async () => {
     setSubmitting(true);
@@ -109,111 +164,207 @@ export function QrOrderApp({
       }
       setCart([]);
       setSubmitting(false);
-      setScreen('success');
+      setNotice(qrStrings.cart.sent);
+      goToTab('history');
+      await refresh();
     } catch {
       setSubmitError(qrOrderErrorMessage(null));
       setSubmitting(false);
     }
   };
 
+  const handleCall = async (kind: ServiceCallKind) => {
+    setCalling(true);
+    setCallError(null);
+    try {
+      const supabase = createClient();
+      const { data, error } = await supabase.rpc('create_qr_service_call', {
+        p_slug: storeSlug,
+        p_token: tableToken,
+        p_kind: kind,
+      });
+      if (error || !data) {
+        setCallError(qrServiceCallErrorMessage(error?.message));
+        setCalling(false);
+        return;
+      }
+      // 送信できたときだけ「呼び出し中」に変える。表示は次のポーリングでサーバー側と一致する
+      const created = data as { kind?: string; created_at?: string };
+      setCalls((prev) =>
+        openServiceCall(prev, kind)
+          ? prev
+          : [...prev, { kind, created_at: typeof created.created_at === 'string' ? created.created_at : '' }]
+      );
+      setCalling(false);
+      setNotice(kind === 'checkout' ? qrStrings.history.checkoutPending : qrStrings.call.pending);
+      await refresh();
+    } catch {
+      setCallError(qrServiceCallErrorMessage(null));
+      setCalling(false);
+    }
+  };
+
+  const navItems: { id: Tab; label: string; icon: typeof LayoutGrid }[] = [
+    { id: 'menu', label: qrStrings.nav.menu, icon: LayoutGrid },
+    { id: 'cart', label: qrStrings.nav.cart, icon: ShoppingCart },
+    { id: 'history', label: qrStrings.nav.history, icon: ReceiptText },
+    { id: 'call', label: qrStrings.nav.call, icon: Bell },
+  ];
+
   return (
     <QrStringsProvider locale={locale}>
-    <div className="flex min-h-screen flex-col bg-surface">
-      <div className="sticky top-0 z-30 bg-white shadow-sm">
-        <div className="relative px-4 py-3 text-center">
-          <p className="text-sm font-bold text-navy">{menu.store_name}</p>
-          <p className="text-xs text-gray-500">{menu.table_name}</p>
-          {/* 言語切替（JA/EN）。商品名・価格は実データのため翻訳せず、UI文言のみ切替 */}
-          <div className="absolute right-3 top-1/2 flex -translate-y-1/2 overflow-hidden rounded-full border border-gray-200 text-[11px]">
-            {(['ja', 'en'] as const).map((l) => (
-              <button
-                key={l}
-                type="button"
-                onClick={() => setLocale(l)}
-                className={locale === l ? 'bg-primary px-2 py-0.5 font-semibold text-white' : 'px-2 py-0.5 text-gray-500'}
-              >
-                {l === 'ja' ? '日本語' : 'EN'}
-              </button>
-            ))}
-          </div>
-        </div>
+      <div className="flex h-[100dvh] flex-col overflow-hidden bg-lilac-soft text-ink">
+        {/* ヘッダーは店名のみ（ロゴ・ベルは置かない）。言語切替だけ端に小さく添える */}
+        <header className="relative flex-none bg-plum px-12 py-4 text-center">
+          <p className="text-[21px] font-bold leading-snug text-white [overflow-wrap:anywhere]">{menu.store_name}</p>
+          {/* 言語切替は控えめに。ロゴやベルはヘッダーに置かない */}
+          <button
+            type="button"
+            onClick={() => setLocale(locale === 'ja' ? 'en' : 'ja')}
+            aria-label={locale === 'ja' ? 'Switch to English' : '日本語に切り替える'}
+            className="absolute right-3 top-1/2 min-h-9 -translate-y-1/2 rounded-full border border-white/25 px-2.5 py-1 font-num text-[10px] font-semibold text-[#c4afd8]"
+          >
+            {locale === 'ja' ? 'EN' : 'JA'}
+          </button>
+        </header>
+
         {reservedCourse && (
-          <div className="border-t border-primary/20 bg-primary-soft/60 px-4 py-2 text-center">
-            <p className="text-xs font-semibold text-primary-deep">
-              ご予約コース：{reservedCourse.name}
-            </p>
-            <p className="text-[11px] text-primary-deep/80">
+          <div className="flex-none border-b border-line bg-lilac px-4 py-2 text-center">
+            <p className="text-[11px] font-bold text-[#5e4777]">ご予約コース：{reservedCourse.name}</p>
+            <p className="mt-0.5 text-[10px] leading-relaxed text-ink-3">
               {[
                 reservedCourse.includes_ayce && '食べ放題',
                 reservedCourse.includes_drinks && '飲み放題',
                 reservedCourse.duration_minutes && `${reservedCourse.duration_minutes}分`,
-              ].filter(Boolean).join('・')}
-              {' '}※コースは注文不要です。追加のご注文のみお選びください
+              ]
+                .filter(Boolean)
+                .join('・')}{' '}
+              ※コースは注文不要です。追加のご注文のみお選びください
             </p>
           </div>
         )}
-        {screen === 'menu' && (
-          <div className="flex border-t border-gray-100">
-            {(['order', 'status'] as const).map((t) => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => setTab(t)}
-                className={cn(
-                  'flex-1 py-2.5 text-sm font-semibold transition-colors',
-                  tab === t ? 'border-b-2 border-primary text-primary-deep' : 'text-gray-400'
-                )}
-              >
-                {t === 'order' ? qrStrings.header.orderTab : qrStrings.header.statusTab}
-              </button>
-            ))}
+
+        <main ref={mainRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+          {tab === 'menu' && (
+            <MenuView
+              tableName={menu.table_name}
+              categories={menu.categories}
+              cart={cart}
+              onSelectItem={setSelectedItem}
+              onQuickAdd={(item) => addToCart(item, 1, '', [])}
+            />
+          )}
+          {tab === 'cart' && (
+            <CartView
+              cart={cart}
+              submitting={submitting}
+              error={submitError}
+              onChangeQuantity={(key, delta) => setCart((prev) => changeCartQuantity(prev, key, delta))}
+              onRemove={(key) => setCart((prev) => removeCartLine(prev, key))}
+              onSubmit={handleSubmit}
+              onBackToMenu={() => goToTab('menu')}
+            />
+          )}
+          {tab === 'history' && (
+            <HistoryView
+              status={status}
+              loading={loading}
+              fetchError={fetchError}
+              calls={calls}
+              calling={calling}
+              callError={callError}
+              onRequestCheckout={() => void handleCall('checkout')}
+            />
+          )}
+          {tab === 'call' && (
+            <CallView
+              tableName={menu.table_name}
+              calls={calls}
+              calling={calling}
+              error={callError}
+              onCallStaff={() => void handleCall('staff')}
+              onBackToMenu={() => goToTab('menu')}
+            />
+          )}
+        </main>
+
+        {/* カートの控え（メニュー閲覧中のみ）。送信はカートタブで行う */}
+        {tab === 'menu' && count > 0 && (
+          <div className="flex-none bg-lilac-soft px-4 py-2.5">
+            <button
+              type="button"
+              onClick={() => goToTab('cart')}
+              className="flex min-h-[50px] w-full items-center justify-between rounded-xl bg-iris px-4 py-2.5 text-xs font-semibold text-white active:scale-[0.99]"
+            >
+              <span className="flex items-center gap-2">
+                <b className="grid h-7 min-w-7 place-items-center rounded-lg bg-white/15 font-num text-sm">{count}</b>
+                {qrStrings.cartDock.review}
+              </span>
+              <strong className="font-num text-[15px] font-bold tabular-nums">{yen(total)} ›</strong>
+            </button>
           </div>
         )}
+
+        <nav
+          aria-label={qrStrings.nav.menu}
+          className="grid flex-none grid-cols-4 gap-1 border-t border-line bg-white px-2.5 pb-1 pt-[7px]"
+        >
+          {navItems.map(({ id, label, icon: Icon }) => {
+            const selected = tab === id;
+            const badge = id === 'cart' && count > 0 ? ` · ${count}` : '';
+            const pending =
+              (id === 'call' && openServiceCall(calls, 'staff')) ||
+              (id === 'history' && openServiceCall(calls, 'checkout'));
+            return (
+              <button
+                key={id}
+                type="button"
+                aria-pressed={selected}
+                onClick={() => goToTab(id)}
+                className={cn(
+                  'relative flex min-h-[52px] flex-col items-center justify-center gap-1 rounded-[9px] px-0.5 py-2 text-[10px] font-semibold',
+                  selected ? 'bg-[#f4edfc] text-iris' : 'text-[#a18bad]'
+                )}
+              >
+                <Icon className="h-[22px] w-[22px]" strokeWidth={1.5} />
+                <span className="whitespace-nowrap">
+                  {label}
+                  {badge}
+                </span>
+                {pending && <span className="absolute right-4 top-2 h-1.5 w-1.5 rounded-full bg-iris" />}
+              </button>
+            );
+          })}
+        </nav>
+
+        <footer className="flex-none bg-white px-2.5 pb-[calc(6px+env(safe-area-inset-bottom))] pt-1 text-center text-[10px] leading-snug text-[#9788a6]">
+          {qrStrings.poweredBy}{' '}
+          <strong className="font-num text-[11px] tracking-wide text-[#59436f]">
+            <span className="text-[#9161cb]">TENPO</span> ONE
+          </strong>
+        </footer>
+
+        {notice && (
+          <p
+            role="status"
+            aria-live="polite"
+            className="fixed bottom-24 left-1/2 z-40 max-w-[90%] -translate-x-1/2 rounded-xl bg-plum/95 px-4 py-3 text-xs font-medium text-white shadow-lg"
+          >
+            {notice}
+          </p>
+        )}
+
+        {selectedItem && (
+          <ItemSheet
+            item={selectedItem}
+            onClose={() => setSelectedItem(null)}
+            onAdd={(quantity, memo, modifiers) => {
+              addToCart(selectedItem, quantity, memo, modifiers);
+              setSelectedItem(null);
+            }}
+          />
+        )}
       </div>
-
-      <main className={cn('flex-1', screen === 'menu' && tab === 'order' && cart.length > 0 && 'pb-24')}>
-        {screen === 'menu' && tab === 'order' && <MenuView categories={menu.categories} onSelectItem={setSelectedItem} />}
-        {screen === 'menu' && tab === 'status' && <OrderStatusView storeSlug={storeSlug} tableToken={tableToken} />}
-        {screen === 'confirm' && (
-          <ConfirmView
-            cart={cart}
-            total={cartTotal}
-            submitting={submitting}
-            error={submitError}
-            onRemove={removeFromCart}
-            onBack={() => setScreen('menu')}
-            onSubmit={handleSubmit}
-          />
-        )}
-        {screen === 'success' && (
-          <SuccessView
-            onViewStatus={() => {
-              setTab('status');
-              setScreen('menu');
-            }}
-            onBackToMenu={() => {
-              setTab('order');
-              setScreen('menu');
-            }}
-          />
-        )}
-      </main>
-
-      {screen === 'menu' && tab === 'order' && cart.length > 0 && (
-        <CartBar count={cartCount} total={cartTotal} onOrder={() => setScreen('confirm')} />
-      )}
-
-      {selectedItem && (
-        <ItemSheet
-          item={selectedItem}
-          onClose={() => setSelectedItem(null)}
-          onAdd={(quantity, memo, modifiers) => {
-            addToCart(selectedItem, quantity, memo, modifiers);
-            setSelectedItem(null);
-          }}
-        />
-      )}
-    </div>
     </QrStringsProvider>
   );
 }

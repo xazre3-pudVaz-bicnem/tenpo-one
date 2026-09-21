@@ -135,16 +135,19 @@ export function OptionDialog({
 
         <FieldError message={error ?? undefined} />
 
-        <div className="flex items-center justify-between border-t border-gray-100 pt-3">
+        {/* スマホ（ハンディ）では縦に積む。横並びのままだと金額とボタンが重なる */}
+        <div className="flex flex-col gap-3 border-t border-gray-100 pt-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-gray-600">
             小計 / Subtotal <span className="text-base font-bold text-navy">{yen(basePrice + extraPrice)}</span>
             {extraPrice > 0 && <span className="ml-1 text-xs text-gray-500">（追加 +{yen(extraPrice)}）</span>}
           </p>
           <div className="flex gap-2">
-            <Button variant="secondary" onClick={onCancel}>
+            <Button variant="secondary" className="flex-1 sm:flex-none" onClick={onCancel}>
               キャンセル / Cancel
             </Button>
-            <Button onClick={handleConfirm}>追加する / Add</Button>
+            <Button className="flex-1 sm:flex-none" onClick={handleConfirm}>
+              追加する / Add
+            </Button>
           </div>
         </div>
       </div>

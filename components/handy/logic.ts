@@ -1,0 +1,321 @@
+/**
+ * ハンディ画面の純粋な計算（DB・React非依存・テスト対象）。
+ *
+ * 承認済みレイアウト（2026-09-21）の注文画面は上位分類タブ（フード／ドリンク／コース／…）で
+ * 商品を分ける。TENPO ONE の menu_categories には上位分類の列が無いため、
+ * ここでは menu_items.item_type と menu_categories.station だけで機械的に振り分け、
+ * どちらからも判断できない商品は「その他」にまとめる（カテゴリ名からの推測はしない）。
+ */
+
+export type HandyGroupId = 'food' | 'drink' | 'course' | 'service' | 'other';
+
+export interface HandyGroupDef {
+  id: HandyGroupId;
+  label: string;
+  /** 承認済みUIに合わせて小さく添える英語表記 */
+  en: string;
+}
+
+/** 上位分類タブの並び（承認済みUIの ①フード ②ドリンク ③コース … に対応する範囲） */
+export const HANDY_GROUPS: readonly HandyGroupDef[] = [
+  { id: 'food', label: 'フード', en: 'Food' },
+  { id: 'drink', label: 'ドリンク', en: 'Drink' },
+  { id: 'course', label: 'コース', en: 'Course' },
+  { id: 'service', label: 'サービス', en: 'Service' },
+  { id: 'other', label: 'その他', en: 'Other' },
+] as const;
+
+/** item_type（food / drink / course / option）からの振り分け。DBのcheck制約と同じ4種 */
+const GROUP_BY_ITEM_TYPE: Record<string, HandyGroupId> = {
+  food: 'food',
+  drink: 'drink',
+  course: 'course',
+  option: 'service',
+};
+
+/** item_type が未知の値だったときだけ使う、カテゴリの厨房ステーションによる保険 */
+const GROUP_BY_STATION: Record<string, HandyGroupId> = {
+  kitchen: 'food',
+  dessert: 'food',
+  drink: 'drink',
+};
+
+/**
+ * 1商品の上位分類を決める。
+ * item_type を最優先し、未知の値のときだけカテゴリの station を見る。
+ * どちらでも決まらなければ 'other'（＝「その他」タブ）。
+ */
+export function classifyMenuItem(
+  itemType: string | null | undefined,
+  categoryStation: string | null | undefined
+): HandyGroupId {
+  return (
+    GROUP_BY_ITEM_TYPE[itemType ?? ''] ?? GROUP_BY_STATION[categoryStation ?? ''] ?? 'other'
+  );
+}
+
+export interface HandyCategoryInput {
+  id: string;
+  name: string;
+  nameEn: string | null;
+  station: string | null;
+  sortOrder: number;
+}
+
+export interface HandyMenuItemInput {
+  id: string;
+  categoryId: string | null;
+  name: string;
+  nameEn: string | null;
+  price: number;
+  itemType: string;
+  isSoldOut: boolean;
+  sortOrder: number;
+  /** 'HH:MM:SS' / 'HH:MM'。null は終日販売 */
+  sellStartTime: string | null;
+  sellEndTime: string | null;
+  imagePath: string | null;
+  /** 選択肢グループが設定されている商品か（タップ時にダイアログを出す） */
+  hasOptions: boolean;
+}
+
+export interface HandyMenuItemView extends HandyMenuItemInput {
+  /** 現在時刻が販売時間外（注文できない） */
+  offHours: boolean;
+}
+
+export interface HandyCategoryView {
+  id: string;
+  name: string;
+  nameEn: string | null;
+  items: HandyMenuItemView[];
+}
+
+export interface HandyGroupView extends HandyGroupDef {
+  categories: HandyCategoryView[];
+  itemCount: number;
+}
+
+/** カテゴリ未設定の商品をまとめる擬似カテゴリのID */
+export const UNCATEGORIZED_ID = '__uncategorized__';
+
+/** 承認済みUIのタイル下線の紫系アクセント（並び順に循環させる） */
+export const TILE_ACCENTS = [
+  '#7b3fe4',
+  '#a778dc',
+  '#5e4777',
+  '#b99bd8',
+  '#8d6baa',
+  '#c6afdf',
+  '#684298',
+] as const;
+
+/** 'HH:MM[:SS]' を0〜1439の分に直す。読めない値は null */
+function toMinutes(value: string | null | undefined): number | null {
+  if (!value) return null;
+  const m = /^(\d{1,2}):(\d{2})/.exec(value);
+  if (!m) return null;
+  const h = Number(m[1]);
+  const min = Number(m[2]);
+  if (h > 23 || min > 59) return null;
+  return h * 60 + min;
+}
+
+/**
+ * 販売時間内か。開始・終了のどちらかが無ければ終日販売とみなす。
+ * 終了が開始より前（例 22:00〜02:00）は日をまたぐ時間帯として扱う。
+ */
+export function isOnSaleAt(
+  item: Pick<HandyMenuItemInput, 'sellStartTime' | 'sellEndTime'>,
+  nowHm: string
+): boolean {
+  const start = toMinutes(item.sellStartTime);
+  const end = toMinutes(item.sellEndTime);
+  const now = toMinutes(nowHm);
+  if (start === null || end === null || now === null) return true;
+  if (start === end) return true;
+  return start < end ? now >= start && now < end : now >= start || now < end;
+}
+
+/**
+ * 上位分類 → 下位カテゴリ → 商品 の3階層を組み立てる。
+ * 商品が1つも無い分類・カテゴリは返さない（空タブを出さない）。
+ */
+export function buildMenuGroups(
+  categories: HandyCategoryInput[],
+  items: HandyMenuItemInput[],
+  nowHm: string
+): HandyGroupView[] {
+  const categoryById = new Map(categories.map((c) => [c.id, c]));
+  const sortedCategories = [...categories].sort(
+    (a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name, 'ja')
+  );
+
+  // 分類 → カテゴリID → 商品
+  const byGroup = new Map<HandyGroupId, Map<string, HandyMenuItemView[]>>();
+  for (const item of items) {
+    const category = item.categoryId ? categoryById.get(item.categoryId) : undefined;
+    const groupId = classifyMenuItem(item.itemType, category?.station ?? null);
+    const categoryId = category?.id ?? UNCATEGORIZED_ID;
+    const groupMap = byGroup.get(groupId) ?? new Map<string, HandyMenuItemView[]>();
+    const list = groupMap.get(categoryId) ?? [];
+    list.push({ ...item, offHours: !isOnSaleAt(item, nowHm) });
+    groupMap.set(categoryId, list);
+    byGroup.set(groupId, groupMap);
+  }
+
+  const views: HandyGroupView[] = [];
+  for (const def of HANDY_GROUPS) {
+    const groupMap = byGroup.get(def.id);
+    if (!groupMap) continue;
+    const order = [
+      ...sortedCategories.filter((c) => groupMap.has(c.id)).map((c) => c.id),
+      ...(groupMap.has(UNCATEGORIZED_ID) ? [UNCATEGORIZED_ID] : []),
+    ];
+    const categoryViews: HandyCategoryView[] = order.map((categoryId) => {
+      const category = categoryById.get(categoryId);
+      return {
+        id: categoryId,
+        name: category?.name ?? '未分類',
+        nameEn: category?.nameEn ?? null,
+        items: (groupMap.get(categoryId) ?? []).sort(
+          (a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name, 'ja')
+        ),
+      };
+    });
+    const itemCount = categoryViews.reduce((n, c) => n + c.items.length, 0);
+    if (itemCount === 0) continue;
+    views.push({ ...def, categories: categoryViews, itemCount });
+  }
+  return views;
+}
+
+/* ---------------------------------------------------------------- カート */
+
+export interface HandyCartLine {
+  /** 同じ商品・同じ選択肢をまとめるためのキー */
+  key: string;
+  menuItemId: string;
+  name: string;
+  nameEn: string | null;
+  /** 選択肢の追加料金を含む単価 */
+  unitPrice: number;
+  quantity: number;
+  optionItemIds: string[];
+  /** 「大盛り・チーズ」のような表示用ラベル */
+  optionLabel: string;
+}
+
+/** 商品＋選択肢の組み合わせで一意になるキー（選択肢の並び順に依存しない） */
+export function cartLineKey(menuItemId: string, optionItemIds: string[]): string {
+  return [menuItemId, ...[...optionItemIds].sort()].join('|');
+}
+
+export function cartCount(lines: HandyCartLine[]): number {
+  return lines.reduce((n, l) => n + l.quantity, 0);
+}
+
+export function cartTotal(lines: HandyCartLine[]): number {
+  return lines.reduce((n, l) => n + l.unitPrice * l.quantity, 0);
+}
+
+/** 1商品の上限数量（送信時に addItem を数量ぶん呼ぶため、現場で使う範囲に制限する） */
+export const MAX_LINE_QUANTITY = 20;
+
+/**
+ * カートに1行足す（同じ商品・同じ選択肢なら数量を加算する）。
+ * 上限を超える分は加算しない（黙って増やさない）。
+ */
+export function addCartLine(
+  lines: HandyCartLine[],
+  line: Omit<HandyCartLine, 'key' | 'quantity'>,
+  quantity: number
+): HandyCartLine[] {
+  const key = cartLineKey(line.menuItemId, line.optionItemIds);
+  const index = lines.findIndex((l) => l.key === key);
+  if (index < 0) {
+    return [...lines, { ...line, key, quantity: Math.min(quantity, MAX_LINE_QUANTITY) }];
+  }
+  const next = [...lines];
+  next[index] = {
+    ...next[index],
+    quantity: Math.min(next[index].quantity + quantity, MAX_LINE_QUANTITY),
+  };
+  return next;
+}
+
+/** 数量を増減する。0以下になった行は取り除く */
+export function changeCartQuantity(
+  lines: HandyCartLine[],
+  key: string,
+  delta: number
+): HandyCartLine[] {
+  return lines
+    .map((l) =>
+      l.key === key
+        ? { ...l, quantity: Math.max(0, Math.min(MAX_LINE_QUANTITY, l.quantity + delta)) }
+        : l
+    )
+    .filter((l) => l.quantity > 0);
+}
+
+/* ------------------------------------------------------------ 呼び出し */
+
+export type ServiceCallKind = 'staff' | 'checkout';
+
+export interface HandyServiceCall {
+  id: string;
+  tableId: string;
+  tableName: string | null;
+  kind: ServiceCallKind;
+  createdAtMs: number;
+  note: string | null;
+}
+
+export function serviceCallLabel(kind: ServiceCallKind): string {
+  return kind === 'checkout' ? 'お会計希望' : 'スタッフ呼び出し';
+}
+
+/** 未対応の呼び出しを古い順（待たせている順）に並べる */
+export function sortServiceCalls(calls: HandyServiceCall[]): HandyServiceCall[] {
+  return [...calls].sort((a, b) => a.createdAtMs - b.createdAtMs || a.id.localeCompare(b.id));
+}
+
+/**
+ * 卓ごとの呼び出しの強調表示。会計希望（橙系）をスタッフ呼び出しより優先する。
+ * 呼び出しが無い卓は null。
+ */
+export function callToneByTable(calls: HandyServiceCall[]): Map<string, ServiceCallKind> {
+  const map = new Map<string, ServiceCallKind>();
+  for (const c of calls) {
+    if (c.kind === 'checkout' || !map.has(c.tableId)) map.set(c.tableId, c.kind);
+  }
+  return map;
+}
+
+/* ---------------------------------------------------------------- 時刻 */
+
+/** 経過時間の表示（45分 / 1時間05分）。未来の時刻は0分として扱う */
+export function elapsedLabel(fromMs: number, nowMs: number): string {
+  const minutes = Math.max(0, Math.floor((nowMs - fromMs) / 60_000));
+  if (minutes < 60) return `${minutes}分`;
+  return `${Math.floor(minutes / 60)}時間${String(minutes % 60).padStart(2, '0')}分`;
+}
+
+/** 卓カードの状態表示 */
+export type HandyTableState = 'occupied' | 'available' | 'cleaning' | 'blocked';
+
+export function tableState(currentStatus: string | null, hasOpenOrder: boolean): HandyTableState {
+  if (hasOpenOrder) return 'occupied';
+  if (currentStatus === 'cleaning') return 'cleaning';
+  if (currentStatus === 'blocked' || currentStatus === 'reserved') return 'blocked';
+  if (currentStatus === 'seated') return 'occupied';
+  return 'available';
+}
+
+export const TABLE_STATE_LABEL: Record<HandyTableState, string> = {
+  occupied: '利用中',
+  available: '空席',
+  cleaning: '清掃中',
+  blocked: '使用不可',
+};

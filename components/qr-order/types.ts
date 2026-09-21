@@ -42,6 +42,15 @@ export interface QrMenuData {
   categories: QrMenuCategory[];
 }
 
+/** 呼び出しの種類。staff=スタッフ呼び出し、checkout=お会計希望（別種類として扱う） */
+export type ServiceCallKind = 'staff' | 'checkout';
+
+/** get_qr_service_calls が返す未対応の呼び出し1件。created_at は 'HH:MM'（JST） */
+export interface QrServiceCall {
+  kind: ServiceCallKind;
+  created_at: string;
+}
+
 export type KitchenStatus = 'pending' | 'preparing' | 'ready' | 'served';
 
 export interface QrOrderStatusItem {
@@ -95,11 +104,32 @@ const QR_ERROR_MESSAGES: Record<string, string> = {
   RATE_LIMITED: '短時間にご注文が集中しました。少し時間をおいてから再度お試しください。',
   INVALID_QUANTITY: '数量の指定が正しくありません。',
   ITEM_UNAVAILABLE: '一部の商品が販売終了・品切れになりました。内容をご確認のうえ再度お試しください。',
+  NOT_IN_SERVICE: 'ご利用の受付が終了しています。スタッフにお声がけください。',
 };
+
+/** Postgres の RAISE EXCEPTION 文言から先頭のコードだけを取り出す */
+function errorCode(raw: string): string {
+  return raw.split(':')[0].trim();
+}
 
 /** RPC のエラーメッセージ（Postgres RAISE EXCEPTION の文言）を日本語表示に変換する */
 export function qrOrderErrorMessage(raw: string | null | undefined): string {
   if (!raw) return '通信エラーが発生しました。時間をおいて再度お試しください。';
-  const code = raw.split(':')[0].trim();
-  return QR_ERROR_MESSAGES[code] ?? '注文の送信に失敗しました。時間をおいて再度お試しください。';
+  return QR_ERROR_MESSAGES[errorCode(raw)] ?? '注文の送信に失敗しました。時間をおいて再度お試しください。';
+}
+
+const QR_CALL_ERROR_MESSAGES: Record<string, string> = {
+  NOT_IN_SERVICE: 'ご利用の受付が終了しています。スタッフにお声がけください。',
+  RATE_LIMITED: '呼び出しが続けて送信されました。少しお待ちください。',
+  TABLE_NOT_FOUND: 'テーブル情報を確認できませんでした。QRコードを読み取り直してください。',
+  INVALID_KIND: '呼び出しの種類が正しくありません。スタッフにお声がけください。',
+};
+
+/** create_qr_service_call のエラーを日本語表示に変換する（通信失敗も成功に見せない） */
+export function qrServiceCallErrorMessage(raw: string | null | undefined): string {
+  if (!raw) return '呼び出しを送信できませんでした。お手数ですがスタッフに直接お声がけください。';
+  return (
+    QR_CALL_ERROR_MESSAGES[errorCode(raw)] ??
+    '呼び出しを送信できませんでした。お手数ですがスタッフに直接お声がけください。'
+  );
 }

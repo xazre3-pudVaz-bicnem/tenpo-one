@@ -61,6 +61,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: '/app/dashboard', label: 'ホーム', en: 'Home', icon: 'home', permission: 'dashboard.view' },
       { href: '/app/pos', label: '即会計', en: 'Quick pay', icon: 'cash', permission: 'pos.order' },
+      { href: '/app/handy', label: 'ハンディ', en: 'Handy', icon: 'monitor', permission: 'pos.order' },
       { href: '/app/orders', label: '伝票明細', en: 'Slips / Receipts', icon: 'receipt', permission: 'pos.order' },
       { href: '/app/cash', label: '入出金', en: 'Cash in / out', icon: 'wallet', permission: 'register.operate' },
       { href: '/app/expenses', label: '仕入・経費', en: 'Bills & payables', icon: 'file', permission: 'cash.write' },
@@ -163,6 +164,7 @@ const EXTRA_TITLES: { href: string; label: string; en: string }[] = [
   // POS はテーブル注文・即会計の両方で使うため、画面タイトルはオーダー・会計に統一する
   { href: '/app/pos', label: 'オーダー・会計', en: 'Order & Pay' },
   { href: '/app/pos/receipt', label: 'レシート', en: 'Receipt' },
+  { href: '/app/handy', label: 'ハンディ', en: 'Handy' },
   { href: '/app/onboarding', label: '初期設定', en: 'Setup' },
   { href: '/app/menu', label: 'メニュー', en: 'Menu' },
   { href: '/app/settings/clerks', label: 'POS担当者', en: 'Clerks' },
@@ -204,7 +206,8 @@ export function screenTitleFor(pathname: string): { label: string; en: string } 
 export const MOBILE_NAV: NavItem[] = [
   { href: '/app/dashboard', label: 'ホーム', en: 'Home', icon: 'home', permission: 'dashboard.view' },
   { href: '/app/reservations', label: '店舗台帳', en: 'Reservation', icon: 'calendar', permission: 'reservations.view' },
-  { href: '/app/floor', label: 'オーダー', en: 'Order', icon: 'pos', permission: 'tables.operate' },
+  // ハンディ（スマホでの注文取り）。iPad向けのオーダー画面とは別に、片手で使える画面を出す
+  { href: '/app/handy', label: 'ハンディ', en: 'Handy', icon: 'pos', permission: 'pos.order' },
   { href: '/app/attendance', label: '勤怠', en: 'Attendance', icon: 'clock', permission: 'attendance.punch' },
   { href: '/app/menu', label: 'メニュー', en: 'Menu', icon: 'more' },
 ];

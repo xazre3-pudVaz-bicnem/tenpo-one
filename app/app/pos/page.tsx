@@ -201,14 +201,20 @@ export default async function PosPage({
 
   // 商品ごとの選択肢グループ（必須・最小/最大・追加料金）。
   // 設定がある商品はPOSでタップした際に選択ダイアログを出す。
-  const { data: optionLinks } = await supabase
+  // 英語名を持つのは選択肢（menu_option_items.name_en）だけで、グループ自体には無い。
+  // グループに name_en を指定するとクエリごと失敗し、選択肢ダイアログが黙って出なくなる。
+  const { data: optionLinks, error: optionLinksError } = await supabase
     .from('menu_item_option_groups')
     .select(
-      'menu_item_id, sort_order, menu_option_groups!inner(id, name, name_en, is_required, min_select, max_select, status, menu_option_items(id, name, name_en, price, sort_order, status))'
+      'menu_item_id, sort_order, menu_option_groups!inner(id, name, is_required, min_select, max_select, status, menu_option_items(id, name, name_en, price, sort_order, status))'
     )
     .eq('store_id', store.id)
     .eq('menu_option_groups.status', 'active')
     .order('sort_order');
+  if (optionLinksError) {
+    // 取得に失敗すると選択肢が出ないまま会計できてしまうため、気付けるように記録する
+    console.error('[pos] 選択肢グループの取得に失敗', optionLinksError.message);
+  }
 
   const optionGroupsByItem: Record<string, {
     id: string; name: string; nameEn: string | null; isRequired: boolean; minSelect: number; maxSelect: number;
@@ -216,7 +222,7 @@ export default async function PosPage({
   }[]> = {};
   for (const link of optionLinks ?? []) {
     const g = link.menu_option_groups as unknown as {
-      id: string; name: string; name_en: string | null; is_required: boolean; min_select: number; max_select: number;
+      id: string; name: string; is_required: boolean; min_select: number; max_select: number;
       menu_option_items: {
         id: string; name: string; name_en: string | null; price: number; sort_order: number; status: string;
       }[];
@@ -230,7 +236,7 @@ export default async function PosPage({
     (optionGroupsByItem[link.menu_item_id] ??= []).push({
       id: g.id,
       name: g.name,
-      nameEn: g.name_en,
+      nameEn: null,
       isRequired: g.is_required,
       minSelect: g.min_select,
       maxSelect: g.max_select,

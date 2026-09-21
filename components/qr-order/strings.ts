@@ -5,9 +5,15 @@
 export type QrLocale = 'ja' | 'en';
 
 const ja = {
-  header: {
-    orderTab: 'メニュー',
-    statusTab: '注文状況',
+  nav: {
+    menu: 'メニュー',
+    cart: 'カート',
+    history: '履歴・会計',
+    call: '呼び出し',
+  },
+  visit: {
+    badge: 'モバイルオーダー',
+    hint: 'お手元のスマートフォンからご注文いただけます',
   },
   menu: {
     empty: '現在ご注文いただけるメニューがありません。店員にお声がけください。',
@@ -15,6 +21,10 @@ const ja = {
     recommendedCategoryName: 'おすすめ',
     recommendedBadge: 'おすすめ',
     soldOutBadge: '品切れ',
+    countSuffix: (n: number) => `${n}品`,
+    addAria: (name: string) => `${name}をカートに追加`,
+    note: 'アレルギーやお料理についてはスタッフにお声がけください。',
+    taxIncluded: '税込',
   },
   itemSheet: {
     quantityLabel: '数量',
@@ -26,43 +36,69 @@ const ja = {
     modifiersLabel: 'オプション',
     addToCart: (total: string) => `カートに追加（${total}）`,
     imageAlt: (name: string) => `${name}の写真`,
+    soldOut: '品切れ',
   },
-  cartBar: {
-    unit: '点',
-    order: '注文する',
+  cartDock: {
+    review: '注文内容を確認',
   },
-  confirm: {
-    title: 'ご注文内容の確認',
-    description: '内容をご確認のうえ、注文を確定してください。',
+  cart: {
+    eyebrow: 'YOUR ORDER',
+    title: '注文内容の確認',
+    description: 'ご注文前に、数量をご確認ください。',
+    empty: 'カートは空です。メニューから商品をお選びください。',
+    quantityLabel: '数量',
+    decreaseAria: (name: string) => `${name}を減らす`,
+    increaseAria: (name: string) => `${name}を増やす`,
     removeAria: (name: string) => `${name}をカートから削除`,
-    total: '合計',
-    back: '戻る',
+    summary: (count: number) => `${count}点 ・ 合計（税込）`,
     submit: 'この内容で注文する',
-  },
-  success: {
-    title: 'ご注文を受け付けました',
-    description: 'お料理をお待ちください',
-    viewStatus: '注文状況を確認する',
+    submitting: '送信中…',
+    note: 'ご注文はそのまま厨房へ送信されます。',
+    sent: 'ご注文を送信しました。',
     backToMenu: 'メニューに戻る',
   },
-  status: {
-    titleSuffix: 'のご注文',
-    empty: 'まだご注文がありません',
+  history: {
+    eyebrow: 'ORDER HISTORY',
+    title: '注文履歴・会計',
+    description: '今回のご利用で送信したご注文です。',
+    empty: 'まだご注文はありません。',
     orderedAtSuffix: '注文',
-    total: '現在の合計',
-    callStaff: '店員を呼ぶ',
-    callNotice: 'お近くの店員にお声がけください',
+    total: '送信済み合計（税込）',
+    note: 'カート内の未送信商品は含みません。',
+    checkout: 'お会計を呼ぶ',
+    checkoutPending: 'お会計をお呼びしています',
+    receivedAt: (time: string) => `${time} に受付`,
     payNotice: 'お会計はレジまたは店員にお申し付けください',
-    fetchError: '注文状況を取得できませんでした',
+    fetchError: '注文状況を取得できませんでした。通信状況をご確認ください。',
   },
+  call: {
+    eyebrow: 'STAFF CALL',
+    title: 'スタッフを呼び出す',
+    description: (table: string) => `${table}からスタッフをお呼びします。`,
+    lead: 'ご用件がある場合はこちらからお知らせください。',
+    button: 'スタッフを呼ぶ',
+    sending: '送信中…',
+    pending: '呼び出し中',
+    receivedAt: (time: string) => `${time} に受付しました。スタッフがお伺いします。`,
+    checkoutPending: 'お会計のご希望も承っています',
+    backToMenu: 'メニューに戻る',
+    note: 'お急ぎの場合は、お近くのスタッフに直接お声がけください。',
+  },
+  poweredBy: 'Powered by',
 };
 
 export type QrStrings = typeof ja;
 
 const en: QrStrings = {
-  header: {
-    orderTab: 'Menu',
-    statusTab: 'Order Status',
+  nav: {
+    menu: 'Menu',
+    cart: 'Cart',
+    history: 'History & Bill',
+    call: 'Call',
+  },
+  visit: {
+    badge: 'Mobile order',
+    hint: 'Order right from your phone',
   },
   menu: {
     empty: 'No items are available right now. Please ask our staff.',
@@ -70,6 +106,10 @@ const en: QrStrings = {
     recommendedCategoryName: 'Recommended',
     recommendedBadge: 'Popular',
     soldOutBadge: 'Sold out',
+    countSuffix: (n: number) => `${n} items`,
+    addAria: (name: string) => `Add ${name} to cart`,
+    note: 'Please ask our staff about allergies or any dish.',
+    taxIncluded: 'tax incl.',
   },
   itemSheet: {
     quantityLabel: 'Quantity',
@@ -81,35 +121,55 @@ const en: QrStrings = {
     modifiersLabel: 'Options',
     addToCart: (total: string) => `Add to cart (${total})`,
     imageAlt: (name: string) => `Photo of ${name}`,
+    soldOut: 'Sold out',
   },
-  cartBar: {
-    unit: 'items',
-    order: 'Order',
+  cartDock: {
+    review: 'Review your order',
   },
-  confirm: {
-    title: 'Confirm your order',
-    description: 'Please review the details and place your order.',
+  cart: {
+    eyebrow: 'YOUR ORDER',
+    title: 'Review your order',
+    description: 'Please check the quantities before you order.',
+    empty: 'Your cart is empty. Please pick items from the menu.',
+    quantityLabel: 'Qty',
+    decreaseAria: (name: string) => `Decrease ${name}`,
+    increaseAria: (name: string) => `Increase ${name}`,
     removeAria: (name: string) => `Remove ${name} from cart`,
-    total: 'Total',
-    back: 'Back',
-    submit: 'Place order',
-  },
-  success: {
-    title: 'Order received',
-    description: 'Your food will be served shortly.',
-    viewStatus: 'View order status',
+    summary: (count: number) => `${count} items · Total (tax incl.)`,
+    submit: 'Place this order',
+    submitting: 'Sending…',
+    note: 'Your order is sent straight to the kitchen.',
+    sent: 'Your order has been sent.',
     backToMenu: 'Back to menu',
   },
-  status: {
-    titleSuffix: ' — Order',
-    empty: 'No orders yet',
+  history: {
+    eyebrow: 'ORDER HISTORY',
+    title: 'Order history & bill',
+    description: 'Orders you have sent during this visit.',
+    empty: 'No orders yet.',
     orderedAtSuffix: 'ordered',
-    total: 'Current total',
-    callStaff: 'Call staff',
-    callNotice: 'Please let a nearby staff member know',
+    total: 'Sent total (tax incl.)',
+    note: 'Items still in your cart are not included.',
+    checkout: 'Request the bill',
+    checkoutPending: 'We have your bill request',
+    receivedAt: (time: string) => `Received at ${time}`,
     payNotice: 'Please pay at the register or ask our staff',
-    fetchError: 'Could not load order status',
+    fetchError: 'Could not load your order status. Please check your connection.',
   },
+  call: {
+    eyebrow: 'STAFF CALL',
+    title: 'Call a staff member',
+    description: (table: string) => `We will call a staff member to ${table}.`,
+    lead: 'Let us know if you need anything.',
+    button: 'Call staff',
+    sending: 'Sending…',
+    pending: 'Calling staff',
+    receivedAt: (time: string) => `Received at ${time}. A staff member is on the way.`,
+    checkoutPending: 'Your bill request is also open',
+    backToMenu: 'Back to menu',
+    note: 'If you are in a hurry, please speak to a nearby staff member.',
+  },
+  poweredBy: 'Powered by',
 };
 
 export const QR_STRINGS: Record<QrLocale, QrStrings> = { ja, en };
