@@ -1,4 +1,6 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
+import { QrCode } from 'lucide-react';
 import { requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { PageHeader } from '@/components/ui/page-header';
@@ -72,7 +74,20 @@ export default async function TablesSettingsPage() {
   return (
     <div>
       <SettingsBackLink />
-      <PageHeader title="フロア・テーブル" en="Tables" description={targetStore.name} />
+      <PageHeader
+        title="フロア・テーブル"
+        en="Tables"
+        description={targetStore.name}
+        actions={
+          <Link
+            href="/app/settings/tables/qr-print"
+            className="inline-flex h-10 items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-4 text-sm font-semibold text-navy hover:bg-gray-50"
+          >
+            <QrCode className="h-4 w-4" aria-hidden />
+            QRコードをまとめて印刷
+          </Link>
+        }
+      />
 
       <div className="grid gap-5 @5xl:grid-cols-3">
         <div className="@5xl:col-span-1">
