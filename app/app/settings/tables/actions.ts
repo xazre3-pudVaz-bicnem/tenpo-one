@@ -1,11 +1,11 @@
 'use server';
 
 import { randomUUID } from 'crypto';
-import { headers } from 'next/headers';
 import { revalidatePath } from 'next/cache';
-import QRCode from 'qrcode';
 import { requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
+import { resolveSiteOrigin } from '@/lib/site-origin';
+import { tableOrderUrl, tableQrDataUrl } from '@/lib/table-qr';
 
 export interface ActionResult {
   error?: string;
@@ -329,15 +329,6 @@ export interface TableQrResult {
   invalidated?: boolean;
 }
 
-/** リクエストの origin（本番は NEXT_PUBLIC_SITE_URL を優先） */
-async function resolveOrigin(): Promise<string> {
-  const headerList = await headers();
-  return (
-    process.env.NEXT_PUBLIC_SITE_URL ??
-    `${headerList.get('x-forwarded-proto') ?? 'https'}://${headerList.get('host')}`
-  );
-}
-
 /** 対象テーブルを取得し、店舗アクセス権を検証する */
 async function loadTableForQr(
   ctx: { isHq: boolean; stores: { id: string }[] },
@@ -368,8 +359,9 @@ async function loadTableForQr(
   };
 }
 
+/** QR 画像（周りの白は規格どおり4マス。lib/table-qr.ts） */
 async function buildTableQr(url: string): Promise<string> {
-  return QRCode.toDataURL(url, { width: 320, margin: 1 });
+  return tableQrDataUrl(url, 480);
 }
 
 /** テーブルのQRコード（注文ページURL・QR画像）を取得する。無効化済み（qr_token=null）の場合は invalidated を返す */
@@ -379,8 +371,8 @@ export async function getTableQr(tableId: string): Promise<TableQrResult> {
   if ('error' in result) return { error: result.error };
   if (!result.table.qr_token) return { invalidated: true };
 
-  const origin = await resolveOrigin();
-  const url = `${origin}/order/${result.table.slug}/${result.table.qr_token}`;
+  const origin = await resolveSiteOrigin();
+  const url = tableOrderUrl(origin, result.table.slug, result.table.qr_token);
   const dataUrl = await buildTableQr(url);
   return { url, dataUrl };
 }
@@ -445,8 +437,8 @@ export async function regenerateTableQrToken(tableId: string): Promise<TableQrRe
 
   revalidatePath('/app/settings/tables');
 
-  const origin = await resolveOrigin();
-  const url = `${origin}/order/${result.table.slug}/${newToken}`;
+  const origin = await resolveSiteOrigin();
+  const url = tableOrderUrl(origin, result.table.slug, newToken);
   const dataUrl = await buildTableQr(url);
   return { url, dataUrl };
 }

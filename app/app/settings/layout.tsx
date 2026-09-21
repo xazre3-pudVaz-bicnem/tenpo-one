@@ -36,14 +36,14 @@ export default async function SettingsLayout({ children }: { children: React.Rea
       rows: [
         { href: '/app/settings/printers', label: 'ハードウェア', en: 'Hardware', icon: 'printers', description: 'レジ端末とレシート・厨房プリンター、キャッシュドロアの設定', visible: true },
         { href: '/app/settings/handy', label: 'ハンディ端末', en: 'Handy devices', icon: 'handy', description: 'スマホをQRコードでハンディとして登録・解除する', visible: true },
-        { href: '/app/settings/tables', label: 'テーブルQRコード', en: 'TableCode', icon: 'qr', description: 'テーブルごとのQR注文コードの発行・印刷（テーブル・フロアから）', visible: true, matchActive: false },
+        { href: '/app/settings/tables/qr-print', label: 'テーブルQRコード', en: 'TableCode', icon: 'qr', description: '全テーブルのQR注文コードをまとめて印刷（1卓ずつの発行・停止はテーブル・フロアから）', visible: true },
       ],
     },
     {
       label: '予約・顧客',
       en: 'Booking',
       rows: [
-        { href: '/app/settings/tables', label: 'テーブル・フロア', en: 'Tables', icon: 'tables', description: 'フロア構成、テーブルの席数・種別・利用停止', visible: true },
+        { href: '/app/settings/tables', label: 'テーブル・フロア', en: 'Tables', icon: 'tables', description: 'フロア構成、テーブルの席数・種別・利用停止', visible: true, exact: true },
         { href: '/app/staff', label: 'スタッフ・権限', en: 'Staff', icon: 'staff', description: 'スタッフの招待・役割（権限）・利用停止', visible: can(role, 'staff.manage') && featureOn('/app/staff'), matchActive: false },
         { href: '/app/settings/booking', label: '予約受付ルール', en: 'Booking rules', icon: 'booking', description: '予約枠間隔・受付期間・キャンセル期限', visible: true },
       ],

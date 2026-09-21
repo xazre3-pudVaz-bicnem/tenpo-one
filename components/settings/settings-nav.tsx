@@ -44,6 +44,8 @@ export interface SettingsNavItem {
   icon: SettingsIconKey;
   /** false のときは現在地として強調しない（同じ画面への別名リンク・設定外の画面） */
   matchActive?: boolean;
+  /** true なら同じパスのときだけ選択中にする（下の階層に別のメニューがあるとき） */
+  exact?: boolean;
   /** 設定トップ（PC）で右ペインに概要を出している項目として強調する */
   hubDefault?: boolean;
 }
@@ -61,6 +63,7 @@ const BARE_PREFIXES = ['/app/settings/printers/test-print'];
 
 function isActive(pathname: string, item: SettingsNavItem) {
   if (item.matchActive === false) return false;
+  if (item.exact) return pathname === item.href;
   return pathname === item.href || pathname.startsWith(item.href + '/');
 }
 
