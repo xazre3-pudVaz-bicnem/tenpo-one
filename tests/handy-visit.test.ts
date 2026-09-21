@@ -10,12 +10,17 @@ import {
   durationProblem,
   HOUR_CHOICES,
   isButtonMinutes,
+  jstHm,
+  minutesAgoHm,
   MINUTE_CHOICES,
   nearestButtonParts,
+  parseCustomHm,
   parseCustomMinutes,
   planHasItems,
   remainingMinutes,
+  resolveStartTime,
   splitMinutes,
+  startTimeProblem,
   validateVisitDraft,
   visitMemo,
   warningProblem,
@@ -196,6 +201,52 @@ describe('時間ピッカー（時間制・終了前注意）', () => {
     expect(warningProblem(0, 120)).toMatch(/設定してください/);
     expect(warningProblem(120, 120)).toMatch(/席時間（2時間）より短く/);
     expect(warningProblem(180, 120)).toMatch(/より短く/);
+  });
+});
+
+describe('開始時間（2026-09-21 Ronnie「開始時間を編集できるように」）', () => {
+  // 2026-09-21 18:23（日本時間）
+  const now = Date.parse('2026-09-21T18:23:00+09:00');
+  const jst = (iso: string) => Date.parse(`${iso}+09:00`);
+
+  it('日本時間の HH:MM と「n分前」', () => {
+    expect(jstHm(now)).toBe('18:23');
+    expect(minutesAgoHm(now, 15)).toBe('18:08');
+    expect(minutesAgoHm(jst('2026-09-21T00:10:00'), 30)).toBe('23:40');
+  });
+
+  it('HH:MM をいまに一番近い過去の日時にする（日をまたぐときは前日）', () => {
+    expect(resolveStartTime('18:10', now)).toBe(jst('2026-09-21T18:10:00'));
+    // 時計のずれは5分まで今日のまま
+    expect(resolveStartTime('18:25', now)).toBe(jst('2026-09-21T18:25:00'));
+    expect(resolveStartTime('18:40', now)).toBe(jst('2026-09-20T18:40:00'));
+    expect(resolveStartTime('23:50', jst('2026-09-22T00:30:00'))).toBe(jst('2026-09-21T23:50:00'));
+    expect(resolveStartTime('25:00', now)).toBeNull();
+  });
+
+  it('12時間前〜今だけ。「今」（null）はいつでも使える', () => {
+    expect(startTimeProblem(null, now)).toBeNull();
+    expect(startTimeProblem('18:10', now)).toBeNull();
+    expect(startTimeProblem('06:30', now)).toBeNull();
+    expect(startTimeProblem('06:00', now)).toMatch(/12時間前から今まで/);
+    // 今より後（19:00）は前日扱いになり、範囲外
+    expect(startTimeProblem('19:00', now)).toMatch(/12時間前から今まで/);
+    expect(startTimeProblem('abc', now)).toMatch(/選び直して/);
+  });
+
+  it('カスタム入力を HH:MM にする（全角数字・空欄も読む）', () => {
+    expect(parseCustomHm('18', '5')).toBe('18:05');
+    expect(parseCustomHm('１８', '１０')).toBe('18:10');
+    expect(parseCustomHm('', '')).toBe('00:00');
+    expect(parseCustomHm('24', '0')).toBeNull();
+    expect(parseCustomHm('18', '60')).toBeNull();
+    expect(parseCustomHm('1.5', '0')).toBeNull();
+  });
+
+  it('お客様情報の開始時間は HH:MM か「今」', () => {
+    expect(validateVisitDraft(draft({ startTime: '18:10' }))).toBeNull();
+    expect(validateVisitDraft(draft({ startTime: null }))).toBeNull();
+    expect(validateVisitDraft(draft({ startTime: '6:10' }))).toMatch(/開始時間/);
   });
 });
 

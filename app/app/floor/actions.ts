@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { assertStoreAccess, requireMember, requirePermission } from '@/lib/auth';
 import { can } from '@/lib/permissions';
 import { createClient } from '@/lib/supabase/server';
+import { resolveStartTime, startTimeProblem } from '@/lib/handy-visit';
 
 /**
  * 会計後に「清掃中」になったテーブルを、自動で空席に戻すまでの分数。
@@ -24,6 +25,11 @@ export interface WalkInOptions {
   memo?: string;
   /** 伝票の種類（コース利用なら 'course'） */
   orderType?: 'dine_in' | 'course';
+  /**
+   * 開始時間（'HH:MM'・日本時間。ハンディで直したとき）。12時間前〜今。
+   * 予約の開始・終了予定（開始＋滞在時間）と伝票の開始時刻（経過時間の起点）をこの時刻にする。省略時は今
+   */
+  startTime?: string;
 }
 
 /** 滞在時間として受け付ける範囲（分）。それ以外は店舗の既定値にする */
@@ -74,8 +80,15 @@ export async function startWalkIn(
   const purpose = options.purpose?.trim().slice(0, 60) || null;
   const memo = options.memo?.trim().slice(0, 200) || null;
   const now = new Date();
-  const endAt = new Date(now.getTime() + stayMinutes * 60000);
-  const today = now.toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' });
+  let startAt = now;
+  if (options.startTime) {
+    const problem = startTimeProblem(options.startTime, now.getTime());
+    if (problem) throw new Error(problem);
+    startAt = new Date(resolveStartTime(options.startTime, now.getTime()) as number);
+  }
+  const customStart = startAt !== now;
+  const endAt = new Date(startAt.getTime() + stayMinutes * 60000);
+  const today = startAt.toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' });
 
   let reservationId: string | null = null;
   for (let attempt = 0; attempt < 3 && !reservationId; attempt++) {
@@ -86,7 +99,7 @@ export async function startWalkIn(
         store_id: table.store_id,
         code: randomWalkInCode(),
         reserved_date: today,
-        start_at: now.toISOString(),
+        start_at: startAt.toISOString(),
         end_at: endAt.toISOString(),
         party_size: partySize,
         adults: partySize,
@@ -124,6 +137,8 @@ export async function startWalkIn(
       staff_id: ctx.userId,
       created_by: ctx.userId,
       ...(memo ? { memo } : {}),
+      // 開始時間を直したときは、フロア・ハンディの経過時間もその時刻から数える
+      ...(customStart ? { opened_at: startAt.toISOString() } : {}),
     })
     .select('id')
     .single();
