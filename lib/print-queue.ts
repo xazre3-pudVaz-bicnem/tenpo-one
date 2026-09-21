@@ -117,7 +117,7 @@ export async function reclaimStaleJobs(admin: Admin, printerId: string) {
 }
 
 /**
- * 店舗の「厨房伝票の分け方・文字の大きさ」（設定 > レジ・プリンター）。読めなければ既定（種類ごと・大きめ）。
+ * 店舗の「厨房伝票の分け方・文字の大きさ・商品名の言語」（設定 > レジ・プリンター）。読めなければ既定（種類ごと・大きめ・英語と日本語）。
  * 伝票が1枚も無いポーリングでは呼ばない（毎回の問い合わせを増やさない）。
  */
 async function kitchenTicketSettingsForStore(admin: Admin, storeId: string): Promise<KitchenTicketSettings> {
@@ -146,7 +146,7 @@ export async function generateKitchenJobs(admin: Admin, printer: PrinterRow) {
   }
   const tickets = groupKitchenTickets((data ?? []) as ClaimedKitchenItem[]);
   if (tickets.length === 0) return;
-  const { split, textSize } = await kitchenTicketSettingsForStore(admin, printer.store_id);
+  const { split, textSize, language } = await kitchenTicketSettingsForStore(admin, printer.store_id);
 
   const stations = (printer.kitchen_stations ?? ['kitchen']) as KitchenStation[];
   const title = `${stations.map((s) => STATION_LABELS[s] ?? s).join('・')} 伝票`;
@@ -163,11 +163,11 @@ export async function generateKitchenJobs(admin: Admin, printer: PrinterRow) {
     const slips = ticketSlips(t, split);
     // Star 機向け: 全角がわずかに広い分を見込んで桁揃え（STAR_WIDTH_OPTIONS）
     const starSlips = slips.map((slip) =>
-      layoutKitchenTicket(slip, { title, titleEn, printedAt, paperWidth, textSize, ...STAR_WIDTH_OPTIONS })
+      layoutKitchenTicket(slip, { title, titleEn, printedAt, paperWidth, textSize, language, ...STAR_WIDTH_OPTIONS })
     );
     // EPSON機は1行の桁数が少ないため、専用の桁数で組み直す（Star用の行をそのまま渡すと折り返す）
     const eposSlips = slips.map((slip) =>
-      layoutKitchenTicket(slip, { title, titleEn, printedAt, columns: eposCols(paperWidth), textSize })
+      layoutKitchenTicket(slip, { title, titleEn, printedAt, columns: eposCols(paperWidth), textSize, language })
     );
     return {
       organization_id: printer.organization_id,

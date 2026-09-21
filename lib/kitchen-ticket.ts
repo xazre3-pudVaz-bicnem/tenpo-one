@@ -62,13 +62,38 @@ export function kitchenTicketTextSizeFrom(settings: unknown): KitchenTicketTextS
   return v === 'large' || v === 'normal' ? v : DEFAULT_KITCHEN_TICKET_TEXT_SIZE;
 }
 
+/**
+ * 厨房伝票の商品名の言語（店舗設定 store_settings.settings.kitchenTicket.language）。
+ *   both … 英語を主に、日本語も下に（これまで）。既定
+ *   en   … 英語だけ（2026-09-21 Ronnie「キッチン英語だけで大丈夫」）。見出しの日本語（ドリンク 伝票・取消・テイクアウト）も出さない。
+ *          英語名が作れない商品（英語名もカナも無い）は日本語名を出す（情報は落とさない）
+ */
+export type KitchenTicketLanguage = 'both' | 'en';
+
+export const DEFAULT_KITCHEN_TICKET_LANGUAGE: KitchenTicketLanguage = 'both';
+
+export const KITCHEN_TICKET_LANGUAGE_LABELS: Record<KitchenTicketLanguage, string> = {
+  both: '英語と日本語（これまで）',
+  en: '英語だけ',
+};
+
+export function kitchenTicketLanguageFrom(settings: unknown): KitchenTicketLanguage {
+  const v = (settings as { kitchenTicket?: { language?: unknown } } | null)?.kitchenTicket?.language;
+  return v === 'both' || v === 'en' ? v : DEFAULT_KITCHEN_TICKET_LANGUAGE;
+}
+
 export interface KitchenTicketSettings {
   split: KitchenTicketSplit;
   textSize: KitchenTicketTextSize;
+  language: KitchenTicketLanguage;
 }
 
 export function kitchenTicketSettingsFrom(settings: unknown): KitchenTicketSettings {
-  return { split: kitchenTicketSplitFrom(settings), textSize: kitchenTicketTextSizeFrom(settings) };
+  return {
+    split: kitchenTicketSplitFrom(settings),
+    textSize: kitchenTicketTextSizeFrom(settings),
+    language: kitchenTicketLanguageFrom(settings),
+  };
 }
 
 /**
@@ -210,6 +235,8 @@ export interface KitchenLayoutOptions extends WidthOptions {
   printedAt: string;
   /** 文字の大きさ（省略時は標準＝これまでの大きさ） */
   textSize?: KitchenTicketTextSize;
+  /** 商品名の言語（省略時は英語と日本語） */
+  language?: KitchenTicketLanguage;
 }
 
 /** 伝票1枚ぶんの行を組み立てる。 */
@@ -227,13 +254,14 @@ export function layoutKitchenTicket(ticket: KitchenTicket, opts: KitchenLayoutOp
 
   const hasCancel = ticket.lines.some((l) => l.delta < 0);
   const hasAdd = ticket.lines.some((l) => l.delta > 0);
+  const enOnly = opts.language === 'en';
 
-  // 厨房は英語主体（日本語を読まないスタッフが作る）。日本語も残して両方読めるようにする。
+  // 厨房は英語主体（日本語を読まないスタッフが作る）。「英語と日本語」は日本語も残して両方読めるようにする。
   if (opts.titleEn) push(opts.titleEn, 'normal', 'center');
-  push(opts.title, 'normal', 'center');
+  if (!enOnly || !opts.titleEn) push(opts.title, 'normal', 'center');
   // 卓名と取消の見出し: 標準は縦2倍、大きめは縦横2倍（卓名は短いので半分の桁数でも収まる）
-  push(ticket.tableName ?? 'TAKEOUT / テイクアウト', big ? 'large' : 'tall', 'center');
-  if (hasCancel && !hasAdd) push('*** CANCEL / 取消 ***', big ? 'large' : 'tall', 'center');
+  push(ticket.tableName ?? (enOnly ? 'TAKEOUT' : 'TAKEOUT / テイクアウト'), big ? 'large' : 'tall', 'center');
+  if (hasCancel && !hasAdd) push(enOnly ? '*** CANCEL ***' : '*** CANCEL / 取消 ***', big ? 'large' : 'tall', 'center');
   const part = ticket.part && ticket.part.total > 1 ? `  (${ticket.part.index}/${ticket.part.total})` : '';
   push(twoCol(`No.${ticket.orderNo}${part}`, opts.printedAt, width, opts), big ? 'tall' : 'normal');
   const meta = [
@@ -253,13 +281,14 @@ export function layoutKitchenTicket(ticket: KitchenTicket, opts: KitchenLayoutOp
   // 縦横2倍は字下げを浅くする（1行の桁数が半分になるため）
   const indent = big ? ' ' : '   ';
   for (const l of ticket.lines) {
-    // 日本語を読まない厨房スタッフ向けに、英語を主・日本語を従で並べる
+    // 日本語を読まない厨房スタッフ向けに、英語を主・日本語を従で並べる（「英語だけ」は日本語を出さない）
     // （英語が作れない商品は日本語のみ。情報は落とさない）
     const qty = `x${Math.abs(l.delta)}`;
-    const cancelled = l.delta < 0;
     const head = l.nameEn ?? l.name;
-    push(`${cancelled ? '[CANCEL/取消] ' : ''}${head}  ${qty}`, itemSize);
-    if (l.nameEn) push(`${indent}${l.name}`, nameJaSize);
+    // 取消の印は商品名と別の行にする（同じ行だと大きい文字で商品名の途中から折り返して読みにくい）
+    if (l.delta < 0) push(enOnly ? '[CANCEL]' : '[CANCEL / 取消]', itemSize);
+    push(`${head}  ${qty}`, itemSize);
+    if (l.nameEn && !enOnly) push(`${indent}${l.name}`, nameJaSize);
     for (const m of l.modifiers) push(`   ・${m}`, detailSize);
     if (l.memo) push(`   ※${l.memo}`, detailSize);
   }
