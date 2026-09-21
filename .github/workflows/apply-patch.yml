@@ -50,6 +50,17 @@ jobs:
           git config user.email "noreply@anthropic.com"
           git checkout -B "$BRANCH" "$BASE"
           git am --3way --ignore-whitespace "${patches[@]}"
-          git push --force origin "$BRANCH"
+          push_refspec="HEAD:refs/heads/$BRANCH"
+          for attempt in 1 2 3; do
+            if git push --force origin "$push_refspec"; then
+              break
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              exit 1
+            fi
+            echo "push failed on attempt $attempt; refreshing origin/$BRANCH and retrying..."
+            git fetch origin "refs/heads/$BRANCH:refs/remotes/origin/$BRANCH" || true
+            sleep "$attempt"
+          done
           echo "pushed $BRANCH at $(git rev-parse --short HEAD) (base $BASE)"
           git log --oneline "$BASE..HEAD"
