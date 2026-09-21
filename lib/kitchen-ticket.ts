@@ -46,20 +46,32 @@ export function kitchenTicketSplitFrom(settings: unknown): KitchenTicketSplit {
  * 厨房伝票の文字の大きさ（店舗設定 store_settings.settings.kitchenTicket.textSize）。
  *   large  … 商品名（英語・日本語）を縦横2倍（Word の16ポイントくらい）、卓名も縦横2倍、
  *             伝票番号・選択肢・メモは縦2倍。既定（2026-09-21 店舗要望「文字を少し大きく」）
+ *   medium … 商品名（英語・日本語）・選択肢・メモ・伝票番号・取消の見出しを縦2倍（幅はそのまま）、卓名だけ縦横2倍。
+ *             Word の12ポイントくらいの見た目（2026-09-21 店舗要望「大きくなりました。Word の12くらいに」）。
+ *             プリンターの文字は1倍・2倍…の整数倍しか選べないため、縦2倍（高さ2倍・幅1倍）がいちばん近い。
+ *             1行の桁数は変わらない（80mm=48桁）ので、長い商品名も縦横2倍のように途中で折り返さない
  *   normal … これまでの大きさ（商品名は縦2倍、日本語名・選択肢は等倍）
  */
-export type KitchenTicketTextSize = 'large' | 'normal';
+export type KitchenTicketTextSize = 'large' | 'medium' | 'normal';
 
 export const DEFAULT_KITCHEN_TICKET_TEXT_SIZE: KitchenTicketTextSize = 'large';
 
 export const KITCHEN_TICKET_TEXT_SIZE_LABELS: Record<KitchenTicketTextSize, string> = {
   large: '大きめ（Word の16ポイントくらい）',
+  medium: '中くらい（Word の12ポイントくらい）',
   normal: '標準（これまでの大きさ）',
 };
 
+/** 設定画面に並べる順（大きい順） */
+export const KITCHEN_TICKET_TEXT_SIZES: readonly KitchenTicketTextSize[] = ['large', 'medium', 'normal'];
+
+export function isKitchenTicketTextSize(v: unknown): v is KitchenTicketTextSize {
+  return v === 'large' || v === 'medium' || v === 'normal';
+}
+
 export function kitchenTicketTextSizeFrom(settings: unknown): KitchenTicketTextSize {
   const v = (settings as { kitchenTicket?: { textSize?: unknown } } | null)?.kitchenTicket?.textSize;
-  return v === 'large' || v === 'normal' ? v : DEFAULT_KITCHEN_TICKET_TEXT_SIZE;
+  return isKitchenTicketTextSize(v) ? v : DEFAULT_KITCHEN_TICKET_TEXT_SIZE;
 }
 
 /**
@@ -245,6 +257,8 @@ export function layoutKitchenTicket(ticket: KitchenTicket, opts: KitchenLayoutOp
   const rule = '-'.repeat(width);
   const out: LayoutLine[] = [];
   const big = opts.textSize === 'large';
+  // 中くらい: 縦2倍（幅はそのまま）を主に使う。卓名だけ縦横2倍（短く、厨房で最初に探すため）
+  const mid = opts.textSize === 'medium';
   // 長い商品名は桁数で折り返す（プリンタ任せだと1文字だけ次行に落ちて読みにくい）。
   // 縦2倍は桁数が変わらない。縦横2倍（large）は1行の桁数が半分になるので半分の桁数で折り返す。
   const push = (text: string, size: LayoutLine['size'] = 'normal', align: LayoutLine['align'] = 'left') => {
@@ -259,11 +273,11 @@ export function layoutKitchenTicket(ticket: KitchenTicket, opts: KitchenLayoutOp
   // 厨房は英語主体（日本語を読まないスタッフが作る）。「英語と日本語」は日本語も残して両方読めるようにする。
   if (opts.titleEn) push(opts.titleEn, 'normal', 'center');
   if (!enOnly || !opts.titleEn) push(opts.title, 'normal', 'center');
-  // 卓名と取消の見出し: 標準は縦2倍、大きめは縦横2倍（卓名は短いので半分の桁数でも収まる）
-  push(ticket.tableName ?? (enOnly ? 'TAKEOUT' : 'TAKEOUT / テイクアウト'), big ? 'large' : 'tall', 'center');
+  // 卓名と取消の見出し: 標準は縦2倍、大きめは縦横2倍（卓名は短いので半分の桁数でも収まる）。中くらいは卓名だけ縦横2倍
+  push(ticket.tableName ?? (enOnly ? 'TAKEOUT' : 'TAKEOUT / テイクアウト'), big || mid ? 'large' : 'tall', 'center');
   if (hasCancel && !hasAdd) push(enOnly ? '*** CANCEL ***' : '*** CANCEL / 取消 ***', big ? 'large' : 'tall', 'center');
   const part = ticket.part && ticket.part.total > 1 ? `  (${ticket.part.index}/${ticket.part.total})` : '';
-  push(twoCol(`No.${ticket.orderNo}${part}`, opts.printedAt, width, opts), big ? 'tall' : 'normal');
+  push(twoCol(`No.${ticket.orderNo}${part}`, opts.printedAt, width, opts), big || mid ? 'tall' : 'normal');
   const meta = [
     ticket.guestCount ? `Guests ${ticket.guestCount}` : null,
     ticket.clerkName ? `Staff ${ticket.clerkName}` : null,
@@ -274,10 +288,11 @@ export function layoutKitchenTicket(ticket: KitchenTicket, opts: KitchenLayoutOp
   out.push({ text: rule, size: 'normal', align: 'left', rule: true });
 
   // 商品名: 大きめは英語・日本語とも縦横2倍（Word の16ポイントくらい）、選択肢・メモは縦2倍。
+  // 中くらいは商品名（英語・日本語）・選択肢・メモとも縦2倍（Word の12ポイントくらい。1行48桁のまま）。
   // 標準は種類ごとの伝票（1枚に1商品）だけ商品名を縦2倍（これまでの大きさ）
-  const itemSize: LayoutLine['size'] = big ? 'large' : ticket.part ? 'tall' : 'normal';
-  const nameJaSize: LayoutLine['size'] = big ? 'large' : 'normal';
-  const detailSize: LayoutLine['size'] = big ? 'tall' : 'normal';
+  const itemSize: LayoutLine['size'] = big ? 'large' : mid ? 'tall' : ticket.part ? 'tall' : 'normal';
+  const nameJaSize: LayoutLine['size'] = big ? 'large' : mid ? 'tall' : 'normal';
+  const detailSize: LayoutLine['size'] = big || mid ? 'tall' : 'normal';
   // 縦横2倍は字下げを浅くする（1行の桁数が半分になるため）
   const indent = big ? ' ' : '   ';
   for (const l of ticket.lines) {

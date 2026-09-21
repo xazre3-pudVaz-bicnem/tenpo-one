@@ -10,6 +10,7 @@ import {
   KITCHEN_TICKET_LANGUAGE_LABELS,
   KITCHEN_TICKET_SPLIT_LABELS,
   KITCHEN_TICKET_TEXT_SIZE_LABELS,
+  KITCHEN_TICKET_TEXT_SIZES,
   type KitchenTicketLanguage,
   type KitchenTicketSettings,
   type KitchenTicketSplit,
@@ -24,6 +25,8 @@ const SPLIT_DESCRIPTIONS: Record<KitchenTicketSplit, string> = {
 
 const SIZE_DESCRIPTIONS: Record<KitchenTicketTextSize, string> = {
   large: '商品名（英語・日本語）と卓名を縦横2倍、伝票番号・選択肢・メモを縦2倍で印字します。',
+  medium:
+    '商品名・選択肢・メモ・伝票番号を縦2倍（幅はふつう）、卓名だけ縦横2倍。1行に48桁入るので、長い商品名も途中で折り返しません。',
   normal: '商品名は縦2倍、日本語名・選択肢は普通の大きさ（これまでの印字）。',
 };
 
@@ -68,6 +71,7 @@ function RadioCard<T extends string>({
 /**
  * 厨房伝票（キッチン・ドリンクのプリンター）の分け方・文字の大きさ・商品名の言語。店舗ごとの設定で、全キッチン機に効く。
  * 既定は「商品の種類ごとに1枚ずつ」「大きめ」「英語と日本語」（2026-09-21 店舗要望）。
+ * 文字の大きさは 大きめ（Word の16くらい）／中くらい（Word の12くらい）／標準（これまで）。
  */
 export function KitchenTicketPanel({ storeId, initial }: { storeId: string; initial: KitchenTicketSettings }) {
   const { toast } = useToast();
@@ -113,7 +117,7 @@ export function KitchenTicketPanel({ storeId, initial }: { storeId: string; init
 
         <div className="space-y-2" role="radiogroup" aria-label="厨房伝票の文字の大きさ">
           <p className="text-xs font-semibold text-gray-600">文字の大きさ</p>
-          {(['large', 'normal'] as const).map((value) => (
+          {KITCHEN_TICKET_TEXT_SIZES.map((value) => (
             <RadioCard
               key={value}
               name="kitchen-ticket-text-size"
