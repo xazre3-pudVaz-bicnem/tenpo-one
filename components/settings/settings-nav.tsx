@@ -1,5 +1,6 @@
 'use client';
 
+import { Suspense } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -8,6 +9,7 @@ import {
   ScrollText, ChevronRight, Smartphone,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { RegisterReturnBar } from './register-return-bar';
 
 const ICONS = {
   store: Store,
@@ -147,7 +149,13 @@ export function SettingsShell({ groups, children }: { groups: SettingsNavGroup[]
             <SettingsNav groups={groups} pathname={pathname} />
           </div>
         </aside>
-        <div className={cn('@container min-w-0', isHub && 'hidden lg:block')}>{children}</div>
+        <div className={cn('@container min-w-0', isHub && 'hidden lg:block')}>
+          {/* レジの設定から開いたときだけ「レジの設定に戻る」を出す */}
+          <Suspense fallback={null}>
+            <RegisterReturnBar />
+          </Suspense>
+          {children}
+        </div>
       </div>
     </div>
   );

@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { BookOpen, PackageX } from 'lucide-react';
+import { BookOpen, PackageX, Settings } from 'lucide-react';
 import { requireFeature } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { isMissingColumnError } from '@/lib/schema-compat';
@@ -93,6 +93,14 @@ export default async function PosPage({
               >
                 <PackageX className="h-4 w-4" aria-hidden />
                 品切れ
+              </Link>
+              {/* レジの設定（厨房伝票・メニュー・QR・ハンディなど、今までの設定をレジからまとめて変える） */}
+              <Link
+                href="/app/pos/settings"
+                className="inline-flex h-10 items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-4 text-sm font-semibold text-navy hover:bg-gray-50"
+              >
+                <Settings className="h-4 w-4" aria-hidden />
+                レジの設定
               </Link>
               {/* メニューブック（カテゴリ・商品の並び順、ハンディ・お客様QRでの出し方）は店長以上だけ */}
               {can(ctx.role, 'menu.manage') && (

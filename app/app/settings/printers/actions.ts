@@ -373,6 +373,7 @@ export async function saveKitchenTicketSettings(
   });
 
   revalidatePath('/app/settings/printers');
+  revalidatePath('/app/pos/settings');
   return {};
 }
 

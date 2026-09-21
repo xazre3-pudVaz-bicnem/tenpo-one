@@ -5,6 +5,7 @@ import { requireFeature } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { can } from '@/lib/permissions';
 import { loadSoldOutBoard } from '@/lib/sold-out-loader';
+import { FROM_REGISTER, registerBackUrl, registerSettingsUrl } from '@/lib/register-settings';
 import { PageHeader } from '@/components/ui/page-header';
 import { EmptyState } from '@/components/ui/state';
 import { SoldOutBoard } from '@/components/pos/sold-out-board';
@@ -15,7 +16,14 @@ export const metadata: Metadata = { title: '品切れ設定' };
  * レジの品切れ設定（POSレジの「品切れ」から開く）。スタッフが商品ごとに売切／販売再開を切り替える。
  * 売切の商品はレジ・ハンディ・お客様QRで注文できなくなる（2026-09-21 店舗要望）。
  */
-export default async function PosSoldOutPage() {
+export default async function PosSoldOutPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ from?: string; order?: string }>;
+}) {
+  const { from, order } = await searchParams;
+  // レジの設定から開いたときはレジの設定に戻す（それ以外は POSレジへ）
+  const fromRegister = from === FROM_REGISTER;
   const ctx = await requireFeature('pos');
   const store = ctx.currentStore ?? ctx.stores[0];
 
@@ -36,9 +44,12 @@ export default async function PosSoldOutPage() {
 
   return (
     <div className="mx-auto max-w-3xl">
-      <Link href="/app/pos" className="mb-2 inline-flex min-h-10 items-center gap-1 text-sm font-medium text-primary hover:underline">
+      <Link
+        href={fromRegister ? registerSettingsUrl(order) : registerBackUrl(order)}
+        className="mb-2 inline-flex min-h-10 items-center gap-1 text-sm font-medium text-primary hover:underline"
+      >
         <ChevronLeft className="h-4 w-4" aria-hidden />
-        POSレジへ戻る
+        {fromRegister ? 'レジの設定に戻る' : 'POSレジへ戻る'}
       </Link>
       <PageHeader title="品切れ設定" en="Sold out" description={`${store.name}｜商品ごとに売切・販売再開を切り替えます`} />
       {error ? (

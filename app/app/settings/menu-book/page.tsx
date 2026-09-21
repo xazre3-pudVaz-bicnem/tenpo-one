@@ -8,7 +8,7 @@ import { MenuBookEditor, type MenuBookCategoryRow, type MenuBookPlanRow } from '
 import type { MenuItemRow } from '@/components/settings/menu-item-dialog';
 import { classifyMenuItem, HANDY_GROUPS, type HandyGroupId } from '@/components/handy/logic';
 import { looksLikePlanName } from '@/lib/handy-visit';
-import { autoCategoryShow, categoryShow, menuBookFrom, type MenuBookItemInput } from '@/lib/menu-book';
+import { autoCategoryShow, categoryShow, isMenuBookTab, menuBookFrom, type MenuBookItemInput } from '@/lib/menu-book';
 
 export const metadata: Metadata = { title: 'メニューブック | 設定' };
 
@@ -18,9 +18,10 @@ const NOT_A_PLAN = /→|延長/;
 /**
  * メニューブック（店長以上）。レジの「メニューブック」ボタン・設定から開く。
  * ハンディ・お客様QRに出すカテゴリの並び順と出し方、ページ（タブのまとめ方）、商品の並び順と入力、
- * プランで出すカテゴリ、ランチの時間帯。
+ * プランで出すカテゴリ、ランチの時間帯。?tab=pages などで最初に開くタブを指定できる（レジの設定から開く）。
  */
-export default async function MenuBookPage() {
+export default async function MenuBookPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
+  const { tab } = await searchParams;
   const ctx = await requirePermission('menu.manage');
   const store = ctx.currentStore ?? ctx.stores[0];
 
@@ -146,6 +147,7 @@ export default async function MenuBookPage() {
         joinPrev={book.joinPrev}
         pageNames={book.pageNames}
         taxRates={(taxRates ?? []).map((t) => ({ id: t.id, name: t.name }))}
+        initialTab={isMenuBookTab(tab) ? tab : undefined}
       />
     </div>
   );
