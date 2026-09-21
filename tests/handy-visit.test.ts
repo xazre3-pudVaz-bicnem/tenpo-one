@@ -2,15 +2,23 @@ import { describe, it, expect } from 'vitest';
 import {
   buildPlanItems,
   classifyPlanItem,
+  CUSTOM_MAX_HOURS,
   DEFAULT_VISIT_DRAFT,
-  DURATION_STEP_MINUTES,
-  durationGrid,
+  DURATION_MAX_MINUTES,
+  DURATION_MIN_MINUTES,
   durationLabel,
-  HANDY_DURATIONS,
+  durationProblem,
+  HOUR_CHOICES,
+  isButtonMinutes,
+  MINUTE_CHOICES,
+  nearestButtonParts,
+  parseCustomMinutes,
   planHasItems,
   remainingMinutes,
+  splitMinutes,
   validateVisitDraft,
   visitMemo,
+  warningProblem,
   type PlanItemInput,
   type VisitDraft,
 } from '@/lib/handy-visit';
@@ -54,6 +62,20 @@ describe('お客様情報の検証', () => {
     expect(validateVisitDraft(draft({ timed: true, duration: 0 }))).toMatch(/席時間/);
     expect(validateVisitDraft(draft({ timed: true, duration: 600 }))).toMatch(/席時間/);
     expect(validateVisitDraft(draft({ timed: true, duration: 120 }))).toBeNull();
+    // カスタムで入れた15分単位でない長さ・ボタンに無い4時間も使える
+    expect(validateVisitDraft(draft({ timed: true, duration: 100 }))).toBeNull();
+    expect(validateVisitDraft(draft({ timed: true, duration: 240 }))).toBeNull();
+  });
+
+  it('終了前注意は席時間より短くないと確定できない（切っていれば見ない）', () => {
+    expect(validateVisitDraft(draft({ timed: true, duration: 30, warningMinutes: 30 }))).toMatch(
+      /終了前注意は席時間（30分）より短く/
+    );
+    expect(validateVisitDraft(draft({ timed: true, duration: 30, warningMinutes: 10 }))).toBeNull();
+    expect(
+      validateVisitDraft(draft({ timed: true, duration: 30, warningMinutes: 30, warningEnabled: false }))
+    ).toBeNull();
+    expect(validateVisitDraft(draft({ timed: false, duration: 30, warningMinutes: 60 }))).toBeNull();
   });
 
   it('プラン商品は必須ではない（メニュー未登録の店でも飲み放題モードで使える）', () => {
@@ -72,6 +94,12 @@ describe('伝票メモ', () => {
     expect(visitMemo(draft({ timed: false }))).toBe('ハンディ: アラカルト / 男2・女1 / 記念日・誕生日');
   });
 
+  it('終了前注意が1時間以上なら「1時間15分前」と書く', () => {
+    expect(visitMemo(draft({ timed: true, duration: 180, warningEnabled: true, warningMinutes: 75 }))).toBe(
+      'ハンディ: アラカルト / 男2・女1 / 記念日・誕生日 / 3時間制（1時間15分前に声かけ）'
+    );
+  });
+
   it('終了前注意を切っていれば声かけを書かない', () => {
     expect(visitMemo(draft({ timed: true, duration: 90, warningEnabled: false }))).toBe(
       'ハンディ: アラカルト / 男2・女1 / 記念日・誕生日 / 1時間30分制'
@@ -86,24 +114,10 @@ describe('時間の表示', () => {
     expect(durationLabel(150)).toBe('2時間30分');
   });
 
-  it('席時間は15分単位（30分〜5時間）', () => {
-    expect(DURATION_STEP_MINUTES).toBe(15);
-    expect(HANDY_DURATIONS[0]).toBe(30);
-    expect(HANDY_DURATIONS[HANDY_DURATIONS.length - 1]).toBe(300);
-    expect(HANDY_DURATIONS.every((m, i) => i === 0 || m - HANDY_DURATIONS[i - 1] === 15)).toBe(true);
-    expect(HANDY_DURATIONS).toContain(75);
+  it('15分単位の表示', () => {
     expect(durationLabel(75)).toBe('1時間15分');
     expect(durationLabel(105)).toBe('1時間45分');
-  });
-
-  it('席時間の表は1時間ごとの行に ちょうど/15分/30分/45分 を並べる', () => {
-    const rows = durationGrid();
-    expect(rows[0]).toEqual([null, null, 30, 45]);
-    expect(rows[1]).toEqual([60, 75, 90, 105]);
-    expect(rows[2]).toEqual([120, 135, 150, 165]);
-    expect(rows[rows.length - 1]).toEqual([300, null, null, null]);
-    expect(rows.flat().filter((v) => v !== null)).toEqual([...HANDY_DURATIONS]);
-    expect(durationGrid([])).toEqual([]);
+    expect(durationLabel(0)).toBe('0分');
   });
 
   it('残り分は切り上げ・0未満は0', () => {
@@ -111,6 +125,77 @@ describe('時間の表示', () => {
     expect(remainingMinutes(now + 90_000, now)).toBe(2);
     expect(remainingMinutes(now - 60_000, now)).toBe(0);
     expect(remainingMinutes(null, now)).toBeNull();
+  });
+});
+
+describe('時間ピッカー（時間制・終了前注意）', () => {
+  it('ボタンは 0〜3時間 と 0/15/30/45分', () => {
+    expect(HOUR_CHOICES).toEqual([0, 1, 2, 3]);
+    expect(MINUTE_CHOICES).toEqual([0, 15, 30, 45]);
+  });
+
+  it('分を時間と分に分ける（読めない値・マイナスは0）', () => {
+    expect(splitMinutes(135)).toEqual({ hours: 2, minutes: 15 });
+    expect(splitMinutes(30)).toEqual({ hours: 0, minutes: 30 });
+    expect(splitMinutes(-5)).toEqual({ hours: 0, minutes: 0 });
+    expect(splitMinutes(Number.NaN)).toEqual({ hours: 0, minutes: 0 });
+  });
+
+  it('ボタンだけで選べる長さか（選べなければカスタムで開く）', () => {
+    expect(isButtonMinutes(120)).toBe(true);
+    expect(isButtonMinutes(30)).toBe(true);
+    expect(isButtonMinutes(225)).toBe(true); // 3時間45分
+    expect(isButtonMinutes(0)).toBe(true); // 0時間0分（設定はできないが、ボタンの組み合わせとしてはある）
+    expect(isButtonMinutes(240)).toBe(false); // 4時間
+    expect(isButtonMinutes(100)).toBe(false); // 1時間40分
+    expect(isButtonMinutes(10)).toBe(false);
+    expect(isButtonMinutes(1.5)).toBe(false);
+  });
+
+  it('カスタムからボタンに戻したときは、近い下のボタンに寄せる', () => {
+    expect(nearestButtonParts(100)).toEqual({ hours: 1, minutes: 30 });
+    expect(nearestButtonParts(250)).toEqual({ hours: 3, minutes: 0 });
+    expect(nearestButtonParts(10)).toEqual({ hours: 0, minutes: 0 });
+    expect(nearestButtonParts(59)).toEqual({ hours: 0, minutes: 45 });
+  });
+
+  it('カスタム入力を分に直す（空欄は0・全角数字も読む）', () => {
+    expect(parseCustomMinutes('4', '0')).toBe(240);
+    expect(parseCustomMinutes('0', '10')).toBe(10);
+    expect(parseCustomMinutes('', '5')).toBe(5);
+    expect(parseCustomMinutes('1', '')).toBe(60);
+    expect(parseCustomMinutes('１', '４０')).toBe(100);
+    expect(parseCustomMinutes(' 2 ', ' 15 ')).toBe(135);
+  });
+
+  it('カスタム入力の読めない値は null（分は59まで・時間は上限まで）', () => {
+    expect(CUSTOM_MAX_HOURS).toBe(8);
+    expect(parseCustomMinutes('0', '60')).toBeNull();
+    expect(parseCustomMinutes('9', '0')).toBeNull();
+    expect(parseCustomMinutes('-1', '0')).toBeNull();
+    expect(parseCustomMinutes('1.5', '0')).toBeNull();
+    expect(parseCustomMinutes('a', '0')).toBeNull();
+    expect(parseCustomMinutes('8', '0')).toBe(480);
+  });
+
+  it('席時間は15分〜8時間（レジのウォークインと同じ範囲）', () => {
+    expect(DURATION_MIN_MINUTES).toBe(15);
+    expect(DURATION_MAX_MINUTES).toBe(480);
+    expect(durationProblem(15)).toBeNull();
+    expect(durationProblem(480)).toBeNull();
+    expect(durationProblem(100)).toBeNull();
+    expect(durationProblem(0)).toMatch(/15分〜8時間/);
+    expect(durationProblem(10)).toMatch(/席時間/);
+    expect(durationProblem(481)).toMatch(/席時間/);
+    expect(durationProblem(90.5)).toMatch(/席時間/);
+  });
+
+  it('終了前注意は1分以上・席時間より短く', () => {
+    expect(warningProblem(30, 120)).toBeNull();
+    expect(warningProblem(10, 120)).toBeNull();
+    expect(warningProblem(0, 120)).toMatch(/設定してください/);
+    expect(warningProblem(120, 120)).toMatch(/席時間（2時間）より短く/);
+    expect(warningProblem(180, 120)).toMatch(/より短く/);
   });
 });
 
