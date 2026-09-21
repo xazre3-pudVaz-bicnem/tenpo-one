@@ -69,6 +69,8 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: '/app/inventory', label: '在庫設定', en: 'Stock', icon: 'package', permission: 'inventory.view' },
       { href: '/app/cash/close', label: 'レジクローズ', en: 'Close register', icon: 'lock', permission: 'register.operate' },
       { href: '/app/scan', label: 'スキャン', en: 'Snap & file', icon: 'camera', permission: 'documents.write' },
+      // レジの設定: 厨房伝票・品切れ・メニュー・QR・ハンディなど、レジで変える設定をまとめた画面（スタッフも開ける。変更は各権限）
+      { href: '/app/pos/settings', label: 'レジの設定', en: 'Register settings', icon: 'gear', permission: 'pos.order' },
       { href: '/app/settings', label: '設定', en: 'Settings', icon: 'settings', permission: 'store.settings' },
       { href: '/app/notifications', label: 'アラート', en: 'Alerts', icon: 'bell', permission: 'dashboard.view', badge: 'alerts' },
     ],
@@ -164,6 +166,8 @@ const EXTRA_TITLES: { href: string; label: string; en: string }[] = [
   // POS はテーブル注文・即会計の両方で使うため、画面タイトルはオーダー・会計に統一する
   { href: '/app/pos', label: 'オーダー・会計', en: 'Order & Pay' },
   { href: '/app/pos/receipt', label: 'レシート', en: 'Receipt' },
+  { href: '/app/pos/settings', label: 'レジの設定', en: 'Register settings' },
+  { href: '/app/pos/sold-out', label: '品切れ設定', en: 'Sold out' },
   { href: '/app/handy', label: 'ハンディ', en: 'Handy' },
   { href: '/app/onboarding', label: '初期設定', en: 'Setup' },
   { href: '/app/menu', label: 'メニュー', en: 'Menu' },
