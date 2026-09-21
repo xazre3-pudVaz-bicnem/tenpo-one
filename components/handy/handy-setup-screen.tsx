@@ -2,21 +2,28 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { yen } from '@/lib/format';
 import { useToast } from '@/components/ui/toast';
 import {
+  CUSTOM_MAX_HOURS,
   DEFAULT_VISIT_DRAFT,
   HANDY_PLANS,
   HANDY_SCENES,
-  HANDY_WARNINGS,
+  HOUR_CHOICES,
   MAX_GUESTS,
-  durationGrid,
+  MINUTE_CHOICES,
   durationLabel,
+  durationProblem,
+  isButtonMinutes,
+  nearestButtonParts,
+  parseCustomMinutes,
   planHasItems,
   planName,
+  splitMinutes,
   validateVisitDraft,
+  warningProblem,
   type HandyPlan,
   type HandyPlanItem,
   type VisitDraft,
@@ -162,7 +169,7 @@ export function HandySetupScreen({
                 onClick={() => setPicker('warning')}
                 className="flex min-h-9 items-center gap-0.5 font-bold text-[#4f3868] disabled:text-[#a69bbb]"
               >
-                {draft.timed && draft.warningEnabled ? `${draft.warningMinutes}分前` : '設定なし'}
+                {draft.timed && draft.warningEnabled ? `${durationLabel(draft.warningMinutes)}前` : '設定なし'}
                 <ChevronRight className="h-4 w-4 text-[#c9b8ea]" aria-hidden />
               </button>
             </span>
@@ -295,9 +302,13 @@ export function HandySetupScreen({
         />
       )}
       {picker === 'duration' && (
-        <DurationSheet
+        <TimePickerSheet
+          title="時間制"
           value={draft.duration}
-          onSelect={(minutes) => {
+          summaryPrefix="席時間"
+          format={durationLabel}
+          problemOf={durationProblem}
+          onSave={(minutes) => {
             set({ duration: minutes });
             setPicker(null);
           }}
@@ -305,18 +316,17 @@ export function HandySetupScreen({
         />
       )}
       {picker === 'warning' && (
-        <ChoiceSheet
+        <TimePickerSheet
           title="終了前注意"
-          onClose={() => setPicker(null)}
-          options={HANDY_WARNINGS.map((m) => ({
-            id: String(m),
-            label: `${m}分前`,
-            selected: m === draft.warningMinutes,
-          }))}
-          onSelect={(id) => {
-            set({ warningMinutes: Number(id) });
+          value={draft.warningMinutes}
+          summaryPrefix="終了の"
+          format={(minutes) => `${durationLabel(minutes)}前`}
+          problemOf={(minutes) => warningProblem(minutes, draft.duration)}
+          onSave={(minutes) => {
+            set({ warningMinutes: minutes });
             setPicker(null);
           }}
+          onClose={() => setPicker(null)}
         />
       )}
       {(picker === 'male' || picker === 'female') && (
@@ -425,10 +435,13 @@ function Switch({
 
 function Sheet({
   title,
+  closeButton,
   onClose,
   children,
 }: {
   title: string;
+  /** 見出しの右に ×（閉じる）を出す */
+  closeButton?: boolean;
   onClose: () => void;
   children: React.ReactNode;
 }) {
@@ -444,7 +457,19 @@ function Sheet({
         className="max-h-[88dvh] w-full max-w-[370px] overflow-y-auto rounded-xl bg-white p-5 shadow-[0_20px_90px_#0005]"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="mb-3 text-lg font-bold text-[#2a2138]">{title}</h2>
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <h2 className="text-lg font-bold text-[#2a2138]">{title}</h2>
+          {closeButton && (
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="閉じる"
+              className="-my-1 -mr-2 flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[#8a769d] active:bg-[#f6f3fb]"
+            >
+              <X className="h-5 w-5" aria-hidden />
+            </button>
+          )}
+        </div>
         {children}
       </div>
     </div>
@@ -552,52 +577,176 @@ function ChoiceSheet({
   );
 }
 
-/** 席時間（15分単位）。1時間ごとの行に ちょうど／15分／30分／45分 を並べる */
-function DurationSheet({
+/** 時間ピッカーのボタン（時間・分・カスタム）。人数ボタンと同じ見た目 */
+function PickButton({
+  selected,
+  onClick,
+  children,
+}: {
+  selected: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={selected}
+      onClick={onClick}
+      className={cn(
+        'min-h-[46px] rounded-[9px] border-[1.5px] border-[#7b3fe4] text-base font-bold tabular-nums',
+        selected ? 'bg-[#7b3fe4] text-white' : 'bg-white text-[#7b3fe4]'
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+/**
+ * 時間制・終了前注意の時間ピッカー（2026-09-21 Ronnie のスクショの操作をハンディのデザインで）。
+ * 「時間」（0〜3時間）と「分」（0/15/30/45分）を1つずつ選び、ボタンに無い長さは「カスタム」で
+ * 時間と分を入力して「設定」。いまの値がボタンに無い長さ（100分のコースなど）ならカスタムで開く。
+ */
+function TimePickerSheet({
+  title,
   value,
-  onSelect,
+  summaryPrefix,
+  format,
+  problemOf,
+  onSave,
   onClose,
 }: {
+  title: string;
   value: number;
-  onSelect: (minutes: number) => void;
+  /** 選んでいる長さの前に付ける言葉（「席時間」「終了の」） */
+  summaryPrefix: string;
+  /** 選んでいる長さの表示（「2時間30分」「30分前」） */
+  format: (minutes: number) => string;
+  /** 設定できない理由。設定できれば null */
+  problemOf: (minutes: number) => string | null;
+  onSave: (minutes: number) => void;
   onClose: () => void;
 }) {
-  const rows = durationGrid();
+  const start = splitMinutes(value);
+  const startButtons = nearestButtonParts(value);
+  const [custom, setCustom] = useState(!isButtonMinutes(value));
+  const [hours, setHours] = useState(startButtons.hours);
+  const [minutes, setMinutes] = useState(startButtons.minutes);
+  const [hoursText, setHoursText] = useState(String(start.hours));
+  const [minutesText, setMinutesText] = useState(String(start.minutes));
+  // カスタムを押したときだけ入力欄にフォーカスする（カスタムの値で開いたときはキーボードを出さない）
+  const [focusCustom, setFocusCustom] = useState(false);
+
+  const total = custom ? parseCustomMinutes(hoursText, minutesText) : hours * 60 + minutes;
+  const problem =
+    total === null
+      ? `時間は0〜${CUSTOM_MAX_HOURS}、分は0〜59の数字で入力してください`
+      : problemOf(total);
+
+  /** 時間・分のボタン: カスタム中なら入力していた値に近いボタンから続ける */
+  const pick = (patch: { hours?: number; minutes?: number }) => {
+    let base = { hours, minutes };
+    if (custom) {
+      const typed = parseCustomMinutes(hoursText, minutesText);
+      if (typed !== null) base = nearestButtonParts(typed);
+      setCustom(false);
+    }
+    setHours(patch.hours ?? base.hours);
+    setMinutes(patch.minutes ?? base.minutes);
+  };
+
+  const openCustom = () => {
+    if (custom) return;
+    setHoursText(String(hours));
+    setMinutesText(String(minutes));
+    setFocusCustom(true);
+    setCustom(true);
+  };
+
+  const save = () => {
+    if (total === null || problem) return;
+    onSave(total);
+  };
+
+  const inputClass =
+    'h-12 w-16 rounded-lg border-[1.5px] border-[#d9ccef] text-center text-2xl font-bold text-[#2a2138] tabular-nums focus:border-[#7b3fe4] focus:outline-none';
+
   return (
-    <Sheet title="席時間（15分単位）" onClose={onClose}>
-      <p className="mb-3 text-xs text-[#8a769d]">
-        いま：<b className="text-sm font-bold text-[#4f3868]">{durationLabel(value)}</b>
-      </p>
-      <div className="grid grid-cols-4 gap-1.5" role="group" aria-label="席時間">
-        {rows.flat().map((minutes, i) =>
-          minutes === null ? (
-            <span key={`empty-${i}`} aria-hidden />
-          ) : (
-            <button
-              key={minutes}
-              type="button"
-              aria-pressed={minutes === value}
-              onClick={() => onSelect(minutes)}
-              className={cn(
-                'min-h-[44px] rounded-[8px] border-[1.5px] px-0.5 text-xs font-bold whitespace-nowrap tabular-nums',
-                minutes === value
-                  ? 'border-[#7b3fe4] bg-[#7b3fe4] text-white'
-                  : minutes % 60 === 0
-                    ? 'border-[#7b3fe4] bg-[#f3ecfe] text-[#4f3868]'
-                    : 'border-[#d9ccef] bg-white text-[#4f3868]'
-              )}
-            >
-              {durationLabel(minutes)}
-            </button>
-          )
+    <Sheet title={title} onClose={onClose} closeButton>
+      <p className="mb-2 text-xs font-bold text-[#5e4777]">時間</p>
+      <div className="grid grid-cols-2 gap-2" role="group" aria-label="時間">
+        {HOUR_CHOICES.map((h) => (
+          <PickButton key={h} selected={!custom && hours === h} onClick={() => pick({ hours: h })}>
+            {h}時間
+          </PickButton>
+        ))}
+      </div>
+
+      <p className="mt-4 mb-2 text-xs font-bold text-[#5e4777]">分</p>
+      <div className="grid grid-cols-2 gap-2" role="group" aria-label="分">
+        {MINUTE_CHOICES.map((m) => (
+          <PickButton key={m} selected={!custom && minutes === m} onClick={() => pick({ minutes: m })}>
+            {m}分
+          </PickButton>
+        ))}
+      </div>
+
+      <div className="mt-4 border-t border-[#e3dbf1] pt-4">
+        <div className="grid grid-cols-2 gap-2">
+          <PickButton selected={custom} onClick={openCustom}>
+            カスタム
+          </PickButton>
+        </div>
+        {custom && (
+          <div className="mt-3 flex items-center justify-center gap-2 text-sm font-bold text-[#5e4777]">
+            <input
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              maxLength={2}
+              autoFocus={focusCustom}
+              value={hoursText}
+              onChange={(e) => setHoursText(e.target.value)}
+              onFocus={(e) => e.currentTarget.select()}
+              onKeyDown={(e) => e.key === 'Enter' && save()}
+              aria-label={`${title}（カスタム）の時間`}
+              className={inputClass}
+            />
+            時間
+            <input
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              maxLength={2}
+              value={minutesText}
+              onChange={(e) => setMinutesText(e.target.value)}
+              onFocus={(e) => e.currentTarget.select()}
+              onKeyDown={(e) => e.key === 'Enter' && save()}
+              aria-label={`${title}（カスタム）の分`}
+              className={inputClass}
+            />
+            分
+          </div>
         )}
       </div>
+
+      <p className="mt-4 min-h-6 text-center" aria-live="polite">
+        {problem ? (
+          <span className="text-xs leading-relaxed text-[#b3341f]">{problem}</span>
+        ) : total !== null ? (
+          <span className="text-sm text-[#8a769d]">
+            {summaryPrefix}{' '}
+            <b className="text-lg font-bold text-[#4f3868] tabular-nums">{format(total)}</b>
+          </span>
+        ) : null}
+      </p>
       <button
         type="button"
-        onClick={onClose}
-        className="mt-4 min-h-[43px] w-full rounded-lg bg-[#efeaf8] text-center text-sm font-bold text-[#5e4777]"
+        disabled={total === null || !!problem}
+        onClick={save}
+        className="mt-3 min-h-[46px] w-full rounded-lg bg-[#7b3fe4] text-base font-bold text-white disabled:opacity-40"
       >
-        閉じる
+        設定
       </button>
     </Sheet>
   );

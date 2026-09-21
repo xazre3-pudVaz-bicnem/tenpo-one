@@ -28,35 +28,85 @@ export const HANDY_SCENES = [
 ] as const;
 export type HandyScene = (typeof HANDY_SCENES)[number];
 
-/** 席時間の刻み（分）。現場の要望で15分単位（2026-09-21） */
-export const DURATION_STEP_MINUTES = 15;
-const DURATION_MIN = 30;
-const DURATION_MAX = 300;
-
-/** 時間制の選択肢（分）: 30分〜5時間を15分ずつ */
-export const HANDY_DURATIONS: readonly number[] = Array.from(
-  { length: (DURATION_MAX - DURATION_MIN) / DURATION_STEP_MINUTES + 1 },
-  (_, i) => DURATION_MIN + i * DURATION_STEP_MINUTES
-);
+/* ------------------------------------------- 時間ピッカー（時間制・終了前注意） */
 
 /**
- * 席時間の選択肢を「1時間ごとの行 × ちょうど/15分/30分/45分 の列」に並べる（選びやすいように）。
- * 選択肢に無い枠は null（最初の行の「0分」「15分」など）。
+ * 時間制・終了前注意は「時間」ボタン（0〜3時間）と「分」ボタン（0/15/30/45分）を1つずつ選んで
+ * 「設定」する。ボタンに無い長さ（4時間・10分など）は「カスタム」で時間と分を入力する
+ * （2026-09-21 Ronnie が送ったスクショの操作。デザインはハンディの他の画面に合わせる）。
  */
-export function durationGrid(options: readonly number[] = HANDY_DURATIONS): (number | null)[][] {
-  if (options.length === 0) return [];
-  const set = new Set(options);
-  const lastHour = Math.floor(Math.max(...options) / 60);
-  const rows: (number | null)[][] = [];
-  for (let h = 0; h <= lastHour; h++) {
-    const row = [0, 15, 30, 45].map((m) => (set.has(h * 60 + m) ? h * 60 + m : null));
-    if (row.some((v) => v !== null)) rows.push(row);
-  }
-  return rows;
+export const HOUR_CHOICES: readonly number[] = [0, 1, 2, 3];
+export const MINUTE_CHOICES: readonly number[] = [0, 15, 30, 45];
+
+/** 席時間（時間制）の範囲（分）。startWalkIn が受け付ける滞在時間（15〜480分）と同じ */
+export const DURATION_MIN_MINUTES = 15;
+export const DURATION_MAX_MINUTES = 480;
+
+/** カスタム入力の「時間」の上限（席時間の上限と同じ8時間） */
+export const CUSTOM_MAX_HOURS = DURATION_MAX_MINUTES / 60;
+
+/** 分を「時間」と「分」に分ける（135 → 2時間・15分）。読めない値・マイナスは0 */
+export function splitMinutes(total: number): { hours: number; minutes: number } {
+  const t = Number.isFinite(total) ? Math.max(0, Math.round(total)) : 0;
+  return { hours: Math.floor(t / 60), minutes: t % 60 };
 }
 
-/** 終了前注意の選択肢（分前） */
-export const HANDY_WARNINGS = [5, 10, 15, 30] as const;
+/** 「時間」「分」のボタンだけで選べる長さか（選べなければピッカーをカスタム入力で開く） */
+export function isButtonMinutes(total: number): boolean {
+  if (!Number.isInteger(total) || total < 0) return false;
+  const { hours, minutes } = splitMinutes(total);
+  return HOUR_CHOICES.includes(hours) && MINUTE_CHOICES.includes(minutes);
+}
+
+/** ボタンに無い長さを、ボタンで選べるいちばん近い下の値に寄せる（カスタムからボタンに戻したとき） */
+export function nearestButtonParts(total: number): { hours: number; minutes: number } {
+  const { hours, minutes } = splitMinutes(total);
+  return {
+    hours: Math.min(hours, HOUR_CHOICES[HOUR_CHOICES.length - 1]),
+    minutes: MINUTE_CHOICES.filter((m) => m <= minutes).pop() ?? 0,
+  };
+}
+
+/** 全角数字を半角にする（日本語キーボードのまま入力されたとき用） */
+function toHalfWidthDigits(s: string): string {
+  return s.replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0));
+}
+
+/**
+ * カスタム入力（時間・分）を分に直す。空欄は0。
+ * 数字でない・マイナス・小数・分が60以上・時間が上限（8時間）超えは null。
+ */
+export function parseCustomMinutes(hoursText: string, minutesText: string): number | null {
+  const read = (s: string): number | null => {
+    const t = toHalfWidthDigits(s).trim();
+    if (t === '') return 0;
+    return /^\d{1,3}$/.test(t) ? Number(t) : null;
+  };
+  const h = read(hoursText);
+  const m = read(minutesText);
+  if (h === null || m === null || m > 59 || h > CUSTOM_MAX_HOURS) return null;
+  return h * 60 + m;
+}
+
+/** 席時間として使えない理由。使えれば null */
+export function durationProblem(minutes: number): string | null {
+  if (!Number.isInteger(minutes) || minutes < DURATION_MIN_MINUTES || minutes > DURATION_MAX_MINUTES) {
+    return `席時間は${durationLabel(DURATION_MIN_MINUTES)}〜${durationLabel(DURATION_MAX_MINUTES)}で設定してください`;
+  }
+  return null;
+}
+
+/**
+ * 終了前注意として使えない理由。使えれば null。
+ * 席時間より短くないと意味がない（2時間制で「2時間前」は着席した瞬間になる）。
+ */
+export function warningProblem(minutes: number, duration: number): string | null {
+  if (!Number.isInteger(minutes) || minutes < 1) return '終了前注意の時間を設定してください';
+  if (minutes >= duration) {
+    return `終了前注意は席時間（${durationLabel(duration)}）より短くしてください`;
+  }
+  return null;
+}
 
 /** 人数の上限（startWalkIn・orders.guest_count の制約と同じ 999） */
 export const MAX_GUESTS = 999;
@@ -114,8 +164,13 @@ export function validateVisitDraft(d: VisitDraft): string | null {
   if (!d.scene || !(HANDY_SCENES as readonly string[]).includes(d.scene)) {
     return '利用シーンを選択してください';
   }
-  if (d.timed && (!Number.isInteger(d.duration) || d.duration < 15 || d.duration > 480)) {
-    return '席時間を選択してください';
+  if (d.timed) {
+    const durationIssue = durationProblem(d.duration);
+    if (durationIssue) return durationIssue;
+    if (d.warningEnabled) {
+      const warningIssue = warningProblem(d.warningMinutes, d.duration);
+      if (warningIssue) return warningIssue;
+    }
   }
   if (!HANDY_PLANS.some((p) => p.id === d.plan)) return 'モードを選択してください';
   return null;
@@ -135,7 +190,7 @@ export function visitMemo(
   if (d.scene) parts.push(String(d.scene));
   if (d.timed) {
     parts.push(
-      `${durationLabel(d.duration)}制${d.warningEnabled ? `（${d.warningMinutes}分前に声かけ）` : ''}`
+      `${durationLabel(d.duration)}制${d.warningEnabled ? `（${durationLabel(d.warningMinutes)}前に声かけ）` : ''}`
     );
   }
   return `ハンディ: ${parts.join(' / ')}`;
