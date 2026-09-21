@@ -17,7 +17,8 @@ const NOT_A_PLAN = /→|延長/;
 
 /**
  * メニューブック（店長以上）。レジの「メニューブック」ボタン・設定から開く。
- * ハンディ・お客様QRに出すカテゴリの並び順と出し方、商品の並び順と入力、プランで出すカテゴリ、ランチの時間帯。
+ * ハンディ・お客様QRに出すカテゴリの並び順と出し方、ページ（タブのまとめ方）、商品の並び順と入力、
+ * プランで出すカテゴリ、ランチの時間帯。
  */
 export default async function MenuBookPage() {
   const ctx = await requirePermission('menu.manage');
@@ -134,7 +135,7 @@ export default async function MenuBookPage() {
       <PageHeader
         title="メニューブック"
         en="Menu book"
-        description={`${store.name}｜ハンディ・お客様QRのカテゴリの並び順と出し方、商品の並び順・入力（店長以上）`}
+        description={`${store.name}｜ハンディ・お客様QRのカテゴリの並び順と出し方、ページ、商品の並び順・入力（店長以上）`}
       />
       <MenuBookEditor
         storeId={store.id}
@@ -142,6 +143,8 @@ export default async function MenuBookPage() {
         items={itemRows}
         plans={planRows}
         lunch={book.lunch}
+        joinPrev={book.joinPrev}
+        pageNames={book.pageNames}
         taxRates={(taxRates ?? []).map((t) => ({ id: t.id, name: t.name }))}
       />
     </div>

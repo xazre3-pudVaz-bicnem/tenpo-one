@@ -21,6 +21,7 @@ import {
   openServiceCall,
   parseServiceCalls,
   removeCartLine,
+  type QrMenuPage,
 } from './logic';
 import {
   qrOrderErrorMessage,
@@ -122,11 +123,14 @@ export function QrOrderApp({
   storeSlug,
   tableToken,
   menu,
+  pages,
   reservedCourse,
 }: {
   storeSlug: string;
   tableToken: string;
   menu: QrMenuData;
+  /** メニューブックのページ（タブのまとめ方。飲み放題・コースの卓は飲み放題のページが先頭） */
+  pages?: QrMenuPage[] | null;
   reservedCourse?: ReservedCourse | null;
 }) {
   const [tab, setTab] = useState<Tab>('menu');
@@ -292,6 +296,7 @@ export function QrOrderApp({
             <MenuView
               tableName={menu.table_name}
               categories={menu.categories}
+              pages={pages}
               cart={cart}
               onSelectItem={setSelectedItem}
               onQuickAdd={(item) => addToCart(item, 1, '', [])}

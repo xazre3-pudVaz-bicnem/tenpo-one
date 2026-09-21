@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState, useTransition } from 'react';
-import { Plus, Pencil, Trash2, Search } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, ArrowUpDown, List } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils';
 import { yen } from '@/lib/format';
 import { toggleSoldOut, deleteMenuItem } from '@/app/app/settings/menu/actions';
 import { MenuItemDialog, type MenuItemRow } from './menu-item-dialog';
+import { ItemOrderList, sortItems } from './item-order-list';
 import type { CategoryRow } from './category-panel';
 
 const ITEM_TYPE_LABEL: Record<string, string> = { food: 'フード', drink: 'ドリンク', course: 'コース', option: 'オプション' };
@@ -35,10 +36,17 @@ export function MenuItemsPanel({
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<MenuItemRow | null>(null);
   const [deleting, setDeleting] = useState<MenuItemRow | null>(null);
+  const [reorder, setReorder] = useState(false);
   const [pending, startTransition] = useTransition();
   const { toast } = useToast();
 
   const visibleItems = items.filter((i) => i.status !== 'deleted');
+  // 並び順はカテゴリの中で決めるので、カテゴリを1つ選んで検索していないときだけ変えられる
+  const canReorder = activeCategory !== 'all' && activeCategory !== 'uncategorized' && !search.trim();
+  const showReorder = reorder && canReorder;
+  const categoryItems = canReorder ? sortItems(visibleItems.filter((i) => i.categoryId === activeCategory)) : [];
+  // 保存のあとに画面の内容（並び順）を取り直したら、並び替えの状態も作り直す
+  const orderKey = `${activeCategory}:${categoryItems.map((i) => `${i.id}.${i.sortOrder}`).join(',')}`;
 
   const filtered = useMemo(() => {
     return visibleItems.filter((i) => {
@@ -110,19 +118,58 @@ export function MenuItemsPanel({
             className="pl-9"
           />
         </div>
-        <Button
-          size="sm"
-          onClick={() => {
-            setEditing(null);
-            setDialogOpen(true);
-          }}
-        >
-          <Plus className="h-4 w-4" />
-          商品追加
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          {showReorder ? (
+            <Button size="sm" variant="outline" onClick={() => setReorder(false)}>
+              <List className="h-4 w-4" />
+              一覧に戻る
+            </Button>
+          ) : (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setReorder(true)}
+              disabled={!canReorder}
+              title={canReorder ? undefined : 'カテゴリを選ぶと並び順を変えられます'}
+            >
+              <ArrowUpDown className="h-4 w-4" />
+              並び順を変える
+            </Button>
+          )}
+          <Button
+            size="sm"
+            onClick={() => {
+              setEditing(null);
+              setDialogOpen(true);
+            }}
+          >
+            <Plus className="h-4 w-4" />
+            商品追加
+          </Button>
+        </div>
       </div>
+      {!canReorder && !showReorder && (
+        <p className="text-xs text-gray-500">上のカテゴリを選ぶと「並び順を変える」で商品の順番を変えられます（レジ・ハンディ・お客様QRで同じ順）。</p>
+      )}
 
-      {filtered.length === 0 ? (
+      {showReorder ? (
+        <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+          <p className="mb-3 text-sm font-semibold text-navy">
+            「{categoryName(activeCategory)}」の並び順
+            <span className="ml-2 text-xs font-normal text-gray-500">⤒ ↑ ↓ ⤓ で動かして「順番を保存」。レジ・ハンディ・お客様QRで同じ順になります。</span>
+          </p>
+          <ItemOrderList
+            key={orderKey}
+            storeId={storeId}
+            categoryId={activeCategory}
+            items={categoryItems}
+            onEdit={(item) => {
+              setEditing(item);
+              setDialogOpen(true);
+            }}
+          />
+        </div>
+      ) : filtered.length === 0 ? (
         <EmptyState title="該当する商品がありません" description="「商品追加」から登録してください" />
       ) : (
         <TableWrap>

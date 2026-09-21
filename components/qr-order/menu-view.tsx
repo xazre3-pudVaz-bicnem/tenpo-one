@@ -4,24 +4,28 @@ import { useMemo, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { yen } from '@/lib/format';
 import { useQrStrings, useQrLocale, localizedName } from './strings-context';
-import { itemQuantityInCart, orderableCategories, RECOMMENDED_TAB_ID } from './logic';
+import { itemQuantityInCart, menuTabs, type QrMenuPage, type QrMenuTab } from './logic';
 import { isPublicImageUrl, type CartLine, type QrMenuCategory, type QrMenuItem } from './types';
 import { DishArt, QrEmpty, QrNote } from './ui';
 
 /**
  * メニュータブ。承認済みレイアウトに合わせて
- *   卓のカード → 分類の横スクロールタブ（濃いプラムの帯） → 写真つき商品カード2列
- * の並びにする。商品が0件の分類はタブに出さない。
+ *   卓のカード → ページの横スクロールタブ（濃いプラムの帯） → 写真つき商品カード2列
+ * の並びにする。タブはメニューブックのページ（SOUP・APPETIZER・SALAD など、複数カテゴリは見出しを付けて並べる）。
+ * 商品が0件のカテゴリ・タブは出さない。
  */
 export function MenuView({
   tableName,
   categories,
+  pages,
   cart,
   onSelectItem,
   onQuickAdd,
 }: {
   tableName: string;
   categories: QrMenuCategory[];
+  /** メニューブックのページ（飲み放題・コースの卓は飲み放題のページが先頭）。無ければ1カテゴリ1タブ */
+  pages?: QrMenuPage[] | null;
   cart: CartLine[];
   onSelectItem: (item: QrMenuItem) => void;
   onQuickAdd: (item: QrMenuItem) => void;
@@ -30,12 +34,15 @@ export function MenuView({
   const locale = useQrLocale();
 
   const tabs = useMemo(
-    () => orderableCategories(categories, qrStrings.menu.recommendedCategoryName),
-    [categories, qrStrings.menu.recommendedCategoryName]
+    () => menuTabs(categories, pages, qrStrings.menu.recommendedCategoryName),
+    [categories, pages, qrStrings.menu.recommendedCategoryName]
   );
 
   const [activeId, setActiveId] = useState<string | null>(null);
-  const active = tabs.find((c) => c.id === activeId) ?? tabs[0] ?? null;
+  const active = tabs.find((t) => t.id === activeId) ?? tabs[0] ?? null;
+  /** タブの名前（ページの名前・おすすめ、無ければカテゴリ名を言語に合わせてつなぐ） */
+  const tabLabel = (t: QrMenuTab) =>
+    t.name ?? t.sections.map((c) => localizedName(locale, c.name, c.name_en)).join('・');
 
   if (!active) {
     return <QrEmpty>{qrStrings.menu.empty}</QrEmpty>;
@@ -57,54 +64,70 @@ export function MenuView({
 
       {/* 分類タブ：横スクロール。濃いプラムの帯の上に立つタブ */}
       <div className="flex gap-1 overflow-x-auto border-b-[3px] border-iris bg-plum px-2.5 pt-2 [scrollbar-width:none]">
-        {tabs.map((category, index) => {
-          const selected = active.id === category.id;
+        {tabs.map((t, index) => {
+          const selected = active.id === t.id;
           return (
             <button
-              key={category.id}
+              key={t.id}
               type="button"
               aria-pressed={selected}
-              onClick={() => setActiveId(category.id)}
+              onClick={() => setActiveId(t.id)}
               className={cn(
-                'flex min-h-[62px] w-[88px] shrink-0 flex-col items-center justify-center gap-0.5 rounded-t-xl border px-2.5 py-1.5 text-[11px] font-bold leading-tight',
+                'flex min-h-[62px] w-auto min-w-[88px] max-w-[136px] shrink-0 flex-col items-center justify-center gap-0.5 rounded-t-xl border px-2.5 py-1.5 text-[11px] font-bold leading-tight',
                 selected
                   ? 'border-line bg-lilac-soft text-iris'
                   : 'border-[#59416f] bg-plum-2 text-[#c4afd8]'
               )}
             >
               <b className="font-num text-lg leading-none">{index + 1}</b>
-              <span className="line-clamp-2 text-center">
-                {category.id === RECOMMENDED_TAB_ID
-                  ? category.name
-                  : localizedName(locale, category.name, category.name_en)}
-              </span>
+              {t.name || t.sections.length === 1 ? (
+                <span className="line-clamp-2 text-center [overflow-wrap:anywhere]">{tabLabel(t)}</span>
+              ) : (
+                // 複数カテゴリのページはカテゴリ名を1行ずつ（4つ以上は3つ＋「+N」）
+                <span className="flex max-w-full flex-col items-center text-[10px] leading-[1.25]">
+                  {(t.sections.length > 3 ? t.sections.slice(0, 2) : t.sections).map((c) => (
+                    <span key={c.id} className="max-w-full truncate">
+                      {localizedName(locale, c.name, c.name_en)}
+                    </span>
+                  ))}
+                  {t.sections.length > 3 && <span className="font-normal">+{t.sections.length - 2}</span>}
+                </span>
+              )}
             </button>
           );
         })}
       </div>
 
       <div className="bg-white">
-        <div className="flex items-center justify-between px-3 pb-2 pt-3.5">
-          <h2 className="text-sm font-bold text-ink">
-            {active.id === RECOMMENDED_TAB_ID ? active.name : localizedName(locale, active.name, active.name_en)}
-          </h2>
-          <span className="font-num text-[10px] text-ink-3">{qrStrings.menu.countSuffix(active.items.length)}</span>
+        <div className="flex items-center justify-between gap-3 px-3 pb-2 pt-3.5">
+          <h2 className="min-w-0 text-sm font-bold text-ink [overflow-wrap:anywhere]">{tabLabel(active)}</h2>
+          <span className="shrink-0 font-num text-[10px] text-ink-3">{qrStrings.menu.countSuffix(active.itemCount)}</span>
         </div>
 
-        {active.items.length === 0 ? (
+        {active.itemCount === 0 ? (
           <QrEmpty>{qrStrings.menu.categoryEmpty}</QrEmpty>
         ) : (
-          <ul className="grid grid-cols-2 gap-2 px-2.5 pb-4">
-            {active.items.map((item) => (
-              <MenuCard
-                key={item.id}
-                item={item}
-                quantity={itemQuantityInCart(cart, item.id)}
-                onOpen={() => onSelectItem(item)}
-                onAdd={() => (item.modifiers.length > 0 ? onSelectItem(item) : onQuickAdd(item))}
-              />
-            ))}
-          </ul>
+          active.sections.map((section) => (
+            <section key={section.id}>
+              {active.sections.length > 1 && (
+                <h3 className="flex items-center gap-2 px-3 pb-2 pt-1 text-[12px] font-bold text-[#5e4777]">
+                  <span className="h-3 w-1 rounded bg-iris" aria-hidden />
+                  {localizedName(locale, section.name, section.name_en)}
+                </h3>
+              )}
+              <ul className="grid grid-cols-2 gap-2 px-2.5 pb-4">
+                {section.items.map((item) => (
+                  <MenuCard
+                    key={item.id}
+                    item={item}
+                    quantity={itemQuantityInCart(cart, item.id)}
+                    onOpen={() => onSelectItem(item)}
+                    onAdd={() => (item.modifiers.length > 0 ? onSelectItem(item) : onQuickAdd(item))}
+                  />
+                ))}
+              </ul>
+            </section>
+          ))
         )}
       </div>
 

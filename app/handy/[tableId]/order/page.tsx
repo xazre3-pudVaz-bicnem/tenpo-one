@@ -7,13 +7,14 @@ import { requireHandyClerk } from '@/lib/handy-session';
 import { HandyBackButton, HandyMain, HandyTopBar } from '@/components/handy/handy-chrome';
 import { HandyOrderScreen } from '@/components/handy/handy-order-screen';
 import {
-  buildMenuGroups,
+  buildHandyTabs,
+  initialHandyTab,
   type HandyCategoryInput,
   type HandyMenuItemInput,
 } from '@/components/handy/logic';
 import type { PosOptionGroup } from '@/components/pos/option-dialog';
 import { submitHandyOrder } from '@/app/app/handy/actions';
-import { filterMenuBook } from '@/lib/menu-book';
+import { filterMenuBook, planCategoryIds } from '@/lib/menu-book';
 import { jstNowHm, loadMenuBook, loadOrderPlanState } from '@/lib/menu-book-server';
 
 export const metadata: Metadata = { title: '注文' };
@@ -161,7 +162,11 @@ export default async function HandyOrderPage({
   // ハンディに出すカテゴリだけに絞る（アラカルトの伝票には飲み放題の F などを出さない。レジは今まで通り全部出す）
   const nowHm = jstNowHm();
   const visible = filterMenuBook(categoryInputs, itemInputs, menuBook, { channel: 'handy', plan, nowHm });
-  const groups = buildMenuGroups(visible.categories, visible.items, nowHm);
+  // 上のタブ（1 単品／2 コース・飲み放題／3 サービス）→ メニューブックのページ。ページの区切りは出さないカテゴリも
+  // 含めた並び順で決める（時間帯・卓によって区切りが変わらないように）
+  const planIds = planCategoryIds(categoryInputs, itemInputs, menuBook);
+  const tabs = buildHandyTabs(categoryInputs, visible.items, nowHm, { planCategoryIds: planIds, pages: menuBook });
+  const initialTabId = initialHandyTab(tabs, planIds, plan.hasPlan);
   const tableName = (order.restaurant_tables as unknown as { name: string } | null)?.name ?? '—';
 
   return (
@@ -173,7 +178,8 @@ export default async function HandyOrderPage({
       orderNo={order.order_no}
       guestCount={order.guest_count}
       unpaidTotal={Number(order.total ?? 0)}
-      groups={groups}
+      tabs={tabs}
+      initialTabId={initialTabId}
       optionGroupsByItem={optionGroupsByItem}
       submitAction={submitHandyOrder}
     />
