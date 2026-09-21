@@ -28,8 +28,33 @@ export const HANDY_SCENES = [
 ] as const;
 export type HandyScene = (typeof HANDY_SCENES)[number];
 
-/** 時間制の選択肢（分） */
-export const HANDY_DURATIONS = [60, 90, 120, 150, 180, 240] as const;
+/** 席時間の刻み（分）。現場の要望で15分単位（2026-09-21） */
+export const DURATION_STEP_MINUTES = 15;
+const DURATION_MIN = 30;
+const DURATION_MAX = 300;
+
+/** 時間制の選択肢（分）: 30分〜5時間を15分ずつ */
+export const HANDY_DURATIONS: readonly number[] = Array.from(
+  { length: (DURATION_MAX - DURATION_MIN) / DURATION_STEP_MINUTES + 1 },
+  (_, i) => DURATION_MIN + i * DURATION_STEP_MINUTES
+);
+
+/**
+ * 席時間の選択肢を「1時間ごとの行 × ちょうど/15分/30分/45分 の列」に並べる（選びやすいように）。
+ * 選択肢に無い枠は null（最初の行の「0分」「15分」など）。
+ */
+export function durationGrid(options: readonly number[] = HANDY_DURATIONS): (number | null)[][] {
+  if (options.length === 0) return [];
+  const set = new Set(options);
+  const lastHour = Math.floor(Math.max(...options) / 60);
+  const rows: (number | null)[][] = [];
+  for (let h = 0; h <= lastHour; h++) {
+    const row = [0, 15, 30, 45].map((m) => (set.has(h * 60 + m) ? h * 60 + m : null));
+    if (row.some((v) => v !== null)) rows.push(row);
+  }
+  return rows;
+}
+
 /** 終了前注意の選択肢（分前） */
 export const HANDY_WARNINGS = [5, 10, 15, 30] as const;
 

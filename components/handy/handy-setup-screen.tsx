@@ -8,11 +8,11 @@ import { yen } from '@/lib/format';
 import { useToast } from '@/components/ui/toast';
 import {
   DEFAULT_VISIT_DRAFT,
-  HANDY_DURATIONS,
   HANDY_PLANS,
   HANDY_SCENES,
   HANDY_WARNINGS,
   MAX_GUESTS,
+  durationGrid,
   durationLabel,
   planHasItems,
   planName,
@@ -295,18 +295,13 @@ export function HandySetupScreen({
         />
       )}
       {picker === 'duration' && (
-        <ChoiceSheet
-          title="席時間"
-          onClose={() => setPicker(null)}
-          options={HANDY_DURATIONS.map((m) => ({
-            id: String(m),
-            label: durationLabel(m),
-            selected: m === draft.duration,
-          }))}
-          onSelect={(id) => {
-            set({ duration: Number(id) });
+        <DurationSheet
+          value={draft.duration}
+          onSelect={(minutes) => {
+            set({ duration: minutes });
             setPicker(null);
           }}
+          onClose={() => setPicker(null)}
         />
       )}
       {picker === 'warning' && (
@@ -552,6 +547,57 @@ function ChoiceSheet({
         className="mt-3 min-h-[43px] w-full rounded-lg bg-[#efeaf8] text-center text-sm font-bold text-[#5e4777]"
       >
         {nothing ? 'プラン無しで続ける' : '閉じる'}
+      </button>
+    </Sheet>
+  );
+}
+
+/** 席時間（15分単位）。1時間ごとの行に ちょうど／15分／30分／45分 を並べる */
+function DurationSheet({
+  value,
+  onSelect,
+  onClose,
+}: {
+  value: number;
+  onSelect: (minutes: number) => void;
+  onClose: () => void;
+}) {
+  const rows = durationGrid();
+  return (
+    <Sheet title="席時間（15分単位）" onClose={onClose}>
+      <p className="mb-3 text-xs text-[#8a769d]">
+        いま：<b className="text-sm font-bold text-[#4f3868]">{durationLabel(value)}</b>
+      </p>
+      <div className="grid grid-cols-4 gap-1.5" role="group" aria-label="席時間">
+        {rows.flat().map((minutes, i) =>
+          minutes === null ? (
+            <span key={`empty-${i}`} aria-hidden />
+          ) : (
+            <button
+              key={minutes}
+              type="button"
+              aria-pressed={minutes === value}
+              onClick={() => onSelect(minutes)}
+              className={cn(
+                'min-h-[44px] rounded-[8px] border-[1.5px] px-0.5 text-xs font-bold whitespace-nowrap tabular-nums',
+                minutes === value
+                  ? 'border-[#7b3fe4] bg-[#7b3fe4] text-white'
+                  : minutes % 60 === 0
+                    ? 'border-[#7b3fe4] bg-[#f3ecfe] text-[#4f3868]'
+                    : 'border-[#d9ccef] bg-white text-[#4f3868]'
+              )}
+            >
+              {durationLabel(minutes)}
+            </button>
+          )
+        )}
+      </div>
+      <button
+        type="button"
+        onClick={onClose}
+        className="mt-4 min-h-[43px] w-full rounded-lg bg-[#efeaf8] text-center text-sm font-bold text-[#5e4777]"
+      >
+        閉じる
       </button>
     </Sheet>
   );
