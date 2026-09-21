@@ -1,20 +1,14 @@
 'use client';
 
-import { useState, useTransition } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { BellRing, ChevronRight, RefreshCw, User, Wallet } from 'lucide-react';
+import { BellRing, Wallet } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { yen, formatTime } from '@/lib/format';
-import { Button } from '@/components/ui/button';
-import { useToast } from '@/components/ui/toast';
-import { useStoreRealtimeRefresh } from '@/components/realtime/use-store-refresh';
 import { useNow } from '@/components/floor/use-now';
 import {
   callToneByTable,
   elapsedLabel,
   serviceCallLabel,
-  sortServiceCalls,
   tableState,
   TABLE_STATE_LABEL,
   type HandyServiceCall,
@@ -32,154 +26,40 @@ export interface HandyTableCard {
   total: number;
 }
 
+/**
+ * テーブル一覧のタイル（承認済みレイアウトの `.tables-screen .tables`）。
+ * 3列・正方形・白地のカードで、利用中の卓だけ薄紫にして「開始 / 経過 / 未会計」を出す。
+ */
 export function HandyTableList({
-  storeId,
-  storeName,
-  staffName,
   tables,
   calls,
   serverNow,
-  resolveServiceCallAction,
 }: {
-  storeId: string;
-  storeName: string;
-  staffName: string;
   tables: HandyTableCard[];
   calls: HandyServiceCall[];
   serverNow: number;
-  resolveServiceCallAction: (callId: string) => Promise<{ alreadyResolved: boolean }>;
 }) {
-  const router = useRouter();
-  const { toast } = useToast();
   const now = useNow(serverNow);
-  const [pending, startTransition] = useTransition();
-  const [resolvingId, setResolvingId] = useState<string | null>(null);
-
-  // 注文・呼び出しは他端末やお客様QRからも増えるため、常に最新を表示する
-  useStoreRealtimeRefresh({
-    storeId,
-    tables: ['orders', 'order_items', 'restaurant_tables', 'service_calls'],
-  });
-
-  const sortedCalls = sortServiceCalls(calls);
   const toneByTable = callToneByTable(calls);
 
-  const handleResolve = (call: HandyServiceCall) => {
-    if (pending) return;
-    setResolvingId(call.id);
-    startTransition(async () => {
-      try {
-        const result = await resolveServiceCallAction(call.id);
-        toast(
-          result.alreadyResolved
-            ? 'この呼び出しは既に対応済みでした'
-            : `${call.tableName ?? '卓'} の${serviceCallLabel(call.kind)}を対応済みにしました`,
-          result.alreadyResolved ? 'warning' : 'success'
-        );
-        router.refresh();
-      } catch (e) {
-        toast(e instanceof Error ? e.message : '対応済みにできませんでした', 'error');
-      } finally {
-        setResolvingId(null);
-      }
-    });
-  };
+  if (tables.length === 0) {
+    return (
+      <p className="px-6 py-9 text-center text-[13px] leading-loose text-[#8a769d]">
+        テーブルが登録されていません。
+        <br />
+        設定画面からフロア・テーブルを登録してください。
+      </p>
+    );
+  }
 
   return (
-    <div className="pb-4">
-      {/* 担当者と更新（承認済みUIの operator バー） */}
-      <div className="mb-3 flex items-center justify-between gap-2 rounded-xl border border-line bg-white px-3 py-2">
-        <span className="flex min-w-0 items-center gap-2">
-          <User className="h-5 w-5 shrink-0 text-ink-3" aria-hidden />
-          <span className="min-w-0">
-            <b className="block truncate text-[15px] font-bold leading-tight text-navy">{staffName}</b>
-            <span className="block truncate text-[11px] leading-tight text-ink-3">{storeName}</span>
-          </span>
-        </span>
-        <span className="flex shrink-0 items-center gap-2">
-          <span className="text-xs font-medium text-ink-3">
-            {tables.length}テーブル<span className="en-inline ml-1 text-[10px]">HANDY</span>
-          </span>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => router.refresh()}
-            aria-label="テーブル一覧を更新"
-            className="h-9 w-9 p-0"
-          >
-            <RefreshCw className="h-4 w-4" aria-hidden />
-          </Button>
-        </span>
-      </div>
-
-      {/* 未対応の呼び出し（時刻順・古い順） */}
-      {sortedCalls.length > 0 && (
-        <section aria-labelledby="handy-calls" className="mb-4">
-          <h2 id="handy-calls" className="mb-2 flex items-center gap-1.5 text-sm font-bold text-navy">
-            <BellRing className="h-4 w-4 text-saffron" aria-hidden />
-            お客様の呼び出し
-            <span className="rounded-full bg-saffron px-2 py-0.5 text-[11px] font-bold text-white">
-              {sortedCalls.length}件
-            </span>
-          </h2>
-          <ul className="space-y-2">
-            {sortedCalls.map((call) => (
-              <li
-                key={call.id}
-                className={cn(
-                  'flex items-center gap-2 rounded-xl border-l-4 bg-white p-3 shadow-sm',
-                  call.kind === 'checkout'
-                    ? 'border-l-saffron bg-saffron-soft'
-                    : 'border-l-iris bg-iris-soft/40'
-                )}
-              >
-                <span className="min-w-0 flex-1">
-                  <span className="flex flex-wrap items-baseline gap-x-2">
-                    <b className="text-base font-bold text-navy">{call.tableName ?? '—'}</b>
-                    <span
-                      className={cn(
-                        'rounded-md px-1.5 py-0.5 text-xs font-bold',
-                        call.kind === 'checkout' ? 'bg-saffron text-white' : 'bg-iris text-white'
-                      )}
-                    >
-                      {serviceCallLabel(call.kind)}
-                    </span>
-                  </span>
-                  <span className="mt-0.5 block text-xs text-ink-2">
-                    {formatTime(new Date(call.createdAtMs))}　{elapsedLabel(call.createdAtMs, now)}経過
-                    {call.note ? `　${call.note}` : ''}
-                  </span>
-                </span>
-                <Button
-                  size="sm"
-                  variant={call.kind === 'checkout' ? 'primary' : 'navy'}
-                  className="h-11 shrink-0 px-3"
-                  // 1件処理中は他の呼び出しも押せないようにする（押せるのに反応しない状態を作らない）
-                  disabled={pending}
-                  onClick={() => handleResolve(call)}
-                >
-                  {pending && resolvingId === call.id ? '処理中…' : '対応済み'}
-                </Button>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {tables.length === 0 ? (
-        <p className="rounded-xl border border-line bg-white p-6 text-center text-sm text-ink-2">
-          テーブルが登録されていません。設定画面からフロア・テーブルを登録してください。
-        </p>
-      ) : (
-        <ul className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
-          {tables.map((t) => (
-            <li key={t.id}>
-              <HandyTableTile table={t} now={now} callKind={toneByTable.get(t.id) ?? null} />
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
+    <ul className="grid grid-cols-3 content-start gap-2 px-2 pt-1.5 pb-2.5 sm:grid-cols-4 lg:grid-cols-6">
+      {tables.map((t) => (
+        <li key={t.id}>
+          <HandyTableTile table={t} now={now} callKind={toneByTable.get(t.id) ?? null} />
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -197,63 +77,92 @@ function HandyTableTile({
 
   return (
     <Link
-      href={`/app/handy/${table.id}`}
+      href={`/handy/${table.id}`}
       className={cn(
-        'flex aspect-square w-full flex-col rounded-xl border p-2 text-left transition-colors',
-        'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
+        'flex aspect-square w-full flex-col items-start rounded-[10px] border p-2 text-left shadow-[0_2px_5px_#24143605]',
+        'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#7b3fe4]',
         callKind === 'checkout'
-          ? 'border-saffron bg-saffron-soft ring-2 ring-saffron/50'
+          ? 'border-[#bd660f] bg-[#fbefdf]'
           : callKind === 'staff'
-            ? 'border-iris bg-iris-soft ring-2 ring-iris/40'
+            ? 'border-[#7b3fe4] bg-[#f3ecfe]'
             : occupied
-              ? 'border-wisteria bg-iris-soft/60'
-              : state === 'available'
-                ? 'border-line bg-white'
-                : 'border-line bg-gray-50'
+              ? 'border-[#cdb4ef] bg-[#efeaf8]'
+              : state === 'blocked'
+                ? 'border-[#c9c4d2] bg-[#e4e0ea]'
+                : 'border-[#e3dbf1] bg-white'
       )}
       aria-label={`${table.name} ${TABLE_STATE_LABEL[state]}${callKind ? ` ${serviceCallLabel(callKind)}` : ''}`}
     >
-      <span className="flex items-start justify-between gap-1">
-        <b className="text-[15px] font-bold leading-tight text-royal">{table.name}</b>
+      <span className="flex w-full items-start justify-between gap-1">
+        <b className="min-w-0 truncate text-[15px] leading-tight font-semibold text-[#5e4777]">
+          {table.name}
+        </b>
         {callKind && (
           <span
             className={cn(
               'shrink-0 rounded-full p-0.5 text-white',
-              callKind === 'checkout' ? 'bg-saffron' : 'bg-iris'
+              callKind === 'checkout' ? 'bg-[#bd660f]' : 'bg-[#7b3fe4]'
             )}
             aria-hidden
           >
-            {callKind === 'checkout' ? <Wallet className="h-3.5 w-3.5" /> : <BellRing className="h-3.5 w-3.5" />}
+            {callKind === 'checkout' ? (
+              <Wallet className="h-3 w-3" />
+            ) : (
+              <BellRing className="h-3 w-3" />
+            )}
           </span>
         )}
-      </span>
-      <span className="mt-0.5 block text-[11px] font-medium text-ink-2">
-        {TABLE_STATE_LABEL[state]}
-        {occupied && table.guestCount > 0 ? ` · ${table.guestCount}名` : ''}
       </span>
 
-      <span className="mt-auto block space-y-0.5">
-        {occupied && table.openedAtMs !== null ? (
-          <>
-            <span className="flex items-baseline justify-between text-[11px] text-ink-3">
-              経過
-              <b className="text-xs font-bold text-ink">{elapsedLabel(table.openedAtMs, now)}</b>
-            </span>
-            <span className="flex items-baseline justify-between text-[11px] text-ink-3">
-              未会計
-              <b className="font-mono text-xs font-bold text-navy">{yen(table.total)}</b>
-            </span>
-            {table.orderCount > 1 && (
-              <span className="block text-right text-[10px] text-ink-3">伝票{table.orderCount}枚</span>
-            )}
-          </>
-        ) : (
-          <span className="flex items-center justify-end text-[11px] text-ink-3">
-            {table.capacityMax}名席
-            <ChevronRight className="h-3.5 w-3.5" aria-hidden />
+      {occupied ? (
+        <>
+          <span className="mt-px mb-auto block w-full truncate text-[10px] leading-tight font-normal text-black">
+            {table.guestCount > 0 ? `${table.guestCount}名` : '利用中'}
+            {table.orderCount > 1 ? ` · 伝票${table.orderCount}` : ''}
           </span>
-        )}
-      </span>
+          <TileRow label="開始" value={table.openedAtMs !== null ? formatTime(new Date(table.openedAtMs)) : '—'} />
+          <TileRow
+            label="経過"
+            value={table.openedAtMs !== null ? elapsedLabel(table.openedAtMs, now) : '—'}
+            accent
+          />
+          <TileRow label="未会計" value={yen(table.total)} small />
+        </>
+      ) : (
+        <span className="m-auto text-[9px] text-[#8a769d]">
+          {state === 'available' ? `${table.capacityMax}名席` : TABLE_STATE_LABEL[state]}
+        </span>
+      )}
     </Link>
+  );
+}
+
+function TileRow({
+  label,
+  value,
+  accent,
+  small,
+}: {
+  label: string;
+  value: string;
+  accent?: boolean;
+  small?: boolean;
+}) {
+  return (
+    <span className="flex w-full items-baseline justify-between gap-1 leading-[1.5]">
+      <small className="shrink-0 text-[9px] text-[#8a769d]">{label}</small>
+      <b
+        className={cn(
+          'min-w-0 truncate tabular-nums',
+          accent
+            ? 'text-[15px] font-bold text-[#7b3fe4]'
+            : small
+              ? 'text-[11px] font-bold text-[#5e4777]'
+              : 'text-[13px] font-bold text-[#5e4777]'
+        )}
+      >
+        {value}
+      </b>
+    </span>
   );
 }

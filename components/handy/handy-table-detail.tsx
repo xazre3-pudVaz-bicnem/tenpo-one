@@ -3,13 +3,18 @@
 import { useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { BellRing, ChevronLeft, Plus, Receipt } from 'lucide-react';
+import { CircleCheckBig } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { yen, formatTime } from '@/lib/format';
-import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast';
-import { useStoreRealtimeRefresh } from '@/components/realtime/use-store-refresh';
 import { useNow } from '@/components/floor/use-now';
+import {
+  HandyBackButton,
+  HandyFooterButton,
+  HandyMain,
+  HandyOperatorBar,
+  HandyTopBar,
+} from './handy-chrome';
 import {
   canStartOrder,
   elapsedLabel,
@@ -40,21 +45,28 @@ export interface HandySlip {
   items: HandySlipItem[];
 }
 
+/**
+ * 卓の伝票画面（テーブル一覧 → 卓）。
+ * 注文の追加・開始と、この卓への呼び出しへの対応をここから行う。
+ */
 export function HandyTableDetail({
-  storeId,
   table,
+  staffName,
   slips,
   calls,
   serverNow,
+  sentQuantity,
   goToOrderAction,
   startWalkInAction,
   resolveServiceCallAction,
 }: {
-  storeId: string;
   table: { id: string; name: string; capacityMax: number; currentStatus: string | null };
+  staffName: string;
   slips: HandySlip[];
   calls: HandyServiceCall[];
   serverNow: number;
+  /** 直前の送信で厨房に送れた点数（注文確認画面から戻ってきた直後だけ入る） */
+  sentQuantity: number | null;
   /** 着席中の卓に伝票を作る（フロア画面と同じ） */
   goToOrderAction: (tableId: string) => Promise<{ orderId: string }>;
   /** 空席の卓を人数つきで着席させて伝票を作る（フロア画面のウォークインと同じ） */
@@ -66,18 +78,12 @@ export function HandyTableDetail({
   const now = useNow(serverNow);
   const [pending, startTransition] = useTransition();
   const [busy, setBusy] = useState<string | null>(null);
-
-  useStoreRealtimeRefresh({
-    storeId,
-    tables: ['orders', 'order_items', 'restaurant_tables', 'service_calls'],
-  });
+  const [partySize, setPartySize] = useState(2);
 
   const state = tableState(table.currentStatus, slips.length > 0);
   const totalAmount = slips.reduce((n, s) => n + s.total, 0);
   const guestCount = slips.reduce((n, s) => n + s.guestCount, 0);
   const openedAtMs = slips.length > 0 ? Math.min(...slips.map((s) => s.openedAtMs)) : null;
-
-  const [partySize, setPartySize] = useState(2);
 
   /**
    * 伝票が無い卓で注文を開始する（既存のフロア画面と同じサーバーアクションを使う）。
@@ -93,7 +99,7 @@ export function HandyTableDetail({
           state === 'occupied'
             ? await goToOrderAction(table.id)
             : await startWalkInAction(table.id, partySize);
-        router.push(`/app/handy/${table.id}/order?order=${orderId}`);
+        router.push(`/handy/${table.id}/order?order=${orderId}`);
       } catch (e) {
         toast(e instanceof Error ? e.message : '注文を開始できませんでした', 'error');
         setBusy(null);
@@ -120,84 +126,77 @@ export function HandyTableDetail({
     });
   };
 
+  const note = [
+    slips.length > 0 ? `${guestCount}名` : `${table.capacityMax}名席`,
+    openedAtMs !== null ? `${formatTime(new Date(openedAtMs))}〜 ${elapsedLabel(openedAtMs, now)}` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
   return (
-    <div className="pb-28">
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <Link
-          href="/app/handy"
-          className="-ml-1 inline-flex items-center gap-0.5 rounded-lg px-1 py-2 text-sm font-medium text-ink-2 hover:text-navy"
-        >
-          <ChevronLeft className="h-5 w-5" aria-hidden />
-          テーブル一覧
-        </Link>
-        <span className="text-xs font-medium text-ink-3">{TABLE_STATE_LABEL[state]}</span>
-      </div>
+    <>
+      <HandyTopBar
+        left={<HandyBackButton href="/handy" label="テーブル一覧" />}
+        title={table.name}
+      />
+      <HandyOperatorBar label={`${table.name} · ${note}`} note={staffName} showIcon={false} />
 
-      <div className="mb-3 rounded-xl border border-line bg-white p-3">
-        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-          <h1 className="text-xl font-bold text-navy">{table.name}</h1>
-          <span className="text-sm text-ink-2">
-            {slips.length > 0 ? `${guestCount}名` : `${table.capacityMax}名席`}
-          </span>
-          {openedAtMs !== null && (
-            <span className="text-sm text-ink-2">
-              {formatTime(new Date(openedAtMs))}〜　経過 {elapsedLabel(openedAtMs, now)}
-            </span>
-          )}
-        </div>
-        {slips.length > 0 && (
-          <div className="mt-2 flex items-baseline justify-between border-t border-line pt-2">
-            <span className="text-sm font-medium text-ink-2">
-              未会計合計<span className="en-inline text-[10px]">Unpaid</span>
-            </span>
-            <b className="font-mono text-2xl font-bold text-navy">{yen(totalAmount)}</b>
-          </div>
+      <HandyMain>
+        {sentQuantity !== null && (
+          <p
+            role="status"
+            className="mx-3 mt-2 flex items-center gap-2 rounded-[10px] border border-[#9bd9bd] bg-[#dff3ea] px-3 py-2.5 text-[13px] font-bold text-[#1e6b4d]"
+          >
+            <CircleCheckBig className="h-[18px] w-[18px] shrink-0" aria-hidden />
+            厨房に送信しました（{sentQuantity}点）
+          </p>
         )}
-      </div>
 
-      {calls.length > 0 && (
-        <ul className="mb-3 space-y-2">
-          {sortServiceCalls(calls).map((call) => (
-            <li
-              key={call.id}
-              className={cn(
-                'flex items-center gap-2 rounded-xl border-l-4 p-3',
-                call.kind === 'checkout'
-                  ? 'border-l-saffron bg-saffron-soft'
-                  : 'border-l-iris bg-iris-soft/50'
-              )}
-            >
-              <BellRing className="h-4 w-4 shrink-0 text-saffron" aria-hidden />
-              <span className="min-w-0 flex-1 text-sm">
-                <b className="font-bold text-navy">{serviceCallLabel(call.kind)}</b>
-                <span className="ml-2 text-xs text-ink-2">
-                  {formatTime(new Date(call.createdAtMs))}　{elapsedLabel(call.createdAtMs, now)}経過
-                </span>
-              </span>
-              <Button
-                size="sm"
-                variant={call.kind === 'checkout' ? 'primary' : 'navy'}
-                className="h-11 shrink-0"
-                disabled={pending && busy === call.id}
-                onClick={() => handleResolve(call)}
+        {calls.length > 0 && (
+          <ul className="mx-3 mt-2.5 space-y-2">
+            {sortServiceCalls(calls).map((call) => (
+              <li
+                key={call.id}
+                className={cn(
+                  'rounded-[10px] border-l-4 p-3',
+                  call.kind === 'checkout'
+                    ? 'border-l-[#bd660f] bg-[#fbefdf]'
+                    : 'border-l-[#7b3fe4] bg-[#efeaf8]'
+                )}
               >
-                {pending && busy === call.id ? '処理中…' : '対応済み'}
-              </Button>
-            </li>
-          ))}
-        </ul>
-      )}
+                <p className="flex items-baseline justify-between gap-2 text-sm">
+                  <b className="font-bold text-[#4f3868]">{serviceCallLabel(call.kind)}</b>
+                  <span className="text-[11px] text-[#7a7090]">
+                    {formatTime(new Date(call.createdAtMs))}
+                    {elapsedLabel(call.createdAtMs, now)}経過
+                  </span>
+                </p>
+                <button
+                  type="button"
+                  className="mt-2 min-h-[40px] w-full rounded-[9px] bg-[#7b3fe4] text-sm font-bold text-white disabled:opacity-40"
+                  disabled={pending}
+                  onClick={() => handleResolve(call)}
+                >
+                  {pending && busy === call.id ? '処理中…' : '対応済みにする'}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
 
-      {slips.length === 0 ? (
-        <div className="rounded-xl border border-line bg-white p-6 text-center">
-          <p className="text-sm text-ink-2">この卓に未会計の注文はありません。</p>
-          {canStartOrder(state) ? (
-            <>
-              {state !== 'occupied' && (
-                <div className="mt-3">
-                  <p className="text-xs text-ink-3">人数</p>
-                  <div className="mt-1 flex justify-center gap-1.5" role="radiogroup" aria-label="人数">
-                    {[1, 2, 3, 4, 5, 6, 7, 8].map((n) => (
+        {slips.length === 0 ? (
+          <div className="m-3 rounded-[10px] border border-[#e3dbf1] bg-white p-3.5">
+            <p className="text-center text-[13px] text-[#7a7090]">
+              この卓に未会計の注文はありません。
+            </p>
+            {canStartOrder(state) ? (
+              state !== 'occupied' && (
+                <>
+                  <p className="mt-3.5 text-sm font-bold text-[#4f3868]">
+                    人数<span className="ml-2 text-[11px] font-normal text-[#8a769d]">合計：{partySize}人</span>
+                  </p>
+                  <div className="mt-3 grid grid-cols-6 gap-[7px]" role="radiogroup" aria-label="人数">
+                    {[1, 2, 3, 4, 5, 6].map((n) => (
                       <button
                         key={n}
                         type="button"
@@ -205,90 +204,99 @@ export function HandyTableDetail({
                         aria-checked={partySize === n}
                         onClick={() => setPartySize(n)}
                         className={cn(
-                          'h-10 w-9 rounded-lg border text-sm font-semibold tabular-nums',
-                          partySize === n
-                            ? 'border-primary bg-primary text-white'
-                            : 'border-line bg-white text-ink-2'
+                          'min-h-[40px] rounded-[7px] border-[1.5px] border-[#7b3fe4] text-[19px] tabular-nums',
+                          partySize === n ? 'bg-[#7b3fe4] text-white' : 'bg-white text-[#7b3fe4]'
                         )}
                       >
                         {n}
                       </button>
                     ))}
                   </div>
-                </div>
-              )}
-              <p className="mt-2 text-xs text-ink-3">
-                {state === 'occupied'
-                  ? '注文を開始すると、この卓に新しい伝票を作ります。'
-                  : '注文を開始すると、この卓を着席にして新しい伝票を作ります。'}
+                  <p className="mt-3 text-[10px] leading-relaxed text-[#8a769d]">
+                    注文を開始すると、この卓を着席にして新しい伝票を作ります。
+                  </p>
+                </>
+              )
+            ) : (
+              <p className="mt-2 text-center text-[11px] text-[#8a769d]">
+                {TABLE_STATE_LABEL[state]}の卓には注文を作れません。フロア画面で状態を変更してください。
               </p>
-              <Button className="mt-3 h-12 w-full" disabled={pending} onClick={handleStart}>
-                {pending && busy === 'start' ? '開始中…' : '注文を開始'}
-              </Button>
-            </>
-          ) : (
-            <p className="mt-2 text-xs text-ink-3">
-              {TABLE_STATE_LABEL[state]}の卓には注文を作れません。フロア画面で状態を変更してください。
+            )}
+          </div>
+        ) : (
+          <>
+            <p className="mx-3 mt-2.5 flex items-baseline justify-between text-[13px] text-[#7a7090]">
+              未会計合計
+              <b className="text-[23px] font-bold text-[#4f3868] tabular-nums">{yen(totalAmount)}</b>
             </p>
-          )}
-          <Link
-            href="/app/floor"
-            className="mt-3 inline-block text-xs font-medium text-primary hover:underline"
-          >
-            人数を指定して着席する（フロア画面）
-          </Link>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {slips.map((slip) => (
-            <section key={slip.id} className="overflow-hidden rounded-xl border border-line bg-white">
-              <header className="flex items-center justify-between border-b border-line bg-lilac-soft px-3 py-2">
-                <span className="flex items-center gap-1.5 text-sm font-bold text-navy">
-                  <Receipt className="h-4 w-4 text-ink-3" aria-hidden />
+            {slips.map((slip) => (
+              <section
+                key={slip.id}
+                className="m-3 rounded-[10px] border border-[#e3dbf1] bg-white p-3.5"
+              >
+                <h2 className="flex items-baseline justify-between text-sm font-bold text-[#4f3868]">
                   伝票 #{slip.orderNo}
-                </span>
-                <span className="text-xs text-ink-2">{slip.guestCount}名</span>
-              </header>
-              {slip.items.length === 0 ? (
-                <p className="px-3 py-4 text-center text-sm text-ink-3">まだ注文はありません。</p>
-              ) : (
-                <ul className="divide-y divide-line">
-                  {slip.items.map((item) => (
-                    <li key={item.id} className="flex items-start gap-2 px-3 py-2">
-                      <span className="min-w-0 flex-1">
-                        <span className="block text-sm font-medium text-navy">{item.name}</span>
-                        {item.optionLabel && (
-                          <span className="block text-xs text-ink-3">{item.optionLabel}</span>
-                        )}
-                      </span>
-                      <span className="shrink-0 text-sm text-ink-2">×{item.quantity}</span>
-                      <span className="w-20 shrink-0 text-right font-mono text-sm font-bold text-navy">
-                        {yen(item.lineTotal)}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              <div className="flex items-baseline justify-between border-t border-line px-3 py-2">
-                <span className="text-xs text-ink-2">
-                  小計 {yen(slip.subtotal)}
-                  {slip.discountTotal > 0 ? `　値引 -${yen(slip.discountTotal)}` : ''}
-                </span>
-                <b className="font-mono text-base font-bold text-navy">{yen(slip.total)}</b>
-              </div>
-              <div className="border-t border-line p-2">
-                <Link
-                  href={`/app/handy/${table.id}/order?order=${slip.id}`}
-                  className="flex h-12 w-full items-center justify-center gap-1.5 rounded-lg bg-primary text-base font-bold text-white hover:bg-primary-deep"
-                >
-                  <Plus className="h-5 w-5" aria-hidden />
-                  注文を追加
-                </Link>
-              </div>
-            </section>
-          ))}
-        </div>
+                  <span className="text-[11px] font-normal text-[#8a769d]">
+                    {slip.guestCount}名 · {formatTime(new Date(slip.openedAtMs))}〜
+                  </span>
+                </h2>
+                {slip.items.length === 0 ? (
+                  <p className="py-4 text-center text-[13px] text-[#8a769d]">まだ注文はありません。</p>
+                ) : (
+                  <ul>
+                    {slip.items.map((item) => (
+                      <li
+                        key={item.id}
+                        className="my-2.5 flex items-baseline justify-between gap-2 text-xs"
+                      >
+                        <span className="min-w-0">
+                          <span className="block text-[#2a2138]">
+                            {item.name}
+                            <span className="ml-1.5 text-[#8a769d]">×{item.quantity}</span>
+                          </span>
+                          {item.optionLabel && (
+                            <small className="block text-[9px] text-[#8a769d]">
+                              {item.optionLabel}
+                            </small>
+                          )}
+                        </span>
+                        <b className="shrink-0 font-bold text-[#4f3868] tabular-nums">
+                          {yen(item.lineTotal)}
+                        </b>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <strong className="mt-2 block border-t border-[#e3dbf1] pt-2 text-right text-lg font-bold text-[#4f3868] tabular-nums">
+                  {yen(slip.total)}
+                </strong>
+                {slips.length > 1 && (
+                  <Link
+                    href={`/handy/${table.id}/order?order=${slip.id}`}
+                    className="mt-2.5 flex min-h-[42px] items-center justify-center rounded-[9px] border border-[#7b3fe4] text-sm font-bold text-[#7b3fe4]"
+                  >
+                    この伝票に注文を追加
+                  </Link>
+                )}
+              </section>
+            ))}
+          </>
+        )}
+      </HandyMain>
+
+      {canStartOrder(state) && (
+        <HandyFooterButton
+          label={
+            pending && busy === 'start'
+              ? '開始中…'
+              : slips.length > 0
+                ? '注文を追加'
+                : '注文を開始'
+          }
+          disabled={pending}
+          onClick={handleStart}
+        />
       )}
-    </div>
+    </>
   );
 }

@@ -25,7 +25,7 @@ export async function resolveServiceCall(callId: string): Promise<{ alreadyResol
   await assertStoreAccess(ctx, call.store_id);
 
   if (call.status !== 'open') {
-    revalidatePath('/app/handy');
+    revalidatePath('/handy');
     return { alreadyResolved: true };
   }
 
@@ -40,7 +40,7 @@ export async function resolveServiceCall(callId: string): Promise<{ alreadyResol
   if (error) throw new Error(error.message);
 
   if (!updated || updated.length === 0) {
-    revalidatePath('/app/handy');
+    revalidatePath('/handy');
     return { alreadyResolved: true };
   }
 
@@ -55,7 +55,7 @@ export async function resolveServiceCall(callId: string): Promise<{ alreadyResol
     p_note: call.kind === 'checkout' ? 'お会計希望に対応' : 'スタッフ呼び出しに対応',
   });
 
-  revalidatePath('/app/handy');
+  revalidatePath('/handy');
   revalidatePath('/app/floor');
   return { alreadyResolved: false };
 }
@@ -119,7 +119,7 @@ export async function submitHandyOrder(
       sentQuantity += line.quantity;
     } catch (e) {
       const reason = e instanceof Error ? e.message : '送信に失敗しました';
-      revalidatePath('/app/handy');
+      revalidatePath('/handy');
       return {
         sentQuantity,
         remaining: lines.slice(i),
@@ -128,6 +128,6 @@ export async function submitHandyOrder(
     }
   }
 
-  revalidatePath('/app/handy');
+  revalidatePath('/handy');
   return { sentQuantity, remaining: [], message: null };
 }

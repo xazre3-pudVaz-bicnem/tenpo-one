@@ -30,8 +30,13 @@ export default async function proxy(request: NextRequest) {
   // 認証が関係しないルート（LP・公開予約・QRオーダー・Webhook・ヘルスチェック等）は
   // Supabaseへのセッション照会を行わない（公開ページのTTFB改善。
   // /app・/admin は下のガードで検証し、各ページの requireSession が最終防衛線）。
+  // /handy はレジ（/app）とは別URLのハンディ専用画面。長時間開きっぱなしで使うため、
+  // ここでもセッションcookieの更新を走らせる
   const needsAuth =
-    pathname.startsWith('/app') || pathname.startsWith('/admin') || pathname === '/login';
+    pathname.startsWith('/app') ||
+    pathname.startsWith('/handy') ||
+    pathname.startsWith('/admin') ||
+    pathname === '/login';
   if (!needsAuth) {
     return NextResponse.next({ request: { headers: withPathname() } });
   }
