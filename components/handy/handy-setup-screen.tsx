@@ -17,11 +17,16 @@ import {
   durationLabel,
   durationProblem,
   isButtonMinutes,
+  jstHm,
+  minutesAgoHm,
   nearestButtonParts,
+  parseCustomHm,
   parseCustomMinutes,
   planHasItems,
   planName,
+  resolveStartTime,
   splitMinutes,
+  startTimeProblem,
   validateVisitDraft,
   warningProblem,
   type HandyPlan,
@@ -35,7 +40,7 @@ import {
   HandyTopBar,
 } from './handy-chrome';
 
-type Picker = null | 'plan' | 'plan-item' | 'duration' | 'warning' | 'male' | 'female';
+type Picker = null | 'plan' | 'plan-item' | 'duration' | 'warning' | 'start' | 'male' | 'female';
 
 /**
  * お客様情報（承認済みレイアウト 2026-09-21 の setup）。
@@ -65,6 +70,8 @@ export function HandySetupScreen({
   const { toast } = useToast();
   const [draft, setDraft] = useState<VisitDraft>(DEFAULT_VISIT_DRAFT);
   const [picker, setPicker] = useState<Picker>(null);
+  // 開始時間の画面を開いた時刻（「今」「5分前」などの基準。描画中に時計を読まないよう、開くときに決める）
+  const [startSheetNow, setStartSheetNow] = useState(0);
   const [pending, startTransition] = useTransition();
 
   const set = (patch: Partial<VisitDraft>) => setDraft((d) => ({ ...d, ...patch }));
@@ -99,6 +106,11 @@ export function HandySetupScreen({
 
   const confirm = () => {
     if (pending || problem) return;
+    const startIssue = startTimeProblem(draft.startTime, Date.now());
+    if (startIssue) {
+      toast(startIssue, 'error');
+      return;
+    }
     startTransition(async () => {
       try {
         const { orderId, planItemError } = await confirmAction(tableId, draft);
@@ -174,7 +186,14 @@ export function HandySetupScreen({
               </button>
             </span>
           </div>
-          <Row label="開始時間" value={`${startLabel}〜`} />
+          <RowButton
+            label="開始時間"
+            value={`${draft.startTime ?? startLabel}〜`}
+            onClick={() => {
+              setStartSheetNow(Date.now());
+              setPicker('start');
+            }}
+          />
         </div>
 
         <SectionTitle
@@ -324,6 +343,19 @@ export function HandySetupScreen({
           problemOf={(minutes) => warningProblem(minutes, draft.duration)}
           onSave={(minutes) => {
             set({ warningMinutes: minutes });
+            setPicker(null);
+          }}
+          onClose={() => setPicker(null)}
+        />
+      )}
+      {picker === 'start' && (
+        <StartTimeSheet
+          value={draft.startTime}
+          nowMs={startSheetNow}
+          timed={draft.timed}
+          duration={draft.duration}
+          onSave={(startTime) => {
+            set({ startTime });
             setPicker(null);
           }}
           onClose={() => setPicker(null)}
@@ -743,6 +775,173 @@ function TimePickerSheet({
       <button
         type="button"
         disabled={total === null || !!problem}
+        onClick={save}
+        className="mt-3 min-h-[46px] w-full rounded-lg bg-[#7b3fe4] text-base font-bold text-white disabled:opacity-40"
+      >
+        設定
+      </button>
+    </Sheet>
+  );
+}
+
+/**
+ * 開始時間（2026-09-21 Ronnie「開始時間を編集できるように」）。
+ * 「今」「5分前」…、時（今の時刻から3時間前まで）と分（5分きざみ）、ボタンに無い時刻は「カスタム」→「設定」。
+ * 12時間前〜今の間だけ。「今」は確定した時刻になる。
+ */
+function StartTimeSheet({
+  value,
+  nowMs,
+  timed,
+  duration,
+  onSave,
+  onClose,
+}: {
+  value: string | null;
+  nowMs: number;
+  timed: boolean;
+  duration: number;
+  onSave: (startTime: string | null) => void;
+  onClose: () => void;
+}) {
+  const nowHm = jstHm(nowMs);
+  const nowHour = Number(nowHm.slice(0, 2));
+  const nowMinute = Number(nowHm.slice(3, 5));
+  const hours = [3, 2, 1, 0].map((back) => (nowHour - back + 24) % 24);
+  const minuteChoices = Array.from({ length: 12 }, (_, i) => i * 5);
+  const quick = [5, 10, 15, 30].map((ago) => ({ ago, hm: minutesAgoHm(nowMs, ago) }));
+  const pad = (n: number) => String(n).padStart(2, '0');
+
+  const [selected, setSelected] = useState<string | null>(value);
+  const [custom, setCustom] = useState(false);
+  const [hoursText, setHoursText] = useState(value ? value.slice(0, 2) : pad(nowHour));
+  const [minutesText, setMinutesText] = useState(value ? value.slice(3, 5) : pad(nowMinute));
+  const [focusCustom, setFocusCustom] = useState(false);
+
+  const effective = custom ? parseCustomHm(hoursText, minutesText) : selected;
+  const invalidCustom = custom && effective === null;
+  const problem = invalidCustom ? '時は0〜23、分は0〜59の数字で入力してください' : startTimeProblem(effective, nowMs);
+  const startMs = effective === null ? nowMs : resolveStartTime(effective, nowMs);
+  const selH = selected ? Number(selected.slice(0, 2)) : null;
+  const selM = selected ? Number(selected.slice(3, 5)) : null;
+
+  const pickNow = () => {
+    setCustom(false);
+    setSelected(null);
+  };
+  const pickHm = (hm: string) => {
+    setCustom(false);
+    setSelected(hm);
+  };
+  const pickHour = (h: number) => pickHm(`${pad(h)}:${pad(selM ?? Math.floor(nowMinute / 5) * 5)}`);
+  const pickMinute = (m: number) => pickHm(`${pad(selH ?? nowHour)}:${pad(m)}`);
+  const openCustom = () => {
+    if (custom) return;
+    const base = selected ?? nowHm;
+    setHoursText(base.slice(0, 2));
+    setMinutesText(base.slice(3, 5));
+    setFocusCustom(true);
+    setCustom(true);
+  };
+  const save = () => {
+    if (invalidCustom || problem) return;
+    onSave(effective);
+  };
+
+  const inputClass =
+    'h-12 w-16 rounded-lg border-[1.5px] border-[#d9ccef] text-center text-2xl font-bold text-[#2a2138] tabular-nums focus:border-[#7b3fe4] focus:outline-none';
+
+  return (
+    <Sheet title="開始時間" onClose={onClose} closeButton>
+      <div className="grid grid-cols-5 gap-1.5" role="group" aria-label="よく使う開始時間">
+        <PickButton selected={!custom && selected === null} onClick={pickNow}>
+          今
+        </PickButton>
+        {quick.map((q) => (
+          <PickButton key={q.ago} selected={!custom && selected === q.hm} onClick={() => pickHm(q.hm)}>
+            <span className="text-sm">{q.ago}分前</span>
+          </PickButton>
+        ))}
+      </div>
+
+      <p className="mt-4 mb-2 text-xs font-bold text-[#5e4777]">時</p>
+      <div className="grid grid-cols-4 gap-2" role="group" aria-label="時">
+        {hours.map((h) => (
+          <PickButton key={h} selected={!custom && selH === h} onClick={() => pickHour(h)}>
+            {h}時
+          </PickButton>
+        ))}
+      </div>
+
+      <p className="mt-4 mb-2 text-xs font-bold text-[#5e4777]">分</p>
+      <div className="grid grid-cols-4 gap-2" role="group" aria-label="分">
+        {minuteChoices.map((m) => (
+          <PickButton key={m} selected={!custom && selM === m} onClick={() => pickMinute(m)}>
+            {pad(m)}分
+          </PickButton>
+        ))}
+      </div>
+
+      <div className="mt-4 border-t border-[#e3dbf1] pt-4">
+        <div className="grid grid-cols-2 gap-2">
+          <PickButton selected={custom} onClick={openCustom}>
+            カスタム
+          </PickButton>
+        </div>
+        {custom && (
+          <div className="mt-3 flex items-center justify-center gap-2 text-sm font-bold text-[#5e4777]">
+            <input
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              maxLength={2}
+              autoFocus={focusCustom}
+              value={hoursText}
+              onChange={(e) => setHoursText(e.target.value)}
+              onFocus={(e) => e.currentTarget.select()}
+              onKeyDown={(e) => e.key === 'Enter' && save()}
+              aria-label="開始時間（カスタム）の時"
+              className={inputClass}
+            />
+            時
+            <input
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              maxLength={2}
+              value={minutesText}
+              onChange={(e) => setMinutesText(e.target.value)}
+              onFocus={(e) => e.currentTarget.select()}
+              onKeyDown={(e) => e.key === 'Enter' && save()}
+              aria-label="開始時間（カスタム）の分"
+              className={inputClass}
+            />
+            分
+          </div>
+        )}
+      </div>
+
+      <p className="mt-4 min-h-6 text-center" aria-live="polite">
+        {problem ? (
+          <span className="text-xs leading-relaxed text-[#b3341f]">{problem}</span>
+        ) : (
+          <span className="text-sm text-[#8a769d]">
+            開始{' '}
+            <b className="text-lg font-bold text-[#4f3868] tabular-nums">
+              {effective === null ? `今（${nowHm}）` : effective}
+            </b>
+            {timed && startMs !== null && (
+              <>
+                {' '}
+                ／ 終了予定 <b className="font-bold text-[#4f3868] tabular-nums">{jstHm(startMs + duration * 60_000)}</b>
+              </>
+            )}
+          </span>
+        )}
+      </p>
+      <button
+        type="button"
+        disabled={invalidCustom || !!problem}
         onClick={save}
         className="mt-3 min-h-[46px] w-full rounded-lg bg-[#7b3fe4] text-base font-bold text-white disabled:opacity-40"
       >

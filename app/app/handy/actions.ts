@@ -98,6 +98,7 @@ export async function startHandyVisit(
     purpose: draft.scene || undefined,
     memo: visitMemo(draft),
     orderType: draft.plan === 'course' ? 'course' : 'dine_in',
+    startTime: draft.startTime ?? undefined,
   });
   await assignHandyClerk(orderId);
 

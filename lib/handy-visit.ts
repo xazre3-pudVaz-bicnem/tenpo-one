@@ -140,6 +140,8 @@ export interface VisitDraft {
   duration: number;
   warningEnabled: boolean;
   warningMinutes: number;
+  /** 開始時間（'HH:MM'・日本時間）。null は「今」＝確定した時刻 */
+  startTime: string | null;
 }
 
 export const DEFAULT_VISIT_DRAFT: VisitDraft = {
@@ -152,6 +154,7 @@ export const DEFAULT_VISIT_DRAFT: VisitDraft = {
   duration: 120,
   warningEnabled: true,
   warningMinutes: 30,
+  startTime: null,
 };
 
 /** 確定できない理由（現場向けの日本語）。確定できれば null */
@@ -173,7 +176,77 @@ export function validateVisitDraft(d: VisitDraft): string | null {
     }
   }
   if (!HANDY_PLANS.some((p) => p.id === d.plan)) return 'モードを選択してください';
+  // 範囲（12時間前〜今）は時刻で変わるので、選ぶ画面とサーバー（startWalkIn）で見る。ここでは形だけ
+  if (d.startTime !== null && !isStartHm(d.startTime)) return '開始時間を選び直してください';
   return null;
+}
+
+/* ------------------------------------------------------------ 開始時間 */
+
+/**
+ * 開始時間（2026-09-21 Ronnie「開始時間を編集できるように」）。
+ * 席に着いてからハンディで入力するまでに時間がたったとき、実際に来店した時刻に直す。
+ * 伝票の開始時刻（経過時間）と、時間制の終了予定（開始＋席時間）がこの時刻からになる。
+ */
+
+/** 開始時間として選べる範囲：12時間前〜今。スマホとサーバーの時計のずれは5分まで許す */
+export const START_MAX_PAST_MINUTES = 12 * 60;
+export const START_FUTURE_TOLERANCE_MINUTES = 5;
+
+const START_HM = /^([01]\d|2[0-3]):([0-5]\d)$/;
+const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
+const pad2 = (n: number) => String(n).padStart(2, '0');
+
+export function isStartHm(value: unknown): value is string {
+  return typeof value === 'string' && START_HM.test(value);
+}
+
+/** 日本時間の 'HH:MM' */
+export function jstHm(ms: number): string {
+  const d = new Date(ms + JST_OFFSET_MS);
+  return `${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}`;
+}
+
+/** 今から minutes 分前の 'HH:MM'（日本時間） */
+export function minutesAgoHm(nowMs: number, minutes: number): string {
+  return jstHm(nowMs - minutes * 60_000);
+}
+
+/**
+ * 'HH:MM'（日本時間）を、いまに一番近い過去の日時（ms）にする。
+ * 今日のその時刻が「今＋5分」より後なら前日（例: 0時30分に 23:50 → 前日の23:50）。読めなければ null。
+ */
+export function resolveStartTime(hm: string, nowMs: number): number | null {
+  if (!isStartHm(hm)) return null;
+  const [h, m] = hm.split(':').map(Number);
+  const today = new Date(nowMs + JST_OFFSET_MS);
+  let t = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate(), h, m) - JST_OFFSET_MS;
+  if (t > nowMs + START_FUTURE_TOLERANCE_MINUTES * 60_000) t -= 24 * 60 * 60_000;
+  return t;
+}
+
+/** 開始時間として使えない理由。null（今）は常に使える */
+export function startTimeProblem(hm: string | null, nowMs: number): string | null {
+  if (hm === null) return null;
+  const t = resolveStartTime(hm, nowMs);
+  if (t === null) return '開始時間を選び直してください';
+  if (nowMs - t > START_MAX_PAST_MINUTES * 60_000) {
+    return '開始時間は12時間前から今までの間で選んでください';
+  }
+  return null;
+}
+
+/** カスタム入力（時・分）を 'HH:MM' にする。空欄は0。読めなければ null（全角数字も読む） */
+export function parseCustomHm(hoursText: string, minutesText: string): string | null {
+  const read = (v: string): number | null => {
+    const t = toHalfWidthDigits(v).trim();
+    if (t === '') return 0;
+    return /^\d{1,2}$/.test(t) ? Number(t) : null;
+  };
+  const h = read(hoursText);
+  const m = read(minutesText);
+  if (h === null || m === null || h > 23 || m > 59) return null;
+  return `${pad2(h)}:${pad2(m)}`;
 }
 
 /**
