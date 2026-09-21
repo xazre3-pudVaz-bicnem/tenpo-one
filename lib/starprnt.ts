@@ -340,3 +340,11 @@ export function kitchenTicketStarPrnt(
   b.cmd(CMD.cut);
   return b.toBuffer();
 }
+
+/** 厨房伝票を複数枚続けて出す（商品の種類ごとに1枚・1枚ごとにカット）。 */
+export function kitchenTicketsStarPrnt(
+  slips: LayoutLine[][],
+  opts: { currency?: CurrencyStyle; encoding?: TextEncoding } = {}
+): Buffer {
+  return Buffer.concat(slips.map((lines) => kitchenTicketStarPrnt(lines, opts)));
+}

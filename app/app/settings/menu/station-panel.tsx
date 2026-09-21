@@ -49,7 +49,7 @@ export function StationPanel({ categories }: { categories: StationCategoryRow[] 
     <div className="space-y-3">
       <p className="text-sm font-semibold text-navy">KDSステーション振り分け</p>
       <p className="text-xs text-gray-500">
-        カテゴリごとにキッチン画面（KDS）でのタブ振り分け先を設定します
+        カテゴリごとにキッチン画面（KDS）のタブと、厨房伝票を出すプリンター（キッチン機／ドリンク機など）の振り分け先を設定します
       </p>
       <ul className="space-y-1.5">
         {rows.map((c) => (

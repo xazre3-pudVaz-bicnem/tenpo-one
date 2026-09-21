@@ -200,7 +200,8 @@ export function PosScreen({
   paymentAvailability: PosPaymentAvailability;
   otherOpenOrders: MergeCandidate[];
   availableTables: AvailableTable[];
-  addItemAction: (orderId: string, menuItemId: string, optionItemIds?: string[]) => Promise<void>;
+  /** 戻り値（追加した明細のID）はレジでは使わない（ハンディが厨房送信に使う） */
+  addItemAction: (orderId: string, menuItemId: string, optionItemIds?: string[]) => Promise<unknown>;
   updateQtyAction: (orderId: string, orderItemId: string, delta: number) => Promise<void>;
   cancelItemAction: (orderId: string, orderItemId: string, reason: string) => Promise<void>;
   setDiscountAction: (orderId: string, discountTotal: number, reason: string) => Promise<void>;

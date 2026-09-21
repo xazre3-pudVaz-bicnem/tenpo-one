@@ -1,12 +1,17 @@
 import { describe, it, expect } from 'vitest';
 import iconv from 'iconv-lite';
 import {
+  DEFAULT_KITCHEN_TICKET_SPLIT,
   groupKitchenTickets,
+  kitchenTicketSplitFrom,
   layoutKitchenTicket,
+  misroutedDrinkCategories,
+  splitTicketByItem,
+  ticketSlips,
   type ClaimedKitchenItem,
 } from '@/lib/kitchen-ticket';
-import { kitchenTicketMarkup } from '@/lib/receipt-markup';
-import { kitchenTicketStarPrnt } from '@/lib/starprnt';
+import { kitchenTicketMarkup, kitchenTicketsMarkup } from '@/lib/receipt-markup';
+import { kitchenTicketStarPrnt, kitchenTicketsStarPrnt } from '@/lib/starprnt';
 
 const row = (over: Partial<ClaimedKitchenItem>): ClaimedKitchenItem => ({
   order_id: 'o1',
@@ -166,5 +171,94 @@ describe('セットの選択肢（カレー・ナン/ご飯など）', () => {
   it('選択肢に英語名が無ければ日本語のまま出す', () => {
     const [t] = groupKitchenTickets([row({ modifiers: [{ name: '大盛り' }] })]);
     expect(layoutKitchenTicket(t, opts).map((l) => l.text)).toContain('   ・大盛り');
+  });
+});
+
+describe('商品の種類ごとの伝票（2026-09-21 店舗要望）', () => {
+  const opts = { title: 'ドリンク 伝票', titleEn: 'DRINK', printedAt: '19:05', paperWidth: 80 as const };
+
+  it('既定は「種類ごと」。設定で「まとめて」にできる', () => {
+    expect(DEFAULT_KITCHEN_TICKET_SPLIT).toBe('item');
+    expect(kitchenTicketSplitFrom(null)).toBe('item');
+    expect(kitchenTicketSplitFrom({})).toBe('item');
+    expect(kitchenTicketSplitFrom({ kitchenTicket: { split: 'order' } })).toBe('order');
+    expect(kitchenTicketSplitFrom({ kitchenTicket: { split: 'xxx' } })).toBe('item');
+    expect(kitchenTicketSplitFrom({ drawer: { autoOpenOnCash: true } })).toBe('item');
+  });
+
+  it('レジで1個ずつタップした同じ商品は数量を足して1行にする', () => {
+    const [t] = groupKitchenTickets([
+      row({ item_name: '生ビール' }),
+      row({ item_name: '生ビール' }),
+      row({ item_name: '生ビール' }),
+      row({ item_name: 'ハイボール' }),
+    ]);
+    expect(t.lines.map((l) => [l.name, l.delta])).toEqual([
+      ['生ビール', 3],
+      ['ハイボール', 1],
+    ]);
+  });
+
+  it('選択肢・メモが違えば別の行、追加と取消も別の行', () => {
+    const [t] = groupKitchenTickets([
+      row({ item_name: 'カレー', modifiers: [{ name: '辛口' }] }),
+      row({ item_name: 'カレー', modifiers: [{ name: '甘口' }] }),
+      row({ item_name: 'カレー', modifiers: [{ name: '辛口' }], memo: 'パクチー抜き' }),
+      row({ item_name: 'カレー', modifiers: [{ name: '辛口' }], delta: -1 }),
+    ]);
+    expect(t.lines).toHaveLength(4);
+    expect(t.lines[0].delta).toBe(-1); // 取消を先頭に
+  });
+
+  it('1商品1枚に分け、何枚目かを付ける', () => {
+    const [t] = groupKitchenTickets([row({ item_name: 'A' }), row({ item_name: 'B' }), row({ item_name: 'C' })]);
+    const slips = splitTicketByItem(t);
+    expect(slips).toHaveLength(3);
+    expect(slips.map((s) => s.lines.map((l) => l.name))).toEqual([['A'], ['B'], ['C']]);
+    expect(slips[1].part).toEqual({ index: 2, total: 3 });
+    // 卓名・伝票番号はどの紙にも出る
+    expect(slips.every((s) => s.tableName === 'T10' && s.orderNo === '5784')).toBe(true);
+  });
+
+  it('「まとめて」は分けない', () => {
+    const [t] = groupKitchenTickets([row({ item_name: 'A' }), row({ item_name: 'B' })]);
+    expect(ticketSlips(t, 'order')).toHaveLength(1);
+    expect(ticketSlips(t, 'item')).toHaveLength(2);
+  });
+
+  it('分けた伝票は「(2/3)」を出し、商品名を縦2倍で出す。1枚だけなら(1/1)は出さない', () => {
+    const [t] = groupKitchenTickets([row({ item_name: 'A' }), row({ item_name: 'B' }), row({ item_name: 'C' })]);
+    const lines = layoutKitchenTicket(splitTicketByItem(t)[1], opts);
+    expect(lines.some((l) => l.text.startsWith('No.5784  (2/3)'))).toBe(true);
+    expect(lines.find((l) => l.text.startsWith('B  x1'))?.size).toBe('tall');
+
+    const [single] = groupKitchenTickets([row({ item_name: 'D' })]);
+    const one = layoutKitchenTicket(splitTicketByItem(single)[0], opts);
+    expect(one.some((l) => l.text.includes('(1/1)'))).toBe(false);
+    expect(one.find((l) => l.text.startsWith('D  x1'))?.size).toBe('tall');
+  });
+
+  it('1回の注文ぶんを1つのジョブにし、1枚ごとに紙を切る（Markup / StarPRNT）', () => {
+    const [t] = groupKitchenTickets([row({ item_name: 'A' }), row({ item_name: 'B' }), row({ item_name: 'C' })]);
+    const slips = splitTicketByItem(t).map((s) => layoutKitchenTicket(s, opts));
+    const markup = kitchenTicketsMarkup(slips);
+    expect(markup.match(/\[cut: feed; partial\]/g)).toHaveLength(3);
+    const buf = kitchenTicketsStarPrnt(slips);
+    let cuts = 0;
+    for (let i = 0; i + 2 < buf.length; i++) if (buf[i] === 0x1b && buf[i + 1] === 0x64 && buf[i + 2] === 0x03) cuts++;
+    expect(cuts).toBe(3);
+  });
+});
+
+describe('ドリンク機に出ないカテゴリの検出', () => {
+  it('ドリンク商品があるのにステーションがドリンクでないカテゴリを返す', () => {
+    const cats = [
+      { id: 'c1', name: '(F) BEER', station: 'kitchen' },
+      { id: 'c2', name: 'ワイン', station: 'drink' },
+      { id: 'c3', name: 'サラダ', station: 'kitchen' },
+      { id: 'c4', name: 'ソフトドリンク', station: null },
+    ];
+    expect(misroutedDrinkCategories(cats, ['c1', 'c2', 'c4', null])).toEqual(['(F) BEER', 'ソフトドリンク']);
+    expect(misroutedDrinkCategories(cats, [])).toEqual([]);
   });
 });

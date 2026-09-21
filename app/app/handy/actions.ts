@@ -8,7 +8,7 @@ import { createClient } from '@/lib/supabase/server';
 import { HANDY_CLERK_COOKIE, NO_CLERK_NAME, serializeHandyClerk } from '@/lib/handy-clerk';
 import { readHandyClerk } from '@/lib/handy-session';
 import { validateVisitDraft, visitMemo, type VisitDraft } from '@/lib/handy-visit';
-import { addItem } from '../pos/actions';
+import { addItem, sendItemsToKitchen } from '../pos/actions';
 import { setOrderClerk } from '../pos/clerk-actions';
 import { goToOrder, startWalkIn } from '../floor/actions';
 import { MAX_LINE_QUANTITY } from '@/components/handy/logic';
@@ -104,8 +104,9 @@ export async function startHandyVisit(
   let planItemError: string | null = null;
   if (draft.planItemId) {
     try {
-      // 価格・税率の検証は POS と同じ addItem に任せる
-      await addItem(orderId, draft.planItemId, [], 1);
+      // 価格・税率の検証は POS と同じ addItem に任せる。ハンディで入れた品は厨房（ドリンク）へもすぐ送る
+      const { id } = await addItem(orderId, draft.planItemId, [], 1);
+      if (id) await sendItemsToKitchen(orderId, [id]);
     } catch (e) {
       // プラン商品が入らなくても来店登録は成立させる（注文画面で手動で入れられる）
       planItemError = e instanceof Error ? e.message : 'プラン商品を伝票に入れられませんでした';
@@ -214,11 +215,13 @@ export interface HandySubmitResult {
 }
 
 /**
- * ハンディのカートを伝票へ送信する。
+ * ハンディのカートを伝票へ送信し、そのまま厨房（キッチン・ドリンクのプリンター／KDS）へ送る。
  * 既存のPOSサーバーアクション（addItem）をそのまま呼ぶ（価格・税率・選択肢の検証はPOS側と同一）。
- * addItem は1回で1点を追加するため、数量ぶん繰り返す（POSで商品を複数回タップした場合と同じ結果）。
+ * addItem はレジと同じく「未送信」で明細を入れるので、全行を入れ終わったら追加した明細だけを
+ * sendItemsToKitchen で同じ時刻に送信済みにする（これをしないと厨房伝票が出ない。2026-09-21 店舗報告）。
  *
  * 途中で失敗したら、そこで中断して「送信できた点数」と「カートに残す行」を返す。
+ * それまでに入った明細は伝票にあるので、厨房へも送っておく。
  * 呼び出し側は残った行をカートに戻すこと（成功したように見せない）。
  */
 export async function submitHandyOrder(
@@ -248,22 +251,39 @@ export async function submitHandyOrder(
   // 1行＝1回の追加（数量ぶんまとめて1明細にする）。1個ずつ呼ぶと数量×往復になり、
   // 伝票と厨房伝票にも同じ商品が数量ぶん別行で並んでしまう
   let sentQuantity = 0;
+  const addedIds: string[] = [];
+
+  /** 追加できた明細を厨房へ送る。失敗したら画面に出す文言を返す（明細は伝票に入っている） */
+  const sendAddedToKitchen = async (): Promise<string | null> => {
+    if (addedIds.length === 0) return null;
+    try {
+      await sendItemsToKitchen(orderId, addedIds);
+      return null;
+    } catch (e) {
+      console.error('[handy] kitchen send failed', orderId, e instanceof Error ? e.message : e);
+      return '伝票には入りましたが、厨房への送信に失敗しました。レジの「厨房へオーダー」で送ってください';
+    }
+  };
+
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     try {
-      await addItem(orderId, line.menuItemId, line.optionItemIds, line.quantity);
+      const { id } = await addItem(orderId, line.menuItemId, line.optionItemIds, line.quantity);
+      if (id) addedIds.push(id);
       sentQuantity += line.quantity;
     } catch (e) {
       const reason = e instanceof Error ? e.message : '送信に失敗しました';
+      const sendProblem = await sendAddedToKitchen();
       revalidatePath('/handy');
       return {
         sentQuantity,
         remaining: lines.slice(i),
-        message: `「${line.name}」で中断しました：${reason}`,
+        message: `「${line.name}」で中断しました：${reason}${sendProblem ? `（${sendProblem}）` : ''}`,
       };
     }
   }
 
+  const sendProblem = await sendAddedToKitchen();
   revalidatePath('/handy');
-  return { sentQuantity, remaining: [], message: null };
+  return { sentQuantity, remaining: [], message: sendProblem };
 }
