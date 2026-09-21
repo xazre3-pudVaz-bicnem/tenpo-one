@@ -33,8 +33,8 @@ export const HANDY_DURATIONS = [60, 90, 120, 150, 180, 240] as const;
 /** 終了前注意の選択肢（分前） */
 export const HANDY_WARNINGS = [5, 10, 15, 30] as const;
 
-/** 人数の上限（startWalkIn と同じく現実的な範囲に制限する） */
-export const MAX_GUESTS = 99;
+/** 人数の上限（startWalkIn・orders.guest_count の制約と同じ 999） */
+export const MAX_GUESTS = 999;
 
 export function planName(plan: HandyPlan): string {
   return HANDY_PLANS.find((p) => p.id === plan)?.name ?? 'アラカルト';
@@ -148,18 +148,28 @@ export interface PlanItemInput {
   courseIncludesAyce: boolean | null;
 }
 
+/** 飲み放題（店によってはローマ字の伝票名 Nomihoudai / Nomihodai で登録されている） */
+const NOMIHODAI = /飲み放題|飲放|のみほ|nomi-?h(?:o|ou|oo|ō)dai/i;
+const TABEHODAI = /食べ放題|食放|tabe-?h(?:o|ou|oo|ō)dai/i;
+const TABENOMI = /食べ飲み放題|食飲放|tabenomi/i;
+/** 飲み放題のアップグレード（A→AB）・延長は途中で足す商品で、着席時に選ぶプランではない */
+const NOT_A_PLAN = /→|延長/;
+
 /**
  * 1商品がどのモードのプラン商品か。該当しなければ null（単品）。
- * DB のフラグ（course_includes_drinks / course_includes_ayce）を優先し、
- * フラグが無い店では商品名・カテゴリ名の「飲み放題」「食べ放題」で拾う。
- * 売切の商品は出さない。
+ * DB のフラグ（course_includes_drinks / course_includes_ayce）と商品名の「飲み放題」「食べ放題」で判断し、
+ * どちらでもないコース商品は「コース」。カテゴリ名はコース商品のときだけ見る
+ * （「飲み放題」カテゴリに入った 0円のドリンクをプランとして拾わないため）。
+ * 売切・アップグレード・延長の商品は出さない。
  */
 export function classifyPlanItem(item: PlanItemInput): HandyPlanItem['kind'] | null {
   if (item.isSoldOut) return null;
-  const text = `${item.categoryName ?? ''} ${item.name}`;
-  const both = /食べ飲み放題|食飲放/.test(text);
-  const drinks = item.courseIncludesDrinks === true || both || /飲み放題|飲放|のみほ/.test(text);
-  const ayce = item.courseIncludesAyce === true || both || /食べ放題|食放/.test(text);
+  if (NOT_A_PLAN.test(item.name)) return null;
+  const text = item.itemType === 'course' ? `${item.categoryName ?? ''} ${item.name}` : item.name;
+  const both =
+    TABENOMI.test(text) || (item.courseIncludesDrinks === true && item.courseIncludesAyce === true);
+  const drinks = both || item.courseIncludesDrinks === true || NOMIHODAI.test(text);
+  const ayce = both || item.courseIncludesAyce === true || TABEHODAI.test(text);
   if (drinks && ayce) return 'food';
   if (drinks) return 'drink';
   if (ayce) return 'buffet';

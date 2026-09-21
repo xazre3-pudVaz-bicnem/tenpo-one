@@ -32,7 +32,8 @@ describe('お客様情報の検証', () => {
   });
 
   it('人数の上限を超えると確定できない', () => {
-    expect(validateVisitDraft(draft({ male: 90, female: 10 }))).toMatch(/合計人数/);
+    expect(validateVisitDraft(draft({ male: 990, female: 10 }))).toMatch(/合計人数/);
+    expect(validateVisitDraft(draft({ male: 120, female: 0 }))).toBeNull();
   });
 
   it('マイナス・小数の人数は受け付けない', () => {
@@ -112,11 +113,27 @@ describe('プラン商品の振り分け', () => {
     expect(classifyPlanItem(item({ courseIncludesDrinks: true, courseIncludesAyce: true }))).toBe('food');
   });
 
-  it('フラグが無ければ商品名・カテゴリ名で拾う', () => {
+  it('フラグが無ければ商品名で拾う', () => {
     expect(classifyPlanItem(item({ name: '2時間飲み放題' }))).toBe('drink');
-    expect(classifyPlanItem(item({ name: 'スタンダード', categoryName: '飲み放題' }))).toBe('drink');
     expect(classifyPlanItem(item({ name: '焼肉食べ放題' }))).toBe('buffet');
     expect(classifyPlanItem(item({ name: '食べ飲み放題コース' }))).toBe('food');
+    expect(classifyPlanItem(item({ name: '【食べ放題Party!】2H飲放＋グランドメニュー50種以上食べ放題' }))).toBe('food');
+  });
+
+  it('ローマ字の伝票名（Nomihoudai / Nomihodai）も飲み放題として拾う', () => {
+    expect(classifyPlanItem(item({ name: 'Nomihoudai AB', itemType: 'course' }))).toBe('drink');
+    expect(classifyPlanItem(item({ name: '(A) 2H Course Nomihodai', itemType: 'course', price: 0 }))).toBe('drink');
+  });
+
+  it('カテゴリ名はコース商品のときだけ見る（飲み放題カテゴリの0円ドリンクはプランにしない）', () => {
+    expect(classifyPlanItem(item({ name: 'スタンダード', categoryName: '飲み放題', itemType: 'course' }))).toBe('drink');
+    expect(classifyPlanItem(item({ name: '生ビール', categoryName: '飲み放題', itemType: 'drink', price: 0 }))).toBeNull();
+  });
+
+  it('アップグレード（A→AB）・延長はプランにしない', () => {
+    expect(classifyPlanItem(item({ name: '飲み放題 (A→AB)' }))).toBeNull();
+    expect(classifyPlanItem(item({ name: 'コース飲み放題 (A→B)', itemType: 'course' }))).toBeNull();
+    expect(classifyPlanItem(item({ name: '延長 (30min)', itemType: 'course' }))).toBeNull();
   });
 
   it('コース商品はコース、単品は null', () => {

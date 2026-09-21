@@ -42,8 +42,9 @@ export async function startWalkIn(
   const ctx = await requirePermission('tables.operate');
   const supabase = await createClient();
 
-  if (!Number.isInteger(partySize) || partySize < 1 || partySize > 99) {
-    throw new Error('人数は1〜99名で指定してください');
+  // 上限は orders.guest_count の制約（0〜999）に合わせる（大人数の貸切もフロアから着席できるように）
+  if (!Number.isInteger(partySize) || partySize < 1 || partySize > 999) {
+    throw new Error('人数は1〜999名で指定してください');
   }
 
   const { data: table } = await supabase

@@ -63,15 +63,23 @@ export function HandySetupScreen({
   const set = (patch: Partial<VisitDraft>) => setDraft((d) => ({ ...d, ...patch }));
   const total = draft.male + draft.female;
   const problem = validateVisitDraft(draft);
+  // 選んだモードに合うプランを先に、それ以外（名前から判断しきれないもの）を「ほかのプラン」として後に出す
   const itemsForPlan = planItems.filter((p) => p.kind === draft.plan);
+  const otherItems = planItems.filter((p) => p.kind !== draft.plan);
   const selectedItem = planItems.find((p) => p.id === draft.planItemId) ?? null;
 
   const choosePlan = (plan: HandyPlan) => {
     // モードを変えたら選んでいたプラン商品は外す。飲み放題・コースは時間制が普通なので既定でオンにする
     set({ plan, planItemId: null, timed: plan === 'normal' ? draft.timed : true });
-    const hasItems = planItems.some((p) => p.kind === plan);
-    setPicker(plan !== 'normal' && hasItems ? 'plan-item' : null);
+    setPicker(plan !== 'normal' && planItems.length > 0 ? 'plan-item' : null);
   };
+
+  const planOption = (p: HandyPlanItem) => ({
+    id: p.id,
+    label: p.name,
+    note: `${yen(p.price)}${p.durationMinutes ? ` · ${durationLabel(p.durationMinutes)}` : ''}`,
+    selected: p.id === draft.planItemId,
+  });
 
   const chooseItem = (item: HandyPlanItem) => {
     set({
@@ -114,11 +122,7 @@ export function HandySetupScreen({
             <RowButton
               label="プラン"
               value={
-                selectedItem
-                  ? selectedItem.name
-                  : itemsForPlan.length > 0
-                    ? '未選択'
-                    : 'メニュー未登録'
+                selectedItem ? selectedItem.name : planItems.length > 0 ? '未選択' : 'メニュー未登録'
               }
               muted={!selectedItem}
               onClick={() => setPicker('plan-item')}
@@ -275,15 +279,12 @@ export function HandySetupScreen({
         <ChoiceSheet
           title={`${planName(draft.plan)}のプラン`}
           onClose={() => setPicker(null)}
-          empty={`メニューに${planName(draft.plan)}の商品がありません（設定 → メニュー で「コース」として登録）。プラン無しで続けられます。`}
-          options={itemsForPlan.map((p) => ({
-            id: p.id,
-            label: p.name,
-            note: `${yen(p.price)}${p.durationMinutes ? ` · ${durationLabel(p.durationMinutes)}` : ''}`,
-            selected: p.id === draft.planItemId,
-          }))}
+          empty="メニューにコース・飲み放題の商品がありません（設定 → メニュー で「コース」として登録）。プラン無しで続けられます。"
+          options={itemsForPlan.map(planOption)}
+          moreTitle={itemsForPlan.length > 0 ? 'ほかのプラン' : undefined}
+          moreOptions={otherItems.map(planOption)}
           onSelect={(id) => {
-            const item = itemsForPlan.find((p) => p.id === id);
+            const item = planItems.find((p) => p.id === id);
             if (item) chooseItem(item);
           }}
           clearLabel={draft.planItemId ? 'プランを外す' : undefined}
@@ -455,9 +456,53 @@ function Sheet({
   );
 }
 
+interface ChoiceOption {
+  id: string;
+  label: string;
+  note?: string;
+  selected: boolean;
+}
+
+function ChoiceList({
+  options,
+  onSelect,
+}: {
+  options: ChoiceOption[];
+  onSelect: (id: string) => void;
+}) {
+  return (
+    <ul className="space-y-2">
+      {options.map((o) => (
+        <li key={o.id}>
+          <button
+            type="button"
+            aria-pressed={o.selected}
+            onClick={() => onSelect(o.id)}
+            className={cn(
+              'flex min-h-[46px] w-full items-center justify-between gap-2 rounded-[9px] border-[1.5px] px-3.5 text-left text-sm',
+              o.selected
+                ? 'border-[#7b3fe4] bg-[#7b3fe4] text-white'
+                : 'border-[#7b3fe4] bg-white text-[#4f3868]'
+            )}
+          >
+            <span className="min-w-0 truncate font-bold">{o.label}</span>
+            {o.note && (
+              <span className={cn('shrink-0 text-xs', o.selected ? 'text-white/85' : 'text-[#8a769d]')}>
+                {o.note}
+              </span>
+            )}
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function ChoiceSheet({
   title,
   options,
+  moreTitle,
+  moreOptions = [],
   empty,
   clearLabel,
   onSelect,
@@ -465,42 +510,33 @@ function ChoiceSheet({
   onClose,
 }: {
   title: string;
-  options: { id: string; label: string; note?: string; selected: boolean }[];
+  options: ChoiceOption[];
+  /** options の後ろに見出しつきで並べる候補（プランの「ほかのプラン」） */
+  moreTitle?: string;
+  moreOptions?: ChoiceOption[];
   empty?: string;
   clearLabel?: string;
   onSelect: (id: string) => void;
   onClear?: () => void;
   onClose: () => void;
 }) {
+  const nothing = options.length === 0 && moreOptions.length === 0;
   return (
     <Sheet title={title} onClose={onClose}>
-      {options.length === 0 && empty && (
+      {nothing && empty && (
         <p className="py-3 text-[13px] leading-relaxed text-[#8a769d]">{empty}</p>
       )}
-      <ul className="space-y-2">
-        {options.map((o) => (
-          <li key={o.id}>
-            <button
-              type="button"
-              aria-pressed={o.selected}
-              onClick={() => onSelect(o.id)}
-              className={cn(
-                'flex min-h-[46px] w-full items-center justify-between gap-2 rounded-[9px] border-[1.5px] px-3.5 text-left text-sm',
-                o.selected
-                  ? 'border-[#7b3fe4] bg-[#7b3fe4] text-white'
-                  : 'border-[#7b3fe4] bg-white text-[#4f3868]'
-              )}
-            >
-              <span className="min-w-0 truncate font-bold">{o.label}</span>
-              {o.note && (
-                <span className={cn('shrink-0 text-xs', o.selected ? 'text-white/85' : 'text-[#8a769d]')}>
-                  {o.note}
-                </span>
-              )}
-            </button>
-          </li>
-        ))}
-      </ul>
+      <ChoiceList options={options} onSelect={onSelect} />
+      {moreOptions.length > 0 && (
+        <>
+          {moreTitle && (
+            <p className="mt-4 mb-2 text-xs font-bold text-[#8a769d]">{moreTitle}</p>
+          )}
+          <div className={moreTitle ? undefined : options.length > 0 ? 'mt-2' : undefined}>
+            <ChoiceList options={moreOptions} onSelect={onSelect} />
+          </div>
+        </>
+      )}
       {clearLabel && onClear && (
         <button
           type="button"
@@ -515,7 +551,7 @@ function ChoiceSheet({
         onClick={onClose}
         className="mt-3 min-h-[43px] w-full rounded-lg bg-[#efeaf8] text-center text-sm font-bold text-[#5e4777]"
       >
-        {options.length === 0 ? 'プラン無しで続ける' : '閉じる'}
+        {nothing ? 'プラン無しで続ける' : '閉じる'}
       </button>
     </Sheet>
   );
