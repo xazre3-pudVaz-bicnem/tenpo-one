@@ -3,7 +3,10 @@ import iconv from 'iconv-lite';
 import {
   DEFAULT_KITCHEN_TICKET_SPLIT,
   DEFAULT_KITCHEN_TICKET_TEXT_SIZE,
+  KITCHEN_TICKET_TEXT_SIZE_LABELS,
+  KITCHEN_TICKET_TEXT_SIZES,
   groupKitchenTickets,
+  isKitchenTicketTextSize,
   kitchenTicketLanguageFrom,
   kitchenTicketSettingsFrom,
   kitchenTicketSplitFrom,
@@ -313,6 +316,72 @@ describe('厨房伝票の文字の大きさ（2026-09-21 店舗要望「Word の
     expect(lines.find((l) => l.text.startsWith('Nama beer  x1'))?.size).toBe('tall');
     expect(lines.find((l) => l.text.trim() === '生ビール')?.size).toBe('normal');
     expect(lines.find((l) => l.text === 'T10')?.size).toBe('tall');
+  });
+
+  it('中くらい（Word の12くらい）: 設定で選べる。大きい順に 大きめ・中くらい・標準', () => {
+    expect(kitchenTicketTextSizeFrom({ kitchenTicket: { textSize: 'medium' } })).toBe('medium');
+    expect(isKitchenTicketTextSize('medium')).toBe(true);
+    expect(isKitchenTicketTextSize('small')).toBe(false);
+    expect(KITCHEN_TICKET_TEXT_SIZES).toEqual(['large', 'medium', 'normal']);
+    expect(KITCHEN_TICKET_TEXT_SIZE_LABELS.medium).toContain('12');
+    // 既定は変えない（ほかの店は大きめのまま）
+    expect(kitchenTicketTextSizeFrom({ kitchenTicket: {} })).toBe('large');
+  });
+
+  it('中くらい: 商品名（英語・日本語）・選択肢・メモ・伝票番号は縦2倍、卓名だけ縦横2倍', () => {
+    const [t] = groupKitchenTickets([
+      row({
+        table_name: 'T-4',
+        item_name: '生ビール',
+        item_name_en: 'Nama beer',
+        delta: 1,
+        modifiers: [{ name: '氷なし' }],
+        memo: '急ぎ',
+      }),
+      row({ table_name: 'T-4', item_name: '水', item_name_en: 'Water', delta: 2 }),
+    ]);
+    const lines = layoutKitchenTicket(splitTicketByItem(t)[0], { ...opts, textSize: 'medium' });
+    const size = (prefix: string) => lines.find((l) => l.text.trimStart().startsWith(prefix))?.size;
+    expect(size('T-4')).toBe('large');
+    expect(size('No.5784  (1/2)')).toBe('tall');
+    expect(size('Nama beer  x1')).toBe('tall');
+    expect(size('生ビール')).toBe('tall');
+    expect(size('・氷なし')).toBe('tall');
+    expect(size('※急ぎ')).toBe('tall');
+    expect(size('DRINK')).toBe('normal');
+    // 縦横2倍は卓名だけ
+    expect(lines.filter((l) => l.size === 'large').map((l) => l.text)).toEqual(['T-4']);
+  });
+
+  it('中くらい: 取消も縦2倍で、商品名は48桁のまま折り返さない（大きめだと2行になる長さ）', () => {
+    const [c] = groupKitchenTickets([
+      row({ table_name: 'T-4', item_name: 'F. カシスウーロン', item_name_en: 'F. Cassis oolong', delta: -1 }),
+    ]);
+    const mid = layoutKitchenTicket(c, { ...opts, textSize: 'medium', language: 'en' });
+    expect(mid.find((l) => l.text.includes('*** CANCEL ***'))?.size).toBe('tall');
+    expect(mid.find((l) => l.text === '[CANCEL]')?.size).toBe('tall');
+    const item = mid.filter((l) => l.text.includes('Cassis'));
+    expect(item).toHaveLength(1);
+    expect(item[0].size).toBe('tall');
+    // 同じ商品を大きめで組むと半分の桁数で折り返す
+    const [long] = groupKitchenTickets([
+      row({ item_name: '長い名前', item_name_en: 'Prime Black Angus Rib Roast with Potato' }),
+    ]);
+    const midLong = layoutKitchenTicket(long, { ...opts, textSize: 'medium', language: 'en' }).filter((l) =>
+      /Angus|Potato/.test(l.text)
+    );
+    const bigLong = layoutKitchenTicket(long, { ...opts, textSize: 'large', language: 'en' }).filter((l) =>
+      /Angus|Potato|Roast|with/.test(l.text)
+    );
+    expect(midLong).toHaveLength(1);
+    expect(bigLong.length).toBeGreaterThan(1);
+  });
+
+  it('中くらいは Markup に縦2倍、卓名だけ縦横2倍の指定が入る', () => {
+    const [t] = groupKitchenTickets([row({ item_name: '生ビール', item_name_en: 'Nama beer' })]);
+    const markup = kitchenTicketMarkup(layoutKitchenTicket(t, { ...opts, textSize: 'medium' }));
+    expect(markup).toContain('[magnify: width 1; height 2]');
+    expect(markup.split('[magnify: width 2; height 2]').length - 1).toBe(1);
   });
 
   it('大きめでも Markup・StarPRNT に縦横2倍の指定が入る', () => {

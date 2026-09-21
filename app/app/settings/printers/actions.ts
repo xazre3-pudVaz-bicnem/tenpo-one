@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import type { PrintResultStatus } from '@/lib/printing/types';
-import type { KitchenTicketSettings } from '@/lib/kitchen-ticket';
+import { isKitchenTicketTextSize, type KitchenTicketSettings } from '@/lib/kitchen-ticket';
 
 export interface ActionResult {
   error?: string;
@@ -337,7 +337,7 @@ export async function saveKitchenTicketSettings(
   const err = assertStoreAccess(ctx.stores.map((s) => s.id), storeId);
   if (err) return { error: err };
   if (next.split !== 'item' && next.split !== 'order') return { error: '伝票の分け方が正しくありません' };
-  if (next.textSize !== 'large' && next.textSize !== 'normal') return { error: '文字の大きさが正しくありません' };
+  if (!isKitchenTicketTextSize(next.textSize)) return { error: '文字の大きさが正しくありません' };
   if (next.language !== 'both' && next.language !== 'en') return { error: '商品名の言語が正しくありません' };
 
   const supabase = await createClient();
