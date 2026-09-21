@@ -7,13 +7,15 @@ import {
   isHm,
   MENU_BOOK_SHOWS,
   menuBookFrom,
+  menuBookToJson,
+  normalizePageName,
   type MenuBookSettings,
   type MenuBookShow,
 } from '@/lib/menu-book';
 
 /**
- * メニューブック（ハンディ・お客様QRに出すカテゴリの並び順と出し方、商品の並び順、プランで出すカテゴリ、
- * ランチの時間帯）の保存。店長以上（menu.manage）だけ。
+ * メニューブック（ハンディ・お客様QRに出すカテゴリの並び順と出し方、ページ（タブのまとめ方）、商品の並び順、
+ * プランで出すカテゴリ、ランチの時間帯）の保存。店長以上（menu.manage）だけ。
  * 並び順は menu_categories / menu_items の sort_order（レジ・ハンディ・お客様QR共通）、
  * 出し方などは store_settings.settings.menuBook（DB 変更なし）に入れる。
  * ハンディ・お客様QRは毎回DBから読むので、保存すればそのまま反映される。
@@ -57,10 +59,7 @@ async function updateMenuBook(
   const current = (existing?.settings as Record<string, unknown> | null) ?? {};
   const book = menuBookFrom(current);
   mutate(book);
-  const nextSettings = {
-    ...current,
-    menuBook: { categories: book.categories, plans: book.plans, lunch: book.lunch },
-  };
+  const nextSettings = { ...current, menuBook: menuBookToJson(book) };
   const { error } = await supabase
     .from('store_settings')
     .upsert(
@@ -232,6 +231,62 @@ export async function saveMenuBookPlans(storeId: string, rows: PlanCategoriesRow
   await audit(ctx, supabase, storeId, 'settings.menu_book.plans_update', {
     plans: rows.length,
     selected: rows.filter((r) => r.categoryIds !== null).length,
+  });
+  revalidateMenus();
+  return {};
+}
+
+export interface MenuBookPagesInput {
+  /** 前のカテゴリと同じページにまとめるカテゴリID */
+  joinPrev: string[];
+  /** ページの先頭カテゴリID → ページの名前（空はカテゴリ名をつなげて出す） */
+  pageNames: Record<string, string>;
+}
+
+/**
+ * ページ（ハンディ・お客様QRの1つのタブにまとめるカテゴリ）。
+ * 並び順で続くカテゴリを「前のカテゴリと同じページ」にする。レジ（POS）の出し方は変わらない。
+ */
+export async function saveMenuBookPages(storeId: string, input: MenuBookPagesInput): Promise<ActionResult> {
+  const ctx = await requirePermission('menu.manage');
+  if (!canUseStore(ctx, storeId)) return { error: 'この店舗の操作はできません' };
+  const joinPrev = Array.isArray(input?.joinPrev) ? input.joinPrev : null;
+  const names = input?.pageNames && typeof input.pageNames === 'object' ? Object.entries(input.pageNames) : null;
+  if (!joinPrev || !names || joinPrev.length > 1000 || names.length > 1000) {
+    return { error: 'ページの指定が正しくありません' };
+  }
+  const ids = [...joinPrev, ...names.map(([id]) => id)];
+  if (ids.some((id) => typeof id !== 'string' || !UUID.test(id))) return { error: 'カテゴリの指定が正しくありません' };
+
+  const supabase = await createClient();
+  if (ids.length > 0) {
+    const { data: found, error } = await supabase
+      .from('menu_categories')
+      .select('id')
+      .eq('organization_id', ctx.organizationId)
+      .eq('status', 'active')
+      .or(`store_id.is.null,store_id.eq.${storeId}`)
+      .in('id', [...new Set(ids)]);
+    if (error) return { error: `カテゴリの読み込みに失敗しました: ${error.message}` };
+    if ((found ?? []).length !== new Set(ids).size) {
+      return { error: 'カテゴリが見つかりません。画面を開き直してください' };
+    }
+  }
+
+  const pageNames: Record<string, string> = {};
+  for (const [id, value] of names) {
+    const name = normalizePageName(value);
+    if (name) pageNames[id] = name;
+  }
+  const settingsError = await updateMenuBook(ctx, supabase, storeId, (book) => {
+    book.joinPrev = [...new Set(joinPrev)];
+    book.pageNames = pageNames;
+  });
+  if (settingsError) return { error: settingsError };
+
+  await audit(ctx, supabase, storeId, 'settings.menu_book.pages_update', {
+    joined: joinPrev.length,
+    named: Object.keys(pageNames).length,
   });
   revalidateMenus();
   return {};

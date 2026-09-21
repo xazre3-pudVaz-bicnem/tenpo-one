@@ -23,17 +23,19 @@ import {
   MAX_LINE_QUANTITY,
   TILE_ACCENTS,
   type HandyCartLine,
-  type HandyGroupView,
   type HandyMenuItemView,
+  type HandyPageView,
+  type HandyTabView,
 } from './logic';
 import type { HandyOrderLineInput, HandySubmitResult } from '@/app/app/handy/actions';
 
 /**
  * 注文画面（承認済みレイアウトの menu / review）。
  *
- * 上位分類タブ → カテゴリのタイル → 商品のタイル、と画面を切り替えながらカートへ入れ、
- * 「注文確認へ」で独立した注文確認画面に移る。注文確認はお客様の横で読み上げて確かめるための
- * 画面なので、下部バーに畳まず1画面まるごと使う。
+ * 上のタブ（1 単品／2 コース・飲み放題／3 サービス）→ ページのタイル（メニューブックのページ。
+ * SOUP・APPETIZER・SALAD のようにカテゴリをまとめたもの）→ 商品のタイル（カテゴリごとに見出し）、と
+ * 画面を切り替えながらカートへ入れ、「注文確認へ」で独立した注文確認画面に移る。注文確認はお客様の横で
+ * 読み上げて確かめるための画面なので、下部バーに畳まず1画面まるごと使う。
  */
 export function HandyOrderScreen({
   tableId,
@@ -43,7 +45,8 @@ export function HandyOrderScreen({
   orderNo,
   guestCount,
   unpaidTotal,
-  groups,
+  tabs,
+  initialTabId,
   optionGroupsByItem,
   submitAction,
 }: {
@@ -54,23 +57,25 @@ export function HandyOrderScreen({
   orderNo: number;
   guestCount: number;
   unpaidTotal: number;
-  groups: HandyGroupView[];
+  tabs: HandyTabView[];
+  /** 開いたときのタブ（飲み放題・コースの卓は 2 コース・飲み放題） */
+  initialTabId?: string | null;
   optionGroupsByItem: Record<string, PosOptionGroup[]>;
   submitAction: (orderId: string, lines: HandyOrderLineInput[]) => Promise<HandySubmitResult>;
 }) {
   const router = useRouter();
   const { toast } = useToast();
   const [step, setStep] = useState<'menu' | 'review'>('menu');
-  const [tabId, setTabId] = useState<string>(groups[0]?.id ?? 'food');
-  const [categoryId, setCategoryId] = useState<string | null>(null);
+  const [tabId, setTabId] = useState<string>(initialTabId ?? tabs[0]?.id ?? 'alacarte');
+  const [pageKey, setPageKey] = useState<string | null>(null);
   const [optionTarget, setOptionTarget] = useState<HandyMenuItemView | null>(null);
   const [cart, setCart] = useState<HandyCartLine[]>([]);
   const [pending, startTransition] = useTransition();
   // 二重送信の保険（連打で startTransition が2回走るのを防ぐ）
   const sendingRef = useRef(false);
 
-  const group = groups.find((g) => g.id === tabId) ?? groups[0] ?? null;
-  const category = group?.categories.find((c) => c.id === categoryId) ?? null;
+  const tab = tabs.find((t) => t.id === tabId) ?? tabs[0] ?? null;
+  const page = tab?.pages.find((p) => p.key === pageKey) ?? null;
 
   const quantityByItem = useMemo(() => {
     const map = new Map<string, number>();
@@ -266,24 +271,24 @@ export function HandyOrderScreen({
             <ChevronLeft className="h-6 w-6" strokeWidth={2.2} aria-hidden />
           </Link>
           <div className="flex min-w-0 flex-1 items-stretch overflow-x-auto">
-            {groups.map((g, i) => (
+            {tabs.map((t, i) => (
               <button
-                key={g.id}
+                key={t.id}
                 type="button"
-                aria-pressed={g.id === tabId}
+                aria-pressed={t.id === tab?.id}
                 onClick={() => {
-                  setTabId(g.id);
-                  setCategoryId(null);
+                  setTabId(t.id);
+                  setPageKey(null);
                 }}
                 className={cn(
-                  'flex w-[86px] flex-[0_0_86px] flex-col items-center justify-center gap-[3px] rounded-t-[11px] border border-b-0 text-xs leading-[1.15] font-bold whitespace-nowrap',
-                  g.id === tabId
+                  'flex min-w-[86px] flex-1 flex-col items-center justify-center gap-[3px] rounded-t-[11px] border border-b-0 px-1 text-xs leading-[1.15] font-bold whitespace-nowrap',
+                  t.id === tab?.id
                     ? 'border-[#f8f6fc] bg-[#f8f6fc] text-[#7b3fe4]'
                     : 'border-[#59416f] bg-[#3a2356] text-[#c4afd8]'
                 )}
               >
                 <b className="block text-lg">{i + 1}</b>
-                {g.label}
+                {t.label}
               </button>
             ))}
           </div>
@@ -292,20 +297,20 @@ export function HandyOrderScreen({
 
       <div className="flex min-h-[27px] flex-none items-center justify-between gap-2 px-1.5 py-[5px] text-[10px] text-[#8a8a8a]">
         <span className="flex min-w-0 items-center gap-0.5">
-          {category ? (
+          {page ? (
             <>
               <button
                 type="button"
-                onClick={() => setCategoryId(null)}
+                onClick={() => setPageKey(null)}
                 className="min-h-[30px] shrink-0 text-[10px] text-[#7b3fe4]"
               >
-                {group?.label}
+                {tab?.label}
               </button>
               <span className="shrink-0">›</span>
-              <span className="truncate">{category.name}</span>
+              <span className="truncate">{page.label}</span>
             </>
           ) : (
-            <span className="truncate">{group?.label ?? '—'}</span>
+            <span className="truncate">{tab?.label ?? '—'}</span>
           )}
         </span>
         <Link
@@ -317,78 +322,92 @@ export function HandyOrderScreen({
       </div>
 
       <HandyMain>
-        {groups.length === 0 ? (
+        {tabs.length === 0 ? (
           <p className="px-6 py-9 text-center text-[13px] leading-loose text-[#8a769d]">
             注文できる商品がありません。
             <br />
             メニュー設定を確認してください。
           </p>
-        ) : !category ? (
+        ) : !page ? (
           <ul className="grid grid-cols-3 gap-x-2 gap-y-[17px] px-[5px] pt-2 pb-5 sm:grid-cols-4 lg:grid-cols-6">
-            {(group?.categories ?? []).map((c, i) => (
-              <li key={c.id}>
+            {(tab?.pages ?? []).map((p, i) => (
+              <li key={p.key}>
                 <button
                   type="button"
-                  onClick={() => setCategoryId(c.id)}
+                  onClick={() => setPageKey(p.key)}
+                  aria-label={`${p.label}（${p.itemCount}品）`}
                   style={{ borderBottomColor: TILE_ACCENTS[i % TILE_ACCENTS.length] }}
                   className="flex aspect-square w-full items-center justify-between gap-1 overflow-hidden rounded-[10px] border border-b-4 border-[#e3dbf1] bg-white px-3 py-2.5 text-left text-xs font-bold break-words text-[#4f3868] shadow-[0_1px_2px_#00000007] active:bg-[#efe5ff]"
                 >
-                  <span className="min-w-0">{c.name}</span>
+                  <PageTileLabel page={p} />
                   <ChevronRight className="h-[13px] w-[13px] shrink-0 text-[#d1c7de]" aria-hidden />
                 </button>
               </li>
             ))}
           </ul>
         ) : (
-          <ul className="grid grid-cols-3 gap-x-2 gap-y-[17px] px-[5px] pt-2 pb-5 sm:grid-cols-4 lg:grid-cols-6">
-            {category.items.map((item, i) => {
-              const inCart = quantityByItem.get(item.id) ?? 0;
-              const disabled = item.isSoldOut || item.offHours;
-              return (
-                <li key={item.id}>
-                  <button
-                    type="button"
-                    disabled={disabled}
-                    onClick={() => handleItemTap(item)}
-                    aria-label={`${item.name} ${yen(item.price)} を追加`}
-                    style={
-                      disabled ? undefined : { borderBottomColor: TILE_ACCENTS[i % TILE_ACCENTS.length] }
-                    }
-                    className={cn(
-                      'relative flex aspect-square w-full items-center justify-center overflow-hidden rounded-[10px] border border-b-4 border-[#e3dbf1] bg-white px-[7px] py-[9px] text-center text-xs font-bold break-words text-[#4f3868] shadow-[0_1px_2px_#00000007]',
-                      disabled ? 'border-b-[#e3dbf1] opacity-50' : 'active:bg-[#efe5ff]',
-                      inCart > 0 && !disabled && 'border-[#7b3fe4] bg-[#efe5ff]'
-                    )}
-                  >
-                    <span className="pb-[11px]">{item.name}</span>
-                    <span className="absolute inset-x-0 bottom-[9px] text-[9px] font-normal text-[#8a769d] tabular-nums">
-                      {yen(item.price)}
-                    </span>
-                    {item.isSoldOut && (
-                      <span className="absolute inset-x-1.5 top-1/2 -translate-y-1/2 rounded bg-[#b3341f] px-1 py-0.5 text-[11px] font-bold text-white">
-                        売切
-                      </span>
-                    )}
-                    {!item.isSoldOut && item.offHours && (
-                      <span className="absolute inset-x-1.5 top-1/2 -translate-y-1/2 rounded bg-[#7a7090] px-1 py-0.5 text-[11px] font-bold text-white">
-                        時間外
-                      </span>
-                    )}
-                    {inCart > 0 && (
-                      <span className="absolute top-[5px] right-[5px] min-w-[21px] rounded-xl bg-[#7b3fe4] px-[5px] py-0.5 text-[10px] font-bold text-white">
-                        {inCart}
-                      </span>
-                    )}
-                    {item.hasOptions && (
-                      <span className="absolute top-[5px] left-[5px] text-[9px] font-normal text-[#8a769d]">
-                        選択肢
-                      </span>
-                    )}
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
+          <div className="px-[5px] pt-2 pb-5">
+            {page.categories.map((c) => (
+              <section key={c.id} className="mb-4 last:mb-0">
+                {page.categories.length > 1 && (
+                  <h2 className="mb-2 flex items-center gap-2 px-1 text-[11px] font-bold tracking-wide text-[#5e4777]">
+                    <span className="h-3 w-1 rounded bg-[#7b3fe4]" aria-hidden />
+                    {c.name}
+                    <span className="font-normal text-[#a393b5]">{c.items.length}</span>
+                  </h2>
+                )}
+                <ul className="grid grid-cols-3 gap-x-2 gap-y-[17px] sm:grid-cols-4 lg:grid-cols-6">
+                  {c.items.map((item, i) => {
+                    const inCart = quantityByItem.get(item.id) ?? 0;
+                    const disabled = item.isSoldOut || item.offHours;
+                    return (
+                      <li key={item.id}>
+                        <button
+                          type="button"
+                          disabled={disabled}
+                          onClick={() => handleItemTap(item)}
+                          aria-label={`${item.name} ${yen(item.price)} を追加`}
+                          style={
+                            disabled ? undefined : { borderBottomColor: TILE_ACCENTS[i % TILE_ACCENTS.length] }
+                          }
+                          className={cn(
+                            'relative flex aspect-square w-full items-center justify-center overflow-hidden rounded-[10px] border border-b-4 border-[#e3dbf1] bg-white px-[7px] py-[9px] text-center text-xs font-bold break-words text-[#4f3868] shadow-[0_1px_2px_#00000007]',
+                            disabled ? 'border-b-[#e3dbf1] opacity-50' : 'active:bg-[#efe5ff]',
+                            inCart > 0 && !disabled && 'border-[#7b3fe4] bg-[#efe5ff]'
+                          )}
+                        >
+                          <span className="pb-[11px]">{item.name}</span>
+                          <span className="absolute inset-x-0 bottom-[9px] text-[9px] font-normal text-[#8a769d] tabular-nums">
+                            {yen(item.price)}
+                          </span>
+                          {item.isSoldOut && (
+                            <span className="absolute inset-x-1.5 top-1/2 -translate-y-1/2 rounded bg-[#b3341f] px-1 py-0.5 text-[11px] font-bold text-white">
+                              売切
+                            </span>
+                          )}
+                          {!item.isSoldOut && item.offHours && (
+                            <span className="absolute inset-x-1.5 top-1/2 -translate-y-1/2 rounded bg-[#7a7090] px-1 py-0.5 text-[11px] font-bold text-white">
+                              時間外
+                            </span>
+                          )}
+                          {inCart > 0 && (
+                            <span className="absolute top-[5px] right-[5px] min-w-[21px] rounded-xl bg-[#7b3fe4] px-[5px] py-0.5 text-[10px] font-bold text-white">
+                              {inCart}
+                            </span>
+                          )}
+                          {item.hasOptions && (
+                            <span className="absolute top-[5px] left-[5px] text-[9px] font-normal text-[#8a769d]">
+                              選択肢
+                            </span>
+                          )}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+            ))}
+          </div>
         )}
       </HandyMain>
 
@@ -415,5 +434,27 @@ export function HandyOrderScreen({
         />
       )}
     </>
+  );
+}
+
+/**
+ * ページのタイルの文字。名前を付けたページは名前、1カテゴリのページはカテゴリ名、
+ * 複数カテゴリのページはカテゴリ名を1行ずつ（多いときは4つ目以降を「ほかN」にまとめる）。
+ */
+function PageTileLabel({ page }: { page: HandyPageView }) {
+  if (page.name || page.categories.length === 1) {
+    return <span className="min-w-0">{page.name ?? page.categories[0]?.name}</span>;
+  }
+  const shown = page.categories.length > 4 ? page.categories.slice(0, 3) : page.categories;
+  const rest = page.categories.length - shown.length;
+  return (
+    <span className="flex min-w-0 flex-col gap-1 text-[11px] leading-[1.2]">
+      {shown.map((c) => (
+        <span key={c.id} className="line-clamp-2 break-words">
+          {c.name}
+        </span>
+      ))}
+      {rest > 0 && <span className="text-[10px] font-normal text-[#8a769d]">ほか{rest}</span>}
+    </span>
   );
 }

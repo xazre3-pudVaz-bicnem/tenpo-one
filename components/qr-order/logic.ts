@@ -88,18 +88,81 @@ export function itemQuantityInCart(cart: CartLine[], menuItemId: string): number
 }
 
 /**
- * 表示するカテゴリタブ。
- * - 販売時間外・非公開などで商品が0件のカテゴリは出さない
- * - おすすめ商品があるときだけ先頭に「おすすめ」擬似カテゴリを足す
+ * メニューブックのページ（サーバーで決めたタブのまとめ方）。categoryIds の中身は get_qr_menu の結果から引く。
+ * plan は「プランのときだけ」のカテゴリだけのページ（飲み放題・コースの卓では先頭に来る）。
  */
-export function orderableCategories(categories: QrMenuCategory[], recommendedLabel: string): QrMenuCategory[] {
+export interface QrMenuPage {
+  key: string;
+  name: string | null;
+  categoryIds: string[];
+  plan?: boolean;
+}
+
+/** メニューのタブ1つ。sections はタブの中のカテゴリ（複数なら見出しを付けて並べる） */
+export interface QrMenuTab {
+  id: string;
+  /** 店長が付けたページの名前、または「おすすめ」。null はカテゴリ名をつなげて出す */
+  name: string | null;
+  sections: QrMenuCategory[];
+  itemCount: number;
+  recommended: boolean;
+}
+
+/**
+ * 表示するタブ。
+ * - メニューブックのページごとに1タブ（SOUP・APPETIZER・SALAD など）。ページが無ければ1カテゴリ1タブ
+ * - 販売時間外・非公開などで商品が0件のカテゴリ・タブは出さない
+ * - おすすめ商品があるときだけ「おすすめ」タブを足す（飲み放題・コースのページの後、ほかのタブの前）
+ */
+export function menuTabs(
+  categories: QrMenuCategory[],
+  pages: QrMenuPage[] | null | undefined,
+  recommendedLabel: string
+): QrMenuTab[] {
   const withItems = categories.filter((category) => category.items.length > 0);
+  const byId = new Map(withItems.map((c) => [c.id, c]));
+  const tab = (id: string, name: string | null, sections: QrMenuCategory[]): QrMenuTab => ({
+    id,
+    name,
+    sections,
+    itemCount: sections.reduce((n, c) => n + c.items.length, 0),
+    recommended: false,
+  });
+
+  const tabs: (QrMenuTab & { plan: boolean })[] = [];
+  const used = new Set<string>();
+  for (const page of pages ?? []) {
+    const sections = page.categoryIds
+      .map((id) => byId.get(id))
+      .filter((c): c is QrMenuCategory => !!c && !used.has(c.id));
+    if (sections.length === 0) continue;
+    for (const c of sections) used.add(c.id);
+    tabs.push({ ...tab(`page:${page.key}`, page.name, sections), plan: !!page.plan });
+  }
+  // ページに入っていないカテゴリ（ページの情報が無いときは全部）は1カテゴリ1タブで後ろに足す
+  for (const c of withItems) {
+    if (!used.has(c.id)) tabs.push({ ...tab(c.id, null, [c]), plan: false });
+  }
+
   const recommended = withItems.flatMap((category) => category.items.filter((item) => item.is_recommended));
-  if (recommended.length === 0) return withItems;
-  return [
-    { id: RECOMMENDED_TAB_ID, name: recommendedLabel, name_en: null, color: null, items: recommended },
-    ...withItems,
-  ];
+  const plain: QrMenuTab[] = tabs.map((t) => ({
+    id: t.id,
+    name: t.name,
+    sections: t.sections,
+    itemCount: t.itemCount,
+    recommended: t.recommended,
+  }));
+  if (recommended.length === 0) return plain;
+  const recommendedTab: QrMenuTab = {
+    id: RECOMMENDED_TAB_ID,
+    name: recommendedLabel,
+    sections: [{ id: RECOMMENDED_TAB_ID, name: recommendedLabel, name_en: null, color: null, items: recommended }],
+    itemCount: recommended.length,
+    recommended: true,
+  };
+  const firstNonPlan = tabs.findIndex((t) => !t.plan);
+  const at = firstNonPlan < 0 ? tabs.length : firstNonPlan;
+  return [...plain.slice(0, at), recommendedTab, ...plain.slice(at)];
 }
 
 /** 未対応の呼び出しのうち、指定種類のもの（なければ null）。会計希望と一般呼び出しは別種類 */

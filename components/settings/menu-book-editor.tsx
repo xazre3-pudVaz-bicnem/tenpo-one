@@ -2,29 +2,33 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowDown, ArrowUp, ChevronsDown, ChevronsUp, Loader2, Pencil, Plus } from 'lucide-react';
+import { Plus, Scissors, Link2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
-import { Label, Select } from '@/components/ui/input';
+import { Input, Label, Select } from '@/components/ui/input';
 import { useToast } from '@/components/ui/toast';
 import { cn } from '@/lib/utils';
 import { yen } from '@/lib/format';
 import {
   effectiveShow,
+  groupMenuPages,
+  menuPageLabel,
   MENU_BOOK_SHOW_LABELS,
   MENU_BOOK_SHOW_NOTES,
   MENU_BOOK_SHOWS,
   moveInList,
+  PAGE_NAME_MAX,
   type MenuBookLunch,
   type MenuBookShow,
 } from '@/lib/menu-book';
 import { RESERVATION_TIME_OPTIONS } from '@/lib/reservation-time';
 import { MenuItemDialog, type MenuItemRow } from './menu-item-dialog';
+import { ItemOrderList, MoveButtons, SaveBar, sortItems } from './item-order-list';
 import {
   saveCategoryLayout,
-  saveItemOrder,
   saveMenuBookLunch,
+  saveMenuBookPages,
   saveMenuBookPlans,
 } from '@/app/app/settings/menu-book/actions';
 
@@ -51,10 +55,11 @@ export interface MenuBookPlanRow {
   categoryIds: string[] | null;
 }
 
-type Tab = 'categories' | 'items' | 'plans' | 'lunch';
+type Tab = 'categories' | 'pages' | 'items' | 'plans' | 'lunch';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'categories', label: 'カテゴリの順番・出し方' },
+  { id: 'pages', label: 'ページ（タブのまとめ方）' },
   { id: 'items', label: '商品の順番・入力' },
   { id: 'plans', label: 'プランで出すカテゴリ' },
   { id: 'lunch', label: 'ランチの時間' },
@@ -69,75 +74,18 @@ const SHOW_TONE: Record<MenuBookShow, string> = {
   hidden: 'border-l-red-400',
 };
 
-function SaveBar({
-  dirty,
-  pending,
-  onSave,
-  onReset,
-  label = '変更を保存',
-}: {
-  dirty: boolean;
-  pending: boolean;
-  onSave: () => void;
-  onReset?: () => void;
-  label?: string;
-}) {
-  return (
-    <div className="sticky bottom-0 z-10 -mx-1 mt-4 flex items-center justify-end gap-2 border-t border-gray-200 bg-white/95 px-1 py-3 backdrop-blur">
-      {dirty ? (
-        <span className="mr-auto text-xs font-medium text-warning">保存していない変更があります</span>
-      ) : (
-        <span className="mr-auto text-xs text-gray-400">変更はありません</span>
-      )}
-      {onReset && (
-        <Button variant="outline" size="md" onClick={onReset} disabled={!dirty || pending}>
-          元に戻す
-        </Button>
-      )}
-      <Button size="md" onClick={onSave} disabled={!dirty || pending}>
-        {pending && <Loader2 className="h-4 w-4 animate-spin" />}
-        {label}
-      </Button>
-    </div>
-  );
-}
-
-function MoveButtons({
-  index,
-  count,
-  onMove,
-  label,
-}: {
-  index: number;
-  count: number;
-  onMove: (to: number) => void;
-  label: string;
-}) {
-  const btn =
-    'flex h-10 w-10 items-center justify-center rounded-md border border-gray-200 bg-white text-gray-600 active:bg-gray-100 disabled:opacity-30';
-  const first = index === 0;
-  const last = index === count - 1;
-  return (
-    <div className="flex shrink-0 gap-1">
-      <button type="button" className={btn} onClick={() => onMove(0)} disabled={first} aria-label={`${label}を先頭へ`}>
-        <ChevronsUp className="h-4 w-4" />
-      </button>
-      <button type="button" className={btn} onClick={() => onMove(index - 1)} disabled={first} aria-label={`${label}を上へ`}>
-        <ArrowUp className="h-4 w-4" />
-      </button>
-      <button type="button" className={btn} onClick={() => onMove(index + 1)} disabled={last} aria-label={`${label}を下へ`}>
-        <ArrowDown className="h-4 w-4" />
-      </button>
-      <button type="button" className={btn} onClick={() => onMove(count - 1)} disabled={last} aria-label={`${label}を最後へ`}>
-        <ChevronsDown className="h-4 w-4" />
-      </button>
-    </div>
-  );
-}
-
 /* ------------------------------------------------------------ カテゴリ */
 
-function CategoriesTab({ storeId, initial }: { storeId: string; initial: MenuBookCategoryRow[] }) {
+function CategoriesTab({
+  storeId,
+  initial,
+  joinPrev,
+}: {
+  storeId: string;
+  initial: MenuBookCategoryRow[];
+  joinPrev: string[];
+}) {
+  const joined = new Set(joinPrev);
   const router = useRouter();
   const { toast } = useToast();
   const [rows, setRows] = useState(initial);
@@ -208,6 +156,7 @@ function CategoriesTab({ storeId, initial }: { storeId: string; initial: MenuBoo
                     {r.group && <Badge tone="gray">{r.group}</Badge>}
                     <span>{r.itemCount}品</span>
                     {r.shared && <Badge tone="warning">全店共通</Badge>}
+                    {i > 0 && joined.has(r.id) && <Badge tone="primary">↑と同じページ</Badge>}
                   </p>
                 </div>
                 <div className="w-full sm:w-64">
@@ -240,76 +189,143 @@ function CategoriesTab({ storeId, initial }: { storeId: string; initial: MenuBoo
   );
 }
 
-/* ------------------------------------------------------------ 商品 */
+/* ------------------------------------------------------------ ページ */
 
-function sortItems(list: MenuItemRow[]): MenuItemRow[] {
-  return [...list].sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name, 'ja'));
+/** 保存する形にそろえる（先頭のカテゴリはつなげられない。名前は今のページの先頭のものだけ） */
+function normalizePages(
+  categories: MenuBookCategoryRow[],
+  join: readonly string[],
+  names: Record<string, string>
+): { joinPrev: string[]; pageNames: Record<string, string> } {
+  const joinSet = new Set(join);
+  const joinPrev = categories.slice(1).filter((c) => joinSet.has(c.id)).map((c) => c.id);
+  const pages = groupMenuPages(categories, { joinPrev, pageNames: {} });
+  const pageNames: Record<string, string> = {};
+  for (const p of pages) {
+    const name = (names[p.key] ?? '').replace(/\s+/g, ' ').trim();
+    if (name) pageNames[p.key] = name;
+  }
+  return { joinPrev, pageNames };
 }
 
-function CategoryItems({
+function PagesTab({
   storeId,
-  categoryId,
-  items,
-  onEdit,
+  categories,
+  joinPrev,
+  pageNames,
 }: {
   storeId: string;
-  categoryId: string;
-  items: MenuItemRow[];
-  onEdit: (item: MenuItemRow) => void;
+  categories: MenuBookCategoryRow[];
+  joinPrev: string[];
+  pageNames: Record<string, string>;
 }) {
   const router = useRouter();
   const { toast } = useToast();
-  const [order, setOrder] = useState(() => items.map((i) => i.id));
+  const [join, setJoin] = useState<string[]>(joinPrev);
+  const [names, setNames] = useState<Record<string, string>>(pageNames);
   const [pending, startTransition] = useTransition();
-  const byId = new Map(items.map((i) => [i.id, i]));
-  const dirty = order.join('|') !== items.map((i) => i.id).join('|');
+
+  const current = normalizePages(categories, join, names);
+  const initial = normalizePages(categories, joinPrev, pageNames);
+  const dirty = JSON.stringify(current) !== JSON.stringify(initial);
+  const pages = groupMenuPages(categories, { joinPrev: current.joinPrev, pageNames: {} });
+  const positionOf = new Map(categories.map((c, i) => [c.id, i]));
+
+  const toggle = (id: string) =>
+    setJoin((list) => (list.includes(id) ? list.filter((x) => x !== id) : [...list, id]));
 
   const save = () => {
     startTransition(async () => {
-      const result = await saveItemOrder(storeId, categoryId, order);
+      const result = await saveMenuBookPages(storeId, current);
       if (result.error) {
         toast(result.error, 'error');
         return;
       }
-      toast('商品の順番を保存しました（レジ・ハンディ・お客様QRに反映）');
+      toast('ページを保存しました（ハンディ・お客様QRに反映）');
       router.refresh();
     });
   };
 
-  if (items.length === 0) {
-    return <p className="py-8 text-center text-sm text-gray-500">このカテゴリに商品はありません</p>;
+  if (categories.length === 0) {
+    return <p className="py-8 text-center text-sm text-gray-500">カテゴリがありません（設定 → メニュー編集 で追加）</p>;
   }
 
   return (
     <div>
-      <ol className="space-y-2">
-        {order.map((id, i) => {
-          const item = byId.get(id);
-          if (!item) return null;
+      <Card className="mb-4">
+        <CardContent className="space-y-1.5 text-xs text-gray-600">
+          <p className="text-sm font-semibold text-navy">ページ ＝ ハンディ・お客様QRの1つのタブ</p>
+          <p>
+            同じページのカテゴリは、ハンディ・お客様QRで1つのタブ（ハンディはタイル1枚）にまとめて出ます。例：SOUP・APPETIZER・SALAD。
+            名前を入れなければ、カテゴリ名をつなげて出します。
+          </p>
+          <p>
+            「↑のページに入れる」で上のページとまとめ、「ここで分ける」で新しいページにします。カテゴリの順番は「カテゴリの順番・出し方」で変えます。
+            レジ（POS）はこれまで通りカテゴリごとです。
+          </p>
+          <p>
+            プランのときだけのカテゴリ（(F) など）は、ハンディでは「2 コース・飲み放題」に、お客様QRでは飲み放題・コースの卓だけ先頭に出ます。
+          </p>
+        </CardContent>
+      </Card>
+
+      <ol className="space-y-3">
+        {pages.map((page, pi) => {
+          const placeholder = menuPageLabel(page, (c) => c.name);
+          const itemCount = page.categories.reduce((n, c) => n + c.itemCount, 0);
           return (
-            <li key={id} className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white p-2 pl-3">
-              <MoveButtons
-                index={i}
-                count={order.length}
-                label={item.name}
-                onMove={(to) => setOrder((list) => moveInList(list, i, to))}
-              />
-              <span className="w-6 shrink-0 text-right text-xs text-gray-400 tabular-nums">{i + 1}</span>
-              <div className="min-w-0 flex-1">
-                <p className={cn('truncate font-semibold text-navy', item.status === 'hidden' && 'text-gray-400')}>
-                  {item.name}
-                </p>
-                <p className="mt-0.5 flex flex-wrap items-center gap-1 text-xs text-gray-500">
-                  <span className="tabular-nums">{item.pricePending ? '価格未定' : yen(item.price)}</span>
-                  {item.isSoldOut && <Badge tone="danger">売切</Badge>}
-                  {item.status === 'hidden' && <Badge tone="gray">非表示</Badge>}
-                  {item.nameEn && <span className="truncate text-gray-400">{item.nameEn}</span>}
-                </p>
+            <li key={page.key} className="overflow-hidden rounded-lg border border-gray-200 bg-white">
+              <div className="flex flex-wrap items-center gap-2 border-b border-gray-100 bg-gray-50 px-3 py-2">
+                <span className="shrink-0 text-xs font-bold text-iris">ページ {pi + 1}</span>
+                <Label htmlFor={`page-name-${page.key}`} className="sr-only">
+                  ページ{pi + 1}の名前
+                </Label>
+                <Input
+                  id={`page-name-${page.key}`}
+                  value={names[page.key] ?? ''}
+                  maxLength={PAGE_NAME_MAX}
+                  placeholder={placeholder}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setNames((n) => ({ ...n, [page.key]: value }));
+                  }}
+                  className="h-9 min-w-[10rem] flex-1 sm:max-w-sm"
+                />
+                <span className="shrink-0 text-xs text-gray-400 tabular-nums">
+                  {page.categories.length}カテゴリ・{itemCount}品
+                </span>
               </div>
-              <Button variant="outline" size="sm" onClick={() => onEdit(item)}>
-                <Pencil className="h-3.5 w-3.5" />
-                編集
-              </Button>
+              <ul className="divide-y divide-gray-100">
+                {page.categories.map((c, ci) => {
+                  const eff = effectiveShow(c.show, c.autoShow);
+                  const position = positionOf.get(c.id) ?? 0;
+                  return (
+                    <li key={c.id} className={cn('flex flex-wrap items-center gap-2 border-l-4 px-3 py-2', SHOW_TONE[eff])}>
+                      <span className="w-6 shrink-0 text-right text-xs text-gray-400 tabular-nums">{position + 1}</span>
+                      <div className="min-w-[8rem] flex-1">
+                        <p className={cn('font-semibold text-navy', eff === 'hidden' && 'text-gray-400 line-through')}>
+                          {c.name}
+                        </p>
+                        <p className="mt-0.5 text-xs text-gray-500">
+                          {c.itemCount}品・{MENU_BOOK_SHOW_LABELS[eff]}
+                        </p>
+                      </div>
+                      {position > 0 &&
+                        (ci === 0 ? (
+                          <Button variant="outline" size="sm" onClick={() => toggle(c.id)} aria-label={`${c.name}を上のページに入れる`}>
+                            <Link2 className="h-3.5 w-3.5" />
+                            ↑のページに入れる
+                          </Button>
+                        ) : (
+                          <Button variant="outline" size="sm" onClick={() => toggle(c.id)} aria-label={`${c.name}から新しいページにする`}>
+                            <Scissors className="h-3.5 w-3.5" />
+                            ここで分ける
+                          </Button>
+                        ))}
+                    </li>
+                  );
+                })}
+              </ul>
             </li>
           );
         })}
@@ -318,12 +334,16 @@ function CategoryItems({
         dirty={dirty}
         pending={pending}
         onSave={save}
-        onReset={() => setOrder(items.map((i) => i.id))}
-        label="順番を保存"
+        onReset={() => {
+          setJoin(joinPrev);
+          setNames(pageNames);
+        }}
       />
     </div>
   );
 }
+
+/* ------------------------------------------------------------ 商品 */
 
 function ItemsTab({
   storeId,
@@ -370,7 +390,7 @@ function ItemsTab({
         上から順にレジ・ハンディ・お客様QRに並びます。商品名・価格・英語名は「編集」から変えられます。追加した商品はいちばん下に入ります。
       </p>
       {categoryId ? (
-        <CategoryItems
+        <ItemOrderList
           key={listKey}
           storeId={storeId}
           categoryId={categoryId}
@@ -573,8 +593,8 @@ function LunchTab({ storeId, lunch }: { storeId: string; lunch: MenuBookLunch })
 /* ------------------------------------------------------------ 画面 */
 
 /**
- * メニューブック（店長以上）。カテゴリの順番・ハンディ／お客様QRでの出し方、商品の順番と入力、
- * プランで出すカテゴリ、ランチの時間。保存するとレジ・ハンディ・お客様QRにそのまま反映される。
+ * メニューブック（店長以上）。カテゴリの順番・ハンディ／お客様QRでの出し方、ページ（タブのまとめ方）、
+ * 商品の順番と入力、プランで出すカテゴリ、ランチの時間。保存するとレジ・ハンディ・お客様QRにそのまま反映される。
  */
 export function MenuBookEditor({
   storeId,
@@ -582,6 +602,8 @@ export function MenuBookEditor({
   items,
   plans,
   lunch,
+  joinPrev,
+  pageNames,
   taxRates,
 }: {
   storeId: string;
@@ -589,10 +611,13 @@ export function MenuBookEditor({
   items: MenuItemRow[];
   plans: MenuBookPlanRow[];
   lunch: MenuBookLunch;
+  joinPrev: string[];
+  pageNames: Record<string, string>;
   taxRates: { id: string; name: string }[];
 }) {
   const [tab, setTab] = useState<Tab>('categories');
   const categoryKey = categories.map((c) => `${c.id}:${c.show}:${c.sortOrder}`).join('|');
+  const pagesKey = `${joinPrev.join(',')}#${JSON.stringify(pageNames)}#${categoryKey}`;
   const planCategories = categories.filter((c) => effectiveShow(c.show, c.autoShow) === 'plan');
   const planKey = plans.map((p) => `${p.id}:${p.categoryIds?.join(',') ?? '*'}`).join('|');
 
@@ -615,7 +640,12 @@ export function MenuBookEditor({
           </button>
         ))}
       </div>
-      {tab === 'categories' && <CategoriesTab key={categoryKey} storeId={storeId} initial={categories} />}
+      {tab === 'categories' && (
+        <CategoriesTab key={categoryKey} storeId={storeId} initial={categories} joinPrev={joinPrev} />
+      )}
+      {tab === 'pages' && (
+        <PagesTab key={pagesKey} storeId={storeId} categories={categories} joinPrev={joinPrev} pageNames={pageNames} />
+      )}
       {tab === 'items' && <ItemsTab storeId={storeId} categories={categories} items={items} taxRates={taxRates} />}
       {tab === 'plans' && (
         <PlansTab key={`${planKey}#${categoryKey}`} storeId={storeId} plans={plans} planCategories={planCategories} />

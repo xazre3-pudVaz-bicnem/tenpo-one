@@ -6,8 +6,8 @@ import {
   changeCartQuantity,
   itemQuantityInCart,
   MAX_LINE_QUANTITY,
+  menuTabs,
   openServiceCall,
-  orderableCategories,
   parseServiceCalls,
   RECOMMENDED_TAB_ID,
   removeCartLine,
@@ -98,25 +98,69 @@ describe('カートの計算', () => {
 
 describe('分類タブ', () => {
   it('商品が0件の分類は出さない', () => {
-    const tabs = orderableCategories(
+    const tabs = menuTabs(
       [category({ id: 'c1', items: [item()] }), category({ id: 'c2', items: [] })],
+      null,
       'おすすめ'
     );
-    expect(tabs.map((c) => c.id)).toEqual(['c1']);
+    expect(tabs.map((t) => t.id)).toEqual(['c1']);
   });
 
   it('おすすめ商品があるときだけ先頭に擬似分類を足す', () => {
     const recommended = item({ id: 'i9', is_recommended: true });
-    const withRecommended = orderableCategories([category({ items: [item(), recommended] })], 'おすすめ');
+    const withRecommended = menuTabs([category({ items: [item(), recommended] })], null, 'おすすめ');
     expect(withRecommended[0].id).toBe(RECOMMENDED_TAB_ID);
-    expect(withRecommended[0].items).toEqual([recommended]);
+    expect(withRecommended[0].recommended).toBe(true);
+    expect(withRecommended[0].sections[0].items).toEqual([recommended]);
 
-    const without = orderableCategories([category({ items: [item()] })], 'おすすめ');
+    const without = menuTabs([category({ items: [item()] })], null, 'おすすめ');
     expect(without[0].id).toBe('c1');
   });
 
   it('販売時間外などで全分類が空なら何も出さない', () => {
-    expect(orderableCategories([category({ items: [] })], 'おすすめ')).toEqual([]);
+    expect(menuTabs([category({ items: [] })], null, 'おすすめ')).toEqual([]);
+  });
+});
+
+describe('メニューブックのページ（タブのまとめ方）', () => {
+  const soup = category({ id: 'soup', name: 'SOUP', items: [item({ id: 's1' })] });
+  const appetizer = category({ id: 'app', name: 'APPETIZER', items: [item({ id: 'a1' }), item({ id: 'a2' })] });
+  const salad = category({ id: 'salad', name: 'SALAD', items: [] });
+  const beer = category({ id: 'beer', name: 'BEER', items: [item({ id: 'b1' })] });
+  const fBeer = category({ id: 'fbeer', name: '(F) BEER', items: [item({ id: 'f1', price: 0 })] });
+
+  it('同じページのカテゴリを1つのタブにまとめる（商品の無いカテゴリは外す）', () => {
+    const tabs = menuTabs(
+      [soup, appetizer, salad, beer],
+      [
+        { key: 'soup', name: null, categoryIds: ['soup', 'app', 'salad'] },
+        { key: 'beer', name: 'ドリンク', categoryIds: ['beer'] },
+      ],
+      'おすすめ'
+    );
+    expect(tabs.map((t) => t.id)).toEqual(['page:soup', 'page:beer']);
+    expect(tabs[0].sections.map((c) => c.id)).toEqual(['soup', 'app']);
+    expect(tabs[0].itemCount).toBe(3);
+    expect(tabs[0].name).toBeNull();
+    expect(tabs[1].name).toBe('ドリンク');
+  });
+
+  it('ページに入っていないカテゴリは1カテゴリ1タブで後ろに出す', () => {
+    const tabs = menuTabs([soup, beer], [{ key: 'soup', name: null, categoryIds: ['soup'] }], 'おすすめ');
+    expect(tabs.map((t) => t.id)).toEqual(['page:soup', 'beer']);
+  });
+
+  it('おすすめは飲み放題・コースのページの後、ほかのページの前に入れる', () => {
+    const withRecommended = category({ id: 'beer', name: 'BEER', items: [item({ id: 'b1', is_recommended: true })] });
+    const tabs = menuTabs(
+      [fBeer, withRecommended],
+      [
+        { key: 'fbeer', name: null, categoryIds: ['fbeer'], plan: true },
+        { key: 'beer', name: null, categoryIds: ['beer'] },
+      ],
+      'おすすめ'
+    );
+    expect(tabs.map((t) => t.id)).toEqual(['page:fbeer', RECOMMENDED_TAB_ID, 'page:beer']);
   });
 });
 

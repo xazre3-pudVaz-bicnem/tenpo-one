@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   addCartLine,
-  buildMenuGroups,
+  buildHandyTabs,
   callToneByTable,
   cartCount,
   cartLineKey,
@@ -9,6 +9,8 @@ import {
   changeCartQuantity,
   classifyMenuItem,
   elapsedLabel,
+  handyTabOf,
+  initialHandyTab,
   isOnSaleAt,
   MAX_LINE_QUANTITY,
   sortServiceCalls,
@@ -110,67 +112,155 @@ describe('isOnSaleAt', () => {
   });
 });
 
-describe('buildMenuGroups', () => {
+describe('handyTabOf（上のタブ：1 単品／2 コース・飲み放題／3 サービス）', () => {
+  it('フード・ドリンク・種類が分からない商品は単品', () => {
+    expect(handyTabOf('food', false)).toBe('alacarte');
+    expect(handyTabOf('drink', false)).toBe('alacarte');
+    expect(handyTabOf('mystery', false)).toBe('alacarte');
+    expect(handyTabOf(null, false)).toBe('alacarte');
+  });
+
+  it('コースの商品と「プランのときだけ」のカテゴリの商品はコース・飲み放題', () => {
+    expect(handyTabOf('course', false)).toBe('plan');
+    expect(handyTabOf('drink', true)).toBe('plan');
+    expect(handyTabOf('food', true)).toBe('plan');
+  });
+
+  it('サービス（オプション）はプランのカテゴリに入っていてもサービス', () => {
+    expect(handyTabOf('option', false)).toBe('service');
+    expect(handyTabOf('option', true)).toBe('service');
+  });
+});
+
+describe('buildHandyTabs', () => {
   const categories = [
-    category('c-curry', 'カレー', 'kitchen', 1),
-    category('c-dessert', 'デザート', 'dessert', 2),
-    category('c-drink', 'ドリンク', 'drink', 3),
-    category('c-course', 'コース', 'kitchen', 4),
-    category('c-opt', '追加オプション', 'kitchen', 5),
+    category('c-soup', 'SOUP', 'kitchen', 10),
+    category('c-app', 'APPETIZER', 'kitchen', 20),
+    category('c-salad', 'SALAD', 'kitchen', 30),
+    category('c-beer', 'BEER', 'drink', 40),
+    category('c-fsoft', '(F) SOFT DRINK', 'drink', 50),
+    category('c-course', 'Course', 'kitchen', 60),
+    category('c-opt', 'オプション', 'kitchen', 70),
   ];
   const items = [
-    item('i-curry', 'c-curry', 'food', { sortOrder: 2 }),
-    item('i-curry2', 'c-curry', 'food', { sortOrder: 1 }),
-    item('i-ice', 'c-dessert', 'food'),
-    item('i-beer', 'c-drink', 'drink'),
-    item('i-course', 'c-course', 'course'),
+    item('i-soup2', 'c-soup', 'food', { sortOrder: 2 }),
+    item('i-soup1', 'c-soup', 'food', { sortOrder: 1 }),
+    item('i-app', 'c-app', 'food'),
+    item('i-salad', 'c-salad', 'food'),
+    item('i-beer', 'c-beer', 'drink'),
+    item('i-ftea', 'c-fsoft', 'drink', { price: 0 }),
+    item('i-plan', 'c-course', 'course'),
     item('i-opt', 'c-opt', 'option'),
   ];
+  const planCategoryIds = new Set(['c-fsoft']);
 
-  it('分類 → カテゴリ → 商品 の3階層を作る', () => {
-    const groups = buildMenuGroups(categories, items, '12:00');
-    expect(groups.map((g) => g.id)).toEqual(['food', 'drink', 'course', 'service']);
-    const food = groups[0];
-    expect(food.itemCount).toBe(3);
-    expect(food.categories.map((c) => c.name)).toEqual(['カレー', 'デザート']);
+  it('上のタブを 単品 → コース・飲み放題 → サービス の順に作る（フードとドリンクは同じ単品）', () => {
+    const tabs = buildHandyTabs(categories, items, '12:00', { planCategoryIds });
+    expect(tabs.map((t) => t.id)).toEqual(['alacarte', 'plan', 'service']);
+    expect(tabs.map((t) => t.label)).toEqual(['単品', 'コース・飲み放題', 'サービス']);
+    const alacarte = tabs[0];
+    expect(alacarte.pages.map((p) => p.label)).toEqual(['SOUP', 'APPETIZER', 'SALAD', 'BEER']);
+    expect(alacarte.itemCount).toBe(5);
     // カテゴリ内は sort_order 順
-    expect(food.categories[0].items.map((i) => i.id)).toEqual(['i-curry2', 'i-curry']);
+    expect(alacarte.pages[0].categories[0].items.map((i) => i.id)).toEqual(['i-soup1', 'i-soup2']);
   });
 
-  it('商品が無い分類のタブは出さない', () => {
-    const groups = buildMenuGroups(categories, [item('i-beer', 'c-drink', 'drink')], '12:00');
-    expect(groups.map((g) => g.id)).toEqual(['drink']);
+  it('飲み放題の中身（プランのときだけのカテゴリ）とコースの商品は 2 コース・飲み放題 に出す', () => {
+    const tabs = buildHandyTabs(categories, items, '12:00', { planCategoryIds });
+    const plan = tabs.find((t) => t.id === 'plan');
+    expect(plan?.pages.map((p) => p.label)).toEqual(['(F) SOFT DRINK', 'Course']);
+    const service = tabs.find((t) => t.id === 'service');
+    expect(service?.pages.flatMap((p) => p.categories.flatMap((c) => c.items)).map((i) => i.id)).toEqual(['i-opt']);
   });
 
-  it('分類できない商品は「その他」にまとめる', () => {
-    const withMisc = [...categories, category('c-misc', 'その他', null, 9)];
-    const groups = buildMenuGroups(withMisc, [item('i-x', 'c-misc', 'mystery')], '12:00');
-    expect(groups.map((g) => g.id)).toEqual(['other']);
-    expect(groups[0].categories[0].id).toBe('c-misc');
+  it('メニューブックのページ：前のカテゴリと同じページのカテゴリを1つのタイルにまとめる', () => {
+    const tabs = buildHandyTabs(categories, items, '12:00', {
+      planCategoryIds,
+      pages: { joinPrev: ['c-app', 'c-salad'], pageNames: {} },
+    });
+    const pages = tabs[0].pages;
+    expect(pages.map((p) => p.label)).toEqual(['SOUP・APPETIZER・SALAD', 'BEER']);
+    expect(pages[0].key).toBe('c-soup');
+    expect(pages[0].categories.map((c) => c.name)).toEqual(['SOUP', 'APPETIZER', 'SALAD']);
+    expect(pages[0].itemCount).toBe(4);
+  });
+
+  it('ページに名前を付けたらその名前を出す', () => {
+    const tabs = buildHandyTabs(categories, items, '12:00', {
+      pages: { joinPrev: ['c-app', 'c-salad'], pageNames: { 'c-soup': '前菜' } },
+    });
+    expect(tabs[0].pages[0].label).toBe('前菜');
+    expect(tabs[0].pages[0].name).toBe('前菜');
+  });
+
+  it('ページの途中のカテゴリに商品が無くても、区切りは変わらない', () => {
+    const withoutAppetizer = items.filter((i) => i.id !== 'i-app');
+    const tabs = buildHandyTabs(categories, withoutAppetizer, '12:00', {
+      planCategoryIds,
+      pages: { joinPrev: ['c-app', 'c-salad'], pageNames: {} },
+    });
+    expect(tabs[0].pages.map((p) => p.label)).toEqual(['SOUP・SALAD', 'BEER']);
+  });
+
+  it('ページの先頭のカテゴリが出ない時間帯でも、同じページの残りはまとまったまま', () => {
+    const withoutSoup = items.filter((i) => !i.id.startsWith('i-soup'));
+    const tabs = buildHandyTabs(categories, withoutSoup, '12:00', {
+      pages: { joinPrev: ['c-app', 'c-salad'], pageNames: { 'c-soup': '前菜' } },
+    });
+    expect(tabs[0].pages[0].label).toBe('前菜');
+    expect(tabs[0].pages[0].categories.map((c) => c.name)).toEqual(['APPETIZER', 'SALAD']);
+  });
+
+  it('タブが違うカテゴリはページにまとめてもタブごとに分かれる', () => {
+    const tabs = buildHandyTabs(categories, items, '12:00', {
+      planCategoryIds,
+      pages: { joinPrev: ['c-fsoft'], pageNames: {} },
+    });
+    expect(tabs[0].pages.map((p) => p.label)).toEqual(['SOUP', 'APPETIZER', 'SALAD', 'BEER']);
+    expect(tabs[1].pages.map((p) => p.label)).toEqual(['(F) SOFT DRINK', 'Course']);
+  });
+
+  it('商品が無いタブは出さない', () => {
+    const tabs = buildHandyTabs(categories, [item('i-beer', 'c-beer', 'drink')], '12:00');
+    expect(tabs.map((t) => t.id)).toEqual(['alacarte']);
   });
 
   it('カテゴリが無い・削除済みの商品はレジと同じく出さない', () => {
-    expect(buildMenuGroups(categories, [item('i-x', null, 'food')], '12:00')).toEqual([]);
-    expect(buildMenuGroups(categories, [item('i-y', 'c-deleted', 'food')], '12:00')).toEqual([]);
+    expect(buildHandyTabs(categories, [item('i-x', null, 'food')], '12:00')).toEqual([]);
+    expect(buildHandyTabs(categories, [item('i-y', 'c-deleted', 'food')], '12:00')).toEqual([]);
   });
 
   it('販売時間外の商品に offHours を立てる（一覧からは消さない）', () => {
-    const lunchOnly = item('i-lunch', 'c-curry', 'food', {
+    const lunchOnly = item('i-lunch', 'c-soup', 'food', {
       sellStartTime: '11:00:00',
       sellEndTime: '15:00:00',
     });
-    const at12 = buildMenuGroups(categories, [lunchOnly], '12:00');
-    expect(at12[0].categories[0].items[0].offHours).toBe(false);
-    const at20 = buildMenuGroups(categories, [lunchOnly], '20:00');
-    expect(at20[0].categories[0].items[0].offHours).toBe(true);
+    const at12 = buildHandyTabs(categories, [lunchOnly], '12:00');
+    expect(at12[0].pages[0].categories[0].items[0].offHours).toBe(false);
+    const at20 = buildHandyTabs(categories, [lunchOnly], '20:00');
+    expect(at20[0].pages[0].categories[0].items[0].offHours).toBe(true);
+  });
+});
+
+describe('initialHandyTab（開いたときのタブ）', () => {
+  const categories = [category('c-beer', 'BEER', 'drink', 1), category('c-fsoft', '(F) SOFT DRINK', 'drink', 2)];
+  const planCategoryIds = new Set(['c-fsoft']);
+
+  it('飲み放題の卓で中身が出ていれば 2 コース・飲み放題 から開く', () => {
+    const tabs = buildHandyTabs(
+      categories,
+      [item('i-beer', 'c-beer', 'drink'), item('i-ftea', 'c-fsoft', 'drink', { price: 0 })],
+      '20:00',
+      { planCategoryIds }
+    );
+    expect(initialHandyTab(tabs, planCategoryIds, true)).toBe('plan');
   });
 
-  it('コースとサービスを混ぜない', () => {
-    const groups = buildMenuGroups(categories, items, '12:00');
-    const course = groups.find((g) => g.id === 'course');
-    const service = groups.find((g) => g.id === 'service');
-    expect(course?.categories.flatMap((c) => c.items).map((i) => i.id)).toEqual(['i-course']);
-    expect(service?.categories.flatMap((c) => c.items).map((i) => i.id)).toEqual(['i-opt']);
+  it('プランの無い卓・中身が出ていない卓は先頭のタブ', () => {
+    const tabs = buildHandyTabs(categories, [item('i-beer', 'c-beer', 'drink')], '20:00', { planCategoryIds });
+    expect(initialHandyTab(tabs, planCategoryIds, false)).toBe('alacarte');
+    expect(initialHandyTab(tabs, planCategoryIds, true)).toBe('alacarte');
+    expect(initialHandyTab([], planCategoryIds, true)).toBeNull();
   });
 });
 

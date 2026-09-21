@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { QrOrderApp, type ReservedCourse } from '@/components/qr-order/qr-order-app';
 import type { QrMenuData } from '@/components/qr-order/types';
-import { filterNestedMenu } from '@/lib/menu-book';
+import { filterNestedMenu, nestedMenuPages } from '@/lib/menu-book';
 import { jstNowHm, loadQrMenuBook } from '@/lib/menu-book-server';
 
 interface PageParams {
@@ -40,17 +40,21 @@ export default async function QrOrderPage({ params }: PageParams) {
   const qrMenu = menu as QrMenuData;
   // メニューブックで絞る：飲み放題・食べ放題・コースが伝票に無い卓には、その中身（F の0円商品など）を出さない。
   // 予約でコースが決まっている卓は、コースが伝票に入る前からプランありとして扱う
+  const effectivePlan = course && !plan.hasPlan ? { hasPlan: true, planItemIds: [] } : plan;
   const categories = filterNestedMenu(qrMenu.categories, book, {
     channel: 'qr',
-    plan: course && !plan.hasPlan ? { hasPlan: true, planItemIds: [] } : plan,
+    plan: effectivePlan,
     nowHm: jstNowHm(),
   });
+  // タブはメニューブックのページごと。飲み放題・コースの卓は飲み放題（プランのときだけ）のページを先頭にする
+  const pages = nestedMenuPages(qrMenu.categories, categories, book, effectivePlan);
 
   return (
     <QrOrderApp
       storeSlug={storeSlug}
       tableToken={tableToken}
       menu={{ ...qrMenu, categories }}
+      pages={pages}
       reservedCourse={course}
     />
   );

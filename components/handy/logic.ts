@@ -1,11 +1,11 @@
 /**
  * ハンディ画面の純粋な計算（DB・React非依存・テスト対象）。
  *
- * 承認済みレイアウト（2026-09-21）の注文画面は上位分類タブ（フード／ドリンク／コース／…）で
- * 商品を分ける。TENPO ONE の menu_categories には上位分類の列が無いため、
- * ここでは menu_items.item_type と menu_categories.station だけで機械的に振り分け、
- * どちらからも判断できない商品は「その他」にまとめる（カテゴリ名からの推測はしない）。
+ * 注文画面の上のタブは 1 単品（フード＆ドリンク）／2 コース・飲み放題／3 サービス（2026-09-21 店舗要望）。
+ * タブの中はメニューブックのページ（SOUP・APPETIZER・SALAD のようにカテゴリをまとめたタイル）→ 商品。
+ * 上位分類（フード／ドリンク…）の判定 classifyMenuItem はメニューブック画面の見出しなどで使う。
  */
+import { groupMenuPages, menuPageLabel } from '@/lib/menu-book';
 
 export type HandyGroupId = 'food' | 'drink' | 'course' | 'service' | 'other';
 
@@ -91,9 +91,54 @@ export interface HandyCategoryView {
   items: HandyMenuItemView[];
 }
 
-export interface HandyGroupView extends HandyGroupDef {
+/* ---------------------------------------------------------- 上のタブ */
+
+export type HandyTabId = 'alacarte' | 'plan' | 'service';
+
+export interface HandyTabDef {
+  id: HandyTabId;
+  label: string;
+  en: string;
+}
+
+/** 注文画面の上のタブ（店舗要望「1を単品全部（フード＆ドリンク）、2をコース＆飲み放題、3をサービス」） */
+export const HANDY_TABS: readonly HandyTabDef[] = [
+  { id: 'alacarte', label: '単品', en: 'A la carte' },
+  { id: 'plan', label: 'コース・飲み放題', en: 'Course & Plan' },
+  { id: 'service', label: 'サービス', en: 'Service' },
+] as const;
+
+/**
+ * 1商品をどのタブに出すか。
+ * サービス（item_type='option'）→ 3、コースの商品か「プランのときだけ」のカテゴリ（(F) の飲み放題の中身など）→ 2、
+ * それ以外（フード・ドリンク・種類が分からないもの）→ 1 単品。
+ */
+export function handyTabOf(itemType: string | null | undefined, inPlanCategory: boolean): HandyTabId {
+  if (itemType === 'option') return 'service';
+  if (itemType === 'course' || inPlanCategory) return 'plan';
+  return 'alacarte';
+}
+
+export interface HandyPageView {
+  /** ページの先頭カテゴリの id */
+  key: string;
+  /** 店長が付けた名前（無ければ null） */
+  name: string | null;
+  /** パンくずに出す名前（店長が付けた名前か、カテゴリ名を「・」でつないだもの） */
+  label: string;
   categories: HandyCategoryView[];
   itemCount: number;
+}
+
+export interface HandyTabView extends HandyTabDef {
+  pages: HandyPageView[];
+  itemCount: number;
+}
+
+/** メニューブックのページ設定（store_settings.settings.menuBook の joinPrev / pageNames） */
+export interface HandyPagesConfig {
+  joinPrev: string[];
+  pageNames: Record<string, string>;
 }
 
 /** 承認済みUIのタイル下線の紫系アクセント（並び順に循環させる） */
@@ -135,56 +180,83 @@ export function isOnSaleAt(
   return start < end ? now >= start && now <= end : now >= start || now <= end;
 }
 
+const byOrderThenName = (a: HandyMenuItemView, b: HandyMenuItemView) =>
+  a.sortOrder - b.sortOrder || a.name.localeCompare(b.name, 'ja');
+
 /**
- * 上位分類 → 下位カテゴリ → 商品 の3階層を組み立てる。
- * 商品が1つも無い分類・カテゴリは返さない（空タブを出さない）。
+ * 上のタブ → ページ（メニューブックのページ）→ カテゴリ → 商品 を組み立てる。
+ * categories はページの区切りを並び順で決めるため、出さないカテゴリも含めて全部渡す。
+ * 商品が1つも無いカテゴリ・ページ・タブは返さない（空のタブ・タイルを出さない）。
  */
-export function buildMenuGroups(
+export function buildHandyTabs(
   categories: HandyCategoryInput[],
   items: HandyMenuItemInput[],
-  nowHm: string
-): HandyGroupView[] {
+  nowHm: string,
+  opts: { planCategoryIds?: ReadonlySet<string>; pages?: HandyPagesConfig } = {}
+): HandyTabView[] {
+  const planIds = opts.planCategoryIds ?? new Set<string>();
+  const pagesConfig = opts.pages ?? { joinPrev: [], pageNames: {} };
   const categoryById = new Map(categories.map((c) => [c.id, c]));
   const sortedCategories = [...categories].sort(
     (a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name, 'ja')
   );
 
-  // 分類 → カテゴリID → 商品
-  const byGroup = new Map<HandyGroupId, Map<string, HandyMenuItemView[]>>();
+  // タブ → カテゴリID → 商品
+  const byTab = new Map<HandyTabId, Map<string, HandyMenuItemView[]>>();
   for (const item of items) {
     const category = item.categoryId ? categoryById.get(item.categoryId) : undefined;
     // 削除済み・未設定カテゴリの商品はレジ（POS）でも出さないので、ハンディでも出さない
     if (!category) continue;
-    const groupId = classifyMenuItem(item.itemType, category.station ?? null);
-    const categoryId = category.id;
-    const groupMap = byGroup.get(groupId) ?? new Map<string, HandyMenuItemView[]>();
-    const list = groupMap.get(categoryId) ?? [];
+    const tabId = handyTabOf(item.itemType, planIds.has(category.id));
+    const tabMap = byTab.get(tabId) ?? new Map<string, HandyMenuItemView[]>();
+    const list = tabMap.get(category.id) ?? [];
     list.push({ ...item, offHours: !isOnSaleAt(item, nowHm) });
-    groupMap.set(categoryId, list);
-    byGroup.set(groupId, groupMap);
+    tabMap.set(category.id, list);
+    byTab.set(tabId, tabMap);
   }
 
-  const views: HandyGroupView[] = [];
-  for (const def of HANDY_GROUPS) {
-    const groupMap = byGroup.get(def.id);
-    if (!groupMap) continue;
-    const order = sortedCategories.filter((c) => groupMap.has(c.id)).map((c) => c.id);
-    const categoryViews: HandyCategoryView[] = order.map((categoryId) => {
-      const category = categoryById.get(categoryId);
-      return {
-        id: categoryId,
-        name: category?.name ?? '',
-        nameEn: category?.nameEn ?? null,
-        items: (groupMap.get(categoryId) ?? []).sort(
-          (a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name, 'ja')
-        ),
-      };
-    });
-    const itemCount = categoryViews.reduce((n, c) => n + c.items.length, 0);
+  const views: HandyTabView[] = [];
+  for (const def of HANDY_TABS) {
+    const tabMap = byTab.get(def.id);
+    if (!tabMap) continue;
+    const pages: HandyPageView[] = groupMenuPages(sortedCategories, pagesConfig, (c) => tabMap.has(c.id)).map(
+      (page) => {
+        const categoryViews: HandyCategoryView[] = page.categories.map((c) => ({
+          id: c.id,
+          name: c.name,
+          nameEn: c.nameEn,
+          items: (tabMap.get(c.id) ?? []).sort(byOrderThenName),
+        }));
+        return {
+          key: page.key,
+          name: page.name,
+          label: menuPageLabel(page, (c) => c.name),
+          categories: categoryViews,
+          itemCount: categoryViews.reduce((n, c) => n + c.items.length, 0),
+        };
+      }
+    );
+    const itemCount = pages.reduce((n, p) => n + p.itemCount, 0);
     if (itemCount === 0) continue;
-    views.push({ ...def, categories: categoryViews, itemCount });
+    views.push({ ...def, pages, itemCount });
   }
   return views;
+}
+
+/**
+ * 注文画面を開いたときのタブ。飲み放題・コースの卓で、その中身（プランのときだけのカテゴリ）が出ていれば
+ * 2 コース・飲み放題、それ以外は先頭のタブ。
+ */
+export function initialHandyTab(
+  tabs: HandyTabView[],
+  planCategoryIds: ReadonlySet<string>,
+  hasPlan: boolean
+): HandyTabId | null {
+  if (hasPlan) {
+    const planTab = tabs.find((t) => t.id === 'plan');
+    if (planTab?.pages.some((p) => p.categories.some((c) => planCategoryIds.has(c.id)))) return 'plan';
+  }
+  return tabs[0]?.id ?? null;
 }
 
 /* ---------------------------------------------------------------- カート */
