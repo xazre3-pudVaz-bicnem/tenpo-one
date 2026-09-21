@@ -34,6 +34,7 @@ export default async function SettingsLayout({ children }: { children: React.Rea
       en: 'Devices & management',
       rows: [
         { href: '/app/settings/printers', label: 'ハードウェア', en: 'Hardware', icon: 'printers', description: 'レジ端末とレシート・厨房プリンター、キャッシュドロアの設定', visible: true },
+        { href: '/app/settings/handy', label: 'ハンディ端末', en: 'Handy devices', icon: 'handy', description: 'スマホをQRコードでハンディとして登録・解除する', visible: true },
         { href: '/app/settings/tables', label: 'テーブルQRコード', en: 'TableCode', icon: 'qr', description: 'テーブルごとのQR注文コードの発行・印刷（テーブル・フロアから）', visible: true, matchActive: false },
       ],
     },

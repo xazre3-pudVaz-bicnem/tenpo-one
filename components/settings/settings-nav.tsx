@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import {
   Store, Building2, Clock, UtensilsCrossed, ListPlus, UserRound, ChartColumn, Printer, QrCode, LayoutGrid,
   CalendarClock, Users, CreditCard, Percent, BookOpen, ShieldCheck, Gift, TriangleAlert, Upload, Plug,
-  ScrollText, ChevronRight,
+  ScrollText, ChevronRight, Smartphone,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -18,6 +18,7 @@ const ICONS = {
   clerks: UserRound,
   reports: ChartColumn,
   printers: Printer,
+  handy: Smartphone,
   qr: QrCode,
   tables: LayoutGrid,
   booking: CalendarClock,

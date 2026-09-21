@@ -2557,6 +2557,171 @@ export type Database = {
           },
         ]
       }
+      handy_devices: {
+        Row: {
+          created_by: string | null
+          id: string
+          last_seen_at: string | null
+          membership_id: string
+          name: string
+          organization_id: string
+          paired_at: string
+          paired_ip: string | null
+          profile_id: string
+          revoked_at: string | null
+          revoked_by: string | null
+          status: string
+          store_id: string
+          user_agent: string | null
+        }
+        Insert: {
+          created_by?: string | null
+          id?: string
+          last_seen_at?: string | null
+          membership_id: string
+          name: string
+          organization_id: string
+          paired_at?: string
+          paired_ip?: string | null
+          profile_id: string
+          revoked_at?: string | null
+          revoked_by?: string | null
+          status?: string
+          store_id: string
+          user_agent?: string | null
+        }
+        Update: {
+          created_by?: string | null
+          id?: string
+          last_seen_at?: string | null
+          membership_id?: string
+          name?: string
+          organization_id?: string
+          paired_at?: string
+          paired_ip?: string | null
+          profile_id?: string
+          revoked_at?: string | null
+          revoked_by?: string | null
+          status?: string
+          store_id?: string
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "handy_devices_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "handy_devices_membership_id_fkey"
+            columns: ["membership_id"]
+            isOneToOne: false
+            referencedRelation: "memberships"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "handy_devices_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "handy_devices_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "handy_devices_revoked_by_fkey"
+            columns: ["revoked_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "handy_devices_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      handy_pairings: {
+        Row: {
+          code_hash: string
+          created_at: string
+          created_by: string | null
+          device_id: string | null
+          device_name: string
+          expires_at: string
+          id: string
+          issued_ip: string
+          organization_id: string
+          store_id: string
+          used_at: string | null
+        }
+        Insert: {
+          code_hash: string
+          created_at?: string
+          created_by?: string | null
+          device_id?: string | null
+          device_name: string
+          expires_at: string
+          id?: string
+          issued_ip: string
+          organization_id: string
+          store_id: string
+          used_at?: string | null
+        }
+        Update: {
+          code_hash?: string
+          created_at?: string
+          created_by?: string | null
+          device_id?: string | null
+          device_name?: string
+          expires_at?: string
+          id?: string
+          issued_ip?: string
+          organization_id?: string
+          store_id?: string
+          used_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "handy_pairings_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "handy_pairings_device_id_fkey"
+            columns: ["device_id"]
+            isOneToOne: false
+            referencedRelation: "handy_devices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "handy_pairings_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "handy_pairings_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       holidays: {
         Row: {
           created_at: string
