@@ -58,39 +58,56 @@ export interface ReservedCourse {
 }
 
 /** 送信済み注文（get_qr_order_status）と未対応の呼び出し（get_qr_service_calls）を同じ間隔で取得する */
-function useQrTableState(storeSlug: string, tableToken: string) {
+/**
+ * 卓の状態（送信済み注文・呼び出し）の取得。
+ * 匿名セッションのためRealtimeは使えず、ポーリングで追う。
+ * ただし全席のスマホが常時2本のRPCを叩くと店舗規模で負荷になるため、
+ * 見ている画面で必要なものだけを取り、メニュー閲覧中は呼び出しの経過がある間だけ確認する。
+ */
+function useQrTableState(storeSlug: string, tableToken: string, tab: Tab) {
   const [status, setStatus] = useState<QrOrderStatus | null>(null);
   const [calls, setCalls] = useState<QrServiceCall[]>([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const hasOpenCalls = calls.length > 0;
 
-  const refresh = useCallback(async () => {
-    const supabase = createClient();
-    const [statusResult, callsResult] = await Promise.all([
-      supabase.rpc('get_qr_order_status', { p_slug: storeSlug, p_token: tableToken }),
-      supabase.rpc('get_qr_service_calls', { p_slug: storeSlug, p_token: tableToken }),
-    ]);
-    if (statusResult.error || !statusResult.data) {
-      // 取得できなかったことを隠さない。直前に取れた内容はそのまま残す
-      setFetchError(qrOrderErrorMessage(statusResult.error?.message));
-    } else {
-      setStatus(statusResult.data as QrOrderStatus);
-      setFetchError(null);
-    }
-    if (!callsResult.error) setCalls(parseServiceCalls(callsResult.data));
-    setLoading(false);
-  }, [storeSlug, tableToken]);
+  const refresh = useCallback(
+    async (opts: { status?: boolean; calls?: boolean } = { status: true, calls: true }) => {
+      const supabase = createClient();
+      const [statusResult, callsResult] = await Promise.all([
+        opts.status ? supabase.rpc('get_qr_order_status', { p_slug: storeSlug, p_token: tableToken }) : null,
+        opts.calls ? supabase.rpc('get_qr_service_calls', { p_slug: storeSlug, p_token: tableToken }) : null,
+      ]);
+      if (statusResult) {
+        if (statusResult.error || !statusResult.data) {
+          // 取得できなかったことを隠さない。直前に取れた内容はそのまま残す
+          setFetchError(qrOrderErrorMessage(statusResult.error?.message));
+        } else {
+          setStatus(statusResult.data as QrOrderStatus);
+          setFetchError(null);
+        }
+      }
+      if (callsResult && !callsResult.error) setCalls(parseServiceCalls(callsResult.data));
+      setLoading(false);
+    },
+    [storeSlug, tableToken]
+  );
 
   useEffect(() => {
-    // 同期的な setState を避けるため、初回取得も非同期関数として呼ぶ
+    // 画面ごとに必要なものだけを定期取得する
+    const wantStatus = tab === 'history';
+    const wantCalls = tab === 'history' || tab === 'call' || hasOpenCalls;
+    // 画面を切り替えたときは一度だけ両方取り直す（再読込後に呼び出し中を復元するため）。
+    // 同期的な setState を避けるため、非同期関数として呼ぶ
     (async () => {
       await refresh();
     })();
+    if (!wantStatus && !wantCalls) return;
     const id = setInterval(() => {
-      void refresh();
+      void refresh({ status: wantStatus, calls: wantCalls });
     }, REFRESH_INTERVAL_MS);
     return () => clearInterval(id);
-  }, [refresh]);
+  }, [refresh, tab, hasOpenCalls]);
 
   return { status, calls, setCalls, loading, fetchError, refresh };
 }
@@ -120,7 +137,7 @@ export function QrOrderApp({
   // カート行のキー。描画中に値が変わらないよう、操作のたびに採番する
   const lineSeq = useRef(0);
 
-  const { status, calls, setCalls, loading, fetchError, refresh } = useQrTableState(storeSlug, tableToken);
+  const { status, calls, setCalls, loading, fetchError, refresh } = useQrTableState(storeSlug, tableToken, tab);
 
   useEffect(() => {
     if (!notice) return;

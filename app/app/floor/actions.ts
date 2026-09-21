@@ -1,7 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { requireMember, requirePermission } from '@/lib/auth';
+import { assertStoreAccess, requireMember, requirePermission } from '@/lib/auth';
 import { can } from '@/lib/permissions';
 import { createClient } from '@/lib/supabase/server';
 
@@ -10,16 +10,6 @@ import { createClient } from '@/lib/supabase/server';
  * 片付けが終わっても「清掃完了」を押し忘れて席が空かない、という現場の詰まりを防ぐ。
  */
 const CLEANING_AUTO_RELEASE_MINUTES = 5;
-
-/** アクセス可能な店舗か検証（HQ系は全店舗） */
-async function assertStoreAccess(
-  ctx: { isHq: boolean; stores: { id: string }[] },
-  storeId: string
-) {
-  if (!ctx.isHq && !ctx.stores.some((s) => s.id === storeId)) {
-    throw new Error('この店舗の操作はできません');
-  }
-}
 
 function randomWalkInCode() {
   return `WI-${Math.floor(100000 + Math.random() * 900000)}`;

@@ -1,7 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { requirePermission } from '@/lib/auth';
+import { assertStoreAccess, requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { isMissingColumnError } from '@/lib/schema-compat';
 import { applicableTaxRate } from '@/lib/tax';
@@ -20,15 +20,6 @@ function jstTimeHHMM(d: Date): string {
   const h = parts.find((p) => p.type === 'hour')?.value ?? '00';
   const m = parts.find((p) => p.type === 'minute')?.value ?? '00';
   return `${h}:${m}`;
-}
-
-async function assertStoreAccess(
-  ctx: { isHq: boolean; stores: { id: string }[] },
-  storeId: string
-) {
-  if (!ctx.isHq && !ctx.stores.some((s) => s.id === storeId)) {
-    throw new Error('この店舗の操作はできません');
-  }
 }
 
 async function loadOpenOrder(
@@ -142,7 +133,19 @@ async function resolveOptions(
  * （レシートには日本語、厨房伝票には英語が出る）。
  * 必須・最小/最大の選択数はサーバー側で検証する（クライアントの表示崩れや改ざんに依存しない）。
  */
-export async function addItem(orderId: string, menuItemId: string, optionItemIds: string[] = []) {
+/**
+ * 明細を追加する。quantity を指定すると1行にまとめて入れる
+ * （ハンディのカート送信用。POSのタップは従来どおり1個ずつ）。
+ */
+export async function addItem(
+  orderId: string,
+  menuItemId: string,
+  optionItemIds: string[] = [],
+  quantity = 1
+) {
+  if (!Number.isInteger(quantity) || quantity < 1 || quantity > 99) {
+    throw new Error('数量は1〜99で指定してください');
+  }
   const ctx = await requirePermission('pos.order');
   const supabase = await createClient();
   const order = await loadOpenOrder(supabase, ctx, orderId);
@@ -179,10 +182,10 @@ export async function addItem(orderId: string, menuItemId: string, optionItemIds
     menu_item_id: item.id,
     name: item.name,
     unit_price: finalUnitPrice,
-    quantity: 1,
+    quantity,
     tax_rate: taxRate,
     tax_included: taxIncluded,
-    line_total: finalUnitPrice,
+    line_total: finalUnitPrice * quantity,
     // modifiers は NOT NULL（既定 '[]'）。選択肢なしでも null ではなく空配列を入れる
     modifiers,
     staff_id: ctx.userId,

@@ -18,7 +18,6 @@ export interface PosOptionItem {
 export interface PosOptionGroup {
   id: string;
   name: string;
-  nameEn?: string | null;
   isRequired: boolean;
   minSelect: number;
   maxSelect: number;
@@ -95,10 +94,7 @@ export function OptionDialog({
           return (
             <div key={g.id}>
               <div className="mb-2 flex items-center gap-2">
-                <p className="text-sm font-semibold text-navy">
-                  {g.name}
-                  {g.nameEn && <span className="ml-1 text-xs font-medium text-gray-500">{g.nameEn}</span>}
-                </p>
+                <p className="text-sm font-semibold text-navy">{g.name}</p>
                 {g.isRequired ? <Badge tone="danger">必須 / Required</Badge> : <Badge tone="gray">任意 / Optional</Badge>}
                 <span className="text-xs text-gray-500">
                   {g.maxSelect === 1 ? '1つ選択 / Choose 1' : `${g.minSelect}〜${g.maxSelect}つ選択 / Choose ${g.minSelect}–${g.maxSelect}`}

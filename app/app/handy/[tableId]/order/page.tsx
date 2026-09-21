@@ -138,7 +138,6 @@ export default async function HandyOrderPage({
     (optionGroupsByItem[link.menu_item_id] ??= []).push({
       id: g.id,
       name: g.name,
-      nameEn: null,
       isRequired: g.is_required,
       minSelect: g.min_select,
       maxSelect: g.max_select,

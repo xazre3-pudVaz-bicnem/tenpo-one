@@ -357,7 +357,7 @@ export function HandyOrderScreen({
             </Button>
           </div>
           <p className="mt-1 text-center text-[10px] text-ink-3">
-            この卓の未会計合計 {yen(unpaidTotal)}（送信すると伝票 #{orderNo} に追加されます）
+            伝票 #{orderNo} の現在の合計 {yen(unpaidTotal)}（送信するとこの伝票に追加されます）
           </p>
         </div>
       </div>

@@ -154,7 +154,8 @@ export function HandyTableList({
                   size="sm"
                   variant={call.kind === 'checkout' ? 'primary' : 'navy'}
                   className="h-11 shrink-0 px-3"
-                  disabled={pending && resolvingId === call.id}
+                  // 1件処理中は他の呼び出しも押せないようにする（押せるのに反応しない状態を作らない）
+                  disabled={pending}
                   onClick={() => handleResolve(call)}
                 >
                   {pending && resolvingId === call.id ? '処理中…' : '対応済み'}

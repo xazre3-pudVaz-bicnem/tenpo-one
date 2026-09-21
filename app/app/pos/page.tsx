@@ -217,7 +217,7 @@ export default async function PosPage({
   }
 
   const optionGroupsByItem: Record<string, {
-    id: string; name: string; nameEn: string | null; isRequired: boolean; minSelect: number; maxSelect: number;
+    id: string; name: string; isRequired: boolean; minSelect: number; maxSelect: number;
     items: { id: string; name: string; nameEn: string | null; price: number }[];
   }[]> = {};
   for (const link of optionLinks ?? []) {
@@ -236,7 +236,6 @@ export default async function PosPage({
     (optionGroupsByItem[link.menu_item_id] ??= []).push({
       id: g.id,
       name: g.name,
-      nameEn: null,
       isRequired: g.is_required,
       minSelect: g.min_select,
       maxSelect: g.max_select,

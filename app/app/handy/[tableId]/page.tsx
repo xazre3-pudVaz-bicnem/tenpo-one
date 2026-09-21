@@ -7,7 +7,7 @@ import { PageHeader } from '@/components/ui/page-header';
 import { EmptyState } from '@/components/ui/state';
 import { HandyTableDetail, type HandySlip } from '@/components/handy/handy-table-detail';
 import type { HandyServiceCall } from '@/components/handy/logic';
-import { goToOrder } from '../../floor/actions';
+import { goToOrder, startWalkIn } from '../../floor/actions';
 import { resolveServiceCall } from '../actions';
 
 export const metadata: Metadata = { title: '卓の注文' };
@@ -54,6 +54,8 @@ export default async function HandyTablePage({ params }: { params: Promise<{ tab
     .from('restaurant_tables')
     .select('id, name, capacity_max, current_status, store_id')
     .eq('id', tableId)
+    // 削除・無効化した卓はURL直打ちでも開かせない（一覧と同じ条件）
+    .eq('status', 'active')
     .maybeSingle();
 
   if (!table || table.store_id !== store.id) {
@@ -145,6 +147,7 @@ export default async function HandyTablePage({ params }: { params: Promise<{ tab
       calls={serviceCalls}
       serverNow={requestTime()}
       goToOrderAction={goToOrder}
+      startWalkInAction={startWalkIn}
       resolveServiceCallAction={resolveServiceCall}
     />
   );

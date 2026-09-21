@@ -11,6 +11,7 @@ import { useToast } from '@/components/ui/toast';
 import { useStoreRealtimeRefresh } from '@/components/realtime/use-store-refresh';
 import { useNow } from '@/components/floor/use-now';
 import {
+  canStartOrder,
   elapsedLabel,
   serviceCallLabel,
   sortServiceCalls,
@@ -46,6 +47,7 @@ export function HandyTableDetail({
   calls,
   serverNow,
   goToOrderAction,
+  startWalkInAction,
   resolveServiceCallAction,
 }: {
   storeId: string;
@@ -53,7 +55,10 @@ export function HandyTableDetail({
   slips: HandySlip[];
   calls: HandyServiceCall[];
   serverNow: number;
+  /** 着席中の卓に伝票を作る（フロア画面と同じ） */
   goToOrderAction: (tableId: string) => Promise<{ orderId: string }>;
+  /** 空席の卓を人数つきで着席させて伝票を作る（フロア画面のウォークインと同じ） */
+  startWalkInAction: (tableId: string, partySize: number) => Promise<{ orderId: string }>;
   resolveServiceCallAction: (callId: string) => Promise<{ alreadyResolved: boolean }>;
 }) {
   const router = useRouter();
@@ -72,13 +77,22 @@ export function HandyTableDetail({
   const guestCount = slips.reduce((n, s) => n + s.guestCount, 0);
   const openedAtMs = slips.length > 0 ? Math.min(...slips.map((s) => s.openedAtMs)) : null;
 
-  /** 伝票が無い卓で注文を開始する（既存のフロア画面と同じサーバーアクションを使う） */
+  const [partySize, setPartySize] = useState(2);
+
+  /**
+   * 伝票が無い卓で注文を開始する（既存のフロア画面と同じサーバーアクションを使う）。
+   * 空席なら人数つきで着席（startWalkIn）。goToOrder は卓を着席状態にしないため、空席の卓に使うと
+   * フロア画面では空席のまま伝票だけができ、二重に着席できてしまう。
+   */
   const handleStart = () => {
     if (pending) return;
     setBusy('start');
     startTransition(async () => {
       try {
-        const { orderId } = await goToOrderAction(table.id);
+        const { orderId } =
+          state === 'occupied'
+            ? await goToOrderAction(table.id)
+            : await startWalkInAction(table.id, partySize);
         router.push(`/app/handy/${table.id}/order?order=${orderId}`);
       } catch (e) {
         toast(e instanceof Error ? e.message : '注文を開始できませんでした', 'error');
@@ -177,12 +191,46 @@ export function HandyTableDetail({
       {slips.length === 0 ? (
         <div className="rounded-xl border border-line bg-white p-6 text-center">
           <p className="text-sm text-ink-2">この卓に未会計の注文はありません。</p>
-          <p className="mt-1 text-xs text-ink-3">
-            注文を開始すると、この卓に新しい伝票を作ります（人数は後からレジで変更できます）。
-          </p>
-          <Button className="mt-4 h-12 w-full" disabled={pending} onClick={handleStart}>
-            {pending && busy === 'start' ? '開始中…' : '注文を開始'}
-          </Button>
+          {canStartOrder(state) ? (
+            <>
+              {state !== 'occupied' && (
+                <div className="mt-3">
+                  <p className="text-xs text-ink-3">人数</p>
+                  <div className="mt-1 flex justify-center gap-1.5" role="radiogroup" aria-label="人数">
+                    {[1, 2, 3, 4, 5, 6, 7, 8].map((n) => (
+                      <button
+                        key={n}
+                        type="button"
+                        role="radio"
+                        aria-checked={partySize === n}
+                        onClick={() => setPartySize(n)}
+                        className={cn(
+                          'h-10 w-9 rounded-lg border text-sm font-semibold tabular-nums',
+                          partySize === n
+                            ? 'border-primary bg-primary text-white'
+                            : 'border-line bg-white text-ink-2'
+                        )}
+                      >
+                        {n}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <p className="mt-2 text-xs text-ink-3">
+                {state === 'occupied'
+                  ? '注文を開始すると、この卓に新しい伝票を作ります。'
+                  : '注文を開始すると、この卓を着席にして新しい伝票を作ります。'}
+              </p>
+              <Button className="mt-3 h-12 w-full" disabled={pending} onClick={handleStart}>
+                {pending && busy === 'start' ? '開始中…' : '注文を開始'}
+              </Button>
+            </>
+          ) : (
+            <p className="mt-2 text-xs text-ink-3">
+              {TABLE_STATE_LABEL[state]}の卓には注文を作れません。フロア画面で状態を変更してください。
+            </p>
+          )}
           <Link
             href="/app/floor"
             className="mt-3 inline-block text-xs font-medium text-primary hover:underline"

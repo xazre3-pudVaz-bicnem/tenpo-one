@@ -178,6 +178,16 @@ export async function requireFeature(
   return ctx;
 }
 
+/**
+ * 操作対象の店舗にアクセスできるか（本部系ロールは全店舗）。
+ * サーバーアクションで店舗IDを受け取ったら、DBを触る前に必ず通す。
+ */
+export function assertStoreAccess(ctx: { isHq: boolean; stores: { id: string }[] }, storeId: string): void {
+  if (!ctx.isHq && !ctx.stores.some((s) => s.id === storeId)) {
+    throw new Error('この店舗の操作はできません');
+  }
+}
+
 /** CYPRESS管理者専用 */
 export async function requireCypressAdmin(): Promise<SessionContext> {
   const ctx = await requireSession();

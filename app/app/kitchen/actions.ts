@@ -1,7 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { requirePermission } from '@/lib/auth';
+import { assertStoreAccess, requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import type { KdsSettings } from '@/components/kitchen/types';
 
@@ -20,12 +20,6 @@ const TIMESTAMP_COLUMN: Record<'preparing' | 'ready' | 'served', 'kitchen_starte
   ready: 'kitchen_ready_at',
   served: 'served_at',
 };
-
-function assertStoreAccess(ctx: { isHq: boolean; stores: { id: string }[] }, storeId: string) {
-  if (!ctx.isHq && !ctx.stores.some((s) => s.id === storeId)) {
-    throw new Error('この店舗の操作はできません');
-  }
-}
 
 /** 品目の調理ステータスを次の段階へ進める（未着手→調理中→完成→提供済） */
 export async function setItemKitchenStatus(orderItemId: string, nextStatus: KitchenStatus) {

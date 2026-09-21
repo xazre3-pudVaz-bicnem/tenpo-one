@@ -1,20 +1,10 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { requirePermission } from '@/lib/auth';
+import { assertStoreAccess, requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { addItem } from '../pos/actions';
 import { MAX_LINE_QUANTITY } from '@/components/handy/logic';
-
-/** アクセス可能な店舗か検証（HQ系は全店舗） */
-async function assertStoreAccess(
-  ctx: { isHq: boolean; stores: { id: string }[] },
-  storeId: string
-) {
-  if (!ctx.isHq && !ctx.stores.some((s) => s.id === storeId)) {
-    throw new Error('この店舗の操作はできません');
-  }
-}
 
 /**
  * お客様QRからの呼び出しを「対応済み」にする。
@@ -119,26 +109,22 @@ export async function submitHandyOrder(
   await assertStoreAccess(ctx, order.store_id);
   if (order.status !== 'open') throw new Error('この注文は既に会計済み・取消済みです');
 
+  // 1行＝1回の追加（数量ぶんまとめて1明細にする）。1個ずつ呼ぶと数量×往復になり、
+  // 伝票と厨房伝票にも同じ商品が数量ぶん別行で並んでしまう
   let sentQuantity = 0;
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-    for (let n = 0; n < line.quantity; n++) {
-      try {
-        await addItem(orderId, line.menuItemId, line.optionItemIds);
-        sentQuantity++;
-      } catch (e) {
-        const reason = e instanceof Error ? e.message : '送信に失敗しました';
-        const remaining: HandyOrderLineInput[] = [
-          ...(line.quantity - n > 0 ? [{ ...line, quantity: line.quantity - n }] : []),
-          ...lines.slice(i + 1),
-        ];
-        revalidatePath('/app/handy');
-        return {
-          sentQuantity,
-          remaining,
-          message: `「${line.name}」で中断しました：${reason}`,
-        };
-      }
+    try {
+      await addItem(orderId, line.menuItemId, line.optionItemIds, line.quantity);
+      sentQuantity += line.quantity;
+    } catch (e) {
+      const reason = e instanceof Error ? e.message : '送信に失敗しました';
+      revalidatePath('/app/handy');
+      return {
+        sentQuantity,
+        remaining: lines.slice(i),
+        message: `「${line.name}」で中断しました：${reason}`,
+      };
     }
   }
 

@@ -13,7 +13,6 @@ import {
   MAX_LINE_QUANTITY,
   sortServiceCalls,
   tableState,
-  UNCATEGORIZED_ID,
   type HandyCartLine,
   type HandyCategoryInput,
   type HandyMenuItemInput,
@@ -90,7 +89,9 @@ describe('isOnSaleAt', () => {
     const lunch = { sellStartTime: '11:00:00', sellEndTime: '15:00:00' };
     expect(isOnSaleAt(lunch, '11:00')).toBe(true);
     expect(isOnSaleAt(lunch, '14:59')).toBe(true);
-    expect(isOnSaleAt(lunch, '15:00')).toBe(false);
+    // 終了時刻ちょうどは販売中（QRのサーバー側判定 between と揃える）
+    expect(isOnSaleAt(lunch, '15:00')).toBe(true);
+    expect(isOnSaleAt(lunch, '15:01')).toBe(false);
     expect(isOnSaleAt(lunch, '10:59')).toBe(false);
   });
 
@@ -98,7 +99,8 @@ describe('isOnSaleAt', () => {
     const late = { sellStartTime: '22:00:00', sellEndTime: '02:00:00' };
     expect(isOnSaleAt(late, '23:30')).toBe(true);
     expect(isOnSaleAt(late, '01:59')).toBe(true);
-    expect(isOnSaleAt(late, '02:00')).toBe(false);
+    expect(isOnSaleAt(late, '02:00')).toBe(true);
+    expect(isOnSaleAt(late, '02:01')).toBe(false);
     expect(isOnSaleAt(late, '12:00')).toBe(false);
   });
 
@@ -141,10 +143,15 @@ describe('buildMenuGroups', () => {
   });
 
   it('分類できない商品は「その他」にまとめる', () => {
-    const groups = buildMenuGroups(categories, [item('i-x', null, 'mystery')], '12:00');
+    const withMisc = [...categories, category('c-misc', 'その他', null, 9)];
+    const groups = buildMenuGroups(withMisc, [item('i-x', 'c-misc', 'mystery')], '12:00');
     expect(groups.map((g) => g.id)).toEqual(['other']);
-    expect(groups[0].categories[0].id).toBe(UNCATEGORIZED_ID);
-    expect(groups[0].categories[0].name).toBe('未分類');
+    expect(groups[0].categories[0].id).toBe('c-misc');
+  });
+
+  it('カテゴリが無い・削除済みの商品はレジと同じく出さない', () => {
+    expect(buildMenuGroups(categories, [item('i-x', null, 'food')], '12:00')).toEqual([]);
+    expect(buildMenuGroups(categories, [item('i-y', 'c-deleted', 'food')], '12:00')).toEqual([]);
   });
 
   it('販売時間外の商品に offHours を立てる（一覧からは消さない）', () => {
@@ -271,7 +278,12 @@ describe('tableState', () => {
   it('伝票が無ければテーブルの状態で決まる', () => {
     expect(tableState('available', false)).toBe('available');
     expect(tableState('cleaning', false)).toBe('cleaning');
-    expect(tableState('reserved', false)).toBe('blocked');
+    expect(tableState('reserved', false)).toBe('reserved');
+    // 使用不可（フロア画面の「使用不可にする」）は DB では 'unavailable'
+    expect(tableState('unavailable', false)).toBe('blocked');
+    expect(tableState('ordering', false)).toBe('occupied');
+    expect(tableState('billing', false)).toBe('occupied');
+    expect(tableState('waiting', false)).toBe('available');
     expect(tableState(null, false)).toBe('available');
   });
 });

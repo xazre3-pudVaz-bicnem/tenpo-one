@@ -96,9 +96,6 @@ export interface HandyGroupView extends HandyGroupDef {
   itemCount: number;
 }
 
-/** カテゴリ未設定の商品をまとめる擬似カテゴリのID */
-export const UNCATEGORIZED_ID = '__uncategorized__';
-
 /** 承認済みUIのタイル下線の紫系アクセント（並び順に循環させる） */
 export const TILE_ACCENTS = [
   '#7b3fe4',
@@ -134,7 +131,8 @@ export function isOnSaleAt(
   const now = toMinutes(nowHm);
   if (start === null || end === null || now === null) return true;
   if (start === end) return true;
-  return start < end ? now >= start && now < end : now >= start || now < end;
+  // 終了時刻ちょうどまで販売中とする（QR注文のサーバー側 create_qr_order の判定と揃える）
+  return start < end ? now >= start && now <= end : now >= start || now <= end;
 }
 
 /**
@@ -155,8 +153,10 @@ export function buildMenuGroups(
   const byGroup = new Map<HandyGroupId, Map<string, HandyMenuItemView[]>>();
   for (const item of items) {
     const category = item.categoryId ? categoryById.get(item.categoryId) : undefined;
-    const groupId = classifyMenuItem(item.itemType, category?.station ?? null);
-    const categoryId = category?.id ?? UNCATEGORIZED_ID;
+    // 削除済み・未設定カテゴリの商品はレジ（POS）でも出さないので、ハンディでも出さない
+    if (!category) continue;
+    const groupId = classifyMenuItem(item.itemType, category.station ?? null);
+    const categoryId = category.id;
     const groupMap = byGroup.get(groupId) ?? new Map<string, HandyMenuItemView[]>();
     const list = groupMap.get(categoryId) ?? [];
     list.push({ ...item, offHours: !isOnSaleAt(item, nowHm) });
@@ -168,15 +168,12 @@ export function buildMenuGroups(
   for (const def of HANDY_GROUPS) {
     const groupMap = byGroup.get(def.id);
     if (!groupMap) continue;
-    const order = [
-      ...sortedCategories.filter((c) => groupMap.has(c.id)).map((c) => c.id),
-      ...(groupMap.has(UNCATEGORIZED_ID) ? [UNCATEGORIZED_ID] : []),
-    ];
+    const order = sortedCategories.filter((c) => groupMap.has(c.id)).map((c) => c.id);
     const categoryViews: HandyCategoryView[] = order.map((categoryId) => {
       const category = categoryById.get(categoryId);
       return {
         id: categoryId,
-        name: category?.name ?? '未分類',
+        name: category?.name ?? '',
         nameEn: category?.nameEn ?? null,
         items: (groupMap.get(categoryId) ?? []).sort(
           (a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name, 'ja')
@@ -302,20 +299,31 @@ export function elapsedLabel(fromMs: number, nowMs: number): string {
   return `${Math.floor(minutes / 60)}時間${String(minutes % 60).padStart(2, '0')}分`;
 }
 
-/** 卓カードの状態表示 */
-export type HandyTableState = 'occupied' | 'available' | 'cleaning' | 'blocked';
+/**
+ * 卓カードの状態表示。
+ * restaurant_tables.current_status の実際の値
+ * （available / reserved / waiting / seated / ordering / billing / cleaning / unavailable）に対応させる。
+ */
+export type HandyTableState = 'occupied' | 'available' | 'reserved' | 'cleaning' | 'blocked';
 
 export function tableState(currentStatus: string | null, hasOpenOrder: boolean): HandyTableState {
   if (hasOpenOrder) return 'occupied';
+  if (currentStatus === 'seated' || currentStatus === 'ordering' || currentStatus === 'billing') return 'occupied';
   if (currentStatus === 'cleaning') return 'cleaning';
-  if (currentStatus === 'blocked' || currentStatus === 'reserved') return 'blocked';
-  if (currentStatus === 'seated') return 'occupied';
-  return 'available';
+  if (currentStatus === 'unavailable') return 'blocked';
+  if (currentStatus === 'reserved') return 'reserved';
+  return 'available'; // available / waiting
+}
+
+/** この状態の卓で、ハンディから新しい注文を始められるか */
+export function canStartOrder(state: HandyTableState): boolean {
+  return state === 'available' || state === 'reserved' || state === 'occupied';
 }
 
 export const TABLE_STATE_LABEL: Record<HandyTableState, string> = {
   occupied: '利用中',
   available: '空席',
+  reserved: '予約あり',
   cleaning: '清掃中',
   blocked: '使用不可',
 };
