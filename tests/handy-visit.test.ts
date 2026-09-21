@@ -3,7 +3,10 @@ import {
   buildPlanItems,
   classifyPlanItem,
   DEFAULT_VISIT_DRAFT,
+  DURATION_STEP_MINUTES,
+  durationGrid,
   durationLabel,
+  HANDY_DURATIONS,
   planHasItems,
   remainingMinutes,
   validateVisitDraft,
@@ -81,6 +84,26 @@ describe('時間の表示', () => {
     expect(durationLabel(45)).toBe('45分');
     expect(durationLabel(60)).toBe('1時間');
     expect(durationLabel(150)).toBe('2時間30分');
+  });
+
+  it('席時間は15分単位（30分〜5時間）', () => {
+    expect(DURATION_STEP_MINUTES).toBe(15);
+    expect(HANDY_DURATIONS[0]).toBe(30);
+    expect(HANDY_DURATIONS[HANDY_DURATIONS.length - 1]).toBe(300);
+    expect(HANDY_DURATIONS.every((m, i) => i === 0 || m - HANDY_DURATIONS[i - 1] === 15)).toBe(true);
+    expect(HANDY_DURATIONS).toContain(75);
+    expect(durationLabel(75)).toBe('1時間15分');
+    expect(durationLabel(105)).toBe('1時間45分');
+  });
+
+  it('席時間の表は1時間ごとの行に ちょうど/15分/30分/45分 を並べる', () => {
+    const rows = durationGrid();
+    expect(rows[0]).toEqual([null, null, 30, 45]);
+    expect(rows[1]).toEqual([60, 75, 90, 105]);
+    expect(rows[2]).toEqual([120, 135, 150, 165]);
+    expect(rows[rows.length - 1]).toEqual([300, null, null, null]);
+    expect(rows.flat().filter((v) => v !== null)).toEqual([...HANDY_DURATIONS]);
+    expect(durationGrid([])).toEqual([]);
   });
 
   it('残り分は切り上げ・0未満は0', () => {
