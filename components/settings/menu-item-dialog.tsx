@@ -36,7 +36,7 @@ const ITEM_TYPE_OPTIONS = [
   { value: 'option', label: 'オプション' },
 ];
 
-function emptyItem(categoryId: string | null): MenuItemRow {
+function emptyItem(categoryId: string | null, itemType = 'food', sortOrder = 0): MenuItemRow {
   return {
     id: '',
     categoryId,
@@ -44,7 +44,7 @@ function emptyItem(categoryId: string | null): MenuItemRow {
     nameEn: '',
     nameKana: '',
     description: '',
-    itemType: 'food',
+    itemType,
     price: 0,
     takeoutPrice: null,
     cost: null,
@@ -52,7 +52,7 @@ function emptyItem(categoryId: string | null): MenuItemRow {
     durationMinutes: null,
     sellStartTime: null,
     sellEndTime: null,
-    sortOrder: 0,
+    sortOrder,
     isSoldOut: false,
     status: 'active',
   };
@@ -64,6 +64,8 @@ export function MenuItemDialog({
   taxRates,
   editing,
   defaultCategoryId,
+  defaultItemType,
+  defaultSortOrder,
   onClose,
 }: {
   storeId: string;
@@ -71,9 +73,15 @@ export function MenuItemDialog({
   taxRates: { id: string; name: string }[];
   editing: MenuItemRow | null;
   defaultCategoryId: string | null;
+  /** 追加するときの種類（メニューブックでドリンクのカテゴリから追加したらドリンク） */
+  defaultItemType?: string;
+  /** 追加するときの並び順（メニューブックではカテゴリのいちばん下） */
+  defaultSortOrder?: number;
   onClose: () => void;
 }) {
-  const [form, setForm] = useState<MenuItemRow>(editing ?? emptyItem(defaultCategoryId));
+  const [form, setForm] = useState<MenuItemRow>(
+    editing ?? emptyItem(defaultCategoryId, defaultItemType, defaultSortOrder)
+  );
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const { toast } = useToast();

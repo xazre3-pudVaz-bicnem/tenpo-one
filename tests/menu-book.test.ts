@@ -2,12 +2,14 @@ import { describe, it, expect } from 'vitest';
 import {
   autoCategoryShow,
   categoryShow,
+  effectiveShow,
   emptyMenuBook,
   filterMenuBook,
   filterNestedMenu,
   isPlanOnlyItem,
   isWithinHm,
   menuBookFrom,
+  moveInList,
   orderPlanState,
   type MenuBookContext,
   type MenuBookItemInput,
@@ -224,5 +226,25 @@ describe('メニューブック：設定の読み込み・時間帯', () => {
     expect(isWithinHm('23:30', '22:00', '02:00')).toBe(true);
     expect(isWithinHm('01:00', '22:00', '02:00')).toBe(true);
     expect(isWithinHm('03:00', '22:00', '02:00')).toBe(false);
+  });
+});
+
+describe('メニューブック画面の並び替え', () => {
+  it('上へ・下へ・先頭へ・最後へ（範囲外は端に寄せる）', () => {
+    const list = ['A', 'B', 'C', 'D'];
+    expect(moveInList(list, 2, 1)).toEqual(['A', 'C', 'B', 'D']);
+    expect(moveInList(list, 1, 2)).toEqual(['A', 'C', 'B', 'D']);
+    expect(moveInList(list, 3, 0)).toEqual(['D', 'A', 'B', 'C']);
+    expect(moveInList(list, 0, 3)).toEqual(['B', 'C', 'D', 'A']);
+    expect(moveInList(list, 0, -1)).toEqual(list);
+    expect(moveInList(list, 3, 99)).toEqual(list);
+    expect(moveInList(list, 9, 0)).toEqual(list);
+    // 元の配列は変えない
+    expect(list).toEqual(['A', 'B', 'C', 'D']);
+  });
+
+  it('「自動」は自動判定の結果を使う', () => {
+    expect(effectiveShow('auto', 'plan')).toBe('plan');
+    expect(effectiveShow('always', 'plan')).toBe('always');
   });
 });

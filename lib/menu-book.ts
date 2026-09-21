@@ -269,3 +269,18 @@ export function filterNestedMenu<
     .filter((c) => (byCategory.get(c.id)?.length ?? 0) > 0)
     .map((c) => ({ ...c, items: byCategory.get(c.id) ?? [] }));
 }
+
+/** 並び替え: from 番目の要素を to 番目へ動かした新しい配列（範囲外は端に寄せる） */
+export function moveInList<T>(list: readonly T[], from: number, to: number): T[] {
+  const next = [...list];
+  if (from < 0 || from >= next.length) return next;
+  const target = Math.max(0, Math.min(next.length - 1, to));
+  const [item] = next.splice(from, 1);
+  next.splice(target, 0, item);
+  return next;
+}
+
+/** カテゴリの出し方（'auto' は自動判定の結果）を実際の出し方にする */
+export function effectiveShow(show: MenuBookShow | 'auto', autoShow: MenuBookShow): MenuBookShow {
+  return show === 'auto' ? autoShow : show;
+}

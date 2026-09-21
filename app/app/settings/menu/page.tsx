@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { PageHeader } from '@/components/ui/page-header';
@@ -80,7 +81,19 @@ export default async function MenuSettingsPage() {
   return (
     <div>
       <SettingsBackLink />
-      <PageHeader title="メニュー" en="Menu" description={targetStore.name} />
+      <PageHeader
+        title="メニュー"
+        en="Menu"
+        description={targetStore.name}
+        actions={
+          <Link
+            href="/app/settings/menu-book"
+            className="inline-flex h-9 items-center rounded-lg border border-gray-300 bg-white px-3 text-sm font-semibold text-navy hover:bg-gray-50"
+          >
+            並び順・ハンディ／QRの出し方（メニューブック）
+          </Link>
+        }
+      />
 
       <div className="grid gap-5 @5xl:grid-cols-4">
         <div className="space-y-5 @5xl:col-span-1">
