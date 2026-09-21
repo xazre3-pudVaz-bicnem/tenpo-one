@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useState, useTransition } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   ChevronLeft,
   ChevronRight,
@@ -13,6 +13,7 @@ import {
   RotateCw,
   ShoppingCart,
   UserRound,
+  UserRoundPen,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatTime } from '@/lib/format';
@@ -54,6 +55,8 @@ export function HandyChrome({
   storeId,
   storeName,
   staffName,
+  clerkSelected,
+  changeClerkAction,
   stores,
   currentStoreId,
   allowAll,
@@ -65,6 +68,10 @@ export function HandyChrome({
   storeId: string;
   storeName: string;
   staffName: string;
+  /** ログイン画面で担当者を選び終えているか（選ぶ前はドロワーに「担当者を変更」を出さない） */
+  clerkSelected: boolean;
+  /** 担当者の選択を消してログイン画面へ戻す */
+  changeClerkAction: () => Promise<void>;
   stores: StoreRef[];
   currentStoreId: string | null;
   allowAll: boolean;
@@ -74,6 +81,8 @@ export function HandyChrome({
   children: React.ReactNode;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
+  const onReservations = pathname.startsWith('/handy/reservations');
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [callsOpen, setCallsOpen] = useState(false);
   const [selectOpen, setSelectOpen] = useState(false);
@@ -139,16 +148,28 @@ export function HandyChrome({
               SELECT ▴
             </button>
             <div className="grid grid-cols-2 gap-[7px]">
-              <span
-                aria-current="page"
-                className="flex min-h-[46px] items-center justify-center gap-2.5 rounded-[9px] bg-[#efeaf8] text-[11px] font-extrabold tracking-[0.5px] text-[#7b3fe4]"
+              <Link
+                href="/handy"
+                aria-current={onReservations ? undefined : 'page'}
+                className={cn(
+                  'flex min-h-[46px] items-center justify-center gap-2.5 rounded-[9px] text-[11px] font-extrabold tracking-[0.5px]',
+                  onReservations
+                    ? 'text-[#8a769d] active:bg-[#f6f3fb]'
+                    : 'bg-[#efeaf8] text-[#7b3fe4]'
+                )}
               >
                 <ShoppingCart className="h-[21px] w-[21px]" aria-hidden />
                 HANDY
-              </span>
+              </Link>
               <Link
-                href="/app/reservations"
-                className="flex min-h-[46px] items-center justify-center gap-2.5 rounded-[9px] text-[11px] font-extrabold tracking-[0.5px] text-[#8a769d] active:bg-[#f6f3fb]"
+                href="/handy/reservations"
+                aria-current={onReservations ? 'page' : undefined}
+                className={cn(
+                  'flex min-h-[46px] items-center justify-center gap-2.5 rounded-[9px] text-[11px] font-extrabold tracking-[0.5px]',
+                  onReservations
+                    ? 'bg-[#efeaf8] text-[#7b3fe4]'
+                    : 'text-[#8a769d] active:bg-[#f6f3fb]'
+                )}
               >
                 <NotebookText className="h-[21px] w-[21px]" aria-hidden />
                 RESERVATION
@@ -167,14 +188,26 @@ export function HandyChrome({
             <span className="text-sm font-bold text-[#4f3868]">店舗</span>
             <StoreSwitcher stores={stores} currentStoreId={currentStoreId} allowAll={allowAll} />
           </div>
+          {clerkSelected && (
+            <form action={changeClerkAction}>
+              <button
+                type="submit"
+                className="flex min-h-[49px] w-full items-center gap-2 border-b border-[#eee8f6] text-left text-sm text-[#7b3fe4]"
+              >
+                <UserRoundPen className="h-[18px] w-[18px]" aria-hidden />
+                担当者を変更（{staffName}）
+                <ChevronRight className="ml-auto h-4 w-4 text-[#c9b8ea]" aria-hidden />
+              </button>
+            </form>
+          )}
           <SheetLink href="/app/dashboard" icon={<House className="h-[18px] w-[18px]" aria-hidden />}>
             TENPO ONE（本体）へ戻る
           </SheetLink>
           <SheetLink
-            href="/app/reservations"
+            href="/handy/reservations"
             icon={<NotebookText className="h-[18px] w-[18px]" aria-hidden />}
           >
-            予約台帳
+            今日の予約
           </SheetLink>
           <button
             type="button"
@@ -208,10 +241,10 @@ export function HandyChrome({
             HANDY · 注文
           </SheetLink>
           <SheetLink
-            href="/app/reservations"
+            href="/handy/reservations"
             icon={<NotebookText className="h-[18px] w-[18px]" aria-hidden />}
           >
-            RESERVATION · 予約管理
+            RESERVATION · 今日の予約
           </SheetLink>
         </HandySheet>
       )}

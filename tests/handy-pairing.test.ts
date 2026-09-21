@@ -6,6 +6,8 @@ import {
   hashPairingCode,
   isPairingCode,
   isSameNetwork,
+  networkKey,
+  normalizeIp,
   PAIRING_FAILURE_MESSAGE,
   pairingFailure,
 } from '@/lib/handy-pairing';
@@ -68,6 +70,33 @@ describe('同じWi-Fiかの判定', () => {
     expect(isSameNetwork(null, '203.0.113.10')).toBe(false);
     expect(isSameNetwork('203.0.113.10', null)).toBe(false);
     expect(isSameNetwork(null, null)).toBe(false);
+  });
+
+  it('IPv6 の店では端末ごとに末尾が違うので、上位64ビットが同じなら同じ回線とみなす', () => {
+    expect(isSameNetwork('2001:db8:1234:5678::1', '2001:db8:1234:5678:abcd:ef01:2345:6789')).toBe(true);
+    expect(isSameNetwork('2001:DB8:1234:5678::1', '2001:db8:1234:5678::2')).toBe(true);
+  });
+
+  it('IPv6 でもプレフィックスが違えば別の回線', () => {
+    expect(isSameNetwork('2001:db8:1234:5678::1', '2001:db8:1234:9999::1')).toBe(false);
+  });
+
+  it('IPv4 と IPv6 は比べられないので別の回線として扱う', () => {
+    expect(isSameNetwork('203.0.113.10', '2001:db8::1')).toBe(false);
+  });
+
+  it('表記ゆれ（ポート付き・IPv4射影・大文字）を吸収する', () => {
+    expect(normalizeIp('203.0.113.10:443')).toBe('203.0.113.10');
+    expect(normalizeIp('::ffff:203.0.113.10')).toBe('203.0.113.10');
+    expect(normalizeIp('[2001:DB8::1]:443')).toBe('2001:db8::1');
+    expect(isSameNetwork('::ffff:203.0.113.10', '203.0.113.10')).toBe(true);
+  });
+
+  it('回線キーは IPv4 はそのまま、IPv6 は上位4ブロック', () => {
+    expect(networkKey('203.0.113.10')).toBe('203.0.113.10');
+    expect(networkKey('2001:db8::1')).toBe('2001:0db8:0000:0000');
+    // 読めない IPv6 はそのまま返す（同じ文字列同士だけ一致する）
+    expect(networkKey('2001:db8::1::2')).toBe('2001:db8::1::2');
   });
 });
 

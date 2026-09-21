@@ -15,10 +15,37 @@ function randomWalkInCode() {
   return `WI-${Math.floor(100000 + Math.random() * 900000)}`;
 }
 
-/** ウォークイン着席: 予約(walk_in/seated)+注文(open)を作成する。呼び出し側で /app/pos?order=id へ遷移すること */
-export async function startWalkIn(tableId: string, partySize: number): Promise<{ orderId: string }> {
+export interface WalkInOptions {
+  /** 滞在時間（分）。省略時は店舗の既定滞在時間（時間制のときにハンディが指定する） */
+  durationMinutes?: number;
+  /** 利用目的・シーン（reservations.purpose。予約台帳の「目的」に出る） */
+  purpose?: string;
+  /** 伝票メモ（orders.memo。レジ・レシートの「メモ」に出る） */
+  memo?: string;
+  /** 伝票の種類（コース利用なら 'course'） */
+  orderType?: 'dine_in' | 'course';
+}
+
+/** 滞在時間として受け付ける範囲（分）。それ以外は店舗の既定値にする */
+const WALK_IN_STAY_MIN = 15;
+const WALK_IN_STAY_MAX = 480;
+
+/**
+ * ウォークイン着席: 予約(walk_in/seated)+注文(open)を作成する。呼び出し側で /app/pos?order=id へ遷移すること。
+ * options はハンディの「お客様情報」（時間制・利用シーン・伝票メモ）用で、フロア画面からは省略する。
+ */
+export async function startWalkIn(
+  tableId: string,
+  partySize: number,
+  options: WalkInOptions = {}
+): Promise<{ orderId: string }> {
   const ctx = await requirePermission('tables.operate');
   const supabase = await createClient();
+
+  // 上限は orders.guest_count の制約（0〜999）に合わせる（大人数の貸切もフロアから着席できるように）
+  if (!Number.isInteger(partySize) || partySize < 1 || partySize > 999) {
+    throw new Error('人数は1〜999名で指定してください');
+  }
 
   const { data: table } = await supabase
     .from('restaurant_tables')
@@ -36,7 +63,16 @@ export async function startWalkIn(tableId: string, partySize: number): Promise<{
     .select('default_stay_minutes')
     .eq('store_id', table.store_id)
     .maybeSingle();
-  const stayMinutes = settings?.default_stay_minutes ?? 120;
+  const requestedStay = options.durationMinutes;
+  const stayMinutes =
+    typeof requestedStay === 'number' &&
+    Number.isInteger(requestedStay) &&
+    requestedStay >= WALK_IN_STAY_MIN &&
+    requestedStay <= WALK_IN_STAY_MAX
+      ? requestedStay
+      : (settings?.default_stay_minutes ?? 120);
+  const purpose = options.purpose?.trim().slice(0, 60) || null;
+  const memo = options.memo?.trim().slice(0, 200) || null;
   const now = new Date();
   const endAt = new Date(now.getTime() + stayMinutes * 60000);
   const today = now.toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' });
@@ -61,6 +97,7 @@ export async function startWalkIn(tableId: string, partySize: number): Promise<{
         created_via: 'walk_in',
         consent_accepted: true,
         created_by: ctx.userId,
+        ...(purpose ? { purpose } : {}),
       })
       .select('id')
       .single();
@@ -81,11 +118,12 @@ export async function startWalkIn(tableId: string, partySize: number): Promise<{
       store_id: table.store_id,
       reservation_id: reservationId,
       table_id: tableId,
-      order_type: 'dine_in',
+      order_type: options.orderType === 'course' ? 'course' : 'dine_in',
       status: 'open',
       guest_count: partySize,
       staff_id: ctx.userId,
       created_by: ctx.userId,
+      ...(memo ? { memo } : {}),
     })
     .select('id')
     .single();

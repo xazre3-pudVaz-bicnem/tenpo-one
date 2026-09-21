@@ -57,7 +57,6 @@ export function HandyTableDetail({
   serverNow,
   sentQuantity,
   goToOrderAction,
-  startWalkInAction,
   resolveServiceCallAction,
 }: {
   table: { id: string; name: string; capacityMax: number; currentStatus: string | null };
@@ -69,8 +68,6 @@ export function HandyTableDetail({
   sentQuantity: number | null;
   /** 着席中の卓に伝票を作る（フロア画面と同じ） */
   goToOrderAction: (tableId: string) => Promise<{ orderId: string }>;
-  /** 空席の卓を人数つきで着席させて伝票を作る（フロア画面のウォークインと同じ） */
-  startWalkInAction: (tableId: string, partySize: number) => Promise<{ orderId: string }>;
   resolveServiceCallAction: (callId: string) => Promise<{ alreadyResolved: boolean }>;
 }) {
   const router = useRouter();
@@ -78,7 +75,6 @@ export function HandyTableDetail({
   const now = useNow(serverNow);
   const [pending, startTransition] = useTransition();
   const [busy, setBusy] = useState<string | null>(null);
-  const [partySize, setPartySize] = useState(2);
 
   const state = tableState(table.currentStatus, slips.length > 0);
   const totalAmount = slips.reduce((n, s) => n + s.total, 0);
@@ -86,19 +82,20 @@ export function HandyTableDetail({
   const openedAtMs = slips.length > 0 ? Math.min(...slips.map((s) => s.openedAtMs)) : null;
 
   /**
-   * 伝票が無い卓で注文を開始する（既存のフロア画面と同じサーバーアクションを使う）。
-   * 空席なら人数つきで着席（startWalkIn）。goToOrder は卓を着席状態にしないため、空席の卓に使うと
-   * フロア画面では空席のまま伝票だけができ、二重に着席できてしまう。
+   * 伝票が無い卓で注文を開始する。
+   * 空席なら「お客様情報」（人数・モード・時間制）を入力してから着席させる（承認済みレイアウトの setup）。
+   * 着席中なら既存のフロア画面と同じサーバーアクションで伝票を開く（無ければ作る）。
    */
   const handleStart = () => {
     if (pending) return;
+    if (state !== 'occupied') {
+      router.push(`/handy/${table.id}/setup`);
+      return;
+    }
     setBusy('start');
     startTransition(async () => {
       try {
-        const { orderId } =
-          state === 'occupied'
-            ? await goToOrderAction(table.id)
-            : await startWalkInAction(table.id, partySize);
+        const { orderId } = await goToOrderAction(table.id);
         router.push(`/handy/${table.id}/order?order=${orderId}`);
       } catch (e) {
         toast(e instanceof Error ? e.message : '注文を開始できませんでした', 'error');
@@ -191,31 +188,10 @@ export function HandyTableDetail({
             </p>
             {canStartOrder(state) ? (
               state !== 'occupied' && (
-                <>
-                  <p className="mt-3.5 text-sm font-bold text-[#4f3868]">
-                    人数<span className="ml-2 text-[11px] font-normal text-[#8a769d]">合計：{partySize}人</span>
-                  </p>
-                  <div className="mt-3 grid grid-cols-6 gap-[7px]" role="radiogroup" aria-label="人数">
-                    {[1, 2, 3, 4, 5, 6].map((n) => (
-                      <button
-                        key={n}
-                        type="button"
-                        role="radio"
-                        aria-checked={partySize === n}
-                        onClick={() => setPartySize(n)}
-                        className={cn(
-                          'min-h-[40px] rounded-[7px] border-[1.5px] border-[#7b3fe4] text-[19px] tabular-nums',
-                          partySize === n ? 'bg-[#7b3fe4] text-white' : 'bg-white text-[#7b3fe4]'
-                        )}
-                      >
-                        {n}
-                      </button>
-                    ))}
-                  </div>
-                  <p className="mt-3 text-[10px] leading-relaxed text-[#8a769d]">
-                    注文を開始すると、この卓を着席にして新しい伝票を作ります。
-                  </p>
-                </>
+                <p className="mt-3 text-center text-[10px] leading-relaxed text-[#8a769d]">
+                  「注文を開始」で人数・モード（飲み放題など）・時間制を入力し、
+                  この卓を着席にして新しい伝票を作ります。
+                </p>
               )
             ) : (
               <p className="mt-2 text-center text-[11px] text-[#8a769d]">

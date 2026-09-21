@@ -1,10 +1,146 @@
 'use server';
 
+import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
+import { redirect } from 'next/navigation';
 import { assertStoreAccess, requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
+import { HANDY_CLERK_COOKIE, NO_CLERK_NAME, serializeHandyClerk } from '@/lib/handy-clerk';
+import { readHandyClerk } from '@/lib/handy-session';
+import { validateVisitDraft, visitMemo, type VisitDraft } from '@/lib/handy-visit';
 import { addItem } from '../pos/actions';
+import { setOrderClerk } from '../pos/clerk-actions';
+import { goToOrder, startWalkIn } from '../floor/actions';
 import { MAX_LINE_QUANTITY } from '@/components/handy/logic';
+
+/* ------------------------------------------------------------ 担当者 */
+
+/** 担当者 Cookie の寿命。端末の登録（30日）より短くし、日をまたいだら選び直させる */
+const CLERK_COOKIE_MAX_AGE_SEC = 60 * 60 * 20;
+
+const clerkCookieOptions = {
+  path: '/handy',
+  httpOnly: true,
+  sameSite: 'lax' as const,
+  secure: process.env.NODE_ENV === 'production',
+  maxAge: CLERK_COOKIE_MAX_AGE_SEC,
+};
+
+/**
+ * ログイン画面の「Login」: 担当者（POS担当者）をこの端末に覚える。
+ * clerkId が null なら「担当者なし」で使う（担当者を登録していない店）。
+ * 担当者は現在の店舗の有効な行だけ受け付ける（他店舗の担当者を指定できないようにする）。
+ */
+export async function loginHandyClerk(clerkId: string | null): Promise<void> {
+  const ctx = await requirePermission('pos.order');
+  const store = ctx.currentStore ?? ctx.stores[0];
+  if (!store) throw new Error('アクセス可能な店舗がありません');
+
+  let value = serializeHandyClerk({ id: null, name: NO_CLERK_NAME });
+  if (clerkId) {
+    const supabase = await createClient();
+    const { data: clerk } = await supabase
+      .from('pos_clerks')
+      .select('id, name')
+      .eq('id', clerkId)
+      .eq('store_id', store.id)
+      .eq('status', 'active')
+      .maybeSingle();
+    if (!clerk) throw new Error('この担当者は選べません。担当者を選び直してください');
+    value = serializeHandyClerk({ id: clerk.id, name: clerk.name });
+  }
+
+  const jar = await cookies();
+  jar.set(HANDY_CLERK_COOKIE, value, clerkCookieOptions);
+  revalidatePath('/handy', 'layout');
+}
+
+/** ドロワーの「担当者を変更」: 担当者の選択を消してログイン画面に戻る（端末の登録はそのまま） */
+export async function logoutHandyClerk(): Promise<void> {
+  const jar = await cookies();
+  jar.set(HANDY_CLERK_COOKIE, '', { ...clerkCookieOptions, maxAge: 0 });
+  revalidatePath('/handy', 'layout');
+  redirect('/handy');
+}
+
+/**
+ * ハンディで作った伝票に担当者を入れる。失敗しても伝票は作れているので、注文は続けられるようにする
+ * （担当者は会計時にレジでも変えられる）。
+ */
+async function assignHandyClerk(orderId: string): Promise<void> {
+  const clerk = await readHandyClerk();
+  if (!clerk?.id) return;
+  try {
+    await setOrderClerk(orderId, clerk.id);
+  } catch (e) {
+    console.error('[handy] clerk assign failed', e instanceof Error ? e.message : e);
+  }
+}
+
+/* ------------------------------------------------------- 来店・伝票 */
+
+/**
+ * 「お客様情報」の確定: 空席の卓に来店を登録して伝票を作る（フロア画面のウォークインと同じ startWalkIn）。
+ * 人数（男女）は合計を guest_count に、内訳・モード・利用シーン・時間制は伝票メモと予約（purpose / end_at）に残す。
+ * コース／飲み放題のプラン商品を選んでいれば、その商品を伝票に1つ入れる（数量は注文画面で足せる）。
+ */
+export async function startHandyVisit(
+  tableId: string,
+  draft: VisitDraft
+): Promise<{ orderId: string; planItemError: string | null }> {
+  await requirePermission('pos.order');
+  const problem = validateVisitDraft(draft);
+  if (problem) throw new Error(problem);
+
+  const guests = draft.male + draft.female;
+  const { orderId } = await startWalkIn(tableId, guests, {
+    durationMinutes: draft.timed ? draft.duration : undefined,
+    purpose: draft.scene || undefined,
+    memo: visitMemo(draft),
+    orderType: draft.plan === 'course' ? 'course' : 'dine_in',
+  });
+  await assignHandyClerk(orderId);
+
+  let planItemError: string | null = null;
+  if (draft.planItemId) {
+    try {
+      // 価格・税率の検証は POS と同じ addItem に任せる
+      await addItem(orderId, draft.planItemId, [], 1);
+    } catch (e) {
+      // プラン商品が入らなくても来店登録は成立させる（注文画面で手動で入れられる）
+      planItemError = e instanceof Error ? e.message : 'プラン商品を伝票に入れられませんでした';
+    }
+  }
+
+  revalidatePath('/handy');
+  return { orderId, planItemError };
+}
+
+/**
+ * 着席中の卓の伝票を開く（無ければ作る）。
+ * 新しく作った伝票にだけハンディの担当者を入れる（既にある伝票の担当者は書き換えない）。
+ */
+export async function openHandyOrder(tableId: string): Promise<{ orderId: string }> {
+  const ctx = await requirePermission('pos.order');
+  const supabase = await createClient();
+  const { data: existing } = await supabase
+    .from('orders')
+    .select('id, store_id')
+    .eq('table_id', tableId)
+    .eq('status', 'open')
+    .order('opened_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (existing) {
+    await assertStoreAccess(ctx, existing.store_id);
+    return { orderId: existing.id };
+  }
+
+  const { orderId } = await goToOrder(tableId);
+  await assignHandyClerk(orderId);
+  revalidatePath('/handy');
+  return { orderId };
+}
 
 /**
  * お客様QRからの呼び出しを「対応済み」にする。
