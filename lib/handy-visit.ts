@@ -236,6 +236,14 @@ const TABENOMI = /食べ飲み放題|食飲放|tabenomi/i;
 const NOT_A_PLAN = /→|延長/;
 
 /**
+ * 商品名が飲み放題・食べ放題（プラン本体やアップグレード）を表すか。
+ * 伝票にプランが入っているかの判定に使う（メニューブックの「プランのときだけ」）。
+ */
+export function looksLikePlanName(name: string): boolean {
+  return NOMIHODAI.test(name) || TABEHODAI.test(name) || TABENOMI.test(name);
+}
+
+/**
  * 1商品がどのモードのプラン商品か。該当しなければ null（単品）。
  * DB のフラグ（course_includes_drinks / course_includes_ayce）と商品名の「飲み放題」「食べ放題」で判断し、
  * どちらでもないコース商品は「コース」。カテゴリ名はコース商品のときだけ見る

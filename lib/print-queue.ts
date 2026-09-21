@@ -8,16 +8,15 @@
  */
 import { createAdminClient } from '@/lib/supabase/admin';
 import {
-  DEFAULT_KITCHEN_TICKET_SPLIT,
   groupKitchenTickets,
-  kitchenTicketSplitFrom,
+  kitchenTicketSettingsFrom,
   layoutKitchenTicket,
   STATION_LABELS,
   STATION_LABELS_EN,
   ticketSlips,
   type ClaimedKitchenItem,
   type KitchenStation,
-  type KitchenTicketSplit,
+  type KitchenTicketSettings,
 } from '@/lib/kitchen-ticket';
 import { kitchenTicketsMarkup, orderSlipMarkup } from '@/lib/receipt-markup';
 import { STAR_WIDTH_OPTIONS } from '@/lib/receipt-layout';
@@ -118,16 +117,16 @@ export async function reclaimStaleJobs(admin: Admin, printerId: string) {
 }
 
 /**
- * 店舗の「厨房伝票の分け方」（設定 > レジ・プリンター）。読めなければ既定（商品の種類ごと）。
+ * 店舗の「厨房伝票の分け方・文字の大きさ」（設定 > レジ・プリンター）。読めなければ既定（種類ごと・大きめ）。
  * 伝票が1枚も無いポーリングでは呼ばない（毎回の問い合わせを増やさない）。
  */
-async function kitchenTicketSplitForStore(admin: Admin, storeId: string): Promise<KitchenTicketSplit> {
+async function kitchenTicketSettingsForStore(admin: Admin, storeId: string): Promise<KitchenTicketSettings> {
   const { data, error } = await admin.from('store_settings').select('settings').eq('store_id', storeId).maybeSingle();
   if (error) {
     console.error('[print-queue] store_settings read failed', storeId, error.message);
-    return DEFAULT_KITCHEN_TICKET_SPLIT;
+    return kitchenTicketSettingsFrom(null);
   }
-  return kitchenTicketSplitFrom(data?.settings ?? null);
+  return kitchenTicketSettingsFrom(data?.settings ?? null);
 }
 
 /**
@@ -147,7 +146,7 @@ export async function generateKitchenJobs(admin: Admin, printer: PrinterRow) {
   }
   const tickets = groupKitchenTickets((data ?? []) as ClaimedKitchenItem[]);
   if (tickets.length === 0) return;
-  const split = await kitchenTicketSplitForStore(admin, printer.store_id);
+  const { split, textSize } = await kitchenTicketSettingsForStore(admin, printer.store_id);
 
   const stations = (printer.kitchen_stations ?? ['kitchen']) as KitchenStation[];
   const title = `${stations.map((s) => STATION_LABELS[s] ?? s).join('・')} 伝票`;
@@ -164,11 +163,11 @@ export async function generateKitchenJobs(admin: Admin, printer: PrinterRow) {
     const slips = ticketSlips(t, split);
     // Star 機向け: 全角がわずかに広い分を見込んで桁揃え（STAR_WIDTH_OPTIONS）
     const starSlips = slips.map((slip) =>
-      layoutKitchenTicket(slip, { title, titleEn, printedAt, paperWidth, ...STAR_WIDTH_OPTIONS })
+      layoutKitchenTicket(slip, { title, titleEn, printedAt, paperWidth, textSize, ...STAR_WIDTH_OPTIONS })
     );
     // EPSON機は1行の桁数が少ないため、専用の桁数で組み直す（Star用の行をそのまま渡すと折り返す）
     const eposSlips = slips.map((slip) =>
-      layoutKitchenTicket(slip, { title, titleEn, printedAt, columns: eposCols(paperWidth) })
+      layoutKitchenTicket(slip, { title, titleEn, printedAt, columns: eposCols(paperWidth), textSize })
     );
     return {
       organization_id: printer.organization_id,

@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Bell, LayoutGrid, ReceiptText, ShoppingCart } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
@@ -45,6 +46,11 @@ import {
  * RLS評価に auth.uid() 等を要するため利用できない。KDS/フロア等と異なりこの画面はポーリングを維持する。
  */
 const REFRESH_INTERVAL_MS = 10000;
+/**
+ * メニューの取り直しの最短間隔（ミリ秒）。スタッフが飲み放題などを伝票に入れると、
+ * そのプランの中身（F）がメニューに出るようになるため、画面に戻ったとき・メニューを開き直したときに取り直す。
+ */
+const MENU_REFRESH_MIN_MS = 30000;
 const NOTICE_MS = 3200;
 
 type Tab = 'menu' | 'cart' | 'history' | 'call';
@@ -139,6 +145,25 @@ export function QrOrderApp({
 
   const { status, calls, setCalls, loading, fetchError, refresh } = useQrTableState(storeSlug, tableToken, tab);
 
+  // メニュー（サーバーで絞った内容）を取り直す。カートなどの画面の状態はそのまま残る
+  const router = useRouter();
+  const menuFetchedAt = useRef(0);
+  const refreshMenu = useCallback(() => {
+    const now = Date.now();
+    if (now - menuFetchedAt.current < MENU_REFRESH_MIN_MS) return;
+    menuFetchedAt.current = now;
+    router.refresh();
+  }, [router]);
+
+  useEffect(() => {
+    menuFetchedAt.current = Date.now();
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') refreshMenu();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [refreshMenu]);
+
   useEffect(() => {
     if (!notice) return;
     const id = setTimeout(() => setNotice(null), NOTICE_MS);
@@ -146,6 +171,7 @@ export function QrOrderApp({
   }, [notice]);
 
   const goToTab = (next: Tab) => {
+    if (next === 'menu' && tab !== 'menu') refreshMenu();
     setTab(next);
     mainRef.current?.scrollTo({ top: 0 });
   };

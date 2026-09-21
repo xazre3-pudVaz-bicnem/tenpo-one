@@ -43,6 +43,35 @@ export function kitchenTicketSplitFrom(settings: unknown): KitchenTicketSplit {
 }
 
 /**
+ * 厨房伝票の文字の大きさ（店舗設定 store_settings.settings.kitchenTicket.textSize）。
+ *   large  … 商品名（英語・日本語）を縦横2倍（Word の16ポイントくらい）、卓名も縦横2倍、
+ *             伝票番号・選択肢・メモは縦2倍。既定（2026-09-21 店舗要望「文字を少し大きく」）
+ *   normal … これまでの大きさ（商品名は縦2倍、日本語名・選択肢は等倍）
+ */
+export type KitchenTicketTextSize = 'large' | 'normal';
+
+export const DEFAULT_KITCHEN_TICKET_TEXT_SIZE: KitchenTicketTextSize = 'large';
+
+export const KITCHEN_TICKET_TEXT_SIZE_LABELS: Record<KitchenTicketTextSize, string> = {
+  large: '大きめ（Word の16ポイントくらい）',
+  normal: '標準（これまでの大きさ）',
+};
+
+export function kitchenTicketTextSizeFrom(settings: unknown): KitchenTicketTextSize {
+  const v = (settings as { kitchenTicket?: { textSize?: unknown } } | null)?.kitchenTicket?.textSize;
+  return v === 'large' || v === 'normal' ? v : DEFAULT_KITCHEN_TICKET_TEXT_SIZE;
+}
+
+export interface KitchenTicketSettings {
+  split: KitchenTicketSplit;
+  textSize: KitchenTicketTextSize;
+}
+
+export function kitchenTicketSettingsFrom(settings: unknown): KitchenTicketSettings {
+  return { split: kitchenTicketSplitFrom(settings), textSize: kitchenTicketTextSizeFrom(settings) };
+}
+
+/**
  * ドリンクの商品（item_type='drink'）が入っているのに、厨房ステーションが「ドリンク」になっていないカテゴリ。
  * 厨房伝票はカテゴリのステーションでプリンターに振り分けるため、ここに出たカテゴリの商品はドリンク機に出ない
  * （キッチン機に出る）。設定画面で気付けるように名前を返す。
@@ -179,6 +208,8 @@ export interface KitchenLayoutOptions extends WidthOptions {
   titleEn?: string;
   /** 表示用の発行時刻（例: 18:21） */
   printedAt: string;
+  /** 文字の大きさ（省略時は標準＝これまでの大きさ） */
+  textSize?: KitchenTicketTextSize;
 }
 
 /** 伝票1枚ぶんの行を組み立てる。 */
@@ -186,10 +217,12 @@ export function layoutKitchenTicket(ticket: KitchenTicket, opts: KitchenLayoutOp
   const width = opts.columns ?? colsFor(opts.paperWidth);
   const rule = '-'.repeat(width);
   const out: LayoutLine[] = [];
+  const big = opts.textSize === 'large';
   // 長い商品名は桁数で折り返す（プリンタ任せだと1文字だけ次行に落ちて読みにくい）。
-  // 縦2倍は桁数が変わらないので、どのサイズでも同じ桁数で折り返してよい。
+  // 縦2倍は桁数が変わらない。縦横2倍（large）は1行の桁数が半分になるので半分の桁数で折り返す。
   const push = (text: string, size: LayoutLine['size'] = 'normal', align: LayoutLine['align'] = 'left') => {
-    for (const w of wrapText(text, width, opts)) out.push({ text: w, size, align });
+    const cols = size === 'large' ? Math.max(8, Math.floor(width / 2)) : width;
+    for (const w of wrapText(text, cols, opts)) out.push({ text: w, size, align });
   };
 
   const hasCancel = ticket.lines.some((l) => l.delta < 0);
@@ -198,11 +231,11 @@ export function layoutKitchenTicket(ticket: KitchenTicket, opts: KitchenLayoutOp
   // 厨房は英語主体（日本語を読まないスタッフが作る）。日本語も残して両方読めるようにする。
   if (opts.titleEn) push(opts.titleEn, 'normal', 'center');
   push(opts.title, 'normal', 'center');
-  // 卓名と取消の見出しは縦2倍まで（縦横2倍だと1行の桁数が半分になり、紙も文字も大きくなりすぎる）
-  push(ticket.tableName ?? 'TAKEOUT / テイクアウト', 'tall', 'center');
-  if (hasCancel && !hasAdd) push('*** CANCEL / 取消 ***', 'tall', 'center');
+  // 卓名と取消の見出し: 標準は縦2倍、大きめは縦横2倍（卓名は短いので半分の桁数でも収まる）
+  push(ticket.tableName ?? 'TAKEOUT / テイクアウト', big ? 'large' : 'tall', 'center');
+  if (hasCancel && !hasAdd) push('*** CANCEL / 取消 ***', big ? 'large' : 'tall', 'center');
   const part = ticket.part && ticket.part.total > 1 ? `  (${ticket.part.index}/${ticket.part.total})` : '';
-  push(twoCol(`No.${ticket.orderNo}${part}`, opts.printedAt, width, opts));
+  push(twoCol(`No.${ticket.orderNo}${part}`, opts.printedAt, width, opts), big ? 'tall' : 'normal');
   const meta = [
     ticket.guestCount ? `Guests ${ticket.guestCount}` : null,
     ticket.clerkName ? `Staff ${ticket.clerkName}` : null,
@@ -212,9 +245,13 @@ export function layoutKitchenTicket(ticket: KitchenTicket, opts: KitchenLayoutOp
   if (meta) push(meta);
   out.push({ text: rule, size: 'normal', align: 'left', rule: true });
 
-  // 種類ごとに分けた伝票（1枚に1商品）は、商品名を縦2倍にして遠くからでも読めるようにする
-  // （縦2倍は1行の桁数が変わらないので折り返しは等倍と同じ）
-  const itemSize: LayoutLine['size'] = ticket.part ? 'tall' : 'normal';
+  // 商品名: 大きめは英語・日本語とも縦横2倍（Word の16ポイントくらい）、選択肢・メモは縦2倍。
+  // 標準は種類ごとの伝票（1枚に1商品）だけ商品名を縦2倍（これまでの大きさ）
+  const itemSize: LayoutLine['size'] = big ? 'large' : ticket.part ? 'tall' : 'normal';
+  const nameJaSize: LayoutLine['size'] = big ? 'large' : 'normal';
+  const detailSize: LayoutLine['size'] = big ? 'tall' : 'normal';
+  // 縦横2倍は字下げを浅くする（1行の桁数が半分になるため）
+  const indent = big ? ' ' : '   ';
   for (const l of ticket.lines) {
     // 日本語を読まない厨房スタッフ向けに、英語を主・日本語を従で並べる
     // （英語が作れない商品は日本語のみ。情報は落とさない）
@@ -222,9 +259,9 @@ export function layoutKitchenTicket(ticket: KitchenTicket, opts: KitchenLayoutOp
     const cancelled = l.delta < 0;
     const head = l.nameEn ?? l.name;
     push(`${cancelled ? '[CANCEL/取消] ' : ''}${head}  ${qty}`, itemSize);
-    if (l.nameEn) push(`   ${l.name}`);
-    for (const m of l.modifiers) push(`   ・${m}`);
-    if (l.memo) push(`   ※${l.memo}`);
+    if (l.nameEn) push(`${indent}${l.name}`, nameJaSize);
+    for (const m of l.modifiers) push(`   ・${m}`, detailSize);
+    if (l.memo) push(`   ※${l.memo}`, detailSize);
   }
   out.push({ text: rule, size: 'normal', align: 'left', rule: true });
   return out;
