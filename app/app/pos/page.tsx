@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { BookOpen } from 'lucide-react';
 import { requireFeature } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { isMissingColumnError } from '@/lib/schema-compat';
@@ -80,7 +81,22 @@ export default async function PosPage({
 
     return (
       <div>
-        <PageHeader title="POSレジ" description={`${store.name}｜会計する注文を選択してください`} />
+        <PageHeader
+          title="POSレジ"
+          description={`${store.name}｜会計する注文を選択してください`}
+          actions={
+            // メニューブック（カテゴリ・商品の並び順、ハンディ・お客様QRでの出し方）は店長以上だけ
+            can(ctx.role, 'menu.manage') ? (
+              <Link
+                href="/app/settings/menu-book"
+                className="inline-flex h-10 items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-4 text-sm font-semibold text-navy hover:bg-gray-50"
+              >
+                <BookOpen className="h-4 w-4" aria-hidden />
+                メニューブック
+              </Link>
+            ) : null
+          }
+        />
         <OrderPicker
           storeId={store.id}
           orders={(openOrders ?? []).map((o) => ({
