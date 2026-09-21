@@ -4,6 +4,7 @@ import {
   DEFAULT_KITCHEN_TICKET_SPLIT,
   DEFAULT_KITCHEN_TICKET_TEXT_SIZE,
   groupKitchenTickets,
+  kitchenTicketLanguageFrom,
   kitchenTicketSettingsFrom,
   kitchenTicketSplitFrom,
   kitchenTicketTextSizeFrom,
@@ -77,7 +78,10 @@ describe('layoutKitchenTicket', () => {
   it('取消は CANCEL と絶対値で出す', () => {
     const [t] = groupKitchenTickets([row({ delta: -3 })]);
     const texts = layoutKitchenTicket(t, opts).map((l) => l.text);
-    expect(texts).toContain('[CANCEL/取消] Chikinkaree  x3');
+    // 取消の印は商品名と別の行（大きい文字で商品名の途中から折り返さないように）
+    const at = texts.indexOf('[CANCEL / 取消]');
+    expect(at).toBeGreaterThan(-1);
+    expect(texts[at + 1]).toBe('Chikinkaree  x3');
     expect(texts).toContain('*** CANCEL / 取消 ***');
   });
 
@@ -264,6 +268,7 @@ describe('厨房伝票の文字の大きさ（2026-09-21 店舗要望「Word の
     expect(kitchenTicketSettingsFrom({ kitchenTicket: { split: 'order' } })).toEqual({
       split: 'order',
       textSize: 'large',
+      language: 'both',
     });
   });
 
@@ -329,5 +334,50 @@ describe('ドリンク機に出ないカテゴリの検出', () => {
     ];
     expect(misroutedDrinkCategories(cats, ['c1', 'c2', 'c4', null])).toEqual(['(F) BEER', 'ソフトドリンク']);
     expect(misroutedDrinkCategories(cats, [])).toEqual([]);
+  });
+});
+
+describe('厨房伝票の商品名の言語（2026-09-21 Ronnie「キッチン英語だけで大丈夫」）', () => {
+  const opts = { title: 'ドリンク 伝票', titleEn: 'DRINK', printedAt: '18:33', paperWidth: 80 as const, textSize: 'large' as const };
+
+  it('既定は「英語と日本語」（これまで）。設定で「英語だけ」', () => {
+    expect(kitchenTicketLanguageFrom(null)).toBe('both');
+    expect(kitchenTicketLanguageFrom({ kitchenTicket: { language: 'en' } })).toBe('en');
+    expect(kitchenTicketLanguageFrom({ kitchenTicket: { language: 'fr' } })).toBe('both');
+    expect(kitchenTicketSettingsFrom({ kitchenTicket: { language: 'en' } }).language).toBe('en');
+  });
+
+  it('英語だけ: 日本語の商品名・見出しを出さない', () => {
+    const [t] = groupKitchenTickets([
+      row({ table_name: 'T-4', item_name: '水', item_name_en: 'Water', delta: 2 }),
+      row({ table_name: 'T-4', item_name: 'F. 生ビール', item_name_en: 'F. Nama beer', delta: 1 }),
+    ]);
+    const texts = layoutKitchenTicket(splitTicketByItem(t)[0], { ...opts, language: 'en' }).map((l) => l.text);
+    expect(texts).toContain('DRINK');
+    expect(texts).not.toContain('ドリンク 伝票');
+    expect(texts).toContain('Water  x2');
+    expect(texts.some((x) => x.includes('水'))).toBe(false);
+    // 英語と日本語（これまで）は日本語も出る
+    const both = layoutKitchenTicket(splitTicketByItem(t)[0], { ...opts, language: 'both' }).map((l) => l.text);
+    expect(both).toContain('ドリンク 伝票');
+    expect(both).toContain(' 水');
+  });
+
+  it('英語だけ: 取消・テイクアウトも英語だけ。取消の印は別の行で商品名を折り返さない', () => {
+    const [t] = groupKitchenTickets([
+      row({ table_name: null, item_name: 'F. カシスウーロン', item_name_en: 'F. Cassis oolong', delta: -1 }),
+    ]);
+    const texts = layoutKitchenTicket(t, { ...opts, language: 'en' }).map((l) => l.text);
+    expect(texts).toContain('TAKEOUT');
+    expect(texts).toContain('*** CANCEL ***');
+    const at = texts.indexOf('[CANCEL]');
+    expect(texts[at + 1]).toBe('F. Cassis oolong  x1');
+    expect(texts.some((x) => /取消|テイクアウト|カシス/.test(x))).toBe(false);
+  });
+
+  it('英語だけ: 英語名の無い商品は日本語で出す（情報を落とさない）', () => {
+    const [t] = groupKitchenTickets([row({ item_name: '本日のおすすめ', item_name_en: null, item_name_kana: null })]);
+    const texts = layoutKitchenTicket(t, { ...opts, language: 'en' }).map((l) => l.text);
+    expect(texts.some((x) => x.startsWith('本日のおすすめ'))).toBe(true);
   });
 });

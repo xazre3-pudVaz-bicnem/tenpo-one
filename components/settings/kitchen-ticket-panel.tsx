@@ -7,8 +7,10 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/components/ui/toast';
 import {
+  KITCHEN_TICKET_LANGUAGE_LABELS,
   KITCHEN_TICKET_SPLIT_LABELS,
   KITCHEN_TICKET_TEXT_SIZE_LABELS,
+  type KitchenTicketLanguage,
   type KitchenTicketSettings,
   type KitchenTicketSplit,
   type KitchenTicketTextSize,
@@ -23,6 +25,11 @@ const SPLIT_DESCRIPTIONS: Record<KitchenTicketSplit, string> = {
 const SIZE_DESCRIPTIONS: Record<KitchenTicketTextSize, string> = {
   large: '商品名（英語・日本語）と卓名を縦横2倍、伝票番号・選択肢・メモを縦2倍で印字します。',
   normal: '商品名は縦2倍、日本語名・選択肢は普通の大きさ（これまでの印字）。',
+};
+
+const LANGUAGE_DESCRIPTIONS: Record<KitchenTicketLanguage, string> = {
+  both: '「Water x2」の下に「水」のように、英語の下に日本語も出します。',
+  en: '「Water x2」だけ。見出しの日本語（ドリンク 伝票・取消など）も出しません。英語名の無い商品は日本語で出します。',
 };
 
 function RadioCard<T extends string>({
@@ -59,19 +66,20 @@ function RadioCard<T extends string>({
 }
 
 /**
- * 厨房伝票（キッチン・ドリンクのプリンター）の分け方と文字の大きさ。店舗ごとの設定で、全キッチン機に効く。
- * 既定は「商品の種類ごとに1枚ずつ」「大きめ」（2026-09-21 店舗要望）。
+ * 厨房伝票（キッチン・ドリンクのプリンター）の分け方・文字の大きさ・商品名の言語。店舗ごとの設定で、全キッチン機に効く。
+ * 既定は「商品の種類ごとに1枚ずつ」「大きめ」「英語と日本語」（2026-09-21 店舗要望）。
  */
 export function KitchenTicketPanel({ storeId, initial }: { storeId: string; initial: KitchenTicketSettings }) {
   const { toast } = useToast();
   const [split, setSplit] = useState<KitchenTicketSplit>(initial.split);
   const [textSize, setTextSize] = useState<KitchenTicketTextSize>(initial.textSize);
+  const [language, setLanguage] = useState<KitchenTicketLanguage>(initial.language);
   const [pending, startTransition] = useTransition();
-  const changed = split !== initial.split || textSize !== initial.textSize;
+  const changed = split !== initial.split || textSize !== initial.textSize || language !== initial.language;
 
   const save = () => {
     startTransition(async () => {
-      const result = await saveKitchenTicketSettings(storeId, { split, textSize });
+      const result = await saveKitchenTicketSettings(storeId, { split, textSize, language });
       if (result.error) {
         toast(result.error, 'error');
         return;
@@ -114,6 +122,21 @@ export function KitchenTicketPanel({ storeId, initial }: { storeId: string; init
               label={KITCHEN_TICKET_TEXT_SIZE_LABELS[value]}
               description={SIZE_DESCRIPTIONS[value]}
               onChange={setTextSize}
+            />
+          ))}
+        </div>
+
+        <div className="space-y-2" role="radiogroup" aria-label="厨房伝票の商品名の言語">
+          <p className="text-xs font-semibold text-gray-600">商品名の言語</p>
+          {(['both', 'en'] as const).map((value) => (
+            <RadioCard
+              key={value}
+              name="kitchen-ticket-language"
+              value={value}
+              checked={language === value}
+              label={KITCHEN_TICKET_LANGUAGE_LABELS[value]}
+              description={LANGUAGE_DESCRIPTIONS[value]}
+              onChange={setLanguage}
             />
           ))}
         </div>

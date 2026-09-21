@@ -326,7 +326,7 @@ export async function saveDrawerSettings(storeId: string, drawer: DrawerSettings
 }
 
 /**
- * 厨房伝票の分け方・文字の大きさ（店舗ごと。store_settings.settings.kitchenTicket）。
+ * 厨房伝票の分け方・文字の大きさ・商品名の言語（店舗ごと。store_settings.settings.kitchenTicket）。
  * settings の他の項目（ドロア・印字文字など）と kitchenTicket の他の項目は消さずに上書きする。
  */
 export async function saveKitchenTicketSettings(
@@ -338,6 +338,7 @@ export async function saveKitchenTicketSettings(
   if (err) return { error: err };
   if (next.split !== 'item' && next.split !== 'order') return { error: '伝票の分け方が正しくありません' };
   if (next.textSize !== 'large' && next.textSize !== 'normal') return { error: '文字の大きさが正しくありません' };
+  if (next.language !== 'both' && next.language !== 'en') return { error: '商品名の言語が正しくありません' };
 
   const supabase = await createClient();
   const { data: existing } = await supabase
@@ -349,7 +350,7 @@ export async function saveKitchenTicketSettings(
   const before = (current.kitchenTicket as Record<string, unknown> | undefined) ?? {};
   const nextSettings = {
     ...current,
-    kitchenTicket: { ...before, split: next.split, textSize: next.textSize },
+    kitchenTicket: { ...before, split: next.split, textSize: next.textSize, language: next.language },
   };
 
   const { error } = await supabase
@@ -366,8 +367,8 @@ export async function saveKitchenTicketSettings(
     p_action: 'settings.printers.kitchen_ticket_update',
     p_target_table: 'store_settings',
     p_target_id: storeId,
-    p_before: { split: before.split ?? null, textSize: before.textSize ?? null },
-    p_after: { split: next.split, textSize: next.textSize },
+    p_before: { split: before.split ?? null, textSize: before.textSize ?? null, language: before.language ?? null },
+    p_after: { split: next.split, textSize: next.textSize, language: next.language },
     p_note: null,
   });
 
