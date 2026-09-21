@@ -2,6 +2,8 @@ import type { Metadata } from 'next';
 import { requireFeature } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { can } from '@/lib/permissions';
+import { handyDateLabel } from '@/lib/handy-clerk';
+import { readHandyClerk } from '@/lib/handy-session';
 import {
   HandyMain,
   HandyMenuButton,
@@ -9,8 +11,11 @@ import {
   HandyRefreshButton,
   HandyTopBar,
 } from '@/components/handy/handy-chrome';
+import { HandyLoginScreen } from '@/components/handy/handy-login-screen';
 import { HandyTableList, type HandyTableCard } from '@/components/handy/handy-table-list';
 import type { HandyServiceCall } from '@/components/handy/logic';
+import { signOut } from '@/app/app/actions';
+import { loginHandyClerk } from '@/app/app/handy/actions';
 
 export const metadata: Metadata = { title: 'テーブル一覧' };
 
@@ -39,6 +44,29 @@ export default async function HandyTablesPage() {
   }
 
   const supabase = await createClient();
+
+  // 承認済みレイアウトの起動画面：担当者を選ぶまではテーブル一覧を出さない
+  const clerk = await readHandyClerk();
+  if (!clerk) {
+    const { data: clerks } = await supabase
+      .from('pos_clerks')
+      .select('id, name')
+      .eq('store_id', store.id)
+      .eq('status', 'active')
+      .order('sort_order')
+      .order('name');
+    return (
+      <HandyLoginScreen
+        storeName={store.name}
+        accountName={ctx.displayName}
+        clerks={(clerks ?? []).map((c) => ({ id: c.id, name: c.name }))}
+        today={handyDateLabel(requestTime())}
+        loginAction={loginHandyClerk}
+        signOutAction={signOut}
+      />
+    );
+  }
+
   const [{ data: tables }, { data: orders }, { data: calls }] = await Promise.all([
     supabase
       .from('restaurant_tables')
@@ -113,7 +141,7 @@ export default async function HandyTablesPage() {
         title="テーブル一覧"
         right={<HandyRefreshButton />}
       />
-      <HandyOperatorBar label={ctx.displayName} note={`${cards.length}テーブル · HANDY`} />
+      <HandyOperatorBar label={clerk.name} note={`${cards.length}テーブル · HANDY`} />
       <HandyMain>
         <HandyTableList tables={cards} calls={serviceCalls} serverNow={requestTime()} />
       </HandyMain>

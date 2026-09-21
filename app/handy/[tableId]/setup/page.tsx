@@ -1,0 +1,127 @@
+import type { Metadata } from 'next';
+import Link from 'next/link';
+import { redirect } from 'next/navigation';
+import { requireFeature } from '@/lib/auth';
+import { createClient } from '@/lib/supabase/server';
+import { can } from '@/lib/permissions';
+import { formatTime } from '@/lib/format';
+import { requireHandyClerk } from '@/lib/handy-session';
+import { buildPlanItems, type PlanItemInput } from '@/lib/handy-visit';
+import { HandyBackButton, HandyMain, HandyTopBar } from '@/components/handy/handy-chrome';
+import { HandySetupScreen } from '@/components/handy/handy-setup-screen';
+import { tableState } from '@/components/handy/logic';
+import { startHandyVisit } from '@/app/app/handy/actions';
+
+export const metadata: Metadata = { title: 'お客様情報' };
+
+/** 描画の基準時刻（リクエスト時点） */
+function requestTime() {
+  return Date.now();
+}
+
+function problem(tableId: string, message: string) {
+  return (
+    <>
+      <HandyTopBar
+        left={<HandyBackButton href={`/handy/${tableId}`} label="卓へ戻る" />}
+        title="お客様情報"
+      />
+      <HandyMain>
+        <p className="px-6 py-10 text-center text-[13px] leading-loose text-[#8a769d]">
+          {message}
+          <br />
+          <Link href={`/handy/${tableId}`} className="font-bold text-[#7b3fe4] underline">
+            卓の画面へ戻る
+          </Link>
+        </p>
+      </HandyMain>
+    </>
+  );
+}
+
+/**
+ * お客様情報（空席の卓の来店登録）。
+ * 卓が既に着席中（未会計の伝票がある）なら入力させず、卓の画面へ戻す。
+ */
+export default async function HandySetupPage({
+  params,
+}: {
+  params: Promise<{ tableId: string }>;
+}) {
+  const { tableId } = await params;
+  const ctx = await requireFeature('pos');
+  const store = ctx.currentStore ?? ctx.stores[0];
+
+  if (!store || !can(ctx.role, 'pos.order')) {
+    return problem(tableId, 'この画面は利用できません。店舗の割り当てと注文権限を確認してください。');
+  }
+  const clerk = await requireHandyClerk();
+
+  const supabase = await createClient();
+  const { data: table } = await supabase
+    .from('restaurant_tables')
+    .select('id, name, current_status, store_id')
+    .eq('id', tableId)
+    .eq('status', 'active')
+    .maybeSingle();
+  if (!table || table.store_id !== store.id) {
+    return problem(tableId, 'このテーブルは存在しないか、現在の店舗からアクセスできません。');
+  }
+
+  const { count: openCount } = await supabase
+    .from('orders')
+    .select('id', { count: 'exact', head: true })
+    .eq('table_id', tableId)
+    .eq('status', 'open');
+  const state = tableState(table.current_status, (openCount ?? 0) > 0);
+  if (state === 'occupied') redirect(`/handy/${tableId}`);
+  if (state !== 'available') {
+    return problem(
+      tableId,
+      `この卓は現在「${state === 'cleaning' ? '清掃中' : state === 'blocked' ? '使用不可' : '予約あり'}」のため、ハンディからは着席できません。フロア画面で状態を変更してください。`
+    );
+  }
+
+  // プラン商品（コース・飲み放題など）。カテゴリ名も見るのでカテゴリを一緒に読む
+  const [{ data: categories }, { data: items }] = await Promise.all([
+    supabase
+      .from('menu_categories')
+      .select('id, name')
+      .eq('organization_id', ctx.organizationId)
+      .or(`store_id.is.null,store_id.eq.${store.id}`)
+      .eq('status', 'active'),
+    supabase
+      .from('menu_items')
+      .select(
+        'id, category_id, name, price, item_type, is_sold_out, duration_minutes, course_includes_drinks, course_includes_ayce'
+      )
+      .eq('organization_id', ctx.organizationId)
+      .or(`store_id.is.null,store_id.eq.${store.id}`)
+      .eq('status', 'active')
+      .neq('item_type', 'option')
+      .order('sort_order'),
+  ]);
+  const categoryNameById = new Map((categories ?? []).map((c) => [c.id, c.name]));
+  const planInputs: PlanItemInput[] = (items ?? []).map((m) => ({
+    id: m.id,
+    name: m.name,
+    categoryName: m.category_id ? (categoryNameById.get(m.category_id) ?? null) : null,
+    price: m.price,
+    itemType: m.item_type,
+    isSoldOut: m.is_sold_out,
+    durationMinutes: m.duration_minutes,
+    courseIncludesDrinks: m.course_includes_drinks,
+    courseIncludesAyce: m.course_includes_ayce,
+  }));
+
+  return (
+    <HandySetupScreen
+      tableId={table.id}
+      tableName={table.name}
+      staffName={clerk.name}
+      planItems={buildPlanItems(planInputs)}
+      startLabel={formatTime(new Date(requestTime()))}
+      confirmAction={startHandyVisit}
+    />
+  );
+}

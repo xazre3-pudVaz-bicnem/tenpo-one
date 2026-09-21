@@ -3,11 +3,11 @@ import Link from 'next/link';
 import { requireFeature } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { can } from '@/lib/permissions';
+import { requireHandyClerk } from '@/lib/handy-session';
 import { HandyBackButton, HandyMain, HandyTopBar } from '@/components/handy/handy-chrome';
 import { HandyTableDetail, type HandySlip } from '@/components/handy/handy-table-detail';
 import type { HandyServiceCall } from '@/components/handy/logic';
-import { goToOrder, startWalkIn } from '@/app/app/floor/actions';
-import { resolveServiceCall } from '@/app/app/handy/actions';
+import { openHandyOrder, resolveServiceCall } from '@/app/app/handy/actions';
 
 export const metadata: Metadata = { title: '卓の注文' };
 
@@ -66,6 +66,7 @@ export default async function HandyTablePage({
   if (!store || !can(ctx.role, 'pos.order')) {
     return notFound('この画面は利用できません。店舗の割り当てと注文権限を確認してください。');
   }
+  const clerk = await requireHandyClerk();
 
   const supabase = await createClient();
   const { data: table } = await supabase
@@ -150,13 +151,12 @@ export default async function HandyTablePage({
         capacityMax: table.capacity_max,
         currentStatus: table.current_status,
       }}
-      staffName={ctx.displayName}
+      staffName={clerk.name}
       slips={slips}
       calls={serviceCalls}
       serverNow={requestTime()}
       sentQuantity={sentQuantity}
-      goToOrderAction={goToOrder}
-      startWalkInAction={startWalkIn}
+      goToOrderAction={openHandyOrder}
       resolveServiceCallAction={resolveServiceCall}
     />
   );

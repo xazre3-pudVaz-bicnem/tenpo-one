@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { requireFeature } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { can } from '@/lib/permissions';
+import { requireHandyClerk } from '@/lib/handy-session';
 import { HandyBackButton, HandyMain, HandyTopBar } from '@/components/handy/handy-chrome';
 import { HandyOrderScreen } from '@/components/handy/handy-order-screen';
 import {
@@ -66,6 +67,7 @@ export default async function HandyOrderPage({
   if (!orderId) {
     return problem(tableId, '伝票が指定されていません。卓の画面から開いてください。');
   }
+  const clerk = await requireHandyClerk();
 
   const supabase = await createClient();
   const { data: order } = await supabase
@@ -171,7 +173,7 @@ export default async function HandyOrderPage({
     <HandyOrderScreen
       tableId={tableId}
       tableName={tableName}
-      staffName={ctx.displayName}
+      staffName={clerk.name}
       orderId={order.id}
       orderNo={order.order_no}
       guestCount={order.guest_count}

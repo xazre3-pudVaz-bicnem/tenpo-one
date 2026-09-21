@@ -1,0 +1,35 @@
+{
+  "id": "/handy",
+  "name": "TENPO ONE ハンディ",
+  "short_name": "ハンディ",
+  "description": "スマホで注文をとる TENPO ONE のハンディ（店舗スタッフ用）",
+  "start_url": "/handy",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "portrait",
+  "background_color": "#241436",
+  "theme_color": "#241436",
+  "lang": "ja",
+  "dir": "ltr",
+  "categories": ["business", "productivity", "food"],
+  "icons": [
+    { "src": "/favicon-32.png", "sizes": "32x32", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    {
+      "name": "テーブル一覧",
+      "short_name": "HANDY",
+      "url": "/handy",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "今日の予約",
+      "short_name": "予約",
+      "url": "/handy/reservations",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}

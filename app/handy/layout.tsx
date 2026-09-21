@@ -1,10 +1,11 @@
 import type { Metadata } from 'next';
 import { requireFeature } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
+import { readHandyClerk } from '@/lib/handy-session';
 import { ThemeBody } from '@/components/layout/theme-body';
 import { HandyChrome } from '@/components/handy/handy-chrome';
 import type { HandyServiceCall } from '@/components/handy/logic';
-import { resolveServiceCall } from '@/app/app/handy/actions';
+import { logoutHandyClerk, resolveServiceCall } from '@/app/app/handy/actions';
 
 /**
  * ハンディは TENPO ONE 本体（/app）の外に置く独立した全画面アプリ。
@@ -13,7 +14,14 @@ import { resolveServiceCall } from '@/app/app/handy/actions';
  * 認証・機能フラグは本体と同じ（未ログインは /login へ）。
  */
 
-export const metadata: Metadata = { title: 'ハンディ' };
+export const metadata: Metadata = {
+  title: 'ハンディ',
+  // /handy を開いた状態で「ホーム画面に追加」すると、名前「ハンディ」・起動先 /handy のアイコンになる
+  // （本体の manifest.webmanifest はダッシュボード起動なので、ハンディ専用のものに差し替える）
+  manifest: '/manifest-handy.webmanifest',
+  applicationName: 'ハンディ',
+  appleWebApp: { capable: true, title: 'ハンディ', statusBarStyle: 'black' },
+};
 export const viewport = { themeColor: '#241436' };
 
 /** 描画の基準時刻（リクエスト時点）。クライアントの時計のハイドレーション初期値にも使う */
@@ -24,6 +32,8 @@ function requestTime() {
 export default async function HandyLayout({ children }: { children: React.ReactNode }) {
   const ctx = await requireFeature('pos');
   const store = ctx.currentStore ?? ctx.stores[0] ?? null;
+  // ログイン画面で選んだ担当者（未選択なら端末アカウントの表示名）
+  const clerk = await readHandyClerk();
 
   let calls: HandyServiceCall[] = [];
   if (store) {
@@ -58,7 +68,9 @@ export default async function HandyLayout({ children }: { children: React.ReactN
       <HandyChrome
         storeId={store?.id ?? ''}
         storeName={store?.name ?? '店舗が未選択です'}
-        staffName={ctx.displayName}
+        staffName={clerk?.name ?? ctx.displayName}
+        clerkSelected={clerk !== null}
+        changeClerkAction={logoutHandyClerk}
         stores={ctx.stores}
         currentStoreId={ctx.currentStore?.id ?? null}
         allowAll={ctx.isHq}
