@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import type { PrintResultStatus } from '@/lib/printing/types';
+import type { KitchenTicketSplit } from '@/lib/kitchen-ticket';
 
 export interface ActionResult {
   error?: string;
@@ -317,6 +318,49 @@ export async function saveDrawerSettings(storeId: string, drawer: DrawerSettings
     p_target_id: storeId,
     p_before: null,
     p_after: drawer,
+    p_note: null,
+  });
+
+  revalidatePath('/app/settings/printers');
+  return {};
+}
+
+/**
+ * 厨房伝票の分け方を保存する（store_settings.settings の kitchenTicket キー。他のキーは壊さない）。
+ * item=商品の種類ごとに1枚 / order=1回の注文をまとめて1枚。次のポーリングから反映される。
+ */
+export async function saveKitchenTicketSplit(storeId: string, split: KitchenTicketSplit): Promise<ActionResult> {
+  const ctx = await requirePermission('store.settings');
+  const err = assertStoreAccess(ctx.stores.map((s) => s.id), storeId);
+  if (err) return { error: err };
+  if (split !== 'item' && split !== 'order') return { error: '伝票の分け方が正しくありません' };
+
+  const supabase = await createClient();
+  const { data: existing } = await supabase
+    .from('store_settings')
+    .select('settings')
+    .eq('store_id', storeId)
+    .maybeSingle();
+  const current = (existing?.settings as Record<string, unknown> | null) ?? {};
+  const before = (current.kitchenTicket as { split?: string } | undefined)?.split ?? null;
+  const nextSettings = { ...current, kitchenTicket: { split } };
+
+  const { error } = await supabase
+    .from('store_settings')
+    .upsert(
+      { organization_id: ctx.organizationId, store_id: storeId, settings: nextSettings, updated_by: ctx.userId },
+      { onConflict: 'store_id' }
+    );
+  if (error) return { error: `厨房伝票の設定の保存に失敗しました: ${error.message}` };
+
+  await supabase.rpc('log_audit', {
+    p_org: ctx.organizationId,
+    p_store: storeId,
+    p_action: 'settings.printers.kitchen_ticket_update',
+    p_target_table: 'store_settings',
+    p_target_id: storeId,
+    p_before: { split: before },
+    p_after: { split },
     p_note: null,
   });
 

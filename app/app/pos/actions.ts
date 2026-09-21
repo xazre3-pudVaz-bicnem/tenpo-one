@@ -142,7 +142,7 @@ export async function addItem(
   menuItemId: string,
   optionItemIds: string[] = [],
   quantity = 1
-) {
+): Promise<{ id: string | null }> {
   if (!Number.isInteger(quantity) || quantity < 1 || quantity > 99) {
     throw new Error('数量は1〜99で指定してください');
   }
@@ -194,15 +194,51 @@ export async function addItem(
   };
   // レジで貯めている途中（未送信）。「厨房へオーダー」を押すまで厨房伝票・KDS には出さない。
   // タップした瞬間に厨房へ流れると押し間違いがそのまま厨房に届くため（店舗要望）。
-  let { error } = await supabase.from('order_items').insert({ ...row, kitchen_sent_at: null });
+  // ハンディは送信の最後に sendItemsToKitchen で追加した明細だけを送る。
+  let { data: inserted, error } = await supabase
+    .from('order_items')
+    .insert({ ...row, kitchen_sent_at: null })
+    .select('id')
+    .single();
   if (error && isMissingColumnError(error.message, 'kitchen_sent_at')) {
     // migration 00063 未適用（列が無い）。従来どおり即時に厨房へ流す挙動で登録だけは通す
-    ({ error } = await supabase.from('order_items').insert(row));
+    ({ data: inserted, error } = await supabase.from('order_items').insert(row).select('id').single());
   }
   if (error) throw new Error(error.message);
 
   await supabase.rpc('recalc_order_totals', { p_order_id: orderId });
   revalidatePath(`/app/pos`);
+  return { id: (inserted?.id as string | undefined) ?? null };
+}
+
+/**
+ * 指定した明細だけを厨房へ送る（ハンディの「注文を送信」・お客様情報のプラン商品用）。
+ * ハンディは1回の送信で複数の明細を追加するため、全部入れ終わってから同じ時刻でまとめて送信済みにする
+ * （1明細ずつ送ると、プリンタのポーリングの境目で1回の注文が2回に分かれて出る）。
+ * 同じ伝票でレジが貯めている途中の明細（未送信）は送らない。
+ * DB に kitchen_sent_at が無い（migration 未適用）ときは、追加した時点で送信済みなので何もしない。
+ */
+export async function sendItemsToKitchen(orderId: string, itemIds: string[]): Promise<SendOrderResult> {
+  const ctx = await requirePermission('pos.order');
+  const supabase = await createClient();
+  await loadOpenOrder(supabase, ctx, orderId);
+  const ids = [...new Set(itemIds.filter(Boolean))];
+  if (ids.length === 0) return { sent: 0 };
+
+  const { data, error } = await supabase
+    .from('order_items')
+    .update({ kitchen_sent_at: new Date().toISOString(), updated_by: ctx.userId })
+    .eq('order_id', orderId)
+    .in('id', ids)
+    .is('kitchen_sent_at', null)
+    .select('id');
+  if (error) {
+    if (isMissingColumnError(error.message, 'kitchen_sent_at')) return { sent: ids.length };
+    throw new Error(error.message);
+  }
+  revalidatePath(`/app/pos`);
+  revalidatePath(`/app/kitchen`);
+  return { sent: (data ?? []).length };
 }
 
 export interface SendOrderResult {

@@ -6,13 +6,14 @@ import {
   drawerKickEpos,
   testPrintEpos,
   kitchenTicketEpos,
+  kitchenTicketsEpos,
   serverDirectPrintResponse,
   parsePrintResultXml,
   escXml,
   eposCols,
   EPOS_NS,
 } from '@/lib/epos-print';
-import { groupKitchenTickets, layoutKitchenTicket, type ClaimedKitchenItem } from '@/lib/kitchen-ticket';
+import { groupKitchenTickets, layoutKitchenTicket, splitTicketByItem, type ClaimedKitchenItem } from '@/lib/kitchen-ticket';
 import { baseReceipt as base } from './fixtures/receipt';
 
 /**
@@ -206,6 +207,33 @@ describe('kitchenTicketEpos', () => {
     expect(x).toContain('T10');
     expect(x).toContain('チキンカレー');
     expect(x).toContain('辛口');
+  });
+});
+
+describe('kitchenTicketsEpos（商品の種類ごとに1枚）', () => {
+  it('1つの文書に複数枚を入れ、1枚ごとにカットする', () => {
+    const rows: ClaimedKitchenItem[] = ['生ビール', 'ハイボール'].map((name) => ({
+      order_id: 'o1',
+      order_no: 5784,
+      table_name: 'T10',
+      guest_count: 2,
+      clerk_name: null,
+      item_name: name,
+      modifiers: [],
+      memo: null,
+      station: 'drink',
+      delta: 1,
+    }));
+    const [t] = groupKitchenTickets(rows);
+    const slips = splitTicketByItem(t).map((s) =>
+      layoutKitchenTicket(s, { title: 'ドリンク', printedAt: '19:05', paperWidth: 80 })
+    );
+    const x = kitchenTicketsEpos(slips);
+    expectWellFormed(x);
+    expect(x.match(/<epos-print/g)).toHaveLength(1);
+    expect(x.match(/<cut type="feed"\/>/g)).toHaveLength(2);
+    expect(x).toContain('生ビール');
+    expect(x).toContain('ハイボール');
   });
 });
 

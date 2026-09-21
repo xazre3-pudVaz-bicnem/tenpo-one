@@ -306,3 +306,11 @@ export function kitchenTicketMarkup(lines: LayoutLine[]): string {
   L.push('[cut: feed; partial]');
   return L.join('\n') + '\n';
 }
+
+/**
+ * 厨房伝票を複数枚続けて出す（商品の種類ごとに1枚）。1枚ごとに紙を切る。
+ * 1回の注文を1つの印刷ジョブにまとめるので、ポーリング1回で全部出て、順番も崩れない。
+ */
+export function kitchenTicketsMarkup(slips: LayoutLine[][]): string {
+  return slips.map((lines) => kitchenTicketMarkup(lines)).join('');
+}

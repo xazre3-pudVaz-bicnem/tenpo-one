@@ -10,6 +10,9 @@ import { RegistersPanel } from '@/components/settings/registers-panel';
 import { PrintersPanel } from '@/components/settings/printers-panel';
 import { DrawerPanel } from '@/components/settings/drawer-panel';
 import { CloudPrntPanel } from '@/components/settings/cloudprnt-panel';
+import Link from 'next/link';
+import { KitchenTicketPanel } from '@/components/settings/kitchen-ticket-panel';
+import { kitchenTicketSplitFrom, misroutedDrinkCategories } from '@/lib/kitchen-ticket';
 
 export const metadata: Metadata = { title: 'レジ・プリンター | 設定' };
 
@@ -106,6 +109,34 @@ export default async function PrintersSettingsPage() {
     autoOpenOnCash: drawer?.autoOpenOnCash ?? true,
     openOnCashless: drawer?.openOnCashless ?? false,
   };
+  const kitchenTicketSplit = kitchenTicketSplitFrom(settingsRow?.settings ?? null);
+
+  // ドリンク機があるのに、ドリンク商品のカテゴリが「ドリンク」に振り分けられていないと、その伝票はドリンク機に出ない
+  const hasDrinkPrinter = cloudPrntRows.some(
+    (p) => p.usage === 'kitchen' && p.cloudprntEnabled && p.kitchenStations.includes('drink')
+  );
+  let drinkCategoryWarnings: string[] = [];
+  if (hasDrinkPrinter) {
+    const [{ data: categoryRows }, { data: drinkItems }] = await Promise.all([
+      supabase
+        .from('menu_categories')
+        .select('id, name, station')
+        .eq('organization_id', ctx.organizationId)
+        .or(`store_id.is.null,store_id.eq.${targetStore.id}`)
+        .eq('status', 'active'),
+      supabase
+        .from('menu_items')
+        .select('category_id')
+        .eq('organization_id', ctx.organizationId)
+        .or(`store_id.is.null,store_id.eq.${targetStore.id}`)
+        .eq('status', 'active')
+        .eq('item_type', 'drink'),
+    ]);
+    drinkCategoryWarnings = misroutedDrinkCategories(
+      categoryRows ?? [],
+      (drinkItems ?? []).map((i) => i.category_id)
+    );
+  }
 
   const registerRows = (registers ?? []).map((r) => ({ id: r.id, name: r.name, status: r.status as 'active' | 'inactive' }));
 
@@ -135,8 +166,22 @@ export default async function PrintersSettingsPage() {
         <div className="min-w-0 space-y-5 @5xl:col-span-1">
           <RegistersPanel storeId={targetStore.id} initial={registerRows} />
           <DrawerPanel storeId={targetStore.id} initial={drawerInitial} />
+          <KitchenTicketPanel storeId={targetStore.id} initial={kitchenTicketSplit} />
         </div>
         <div className="min-w-0 space-y-5 @5xl:col-span-2">
+          {drinkCategoryWarnings.length > 0 && (
+            <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              <p className="font-semibold">ドリンク機に出ないカテゴリがあります</p>
+              <p className="mt-1 text-xs leading-relaxed">
+                ドリンクの商品が入っているのに、厨房ステーションが「ドリンク」になっていません（この商品の伝票はキッチン機に出ます）：
+                {drinkCategoryWarnings.slice(0, 12).join('、')}
+                {drinkCategoryWarnings.length > 12 ? ` ほか${drinkCategoryWarnings.length - 12}件` : ''}
+              </p>
+              <Link href="/app/settings/menu" className="mt-1 inline-block text-xs font-semibold text-amber-900 underline">
+                設定 → メニュー の「KDSステーション振り分け」で「ドリンク」にする
+              </Link>
+            </div>
+          )}
           <Card>
             <CardContent>
               <PrintersPanel storeId={targetStore.id} initial={printerRows} />
