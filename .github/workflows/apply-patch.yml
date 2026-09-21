@@ -52,10 +52,15 @@ jobs:
           git am --3way --ignore-whitespace "${patches[@]}"
           push_refspec="HEAD:refs/heads/$BRANCH"
           for attempt in 1 2 3; do
-            if git push --force origin "$push_refspec"; then
+            if push_output=$(git push --force origin "$push_refspec" 2>&1); then
+              echo "$push_output"
               break
             fi
+            echo "$push_output"
             if [ "$attempt" -eq 3 ]; then
+              exit 1
+            fi
+            if ! grep -Fq "cannot lock ref 'refs/heads/$BRANCH': reference already exists" <<<"$push_output"; then
               exit 1
             fi
             echo "push failed on attempt $attempt; refreshing origin/$BRANCH and retrying..."
