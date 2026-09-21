@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { BookOpen } from 'lucide-react';
+import { BookOpen, PackageX } from 'lucide-react';
 import { requireFeature } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { isMissingColumnError } from '@/lib/schema-compat';
@@ -85,16 +85,26 @@ export default async function PosPage({
           title="POSレジ"
           description={`${store.name}｜会計する注文を選択してください`}
           actions={
-            // メニューブック（カテゴリ・商品の並び順、ハンディ・お客様QRでの出し方）は店長以上だけ
-            can(ctx.role, 'menu.manage') ? (
+            <div className="flex flex-wrap gap-2">
+              {/* 品切れ（売切・販売再開）はスタッフ全員。レジ・ハンディ・お客様QRに反映 */}
               <Link
-                href="/app/settings/menu-book"
+                href="/app/pos/sold-out"
                 className="inline-flex h-10 items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-4 text-sm font-semibold text-navy hover:bg-gray-50"
               >
-                <BookOpen className="h-4 w-4" aria-hidden />
-                メニューブック
+                <PackageX className="h-4 w-4" aria-hidden />
+                品切れ
               </Link>
-            ) : null
+              {/* メニューブック（カテゴリ・商品の並び順、ハンディ・お客様QRでの出し方）は店長以上だけ */}
+              {can(ctx.role, 'menu.manage') && (
+                <Link
+                  href="/app/settings/menu-book"
+                  className="inline-flex h-10 items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-4 text-sm font-semibold text-navy hover:bg-gray-50"
+                >
+                  <BookOpen className="h-4 w-4" aria-hidden />
+                  メニューブック
+                </Link>
+              )}
+            </div>
           }
         />
         <OrderPicker

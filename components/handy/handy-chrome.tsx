@@ -10,6 +10,7 @@ import {
   LogOut,
   Menu,
   NotebookText,
+  PackageX,
   RotateCw,
   ShoppingCart,
   UserRound,
@@ -208,6 +209,9 @@ export function HandyChrome({
             icon={<NotebookText className="h-[18px] w-[18px]" aria-hidden />}
           >
             今日の予約
+          </SheetLink>
+          <SheetLink href="/handy/sold-out" icon={<PackageX className="h-[18px] w-[18px]" aria-hidden />}>
+            品切れ設定（売切・販売再開）
           </SheetLink>
           <button
             type="button"
