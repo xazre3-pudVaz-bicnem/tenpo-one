@@ -7,14 +7,19 @@ import { Button } from '@/components/ui/button';
 import { Label, Select } from '@/components/ui/input';
 import { useToast } from '@/components/ui/toast';
 import { moveReservation } from '@/app/app/reservations/actions';
+import {
+  hmToMinutes,
+  isValidStayMinutes,
+  minutesToHm,
+  RESERVATION_TIME_OPTIONS,
+  STAY_MINUTE_OPTIONS,
+  stayOptionLabel,
+  withCurrentStay,
+  withCurrentTime,
+} from '@/lib/reservation-time';
 
-const STAY_OPTIONS = [60, 90, 120, 150, 180];
-
-const TIME_OPTIONS = Array.from({ length: 48 }, (_, i) => {
-  const h = Math.floor(i / 2);
-  const m = (i % 2) * 30;
-  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-});
+/** 滞在時間が読めない予約（終了が開始より前など）を開いたときの初期値 */
+const FALLBACK_STAY_MINUTES = 120;
 
 function toJstParts(iso: string): { date: string; time: string } {
   const d = new Date(iso);
@@ -30,18 +35,6 @@ function toJstParts(iso: string): { date: string; time: string } {
   const get = (t: string) => parts.find((p) => p.type === t)?.value ?? '00';
   const hour = get('hour') === '24' ? '00' : get('hour');
   return { date: `${get('year')}-${get('month')}-${get('day')}`, time: `${hour}:${get('minute')}` };
-}
-
-function nearestHalfHour(time: string): string {
-  const [h, m] = time.split(':').map(Number);
-  const rounded = Math.round(m / 30) * 30;
-  const hh = rounded === 60 ? (h + 1) % 24 : h;
-  const mm = rounded === 60 ? 0 : rounded;
-  return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
-}
-
-function nearestStay(minutes: number): number {
-  return STAY_OPTIONS.reduce((best, cur) => (Math.abs(cur - minutes) < Math.abs(best - minutes) ? cur : best), STAY_OPTIONS[0]);
 }
 
 /** 予約の日時変更（開始時刻・滞在時間）。ドラッグ&ドロップは今回未実装で、このクリック操作で代替する。 */
@@ -104,9 +97,16 @@ function MoveDialogContent({
   const [pending, startTransition] = useTransition();
   const initial = toJstParts(startAt);
   const initialStay = Math.round((new Date(endAt).getTime() - new Date(startAt).getTime()) / 60000);
+  // 15分単位の選択肢。いまの予約の時刻・滞在時間が15分単位でなくても選択肢に足して、
+  // 日付だけ直したときに時刻が勝手に丸められないようにする
+  const timeOptions = withCurrentTime(RESERVATION_TIME_OPTIONS, initial.time);
+  const stayOptions = withCurrentStay(STAY_MINUTE_OPTIONS, initialStay);
   const [date, setDate] = useState(initial.date);
-  const [time, setTime] = useState(nearestHalfHour(initial.time));
-  const [stayMinutes, setStayMinutes] = useState(nearestStay(initialStay));
+  const [time, setTime] = useState(initial.time);
+  const [stayMinutes, setStayMinutes] = useState(
+    isValidStayMinutes(initialStay) ? initialStay : FALLBACK_STAY_MINUTES
+  );
+  const startMinutes = hmToMinutes(time);
 
   const submit = () => {
     startTransition(async () => {
@@ -137,7 +137,7 @@ function MoveDialogContent({
           <div>
             <Label htmlFor="move-time">開始時刻</Label>
             <Select id="move-time" value={time} onChange={(e) => setTime(e.target.value)}>
-              {TIME_OPTIONS.map((t) => (
+              {timeOptions.map((t) => (
                 <option key={t} value={t}>
                   {t}
                 </option>
@@ -147,15 +147,17 @@ function MoveDialogContent({
           <div>
             <Label htmlFor="move-stay">滞在時間</Label>
             <Select id="move-stay" value={stayMinutes} onChange={(e) => setStayMinutes(Number(e.target.value))}>
-              {STAY_OPTIONS.map((m) => (
+              {stayOptions.map((m) => (
                 <option key={m} value={m}>
-                  {m}分
+                  {stayOptionLabel(m)}
                 </option>
               ))}
             </Select>
           </div>
         </div>
-        <p className="text-xs text-gray-400">終了予定 {TIME_OPTIONS.includes(time) ? addMinutes(time, stayMinutes) : ''}</p>
+        <p className="text-xs text-gray-400">
+          終了予定 {startMinutes !== null ? minutesToHm(startMinutes + stayMinutes) : ''}（15分単位で選べます）
+        </p>
       </div>
       <div className="mt-5 flex justify-end gap-2">
         <Button variant="secondary" onClick={onClose} disabled={pending}>
@@ -168,12 +170,4 @@ function MoveDialogContent({
       </div>
     </Dialog>
   );
-}
-
-function addMinutes(time: string, minutes: number): string {
-  const [h, m] = time.split(':').map(Number);
-  const total = (h * 60 + m + minutes) % (24 * 60);
-  const hh = Math.floor(total / 60);
-  const mm = total % 60;
-  return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
 }
