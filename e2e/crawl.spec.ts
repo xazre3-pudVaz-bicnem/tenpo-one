@@ -68,6 +68,7 @@ const APP_ROUTES = [
   '/app/settings/categories',
   '/app/settings/menu-bulk',
   '/app/settings/dynamic-pricing',
+  '/app/settings/handy-qr',
   '/app/settings/tax',
   '/app/settings/booking',
   '/app/settings/printers',

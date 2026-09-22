@@ -28,6 +28,8 @@ export interface SessionContext {
   isHq: boolean;
   /** 企業単位で無効化された機能キー（feature_flags で enabled=false のもの） */
   disabledFeatures: ReadonlySet<string>;
+  /** ハンディ端末（QRで登録したスマホ）の専用アカウントか。/app（レジ本体）は使わせず /handy へ */
+  isHandyDevice?: boolean;
 }
 
 /**
@@ -135,6 +137,7 @@ export const getSessionContext = cache(async (): Promise<SessionContext | null> 
     currentStore,
     isHq: isHqRole(role),
     disabledFeatures,
+    isHandyDevice: user.user_metadata?.handy_device === true,
   };
 });
 

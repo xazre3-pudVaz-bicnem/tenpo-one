@@ -6,6 +6,10 @@ import { ThemeBody } from '@/components/layout/theme-body';
 import { HandyChrome } from '@/components/handy/handy-chrome';
 import type { HandyServiceCall } from '@/components/handy/logic';
 import { logoutHandyClerk, resolveServiceCall } from '@/app/app/handy/actions';
+import { redirect } from 'next/navigation';
+import { checkHandyNetwork } from '@/lib/handy-device-server';
+import { HandyNetworkWatch } from '@/components/handy/handy-network-watch';
+import { handyHeartbeat } from '@/app/handy-join/actions';
 
 /**
  * ハンディは TENPO ONE 本体（/app）の外に置く独立した全画面アプリ。
@@ -31,6 +35,9 @@ function requestTime() {
 
 export default async function HandyLayout({ children }: { children: React.ReactNode }) {
   const ctx = await requireFeature('pos');
+  // iPhone用ハンディ：お店のWi-Fiの外に3分いた端末はログアウト画面へ（解除はそこで行う）
+  const guard = await checkHandyNetwork();
+  if (guard.isDevice && guard.decision.kind === 'logout') redirect('/handy-join?out=1');
   const store = ctx.currentStore ?? ctx.stores[0] ?? null;
   // ログイン画面で選んだ担当者（未選択なら端末アカウントの表示名）
   const clerk = await readHandyClerk();
@@ -65,6 +72,7 @@ export default async function HandyLayout({ children }: { children: React.ReactN
     <>
       {/* トースト等 body 直下の要素にも店舗画面の配色を効かせる */}
       <ThemeBody />
+      {guard.isDevice && <HandyNetworkWatch heartbeatAction={handyHeartbeat} />}
       <HandyChrome
         storeId={store?.id ?? ''}
         storeName={store?.name ?? '店舗が未選択です'}
