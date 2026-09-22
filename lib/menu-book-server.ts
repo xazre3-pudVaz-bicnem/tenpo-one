@@ -1,4 +1,6 @@
 import 'server-only';
+import type { DynamicPriceRule } from './dynamic-pricing';
+import { loadDynamicRules } from './dynamic-pricing-server';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createAdminClient } from '@/lib/supabase/admin';
 import {
@@ -76,7 +78,7 @@ export async function loadOrderPlanState(client: AnyClient, orderId: string): Pr
 export async function loadQrMenuBook(
   storeSlug: string,
   tableToken: string
-): Promise<{ book: MenuBookSettings; plan: OrderPlanState }> {
+): Promise<{ book: MenuBookSettings; plan: OrderPlanState; dynamicRules: DynamicPriceRule[] }> {
   try {
     const admin = createAdminClient();
     const { data: table } = await admin
@@ -86,8 +88,8 @@ export async function loadQrMenuBook(
       .eq('stores.slug', storeSlug)
       .eq('status', 'active')
       .maybeSingle();
-    if (!table) return { book: emptyMenuBook(), plan: NO_PLAN };
-    const [book, { data: order }] = await Promise.all([
+    if (!table) return { book: emptyMenuBook(), plan: NO_PLAN, dynamicRules: [] };
+    const [book, { data: order }, dynamicRules] = await Promise.all([
       loadMenuBook(admin, table.store_id),
       admin
         .from('orders')
@@ -97,11 +99,12 @@ export async function loadQrMenuBook(
         .order('opened_at', { ascending: false })
         .limit(1)
         .maybeSingle(),
+      loadDynamicRules(admin, table.store_id),
     ]);
     const plan = order ? await loadOrderPlanState(admin, order.id) : NO_PLAN;
-    return { book, plan };
+    return { book, plan, dynamicRules };
   } catch (e) {
     console.error('[menu-book] qr context failed', e instanceof Error ? e.message : e);
-    return { book: emptyMenuBook(), plan: NO_PLAN };
+    return { book: emptyMenuBook(), plan: NO_PLAN, dynamicRules: [] };
   }
 }

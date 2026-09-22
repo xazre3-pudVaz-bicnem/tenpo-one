@@ -66,6 +66,8 @@ const APP_ROUTES = [
   '/app/settings/menu',
   '/app/settings/plans',
   '/app/settings/categories',
+  '/app/settings/menu-bulk',
+  '/app/settings/dynamic-pricing',
   '/app/settings/tax',
   '/app/settings/booking',
   '/app/settings/printers',

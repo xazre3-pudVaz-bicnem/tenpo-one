@@ -5,6 +5,7 @@ import { QrOrderApp, type ReservedCourse } from '@/components/qr-order/qr-order-
 import type { QrMenuData } from '@/components/qr-order/types';
 import { filterNestedMenu, nestedMenuPages } from '@/lib/menu-book';
 import { jstNowHm, loadQrMenuBook } from '@/lib/menu-book-server';
+import { dynamicUnitPrice } from '@/lib/dynamic-pricing';
 
 interface PageParams {
   params: Promise<{ storeSlug: string; tableToken: string }>;
@@ -29,7 +30,7 @@ export async function generateMetadata({ params }: PageParams): Promise<Metadata
 export default async function QrOrderPage({ params }: PageParams) {
   const { storeSlug, tableToken } = await params;
   const supabase = await createClient();
-  const [{ data: menu }, { data: reservedCourse }, { book, plan }] = await Promise.all([
+  const [{ data: menu }, { data: reservedCourse }, { book, plan, dynamicRules }] = await Promise.all([
     supabase.rpc('get_qr_menu', { p_slug: storeSlug, p_token: tableToken }),
     supabase.rpc('get_qr_reserved_course', { p_slug: storeSlug, p_token: tableToken }),
     loadQrMenuBook(storeSlug, tableToken),
@@ -37,7 +38,22 @@ export default async function QrOrderPage({ params }: PageParams) {
   if (!menu) notFound();
 
   const course = (reservedCourse as ReservedCourse | null) ?? null;
-  const qrMenu = menu as QrMenuData;
+  const rawMenu = menu as QrMenuData;
+  // ダイナミックプライシング：今の時間帯の値段で見せる（注文の値段は create_qr_order が同じ計算で決める）
+  const now = new Date();
+  const qrMenu: QrMenuData = dynamicRules.length
+    ? {
+        ...rawMenu,
+        categories: rawMenu.categories.map((c) => ({
+          ...c,
+          items: c.items.map((i) => ({
+            ...i,
+            // QR の商品はフード・ドリンクだけ（create_qr_order と同じ）
+            price: dynamicUnitPrice(dynamicRules, { id: i.id, categoryId: c.id, itemType: 'food' }, i.price, now).price,
+          })),
+        })),
+      }
+    : rawMenu;
   // メニューブックで絞る：飲み放題・食べ放題・コースが伝票に無い卓には、その中身（F の0円商品など）を出さない。
   // 予約でコースが決まっている卓は、コースが伝票に入る前からプランありとして扱う
   const effectivePlan = course && !plan.hasPlan ? { hasPlan: true, planItemIds: [] } : plan;
