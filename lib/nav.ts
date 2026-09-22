@@ -175,6 +175,8 @@ const EXTRA_TITLES: { href: string; label: string; en: string }[] = [
   { href: '/app/settings/options', label: 'オプション', en: 'Options' },
   { href: '/app/settings/plans', label: 'プラン', en: 'Plans' },
   { href: '/app/settings/categories', label: 'カテゴリ', en: 'Categories' },
+  { href: '/app/settings/menu-bulk', label: 'メニュー一括編集', en: 'Bulk edit' },
+  { href: '/app/settings/dynamic-pricing', label: 'ダイナミックプライシング', en: 'Dynamic pricing' },
   { href: '/app/settings/printers', label: 'レジ・プリンター', en: 'Registers & printers' },
   { href: '/app/settings/payments', label: '決済・端末', en: 'Payments' },
   { href: '/app/settings/booking', label: '予約設定', en: 'Booking rules' },

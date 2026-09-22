@@ -22,7 +22,7 @@ describe('設定のメニューを dinii と同じく メニュー／プラン�
       const file = join(ROOT, 'app/app/settings', path, 'page.tsx');
       expect(existsSync(file), path).toBe(true);
     }
-    for (const path of ['menu', 'plans', 'categories']) {
+    for (const path of ['menu', 'plans', 'categories', 'menu-bulk', 'dynamic-pricing']) {
       const src = readFileSync(join(ROOT, 'app/app/settings', path, 'page.tsx'), 'utf8');
       expect(src).toContain("requirePermission('menu.manage')");
     }
@@ -40,6 +40,8 @@ describe('設定のメニューを dinii と同じく メニュー／プラン�
       '/app/settings/options',
       '/app/settings/categories',
       '/app/settings/menu-book',
+      '/app/settings/menu-bulk',
+      '/app/settings/dynamic-pricing',
     ]);
   });
 

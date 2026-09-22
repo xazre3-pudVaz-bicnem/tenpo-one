@@ -9,6 +9,8 @@ import { validateCoupon, COUPON_REJECT_LABELS, type CouponLike } from '@/lib/cou
 import { resolveOptionSelection } from '@/lib/menu-options';
 import { resolveStartTime, startTimeProblem } from '@/lib/handy-visit';
 import { isSeatDuration } from '@/lib/seat-time';
+import { dynamicUnitPrice } from '@/lib/dynamic-pricing';
+import { loadDynamicRules } from '@/lib/dynamic-pricing-server';
 
 const COUPON_PREFIX = 'クーポン: ';
 
@@ -154,7 +156,7 @@ export async function addItem(
 
   const { data: item } = await supabase
     .from('menu_items')
-    .select('id, name, price, takeout_price, item_type, is_sold_out, status, tax_rates(rate, is_inclusive)')
+    .select('id, name, price, takeout_price, item_type, category_id, is_sold_out, status, tax_rates(rate, is_inclusive)')
     .eq('id', menuItemId)
     .single();
   if (!item) throw new Error('商品が見つかりません');
@@ -167,7 +169,17 @@ export async function addItem(
   //  事前注文の商品が店内飲食価格・標準税率10%で計算されてしまう）
   const isTakeoutLike =
     order.order_type === 'takeout' || order.order_type === 'delivery' || order.order_type === 'pre_order';
-  const unitPrice = isTakeoutLike ? (item.takeout_price ?? item.price) : item.price;
+  const basePrice = isTakeoutLike ? (item.takeout_price ?? item.price) : item.price;
+  // ダイナミックプライシング（曜日・時間帯の値段。お客様QRは SQL の dynamic_menu_price で同じ計算）
+  const dynamicRules = await loadDynamicRules(supabase, order.store_id);
+  const unitPrice = dynamicRules.length
+    ? dynamicUnitPrice(
+        dynamicRules,
+        { id: item.id, categoryId: (item.category_id as string | null) ?? null, itemType: item.item_type },
+        basePrice,
+        new Date()
+      ).price
+    : basePrice;
   const taxRate = isTakeoutLike
     ? applicableTaxRate(order.order_type as 'takeout' | 'delivery' | 'pre_order', item.item_type === 'drink')
     : (taxRateRow?.rate ?? 10);
