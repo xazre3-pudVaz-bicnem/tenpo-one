@@ -7,6 +7,8 @@ import {
   filterMenuBook,
   filterNestedMenu,
   groupMenuPages,
+  isPlanAddOn,
+  isPlanItem,
   isPlanOnlyItem,
   isWithinHm,
   menuBookFrom,
@@ -175,6 +177,38 @@ describe('メニューブック：絞り込み', () => {
     // 指定の無いプランが一緒に入っていれば全部出す
     const r2 = filterMenuBook(categories, items, book, ctx({ plan: { hasPlan: true, planItemIds: [planA, id(61)] } }));
     expect(names(r2.categories)).toContain('(F) BEER');
+  });
+
+  it('アップグレード（A→AB）にも出すカテゴリを決められる：A＋アップグレードの卓は AB のカテゴリだけ（2026-09-22 御茶ノ水）', () => {
+    const planA = id(60);
+    const upAtoAB = id(62);
+    const book: MenuBookSettings = {
+      ...emptyMenuBook(),
+      plans: { [planA]: [C.fSoft.id], [upAtoAB]: [C.fSoft.id, C.fBeer.id] },
+    };
+    const r = filterMenuBook(categories, items, book, ctx({ plan: { hasPlan: true, planItemIds: [planA, upAtoAB] } }));
+    expect(names(r.categories)).toEqual(expect.arrayContaining(['(F) SOFT DRINK', '(F) BEER']));
+    // ABC だけのカテゴリ・コースの中身は出さない（決めていないと全部出ていた）
+    expect(names(r.categories)).not.toContain('(F/C) WHISKEY&SPARKLING');
+    expect(names(r.categories)).not.toContain('Course food');
+  });
+
+  it('プランとして数える商品（メニューブックの「プランで出すカテゴリ」に並べる）とアップグレード・延長の見分け', () => {
+    expect(isPlanItem('course', '(AB) 2H Course Nomihodai')).toBe(true);
+    expect(isPlanItem('course', 'Nomihoudai ABC')).toBe(true);
+    expect(isPlanItem('drink', '飲み放題 (A→AB)')).toBe(true);
+    expect(isPlanItem('drink', 'コース飲み放題 (A→B)')).toBe(true);
+    // 名前に飲み放題が無い延長・席料はプランとして数えない（並べない）
+    expect(isPlanItem('drink', '延長 (30min)')).toBe(false);
+    expect(isPlanItem('food', '席料')).toBe(false);
+    expect(isPlanAddOn('飲み放題 (A→AB)')).toBe(true);
+    expect(isPlanAddOn('飲み放題延長 30分')).toBe(true);
+    expect(isPlanAddOn('(AB) 2H Course Nomihodai')).toBe(false);
+    // 伝票のプラン判定と同じ
+    expect(orderPlanState([{ menuItemId: id(62), name: '飲み放題 (A→AB)', itemType: 'drink', status: 'active' }])).toEqual({
+      hasPlan: true,
+      planItemIds: [id(62)],
+    });
   });
 
   it('ランチのカテゴリはランチの時間帯だけ', () => {

@@ -54,6 +54,8 @@ export interface MenuBookPlanRow {
   price: number;
   /** null は「プランのときだけのカテゴリを全部出す」 */
   categoryIds: string[] | null;
+  /** アップグレード（A→AB など）・延長。上の段のカテゴリを選ぶ */
+  addOn?: boolean;
 }
 
 type Tab = MenuBookTab;
@@ -470,6 +472,8 @@ function PlansTab({
       <p className="mb-3 text-xs text-gray-500">
         伝票にこのプランが入っているとき、ハンディ・お客様QRに出す「プランのときだけ」のカテゴリです。
         「全部」のままなら、プランのときだけのカテゴリを全部出します（例: 飲み放題A は (F) SOFT DRINK・(F) SOUR・(F) COCKTAIL だけにする）。
+        <br />
+        アップグレード（A→AB など）・延長も伝票に入るとプランとして数えます。上の段（AB・ABC など）で出すカテゴリを選んでください。
       </p>
       {planCategories.length === 0 && (
         <p className="mb-3 rounded-lg bg-warning-soft px-3 py-2 text-xs text-warning">
@@ -482,7 +486,14 @@ function PlansTab({
           return (
             <li key={p.id} className="rounded-lg border border-gray-200 bg-white p-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="font-semibold text-navy">{p.name}</p>
+                <p className="font-semibold text-navy">
+                  {p.name}
+                  {p.addOn && (
+                    <span className="ml-2 rounded-full bg-primary-soft px-2 py-0.5 align-middle text-[11px] font-semibold text-primary">
+                      アップグレード・延長
+                    </span>
+                  )}
+                </p>
                 <span className="text-xs text-gray-500 tabular-nums">{yen(p.price)}</span>
               </div>
               <div className="mt-2 flex flex-wrap gap-4 text-sm" role="radiogroup" aria-label={`${p.name}で出すカテゴリ`}>
