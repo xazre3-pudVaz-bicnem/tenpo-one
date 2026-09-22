@@ -8,6 +8,8 @@ import type { HandyServiceCall } from '@/components/handy/logic';
 import { logoutHandyClerk, resolveServiceCall } from '@/app/app/handy/actions';
 import { redirect } from 'next/navigation';
 import { checkHandyNetwork } from '@/lib/handy-device-server';
+import { isRequestFromStoreNetwork } from '@/lib/store-access-server';
+import { ACCESS_MESSAGE } from '@/lib/store-access';
 import { HandyNetworkWatch } from '@/components/handy/handy-network-watch';
 import { handyHeartbeat } from '@/app/handy-join/actions';
 
@@ -38,6 +40,10 @@ export default async function HandyLayout({ children }: { children: React.ReactN
   // iPhone用ハンディ：お店のWi-Fiの外に3分いた端末はログアウト画面へ（解除はそこで行う）
   const guard = await checkHandyNetwork();
   if (guard.isDevice && guard.decision.kind === 'logout') redirect('/handy-join?out=1');
+
+  // 契約のアクセス制限（お店の回線）。制限なしの店舗はそのまま
+  const storeForAccess = ctx.currentStore ?? ctx.stores[0] ?? null;
+  const onStoreNetwork = storeForAccess ? await isRequestFromStoreNetwork(storeForAccess.id) : true;
   const store = ctx.currentStore ?? ctx.stores[0] ?? null;
   // ログイン画面で選んだ担当者（未選択なら端末アカウントの表示名）
   const clerk = await readHandyClerk();
@@ -66,6 +72,20 @@ export default async function HandyLayout({ children }: { children: React.ReactN
       createdAtMs: new Date(c.created_at).getTime(),
       note: c.note,
     }));
+  }
+
+  if (!onStoreNetwork) {
+    return (
+      <>
+        <ThemeBody />
+        <div className="flex min-h-dvh items-center justify-center bg-[#F6F3FB] px-6 text-center">
+          <div className="rounded-2xl bg-white px-6 py-8 shadow-sm">
+            <p className="text-base font-bold text-[#2A2138]">お店の回線からご利用ください</p>
+            <p className="mt-2 text-sm leading-relaxed text-[#5A4F6E]">{ACCESS_MESSAGE.network}</p>
+          </div>
+        </div>
+      </>
+    );
   }
 
   return (

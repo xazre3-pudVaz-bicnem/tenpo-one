@@ -10,6 +10,8 @@ import {
   revokeHandyDeviceSystem,
 } from '@/lib/handy-device-server';
 import { networkKey } from '@/lib/handy-pairing';
+import { loadStorePolicy } from '@/lib/store-access-server';
+import { isAllowedNetwork } from '@/lib/store-access';
 import { HANDY_OUTSIDE_COOKIE, handyQrFrom, isHandyQrToken, isShopNetwork } from '@/lib/handy-qr';
 
 export type JoinResult = { ok: true; storeName: string } | { ok: false; error: string };
@@ -42,7 +44,10 @@ export async function joinHandyByQr(token: string): Promise<JoinResult> {
   if (!store || store.status !== 'active') return { ok: false, error: 'この店舗は現在利用できません。管理者にご連絡ください' };
 
   const ip = await currentRequestIp();
-  if (!isShopNetwork(qr, ip)) {
+  // 契約で運営が登録した回線（store_access_policies）でも開ける
+  const policy = await loadStorePolicy(store.id as string);
+  const allowed = isShopNetwork(qr, ip) || (policy.networks.length > 0 && isAllowedNetwork(policy, ip));
+  if (!allowed) {
     return {
       ok: false,
       error: `お店のWi-Fiに接続してから読み取ってください（スマホの回線やほかのWi-Fiでは開けません）。この端末の回線: ${ip ? networkKey(ip) : '不明'}`,
