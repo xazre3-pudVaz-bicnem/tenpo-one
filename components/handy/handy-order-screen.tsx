@@ -296,7 +296,29 @@ export function HandyOrderScreen({
       </header>
 
       <div className="flex min-h-[27px] flex-none items-center justify-between gap-2 px-1.5 py-[5px] text-[10px] text-[#8a8a8a]">
-        <span className="flex min-w-0 items-center gap-0.5">
+        <span className="flex min-w-0 items-center gap-1.5">
+          {/* 1ページ前に戻る（2026-09-22 店舗要望「全部の画面で1ページ前に戻るボタンがほしい」）:
+              商品の画面 → ページのタイル、ページのタイル → 卓の画面 */}
+          {page ? (
+            <button
+              type="button"
+              onClick={() => setPageKey(null)}
+              aria-label={`${tab?.label ?? 'ページ一覧'}へ戻る`}
+              className="flex min-h-[34px] shrink-0 items-center gap-0.5 rounded-[8px] border border-[#d9ccef] bg-white pr-2.5 pl-1 text-[12px] font-bold text-[#7b3fe4] shadow-[0_1px_2px_#00000008] active:bg-[#efe5ff]"
+            >
+              <ChevronLeft className="h-4 w-4" strokeWidth={2.4} aria-hidden />
+              戻る
+            </button>
+          ) : (
+            <Link
+              href={`/handy/${tableId}`}
+              aria-label="卓の画面へ戻る"
+              className="flex min-h-[34px] shrink-0 items-center gap-0.5 rounded-[8px] border border-[#d9ccef] bg-white pr-2.5 pl-1 text-[12px] font-bold text-[#7b3fe4] shadow-[0_1px_2px_#00000008] active:bg-[#efe5ff]"
+            >
+              <ChevronLeft className="h-4 w-4" strokeWidth={2.4} aria-hidden />
+              戻る
+            </Link>
+          )}
           {page ? (
             <>
               <button

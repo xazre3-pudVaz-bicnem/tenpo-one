@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { CircleCheckBig } from 'lucide-react';
+import { CircleCheckBig, Printer } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { yen, formatTime } from '@/lib/format';
 import { useToast } from '@/components/ui/toast';
@@ -58,6 +58,7 @@ export function HandyTableDetail({
   sentQuantity,
   goToOrderAction,
   resolveServiceCallAction,
+  printBillAction,
 }: {
   table: { id: string; name: string; capacityMax: number; currentStatus: string | null };
   staffName: string;
@@ -69,6 +70,8 @@ export function HandyTableDetail({
   /** 着席中の卓に伝票を作る（フロア画面と同じ） */
   goToOrderAction: (tableId: string) => Promise<{ orderId: string }>;
   resolveServiceCallAction: (callId: string) => Promise<{ alreadyResolved: boolean }>;
+  /** 会計伝票（中間伝票）をプリンターへ出す（レジの「伝票印刷」と同じ）。省略時はボタンを出さない */
+  printBillAction?: (orderId: string) => Promise<{ ok: boolean; error?: string; queued?: number }>;
 }) {
   const router = useRouter();
   const { toast } = useToast();
@@ -99,6 +102,31 @@ export function HandyTableDetail({
         router.push(`/handy/${table.id}/order?order=${orderId}`);
       } catch (e) {
         toast(e instanceof Error ? e.message : '注文を開始できませんでした', 'error');
+        setBusy(null);
+      }
+    });
+  };
+
+  /**
+   * 会計伝票を出す（2026-09-22 店舗要望: ハンディからも会計伝票を出したい）。
+   * レジの「伝票印刷」と同じ中間伝票。卓のフロア担当のプリンター（無ければレジ機）から出る。
+   * 会計・売上には影響しない。
+   */
+  const handlePrintBill = (slip: HandySlip) => {
+    if (pending || !printBillAction) return;
+    if (slip.items.length === 0) {
+      toast('まだ注文がないため、会計伝票は出せません', 'warning');
+      return;
+    }
+    setBusy(`bill:${slip.id}`);
+    startTransition(async () => {
+      try {
+        const result = await printBillAction(slip.id);
+        if (result.ok) toast(`会計伝票 #${slip.orderNo} を印刷しました`, 'success');
+        else toast(result.error ?? '会計伝票を印刷できませんでした', 'error');
+      } catch (e) {
+        toast(e instanceof Error ? e.message : '会計伝票を印刷できませんでした', 'error');
+      } finally {
         setBusy(null);
       }
     });
@@ -246,6 +274,17 @@ export function HandyTableDetail({
                 <strong className="mt-2 block border-t border-[#e3dbf1] pt-2 text-right text-lg font-bold text-[#4f3868] tabular-nums">
                   {yen(slip.total)}
                 </strong>
+                {printBillAction && slip.items.length > 0 && (
+                  <button
+                    type="button"
+                    disabled={pending}
+                    onClick={() => handlePrintBill(slip)}
+                    className="mt-2.5 flex min-h-[42px] w-full items-center justify-center gap-1.5 rounded-[9px] border border-[#bd660f] bg-[#fbefdf] text-sm font-bold text-[#8a4a0b] active:bg-[#f6e0c4] disabled:opacity-40"
+                  >
+                    <Printer className="h-4 w-4" aria-hidden />
+                    {pending && busy === `bill:${slip.id}` ? '印刷中…' : '会計伝票を出す'}
+                  </button>
+                )}
                 {slips.length > 1 && (
                   <Link
                     href={`/handy/${table.id}/order?order=${slip.id}`}

@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   Minus, Plus, X, ArrowLeft, Split, Combine, ArrowRightLeft, Search, Star, Flame, User, XCircle,
-  FilePlus, Printer, Users, ChefHat, Settings,
+  FilePlus, Printer, Users, ChefHat, Settings, Clock,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { yen } from '@/lib/format';
@@ -31,6 +31,9 @@ import { SplitDialog } from './split-dialog';
 import { MergeDialog, type MergeCandidate } from './merge-dialog';
 import { TableMoveDialog, type AvailableTable } from './table-move-dialog';
 import { GuestCountDialog } from './guest-count-dialog';
+import { SeatTimeDialog } from './seat-time-dialog';
+import { seatBadgeLabel, type SeatCourseOption, type SeatTimeState } from '@/lib/seat-time';
+import type { SeatTimeInput } from '@/app/app/pos/actions';
 import { CustomerLinkDialog } from './customer-link-dialog';
 import { POS_SHORTCUTS } from './shortcuts';
 import type {
@@ -166,6 +169,9 @@ export function PosScreen({
   moveTableAction,
   cancelEmptyOrderAction,
   setGuestCountAction,
+  seatTime,
+  seatCourses = [],
+  setSeatTimeAction,
   addSlipToTableAction,
   startTerminalPaymentAction,
   checkTerminalPaymentAction,
@@ -215,6 +221,10 @@ export function PosScreen({
   cancelEmptyOrderAction?: (orderId: string, reason: string) => Promise<void>;
   /** 注文後の人数変更。省略時は人数バッジを押しても何も起きない */
   setGuestCountAction?: (orderId: string, guestCount: number) => Promise<void>;
+  /** 席の時間・コース（卓の伝票だけ）。省略時はバッジを出さない */
+  seatTime?: SeatTimeState;
+  seatCourses?: SeatCourseOption[];
+  setSeatTimeAction?: (orderId: string, input: SeatTimeInput) => Promise<void>;
   /** 同じテーブルに空の伝票をもう1枚作る（別会計用）。省略時はボタンを表示しない */
   addSlipToTableAction?: (orderId: string) => Promise<{ newOrderId: string; orderNo: number }>;
   startTerminalPaymentAction: (orderId: string, readerId: string) => Promise<TerminalPaymentState>;
@@ -237,6 +247,7 @@ export function PosScreen({
   const [tableMoveOpen, setTableMoveOpen] = useState(false);
   const [cancelOrderOpen, setCancelOrderOpen] = useState(false);
   const [guestCountOpen, setGuestCountOpen] = useState(false);
+  const [seatTimeOpen, setSeatTimeOpen] = useState(false);
   const [customerOpen, setCustomerOpen] = useState(false);
   const [optionTarget, setOptionTarget] = useState<string | null>(null);
   const [linkedCustomer, setLinkedCustomer] = useState(customer);
@@ -467,6 +478,17 @@ export function PosScreen({
               </button>
             ) : (
               <span className="text-gray-500">{order.guestCount}名</span>
+            )}
+            {seatTime && setSeatTimeAction && (
+              <button
+                type="button"
+                onClick={() => setSeatTimeOpen(true)}
+                aria-label="席の時間・コースを変更する"
+                className="flex max-w-[16rem] items-center gap-1 rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-200"
+              >
+                <Clock className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                <span className="truncate">{seatBadgeLabel(seatTime, seatCourses)}</span>
+              </button>
             )}
             <ClerkSelector orderId={order.id} clerks={clerks} currentClerkId={currentClerkId} />
             {/* 担当者が未登録の店舗では従来どおりログインユーザー名を表示する */}
@@ -834,6 +856,16 @@ export function PosScreen({
         requireReason
         onConfirm={handleCancelEmptyOrder}
       />
+
+      {seatTime && setSeatTimeAction && seatTimeOpen && (
+        <SeatTimeDialog
+          onClose={() => setSeatTimeOpen(false)}
+          orderId={order.id}
+          current={seatTime}
+          courses={seatCourses}
+          setSeatTimeAction={setSeatTimeAction}
+        />
+      )}
 
       {setGuestCountAction && guestCountOpen && (
         <GuestCountDialog

@@ -53,6 +53,7 @@ export function HandySetupScreen({
   planItems,
   startLabel,
   confirmAction,
+  from = 'handy',
 }: {
   tableId: string;
   tableName: string;
@@ -65,6 +66,11 @@ export function HandySetupScreen({
     tableId: string,
     draft: VisitDraft
   ) => Promise<{ orderId: string; planItemError: string | null }>;
+  /**
+   * どこから開いたか。'pos' はレジ（オーダー・会計）のファーストオーダー:
+   * 戻るはフロア画面、確定後はレジの伝票画面へ（2026-09-22 店舗要望: iPad でもこの画面を出したい）
+   */
+  from?: 'handy' | 'pos';
 }) {
   const router = useRouter();
   const { toast } = useToast();
@@ -117,7 +123,7 @@ export function HandySetupScreen({
         if (planItemError) {
           toast(`来店を登録しました。プラン商品は入っていません：${planItemError}`, 'warning');
         }
-        router.push(`/handy/${tableId}/order?order=${orderId}`);
+        router.push(from === 'pos' ? `/app/pos?order=${orderId}` : `/handy/${tableId}/order?order=${orderId}`);
         router.refresh();
       } catch (e) {
         toast(e instanceof Error ? e.message : '登録に失敗しました', 'error');
@@ -128,7 +134,13 @@ export function HandySetupScreen({
   return (
     <>
       <HandyTopBar
-        left={<HandyBackButton href={`/handy/${tableId}`} label="卓へ戻る" />}
+        left={
+          from === 'pos' ? (
+            <HandyBackButton href="/app/floor" label="テーブル一覧" />
+          ) : (
+            <HandyBackButton href={`/handy/${tableId}`} label="卓へ戻る" />
+          )
+        }
         title="お客様情報"
       />
 

@@ -1,3 +1,4 @@
+import { enqueueOrderSlipPrint } from '@/app/app/pos/print-actions';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { requireFeature } from '@/lib/auth';
@@ -158,6 +159,7 @@ export default async function HandyTablePage({
       sentQuantity={sentQuantity}
       goToOrderAction={openHandyOrder}
       resolveServiceCallAction={resolveServiceCall}
+      printBillAction={enqueueOrderSlipPrint}
     />
   );
 }

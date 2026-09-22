@@ -22,6 +22,7 @@ import {
   moveTable,
   cancelEmptyOrder,
   setGuestCount,
+  setSeatTime,
   addSlipToTable,
   applyCoupon,
   clearCoupon,
@@ -135,7 +136,7 @@ export default async function PosPage({
   const { data: order, error: orderError } = await supabase
     .from('orders')
     .select(
-      'id, order_no, order_type, status, guest_count, discount_total, discount_reason, coupon_code, customer_id, subtotal, tax_total, service_charge, total, store_id, table_id, staff_id, clerk_id, restaurant_tables(name), profiles(display_name)'
+      'id, order_no, order_type, status, guest_count, discount_total, discount_reason, coupon_code, customer_id, subtotal, tax_total, service_charge, total, store_id, table_id, staff_id, clerk_id, opened_at, restaurant_tables(name), profiles(display_name), reservations(start_at, end_at, course_id)'
     )
     .eq('id', orderId)
     .single();
@@ -181,7 +182,7 @@ export default async function PosPage({
       .order('sort_order'),
     supabase
       .from('menu_items')
-      .select('id, category_id, name, name_en, name_kana, price, takeout_price, item_type, is_sold_out, is_recommended, sort_order')
+      .select('id, category_id, name, name_en, name_kana, price, takeout_price, item_type, is_sold_out, is_recommended, sort_order, duration_minutes')
       .eq('organization_id', ctx.organizationId)
       .or(`store_id.is.null,store_id.eq.${store.id}`)
       .eq('status', 'active')
@@ -351,6 +352,21 @@ export default async function PosPage({
     }
   }
 
+  // 席の時間・コース（伝票画面の上で直せる）
+  const seatResv = (Array.isArray(order.reservations) ? order.reservations[0] : order.reservations) as
+    | { start_at: string | null; end_at: string | null; course_id: string | null }
+    | null;
+  const seatStartMs = new Date(order.opened_at as string).getTime();
+  const seatEndMs = seatResv?.end_at ? new Date(seatResv.end_at).getTime() : null;
+  const seatTime = {
+    startMs: seatStartMs,
+    endMs: seatEndMs != null && seatEndMs > seatStartMs ? seatEndMs : null,
+    courseId: seatResv?.course_id ?? null,
+  };
+  const seatCourses = (menuItems ?? [])
+    .filter((m) => m.item_type === 'course')
+    .map((m) => ({ id: m.id as string, name: m.name as string, durationMinutes: (m.duration_minutes as number | null) ?? null }));
+
   return (
     <div className="-m-4 lg:-m-6">
       <PosScreen
@@ -399,6 +415,9 @@ export default async function PosPage({
         moveTableAction={moveTable}
         cancelEmptyOrderAction={cancelEmptyOrder}
         setGuestCountAction={setGuestCount}
+        seatTime={order.table_id ? seatTime : undefined}
+        seatCourses={seatCourses}
+        setSeatTimeAction={setSeatTime}
         addSlipToTableAction={addSlipToTable}
         startTerminalPaymentAction={startTerminalPayment}
         checkTerminalPaymentAction={checkTerminalPayment}

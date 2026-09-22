@@ -6,11 +6,11 @@ import { createClient } from '@/lib/supabase/server';
 import { can } from '@/lib/permissions';
 import { formatTime } from '@/lib/format';
 import { requireHandyClerk } from '@/lib/handy-session';
-import { buildPlanItems, type PlanItemInput } from '@/lib/handy-visit';
 import { HandyBackButton, HandyMain, HandyTopBar } from '@/components/handy/handy-chrome';
 import { HandySetupScreen } from '@/components/handy/handy-setup-screen';
 import { tableState } from '@/components/handy/logic';
 import { startHandyVisit } from '@/app/app/handy/actions';
+import { loadSetupPlanItems } from '@/app/app/handy/setup-data';
 
 export const metadata: Metadata = { title: 'お客様情報' };
 
@@ -82,44 +82,15 @@ export default async function HandySetupPage({
     );
   }
 
-  // プラン商品（コース・飲み放題など）。カテゴリ名も見るのでカテゴリを一緒に読む
-  const [{ data: categories }, { data: items }] = await Promise.all([
-    supabase
-      .from('menu_categories')
-      .select('id, name')
-      .eq('organization_id', ctx.organizationId)
-      .or(`store_id.is.null,store_id.eq.${store.id}`)
-      .eq('status', 'active'),
-    supabase
-      .from('menu_items')
-      .select(
-        'id, category_id, name, price, item_type, is_sold_out, duration_minutes, course_includes_drinks, course_includes_ayce'
-      )
-      .eq('organization_id', ctx.organizationId)
-      .or(`store_id.is.null,store_id.eq.${store.id}`)
-      .eq('status', 'active')
-      .neq('item_type', 'option')
-      .order('sort_order'),
-  ]);
-  const categoryNameById = new Map((categories ?? []).map((c) => [c.id, c.name]));
-  const planInputs: PlanItemInput[] = (items ?? []).map((m) => ({
-    id: m.id,
-    name: m.name,
-    categoryName: m.category_id ? (categoryNameById.get(m.category_id) ?? null) : null,
-    price: m.price,
-    itemType: m.item_type,
-    isSoldOut: m.is_sold_out,
-    durationMinutes: m.duration_minutes,
-    courseIncludesDrinks: m.course_includes_drinks,
-    courseIncludesAyce: m.course_includes_ayce,
-  }));
+  // プラン商品（コース・飲み放題など）
+  const planItems = await loadSetupPlanItems(ctx.organizationId, store.id);
 
   return (
     <HandySetupScreen
       tableId={table.id}
       tableName={table.name}
       staffName={clerk.name}
-      planItems={buildPlanItems(planInputs)}
+      planItems={planItems}
       startLabel={formatTime(new Date(requestTime()))}
       confirmAction={startHandyVisit}
     />

@@ -10,6 +10,7 @@ import { TableSheet } from './table-sheet';
 import { TableCard } from './table-card';
 import { ReservationPanel } from './reservation-panel';
 import { useNow } from './use-now';
+import type { WalkInSeatOptions } from './table-sheet';
 import {
   TILE_LABEL,
   tileState,
@@ -50,6 +51,7 @@ export function FloorBoard({
   serverNow,
   canOperate,
   startWalkInAction,
+  defaultStayMinutes = 120,
   goToOrderAction,
   completeCleaningAction,
   setTableAvailabilityAction,
@@ -61,7 +63,9 @@ export function FloorBoard({
   reservations: PanelReservation[];
   serverNow: number;
   canOperate: boolean;
-  startWalkInAction: (tableId: string, partySize: number) => Promise<{ orderId: string }>;
+  startWalkInAction: (tableId: string, partySize: number, options?: WalkInSeatOptions) => Promise<{ orderId: string }>;
+  /** 店舗の既定滞在時間（分） */
+  defaultStayMinutes?: number;
   goToOrderAction: (tableId: string) => Promise<{ orderId: string }>;
   completeCleaningAction: (tableId: string) => Promise<void>;
   setTableAvailabilityAction: (tableId: string, unavailable: boolean) => Promise<void>;
@@ -244,11 +248,13 @@ export function FloorBoard({
       <ReservationPanel reservations={reservations} now={now} />
 
       <TableSheet
+        key={selected?.id ?? 'none'}
         table={selected}
         now={now}
         canOperate={canOperate}
         onClose={() => setSelectedId(null)}
         startWalkInAction={startWalkInAction}
+        defaultStayMinutes={defaultStayMinutes}
         goToOrderAction={goToOrderAction}
         completeCleaningAction={completeCleaningAction}
         setTableAvailabilityAction={setTableAvailabilityAction}

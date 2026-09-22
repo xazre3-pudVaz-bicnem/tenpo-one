@@ -4,11 +4,17 @@ import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Dialog } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Input, Label } from '@/components/ui/input';
+import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/components/ui/toast';
 import { yen } from '@/lib/format';
 import { TILE_LABEL, nextReservation, tileState, tileTime, type TableView } from './types';
+
+/** 着席（ファーストオーダー）のときに決めるコース・時間 */
+export interface WalkInSeatOptions {
+  durationMinutes?: number;
+  courseId?: string;
+}
 
 export function TableSheet({
   table,
@@ -16,6 +22,7 @@ export function TableSheet({
   canOperate,
   onClose,
   startWalkInAction,
+  defaultStayMinutes = 120,
   goToOrderAction,
   completeCleaningAction,
   setTableAvailabilityAction,
@@ -24,7 +31,8 @@ export function TableSheet({
   now: number;
   canOperate: boolean;
   onClose: () => void;
-  startWalkInAction: (tableId: string, partySize: number) => Promise<{ orderId: string }>;
+  startWalkInAction: (tableId: string, partySize: number, options?: WalkInSeatOptions) => Promise<{ orderId: string }>;
+  defaultStayMinutes?: number;
   goToOrderAction: (tableId: string) => Promise<{ orderId: string }>;
   completeCleaningAction: (tableId: string) => Promise<void>;
   setTableAvailabilityAction: (tableId: string, unavailable: boolean) => Promise<void>;
@@ -110,27 +118,44 @@ export function TableSheet({
       <div className="space-y-3">
         {status === 'available' && (
           <div className="rounded-xl border border-line p-4">
-            <Label htmlFor="party-size">人数 / Guests</Label>
-            <div className="flex items-center gap-2">
+            {/* ファーストオーダー: ハンディと同じ「お客様情報」（モード・プラン・時間制・開始時間・男女の人数）を出してから着席する
+                （2026-09-22 店舗要望: iPad のオーダー・会計でもこの画面を出したい） */}
+            <Button
+              size="pos"
+              className="w-full"
+              disabled={pending}
+              onClick={() => router.push(`/app/floor/${table.id}/setup`)}
+            >
+              お客様情報を入力して着席 / Seat
+            </Button>
+            <div className="mt-3 flex items-center gap-2 border-t border-line pt-3">
+              <span className="text-xs text-ink-3">すぐ着席（人数だけ）:</span>
               <Input
                 id="party-size"
                 type="number"
                 min={1}
                 max={99}
+                aria-label="人数 / Guests"
                 value={partySize}
                 onChange={(e) => setPartySize(Math.max(1, Number(e.target.value) || 1))}
-                className="w-24"
+                className="h-9 w-20"
               />
-              <span className="text-sm text-ink-3">名</span>
+              <span className="text-xs text-ink-3">名</span>
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={pending}
+                onClick={() =>
+                  goPos(() =>
+                    startWalkInAction(table.id, partySize, {
+                      durationMinutes: defaultStayMinutes,
+                    })
+                  )
+                }
+              >
+                着席 / Seat
+              </Button>
             </div>
-            <Button
-              size="pos"
-              className="mt-3 w-full"
-              disabled={pending}
-              onClick={() => goPos(() => startWalkInAction(table.id, partySize))}
-            >
-              ウォークイン着席 / Seat walk-in
-            </Button>
           </div>
         )}
 
