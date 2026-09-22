@@ -3,18 +3,27 @@
 import { useState, useTransition } from 'react';
 import { Pencil, Trash2, Plus, Check, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input, FieldError } from '@/components/ui/input';
+import { Input, Label, Select, FieldError } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useToast } from '@/components/ui/toast';
-import { addFloor, renameFloor, deleteFloor } from '@/app/app/settings/tables/actions';
+import { addFloor, renameFloor, deleteFloor, saveDefaultFloor } from '@/app/app/settings/tables/actions';
 
 export interface FloorRow {
   id: string;
   name: string;
 }
 
-export function FloorsPanel({ storeId, initial }: { storeId: string; initial: FloorRow[] }) {
+export function FloorsPanel({
+  storeId,
+  initial,
+  defaultFloorId = null,
+}: {
+  storeId: string;
+  initial: FloorRow[];
+  /** レジのフロア画面で最初に出すフロア */
+  defaultFloorId?: string | null;
+}) {
   const floors = initial;
 
   const [newName, setNewName] = useState('');
@@ -123,6 +132,35 @@ export function FloorsPanel({ storeId, initial }: { storeId: string; initial: Fl
           </Button>
         </div>
         <FieldError message={error ?? undefined} />
+
+        {floors.length > 1 && (
+          <div className="border-t border-gray-100 pt-3">
+            <Label htmlFor="default-floor">レジで最初に出すフロア</Label>
+            <Select
+              id="default-floor"
+              value={defaultFloorId ?? ''}
+              disabled={pending}
+              onChange={(e) => {
+                const v = e.target.value || null;
+                startTransition(async () => {
+                  const result = await saveDefaultFloor(storeId, v);
+                  if (result.error) toast(result.error, 'error');
+                  else toast('最初に出すフロアを保存しました');
+                });
+              }}
+            >
+              <option value="">すべて（全フロア）</option>
+              {floors.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.name}
+                </option>
+              ))}
+            </Select>
+            <p className="mt-1.5 text-xs text-gray-500">
+              オーダー・会計の画面を開いたときにこのフロアが出ます。画面を右にスライドすると次のフロア、左にスライドすると前のフロアへ（上の並び順）。
+            </p>
+          </div>
+        )}
       </CardContent>
 
       {deletingFloor && (

@@ -1,3 +1,4 @@
+import { floorBoardFrom } from '@/lib/floor-nav';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Settings } from 'lucide-react';
@@ -114,7 +115,8 @@ export default async function FloorPage() {
         .select('id, name, sort_order')
         .eq('store_id', store.id)
         .eq('status', 'active')
-        .order('sort_order'),
+        .order('sort_order')
+        .order('name'),
       supabase
         .from('restaurant_tables')
         .select(
@@ -123,7 +125,7 @@ export default async function FloorPage() {
         .eq('store_id', store.id)
         .eq('status', 'active')
         .order('sort_order'),
-      supabase.from('store_settings').select('default_stay_minutes').eq('store_id', store.id).maybeSingle(),
+      supabase.from('store_settings').select('default_stay_minutes, settings').eq('store_id', store.id).maybeSingle(),
       supabase
         .from('orders')
         .select(
@@ -270,6 +272,7 @@ export default async function FloorPage() {
         <FloorBoard
           storeId={store.id}
           floors={floors ?? []}
+          defaultFloorId={floorBoardFrom(settings?.settings).defaultFloorId}
           tables={tableViews}
           reservations={panel}
           serverNow={serverNow}

@@ -1,3 +1,4 @@
+import { floorBoardFrom } from '@/lib/floor-nav';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { QrCode } from 'lucide-react';
@@ -33,7 +34,14 @@ export default async function TablesSettingsPage() {
     .select('id, name')
     .eq('store_id', targetStore.id)
     .eq('status', 'active')
-    .order('sort_order');
+    .order('sort_order')
+    .order('name');
+  const { data: storeSettings } = await supabase
+    .from('store_settings')
+    .select('settings')
+    .eq('store_id', targetStore.id)
+    .maybeSingle();
+  const defaultFloorId = floorBoardFrom(storeSettings?.settings).defaultFloorId;
 
   const { data: tables } = await supabase
     .from('restaurant_tables')
@@ -91,7 +99,7 @@ export default async function TablesSettingsPage() {
 
       <div className="grid gap-5 @5xl:grid-cols-3">
         <div className="@5xl:col-span-1">
-          <FloorsPanel storeId={targetStore.id} initial={floorRows} />
+          <FloorsPanel storeId={targetStore.id} initial={floorRows} defaultFloorId={defaultFloorId} />
         </div>
         <div className="@5xl:col-span-2">
           <Card>
