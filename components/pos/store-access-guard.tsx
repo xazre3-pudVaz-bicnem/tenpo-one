@@ -1,6 +1,6 @@
 import { RegisterGate } from '@/components/pos/register-gate';
 import { claimRegisterDevice } from '@/app/app/pos/register-device-actions';
-import { isRequestFromStoreNetwork, peekRegisterDevice } from '@/lib/store-access-server';
+import { loadStoreAccess, peekRegisterDevice } from '@/lib/store-access-server';
 import { ACCESS_MESSAGE } from '@/lib/store-access';
 
 /**
@@ -12,12 +12,13 @@ export async function storeAccessBlock(
   store: { id: string; name: string },
   opts: { countDevice: boolean }
 ): Promise<React.ReactNode | null> {
-  if (!(await isRequestFromStoreNetwork(store.id))) {
+  const { policy, onNetwork } = await loadStoreAccess(store.id);
+  if (!onNetwork) {
     return <RegisterGate kind="network" storeId={store.id} storeName={store.name} message={ACCESS_MESSAGE.network} />;
   }
   if (!opts.countDevice) return null;
 
-  const { decision, limit } = await peekRegisterDevice(store.id);
+  const { decision, limit } = await peekRegisterDevice(store.id, policy);
   if (decision.kind === 'allowed') return null;
   if (decision.kind === 'register') {
     return (

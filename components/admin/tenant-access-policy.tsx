@@ -82,7 +82,7 @@ export function TenantAccessPolicy({
       <p className="text-xs leading-relaxed text-gray-500">
         契約時に、この店舗の回線（グローバルIP）とレジ端末の台数を決めます。回線を入れると、レジ（/app/pos・フロア）とハンディは
         その回線からだけ使えます（注文・厨房への送信・会計も止まります）。会計・帳票・設定などの画面は制限しません。
-        回線を1件も入れない場合は制限なし（今まで通り）。IPv6 は上位64ビットで判定します。
+        回線を1件も入れない場合は制限なし（回線・台数のどちらも効きません＝今まで通り）。IPv6 は上位64ビットで判定します。
       </p>
 
       <div className="space-y-2">
@@ -126,6 +126,7 @@ export function TenantAccessPolicy({
         <div>
           <Label htmlFor="register-limit">レジ端末（iPad）の台数</Label>
           <Input id="register-limit" value={limit} onChange={(e) => setLimit(e.target.value.replace(/[^0-9]/g, ''))} className="w-24 text-right" inputMode="numeric" />
+          <p className="mt-1 text-xs text-gray-500">台数の制限は、回線を1件以上入れてから効きます</p>
         </div>
         <div className="flex-1">
           <Label htmlFor="access-note">メモ（契約内容など）</Label>

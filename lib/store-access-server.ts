@@ -6,14 +6,13 @@ import { currentRequestIp } from '@/lib/handy-device-server';
 import {
   EMPTY_POLICY,
   REGISTER_COOKIE,
+  countsRegisterDevices,
   decideRegisterDevice,
   isAllowedNetwork,
   policyFrom,
   type RegisterDeviceDecision,
   type StoreAccessPolicy,
 } from '@/lib/store-access';
-
-type AnyClient = { from: (table: string) => never } | ReturnType<typeof createAdminClient>;
 
 export function hashDeviceToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
@@ -42,9 +41,21 @@ export async function isRequestFromStoreNetwork(storeId: string): Promise<boolea
   return isAllowedNetwork(policy, await currentRequestIp());
 }
 
-/** 登録はせずに、この端末の状態だけ見る（ページの表示用） */
-export async function peekRegisterDevice(storeId: string): Promise<{ decision: RegisterDeviceDecision; limit: number }> {
+/** 店舗の設定と「今の回線でよいか」を一度に取る（画面で2回読まないため） */
+export async function loadStoreAccess(storeId: string): Promise<{ policy: StoreAccessPolicy; onNetwork: boolean }> {
   const policy = await loadStorePolicy(storeId);
+  if (policy.networks.length === 0) return { policy, onNetwork: true };
+  return { policy, onNetwork: isAllowedNetwork(policy, await currentRequestIp()) };
+}
+
+/** 登録はせずに、この端末の状態だけ見る（ページの表示用） */
+export async function peekRegisterDevice(
+  storeId: string,
+  preloaded?: StoreAccessPolicy
+): Promise<{ decision: RegisterDeviceDecision; limit: number }> {
+  const policy = preloaded ?? (await loadStorePolicy(storeId));
+  // 契約で回線を登録していない店舗は、台数を数えない（今まで通り）
+  if (!countsRegisterDevices(policy)) return { decision: { kind: 'allowed' }, limit: policy.registerLimit };
   const admin = createAdminClient();
   const token = (await cookies()).get(REGISTER_COOKIE)?.value ?? null;
   let known: { status: 'active' | 'revoked'; storeId: string } | null = null;
@@ -85,6 +96,7 @@ export async function checkRegisterDevice(opts: {
   createdBy: string | null;
 }): Promise<RegisterDeviceCheck> {
   const policy = await loadStorePolicy(opts.storeId);
+  if (!countsRegisterDevices(policy)) return { decision: { kind: 'allowed' }, newToken: null, limit: policy.registerLimit };
   const admin = createAdminClient();
   const jar = await cookies();
   const token = jar.get(REGISTER_COOKIE)?.value ?? null;
