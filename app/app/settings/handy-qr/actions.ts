@@ -7,7 +7,7 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { currentRequestIp } from '@/lib/handy-device-server';
 import { networkKey } from '@/lib/handy-pairing';
-import { addShopNetwork, handyQrFrom, type HandyQrSettings } from '@/lib/handy-qr';
+import { addShopNetwork, handyQrFrom, isIpLiteral, type HandyQrSettings } from '@/lib/handy-qr';
 
 export interface ActionResult {
   error?: string;
@@ -57,16 +57,29 @@ async function audit(ctx: Ctx, storeId: string, action: string, after: Record<st
 const newToken = () => randomBytes(24).toString('hex');
 
 /**
+ * レジの画面が調べた、この回線の IPv4 / IPv6（api.ipify.org / api6.ipify.org）。
+ * お店の回線が IPv4 と IPv6 の両方を持つとき、レジは IPv4・iPhone は IPv6 でつながることがあるので両方を登録する。
+ * 操作しているのはログインした店長以上なので、送られた値をそのまま回線として使う（形だけ確認）。
+ */
+function extraIpsFrom(v: unknown): string[] {
+  return Array.isArray(v) ? v.filter(isIpLiteral).slice(0, 2) : [];
+}
+
+/**
  * iPhone用ハンディのQRコードを作る（はじめて使うとき）。
  * 同時に、いま操作しているレジの回線を「お店のWi-Fi」として登録する（お店のWi-Fiにつないだレジで操作すること）。
  */
-export async function setupHandyQr(storeId: string): Promise<ActionResult> {
+export async function setupHandyQr(storeId: string, extraIps: string[] = []): Promise<ActionResult> {
   const ctx = await requirePermission('store.settings');
   assertStoreAccess(ctx, storeId);
   const ip = await currentRequestIp();
   if (!ip) return { error: '接続元を確認できません。お店のWi-Fiにつないだレジから操作してください' };
   const result = await writeHandyQr(ctx, storeId, (qr) => {
-    const withNet = addShopNetwork(qr, ip, 'レジの回線', new Date().toISOString());
+    const now = new Date().toISOString();
+    let withNet = addShopNetwork(qr, ip, 'レジの回線', now);
+    for (const extra of extraIpsFrom(extraIps)) {
+      withNet = addShopNetwork(withNet, extra, extra.includes(':') ? 'レジの回線（IPv6）' : 'レジの回線（IPv4）', now);
+    }
     return { ...withNet, token: qr.token ?? newToken() };
   });
   if (!result.error) await audit(ctx, storeId, 'handy.qr_setup', { network: networkKey(ip) });
@@ -104,16 +117,19 @@ export async function regenerateHandyQr(storeId: string): Promise<ActionResult> 
 }
 
 /** いま操作しているレジ（端末）の回線を「お店のWi-Fi」に追加する */
-export async function addCurrentShopNetwork(storeId: string, label: string): Promise<ActionResult> {
+export async function addCurrentShopNetwork(storeId: string, label: string, extraIps: string[] = []): Promise<ActionResult> {
   const ctx = await requirePermission('store.settings');
   assertStoreAccess(ctx, storeId);
   const ip = await currentRequestIp();
   if (!ip) return { error: '接続元を確認できません' };
-  const result = await writeHandyQr(ctx, storeId, (qr) =>
-    qr.networks.some((n) => n.key === networkKey(ip))
-      ? 'この回線はすでに登録されています'
-      : addShopNetwork(qr, ip, label || 'お店のWi-Fi', new Date().toISOString())
-  );
+  const result = await writeHandyQr(ctx, storeId, (qr) => {
+    const now = new Date().toISOString();
+    const ips = [ip, ...extraIpsFrom(extraIps)];
+    if (ips.every((x) => qr.networks.some((n) => n.key === networkKey(x)))) return 'この回線はすでに登録されています';
+    let next = qr;
+    for (const x of ips) next = addShopNetwork(next, x, `${label || 'お店のWi-Fi'}${x.includes(':') ? '（IPv6）' : ''}`, now);
+    return next;
+  });
   if (!result.error) await audit(ctx, storeId, 'handy.network_add', { network: networkKey(ip) });
   return result;
 }

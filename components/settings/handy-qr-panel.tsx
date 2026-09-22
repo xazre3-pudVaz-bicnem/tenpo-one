@@ -37,9 +37,9 @@ export function HandyQrPanel({
   currentNetwork: string | null;
   currentIsShop: boolean;
   activeDevices: number;
-  setupAction: Action<[string]>;
+  setupAction: Action<[string, string[]]>;
   regenerateAction: Action<[string]>;
-  addNetworkAction: Action<[string, string]>;
+  addNetworkAction: Action<[string, string, string[]]>;
   removeNetworkAction: Action<[string, string]>;
 }) {
   const router = useRouter();
@@ -59,6 +59,24 @@ export function HandyQrPanel({
       alive = false;
     };
   }, [token]);
+
+  /** この回線の IPv4 / IPv6 を調べる（お店の回線が両方あるとき、iPhone が IPv6 でつながっても開けるように） */
+  const lookupIps = async (): Promise<string[]> => {
+    const get = async (url: string) => {
+      try {
+        const ctrl = new AbortController();
+        const t = window.setTimeout(() => ctrl.abort(), 3000);
+        const r = await fetch(url, { signal: ctrl.signal, cache: 'no-store' });
+        window.clearTimeout(t);
+        const j = (await r.json()) as { ip?: string };
+        return typeof j.ip === 'string' ? j.ip : null;
+      } catch {
+        return null;
+      }
+    };
+    const found = await Promise.all([get('https://api.ipify.org?format=json'), get('https://api6.ipify.org?format=json')]);
+    return found.filter((x): x is string => !!x);
+  };
 
   const run = (fn: () => Promise<{ error?: string }>, ok: string) =>
     startTransition(async () => {
@@ -94,7 +112,7 @@ export function HandyQrPanel({
         <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">
           いまお使いの端末の回線を「お店のWi-Fi」として登録します。必ず<strong>お店のWi-Fiにつないだレジ</strong>で押してください。
         </p>
-        <Button onClick={() => run(() => setupAction(storeId), 'QRコードを作りました')} disabled={pending}>
+        <Button onClick={() => run(async () => setupAction(storeId, await lookupIps()), 'QRコードを作りました')} disabled={pending}>
           QRコードを作る
         </Button>
       </div>
@@ -171,7 +189,7 @@ export function HandyQrPanel({
         {!currentIsShop && (
           <div className="flex flex-wrap items-center gap-2">
             <Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="名前（例: 3F Wi-Fi）" className="h-9 w-48" />
-            <Button size="sm" onClick={() => run(() => addNetworkAction(storeId, label), '回線を追加しました')} disabled={pending}>
+            <Button size="sm" onClick={() => run(async () => addNetworkAction(storeId, label, await lookupIps()), '回線を追加しました')} disabled={pending}>
               この回線を追加
             </Button>
           </div>

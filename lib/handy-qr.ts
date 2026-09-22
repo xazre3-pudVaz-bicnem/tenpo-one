@@ -100,3 +100,10 @@ export function parseOutsideSince(v: string | undefined | null): number | null {
 export function handyQrUrl(siteUrl: string, token: string): string {
   return `${siteUrl.replace(/\/$/, '')}/handy-join#${token}`;
 }
+
+/** IPv4 / IPv6 として読める値か（レジの画面から送られた回線の確認用） */
+export function isIpLiteral(v: unknown): v is string {
+  if (typeof v !== 'string' || v.length > 45) return false;
+  if (/^(25[0-5]|2[0-4]\d|1?\d?\d)(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}$/.test(v)) return true;
+  return /^[0-9a-f:]+$/i.test(v) && v.includes(':') && v.split('::').length <= 2;
+}

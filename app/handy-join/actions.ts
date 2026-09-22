@@ -9,6 +9,7 @@ import {
   currentRequestIp,
   revokeHandyDeviceSystem,
 } from '@/lib/handy-device-server';
+import { networkKey } from '@/lib/handy-pairing';
 import { HANDY_OUTSIDE_COOKIE, handyQrFrom, isHandyQrToken, isShopNetwork } from '@/lib/handy-qr';
 
 export type JoinResult = { ok: true; storeName: string } | { ok: false; error: string };
@@ -42,7 +43,10 @@ export async function joinHandyByQr(token: string): Promise<JoinResult> {
 
   const ip = await currentRequestIp();
   if (!isShopNetwork(qr, ip)) {
-    return { ok: false, error: 'お店のWi-Fiに接続してから読み取ってください（スマホの回線やほかのWi-Fiでは開けません）' };
+    return {
+      ok: false,
+      error: `お店のWi-Fiに接続してから読み取ってください（スマホの回線やほかのWi-Fiでは開けません）。この端末の回線: ${ip ? networkKey(ip) : '不明'}`,
+    };
   }
 
   // すでにこの店のハンディとしてログインしている端末は、そのまま開く

@@ -60,3 +60,14 @@ describe('お店のWi-Fiの外からは注文・厨房送信を止める', () =>
     expect(src).toContain('assertHandyOnShopNetwork');
   });
 });
+
+describe('回線の形の確認', () => {
+  it('IPv4 / IPv6 だけを受け付ける', async () => {
+    const { isIpLiteral } = await import('@/lib/handy-qr');
+    expect(isIpLiteral('113.33.158.194')).toBe(true);
+    expect(isIpLiteral('2001:db8::1')).toBe(true);
+    expect(isIpLiteral('999.1.1.1')).toBe(false);
+    expect(isIpLiteral('<script>')).toBe(false);
+    expect(isIpLiteral(12)).toBe(false);
+  });
+});
