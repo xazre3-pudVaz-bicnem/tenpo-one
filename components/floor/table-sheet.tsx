@@ -4,14 +4,7 @@ import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Dialog } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Input, Label, Select } from '@/components/ui/input';
-import { cn } from '@/lib/utils';
-import {
-  SEAT_DURATION_CHOICES,
-  durationForCourse,
-  durationLabel,
-  type SeatCourseOption,
-} from '@/lib/seat-time';
+import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/components/ui/toast';
 import { yen } from '@/lib/format';
@@ -29,7 +22,6 @@ export function TableSheet({
   canOperate,
   onClose,
   startWalkInAction,
-  courses = [],
   defaultStayMinutes = 120,
   goToOrderAction,
   completeCleaningAction,
@@ -40,7 +32,6 @@ export function TableSheet({
   canOperate: boolean;
   onClose: () => void;
   startWalkInAction: (tableId: string, partySize: number, options?: WalkInSeatOptions) => Promise<{ orderId: string }>;
-  courses?: SeatCourseOption[];
   defaultStayMinutes?: number;
   goToOrderAction: (tableId: string) => Promise<{ orderId: string }>;
   completeCleaningAction: (tableId: string) => Promise<void>;
@@ -49,9 +40,6 @@ export function TableSheet({
   const router = useRouter();
   const { toast } = useToast();
   const [partySize, setPartySize] = useState(2);
-  // ファーストオーダーのコース・時間（2026-09-22 店舗要望: オーダー・会計から着席するときにも決めたい）
-  const [courseId, setCourseId] = useState('');
-  const [minutes, setMinutes] = useState<number>(defaultStayMinutes);
   const [pending, startTransition] = useTransition();
 
   if (!table) return null;
@@ -130,79 +118,44 @@ export function TableSheet({
       <div className="space-y-3">
         {status === 'available' && (
           <div className="rounded-xl border border-line p-4">
-            <Label htmlFor="party-size">人数 / Guests</Label>
-            <div className="flex items-center gap-2">
+            {/* ファーストオーダー: ハンディと同じ「お客様情報」（モード・プラン・時間制・開始時間・男女の人数）を出してから着席する
+                （2026-09-22 店舗要望: iPad のオーダー・会計でもこの画面を出したい） */}
+            <Button
+              size="pos"
+              className="w-full"
+              disabled={pending}
+              onClick={() => router.push(`/app/floor/${table.id}/setup`)}
+            >
+              お客様情報を入力して着席 / Seat
+            </Button>
+            <div className="mt-3 flex items-center gap-2 border-t border-line pt-3">
+              <span className="text-xs text-ink-3">すぐ着席（人数だけ）:</span>
               <Input
                 id="party-size"
                 type="number"
                 min={1}
                 max={99}
+                aria-label="人数 / Guests"
                 value={partySize}
                 onChange={(e) => setPartySize(Math.max(1, Number(e.target.value) || 1))}
-                className="w-24"
+                className="h-9 w-20"
               />
-              <span className="text-sm text-ink-3">名</span>
-            </div>
-
-            <div className="mt-3">
-              <Label htmlFor="seat-course">コース / Course</Label>
-              <Select
-                id="seat-course"
-                value={courseId}
-                onChange={(e) => {
-                  const id = e.target.value;
-                  setCourseId(id);
-                  const c = courses.find((x) => x.id === id) ?? null;
-                  setMinutes((cur) => durationForCourse(c, cur) ?? defaultStayMinutes);
-                }}
+              <span className="text-xs text-ink-3">名</span>
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={pending}
+                onClick={() =>
+                  goPos(() =>
+                    startWalkInAction(table.id, partySize, {
+                      durationMinutes: defaultStayMinutes,
+                    })
+                  )
+                }
               >
-                <option value="">なし（アラカルト） / None</option>
-                {courses.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                    {c.durationMinutes ? `（${durationLabel(c.durationMinutes)}）` : ''}
-                  </option>
-                ))}
-              </Select>
+                着席 / Seat
+              </Button>
             </div>
-
-            <div className="mt-3">
-              <p className="mb-1.5 text-sm font-medium text-gray-700">時間 / Duration</p>
-              <div className="grid grid-cols-5 gap-1.5">
-                {SEAT_DURATION_CHOICES.map((n) => (
-                  <button
-                    key={n}
-                    type="button"
-                    onClick={() => setMinutes(n)}
-                    className={cn(
-                      'rounded-lg border py-2.5 text-xs font-semibold transition-colors',
-                      minutes === n ? 'border-primary bg-primary-soft text-primary-deep' : 'border-gray-200 text-navy hover:bg-gray-50'
-                    )}
-                  >
-                    {durationLabel(n)}
-                  </button>
-                ))}
-              </div>
-              {!SEAT_DURATION_CHOICES.includes(minutes) && (
-                <p className="mt-1.5 text-xs text-ink-3">時間: {durationLabel(minutes)}</p>
-              )}
-            </div>
-
-            <Button
-              size="pos"
-              className="mt-3 w-full"
-              disabled={pending}
-              onClick={() =>
-                goPos(() =>
-                  startWalkInAction(table.id, partySize, {
-                    durationMinutes: minutes,
-                    ...(courseId ? { courseId } : {}),
-                  })
-                )
-              }
-            >
-              ウォークイン着席 / Seat walk-in
-            </Button>
           </div>
         )}
 

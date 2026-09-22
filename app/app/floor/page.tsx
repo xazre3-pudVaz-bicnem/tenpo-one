@@ -147,19 +147,6 @@ export default async function FloorPage() {
         .order('start_at'),
     ]);
 
-  const { data: courseRows } = await supabase
-    .from('menu_items')
-    .select('id, name, duration_minutes, sort_order')
-    .eq('store_id', store.id)
-    .eq('item_type', 'course')
-    .eq('status', 'active')
-    .order('sort_order');
-  const seatCourses = (courseRows ?? []).map((c) => ({
-    id: c.id as string,
-    name: c.name as string,
-    durationMinutes: (c.duration_minutes as number | null) ?? null,
-  }));
-
   const serverNow = requestTime();
   const stayMinutes = settings?.default_stay_minutes ?? 120;
   const tableRows = (tables ?? []) as FloorTable[];
@@ -288,7 +275,6 @@ export default async function FloorPage() {
           serverNow={serverNow}
           canOperate={canOperate}
           startWalkInAction={startWalkIn}
-          courses={seatCourses}
           defaultStayMinutes={stayMinutes}
           goToOrderAction={goToOrder}
           completeCleaningAction={completeCleaning}
