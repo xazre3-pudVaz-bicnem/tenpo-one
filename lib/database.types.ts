@@ -5675,6 +5675,7 @@ export type Database = {
       printer_configs: {
         Row: {
           auto_print: boolean
+          bill_slips: boolean
           cloudprnt_enabled: boolean
           cloudprnt_token: string | null
           connection_type: string | null
@@ -5685,6 +5686,7 @@ export type Database = {
           id: string
           ip_address: string | null
           is_verified: boolean
+          floor_ids: string[]
           kitchen_stations: string[]
           last_connected_at: string | null
           last_polled_at: string | null
@@ -5703,6 +5705,7 @@ export type Database = {
         }
         Insert: {
           auto_print?: boolean
+          bill_slips?: boolean
           cloudprnt_enabled?: boolean
           cloudprnt_token?: string | null
           connection_type?: string | null
@@ -5713,6 +5716,7 @@ export type Database = {
           id?: string
           ip_address?: string | null
           is_verified?: boolean
+          floor_ids?: string[]
           kitchen_stations?: string[]
           last_connected_at?: string | null
           last_polled_at?: string | null
@@ -5731,6 +5735,7 @@ export type Database = {
         }
         Update: {
           auto_print?: boolean
+          bill_slips?: boolean
           cloudprnt_enabled?: boolean
           cloudprnt_token?: string | null
           connection_type?: string | null
@@ -5741,6 +5746,7 @@ export type Database = {
           id?: string
           ip_address?: string | null
           is_verified?: boolean
+          floor_ids?: string[]
           kitchen_stations?: string[]
           last_connected_at?: string | null
           last_polled_at?: string | null

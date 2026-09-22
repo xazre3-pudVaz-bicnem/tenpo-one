@@ -6,12 +6,13 @@
 import { colsFor, twoCol, wrapText, type PaperWidth, type WidthOptions } from './receipt-layout';
 import { englishName } from './romaji';
 
-export type KitchenStation = 'kitchen' | 'drink' | 'dessert';
+export type KitchenStation = 'kitchen' | 'drink' | 'dessert' | 'grill';
 
 export const STATION_LABELS: Record<KitchenStation, string> = {
   kitchen: 'キッチン',
   drink: 'ドリンク',
   dessert: 'デザート',
+  grill: '焼き場',
 };
 
 /** 厨房伝票は英語を主にするため、ステーション名も英語を持つ */
@@ -19,6 +20,7 @@ export const STATION_LABELS_EN: Record<KitchenStation, string> = {
   kitchen: 'KITCHEN',
   drink: 'DRINK',
   dessert: 'DESSERT',
+  grill: 'GRILL',
 };
 
 /**

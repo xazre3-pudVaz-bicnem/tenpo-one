@@ -2,13 +2,24 @@ import { describe, it, expect } from 'vitest';
 import { validateMenuItemRow, validateOptionGroupRow } from '@/components/import/validators';
 
 describe('validateMenuItemRow（商品CSV）', () => {
+  it('同じ商品名でもカテゴリが違えば別の重複キーになる（dinii と同じ持ち方）', () => {
+    const a = validateMenuItemRow({ categoryName: 'A(F) おつまみ', name: 'F. 枝豆', price: '0' });
+    const b = validateMenuItemRow({ categoryName: 'B(F) おつまみ', name: 'F. 枝豆', price: '0' });
+    const c = validateMenuItemRow({ categoryName: 'a(f) おつまみ ', name: ' f. 枝豆', price: '0' });
+    expect(a.ok && b.ok && c.ok).toBe(true);
+    if (a.ok && b.ok && c.ok) {
+      expect(a.dupKey).not.toBe(b.dupKey);
+      expect(a.dupKey).toBe(c.dupKey);
+    }
+  });
+
   it('英語名を取り込み、価格が空でも通す（登録済み商品の英語名更新用）', () => {
     const r = validateMenuItemRow({ name: 'バターチキンカレー', nameEn: 'Butter Chicken Curry', price: '' });
     expect(r.ok).toBe(true);
     if (r.ok) {
       expect(r.data.nameEn).toBe('Butter Chicken Curry');
       expect(r.data.price).toBeNull();
-      expect(r.dupKey).toBe('バターチキンカレー');
+      expect(r.dupKey).toBe('|バターチキンカレー');
     }
   });
 
@@ -78,5 +89,22 @@ describe('validateOptionGroupRow（選択肢CSV）', () => {
     const r = validateOptionGroupRow({ groupName: 'トッピング', optionName: 'チーズ', isRequired: '任意', price: '200' });
     expect(r.ok && r.data.isRequired).toBe(false);
     expect(r.ok && r.data.price).toBe(200);
+  });
+});
+
+describe('validateMenuItemRow（所要時間）', () => {
+  it('コースは所要時間（分）を取り込む', () => {
+    const r = validateMenuItemRow({ name: '3h 3980 course（大人）', price: '3980', itemType: 'コース', durationMinutes: '180' });
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.data.durationMinutes).toBe(180);
+  });
+  it('コース以外は所要時間を無視する', () => {
+    const r = validateMenuItemRow({ name: '生ビール', price: '550', itemType: 'ドリンク', durationMinutes: '90' });
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.data.durationMinutes).toBeNull();
+  });
+  it('範囲外・数字以外はエラー', () => {
+    expect(validateMenuItemRow({ name: 'A', price: '1', itemType: 'コース', durationMinutes: '0' }).ok).toBe(false);
+    expect(validateMenuItemRow({ name: 'A', price: '1', itemType: 'コース', durationMinutes: '2時間' }).ok).toBe(false);
   });
 });

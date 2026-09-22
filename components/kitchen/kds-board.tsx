@@ -82,7 +82,7 @@ export function KdsBoard({
   );
 
   const stationCounts = useMemo(() => {
-    const counts: Record<StationFilter, number> = { all: 0, kitchen: 0, drink: 0, dessert: 0 };
+    const counts: Record<StationFilter, number> = { all: 0, kitchen: 0, grill: 0, drink: 0, dessert: 0 };
     for (const g of groups) {
       for (const i of g.items) {
         if (!showServed && i.kitchenStatus === 'served') continue;

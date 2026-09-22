@@ -76,7 +76,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
   await reclaimStaleJobs(admin, printer.id);
 
   if (printer.usage === 'kitchen') await generateKitchenJobs(admin, printer);
-  if (printer.usage === 'receipt') await generateQrBillJobs(admin, printer);
+  // レシート機と「会計伝票も出す」厨房（ドリンク）機（関数の中で判定する）
+  await generateQrBillJobs(admin, printer);
 
   const job = await claimNextJob(admin, printer.id);
   if (!job) return NextResponse.json({ jobReady: false });

@@ -9,7 +9,7 @@ import { EmptyState } from '@/components/ui/state';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useToast } from '@/components/ui/toast';
 import { deletePrinterConfig } from '@/app/app/settings/printers/actions';
-import { PrinterDialog, type PrinterConfigRow } from './printer-dialog';
+import { PrinterDialog, type FloorOption, type PrinterConfigRow } from './printer-dialog';
 import { TestPrintDialog } from './test-print-dialog';
 
 const USAGE_LABEL: Record<string, string> = { receipt: 'レシート', kitchen: '厨房', label: 'ラベル' };
@@ -17,7 +17,15 @@ const CONNECTION_LABEL: Record<string, string> = {
   browser: 'ブラウザ印刷', wifi: 'Wi-Fi', lan: '有線LAN', bluetooth: 'Bluetooth', usb: 'USB',
 };
 
-export function PrintersPanel({ storeId, initial }: { storeId: string; initial: PrinterConfigRow[] }) {
+export function PrintersPanel({
+  storeId,
+  initial,
+  floors = [],
+}: {
+  storeId: string;
+  initial: PrinterConfigRow[];
+  floors?: FloorOption[];
+}) {
   const rows = initial;
 
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -75,7 +83,15 @@ export function PrintersPanel({ storeId, initial }: { storeId: string; initial: 
                       <Badge tone="success" className="ml-1">実機印字</Badge>
                     )}
                   </Td>
-                  <Td>{USAGE_LABEL[r.usage] ?? r.usage}</Td>
+                  <Td>
+                    {USAGE_LABEL[r.usage] ?? r.usage}
+                    {r.usage === 'kitchen' && r.billSlips && <span className="ml-1 text-xs text-gray-500">＋会計伝票</span>}
+                    {(r.floorIds ?? []).length > 0 && (
+                      <span className="ml-1 text-xs text-gray-500">
+                        （{floors.filter((f) => (r.floorIds ?? []).includes(f.id)).map((f) => f.name).join('・')}）
+                      </span>
+                    )}
+                  </Td>
                   <Td>
                     <Badge tone={r.isVerified ? 'success' : 'gray'}>{r.isVerified ? '検証済み' : '未検証'}</Badge>
                   </Td>
@@ -135,7 +151,7 @@ export function PrintersPanel({ storeId, initial }: { storeId: string; initial: 
         </TableWrap>
       )}
 
-      {dialogOpen && <PrinterDialog storeId={storeId} editing={editing} onClose={() => setDialogOpen(false)} />}
+      {dialogOpen && <PrinterDialog storeId={storeId} editing={editing} floors={floors} onClose={() => setDialogOpen(false)} />}
 
       {testing && (
         <TestPrintDialog

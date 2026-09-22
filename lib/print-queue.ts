@@ -6,6 +6,7 @@
  * ジョブの期限切れ・取りこぼし回収・厨房伝票の生成は同じロジックでよい。表現（Markup / StarPRNT / ePOS-Print XML）
  * だけが方式ごとに異なり、payload に3種とも載せてプリンタ側に選ばせる。
  */
+import { normalizeFloorIds, printerServesFloor, printsBillSlips } from '@/lib/printer-floors';
 import { createAdminClient } from '@/lib/supabase/admin';
 import {
   groupKitchenTickets,
@@ -60,6 +61,10 @@ export interface PrinterRow {
   kitchen_stations: string[] | null;
   /** レジ機: QR注文が入ったらお会計伝票を自動で印字する（設定 > プリンター「自動印刷」） */
   auto_print?: boolean;
+  /** 担当フロア（floors.id）。空＝既定プリンター（lib/printer-floors.ts） */
+  floor_ids?: string[] | null;
+  /** 厨房（ドリンク）機から会計伝票も出す */
+  bill_slips?: boolean;
 }
 
 type Admin = ReturnType<typeof createAdminClient>;
@@ -69,7 +74,7 @@ export async function resolvePrinter(token: string): Promise<{ admin: Admin; pri
   const admin = createAdminClient();
   const { data } = await admin
     .from('printer_configs')
-    .select('id, organization_id, store_id, name, usage, paper_width_mm, kitchen_stations, auto_print')
+    .select('id, organization_id, store_id, name, usage, paper_width_mm, kitchen_stations, auto_print, floor_ids, bill_slips')
     .eq('cloudprnt_token', token)
     .eq('cloudprnt_enabled', true)
     .eq('status', 'active')
@@ -205,11 +210,11 @@ export async function generateKitchenJobs(admin: Admin, printer: PrinterRow) {
  * - 重複防止: 印字済みかどうかは print_jobs（job_type='order_slip'）の作成時刻で判定する。新しい列は作らない
  */
 export async function generateQrBillJobs(admin: Admin, printer: PrinterRow) {
-  if (printer.usage !== 'receipt' || !printer.auto_print) return;
+  if (!printsBillSlips(printer) || !printer.auto_print) return;
 
   const { data: orders, error } = await admin
     .from('orders')
-    .select('id, order_no, guest_count, clerk_name, subtotal, tax_total, service_charge, discount_total, total, restaurant_tables(name), stores(name)')
+    .select('id, order_no, guest_count, clerk_name, subtotal, tax_total, service_charge, discount_total, total, restaurant_tables(name, floor_id), stores(name)')
     .eq('store_id', printer.store_id)
     .eq('order_source', 'qr')
     .eq('status', 'open')
@@ -220,7 +225,29 @@ export async function generateQrBillJobs(admin: Admin, printer: PrinterRow) {
     return;
   }
   if (!orders || orders.length === 0) return;
-  const orderIds = orders.map((o) => o.id as string);
+
+  // 担当フロア: このプリンターが担当する卓の伝票だけ出す（3F の卓 → 3F のプリンター）。
+  // 比較対象は同じ店の「自動印刷ON・実機接続ON」のレシート機（どれか1台から1回だけ出るように）
+  const { data: peers } = await admin
+    .from('printer_configs')
+    .select('id, floor_ids')
+    .eq('store_id', printer.store_id)
+    .eq('status', 'active')
+    .eq('cloudprnt_enabled', true)
+    .or('usage.eq.receipt,bill_slips.eq.true')
+    .eq('auto_print', true);
+  const peerList = ((peers ?? []) as { id: string; floor_ids: string[] | null }[]).map((p) => ({
+    id: p.id,
+    floorIds: normalizeFloorIds(p.floor_ids),
+  }));
+  const self = { id: printer.id, floorIds: normalizeFloorIds(printer.floor_ids) };
+  if (!peerList.some((p) => p.id === self.id)) peerList.push(self);
+  const mine = orders.filter((o) => {
+    const t = o.restaurant_tables as unknown as { floor_id: string | null } | null;
+    return printerServesFloor(self, t?.floor_id ?? null, peerList);
+  });
+  if (mine.length === 0) return;
+  const orderIds = mine.map((o) => o.id as string);
 
   const [{ data: items }, { data: slips }] = await Promise.all([
     admin
@@ -250,7 +277,7 @@ export async function generateQrBillJobs(admin: Admin, printer: PrinterRow) {
 
   const toPrint = new Set(
     selectQrOrdersToPrint(
-      orders.map((o) => ({
+      mine.map((o) => ({
         orderId: o.id as string,
         itemAddedAt: (itemsByOrder.get(o.id as string) ?? []).map((l) => Date.parse(l.created_at as string)),
         lastSlipAt: lastSlipAt.get(o.id as string),
@@ -264,7 +291,7 @@ export async function generateQrBillJobs(admin: Admin, printer: PrinterRow) {
   const issuedAt = new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo', dateStyle: 'short', timeStyle: 'short' });
   const rows: Record<string, unknown>[] = [];
 
-  for (const o of orders) {
+  for (const o of mine) {
     const oid = o.id as string;
     if (!toPrint.has(oid)) continue;
     const lines = itemsByOrder.get(oid) ?? [];

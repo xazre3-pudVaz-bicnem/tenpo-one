@@ -9,6 +9,7 @@ const STATION_OPTIONS = [
   { value: 'kitchen', label: 'キッチン' },
   { value: 'drink', label: 'ドリンク' },
   { value: 'dessert', label: 'デザート' },
+  { value: 'grill', label: '焼き場' },
 ] as const;
 
 export interface StationCategoryRow {

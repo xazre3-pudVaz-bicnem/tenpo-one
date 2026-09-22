@@ -45,7 +45,7 @@ export const FIELD_DEFS: Record<ImportType, ImportFieldDef[]> = {
       required: false,
       kind: 'text',
       aliases: ['英語名', '英語', 'english', 'name_en', 'en'],
-      hint: 'レジ画面・厨房伝票に日本語と並べて表示します。登録済みの商品名と一致する行は英語名・カナだけを上書き更新します',
+      hint: 'レジ画面・厨房伝票に日本語と並べて表示します。同じカテゴリに同じ商品名が登録済みの行は英語名・カナ（コースは所要時間も）だけを上書き更新します（カテゴリが違えば同じ商品名でも別の商品として登録します）',
     },
     {
       key: 'price',
@@ -53,7 +53,7 @@ export const FIELD_DEFS: Record<ImportType, ImportFieldDef[]> = {
       required: false,
       kind: 'int',
       aliases: ['価格', '販売価格', 'price', '単価'],
-      hint: '新しい商品には必須。登録済みの商品（英語名・カナの更新）では省略できます',
+      hint: '新しい商品には必須。登録済みの商品（英語名・カナ・所要時間の更新）では省略できます',
     },
     {
       key: 'takeoutPrice',
@@ -71,6 +71,14 @@ export const FIELD_DEFS: Record<ImportType, ImportFieldDef[]> = {
       options: MENU_ITEM_TYPE_OPTIONS,
       aliases: ['種別', 'type', 'item_type', '区分'],
       hint: '未入力の場合は「フード」として登録します',
+    },
+    {
+      key: 'durationMinutes',
+      label: '所要時間（分）',
+      required: false,
+      kind: 'int',
+      aliases: ['所要時間（分）', '所要時間', '利用時間', '制限時間', '時間（分）', 'duration', 'duration_minutes', 'plan_time'],
+      hint: '種別が「コース」の商品だけ使います（飲み放題90分など）。フロア・ハンディの残り時間とL.O.表示に使います',
     },
   ],
   menu_option_groups: [

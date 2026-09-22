@@ -94,6 +94,8 @@ export interface NormalizedMenuItemRow {
   takeoutPrice: number | null;
   cost: number | null;
   itemType: 'food' | 'drink' | 'course' | 'option';
+  /** コースの所要時間（分）。コース以外は常に null */
+  durationMinutes: number | null;
 }
 
 export type ValidateResult<T> = { ok: true; data: T; dupKey: string | null } | { ok: false; errors: string[] };
@@ -109,6 +111,12 @@ export function validateMenuItemRow(values: Record<string, string>): ValidateRes
   if (!takeoutPrice.ok) errors.push(takeoutPrice.error);
   const cost = optionalInt(values, 'cost', '原価');
   if (!cost.ok) errors.push(cost.error);
+
+  const duration = optionalInt(values, 'durationMinutes', '所要時間（分）');
+  if (!duration.ok) errors.push(duration.error);
+  else if (duration.value !== null && (duration.value < 1 || duration.value > 1440)) {
+    errors.push('所要時間（分）は1〜1440で入力してください');
+  }
 
   const itemTypeRaw = cell(values, 'itemType');
   const itemTypeMatch = MENU_ITEM_TYPE_OPTIONS.find(
@@ -127,8 +135,20 @@ export function validateMenuItemRow(values: Record<string, string>): ValidateRes
     takeoutPrice: takeoutPrice.ok ? takeoutPrice.value : null,
     cost: cost.ok ? cost.value : null,
     itemType: (itemTypeMatch?.value as NormalizedMenuItemRow['itemType']) ?? 'food',
+    durationMinutes: null,
   };
-  return { ok: true, data, dupKey: data.name.toLowerCase() };
+  // 所要時間はコースだけ（フード・ドリンクに入っていても無視する＝商品編集画面と同じ扱い）
+  if (data.itemType === 'course' && duration.ok) data.durationMinutes = duration.value;
+  return { ok: true, data, dupKey: menuItemDupKey(data.categoryName, data.name) };
+}
+
+/**
+ * 商品の重複判定キー（「カテゴリ名|商品名」を小文字化）。
+ * dinii 等と同じく、同じ商品名でもカテゴリが違えば別の商品として登録できる
+ * （例: 「F. 枝豆」を A(F)・B(F) の両方の食べ放題カテゴリに置く）。同じカテゴリ内の同名だけを重複とみなす。
+ */
+export function menuItemDupKey(categoryName: string | null | undefined, name: string): string {
+  return `${(categoryName ?? '').trim().toLowerCase()}|${name.trim().toLowerCase()}`;
 }
 
 // ---------------------------------------------------------------

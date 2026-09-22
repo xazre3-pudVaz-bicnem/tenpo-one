@@ -6,6 +6,7 @@ import { requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { resolveSiteOrigin } from '@/lib/site-origin';
 import { tableOrderUrl, tableQrDataUrl } from '@/lib/table-qr';
+import { floorBoardFrom, floorBoardToJson } from '@/lib/floor-nav';
 
 export interface ActionResult {
   error?: string;
@@ -13,6 +14,68 @@ export interface ActionResult {
 
 function assertStoreAccess(storeIds: string[], storeId: string): string | null {
   return storeIds.includes(storeId) ? null : '対象店舗にアクセス権がありません';
+}
+
+/**
+ * レジ（オーダー・会計）のフロア画面で最初に出すフロアを保存する（null＝「すべて」）。
+ * store_settings.settings.floorBoard に入れる（settings の他の項目は消さない）。
+ */
+export async function saveDefaultFloor(storeId: string, floorId: string | null): Promise<ActionResult> {
+  const ctx = await requirePermission('store.settings');
+  const err = assertStoreAccess(
+    ctx.stores.map((s) => s.id),
+    storeId
+  );
+  if (err) return { error: err };
+
+  const supabase = await createClient();
+  if (floorId) {
+    const { data: floor } = await supabase
+      .from('floors')
+      .select('id')
+      .eq('id', floorId)
+      .eq('store_id', storeId)
+      .eq('status', 'active')
+      .maybeSingle();
+    if (!floor) return { error: 'フロアが見つかりません' };
+  }
+
+  const { data: existing, error: readError } = await supabase
+    .from('store_settings')
+    .select('settings')
+    .eq('store_id', storeId)
+    .maybeSingle();
+  if (readError) return { error: `店舗設定の読み込みに失敗しました: ${readError.message}` };
+  const current = (existing?.settings as Record<string, unknown> | null) ?? {};
+  const board = floorBoardFrom(current);
+  board.defaultFloorId = floorId;
+  const { error } = await supabase
+    .from('store_settings')
+    .upsert(
+      {
+        organization_id: ctx.organizationId,
+        store_id: storeId,
+        settings: { ...current, floorBoard: floorBoardToJson(board) },
+        updated_by: ctx.userId,
+      },
+      { onConflict: 'store_id' }
+    );
+  if (error) return { error: `最初に出すフロアの保存に失敗しました: ${error.message}` };
+
+  await supabase.rpc('log_audit', {
+    p_org: ctx.organizationId,
+    p_store: storeId,
+    p_action: 'settings.tables.default_floor',
+    p_target_table: 'store_settings',
+    p_target_id: storeId,
+    p_before: null,
+    p_after: { defaultFloorId: floorId },
+    p_note: null,
+  });
+
+  revalidatePath('/app/settings/tables');
+  revalidatePath('/app/floor');
+  return {};
 }
 
 /** フロア追加 */

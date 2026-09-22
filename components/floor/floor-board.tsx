@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { LayoutGrid, Map as MapIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -11,6 +11,7 @@ import { TableCard } from './table-card';
 import { ReservationPanel } from './reservation-panel';
 import { useNow } from './use-now';
 import type { WalkInSeatOptions } from './table-sheet';
+import { initialFloorFilter, stepFloor, swipeDirection } from '@/lib/floor-nav';
 import {
   TILE_LABEL,
   tileState,
@@ -46,6 +47,7 @@ type View = 'cards' | 'map';
 export function FloorBoard({
   storeId,
   floors,
+  defaultFloorId = null,
   tables,
   reservations,
   serverNow,
@@ -59,6 +61,8 @@ export function FloorBoard({
 }: {
   storeId: string;
   floors: FloorRow[];
+  /** 最初に出すフロア（設定 > テーブル・フロア）。無ければ「すべて」 */
+  defaultFloorId?: string | null;
   tables: TableView[];
   reservations: PanelReservation[];
   serverNow: number;
@@ -75,7 +79,22 @@ export function FloorBoard({
   const router = useRouter();
   const now = useNow(serverNow);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [floorFilter, setFloorFilter] = useState<string>('all');
+  const floorIds = floors.map((f) => f.id);
+  const [floorFilter, setFloorFilter] = useState<string>(() => initialFloorFilter(floorIds, defaultFloorId));
+  // 左右スライドで隣のフロアへ（右 → 次のフロア、左 → 前のフロア）
+  const touchStart = useRef<{ x: number; y: number } | null>(null);
+  const onTouchStart = (e: React.TouchEvent) => {
+    const t = e.touches[0];
+    touchStart.current = t ? { x: t.clientX, y: t.clientY } : null;
+  };
+  const onTouchEnd = (e: React.TouchEvent) => {
+    const s = touchStart.current;
+    touchStart.current = null;
+    const t = e.changedTouches[0];
+    if (!s || !t || floorIds.length < 2) return;
+    const dir = swipeDirection(t.clientX - s.x, t.clientY - s.y);
+    if (dir) setFloorFilter((cur) => stepFloor(floorIds, cur, dir, defaultFloorId));
+  };
   const [view, setView] = useState<View>('cards');
 
   // テーブル状態（着席・清掃中など）と、テーブルに紐づく注文・予約の変化をRealtimeで検知して画面を更新する。
@@ -127,7 +146,7 @@ export function FloorBoard({
 
   return (
     <div className="grid items-start gap-3.5 lg:grid-cols-[minmax(0,1fr)_270px]">
-      <div className="min-w-0 space-y-3">
+      <div className="min-w-0 space-y-3" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
         {showToolbar && (
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-wrap gap-1.5">
