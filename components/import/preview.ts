@@ -101,7 +101,7 @@ export function validateRowsLocally(type: ImportType, rows: ParsedRow[]): LocalV
 export function applyExistingDuplicates(issues: RowIssue[], existingKeys: Set<string>, type?: ImportType): RowIssue[] {
   const reason =
     type === 'menu_items'
-      ? '同じカテゴリに登録済みの商品です。英語名・カナの列があればその項目だけ上書き更新、無ければスキップされます'
+      ? '同じカテゴリに登録済みの商品です。英語名・カナ（コースは所要時間）の列があればその項目だけ上書き更新、無ければスキップされます'
       : '重複（登録済みのデータがあります）スキップされます';
   return issues.map((issue) => {
     if (issue.status === 'ok' && issue.dupKey && existingKeys.has(issue.dupKey)) {

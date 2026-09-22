@@ -91,3 +91,20 @@ describe('validateOptionGroupRow（選択肢CSV）', () => {
     expect(r.ok && r.data.price).toBe(200);
   });
 });
+
+describe('validateMenuItemRow（所要時間）', () => {
+  it('コースは所要時間（分）を取り込む', () => {
+    const r = validateMenuItemRow({ name: '3h 3980 course（大人）', price: '3980', itemType: 'コース', durationMinutes: '180' });
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.data.durationMinutes).toBe(180);
+  });
+  it('コース以外は所要時間を無視する', () => {
+    const r = validateMenuItemRow({ name: '生ビール', price: '550', itemType: 'ドリンク', durationMinutes: '90' });
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.data.durationMinutes).toBeNull();
+  });
+  it('範囲外・数字以外はエラー', () => {
+    expect(validateMenuItemRow({ name: 'A', price: '1', itemType: 'コース', durationMinutes: '0' }).ok).toBe(false);
+    expect(validateMenuItemRow({ name: 'A', price: '1', itemType: 'コース', durationMinutes: '2時間' }).ok).toBe(false);
+  });
+});

@@ -94,6 +94,8 @@ export interface NormalizedMenuItemRow {
   takeoutPrice: number | null;
   cost: number | null;
   itemType: 'food' | 'drink' | 'course' | 'option';
+  /** コースの所要時間（分）。コース以外は常に null */
+  durationMinutes: number | null;
 }
 
 export type ValidateResult<T> = { ok: true; data: T; dupKey: string | null } | { ok: false; errors: string[] };
@@ -109,6 +111,12 @@ export function validateMenuItemRow(values: Record<string, string>): ValidateRes
   if (!takeoutPrice.ok) errors.push(takeoutPrice.error);
   const cost = optionalInt(values, 'cost', '原価');
   if (!cost.ok) errors.push(cost.error);
+
+  const duration = optionalInt(values, 'durationMinutes', '所要時間（分）');
+  if (!duration.ok) errors.push(duration.error);
+  else if (duration.value !== null && (duration.value < 1 || duration.value > 1440)) {
+    errors.push('所要時間（分）は1〜1440で入力してください');
+  }
 
   const itemTypeRaw = cell(values, 'itemType');
   const itemTypeMatch = MENU_ITEM_TYPE_OPTIONS.find(
@@ -127,7 +135,10 @@ export function validateMenuItemRow(values: Record<string, string>): ValidateRes
     takeoutPrice: takeoutPrice.ok ? takeoutPrice.value : null,
     cost: cost.ok ? cost.value : null,
     itemType: (itemTypeMatch?.value as NormalizedMenuItemRow['itemType']) ?? 'food',
+    durationMinutes: null,
   };
+  // 所要時間はコースだけ（フード・ドリンクに入っていても無視する＝商品編集画面と同じ扱い）
+  if (data.itemType === 'course' && duration.ok) data.durationMinutes = duration.value;
   return { ok: true, data, dupKey: menuItemDupKey(data.categoryName, data.name) };
 }
 

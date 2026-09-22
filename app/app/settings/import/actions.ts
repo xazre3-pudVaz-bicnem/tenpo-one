@@ -284,7 +284,7 @@ export async function importRows(type: string, rows: ImportRowInput[]): Promise<
 
     const seen = new Set<string>();
     const toInsert: Valid<NormalizedMenuItemRow>[] = [];
-    const toUpdate: { id: string; name_en?: string; name_kana?: string }[] = [];
+    const toUpdate: { id: string; name_en?: string; name_kana?: string; duration_minutes?: number }[] = [];
     for (const item of validMenuItems) {
       const key = item.dupKey ?? '';
       if (seen.has(key)) {
@@ -294,10 +294,12 @@ export async function importRows(type: string, rows: ImportRowInput[]): Promise<
       seen.add(key);
       const existingId = existingIdByName.get(key);
       if (existingId) {
-        const patch: { id: string; name_en?: string; name_kana?: string } = { id: existingId };
+        const patch: { id: string; name_en?: string; name_kana?: string; duration_minutes?: number } = { id: existingId };
         if (item.data.nameEn) patch.name_en = item.data.nameEn;
         if (item.data.nameKana) patch.name_kana = item.data.nameKana;
-        if (patch.name_en || patch.name_kana) toUpdate.push(patch);
+        // コースの所要時間も登録済み商品へ後から入れられるようにする（dinii のプラン時間の移行用）
+        if (item.data.durationMinutes !== null) patch.duration_minutes = item.data.durationMinutes;
+        if (patch.name_en || patch.name_kana || patch.duration_minutes) toUpdate.push(patch);
         else skipped += 1;
         continue;
       }
@@ -336,6 +338,7 @@ export async function importRows(type: string, rows: ImportRowInput[]): Promise<
           price: k.data.price ?? 0,
           takeout_price: k.data.takeoutPrice,
           cost: k.data.cost,
+          duration_minutes: k.data.itemType === 'course' ? k.data.durationMinutes : null,
           created_by: ctx.userId,
           updated_by: ctx.userId,
         }));
