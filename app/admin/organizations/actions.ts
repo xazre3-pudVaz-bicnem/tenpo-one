@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/server';
 import { ROLES } from '@/lib/permissions';
 import { FEATURE_KEYS } from '@/lib/features';
 import { withErrorCapture } from '@/lib/observability-server';
+import { assignOrgCode, setupStoreContract } from '@/lib/tenant-provisioning';
 
 function randomPassword() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!#$%';
@@ -54,6 +55,8 @@ export async function createOrganization(
     .select('id')
     .single();
   if (orgError || !org) throw new Error(orgError?.message ?? '企業の作成に失敗しました');
+  // レジ（iPad）のログインで使う企業番号（t1+5桁）
+  await assignOrgCode(admin, org.id as string);
 
   const password = randomPassword();
   const { data: userRes, error: userError } = await admin.auth.admin.createUser({
@@ -258,11 +261,20 @@ export interface CreateStoreForOrgInput {
   organizationId: string;
   name: string;
   address?: string;
+  /** 契約: お店の回線（グローバルIP）。1件でも入れるとレジ・ハンディが制限される */
+  storeIps?: { ip: string; label: string }[];
+  /** 契約: レジ（iPad）の台数（既定2台） */
+  registerLimit?: number;
+  /** 契約: ハンディの台数（既定2台） */
+  handyLimit?: number;
 }
 
 export interface CreateStoreForOrgResult {
   storeId: string;
   slug: string;
+  /** レジ（iPad）のログインで使う（一度だけ表示） */
+  orgCode?: string;
+  registerPassword?: string;
 }
 
 /** 企業詳細から店舗を追加（stores + store_settings）。slugは名称から自動生成し重複時はサフィックスを付与する */
@@ -306,8 +318,27 @@ export async function createStoreForOrg(input: CreateStoreForOrgInput): Promise<
         p_note: null,
       });
 
+      // 契約の内容（お店の回線・レジ台数・ハンディ台数・レジ用パスワード）
+      const contract = await setupStoreContract(admin, {
+        organizationId: input.organizationId,
+        storeId: store.id,
+        ips: input.storeIps ?? [],
+        registerLimit: input.registerLimit,
+        handyLimit: input.handyLimit,
+      });
+      const { data: orgRow } = await admin
+        .from('organizations')
+        .select('org_code')
+        .eq('id', input.organizationId)
+        .maybeSingle();
+
       revalidatePath(`/admin/organizations/${input.organizationId}`);
-      return { storeId: store.id, slug: store.slug };
+      return {
+        storeId: store.id,
+        slug: store.slug,
+        orgCode: (orgRow?.org_code as string | null) ?? undefined,
+        registerPassword: contract.registerPassword,
+      };
     }
 
     if (error?.code !== '23505') {

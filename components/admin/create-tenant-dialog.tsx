@@ -33,13 +33,30 @@ export function CreateTenantTrigger({ organizations, plans }: { organizations: O
     environment: 'production' as (typeof ENVIRONMENTS)[number],
     ownerEmail: '',
     ownerName: '',
+    // 契約（お店の回線・台数）
+    storeIp: '',
+    storeIp2: '',
+    registerLimit: '2',
+    handyLimit: '2',
   });
   const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) => setForm((f) => ({ ...f, [k]: v }));
 
   const reset = () => {
     setResult(null);
     setError(null);
-    setForm((f) => ({ ...f, companyName: '', companyNameKana: '', storeName: '', slug: '', ownerEmail: '', ownerName: '' }));
+    setForm((f) => ({
+      ...f,
+      companyName: '',
+      companyNameKana: '',
+      storeName: '',
+      slug: '',
+      ownerEmail: '',
+      ownerName: '',
+      storeIp: '',
+      storeIp2: '',
+      registerLimit: '2',
+      handyLimit: '2',
+    }));
   };
 
   const submit = () => {
@@ -57,6 +74,12 @@ export function CreateTenantTrigger({ organizations, plans }: { organizations: O
           environment: form.environment,
           ownerEmail: form.ownerEmail || undefined,
           ownerName: form.ownerName || undefined,
+          storeIps: [
+            { ip: form.storeIp, label: 'お店の回線' },
+            { ip: form.storeIp2, label: 'お店の回線2' },
+          ].filter((x) => x.ip.trim()),
+          registerLimit: Number(form.registerLimit) || 0,
+          handyLimit: Number(form.handyLimit) || 0,
         });
         setResult(res);
         router.refresh();
@@ -82,6 +105,24 @@ export function CreateTenantTrigger({ organizations, plans }: { organizations: O
             <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm">
               <p className="font-semibold text-emerald-800">店舗を作成しました</p>
               <p className="mt-1 text-emerald-700">公開予約URLのslug：<span className="font-mono">{result.slug}</span></p>
+            </div>
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm">
+              <p className="font-semibold text-amber-800">レジ（iPad）のログイン（この画面でしか表示されません）</p>
+              <p className="mt-1">企業番号：<span className="font-mono text-base">{result.orgCode ?? '—'}</span></p>
+              <div className="mt-1 flex items-center gap-2">
+                <span>レジ用パスワード：</span>
+                <code className="rounded bg-white px-2 py-1 font-mono text-amber-900">{result.registerPassword}</code>
+                <button
+                  type="button"
+                  onClick={() => navigator.clipboard?.writeText(result.registerPassword ?? '')}
+                  className="inline-flex items-center gap-1 text-xs text-amber-700 hover:underline"
+                >
+                  <Copy className="h-3.5 w-3.5" />コピー
+                </button>
+              </div>
+              <p className="mt-1 text-xs text-amber-600">
+                iPad は この2つだけでログインします。どの店舗かは登録したお店の回線で決まります。パスワードは運営だけが作り直せます。
+              </p>
             </div>
             {result.ownerPassword && (
               <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm">
@@ -170,6 +211,32 @@ export function CreateTenantTrigger({ organizations, plans }: { organizations: O
             <div>
               <Label htmlFor="ct-slug">slug（任意・未指定なら店舗名から生成）</Label>
               <Input id="ct-slug" value={form.slug} onChange={(e) => set('slug', e.target.value)} placeholder="fogo-de-brasia-shinjuku" className="font-mono" />
+            </div>
+            <div className="space-y-3 rounded-xl border border-gray-100 bg-surface p-3">
+              <p className="text-sm font-semibold text-navy">契約（レジ・ハンディ）</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label htmlFor="ct-ip">お店のIPアドレス</Label>
+                  <Input id="ct-ip" value={form.storeIp} onChange={(e) => set('storeIp', e.target.value)} placeholder="203.0.113.5" className="font-mono" />
+                </div>
+                <div>
+                  <Label htmlFor="ct-ip2">お店のIPアドレス2（任意）</Label>
+                  <Input id="ct-ip2" value={form.storeIp2} onChange={(e) => set('storeIp2', e.target.value)} placeholder="2001:db8:1:2::" className="font-mono" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label htmlFor="ct-rlimit">レジ（iPad）の台数</Label>
+                  <Input id="ct-rlimit" value={form.registerLimit} onChange={(e) => set('registerLimit', e.target.value.replace(/[^0-9]/g, ''))} className="text-right" inputMode="numeric" />
+                </div>
+                <div>
+                  <Label htmlFor="ct-hlimit">ハンディの台数</Label>
+                  <Input id="ct-hlimit" value={form.handyLimit} onChange={(e) => set('handyLimit', e.target.value.replace(/[^0-9]/g, ''))} className="text-right" inputMode="numeric" />
+                </div>
+              </div>
+              <p className="text-xs text-gray-500">
+                IPを入れると、レジ・ハンディはその回線からだけ使えます（台数の制限もここから効きます）。入れない場合は制限なし（今まで通り）。
+              </p>
             </div>
             <div className="grid grid-cols-2 gap-3 border-t border-gray-100 pt-3">
               <div>

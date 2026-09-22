@@ -30,6 +30,8 @@ export interface SessionContext {
   disabledFeatures: ReadonlySet<string>;
   /** ハンディ端末（QRで登録したスマホ）の専用アカウントか。/app（レジ本体）は使わせず /handy へ */
   isHandyDevice?: boolean;
+  /** レジ端末（企業番号＋レジ用パスワードで入ったiPad）のアカウントか */
+  isRegisterDevice?: boolean;
 }
 
 /**
@@ -138,6 +140,7 @@ export const getSessionContext = cache(async (): Promise<SessionContext | null> 
     isHq: isHqRole(role),
     disabledFeatures,
     isHandyDevice: user.user_metadata?.handy_device === true,
+    isRegisterDevice: user.user_metadata?.register_device === true,
   };
 });
 
@@ -175,7 +178,9 @@ export async function requirePermission(action: PermissionAction) {
   }
   // 契約のアクセス制限（2026-09-23）: レジ・ハンディの操作はお店の回線からだけ。
   // 回線を登録していない店舗は制限なし。画面の表示は止めず、Server Action だけを止める。
-  if (POS_ACTIONS.has(action) && ctx.currentStore && (await headers()).get('next-action')) {
+  // レジ端末のアカウントは、レジの操作にかぎらず全ての操作を回線の中からだけ受け付ける。
+  const guardNetwork = POS_ACTIONS.has(action) || ctx.isRegisterDevice === true;
+  if (guardNetwork && ctx.currentStore && (await headers()).get('next-action')) {
     const [{ isRequestFromStoreNetwork }, { ACCESS_MESSAGE }] = await Promise.all([
       import('@/lib/store-access-server'),
       import('@/lib/store-access'),

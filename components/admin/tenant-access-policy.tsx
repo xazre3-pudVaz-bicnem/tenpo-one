@@ -21,25 +21,40 @@ export interface RegisterDeviceRow {
 /**
  * 契約時のアクセス制限（運営だけが設定）。
  * - お店の回線（IP）を入れると、レジ（iPad）とハンディはその回線からだけ使える
- * - レジとして登録できる端末の台数
+ * - レジ（iPad）とハンディの台数
+ * - レジ用パスワード（企業番号と合わせてiPadのログインに使う。運営だけが作り直せる）
  * 回線を1つも入れない＝制限なし（今まで通り）。
  */
 export function TenantAccessPolicy({
   storeId,
+  orgCode,
   networks,
   registerLimit,
+  handyLimit,
+  handyCount,
   note,
   devices,
   saveAction,
   revokeAction,
+  reissueAction,
 }: {
   storeId: string;
+  orgCode: string | null;
   networks: AllowedNetwork[];
   registerLimit: number;
+  handyLimit: number;
+  handyCount: number;
   note: string;
   devices: RegisterDeviceRow[];
-  saveAction: (input: { storeId: string; ips: { ip: string; label: string }[]; registerLimit: number; note: string }) => Promise<{ error?: string }>;
+  saveAction: (input: {
+    storeId: string;
+    ips: { ip: string; label: string }[];
+    registerLimit: number;
+    handyLimit: number;
+    note: string;
+  }) => Promise<{ error?: string }>;
   revokeAction: (input: { storeId: string; deviceId: string }) => Promise<{ error?: string }>;
+  reissueAction: (input: { storeId: string }) => Promise<{ password?: string; error?: string }>;
 }) {
   const router = useRouter();
   const { toast } = useToast();
@@ -47,7 +62,9 @@ export function TenantAccessPolicy({
     networks.length > 0 ? networks.map((n) => ({ ip: n.key, label: n.label })) : [{ ip: '', label: '' }]
   );
   const [limit, setLimit] = useState(String(registerLimit));
+  const [handy, setHandy] = useState(String(handyLimit));
   const [memo, setMemo] = useState(note);
+  const [newPassword, setNewPassword] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   const save = () =>
@@ -56,11 +73,23 @@ export function TenantAccessPolicy({
         storeId,
         ips: rows.filter((x) => x.ip.trim()),
         registerLimit: Number(limit) || 0,
+        handyLimit: Number(handy) || 0,
         note: memo,
       });
       if (r.error) toast(r.error, 'error');
       else {
         toast('アクセス制限を保存しました');
+        router.refresh();
+      }
+    });
+
+  const reissue = () =>
+    startTransition(async () => {
+      const r = await reissueAction({ storeId });
+      if (r.error) toast(r.error, 'error');
+      else {
+        setNewPassword(r.password ?? null);
+        toast('レジ用パスワードを作り直しました');
         router.refresh();
       }
     });
@@ -128,12 +157,39 @@ export function TenantAccessPolicy({
           <Input id="register-limit" value={limit} onChange={(e) => setLimit(e.target.value.replace(/[^0-9]/g, ''))} className="w-24 text-right" inputMode="numeric" />
           <p className="mt-1 text-xs text-gray-500">台数の制限は、回線を1件以上入れてから効きます</p>
         </div>
+        <div>
+          <Label htmlFor="handy-limit">ハンディの台数</Label>
+          <Input id="handy-limit" value={handy} onChange={(e) => setHandy(e.target.value.replace(/[^0-9]/g, ''))} className="w-24 text-right" inputMode="numeric" />
+          <p className="mt-1 text-xs text-gray-500">
+            いま <span className="tabular-nums">{handyCount}</span> 台つながっています
+          </p>
+        </div>
         <div className="flex-1">
           <Label htmlFor="access-note">メモ（契約内容など）</Label>
           <Input id="access-note" value={memo} onChange={(e) => setMemo(e.target.value)} placeholder="例: 2026-09 契約。固定IP。増設は要相談" />
         </div>
         <Button onClick={save} disabled={pending}>
           {pending ? '保存中…' : '保存する'}
+        </Button>
+      </div>
+
+      <div className="rounded-xl border border-gray-100 bg-surface px-4 py-3">
+        <p className="text-sm font-semibold text-navy">レジ（iPad）のログイン</p>
+        <p className="mt-1 text-sm text-gray-600">
+          企業番号 <span className="font-mono text-base text-navy">{orgCode ?? '（未発行）'}</span>
+          <span className="ml-2 text-xs text-gray-500">＋ 店舗ごとのレジ用パスワード</span>
+        </p>
+        <p className="mt-1 text-xs text-gray-500">
+          どの店舗のレジかは、上で登録したお店の回線で決まります。パスワードは運営だけが作り直せます（店舗・オーナーは変更できません）。
+        </p>
+        {newPassword && (
+          <p className="mt-2 rounded-lg bg-warning-soft px-3 py-2 font-mono text-base text-navy">
+            新しいパスワード: {newPassword}
+            <span className="ml-2 font-sans text-xs text-gray-600">（この画面を閉じると二度と出ません）</span>
+          </p>
+        )}
+        <Button size="sm" variant="secondary" className="mt-2" onClick={reissue} disabled={pending}>
+          パスワードを作り直す
         </Button>
       </div>
 

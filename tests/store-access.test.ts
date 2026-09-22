@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
+  DEFAULT_HANDY_LIMIT,
   DEFAULT_REGISTER_LIMIT,
+  canAddHandyDevice,
   countsRegisterDevices,
   decideRegisterDevice,
   isAllowedNetwork,
@@ -11,11 +13,27 @@ import {
 
 describe('店舗のアクセス制限（契約: お店の回線・レジ端末の台数）', () => {
   it('DBの行から読む（壊れた値は捨てる）', () => {
-    expect(policyFrom(null)).toEqual({ networks: [], registerLimit: DEFAULT_REGISTER_LIMIT, note: '' });
+    expect(policyFrom(null)).toEqual({
+      networks: [],
+      registerLimit: DEFAULT_REGISTER_LIMIT,
+      handyLimit: DEFAULT_HANDY_LIMIT,
+      note: '',
+    });
     const p = policyFrom({ networks: [{ key: '203.0.113.5', label: '店舗' }, { nope: 1 }], register_limit: 3, note: 'x' });
     expect(p.networks).toEqual([{ key: '203.0.113.5', label: '店舗' }]);
     expect(p.registerLimit).toBe(3);
     expect(policyFrom({ register_limit: -5 }).registerLimit).toBe(DEFAULT_REGISTER_LIMIT);
+    expect(policyFrom({ handy_limit: 5 }).handyLimit).toBe(5);
+    expect(policyFrom({ handy_limit: 99 }).handyLimit).toBe(20);
+    expect(policyFrom({ handy_limit: 'x' }).handyLimit).toBe(DEFAULT_HANDY_LIMIT);
+  });
+
+  it('ハンディの台数（回線を登録した店舗だけ数える）', () => {
+    const none = policyFrom(null);
+    expect(canAddHandyDevice(none, 99)).toBe(true);
+    const p = policyFrom({ networks: [{ key: '203.0.113.5', label: '' }], handy_limit: 2 });
+    expect(canAddHandyDevice(p, 1)).toBe(true);
+    expect(canAddHandyDevice(p, 2)).toBe(false);
   });
 
   it('入力したIPを回線に直す（IPv6 は上位64ビット）', () => {
