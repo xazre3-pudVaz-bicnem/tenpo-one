@@ -7,13 +7,18 @@ import { SettingsBackLink } from '@/components/settings/back-link';
 import { MenuBookEditor, type MenuBookCategoryRow, type MenuBookPlanRow } from '@/components/settings/menu-book-editor';
 import type { MenuItemRow } from '@/components/settings/menu-item-dialog';
 import { classifyMenuItem, HANDY_GROUPS, type HandyGroupId } from '@/components/handy/logic';
-import { looksLikePlanName } from '@/lib/handy-visit';
-import { autoCategoryShow, categoryShow, isMenuBookTab, menuBookFrom, type MenuBookItemInput } from '@/lib/menu-book';
+import {
+  autoCategoryShow,
+  categoryShow,
+  isMenuBookTab,
+  isPlanAddOn,
+  isPlanItem,
+  menuBookFrom,
+  type MenuBookItemInput,
+} from '@/lib/menu-book';
 
 export const metadata: Metadata = { title: 'メニューブック | 設定' };
 
-/** 飲み放題のアップグレード・延長は途中で足す商品で、プランとして選ぶものではない */
-const NOT_A_PLAN = /→|延長/;
 
 /**
  * メニューブック（店長以上）。レジの「メニューブック」ボタン・設定から開く。
@@ -120,15 +125,18 @@ export default async function MenuBookPage({ searchParams }: { searchParams: Pro
     pricePending: i.price_pending ?? false,
   }));
 
-  // プラン（コース・飲み放題）: コースの商品と、名前が飲み放題・食べ放題の商品（アップグレード・延長は除く）
+  // プラン: 伝票に入るとプランとして数える商品（コース、名前が飲み放題・食べ放題の商品）。
+  // アップグレード（A→AB など）・延長も伝票に入るとプランとして数えるので、後ろにまとめて並べる
   const planRows: MenuBookPlanRow[] = activeItems
-    .filter((i) => i.item_type === 'course' || (looksLikePlanName(i.name) && !NOT_A_PLAN.test(i.name)))
+    .filter((i) => isPlanItem(i.item_type, i.name))
     .map((i) => ({
       id: i.id,
       name: i.name,
       price: Number(i.price),
       categoryIds: book.plans[i.id] ?? null,
-    }));
+      addOn: isPlanAddOn(i.name),
+    }))
+    .sort((a, b) => Number(a.addOn) - Number(b.addOn));
 
   return (
     <div>

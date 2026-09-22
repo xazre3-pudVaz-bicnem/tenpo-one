@@ -220,7 +220,22 @@ export interface OrderLineForPlan {
 /** 伝票の1行がプラン（コース・飲み放題・食べ放題・そのアップグレード）か */
 export function isPlanLine(line: OrderLineForPlan): boolean {
   if (line.status === 'cancelled') return false;
-  return line.itemType === 'course' || looksLikePlanName(line.name);
+  return isPlanItem(line.itemType, line.name);
+}
+
+/**
+ * 伝票に入るとプランとして数える商品か（isPlanLine と同じ判定）。コースの商品と、名前が飲み放題・食べ放題の商品。
+ * 「飲み放題 (A→AB)」のようなアップグレードや延長も名前に飲み放題が入っていればプランとして数えるので、
+ * メニューブックの「プランで出すカテゴリ」にも並べて、出すカテゴリを決められるようにする
+ * （決めないと、プランのときだけのカテゴリを全部出してしまう。2026-09-22 御茶ノ水）。
+ */
+export function isPlanItem(itemType: string | null, name: string): boolean {
+  return itemType === 'course' || looksLikePlanName(name);
+}
+
+/** プランの追加（アップグレード「A→AB」・延長）。プランで出すカテゴリでは上の段のカテゴリを選ぶ */
+export function isPlanAddOn(name: string): boolean {
+  return /→|->|⇒|延長/.test(name);
 }
 
 export interface OrderPlanState {
