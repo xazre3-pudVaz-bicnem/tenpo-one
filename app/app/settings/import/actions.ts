@@ -12,6 +12,7 @@ import {
   validateMenuItemRow,
   validateOptionGroupRow,
   validateVendorRow,
+  menuItemDupKey,
   type NormalizedCustomerRow,
   type NormalizedInventoryItemRow,
   type NormalizedMenuItemRow,
@@ -53,13 +54,8 @@ async function fetchExistingKeys(
   if (type === 'menu_items') {
     // 商品は店舗ごとに独立して持つ。重複判定も対象店舗内に限定する
     // （他店舗に同名商品があっても取込をブロックしない）。
-    const { data } = await supabase
-      .from('menu_items')
-      .select('name')
-      .eq('organization_id', ctx.organizationId)
-      .eq('store_id', storeId as string)
-      .neq('status', 'deleted');
-    for (const r of data ?? []) keys.add(r.name.trim().toLowerCase());
+    // 同じ商品名でもカテゴリが違えば別商品（「カテゴリ名|商品名」で判定）
+    for (const r of await fetchStoreMenuItems(ctx, storeId as string)) keys.add(r.key);
   } else if (type === 'menu_option_groups') {
     // 「グループ名|選択肢名」（小文字化）。同じグループに同じ選択肢を二重登録しない
     const { data } = await supabase
@@ -96,6 +92,36 @@ async function fetchExistingKeys(
     for (const r of data ?? []) keys.add(r.name.trim().toLowerCase());
   }
   return keys;
+}
+
+/**
+ * 対象店舗の商品（削除済みを除く）を「カテゴリ名|商品名」キー付きで返す。
+ * カテゴリ名は menu_categories から引く（カテゴリ未設定の商品はカテゴリ名を空として扱う）。
+ */
+async function fetchStoreMenuItems(
+  ctx: Ctx,
+  storeId: string
+): Promise<{ id: string; name: string; key: string }[]> {
+  const supabase = await createClient();
+  const [{ data: items }, { data: cats }] = await Promise.all([
+    supabase
+      .from('menu_items')
+      .select('id, name, category_id')
+      .eq('organization_id', ctx.organizationId)
+      .eq('store_id', storeId)
+      .neq('status', 'deleted'),
+    supabase
+      .from('menu_categories')
+      .select('id, name')
+      .eq('organization_id', ctx.organizationId)
+      .eq('store_id', storeId),
+  ]);
+  const catName = new Map(((cats ?? []) as { id: string; name: string }[]).map((c) => [c.id, c.name]));
+  return ((items ?? []) as { id: string; name: string; category_id: string | null }[]).map((r) => ({
+    id: r.id,
+    name: r.name,
+    key: menuItemDupKey(r.category_id ? (catName.get(r.category_id) ?? '') : '', r.name),
+  }));
 }
 
 /**
@@ -249,15 +275,12 @@ export async function importRows(type: string, rows: ImportRowInput[]): Promise<
   let updated = 0;
 
   if (type === 'menu_items') {
-    // 登録済みの商品名と一致する行は「英語名・カナの上書き更新」に使う（現場の要望: 全商品に英語を付けたい）。
+    // 登録済みの商品（同じカテゴリ・同じ商品名）と一致する行は「英語名・カナの上書き更新」に使う（現場の要望: 全商品に英語を付けたい）。
     // それ以外の項目（価格・カテゴリ等）は触らない。英語名もカナも無い行は従来どおりスキップ。
-    const { data: existingRows } = await supabase
-      .from('menu_items')
-      .select('id, name')
-      .eq('organization_id', ctx.organizationId)
-      .eq('store_id', storeId as string)
-      .neq('status', 'deleted');
-    const existingIdByName = new Map((existingRows ?? []).map((r) => [r.name.trim().toLowerCase(), r.id as string]));
+    // 同じ商品名でもカテゴリが違えば別商品として新規登録する（dinii と同じ持ち方）。
+    const existingIdByName = new Map(
+      (await fetchStoreMenuItems(ctx, storeId as string)).map((r) => [r.key, r.id])
+    );
 
     const seen = new Set<string>();
     const toInsert: Valid<NormalizedMenuItemRow>[] = [];
@@ -542,9 +565,12 @@ async function importOptionGroups(
       .select('id, name')
       .eq('store_id', storeId)
       .neq('status', 'deleted');
-    const itemIdByName = new Map<string, string>(
-      ((items ?? []) as { id: string; name: string }[]).map((i) => [i.name.trim().toLowerCase(), i.id])
-    );
+    // 同じ商品名がカテゴリ違いで複数ある場合は、その全部に選択肢グループを付ける
+    const itemIdsByName = new Map<string, string[]>();
+    for (const i of (items ?? []) as { id: string; name: string }[]) {
+      const k = i.name.trim().toLowerCase();
+      itemIdsByName.set(k, [...(itemIdsByName.get(k) ?? []), i.id]);
+    }
     const { data: links } = await supabase
       .from('menu_item_option_groups')
       .select('menu_item_id, group_id')
@@ -554,23 +580,25 @@ async function importOptionGroups(
     const linkRows: Record<string, unknown>[] = [];
     for (const w of wanted.values()) {
       const groupId = groupIdByName.get(w.groupKey);
-      const itemId = itemIdByName.get(w.itemName.trim().toLowerCase());
+      const itemIds = itemIdsByName.get(w.itemName.trim().toLowerCase()) ?? [];
       if (!groupId) continue;
-      if (!itemId) {
+      if (itemIds.length === 0) {
         failed.push({ rowNumber: w.rowNumber, reason: `対象商品が見つかりません: ${w.itemName}` });
         continue;
       }
-      if (linkSet.has(`${groupId}|${itemId}`)) continue;
-      linkSet.add(`${groupId}|${itemId}`);
-      linkRows.push({
-        organization_id: ctx.organizationId,
-        store_id: storeId,
-        menu_item_id: itemId,
-        group_id: groupId,
-        sort_order: 0,
-        created_by: ctx.userId,
-        updated_by: ctx.userId,
-      });
+      for (const itemId of itemIds) {
+        if (linkSet.has(`${groupId}|${itemId}`)) continue;
+        linkSet.add(`${groupId}|${itemId}`);
+        linkRows.push({
+          organization_id: ctx.organizationId,
+          store_id: storeId,
+          menu_item_id: itemId,
+          group_id: groupId,
+          sort_order: 0,
+          created_by: ctx.userId,
+          updated_by: ctx.userId,
+        });
+      }
     }
     if (linkRows.length > 0) {
       const { error } = await supabase.from('menu_item_option_groups').insert(linkRows);

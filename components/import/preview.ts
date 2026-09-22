@@ -77,7 +77,10 @@ export function validateRowsLocally(type: ImportType, rows: ParsedRow[]): LocalV
         issues.push({
           rowNumber: row.rowNumber,
           status: 'duplicate',
-          reason: '重複（ファイル内に同じ内容の行があります）スキップされます',
+          reason:
+            type === 'menu_items'
+              ? '重複（ファイル内に同じカテゴリ・同じ商品名の行があります）スキップされます'
+              : '重複（ファイル内に同じ内容の行があります）スキップされます',
           dupKey: r.dupKey,
         });
         continue;
@@ -98,7 +101,7 @@ export function validateRowsLocally(type: ImportType, rows: ParsedRow[]): LocalV
 export function applyExistingDuplicates(issues: RowIssue[], existingKeys: Set<string>, type?: ImportType): RowIssue[] {
   const reason =
     type === 'menu_items'
-      ? '登録済みの商品です。英語名・カナの列があればその項目だけ上書き更新、無ければスキップされます'
+      ? '同じカテゴリに登録済みの商品です。英語名・カナの列があればその項目だけ上書き更新、無ければスキップされます'
       : '重複（登録済みのデータがあります）スキップされます';
   return issues.map((issue) => {
     if (issue.status === 'ok' && issue.dupKey && existingKeys.has(issue.dupKey)) {

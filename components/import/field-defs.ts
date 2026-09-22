@@ -45,7 +45,7 @@ export const FIELD_DEFS: Record<ImportType, ImportFieldDef[]> = {
       required: false,
       kind: 'text',
       aliases: ['英語名', '英語', 'english', 'name_en', 'en'],
-      hint: 'レジ画面・厨房伝票に日本語と並べて表示します。登録済みの商品名と一致する行は英語名・カナだけを上書き更新します',
+      hint: 'レジ画面・厨房伝票に日本語と並べて表示します。同じカテゴリに同じ商品名が登録済みの行は英語名・カナだけを上書き更新します（カテゴリが違えば同じ商品名でも別の商品として登録します）',
     },
     {
       key: 'price',

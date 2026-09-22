@@ -128,7 +128,16 @@ export function validateMenuItemRow(values: Record<string, string>): ValidateRes
     cost: cost.ok ? cost.value : null,
     itemType: (itemTypeMatch?.value as NormalizedMenuItemRow['itemType']) ?? 'food',
   };
-  return { ok: true, data, dupKey: data.name.toLowerCase() };
+  return { ok: true, data, dupKey: menuItemDupKey(data.categoryName, data.name) };
+}
+
+/**
+ * 商品の重複判定キー（「カテゴリ名|商品名」を小文字化）。
+ * dinii 等と同じく、同じ商品名でもカテゴリが違えば別の商品として登録できる
+ * （例: 「F. 枝豆」を A(F)・B(F) の両方の食べ放題カテゴリに置く）。同じカテゴリ内の同名だけを重複とみなす。
+ */
+export function menuItemDupKey(categoryName: string | null | undefined, name: string): string {
+  return `${(categoryName ?? '').trim().toLowerCase()}|${name.trim().toLowerCase()}`;
 }
 
 // ---------------------------------------------------------------
