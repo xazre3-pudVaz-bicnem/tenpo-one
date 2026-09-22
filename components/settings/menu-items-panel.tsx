@@ -18,12 +18,28 @@ import type { CategoryRow } from './category-panel';
 
 const ITEM_TYPE_LABEL: Record<string, string> = { food: 'フード', drink: 'ドリンク', course: 'コース', option: 'オプション' };
 
+/**
+ * 画面ごとに出す商品（2026-09-23 dinii と同じく「メニュー」と「プラン」を別の画面にした）。
+ * - menu: 単品（フード・ドリンク・オプション）
+ * - plan: プラン（種別「コース」＝コース・飲み放題・食べ放題）
+ * - all: 全部（今までの出し方）
+ */
+export type MenuItemsMode = 'menu' | 'plan' | 'all';
+
+export function itemInMode(itemType: string, mode: MenuItemsMode): boolean {
+  if (mode === 'plan') return itemType === 'course';
+  if (mode === 'menu') return itemType !== 'course';
+  return true;
+}
+
 export function MenuItemsPanel({
+  mode = 'all',
   storeId,
   categories,
   taxRates,
   initial,
 }: {
+  mode?: MenuItemsMode;
   storeId: string;
   categories: CategoryRow[];
   taxRates: { id: string; name: string }[];
@@ -40,7 +56,13 @@ export function MenuItemsPanel({
   const [pending, startTransition] = useTransition();
   const { toast } = useToast();
 
-  const visibleItems = items.filter((i) => i.status !== 'deleted');
+  const isPlan = mode === 'plan';
+  const noun = isPlan ? 'プラン' : '商品';
+  const visibleItems = items.filter((i) => i.status !== 'deleted' && itemInMode(i.itemType, mode));
+  // カテゴリの絞り込みは、この画面の商品が入っているカテゴリだけ出す（プランの画面に単品のカテゴリを並べない）
+  const usedCategoryIds = new Set(visibleItems.map((i) => i.categoryId));
+  const chipCategories = mode === 'all' ? categories : categories.filter((c) => usedCategoryIds.has(c.id));
+  const hasUncategorized = mode === 'all' || usedCategoryIds.has(null);
   // 並び順はカテゴリの中で決めるので、カテゴリを1つ選んで検索していないときだけ変えられる
   const canReorder = activeCategory !== 'all' && activeCategory !== 'uncategorized' && !search.trim();
   const showReorder = reorder && canReorder;
@@ -83,7 +105,7 @@ export function MenuItemsPanel({
         >
           すべて
         </button>
-        {categories.map((c) => (
+        {chipCategories.map((c) => (
           <button
             key={c.id}
             type="button"
@@ -96,6 +118,7 @@ export function MenuItemsPanel({
             {c.name}
           </button>
         ))}
+        {hasUncategorized && (
         <button
           type="button"
           onClick={() => setActiveCategory('uncategorized')}
@@ -106,6 +129,7 @@ export function MenuItemsPanel({
         >
           未分類
         </button>
+        )}
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -114,7 +138,7 @@ export function MenuItemsPanel({
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="商品名で検索"
+            placeholder={`${noun}名で検索`}
             className="pl-9"
           />
         </div>
@@ -144,7 +168,7 @@ export function MenuItemsPanel({
             }}
           >
             <Plus className="h-4 w-4" />
-            商品追加
+            {noun}追加
           </Button>
         </div>
       </div>
@@ -170,18 +194,19 @@ export function MenuItemsPanel({
           />
         </div>
       ) : filtered.length === 0 ? (
-        <EmptyState title="該当する商品がありません" description="「商品追加」から登録してください" />
+        <EmptyState title={`該当する${noun}がありません`}
+          description={isPlan ? '「プラン追加」から、コース・飲み放題を登録してください（種別は「コース」）' : '「商品追加」から登録してください'} />
       ) : (
         <TableWrap>
           <Table>
             <THead>
               <Tr>
-                <Th>商品名</Th>
+                <Th>{noun}名</Th>
                 <Th>カテゴリ</Th>
-                <Th>種別</Th>
+                {isPlan ? <Th className="text-right">時間</Th> : <Th>種別</Th>}
                 <Th className="text-right">価格</Th>
-                <Th className="text-right">テイクアウト</Th>
-                <Th className="text-right">原価</Th>
+                {!isPlan && <Th className="text-right">テイクアウト</Th>}
+                {!isPlan && <Th className="text-right">原価</Th>}
                 <Th>売切</Th>
                 <Th className="text-right">操作</Th>
               </Tr>
@@ -203,10 +228,14 @@ export function MenuItemsPanel({
                     )}
                   </Td>
                   <Td>{categoryName(i.categoryId)}</Td>
-                  <Td>{ITEM_TYPE_LABEL[i.itemType] ?? i.itemType}</Td>
+                  {isPlan ? (
+                    <Td className="text-right tabular-nums">{i.durationMinutes ? `${i.durationMinutes}分` : '—'}</Td>
+                  ) : (
+                    <Td>{ITEM_TYPE_LABEL[i.itemType] ?? i.itemType}</Td>
+                  )}
                   <Td className="text-right tabular-nums">{yen(i.price)}</Td>
-                  <Td className="text-right tabular-nums">{i.takeoutPrice != null ? yen(i.takeoutPrice) : '—'}</Td>
-                  <Td className="text-right tabular-nums">{i.cost != null ? yen(i.cost) : '—'}</Td>
+                  {!isPlan && <Td className="text-right tabular-nums">{i.takeoutPrice != null ? yen(i.takeoutPrice) : '—'}</Td>}
+                  {!isPlan && <Td className="text-right tabular-nums">{i.cost != null ? yen(i.cost) : '—'}</Td>}
                   <Td>
                     <button
                       type="button"
@@ -254,6 +283,7 @@ export function MenuItemsPanel({
           categories={categories}
           taxRates={taxRates}
           editing={editing}
+          defaultItemType={isPlan ? 'course' : undefined}
           defaultCategoryId={activeCategory === 'all' || activeCategory === 'uncategorized' ? null : activeCategory}
           onClose={() => setDialogOpen(false)}
         />

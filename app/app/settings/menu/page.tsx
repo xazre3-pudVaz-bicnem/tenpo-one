@@ -1,18 +1,18 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { requirePermission } from '@/lib/auth';
-import { createClient } from '@/lib/supabase/server';
 import { PageHeader } from '@/components/ui/page-header';
 import { EmptyState } from '@/components/ui/state';
-import { Card, CardContent } from '@/components/ui/card';
 import { SettingsBackLink } from '@/components/settings/back-link';
-import { CategoryPanel } from '@/components/settings/category-panel';
 import { MenuItemsPanel } from '@/components/settings/menu-items-panel';
-import type { MenuItemRow } from '@/components/settings/menu-item-dialog';
-import { StationPanel } from './station-panel';
+import { loadMenuSettingsData } from './data';
 
 export const metadata: Metadata = { title: 'メニュー | 設定' };
 
+/**
+ * 設定 > メニュー（単品の商品）。
+ * プラン（コース・飲み放題）は「プラン」、カテゴリと厨房の振り分けは「カテゴリ」の画面に分けている（dinii と同じ分け方）。
+ */
 export default async function MenuSettingsPage() {
   const ctx = await requirePermission('menu.manage');
   const targetStore = ctx.currentStore ?? ctx.stores[0];
@@ -27,56 +27,7 @@ export default async function MenuSettingsPage() {
     );
   }
 
-  const supabase = await createClient();
-
-  const { data: categories } = await supabase
-    .from('menu_categories')
-    .select('id, name, name_en, color, sort_order, station')
-    .eq('organization_id', ctx.organizationId)
-    .eq('status', 'active')
-    .or(`store_id.is.null,store_id.eq.${targetStore.id}`)
-    .order('sort_order');
-
-  const { data: items } = await supabase
-    .from('menu_items')
-    .select(
-      `id, category_id, name, name_en, name_kana, description, item_type, price, takeout_price, cost, tax_rate_id,
-       duration_minutes, sell_start_time, sell_end_time, sort_order, is_sold_out, status, price_pending`
-    )
-    .eq('organization_id', ctx.organizationId)
-    .neq('status', 'deleted')
-    .or(`store_id.is.null,store_id.eq.${targetStore.id}`)
-    .order('sort_order');
-
-  const { data: taxRates } = await supabase
-    .from('tax_rates')
-    .select('id, name')
-    .eq('organization_id', ctx.organizationId)
-    .eq('status', 'active')
-    .order('is_default', { ascending: false });
-
-  const categoryRows = (categories ?? []).map((c) => ({ id: c.id, name: c.name, nameEn: c.name_en ?? '', color: c.color ?? '#7B3FF2', sortOrder: c.sort_order }));
-
-  const itemRows: MenuItemRow[] = (items ?? []).map((i) => ({
-    id: i.id,
-    categoryId: i.category_id,
-    name: i.name,
-    nameEn: i.name_en ?? '',
-    nameKana: i.name_kana ?? '',
-    description: i.description ?? '',
-    itemType: i.item_type,
-    price: i.price,
-    takeoutPrice: i.takeout_price,
-    cost: i.cost,
-    taxRateId: i.tax_rate_id,
-    durationMinutes: i.duration_minutes,
-    sellStartTime: i.sell_start_time?.slice(0, 5) ?? null,
-    sellEndTime: i.sell_end_time?.slice(0, 5) ?? null,
-    sortOrder: i.sort_order,
-    isSoldOut: i.is_sold_out,
-    status: i.status as 'active' | 'hidden' | 'deleted',
-    pricePending: i.price_pending ?? false,
-  }));
+  const data = await loadMenuSettingsData(ctx, targetStore.id);
 
   return (
     <div>
@@ -84,39 +35,31 @@ export default async function MenuSettingsPage() {
       <PageHeader
         title="メニュー"
         en="Menu"
-        description={targetStore.name}
+        description={`${targetStore.name}・単品の商品（コース・飲み放題は「プラン」）`}
         actions={
-          <Link
-            href="/app/settings/menu-book"
-            className="inline-flex h-9 items-center rounded-lg border border-gray-300 bg-white px-3 text-sm font-semibold text-navy hover:bg-gray-50"
-          >
-            並び順・ハンディ／QRの出し方（メニューブック）
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href="/app/settings/categories"
+              className="inline-flex h-9 items-center rounded-lg border border-gray-300 bg-white px-3 text-sm font-semibold text-navy hover:bg-gray-50"
+            >
+              カテゴリ
+            </Link>
+            <Link
+              href="/app/settings/menu-book"
+              className="inline-flex h-9 items-center rounded-lg border border-gray-300 bg-white px-3 text-sm font-semibold text-navy hover:bg-gray-50"
+            >
+              並び順・ハンディ／QRの出し方（メニューブック）
+            </Link>
+          </div>
         }
       />
-
-      <div className="grid gap-5 @5xl:grid-cols-4">
-        <div className="space-y-5 @5xl:col-span-1">
-          <Card>
-            <CardContent>
-              <CategoryPanel storeId={targetStore.id} initial={categoryRows} />
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent>
-              <StationPanel categories={(categories ?? []).map((c) => ({ id: c.id, name: c.name, station: c.station }))} />
-            </CardContent>
-          </Card>
-        </div>
-        <div className="order-first @5xl:order-none @5xl:col-span-3">
-          <MenuItemsPanel
-            storeId={targetStore.id}
-            categories={categoryRows}
-            taxRates={(taxRates ?? []).map((t) => ({ id: t.id, name: t.name }))}
-            initial={itemRows}
-          />
-        </div>
-      </div>
+      <MenuItemsPanel
+        mode="menu"
+        storeId={targetStore.id}
+        categories={data.categoryRows}
+        taxRates={data.taxRates}
+        initial={data.itemRows}
+      />
     </div>
   );
 }

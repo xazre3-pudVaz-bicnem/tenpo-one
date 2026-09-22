@@ -73,6 +73,8 @@ export async function setItemSoldOut(itemId: string, soldOut: boolean): Promise<
   revalidatePath('/handy', 'layout');
   revalidatePath('/app/pos', 'layout');
   revalidatePath('/app/settings/menu');
+  revalidatePath('/app/settings/plans');
+  revalidatePath('/app/settings/categories');
   revalidatePath('/app/settings/menu-book');
   return {};
 }

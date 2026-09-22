@@ -49,8 +49,22 @@ export const REGISTER_SETTING_SECTIONS: readonly RegisterSettingSection[] = [
       {
         id: 'menu-items',
         title: '商品の追加・編集',
-        description: '商品名・値段・英語名・カテゴリ・販売時間。カテゴリの追加・名前の変更も',
+        description: '商品名・値段・英語名・カテゴリ・販売時間',
         href: '/app/settings/menu',
+        permission: 'menu.manage',
+      },
+      {
+        id: 'plan-items',
+        title: 'プラン（コース・飲み放題）',
+        description: 'コース・飲み放題・食べ放題の価格と時間（フロアの残り時間・L.O.）',
+        href: '/app/settings/plans',
+        permission: 'menu.manage',
+      },
+      {
+        id: 'categories',
+        title: 'カテゴリの追加・名前',
+        description: 'カテゴリの追加・名前・色',
+        href: '/app/settings/categories',
         permission: 'menu.manage',
       },
       {
@@ -105,8 +119,8 @@ export const REGISTER_SETTING_SECTIONS: readonly RegisterSettingSection[] = [
       {
         id: 'stations',
         title: 'ドリンク機・キッチン機への振り分け',
-        description: 'カテゴリごとに出す厨房プリンター（メニュー編集の「KDSステーション振り分け」）',
-        href: '/app/settings/menu',
+        description: 'カテゴリごとに出す厨房プリンター（カテゴリの「KDSステーション振り分け」）',
+        href: '/app/settings/categories',
         permission: 'menu.manage',
       },
       {

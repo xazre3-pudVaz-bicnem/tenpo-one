@@ -64,6 +64,8 @@ const APP_ROUTES = [
   '/app/settings/hours',
   '/app/settings/tables',
   '/app/settings/menu',
+  '/app/settings/plans',
+  '/app/settings/categories',
   '/app/settings/tax',
   '/app/settings/booking',
   '/app/settings/printers',

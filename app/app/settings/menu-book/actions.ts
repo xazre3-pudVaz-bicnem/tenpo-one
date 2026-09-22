@@ -39,6 +39,8 @@ function canUseStore(ctx: Ctx, storeId: string): boolean {
 function revalidateMenus() {
   revalidatePath('/app/settings/menu-book');
   revalidatePath('/app/settings/menu');
+  revalidatePath('/app/settings/plans');
+  revalidatePath('/app/settings/categories');
   revalidatePath('/app/pos');
   revalidatePath('/handy', 'layout');
 }
