@@ -51,7 +51,7 @@ export function HandyNetworkWatch({ heartbeatAction }: { heartbeatAction: () => 
   return (
     <div role="alert" className="fixed inset-x-2 top-2 z-[70] flex items-center gap-2 rounded-xl bg-amber-500 px-3 py-2 text-sm font-bold text-white shadow-lg">
       <WifiOff className="h-4 w-4 shrink-0" aria-hidden />
-      お店のWi-Fiにつながっていません。あと約{min}分でログアウトします
+      お店のWi-Fiにつながっていません。注文・厨房への送信はできません（あと約{min}分でログアウト）
     </div>
   );
 }

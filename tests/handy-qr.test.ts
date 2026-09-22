@@ -51,3 +51,12 @@ describe('iPhone用ハンディ（固定QR・お店のWi-Fiだけ・外に3分�
     expect(handyQrUrl('https://www.tenpo-one.com/', TOKEN)).toBe(`https://www.tenpo-one.com/handy-join#${TOKEN}`);
   });
 });
+
+describe('お店のWi-Fiの外からは注文・厨房送信を止める', () => {
+  it('ハンディ端末の Server Action は requirePermission で Wi-Fi を確認する', async () => {
+    const { readFileSync } = await import('node:fs');
+    const src = readFileSync(new URL('../lib/auth.ts', import.meta.url), 'utf8');
+    expect(src).toContain("ctx.isHandyDevice && (await headers()).get('next-action')");
+    expect(src).toContain('assertHandyOnShopNetwork');
+  });
+});
