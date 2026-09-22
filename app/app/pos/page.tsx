@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { BookOpen, PackageX, Settings } from 'lucide-react';
 import { requireFeature } from '@/lib/auth';
+import { storeAccessBlock } from '@/components/pos/store-access-guard';
 import { createClient } from '@/lib/supabase/server';
 import { isMissingColumnError } from '@/lib/schema-compat';
 import { can } from '@/lib/permissions';
@@ -68,6 +69,10 @@ export default async function PosPage({
       </div>
     );
   }
+
+  // 契約のアクセス制限（お店の回線・レジ端末の台数）。制限なしの店舗はそのまま
+  const accessBlock = await storeAccessBlock(store, { countDevice: true });
+  if (accessBlock) return accessBlock;
 
   if (!orderId) {
     const { data: openOrders, error: openOrdersError } = await supabase

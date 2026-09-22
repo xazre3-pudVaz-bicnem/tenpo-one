@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Settings } from 'lucide-react';
 import { requireFeature } from '@/lib/auth';
+import { storeAccessBlock } from '@/components/pos/store-access-guard';
 import { createClient } from '@/lib/supabase/server';
 import { can } from '@/lib/permissions';
 import { todayJst, formatTime } from '@/lib/format';
@@ -94,6 +95,9 @@ export default async function FloorPage() {
   const ctx = await requireFeature('pos');
   const supabase = await createClient();
   const store = ctx.currentStore ?? ctx.stores[0];
+
+  const accessBlock = store ? await storeAccessBlock(store, { countDevice: false }) : null;
+  if (accessBlock) return accessBlock;
 
   if (!store) {
     return (

@@ -158,6 +158,9 @@ export async function requireMember(): Promise<SessionContext & { organizationId
   return ctx as SessionContext & { organizationId: string; role: Role };
 }
 
+/** レジ・ハンディの操作（お店の回線からだけ受け付ける） */
+const POS_ACTIONS = new Set<PermissionAction>(['pos.order', 'pos.checkout', 'pos.discount', 'pos.refund', 'tables.operate']);
+
 /** アクション権限必須（Server Action / ページ双方で使用） */
 export async function requirePermission(action: PermissionAction) {
   const ctx = await requireMember();
@@ -169,6 +172,15 @@ export async function requirePermission(action: PermissionAction) {
   if (ctx.isHandyDevice && (await headers()).get('next-action')) {
     const { assertHandyOnShopNetwork } = await import('@/lib/handy-device-server');
     await assertHandyOnShopNetwork();
+  }
+  // 契約のアクセス制限（2026-09-23）: レジ・ハンディの操作はお店の回線からだけ。
+  // 回線を登録していない店舗は制限なし。画面の表示は止めず、Server Action だけを止める。
+  if (POS_ACTIONS.has(action) && ctx.currentStore && (await headers()).get('next-action')) {
+    const [{ isRequestFromStoreNetwork }, { ACCESS_MESSAGE }] = await Promise.all([
+      import('@/lib/store-access-server'),
+      import('@/lib/store-access'),
+    ]);
+    if (!(await isRequestFromStoreNetwork(ctx.currentStore.id))) throw new Error(ACCESS_MESSAGE.network);
   }
   return ctx;
 }

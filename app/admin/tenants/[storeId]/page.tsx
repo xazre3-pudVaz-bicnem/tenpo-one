@@ -16,6 +16,9 @@ import { TenantChecklist } from '@/components/admin/tenant-checklist';
 import { TenantAccounts } from '@/components/admin/tenant-accounts';
 import { TenantHardware } from '@/components/admin/tenant-hardware';
 import { TenantSupportNotes } from '@/components/admin/tenant-support-notes';
+import { TenantAccessPolicy } from '@/components/admin/tenant-access-policy';
+import { policyFrom } from '@/lib/store-access';
+import { saveStoreAccessPolicy, revokeRegisterDevice } from '../actions';
 
 export const metadata: Metadata = { title: '店舗導入管理' };
 
@@ -53,6 +56,13 @@ export default async function TenantDetailPage({ params }: { params: Promise<{ s
     admin.from('stores').select('id, name').eq('organization_id', store.organization_id).eq('status', 'active').order('name'),
   ]);
   const orgStores = (orgStoresRes.data ?? []).map((s) => ({ id: s.id as string, name: s.name as string }));
+
+  // 契約のアクセス制限（お店の回線・レジ端末の台数）
+  const [{ data: policyRow }, { data: deviceRows }] = await Promise.all([
+    admin.from('store_access_policies').select('networks, register_limit, note').eq('store_id', storeId).maybeSingle(),
+    admin.from('register_devices').select('id, name, user_agent, first_ip, last_seen_at, status').eq('store_id', storeId).order('created_at'),
+  ]);
+  const accessPolicy = policyFrom(policyRow ?? null);
 
   const progress = computeProgress(signals, checklist, enabledModules);
   const goLive = evaluateGoLive(signals, checklist, enabledModules);
@@ -165,6 +175,30 @@ export default async function TenantDetailPage({ params }: { params: Promise<{ s
         goLive={goLive}
         stage={onboarding.stage as Stage}
       />
+
+      <Card>
+        <CardHeader>
+          <CardTitle>アクセス制限（契約）</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <TenantAccessPolicy
+            storeId={storeId}
+            networks={accessPolicy.networks}
+            registerLimit={accessPolicy.registerLimit}
+            note={accessPolicy.note}
+            devices={(deviceRows ?? []).map((d) => ({
+              id: d.id as string,
+              name: (d.name as string) ?? 'レジ端末',
+              userAgent: (d.user_agent as string | null) ?? null,
+              firstIp: (d.first_ip as string | null) ?? null,
+              lastSeenAt: d.last_seen_at ? formatDateTime(d.last_seen_at as string) : null,
+              status: d.status as string,
+            }))}
+            saveAction={saveStoreAccessPolicy}
+            revokeAction={revokeRegisterDevice}
+          />
+        </CardContent>
+      </Card>
 
       {/* 機能フラグ（org単位・default ON）表示 */}
       <Card>

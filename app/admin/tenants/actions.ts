@@ -21,6 +21,7 @@ import {
   type ChecklistState,
 } from '@/lib/tenant-onboarding';
 import { computeStoreSignals } from './signals';
+import { DEFAULT_REGISTER_LIMIT, MAX_ALLOWED_NETWORKS, toNetwork } from '@/lib/store-access';
 
 function randomPassword() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!#$%';
@@ -424,4 +425,75 @@ export async function deleteSupportNote(input: { storeId: string; noteId: string
   const { error } = await admin.from('tenant_support_notes').delete().eq('id', input.noteId);
   if (error) throw new Error(error.message);
   revalidatePath(`/admin/tenants/${input.storeId}`);
+}
+
+/* ------------------------------------------------------------ アクセス制限（契約） */
+
+/**
+ * 店舗のアクセス制限（お店の回線・レジ端末の台数）を設定する。運営だけが変更できる。
+ * 回線を1つも登録していない店舗は制限なし（今まで通り使える）。
+ */
+export async function saveStoreAccessPolicy(input: {
+  storeId: string;
+  ips: { ip: string; label: string }[];
+  registerLimit: number;
+  note: string;
+}): Promise<{ error?: string }> {
+  const ctx = await requireCypressAdmin();
+  const admin = createAdminClient();
+
+  const { data: store } = await admin.from('stores').select('id, organization_id').eq('id', input.storeId).maybeSingle();
+  if (!store) return { error: '店舗が見つかりません' };
+
+  const networks: { key: string; label: string }[] = [];
+  for (const row of input.ips ?? []) {
+    if (!row.ip.trim()) continue;
+    const net = toNetwork(row.ip, row.label ?? '');
+    if (!net) return { error: `IPアドレスの形が正しくありません: ${row.ip}` };
+    if (!networks.some((n) => n.key === net.key)) networks.push(net);
+  }
+  if (networks.length > MAX_ALLOWED_NETWORKS) return { error: `回線は${MAX_ALLOWED_NETWORKS}件までです` };
+  const limit = Number.isInteger(input.registerLimit) ? Math.min(20, Math.max(0, input.registerLimit)) : DEFAULT_REGISTER_LIMIT;
+
+  const { error } = await admin.from('store_access_policies').upsert(
+    {
+      store_id: input.storeId,
+      organization_id: store.organization_id as string,
+      networks,
+      register_limit: limit,
+      note: input.note?.slice(0, 500) ?? null,
+      updated_at: new Date().toISOString(),
+      updated_by: ctx.userId,
+    },
+    { onConflict: 'store_id' }
+  );
+  if (error) return { error: `保存に失敗しました: ${error.message}` };
+
+  await admin.rpc('log_audit', {
+    p_org: store.organization_id as string,
+    p_store: input.storeId,
+    p_action: 'admin.store_access_policy',
+    p_target_table: 'store_access_policies',
+    p_target_id: input.storeId,
+    p_before: null,
+    p_after: { networks: networks.length, register_limit: limit },
+    p_note: input.note?.slice(0, 200) ?? null,
+  });
+
+  revalidatePath(`/admin/tenants/${input.storeId}`);
+  return {};
+}
+
+/** レジ端末（iPad）の登録を解除する。解除するとその端末ではレジを開けなくなる */
+export async function revokeRegisterDevice(input: { storeId: string; deviceId: string }): Promise<{ error?: string }> {
+  const ctx = await requireCypressAdmin();
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from('register_devices')
+    .update({ status: 'revoked', revoked_at: new Date().toISOString(), revoked_by: ctx.userId })
+    .eq('id', input.deviceId)
+    .eq('store_id', input.storeId);
+  if (error) return { error: `解除に失敗しました: ${error.message}` };
+  revalidatePath(`/admin/tenants/${input.storeId}`);
+  return {};
 }
