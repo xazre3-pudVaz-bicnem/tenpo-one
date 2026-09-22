@@ -68,6 +68,7 @@ interface OrderRow {
   reservations: One<
     ReservationSource & {
       guest_name: string;
+      start_at: string | null;
       end_at: string;
       menu_items: One<{
         duration_minutes: number | null;
@@ -128,7 +129,7 @@ export default async function FloorPage() {
         .select(
           `id, table_id, opened_at, guest_count, total, clerk_name,
            customers(name, visit_count),
-           reservations(guest_name, created_via, end_at, reservation_sources(name),
+           reservations(guest_name, created_via, start_at, end_at, reservation_sources(name),
              menu_items(duration_minutes, course_includes_drinks, course_includes_ayce))`
         )
         .eq('store_id', store.id)
@@ -163,11 +164,19 @@ export default async function FloorPage() {
       course?.duration_minutes && course.duration_minutes > 0
         ? { label: courseLabel(course), minutes: course.duration_minutes }
         : null;
-    const endAtMs = courseInfo
-      ? openedAtMs + courseInfo.minutes * 60_000
-      : resv && new Date(resv.end_at).getTime() > openedAtMs
-        ? new Date(resv.end_at).getTime()
-        : openedAtMs + stayMinutes * 60_000;
+    // 予約の開始が伝票の開始と同じ（ウォークイン・レジの「席の時間」で直した伝票）なら、予約の終了予定をそのまま使う。
+    // それ以外（予約客が遅れて来た等）は今まで通り: コースの所要時間 → 予約の終了予定 → 店舗の既定滞在時間。
+    const resvStartMs = resv?.start_at ? new Date(resv.start_at).getTime() : NaN;
+    const resvEndMs = resv ? new Date(resv.end_at).getTime() : NaN;
+    const seatTimeSet =
+      Number.isFinite(resvStartMs) && Math.abs(resvStartMs - openedAtMs) < 60_000 && resvEndMs > openedAtMs;
+    const endAtMs = seatTimeSet
+      ? resvEndMs
+      : courseInfo
+        ? openedAtMs + courseInfo.minutes * 60_000
+        : resv && resvEndMs > openedAtMs
+          ? resvEndMs
+          : openedAtMs + stayMinutes * 60_000;
     const prev = orderByTable.get(o.table_id);
     orderByTable.set(o.table_id, {
       id: o.id,

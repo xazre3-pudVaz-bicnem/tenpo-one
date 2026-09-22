@@ -7,6 +7,8 @@ import { isMissingColumnError } from '@/lib/schema-compat';
 import { applicableTaxRate } from '@/lib/tax';
 import { validateCoupon, COUPON_REJECT_LABELS, type CouponLike } from '@/lib/coupons';
 import { resolveOptionSelection } from '@/lib/menu-options';
+import { resolveStartTime, startTimeProblem } from '@/lib/handy-visit';
+import { isSeatDuration } from '@/lib/seat-time';
 
 const COUPON_PREFIX = 'クーポン: ';
 
@@ -878,6 +880,147 @@ export async function setGuestCount(orderId: string, guestCount: number): Promis
   revalidatePath('/app/pos');
   revalidatePath('/app/floor');
   revalidatePath('/app/reservations');
+}
+
+export interface SeatTimeInput {
+  /** 開始時間（'HH:MM'・日本時間）。null なら今の開始時刻のまま */
+  startTime: string | null;
+  /** 時間（分）。null なら時間制なし（終了予定を店舗の既定滞在時間にする） */
+  durationMinutes: number | null;
+  /** コース（menu_items.id、item_type='course'）。null ならコースなし */
+  courseId: string | null;
+}
+
+/**
+ * 伝票画面から「席の時間・コース」を直す（2026-09-22 店舗要望）。
+ * - 開始時間 → orders.opened_at と予約の start_at（フロア・ハンディの経過時間の起点）
+ * - 時間 → 予約の end_at（開始＋時間。フロアの残り時間・L.O.・時間超過）
+ * - コース → 予約の course_id、伝票の種類（コース／店内）
+ * 伝票に予約（ウォークイン含む）が無いときは、ウォークインの予約を作って紐付ける。
+ * 金額には影響しない（コース商品を伝票に入れるのは今まで通り商品から）。
+ */
+export async function setSeatTime(orderId: string, input: SeatTimeInput): Promise<void> {
+  const ctx = await requirePermission('pos.order');
+  const supabase = await createClient();
+  const order = await loadOpenOrder(supabase, ctx, orderId);
+
+  if (input.durationMinutes !== null && !isSeatDuration(input.durationMinutes)) {
+    throw new Error('時間は15分〜8時間で選んでください');
+  }
+  const nowMs = Date.now();
+  let startMs = new Date(order.opened_at as string).getTime();
+  if (input.startTime) {
+    const problem = startTimeProblem(input.startTime, nowMs);
+    if (problem) throw new Error(problem);
+    startMs = resolveStartTime(input.startTime, nowMs) as number;
+  }
+
+  let courseId: string | null = null;
+  if (input.courseId) {
+    const { data: course } = await supabase
+      .from('menu_items')
+      .select('id')
+      .eq('id', input.courseId)
+      .eq('store_id', order.store_id)
+      .eq('item_type', 'course')
+      .neq('status', 'deleted')
+      .maybeSingle();
+    if (!course) throw new Error('コースが見つかりません');
+    courseId = course.id as string;
+  }
+
+  let stay: number = input.durationMinutes ?? 0;
+  if (input.durationMinutes === null) {
+    const { data: settings } = await supabase
+      .from('store_settings')
+      .select('default_stay_minutes')
+      .eq('store_id', order.store_id)
+      .maybeSingle();
+    stay = settings?.default_stay_minutes ?? 120;
+  }
+  const startAt = new Date(startMs);
+  const endAt = new Date(startMs + stay * 60_000);
+
+  // 予約が無ければウォークインの予約を作る（フロアの時間表示は予約の終了予定から出すため）
+  let reservationId = (order.reservation_id as string | null) ?? null;
+  if (!reservationId) {
+    for (let attempt = 0; attempt < 3 && !reservationId; attempt++) {
+      const { data: reservation, error } = await supabase
+        .from('reservations')
+        .insert({
+          organization_id: order.organization_id,
+          store_id: order.store_id,
+          code: `WI-${Math.floor(100000 + Math.random() * 900000)}`,
+          reserved_date: startAt.toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' }),
+          start_at: startAt.toISOString(),
+          end_at: endAt.toISOString(),
+          party_size: order.guest_count || 1,
+          adults: order.guest_count || 1,
+          children: 0,
+          guest_name: 'ウォークイン',
+          guest_phone: '-',
+          status: 'seated',
+          created_via: 'walk_in',
+          consent_accepted: true,
+          course_id: courseId,
+          created_by: ctx.userId,
+        })
+        .select('id')
+        .single();
+      if (error) {
+        if (error.code === '23505') continue;
+        throw new Error(`席の時間の保存に失敗しました: ${error.message}`);
+      }
+      reservationId = reservation.id as string;
+    }
+    if (!reservationId) throw new Error('席の時間の保存に失敗しました');
+    if (order.table_id) {
+      await supabase.from('reservation_tables').insert({ reservation_id: reservationId, table_id: order.table_id });
+    }
+  } else {
+    const { error } = await supabase
+      .from('reservations')
+      .update({
+        start_at: startAt.toISOString(),
+        end_at: endAt.toISOString(),
+        course_id: courseId,
+        updated_by: ctx.userId,
+      })
+      .eq('id', reservationId);
+    if (error) throw new Error(`席の時間の保存に失敗しました: ${error.message}`);
+  }
+
+  const orderPatch: Record<string, unknown> = {
+    opened_at: startAt.toISOString(),
+    reservation_id: reservationId,
+    updated_by: ctx.userId,
+  };
+  // 店内・コースの伝票だけ種類を合わせる（テイクアウト等はそのまま）
+  if (order.order_type === 'dine_in' || order.order_type === 'course') {
+    orderPatch.order_type = courseId ? 'course' : 'dine_in';
+  }
+  const { error: orderError } = await supabase
+    .from('orders')
+    .update(orderPatch)
+    .eq('id', orderId)
+    .eq('status', 'open');
+  if (orderError) throw new Error(`席の時間の保存に失敗しました: ${orderError.message}`);
+
+  await supabase.rpc('log_audit', {
+    p_org: order.organization_id,
+    p_store: order.store_id,
+    p_action: 'order.set_seat_time',
+    p_target_table: 'orders',
+    p_target_id: orderId,
+    p_before: { opened_at: order.opened_at, reservation_id: order.reservation_id },
+    p_after: { opened_at: startAt.toISOString(), end_at: endAt.toISOString(), course_id: courseId },
+    p_note: null,
+  });
+
+  revalidatePath('/app/pos');
+  revalidatePath('/app/floor');
+  revalidatePath('/app/reservations');
+  revalidatePath('/handy', 'layout');
 }
 
 /**
