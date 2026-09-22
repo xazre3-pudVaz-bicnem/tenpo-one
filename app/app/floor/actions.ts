@@ -30,6 +30,8 @@ export interface WalkInOptions {
    * 予約の開始・終了予定（開始＋滞在時間）と伝票の開始時刻（経過時間の起点）をこの時刻にする。省略時は今
    */
   startTime?: string;
+  /** コース（menu_items.id、item_type='course'）。予約の course_id に入れ、伝票はコース扱いにする。時間の指定が無ければコースの所要時間 */
+  courseId?: string;
 }
 
 /** 滞在時間として受け付ける範囲（分）。それ以外は店舗の既定値にする */
@@ -69,7 +71,24 @@ export async function startWalkIn(
     .select('default_stay_minutes')
     .eq('store_id', table.store_id)
     .maybeSingle();
-  const requestedStay = options.durationMinutes;
+
+  // コース（オーダー・会計の着席画面・ハンディから）。この店舗のコースだけ受け付ける
+  let courseId: string | null = null;
+  let courseMinutes: number | null = null;
+  if (options.courseId) {
+    const { data: course } = await supabase
+      .from('menu_items')
+      .select('id, duration_minutes')
+      .eq('id', options.courseId)
+      .eq('store_id', table.store_id)
+      .eq('item_type', 'course')
+      .neq('status', 'deleted')
+      .maybeSingle();
+    if (!course) throw new Error('コースが見つかりません');
+    courseId = course.id as string;
+    courseMinutes = (course.duration_minutes as number | null) ?? null;
+  }
+  const requestedStay = options.durationMinutes ?? courseMinutes ?? undefined;
   const stayMinutes =
     typeof requestedStay === 'number' &&
     Number.isInteger(requestedStay) &&
@@ -111,6 +130,7 @@ export async function startWalkIn(
         consent_accepted: true,
         created_by: ctx.userId,
         ...(purpose ? { purpose } : {}),
+        ...(courseId ? { course_id: courseId } : {}),
       })
       .select('id')
       .single();
@@ -131,7 +151,7 @@ export async function startWalkIn(
       store_id: table.store_id,
       reservation_id: reservationId,
       table_id: tableId,
-      order_type: options.orderType === 'course' ? 'course' : 'dine_in',
+      order_type: options.orderType === 'course' || courseId ? 'course' : 'dine_in',
       status: 'open',
       guest_count: partySize,
       staff_id: ctx.userId,

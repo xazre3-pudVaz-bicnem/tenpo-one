@@ -4,11 +4,24 @@ import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Dialog } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Input, Label } from '@/components/ui/input';
+import { Input, Label, Select } from '@/components/ui/input';
+import { cn } from '@/lib/utils';
+import {
+  SEAT_DURATION_CHOICES,
+  durationForCourse,
+  durationLabel,
+  type SeatCourseOption,
+} from '@/lib/seat-time';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/components/ui/toast';
 import { yen } from '@/lib/format';
 import { TILE_LABEL, nextReservation, tileState, tileTime, type TableView } from './types';
+
+/** 着席（ファーストオーダー）のときに決めるコース・時間 */
+export interface WalkInSeatOptions {
+  durationMinutes?: number;
+  courseId?: string;
+}
 
 export function TableSheet({
   table,
@@ -16,6 +29,8 @@ export function TableSheet({
   canOperate,
   onClose,
   startWalkInAction,
+  courses = [],
+  defaultStayMinutes = 120,
   goToOrderAction,
   completeCleaningAction,
   setTableAvailabilityAction,
@@ -24,7 +39,9 @@ export function TableSheet({
   now: number;
   canOperate: boolean;
   onClose: () => void;
-  startWalkInAction: (tableId: string, partySize: number) => Promise<{ orderId: string }>;
+  startWalkInAction: (tableId: string, partySize: number, options?: WalkInSeatOptions) => Promise<{ orderId: string }>;
+  courses?: SeatCourseOption[];
+  defaultStayMinutes?: number;
   goToOrderAction: (tableId: string) => Promise<{ orderId: string }>;
   completeCleaningAction: (tableId: string) => Promise<void>;
   setTableAvailabilityAction: (tableId: string, unavailable: boolean) => Promise<void>;
@@ -32,6 +49,9 @@ export function TableSheet({
   const router = useRouter();
   const { toast } = useToast();
   const [partySize, setPartySize] = useState(2);
+  // ファーストオーダーのコース・時間（2026-09-22 店舗要望: オーダー・会計から着席するときにも決めたい）
+  const [courseId, setCourseId] = useState('');
+  const [minutes, setMinutes] = useState<number>(defaultStayMinutes);
   const [pending, startTransition] = useTransition();
 
   if (!table) return null;
@@ -123,11 +143,63 @@ export function TableSheet({
               />
               <span className="text-sm text-ink-3">名</span>
             </div>
+
+            <div className="mt-3">
+              <Label htmlFor="seat-course">コース / Course</Label>
+              <Select
+                id="seat-course"
+                value={courseId}
+                onChange={(e) => {
+                  const id = e.target.value;
+                  setCourseId(id);
+                  const c = courses.find((x) => x.id === id) ?? null;
+                  setMinutes((cur) => durationForCourse(c, cur) ?? defaultStayMinutes);
+                }}
+              >
+                <option value="">なし（アラカルト） / None</option>
+                {courses.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                    {c.durationMinutes ? `（${durationLabel(c.durationMinutes)}）` : ''}
+                  </option>
+                ))}
+              </Select>
+            </div>
+
+            <div className="mt-3">
+              <p className="mb-1.5 text-sm font-medium text-gray-700">時間 / Duration</p>
+              <div className="grid grid-cols-5 gap-1.5">
+                {SEAT_DURATION_CHOICES.map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => setMinutes(n)}
+                    className={cn(
+                      'rounded-lg border py-2.5 text-xs font-semibold transition-colors',
+                      minutes === n ? 'border-primary bg-primary-soft text-primary-deep' : 'border-gray-200 text-navy hover:bg-gray-50'
+                    )}
+                  >
+                    {durationLabel(n)}
+                  </button>
+                ))}
+              </div>
+              {!SEAT_DURATION_CHOICES.includes(minutes) && (
+                <p className="mt-1.5 text-xs text-ink-3">時間: {durationLabel(minutes)}</p>
+              )}
+            </div>
+
             <Button
               size="pos"
               className="mt-3 w-full"
               disabled={pending}
-              onClick={() => goPos(() => startWalkInAction(table.id, partySize))}
+              onClick={() =>
+                goPos(() =>
+                  startWalkInAction(table.id, partySize, {
+                    durationMinutes: minutes,
+                    ...(courseId ? { courseId } : {}),
+                  })
+                )
+              }
             >
               ウォークイン着席 / Seat walk-in
             </Button>
