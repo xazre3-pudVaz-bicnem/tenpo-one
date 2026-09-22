@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   DEFAULT_REGISTER_LIMIT,
+  countsRegisterDevices,
   decideRegisterDevice,
   isAllowedNetwork,
   isRestricted,
@@ -34,6 +35,12 @@ describe('店舗のアクセス制限（契約: お店の回線・レジ端末�
     expect(isAllowedNetwork(p, '2001:db8:1:2:ffff::7')).toBe(true);
     expect(isAllowedNetwork(p, '198.51.100.9')).toBe(false);
     expect(isAllowedNetwork(p, null)).toBe(false);
+  });
+
+  it('回線を登録していない店舗は台数を数えない（今まで通り）', () => {
+    expect(countsRegisterDevices(policyFrom(null))).toBe(false);
+    expect(countsRegisterDevices(policyFrom({ register_limit: 2 }))).toBe(false);
+    expect(countsRegisterDevices(policyFrom({ networks: [{ key: '203.0.113.5', label: '' }] }))).toBe(true);
   });
 
   it('レジ端末の台数（契約で決めた数まで）', () => {

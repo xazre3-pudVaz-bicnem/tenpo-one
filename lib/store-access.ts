@@ -68,6 +68,15 @@ export function isRestricted(policy: StoreAccessPolicy): boolean {
   return policy.networks.length > 0;
 }
 
+/**
+ * レジ端末の台数を数えるかどうか。
+ * 契約で回線を登録した店舗だけ数える。未登録の店舗は今まで通り台数の制限なし
+ * （既存の店舗が、この機能を入れた瞬間に3台目のレジを開けなくなるのを防ぐため）。
+ */
+export function countsRegisterDevices(policy: StoreAccessPolicy): boolean {
+  return isRestricted(policy);
+}
+
 export type RegisterDeviceDecision =
   | { kind: 'allowed' }
   | { kind: 'register' }
