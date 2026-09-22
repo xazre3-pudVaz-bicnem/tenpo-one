@@ -11,18 +11,19 @@ const store = (over: Partial<RegisterLoginCandidate> & { storeId: string }): Reg
 });
 
 describe('企業番号', () => {
-  it('t1 + 5桁で作る', () => {
-    expect(generateOrgCode(() => 0)).toBe('t100000');
-    expect(generateOrgCode(() => 0.84203)).toBe('t184203');
+  it('6桁の数字で作る', () => {
+    expect(generateOrgCode(() => 0)).toBe('000000');
+    expect(generateOrgCode(() => 0.184203)).toBe('184203');
+    expect(generateOrgCode(() => 0.999999)).toBe('999999');
     for (let i = 0; i < 50; i++) expect(isOrgCode(generateOrgCode())).toBe(true);
   });
 
   it('打ち間違いを吸収して比べる', () => {
-    expect(normalizeOrgCode(' T1-84203 ')).toBe('t184203');
-    expect(normalizeOrgCode('ｔ１８４２０３')).toBe('t184203');
-    expect(isOrgCode('t18420')).toBe(false);
-    expect(isOrgCode('t1842031')).toBe(false);
-    expect(isOrgCode('x184203')).toBe(false);
+    expect(normalizeOrgCode(' 184-203 ')).toBe('184203');
+    expect(normalizeOrgCode('１８４２０３')).toBe('184203');
+    expect(isOrgCode('18420')).toBe(false);
+    expect(isOrgCode('1842031')).toBe(false);
+    expect(isOrgCode('t184203')).toBe(false);
   });
 });
 

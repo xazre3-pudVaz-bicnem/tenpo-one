@@ -55,7 +55,7 @@ export async function createOrganization(
     .select('id')
     .single();
   if (orgError || !org) throw new Error(orgError?.message ?? '企業の作成に失敗しました');
-  // レジ（iPad）のログインで使う企業番号（t1+5桁）
+  // レジ（iPad）のログインで使う企業番号（6桁の数字）
   await assignOrgCode(admin, org.id as string);
 
   const password = randomPassword();
