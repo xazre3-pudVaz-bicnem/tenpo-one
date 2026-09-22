@@ -148,6 +148,13 @@ const FREE_PRICE_CATEGORY = /^(?:フリー|free)$/i;
 const LUNCH_CATEGORY = /lunch|ランチ|^\((?:L|H\.L)\)/i;
 /** 飲み放題・食べ放題の中身（dinii から来た「(F)」「(F/C)」「(C/F)」「(4400) F. …」） */
 const PLAN_CATEGORY = /\((?:F|F\/C|C\/F)\)|(?:^|[\s)])F\.(?:\s|$)/i;
+/**
+ * お客様が自分で頼む物ではない商品（席料・お通し・チャージ・キャンセル料・サービス料・アップグレード・延長）。
+ * dinii でもお客様には出していなかった（FULL MOoN・肉ギャングの Others は全部「お客様に表示しない」）。
+ * 自動のカテゴリではお客様QRに出さず、ハンディ・レジでスタッフが入れる（2026-09-23 全店舗）。
+ */
+const STAFF_ONLY_ITEM =
+  /席料|お通し|ｵﾄｵｼ|チャージ|キャンセル料|サービス料|アップグレード|\b(?:cover|table|seat|service)\s*charge\b|\bcancel(?:lation)?\s*(?:fee|charge)\b|\bupgrade\b/i;
 /** 「F. 生ビール」のような0円の商品は、普通のカテゴリに混ざっていてもプランのときだけ出す */
 const PLAN_ITEM = /^F[.．]\s?/;
 
@@ -169,6 +176,7 @@ export interface MenuBookItemInput {
  * - 「フリー」「FREE」→ 出さない（レジで金額を入れる商品）
  * - ランチの名前 → ランチの時間だけ（0円のランチセットの中身もランチ中は出す）
  * - 「(F)」などの名前、またはフード・ドリンクが全部0円（コース・食べ放題の中身）→ プランのときだけ
+ * - 席料・お通し・キャンセル料・延長・アップグレードだけのカテゴリ → ハンディだけ
  * - それ以外 → いつも出す
  */
 export function autoCategoryShow(category: MenuBookCategoryInput, items: readonly MenuBookItemInput[]): MenuBookShow {
@@ -176,6 +184,9 @@ export function autoCategoryShow(category: MenuBookCategoryInput, items: readonl
   if (FREE_PRICE_CATEGORY.test(name)) return 'hidden';
   if (LUNCH_CATEGORY.test(name)) return 'lunch';
   if (PLAN_CATEGORY.test(name)) return 'plan';
+  // 席料・お通し・キャンセル料・延長・アップグレードだけのカテゴリ（Others など）はハンディだけ
+  const mine = items.filter((i) => i.categoryId === category.id);
+  if (mine.length > 0 && mine.every((i) => isStaffOnlyItem(i.name))) return 'staff';
   const sellable = items.filter(
     (i) => i.categoryId === category.id && (i.itemType == null || i.itemType === 'food' || i.itemType === 'drink')
   );
@@ -238,16 +249,29 @@ export function isPlanAddOn(name: string): boolean {
   return /→|->|⇒|延長/.test(name);
 }
 
+/** お客様QRに出さない商品（席料・お通し・チャージ・キャンセル料・サービス料・アップグレード・延長） */
+export function isStaffOnlyItem(name: string): boolean {
+  const n = name.trim();
+  return isPlanAddOn(n) || STAFF_ONLY_ITEM.test(n);
+}
+
 export interface OrderPlanState {
   hasPlan: boolean;
   /** 伝票に入っているプラン商品の id（重複なし） */
   planItemIds: string[];
+  /** そのうちアップグレード・延長（A→AB など）の id。出すカテゴリを決めていなければ何も足さない */
+  addOnItemIds?: string[];
 }
 
 export function orderPlanState(lines: readonly OrderLineForPlan[]): OrderPlanState {
   const plans = lines.filter(isPlanLine);
   const ids = [...new Set(plans.map((l) => l.menuItemId).filter((id): id is string => !!id))];
-  return { hasPlan: plans.length > 0, planItemIds: ids };
+  const addOns = [
+    ...new Set(plans.filter((l) => isPlanAddOn(l.name)).map((l) => l.menuItemId).filter((id): id is string => !!id)),
+  ];
+  const state: OrderPlanState = { hasPlan: plans.length > 0, planItemIds: ids };
+  if (addOns.length > 0) state.addOnItemIds = addOns;
+  return state;
 }
 
 /* ------------------------------------------------------------ 表示判定 */
@@ -266,13 +290,20 @@ export interface MenuBookContext {
   nowHm: string;
 }
 
-/** プランのときだけのカテゴリを、伝票のプランで出してよいか（プランごとの指定が無ければ全部出す） */
+/**
+ * プランのときだけのカテゴリを、伝票のプランで出してよいか。
+ * プランごとの指定が無ければ全部出す。ただしアップグレード・延長（A→AB など）は、指定が無ければ何も足さない
+ * （指定の無いアップグレードで (F) を全部出していた。アラカルトの卓で ¥700 のアップグレードを頼むと
+ *  ABC 相当になっていた。2026-09-22 御茶ノ水 → 2026-09-23 全店舗の既定に）。
+ */
 function planAllows(categoryId: string, book: MenuBookSettings, plan: OrderPlanState): boolean {
   if (!plan.hasPlan) return false;
   if (plan.planItemIds.length === 0) return true;
+  const addOns = new Set(plan.addOnItemIds ?? []);
   return plan.planItemIds.some((id) => {
     const list = book.plans[id];
-    return !list || list.includes(categoryId);
+    if (list) return list.includes(categoryId);
+    return !addOns.has(id);
   });
 }
 
@@ -299,6 +330,8 @@ export function isShowVisible(
 /**
  * ハンディ・お客様QRに出すカテゴリと商品に絞る。
  * カテゴリの出し方で絞ったうえで、「F. …」の0円商品はプランが無ければ外す。
+ * お客様QRでは、自動のカテゴリに混ざった席料・お通し・キャンセル料・延長・アップグレードも外す
+ * （カテゴリを「いつも出す」に決めればお客様にも出る）。
  */
 export function filterMenuBook<C extends MenuBookCategoryInput, I extends MenuBookItemInput>(
   categories: readonly C[],
@@ -307,14 +340,25 @@ export function filterMenuBook<C extends MenuBookCategoryInput, I extends MenuBo
   ctx: MenuBookContext
 ): { categories: C[]; items: I[] } {
   const visible = new Set<string>();
+  /** 出し方を店長が決めていない（自動の）カテゴリ。ここでは席料・延長などをお客様QRに出さない */
+  const autoIds = new Set<string>();
   for (const c of categories) {
-    if (isShowVisible(categoryShow(c, items, book).show, c.id, book, ctx)) visible.add(c.id);
+    const { show, auto } = categoryShow(c, items, book);
+    if (isShowVisible(show, c.id, book, ctx)) visible.add(c.id);
+    if (auto) autoIds.add(c.id);
   }
+  const staffOnlyHidden = (i: I) =>
+    ctx.channel === 'qr' && i.categoryId !== null && autoIds.has(i.categoryId) && isStaffOnlyItem(i.name);
+  const kept = items.filter(
+    (i) =>
+      i.categoryId !== null &&
+      visible.has(i.categoryId) &&
+      (ctx.plan.hasPlan || !isPlanOnlyItem(i)) &&
+      !staffOnlyHidden(i)
+  );
   return {
     categories: categories.filter((c) => visible.has(c.id)),
-    items: items.filter(
-      (i) => i.categoryId !== null && visible.has(i.categoryId) && (ctx.plan.hasPlan || !isPlanOnlyItem(i))
-    ),
+    items: kept,
   };
 }
 

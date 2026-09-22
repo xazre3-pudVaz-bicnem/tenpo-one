@@ -10,6 +10,7 @@ import {
   isPlanAddOn,
   isPlanItem,
   isPlanOnlyItem,
+  isStaffOnlyItem,
   isWithinHm,
   menuBookFrom,
   menuBookToJson,
@@ -102,9 +103,19 @@ describe('メニューブック：カテゴリの自動判定', () => {
   it('普通のカテゴリはいつも出す（0円の水が混ざっていても・オプションだけのカテゴリも）', () => {
     expect(autoCategoryShow(C.meat, items)).toBe('always');
     expect(autoCategoryShow(C.soft, items)).toBe('always');
-    expect(autoCategoryShow(C.others, items)).toBe('always');
     expect(autoCategoryShow(C.options, items)).toBe('always');
     expect(autoCategoryShow({ id: id(96), name: '空のカテゴリ' }, items)).toBe('always');
+  });
+
+  it('席料・お通し・キャンセル料・延長・アップグレードだけのカテゴリ（Others）はハンディだけ（2026-09-23 全店舗）', () => {
+    expect(autoCategoryShow(C.others, items)).toBe('staff');
+    const mixed = { id: id(98), name: 'OTHERS' };
+    const mixedItems: MenuBookItemInput[] = [
+      { categoryId: mixed.id, name: '席料', price: 300, itemType: 'food' },
+      { categoryId: mixed.id, name: 'デザートプレート', price: 1000, itemType: 'food' },
+    ];
+    // お客様が頼む物が混ざっていればいつも出す（席料だけはお客様QRで外す）
+    expect(autoCategoryShow(mixed, mixedItems)).toBe('always');
   });
 
   it('店長が決めた出し方は自動判定より優先', () => {
@@ -151,7 +162,7 @@ describe('メニューブック：伝票のプラン', () => {
 describe('メニューブック：絞り込み', () => {
   it('アラカルトの卓（お客様QR）には F・コースの中身・フリーを出さない（店舗報告 2026-09-21）', () => {
     const r = filterMenuBook(categories, items, emptyMenuBook(), ctx());
-    expect(names(r.categories)).toEqual(['MEAT STAGE', 'SOFT DRINK', 'Others', 'オプション']);
+    expect(names(r.categories)).toEqual(['MEAT STAGE', 'SOFT DRINK', 'オプション']);
     // 通常カテゴリに混ざった「F. 緑茶」も外す。0円の水は残す
     expect(names(r.items)).not.toContain('F. 緑茶');
     expect(names(r.items)).toContain('水');
@@ -193,6 +204,68 @@ describe('メニューブック：絞り込み', () => {
     expect(names(r.categories)).not.toContain('Course food');
   });
 
+  it('カテゴリを決めていないアップグレードでは何も増えない（全店舗の既定。2026-09-23）', () => {
+    const planA = id(60);
+    const upAtoAB = id(62);
+    const lines = (ids: [string, string][]) =>
+      orderPlanState(ids.map(([menuItemId, name]) => ({ menuItemId, name, itemType: 'drink', status: 'active' })));
+    // アラカルトの卓でアップグレードだけ → (F) もコースの中身も出さない（これまでは全部出ていた）
+    const onlyUp = filterMenuBook(categories, items, emptyMenuBook(), ctx({ plan: lines([[upAtoAB, '飲み放題 (A→AB)']]) }));
+    expect(names(onlyUp.categories)).not.toContain('(F) SOFT DRINK');
+    expect(names(onlyUp.categories)).not.toContain('(F) BEER');
+    expect(names(onlyUp.categories)).not.toContain('Course food');
+    // A を決めている店：A＋決めていないアップグレード → A の分だけ
+    const bookA: MenuBookSettings = { ...emptyMenuBook(), plans: { [planA]: [C.fSoft.id] } };
+    const aUp = filterMenuBook(
+      categories,
+      items,
+      bookA,
+      ctx({ plan: lines([[planA, 'Nomihoudai A'], [upAtoAB, '飲み放題 (A→AB)']]) })
+    );
+    expect(names(aUp.categories)).toContain('(F) SOFT DRINK');
+    expect(names(aUp.categories)).not.toContain('(F) BEER');
+    // 何も決めていない店：プラン＋アップグレード → これまでどおり全部
+    const none = filterMenuBook(
+      categories,
+      items,
+      emptyMenuBook(),
+      ctx({ plan: lines([[planA, 'Nomihoudai A'], [upAtoAB, '飲み放題 (A→AB)']]) })
+    );
+    expect(names(none.categories)).toEqual(expect.arrayContaining(['(F) SOFT DRINK', '(F) BEER', 'Course food']));
+    // 予約でコースが決まっている卓（プラン商品の id が無い）は全部
+    expect(
+      names(filterMenuBook(categories, items, emptyMenuBook(), ctx({ plan: { hasPlan: true, planItemIds: [] } })).categories)
+    ).toContain('(F) BEER');
+  });
+
+  it('席料・お通し・キャンセル料・延長・アップグレードはお客様QRに出さない（ハンディには出す。「いつも出す」にすれば出る）', () => {
+    for (const n of ['席料', 'お通し', 'キャンセル料', '延長 (30min)', '飲み放題 (A→AB)', 'コース飲み放題 (A→ABC)', 'Cover charge', 'テーブルチャージ', 'サービス料 10%', '飲み放題アップグレード']) {
+      expect(isStaffOnlyItem(n), n).toBe(true);
+    }
+    for (const n of ['生ビール', 'デザートプレート', 'メッセージプレート', 'Chicken Tikka', 'Nomihoudai AB', '(AB) 2H Course Nomihodai', 'F. 緑茶', 'チーズナン']) {
+      expect(isStaffOnlyItem(n), n).toBe(false);
+    }
+    const others = { id: id(98), name: 'OTHERS' };
+    const qr = [
+      {
+        ...others,
+        items: [
+          { name: '席料', price: 300 },
+          { name: 'お通し', price: 300 },
+          { name: 'デザートプレート', price: 1000 },
+          { name: 'コース飲み放題 (A→B)', price: 700 },
+        ],
+      },
+    ];
+    // お客様QR：お客様が頼む物だけ残す
+    expect(filterNestedMenu(qr, emptyMenuBook(), ctx())[0].items.map((i) => i.name)).toEqual(['デザートプレート']);
+    // ハンディ：全部出す
+    expect(filterNestedMenu(qr, emptyMenuBook(), ctx({ channel: 'handy' }))[0].items).toHaveLength(4);
+    // 店長が「いつも出す」に決めたカテゴリはお客様QRにも全部出す
+    const always: MenuBookSettings = { ...emptyMenuBook(), categories: { [others.id]: 'always' } };
+    expect(filterNestedMenu(qr, always, ctx())[0].items).toHaveLength(4);
+  });
+
   it('プランとして数える商品（メニューブックの「プランで出すカテゴリ」に並べる）とアップグレード・延長の見分け', () => {
     expect(isPlanItem('course', '(AB) 2H Course Nomihodai')).toBe(true);
     expect(isPlanItem('course', 'Nomihoudai ABC')).toBe(true);
@@ -208,6 +281,7 @@ describe('メニューブック：絞り込み', () => {
     expect(orderPlanState([{ menuItemId: id(62), name: '飲み放題 (A→AB)', itemType: 'drink', status: 'active' }])).toEqual({
       hasPlan: true,
       planItemIds: [id(62)],
+      addOnItemIds: [id(62)],
     });
   });
 
