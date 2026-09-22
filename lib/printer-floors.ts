@@ -70,3 +70,12 @@ export function normalizeFloorIds(value: unknown, allowed?: ReadonlySet<string>)
   }
   return out;
 }
+
+/**
+ * 会計伝票（中間伝票・QRのお会計伝票）を出せるプリンターか。
+ * レシート機は常に出せる。厨房（ドリンク）機は「会計伝票も出す」（bill_slips）のときだけ
+ * （SHUNKA 新宿: 3F・5F はドリンク・バー機1台でドリンク伝票と会計伝票の両方を出す）。
+ */
+export function printsBillSlips(printer: { usage: string; bill_slips?: boolean | null }): boolean {
+  return printer.usage === 'receipt' || (printer.usage === 'kitchen' && !!printer.bill_slips);
+}

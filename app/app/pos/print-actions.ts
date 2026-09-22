@@ -39,22 +39,26 @@ async function getCloudPrntPrinter(
   storeId: string,
   floor?: { floorId: string | null }
 ): Promise<{ id: string; paper_width_mm: number; drawer_kick: boolean; drawer_command: string } | null> {
-  const { data } = await supabase
+  let q = supabase
     .from('printer_configs')
-    .select('id, paper_width_mm, drawer_kick, drawer_command, usage, floor_ids')
+    .select('id, paper_width_mm, drawer_kick, drawer_command, usage, floor_ids, bill_slips')
     .eq('store_id', storeId)
     .eq('status', 'active')
-    .eq('cloudprnt_enabled', true)
-    .eq('usage', 'receipt')
-    .order('created_at', { ascending: true })
-    .limit(20);
+    .eq('cloudprnt_enabled', true);
+  // 会計伝票はレシート機に加えて「会計伝票も出す」厨房（ドリンク）機からも出せる。レシート・ドロアはレシート機だけ
+  q = floor ? q.or('usage.eq.receipt,bill_slips.eq.true') : q.eq('usage', 'receipt');
+  const { data } = await q.order('created_at', { ascending: true }).limit(20);
   const rows = ((data ?? []) as {
     id: string;
     paper_width_mm: number;
     drawer_kick: boolean;
     drawer_command: string;
+    usage: string;
     floor_ids: string[] | null;
-  }[]).map((r) => ({ ...r, floorIds: normalizeFloorIds(r.floor_ids) }));
+  }[])
+    .map((r) => ({ ...r, floorIds: normalizeFloorIds(r.floor_ids) }))
+    // 既定（担当フロアなし）はレシート機を優先する
+    .sort((a, b) => Number(b.usage === 'receipt') - Number(a.usage === 'receipt'));
   const picked = floor ? pickPrinterForFloor(rows, floor.floorId) : pickDefaultPrinter(rows);
   if (!picked) return null;
   return {

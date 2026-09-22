@@ -6,7 +6,7 @@
  * ジョブの期限切れ・取りこぼし回収・厨房伝票の生成は同じロジックでよい。表現（Markup / StarPRNT / ePOS-Print XML）
  * だけが方式ごとに異なり、payload に3種とも載せてプリンタ側に選ばせる。
  */
-import { normalizeFloorIds, printerServesFloor } from '@/lib/printer-floors';
+import { normalizeFloorIds, printerServesFloor, printsBillSlips } from '@/lib/printer-floors';
 import { createAdminClient } from '@/lib/supabase/admin';
 import {
   groupKitchenTickets,
@@ -63,6 +63,8 @@ export interface PrinterRow {
   auto_print?: boolean;
   /** 担当フロア（floors.id）。空＝既定プリンター（lib/printer-floors.ts） */
   floor_ids?: string[] | null;
+  /** 厨房（ドリンク）機から会計伝票も出す */
+  bill_slips?: boolean;
 }
 
 type Admin = ReturnType<typeof createAdminClient>;
@@ -72,7 +74,7 @@ export async function resolvePrinter(token: string): Promise<{ admin: Admin; pri
   const admin = createAdminClient();
   const { data } = await admin
     .from('printer_configs')
-    .select('id, organization_id, store_id, name, usage, paper_width_mm, kitchen_stations, auto_print, floor_ids')
+    .select('id, organization_id, store_id, name, usage, paper_width_mm, kitchen_stations, auto_print, floor_ids, bill_slips')
     .eq('cloudprnt_token', token)
     .eq('cloudprnt_enabled', true)
     .eq('status', 'active')
@@ -208,7 +210,7 @@ export async function generateKitchenJobs(admin: Admin, printer: PrinterRow) {
  * - 重複防止: 印字済みかどうかは print_jobs（job_type='order_slip'）の作成時刻で判定する。新しい列は作らない
  */
 export async function generateQrBillJobs(admin: Admin, printer: PrinterRow) {
-  if (printer.usage !== 'receipt' || !printer.auto_print) return;
+  if (!printsBillSlips(printer) || !printer.auto_print) return;
 
   const { data: orders, error } = await admin
     .from('orders')
@@ -232,7 +234,7 @@ export async function generateQrBillJobs(admin: Admin, printer: PrinterRow) {
     .eq('store_id', printer.store_id)
     .eq('status', 'active')
     .eq('cloudprnt_enabled', true)
-    .eq('usage', 'receipt')
+    .or('usage.eq.receipt,bill_slips.eq.true')
     .eq('auto_print', true);
   const peerList = ((peers ?? []) as { id: string; floor_ids: string[] | null }[]).map((p) => ({
     id: p.id,

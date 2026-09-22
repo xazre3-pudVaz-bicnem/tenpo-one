@@ -181,7 +181,7 @@ export async function saveMenuItem(input: MenuItemInput): Promise<ActionResult> 
   return {};
 }
 
-const STATIONS = ['kitchen', 'drink', 'dessert'] as const;
+const STATIONS = ['kitchen', 'drink', 'dessert', 'grill'] as const;
 
 /** カテゴリのKDS振り分け先（station）を変更する。ここで設定した値が /app/kitchen のタブ振り分けに使われる */
 export async function updateCategoryStation(id: string, station: string): Promise<ActionResult> {

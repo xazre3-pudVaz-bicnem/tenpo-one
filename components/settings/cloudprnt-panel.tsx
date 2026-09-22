@@ -38,6 +38,7 @@ export interface CloudPrntPrinter {
 const STATIONS: { key: string; label: string }[] = [
   { key: 'kitchen', label: 'キッチン（フード）' },
   { key: 'drink', label: 'ドリンク' },
+  { key: 'grill', label: '焼き場（焼き鳥）' },
   { key: 'dessert', label: 'デザート' },
 ];
 

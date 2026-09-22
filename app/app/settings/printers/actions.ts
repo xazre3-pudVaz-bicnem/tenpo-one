@@ -122,8 +122,10 @@ export interface PrinterConfigInput {
   paperWidthMm: number;
   autoPrint: boolean;
   drawerKick: boolean;
-  /** 担当フロア（floors.id）。レシート機だけ。空＝既定プリンター */
+  /** 担当フロア（floors.id）。レシート機・厨房機。空＝既定プリンター */
   floorIds?: string[];
+  /** 厨房（ドリンク）機から会計伝票も出す */
+  billSlips?: boolean;
 }
 
 /** プリンター設定の追加・更新 */
@@ -135,9 +137,9 @@ export async function savePrinterConfig(input: PrinterConfigInput): Promise<Acti
 
   const supabase = await createClient();
 
-  // 担当フロアはこの店舗のフロアだけ受け付ける（他店舗のIDや削除済みは捨てる）。レシート機以外は空
+  // 担当フロアはこの店舗のフロアだけ受け付ける（他店舗のIDや削除済みは捨てる）。ラベル機は空
   let floorIds: string[] = [];
-  if (input.usage === 'receipt' && Array.isArray(input.floorIds) && input.floorIds.length > 0) {
+  if (input.usage !== 'label' && Array.isArray(input.floorIds) && input.floorIds.length > 0) {
     const { data: floors } = await supabase
       .from('floors')
       .select('id')
@@ -159,6 +161,7 @@ export async function savePrinterConfig(input: PrinterConfigInput): Promise<Acti
     auto_print: input.autoPrint,
     drawer_kick: input.drawerKick,
     floor_ids: floorIds,
+    bill_slips: input.usage === 'kitchen' ? !!input.billSlips : false,
     updated_by: ctx.userId,
   };
 
@@ -398,7 +401,7 @@ export async function saveKitchenTicketSettings(
 // -------------------------------------------------------------
 
 /** CloudPRNTの有効化・ドロア命令・ポーリング間隔を更新する。 */
-const KITCHEN_STATIONS = ['kitchen', 'drink', 'dessert'] as const;
+const KITCHEN_STATIONS = ['kitchen', 'drink', 'dessert', 'grill'] as const;
 
 export async function setCloudPrntConfig(input: {
   id: string;
@@ -424,7 +427,7 @@ export async function setCloudPrntConfig(input: {
     const stations = Array.from(new Set(input.kitchenStations)).filter((s): s is (typeof KITCHEN_STATIONS)[number] =>
       (KITCHEN_STATIONS as readonly string[]).includes(s)
     );
-    if (stations.length === 0) return { error: '担当する厨房（キッチン／ドリンク／デザート）を1つ以上選んでください' };
+    if (stations.length === 0) return { error: '担当する厨房（キッチン／焼き場／ドリンク／デザート）を1つ以上選んでください' };
     patch.kitchen_stations = stations;
   }
 

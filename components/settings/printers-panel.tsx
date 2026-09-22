@@ -85,7 +85,8 @@ export function PrintersPanel({
                   </Td>
                   <Td>
                     {USAGE_LABEL[r.usage] ?? r.usage}
-                    {r.usage === 'receipt' && (r.floorIds ?? []).length > 0 && (
+                    {r.usage === 'kitchen' && r.billSlips && <span className="ml-1 text-xs text-gray-500">＋会計伝票</span>}
+                    {(r.floorIds ?? []).length > 0 && (
                       <span className="ml-1 text-xs text-gray-500">
                         （{floors.filter((f) => (r.floorIds ?? []).includes(f.id)).map((f) => f.name).join('・')}）
                       </span>

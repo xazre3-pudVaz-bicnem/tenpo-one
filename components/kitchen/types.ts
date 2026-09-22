@@ -3,16 +3,17 @@
 export type KitchenStatus = 'pending' | 'preparing' | 'ready' | 'served';
 
 /** menu_categories.station。品目が紐付かない（menu_item_id=null）場合は 'kitchen' 扱い */
-export type Station = 'kitchen' | 'drink' | 'dessert';
+export type Station = 'kitchen' | 'drink' | 'dessert' | 'grill';
 
 export const STATION_LABELS: Record<Station, string> = {
   kitchen: 'キッチン',
   drink: 'ドリンク',
   dessert: 'デザート',
+  grill: '焼き場',
 };
 
 export type StationFilter = 'all' | Station;
-export const STATION_FILTER_OPTIONS: StationFilter[] = ['all', 'kitchen', 'drink', 'dessert'];
+export const STATION_FILTER_OPTIONS: StationFilter[] = ['all', 'kitchen', 'grill', 'drink', 'dessert'];
 export const STATION_FILTER_LABELS: Record<StationFilter, string> = {
   all: 'すべて',
   ...STATION_LABELS,

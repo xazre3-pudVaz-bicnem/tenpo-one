@@ -4,6 +4,7 @@ import {
   pickDefaultPrinter,
   pickPrinterForFloor,
   printerServesFloor,
+  printsBillSlips,
 } from '@/lib/printer-floors';
 
 // SHUNKA 新宿: 4F=レジ（既定）、3F・5F に会計伝票のプリンター
@@ -60,5 +61,38 @@ describe('normalizeFloorIds', () => {
     expect(normalizeFloorIds(null)).toEqual([]);
     expect(normalizeFloorIds(['f3', 'f3', '', 5, 'f5'])).toEqual(['f3', 'f5']);
     expect(normalizeFloorIds(['f3', 'x'], new Set(['f3']))).toEqual(['f3']);
+  });
+});
+
+describe('printsBillSlips（会計伝票を出せるか）', () => {
+  it('レシート機は常に、厨房機は「会計伝票も出す」のときだけ', () => {
+    expect(printsBillSlips({ usage: 'receipt' })).toBe(true);
+    expect(printsBillSlips({ usage: 'kitchen', bill_slips: true })).toBe(true);
+    expect(printsBillSlips({ usage: 'kitchen', bill_slips: false })).toBe(false);
+    expect(printsBillSlips({ usage: 'kitchen' })).toBe(false);
+    expect(printsBillSlips({ usage: 'label', bill_slips: true })).toBe(false);
+  });
+});
+
+describe('SHUNKA 新宿の構成（ドリンク機は各階、キッチン・焼き場は 4F の1台ずつ）', () => {
+  const drink4 = { id: 'd4', floorIds: [] as string[] };
+  const drink3 = { id: 'd3', floorIds: ['f3'] };
+  const drink5 = { id: 'd5', floorIds: ['f5'] };
+  const drinks = [drink4, drink3, drink5];
+  it('ドリンク伝票は卓の階のドリンク機1台から', () => {
+    expect(drinks.filter((p) => printerServesFloor(p, 'f3', drinks)).map((p) => p.id)).toEqual(['d3']);
+    expect(drinks.filter((p) => printerServesFloor(p, 'f5', drinks)).map((p) => p.id)).toEqual(['d5']);
+    expect(drinks.filter((p) => printerServesFloor(p, 'f4', drinks)).map((p) => p.id)).toEqual(['d4']);
+  });
+  it('焼き場・キッチンは1台だけなので全フロアの伝票を出す', () => {
+    const grill = { id: 'g', floorIds: [] as string[] };
+    for (const f of ['f3', 'f4', 'f5', null]) expect(printerServesFloor(grill, f, [grill])).toBe(true);
+  });
+  it('会計伝票: 3F・5F の卓はその階のドリンク機、4F はレジ機', () => {
+    const regi = { id: 'regi', floorIds: [] as string[] };
+    const billers = [regi, drink3, drink5];
+    expect(pickPrinterForFloor(billers, 'f3')?.id).toBe('d3');
+    expect(pickPrinterForFloor(billers, 'f5')?.id).toBe('d5');
+    expect(pickPrinterForFloor(billers, 'f4')?.id).toBe('regi');
   });
 });
