@@ -156,3 +156,19 @@ export async function checkHandyNetwork(): Promise<HandyGuardResult> {
   });
   return { isDevice: true, decision, device };
 }
+
+/** お店のWi-Fiの外からの注文・厨房への送信を止めるときの文言 */
+export const HANDY_OUTSIDE_ORDER_MESSAGE =
+  'お店のWi-Fiの外からは注文・厨房への送信・会計はできません。お店のWi-Fiにつないでください';
+
+/**
+ * ハンディ端末からの操作（Server Action）は、お店のWi-Fiにいるときだけ受け付ける。
+ * 外に出た直後（ログアウトまでの3分間）でも、注文・厨房送信などはすぐ止める。
+ * 回線を登録していない店、ハンディ端末でないアカウントは何もしない。
+ */
+export async function assertHandyOnShopNetwork(): Promise<void> {
+  const result = await checkHandyNetwork();
+  if (result.isDevice && result.decision.kind !== 'ok') {
+    throw new Error(HANDY_OUTSIDE_ORDER_MESSAGE);
+  }
+}

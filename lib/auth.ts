@@ -1,5 +1,5 @@
 import { cache } from 'react';
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { can, isHqRole, type PermissionAction, type Role } from '@/lib/permissions';
@@ -163,6 +163,12 @@ export async function requirePermission(action: PermissionAction) {
   const ctx = await requireMember();
   if (!can(ctx.role, action)) {
     throw new Error(`権限がありません: ${action}`);
+  }
+  // ハンディ端末（iPhone用ハンディ）の操作は、お店のWi-Fiの中からだけ受け付ける。
+  // 画面の表示（ページ）は止めず、Server Action（注文・厨房送信・会計など）だけを止める。
+  if (ctx.isHandyDevice && (await headers()).get('next-action')) {
+    const { assertHandyOnShopNetwork } = await import('@/lib/handy-device-server');
+    await assertHandyOnShopNetwork();
   }
   return ctx;
 }
