@@ -11,7 +11,7 @@ import {
 } from '@/lib/handy-device-server';
 import { networkKey } from '@/lib/handy-pairing';
 import { loadStorePolicy } from '@/lib/store-access-server';
-import { isAllowedNetwork } from '@/lib/store-access';
+import { ACCESS_MESSAGE, canAddHandyDevice, isAllowedNetwork } from '@/lib/store-access';
 import { HANDY_OUTSIDE_COOKIE, handyQrFrom, isHandyQrToken, isShopNetwork } from '@/lib/handy-qr';
 
 export type JoinResult = { ok: true; storeName: string } | { ok: false; error: string };
@@ -71,6 +71,14 @@ export async function joinHandyByQr(token: string): Promise<JoinResult> {
     }
     await supabase.auth.signOut();
   }
+
+  // 契約したハンディの台数まで（回線を登録していない店舗は数えない）
+  const { count: handyCount } = await admin
+    .from('handy_devices')
+    .select('id', { count: 'exact', head: true })
+    .eq('store_id', store.id as string)
+    .eq('status', 'active');
+  if (!canAddHandyDevice(policy, handyCount ?? 0)) return { ok: false, error: ACCESS_MESSAGE.handyLimit };
 
   const h = await headers();
   const ua = h.get('user-agent')?.slice(0, 200) ?? null;

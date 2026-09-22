@@ -18,7 +18,7 @@ import { TenantHardware } from '@/components/admin/tenant-hardware';
 import { TenantSupportNotes } from '@/components/admin/tenant-support-notes';
 import { TenantAccessPolicy } from '@/components/admin/tenant-access-policy';
 import { policyFrom } from '@/lib/store-access';
-import { saveStoreAccessPolicy, revokeRegisterDevice } from '../actions';
+import { saveStoreAccessPolicy, revokeRegisterDevice, reissueRegisterPassword } from '../actions';
 
 export const metadata: Metadata = { title: '店舗導入管理' };
 
@@ -58,9 +58,11 @@ export default async function TenantDetailPage({ params }: { params: Promise<{ s
   const orgStores = (orgStoresRes.data ?? []).map((s) => ({ id: s.id as string, name: s.name as string }));
 
   // 契約のアクセス制限（お店の回線・レジ端末の台数）
-  const [{ data: policyRow }, { data: deviceRows }] = await Promise.all([
-    admin.from('store_access_policies').select('networks, register_limit, note').eq('store_id', storeId).maybeSingle(),
+  const [{ data: policyRow }, { data: deviceRows }, { count: handyCount }, { data: orgCodeRow }] = await Promise.all([
+    admin.from('store_access_policies').select('networks, register_limit, handy_limit, note').eq('store_id', storeId).maybeSingle(),
     admin.from('register_devices').select('id, name, user_agent, first_ip, last_seen_at, status').eq('store_id', storeId).order('created_at'),
+    admin.from('handy_devices').select('id', { count: 'exact', head: true }).eq('store_id', storeId).eq('status', 'active'),
+    admin.from('organizations').select('org_code').eq('id', store.organization_id).maybeSingle(),
   ]);
   const accessPolicy = policyFrom(policyRow ?? null);
 
@@ -183,8 +185,11 @@ export default async function TenantDetailPage({ params }: { params: Promise<{ s
         <CardContent>
           <TenantAccessPolicy
             storeId={storeId}
+            orgCode={(orgCodeRow?.org_code as string | null) ?? null}
             networks={accessPolicy.networks}
             registerLimit={accessPolicy.registerLimit}
+            handyLimit={accessPolicy.handyLimit}
+            handyCount={handyCount ?? 0}
             note={accessPolicy.note}
             devices={(deviceRows ?? []).map((d) => ({
               id: d.id as string,
@@ -196,6 +201,7 @@ export default async function TenantDetailPage({ params }: { params: Promise<{ s
             }))}
             saveAction={saveStoreAccessPolicy}
             revokeAction={revokeRegisterDevice}
+            reissueAction={reissueRegisterPassword}
           />
         </CardContent>
       </Card>

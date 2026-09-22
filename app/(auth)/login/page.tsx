@@ -38,6 +38,11 @@ export default async function LoginPage({
               パスワードをお忘れの方
             </Link>
           </p>
+          <p>
+            <Link href="/register-login" className="text-primary hover:underline">
+              レジ（iPad）からのログインはこちら
+            </Link>
+          </p>
           <p className="text-xs text-gray-400">
             アカウントは所属企業の管理者から発行されます
           </p>

@@ -21,7 +21,8 @@ import {
   type ChecklistState,
 } from '@/lib/tenant-onboarding';
 import { computeStoreSignals } from './signals';
-import { DEFAULT_REGISTER_LIMIT, MAX_ALLOWED_NETWORKS, toNetwork } from '@/lib/store-access';
+import { DEFAULT_HANDY_LIMIT, DEFAULT_REGISTER_LIMIT, MAX_ALLOWED_NETWORKS, limitFrom, toNetwork } from '@/lib/store-access';
+import { assignOrgCode, resetStoreRegisterPassword, setupStoreContract } from '@/lib/tenant-provisioning';
 
 function randomPassword() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!#$%';
@@ -68,6 +69,12 @@ export interface CreateTenantStoreInput {
   environment: Environment;
   ownerEmail?: string; // 任意（新org時は推奨）
   ownerName?: string;
+  /** 契約: お店の回線（グローバルIP）。1件でも入れるとレジ・ハンディが制限される */
+  storeIps?: { ip: string; label: string }[];
+  /** 契約: レジ（iPad）の台数（既定2台） */
+  registerLimit?: number;
+  /** 契約: ハンディの台数（既定2台） */
+  handyLimit?: number;
 }
 export interface CreateTenantStoreResult {
   organizationId: string;
@@ -75,6 +82,9 @@ export interface CreateTenantStoreResult {
   slug: string;
   ownerEmail?: string;
   ownerPassword?: string; // 一度だけ表示
+  /** レジ（iPad）のログインで使う（一度だけ表示） */
+  orgCode?: string;
+  registerPassword?: string;
 }
 
 export async function createTenantStore(input: CreateTenantStoreInput): Promise<CreateTenantStoreResult> {
@@ -100,6 +110,7 @@ export async function createTenantStore(input: CreateTenantStoreInput): Promise<
     if (error || !org) throw new Error(error?.message ?? '会社の作成に失敗しました');
     organizationId = org.id;
     createdOrg = true;
+    await assignOrgCode(admin, organizationId);
     await audit(organizationId, null, 'organization.create', 'organizations', organizationId, { name: companyName });
   } else {
     if (!organizationId) throw new Error('対象の会社を選択してください');
@@ -164,8 +175,33 @@ export async function createTenantStore(input: CreateTenantStoreInput): Promise<
     await audit(organizationId, storeId, 'tenant.owner_issue', 'memberships', mem.id as string, { email, role: 'org_owner' });
   }
 
+  // 契約の内容（お店の回線・レジ台数・ハンディ台数・レジ用パスワード）
+  const contract = await setupStoreContract(admin, {
+    organizationId,
+    storeId,
+    ips: input.storeIps ?? [],
+    registerLimit: limitFrom(input.registerLimit, DEFAULT_REGISTER_LIMIT),
+    handyLimit: limitFrom(input.handyLimit, DEFAULT_HANDY_LIMIT),
+    updatedBy: null,
+  });
+  await audit(organizationId, storeId, 'admin.store_access_policy', 'store_access_policies', storeId, {
+    networks: contract.networks.length,
+    register_limit: contract.registerLimit,
+    handy_limit: contract.handyLimit,
+  });
+
+  const { data: orgRow } = await admin.from('organizations').select('org_code').eq('id', organizationId).maybeSingle();
+
   revalidatePath('/admin/tenants');
-  return { organizationId, storeId, slug, ownerEmail, ownerPassword };
+  return {
+    organizationId,
+    storeId,
+    slug,
+    ownerEmail,
+    ownerPassword,
+    orgCode: (orgRow?.org_code as string | null) ?? undefined,
+    registerPassword: contract.registerPassword,
+  };
 }
 
 // ---------------------------------------------------------------
@@ -437,6 +473,7 @@ export async function saveStoreAccessPolicy(input: {
   storeId: string;
   ips: { ip: string; label: string }[];
   registerLimit: number;
+  handyLimit: number;
   note: string;
 }): Promise<{ error?: string }> {
   const ctx = await requireCypressAdmin();
@@ -453,7 +490,8 @@ export async function saveStoreAccessPolicy(input: {
     if (!networks.some((n) => n.key === net.key)) networks.push(net);
   }
   if (networks.length > MAX_ALLOWED_NETWORKS) return { error: `回線は${MAX_ALLOWED_NETWORKS}件までです` };
-  const limit = Number.isInteger(input.registerLimit) ? Math.min(20, Math.max(0, input.registerLimit)) : DEFAULT_REGISTER_LIMIT;
+  const limit = limitFrom(input.registerLimit, DEFAULT_REGISTER_LIMIT);
+  const handyLimit = limitFrom(input.handyLimit, DEFAULT_HANDY_LIMIT);
 
   const { error } = await admin.from('store_access_policies').upsert(
     {
@@ -461,6 +499,7 @@ export async function saveStoreAccessPolicy(input: {
       organization_id: store.organization_id as string,
       networks,
       register_limit: limit,
+      handy_limit: handyLimit,
       note: input.note?.slice(0, 500) ?? null,
       updated_at: new Date().toISOString(),
       updated_by: ctx.userId,
@@ -476,7 +515,7 @@ export async function saveStoreAccessPolicy(input: {
     p_target_table: 'store_access_policies',
     p_target_id: input.storeId,
     p_before: null,
-    p_after: { networks: networks.length, register_limit: limit },
+    p_after: { networks: networks.length, register_limit: limit, handy_limit: handyLimit },
     p_note: input.note?.slice(0, 200) ?? null,
   });
 
@@ -496,4 +535,29 @@ export async function revokeRegisterDevice(input: { storeId: string; deviceId: s
   if (error) return { error: `解除に失敗しました: ${error.message}` };
   revalidatePath(`/admin/tenants/${input.storeId}`);
   return {};
+}
+
+/**
+ * レジ用パスワードを作り直す（運営だけ）。
+ * 店舗・オーナーからは変更できない。作り直すと、今ログインしているレジは入り直しになる。
+ */
+export async function reissueRegisterPassword(input: { storeId: string }): Promise<{ password?: string; error?: string }> {
+  const ctx = await requireCypressAdmin();
+  const admin = createAdminClient();
+  const { data: store } = await admin.from('stores').select('id, organization_id').eq('id', input.storeId).maybeSingle();
+  if (!store) return { error: '店舗が見つかりません' };
+  try {
+    const password = await resetStoreRegisterPassword(admin, {
+      organizationId: store.organization_id as string,
+      storeId: input.storeId,
+      updatedBy: ctx.userId,
+    });
+    await audit(store.organization_id as string, input.storeId, 'admin.register_password_reissue', 'store_register_credentials', input.storeId, {
+      reissued: true,
+    });
+    revalidatePath(`/admin/tenants/${input.storeId}`);
+    return { password };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : '作り直しに失敗しました' };
+  }
 }

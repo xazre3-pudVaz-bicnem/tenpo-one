@@ -19,16 +19,30 @@ export interface AllowedNetwork {
 export interface StoreAccessPolicy {
   networks: AllowedNetwork[];
   registerLimit: number;
+  handyLimit: number;
   note: string;
 }
 
 export const DEFAULT_REGISTER_LIMIT = 2;
+export const DEFAULT_HANDY_LIMIT = 2;
 export const MAX_ALLOWED_NETWORKS = 10;
 
-export const EMPTY_POLICY: StoreAccessPolicy = { networks: [], registerLimit: DEFAULT_REGISTER_LIMIT, note: '' };
+export const EMPTY_POLICY: StoreAccessPolicy = {
+  networks: [],
+  registerLimit: DEFAULT_REGISTER_LIMIT,
+  handyLimit: DEFAULT_HANDY_LIMIT,
+  note: '',
+};
+
+/** 台数の入力を 0〜20 に丸める（壊れた値は既定に戻す） */
+export function limitFrom(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0 ? Math.min(20, value) : fallback;
+}
 
 /** DB の行から読む（壊れた値は捨てる） */
-export function policyFrom(row: { networks?: unknown; register_limit?: unknown; note?: unknown } | null): StoreAccessPolicy {
+export function policyFrom(
+  row: { networks?: unknown; register_limit?: unknown; handy_limit?: unknown; note?: unknown } | null
+): StoreAccessPolicy {
   if (!row) return EMPTY_POLICY;
   const networks = Array.isArray(row.networks)
     ? row.networks
@@ -41,11 +55,12 @@ export function policyFrom(row: { networks?: unknown; register_limit?: unknown; 
         .filter((n): n is AllowedNetwork => n !== null)
         .slice(0, MAX_ALLOWED_NETWORKS)
     : [];
-  const limit =
-    typeof row.register_limit === 'number' && Number.isInteger(row.register_limit) && row.register_limit >= 0
-      ? Math.min(20, row.register_limit)
-      : DEFAULT_REGISTER_LIMIT;
-  return { networks, registerLimit: limit, note: typeof row.note === 'string' ? row.note : '' };
+  return {
+    networks,
+    registerLimit: limitFrom(row.register_limit, DEFAULT_REGISTER_LIMIT),
+    handyLimit: limitFrom(row.handy_limit, DEFAULT_HANDY_LIMIT),
+    note: typeof row.note === 'string' ? row.note : '',
+  };
 }
 
 /** 入力された IP を回線（キー）に直す。IP として読めなければ null */
@@ -75,6 +90,17 @@ export function isRestricted(policy: StoreAccessPolicy): boolean {
  */
 export function countsRegisterDevices(policy: StoreAccessPolicy): boolean {
   return isRestricted(policy);
+}
+
+/** ハンディの台数を数えるか。レジと同じく、回線を登録した店舗だけ */
+export function countsHandyDevices(policy: StoreAccessPolicy): boolean {
+  return isRestricted(policy);
+}
+
+/** ハンディをもう1台つないでよいか（既に使っている端末は数に入っている） */
+export function canAddHandyDevice(policy: StoreAccessPolicy, activeCount: number): boolean {
+  if (!countsHandyDevices(policy)) return true;
+  return activeCount < policy.handyLimit;
 }
 
 export type RegisterDeviceDecision =
@@ -107,5 +133,6 @@ export const REGISTER_COOKIE = 'tenpo_register_device';
 export const ACCESS_MESSAGE = {
   network: 'お店の回線からのみ、レジ・ハンディを使えます（契約時に登録した回線）。お店のWi-Fi・有線につないでください',
   limit: 'この店舗で使えるレジ端末の台数の上限です。使わない端末の解除や台数の変更は、TENPO ONE のサポートへご連絡ください',
+  handyLimit: 'この店舗で使えるハンディの台数の上限です。使わない端末の解除や台数の変更は、TENPO ONE のサポートへご連絡ください',
   revoked: 'この端末はレジとして解除されています。もう一度使うには、店舗の管理者に登録を依頼してください',
 } as const;

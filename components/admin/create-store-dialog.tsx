@@ -12,6 +12,10 @@ export function CreateStoreDialog({ organizationId }: { organizationId: string }
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
   const [address, setAddress] = useState('');
+  const [storeIp, setStoreIp] = useState('');
+  const [registerLimit, setRegisterLimit] = useState('2');
+  const [handyLimit, setHandyLimit] = useState('2');
+  const [issued, setIssued] = useState<{ orgCode?: string; registerPassword?: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const { toast } = useToast();
@@ -20,6 +24,10 @@ export function CreateStoreDialog({ organizationId }: { organizationId: string }
     setOpen(false);
     setName('');
     setAddress('');
+    setStoreIp('');
+    setRegisterLimit('2');
+    setHandyLimit('2');
+    setIssued(null);
     setError(null);
   };
 
@@ -28,9 +36,16 @@ export function CreateStoreDialog({ organizationId }: { organizationId: string }
     setError(null);
     startTransition(async () => {
       try {
-        await createStoreForOrg({ organizationId, name, address });
+        const res = await createStoreForOrg({
+          organizationId,
+          name,
+          address,
+          storeIps: storeIp.trim() ? [{ ip: storeIp, label: 'お店の回線' }] : [],
+          registerLimit: Number(registerLimit) || 0,
+          handyLimit: Number(handyLimit) || 0,
+        });
         toast('店舗を追加しました');
-        close();
+        setIssued({ orgCode: res.orgCode, registerPassword: res.registerPassword });
       } catch (err) {
         setError(err instanceof Error ? err.message : '作成に失敗しました');
       }
@@ -54,6 +69,33 @@ export function CreateStoreDialog({ organizationId }: { organizationId: string }
             <Label htmlFor="new-store-address">住所</Label>
             <Input id="new-store-address" value={address} onChange={(e) => setAddress(e.target.value)} />
           </div>
+          <div className="space-y-3 rounded-xl border border-gray-100 bg-surface p-3">
+            <p className="text-sm font-semibold text-navy">契約（レジ・ハンディ）</p>
+            <div>
+              <Label htmlFor="new-store-ip">お店のIPアドレス</Label>
+              <Input id="new-store-ip" value={storeIp} onChange={(e) => setStoreIp(e.target.value)} placeholder="203.0.113.5" className="font-mono" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label htmlFor="new-store-rlimit">レジ（iPad）の台数</Label>
+                <Input id="new-store-rlimit" value={registerLimit} onChange={(e) => setRegisterLimit(e.target.value.replace(/[^0-9]/g, ''))} className="text-right" inputMode="numeric" />
+              </div>
+              <div>
+                <Label htmlFor="new-store-hlimit">ハンディの台数</Label>
+                <Input id="new-store-hlimit" value={handyLimit} onChange={(e) => setHandyLimit(e.target.value.replace(/[^0-9]/g, ''))} className="text-right" inputMode="numeric" />
+              </div>
+            </div>
+            <p className="text-xs text-gray-500">
+              IPを入れると、レジ・ハンディはその回線からだけ使えます（台数の制限もここから効きます）。入れない場合は制限なし。
+            </p>
+          </div>
+          {issued && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm">
+              <p className="font-semibold text-amber-800">レジ（iPad）のログイン（この画面でしか表示されません）</p>
+              <p className="mt-1">企業番号：<span className="font-mono text-base">{issued.orgCode ?? '—'}</span></p>
+              <p className="mt-1">レジ用パスワード：<span className="font-mono text-base">{issued.registerPassword ?? '—'}</span></p>
+            </div>
+          )}
           <p className="text-xs text-gray-500">
             公開URL用のslugは店舗名から自動生成されます。詳細な設定（営業時間・テーブル等）は作成後に企業側の設定画面から行えます。
           </p>
@@ -62,7 +104,7 @@ export function CreateStoreDialog({ organizationId }: { organizationId: string }
             <Button type="button" variant="secondary" onClick={close} disabled={pending}>
               キャンセル
             </Button>
-            <Button type="submit" disabled={pending || !name.trim()}>
+            <Button type="submit" disabled={pending || !name.trim() || !!issued}>
               {pending ? '作成中…' : '作成する'}
             </Button>
           </div>
