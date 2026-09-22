@@ -51,9 +51,10 @@ export function RegisterLoginForm() {
             <Input
               id="org-code"
               value={orgCode}
-              onChange={(e) => setOrgCode(e.target.value)}
-              placeholder="t184203"
-              autoCapitalize="none"
+              onChange={(e) => setOrgCode(e.target.value.replace(/[^0-9]/g, '').slice(0, 6))}
+              placeholder="184203"
+              inputMode="numeric"
+              autoComplete="off"
               autoCorrect="off"
               spellCheck={false}
               className="text-lg tracking-widest"

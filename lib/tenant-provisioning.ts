@@ -13,7 +13,7 @@ import {
 
 type Admin = ReturnType<typeof createAdminClient>;
 
-/** 会社に企業番号（t1+5桁）を配る。重複したらやり直す */
+/** 会社に企業番号（6桁の数字）を配る。重複したらやり直す */
 export async function assignOrgCode(admin: Admin, organizationId: string): Promise<string | null> {
   for (let attempt = 0; attempt < 12; attempt++) {
     const code = generateOrgCode();

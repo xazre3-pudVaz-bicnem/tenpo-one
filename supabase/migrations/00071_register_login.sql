@@ -7,7 +7,7 @@
 --   - ハンディも契約した台数までしか使えないようにする（既定2台）
 --   - パソコンからは今まで通り メールアドレス＋パスワード
 
--- 企業番号（t1 + 5桁）。レジのログイン画面で打つ番号。秘密ではない（秘密はパスワードの方）
+-- 企業番号。レジのログイン画面で打つ番号。秘密ではない（秘密はパスワードの方）。形は 00072 で6桁の数字に変更
 alter table public.organizations add column if not exists org_code text;
 create unique index if not exists idx_organizations_org_code
   on public.organizations(org_code) where org_code is not null;

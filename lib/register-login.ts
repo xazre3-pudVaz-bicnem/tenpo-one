@@ -42,7 +42,7 @@ export function decideRegisterLogin(
 
 export const REGISTER_LOGIN_MESSAGE = {
   unknownOrg: '企業番号が見つかりません。番号をご確認ください',
-  badFormat: '企業番号は t1 ではじまる7文字です（例: t184203）',
+  badFormat: '企業番号は6桁の数字です（例: 184203）',
   noNetwork:
     'この回線は、この会社の店舗として登録されていません。お店のWi-Fi・有線につないでから、もう一度お試しください',
   badPassword: 'レジ用パスワードが正しくありません',
