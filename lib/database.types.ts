@@ -5685,6 +5685,7 @@ export type Database = {
           id: string
           ip_address: string | null
           is_verified: boolean
+          floor_ids: string[]
           kitchen_stations: string[]
           last_connected_at: string | null
           last_polled_at: string | null
@@ -5713,6 +5714,7 @@ export type Database = {
           id?: string
           ip_address?: string | null
           is_verified?: boolean
+          floor_ids?: string[]
           kitchen_stations?: string[]
           last_connected_at?: string | null
           last_polled_at?: string | null
@@ -5741,6 +5743,7 @@ export type Database = {
           id?: string
           ip_address?: string | null
           is_verified?: boolean
+          floor_ids?: string[]
           kitchen_stations?: string[]
           last_connected_at?: string | null
           last_polled_at?: string | null

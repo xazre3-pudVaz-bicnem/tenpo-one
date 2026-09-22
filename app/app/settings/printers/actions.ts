@@ -1,5 +1,6 @@
 'use server';
 
+import { normalizeFloorIds } from '@/lib/printer-floors';
 import { revalidatePath } from 'next/cache';
 import { requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
@@ -121,6 +122,8 @@ export interface PrinterConfigInput {
   paperWidthMm: number;
   autoPrint: boolean;
   drawerKick: boolean;
+  /** 担当フロア（floors.id）。レシート機だけ。空＝既定プリンター */
+  floorIds?: string[];
 }
 
 /** プリンター設定の追加・更新 */
@@ -131,6 +134,18 @@ export async function savePrinterConfig(input: PrinterConfigInput): Promise<Acti
   if (!input.name.trim()) return { error: 'プリンター名を入力してください' };
 
   const supabase = await createClient();
+
+  // 担当フロアはこの店舗のフロアだけ受け付ける（他店舗のIDや削除済みは捨てる）。レシート機以外は空
+  let floorIds: string[] = [];
+  if (input.usage === 'receipt' && Array.isArray(input.floorIds) && input.floorIds.length > 0) {
+    const { data: floors } = await supabase
+      .from('floors')
+      .select('id')
+      .eq('store_id', input.storeId)
+      .eq('status', 'active');
+    floorIds = normalizeFloorIds(input.floorIds, new Set((floors ?? []).map((f) => f.id as string)));
+  }
+
   const payload = {
     organization_id: ctx.organizationId,
     store_id: input.storeId,
@@ -143,6 +158,7 @@ export async function savePrinterConfig(input: PrinterConfigInput): Promise<Acti
     paper_width_mm: input.paperWidthMm,
     auto_print: input.autoPrint,
     drawer_kick: input.drawerKick,
+    floor_ids: floorIds,
     updated_by: ctx.userId,
   };
 
@@ -165,7 +181,7 @@ export async function savePrinterConfig(input: PrinterConfigInput): Promise<Acti
     p_target_table: 'printer_configs',
     p_target_id: input.id ?? input.storeId,
     p_before: null,
-    p_after: { name: input.name.trim(), usage: input.usage, connection_type: input.connectionType || null },
+    p_after: { name: input.name.trim(), usage: input.usage, connection_type: input.connectionType || null, floor_ids: floorIds },
     p_note: null,
   });
 

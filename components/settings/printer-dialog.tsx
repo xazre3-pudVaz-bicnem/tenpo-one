@@ -21,6 +21,13 @@ export interface PrinterConfigRow {
   isVerified: boolean;
   /** CloudPRNTで実機印字する設定になっているか（一覧の「シミュレーション動作」表示の判定に使う）。 */
   cloudprntEnabled?: boolean;
+  /** 担当フロア（floors.id）。空＝既定プリンター */
+  floorIds?: string[];
+}
+
+export interface FloorOption {
+  id: string;
+  name: string;
 }
 
 const MAKER_OPTIONS = ['EPSON', 'Star', 'その他'];
@@ -56,10 +63,13 @@ function emptyPrinter(): PrinterConfigRow {
 export function PrinterDialog({
   storeId,
   editing,
+  floors = [],
   onClose,
 }: {
   storeId: string;
   editing: PrinterConfigRow | null;
+  /** 店舗のフロア（担当フロアの選択肢） */
+  floors?: FloorOption[];
   onClose: () => void;
 }) {
   const [form, setForm] = useState<PrinterConfigRow>(editing ?? emptyPrinter());
@@ -89,6 +99,7 @@ export function PrinterDialog({
         paperWidthMm: form.paperWidthMm,
         autoPrint: form.autoPrint,
         drawerKick: form.drawerKick,
+        floorIds: form.usage === 'receipt' ? (form.floorIds ?? []) : [],
       });
       if (result.error) {
         setError(result.error);
@@ -184,6 +195,35 @@ export function PrinterDialog({
             ドロア連動
           </label>
         </div>
+
+        {form.usage === 'receipt' && floors.length > 0 && (
+          <div>
+            <p className="text-sm font-medium text-gray-700">担当フロア（会計伝票を出すフロア）</p>
+            <div className="mt-1.5 flex flex-wrap gap-3">
+              {floors.map((f) => {
+                const checked = (form.floorIds ?? []).includes(f.id);
+                return (
+                  <label key={f.id} className="flex items-center gap-2 text-sm text-gray-700">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                      checked={checked}
+                      onChange={(e) => {
+                        const cur = form.floorIds ?? [];
+                        set('floorIds', e.target.checked ? [...cur, f.id] : cur.filter((x) => x !== f.id));
+                      }}
+                    />
+                    {f.name}
+                  </label>
+                );
+              })}
+            </div>
+            <p className="mt-1.5 text-xs text-gray-500">
+              チェックしたフロアの卓の会計伝票（中間伝票・QR注文のお会計伝票）をこのプリンターから出します。
+              何もチェックしない＝店の既定プリンター（レシート・ドロア、担当のいないフロアの伝票）。
+            </p>
+          </div>
+        )}
 
         <FieldError message={error ?? undefined} />
 

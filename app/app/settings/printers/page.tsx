@@ -13,6 +13,7 @@ import { CloudPrntPanel } from '@/components/settings/cloudprnt-panel';
 import Link from 'next/link';
 import { KitchenTicketPanel } from '@/components/settings/kitchen-ticket-panel';
 import { kitchenTicketSettingsFrom, misroutedDrinkCategories } from '@/lib/kitchen-ticket';
+import { normalizeFloorIds } from '@/lib/printer-floors';
 
 export const metadata: Metadata = { title: 'レジ・プリンター | 設定' };
 
@@ -40,10 +41,19 @@ export default async function PrintersSettingsPage() {
 
   const { data: printers } = await supabase
     .from('printer_configs')
-    .select('id, name, maker, model, connection_type, ip_address, usage, paper_width_mm, auto_print, drawer_kick, is_verified, cloudprnt_enabled, cloudprnt_token, drawer_command, poll_interval_seconds, last_polled_at, mac_address, kitchen_stations')
+    .select('id, name, maker, model, connection_type, ip_address, usage, paper_width_mm, auto_print, drawer_kick, is_verified, cloudprnt_enabled, cloudprnt_token, drawer_command, poll_interval_seconds, last_polled_at, mac_address, kitchen_stations, floor_ids')
     .eq('store_id', targetStore.id)
     .eq('status', 'active')
     .order('name');
+
+  const { data: floorRows } = await supabase
+    .from('floors')
+    .select('id, name')
+    .eq('store_id', targetStore.id)
+    .eq('status', 'active')
+    .order('sort_order')
+    .order('name');
+  const floors = (floorRows ?? []).map((f) => ({ id: f.id as string, name: f.name as string }));
 
   // 未印刷のまま待っているジョブ数（プリンタ未接続の気付きのため）
   const { data: pendingJobs } = await supabase
@@ -154,6 +164,7 @@ export default async function PrintersSettingsPage() {
     isVerified: p.is_verified,
     // 実機接続が有効かどうか（一覧のバッジとテスト印刷ボタンの出し分けに使う）
     cloudprntEnabled: p.cloudprnt_enabled ?? false,
+    floorIds: normalizeFloorIds(p.floor_ids),
   }));
 
   return (
@@ -184,7 +195,7 @@ export default async function PrintersSettingsPage() {
           )}
           <Card>
             <CardContent>
-              <PrintersPanel storeId={targetStore.id} initial={printerRows} />
+              <PrintersPanel storeId={targetStore.id} initial={printerRows} floors={floors} />
             </CardContent>
           </Card>
           <CloudPrntPanel storeId={targetStore.id} siteUrl={siteUrl} printers={cloudPrntRows} setupQrById={setupQrById} />

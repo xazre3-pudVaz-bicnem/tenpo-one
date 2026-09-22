@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server';
 import { loadReceiptData } from '@/lib/receipts-loader';
 import { receiptToStarMarkup, ryoshushoToStarMarkup, orderSlipMarkup, drawerKickMarkup } from '@/lib/receipt-markup';
 import { receiptToStarPrnt, ryoshushoToStarPrnt, orderSlipStarPrnt, drawerKickStarPrnt } from '@/lib/starprnt';
+import { normalizeFloorIds, pickDefaultPrinter, pickPrinterForFloor } from '@/lib/printer-floors';
 import { receiptToEposXml, ryoshushoToEposXml, orderSlipEposXml, drawerKickEpos } from '@/lib/epos-print';
 
 /**
@@ -27,23 +28,41 @@ function assertStore(ctx: { isHq: boolean; stores: { id: string }[] }, storeId: 
 /**
  * 店舗のレシート用 CloudPRNT プリンタ設定を取得。無ければ null。
  * usage='receipt' に限定する（厨房・ラベル用プリンタへレシートを出さないため）。
+ *
+ * 担当フロア（printer_configs.floor_ids）:
+ *   - floor を省略（レシート・ドロア）… 担当フロアの無い既定プリンター
+ *   - floor を指定（会計伝票）… その卓のフロア担当のプリンター、無ければ既定プリンター
  */
 async function getCloudPrntPrinter(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   supabase: any,
-  storeId: string
+  storeId: string,
+  floor?: { floorId: string | null }
 ): Promise<{ id: string; paper_width_mm: number; drawer_kick: boolean; drawer_command: string } | null> {
   const { data } = await supabase
     .from('printer_configs')
-    .select('id, paper_width_mm, drawer_kick, drawer_command, usage')
+    .select('id, paper_width_mm, drawer_kick, drawer_command, usage, floor_ids')
     .eq('store_id', storeId)
     .eq('status', 'active')
     .eq('cloudprnt_enabled', true)
     .eq('usage', 'receipt')
     .order('created_at', { ascending: true })
-    .limit(1)
-    .maybeSingle();
-  return data ?? null;
+    .limit(20);
+  const rows = ((data ?? []) as {
+    id: string;
+    paper_width_mm: number;
+    drawer_kick: boolean;
+    drawer_command: string;
+    floor_ids: string[] | null;
+  }[]).map((r) => ({ ...r, floorIds: normalizeFloorIds(r.floor_ids) }));
+  const picked = floor ? pickPrinterForFloor(rows, floor.floorId) : pickDefaultPrinter(rows);
+  if (!picked) return null;
+  return {
+    id: picked.id,
+    paper_width_mm: picked.paper_width_mm,
+    drawer_kick: picked.drawer_kick,
+    drawer_command: picked.drawer_command,
+  };
 }
 
 /**
@@ -155,14 +174,16 @@ export async function enqueueOrderSlipPrint(orderId: string): Promise<EnqueueRes
   const { data: order } = await supabase
     .from('orders')
     .select(
-      'id, organization_id, store_id, order_no, guest_count, clerk_name, subtotal, tax_total, service_charge, discount_total, total, stores(name), restaurant_tables(name)'
+      'id, organization_id, store_id, order_no, guest_count, clerk_name, subtotal, tax_total, service_charge, discount_total, total, stores(name), restaurant_tables(name, floor_id)'
     )
     .eq('id', orderId)
     .single();
   if (!order) return { ok: false, error: '注文が見つかりません' };
   if (!assertStore(ctx, order.store_id)) return { ok: false, error: 'この店舗へのアクセス権がありません' };
 
-  const printer = await getCloudPrntPrinter(supabase, order.store_id);
+  // 会計伝票はその卓のフロア担当のプリンターから出す（3F の卓 → 3F のプリンター）
+  const tableFloor = order.restaurant_tables as unknown as { floor_id: string | null } | null;
+  const printer = await getCloudPrntPrinter(supabase, order.store_id, { floorId: tableFloor?.floor_id ?? null });
   if (!printer) {
     return { ok: false, error: 'CloudPRNT対応プリンタが未設定です（設定 > プリンター で有効化してください）' };
   }
