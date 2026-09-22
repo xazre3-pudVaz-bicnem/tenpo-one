@@ -23,11 +23,20 @@ export default async function SettingsLayout({ children }: { children: React.Rea
         { href: '/app/settings/store', label: '店舗情報', en: 'Store', icon: 'store', description: '名称・住所・連絡先・紹介文・公開予約URL', visible: true, hubDefault: true },
         { href: '/app/settings/company', label: '企業情報', en: 'Company', icon: 'company', description: '会社名・住所・連絡先・請求情報の管理', visible: can(role, 'org.settings') },
         { href: '/app/settings/hours', label: '営業時間・休業日', en: 'Hours', icon: 'hours', description: '曜日別の営業時間、定休日、臨時休業の設定', visible: true },
-        { href: '/app/settings/menu', label: 'メニュー編集', en: 'Menu', icon: 'menu', description: 'カテゴリ・商品の登録、価格、売切管理', visible: can(role, 'menu.manage') },
-        { href: '/app/settings/menu-book', label: 'メニューブック', en: 'Menu book', icon: 'menu', description: 'ハンディ・お客様QRのカテゴリの並び順と出し方、商品の並び順（店長以上）', visible: can(role, 'menu.manage') },
-        { href: '/app/settings/options', label: 'メニュー選択肢', en: 'Menu options', icon: 'options', description: 'サイズ・トッピング等の選択肢と追加料金', visible: true },
         { href: '/app/settings/clerks', label: 'POS担当者', en: 'Clerks', icon: 'clerks', description: '会計時に選ぶ担当者名の登録（アカウント不要）', visible: true },
         { href: '/app/reports', label: '帳票管理・分析', en: 'Reports', icon: 'reports', description: '売上・客数などのレポートと帳票出力', visible: can(role, 'reports.view') && featureOn('/app/reports'), matchActive: false },
+      ],
+    },
+    {
+      // 2026-09-23 dinii と同じく メニュー／プラン／オプション／カテゴリ を別の画面に分けた（全店舗共通）
+      label: 'メニュー',
+      en: 'Menu',
+      rows: [
+        { href: '/app/settings/menu', label: 'メニュー', en: 'Menu', icon: 'menu', description: '単品の商品の登録、価格、英語名、売切管理', visible: can(role, 'menu.manage') },
+        { href: '/app/settings/plans', label: 'プラン', en: 'Plans', icon: 'plans', description: 'コース・飲み放題・食べ放題の価格と時間', visible: can(role, 'menu.manage') },
+        { href: '/app/settings/options', label: 'オプション', en: 'Options', icon: 'options', description: 'サイズ・トッピング等の選択肢と追加料金', visible: true },
+        { href: '/app/settings/categories', label: 'カテゴリ', en: 'Categories', icon: 'categories', description: 'カテゴリの追加・名前・色と、キッチン／ドリンク／焼き場への振り分け', visible: can(role, 'menu.manage') },
+        { href: '/app/settings/menu-book', label: 'メニューブック', en: 'Menu book', icon: 'menubook', description: 'ハンディ・お客様QRのカテゴリの並び順と出し方、プランで出すカテゴリ', visible: can(role, 'menu.manage') },
       ],
     },
     {

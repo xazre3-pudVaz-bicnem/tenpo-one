@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation';
 import {
   Store, Building2, Clock, UtensilsCrossed, ListPlus, UserRound, ChartColumn, Printer, QrCode, LayoutGrid,
   CalendarClock, Users, CreditCard, Percent, BookOpen, ShieldCheck, Gift, TriangleAlert, Upload, Plug,
-  ScrollText, ChevronRight, Smartphone,
+  ScrollText, ChevronRight, Smartphone, ClipboardList, Tags, BookOpenText,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { RegisterReturnBar } from './register-return-bar';
@@ -17,6 +17,9 @@ const ICONS = {
   hours: Clock,
   menu: UtensilsCrossed,
   options: ListPlus,
+  plans: ClipboardList,
+  categories: Tags,
+  menubook: BookOpenText,
   clerks: UserRound,
   reports: ChartColumn,
   printers: Printer,

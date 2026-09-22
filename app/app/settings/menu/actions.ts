@@ -65,6 +65,8 @@ export async function saveCategory(input: CategoryInput): Promise<ActionResult> 
   });
 
   revalidatePath('/app/settings/menu');
+  revalidatePath('/app/settings/plans');
+  revalidatePath('/app/settings/categories');
   revalidatePath('/app/settings/menu-book');
   return {};
 }
@@ -92,6 +94,8 @@ export async function deleteCategory(id: string): Promise<ActionResult> {
   });
 
   revalidatePath('/app/settings/menu');
+  revalidatePath('/app/settings/plans');
+  revalidatePath('/app/settings/categories');
   revalidatePath('/app/settings/menu-book');
   return {};
 }
@@ -177,6 +181,8 @@ export async function saveMenuItem(input: MenuItemInput): Promise<ActionResult> 
   });
 
   revalidatePath('/app/settings/menu');
+  revalidatePath('/app/settings/plans');
+  revalidatePath('/app/settings/categories');
   revalidatePath('/app/settings/menu-book');
   return {};
 }
@@ -207,6 +213,8 @@ export async function updateCategoryStation(id: string, station: string): Promis
   });
 
   revalidatePath('/app/settings/menu');
+  revalidatePath('/app/settings/plans');
+  revalidatePath('/app/settings/categories');
   revalidatePath('/app/settings/menu-book');
   return {};
 }
@@ -234,6 +242,8 @@ export async function deleteMenuItem(id: string): Promise<ActionResult> {
   });
 
   revalidatePath('/app/settings/menu');
+  revalidatePath('/app/settings/plans');
+  revalidatePath('/app/settings/categories');
   revalidatePath('/app/settings/menu-book');
   return {};
 }
@@ -250,6 +260,8 @@ export async function toggleSoldOut(id: string, soldOut: boolean): Promise<Actio
   if (error) return { error: `更新に失敗しました: ${error.message}` };
 
   revalidatePath('/app/settings/menu');
+  revalidatePath('/app/settings/plans');
+  revalidatePath('/app/settings/categories');
   revalidatePath('/app/settings/menu-book');
   return {};
 }
