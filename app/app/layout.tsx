@@ -20,6 +20,9 @@ export const viewport = { themeColor: '#241436' };
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const ctx = await requireSession();
 
+  // ハンディ端末（QRで登録したスマホ）はハンディ専用。レジ本体（/app）は開かせない
+  if (ctx.isHandyDevice) redirect('/handy');
+
   // 組織に未所属のcypress管理者は運営コンソールへ
   if (!ctx.organizationId) {
     if (ctx.isCypressAdmin) redirect('/admin/organizations');
