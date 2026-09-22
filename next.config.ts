@@ -17,7 +17,8 @@ function buildCsp(): string {
     ? new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).hostname
     : null;
 
-  const connectSrc = ["'self'"];
+  // api.ipify.org / api6.ipify.org: iPhoneハンディでお店の回線（IPv4・IPv6）を登録するときだけ使う
+  const connectSrc = ["'self'", 'https://api.ipify.org', 'https://api6.ipify.org'];
   const imgSrc = ["'self'", 'data:', 'blob:'];
   if (supabaseHost) {
     // Supabase REST/Storage(https) と Realtime(wss) の両方を許可する

@@ -10,10 +10,10 @@ import { currentRequestIp } from '@/lib/handy-device-server';
 import { networkKey } from '@/lib/handy-pairing';
 import { addCurrentShopNetwork, regenerateHandyQr, removeShopNetwork, setupHandyQr } from './actions';
 
-export const metadata: Metadata = { title: 'iPhone用ハンディ | 設定' };
+export const metadata: Metadata = { title: 'iPhoneハンディ | 設定' };
 
 /**
- * 設定 > iPhone用ハンディ（全店舗共通の機能）。
+ * 設定 > iPhoneハンディ（全店舗共通の機能）。
  * 店ごとに1つの固定QRコード。お店のWi-Fiにつないだ iPhone で読むとハンディが開き、
  * Wi-Fi の外に3分いると自動でログアウトする。
  */
@@ -25,7 +25,7 @@ export default async function HandyQrPage() {
     return (
       <div>
         <SettingsBackLink />
-        <PageHeader title="iPhone用ハンディ" en="Handy QR" />
+        <PageHeader title="iPhoneハンディ" en="Handy QR" />
         <EmptyState title="対象の店舗がありません" description="店舗を選択してから設定を行ってください" />
       </div>
     );
@@ -42,7 +42,7 @@ export default async function HandyQrPage() {
   return (
     <div>
       <SettingsBackLink />
-      <PageHeader title="iPhone用ハンディ" en="Handy QR" description={`${store.name}・QRコードを読むだけでハンディが開く（お店のWi-Fiだけ）`} />
+      <PageHeader title="iPhoneハンディ" en="Handy QR" description={`${store.name}・QRコードを読むだけでハンディが開く（お店のWi-Fiだけ）`} />
       <HandyQrPanel
         storeId={store.id}
         storeName={store.name}

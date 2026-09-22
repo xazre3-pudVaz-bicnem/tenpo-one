@@ -160,7 +160,7 @@ export const REGISTER_SETTING_SECTIONS: readonly RegisterSettingSection[] = [
     links: [
       {
         id: 'handy-qr',
-        title: 'iPhone用ハンディ（QRでログイン）',
+        title: 'iPhoneハンディ（QRでログイン）',
         description: 'お店に1つの固定QR。お店のWi-Fiで読むとハンディが開き、Wi-Fiの外に3分でログアウト',
         href: '/app/settings/handy-qr',
         permission: 'store.settings',
