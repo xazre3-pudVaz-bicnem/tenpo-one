@@ -6,20 +6,13 @@ import { cn } from '@/lib/utils';
 import type { NavItem } from '@/lib/nav';
 import { NavIcon } from './nav-icons';
 
-/**
- * スマホ・タブレット用の下部ナビゲーション。
- * パソコン（マウス）だけ左メニューに切り替える。iPad は横向きで幅が 1024px を超えるため、
- * 幅ではなく指で使う端末か（pointer: coarse）で見分ける。alwaysShow はレジ端末用。
- */
-export function MobileNav({ items, alwaysShow = false }: { items: NavItem[]; alwaysShow?: boolean }) {
+/** スマホ用（幅が狭いとき）の下部ナビゲーション。左メニューが出る幅では隠す */
+export function MobileNav({ items }: { items: NavItem[] }) {
   const pathname = usePathname();
 
   return (
     <nav
-      className={cn(
-        'fixed inset-x-0 bottom-0 z-30 border-t border-gray-200 bg-white pb-[env(safe-area-inset-bottom)]',
-        !alwaysShow && 'lg:pointer-fine:hidden'
-      )}
+      className="fixed inset-x-0 bottom-0 z-30 border-t border-gray-200 bg-white pb-[env(safe-area-inset-bottom)] lg:hidden"
       aria-label="モバイルナビゲーション"
     >
       <ul className="flex">

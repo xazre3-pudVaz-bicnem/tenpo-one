@@ -7,6 +7,7 @@ import { visibleNavGroups, visibleNavTiles, MOBILE_NAV, TABLET_NAV } from '@/lib
 import { can } from '@/lib/permissions';
 import { featureForRoute } from '@/lib/features';
 import { Sidebar } from '@/components/layout/sidebar';
+import { menuLayout } from '@/app/app/menu/data';
 import { TopBar } from '@/components/layout/top-bar';
 import { MobileNav } from '@/components/layout/mobile-nav';
 import { StoreSwitcher } from '@/components/layout/store-switcher';
@@ -59,10 +60,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // 他画面への移動は上部バーの「メニュー」「ホーム」と、画面内の「フロアへ戻る」から。
   const posFullscreen = pathname === '/app/pos';
 
-  // レジ（iPad）は横向きにすると幅が 1024px を超え、パソコンと同じ左メニューになってしまう。
-  // レジ端末としてログインしている間は幅に関係なく「下のメニュー＋メニュー一覧」を使う。
-  // メール＋パスワードで入った iPad などは CSS 側（lg:pointer-fine）で同じ判定をする。
-  const tabletLayout = ctx.isRegisterDevice === true;
+  // レジ端末（/register-login でログイン）だけ、左メニューの中身をレジ用の並びに差し替える。
+  // 画面の形（左メニュー＋上部バー）はパソコンと同じまま。メール＋パスワードのパソコンは今まで通り。
+  const isRegi = ctx.isRegisterDevice === true;
 
   // 初期導入ウィザード未完了の企業オーナー/本社管理者を /app/onboarding へ誘導
   // （ウィザード自身とハンバーガーメニュー画面は無限リダイレクトを避けるため除外）
@@ -75,9 +75,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   const unreadCount = 'count' in unreadRes ? unreadRes.count : 0;
 
-  const tiles = visibleNavTiles(ctx.role, ctx.disabledFeatures);
-  const groups = visibleNavGroups(ctx.role, ctx.disabledFeatures);
-  const mobileItems = (tabletLayout ? TABLET_NAV : MOBILE_NAV).filter((i) => {
+  // レジ端末は「入金出金・仕入経費を上のタイルに」「ハンディ・レジの設定・スキャン・スタッフは設定などの中へ」
+  // 「在庫設定は仕入・在庫の中へ」「店舗運営〜チームは集計ひとつに」まとめた並び（app/app/menu/data.ts）
+  const regiLayout = isRegi ? menuLayout(ctx.role, ctx.disabledFeatures) : null;
+  const tiles = regiLayout ? regiLayout.tiles : visibleNavTiles(ctx.role, ctx.disabledFeatures);
+  const groups = regiLayout
+    ? [{ label: null, items: regiLayout.main }]
+    : visibleNavGroups(ctx.role, ctx.disabledFeatures);
+  const mobileItems = (isRegi ? TABLET_NAV : MOBILE_NAV).filter((i) => {
     if (i.permission && !can(ctx.role, i.permission)) return false;
     const feature = featureForRoute(i.href);
     return !feature || !ctx.disabledFeatures.has(feature);
@@ -90,7 +95,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <div className="theme-regi min-h-screen bg-lilac">
         {/* 上部バー（全幅）→ その下に左メニュー（固定）と本文 */}
         <TopBar ctx={ctx} unreadCount={unreadCount ?? 0} showMenuLink={posFullscreen} />
-        {!posFullscreen && !tabletLayout && (
+        {!posFullscreen && (
           <Sidebar
             tiles={tiles}
             groups={groups}
@@ -98,7 +103,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             currentStoreId={ctx.currentStore?.id ?? null}
           />
         )}
-        <div className={posFullscreen || tabletLayout ? undefined : 'lg:pointer-fine:pl-[250px]'}>
+        <div className={posFullscreen ? undefined : 'lg:pl-[250px]'}>
           <InstallPrompt />
           {/* スマホは店舗切替を上部バーの下に表示 */}
           <div className="border-b border-line bg-white px-4 py-2 sm:hidden">
@@ -110,7 +115,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </div>
           <main className="px-4 pt-4 pb-24 lg:px-[22px] lg:pt-[18px] lg:pb-8">{children}</main>
         </div>
-        <MobileNav items={mobileItems} alwaysShow={tabletLayout} />
+        <MobileNav items={mobileItems} />
       </div>
     </CommandPaletteProvider>
   );
