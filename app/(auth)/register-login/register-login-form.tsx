@@ -69,7 +69,8 @@ export function RegisterLoginForm() {
     } catch {
       // プライベートブラウズなどで保存できなくても、ログインは続ける
     }
-    router.push('/app/pos');
+    // ログイン後はホーム（メニュー一覧）へ。POSレジは「オーダー・会計」から開く（2026-09-24 要望）
+    router.push('/app/dashboard');
     router.refresh();
   };
 
