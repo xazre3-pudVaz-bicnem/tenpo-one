@@ -180,7 +180,7 @@ export default async function PosPage({
     loadOrderItems(supabase, orderId),
     supabase
       .from('menu_categories')
-      .select('id, name, name_en, color, sort_order')
+      .select('id, name, name_en, color, sort_order, station')
       .eq('organization_id', ctx.organizationId)
       .or(`store_id.is.null,store_id.eq.${store.id}`)
       .eq('status', 'active')

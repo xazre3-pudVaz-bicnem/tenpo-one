@@ -98,6 +98,9 @@ export default async function MenuBookPage({ searchParams }: { searchParams: Pro
       sortOrder: c.sort_order,
       shared: c.store_id === null,
       itemCount: mine.length,
+      station: c.station ?? null,
+      // 0円だけのカテゴリ＝食べ放題・飲み放題の中身（ページの自動振り分けに使う）
+      allZeroPrice: mine.length > 0 && mine.every((i) => Number(i.price) === 0),
       group: top ? (groupLabel.get(top) ?? '') : '',
       show: auto ? 'auto' : show,
       autoShow: autoCategoryShow({ id: c.id, name: c.name }, itemInputs),
@@ -152,8 +155,8 @@ export default async function MenuBookPage({ searchParams }: { searchParams: Pro
         items={itemRows}
         plans={planRows}
         lunch={book.lunch}
-        joinPrev={book.joinPrev}
-        pageNames={book.pageNames}
+        pages={book.pages}
+        categoryPage={book.categoryPage}
         taxRates={(taxRates ?? []).map((t) => ({ id: t.id, name: t.name }))}
         initialTab={isMenuBookTab(tab) ? tab : undefined}
       />

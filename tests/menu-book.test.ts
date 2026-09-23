@@ -6,6 +6,7 @@ import {
   emptyMenuBook,
   filterMenuBook,
   filterNestedMenu,
+  autoCategoryPage,
   groupMenuPages,
   isPlanAddOn,
   isPlanItem,
@@ -14,7 +15,6 @@ import {
   isWithinHm,
   menuBookFrom,
   menuBookToJson,
-  menuPageLabel,
   moveInList,
   nestedMenuPages,
   normalizePageName,
@@ -365,54 +365,79 @@ describe('メニューブック画面の並び替え', () => {
   });
 });
 
-describe('メニューブック：ページ（ハンディ・お客様QRのタブのまとめ方）', () => {
+describe('メニューブック：ページ（レジ・ハンディ・お客様QRの上のタブ）', () => {
   const P = {
-    soup: { id: id(21), name: 'SOUP' },
-    appetizer: { id: id(22), name: 'APPETIZER' },
-    salad: { id: id(23), name: 'SALAD' },
-    alacarte: { id: id(24), name: 'ALACARTE' },
-    beer: { id: id(25), name: 'BEER' },
+    lunchSet: { id: id(21), name: 'ランチセット', station: 'kitchen' },
+    lunchOption: { id: id(22), name: 'ランチ オプション', station: 'kitchen' },
+    salad: { id: id(23), name: 'サラダ', station: 'kitchen' },
+    beer: { id: id(25), name: 'Beer', station: 'drink' },
+    course: { id: id(26), name: '3300/2500 course', station: 'kitchen' },
+    fYakitori: { id: id(27), name: 'F YAKITORI', station: 'grill' },
+    fSour: { id: id(28), name: '(F) サワー', station: 'drink' },
+    option: { id: id(29), name: 'オプション', station: 'kitchen' },
+    others: { id: id(30), name: 'Others', station: 'kitchen' },
   };
   const ordered = Object.values(P);
-  const book = (joinPrev: string[], pageNames: Record<string, string> = {}) => ({ joinPrev, pageNames });
+  /** お客様QR・保存の形のテスト用（上の自動振り分けの並びには入れない） */
+  const Q = { soup: { id: id(33), name: 'SOUP' }, appetizer: { id: id(34), name: 'APPETIZER' } };
+  const empty = { pages: [], categoryPage: {} };
 
-  it('前のカテゴリと同じページのカテゴリを1ページにまとめる（SOUP・APPETIZER・SALAD）', () => {
-    const pages = groupMenuPages(ordered, book([P.appetizer.id, P.salad.id]));
-    expect(pages.map((p) => names(p.categories))).toEqual([['SOUP', 'APPETIZER', 'SALAD'], ['ALACARTE'], ['BEER']]);
-    expect(pages[0].key).toBe(P.soup.id);
-    expect(menuPageLabel(pages[0], (c) => c.name)).toBe('SOUP・APPETIZER・SALAD');
+  it('標準の8タブに自動で振り分ける（0円・F は食べ放題／飲み放題、ドリンクのステーションはドリンク）', () => {
+    expect(autoCategoryPage(P.lunchSet)).toBe('lunch');
+    // ランチのオプションはサービスではなくランチに残す
+    expect(autoCategoryPage(P.lunchOption)).toBe('lunch');
+    expect(autoCategoryPage(P.option)).toBe('service');
+    expect(autoCategoryPage(P.others)).toBe('other');
+    expect(autoCategoryPage(P.course)).toBe('course');
+    expect(autoCategoryPage(P.fYakitori)).toBe('tabehodai');
+    expect(autoCategoryPage(P.fSour)).toBe('nomihodai');
+    expect(autoCategoryPage(P.beer)).toBe('drink');
+    expect(autoCategoryPage(P.salad)).toBe('food');
+    // 名前に印が無くても、売る商品が全部0円なら 食べ放題／飲み放題
+    expect(autoCategoryPage({ id: id(31), name: '日本酒＆焼酎', station: 'drink', allZeroPrice: true })).toBe('nomihodai');
+    expect(autoCategoryPage({ id: id(32), name: 'おでん', station: 'kitchen', allZeroPrice: true })).toBe('tabehodai');
   });
 
-  it('何も設定していなければ1カテゴリ1ページ（これまでと同じ）', () => {
-    expect(groupMenuPages(ordered, book([])).map((p) => p.categories.length)).toEqual([1, 1, 1, 1, 1]);
+  it('設定なしでも標準の8タブの並びで出る。カテゴリの無いタブは出さない', () => {
+    const pages = groupMenuPages(ordered, empty);
+    expect(pages.map((p) => p.name)).toEqual([
+      'ランチ', 'ドリンク', 'フード', 'コース', '食べ放題', '飲み放題', 'サービス', 'OTHER',
+    ]);
+    expect(names(pages[0].categories)).toEqual(['ランチセット', 'ランチ オプション']);
+    // ランチのカテゴリを外すと「ランチ」タブごと消える
+    const noLunch = groupMenuPages(ordered, empty, (c) => c.id !== P.lunchSet.id && c.id !== P.lunchOption.id);
+    expect(noLunch.map((p) => p.key)).not.toContain('lunch');
   });
 
-  it('先頭のカテゴリは前が無いのでつなげない', () => {
-    const pages = groupMenuPages(ordered, book([P.soup.id]));
-    expect(pages).toHaveLength(5);
+  it('店舗が決めた行き先が自動より優先。消したタブに入っていたカテゴリは自動に戻る', () => {
+    const book = { pages: [], categoryPage: { [P.beer.id]: 'food', [P.salad.id]: 'nowhere' } };
+    const pages = groupMenuPages(ordered, book);
+    const food = pages.find((p) => p.key === 'food');
+    // Beer はドリンクだが、店舗が「フード」に入れたのでフード
+    expect(names(food!.categories)).toEqual(['サラダ', 'Beer']);
   });
 
-  it('名前はページの先頭カテゴリに付く。出さないカテゴリがあっても区切り・名前は変わらない', () => {
-    const b = book([P.appetizer.id, P.salad.id], { [P.soup.id]: '前菜' });
-    const pages = groupMenuPages(ordered, b, (c) => c.id !== P.soup.id);
-    expect(pages[0].name).toBe('前菜');
-    expect(names(pages[0].categories)).toEqual(['APPETIZER', 'SALAD']);
-    expect(menuPageLabel(pages[0], (c) => c.name)).toBe('前菜');
-    // 1つも残らないページは返さない
-    expect(groupMenuPages(ordered, b, (c) => c.id === P.beer.id).map((p) => p.key)).toEqual([P.beer.id]);
+  it('店舗が足したタブも使える（並びは店舗の設定どおり）', () => {
+    const book = {
+      pages: [
+        { key: 'page1', name: '季節のおすすめ' },
+        { key: 'food', name: 'フード' },
+        { key: 'other', name: 'OTHER' },
+      ],
+      categoryPage: { [P.salad.id]: 'page1' },
+    };
+    const pages = groupMenuPages(ordered, book);
+    expect(pages.map((p) => p.name)).toEqual(['季節のおすすめ', 'OTHER']);
+    expect(names(pages[0].categories)).toEqual(['サラダ']);
+    // 標準のタブが無い分は OTHER にまとまる
+    expect(names(pages[1].categories)).toContain('Beer');
   });
 
-  it('プランのある卓：プランのカテゴリのページを先に（混ざったページはプランの分だけ前へ）', () => {
-    const cats = [P.soup, C.fSoft, C.fBeer, P.beer];
-    const pages = groupMenuPages(cats, book([C.fSoft.id, C.fBeer.id], { [P.soup.id]: '混ぜたページ' }));
-    expect(pages.map((p) => names(p.categories))).toEqual([['SOUP', '(F) SOFT DRINK', '(F) BEER'], ['BEER']]);
-    const planIds = new Set([C.fSoft.id, C.fBeer.id]);
-    const ordered2 = planPagesFirst(pages, (c) => planIds.has(c.id));
-    expect(ordered2.map((p) => names(p.categories))).toEqual([['(F) SOFT DRINK', '(F) BEER'], ['SOUP'], ['BEER']]);
-    // 分けたページは名前を付けない（カテゴリ名をつなげて出す）
-    expect(ordered2[0].name).toBeNull();
-    expect(ordered2[1].name).toBeNull();
-    expect(ordered2[0].key).toBe(`${P.soup.id}:plan`);
+  it('プランのある卓：食べ放題・飲み放題のタブを先に出す', () => {
+    const pages = groupMenuPages(ordered, empty);
+    const planIds = new Set([P.fYakitori.id, P.fSour.id]);
+    const first = planPagesFirst(pages, (c) => planIds.has(c.id));
+    expect(first.slice(0, 2).map((p) => p.key)).toEqual(['tabehodai', 'nomihodai']);
   });
 
   it('「プランのときだけ」のカテゴリ（設定・自動）', () => {
@@ -428,39 +453,51 @@ describe('メニューブック：ページ（ハンディ・お客様QRのタ�
 
   it('お客様QR：飲み放題の卓は飲み放題のページが先頭、アラカルトの卓はプランのページを出さない', () => {
     const nested = [
-      { id: P.soup.id, name: 'SOUP', items: [{ name: 'スープ', price: 880 }] },
-      { id: P.appetizer.id, name: 'APPETIZER', items: [{ name: 'ナチョス', price: 1080 }] },
+      { id: Q.soup.id, name: 'SOUP', items: [{ name: 'スープ', price: 880 }] },
+      { id: Q.appetizer.id, name: 'APPETIZER', items: [{ name: 'ナチョス', price: 1080 }] },
       { id: C.soft.id, name: 'SOFT DRINK', items: [{ name: 'ウーロン茶', price: 480 }] },
       { id: C.fSoft.id, name: '(F) SOFT DRINK', items: [{ name: 'F. ウーロン茶', price: 0 }] },
       { id: C.fBeer.id, name: '(F) BEER', items: [{ name: 'F. 生ビール', price: 0 }] },
     ];
-    const b: MenuBookSettings = { ...emptyMenuBook(), joinPrev: [P.appetizer.id, C.fBeer.id] };
+    const b: MenuBookSettings = emptyMenuBook();
+    const station = new Map<string, string | null>([
+      [C.soft.id, 'drink'],
+      [C.fSoft.id, 'drink'],
+      [C.fBeer.id, 'drink'],
+    ]);
     const planState = { hasPlan: true, planItemIds: [] };
     const visiblePlan = filterNestedMenu(nested, b, ctx({ plan: planState }));
-    const planPages = nestedMenuPages(nested, visiblePlan, b, planState);
-    expect(planPages.map((p) => p.categoryIds)).toEqual([[C.fSoft.id, C.fBeer.id], [P.soup.id, P.appetizer.id], [C.soft.id]]);
+    const planPages = nestedMenuPages(nested, visiblePlan, b, planState, station);
+    // 飲み放題（0円のドリンク）のタブが先、そのあと ドリンク・フード
+    expect(planPages.map((p) => p.categoryIds)).toEqual([[C.fSoft.id, C.fBeer.id], [C.soft.id], [Q.soup.id, Q.appetizer.id]]);
     expect(planPages.map((p) => p.plan)).toEqual([true, false, false]);
 
     const visibleAlaCarte = filterNestedMenu(nested, b, ctx());
-    const alaCartePages = nestedMenuPages(nested, visibleAlaCarte, b, ALA_CARTE);
-    expect(alaCartePages.map((p) => p.categoryIds)).toEqual([[P.soup.id, P.appetizer.id], [C.soft.id]]);
+    const alaCartePages = nestedMenuPages(nested, visibleAlaCarte, b, ALA_CARTE, station);
+    expect(alaCartePages.map((p) => p.categoryIds)).toEqual([[C.soft.id], [Q.soup.id, Q.appetizer.id]]);
   });
 
   it('設定の読み込み・保存の形（壊れた値は捨てる・名前は整える）', () => {
     const b = menuBookFrom({
       menuBook: {
-        joinPrev: [P.appetizer.id, P.appetizer.id, 'bad', 3],
-        pageNames: { [P.soup.id]: '  前菜   メニュー ', [P.beer.id]: '   ', bad: 'x', [P.salad.id]: 5 },
+        pages: [
+          { key: 'lunch', name: '  ランチ   メニュー ' },
+          { key: 'lunch', name: 'あとの同じ記号は捨てる' },
+          { key: 'BAD KEY', name: 'x' },
+          { key: 'food', name: '   ' },
+          { key: 'food', name: 'フード' },
+        ],
+        categoryPage: { [Q.soup.id]: 'lunch', [P.beer.id]: 'BAD KEY', bad: 'food', [P.salad.id]: 5 },
       },
     });
-    expect(b.joinPrev).toEqual([P.appetizer.id]);
-    expect(b.pageNames).toEqual({ [P.soup.id]: '前菜 メニュー' });
+    expect(b.pages).toEqual([{ key: 'lunch', name: 'ランチ メニュー' }, { key: 'food', name: 'フード' }]);
+    expect(b.categoryPage).toEqual({ [Q.soup.id]: 'lunch' });
     expect(menuBookToJson(b)).toEqual({
       categories: {},
       plans: {},
       lunch: { start: '10:00', end: '16:00' },
-      joinPrev: [P.appetizer.id],
-      pageNames: { [P.soup.id]: '前菜 メニュー' },
+      pages: [{ key: 'lunch', name: 'ランチ メニュー' }, { key: 'food', name: 'フード' }],
+      categoryPage: { [Q.soup.id]: 'lunch' },
     });
     expect(normalizePageName('あ'.repeat(PAGE_NAME_MAX + 5))).toHaveLength(PAGE_NAME_MAX);
     expect(normalizePageName('')).toBeNull();

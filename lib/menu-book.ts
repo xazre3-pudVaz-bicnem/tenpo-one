@@ -55,10 +55,43 @@ export interface MenuBookSettings {
   /** プラン商品（menu_items.id）→ そのプランで出すカテゴリID。無いプランは「プランのときだけ」を全部出す */
   plans: Record<string, string[]>;
   lunch: MenuBookLunch;
-  /** 前のカテゴリ（並び順で1つ上）と同じページにまとめるカテゴリID */
-  joinPrev: string[];
-  /** ページの名前（ページの先頭カテゴリID → 名前）。無いページはカテゴリ名をつなげて出す */
-  pageNames: Record<string, string>;
+  /** 上のタブ（ページ）の並び。空なら STANDARD_MENU_PAGES */
+  pages: MenuPageDef[];
+  /** カテゴリID → ページのkey。決めていないカテゴリは autoCategoryPage で自動 */
+  categoryPage: Record<string, string>;
+}
+
+/** 上のタブ（ページ）1つ分の設定 */
+export interface MenuPageDef {
+  /** 'lunch' 'drink' のような英数字のkey（保存用。名前を変えても中身が動かないように） */
+  key: string;
+  name: string;
+}
+
+/**
+ * どの店舗でも最初に出す8つのタブ（2026-09-24 全店舗の要望）。
+ * 店舗は設定（メニューブック＞ページ）で名前を変えたり、タブを足したりできる。
+ * カテゴリが1つも入っていないタブは、レジ・ハンディ・お客様QRには出さない（押せないタブを出さないため）。
+ */
+export const STANDARD_MENU_PAGES: readonly (MenuPageDef & { en: string })[] = [
+  { key: 'lunch', name: 'ランチ', en: 'Lunch' },
+  { key: 'drink', name: 'ドリンク', en: 'Drink' },
+  { key: 'food', name: 'フード', en: 'Food' },
+  { key: 'course', name: 'コース', en: 'Course' },
+  { key: 'tabehodai', name: '食べ放題', en: 'All you can eat' },
+  { key: 'nomihodai', name: '飲み放題', en: 'All you can drink' },
+  { key: 'service', name: 'サービス', en: 'Service' },
+  { key: 'other', name: 'OTHER', en: 'Other' },
+];
+
+/** 何にも当てはまらないカテゴリの行き先 */
+export const FALLBACK_PAGE_KEY = 'other';
+
+/** ページのkeyの形（保存・URLで使うので英数字とハイフンだけ） */
+export const PAGE_KEY_RE = /^[a-z0-9][a-z0-9-]{0,23}$/;
+
+export function menuBookPages(book: Pick<MenuBookSettings, 'pages'>): MenuPageDef[] {
+  return book.pages.length > 0 ? book.pages : STANDARD_MENU_PAGES.map((p) => ({ key: p.key, name: p.name }));
 }
 
 /** ページの名前の最大文字数（ハンディのタイル・お客様QRのタブに収まる長さ） */
@@ -73,7 +106,7 @@ export function isMenuBookTab(value: unknown): value is MenuBookTab {
 }
 
 export function emptyMenuBook(): MenuBookSettings {
-  return { categories: {}, plans: {}, lunch: { ...DEFAULT_MENU_BOOK_LUNCH }, joinPrev: [], pageNames: {} };
+  return { categories: {}, plans: {}, lunch: { ...DEFAULT_MENU_BOOK_LUNCH }, pages: [], categoryPage: {} };
 }
 
 /** store_settings.settings.menuBook に書く形（項目を足したらここにも足す。書き忘れると保存のたびに消える） */
@@ -82,8 +115,8 @@ export function menuBookToJson(book: MenuBookSettings): Record<string, unknown> 
     categories: book.categories,
     plans: book.plans,
     lunch: book.lunch,
-    joinPrev: book.joinPrev,
-    pageNames: book.pageNames,
+    pages: book.pages,
+    categoryPage: book.categoryPage,
   };
 }
 
@@ -128,13 +161,20 @@ export function menuBookFrom(settings: unknown): MenuBookSettings {
   if (isRecord(root.lunch) && isHm(root.lunch.start) && isHm(root.lunch.end) && root.lunch.start !== root.lunch.end) {
     book.lunch = { start: root.lunch.start, end: root.lunch.end };
   }
-  if (Array.isArray(root.joinPrev)) {
-    book.joinPrev = [...new Set(root.joinPrev.filter((x): x is string => typeof x === 'string' && UUID.test(x)))];
+  if (Array.isArray(root.pages)) {
+    const seen = new Set<string>();
+    for (const p of root.pages) {
+      if (!isRecord(p)) continue;
+      const key = typeof p.key === 'string' ? p.key : '';
+      const name = normalizePageName(p.name);
+      if (!PAGE_KEY_RE.test(key) || !name || seen.has(key)) continue;
+      seen.add(key);
+      book.pages.push({ key, name });
+    }
   }
-  if (isRecord(root.pageNames)) {
-    for (const [id, v] of Object.entries(root.pageNames)) {
-      const name = normalizePageName(v);
-      if (UUID.test(id) && name) book.pageNames[id] = name;
+  if (isRecord(root.categoryPage)) {
+    for (const [id, v] of Object.entries(root.categoryPage)) {
+      if (UUID.test(id) && typeof v === 'string' && PAGE_KEY_RE.test(v)) book.categoryPage[id] = v;
     }
   }
   return book;
@@ -158,9 +198,56 @@ const STAFF_ONLY_ITEM =
 /** 「F. 生ビール」のような0円の商品は、普通のカテゴリに混ざっていてもプランのときだけ出す */
 const PLAN_ITEM = /^F[.．]\s?/;
 
+/** 「その他」に置くカテゴリ（dinii の Others・レジで金額を入れる Free） */
+const OTHER_PAGE_CATEGORY = /^(?:others?|その他|フリー|free)$/i;
+/** サービス・席料・オプションのカテゴリ（ランチの判定のあとに見る。「ランチ オプション」はランチに残す） */
+const SERVICE_PAGE_CATEGORY =
+  /オプション|option|席料|お通し|ｵﾄｵｼ|チャージ|charge|サービス料|延長|アップグレード|upgrade|キャンセル料|容器|取り皿/i;
+/** コースのカテゴリ（「(C) 食事」「3300/2500 course」「3480 おでん」のように頭に金額が付くもの） */
+const COURSE_PAGE_CATEGORY = /コース|course|couruse|^\(C\)|^\d{3,5}(?:\s*\/\s*\d{3,5})?[\s　]/i;
+/** プラン（飲み放題・食べ放題）の中身のカテゴリ。「(A) …」のようなプラン別の頭文字も見る */
+const PLAN_PAGE_CATEGORY = /\((?:F|F\/C|C\/F)\)|(?:^|[\s)])F[.\s]|^\([A-BD-EG-Z]\)/i;
+
 export interface MenuBookCategoryInput {
   id: string;
   name: string;
+}
+
+/** ページの自動振り分けに使うカテゴリの情報 */
+export interface MenuPageCategoryInput extends MenuBookCategoryInput {
+  /** 厨房のステーション（'drink' なら飲み物。ドリンク・飲み放題の判定に使う） */
+  station?: string | null;
+  /** 売る商品が全部0円か。分かるときだけ渡す（0円＝食べ放題・飲み放題の中身） */
+  allZeroPrice?: boolean;
+}
+
+/**
+ * カテゴリをどのタブ（ページ）に入れるかの自動判定。店舗が設定していないカテゴリに使う。
+ * 店舗要望（2026-09-24）「0円の商品、または名前に F が付いたカテゴリは 食べ放題／飲み放題」。
+ * 食べ放題か飲み放題かは厨房のステーション（drink かどうか）で分ける。
+ * ランチはサービスより先に見る（「ランチ オプション」をサービスに落とさないため）。
+ */
+export function autoCategoryPage(category: MenuPageCategoryInput): string {
+  const name = category.name.trim();
+  const drink = (category.station ?? '') === 'drink';
+  if (OTHER_PAGE_CATEGORY.test(name)) return 'other';
+  if (LUNCH_CATEGORY.test(name)) return 'lunch';
+  if (SERVICE_PAGE_CATEGORY.test(name)) return 'service';
+  if (COURSE_PAGE_CATEGORY.test(name)) return 'course';
+  if (category.allZeroPrice === true || PLAN_PAGE_CATEGORY.test(name)) return drink ? 'nomihodai' : 'tabehodai';
+  return drink ? 'drink' : 'food';
+}
+
+/** カテゴリの行き先（店舗が決めていればそれ、無ければ自動。知らないページは OTHER へ） */
+export function categoryPageKey(
+  category: MenuPageCategoryInput,
+  book: Pick<MenuBookSettings, 'pages' | 'categoryPage'>,
+  known: ReadonlySet<string>
+): string {
+  const set = book.categoryPage[category.id];
+  const key = set && known.has(set) ? set : autoCategoryPage(category);
+  if (known.has(key)) return key;
+  return known.has(FALLBACK_PAGE_KEY) ? FALLBACK_PAGE_KEY : [...known][known.size - 1];
 }
 
 export interface MenuBookItemInput {
@@ -396,29 +483,25 @@ export interface MenuBookPage<C> {
 }
 
 /**
- * 並び順どおりのカテゴリをページにまとめる（「前のカテゴリと同じページ」のカテゴリは前のページに入れる）。
- * 区切りは全カテゴリで決めてから keep に残るカテゴリだけにする。途中のカテゴリが出ない時間帯・卓でも
- * ページの区切りと名前が変わらないようにするため。カテゴリが1つも残らないページは返さない。
+ * カテゴリをタブ（ページ）にまとめる。ページの並びは店舗の設定（無ければ STANDARD_MENU_PAGES）。
+ * どのページに入るかはカテゴリごとの設定、決めていなければ autoCategoryPage の自動判定。
+ * カテゴリが1つも入らないページは返さない（押せないタブを出さないため）。
  */
-export function groupMenuPages<C extends { id: string }>(
+export function groupMenuPages<C extends MenuPageCategoryInput>(
   ordered: readonly C[],
-  book: Pick<MenuBookSettings, 'joinPrev' | 'pageNames'>,
+  book: Pick<MenuBookSettings, 'pages' | 'categoryPage'>,
   keep: (category: C) => boolean = () => true
 ): MenuBookPage<C>[] {
-  const join = new Set(book.joinPrev);
-  const raw: { key: string; all: C[] }[] = [];
+  const defs = menuBookPages(book);
+  const known = new Set(defs.map((p) => p.key));
+  const bucket = new Map<string, C[]>(defs.map((p) => [p.key, []]));
   for (const c of ordered) {
-    const current = raw[raw.length - 1];
-    if (current && join.has(c.id)) current.all.push(c);
-    else raw.push({ key: c.id, all: [c] });
+    if (!keep(c)) continue;
+    bucket.get(categoryPageKey(c, book, known))?.push(c);
   }
-  const pages: MenuBookPage<C>[] = [];
-  for (const p of raw) {
-    const categories = p.all.filter(keep);
-    if (categories.length === 0) continue;
-    pages.push({ key: p.key, name: book.pageNames[p.key] ?? null, categories });
-  }
-  return pages;
+  return defs
+    .filter((p) => (bucket.get(p.key)?.length ?? 0) > 0)
+    .map((p) => ({ key: p.key, name: p.name, categories: bucket.get(p.key) as C[] }));
 }
 
 /** ページの表示名（名前が無ければカテゴリ名を「・」でつなぐ） */
@@ -427,23 +510,15 @@ export function menuPageLabel<C>(page: { name: string | null; categories: readon
 }
 
 /**
- * プランのある卓のタブの並び：「プランのときだけ」のカテゴリのページを先に、それ以外を後に
+ * プランのある卓のタブの並び：「プランのときだけ」のカテゴリだけのページ（食べ放題・飲み放題）を先に出す
  * （2026-09-21 店舗要望「飲み放題の卓のセルフオーダーが、アラカルトと変わらないので飲み放題を前に」）。
- * 1つのページにプランとそれ以外が混ざっているときは、プランのカテゴリだけ前に出す（その場合は名前を付けない）。
  */
 export function planPagesFirst<C extends { id: string }>(
   pages: readonly MenuBookPage<C>[],
   isPlan: (category: C) => boolean
 ): MenuBookPage<C>[] {
-  const planPart: MenuBookPage<C>[] = [];
-  const rest: MenuBookPage<C>[] = [];
-  for (const p of pages) {
-    const plan = p.categories.filter(isPlan);
-    const other = p.categories.filter((c) => !isPlan(c));
-    const split = plan.length > 0 && other.length > 0;
-    if (plan.length > 0) planPart.push({ key: split ? `${p.key}:plan` : p.key, name: split ? null : p.name, categories: plan });
-    if (other.length > 0) rest.push({ key: p.key, name: split ? null : p.name, categories: other });
-  }
+  const planPart = pages.filter((p) => p.categories.every(isPlan));
+  const rest = pages.filter((p) => !p.categories.every(isPlan));
   return [...planPart, ...rest];
 }
 
@@ -463,13 +538,25 @@ export interface MenuPageRef {
 export function nestedMenuPages<
   I extends { name: string; price: number },
   C extends MenuBookCategoryInput & { items: I[] },
->(all: readonly C[], visible: readonly C[], book: MenuBookSettings, plan: OrderPlanState): MenuPageRef[] {
+>(
+  all: readonly C[],
+  visible: readonly C[],
+  book: MenuBookSettings,
+  plan: OrderPlanState,
+  /** カテゴリID → 厨房のステーション（ページの自動振り分けに使う。get_qr_menu には入っていないので別に渡す） */
+  stationById: ReadonlyMap<string, string | null> = new Map()
+): MenuPageRef[] {
   const flat: MenuBookItemInput[] = all.flatMap((c) =>
     c.items.map((item) => ({ categoryId: c.id, name: item.name, price: item.price, itemType: null }))
   );
   const planIds = planCategoryIds(all, flat, book);
   const shown = new Set(visible.map((c) => c.id));
-  let pages = groupMenuPages(all, book, (c) => shown.has(c.id));
+  const forPages = all.map((c) => ({
+    ...c,
+    station: stationById.get(c.id) ?? null,
+    allZeroPrice: c.items.length > 0 && c.items.every((i) => Number(i.price) === 0),
+  }));
+  let pages = groupMenuPages(forPages, book, (c) => shown.has(c.id));
   if (plan.hasPlan) pages = planPagesFirst(pages, (c) => planIds.has(c.id));
   return pages.map((p) => ({
     key: p.key,

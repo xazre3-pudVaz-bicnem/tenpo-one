@@ -78,18 +78,24 @@ export async function loadOrderPlanState(client: AnyClient, orderId: string): Pr
 export async function loadQrMenuBook(
   storeSlug: string,
   tableToken: string
-): Promise<{ book: MenuBookSettings; plan: OrderPlanState; dynamicRules: DynamicPriceRule[] }> {
+): Promise<{
+  book: MenuBookSettings;
+  plan: OrderPlanState;
+  dynamicRules: DynamicPriceRule[];
+  /** カテゴリID → 厨房のステーション（上のタブの自動振り分けに使う） */
+  stationById: Map<string, string | null>;
+}> {
   try {
     const admin = createAdminClient();
     const { data: table } = await admin
       .from('restaurant_tables')
-      .select('id, store_id, stores!inner(slug)')
+      .select('id, store_id, organization_id, stores!inner(slug)')
       .eq('qr_token', tableToken)
       .eq('stores.slug', storeSlug)
       .eq('status', 'active')
       .maybeSingle();
-    if (!table) return { book: emptyMenuBook(), plan: NO_PLAN, dynamicRules: [] };
-    const [book, { data: order }, dynamicRules] = await Promise.all([
+    if (!table) return { book: emptyMenuBook(), plan: NO_PLAN, dynamicRules: [], stationById: new Map() };
+    const [book, { data: order }, dynamicRules, { data: categoryRows }] = await Promise.all([
       loadMenuBook(admin, table.store_id),
       admin
         .from('orders')
@@ -100,11 +106,20 @@ export async function loadQrMenuBook(
         .limit(1)
         .maybeSingle(),
       loadDynamicRules(admin, table.store_id),
+      admin
+        .from('menu_categories')
+        .select('id, station')
+        .eq('organization_id', table.organization_id)
+        .or(`store_id.is.null,store_id.eq.${table.store_id}`)
+        .eq('status', 'active'),
     ]);
     const plan = order ? await loadOrderPlanState(admin, order.id) : NO_PLAN;
-    return { book, plan, dynamicRules };
+    const stationById = new Map<string, string | null>(
+      ((categoryRows ?? []) as { id: string; station: string | null }[]).map((c) => [c.id, c.station])
+    );
+    return { book, plan, dynamicRules, stationById };
   } catch (e) {
     console.error('[menu-book] qr context failed', e instanceof Error ? e.message : e);
-    return { book: emptyMenuBook(), plan: NO_PLAN, dynamicRules: [] };
+    return { book: emptyMenuBook(), plan: NO_PLAN, dynamicRules: [], stationById: new Map() };
   }
 }
