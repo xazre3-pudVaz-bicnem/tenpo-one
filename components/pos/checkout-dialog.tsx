@@ -738,7 +738,7 @@ export function CheckoutDialog({
               支払<span className="en-inline">Payment</span>
             </h3>
           </div>
-          <div className="min-h-0 flex-1 overflow-y-auto p-3 lg:overflow-visible">
+          <div className="min-h-0 flex-1 overflow-y-auto p-3">
             {/* 一番多い「現金」は一番上に大きく（2026-09-24 要望） */}
             {rightTab === 'pay' && (
               <button
