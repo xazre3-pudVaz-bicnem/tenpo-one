@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, useTransition } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { LayoutGrid, Map as MapIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -77,16 +77,13 @@ export function FloorBoard({
   releaseFinishedCleaningAction?: (storeId: string) => Promise<{ released: number }>;
 }) {
   const router = useRouter();
-  const [, startTransition] = useTransition();
   const now = useNow(serverNow);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   /**
    * テーブルを押したときの動き（2026-09-24 要望）。
-   *   空席            → そのまま「お客様情報」へ
-   *   着席中・会計待ち → そのまま注文・会計画面へ
-   *   清掃中・利用停止 → 右のパネル（清掃完了・再開のボタンがある）
-   * 利用停止にしたいときは、パネルをテーブル名の右の「…」から開く。
+   *   空席   → そのまま「お客様情報」へ
+   *   その他 → 右のパネル（追加オーダー／テーブル移動／会計伝票／会計 など）
    */
   const openTable = (t: TableView) => {
     const st = tileState(t, now);
@@ -94,18 +91,8 @@ export function FloorBoard({
       router.push(`/app/floor/${t.id}/setup`);
       return;
     }
-    if (st === 'cleaning' || st === 'unavailable') {
-      setSelectedId(t.id);
-      return;
-    }
-    startTransition(async () => {
-      try {
-        const { orderId } = await goToOrderAction(t.id);
-        router.push(`/app/pos?order=${orderId}`);
-      } catch {
-        setSelectedId(t.id);
-      }
-    });
+    // 着席中・会計待ち・清掃中などは右のパネルから選ぶ（追加オーダー／テーブル移動／会計伝票／会計）
+    setSelectedId(t.id);
   };
   const floorIds = floors.map((f) => f.id);
   const [floorFilter, setFloorFilter] = useState<string>(() => initialFloorFilter(floorIds, defaultFloorId));

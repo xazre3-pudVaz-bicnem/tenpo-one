@@ -4,8 +4,8 @@ import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
-  Minus, Plus, X, ArrowLeft, Split, Combine, ArrowRightLeft, Search, Star, User, XCircle,
-  FilePlus, Printer, Users, ChefHat, Settings, Clock,
+  Minus, Plus, X, ArrowLeft, Search, Star, User,
+  Users, ChefHat, Clock,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { yen } from '@/lib/format';
@@ -16,7 +16,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useToast } from '@/components/ui/toast';
 import { useStoreRealtimeRefresh } from '@/components/realtime/use-store-refresh';
 import { createMockDrawerProvider } from '@/lib/printing/providers';
-import { enqueueDrawerKick, enqueueOrderSlipPrint } from '@/app/app/pos/print-actions';
+import { enqueueDrawerKick } from '@/app/app/pos/print-actions';
 import { ClerkSelector, type ClerkOption } from './clerk-selector';
 import { OptionDialog, type PosOptionGroup } from './option-dialog';
 import { shouldOpenDrawer, type DrawerResultStatus } from '@/lib/printing/types';
@@ -27,8 +27,6 @@ import {
   type PosTerminalReader,
   type PointsAvailability,
 } from './checkout-dialog';
-import { SplitDialog } from './split-dialog';
-import { MergeDialog, type MergeCandidate } from './merge-dialog';
 import { TableMoveDialog, type AvailableTable } from './table-move-dialog';
 import { GuestCountDialog } from './guest-count-dialog';
 import { SeatTimeDialog } from './seat-time-dialog';
@@ -36,7 +34,7 @@ import { seatBadgeLabel, type SeatCourseOption, type SeatTimeState } from '@/lib
 import type { SeatTimeInput } from '@/app/app/pos/actions';
 import { CustomerLinkDialog } from './customer-link-dialog';
 import type {
-  CheckoutPayment, CheckoutOutcome, SplitMove, ApplyCouponResult,
+  CheckoutPayment, CheckoutOutcome, ApplyCouponResult,
   PosCustomerSearchResult, SetOrderCustomerResult, SendOrderResult,
 } from '@/app/app/pos/actions';
 import type { TerminalPaymentState } from '@/app/app/pos/payment-actions';
@@ -72,8 +70,6 @@ export interface PosOrder {
   serviceCharge: number;
   total: number;
   tableId: string | null;
-  /** 厨房へ印字するか（注文画面のスイッチ。migration 00076） */
-  kitchenPrintEnabled?: boolean;
 }
 
 export interface PosOrderItem {
@@ -157,7 +153,6 @@ export function PosScreen({
   registerOpen = true,
   terminalReaders,
   paymentAvailability,
-  otherOpenOrders,
   availableTables,
   addItemAction,
   updateQtyAction,
@@ -165,16 +160,14 @@ export function PosScreen({
   setDiscountAction,
   checkoutAction,
   sendOrderAction,
-  setKitchenPrintAction,
-  splitOrderAction,
-  mergeOrdersAction,
+  openCheckout = false,
+  openTableMove = false,
   moveTableAction,
   cancelEmptyOrderAction,
   setGuestCountAction,
   seatTime,
   seatCourses = [],
   setSeatTimeAction,
-  addSlipToTableAction,
   startTerminalPaymentAction,
   checkTerminalPaymentAction,
   cancelTerminalPaymentAction,
@@ -206,7 +199,6 @@ export function PosScreen({
   registerOpen?: boolean;
   terminalReaders: PosTerminalReader[];
   paymentAvailability: PosPaymentAvailability;
-  otherOpenOrders: MergeCandidate[];
   availableTables: AvailableTable[];
   /** 戻り値（追加した明細のID）はレジでは使わない（ハンディが厨房送信に使う） */
   addItemAction: (orderId: string, menuItemId: string, optionItemIds?: string[]) => Promise<unknown>;
@@ -216,9 +208,9 @@ export function PosScreen({
   checkoutAction: (orderId: string, payments: CheckoutPayment[]) => Promise<CheckoutOutcome>;
   /** 未送信の品目をまとめて厨房へ送る */
   sendOrderAction?: (orderId: string) => Promise<SendOrderResult>;
-  setKitchenPrintAction?: (orderId: string, enabled: boolean) => Promise<void>;
-  splitOrderAction: (orderId: string, moves: SplitMove[]) => Promise<{ newOrderId: string }>;
-  mergeOrdersAction: (targetOrderId: string, sourceOrderId: string) => Promise<void>;
+  /** テーブル一覧のポップアップから「会計」「テーブル移動」を選んで来たときに、その画面を開く */
+  openCheckout?: boolean;
+  openTableMove?: boolean;
   moveTableAction: (orderId: string, newTableId: string) => Promise<{ tableName: string }>;
   /** 品目のない注文（会計前・¥0）を取消する。省略時はボタンを表示しない */
   cancelEmptyOrderAction?: (orderId: string, reason: string) => Promise<void>;
@@ -229,7 +221,6 @@ export function PosScreen({
   seatCourses?: SeatCourseOption[];
   setSeatTimeAction?: (orderId: string, input: SeatTimeInput) => Promise<void>;
   /** 同じテーブルに空の伝票をもう1枚作る（別会計用）。省略時はボタンを表示しない */
-  addSlipToTableAction?: (orderId: string) => Promise<{ newOrderId: string; orderNo: number }>;
   startTerminalPaymentAction: (orderId: string, readerId: string) => Promise<TerminalPaymentState>;
   checkTerminalPaymentAction: (localIntentId: string) => Promise<TerminalPaymentState>;
   cancelTerminalPaymentAction: (localIntentId: string) => Promise<TerminalPaymentState>;
@@ -244,10 +235,8 @@ export function PosScreen({
   const [activeCategory, setActiveCategory] = useState<string>(categories[0]?.id ?? '');
   const [searchQuery, setSearchQuery] = useState('');
   const [cancelTarget, setCancelTarget] = useState<PosOrderItem | null>(null);
-  const [checkoutOpen, setCheckoutOpen] = useState(false);
-  const [splitOpen, setSplitOpen] = useState(false);
-  const [mergeOpen, setMergeOpen] = useState(false);
-  const [tableMoveOpen, setTableMoveOpen] = useState(false);
+  const [checkoutOpen, setCheckoutOpen] = useState(openCheckout);
+  const [tableMoveOpen, setTableMoveOpen] = useState(openTableMove);
   const [cancelOrderOpen, setCancelOrderOpen] = useState(false);
   const [guestCountOpen, setGuestCountOpen] = useState(false);
   const [seatTimeOpen, setSeatTimeOpen] = useState(false);
@@ -364,31 +353,7 @@ export function PosScreen({
   };
 
   // 伝票追加: 同じテーブルに空の伝票をもう1枚作り、そのままその伝票へ切り替えて注文を取れるようにする
-  const handleAddSlip = () => {
-    if (!addSlipToTableAction) return;
-    startTransition(async () => {
-      try {
-        const { newOrderId, orderNo } = await addSlipToTableAction(order.id);
-        toast(`伝票 #${orderNo} を追加しました`, 'success');
-        router.push(`/app/pos?order=${newOrderId}`);
-      } catch (e) {
-        toast(e instanceof Error ? e.message : '伝票の追加に失敗しました', 'error');
-      }
-    });
-  };
-
   // 注文伝票（会計前の確認用）をレシートプリンターへ。会計も売上も動かさない
-  const handleOrderSlipPrint = () => {
-    startTransition(async () => {
-      try {
-        const res = await enqueueOrderSlipPrint(order.id);
-        toast(res.ok ? 'お会計伝票を印刷します' : (res.error ?? 'お会計伝票の印刷に失敗しました'), res.ok ? 'success' : 'error');
-      } catch (e) {
-        toast(e instanceof Error ? e.message : 'お会計伝票の印刷に失敗しました', 'error');
-      }
-    });
-  };
-
   // 未送信（厨房にまだ伝えていない）品目。タップした瞬間ではなく、このボタンで初めて厨房伝票・KDS に出る
   const unsentItems = items.filter((it) => it.kitchen_sent_at === null);
   const handleSendOrder = () => {
@@ -470,25 +435,14 @@ export function PosScreen({
   };
 
   /** カテゴリの並び（おすすめ・売れ筋 → 各カテゴリ）。中央の縦リストと、幅が狭いときの横並びで同じものを使う */
-  const kitchenPrintOn = order.kitchenPrintEnabled !== false;
-  const toggleKitchenPrint = () => {
-    if (!setKitchenPrintAction) return;
-    startTransition(async () => {
-      try {
-        await setKitchenPrintAction(order.id, !kitchenPrintOn);
-        toast(!kitchenPrintOn ? '厨房へ印字する に切り替えました' : '厨房へ印字しない に切り替えました', 'success');
-        router.refresh();
-      } catch (e) {
-        toast(e instanceof Error ? e.message : '切り替えに失敗しました', 'error');
-      }
-    });
-  };
-
   const categoryTabs = [
     { id: FAVORITES_TAB, name: 'おすすめ', en: 'Picks', color: null as string | null },
     { id: BESTSELLERS_TAB, name: '売れ筋', en: 'Popular', color: null as string | null },
     ...categories.map((c) => ({ id: c.id, name: c.name, en: englishName(c.name, null, c.name_en), color: c.color })),
   ];
+
+  /** 担当者は必須（店舗に担当者が登録されている場合）。未選択なら注文確定・会計へ進めない */
+  const clerkMissing = clerks.length > 0 && !currentClerkId;
 
   const metaChip =
     'flex items-center gap-1 rounded-full bg-lilac px-3 py-1 text-xs font-semibold text-ink-2 transition-colors hover:bg-iris-soft';
@@ -530,12 +484,8 @@ export function PosScreen({
               <span className="truncate">{seatBadgeLabel(seatTime, seatCourses)}</span>
             </button>
           )}
-          <ClerkSelector orderId={order.id} clerks={clerks} currentClerkId={currentClerkId} />
+          <ClerkSelector orderId={order.id} clerks={clerks} currentClerkId={currentClerkId} required />
           {clerks.length === 0 && staffName && <span className="text-xs text-ink-3">担当 {staffName}</span>}
-          <Link href={`/app/pos/settings?order=${order.id}`} aria-label="レジの設定" className={cn(metaChip, 'ml-auto')}>
-            <Settings className="h-3.5 w-3.5" aria-hidden />
-            設定
-          </Link>
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto">
@@ -637,67 +587,6 @@ export function PosScreen({
             <span className="text-[15px] font-bold text-ink-2">合計（税込）</span>
             <span className="text-3xl font-extrabold tabular-nums text-royal">{yen(order.total)}</span>
           </div>
-          {setKitchenPrintAction && (
-            <button
-              type="button"
-              role="switch"
-              aria-checked={kitchenPrintOn}
-              disabled={pending}
-              onClick={toggleKitchenPrint}
-              className="mt-2.5 flex w-full items-center gap-2.5 rounded-xl border border-line px-3 py-2.5 text-left disabled:opacity-50"
-            >
-              <span className="text-[14px] font-bold text-ink-2">キッチンへ印字</span>
-              <span className={cn('ml-auto text-[13px] font-bold', kitchenPrintOn ? 'text-ink-3' : 'text-royal')}>しない</span>
-              <span className={cn('relative h-7 w-[52px] shrink-0 rounded-full transition-colors', kitchenPrintOn ? 'bg-iris' : 'bg-gray-300')}>
-                <span className={cn('absolute top-0.5 h-6 w-6 rounded-full bg-white transition-all', kitchenPrintOn ? 'left-[26px]' : 'left-0.5')} />
-              </span>
-              <span className={cn('text-[13px] font-bold', kitchenPrintOn ? 'text-royal' : 'text-ink-3')}>する</span>
-            </button>
-          )}
-          {canCheckout && (
-            <div className="mt-2.5 flex flex-wrap gap-1.5">
-              <button type="button" disabled={items.length === 0} onClick={() => setSplitOpen(true)} className={cn(metaChip, 'disabled:opacity-40')}>
-                <Split className="h-3.5 w-3.5" />
-                伝票分割
-              </button>
-              {addSlipToTableAction && (
-                <button type="button" disabled={pending} onClick={handleAddSlip} className={cn(metaChip, 'disabled:opacity-40')}>
-                  <FilePlus className="h-3.5 w-3.5" />
-                  伝票追加
-                </button>
-              )}
-              <button type="button" onClick={() => setMergeOpen(true)} className={metaChip}>
-                <Combine className="h-3.5 w-3.5" />
-                伝票統合
-              </button>
-              {order.tableId && (
-                <button type="button" onClick={() => setTableMoveOpen(true)} className={metaChip}>
-                  <ArrowRightLeft className="h-3.5 w-3.5" />
-                  テーブル移動
-                </button>
-              )}
-              <button
-                type="button"
-                disabled={items.length === 0 || pending}
-                onClick={handleOrderSlipPrint}
-                className={cn(metaChip, 'disabled:opacity-40')}
-              >
-                <Printer className="h-3.5 w-3.5" />
-                お会計伝票
-              </button>
-              {cancelEmptyOrderAction && items.length === 0 && (
-                <button
-                  type="button"
-                  disabled={pending}
-                  onClick={() => setCancelOrderOpen(true)}
-                  className={cn(metaChip, 'text-danger disabled:opacity-40')}
-                >
-                  <XCircle className="h-3.5 w-3.5" />
-                  この注文を取消
-                </button>
-              )}
-            </div>
-          )}
         </div>
       </section>
 
@@ -802,6 +691,12 @@ export function PosScreen({
           )}
         </div>
 
+        {clerkMissing && (
+          <p className="mx-3 mb-2 rounded-lg border border-danger/40 bg-danger-soft px-3 py-2 text-xs font-bold text-danger">
+            担当者を選んでください（注文確定・会計には担当者が必要です）
+          </p>
+        )}
+
         {canCheckout && !registerOpen && (
           <Link
             href="/app/cash/close"
@@ -812,29 +707,33 @@ export function PosScreen({
           </Link>
         )}
 
-        <div className="grid grid-cols-2 gap-3 border-t border-line p-3 pb-[calc(0.75rem+3.5rem+env(safe-area-inset-bottom))] lg:pb-3">
-          {sendOrderAction ? (
-            <Button
-              size="pos"
-              variant={unsentItems.length > 0 ? 'navy' : 'secondary'}
-              className="h-[60px] w-full text-[17px]"
-              disabled={unsentItems.length === 0 || pending}
-              onClick={handleSendOrder}
-            >
-              <ChefHat className="h-5 w-5" />
-              {unsentItems.length > 0 ? `注文確定（${unsentItems.length}品）` : '注文確定（未送信なし）'}
-            </Button>
-          ) : (
-            <span />
-          )}
-          <Button
-            size="pos"
-            className="h-[60px] w-full text-[18px]"
-            disabled={items.length === 0 || pending}
-            onClick={() => setCheckoutOpen(true)}
-          >
-            会計へ（{yen(order.total)}）
-          </Button>
+        <div className="border-t border-line p-3 pb-[calc(0.75rem+3.5rem+env(safe-area-inset-bottom))] lg:pb-3">
+          <div className={cn('grid gap-3', order.tableId ? 'grid-cols-1' : 'grid-cols-2')}>
+            {sendOrderAction && (
+              <Button
+                size="pos"
+                variant={unsentItems.length > 0 ? 'navy' : 'secondary'}
+                className="h-[64px] w-full text-[20px]"
+                disabled={unsentItems.length === 0 || pending || clerkMissing}
+                onClick={handleSendOrder}
+              >
+                <ChefHat className="h-5 w-5" />
+                {unsentItems.length > 0 ? `Order（${unsentItems.length}品）` : 'Order（未送信なし）'}
+              </Button>
+            )}
+            {/* テーブルのある伝票は テーブル一覧のポップアップから会計する。
+                テイクアウト等（卓なし）はここからしか会計できないので残す */}
+            {!order.tableId && (
+              <Button
+                size="pos"
+                className="h-[64px] w-full text-[18px]"
+                disabled={items.length === 0 || pending || clerkMissing}
+                onClick={() => setCheckoutOpen(true)}
+              >
+                会計へ（{yen(order.total)}）
+              </Button>
+            )}
+          </div>
         </div>
       </section>
 
@@ -895,6 +794,7 @@ export function PosScreen({
         checkTerminalPaymentAction={checkTerminalPaymentAction}
         cancelTerminalPaymentAction={cancelTerminalPaymentAction}
         onTerminalPaymentFinalized={handleTerminalPaymentFinalized}
+        clerkMissing={clerkMissing}
       />
       )}
 
@@ -935,20 +835,6 @@ export function PosScreen({
 
       {canCheckout && (
         <>
-          <SplitDialog
-            open={splitOpen}
-            onClose={() => setSplitOpen(false)}
-            orderId={order.id}
-            items={items}
-            splitOrderAction={splitOrderAction}
-          />
-          <MergeDialog
-            open={mergeOpen}
-            onClose={() => setMergeOpen(false)}
-            orderId={order.id}
-            candidates={otherOpenOrders}
-            mergeOrdersAction={mergeOrdersAction}
-          />
           {order.tableId && (
             <TableMoveDialog
               open={tableMoveOpen}

@@ -104,6 +104,7 @@ export function CheckoutDialog({
   checkTerminalPaymentAction,
   cancelTerminalPaymentAction,
   onTerminalPaymentFinalized,
+  clerkMissing = false,
 }: {
   onClose: () => void;
   order: CheckoutOrder;
@@ -120,6 +121,8 @@ export function CheckoutDialog({
   checkTerminalPaymentAction: (localIntentId: string) => Promise<TerminalPaymentState>;
   cancelTerminalPaymentAction: (localIntentId: string) => Promise<TerminalPaymentState>;
   onTerminalPaymentFinalized: () => void;
+  /** 担当者が未選択（会計には担当者が必要） */
+  clerkMissing?: boolean;
 }) {
   const { toast } = useToast();
   const [discountPending, startDiscount] = useTransition();
@@ -351,6 +354,7 @@ export function CheckoutDialog({
   // 従来は「支払行が1件以上」かつ「各行の金額>0」を必須としていたため、0円会計が
   // 支払方法を追加できず（追加しても上限0円で金額>0にできない）会計を確定できなかった。
   const canConfirm =
+    !clerkMissing &&
     !terminalBlocking &&
     paid === order.total &&
     (order.total === 0 ? payments.length === 0 : payments.length > 0 && payments.every((p) => p.amount > 0));
@@ -451,6 +455,9 @@ export function CheckoutDialog({
               <b className="text-[44px] font-extrabold leading-none tabular-nums text-royal">{yen(done.change)}</b>
             </div>
           </div>
+          <p className="px-6 pb-2 text-center text-xs text-ink-3">
+            レシートは自動で印字されます（レシート機の「自動印刷」がONのとき）
+          </p>
           <div className="grid grid-cols-2 gap-3 px-6 pb-6">
             <Button variant="secondary" size="pos" className="h-[62px]" onClick={() => router.push(`/app/pos/receipt/${order.id}`)}>
               <ReceiptText className="h-5 w-5" />
@@ -592,6 +599,11 @@ export function CheckoutDialog({
             )}
           </div>
           <div className="border-t border-line p-3">
+            {clerkMissing && (
+              <p className="mb-2 rounded-lg border border-danger/40 bg-danger-soft px-3 py-2 text-xs font-bold text-danger">
+                担当者を選んでください（伝票へ戻って担当を選ぶと会計できます）
+              </p>
+            )}
             <Button
               size="pos"
               className="h-[56px] w-full text-[18px]"

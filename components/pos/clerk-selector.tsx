@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react';
 import { UserRound } from 'lucide-react';
 import { useToast } from '@/components/ui/toast';
+import { cn } from '@/lib/utils';
 import { setOrderClerk } from '@/app/app/pos/clerk-actions';
 
 export interface ClerkOption {
@@ -18,10 +19,13 @@ export function ClerkSelector({
   orderId,
   clerks,
   currentClerkId,
+  required = false,
 }: {
   orderId: string;
   clerks: ClerkOption[];
   currentClerkId: string | null;
+  /** 未選択のときに赤く強調する（注文・会計には担当者が必要） */
+  required?: boolean;
 }) {
   const { toast } = useToast();
   const [pending, startTransition] = useTransition();
@@ -49,17 +53,23 @@ export function ClerkSelector({
     });
   };
 
+  const missing = required && !value;
+
   return (
-    <label className="flex items-center gap-1.5 text-sm text-gray-600">
-      <UserRound className="h-4 w-4 text-gray-400" />
+    <label className={cn('flex items-center gap-1.5 text-sm', missing ? 'text-danger' : 'text-gray-600')}>
+      <UserRound className={cn('h-4 w-4', missing ? 'text-danger' : 'text-gray-400')} />
       <span className="sr-only">担当者</span>
       <select
         value={value}
         onChange={(e) => handleChange(e.target.value)}
         disabled={pending}
-        className="rounded-lg border border-gray-300 bg-white px-2 py-1 text-sm text-navy disabled:opacity-60"
+        aria-invalid={missing || undefined}
+        className={cn(
+          'rounded-lg border bg-white px-2 py-1 text-sm disabled:opacity-60',
+          missing ? 'border-danger bg-danger-soft font-bold text-danger' : 'border-gray-300 text-navy'
+        )}
       >
-        <option value="">担当者を選択</option>
+        <option value="">{missing ? '担当者を選んでください' : '担当者を選択'}</option>
         {clerks.map((c) => (
           <option key={c.id} value={c.id}>
             {c.name}
