@@ -24,7 +24,6 @@ export default async function SettingsLayout({ children }: { children: React.Rea
         { href: '/app/settings/company', label: '企業情報', en: 'Company', icon: 'company', description: '会社名・住所・連絡先・請求情報の管理', visible: can(role, 'org.settings') },
         { href: '/app/settings/hours', label: '営業時間・休業日', en: 'Hours', icon: 'hours', description: '曜日別の営業時間、定休日、臨時休業の設定', visible: true },
         { href: '/app/settings/clerks', label: 'POS担当者', en: 'Clerks', icon: 'clerks', description: '会計時に選ぶ担当者名の登録（アカウント不要）', visible: true },
-        { href: '/app/reports', label: '帳票管理・分析', en: 'Reports', icon: 'reports', description: '売上・客数などのレポートと帳票出力', visible: can(role, 'reports.view') && featureOn('/app/reports'), matchActive: false },
       ],
     },
     {
