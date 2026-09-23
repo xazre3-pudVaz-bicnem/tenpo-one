@@ -147,7 +147,7 @@ export default async function MenuBookPage({ searchParams }: { searchParams: Pro
       <PageHeader
         title="メニューブック"
         en="Menu book"
-        description={`${store.name}｜ハンディ・お客様QRのカテゴリの並び順と出し方、ページ、商品の並び順・入力（店長以上）`}
+        description={`${store.name}｜上のタブ（ページ）、カテゴリの並び順と出し方、商品の並び順・入力（店長以上）`}
       />
       <MenuBookEditor
         storeId={store.id}
