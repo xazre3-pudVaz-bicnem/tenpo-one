@@ -9,6 +9,7 @@ import {
   menuBookFrom,
   menuBookToJson,
   normalizePageName,
+  PAGE_KEY_RE,
   type MenuBookSettings,
   type MenuBookShow,
 } from '@/lib/menu-book';
@@ -239,26 +240,43 @@ export async function saveMenuBookPlans(storeId: string, rows: PlanCategoriesRow
 }
 
 export interface MenuBookPagesInput {
-  /** 前のカテゴリと同じページにまとめるカテゴリID */
-  joinPrev: string[];
-  /** ページの先頭カテゴリID → ページの名前（空はカテゴリ名をつなげて出す） */
-  pageNames: Record<string, string>;
+  /** 上のタブの並び（key と名前） */
+  pages: { key: string; name: string }[];
+  /** カテゴリID → タブのkey */
+  categoryPage: Record<string, string>;
 }
 
 /**
- * ページ（ハンディ・お客様QRの1つのタブにまとめるカテゴリ）。
- * 並び順で続くカテゴリを「前のカテゴリと同じページ」にする。レジ（POS）の出し方は変わらない。
+ * ページ ＝ レジ・ハンディ・お客様QRの上のタブ（ランチ・ドリンク・フード…）。
+ * タブの並びと、どのカテゴリをどのタブに入れるかを保存する。
+ * カテゴリを指定していないタブは自動判定（autoCategoryPage）のまま。
  */
 export async function saveMenuBookPages(storeId: string, input: MenuBookPagesInput): Promise<ActionResult> {
   const ctx = await requirePermission('menu.manage');
   if (!canUseStore(ctx, storeId)) return { error: 'この店舗の操作はできません' };
-  const joinPrev = Array.isArray(input?.joinPrev) ? input.joinPrev : null;
-  const names = input?.pageNames && typeof input.pageNames === 'object' ? Object.entries(input.pageNames) : null;
-  if (!joinPrev || !names || joinPrev.length > 1000 || names.length > 1000) {
+  const rawPages = Array.isArray(input?.pages) ? input.pages : null;
+  const rawMap = input?.categoryPage && typeof input.categoryPage === 'object' ? Object.entries(input.categoryPage) : null;
+  if (!rawPages || !rawMap || rawPages.length === 0 || rawPages.length > 40 || rawMap.length > 2000) {
     return { error: 'ページの指定が正しくありません' };
   }
-  const ids = [...joinPrev, ...names.map(([id]) => id)];
-  if (ids.some((id) => typeof id !== 'string' || !UUID.test(id))) return { error: 'カテゴリの指定が正しくありません' };
+
+  const pages: { key: string; name: string }[] = [];
+  const keys = new Set<string>();
+  for (const p of rawPages) {
+    const key = typeof p?.key === 'string' ? p.key : '';
+    const name = normalizePageName(p?.name);
+    if (!PAGE_KEY_RE.test(key)) return { error: `ページの記号が正しくありません: ${String(key)}` };
+    if (!name) return { error: 'ページの名前を入れてください' };
+    if (keys.has(key)) return { error: `同じ記号のページが2つあります: ${key}` };
+    keys.add(key);
+    pages.push({ key, name });
+  }
+
+  const ids = rawMap.map(([id]) => id);
+  if (ids.some((id) => !UUID.test(id))) return { error: 'カテゴリの指定が正しくありません' };
+  if (rawMap.some(([, key]) => typeof key !== 'string' || !keys.has(key))) {
+    return { error: '無いページにカテゴリを入れようとしています。画面を開き直してください' };
+  }
 
   const supabase = await createClient();
   if (ids.length > 0) {
@@ -275,20 +293,17 @@ export async function saveMenuBookPages(storeId: string, input: MenuBookPagesInp
     }
   }
 
-  const pageNames: Record<string, string> = {};
-  for (const [id, value] of names) {
-    const name = normalizePageName(value);
-    if (name) pageNames[id] = name;
-  }
+  const categoryPage: Record<string, string> = {};
+  for (const [id, key] of rawMap) categoryPage[id] = key as string;
   const settingsError = await updateMenuBook(ctx, supabase, storeId, (book) => {
-    book.joinPrev = [...new Set(joinPrev)];
-    book.pageNames = pageNames;
+    book.pages = pages;
+    book.categoryPage = categoryPage;
   });
   if (settingsError) return { error: settingsError };
 
   await audit(ctx, supabase, storeId, 'settings.menu_book.pages_update', {
-    joined: joinPrev.length,
-    named: Object.keys(pageNames).length,
+    pages: pages.length,
+    assigned: Object.keys(categoryPage).length,
   });
   revalidateMenus();
   return {};

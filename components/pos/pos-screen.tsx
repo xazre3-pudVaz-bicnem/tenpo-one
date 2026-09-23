@@ -10,7 +10,7 @@ import {
 import { cn } from '@/lib/utils';
 import { yen } from '@/lib/format';
 import { englishName } from '@/lib/romaji';
-import { groupMenuPages, menuPageLabel } from '@/lib/menu-book';
+import { groupMenuPages, menuPageLabel, type MenuBookSettings } from '@/lib/menu-book';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -94,6 +94,8 @@ export interface PosCategory {
   name_en: string | null;
   color: string | null;
   sort_order: number;
+  /** 厨房のステーション。ページ（上のタブ）の自動振り分けに使う */
+  station: string | null;
 }
 
 export interface PosMenuItem {
@@ -182,8 +184,8 @@ export function PosScreen({
   order: PosOrder;
   items: PosOrderItem[];
   categories: PosCategory[];
-  /** メニューブックの「ページ」設定。上のタブ（フード・ドリンク…）に使う */
-  menuPages?: { joinPrev: string[]; pageNames: Record<string, string> };
+  /** メニューブックの「ページ」設定。上のタブ（ランチ・ドリンク・フード…）に使う */
+  menuPages?: Pick<MenuBookSettings, 'pages' | 'categoryPage'>;
   menuItems: PosMenuItem[];
   /** 過去30日の販売数量TOP12（menu_item_id）。多い順 */
   bestSellerIds: string[];
@@ -445,8 +447,16 @@ export function PosScreen({
    * 先頭に「おすすめ・売れ筋」のページを置く。
    */
   const pages = useMemo(() => {
-    const book = { joinPrev: menuPages?.joinPrev ?? [], pageNames: menuPages?.pageNames ?? {} };
-    const grouped = groupMenuPages(categories, book).map((pg) => {
+    const book = { pages: menuPages?.pages ?? [], categoryPage: menuPages?.categoryPage ?? {} };
+    // 0円だけのカテゴリ＝食べ放題・飲み放題の中身。ページの自動振り分けに使う
+    const zeroOnly = new Map<string, boolean>();
+    for (const m of menuItems) {
+      if (!m.category_id) continue;
+      const zero = Number(m.price) === 0;
+      zeroOnly.set(m.category_id, (zeroOnly.get(m.category_id) ?? true) && zero);
+    }
+    const forPages = categories.map((c) => ({ ...c, allZeroPrice: zeroOnly.get(c.id) ?? false }));
+    const grouped = groupMenuPages(forPages, book).map((pg) => {
       const label = menuPageLabel(pg, (c) => c.name);
       const first = pg.categories[0];
       return {
@@ -473,7 +483,7 @@ export function PosScreen({
       },
       ...grouped,
     ];
-  }, [categories, menuPages]);
+  }, [categories, menuItems, menuPages]);
 
   const activePage = pages.find((pg) => pg.categories.some((c) => c.id === activeCategory)) ?? pages[0];
 

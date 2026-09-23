@@ -30,7 +30,7 @@ export async function generateMetadata({ params }: PageParams): Promise<Metadata
 export default async function QrOrderPage({ params }: PageParams) {
   const { storeSlug, tableToken } = await params;
   const supabase = await createClient();
-  const [{ data: menu }, { data: reservedCourse }, { book, plan, dynamicRules }] = await Promise.all([
+  const [{ data: menu }, { data: reservedCourse }, { book, plan, dynamicRules, stationById }] = await Promise.all([
     supabase.rpc('get_qr_menu', { p_slug: storeSlug, p_token: tableToken }),
     supabase.rpc('get_qr_reserved_course', { p_slug: storeSlug, p_token: tableToken }),
     loadQrMenuBook(storeSlug, tableToken),
@@ -63,7 +63,7 @@ export default async function QrOrderPage({ params }: PageParams) {
     nowHm: jstNowHm(),
   });
   // タブはメニューブックのページごと。飲み放題・コースの卓は飲み放題（プランのときだけ）のページを先頭にする
-  const pages = nestedMenuPages(qrMenu.categories, categories, book, effectivePlan);
+  const pages = nestedMenuPages(qrMenu.categories, categories, book, effectivePlan, stationById);
 
   return (
     <QrOrderApp

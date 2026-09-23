@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Scissors, Link2 } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -11,15 +11,18 @@ import { useToast } from '@/components/ui/toast';
 import { cn } from '@/lib/utils';
 import { yen } from '@/lib/format';
 import {
+  autoCategoryPage,
   effectiveShow,
+  FALLBACK_PAGE_KEY,
   groupMenuPages,
-  menuPageLabel,
   MENU_BOOK_SHOW_LABELS,
   MENU_BOOK_SHOW_NOTES,
   MENU_BOOK_SHOWS,
   moveInList,
   PAGE_NAME_MAX,
+  STANDARD_MENU_PAGES,
   type MenuBookLunch,
+  type MenuPageDef,
   type MenuBookShow,
   type MenuBookTab,
 } from '@/lib/menu-book';
@@ -42,6 +45,10 @@ export interface MenuBookCategoryRow {
   /** 全店共通のカテゴリ（並び順を変えると全店に効く） */
   shared: boolean;
   itemCount: number;
+  /** 厨房のステーション（ページの自動振り分けに使う） */
+  station: string | null;
+  /** 売る商品が全部0円か（＝食べ放題・飲み放題の中身） */
+  allZeroPrice: boolean;
   /** ハンディの上位分類（フード／ドリンク…） */
   group: string;
   show: MenuBookShow | 'auto';
@@ -82,13 +89,13 @@ const SHOW_TONE: Record<MenuBookShow, string> = {
 function CategoriesTab({
   storeId,
   initial,
-  joinPrev,
+  pageOf,
 }: {
   storeId: string;
   initial: MenuBookCategoryRow[];
-  joinPrev: string[];
+  /** カテゴリID → 今入っているページの名前（「ページ」タブで変えられる） */
+  pageOf: Map<string, string>;
 }) {
-  const joined = new Set(joinPrev);
   const router = useRouter();
   const { toast } = useToast();
   const [rows, setRows] = useState(initial);
@@ -160,7 +167,7 @@ function CategoriesTab({
                     {r.group && <Badge tone="gray">{r.group}</Badge>}
                     <span>{r.itemCount}品</span>
                     {r.shared && <Badge tone="warning">全店共通</Badge>}
-                    {i > 0 && joined.has(r.id) && <Badge tone="primary">↑と同じページ</Badge>}
+                    {pageOf.get(r.id) && <Badge tone="primary">{pageOf.get(r.id)}</Badge>}
                   </p>
                 </div>
                 <div className="w-full sm:w-64">
@@ -195,57 +202,85 @@ function CategoriesTab({
 
 /* ------------------------------------------------------------ ページ */
 
-/** 保存する形にそろえる（先頭のカテゴリはつなげられない。名前は今のページの先頭のものだけ） */
-function normalizePages(
-  categories: MenuBookCategoryRow[],
-  join: readonly string[],
-  names: Record<string, string>
-): { joinPrev: string[]; pageNames: Record<string, string> } {
-  const joinSet = new Set(join);
-  const joinPrev = categories.slice(1).filter((c) => joinSet.has(c.id)).map((c) => c.id);
-  const pages = groupMenuPages(categories, { joinPrev, pageNames: {} });
-  const pageNames: Record<string, string> = {};
-  for (const p of pages) {
-    const name = (names[p.key] ?? '').replace(/\s+/g, ' ').trim();
-    if (name) pageNames[p.key] = name;
+/** 追加するページのkeyを作る（page1, page2 …。既にあるkeyは飛ばす） */
+function nextPageKey(pages: readonly MenuPageDef[]): string {
+  const used = new Set(pages.map((p) => p.key));
+  for (let i = 1; i <= 99; i += 1) {
+    const key = `page${i}`;
+    if (!used.has(key)) return key;
   }
-  return { joinPrev, pageNames };
+  return `page${Date.now().toString(36)}`;
 }
 
 function PagesTab({
   storeId,
   categories,
-  joinPrev,
-  pageNames,
+  pages: savedPages,
+  categoryPage: savedMap,
 }: {
   storeId: string;
   categories: MenuBookCategoryRow[];
-  joinPrev: string[];
-  pageNames: Record<string, string>;
+  pages: MenuPageDef[];
+  categoryPage: Record<string, string>;
 }) {
   const router = useRouter();
   const { toast } = useToast();
-  const [join, setJoin] = useState<string[]>(joinPrev);
-  const [names, setNames] = useState<Record<string, string>>(pageNames);
+  const [pages, setPages] = useState<MenuPageDef[]>(() =>
+    savedPages.length > 0 ? savedPages : STANDARD_MENU_PAGES.map((p) => ({ key: p.key, name: p.name }))
+  );
+  const [map, setMap] = useState<Record<string, string>>(savedMap);
   const [pending, startTransition] = useTransition();
 
-  const current = normalizePages(categories, join, names);
-  const initial = normalizePages(categories, joinPrev, pageNames);
-  const dirty = JSON.stringify(current) !== JSON.stringify(initial);
-  const pages = groupMenuPages(categories, { joinPrev: current.joinPrev, pageNames: {} });
-  const positionOf = new Map(categories.map((c, i) => [c.id, i]));
+  const known = new Set(pages.map((p) => p.key));
+  /** いまの画面での行き先（設定が無ければ自動判定） */
+  const pageKeyOf = (c: MenuBookCategoryRow) => {
+    const set = map[c.id];
+    if (set && known.has(set)) return set;
+    const auto = autoCategoryPage(c);
+    return known.has(auto) ? auto : FALLBACK_PAGE_KEY;
+  };
+  const countOf = new Map(pages.map((p) => [p.key, 0]));
+  for (const c of categories) {
+    const key = pageKeyOf(c);
+    countOf.set(key, (countOf.get(key) ?? 0) + 1);
+  }
 
-  const toggle = (id: string) =>
-    setJoin((list) => (list.includes(id) ? list.filter((x) => x !== id) : [...list, id]));
+  const initial = JSON.stringify({ pages: savedPages, map: savedMap });
+  const dirty = JSON.stringify({ pages, map }) !== initial;
+
+  const movePage = (from: number, to: number) => setPages((list) => moveInList(list, from, to));
+  const renamePage = (key: string, name: string) =>
+    setPages((list) => list.map((p) => (p.key === key ? { ...p, name } : p)));
+  const addPage = () =>
+    setPages((list) => (list.length >= 40 ? list : [...list, { key: nextPageKey(list), name: '' }]));
+  const removePage = (key: string) => {
+    setPages((list) => (list.length <= 1 ? list : list.filter((p) => p.key !== key)));
+    setMap((m) => {
+      const next = { ...m };
+      for (const [id, k] of Object.entries(next)) if (k === key) delete next[id];
+      return next;
+    });
+  };
+  /** 画面に出ている行き先をそのまま保存する（自動の分も固定する）。店舗が後から並びを変えても動かないように */
+  const assign = (id: string, key: string) => setMap((m) => ({ ...m, [id]: key }));
 
   const save = () => {
+    if (pages.some((p) => !p.name.trim())) {
+      toast('ページの名前を入れてください', 'error');
+      return;
+    }
+    const categoryPage: Record<string, string> = {};
+    for (const c of categories) categoryPage[c.id] = pageKeyOf(c);
     startTransition(async () => {
-      const result = await saveMenuBookPages(storeId, current);
+      const result = await saveMenuBookPages(storeId, {
+        pages: pages.map((p) => ({ key: p.key, name: p.name.trim() })),
+        categoryPage,
+      });
       if (result.error) {
         toast(result.error, 'error');
         return;
       }
-      toast('ページを保存しました（ハンディ・お客様QRに反映）');
+      toast('ページを保存しました（レジ・ハンディ・お客様QRに反映）');
       router.refresh();
     });
   };
@@ -258,89 +293,98 @@ function PagesTab({
     <div>
       <Card className="mb-4">
         <CardContent className="space-y-1.5 text-xs text-gray-600">
-          <p className="text-sm font-semibold text-navy">ページ ＝ ハンディ・お客様QRの1つのタブ</p>
+          <p className="text-sm font-semibold text-navy">ページ ＝ レジ・ハンディ・お客様QRの上のタブ</p>
           <p>
-            同じページのカテゴリは、ハンディ・お客様QRで1つのタブ（ハンディはタイル1枚）にまとめて出ます。例：SOUP・APPETIZER・SALAD。
-            名前を入れなければ、カテゴリ名をつなげて出します。
+            どの店舗も ランチ／ドリンク／フード／コース／食べ放題／飲み放題／サービス／OTHER の8つから始まります。
+            名前は自由に変えられます。「ページを追加」でタブを足せます。
           </p>
           <p>
-            「↑のページに入れる」で上のページとまとめ、「ここで分ける」で新しいページにします。カテゴリの順番は「カテゴリの順番・出し方」で変えます。
-            レジ（POS）はこれまで通りカテゴリごとです。
+            カテゴリが1つも入っていないタブは、レジ・ハンディ・お客様QRには出ません（押せないタブを出さないため）。
           </p>
           <p>
-            プランのときだけのカテゴリ（(F) など）は、ハンディでは「2 コース・飲み放題」に、お客様QRでは飲み放題・コースの卓だけ先頭に出ます。
+            下の「どのページに入れるか」を変えていないカテゴリは自動で振り分けます（0円の商品・名前に F が付くカテゴリは
+            食べ放題／飲み放題、ドリンクのステーションはドリンク、ランチの名前はランチ）。保存するといまの並びで固定されます。
           </p>
         </CardContent>
       </Card>
 
-      <ol className="space-y-3">
-        {pages.map((page, pi) => {
-          const placeholder = menuPageLabel(page, (c) => c.name);
-          const itemCount = page.categories.reduce((n, c) => n + c.itemCount, 0);
+      <h3 className="mb-2 text-sm font-bold text-navy">1. タブの並びと名前</h3>
+      <ol className="mb-6 space-y-2">
+        {pages.map((p, i) => (
+          <li key={p.key} className="flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-white px-2 py-2">
+            <span className="w-6 shrink-0 text-center text-xs font-bold text-iris tabular-nums">{i + 1}</span>
+            <Label htmlFor={`page-name-${p.key}`} className="sr-only">
+              {i + 1}番目のタブの名前
+            </Label>
+            <Input
+              id={`page-name-${p.key}`}
+              value={p.name}
+              maxLength={PAGE_NAME_MAX}
+              placeholder="タブの名前"
+              onChange={(e) => renamePage(p.key, e.target.value)}
+              className="h-11 min-w-[8rem] flex-1 sm:max-w-xs"
+            />
+            <span className="shrink-0 text-xs text-gray-400 tabular-nums">{countOf.get(p.key) ?? 0}カテゴリ</span>
+            <MoveButtons index={i} count={pages.length} onMove={(to) => movePage(i, to)} label={p.name || `${i + 1}番目のタブ`} />
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={pages.length <= 1}
+              onClick={() => removePage(p.key)}
+              aria-label={`${p.name || `${i + 1}番目のタブ`}を消す`}
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </li>
+        ))}
+      </ol>
+      <Button variant="outline" className="mb-8 h-11" disabled={pages.length >= 40} onClick={addPage}>
+        <Plus className="h-4 w-4" />
+        ページを追加
+      </Button>
+
+      <h3 className="mb-2 text-sm font-bold text-navy">2. どのページに入れるか</h3>
+      <ul className="space-y-1.5">
+        {categories.map((c) => {
+          const eff = effectiveShow(c.show, c.autoShow);
           return (
-            <li key={page.key} className="overflow-hidden rounded-lg border border-gray-200 bg-white">
-              <div className="flex flex-wrap items-center gap-2 border-b border-gray-100 bg-gray-50 px-3 py-2">
-                <span className="shrink-0 text-xs font-bold text-iris">ページ {pi + 1}</span>
-                <Label htmlFor={`page-name-${page.key}`} className="sr-only">
-                  ページ{pi + 1}の名前
-                </Label>
-                <Input
-                  id={`page-name-${page.key}`}
-                  value={names[page.key] ?? ''}
-                  maxLength={PAGE_NAME_MAX}
-                  placeholder={placeholder}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    setNames((n) => ({ ...n, [page.key]: value }));
-                  }}
-                  className="h-9 min-w-[10rem] flex-1 sm:max-w-sm"
-                />
-                <span className="shrink-0 text-xs text-gray-400 tabular-nums">
-                  {page.categories.length}カテゴリ・{itemCount}品
-                </span>
+            <li
+              key={c.id}
+              className={cn('flex flex-wrap items-center gap-2 rounded-lg border-l-4 border border-gray-200 bg-white px-3 py-2', SHOW_TONE[eff])}
+            >
+              <div className="min-w-[8rem] flex-1">
+                <p className={cn('font-semibold text-navy', eff === 'hidden' && 'text-gray-400 line-through')}>{c.name}</p>
+                <p className="mt-0.5 text-xs text-gray-500">
+                  {c.itemCount}品{c.allZeroPrice && c.itemCount > 0 && '・全部0円'}
+                  {c.station === 'drink' && '・ドリンク'}
+                </p>
               </div>
-              <ul className="divide-y divide-gray-100">
-                {page.categories.map((c, ci) => {
-                  const eff = effectiveShow(c.show, c.autoShow);
-                  const position = positionOf.get(c.id) ?? 0;
-                  return (
-                    <li key={c.id} className={cn('flex flex-wrap items-center gap-2 border-l-4 px-3 py-2', SHOW_TONE[eff])}>
-                      <span className="w-6 shrink-0 text-right text-xs text-gray-400 tabular-nums">{position + 1}</span>
-                      <div className="min-w-[8rem] flex-1">
-                        <p className={cn('font-semibold text-navy', eff === 'hidden' && 'text-gray-400 line-through')}>
-                          {c.name}
-                        </p>
-                        <p className="mt-0.5 text-xs text-gray-500">
-                          {c.itemCount}品・{MENU_BOOK_SHOW_LABELS[eff]}
-                        </p>
-                      </div>
-                      {position > 0 &&
-                        (ci === 0 ? (
-                          <Button variant="outline" size="sm" onClick={() => toggle(c.id)} aria-label={`${c.name}を上のページに入れる`}>
-                            <Link2 className="h-3.5 w-3.5" />
-                            ↑のページに入れる
-                          </Button>
-                        ) : (
-                          <Button variant="outline" size="sm" onClick={() => toggle(c.id)} aria-label={`${c.name}から新しいページにする`}>
-                            <Scissors className="h-3.5 w-3.5" />
-                            ここで分ける
-                          </Button>
-                        ))}
-                    </li>
-                  );
-                })}
-              </ul>
+              <Label htmlFor={`page-of-${c.id}`} className="sr-only">
+                {c.name}のページ
+              </Label>
+              <Select
+                id={`page-of-${c.id}`}
+                value={pageKeyOf(c)}
+                onChange={(e) => assign(c.id, e.target.value)}
+                className="h-11 w-[11rem] shrink-0"
+              >
+                {pages.map((p, i) => (
+                  <option key={p.key} value={p.key}>
+                    {p.name || `${i + 1}番目のタブ`}
+                  </option>
+                ))}
+              </Select>
             </li>
           );
         })}
-      </ol>
+      </ul>
       <SaveBar
         dirty={dirty}
         pending={pending}
         onSave={save}
         onReset={() => {
-          setJoin(joinPrev);
-          setNames(pageNames);
+          setPages(savedPages.length > 0 ? savedPages : STANDARD_MENU_PAGES.map((p) => ({ key: p.key, name: p.name })));
+          setMap(savedMap);
         }}
       />
     </div>
@@ -615,8 +659,8 @@ export function MenuBookEditor({
   items,
   plans,
   lunch,
-  joinPrev,
-  pageNames,
+  pages,
+  categoryPage,
   taxRates,
   initialTab,
 }: {
@@ -625,15 +669,19 @@ export function MenuBookEditor({
   items: MenuItemRow[];
   plans: MenuBookPlanRow[];
   lunch: MenuBookLunch;
-  joinPrev: string[];
-  pageNames: Record<string, string>;
+  pages: MenuPageDef[];
+  categoryPage: Record<string, string>;
   taxRates: { id: string; name: string }[];
   /** 最初に開くタブ（?tab=。レジの設定から「ページ」「プラン」などを直接開く） */
   initialTab?: MenuBookTab;
 }) {
   const [tab, setTab] = useState<Tab>(initialTab ?? 'categories');
   const categoryKey = categories.map((c) => `${c.id}:${c.show}:${c.sortOrder}`).join('|');
-  const pagesKey = `${joinPrev.join(',')}#${JSON.stringify(pageNames)}#${categoryKey}`;
+  const pagesKey = `${JSON.stringify(pages)}#${JSON.stringify(categoryPage)}#${categoryKey}`;
+  // カテゴリ一覧に「いまどのタブに入っているか」を出す
+  const pageOf = new Map(
+    groupMenuPages(categories, { pages, categoryPage }).flatMap((pg) => pg.categories.map((c) => [c.id, pg.name ?? ''] as const))
+  );
   const planCategories = categories.filter((c) => effectiveShow(c.show, c.autoShow) === 'plan');
   const planKey = plans.map((p) => `${p.id}:${p.categoryIds?.join(',') ?? '*'}`).join('|');
 
@@ -657,10 +705,10 @@ export function MenuBookEditor({
         ))}
       </div>
       {tab === 'categories' && (
-        <CategoriesTab key={categoryKey} storeId={storeId} initial={categories} joinPrev={joinPrev} />
+        <CategoriesTab key={categoryKey} storeId={storeId} initial={categories} pageOf={pageOf} />
       )}
       {tab === 'pages' && (
-        <PagesTab key={pagesKey} storeId={storeId} categories={categories} joinPrev={joinPrev} pageNames={pageNames} />
+        <PagesTab key={pagesKey} storeId={storeId} categories={categories} pages={pages} categoryPage={categoryPage} />
       )}
       {tab === 'items' && <ItemsTab storeId={storeId} categories={categories} items={items} taxRates={taxRates} />}
       {tab === 'plans' && (

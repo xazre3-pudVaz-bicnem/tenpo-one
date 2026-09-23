@@ -5,7 +5,7 @@
  * タブの中はメニューブックのページ（SOUP・APPETIZER・SALAD のようにカテゴリをまとめたタイル）→ 商品。
  * 上位分類（フード／ドリンク…）の判定 classifyMenuItem はメニューブック画面の見出しなどで使う。
  */
-import { groupMenuPages, menuPageLabel } from '@/lib/menu-book';
+import { groupMenuPages, menuPageLabel, type MenuPageDef } from '@/lib/menu-book';
 
 export type HandyGroupId = 'food' | 'drink' | 'course' | 'service' | 'other';
 
@@ -135,10 +135,10 @@ export interface HandyTabView extends HandyTabDef {
   itemCount: number;
 }
 
-/** メニューブックのページ設定（store_settings.settings.menuBook の joinPrev / pageNames） */
+/** メニューブックのページ設定（store_settings.settings.menuBook の pages / categoryPage） */
 export interface HandyPagesConfig {
-  joinPrev: string[];
-  pageNames: Record<string, string>;
+  pages: MenuPageDef[];
+  categoryPage: Record<string, string>;
 }
 
 /** 承認済みUIのタイル下線の紫系アクセント（並び順に循環させる） */
@@ -195,11 +195,18 @@ export function buildHandyTabs(
   opts: { planCategoryIds?: ReadonlySet<string>; pages?: HandyPagesConfig } = {}
 ): HandyTabView[] {
   const planIds = opts.planCategoryIds ?? new Set<string>();
-  const pagesConfig = opts.pages ?? { joinPrev: [], pageNames: {} };
+  const pagesConfig = opts.pages ?? { pages: [], categoryPage: {} };
   const categoryById = new Map(categories.map((c) => [c.id, c]));
   const sortedCategories = [...categories].sort(
     (a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name, 'ja')
   );
+  // 0円だけのカテゴリ＝食べ放題・飲み放題の中身。ページ（上のタブ）の自動振り分けに使う
+  const zeroOnly = new Map<string, boolean>();
+  for (const i of items) {
+    if (!i.categoryId) continue;
+    zeroOnly.set(i.categoryId, (zeroOnly.get(i.categoryId) ?? true) && Number(i.price) === 0);
+  }
+  const categoriesForPages = sortedCategories.map((c) => ({ ...c, allZeroPrice: zeroOnly.get(c.id) ?? false }));
 
   // タブ → カテゴリID → 商品
   const byTab = new Map<HandyTabId, Map<string, HandyMenuItemView[]>>();
@@ -219,7 +226,7 @@ export function buildHandyTabs(
   for (const def of HANDY_TABS) {
     const tabMap = byTab.get(def.id);
     if (!tabMap) continue;
-    const pages: HandyPageView[] = groupMenuPages(sortedCategories, pagesConfig, (c) => tabMap.has(c.id)).map(
+    const pages: HandyPageView[] = groupMenuPages(categoriesForPages, pagesConfig, (c) => tabMap.has(c.id)).map(
       (page) => {
         const categoryViews: HandyCategoryView[] = page.categories.map((c) => ({
           id: c.id,
