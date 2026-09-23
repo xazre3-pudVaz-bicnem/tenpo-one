@@ -1,6 +1,6 @@
 import {
   Home, BookOpen, List, Calendar, CalendarDays, LayoutGrid, MonitorSmartphone,
-  Receipt, Users, Banknote, Wallet, FileText, Truck, ClipboardList, Package,
+  ReceiptJapaneseYen, Users, Banknote, Wallet, FileText, Truck, ClipboardList, Package,
   Clock, JapaneseYen, BarChart3, UserCog, Settings, MoreHorizontal, Lock, Bell,
   Ticket, Landmark, Mail, Inbox, Camera, ConciergeBell, SlidersHorizontal,
   type LucideIcon,
@@ -15,7 +15,8 @@ const ICONS: Record<string, LucideIcon> = {
   grid: LayoutGrid,
   pos: ConciergeBell,
   monitor: MonitorSmartphone,
-  receipt: Receipt,
+  // 伝票はドル記号ではなく円記号のレシート
+  receipt: ReceiptJapaneseYen,
   users: Users,
   cash: Banknote,
   wallet: Wallet,

@@ -14,12 +14,12 @@ describe('menuLayout（iPad・スマホのメニュー一覧）', () => {
     }
   });
 
-  it('入金出金・仕入経費は上のタイルに出す', () => {
+  it('入出金・仕入経費は一覧の先頭に出す（大きなタイルにはしない）', () => {
     const tiles = layout.tiles.map((t) => t.href);
-    expect(tiles).toContain('/app/cash');
-    expect(tiles).toContain('/app/expenses');
-    expect(mainHrefs).not.toContain('/app/cash');
-    expect(mainHrefs).not.toContain('/app/expenses');
+    expect(tiles).not.toContain('/app/cash');
+    expect(tiles).not.toContain('/app/expenses');
+    expect(mainHrefs[0]).toBe('/app/cash');
+    expect(mainHrefs[1]).toBe('/app/expenses');
   });
 
   it('在庫設定は「仕入・在庫」の中に入れる', () => {

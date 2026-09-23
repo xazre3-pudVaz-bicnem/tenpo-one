@@ -18,7 +18,10 @@ const MOVED_OUT_OF_MENU = new Set([
   '/app/dashboard', // → 上部バーの「ホーム」ボタンとロゴから開く（スマホは下部ナビにもある）
 ]);
 
-/** 上のタイルに上げるもの（iPad でよく使う）。並びは 入金出金 → 仕入・経費 */
+/**
+ * 一覧の先頭に上げるもの（iPad でよく使う）。並びは 入出金 → 仕入・経費。
+ * 大きなタイルにはせず、下の行と同じ大きさで並べる（2026-09-23 要望）。
+ */
 const TOP_ROW = ['/app/cash', '/app/expenses'];
 
 /** 「在庫設定」を入れ直すグループ */
@@ -53,10 +56,8 @@ export function menuLayout(
   const allGroups = visibleNavGroups(role, disabledFeatures);
   const byHref = new Map(allGroups.flatMap((g) => g.items).map((i) => [i.href, i]));
 
-  const topRowTiles: NavTile[] = TOP_ROW.map((href) => byHref.get(href))
-    .filter((i) => i !== undefined)
-    .map((i) => ({ href: i.href, label: i.label, en: i.en, icon: i.icon, permission: i.permission, match: [i.href] }));
-  const tiles: NavTile[] = [...visibleNavTiles(role, disabledFeatures), ...topRowTiles];
+  const tiles: NavTile[] = visibleNavTiles(role, disabledFeatures);
+  const topRowItems: NavItem[] = TOP_ROW.map((href) => byHref.get(href)).filter((i) => i !== undefined);
 
   const trimmed = allGroups
     .map((g) => ({
@@ -69,7 +70,7 @@ export function menuLayout(
     }))
     .filter((g) => g.items.length > 0);
 
-  const main = trimmed.find((g) => g.label === null)?.items ?? [];
+  const main = [...topRowItems, ...(trimmed.find((g) => g.label === null)?.items ?? [])];
   const summaryGroups = trimmed
     .filter((g) => g.label !== null)
     .map((g) => {
