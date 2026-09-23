@@ -153,6 +153,20 @@ export async function readStoreRegisterPassword(
   };
 }
 
+/** 会社の全店舗のレジ用パスワードをまとめて読む（運営の画面でそのまま出すため） */
+export async function readOrgRegisterPasswords(admin: Admin, storeIds: string[]): Promise<Map<string, string | null>> {
+  const out = new Map<string, string | null>();
+  if (storeIds.length === 0) return out;
+  const { data } = await admin
+    .from('store_register_credentials')
+    .select('store_id, password_enc')
+    .in('store_id', storeIds);
+  for (const row of data ?? []) {
+    out.set(row.store_id as string, decryptRegisterPassword(row.password_enc as string | null));
+  }
+  return out;
+}
+
 export async function resetStoreRegisterPassword(
   admin: Admin,
   input: { organizationId: string; storeId: string; updatedBy?: string | null }

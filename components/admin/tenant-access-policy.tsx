@@ -30,6 +30,7 @@ export function TenantAccessPolicy({
   storeId,
   orgCode,
   storeUser,
+  registerPassword,
   networks,
   networkEnforced,
   registerLimit,
@@ -46,6 +47,7 @@ export function TenantAccessPolicy({
   storeId: string;
   orgCode: string | null;
   storeUser: string | null;
+  registerPassword: string | null;
   networks: AllowedNetwork[];
   networkEnforced: boolean;
   registerLimit: number;
@@ -150,6 +152,7 @@ export function TenantAccessPolicy({
           <StoreRegisterPassword
             storeId={storeId}
             storeUser={storeUser}
+            password={registerPassword}
             revealAction={revealAction}
             reissueAction={reissueAction}
             renameAction={renameAction}
