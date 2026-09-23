@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Check, Loader2, ReceiptText, Trash2, Ticket, X as XIcon } from 'lucide-react';
+import { ArrowLeft, Check, Delete, Loader2, ReceiptText, Trash2, Ticket, X as XIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input, Label, Select } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -74,12 +74,21 @@ export interface PointsAvailability {
   pointValue: number;
 }
 
-const BASE_METHODS: CheckoutPayment['method'][] = ['cash', 'credit', 'qr', 'emoney', 'voucher', 'on_account', 'external', 'other'];
+/**
+ * 会計画面に出す支払方法（2026-09-24 要望で 商品券・掛売 は出さない）。
+ * 過去の伝票には残っているので、表示のラベル（METHOD_LABELS）は消していない。
+ */
+const BASE_METHODS: CheckoutPayment['method'][] = ['cash', 'credit', 'qr', 'emoney', 'external', 'other'];
 /** 支払方法のボタン（日本語の下に小さく英語）。スクロールせずに収まる高さにする */
 const payMethodBtn =
   'flex h-[46px] flex-col items-center justify-center rounded-xl border px-1.5 text-center text-[14px] font-bold leading-tight transition-colors disabled:opacity-50';
 const payMethodOn = 'border-iris bg-iris text-white';
 const payMethodOff = 'border-line bg-white text-navy active:bg-lilac-soft';
+/** どのポイントかを選ぶボタン（ポイントを押したあとに出る） */
+const pointBrandBtn =
+  'flex h-[40px] items-center justify-center rounded-xl border px-1.5 text-center text-[12.5px] font-bold leading-tight transition-colors disabled:opacity-40';
+const pointBrandOn = 'border-iris bg-iris text-white';
+const pointBrandOff = 'border-line bg-white text-navy active:bg-lilac-soft';
 
 /**
  * 外部の決済端末（stera 等）を操作してから確定する必要がある支払方法。
@@ -153,6 +162,8 @@ export function CheckoutDialog({
   const [discountReasonInput, setDiscountReasonInput] = useState(
     isCouponReason ? '' : (discountReason ?? '')
   );
+  /** 「ポイント」を押したら、どのポイントかを選ぶ列を出す */
+  const [pointsOpen, setPointsOpen] = useState(false);
   /** 値引きの入れ方（￥ か ％） */
   const [discountMode, setDiscountMode] = useState<'amount' | 'percent'>('amount');
   const [percentInput, setPercentInput] = useState('');
@@ -278,6 +289,9 @@ export function CheckoutDialog({
 
   /** 値引き前の合計（％値引きはこの金額から計算する） */
   const baseTotal = order.total + order.discountTotal;
+
+  /** ポイント（自社・サイト）で払う指定があるか */
+  const pointsSelected = payments.some((p) => p.method === 'points' || p.method === 'site_points');
 
   const runDiscount = (amount: number, reason: string) => {
     if (amount > 0 && !reason.trim()) {
@@ -473,9 +487,11 @@ export function CheckoutDialog({
   const changeTotal = cashRow ? calcChange(cashRow.amount, cashRow.tendered ?? 0) : 0;
 
   const keyBtn =
-    'flex h-[58px] items-center justify-center rounded-xl border border-line bg-white text-2xl font-bold tabular-nums text-navy transition-colors active:bg-lilac disabled:opacity-40';
+    'flex h-[52px] items-center justify-center rounded-xl border border-line bg-white text-2xl font-bold tabular-nums text-navy transition-colors active:bg-lilac disabled:opacity-40';
+  // 文字のキー（C・ちょうど・訂正）は日本語の下に小さく英語
   const keySmall =
-    'flex h-[58px] items-center justify-center rounded-xl border border-line bg-iris-soft text-base font-bold text-royal transition-colors active:bg-wisteria disabled:opacity-40';
+    'flex h-[52px] flex-col items-center justify-center rounded-xl border border-line bg-iris-soft text-base font-bold leading-tight text-royal transition-colors active:bg-wisteria disabled:opacity-40';
+  const keySmallEn = 'text-[10px] font-semibold text-royal/70';
   const sumRow = 'flex items-center justify-between py-2 text-[15px] text-ink-2';
 
   // 会計が終わったあとの画面（お支払い金額・お預り・おつり）
@@ -545,7 +561,7 @@ export function CheckoutDialog({
         <span className="w-[112px]" />
       </div>
 
-      <div className="grid min-h-0 flex-1 gap-3 overflow-auto p-3 lg:grid-cols-[1fr_1fr_390px] lg:overflow-hidden">
+      <div className="grid min-h-0 flex-1 gap-3 overflow-auto p-3 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,0.85fr)_470px] lg:overflow-hidden">
         {/* 左: 伝票 */}
         <section className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-line bg-white">
           <div className="flex items-center gap-2 border-b border-line px-4 py-3">
@@ -681,7 +697,7 @@ export function CheckoutDialog({
               支払<span className="en-inline">Payment</span>
             </h3>
           </div>
-          <div className="min-h-0 flex-1 overflow-y-auto p-3">
+          <div className="min-h-0 flex-1 overflow-y-auto p-3 lg:overflow-visible">
             <div className="mb-3 flex gap-1 rounded-xl bg-lilac p-1">
               <button
                 type="button"
@@ -745,35 +761,37 @@ export function CheckoutDialog({
                       </button>
                     );
                   })}
+                  {/* ポイントは押してから、どのポイントかを選ぶ（2026-09-24 要望） */}
                   <button
                     type="button"
-                    disabled={terminalBlocking || !pointsAvailability.available}
-                    aria-pressed={payments.some((p) => p.method === 'points')}
-                    title={pointsAvailability.available ? `残高 ${pointsAvailability.balance}pt` : '顧客紐付け・会員機能有効・残高が必要です'}
-                    onClick={() => selectPayment('points')}
-                    className={cn(
-                      payMethodBtn,
-                      payments.some((p) => p.method === 'points') ? payMethodOn : payMethodOff,
-                      'disabled:opacity-40'
-                    )}
+                    disabled={terminalBlocking}
+                    aria-expanded={pointsOpen}
+                    aria-pressed={pointsSelected}
+                    onClick={() => setPointsOpen((v) => !v)}
+                    className={cn(payMethodBtn, pointsSelected ? payMethodOn : payMethodOff)}
                   >
-                    <span className="block">自社ポイント</span>
-                    <span
-                      className={cn(
-                        'block text-[10px] font-semibold',
-                        payments.some((p) => p.method === 'points') ? 'text-white/80' : 'text-ink-3'
-                      )}
-                    >
-                      Our points
+                    <span className="block">{METHOD_LABELS.points}</span>
+                    <span className={cn('block text-[10px] font-semibold', pointsSelected ? 'text-white/80' : 'text-ink-3')}>
+                      {METHOD_LABELS_EN.points}
                     </span>
                   </button>
                 </div>
 
-                {/* グルメサイトのポイント（ホットペッパー・ぐるなび・食べログなど。設定 > 決済・端末 で足せる） */}
-                {pointBrands.length > 0 && (
-                  <div className="mt-1.5">
-                    <p className="mb-1 text-[11px] font-bold text-ink-3">サイトのポイント / Site points</p>
+                {/* どのポイントか（自社ポイントと、グルメサイトのポイント。設定 > 決済・端末 で足せる） */}
+                {pointsOpen && (
+                  <div className="mt-1.5 rounded-xl border border-line p-2">
+                    <p className="mb-1 text-[11px] font-bold text-ink-3">どのポイントですか / Choose points</p>
                     <div className="grid grid-cols-3 gap-1.5">
+                      <button
+                        type="button"
+                        disabled={terminalBlocking || !pointsAvailability.available}
+                        aria-pressed={payments.some((p) => p.method === 'points')}
+                        title={pointsAvailability.available ? `残高 ${pointsAvailability.balance}pt` : '顧客紐付け・会員機能有効・残高が必要です'}
+                        onClick={() => selectPayment('points')}
+                        className={cn(pointBrandBtn, payments.some((p) => p.method === 'points') ? pointBrandOn : pointBrandOff)}
+                      >
+                        自社ポイント
+                      </button>
                       {pointBrands.map((b) => {
                         const selected = payments.some((p) => p.method === 'site_points' && p.provider === b.key);
                         return (
@@ -783,16 +801,16 @@ export function CheckoutDialog({
                             disabled={terminalBlocking}
                             aria-pressed={selected}
                             onClick={() => selectPayment('site_points', b.key)}
-                            className={cn(
-                              'flex h-[40px] items-center justify-center rounded-xl border px-1.5 text-center text-[12.5px] font-bold leading-tight transition-colors disabled:opacity-50',
-                              selected ? 'border-iris bg-iris text-white' : 'border-line bg-white text-navy active:bg-lilac-soft'
-                            )}
+                            className={cn(pointBrandBtn, selected ? pointBrandOn : pointBrandOff)}
                           >
                             {b.name}
                           </button>
                         );
                       })}
                     </div>
+                    {!pointsAvailability.available && (
+                      <p className="mt-1 text-[10px] text-ink-3">自社ポイントは、お客様を伝票に紐付けて残高があるときだけ使えます</p>
+                    )}
                   </div>
                 )}
 
@@ -803,30 +821,31 @@ export function CheckoutDialog({
                 )}
 
                 {/* 金額表示とテンキー（選んだ支払方法の金額・現金は預り金を入力する） */}
-                <div className="mt-3 rounded-xl bg-plum px-4 py-3 text-right text-[34px] font-extrabold tabular-nums text-white">
+                <div className="mt-2 rounded-xl bg-plum px-4 py-2 text-right text-[30px] font-extrabold tabular-nums text-white">
                   {activeRow ? activeValue.toLocaleString() : 0}
                 </div>
                 <p className="mt-1 text-right text-[11px] text-ink-3">
                   {activeRow ? (activeRow.method === 'cash' ? '預り金を入力' : `${METHOD_LABELS[activeRow.method]}の金額`) : '支払方法を選んでください'}
                 </p>
 
-                <div className="mt-2 grid grid-cols-3 gap-2">
+                <div className="mt-1.5 grid grid-cols-3 gap-1.5">
                   {QUICK_CASH_AMOUNTS.map((amt) => (
                     <button
                       key={amt}
                       type="button"
                       disabled={!activeRow}
                       onClick={() => setActiveValue(activeValue + amt)}
-                      className="flex h-11 items-center justify-center rounded-xl border border-line bg-white text-[15px] font-bold tabular-nums text-navy active:bg-lilac disabled:opacity-40"
+                      className="flex h-10 items-center justify-center rounded-xl border border-line bg-white text-[15px] font-bold tabular-nums text-navy active:bg-lilac disabled:opacity-40"
                     >
                       {amt.toLocaleString()}
                     </button>
                   ))}
                 </div>
 
-                <div className="mt-2 grid grid-cols-3 gap-2">
+                <div className="mt-1.5 grid grid-cols-3 gap-1.5">
                   <button type="button" disabled={!activeRow} onClick={() => setActiveValue(0)} className={cn(keySmall, 'text-danger')}>
                     C
+                    <span className="text-[10px] font-semibold text-danger/70">Clear</span>
                   </button>
                   <button
                     type="button"
@@ -835,14 +854,18 @@ export function CheckoutDialog({
                     className={keySmall}
                   >
                     ちょうど
+                    <span className={keySmallEn}>Exact</span>
                   </button>
                   <button
                     type="button"
                     disabled={!activeRow}
                     onClick={() => setActiveValue(Math.floor(activeValue / 10))}
                     className={keySmall}
+                    aria-label="1文字消す / Delete"
                   >
-                    訂正
+                    {/* パソコンのキーボードと同じ「消す」の印（⌫） */}
+                    <Delete className="h-6 w-6" aria-hidden />
+                    <span className={keySmallEn}>Delete</span>
                   </button>
                   {(['7', '8', '9', '4', '5', '6', '1', '2', '3'] as const).map((k) => (
                     <button key={k} type="button" disabled={!activeRow} onClick={() => setActiveValue(appendTenkeyDigit(activeValue, k))} className={keyBtn}>
@@ -859,9 +882,10 @@ export function CheckoutDialog({
                     type="button"
                     disabled={!canConfirm || checkoutPending}
                     onClick={handleConfirm}
-                    className="flex h-[58px] items-center justify-center rounded-xl bg-iris text-lg font-bold text-white active:bg-iris-deep disabled:opacity-40"
+                    className="flex h-[52px] flex-col items-center justify-center rounded-xl bg-iris text-lg font-bold leading-tight text-white active:bg-iris-deep disabled:opacity-40"
                   >
                     決定
+                    <span className="text-[10px] font-semibold text-white/75">Confirm</span>
                   </button>
                 </div>
 
