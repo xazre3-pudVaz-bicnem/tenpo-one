@@ -21,9 +21,11 @@ import {
   type ChecklistState,
 } from '@/lib/tenant-onboarding';
 import { computeStoreSignals } from './signals';
+import { REGISTER_LOGIN_MESSAGE, isStoreUser, normalizeStoreUser } from '@/lib/register-login';
 import { DEFAULT_HANDY_LIMIT, DEFAULT_REGISTER_LIMIT, MAX_ALLOWED_NETWORKS, limitFrom, toNetwork } from '@/lib/store-access';
 import {
   assignOrgCode,
+  assignStoreUsername,
   readStoreRegisterPassword,
   resetStoreRegisterPassword,
   setupStoreContract,
@@ -80,6 +82,8 @@ export interface CreateTenantStoreInput {
   registerLimit?: number;
   /** 契約: ハンディの台数（既定2台） */
   handyLimit?: number;
+  /** レジのログインで打つ店舗ユーザー名（未指定なら店舗名から作る） */
+  storeUser?: string;
 }
 export interface CreateTenantStoreResult {
   organizationId: string;
@@ -89,6 +93,7 @@ export interface CreateTenantStoreResult {
   ownerPassword?: string; // 一度だけ表示
   /** レジ（iPad）のログインで使う（一度だけ表示） */
   orgCode?: string;
+  storeUser?: string;
   registerPassword?: string;
 }
 
@@ -180,6 +185,14 @@ export async function createTenantStore(input: CreateTenantStoreInput): Promise<
     await audit(organizationId, storeId, 'tenant.owner_issue', 'memberships', mem.id as string, { email, role: 'org_owner' });
   }
 
+  // レジのログインで打つ店舗ユーザー名
+  const storeUser = await assignStoreUsername(admin, {
+    organizationId,
+    storeId,
+    desired: input.storeUser,
+    seed: input.slug?.trim() || slug || storeName,
+  });
+
   // 契約の内容（お店の回線・レジ台数・ハンディ台数・レジ用パスワード）
   const contract = await setupStoreContract(admin, {
     organizationId,
@@ -205,6 +218,7 @@ export async function createTenantStore(input: CreateTenantStoreInput): Promise<
     ownerEmail,
     ownerPassword,
     orgCode: (orgRow?.org_code as string | null) ?? undefined,
+    storeUser: storeUser ?? undefined,
     registerPassword: contract.registerPassword,
   };
 }
@@ -592,4 +606,27 @@ export async function revealRegisterPassword(input: { storeId: string }): Promis
     viewed: true,
   });
   return { password: found.password, updatedAt: found.updatedAt };
+}
+
+/** 店舗ユーザー名（レジのログインで打つ名前）を変える。運営だけ */
+export async function saveStoreRegisterUsername(input: { storeId: string; username: string }): Promise<{ username?: string; error?: string }> {
+  await requireCypressAdmin();
+  const admin = createAdminClient();
+  const { data: store } = await admin.from('stores').select('id, name, organization_id').eq('id', input.storeId).maybeSingle();
+  if (!store) return { error: '店舗が見つかりません' };
+
+  const wanted = normalizeStoreUser(input.username ?? '');
+  if (!isStoreUser(wanted)) return { error: REGISTER_LOGIN_MESSAGE.badStoreUser };
+
+  const { error } = await admin.from('stores').update({ register_username: wanted }).eq('id', input.storeId);
+  if (error) {
+    if (error.code === '23505') return { error: 'この店舗ユーザー名は、同じ会社の別の店舗で使われています' };
+    return { error: `保存に失敗しました: ${error.message}` };
+  }
+  await audit(store.organization_id as string, input.storeId, 'admin.store_register_username', 'stores', input.storeId, {
+    register_username: wanted,
+  });
+  revalidatePath(`/admin/tenants/${input.storeId}`);
+  revalidatePath(`/admin/organizations/${store.organization_id as string}`);
+  return { username: wanted };
 }

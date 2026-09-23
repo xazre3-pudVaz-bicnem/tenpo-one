@@ -1,6 +1,7 @@
 import 'server-only';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { generateOrgCode } from '@/lib/org-code';
+import { isStoreUser, normalizeStoreUser, suggestStoreUser } from '@/lib/register-login';
 import {
   decryptRegisterPassword,
   encryptRegisterPassword,
@@ -30,6 +31,32 @@ export async function assignOrgCode(admin: Admin, organizationId: string): Promi
     }
   }
   console.error('[tenant] org_code の採番に失敗しました', organizationId);
+  return null;
+}
+
+/**
+ * 店舗ユーザー名（レジのログインで打つ名前）を決める。
+ * 会社の中で重複したら後ろに数字を付けてやり直す。
+ */
+export async function assignStoreUsername(
+  admin: Admin,
+  input: { organizationId: string; storeId: string; desired?: string | null; seed: string }
+): Promise<string | null> {
+  const wanted = input.desired ? normalizeStoreUser(input.desired) : '';
+  const base = isStoreUser(wanted) ? wanted : suggestStoreUser(input.seed);
+  for (let attempt = 0; attempt <= 9; attempt++) {
+    const candidate = attempt === 0 ? base : `${base.slice(0, 28)}-${attempt}`;
+    const { error } = await admin
+      .from('stores')
+      .update({ register_username: candidate })
+      .eq('id', input.storeId);
+    if (!error) return candidate;
+    if (error.code !== '23505') {
+      console.error('[tenant] register_username update failed', error.message);
+      return null;
+    }
+  }
+  console.error('[tenant] 店舗ユーザー名の採番に失敗しました', input.storeId);
   return null;
 }
 

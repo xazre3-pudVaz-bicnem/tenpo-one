@@ -29,6 +29,7 @@ export interface RegisterDeviceRow {
 export function TenantAccessPolicy({
   storeId,
   orgCode,
+  storeUser,
   networks,
   registerLimit,
   handyLimit,
@@ -39,9 +40,11 @@ export function TenantAccessPolicy({
   revokeAction,
   reissueAction,
   revealAction,
+  renameAction,
 }: {
   storeId: string;
   orgCode: string | null;
+  storeUser: string | null;
   networks: AllowedNetwork[];
   registerLimit: number;
   handyLimit: number;
@@ -63,6 +66,7 @@ export function TenantAccessPolicy({
     notSet?: boolean;
     error?: string;
   }>;
+  renameAction: (input: { storeId: string; username: string }) => Promise<{ username?: string; error?: string }>;
 }) {
   const router = useRouter();
   const { toast } = useToast();
@@ -173,16 +177,18 @@ export function TenantAccessPolicy({
         <p className="text-sm font-semibold text-navy">レジ（iPad）のログイン</p>
         <p className="mt-1 text-sm text-gray-600">
           企業番号 <span className="font-mono text-base text-navy">{orgCode ?? '（未発行）'}</span>
-          <span className="ml-2 text-xs text-gray-500">＋ 店舗ごとのレジ用パスワード</span>
+          <span className="ml-2 text-xs text-gray-500">＋ 店舗ユーザー名 ＋ 店舗ごとのレジ用パスワード</span>
         </p>
         <p className="mt-1 text-xs text-gray-500">
-          どの店舗のレジかは、上で登録したお店の回線で決まります。パスワードは運営だけが作り直せます（店舗・オーナーは変更できません）。
+          お店の回線を登録している店舗は、その回線からしか入れません。パスワードは運営だけが作り直せます（店舗・オーナーは変更できません）。
         </p>
         <div className="mt-2">
           <StoreRegisterPassword
             storeId={storeId}
+            storeUser={storeUser}
             revealAction={revealAction}
             reissueAction={reissueAction}
+            renameAction={renameAction}
             compact
           />
         </div>

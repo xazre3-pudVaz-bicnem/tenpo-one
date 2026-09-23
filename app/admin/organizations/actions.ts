@@ -7,7 +7,7 @@ import { createClient } from '@/lib/supabase/server';
 import { ROLES } from '@/lib/permissions';
 import { FEATURE_KEYS } from '@/lib/features';
 import { withErrorCapture } from '@/lib/observability-server';
-import { assignOrgCode, setupStoreContract } from '@/lib/tenant-provisioning';
+import { assignOrgCode, assignStoreUsername, setupStoreContract } from '@/lib/tenant-provisioning';
 
 function randomPassword() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!#$%';
@@ -267,6 +267,8 @@ export interface CreateStoreForOrgInput {
   registerLimit?: number;
   /** 契約: ハンディの台数（既定2台） */
   handyLimit?: number;
+  /** レジのログインで打つ店舗ユーザー名（未指定なら店舗名から作る） */
+  storeUser?: string;
 }
 
 export interface CreateStoreForOrgResult {
@@ -274,6 +276,7 @@ export interface CreateStoreForOrgResult {
   slug: string;
   /** レジ（iPad）のログインで使う（一度だけ表示） */
   orgCode?: string;
+  storeUser?: string;
   registerPassword?: string;
 }
 
@@ -318,6 +321,13 @@ export async function createStoreForOrg(input: CreateStoreForOrgInput): Promise<
         p_note: null,
       });
 
+      const storeUser = await assignStoreUsername(admin, {
+        organizationId: input.organizationId,
+        storeId: store.id,
+        desired: input.storeUser,
+        seed: store.slug ?? name,
+      });
+
       // 契約の内容（お店の回線・レジ台数・ハンディ台数・レジ用パスワード）
       const contract = await setupStoreContract(admin, {
         organizationId: input.organizationId,
@@ -337,6 +347,7 @@ export async function createStoreForOrg(input: CreateStoreForOrgInput): Promise<
         storeId: store.id,
         slug: store.slug,
         orgCode: (orgRow?.org_code as string | null) ?? undefined,
+        storeUser: storeUser ?? undefined,
         registerPassword: contract.registerPassword,
       };
     }

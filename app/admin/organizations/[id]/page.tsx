@@ -13,7 +13,7 @@ import { TableWrap, Table, THead, TBody, Tr, Th, Td } from '@/components/ui/tabl
 import { EmptyState } from '@/components/ui/state';
 import { CreateStoreDialog } from '@/components/admin/create-store-dialog';
 import { StoreRegisterPassword } from '@/components/admin/store-register-password';
-import { revealRegisterPassword, reissueRegisterPassword } from '@/app/admin/tenants/actions';
+import { revealRegisterPassword, reissueRegisterPassword, saveStoreRegisterUsername } from '@/app/admin/tenants/actions';
 import { AddOrgMemberDialog } from '@/components/admin/add-org-member-dialog';
 import { FeatureFlagMatrix } from '@/components/admin/feature-flag-matrix';
 import { OrgPlanForm } from '@/components/admin/org-plan-form';
@@ -86,7 +86,7 @@ export default async function OrganizationDetailPage({ params }: { params: Promi
       admin.from('plans').select('code, name, features').eq('is_active', true).order('sort_order'),
       admin
         .from('stores')
-        .select('id, name, slug, status, booking_enabled, created_at')
+        .select('id, name, slug, status, booking_enabled, created_at, register_username')
         .eq('organization_id', id)
         .order('created_at'),
       admin
@@ -253,7 +253,7 @@ export default async function OrganizationDetailPage({ params }: { params: Promi
                       <Tr>
                         <Th>店舗名</Th>
                         <Th>状態</Th>
-                        <Th>レジ用パスワード</Th>
+                        <Th>レジ（iPad）のログイン</Th>
                         <Th>オンライン予約</Th>
                         <Th>作成日</Th>
                       </Tr>
@@ -275,9 +275,11 @@ export default async function OrganizationDetailPage({ params }: { params: Promi
                             <Td>
                               <StoreRegisterPassword
                                 storeId={s.id as string}
+                                storeUser={(s.register_username as string | null) ?? null}
                                 compact
                                 revealAction={revealRegisterPassword}
                                 reissueAction={reissueRegisterPassword}
+                                renameAction={saveStoreRegisterUsername}
                               />
                             </Td>
                             <Td>

@@ -9,15 +9,16 @@ import { signInRegister } from './actions';
 
 /**
  * レジ（iPad）のログイン。
- * 打つのは 企業番号 と レジ用パスワード の2つだけ。
- * どの店舗のレジかは、お店の回線（契約時に登録したIP）で決まる。
+ *   企業番号（会社で1つ・6桁の数字）
+ *   店舗ユーザー名（店舗ごと）
+ *   レジ用パスワード（店舗ごと）
+ * さらに、契約でお店の回線を登録している店舗は、その回線からしか入れない。
  */
 export function RegisterLoginForm() {
   const router = useRouter();
   const [orgCode, setOrgCode] = useState('');
+  const [storeUser, setStoreUser] = useState('');
   const [password, setPassword] = useState('');
-  const [stores, setStores] = useState<{ id: string; name: string }[]>([]);
-  const [storeId, setStoreId] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -25,16 +26,9 @@ export function RegisterLoginForm() {
     e.preventDefault();
     setBusy(true);
     setError(null);
-    const res = await signInRegister({ orgCode, password, storeId: storeId || null });
+    const res = await signInRegister({ orgCode, storeUser, password });
     if (res.error) {
       setError(res.error);
-      setBusy(false);
-      return;
-    }
-    if (res.choose) {
-      setStores(res.choose);
-      setStoreId(res.choose[0]?.id ?? '');
-      setError('この回線に店舗が複数あります。店舗を選んでください');
       setBusy(false);
       return;
     }
@@ -62,6 +56,21 @@ export function RegisterLoginForm() {
             />
           </div>
           <div>
+            <Label htmlFor="store-user">店舗ユーザー名</Label>
+            <Input
+              id="store-user"
+              value={storeUser}
+              onChange={(e) => setStoreUser(e.target.value.replace(/[^A-Za-z0-9-]/g, '').toLowerCase().slice(0, 32))}
+              placeholder="ronnies-house"
+              autoCapitalize="none"
+              autoComplete="username"
+              autoCorrect="off"
+              spellCheck={false}
+              className="text-lg"
+              required
+            />
+          </div>
+          <div>
             <Label htmlFor="register-password">レジ用パスワード</Label>
             <Input
               id="register-password"
@@ -73,25 +82,8 @@ export function RegisterLoginForm() {
               required
             />
           </div>
-          {stores.length > 0 && (
-            <div>
-              <Label htmlFor="store-pick">店舗</Label>
-              <select
-                id="store-pick"
-                value={storeId}
-                onChange={(e) => setStoreId(e.target.value)}
-                className="h-11 w-full rounded-lg border border-gray-200 bg-white px-3 text-base"
-              >
-                {stores.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
           <FieldError message={error ?? undefined} />
-          <Button type="submit" className="w-full" size="lg" disabled={busy || !orgCode || !password}>
+          <Button type="submit" className="w-full" size="lg" disabled={busy || !orgCode || !storeUser || !password}>
             {busy ? 'ログイン中…' : 'レジを開く'}
           </Button>
         </form>

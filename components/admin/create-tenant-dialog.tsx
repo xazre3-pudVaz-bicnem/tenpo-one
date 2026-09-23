@@ -34,6 +34,7 @@ export function CreateTenantTrigger({ organizations, plans }: { organizations: O
     ownerEmail: '',
     ownerName: '',
     // 契約（お店の回線・台数）
+    storeUser: '',
     storeIp: '',
     storeIp2: '',
     registerLimit: '2',
@@ -52,6 +53,7 @@ export function CreateTenantTrigger({ organizations, plans }: { organizations: O
       slug: '',
       ownerEmail: '',
       ownerName: '',
+      storeUser: '',
       storeIp: '',
       storeIp2: '',
       registerLimit: '2',
@@ -78,6 +80,7 @@ export function CreateTenantTrigger({ organizations, plans }: { organizations: O
             { ip: form.storeIp, label: 'お店の回線' },
             { ip: form.storeIp2, label: 'お店の回線2' },
           ].filter((x) => x.ip.trim()),
+          storeUser: form.storeUser || undefined,
           registerLimit: Number(form.registerLimit) || 0,
           handyLimit: Number(form.handyLimit) || 0,
         });
@@ -109,6 +112,7 @@ export function CreateTenantTrigger({ organizations, plans }: { organizations: O
             <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm">
               <p className="font-semibold text-amber-800">レジ（iPad）のログイン（この画面でしか表示されません）</p>
               <p className="mt-1">企業番号：<span className="font-mono text-base">{result.orgCode ?? '—'}</span></p>
+              <p className="mt-1">店舗ユーザー名：<span className="font-mono text-base">{result.storeUser ?? '—'}</span></p>
               <div className="mt-1 flex items-center gap-2">
                 <span>レジ用パスワード：</span>
                 <code className="rounded bg-white px-2 py-1 font-mono text-amber-900">{result.registerPassword}</code>
@@ -121,7 +125,7 @@ export function CreateTenantTrigger({ organizations, plans }: { organizations: O
                 </button>
               </div>
               <p className="mt-1 text-xs text-amber-600">
-                iPad は この2つだけでログインします。どの店舗かは登録したお店の回線で決まります。パスワードは運営だけが作り直せます。
+                iPad は この3つでログインします。お店の回線を登録した店舗は、その回線からしか入れません。パスワードは運営だけが作り直せます。
               </p>
             </div>
             {result.ownerPassword && (
@@ -214,6 +218,16 @@ export function CreateTenantTrigger({ organizations, plans }: { organizations: O
             </div>
             <div className="space-y-3 rounded-xl border border-gray-100 bg-surface p-3">
               <p className="text-sm font-semibold text-navy">契約（レジ・ハンディ）</p>
+              <div>
+                <Label htmlFor="ct-user">店舗ユーザー名（任意・未指定なら店舗名から生成）</Label>
+                <Input
+                  id="ct-user"
+                  value={form.storeUser}
+                  onChange={(e) => set('storeUser', e.target.value.replace(/[^A-Za-z0-9-]/g, '').toLowerCase().slice(0, 32))}
+                  placeholder="shunka-shinjuku"
+                  className="font-mono"
+                />
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label htmlFor="ct-ip">お店のIPアドレス</Label>

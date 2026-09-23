@@ -1,14 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import { generateOrgCode, isOrgCode, normalizeOrgCode } from '@/lib/org-code';
-import { decideRegisterLogin, type RegisterLoginCandidate } from '@/lib/register-login';
+import {
+  decideRegisterLogin,
+  isStoreUser,
+  normalizeStoreUser,
+  suggestStoreUser,
+  type RegisterLoginStore,
+} from '@/lib/register-login';
 import { generateRegisterPassword, hashRegisterPassword, verifyRegisterPassword } from '@/lib/register-password';
-
-const store = (over: Partial<RegisterLoginCandidate> & { storeId: string }): RegisterLoginCandidate => ({
-  storeName: over.storeId,
-  onNetwork: false,
-  passwordOk: false,
-  ...over,
-});
 
 describe('企業番号', () => {
   it('6桁の数字で作る', () => {
@@ -27,35 +26,53 @@ describe('企業番号', () => {
   });
 });
 
+describe('店舗ユーザー名', () => {
+  it('形と打ち間違いの吸収', () => {
+    expect(normalizeStoreUser(' Ronnies-House ')).toBe('ronnies-house');
+    expect(normalizeStoreUser('ＲＯＮＮＩＥＳ')).toBe('ronnies');
+    expect(isStoreUser('ronnies-house')).toBe(true);
+    expect(isStoreUser('a')).toBe(false);
+    expect(isStoreUser('-abc')).toBe(false);
+    expect(isStoreUser('ロンニー')).toBe(false);
+  });
+
+  it('店舗名から候補を作る', () => {
+    expect(suggestStoreUser("Ronnie's House（デモ）")).toBe('ronnie-s-house');
+    expect(suggestStoreUser('SHUNKA 新宿')).toBe('shunka');
+    expect(isStoreUser(suggestStoreUser('新宿本店'))).toBe(true);
+  });
+});
+
 describe('レジ（iPad）のログインの決め方', () => {
-  it('お店の回線から来ていなければ入れない', () => {
-    expect(decideRegisterLogin([store({ storeId: 'a', passwordOk: true })])).toEqual({ kind: 'no_network' });
+  const base: RegisterLoginStore = {
+    storeId: 's1',
+    storeName: '1号店',
+    passwordOk: true,
+    restricted: true,
+    onNetwork: true,
+  };
+
+  it('企業番号と店舗ユーザー名が合わなければ入れない', () => {
+    expect(decideRegisterLogin(null)).toEqual({ kind: 'unknown_store' });
   });
 
-  it('回線が合っていてもパスワードが違えば入れない', () => {
-    expect(decideRegisterLogin([store({ storeId: 'a', onNetwork: true })])).toEqual({ kind: 'bad_password' });
+  it('お店の回線の外からは入れない（パスワードが合っていても）', () => {
+    expect(decideRegisterLogin({ ...base, onNetwork: false })).toEqual({ kind: 'off_network' });
   });
 
-  it('回線とパスワードが合えば、その店舗のレジになる', () => {
-    const list = [store({ storeId: 'a', onNetwork: true, passwordOk: true }), store({ storeId: 'b' })];
-    expect(decideRegisterLogin(list)).toEqual({ kind: 'ok', storeId: 'a' });
-  });
-
-  it('同じ回線に複数の店舗があるときは選んでもらう', () => {
-    const list = [
-      store({ storeId: 'a', storeName: '1号店', onNetwork: true, passwordOk: true }),
-      store({ storeId: 'b', storeName: '2号店', onNetwork: true, passwordOk: true }),
-    ];
-    expect(decideRegisterLogin(list)).toEqual({
-      kind: 'choose',
-      stores: [
-        { id: 'a', name: '1号店' },
-        { id: 'b', name: '2号店' },
-      ],
+  it('回線を登録していない店舗は、どこからでも入れる（今まで通り）', () => {
+    expect(decideRegisterLogin({ ...base, restricted: false, onNetwork: false })).toEqual({
+      kind: 'ok',
+      storeId: 's1',
     });
-    expect(decideRegisterLogin(list, 'b')).toEqual({ kind: 'ok', storeId: 'b' });
-    // 回線の外の店舗を指定しても通らない
-    expect(decideRegisterLogin(list, 'zzz')).toEqual({ kind: 'no_network' });
+  });
+
+  it('パスワードが違えば入れない', () => {
+    expect(decideRegisterLogin({ ...base, passwordOk: false })).toEqual({ kind: 'bad_password' });
+  });
+
+  it('全部そろえば、その店舗のレジになる', () => {
+    expect(decideRegisterLogin(base)).toEqual({ kind: 'ok', storeId: 's1' });
   });
 });
 

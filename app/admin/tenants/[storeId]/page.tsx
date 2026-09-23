@@ -18,7 +18,7 @@ import { TenantHardware } from '@/components/admin/tenant-hardware';
 import { TenantSupportNotes } from '@/components/admin/tenant-support-notes';
 import { TenantAccessPolicy } from '@/components/admin/tenant-access-policy';
 import { policyFrom } from '@/lib/store-access';
-import { saveStoreAccessPolicy, revokeRegisterDevice, reissueRegisterPassword, revealRegisterPassword } from '../actions';
+import { saveStoreAccessPolicy, revokeRegisterDevice, reissueRegisterPassword, revealRegisterPassword, saveStoreRegisterUsername } from '../actions';
 
 export const metadata: Metadata = { title: '店舗導入管理' };
 
@@ -36,7 +36,7 @@ export default async function TenantDetailPage({ params }: { params: Promise<{ s
   const { data: onboarding } = await admin.from('store_onboarding').select('*').eq('store_id', storeId).maybeSingle();
   const { data: store } = await admin
     .from('stores')
-    .select('id, name, slug, status, seat_count, booking_enabled, organization_id, address, phone, email, organizations(name, plan_code, status, is_demo)')
+    .select('id, name, slug, status, seat_count, booking_enabled, organization_id, address, phone, email, register_username, organizations(name, plan_code, status, is_demo)')
     .eq('id', storeId)
     .maybeSingle();
   if (!onboarding || !store) notFound();
@@ -186,6 +186,7 @@ export default async function TenantDetailPage({ params }: { params: Promise<{ s
           <TenantAccessPolicy
             storeId={storeId}
             orgCode={(orgCodeRow?.org_code as string | null) ?? null}
+            storeUser={(store.register_username as string | null) ?? null}
             networks={accessPolicy.networks}
             registerLimit={accessPolicy.registerLimit}
             handyLimit={accessPolicy.handyLimit}
@@ -203,6 +204,7 @@ export default async function TenantDetailPage({ params }: { params: Promise<{ s
             revokeAction={revokeRegisterDevice}
             reissueAction={reissueRegisterPassword}
             revealAction={revealRegisterPassword}
+            renameAction={saveStoreRegisterUsername}
           />
         </CardContent>
       </Card>
