@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
-  Minus, Plus, X, ArrowLeft, Split, Combine, ArrowRightLeft, Search, Star, Flame, User, XCircle,
+  Minus, Plus, X, ArrowLeft, Split, Combine, ArrowRightLeft, Search, Star, User, XCircle,
   FilePlus, Printer, Users, ChefHat, Settings, Clock,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -35,7 +35,6 @@ import { SeatTimeDialog } from './seat-time-dialog';
 import { seatBadgeLabel, type SeatCourseOption, type SeatTimeState } from '@/lib/seat-time';
 import type { SeatTimeInput } from '@/app/app/pos/actions';
 import { CustomerLinkDialog } from './customer-link-dialog';
-import { POS_SHORTCUTS } from './shortcuts';
 import type {
   CheckoutPayment, CheckoutOutcome, SplitMove, ApplyCouponResult,
   PosCustomerSearchResult, SetOrderCustomerResult, SendOrderResult,
@@ -455,143 +454,274 @@ export function PosScreen({
     unsentCount: unsentItems.length,
   };
 
+  /** カテゴリの並び（おすすめ・売れ筋 → 各カテゴリ）。中央の縦リストと、幅が狭いときの横並びで同じものを使う */
+  const categoryTabs = [
+    { id: FAVORITES_TAB, name: 'おすすめ', en: 'Picks', color: null as string | null },
+    { id: BESTSELLERS_TAB, name: '売れ筋', en: 'Popular', color: null as string | null },
+    ...categories.map((c) => ({ id: c.id, name: c.name, en: englishName(c.name, null, c.name_en), color: c.color })),
+  ];
+
+  const metaChip =
+    'flex items-center gap-1 rounded-full bg-lilac px-3 py-1 text-xs font-semibold text-ink-2 transition-colors hover:bg-iris-soft';
+
   return (
-    <div className="flex h-[calc(100vh-4rem)] flex-col lg:flex-row">
-      {/* 左: 検索・カテゴリ + 商品グリッド */}
-      <div className="flex min-w-0 flex-1 flex-col border-b border-gray-200 lg:border-b-0 lg:border-r">
-        <div className="flex items-center gap-3 border-b border-gray-200 bg-white px-4 py-3">
-          <Link href="/app/floor" className="flex items-center gap-1 text-sm font-medium text-gray-600 hover:text-primary">
-            <ArrowLeft className="h-4 w-4" />
-            フロアへ戻る / Floor
+    <div className="flex h-[calc(100vh-4rem)] flex-col gap-3 lg:flex-row">
+      {/* 左: 伝票（テーブル・人数・顧客と、追加した品目） */}
+      <section className="flex min-h-0 w-full shrink-0 flex-col overflow-hidden rounded-2xl border border-line bg-white lg:w-[380px]">
+        <div className="flex items-center gap-2 border-b border-line px-4 py-3">
+          <Link href="/app/floor" aria-label="フロアへ戻る" className="rounded-lg p-1.5 text-ink-3 hover:bg-lilac">
+            <ArrowLeft className="h-5 w-5" />
           </Link>
-          <div className="ml-auto flex flex-wrap items-center gap-2 text-sm">
-            <Badge tone="navy">{tableName ?? ORDER_TYPE_LABELS[order.orderType] ?? order.orderType}</Badge>
-            {setGuestCountAction ? (
-              <button
-                type="button"
-                onClick={() => setGuestCountOpen(true)}
-                aria-label="人数を変更する"
-                className="flex items-center gap-1 rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-200"
-              >
-                <Users className="h-3.5 w-3.5" />
-                {order.guestCount}名
-              </button>
-            ) : (
-              <span className="text-gray-500">{order.guestCount}名</span>
-            )}
-            {seatTime && setSeatTimeAction && (
-              <button
-                type="button"
-                onClick={() => setSeatTimeOpen(true)}
-                aria-label="席の時間・コースを変更する"
-                className="flex max-w-[16rem] items-center gap-1 rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-200"
-              >
-                <Clock className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                <span className="truncate">{seatBadgeLabel(seatTime, seatCourses)}</span>
-              </button>
-            )}
-            <ClerkSelector orderId={order.id} clerks={clerks} currentClerkId={currentClerkId} />
-            {/* 担当者が未登録の店舗では従来どおりログインユーザー名を表示する */}
-            {clerks.length === 0 && staffName && <span className="text-gray-500">担当 / Staff: {staffName}</span>}
-            <button
-              type="button"
-              onClick={() => setCustomerOpen(true)}
-              className={cn(
-                'flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold transition-colors',
-                linkedCustomer ? 'bg-primary-soft text-primary-deep' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-              )}
-            >
-              <User className="h-3.5 w-3.5" />
-              {linkedCustomer ? linkedCustomer.name : '顧客未設定 / No customer'}
+          <span className="text-2xl font-extrabold leading-none text-royal">
+            {tableName ?? ORDER_TYPE_LABELS[order.orderType] ?? order.orderType}
+          </span>
+          {setGuestCountAction ? (
+            <button type="button" onClick={() => setGuestCountOpen(true)} aria-label="人数を変更する" className={metaChip}>
+              <Users className="h-3.5 w-3.5" />
+              {order.guestCount}名
             </button>
-            {/* レジの設定（厨房伝票・品切れ・メニューなど）。戻るとこの伝票に戻る */}
-            <Link
-              href={`/app/pos/settings?order=${order.id}`}
-              aria-label="レジの設定"
-              className="flex items-center gap-1 rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-200"
-            >
-              <Settings className="h-3.5 w-3.5" aria-hidden />
-              設定
-            </Link>
-          </div>
+          ) : (
+            <span className="text-sm text-ink-3">{order.guestCount}名</span>
+          )}
+          <span className="ml-auto text-xs text-ink-3">#{order.orderNo}</span>
         </div>
 
-        <div className="border-b border-gray-200 bg-white px-3 py-2">
+        <div className="flex flex-wrap items-center gap-1.5 border-b border-line px-4 py-2">
+          <button
+            type="button"
+            onClick={() => setCustomerOpen(true)}
+            className={cn(metaChip, linkedCustomer && 'bg-iris-soft text-royal')}
+          >
+            <User className="h-3.5 w-3.5" />
+            {linkedCustomer ? linkedCustomer.name : '顧客 未設定'}
+          </button>
+          {seatTime && setSeatTimeAction && (
+            <button type="button" onClick={() => setSeatTimeOpen(true)} aria-label="席の時間・コースを変更する" className={cn(metaChip, 'max-w-[15rem]')}>
+              <Clock className="h-3.5 w-3.5 shrink-0" aria-hidden />
+              <span className="truncate">{seatBadgeLabel(seatTime, seatCourses)}</span>
+            </button>
+          )}
+          <ClerkSelector orderId={order.id} clerks={clerks} currentClerkId={currentClerkId} />
+          {clerks.length === 0 && staffName && <span className="text-xs text-ink-3">担当 {staffName}</span>}
+          <Link href={`/app/pos/settings?order=${order.id}`} aria-label="レジの設定" className={cn(metaChip, 'ml-auto')}>
+            <Settings className="h-3.5 w-3.5" aria-hidden />
+            設定
+          </Link>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          {items.length === 0 ? (
+            <p className="p-6 text-center text-sm text-ink-3">商品をタップして追加してください / Tap an item to add</p>
+          ) : (
+            <ul className="divide-y divide-line">
+              {items.map((it) => (
+                <li key={it.id} className="flex items-center gap-2.5 px-3 py-2.5">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[15px] font-bold leading-tight text-navy">
+                      {it.name}
+                      {it.kitchen_sent_at === null && (
+                        <span className="ml-1.5 inline-block rounded bg-amber-100 px-1.5 py-0.5 align-middle text-[10px] font-bold text-amber-800">
+                          未送信
+                        </span>
+                      )}
+                    </p>
+                    <p className="text-xs leading-tight text-ink-3 tabular-nums">
+                      {yen(it.unit_price)}
+                      {it.menu_item_id && englishByItemId.get(it.menu_item_id) ? ` ・ ${englishByItemId.get(it.menu_item_id)}` : ''}
+                    </p>
+                  </div>
+                  {/* 数量は指で押せる大きさに（レジは iPad で使う） */}
+                  <div className="flex shrink-0 items-center overflow-hidden rounded-xl border border-line">
+                    <button
+                      type="button"
+                      aria-label={`${it.name}を1つ減らす`}
+                      disabled={pending}
+                      onClick={() => handleQty(it.id, -1)}
+                      className="flex h-11 w-11 items-center justify-center bg-lilac-soft text-royal disabled:opacity-50"
+                    >
+                      <Minus className="h-4 w-4" />
+                    </button>
+                    <input
+                      key={it.quantity}
+                      type="number"
+                      min={1}
+                      disabled={pending}
+                      defaultValue={it.quantity}
+                      onBlur={(e) => handleQtyDirectInput(it, Number(e.target.value))}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') e.currentTarget.blur();
+                      }}
+                      aria-label={`${it.name}の数量`}
+                      className="h-11 w-11 border-0 text-center text-base font-bold tabular-nums text-navy focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      aria-label={`${it.name}を1つ増やす`}
+                      disabled={pending}
+                      onClick={() => handleQty(it.id, 1)}
+                      className="flex h-11 w-11 items-center justify-center bg-lilac-soft text-royal disabled:opacity-50"
+                    >
+                      <Plus className="h-4 w-4" />
+                    </button>
+                  </div>
+                  <span className="w-[72px] shrink-0 text-right text-[15px] font-bold tabular-nums text-navy">
+                    {yen(it.line_total)}
+                  </span>
+                  <button
+                    type="button"
+                    aria-label="取消"
+                    onClick={() => setCancelTarget(it)}
+                    className="shrink-0 rounded-lg p-1.5 text-ink-3 hover:bg-danger-soft hover:text-danger"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <div className="border-t border-line px-4 py-3">
+          <div className="space-y-1 text-sm">
+            <div className="flex justify-between text-ink-2">
+              <span>小計</span>
+              <span className="tabular-nums">{yen(order.subtotal)}</span>
+            </div>
+            <div className="flex justify-between text-ink-2">
+              <span>消費税</span>
+              <span className="tabular-nums">{yen(order.taxTotal)}</span>
+            </div>
+            {order.serviceCharge > 0 && (
+              <div className="flex justify-between text-ink-2">
+                <span>サービス料</span>
+                <span className="tabular-nums">{yen(order.serviceCharge)}</span>
+              </div>
+            )}
+            {order.discountTotal > 0 && (
+              <div className="flex justify-between text-warning">
+                <span>値引き{order.couponCode ? `（${order.couponCode}）` : ''}</span>
+                <span className="tabular-nums">-{yen(order.discountTotal)}</span>
+              </div>
+            )}
+          </div>
+          <div className="mt-2 flex items-baseline justify-between border-t border-line pt-2">
+            <span className="text-[15px] font-bold text-ink-2">合計（税込）</span>
+            <span className="text-3xl font-extrabold tabular-nums text-royal">{yen(order.total)}</span>
+          </div>
+          {canCheckout && (
+            <div className="mt-2.5 flex flex-wrap gap-1.5">
+              <button type="button" disabled={items.length === 0} onClick={() => setSplitOpen(true)} className={cn(metaChip, 'disabled:opacity-40')}>
+                <Split className="h-3.5 w-3.5" />
+                伝票分割
+              </button>
+              {addSlipToTableAction && (
+                <button type="button" disabled={pending} onClick={handleAddSlip} className={cn(metaChip, 'disabled:opacity-40')}>
+                  <FilePlus className="h-3.5 w-3.5" />
+                  伝票追加
+                </button>
+              )}
+              <button type="button" onClick={() => setMergeOpen(true)} className={metaChip}>
+                <Combine className="h-3.5 w-3.5" />
+                伝票統合
+              </button>
+              {order.tableId && (
+                <button type="button" onClick={() => setTableMoveOpen(true)} className={metaChip}>
+                  <ArrowRightLeft className="h-3.5 w-3.5" />
+                  テーブル移動
+                </button>
+              )}
+              <button
+                type="button"
+                disabled={items.length === 0 || pending}
+                onClick={handleOrderSlipPrint}
+                className={cn(metaChip, 'disabled:opacity-40')}
+              >
+                <Printer className="h-3.5 w-3.5" />
+                お会計伝票
+              </button>
+              {cancelEmptyOrderAction && items.length === 0 && (
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => setCancelOrderOpen(true)}
+                  className={cn(metaChip, 'text-danger disabled:opacity-40')}
+                >
+                  <XCircle className="h-3.5 w-3.5" />
+                  この注文を取消
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* 中: カテゴリ（縦一列。iPad で指で選びやすいように） */}
+      {!searchQuery.trim() && (
+        <nav className="hidden w-[168px] shrink-0 overflow-y-auto rounded-2xl border border-line bg-white lg:block">
+          {categoryTabs.map((c) => {
+            const on = activeCategory === c.id;
+            return (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => setActiveCategory(c.id)}
+                className={cn(
+                  'w-full border-b border-line px-3.5 py-3.5 text-left text-[15px] font-bold leading-tight transition-colors last:border-b-0',
+                  on ? 'text-white' : 'text-ink-2 hover:bg-lilac-soft'
+                )}
+                style={on ? { backgroundColor: c.color ?? '#7B3FE4' } : undefined}
+              >
+                <span className="block">{c.name}</span>
+                {c.en && <span className={cn('block text-[11px] font-medium', on ? 'text-white/80' : 'text-ink-3')}>{c.en}</span>}
+              </button>
+            );
+          })}
+        </nav>
+      )}
+
+      {/* 右: 検索・商品グリッドと、下の「厨房へオーダー」「会計へ」 */}
+      <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-line bg-white">
+        <div className="border-b border-line px-3 py-2">
           <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-3" />
             <input
               ref={searchInputRef}
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="商品名・カナ・英語で検索 / Search（F2）"
-              className="h-10 w-full rounded-lg border border-gray-300 bg-white pl-9 pr-3 text-sm text-gray-900 placeholder:text-gray-400 focus:border-primary focus:outline-2 focus:outline-primary/30"
+              placeholder="商品名・カナ・英語で検索 / Search"
+              className="h-11 w-full rounded-xl border border-line bg-white pl-9 pr-3 text-[15px] text-navy placeholder:text-ink-3 focus:border-iris focus:outline-2 focus:outline-iris/30"
             />
           </div>
         </div>
 
+        {/* 幅が狭いとき（スマホ・縦置き）はカテゴリを横並びで出す */}
         {!searchQuery.trim() && (
-          <div className="flex gap-2 overflow-x-auto border-b border-gray-200 bg-white px-3 py-2">
-            <button
-              type="button"
-              onClick={() => setActiveCategory(FAVORITES_TAB)}
-              className={cn(
-                'flex shrink-0 items-center gap-1 rounded-full px-4 py-2 text-sm font-semibold transition-colors',
-                activeCategory === FAVORITES_TAB ? 'bg-warning text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              )}
-            >
-              <Star className="h-3.5 w-3.5" />
-              おすすめ / Picks
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveCategory(BESTSELLERS_TAB)}
-              className={cn(
-                'flex shrink-0 items-center gap-1 rounded-full px-4 py-2 text-sm font-semibold transition-colors',
-                activeCategory === BESTSELLERS_TAB ? 'bg-danger text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              )}
-            >
-              <Flame className="h-3.5 w-3.5" />
-              売れ筋 / Popular
-            </button>
-            {categories.map((c) => (
+          <div className="flex gap-2 overflow-x-auto border-b border-line px-3 py-2 lg:hidden">
+            {categoryTabs.map((c) => (
               <button
                 key={c.id}
                 type="button"
                 onClick={() => setActiveCategory(c.id)}
                 className={cn(
                   'shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition-colors',
-                  activeCategory === c.id ? 'text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  activeCategory === c.id ? 'text-white' : 'bg-lilac text-ink-2'
                 )}
-                style={activeCategory === c.id ? { backgroundColor: c.color ?? '#7B3FF2' } : undefined}
+                style={activeCategory === c.id ? { backgroundColor: c.color ?? '#7B3FE4' } : undefined}
               >
-                <span className="block leading-tight">{c.name}</span>
-                {(() => {
-                  const en = englishName(c.name, null, c.name_en);
-                  return en ? (
-                    <span
-                      className={cn(
-                        'block text-[11px] font-medium leading-tight',
-                        activeCategory === c.id ? 'text-white/80' : 'text-gray-500'
-                      )}
-                    >
-                      {en}
-                    </span>
-                  ) : null;
-                })()}
+                {c.name}
               </button>
             ))}
           </div>
         )}
 
-        <div className="flex-1 overflow-y-auto p-3">
+        <div className="min-h-0 flex-1 overflow-y-auto p-3">
           {visibleItems.length === 0 ? (
-            <p className="p-6 text-center text-sm text-gray-400">
+            <p className="p-6 text-center text-sm text-ink-3">
               {searchQuery.trim() ? '該当する商品が見つかりません / No items found' : 'このカテゴリに商品がありません / No items in this category'}
             </p>
           ) : (
-            // レジ画面は左メニューを出さない（app/app/layout.tsx）ので、iPad 横向きでも4列入る
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5">
+            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-4">
               {visibleItems.map((m) => {
                 const price = isTakeoutLike ? (m.takeout_price ?? m.price) : m.price;
                 const category = categories.find((c) => c.id === m.category_id);
@@ -602,27 +732,22 @@ export function PosScreen({
                     disabled={m.is_sold_out || pending}
                     onClick={() => handleAdd(m.id)}
                     className={cn(
-                      'flex min-h-[96px] flex-col items-start justify-between rounded-xl border p-3 text-left shadow-sm transition-transform active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-60',
-                      m.is_sold_out ? 'border-gray-200 bg-gray-100' : 'border-gray-200 bg-white'
+                      'flex min-h-[92px] flex-col items-center justify-center gap-1.5 rounded-xl border px-2.5 py-3 text-center transition-transform active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-60',
+                      m.is_sold_out ? 'border-line bg-lilac' : 'border-line bg-white hover:bg-lilac-soft'
                     )}
-                    style={!m.is_sold_out && category?.color ? { borderLeft: `6px solid ${category.color}` } : undefined}
+                    style={!m.is_sold_out && category?.color ? { borderTop: `4px solid ${category.color}` } : undefined}
                   >
-                    <span className="w-full">
-                      <span className="flex items-center gap-1 text-sm font-bold leading-tight text-navy">
-                        {m.is_recommended && <Star className="h-3.5 w-3.5 shrink-0 fill-warning text-warning" />}
-                        {m.name}
-                      </span>
-                      {/* 日本語を読まないスタッフ向けの英語。英語名が無ければカナからローマ字 */}
-                      {englishByItemId.get(m.id) && (
-                        <span className="mt-0.5 block text-xs leading-tight text-gray-500">
-                          {englishByItemId.get(m.id)}
-                        </span>
-                      )}
+                    <span className="flex items-center gap-1 text-[15px] font-bold leading-tight text-navy">
+                      {m.is_recommended && <Star className="h-3.5 w-3.5 shrink-0 fill-warning text-warning" />}
+                      {m.name}
                     </span>
+                    {englishByItemId.get(m.id) && (
+                      <span className="text-[11px] leading-tight text-ink-3">{englishByItemId.get(m.id)}</span>
+                    )}
                     {m.is_sold_out ? (
                       <Badge tone="gray">売切 / Sold out</Badge>
                     ) : (
-                      <span className="text-base font-bold tabular-nums text-primary-deep">{yen(price)}</span>
+                      <span className="text-[17px] font-extrabold tabular-nums text-royal">{yen(price)}</span>
                     )}
                   </button>
                 );
@@ -630,212 +755,42 @@ export function PosScreen({
             </div>
           )}
         </div>
-      </div>
 
-      {/* 右: 伝票（会計ボタン・合計は常時表示。スクロールは品目リストのみ） */}
-      <div className="flex w-full flex-col bg-white lg:w-[380px] lg:shrink-0">
-        <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
-          <h2 className="text-sm font-bold text-navy">伝票 / Slip #{order.orderNo}</h2>
-        </div>
+        {canCheckout && !registerOpen && (
+          <Link
+            href="/app/cash/close"
+            className="mx-3 mb-2 block rounded-lg border border-danger/40 bg-danger-soft px-3 py-2 text-xs text-danger"
+          >
+            <b>レジが未開局です。</b>
+            会計の前に「レジクローズ」画面で釣銭準備金を数えてレジを開局してください（タップで移動）
+          </Link>
+        )}
 
-        <div className="flex-1 overflow-y-auto">
-          {items.length === 0 ? (
-            <p className="p-6 text-center text-sm text-gray-400">商品をタップして追加してください / Tap an item to add</p>
-          ) : (
-            <ul className="divide-y divide-gray-100">
-              {items.map((it) => (
-                <li key={it.id} className="px-4 py-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium leading-tight text-navy">
-                        {it.name}
-                        {it.kitchen_sent_at === null && (
-                          <span className="ml-1.5 inline-block rounded bg-amber-100 px-1.5 py-0.5 align-middle text-[10px] font-bold text-amber-800">
-                            未送信 / Not sent
-                          </span>
-                        )}
-                      </p>
-                      {it.menu_item_id && englishByItemId.get(it.menu_item_id) && (
-                        <p className="text-xs leading-tight text-gray-500">
-                          {englishByItemId.get(it.menu_item_id)}
-                        </p>
-                      )}
-                    </div>
-                    <button
-                      type="button"
-                      aria-label="取消"
-                      onClick={() => setCancelTarget(it)}
-                      className="rounded p-1 text-gray-400 hover:bg-danger-soft hover:text-danger"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  </div>
-                  <div className="mt-1 flex items-center justify-between">
-                    <span className="text-xs text-gray-500 tabular-nums">{yen(it.unit_price)}</span>
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        disabled={pending}
-                        onClick={() => handleQty(it.id, -1)}
-                        className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-300 text-gray-600 disabled:opacity-50"
-                      >
-                        <Minus className="h-3.5 w-3.5" />
-                      </button>
-                      <input
-                        key={it.quantity}
-                        type="number"
-                        min={1}
-                        disabled={pending}
-                        defaultValue={it.quantity}
-                        onBlur={(e) => handleQtyDirectInput(it, Number(e.target.value))}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') e.currentTarget.blur();
-                        }}
-                        aria-label={`${it.name}の数量`}
-                        className="w-12 rounded-lg border border-gray-300 py-1 text-center text-sm font-semibold tabular-nums focus:border-primary focus:outline-2 focus:outline-primary/30"
-                      />
-                      <button
-                        type="button"
-                        disabled={pending}
-                        onClick={() => handleQty(it.id, 1)}
-                        className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-300 text-gray-600 disabled:opacity-50"
-                      >
-                        <Plus className="h-3.5 w-3.5" />
-                      </button>
-                      <span className="w-16 text-right text-sm font-bold tabular-nums text-navy">
-                        {yen(it.line_total)}
-                      </span>
-                    </div>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        <div className="space-y-1.5 border-t border-gray-200 px-4 py-3 text-sm">
-          <div className="flex justify-between text-gray-600">
-            <span>小計 / Subtotal</span>
-            <span className="tabular-nums">{yen(order.subtotal)}</span>
-          </div>
-          <div className="flex justify-between text-gray-600">
-            <span>消費税 / Tax</span>
-            <span className="tabular-nums">{yen(order.taxTotal)}</span>
-          </div>
-          {order.serviceCharge > 0 && (
-            <div className="flex justify-between text-gray-600">
-              <span>サービス料 / Service charge</span>
-              <span className="tabular-nums">{yen(order.serviceCharge)}</span>
-            </div>
-          )}
-          {order.discountTotal > 0 && (
-            <div className="flex justify-between text-warning">
-              <span>値引き / Discount{order.couponCode ? `（${order.couponCode}）` : ''}</span>
-              <span className="tabular-nums">-{yen(order.discountTotal)}</span>
-            </div>
-          )}
-          <div className="flex justify-between border-t border-gray-100 pt-1.5 text-base font-bold text-navy">
-            <span>合計 / Total</span>
-            <span className="tabular-nums">{yen(order.total)}</span>
-          </div>
-        </div>
-
-        {/* lg 未満は下部ナビ（固定・約56px）が重なるので、その分だけ下に余白を取る。
-            取らないと最下段の「この注文を取消」やショートカット表示がナビの裏に隠れて押せない */}
-        <div className="space-y-2 border-t border-gray-200 p-3 pb-[calc(0.75rem+3.5rem+env(safe-area-inset-bottom))] lg:pb-3">
-          {canCheckout && (
-            <div className="grid grid-cols-2 gap-2">
-              <Button
-                variant="secondary"
-                size="sm"
-                disabled={items.length === 0}
-                onClick={() => setSplitOpen(true)}
-              >
-                <Split className="h-4 w-4" />
-                伝票分割 / Split
-              </Button>
-              {/* 別会計用に空の伝票をもう1枚作る（分割と違い、既存の品目は動かさない） */}
-              {addSlipToTableAction && (
-                <Button variant="secondary" size="sm" disabled={pending} onClick={handleAddSlip}>
-                  <FilePlus className="h-4 w-4" />
-                  伝票追加 / Add slip
-                </Button>
-              )}
-              <Button variant="secondary" size="sm" onClick={() => setMergeOpen(true)}>
-                <Combine className="h-4 w-4" />
-                伝票統合 / Merge
-              </Button>
-              {order.tableId && (
-                <Button variant="secondary" size="sm" onClick={() => setTableMoveOpen(true)}>
-                  <ArrowRightLeft className="h-4 w-4" />
-                  テーブル移動 / Move table
-                </Button>
-              )}
-            </div>
-          )}
-          {/* レジ未開局。会計はサーバー側でも拒否されるが、押してから怒られる前にここで分かるようにする */}
-          {canCheckout && !registerOpen && (
-            <Link
-              href="/app/cash/close"
-              className="block rounded-lg border border-danger/40 bg-danger-soft px-3 py-2 text-xs text-danger"
-            >
-              <b>レジが未開局です。</b>
-              会計の前に「レジクローズ」画面で釣銭準備金を数えてレジを開局してください（タップで移動）
-              <br />
-              <span className="text-[11px]">Register is not opened. Count the opening cash and open the register first.</span>
-            </Link>
-          )}
-          {/* 品目はタップしただけでは厨房に届かない。ここでまとめて送る（押し間違いを厨房に流さないため） */}
-          {sendOrderAction && (
+        <div className="grid grid-cols-2 gap-3 border-t border-line p-3 pb-[calc(0.75rem+3.5rem+env(safe-area-inset-bottom))] lg:pb-3">
+          {sendOrderAction ? (
             <Button
               size="pos"
               variant={unsentItems.length > 0 ? 'navy' : 'secondary'}
-              className="w-full"
+              className="h-[60px] w-full text-[17px]"
               disabled={unsentItems.length === 0 || pending}
               onClick={handleSendOrder}
             >
               <ChefHat className="h-5 w-5" />
-              {unsentItems.length > 0
-                ? `厨房へオーダー / Send order（未送信 ${unsentItems.length}品）`
-                : '厨房へオーダー / Send order（未送信なし）'}
+              {unsentItems.length > 0 ? `注文確定（${unsentItems.length}品）` : '注文確定（未送信なし）'}
             </Button>
+          ) : (
+            <span />
           )}
-          {/* 会計前に「いま何をいくつ・合計いくら」をお客様へ紙で出す。会計・売上には影響しない */}
-          <Button
-            variant="secondary"
-            size="sm"
-            className="w-full"
-            disabled={items.length === 0 || pending}
-            onClick={handleOrderSlipPrint}
-          >
-            <Printer className="h-4 w-4" />
-            お会計伝票を印刷 / Print bill
-          </Button>
           <Button
             size="pos"
-            className="w-full"
+            className="h-[60px] w-full text-[18px]"
             disabled={items.length === 0 || pending}
             onClick={() => setCheckoutOpen(true)}
           >
-            会計へ / Checkout（{yen(order.total)}）
+            会計へ（{yen(order.total)}）
           </Button>
-          {canCheckout && cancelEmptyOrderAction && items.length === 0 && (
-            <Button
-              variant="secondary"
-              size="sm"
-              className="w-full text-danger"
-              disabled={pending}
-              onClick={() => setCancelOrderOpen(true)}
-            >
-              <XCircle className="h-4 w-4" />
-              この注文を取消 / Cancel order（品目なし）
-            </Button>
-          )}
-          <p className="text-center text-[11px] text-gray-400">
-            {POS_SHORTCUTS.map((s) => `${s.label}:${s.description}`).join('　')}
-          </p>
         </div>
-      </div>
+      </section>
 
       <ConfirmDialog
         open={!!cancelTarget}

@@ -4,7 +4,6 @@ import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Dialog } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/components/ui/toast';
 import { yen } from '@/lib/format';
@@ -119,44 +118,56 @@ export function TableSheet({
       <div className="space-y-3">
         {status === 'available' && (
           <div className="rounded-xl border border-line p-4">
-            {/* ファーストオーダー: ハンディと同じ「お客様情報」（モード・プラン・時間制・開始時間・男女の人数）を出してから着席する
-                （2026-09-22 店舗要望: iPad のオーダー・会計でもこの画面を出したい） */}
+            {/* レジで一番多い操作は「人数だけ入れて着席」。指で押せる大きさにして一番上・一番大きく置く */}
+            <p className="mb-2 text-xs font-bold text-ink-2">人数 / Guests</p>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                aria-label="人数を1人減らす"
+                disabled={pending || partySize <= 1}
+                onClick={() => setPartySize((n) => Math.max(1, n - 1))}
+                className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border border-line bg-lilac-soft text-2xl font-bold text-royal disabled:opacity-40"
+              >
+                −
+              </button>
+              <div className="flex h-14 flex-1 items-baseline justify-center gap-1 rounded-xl border border-line">
+                <span className="text-3xl font-extrabold tabular-nums text-navy">{partySize}</span>
+                <span className="text-sm text-ink-3">名</span>
+              </div>
+              <button
+                type="button"
+                aria-label="人数を1人増やす"
+                disabled={pending || partySize >= 99}
+                onClick={() => setPartySize((n) => Math.min(99, n + 1))}
+                className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border border-line bg-lilac-soft text-2xl font-bold text-royal disabled:opacity-40"
+              >
+                ＋
+              </button>
+            </div>
             <Button
               size="pos"
-              className="w-full"
+              className="mt-3 h-[60px] w-full text-[18px]"
+              disabled={pending}
+              onClick={() =>
+                goPos(() =>
+                  startWalkInAction(table.id, partySize, {
+                    durationMinutes: defaultStayMinutes,
+                  })
+                )
+              }
+            >
+              着席して注文へ / Seat
+            </Button>
+            {/* ファーストオーダー: ハンディと同じ「お客様情報」（モード・プラン・時間制・開始時間・男女の人数）を出してから着席する */}
+            <Button
+              size="md"
+              variant="secondary"
+              className="mt-2 w-full"
               disabled={pending}
               onClick={() => router.push(`/app/floor/${table.id}/setup`)}
             >
-              お客様情報を入力して着席 / Seat
+              お客様情報を入力して着席
             </Button>
-            <div className="mt-3 flex items-center gap-2 border-t border-line pt-3">
-              <span className="text-xs text-ink-3">すぐ着席（人数だけ）:</span>
-              <Input
-                id="party-size"
-                type="number"
-                min={1}
-                max={99}
-                aria-label="人数 / Guests"
-                value={partySize}
-                onChange={(e) => setPartySize(Math.max(1, Number(e.target.value) || 1))}
-                className="h-9 w-20"
-              />
-              <span className="text-xs text-ink-3">名</span>
-              <Button
-                size="sm"
-                variant="secondary"
-                disabled={pending}
-                onClick={() =>
-                  goPos(() =>
-                    startWalkInAction(table.id, partySize, {
-                      durationMinutes: defaultStayMinutes,
-                    })
-                  )
-                }
-              >
-                着席 / Seat
-              </Button>
-            </div>
           </div>
         )}
 
@@ -183,18 +194,16 @@ export function TableSheet({
           </Button>
         )}
 
+        {/* 利用停止はめったに使わないので、間違って押さないよう小さく下に置く */}
         {canOperate && (status === 'available' || status === 'unavailable') && (
-          <Button
-            size="lg"
-            variant={status === 'unavailable' ? 'secondary' : 'ghost'}
-            className="w-full"
+          <button
+            type="button"
             disabled={pending}
-            onClick={() =>
-              run(() => setTableAvailabilityAction(table.id, status !== 'unavailable'))
-            }
+            onClick={() => run(() => setTableAvailabilityAction(table.id, status !== 'unavailable'))}
+            className="mx-auto block rounded-lg px-3 py-2 text-xs font-semibold text-ink-3 hover:bg-lilac hover:text-royal disabled:opacity-40"
           >
-            {status === 'unavailable' ? 'テーブルを再開する / Reopen table' : 'このテーブルを利用停止にする / Close table'}
-          </Button>
+            {status === 'unavailable' ? 'テーブルを再開する' : 'このテーブルを利用停止にする'}
+          </button>
         )}
       </div>
     </Dialog>
