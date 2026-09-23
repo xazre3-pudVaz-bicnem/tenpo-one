@@ -73,3 +73,28 @@ describe('レジ用パスワード', () => {
     expect(verifyRegisterPassword('ABCD2345', 'こわれた値')).toBe(false);
   });
 });
+
+describe('レジ用パスワードを運営が見る（暗号化して保存）', () => {
+  it('暗号化して戻せる。DBの中身を見ても読めない', async () => {
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-service-role-key';
+    const { encryptRegisterPassword, decryptRegisterPassword } = await import('@/lib/register-password');
+    const enc = encryptRegisterPassword('ABCD2345');
+    expect(enc).toBeTruthy();
+    expect(enc).not.toContain('ABCD2345');
+    expect(enc!.startsWith('v1.')).toBe(true);
+    expect(decryptRegisterPassword(enc)).toBe('ABCD2345');
+    // 同じパスワードでも毎回ちがう暗号文になる
+    expect(encryptRegisterPassword('ABCD2345')).not.toBe(enc);
+  });
+
+  it('こわれた値・鍵ちがいは null（画面では「再発行してください」）', async () => {
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-service-role-key';
+    const { encryptRegisterPassword, decryptRegisterPassword } = await import('@/lib/register-password');
+    const enc = encryptRegisterPassword('ABCD2345')!;
+    expect(decryptRegisterPassword(null)).toBeNull();
+    expect(decryptRegisterPassword('こわれた値')).toBeNull();
+    expect(decryptRegisterPassword(enc.replace('v1.', 'v9.'))).toBeNull();
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'another-key';
+    expect(decryptRegisterPassword(enc)).toBeNull();
+  });
+});

@@ -18,7 +18,7 @@ import { TenantHardware } from '@/components/admin/tenant-hardware';
 import { TenantSupportNotes } from '@/components/admin/tenant-support-notes';
 import { TenantAccessPolicy } from '@/components/admin/tenant-access-policy';
 import { policyFrom } from '@/lib/store-access';
-import { saveStoreAccessPolicy, revokeRegisterDevice, reissueRegisterPassword } from '../actions';
+import { saveStoreAccessPolicy, revokeRegisterDevice, reissueRegisterPassword, revealRegisterPassword } from '../actions';
 
 export const metadata: Metadata = { title: '店舗導入管理' };
 
@@ -202,6 +202,7 @@ export default async function TenantDetailPage({ params }: { params: Promise<{ s
             saveAction={saveStoreAccessPolicy}
             revokeAction={revokeRegisterDevice}
             reissueAction={reissueRegisterPassword}
+            revealAction={revealRegisterPassword}
           />
         </CardContent>
       </Card>

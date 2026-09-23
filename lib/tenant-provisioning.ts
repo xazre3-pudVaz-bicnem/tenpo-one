@@ -1,7 +1,12 @@
 import 'server-only';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { generateOrgCode } from '@/lib/org-code';
-import { generateRegisterPassword, hashRegisterPassword } from '@/lib/register-password';
+import {
+  decryptRegisterPassword,
+  encryptRegisterPassword,
+  generateRegisterPassword,
+  hashRegisterPassword,
+} from '@/lib/register-password';
 import {
   DEFAULT_HANDY_LIMIT,
   DEFAULT_REGISTER_LIMIT,
@@ -82,6 +87,7 @@ export async function setupStoreContract(admin: Admin, input: StoreContractInput
       store_id: input.storeId,
       organization_id: input.organizationId,
       password_hash: hashRegisterPassword(registerPassword),
+      password_enc: encryptRegisterPassword(registerPassword),
       updated_at: new Date().toISOString(),
       updated_by: input.updatedBy ?? null,
     },
@@ -96,6 +102,27 @@ export async function setupStoreContract(admin: Admin, input: StoreContractInput
  * レジ用パスワードを作り直す。
  * 出ているレジのログイン状態は全部切る（新しいパスワードで入り直してもらう）。
  */
+/**
+ * 今のレジ用パスワードを運営が見る。
+ * 暗号文が無い・鍵が変わって読めないときは null（画面では「再発行してください」と出す）。
+ */
+export async function readStoreRegisterPassword(
+  admin: Admin,
+  storeId: string
+): Promise<{ password: string | null; updatedAt: string | null; exists: boolean }> {
+  const { data } = await admin
+    .from('store_register_credentials')
+    .select('password_enc, updated_at')
+    .eq('store_id', storeId)
+    .maybeSingle();
+  if (!data) return { password: null, updatedAt: null, exists: false };
+  return {
+    password: decryptRegisterPassword(data.password_enc as string | null),
+    updatedAt: (data.updated_at as string | null) ?? null,
+    exists: true,
+  };
+}
+
 export async function resetStoreRegisterPassword(
   admin: Admin,
   input: { organizationId: string; storeId: string; updatedBy?: string | null }
@@ -112,6 +139,7 @@ export async function resetStoreRegisterPassword(
       store_id: input.storeId,
       organization_id: input.organizationId,
       password_hash: hashRegisterPassword(password),
+      password_enc: encryptRegisterPassword(password),
       updated_at: new Date().toISOString(),
       updated_by: input.updatedBy ?? null,
     },

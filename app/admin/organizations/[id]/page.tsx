@@ -12,6 +12,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { TableWrap, Table, THead, TBody, Tr, Th, Td } from '@/components/ui/table';
 import { EmptyState } from '@/components/ui/state';
 import { CreateStoreDialog } from '@/components/admin/create-store-dialog';
+import { StoreRegisterPassword } from '@/components/admin/store-register-password';
+import { revealRegisterPassword, reissueRegisterPassword } from '@/app/admin/tenants/actions';
 import { AddOrgMemberDialog } from '@/components/admin/add-org-member-dialog';
 import { FeatureFlagMatrix } from '@/components/admin/feature-flag-matrix';
 import { OrgPlanForm } from '@/components/admin/org-plan-form';
@@ -77,7 +79,7 @@ export default async function OrganizationDetailPage({ params }: { params: Promi
       admin
         .from('organizations')
         .select(
-          'id, name, name_kana, plan_code, status, is_demo, created_at, postal_code, address, phone, contact_email, contact_phone, billing_info, onboarding'
+          'id, name, name_kana, plan_code, status, is_demo, created_at, postal_code, address, phone, contact_email, contact_phone, billing_info, onboarding, org_code'
         )
         .eq('id', id)
         .maybeSingle(),
@@ -230,8 +232,15 @@ export default async function OrganizationDetailPage({ params }: { params: Promi
           </Card>
 
           <Card>
-            <CardHeader className="flex items-center justify-between gap-2">
-              <CardTitle>店舗一覧</CardTitle>
+            <CardHeader className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <CardTitle>店舗一覧</CardTitle>
+                <p className="mt-1 text-xs text-gray-500">
+                  レジ（iPad）のログイン：企業番号{' '}
+                  <span className="font-mono text-sm text-navy">{(org.org_code as string | null) ?? '（未発行）'}</span>
+                  {' ＋ '}店舗ごとのレジ用パスワード
+                </p>
+              </div>
               <CreateStoreDialog organizationId={org.id} />
             </CardHeader>
             <CardContent className="p-0">
@@ -244,6 +253,7 @@ export default async function OrganizationDetailPage({ params }: { params: Promi
                       <Tr>
                         <Th>店舗名</Th>
                         <Th>状態</Th>
+                        <Th>レジ用パスワード</Th>
                         <Th>オンライン予約</Th>
                         <Th>作成日</Th>
                       </Tr>
@@ -261,6 +271,14 @@ export default async function OrganizationDetailPage({ params }: { params: Promi
                             </Td>
                             <Td>
                               <Badge tone={meta.tone}>{meta.label}</Badge>
+                            </Td>
+                            <Td>
+                              <StoreRegisterPassword
+                                storeId={s.id as string}
+                                compact
+                                revealAction={revealRegisterPassword}
+                                reissueAction={reissueRegisterPassword}
+                              />
                             </Td>
                             <Td>
                               <Badge tone={s.booking_enabled ? 'success' : 'gray'}>

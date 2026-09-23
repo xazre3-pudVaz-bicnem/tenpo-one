@@ -22,7 +22,12 @@ import {
 } from '@/lib/tenant-onboarding';
 import { computeStoreSignals } from './signals';
 import { DEFAULT_HANDY_LIMIT, DEFAULT_REGISTER_LIMIT, MAX_ALLOWED_NETWORKS, limitFrom, toNetwork } from '@/lib/store-access';
-import { assignOrgCode, resetStoreRegisterPassword, setupStoreContract } from '@/lib/tenant-provisioning';
+import {
+  assignOrgCode,
+  readStoreRegisterPassword,
+  resetStoreRegisterPassword,
+  setupStoreContract,
+} from '@/lib/tenant-provisioning';
 
 function randomPassword() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!#$%';
@@ -560,4 +565,31 @@ export async function reissueRegisterPassword(input: { storeId: string }): Promi
   } catch (e) {
     return { error: e instanceof Error ? e.message : '作り直しに失敗しました' };
   }
+}
+
+/**
+ * 今のレジ用パスワードを運営が見る（運営だけ）。
+ * 店から「忘れた」と電話が来たときに、営業を止めずに答えるための機能。
+ * 誰がいつ見たかは監査ログに残す。
+ */
+export async function revealRegisterPassword(input: { storeId: string }): Promise<{
+  password?: string;
+  updatedAt?: string | null;
+  notSet?: boolean;
+  error?: string;
+}> {
+  await requireCypressAdmin();
+  const admin = createAdminClient();
+  const { data: store } = await admin.from('stores').select('id, organization_id').eq('id', input.storeId).maybeSingle();
+  if (!store) return { error: '店舗が見つかりません' };
+
+  const found = await readStoreRegisterPassword(admin, input.storeId);
+  if (!found.exists) return { notSet: true };
+  if (!found.password) {
+    return { error: 'このパスワードは表示できません（古い発行分です）。「パスワードを作り直す」で新しく発行してください' };
+  }
+  await audit(store.organization_id as string, input.storeId, 'admin.register_password_reveal', 'store_register_credentials', input.storeId, {
+    viewed: true,
+  });
+  return { password: found.password, updatedAt: found.updatedAt };
 }

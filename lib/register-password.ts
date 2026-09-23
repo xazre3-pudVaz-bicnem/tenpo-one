@@ -1,4 +1,4 @@
-import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
+import { createCipheriv, createDecipheriv, hkdfSync, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 
 /**
  * レジ（iPad）のログイン用パスワード。
@@ -49,4 +49,43 @@ export function verifyRegisterPassword(password: string, stored: string | null |
     return false;
   }
   return timingSafeEqual(expected, actual);
+}
+
+/* ---------------------------------------------------------------- 運営が見るための暗号化 */
+
+/**
+ * 暗号化の鍵。サーバーだけが持つ SUPABASE_SERVICE_ROLE_KEY から作る。
+ * 新しい環境変数を増やさずに済み、DB を覗いただけでは読めない。
+ * （サービスロールキーを入れ替えると復号できなくなる。そのときはパスワードを再発行する）
+ */
+function revealKey(): Buffer | null {
+  const secret = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!secret) return null;
+  return Buffer.from(hkdfSync('sha256', secret, 'tenpo-one/register-password', 'v1', 32));
+}
+
+/** 運営が画面で見るために、パスワードを暗号化して保存する */
+export function encryptRegisterPassword(password: string): string | null {
+  const key = revealKey();
+  if (!key) return null;
+  const iv = randomBytes(12);
+  const cipher = createCipheriv('aes-256-gcm', key, iv);
+  const body = Buffer.concat([cipher.update(password, 'utf8'), cipher.final()]);
+  return `v1.${iv.toString('base64url')}.${cipher.getAuthTag().toString('base64url')}.${body.toString('base64url')}`;
+}
+
+/** 暗号文を戻す。鍵が変わった・壊れている場合は null（画面には「再発行してください」と出す） */
+export function decryptRegisterPassword(enc: string | null | undefined): string | null {
+  if (!enc) return null;
+  const key = revealKey();
+  if (!key) return null;
+  const parts = enc.split('.');
+  if (parts.length !== 4 || parts[0] !== 'v1') return null;
+  try {
+    const decipher = createDecipheriv('aes-256-gcm', key, Buffer.from(parts[1], 'base64url'));
+    decipher.setAuthTag(Buffer.from(parts[2], 'base64url'));
+    return Buffer.concat([decipher.update(Buffer.from(parts[3], 'base64url')), decipher.final()]).toString('utf8');
+  } catch {
+    return null;
+  }
 }
