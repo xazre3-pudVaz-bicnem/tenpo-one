@@ -3,6 +3,7 @@ import { headers } from 'next/headers';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
 import { currentRequestIp } from '@/lib/handy-device-server';
+import { networkKey } from '@/lib/handy-pairing';
 import { isAllowedNetwork, isRestricted, policyFrom } from '@/lib/store-access';
 import { verifyRegisterPassword } from '@/lib/register-password';
 import { isOrgCode, normalizeOrgCode } from '@/lib/org-code';
@@ -36,7 +37,8 @@ export async function loginRegisterDevice(input: {
 }): Promise<RegisterLoginOutcome> {
   const code = normalizeOrgCode(input.orgCode);
   if (!isOrgCode(code)) return { error: REGISTER_LOGIN_MESSAGE.badFormat };
-  if (!input.password) return { error: REGISTER_LOGIN_MESSAGE.badPassword };
+  const password = input.password.trim();
+  if (!password) return { error: REGISTER_LOGIN_MESSAGE.badPassword };
 
   const admin = createAdminClient();
   const { data: org } = await admin
@@ -75,12 +77,16 @@ export async function loginRegisterDevice(input: {
       storeId: s.id as string,
       storeName: (s.name as string) ?? '',
       onNetwork,
-      passwordOk: onNetwork && verifyRegisterPassword(input.password, hashByStore.get(s.id as string) ?? null),
+      passwordOk: onNetwork && verifyRegisterPassword(password, hashByStore.get(s.id as string) ?? null),
     };
   });
 
   const decision = decideRegisterLogin(candidates, input.storeId ?? null);
-  if (decision.kind === 'no_network') return { error: REGISTER_LOGIN_MESSAGE.noNetwork };
+  if (decision.kind === 'no_network') {
+    return {
+      error: `${REGISTER_LOGIN_MESSAGE.noNetwork}（この端末の回線: ${networkKey(ip)}）。${REGISTER_LOGIN_MESSAGE.noNetworkHint}`,
+    };
+  }
   if (decision.kind === 'bad_password') return { error: REGISTER_LOGIN_MESSAGE.badPassword };
   if (decision.kind === 'choose') return { choose: decision.stores };
 
