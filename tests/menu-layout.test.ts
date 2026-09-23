@@ -99,3 +99,15 @@ describe('在庫設定の位置（2026-09-23 要望）', () => {
     expect(purchasing?.items.map((i) => i.href)).not.toContain('/app/inventory');
   });
 });
+
+describe('同じものを2か所に出さない（2026-09-23 要望）', () => {
+  it('メニュー・集計の中で重複しない', () => {
+    const l = menuLayout('org_owner', undefined, { keepActions: true });
+    const all = [
+      ...l.tiles.map((t) => t.href),
+      ...l.main.map((i) => i.href),
+      ...l.summaryGroups.flatMap((g) => g.items).map((i) => i.href),
+    ];
+    expect(all.filter((h, i) => all.indexOf(h) !== i)).toEqual([]);
+  });
+});
