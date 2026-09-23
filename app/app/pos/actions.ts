@@ -848,6 +848,30 @@ export async function cancelEmptyOrder(orderId: string, reason: string): Promise
  * 伝票・厨房伝票・フロア表示の人数を後から直せるようにする。
  * 金額計算には人数を使っていないため、この操作で合計金額は変わらない。
  */
+/**
+ * この伝票を厨房へ印字するか（注文画面のスイッチ・2026-09-24 要望）。
+ * 厨房伝票はプリンタ側のポーリングで自動的に出るため、false の間は
+ * claim_kitchen_items の対象から外れる（migration 00076）。
+ * true に戻すと、それまでに入れた品目もまとめて印字される。
+ */
+export async function setKitchenPrint(orderId: string, enabled: boolean): Promise<void> {
+  const ctx = await requirePermission('pos.order');
+  const supabase = await createClient();
+  await loadOpenOrder(supabase, ctx, orderId);
+  const { error } = await supabase
+    .from('orders')
+    .update({ kitchen_print_enabled: enabled, updated_by: ctx.userId })
+    .eq('id', orderId);
+  if (error) {
+    // 列が無い環境（migration 未適用）では機能を無効として扱う
+    if (isMissingColumnError(error.message, 'kitchen_print_enabled')) {
+      throw new Error('厨房へ印字の切り替えはまだ有効になっていません（DB更新待ち）');
+    }
+    throw new Error(error.message);
+  }
+  revalidatePath('/app/pos');
+}
+
 export async function setGuestCount(orderId: string, guestCount: number): Promise<void> {
   const ctx = await requirePermission('pos.order');
   if (!Number.isInteger(guestCount) || guestCount < 1 || guestCount > 999) {

@@ -72,6 +72,8 @@ export interface PosOrder {
   serviceCharge: number;
   total: number;
   tableId: string | null;
+  /** 厨房へ印字するか（注文画面のスイッチ。migration 00076） */
+  kitchenPrintEnabled?: boolean;
 }
 
 export interface PosOrderItem {
@@ -163,6 +165,7 @@ export function PosScreen({
   setDiscountAction,
   checkoutAction,
   sendOrderAction,
+  setKitchenPrintAction,
   splitOrderAction,
   mergeOrdersAction,
   moveTableAction,
@@ -213,6 +216,7 @@ export function PosScreen({
   checkoutAction: (orderId: string, payments: CheckoutPayment[]) => Promise<CheckoutOutcome>;
   /** 未送信の品目をまとめて厨房へ送る */
   sendOrderAction?: (orderId: string) => Promise<SendOrderResult>;
+  setKitchenPrintAction?: (orderId: string, enabled: boolean) => Promise<void>;
   splitOrderAction: (orderId: string, moves: SplitMove[]) => Promise<{ newOrderId: string }>;
   mergeOrdersAction: (targetOrderId: string, sourceOrderId: string) => Promise<void>;
   moveTableAction: (orderId: string, newTableId: string) => Promise<{ tableName: string }>;
@@ -466,6 +470,20 @@ export function PosScreen({
   };
 
   /** カテゴリの並び（おすすめ・売れ筋 → 各カテゴリ）。中央の縦リストと、幅が狭いときの横並びで同じものを使う */
+  const kitchenPrintOn = order.kitchenPrintEnabled !== false;
+  const toggleKitchenPrint = () => {
+    if (!setKitchenPrintAction) return;
+    startTransition(async () => {
+      try {
+        await setKitchenPrintAction(order.id, !kitchenPrintOn);
+        toast(!kitchenPrintOn ? '厨房へ印字する に切り替えました' : '厨房へ印字しない に切り替えました', 'success');
+        router.refresh();
+      } catch (e) {
+        toast(e instanceof Error ? e.message : '切り替えに失敗しました', 'error');
+      }
+    });
+  };
+
   const categoryTabs = [
     { id: FAVORITES_TAB, name: 'おすすめ', en: 'Picks', color: null as string | null },
     { id: BESTSELLERS_TAB, name: '売れ筋', en: 'Popular', color: null as string | null },
@@ -619,6 +637,23 @@ export function PosScreen({
             <span className="text-[15px] font-bold text-ink-2">合計（税込）</span>
             <span className="text-3xl font-extrabold tabular-nums text-royal">{yen(order.total)}</span>
           </div>
+          {setKitchenPrintAction && (
+            <button
+              type="button"
+              role="switch"
+              aria-checked={kitchenPrintOn}
+              disabled={pending}
+              onClick={toggleKitchenPrint}
+              className="mt-2.5 flex w-full items-center gap-2.5 rounded-xl border border-line px-3 py-2.5 text-left disabled:opacity-50"
+            >
+              <span className="text-[14px] font-bold text-ink-2">キッチンへ印字</span>
+              <span className={cn('ml-auto text-[13px] font-bold', kitchenPrintOn ? 'text-ink-3' : 'text-royal')}>しない</span>
+              <span className={cn('relative h-7 w-[52px] shrink-0 rounded-full transition-colors', kitchenPrintOn ? 'bg-iris' : 'bg-gray-300')}>
+                <span className={cn('absolute top-0.5 h-6 w-6 rounded-full bg-white transition-all', kitchenPrintOn ? 'left-[26px]' : 'left-0.5')} />
+              </span>
+              <span className={cn('text-[13px] font-bold', kitchenPrintOn ? 'text-royal' : 'text-ink-3')}>する</span>
+            </button>
+          )}
           {canCheckout && (
             <div className="mt-2.5 flex flex-wrap gap-1.5">
               <button type="button" disabled={items.length === 0} onClick={() => setSplitOpen(true)} className={cn(metaChip, 'disabled:opacity-40')}>
