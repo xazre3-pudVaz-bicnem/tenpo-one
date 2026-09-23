@@ -69,7 +69,7 @@ type Tab = MenuBookTab;
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'categories', label: 'カテゴリの順番・出し方' },
-  { id: 'pages', label: 'ページ（タブのまとめ方）' },
+  { id: 'pages', label: 'ページ（上のタブ）' },
   { id: 'items', label: '商品の順番・入力' },
   { id: 'plans', label: 'プランで出すカテゴリ' },
   { id: 'lunch', label: 'ランチの時間' },
@@ -225,9 +225,9 @@ function PagesTab({
 }) {
   const router = useRouter();
   const { toast } = useToast();
-  const [pages, setPages] = useState<MenuPageDef[]>(() =>
-    savedPages.length > 0 ? savedPages : STANDARD_MENU_PAGES.map((p) => ({ key: p.key, name: p.name }))
-  );
+  // 設定していない店舗は標準の8タブから始める（これは「未保存の変更」ではない）
+  const basePages = savedPages.length > 0 ? savedPages : STANDARD_MENU_PAGES.map((p) => ({ key: p.key, name: p.name }));
+  const [pages, setPages] = useState<MenuPageDef[]>(basePages);
   const [map, setMap] = useState<Record<string, string>>(savedMap);
   const [pending, startTransition] = useTransition();
 
@@ -245,7 +245,7 @@ function PagesTab({
     countOf.set(key, (countOf.get(key) ?? 0) + 1);
   }
 
-  const initial = JSON.stringify({ pages: savedPages, map: savedMap });
+  const initial = JSON.stringify({ pages: basePages, map: savedMap });
   const dirty = JSON.stringify({ pages, map }) !== initial;
 
   const movePage = (from: number, to: number) => setPages((list) => moveInList(list, from, to));
@@ -383,7 +383,7 @@ function PagesTab({
         pending={pending}
         onSave={save}
         onReset={() => {
-          setPages(savedPages.length > 0 ? savedPages : STANDARD_MENU_PAGES.map((p) => ({ key: p.key, name: p.name })));
+          setPages(basePages);
           setMap(savedMap);
         }}
       />
