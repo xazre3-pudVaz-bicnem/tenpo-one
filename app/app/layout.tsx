@@ -101,6 +101,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             groups={groups}
             alertCount={unreadCount ?? 0}
             currentStoreId={ctx.currentStore?.id ?? null}
+            iconFirst={isRegi}
           />
         )}
         <div className={posFullscreen ? undefined : 'lg:pl-[250px]'}>
