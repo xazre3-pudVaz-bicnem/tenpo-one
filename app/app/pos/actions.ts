@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { assertStoreAccess, requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { isMissingColumnError } from '@/lib/schema-compat';
-import { enqueueReceiptPrint } from './print-actions';
+import { enqueueCancelSlipPrint, enqueueReceiptPrint } from './print-actions';
 import { applicableTaxRate } from '@/lib/tax';
 import { validateCoupon, COUPON_REJECT_LABELS, type CouponLike } from '@/lib/coupons';
 import { resolveOptionSelection } from '@/lib/menu-options';
@@ -365,6 +365,22 @@ export async function cancelItem(orderId: string, orderItemId: string, reason: s
   });
 
   await supabase.rpc('recalc_order_totals', { p_order_id: order.id });
+
+  // 一度キッチンへ出した品を取り消したときは、レジにも「取消」の紙を出す（2026-09-24 店舗要望）。
+  // 厨房ぶんは claim_kitchen_items のマイナス差分で自動的に出る。印刷に失敗しても取消は成立させる。
+  if (line.kitchen_sent_at) {
+    try {
+      const modifiers = ((line.modifiers ?? []) as { name?: string }[])
+        .map((m) => m?.name)
+        .filter((n): n is string => !!n);
+      await enqueueCancelSlipPrint(orderId, [
+        { name: line.name, quantity: line.quantity, modifiers, memo: line.memo ?? null },
+      ]);
+    } catch (e) {
+      console.error('[pos.cancelItem] cancel slip print failed:', e);
+    }
+  }
+
   revalidatePath(`/app/pos`);
 }
 
