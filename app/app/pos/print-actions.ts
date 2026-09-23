@@ -6,7 +6,11 @@ import { loadReceiptData } from '@/lib/receipts-loader';
 import { receiptToStarMarkup, ryoshushoToStarMarkup, orderSlipMarkup, drawerKickMarkup } from '@/lib/receipt-markup';
 import { receiptToStarPrnt, ryoshushoToStarPrnt, orderSlipStarPrnt, drawerKickStarPrnt } from '@/lib/starprnt';
 import { normalizeFloorIds, pickDefaultPrinter, pickPrinterForFloor } from '@/lib/printer-floors';
-import { receiptToEposXml, ryoshushoToEposXml, orderSlipEposXml, drawerKickEpos } from '@/lib/epos-print';
+import { receiptToEposXml, ryoshushoToEposXml, orderSlipEposXml, drawerKickEpos, kitchenTicketsEpos, eposCols } from '@/lib/epos-print';
+import { layoutKitchenTicket, type KitchenTicket } from '@/lib/kitchen-ticket';
+import { kitchenTicketsMarkup } from '@/lib/receipt-markup';
+import { kitchenTicketsStarPrnt } from '@/lib/starprnt';
+import { STAR_WIDTH_OPTIONS } from '@/lib/receipt-layout';
 
 /**
  * ジョブに載せる既定の形式。実際にどの形式で印字されるかはプリンタが
@@ -14,6 +18,8 @@ import { receiptToEposXml, ryoshushoToEposXml, orderSlipEposXml, drawerKickEpos 
  * この値は表示・互換のための「第一希望」に過ぎない。
  */
 const RECEIPT_CONTENT_TYPE = 'text/vnd.star.markup';
+/** 厨房伝票と同じ組み方で出す紙（取消伝票）の形式 */
+const MARKUP_CONTENT_TYPE = 'text/vnd.star.markup';
 
 export interface EnqueueResult {
   ok: boolean;
@@ -274,5 +280,79 @@ export async function enqueueDrawerKick(storeId: string): Promise<EnqueueResult>
     created_by: ctx.userId,
   });
   if (error) return { ok: false, error: `ドロア開放ジョブの登録に失敗しました: ${error.message}` };
+  return { ok: true, queued: 1 };
+}
+
+/** 取消の紙に載せる1品 */
+export interface CancelSlipLine {
+  name: string;
+  nameEn?: string | null;
+  /** 取り消した数（正の数で渡す） */
+  quantity: number;
+  modifiers?: string[];
+  memo?: string | null;
+}
+
+/**
+ * 一度キッチンへ出した品を取り消したときに、レジのレシート機へ「取消」の紙を出す（2026-09-24 店舗要望）。
+ * 厨房ぶんは claim_kitchen_items のマイナス差分で今までどおり出るので、ここはレジ側だけ。
+ * 印刷できなくても取消そのものは成立させる（呼び出し側で握りつぶす）。
+ */
+export async function enqueueCancelSlipPrint(orderId: string, lines: CancelSlipLine[]): Promise<EnqueueResult> {
+  const ctx = await requirePermission('pos.order');
+  if (lines.length === 0) return { ok: false, error: '取消した品がありません' };
+  const supabase = await createClient();
+
+  const { data: order } = await supabase
+    .from('orders')
+    .select('id, organization_id, store_id, order_no, guest_count, clerk_name, restaurant_tables(name)')
+    .eq('id', orderId)
+    .single();
+  if (!order) return { ok: false, error: '注文が見つかりません' };
+  if (!assertStore(ctx, order.store_id)) return { ok: false, error: 'この店舗へのアクセス権がありません' };
+
+  const printer = await getCloudPrntPrinter(supabase, order.store_id);
+  if (!printer) return { ok: false, error: 'レシート用のCloudPRNT対応プリンタが未設定です' };
+
+  const table = order.restaurant_tables as unknown as { name: string } | null;
+  const ticket: KitchenTicket = {
+    orderId: order.id,
+    orderNo: String(order.order_no),
+    tableName: table?.name ?? null,
+    guestCount: order.guest_count ?? null,
+    clerkName: order.clerk_name ?? null,
+    lines: lines.map((l) => ({
+      name: l.name,
+      nameEn: l.nameEn ?? null,
+      modifiers: l.modifiers ?? [],
+      memo: l.memo ?? null,
+      // マイナス＝取消（厨房伝票と同じ書き方で「*** CANCEL / 取消 ***」が出る）
+      delta: -Math.abs(l.quantity),
+    })),
+  };
+
+  const printedAt = new Date().toLocaleTimeString('ja-JP', { timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit' });
+  const paperWidth = printer.paper_width_mm === 58 ? 58 : 80;
+  const common = { title: '取消 伝票', titleEn: 'CANCEL', printedAt, textSize: 'large' as const, language: 'both' as const };
+  const star = layoutKitchenTicket(ticket, { ...common, paperWidth, ...STAR_WIDTH_OPTIONS });
+  const epos = layoutKitchenTicket(ticket, { ...common, columns: eposCols(paperWidth) });
+
+  const { error } = await supabase.from('print_jobs').insert({
+    organization_id: order.organization_id,
+    store_id: order.store_id,
+    printer_config_id: printer.id,
+    job_type: 'cancel_slip',
+    order_id: orderId,
+    target: 'cloudprnt',
+    content_type: MARKUP_CONTENT_TYPE,
+    payload: {
+      body: kitchenTicketsMarkup([star]),
+      starprnt: kitchenTicketsStarPrnt([star]).toString('base64'),
+      epos: kitchenTicketsEpos([epos]),
+    },
+    status: 'queued',
+    created_by: ctx.userId,
+  });
+  if (error) return { ok: false, error: `印刷ジョブの登録に失敗しました: ${error.message}` };
   return { ok: true, queued: 1 };
 }

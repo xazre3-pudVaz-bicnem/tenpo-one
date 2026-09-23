@@ -593,7 +593,8 @@ export function PosScreen({
                         if (e.key === 'Enter') e.currentTarget.blur();
                       }}
                       aria-label={`${it.name}の数量`}
-                      className="h-11 w-11 border-0 text-center text-base font-bold tabular-nums text-navy focus:outline-none"
+                      // ブラウザの上下の矢印は出さない（数は −／＋ で変える。2026-09-24 要望）
+                      className="h-11 w-11 border-0 text-center text-base font-bold tabular-nums text-navy focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                     />
                     <button
                       type="button"

@@ -9,7 +9,7 @@ import type { Role } from '@/lib/permissions';
 
 /** この一覧には出さず、それぞれの画面の中に置いたもの */
 const MOVED_OUT_OF_MENU = new Set([
-  '/app/pos', // → テーブル一覧の「テイクアウト」ボタン
+  '/app/pos', // → ホームの「テイクアウト」とテーブル一覧から開く
   '/app/handy', // → 設定 > iPhoneハンディ
   '/app/pos/settings', // → 設定 > デバイス管理
   '/app/scan', // → 入金出金・仕入・経費 の中から撮る
@@ -69,7 +69,7 @@ export function menuLayout(
       // ドロアオープン等の操作行は左メニューだけ（メニュー一覧の画面からは押せない）
       items: g.items.filter(
         (i) =>
-          (options?.keepActions || !i.action) &&
+          (options?.keepActions || i.action !== 'drawer') &&
           !MOVED_OUT_OF_MENU.has(i.href) &&
           !MOVED_IN_LIST.includes(i.href)
       ),
