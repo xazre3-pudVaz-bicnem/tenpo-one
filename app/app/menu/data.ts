@@ -43,7 +43,12 @@ export interface MenuLayout {
   summaryGroups: NavGroup[];
 }
 
-export function menuLayout(role: Role | null, disabledFeatures?: ReadonlySet<string>): MenuLayout {
+export function menuLayout(
+  role: Role | null,
+  disabledFeatures?: ReadonlySet<string>,
+  /** ドロアオープンなどの操作行を残すか（左メニューは残す。メニュー一覧の画面では押せないので外す） */
+  options?: { keepActions?: boolean }
+): MenuLayout {
   const allGroups = visibleNavGroups(role, disabledFeatures);
   const byHref = new Map(allGroups.flatMap((g) => g.items).map((i) => [i.href, i]));
 
@@ -55,8 +60,11 @@ export function menuLayout(role: Role | null, disabledFeatures?: ReadonlySet<str
   const trimmed = allGroups
     .map((g) => ({
       ...g,
-      // ドロアオープン等の操作行はレジ端末の左メニューでのみ扱う
-      items: g.items.filter((i) => !i.action && !MOVED_OUT_OF_MENU.has(i.href) && !TOP_ROW.includes(i.href)),
+      // ドロアオープン等の操作行は左メニューだけ（メニュー一覧の画面からは押せない）
+      items: g.items.filter(
+        (i) =>
+          (options?.keepActions || !i.action) && !MOVED_OUT_OF_MENU.has(i.href) && !TOP_ROW.includes(i.href)
+      ),
     }))
     .filter((g) => g.items.length > 0);
 
