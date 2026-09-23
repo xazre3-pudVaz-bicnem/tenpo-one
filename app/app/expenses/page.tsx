@@ -110,16 +110,6 @@ export default async function ExpensesPage({
         description={store ? `${store.name}を中心に表示しています` : '所属店舗がありません'}
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            {/* メニュー一覧から「スキャン」を外したので、ここから撮って保存できるようにする（2026-09-23 要望） */}
-            {can(ctx.role, 'documents.write') && (
-              <Link
-                href="/app/scan"
-                className="inline-flex h-10 items-center gap-2 rounded-lg border-2 border-dashed border-iris bg-iris-soft px-4 text-sm font-bold text-royal hover:bg-lilac"
-              >
-                <Camera className="h-4 w-4" aria-hidden />
-                レシート・請求書を撮る
-              </Link>
-            )}
             {can(ctx.role, 'csv.export') && (
               <Link
                 href={`/app/expenses/export?from=${from}&to=${to}`}
@@ -137,6 +127,22 @@ export default async function ExpensesPage({
         <EmptyState title="所属店舗がありません" description="経費登録には店舗への割当が必要です。管理者に確認してください。" />
       ) : (
         <div className="space-y-5">
+          {/* メニュー一覧から「スキャン」を外したので、ここから撮って保存できるようにする（入出金と同じ形。2026-09-23 要望） */}
+          {can(ctx.role, 'documents.write') && (
+            <Link
+              href="/app/scan"
+              className="flex items-center gap-3 rounded-xl border-2 border-dashed border-iris bg-iris-soft px-4 py-3.5 text-royal transition-colors hover:bg-lilac"
+            >
+              <Camera className="h-6 w-6 shrink-0" aria-hidden />
+              <span className="min-w-0">
+                <b className="block text-[15px]">
+                  レシートを撮って保存<span className="en-inline">Snap receipt</span>
+                </b>
+                <span className="block text-xs text-ink-3">仕入・経費のレシート・請求書を書類ボックスへ。その場で撮っても、あとから写真・PDFを選んで添付してもかまいません</span>
+              </span>
+            </Link>
+          )}
+
           {monthTotals.size > 0 && (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
               {[...monthTotals.entries()].map(([name, total]) => (
