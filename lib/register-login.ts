@@ -45,6 +45,8 @@ export const REGISTER_LOGIN_MESSAGE = {
   badFormat: '企業番号は6桁の数字です（例: 184203）',
   noNetwork:
     'この回線は、この会社の店舗として登録されていません。お店のWi-Fi・有線につないでから、もう一度お試しください',
+  /** iPhone/iPad は プライベートリレー を切らないと回線が変わってしまうので、端末の回線を出して気づけるようにする */
+  noNetworkHint: 'iPhone・iPad は「設定 > Apple ID > iCloud > プライベートリレー」と、Wi-Fi の「IPアドレスを追跡させない」を切ってください',
   badPassword: 'レジ用パスワードが正しくありません',
   noIp: '接続元が確認できませんでした。もう一度お試しください',
 } as const;
