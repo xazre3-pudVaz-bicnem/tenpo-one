@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { Download } from 'lucide-react';
+import { Camera, Download } from 'lucide-react';
 import { requireFeature } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { can, ROLE_LABELS } from '@/lib/permissions';
@@ -109,15 +109,27 @@ export default async function ExpensesPage({
         title="経費"
         description={store ? `${store.name}を中心に表示しています` : '所属店舗がありません'}
         actions={
-          can(ctx.role, 'csv.export') ? (
-            <Link
-              href={`/app/expenses/export?from=${from}&to=${to}`}
-              className="inline-flex h-10 items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 text-sm font-medium text-navy hover:bg-gray-50"
-            >
-              <Download className="h-4 w-4" />
-              経費CSV
-            </Link>
-          ) : undefined
+          <div className="flex flex-wrap items-center gap-2">
+            {/* メニュー一覧から「スキャン」を外したので、ここから撮って保存できるようにする（2026-09-23 要望） */}
+            {can(ctx.role, 'documents.write') && (
+              <Link
+                href="/app/scan"
+                className="inline-flex h-10 items-center gap-2 rounded-lg border-2 border-dashed border-iris bg-iris-soft px-4 text-sm font-bold text-royal hover:bg-lilac"
+              >
+                <Camera className="h-4 w-4" aria-hidden />
+                レシート・請求書を撮る
+              </Link>
+            )}
+            {can(ctx.role, 'csv.export') && (
+              <Link
+                href={`/app/expenses/export?from=${from}&to=${to}`}
+                className="inline-flex h-10 items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 text-sm font-medium text-navy hover:bg-gray-50"
+              >
+                <Download className="h-4 w-4" />
+                経費CSV
+              </Link>
+            )}
+          </div>
         }
       />
 
