@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { menuLayout, SUMMARY_ITEM } from '@/app/app/menu/data';
+import { NAV_GROUPS, NAV_TILES, MOBILE_NAV, TABLET_NAV } from '@/lib/nav';
 
 describe('menuLayout（iPad・スマホのメニュー一覧）', () => {
   const layout = menuLayout('org_owner');
@@ -37,5 +38,27 @@ describe('menuLayout（iPad・スマホのメニュー一覧）', () => {
     if (staff.summaryGroups.length === 0) {
       expect(staff.main.map((i) => i.href)).not.toContain(SUMMARY_ITEM.href);
     }
+  });
+});
+
+describe('左メニュー・下部ナビ（2026-09-23 要望）', () => {
+  it('即会計は左メニューに出さない（オーダー・会計の中のテイクアウトから）', () => {
+    const hrefs = NAV_GROUPS.flatMap((g) => g.items).map((i) => i.href);
+    expect(hrefs).not.toContain('/app/pos');
+    expect(NAV_TILES.map((t) => t.href)).toContain('/app/floor');
+    // テーブル一覧（/app/floor）を開くタイルは 即会計 の画面も選択中として扱う
+    expect(NAV_TILES.find((t) => t.href === '/app/floor')?.match).toContain('/app/pos');
+  });
+
+  it('レジ（iPad）の下部ナビはハンディを出さず、オーダー・会計を出す', () => {
+    const hrefs = TABLET_NAV.map((i) => i.href);
+    expect(hrefs).not.toContain('/app/handy');
+    expect(hrefs).toContain('/app/floor');
+    expect(hrefs).toContain('/app/menu');
+    expect(TABLET_NAV.length).toBeLessThanOrEqual(5);
+  });
+
+  it('スマホの下部ナビはハンディのまま', () => {
+    expect(MOBILE_NAV.map((i) => i.href)).toContain('/app/handy');
   });
 });

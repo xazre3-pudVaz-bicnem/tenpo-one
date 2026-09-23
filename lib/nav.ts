@@ -34,6 +34,7 @@ export interface NavTile {
 
 export const NAV_TILES: NavTile[] = [
   {
+    // 即会計（Quick pay）はこの中（テーブル一覧）の「テイクアウト」ボタンから。左メニューには出さない
     href: '/app/floor',
     label: 'オーダー・会計',
     en: 'Order & Pay',
@@ -60,7 +61,6 @@ export const NAV_GROUPS: NavGroup[] = [
     label: null,
     items: [
       { href: '/app/dashboard', label: 'ホーム', en: 'Home', icon: 'home', permission: 'dashboard.view' },
-      { href: '/app/pos', label: '即会計', en: 'Quick pay', icon: 'cash', permission: 'pos.order' },
       { href: '/app/handy', label: 'ハンディ', en: 'Handy', icon: 'monitor', permission: 'pos.order' },
       { href: '/app/orders', label: '伝票明細', en: 'Slips / Receipts', icon: 'receipt', permission: 'pos.order' },
       { href: '/app/cash', label: '入出金', en: 'Cash in / out', icon: 'wallet', permission: 'register.operate' },
@@ -217,6 +217,18 @@ export const MOBILE_NAV: NavItem[] = [
   { href: '/app/reservations', label: '店舗台帳', en: 'Reservation', icon: 'calendar', permission: 'reservations.view' },
   // ハンディ（スマホでの注文取り）。iPad向けのオーダー画面とは別に、片手で使える画面を出す
   { href: '/app/handy', label: 'ハンディ', en: 'Handy', icon: 'pos', permission: 'pos.order' },
+  { href: '/app/attendance', label: '勤怠', en: 'Attendance', icon: 'clock', permission: 'attendance.punch' },
+  { href: '/app/menu', label: 'メニュー', en: 'Menu', icon: 'more' },
+];
+
+/**
+ * レジ（iPad）下部ナビ（5項目まで）。
+ * ハンディはスマホ用なので出さず（設定 > iPhoneハンディ から開く）、代わりに オーダー・会計 を置く。
+ */
+export const TABLET_NAV: NavItem[] = [
+  { href: '/app/dashboard', label: 'ホーム', en: 'Home', icon: 'home', permission: 'dashboard.view' },
+  { href: '/app/floor', label: 'オーダー・会計', en: 'Order & Pay', icon: 'pos', permission: 'tables.operate' },
+  { href: '/app/reservations', label: '店舗台帳', en: 'Reservation', icon: 'calendar', permission: 'reservations.view' },
   { href: '/app/attendance', label: '勤怠', en: 'Attendance', icon: 'clock', permission: 'attendance.punch' },
   { href: '/app/menu', label: 'メニュー', en: 'Menu', icon: 'more' },
 ];

@@ -68,7 +68,7 @@ export function Sidebar({
 
   return (
     <aside
-      className="fixed top-[58px] bottom-0 left-0 z-30 hidden w-[250px] flex-col border-r border-line bg-white lg:flex"
+      className="fixed top-[58px] bottom-0 left-0 z-30 hidden w-[250px] flex-col border-r border-line bg-white lg:pointer-fine:flex"
       aria-label="メインナビゲーション"
     >
       <nav className="flex-1 overflow-y-auto">
