@@ -2,12 +2,11 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input, Label } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/components/ui/toast';
-import { MAX_ALLOWED_NETWORKS, type AllowedNetwork } from '@/lib/store-access';
+import type { AllowedNetwork } from '@/lib/store-access';
 import { StoreRegisterPassword } from '@/components/admin/store-register-password';
 
 export interface RegisterDeviceRow {
@@ -20,11 +19,12 @@ export interface RegisterDeviceRow {
 }
 
 /**
- * 契約時のアクセス制限（運営だけが設定）。
- * - お店の回線（IP）を入れると、レジ（iPad）とハンディはその回線からだけ使える
+ * 契約の内容（運営だけが設定）。
  * - レジ（iPad）とハンディの台数
- * - レジ用パスワード（企業番号と合わせてiPadのログインに使う。運営だけが作り直せる）
- * 回線を1つも入れない＝制限なし（今まで通り）。
+ * - レジ用パスワード（企業番号・店舗ユーザー名と合わせてレジのログインに使う。運営だけが作り直せる）
+ *
+ * お店の回線（IP）による制限は、現場の手間が大きいので画面から外している（2026-09-23）。
+ * 仕組み自体は残してあるので、必要になったらこの画面に戻すだけで使える。
  */
 export function TenantAccessPolicy({
   storeId,
@@ -73,12 +73,8 @@ export function TenantAccessPolicy({
 }) {
   const router = useRouter();
   const { toast } = useToast();
-  const [rows, setRows] = useState<{ ip: string; label: string }[]>(
-    networks.length > 0 ? networks.map((n) => ({ ip: n.key, label: n.label })) : [{ ip: '', label: '' }]
-  );
   const [limit, setLimit] = useState(String(registerLimit));
   const [handy, setHandy] = useState(String(handyLimit));
-  const [enforce, setEnforce] = useState(networkEnforced);
   const [memo, setMemo] = useState(note);
   const [pending, startTransition] = useTransition();
 
@@ -86,15 +82,16 @@ export function TenantAccessPolicy({
     startTransition(async () => {
       const r = await saveAction({
         storeId,
-        ips: rows.filter((x) => x.ip.trim()),
+        // 回線（IP）の制限はいま使っていない。保存時に今の値をそのまま送る
+        ips: networks.map((n) => ({ ip: n.key, label: n.label })),
         registerLimit: Number(limit) || 0,
         handyLimit: Number(handy) || 0,
-        networkEnforced: enforce,
+        networkEnforced,
         note: memo,
       });
       if (r.error) toast(r.error, 'error');
       else {
-        toast('アクセス制限を保存しました');
+        toast('契約の内容を保存しました');
         router.refresh();
       }
     });
@@ -114,61 +111,9 @@ export function TenantAccessPolicy({
   return (
     <div className="space-y-5">
       <p className="text-xs leading-relaxed text-gray-500">
-        契約時に、この店舗の回線（グローバルIP）とレジ端末の台数を決めます。回線を入れると、レジ（/app/pos・フロア）とハンディは
-        その回線からだけ使えます（注文・厨房への送信・会計も止まります）。会計・帳票・設定などの画面は制限しません。
-        回線の制限は、下のチェックを入れて回線を1件以上登録したときだけ効きます。IPv6 は上位64ビットで判定します。
-        台数（レジ・ハンディ）の制限は、この画面で保存した店舗に効きます。
+        契約時に、レジ（iPad）とハンディの台数を決めます。レジは 企業番号 ＋ 店舗ユーザー名 ＋ レジ用パスワード で開きます。
+        台数の制限は、この画面で保存した店舗に効きます（0 にすると数えません）。
       </p>
-
-      <div className="space-y-2">
-        <Label>お店の回線（IPアドレス）</Label>
-        {rows.map((row, i) => (
-          <div key={i} className="flex flex-wrap items-center gap-2">
-            <Input
-              value={row.ip}
-              onChange={(e) => setRows((list) => list.map((x, j) => (j === i ? { ...x, ip: e.target.value } : x)))}
-              placeholder="203.0.113.5 または 2001:db8:1:2::"
-              className="w-64 font-mono"
-            />
-            <Input
-              value={row.label}
-              onChange={(e) => setRows((list) => list.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))}
-              placeholder="メモ（例: 店舗光回線）"
-              className="w-56"
-            />
-            <button
-              type="button"
-              aria-label="削除"
-              onClick={() => setRows((list) => (list.length === 1 ? [{ ip: '', label: '' }] : list.filter((_, j) => j !== i)))}
-              className="rounded p-1.5 text-gray-400 hover:bg-danger-soft hover:text-danger"
-            >
-              <Trash2 className="h-4 w-4" />
-            </button>
-          </div>
-        ))}
-        <Button
-          size="sm"
-          variant="secondary"
-          onClick={() => setRows((list) => (list.length >= MAX_ALLOWED_NETWORKS ? list : [...list, { ip: '', label: '' }]))}
-          disabled={pending}
-        >
-          <Plus className="h-4 w-4" />
-          回線を追加
-        </Button>
-        <label htmlFor="network-enforced" className="mt-3 flex items-center gap-2 text-sm font-medium text-navy">
-          <input
-            id="network-enforced"
-            type="checkbox"
-            checked={enforce}
-            onChange={(e) => setEnforce(e.target.checked)}
-            className="h-4 w-4 rounded border-gray-300 accent-primary"
-          />
-          この回線からだけ レジ・ハンディ を使えるようにする
-        </label>
-        <p className="text-xs text-gray-500">
-          OFF のあいだは、どの回線からでも 企業番号・店舗ユーザー名・レジ用パスワード で開けます（台数の制限は効きます）。
-        </p>
-      </div>
 
       <div className="flex flex-wrap items-end gap-4">
         <div>
@@ -199,7 +144,7 @@ export function TenantAccessPolicy({
           <span className="ml-2 text-xs text-gray-500">＋ 店舗ユーザー名 ＋ 店舗ごとのレジ用パスワード</span>
         </p>
         <p className="mt-1 text-xs text-gray-500">
-          お店の回線を登録している店舗は、その回線からしか入れません。パスワードは運営だけが作り直せます（店舗・オーナーは変更できません）。
+          パスワードは運営だけが作り直せます（店舗・オーナーは変更できません）。
         </p>
         <div className="mt-2">
           <StoreRegisterPassword

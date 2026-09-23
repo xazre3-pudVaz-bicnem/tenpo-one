@@ -33,10 +33,8 @@ export function CreateTenantTrigger({ organizations, plans }: { organizations: O
     environment: 'production' as (typeof ENVIRONMENTS)[number],
     ownerEmail: '',
     ownerName: '',
-    // 契約（お店の回線・台数）
+    // 契約（台数）
     storeUser: '',
-    storeIp: '',
-    storeIp2: '',
     registerLimit: '2',
     handyLimit: '2',
   });
@@ -54,8 +52,6 @@ export function CreateTenantTrigger({ organizations, plans }: { organizations: O
       ownerEmail: '',
       ownerName: '',
       storeUser: '',
-      storeIp: '',
-      storeIp2: '',
       registerLimit: '2',
       handyLimit: '2',
     }));
@@ -76,10 +72,6 @@ export function CreateTenantTrigger({ organizations, plans }: { organizations: O
           environment: form.environment,
           ownerEmail: form.ownerEmail || undefined,
           ownerName: form.ownerName || undefined,
-          storeIps: [
-            { ip: form.storeIp, label: 'お店の回線' },
-            { ip: form.storeIp2, label: 'お店の回線2' },
-          ].filter((x) => x.ip.trim()),
           storeUser: form.storeUser || undefined,
           registerLimit: Number(form.registerLimit) || 0,
           handyLimit: Number(form.handyLimit) || 0,
@@ -230,16 +222,6 @@ export function CreateTenantTrigger({ organizations, plans }: { organizations: O
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label htmlFor="ct-ip">お店のIPアドレス</Label>
-                  <Input id="ct-ip" value={form.storeIp} onChange={(e) => set('storeIp', e.target.value)} placeholder="203.0.113.5" className="font-mono" />
-                </div>
-                <div>
-                  <Label htmlFor="ct-ip2">お店のIPアドレス2（任意）</Label>
-                  <Input id="ct-ip2" value={form.storeIp2} onChange={(e) => set('storeIp2', e.target.value)} placeholder="2001:db8:1:2::" className="font-mono" />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
                   <Label htmlFor="ct-rlimit">レジ（iPad）の台数</Label>
                   <Input id="ct-rlimit" value={form.registerLimit} onChange={(e) => set('registerLimit', e.target.value.replace(/[^0-9]/g, ''))} className="text-right" inputMode="numeric" />
                 </div>
@@ -248,9 +230,7 @@ export function CreateTenantTrigger({ organizations, plans }: { organizations: O
                   <Input id="ct-hlimit" value={form.handyLimit} onChange={(e) => set('handyLimit', e.target.value.replace(/[^0-9]/g, ''))} className="text-right" inputMode="numeric" />
                 </div>
               </div>
-              <p className="text-xs text-gray-500">
-                IPを入れると、レジ・ハンディはその回線からだけ使えます（台数の制限もここから効きます）。入れない場合は制限なし（今まで通り）。
-              </p>
+              <p className="text-xs text-gray-500">レジは 企業番号 ＋ 店舗ユーザー名 ＋ レジ用パスワード で開きます。</p>
             </div>
             <div className="grid grid-cols-2 gap-3 border-t border-gray-100 pt-3">
               <div>

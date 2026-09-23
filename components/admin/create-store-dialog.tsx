@@ -13,7 +13,6 @@ export function CreateStoreDialog({ organizationId }: { organizationId: string }
   const [name, setName] = useState('');
   const [address, setAddress] = useState('');
   const [storeUser, setStoreUser] = useState('');
-  const [storeIp, setStoreIp] = useState('');
   const [registerLimit, setRegisterLimit] = useState('2');
   const [handyLimit, setHandyLimit] = useState('2');
   const [issued, setIssued] = useState<{ orgCode?: string; storeUser?: string; registerPassword?: string } | null>(null);
@@ -26,7 +25,6 @@ export function CreateStoreDialog({ organizationId }: { organizationId: string }
     setName('');
     setAddress('');
     setStoreUser('');
-    setStoreIp('');
     setRegisterLimit('2');
     setHandyLimit('2');
     setIssued(null);
@@ -43,7 +41,6 @@ export function CreateStoreDialog({ organizationId }: { organizationId: string }
           name,
           address,
           storeUser: storeUser || undefined,
-          storeIps: storeIp.trim() ? [{ ip: storeIp, label: 'お店の回線' }] : [],
           registerLimit: Number(registerLimit) || 0,
           handyLimit: Number(handyLimit) || 0,
         });
@@ -84,10 +81,6 @@ export function CreateStoreDialog({ organizationId }: { organizationId: string }
                 className="font-mono"
               />
             </div>
-            <div>
-              <Label htmlFor="new-store-ip">お店のIPアドレス</Label>
-              <Input id="new-store-ip" value={storeIp} onChange={(e) => setStoreIp(e.target.value)} placeholder="203.0.113.5" className="font-mono" />
-            </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label htmlFor="new-store-rlimit">レジ（iPad）の台数</Label>
@@ -98,9 +91,7 @@ export function CreateStoreDialog({ organizationId }: { organizationId: string }
                 <Input id="new-store-hlimit" value={handyLimit} onChange={(e) => setHandyLimit(e.target.value.replace(/[^0-9]/g, ''))} className="text-right" inputMode="numeric" />
               </div>
             </div>
-            <p className="text-xs text-gray-500">
-              IPを入れると、レジ・ハンディはその回線からだけ使えます（台数の制限もここから効きます）。入れない場合は制限なし。
-            </p>
+            <p className="text-xs text-gray-500">レジは 企業番号 ＋ 店舗ユーザー名 ＋ レジ用パスワード で開きます。</p>
           </div>
           {issued && (
             <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm">
