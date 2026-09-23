@@ -42,7 +42,47 @@ export interface PointBrand {
 export interface CheckoutPresets {
   discounts: DiscountPreset[];
   pointBrands: PointBrand[];
+  /** 支払方法ごとの内訳（クレジット→VISA・JCB…、QR→PayPay・楽天ペイ…） */
+  methodBrands: Record<string, PointBrand[]>;
 }
+
+/** 内訳を選ばせる支払方法 */
+export const BRANDED_METHODS = ['credit', 'qr', 'emoney'] as const;
+export type BrandedMethod = (typeof BRANDED_METHODS)[number];
+
+export function isBrandedMethod(value: string): value is BrandedMethod {
+  return (BRANDED_METHODS as readonly string[]).includes(value);
+}
+
+/** 設定していない店舗に出す内訳（店舗要望で挙がったもの） */
+export const DEFAULT_METHOD_BRANDS: Record<BrandedMethod, readonly PointBrand[]> = {
+  credit: [
+    { key: 'visa', name: 'VISA' },
+    { key: 'master', name: 'Mastercard' },
+    { key: 'jcb', name: 'JCB' },
+    { key: 'amex', name: 'AMEX' },
+    { key: 'diners', name: 'Diners' },
+    { key: 'unionpay', name: '銀聯' },
+  ],
+  qr: [
+    { key: 'paypay', name: 'PayPay' },
+    { key: 'rakutenpay', name: '楽天ペイ' },
+    { key: 'dbarai', name: 'd払い' },
+    { key: 'aupay', name: 'au PAY' },
+    { key: 'alipay', name: 'Alipay' },
+    { key: 'wechatpay', name: 'WeChat Pay' },
+    { key: 'merpay', name: 'メルペイ' },
+    { key: 'linepay', name: 'LINE Pay' },
+  ],
+  emoney: [
+    { key: 'transit', name: '交通系IC' },
+    { key: 'id', name: 'iD' },
+    { key: 'quicpay', name: 'QUICPay' },
+    { key: 'edy', name: '楽天Edy' },
+    { key: 'nanaco', name: 'nanaco' },
+    { key: 'waon', name: 'WAON' },
+  ],
+};
 
 /** 記号の形（保存・URL で使うので英数字とハイフンだけ） */
 export const PRESET_KEY_RE = /^[a-z0-9][a-z0-9-]{0,23}$/;
@@ -63,7 +103,14 @@ export const DEFAULT_DISCOUNT_PRESETS: readonly DiscountPreset[] = [
 ];
 
 export function emptyCheckoutPresets(): CheckoutPresets {
-  return { discounts: [], pointBrands: [] };
+  return { discounts: [], pointBrands: [], methodBrands: {} };
+}
+
+/** 画面に出す支払方法の内訳（設定が空なら既定） */
+export function methodBrandsOf(presets: CheckoutPresets, method: string): PointBrand[] {
+  const set = presets.methodBrands[method];
+  if (set && set.length > 0) return set;
+  return isBrandedMethod(method) ? DEFAULT_METHOD_BRANDS[method].map((b) => ({ ...b })) : [];
 }
 
 /** 画面に出す値引きの選択肢（設定が空なら既定） */
@@ -126,12 +173,29 @@ export function checkoutPresetsFrom(settings: unknown): CheckoutPresets {
     }
   }
 
+  if (isRecord(root.methodBrands)) {
+    for (const [method, list] of Object.entries(root.methodBrands)) {
+      if (!isBrandedMethod(method) || !Array.isArray(list)) continue;
+      const seen = new Set<string>();
+      const brands: PointBrand[] = [];
+      for (const b of list) {
+        if (!isRecord(b)) continue;
+        const key = typeof b.key === 'string' ? b.key : '';
+        const name = normalizePresetName(b.name);
+        if (!PRESET_KEY_RE.test(key) || !name || seen.has(key) || brands.length >= PRESET_MAX) continue;
+        seen.add(key);
+        brands.push({ key, name });
+      }
+      out.methodBrands[method] = brands;
+    }
+  }
+
   return out;
 }
 
 /** store_settings.settings.checkout に書く形（項目を足したらここにも足す） */
 export function checkoutPresetsToJson(presets: CheckoutPresets): Record<string, unknown> {
-  return { discounts: presets.discounts, pointBrands: presets.pointBrands };
+  return { discounts: presets.discounts, pointBrands: presets.pointBrands, methodBrands: presets.methodBrands };
 }
 
 /**

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  BRANDED_METHODS,
   checkoutPresetsFrom,
   checkoutPresetsToJson,
   DEFAULT_DISCOUNT_PRESETS,
@@ -7,6 +8,7 @@ import {
   discountAmountOf,
   discountPresetsOf,
   emptyCheckoutPresets,
+  methodBrandsOf,
   nextPresetKey,
   normalizePresetName,
   normalizePresetValue,
@@ -58,6 +60,7 @@ describe('会計の「値引き」「ポイント」の選択肢', () => {
     expect(checkoutPresetsToJson(presets)).toEqual({
       discounts: presets.discounts,
       pointBrands: presets.pointBrands,
+      methodBrands: presets.methodBrands,
     });
   });
 
@@ -77,6 +80,32 @@ describe('会計の「値引き」「ポイント」の選択肢', () => {
     expect(percentDiscountAmount(100, 4400)).toBe(4400);
     expect(percentDiscountAmount(-5, 4400)).toBe(0);
     expect(percentDiscountAmount(150, 4400)).toBe(4400);
+  });
+
+  it('支払方法の内訳：設定が空なら既定（VISA…・PayPay…・交通系IC…）', () => {
+    const empty = emptyCheckoutPresets();
+    expect(BRANDED_METHODS).toEqual(['credit', 'qr', 'emoney']);
+    expect(methodBrandsOf(empty, 'credit').map((b) => b.name)).toContain('VISA');
+    expect(methodBrandsOf(empty, 'qr').map((b) => b.name)).toContain('PayPay');
+    expect(methodBrandsOf(empty, 'emoney').map((b) => b.name)).toContain('交通系IC');
+    // 内訳を出さない支払方法は空
+    expect(methodBrandsOf(empty, 'cash')).toEqual([]);
+  });
+
+  it('支払方法の内訳：店舗が決めたものが優先。知らない支払方法は捨てる', () => {
+    const presets = checkoutPresetsFrom({
+      checkout: {
+        methodBrands: {
+          credit: [{ key: 'visa', name: 'VISA' }, { key: 'visa', name: '重複' }, { key: 'BAD', name: 'x' }],
+          cash: [{ key: 'nope', name: '現金に内訳は無い' }],
+        },
+      },
+    });
+    expect(presets.methodBrands.credit).toEqual([{ key: 'visa', name: 'VISA' }]);
+    expect(presets.methodBrands.cash).toBeUndefined();
+    expect(methodBrandsOf(presets, 'credit').map((b) => b.name)).toEqual(['VISA']);
+    // 決めていない支払方法は既定のまま
+    expect(methodBrandsOf(presets, 'qr').length).toBeGreaterThan(0);
   });
 
   it('追加するときの記号は使っていないものを選ぶ', () => {

@@ -5,7 +5,7 @@ import { requireFeature } from '@/lib/auth';
 import { storeAccessBlock } from '@/components/pos/store-access-guard';
 import { createClient } from '@/lib/supabase/server';
 import { loadMenuBook } from '@/lib/menu-book-server';
-import { checkoutPresetsFrom, discountPresetsOf, pointBrandsOf } from '@/lib/checkout-presets';
+import { BRANDED_METHODS, checkoutPresetsFrom, discountPresetsOf, methodBrandsOf, pointBrandsOf } from '@/lib/checkout-presets';
 import { isMissingColumnError } from '@/lib/schema-compat';
 import { can } from '@/lib/permissions';
 import { PageHeader } from '@/components/ui/page-header';
@@ -175,6 +175,7 @@ export default async function PosPage({
     .eq('store_id', store.id)
     .maybeSingle();
   const checkoutPresets = checkoutPresetsFrom(checkoutSettings?.settings);
+  const methodBrands = Object.fromEntries(BRANDED_METHODS.map((m) => [m, methodBrandsOf(checkoutPresets, m)]));
 
   const [
     { data: items, error: itemsError },
@@ -380,6 +381,7 @@ export default async function PosPage({
         menuPages={menuBook}
         discountPresets={discountPresetsOf(checkoutPresets)}
         pointBrands={pointBrandsOf(checkoutPresets)}
+        methodBrands={methodBrands}
         menuItems={menuItems ?? []}
         bestSellerIds={bestSellerIds}
         tableName={table?.name ?? null}
