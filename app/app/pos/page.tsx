@@ -18,13 +18,10 @@ import {
   checkout,
   sendOrderToKitchen,
   startTakeout,
-  splitOrder,
-  mergeOrders,
   moveTable,
   cancelEmptyOrder,
   setGuestCount,
   setSeatTime,
-  addSlipToTable,
   applyCoupon,
   clearCoupon,
   searchCustomerByPhone,
@@ -51,9 +48,9 @@ async function loadOrderItems(supabase: Awaited<ReturnType<typeof createClient>>
 export default async function PosPage({
   searchParams,
 }: {
-  searchParams: Promise<{ order?: string }>;
+  searchParams: Promise<{ order?: string; checkout?: string; move?: string }>;
 }) {
-  const { order: orderId } = await searchParams;
+  const { order: orderId, checkout: openCheckout, move: openMove } = await searchParams;
   const ctx = await requireFeature('pos');
   const supabase = await createClient();
   const store = ctx.currentStore ?? ctx.stores[0];
@@ -293,32 +290,17 @@ export default async function PosPage({
     status: string;
     lastSeenAt: string | null;
   }[] = [];
-  let otherOpenOrders: {
-    id: string;
-    orderNo: number;
-    tableName: string | null;
-    total: number;
-    guestCount: number;
-  }[] = [];
   let availableTables: { id: string; name: string; capacityMax: number }[] = [];
   // レジが開局しているか（未開局だと会計を受け付けない。画面にも先に出しておく）
   let registerOpen = true;
 
   if (canCheckout) {
-    const [availability, { data: readers }, { data: otherOrders }, { data: openSession }] = await Promise.all([
+    const [availability, { data: readers }, { data: openSession }] = await Promise.all([
       getPaymentAvailability(),
       supabase
         .from('terminal_readers')
         .select('id, label, device_type, is_simulated, status, last_seen_at')
         .eq('store_id', store.id),
-      supabase
-        .from('orders')
-        .select('id, order_no, total, guest_count, restaurant_tables(name)')
-        .eq('store_id', store.id)
-        .eq('status', 'open')
-        .neq('id', orderId)
-        .order('opened_at', { ascending: false })
-        .limit(30),
       supabase.from('register_sessions').select('id').eq('store_id', store.id).eq('status', 'open').limit(1).maybeSingle(),
     ]);
     paymentAvailability = availability;
@@ -337,14 +319,6 @@ export default async function PosPage({
         (a, b) =>
           (statusOrder[a.status] ?? 1) - (statusOrder[b.status] ?? 1) || a.label.localeCompare(b.label, 'ja')
       );
-    otherOpenOrders = (otherOrders ?? []).map((o) => ({
-      id: o.id,
-      orderNo: o.order_no,
-      tableName: (o.restaurant_tables as unknown as { name: string } | null)?.name ?? null,
-      total: o.total,
-      guestCount: o.guest_count,
-    }));
-
     if (order.table_id) {
       const { data: tables } = await supabase
         .from('restaurant_tables')
@@ -407,7 +381,6 @@ export default async function PosPage({
         registerOpen={registerOpen}
         terminalReaders={terminalReaders}
         paymentAvailability={paymentAvailability}
-        otherOpenOrders={otherOpenOrders}
         availableTables={availableTables}
         addItemAction={addItem}
         updateQtyAction={updateQty}
@@ -415,15 +388,14 @@ export default async function PosPage({
         setDiscountAction={setDiscount}
         checkoutAction={checkout}
         sendOrderAction={sendOrderToKitchen}
-        splitOrderAction={splitOrder}
-        mergeOrdersAction={mergeOrders}
         moveTableAction={moveTable}
         cancelEmptyOrderAction={cancelEmptyOrder}
+        openCheckout={openCheckout === '1'}
+        openTableMove={openMove === '1'}
         setGuestCountAction={setGuestCount}
         seatTime={order.table_id ? seatTime : undefined}
         seatCourses={seatCourses}
         setSeatTimeAction={setSeatTime}
-        addSlipToTableAction={addSlipToTable}
         startTerminalPaymentAction={startTerminalPayment}
         checkTerminalPaymentAction={checkTerminalPayment}
         cancelTerminalPaymentAction={cancelTerminalPayment}

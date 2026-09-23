@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import { enqueueOrderSlipPrint } from '@/app/app/pos/print-actions';
 import { Dialog } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -60,6 +61,19 @@ export function TableSheet({
         router.push(`/app/pos?order=${orderId}`);
       } catch (e) {
         toast(e instanceof Error ? e.message : '操作に失敗しました', 'error');
+      }
+    });
+  };
+
+  /** お会計伝票をその場で印刷する（レジ画面へ移動しない） */
+  const handlePrintBill = () => {
+    if (!table.order) return;
+    startTransition(async () => {
+      try {
+        const res = await enqueueOrderSlipPrint(table.order!.id);
+        toast(res.ok ? 'お会計伝票を印刷します' : (res.error ?? 'お会計伝票の印刷に失敗しました'), res.ok ? 'success' : 'error');
+      } catch (e) {
+        toast(e instanceof Error ? e.message : 'お会計伝票の印刷に失敗しました', 'error');
       }
     });
   };
@@ -171,15 +185,45 @@ export function TableSheet({
           </div>
         )}
 
+        {/* お客様が入っている卓は、ここから4つの操作を選ぶ（2026-09-24 要望） */}
         {(status === 'seated' || status === 'ordering' || status === 'billing') && (
-          <Button
-            size="pos"
-            className="w-full"
-            disabled={pending}
-            onClick={() => goPos(() => goToOrderAction(table.id))}
-          >
-            {status === 'billing' ? '注文・会計画面へ / Order & Pay' : '注文画面へ / Order'}
-          </Button>
+          <div className="space-y-2.5">
+            <Button
+              size="pos"
+              className="h-[60px] w-full text-[18px]"
+              disabled={pending}
+              onClick={() => goPos(() => goToOrderAction(table.id))}
+            >
+              追加オーダー
+            </Button>
+            <Button
+              size="pos"
+              variant="secondary"
+              className="h-[56px] w-full text-[16px]"
+              disabled={pending || !table.order}
+              onClick={() => table.order && router.push(`/app/pos?order=${table.order.id}&move=1`)}
+            >
+              テーブル移動
+            </Button>
+            <Button
+              size="pos"
+              variant="secondary"
+              className="h-[56px] w-full text-[16px]"
+              disabled={pending || !table.order}
+              onClick={handlePrintBill}
+            >
+              会計伝票
+            </Button>
+            <Button
+              size="pos"
+              variant="navy"
+              className="h-[60px] w-full text-[18px]"
+              disabled={pending || !table.order}
+              onClick={() => table.order && router.push(`/app/pos?order=${table.order.id}&checkout=1`)}
+            >
+              会計
+            </Button>
+          </div>
         )}
 
         {status === 'cleaning' && (
