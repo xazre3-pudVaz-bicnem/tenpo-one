@@ -15,8 +15,10 @@ export default async function MenuPage() {
   const tiles = visibleNavTiles(ctx.role, ctx.disabledFeatures);
   const groups = visibleNavGroups(ctx.role, ctx.disabledFeatures).map((g) => ({
     ...g,
-    // ドロアオープン等の操作行はレジ端末の左メニューでのみ扱う
-    items: g.items.filter((i) => !i.action),
+    // ドロアオープン等の操作行はレジ端末の左メニューでのみ扱う。
+    // 「即会計」はテーブル一覧の「テイクアウト」ボタンに移したので、この一覧からは外す
+    // （2026-09-23 要望。パソコンの左メニューはそのまま）。
+    items: g.items.filter((i) => !i.action && i.href !== '/app/pos'),
   }));
 
   return (

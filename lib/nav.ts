@@ -60,6 +60,7 @@ export const NAV_GROUPS: NavGroup[] = [
     label: null,
     items: [
       { href: '/app/dashboard', label: 'ホーム', en: 'Home', icon: 'home', permission: 'dashboard.view' },
+      { href: '/app/pos', label: '即会計', en: 'Quick pay', icon: 'cash', permission: 'pos.order' },
       { href: '/app/handy', label: 'ハンディ', en: 'Handy', icon: 'monitor', permission: 'pos.order' },
       { href: '/app/orders', label: '伝票明細', en: 'Slips / Receipts', icon: 'receipt', permission: 'pos.order' },
       { href: '/app/cash', label: '入出金', en: 'Cash in / out', icon: 'wallet', permission: 'register.operate' },
