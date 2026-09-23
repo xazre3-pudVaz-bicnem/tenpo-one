@@ -25,12 +25,15 @@ function isItemActive(pathname: string, href: string): boolean {
  *   最上段に「オーダー・会計」「店舗台帳」の大きなタイル → レジ業務の行 → 業務ドメインの折りたたみグループ。
  * 折りたたみ状態は localStorage に保持し、現在地を含むグループは常に展開する。
  */
+const HOME_PATH = '/app/dashboard';
+
 export function Sidebar({
   tiles,
   groups,
   alertCount,
   currentStoreId,
   iconFirst = false,
+  homeOnly = false,
 }: {
   tiles: NavTile[];
   groups: NavGroup[];
@@ -38,6 +41,8 @@ export function Sidebar({
   currentStoreId: string | null;
   /** タイルのアイコンを左に置く（レジ端末。パソコンは文字が左のまま） */
   iconFirst?: boolean;
+  /** レジ端末：左メニューはホーム画面だけに出し、開いた画面は全幅で使う */
+  homeOnly?: boolean;
 }) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
@@ -68,6 +73,9 @@ export function Sidebar({
       return next;
     });
   };
+
+  // レジ：ホーム画面だけに出す。開いた画面は全幅で使い、戻るのは上部バーの「ホーム」
+  if (homeOnly && pathname !== HOME_PATH) return null;
 
   return (
     <aside
