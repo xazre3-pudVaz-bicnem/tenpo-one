@@ -148,13 +148,13 @@ export async function checkHandyNetwork(): Promise<HandyGuardResult> {
   const { qr } = await loadHandyQr(admin, device.storeId);
   // 契約で運営が登録した回線（store_access_policies）も「お店の回線」として扱う
   const { loadStorePolicy } = await import('@/lib/store-access-server');
-  const { isAllowedNetwork } = await import('@/lib/store-access');
+  const { isAllowedNetwork, isRestricted } = await import('@/lib/store-access');
   const policy = await loadStorePolicy(device.storeId);
   const ip = await currentRequestIp();
   const jar = await cookies();
   const decision = decideOutside({
-    guarded: qr.networks.length > 0 || policy.networks.length > 0,
-    inside: isShopNetwork(qr, ip) || (policy.networks.length > 0 && isAllowedNetwork(policy, ip)),
+    guarded: qr.networks.length > 0 || isRestricted(policy),
+    inside: isShopNetwork(qr, ip) || (isRestricted(policy) && isAllowedNetwork(policy, ip)),
     outsideSince: parseOutsideSince(jar.get(HANDY_OUTSIDE_COOKIE)?.value),
     now: Date.now(),
   });

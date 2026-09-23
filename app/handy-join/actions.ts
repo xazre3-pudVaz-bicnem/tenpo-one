@@ -11,7 +11,7 @@ import {
 } from '@/lib/handy-device-server';
 import { networkKey } from '@/lib/handy-pairing';
 import { loadStorePolicy } from '@/lib/store-access-server';
-import { ACCESS_MESSAGE, canAddHandyDevice, isAllowedNetwork } from '@/lib/store-access';
+import { ACCESS_MESSAGE, canAddHandyDevice, isAllowedNetwork, isRestricted } from '@/lib/store-access';
 import { HANDY_OUTSIDE_COOKIE, handyQrFrom, isHandyQrToken, isShopNetwork } from '@/lib/handy-qr';
 
 export type JoinResult = { ok: true; storeName: string } | { ok: false; error: string };
@@ -46,7 +46,7 @@ export async function joinHandyByQr(token: string): Promise<JoinResult> {
   const ip = await currentRequestIp();
   // 契約で運営が登録した回線（store_access_policies）でも開ける
   const policy = await loadStorePolicy(store.id as string);
-  const allowed = isShopNetwork(qr, ip) || (policy.networks.length > 0 && isAllowedNetwork(policy, ip));
+  const allowed = isShopNetwork(qr, ip) || (isRestricted(policy) && isAllowedNetwork(policy, ip));
   if (!allowed) {
     return {
       ok: false,

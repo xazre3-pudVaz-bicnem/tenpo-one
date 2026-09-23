@@ -17,7 +17,11 @@ export interface AllowedNetwork {
 }
 
 export interface StoreAccessPolicy {
+  /** 契約（store_access_policies の行）があるか。台数の制限はこれで効く */
+  exists: boolean;
   networks: AllowedNetwork[];
+  /** お店の回線からだけ使えるようにするか（運営が切り替える。既定はOFF） */
+  networkEnforced: boolean;
   registerLimit: number;
   handyLimit: number;
   note: string;
@@ -28,7 +32,9 @@ export const DEFAULT_HANDY_LIMIT = 2;
 export const MAX_ALLOWED_NETWORKS = 10;
 
 export const EMPTY_POLICY: StoreAccessPolicy = {
+  exists: false,
   networks: [],
+  networkEnforced: false,
   registerLimit: DEFAULT_REGISTER_LIMIT,
   handyLimit: DEFAULT_HANDY_LIMIT,
   note: '',
@@ -41,7 +47,13 @@ export function limitFrom(value: unknown, fallback: number): number {
 
 /** DB の行から読む（壊れた値は捨てる） */
 export function policyFrom(
-  row: { networks?: unknown; register_limit?: unknown; handy_limit?: unknown; note?: unknown } | null
+  row: {
+    networks?: unknown;
+    network_enforced?: unknown;
+    register_limit?: unknown;
+    handy_limit?: unknown;
+    note?: unknown;
+  } | null
 ): StoreAccessPolicy {
   if (!row) return EMPTY_POLICY;
   const networks = Array.isArray(row.networks)
@@ -56,7 +68,9 @@ export function policyFrom(
         .slice(0, MAX_ALLOWED_NETWORKS)
     : [];
   return {
+    exists: true,
     networks,
+    networkEnforced: row.network_enforced === true,
     registerLimit: limitFrom(row.register_limit, DEFAULT_REGISTER_LIMIT),
     handyLimit: limitFrom(row.handy_limit, DEFAULT_HANDY_LIMIT),
     note: typeof row.note === 'string' ? row.note : '',
@@ -70,31 +84,32 @@ export function toNetwork(ip: string, label: string): AllowedNetwork | null {
   return { key: networkKey(trimmed), label: label.trim().slice(0, 60) };
 }
 
-/** この回線から使ってよいか。回線が未登録の店舗は常に true（制限なし） */
+/** この回線から使ってよいか。制限をかけていない店舗は常に true */
 export function isAllowedNetwork(policy: StoreAccessPolicy, ip: string | null): boolean {
-  if (policy.networks.length === 0) return true;
+  if (!isRestricted(policy)) return true;
   if (!ip) return false;
   const key = networkKey(ip);
   return policy.networks.some((n) => n.key === key);
 }
 
-/** 制限をかけている店舗か */
+/** お店の回線でしか使えない店舗か（運営がONにして、回線を登録しているとき） */
 export function isRestricted(policy: StoreAccessPolicy): boolean {
-  return policy.networks.length > 0;
+  return policy.networkEnforced && policy.networks.length > 0;
 }
 
 /**
  * レジ端末の台数を数えるかどうか。
- * 契約で回線を登録した店舗だけ数える。未登録の店舗は今まで通り台数の制限なし
- * （既存の店舗が、この機能を入れた瞬間に3台目のレジを開けなくなるのを防ぐため）。
+ * 契約（store_access_policies の行）がある店舗だけ数える。
+ * 契約のない既存の店舗は今まで通り台数の制限なし
+ * （この機能を入れた瞬間に3台目のレジが開けなくなるのを防ぐため）。
  */
 export function countsRegisterDevices(policy: StoreAccessPolicy): boolean {
-  return isRestricted(policy);
+  return policy.exists && policy.registerLimit > 0;
 }
 
-/** ハンディの台数を数えるか。レジと同じく、回線を登録した店舗だけ */
+/** ハンディの台数を数えるか。レジと同じく、契約のある店舗だけ */
 export function countsHandyDevices(policy: StoreAccessPolicy): boolean {
-  return isRestricted(policy);
+  return policy.exists && policy.handyLimit > 0;
 }
 
 /** ハンディをもう1台つないでよいか（既に使っている端末は数に入っている） */

@@ -59,7 +59,7 @@ export default async function TenantDetailPage({ params }: { params: Promise<{ s
 
   // 契約のアクセス制限（お店の回線・レジ端末の台数）
   const [{ data: policyRow }, { data: deviceRows }, { count: handyCount }, { data: orgCodeRow }] = await Promise.all([
-    admin.from('store_access_policies').select('networks, register_limit, handy_limit, note').eq('store_id', storeId).maybeSingle(),
+    admin.from('store_access_policies').select('networks, network_enforced, register_limit, handy_limit, note').eq('store_id', storeId).maybeSingle(),
     admin.from('register_devices').select('id, name, user_agent, first_ip, last_seen_at, status').eq('store_id', storeId).order('created_at'),
     admin.from('handy_devices').select('id', { count: 'exact', head: true }).eq('store_id', storeId).eq('status', 'active'),
     admin.from('organizations').select('org_code').eq('id', store.organization_id).maybeSingle(),
@@ -188,6 +188,7 @@ export default async function TenantDetailPage({ params }: { params: Promise<{ s
             orgCode={(orgCodeRow?.org_code as string | null) ?? null}
             storeUser={(store.register_username as string | null) ?? null}
             networks={accessPolicy.networks}
+            networkEnforced={accessPolicy.networkEnforced}
             registerLimit={accessPolicy.registerLimit}
             handyLimit={accessPolicy.handyLimit}
             handyCount={handyCount ?? 0}

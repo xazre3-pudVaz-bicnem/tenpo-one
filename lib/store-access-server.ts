@@ -9,6 +9,7 @@ import {
   countsRegisterDevices,
   decideRegisterDevice,
   isAllowedNetwork,
+  isRestricted,
   policyFrom,
   type RegisterDeviceDecision,
   type StoreAccessPolicy,
@@ -24,7 +25,7 @@ export async function loadStorePolicy(storeId: string): Promise<StoreAccessPolic
     const admin = createAdminClient();
     const { data } = await admin
       .from('store_access_policies')
-      .select('networks, register_limit, note')
+      .select('networks, network_enforced, register_limit, handy_limit, note')
       .eq('store_id', storeId)
       .maybeSingle();
     return policyFrom(data ?? null);
@@ -37,14 +38,14 @@ export async function loadStorePolicy(storeId: string): Promise<StoreAccessPolic
 /** この回線からレジ・ハンディを使ってよいか（制限なしの店舗は常に true） */
 export async function isRequestFromStoreNetwork(storeId: string): Promise<boolean> {
   const policy = await loadStorePolicy(storeId);
-  if (policy.networks.length === 0) return true;
+  if (!isRestricted(policy)) return true;
   return isAllowedNetwork(policy, await currentRequestIp());
 }
 
 /** 店舗の設定と「今の回線でよいか」を一度に取る（画面で2回読まないため） */
 export async function loadStoreAccess(storeId: string): Promise<{ policy: StoreAccessPolicy; onNetwork: boolean }> {
   const policy = await loadStorePolicy(storeId);
-  if (policy.networks.length === 0) return { policy, onNetwork: true };
+  if (!isRestricted(policy)) return { policy, onNetwork: true };
   return { policy, onNetwork: isAllowedNetwork(policy, await currentRequestIp()) };
 }
 

@@ -31,6 +31,7 @@ export function TenantAccessPolicy({
   orgCode,
   storeUser,
   networks,
+  networkEnforced,
   registerLimit,
   handyLimit,
   handyCount,
@@ -46,6 +47,7 @@ export function TenantAccessPolicy({
   orgCode: string | null;
   storeUser: string | null;
   networks: AllowedNetwork[];
+  networkEnforced: boolean;
   registerLimit: number;
   handyLimit: number;
   handyCount: number;
@@ -56,6 +58,7 @@ export function TenantAccessPolicy({
     ips: { ip: string; label: string }[];
     registerLimit: number;
     handyLimit: number;
+    networkEnforced: boolean;
     note: string;
   }) => Promise<{ error?: string }>;
   revokeAction: (input: { storeId: string; deviceId: string }) => Promise<{ error?: string }>;
@@ -75,6 +78,7 @@ export function TenantAccessPolicy({
   );
   const [limit, setLimit] = useState(String(registerLimit));
   const [handy, setHandy] = useState(String(handyLimit));
+  const [enforce, setEnforce] = useState(networkEnforced);
   const [memo, setMemo] = useState(note);
   const [pending, startTransition] = useTransition();
 
@@ -85,6 +89,7 @@ export function TenantAccessPolicy({
         ips: rows.filter((x) => x.ip.trim()),
         registerLimit: Number(limit) || 0,
         handyLimit: Number(handy) || 0,
+        networkEnforced: enforce,
         note: memo,
       });
       if (r.error) toast(r.error, 'error');
@@ -111,7 +116,8 @@ export function TenantAccessPolicy({
       <p className="text-xs leading-relaxed text-gray-500">
         契約時に、この店舗の回線（グローバルIP）とレジ端末の台数を決めます。回線を入れると、レジ（/app/pos・フロア）とハンディは
         その回線からだけ使えます（注文・厨房への送信・会計も止まります）。会計・帳票・設定などの画面は制限しません。
-        回線を1件も入れない場合は制限なし（回線・台数のどちらも効きません＝今まで通り）。IPv6 は上位64ビットで判定します。
+        回線の制限は、下のチェックを入れて回線を1件以上登録したときだけ効きます。IPv6 は上位64ビットで判定します。
+        台数（レジ・ハンディ）の制限は、この画面で保存した店舗に効きます。
       </p>
 
       <div className="space-y-2">
@@ -149,13 +155,26 @@ export function TenantAccessPolicy({
           <Plus className="h-4 w-4" />
           回線を追加
         </Button>
+        <label htmlFor="network-enforced" className="mt-3 flex items-center gap-2 text-sm font-medium text-navy">
+          <input
+            id="network-enforced"
+            type="checkbox"
+            checked={enforce}
+            onChange={(e) => setEnforce(e.target.checked)}
+            className="h-4 w-4 rounded border-gray-300 accent-primary"
+          />
+          この回線からだけ レジ・ハンディ を使えるようにする
+        </label>
+        <p className="text-xs text-gray-500">
+          OFF のあいだは、どの回線からでも 企業番号・店舗ユーザー名・レジ用パスワード で開けます（台数の制限は効きます）。
+        </p>
       </div>
 
       <div className="flex flex-wrap items-end gap-4">
         <div>
           <Label htmlFor="register-limit">レジ端末（iPad）の台数</Label>
           <Input id="register-limit" value={limit} onChange={(e) => setLimit(e.target.value.replace(/[^0-9]/g, ''))} className="w-24 text-right" inputMode="numeric" />
-          <p className="mt-1 text-xs text-gray-500">台数の制限は、回線を1件以上入れてから効きます</p>
+          <p className="mt-1 text-xs text-gray-500">0 にすると台数を数えません</p>
         </div>
         <div>
           <Label htmlFor="handy-limit">ハンディの台数</Label>
