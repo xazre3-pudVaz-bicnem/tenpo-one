@@ -12,9 +12,11 @@ interface DialogProps {
   className?: string;
   /** 会計モーダル等の広い画面用 */
   wide?: boolean;
+  /** 'right' … 画面の右side から出す（レジのテーブル選択など。左のフロアが見えたまま操作できる） */
+  side?: 'center' | 'right';
 }
 
-export function Dialog({ open, onClose, title, children, className, wide }: DialogProps) {
+export function Dialog({ open, onClose, title, children, className, wide, side = 'center' }: DialogProps) {
   useEffect(() => {
     if (!open) return;
     const handler = (e: KeyboardEvent) => {
@@ -30,8 +32,15 @@ export function Dialog({ open, onClose, title, children, className, wide }: Dial
 
   if (!open) return null;
 
+  const right = side === 'right';
+
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
+    <div
+      className={cn(
+        'fixed inset-0 z-50 flex',
+        right ? 'items-stretch justify-end' : 'items-end justify-center sm:items-center'
+      )}
+    >
       <div
         className="absolute inset-0 bg-navy/50"
         onClick={onClose}
@@ -42,8 +51,10 @@ export function Dialog({ open, onClose, title, children, className, wide }: Dial
         aria-modal="true"
         aria-label={title}
         className={cn(
-          'relative z-10 max-h-[92vh] w-full overflow-y-auto rounded-t-2xl bg-white shadow-xl sm:rounded-2xl',
-          wide ? 'sm:max-w-3xl' : 'sm:max-w-lg',
+          'relative z-10 w-full overflow-y-auto bg-white shadow-xl',
+          right
+            ? 'h-full max-h-none rounded-t-2xl sm:max-w-[420px] sm:rounded-none sm:rounded-l-2xl'
+            : cn('max-h-[92vh] rounded-t-2xl sm:rounded-2xl', wide ? 'sm:max-w-3xl' : 'sm:max-w-lg'),
           className
         )}
       >

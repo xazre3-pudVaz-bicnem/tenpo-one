@@ -71,7 +71,8 @@ export function TableSheet({
   const tt = order ? tileTime(order, now) : null;
 
   return (
-    <Dialog open onClose={onClose} title={table.name}>
+    // レジでは左のフロアを見たまま操作できるよう、右側から出す（2026-09-23 要望）
+    <Dialog open onClose={onClose} title={table.name} side="right">
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <Badge tone="primary">{TILE_LABEL[tileState(table, now)]}</Badge>
         <Badge tone="gray">
