@@ -62,3 +62,12 @@ describe('左メニュー・下部ナビ（2026-09-23 要望）', () => {
     expect(MOBILE_NAV.map((i) => i.href)).toContain('/app/handy');
   });
 });
+
+describe('レジの左メニュー（keepActions）', () => {
+  it('ドロアオープンは左メニューには残し、メニュー一覧の画面からは外す', () => {
+    const sidebar = menuLayout('org_owner', undefined, { keepActions: true }).main.map((i) => i.href);
+    const page = menuLayout('org_owner').main.map((i) => i.href);
+    expect(sidebar).toContain('#drawer');
+    expect(page).not.toContain('#drawer');
+  });
+});

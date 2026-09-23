@@ -77,7 +77,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   // レジ端末は「入金出金・仕入経費を上のタイルに」「ハンディ・レジの設定・スキャン・スタッフは設定などの中へ」
   // 「在庫設定は仕入・在庫の中へ」「店舗運営〜チームは集計ひとつに」まとめた並び（app/app/menu/data.ts）
-  const regiLayout = isRegi ? menuLayout(ctx.role, ctx.disabledFeatures) : null;
+  const regiLayout = isRegi ? menuLayout(ctx.role, ctx.disabledFeatures, { keepActions: true }) : null;
   const tiles = regiLayout ? regiLayout.tiles : visibleNavTiles(ctx.role, ctx.disabledFeatures);
   const groups = regiLayout
     ? [{ label: null, items: regiLayout.main }]
