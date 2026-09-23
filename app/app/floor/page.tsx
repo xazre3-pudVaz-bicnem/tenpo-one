@@ -1,7 +1,5 @@
 import { floorBoardFrom } from '@/lib/floor-nav';
 import type { Metadata } from 'next';
-import Link from 'next/link';
-import { Settings } from 'lucide-react';
 import { requireFeature } from '@/lib/auth';
 import { storeAccessBlock } from '@/components/pos/store-access-guard';
 import { createClient } from '@/lib/supabase/server';
@@ -251,26 +249,15 @@ export default async function FloorPage() {
 
   return (
     <div>
-      <PageHeader
-        title="テーブル一覧"
-        en="Tables"
-        description="テーブルを選んで注文・会計に進みます。持ち帰りは「テイクアウト」から ／ Tap a table to order or pay"
-        actions={
-          <div className="flex flex-wrap items-center gap-3">
-            <Legend />
-            {/* 持ち帰りはテーブルを使わないので、テーブル一覧からそのまま始められるようにする */}
-            {canOperate && <TakeoutButton startTakeoutAction={startTakeout} />}
-            {/* レジの設定（厨房伝票・品切れ・メニュー・QR など）をフロアからも開けるように */}
-            <Link
-              href="/app/pos/settings"
-              className="inline-flex h-10 items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-4 text-sm font-semibold text-navy hover:bg-gray-50"
-            >
-              <Settings className="h-4 w-4" aria-hidden />
-              レジの設定
-            </Link>
-          </div>
-        }
-      />
+      {/*
+        画面名（オーダー・会計）は上部バーに出ているので、ここでは見出し・説明を出さない。
+        レジの設定もここには置かない（設定 > デバイス管理 から開く）。2026-09-23 要望。
+      */}
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <Legend />
+        {/* 持ち帰りはテーブルを使わないので、テーブル一覧からそのまま始められるようにする */}
+        {canOperate && <TakeoutButton startTakeoutAction={startTakeout} />}
+      </div>
       {tableViews.length === 0 ? (
         <EmptyState
           title="テーブルが登録されていません"
