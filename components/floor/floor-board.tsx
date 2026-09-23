@@ -79,13 +79,21 @@ export function FloorBoard({
   const router = useRouter();
   const now = useNow(serverNow);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  /** 押したテーブルの画面上の位置。ポップアップをその近くに出す */
+  const [anchor, setAnchor] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
 
   /**
    * テーブルを押したときの動き（2026-09-24 要望）。
    *   空席   → そのまま「お客様情報」へ
    *   その他 → 右のパネル（追加オーダー／テーブル移動／会計伝票／会計 など）
    */
-  const openTable = (t: TableView) => {
+  const openTable = (t: TableView, el?: HTMLElement | null) => {
+    if (el) {
+      const r = el.getBoundingClientRect();
+      setAnchor({ x: r.left, y: r.top, w: r.width, h: r.height });
+    } else {
+      setAnchor(null);
+    }
     const st = tileState(t, now);
     if (st === 'free' || st === 'reserved' || st === 'waiting') {
       router.push(`/app/floor/${t.id}/setup`);
@@ -234,7 +242,7 @@ export function FloorBoard({
                                 <button
                                   key={t.id}
                                   type="button"
-                                  onClick={() => openTable(t)}
+                                  onClick={(e) => openTable(t, e.currentTarget)}
                                   style={{
                                     gridColumnStart: (t.pos_x as number) + 1,
                                     gridRowStart: (t.pos_y as number) + 1,
@@ -284,9 +292,13 @@ export function FloorBoard({
       <TableSheet
         key={selected?.id ?? 'none'}
         table={selected}
+        anchor={anchor}
         now={now}
         canOperate={canOperate}
-        onClose={() => setSelectedId(null)}
+        onClose={() => {
+          setSelectedId(null);
+          setAnchor(null);
+        }}
         startWalkInAction={startWalkInAction}
         defaultStayMinutes={defaultStayMinutes}
         goToOrderAction={goToOrderAction}
