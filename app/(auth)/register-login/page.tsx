@@ -21,7 +21,7 @@ export default function RegisterLoginPage() {
 
         <div className="mt-6 space-y-2 text-center text-sm">
           <p className="text-xs text-gray-400">
-            お店の回線（契約時に登録したWi-Fi・有線）からだけログインできます
+            企業番号・店舗ユーザー名・レジ用パスワードは、TENPO ONE から店舗へお渡ししています
           </p>
           <p>
             <Link href="/login" className="text-primary hover:underline">
