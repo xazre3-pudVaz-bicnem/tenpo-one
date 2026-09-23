@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { assertStoreAccess, requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { isMissingColumnError } from '@/lib/schema-compat';
+import { enqueueReceiptPrint } from './print-actions';
 import { applicableTaxRate } from '@/lib/tax';
 import { validateCoupon, COUPON_REJECT_LABELS, type CouponLike } from '@/lib/coupons';
 import { resolveOptionSelection } from '@/lib/menu-options';
@@ -482,8 +483,35 @@ export async function checkout(orderId: string, payments: CheckoutPayment[]): Pr
   revalidatePath('/app/orders');
   revalidatePath('/app/floor');
 
+  // 会計が終わったらレシートを自動で印字する（2026-09-24 店舗要望）。
+  // レシート機の「自動印刷」がONのときだけ。失敗しても会計は成立させる（手動でも印刷できる）。
+  try {
+    const printer = await receiptPrinterForAutoPrint(supabase, order.store_id);
+    if (printer) await enqueueReceiptPrint(orderId);
+  } catch (e) {
+    console.error('[pos.checkout] receipt auto print failed:', e);
+  }
+
   const result = data as { points_earned?: number } | null;
   return { ok: true, warning: null, pointsEarned: result?.points_earned ?? 0 };
+}
+
+/** レシートを自動印字してよいプリンタ（usage=receipt・CloudPRNT有効・自動印刷ON）があるか */
+async function receiptPrinterForAutoPrint(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  storeId: string
+): Promise<{ id: string } | null> {
+  const { data } = await supabase
+    .from('printer_configs')
+    .select('id')
+    .eq('store_id', storeId)
+    .eq('status', 'active')
+    .eq('cloudprnt_enabled', true)
+    .eq('auto_print', true)
+    .eq('usage', 'receipt')
+    .limit(1)
+    .maybeSingle();
+  return data ? { id: data.id } : null;
 }
 
 export interface SplitMove {
@@ -848,30 +876,6 @@ export async function cancelEmptyOrder(orderId: string, reason: string): Promise
  * 伝票・厨房伝票・フロア表示の人数を後から直せるようにする。
  * 金額計算には人数を使っていないため、この操作で合計金額は変わらない。
  */
-/**
- * この伝票を厨房へ印字するか（注文画面のスイッチ・2026-09-24 要望）。
- * 厨房伝票はプリンタ側のポーリングで自動的に出るため、false の間は
- * claim_kitchen_items の対象から外れる（migration 00076）。
- * true に戻すと、それまでに入れた品目もまとめて印字される。
- */
-export async function setKitchenPrint(orderId: string, enabled: boolean): Promise<void> {
-  const ctx = await requirePermission('pos.order');
-  const supabase = await createClient();
-  await loadOpenOrder(supabase, ctx, orderId);
-  const { error } = await supabase
-    .from('orders')
-    .update({ kitchen_print_enabled: enabled, updated_by: ctx.userId })
-    .eq('id', orderId);
-  if (error) {
-    // 列が無い環境（migration 未適用）では機能を無効として扱う
-    if (isMissingColumnError(error.message, 'kitchen_print_enabled')) {
-      throw new Error('厨房へ印字の切り替えはまだ有効になっていません（DB更新待ち）');
-    }
-    throw new Error(error.message);
-  }
-  revalidatePath('/app/pos');
-}
-
 export async function setGuestCount(orderId: string, guestCount: number): Promise<void> {
   const ctx = await requirePermission('pos.order');
   if (!Number.isInteger(guestCount) || guestCount < 1 || guestCount > 999) {

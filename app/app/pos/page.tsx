@@ -23,7 +23,6 @@ import {
   moveTable,
   cancelEmptyOrder,
   setGuestCount,
-  setKitchenPrint,
   setSeatTime,
   addSlipToTable,
   applyCoupon,
@@ -142,7 +141,7 @@ export default async function PosPage({
   const { data: order, error: orderError } = await supabase
     .from('orders')
     .select(
-      'id, order_no, order_type, status, guest_count, kitchen_print_enabled, discount_total, discount_reason, coupon_code, customer_id, subtotal, tax_total, service_charge, total, store_id, table_id, staff_id, clerk_id, opened_at, restaurant_tables(name), profiles(display_name), reservations(start_at, end_at, course_id)'
+      'id, order_no, order_type, status, guest_count, discount_total, discount_reason, coupon_code, customer_id, subtotal, tax_total, service_charge, total, store_id, table_id, staff_id, clerk_id, opened_at, restaurant_tables(name), profiles(display_name), reservations(start_at, end_at, course_id)'
     )
     .eq('id', orderId)
     .single();
@@ -390,7 +389,6 @@ export default async function PosPage({
           serviceCharge: order.service_charge,
           total: order.total,
           tableId: order.table_id,
-          kitchenPrintEnabled: (order as { kitchen_print_enabled?: boolean | null }).kitchen_print_enabled ?? true,
         }}
         items={items ?? []}
         categories={categories ?? []}
@@ -422,7 +420,6 @@ export default async function PosPage({
         moveTableAction={moveTable}
         cancelEmptyOrderAction={cancelEmptyOrder}
         setGuestCountAction={setGuestCount}
-        setKitchenPrintAction={setKitchenPrint}
         seatTime={order.table_id ? seatTime : undefined}
         seatCourses={seatCourses}
         setSeatTimeAction={setSeatTime}

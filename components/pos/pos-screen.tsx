@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   Minus, Plus, X, ArrowLeft, Split, Combine, ArrowRightLeft, Search, Star, User, XCircle,
-  FilePlus, Printer, Users, ChefHat, Settings, Clock,
+  FilePlus, Printer, Users, ChefHat, Clock,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { yen } from '@/lib/format';
@@ -72,8 +72,6 @@ export interface PosOrder {
   serviceCharge: number;
   total: number;
   tableId: string | null;
-  /** 厨房へ印字するか（注文画面のスイッチ。migration 00076） */
-  kitchenPrintEnabled?: boolean;
 }
 
 export interface PosOrderItem {
@@ -165,7 +163,6 @@ export function PosScreen({
   setDiscountAction,
   checkoutAction,
   sendOrderAction,
-  setKitchenPrintAction,
   splitOrderAction,
   mergeOrdersAction,
   moveTableAction,
@@ -216,7 +213,6 @@ export function PosScreen({
   checkoutAction: (orderId: string, payments: CheckoutPayment[]) => Promise<CheckoutOutcome>;
   /** 未送信の品目をまとめて厨房へ送る */
   sendOrderAction?: (orderId: string) => Promise<SendOrderResult>;
-  setKitchenPrintAction?: (orderId: string, enabled: boolean) => Promise<void>;
   splitOrderAction: (orderId: string, moves: SplitMove[]) => Promise<{ newOrderId: string }>;
   mergeOrdersAction: (targetOrderId: string, sourceOrderId: string) => Promise<void>;
   moveTableAction: (orderId: string, newTableId: string) => Promise<{ tableName: string }>;
@@ -470,25 +466,14 @@ export function PosScreen({
   };
 
   /** カテゴリの並び（おすすめ・売れ筋 → 各カテゴリ）。中央の縦リストと、幅が狭いときの横並びで同じものを使う */
-  const kitchenPrintOn = order.kitchenPrintEnabled !== false;
-  const toggleKitchenPrint = () => {
-    if (!setKitchenPrintAction) return;
-    startTransition(async () => {
-      try {
-        await setKitchenPrintAction(order.id, !kitchenPrintOn);
-        toast(!kitchenPrintOn ? '厨房へ印字する に切り替えました' : '厨房へ印字しない に切り替えました', 'success');
-        router.refresh();
-      } catch (e) {
-        toast(e instanceof Error ? e.message : '切り替えに失敗しました', 'error');
-      }
-    });
-  };
-
   const categoryTabs = [
     { id: FAVORITES_TAB, name: 'おすすめ', en: 'Picks', color: null as string | null },
     { id: BESTSELLERS_TAB, name: '売れ筋', en: 'Popular', color: null as string | null },
     ...categories.map((c) => ({ id: c.id, name: c.name, en: englishName(c.name, null, c.name_en), color: c.color })),
   ];
+
+  /** 担当者は必須（店舗に担当者が登録されている場合）。未選択なら注文確定・会計へ進めない */
+  const clerkMissing = clerks.length > 0 && !currentClerkId;
 
   const metaChip =
     'flex items-center gap-1 rounded-full bg-lilac px-3 py-1 text-xs font-semibold text-ink-2 transition-colors hover:bg-iris-soft';
@@ -530,12 +515,8 @@ export function PosScreen({
               <span className="truncate">{seatBadgeLabel(seatTime, seatCourses)}</span>
             </button>
           )}
-          <ClerkSelector orderId={order.id} clerks={clerks} currentClerkId={currentClerkId} />
+          <ClerkSelector orderId={order.id} clerks={clerks} currentClerkId={currentClerkId} required />
           {clerks.length === 0 && staffName && <span className="text-xs text-ink-3">担当 {staffName}</span>}
-          <Link href={`/app/pos/settings?order=${order.id}`} aria-label="レジの設定" className={cn(metaChip, 'ml-auto')}>
-            <Settings className="h-3.5 w-3.5" aria-hidden />
-            設定
-          </Link>
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto">
@@ -637,23 +618,6 @@ export function PosScreen({
             <span className="text-[15px] font-bold text-ink-2">合計（税込）</span>
             <span className="text-3xl font-extrabold tabular-nums text-royal">{yen(order.total)}</span>
           </div>
-          {setKitchenPrintAction && (
-            <button
-              type="button"
-              role="switch"
-              aria-checked={kitchenPrintOn}
-              disabled={pending}
-              onClick={toggleKitchenPrint}
-              className="mt-2.5 flex w-full items-center gap-2.5 rounded-xl border border-line px-3 py-2.5 text-left disabled:opacity-50"
-            >
-              <span className="text-[14px] font-bold text-ink-2">キッチンへ印字</span>
-              <span className={cn('ml-auto text-[13px] font-bold', kitchenPrintOn ? 'text-ink-3' : 'text-royal')}>しない</span>
-              <span className={cn('relative h-7 w-[52px] shrink-0 rounded-full transition-colors', kitchenPrintOn ? 'bg-iris' : 'bg-gray-300')}>
-                <span className={cn('absolute top-0.5 h-6 w-6 rounded-full bg-white transition-all', kitchenPrintOn ? 'left-[26px]' : 'left-0.5')} />
-              </span>
-              <span className={cn('text-[13px] font-bold', kitchenPrintOn ? 'text-royal' : 'text-ink-3')}>する</span>
-            </button>
-          )}
           {canCheckout && (
             <div className="mt-2.5 flex flex-wrap gap-1.5">
               <button type="button" disabled={items.length === 0} onClick={() => setSplitOpen(true)} className={cn(metaChip, 'disabled:opacity-40')}>
@@ -802,6 +766,12 @@ export function PosScreen({
           )}
         </div>
 
+        {clerkMissing && (
+          <p className="mx-3 mb-2 rounded-lg border border-danger/40 bg-danger-soft px-3 py-2 text-xs font-bold text-danger">
+            担当者を選んでください（注文確定・会計には担当者が必要です）
+          </p>
+        )}
+
         {canCheckout && !registerOpen && (
           <Link
             href="/app/cash/close"
@@ -818,7 +788,7 @@ export function PosScreen({
               size="pos"
               variant={unsentItems.length > 0 ? 'navy' : 'secondary'}
               className="h-[60px] w-full text-[17px]"
-              disabled={unsentItems.length === 0 || pending}
+              disabled={unsentItems.length === 0 || pending || clerkMissing}
               onClick={handleSendOrder}
             >
               <ChefHat className="h-5 w-5" />
@@ -830,7 +800,7 @@ export function PosScreen({
           <Button
             size="pos"
             className="h-[60px] w-full text-[18px]"
-            disabled={items.length === 0 || pending}
+            disabled={items.length === 0 || pending || clerkMissing}
             onClick={() => setCheckoutOpen(true)}
           >
             会計へ（{yen(order.total)}）
@@ -895,6 +865,7 @@ export function PosScreen({
         checkTerminalPaymentAction={checkTerminalPaymentAction}
         cancelTerminalPaymentAction={cancelTerminalPaymentAction}
         onTerminalPaymentFinalized={handleTerminalPaymentFinalized}
+        clerkMissing={clerkMissing}
       />
       )}
 
