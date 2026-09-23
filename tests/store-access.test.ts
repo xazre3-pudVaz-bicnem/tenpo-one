@@ -14,7 +14,9 @@ import {
 describe('店舗のアクセス制限（契約: お店の回線・レジ端末の台数）', () => {
   it('DBの行から読む（壊れた値は捨てる）', () => {
     expect(policyFrom(null)).toEqual({
+      exists: false,
       networks: [],
+      networkEnforced: false,
       registerLimit: DEFAULT_REGISTER_LIMIT,
       handyLimit: DEFAULT_HANDY_LIMIT,
       note: '',
@@ -28,12 +30,13 @@ describe('店舗のアクセス制限（契約: お店の回線・レジ端末�
     expect(policyFrom({ handy_limit: 'x' }).handyLimit).toBe(DEFAULT_HANDY_LIMIT);
   });
 
-  it('ハンディの台数（回線を登録した店舗だけ数える）', () => {
+  it('ハンディの台数（契約のある店舗だけ数える）', () => {
     const none = policyFrom(null);
     expect(canAddHandyDevice(none, 99)).toBe(true);
-    const p = policyFrom({ networks: [{ key: '203.0.113.5', label: '' }], handy_limit: 2 });
+    const p = policyFrom({ handy_limit: 2 });
     expect(canAddHandyDevice(p, 1)).toBe(true);
     expect(canAddHandyDevice(p, 2)).toBe(false);
+    expect(canAddHandyDevice(policyFrom({ handy_limit: 0 }), 99)).toBe(true);
   });
 
   it('入力したIPを回線に直す（IPv6 は上位64ビット）', () => {
@@ -43,11 +46,21 @@ describe('店舗のアクセス制限（契約: お店の回線・レジ端末�
     expect(toNetwork('drop table', '')).toBeNull();
   });
 
-  it('回線が未登録なら制限なし、登録したら同じ回線だけ', () => {
+  it('回線の制限は、ONにして回線を登録したときだけ効く', () => {
     const none = policyFrom(null);
     expect(isRestricted(none)).toBe(false);
     expect(isAllowedNetwork(none, null)).toBe(true);
-    const p = policyFrom({ networks: [{ key: '203.0.113.5', label: '' }, { key: '2001:0db8:0001:0002', label: '' }] });
+    // 回線を登録していても、OFF のあいだはどこからでも入れる
+    const off = policyFrom({ networks: [{ key: '203.0.113.5', label: '' }] });
+    expect(isRestricted(off)).toBe(false);
+    expect(isAllowedNetwork(off, '198.51.100.9')).toBe(true);
+    // ONでも回線が1件も無ければ制限しない
+    const onNoNet = policyFrom({ networks: [], network_enforced: true });
+    expect(isRestricted(onNoNet)).toBe(false);
+    const p = policyFrom({
+      network_enforced: true,
+      networks: [{ key: '203.0.113.5', label: '' }, { key: '2001:0db8:0001:0002', label: '' }],
+    });
     expect(isRestricted(p)).toBe(true);
     expect(isAllowedNetwork(p, '203.0.113.5')).toBe(true);
     expect(isAllowedNetwork(p, '2001:db8:1:2:ffff::7')).toBe(true);
@@ -55,10 +68,10 @@ describe('店舗のアクセス制限（契約: お店の回線・レジ端末�
     expect(isAllowedNetwork(p, null)).toBe(false);
   });
 
-  it('回線を登録していない店舗は台数を数えない（今まで通り）', () => {
+  it('台数は契約のある店舗だけ数える（回線のON/OFFとは別）', () => {
     expect(countsRegisterDevices(policyFrom(null))).toBe(false);
-    expect(countsRegisterDevices(policyFrom({ register_limit: 2 }))).toBe(false);
-    expect(countsRegisterDevices(policyFrom({ networks: [{ key: '203.0.113.5', label: '' }] }))).toBe(true);
+    expect(countsRegisterDevices(policyFrom({ register_limit: 2 }))).toBe(true);
+    expect(countsRegisterDevices(policyFrom({ register_limit: 0 }))).toBe(false);
   });
 
   it('レジ端末の台数（契約で決めた数まで）', () => {

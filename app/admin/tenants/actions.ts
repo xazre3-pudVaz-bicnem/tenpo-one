@@ -493,6 +493,7 @@ export async function saveStoreAccessPolicy(input: {
   ips: { ip: string; label: string }[];
   registerLimit: number;
   handyLimit: number;
+  networkEnforced: boolean;
   note: string;
 }): Promise<{ error?: string }> {
   const ctx = await requireCypressAdmin();
@@ -517,6 +518,7 @@ export async function saveStoreAccessPolicy(input: {
       store_id: input.storeId,
       organization_id: store.organization_id as string,
       networks,
+      network_enforced: input.networkEnforced === true,
       register_limit: limit,
       handy_limit: handyLimit,
       note: input.note?.slice(0, 500) ?? null,
@@ -534,7 +536,7 @@ export async function saveStoreAccessPolicy(input: {
     p_target_table: 'store_access_policies',
     p_target_id: input.storeId,
     p_before: null,
-    p_after: { networks: networks.length, register_limit: limit, handy_limit: handyLimit },
+    p_after: { networks: networks.length, network_enforced: input.networkEnforced === true, register_limit: limit, handy_limit: handyLimit },
     p_note: input.note?.slice(0, 200) ?? null,
   });
 

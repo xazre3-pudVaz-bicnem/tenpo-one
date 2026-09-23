@@ -67,6 +67,8 @@ export interface StoreContractInput {
   ips?: { ip: string; label: string }[];
   registerLimit?: number;
   handyLimit?: number;
+  /** お店の回線からだけ使えるようにするか（既定はOFF） */
+  networkEnforced?: boolean;
   note?: string;
   /** 指定しなければ自動で発行する */
   password?: string;
@@ -98,6 +100,7 @@ export async function setupStoreContract(admin: Admin, input: StoreContractInput
       store_id: input.storeId,
       organization_id: input.organizationId,
       networks,
+      network_enforced: input.networkEnforced === true,
       register_limit: registerLimit,
       handy_limit: handyLimit,
       note: input.note?.trim() || null,
