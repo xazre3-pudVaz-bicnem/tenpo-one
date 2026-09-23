@@ -61,8 +61,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const posFullscreen = pathname === '/app/pos';
 
   // レジ端末（/register-login でログイン）だけ、左メニューの中身をレジ用の並びに差し替える。
-  // 画面の形（左メニュー＋上部バー）はパソコンと同じまま。メール＋パスワードのパソコンは今まで通り。
+  // メール＋パスワードのパソコンは今まで通り。
   const isRegi = ctx.isRegisterDevice === true;
+
+  // レジは左メニューをホーム画面だけに出し、そこから開いた画面は全幅で使う（2026-09-23 要望）。
+  // 戻るのは上部バーの「ホーム」ボタン。
+  const hideSidebar = posFullscreen || (isRegi && pathname !== '/app/dashboard');
 
   // 初期導入ウィザード未完了の企業オーナー/本社管理者を /app/onboarding へ誘導
   // （ウィザード自身とハンバーガーメニュー画面は無限リダイレクトを避けるため除外）
@@ -95,7 +99,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <div className="theme-regi min-h-screen bg-lilac">
         {/* 上部バー（全幅）→ その下に左メニュー（固定）と本文 */}
         <TopBar ctx={ctx} unreadCount={unreadCount ?? 0} showMenuLink={posFullscreen} />
-        {!posFullscreen && (
+        {!hideSidebar && (
           <Sidebar
             tiles={tiles}
             groups={groups}
@@ -104,7 +108,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             iconFirst={isRegi}
           />
         )}
-        <div className={posFullscreen ? undefined : 'lg:pl-[250px]'}>
+        <div className={hideSidebar ? undefined : 'lg:pl-[250px]'}>
           <InstallPrompt />
           {/* スマホは店舗切替を上部バーの下に表示 */}
           <div className="border-b border-line bg-white px-4 py-2 sm:hidden">
