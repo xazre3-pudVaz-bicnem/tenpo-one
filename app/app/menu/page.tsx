@@ -10,15 +10,19 @@ import { signOut } from '@/app/app/actions';
 
 export const metadata: Metadata = { title: 'メニュー' };
 
+/** メニュー一覧からは出さず、それぞれの画面の中に置いたもの */
+const MOVED_OUT_OF_MENU = new Set(['/app/pos', '/app/handy']);
+
 export default async function MenuPage() {
   const ctx = await requireMember();
   const tiles = visibleNavTiles(ctx.role, ctx.disabledFeatures);
   const groups = visibleNavGroups(ctx.role, ctx.disabledFeatures).map((g) => ({
     ...g,
     // ドロアオープン等の操作行はレジ端末の左メニューでのみ扱う。
-    // 「即会計」はテーブル一覧の「テイクアウト」ボタンに移したので、この一覧からは外す
-    // （2026-09-23 要望。パソコンの左メニューはそのまま）。
-    items: g.items.filter((i) => !i.action && i.href !== '/app/pos'),
+    // 2026-09-23 要望（パソコンの左メニューはそのまま、この一覧からだけ外す）:
+    //   「即会計」  → テーブル一覧の「テイクアウト」ボタンへ
+    //   「ハンディ」→ 設定 > iPhoneハンディ の中へ
+    items: g.items.filter((i) => !i.action && !MOVED_OUT_OF_MENU.has(i.href)),
   }));
 
   return (

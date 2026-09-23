@@ -1,4 +1,6 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
+import { Smartphone } from 'lucide-react';
 import { requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { PageHeader } from '@/components/ui/page-header';
@@ -56,6 +58,21 @@ export default async function HandyQrPage() {
         addNetworkAction={addCurrentShopNetwork}
         removeNetworkAction={removeShopNetwork}
       />
+
+      {/* メニュー一覧から「ハンディ」を外したので、この画面からそのまま開けるようにする（2026-09-23 要望） */}
+      <div className="mt-5 rounded-xl border border-line bg-white px-4 py-4">
+        <p className="text-sm font-semibold text-navy">この端末でハンディを開く</p>
+        <p className="mt-1 text-xs text-gray-500">
+          QRコードを使わずに、いま使っている端末でそのままハンディを開きます。
+        </p>
+        <Link
+          href="/handy"
+          className="mt-3 inline-flex h-11 items-center gap-2 rounded-lg bg-primary px-5 text-sm font-semibold text-white hover:bg-primary-deep"
+        >
+          <Smartphone className="h-4 w-4" aria-hidden />
+          ハンディを開く
+        </Link>
+      </div>
     </div>
   );
 }
