@@ -23,9 +23,10 @@ describe('menuLayout（iPad・スマホのメニュー一覧）', () => {
     expect(mainHrefs.indexOf('/app/expenses')).toBe(mainHrefs.indexOf('/app/cash/close') - 1);
   });
 
-  it('在庫設定は「仕入・在庫」の中に入れる', () => {
+  it('在庫設定は一覧に出し、集計の中には入れない', () => {
+    expect(mainHrefs).toContain('/app/inventory');
     const purchasing = layout.summaryGroups.find((g) => g.label === '仕入・在庫');
-    expect(purchasing?.items[0]?.href).toBe('/app/inventory');
+    expect(purchasing?.items.map((i) => i.href)).not.toContain('/app/inventory');
   });
 
   it('集計ボタンはアラートの手前（設定とアラートの間）に入れる', () => {
@@ -92,9 +93,9 @@ describe('在庫設定の位置（2026-09-23 要望）', () => {
     expect(main.indexOf('/app/inventory')).toBe(main.indexOf('/app/settings') - 1);
   });
 
-  it('集計の「仕入・在庫」の中にも残す', () => {
+  it('集計の「仕入・在庫」の中には出さない（二重に出さない）', () => {
     const groups = menuLayout('org_owner').summaryGroups;
     const purchasing = groups.find((g) => g.label === '仕入・在庫');
-    expect(purchasing?.items.map((i) => i.href)).toContain('/app/inventory');
+    expect(purchasing?.items.map((i) => i.href)).not.toContain('/app/inventory');
   });
 });
