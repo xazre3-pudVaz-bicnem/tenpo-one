@@ -1,9 +1,10 @@
-import { visibleNavGroups, visibleNavTiles, type NavGroup, type NavItem } from '@/lib/nav';
+import { visibleNavGroups, visibleNavTiles, type NavGroup, type NavItem, type NavTile } from '@/lib/nav';
 import type { Role } from '@/lib/permissions';
 
 /**
- * メニュー一覧（iPad・スマホ）の並び（2026-09-23 要望）。
- * パソコンの左メニュー（lib/nav.ts）は変えず、この画面の並びだけをここで決める。
+ * レジ（iPad）の並び（2026-09-23 要望）。
+ * レジ端末（/register-login でログイン）の左メニューと、幅が狭いときのメニュー一覧の両方で使う。
+ * パソコン（メール＋パスワード）の左メニューは lib/nav.ts のまま変えない。
  */
 
 /** この一覧には出さず、それぞれの画面の中に置いたもの */
@@ -35,19 +36,21 @@ const SUMMARY_BEFORE = '/app/notifications';
 
 export interface MenuLayout {
   /** 上の大きなタイル */
-  tiles: { href: string; label: string; en: string; icon: string }[];
+  tiles: NavTile[];
   /** 一覧の先頭グループ（レジ業務）。集計ボタンを含む */
   main: NavItem[];
   /** 集計の中に入るグループ */
   summaryGroups: NavGroup[];
 }
 
-export function menuLayout(role: Role, disabledFeatures?: ReadonlySet<string>): MenuLayout {
+export function menuLayout(role: Role | null, disabledFeatures?: ReadonlySet<string>): MenuLayout {
   const allGroups = visibleNavGroups(role, disabledFeatures);
   const byHref = new Map(allGroups.flatMap((g) => g.items).map((i) => [i.href, i]));
 
-  const topRowTiles = TOP_ROW.map((href) => byHref.get(href)).filter((i) => i !== undefined);
-  const tiles = [...visibleNavTiles(role, disabledFeatures), ...topRowTiles];
+  const topRowTiles: NavTile[] = TOP_ROW.map((href) => byHref.get(href))
+    .filter((i) => i !== undefined)
+    .map((i) => ({ href: i.href, label: i.label, en: i.en, icon: i.icon, permission: i.permission, match: [i.href] }));
+  const tiles: NavTile[] = [...visibleNavTiles(role, disabledFeatures), ...topRowTiles];
 
   const trimmed = allGroups
     .map((g) => ({
