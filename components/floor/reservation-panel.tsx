@@ -62,7 +62,7 @@ export function ReservationPanel({
   const people = (rs: PanelReservation[]) => rs.reduce((s, r) => s + r.partySize, 0);
 
   return (
-    <section className="ui-card flex min-h-0 flex-col overflow-hidden border border-line bg-white lg:sticky lg:top-4 lg:max-h-[calc(100vh-150px)]">
+    <section className="ui-card flex min-h-0 flex-col overflow-hidden border border-line bg-white lg:h-full">
       <header className="flex flex-wrap items-center justify-between gap-2 px-3.5 pt-3 pb-2.5">
         <h2 className="text-[14.5px] font-bold text-ink">
           本日のご予約<span className="en-inline">Today&apos;s reservations</span>
