@@ -253,11 +253,6 @@ export default async function FloorPage() {
         画面名（オーダー・会計）は上部バーに出ているので、ここでは見出し・説明を出さない。
         レジの設定もここには置かない（設定 > デバイス管理 から開く）。2026-09-23 要望。
       */}
-      <div className="mb-4 flex flex-wrap items-center gap-3">
-        <Legend />
-        {/* 持ち帰りはテーブルを使わないので、テーブル一覧からそのまま始められるようにする */}
-        {canOperate && <TakeoutButton startTakeoutAction={startTakeout} />}
-      </div>
       {tableViews.length === 0 ? (
         <EmptyState
           title="テーブルが登録されていません"
@@ -278,6 +273,13 @@ export default async function FloorPage() {
           completeCleaningAction={completeCleaning}
           setTableAvailabilityAction={setTableAvailability}
           releaseFinishedCleaningAction={releaseFinishedCleaning}
+          topSlot={
+            <div className="flex flex-wrap items-center gap-3">
+              <Legend />
+              {/* 持ち帰りはテーブルを使わないので、テーブル一覧からそのまま始められるようにする */}
+              {canOperate && <TakeoutButton startTakeoutAction={startTakeout} />}
+            </div>
+          }
         />
       )}
     </div>

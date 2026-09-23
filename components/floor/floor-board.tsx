@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { LayoutGrid, Map as MapIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -58,6 +58,7 @@ export function FloorBoard({
   completeCleaningAction,
   setTableAvailabilityAction,
   releaseFinishedCleaningAction,
+  topSlot,
 }: {
   storeId: string;
   floors: FloorRow[];
@@ -73,6 +74,8 @@ export function FloorBoard({
   goToOrderAction: (tableId: string) => Promise<{ orderId: string }>;
   completeCleaningAction: (tableId: string) => Promise<void>;
   setTableAvailabilityAction: (tableId: string, unavailable: boolean) => Promise<void>;
+  /** テーブルの上に出すもの（色の見方・テイクアウト）。右のご予約は一番上から出したいのでここに入れる */
+  topSlot?: ReactNode;
   /** 清掃中のまま時間が過ぎたテーブルを空席に戻す。省略時は自動解除しない */
   releaseFinishedCleaningAction?: (storeId: string) => Promise<{ released: number }>;
 }) {
@@ -168,8 +171,14 @@ export function FloorBoard({
   const showToolbar = floors.length > 1 || (floors.length > 0 && unassigned.length > 0) || hasPlacement;
 
   return (
-    <div className="grid items-start gap-3.5 lg:grid-cols-[minmax(0,1fr)_270px]">
-      <div className="min-w-0 space-y-3" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
+    // パソコン・iPad は「テーブル」と「本日のご予約」を別々にスクロールさせる（画面の高さで止める）
+    <div className="grid items-start gap-3.5 lg:h-[calc(100vh-7rem)] lg:grid-cols-[minmax(0,1fr)_270px]">
+      <div
+        className="min-w-0 space-y-3 lg:h-full lg:overflow-y-auto lg:pr-1"
+        onTouchStart={onTouchStart}
+        onTouchEnd={onTouchEnd}
+      >
+        {topSlot}
         {showToolbar && (
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-wrap gap-1.5">
@@ -287,7 +296,9 @@ export function FloorBoard({
         )}
       </div>
 
-      <ReservationPanel reservations={reservations} now={now} />
+      <div className="min-w-0 lg:h-full lg:min-h-0">
+        <ReservationPanel reservations={reservations} now={now} />
+      </div>
 
       <TableSheet
         key={selected?.id ?? 'none'}
