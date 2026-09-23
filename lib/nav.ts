@@ -60,7 +60,6 @@ export const NAV_GROUPS: NavGroup[] = [
     label: null,
     items: [
       { href: '/app/dashboard', label: 'ホーム', en: 'Home', icon: 'home', permission: 'dashboard.view' },
-      { href: '/app/pos', label: '即会計', en: 'Quick pay', icon: 'cash', permission: 'pos.order' },
       { href: '/app/handy', label: 'ハンディ', en: 'Handy', icon: 'monitor', permission: 'pos.order' },
       { href: '/app/orders', label: '伝票明細', en: 'Slips / Receipts', icon: 'receipt', permission: 'pos.order' },
       { href: '/app/cash', label: '入出金', en: 'Cash in / out', icon: 'wallet', permission: 'register.operate' },
@@ -163,7 +162,7 @@ export function visibleNavTiles(role: Role | null, disabledFeatures?: ReadonlySe
 
 /** 上部バー中央の画面タイトル（ナビ以外の画面も含む）。長い前方一致を優先する。 */
 const EXTRA_TITLES: { href: string; label: string; en: string }[] = [
-  // POS はテーブル注文・即会計の両方で使うため、画面タイトルはオーダー・会計に統一する
+  // POS はテーブル注文・テイクアウトの両方で使うため、画面タイトルはオーダー・会計に統一する
   { href: '/app/pos', label: 'オーダー・会計', en: 'Order & Pay' },
   { href: '/app/pos/receipt', label: 'レシート', en: 'Receipt' },
   { href: '/app/pos/settings', label: 'レジの設定', en: 'Register settings' },

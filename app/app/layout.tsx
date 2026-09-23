@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { headers } from 'next/headers';
 import { requireSession } from '@/lib/auth';
+import { isPhoneUserAgent } from '@/lib/device-kind';
 import { createClient } from '@/lib/supabase/server';
 import { visibleNavGroups, visibleNavTiles, MOBILE_NAV } from '@/lib/nav';
 import { can } from '@/lib/permissions';
@@ -28,6 +29,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     if (ctx.isCypressAdmin) redirect('/admin/organizations');
     redirect('/login?error=no_membership');
   }
+
+  // スマホからは ハンディ だけ（2026-09-23 要望）。
+  // 売上・設定などの本体はパソコンと iPad から。iPad はここに入らない（lib/device-kind.ts）。
+  if (isPhoneUserAgent((await headers()).get('user-agent'))) redirect('/handy');
 
   const supabase = await createClient();
 
