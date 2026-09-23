@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useState, useTransition } from 'react';
-import { Loader2, Trash2, Ticket, X as XIcon } from 'lucide-react';
-import { Dialog } from '@/components/ui/dialog';
+import { useRouter } from 'next/navigation';
+import { ArrowLeft, Check, Loader2, ReceiptText, Trash2, Ticket, X as XIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input, Label, Select } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -11,13 +11,22 @@ import { useToast } from '@/components/ui/toast';
 import { cn } from '@/lib/utils';
 import { yen } from '@/lib/format';
 import { calcChange } from '@/lib/money';
-import { METHOD_LABELS, METHOD_LABELS_EN } from '@/components/cash/labels';
-import { Tenkey, appendTenkeyDigit, appendTenkeyDoubleZero } from './tenkey';
+import { METHOD_LABELS } from '@/components/cash/labels';
+import { appendTenkeyDigit, appendTenkeyDoubleZero } from './tenkey';
 import type { CheckoutPayment, ApplyCouponResult } from '@/app/app/pos/actions';
 import type { TerminalPaymentState } from '@/app/app/pos/payment-actions';
 
 const COUPON_PREFIX = 'クーポン: ';
 const QUICK_CASH_AMOUNTS = [1000, 5000, 10000] as const;
+
+/** 会計画面の左側に出す伝票の1行 */
+export interface CheckoutLine {
+  id: string;
+  name: string;
+  quantity: number;
+  unitPrice: number;
+  lineTotal: number;
+}
 
 export interface CheckoutOrder {
   id: string;
@@ -29,6 +38,12 @@ export interface CheckoutOrder {
   total: number;
   /** 厨房へ未送信の品目数。会計と同時に厨房へ送られる旨を案内する */
   unsentCount?: number;
+  /** 見出し用（T1 など）。無ければ伝票番号だけ出す */
+  label?: string | null;
+  guestCount?: number;
+  orderNo?: number;
+  /** 左に出す伝票の中身 */
+  lines?: CheckoutLine[];
 }
 
 export interface PosTerminalReader {
@@ -74,7 +89,6 @@ interface PaymentRow extends CheckoutPayment {
 }
 
 export function CheckoutDialog({
-  open,
   onClose,
   order,
   canDiscount,
@@ -91,7 +105,6 @@ export function CheckoutDialog({
   cancelTerminalPaymentAction,
   onTerminalPaymentFinalized,
 }: {
-  open: boolean;
   onClose: () => void;
   order: CheckoutOrder;
   canDiscount: boolean;
@@ -121,6 +134,11 @@ export function CheckoutDialog({
     isCouponReason ? '' : (discountReason ?? '')
   );
   const [payments, setPayments] = useState<PaymentRow[]>([]);
+  /** 右側のタブ（支払 / 値引） */
+  const [rightTab, setRightTab] = useState<'pay' | 'discount'>('pay');
+  /** 会計が終わったあとに出す金額（お支払い・お預り・おつり） */
+  const [done, setDone] = useState<{ total: number; tendered: number; change: number } | null>(null);
+  const router = useRouter();
   /**
    * 支払いを複数に分けるモード。既定はOFF＝「タッチした支払方法だけ」を1つ表示する。
    * 現場から「クレジットをタッチすると行がどんどん積み上がる」と指摘されたため、
@@ -350,7 +368,12 @@ export function CheckoutDialog({
             tendered: p.method === 'cash' ? p.tendered : undefined,
           }))
         );
-        onClose();
+        const cash = payments.find((p) => p.method === 'cash');
+        setDone({
+          total: order.total,
+          tendered: cash?.tendered ?? 0,
+          change: cash ? calcChange(cash.amount, cash.tendered ?? 0) : 0,
+        });
         setPayments([]);
       } catch (e) {
         toast(
@@ -371,393 +394,487 @@ export function CheckoutDialog({
     // 次に開いたとき前のお客様の支払い入力が残らないようにする
     setPayments([]);
     setSplitMode(false);
+    setRightTab('pay');
+    setDone(null);
     onClose();
   };
 
+  /** テンキーなどが編集する対象の支払行（最後に選んだもの） */
+  const activeRow = payments[payments.length - 1] ?? null;
+
+  const setActiveValue = (next: number) => {
+    if (!activeRow) return;
+    if (activeRow.method === 'cash') {
+      updatePayment(activeRow.key, { tendered: Math.max(0, next) });
+    } else {
+      const cap = activeRow.method === 'points' ? maxPointsUsable : Number.MAX_SAFE_INTEGER;
+      updatePayment(activeRow.key, { amount: Math.max(0, Math.min(cap, next)) });
+    }
+  };
+  const activeValue = activeRow ? (activeRow.method === 'cash' ? (activeRow.tendered ?? 0) : activeRow.amount) : 0;
+  const cashRow = payments.find((p) => p.method === 'cash') ?? null;
+  const tenderedTotal = cashRow ? (cashRow.tendered ?? 0) : 0;
+  const changeTotal = cashRow ? calcChange(cashRow.amount, cashRow.tendered ?? 0) : 0;
+
+  const keyBtn =
+    'flex h-[58px] items-center justify-center rounded-xl border border-line bg-white text-2xl font-bold tabular-nums text-navy transition-colors active:bg-lilac disabled:opacity-40';
+  const keySmall =
+    'flex h-[58px] items-center justify-center rounded-xl border border-line bg-iris-soft text-base font-bold text-royal transition-colors active:bg-wisteria disabled:opacity-40';
+  const sumRow = 'flex items-center justify-between py-2 text-[15px] text-ink-2';
+
+  // 会計が終わったあとの画面（お支払い金額・お預り・おつり）
+  if (done) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy/60 p-4">
+        <div className="w-full max-w-[620px] overflow-hidden rounded-[22px] bg-white shadow-xl">
+          <div className="flex items-center gap-3 border-b border-line px-6 py-5">
+            <span className="grid h-10 w-10 place-items-center rounded-full bg-success-soft text-success">
+              <Check className="h-6 w-6" />
+            </span>
+            <h2 className="text-[22px] font-extrabold text-navy">
+              会計完了<span className="en-inline">Payment complete</span>
+            </h2>
+          </div>
+          <div className="px-6 py-5">
+            <div className="flex items-baseline justify-between border-b border-line py-3 text-[17px] text-ink-2">
+              <span>お支払い金額</span>
+              <b className="text-2xl font-extrabold tabular-nums text-navy">{yen(done.total)}</b>
+            </div>
+            {done.tendered > 0 && (
+              <div className="flex items-baseline justify-between border-b border-line py-3 text-[17px] text-ink-2">
+                <span>お預かり金額</span>
+                <b className="text-2xl font-extrabold tabular-nums text-navy">{yen(done.tendered)}</b>
+              </div>
+            )}
+            <div className="mt-4 flex items-baseline justify-between rounded-2xl bg-iris-soft px-5 py-4">
+              <span className="text-[19px] font-extrabold text-royal">おつり</span>
+              <b className="text-[44px] font-extrabold leading-none tabular-nums text-royal">{yen(done.change)}</b>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3 px-6 pb-6">
+            <Button variant="secondary" size="pos" className="h-[62px]" onClick={() => router.push(`/app/pos/receipt/${order.id}`)}>
+              <ReceiptText className="h-5 w-5" />
+              レシート・領収書
+            </Button>
+            <Button variant="secondary" size="pos" className="h-[62px]" onClick={() => router.push('/app/floor')}>
+              テーブル一覧へ
+            </Button>
+            <Button size="pos" className="col-span-2 h-[62px] text-[18px]" onClick={() => router.push('/app/pos')}>
+              連続会計（次の伝票へ）
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <Dialog open={open} onClose={handleDialogClose} title="会計 / Checkout" wide>
-      <div className="space-y-5">
-        <div className="rounded-xl bg-surface p-4 text-sm">
-          <div className="flex justify-between text-gray-600">
-            <span>小計 / Subtotal</span>
-            <span className="tabular-nums">{yen(order.subtotal)}</span>
+    <div className="fixed inset-0 z-50 flex flex-col bg-lilac">
+      {/* 上部バー */}
+      <div className="flex h-[58px] shrink-0 items-center bg-plum px-3 text-white">
+        <button
+          type="button"
+          onClick={handleDialogClose}
+          className="inline-flex items-center gap-1 rounded-lg bg-white/12 px-3 py-1.5 text-[13px] font-semibold hover:bg-white/20"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          伝票へ戻る
+        </button>
+        <span className="mx-auto text-[17px] font-bold tracking-[0.12em]">
+          お会計<span className="ml-2 text-[11px] font-semibold tracking-normal opacity-70">Checkout</span>
+        </span>
+        <span className="w-[112px]" />
+      </div>
+
+      <div className="grid min-h-0 flex-1 gap-3 overflow-auto p-3 lg:grid-cols-[1fr_1fr_390px] lg:overflow-hidden">
+        {/* 左: 伝票 */}
+        <section className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-line bg-white">
+          <div className="flex items-center gap-2 border-b border-line px-4 py-3">
+            <h3 className="text-[15px] font-bold text-navy">
+              伝票<span className="en-inline">Slip</span>
+            </h3>
+            {order.orderNo != null && <span className="text-xs text-ink-3">#{order.orderNo}</span>}
+            <span className="ml-auto flex items-center gap-2">
+              {order.label && <span className="text-xl font-extrabold text-royal">{order.label}</span>}
+              {order.guestCount != null && (
+                <span className="rounded-full bg-iris-soft px-3 py-1 text-xs font-bold text-royal">{order.guestCount}名</span>
+              )}
+            </span>
           </div>
-          <div className="flex justify-between text-gray-600">
-            <span>消費税 / Tax</span>
-            <span className="tabular-nums">{yen(order.taxTotal)}</span>
-          </div>
-          {order.serviceCharge > 0 && (
-            <div className="flex justify-between text-gray-600">
-              <span>サービス料 / Service charge</span>
-              <span className="tabular-nums">{yen(order.serviceCharge)}</span>
-            </div>
-          )}
-          {order.discountTotal > 0 && (
-            <div className="flex justify-between text-warning">
-              <span>値引き / Discount</span>
-              <span className="tabular-nums">-{yen(order.discountTotal)}</span>
-            </div>
-          )}
-          <div className="mt-1 flex justify-between border-t border-gray-200 pt-1.5 text-lg font-bold text-navy">
-            <span>合計 / Total</span>
-            <span className="tabular-nums">{yen(order.total)}</span>
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            {(order.lines ?? []).length === 0 ? (
+              <p className="p-6 text-center text-sm text-ink-3">品目がありません</p>
+            ) : (
+              <ul className="divide-y divide-line">
+                {(order.lines ?? []).map((l) => (
+                  <li key={l.id} className="flex items-center gap-3 px-4 py-3">
+                    <span className="min-w-0 flex-1 truncate text-[15px] font-bold text-navy">{l.name}</span>
+                    <span className="w-12 text-right text-sm text-ink-2 tabular-nums">{l.quantity}</span>
+                    <span className="w-[88px] text-right text-[15px] font-bold tabular-nums text-navy">{yen(l.lineTotal)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
           {(order.unsentCount ?? 0) > 0 && (
-            <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            <p className="border-t border-line bg-amber-50 px-4 py-2.5 text-xs text-amber-800">
               厨房へ未送信の品目が {order.unsentCount} 品あります。会計を確定すると同時に厨房へ送信されます。
-              <br />
-              {order.unsentCount} item(s) not yet sent to the kitchen will be sent when you confirm payment.
             </p>
           )}
-        </div>
+        </section>
 
-        {paymentAvailability.configured && (
-          <div className="rounded-xl border border-primary/30 bg-primary-soft/40 p-4">
-            <div className="mb-3 flex items-center justify-between">
-              <p className="text-sm font-semibold text-navy">カード端末で決済 / Pay on terminal</p>
-              {paymentAvailability.testMode && <Badge tone="warning">テストモード</Badge>}
+        {/* 中: 金額 */}
+        <section className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-line bg-white">
+          <div className="border-b border-line px-4 py-3">
+            <h3 className="text-[15px] font-bold text-navy">
+              金額<span className="en-inline">Amount</span>
+            </h3>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto px-5 py-3">
+            <div className={sumRow}>
+              <span>小計</span>
+              <b className="font-bold tabular-nums text-ink">{yen(order.subtotal)}</b>
+            </div>
+            {order.serviceCharge > 0 && (
+              <div className={cn(sumRow, 'pl-3 text-[13px] text-ink-3')}>
+                <span>サービス料</span>
+                <b className="tabular-nums">{yen(order.serviceCharge)}</b>
+              </div>
+            )}
+            <div className={cn(sumRow, order.discountTotal > 0 && 'text-warning')}>
+              <span>値引き・クーポン{order.couponCode ? `（${order.couponCode}）` : ''}</span>
+              <b className="font-bold tabular-nums">{order.discountTotal > 0 ? `-${yen(order.discountTotal)}` : yen(0)}</b>
+            </div>
+            <div className="my-2 border-t border-dashed border-line" />
+            <div className="flex items-baseline justify-between py-2">
+              <span className="text-base font-bold text-navy">お支払い金額</span>
+              <b className="text-[34px] font-extrabold leading-none tabular-nums text-royal">{yen(order.total)}</b>
+            </div>
+            <div className={cn(sumRow, 'pl-3 text-[13px] text-ink-3')}>
+              <span>うち消費税</span>
+              <b className="tabular-nums">{yen(order.taxTotal)}</b>
+            </div>
+            <div className="my-2 border-t border-dashed border-line" />
+            <div className={sumRow}>
+              <span>お預り</span>
+              <b className="font-bold tabular-nums text-ink">{yen(tenderedTotal)}</b>
+            </div>
+            <div className="flex items-baseline justify-between py-1.5">
+              <span className="text-[15px] font-bold text-ink-2">残額</span>
+              <b className={cn('text-2xl font-extrabold tabular-nums', remaining === 0 ? 'text-success' : 'text-warning')}>
+                {yen(remaining)}
+              </b>
+            </div>
+            <div className={sumRow}>
+              <span>おつり</span>
+              <b className="font-bold tabular-nums text-ink">{yen(changeTotal)}</b>
             </div>
 
-            {terminalReaders.length === 0 ? (
-              <p className="text-xs text-gray-500">
-                利用可能な決済端末が登録されていません。設定 &gt; 決済・端末 から登録してください。
-              </p>
-            ) : terminalStatus === 'idle' ? (
-              <div className="space-y-3">
-                {terminalReaders.length > 1 ? (
-                  <div>
-                    <Label htmlFor="terminal-reader">決済端末</Label>
-                    <Select
-                      id="terminal-reader"
-                      value={selectedReaderId}
-                      onChange={(e) => setSelectedReaderId(e.target.value)}
+            {payments.length > 0 && (
+              <div className="mt-3 space-y-1.5 border-t border-line pt-3">
+                {payments.map((p) => (
+                  <div key={p.key} className="flex items-center gap-2 rounded-xl bg-lilac-soft px-3 py-2">
+                    <Badge tone="navy" className="shrink-0">
+                      {METHOD_LABELS[p.method]}
+                    </Badge>
+                    <span className="ml-auto text-lg font-bold tabular-nums text-navy">{yen(p.amount)}</span>
+                    <button
+                      type="button"
+                      aria-label="削除"
+                      onClick={() => removePayment(p.key)}
+                      className="rounded p-1 text-ink-3 hover:bg-danger-soft hover:text-danger"
                     >
-                      {terminalReaders.map((r) => (
-                        <option key={r.id} value={r.id}>
-                          {r.label}
-                          {r.isSimulated ? '（シミュレーション端末）' : ''}
-                        </option>
-                      ))}
-                    </Select>
+                      <Trash2 className="h-4 w-4" />
+                    </button>
                   </div>
-                ) : (
-                  <div className="flex items-center gap-2 text-sm text-navy">
-                    <span className="font-medium">{terminalReaders[0].label}</span>
-                    {terminalReaders[0].isSimulated && <Badge tone="gray">シミュレーション端末</Badge>}
-                  </div>
-                )}
-                {terminalError && <p className="text-xs text-danger">{terminalError}</p>}
-                <Button
-                  variant="navy"
-                  size="pos"
-                  className="w-full"
-                  disabled={!selectedReaderId || terminalActionPending}
-                  onClick={handleStartTerminal}
-                >
-                  端末へ送信（{yen(order.total)}）
-                </Button>
-              </div>
-            ) : terminalStatus === 'sending' || terminalStatus === 'polling' ? (
-              <div className="flex flex-col items-center gap-3 py-3">
-                <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                <p className="text-sm text-gray-600">
-                  {terminalStatus === 'sending' ? '端末へ送信しています…' : 'お客様の決済をお待ちしています…'}
-                </p>
-                <Button variant="secondary" size="sm" onClick={handleCancelTerminal} disabled={terminalActionPending}>
-                  キャンセル
-                </Button>
-              </div>
-            ) : terminalStatus === 'timeout' ? (
-              <div className="space-y-3 text-center">
-                <p className="text-sm text-warning">
-                  状態の確認がタイムアウトしました。決済は継続している場合があります。
-                </p>
-                <div className="flex justify-center gap-2">
-                  <Button variant="secondary" size="sm" onClick={handleRecheckTerminal}>
-                    状態を再確認
-                  </Button>
-                  <Button variant="secondary" size="sm" onClick={handleCancelTerminal} disabled={terminalActionPending}>
-                    キャンセル
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-3 text-center">
-                <p className="text-sm text-danger">{terminalError ?? '決済に失敗しました'}</p>
-                <Button variant="secondary" size="sm" onClick={handleCancelTerminal} disabled={terminalActionPending}>
-                  閉じて他の支払方法を選ぶ
-                </Button>
+                ))}
               </div>
             )}
           </div>
-        )}
+          <div className="border-t border-line p-3">
+            <Button
+              size="pos"
+              className="h-[56px] w-full text-[18px]"
+              disabled={!canConfirm || checkoutPending}
+              onClick={handleConfirm}
+            >
+              {checkoutPending ? (
+                <>
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  処理中…
+                </>
+              ) : (
+                '会計する'
+              )}
+            </Button>
+          </div>
+        </section>
 
-        {canDiscount && (
-          <div className="rounded-xl border border-gray-200 p-4">
-            <div className="mb-2 flex items-center justify-between">
-              <p className="text-sm font-semibold text-navy">値引き・クーポン / Discount・Coupon</p>
-              <div className="flex gap-1 rounded-full bg-gray-100 p-0.5 text-xs">
-                <button
-                  type="button"
-                  onClick={() => setCouponMode(false)}
-                  className={cn(
-                    'rounded-full px-3 py-1 font-medium transition-colors',
-                    !couponMode ? 'bg-white text-navy shadow-sm' : 'text-gray-500'
-                  )}
-                >
-                  値引き
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setCouponMode(true)}
-                  className={cn(
-                    'rounded-full px-3 py-1 font-medium transition-colors',
-                    couponMode ? 'bg-white text-navy shadow-sm' : 'text-gray-500'
-                  )}
-                >
-                  クーポン
-                </button>
-              </div>
+        {/* 右: 支払・値引 */}
+        <section className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-line bg-white">
+          <div className="border-b border-line px-4 py-3">
+            <h3 className="text-[15px] font-bold text-navy">
+              支払<span className="en-inline">Payment</span>
+            </h3>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto p-3">
+            <div className="mb-3 flex gap-1 rounded-xl bg-lilac p-1">
+              <button
+                type="button"
+                onClick={() => setRightTab('pay')}
+                className={cn(
+                  'flex-1 rounded-lg py-2.5 text-sm font-bold transition-colors',
+                  rightTab === 'pay' ? 'bg-white text-royal shadow-sm' : 'text-ink-2'
+                )}
+              >
+                支払
+              </button>
+              <button
+                type="button"
+                disabled={!canDiscount}
+                onClick={() => setRightTab('discount')}
+                className={cn(
+                  'flex-1 rounded-lg py-2.5 text-sm font-bold transition-colors disabled:opacity-40',
+                  rightTab === 'discount' ? 'bg-white text-royal shadow-sm' : 'text-ink-2'
+                )}
+              >
+                値引
+              </button>
             </div>
 
-            {couponMode ? (
-              isCouponReason ? (
-                <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-primary-soft/50 px-3 py-2">
-                  <div className="flex items-center gap-2 text-sm text-primary-deep">
-                    <Ticket className="h-4 w-4" />
-                    <span className="font-medium">{(discountReason as string).slice(COUPON_PREFIX.length)}</span>
-                    <span className="tabular-nums">-{yen(order.discountTotal)}</span>
-                  </div>
+            {rightTab === 'pay' ? (
+              <>
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="text-xs font-bold text-ink-2">支払方法</span>
                   <button
                     type="button"
-                    onClick={handleClearCoupon}
-                    disabled={couponPending}
-                    className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-danger hover:bg-danger-soft"
+                    onClick={toggleSplitMode}
+                    disabled={terminalBlocking}
+                    aria-pressed={splitMode}
+                    className={cn(
+                      'rounded-full px-3 py-1 text-[11px] font-bold transition-colors disabled:opacity-50',
+                      splitMode ? 'bg-iris text-white' : 'bg-lilac text-ink-2'
+                    )}
                   >
-                    <XIcon className="h-3.5 w-3.5" />
-                    解除
+                    {splitMode ? '分けて払う：ON' : '分けて払う'}
                   </button>
                 </div>
-              ) : (
-                <div className="flex flex-wrap items-end gap-2">
-                  <div className="flex-1 min-w-[180px]">
-                    <Label htmlFor="coupon-code">クーポンコード</Label>
-                    <Input
-                      id="coupon-code"
-                      value={couponCodeInput}
-                      onChange={(e) => setCouponCodeInput(e.target.value)}
-                      placeholder="例: WELCOME500"
-                    />
+                <div className="grid grid-cols-2 gap-2">
+                  {BASE_METHODS.map((m) => {
+                    const selected = payments.some((p) => p.method === m);
+                    return (
+                      <button
+                        key={m}
+                        type="button"
+                        disabled={terminalBlocking}
+                        aria-pressed={selected}
+                        onClick={() => selectPayment(m)}
+                        className={cn(
+                          'flex h-[52px] items-center justify-center rounded-xl border px-2 text-center text-[15px] font-bold leading-tight transition-colors disabled:opacity-50',
+                          selected ? 'border-iris bg-iris text-white' : 'border-line bg-white text-navy active:bg-lilac-soft'
+                        )}
+                      >
+                        {METHOD_LABELS[m]}
+                      </button>
+                    );
+                  })}
+                  <button
+                    type="button"
+                    disabled={terminalBlocking || !pointsAvailability.available}
+                    aria-pressed={payments.some((p) => p.method === 'points')}
+                    title={pointsAvailability.available ? `残高 ${pointsAvailability.balance}pt` : '顧客紐付け・会員機能有効・残高が必要です'}
+                    onClick={() => selectPayment('points')}
+                    className={cn(
+                      'flex h-[52px] items-center justify-center rounded-xl border px-2 text-center text-[15px] font-bold leading-tight transition-colors disabled:opacity-40',
+                      payments.some((p) => p.method === 'points')
+                        ? 'border-iris bg-iris text-white'
+                        : 'border-line bg-white text-navy active:bg-lilac-soft'
+                    )}
+                  >
+                    {METHOD_LABELS.points}
+                  </button>
+                </div>
+
+                {payments.some((p) => TERMINAL_METHODS.includes(p.method)) && (
+                  <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-[11px] text-amber-700">
+                    決済端末（stera 等）で決済してから「会計する」を押してください。
+                  </p>
+                )}
+
+                {/* 金額表示とテンキー（選んだ支払方法の金額・現金は預り金を入力する） */}
+                <div className="mt-3 rounded-xl bg-plum px-4 py-3 text-right text-[34px] font-extrabold tabular-nums text-white">
+                  {activeRow ? activeValue.toLocaleString() : 0}
+                </div>
+                <p className="mt-1 text-right text-[11px] text-ink-3">
+                  {activeRow ? (activeRow.method === 'cash' ? '預り金を入力' : `${METHOD_LABELS[activeRow.method]}の金額`) : '支払方法を選んでください'}
+                </p>
+
+                <div className="mt-2 grid grid-cols-3 gap-2">
+                  {QUICK_CASH_AMOUNTS.map((amt) => (
+                    <button
+                      key={amt}
+                      type="button"
+                      disabled={!activeRow}
+                      onClick={() => setActiveValue(activeValue + amt)}
+                      className="flex h-11 items-center justify-center rounded-xl border border-line bg-white text-[15px] font-bold tabular-nums text-navy active:bg-lilac disabled:opacity-40"
+                    >
+                      {amt.toLocaleString()}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="mt-2 grid grid-cols-3 gap-2">
+                  <button type="button" disabled={!activeRow} onClick={() => setActiveValue(0)} className={cn(keySmall, 'text-danger')}>
+                    C
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!activeRow}
+                    onClick={() => setActiveValue(activeRow?.method === 'cash' ? (activeRow?.amount ?? 0) : Math.max(0, remaining) + (activeRow?.amount ?? 0))}
+                    className={keySmall}
+                  >
+                    ちょうど
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!activeRow}
+                    onClick={() => setActiveValue(Math.floor(activeValue / 10))}
+                    className={keySmall}
+                  >
+                    訂正
+                  </button>
+                  {(['7', '8', '9', '4', '5', '6', '1', '2', '3'] as const).map((k) => (
+                    <button key={k} type="button" disabled={!activeRow} onClick={() => setActiveValue(appendTenkeyDigit(activeValue, k))} className={keyBtn}>
+                      {k}
+                    </button>
+                  ))}
+                  <button type="button" disabled={!activeRow} onClick={() => setActiveValue(appendTenkeyDigit(activeValue, '0'))} className={keyBtn}>
+                    0
+                  </button>
+                  <button type="button" disabled={!activeRow} onClick={() => setActiveValue(appendTenkeyDoubleZero(activeValue))} className={keyBtn}>
+                    00
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!canConfirm || checkoutPending}
+                    onClick={handleConfirm}
+                    className="flex h-[58px] items-center justify-center rounded-xl bg-iris text-lg font-bold text-white active:bg-iris-deep disabled:opacity-40"
+                  >
+                    決定
+                  </button>
+                </div>
+
+                {paymentAvailability.configured && terminalReaders.length > 0 && (
+                  <div className="mt-3 rounded-xl border border-line p-3">
+                    <div className="mb-2 flex items-center justify-between">
+                      <p className="text-xs font-bold text-navy">カード端末で決済</p>
+                      {paymentAvailability.testMode && <Badge tone="warning">テスト</Badge>}
+                    </div>
+                    {terminalStatus === 'idle' ? (
+                      <div className="space-y-2">
+                        {terminalReaders.length > 1 && (
+                          <Select id="terminal-reader" value={selectedReaderId} onChange={(e) => setSelectedReaderId(e.target.value)}>
+                            {terminalReaders.map((r) => (
+                              <option key={r.id} value={r.id}>
+                                {r.label}
+                                {r.isSimulated ? '（シミュレーション）' : ''}
+                              </option>
+                            ))}
+                          </Select>
+                        )}
+                        {terminalError && <p className="text-xs text-danger">{terminalError}</p>}
+                        <Button variant="navy" size="md" className="w-full" disabled={!selectedReaderId || terminalActionPending} onClick={handleStartTerminal}>
+                          端末へ送信（{yen(order.total)}）
+                        </Button>
+                      </div>
+                    ) : terminalStatus === 'sending' || terminalStatus === 'polling' ? (
+                      <div className="flex flex-col items-center gap-2 py-2">
+                        <Loader2 className="h-5 w-5 animate-spin text-iris" />
+                        <p className="text-xs text-ink-2">{terminalStatus === 'sending' ? '端末へ送信しています…' : 'お客様の決済をお待ちしています…'}</p>
+                        <Button variant="secondary" size="sm" onClick={handleCancelTerminal} disabled={terminalActionPending}>
+                          キャンセル
+                        </Button>
+                      </div>
+                    ) : terminalStatus === 'timeout' ? (
+                      <div className="space-y-2 text-center">
+                        <p className="text-xs text-warning">状態の確認がタイムアウトしました。決済は継続している場合があります。</p>
+                        <div className="flex justify-center gap-2">
+                          <Button variant="secondary" size="sm" onClick={handleRecheckTerminal}>
+                            状態を再確認
+                          </Button>
+                          <Button variant="secondary" size="sm" onClick={handleCancelTerminal} disabled={terminalActionPending}>
+                            キャンセル
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-2 text-center">
+                        <p className="text-xs text-danger">{terminalError ?? '決済に失敗しました'}</p>
+                        <Button variant="secondary" size="sm" onClick={handleCancelTerminal} disabled={terminalActionPending}>
+                          閉じて他の支払方法を選ぶ
+                        </Button>
+                      </div>
+                    )}
                   </div>
-                  <Button variant="secondary" onClick={() => runApplyCoupon(false)} disabled={couponPending}>
-                    {couponPending ? '確認中…' : 'クーポンを適用'}
-                  </Button>
-                </div>
-              )
+                )}
+              </>
             ) : (
-              <div className="flex flex-wrap items-end gap-2">
-                <div>
-                  <Label htmlFor="discount-amount">値引き額</Label>
-                  <Input
-                    id="discount-amount"
-                    type="number"
-                    min={0}
-                    value={discountInput}
-                    onChange={(e) => setDiscountInput(e.target.value)}
-                    className="w-32"
-                  />
+              <div className="space-y-3">
+                <div className="flex gap-1 rounded-xl bg-lilac p-1 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setCouponMode(false)}
+                    className={cn('flex-1 rounded-lg py-2 font-bold', !couponMode ? 'bg-white text-royal shadow-sm' : 'text-ink-2')}
+                  >
+                    値引き
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCouponMode(true)}
+                    className={cn('flex-1 rounded-lg py-2 font-bold', couponMode ? 'bg-white text-royal shadow-sm' : 'text-ink-2')}
+                  >
+                    クーポン
+                  </button>
                 </div>
-                <div className="flex-1 min-w-[180px]">
-                  <Label htmlFor="discount-reason">理由</Label>
-                  <Input
-                    id="discount-reason"
-                    value={discountReasonInput}
-                    onChange={(e) => setDiscountReasonInput(e.target.value)}
-                    placeholder="端数調整・サービス等"
-                  />
-                </div>
-                <Button variant="secondary" onClick={applyDiscount} disabled={discountPending}>
-                  {discountPending ? '処理中…' : '値引きを適用'}
-                </Button>
+                {couponMode ? (
+                  <>
+                    <div>
+                      <Label htmlFor="coupon-code">クーポンコード</Label>
+                      <Input id="coupon-code" value={couponCodeInput} onChange={(e) => setCouponCodeInput(e.target.value.toUpperCase())} placeholder="例: WELCOME500" />
+                    </div>
+                    <div className="flex gap-2">
+                      <Button variant="secondary" className="flex-1" onClick={() => runApplyCoupon(false)} disabled={couponPending}>
+                        <Ticket className="h-4 w-4" />
+                        適用
+                      </Button>
+                      {order.couponCode && (
+                        <Button variant="secondary" onClick={handleClearCoupon} disabled={couponPending}>
+                          <XIcon className="h-4 w-4" />
+                          解除
+                        </Button>
+                      )}
+                    </div>
+                    {order.couponCode && <p className="text-xs text-ink-2">適用中: {order.couponCode}</p>}
+                  </>
+                ) : (
+                  <>
+                    <div>
+                      <Label htmlFor="discount-amount">値引き額</Label>
+                      <Input id="discount-amount" type="number" min={0} value={discountInput} onChange={(e) => setDiscountInput(e.target.value)} />
+                    </div>
+                    <div>
+                      <Label htmlFor="discount-reason">理由</Label>
+                      <Input id="discount-reason" value={discountReasonInput} onChange={(e) => setDiscountReasonInput(e.target.value)} placeholder="端数調整・サービス等" />
+                    </div>
+                    <Button variant="secondary" className="w-full" onClick={applyDiscount} disabled={discountPending}>
+                      {discountPending ? '処理中…' : '値引きを適用'}
+                    </Button>
+                  </>
+                )}
               </div>
             )}
           </div>
-        )}
-
-        <div>
-          <div className="mb-2 flex items-center justify-between gap-2">
-            <p className="text-base font-semibold text-navy">支払方法 / Payment method</p>
-            <button
-              type="button"
-              onClick={toggleSplitMode}
-              disabled={terminalBlocking}
-              aria-pressed={splitMode}
-              className={cn(
-                'rounded-full px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-50',
-                splitMode
-                  ? 'bg-primary text-white'
-                  : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-              )}
-            >
-              {splitMode ? '支払いを分ける / Split：ON' : '支払いを分ける / Split'}
-            </button>
-          </div>
-          <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
-            {BASE_METHODS.map((m) => {
-              const selected = payments.some((p) => p.method === m);
-              return (
-                <button
-                  key={m}
-                  type="button"
-                  disabled={terminalBlocking}
-                  aria-pressed={selected}
-                  onClick={() => selectPayment(m)}
-                  className={cn(
-                    'flex h-16 items-center justify-center rounded-xl border px-2 text-center text-base font-bold leading-tight transition-colors disabled:cursor-not-allowed disabled:opacity-50',
-                    selected
-                      ? 'border-primary bg-primary text-white'
-                      : 'border-gray-200 bg-white text-navy hover:bg-gray-50'
-                  )}
-                >
-                  <span className="block">{METHOD_LABELS[m]}</span>
-                  <span className="block text-[11px] font-normal opacity-80">{METHOD_LABELS_EN[m]}</span>
-                </button>
-              );
-            })}
-            {(() => {
-              const selected = payments.some((p) => p.method === 'points');
-              return (
-                <button
-                  type="button"
-                  disabled={terminalBlocking || !pointsAvailability.available}
-                  aria-pressed={selected}
-                  title={
-                    pointsAvailability.available
-                      ? `残高 ${pointsAvailability.balance}pt`
-                      : '顧客紐付け・会員機能有効・残高が必要です'
-                  }
-                  onClick={() => selectPayment('points')}
-                  className={cn(
-                    'flex h-16 items-center justify-center rounded-xl border px-2 text-center text-base font-bold leading-tight transition-colors disabled:cursor-not-allowed disabled:opacity-50',
-                    selected
-                      ? 'border-primary bg-primary text-white'
-                      : 'border-gray-200 bg-white text-navy hover:bg-gray-50'
-                  )}
-                >
-                  {METHOD_LABELS.points}
-                </button>
-              );
-            })()}
-          </div>
-          {payments.some((p) => TERMINAL_METHODS.includes(p.method)) && (
-            <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
-              決済端末（stera JT-C60 等）で決済してください。端末で決済成功を確認してから「会計を確定」を押してください。
-            </p>
-          )}
-        </div>
-
-        {payments.length > 0 && (
-          <div className="space-y-2">
-            {payments.map((p) => (
-              <div key={p.key} className="rounded-xl border border-gray-200 p-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge tone="navy" className="shrink-0 text-sm">
-                    {METHOD_LABELS[p.method]}
-                  </Badge>
-                  <Input
-                    type="number"
-                    inputMode="numeric"
-                    aria-label={`${METHOD_LABELS[p.method]}の金額`}
-                    min={0}
-                    max={p.method === 'points' ? maxPointsUsable : undefined}
-                    value={p.amount}
-                    onChange={(e) => {
-                      const cap = p.method === 'points' ? maxPointsUsable : Number.MAX_SAFE_INTEGER;
-                      const v = Math.max(0, Math.min(cap, Number(e.target.value) || 0));
-                      updatePayment(p.key, { amount: v, tendered: p.method === 'cash' ? p.tendered : undefined });
-                    }}
-                    className="h-14 w-40 text-right text-2xl font-bold tabular-nums"
-                  />
-                  {p.method === 'points' && (
-                    <span className="text-sm text-gray-500 tabular-nums">上限 {yen(maxPointsUsable)}</span>
-                  )}
-                  <button
-                    type="button"
-                    aria-label="削除"
-                    onClick={() => removePayment(p.key)}
-                    className="ml-auto rounded p-1.5 text-gray-400 hover:bg-danger-soft hover:text-danger"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
-
-                {p.method === 'cash' && (
-                  <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_auto]">
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <Label className="mb-0 text-base">預り金 / Tendered</Label>
-                        <span className="text-3xl font-bold tabular-nums text-navy">{yen(p.tendered ?? 0)}</span>
-                      </div>
-                      <div className="flex flex-wrap gap-1.5">
-                        {QUICK_CASH_AMOUNTS.map((amt) => (
-                          <button
-                            key={amt}
-                            type="button"
-                            onClick={() =>
-                              updatePayment(p.key, { tendered: (p.tendered ?? 0) + amt })
-                            }
-                            className="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-base font-semibold text-navy hover:bg-gray-50"
-                          >
-                            +{yen(amt)}
-                          </button>
-                        ))}
-                        <button
-                          type="button"
-                          onClick={() => updatePayment(p.key, { tendered: p.amount })}
-                          className="rounded-lg border border-primary/40 bg-primary-soft px-4 py-2.5 text-base font-semibold text-primary-deep hover:bg-primary-soft/70"
-                        >
-                          ちょうど / Exact
-                        </button>
-                      </div>
-                      <p className="text-xl font-bold tabular-nums text-navy">
-                        お釣り / Change {yen(calcChange(p.amount, p.tendered ?? 0))}
-                      </p>
-                    </div>
-                    <Tenkey
-                      onKey={(k) => {
-                        const current = p.tendered ?? 0;
-                        if (k === 'C') updatePayment(p.key, { tendered: 0 });
-                        else if (k === '00') updatePayment(p.key, { tendered: appendTenkeyDoubleZero(current) });
-                        else updatePayment(p.key, { tendered: appendTenkeyDigit(current, k) });
-                      }}
-                    />
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-
-        <div className="flex items-center justify-between rounded-xl bg-navy px-4 py-3 text-white">
-          <span className="text-base">残額 / Remaining</span>
-          <span className="text-2xl font-bold tabular-nums">{yen(remaining)}</span>
-        </div>
-
-        <Button
-          size="pos"
-          className="w-full"
-          disabled={!canConfirm || checkoutPending}
-          onClick={handleConfirm}
-        >
-          {checkoutPending ? (
-            <>
-              <Loader2 className="h-5 w-5 animate-spin" />
-              処理中…
-            </>
-          ) : (
-            '会計を確定 / Confirm payment'
-          )}
-        </Button>
+        </section>
       </div>
 
       <ConfirmDialog
@@ -769,6 +886,6 @@ export function CheckoutDialog({
         destructive={false}
         onConfirm={() => runApplyCoupon(true)}
       />
-    </Dialog>
+    </div>
   );
 }

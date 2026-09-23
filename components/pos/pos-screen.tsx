@@ -434,7 +434,8 @@ export function PosScreen({
     const base = result.warning ?? '会計が完了しました';
     toast(earned > 0 ? `${base}（+${earned}ポイント付与）` : base, result.warning ? 'error' : 'success');
     void attemptOpenDrawer(payments.map((p) => p.method));
-    router.push(`/app/pos/receipt/${order.id}`);
+    // 画面遷移はしない: 会計ダイアログが「会計完了（お預り・おつり）」を出し、
+    // そこから レシート／テーブル一覧／連続会計 を選ぶ
   };
 
   const handleTerminalPaymentFinalized = () => {
@@ -444,6 +445,16 @@ export function PosScreen({
   };
 
   const checkoutOrder: CheckoutOrder = {
+    label: tableName ?? ORDER_TYPE_LABELS[order.orderType] ?? order.orderType,
+    guestCount: order.guestCount,
+    orderNo: order.orderNo,
+    lines: items.map((i) => ({
+      id: i.id,
+      name: i.name,
+      quantity: i.quantity,
+      unitPrice: i.unit_price,
+      lineTotal: i.line_total,
+    })),
     id: order.id,
     subtotal: order.subtotal,
     taxTotal: order.taxTotal,
@@ -832,8 +843,8 @@ export function PosScreen({
         />
       )}
 
+      {checkoutOpen && (
       <CheckoutDialog
-        open={checkoutOpen}
         onClose={() => setCheckoutOpen(false)}
         order={checkoutOrder}
         canDiscount={canDiscount}
@@ -850,6 +861,7 @@ export function PosScreen({
         cancelTerminalPaymentAction={cancelTerminalPaymentAction}
         onTerminalPaymentFinalized={handleTerminalPaymentFinalized}
       />
+      )}
 
       {optionTarget && (() => {
         const target = menuItems.find((m) => m.id === optionTarget);

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { LayoutGrid, Map as MapIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -77,8 +77,36 @@ export function FloorBoard({
   releaseFinishedCleaningAction?: (storeId: string) => Promise<{ released: number }>;
 }) {
   const router = useRouter();
+  const [, startTransition] = useTransition();
   const now = useNow(serverNow);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  /**
+   * テーブルを押したときの動き（2026-09-24 要望）。
+   *   空席            → そのまま「お客様情報」へ
+   *   着席中・会計待ち → そのまま注文・会計画面へ
+   *   清掃中・利用停止 → 右のパネル（清掃完了・再開のボタンがある）
+   * 利用停止にしたいときは、パネルをテーブル名の右の「…」から開く。
+   */
+  const openTable = (t: TableView) => {
+    const st = tileState(t, now);
+    if (st === 'free' || st === 'reserved' || st === 'waiting') {
+      router.push(`/app/floor/${t.id}/setup`);
+      return;
+    }
+    if (st === 'cleaning' || st === 'unavailable') {
+      setSelectedId(t.id);
+      return;
+    }
+    startTransition(async () => {
+      try {
+        const { orderId } = await goToOrderAction(t.id);
+        router.push(`/app/pos?order=${orderId}`);
+      } catch {
+        setSelectedId(t.id);
+      }
+    });
+  };
   const floorIds = floors.map((f) => f.id);
   const [floorFilter, setFloorFilter] = useState<string>(() => initialFloorFilter(floorIds, defaultFloorId));
   // 左右スライドで隣のフロアへ（右 → 次のフロア、左 → 前のフロア）
@@ -219,7 +247,7 @@ export function FloorBoard({
                                 <button
                                   key={t.id}
                                   type="button"
-                                  onClick={() => setSelectedId(t.id)}
+                                  onClick={() => openTable(t)}
                                   style={{
                                     gridColumnStart: (t.pos_x as number) + 1,
                                     gridRowStart: (t.pos_y as number) + 1,
@@ -241,7 +269,7 @@ export function FloorBoard({
                       {unplaced.length > 0 && (
                         <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
                           {unplaced.map((t) => (
-                            <TableCard key={t.id} table={t} now={now} onSelect={(x) => setSelectedId(x.id)} />
+                            <TableCard key={t.id} table={t} now={now} onSelect={openTable} />
                           ))}
                         </div>
                       )}
@@ -258,7 +286,7 @@ export function FloorBoard({
         ) : (
           <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
             {visible.map((t) => (
-              <TableCard key={t.id} table={t} now={now} onSelect={(x) => setSelectedId(x.id)} />
+              <TableCard key={t.id} table={t} now={now} onSelect={openTable} />
             ))}
           </div>
         )}
