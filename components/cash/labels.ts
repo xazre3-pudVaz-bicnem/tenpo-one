@@ -44,6 +44,7 @@ export const METHOD_LABELS: Record<string, string> = {
   voucher: '商品券',
   on_account: '掛売',
   points: 'ポイント',
+  site_points: 'サイトのポイント',
   external: '外部端末(stera等)',
   other: 'その他',
 };
@@ -60,6 +61,7 @@ export const METHOD_LABELS_EN: Record<string, string> = {
   voucher: 'Voucher',
   on_account: 'On account',
   points: 'Points',
+  site_points: 'Site points',
   external: 'Terminal (stera)',
   other: 'Other',
 };

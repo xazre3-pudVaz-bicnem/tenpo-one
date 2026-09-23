@@ -9,6 +9,8 @@ import { Badge } from '@/components/ui/badge';
 import { SettingsBackLink } from '@/components/settings/back-link';
 import { PaymentReadersPanel, type TerminalReaderRow } from '@/components/settings/payment-readers-panel';
 import { BookingPaymentSettingsForm } from '@/components/settings/booking-payment-settings-form';
+import { CheckoutPresetsPanel } from '@/components/settings/checkout-presets-panel';
+import { checkoutPresetsFrom } from '@/lib/checkout-presets';
 import type { BookingPaymentMode } from './actions';
 
 export const metadata: Metadata = { title: '決済・端末 | 設定' };
@@ -39,7 +41,7 @@ export default async function PaymentsSettingsPage() {
       .order('created_at'),
     supabase
       .from('store_settings')
-      .select('booking_payment_mode, booking_deposit_amount')
+      .select('booking_payment_mode, booking_deposit_amount, settings')
       .eq('store_id', targetStore.id)
       .maybeSingle(),
   ]);
@@ -57,6 +59,10 @@ export default async function PaymentsSettingsPage() {
     <div>
       <SettingsBackLink />
       <PageHeader title="決済・端末" en="Payments" description={targetStore.name} />
+
+      <div className="mb-6">
+        <CheckoutPresetsPanel storeId={targetStore.id} initial={checkoutPresetsFrom(settings?.settings)} />
+      </div>
 
       <div className="space-y-5">
         <Card>

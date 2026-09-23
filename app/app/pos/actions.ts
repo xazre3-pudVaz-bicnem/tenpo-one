@@ -405,9 +405,14 @@ export async function setDiscount(orderId: string, discountTotal: number, reason
 }
 
 export interface CheckoutPayment {
-  method: 'cash' | 'credit' | 'qr' | 'emoney' | 'voucher' | 'on_account' | 'points' | 'external' | 'other';
+  method: 'cash' | 'credit' | 'qr' | 'emoney' | 'voucher' | 'on_account' | 'points' | 'site_points' | 'external' | 'other';
   amount: number;
   tendered?: number;
+  /**
+   * どのサイトのポイントか（ホットペッパー等）。'site_points' のときだけ使う。
+   * finalize_order は provider を書かないので、会計が通ったあとにここで payments に書き足す。
+   */
+  provider?: string | null;
 }
 
 export interface CheckoutOutcome {
@@ -477,6 +482,18 @@ export async function checkout(orderId: string, payments: CheckoutPayment[]): Pr
     }
     console.error('[pos.checkout] finalize_order failed:', error);
     throw new Error('会計の確定に失敗しました。通信状態を確認して再度お試しください');
+  }
+
+  // どのサイトのポイントで払ったかを残す（finalize_order は provider を書かないのでここで書き足す）。
+  // 売上の内訳を見るためだけの情報なので、失敗しても会計は成立させる。
+  const sitePoints = payments.find((p) => p.method === 'site_points' && p.provider);
+  if (sitePoints?.provider) {
+    const { error: providerError } = await supabase
+      .from('payments')
+      .update({ provider: sitePoints.provider })
+      .eq('order_id', orderId)
+      .eq('method', 'site_points');
+    if (providerError) console.error('[pos.checkout] site points provider not saved:', providerError.message);
   }
 
   revalidatePath('/app/pos');

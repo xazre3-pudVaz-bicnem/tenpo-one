@@ -4,6 +4,14 @@ import { revalidatePath } from 'next/cache';
 import { requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { getPaymentProvider, isPaymentTestMode } from '@/lib/payments';
+import {
+  checkoutPresetsFrom,
+  checkoutPresetsToJson,
+  normalizePresetName,
+  PRESET_KEY_RE,
+  PRESET_MAX,
+  type CheckoutPresets,
+} from '@/lib/checkout-presets';
 
 export interface ActionResult {
   error?: string;
@@ -136,5 +144,64 @@ export async function updateBookingPaymentSettings(input: BookingPaymentSettings
   });
 
   revalidatePath('/app/settings/payments');
+  return {};
+}
+
+/**
+ * 会計画面の「値引き」と「ポイント」の選択肢（店舗ごと）。
+ * 店舗要望（2026-09-24）：グルメサイトのクーポン（幹事様無料など）とポイント（ホットペッパー・
+ * ぐるなび・食べログなど）をレジで選べるようにする。設定は iPad からも変えられる。
+ */
+export async function saveCheckoutPresets(storeId: string, input: CheckoutPresets): Promise<ActionResult> {
+  const ctx = await requirePermission('store.settings');
+  const err = assertStoreAccess(ctx.stores.map((s) => s.id), storeId);
+  if (err) return { error: err };
+
+  const discounts = Array.isArray(input?.discounts) ? input.discounts : null;
+  const brands = Array.isArray(input?.pointBrands) ? input.pointBrands : null;
+  if (!discounts || !brands) return { error: '選択肢の指定が正しくありません' };
+  if (discounts.length > PRESET_MAX || brands.length > PRESET_MAX) {
+    return { error: `選択肢は ${PRESET_MAX} 個までです` };
+  }
+  for (const list of [discounts, brands]) {
+    for (const item of list) {
+      if (!PRESET_KEY_RE.test(item?.key ?? '')) return { error: '選択肢の記号が正しくありません' };
+      if (!normalizePresetName(item?.name)) return { error: '選択肢の名前を入れてください' };
+    }
+  }
+
+  const supabase = await createClient();
+  const { data: existing, error: readError } = await supabase
+    .from('store_settings')
+    .select('settings')
+    .eq('store_id', storeId)
+    .maybeSingle();
+  if (readError) return { error: `店舗設定の読み込みに失敗しました: ${readError.message}` };
+
+  const current = (existing?.settings as Record<string, unknown> | null) ?? {};
+  // 保存する形は checkoutPresetsFrom に通して揃える（壊れた値をそのまま書かない）
+  const presets = checkoutPresetsFrom({ checkout: checkoutPresetsToJson(input) });
+  const nextSettings = { ...current, checkout: checkoutPresetsToJson(presets) };
+  const { error } = await supabase
+    .from('store_settings')
+    .upsert(
+      { organization_id: ctx.organizationId, store_id: storeId, settings: nextSettings, updated_by: ctx.userId },
+      { onConflict: 'store_id' }
+    );
+  if (error) return { error: `選択肢の保存に失敗しました: ${error.message}` };
+
+  await supabase.rpc('log_audit', {
+    p_org: ctx.organizationId,
+    p_store: storeId,
+    p_action: 'settings.payments.presets_update',
+    p_target_table: 'store_settings',
+    p_target_id: storeId,
+    p_before: null,
+    p_after: { discounts: presets.discounts.length, pointBrands: presets.pointBrands.length },
+    p_note: null,
+  });
+
+  revalidatePath('/app/settings/payments');
+  revalidatePath('/app/pos');
   return {};
 }

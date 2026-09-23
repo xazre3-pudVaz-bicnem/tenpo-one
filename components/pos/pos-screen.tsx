@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils';
 import { yen } from '@/lib/format';
 import { englishName } from '@/lib/romaji';
 import { groupMenuPages, menuPageLabel, type MenuBookSettings } from '@/lib/menu-book';
+import type { DiscountPreset, PointBrand } from '@/lib/checkout-presets';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -142,6 +143,8 @@ export function PosScreen({
   items,
   categories,
   menuPages,
+  discountPresets = [],
+  pointBrands = [],
   menuItems,
   bestSellerIds,
   tableName,
@@ -186,6 +189,10 @@ export function PosScreen({
   categories: PosCategory[];
   /** メニューブックの「ページ」設定。上のタブ（ランチ・ドリンク・フード…）に使う */
   menuPages?: Pick<MenuBookSettings, 'pages' | 'categoryPage'>;
+  /** 会計の値引きの選択肢（設定 > 決済・端末） */
+  discountPresets?: DiscountPreset[];
+  /** 会計のポイントの選択肢（ホットペッパー・ぐるなび・食べログなど） */
+  pointBrands?: PointBrand[];
   menuItems: PosMenuItem[];
   /** 過去30日の販売数量TOP12（menu_item_id）。多い順 */
   bestSellerIds: string[];
@@ -891,6 +898,8 @@ export function PosScreen({
         cancelTerminalPaymentAction={cancelTerminalPaymentAction}
         onTerminalPaymentFinalized={handleTerminalPaymentFinalized}
         clerkMissing={clerkMissing}
+        discountPresets={discountPresets}
+        pointBrands={pointBrands}
       />
       )}
 

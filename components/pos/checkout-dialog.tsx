@@ -11,7 +11,13 @@ import { useToast } from '@/components/ui/toast';
 import { cn } from '@/lib/utils';
 import { yen } from '@/lib/format';
 import { calcChange } from '@/lib/money';
-import { METHOD_LABELS } from '@/components/cash/labels';
+import { METHOD_LABELS, METHOD_LABELS_EN } from '@/components/cash/labels';
+import {
+  discountAmountOf,
+  percentDiscountAmount,
+  type DiscountPreset,
+  type PointBrand,
+} from '@/lib/checkout-presets';
 import { appendTenkeyDigit, appendTenkeyDoubleZero } from './tenkey';
 import type { CheckoutPayment, ApplyCouponResult } from '@/app/app/pos/actions';
 import type { TerminalPaymentState } from '@/app/app/pos/payment-actions';
@@ -69,6 +75,11 @@ export interface PointsAvailability {
 }
 
 const BASE_METHODS: CheckoutPayment['method'][] = ['cash', 'credit', 'qr', 'emoney', 'voucher', 'on_account', 'external', 'other'];
+/** 支払方法のボタン（日本語の下に小さく英語）。スクロールせずに収まる高さにする */
+const payMethodBtn =
+  'flex h-[46px] flex-col items-center justify-center rounded-xl border px-1.5 text-center text-[14px] font-bold leading-tight transition-colors disabled:opacity-50';
+const payMethodOn = 'border-iris bg-iris text-white';
+const payMethodOff = 'border-line bg-white text-navy active:bg-lilac-soft';
 
 /**
  * 外部の決済端末（stera 等）を操作してから確定する必要がある支払方法。
@@ -105,6 +116,8 @@ export function CheckoutDialog({
   cancelTerminalPaymentAction,
   onTerminalPaymentFinalized,
   clerkMissing = false,
+  discountPresets = [],
+  pointBrands = [],
 }: {
   onClose: () => void;
   order: CheckoutOrder;
@@ -123,6 +136,10 @@ export function CheckoutDialog({
   onTerminalPaymentFinalized: () => void;
   /** 担当者が未選択（会計には担当者が必要） */
   clerkMissing?: boolean;
+  /** 値引きの選択肢（設定 > 決済・端末）。グルメサイトのクーポンなど */
+  discountPresets?: DiscountPreset[];
+  /** ポイントの選択肢（ホットペッパー・ぐるなび・食べログなど） */
+  pointBrands?: PointBrand[];
 }) {
   const { toast } = useToast();
   const [discountPending, startDiscount] = useTransition();
@@ -136,6 +153,9 @@ export function CheckoutDialog({
   const [discountReasonInput, setDiscountReasonInput] = useState(
     isCouponReason ? '' : (discountReason ?? '')
   );
+  /** 値引きの入れ方（￥ か ％） */
+  const [discountMode, setDiscountMode] = useState<'amount' | 'percent'>('amount');
+  const [percentInput, setPercentInput] = useState('');
   const [payments, setPayments] = useState<PaymentRow[]>([]);
   /** 右側のタブ（支払 / 値引） */
   const [rightTab, setRightTab] = useState<'pay' | 'discount'>('pay');
@@ -256,19 +276,51 @@ export function CheckoutDialog({
     setTerminalStatus('polling');
   };
 
-  const applyDiscount = () => {
-    const amount = Math.max(0, Number(discountInput) || 0);
-    if (amount > 0 && !discountReasonInput.trim()) {
+  /** 値引き前の合計（％値引きはこの金額から計算する） */
+  const baseTotal = order.total + order.discountTotal;
+
+  const runDiscount = (amount: number, reason: string) => {
+    if (amount > 0 && !reason.trim()) {
       toast('値引き理由を入力してください', 'error');
       return;
     }
     startDiscount(async () => {
       try {
-        await setDiscountAction(order.id, amount, discountReasonInput);
+        await setDiscountAction(order.id, amount, reason);
       } catch (e) {
         toast(e instanceof Error ? e.message : '値引きの適用に失敗しました', 'error');
       }
     });
+  };
+
+  const applyDiscount = () => {
+    const amount =
+      discountMode === 'percent'
+        ? percentDiscountAmount(Number(percentInput) || 0, baseTotal)
+        : Math.max(0, Number(discountInput) || 0);
+    const reason =
+      discountMode === 'percent' && !discountReasonInput.trim()
+        ? `${Math.max(0, Math.min(100, Math.floor(Number(percentInput) || 0)))}%値引き`
+        : discountReasonInput;
+    runDiscount(amount, reason);
+  };
+
+  /**
+   * 決めておいた値引きを押したとき。
+   * 「金額はレジで入れる」（幹事様無料など）は名前を理由に入れて、金額の入力にうつる。
+   */
+  const applyPreset = (preset: DiscountPreset) => {
+    setDiscountReasonInput(preset.name);
+    if (preset.kind === 'manual') {
+      setDiscountMode('amount');
+      setDiscountInput('');
+      toast(`${preset.name}：値引き額を入れてください`);
+      return;
+    }
+    const amount = discountAmountOf(preset, baseTotal);
+    setDiscountMode('amount');
+    setDiscountInput(String(amount));
+    runDiscount(amount, preset.name);
   };
 
   const runApplyCoupon = (force: boolean) => {
@@ -307,11 +359,11 @@ export function CheckoutDialog({
     });
   };
 
-  const addPayment = (method: CheckoutPayment['method']) => {
+  const addPayment = (method: CheckoutPayment['method'], provider?: string | null) => {
     const cap = method === 'points' ? Math.min(maxPointsUsable, Math.max(0, remaining)) : Math.max(0, remaining);
     setPayments((rows) => [
       ...rows,
-      { key: `${method}-${Date.now()}`, method, amount: cap, tendered: method === 'cash' ? cap : undefined },
+      { key: `${method}-${Date.now()}`, method, provider: provider ?? null, amount: cap, tendered: method === 'cash' ? cap : undefined },
     ]);
   };
 
@@ -321,17 +373,17 @@ export function CheckoutDialog({
    * 別の方法をタッチすれば置き換わり、同じ方法をもう一度タッチすれば取り消す。
    * splitMode=true のときだけ従来どおり行を積み上げて併用払いにできる。
    */
-  const selectPayment = (method: CheckoutPayment['method']) => {
+  const selectPayment = (method: CheckoutPayment['method'], provider?: string | null) => {
     if (splitMode) {
-      addPayment(method);
+      addPayment(method, provider);
       return;
     }
     const cap = method === 'points' ? Math.min(maxPointsUsable, order.total) : order.total;
     setPayments((rows) => {
-      // 同じ方法をもう一度タッチしたら取り消す（選択トグル）
-      if (rows.length === 1 && rows[0].method === method) return [];
+      // 同じ方法をもう一度タッチしたら取り消す（選択トグル。サイトのポイントは同じサイトのとき）
+      if (rows.length === 1 && rows[0].method === method && (rows[0].provider ?? null) === (provider ?? null)) return [];
       return [
-        { key: `${method}-${Date.now()}`, method, amount: cap, tendered: method === 'cash' ? cap : undefined },
+        { key: `${method}-${Date.now()}`, method, provider: provider ?? null, amount: cap, tendered: method === 'cash' ? cap : undefined },
       ];
     });
   };
@@ -639,7 +691,7 @@ export function CheckoutDialog({
                   rightTab === 'pay' ? 'bg-white text-royal shadow-sm' : 'text-ink-2'
                 )}
               >
-                支払
+                支払<span className="block text-[10px] font-semibold opacity-70">Payment</span>
               </button>
               <button
                 type="button"
@@ -650,28 +702,31 @@ export function CheckoutDialog({
                   rightTab === 'discount' ? 'bg-white text-royal shadow-sm' : 'text-ink-2'
                 )}
               >
-                値引
+                値引<span className="block text-[10px] font-semibold opacity-70">Discount</span>
               </button>
             </div>
 
             {rightTab === 'pay' ? (
               <>
-                <div className="mb-2 flex items-center justify-between">
-                  <span className="text-xs font-bold text-ink-2">支払方法</span>
+                <div className="mb-1.5 flex items-center justify-between gap-2">
+                  <span className="text-[11px] font-bold text-ink-3">支払方法 / Payment method</span>
                   <button
                     type="button"
                     onClick={toggleSplitMode}
                     disabled={terminalBlocking}
                     aria-pressed={splitMode}
                     className={cn(
-                      'rounded-full px-3 py-1 text-[11px] font-bold transition-colors disabled:opacity-50',
+                      'flex shrink-0 flex-col items-center rounded-full px-3 py-1 text-[11px] font-bold leading-tight transition-colors disabled:opacity-50',
                       splitMode ? 'bg-iris text-white' : 'bg-lilac text-ink-2'
                     )}
                   >
                     {splitMode ? '分けて払う：ON' : '分けて払う'}
+                    <span className={cn('text-[9px] font-semibold', splitMode ? 'text-white/80' : 'text-ink-3')}>
+                      Split payment
+                    </span>
                   </button>
                 </div>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-2 gap-1.5">
                   {BASE_METHODS.map((m) => {
                     const selected = payments.some((p) => p.method === m);
                     return (
@@ -681,12 +736,12 @@ export function CheckoutDialog({
                         disabled={terminalBlocking}
                         aria-pressed={selected}
                         onClick={() => selectPayment(m)}
-                        className={cn(
-                          'flex h-[52px] items-center justify-center rounded-xl border px-2 text-center text-[15px] font-bold leading-tight transition-colors disabled:opacity-50',
-                          selected ? 'border-iris bg-iris text-white' : 'border-line bg-white text-navy active:bg-lilac-soft'
-                        )}
+                        className={cn(payMethodBtn, selected ? payMethodOn : payMethodOff)}
                       >
-                        {METHOD_LABELS[m]}
+                        <span className="block">{METHOD_LABELS[m]}</span>
+                        <span className={cn('block text-[10px] font-semibold', selected ? 'text-white/80' : 'text-ink-3')}>
+                          {METHOD_LABELS_EN[m]}
+                        </span>
                       </button>
                     );
                   })}
@@ -697,15 +752,49 @@ export function CheckoutDialog({
                     title={pointsAvailability.available ? `残高 ${pointsAvailability.balance}pt` : '顧客紐付け・会員機能有効・残高が必要です'}
                     onClick={() => selectPayment('points')}
                     className={cn(
-                      'flex h-[52px] items-center justify-center rounded-xl border px-2 text-center text-[15px] font-bold leading-tight transition-colors disabled:opacity-40',
-                      payments.some((p) => p.method === 'points')
-                        ? 'border-iris bg-iris text-white'
-                        : 'border-line bg-white text-navy active:bg-lilac-soft'
+                      payMethodBtn,
+                      payments.some((p) => p.method === 'points') ? payMethodOn : payMethodOff,
+                      'disabled:opacity-40'
                     )}
                   >
-                    {METHOD_LABELS.points}
+                    <span className="block">自社ポイント</span>
+                    <span
+                      className={cn(
+                        'block text-[10px] font-semibold',
+                        payments.some((p) => p.method === 'points') ? 'text-white/80' : 'text-ink-3'
+                      )}
+                    >
+                      Our points
+                    </span>
                   </button>
                 </div>
+
+                {/* グルメサイトのポイント（ホットペッパー・ぐるなび・食べログなど。設定 > 決済・端末 で足せる） */}
+                {pointBrands.length > 0 && (
+                  <div className="mt-1.5">
+                    <p className="mb-1 text-[11px] font-bold text-ink-3">サイトのポイント / Site points</p>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {pointBrands.map((b) => {
+                        const selected = payments.some((p) => p.method === 'site_points' && p.provider === b.key);
+                        return (
+                          <button
+                            key={b.key}
+                            type="button"
+                            disabled={terminalBlocking}
+                            aria-pressed={selected}
+                            onClick={() => selectPayment('site_points', b.key)}
+                            className={cn(
+                              'flex h-[40px] items-center justify-center rounded-xl border px-1.5 text-center text-[12.5px] font-bold leading-tight transition-colors disabled:opacity-50',
+                              selected ? 'border-iris bg-iris text-white' : 'border-line bg-white text-navy active:bg-lilac-soft'
+                            )}
+                          >
+                            {b.name}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
 
                 {payments.some((p) => TERMINAL_METHODS.includes(p.method)) && (
                   <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-[11px] text-amber-700">
@@ -870,10 +959,69 @@ export function CheckoutDialog({
                   </>
                 ) : (
                   <>
-                    <div>
-                      <Label htmlFor="discount-amount">値引き額</Label>
-                      <Input id="discount-amount" type="number" min={0} value={discountInput} onChange={(e) => setDiscountInput(e.target.value)} />
+                    {/* グルメサイトのクーポンなど、決めておいた値引き（設定 > 決済・端末 で足せる） */}
+                    {discountPresets.length > 0 && (
+                      <div>
+                        <p className="mb-1 text-[11px] font-bold text-ink-3">決まった値引き / Presets</p>
+                        <div className="grid grid-cols-2 gap-1.5">
+                          {discountPresets.map((d) => (
+                            <button
+                              key={d.key}
+                              type="button"
+                              disabled={discountPending}
+                              onClick={() => applyPreset(d)}
+                              className="flex h-[44px] flex-col items-center justify-center rounded-xl border border-line bg-white px-1.5 text-center text-[13px] font-bold leading-tight text-navy active:bg-lilac-soft disabled:opacity-50"
+                            >
+                              {d.name}
+                              {d.kind !== 'manual' && (
+                                <span className="text-[10px] font-semibold text-ink-3">
+                                  {d.kind === 'percent' ? `${d.value}%` : yen(d.value)}
+                                </span>
+                              )}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ％で引くか、円で引くか */}
+                    <div className="flex gap-1 rounded-xl bg-lilac p-1 text-xs">
+                      {(['amount', 'percent'] as const).map((m) => (
+                        <button
+                          key={m}
+                          type="button"
+                          onClick={() => setDiscountMode(m)}
+                          className={cn(
+                            'flex-1 rounded-lg py-2 font-bold',
+                            discountMode === m ? 'bg-white text-royal shadow-sm' : 'text-ink-2'
+                          )}
+                        >
+                          {m === 'amount' ? '￥値引き' : '％値引き'}
+                        </button>
+                      ))}
                     </div>
+
+                    {discountMode === 'percent' ? (
+                      <div>
+                        <Label htmlFor="discount-percent">値引き率（％）</Label>
+                        <Input
+                          id="discount-percent"
+                          type="number"
+                          min={0}
+                          max={100}
+                          value={percentInput}
+                          onChange={(e) => setPercentInput(e.target.value)}
+                        />
+                        <p className="mt-1 text-[11px] text-ink-3">
+                          引く金額 {yen(percentDiscountAmount(Number(percentInput) || 0, baseTotal))}
+                        </p>
+                      </div>
+                    ) : (
+                      <div>
+                        <Label htmlFor="discount-amount">値引き額</Label>
+                        <Input id="discount-amount" type="number" min={0} value={discountInput} onChange={(e) => setDiscountInput(e.target.value)} />
+                      </div>
+                    )}
                     <div>
                       <Label htmlFor="discount-reason">理由</Label>
                       <Input id="discount-reason" value={discountReasonInput} onChange={(e) => setDiscountReasonInput(e.target.value)} placeholder="端数調整・サービス等" />
