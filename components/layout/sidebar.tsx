@@ -30,11 +30,14 @@ export function Sidebar({
   groups,
   alertCount,
   currentStoreId,
+  iconFirst = false,
 }: {
   tiles: NavTile[];
   groups: NavGroup[];
   alertCount: number;
   currentStoreId: string | null;
+  /** タイルのアイコンを左に置く（レジ端末。パソコンは文字が左のまま） */
+  iconFirst?: boolean;
 }) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
@@ -82,14 +85,12 @@ export function Sidebar({
                   href={t.href}
                   aria-current={active ? 'page' : undefined}
                   className={cn(
-                    'flex items-center justify-between gap-3 border-b border-line px-[18px] py-4 text-royal transition-colors last:border-b-0',
+                    'flex items-center gap-3 border-b border-line px-[18px] py-4 text-royal transition-colors last:border-b-0',
+                    // レジは下の一覧と縦を揃えるためアイコンを左に。パソコンは今まで通り文字が左
+                    iconFirst ? 'justify-start' : 'flex-row-reverse justify-between',
                     active ? 'bg-iris-soft' : 'hover:bg-lilac-soft'
                   )}
                 >
-                  <span className="min-w-0">
-                    <span className="block text-[17px] leading-tight font-bold whitespace-nowrap">{t.label}</span>
-                    <span className="mt-0.5 block text-xs text-ink-3">{t.en}</span>
-                  </span>
                   <span
                     className={cn(
                       'grid h-11 w-11 shrink-0 place-items-center rounded-xl',
@@ -97,6 +98,10 @@ export function Sidebar({
                     )}
                   >
                     <NavIcon name={t.icon} className="h-6 w-6" />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-[17px] leading-tight font-bold whitespace-nowrap">{t.label}</span>
+                    <span className="mt-0.5 block text-xs text-ink-3">{t.en}</span>
                   </span>
                 </Link>
               );
