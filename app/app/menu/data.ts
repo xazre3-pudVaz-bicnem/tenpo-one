@@ -27,12 +27,9 @@ const MOVED_IN_LIST = ['/app/expenses'];
 const EXPENSES = '/app/expenses';
 const BEFORE_EXPENSES = '/app/cash/close';
 
-/** 在庫設定は一覧では「設定」の手前に出す（集計＞仕入・在庫 の中にも入っている） */
+/** 在庫設定は一覧の「設定」の手前だけに出す */
 const INVENTORY = '/app/inventory';
 const BEFORE_INVENTORY = '/app/settings';
-
-/** 「在庫設定」を入れ直すグループ */
-const PURCHASING_GROUP = '仕入・在庫';
 
 /** 集計（店舗運営・仕入・在庫・経理・管理・チームをまとめた画面） */
 export const SUMMARY_ITEM: NavItem = {
@@ -91,14 +88,8 @@ export function menuLayout(
     const at = main.findIndex((i) => i.href === BEFORE_INVENTORY);
     main.splice(at < 0 ? main.length : at, 0, inventoryItem);
   }
-  const summaryGroups = trimmed
-    .filter((g) => g.label !== null)
-    .map((g) => {
-      if (g.label !== PURCHASING_GROUP) return g;
-      // 「在庫設定」は「仕入・在庫」の先頭に入れる
-      const inventory = byHref.get('/app/inventory');
-      return inventory ? { ...g, items: [inventory, ...g.items] } : g;
-    });
+  // 「在庫設定」は左メニューの「設定」の手前だけに出す（集計＞仕入・在庫 には入れない）
+  const summaryGroups = trimmed.filter((g) => g.label !== null);
 
   // 集計ボタンは アラート の手前（＝設定とアラートの間）に入れる
   const at = main.findIndex((i) => i.href === SUMMARY_BEFORE);
