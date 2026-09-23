@@ -4,23 +4,20 @@ import { loginRegisterDevice } from '@/lib/register-login-server';
 
 export interface RegisterLoginResult {
   ok?: boolean;
-  /** 同じ回線に同じ会社の店舗が複数あるとき、選んでもらう */
-  choose?: { id: string; name: string }[];
   error?: string;
 }
 
-/** レジ（iPad）のログイン。企業番号＋レジ用パスワード（店舗は接続元IPで決まる） */
+/** レジ（iPad）のログイン。企業番号＋店舗ユーザー名＋レジ用パスワード */
 export async function signInRegister(input: {
   orgCode: string;
+  storeUser: string;
   password: string;
-  storeId?: string | null;
 }): Promise<RegisterLoginResult> {
   const result = await loginRegisterDevice({
     orgCode: String(input.orgCode ?? '').slice(0, 32),
+    storeUser: String(input.storeUser ?? '').slice(0, 64),
     password: String(input.password ?? '').slice(0, 128),
-    storeId: input.storeId ?? null,
   });
   if (result.error) return { error: result.error };
-  if (result.choose) return { choose: result.choose };
   return { ok: true };
 }

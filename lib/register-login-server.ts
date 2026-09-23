@@ -4,10 +4,11 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
 import { currentRequestIp } from '@/lib/handy-device-server';
 import { networkKey } from '@/lib/handy-pairing';
-import { isAllowedNetwork, isRestricted, policyFrom } from '@/lib/store-access';
+import { isAllowedNetwork, isRestricted } from '@/lib/store-access';
 import { verifyRegisterPassword } from '@/lib/register-password';
 import { isOrgCode, normalizeOrgCode } from '@/lib/org-code';
-import { REGISTER_LOGIN_MESSAGE, decideRegisterLogin, type RegisterLoginCandidate } from '@/lib/register-login';
+import { loadStorePolicy } from '@/lib/store-access-server';
+import { REGISTER_LOGIN_MESSAGE, decideRegisterLogin, isStoreUser, normalizeStoreUser } from '@/lib/register-login';
 
 type Admin = ReturnType<typeof createAdminClient>;
 
@@ -21,22 +22,22 @@ export function registerDeviceEmail(storeId: string): string {
 
 export interface RegisterLoginOutcome {
   ok?: { storeId: string; storeName: string };
-  /** 同じ回線に同じ会社の店舗が複数あるとき、選んでもらう */
-  choose?: { id: string; name: string }[];
   error?: string;
 }
 
 /**
- * 企業番号 ＋ レジ用パスワード でログインする。
- * 会社は企業番号で、店舗は契約時に登録したお店のIPで決まる。
+ * 企業番号 ＋ 店舗ユーザー名 ＋ レジ用パスワード でログインする。
+ * さらに、契約でお店の回線を登録している店舗は、その回線からしか入れない。
  */
 export async function loginRegisterDevice(input: {
   orgCode: string;
+  storeUser: string;
   password: string;
-  storeId?: string | null;
 }): Promise<RegisterLoginOutcome> {
   const code = normalizeOrgCode(input.orgCode);
   if (!isOrgCode(code)) return { error: REGISTER_LOGIN_MESSAGE.badFormat };
+  const storeUser = normalizeStoreUser(input.storeUser);
+  if (!isStoreUser(storeUser)) return { error: REGISTER_LOGIN_MESSAGE.badStoreUser };
   const password = input.password.trim();
   if (!password) return { error: REGISTER_LOGIN_MESSAGE.badPassword };
 
@@ -50,56 +51,46 @@ export async function loginRegisterDevice(input: {
     return { error: REGISTER_LOGIN_MESSAGE.unknownOrg };
   }
 
-  const ip = await currentRequestIp();
-  if (!ip) return { error: REGISTER_LOGIN_MESSAGE.noIp };
-
-  const { data: stores } = await admin
+  const { data: store } = await admin
     .from('stores')
     .select('id, name')
     .eq('organization_id', org.id as string)
-    .eq('status', 'active');
-  const storeIds = (stores ?? []).map((s) => s.id as string);
-  if (storeIds.length === 0) return { error: REGISTER_LOGIN_MESSAGE.noNetwork };
+    .eq('status', 'active')
+    .eq('register_username', storeUser)
+    .maybeSingle();
+  if (!store) return { error: REGISTER_LOGIN_MESSAGE.unknownStore };
 
-  const [{ data: policies }, { data: creds }] = await Promise.all([
-    admin.from('store_access_policies').select('store_id, networks, register_limit, handy_limit, note').in('store_id', storeIds),
-    admin.from('store_register_credentials').select('store_id, password_hash').in('store_id', storeIds),
+  const storeId = store.id as string;
+  const [policy, { data: cred }] = await Promise.all([
+    loadStorePolicy(storeId),
+    admin.from('store_register_credentials').select('password_hash').eq('store_id', storeId).maybeSingle(),
   ]);
 
-  const policyByStore = new Map((policies ?? []).map((p) => [p.store_id as string, policyFrom(p)]));
-  const hashByStore = new Map((creds ?? []).map((c) => [c.store_id as string, c.password_hash as string]));
-
-  const candidates: RegisterLoginCandidate[] = (stores ?? []).map((s) => {
-    const policy = policyByStore.get(s.id as string);
-    // 回線を登録していない店舗は、IPで見分けられないのでレジのログイン対象にしない
-    const onNetwork = !!policy && isRestricted(policy) && isAllowedNetwork(policy, ip);
-    return {
-      storeId: s.id as string,
-      storeName: (s.name as string) ?? '',
-      onNetwork,
-      passwordOk: onNetwork && verifyRegisterPassword(password, hashByStore.get(s.id as string) ?? null),
-    };
+  const ip = await currentRequestIp();
+  const decision = decideRegisterLogin({
+    storeId,
+    storeName: (store.name as string) ?? '',
+    passwordOk: verifyRegisterPassword(password, (cred?.password_hash as string | null) ?? null),
+    restricted: isRestricted(policy),
+    onNetwork: isAllowedNetwork(policy, ip),
   });
 
-  const decision = decideRegisterLogin(candidates, input.storeId ?? null);
-  if (decision.kind === 'no_network') {
-    return {
-      error: `${REGISTER_LOGIN_MESSAGE.noNetwork}（この端末の回線: ${networkKey(ip)}）。${REGISTER_LOGIN_MESSAGE.noNetworkHint}`,
-    };
+  if (decision.kind === 'unknown_store') return { error: REGISTER_LOGIN_MESSAGE.unknownStore };
+  if (decision.kind === 'off_network') {
+    const seen = ip ? networkKey(ip) : '不明';
+    return { error: `${REGISTER_LOGIN_MESSAGE.offNetwork}（この端末の回線: ${seen}）。${REGISTER_LOGIN_MESSAGE.offNetworkHint}` };
   }
   if (decision.kind === 'bad_password') return { error: REGISTER_LOGIN_MESSAGE.badPassword };
-  if (decision.kind === 'choose') return { choose: decision.stores };
 
-  const store = candidates.find((c) => c.storeId === decision.storeId)!;
   const ua = (await headers()).get('user-agent')?.slice(0, 200) ?? null;
   const session = await startRegisterSession(admin, {
     organizationId: org.id as string,
-    storeId: store.storeId,
-    storeName: store.storeName,
+    storeId,
+    storeName: (store.name as string) ?? '',
     userAgent: ua,
   });
   if (session.error) return { error: session.error };
-  return { ok: { storeId: store.storeId, storeName: store.storeName } };
+  return { ok: { storeId, storeName: (store.name as string) ?? '' } };
 }
 
 /**

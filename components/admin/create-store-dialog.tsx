@@ -12,10 +12,11 @@ export function CreateStoreDialog({ organizationId }: { organizationId: string }
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
   const [address, setAddress] = useState('');
+  const [storeUser, setStoreUser] = useState('');
   const [storeIp, setStoreIp] = useState('');
   const [registerLimit, setRegisterLimit] = useState('2');
   const [handyLimit, setHandyLimit] = useState('2');
-  const [issued, setIssued] = useState<{ orgCode?: string; registerPassword?: string } | null>(null);
+  const [issued, setIssued] = useState<{ orgCode?: string; storeUser?: string; registerPassword?: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const { toast } = useToast();
@@ -24,6 +25,7 @@ export function CreateStoreDialog({ organizationId }: { organizationId: string }
     setOpen(false);
     setName('');
     setAddress('');
+    setStoreUser('');
     setStoreIp('');
     setRegisterLimit('2');
     setHandyLimit('2');
@@ -40,12 +42,13 @@ export function CreateStoreDialog({ organizationId }: { organizationId: string }
           organizationId,
           name,
           address,
+          storeUser: storeUser || undefined,
           storeIps: storeIp.trim() ? [{ ip: storeIp, label: 'お店の回線' }] : [],
           registerLimit: Number(registerLimit) || 0,
           handyLimit: Number(handyLimit) || 0,
         });
         toast('店舗を追加しました');
-        setIssued({ orgCode: res.orgCode, registerPassword: res.registerPassword });
+        setIssued({ orgCode: res.orgCode, storeUser: res.storeUser, registerPassword: res.registerPassword });
       } catch (err) {
         setError(err instanceof Error ? err.message : '作成に失敗しました');
       }
@@ -72,6 +75,16 @@ export function CreateStoreDialog({ organizationId }: { organizationId: string }
           <div className="space-y-3 rounded-xl border border-gray-100 bg-surface p-3">
             <p className="text-sm font-semibold text-navy">契約（レジ・ハンディ）</p>
             <div>
+              <Label htmlFor="new-store-user">店舗ユーザー名（任意・未指定なら店舗名から生成）</Label>
+              <Input
+                id="new-store-user"
+                value={storeUser}
+                onChange={(e) => setStoreUser(e.target.value.replace(/[^A-Za-z0-9-]/g, '').toLowerCase().slice(0, 32))}
+                placeholder="shunka-shinjuku"
+                className="font-mono"
+              />
+            </div>
+            <div>
               <Label htmlFor="new-store-ip">お店のIPアドレス</Label>
               <Input id="new-store-ip" value={storeIp} onChange={(e) => setStoreIp(e.target.value)} placeholder="203.0.113.5" className="font-mono" />
             </div>
@@ -93,6 +106,7 @@ export function CreateStoreDialog({ organizationId }: { organizationId: string }
             <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm">
               <p className="font-semibold text-amber-800">レジ（iPad）のログイン（この画面でしか表示されません）</p>
               <p className="mt-1">企業番号：<span className="font-mono text-base">{issued.orgCode ?? '—'}</span></p>
+              <p className="mt-1">店舗ユーザー名：<span className="font-mono text-base">{issued.storeUser ?? '—'}</span></p>
               <p className="mt-1">レジ用パスワード：<span className="font-mono text-base">{issued.registerPassword ?? '—'}</span></p>
             </div>
           )}
