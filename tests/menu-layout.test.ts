@@ -14,11 +14,12 @@ describe('menuLayout（iPad・スマホのメニュー一覧）', () => {
     }
   });
 
-  it('入出金は一覧の先頭、仕入・経費はレジクローズの手前（大きなタイルにはしない）', () => {
+  it('伝票明細→入出金の順、仕入・経費はレジクローズの手前（大きなタイルにはしない）', () => {
     const tiles = layout.tiles.map((t) => t.href);
     expect(tiles).not.toContain('/app/cash');
     expect(tiles).not.toContain('/app/expenses');
-    expect(mainHrefs[0]).toBe('/app/cash');
+    expect(mainHrefs[0]).toBe('/app/orders');
+    expect(mainHrefs[1]).toBe('/app/cash');
     expect(mainHrefs.indexOf('/app/expenses')).toBe(mainHrefs.indexOf('/app/cash/close') - 1);
   });
 
@@ -81,5 +82,19 @@ describe('ホームは上部バーから開く（2026-09-23 要望）', () => {
   it('スマホの下部ナビにはホームを残す（上部バーの戻るボタンは幅が狭いと出ないため）', () => {
     expect(MOBILE_NAV.map((i) => i.href)).toContain('/app/dashboard');
     expect(TABLET_NAV.map((i) => i.href)).toContain('/app/dashboard');
+  });
+});
+
+describe('在庫設定の位置（2026-09-23 要望）', () => {
+  const main = menuLayout('org_owner', undefined, { keepActions: true }).main.map((i) => i.href);
+
+  it('一覧では「設定」の手前に出す', () => {
+    expect(main.indexOf('/app/inventory')).toBe(main.indexOf('/app/settings') - 1);
+  });
+
+  it('集計の「仕入・在庫」の中にも残す', () => {
+    const groups = menuLayout('org_owner').summaryGroups;
+    const purchasing = groups.find((g) => g.label === '仕入・在庫');
+    expect(purchasing?.items.map((i) => i.href)).toContain('/app/inventory');
   });
 });
