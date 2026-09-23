@@ -4,6 +4,7 @@ import { BookOpen, PackageX, Settings } from 'lucide-react';
 import { requireFeature } from '@/lib/auth';
 import { storeAccessBlock } from '@/components/pos/store-access-guard';
 import { createClient } from '@/lib/supabase/server';
+import { loadMenuBook } from '@/lib/menu-book-server';
 import { isMissingColumnError } from '@/lib/schema-compat';
 import { can } from '@/lib/permissions';
 import { PageHeader } from '@/components/ui/page-header';
@@ -165,6 +166,8 @@ export default async function PosPage({
 
   // order は取得済みのため、以降の7クエリ（明細・カテゴリ・商品・売れ筋・顧客・ロイヤリティ・店舗設定）は
   // すべて相互に独立＝並列取得できる（customer も order.customer_id が判明済み）。
+  const menuBook = await loadMenuBook(supabase, store.id);
+
   const [
     { data: items, error: itemsError },
     { data: categories, error: categoriesError },
@@ -366,6 +369,7 @@ export default async function PosPage({
         }}
         items={items ?? []}
         categories={categories ?? []}
+        menuPages={menuBook}
         menuItems={menuItems ?? []}
         bestSellerIds={bestSellerIds}
         tableName={table?.name ?? null}

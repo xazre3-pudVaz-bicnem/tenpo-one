@@ -10,6 +10,7 @@ import {
 import { cn } from '@/lib/utils';
 import { yen } from '@/lib/format';
 import { englishName } from '@/lib/romaji';
+import { groupMenuPages, menuPageLabel } from '@/lib/menu-book';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -138,6 +139,7 @@ export function PosScreen({
   order,
   items,
   categories,
+  menuPages,
   menuItems,
   bestSellerIds,
   tableName,
@@ -180,6 +182,8 @@ export function PosScreen({
   order: PosOrder;
   items: PosOrderItem[];
   categories: PosCategory[];
+  /** メニューブックの「ページ」設定。上のタブ（フード・ドリンク…）に使う */
+  menuPages?: { joinPrev: string[]; pageNames: Record<string, string> };
   menuItems: PosMenuItem[];
   /** 過去30日の販売数量TOP12（menu_item_id）。多い順 */
   bestSellerIds: string[];
@@ -435,11 +439,52 @@ export function PosScreen({
   };
 
   /** カテゴリの並び（おすすめ・売れ筋 → 各カテゴリ）。中央の縦リストと、幅が狭いときの横並びで同じものを使う */
-  const categoryTabs = [
-    { id: FAVORITES_TAB, name: 'おすすめ', en: 'Picks', color: null as string | null },
-    { id: BESTSELLERS_TAB, name: '売れ筋', en: 'Popular', color: null as string | null },
-    ...categories.map((c) => ({ id: c.id, name: c.name, en: englishName(c.name, null, c.name_en), color: c.color })),
-  ];
+  /**
+   * 上のタブ（ページ）と、その中のカテゴリ。
+   * ページはメニューブックの設定（ハンディ・お客様QRと同じ）をそのまま使う。
+   * 先頭に「おすすめ・売れ筋」のページを置く。
+   */
+  const pages = useMemo(() => {
+    const book = { joinPrev: menuPages?.joinPrev ?? [], pageNames: menuPages?.pageNames ?? {} };
+    const grouped = groupMenuPages(categories, book).map((pg) => {
+      const label = menuPageLabel(pg, (c) => c.name);
+      const first = pg.categories[0];
+      return {
+        key: pg.key,
+        label,
+        en: pg.categories.length === 1 ? englishName(first.name, null, first.name_en) : englishName(label, null, null),
+        categories: pg.categories.map((c) => ({
+          id: c.id,
+          name: c.name,
+          en: englishName(c.name, null, c.name_en),
+          color: c.color,
+        })),
+      };
+    });
+    return [
+      {
+        key: 'picks',
+        label: 'おすすめ',
+        en: 'Picks',
+        categories: [
+          { id: FAVORITES_TAB, name: 'おすすめ', en: 'Picks', color: null as string | null },
+          { id: BESTSELLERS_TAB, name: '売れ筋', en: 'Popular', color: null as string | null },
+        ],
+      },
+      ...grouped,
+    ];
+  }, [categories, menuPages]);
+
+  const activePage = pages.find((pg) => pg.categories.some((c) => c.id === activeCategory)) ?? pages[0];
+
+  /** 左の列に出すのは「いま開いているページ」の中のカテゴリだけ（上のタブ＝ページ、左＝その中身） */
+  const categoryTabs = activePage?.categories ?? [];
+
+  /** 上のタブ（ページ）を押したら、そのページの最初のカテゴリを開く */
+  const openPage = (key: string) => {
+    const pg = pages.find((p) => p.key === key);
+    if (pg?.categories[0]) setActiveCategory(pg.categories[0].id);
+  };
 
   /** 担当者は必須（店舗に担当者が登録されている場合）。未選択なら注文確定・会計へ進めない */
   const clerkMissing = clerks.length > 0 && !currentClerkId;
@@ -590,152 +635,193 @@ export function PosScreen({
         </div>
       </section>
 
-      {/* 中: カテゴリ（縦一列。iPad で指で選びやすいように） */}
-      {!searchQuery.trim() && (
-        <nav className="hidden w-[168px] shrink-0 overflow-y-auto rounded-2xl border border-line bg-white lg:block">
-          {categoryTabs.map((c) => {
-            const on = activeCategory === c.id;
-            return (
-              <button
-                key={c.id}
-                type="button"
-                onClick={() => setActiveCategory(c.id)}
-                className={cn(
-                  'w-full border-b border-line px-3.5 py-3.5 text-left text-[15px] font-bold leading-tight transition-colors last:border-b-0',
-                  on ? 'text-white' : 'text-ink-2 hover:bg-lilac-soft'
-                )}
-                style={on ? { backgroundColor: c.color ?? '#7B3FE4' } : undefined}
-              >
-                <span className="block">{c.name}</span>
-                {c.en && <span className={cn('block text-[11px] font-medium', on ? 'text-white/80' : 'text-ink-3')}>{c.en}</span>}
-              </button>
-            );
-          })}
-        </nav>
-      )}
-
-      {/* 右: 検索・商品グリッドと、下の「厨房へオーダー」「会計へ」 */}
-      <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-line bg-white">
-        <div className="border-b border-line px-3 py-2">
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-3" />
-            <input
-              ref={searchInputRef}
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="商品名・カナ・英語で検索 / Search"
-              className="h-11 w-full rounded-xl border border-line bg-white pl-9 pr-3 text-[15px] text-navy placeholder:text-ink-3 focus:border-iris focus:outline-2 focus:outline-iris/30"
-            />
-          </div>
-        </div>
-
-        {/* 幅が狭いとき（スマホ・縦置き）はカテゴリを横並びで出す */}
-        {!searchQuery.trim() && (
-          <div className="flex gap-2 overflow-x-auto border-b border-line px-3 py-2 lg:hidden">
-            {categoryTabs.map((c) => (
-              <button
-                key={c.id}
-                type="button"
-                onClick={() => setActiveCategory(c.id)}
-                className={cn(
-                  'shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition-colors',
-                  activeCategory === c.id ? 'text-white' : 'bg-lilac text-ink-2'
-                )}
-                style={activeCategory === c.id ? { backgroundColor: c.color ?? '#7B3FE4' } : undefined}
-              >
-                {c.name}
-              </button>
-            ))}
-          </div>
+      {/* 右側: 上が「ページ」のタブ（フード・ドリンク…）、下が「カテゴリの列 + 商品」 */}
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3">
+        {!searchQuery.trim() && pages.length > 1 && (
+          <nav className="flex shrink-0 gap-1.5 overflow-x-auto rounded-2xl border border-line bg-white p-1.5">
+            {pages.map((pg, i) => {
+              const on = activePage?.key === pg.key;
+              return (
+                <button
+                  key={pg.key}
+                  type="button"
+                  onClick={() => openPage(pg.key)}
+                  className={cn(
+                    'flex shrink-0 items-center gap-2 rounded-xl px-3.5 py-2 text-left transition-colors',
+                    on ? 'bg-royal text-white' : 'text-ink-2 hover:bg-lilac-soft'
+                  )}
+                >
+                  <span
+                    className={cn(
+                      'flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[12px] font-extrabold tabular-nums',
+                      on ? 'bg-white/20 text-white' : 'bg-lilac text-ink-3'
+                    )}
+                  >
+                    {i + 1}
+                  </span>
+                  <span className="leading-tight">
+                    <span className="block whitespace-nowrap text-[15px] font-bold">{pg.label}</span>
+                    {pg.en && (
+                      <span className={cn('block whitespace-nowrap text-[10px] font-semibold', on ? 'text-white/75' : 'text-ink-3')}>
+                        {pg.en}
+                      </span>
+                    )}
+                  </span>
+                </button>
+              );
+            })}
+          </nav>
         )}
 
-        <div className="min-h-0 flex-1 overflow-y-auto p-3">
-          {visibleItems.length === 0 ? (
-            <p className="p-6 text-center text-sm text-ink-3">
-              {searchQuery.trim() ? '該当する商品が見つかりません / No items found' : 'このカテゴリに商品がありません / No items in this category'}
-            </p>
-          ) : (
-            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-4">
-              {visibleItems.map((m) => {
-                const price = isTakeoutLike ? (m.takeout_price ?? m.price) : m.price;
-                const category = categories.find((c) => c.id === m.category_id);
+        <div className="flex min-h-0 flex-1 flex-col gap-3 lg:flex-row">
+          {/* 中: カテゴリ（縦一列。iPad で指で選びやすいように） */}
+          {!searchQuery.trim() && (
+            <nav className="hidden w-[168px] shrink-0 overflow-y-auto rounded-2xl border border-line bg-white lg:block">
+              {categoryTabs.map((c) => {
+                const on = activeCategory === c.id;
                 return (
                   <button
-                    key={m.id}
+                    key={c.id}
                     type="button"
-                    disabled={m.is_sold_out || pending}
-                    onClick={() => handleAdd(m.id)}
+                    onClick={() => setActiveCategory(c.id)}
                     className={cn(
-                      'flex min-h-[92px] flex-col items-center justify-center gap-1.5 rounded-xl border px-2.5 py-3 text-center transition-transform active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-60',
-                      m.is_sold_out ? 'border-line bg-lilac' : 'border-line bg-white hover:bg-lilac-soft'
+                      'w-full border-b border-line px-3.5 py-3.5 text-left text-[15px] font-bold leading-tight transition-colors last:border-b-0',
+                      on ? 'text-white' : 'text-ink-2 hover:bg-lilac-soft'
                     )}
-                    style={!m.is_sold_out && category?.color ? { borderTop: `4px solid ${category.color}` } : undefined}
+                    style={on ? { backgroundColor: c.color ?? '#7B3FE4' } : undefined}
                   >
-                    <span className="flex items-center gap-1 text-[15px] font-bold leading-tight text-navy">
-                      {m.is_recommended && <Star className="h-3.5 w-3.5 shrink-0 fill-warning text-warning" />}
-                      {m.name}
-                    </span>
-                    {englishByItemId.get(m.id) && (
-                      <span className="text-[11px] leading-tight text-ink-3">{englishByItemId.get(m.id)}</span>
-                    )}
-                    {m.is_sold_out ? (
-                      <Badge tone="gray">売切 / Sold out</Badge>
-                    ) : (
-                      <span className="text-[17px] font-extrabold tabular-nums text-royal">{yen(price)}</span>
-                    )}
+                    <span className="block">{c.name}</span>
+                    {c.en && <span className={cn('block text-[11px] font-medium', on ? 'text-white/80' : 'text-ink-3')}>{c.en}</span>}
                   </button>
                 );
               })}
-            </div>
+            </nav>
           )}
-        </div>
 
-        {clerkMissing && (
-          <p className="mx-3 mb-2 rounded-lg border border-danger/40 bg-danger-soft px-3 py-2 text-xs font-bold text-danger">
-            担当者を選んでください（注文確定・会計には担当者が必要です）
-          </p>
-        )}
+          {/* 右: 検索・商品グリッドと、下の「厨房へオーダー」「会計へ」 */}
+          <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-line bg-white">
+            <div className="border-b border-line px-3 py-2">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-3" />
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="商品名・カナ・英語で検索 / Search"
+                  className="h-11 w-full rounded-xl border border-line bg-white pl-9 pr-3 text-[15px] text-navy placeholder:text-ink-3 focus:border-iris focus:outline-2 focus:outline-iris/30"
+                />
+              </div>
+            </div>
 
-        {canCheckout && !registerOpen && (
-          <Link
-            href="/app/cash/close"
-            className="mx-3 mb-2 block rounded-lg border border-danger/40 bg-danger-soft px-3 py-2 text-xs text-danger"
-          >
-            <b>レジが未開局です。</b>
-            会計の前に「レジクローズ」画面で釣銭準備金を数えてレジを開局してください（タップで移動）
-          </Link>
-        )}
-
-        <div className="border-t border-line p-3 pb-[calc(0.75rem+3.5rem+env(safe-area-inset-bottom))] lg:pb-3">
-          <div className={cn('grid gap-3', order.tableId ? 'grid-cols-1' : 'grid-cols-2')}>
-            {sendOrderAction && (
-              <Button
-                size="pos"
-                variant={unsentItems.length > 0 ? 'navy' : 'secondary'}
-                className="h-[64px] w-full text-[20px]"
-                disabled={unsentItems.length === 0 || pending || clerkMissing}
-                onClick={handleSendOrder}
-              >
-                <ChefHat className="h-5 w-5" />
-                {unsentItems.length > 0 ? `Order（${unsentItems.length}品）` : 'Order（未送信なし）'}
-              </Button>
+            {/* 幅が狭いとき（スマホ・縦置き）はカテゴリを横並びで出す */}
+            {!searchQuery.trim() && (
+              <div className="flex gap-2 overflow-x-auto border-b border-line px-3 py-2 lg:hidden">
+                {categoryTabs.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => setActiveCategory(c.id)}
+                    className={cn(
+                      'shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition-colors',
+                      activeCategory === c.id ? 'text-white' : 'bg-lilac text-ink-2'
+                    )}
+                    style={activeCategory === c.id ? { backgroundColor: c.color ?? '#7B3FE4' } : undefined}
+                  >
+                    {c.name}
+                  </button>
+                ))}
+              </div>
             )}
-            {/* テーブルのある伝票は テーブル一覧のポップアップから会計する。
-                テイクアウト等（卓なし）はここからしか会計できないので残す */}
-            {!order.tableId && (
-              <Button
-                size="pos"
-                className="h-[64px] w-full text-[18px]"
-                disabled={items.length === 0 || pending || clerkMissing}
-                onClick={() => setCheckoutOpen(true)}
-              >
-                会計へ（{yen(order.total)}）
-              </Button>
+
+            <div className="min-h-0 flex-1 overflow-y-auto p-3">
+              {visibleItems.length === 0 ? (
+                <p className="p-6 text-center text-sm text-ink-3">
+                  {searchQuery.trim() ? '該当する商品が見つかりません / No items found' : 'このカテゴリに商品がありません / No items in this category'}
+                </p>
+              ) : (
+                <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-4">
+                  {visibleItems.map((m) => {
+                    const price = isTakeoutLike ? (m.takeout_price ?? m.price) : m.price;
+                    const category = categories.find((c) => c.id === m.category_id);
+                    return (
+                      <button
+                        key={m.id}
+                        type="button"
+                        disabled={m.is_sold_out || pending}
+                        onClick={() => handleAdd(m.id)}
+                        className={cn(
+                          'flex min-h-[92px] flex-col items-center justify-center gap-1.5 rounded-xl border px-2.5 py-3 text-center transition-transform active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-60',
+                          m.is_sold_out ? 'border-line bg-lilac' : 'border-line bg-white hover:bg-lilac-soft'
+                        )}
+                        style={!m.is_sold_out && category?.color ? { borderTop: `4px solid ${category.color}` } : undefined}
+                      >
+                        <span className="flex items-center gap-1 text-[15px] font-bold leading-tight text-navy">
+                          {m.is_recommended && <Star className="h-3.5 w-3.5 shrink-0 fill-warning text-warning" />}
+                          {m.name}
+                        </span>
+                        {englishByItemId.get(m.id) && (
+                          <span className="text-[11px] leading-tight text-ink-3">{englishByItemId.get(m.id)}</span>
+                        )}
+                        {m.is_sold_out ? (
+                          <Badge tone="gray">売切 / Sold out</Badge>
+                        ) : (
+                          <span className="text-[17px] font-extrabold tabular-nums text-royal">{yen(price)}</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {clerkMissing && (
+              <p className="mx-3 mb-2 rounded-lg border border-danger/40 bg-danger-soft px-3 py-2 text-xs font-bold text-danger">
+                担当者を選んでください（注文確定・会計には担当者が必要です）
+              </p>
             )}
-          </div>
+
+            {canCheckout && !registerOpen && (
+              <Link
+                href="/app/cash/close"
+                className="mx-3 mb-2 block rounded-lg border border-danger/40 bg-danger-soft px-3 py-2 text-xs text-danger"
+              >
+                <b>レジが未開局です。</b>
+                会計の前に「レジクローズ」画面で釣銭準備金を数えてレジを開局してください（タップで移動）
+              </Link>
+            )}
+
+            <div className="border-t border-line p-3 pb-[calc(0.75rem+3.5rem+env(safe-area-inset-bottom))] lg:pb-3">
+              <div className={cn('grid gap-3', order.tableId ? 'grid-cols-1' : 'grid-cols-2')}>
+                {sendOrderAction && (
+                  <Button
+                    size="pos"
+                    variant={unsentItems.length > 0 ? 'navy' : 'secondary'}
+                    className="h-[64px] w-full text-[20px]"
+                    disabled={unsentItems.length === 0 || pending || clerkMissing}
+                    onClick={handleSendOrder}
+                  >
+                    <ChefHat className="h-5 w-5" />
+                    {unsentItems.length > 0 ? `Order（${unsentItems.length}品）` : 'Order（未送信なし）'}
+                  </Button>
+                )}
+                {/* テーブルのある伝票は テーブル一覧のポップアップから会計する。
+                    テイクアウト等（卓なし）はここからしか会計できないので残す */}
+                {!order.tableId && (
+                  <Button
+                    size="pos"
+                    className="h-[64px] w-full text-[18px]"
+                    disabled={items.length === 0 || pending || clerkMissing}
+                    onClick={() => setCheckoutOpen(true)}
+                  >
+                    会計へ（{yen(order.total)}）
+                  </Button>
+                )}
+              </div>
+            </div>
+          </section>
         </div>
-      </section>
+      </div>
 
       <ConfirmDialog
         open={!!cancelTarget}
