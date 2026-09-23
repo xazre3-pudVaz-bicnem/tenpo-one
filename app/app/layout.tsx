@@ -7,6 +7,7 @@ import { visibleNavGroups, visibleNavTiles, MOBILE_NAV, TABLET_NAV } from '@/lib
 import { can } from '@/lib/permissions';
 import { featureForRoute } from '@/lib/features';
 import { Sidebar } from '@/components/layout/sidebar';
+import { ContentArea } from '@/components/layout/content-area';
 import { menuLayout } from '@/app/app/menu/data';
 import { TopBar } from '@/components/layout/top-bar';
 import { MobileNav } from '@/components/layout/mobile-nav';
@@ -65,8 +66,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const isRegi = ctx.isRegisterDevice === true;
 
   // レジは左メニューをホーム画面だけに出し、そこから開いた画面は全幅で使う（2026-09-23 要望）。
-  // 戻るのは上部バーの「ホーム」ボタン。
-  const hideSidebar = posFullscreen || (isRegi && pathname !== '/app/dashboard');
+  // 画面の移動では layout が作り直されないため、出し分けは Sidebar / ContentArea 側で行う。
 
   // 初期導入ウィザード未完了の企業オーナー/本社管理者を /app/onboarding へ誘導
   // （ウィザード自身とハンバーガーメニュー画面は無限リダイレクトを避けるため除外）
@@ -99,16 +99,17 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <div className="theme-regi min-h-screen bg-lilac">
         {/* 上部バー（全幅）→ その下に左メニュー（固定）と本文 */}
         <TopBar ctx={ctx} unreadCount={unreadCount ?? 0} showMenuLink={posFullscreen} />
-        {!hideSidebar && (
+        {!posFullscreen && (
           <Sidebar
             tiles={tiles}
             groups={groups}
             alertCount={unreadCount ?? 0}
             currentStoreId={ctx.currentStore?.id ?? null}
             iconFirst={isRegi}
+            homeOnly={isRegi}
           />
         )}
-        <div className={hideSidebar ? undefined : 'lg:pl-[250px]'}>
+        <ContentArea homeOnly={isRegi}>
           <InstallPrompt />
           {/* スマホは店舗切替を上部バーの下に表示 */}
           <div className="border-b border-line bg-white px-4 py-2 sm:hidden">
@@ -119,7 +120,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             />
           </div>
           <main className="px-4 pt-4 pb-24 lg:px-[22px] lg:pt-[18px] lg:pb-8">{children}</main>
-        </div>
+        </ContentArea>
         <MobileNav items={mobileItems} />
       </div>
     </CommandPaletteProvider>
