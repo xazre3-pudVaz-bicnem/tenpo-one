@@ -1,23 +1,19 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { LogOut, ChevronRight } from 'lucide-react';
+import { LogOut } from 'lucide-react';
 import { requireMember } from '@/lib/auth';
-import { visibleNavGroups, visibleNavTiles } from '@/lib/nav';
 import { ROLE_LABELS } from '@/lib/permissions';
 import { PageHeader } from '@/components/ui/page-header';
 import { NavIcon } from '@/components/layout/nav-icons';
+import { MenuList } from '@/components/layout/menu-list';
 import { signOut } from '@/app/app/actions';
+import { menuLayout } from './data';
 
 export const metadata: Metadata = { title: 'メニュー' };
 
 export default async function MenuPage() {
   const ctx = await requireMember();
-  const tiles = visibleNavTiles(ctx.role, ctx.disabledFeatures);
-  const groups = visibleNavGroups(ctx.role, ctx.disabledFeatures).map((g) => ({
-    ...g,
-    // ドロアオープン等の操作行はレジ端末の左メニューでのみ扱う
-    items: g.items.filter((i) => !i.action),
-  }));
+  const { tiles, main } = menuLayout(ctx.role, ctx.disabledFeatures);
 
   return (
     <div>
@@ -51,36 +47,7 @@ export default async function MenuPage() {
         </div>
       )}
 
-      <div className="space-y-5">
-        {groups.map((group, gi) => (
-          <div key={gi}>
-            {group.label && (
-              <p className="mb-1.5 px-1 text-[11px] font-medium uppercase tracking-wider text-gray-400">
-                {group.label}
-              </p>
-            )}
-            <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
-              <ul className="divide-y divide-gray-100">
-                {group.items.map((item) => (
-                  <li key={item.href}>
-                    <Link
-                      href={item.href}
-                      className="flex items-center gap-3 px-4 py-3.5 text-sm font-medium text-navy active:bg-gray-50"
-                    >
-                      <NavIcon name={item.icon} className="h-5 w-5 shrink-0 text-gray-500" />
-                      <span className="flex-1">
-                        {item.label}
-                        <span className="en-sub">{item.en}</span>
-                      </span>
-                      <ChevronRight className="h-4 w-4 shrink-0 text-gray-300" aria-hidden="true" />
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        ))}
-      </div>
+      <MenuList groups={[{ items: main }]} />
 
       <form action={signOut} className="mt-6">
         <button

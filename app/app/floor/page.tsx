@@ -11,6 +11,7 @@ import { PageHeader } from '@/components/ui/page-header';
 import { EmptyState } from '@/components/ui/state';
 import { CREATED_VIA_LABEL } from '@/components/reservations/constants';
 import { FloorBoard } from '@/components/floor/floor-board';
+import { TakeoutButton } from '@/components/floor/takeout-button';
 import type {
   FloorTable,
   PanelReservation,
@@ -19,6 +20,7 @@ import type {
   UpcomingReservation,
 } from '@/components/floor/types';
 import { startWalkIn, goToOrder, completeCleaning, setTableAvailability, releaseFinishedCleaning } from './actions';
+import { startTakeout } from '@/app/app/pos/actions';
 
 export const metadata: Metadata = { title: 'テーブル一覧' };
 
@@ -252,10 +254,12 @@ export default async function FloorPage() {
       <PageHeader
         title="テーブル一覧"
         en="Tables"
-        description="テーブルを選んで注文・会計に進みます ／ Tap a table to order or pay"
+        description="テーブルを選んで注文・会計に進みます。持ち帰りは「テイクアウト」から ／ Tap a table to order or pay"
         actions={
           <div className="flex flex-wrap items-center gap-3">
             <Legend />
+            {/* 持ち帰りはテーブルを使わないので、テーブル一覧からそのまま始められるようにする */}
+            {canOperate && <TakeoutButton startTakeoutAction={startTakeout} />}
             {/* レジの設定（厨房伝票・品切れ・メニュー・QR など）をフロアからも開けるように */}
             <Link
               href="/app/pos/settings"

@@ -1,0 +1,80 @@
+import { visibleNavGroups, visibleNavTiles, type NavGroup, type NavItem } from '@/lib/nav';
+import type { Role } from '@/lib/permissions';
+
+/**
+ * メニュー一覧（iPad・スマホ）の並び（2026-09-23 要望）。
+ * パソコンの左メニュー（lib/nav.ts）は変えず、この画面の並びだけをここで決める。
+ */
+
+/** この一覧には出さず、それぞれの画面の中に置いたもの */
+const MOVED_OUT_OF_MENU = new Set([
+  '/app/pos', // → テーブル一覧の「テイクアウト」ボタン
+  '/app/handy', // → 設定 > iPhoneハンディ
+  '/app/pos/settings', // → 設定 > デバイス管理
+  '/app/scan', // → 入金出金・仕入・経費 の中から撮る
+  '/app/inventory', // → 「仕入・在庫」の中へ（下で入れ直す）
+  '/app/staff', // → 設定 > 予約・顧客（スタッフ・権限）
+]);
+
+/** 上のタイルに上げるもの（iPad でよく使う）。並びは 入金出金 → 仕入・経費 */
+const TOP_ROW = ['/app/cash', '/app/expenses'];
+
+/** 「在庫設定」を入れ直すグループ */
+const PURCHASING_GROUP = '仕入・在庫';
+
+/** 集計（店舗運営・仕入・在庫・経理・管理・チームをまとめた画面） */
+export const SUMMARY_ITEM: NavItem = {
+  href: '/app/menu/summary',
+  label: '集計',
+  en: 'Reports & admin',
+  icon: 'chart',
+};
+
+/** 集計ボタンを差し込む位置（この href の手前に入れる） */
+const SUMMARY_BEFORE = '/app/notifications';
+
+export interface MenuLayout {
+  /** 上の大きなタイル */
+  tiles: { href: string; label: string; en: string; icon: string }[];
+  /** 一覧の先頭グループ（レジ業務）。集計ボタンを含む */
+  main: NavItem[];
+  /** 集計の中に入るグループ */
+  summaryGroups: NavGroup[];
+}
+
+export function menuLayout(role: Role, disabledFeatures?: ReadonlySet<string>): MenuLayout {
+  const allGroups = visibleNavGroups(role, disabledFeatures);
+  const byHref = new Map(allGroups.flatMap((g) => g.items).map((i) => [i.href, i]));
+
+  const topRowTiles = TOP_ROW.map((href) => byHref.get(href)).filter((i) => i !== undefined);
+  const tiles = [...visibleNavTiles(role, disabledFeatures), ...topRowTiles];
+
+  const trimmed = allGroups
+    .map((g) => ({
+      ...g,
+      // ドロアオープン等の操作行はレジ端末の左メニューでのみ扱う
+      items: g.items.filter((i) => !i.action && !MOVED_OUT_OF_MENU.has(i.href) && !TOP_ROW.includes(i.href)),
+    }))
+    .filter((g) => g.items.length > 0);
+
+  const main = trimmed.find((g) => g.label === null)?.items ?? [];
+  const summaryGroups = trimmed
+    .filter((g) => g.label !== null)
+    .map((g) => {
+      if (g.label !== PURCHASING_GROUP) return g;
+      // 「在庫設定」は「仕入・在庫」の先頭に入れる
+      const inventory = byHref.get('/app/inventory');
+      return inventory ? { ...g, items: [inventory, ...g.items] } : g;
+    });
+
+  // 集計ボタンは アラート の手前（＝設定とアラートの間）に入れる
+  const at = main.findIndex((i) => i.href === SUMMARY_BEFORE);
+  const withSummary =
+    summaryGroups.length === 0
+      ? main
+      : at < 0
+        ? [...main, SUMMARY_ITEM]
+        : [...main.slice(0, at), SUMMARY_ITEM, ...main.slice(at)];
+
+  return { tiles, main: withSummary, summaryGroups };
+}

@@ -45,6 +45,8 @@ export default async function SettingsLayout({ children }: { children: React.Rea
       label: 'デバイス管理',
       en: 'Devices & management',
       rows: [
+        // メニュー一覧から移したので、設定の中から開けるようにする（2026-09-23 要望）
+        { href: '/app/pos/settings', label: 'レジの設定', en: 'Register settings', icon: 'printers', description: '厨房伝票・品切れ・メニュー・QR・ハンディなど、レジで変える設定', visible: can(role, 'pos.order'), matchActive: false },
         { href: '/app/settings/printers', label: 'ハードウェア', en: 'Hardware', icon: 'printers', description: 'レジ端末とレシート・厨房プリンター、キャッシュドロアの設定', visible: true },
         { href: '/app/settings/handy-qr', label: 'iPhoneハンディ', en: 'Handy QR', icon: 'qr', description: 'お店に1つの固定QRでハンディにログイン（お店のWi-Fiだけ・外に出ると自動ログアウト）', visible: true },
         { href: '/app/settings/handy', label: 'ハンディ端末', en: 'Handy devices', icon: 'handy', description: 'スマホをQRコードでハンディとして登録・解除する', visible: true },
