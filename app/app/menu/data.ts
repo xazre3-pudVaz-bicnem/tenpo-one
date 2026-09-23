@@ -20,13 +20,16 @@ const MOVED_OUT_OF_MENU = new Set([
 
 /**
  * 元の位置から動かす行（大きなタイルにはせず、他と同じ大きさのまま。2026-09-23 要望）。
- *   入出金     … 一覧の先頭
- *   仕入・経費 … レジクローズの手前
+ *   仕入・経費 … レジクローズの手前へ
+ * 伝票明細・入出金 は元の並びのまま（伝票明細 → 入出金）。
  */
-const MOVED_IN_LIST = ['/app/cash', '/app/expenses'];
-const FIRST_IN_LIST = '/app/cash';
+const MOVED_IN_LIST = ['/app/expenses'];
 const EXPENSES = '/app/expenses';
 const BEFORE_EXPENSES = '/app/cash/close';
+
+/** 在庫設定は一覧では「設定」の手前に出す（集計＞仕入・在庫 の中にも入っている） */
+const INVENTORY = '/app/inventory';
+const BEFORE_INVENTORY = '/app/settings';
 
 /** 「在庫設定」を入れ直すグループ */
 const PURCHASING_GROUP = '仕入・在庫';
@@ -61,7 +64,6 @@ export function menuLayout(
   const byHref = new Map(allGroups.flatMap((g) => g.items).map((i) => [i.href, i]));
 
   const tiles: NavTile[] = visibleNavTiles(role, disabledFeatures);
-  const firstItem = byHref.get(FIRST_IN_LIST);
   const expensesItem = byHref.get(EXPENSES);
 
   const trimmed = allGroups
@@ -77,13 +79,18 @@ export function menuLayout(
     }))
     .filter((g) => g.items.length > 0);
 
-  const listed = [...(trimmed.find((g) => g.label === null)?.items ?? [])];
+  const main = [...(trimmed.find((g) => g.label === null)?.items ?? [])];
   // 仕入・経費 は レジクローズ の手前へ（無ければ末尾）
   if (expensesItem) {
-    const at = listed.findIndex((i) => i.href === BEFORE_EXPENSES);
-    listed.splice(at < 0 ? listed.length : at, 0, expensesItem);
+    const at = main.findIndex((i) => i.href === BEFORE_EXPENSES);
+    main.splice(at < 0 ? main.length : at, 0, expensesItem);
   }
-  const main = firstItem ? [firstItem, ...listed] : listed;
+  // 在庫設定 は 設定 の手前へ（無ければ末尾）
+  const inventoryItem = byHref.get(INVENTORY);
+  if (inventoryItem) {
+    const at = main.findIndex((i) => i.href === BEFORE_INVENTORY);
+    main.splice(at < 0 ? main.length : at, 0, inventoryItem);
+  }
   const summaryGroups = trimmed
     .filter((g) => g.label !== null)
     .map((g) => {
