@@ -78,7 +78,7 @@ export interface PointsAvailability {
  * 会計画面に出す支払方法（2026-09-24 要望で 商品券・掛売 は出さない）。
  * 過去の伝票には残っているので、表示のラベル（METHOD_LABELS）は消していない。
  */
-const BASE_METHODS: CheckoutPayment['method'][] = ['cash', 'credit', 'qr', 'emoney', 'external', 'other'];
+const BASE_METHODS: CheckoutPayment['method'][] = ['credit', 'qr', 'emoney', 'external', 'other'];
 /** 支払方法のボタン（日本語の下に小さく英語）。スクロールせずに収まる高さにする */
 const payMethodBtn =
   'flex h-[46px] flex-col items-center justify-center rounded-xl border px-1.5 text-center text-[14px] font-bold leading-tight transition-colors disabled:opacity-50';
@@ -127,6 +127,7 @@ export function CheckoutDialog({
   clerkMissing = false,
   discountPresets = [],
   pointBrands = [],
+  methodBrands = {},
 }: {
   onClose: () => void;
   order: CheckoutOrder;
@@ -149,6 +150,8 @@ export function CheckoutDialog({
   discountPresets?: DiscountPreset[];
   /** ポイントの選択肢（ホットペッパー・ぐるなび・食べログなど） */
   pointBrands?: PointBrand[];
+  /** 支払方法ごとの内訳（クレジット→VISA…、QR→PayPay…） */
+  methodBrands?: Record<string, PointBrand[]>;
 }) {
   const { toast } = useToast();
   const [discountPending, startDiscount] = useTransition();
@@ -162,8 +165,10 @@ export function CheckoutDialog({
   const [discountReasonInput, setDiscountReasonInput] = useState(
     isCouponReason ? '' : (discountReason ?? '')
   );
-  /** 「ポイント」を押したら、どのポイントかを選ぶ列を出す */
-  const [pointsOpen, setPointsOpen] = useState(false);
+  /** 押した支払方法（内訳＝VISA・PayPay・ホットペッパー等を選ぶ列を出す） */
+  const [openMethod, setOpenMethod] = useState<string | null>(null);
+  /** 別々お支払い：何人で割るか（null＝割らない。2026-09-24 要望） */
+  const [splitGuests, setSplitGuests] = useState<number | null>(null);
   /** 値引きの入れ方（￥ か ％） */
   const [discountMode, setDiscountMode] = useState<'amount' | 'percent'>('amount');
   const [percentInput, setPercentInput] = useState('');
@@ -374,7 +379,14 @@ export function CheckoutDialog({
   };
 
   const addPayment = (method: CheckoutPayment['method'], provider?: string | null) => {
-    const cap = method === 'points' ? Math.min(maxPointsUsable, Math.max(0, remaining)) : Math.max(0, remaining);
+    const left = Math.max(0, remaining);
+    // 別々お支払い：最後の1人が端数を持つ（合計がぴったり合うように）
+    const share = splitGuests
+      ? payments.length >= splitGuests - 1
+        ? left
+        : Math.min(left, Math.floor(order.total / splitGuests))
+      : left;
+    const cap = method === 'points' ? Math.min(maxPointsUsable, share) : share;
     setPayments((rows) => [
       ...rows,
       { key: `${method}-${Date.now()}`, method, provider: provider ?? null, amount: cap, tendered: method === 'cash' ? cap : undefined },
@@ -392,19 +404,48 @@ export function CheckoutDialog({
       addPayment(method, provider);
       return;
     }
-    const cap = method === 'points' ? Math.min(maxPointsUsable, order.total) : order.total;
     setPayments((rows) => {
-      // 同じ方法をもう一度タッチしたら取り消す（選択トグル。サイトのポイントは同じサイトのとき）
-      if (rows.length === 1 && rows[0].method === method && (rows[0].provider ?? null) === (provider ?? null)) return [];
-      return [
-        { key: `${method}-${Date.now()}`, method, provider: provider ?? null, amount: cap, tendered: method === 'cash' ? cap : undefined },
-      ];
+      const same = (r: PaymentRow) => r.method === method && (r.provider ?? null) === (provider ?? null);
+      // 同じ方法をもう一度タッチしたら取り消す（選択トグル。内訳つきは同じ内訳のとき）
+      if (rows.some(same)) return rows.filter((r) => !same(r));
+      // すでに入れた支払で足りていなければ、残りを足す
+      // （例：ポイントで400円払って、残りを現金やカードで払う。2026-09-24 要望）
+      const paid = rows.reduce((sum, r) => sum + r.amount, 0);
+      const left = Math.max(0, order.total - paid);
+      const base = rows.length > 0 && left > 0 ? left : order.total;
+      const cap = method === 'points' ? Math.min(maxPointsUsable, base) : base;
+      const row: PaymentRow = {
+        key: `${method}-${Date.now()}`,
+        method,
+        provider: provider ?? null,
+        amount: cap,
+        tendered: method === 'cash' ? cap : undefined,
+      };
+      return rows.length > 0 && left > 0 ? [...rows, row] : [row];
     });
   };
 
   // モードを切り替えたら入力済みの支払行は白紙に戻す（単一↔併用で金額の意味が変わるため）
   const toggleSplitMode = () => {
     setSplitMode((v) => !v);
+    setSplitGuests(null);
+    setPayments([]);
+  };
+
+  /**
+   * 別々お支払い（2026-09-24 要望）。
+   * 例：4人で来て1人ずつ払う → 人数を決めて、1人ずつ支払方法を押すと1人分ずつ入る。
+   * 最後の1人が端数を持つので合計はぴったり合う。
+   */
+  const startSplitByGuests = () => {
+    setSplitGuests(Math.max(2, order.guestCount && order.guestCount > 1 ? order.guestCount : 2));
+    setSplitMode(true);
+    setPayments([]);
+  };
+
+  const stopSplitByGuests = () => {
+    setSplitGuests(null);
+    setSplitMode(false);
     setPayments([]);
   };
 
@@ -698,60 +739,114 @@ export function CheckoutDialog({
             </h3>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto p-3 lg:overflow-visible">
-            <div className="mb-3 flex gap-1 rounded-xl bg-lilac p-1">
+            {/* 一番多い「現金」は一番上に大きく（2026-09-24 要望） */}
+            {rightTab === 'pay' && (
               <button
                 type="button"
-                onClick={() => setRightTab('pay')}
+                disabled={terminalBlocking}
+                aria-pressed={payments.some((p) => p.method === 'cash')}
+                onClick={() => selectPayment('cash')}
                 className={cn(
-                  'flex-1 rounded-lg py-2.5 text-sm font-bold transition-colors',
-                  rightTab === 'pay' ? 'bg-white text-royal shadow-sm' : 'text-ink-2'
+                  'mb-2 flex h-[54px] w-full flex-col items-center justify-center rounded-xl border text-center text-[18px] font-extrabold leading-tight transition-colors disabled:opacity-50',
+                  payments.some((p) => p.method === 'cash') ? payMethodOn : payMethodOff
                 )}
               >
-                支払<span className="block text-[10px] font-semibold opacity-70">Payment</span>
+                現金
+                <span
+                  className={cn(
+                    'text-[10px] font-semibold',
+                    payments.some((p) => p.method === 'cash') ? 'text-white/80' : 'text-ink-3'
+                  )}
+                >
+                  Cash
+                </span>
               </button>
-              <button
-                type="button"
-                disabled={!canDiscount}
-                onClick={() => setRightTab('discount')}
-                className={cn(
-                  'flex-1 rounded-lg py-2.5 text-sm font-bold transition-colors disabled:opacity-40',
-                  rightTab === 'discount' ? 'bg-white text-royal shadow-sm' : 'text-ink-2'
-                )}
-              >
-                値引<span className="block text-[10px] font-semibold opacity-70">Discount</span>
-              </button>
-            </div>
+            )}
 
             {rightTab === 'pay' ? (
               <>
                 <div className="mb-1.5 flex items-center justify-between gap-2">
                   <span className="text-[11px] font-bold text-ink-3">支払方法 / Payment method</span>
-                  <button
-                    type="button"
-                    onClick={toggleSplitMode}
-                    disabled={terminalBlocking}
-                    aria-pressed={splitMode}
-                    className={cn(
-                      'flex shrink-0 flex-col items-center rounded-full px-3 py-1 text-[11px] font-bold leading-tight transition-colors disabled:opacity-50',
-                      splitMode ? 'bg-iris text-white' : 'bg-lilac text-ink-2'
-                    )}
-                  >
-                    {splitMode ? '分けて払う：ON' : '分けて払う'}
-                    <span className={cn('text-[9px] font-semibold', splitMode ? 'text-white/80' : 'text-ink-3')}>
-                      Split payment
-                    </span>
-                  </button>
+                  <div className="flex shrink-0 gap-1.5">
+                    <button
+                      type="button"
+                      onClick={startSplitByGuests}
+                      disabled={terminalBlocking}
+                      aria-pressed={splitGuests != null}
+                      className={cn(
+                        'flex flex-col items-center rounded-full px-3 py-1 text-[11px] font-bold leading-tight transition-colors disabled:opacity-50',
+                        splitGuests != null ? 'bg-iris text-white' : 'bg-lilac text-ink-2'
+                      )}
+                    >
+                      別々お支払い
+                      <span className={cn('text-[9px] font-semibold', splitGuests != null ? 'text-white/80' : 'text-ink-3')}>
+                        Split by guests
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={toggleSplitMode}
+                      disabled={terminalBlocking}
+                      aria-pressed={splitMode}
+                      className={cn(
+                        'flex flex-col items-center rounded-full px-3 py-1 text-[11px] font-bold leading-tight transition-colors disabled:opacity-50',
+                        splitMode ? 'bg-iris text-white' : 'bg-lilac text-ink-2'
+                      )}
+                    >
+                      {splitMode ? '分けて払う：ON' : '分けて払う'}
+                      <span className={cn('text-[9px] font-semibold', splitMode ? 'text-white/80' : 'text-ink-3')}>
+                        Split payment
+                      </span>
+                    </button>
+                  </div>
                 </div>
+
+                {/* 別々お支払い：人数を決めて、1人ずつ支払方法を押す */}
+                {splitGuests != null && (
+                  <div className="mb-1.5 flex items-center gap-2 rounded-xl bg-lilac-soft px-2.5 py-1.5">
+                    <button
+                      type="button"
+                      aria-label="人数を1人減らす"
+                      onClick={() => setSplitGuests((n) => Math.max(2, (n ?? 2) - 1))}
+                      className="flex h-9 w-9 items-center justify-center rounded-lg border border-line bg-white text-lg font-bold text-royal"
+                    >
+                      −
+                    </button>
+                    <span className="text-[13px] font-bold text-royal tabular-nums">{splitGuests}人</span>
+                    <button
+                      type="button"
+                      aria-label="人数を1人増やす"
+                      onClick={() => setSplitGuests((n) => Math.min(20, (n ?? 2) + 1))}
+                      className="flex h-9 w-9 items-center justify-center rounded-lg border border-line bg-white text-lg font-bold text-royal"
+                    >
+                      ＋
+                    </button>
+                    <span className="ml-auto text-[12px] font-bold text-ink-2 tabular-nums">
+                      1人 {yen(Math.floor(order.total / splitGuests))} ・ あと {Math.max(0, splitGuests - payments.length)}人
+                    </span>
+                    <button
+                      type="button"
+                      aria-label="別々お支払いをやめる"
+                      onClick={stopSplitByGuests}
+                      className="rounded p-1 text-ink-3 hover:bg-danger-soft hover:text-danger"
+                    >
+                      <XIcon className="h-4 w-4" />
+                    </button>
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-1.5">
                   {BASE_METHODS.map((m) => {
                     const selected = payments.some((p) => p.method === m);
+                    const brands = methodBrands[m] ?? [];
                     return (
                       <button
                         key={m}
                         type="button"
                         disabled={terminalBlocking}
                         aria-pressed={selected}
-                        onClick={() => selectPayment(m)}
+                        aria-expanded={brands.length > 0 ? openMethod === m : undefined}
+                        // 内訳（VISA・PayPay など）があるものは、押してから中身を選ぶ
+                        onClick={() => (brands.length > 0 ? setOpenMethod((cur) => (cur === m ? null : m)) : selectPayment(m))}
                         className={cn(payMethodBtn, selected ? payMethodOn : payMethodOff)}
                       >
                         <span className="block">{METHOD_LABELS[m]}</span>
@@ -761,13 +856,13 @@ export function CheckoutDialog({
                       </button>
                     );
                   })}
-                  {/* ポイントは押してから、どのポイントかを選ぶ（2026-09-24 要望） */}
+                  {/* ポイントも押してから、どのポイントかを選ぶ（2026-09-24 要望） */}
                   <button
                     type="button"
                     disabled={terminalBlocking}
-                    aria-expanded={pointsOpen}
+                    aria-expanded={openMethod === 'points'}
                     aria-pressed={pointsSelected}
-                    onClick={() => setPointsOpen((v) => !v)}
+                    onClick={() => setOpenMethod((cur) => (cur === 'points' ? null : 'points'))}
                     className={cn(payMethodBtn, pointsSelected ? payMethodOn : payMethodOff)}
                   >
                     <span className="block">{METHOD_LABELS.points}</span>
@@ -775,32 +870,54 @@ export function CheckoutDialog({
                       {METHOD_LABELS_EN.points}
                     </span>
                   </button>
+                  {/* 値引はここ（下の項目）から開く（2026-09-24 要望） */}
+                  <button
+                    type="button"
+                    disabled={!canDiscount}
+                    onClick={() => setRightTab('discount')}
+                    className={cn(payMethodBtn, order.discountTotal > 0 ? payMethodOn : payMethodOff, 'disabled:opacity-40')}
+                  >
+                    <span className="block">値引</span>
+                    <span
+                      className={cn(
+                        'block text-[10px] font-semibold',
+                        order.discountTotal > 0 ? 'text-white/80' : 'text-ink-3'
+                      )}
+                    >
+                      Discount
+                    </span>
+                  </button>
                 </div>
 
-                {/* どのポイントか（自社ポイントと、グルメサイトのポイント。設定 > 決済・端末 で足せる） */}
-                {pointsOpen && (
+                {/* 押した支払方法の内訳（クレジット→VISA…、QR→PayPay…、ポイント→ホットペッパー…） */}
+                {openMethod && (
                   <div className="mt-1.5 rounded-xl border border-line p-2">
-                    <p className="mb-1 text-[11px] font-bold text-ink-3">どのポイントですか / Choose points</p>
+                    <p className="mb-1 text-[11px] font-bold text-ink-3">
+                      {openMethod === 'points' ? 'どのポイントですか / Choose points' : `${METHOD_LABELS[openMethod]}の種類 / Choose`}
+                    </p>
                     <div className="grid grid-cols-3 gap-1.5">
-                      <button
-                        type="button"
-                        disabled={terminalBlocking || !pointsAvailability.available}
-                        aria-pressed={payments.some((p) => p.method === 'points')}
-                        title={pointsAvailability.available ? `残高 ${pointsAvailability.balance}pt` : '顧客紐付け・会員機能有効・残高が必要です'}
-                        onClick={() => selectPayment('points')}
-                        className={cn(pointBrandBtn, payments.some((p) => p.method === 'points') ? pointBrandOn : pointBrandOff)}
-                      >
-                        自社ポイント
-                      </button>
-                      {pointBrands.map((b) => {
-                        const selected = payments.some((p) => p.method === 'site_points' && p.provider === b.key);
+                      {openMethod === 'points' && (
+                        <button
+                          type="button"
+                          disabled={terminalBlocking || !pointsAvailability.available}
+                          aria-pressed={payments.some((p) => p.method === 'points')}
+                          title={pointsAvailability.available ? `残高 ${pointsAvailability.balance}pt` : '顧客紐付け・会員機能有効・残高が必要です'}
+                          onClick={() => selectPayment('points')}
+                          className={cn(pointBrandBtn, payments.some((p) => p.method === 'points') ? pointBrandOn : pointBrandOff)}
+                        >
+                          自社ポイント
+                        </button>
+                      )}
+                      {(openMethod === 'points' ? pointBrands : (methodBrands[openMethod] ?? [])).map((b) => {
+                        const method = openMethod === 'points' ? 'site_points' : (openMethod as CheckoutPayment['method']);
+                        const selected = payments.some((p) => p.method === method && p.provider === b.key);
                         return (
                           <button
                             key={b.key}
                             type="button"
                             disabled={terminalBlocking}
                             aria-pressed={selected}
-                            onClick={() => selectPayment('site_points', b.key)}
+                            onClick={() => selectPayment(method, b.key)}
                             className={cn(pointBrandBtn, selected ? pointBrandOn : pointBrandOff)}
                           >
                             {b.name}
@@ -808,7 +925,7 @@ export function CheckoutDialog({
                         );
                       })}
                     </div>
-                    {!pointsAvailability.available && (
+                    {openMethod === 'points' && !pointsAvailability.available && (
                       <p className="mt-1 text-[10px] text-ink-3">自社ポイントは、お客様を伝票に紐付けて残高があるときだけ使えます</p>
                     )}
                   </div>
@@ -944,7 +1061,21 @@ export function CheckoutDialog({
                 )}
               </>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-2">
+                <div className="mb-1 flex items-center justify-between gap-2">
+                  <span className="text-[13px] font-bold text-navy">
+                    値引<span className="ml-1 text-[10px] font-semibold text-ink-3">Discount</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setRightTab('pay')}
+                    className="flex items-center gap-1 rounded-full bg-lilac px-3 py-1 text-[11px] font-bold text-ink-2"
+                  >
+                    <ArrowLeft className="h-3.5 w-3.5" aria-hidden />
+                    支払へ戻る
+                    <span className="text-[9px] font-semibold text-ink-3">Back</span>
+                  </button>
+                </div>
                 <div className="flex gap-1 rounded-xl bg-lilac p-1 text-xs">
                   <button
                     type="button"

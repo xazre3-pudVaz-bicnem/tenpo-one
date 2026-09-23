@@ -7,17 +7,21 @@ import { Input, Label, Select } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/components/ui/toast';
 import {
+  BRANDED_METHODS,
   DISCOUNT_KIND_LABELS,
   discountPresetsOf,
+  methodBrandsOf,
   nextPresetKey,
   pointBrandsOf,
   PRESET_MAX,
   PRESET_NAME_MAX,
+  type BrandedMethod,
   type CheckoutPresets,
   type DiscountPreset,
   type DiscountPresetKind,
   type PointBrand,
 } from '@/lib/checkout-presets';
+import { METHOD_LABELS } from '@/components/cash/labels';
 import { saveCheckoutPresets } from '@/app/app/settings/payments/actions';
 
 const KINDS: DiscountPresetKind[] = ['manual', 'percent', 'amount'];
@@ -32,20 +36,25 @@ export function CheckoutPresetsPanel({ storeId, initial }: { storeId: string; in
   const base: CheckoutPresets = {
     discounts: discountPresetsOf(initial),
     pointBrands: pointBrandsOf(initial),
+    methodBrands: Object.fromEntries(BRANDED_METHODS.map((m) => [m, methodBrandsOf(initial, m)])),
   };
   const [discounts, setDiscounts] = useState<DiscountPreset[]>(base.discounts);
   const [brands, setBrands] = useState<PointBrand[]>(base.pointBrands);
+  const [methods, setMethods] = useState<Record<string, PointBrand[]>>(base.methodBrands);
   const [pending, startTransition] = useTransition();
 
-  const dirty = JSON.stringify({ discounts, brands }) !== JSON.stringify({ discounts: base.discounts, brands: base.pointBrands });
+  const dirty =
+    JSON.stringify({ discounts, brands, methods }) !==
+    JSON.stringify({ discounts: base.discounts, brands: base.pointBrands, methods: base.methodBrands });
 
   const save = () => {
-    if (discounts.some((d) => !d.name.trim()) || brands.some((b) => !b.name.trim())) {
+    const allBrands = [...brands, ...Object.values(methods).flat()];
+    if (discounts.some((d) => !d.name.trim()) || allBrands.some((b) => !b.name.trim())) {
       toast('名前を入れてください', 'error');
       return;
     }
     startTransition(async () => {
-      const result = await saveCheckoutPresets(storeId, { discounts, pointBrands: brands });
+      const result = await saveCheckoutPresets(storeId, { discounts, pointBrands: brands, methodBrands: methods });
       if (result.error) {
         toast(result.error, 'error');
         return;
@@ -186,6 +195,55 @@ export function CheckoutPresetsPanel({ storeId, initial }: { storeId: string; in
           </Button>
         </section>
 
+        {BRANDED_METHODS.map((m: BrandedMethod) => (
+          <section key={m}>
+            <h3 className="mb-2 text-sm font-bold text-navy">{METHOD_LABELS[m]}の種類</h3>
+            <ul className="space-y-2">
+              {(methods[m] ?? []).map((b, i) => (
+                <li key={b.key} className="flex flex-wrap items-end gap-2 rounded-lg border border-gray-200 bg-white p-2">
+                  <div className="min-w-[9rem] flex-1">
+                    <Label htmlFor={`m-${m}-${b.key}`}>名前</Label>
+                    <Input
+                      id={`m-${m}-${b.key}`}
+                      value={b.name}
+                      maxLength={PRESET_NAME_MAX}
+                      className="h-11"
+                      onChange={(e) =>
+                        setMethods((cur) => ({
+                          ...cur,
+                          [m]: (cur[m] ?? []).map((x, xi) => (xi === i ? { ...x, name: e.target.value } : x)),
+                        }))
+                      }
+                    />
+                  </div>
+                  <Button
+                    variant="outline"
+                    className="h-11"
+                    aria-label={`${b.name || METHOD_LABELS[m]}を消す`}
+                    onClick={() => setMethods((cur) => ({ ...cur, [m]: (cur[m] ?? []).filter((_, xi) => xi !== i) }))}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </li>
+              ))}
+            </ul>
+            <Button
+              variant="outline"
+              className="mt-2 h-11"
+              disabled={(methods[m] ?? []).length >= PRESET_MAX}
+              onClick={() =>
+                setMethods((cur) => ({
+                  ...cur,
+                  [m]: [...(cur[m] ?? []), { key: nextPresetKey(cur[m] ?? [], m), name: '' }],
+                }))
+              }
+            >
+              <Plus className="h-4 w-4" />
+              {METHOD_LABELS[m]}の種類を追加
+            </Button>
+          </section>
+        ))}
+
         <div className="flex items-center justify-end gap-2">
           {dirty && <span className="mr-auto text-xs text-warning">保存していない変更があります</span>}
           <Button
@@ -195,6 +253,7 @@ export function CheckoutPresetsPanel({ storeId, initial }: { storeId: string; in
             onClick={() => {
               setDiscounts(base.discounts);
               setBrands(base.pointBrands);
+              setMethods(base.methodBrands);
             }}
           >
             元に戻す

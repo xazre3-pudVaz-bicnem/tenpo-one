@@ -145,6 +145,7 @@ export function PosScreen({
   menuPages,
   discountPresets = [],
   pointBrands = [],
+  methodBrands = {},
   menuItems,
   bestSellerIds,
   tableName,
@@ -193,6 +194,8 @@ export function PosScreen({
   discountPresets?: DiscountPreset[];
   /** 会計のポイントの選択肢（ホットペッパー・ぐるなび・食べログなど） */
   pointBrands?: PointBrand[];
+  /** 会計の支払方法ごとの内訳（クレジット→VISA…、QR→PayPay…） */
+  methodBrands?: Record<string, PointBrand[]>;
   menuItems: PosMenuItem[];
   /** 過去30日の販売数量TOP12（menu_item_id）。多い順 */
   bestSellerIds: string[];
@@ -901,6 +904,7 @@ export function PosScreen({
         clerkMissing={clerkMissing}
         discountPresets={discountPresets}
         pointBrands={pointBrands}
+        methodBrands={methodBrands}
       />
       )}
 

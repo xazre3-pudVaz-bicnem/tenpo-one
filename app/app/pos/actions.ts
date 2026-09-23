@@ -500,16 +500,20 @@ export async function checkout(orderId: string, payments: CheckoutPayment[]): Pr
     throw new Error('会計の確定に失敗しました。通信状態を確認して再度お試しください');
   }
 
-  // どのサイトのポイントで払ったかを残す（finalize_order は provider を書かないのでここで書き足す）。
+  // 支払方法の内訳（VISA・PayPay・ホットペッパー等）を残す。
+  // finalize_order は provider を書かないのでここで書き足す。
   // 売上の内訳を見るためだけの情報なので、失敗しても会計は成立させる。
-  const sitePoints = payments.find((p) => p.method === 'site_points' && p.provider);
-  if (sitePoints?.provider) {
+  const branded = new Map<string, string>();
+  for (const p of payments) {
+    if (p.provider && !branded.has(p.method)) branded.set(p.method, p.provider);
+  }
+  for (const [method, provider] of branded) {
     const { error: providerError } = await supabase
       .from('payments')
-      .update({ provider: sitePoints.provider })
+      .update({ provider })
       .eq('order_id', orderId)
-      .eq('method', 'site_points');
-    if (providerError) console.error('[pos.checkout] site points provider not saved:', providerError.message);
+      .eq('method', method);
+    if (providerError) console.error('[pos.checkout] payment provider not saved:', method, providerError.message);
   }
 
   revalidatePath('/app/pos');
