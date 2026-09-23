@@ -19,10 +19,14 @@ const MOVED_OUT_OF_MENU = new Set([
 ]);
 
 /**
- * 一覧の先頭に上げるもの（iPad でよく使う）。並びは 入出金 → 仕入・経費。
- * 大きなタイルにはせず、下の行と同じ大きさで並べる（2026-09-23 要望）。
+ * 元の位置から動かす行（大きなタイルにはせず、他と同じ大きさのまま。2026-09-23 要望）。
+ *   入出金     … 一覧の先頭
+ *   仕入・経費 … レジクローズの手前
  */
-const TOP_ROW = ['/app/cash', '/app/expenses'];
+const MOVED_IN_LIST = ['/app/cash', '/app/expenses'];
+const FIRST_IN_LIST = '/app/cash';
+const EXPENSES = '/app/expenses';
+const BEFORE_EXPENSES = '/app/cash/close';
 
 /** 「在庫設定」を入れ直すグループ */
 const PURCHASING_GROUP = '仕入・在庫';
@@ -57,7 +61,8 @@ export function menuLayout(
   const byHref = new Map(allGroups.flatMap((g) => g.items).map((i) => [i.href, i]));
 
   const tiles: NavTile[] = visibleNavTiles(role, disabledFeatures);
-  const topRowItems: NavItem[] = TOP_ROW.map((href) => byHref.get(href)).filter((i) => i !== undefined);
+  const firstItem = byHref.get(FIRST_IN_LIST);
+  const expensesItem = byHref.get(EXPENSES);
 
   const trimmed = allGroups
     .map((g) => ({
@@ -65,12 +70,20 @@ export function menuLayout(
       // ドロアオープン等の操作行は左メニューだけ（メニュー一覧の画面からは押せない）
       items: g.items.filter(
         (i) =>
-          (options?.keepActions || !i.action) && !MOVED_OUT_OF_MENU.has(i.href) && !TOP_ROW.includes(i.href)
+          (options?.keepActions || !i.action) &&
+          !MOVED_OUT_OF_MENU.has(i.href) &&
+          !MOVED_IN_LIST.includes(i.href)
       ),
     }))
     .filter((g) => g.items.length > 0);
 
-  const main = [...topRowItems, ...(trimmed.find((g) => g.label === null)?.items ?? [])];
+  const listed = [...(trimmed.find((g) => g.label === null)?.items ?? [])];
+  // 仕入・経費 は レジクローズ の手前へ（無ければ末尾）
+  if (expensesItem) {
+    const at = listed.findIndex((i) => i.href === BEFORE_EXPENSES);
+    listed.splice(at < 0 ? listed.length : at, 0, expensesItem);
+  }
+  const main = firstItem ? [firstItem, ...listed] : listed;
   const summaryGroups = trimmed
     .filter((g) => g.label !== null)
     .map((g) => {
