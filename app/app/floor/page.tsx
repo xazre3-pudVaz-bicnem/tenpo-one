@@ -9,7 +9,6 @@ import { PageHeader } from '@/components/ui/page-header';
 import { EmptyState } from '@/components/ui/state';
 import { CREATED_VIA_LABEL } from '@/components/reservations/constants';
 import { FloorBoard } from '@/components/floor/floor-board';
-import { TakeoutButton } from '@/components/floor/takeout-button';
 import type {
   FloorTable,
   PanelReservation,
@@ -18,7 +17,6 @@ import type {
   UpcomingReservation,
 } from '@/components/floor/types';
 import { startWalkIn, goToOrder, completeCleaning, setTableAvailability, releaseFinishedCleaning } from './actions';
-import { startTakeout } from '@/app/app/pos/actions';
 
 export const metadata: Metadata = { title: 'テーブル一覧' };
 
@@ -273,8 +271,6 @@ export default async function FloorPage() {
           completeCleaningAction={completeCleaning}
           setTableAvailabilityAction={setTableAvailability}
           releaseFinishedCleaningAction={releaseFinishedCleaning}
-          // 持ち帰りはテーブルを使わないので、テーブル一覧からそのまま始められるようにする
-          topSlot={canOperate ? <TakeoutButton startTakeoutAction={startTakeout} /> : null}
           bottomSlot={<Legend />}
         />
       )}

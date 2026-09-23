@@ -12,7 +12,8 @@ export interface NavItem {
   /** 件数バッジの種類（layout 側で件数を渡す） */
   badge?: 'alerts';
   /** リンクではなく操作ボタンとして表示する */
-  action?: 'drawer';
+  /** リンクではなくその場で動くもの（ドロアを開く・テイクアウトの伝票を作る） */
+  action?: 'drawer' | 'takeout';
 }
 
 export interface NavGroup {
@@ -62,6 +63,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: '/app/dashboard', label: 'ホーム', en: 'Home', icon: 'home', permission: 'dashboard.view' },
       { href: '/app/handy', label: 'ハンディ', en: 'Handy', icon: 'monitor', permission: 'pos.order' },
+      { href: '#takeout', label: 'テイクアウト', en: 'Take out', icon: 'bag', permission: 'pos.order', action: 'takeout' },
       { href: '/app/orders', label: '伝票明細', en: 'Slips / Receipts', icon: 'receipt', permission: 'pos.order' },
       { href: '/app/cash', label: '入出金', en: 'Cash in / out', icon: 'wallet', permission: 'register.operate' },
       { href: '/app/expenses', label: '仕入・経費', en: 'Bills & payables', icon: 'file', permission: 'cash.write' },

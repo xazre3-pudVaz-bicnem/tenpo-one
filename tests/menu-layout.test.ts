@@ -14,12 +14,14 @@ describe('menuLayout（iPad・スマホのメニュー一覧）', () => {
     }
   });
 
-  it('伝票明細→入出金の順、仕入・経費はレジクローズの手前（大きなタイルにはしない）', () => {
+  it('テイクアウト→伝票明細→入出金の順、仕入・経費はレジクローズの手前（大きなタイルにはしない）', () => {
     const tiles = layout.tiles.map((t) => t.href);
     expect(tiles).not.toContain('/app/cash');
     expect(tiles).not.toContain('/app/expenses');
-    expect(mainHrefs[0]).toBe('/app/orders');
-    expect(mainHrefs[1]).toBe('/app/cash');
+    // テイクアウトは伝票明細の上（2026-09-24 要望でテーブル一覧の上のボタンから移した）
+    expect(mainHrefs[0]).toBe('#takeout');
+    expect(mainHrefs[1]).toBe('/app/orders');
+    expect(mainHrefs[2]).toBe('/app/cash');
     expect(mainHrefs.indexOf('/app/expenses')).toBe(mainHrefs.indexOf('/app/cash/close') - 1);
   });
 

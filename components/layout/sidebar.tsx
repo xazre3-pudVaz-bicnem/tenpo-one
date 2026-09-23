@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils';
 import type { NavGroup, NavItem, NavTile } from '@/lib/nav';
 import { enqueueDrawerKick } from '@/app/app/pos/print-actions';
 import { useToast } from '@/components/ui/toast';
+import { TakeoutRow } from './takeout-row';
 import { NavIcon } from './nav-icons';
 
 const STORAGE_KEY = 'tenpo-nav-collapsed';
@@ -196,6 +197,12 @@ function NavRow({
   storeId: string | null;
 }) {
   if (item.action === 'drawer') return <DrawerRow item={item} storeId={storeId} />;
+  if (item.action === 'takeout')
+    return (
+      <TakeoutRow className={cn(rowClass, 'disabled:opacity-50')}>
+        <RowBody item={item} count={0} />
+      </TakeoutRow>
+    );
   return (
     <Link href={item.href} aria-current={active ? 'page' : undefined} className={rowClass}>
       <RowBody item={item} count={count} />
