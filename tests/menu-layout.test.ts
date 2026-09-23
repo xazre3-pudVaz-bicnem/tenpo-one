@@ -71,3 +71,15 @@ describe('レジの左メニュー（keepActions）', () => {
     expect(page).not.toContain('#drawer');
   });
 });
+
+describe('ホームは上部バーから開く（2026-09-23 要望）', () => {
+  it('レジの一覧にホームは出さない', () => {
+    const sidebar = menuLayout('org_owner', undefined, { keepActions: true }).main.map((i) => i.href);
+    expect(sidebar).not.toContain('/app/dashboard');
+  });
+
+  it('スマホの下部ナビにはホームを残す（上部バーの戻るボタンは幅が狭いと出ないため）', () => {
+    expect(MOBILE_NAV.map((i) => i.href)).toContain('/app/dashboard');
+    expect(TABLET_NAV.map((i) => i.href)).toContain('/app/dashboard');
+  });
+});
