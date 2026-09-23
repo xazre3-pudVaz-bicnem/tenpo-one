@@ -18,6 +18,7 @@ import { TenantHardware } from '@/components/admin/tenant-hardware';
 import { TenantSupportNotes } from '@/components/admin/tenant-support-notes';
 import { TenantAccessPolicy } from '@/components/admin/tenant-access-policy';
 import { policyFrom } from '@/lib/store-access';
+import { readStoreRegisterPassword } from '@/lib/tenant-provisioning';
 import { saveStoreAccessPolicy, revokeRegisterDevice, reissueRegisterPassword, revealRegisterPassword, saveStoreRegisterUsername } from '../actions';
 
 export const metadata: Metadata = { title: '店舗導入管理' };
@@ -65,6 +66,8 @@ export default async function TenantDetailPage({ params }: { params: Promise<{ s
     admin.from('organizations').select('org_code').eq('id', store.organization_id).maybeSingle(),
   ]);
   const accessPolicy = policyFrom(policyRow ?? null);
+  // レジ用パスワードは運営だけが見る画面なので、最初から出しておく
+  const { password: registerPassword } = await readStoreRegisterPassword(admin, storeId);
 
   const progress = computeProgress(signals, checklist, enabledModules);
   const goLive = evaluateGoLive(signals, checklist, enabledModules);
@@ -187,6 +190,7 @@ export default async function TenantDetailPage({ params }: { params: Promise<{ s
             storeId={storeId}
             orgCode={(orgCodeRow?.org_code as string | null) ?? null}
             storeUser={(store.register_username as string | null) ?? null}
+            registerPassword={registerPassword}
             networks={accessPolicy.networks}
             networkEnforced={accessPolicy.networkEnforced}
             registerLimit={accessPolicy.registerLimit}

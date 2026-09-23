@@ -9,13 +9,15 @@ import { useToast } from '@/components/ui/toast';
 /**
  * レジ（iPad）のログイン情報（運営だけが見る）。
  * 企業番号は会社で1つ、レジ用パスワードは店舗ごと。
- * 「表示」で今のパスワードを出し、「作り直す」で新しいものを発行する。
- * 作り直すと、その店舗のレジは入り直しになる。
+ * この画面は運営だけが開けるので、パスワードは最初から出しておく。
+ * 画面共有などで隠したいときは「隠す」を押す。「作り直す」で新しいものを発行する
+ * （作り直すと、その店舗のレジは入り直しになる）。
  */
 export function StoreRegisterPassword({
   storeId,
   orgCode,
   storeUser,
+  password,
   compact = false,
   revealAction,
   reissueAction,
@@ -24,13 +26,15 @@ export function StoreRegisterPassword({
   storeId: string;
   orgCode?: string | null;
   storeUser?: string | null;
+  /** 今のパスワード（運営の画面なので最初から出す）。まだ発行していなければ null */
+  password?: string | null;
   compact?: boolean;
   renameAction?: (input: { storeId: string; username: string }) => Promise<{ username?: string; error?: string }>;
   revealAction: (input: { storeId: string }) => Promise<{ password?: string; updatedAt?: string | null; notSet?: boolean; error?: string }>;
   reissueAction: (input: { storeId: string }) => Promise<{ password?: string; error?: string }>;
 }) {
   const { toast } = useToast();
-  const [shown, setShown] = useState<string | null>(null);
+  const [shown, setShown] = useState<string | null>(password ?? null);
   const [user, setUser] = useState(storeUser ?? '');
   const [editing, setEditing] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -102,7 +106,9 @@ export function StoreRegisterPassword({
             )}
           </span>
         ))}
-      <span className="rounded-lg bg-surface px-2 py-1 font-mono text-sm text-navy">{shown ?? '••••••••'}</span>
+      <span className="rounded-lg bg-surface px-2 py-1 font-mono text-sm text-navy">
+        {shown ?? (password === null ? '（未発行）' : '••••••••')}
+      </span>
       <Button size="sm" variant="ghost" onClick={reveal} disabled={pending}>
         {shown ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
         {shown ? '隠す' : '表示'}

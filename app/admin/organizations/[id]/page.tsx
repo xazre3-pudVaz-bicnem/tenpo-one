@@ -13,6 +13,7 @@ import { TableWrap, Table, THead, TBody, Tr, Th, Td } from '@/components/ui/tabl
 import { EmptyState } from '@/components/ui/state';
 import { CreateStoreDialog } from '@/components/admin/create-store-dialog';
 import { StoreRegisterPassword } from '@/components/admin/store-register-password';
+import { readOrgRegisterPasswords } from '@/lib/tenant-provisioning';
 import { revealRegisterPassword, reissueRegisterPassword, saveStoreRegisterUsername } from '@/app/admin/tenants/actions';
 import { AddOrgMemberDialog } from '@/components/admin/add-org-member-dialog';
 import { FeatureFlagMatrix } from '@/components/admin/feature-flag-matrix';
@@ -148,6 +149,8 @@ export default async function OrganizationDetailPage({ params }: { params: Promi
   const currentPlan = (plans ?? []).find((p) => p.code === org.plan_code);
   const planFeatures = (currentPlan?.features ?? {}) as { store_limit?: number | null; user_limit?: number | null };
   const storeCount = (stores ?? []).length;
+  // レジ用パスワードは運営だけが見る画面なので、最初から出しておく
+  const registerPasswords = await readOrgRegisterPasswords(admin, (stores ?? []).map((s) => s.id as string));
   const storeLimit = planFeatures.store_limit ?? null;
   const userLimit = planFeatures.user_limit ?? null;
   const storeOverLimit = storeLimit != null && storeCount > storeLimit;
@@ -276,6 +279,7 @@ export default async function OrganizationDetailPage({ params }: { params: Promi
                               <StoreRegisterPassword
                                 storeId={s.id as string}
                                 storeUser={(s.register_username as string | null) ?? null}
+                                password={registerPasswords.get(s.id as string) ?? null}
                                 compact
                                 revealAction={revealRegisterPassword}
                                 reissueAction={reissueRegisterPassword}
