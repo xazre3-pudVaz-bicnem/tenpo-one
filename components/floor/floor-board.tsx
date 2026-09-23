@@ -59,6 +59,7 @@ export function FloorBoard({
   setTableAvailabilityAction,
   releaseFinishedCleaningAction,
   topSlot,
+  bottomSlot,
 }: {
   storeId: string;
   floors: FloorRow[];
@@ -74,8 +75,10 @@ export function FloorBoard({
   goToOrderAction: (tableId: string) => Promise<{ orderId: string }>;
   completeCleaningAction: (tableId: string) => Promise<void>;
   setTableAvailabilityAction: (tableId: string, unavailable: boolean) => Promise<void>;
-  /** テーブルの上に出すもの（色の見方・テイクアウト）。右のご予約は一番上から出したいのでここに入れる */
+  /** テーブルの上に出すもの（テイクアウト）。右のご予約は一番上から出したいのでここに入れる */
   topSlot?: ReactNode;
+  /** テーブルの下に出すもの（色の見方）。上に置くとテーブルが下がるので一番下に置く */
+  bottomSlot?: ReactNode;
   /** 清掃中のまま時間が過ぎたテーブルを空席に戻す。省略時は自動解除しない */
   releaseFinishedCleaningAction?: (storeId: string) => Promise<{ released: number }>;
 }) {
@@ -169,19 +172,18 @@ export function FloorBoard({
       : [{ id: '_', name: 'テーブル', tables }];
 
   const showToolbar = floors.length > 1 || (floors.length > 0 && unassigned.length > 0) || hasPlacement;
+  /** フロアが2つ以上あるときだけ左右スライドでフロアを変える */
+  const canSwipeFloor = floorIds.length > 1;
 
   return (
     // パソコン・iPad は「テーブル」と「本日のご予約」を別々にスクロールさせる（画面の高さで止める）
     <div className="grid items-start gap-3.5 lg:h-[calc(100vh-7rem)] lg:grid-cols-[minmax(0,1fr)_270px]">
-      <div
-        className="min-w-0 space-y-3 lg:h-full lg:overflow-y-auto lg:pr-1"
-        onTouchStart={onTouchStart}
-        onTouchEnd={onTouchEnd}
-      >
+      <div className="min-w-0 space-y-3 lg:h-full lg:overflow-y-auto lg:pr-1">
         {topSlot}
         {showToolbar && (
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex flex-wrap gap-1.5">
+          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+            <span aria-hidden />
+            <div className="flex flex-wrap justify-center gap-1.5">
               {(floors.length > 1 || (floors.length > 0 && unassigned.length > 0)) && (
                 <>
                   <ChipButton on={floorFilter === 'all'} onClick={() => setFloorFilter('all')}>
@@ -200,7 +202,8 @@ export function FloorBoard({
                 </>
               )}
             </div>
-            {hasPlacement && (
+            <div className="flex justify-end">
+              {hasPlacement && (
               <div className="inline-flex overflow-hidden rounded-lg border border-line bg-white p-0.5">
                 {(
                   [
@@ -223,77 +226,86 @@ export function FloorBoard({
                   </button>
                 ))}
               </div>
-            )}
+              )}
+            </div>
           </div>
         )}
 
-        {view === 'map' && hasPlacement ? (
-          <div className="space-y-3">
-            {mapGroups.map((g) => {
-              const placed = g.tables.filter((t) => t.pos_x != null && t.pos_y != null);
-              const unplaced = g.tables.filter((t) => t.pos_x == null || t.pos_y == null);
-              return (
-                <section key={g.id} className="ui-card border border-line bg-white p-4">
-                  <h2 className="mb-3 text-[13px] font-bold text-royal">{g.name}</h2>
-                  {g.tables.length === 0 ? (
-                    <p className="text-xs text-ink-3">このフロアにテーブルはありません</p>
-                  ) : (
-                    <>
-                      {placed.length > 0 && (
-                        <div className="overflow-x-auto">
-                          <div
-                            className="grid min-w-[40rem] gap-2"
-                            style={{ gridTemplateColumns: 'repeat(8, minmax(0, 1fr))', gridAutoRows: '5rem' }}
-                          >
-                            {placed.map((t) => {
-                              const st = tileState(t, now);
-                              return (
-                                <button
-                                  key={t.id}
-                                  type="button"
-                                  onClick={(e) => openTable(t, e.currentTarget)}
-                                  style={{
-                                    gridColumnStart: (t.pos_x as number) + 1,
-                                    gridRowStart: (t.pos_y as number) + 1,
-                                  }}
-                                  className={cn(
-                                    'flex flex-col items-center justify-center gap-0.5 border p-1.5 text-center transition-transform active:scale-[0.97]',
-                                    MAP_TONE[st],
-                                    SHAPE_CLASS[t.shape] ?? SHAPE_CLASS.square
-                                  )}
-                                >
-                                  <b className="text-[13px] font-extrabold text-ink tabular-nums">{t.name}</b>
-                                  <span className="text-[10.5px] font-bold">{TILE_LABEL[st]}</span>
-                                </button>
-                              );
-                            })}
+        {/* 左右スライドで隣のフロアへ。テーブルの並びの上だけで効かせる（フロアが2つ以上のときだけ） */}
+        <div
+          onTouchStart={canSwipeFloor ? onTouchStart : undefined}
+          onTouchEnd={canSwipeFloor ? onTouchEnd : undefined}
+        >
+          {view === 'map' && hasPlacement ? (
+            <div className="space-y-3">
+              {mapGroups.map((g) => {
+                const placed = g.tables.filter((t) => t.pos_x != null && t.pos_y != null);
+                const unplaced = g.tables.filter((t) => t.pos_x == null || t.pos_y == null);
+                return (
+                  <section key={g.id} className="ui-card border border-line bg-white p-4">
+                    <h2 className="mb-3 text-[13px] font-bold text-royal">{g.name}</h2>
+                    {g.tables.length === 0 ? (
+                      <p className="text-xs text-ink-3">このフロアにテーブルはありません</p>
+                    ) : (
+                      <>
+                        {placed.length > 0 && (
+                          <div className="overflow-x-auto">
+                            <div
+                              className="grid min-w-[40rem] gap-2"
+                              style={{ gridTemplateColumns: 'repeat(8, minmax(0, 1fr))', gridAutoRows: '5rem' }}
+                            >
+                              {placed.map((t) => {
+                                const st = tileState(t, now);
+                                return (
+                                  <button
+                                    key={t.id}
+                                    type="button"
+                                    onClick={(e) => openTable(t, e.currentTarget)}
+                                    style={{
+                                      gridColumnStart: (t.pos_x as number) + 1,
+                                      gridRowStart: (t.pos_y as number) + 1,
+                                    }}
+                                    className={cn(
+                                      'flex flex-col items-center justify-center gap-0.5 border p-1.5 text-center transition-transform active:scale-[0.97]',
+                                      MAP_TONE[st],
+                                      SHAPE_CLASS[t.shape] ?? SHAPE_CLASS.square
+                                    )}
+                                  >
+                                    <b className="text-[13px] font-extrabold text-ink tabular-nums">{t.name}</b>
+                                    <span className="text-[10.5px] font-bold">{TILE_LABEL[st]}</span>
+                                  </button>
+                                );
+                              })}
+                            </div>
                           </div>
-                        </div>
-                      )}
-                      {unplaced.length > 0 && (
-                        <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
-                          {unplaced.map((t) => (
-                            <TableCard key={t.id} table={t} now={now} onSelect={openTable} />
-                          ))}
-                        </div>
-                      )}
-                    </>
-                  )}
-                </section>
-              );
-            })}
-          </div>
-        ) : visible.length === 0 ? (
-          <p className="rounded-[10px] border border-dashed border-wisteria bg-white px-4 py-10 text-center text-[13px] text-ink-3">
-            このフロアにテーブルはありません
-          </p>
-        ) : (
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
-            {visible.map((t) => (
-              <TableCard key={t.id} table={t} now={now} onSelect={openTable} />
-            ))}
-          </div>
-        )}
+                        )}
+                        {unplaced.length > 0 && (
+                          <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
+                            {unplaced.map((t) => (
+                              <TableCard key={t.id} table={t} now={now} onSelect={openTable} />
+                            ))}
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </section>
+                );
+              })}
+            </div>
+          ) : visible.length === 0 ? (
+            <p className="rounded-[10px] border border-dashed border-wisteria bg-white px-4 py-10 text-center text-[13px] text-ink-3">
+              このフロアにテーブルはありません
+            </p>
+          ) : (
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
+              {visible.map((t) => (
+                <TableCard key={t.id} table={t} now={now} onSelect={openTable} />
+              ))}
+            </div>
+          )}
+        </div>
+
+        {bottomSlot}
       </div>
 
       <div className="min-w-0 lg:h-full lg:min-h-0">

@@ -273,13 +273,9 @@ export default async function FloorPage() {
           completeCleaningAction={completeCleaning}
           setTableAvailabilityAction={setTableAvailability}
           releaseFinishedCleaningAction={releaseFinishedCleaning}
-          topSlot={
-            <div className="flex flex-wrap items-center gap-3">
-              <Legend />
-              {/* 持ち帰りはテーブルを使わないので、テーブル一覧からそのまま始められるようにする */}
-              {canOperate && <TakeoutButton startTakeoutAction={startTakeout} />}
-            </div>
-          }
+          // 持ち帰りはテーブルを使わないので、テーブル一覧からそのまま始められるようにする
+          topSlot={canOperate ? <TakeoutButton startTakeoutAction={startTakeout} /> : null}
+          bottomSlot={<Legend />}
         />
       )}
     </div>
