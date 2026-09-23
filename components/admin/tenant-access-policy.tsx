@@ -8,6 +8,7 @@ import { Input, Label } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/components/ui/toast';
 import { MAX_ALLOWED_NETWORKS, type AllowedNetwork } from '@/lib/store-access';
+import { StoreRegisterPassword } from '@/components/admin/store-register-password';
 
 export interface RegisterDeviceRow {
   id: string;
@@ -37,6 +38,7 @@ export function TenantAccessPolicy({
   saveAction,
   revokeAction,
   reissueAction,
+  revealAction,
 }: {
   storeId: string;
   orgCode: string | null;
@@ -55,6 +57,12 @@ export function TenantAccessPolicy({
   }) => Promise<{ error?: string }>;
   revokeAction: (input: { storeId: string; deviceId: string }) => Promise<{ error?: string }>;
   reissueAction: (input: { storeId: string }) => Promise<{ password?: string; error?: string }>;
+  revealAction: (input: { storeId: string }) => Promise<{
+    password?: string;
+    updatedAt?: string | null;
+    notSet?: boolean;
+    error?: string;
+  }>;
 }) {
   const router = useRouter();
   const { toast } = useToast();
@@ -64,7 +72,6 @@ export function TenantAccessPolicy({
   const [limit, setLimit] = useState(String(registerLimit));
   const [handy, setHandy] = useState(String(handyLimit));
   const [memo, setMemo] = useState(note);
-  const [newPassword, setNewPassword] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   const save = () =>
@@ -79,17 +86,6 @@ export function TenantAccessPolicy({
       if (r.error) toast(r.error, 'error');
       else {
         toast('アクセス制限を保存しました');
-        router.refresh();
-      }
-    });
-
-  const reissue = () =>
-    startTransition(async () => {
-      const r = await reissueAction({ storeId });
-      if (r.error) toast(r.error, 'error');
-      else {
-        setNewPassword(r.password ?? null);
-        toast('レジ用パスワードを作り直しました');
         router.refresh();
       }
     });
@@ -182,15 +178,14 @@ export function TenantAccessPolicy({
         <p className="mt-1 text-xs text-gray-500">
           どの店舗のレジかは、上で登録したお店の回線で決まります。パスワードは運営だけが作り直せます（店舗・オーナーは変更できません）。
         </p>
-        {newPassword && (
-          <p className="mt-2 rounded-lg bg-warning-soft px-3 py-2 font-mono text-base text-navy">
-            新しいパスワード: {newPassword}
-            <span className="ml-2 font-sans text-xs text-gray-600">（この画面を閉じると二度と出ません）</span>
-          </p>
-        )}
-        <Button size="sm" variant="secondary" className="mt-2" onClick={reissue} disabled={pending}>
-          パスワードを作り直す
-        </Button>
+        <div className="mt-2">
+          <StoreRegisterPassword
+            storeId={storeId}
+            revealAction={revealAction}
+            reissueAction={reissueAction}
+            compact
+          />
+        </div>
       </div>
 
       <div>
