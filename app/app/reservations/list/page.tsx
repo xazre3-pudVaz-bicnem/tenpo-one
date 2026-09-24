@@ -13,7 +13,7 @@ import { Input, Label, Select } from '@/components/ui/input';
 import { ReservationListTable } from '@/components/reservations/reservation-list-table';
 import { DateNav } from '@/components/reservations/date-nav';
 import { loadLedgerChrome } from '@/components/reservations/ledger-data';
-import { LedgerTop, LedgerSummaryTiles } from '@/components/reservations/ledger-header';
+import { LedgerTop } from '@/components/reservations/ledger-header';
 import { RESERVATION_STATUS, type ReservationStatus } from '@/lib/reservations';
 import type { ReservationListRow } from '@/components/reservations/list-types';
 import { cn } from '@/lib/utils';
@@ -242,7 +242,7 @@ export default async function ReservationListPage({ searchParams }: { searchPara
     <div>
       <h1 className="sr-only">予約リスト</h1>
       <LedgerTop
-        active="list"
+        title="予約リスト"
         date={navDate}
         chrome={chrome}
         nav={
@@ -261,7 +261,6 @@ export default async function ReservationListPage({ searchParams }: { searchPara
           予約リスト ／ {store.name} ／ {from.replaceAll('-', '/')}
           {singleDay ? '' : ` 〜 ${to.replaceAll('-', '/')}`}
         </p>
-        <LedgerSummaryTiles chrome={chrome} isToday={chrome.summaryDate === chrome.today} />
 
         <Card className="overflow-hidden">
           <CardHeader className="flex flex-wrap items-center justify-between gap-3">
