@@ -43,9 +43,12 @@ interface ReservationSource {
 }
 
 function sourceLabel(r: ReservationSource | null): string {
-  if (!r || r.created_via === 'walk_in') return '直接来店';
+  if (!r) return '直接来店';
+  // 来店経路（食べログ・ホットペッパーなど）が入っていれば、ウォークインでもその名前を出す
   const src = one(r.reservation_sources);
-  return src?.name ?? CREATED_VIA_LABEL[r.created_via] ?? r.created_via;
+  if (src?.name) return src.name;
+  if (r.created_via === 'walk_in') return '直接来店';
+  return CREATED_VIA_LABEL[r.created_via] ?? r.created_via;
 }
 
 function courseLabel(c: { course_includes_drinks: boolean | null; course_includes_ayce: boolean | null }) {

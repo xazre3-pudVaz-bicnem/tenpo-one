@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { assertStoreAccess, requireMember, requirePermission } from '@/lib/auth';
 import { can } from '@/lib/permissions';
 import { createClient } from '@/lib/supabase/server';
-import { resolveStartTime, startTimeProblem } from '@/lib/handy-visit';
+import { resolveStartTime, startTimeProblem, visitSourceByLabel } from '@/lib/handy-visit';
 
 /**
  * 会計後に「清掃中」になったテーブルを、自動で空席に戻すまでの分数。
@@ -32,6 +32,11 @@ export interface WalkInOptions {
   startTime?: string;
   /** コース（menu_items.id、item_type='course'）。予約の course_id に入れ、伝票はコース扱いにする。時間の指定が無ければコースの所要時間 */
   courseId?: string;
+  /**
+   * 来店経路（VISIT_SOURCES のラベル。「フリー」「食べログご予約」など。2026-09-24 店舗要望）。
+   * 同じ名前の reservation_sources があれば予約の経路（source_id）に入れ、無ければ purpose にだけ残す。
+   */
+  sourceLabel?: string;
 }
 
 /** 滞在時間として受け付ける範囲（分）。それ以外は店舗の既定値にする */
@@ -126,6 +131,21 @@ export async function startWalkIn(
   const endAt = new Date(startAt.getTime() + stayMinutes * 60000);
   const today = startAt.toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' });
 
+  // 来店経路（グルメサイトなど）。組織の reservation_sources に同じ code があればそれを使う
+  let sourceId: string | null = null;
+  const visitSource = options.sourceLabel ? visitSourceByLabel(options.sourceLabel) : null;
+  if (visitSource) {
+    const { data: srcRow } = await supabase
+      .from('reservation_sources')
+      .select('id')
+      .in('code', visitSource.codes as string[])
+      .eq('status', 'active')
+      .or(`organization_id.is.null,organization_id.eq.${table.organization_id}`)
+      .limit(1)
+      .maybeSingle();
+    sourceId = (srcRow?.id as string | undefined) ?? null;
+  }
+
   let reservationId: string | null = null;
   for (let attempt = 0; attempt < 3 && !reservationId; attempt++) {
     const { data: reservation, error } = await supabase
@@ -147,6 +167,7 @@ export async function startWalkIn(
         consent_accepted: true,
         created_by: ctx.userId,
         ...(purpose ? { purpose } : {}),
+        ...(sourceId ? { source_id: sourceId } : {}),
         ...(courseId ? { course_id: courseId } : {}),
       })
       .select('id')

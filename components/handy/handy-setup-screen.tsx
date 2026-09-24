@@ -10,7 +10,7 @@ import {
   CUSTOM_MAX_HOURS,
   DEFAULT_VISIT_DRAFT,
   HANDY_PLANS,
-  HANDY_SCENES,
+  VISIT_SOURCES,
   HOUR_CHOICES,
   MAX_GUESTS,
   MINUTE_CHOICES,
@@ -260,29 +260,34 @@ export function HandySetupScreen({
           ))}
         </div>
 
-        <SectionTitle required>客層</SectionTitle>
+        {/* 来店経路（グルメサイトの色に寄せたボタン。2026-09-24 店舗要望で「利用シーン」から置き換え） */}
+        <SectionTitle required>来店経路</SectionTitle>
         <div className="mx-3 mb-3 rounded-[10px] border border-[#e3dbf1] bg-white px-3.5 py-3">
-          <p className="mb-2 text-xs text-[#5e4777]">利用シーン</p>
-          <div className="flex flex-wrap gap-2" role="group" aria-label="利用シーン">
-            {HANDY_SCENES.map((s) => (
-              <button
-                key={s}
-                type="button"
-                aria-pressed={draft.scene === s}
-                onClick={() => set({ scene: s })}
-                className={cn(
-                  'min-h-[38px] rounded-full border-[1.5px] border-[#7b3fe4] px-3.5 text-[13px]',
-                  draft.scene === s ? 'bg-[#7b3fe4] text-white' : 'bg-white text-[#7b3fe4]'
-                )}
-              >
-                {s}
-              </button>
-            ))}
+          <div className="flex flex-wrap gap-2" role="group" aria-label="来店経路">
+            {VISIT_SOURCES.map((src) => {
+              const on = draft.source === src.label;
+              return (
+                <button
+                  key={src.id}
+                  type="button"
+                  aria-pressed={on}
+                  onClick={() => set({ source: src.label })}
+                  style={
+                    on
+                      ? { backgroundColor: src.color, borderColor: src.color, color: '#fff' }
+                      : { borderColor: src.color, color: src.color }
+                  }
+                  className="tap3d min-h-[40px] rounded-full border-[1.5px] bg-white px-3.5 text-[13px] font-bold"
+                >
+                  {src.label}
+                </button>
+              );
+            })}
           </div>
         </div>
 
         <p className="px-5 pb-4 text-center text-[10px] leading-[1.7] text-[#8a769d]">
-          人数と利用シーンを選ぶと確定できます。確定するとこの卓を着席にして伝票を作ります。
+          人数と来店経路を選ぶと確定できます。確定するとこの卓を着席にして伝票を作ります。
           {selectedItem && (
             <>
               <br />

@@ -95,7 +95,8 @@ export async function startHandyVisit(
   const guests = draft.male + draft.female;
   const { orderId } = await startWalkIn(tableId, guests, {
     durationMinutes: draft.timed ? draft.duration : undefined,
-    purpose: draft.scene || undefined,
+    purpose: draft.source || undefined,
+    sourceLabel: draft.source || undefined,
     memo: visitMemo(draft),
     orderType: draft.plan === 'course' ? 'course' : 'dine_in',
     startTime: draft.startTime ?? undefined,

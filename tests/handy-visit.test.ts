@@ -35,11 +35,11 @@ import {
 } from '@/lib/handy-clerk';
 
 function draft(overrides: Partial<VisitDraft> = {}): VisitDraft {
-  return { ...DEFAULT_VISIT_DRAFT, male: 2, female: 1, scene: '記念日・誕生日', ...overrides };
+  return { ...DEFAULT_VISIT_DRAFT, male: 2, female: 1, source: '食べログご予約', ...overrides };
 }
 
 describe('お客様情報の検証', () => {
-  it('人数と利用シーンがあれば確定できる', () => {
+  it('人数と来店経路があれば確定できる', () => {
     expect(validateVisitDraft(draft())).toBeNull();
   });
 
@@ -57,9 +57,9 @@ describe('お客様情報の検証', () => {
     expect(validateVisitDraft(draft({ female: 1.5 }))).toMatch(/人数/);
   });
 
-  it('利用シーンが無いと確定できない（一覧に無い値も不可）', () => {
-    expect(validateVisitDraft(draft({ scene: '' }))).toMatch(/利用シーン/);
-    expect(validateVisitDraft(draft({ scene: '飲み会' as VisitDraft['scene'] }))).toMatch(/利用シーン/);
+  it('来店経路が無いと確定できない（一覧に無い値も不可）', () => {
+    expect(validateVisitDraft(draft({ source: '' }))).toMatch(/来店経路/);
+    expect(validateVisitDraft(draft({ source: '飲み会' }))).toMatch(/来店経路/);
   });
 
   it('時間制のときだけ席時間を検証する', () => {
@@ -91,23 +91,23 @@ describe('お客様情報の検証', () => {
 describe('伝票メモ', () => {
   it('モード・人数・シーン・時間制を1行にまとめる（レジのメモ欄で読める形）', () => {
     expect(visitMemo(draft({ plan: 'drink', timed: true, duration: 120, warningEnabled: true, warningMinutes: 30 }))).toBe(
-      'ハンディ: 飲み放題 / 男2・女1 / 記念日・誕生日 / 2時間制（30分前に声かけ）'
+      'ハンディ: 飲み放題 / 男2・女1 / 食べログご予約 / 2時間制（30分前に声かけ）'
     );
   });
 
   it('時間制でなければ時間を書かない', () => {
-    expect(visitMemo(draft({ timed: false }))).toBe('ハンディ: アラカルト / 男2・女1 / 記念日・誕生日');
+    expect(visitMemo(draft({ timed: false }))).toBe('ハンディ: アラカルト / 男2・女1 / 食べログご予約');
   });
 
   it('終了前注意が1時間以上なら「1時間15分前」と書く', () => {
     expect(visitMemo(draft({ timed: true, duration: 180, warningEnabled: true, warningMinutes: 75 }))).toBe(
-      'ハンディ: アラカルト / 男2・女1 / 記念日・誕生日 / 3時間制（1時間15分前に声かけ）'
+      'ハンディ: アラカルト / 男2・女1 / 食べログご予約 / 3時間制（1時間15分前に声かけ）'
     );
   });
 
   it('終了前注意を切っていれば声かけを書かない', () => {
     expect(visitMemo(draft({ timed: true, duration: 90, warningEnabled: false }))).toBe(
-      'ハンディ: アラカルト / 男2・女1 / 記念日・誕生日 / 1時間30分制'
+      'ハンディ: アラカルト / 男2・女1 / 食べログご予約 / 1時間30分制'
     );
   });
 });
