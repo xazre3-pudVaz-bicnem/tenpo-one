@@ -529,13 +529,28 @@ export interface CheckoutOutcome {
  * finalize_order は status<>'open' をDB層で拒否する（二重会計防止）。
  * 既に会計済みだった場合はエラーにせず alreadyPaid:true を返し、呼び出し側でレシートへ誘導する。
  */
-export async function checkout(orderId: string, payments: CheckoutPayment[]): Promise<CheckoutOutcome> {
+export async function checkout(
+  orderId: string,
+  payments: CheckoutPayment[],
+  /** 支払メモ（2026-09-25 店舗要望「カードで取ったつもりが現金になった時などの理由を残したい」） */
+  paymentMemo?: string
+): Promise<CheckoutOutcome> {
   const ctx = await requirePermission('pos.checkout');
   const supabase = await createClient();
 
   const { data: order } = await supabase.from('orders').select('*').eq('id', orderId).single();
   if (!order) throw new Error('注文が見つかりません');
   await assertStoreAccess(ctx, order.store_id);
+
+  // 支払メモは伝票のメモに残す（取引履歴・レシート再発行のときに読める）
+  const memo = (paymentMemo ?? '').trim().slice(0, 200);
+  if (memo) {
+    const before = (order.memo as string | null) ?? '';
+    await supabase
+      .from('orders')
+      .update({ memo: before ? `${before} / 支払メモ: ${memo}` : `支払メモ: ${memo}`, updated_by: ctx.userId })
+      .eq('id', orderId);
+  }
 
   if (order.status !== 'open') {
     return { ok: false, alreadyPaid: true };

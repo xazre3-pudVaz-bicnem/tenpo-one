@@ -142,7 +142,7 @@ export function CheckoutDialog({
   setDiscountAction: (orderId: string, discountTotal: number, reason: string) => Promise<void>;
   applyCouponAction: (orderId: string, code: string, force?: boolean) => Promise<ApplyCouponResult>;
   clearCouponAction: (orderId: string) => Promise<void>;
-  onCheckout: (payments: CheckoutPayment[]) => Promise<void>;
+  onCheckout: (payments: CheckoutPayment[], paymentMemo?: string) => Promise<void>;
   terminalReaders: PosTerminalReader[];
   paymentAvailability: PosPaymentAvailability;
   pointsAvailability: PointsAvailability;
@@ -196,6 +196,10 @@ export function CheckoutDialog({
   const [rightTab, setRightTab] = useState<'pay' | 'discount'>('pay');
   /** 会計が終わったあとに出す金額（お支払い・お預り・おつり） */
   const [done, setDone] = useState<{ total: number; tendered: number; change: number } | null>(null);
+  /** 支払メモ（レジ締めや取引履歴で読む。2026-09-25 店舗要望） */
+  const [payMemo, setPayMemo] = useState('');
+  /** 別々会計の「品目ごと／金額ごと」を選ぶ小さなメニューを開いているか */
+  const [splitOpen, setSplitOpen] = useState(false);
   /** 会計完了のあとに出す「レシート／領収書」。領収書は宛名・但し書きを入れてから印字する */
   const [invoiceOpen, setInvoiceOpen] = useState(false);
   const [recipientName, setRecipientName] = useState('');
@@ -540,7 +544,8 @@ export function CheckoutDialog({
               amount: p.amount,
               tendered: p.method === 'cash' ? p.tendered : undefined,
               provider: p.provider ?? null,
-            }))
+            })),
+          payMemo.trim() || undefined
         );
         const cash = payments.find((p) => p.method === 'cash');
         setDone({
@@ -867,40 +872,82 @@ export function CheckoutDialog({
             )}
           </div>
           <div className="border-t border-line p-3">
-            {/* 別々会計・分けて払うはここ（金額の下）。担当者は卓をタップする時に選んでいるので出さない
-                （2026-09-25 店舗要望） */}
-            <div className="mb-2 grid grid-cols-2 gap-1.5">
+            {/* 別々会計は「品目ごと」か「金額ごと」を選ぶ（2026-09-25 店舗要望）。
+                品目ごと＝食べた分だけ先に会計（伝票を分ける）。金額ごと＝1枚の伝票を分けて払う */}
+            <div className="mb-2">
               <button
                 type="button"
-                onClick={() => setSplitPick(splitPick ? null : {})}
-                disabled={terminalBlocking || !splitOrderAction || splitLines.length < 2}
-                aria-pressed={splitPick != null}
-                className={cn(
-                  'tap3d flex h-[46px] flex-col items-center justify-center rounded-xl border text-[13px] font-bold leading-tight disabled:opacity-40',
-                  splitPick != null ? 'border-iris bg-iris text-white' : 'border-line bg-white text-navy'
-                )}
-              >
-                別々会計
-                <span className={cn('text-[10px] font-semibold', splitPick != null ? 'text-white/80' : 'text-ink-3')}>
-                  Split by item
-                </span>
-              </button>
-              <button
-                type="button"
-                onClick={toggleSplitMode}
+                onClick={() => {
+                  if (splitPick != null || splitMode) {
+                    setSplitPick(null);
+                    if (splitMode) toggleSplitMode();
+                    return;
+                  }
+                  setSplitOpen((v) => !v);
+                }}
                 disabled={terminalBlocking}
-                aria-pressed={splitMode}
+                aria-pressed={splitPick != null || splitMode}
                 className={cn(
-                  'tap3d flex h-[46px] flex-col items-center justify-center rounded-xl border text-[13px] font-bold leading-tight disabled:opacity-40',
-                  splitMode ? 'border-iris bg-iris text-white' : 'border-line bg-white text-navy'
+                  'tap3d flex h-[46px] w-full flex-col items-center justify-center rounded-xl border text-[14px] font-bold leading-tight disabled:opacity-40',
+                  splitPick != null || splitMode ? 'border-iris bg-iris text-white' : 'border-line bg-white text-navy'
                 )}
               >
-                {splitMode ? '分けて払う：ON' : '分けて払う'}
-                <span className={cn('text-[10px] font-semibold', splitMode ? 'text-white/80' : 'text-ink-3')}>
-                  Split payment
+                {splitPick != null ? '別々会計：品目ごと' : splitMode ? '別々会計：金額ごと' : '別々会計'}
+                <span
+                  className={cn(
+                    'text-[10px] font-semibold',
+                    splitPick != null || splitMode ? 'text-white/80' : 'text-ink-3'
+                  )}
+                >
+                  Split
                 </span>
               </button>
+
+              {splitOpen && splitPick == null && !splitMode && (
+                <div className="mt-1.5 grid grid-cols-2 gap-1.5">
+                  <button
+                    type="button"
+                    disabled={terminalBlocking || !splitOrderAction || splitLines.length < 2}
+                    onClick={() => {
+                      setSplitOpen(false);
+                      setSplitPick({});
+                    }}
+                    className="tap3d flex h-[44px] flex-col items-center justify-center rounded-xl border border-line bg-white text-[13px] font-bold leading-tight text-navy disabled:opacity-40"
+                  >
+                    品目ごと
+                    <span className="text-[10px] font-semibold text-ink-3">By item</span>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={terminalBlocking}
+                    onClick={() => {
+                      setSplitOpen(false);
+                      toggleSplitMode();
+                    }}
+                    className="tap3d flex h-[44px] flex-col items-center justify-center rounded-xl border border-line bg-white text-[13px] font-bold leading-tight text-navy disabled:opacity-40"
+                  >
+                    金額ごと
+                    <span className="text-[10px] font-semibold text-ink-3">By price</span>
+                  </button>
+                </div>
+              )}
             </div>
+
+            {/* 支払メモ（カードのつもりが現金になった等の理由をその場で残す。2026-09-25 店舗要望） */}
+            <label className="mb-2 block">
+              <span className="mb-1 block text-[11px] font-bold text-ink-3">
+                支払メモ / Payment note<span className="ml-1 font-normal">（任意）</span>
+              </span>
+              <input
+                type="text"
+                value={payMemo}
+                onChange={(e) => setPayMemo(e.target.value)}
+                maxLength={200}
+                placeholder="例）カード決済のつもりが現金で受領"
+                className="ui-input h-10 w-full border border-line bg-white px-3 text-[14px] text-navy placeholder:text-ink-3 focus:border-iris focus:outline-2 focus:outline-iris/30"
+              />
+            </label>
+
             <Button
               size="pos"
               className="h-[56px] w-full text-[18px]"
