@@ -1,14 +1,17 @@
 import Link from 'next/link';
-import { ChevronLeft, ChevronRight, Plus, Printer } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Mail, Plus, Printer } from 'lucide-react';
 import { SegmentedTabs, type SegmentedTab } from '@/components/ui/segmented-tabs';
 import { cn } from '@/lib/utils';
 import { ManualReservationDialog } from './manual-reservation-dialog';
 import { WalkInDialog } from './walk-in-dialog';
 import { FindSeatsDialog } from './find-seats-dialog';
 import { PrintButton } from './print-button';
+import { LedgerMoreMenu } from './ledger-more-menu';
 import type { LedgerChrome } from './ledger-data';
 
 export type LedgerTabKey =
+  | 'home'
+  | 'gourmet'
   | 'tables'
   | 'list'
   | 'schedule'
@@ -19,9 +22,12 @@ export type LedgerTabKey =
   | 'analytics'
   | 'settings';
 
-const TILE =
-  'inline-flex h-[52px] items-center gap-1.5 rounded-xl px-4 text-[15px] font-bold whitespace-nowrap transition-colors';
-const TILE_GHOST = cn(TILE, 'bg-iris-soft text-royal hover:bg-wisteria');
+const ACTION =
+  'inline-flex h-10 items-center gap-1.5 rounded-[9px] px-3.5 text-[14px] font-bold whitespace-nowrap transition-colors';
+const ACTION_GHOST = cn(ACTION, 'bg-iris-soft text-royal hover:bg-wisteria');
+/** 「…」の中の1行 */
+const MENU_ITEM =
+  'flex h-11 w-full items-center justify-start gap-2 rounded-lg px-3 text-left text-[14px] font-semibold text-ink hover:bg-lilac-soft';
 
 function En({ children, light }: { children: React.ReactNode; light?: boolean }) {
   return (
@@ -49,50 +55,40 @@ export function LedgerTop({
   nav?: React.ReactNode;
 }) {
   const tabs: (SegmentedTab | false)[] = [
-    chrome.links.tables && { key: 'tables', label: 'テーブル管理', en: 'Tables', href: '/app/floor' },
+    { key: 'home', label: 'ホーム', en: 'Home', href: '/app' },
     { key: 'list', label: '予約リスト', en: 'List', href: `/app/reservations/list?from=${date}&to=${date}` },
     { key: 'schedule', label: 'スケジュール', en: 'Schedule', href: `/app/reservations?date=${date}` },
-    { key: 'week', label: '週間', en: 'Week', href: `/app/reservations?view=week&date=${date}` },
-    { key: 'month', label: '月間', en: 'Month', href: `/app/reservations/calendar?month=${date.slice(0, 7)}` },
-    { key: 'waiting', label: 'ウェイティング', en: 'Waiting', href: '/app/reservations?view=waitlist' },
+    { key: 'gourmet', label: 'グルメ別', en: 'Gourmet', href: `/app/reservations?view=gourmet&date=${date}` },
     chrome.links.customers && { key: 'customers', label: '顧客台帳', en: 'Customers', href: '/app/customers' },
-    chrome.links.analytics && {
-      key: 'analytics',
-      label: '集計分析',
-      en: 'Analytics',
-      href: `/app/reports?from=${date.slice(0, 7)}-01&to=${date}`,
-    },
-    chrome.links.settings && { key: 'settings', label: '台帳設定', en: 'Settings', href: '/app/settings/booking' },
   ];
 
-  return (
-    <div className="mb-4 space-y-4 print:hidden">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <SegmentedTabs tabs={tabs.filter((t): t is SegmentedTab => !!t)} active={active} className="[&>a]:px-2" />
-        {nav}
-      </div>
+  // 封筒＝未連絡（仮予約のまま返事をしていない予約）。押すと予約リストのその絞り込みへ
+  const unconfirmed = chrome.summary.unconfirmed;
 
-      <div className="flex flex-wrap gap-2.5">
-        <PrintButton className={cn(TILE_GHOST, 'gap-2 px-4')}>
-          <Printer className="h-4 w-4" aria-hidden />
-          <span>
-            印刷・PDF<En>Print / PDF</En>
-          </span>
-        </PrintButton>
-        <FindSeatsDialog storeId={chrome.storeId} tables={chrome.seatTables} defaultDate={date} className={cn(TILE_GHOST, 'px-4')}>
+  return (
+    <div className="mb-4 flex flex-wrap items-center gap-2 print:hidden">
+      <SegmentedTabs tabs={tabs.filter((t): t is SegmentedTab => !!t)} active={active} className="[&>a]:px-2" />
+
+      <div className="ml-auto flex flex-wrap items-center gap-2">
+        {nav}
+        <Link
+          href={`/app/reservations/list?from=${date}&to=${date}&status=pending`}
+          aria-label={`未連絡の予約 ${unconfirmed}件`}
+          title="未連絡（仮予約）/ Unconfirmed"
+          className="relative flex h-10 w-10 items-center justify-center rounded-[9px] border border-line bg-white text-ink-2 transition-colors hover:border-iris hover:text-iris"
+        >
+          <Mail className="h-5 w-5" aria-hidden />
+          {unconfirmed > 0 && (
+            <span className="absolute -top-1.5 -right-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-danger px-1 font-[family-name:var(--font-num)] text-[10px] font-extrabold text-white tabular-nums">
+              {unconfirmed > 99 ? '99+' : unconfirmed}
+            </span>
+          )}
+        </Link>
+
+        <FindSeatsDialog storeId={chrome.storeId} tables={chrome.seatTables} defaultDate={date} className={ACTION_GHOST}>
           空席検索<En>Find seats</En>
         </FindSeatsDialog>
-        <WalkInDialog
-          stores={chrome.stores}
-          defaultStoreId={chrome.defaultStoreId}
-          storeTables={chrome.storeTables}
-          triggerClassName={cn(TILE, 'h-[52px] rounded-xl px-4 text-[15px]')}
-          triggerContent={
-            <>
-              直接来店<En>Walk-in</En>
-            </>
-          }
-        />
+
         <ManualReservationDialog
           stores={chrome.stores}
           defaultStoreId={chrome.defaultStoreId}
@@ -101,14 +97,57 @@ export function LedgerTop({
           tables={chrome.manualTables}
           prefill={{ date }}
           triggerVariant="primary"
-          triggerClassName={cn(TILE, 'h-[52px] rounded-xl px-5 text-[15px] shadow-card')}
+          triggerClassName={cn(ACTION, 'px-4 shadow-card')}
           triggerContent={
             <>
               <Plus className="h-4 w-4" strokeWidth={3} aria-hidden />
-              予約登録<En light>Add</En>
+              予約登録
             </>
           }
         />
+
+        {/* 週間・月間・ウェイティング・印刷などは「…」の中へ（タブは5つに絞る） */}
+        <LedgerMoreMenu>
+          {chrome.links.tables && (
+            <Link href="/app/floor" className={MENU_ITEM}>
+              テーブル管理<En>Tables</En>
+            </Link>
+          )}
+          <Link href={`/app/reservations?view=week&date=${date}`} className={MENU_ITEM}>
+            週間<En>Week</En>
+          </Link>
+          <Link href={`/app/reservations/calendar?month=${date.slice(0, 7)}`} className={MENU_ITEM}>
+            月間<En>Month</En>
+          </Link>
+          <Link href="/app/reservations?view=waitlist" className={MENU_ITEM}>
+            ウェイティング<En>Waiting</En>
+          </Link>
+          <WalkInDialog
+            stores={chrome.stores}
+            defaultStoreId={chrome.defaultStoreId}
+            storeTables={chrome.storeTables}
+            triggerClassName={MENU_ITEM}
+            triggerContent={
+              <>
+                直接来店<En>Walk-in</En>
+              </>
+            }
+          />
+          <PrintButton className={MENU_ITEM}>
+            <Printer className="h-4 w-4" aria-hidden />
+            印刷・PDF<En>Print / PDF</En>
+          </PrintButton>
+          {chrome.links.analytics && (
+            <Link href={`/app/reports?from=${date.slice(0, 7)}-01&to=${date}`} className={MENU_ITEM}>
+              集計分析<En>Analytics</En>
+            </Link>
+          )}
+          {chrome.links.settings && (
+            <Link href="/app/settings/booking" className={MENU_ITEM}>
+              台帳設定<En>Settings</En>
+            </Link>
+          )}
+        </LedgerMoreMenu>
       </div>
     </div>
   );
