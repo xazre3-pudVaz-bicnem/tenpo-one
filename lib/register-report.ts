@@ -92,7 +92,10 @@ export interface RegisterReportOptions extends WidthOptions {
 export type DenominationJson = Record<string, number>;
 
 /** レジ締めアクションの結果。締め自体は成功したが精算レシートだけ出せなかったときは printWarning に理由が入る */
-export type CloseRegisterResult = { ok: true; printWarning?: string | null } | { ok: false; error: string };
+export type CloseRegisterResult =
+  /** signOutAfter: レジ端末はレジ締めのあとログアウトする（2026-09-24 店舗要望） */
+  | { ok: true; printWarning?: string | null; signOutAfter?: boolean }
+  | { ok: false; error: string };
 
 /** 金種のレシート表記（dinii と同じ「1円硬貨」「千円紙幣」形式） */
 export function denominationReportLabel(denom: CashDenomination): string {

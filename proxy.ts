@@ -62,13 +62,20 @@ export default async function proxy(request: NextRequest) {
     }
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { data, error } = await supabase.auth.getUser();
+  const user = data.user;
 
   const isProtected = pathname.startsWith('/app') || pathname.startsWith('/admin');
 
-  if (isProtected && !user) {
+  // 通信が一瞬切れた・認証サーバーが重いだけでログイン画面に飛ばさない。
+  // 営業中のレジが突然ログアウトされた（2026-09-24 店舗報告）のはここが原因になりうる。
+  // ログインの跡（sb-… cookie）があって、はっきりした認証エラー（400/401/403）でないときは、
+  // そのまま通してページ側（requireSession）の判断に任せる。
+  const authFailed = !!error && [400, 401, 403].includes((error as { status?: number }).status ?? 0);
+  const hasAuthCookie = request.cookies.getAll().some((c) => c.name.startsWith('sb-') && !!c.value);
+  const looksTransient = !user && !!error && !authFailed && hasAuthCookie;
+
+  if (isProtected && !user && !looksTransient) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     url.searchParams.set('next', pathname);
