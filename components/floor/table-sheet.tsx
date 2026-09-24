@@ -3,13 +3,11 @@
 import { useLayoutEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { enqueueOrderSlipPrint } from '@/app/app/pos/print-actions';
-import { X } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { Lock, LockOpen, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/components/ui/toast';
-import { yen } from '@/lib/format';
-import { TILE_LABEL, nextReservation, tileState, tileTime, type TableView } from './types';
+import { TILE_LABEL, nextReservation, tileState, type TableView } from './types';
 
 /** 着席（ファーストオーダー）のときに決めるコース・時間 */
 export interface WalkInSeatOptions {
@@ -103,9 +101,7 @@ export function TableSheet({
   };
 
   const status = table.current_status;
-  const order = table.order;
   const next = nextReservation(table, now);
-  const tt = order ? tileTime(order, now) : null;
 
   return (
     <div className="fixed inset-0 z-50" onClick={onClose} role="presentation">
@@ -129,32 +125,6 @@ export function TableSheet({
           <X className="h-4 w-4" />
         </button>
       </div>
-
-      {order && tt && (
-        <div className="mb-2 rounded-xl bg-lilac-soft px-2.5 py-1.5">
-          <dl className="grid grid-cols-3 gap-1 text-center">
-            <div>
-              <dt className="text-[10px] text-ink-3">経過</dt>
-              <dd className="text-[14px] font-extrabold text-royal tabular-nums">{tt.elapsed}分</dd>
-            </div>
-            <div>
-              <dt className="text-[10px] text-ink-3">残り</dt>
-              <dd className={cn('text-[14px] font-extrabold tabular-nums', tt.left > 0 ? 'text-ink' : 'text-danger')}>
-                {tt.left > 0 ? `${tt.left}分` : `超過${-tt.left}分`}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-[10px] text-ink-3">お会計</dt>
-              <dd className="text-[14px] font-extrabold text-ink tabular-nums">{yen(order.total)}</dd>
-            </div>
-          </dl>
-          <p className="mt-1 truncate text-[11px] text-ink-2">
-            {order.guestCount}名
-            {(order.customerName ?? order.guestName) && `・${order.customerName ?? order.guestName} 様`}
-            {order.clerkName && `・担当 ${order.clerkName}`}
-          </p>
-        </div>
-      )}
 
       {next && (
         <div className="mb-2.5 rounded-lg bg-iris-soft px-2.5 py-1.5 text-[11px] text-royal">
@@ -278,16 +248,21 @@ export function TableSheet({
           </Button>
         )}
 
-        {/* 利用停止はめったに使わないので、間違って押さないよう小さく下に置く */}
+        {/* 卓ロック：空いている卓だけ。お客様が入っている卓はロックできない（2026-09-24 店舗要望） */}
         {canOperate && (status === 'available' || status === 'unavailable') && (
-          <button
-            type="button"
+          <Button
+            size="md"
+            variant="secondary"
+            className="h-[40px] w-full flex-col gap-0 text-[14px] leading-tight"
             disabled={pending}
             onClick={() => run(() => setTableAvailabilityAction(table.id, status !== 'unavailable'))}
-            className="mx-auto block rounded-lg px-3 py-2 text-xs font-semibold text-ink-3 hover:bg-lilac hover:text-royal disabled:opacity-40"
           >
-            {status === 'unavailable' ? 'テーブルを再開する' : 'このテーブルを利用停止にする'}
-          </button>
+            <span className="flex items-center gap-1.5">
+              {status === 'unavailable' ? <LockOpen className="h-4 w-4" aria-hidden /> : <Lock className="h-4 w-4" aria-hidden />}
+              {status === 'unavailable' ? 'ロック解除' : 'テーブルをロック'}
+            </span>
+            <span className="text-[10px] font-semibold text-ink-3">{status === 'unavailable' ? 'Unlock' : 'Lock table'}</span>
+          </Button>
         )}
       </div>
       </div>
