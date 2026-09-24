@@ -157,7 +157,9 @@ export async function closeRegister(
   sessionId: string,
   countedCash: number,
   differenceReason: string | null,
-  denominations: DenominationJson | null = null
+  denominations: DenominationJson | null = null,
+  /** レジで選んでいる担当者。精算レシートの「担当者」に出す（2026-09-24 店舗要望） */
+  clerkName: string | null = null
 ): Promise<CloseRegisterResult> {
   const ctx = await requirePermission('register.operate');
   if (!Number.isInteger(countedCash) || countedCash < 0) {
@@ -190,7 +192,7 @@ export async function closeRegister(
 
   let printWarning: string | null = null;
   try {
-    const printed = await enqueueRegisterReportPrint(supabase, sessionId, ctx.userId);
+    const printed = await enqueueRegisterReportPrint(supabase, sessionId, ctx.userId, clerkName);
     if (!printed.ok) printWarning = printed.error ?? 'レジ精算レシートを印刷できませんでした';
   } catch (err) {
     await captureServerError(err, {

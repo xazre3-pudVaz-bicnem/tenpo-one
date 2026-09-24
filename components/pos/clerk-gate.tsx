@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { ShieldCheck, UserRound } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { cancelApprovers, CLERK_ROLE_EN, CLERK_ROLE_LABELS, type ClerkRole } from '@/lib/clerk-roles';
+import { cancelApprovers, CLERK_ROLE_LABELS, type ClerkRole } from '@/lib/clerk-roles';
 import {
   CLERK_SESSION_KEY,
   isClerkSessionExpired,
@@ -175,7 +175,7 @@ export function ClerkGate({ clerks, children }: { clerks: GateClerk[]; children:
         <ClerkPickerOverlay
           title="担当者を選んでください"
           en="Who is on the register?"
-          note="3分そのままだと、もう一度この画面が出ます / Asks again after 3 minutes"
+          note="3分そのままだと、もう一度出ます / Asks again after 3 min"
           clerks={clerks}
           onPick={choose}
           onCancel={clerk ? () => setPicking(false) : undefined}
@@ -185,7 +185,7 @@ export function ClerkGate({ clerks, children }: { clerks: GateClerk[]; children:
         <ClerkPickerOverlay
           title="取消には店長の承認が必要です"
           en="Manager approval required to cancel"
-          note="店長以上の担当者を選んでください / Pick a manager or above"
+          note="店長以上を選んでください / Manager or above"
           clerks={managers}
           manager
           onPick={(picked) => answerApprover({ ok: true, approver: picked })}
@@ -215,6 +215,8 @@ function ClerkPickerOverlay({
   /** 省略すると閉じられない（担当者を選ぶまでレジを使わせない） */
   onCancel?: () => void;
 }) {
+  // 名前のアルファベット順で出す（店舗要望 2026-09-24）。日本語の名前も同じ並びに揃える
+  const sorted = [...clerks].sort((a, b) => a.name.localeCompare(b.name, 'ja'));
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-navy/60" aria-hidden />
@@ -222,46 +224,44 @@ function ClerkPickerOverlay({
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="relative z-10 w-full max-w-md rounded-2xl bg-white p-4 shadow-xl"
+        className="relative z-10 w-full max-w-[300px] rounded-xl bg-white p-3 shadow-xl"
       >
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           {manager ? (
-            <ShieldCheck className="h-4 w-4 text-danger" aria-hidden />
+            <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-danger" aria-hidden />
           ) : (
-            <UserRound className="h-4 w-4 text-royal" aria-hidden />
+            <UserRound className="h-3.5 w-3.5 shrink-0 text-royal" aria-hidden />
           )}
-          <div className="min-w-0">
-            <p className={cn('text-sm font-bold', manager ? 'text-danger' : 'text-navy')}>{title}</p>
-            <p className="text-[11px] text-ink-3">{en}</p>
-          </div>
+          <p className={cn('text-[13px] font-bold leading-tight', manager ? 'text-danger' : 'text-navy')}>
+            {title}
+            <span className="ml-1.5 text-[10px] font-normal text-ink-3">{en}</span>
+          </p>
         </div>
 
-        <ul className="mt-3 grid max-h-[50vh] grid-cols-2 gap-2 overflow-y-auto">
-          {clerks.map((c) => (
+        <ul className="mt-2 max-h-[52vh] divide-y divide-line overflow-y-auto rounded-lg border border-line">
+          {sorted.map((c) => (
             <li key={c.id}>
               <button
                 type="button"
                 onClick={() => onPick(c)}
-                className="flex h-14 w-full flex-col items-center justify-center rounded-xl border border-line bg-white px-2 leading-tight hover:bg-lilac-soft"
+                className="flex h-10 w-full items-center justify-between gap-2 bg-white px-3 text-left hover:bg-lilac-soft"
               >
-                <span className="w-full truncate text-center text-sm font-bold text-navy">{c.name}</span>
-                <span className="w-full truncate text-center text-[10px] text-ink-3">
-                  {CLERK_ROLE_LABELS[c.role]} / {CLERK_ROLE_EN[c.role]}
-                </span>
+                <span className="truncate text-[13px] font-bold text-navy">{c.name}</span>
+                <span className="shrink-0 text-[10px] text-ink-3">{CLERK_ROLE_LABELS[c.role]}</span>
               </button>
             </li>
           ))}
         </ul>
 
-        <div className="mt-3 flex items-center justify-between gap-2">
-          <p className="text-[11px] text-ink-3">{note}</p>
+        <div className="mt-2 flex items-center justify-between gap-2">
+          <p className="text-[10px] leading-tight text-ink-3">{note}</p>
           {onCancel && (
             <button
               type="button"
               onClick={onCancel}
-              className="shrink-0 rounded-lg border border-line px-3 py-1.5 text-xs text-ink-2 hover:bg-lilac-soft"
+              className="shrink-0 rounded-lg border border-line px-2 py-1 text-[11px] text-ink-2 hover:bg-lilac-soft"
             >
-              やめる / Cancel
+              やめる
             </button>
           )}
         </div>
