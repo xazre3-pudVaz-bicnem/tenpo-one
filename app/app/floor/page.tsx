@@ -59,6 +59,7 @@ const isWalkInName = (name: string) => name === 'ウォークイン';
 
 interface OrderRow {
   id: string;
+  order_no: number | null;
   table_id: string | null;
   opened_at: string;
   guest_count: number;
@@ -131,7 +132,7 @@ export default async function FloorPage() {
       supabase
         .from('orders')
         .select(
-          `id, table_id, opened_at, guest_count, total, clerk_name,
+          `id, order_no, table_id, opened_at, guest_count, total, clerk_name,
            customers(name, visit_count),
            reservations(guest_name, created_via, start_at, end_at, reservation_sources(name),
              menu_items(duration_minutes, course_includes_drinks, course_includes_ayce))`
@@ -182,6 +183,13 @@ export default async function FloorPage() {
           ? resvEndMs
           : openedAtMs + stayMinutes * 60_000;
     const prev = orderByTable.get(o.table_id);
+    const slip = {
+      id: o.id,
+      orderNo: o.order_no ?? 0,
+      openedAtMs,
+      guestCount: o.guest_count,
+      total: Number(o.total ?? 0),
+    };
     orderByTable.set(o.table_id, {
       id: o.id,
       // 経過時間は最初の注文の開始時刻から数える
@@ -195,6 +203,8 @@ export default async function FloorPage() {
       clerkName: o.clerk_name ?? prev?.clerkName ?? null,
       course: courseInfo ?? prev?.course ?? null,
       endAtMs: prev ? Math.max(prev.endAtMs, endAtMs) : endAtMs,
+      // 会計できない伝票が卓に残らないよう、卓のポップアップからすべての伝票を開けるようにする
+      slips: [...(prev?.slips ?? []), slip],
     });
   }
 
