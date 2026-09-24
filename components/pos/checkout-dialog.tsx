@@ -811,48 +811,9 @@ export function CheckoutDialog({
             </h3>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto px-5 py-3">
-            <div className={sumRow}>
-              <span>小計</span>
-              <b className="font-bold tabular-nums text-ink">{yen(order.subtotal)}</b>
-            </div>
-            {order.serviceCharge > 0 && (
-              <div className={cn(sumRow, 'pl-3 text-[13px] text-ink-3')}>
-                <span>サービス料</span>
-                <b className="tabular-nums">{yen(order.serviceCharge)}</b>
-              </div>
-            )}
-            <div className={cn(sumRow, order.discountTotal > 0 && 'text-warning')}>
-              <span>値引き・クーポン{order.couponCode ? `（${order.couponCode}）` : ''}</span>
-              <b className="font-bold tabular-nums">{order.discountTotal > 0 ? `-${yen(order.discountTotal)}` : yen(0)}</b>
-            </div>
-            <div className="my-2 border-t border-dashed border-line" />
-            <div className="flex items-baseline justify-between py-2">
-              <span className="text-base font-bold text-navy">お支払い金額</span>
-              <b className="text-[34px] font-extrabold leading-none tabular-nums text-royal">{yen(order.total)}</b>
-            </div>
-            <div className={cn(sumRow, 'pl-3 text-[13px] text-ink-3')}>
-              <span>うち消費税</span>
-              <b className="tabular-nums">{yen(order.taxTotal)}</b>
-            </div>
-            <div className="my-2 border-t border-dashed border-line" />
-            <div className={sumRow}>
-              <span>お預り</span>
-              <b className="font-bold tabular-nums text-ink">{yen(tenderedTotal)}</b>
-            </div>
-            <div className="flex items-baseline justify-between py-1.5">
-              <span className="text-[15px] font-bold text-ink-2">残額</span>
-              <b className={cn('text-2xl font-extrabold tabular-nums', remaining === 0 ? 'text-success' : 'text-warning')}>
-                {yen(remaining)}
-              </b>
-            </div>
-            <div className={sumRow}>
-              <span>おつり</span>
-              <b className="font-bold tabular-nums text-ink">{yen(changeTotal)}</b>
-            </div>
-
             {/* 別々会計は金額のすぐ下（2026-09-25 店舗要望）。「品目ごと」か「金額ごと」を選ぶ。
                 品目ごと＝食べた分だけ先に会計（伝票を分ける）。金額ごと＝1枚の伝票を分けて払う */}
-            <div className="mt-3 border-t border-line pt-3">
+            <div className="mb-3 border-b border-line pb-3">
               <button
                 type="button"
                 onClick={() => {
@@ -909,6 +870,45 @@ export function CheckoutDialog({
                   </button>
                 </div>
               )}
+            </div>
+
+            <div className={sumRow}>
+              <span>小計</span>
+              <b className="font-bold tabular-nums text-ink">{yen(order.subtotal)}</b>
+            </div>
+            {order.serviceCharge > 0 && (
+              <div className={cn(sumRow, 'pl-3 text-[13px] text-ink-3')}>
+                <span>サービス料</span>
+                <b className="tabular-nums">{yen(order.serviceCharge)}</b>
+              </div>
+            )}
+            <div className={cn(sumRow, order.discountTotal > 0 && 'text-warning')}>
+              <span>値引き・クーポン{order.couponCode ? `（${order.couponCode}）` : ''}</span>
+              <b className="font-bold tabular-nums">{order.discountTotal > 0 ? `-${yen(order.discountTotal)}` : yen(0)}</b>
+            </div>
+            <div className="my-2 border-t border-dashed border-line" />
+            <div className="flex items-baseline justify-between py-2">
+              <span className="text-base font-bold text-navy">お支払い金額</span>
+              <b className="text-[34px] font-extrabold leading-none tabular-nums text-royal">{yen(order.total)}</b>
+            </div>
+            <div className={cn(sumRow, 'pl-3 text-[13px] text-ink-3')}>
+              <span>うち消費税</span>
+              <b className="tabular-nums">{yen(order.taxTotal)}</b>
+            </div>
+            <div className="my-2 border-t border-dashed border-line" />
+            <div className={sumRow}>
+              <span>お預り</span>
+              <b className="font-bold tabular-nums text-ink">{yen(tenderedTotal)}</b>
+            </div>
+            <div className="flex items-baseline justify-between py-1.5">
+              <span className="text-[15px] font-bold text-ink-2">残額</span>
+              <b className={cn('text-2xl font-extrabold tabular-nums', remaining === 0 ? 'text-success' : 'text-warning')}>
+                {yen(remaining)}
+              </b>
+            </div>
+            <div className={sumRow}>
+              <span>おつり</span>
+              <b className="font-bold tabular-nums text-ink">{yen(changeTotal)}</b>
             </div>
 
             {payments.length > 0 && (
