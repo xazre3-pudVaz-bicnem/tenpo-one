@@ -127,7 +127,12 @@ export function FloorBoard({
   const [view, setView] = useState<View>('cards');
 
   // テーブル状態（着席・清掃中など）と、テーブルに紐づく注文・予約の変化をRealtimeで検知して画面を更新する。
-  useStoreRealtimeRefresh({ storeId, tables: ['restaurant_tables', 'orders', 'reservations'] });
+  // 15秒ごとに自動更新（Realtime が届かない端末でも遅れないように。2026-09-25 店舗要望）
+  useStoreRealtimeRefresh({
+    storeId,
+    tables: ['restaurant_tables', 'orders', 'reservations'],
+    fallbackMs: 15_000,
+  });
 
   // 清掃中のまま放置されたテーブルを自動で空席に戻す。
   // 「清掃完了」の押し忘れで席が埋まったままに見える、という現場の詰まりを防ぐ。

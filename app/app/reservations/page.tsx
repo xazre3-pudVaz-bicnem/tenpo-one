@@ -630,7 +630,12 @@ export default async function ReservationsLedgerPage({ searchParams }: { searchP
   return (
     <div>
       {/* 予約・ウェイティングの追加・変更・キャンセルをRealtimeで検知し、台帳（日/週/ウェイティング）を自動更新する */}
-      <StoreRealtimeRefresh storeId={store.id} tables={['reservations', 'waitlist_entries']} />
+      {/* 15秒ごとに自動更新（2026-09-25 店舗要望）。卓の着席・会計も台帳に反映する */}
+      <StoreRealtimeRefresh
+        storeId={store.id}
+        tables={['reservations', 'waitlist_entries', 'restaurant_tables', 'orders']}
+        fallbackMs={15_000}
+      />
       <h1 className="sr-only">店舗台帳（{store.name}）</h1>
       <LedgerTop title={title} date={date} chrome={chrome} nav={nav} />
       <div className="print-area">
