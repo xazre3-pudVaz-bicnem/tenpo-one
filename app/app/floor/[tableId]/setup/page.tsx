@@ -7,6 +7,7 @@ import { can } from '@/lib/permissions';
 import { formatTime } from '@/lib/format';
 import { readHandyClerk } from '@/lib/handy-session';
 import { HandySetupScreen } from '@/components/handy/handy-setup-screen';
+import { visitSourcesFrom } from '@/lib/handy-visit';
 import { tableState } from '@/components/handy/logic';
 import { startHandyVisit } from '@/app/app/handy/actions';
 import { loadSetupPlanItems } from '@/app/app/handy/setup-data';
@@ -79,6 +80,13 @@ export default async function FloorSetupPage({ params }: { params: Promise<{ tab
 
   const planItems = await loadSetupPlanItems(ctx.organizationId, store.id);
   const clerk = await readHandyClerk();
+  // この店で使う来店経路（設定 > レジ で選ぶ。2026-09-24 店舗要望）
+  const { data: storeSettings } = await supabase
+    .from('store_settings')
+    .select('settings')
+    .eq('store_id', store.id)
+    .maybeSingle();
+  const visitSources = visitSourcesFrom(storeSettings?.settings ?? null);
 
   return shell(
     <HandySetupScreen
@@ -88,6 +96,7 @@ export default async function FloorSetupPage({ params }: { params: Promise<{ tab
       staffName={clerk?.name ?? ctx.displayName}
       planItems={planItems}
       startLabel={formatTime(new Date(requestTime()))}
+      sources={visitSources}
       confirmAction={startHandyVisit}
     />
   );

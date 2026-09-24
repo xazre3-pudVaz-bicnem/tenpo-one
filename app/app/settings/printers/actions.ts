@@ -6,6 +6,7 @@ import { requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import type { PrintResultStatus } from '@/lib/printing/types';
 import { isKitchenTicketTextSize, type KitchenTicketSettings } from '@/lib/kitchen-ticket';
+import { normalizeVisitSourceIds } from '@/lib/handy-visit';
 
 export interface ActionResult {
   error?: string;
@@ -543,5 +544,38 @@ export async function enqueueCloudPrntTest(
   if (error) return { error: `テストジョブの登録に失敗しました: ${error.message}` };
 
   revalidatePath('/app/settings/printers');
+  return {};
+}
+
+/**
+ * この店で使う来店経路（store_settings.settings.visitSources）。2026-09-24 店舗要望。
+ * settings の他の項目は消さずに上書きする。
+ */
+export async function saveVisitSources(storeId: string, ids: string[]): Promise<ActionResult> {
+  const ctx = await requirePermission('store.settings');
+  const err = assertStoreAccess(ctx.stores.map((s) => s.id), storeId);
+  if (err) return { error: err };
+
+  const next = normalizeVisitSourceIds(ids);
+  const supabase = await createClient();
+  const { data: existing } = await supabase
+    .from('store_settings')
+    .select('settings')
+    .eq('store_id', storeId)
+    .maybeSingle();
+  const current = (existing?.settings as Record<string, unknown> | null) ?? {};
+
+  const { error } = await supabase
+    .from('store_settings')
+    .upsert(
+      {
+        organization_id: ctx.organizationId,
+        store_id: storeId,
+        settings: { ...current, visitSources: next },
+        updated_by: ctx.userId,
+      },
+      { onConflict: 'store_id' }
+    );
+  if (error) return { error: `来店経路の保存に失敗しました: ${error.message}` };
   return {};
 }

@@ -9,6 +9,8 @@ import { registerBackUrl, registerOrderId, registerSettingSections } from '@/lib
 import { PageHeader } from '@/components/ui/page-header';
 import { EmptyState } from '@/components/ui/state';
 import { KitchenTicketPanel } from '@/components/settings/kitchen-ticket-panel';
+import { VisitSourcesPanel } from '@/components/settings/visit-sources-panel';
+import { visitSourcesFrom } from '@/lib/handy-visit';
 import { RegisterSettingsList } from '@/components/pos/register-settings-list';
 
 export const metadata: Metadata = { title: 'レジの設定' };
@@ -45,10 +47,12 @@ export default async function RegisterSettingsPage({
 
   const canKitchen = can(ctx.role, 'store.settings');
   let kitchen = null;
+  let visitSourceIds: string[] = [];
   if (canKitchen) {
     const supabase = await createClient();
     const { data } = await supabase.from('store_settings').select('settings').eq('store_id', store.id).maybeSingle();
     kitchen = kitchenTicketSettingsFrom(data?.settings ?? null);
+    visitSourceIds = visitSourcesFrom(data?.settings ?? null).map((s) => s.id);
   }
 
   return (
@@ -80,6 +84,17 @@ export default async function RegisterSettingsPage({
           </div>
         )}
       </section>
+
+      {/* 来店経路（お客様情報のボタン）。使わないサイトは外せる（2026-09-24 店舗要望） */}
+      {kitchen && (
+        <section aria-labelledby="register-settings-visit-sources" className="mb-6">
+          <h2 id="register-settings-visit-sources" className="mb-2 text-sm font-bold text-navy">
+            来店経路（お客様情報のボタン）
+            <span className="ml-1.5 text-xs font-normal text-gray-400">Visit sources</span>
+          </h2>
+          <VisitSourcesPanel storeId={store.id} initial={visitSourceIds} />
+        </section>
+      )}
 
       <RegisterSettingsList sections={registerSettingSections(ctx.role, orderId)} />
     </div>
