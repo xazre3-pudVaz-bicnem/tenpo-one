@@ -47,7 +47,7 @@
 
   --font-sans: "Noto Sans JP", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", Meiryo, system-ui, sans-serif;
   /* 数字・英字ラベル用 */
-  --font-num: "Manrope", "Noto Sans JP", system-ui, sans-serif;
+  --font-num: "Noto Sans JP", system-ui, sans-serif;
 }
 
 body {
