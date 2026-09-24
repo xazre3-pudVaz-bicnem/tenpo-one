@@ -162,3 +162,48 @@ export async function setPosClerkRole(id: string, storeId: string, role: ClerkRo
   revalidatePath('/app/settings/clerks');
   return {};
 }
+
+/**
+ * 担当者を消す。
+ * 伝票（orders.clerk_id）で使われている担当者は消せない（過去の伝票・レシートの担当名が
+ * 壊れるため）。その場合は「非表示」にしてもらう。
+ */
+export async function deletePosClerk(id: string, storeId: string): Promise<ActionResult> {
+  const ctx = await requirePermission('store.settings');
+  const err = assertStoreAccess(ctx.stores.map((s) => s.id), storeId);
+  if (err) return { error: err };
+
+  const supabase = await createClient();
+  const { data: clerk } = await supabase
+    .from('pos_clerks')
+    .select('id, name')
+    .eq('id', id)
+    .eq('store_id', storeId)
+    .maybeSingle();
+  if (!clerk) return { error: '担当者が見つかりません' };
+
+  const { count } = await supabase
+    .from('orders')
+    .select('id', { count: 'exact', head: true })
+    .eq('clerk_id', id);
+  if ((count ?? 0) > 0) {
+    return { error: 'この担当者は伝票で使われているため削除できません。「非表示」にしてください' };
+  }
+
+  const { error } = await supabase.from('pos_clerks').delete().eq('id', id).eq('store_id', storeId);
+  if (error) return { error: `削除に失敗しました: ${error.message}` };
+
+  await supabase.rpc('log_audit', {
+    p_org: ctx.organizationId,
+    p_store: storeId,
+    p_action: 'settings.clerks.delete',
+    p_target_table: 'pos_clerks',
+    p_target_id: id,
+    p_before: { name: clerk.name },
+    p_after: null,
+    p_note: null,
+  });
+
+  revalidatePath('/app/settings/clerks');
+  return {};
+}
