@@ -480,14 +480,14 @@ export function CheckoutDialog({
     setPayments((rows) => rows.filter((r) => r.key !== key));
   };
 
-  // 合計0円（値引き・クーポンで満額オフになった等）の場合は支払行なしで確定できるようにする。
-  // 従来は「支払行が1件以上」かつ「各行の金額>0」を必須としていたため、0円会計が
-  // 支払方法を追加できず（追加しても上限0円で金額>0にできない）会計を確定できなかった。
+  /**
+   * 合計0円（値引き・クーポンで満額オフ、まかない・招待など）はそのまま会計できる。
+   * 支払方法を押しても押さなくてもよい（押すと0円の行ができるが、送るときに落とす）。
+   * 0円以外はこれまで通り「支払行が1件以上」かつ「各行の金額>0」。
+   */
   const canConfirm =
-    !clerkMissing &&
-    !terminalBlocking &&
-    paid === order.total &&
-    (order.total === 0 ? payments.length === 0 : payments.length > 0 && payments.every((p) => p.amount > 0));
+    !clerkMissing && !terminalBlocking && paid === order.total &&
+    (order.total === 0 ? true : payments.length > 0 && payments.every((p) => p.amount > 0));
 
   const handleConfirm = () => {
     // disabled属性の反映を待たず、同一フレーム内の連打でも1回しか送信しない
@@ -496,11 +496,15 @@ export function CheckoutDialog({
     startCheckout(async () => {
       try {
         await onCheckout(
-          payments.map((p) => ({
-            method: p.method,
-            amount: p.amount,
-            tendered: p.method === 'cash' ? p.tendered : undefined,
-          }))
+          // 0円の行は送らない（0円会計のときに空の支払として確定させるため）
+          payments
+            .filter((p) => p.amount > 0)
+            .map((p) => ({
+              method: p.method,
+              amount: p.amount,
+              tendered: p.method === 'cash' ? p.tendered : undefined,
+              provider: p.provider ?? null,
+            }))
         );
         const cash = payments.find((p) => p.method === 'cash');
         setDone({
