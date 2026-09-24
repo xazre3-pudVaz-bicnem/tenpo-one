@@ -1,0 +1,49 @@
+/**
+ * テーブルグループ（2026-09-25 店舗要望「空席の卓に テーブルグループ設定 を出す」）。
+ *
+ * 大人数のお客様を2卓・3卓に分けて通すとき、その卓を1組としてまとめる。
+ * まとめた卓のどれかに伝票が立つと、同じグループの卓はすべて同じ伝票として扱う
+ * （卓をタップすればその伝票が開く＝1組1伝票のまま）。
+ *
+ * データベースの列は増やさず、店舗設定に持つ:
+ *   store_settings.settings.tableGroups = [{ id, tableIds: [...] }]
+ */
+
+export interface TableGroup {
+  id: string;
+  tableIds: string[];
+}
+
+/** 店舗設定から読む（壊れた値は捨てる） */
+export function tableGroupsFrom(settings: unknown): TableGroup[] {
+  const raw = (settings as { tableGroups?: unknown } | null)?.tableGroups;
+  if (!Array.isArray(raw)) return [];
+  const out: TableGroup[] = [];
+  for (const g of raw) {
+    const id = (g as { id?: unknown } | null)?.id;
+    const ids = (g as { tableIds?: unknown } | null)?.tableIds;
+    if (typeof id !== 'string' || !Array.isArray(ids)) continue;
+    const tableIds = [...new Set(ids.filter((v): v is string => typeof v === 'string'))];
+    if (tableIds.length >= 2) out.push({ id, tableIds });
+  }
+  return out;
+}
+
+/** その卓が入っているグループ（無ければ null） */
+export function groupOfTable(groups: TableGroup[], tableId: string): TableGroup | null {
+  return groups.find((g) => g.tableIds.includes(tableId)) ?? null;
+}
+
+/**
+ * 卓のまとまりを作り直す。
+ * 選んだ卓は他のグループから外し、2卓以上なら新しいグループにする（1卓以下ならグループ無し）。
+ * 卓が1つだけ残ったグループは意味がないので消す。
+ */
+export function setTableGroup(groups: TableGroup[], tableIds: string[], newId: string): TableGroup[] {
+  const picked = new Set(tableIds);
+  const rest = groups
+    .map((g) => ({ ...g, tableIds: g.tableIds.filter((id) => !picked.has(id)) }))
+    .filter((g) => g.tableIds.length >= 2);
+  if (picked.size >= 2) rest.push({ id: newId, tableIds: [...picked] });
+  return rest;
+}
