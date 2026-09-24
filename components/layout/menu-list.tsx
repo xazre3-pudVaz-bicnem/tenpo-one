@@ -4,7 +4,9 @@ import { NavIcon } from '@/components/layout/nav-icons';
 import { TakeoutRow } from '@/components/layout/takeout-row';
 import type { NavGroup, NavItem } from '@/lib/nav';
 
-const menuRowClass = 'flex w-full items-center gap-3 px-4 py-3.5 text-left text-sm font-medium text-navy active:bg-gray-50';
+// 立体的で少し光るタブ（押すと沈む。2026-09-24 店舗要望）
+const menuRowClass =
+  'tapneon flex w-full items-center gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3.5 text-left text-sm font-medium text-navy';
 
 /** メニュー一覧（iPad・スマホ）の行リスト。メニュー画面と集計画面で同じ見た目にする */
 export function MenuList({ groups }: { groups: (NavGroup | { label?: null; items: NavItem[] })[] }) {
@@ -15,8 +17,8 @@ export function MenuList({ groups }: { groups: (NavGroup | { label?: null; items
           {group.label && (
             <p className="mb-1.5 px-1 text-[11px] font-medium uppercase tracking-wider text-gray-400">{group.label}</p>
           )}
-          <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
-            <ul className="divide-y divide-gray-100">
+          <div>
+            <ul className="space-y-1.5">
               {group.items.map((item) => {
                 const body = (
                   <>

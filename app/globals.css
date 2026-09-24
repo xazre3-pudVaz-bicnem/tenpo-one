@@ -190,6 +190,56 @@ body.theme-regi {
   .tap3d:disabled {
     box-shadow: none;
   }
+  /*
+   * メニューの行などを「タブ」に見せる立体ボタン（うっすら紫に光る。2026-09-24 店舗要望）。
+   * .tap3d と同じ押し心地で、まわりに TENPO ONE の紫のにじみを足したもの。
+   */
+  .tapneon {
+    background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(246, 243, 251, 0.92));
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 1),
+      0 0 0 1px rgba(123, 63, 228, 0.09),
+      0 2px 0 rgba(94, 71, 119, 0.14),
+      0 4px 12px rgba(123, 63, 228, 0.13);
+    transition:
+      transform 0.06s ease,
+      box-shadow 0.06s ease,
+      filter 0.06s ease;
+    -webkit-tap-highlight-color: transparent;
+  }
+  @media (hover: hover) {
+    .tapneon:hover {
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 1),
+        0 0 0 1px rgba(123, 63, 228, 0.2),
+        0 2px 0 rgba(94, 71, 119, 0.14),
+        0 6px 18px rgba(123, 63, 228, 0.22);
+    }
+  }
+  .tapneon:active:not(:disabled) {
+    transform: translateY(2px);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.8),
+      0 0 0 1px rgba(123, 63, 228, 0.26),
+      0 1px 5px rgba(123, 63, 228, 0.2);
+    filter: brightness(0.98);
+  }
+  /* 選ばれている側（紫で塗ったボタン・タブ）。地の色を消さずに光らせる */
+  .tapneon-on {
+    background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.18), rgba(0, 0, 0, 0.06));
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.35),
+      0 0 0 1px rgba(123, 63, 228, 0.35),
+      0 2px 0 rgba(60, 32, 110, 0.32),
+      0 6px 18px rgba(123, 63, 228, 0.38);
+  }
+  .tapneon-on:active:not(:disabled) {
+    transform: translateY(2px);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.25),
+      0 0 0 1px rgba(123, 63, 228, 0.4),
+      0 1px 6px rgba(123, 63, 228, 0.35);
+  }
 }
 
 /* 数値の等幅表示（金額・集計） */
