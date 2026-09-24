@@ -3,7 +3,7 @@
 import { useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ChevronLeft } from 'lucide-react';
+import { ChevronLeft, House } from 'lucide-react';
 import { screenTitleFor } from '@/lib/nav';
 
 /** 上部バー中央の画面タイトル（日本語＋英語） */
@@ -26,11 +26,13 @@ export function BackHome() {
   const pathname = usePathname();
   if (pathname === '/app/dashboard') return null;
   return (
+    // 家のマーク付き・少し大きめの立体ボタン（2026-09-24 店舗要望）
     <Link
       href="/app/dashboard"
-      className="hidden shrink-0 items-center gap-0.5 rounded-lg bg-white/12 py-1.5 pr-3 pl-1.5 text-[13px] font-semibold whitespace-nowrap text-white transition-colors hover:bg-white/20 md:inline-flex"
+      className="tap3d-dark hidden h-11 shrink-0 items-center gap-1 rounded-xl bg-white/12 pr-4 pl-2 text-[15px] font-bold whitespace-nowrap text-white hover:bg-white/20 md:inline-flex"
     >
-      <ChevronLeft className="h-[18px] w-[18px]" />
+      <ChevronLeft className="h-[18px] w-[18px] shrink-0 text-white/70" />
+      <House className="h-[19px] w-[19px] shrink-0" />
       ホーム
     </Link>
   );
