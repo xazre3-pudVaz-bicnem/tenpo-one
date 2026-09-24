@@ -7,6 +7,14 @@ import type { ReservationStatus } from '@/lib/reservations';
 import { RESERVATION_STATUS } from '@/lib/reservations';
 import type { BadgeTone } from '@/components/ui/badge';
 
+/**
+ * スケジュール（テーブル×時間）のマスの幅＝30分。
+ * ⚠️ ここに置く理由: schedule-board.tsx は 'use client' のため、サーバー側（page.tsx）から
+ * そこの定数を import すると値ではなくクライアント参照になり、計算が NaN になる
+ * （2026-09-24 に店舗台帳のスケジュールが崩れた原因）。
+ */
+export const BOARD_SLOT = 30;
+
 export const CREATED_VIA_LABEL: Record<string, string> = {
   web: 'Web予約',
   phone: '電話',
