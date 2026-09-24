@@ -1,17 +1,22 @@
 'use client';
 
+import { useState, useTransition } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { BellRing, Wallet } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { yen, formatTime } from '@/lib/format';
+import { useToast } from '@/components/ui/toast';
 import { useNow } from '@/components/floor/use-now';
 import {
   callToneByTable,
+  canStartOrder,
   elapsedLabel,
   serviceCallLabel,
   tableState,
   TABLE_STATE_LABEL,
   type HandyServiceCall,
+  type HandyTableState,
 } from './logic';
 
 export interface HandyTableCard {
@@ -34,13 +39,19 @@ export function HandyTableList({
   tables,
   calls,
   serverNow,
+  setTableLockAction,
 }: {
   tables: HandyTableCard[];
   calls: HandyServiceCall[];
   serverNow: number;
+  /** 卓ロック（お客様が入っていない卓だけ）。レジのテーブル一覧と同じ（2026-09-24 店舗要望） */
+  setTableLockAction?: (tableId: string, unavailable: boolean) => Promise<void>;
 }) {
   const now = useNow(serverNow);
   const toneByTable = callToneByTable(calls);
+  // 空いている卓はタップで画面遷移せず、真ん中に小さいポップアップを出す（2026-09-24 店舗要望）
+  const [sheetTableId, setSheetTableId] = useState<string | null>(null);
+  const sheetTable = tables.find((t) => t.id === sheetTableId) ?? null;
 
   if (tables.length === 0) {
     return (
@@ -53,13 +64,110 @@ export function HandyTableList({
   }
 
   return (
-    <ul className="grid grid-cols-3 content-start gap-2 px-2 pt-1.5 pb-2.5 sm:grid-cols-4 lg:grid-cols-6">
-      {tables.map((t) => (
-        <li key={t.id}>
-          <HandyTableTile table={t} now={now} callKind={toneByTable.get(t.id) ?? null} />
-        </li>
-      ))}
-    </ul>
+    <>
+      <ul className="grid grid-cols-3 content-start gap-2 px-2 pt-1.5 pb-2.5 sm:grid-cols-4 lg:grid-cols-6">
+        {tables.map((t) => (
+          <li key={t.id}>
+            <HandyTableTile
+              table={t}
+              now={now}
+              callKind={toneByTable.get(t.id) ?? null}
+              onPick={setTableLockAction ? () => setSheetTableId(t.id) : undefined}
+            />
+          </li>
+        ))}
+      </ul>
+      {sheetTable && setTableLockAction && (
+        <HandyTableSheet
+          table={sheetTable}
+          setTableLockAction={setTableLockAction}
+          onClose={() => setSheetTableId(null)}
+        />
+      )}
+    </>
+  );
+}
+
+/** ポップアップを出す（画面遷移しない）卓の状態 */
+function usesSheet(state: HandyTableState): boolean {
+  return state === 'available' || state === 'blocked' || state === 'cleaning';
+}
+
+/**
+ * 卓のポップアップ（承認済みレイアウトの一覧の上に小さく出す）。
+ * 「注文を開始」と「テーブルをロック」だけ。お客様が入っている卓では出さない。
+ */
+function HandyTableSheet({
+  table,
+  setTableLockAction,
+  onClose,
+}: {
+  table: HandyTableCard;
+  setTableLockAction: (tableId: string, unavailable: boolean) => Promise<void>;
+  onClose: () => void;
+}) {
+  const router = useRouter();
+  const { toast } = useToast();
+  const [pending, startTransition] = useTransition();
+  const state = tableState(table.currentStatus, table.orderCount > 0);
+  const locked = state === 'blocked';
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={table.name}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[#24143688] p-3"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-[250px] rounded-xl bg-white p-3.5 shadow-[0_20px_90px_#0005]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <p className="text-center text-[15px] font-bold text-[#2a2138]">{table.name}</p>
+        <p className="mt-0.5 text-center text-[11px] text-[#8a769d]">
+          {table.capacityMax}名席 · {TABLE_STATE_LABEL[state]}
+        </p>
+        <div className="mt-3 grid gap-1.5">
+          {canStartOrder(state) && (
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => router.push(`/handy/${table.id}/setup`)}
+              className="min-h-[43px] rounded-lg bg-[#7b3fe4] text-sm font-bold text-white disabled:opacity-40"
+            >
+              注文を開始
+            </button>
+          )}
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() =>
+              startTransition(async () => {
+                try {
+                  await setTableLockAction(table.id, !locked);
+                  toast(locked ? 'ロックを解除しました' : 'テーブルをロックしました');
+                  router.refresh();
+                  onClose();
+                } catch (e) {
+                  toast(e instanceof Error ? e.message : '変更できませんでした', 'error');
+                }
+              })
+            }
+            className="min-h-[43px] rounded-lg border border-[#e3dbf1] bg-[#f4effb] text-sm font-bold text-[#4f3868] disabled:opacity-40"
+          >
+            {locked ? 'ロック解除' : 'テーブルをロック'}
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="min-h-[38px] rounded-lg bg-[#efeaf8] text-[13px] font-bold text-[#5e4777]"
+          >
+            閉じる
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -67,18 +175,19 @@ function HandyTableTile({
   table,
   now,
   callKind,
+  onPick,
 }: {
   table: HandyTableCard;
   now: number;
   callKind: 'staff' | 'checkout' | null;
+  /** 空いている卓のタップ（ポップアップ）。未指定なら従来どおり卓の画面へ移動する */
+  onPick?: () => void;
 }) {
   const state = tableState(table.currentStatus, table.orderCount > 0);
   const occupied = state === 'occupied';
+  const sheet = onPick && usesSheet(state);
 
-  return (
-    <Link
-      href={`/handy/${table.id}`}
-      className={cn(
+  const className = cn(
         'flex aspect-square w-full flex-col items-start rounded-[10px] border p-2 text-left shadow-[0_2px_5px_#24143605]',
         'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#7b3fe4]',
         callKind === 'checkout'
@@ -90,9 +199,11 @@ function HandyTableTile({
               : state === 'blocked'
                 ? 'border-[#c9c4d2] bg-[#e4e0ea]'
                 : 'border-[#e3dbf1] bg-white'
-      )}
-      aria-label={`${table.name} ${TABLE_STATE_LABEL[state]}${callKind ? ` ${serviceCallLabel(callKind)}` : ''}`}
-    >
+  );
+  const label = `${table.name} ${TABLE_STATE_LABEL[state]}${callKind ? ` ${serviceCallLabel(callKind)}` : ''}`;
+
+  const body = (
+    <>
       <span className="flex w-full items-start justify-between gap-1">
         <b className="min-w-0 truncate text-[15px] leading-tight font-semibold text-[#5e4777]">
           {table.name}
@@ -133,6 +244,19 @@ function HandyTableTile({
           {state === 'available' ? `${table.capacityMax}名席` : TABLE_STATE_LABEL[state]}
         </span>
       )}
+    </>
+  );
+
+  if (sheet) {
+    return (
+      <button type="button" onClick={onPick} className={className} aria-label={label}>
+        {body}
+      </button>
+    );
+  }
+  return (
+    <Link href={`/handy/${table.id}`} className={className} aria-label={label}>
+      {body}
     </Link>
   );
 }

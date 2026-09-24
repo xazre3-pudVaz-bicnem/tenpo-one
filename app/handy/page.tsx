@@ -15,6 +15,7 @@ import { HandyLoginScreen } from '@/components/handy/handy-login-screen';
 import { HandyTableList, type HandyTableCard } from '@/components/handy/handy-table-list';
 import type { HandyServiceCall } from '@/components/handy/logic';
 import { signOut } from '@/app/app/actions';
+import { setTableAvailability } from '@/app/app/floor/actions';
 import { loginHandyClerk } from '@/app/app/handy/actions';
 
 export const metadata: Metadata = { title: 'テーブル一覧' };
@@ -143,7 +144,12 @@ export default async function HandyTablesPage() {
       />
       <HandyOperatorBar label={clerk.name} note={`${cards.length}テーブル · HANDY`} />
       <HandyMain>
-        <HandyTableList tables={cards} calls={serviceCalls} serverNow={requestTime()} />
+        <HandyTableList
+          tables={cards}
+          calls={serviceCalls}
+          serverNow={requestTime()}
+          setTableLockAction={setTableAvailability}
+        />
       </HandyMain>
     </>
   );
