@@ -901,7 +901,8 @@ export function PosScreen({
         checkTerminalPaymentAction={checkTerminalPaymentAction}
         cancelTerminalPaymentAction={cancelTerminalPaymentAction}
         onTerminalPaymentFinalized={handleTerminalPaymentFinalized}
-        clerkMissing={clerkMissing}
+        clerks={clerks}
+        currentClerkId={currentClerkId}
         discountPresets={discountPresets}
         pointBrands={pointBrands}
         methodBrands={methodBrands}
