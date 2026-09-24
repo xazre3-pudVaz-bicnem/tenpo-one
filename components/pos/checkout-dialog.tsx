@@ -321,7 +321,7 @@ export function CheckoutDialog({
 
   /** 担当者（会計画面でも選べる。選ばないと会計できない） */
   const [clerkId, setClerkId] = useState(currentClerkId ?? '');
-  const [clerkPending, startClerk] = useTransition();
+  const [, startClerk] = useTransition();
   const clerkGate = useClerkGate();
   const gateAppliedRef = useRef(false);
 
@@ -337,20 +337,9 @@ export function CheckoutDialog({
       else gateAppliedRef.current = false;
     });
   }, [gateClerkId, clerkId, clerks, order.id]);
+  // 担当者は卓をタップする時に選んでいるので、会計画面では選ばせない（2026-09-25 店舗要望）。
+  // 伝票に担当者が入っていないときだけ、会計を止めて伝票画面で選んでもらう
   const clerkMissing = clerks.length > 0 && !clerkId;
-  const clerkName = clerks.find((c) => c.id === clerkId)?.name ?? null;
-
-  const pickClerk = (id: string) => {
-    const previous = clerkId;
-    setClerkId(id);
-    startClerk(async () => {
-      const res = await setOrderClerk(order.id, id || null);
-      if (!res.ok) {
-        setClerkId(previous);
-        toast(res.error ?? '担当者の設定に失敗しました', 'error');
-      }
-    });
-  };
 
   /** ポイント（自社・サイト）で払う指定があるか */
   const pointsSelected = payments.some((p) => p.method === 'points' || p.method === 'site_points');
@@ -875,36 +864,40 @@ export function CheckoutDialog({
             )}
           </div>
           <div className="border-t border-line p-3">
-            {/* 担当者はここで選ぶ（伝票へ戻らなくていいように。2026-09-25 要望） */}
-            {clerks.length > 0 && (
-              <div
+            {/* 別々会計・分けて払うはここ（金額の下）。担当者は卓をタップする時に選んでいるので出さない
+                （2026-09-25 店舗要望） */}
+            <div className="mb-2 grid grid-cols-2 gap-1.5">
+              <button
+                type="button"
+                onClick={() => setSplitPick(splitPick ? null : {})}
+                disabled={terminalBlocking || !splitOrderAction || splitLines.length < 2}
+                aria-pressed={splitPick != null}
                 className={cn(
-                  'mb-2 rounded-xl border p-2',
-                  clerkMissing ? 'border-danger/50 bg-danger-soft' : 'border-line bg-lilac-soft'
+                  'tap3d flex h-[46px] flex-col items-center justify-center rounded-xl border text-[13px] font-bold leading-tight disabled:opacity-40',
+                  splitPick != null ? 'border-iris bg-iris text-white' : 'border-line bg-white text-navy'
                 )}
               >
-                <p className={cn('mb-1.5 text-[11px] font-bold', clerkMissing ? 'text-danger' : 'text-ink-3')}>
-                  {clerkMissing ? '担当者を選んでください / Choose staff' : `担当 ${clerkName} / Staff`}
-                </p>
-                <div className="grid grid-cols-3 gap-1.5">
-                  {clerks.map((c) => (
-                    <button
-                      key={c.id}
-                      type="button"
-                      disabled={clerkPending}
-                      aria-pressed={clerkId === c.id}
-                      onClick={() => pickClerk(c.id)}
-                      className={cn(
-                        'flex h-[38px] items-center justify-center rounded-lg border px-1.5 text-center text-[13px] font-bold leading-tight transition-colors disabled:opacity-50',
-                        clerkId === c.id ? 'border-iris bg-iris text-white' : 'border-line bg-white text-navy active:bg-lilac'
-                      )}
-                    >
-                      {c.name}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
+                別々会計
+                <span className={cn('text-[10px] font-semibold', splitPick != null ? 'text-white/80' : 'text-ink-3')}>
+                  Split by item
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={toggleSplitMode}
+                disabled={terminalBlocking}
+                aria-pressed={splitMode}
+                className={cn(
+                  'tap3d flex h-[46px] flex-col items-center justify-center rounded-xl border text-[13px] font-bold leading-tight disabled:opacity-40',
+                  splitMode ? 'border-iris bg-iris text-white' : 'border-line bg-white text-navy'
+                )}
+              >
+                {splitMode ? '分けて払う：ON' : '分けて払う'}
+                <span className={cn('text-[10px] font-semibold', splitMode ? 'text-white/80' : 'text-ink-3')}>
+                  Split payment
+                </span>
+              </button>
+            </div>
             <Button
               size="pos"
               className="h-[56px] w-full text-[18px]"
@@ -957,41 +950,7 @@ export function CheckoutDialog({
 
             {rightTab === 'pay' ? (
               <>
-                <div className="mb-1.5 flex items-center justify-between gap-2">
-                  <span className="text-[11px] font-bold text-ink-3">支払方法 / Payment method</span>
-                  <div className="flex shrink-0 gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => setSplitPick(splitPick ? null : {})}
-                      disabled={terminalBlocking || !splitOrderAction || splitLines.length < 2}
-                      aria-pressed={splitPick != null}
-                      className={cn(
-                        'flex flex-col items-center rounded-full px-3 py-1 text-[11px] font-bold leading-tight transition-colors disabled:opacity-50',
-                        splitPick != null ? 'bg-iris text-white' : 'bg-lilac text-ink-2'
-                      )}
-                    >
-                      別々会計
-                      <span className={cn('text-[9px] font-semibold', splitPick != null ? 'text-white/80' : 'text-ink-3')}>
-                        Split by item
-                      </span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={toggleSplitMode}
-                      disabled={terminalBlocking}
-                      aria-pressed={splitMode}
-                      className={cn(
-                        'flex flex-col items-center rounded-full px-3 py-1 text-[11px] font-bold leading-tight transition-colors disabled:opacity-50',
-                        splitMode ? 'bg-iris text-white' : 'bg-lilac text-ink-2'
-                      )}
-                    >
-                      {splitMode ? '分けて払う：ON' : '分けて払う'}
-                      <span className={cn('text-[9px] font-semibold', splitMode ? 'text-white/80' : 'text-ink-3')}>
-                        Split payment
-                      </span>
-                    </button>
-                  </div>
-                </div>
+                <p className="mb-1.5 text-[11px] font-bold text-ink-3">支払方法 / Payment method</p>
 
                 {/* 別々会計：自分が食べた分（ランチのセットなど）を選んで、その分だけ先に会計する */}
                 {splitPick != null && (
