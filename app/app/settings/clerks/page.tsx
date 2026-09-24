@@ -5,6 +5,7 @@ import { PageHeader } from '@/components/ui/page-header';
 import { EmptyState } from '@/components/ui/state';
 import { SettingsBackLink } from '@/components/settings/back-link';
 import { ClerksPanel, type ClerkRow } from '@/components/settings/clerks-panel';
+import { loadStoreClerks } from '@/lib/pos-clerks-server';
 
 export const metadata: Metadata = { title: 'POS担当者 | 設定' };
 
@@ -23,17 +24,11 @@ export default async function ClerksSettingsPage() {
   }
 
   const supabase = await createClient();
-  const { data: clerks } = await supabase
-    .from('pos_clerks')
-    .select('id, name, status, sort_order')
-    .eq('store_id', targetStore.id)
-    .order('sort_order')
-    .order('name');
-
-  const rows: ClerkRow[] = (clerks ?? []).map((c) => ({
+  const rows: ClerkRow[] = (await loadStoreClerks(supabase, targetStore.id, { includeHidden: true })).map((c) => ({
     id: c.id,
     name: c.name,
-    status: c.status as 'active' | 'hidden',
+    status: c.status,
+    role: c.role,
   }));
 
   return (

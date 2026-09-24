@@ -20,6 +20,7 @@ import { useStoreRealtimeRefresh } from '@/components/realtime/use-store-refresh
 import { createMockDrawerProvider } from '@/lib/printing/providers';
 import { enqueueDrawerKick } from '@/app/app/pos/print-actions';
 import { ClerkSelector, type ClerkOption } from './clerk-selector';
+import { useClerkGate } from './clerk-gate';
 import { OptionDialog, type PosOptionGroup } from './option-dialog';
 import { shouldOpenDrawer, type DrawerResultStatus } from '@/lib/printing/types';
 import {
@@ -219,7 +220,12 @@ export function PosScreen({
   /** 戻り値（追加した明細のID）はレジでは使わない（ハンディが厨房送信に使う） */
   addItemAction: (orderId: string, menuItemId: string, optionItemIds?: string[]) => Promise<unknown>;
   updateQtyAction: (orderId: string, orderItemId: string, delta: number) => Promise<void>;
-  cancelItemAction: (orderId: string, orderItemId: string, reason: string) => Promise<void>;
+  cancelItemAction: (
+    orderId: string,
+    orderItemId: string,
+    reason: string,
+    approvedByClerkId?: string | null
+  ) => Promise<void>;
   setDiscountAction: (orderId: string, discountTotal: number, reason: string) => Promise<void>;
   checkoutAction: (orderId: string, payments: CheckoutPayment[]) => Promise<CheckoutOutcome>;
   /** 未送信の品目をまとめて厨房へ送る */
@@ -229,7 +235,7 @@ export function PosScreen({
   openTableMove?: boolean;
   moveTableAction: (orderId: string, newTableId: string) => Promise<{ tableName: string }>;
   /** 品目のない注文（会計前・¥0）を取消する。省略時はボタンを表示しない */
-  cancelEmptyOrderAction?: (orderId: string, reason: string) => Promise<void>;
+  cancelEmptyOrderAction?: (orderId: string, reason: string, approvedByClerkId?: string | null) => Promise<void>;
   /** 注文後の人数変更。省略時は人数バッジを押しても何も起きない */
   setGuestCountAction?: (orderId: string, guestCount: number) => Promise<void>;
   /** 席の時間・コース（卓の伝票だけ）。省略時はバッジを出さない */
@@ -247,6 +253,7 @@ export function PosScreen({
 }) {
   const router = useRouter();
   const { toast } = useToast();
+  const clerkGate = useClerkGate();
   const [pending, startTransition] = useTransition();
   const [activeCategory, setActiveCategory] = useState<string>(categories[0]?.id ?? '');
   const [searchQuery, setSearchQuery] = useState('');
@@ -347,10 +354,26 @@ export function PosScreen({
     handleQty(item.id, next - item.quantity);
   };
 
+  /**
+   * 取消の前に店長以上の担当者に承認してもらう（レジのみ。2026-09-24 店舗要望）。
+   * パソコン・ハンディ（clerkGate が無い）は今まで通りそのまま取消できる。
+   */
+  const askCancelApproval = async (): Promise<{ ok: boolean; approverId: string | null }> => {
+    if (!clerkGate) return { ok: true, approverId: null };
+    const answer = await clerkGate.askApprover();
+    if (!answer.ok) {
+      toast('取消には店長以上の承認が必要です / Manager approval required', 'error');
+      return { ok: false, approverId: null };
+    }
+    return { ok: true, approverId: answer.approver?.id ?? null };
+  };
+
   const handleCancel = async (reason: string) => {
     if (!cancelTarget) return;
+    const approval = await askCancelApproval();
+    if (!approval.ok) return;
     try {
-      await cancelItemAction(order.id, cancelTarget.id, reason);
+      await cancelItemAction(order.id, cancelTarget.id, reason, approval.approverId);
     } catch (e) {
       toast(e instanceof Error ? e.message : '取消に失敗しました', 'error');
     }
@@ -359,8 +382,10 @@ export function PosScreen({
   // 品目のない注文の取消。成功したら注文一覧（会計待ち）へ戻る
   const handleCancelEmptyOrder = async (reason: string) => {
     if (!cancelEmptyOrderAction) return;
+    const approval = await askCancelApproval();
+    if (!approval.ok) return;
     try {
-      await cancelEmptyOrderAction(order.id, reason);
+      await cancelEmptyOrderAction(order.id, reason, approval.approverId);
       toast(`注文 #${order.orderNo} を取消しました`, 'success');
       router.push('/app/pos');
     } catch (e) {

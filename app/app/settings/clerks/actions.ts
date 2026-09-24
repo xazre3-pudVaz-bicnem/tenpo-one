@@ -3,6 +3,8 @@
 import { revalidatePath } from 'next/cache';
 import { requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
+import { CLERK_ROLES, parseClerkRole, type ClerkRole } from '@/lib/clerk-roles';
+import { isMissingColumnError } from '@/lib/schema-compat';
 
 export interface ActionResult {
   error?: string;
@@ -12,8 +14,8 @@ function assertStoreAccess(storeIds: string[], storeId: string): string | null {
   return storeIds.includes(storeId) ? null : '対象店舗にアクセス権がありません';
 }
 
-/** POS担当者を追加する（アカウントは作らず、名前だけを店舗の台帳に登録する） */
-export async function addPosClerk(storeId: string, name: string): Promise<ActionResult> {
+/** POS担当者を追加する（アカウントは作らず、名前と役職だけを店舗の台帳に登録する） */
+export async function addPosClerk(storeId: string, name: string, role: string = 'staff'): Promise<ActionResult> {
   const ctx = await requirePermission('store.settings');
   const err = assertStoreAccess(ctx.stores.map((s) => s.id), storeId);
   if (err) return { error: err };
@@ -29,14 +31,19 @@ export async function addPosClerk(storeId: string, name: string): Promise<Action
     .select('id', { count: 'exact', head: true })
     .eq('store_id', storeId);
 
-  const { error } = await supabase.from('pos_clerks').insert({
+  const base = {
     organization_id: ctx.organizationId,
     store_id: storeId,
     name: trimmed,
     sort_order: count ?? 0,
     created_by: ctx.userId,
     updated_by: ctx.userId,
-  });
+  };
+  let { error } = await supabase.from('pos_clerks').insert({ ...base, role: parseClerkRole(role) });
+  // role 列がまだ本番DBに無い間は役職なしで登録する（担当者の追加が止まらないように）
+  if (error && isMissingColumnError(error.message, 'role')) {
+    ({ error } = await supabase.from('pos_clerks').insert(base));
+  }
   if (error) {
     if ((error as { code?: string }).code === '23505') {
       return { error: 'この担当者名は既に登録されています' };
@@ -51,7 +58,7 @@ export async function addPosClerk(storeId: string, name: string): Promise<Action
     p_target_table: 'pos_clerks',
     p_target_id: null,
     p_before: null,
-    p_after: { name: trimmed },
+    p_after: { name: trimmed, role: parseClerkRole(role) },
     p_note: null,
   });
 
@@ -111,6 +118,44 @@ export async function setPosClerkStatus(
     p_target_id: id,
     p_before: null,
     p_after: { status },
+    p_note: null,
+  });
+
+  revalidatePath('/app/settings/clerks');
+  return {};
+}
+
+/**
+ * 担当者の役職を変える。
+ * 役職は「レジ取消は店長以上」（2026-09-24 店舗要望）の判定に使う。
+ */
+export async function setPosClerkRole(id: string, storeId: string, role: ClerkRole): Promise<ActionResult> {
+  const ctx = await requirePermission('store.settings');
+  const err = assertStoreAccess(ctx.stores.map((s) => s.id), storeId);
+  if (err) return { error: err };
+  if (!CLERK_ROLES.includes(role)) return { error: '役職が不正です' };
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from('pos_clerks')
+    .update({ role, updated_by: ctx.userId })
+    .eq('id', id)
+    .eq('store_id', storeId);
+  if (error) {
+    if (isMissingColumnError(error.message, 'role')) {
+      return { error: '役職はまだ使えません（データベースの更新待ちです）' };
+    }
+    return { error: `役職の変更に失敗しました: ${error.message}` };
+  }
+
+  await supabase.rpc('log_audit', {
+    p_org: ctx.organizationId,
+    p_store: storeId,
+    p_action: 'settings.clerks.role',
+    p_target_table: 'pos_clerks',
+    p_target_id: id,
+    p_before: null,
+    p_after: { role },
     p_note: null,
   });
 

@@ -5,16 +5,19 @@ import { useRouter } from 'next/navigation';
 import { Plus, EyeOff, Eye, Pencil, Check, X, Loader2 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { Input, Select } from '@/components/ui/input';
 import { EmptyState } from '@/components/ui/state';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/components/ui/toast';
-import { addPosClerk, renamePosClerk, setPosClerkStatus } from '@/app/app/settings/clerks/actions';
+import { addPosClerk, renamePosClerk, setPosClerkRole, setPosClerkStatus } from '@/app/app/settings/clerks/actions';
+import { CLERK_ROLE_LABELS, CLERK_ROLES, type ClerkRole } from '@/lib/clerk-roles';
 
 export interface ClerkRow {
   id: string;
   name: string;
   status: 'active' | 'hidden';
+  /** 役職。レジ取消は店長以上だけができる */
+  role: ClerkRole;
 }
 
 /**
@@ -26,6 +29,7 @@ export function ClerksPanel({ storeId, initial }: { storeId: string; initial: Cl
   const { toast } = useToast();
   const [pending, startTransition] = useTransition();
   const [newName, setNewName] = useState('');
+  const [newRole, setNewRole] = useState<ClerkRole>('staff');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
 
@@ -43,7 +47,10 @@ export function ClerksPanel({ storeId, initial }: { storeId: string; initial: Cl
 
   const handleAdd = () => {
     if (!newName.trim()) return;
-    run(() => addPosClerk(storeId, newName), '担当者を追加しました', () => setNewName(''));
+    run(() => addPosClerk(storeId, newName, newRole), '担当者を追加しました', () => {
+      setNewName('');
+      setNewRole('staff');
+    });
   };
 
   return (
@@ -65,6 +72,19 @@ export function ClerksPanel({ storeId, initial }: { storeId: string; initial: Cl
             className="max-w-xs"
             disabled={pending}
           />
+          <Select
+            value={newRole}
+            onChange={(e) => setNewRole(e.target.value as ClerkRole)}
+            className="max-w-[12rem]"
+            aria-label="役職"
+            disabled={pending}
+          >
+            {CLERK_ROLES.map((r) => (
+              <option key={r} value={r}>
+                {CLERK_ROLE_LABELS[r]}
+              </option>
+            ))}
+          </Select>
           <Button onClick={handleAdd} disabled={pending || !newName.trim()}>
             {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
             追加
@@ -107,6 +127,24 @@ export function ClerksPanel({ storeId, initial }: { storeId: string; initial: Cl
                         {c.name}
                       </span>
                       {c.status === 'hidden' && <Badge tone="gray">非表示</Badge>}
+                      <Select
+                        value={c.role}
+                        onChange={(e) =>
+                          run(
+                            () => setPosClerkRole(c.id, storeId, e.target.value as ClerkRole),
+                            '役職を変更しました'
+                          )
+                        }
+                        className="h-9 max-w-[11rem] text-sm"
+                        aria-label={`${c.name}の役職`}
+                        disabled={pending}
+                      >
+                        {CLERK_ROLES.map((r) => (
+                          <option key={r} value={r}>
+                            {CLERK_ROLE_LABELS[r]}
+                          </option>
+                        ))}
+                      </Select>
                     </div>
                     <div className="flex items-center gap-1">
                       <Button
@@ -145,6 +183,11 @@ export function ClerksPanel({ storeId, initial }: { storeId: string; initial: Cl
 
         <p className="text-xs text-gray-500">
           退職などで選択肢から外す場合は「非表示」にしてください。削除ではないため、過去の伝票・レシートに残る担当名は変わりません。
+        </p>
+        <p className="text-xs text-gray-500">
+          <strong>役職</strong>は、レジでの取消（品目取消・注文取消）に使います。取消は
+          <strong>店長以上</strong>（店長・エリアマネージャー・オーナー）の担当者を選んだときだけできます。
+          店長以上を1人も登録していない間は、今まで通り誰でも取消できます。
         </p>
       </CardContent>
     </Card>

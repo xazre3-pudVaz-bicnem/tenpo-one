@@ -7,6 +7,7 @@ import { CommandPaletteIconTrigger } from '@/components/search/command-palette';
 import { HelpPopover } from '@/components/help/help-popover';
 import { StoreSwitcher } from './store-switcher';
 import { BackHome, LiveClock, ScreenTitle } from './top-bar-parts';
+import { ClerkChip } from '@/components/pos/clerk-gate';
 
 /**
  * 上部バー（濃紫・高さ58px）。D&DREAM レジ v32 準拠:
@@ -81,6 +82,8 @@ export function TopBar({
             </span>
           )}
         </Link>
+        {/* レジは店舗共通のアカウントなので、いま操作している担当者を出す（押すと選び直し） */}
+        <ClerkChip />
         <span
           className="hidden max-w-[200px] items-center gap-1.5 rounded-full bg-white/12 py-1 pr-3 pl-2 text-[13px] font-medium whitespace-nowrap md:inline-flex"
           title={roleLabel}

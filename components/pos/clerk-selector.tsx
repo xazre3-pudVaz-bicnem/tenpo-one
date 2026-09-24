@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 import { UserRound } from 'lucide-react';
 import { useToast } from '@/components/ui/toast';
 import { cn } from '@/lib/utils';
 import { setOrderClerk } from '@/app/app/pos/clerk-actions';
+import { useClerkGate } from './clerk-gate';
 
 export interface ClerkOption {
   id: string;
@@ -28,8 +29,24 @@ export function ClerkSelector({
   required?: boolean;
 }) {
   const { toast } = useToast();
+  const gate = useClerkGate();
   const [pending, startTransition] = useTransition();
   const [value, setValue] = useState(currentClerkId ?? '');
+  const appliedRef = useRef(false);
+
+  // レジ（iPad）は入口で担当者を選んでいるので、伝票にはそれをそのまま入れる。
+  // 伝票に担当者が入っていないときだけ。手で選び直した伝票は上書きしない（2026-09-24 店舗要望）。
+  const gateClerkId = gate?.clerk?.id ?? null;
+  useEffect(() => {
+    if (!gateClerkId || value || appliedRef.current) return;
+    if (!clerks.some((c) => c.id === gateClerkId)) return;
+    appliedRef.current = true;
+    startTransition(async () => {
+      const res = await setOrderClerk(orderId, gateClerkId);
+      if (res.ok) setValue(gateClerkId);
+      else appliedRef.current = false;
+    });
+  }, [gateClerkId, value, clerks, orderId]);
 
   if (clerks.length === 0) {
     return (
