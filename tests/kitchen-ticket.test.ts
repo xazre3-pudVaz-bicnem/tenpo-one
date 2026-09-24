@@ -13,9 +13,11 @@ import {
   kitchenTicketTextSizeFrom,
   layoutKitchenTicket,
   misroutedDrinkCategories,
+  rotateLines180,
   splitTicketByItem,
   ticketSlips,
   type ClaimedKitchenItem,
+  type LayoutLine,
 } from '@/lib/kitchen-ticket';
 import { kitchenTicketMarkup, kitchenTicketsMarkup } from '@/lib/receipt-markup';
 import { kitchenTicketStarPrnt, kitchenTicketsStarPrnt } from '@/lib/starprnt';
@@ -448,5 +450,32 @@ describe('厨房伝票の商品名の言語（2026-09-21 Ronnie「キッチン�
     const [t] = groupKitchenTickets([row({ item_name: '本日のおすすめ', item_name_en: null, item_name_kana: null })]);
     const texts = layoutKitchenTicket(t, { ...opts, language: 'en' }).map((l) => l.text);
     expect(texts.some((x) => x.startsWith('本日のおすすめ'))).toBe(true);
+  });
+});
+
+describe('上下さかさまのプリンター（180度回して出す）', () => {
+  it('行の並びを逆にして、1行の文字も逆順にする', () => {
+    const lines: LayoutLine[] = [
+      { text: 'T9', align: 'center', size: 'large' },
+      { text: 'Curry Naan Lunch  x1', align: 'left', size: 'normal' },
+    ];
+    const out = rotateLines180(lines);
+    expect(out.map((l) => l.text)).toEqual(['1x  hcnuL naaN yrruC', '9T']);
+    // 大きさと寄せ方はそのまま（左寄せは桁数を渡したときだけ右に寄せる）
+    expect(out[0].size).toBe('normal');
+    expect(out[1].align).toBe('center');
+  });
+
+  it('桁数を渡すと、左寄せの行は右に寄せる（回すと左寄せに見える）', () => {
+    const out = rotateLines180([{ text: 'abc', align: 'left', size: 'normal' }], 10);
+    expect(out[0].text).toBe('       cba');
+    // 縦横2倍の行は1行の桁数が半分
+    const big = rotateLines180([{ text: 'ab', align: 'left', size: 'large' }], 20);
+    expect(big[0].text).toBe('        ba');
+  });
+
+  it('日本語もそのまま逆順にできる', () => {
+    const out = rotateLines180([{ text: 'キッチン', align: 'center', size: 'tall' }]);
+    expect(out[0].text).toBe('ンチッキ');
   });
 });

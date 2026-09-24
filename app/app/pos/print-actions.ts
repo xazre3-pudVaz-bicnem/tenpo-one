@@ -7,10 +7,10 @@ import { receiptToStarMarkup, ryoshushoToStarMarkup, orderSlipMarkup, drawerKick
 import { receiptToStarPrnt, ryoshushoToStarPrnt, orderSlipStarPrnt, drawerKickStarPrnt } from '@/lib/starprnt';
 import { normalizeFloorIds, pickDefaultPrinter, pickPrinterForFloor } from '@/lib/printer-floors';
 import { receiptToEposXml, ryoshushoToEposXml, orderSlipEposXml, drawerKickEpos, kitchenTicketsEpos, eposCols } from '@/lib/epos-print';
-import { layoutKitchenTicket, type KitchenTicket } from '@/lib/kitchen-ticket';
+import { layoutKitchenTicket, rotateLines180, type KitchenTicket } from '@/lib/kitchen-ticket';
 import { kitchenTicketsMarkup } from '@/lib/receipt-markup';
 import { kitchenTicketsStarPrnt } from '@/lib/starprnt';
-import { STAR_WIDTH_OPTIONS } from '@/lib/receipt-layout';
+import { colsFor, STAR_WIDTH_OPTIONS } from '@/lib/receipt-layout';
 
 /**
  * ジョブに載せる既定の形式。実際にどの形式で印字されるかはプリンタが
@@ -44,10 +44,10 @@ async function getCloudPrntPrinter(
   supabase: any,
   storeId: string,
   floor?: { floorId: string | null }
-): Promise<{ id: string; paper_width_mm: number; drawer_kick: boolean; drawer_command: string } | null> {
+): Promise<{ id: string; paper_width_mm: number; drawer_kick: boolean; drawer_command: string; upside_down: boolean } | null> {
   let q = supabase
     .from('printer_configs')
-    .select('id, paper_width_mm, drawer_kick, drawer_command, usage, floor_ids, bill_slips')
+    .select('id, paper_width_mm, drawer_kick, drawer_command, usage, floor_ids, bill_slips, upside_down')
     .eq('store_id', storeId)
     .eq('status', 'active')
     .eq('cloudprnt_enabled', true);
@@ -61,6 +61,7 @@ async function getCloudPrntPrinter(
     drawer_command: string;
     usage: string;
     floor_ids: string[] | null;
+    upside_down?: boolean;
   }[])
     .map((r) => ({ ...r, floorIds: normalizeFloorIds(r.floor_ids) }))
     // 既定（担当フロアなし）はレシート機を優先する
@@ -68,6 +69,7 @@ async function getCloudPrntPrinter(
   const picked = floor ? pickPrinterForFloor(rows, floor.floorId) : pickDefaultPrinter(rows);
   if (!picked) return null;
   return {
+    upside_down: picked.upside_down === true,
     id: picked.id,
     paper_width_mm: picked.paper_width_mm,
     drawer_kick: picked.drawer_kick,
@@ -334,8 +336,11 @@ export async function enqueueCancelSlipPrint(orderId: string, lines: CancelSlipL
   const printedAt = new Date().toLocaleTimeString('ja-JP', { timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit' });
   const paperWidth = printer.paper_width_mm === 58 ? 58 : 80;
   const common = { title: '取消 伝票', titleEn: 'CANCEL', printedAt, textSize: 'large' as const, language: 'both' as const };
-  const star = layoutKitchenTicket(ticket, { ...common, paperWidth, ...STAR_WIDTH_OPTIONS });
-  const epos = layoutKitchenTicket(ticket, { ...common, columns: eposCols(paperWidth) });
+  const starLines = layoutKitchenTicket(ticket, { ...common, paperWidth, ...STAR_WIDTH_OPTIONS });
+  const eposLines = layoutKitchenTicket(ticket, { ...common, columns: eposCols(paperWidth) });
+  // プリンターを上下さかさまに付けている店舗は、印字を180度回して出す
+  const star = printer.upside_down ? rotateLines180(starLines, colsFor(paperWidth)) : starLines;
+  const epos = printer.upside_down ? rotateLines180(eposLines, eposCols(paperWidth)) : eposLines;
 
   const { error } = await supabase.from('print_jobs').insert({
     organization_id: order.organization_id,

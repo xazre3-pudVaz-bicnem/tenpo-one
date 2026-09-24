@@ -126,6 +126,8 @@ export interface PrinterConfigInput {
   floorIds?: string[];
   /** 厨房（ドリンク）機から会計伝票も出す */
   billSlips?: boolean;
+  /** プリンターを上下さかさまに付けているとき（印字を180度回して出す） */
+  upsideDown?: boolean;
 }
 
 /** プリンター設定の追加・更新 */
@@ -162,6 +164,7 @@ export async function savePrinterConfig(input: PrinterConfigInput): Promise<Acti
     drawer_kick: input.drawerKick,
     floor_ids: floorIds,
     bill_slips: input.usage === 'kitchen' ? !!input.billSlips : false,
+    upside_down: !!input.upsideDown,
     updated_by: ctx.userId,
   };
 

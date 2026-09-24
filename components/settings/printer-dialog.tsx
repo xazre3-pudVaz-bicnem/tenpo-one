@@ -25,6 +25,8 @@ export interface PrinterConfigRow {
   floorIds?: string[];
   /** 厨房（ドリンク）機から会計伝票も出す */
   billSlips?: boolean;
+  /** プリンターを上下さかさまに付けている（印字を180度回して出す） */
+  upsideDown?: boolean;
 }
 
 export interface FloorOption {
@@ -103,6 +105,7 @@ export function PrinterDialog({
         drawerKick: form.drawerKick,
         floorIds: form.usage === 'label' ? [] : (form.floorIds ?? []),
         billSlips: form.usage === 'kitchen' ? !!form.billSlips : false,
+        upsideDown: !!form.upsideDown,
       });
       if (result.error) {
         setError(result.error);
@@ -210,6 +213,17 @@ export function PrinterDialog({
             会計伝票もこのプリンターから出す（担当フロアの卓の中間伝票・QR注文のお会計伝票）
           </label>
         )}
+
+        {/* プリンターを逆さに取り付けている店舗（2026-09-25 要望）。印字を180度回して出す */}
+        <label className="flex items-center gap-2 text-sm text-gray-700">
+          <input
+            type="checkbox"
+            className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+            checked={!!form.upsideDown}
+            onChange={(e) => set('upsideDown', e.target.checked)}
+          />
+          上下さかさまに印字する（プリンターを逆向きに取り付けているとき）
+        </label>
 
         {form.usage !== 'label' && floors.length > 0 && (
           <div>

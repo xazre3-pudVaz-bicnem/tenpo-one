@@ -254,6 +254,25 @@ export interface KitchenLayoutOptions extends WidthOptions {
 }
 
 /** 伝票1枚ぶんの行を組み立てる。 */
+/**
+ * プリンターを上下さかさまに取り付けている店舗向けに、印字を180度回す（2026-09-25 要望）。
+ * 行の並びを逆にして、1行の文字も逆順にする。紙をさかさまに読むと正しく見える。
+ * 左寄せの行は回すと右寄せに見えるので、あらかじめ右に寄せておく（桁数が分かるときだけ）。
+ * 機種ごとのコマンドに頼らないので、Star でも EPSON でも同じように効く。
+ */
+export function rotateLines180(lines: readonly LayoutLine[], columns?: number): LayoutLine[] {
+  return [...lines].reverse().map((l) => {
+    const text = [...l.text].reverse().join('');
+    if (l.align === 'left' && columns && columns > 0) {
+      // large（縦横2倍）は1行に入る桁数が半分になる
+      const cols = l.size === 'large' ? Math.max(8, Math.floor(columns / 2)) : columns;
+      const pad = Math.max(0, cols - [...text].length);
+      return { ...l, text: ' '.repeat(pad) + text };
+    }
+    return { ...l, text };
+  });
+}
+
 export function layoutKitchenTicket(ticket: KitchenTicket, opts: KitchenLayoutOptions): LayoutLine[] {
   const width = opts.columns ?? colsFor(opts.paperWidth);
   const rule = '-'.repeat(width);

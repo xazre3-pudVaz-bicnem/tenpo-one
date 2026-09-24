@@ -41,7 +41,7 @@ export default async function PrintersSettingsPage() {
 
   const { data: printers } = await supabase
     .from('printer_configs')
-    .select('id, name, maker, model, connection_type, ip_address, usage, paper_width_mm, auto_print, drawer_kick, is_verified, cloudprnt_enabled, cloudprnt_token, drawer_command, poll_interval_seconds, last_polled_at, mac_address, kitchen_stations, floor_ids, bill_slips')
+    .select('id, name, maker, model, connection_type, ip_address, usage, paper_width_mm, auto_print, drawer_kick, is_verified, cloudprnt_enabled, cloudprnt_token, drawer_command, poll_interval_seconds, last_polled_at, mac_address, kitchen_stations, floor_ids, bill_slips, upside_down')
     .eq('store_id', targetStore.id)
     .eq('status', 'active')
     .order('name');
@@ -166,6 +166,7 @@ export default async function PrintersSettingsPage() {
     cloudprntEnabled: p.cloudprnt_enabled ?? false,
     floorIds: normalizeFloorIds(p.floor_ids),
     billSlips: p.bill_slips ?? false,
+    upsideDown: p.upside_down ?? false,
   }));
 
   return (
