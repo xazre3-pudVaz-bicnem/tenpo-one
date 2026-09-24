@@ -12,6 +12,8 @@ import { resolveStartTime, startTimeProblem } from '@/lib/handy-visit';
 import { isSeatDuration } from '@/lib/seat-time';
 import { dynamicUnitPrice } from '@/lib/dynamic-pricing';
 import { loadDynamicRules } from '@/lib/dynamic-pricing-server';
+import { clerkCanCancel } from '@/lib/clerk-roles';
+import { loadStoreClerks } from '@/lib/pos-clerks-server';
 
 const COUPON_PREFIX = 'クーポン: ';
 
@@ -327,12 +329,45 @@ export async function updateQty(orderId: string, orderItemId: string, delta: num
   revalidatePath(`/app/pos`);
 }
 
+/**
+ * 取消（品目取消・注文取消）は店長以上の担当者の承認が必要（2026-09-24 店舗要望「レジ取消は店長または店長より上の人」）。
+ *
+ * レジ端末は店舗共通のアカウントでログインしているため、ログイン権限では誰が押したか分からない。
+ * そこでレジからの取消だけ、店長以上の担当者（pos_clerks.role）を選ばせて記録する。
+ * パソコン・ハンディは今まで通りログインアカウントの権限で判断する。
+ * 店長以上をまだ登録していない店舗は止めない（取消ができずレジが止まるため）。
+ *
+ * 戻り値は承認した担当者名（承認が要らなかったときは null）。
+ */
+async function requireCancelApproval(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  ctx: { isRegisterDevice?: boolean },
+  storeId: string,
+  approvedByClerkId?: string | null
+): Promise<string | null> {
+  if (ctx.isRegisterDevice !== true) return null;
+
+  const clerks = await loadStoreClerks(supabase, storeId);
+  const managers = clerks.filter((c) => clerkCanCancel(c.role));
+  if (managers.length === 0) return null;
+
+  const approver = approvedByClerkId ? managers.find((m) => m.id === approvedByClerkId) : null;
+  if (!approver) throw new Error('取消には店長以上の担当者の承認が必要です');
+  return approver.name;
+}
+
 /** 品目取消（理由必須・監査ログ） */
-export async function cancelItem(orderId: string, orderItemId: string, reason: string) {
+export async function cancelItem(
+  orderId: string,
+  orderItemId: string,
+  reason: string,
+  approvedByClerkId?: string | null
+) {
   const ctx = await requirePermission('pos.order');
   if (!reason.trim()) throw new Error('取消理由を入力してください');
   const supabase = await createClient();
   const order = await loadOpenOrder(supabase, ctx, orderId);
+  const approver = await requireCancelApproval(supabase, ctx, order.store_id, approvedByClerkId);
 
   const { data: line } = await supabase
     .from('order_items')
@@ -360,8 +395,8 @@ export async function cancelItem(orderId: string, orderItemId: string, reason: s
     p_target_table: 'order_items',
     p_target_id: orderItemId,
     p_before: { status: line.status, name: line.name, quantity: line.quantity },
-    p_after: { status: 'cancelled' },
-    p_note: reason,
+    p_after: { status: 'cancelled', approved_by: approver },
+    p_note: approver ? `${reason}（承認: ${approver}）` : reason,
   });
 
   await supabase.rpc('recalc_order_totals', { p_order_id: order.id });
@@ -828,11 +863,16 @@ export async function moveTable(orderId: string, newTableId: string): Promise<{ 
  * - 注文は status='cancelled'（取引履歴では「取消」）、理由は void_reason に記録
  * - テーブルは他に会計前の注文が無ければ空席に戻す。紐づく予約（ウォークイン等）は取消扱い
  */
-export async function cancelEmptyOrder(orderId: string, reason: string): Promise<void> {
+export async function cancelEmptyOrder(
+  orderId: string,
+  reason: string,
+  approvedByClerkId?: string | null
+): Promise<void> {
   const ctx = await requirePermission('pos.checkout');
   if (!reason.trim()) throw new Error('取消理由を入力してください');
   const supabase = await createClient();
   const order = await loadOpenOrder(supabase, ctx, orderId);
+  const approver = await requireCancelApproval(supabase, ctx, order.store_id, approvedByClerkId);
 
   const { count: activeItems } = await supabase
     .from('order_items')
@@ -854,7 +894,12 @@ export async function cancelEmptyOrder(orderId: string, reason: string): Promise
   const now = new Date().toISOString();
   const { data: updated, error } = await supabase
     .from('orders')
-    .update({ status: 'cancelled', void_reason: reason.trim(), closed_at: now, updated_by: ctx.userId })
+    .update({
+      status: 'cancelled',
+      void_reason: approver ? `${reason.trim()}（承認: ${approver}）` : reason.trim(),
+      closed_at: now,
+      updated_by: ctx.userId,
+    })
     .eq('id', orderId)
     .eq('status', 'open')
     .select('id')

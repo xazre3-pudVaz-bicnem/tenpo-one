@@ -14,6 +14,7 @@ import { calcChange } from '@/lib/money';
 import { METHOD_LABELS, METHOD_LABELS_EN } from '@/components/cash/labels';
 import { setOrderClerk } from '@/app/app/pos/clerk-actions';
 import type { ClerkOption } from './clerk-selector';
+import { useClerkGate } from './clerk-gate';
 import {
   discountAmountOf,
   percentDiscountAmount,
@@ -303,6 +304,21 @@ export function CheckoutDialog({
   /** 担当者（会計画面でも選べる。選ばないと会計できない） */
   const [clerkId, setClerkId] = useState(currentClerkId ?? '');
   const [clerkPending, startClerk] = useTransition();
+  const clerkGate = useClerkGate();
+  const gateAppliedRef = useRef(false);
+
+  // レジは入口で担当者を選んでいるので、会計画面でも選び直さなくていいようにそれを入れる（2026-09-24 店舗要望）
+  const gateClerkId = clerkGate?.clerk?.id ?? null;
+  useEffect(() => {
+    if (!gateClerkId || clerkId || gateAppliedRef.current) return;
+    if (!clerks.some((c) => c.id === gateClerkId)) return;
+    gateAppliedRef.current = true;
+    startClerk(async () => {
+      const res = await setOrderClerk(order.id, gateClerkId);
+      if (res.ok) setClerkId(gateClerkId);
+      else gateAppliedRef.current = false;
+    });
+  }, [gateClerkId, clerkId, clerks, order.id]);
   const clerkMissing = clerks.length > 0 && !clerkId;
   const clerkName = clerks.find((c) => c.id === clerkId)?.name ?? null;
 

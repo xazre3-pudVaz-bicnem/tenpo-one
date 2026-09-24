@@ -16,6 +16,8 @@ import { CommandPaletteProvider } from '@/components/search/command-palette';
 import { OfflineBanner } from '@/components/offline/offline-banner';
 import { ThemeBody } from '@/components/layout/theme-body';
 import { InstallPrompt } from '@/components/pwa/install-prompt';
+import { ClerkGate, type GateClerk } from '@/components/pos/clerk-gate';
+import { loadStoreClerks } from '@/lib/pos-clerks-server';
 
 /** 店舗画面はブラウザのツールバー色も上部バー（濃紫）に合わせる */
 export const viewport = { themeColor: '#241436' };
@@ -65,6 +67,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // メール＋パスワードのパソコンは今まで通り。
   const isRegi = ctx.isRegisterDevice === true;
 
+  // レジ端末は「いま誰が操作しているか」を必ず選ばせる（3分さわらないと選び直し）。
+  // 取消の承認（店長以上）にも使うので、役職も一緒に持ってくる。
+  let gateClerks: GateClerk[] = [];
+  if (isRegi && ctx.currentStore) {
+    const rows = await loadStoreClerks(supabase, ctx.currentStore.id);
+    gateClerks = rows.map((c) => ({ id: c.id, name: c.name, role: c.role }));
+  }
+
   // レジは左メニューをホーム画面だけに出し、そこから開いた画面は全幅で使う（2026-09-23 要望）。
   // 画面の移動では layout が作り直されないため、出し分けは Sidebar / ContentArea 側で行う。
 
@@ -92,7 +102,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     return !feature || !ctx.disabledFeatures.has(feature);
   });
 
-  return (
+  const shell = (
     <CommandPaletteProvider role={ctx.role}>
       <ThemeBody />
       <OfflineBanner />
@@ -125,4 +135,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       </div>
     </CommandPaletteProvider>
   );
+
+  // レジだけ担当者のポップアップで包む（パソコン・ハンディは今まで通り）
+  return isRegi ? <ClerkGate clerks={gateClerks}>{shell}</ClerkGate> : shell;
 }
