@@ -82,7 +82,7 @@ export function TableCard({
       onClick={(e) => onSelect(t, e.currentTarget)}
       aria-label={`${t.name} ${TILE_LABEL[state]}`}
       className={cn(
-        'relative flex min-h-[170px] min-w-0 flex-col gap-[3px] overflow-hidden rounded-[10px] border border-line bg-white px-3 pt-2.5 text-left transition-[box-shadow,transform] hover:shadow-card active:scale-[0.98]',
+        'tap3d relative flex min-h-[170px] min-w-0 flex-col gap-[3px] overflow-hidden rounded-[10px] border border-line bg-white px-3 pt-2.5 text-left',
         SURFACE[state],
         dashed && 'border-dashed border-wisteria',
         state === 'reserved' && 'border-royal',

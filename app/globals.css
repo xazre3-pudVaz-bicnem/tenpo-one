@@ -164,6 +164,32 @@ body.theme-regi {
   .ui-input {
     border-radius: var(--ui-input-radius);
   }
+  /*
+   * 指で押した感じの出る立体的なボタン（レジ・ハンディの卓とメニュー。2026-09-24 店舗要望）。
+   * 少し浮かせておいて、押している間だけ沈める。iPad で押した瞬間に反応が返るよう transition は短く。
+   */
+  .tap3d {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.9),
+      0 2px 0 rgba(94, 71, 119, 0.22),
+      0 4px 10px rgba(36, 20, 54, 0.14);
+    transition:
+      transform 0.06s ease,
+      box-shadow 0.06s ease,
+      filter 0.06s ease;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .tap3d:active:not(:disabled) {
+    transform: translateY(2px);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.7),
+      0 0 0 rgba(94, 71, 119, 0.22),
+      0 1px 3px rgba(36, 20, 54, 0.14);
+    filter: brightness(0.97);
+  }
+  .tap3d:disabled {
+    box-shadow: none;
+  }
 }
 
 /* 数値の等幅表示（金額・集計） */
