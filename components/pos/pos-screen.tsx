@@ -486,15 +486,11 @@ export function PosScreen({
           await addItemAction(order.id, line.menuItemId, line.optionItemIds, line.quantity);
         }
         setCart([]);
-        if (!sendOrderAction) {
-          toast('伝票に入れました', 'success');
-          return;
-        }
+        if (!sendOrderAction) return;
         const res = await sendOrderAction(order.id);
-        toast(
-          res.sent > 0 ? `厨房へ ${res.sent} 品を送信しました / Sent to kitchen` : '伝票に入れました',
-          'success'
-        );
+        // うまくいったときは何も出さない。厨房で印刷されていない恐れがあるときだけ知らせる
+        // （2026-09-25 店舗要望）
+        if (res.printWarning) toast(res.printWarning, 'error');
       } catch (e) {
         toast(e instanceof Error ? e.message : '注文に失敗しました', 'error');
       }
@@ -703,15 +699,16 @@ export function PosScreen({
                       <p className="truncate text-[15px] font-bold leading-tight text-navy">
                         {l.nameEn ?? l.name}
                       </p>
-                      <p className="truncate text-xs leading-tight text-ink-3 tabular-nums">
-                        {yen(l.unitPrice)}
-                        {l.nameEn ? ` ・ ${l.name}` : ''}
-                        {l.optionLabel ? ` ・ ${l.optionLabel}` : ''}
+                      <p className="truncate text-xs leading-tight text-ink-3">
+                        {l.nameEn ? l.name : ''}
+                        {l.optionLabel ? `${l.nameEn ? ' ・ ' : ''}${l.optionLabel}` : ''}
                       </p>
                     </div>
+                    {/* 金額 × 数量（2026-09-25 店舗要望） */}
                     <span className="w-[72px] shrink-0 text-right text-[15px] font-bold tabular-nums text-navy">
-                      {yen(l.unitPrice * l.quantity)}
+                      {yen(l.unitPrice)}
                     </span>
+                    <span className="shrink-0 text-[13px] font-bold text-ink-3">×</span>
                     <div className="flex shrink-0 items-center overflow-hidden rounded-xl border border-line bg-white">
                       <button
                         type="button"
@@ -762,14 +759,15 @@ export function PosScreen({
                         </span>
                       )}
                     </p>
-                    <p className="text-xs leading-tight text-ink-3 tabular-nums">
-                      {yen(it.unit_price)}
-                      {it.menu_item_id && englishByItemId.get(it.menu_item_id) ? ` ・ ${it.name}` : ''}
+                    <p className="truncate text-xs leading-tight text-ink-3">
+                      {it.menu_item_id && englishByItemId.get(it.menu_item_id) ? it.name : ''}
                     </p>
                   </div>
+                  {/* 金額 × 数量（2026-09-25 店舗要望） */}
                   <span className="w-[72px] shrink-0 text-right text-[15px] font-bold tabular-nums text-navy">
-                    {yen(it.line_total)}
+                    {yen(it.unit_price)}
                   </span>
+                  <span className="shrink-0 text-[13px] font-bold text-ink-3">×</span>
                   {/* 数量は指で押せる大きさに（レジは iPad で使う） */}
                   <div className="flex shrink-0 items-center overflow-hidden rounded-xl border border-line">
                     <button
