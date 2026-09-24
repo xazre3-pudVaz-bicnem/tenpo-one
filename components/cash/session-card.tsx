@@ -12,6 +12,7 @@ import { toUserMessage } from '@/lib/action-error';
 import { hasAnyCount, sumDenominations, type DenominationCounts } from '@/lib/cash-count';
 import { CashDenominationCounter } from '@/components/cash/cash-denomination-counter';
 import { KIND_LABELS, IN_KINDS, type CashKind } from '@/components/cash/labels';
+import { useClerkGate } from '@/components/pos/clerk-gate';
 
 export interface SessionCardData {
   id: string;
@@ -193,6 +194,7 @@ function CloseRegisterDialog({
   const [reason, setReason] = useState('');
   const [pending, startTransition] = useTransition();
   const { toast } = useToast();
+  const clerkGate = useClerkGate();
 
   const entered = hasAnyCount(counts);
   const counted = sumDenominations(counts);
@@ -211,7 +213,13 @@ function CloseRegisterDialog({
     }
     startTransition(async () => {
       try {
-        const result = await closeRegister(sessionId, counted, needsReason ? reason.trim() : null);
+        const result = await closeRegister(
+          sessionId,
+          counted,
+          needsReason ? reason.trim() : null,
+          null,
+          clerkGate?.clerk?.name ?? null
+        );
         if (!result.ok) {
           toast(result.error, 'error');
           return;

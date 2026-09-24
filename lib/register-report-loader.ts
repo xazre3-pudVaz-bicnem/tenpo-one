@@ -54,7 +54,9 @@ function businessDateLabel(date: string): string {
  */
 export async function loadRegisterReportData(
   supabase: AnyClient,
-  sessionId: string
+  sessionId: string,
+  /** レジで選んでいる担当者。レジは店舗共通のアカウントなので、こちらを「担当者」として印字する */
+  clerkName?: string | null
 ): Promise<{ data: RegisterReportData; storeId: string; organizationId: string } | null> {
   const SESSION_COLUMNS =
     'id, organization_id, store_id, register_id, business_date, status, opened_at, opened_by, closed_at, closed_by, opening_float, expected_cash, counted_cash, difference, difference_reason, note, registers(name), stores(name)';
@@ -288,7 +290,7 @@ export async function loadRegisterReportData(
     openedAtLabel: formatDateTime(session.opened_at as string),
     openedBy: nameOf(session.opened_by as string | null),
     closedAtLabel: session.closed_at ? formatDateTime(session.closed_at as string) : '—（開局中）',
-    closedBy: nameOf(session.closed_by as string | null),
+    closedBy: clerkName?.trim() || nameOf(session.closed_by as string | null),
     printedAtLabel: jstNowLabel(),
     sales: {
       gross,
@@ -340,9 +342,11 @@ export interface RegisterReportPrintResult {
 export async function enqueueRegisterReportPrint(
   supabase: AnyClient,
   sessionId: string,
-  userId: string
+  userId: string,
+  /** レジで選んでいる担当者（レジ閉めをした人）。無ければログインアカウントの名前で出す */
+  clerkName?: string | null
 ): Promise<RegisterReportPrintResult> {
-  const loaded = await loadRegisterReportData(supabase, sessionId);
+  const loaded = await loadRegisterReportData(supabase, sessionId, clerkName);
   if (!loaded) return { ok: false, error: '対象のレジセッションが見つかりません' };
 
   const { data: printer } = await supabase

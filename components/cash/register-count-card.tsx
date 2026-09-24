@@ -12,6 +12,7 @@ import { toUserMessage } from '@/lib/action-error';
 import { hasAnyCount, sumDenominations, type DenominationCounts } from '@/lib/cash-count';
 import { denominationsToJson } from '@/lib/register-report';
 import { CashDenominationCounter } from '@/components/cash/cash-denomination-counter';
+import { useClerkGate } from '@/components/pos/clerk-gate';
 
 export interface CountSession {
   id: string;
@@ -48,6 +49,7 @@ export function RegisterCountCard({
   const [reason, setReason] = useState('');
   const [pending, startTransition] = useTransition();
   const { toast } = useToast();
+  const clerkGate = useClerkGate();
 
   const entered = hasAnyCount(counts);
   const countedValue = useMemo(() => sumDenominations(counts), [counts]);
@@ -69,7 +71,8 @@ export function RegisterCountCard({
           session.id,
           countedValue,
           needsReason ? reason.trim() : null,
-          denominationsToJson(counts)
+          denominationsToJson(counts),
+          clerkGate?.clerk?.name ?? null
         );
         if (!result.ok) {
           toast(result.error, 'error');
