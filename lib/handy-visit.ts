@@ -16,17 +16,36 @@ export const HANDY_PLANS: readonly { id: HandyPlan; name: string }[] = [
   { id: 'course', name: 'コース' },
 ];
 
-export const HANDY_SCENES = [
-  '宴会・パーティー',
-  '接待',
-  'デート',
-  '記念日・誕生日',
-  '合コン',
-  '女子会',
-  'ランチ',
-  'その他',
+/**
+ * 来店経路（お客様がどこから来たか）。2026-09-24 店舗要望で「利用シーン」から置き換えた。
+ * color はグルメサイトの色に寄せて、現場が一目で選べるようにする。
+ * code は `reservation_sources.code` に合わせてあり、行があれば予約の経路として記録する
+ * （無ければラベルを伝票メモ・予約の目的に残すので、集計から漏れない）。
+ */
+export interface VisitSource {
+  id: string;
+  label: string;
+  /** reservation_sources.code の候補（先に見つかったものを使う） */
+  codes: readonly string[];
+  /** ボタンの色（選択時の地色・未選択時の文字と枠） */
+  color: string;
+}
+
+export const VISIT_SOURCES: readonly VisitSource[] = [
+  { id: 'free', label: 'フリー', codes: ['walk_in', 'free'], color: '#5e4777' },
+  { id: 'phone', label: '当日電話ご予約', codes: ['phone', 'tel'], color: '#2f6fd0' },
+  { id: 'tabelog', label: '食べログご予約', codes: ['tabelog'], color: '#e8801a' },
+  { id: 'hotpepper', label: 'ホットペッパー', codes: ['hotpepper', 'hpg'], color: '#d8341c' },
+  { id: 'gourmet', label: '他全てのグルメ', codes: ['gurunavi', 'other_gourmet', 'gourmet'], color: '#7b3fe4' },
+  { id: 'catch', label: 'CATCH', codes: ['catch'], color: '#0a9b7a' },
+  { id: 'line', label: 'LINE', codes: ['line'], color: '#06c755' },
 ] as const;
-export type HandyScene = (typeof HANDY_SCENES)[number];
+
+export const VISIT_SOURCE_LABELS: readonly string[] = VISIT_SOURCES.map((s) => s.label);
+
+export function visitSourceByLabel(label: string): VisitSource | null {
+  return VISIT_SOURCES.find((s) => s.label === label) ?? null;
+}
 
 /* ------------------------------------------- 時間ピッカー（時間制・終了前注意） */
 
@@ -134,7 +153,8 @@ export interface VisitDraft {
   planItemId: string | null;
   male: number;
   female: number;
-  scene: HandyScene | '';
+  /** 来店経路（VISIT_SOURCES のラベル）。未選択は '' */
+  source: string;
   timed: boolean;
   /** 席時間（分）。timed のときだけ使う */
   duration: number;
@@ -149,7 +169,7 @@ export const DEFAULT_VISIT_DRAFT: VisitDraft = {
   planItemId: null,
   male: 0,
   female: 0,
-  scene: '',
+  source: '',
   timed: false,
   duration: 120,
   warningEnabled: true,
@@ -164,8 +184,8 @@ export function validateVisitDraft(d: VisitDraft): string | null {
   }
   const guests = d.male + d.female;
   if (guests < 1 || guests > MAX_GUESTS) return `合計人数を1〜${MAX_GUESTS}名で入力してください`;
-  if (!d.scene || !(HANDY_SCENES as readonly string[]).includes(d.scene)) {
-    return '利用シーンを選択してください';
+  if (!d.source || !VISIT_SOURCE_LABELS.includes(d.source)) {
+    return '来店経路を選択してください';
   }
   if (d.timed) {
     const durationIssue = durationProblem(d.duration);
@@ -251,16 +271,16 @@ export function parseCustomHm(hoursText: string, minutesText: string): string | 
 
 /**
  * 伝票メモに残す文（レジ・レシートの「メモ」で見える）。
- * 例: ハンディ: 飲み放題 / 男2・女1 / 記念日・誕生日 / 2時間制（30分前に声かけ）
+ * 例: ハンディ: 飲み放題 / 男2・女1 / 食べログご予約 / 2時間制（30分前に声かけ）
  */
 export function visitMemo(
   d: Pick<
     VisitDraft,
-    'plan' | 'male' | 'female' | 'scene' | 'timed' | 'duration' | 'warningEnabled' | 'warningMinutes'
+    'plan' | 'male' | 'female' | 'source' | 'timed' | 'duration' | 'warningEnabled' | 'warningMinutes'
   >
 ): string {
   const parts = [planName(d.plan), `男${d.male}・女${d.female}`];
-  if (d.scene) parts.push(String(d.scene));
+  if (d.source) parts.push(String(d.source));
   if (d.timed) {
     parts.push(
       `${durationLabel(d.duration)}制${d.warningEnabled ? `（${durationLabel(d.warningMinutes)}前に声かけ）` : ''}`
