@@ -35,7 +35,7 @@ import {
 } from '@/lib/handy-clerk';
 
 function draft(overrides: Partial<VisitDraft> = {}): VisitDraft {
-  return { ...DEFAULT_VISIT_DRAFT, male: 2, female: 1, source: '食べログご予約', ...overrides };
+  return { ...DEFAULT_VISIT_DRAFT, male: 2, female: 1, source: '食べログ', ...overrides };
 }
 
 describe('お客様情報の検証', () => {
@@ -91,23 +91,23 @@ describe('お客様情報の検証', () => {
 describe('伝票メモ', () => {
   it('モード・人数・シーン・時間制を1行にまとめる（レジのメモ欄で読める形）', () => {
     expect(visitMemo(draft({ plan: 'drink', timed: true, duration: 120, warningEnabled: true, warningMinutes: 30 }))).toBe(
-      'ハンディ: 飲み放題 / 男2・女1 / 食べログご予約 / 2時間制（30分前に声かけ）'
+      'ハンディ: 飲み放題 / 男2・女1 / 食べログ / 2時間制（30分前に声かけ）'
     );
   });
 
   it('時間制でなければ時間を書かない', () => {
-    expect(visitMemo(draft({ timed: false }))).toBe('ハンディ: アラカルト / 男2・女1 / 食べログご予約');
+    expect(visitMemo(draft({ timed: false }))).toBe('ハンディ: アラカルト / 男2・女1 / 食べログ');
   });
 
   it('終了前注意が1時間以上なら「1時間15分前」と書く', () => {
     expect(visitMemo(draft({ timed: true, duration: 180, warningEnabled: true, warningMinutes: 75 }))).toBe(
-      'ハンディ: アラカルト / 男2・女1 / 食べログご予約 / 3時間制（1時間15分前に声かけ）'
+      'ハンディ: アラカルト / 男2・女1 / 食べログ / 3時間制（1時間15分前に声かけ）'
     );
   });
 
   it('終了前注意を切っていれば声かけを書かない', () => {
     expect(visitMemo(draft({ timed: true, duration: 90, warningEnabled: false }))).toBe(
-      'ハンディ: アラカルト / 男2・女1 / 食べログご予約 / 1時間30分制'
+      'ハンディ: アラカルト / 男2・女1 / 食べログ / 1時間30分制'
     );
   });
 });
