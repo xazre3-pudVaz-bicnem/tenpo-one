@@ -636,6 +636,9 @@ export function PosScreen({
                       {it.menu_item_id && englishByItemId.get(it.menu_item_id) ? ` ・ ${it.name}` : ''}
                     </p>
                   </div>
+                  <span className="w-[72px] shrink-0 text-right text-[15px] font-bold tabular-nums text-navy">
+                    {yen(it.line_total)}
+                  </span>
                   {/* 数量は指で押せる大きさに（レジは iPad で使う） */}
                   <div className="flex shrink-0 items-center overflow-hidden rounded-xl border border-line">
                     <button
@@ -671,9 +674,6 @@ export function PosScreen({
                       <Plus className="h-4 w-4" />
                     </button>
                   </div>
-                  <span className="w-[72px] shrink-0 text-right text-[15px] font-bold tabular-nums text-navy">
-                    {yen(it.line_total)}
-                  </span>
                   <button
                     type="button"
                     aria-label="取消"

@@ -98,20 +98,30 @@ export async function startHandyVisit(
     purpose: draft.source || undefined,
     sourceLabel: draft.source || undefined,
     memo: visitMemo(draft),
-    orderType: draft.plan === 'course' ? 'course' : 'dine_in',
+    orderType: draft.plans.includes('course') ? 'course' : 'dine_in',
     startTime: draft.startTime ?? undefined,
   });
   await assignHandyClerk(orderId);
 
+  // 選んだプラン商品（飲み放題B・食べ放題など。何個でも）を伝票に入れる
   let planItemError: string | null = null;
-  if (draft.planItemId) {
+  const addedIds: string[] = [];
+  for (const planItemId of draft.planItemIds) {
     try {
-      // 価格・税率の検証は POS と同じ addItem に任せる。ハンディで入れた品は厨房（ドリンク）へもすぐ送る
-      const { id } = await addItem(orderId, draft.planItemId, [], 1);
-      if (id) await sendItemsToKitchen(orderId, [id]);
+      // 価格・税率の検証は POS と同じ addItem に任せる
+      const { id } = await addItem(orderId, planItemId, [], 1);
+      if (id) addedIds.push(id);
     } catch (e) {
       // プラン商品が入らなくても来店登録は成立させる（注文画面で手動で入れられる）
       planItemError = e instanceof Error ? e.message : 'プラン商品を伝票に入れられませんでした';
+    }
+  }
+  // ハンディで入れた品は厨房（ドリンク）へもすぐ送る
+  if (addedIds.length > 0) {
+    try {
+      await sendItemsToKitchen(orderId, addedIds);
+    } catch {
+      // 送れなくても来店登録は成立させる（注文画面から送り直せる）
     }
   }
 
