@@ -5,6 +5,7 @@ import { assertStoreAccess, requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { isMissingColumnError } from '@/lib/schema-compat';
 import { enqueueCancelSlipPrint, enqueueReceiptPrint } from './print-actions';
+import { allowsTakeoutItem, takeoutMenuFrom } from '@/lib/takeout-menu';
 import { applicableTaxRate } from '@/lib/tax';
 import { validateCoupon, COUPON_REJECT_LABELS, type CouponLike } from '@/lib/coupons';
 import { resolveOptionSelection } from '@/lib/menu-options';
@@ -172,6 +173,19 @@ export async function addItem(
   //  事前注文の商品が店内飲食価格・標準税率10%で計算されてしまう）
   const isTakeoutLike =
     order.order_type === 'takeout' || order.order_type === 'delivery' || order.order_type === 'pre_order';
+  // テイクアウトはテイクアウトメニューに入れた商品だけ（軽減税率8%で計算するため。2026-09-25 店舗要望）
+  if (isTakeoutLike) {
+    const { data: settingsRow } = await supabase
+      .from('store_settings')
+      .select('settings')
+      .eq('store_id', order.store_id)
+      .maybeSingle();
+    if (!allowsTakeoutItem(takeoutMenuFrom(settingsRow?.settings ?? null), item.id)) {
+      throw new Error(
+        'この商品はテイクアウトメニューに入っていません（設定 > メニューブック > テイクアウトメニュー で追加してください）'
+      );
+    }
+  }
   const basePrice = isTakeoutLike ? (item.takeout_price ?? item.price) : item.price;
   // ダイナミックプライシング（曜日・時間帯の値段。お客様QRは SQL の dynamic_menu_price で同じ計算）
   const dynamicRules = await loadDynamicRules(supabase, order.store_id);

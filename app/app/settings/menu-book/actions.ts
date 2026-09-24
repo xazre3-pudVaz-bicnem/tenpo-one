@@ -13,6 +13,7 @@ import {
   type MenuBookSettings,
   type MenuBookShow,
 } from '@/lib/menu-book';
+import { cleanTakeoutItemIds } from '@/lib/takeout-menu';
 
 /**
  * メニューブック（ハンディ・お客様QRに出すカテゴリの並び順と出し方、ページ（タブのまとめ方）、商品の並び順、
@@ -323,6 +324,50 @@ export async function saveMenuBookLunch(storeId: string, start: string, end: str
   if (settingsError) return { error: settingsError };
 
   await audit(ctx, supabase, storeId, 'settings.menu_book.lunch_update', { start, end });
+  revalidateMenus();
+  return {};
+}
+
+/**
+ * テイクアウト専用メニューの保存（2026-09-25 店舗要望）。
+ * ここに入れた商品だけがテイクアウト伝票で打てる（テイクアウトは軽減税率8%）。
+ * 何も入れていない店舗は、テイクアウトでは商品を出さない。
+ * 保存先は store_settings.settings.takeoutMenu（menuBook とは別。DB 変更なし）。
+ */
+export async function saveTakeoutMenu(storeId: string, itemIds: string[]): Promise<ActionResult> {
+  const ctx = await requirePermission('menu.manage');
+  if (!canUseStore(ctx, storeId)) return { error: '担当外の店舗です' };
+  const ids = cleanTakeoutItemIds(itemIds);
+  const supabase = await createClient();
+
+  if (ids.length > 0) {
+    const { data: rows } = await supabase
+      .from('menu_items')
+      .select('id')
+      .eq('organization_id', ctx.organizationId)
+      .in('id', ids);
+    if ((rows ?? []).length !== ids.length) return { error: 'この会社にない商品が含まれています' };
+  }
+
+  const { data: existing, error: readError } = await supabase
+    .from('store_settings')
+    .select('settings')
+    .eq('store_id', storeId)
+    .maybeSingle();
+  if (readError) return { error: `設定の読み込みに失敗しました: ${readError.message}` };
+  const current = (existing?.settings as Record<string, unknown> | null) ?? {};
+
+  const { error } = await supabase.from('store_settings').upsert(
+    {
+      organization_id: ctx.organizationId,
+      store_id: storeId,
+      settings: { ...current, takeoutMenu: { itemIds: ids } },
+      updated_by: ctx.userId,
+    },
+    { onConflict: 'store_id' }
+  );
+  if (error) return { error: `テイクアウトメニューの保存に失敗しました: ${error.message}` };
+
   revalidateMenus();
   return {};
 }

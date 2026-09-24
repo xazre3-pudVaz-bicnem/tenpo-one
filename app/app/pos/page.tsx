@@ -6,6 +6,7 @@ import { storeAccessBlock } from '@/components/pos/store-access-guard';
 import { createClient } from '@/lib/supabase/server';
 import { loadMenuBook } from '@/lib/menu-book-server';
 import { loadMenuStock } from '@/lib/menu-stock-server';
+import { filterTakeoutItems, isTakeoutLikeOrder, takeoutMenuFrom } from '@/lib/takeout-menu';
 import { isMenuSoldOut } from '@/lib/menu-stock';
 import { BRANDED_METHODS, checkoutPresetsFrom, discountPresetsOf, methodBrandsOf, pointBrandsOf } from '@/lib/checkout-presets';
 import { isMissingColumnError } from '@/lib/schema-compat';
@@ -359,10 +360,15 @@ export default async function PosPage({
   };
   // メニューの売り切り（本日の食数）が0になった商品は自動で売切にする（2026-09-24 店舗要望）
   const menuStock = await loadMenuStock(supabase, store.id);
-  const menuItemsWithStock = (menuItems ?? []).map((m) => ({
+  const withStock = (menuItems ?? []).map((m) => ({
     ...m,
     is_sold_out: isMenuSoldOut(!!m.is_sold_out, menuStock.get(m.id as string)),
   }));
+  // テイクアウトは軽減税率8%。店内のメニューが紛れ込まないよう、
+  // テイクアウトメニューに入れた商品だけを出す（未設定の店舗は何も出さない。2026-09-25 店舗要望）
+  const takeout = isTakeoutLikeOrder(order.order_type as string | null);
+  const takeoutMenu = takeoutMenuFrom(storeSettings?.settings ?? null);
+  const menuItemsWithStock = takeout ? filterTakeoutItems(withStock, takeoutMenu) : withStock;
 
   const seatCourses = (menuItems ?? [])
     .filter((m) => m.item_type === 'course')

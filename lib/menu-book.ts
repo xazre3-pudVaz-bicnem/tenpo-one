@@ -98,7 +98,7 @@ export function menuBookPages(book: Pick<MenuBookSettings, 'pages'>): MenuPageDe
 export const PAGE_NAME_MAX = 30;
 
 /** メニューブックの画面のタブ（?tab= で直接開ける。レジの設定から「ページ」「プラン」などを開くため） */
-export const MENU_BOOK_TABS = ['categories', 'pages', 'items', 'plans', 'lunch'] as const;
+export const MENU_BOOK_TABS = ['categories', 'pages', 'items', 'plans', 'lunch', 'takeout'] as const;
 export type MenuBookTab = (typeof MENU_BOOK_TABS)[number];
 
 export function isMenuBookTab(value: unknown): value is MenuBookTab {

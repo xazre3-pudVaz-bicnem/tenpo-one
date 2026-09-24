@@ -34,6 +34,7 @@ import {
   saveMenuBookLunch,
   saveMenuBookPages,
   saveMenuBookPlans,
+  saveTakeoutMenu,
 } from '@/app/app/settings/menu-book/actions';
 
 export interface MenuBookCategoryRow {
@@ -73,6 +74,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'items', label: '商品の順番・入力' },
   { id: 'plans', label: 'プランで出すカテゴリ' },
   { id: 'lunch', label: 'ランチの時間' },
+  { id: 'takeout', label: 'テイクアウトメニュー' },
 ];
 
 /** 出し方ごとの色（行の左端の帯） */
@@ -662,6 +664,7 @@ export function MenuBookEditor({
   pages,
   categoryPage,
   taxRates,
+  takeoutItemIds,
   initialTab,
 }: {
   storeId: string;
@@ -672,6 +675,8 @@ export function MenuBookEditor({
   pages: MenuPageDef[];
   categoryPage: Record<string, string>;
   taxRates: { id: string; name: string }[];
+  /** テイクアウトで打てる商品（2026-09-25 店舗要望）。空＝テイクアウトでは何も打てない */
+  takeoutItemIds: string[];
   /** 最初に開くタブ（?tab=。レジの設定から「ページ」「プラン」などを直接開く） */
   initialTab?: MenuBookTab;
 }) {
@@ -715,6 +720,136 @@ export function MenuBookEditor({
         <PlansTab key={`${planKey}#${categoryKey}`} storeId={storeId} plans={plans} planCategories={planCategories} />
       )}
       {tab === 'lunch' && <LunchTab key={`${lunch.start}-${lunch.end}`} storeId={storeId} lunch={lunch} />}
+      {tab === 'takeout' && (
+        <TakeoutTab
+          key={takeoutItemIds.join(',')}
+          storeId={storeId}
+          categories={categories}
+          items={items}
+          initial={takeoutItemIds}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * テイクアウトメニュー（2026-09-25 店舗要望）。
+ * ここで選んだ商品だけが、テイクアウト伝票で打てる。
+ * テイクアウトは軽減税率8%（酒類は10%）で計算するので、店内のメニューをそのまま出さない。
+ * 1つも選んでいない店舗は、テイクアウトでは商品が出ない（今はどの店舗も未設定）。
+ */
+function TakeoutTab({
+  storeId,
+  categories,
+  items,
+  initial,
+}: {
+  storeId: string;
+  categories: MenuBookCategoryRow[];
+  items: MenuItemRow[];
+  initial: string[];
+}) {
+  const [picked, setPicked] = useState<string[]>(initial);
+  const [q, setQ] = useState('');
+  const [busy, setBusy] = useState(false);
+  const { toast } = useToast();
+  const router = useRouter();
+
+  const categoryName = new Map(categories.map((c) => [c.id, c.name]));
+  const needle = q.trim().toLowerCase();
+  const shown = items
+    .filter((i) => i.status === 'active')
+    .filter((i) => {
+      if (!needle) return true;
+      const cat = (i.categoryId && categoryName.get(i.categoryId)) || '';
+      return `${i.name} ${i.nameEn} ${i.nameKana} ${cat}`.toLowerCase().includes(needle);
+    })
+    .slice(0, 300);
+
+  const toggle = (id: string) =>
+    setPicked((prev) => (prev.includes(id) ? prev.filter((v) => v !== id) : [...prev, id]));
+
+  const save = async () => {
+    setBusy(true);
+    try {
+      const res = await saveTakeoutMenu(storeId, picked);
+      if (res.error) toast(res.error, 'error');
+      else {
+        toast(picked.length > 0 ? `テイクアウトメニューに${picked.length}品を設定しました` : 'テイクアウトメニューを空にしました');
+        router.refresh();
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-gray-600">
+        テイクアウトで打てる商品を選びます。テイクアウトは軽減税率<b>8%</b>（酒類は10%）で計算し、値段は商品の
+        「テイクアウト価格」があればそちらを使います。
+        <br />
+        <b>1品も選んでいないと、テイクアウトの伝票では商品が出ません</b>（店内のメニューが紛れ込まないようにするため）。
+      </p>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <Input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="商品名・カテゴリで探す"
+          className="w-64"
+        />
+        <span className="text-sm font-semibold text-navy">選択中 {picked.length}品</span>
+        {picked.length > 0 && (
+          <Button size="sm" variant="secondary" onClick={() => setPicked([])} disabled={busy}>
+            全部外す
+          </Button>
+        )}
+        <Button size="sm" onClick={() => void save()} disabled={busy} className="ml-auto">
+          {busy ? '保存中…' : '保存する'}
+        </Button>
+      </div>
+
+      <div className="max-h-[60vh] space-y-1 overflow-y-auto rounded-lg border border-line p-2">
+        {shown.length === 0 ? (
+          <p className="p-4 text-center text-sm text-gray-500">該当する商品がありません</p>
+        ) : (
+          shown.map((i) => {
+            const on = picked.includes(i.id);
+            return (
+              <button
+                key={i.id}
+                type="button"
+                aria-pressed={on}
+                onClick={() => toggle(i.id)}
+                className={cn(
+                  'flex w-full items-center justify-between gap-3 rounded-lg border px-3 py-2 text-left',
+                  on ? 'border-iris bg-iris/8' : 'border-line bg-white'
+                )}
+              >
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-semibold text-navy">{i.name}</span>
+                  <span className="block truncate text-xs text-gray-500">
+                    {(i.categoryId && categoryName.get(i.categoryId)) || 'カテゴリなし'}
+                  </span>
+                </span>
+                <span className="shrink-0 text-right text-sm tabular-nums text-navy">
+                  ¥{(i.takeoutPrice ?? i.price).toLocaleString('ja-JP')}
+                  {i.takeoutPrice != null && i.takeoutPrice !== i.price && (
+                    <span className="ml-1 text-[11px] text-gray-400">テイクアウト価格</span>
+                  )}
+                </span>
+              </button>
+            );
+          })
+        )}
+        {items.filter((i) => i.status === 'active').length > shown.length && (
+          <p className="p-2 text-center text-xs text-gray-500">
+            上位300品まで表示しています。検索で絞ってください。
+          </p>
+        )}
+      </div>
     </div>
   );
 }

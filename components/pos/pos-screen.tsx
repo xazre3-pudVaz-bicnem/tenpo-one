@@ -959,7 +959,11 @@ export function PosScreen({
             <div className="min-h-0 flex-1 overflow-y-auto p-3">
               {visibleItems.length === 0 ? (
                 <p className="p-6 text-center text-sm text-ink-3">
-                  {searchQuery.trim() ? '該当する商品が見つかりません / No items found' : 'このカテゴリに商品がありません / No items in this category'}
+                  {searchQuery.trim()
+                    ? '該当する商品が見つかりません / No items found'
+                    : isTakeoutLike && menuItems.length === 0
+                      ? 'テイクアウトメニューが未設定です / Takeout menu is not set（設定 > メニューブック > テイクアウトメニュー で商品を選ぶと、ここに出ます）'
+                      : 'このカテゴリに商品がありません / No items in this category'}
                 </p>
               ) : (
                 <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-4">
