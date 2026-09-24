@@ -2,7 +2,18 @@
 
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Check, Delete, Loader2, ReceiptText, Trash2, Ticket, X as XIcon } from 'lucide-react';
+import {
+  ArrowLeft,
+  Check,
+  Home,
+  ChevronLeft,
+  ChevronRight,
+  Delete,
+  Loader2,
+  Trash2,
+  Ticket,
+  X as XIcon,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input, Label, Select } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -622,79 +633,188 @@ export function CheckoutDialog({
       if (jobType === 'ryoshusho') setInvoiceOpen(false);
     });
 
+  /** 伝票分割の画面（見本のレジと同じ：左＝元の伝票、右＝分ける伝票。2026-09-25 店舗要望） */
+  const splitScreen = splitPick != null && (
+    <div className="fixed inset-0 z-[70] flex flex-col bg-lilac-soft">
+      <header className="flex items-center justify-between gap-3 bg-plum px-4 py-3 text-white">
+        <button
+          type="button"
+          onClick={() => setSplitPick(null)}
+          className="inline-flex min-h-10 items-center gap-1 text-[15px] font-bold"
+        >
+          <ChevronLeft className="h-5 w-5" />
+          レジ会計
+        </button>
+        <b className="text-[17px]">伝票分割 / Split by item</b>
+        <span className="w-[92px]" aria-hidden />
+      </header>
+
+      <div className="grid min-h-0 flex-1 grid-cols-[1fr_72px_1fr] gap-3 p-4">
+        {/* 左：元の伝票に残る分 */}
+        <section className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-line bg-white">
+          <p className="border-b border-line px-4 py-2.5 text-[15px] font-bold text-royal">
+            {order.label ?? `伝票 #${order.orderNo ?? ''}`}
+            <span className="ml-2 text-[11px] font-semibold text-ink-3">元の伝票 / Stays</span>
+          </p>
+          <ul className="min-h-0 flex-1 divide-y divide-line overflow-y-auto">
+            {splitLines.map((l) => {
+              const left = l.quantity - (splitPick[l.id] ?? 0);
+              if (left <= 0) return null;
+              return (
+                <li key={l.id} className="flex items-center gap-2 px-4 py-2.5">
+                  <span className="min-w-0 flex-1 truncate text-[14px] font-bold text-navy">{l.name}</span>
+                  <span className="shrink-0 text-[12px] text-ink-3 tabular-nums">×{left}</span>
+                  <b className="w-[84px] shrink-0 text-right text-[14px] font-bold text-navy tabular-nums">
+                    {yen(l.unitPrice * left)}
+                  </b>
+                  <button
+                    type="button"
+                    aria-label={`${l.name}を分ける伝票へ`}
+                    onClick={() => pickSplit(l.id, l.quantity, 1)}
+                    className="tap3d grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-line bg-white text-royal"
+                  >
+                    <ChevronRight className="h-5 w-5" />
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+          <p className="flex items-baseline justify-between border-t border-line px-4 py-3 text-[15px]">
+            <span className="font-bold text-ink-2">合計金額</span>
+            <b className="text-xl font-extrabold text-navy tabular-nums">{yen(order.total - splitTotal)}</b>
+          </p>
+        </section>
+
+        <div className="flex flex-col items-center justify-center gap-4 text-ink-3">
+          <ChevronRight className="h-9 w-9" aria-hidden />
+          <ChevronLeft className="h-9 w-9" aria-hidden />
+        </div>
+
+        {/* 右：分けて先に会計する分 */}
+        <section className="flex min-h-0 flex-col overflow-hidden rounded-2xl border-2 border-iris bg-white">
+          <p className="border-b border-line px-4 py-2.5 text-[15px] font-bold text-royal">
+            分ける伝票<span className="ml-2 text-[11px] font-semibold text-ink-3">この分を先に会計 / Pay now</span>
+          </p>
+          <ul className="min-h-0 flex-1 divide-y divide-line overflow-y-auto">
+            {splitLines.map((l) => {
+              const picked = splitPick[l.id] ?? 0;
+              if (picked <= 0) return null;
+              return (
+                <li key={l.id} className="flex items-center gap-2 px-4 py-2.5">
+                  <button
+                    type="button"
+                    aria-label={`${l.name}を元の伝票へ戻す`}
+                    onClick={() => pickSplit(l.id, l.quantity, -1)}
+                    className="tap3d grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-line bg-white text-royal"
+                  >
+                    <ChevronLeft className="h-5 w-5" />
+                  </button>
+                  <span className="min-w-0 flex-1 truncate text-[14px] font-bold text-navy">{l.name}</span>
+                  <span className="shrink-0 text-[12px] text-ink-3 tabular-nums">×{picked}</span>
+                  <b className="w-[84px] shrink-0 text-right text-[14px] font-bold text-navy tabular-nums">
+                    {yen(l.unitPrice * picked)}
+                  </b>
+                </li>
+              );
+            })}
+            {splitCount === 0 && (
+              <li className="px-4 py-10 text-center text-[13px] text-ink-3">
+                左の伝票から「›」で品を移してください
+              </li>
+            )}
+          </ul>
+          <p className="flex items-baseline justify-between border-t border-line px-4 py-3 text-[15px]">
+            <span className="font-bold text-ink-2">合計金額</span>
+            <b className="text-xl font-extrabold text-royal tabular-nums">{yen(splitTotal)}</b>
+          </p>
+        </section>
+      </div>
+
+      <div className="flex items-center justify-end gap-3 px-4 pb-4">
+        {splitIsAll && splitCount > 0 && (
+          <span className="text-[13px] font-bold text-warning">
+            全部を移すと分かれません。1つは元の伝票に残してください
+          </span>
+        )}
+        <Button
+          size="pos"
+          className="h-[56px] w-[220px] text-[18px]"
+          disabled={splitPending || splitCount === 0 || splitIsAll}
+          onClick={confirmSplit}
+        >
+          {splitPending ? <Loader2 className="h-5 w-5 animate-spin" /> : null}
+          この分を会計
+        </Button>
+      </div>
+    </div>
+  );
+
   if (done) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy/60 p-4">
-        <div className="w-full max-w-[620px] overflow-hidden rounded-[22px] bg-white shadow-xl">
-          <div className="flex items-center gap-3 border-b border-line px-6 py-5">
-            <span className="grid h-10 w-10 place-items-center rounded-full bg-success-soft text-success">
-              <Check className="h-6 w-6" />
+        <div className="w-full max-w-[560px] overflow-hidden rounded-[22px] bg-white shadow-xl">
+          {/* 見本のレジと同じ：おつりを大きく、下に金額、ボタンは2段（2026-09-25 店舗要望） */}
+          <div className="flex items-center justify-center gap-2 px-6 pt-6">
+            <span className="grid h-8 w-8 place-items-center rounded-full bg-success text-white">
+              <Check className="h-5 w-5" />
             </span>
-            <h2 className="text-[22px] font-extrabold text-navy">
-              会計完了<span className="en-inline">Payment complete</span>
-            </h2>
+            <h2 className="text-[19px] font-bold text-navy">会計が完了しました</h2>
           </div>
-          {/* 見本（dinii のレジ）と同じ並び：金額3行 → 領収書発行 → メニュー／連続会計
-              （2026-09-25 店舗要望） */}
-          <div className="px-6 py-4">
-            <div className="flex items-baseline justify-between border-b border-line py-3 text-[17px] text-ink-2">
+
+          <div className="px-6 pt-4 pb-2 text-center">
+            <p className="text-[15px] font-bold text-ink-2">おつり</p>
+            <p className="text-[52px] leading-none font-extrabold tabular-nums text-navy">{yen(done.change)}</p>
+          </div>
+
+          <div className="mx-6 border-t border-line">
+            <div className="flex items-baseline justify-between border-b border-line py-3 text-[15px] text-ink-2">
               <span>お支払い金額</span>
-              <b className="text-2xl font-extrabold tabular-nums text-navy">{yen(done.total)}</b>
+              <b className="text-[17px] font-bold tabular-nums text-navy">{yen(done.total)}</b>
             </div>
-            <div className="flex items-baseline justify-between border-b border-line py-3 text-[17px] text-ink-2">
+            <div className="flex items-baseline justify-between py-3 text-[15px] text-ink-2">
               <span>お預かり金額</span>
-              <b className="text-2xl font-extrabold tabular-nums text-navy">{yen(done.tendered)}</b>
-            </div>
-            <div className="flex items-baseline justify-between py-3 text-[17px] text-ink-2">
-              <span>おつり</span>
-              <b
-                className={cn(
-                  'text-[34px] leading-none font-extrabold tabular-nums',
-                  done.change > 0 ? 'text-royal' : 'text-navy'
-                )}
-              >
-                {yen(done.change)}
-              </b>
+              <b className="text-[17px] font-bold tabular-nums text-navy">{yen(done.tendered)}</b>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 px-6 pb-6">
+          <div className="grid grid-cols-3 gap-2 px-6 pt-3">
+            <Button variant="secondary" size="pos" className="h-[52px] text-[15px]" onClick={() => router.push('/app/menu')}>
+              <Home className="h-[18px] w-[18px]" />
+              メニュー
+            </Button>
             <Button
               variant="secondary"
               size="pos"
-              className="h-[56px] flex-col gap-0 leading-tight"
+              className="h-[52px] text-[15px]"
               disabled={printPending}
               onClick={() => printSlip('receipt')}
             >
-              <span className="flex items-center gap-2 text-[16px] font-bold">
-                {printPending ? <Loader2 className="h-5 w-5 animate-spin" /> : <ReceiptText className="h-5 w-5" />}
-                レシート
-              </span>
-              <span className="text-[11px] font-normal text-ink-3">Receipt</span>
+              {printPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              レシート発行
             </Button>
             <Button
               variant="secondary"
               size="pos"
-              className="h-[56px] flex-col gap-0 leading-tight"
+              className="h-[52px] text-[15px]"
               disabled={printPending}
               onClick={() => setInvoiceOpen(true)}
             >
-              <span className="text-[16px] font-bold">領収書発行</span>
-              <span className="text-[11px] font-normal text-ink-3">Invoice</span>
+              領収書発行
             </Button>
-            <Button variant="secondary" size="pos" className="h-[60px] text-[17px]" onClick={() => router.push('/app/menu')}>
-              メニュー
-            </Button>
-            <Button size="pos" className="h-[60px] text-[18px]" onClick={() => router.push('/app/pos')}>
-              連続会計
-            </Button>
-            <button
-              type="button"
+          </div>
+
+          <div className="mx-6 mt-3 grid grid-cols-2 gap-3 border-t border-line pt-3 pb-6">
+            <Button
+              variant="secondary"
+              size="pos"
+              className="h-[56px] text-[16px]"
               onClick={() => router.push(`/app/pos/receipt/${order.id}`)}
-              className="col-span-2 min-h-10 text-center text-[13px] font-semibold text-royal underline"
             >
-              画面で見る・保存する / View &amp; save
-            </button>
+              伝票明細
+            </Button>
+            <Button size="pos" className="h-[56px] text-[17px]" onClick={() => router.push('/app/pos')}>
+              続けて会計
+            </Button>
           </div>
 
           {invoiceOpen && (
@@ -750,6 +870,7 @@ export function CheckoutDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-lilac">
+      {splitScreen}
       {/* 上部バー */}
       <div className="flex h-[58px] shrink-0 items-center bg-plum px-3 text-white">
         <button
@@ -1002,76 +1123,6 @@ export function CheckoutDialog({
               <>
                 <p className="mb-1.5 text-[11px] font-bold text-ink-3">支払方法 / Payment method</p>
 
-                {/* 別々会計：自分が食べた分（ランチのセットなど）を選んで、その分だけ先に会計する */}
-                {splitPick != null && (
-                  <div className="mb-1.5 rounded-xl bg-lilac-soft p-2">
-                    <div className="mb-1 flex items-center justify-between gap-2">
-                      <span className="text-[11px] font-bold text-royal">
-                        この人の分を選ぶ
-                        <span className="ml-1 text-[9px] font-semibold text-ink-3">Pick this person&apos;s items</span>
-                      </span>
-                      <button
-                        type="button"
-                        aria-label="別々会計をやめる"
-                        onClick={() => setSplitPick(null)}
-                        className="rounded p-1 text-ink-3 hover:bg-danger-soft hover:text-danger"
-                      >
-                        <XIcon className="h-4 w-4" />
-                      </button>
-                    </div>
-                    <ul className="max-h-[30vh] space-y-1 overflow-y-auto">
-                      {splitLines.map((l) => {
-                        const picked = splitPick[l.id] ?? 0;
-                        return (
-                          <li key={l.id} className="flex items-center gap-2 rounded-lg bg-white px-2 py-1.5">
-                            <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium text-navy">{l.name}</span>
-                            <span className="shrink-0 text-[11px] text-ink-3 tabular-nums">
-                              {yen(l.unitPrice)}×{l.quantity}
-                            </span>
-                            <button
-                              type="button"
-                              aria-label={`${l.name}を1つ減らす`}
-                              onClick={() => pickSplit(l.id, l.quantity, -1)}
-                              className="flex h-8 w-8 items-center justify-center rounded-lg border border-line text-lg font-bold text-royal disabled:opacity-40"
-                              disabled={picked === 0}
-                            >
-                              −
-                            </button>
-                            <span className="w-6 text-center text-[13px] font-bold text-royal tabular-nums">{picked}</span>
-                            <button
-                              type="button"
-                              aria-label={`${l.name}を1つ増やす`}
-                              onClick={() => pickSplit(l.id, l.quantity, 1)}
-                              className="flex h-8 w-8 items-center justify-center rounded-lg border border-line text-lg font-bold text-royal disabled:opacity-40"
-                              disabled={picked >= l.quantity}
-                            >
-                              ＋
-                            </button>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                    <div className="mt-1.5 flex items-center gap-2">
-                      <span className="text-[12px] font-bold text-ink-2 tabular-nums">
-                        {splitCount}点 ・ {yen(splitTotal)}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={confirmSplit}
-                        disabled={splitPending || splitCount === 0 || splitIsAll}
-                        className="ml-auto inline-flex h-10 items-center gap-1.5 rounded-lg bg-royal px-3.5 text-[13px] font-bold text-white disabled:opacity-50"
-                      >
-                        {splitPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                        この分を会計 / Pay this part
-                      </button>
-                    </div>
-                    {splitIsAll && splitCount > 0 && (
-                      <p className="mt-1 text-[11px] text-warning">
-                        全部を選ぶと分かれません。残す分は減らしてください。
-                      </p>
-                    )}
-                  </div>
-                )}
                 <div className="grid grid-cols-2 gap-1.5">
                   {BASE_METHODS.map((m) => {
                     // 支払を足したもの＝色、種類（VISA など）を選んでいる最中のものも色（2026-09-24 店舗要望）
