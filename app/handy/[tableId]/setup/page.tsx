@@ -75,10 +75,11 @@ export default async function HandySetupPage({
     .eq('status', 'open');
   const state = tableState(table.current_status, (openCount ?? 0) > 0);
   if (state === 'occupied') redirect(`/handy/${tableId}`);
-  if (state !== 'available') {
+  // 清掃中（整理中）でも着席できる（会計が終わった卓へすぐ次のお客様を通すため。2026-09-24 店舗要望）
+  if (state !== 'available' && state !== 'cleaning') {
     return problem(
       tableId,
-      `この卓は現在「${state === 'cleaning' ? '清掃中' : state === 'blocked' ? '使用不可' : '予約あり'}」のため、ハンディからは着席できません。フロア画面で状態を変更してください。`
+      `この卓は現在「${state === 'blocked' ? '使用不可' : '予約あり'}」のため、ハンディからは着席できません。フロア画面で状態を変更してください。`
     );
   }
 

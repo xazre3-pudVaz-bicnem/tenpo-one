@@ -535,6 +535,30 @@ export async function checkout(orderId: string, payments: CheckoutPayment[]): Pr
     throw new Error('会計の確定に失敗しました。通信状態を確認して再度お試しください');
   }
 
+  // 会計が終わったら、その卓はすぐ次のお客様を入れられるようにする（店舗要望 2026-09-24）。
+  // finalize_order は卓を「清掃中（整理中）」にするが、回転の速い店ではそのままだと
+  // レジ・ハンディの両方で次の注文が取れず現場が止まる。
+  // 同じ卓に会計前の伝票が残っていないときだけ、「空席」に戻す。
+  if (order.table_id) {
+    try {
+      const { count: otherOpen } = await supabase
+        .from('orders')
+        .select('id', { count: 'exact', head: true })
+        .eq('table_id', order.table_id)
+        .eq('status', 'open')
+        .neq('id', orderId);
+      if ((otherOpen ?? 0) === 0) {
+        await supabase
+          .from('restaurant_tables')
+          .update({ current_status: 'available' })
+          .eq('id', order.table_id)
+          .eq('current_status', 'cleaning');
+      }
+    } catch (e) {
+      console.error('[pos.checkout] table not freed:', e);
+    }
+  }
+
   // 支払方法の内訳（VISA・PayPay・ホットペッパー等）を残す。
   // finalize_order は provider を書かないのでここで書き足す。
   // 売上の内訳を見るためだけの情報なので、失敗しても会計は成立させる。

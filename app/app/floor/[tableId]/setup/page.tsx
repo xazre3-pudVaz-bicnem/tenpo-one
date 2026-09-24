@@ -70,9 +70,10 @@ export default async function FloorSetupPage({ params }: { params: Promise<{ tab
   // 既に着席中なら入力させず、その伝票へ
   if (openOrder) redirect(`/app/pos?order=${openOrder.id}`);
   const state = tableState(table.current_status, false);
-  if (state !== 'available') {
+  // 清掃中（整理中）でも着席できる（会計が終わった卓へすぐ次のお客様を通すため。2026-09-24 店舗要望）
+  if (state !== 'available' && state !== 'cleaning') {
     return problem(
-      `この卓は現在「${state === 'cleaning' ? '清掃中' : state === 'blocked' ? '使用不可' : '予約あり'}」のため着席できません。テーブル一覧で状態を変更してください。`
+      `この卓は現在「${state === 'blocked' ? '使用不可' : '予約あり'}」のため着席できません。テーブル一覧で状態を変更してください。`
     );
   }
 
