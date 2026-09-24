@@ -101,7 +101,7 @@ export function LedgerTop({
           triggerContent={
             <>
               <Plus className="h-4 w-4" strokeWidth={3} aria-hidden />
-              予約登録<En light>Add</En>
+              予約登録
             </>
           }
         />

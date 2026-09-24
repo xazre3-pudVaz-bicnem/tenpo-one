@@ -73,7 +73,7 @@ export function DateNav({
   };
 
   return (
-    <div className="ml-auto flex items-center gap-1 print:hidden">
+    <div className="ml-auto flex items-center gap-2 print:hidden">
       <Link href={hrefFor(shiftDate(date, -step))} aria-label={step === 7 ? '前の週' : '前日'} className={iconBtn}>
         <ChevronLeft className="h-4 w-4" />
       </Link>
