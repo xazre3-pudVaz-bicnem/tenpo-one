@@ -11,6 +11,7 @@ import {
   DEFAULT_VISIT_DRAFT,
   HANDY_PLANS,
   VISIT_SOURCES,
+  type VisitSource,
   HOUR_CHOICES,
   MAX_GUESTS,
   MINUTE_CHOICES,
@@ -52,6 +53,7 @@ export function HandySetupScreen({
   staffName,
   planItems,
   startLabel,
+  sources = VISIT_SOURCES,
   confirmAction,
   from = 'handy',
 }: {
@@ -62,6 +64,8 @@ export function HandySetupScreen({
   planItems: HandyPlanItem[];
   /** 開始時刻（サーバーで JST に整形） */
   startLabel: string;
+  /** この店で使う来店経路（設定 > レジ で選ぶ。省略時は全部） */
+  sources?: readonly VisitSource[];
   confirmAction: (
     tableId: string,
     draft: VisitDraft
@@ -269,11 +273,11 @@ export function HandySetupScreen({
           ))}
         </div>
 
-        {/* 来店経路（グルメサイトの色に寄せたボタン。2026-09-24 店舗要望で「利用シーン」から置き換え） */}
+        {/* 来店経路（人気順・色はそろえる。使わない経路は 設定 > レジ から外せる。2026-09-24 店舗要望） */}
         <SectionTitle en="Source" required>来店経路</SectionTitle>
         <div className="mx-3 mb-3 rounded-[10px] border border-[#e3dbf1] bg-white px-3.5 py-3">
           <div className="flex flex-wrap gap-1.5" role="group" aria-label="来店経路">
-            {VISIT_SOURCES.map((src) => {
+            {sources.map((src) => {
               const on = draft.source === src.label;
               return (
                 <button
@@ -281,12 +285,10 @@ export function HandySetupScreen({
                   type="button"
                   aria-pressed={on}
                   onClick={() => set({ source: src.label })}
-                  style={
-                    on
-                      ? { backgroundColor: src.color, borderColor: src.color, color: '#fff' }
-                      : { borderColor: src.color, color: src.color }
-                  }
-                  className="tap3d min-h-[32px] rounded-full border-[1.5px] bg-white px-2.5 text-[11px] font-bold"
+                  className={cn(
+                    'tap3d min-h-[32px] rounded-full border-[1.5px] border-[#7b3fe4] px-2.5 text-[11px] font-bold',
+                    on ? 'bg-[#7b3fe4] text-white' : 'bg-white text-[#7b3fe4]'
+                  )}
                 >
                   {src.label}
                 </button>

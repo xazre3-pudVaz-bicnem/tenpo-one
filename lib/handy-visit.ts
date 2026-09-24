@@ -18,8 +18,8 @@ export const HANDY_PLANS: readonly { id: HandyPlan; name: string }[] = [
 
 /**
  * 来店経路（お客様がどこから来たか）。2026-09-24 店舗要望で「利用シーン」から置き換えた。
- * 日本で連携できる主な予約サイトをひととおり並べ、名前は英語にする（2026-09-24 店舗要望）。
- * color は各サイトの色に寄せて、現場が一目で選べるようにする。
+ * 日本で連携できる主な予約サイトをひととおり、人気順に並べてある（2026-09-24 店舗要望）。
+ * 色は全部そろえる。店舗で使わない経路は 設定 > レジ から外せる。
  * code は `reservation_sources.code` に合わせてあり、行があれば予約の経路として記録する
  * （無ければラベルを伝票メモ・予約の目的に残すので、集計から漏れない）。
  */
@@ -28,31 +28,49 @@ export interface VisitSource {
   label: string;
   /** reservation_sources.code の候補（先に見つかったものを使う） */
   codes: readonly string[];
-  /** ボタンの色（選択時の地色・未選択時の文字と枠） */
-  color: string;
 }
 
 export const VISIT_SOURCES: readonly VisitSource[] = [
-  { id: 'free', label: 'Walk in', codes: ['walk_in', 'free'], color: '#5e4777' },
-  { id: 'phone', label: '当日電話', codes: ['phone', 'tel'], color: '#2f6fd0' },
-  { id: 'tabelog', label: '食べログ', codes: ['tabelog'], color: '#e8801a' },
-  { id: 'hotpepper', label: 'ホットペッパー', codes: ['hotpepper', 'hpg'], color: '#d8341c' },
-  { id: 'gurunavi', label: 'ぐるなび', codes: ['gurunavi', 'gnavi'], color: '#b33939' },
-  { id: 'retty', label: 'Retty', codes: ['retty'], color: '#e0507a' },
-  { id: 'ikyu', label: '一休', codes: ['ikyu'], color: '#1f3b73' },
-  { id: 'ozmall', label: 'OZmall', codes: ['ozmall', 'oz'], color: '#c9539b' },
-  { id: 'epark', label: 'EPARK', codes: ['epark'], color: '#cf5b1f' },
-  { id: 'hitosara', label: 'ヒトサラ', codes: ['hitosara'], color: '#7a6a55' },
-  { id: 'google', label: 'Google', codes: ['google'], color: '#4285f4' },
-  { id: 'tablecheck', label: 'TableCheck', codes: ['tablecheck'], color: '#00a39a' },
-  { id: 'toreta', label: 'トレタ', codes: ['toreta'], color: '#2aa5c7' },
-  { id: 'ebica', label: 'ebica', codes: ['ebica'], color: '#2f8f5b' },
-  { id: 'instagram', label: 'Instagram', codes: ['instagram', 'ig'], color: '#c13584' },
-  { id: 'catch', label: 'CATCH', codes: ['catch'], color: '#0a9b7a' },
-  { id: 'line', label: 'LINE', codes: ['line'], color: '#06c755' },
-  { id: 'website', label: '自社サイト', codes: ['web', 'own_site'], color: '#4f3868' },
-  { id: 'other', label: 'その他', codes: ['other'], color: '#8a769d' },
+  { id: 'free', label: 'Walk in', codes: ['walk_in', 'free'] },
+  { id: 'phone', label: '当日電話', codes: ['phone', 'tel'] },
+  { id: 'tabelog', label: '食べログ', codes: ['tabelog'] },
+  { id: 'hotpepper', label: 'ホットペッパー', codes: ['hotpepper', 'hpg'] },
+  { id: 'gurunavi', label: 'ぐるなび', codes: ['gurunavi', 'gnavi'] },
+  { id: 'google', label: 'Google', codes: ['google'] },
+  { id: 'retty', label: 'Retty', codes: ['retty'] },
+  { id: 'ikyu', label: '一休', codes: ['ikyu'] },
+  { id: 'ozmall', label: 'OZmall', codes: ['ozmall', 'oz'] },
+  { id: 'epark', label: 'EPARK', codes: ['epark'] },
+  { id: 'hitosara', label: 'ヒトサラ', codes: ['hitosara'] },
+  { id: 'tablecheck', label: 'TableCheck', codes: ['tablecheck'] },
+  { id: 'toreta', label: 'トレタ', codes: ['toreta'] },
+  { id: 'ebica', label: 'ebica', codes: ['ebica'] },
+  { id: 'instagram', label: 'Instagram', codes: ['instagram', 'ig'] },
+  { id: 'line', label: 'LINE', codes: ['line'] },
+  { id: 'website', label: '自社サイト', codes: ['web', 'own_site'] },
+  { id: 'repeat', label: 'リピート', codes: ['repeat'] },
+  { id: 'catch', label: 'CATCH', codes: ['catch'] },
 ] as const;
+
+/**
+ * 店舗で使う来店経路（店舗設定 store_settings.settings.visitSources）。
+ * 設定が無い店は全部出す。並びは VISIT_SOURCES の順（人気順）を保つ。
+ */
+export function visitSourcesFrom(settings: unknown): readonly VisitSource[] {
+  const raw = (settings as { visitSources?: unknown } | null)?.visitSources;
+  if (!Array.isArray(raw)) return VISIT_SOURCES;
+  const on = new Set(raw.filter((v): v is string => typeof v === 'string'));
+  const kept = VISIT_SOURCES.filter((s) => on.has(s.id));
+  // 全部外してしまった店は、選べなくならないように全部出す
+  return kept.length > 0 ? kept : VISIT_SOURCES;
+}
+
+/** 設定に保存する形（知らないIDは捨てる） */
+export function normalizeVisitSourceIds(ids: unknown): string[] {
+  if (!Array.isArray(ids)) return [];
+  const known = new Set(VISIT_SOURCES.map((s) => s.id));
+  return VISIT_SOURCES.filter((s) => ids.includes(s.id) && known.has(s.id)).map((s) => s.id);
+}
 
 export const VISIT_SOURCE_LABELS: readonly string[] = VISIT_SOURCES.map((s) => s.label);
 

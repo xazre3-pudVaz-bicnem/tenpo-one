@@ -8,6 +8,7 @@ import { formatTime } from '@/lib/format';
 import { requireHandyClerk } from '@/lib/handy-session';
 import { HandyBackButton, HandyMain, HandyTopBar } from '@/components/handy/handy-chrome';
 import { HandySetupScreen } from '@/components/handy/handy-setup-screen';
+import { visitSourcesFrom } from '@/lib/handy-visit';
 import { tableState } from '@/components/handy/logic';
 import { startHandyVisit } from '@/app/app/handy/actions';
 import { loadSetupPlanItems } from '@/app/app/handy/setup-data';
@@ -86,6 +87,14 @@ export default async function HandySetupPage({
   // プラン商品（コース・飲み放題など）
   const planItems = await loadSetupPlanItems(ctx.organizationId, store.id);
 
+  // この店で使う来店経路（設定 > レジ で選ぶ。2026-09-24 店舗要望）
+  const { data: storeSettings } = await supabase
+    .from('store_settings')
+    .select('settings')
+    .eq('store_id', store.id)
+    .maybeSingle();
+  const visitSources = visitSourcesFrom(storeSettings?.settings ?? null);
+
   return (
     <HandySetupScreen
       tableId={table.id}
@@ -93,6 +102,7 @@ export default async function HandySetupPage({
       staffName={clerk.name}
       planItems={planItems}
       startLabel={formatTime(new Date(requestTime()))}
+      sources={visitSources}
       confirmAction={startHandyVisit}
     />
   );
