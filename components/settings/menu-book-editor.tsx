@@ -758,12 +758,22 @@ function TakeoutTab({
 
   const categoryName = new Map(categories.map((c) => [c.id, c.name]));
   const needle = q.trim().toLowerCase();
-  const shown = items
-    .filter((i) => i.status === 'active')
+  // レジに出る商品だけ（選択肢＝オプションはレジの商品一覧にも出ないので外す）
+  const sellable = items.filter((i) => i.status === 'active' && i.itemType !== 'option');
+  const shown = sellable
     .filter((i) => {
       if (!needle) return true;
       const cat = (i.categoryId && categoryName.get(i.categoryId)) || '';
       return `${i.name} ${i.nameEn} ${i.nameKana} ${cat}`.toLowerCase().includes(needle);
+    })
+    .sort((a, b) => {
+      // 選んだ商品を上に、そのあとカテゴリ順・名前順
+      const pa = picked.includes(a.id) ? 0 : 1;
+      const pb = picked.includes(b.id) ? 0 : 1;
+      if (pa !== pb) return pa - pb;
+      const ca = (a.categoryId && categoryName.get(a.categoryId)) || '';
+      const cb = (b.categoryId && categoryName.get(b.categoryId)) || '';
+      return ca.localeCompare(cb, 'ja') || a.name.localeCompare(b.name, 'ja');
     })
     .slice(0, 300);
 
@@ -844,7 +854,7 @@ function TakeoutTab({
             );
           })
         )}
-        {items.filter((i) => i.status === 'active').length > shown.length && (
+        {sellable.length > shown.length && (
           <p className="p-2 text-center text-xs text-gray-500">
             上位300品まで表示しています。検索で絞ってください。
           </p>
