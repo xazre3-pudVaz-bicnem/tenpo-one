@@ -63,15 +63,19 @@ export function ReservationPanel({
 
   return (
     <section className="ui-card flex min-h-0 flex-col overflow-hidden border border-line bg-white lg:h-full">
-      <header className="flex flex-wrap items-center justify-between gap-2 px-3.5 pt-3 pb-2.5">
-        <h2 className="text-[14.5px] font-bold text-ink">
-          本日のご予約<span className="en-inline">Today&apos;s reservations</span>
+      {/* 見出しは日本語＋下に小さく英語、台帳は横いっぱいの立体ボタン（2026-09-25 店舗要望） */}
+      <header className="px-3.5 pt-3 pb-2.5">
+        <h2 className="text-[14.5px] leading-tight font-bold text-ink">
+          本日のご予約一覧
+          <span className="mt-0.5 block text-[10px] font-semibold tracking-[0.08em] text-ink-3">
+            TODAY&apos;S RESERVATION
+          </span>
         </h2>
         <Link
           href="/app/reservations"
-          className="inline-flex items-center rounded-lg bg-iris px-2.5 py-1.5 text-[12px] font-bold text-white transition-colors hover:bg-iris-deep"
+          className="tapneon-on mt-2 flex h-11 w-full items-center justify-center rounded-xl bg-iris text-[15px] font-bold text-white hover:bg-iris-deep"
         >
-          店舗台帳<span className="ml-1 text-[10.5px] font-semibold text-white/85 tabular-nums">Open</span>
+          店舗台帳
         </Link>
       </header>
 
