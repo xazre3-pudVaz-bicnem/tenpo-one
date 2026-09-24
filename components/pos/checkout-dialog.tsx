@@ -13,6 +13,7 @@ import { yen } from '@/lib/format';
 import { calcChange } from '@/lib/money';
 import { METHOD_LABELS, METHOD_LABELS_EN } from '@/components/cash/labels';
 import { setOrderClerk } from '@/app/app/pos/clerk-actions';
+import { enqueueReceiptPrint } from '@/app/app/pos/print-actions';
 import type { ClerkOption } from './clerk-selector';
 import { useClerkGate } from './clerk-gate';
 import {
@@ -183,6 +184,11 @@ export function CheckoutDialog({
   const [rightTab, setRightTab] = useState<'pay' | 'discount'>('pay');
   /** 会計が終わったあとに出す金額（お支払い・お預り・おつり） */
   const [done, setDone] = useState<{ total: number; tendered: number; change: number } | null>(null);
+  /** 会計完了のあとに出す「レシート／領収書」。領収書は宛名・但し書きを入れてから印字する */
+  const [invoiceOpen, setInvoiceOpen] = useState(false);
+  const [recipientName, setRecipientName] = useState('');
+  const [invoicePurpose, setInvoicePurpose] = useState('お品代として');
+  const [printPending, startPrint] = useTransition();
   const router = useRouter();
   /**
    * 支払いを複数に分けるモード。既定はOFF＝「タッチした支払方法だけ」を1つ表示する。
@@ -579,6 +585,23 @@ export function CheckoutDialog({
   const sumRow = 'flex items-center justify-between py-2 text-[15px] text-ink-2';
 
   // 会計が終わったあとの画面（お支払い金額・お預り・おつり）
+  /** 会計完了の画面から、レシート／領収書をレシート機へ出す */
+  const printSlip = (jobType: 'receipt' | 'ryoshusho') =>
+    startPrint(async () => {
+      const res = await enqueueReceiptPrint(order.id, {
+        jobType,
+        ...(jobType === 'ryoshusho'
+          ? { recipientName: recipientName.trim() || null, purpose: invoicePurpose.trim() || null }
+          : {}),
+      });
+      if (!res.ok) {
+        toast(res.error ?? '送信に失敗しました', 'error');
+        return;
+      }
+      toast(jobType === 'ryoshusho' ? '領収書をプリンタへ送りました' : 'レシートをプリンタへ送りました');
+      if (jobType === 'ryoshusho') setInvoiceOpen(false);
+    });
+
   if (done) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy/60 p-4">
@@ -610,18 +633,93 @@ export function CheckoutDialog({
           <p className="px-6 pb-2 text-center text-xs text-ink-3">
             レシートは自動で印字されます（レシート機の「自動印刷」がONのとき）
           </p>
+          {/* 会計のあとにレシート／領収書を選んで出せるようにする（2026-09-24 店舗要望） */}
           <div className="grid grid-cols-2 gap-3 px-6 pb-6">
-            <Button variant="secondary" size="pos" className="h-[62px]" onClick={() => router.push(`/app/pos/receipt/${order.id}`)}>
-              <ReceiptText className="h-5 w-5" />
-              レシート・領収書
+            <Button
+              variant="secondary"
+              size="pos"
+              className="h-[62px] flex-col gap-0 leading-tight"
+              disabled={printPending}
+              onClick={() => printSlip('receipt')}
+            >
+              <span className="flex items-center gap-2 text-[17px] font-bold">
+                {printPending ? <Loader2 className="h-5 w-5 animate-spin" /> : <ReceiptText className="h-5 w-5" />}
+                レシート
+              </span>
+              <span className="text-[11px] font-normal text-ink-3">Receipt</span>
+            </Button>
+            <Button
+              variant="secondary"
+              size="pos"
+              className="h-[62px] flex-col gap-0 leading-tight"
+              disabled={printPending}
+              onClick={() => setInvoiceOpen(true)}
+            >
+              <span className="text-[17px] font-bold">領収書</span>
+              <span className="text-[11px] font-normal text-ink-3">Invoice</span>
+            </Button>
+            <Button
+              variant="secondary"
+              size="pos"
+              className="col-span-2 h-[54px]"
+              onClick={() => router.push(`/app/pos/receipt/${order.id}`)}
+            >
+              画面で見る・保存する / View &amp; save
             </Button>
             <Button variant="secondary" size="pos" className="h-[62px]" onClick={() => router.push('/app/floor')}>
               テーブル一覧へ
             </Button>
-            <Button size="pos" className="col-span-2 h-[62px] text-[18px]" onClick={() => router.push('/app/pos')}>
-              連続会計（次の伝票へ）
+            <Button size="pos" className="h-[62px] text-[18px]" onClick={() => router.push('/app/pos')}>
+              連続会計
             </Button>
           </div>
+
+          {invoiceOpen && (
+            <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+              <div className="absolute inset-0 bg-navy/50" aria-hidden onClick={() => setInvoiceOpen(false)} />
+              <div
+                role="dialog"
+                aria-modal="true"
+                aria-label="領収書"
+                className="relative z-10 w-full max-w-md rounded-2xl bg-white p-5 shadow-xl"
+              >
+                <p className="text-[17px] font-bold text-navy">
+                  領収書<span className="ml-2 text-[11px] font-normal text-ink-3">Invoice</span>
+                </p>
+                <div className="mt-3 space-y-3">
+                  <div>
+                    <Label htmlFor="inv-name">宛名 / Name（空欄なら「上様」）</Label>
+                    <Input
+                      id="inv-name"
+                      value={recipientName}
+                      onChange={(e) => setRecipientName(e.target.value)}
+                      placeholder="上様"
+                      className="h-12"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="inv-purpose">但し書き / For</Label>
+                    <Input
+                      id="inv-purpose"
+                      value={invoicePurpose}
+                      onChange={(e) => setInvoicePurpose(e.target.value)}
+                      placeholder="お品代として"
+                      className="h-12"
+                    />
+                  </div>
+                </div>
+                <div className="mt-4 grid grid-cols-2 gap-3">
+                  <Button variant="secondary" className="h-12" onClick={() => setInvoiceOpen(false)}>
+                    やめる / Cancel
+                  </Button>
+                  <Button className="h-12" disabled={printPending} onClick={() => printSlip('ryoshusho')}>
+                    {printPending ? <Loader2 className="h-5 w-5 animate-spin" /> : null}
+                    印刷する / Print
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     );
