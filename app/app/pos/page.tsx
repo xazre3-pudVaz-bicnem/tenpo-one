@@ -370,7 +370,10 @@ export default async function PosPage({
 
   return (
     <div className="-m-4 lg:-m-6">
+      {/* 伝票が変わったら画面の状態（カート・会計ダイアログ）を作り直す。
+          伝票分割のあと、分けた伝票の会計画面がそのまま開くようにするため（2026-09-25 店舗要望） */}
       <PosScreen
+        key={order.id}
         storeId={store.id}
         order={{
           id: order.id,
