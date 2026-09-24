@@ -361,3 +361,104 @@ export async function enqueueCancelSlipPrint(orderId: string, lines: CancelSlipL
   if (error) return { ok: false, error: `印刷ジョブの登録に失敗しました: ${error.message}` };
   return { ok: true, queued: 1 };
 }
+
+/**
+ * 伝票の品目を1枚にまとめて出す紙（2026-09-25 店舗要望）。
+ *   デシャップ伝票 … その伝票の品目を全部
+ *   選択印刷       … 選んだ品目だけ
+ * どちらも厨房伝票と同じ組み方で、レジのレシート機（フロアの手元）へ出す。
+ * 新しく作る注文ではないので、厨房への自動印字（claim_kitchen_items）には影響しない。
+ */
+async function enqueueOrderItemsTicket(
+  orderId: string,
+  itemIds: string[] | null,
+  title: string,
+  titleEn: string
+): Promise<EnqueueResult> {
+  const ctx = await requirePermission('pos.order');
+  const supabase = await createClient();
+
+  const { data: order } = await supabase
+    .from('orders')
+    .select('id, organization_id, store_id, order_no, guest_count, clerk_name, restaurant_tables(name, floor_id)')
+    .eq('id', orderId)
+    .single();
+  if (!order) return { ok: false, error: '注文が見つかりません' };
+  if (!assertStore(ctx, order.store_id)) return { ok: false, error: 'この店舗へのアクセス権がありません' };
+
+  const tableFloor = order.restaurant_tables as unknown as { floor_id: string | null } | null;
+  const printer = await getCloudPrntPrinter(supabase, order.store_id, { floorId: tableFloor?.floor_id ?? null });
+  if (!printer) {
+    return { ok: false, error: 'CloudPRNT対応プリンタが未設定です（設定 > プリンター で有効化してください）' };
+  }
+
+  let query = supabase
+    .from('order_items')
+    .select('id, name, name_en, quantity, modifiers, memo')
+    .eq('order_id', orderId)
+    .eq('status', 'active')
+    .order('created_at');
+  if (itemIds) {
+    if (itemIds.length === 0) return { ok: false, error: '印刷する品を選んでください' };
+    query = query.in('id', itemIds);
+  }
+  const { data: items } = await query;
+  if (!items || items.length === 0) return { ok: false, error: '印刷する注文明細がありません' };
+
+  const table = order.restaurant_tables as unknown as { name: string } | null;
+  const ticket: KitchenTicket = {
+    orderId: order.id,
+    orderNo: String(order.order_no),
+    tableName: table?.name ?? null,
+    guestCount: order.guest_count ?? null,
+    clerkName: order.clerk_name ?? null,
+    lines: items.map((it) => ({
+      name: it.name as string,
+      nameEn: (it.name_en as string | null) ?? null,
+      modifiers: ((it.modifiers ?? []) as { name: string }[]).map((m) => m.name),
+      memo: (it.memo as string | null) ?? null,
+      delta: it.quantity as number,
+    })),
+  };
+
+  const printedAt = new Date().toLocaleTimeString('ja-JP', {
+    timeZone: 'Asia/Tokyo',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+  const paperWidth = printer.paper_width_mm === 58 ? 58 : 80;
+  const common = { title, titleEn, printedAt, textSize: 'large' as const, language: 'both' as const };
+  const starLines = layoutKitchenTicket(ticket, { ...common, paperWidth, ...STAR_WIDTH_OPTIONS });
+  const eposLines = layoutKitchenTicket(ticket, { ...common, columns: eposCols(paperWidth) });
+  const star = printer.upside_down ? rotateLines180(starLines, colsFor(paperWidth)) : starLines;
+  const epos = printer.upside_down ? rotateLines180(eposLines, eposCols(paperWidth)) : eposLines;
+
+  const { error } = await supabase.from('print_jobs').insert({
+    organization_id: order.organization_id,
+    store_id: order.store_id,
+    printer_config_id: printer.id,
+    job_type: 'order_slip',
+    order_id: orderId,
+    target: 'cloudprnt',
+    content_type: MARKUP_CONTENT_TYPE,
+    payload: {
+      body: kitchenTicketsMarkup([star]),
+      starprnt: kitchenTicketsStarPrnt([star]).toString('base64'),
+      epos: kitchenTicketsEpos([epos]),
+    },
+    status: 'queued',
+    created_by: ctx.userId,
+  });
+  if (error) return { ok: false, error: `印刷ジョブの登録に失敗しました: ${error.message}` };
+  return { ok: true, queued: 1 };
+}
+
+/** デシャップ伝票印刷: その伝票の品目を全部1枚にまとめて出す */
+export async function enqueueExpoSlipPrint(orderId: string): Promise<EnqueueResult> {
+  return enqueueOrderItemsTicket(orderId, null, 'デシャップ伝票', 'EXPO');
+}
+
+/** 選択印刷: 選んだ品目だけを1枚にまとめて出す */
+export async function enqueueSelectedItemsPrint(orderId: string, itemIds: string[]): Promise<EnqueueResult> {
+  return enqueueOrderItemsTicket(orderId, itemIds, '選択印刷', 'SELECTED');
+}

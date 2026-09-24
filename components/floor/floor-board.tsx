@@ -58,6 +58,11 @@ export function FloorBoard({
   completeCleaningAction,
   setTableAvailabilityAction,
   saveTableGroupAction,
+  mergeOrdersAction,
+  setGuestCountAction,
+  setPaymentMemoAction,
+  printExpoSlipAction,
+  printSelectedItemsAction,
   releaseFinishedCleaningAction,
   topSlot,
   bottomSlot,
@@ -78,6 +83,12 @@ export function FloorBoard({
   setTableAvailabilityAction: (tableId: string, unavailable: boolean) => Promise<void>;
   /** テーブルグループ（まとめる卓）の保存。1卓以下を渡すと解除（2026-09-25 店舗要望） */
   saveTableGroupAction: (tableIds: string[]) => Promise<{ error?: string }>;
+  /** テーブル合算・お客様情報・支払メモ・印刷（2026-09-25 店舗要望） */
+  mergeOrdersAction: (targetOrderId: string, sourceOrderId: string) => Promise<void>;
+  setGuestCountAction: (orderId: string, guestCount: number) => Promise<void>;
+  setPaymentMemoAction: (orderId: string, memo: string) => Promise<{ error?: string }>;
+  printExpoSlipAction: (orderId: string) => Promise<{ ok: boolean; error?: string }>;
+  printSelectedItemsAction: (orderId: string, itemIds: string[]) => Promise<{ ok: boolean; error?: string }>;
   /** テーブルの上に出すもの（テイクアウト）。右のご予約は一番上から出したいのでここに入れる */
   topSlot?: ReactNode;
   /** テーブルの下に出すもの（色の見方）。上に置くとテーブルが下がるので一番下に置く */
@@ -337,6 +348,11 @@ export function FloorBoard({
         completeCleaningAction={completeCleaningAction}
         setTableAvailabilityAction={setTableAvailabilityAction}
         saveTableGroupAction={saveTableGroupAction}
+        mergeOrdersAction={mergeOrdersAction}
+        setGuestCountAction={setGuestCountAction}
+        setPaymentMemoAction={setPaymentMemoAction}
+        printExpoSlipAction={printExpoSlipAction}
+        printSelectedItemsAction={printSelectedItemsAction}
         allTables={tables}
       />
     </div>

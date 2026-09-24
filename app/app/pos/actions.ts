@@ -866,6 +866,14 @@ export async function mergeOrders(targetOrderId: string, sourceOrderId: string):
     .update({ guest_count: target.guest_count + source.guest_count, updated_by: ctx.userId })
     .eq('id', targetOrderId);
 
+  // 合算した側の卓は空ける（伝票が無いのに着席のまま残らないように。2026-09-25 店舗要望「テーブル合算」）
+  if (source.table_id && source.table_id !== target.table_id) {
+    await supabase
+      .from('restaurant_tables')
+      .update({ current_status: 'cleaning', updated_by: ctx.userId })
+      .eq('id', source.table_id);
+  }
+
   await supabase.rpc('recalc_order_totals', { p_order_id: targetOrderId });
 
   await supabase.rpc('log_audit', {
@@ -1034,6 +1042,39 @@ export async function cancelEmptyOrder(
   revalidatePath('/app/orders');
   revalidatePath('/app/floor');
   revalidatePath('/app/reservations');
+}
+
+/**
+ * 支払メモを伝票に残す（2026-09-25 店舗要望）。
+ * 例「カード決済のつもりが現金で受領」。会計画面で入れるメモと同じ場所（orders.memo）に書くので、
+ * 伝票明細・レジ締めからそのまま読める。会計の前でも後からでも直せる。
+ */
+export async function setPaymentMemo(orderId: string, memo: string): Promise<{ error?: string }> {
+  const ctx = await requirePermission('pos.order');
+  const text = (memo ?? '').trim().slice(0, 200);
+  const supabase = await createClient();
+  const order = await loadOpenOrder(supabase, ctx, orderId);
+
+  // 既にある伝票メモは消さず、「支払メモ:」の行だけ差し替える
+  const before = (order.memo as string | null) ?? '';
+  const kept = before
+    .split('\n')
+    .filter((line) => !line.startsWith('支払メモ:'))
+    .join('\n')
+    .trim();
+  const next = [kept, text ? `支払メモ: ${text}` : ''].filter(Boolean).join('\n');
+
+  const { error } = await supabase
+    .from('orders')
+    .update({ memo: next || null, updated_by: ctx.userId })
+    .eq('id', orderId)
+    .eq('status', 'open');
+  if (error) return { error: `支払メモの保存に失敗しました: ${error.message}` };
+
+  revalidatePath('/app/pos');
+  revalidatePath('/app/floor');
+  revalidatePath('/app/orders');
+  return {};
 }
 
 /**

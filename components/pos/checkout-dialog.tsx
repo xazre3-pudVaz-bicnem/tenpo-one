@@ -1002,21 +1002,6 @@ export function CheckoutDialog({
               />
             </label>
 
-            <Button
-              size="pos"
-              className="h-[56px] w-full text-[18px]"
-              disabled={!canConfirm || checkoutPending}
-              onClick={handleConfirm}
-            >
-              {checkoutPending ? (
-                <>
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                  処理中…
-                </>
-              ) : (
-                '会計する'
-              )}
-            </Button>
           </div>
         </section>
 
@@ -1223,14 +1208,21 @@ export function CheckoutDialog({
                   <button type="button" disabled={!activeRow} onClick={() => setActiveValue(appendTenkeyDoubleZero(activeValue))} className={keyBtn}>
                     00
                   </button>
+                  {/* テンキーの一番下は会計の締め。左にあった「会計する」はここに一本化した（2026-09-25 店舗要望） */}
                   <button
                     type="button"
                     disabled={!canConfirm || checkoutPending}
                     onClick={handleConfirm}
-                    className="flex h-[52px] flex-col items-center justify-center rounded-xl bg-iris text-lg font-bold leading-tight text-white active:bg-iris-deep disabled:opacity-40"
+                    className="tap3d flex h-[52px] flex-col items-center justify-center rounded-xl bg-iris text-[15px] font-bold leading-tight text-white active:bg-iris-deep disabled:opacity-40"
                   >
-                    決定
-                    <span className="text-[10px] font-semibold text-white/75">Confirm</span>
+                    {checkoutPending ? (
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                    ) : (
+                      <>
+                        会計完了
+                        <span className="text-[10px] font-semibold text-white/75">Checkout</span>
+                      </>
+                    )}
                   </button>
                 </div>
 
