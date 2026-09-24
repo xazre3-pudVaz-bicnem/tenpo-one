@@ -586,7 +586,21 @@ export function PosScreen({
 
         <div className="min-h-0 flex-1 overflow-y-auto">
           {items.length === 0 ? (
-            <p className="p-6 text-center text-sm text-ink-3">商品をタップして追加してください / Tap an item to add</p>
+            <div className="p-6 text-center">
+              <p className="text-sm text-ink-3">商品をタップして追加してください / Tap an item to add</p>
+              {/* 品目のない伝票はここから取消せる（卓に開きっぱなしの伝票を閉じるため。2026-09-24 店舗要望）。
+                  売上には入らない（会計ではなく「取消」で閉じる） */}
+              {cancelEmptyOrderAction && (
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => setCancelOrderOpen(true)}
+                  className="mt-4 inline-flex h-10 items-center rounded-xl border border-danger/40 px-4 text-sm font-bold text-danger hover:bg-danger-soft disabled:opacity-50"
+                >
+                  この伝票を取消 / Cancel slip
+                </button>
+              )}
+            </div>
           ) : (
             <ul className="divide-y divide-line">
               {items.map((it) => (
