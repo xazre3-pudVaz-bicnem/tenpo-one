@@ -351,15 +351,25 @@ export async function generateQrBillJobs(admin: Admin, printer: PrinterRow) {
 }
 
 export async function claimNextJob(admin: Admin, printerId: string) {
-  const { data: job } = await admin
-    .from('print_jobs')
-    .select('id, content_type, payload')
-    .eq('printer_config_id', printerId)
-    .eq('status', 'queued')
-    .eq('target', 'cloudprnt')
+  const queued = () =>
+    admin
+      .from('print_jobs')
+      .select('id, content_type, payload')
+      .eq('printer_config_id', printerId)
+      .eq('status', 'queued')
+      .eq('target', 'cloudprnt');
+
+  // ドロアは会計のたびに「すぐ」開かないとお釣りが出せず現場が止まるので、伝票より先に出す。
+  // （これまでは古い順だったため、前のレシートや厨房伝票が詰まると数分待たされることがあった。
+  //   2026-09-25 店舗報告「会計してもドロアが5分後に開く」）
+  const { data: drawer } = await queued()
+    .eq('job_type', 'test')
+    .eq('payload->>drawer', 'true')
     .order('created_at', { ascending: true })
     .limit(1)
     .maybeSingle();
+
+  const job = drawer ?? (await queued().order('created_at', { ascending: true }).limit(1).maybeSingle()).data;
   if (!job) return null;
 
   await admin
