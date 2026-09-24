@@ -1,11 +1,12 @@
 'use client';
 
-import { Loader2, Minus, Plus, X } from 'lucide-react';
+import { Minus, Plus, X } from 'lucide-react';
 import { yen } from '@/lib/format';
 import { useQrStrings } from './strings-context';
 import { cartCount, cartTotal, MAX_LINE_QUANTITY } from './logic';
 import { cartLineUnitPrice, type CartLine } from './types';
-import { BillSummary, PageTitle, PrimaryButton, QrEmpty, QrError, QrNote } from './ui';
+import { BillSummary, PageTitle, QrEmpty, QrError, QrNote } from './ui';
+import { SlideToConfirm } from '@/components/ui/slide-to-confirm';
 
 /** カートタブ：未送信の注文。数量変更・削除・送信を行う */
 export function CartView({
@@ -110,11 +111,16 @@ export function CartView({
 
           {error && <QrError>{error}</QrError>}
 
+          {/* 注文はスライドで確定（押し間違いを防ぐ。レジの Order と同じ。2026-09-25 店舗要望） */}
           <div className="px-5">
-            <PrimaryButton onClick={onSubmit} disabled={submitting}>
-              {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
-              {submitting ? qrStrings.cart.submitting : qrStrings.cart.submit}
-            </PrimaryButton>
+            <SlideToConfirm
+              label={submitting ? qrStrings.cart.submitting : qrStrings.cart.submit}
+              hint={qrStrings.cart.slideHint}
+              tone="royal"
+              busy={submitting}
+              disabled={submitting}
+              onConfirm={onSubmit}
+            />
           </div>
           <QrNote className="pt-3">{qrStrings.cart.note}</QrNote>
         </>
