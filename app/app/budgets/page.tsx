@@ -1,4 +1,6 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
+import { CalendarDays } from 'lucide-react';
 import { requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { yen, todayJst } from '@/lib/format';
@@ -217,7 +219,20 @@ export default async function BudgetsPage({
 
   return (
     <div>
-      <PageHeader title="予算管理" description="月別・店舗別の予算設定と実績・着地予測の比較" />
+      <PageHeader
+        title="予算管理"
+        description="月別・店舗別の予算設定と実績・着地予測の比較"
+        actions={
+          <Link
+            href={`/app/budgets/daily?month=${monthFirst.slice(0, 7)}`}
+            className="tap3d inline-flex items-center gap-1.5 rounded-xl bg-plum px-4 py-2 text-[13px] font-bold text-white"
+          >
+            <CalendarDays className="h-4 w-4" />
+            日別予算登録
+            <span className="text-[10px] font-semibold opacity-70">Daily</span>
+          </Link>
+        }
+      />
 
       <form method="GET" className="mb-4 flex flex-wrap items-end gap-2">
         <div>
