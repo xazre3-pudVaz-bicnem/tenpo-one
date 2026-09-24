@@ -14,11 +14,15 @@ function shiftDate(date: string, days: number): string {
   return dt.toISOString().slice(0, 10);
 }
 
+function pad2(n: number): string {
+  return String(n).padStart(2, '0');
+}
+
 const iconBtn =
   'flex h-10 w-10 items-center justify-center rounded-[9px] border border-line bg-white text-ink-2 transition-colors hover:border-iris hover:text-iris';
 
 /**
- * 店舗台帳の日付ナビ（‹ ［今日］ 9/16（水）▾ ›）。
+ * 店舗台帳の日付ナビ（‹ ［今日］ 2026/09/16（水）▾ ›）。
  * 中央の日付をタップするとカレンダー（input[type=date]）が開く。
  * mode='range' のときは from/to に同じ日付を入れる（予約リスト用）。
  */
@@ -55,7 +59,7 @@ export function DateNav({
   };
 
   const isToday = date === today;
-  const [, m, d] = date.split('-').map(Number);
+  const [y, m, d] = date.split('-').map(Number);
 
   const openPicker = () => {
     const el = inputRef.current;
@@ -73,18 +77,27 @@ export function DateNav({
       <Link href={hrefFor(shiftDate(date, -step))} aria-label={step === 7 ? '前の週' : '前日'} className={iconBtn}>
         <ChevronLeft className="h-4 w-4" />
       </Link>
+      <Link
+        href={hrefFor(today)}
+        aria-current={isToday ? 'page' : undefined}
+        className={cn(
+          'inline-flex h-10 items-center rounded-[9px] border px-3 text-[14px] font-bold transition-colors',
+          isToday ? 'border-transparent bg-iris-soft text-royal' : 'border-line bg-white text-iris hover:border-iris'
+        )}
+      >
+        今日
+      </Link>
       <div className="relative">
         <button
           type="button"
           onClick={openPicker}
-          className="inline-flex h-10 items-center gap-2 rounded-[9px] border border-line bg-white px-3 text-base font-bold text-ink transition-colors hover:border-iris"
+          className="inline-flex h-10 items-center gap-1.5 rounded-[9px] border border-line bg-white px-3.5 text-[15px] font-bold text-ink transition-colors hover:border-iris"
           aria-label="日付を選択"
         >
-          {isToday && <span className="rounded-full bg-iris-soft px-2.5 py-0.5 text-xs font-bold text-royal">今日</span>}
           <span className="tabular-nums">
-            {m}/{d}
+            {y}/{pad2(m)}/{pad2(d)}
           </span>
-          <span className="-ml-1.5 text-[15px]">（{weekdayJa(date)}）</span>
+          <span className="text-[14px]">（{weekdayJa(date)}）</span>
           <ChevronDown className="h-4 w-4 text-ink-2" />
         </button>
         <input
@@ -99,15 +112,6 @@ export function DateNav({
       </div>
       <Link href={hrefFor(shiftDate(date, step))} aria-label={step === 7 ? '次の週' : '翌日'} className={iconBtn}>
         <ChevronRight className="h-4 w-4" />
-      </Link>
-      <Link
-        href={hrefFor(today)}
-        className={cn(
-          'inline-flex h-10 items-center rounded-[9px] px-2 text-[13px] font-bold text-iris hover:bg-iris-soft',
-          isToday && 'hidden'
-        )}
-      >
-        今日へ
       </Link>
     </div>
   );

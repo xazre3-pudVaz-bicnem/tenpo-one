@@ -9,6 +9,7 @@ import { EmptyState } from '@/components/ui/state';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { StoreRealtimeRefresh } from '@/components/realtime/store-realtime-refresh';
+import { GourmetPanel } from '@/components/reservations/gourmet-panel';
 import { DateNav } from '@/components/reservations/date-nav';
 import type { ReservationCardData } from '@/components/reservations/reservation-card';
 import { WaitlistDialog } from '@/components/reservations/waitlist-dialog';
@@ -182,7 +183,7 @@ export default async function ReservationsLedgerPage({ searchParams }: { searchP
   }
 
   const sp = await searchParams;
-  const view = sp.view === 'week' || sp.view === 'waitlist' ? sp.view : 'day';
+  const view = sp.view === 'week' || sp.view === 'waitlist' || sp.view === 'gourmet' ? sp.view : 'day';
   const canManagePrivateHire = can(ctx.role, 'store.settings');
 
   // 集計タイル・操作ボタン用の共通データ（today もここで算出）
@@ -316,6 +317,21 @@ export default async function ReservationsLedgerPage({ searchParams }: { searchP
         />
       </>
     );
+  } else if (view === 'gourmet') {
+    // グルメ別：その日の予約を入り口（ホットペッパー・ぐるなび・食べログ・電話…）ごとにまとめる
+    active = 'gourmet';
+    nav = <DateNav date={date} basePath="/app/reservations" today={today} query="view=gourmet" />;
+
+    const { data: gourmetData } = await supabase
+      .from('reservations')
+      .select(RESERVATION_SELECT)
+      .eq('store_id', store.id)
+      .eq('reserved_date', date)
+      .in('status', ACTIVE_TIMELINE_STATUSES)
+      .order('start_at');
+
+    const rows = ((gourmetData ?? []) as unknown as RawReservation[]).map((r) => mapReservationRow(r, null));
+    body = <GourmetPanel reservations={rows} dateLabel={date.replaceAll('-', '/')} />;
   } else if (view === 'week') {
     active = 'week';
     nav = <DateNav date={date} basePath="/app/reservations" today={today} query="view=week" step={7} />;
