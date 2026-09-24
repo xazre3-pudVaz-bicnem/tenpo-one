@@ -407,6 +407,9 @@ export function ScheduleBoard({
         .board-off{background:repeating-linear-gradient(135deg,rgba(201,184,234,.35) 0 6px,transparent 6px 12px);pointer-events:none}
         .board-buffer{background:repeating-linear-gradient(45deg,rgba(122,112,144,.18) 0 3px,transparent 3px 6px);pointer-events:auto}
         .board-past{background:rgba(36,20,54,.06);pointer-events:none}
+        /* 卓などのチップは少し浮き上がった（3D）ボタンに見せる（店舗要望 2026-09-24） */
+        .board-chip{background-image:linear-gradient(180deg,rgba(255,255,255,.85) 0%,rgba(255,255,255,0) 60%);box-shadow:inset 0 1px 0 rgba(255,255,255,.95),0 2px 0 rgba(122,63,228,.16),0 3px 7px rgba(36,20,54,.13)}
+        .board-chip:active{transform:translateY(1px);box-shadow:inset 0 1px 0 rgba(255,255,255,.8),0 1px 0 rgba(122,63,228,.16),0 1px 3px rgba(36,20,54,.12)}
       `}</style>
       {/* 見出しは出さない（店舗要望 2026-09-24）。日付ナビは上のバー、
           「最終更新・組数・人数・営業時間」は下の行にまとめた */}
@@ -454,7 +457,7 @@ export function ScheduleBoard({
             {unassigned.length > 0 && (
               <>
                 <div className="sticky left-0 z-[2] flex flex-col justify-center border-r border-b border-line bg-white px-1.5 py-1" style={{ minHeight: ROW_H }}>
-                  <div className="flex flex-col justify-center rounded-lg border border-danger/30 bg-danger-soft px-2.5 py-1 leading-tight">
+                  <div className="board-chip flex flex-col justify-center rounded-lg border border-danger/30 bg-danger-soft px-2.5 py-1 leading-tight">
                     <span className="text-[13px] font-extrabold text-danger">席未定</span>
                     <small className="text-[11px] text-ink-2">{unassigned.length}組 ・ 席選択が必要</small>
                   </div>
@@ -478,7 +481,7 @@ export function ScheduleBoard({
                   {/* 卓はうすい紫のボタンのような見た目にする（店舗要望 2026-09-24）。
                       出すのは卓の名前と「◯〜◯名席」だけ */}
                   <div className="sticky left-0 z-[2] flex flex-col justify-center border-r border-b border-line bg-white px-1.5 py-1" style={{ minHeight: ROW_H }}>
-                    <div className="flex flex-col justify-center rounded-lg border border-lilac bg-lilac-soft px-2.5 py-1 leading-tight">
+                    <div className="board-chip flex flex-col justify-center rounded-lg border border-lilac bg-lilac-soft px-2.5 py-1 leading-tight">
                       <span className="font-[family-name:var(--font-num)] text-[13px] font-extrabold text-royal">
                         <span className="mr-1 text-[9px]">▶</span>
                         {t.name}
