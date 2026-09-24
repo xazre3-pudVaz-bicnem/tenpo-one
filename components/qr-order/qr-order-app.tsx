@@ -261,18 +261,27 @@ export function QrOrderApp({
   return (
     <QrStringsProvider locale={locale}>
       <div className="flex h-[100dvh] flex-col overflow-hidden bg-lilac-soft text-ink">
-        {/* ヘッダーは店名のみ（ロゴ・ベルは置かない）。言語切替だけ端に小さく添える */}
-        <header className="relative flex-none bg-plum px-12 py-4 text-center">
+        {/* ヘッダーは店名のみ（ロゴ・ベルは置かない）。言語は店名の下で選ぶ（2026-09-24 店舗要望：
+            日本語と英語を上で選べるように。開いたときは日本語） */}
+        <header className="flex-none bg-plum px-4 py-3.5 text-center">
           <p className="text-[21px] font-bold leading-snug text-white [overflow-wrap:anywhere]">{menu.store_name}</p>
-          {/* 言語切替は控えめに。ロゴやベルはヘッダーに置かない */}
-          <button
-            type="button"
-            onClick={() => setLocale(locale === 'ja' ? 'en' : 'ja')}
-            aria-label={locale === 'ja' ? 'Switch to English' : '日本語に切り替える'}
-            className="absolute right-3 top-1/2 min-h-9 -translate-y-1/2 rounded-full border border-white/25 px-2.5 py-1 font-num text-[10px] font-semibold text-[#c4afd8]"
-          >
-            {locale === 'ja' ? 'EN' : 'JA'}
-          </button>
+          <div className="mt-2 inline-flex overflow-hidden rounded-full border border-white/30">
+            {(['ja', 'en'] as const).map((l) => (
+              <button
+                key={l}
+                type="button"
+                onClick={() => setLocale(l)}
+                aria-pressed={locale === l}
+                aria-label={l === 'ja' ? '日本語に切り替える' : 'Switch to English'}
+                className={cn(
+                  'min-h-8 px-3.5 text-[12px] font-bold',
+                  locale === l ? 'bg-white text-plum' : 'text-white/75'
+                )}
+              >
+                {l === 'ja' ? '日本語' : 'English'}
+              </button>
+            ))}
+          </div>
         </header>
 
         {reservedCourse && (

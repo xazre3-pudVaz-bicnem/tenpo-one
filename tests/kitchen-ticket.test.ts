@@ -273,7 +273,7 @@ describe('厨房伝票の文字の大きさ（2026-09-21 店舗要望「Word の
     expect(kitchenTicketSettingsFrom({ kitchenTicket: { split: 'order' } })).toEqual({
       split: 'order',
       textSize: 'large',
-      language: 'both',
+      language: 'en',
     });
   });
 
@@ -411,10 +411,10 @@ describe('ドリンク機に出ないカテゴリの検出', () => {
 describe('厨房伝票の商品名の言語（2026-09-21 Ronnie「キッチン英語だけで大丈夫」）', () => {
   const opts = { title: 'ドリンク 伝票', titleEn: 'DRINK', printedAt: '18:33', paperWidth: 80 as const, textSize: 'large' as const };
 
-  it('既定は「英語と日本語」（これまで）。設定で「英語だけ」', () => {
-    expect(kitchenTicketLanguageFrom(null)).toBe('both');
-    expect(kitchenTicketLanguageFrom({ kitchenTicket: { language: 'en' } })).toBe('en');
-    expect(kitchenTicketLanguageFrom({ kitchenTicket: { language: 'fr' } })).toBe('both');
+  it('既定は「英語だけ」（2026-09-24 店舗要望）。設定で「英語と日本語」にできる', () => {
+    expect(kitchenTicketLanguageFrom(null)).toBe('en');
+    expect(kitchenTicketLanguageFrom({ kitchenTicket: { language: 'both' } })).toBe('both');
+    expect(kitchenTicketLanguageFrom({ kitchenTicket: { language: 'fr' } })).toBe('en');
     expect(kitchenTicketSettingsFrom({ kitchenTicket: { language: 'en' } }).language).toBe('en');
   });
 

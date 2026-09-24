@@ -84,7 +84,8 @@ export function kitchenTicketTextSizeFrom(settings: unknown): KitchenTicketTextS
  */
 export type KitchenTicketLanguage = 'both' | 'en';
 
-export const DEFAULT_KITCHEN_TICKET_LANGUAGE: KitchenTicketLanguage = 'both';
+/** 既定は英語だけ（厨房・バーは英語で出す。2026-09-24 店舗要望） */
+export const DEFAULT_KITCHEN_TICKET_LANGUAGE: KitchenTicketLanguage = 'en';
 
 export const KITCHEN_TICKET_LANGUAGE_LABELS: Record<KitchenTicketLanguage, string> = {
   both: '英語と日本語（これまで）',

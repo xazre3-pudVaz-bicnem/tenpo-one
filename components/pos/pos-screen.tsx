@@ -606,8 +606,10 @@ export function PosScreen({
               {items.map((it) => (
                 <li key={it.id} className="flex items-center gap-2.5 px-3 py-2.5">
                   <div className="min-w-0 flex-1">
+                    {/* レジの画面は英語を主にする（日本語を読まないスタッフが打つため。2026-09-24 店舗要望）。
+                        日本語名は下に小さく残す。印刷する会計伝票は日本語のまま */}
                     <p className="truncate text-[15px] font-bold leading-tight text-navy">
-                      {it.name}
+                      {(it.menu_item_id && englishByItemId.get(it.menu_item_id)) || it.name}
                       {it.kitchen_sent_at === null && (
                         <span className="ml-1.5 inline-block rounded bg-amber-100 px-1.5 py-0.5 align-middle text-[10px] font-bold text-amber-800">
                           未送信
@@ -616,7 +618,7 @@ export function PosScreen({
                     </p>
                     <p className="text-xs leading-tight text-ink-3 tabular-nums">
                       {yen(it.unit_price)}
-                      {it.menu_item_id && englishByItemId.get(it.menu_item_id) ? ` ・ ${englishByItemId.get(it.menu_item_id)}` : ''}
+                      {it.menu_item_id && englishByItemId.get(it.menu_item_id) ? ` ・ ${it.name}` : ''}
                     </p>
                   </div>
                   {/* 数量は指で押せる大きさに（レジは iPad で使う） */}
@@ -726,10 +728,10 @@ export function PosScreen({
                     {i + 1}
                   </span>
                   <span className="leading-tight">
-                    <span className="block whitespace-nowrap text-[15px] font-bold">{pg.label}</span>
+                    <span className="block whitespace-nowrap text-[15px] font-bold">{pg.en ?? pg.label}</span>
                     {pg.en && (
                       <span className={cn('block whitespace-nowrap text-[10px] font-semibold', on ? 'text-white/75' : 'text-ink-3')}>
-                        {pg.en}
+                        {pg.label}
                       </span>
                     )}
                   </span>
@@ -756,8 +758,8 @@ export function PosScreen({
                     )}
                     style={on ? { backgroundColor: c.color ?? '#7B3FE4' } : undefined}
                   >
-                    <span className="block">{c.name}</span>
-                    {c.en && <span className={cn('block text-[11px] font-medium', on ? 'text-white/80' : 'text-ink-3')}>{c.en}</span>}
+                    <span className="block">{c.en ?? c.name}</span>
+                    {c.en && <span className={cn('block text-[11px] font-medium', on ? 'text-white/80' : 'text-ink-3')}>{c.name}</span>}
                   </button>
                 );
               })}
@@ -794,7 +796,7 @@ export function PosScreen({
                     )}
                     style={activeCategory === c.id ? { backgroundColor: c.color ?? '#7B3FE4' } : undefined}
                   >
-                    {c.name}
+                    {c.en ?? c.name}
                   </button>
                 ))}
               </div>
@@ -824,10 +826,10 @@ export function PosScreen({
                       >
                         <span className="flex items-center gap-1 text-[15px] font-bold leading-tight text-navy">
                           {m.is_recommended && <Star className="h-3.5 w-3.5 shrink-0 fill-warning text-warning" />}
-                          {m.name}
+                          {englishByItemId.get(m.id) ?? m.name}
                         </span>
                         {englishByItemId.get(m.id) && (
-                          <span className="text-[11px] leading-tight text-ink-3">{englishByItemId.get(m.id)}</span>
+                          <span className="text-[11px] leading-tight text-ink-3">{m.name}</span>
                         )}
                         {m.is_sold_out ? (
                           <Badge tone="gray">売切 / Sold out</Badge>

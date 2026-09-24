@@ -15,6 +15,7 @@ import {
 import type { PosOptionGroup } from '@/components/pos/option-dialog';
 import { submitHandyOrder } from '@/app/app/handy/actions';
 import { filterMenuBook, planCategoryIds } from '@/lib/menu-book';
+import { englishName } from '@/lib/romaji';
 import { jstNowHm, loadMenuBook, loadOrderPlanState } from '@/lib/menu-book-server';
 
 export const metadata: Metadata = { title: '注文' };
@@ -82,7 +83,7 @@ export default async function HandyOrderPage({
     supabase
       .from('menu_items')
       .select(
-        'id, category_id, name, name_en, price, item_type, is_sold_out, sort_order, sell_start_time, sell_end_time, image_path'
+        'id, category_id, name, name_en, name_kana, price, item_type, is_sold_out, sort_order, sell_start_time, sell_end_time, image_path'
       )
       .eq('organization_id', ctx.organizationId)
       .or(`store_id.is.null,store_id.eq.${store.id}`)
@@ -140,7 +141,7 @@ export default async function HandyOrderPage({
   const categoryInputs: HandyCategoryInput[] = (categories ?? []).map((c) => ({
     id: c.id,
     name: c.name,
-    nameEn: c.name_en,
+    nameEn: englishName(c.name, null, c.name_en),
     station: c.station,
     sortOrder: c.sort_order,
   }));
@@ -148,7 +149,8 @@ export default async function HandyOrderPage({
     id: m.id,
     categoryId: m.category_id,
     name: m.name,
-    nameEn: m.name_en,
+    // 英語名が入っていない商品はカナからローマ字を作る（レジ画面と同じ englishName）
+    nameEn: englishName(m.name, m.name_kana, m.name_en),
     price: m.price,
     itemType: m.item_type,
     isSoldOut: m.is_sold_out,

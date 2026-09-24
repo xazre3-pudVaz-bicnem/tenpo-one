@@ -192,7 +192,7 @@ export function HandyOrderScreen({
                   className="mb-2.5 rounded-[10px] border border-[#e3dbf1] bg-white p-3.5"
                 >
                   <div className="flex items-center justify-between gap-2 text-[13px]">
-                    <b className="min-w-0 font-bold break-words text-[#2a2138]">{line.name}</b>
+                    <b className="min-w-0 font-bold break-words text-[#2a2138]">{line.nameEn ?? line.name}</b>
                     <strong className="shrink-0 font-bold text-[#2a2138] tabular-nums">
                       {yen(line.unitPrice * line.quantity)}
                     </strong>
@@ -374,7 +374,7 @@ export function HandyOrderScreen({
                 {page.categories.length > 1 && (
                   <h2 className="mb-2 flex items-center gap-2 px-1 text-[11px] font-bold tracking-wide text-[#5e4777]">
                     <span className="h-3 w-1 rounded bg-[#7b3fe4]" aria-hidden />
-                    {c.name}
+                    {c.nameEn ?? c.name}
                     <span className="font-normal text-[#a393b5]">{c.items.length}</span>
                   </h2>
                 )}
@@ -398,7 +398,14 @@ export function HandyOrderScreen({
                             inCart > 0 && !disabled && 'border-[#7b3fe4] bg-[#efe5ff]'
                           )}
                         >
-                          <span className="pb-[11px]">{item.name}</span>
+                          {/* ハンディは英語を主にする（日本語を読まないスタッフが打つため。2026-09-24 店舗要望）。
+                              日本語名は下に小さく残す */}
+                          <span className="flex flex-col gap-0.5 pb-[18px]">
+                            <span>{item.nameEn ?? item.name}</span>
+                            {item.nameEn && (
+                              <span className="text-[9px] font-normal text-[#8a769d]">{item.name}</span>
+                            )}
+                          </span>
                           <span className="absolute inset-x-0 bottom-[9px] text-[9px] font-normal text-[#8a769d] tabular-nums">
                             {yen(item.price)}
                           </span>
@@ -465,7 +472,14 @@ export function HandyOrderScreen({
  */
 function PageTileLabel({ page }: { page: HandyPageView }) {
   if (page.name || page.categories.length === 1) {
-    return <span className="min-w-0">{page.name ?? page.categories[0]?.name}</span>;
+    const only = page.categories.length === 1 ? page.categories[0] : null;
+    const en = page.name ? null : (only?.nameEn ?? null);
+    return (
+      <span className="flex min-w-0 flex-col gap-0.5">
+        <span>{en ?? page.name ?? only?.name}</span>
+        {en && <span className="text-[9px] font-normal text-[#8a769d]">{only?.name}</span>}
+      </span>
+    );
   }
   const shown = page.categories.length > 4 ? page.categories.slice(0, 3) : page.categories;
   const rest = page.categories.length - shown.length;
@@ -473,7 +487,7 @@ function PageTileLabel({ page }: { page: HandyPageView }) {
     <span className="flex min-w-0 flex-col gap-1 text-[11px] leading-[1.2]">
       {shown.map((c) => (
         <span key={c.id} className="line-clamp-2 break-words">
-          {c.name}
+          {c.nameEn ?? c.name}
         </span>
       ))}
       {rest > 0 && <span className="text-[10px] font-normal text-[#8a769d]">ほか{rest}</span>}
