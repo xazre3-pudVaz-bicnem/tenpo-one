@@ -63,7 +63,7 @@ export function LedgerMoreMenu({
         <div
           role="menu"
           onClick={() => setOpen(false)}
-          className="absolute right-0 z-30 mt-1 w-60 rounded-xl border border-line bg-white p-1.5 shadow-card [&>*]:flex [&>*]:h-11 [&>*]:w-full [&>*]:items-center [&>*]:justify-start [&>*]:gap-2 [&>*]:rounded-lg [&>*]:px-3 [&>*]:text-left [&>*]:text-[14px] [&>*]:font-semibold [&>*]:text-ink [&>*:hover]:bg-lilac-soft"
+          className="absolute right-0 z-30 mt-1 w-60 space-y-1 rounded-xl border border-line bg-white p-1.5 shadow-card [&>*]:flex [&>*]:h-11 [&>*]:w-full [&>*]:items-center [&>*]:justify-start [&>*]:gap-2 [&>*]:rounded-lg [&>*]:px-3 [&>*]:text-left [&>*]:text-[14px] [&>*]:font-semibold [&>*]:text-ink [&>*:hover]:bg-lilac-soft"
         >
           {children}
         </div>

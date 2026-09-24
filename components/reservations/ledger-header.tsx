@@ -21,7 +21,7 @@ const ACTION =
   'inline-flex h-10 items-center gap-1.5 rounded-[9px] bg-royal px-3.5 text-[14px] font-bold whitespace-nowrap text-white transition-colors hover:bg-plum';
 /** カレンダーのボタンの中の1行 */
 const MENU_ITEM =
-  'flex h-11 w-full items-center justify-start gap-2 rounded-lg px-3 text-left text-[14px] font-semibold text-ink hover:bg-lilac-soft';
+  'flex h-11 w-full items-center justify-start gap-2 rounded-lg border border-lilac bg-lilac-soft px-3 text-left text-[14px] font-semibold text-royal hover:bg-wisteria';
 
 export function LedgerTop({
   title,

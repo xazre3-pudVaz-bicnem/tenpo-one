@@ -22,8 +22,11 @@ export { BOARD_SLOT } from './constants';
 const SLOT_W = 100;
 const LABEL_W = 128;
 const HEAD_H = 40;
-/** 1行の高さ（10卓ぶんが画面に入るように低くした。店舗要望 2026-09-24） */
-const ROW_H = 44;
+/**
+ * 1行の高さ。画面に10卓ぶんが入る大きさにする（店舗要望 2026-09-24）。
+ * 44px だと12卓入って細かすぎたので、少し戻して10卓ちょうどにした。
+ */
+const ROW_H = 53;
 
 export interface BoardTable extends AssignableTable {
   /** 例: 「着席中 2名・高橋 様」「空席」。当日以外は空文字 */
@@ -199,7 +202,7 @@ export function ScheduleBoard({
         }}
         title={`${r.guestName} 様 ${hm(s)}〜${hm(e)}`}
         className={cn(
-          'absolute top-[5px] flex h-[34px] cursor-pointer items-center gap-2 overflow-hidden rounded-lg border-[1.5px] py-1 pr-1.5 pl-2 text-left text-xs leading-tight transition-shadow hover:z-[2] hover:shadow-card focus-visible:z-[2] focus-visible:outline-2 focus-visible:outline-saffron',
+          'absolute top-[6px] flex h-10 cursor-pointer items-center gap-2 overflow-hidden rounded-lg border-[1.5px] py-1 pr-1.5 pl-2 text-left text-xs leading-tight transition-shadow hover:z-[2] hover:shadow-card focus-visible:z-[2] focus-visible:outline-2 focus-visible:outline-saffron',
           BAR_CLASS[kind],
           r.isPrivateHire && 'ring-2 ring-gold ring-offset-1'
         )}
@@ -272,7 +275,7 @@ export function ScheduleBoard({
             <i
               key={`buf-${p.r.id}`}
               title={`清掃時間（バッファ${bufferMinutes}分）`}
-              className="board-buffer absolute top-[5px] h-[34px] rounded-md"
+              className="board-buffer absolute top-[6px] h-10 rounded-md"
               style={{ left: x(p.e), width: Math.max(0, x(p.e + bufferMinutes) - x(p.e)) }}
             />
           ))
@@ -335,9 +338,11 @@ export function ScheduleBoard({
             {/* 席未定 */}
             {unassigned.length > 0 && (
               <>
-                <div className="sticky left-0 z-[2] flex flex-col justify-center gap-0.5 border-r border-b border-line bg-danger-soft px-3 py-1" style={{ minHeight: ROW_H }}>
-                  <span className="text-[13px] font-extrabold text-danger">席未定</span>
-                  <small className="text-[11px] leading-snug text-ink-2">{unassigned.length}組 ・ 席選択が必要</small>
+                <div className="sticky left-0 z-[2] flex flex-col justify-center border-r border-b border-line bg-white px-1.5 py-1" style={{ minHeight: ROW_H }}>
+                  <div className="flex flex-col justify-center rounded-lg border border-danger/30 bg-danger-soft px-2.5 py-1 leading-tight">
+                    <span className="text-[13px] font-extrabold text-danger">席未定</span>
+                    <small className="text-[11px] text-ink-2">{unassigned.length}組 ・ 席選択が必要</small>
+                  </div>
                 </div>
                 <div className="relative border-b border-line bg-danger-soft/70" style={{ ...rowBg, minHeight: ROW_H }}>
                   {offHours}
@@ -355,18 +360,21 @@ export function ScheduleBoard({
               );
               return (
                 <div key={t.id} className="contents">
-                  <div className="sticky left-0 z-[2] flex flex-col justify-center gap-0.5 border-r border-b border-line bg-white px-3 py-1" style={{ minHeight: ROW_H }}>
-                    <span className="font-[family-name:var(--font-num)] text-[13px] leading-tight font-extrabold text-royal">
-                      <span className="mr-1 text-[9px]">▶</span>
-                      {t.name}
-                    </span>
-                    {/* 卓の名前と「◯〜◯名席」だけ（店舗要望 2026-09-24。着席中◯名などは出さない） */}
-                    <small className="text-[11px] leading-snug text-ink-2">
-                      <span className="tabular-nums">
-                        {t.capacityMin === t.capacityMax ? t.capacityMax : `${t.capacityMin}〜${t.capacityMax}`}
+                  {/* 卓はうすい紫のボタンのような見た目にする（店舗要望 2026-09-24）。
+                      出すのは卓の名前と「◯〜◯名席」だけ */}
+                  <div className="sticky left-0 z-[2] flex flex-col justify-center border-r border-b border-line bg-white px-1.5 py-1" style={{ minHeight: ROW_H }}>
+                    <div className="flex flex-col justify-center rounded-lg border border-lilac bg-lilac-soft px-2.5 py-1 leading-tight">
+                      <span className="font-[family-name:var(--font-num)] text-[13px] font-extrabold text-royal">
+                        <span className="mr-1 text-[9px]">▶</span>
+                        {t.name}
                       </span>
-                      名席
-                    </small>
+                      <small className="text-[11px] text-ink-2">
+                        <span className="tabular-nums">
+                          {t.capacityMin === t.capacityMax ? t.capacityMax : `${t.capacityMin}〜${t.capacityMax}`}
+                        </span>
+                        名席
+                      </small>
+                    </div>
                   </div>
                   <div className="relative border-b border-line" style={{ ...rowBg, minHeight: ROW_H }}>
                     {offHours}
