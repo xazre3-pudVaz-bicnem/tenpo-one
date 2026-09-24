@@ -629,35 +629,39 @@ export function CheckoutDialog({
               会計完了<span className="en-inline">Payment complete</span>
             </h2>
           </div>
-          <div className="px-6 py-5">
+          {/* 見本（dinii のレジ）と同じ並び：金額3行 → 領収書発行 → メニュー／連続会計
+              （2026-09-25 店舗要望） */}
+          <div className="px-6 py-4">
             <div className="flex items-baseline justify-between border-b border-line py-3 text-[17px] text-ink-2">
               <span>お支払い金額</span>
               <b className="text-2xl font-extrabold tabular-nums text-navy">{yen(done.total)}</b>
             </div>
-            {done.tendered > 0 && (
-              <div className="flex items-baseline justify-between border-b border-line py-3 text-[17px] text-ink-2">
-                <span>お預かり金額</span>
-                <b className="text-2xl font-extrabold tabular-nums text-navy">{yen(done.tendered)}</b>
-              </div>
-            )}
-            <div className="mt-4 flex items-baseline justify-between rounded-2xl bg-iris-soft px-5 py-4">
-              <span className="text-[19px] font-extrabold text-royal">おつり</span>
-              <b className="text-[44px] font-extrabold leading-none tabular-nums text-royal">{yen(done.change)}</b>
+            <div className="flex items-baseline justify-between border-b border-line py-3 text-[17px] text-ink-2">
+              <span>お預かり金額</span>
+              <b className="text-2xl font-extrabold tabular-nums text-navy">{yen(done.tendered)}</b>
+            </div>
+            <div className="flex items-baseline justify-between py-3 text-[17px] text-ink-2">
+              <span>おつり</span>
+              <b
+                className={cn(
+                  'text-[34px] leading-none font-extrabold tabular-nums',
+                  done.change > 0 ? 'text-royal' : 'text-navy'
+                )}
+              >
+                {yen(done.change)}
+              </b>
             </div>
           </div>
-          <p className="px-6 pb-2 text-center text-xs text-ink-3">
-            レシートは自動で印字されます（レシート機の「自動印刷」がONのとき）
-          </p>
-          {/* 会計のあとにレシート／領収書を選んで出せるようにする（2026-09-24 店舗要望） */}
+
           <div className="grid grid-cols-2 gap-3 px-6 pb-6">
             <Button
               variant="secondary"
               size="pos"
-              className="h-[62px] flex-col gap-0 leading-tight"
+              className="h-[56px] flex-col gap-0 leading-tight"
               disabled={printPending}
               onClick={() => printSlip('receipt')}
             >
-              <span className="flex items-center gap-2 text-[17px] font-bold">
+              <span className="flex items-center gap-2 text-[16px] font-bold">
                 {printPending ? <Loader2 className="h-5 w-5 animate-spin" /> : <ReceiptText className="h-5 w-5" />}
                 レシート
               </span>
@@ -666,27 +670,26 @@ export function CheckoutDialog({
             <Button
               variant="secondary"
               size="pos"
-              className="h-[62px] flex-col gap-0 leading-tight"
+              className="h-[56px] flex-col gap-0 leading-tight"
               disabled={printPending}
               onClick={() => setInvoiceOpen(true)}
             >
-              <span className="text-[17px] font-bold">領収書</span>
+              <span className="text-[16px] font-bold">領収書発行</span>
               <span className="text-[11px] font-normal text-ink-3">Invoice</span>
             </Button>
-            <Button
-              variant="secondary"
-              size="pos"
-              className="col-span-2 h-[54px]"
-              onClick={() => router.push(`/app/pos/receipt/${order.id}`)}
-            >
-              画面で見る・保存する / View &amp; save
+            <Button variant="secondary" size="pos" className="h-[60px] text-[17px]" onClick={() => router.push('/app/menu')}>
+              メニュー
             </Button>
-            <Button variant="secondary" size="pos" className="h-[62px]" onClick={() => router.push('/app/floor')}>
-              テーブル一覧へ
-            </Button>
-            <Button size="pos" className="h-[62px] text-[18px]" onClick={() => router.push('/app/pos')}>
+            <Button size="pos" className="h-[60px] text-[18px]" onClick={() => router.push('/app/pos')}>
               連続会計
             </Button>
+            <button
+              type="button"
+              onClick={() => router.push(`/app/pos/receipt/${order.id}`)}
+              className="col-span-2 min-h-10 text-center text-[13px] font-semibold text-royal underline"
+            >
+              画面で見る・保存する / View &amp; save
+            </button>
           </div>
 
           {invoiceOpen && (
