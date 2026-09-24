@@ -850,31 +850,9 @@ export function CheckoutDialog({
               <b className="font-bold tabular-nums text-ink">{yen(changeTotal)}</b>
             </div>
 
-            {payments.length > 0 && (
-              <div className="mt-3 space-y-1.5 border-t border-line pt-3">
-                {payments.map((p) => (
-                  <div key={p.key} className="flex items-center gap-2 rounded-xl bg-lilac-soft px-3 py-2">
-                    <Badge tone="navy" className="shrink-0">
-                      {METHOD_LABELS[p.method]}
-                    </Badge>
-                    <span className="ml-auto text-lg font-bold tabular-nums text-navy">{yen(p.amount)}</span>
-                    <button
-                      type="button"
-                      aria-label="削除"
-                      onClick={() => removePayment(p.key)}
-                      className="rounded p-1 text-ink-3 hover:bg-danger-soft hover:text-danger"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-          <div className="border-t border-line p-3">
-            {/* 別々会計は「品目ごと」か「金額ごと」を選ぶ（2026-09-25 店舗要望）。
+            {/* 別々会計は金額のすぐ下（2026-09-25 店舗要望）。「品目ごと」か「金額ごと」を選ぶ。
                 品目ごと＝食べた分だけ先に会計（伝票を分ける）。金額ごと＝1枚の伝票を分けて払う */}
-            <div className="mb-2">
+            <div className="mt-3 border-t border-line pt-3">
               <button
                 type="button"
                 onClick={() => {
@@ -899,7 +877,7 @@ export function CheckoutDialog({
                     splitPick != null || splitMode ? 'text-white/80' : 'text-ink-3'
                   )}
                 >
-                  Split
+                  Separate payment
                 </span>
               </button>
 
@@ -933,6 +911,28 @@ export function CheckoutDialog({
               )}
             </div>
 
+            {payments.length > 0 && (
+              <div className="mt-3 space-y-1.5 border-t border-line pt-3">
+                {payments.map((p) => (
+                  <div key={p.key} className="flex items-center gap-2 rounded-xl bg-lilac-soft px-3 py-2">
+                    <Badge tone="navy" className="shrink-0">
+                      {METHOD_LABELS[p.method]}
+                    </Badge>
+                    <span className="ml-auto text-lg font-bold tabular-nums text-navy">{yen(p.amount)}</span>
+                    <button
+                      type="button"
+                      aria-label="削除"
+                      onClick={() => removePayment(p.key)}
+                      className="rounded p-1 text-ink-3 hover:bg-danger-soft hover:text-danger"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="border-t border-line p-3">
             {/* 支払メモ（カードのつもりが現金になった等の理由をその場で残す。2026-09-25 店舗要望） */}
             <label className="mb-2 block">
               <span className="mb-1 block text-[11px] font-bold text-ink-3">
