@@ -3,6 +3,8 @@ import type { DynamicPriceRule } from './dynamic-pricing';
 import { loadDynamicRules } from './dynamic-pricing-server';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { loadMenuStock } from '@/lib/menu-stock-server';
+import type { MenuStockState } from '@/lib/menu-stock';
 import {
   emptyMenuBook,
   menuBookFrom,
@@ -84,6 +86,8 @@ export async function loadQrMenuBook(
   dynamicRules: DynamicPriceRule[];
   /** カテゴリID → 厨房のステーション（上のタブの自動振り分けに使う） */
   stationById: Map<string, string | null>;
+  /** 商品ID → 本日の残数（売り切り設定のある商品だけ。2026-09-25 店舗要望） */
+  menuStock: Map<string, MenuStockState>;
 }> {
   try {
     const admin = createAdminClient();
@@ -94,8 +98,9 @@ export async function loadQrMenuBook(
       .eq('stores.slug', storeSlug)
       .eq('status', 'active')
       .maybeSingle();
-    if (!table) return { book: emptyMenuBook(), plan: NO_PLAN, dynamicRules: [], stationById: new Map() };
-    const [book, { data: order }, dynamicRules, { data: categoryRows }] = await Promise.all([
+    if (!table)
+      return { book: emptyMenuBook(), plan: NO_PLAN, dynamicRules: [], stationById: new Map(), menuStock: new Map() };
+    const [book, { data: order }, dynamicRules, { data: categoryRows }, menuStock] = await Promise.all([
       loadMenuBook(admin, table.store_id),
       admin
         .from('orders')
@@ -112,14 +117,16 @@ export async function loadQrMenuBook(
         .eq('organization_id', table.organization_id)
         .or(`store_id.is.null,store_id.eq.${table.store_id}`)
         .eq('status', 'active'),
+      // 売り切り（本日の食数）。QRからも残り0の商品は注文できないようにする（2026-09-25 店舗要望）
+      loadMenuStock(admin, table.store_id),
     ]);
     const plan = order ? await loadOrderPlanState(admin, order.id) : NO_PLAN;
     const stationById = new Map<string, string | null>(
       ((categoryRows ?? []) as { id: string; station: string | null }[]).map((c) => [c.id, c.station])
     );
-    return { book, plan, dynamicRules, stationById };
+    return { book, plan, dynamicRules, stationById, menuStock };
   } catch (e) {
     console.error('[menu-book] qr context failed', e instanceof Error ? e.message : e);
-    return { book: emptyMenuBook(), plan: NO_PLAN, dynamicRules: [], stationById: new Map() };
+    return { book: emptyMenuBook(), plan: NO_PLAN, dynamicRules: [], stationById: new Map(), menuStock: new Map() };
   }
 }
