@@ -18,7 +18,8 @@ export const HANDY_PLANS: readonly { id: HandyPlan; name: string }[] = [
 
 /**
  * 来店経路（お客様がどこから来たか）。2026-09-24 店舗要望で「利用シーン」から置き換えた。
- * color はグルメサイトの色に寄せて、現場が一目で選べるようにする。
+ * 日本で連携できる主な予約サイトをひととおり並べ、名前は英語にする（2026-09-24 店舗要望）。
+ * color は各サイトの色に寄せて、現場が一目で選べるようにする。
  * code は `reservation_sources.code` に合わせてあり、行があれば予約の経路として記録する
  * （無ければラベルを伝票メモ・予約の目的に残すので、集計から漏れない）。
  */
@@ -32,13 +33,25 @@ export interface VisitSource {
 }
 
 export const VISIT_SOURCES: readonly VisitSource[] = [
-  { id: 'free', label: 'フリー', codes: ['walk_in', 'free'], color: '#5e4777' },
-  { id: 'phone', label: '当日電話ご予約', codes: ['phone', 'tel'], color: '#2f6fd0' },
-  { id: 'tabelog', label: '食べログご予約', codes: ['tabelog'], color: '#e8801a' },
+  { id: 'free', label: 'Walk in', codes: ['walk_in', 'free'], color: '#5e4777' },
+  { id: 'phone', label: '当日電話', codes: ['phone', 'tel'], color: '#2f6fd0' },
+  { id: 'tabelog', label: '食べログ', codes: ['tabelog'], color: '#e8801a' },
   { id: 'hotpepper', label: 'ホットペッパー', codes: ['hotpepper', 'hpg'], color: '#d8341c' },
-  { id: 'gourmet', label: '他全てのグルメ', codes: ['gurunavi', 'other_gourmet', 'gourmet'], color: '#7b3fe4' },
+  { id: 'gurunavi', label: 'ぐるなび', codes: ['gurunavi', 'gnavi'], color: '#b33939' },
+  { id: 'retty', label: 'Retty', codes: ['retty'], color: '#e0507a' },
+  { id: 'ikyu', label: '一休', codes: ['ikyu'], color: '#1f3b73' },
+  { id: 'ozmall', label: 'OZmall', codes: ['ozmall', 'oz'], color: '#c9539b' },
+  { id: 'epark', label: 'EPARK', codes: ['epark'], color: '#cf5b1f' },
+  { id: 'hitosara', label: 'ヒトサラ', codes: ['hitosara'], color: '#7a6a55' },
+  { id: 'google', label: 'Google', codes: ['google'], color: '#4285f4' },
+  { id: 'tablecheck', label: 'TableCheck', codes: ['tablecheck'], color: '#00a39a' },
+  { id: 'toreta', label: 'トレタ', codes: ['toreta'], color: '#2aa5c7' },
+  { id: 'ebica', label: 'ebica', codes: ['ebica'], color: '#2f8f5b' },
+  { id: 'instagram', label: 'Instagram', codes: ['instagram', 'ig'], color: '#c13584' },
   { id: 'catch', label: 'CATCH', codes: ['catch'], color: '#0a9b7a' },
   { id: 'line', label: 'LINE', codes: ['line'], color: '#06c755' },
+  { id: 'website', label: '自社サイト', codes: ['web', 'own_site'], color: '#4f3868' },
+  { id: 'other', label: 'その他', codes: ['other'], color: '#8a769d' },
 ] as const;
 
 export const VISIT_SOURCE_LABELS: readonly string[] = VISIT_SOURCES.map((s) => s.label);

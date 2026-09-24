@@ -146,12 +146,13 @@ export function HandySetupScreen({
 
       <HandyMain>
         <div className="m-3 rounded-[10px] border border-[#e3dbf1] bg-white">
-          <Row label="テーブル" value={tableName} />
-          <Row label="担当者" value={staffName} />
-          <RowButton label="モード" value={planName(draft.plan)} onClick={() => setPicker('plan')} />
+          <Row label="テーブル" en="Table" value={tableName} />
+          <Row label="担当者" en="Staff" value={staffName} />
+          <RowButton label="モード" en="Mode" value={planName(draft.plan)} onClick={() => setPicker('plan')} />
           {planHasItems(draft.plan) && (
             <RowButton
               label="プラン"
+              en="Plan"
               value={
                 selectedItem ? selectedItem.name : planItems.length > 0 ? '未選択' : 'メニュー未登録'
               }
@@ -161,10 +162,12 @@ export function HandySetupScreen({
           )}
         </div>
 
-        <SectionTitle>タイマー設定</SectionTitle>
+        <SectionTitle en="Timer">タイマー設定</SectionTitle>
         <div className="mx-3 rounded-[10px] border border-[#e3dbf1] bg-white">
           <div className="flex min-h-[46px] items-center justify-between gap-2 border-b border-[#eee8f6] px-3.5 text-[13px]">
-            <span className="text-[#5e4777]">時間制</span>
+            <span className="flex items-baseline gap-1 text-[#5e4777]">
+              時間制 <Sub>Time limit</Sub>
+            </span>
             <span className="flex items-center gap-2">
               <Switch label="時間制" checked={draft.timed} onChange={(v) => set({ timed: v })} />
               <button
@@ -179,7 +182,9 @@ export function HandySetupScreen({
             </span>
           </div>
           <div className="flex min-h-[46px] items-center justify-between gap-2 border-b border-[#eee8f6] px-3.5 text-[13px]">
-            <span className="text-[#5e4777]">終了前注意</span>
+            <span className="flex items-baseline gap-1 text-[#5e4777]">
+              終了前注意 <Sub>Last call</Sub>
+            </span>
             <span className="flex items-center gap-2">
               <Switch
                 label="終了前注意"
@@ -200,6 +205,7 @@ export function HandySetupScreen({
           </div>
           <RowButton
             label="開始時間"
+            en="Start time"
             value={`${draft.startTime ?? startLabel}〜`}
             onClick={() => {
               setStartSheetNow(Date.now());
@@ -209,6 +215,7 @@ export function HandySetupScreen({
         </div>
 
         <SectionTitle
+          en="Guests"
           required
           right={
             <span className="text-[11px] font-normal text-[#8a769d]">合計：{total}人</span>
@@ -219,13 +226,15 @@ export function HandySetupScreen({
         <div className="mx-3 rounded-[10px] border border-[#e3dbf1] bg-white px-3.5 py-2">
           {(
             [
-              ['male', '男性'],
-              ['female', '女性'],
+              ['male', '男性', 'Male'],
+              ['female', '女性', 'Female'],
             ] as const
-          ).map(([key, label]) => (
+          ).map(([key, label, en]) => (
             <section key={key} className="py-2">
               <p className="mb-2 text-xs text-[#5e4777]">
                 {label}
+                {/* 日本語を読まないスタッフ向けに英語も小さく添える（2026-09-24 店舗要望） */}
+                <span className="ml-1 text-[10px] font-normal text-[#8a769d]">{en}</span>
                 {draft[key] > 5 ? `：${draft[key]}名` : ''}
               </p>
               <div className="grid grid-cols-6 gap-[7px]" role="group" aria-label={label}>
@@ -261,9 +270,9 @@ export function HandySetupScreen({
         </div>
 
         {/* 来店経路（グルメサイトの色に寄せたボタン。2026-09-24 店舗要望で「利用シーン」から置き換え） */}
-        <SectionTitle required>来店経路</SectionTitle>
+        <SectionTitle en="Source" required>来店経路</SectionTitle>
         <div className="mx-3 mb-3 rounded-[10px] border border-[#e3dbf1] bg-white px-3.5 py-3">
-          <div className="flex flex-wrap gap-2" role="group" aria-label="来店経路">
+          <div className="flex flex-wrap gap-1.5" role="group" aria-label="来店経路">
             {VISIT_SOURCES.map((src) => {
               const on = draft.source === src.label;
               return (
@@ -277,7 +286,7 @@ export function HandySetupScreen({
                       ? { backgroundColor: src.color, borderColor: src.color, color: '#fff' }
                       : { borderColor: src.color, color: src.color }
                   }
-                  className="tap3d min-h-[40px] rounded-full border-[1.5px] bg-white px-3.5 text-[13px] font-bold"
+                  className="tap3d min-h-[32px] rounded-full border-[1.5px] bg-white px-2.5 text-[11px] font-bold"
                 >
                   {src.label}
                 </button>
@@ -395,28 +404,39 @@ export function HandySetupScreen({
 
 /* ------------------------------------------------------------ 部品 */
 
+/** 日本語を読まないスタッフ向けに小さく添える英語（2026-09-24 店舗要望） */
+function Sub({ children }: { children: React.ReactNode }) {
+  return <span className="text-[10px] font-normal text-[#8a769d]">{children}</span>;
+}
+
 function SectionTitle({
   children,
+  en,
   required,
   right,
 }: {
   children: React.ReactNode;
+  en?: string;
   required?: boolean;
   right?: React.ReactNode;
 }) {
   return (
     <h2 className="mx-3 mt-4 mb-1.5 flex items-baseline gap-1.5 text-sm font-bold text-[#4f3868]">
       {children}
+      {en && <Sub>{en}</Sub>}
       {required && <span className="text-[#b3341f]">＊</span>}
       {right && <span className="ml-auto">{right}</span>}
     </h2>
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+function Row({ label, en, value }: { label: string; en?: string; value: string }) {
   return (
     <div className="flex min-h-[46px] items-center justify-between gap-3 border-b border-[#eee8f6] px-3.5 text-[13px] last:border-b-0">
-      <span className="shrink-0 text-[#5e4777]">{label}</span>
+      <span className="flex shrink-0 items-baseline gap-1 text-[#5e4777]">
+        {label}
+        {en && <Sub>{en}</Sub>}
+      </span>
       <span className="min-w-0 truncate font-bold text-[#4f3868]">{value}</span>
     </div>
   );
@@ -424,11 +444,13 @@ function Row({ label, value }: { label: string; value: string }) {
 
 function RowButton({
   label,
+  en,
   value,
   muted,
   onClick,
 }: {
   label: string;
+  en?: string;
   value: string;
   muted?: boolean;
   onClick: () => void;
@@ -439,7 +461,10 @@ function RowButton({
       onClick={onClick}
       className="flex min-h-[46px] w-full items-center justify-between gap-3 border-b border-[#eee8f6] px-3.5 text-left text-[13px] last:border-b-0 active:bg-[#f6f3fb]"
     >
-      <span className="shrink-0 text-[#5e4777]">{label}</span>
+      <span className="flex shrink-0 items-baseline gap-1 text-[#5e4777]">
+        {label}
+        {en && <Sub>{en}</Sub>}
+      </span>
       <span
         className={cn(
           'flex min-w-0 items-center gap-0.5 font-bold',
