@@ -36,6 +36,15 @@ export interface TableSlip {
   openedAtMs: number;
   guestCount: number;
   total: number;
+  /** この伝票の品（選択印刷で選ぶ。2026-09-25 店舗要望） */
+  lines: TableSlipLine[];
+}
+
+/** 伝票の1品（選択印刷の一覧に出す） */
+export interface TableSlipLine {
+  id: string;
+  name: string;
+  quantity: number;
 }
 
 /** テーブルに紐づく未会計注文（表示用） */

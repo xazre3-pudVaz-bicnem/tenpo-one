@@ -18,6 +18,8 @@ import type {
   UpcomingReservation,
 } from '@/components/floor/types';
 import { saveTableGroup } from './group-actions';
+import { mergeOrders, setGuestCount, setPaymentMemo } from '@/app/app/pos/actions';
+import { enqueueExpoSlipPrint, enqueueSelectedItemsPrint } from '@/app/app/pos/print-actions';
 import { startWalkIn, goToOrder, completeCleaning, setTableAvailability, releaseFinishedCleaning } from './actions';
 
 export const metadata: Metadata = { title: 'テーブル一覧' };
@@ -157,6 +159,23 @@ export default async function FloorPage() {
         .order('start_at'),
     ]);
 
+  // 選択印刷で選べるように、未会計伝票の品を読む（2026-09-25 店舗要望）
+  const openOrderIds = ((orderRows ?? []) as { id: string }[]).map((o) => o.id);
+  const { data: itemRows } = openOrderIds.length
+    ? await supabase
+        .from('order_items')
+        .select('id, order_id, name, quantity')
+        .in('order_id', openOrderIds)
+        .eq('status', 'active')
+        .order('created_at')
+    : { data: [] };
+  const linesByOrder = new Map<string, { id: string; name: string; quantity: number }[]>();
+  for (const it of (itemRows ?? []) as { id: string; order_id: string; name: string; quantity: number }[]) {
+    const list = linesByOrder.get(it.order_id) ?? [];
+    list.push({ id: it.id, name: it.name, quantity: it.quantity });
+    linesByOrder.set(it.order_id, list);
+  }
+
   const serverNow = requestTime();
   const stayMinutes = settings?.default_stay_minutes ?? 120;
   const tableRows = (tables ?? []) as FloorTable[];
@@ -194,6 +213,7 @@ export default async function FloorPage() {
       openedAtMs,
       guestCount: o.guest_count,
       total: Number(o.total ?? 0),
+      lines: linesByOrder.get(o.id) ?? [],
     };
     orderByTable.set(o.table_id, {
       id: o.id,
@@ -295,6 +315,11 @@ export default async function FloorPage() {
           completeCleaningAction={completeCleaning}
           setTableAvailabilityAction={setTableAvailability}
           saveTableGroupAction={saveTableGroup}
+          mergeOrdersAction={mergeOrders}
+          setGuestCountAction={setGuestCount}
+          setPaymentMemoAction={setPaymentMemo}
+          printExpoSlipAction={enqueueExpoSlipPrint}
+          printSelectedItemsAction={enqueueSelectedItemsPrint}
           releaseFinishedCleaningAction={releaseFinishedCleaning}
           bottomSlot={<Legend />}
         />
