@@ -6,7 +6,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast';
 import { cn } from '@/lib/utils';
-import { VISIT_SOURCES } from '@/lib/handy-visit';
+import { DEFAULT_VISIT_SOURCE_IDS, VISIT_SOURCES } from '@/lib/handy-visit';
 import { saveVisitSources } from '@/app/app/settings/printers/actions';
 
 /**
@@ -37,7 +37,7 @@ export function VisitSourcesPanel({ storeId, initial }: { storeId: string; initi
       <CardContent className="space-y-3">
         <p className="text-sm text-ink-2">
           お客様情報の「来店経路」に出すものを選びます。使わないサイトは外してください。
-          （全部外すと選べなくなるので、その場合は全部出します）
+          （全部外すと選べなくなるので、その場合は既定の12個を出します）
         </p>
         <div className="flex flex-wrap gap-1.5">
           {VISIT_SOURCES.map((s) => {
@@ -62,6 +62,13 @@ export function VisitSourcesPanel({ storeId, initial }: { storeId: string; initi
           <Button onClick={save} disabled={pending}>
             {pending && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
             設定を保存
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={() => setOn([...DEFAULT_VISIT_SOURCE_IDS])}
+            disabled={pending}
+          >
+            既定に戻す
           </Button>
           <Button variant="secondary" onClick={() => setOn(VISIT_SOURCES.map((s) => s.id))} disabled={pending}>
             全部出す

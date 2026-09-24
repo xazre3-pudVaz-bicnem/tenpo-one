@@ -31,13 +31,20 @@ export interface VisitSource {
 }
 
 export const VISIT_SOURCES: readonly VisitSource[] = [
+  // 既定で出すもの（この12個。2026-09-24 店舗要望）
   { id: 'free', label: 'Walk in', codes: ['walk_in', 'free'] },
   { id: 'phone', label: '当日電話', codes: ['phone', 'tel'] },
   { id: 'tabelog', label: '食べログ', codes: ['tabelog'] },
   { id: 'hotpepper', label: 'ホットペッパー', codes: ['hotpepper', 'hpg'] },
   { id: 'gurunavi', label: 'ぐるなび', codes: ['gurunavi', 'gnavi'] },
-  { id: 'google', label: 'Google', codes: ['google'] },
   { id: 'retty', label: 'Retty', codes: ['retty'] },
+  { id: 'google', label: 'Google', codes: ['google'] },
+  { id: 'website', label: 'ホームページ', codes: ['web', 'own_site'] },
+  { id: 'sns', label: 'SNS', codes: ['sns'] },
+  { id: 'line', label: 'LINE', codes: ['line'] },
+  { id: 'catch', label: 'CATCH', codes: ['catch'] },
+  { id: 'other', label: 'その他', codes: ['other'] },
+  // ここから下は既定では出さない。設定 > レジ > 来店経路 で足せる
   { id: 'ikyu', label: '一休', codes: ['ikyu'] },
   { id: 'ozmall', label: 'OZmall', codes: ['ozmall', 'oz'] },
   { id: 'epark', label: 'EPARK', codes: ['epark'] },
@@ -46,24 +53,43 @@ export const VISIT_SOURCES: readonly VisitSource[] = [
   { id: 'toreta', label: 'トレタ', codes: ['toreta'] },
   { id: 'ebica', label: 'ebica', codes: ['ebica'] },
   { id: 'instagram', label: 'Instagram', codes: ['instagram', 'ig'] },
-  { id: 'line', label: 'LINE', codes: ['line'] },
-  { id: 'website', label: '自社サイト', codes: ['web', 'own_site'] },
   { id: 'repeat', label: 'リピート', codes: ['repeat'] },
-  { id: 'catch', label: 'CATCH', codes: ['catch'] },
 ] as const;
+
+/** 設定しなければ出す12個（お客様情報のボタン） */
+export const DEFAULT_VISIT_SOURCE_IDS: readonly string[] = [
+  'free',
+  'phone',
+  'tabelog',
+  'hotpepper',
+  'gurunavi',
+  'retty',
+  'google',
+  'website',
+  'sns',
+  'line',
+  'catch',
+  'other',
+];
 
 /**
  * 店舗で使う来店経路（店舗設定 store_settings.settings.visitSources）。
- * 設定が無い店は全部出す。並びは VISIT_SOURCES の順（人気順）を保つ。
+ * 設定が無い店は既定の12個。並びは VISIT_SOURCES の順を保つ。
  */
 export function visitSourcesFrom(settings: unknown): readonly VisitSource[] {
   const raw = (settings as { visitSources?: unknown } | null)?.visitSources;
-  if (!Array.isArray(raw)) return VISIT_SOURCES;
-  const on = new Set(raw.filter((v): v is string => typeof v === 'string'));
+  const on = new Set(
+    Array.isArray(raw) ? raw.filter((v): v is string => typeof v === 'string') : DEFAULT_VISIT_SOURCE_IDS
+  );
   const kept = VISIT_SOURCES.filter((s) => on.has(s.id));
-  // 全部外してしまった店は、選べなくならないように全部出す
-  return kept.length > 0 ? kept : VISIT_SOURCES;
+  // 全部外してしまった店は、選べなくならないように既定の12個を出す
+  return kept.length > 0 ? kept : VISIT_SOURCES.filter((s) => DEFAULT_VISIT_SOURCE_IDS.includes(s.id));
 }
+
+/** 既定で出す来店経路（画面が sources を渡さなかったときの保険） */
+export const DEFAULT_VISIT_SOURCES: readonly VisitSource[] = VISIT_SOURCES.filter((s) =>
+  DEFAULT_VISIT_SOURCE_IDS.includes(s.id)
+);
 
 /** 設定に保存する形（知らないIDは捨てる） */
 export function normalizeVisitSourceIds(ids: unknown): string[] {

@@ -5,7 +5,6 @@ import { requireFeature } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { can } from '@/lib/permissions';
 import { formatTime } from '@/lib/format';
-import { readHandyClerk } from '@/lib/handy-session';
 import { HandySetupScreen } from '@/components/handy/handy-setup-screen';
 import { visitSourcesFrom } from '@/lib/handy-visit';
 import { tableState } from '@/components/handy/logic';
@@ -79,7 +78,6 @@ export default async function FloorSetupPage({ params }: { params: Promise<{ tab
   }
 
   const planItems = await loadSetupPlanItems(ctx.organizationId, store.id);
-  const clerk = await readHandyClerk();
   // この店で使う来店経路（設定 > レジ で選ぶ。2026-09-24 店舗要望）
   const { data: storeSettings } = await supabase
     .from('store_settings')
@@ -93,7 +91,6 @@ export default async function FloorSetupPage({ params }: { params: Promise<{ tab
       from="pos"
       tableId={table.id}
       tableName={table.name}
-      staffName={clerk?.name ?? ctx.displayName}
       planItems={planItems}
       startLabel={formatTime(new Date(requestTime()))}
       sources={visitSources}

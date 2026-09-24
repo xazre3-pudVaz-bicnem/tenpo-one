@@ -10,7 +10,7 @@ import {
   CUSTOM_MAX_HOURS,
   DEFAULT_VISIT_DRAFT,
   HANDY_PLANS,
-  VISIT_SOURCES,
+  DEFAULT_VISIT_SOURCES,
   type VisitSource,
   HOUR_CHOICES,
   MAX_GUESTS,
@@ -50,16 +50,14 @@ type Picker = null | 'plan' | 'plan-item' | 'duration' | 'warning' | 'start' | '
 export function HandySetupScreen({
   tableId,
   tableName,
-  staffName,
   planItems,
   startLabel,
-  sources = VISIT_SOURCES,
+  sources = DEFAULT_VISIT_SOURCES,
   confirmAction,
   from = 'handy',
 }: {
   tableId: string;
   tableName: string;
-  staffName: string;
   /** コース／飲み放題などのプラン商品（モードごとに絞って出す） */
   planItems: HandyPlanItem[];
   /** 開始時刻（サーバーで JST に整形） */
@@ -151,7 +149,6 @@ export function HandySetupScreen({
       <HandyMain>
         <div className="m-3 rounded-[10px] border border-[#e3dbf1] bg-white">
           <Row label="テーブル" en="Table" value={tableName} />
-          <Row label="担当者" en="Staff" value={staffName} />
           <RowButton label="モード" en="Mode" value={planName(draft.plan)} onClick={() => setPicker('plan')} />
           {planHasItems(draft.plan) && (
             <RowButton
@@ -297,15 +294,6 @@ export function HandySetupScreen({
           </div>
         </div>
 
-        <p className="px-5 pb-4 text-center text-[10px] leading-[1.7] text-[#8a769d]">
-          人数と来店経路を選ぶと確定できます。確定するとこの卓を着席にして伝票を作ります。
-          {selectedItem && (
-            <>
-              <br />
-              「{selectedItem.name}」を伝票に1つ入れます（数量は注文画面で足せます）。
-            </>
-          )}
-        </p>
       </HandyMain>
 
       <div className="flex-none bg-[#f6f3fb] px-3.5 pt-2 pb-2.5">
