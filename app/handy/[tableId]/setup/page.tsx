@@ -56,7 +56,8 @@ export default async function HandySetupPage({
   if (!store || !can(ctx.role, 'pos.order')) {
     return problem(tableId, 'この画面は利用できません。店舗の割り当てと注文権限を確認してください。');
   }
-  const clerk = await requireHandyClerk();
+  // 担当者はここまでに選ばれている（選ばれていなければ担当者の画面へ戻す）
+  await requireHandyClerk();
 
   const supabase = await createClient();
   const { data: table } = await supabase
@@ -99,7 +100,6 @@ export default async function HandySetupPage({
     <HandySetupScreen
       tableId={table.id}
       tableName={table.name}
-      staffName={clerk.name}
       planItems={planItems}
       startLabel={formatTime(new Date(requestTime()))}
       sources={visitSources}
