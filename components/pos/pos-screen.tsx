@@ -173,6 +173,7 @@ export function PosScreen({
   openTableMove = false,
   moveTableAction,
   cancelEmptyOrderAction,
+  splitOrderAction,
   setGuestCountAction,
   seatTime,
   seatCourses = [],
@@ -236,6 +237,11 @@ export function PosScreen({
   moveTableAction: (orderId: string, newTableId: string) => Promise<{ tableName: string }>;
   /** 品目のない注文（会計前・¥0）を取消する。省略時はボタンを表示しない */
   cancelEmptyOrderAction?: (orderId: string, reason: string, approvedByClerkId?: string | null) => Promise<void>;
+  /** 別々会計：選んだ品目を別の伝票に移す（移した伝票をそのまま会計する） */
+  splitOrderAction?: (
+    orderId: string,
+    moves: { orderItemId: string; quantity: number }[]
+  ) => Promise<{ newOrderId: string }>;
   /** 注文後の人数変更。省略時は人数バッジを押しても何も起きない */
   setGuestCountAction?: (orderId: string, guestCount: number) => Promise<void>;
   /** 席の時間・コース（卓の伝票だけ）。省略時はバッジを出さない */
@@ -919,6 +925,7 @@ export function PosScreen({
         applyCouponAction={applyCouponAction}
         clearCouponAction={clearCouponAction}
         onCheckout={handleCheckout}
+        splitOrderAction={splitOrderAction}
         terminalReaders={terminalReaders}
         paymentAvailability={paymentAvailability}
         pointsAvailability={pointsAvailability}
