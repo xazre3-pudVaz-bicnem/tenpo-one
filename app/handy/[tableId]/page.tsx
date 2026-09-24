@@ -1,3 +1,4 @@
+import { setTableAvailability } from '@/app/app/floor/actions';
 import { enqueueOrderSlipPrint } from '@/app/app/pos/print-actions';
 import type { Metadata } from 'next';
 import Link from 'next/link';
@@ -160,6 +161,7 @@ export default async function HandyTablePage({
       goToOrderAction={openHandyOrder}
       resolveServiceCallAction={resolveServiceCall}
       printBillAction={enqueueOrderSlipPrint}
+      setTableLockAction={setTableAvailability}
     />
   );
 }

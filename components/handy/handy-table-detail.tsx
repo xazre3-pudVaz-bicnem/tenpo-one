@@ -59,6 +59,7 @@ export function HandyTableDetail({
   goToOrderAction,
   resolveServiceCallAction,
   printBillAction,
+  setTableLockAction,
 }: {
   table: { id: string; name: string; capacityMax: number; currentStatus: string | null };
   staffName: string;
@@ -72,6 +73,8 @@ export function HandyTableDetail({
   resolveServiceCallAction: (callId: string) => Promise<{ alreadyResolved: boolean }>;
   /** 会計伝票（中間伝票）をプリンターへ出す（レジの「伝票印刷」と同じ）。省略時はボタンを出さない */
   printBillAction?: (orderId: string) => Promise<{ ok: boolean; error?: string; queued?: number }>;
+  /** 卓ロック（空いている卓だけ）。レジのテーブル一覧と同じ（2026-09-24 店舗要望） */
+  setTableLockAction?: (tableId: string, unavailable: boolean) => Promise<void>;
 }) {
   const router = useRouter();
   const { toast } = useToast();
@@ -225,6 +228,34 @@ export function HandyTableDetail({
               <p className="mt-2 text-center text-[11px] text-[#8a769d]">
                 {TABLE_STATE_LABEL[state]}の卓には注文を作れません。フロア画面で状態を変更してください。
               </p>
+            )}
+
+            {/* 卓ロック：お客様が入っていない卓だけ（レジのテーブル一覧と同じ。2026-09-24 店舗要望） */}
+            {setTableLockAction && (state === 'available' || state === 'blocked') && (
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => {
+                  setBusy('lock');
+                  startTransition(async () => {
+                    try {
+                      await setTableLockAction(table.id, state !== 'blocked');
+                      toast(state === 'blocked' ? 'ロックを解除しました' : 'テーブルをロックしました');
+                      router.refresh();
+                    } catch (e) {
+                      toast(e instanceof Error ? e.message : '変更できませんでした', 'error');
+                    } finally {
+                      setBusy(null);
+                    }
+                  });
+                }}
+                className="mt-3 flex h-12 w-full flex-col items-center justify-center rounded-[10px] border border-[#e3dbf1] bg-[#f4effb] leading-tight text-[#4f3868] disabled:opacity-50"
+              >
+                <span className="text-[14px] font-bold">
+                  {state === 'blocked' ? 'ロック解除' : 'テーブルをロック'}
+                </span>
+                <span className="text-[10px] text-[#8a769d]">{state === 'blocked' ? 'Unlock' : 'Lock table'}</span>
+              </button>
             )}
           </div>
         ) : (
