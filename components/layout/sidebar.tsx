@@ -85,7 +85,7 @@ export function Sidebar({
     >
       <nav className="flex-1 overflow-y-auto">
         {tiles.length > 0 && (
-          <div className="border-b border-line">
+          <div className="space-y-1.5 border-b border-line p-2">
             {tiles.map((t) => {
               const active = t.match.some((m) => pathname === m || pathname.startsWith(m + '/'));
               return (
@@ -94,10 +94,11 @@ export function Sidebar({
                   href={t.href}
                   aria-current={active ? 'page' : undefined}
                   className={cn(
-                    'flex items-center gap-3 border-b border-line px-[18px] py-4 text-royal transition-colors last:border-b-0',
+                    // 押した感じの出る立体的なタブ（2026-09-24 店舗要望）
+                    'tapneon flex items-center gap-3 rounded-xl px-3.5 py-3.5 text-royal',
                     // レジは下の一覧と縦を揃えるためアイコンを左に。パソコンは今まで通り文字が左
                     iconFirst ? 'justify-start' : 'flex-row-reverse justify-between',
-                    active ? 'bg-iris-soft' : 'hover:bg-lilac-soft'
+                    active && 'bg-iris-soft'
                   )}
                 >
                   <span
@@ -133,7 +134,7 @@ export function Sidebar({
                   type="button"
                   onClick={() => toggle(group.label!)}
                   aria-expanded={!isCollapsed}
-                  className="flex w-full items-center justify-between border-b border-line bg-lilac-soft px-[18px] py-2 text-left text-xs font-bold text-ink-2 hover:text-royal"
+                  className="tapneon mx-2 my-1.5 flex w-[calc(100%-1rem)] items-center justify-between rounded-lg px-3.5 py-2 text-left text-xs font-bold text-ink-2 hover:text-royal"
                 >
                   <span>
                     {group.label}
@@ -143,7 +144,7 @@ export function Sidebar({
                 </button>
               )}
               {!isCollapsed && (
-                <ul>
+                <ul className="space-y-1.5 p-2 pt-0">
                   {group.items.map((item) => (
                     <li key={item.href}>
                       <NavRow
@@ -183,7 +184,8 @@ function RowBody({ item, count }: { item: NavItem; count: number }) {
 }
 
 const rowClass =
-  'group flex w-full items-center gap-3 border-b border-line px-[18px] py-2.5 text-left text-[15px] leading-snug font-medium text-ink-2 transition-colors hover:bg-lilac-soft hover:text-royal aria-[current=page]:bg-iris-soft aria-[current=page]:font-bold aria-[current=page]:text-royal';
+  // 立体的な「タブ」（うっすら紫に光る・押すと沈む。2026-09-24 店舗要望）
+  'tapneon group flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-left text-[15px] leading-snug font-medium text-ink-2 hover:text-royal aria-[current=page]:bg-iris-soft aria-[current=page]:font-bold aria-[current=page]:text-royal';
 
 function NavRow({
   item,

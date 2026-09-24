@@ -13,8 +13,9 @@ export function ChipButton({
       type="button"
       aria-pressed={on}
       className={cn(
-        'rounded-full border px-3.5 py-1.5 text-[13px] font-semibold transition-colors',
-        on ? 'border-royal bg-royal text-white' : 'border-line bg-white text-ink-2 hover:bg-lilac-soft',
+        // 立体的で少し光るタブ（押すと沈む。2026-09-24 店舗要望）
+        'tapneon rounded-full border px-3.5 py-1.5 text-[13px] font-semibold',
+        on ? 'tapneon-on border-royal bg-royal text-white' : 'border-line bg-white text-ink-2',
         className
       )}
       {...props}
