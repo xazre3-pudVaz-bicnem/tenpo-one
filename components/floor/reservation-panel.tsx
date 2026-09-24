@@ -33,7 +33,8 @@ function chip(r: PanelReservation, now: number): { label: string; className: str
 
 function Sum({ label, groups, people }: { label: string; groups: number; people?: number }) {
   return (
-    <div className="flex min-w-0 flex-col gap-0.5 rounded-[10px] bg-lilac-soft px-2.5 py-1.5">
+    // 集計のタイルは少し浮き上がったポップアップ風にする（2026-09-25 店舗要望）
+    <div className="tapneon flex min-w-0 flex-col gap-0.5 rounded-xl bg-lilac-soft px-2.5 py-2">
       <span className="text-[10.5px] font-medium whitespace-nowrap text-ink-3">{label}</span>
       <span className="text-[17px] leading-tight font-extrabold whitespace-nowrap text-royal tabular-nums">
         {groups}
@@ -79,7 +80,7 @@ export function ReservationPanel({
         </Link>
       </header>
 
-      <div className="grid grid-cols-2 gap-1.5 px-3">
+      <div className="grid grid-cols-2 gap-2 px-3 pb-1">
         <Sum label="本日のご予約" groups={reservations.length} people={people(reservations)} />
         <Sum label="当日ご予約" groups={sameDay.length} people={people(sameDay)} />
         <Sum label="来店済" groups={arrived.length} />
