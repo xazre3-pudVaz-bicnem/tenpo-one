@@ -34,16 +34,36 @@ export interface SessionContext {
   isRegisterDevice?: boolean;
 }
 
+
+/** はっきりした認証エラー（期限切れ・無効なトークン）か。通信エラー・サーバー障害と区別する */
+function isAuthFailure(error: { status?: number; name?: string }): boolean {
+  const status = error.status ?? 0;
+  return status === 400 || status === 401 || status === 403;
+}
+
+/** ログインの跡（Supabase の認証cookie）があるか */
+async function hasAuthCookie(): Promise<boolean> {
+  return (await cookies()).getAll().some((c) => c.name.startsWith('sb-') && c.value.length > 0);
+}
+
 /**
  * 現在のセッションコンテキストを取得する（リクエスト内キャッシュ）。
  * 未ログインなら null。
  */
 export const getSessionContext = cache(async (): Promise<SessionContext | null> => {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return null;
+  const { data, error } = await supabase.auth.getUser();
+  const user = data.user;
+  if (!user) {
+    // 通信が一瞬切れた・認証サーバーが重いだけ、を「ログアウト」にしない。
+    // 営業中のレジがログイン画面に飛ばされた（2026-09-24 店舗報告）のはここが原因になりうる。
+    // ログインの跡（sb-… cookie）があって、はっきりした認証エラーでないときは、
+    // 例外にして「もう一度」で戻れるようにする（ログイン画面へは飛ばさない）。
+    if (error && !isAuthFailure(error) && (await hasAuthCookie())) {
+      throw new Error('接続が不安定です。もう一度お試しください');
+    }
+    return null;
+  }
 
   // プロフィールとメンバーシップを並列取得（往復回数削減）
   const [{ data: profile }, { data: membership }] = await Promise.all([
@@ -63,7 +83,10 @@ export const getSessionContext = cache(async (): Promise<SessionContext | null> 
   if (!profile) return null;
   // 停止ユーザーは既存セッションでも利用不可（次のリクエストで即時遮断）
   if (profile.status === 'suspended') {
-    await supabase.auth.signOut();
+    // この端末だけログアウトする（scope:'local'）。
+    // 既定の global は同じアカウントの他の端末も全部落とすため、営業中の他店・他のレジまで
+    // ログアウトさせてしまう（2026-09-24 店舗報告）
+    await supabase.auth.signOut({ scope: 'local' });
     return null;
   }
   // 契約停止・解約・削除待ちの企業に属するユーザーは既存セッションでも遮断する
@@ -71,7 +94,7 @@ export const getSessionContext = cache(async (): Promise<SessionContext | null> 
   if (!profile.is_cypress_admin && membership) {
     const orgStatus = (membership.organizations as unknown as { status?: string } | null)?.status;
     if (orgStatus && orgStatus !== 'active' && orgStatus !== 'trial') {
-      await supabase.auth.signOut();
+      await supabase.auth.signOut({ scope: 'local' });
       return null;
     }
   }

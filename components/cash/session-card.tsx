@@ -13,6 +13,7 @@ import { hasAnyCount, sumDenominations, type DenominationCounts } from '@/lib/ca
 import { CashDenominationCounter } from '@/components/cash/cash-denomination-counter';
 import { KIND_LABELS, IN_KINDS, type CashKind } from '@/components/cash/labels';
 import { useClerkGate } from '@/components/pos/clerk-gate';
+import { signOutRegister } from '@/app/app/actions';
 
 export interface SessionCardData {
   id: string;
@@ -226,6 +227,8 @@ function CloseRegisterDialog({
         }
         toast('レジを締めました');
         onClose();
+        // レジ端末は締めたらログアウト（レジのログイン画面へ戻る）
+        if (result.signOutAfter) await signOutRegister();
       } catch (err) {
         toast(toUserMessage(err, '締め処理に失敗しました'), 'error');
       }

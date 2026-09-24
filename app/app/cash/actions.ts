@@ -205,7 +205,8 @@ export async function closeRegister(
   }
   revalidatePath('/app/cash');
   revalidatePath('/app/pos');
-  return { ok: true, printWarning };
+  // レジ端末は締めたら閉店。そのままログアウトしてレジのログイン画面へ戻す（2026-09-24 店舗要望）
+  return { ok: true, printWarning, signOutAfter: ctx.isRegisterDevice === true };
 }
 
 /**

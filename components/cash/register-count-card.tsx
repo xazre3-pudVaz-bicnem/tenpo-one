@@ -13,6 +13,7 @@ import { hasAnyCount, sumDenominations, type DenominationCounts } from '@/lib/ca
 import { denominationsToJson } from '@/lib/register-report';
 import { CashDenominationCounter } from '@/components/cash/cash-denomination-counter';
 import { useClerkGate } from '@/components/pos/clerk-gate';
+import { signOutRegister } from '@/app/app/actions';
 
 export interface CountSession {
   id: string;
@@ -85,6 +86,8 @@ export function RegisterCountCard({
         }
         setCounts({});
         setReason('');
+        // レジ端末は締めたらログアウト（レジのログイン画面へ戻る）
+        if (result.signOutAfter) await signOutRegister();
       } catch (err) {
         toast(toUserMessage(err, 'クローズに失敗しました'), 'error');
       }
