@@ -81,8 +81,8 @@ export function DateNav({
         href={hrefFor(today)}
         aria-current={isToday ? 'page' : undefined}
         className={cn(
-          'inline-flex h-10 items-center rounded-[9px] border px-3 text-[14px] font-bold transition-colors',
-          isToday ? 'border-transparent bg-iris-soft text-royal' : 'border-line bg-white text-iris hover:border-iris'
+          'inline-flex h-10 items-center rounded-[9px] border border-line bg-white px-3.5 text-[14px] font-bold text-royal transition-colors hover:border-iris',
+          isToday && 'border-iris'
         )}
       >
         今日

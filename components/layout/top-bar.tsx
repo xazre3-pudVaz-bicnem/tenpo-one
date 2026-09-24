@@ -63,7 +63,8 @@ export function TopBar({
       <ScreenTitle />
 
       <div className="flex min-w-0 items-center justify-end gap-1 sm:gap-2">
-        <span className="mr-2 hidden xl:inline-flex">
+        {/* 1366px（iPad横）では画面名と重なるので、時計はもっと広い画面だけに出す */}
+        <span className="mr-2 hidden 2xl:inline-flex">
           <LiveClock />
         </span>
         <CommandPaletteIconTrigger tone="dark" />
