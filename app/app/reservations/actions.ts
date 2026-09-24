@@ -525,6 +525,20 @@ export async function createOrderFromReservation(reservationId: string) {
     .limit(1);
   const tableId = links?.[0]?.table_id ?? null;
 
+  // 会計が済むまで、その卓は同じお客様として1枚の伝票で扱う（2026-09-24 店舗要望）。
+  // 卓に未会計の伝票が残っていたら新しく作らず、その伝票を開く。
+  if (tableId) {
+    const { data: tableOrder } = await supabase
+      .from('orders')
+      .select('id')
+      .eq('table_id', tableId)
+      .eq('status', 'open')
+      .order('opened_at')
+      .limit(1)
+      .maybeSingle();
+    if (tableOrder) redirect(`/app/pos?order=${tableOrder.id}`);
+  }
+
   const { data: created, error } = await supabase
     .from('orders')
     .insert({
@@ -1007,6 +1021,17 @@ export async function guideWaitingTicket(id: string, tableId: string) {
     .eq('store_id', entry.store_id)
     .maybeSingle();
   if (!table) throw new Error('テーブルを選択してください');
+
+  // 会計が済むまで、その卓は同じお客様として1枚の伝票で扱う（2026-09-24 店舗要望）。
+  // 未会計の伝票が残っている卓には案内できない（先に会計する）。
+  const { count: openOnTable } = await supabase
+    .from('orders')
+    .select('id', { count: 'exact', head: true })
+    .eq('table_id', tableId)
+    .eq('status', 'open');
+  if ((openOnTable ?? 0) > 0) {
+    throw new Error('この卓には未会計の伝票が残っています。先に会計してください');
+  }
 
   const { reservationId } = await createWalkInReservation({
     storeId: entry.store_id,

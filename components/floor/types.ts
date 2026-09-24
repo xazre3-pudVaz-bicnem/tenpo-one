@@ -127,8 +127,11 @@ export function tileTime(order: TableOrderInfo, now: number): TileTime {
 
 export function tileState(t: TableView, now: number): TileState {
   const s = t.current_status;
-  if (s === 'unavailable') return 'unavailable';
-  if (s === 'cleaning') return 'cleaning';
+  // 会計が済むまで、その卓は同じお客様として扱う（2026-09-24 店舗要望）。
+  // 未会計の伝票がある卓は、卓の状態が「清掃中」「使用不可」でもお客様が入っている扱いにする
+  // （そうしないと卓から伝票にたどり着けない。2026-09-24 高田馬場 T12）
+  if (!t.order && s === 'unavailable') return 'unavailable';
+  if (!t.order && s === 'cleaning') return 'cleaning';
   if (s === 'billing') return 'pay';
   if (!t.order) {
     if (s === 'seated' || s === 'ordering') return 'seated';

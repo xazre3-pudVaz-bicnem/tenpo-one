@@ -144,7 +144,7 @@ export function TableSheet({
       )}
 
       <div className="space-y-3">
-        {status === 'available' && (
+        {status === 'available' && slips.length === 0 && (
           <div className="rounded-xl border border-line p-2.5">
             {/* レジで一番多い操作は「人数だけ入れて着席」。指で押せる大きさにして一番上・一番大きく置く */}
             <p className="mb-1.5 text-[11px] font-bold text-ink-2">人数 / Guests</p>
@@ -201,8 +201,10 @@ export function TableSheet({
           </div>
         )}
 
-        {/* お客様が入っている卓は、ここから4つの操作を選ぶ（2026-09-24 要望） */}
-        {(status === 'seated' || status === 'ordering' || status === 'billing') && (
+        {/* お客様が入っている卓は、ここから4つの操作を選ぶ（2026-09-24 要望）。
+            未会計の伝票が残っている卓は、状態が「清掃中」などでも必ずここを出す
+            （会計できない伝票が卓に残らないように） */}
+        {(slips.length > 0 || status === 'seated' || status === 'ordering' || status === 'billing') && (
           <div className="space-y-1.5">
             {/* 伝票が2枚以上ある卓は、どの伝票を操作するか先に選ぶ（2026-09-24 店舗要望） */}
             {slips.length > 1 && (
@@ -281,7 +283,7 @@ export function TableSheet({
           </div>
         )}
 
-        {status === 'cleaning' && (
+        {status === 'cleaning' && slips.length === 0 && (
           <Button
             size="pos"
             variant="navy"
@@ -295,7 +297,7 @@ export function TableSheet({
         )}
 
         {/* 卓ロック：空いている卓だけ。お客様が入っている卓はロックできない（2026-09-24 店舗要望） */}
-        {canOperate && (status === 'available' || status === 'unavailable') && (
+        {canOperate && slips.length === 0 && (status === 'available' || status === 'unavailable') && (
           <Button
             size="md"
             variant="secondary"
