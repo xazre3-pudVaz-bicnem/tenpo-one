@@ -186,8 +186,9 @@ export function FloorBoard({
             <div className="flex flex-wrap justify-center gap-1.5">
               {(floors.length > 1 || (floors.length > 0 && unassigned.length > 0)) && (
                 <>
+                  {/* 全フロアは「ALL」だけ（日本語は出さない。2026-09-24 店舗要望） */}
                   <ChipButton on={floorFilter === 'all'} onClick={() => setFloorFilter('all')}>
-                    すべて / All
+                    ALL
                   </ChipButton>
                   {floors.map((f) => (
                     <ChipButton key={f.id} on={floorFilter === f.id} onClick={() => setFloorFilter(f.id)}>

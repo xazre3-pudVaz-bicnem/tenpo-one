@@ -180,6 +180,8 @@ body.theme-regi {
     -webkit-tap-highlight-color: transparent;
   }
   .tap3d:active:not(:disabled) {
+    /* 押した瞬間は待たせない（戻るときだけアニメ） */
+    transition-duration: 0s;
     transform: translateY(2px);
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.7),
@@ -217,6 +219,7 @@ body.theme-regi {
     }
   }
   .tapneon:active:not(:disabled) {
+    transition-duration: 0s;
     transform: translateY(2px);
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.8),
@@ -234,11 +237,33 @@ body.theme-regi {
       0 6px 18px rgba(123, 63, 228, 0.38);
   }
   .tapneon-on:active:not(:disabled) {
+    transition-duration: 0s;
     transform: translateY(2px);
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.25),
       0 0 0 1px rgba(123, 63, 228, 0.4),
       0 1px 6px rgba(123, 63, 228, 0.35);
+  }
+  /* 濃い色のバーの上に置くボタン（上部バーの「ホーム」など）用の立体ボタン */
+  .tap3d-dark {
+    background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.17), rgba(255, 255, 255, 0.04));
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.3),
+      0 2px 0 rgba(0, 0, 0, 0.3),
+      0 4px 12px rgba(0, 0, 0, 0.3);
+    transition:
+      transform 0.06s ease,
+      box-shadow 0.06s ease,
+      filter 0.06s ease;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .tap3d-dark:active:not(:disabled) {
+    transition-duration: 0s;
+    transform: translateY(2px);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.2),
+      0 1px 4px rgba(0, 0, 0, 0.32);
+    filter: brightness(1.08);
   }
 }
 
