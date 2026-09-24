@@ -17,10 +17,10 @@ import { WaitlistPanel, type WaitlistRow, type WaitlistStatus } from '@/componen
 import { WaitingTicketDialog } from '@/components/reservations/waiting-ticket-dialog';
 import { WaitingQueuePanel, type WaitingTicketRow, type WaitingHint } from '@/components/reservations/waiting-queue-panel';
 import type { GuideTableOption } from '@/components/reservations/guide-table-dialog';
-import { ACTIVE_TIMELINE_STATUSES } from '@/components/reservations/constants';
+import { ACTIVE_TIMELINE_STATUSES, BOARD_SLOT } from '@/components/reservations/constants';
 import { loadLedgerChrome } from '@/components/reservations/ledger-data';
 import { LedgerTop, LedgerSummaryTiles, type LedgerTabKey } from '@/components/reservations/ledger-header';
-import { ScheduleBoard, BOARD_SLOT, type BoardTable } from '@/components/reservations/schedule-board';
+import { ScheduleBoard, type BoardTable } from '@/components/reservations/schedule-board';
 import { suggestTables, type TableLike, type ReservationStatus } from '@/lib/reservations';
 import { cn } from '@/lib/utils';
 

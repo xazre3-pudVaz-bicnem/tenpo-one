@@ -11,8 +11,9 @@ import { ReservationDetailDialog } from './reservation-detail-dialog';
 import type { AssignableTable } from './assign-table-dialog';
 import type { ReservationListRow } from './list-types';
 import { jstMinutesOfMs, useNow } from './use-now';
+import { BOARD_SLOT } from './constants';
 
-export const BOARD_SLOT = 30;
+export { BOARD_SLOT } from './constants';
 const SLOT_W = 52;
 const LABEL_W = 128;
 const HEAD_H = 48;
@@ -146,7 +147,9 @@ export function ScheduleBoard({
   const showNow = isToday && nowMin >= viewStartMin && nowMin <= viewEndMin;
   const nowX = ((nowMin - viewStartMin) / BOARD_SLOT) * SLOT_W;
 
-  const cols = Math.max(1, Math.round((viewEndMin - viewStartMin) / BOARD_SLOT));
+  // 万一おかしな値が来ても表が崩れないようにする（NaN だと grid が1列に潰れる）
+  const rawCols = Math.round((viewEndMin - viewStartMin) / BOARD_SLOT);
+  const cols = Number.isFinite(rawCols) && rawCols > 0 ? rawCols : 24;
   const gridWidth = cols * SLOT_W;
   const x = (min: number) => ((Math.min(Math.max(min, viewStartMin), viewEndMin) - viewStartMin) / BOARD_SLOT) * SLOT_W;
 
