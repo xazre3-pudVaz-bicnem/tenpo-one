@@ -2,14 +2,15 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, EyeOff, Eye, Pencil, Check, X, Loader2 } from 'lucide-react';
+import { Plus, EyeOff, Eye, Pencil, Check, X, Loader2, Trash2 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input, Select } from '@/components/ui/input';
 import { EmptyState } from '@/components/ui/state';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/components/ui/toast';
-import { addPosClerk, renamePosClerk, setPosClerkRole, setPosClerkStatus } from '@/app/app/settings/clerks/actions';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { addPosClerk, deletePosClerk, renamePosClerk, setPosClerkRole, setPosClerkStatus } from '@/app/app/settings/clerks/actions';
 import { CLERK_ROLE_LABELS, CLERK_ROLES, type ClerkRole } from '@/lib/clerk-roles';
 
 export interface ClerkRow {
@@ -32,6 +33,7 @@ export function ClerksPanel({ storeId, initial }: { storeId: string; initial: Cl
   const [newRole, setNewRole] = useState<ClerkRole>('staff');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
+  const [deleteTarget, setDeleteTarget] = useState<ClerkRow | null>(null);
 
   const run = (fn: () => Promise<{ error?: string }>, okMsg: string, after?: () => void) =>
     startTransition(async () => {
@@ -173,6 +175,18 @@ export function ClerksPanel({ storeId, initial }: { storeId: string; initial: Cl
                         {c.status === 'hidden' ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
                         {c.status === 'hidden' ? '表示に戻す' : '非表示'}
                       </Button>
+                      {/* 伝票で使っていない担当者は消せる（使っていれば「非表示」を案内する） */}
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="text-danger hover:bg-danger-soft"
+                        aria-label={`${c.name}を削除`}
+                        disabled={pending}
+                        onClick={() => setDeleteTarget(c)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        削除
+                      </Button>
                     </div>
                   </>
                 )}
@@ -180,6 +194,24 @@ export function ClerksPanel({ storeId, initial }: { storeId: string; initial: Cl
             ))}
           </ul>
         )}
+
+        <ConfirmDialog
+          open={!!deleteTarget}
+          onClose={() => setDeleteTarget(null)}
+          title="担当者を削除しますか"
+          message={
+            deleteTarget
+              ? `「${deleteTarget.name}」を削除します。伝票で使っている担当者は削除できません（その場合は「非表示」にしてください）。`
+              : ''
+          }
+          confirmLabel="削除する"
+          onConfirm={async () => {
+            if (!deleteTarget) return;
+            const target = deleteTarget;
+            setDeleteTarget(null);
+            run(() => deletePosClerk(target.id, storeId), '担当者を削除しました');
+          }}
+        />
 
         <p className="text-xs text-gray-500">
           退職などで選択肢から外す場合は「非表示」にしてください。削除ではないため、過去の伝票・レシートに残る担当名は変わりません。
