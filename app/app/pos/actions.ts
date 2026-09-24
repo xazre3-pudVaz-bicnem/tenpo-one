@@ -261,6 +261,49 @@ export async function sendItemsToKitchen(orderId: string, itemIds: string[]): Pr
 export interface SendOrderResult {
   /** 今回厨房へ送った品目数（行数） */
   sent: number;
+  /**
+   * 厨房で印刷されていない恐れがあるときの注意書き（2026-09-25 店舗要望
+   * 「うまくいったメッセージは要らない。印刷されなかった時だけ知らせて」）。
+   * 問題なければ null。
+   */
+  printWarning?: string | null;
+}
+
+/** 厨房プリンターが動いていない疑いを調べる（登録なし／しばらく応答なし） */
+const PRINTER_SILENT_MINUTES = 5;
+
+async function kitchenPrintWarning(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  storeId: string
+): Promise<string | null> {
+  const { data, error } = await supabase
+    .from('printer_configs')
+    .select('name, usage, status, last_polled_at')
+    .eq('store_id', storeId)
+    .eq('status', 'active')
+    .in('usage', ['kitchen', 'drink']);
+  // 調べられないときは黙る（注文そのものは成立しているため）
+  if (error) return null;
+  const printers = data ?? [];
+  if (printers.length === 0) {
+    return '厨房プリンターが登録されていません。伝票は出ていません（設定 → プリンター）';
+  }
+  const threshold = Date.now() - PRINTER_SILENT_MINUTES * 60_000;
+  const alive = printers.filter((p) => {
+    const t = p.last_polled_at ? new Date(p.last_polled_at as string).getTime() : 0;
+    return t >= threshold;
+  });
+  if (alive.length === 0) {
+    return '厨房プリンターが応答していません。伝票が出ていない可能性があります（電源・Wi-Fiを確認）';
+  }
+  if (alive.length < printers.length) {
+    const off = printers
+      .filter((p) => !alive.includes(p))
+      .map((p) => p.name)
+      .join('・');
+    return `プリンター「${off}」が応答していません。伝票が出ていない可能性があります`;
+  }
+  return null;
 }
 
 /**
@@ -271,14 +314,16 @@ export interface SendOrderResult {
 export async function sendOrderToKitchen(orderId: string): Promise<SendOrderResult> {
   const ctx = await requirePermission('pos.order');
   const supabase = await createClient();
-  await loadOpenOrder(supabase, ctx, orderId);
+  const order = await loadOpenOrder(supabase, ctx, orderId);
   const sent = await markUnsentItemsSent(supabase, orderId, ctx.userId);
   if (sent == null) {
     throw new Error('厨房へのまとめ送信はまだ有効になっていません（DB更新待ち）。品目は追加時に厨房へ送られています');
   }
   revalidatePath(`/app/pos`);
   revalidatePath(`/app/kitchen`);
-  return { sent };
+  // 送れたときは何も出さない。印刷されていない恐れがあるときだけ知らせる
+  const printWarning = sent > 0 ? await kitchenPrintWarning(supabase, order.store_id) : null;
+  return { sent, printWarning };
 }
 
 /**
