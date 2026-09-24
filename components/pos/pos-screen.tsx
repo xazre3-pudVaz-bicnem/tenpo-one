@@ -249,7 +249,11 @@ export function PosScreen({
     approvedByClerkId?: string | null
   ) => Promise<void>;
   setDiscountAction: (orderId: string, discountTotal: number, reason: string) => Promise<void>;
-  checkoutAction: (orderId: string, payments: CheckoutPayment[]) => Promise<CheckoutOutcome>;
+  checkoutAction: (
+    orderId: string,
+    payments: CheckoutPayment[],
+    paymentMemo?: string
+  ) => Promise<CheckoutOutcome>;
   /** 未送信の品目をまとめて厨房へ送る */
   sendOrderAction?: (orderId: string) => Promise<SendOrderResult>;
   /** テーブル一覧のポップアップから「会計」「テーブル移動」を選んで来たときに、その画面を開く */
@@ -514,8 +518,8 @@ export function PosScreen({
     }
   };
 
-  const handleCheckout = async (payments: CheckoutPayment[]) => {
-    const result = await checkoutAction(order.id, payments);
+  const handleCheckout = async (payments: CheckoutPayment[], paymentMemo?: string) => {
+    const result = await checkoutAction(order.id, payments, paymentMemo);
     if (result.registerClosed) {
       // 会計は確定していない。ダイアログ側の catch でトーストに出す
       throw new Error(
