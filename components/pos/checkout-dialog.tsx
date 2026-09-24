@@ -1065,7 +1065,8 @@ export function CheckoutDialog({
                 )}
                 <div className="grid grid-cols-2 gap-1.5">
                   {BASE_METHODS.map((m) => {
-                    const selected = payments.some((p) => p.method === m);
+                    // 支払を足したもの＝色、種類（VISA など）を選んでいる最中のものも色（2026-09-24 店舗要望）
+                    const selected = payments.some((p) => p.method === m) || openMethod === m;
                     const brands = methodBrands[m] ?? [];
                     return (
                       <button
@@ -1092,10 +1093,15 @@ export function CheckoutDialog({
                     aria-expanded={openMethod === 'points'}
                     aria-pressed={pointsSelected}
                     onClick={() => setOpenMethod((cur) => (cur === 'points' ? null : 'points'))}
-                    className={cn(payMethodBtn, pointsSelected ? payMethodOn : payMethodOff)}
+                    className={cn(payMethodBtn, pointsSelected || openMethod === 'points' ? payMethodOn : payMethodOff)}
                   >
                     <span className="block">{METHOD_LABELS.points}</span>
-                    <span className={cn('block text-[10px] font-semibold', pointsSelected ? 'text-white/80' : 'text-ink-3')}>
+                    <span
+                      className={cn(
+                        'block text-[10px] font-semibold',
+                        pointsSelected || openMethod === 'points' ? 'text-white/80' : 'text-ink-3'
+                      )}
+                    >
                       {METHOD_LABELS_EN.points}
                     </span>
                   </button>

@@ -16,6 +16,8 @@ import type { PosOptionGroup } from '@/components/pos/option-dialog';
 import { submitHandyOrder } from '@/app/app/handy/actions';
 import { filterMenuBook, planCategoryIds } from '@/lib/menu-book';
 import { englishName } from '@/lib/romaji';
+import { loadMenuStock } from '@/lib/menu-stock-server';
+import { isMenuSoldOut } from '@/lib/menu-stock';
 import { jstNowHm, loadMenuBook, loadOrderPlanState } from '@/lib/menu-book-server';
 
 export const metadata: Metadata = { title: '注文' };
@@ -145,6 +147,9 @@ export default async function HandyOrderPage({
     station: c.station,
     sortOrder: c.sort_order,
   }));
+  // メニューの売り切り（本日の食数）が0になった商品は自動で売切にする（2026-09-24 店舗要望）
+  const menuStock = await loadMenuStock(supabase, store.id);
+
   const itemInputs: HandyMenuItemInput[] = (menuItems ?? []).map((m) => ({
     id: m.id,
     categoryId: m.category_id,
@@ -153,7 +158,7 @@ export default async function HandyOrderPage({
     nameEn: englishName(m.name, m.name_kana, m.name_en),
     price: m.price,
     itemType: m.item_type,
-    isSoldOut: m.is_sold_out,
+    isSoldOut: isMenuSoldOut(!!m.is_sold_out, menuStock.get(m.id as string)),
     sortOrder: m.sort_order,
     sellStartTime: m.sell_start_time,
     sellEndTime: m.sell_end_time,

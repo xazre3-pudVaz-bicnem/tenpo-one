@@ -5,6 +5,8 @@ import { requireFeature } from '@/lib/auth';
 import { storeAccessBlock } from '@/components/pos/store-access-guard';
 import { createClient } from '@/lib/supabase/server';
 import { loadMenuBook } from '@/lib/menu-book-server';
+import { loadMenuStock } from '@/lib/menu-stock-server';
+import { isMenuSoldOut } from '@/lib/menu-stock';
 import { BRANDED_METHODS, checkoutPresetsFrom, discountPresetsOf, methodBrandsOf, pointBrandsOf } from '@/lib/checkout-presets';
 import { isMissingColumnError } from '@/lib/schema-compat';
 import { can } from '@/lib/permissions';
@@ -355,6 +357,13 @@ export default async function PosPage({
     endMs: seatEndMs != null && seatEndMs > seatStartMs ? seatEndMs : null,
     courseId: seatResv?.course_id ?? null,
   };
+  // メニューの売り切り（本日の食数）が0になった商品は自動で売切にする（2026-09-24 店舗要望）
+  const menuStock = await loadMenuStock(supabase, store.id);
+  const menuItemsWithStock = (menuItems ?? []).map((m) => ({
+    ...m,
+    is_sold_out: isMenuSoldOut(!!m.is_sold_out, menuStock.get(m.id as string)),
+  }));
+
   const seatCourses = (menuItems ?? [])
     .filter((m) => m.item_type === 'course')
     .map((m) => ({ id: m.id as string, name: m.name as string, durationMinutes: (m.duration_minutes as number | null) ?? null }));
@@ -383,7 +392,7 @@ export default async function PosPage({
         discountPresets={discountPresetsOf(checkoutPresets)}
         pointBrands={pointBrandsOf(checkoutPresets)}
         methodBrands={methodBrands}
-        menuItems={menuItems ?? []}
+        menuItems={menuItemsWithStock}
         bestSellerIds={bestSellerIds}
         tableName={table?.name ?? null}
         staffName={staff?.display_name ?? null}
