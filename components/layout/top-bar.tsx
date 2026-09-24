@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Bell, LogOut, Menu, UserRound } from 'lucide-react';
+import { Bell, LogOut, Menu, Store, UserRound } from 'lucide-react';
 import type { SessionContext } from '@/lib/auth';
 import { ROLE_LABELS } from '@/lib/permissions';
 import { signOut } from '@/app/app/actions';
@@ -24,6 +24,8 @@ export function TopBar({
   showMenuLink?: boolean;
 }) {
   const roleLabel = ctx.role ? ROLE_LABELS[ctx.role] : ctx.isCypressAdmin ? '運営管理者' : '';
+  // 1店舗だけの端末（レジのiPad）は、右上に契約の店名を出す
+  const oneStore = !ctx.isHq && ctx.stores.length === 1 ? (ctx.currentStore ?? ctx.stores[0]) : null;
   return (
     <header className="sticky top-0 z-40 grid h-[58px] grid-cols-[1fr_minmax(0,auto)_1fr] items-center gap-2 bg-plum px-3 text-white sm:gap-3 sm:px-5">
       <div className="flex min-w-0 items-center gap-3">
@@ -50,14 +52,18 @@ export function TopBar({
           </span>
           <span className="hidden text-[15px] font-bold whitespace-nowrap xl:inline">TENPO ONE</span>
         </Link>
-        <div className="hidden min-w-0 sm:block">
-          <StoreSwitcher
-            tone="dark"
-            stores={ctx.stores}
-            currentStoreId={ctx.currentStore?.id ?? null}
-            allowAll={ctx.isHq}
-          />
-        </div>
+        {/* 店舗を1つしか持たない端末（レジのiPad）では、右に店名が出るので左には出さない
+            （2026-09-25 店舗要望「2か所は要らない。右だけ」） */}
+        {(ctx.isHq || ctx.stores.length > 1) && (
+          <div className="hidden min-w-0 sm:block">
+            <StoreSwitcher
+              tone="dark"
+              stores={ctx.stores}
+              currentStoreId={ctx.currentStore?.id ?? null}
+              allowAll={ctx.isHq}
+            />
+          </div>
+        )}
       </div>
 
       <ScreenTitle />
@@ -85,13 +91,21 @@ export function TopBar({
         </Link>
         {/* レジは店舗共通のアカウントなので、いま操作している担当者を出す（押すと選び直し） */}
         <ClerkChip />
+        {/* 右はお店のマーク＋店名だけ（企業名・アカウント名は出さない。2026-09-25 店舗要望）。
+            複数店舗を見るアカウントは今までどおりアカウント名を出す */}
         <span
-          className="hidden max-w-[200px] items-center gap-1.5 rounded-full bg-white/12 py-1 pr-3 pl-2 text-[13px] font-medium whitespace-nowrap md:inline-flex"
+          className="hidden max-w-[220px] items-center gap-1.5 rounded-full bg-white/12 py-1 pr-3 pl-2 text-[13px] font-bold whitespace-nowrap md:inline-flex"
           title={roleLabel}
         >
-          <UserRound className="h-[18px] w-[18px] shrink-0" />
-          <span className="truncate">{ctx.displayName}</span>
-          {roleLabel && <span className="hidden truncate text-[11px] text-[#D9CCF3] 2xl:inline">{roleLabel}</span>}
+          {oneStore ? (
+            <Store className="h-[18px] w-[18px] shrink-0" />
+          ) : (
+            <UserRound className="h-[18px] w-[18px] shrink-0" />
+          )}
+          <span className="truncate">{oneStore ? oneStore.name : ctx.displayName}</span>
+          {!oneStore && roleLabel && (
+            <span className="hidden truncate text-[11px] font-medium text-[#D9CCF3] 2xl:inline">{roleLabel}</span>
+          )}
         </span>
         <form action={signOut}>
           <button
