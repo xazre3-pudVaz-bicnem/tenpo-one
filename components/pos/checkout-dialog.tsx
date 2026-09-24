@@ -133,6 +133,7 @@ export function CheckoutDialog({
   discountPresets = [],
   pointBrands = [],
   methodBrands = {},
+  splitOrderAction,
 }: {
   onClose: () => void;
   order: CheckoutOrder;
@@ -159,6 +160,11 @@ export function CheckoutDialog({
   pointBrands?: PointBrand[];
   /** 支払方法ごとの内訳（クレジット→VISA…、QR→PayPay…） */
   methodBrands?: Record<string, PointBrand[]>;
+  /** 別々会計：選んだ品目を別の伝票に移す（移した伝票をそのまま会計する） */
+  splitOrderAction?: (
+    orderId: string,
+    moves: { orderItemId: string; quantity: number }[]
+  ) => Promise<{ newOrderId: string }>;
 }) {
   const { toast } = useToast();
   const [discountPending, startDiscount] = useTransition();
@@ -174,8 +180,14 @@ export function CheckoutDialog({
   );
   /** 押した支払方法（内訳＝VISA・PayPay・ホットペッパー等を選ぶ列を出す） */
   const [openMethod, setOpenMethod] = useState<string | null>(null);
-  /** 別々お支払い：何人で割るか（null＝割らない。2026-09-24 要望） */
-  const [splitGuests, setSplitGuests] = useState<number | null>(null);
+  /**
+   * 別々会計（2026-09-24 要望）。
+   * 金額を人数で割るのではなく、「ランチのセットごと」＝食べた品目ごとに分けて払う。
+   * 選んだ品目を別の伝票へ移し（伝票分割）、その伝票をそのまま会計する。
+   * 値は 品目ID → この人が持つ数量。
+   */
+  const [splitPick, setSplitPick] = useState<Record<string, number> | null>(null);
+  const [splitPending, startSplit] = useTransition();
   /** 値引きの入れ方（￥ か ％） */
   const [discountMode, setDiscountMode] = useState<'amount' | 'percent'>('amount');
   const [percentInput, setPercentInput] = useState('');
@@ -425,13 +437,7 @@ export function CheckoutDialog({
 
   const addPayment = (method: CheckoutPayment['method'], provider?: string | null) => {
     const left = Math.max(0, remaining);
-    // 別々お支払い：最後の1人が端数を持つ（合計がぴったり合うように）
-    const share = splitGuests
-      ? payments.length >= splitGuests - 1
-        ? left
-        : Math.min(left, Math.floor(order.total / splitGuests))
-      : left;
-    const cap = method === 'points' ? Math.min(maxPointsUsable, share) : share;
+    const cap = method === 'points' ? Math.min(maxPointsUsable, left) : left;
     setPayments((rows) => [
       ...rows,
       { key: `${method}-${Date.now()}`, method, provider: provider ?? null, amount: cap, tendered: method === 'cash' ? cap : undefined },
@@ -473,25 +479,44 @@ export function CheckoutDialog({
   // モードを切り替えたら入力済みの支払行は白紙に戻す（単一↔併用で金額の意味が変わるため）
   const toggleSplitMode = () => {
     setSplitMode((v) => !v);
-    setSplitGuests(null);
     setPayments([]);
   };
 
   /**
-   * 別々お支払い（2026-09-24 要望）。
-   * 例：4人で来て1人ずつ払う → 人数を決めて、1人ずつ支払方法を押すと1人分ずつ入る。
-   * 最後の1人が端数を持つので合計はぴったり合う。
+   * 別々会計（2026-09-24 要望）。
+   * 例：4人でランチのセットをそれぞれ頼んだ → 自分が食べた分だけ払う。
+   * この人の品目を選んで「この分を会計」を押すと、その品目だけ別の伝票になり、
+   * そのまま会計画面が開く。残りは元の伝票に残るので、次の人も同じように会計できる。
    */
-  const startSplitByGuests = () => {
-    setSplitGuests(Math.max(2, order.guestCount && order.guestCount > 1 ? order.guestCount : 2));
-    setSplitMode(true);
-    setPayments([]);
-  };
+  const splitLines = order.lines ?? [];
+  const splitTotal = splitPick
+    ? splitLines.reduce((sum, l) => sum + (splitPick[l.id] ?? 0) * l.unitPrice, 0)
+    : 0;
+  const splitCount = splitPick ? Object.values(splitPick).reduce((a, b) => a + b, 0) : 0;
+  /** 全部を選んだら分割にならない（元の伝票が空になる） */
+  const splitIsAll = splitLines.every((l) => (splitPick?.[l.id] ?? 0) >= l.quantity);
 
-  const stopSplitByGuests = () => {
-    setSplitGuests(null);
-    setSplitMode(false);
-    setPayments([]);
+  const pickSplit = (lineId: string, max: number, delta: number) =>
+    setSplitPick((cur) => {
+      const now = { ...(cur ?? {}) };
+      const next = Math.min(max, Math.max(0, (now[lineId] ?? 0) + delta));
+      if (next === 0) delete now[lineId];
+      else now[lineId] = next;
+      return now;
+    });
+
+  const confirmSplit = () => {
+    if (!splitOrderAction || splitCount === 0 || splitIsAll) return;
+    const moves = Object.entries(splitPick ?? {}).map(([orderItemId, quantity]) => ({ orderItemId, quantity }));
+    startSplit(async () => {
+      try {
+        const res = await splitOrderAction(order.id, moves);
+        setSplitPick(null);
+        router.push(`/app/pos?order=${res.newOrderId}&checkout=1`);
+      } catch (e) {
+        toast(e instanceof Error ? e.message : '伝票を分けられませんでした', 'error');
+      }
+    });
   };
 
   const updatePayment = (key: string, patch: Partial<PaymentRow>) => {
@@ -554,6 +579,7 @@ export function CheckoutDialog({
     // 次に開いたとき前のお客様の支払い入力が残らないようにする
     setPayments([]);
     setSplitMode(false);
+    setSplitPick(null);
     setRightTab('pay');
     setDone(null);
     onClose();
@@ -936,17 +962,17 @@ export function CheckoutDialog({
                   <div className="flex shrink-0 gap-1.5">
                     <button
                       type="button"
-                      onClick={startSplitByGuests}
-                      disabled={terminalBlocking}
-                      aria-pressed={splitGuests != null}
+                      onClick={() => setSplitPick(splitPick ? null : {})}
+                      disabled={terminalBlocking || !splitOrderAction || splitLines.length < 2}
+                      aria-pressed={splitPick != null}
                       className={cn(
                         'flex flex-col items-center rounded-full px-3 py-1 text-[11px] font-bold leading-tight transition-colors disabled:opacity-50',
-                        splitGuests != null ? 'bg-iris text-white' : 'bg-lilac text-ink-2'
+                        splitPick != null ? 'bg-iris text-white' : 'bg-lilac text-ink-2'
                       )}
                     >
-                      別々お支払い
-                      <span className={cn('text-[9px] font-semibold', splitGuests != null ? 'text-white/80' : 'text-ink-3')}>
-                        Split by guests
+                      別々会計
+                      <span className={cn('text-[9px] font-semibold', splitPick != null ? 'text-white/80' : 'text-ink-3')}>
+                        Split by item
                       </span>
                     </button>
                     <button
@@ -967,37 +993,74 @@ export function CheckoutDialog({
                   </div>
                 </div>
 
-                {/* 別々お支払い：人数を決めて、1人ずつ支払方法を押す */}
-                {splitGuests != null && (
-                  <div className="mb-1.5 flex items-center gap-2 rounded-xl bg-lilac-soft px-2.5 py-1.5">
-                    <button
-                      type="button"
-                      aria-label="人数を1人減らす"
-                      onClick={() => setSplitGuests((n) => Math.max(2, (n ?? 2) - 1))}
-                      className="flex h-9 w-9 items-center justify-center rounded-lg border border-line bg-white text-lg font-bold text-royal"
-                    >
-                      −
-                    </button>
-                    <span className="text-[13px] font-bold text-royal tabular-nums">{splitGuests}人</span>
-                    <button
-                      type="button"
-                      aria-label="人数を1人増やす"
-                      onClick={() => setSplitGuests((n) => Math.min(20, (n ?? 2) + 1))}
-                      className="flex h-9 w-9 items-center justify-center rounded-lg border border-line bg-white text-lg font-bold text-royal"
-                    >
-                      ＋
-                    </button>
-                    <span className="ml-auto text-[12px] font-bold text-ink-2 tabular-nums">
-                      1人 {yen(Math.floor(order.total / splitGuests))} ・ あと {Math.max(0, splitGuests - payments.length)}人
-                    </span>
-                    <button
-                      type="button"
-                      aria-label="別々お支払いをやめる"
-                      onClick={stopSplitByGuests}
-                      className="rounded p-1 text-ink-3 hover:bg-danger-soft hover:text-danger"
-                    >
-                      <XIcon className="h-4 w-4" />
-                    </button>
+                {/* 別々会計：自分が食べた分（ランチのセットなど）を選んで、その分だけ先に会計する */}
+                {splitPick != null && (
+                  <div className="mb-1.5 rounded-xl bg-lilac-soft p-2">
+                    <div className="mb-1 flex items-center justify-between gap-2">
+                      <span className="text-[11px] font-bold text-royal">
+                        この人の分を選ぶ
+                        <span className="ml-1 text-[9px] font-semibold text-ink-3">Pick this person&apos;s items</span>
+                      </span>
+                      <button
+                        type="button"
+                        aria-label="別々会計をやめる"
+                        onClick={() => setSplitPick(null)}
+                        className="rounded p-1 text-ink-3 hover:bg-danger-soft hover:text-danger"
+                      >
+                        <XIcon className="h-4 w-4" />
+                      </button>
+                    </div>
+                    <ul className="max-h-[30vh] space-y-1 overflow-y-auto">
+                      {splitLines.map((l) => {
+                        const picked = splitPick[l.id] ?? 0;
+                        return (
+                          <li key={l.id} className="flex items-center gap-2 rounded-lg bg-white px-2 py-1.5">
+                            <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium text-navy">{l.name}</span>
+                            <span className="shrink-0 text-[11px] text-ink-3 tabular-nums">
+                              {yen(l.unitPrice)}×{l.quantity}
+                            </span>
+                            <button
+                              type="button"
+                              aria-label={`${l.name}を1つ減らす`}
+                              onClick={() => pickSplit(l.id, l.quantity, -1)}
+                              className="flex h-8 w-8 items-center justify-center rounded-lg border border-line text-lg font-bold text-royal disabled:opacity-40"
+                              disabled={picked === 0}
+                            >
+                              −
+                            </button>
+                            <span className="w-6 text-center text-[13px] font-bold text-royal tabular-nums">{picked}</span>
+                            <button
+                              type="button"
+                              aria-label={`${l.name}を1つ増やす`}
+                              onClick={() => pickSplit(l.id, l.quantity, 1)}
+                              className="flex h-8 w-8 items-center justify-center rounded-lg border border-line text-lg font-bold text-royal disabled:opacity-40"
+                              disabled={picked >= l.quantity}
+                            >
+                              ＋
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                    <div className="mt-1.5 flex items-center gap-2">
+                      <span className="text-[12px] font-bold text-ink-2 tabular-nums">
+                        {splitCount}点 ・ {yen(splitTotal)}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={confirmSplit}
+                        disabled={splitPending || splitCount === 0 || splitIsAll}
+                        className="ml-auto inline-flex h-10 items-center gap-1.5 rounded-lg bg-royal px-3.5 text-[13px] font-bold text-white disabled:opacity-50"
+                      >
+                        {splitPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                        この分を会計 / Pay this part
+                      </button>
+                    </div>
+                    {splitIsAll && splitCount > 0 && (
+                      <p className="mt-1 text-[11px] text-warning">
+                        全部を選ぶと分かれません。残す分は減らしてください。
+                      </p>
+                    )}
                   </div>
                 )}
                 <div className="grid grid-cols-2 gap-1.5">
