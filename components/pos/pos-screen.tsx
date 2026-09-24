@@ -57,6 +57,9 @@ const DRAWER_STATUS_LABELS: Record<DrawerResultStatus, string> = {
   offline: 'ドロアがオフラインです（シミュレーション）',
 };
 
+/** 「テイクアウト」のメニュー（カテゴリ名で判断する。無い店はこれまでどおり） */
+const TAKEOUT_CATEGORY = /テイクアウト|持ち帰り|お持ち帰り|take\s*out|takeaway/i;
+
 const FAVORITES_TAB = '__favorites__';
 const BESTSELLERS_TAB = '__bestsellers__';
 
@@ -261,7 +264,19 @@ export function PosScreen({
   const { toast } = useToast();
   const clerkGate = useClerkGate();
   const [pending, startTransition] = useTransition();
-  const [activeCategory, setActiveCategory] = useState<string>(categories[0]?.id ?? '');
+  /**
+   * テイクアウトの伝票は「テイクアウト」のカテゴリがあればそこから開く（2026-09-24 店舗要望）。
+   * 無ければ今までどおり最初のカテゴリ。ここは最初の1回だけで、あとは押したカテゴリに従う。
+   */
+  const [activeCategory, setActiveCategory] = useState<string>(() => {
+    const takeoutSlip =
+      order.orderType === 'takeout' || order.orderType === 'delivery' || order.orderType === 'pre_order';
+    if (takeoutSlip) {
+      const takeoutCategory = categories.find((c) => TAKEOUT_CATEGORY.test(c.name));
+      if (takeoutCategory) return takeoutCategory.id;
+    }
+    return categories[0]?.id ?? '';
+  });
   const [searchQuery, setSearchQuery] = useState('');
   const [cancelTarget, setCancelTarget] = useState<PosOrderItem | null>(null);
   const [checkoutOpen, setCheckoutOpen] = useState(openCheckout);
