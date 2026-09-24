@@ -215,6 +215,8 @@ function ClerkPickerOverlay({
   /** 省略すると閉じられない（担当者を選ぶまでレジを使わせない） */
   onCancel?: () => void;
 }) {
+  // 名前のアルファベット順で出す（店舗要望 2026-09-24）。日本語の名前も同じ並びに揃える
+  const sorted = [...clerks].sort((a, b) => a.name.localeCompare(b.name, 'ja'));
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-navy/60" aria-hidden />
@@ -237,7 +239,7 @@ function ClerkPickerOverlay({
         </div>
 
         <ul className="mt-2 max-h-[52vh] divide-y divide-line overflow-y-auto rounded-lg border border-line">
-          {clerks.map((c) => (
+          {sorted.map((c) => (
             <li key={c.id}>
               <button
                 type="button"
