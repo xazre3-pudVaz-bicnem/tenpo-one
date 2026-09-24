@@ -358,11 +358,12 @@ export function ScheduleBoard({
                       <span className="mr-1 text-[9px]">▶</span>
                       {t.name}
                     </span>
+                    {/* 卓の名前と「◯〜◯名席」だけ（店舗要望 2026-09-24。着席中◯名などは出さない） */}
                     <small className="text-[11px] leading-snug text-ink-2">
                       <span className="tabular-nums">
                         {t.capacityMin === t.capacityMax ? t.capacityMax : `${t.capacityMin}〜${t.capacityMax}`}
                       </span>
-                      名席{t.statusLabel ? ` ・ ${t.statusLabel}` : ''}
+                      名席
                     </small>
                   </div>
                   <div className="relative min-h-[54px] border-b border-line" style={rowBg}>
