@@ -713,8 +713,8 @@ export function PosScreen({
                   type="button"
                   onClick={() => openPage(pg.key)}
                   className={cn(
-                    'flex shrink-0 items-center gap-2 rounded-xl px-3.5 py-2 text-left transition-colors',
-                    on ? 'bg-royal text-white' : 'text-ink-2 hover:bg-lilac-soft'
+                    'tap3d flex shrink-0 items-center gap-2 rounded-xl px-3.5 py-2 text-left',
+                    on ? 'bg-royal text-white' : 'bg-white text-ink-2 hover:bg-lilac-soft'
                   )}
                 >
                   <span
@@ -751,7 +751,7 @@ export function PosScreen({
                     type="button"
                     onClick={() => setActiveCategory(c.id)}
                     className={cn(
-                      'w-full border-b border-line px-3.5 py-3.5 text-left text-[15px] font-bold leading-tight transition-colors last:border-b-0',
+                      'tap3d w-full border-b border-line px-3.5 py-3.5 text-left text-[15px] font-bold leading-tight last:border-b-0',
                       on ? 'text-white' : 'text-ink-2 hover:bg-lilac-soft'
                     )}
                     style={on ? { backgroundColor: c.color ?? '#7B3FE4' } : undefined}
@@ -789,7 +789,7 @@ export function PosScreen({
                     type="button"
                     onClick={() => setActiveCategory(c.id)}
                     className={cn(
-                      'shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition-colors',
+                      'tap3d shrink-0 rounded-full px-4 py-2 text-sm font-semibold',
                       activeCategory === c.id ? 'text-white' : 'bg-lilac text-ink-2'
                     )}
                     style={activeCategory === c.id ? { backgroundColor: c.color ?? '#7B3FE4' } : undefined}
@@ -817,7 +817,7 @@ export function PosScreen({
                         disabled={m.is_sold_out || pending}
                         onClick={() => handleAdd(m.id)}
                         className={cn(
-                          'flex min-h-[92px] flex-col items-center justify-center gap-1.5 rounded-xl border px-2.5 py-3 text-center transition-transform active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-60',
+                          'tap3d flex min-h-[92px] flex-col items-center justify-center gap-1.5 rounded-xl border px-2.5 py-3 text-center disabled:cursor-not-allowed disabled:opacity-60',
                           m.is_sold_out ? 'border-line bg-lilac' : 'border-line bg-white hover:bg-lilac-soft'
                         )}
                         style={!m.is_sold_out && category?.color ? { borderTop: `4px solid ${category.color}` } : undefined}

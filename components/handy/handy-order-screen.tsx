@@ -359,7 +359,7 @@ export function HandyOrderScreen({
                   onClick={() => setPageKey(p.key)}
                   aria-label={`${p.label}（${p.itemCount}品）`}
                   style={{ borderBottomColor: TILE_ACCENTS[i % TILE_ACCENTS.length] }}
-                  className="flex aspect-square w-full items-center justify-between gap-1 overflow-hidden rounded-[10px] border border-b-4 border-[#e3dbf1] bg-white px-3 py-2.5 text-left text-xs font-bold break-words text-[#4f3868] shadow-[0_1px_2px_#00000007] active:bg-[#efe5ff]"
+                  className="tap3d flex aspect-square w-full items-center justify-between gap-1 overflow-hidden rounded-[10px] border border-[#e3dbf1] bg-white px-3 py-2.5 text-left text-xs font-bold break-words text-[#4f3868] active:bg-[#efe5ff]"
                 >
                   <PageTileLabel page={p} />
                   <ChevronRight className="h-[13px] w-[13px] shrink-0 text-[#d1c7de]" aria-hidden />
@@ -393,7 +393,7 @@ export function HandyOrderScreen({
                             disabled ? undefined : { borderBottomColor: TILE_ACCENTS[i % TILE_ACCENTS.length] }
                           }
                           className={cn(
-                            'relative flex aspect-square w-full items-center justify-center overflow-hidden rounded-[10px] border border-b-4 border-[#e3dbf1] bg-white px-[7px] py-[9px] text-center text-xs font-bold break-words text-[#4f3868] shadow-[0_1px_2px_#00000007]',
+                            'tap3d relative flex aspect-square w-full items-center justify-center overflow-hidden rounded-[10px] border border-[#e3dbf1] bg-white px-[7px] py-[9px] text-center text-xs font-bold break-words text-[#4f3868]',
                             disabled ? 'border-b-[#e3dbf1] opacity-50' : 'active:bg-[#efe5ff]',
                             inCart > 0 && !disabled && 'border-[#7b3fe4] bg-[#efe5ff]'
                           )}

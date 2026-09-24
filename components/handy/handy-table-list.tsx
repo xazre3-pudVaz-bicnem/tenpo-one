@@ -188,7 +188,7 @@ function HandyTableTile({
   const sheet = onPick && usesSheet(state);
 
   const className = cn(
-        'flex aspect-square w-full flex-col items-start rounded-[10px] border p-2 text-left shadow-[0_2px_5px_#24143605]',
+        'tap3d flex aspect-square w-full flex-col items-start rounded-[10px] border p-2 text-left',
         'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#7b3fe4]',
         callKind === 'checkout'
           ? 'border-[#bd660f] bg-[#fbefdf]'
