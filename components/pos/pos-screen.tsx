@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   Minus, Plus, X, ArrowLeft, Search, Star, User,
-  Users, ChefHat, Clock,
+  Users, Clock,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { yen } from '@/lib/format';
@@ -22,6 +22,7 @@ import { enqueueDrawerKick } from '@/app/app/pos/print-actions';
 import { ClerkSelector, type ClerkOption } from './clerk-selector';
 import { useClerkGate } from './clerk-gate';
 import { OptionDialog, type PosOptionGroup } from './option-dialog';
+import { SlideToConfirm } from '@/components/ui/slide-to-confirm';
 import { shouldOpenDrawer, type DrawerResultStatus } from '@/lib/printing/types';
 import {
   CheckoutDialog,
@@ -59,6 +60,18 @@ const DRAWER_STATUS_LABELS: Record<DrawerResultStatus, string> = {
 
 /** 「テイクアウト」のメニュー（カテゴリ名で判断する。無い店はこれまでどおり） */
 const TAKEOUT_CATEGORY = /テイクアウト|持ち帰り|お持ち帰り|take\s*out|takeaway/i;
+
+/** まだ注文していない品（カート）の1行。Order を押すまで伝票には入らない */
+interface CartLine {
+  key: string;
+  menuItemId: string;
+  name: string;
+  nameEn: string | null;
+  unitPrice: number;
+  quantity: number;
+  optionItemIds: string[];
+  optionLabel: string | null;
+}
 
 const FAVORITES_TAB = '__favorites__';
 const BESTSELLERS_TAB = '__bestsellers__';
@@ -222,7 +235,12 @@ export function PosScreen({
   paymentAvailability: PosPaymentAvailability;
   availableTables: AvailableTable[];
   /** 戻り値（追加した明細のID）はレジでは使わない（ハンディが厨房送信に使う） */
-  addItemAction: (orderId: string, menuItemId: string, optionItemIds?: string[]) => Promise<unknown>;
+  addItemAction: (
+    orderId: string,
+    menuItemId: string,
+    optionItemIds?: string[],
+    quantity?: number
+  ) => Promise<unknown>;
   updateQtyAction: (orderId: string, orderItemId: string, delta: number) => Promise<void>;
   cancelItemAction: (
     orderId: string,
@@ -286,6 +304,12 @@ export function PosScreen({
   const [seatTimeOpen, setSeatTimeOpen] = useState(false);
   const [customerOpen, setCustomerOpen] = useState(false);
   const [optionTarget, setOptionTarget] = useState<string | null>(null);
+  /**
+   * まだ注文していない品（カート）。2026-09-25 店舗要望
+   * 「商品をタップしただけでは注文にしない。右下の Order を押してはじめて注文にする」。
+   * ハンディと同じ作りで、Order を押した時に伝票へ入り、厨房へ出て、テーブルにも金額が出る。
+   */
+  const [cart, setCart] = useState<CartLine[]>([]);
   const [linkedCustomer, setLinkedCustomer] = useState(customer);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -339,15 +363,47 @@ export function PosScreen({
       : menuItems.filter((m) => !m.category_id);
   }, [menuItems, activeCategory, searchQuery, bestSellerRank]);
 
+  /** タップした品はまずカートへ（同じ品・同じ選択肢はまとめて数量を足す） */
   const addWithOptions = (menuItemId: string, optionItemIds: string[]) => {
-    startTransition(async () => {
-      try {
-        await addItemAction(order.id, menuItemId, optionItemIds);
-      } catch (e) {
-        toast(e instanceof Error ? e.message : '追加に失敗しました', 'error');
+    const item = menuItems.find((m) => m.id === menuItemId);
+    if (!item) return;
+    const groups = optionGroupsByItem[menuItemId] ?? [];
+    const chosen = groups
+      .flatMap((g) => g.items)
+      .filter((o) => optionItemIds.includes(o.id));
+    const extra = chosen.reduce((n, o) => n + Number(o.price ?? 0), 0);
+    const basePrice = isTakeoutLike ? (item.takeout_price ?? item.price) : item.price;
+    const key = `${menuItemId}:${[...optionItemIds].sort().join(',')}`;
+    setCart((cur) => {
+      const found = cur.find((l) => l.key === key);
+      if (found) {
+        return cur.map((l) => (l.key === key ? { ...l, quantity: l.quantity + 1 } : l));
       }
+      return [
+        ...cur,
+        {
+          key,
+          menuItemId,
+          name: item.name,
+          nameEn: englishByItemId.get(menuItemId) ?? null,
+          unitPrice: Number(basePrice) + extra,
+          quantity: 1,
+          optionItemIds,
+          optionLabel: chosen.length > 0 ? chosen.map((o) => o.name).join('・') : null,
+        },
+      ];
     });
   };
+
+  const cartQty = (key: string, delta: number) =>
+    setCart((cur) =>
+      cur
+        .map((l) => (l.key === key ? { ...l, quantity: l.quantity + delta } : l))
+        .filter((l) => l.quantity > 0)
+    );
+
+  const cartCount = cart.reduce((n, l) => n + l.quantity, 0);
+  const cartTotal = cart.reduce((n, l) => n + l.unitPrice * l.quantity, 0);
 
   const handleAdd = (menuItemId: string) => {
     // 選択肢グループが設定された商品は、先に選択ダイアログを出す
@@ -418,14 +474,29 @@ export function PosScreen({
   // 注文伝票（会計前の確認用）をレシートプリンターへ。会計も売上も動かさない
   // 未送信（厨房にまだ伝えていない）品目。タップした瞬間ではなく、このボタンで初めて厨房伝票・KDS に出る
   const unsentItems = items.filter((it) => it.kitchen_sent_at === null);
+  /**
+   * Order（決定）。カートの品をまとめて伝票に入れ、そのまま厨房へ送る。
+   * ここではじめて伝票・テーブルの金額・厨房伝票に出る（2026-09-25 店舗要望）。
+   */
   const handleSendOrder = () => {
-    if (!sendOrderAction || unsentItems.length === 0) return;
+    if (cart.length === 0 && unsentItems.length === 0) return;
     startTransition(async () => {
       try {
+        for (const line of cart) {
+          await addItemAction(order.id, line.menuItemId, line.optionItemIds, line.quantity);
+        }
+        setCart([]);
+        if (!sendOrderAction) {
+          toast('伝票に入れました', 'success');
+          return;
+        }
         const res = await sendOrderAction(order.id);
-        toast(res.sent > 0 ? `厨房へ ${res.sent} 品を送信しました / Sent to kitchen` : '送信する品目がありません', res.sent > 0 ? 'success' : 'error');
+        toast(
+          res.sent > 0 ? `厨房へ ${res.sent} 品を送信しました / Sent to kitchen` : '伝票に入れました',
+          'success'
+        );
       } catch (e) {
-        toast(e instanceof Error ? e.message : '厨房への送信に失敗しました', 'error');
+        toast(e instanceof Error ? e.message : '注文に失敗しました', 'error');
       }
     });
   };
@@ -616,7 +687,67 @@ export function PosScreen({
                 </button>
               )}
             </div>
-          ) : (
+          ) : null}
+
+          {/* まだ注文していない品（カート）。Order を押すと伝票へ入る（2026-09-25 店舗要望） */}
+          {cart.length > 0 && (
+            <div className="border-b-2 border-dashed border-iris/40 bg-iris-soft/40">
+              <p className="px-3 pt-2 text-[11px] font-bold text-royal">
+                未確定 / Not ordered yet
+                <span className="ml-1 font-normal text-ink-3">Order を押すと注文になります</span>
+              </p>
+              <ul>
+                {cart.map((l) => (
+                  <li key={l.key} className="flex items-center gap-2.5 px-3 py-2.5">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[15px] font-bold leading-tight text-navy">
+                        {l.nameEn ?? l.name}
+                      </p>
+                      <p className="truncate text-xs leading-tight text-ink-3 tabular-nums">
+                        {yen(l.unitPrice)}
+                        {l.nameEn ? ` ・ ${l.name}` : ''}
+                        {l.optionLabel ? ` ・ ${l.optionLabel}` : ''}
+                      </p>
+                    </div>
+                    <span className="w-[72px] shrink-0 text-right text-[15px] font-bold tabular-nums text-navy">
+                      {yen(l.unitPrice * l.quantity)}
+                    </span>
+                    <div className="flex shrink-0 items-center overflow-hidden rounded-xl border border-line bg-white">
+                      <button
+                        type="button"
+                        aria-label={`${l.name}を1つ減らす`}
+                        onClick={() => cartQty(l.key, -1)}
+                        className="flex h-11 w-11 items-center justify-center bg-lilac-soft text-royal"
+                      >
+                        <Minus className="h-4 w-4" />
+                      </button>
+                      <span className="grid h-11 w-11 place-items-center text-base font-bold tabular-nums text-navy">
+                        {l.quantity}
+                      </span>
+                      <button
+                        type="button"
+                        aria-label={`${l.name}を1つ増やす`}
+                        onClick={() => cartQty(l.key, 1)}
+                        className="flex h-11 w-11 items-center justify-center bg-lilac-soft text-royal"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </button>
+                    </div>
+                    <button
+                      type="button"
+                      aria-label="取消"
+                      onClick={() => setCart((cur) => cur.filter((x) => x.key !== l.key))}
+                      className="shrink-0 rounded-lg p-1.5 text-ink-3 hover:bg-danger-soft hover:text-danger"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {items.length > 0 && (
             <ul className="divide-y divide-line">
               {items.map((it) => (
                 <li key={it.id} className="flex items-center gap-2.5 px-3 py-2.5">
@@ -711,6 +842,12 @@ export function PosScreen({
               </div>
             )}
           </div>
+          {cart.length > 0 && (
+            <div className="mt-1 flex justify-between text-sm font-bold text-royal">
+              <span>未確定（Order前）</span>
+              <span className="tabular-nums">+{yen(cartTotal)}</span>
+            </div>
+          )}
           <div className="mt-2 flex items-baseline justify-between border-t border-line pt-2">
             <span className="text-[15px] font-bold text-ink-2">合計（税込）</span>
             <span className="text-3xl font-extrabold tabular-nums text-royal">{yen(order.total)}</span>
@@ -876,18 +1013,18 @@ export function PosScreen({
 
             <div className="border-t border-line p-3 pb-[calc(0.75rem+3.5rem+env(safe-area-inset-bottom))] lg:pb-3">
               <div className={cn('grid gap-3', order.tableId ? 'grid-cols-1' : 'grid-cols-2')}>
-                {sendOrderAction && (
-                  <Button
-                    size="pos"
-                    variant={unsentItems.length > 0 ? 'navy' : 'secondary'}
-                    className="h-[64px] w-full text-[20px]"
-                    disabled={unsentItems.length === 0 || pending || clerkMissing}
-                    onClick={handleSendOrder}
-                  >
-                    <ChefHat className="h-5 w-5" />
-                    {unsentItems.length > 0 ? `Order（${unsentItems.length}品）` : 'Order（未送信なし）'}
-                  </Button>
-                )}
+                {/* 決定はスライドで（押し間違いで注文が飛ばない。2026-09-25 店舗要望） */}
+                <SlideToConfirm
+                  label={
+                    cartCount + unsentItems.length > 0
+                      ? `Order（${cartCount + unsentItems.length}品）`
+                      : 'Order（未確定なし）'
+                  }
+                  hint="スライドして注文 / Slide to order"
+                  busy={pending}
+                  disabled={cartCount + unsentItems.length === 0 || pending || clerkMissing}
+                  onConfirm={handleSendOrder}
+                />
                 {/* テーブルのある伝票は テーブル一覧のポップアップから会計する。
                     テイクアウト等（卓なし）はここからしか会計できないので残す */}
                 {!order.tableId && (
