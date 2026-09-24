@@ -224,7 +224,7 @@ export function TableSheet({
       )}
 
       <div className="space-y-1.5">
-        {status === 'available' && slips.length === 0 && (
+        {!seated && status !== 'cleaning' && status !== 'unavailable' && (
           <>
             {/* 見本と同じく「注文」1つだけ。人数は注文画面の人数から直す（2026-09-25 店舗要望） */}
             <Button

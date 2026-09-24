@@ -103,9 +103,10 @@ export function FloorBoard({
   const [anchor, setAnchor] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
 
   /**
-   * テーブルを押したときの動き（2026-09-24 要望）。
-   *   空席   → そのまま「お客様情報」へ
-   *   その他 → 右のパネル（追加オーダー／テーブル移動／会計伝票／会計 など）
+   * テーブルを押したときの動き（2026-09-25 店舗要望）。
+   * どの状態でも、押した卓の上に小さいポップアップを出す。
+   *   空席   → 注文 ／ テーブルブロック ／ テーブルグループ設定
+   *   着席中 → まとめ・注文・レジ会計・テーブル・印刷・お客様情報・支払メモ
    */
   const openTable = (t: TableView, el?: HTMLElement | null) => {
     if (el) {
@@ -114,12 +115,6 @@ export function FloorBoard({
     } else {
       setAnchor(null);
     }
-    const st = tileState(t, now);
-    if (st === 'free' || st === 'reserved' || st === 'waiting') {
-      router.push(`/app/floor/${t.id}/setup`);
-      return;
-    }
-    // 着席中・会計待ち・清掃中などは右のパネルから選ぶ（追加オーダー／テーブル移動／会計伝票／会計）
     setSelectedId(t.id);
   };
   const floorIds = floors.map((f) => f.id);
