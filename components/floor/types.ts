@@ -26,6 +26,18 @@ export interface FloorTable {
   shape: string;
 }
 
+/**
+ * 同じテーブルに複数ある未会計伝票の1枚（伝票分割・相席・締め忘れなど）。
+ * ポップアップから「どの伝票を会計するか」を選べるようにするために持つ（2026-09-24 店舗要望）。
+ */
+export interface TableSlip {
+  id: string;
+  orderNo: number;
+  openedAtMs: number;
+  guestCount: number;
+  total: number;
+}
+
 /** テーブルに紐づく未会計注文（表示用） */
 export interface TableOrderInfo {
   id: string;
@@ -45,6 +57,8 @@ export interface TableOrderInfo {
   course: { label: string; minutes: number } | null;
   /** 滞在終了予定（コース時間 → 予約の終了時刻 → 店舗の既定滞在時間 の順で決定） */
   endAtMs: number;
+  /** この卓の未会計伝票すべて（古い順）。1枚だけのときも入る */
+  slips: TableSlip[];
 }
 
 /** このテーブルに入る予約（未来店） */

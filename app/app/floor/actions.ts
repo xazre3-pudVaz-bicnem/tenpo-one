@@ -66,6 +66,23 @@ export async function startWalkIn(
     throw new Error('このテーブルは現在空席ではありません');
   }
 
+  // 卓に未会計の伝票が残っているのに「空席」になっていることがある（ロック解除・清掃完了のあとなど）。
+  // ここで新しい伝票を作ると、古い伝票が誰からも開けないまま卓に残る（2026-09-24 高田馬場 T12）。
+  // 伝票は増やさず、残っている伝票をそのまま開く。
+  const { data: stranded } = await supabase
+    .from('orders')
+    .select('id')
+    .eq('table_id', tableId)
+    .eq('status', 'open')
+    .order('opened_at')
+    .limit(1)
+    .maybeSingle();
+  if (stranded) {
+    await supabase.from('restaurant_tables').update({ current_status: 'seated' }).eq('id', tableId);
+    revalidatePath('/app/floor');
+    return { orderId: stranded.id as string };
+  }
+
   const { data: settings } = await supabase
     .from('store_settings')
     .select('default_stay_minutes')
@@ -245,7 +262,18 @@ export async function completeCleaning(tableId: string) {
   if (!table) throw new Error('テーブルが見つかりません');
   await assertStoreAccess(ctx, table.store_id);
 
-  await supabase.from('restaurant_tables').update({ current_status: 'available' }).eq('id', tableId);
+  // 未会計の伝票が残っているのに空席に戻すと、その伝票が卓から開けなくなる（2026-09-24 高田馬場 T12）。
+  // 伝票が残っている卓は「着席中」に戻して、卓のポップアップから会計できるようにする。
+  const { count: openOrders } = await supabase
+    .from('orders')
+    .select('id', { count: 'exact', head: true })
+    .eq('table_id', tableId)
+    .eq('status', 'open');
+
+  await supabase
+    .from('restaurant_tables')
+    .update({ current_status: (openOrders ?? 0) > 0 ? 'seated' : 'available' })
+    .eq('id', tableId);
   revalidatePath('/app/floor');
 }
 
@@ -289,6 +317,17 @@ export async function setTableAvailability(tableId: string, unavailable: boolean
     .single();
   if (!table) throw new Error('テーブルが見つかりません');
   await assertStoreAccess(ctx, table.store_id);
+
+  // 未会計の伝票が残っている卓は空席・使用不可にしない。
+  // 空席に戻すと次のお客様の伝票が別に作られ、古い伝票が会計できなくなる（2026-09-24 高田馬場 T12）
+  const { count: openOrders } = await supabase
+    .from('orders')
+    .select('id', { count: 'exact', head: true })
+    .eq('table_id', tableId)
+    .eq('status', 'open');
+  if ((openOrders ?? 0) > 0) {
+    throw new Error('この卓には未会計の伝票が残っています。先に会計してください');
+  }
 
   await supabase
     .from('restaurant_tables')

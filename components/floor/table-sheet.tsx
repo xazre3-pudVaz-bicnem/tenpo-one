@@ -7,6 +7,8 @@ import { Lock, LockOpen, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/components/ui/toast';
+import { yen, formatTime } from '@/lib/format';
+import { cn } from '@/lib/utils';
 import { TILE_LABEL, nextReservation, tileState, type TableView } from './types';
 
 /** 着席（ファーストオーダー）のときに決めるコース・時間 */
@@ -62,9 +64,18 @@ export function TableSheet({
   });
   const { toast } = useToast();
   const [partySize, setPartySize] = useState(2);
+  const [slipId, setSlipId] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   if (!table) return null;
+
+  /**
+   * この卓の未会計伝票（古い順）。伝票分割・相席・締め忘れで2枚以上あることがある。
+   * 以前は一番新しい伝票しか開けず、古い伝票が会計できないまま卓に残ってしまった（2026-09-24 高田馬場 T12）。
+   * ここで全部出して、どれを会計・追加オーダーするか選べるようにする。
+   */
+  const slips = table.order?.slips ?? [];
+  const selected = slips.find((s) => s.id === slipId) ?? slips[0] ?? null;
 
   const run = (fn: () => Promise<void>) => {
     startTransition(async () => {
@@ -89,10 +100,10 @@ export function TableSheet({
 
   /** お会計伝票をその場で印刷する（レジ画面へ移動しない） */
   const handlePrintBill = () => {
-    if (!table.order) return;
+    if (!selected) return;
     startTransition(async () => {
       try {
-        const res = await enqueueOrderSlipPrint(table.order!.id);
+        const res = await enqueueOrderSlipPrint(selected.id);
         toast(res.ok ? 'お会計伝票を印刷します' : (res.error ?? 'お会計伝票の印刷に失敗しました'), res.ok ? 'success' : 'error');
       } catch (e) {
         toast(e instanceof Error ? e.message : 'お会計伝票の印刷に失敗しました', 'error');
@@ -193,11 +204,46 @@ export function TableSheet({
         {/* お客様が入っている卓は、ここから4つの操作を選ぶ（2026-09-24 要望） */}
         {(status === 'seated' || status === 'ordering' || status === 'billing') && (
           <div className="space-y-1.5">
+            {/* 伝票が2枚以上ある卓は、どの伝票を操作するか先に選ぶ（2026-09-24 店舗要望） */}
+            {slips.length > 1 && (
+              <div className="rounded-xl border border-line p-1.5">
+                <p className="mb-1 px-0.5 text-[11px] font-bold text-ink-2">伝票を選ぶ / Slip</p>
+                <div className="space-y-1">
+                  {slips.map((s) => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => setSlipId(s.id)}
+                      className={cn(
+                        'flex w-full items-baseline justify-between gap-1 rounded-lg border px-2 py-1.5 text-left',
+                        selected?.id === s.id
+                          ? 'border-royal bg-lilac-soft'
+                          : 'border-line bg-white'
+                      )}
+                    >
+                      <span className="text-[12px] font-bold text-royal tabular-nums">
+                        #{s.orderNo}
+                      </span>
+                      <span className="text-[10px] text-ink-3 tabular-nums">
+                        {formatTime(new Date(s.openedAtMs))} · {s.guestCount}名
+                      </span>
+                      <span className="text-[12px] font-bold text-navy tabular-nums">
+                        {yen(s.total)}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             <Button
               size="md"
               className="h-[44px] w-full flex-col gap-0 text-[15px] leading-tight"
               disabled={pending}
-              onClick={() => goPos(() => goToOrderAction(table.id))}
+              onClick={() =>
+                selected
+                  ? router.push(`/app/pos?order=${selected.id}`)
+                  : goPos(() => goToOrderAction(table.id))
+              }
             >
               追加オーダー
               <span className="text-[10px] font-semibold opacity-80">Add order</span>
@@ -206,8 +252,8 @@ export function TableSheet({
               size="md"
               variant="secondary"
               className="h-[40px] w-full flex-col gap-0 text-[14px] leading-tight"
-              disabled={pending || !table.order}
-              onClick={() => table.order && router.push(`/app/pos?order=${table.order.id}&move=1`)}
+              disabled={pending || !selected}
+              onClick={() => selected && router.push(`/app/pos?order=${selected.id}&move=1`)}
             >
               テーブル移動
               <span className="text-[10px] font-semibold text-ink-3">Move table</span>
@@ -216,7 +262,7 @@ export function TableSheet({
               size="md"
               variant="secondary"
               className="h-[40px] w-full flex-col gap-0 text-[14px] leading-tight"
-              disabled={pending || !table.order}
+              disabled={pending || !selected}
               onClick={handlePrintBill}
             >
               会計伝票
@@ -226,8 +272,8 @@ export function TableSheet({
               size="md"
               variant="navy"
               className="h-[44px] w-full flex-col gap-0 text-[15px] leading-tight"
-              disabled={pending || !table.order}
-              onClick={() => table.order && router.push(`/app/pos?order=${table.order.id}&checkout=1`)}
+              disabled={pending || !selected}
+              onClick={() => selected && router.push(`/app/pos?order=${selected.id}&checkout=1`)}
             >
               会計
               <span className="text-[10px] font-semibold opacity-80">Checkout</span>
