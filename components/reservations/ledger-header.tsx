@@ -55,11 +55,12 @@ export function LedgerTop({
   nav?: React.ReactNode;
 }) {
   const tabs: (SegmentedTab | false)[] = [
-    { key: 'home', label: 'ホーム', en: 'Home', href: '/app' },
-    { key: 'list', label: '予約リスト', en: 'List', href: `/app/reservations/list?from=${date}&to=${date}` },
-    { key: 'schedule', label: 'スケジュール', en: 'Schedule', href: `/app/reservations?date=${date}` },
-    { key: 'gourmet', label: 'グルメ別', en: 'Gourmet', href: `/app/reservations?view=gourmet&date=${date}` },
-    chrome.links.customers && { key: 'customers', label: '顧客台帳', en: 'Customers', href: '/app/customers' },
+    // 見本どおり日本語だけの1行（英語の小文字は入れない）
+    { key: 'home', label: 'ホーム', href: '/app' },
+    { key: 'list', label: '予約リスト', href: `/app/reservations/list?from=${date}&to=${date}` },
+    { key: 'schedule', label: 'スケジュール', href: `/app/reservations?date=${date}` },
+    { key: 'gourmet', label: 'グルメ別', href: `/app/reservations?view=gourmet&date=${date}` },
+    chrome.links.customers && { key: 'customers', label: '顧客台帳', href: '/app/customers' },
   ];
 
   // 封筒＝未連絡（仮予約のまま返事をしていない予約）。押すと予約リストのその絞り込みへ
@@ -86,7 +87,7 @@ export function LedgerTop({
         </Link>
 
         <FindSeatsDialog storeId={chrome.storeId} tables={chrome.seatTables} defaultDate={date} className={ACTION_GHOST}>
-          空席検索<En>Find seats</En>
+          空席検索
         </FindSeatsDialog>
 
         <ManualReservationDialog
@@ -97,7 +98,7 @@ export function LedgerTop({
           tables={chrome.manualTables}
           prefill={{ date }}
           triggerVariant="primary"
-          triggerClassName={cn(ACTION, 'px-4 shadow-card')}
+          triggerClassName={cn(ACTION, 'shadow-card')}
           triggerContent={
             <>
               <Plus className="h-4 w-4" strokeWidth={3} aria-hidden />

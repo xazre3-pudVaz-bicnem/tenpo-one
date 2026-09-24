@@ -12,7 +12,7 @@ export function ScreenTitle() {
   const t = screenTitleFor(pathname);
   if (!t) return null;
   return (
-    <div className="truncate text-center text-[17px] font-bold tracking-[0.12em] text-white">
+    <div className="min-w-0 truncate text-center text-[17px] font-bold tracking-[0.12em] text-white">
       {t.label}
       <span className="ml-1.5 hidden align-middle font-[family-name:var(--font-num)] text-[11px] font-semibold tracking-[0.06em] text-[#D9CCF3] sm:inline">
         {t.en}
