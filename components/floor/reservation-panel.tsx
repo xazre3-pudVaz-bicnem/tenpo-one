@@ -66,7 +66,7 @@ export function ReservationPanel({
     <section className="ui-card flex min-h-0 flex-col overflow-hidden border border-line bg-white lg:h-full">
       {/* 見出しは日本語＋下に小さく英語、台帳は横いっぱいの立体ボタン（2026-09-25 店舗要望） */}
       <header className="px-3.5 pt-3 pb-2.5">
-        <h2 className="text-[14.5px] leading-tight font-bold text-ink">
+        <h2 className="text-center text-[14.5px] leading-tight font-bold text-ink">
           本日のご予約一覧
           <span className="mt-0.5 block text-[10px] font-semibold tracking-[0.08em] text-ink-3">
             TODAY&apos;S RESERVATION
