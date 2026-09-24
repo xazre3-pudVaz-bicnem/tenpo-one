@@ -220,7 +220,8 @@ export default async function ReservationsLedgerPage({ searchParams }: { searchP
 
   let body: React.ReactNode;
   let active: LedgerTabKey = 'schedule';
-  let nav: React.ReactNode = <DateNav date={date} basePath="/app/reservations" today={today} />;
+  // スケジュールの日付ナビはスケジュールの中（真ん中）に出すので、上のバーには置かない
+  let nav: React.ReactNode = null;
 
   if (view === 'day') {
     const dow = dowOfDateStr(date);
@@ -235,9 +236,10 @@ export default async function ReservationsLedgerPage({ searchParams }: { searchP
         closeMin = c > o ? c : c + 24 * 60;
       }
     }
-    // 営業時間の前後1時間まで表示し、営業時間外は斜線で示す
-    const viewStartMin = Math.max(0, Math.floor((openMin - 60) / 60) * 60);
-    const viewEndMin = Math.min(30 * 60, Math.ceil((closeMin + 60) / 60) * 60);
+    // 表示は営業開始〜閉店そのまま（店舗要望 2026-09-24「営業時間から閉店時間に自動で」）。
+    // 30分単位のマスに合わせて、開始は切り下げ・終了は切り上げる
+    const viewStartMin = Math.max(0, Math.floor(openMin / BOARD_SLOT) * BOARD_SLOT);
+    const viewEndMin = Math.min(30 * 60, Math.ceil(closeMin / BOARD_SLOT) * BOARD_SLOT);
     const isClosedDay = !!bh?.is_closed;
     if (isClosedDay) {
       openMin = viewEndMin;
@@ -301,6 +303,7 @@ export default async function ReservationsLedgerPage({ searchParams }: { searchP
           </div>
         )}
         <ScheduleBoard
+          dateNav={<DateNav date={date} basePath="/app/reservations" today={today} />}
           reservations={reservations}
           tables={boardTables}
           viewStartMin={viewStartMin}

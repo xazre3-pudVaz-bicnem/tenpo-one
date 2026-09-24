@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useTransition } from 'react';
-import { Card, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/state';
 import { useToast } from '@/components/ui/toast';
 import { createOrderFromReservation } from '@/app/app/reservations/actions';
@@ -116,6 +116,7 @@ export function ScheduleBoard({
   isToday,
   nowMs,
   updatedAt,
+  dateNav,
 }: {
   reservations: ReservationListRow[];
   tables: BoardTable[];
@@ -130,6 +131,8 @@ export function ScheduleBoard({
   isToday: boolean;
   nowMs: number;
   updatedAt: string;
+  /** スケジュールの真ん中（上）に出す日付ナビ（‹ 今日 日付 ›）。店舗要望 2026-09-24 */
+  dateNav?: React.ReactNode;
 }) {
   const { toast } = useToast();
   const [selected, setSelected] = useState<ReservationListRow | null>(null);
@@ -280,18 +283,13 @@ export function ScheduleBoard({
         .board-off{background:repeating-linear-gradient(135deg,rgba(201,184,234,.35) 0 6px,transparent 6px 12px);pointer-events:none}
         .board-buffer{background:repeating-linear-gradient(45deg,rgba(122,112,144,.18) 0 3px,transparent 3px 6px);pointer-events:auto}
       `}</style>
-      <CardHeader className="flex flex-wrap items-center justify-between gap-3">
-        <CardTitle className="flex flex-wrap items-baseline">
-          スケジュール
-          <span className="en-inline">Schedule</span>
-          <small className="ml-2 text-[13px] font-medium text-ink-2 tabular-nums">
-            {isClosedDay ? '定休日' : `${hm(openMin)}〜${hm(closeMin)}`} ・ 30分単位
-          </small>
-        </CardTitle>
-        <span className="text-xs text-ink-3 tabular-nums">
-          最終更新 {updatedAt} ・ {live.length}組 {totalGuests}名
-        </span>
-      </CardHeader>
+      {/* 見出しは出さず、日付ナビを真ん中に置く（店舗要望 2026-09-24）。
+          「最終更新・組数・人数」は下の行にまとめた */}
+      {dateNav && (
+        <div className="flex items-center justify-center border-b border-line px-4 py-2 print:hidden [&>*]:ml-0">
+          {dateNav}
+        </div>
+      )}
 
       {tables.length === 0 && unassigned.length === 0 ? (
         <div className="p-5">
@@ -395,7 +393,10 @@ export function ScheduleBoard({
       )}
 
       <div className="flex flex-wrap items-center justify-between gap-2.5 border-t border-line bg-lilac-soft px-4 py-2 text-[11.5px] text-ink-3">
-        <span className="tabular-nums">最終更新 {updatedAt}</span>
+        <span className="tabular-nums">
+          最終更新 {updatedAt} ・ {live.length}組 {totalGuests}名
+          {!isClosedDay && ` ・ ${hm(openMin)}〜${hm(closeMin)}`}
+        </span>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 font-medium text-ink-2">
           <Legend className="border-2 border-dashed border-ink-3 bg-white">仮予約</Legend>
           <Legend className="border-2 border-iris bg-white">来店待ち</Legend>
