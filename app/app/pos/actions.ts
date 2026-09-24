@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server';
 import { isMissingColumnError } from '@/lib/schema-compat';
 import { enqueueCancelSlipPrint, enqueueReceiptPrint } from './print-actions';
 import { allowsTakeoutItem, takeoutMenuFrom } from '@/lib/takeout-menu';
+import { loadMenuStock } from '@/lib/menu-stock-server';
 import { applicableTaxRate } from '@/lib/tax';
 import { validateCoupon, COUPON_REJECT_LABELS, type CouponLike } from '@/lib/coupons';
 import { resolveOptionSelection } from '@/lib/menu-options';
@@ -166,6 +167,14 @@ export async function addItem(
   if (!item) throw new Error('商品が見つかりません');
   if (item.status !== 'active') throw new Error('この商品は現在販売していません');
   if (item.is_sold_out) throw new Error('この商品は売り切れです');
+  // 売り切り（本日の食数）。画面でも止めているが、同時に打たれたときのためサーバー側でも数える
+  // （2026-09-25 店舗要望）。食数を設定していない商品は素通り。
+  const stock = (await loadMenuStock(supabase, order.store_id)).get(item.id);
+  if (stock && stock.remaining < quantity) {
+    throw new Error(
+      stock.remaining <= 0 ? 'この商品は本日の食数が終わりました' : `この商品は残り${stock.remaining}点です`
+    );
+  }
 
   const taxRateRow = item.tax_rates as unknown as { rate: number; is_inclusive: boolean } | null;
   // pre_order（事前注文）もテイクアウト同様の受け渡し形態のため、価格・軽減税率判定に含める

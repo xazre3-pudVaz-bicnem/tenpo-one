@@ -10,13 +10,33 @@ import { Button, buttonVariants } from '@/components/ui/button';
 import { Input, Label, Select } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { EmptyState } from '@/components/ui/state';
-import { TableWrap, Table, THead, TBody, Tr, Th, Td } from '@/components/ui/table';
 import { OrderStatusBadge } from '@/components/orders/status-badge';
 import { LinkChips } from '@/components/orders/link-chips';
 import { Badge } from '@/components/ui/badge';
+import { Printer, Receipt, Utensils } from 'lucide-react';
 import { METHOD_LABELS } from '@/components/cash/labels';
 
 export const metadata: Metadata = { title: '伝票明細' };
+
+/** 見本と同じ支払の内訳の並び（現金・クレジット・電子マネー・ポイント・その他） */
+type PayKey = 'cash' | 'credit' | 'emoney' | 'points' | 'other';
+
+const PAY_ROWS: [PayKey, string][] = [
+  ['cash', '現金'],
+  ['credit', 'クレジット'],
+  ['emoney', '電子マネー'],
+  ['points', 'ポイント'],
+  ['other', 'その他'],
+];
+
+/** 支払方法を見本の5行のどれかに寄せる（QR・商品券・掛売・外部端末などは「その他」） */
+function payKeyOf(method: string): PayKey {
+  if (method === 'cash') return 'cash';
+  if (method === 'credit') return 'credit';
+  if (method === 'emoney') return 'emoney';
+  if (method === 'points' || method === 'site_points') return 'points';
+  return 'other';
+}
 
 const PAGE_SIZE = 50;
 
@@ -95,7 +115,7 @@ export default async function OrdersPage({
   let query = supabase
     .from('orders')
     .select(
-      'id, order_no, opened_at, closed_at, status, total, guest_count, order_type, restaurant_tables(name), profiles(display_name)',
+      'id, order_no, opened_at, closed_at, status, total, discount_total, guest_count, order_type, clerk_name, restaurant_tables(name), profiles(display_name)',
       { count: 'exact' }
     )
     .eq('store_id', store.id)
@@ -131,11 +151,11 @@ export default async function OrdersPage({
     orderIds.length > 0
       ? await Promise.all([
           supabase.from('refunds').select('order_id, amount, kind').in('order_id', orderIds),
-          supabase.from('payments').select('order_id, method').in('order_id', orderIds).eq('status', 'completed'),
+          supabase.from('payments').select('order_id, method, amount').in('order_id', orderIds).eq('status', 'completed'),
         ])
       : [
           { data: [] as { order_id: string; amount: number; kind: string }[] },
-          { data: [] as { order_id: string; method: string }[] },
+          { data: [] as { order_id: string; method: string; amount: number }[] },
         ];
   const refundTotalByOrder = new Map<string, number>();
   const voidOrderIds = new Set<string>();
@@ -143,11 +163,12 @@ export default async function OrdersPage({
     refundTotalByOrder.set(r.order_id, (refundTotalByOrder.get(r.order_id) ?? 0) + r.amount);
     if (r.kind === 'void') voidOrderIds.add(r.order_id);
   }
-  const methodsByOrder = new Map<string, Set<string>>();
+  // 見本と同じく、伝票ごとに「現金・クレジット・電子マネー・ポイント・その他」の内訳を出す
+  const payByOrder = new Map<string, Record<PayKey, number>>();
   for (const p of paymentRows ?? []) {
-    const set = methodsByOrder.get(p.order_id) ?? new Set<string>();
-    set.add(p.method);
-    methodsByOrder.set(p.order_id, set);
+    const row = payByOrder.get(p.order_id) ?? { cash: 0, credit: 0, emoney: 0, points: 0, other: 0 };
+    row[payKeyOf(p.method)] += Number(p.amount ?? 0);
+    payByOrder.set(p.order_id, row);
   }
 
   const totalPages = Math.max(1, Math.ceil((count ?? 0) / PAGE_SIZE));
@@ -273,87 +294,107 @@ export default async function OrdersPage({
         <EmptyState title="該当する伝票がありません" description="期間や条件を変更してお試しください" />
       ) : (
         <>
-          <TableWrap className="border-line">
-            <Table className="text-[13.5px]">
-              <THead className="bg-lilac-soft text-ink-3">
-                <Tr className="hover:bg-transparent">
-                  <Th className="font-semibold">伝票No</Th>
-                  <Th className="font-semibold">テーブル</Th>
-                  <Th className="font-semibold">開始</Th>
-                  <Th className="font-semibold">会計</Th>
-                  <Th className="font-semibold">人数</Th>
-                  <Th className="font-semibold">支払方法</Th>
-                  <Th className="text-right font-semibold">金額</Th>
-                  <Th className="font-semibold">状態</Th>
-                  <Th>
-                    <span className="sr-only">操作</span>
-                  </Th>
-                </Tr>
-              </THead>
-              <TBody className="divide-line">
-                {(orders ?? []).map((o) => {
-                  const table = o.restaurant_tables as unknown as { name: string } | null;
-                  const staff = o.profiles as unknown as { display_name: string } | null;
-                  const refundTotal = refundTotalByOrder.get(o.id) ?? 0;
-                  const isVoided = voidOrderIds.has(o.id);
-                  const isPartiallyRefunded = !isVoided && o.status === 'paid' && refundTotal > 0;
-                  const methods = [...(methodsByOrder.get(o.id) ?? [])].map((m) => METHOD_LABELS[m] ?? m);
-                  const isOpen = o.status === 'open';
-                  return (
-                    <Tr key={o.id} className="hover:bg-lilac-soft/60">
-                      <Td className="py-3.5">
-                        <Link href={`/app/orders/${o.id}`} className="font-bold text-royal tabular-nums hover:underline">
-                          #{o.order_no}
-                        </Link>
-                      </Td>
-                      <Td className="py-3.5">
-                        <b className="text-ink">{table?.name ?? (o.order_type === 'takeout' ? 'テイクアウト' : '—')}</b>
-                        {staff?.display_name && <small className="block text-[11px] text-ink-3">担当 {staff.display_name}</small>}
-                      </Td>
-                      <Td className="py-3.5 tabular-nums">{slipTime(o.opened_at, multiDay)}</Td>
-                      <Td className="py-3.5 tabular-nums">
-                        {isOpen ? <span className="text-ink-3">—</span> : (slipTime(o.closed_at, multiDay) ?? <span className="text-ink-3">—</span>)}
-                      </Td>
-                      <Td className="py-3.5 tabular-nums">{o.guest_count}名</Td>
-                      <Td className="py-3.5">{methods.length > 0 ? methods.join('・') : <span className="text-ink-3">—</span>}</Td>
-                      <Td className="py-3.5 text-right font-bold text-ink tabular-nums">
+          {/* 見本（他社レジ）と同じカード一覧。新しい伝票が上・古いものが下（opened_at の降順） */}
+          <div className="divide-y divide-line overflow-hidden rounded-2xl border border-line bg-white">
+            {(orders ?? []).map((o) => {
+              const table = o.restaurant_tables as unknown as { name: string } | null;
+              const staff = o.profiles as unknown as { display_name: string } | null;
+              const clerk = (o.clerk_name as string | null) ?? staff?.display_name ?? null;
+              const refundTotal = refundTotalByOrder.get(o.id) ?? 0;
+              const isVoided = voidOrderIds.has(o.id);
+              const isPartiallyRefunded = !isVoided && o.status === 'paid' && refundTotal > 0;
+              const isOpen = o.status === 'open';
+              const pay = payByOrder.get(o.id);
+              const stay = `${slipTime(o.opened_at, multiDay)}〜${isOpen ? '' : (slipTime(o.closed_at, multiDay) ?? '')}`;
+              return (
+                <div key={o.id} className="flex flex-wrap items-start gap-x-6 gap-y-3 p-4 hover:bg-lilac-soft/40">
+                  {/* 左: 伝票No・卓・状態 */}
+                  <div className="w-[190px] shrink-0">
+                    <Link
+                      href={`/app/orders/${o.id}`}
+                      className="flex items-center gap-1.5 text-[15px] font-extrabold text-royal tabular-nums hover:underline"
+                    >
+                      <Receipt className="h-4 w-4 shrink-0" aria-hidden />#{o.order_no}
+                    </Link>
+                    <p className="mt-0.5 flex items-center gap-1.5 text-[13px] font-bold text-ink">
+                      <Utensils className="h-3.5 w-3.5 shrink-0 text-ink-3" aria-hidden />
+                      {table?.name ?? (o.order_type === 'takeout' ? 'テイクアウト' : '—')}
+                    </p>
+                    <div className="mt-1.5 flex flex-wrap items-center gap-1">
+                      <OrderStatusBadge status={o.status} />
+                      {isVoided && <Badge tone="gray">取消</Badge>}
+                      {isPartiallyRefunded && <Badge tone="warning">一部返金あり</Badge>}
+                    </div>
+                  </div>
+
+                  {/* 中: 支払方法ごとの内訳 */}
+                  <dl className="min-w-[190px] flex-1 space-y-0.5 text-[13px]">
+                    {PAY_ROWS.map(([key, label]) => (
+                      <div key={key} className="flex items-baseline gap-2">
+                        <dt className="w-[86px] shrink-0 text-ink-3">{label}</dt>
+                        <dd className="tabular-nums text-ink">
+                          {pay && pay[key] > 0 ? yen(pay[key]) : <span className="text-ink-3">—</span>}
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+
+                  {/* 右: 金額・値引き・人数・入退店・会計担当 */}
+                  <dl className="min-w-[210px] flex-1 space-y-0.5 text-[13px]">
+                    <div className="flex items-baseline gap-2">
+                      <dt className="w-[76px] shrink-0 text-ink-3">金額</dt>
+                      <dd className="font-bold tabular-nums text-ink">
                         {yen(o.total)}
                         {refundTotal > 0 && (
-                          <div className="text-xs font-normal text-danger">純額 {yen(o.total - refundTotal)}</div>
+                          <span className="ml-1.5 text-[11px] font-normal text-danger">純額 {yen(o.total - refundTotal)}</span>
                         )}
-                      </Td>
-                      <Td className="py-3.5">
-                        <div className="flex flex-wrap items-center gap-1">
-                          <OrderStatusBadge status={o.status} />
-                          {isVoided && <Badge tone="gray">取消</Badge>}
-                          {isPartiallyRefunded && <Badge tone="warning">一部返金あり</Badge>}
-                        </div>
-                      </Td>
-                      <Td className="py-2.5 text-right">
-                        {isOpen ? (
-                          <Link href={`/app/pos?order=${o.id}`} className={cn(buttonVariants({ size: 'md' }), 'h-9 px-3.5 text-[13px]')}>
-                            注文・会計
-                          </Link>
-                        ) : (
-                          <div className="flex justify-end gap-1.5">
-                            <Link
-                              href={`/app/pos/receipt/${o.id}`}
-                              className={cn(buttonVariants({ variant: 'outline', size: 'md' }), 'h-9 border-wisteria px-3 text-[13px] text-royal')}
-                            >
-                              レシート
-                            </Link>
-                            <Link href={`/app/orders/${o.id}`} className={cn(buttonVariants({ variant: 'secondary', size: 'md' }), 'h-9 px-3.5 text-[13px]')}>
-                              詳細
-                            </Link>
-                          </div>
-                        )}
-                      </Td>
-                    </Tr>
-                  );
-                })}
-              </TBody>
-            </Table>
-          </TableWrap>
+                      </dd>
+                    </div>
+                    <div className="flex items-baseline gap-2">
+                      <dt className="w-[76px] shrink-0 text-ink-3">値割引計</dt>
+                      <dd className="tabular-nums text-ink">
+                        {o.discount_total > 0 ? yen(o.discount_total) : <span className="text-ink-3">¥0</span>}
+                      </dd>
+                    </div>
+                    <div className="flex items-baseline gap-2">
+                      <dt className="w-[76px] shrink-0 text-ink-3">人数</dt>
+                      <dd className="tabular-nums text-ink">{o.guest_count}</dd>
+                    </div>
+                    <div className="flex items-baseline gap-2">
+                      <dt className="w-[76px] shrink-0 text-ink-3">入退店時間</dt>
+                      <dd className="tabular-nums text-ink">{stay}</dd>
+                    </div>
+                    <div className="flex items-baseline gap-2">
+                      <dt className="w-[76px] shrink-0 text-ink-3">会計担当</dt>
+                      <dd className="text-ink">{clerk ?? <span className="text-ink-3">—</span>}</dd>
+                    </div>
+                  </dl>
+
+                  {/* 操作 */}
+                  <div className="flex shrink-0 flex-col gap-1.5">
+                    {isOpen ? (
+                      <Link href={`/app/pos?order=${o.id}`} className={cn(buttonVariants({ size: 'md' }), 'h-9 px-3.5 text-[13px]')}>
+                        注文・会計
+                      </Link>
+                    ) : (
+                      <>
+                        <Link
+                          href={`/app/pos/receipt/${o.id}`}
+                          className={cn(buttonVariants({ variant: 'outline', size: 'md' }), 'h-9 border-wisteria px-3 text-[13px] text-royal')}
+                        >
+                          <Printer className="h-4 w-4" aria-hidden />
+                          レシート
+                        </Link>
+                        <Link href={`/app/orders/${o.id}`} className={cn(buttonVariants({ variant: 'secondary', size: 'md' }), 'h-9 px-3.5 text-[13px]')}>
+                          詳細
+                        </Link>
+                      </>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
 
           {totalPages > 1 && (
             <div className="mt-4 flex items-center justify-between text-sm text-ink-2">
