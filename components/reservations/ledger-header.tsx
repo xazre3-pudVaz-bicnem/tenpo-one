@@ -40,52 +40,48 @@ export function LedgerTop({
   const unconfirmed = chrome.summary.unconfirmed;
 
   return (
-    <div className="mb-4 print:hidden">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line pb-3">
-        <h2 className="text-[22px] leading-none font-extrabold text-navy">{title}</h2>
+    <div className="mb-3 flex flex-wrap items-center gap-2 print:hidden">
+      <h2 className="text-[20px] leading-none font-extrabold whitespace-nowrap text-navy">{title}</h2>
 
-        <div className="flex flex-wrap items-center gap-2">
-          {chrome.links.tables && (
-            <Link href="/app/floor" className={ACTION}>
-              <DoorOpen className="h-4 w-4" aria-hidden />
-              退店管理
-            </Link>
-          )}
-          <a href={`/app/reservations/list/export?from=${date}&to=${date}`} className={ACTION}>
-            <FileSpreadsheet className="h-4 w-4" aria-hidden />
-            CSV出力
-          </a>
-          {chrome.links.analytics && (
-            <Link href={`/app/reports?from=${date.slice(0, 7)}-01&to=${date}`} className={ACTION}>
-              <BarChart3 className="h-4 w-4" aria-hidden />
-              集計
-            </Link>
-          )}
-          <PrintButton className={ACTION}>
-            <FileDown className="h-4 w-4" aria-hidden />
-            PDF作成
-          </PrintButton>
-          <ManualReservationDialog
-            stores={chrome.stores}
-            defaultStoreId={chrome.defaultStoreId}
-            sources={chrome.sources}
-            courses={chrome.courses}
-            tables={chrome.manualTables}
-            prefill={{ date }}
-            triggerVariant="primary"
-            triggerClassName={ACTION}
-            triggerContent={
-              <>
-                <Plus className="h-4 w-4" strokeWidth={3} aria-hidden />
-                予約登録
-              </>
-            }
-          />
-        </div>
-      </div>
+      <div className="flex items-center [&>*]:ml-0">{nav}</div>
 
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center [&>*]:ml-0">{nav}</div>
+      <div className="ml-auto flex flex-wrap items-center gap-2">
+        {chrome.links.tables && (
+          <Link href="/app/floor" className={ACTION}>
+            <DoorOpen className="h-4 w-4" aria-hidden />
+            退店管理
+          </Link>
+        )}
+        <a href={`/app/reservations/list/export?from=${date}&to=${date}`} className={ACTION}>
+          <FileSpreadsheet className="h-4 w-4" aria-hidden />
+          CSV出力
+        </a>
+        {chrome.links.analytics && (
+          <Link href={`/app/reports?from=${date.slice(0, 7)}-01&to=${date}`} className={ACTION}>
+            <BarChart3 className="h-4 w-4" aria-hidden />
+            集計
+          </Link>
+        )}
+        <PrintButton className={ACTION}>
+          <FileDown className="h-4 w-4" aria-hidden />
+          PDF作成
+        </PrintButton>
+        <ManualReservationDialog
+          stores={chrome.stores}
+          defaultStoreId={chrome.defaultStoreId}
+          sources={chrome.sources}
+          courses={chrome.courses}
+          tables={chrome.manualTables}
+          prefill={{ date }}
+          triggerVariant="primary"
+          triggerClassName={ACTION}
+          triggerContent={
+            <>
+              <Plus className="h-4 w-4" strokeWidth={3} aria-hidden />
+              予約登録
+            </>
+          }
+        />
 
         <LedgerMoreMenu icon="calendar" label="ほかの台帳・設定">
           <Link href={`/app/reservations?date=${date}`} className={MENU_ITEM}>

@@ -21,7 +21,9 @@ export { BOARD_SLOT } from './constants';
  */
 const SLOT_W = 100;
 const LABEL_W = 128;
-const HEAD_H = 48;
+const HEAD_H = 40;
+/** 1行の高さ（10卓ぶんが画面に入るように低くした。店舗要望 2026-09-24） */
+const ROW_H = 44;
 
 export interface BoardTable extends AssignableTable {
   /** 例: 「着席中 2名・高橋 様」「空席」。当日以外は空文字 */
@@ -197,7 +199,7 @@ export function ScheduleBoard({
         }}
         title={`${r.guestName} 様 ${hm(s)}〜${hm(e)}`}
         className={cn(
-          'absolute top-[7px] flex h-10 cursor-pointer items-center gap-2 overflow-hidden rounded-lg border-[1.5px] py-1 pr-1.5 pl-2 text-left text-xs leading-tight transition-shadow hover:z-[2] hover:shadow-card focus-visible:z-[2] focus-visible:outline-2 focus-visible:outline-saffron',
+          'absolute top-[5px] flex h-[34px] cursor-pointer items-center gap-2 overflow-hidden rounded-lg border-[1.5px] py-1 pr-1.5 pl-2 text-left text-xs leading-tight transition-shadow hover:z-[2] hover:shadow-card focus-visible:z-[2] focus-visible:outline-2 focus-visible:outline-saffron',
           BAR_CLASS[kind],
           r.isPrivateHire && 'ring-2 ring-gold ring-offset-1'
         )}
@@ -270,7 +272,7 @@ export function ScheduleBoard({
             <i
               key={`buf-${p.r.id}`}
               title={`清掃時間（バッファ${bufferMinutes}分）`}
-              className="board-buffer absolute top-[7px] h-10 rounded-md"
+              className="board-buffer absolute top-[5px] h-[34px] rounded-md"
               style={{ left: x(p.e), width: Math.max(0, x(p.e + bufferMinutes) - x(p.e)) }}
             />
           ))
@@ -296,7 +298,7 @@ export function ScheduleBoard({
           <EmptyState title="テーブルが登録されていません" description="設定 > テーブル管理からテーブルを登録してください。" />
         </div>
       ) : (
-        <div ref={scrollRef} className="relative max-h-[62vh] overflow-auto print:max-h-none print:overflow-visible">
+        <div ref={scrollRef} className="relative max-h-[calc(100dvh-12rem)] overflow-auto print:max-h-none print:overflow-visible">
           <div
             className="relative grid min-w-max"
             style={{ gridTemplateColumns: `${LABEL_W}px ${gridWidth}px` }}
@@ -333,11 +335,11 @@ export function ScheduleBoard({
             {/* 席未定 */}
             {unassigned.length > 0 && (
               <>
-                <div className="sticky left-0 z-[2] flex min-h-[54px] flex-col justify-center gap-0.5 border-r border-b border-line bg-danger-soft px-3 py-2">
+                <div className="sticky left-0 z-[2] flex flex-col justify-center gap-0.5 border-r border-b border-line bg-danger-soft px-3 py-1" style={{ minHeight: ROW_H }}>
                   <span className="text-[13px] font-extrabold text-danger">席未定</span>
                   <small className="text-[11px] leading-snug text-ink-2">{unassigned.length}組 ・ 席選択が必要</small>
                 </div>
-                <div className="relative min-h-[54px] border-b border-line bg-danger-soft/70" style={rowBg}>
+                <div className="relative border-b border-line bg-danger-soft/70" style={{ ...rowBg, minHeight: ROW_H }}>
                   {offHours}
                   {unassignedPlaced.map((p) => renderBar(p, true))}
                 </div>
@@ -353,7 +355,7 @@ export function ScheduleBoard({
               );
               return (
                 <div key={t.id} className="contents">
-                  <div className="sticky left-0 z-[2] flex min-h-[54px] flex-col justify-center gap-0.5 border-r border-b border-line bg-white px-3 py-2">
+                  <div className="sticky left-0 z-[2] flex flex-col justify-center gap-0.5 border-r border-b border-line bg-white px-3 py-1" style={{ minHeight: ROW_H }}>
                     <span className="font-[family-name:var(--font-num)] text-[13px] leading-tight font-extrabold text-royal">
                       <span className="mr-1 text-[9px]">▶</span>
                       {t.name}
@@ -366,7 +368,7 @@ export function ScheduleBoard({
                       名席
                     </small>
                   </div>
-                  <div className="relative min-h-[54px] border-b border-line" style={rowBg}>
+                  <div className="relative border-b border-line" style={{ ...rowBg, minHeight: ROW_H }}>
                     {offHours}
                     {bufferStripes(placed)}
                     {placed.map((p) => renderBar(p, false))}
