@@ -217,7 +217,10 @@ export async function generateKitchenJobs(admin: Admin, printer: PrinterRow) {
  * - 重複防止: 印字済みかどうかは print_jobs（job_type='order_slip'）の作成時刻で判定する。新しい列は作らない
  */
 export async function generateQrBillJobs(admin: Admin, printer: PrinterRow) {
-  if (!printsBillSlips(printer) || !printer.auto_print) return;
+  // QR注文のたびに出す「お会計伝票（履歴）」はレシート機だけから出す。
+  // 厨房（ドリンク）機は新しい注文の伝票だけでよい、という店舗要望（2026-09-24 FULL MOoN）。
+  // ドリンク機の「会計伝票も出す」は、会計伝票ボタンを押したときのフロア担当として今までどおり使う。
+  if (printer.usage !== 'receipt' || !printsBillSlips(printer) || !printer.auto_print) return;
 
   const { data: orders, error } = await admin
     .from('orders')
@@ -241,7 +244,7 @@ export async function generateQrBillJobs(admin: Admin, printer: PrinterRow) {
     .eq('store_id', printer.store_id)
     .eq('status', 'active')
     .eq('cloudprnt_enabled', true)
-    .or('usage.eq.receipt,bill_slips.eq.true')
+    .eq('usage', 'receipt')
     .eq('auto_print', true);
   const peerList = ((peers ?? []) as { id: string; floor_ids: string[] | null }[]).map((p) => ({
     id: p.id,
