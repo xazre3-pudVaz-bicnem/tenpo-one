@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/state';
 import { useToast } from '@/components/ui/toast';
-import { createOrderFromReservation } from '@/app/app/reservations/actions';
+import { assignTables, createOrderFromReservation, moveReservation } from '@/app/app/reservations/actions';
 import type { ReservationStatus } from '@/lib/reservations';
 import { cn } from '@/lib/utils';
 import { ReservationDetailDialog } from './reservation-detail-dialog';
@@ -163,6 +163,13 @@ export function ScheduleBoard({
   const [slot, setSlot] = useState<{ tableId: string; tableName: string; min: number; x: number; y: number } | null>(null);
   /** 「新規予約」を押したら、その卓・時間で予約登録を開く */
   const [bookingSlot, setBookingSlot] = useState<{ tableId: string; min: number } | null>(null);
+  /**
+   * バーを持って動かす（店舗要望 2026-09-24）。
+   * 横＝時間を変える（30分単位）、縦＝テーブルを変える。動かさずに離したら今までどおり詳細を開く。
+   */
+  const [drag, setDrag] = useState<{ id: string; dx: number; dy: number } | null>(null);
+  const dragRef = useRef<{ id: string; x: number; y: number; rowIndex: number; moved: boolean } | null>(null);
+  const [movePending, startMove] = useTransition();
   const [payPending, startPay] = useTransition();
   const scrollRef = useRef<HTMLDivElement>(null);
   const scrolled = useRef(false);
@@ -199,7 +206,7 @@ export function ScheduleBoard({
     });
   };
 
-  const renderBar = ({ r, s, e }: Placed, unassignedRow: boolean) => {
+  const renderBar = ({ r, s, e }: Placed, unassignedRow: boolean, rowIndex = -1) => {
     const kind = barKind(r.status, unassignedRow);
     const left = x(s) + 2;
     const width = Math.max(18, x(e) - x(s) - 4);
@@ -214,7 +221,42 @@ export function ScheduleBoard({
         tabIndex={0}
         onClick={(ev) => {
           ev.stopPropagation();
+          if (dragRef.current?.moved) return;
           setSelected(r);
+        }}
+        onPointerDown={(ev) => {
+          if (movePending) return;
+          dragRef.current = { id: r.id, x: ev.clientX, y: ev.clientY, rowIndex, moved: false };
+          (ev.currentTarget as HTMLElement).setPointerCapture(ev.pointerId);
+        }}
+        onPointerMove={(ev) => {
+          const d = dragRef.current;
+          if (!d || d.id !== r.id) return;
+          const dx = ev.clientX - d.x;
+          const dy = ev.clientY - d.y;
+          if (!d.moved && Math.abs(dx) < 6 && Math.abs(dy) < 6) return;
+          d.moved = true;
+          setDrag({ id: r.id, dx, dy });
+        }}
+        onPointerUp={(ev) => {
+          const d = dragRef.current;
+          setDrag(null);
+          if (!d || d.id !== r.id) return;
+          const dx = ev.clientX - d.x;
+          const dy = ev.clientY - d.y;
+          if (!d.moved) {
+            dragRef.current = null;
+            return;
+          }
+          applyDrag(r, s, e, dx, dy, d.rowIndex);
+          // タップと区別するため、クリックが終わってから印を消す
+          window.setTimeout(() => {
+            dragRef.current = null;
+          }, 0);
+        }}
+        onPointerCancel={() => {
+          setDrag(null);
+          dragRef.current = null;
         }}
         onKeyDown={(ev) => {
           if (ev.key === 'Enter' || ev.key === ' ') {
@@ -228,7 +270,7 @@ export function ScheduleBoard({
           BAR_CLASS[kind],
           r.isPrivateHire && 'ring-2 ring-gold ring-offset-1'
         )}
-        style={{ left, width }}
+        style={{ left, width, transform: drag?.id === r.id ? `translate(${drag.dx}px, ${drag.dy}px)` : undefined, touchAction: 'none' }}
       >
         <span className="flex min-w-0 flex-1 flex-col justify-center gap-px">
           <b className="flex items-center gap-1 truncate font-[family-name:var(--font-num)] text-[12.5px] font-bold whitespace-nowrap">
@@ -280,6 +322,46 @@ export function ScheduleBoard({
         )}
       </div>
     );
+  };
+
+  /**
+   * バーを動かして離したときに、時間とテーブルを変える。
+   * 横は30分単位、縦は1行＝1卓。動かした先が同じなら何もしない。
+   */
+  const applyDrag = (
+    r: ReservationListRow,
+    startM: number,
+    endM: number,
+    dx: number,
+    dy: number,
+    rowIndex: number
+  ) => {
+    const deltaMin = Math.round(dx / SLOT_W) * BOARD_SLOT;
+    const deltaRow = Math.round(dy / ROW_H);
+    const target = rowIndex >= 0 && deltaRow !== 0 ? tables[rowIndex + deltaRow] : undefined;
+    const wantsTable = rowIndex < 0 ? tables[Math.max(0, deltaRow)] : target;
+    if (deltaMin === 0 && !wantsTable) return;
+
+    startMove(async () => {
+      try {
+        if (deltaMin !== 0) {
+          const nextStart = ((startM + deltaMin) % 1440 + 1440) % 1440;
+          await moveReservation(r.id, {
+            date: r.reservedDate,
+            time: hm(nextStart),
+            stayMinutes: Math.max(BOARD_SLOT, endM - startM),
+          });
+        }
+        if (wantsTable && !r.tableIds.includes(wantsTable.id)) {
+          await assignTables(r.id, [wantsTable.id]);
+        }
+        toast('変更しました');
+        router.refresh();
+      } catch (e) {
+        toast(e instanceof Error ? e.message : '変更できませんでした', 'error');
+        router.refresh();
+      }
+    });
   };
 
   /** 空きマスを押したら、その卓と時間を覚えて小さいメニューを出す */
@@ -385,7 +467,7 @@ export function ScheduleBoard({
             )}
 
             {/* テーブル行 */}
-            {tables.map((t) => {
+            {tables.map((t, rowIndex) => {
               const placed = place(
                 live.filter((r) => r.tableIds.includes(t.id)),
                 viewStartMin,
@@ -418,7 +500,7 @@ export function ScheduleBoard({
                   >
                     {offHours}
                     {bufferStripes(placed)}
-                    {placed.map((p) => renderBar(p, false))}
+                    {placed.map((p) => renderBar(p, false, rowIndex))}
                   </div>
                 </div>
               );
@@ -455,7 +537,7 @@ export function ScheduleBoard({
           <Legend className="bg-danger">席未定</Legend>
           {bufferMinutes > 0 && <Legend className="board-buffer border border-line">清掃（{bufferMinutes}分）</Legend>}
           {isToday && <Legend className="bg-saffron">現在時刻</Legend>}
-          <span className="text-ink-3">バーをタップ＝詳細（状態・テーブル割当・日時変更）</span>
+          <span className="text-ink-3">バーを横にドラッグ＝時間変更 ／ 縦＝テーブル変更 ／ タップ＝詳細</span>
         </div>
       </div>
 
