@@ -3,6 +3,7 @@ import { requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { PageHeader } from '@/components/ui/page-header';
 import { EmptyState } from '@/components/ui/state';
+import { takeoutMenuFrom } from '@/lib/takeout-menu';
 import { SettingsBackLink } from '@/components/settings/back-link';
 import { MenuBookEditor, type MenuBookCategoryRow, type MenuBookPlanRow } from '@/components/settings/menu-book-editor';
 import type { MenuItemRow } from '@/components/settings/menu-item-dialog';
@@ -71,6 +72,7 @@ export default async function MenuBookPage({ searchParams }: { searchParams: Pro
   ]);
 
   const book = menuBookFrom(settingsRow?.settings ?? null);
+  const takeoutMenu = takeoutMenuFrom(settingsRow?.settings ?? null);
   const activeItems = (items ?? []).filter((i) => i.status === 'active');
   const itemInputs: MenuBookItemInput[] = activeItems.map((i) => ({
     categoryId: i.category_id,
@@ -158,6 +160,7 @@ export default async function MenuBookPage({ searchParams }: { searchParams: Pro
         pages={book.pages}
         categoryPage={book.categoryPage}
         taxRates={(taxRates ?? []).map((t) => ({ id: t.id, name: t.name }))}
+        takeoutItemIds={takeoutMenu.itemIds}
         initialTab={isMenuBookTab(tab) ? tab : undefined}
       />
     </div>

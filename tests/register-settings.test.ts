@@ -55,7 +55,7 @@ describe('レジの設定の一覧（2026-09-21 店舗要望「レジから今�
       const tab = new URLSearchParams(link.href.split('?')[1] ?? '').get('tab');
       expect(isMenuBookTab(tab), link.href).toBe(true);
     }
-    expect(MENU_BOOK_TABS).toEqual(['categories', 'pages', 'items', 'plans', 'lunch']);
+    expect(MENU_BOOK_TABS).toEqual(['categories', 'pages', 'items', 'plans', 'lunch', 'takeout']);
     expect(isMenuBookTab('pages')).toBe(true);
     expect(isMenuBookTab('nope')).toBe(false);
     expect(isMenuBookTab(undefined)).toBe(false);
