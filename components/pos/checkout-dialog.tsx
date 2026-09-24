@@ -95,17 +95,6 @@ export interface PointsAvailability {
  */
 const BASE_METHODS: CheckoutPayment['method'][] = ['credit', 'qr', 'emoney', 'external', 'other'];
 /** 支払方法のボタン（日本語の下に小さく英語）。スクロールせずに収まる高さにする */
-/**
- * 人数で分けたときの1人分（端数は最初の人が持つ）。
- * 例: 1,300円を3人 → 434 / 433 / 433
- */
-function shareAmount(total: number, ways: number, index: number): number {
-  if (ways <= 1) return total;
-  const base = Math.floor(total / ways);
-  const rest = total - base * ways;
-  return base + (index < rest ? 1 : 0);
-}
-
 const payMethodBtn =
   'flex h-[46px] flex-col items-center justify-center rounded-xl border px-1.5 text-center text-[14px] font-bold leading-tight transition-colors disabled:opacity-50';
 const payMethodOn = 'border-iris bg-iris text-white';
@@ -220,22 +209,12 @@ export function CheckoutDialog({
   const [done, setDone] = useState<{ total: number; tendered: number; change: number } | null>(null);
   /** 支払メモ（レジ締めや取引履歴で読む。2026-09-25 店舗要望） */
   const [payMemo, setPayMemo] = useState('');
-  /** 別々会計の「品目ごと／金額ごと」を選ぶ小さなメニューを開いているか */
-  const [splitOpen, setSplitOpen] = useState(false);
   /** 会計完了のあとに出す「レシート／領収書」。領収書は宛名・但し書きを入れてから印字する */
   const [invoiceOpen, setInvoiceOpen] = useState(false);
   const [recipientName, setRecipientName] = useState('');
   const [invoicePurpose, setInvoicePurpose] = useState('お品代として');
   const [printPending, startPrint] = useTransition();
   const router = useRouter();
-  /**
-   * 支払いを複数に分けるモード。既定はOFF＝「タッチした支払方法だけ」を1つ表示する。
-   * 現場から「クレジットをタッチすると行がどんどん積み上がる」と指摘されたため、
-   * 積み上げ（現金+クレジットの併用など）は明示的にONにしたときだけの動作にした。
-   */
-  const [splitMode, setSplitMode] = useState(false);
-  /** 金額ごとの別々会計：何人で分けるか（2026-09-25 店舗要望）。null は人数を決めずに金額を手で入れる */
-  const [splitWays, setSplitWays] = useState<number | null>(null);
   // 二度押し・連打対策: pending state に加えて同期フラグでも多重送信を防ぐ
   const checkoutInFlightRef = useRef(false);
 
@@ -452,35 +431,13 @@ export function CheckoutDialog({
     });
   };
 
-  const addPayment = (method: CheckoutPayment['method'], provider?: string | null) => {
-    const left = Math.max(0, remaining);
-    // 人数で分けるときは1人分を入れる（端数は最初の人。残りが少なければ残りぶん）
-    const share = splitWays && splitWays > 1 ? shareAmount(order.total, splitWays, payments.length) : left;
-    const want = Math.min(left, share > 0 ? share : left);
-    const cap = method === 'points' ? Math.min(maxPointsUsable, want) : want;
-    setPayments((rows) => [
-      ...rows,
-      {
-        key: `${method}-${Date.now()}`,
-        method,
-        provider: provider ?? null,
-        amount: cap,
-        tendered: method === 'cash' ? cap : undefined,
-      },
-    ]);
-  };
-
   /**
-   * 支払方法をタッチしたときの動作。
-   * 既定（splitMode=false）は単一選択：タッチした支払方法だけが下に出る。
-   * 別の方法をタッチすれば置き換わり、同じ方法をもう一度タッチすれば取り消す。
-   * splitMode=true のときだけ従来どおり行を積み上げて併用払いにできる。
+   * 支払方法をタッチしたときの動作（単一選択）。
+   * タッチした支払方法だけが下に出る。別の方法をタッチすれば置き換わり、
+   * 同じ方法をもう一度タッチすれば取り消す。
+   * 足りないぶんが残っているときだけ、次にタッチした方法が残額として積まれる。
    */
   const selectPayment = (method: CheckoutPayment['method'], provider?: string | null) => {
-    if (splitMode) {
-      addPayment(method, provider);
-      return;
-    }
     setPayments((rows) => {
       const same = (r: PaymentRow) => r.method === method && (r.provider ?? null) === (provider ?? null);
       // 同じ方法をもう一度タッチしたら取り消す（選択トグル。内訳つきは同じ内訳のとき）
@@ -500,13 +457,6 @@ export function CheckoutDialog({
       };
       return rows.length > 0 && left > 0 ? [...rows, row] : [row];
     });
-  };
-
-  // モードを切り替えたら入力済みの支払行は白紙に戻す（単一↔併用で金額の意味が変わるため）
-  const toggleSplitMode = () => {
-    setSplitMode((v) => !v);
-    setSplitWays(null);
-    setPayments([]);
   };
 
   /**
@@ -606,7 +556,6 @@ export function CheckoutDialog({
     }
     // 次に開いたとき前のお客様の支払い入力が残らないようにする
     setPayments([]);
-    setSplitMode(false);
     setSplitPick(null);
     setRightTab('pay');
     setDone(null);
@@ -955,65 +904,26 @@ export function CheckoutDialog({
             </h3>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto px-5 py-3">
-            {/* 別々会計は金額のすぐ下（2026-09-25 店舗要望）。「品目ごと」か「金額ごと」を選ぶ。
-                品目ごと＝食べた分だけ先に会計（伝票を分ける）。金額ごと＝1枚の伝票を分けて払う */}
+            {/* 別々会計は金額のすぐ下（2026-09-25 店舗要望）。
+                押すと伝票分割（品目ごと）へ進む。食べた分だけ先に会計して、残りは元の伝票に残る */}
             <div className="mb-3 border-b border-line pb-3">
               <button
                 type="button"
-                onClick={() => {
-                  if (splitPick != null || splitMode) {
-                    setSplitPick(null);
-                    if (splitMode) toggleSplitMode();
-                    return;
-                  }
-                  setSplitOpen((v) => !v);
-                }}
-                disabled={terminalBlocking}
-                aria-pressed={splitPick != null || splitMode}
+                onClick={() => setSplitPick(splitPick != null ? null : {})}
+                disabled={terminalBlocking || !splitOrderAction || splitLines.length < 2}
+                aria-pressed={splitPick != null}
                 className={cn(
                   'tap3d flex h-[46px] w-full flex-col items-center justify-center rounded-xl border text-[14px] font-bold leading-tight disabled:opacity-40',
-                  splitPick != null || splitMode ? 'border-iris bg-iris text-white' : 'border-line bg-white text-navy'
+                  splitPick != null ? 'border-iris bg-iris text-white' : 'border-line bg-white text-navy'
                 )}
               >
-                {splitPick != null ? '別々会計：品目ごと' : splitMode ? '別々会計：金額ごと' : '別々会計'}
+                別々会計
                 <span
-                  className={cn(
-                    'text-[10px] font-semibold',
-                    splitPick != null || splitMode ? 'text-white/80' : 'text-ink-3'
-                  )}
+                  className={cn('text-[10px] font-semibold', splitPick != null ? 'text-white/80' : 'text-ink-3')}
                 >
                   Separate payment
                 </span>
               </button>
-
-              {splitOpen && splitPick == null && !splitMode && (
-                <div className="mt-1.5 grid grid-cols-2 gap-1.5">
-                  <button
-                    type="button"
-                    disabled={terminalBlocking || !splitOrderAction || splitLines.length < 2}
-                    onClick={() => {
-                      setSplitOpen(false);
-                      setSplitPick({});
-                    }}
-                    className="tap3d flex h-[44px] flex-col items-center justify-center rounded-xl border border-line bg-white text-[13px] font-bold leading-tight text-navy disabled:opacity-40"
-                  >
-                    品目ごと
-                    <span className="text-[10px] font-semibold text-ink-3">By item</span>
-                  </button>
-                  <button
-                    type="button"
-                    disabled={terminalBlocking}
-                    onClick={() => {
-                      setSplitOpen(false);
-                      toggleSplitMode();
-                    }}
-                    className="tap3d flex h-[44px] flex-col items-center justify-center rounded-xl border border-line bg-white text-[13px] font-bold leading-tight text-navy disabled:opacity-40"
-                  >
-                    金額ごと
-                    <span className="text-[10px] font-semibold text-ink-3">By price</span>
-                  </button>
-                </div>
-              )}
             </div>
 
             <div className={sumRow}>
@@ -1144,49 +1054,6 @@ export function CheckoutDialog({
 
             {rightTab === 'pay' ? (
               <>
-                {/* 金額ごと：何人で分けるかを先に決める（2026-09-25 店舗要望） */}
-                {splitMode && (
-                  <div className="mb-2 rounded-xl bg-lilac-soft p-2">
-                    <p className="mb-1.5 text-[11px] font-bold text-royal">
-                      何人で分けますか / Split into
-                      {splitWays && splitWays > 1 && (
-                        <span className="ml-1.5 font-normal text-ink-2">
-                          1人 {yen(shareAmount(order.total, splitWays, payments.length))}
-                        </span>
-                      )}
-                    </p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {[2, 3, 4, 5, 6, 7, 8].map((n) => (
-                        <button
-                          key={n}
-                          type="button"
-                          aria-pressed={splitWays === n}
-                          onClick={() => setSplitWays(splitWays === n ? null : n)}
-                          className={cn(
-                            'tap3d h-10 w-10 rounded-xl border text-[15px] font-bold',
-                            splitWays === n ? 'border-iris bg-iris text-white' : 'border-line bg-white text-navy'
-                          )}
-                        >
-                          {n}
-                        </button>
-                      ))}
-                      <button
-                        type="button"
-                        aria-pressed={splitWays === null}
-                        onClick={() => setSplitWays(null)}
-                        className={cn(
-                          'tap3d h-10 rounded-xl border px-3 text-[13px] font-bold',
-                          splitWays === null ? 'border-iris bg-iris text-white' : 'border-line bg-white text-navy'
-                        )}
-                      >
-                        金額を入れる
-                      </button>
-                    </div>
-                    <p className="mt-1.5 text-[11px] text-ink-3">
-                      人数を選んでから支払方法を押すと、1人分ずつ足していけます（金額はテンキーで直せます）
-                    </p>
-                  </div>
-                )}
                 <p className="mb-1.5 text-[11px] font-bold text-ink-3">支払方法 / Payment method</p>
 
                 <div className="grid grid-cols-2 gap-1.5">

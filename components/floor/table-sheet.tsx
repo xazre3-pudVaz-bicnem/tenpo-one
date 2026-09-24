@@ -7,8 +7,7 @@ import { Lock, LockOpen, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/components/ui/toast';
-import { yen, formatTime } from '@/lib/format';
-import { cn } from '@/lib/utils';
+import { yen } from '@/lib/format';
 import { TILE_LABEL, nextReservation, tileState, type TableView } from './types';
 
 /** 着席（ファーストオーダー）のときに決めるコース・時間 */
@@ -18,7 +17,17 @@ export interface WalkInSeatOptions {
 }
 
 /** ポップアップの幅（レジのテーブル一覧で使う小さいカード） */
-const POP_W = 244;
+const POP_W = 296;
+
+/** ポップアップの見出し（レジの見本と同じ「テーブル」「印刷」の区切り） */
+function Section({ ja, en }: { ja: string; en: string }) {
+  return (
+    <p className="px-0.5 pt-1 text-[11px] font-bold text-ink-3">
+      {ja}
+      <span className="ml-1 text-[9px] font-semibold opacity-70">{en}</span>
+    </p>
+  );
+}
 
 export function TableSheet({
   table,
@@ -64,7 +73,6 @@ export function TableSheet({
   });
   const { toast } = useToast();
   const [partySize, setPartySize] = useState(2);
-  const [slipId, setSlipId] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   if (!table) return null;
@@ -75,7 +83,9 @@ export function TableSheet({
    * ここで全部出して、どれを会計・追加オーダーするか選べるようにする。
    */
   const slips = table.order?.slips ?? [];
-  const selected = slips.find((s) => s.id === slipId) ?? slips[0] ?? null;
+  // 1卓＝1組なので、伝票を選ばせる画面は出さない（2026-09-25 店舗要望）。
+  // 万一2枚以上残っていても、古いほうから順に会計できるよう常に一番古い伝票を対象にする。
+  const selected = slips[0] ?? null;
 
   const run = (fn: () => Promise<void>) => {
     startTransition(async () => {
@@ -113,6 +123,10 @@ export function TableSheet({
 
   const status = table.current_status;
   const next = nextReservation(table, now);
+  const seated = slips.length > 0 || status === 'seated' || status === 'ordering' || status === 'billing';
+  const guests = selected?.guestCount ?? table.order?.guestCount ?? 0;
+  const total = selected?.total ?? table.order?.total ?? 0;
+  const perGuest = guests > 0 ? Math.round(total / guests) : 0;
 
   return (
     <div className="fixed inset-0 z-50" onClick={onClose} role="presentation">
@@ -143,18 +157,18 @@ export function TableSheet({
         </div>
       )}
 
-      <div className="space-y-3">
+      <div className="space-y-1.5">
         {status === 'available' && slips.length === 0 && (
-          <div className="rounded-xl border border-line p-2.5">
-            {/* レジで一番多い操作は「人数だけ入れて着席」。指で押せる大きさにして一番上・一番大きく置く */}
-            <p className="mb-1.5 text-[11px] font-bold text-ink-2">人数 / Guests</p>
+          <>
+            {/* レジで一番多い操作は「人数だけ入れて着席」。指で押せる大きさにして一番上に置く */}
+            <p className="px-0.5 text-[11px] font-bold text-ink-2">人数 / Guests</p>
             <div className="flex items-center gap-2">
               <button
                 type="button"
                 aria-label="人数を1人減らす"
                 disabled={pending || partySize <= 1}
                 onClick={() => setPartySize((n) => Math.max(1, n - 1))}
-                className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-line bg-lilac-soft text-xl font-bold text-royal disabled:opacity-40"
+                className="tap3d flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-line bg-lilac-soft text-xl font-bold text-royal disabled:opacity-40"
               >
                 −
               </button>
@@ -167,14 +181,14 @@ export function TableSheet({
                 aria-label="人数を1人増やす"
                 disabled={pending || partySize >= 99}
                 onClick={() => setPartySize((n) => Math.min(99, n + 1))}
-                className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-line bg-lilac-soft text-xl font-bold text-royal disabled:opacity-40"
+                className="tap3d flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-line bg-lilac-soft text-xl font-bold text-royal disabled:opacity-40"
               >
                 ＋
               </button>
             </div>
             <Button
               size="pos"
-              className="mt-2 h-[44px] w-full flex-col gap-0 text-[15px] leading-tight"
+              className="mt-1 h-[46px] w-full flex-col gap-0 text-[15px] leading-tight"
               disabled={pending}
               onClick={() =>
                 goPos(() =>
@@ -184,103 +198,121 @@ export function TableSheet({
                 )
               }
             >
-              着席して注文へ
-              <span className="text-[10px] font-semibold opacity-80">Seat & order</span>
+              注文
+              <span className="text-[10px] font-semibold opacity-80">Order</span>
             </Button>
-            {/* ファーストオーダー: ハンディと同じ「お客様情報」（モード・プラン・時間制・開始時間・男女の人数）を出してから着席する */}
-            <Button
-              size="md"
-              variant="secondary"
-              className="mt-1.5 h-[40px] w-full flex-col gap-0 text-[13px] leading-tight"
-              disabled={pending}
-              onClick={() => router.push(`/app/floor/${table.id}/setup`)}
-            >
-              お客様情報を入力して着席
-              <span className="text-[10px] font-semibold text-ink-3">Guest info</span>
-            </Button>
-          </div>
+
+            <div className="my-1 border-t border-line" />
+            <Section ja="テーブル" en="Table" />
+            <div className="grid grid-cols-2 gap-1.5">
+              {/* ファーストオーダー: ハンディと同じ「お客様情報」（モード・プラン・時間制・開始時間・男女の人数）を出してから着席する */}
+              <Button
+                size="md"
+                variant="secondary"
+                className="h-[44px] w-full flex-col gap-0 text-[13px] leading-tight"
+                disabled={pending}
+                onClick={() => router.push(`/app/floor/${table.id}/setup`)}
+              >
+                お客様情報
+                <span className="text-[10px] font-semibold text-ink-3">Guest info</span>
+              </Button>
+              {canOperate ? (
+                <Button
+                  size="md"
+                  variant="secondary"
+                  className="h-[44px] w-full flex-col gap-0 text-[13px] leading-tight"
+                  disabled={pending}
+                  onClick={() => run(() => setTableAvailabilityAction(table.id, true))}
+                >
+                  <span className="flex items-center gap-1">
+                    <Lock className="h-3.5 w-3.5" aria-hidden />
+                    テーブルブロック
+                  </span>
+                  <span className="text-[10px] font-semibold text-ink-3">Block</span>
+                </Button>
+              ) : (
+                <span />
+              )}
+            </div>
+          </>
         )}
 
-        {/* お客様が入っている卓は、ここから4つの操作を選ぶ（2026-09-24 要望）。
+        {/* お客様が入っている卓（2026-09-25 店舗要望：レジの見本と同じ並び）。
             未会計の伝票が残っている卓は、状態が「清掃中」などでも必ずここを出す
             （会計できない伝票が卓に残らないように） */}
-        {(slips.length > 0 || status === 'seated' || status === 'ordering' || status === 'billing') && (
-          <div className="space-y-1.5">
-            {/* 伝票が2枚以上ある卓は、どの伝票を操作するか先に選ぶ（2026-09-24 店舗要望） */}
-            {slips.length > 1 && (
-              <div className="rounded-xl border border-line p-1.5">
-                <p className="mb-1 px-0.5 text-[11px] font-bold text-ink-2">伝票を選ぶ / Slip</p>
-                <div className="space-y-1">
-                  {slips.map((s) => (
-                    <button
-                      key={s.id}
-                      type="button"
-                      onClick={() => setSlipId(s.id)}
-                      className={cn(
-                        'flex w-full items-baseline justify-between gap-1 rounded-lg border px-2 py-1.5 text-left',
-                        selected?.id === s.id
-                          ? 'border-royal bg-lilac-soft'
-                          : 'border-line bg-white'
-                      )}
-                    >
-                      <span className="text-[12px] font-bold text-royal tabular-nums">
-                        #{s.orderNo}
-                      </span>
-                      <span className="text-[10px] text-ink-3 tabular-nums">
-                        {formatTime(new Date(s.openedAtMs))} · {s.guestCount}名
-                      </span>
-                      <span className="text-[12px] font-bold text-navy tabular-nums">
-                        {yen(s.total)}
-                      </span>
-                    </button>
-                  ))}
+        {seated && (
+          <>
+            {/* まとめ：人数・顧客・来店経路と、いまの金額（かっこ内は客単価） */}
+            <div className="flex items-center gap-2 rounded-xl bg-lilac-soft px-2.5 py-2">
+              <dl className="min-w-0 flex-1 space-y-0.5 text-[11px] leading-tight">
+                <div className="flex gap-1.5">
+                  <dt className="w-[42px] shrink-0 font-bold text-ink-2">人数</dt>
+                  <dd className="text-navy tabular-nums">{guests}名</dd>
                 </div>
+                <div className="flex gap-1.5">
+                  <dt className="w-[42px] shrink-0 font-bold text-ink-2">顧客</dt>
+                  <dd className="truncate text-navy">{table.order?.customerName ?? '未登録'}</dd>
+                </div>
+                <div className="flex gap-1.5">
+                  <dt className="w-[42px] shrink-0 font-bold text-ink-2">来店</dt>
+                  <dd className="truncate text-navy">{table.order?.sourceLabel || '—'}</dd>
+                </div>
+              </dl>
+              <div className="shrink-0 text-right">
+                <div className="text-[18px] font-extrabold text-navy tabular-nums">{yen(total)}</div>
+                <div className="text-[10px] text-ink-3 tabular-nums">（{yen(perGuest)}）</div>
               </div>
-            )}
-            <Button
-              size="md"
-              className="h-[44px] w-full flex-col gap-0 text-[15px] leading-tight"
-              disabled={pending}
-              onClick={() =>
-                selected
-                  ? router.push(`/app/pos?order=${selected.id}`)
-                  : goPos(() => goToOrderAction(table.id))
-              }
-            >
-              追加オーダー
-              <span className="text-[10px] font-semibold opacity-80">Add order</span>
-            </Button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-1.5">
+              <Button
+                size="md"
+                className="h-[46px] w-full flex-col gap-0 text-[15px] leading-tight"
+                disabled={pending}
+                onClick={() =>
+                  selected ? router.push(`/app/pos?order=${selected.id}`) : goPos(() => goToOrderAction(table.id))
+                }
+              >
+                注文
+                <span className="text-[10px] font-semibold opacity-80">Order</span>
+              </Button>
+              <Button
+                size="md"
+                variant="navy"
+                className="h-[46px] w-full flex-col gap-0 text-[15px] leading-tight"
+                disabled={pending || !selected}
+                onClick={() => selected && router.push(`/app/pos?order=${selected.id}&checkout=1`)}
+              >
+                レジ会計
+                <span className="text-[10px] font-semibold opacity-80">Checkout</span>
+              </Button>
+            </div>
+
+            <div className="my-1 border-t border-line" />
+            <Section ja="テーブル" en="Table" />
             <Button
               size="md"
               variant="secondary"
-              className="h-[40px] w-full flex-col gap-0 text-[14px] leading-tight"
+              className="h-[44px] w-full flex-col gap-0 text-[13px] leading-tight"
               disabled={pending || !selected}
               onClick={() => selected && router.push(`/app/pos?order=${selected.id}&move=1`)}
             >
               テーブル移動
               <span className="text-[10px] font-semibold text-ink-3">Move table</span>
             </Button>
+
+            <Section ja="印刷" en="Print" />
             <Button
               size="md"
               variant="secondary"
-              className="h-[40px] w-full flex-col gap-0 text-[14px] leading-tight"
+              className="h-[44px] w-full flex-col gap-0 text-[13px] leading-tight"
               disabled={pending || !selected}
               onClick={handlePrintBill}
             >
               会計伝票
               <span className="text-[10px] font-semibold text-ink-3">Print bill</span>
             </Button>
-            <Button
-              size="md"
-              variant="navy"
-              className="h-[44px] w-full flex-col gap-0 text-[15px] leading-tight"
-              disabled={pending || !selected}
-              onClick={() => selected && router.push(`/app/pos?order=${selected.id}&checkout=1`)}
-            >
-              会計
-              <span className="text-[10px] font-semibold opacity-80">Checkout</span>
-            </Button>
-          </div>
+          </>
         )}
 
         {status === 'cleaning' && slips.length === 0 && (
@@ -296,20 +328,20 @@ export function TableSheet({
           </Button>
         )}
 
-        {/* 卓ロック：空いている卓だけ。お客様が入っている卓はロックできない（2026-09-24 店舗要望） */}
-        {canOperate && slips.length === 0 && (status === 'available' || status === 'unavailable') && (
+        {/* 卓ロック解除：ブロック中の卓だけ（お客様が入っている卓はロックできない。2026-09-24 店舗要望） */}
+        {canOperate && slips.length === 0 && status === 'unavailable' && (
           <Button
             size="md"
             variant="secondary"
-            className="h-[40px] w-full flex-col gap-0 text-[14px] leading-tight"
+            className="h-[44px] w-full flex-col gap-0 text-[13px] leading-tight"
             disabled={pending}
-            onClick={() => run(() => setTableAvailabilityAction(table.id, status !== 'unavailable'))}
+            onClick={() => run(() => setTableAvailabilityAction(table.id, false))}
           >
             <span className="flex items-center gap-1.5">
-              {status === 'unavailable' ? <LockOpen className="h-4 w-4" aria-hidden /> : <Lock className="h-4 w-4" aria-hidden />}
-              {status === 'unavailable' ? 'ロック解除' : 'テーブルをロック'}
+              <LockOpen className="h-4 w-4" aria-hidden />
+              ブロック解除
             </span>
-            <span className="text-[10px] font-semibold text-ink-3">{status === 'unavailable' ? 'Unlock' : 'Lock table'}</span>
+            <span className="text-[10px] font-semibold text-ink-3">Unblock</span>
           </Button>
         )}
       </div>
