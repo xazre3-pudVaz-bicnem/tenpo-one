@@ -50,6 +50,8 @@ export interface ManualReservationPrefill {
   phone?: string;
   email?: string;
   note?: string;
+  /** 先に選んでおくテーブル（スケジュールの空きマスを押したとき） */
+  tableIds?: string[];
 }
 
 export function ManualReservationDialog({
@@ -67,6 +69,9 @@ export function ManualReservationDialog({
   triggerClassName,
   triggerContent,
   onCreated,
+  defaultOpen = false,
+  hideTrigger = false,
+  onDialogClose,
 }: {
   stores: StoreRef[];
   defaultStoreId: string | null;
@@ -83,9 +88,15 @@ export function ManualReservationDialog({
   /** ボタンの中身を上書き（未指定なら電話アイコン＋triggerLabel） */
   triggerContent?: React.ReactNode;
   onCreated?: () => void;
+  /** 開いた状態で出す（スケジュールの空きマスから「新規予約」を押したとき） */
+  defaultOpen?: boolean;
+  /** ボタンを出さない（上の用途） */
+  hideTrigger?: boolean;
+  /** 閉じたときに呼ぶ（呼び出し側の状態を戻す） */
+  onDialogClose?: () => void;
 }) {
   const { toast } = useToast();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const [pending, startTransition] = useTransition();
   const initialStoreId = prefill?.storeId ?? defaultStoreId ?? stores[0]?.id ?? '';
   const [form, setForm] = useState({ ...EMPTY, ...prefill, storeId: initialStoreId });
@@ -115,6 +126,7 @@ export function ManualReservationDialog({
         setForm({ ...EMPTY, ...prefill, storeId: initialStoreId });
         setOpen(false);
         onCreated?.();
+        onDialogClose?.();
       } catch (e) {
         toast(e instanceof Error ? e.message : '登録に失敗しました', 'error');
       }
@@ -123,15 +135,24 @@ export function ManualReservationDialog({
 
   return (
     <>
-      <Button variant={triggerVariant} size={triggerSize} onClick={() => setOpen(true)} className={triggerClassName}>
-        {triggerContent ?? (
-          <>
-            <Phone className="h-4 w-4" />
-            {triggerLabel}
-          </>
-        )}
-      </Button>
-      <Dialog open={open} onClose={() => setOpen(false)} title={waitlistEntryId ? '予約へ変換' : '電話予約の登録'}>
+      {!hideTrigger && (
+        <Button variant={triggerVariant} size={triggerSize} onClick={() => setOpen(true)} className={triggerClassName}>
+          {triggerContent ?? (
+            <>
+              <Phone className="h-4 w-4" />
+              {triggerLabel}
+            </>
+          )}
+        </Button>
+      )}
+      <Dialog
+        open={open}
+        onClose={() => {
+          setOpen(false);
+          onDialogClose?.();
+        }}
+        title={waitlistEntryId ? '予約へ変換' : '電話予約の登録'}
+      >
         <div className="space-y-3">
           {stores.length > 1 && (
             <div>

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
 import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/state';
 import { useToast } from '@/components/ui/toast';
@@ -8,6 +9,7 @@ import { createOrderFromReservation } from '@/app/app/reservations/actions';
 import type { ReservationStatus } from '@/lib/reservations';
 import { cn } from '@/lib/utils';
 import { ReservationDetailDialog } from './reservation-detail-dialog';
+import { ManualReservationDialog } from './manual-reservation-dialog';
 import type { AssignableTable } from './assign-table-dialog';
 import type { ReservationListRow } from './list-types';
 import { jstMinutesOfMs, useNow } from './use-now';
@@ -127,6 +129,8 @@ export function ScheduleBoard({
   isToday,
   nowMs,
   updatedAt,
+  date,
+  newReservation,
 }: {
   reservations: ReservationListRow[];
   tables: BoardTable[];
@@ -141,9 +145,24 @@ export function ScheduleBoard({
   isToday: boolean;
   nowMs: number;
   updatedAt: string;
+  /** 表示している日（空きマスから予約を作るときに使う） */
+  date?: string;
+  /** 空きマスを押したときに出す「お客様を入れる／新規予約」に必要なもの */
+  newReservation?: {
+    stores: React.ComponentProps<typeof ManualReservationDialog>['stores'];
+    defaultStoreId: string | null;
+    sources?: React.ComponentProps<typeof ManualReservationDialog>['sources'];
+    courses?: React.ComponentProps<typeof ManualReservationDialog>['courses'];
+    tables?: React.ComponentProps<typeof ManualReservationDialog>['tables'];
+  };
 }) {
   const { toast } = useToast();
+  const router = useRouter();
   const [selected, setSelected] = useState<ReservationListRow | null>(null);
+  /** 空きマスを押したとき（卓＋時間）。ここから「お客様を入れる」「新規予約」を選ぶ */
+  const [slot, setSlot] = useState<{ tableId: string; tableName: string; min: number; x: number; y: number } | null>(null);
+  /** 「新規予約」を押したら、その卓・時間で予約登録を開く */
+  const [bookingSlot, setBookingSlot] = useState<{ tableId: string; min: number } | null>(null);
   const [payPending, startPay] = useTransition();
   const scrollRef = useRef<HTMLDivElement>(null);
   const scrolled = useRef(false);
@@ -193,7 +212,10 @@ export function ScheduleBoard({
         key={r.id}
         role="button"
         tabIndex={0}
-        onClick={() => setSelected(r)}
+        onClick={(ev) => {
+          ev.stopPropagation();
+          setSelected(r);
+        }}
         onKeyDown={(ev) => {
           if (ev.key === 'Enter' || ev.key === ' ') {
             ev.preventDefault();
@@ -260,10 +282,20 @@ export function ScheduleBoard({
     );
   };
 
+  /** 空きマスを押したら、その卓と時間を覚えて小さいメニューを出す */
+  const pickSlot = (t: BoardTable) => (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!newReservation || !date) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const min = viewStartMin + Math.floor(Math.max(0, e.clientX - rect.left) / SLOT_W) * BOARD_SLOT;
+    setSlot({ tableId: t.id, tableName: t.name, min, x: e.clientX, y: e.clientY });
+  };
+
   const offHours = (
     <>
       {openMin > viewStartMin && <i className="board-off absolute inset-y-0 left-0" style={{ width: x(openMin) }} aria-hidden />}
       {closeMin < viewEndMin && <i className="board-off absolute inset-y-0 right-0" style={{ left: x(closeMin) }} aria-hidden />}
+      {/* 現在時刻より前（もう過ぎた時間）はうすく（店舗要望 2026-09-24） */}
+      {showNow && nowX > 0 && <i className="board-past absolute inset-y-0 left-0" style={{ width: nowX }} aria-hidden />}
     </>
   );
 
@@ -292,6 +324,7 @@ export function ScheduleBoard({
       <style>{`
         .board-off{background:repeating-linear-gradient(135deg,rgba(201,184,234,.35) 0 6px,transparent 6px 12px);pointer-events:none}
         .board-buffer{background:repeating-linear-gradient(45deg,rgba(122,112,144,.18) 0 3px,transparent 3px 6px);pointer-events:auto}
+        .board-past{background:rgba(36,20,54,.06);pointer-events:none}
       `}</style>
       {/* 見出しは出さない（店舗要望 2026-09-24）。日付ナビは上のバー、
           「最終更新・組数・人数・営業時間」は下の行にまとめた */}
@@ -376,7 +409,13 @@ export function ScheduleBoard({
                       </small>
                     </div>
                   </div>
-                  <div className="relative border-b border-line" style={{ ...rowBg, minHeight: ROW_H }}>
+                  <div
+                    className="relative border-b border-line"
+                    style={{ ...rowBg, minHeight: ROW_H }}
+                    onClick={pickSlot(t)}
+                    role={newReservation && date ? 'button' : undefined}
+                    tabIndex={-1}
+                  >
                     {offHours}
                     {bufferStripes(placed)}
                     {placed.map((p) => renderBar(p, false))}
@@ -419,6 +458,63 @@ export function ScheduleBoard({
           <span className="text-ink-3">バーをタップ＝詳細（状態・テーブル割当・日時変更）</span>
         </div>
       </div>
+
+      {/* 空きマスを押したとき：その卓・その時間で「お客様を入れる」か「新規予約」 */}
+      {slot && newReservation && date && (
+        <div className="fixed inset-0 z-[60]" onClick={() => setSlot(null)} role="presentation">
+          <div
+            role="dialog"
+            aria-label={`${slot.tableName} ${hm(slot.min)}`}
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              left: Math.min(Math.max(8, slot.x - 110), Math.max(8, window.innerWidth - 228)),
+              top: Math.min(Math.max(64, slot.y - 8), Math.max(64, window.innerHeight - 190)),
+            }}
+            className="absolute w-[220px] rounded-xl border border-line bg-white p-2 shadow-[0_18px_44px_rgba(36,20,54,0.28)]"
+          >
+            <p className="mb-1.5 px-1 text-[12px] font-bold text-navy">
+              {slot.tableName}
+              <span className="ml-1.5 font-[family-name:var(--font-num)] text-[12px] text-royal tabular-nums">{hm(slot.min)}</span>
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setSlot(null);
+                router.push(`/app/floor/${slot.tableId}/setup`);
+              }}
+              className="mb-1 flex h-11 w-full flex-col items-center justify-center rounded-lg border border-lilac bg-lilac-soft leading-tight text-royal hover:bg-wisteria"
+            >
+              <span className="text-[13px] font-bold">お客様を入れる</span>
+              <span className="text-[10px] font-semibold text-ink-3">Walk-in</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setBookingSlot({ tableId: slot.tableId, min: slot.min });
+                setSlot(null);
+              }}
+              className="flex h-11 w-full flex-col items-center justify-center rounded-lg bg-royal leading-tight text-white hover:bg-plum"
+            >
+              <span className="text-[13px] font-bold">新規予約</span>
+              <span className="text-[10px] font-semibold text-white/80">New booking</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {bookingSlot && newReservation && date && (
+        <ManualReservationDialog
+          stores={newReservation.stores}
+          defaultStoreId={newReservation.defaultStoreId}
+          sources={newReservation.sources}
+          courses={newReservation.courses}
+          tables={newReservation.tables}
+          prefill={{ date, time: hm(bookingSlot.min), tableIds: [bookingSlot.tableId] }}
+          defaultOpen
+          hideTrigger
+          onDialogClose={() => setBookingSlot(null)}
+        />
+      )}
 
       <ReservationDetailDialog
         reservation={selected}

@@ -302,6 +302,14 @@ export default async function ReservationsLedgerPage({ searchParams }: { searchP
           </div>
         )}
         <ScheduleBoard
+          date={date}
+          newReservation={{
+            stores: chrome.stores,
+            defaultStoreId: chrome.defaultStoreId,
+            sources: chrome.sources,
+            courses: chrome.courses,
+            tables: chrome.manualTables,
+          }}
           reservations={reservations}
           tables={boardTables}
           viewStartMin={viewStartMin}
