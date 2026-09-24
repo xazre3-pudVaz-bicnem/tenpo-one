@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/components/ui/toast';
 import { yen } from '@/lib/format';
+import { cn } from '@/lib/utils';
 import { TILE_LABEL, nextReservation, tileState, type TableView } from './types';
 
 /** 着席（ファーストオーダー）のときに決めるコース・時間 */
@@ -40,6 +41,8 @@ export function TableSheet({
   goToOrderAction,
   completeCleaningAction,
   setTableAvailabilityAction,
+  saveTableGroupAction,
+  allTables,
 }: {
   table: TableView | null;
   /** 押したテーブルの画面上の位置。その近くに小さく出す */
@@ -52,6 +55,10 @@ export function TableSheet({
   goToOrderAction: (tableId: string) => Promise<{ orderId: string }>;
   completeCleaningAction: (tableId: string) => Promise<void>;
   setTableAvailabilityAction: (tableId: string, unavailable: boolean) => Promise<void>;
+  /** まとめる卓の保存（1卓以下で解除）。2026-09-25 店舗要望 */
+  saveTableGroupAction: (tableIds: string[]) => Promise<{ error?: string }>;
+  /** 同じフロアの卓（テーブルグループ設定で選ぶ） */
+  allTables: TableView[];
 }) {
   const router = useRouter();
   const popRef = useRef<HTMLDivElement>(null);
@@ -73,6 +80,9 @@ export function TableSheet({
   });
   const { toast } = useToast();
   const [partySize, setPartySize] = useState(2);
+  /** テーブルグループ設定を開いているか。開いたら同じ組にする卓を選ぶ */
+  const [groupOpen, setGroupOpen] = useState(false);
+  const [groupPick, setGroupPick] = useState<string[] | null>(null);
   const [pending, startTransition] = useTransition();
 
   if (!table) return null;
@@ -151,6 +161,16 @@ export function TableSheet({
         </button>
       </div>
 
+      {table.groupTableIds.length > 1 && (
+        <div className="mb-2 rounded-lg bg-royal/10 px-2.5 py-1.5 text-[11px] font-bold text-royal">
+          グループ{' '}
+          {table.groupTableIds
+            .map((id) => allTables.find((t) => t.id === id)?.name)
+            .filter(Boolean)
+            .join(' + ')}
+        </div>
+      )}
+
       {next && (
         <div className="mb-2.5 rounded-lg bg-iris-soft px-2.5 py-1.5 text-[11px] text-royal">
           次の予約 <span className="tabular-nums">{next.time}</span>　{next.name.replace(/ ?様$/, '')} 様（{next.partySize}名）
@@ -168,11 +188,11 @@ export function TableSheet({
                 aria-label="人数を1人減らす"
                 disabled={pending || partySize <= 1}
                 onClick={() => setPartySize((n) => Math.max(1, n - 1))}
-                className="tap3d flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-line bg-lilac-soft text-xl font-bold text-royal disabled:opacity-40"
+                className="tap3d flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-line bg-lilac-soft text-xl font-bold text-royal disabled:opacity-40"
               >
                 −
               </button>
-              <div className="flex h-12 flex-1 items-baseline justify-center gap-1 rounded-xl border border-line">
+              <div className="flex h-11 flex-1 items-baseline justify-center gap-1 rounded-xl border border-line">
                 <span className="text-2xl font-extrabold tabular-nums text-navy">{partySize}</span>
                 <span className="text-sm text-ink-3">名</span>
               </div>
@@ -181,7 +201,7 @@ export function TableSheet({
                 aria-label="人数を1人増やす"
                 disabled={pending || partySize >= 99}
                 onClick={() => setPartySize((n) => Math.min(99, n + 1))}
-                className="tap3d flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-line bg-lilac-soft text-xl font-bold text-royal disabled:opacity-40"
+                className="tap3d flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-line bg-lilac-soft text-xl font-bold text-royal disabled:opacity-40"
               >
                 ＋
               </button>
@@ -205,35 +225,107 @@ export function TableSheet({
             <div className="my-1 border-t border-line" />
             <Section ja="テーブル" en="Table" />
             <div className="grid grid-cols-2 gap-1.5">
-              {/* ファーストオーダー: ハンディと同じ「お客様情報」（モード・プラン・時間制・開始時間・男女の人数）を出してから着席する */}
               <Button
                 size="md"
                 variant="secondary"
-                className="h-[44px] w-full flex-col gap-0 text-[13px] leading-tight"
-                disabled={pending}
-                onClick={() => router.push(`/app/floor/${table.id}/setup`)}
+                className="h-[46px] w-full flex-col gap-0 text-[12px] leading-tight"
+                disabled={pending || !canOperate}
+                onClick={() => run(() => setTableAvailabilityAction(table.id, true))}
               >
-                お客様情報
-                <span className="text-[10px] font-semibold text-ink-3">Guest info</span>
+                <span className="flex items-center gap-1">
+                  <Lock className="h-3.5 w-3.5" aria-hidden />
+                  テーブルブロック
+                </span>
+                <span className="text-[10px] font-semibold text-ink-3">Block</span>
               </Button>
-              {canOperate ? (
-                <Button
-                  size="md"
-                  variant="secondary"
-                  className="h-[44px] w-full flex-col gap-0 text-[13px] leading-tight"
-                  disabled={pending}
-                  onClick={() => run(() => setTableAvailabilityAction(table.id, true))}
-                >
-                  <span className="flex items-center gap-1">
-                    <Lock className="h-3.5 w-3.5" aria-hidden />
-                    テーブルブロック
-                  </span>
-                  <span className="text-[10px] font-semibold text-ink-3">Block</span>
-                </Button>
-              ) : (
-                <span />
-              )}
+              <Button
+                size="md"
+                variant={groupOpen ? 'primary' : 'secondary'}
+                className="h-[46px] w-full flex-col gap-0 text-[12px] leading-tight"
+                disabled={pending || !canOperate}
+                onClick={() => {
+                  setGroupPick(table.groupTableIds.length > 0 ? table.groupTableIds : [table.id]);
+                  setGroupOpen((v) => !v);
+                }}
+              >
+                テーブルグループ設定
+                <span className={cn('text-[10px] font-semibold', groupOpen ? 'opacity-80' : 'text-ink-3')}>
+                  Table group
+                </span>
+              </Button>
             </div>
+
+            {/* まとめる卓を選ぶ。まとめた卓のどれかに伝票が立つと、同じ組として全部に出る */}
+            {groupOpen && (
+              <div className="rounded-xl border border-line p-2">
+                <p className="mb-1.5 text-[11px] font-bold text-ink-2">
+                  同じ組にする卓を選ぶ / Tables in this group
+                </p>
+                <div className="grid max-h-[180px] grid-cols-3 gap-1 overflow-y-auto">
+                  {allTables
+                    .filter((t) => t.floor_id === table.floor_id)
+                    .map((t) => {
+                      const on = (groupPick ?? []).includes(t.id);
+                      const self = t.id === table.id;
+                      return (
+                        <button
+                          key={t.id}
+                          type="button"
+                          disabled={self}
+                          aria-pressed={on}
+                          onClick={() =>
+                            setGroupPick((prev) => {
+                              const list = prev ?? [table.id];
+                              return on ? list.filter((id) => id !== t.id) : [...list, t.id];
+                            })
+                          }
+                          className={cn(
+                            'tap3d h-9 rounded-lg border text-[12px] font-bold disabled:opacity-100',
+                            on ? 'border-royal bg-royal text-white' : 'border-line bg-white text-navy'
+                          )}
+                        >
+                          {t.name}
+                        </button>
+                      );
+                    })}
+                </div>
+                <div className="mt-1.5 grid grid-cols-2 gap-1.5">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="h-[36px] w-full text-[12px]"
+                    disabled={pending}
+                    onClick={() =>
+                      run(async () => {
+                        const res = await saveTableGroupAction([]);
+                        if (res.error) throw new Error(res.error);
+                        setGroupOpen(false);
+                        toast('グループを解除しました');
+                        router.refresh();
+                      })
+                    }
+                  >
+                    解除 / Clear
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="h-[36px] w-full text-[12px]"
+                    disabled={pending}
+                    onClick={() =>
+                      run(async () => {
+                        const res = await saveTableGroupAction(groupPick ?? [table.id]);
+                        if (res.error) throw new Error(res.error);
+                        setGroupOpen(false);
+                        toast('テーブルグループを保存しました');
+                        router.refresh();
+                      })
+                    }
+                  >
+                    保存 / Save
+                  </Button>
+                </div>
+              </div>
+            )}
           </>
         )}
 

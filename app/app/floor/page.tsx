@@ -1,3 +1,4 @@
+import { groupOfTable, tableGroupsFrom } from '@/lib/table-group';
 import { floorBoardFrom } from '@/lib/floor-nav';
 import type { Metadata } from 'next';
 import { requireFeature } from '@/lib/auth';
@@ -16,6 +17,7 @@ import type {
   TableView,
   UpcomingReservation,
 } from '@/components/floor/types';
+import { saveTableGroup } from './group-actions';
 import { startWalkIn, goToOrder, completeCleaning, setTableAvailability, releaseFinishedCleaning } from './actions';
 
 export const metadata: Metadata = { title: 'テーブル一覧' };
@@ -231,10 +233,19 @@ export default async function FloorPage() {
     }
   }
 
+  // テーブルグループ（2026-09-25 店舗要望）。まとめた卓のどれかに伝票があれば、同じ組として全部に出す
+  const tableGroups = tableGroupsFrom(settings?.settings);
+  for (const g of tableGroups) {
+    const withOrder = g.tableIds.map((id) => orderByTable.get(id)).find((o) => !!o);
+    if (!withOrder) continue;
+    for (const id of g.tableIds) if (!orderByTable.has(id)) orderByTable.set(id, withOrder);
+  }
+
   const tableViews: TableView[] = tableRows.map((t) => ({
     ...t,
     order: orderByTable.get(t.id) ?? null,
     upcoming: upcomingByTable.get(t.id) ?? [],
+    groupTableIds: groupOfTable(tableGroups, t.id)?.tableIds ?? [],
   }));
 
   // 右パネル: ウォークイン（直接来店）は予約ではないので除外
@@ -283,6 +294,7 @@ export default async function FloorPage() {
           goToOrderAction={goToOrder}
           completeCleaningAction={completeCleaning}
           setTableAvailabilityAction={setTableAvailability}
+          saveTableGroupAction={saveTableGroup}
           releaseFinishedCleaningAction={releaseFinishedCleaning}
           bottomSlot={<Legend />}
         />

@@ -74,6 +74,8 @@ export interface UpcomingReservation {
 export interface TableView extends FloorTable {
   order: TableOrderInfo | null;
   upcoming: UpcomingReservation[];
+  /** 同じ組としてまとめている卓（自分を含む）。まとめていなければ空（2026-09-25 店舗要望） */
+  groupTableIds: string[];
 }
 
 /** 右パネル「本日のご予約」の1行 */

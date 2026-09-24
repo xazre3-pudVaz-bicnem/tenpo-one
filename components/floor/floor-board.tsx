@@ -57,6 +57,7 @@ export function FloorBoard({
   goToOrderAction,
   completeCleaningAction,
   setTableAvailabilityAction,
+  saveTableGroupAction,
   releaseFinishedCleaningAction,
   topSlot,
   bottomSlot,
@@ -75,6 +76,8 @@ export function FloorBoard({
   goToOrderAction: (tableId: string) => Promise<{ orderId: string }>;
   completeCleaningAction: (tableId: string) => Promise<void>;
   setTableAvailabilityAction: (tableId: string, unavailable: boolean) => Promise<void>;
+  /** テーブルグループ（まとめる卓）の保存。1卓以下を渡すと解除（2026-09-25 店舗要望） */
+  saveTableGroupAction: (tableIds: string[]) => Promise<{ error?: string }>;
   /** テーブルの上に出すもの（テイクアウト）。右のご予約は一番上から出したいのでここに入れる */
   topSlot?: ReactNode;
   /** テーブルの下に出すもの（色の見方）。上に置くとテーブルが下がるので一番下に置く */
@@ -333,6 +336,8 @@ export function FloorBoard({
         goToOrderAction={goToOrderAction}
         completeCleaningAction={completeCleaningAction}
         setTableAvailabilityAction={setTableAvailabilityAction}
+        saveTableGroupAction={saveTableGroupAction}
+        allTables={tables}
       />
     </div>
   );
