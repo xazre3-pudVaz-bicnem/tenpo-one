@@ -117,7 +117,6 @@ export function ScheduleBoard({
   isToday,
   nowMs,
   updatedAt,
-  dateNav,
 }: {
   reservations: ReservationListRow[];
   tables: BoardTable[];
@@ -132,8 +131,6 @@ export function ScheduleBoard({
   isToday: boolean;
   nowMs: number;
   updatedAt: string;
-  /** スケジュールの真ん中（上）に出す日付ナビ（‹ 今日 日付 ›）。店舗要望 2026-09-24 */
-  dateNav?: React.ReactNode;
 }) {
   const { toast } = useToast();
   const [selected, setSelected] = useState<ReservationListRow | null>(null);
@@ -286,13 +283,8 @@ export function ScheduleBoard({
         .board-off{background:repeating-linear-gradient(135deg,rgba(201,184,234,.35) 0 6px,transparent 6px 12px);pointer-events:none}
         .board-buffer{background:repeating-linear-gradient(45deg,rgba(122,112,144,.18) 0 3px,transparent 3px 6px);pointer-events:auto}
       `}</style>
-      {/* 見出しは出さず、日付ナビを真ん中に置く（店舗要望 2026-09-24）。
-          「最終更新・組数・人数」は下の行にまとめた */}
-      {dateNav && (
-        <div className="flex items-center justify-center border-b border-line px-4 py-2 print:hidden [&>*]:ml-0">
-          {dateNav}
-        </div>
-      )}
+      {/* 見出しは出さない（店舗要望 2026-09-24）。日付ナビは上のバー、
+          「最終更新・組数・人数・営業時間」は下の行にまとめた */}
 
       {tables.length === 0 && unassigned.length === 0 ? (
         <div className="p-5">

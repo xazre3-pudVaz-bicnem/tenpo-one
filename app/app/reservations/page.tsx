@@ -220,8 +220,7 @@ export default async function ReservationsLedgerPage({ searchParams }: { searchP
 
   let body: React.ReactNode;
   let active: LedgerTabKey = 'schedule';
-  // スケジュールの日付ナビはスケジュールの中（真ん中）に出すので、上のバーには置かない
-  let nav: React.ReactNode = null;
+  let nav: React.ReactNode = <DateNav date={date} basePath="/app/reservations" today={today} />;
 
   if (view === 'day') {
     const dow = dowOfDateStr(date);
@@ -303,7 +302,6 @@ export default async function ReservationsLedgerPage({ searchParams }: { searchP
           </div>
         )}
         <ScheduleBoard
-          dateNav={<DateNav date={date} basePath="/app/reservations" today={today} />}
           reservations={reservations}
           tables={boardTables}
           viewStartMin={viewStartMin}

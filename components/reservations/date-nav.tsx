@@ -81,7 +81,7 @@ export function DateNav({
         href={hrefFor(today)}
         aria-current={isToday ? 'page' : undefined}
         className={cn(
-          'inline-flex h-10 items-center rounded-[9px] border border-line bg-white px-3.5 text-[14px] font-bold text-royal transition-colors hover:border-iris',
+          'inline-flex h-10 items-center rounded-[9px] border border-line bg-white px-3 text-[14px] font-bold text-royal transition-colors hover:border-iris',
           isToday && 'border-iris'
         )}
       >
@@ -91,13 +91,13 @@ export function DateNav({
         <button
           type="button"
           onClick={openPicker}
-          className="inline-flex h-10 items-center gap-1.5 rounded-[9px] border border-line bg-white px-3.5 text-[15px] font-bold text-ink transition-colors hover:border-iris"
+          className="inline-flex h-10 items-center gap-1.5 rounded-[9px] border border-line bg-white px-3 text-[14px] font-bold text-ink transition-colors hover:border-iris"
           aria-label="日付を選択"
         >
           <span className="tabular-nums">
             {y}/{pad2(m)}/{pad2(d)}
           </span>
-          <span className="text-[14px]">（{weekdayJa(date)}）</span>
+          <span className="text-[13px] text-ink-2">（{weekdayJa(date)}）</span>
           <ChevronDown className="h-4 w-4 text-ink-2" />
         </button>
         <input
