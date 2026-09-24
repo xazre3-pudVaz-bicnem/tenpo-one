@@ -11,6 +11,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import {
   groupKitchenTickets,
   kitchenTicketSettingsFrom,
+  rotateLines180,
   layoutKitchenTicket,
   STATION_LABELS,
   STATION_LABELS_EN,
@@ -20,7 +21,7 @@ import {
   type KitchenTicketSettings,
 } from '@/lib/kitchen-ticket';
 import { kitchenTicketsMarkup, orderSlipMarkup } from '@/lib/receipt-markup';
-import { STAR_WIDTH_OPTIONS } from '@/lib/receipt-layout';
+import { colsFor, STAR_WIDTH_OPTIONS } from '@/lib/receipt-layout';
 import { kitchenTicketsStarPrnt, orderSlipStarPrnt } from '@/lib/starprnt';
 import { kitchenTicketsEpos, orderSlipEposXml, eposCols } from '@/lib/epos-print';
 import { selectQrOrdersToPrint, QR_BILL_WINDOW_MS } from '@/lib/qr-bill';
@@ -65,6 +66,8 @@ export interface PrinterRow {
   floor_ids?: string[] | null;
   /** 厨房（ドリンク）機から会計伝票も出す */
   bill_slips?: boolean;
+  /** プリンターを上下さかさまに付けているとき true（印字を180度回して出す） */
+  upside_down?: boolean;
 }
 
 type Admin = ReturnType<typeof createAdminClient>;
@@ -74,7 +77,7 @@ export async function resolvePrinter(token: string): Promise<{ admin: Admin; pri
   const admin = createAdminClient();
   const { data } = await admin
     .from('printer_configs')
-    .select('id, organization_id, store_id, name, usage, paper_width_mm, kitchen_stations, auto_print, floor_ids, bill_slips')
+    .select('id, organization_id, store_id, name, usage, paper_width_mm, kitchen_stations, auto_print, floor_ids, bill_slips, upside_down')
     .eq('cloudprnt_token', token)
     .eq('cloudprnt_enabled', true)
     .eq('status', 'active')
@@ -167,13 +170,17 @@ export async function generateKitchenJobs(admin: Admin, printer: PrinterRow) {
   const rows = tickets.map((t) => {
     const slips = ticketSlips(t, split);
     // Star 機向け: 全角がわずかに広い分を見込んで桁揃え（STAR_WIDTH_OPTIONS）
-    const starSlips = slips.map((slip) =>
-      layoutKitchenTicket(slip, { title, titleEn, printedAt, paperWidth, textSize, language, ...STAR_WIDTH_OPTIONS })
-    );
+    const starSlips = slips.map((slip) => {
+      const lines = layoutKitchenTicket(slip, { title, titleEn, printedAt, paperWidth, textSize, language, ...STAR_WIDTH_OPTIONS });
+      // プリンターを上下さかさまに付けている店舗は、印字を180度回して出す
+      return printer.upside_down ? rotateLines180(lines, colsFor(paperWidth)) : lines;
+    });
     // EPSON機は1行の桁数が少ないため、専用の桁数で組み直す（Star用の行をそのまま渡すと折り返す）
-    const eposSlips = slips.map((slip) =>
-      layoutKitchenTicket(slip, { title, titleEn, printedAt, columns: eposCols(paperWidth), textSize, language })
-    );
+    const eposSlips = slips.map((slip) => {
+      const cols = eposCols(paperWidth);
+      const lines = layoutKitchenTicket(slip, { title, titleEn, printedAt, columns: cols, textSize, language });
+      return printer.upside_down ? rotateLines180(lines, cols) : lines;
+    });
     return {
       organization_id: printer.organization_id,
       store_id: printer.store_id,
