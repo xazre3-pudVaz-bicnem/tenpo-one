@@ -12,6 +12,8 @@ import { cn } from '@/lib/utils';
 import { yen } from '@/lib/format';
 import { calcChange } from '@/lib/money';
 import { METHOD_LABELS, METHOD_LABELS_EN } from '@/components/cash/labels';
+import { setOrderClerk } from '@/app/app/pos/clerk-actions';
+import type { ClerkOption } from './clerk-selector';
 import {
   discountAmountOf,
   percentDiscountAmount,
@@ -124,7 +126,8 @@ export function CheckoutDialog({
   checkTerminalPaymentAction,
   cancelTerminalPaymentAction,
   onTerminalPaymentFinalized,
-  clerkMissing = false,
+  clerks = [],
+  currentClerkId = null,
   discountPresets = [],
   pointBrands = [],
   methodBrands = {},
@@ -144,8 +147,10 @@ export function CheckoutDialog({
   checkTerminalPaymentAction: (localIntentId: string) => Promise<TerminalPaymentState>;
   cancelTerminalPaymentAction: (localIntentId: string) => Promise<TerminalPaymentState>;
   onTerminalPaymentFinalized: () => void;
-  /** 担当者が未選択（会計には担当者が必要） */
-  clerkMissing?: boolean;
+  /** 店舗のPOS担当者。会計画面でそのまま選べる（2026-09-25 要望） */
+  clerks?: ClerkOption[];
+  /** いまの伝票の担当者 */
+  currentClerkId?: string | null;
   /** 値引きの選択肢（設定 > 決済・端末）。グルメサイトのクーポンなど */
   discountPresets?: DiscountPreset[];
   /** ポイントの選択肢（ホットペッパー・ぐるなび・食べログなど） */
@@ -294,6 +299,24 @@ export function CheckoutDialog({
 
   /** 値引き前の合計（％値引きはこの金額から計算する） */
   const baseTotal = order.total + order.discountTotal;
+
+  /** 担当者（会計画面でも選べる。選ばないと会計できない） */
+  const [clerkId, setClerkId] = useState(currentClerkId ?? '');
+  const [clerkPending, startClerk] = useTransition();
+  const clerkMissing = clerks.length > 0 && !clerkId;
+  const clerkName = clerks.find((c) => c.id === clerkId)?.name ?? null;
+
+  const pickClerk = (id: string) => {
+    const previous = clerkId;
+    setClerkId(id);
+    startClerk(async () => {
+      const res = await setOrderClerk(order.id, id || null);
+      if (!res.ok) {
+        setClerkId(previous);
+        toast(res.error ?? '担当者の設定に失敗しました', 'error');
+      }
+    });
+  };
 
   /** ポイント（自社・サイト）で払う指定があるか */
   const pointsSelected = payments.some((p) => p.method === 'points' || p.method === 'site_points');
@@ -708,10 +731,35 @@ export function CheckoutDialog({
             )}
           </div>
           <div className="border-t border-line p-3">
-            {clerkMissing && (
-              <p className="mb-2 rounded-lg border border-danger/40 bg-danger-soft px-3 py-2 text-xs font-bold text-danger">
-                担当者を選んでください（伝票へ戻って担当を選ぶと会計できます）
-              </p>
+            {/* 担当者はここで選ぶ（伝票へ戻らなくていいように。2026-09-25 要望） */}
+            {clerks.length > 0 && (
+              <div
+                className={cn(
+                  'mb-2 rounded-xl border p-2',
+                  clerkMissing ? 'border-danger/50 bg-danger-soft' : 'border-line bg-lilac-soft'
+                )}
+              >
+                <p className={cn('mb-1.5 text-[11px] font-bold', clerkMissing ? 'text-danger' : 'text-ink-3')}>
+                  {clerkMissing ? '担当者を選んでください / Choose staff' : `担当 ${clerkName} / Staff`}
+                </p>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {clerks.map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      disabled={clerkPending}
+                      aria-pressed={clerkId === c.id}
+                      onClick={() => pickClerk(c.id)}
+                      className={cn(
+                        'flex h-[38px] items-center justify-center rounded-lg border px-1.5 text-center text-[13px] font-bold leading-tight transition-colors disabled:opacity-50',
+                        clerkId === c.id ? 'border-iris bg-iris text-white' : 'border-line bg-white text-navy active:bg-lilac'
+                      )}
+                    >
+                      {c.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
             )}
             <Button
               size="pos"
