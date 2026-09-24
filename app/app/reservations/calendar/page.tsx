@@ -7,7 +7,7 @@ import { EmptyState } from '@/components/ui/state';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { ACTIVE_TIMELINE_STATUSES } from '@/components/reservations/constants';
 import { loadLedgerChrome } from '@/components/reservations/ledger-data';
-import { LedgerTop, LedgerSummaryTiles, MonthNav } from '@/components/reservations/ledger-header';
+import { LedgerTop, MonthNav } from '@/components/reservations/ledger-header';
 import { cn } from '@/lib/utils';
 
 export const metadata: Metadata = { title: '予約カレンダー' };
@@ -113,10 +113,9 @@ export default async function ReservationsCalendarPage({
   return (
     <div>
       <h1 className="sr-only">月間（予約カレンダー）</h1>
-      <LedgerTop active="month" date={linkDate} chrome={chrome} nav={<MonthNav month={month} current={currentMonth} />} />
+      <LedgerTop title="月間カレンダー" date={linkDate} chrome={chrome} nav={<MonthNav month={month} current={currentMonth} />} />
 
       <div className="print-area">
-        <LedgerSummaryTiles chrome={chrome} isToday />
 
         <Card className="overflow-hidden">
           <CardHeader className="flex flex-wrap items-center justify-between gap-3">

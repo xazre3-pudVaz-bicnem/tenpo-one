@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { MoreHorizontal } from 'lucide-react';
+import { CalendarDays, MoreHorizontal } from 'lucide-react';
 
 /**
  * 店舗台帳の「…」（そのほか）。
@@ -10,7 +10,16 @@ import { MoreHorizontal } from 'lucide-react';
  *
  * 中の項目はリンクでもダイアログの開くボタンでもよい（見た目はここで揃える）。
  */
-export function LedgerMoreMenu({ children }: { children: React.ReactNode }) {
+export function LedgerMoreMenu({
+  children,
+  icon = 'more',
+  label = 'そのほか',
+}: {
+  children: React.ReactNode;
+  /** 見た目のアイコン（見本に合わせてカレンダーにもできる） */
+  icon?: 'more' | 'calendar';
+  label?: string;
+}) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -34,12 +43,21 @@ export function LedgerMoreMenu({ children }: { children: React.ReactNode }) {
     <div ref={ref} className="relative print:hidden">
       <button
         type="button"
-        aria-label="そのほか"
+        aria-label={label}
+        title={label}
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
-        className="flex h-10 w-10 items-center justify-center rounded-[9px] border border-line bg-white text-ink-2 transition-colors hover:border-iris hover:text-iris"
+        className={
+          icon === 'calendar'
+            ? 'flex h-10 w-10 items-center justify-center rounded-[9px] bg-iris text-white transition-colors hover:bg-royal'
+            : 'flex h-10 w-10 items-center justify-center rounded-[9px] border border-line bg-white text-ink-2 transition-colors hover:border-iris hover:text-iris'
+        }
       >
-        <MoreHorizontal className="h-5 w-5" aria-hidden />
+        {icon === 'calendar' ? (
+          <CalendarDays className="h-5 w-5" aria-hidden />
+        ) : (
+          <MoreHorizontal className="h-5 w-5" aria-hidden />
+        )}
       </button>
       {open && (
         <div

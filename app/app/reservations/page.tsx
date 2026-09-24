@@ -19,7 +19,7 @@ import { WaitingQueuePanel, type WaitingTicketRow, type WaitingHint } from '@/co
 import type { GuideTableOption } from '@/components/reservations/guide-table-dialog';
 import { ACTIVE_TIMELINE_STATUSES, BOARD_SLOT } from '@/components/reservations/constants';
 import { loadLedgerChrome } from '@/components/reservations/ledger-data';
-import { LedgerTop, LedgerSummaryTiles, type LedgerTabKey } from '@/components/reservations/ledger-header';
+import { LedgerTop } from '@/components/reservations/ledger-header';
 import { ScheduleBoard, type BoardTable } from '@/components/reservations/schedule-board';
 import { suggestTables, type TableLike, type ReservationStatus } from '@/lib/reservations';
 import { cn } from '@/lib/utils';
@@ -219,7 +219,7 @@ export default async function ReservationsLedgerPage({ searchParams }: { searchP
     .sort((a, b) => a.name.localeCompare(b.name, 'ja'));
 
   let body: React.ReactNode;
-  let active: LedgerTabKey = 'schedule';
+  let title = 'スケジュール';
   let nav: React.ReactNode = <DateNav date={date} basePath="/app/reservations" today={today} />;
 
   if (view === 'day') {
@@ -320,7 +320,7 @@ export default async function ReservationsLedgerPage({ searchParams }: { searchP
     );
   } else if (view === 'gourmet') {
     // グルメ別：その日の予約を入り口（ホットペッパー・ぐるなび・食べログ・電話…）ごとにまとめる
-    active = 'gourmet';
+    title = 'グルメ別';
     nav = <DateNav date={date} basePath="/app/reservations" today={today} query="view=gourmet" />;
 
     const { data: gourmetData } = await supabase
@@ -334,7 +334,7 @@ export default async function ReservationsLedgerPage({ searchParams }: { searchP
     const rows = ((gourmetData ?? []) as unknown as RawReservation[]).map((r) => mapReservationRow(r, null));
     body = <GourmetPanel reservations={rows} dateLabel={date.replaceAll('-', '/')} />;
   } else if (view === 'week') {
-    active = 'week';
+    title = '週間';
     nav = <DateNav date={date} basePath="/app/reservations" today={today} query="view=week" step={7} />;
     const weekStart = shiftDateStr(date, -dowOfDateStr(date));
     const weekDates = Array.from({ length: 7 }, (_, i) => shiftDateStr(weekStart, i));
@@ -474,7 +474,7 @@ export default async function ReservationsLedgerPage({ searchParams }: { searchP
       </Card>
     );
   } else {
-    active = 'waiting';
+    title = 'ウェイティング';
     nav = null;
     const storeIds = ctx.currentStore ? [ctx.currentStore.id] : ctx.stores.map((s) => s.id);
     const showStore = !ctx.currentStore && ctx.stores.length > 1;
@@ -618,19 +618,17 @@ export default async function ReservationsLedgerPage({ searchParams }: { searchP
     );
   }
 
-  const isSummaryToday = chrome.summaryDate === today;
 
   return (
     <div>
       {/* 予約・ウェイティングの追加・変更・キャンセルをRealtimeで検知し、台帳（日/週/ウェイティング）を自動更新する */}
       <StoreRealtimeRefresh storeId={store.id} tables={['reservations', 'waitlist_entries']} />
       <h1 className="sr-only">店舗台帳（{store.name}）</h1>
-      <LedgerTop active={active} date={date} chrome={chrome} nav={nav} />
+      <LedgerTop title={title} date={date} chrome={chrome} nav={nav} />
       <div className="print-area">
         <p className="mb-3 hidden text-base font-bold text-ink print:block">
           店舗台帳 ／ {store.name} ／ {chrome.summaryDate.replaceAll('-', '/')}
         </p>
-        <LedgerSummaryTiles chrome={chrome} isToday={isSummaryToday} />
         {body}
       </div>
     </div>
