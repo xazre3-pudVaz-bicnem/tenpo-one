@@ -398,9 +398,12 @@ export function tableState(currentStatus: string | null, hasOpenOrder: boolean):
  * この状態の卓で、ハンディから新しい注文を始められるか。
  * 「予約あり」の卓はフロア画面のウォークイン（startWalkIn）でも着席できない（予約の来店処理が必要）ため、
  * ハンディでも始められない。
+ *
+ * 「清掃中（整理中）」は始められる（店舗要望 2026-09-24）。回転の速い店は会計が終わった卓へ
+ * すぐ次のお客様を通すため、片付け中でも注文を取れないと現場が止まる。
  */
 export function canStartOrder(state: HandyTableState): boolean {
-  return state === 'available' || state === 'occupied';
+  return state === 'available' || state === 'occupied' || state === 'cleaning';
 }
 
 export const TABLE_STATE_LABEL: Record<HandyTableState, string> = {

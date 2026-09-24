@@ -14,7 +14,12 @@ import { jstMinutesOfMs, useNow } from './use-now';
 import { BOARD_SLOT } from './constants';
 
 export { BOARD_SLOT } from './constants';
-const SLOT_W = 52;
+/**
+ * 30分のマスの幅。
+ * 店舗要望（2026-09-24）「画面いっぱいで6時間ぐらい見えるように」。
+ * iPad 横（1366px）で テーブル列128px を引いた約1240px に 12マス（＝6時間）入る幅にする。
+ */
+const SLOT_W = 100;
 const LABEL_W = 128;
 const HEAD_H = 48;
 
