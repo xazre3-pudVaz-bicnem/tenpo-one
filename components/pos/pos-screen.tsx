@@ -354,6 +354,9 @@ export function PosScreen({
     if (searchQuery.trim()) {
       return menuItems.filter((m) => matchesQuery(m, searchQuery));
     }
+    // テイクアウトは店内のカテゴリ・ページを使わない。テイクアウトメニューに入れた商品だけを一枚で出す
+    // （2026-09-25 店舗要望「テイクアウトの中に店内のメニューは出さない」）
+    if (isTakeoutLike) return menuItems;
     if (activeCategory === FAVORITES_TAB) {
       return menuItems.filter((m) => m.is_recommended);
     }
@@ -365,7 +368,7 @@ export function PosScreen({
     return activeCategory
       ? menuItems.filter((m) => m.category_id === activeCategory)
       : menuItems.filter((m) => !m.category_id);
-  }, [menuItems, activeCategory, searchQuery, bestSellerRank]);
+  }, [menuItems, activeCategory, searchQuery, bestSellerRank, isTakeoutLike]);
 
   /** タップした品はまずカートへ（同じ品・同じ選択肢はまとめて数量を足す） */
   const addWithOptions = (menuItemId: string, optionItemIds: string[]) => {
@@ -859,7 +862,7 @@ export function PosScreen({
 
       {/* 右側: 上が「ページ」のタブ（フード・ドリンク…）、下が「カテゴリの列 + 商品」 */}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3">
-        {!searchQuery.trim() && pages.length > 1 && (
+        {!isTakeoutLike && !searchQuery.trim() && pages.length > 1 && (
           <nav className="flex shrink-0 gap-1.5 overflow-x-auto rounded-2xl border border-line bg-white p-1.5">
             {pages.map((pg, i) => {
               const on = activePage?.key === pg.key;
@@ -896,8 +899,8 @@ export function PosScreen({
         )}
 
         <div className="flex min-h-0 flex-1 flex-col gap-3 lg:flex-row">
-          {/* 中: カテゴリ（縦一列。iPad で指で選びやすいように） */}
-          {!searchQuery.trim() && (
+          {/* 中: カテゴリ（縦一列。iPad で指で選びやすいように）。テイクアウトは出さない */}
+          {!isTakeoutLike && !searchQuery.trim() && (
             <nav className="hidden w-[168px] shrink-0 overflow-y-auto rounded-2xl border border-line bg-white lg:block">
               {categoryTabs.map((c) => {
                 const on = activeCategory === c.id;
@@ -936,8 +939,8 @@ export function PosScreen({
               </div>
             </div>
 
-            {/* 幅が狭いとき（スマホ・縦置き）はカテゴリを横並びで出す */}
-            {!searchQuery.trim() && (
+            {/* 幅が狭いとき（スマホ・縦置き）はカテゴリを横並びで出す。テイクアウトは出さない */}
+            {!isTakeoutLike && !searchQuery.trim() && (
               <div className="flex gap-2 overflow-x-auto border-b border-line px-3 py-2 lg:hidden">
                 {categoryTabs.map((c) => (
                   <button
