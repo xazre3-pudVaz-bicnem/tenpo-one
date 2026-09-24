@@ -25,7 +25,7 @@ export function TopBar({
 }) {
   const roleLabel = ctx.role ? ROLE_LABELS[ctx.role] : ctx.isCypressAdmin ? '運営管理者' : '';
   return (
-    <header className="sticky top-0 z-40 grid h-[58px] grid-cols-[1fr_auto_1fr] items-center gap-4 bg-plum px-3 text-white sm:px-5">
+    <header className="sticky top-0 z-40 grid h-[58px] grid-cols-[1fr_minmax(0,auto)_1fr] items-center gap-2 bg-plum px-3 text-white sm:gap-3 sm:px-5">
       <div className="flex min-w-0 items-center gap-3">
         {showMenuLink && (
           <Link
