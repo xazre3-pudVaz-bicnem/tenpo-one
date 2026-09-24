@@ -22,6 +22,9 @@ import { TransferList, type TransferRow } from '@/components/inventory/transfer-
 import { ReorderTab, type ReorderRow } from '@/components/inventory/reorder-tab';
 import { ForecastChart, type WeekdayAvgPoint } from '@/components/inventory/forecast-chart';
 import { ForecastItemSelect } from '@/components/inventory/forecast-item-select';
+import { MenuStockPanel, type MenuStockRow } from '@/components/inventory/menu-stock-panel';
+import { loadMenuStock } from '@/lib/menu-stock-server';
+import { setMenuStockLimit } from './menu-stock-actions';
 import {
   ITEM_KIND_LABELS,
   ITEM_KIND_OPTIONS,
@@ -35,9 +38,10 @@ import {
 
 export const metadata: Metadata = { title: '在庫' };
 
-type Tab = 'items' | 'counts' | 'transfers' | 'reorder' | 'forecast';
+type Tab = 'items' | 'menu' | 'counts' | 'transfers' | 'reorder' | 'forecast';
 const TABS: { key: Tab; label: string }[] = [
   { key: 'items', label: '品目' },
+  { key: 'menu', label: 'メニュー売切' },
   { key: 'counts', label: '棚卸' },
   { key: 'transfers', label: '移動' },
   { key: 'reorder', label: '発注提案' },
@@ -77,6 +81,8 @@ export default async function InventoryPage({
   let transferItemOptions: { id: string; name: string; unit: string; currentQuantity: number }[] = [];
   let reorderRows: ReorderRow[] = [];
   let forecastItemOptions: { id: string; name: string }[] = [];
+  /** メニュー売切タブ（本日の食数）の行 */
+  let menuStockRows: MenuStockRow[] = [];
   let forecastResult: ReturnType<typeof forecastUsage> | null = null;
   let forecastWeekdayChart: WeekdayAvgPoint[] = [];
   let forecastUnit = '';
@@ -293,6 +299,36 @@ export default async function InventoryPage({
         basis: suggestion.basis,
       };
     });
+  } else if (tab === 'menu') {
+    // メニューの売り切り（本日の食数）。設定は店舗設定、売れた数はその日の伝票から数える
+    const [{ data: items }, { data: cats }, stock] = await Promise.all([
+      supabase
+        .from('menu_items')
+        .select('id, name, category_id, price, is_sold_out, status, store_id')
+        .eq('organization_id', ctx.organizationId)
+        .or(`store_id.is.null,store_id.eq.${currentStore.id}`)
+        .eq('status', 'active')
+        .order('sort_order')
+        .order('name'),
+      supabase
+        .from('menu_categories')
+        .select('id, name')
+        .eq('organization_id', ctx.organizationId),
+      loadMenuStock(supabase, currentStore.id),
+    ]);
+    const catName = new Map((cats ?? []).map((c) => [c.id as string, c.name as string]));
+    menuStockRows = (items ?? []).map((m) => {
+      const st = stock.get(m.id as string);
+      return {
+        id: m.id as string,
+        name: m.name as string,
+        categoryName: m.category_id ? (catName.get(m.category_id as string) ?? null) : null,
+        price: Number(m.price ?? 0),
+        limit: st ? st.limit : null,
+        sold: st ? st.sold : 0,
+        manualSoldOut: !!m.is_sold_out,
+      };
+    });
   } else if (tab === 'forecast') {
     // 在庫品目(activeItems)と販売実績(movements)は独立のため並列取得する。
     const [{ data: activeItems }, { data: movements }] = await Promise.all([
@@ -497,6 +533,10 @@ export default async function InventoryPage({
             </Table>
           </TableWrap>
         ))}
+
+      {tab === 'menu' && (
+        <MenuStockPanel storeId={currentStore.id} rows={menuStockRows} saveAction={setMenuStockLimit} />
+      )}
 
       {tab === 'transfers' && <TransferList rows={transferRows} currentStoreId={currentStore.id} />}
 
