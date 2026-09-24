@@ -129,6 +129,81 @@ export function toRomaji(input: string): string {
 }
 
 /**
+ * よく使う日本語の言い方 → 正しい英語（2026-09-24 店舗要望「Dorinku・Fuudo は英語が間違い」）。
+ * カナのローマ字より先にこちらを使う。完全一致だけを見る（部分一致で誤訳しないため）。
+ */
+const COMMON_EN: Record<string, string> = {
+  ドリンク: 'Drink',
+  'ドリンク類': 'Drinks',
+  お飲み物: 'Drinks',
+  飲み物: 'Drinks',
+  フード: 'Food',
+  料理: 'Food',
+  お食事: 'Food',
+  食事: 'Food',
+  コース: 'Course',
+  コース料理: 'Course',
+  おすすめ: 'Picks',
+  オススメ: 'Picks',
+  本日のおすすめ: "Today's picks",
+  人気: 'Popular',
+  売れ筋: 'Popular',
+  ランチ: 'Lunch',
+  ディナー: 'Dinner',
+  モーニング: 'Morning',
+  サービス: 'Service',
+  オプション: 'Options',
+  トッピング: 'Toppings',
+  サイド: 'Sides',
+  サイドメニュー: 'Sides',
+  前菜: 'Appetizer',
+  サラダ: 'Salad',
+  スープ: 'Soup',
+  メイン: 'Main',
+  デザート: 'Dessert',
+  ドルチェ: 'Dessert',
+  アルコール: 'Alcohol',
+  ソフトドリンク: 'Soft drinks',
+  ビール: 'Beer',
+  ワイン: 'Wine',
+  日本酒: 'Sake',
+  焼酎: 'Shochu',
+  ウイスキー: 'Whisky',
+  カクテル: 'Cocktails',
+  サワー: 'Sour',
+  ハイボール: 'Highball',
+  ノンアルコール: 'Non-alcoholic',
+  飲み放題: 'All you can drink',
+  食べ放題: 'All you can eat',
+  食べ飲み放題: 'All you can eat & drink',
+  テイクアウト: 'Takeout',
+  お持ち帰り: 'Takeout',
+  持ち帰り: 'Takeout',
+  その他: 'Other',
+  セット: 'Set',
+  単品: 'A la carte',
+  アラカルト: 'A la carte',
+  カレー: 'Curry',
+  ナン: 'Naan',
+  ライス: 'Rice',
+  ご飯: 'Rice',
+  麺: 'Noodles',
+  丼: 'Rice bowl',
+  鍋: 'Hot pot',
+  寿司: 'Sushi',
+  刺身: 'Sashimi',
+  焼き鳥: 'Yakitori',
+  揚げ物: 'Fried',
+  デリバリー: 'Delivery',
+};
+
+/** よく使う言い方の英語（完全一致のみ）。無ければ null */
+export function commonEnglishName(name: string): string | null {
+  const key = name.trim().replace(/\s+/g, '');
+  return COMMON_EN[key] ?? null;
+}
+
+/**
  * 厨房伝票に出すローマ字名を決める。
  * @param name  商品名（日本語のことが多い）
  * @param kana  カナ名（tenpo-one の「カナ」欄。英語名を入れている店舗もある）
@@ -165,5 +240,8 @@ export function englishName(
   const manual = (nameEn ?? '').trim();
   // 日本語名と同じ文字列を英語名欄に入れている場合は「英語なし」と同じ扱いにする
   if (manual && manual !== name.trim()) return manual;
+  // 「ドリンク→Dorinku」のようなローマ字にならないよう、よく使う言い方は先に英語にする
+  const common = commonEnglishName(name);
+  if (common) return common;
   return romanItemName(name, nameKana ?? null);
 }

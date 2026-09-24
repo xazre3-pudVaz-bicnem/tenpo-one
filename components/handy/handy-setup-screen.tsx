@@ -23,8 +23,8 @@ import {
   nearestButtonParts,
   parseCustomHm,
   parseCustomMinutes,
-  planHasItems,
-  planName,
+  planNames,
+  plansHaveItems,
   resolveStartTime,
   splitMinutes,
   startTimeProblem,
@@ -86,30 +86,46 @@ export function HandySetupScreen({
   const total = draft.male + draft.female;
   const problem = validateVisitDraft(draft);
   // 選んだモードに合うプランを先に、それ以外（名前から判断しきれないもの）を「ほかのプラン」として後に出す
-  const itemsForPlan = planItems.filter((p) => p.kind === draft.plan);
-  const otherItems = planItems.filter((p) => p.kind !== draft.plan);
-  const selectedItem = planItems.find((p) => p.id === draft.planItemId) ?? null;
+  const itemsForPlan = planItems.filter((p) => draft.plans.includes(p.kind));
+  const otherItems = planItems.filter((p) => !draft.plans.includes(p.kind));
+  const selectedItems = planItems.filter((p) => draft.planItemIds.includes(p.id));
 
-  const choosePlan = (plan: HandyPlan) => {
-    // モードを変えたら選んでいたプラン商品は外す。飲み放題・コースは時間制が普通なので既定でオンにする
-    set({ plan, planItemId: null, timed: plan === 'normal' ? draft.timed : true });
-    setPicker(plan !== 'normal' && planItems.length > 0 ? 'plan-item' : null);
+  /**
+   * モードは何個でも選べる（2026-09-24 店舗要望）。
+   * 例: 飲み放題＋アラカルト、食べ放題＋単品ドリンク。押すたびに入り切りする。
+   */
+  const togglePlan = (plan: HandyPlan) => {
+    const on = draft.plans.includes(plan);
+    const plans = on ? draft.plans.filter((p) => p !== plan) : [...draft.plans, plan];
+    if (plans.length === 0) return; // 全部外すのは不可（最低1つ）
+    // 外したモードのプラン商品も外す
+    const planItemIds = draft.planItemIds.filter((id) => {
+      const item = planItems.find((p) => p.id === id);
+      return item ? plans.includes(item.kind) : false;
+    });
+    // 飲み放題・食べ放題・コースを入れたら時間制を既定でオンにする
+    const timed = plans.some((p) => p !== 'normal') ? true : draft.timed;
+    set({ plans, planItemIds, timed });
   };
 
   const planOption = (p: HandyPlanItem) => ({
     id: p.id,
     label: p.name,
     note: `${yen(p.price)}${p.durationMinutes ? ` · ${durationLabel(p.durationMinutes)}` : ''}`,
-    selected: p.id === draft.planItemId,
+    selected: draft.planItemIds.includes(p.id),
   });
 
-  const chooseItem = (item: HandyPlanItem) => {
+  /** プラン商品も何個でも選べる（飲み放題B＋食べ放題A のような組み合わせ） */
+  const toggleItem = (item: HandyPlanItem) => {
+    const on = draft.planItemIds.includes(item.id);
+    const planItemIds = on
+      ? draft.planItemIds.filter((id) => id !== item.id)
+      : [...draft.planItemIds, item.id];
     set({
-      planItemId: item.id,
-      timed: true,
-      duration: item.durationMinutes ?? draft.duration,
+      planItemIds,
+      timed: on ? draft.timed : true,
+      duration: !on && item.durationMinutes ? item.durationMinutes : draft.duration,
     });
-    setPicker(null);
   };
 
   const confirm = () => {
@@ -149,15 +165,19 @@ export function HandySetupScreen({
       <HandyMain>
         <div className="m-3 rounded-[10px] border border-[#e3dbf1] bg-white">
           <Row label="テーブル" en="Table" value={tableName} />
-          <RowButton label="モード" en="Mode" value={planName(draft.plan)} onClick={() => setPicker('plan')} />
-          {planHasItems(draft.plan) && (
+          <RowButton label="モード" en="Mode" value={planNames(draft.plans)} onClick={() => setPicker('plan')} />
+          {plansHaveItems(draft.plans) && (
             <RowButton
               label="プラン"
               en="Plan"
               value={
-                selectedItem ? selectedItem.name : planItems.length > 0 ? '未選択' : 'メニュー未登録'
+                selectedItems.length > 0
+                  ? selectedItems.map((i) => i.name).join('・')
+                  : planItems.length > 0
+                    ? '未選択'
+                    : 'メニュー未登録'
               }
-              muted={!selectedItem}
+              muted={selectedItems.length === 0}
               onClick={() => setPicker('plan-item')}
             />
           )}
@@ -311,15 +331,19 @@ export function HandySetupScreen({
 
       {picker === 'plan' && (
         <ChoiceSheet
-          title="モードを選択"
+          title="モードを選択（何個でも）"
           onClose={() => setPicker(null)}
-          options={HANDY_PLANS.map((p) => ({ id: p.id, label: p.name, selected: p.id === draft.plan }))}
-          onSelect={(id) => choosePlan(id as HandyPlan)}
+          options={HANDY_PLANS.map((p) => ({
+            id: p.id,
+            label: p.name,
+            selected: draft.plans.includes(p.id),
+          }))}
+          onSelect={(id) => togglePlan(id as HandyPlan)}
         />
       )}
       {picker === 'plan-item' && (
         <ChoiceSheet
-          title={`${planName(draft.plan)}のプラン`}
+          title={`${planNames(draft.plans)}のプラン（何個でも）`}
           onClose={() => setPicker(null)}
           empty="メニューにコース・飲み放題の商品がありません（設定 → メニュー で「コース」として登録）。プラン無しで続けられます。"
           options={itemsForPlan.map(planOption)}
@@ -327,11 +351,11 @@ export function HandySetupScreen({
           moreOptions={otherItems.map(planOption)}
           onSelect={(id) => {
             const item = planItems.find((p) => p.id === id);
-            if (item) chooseItem(item);
+            if (item) toggleItem(item);
           }}
-          clearLabel={draft.planItemId ? 'プランを外す' : undefined}
+          clearLabel={draft.planItemIds.length > 0 ? 'プランを全部外す' : undefined}
           onClear={() => {
-            set({ planItemId: null });
+            set({ planItemIds: [] });
             setPicker(null);
           }}
         />

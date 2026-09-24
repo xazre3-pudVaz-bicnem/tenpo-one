@@ -447,9 +447,9 @@ describe('厨房伝票の商品名の言語（2026-09-21 Ronnie「キッチン�
   });
 
   it('英語だけ: 英語名の無い商品は日本語で出す（情報を落とさない）', () => {
-    const [t] = groupKitchenTickets([row({ item_name: '本日のおすすめ', item_name_en: null, item_name_kana: null })]);
+    const [t] = groupKitchenTickets([row({ item_name: '大将のきまぐれ皿', item_name_en: null, item_name_kana: null })]);
     const texts = layoutKitchenTicket(t, { ...opts, language: 'en' }).map((l) => l.text);
-    expect(texts.some((x) => x.startsWith('本日のおすすめ'))).toBe(true);
+    expect(texts.some((x) => x.startsWith('大将のきまぐれ皿'))).toBe(true);
   });
 });
 

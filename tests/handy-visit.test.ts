@@ -84,13 +84,13 @@ describe('お客様情報の検証', () => {
   });
 
   it('プラン商品は必須ではない（メニュー未登録の店でも飲み放題モードで使える）', () => {
-    expect(validateVisitDraft(draft({ plan: 'drink', planItemId: null }))).toBeNull();
+    expect(validateVisitDraft(draft({ plans: ['drink'], planItemIds: [] }))).toBeNull();
   });
 });
 
 describe('伝票メモ', () => {
   it('モード・人数・シーン・時間制を1行にまとめる（レジのメモ欄で読める形）', () => {
-    expect(visitMemo(draft({ plan: 'drink', timed: true, duration: 120, warningEnabled: true, warningMinutes: 30 }))).toBe(
+    expect(visitMemo(draft({ plans: ['drink'], timed: true, duration: 120, warningEnabled: true, warningMinutes: 30 }))).toBe(
       'ハンディ: 飲み放題 / 男2・女1 / 食べログ / 2時間制（30分前に声かけ）'
     );
   });
@@ -352,5 +352,18 @@ describe('担当者 Cookie', () => {
   it('日付は日本時間で描く', () => {
     // 2026-09-21 00:30 JST = 2026-09-20 15:30 UTC（UTCのままだと前日になる）
     expect(handyDateLabel(Date.UTC(2026, 8, 20, 15, 30))).toBe('2026/09/21');
+  });
+});
+
+describe('モードは何個でも選べる（2026-09-24 店舗要望）', () => {
+  it('飲み放題＋アラカルトのように複数選べる。全部外すと確定できない', () => {
+    expect(validateVisitDraft(draft({ plans: ['drink', 'normal'] }))).toBeNull();
+    expect(validateVisitDraft(draft({ plans: [] }))).toMatch(/モード/);
+  });
+
+  it('伝票メモには選んだモードを並べる', () => {
+    expect(visitMemo(draft({ plans: ['drink', 'normal'], timed: false }))).toBe(
+      'ハンディ: 飲み放題・アラカルト / 男2・女1 / 食べログ'
+    );
   });
 });

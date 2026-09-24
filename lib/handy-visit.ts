@@ -204,10 +204,25 @@ export function planHasItems(plan: HandyPlan): boolean {
   return plan !== 'normal';
 }
 
+/** 選んだモードの名前（「飲み放題・アラカルト」のように並べる） */
+export function planNames(plans: readonly HandyPlan[]): string {
+  if (plans.length === 0) return '未選択';
+  return plans.map(planName).join('・');
+}
+
+/** 選んだモードのどれかがプラン商品（コース・飲み放題など）を持つか */
+export function plansHaveItems(plans: readonly HandyPlan[]): boolean {
+  return plans.some(planHasItems);
+}
+
 export interface VisitDraft {
-  plan: HandyPlan;
-  /** コース／飲み放題などで選んだプラン商品（menu_items.id）。アラカルト・未選択は null */
-  planItemId: string | null;
+  /**
+   * モード（何個でも選べる。2026-09-24 店舗要望）。
+   * 例: 飲み放題＋アラカルト、食べ放題＋単品ドリンク、飲み放題Bだけ。
+   */
+  plans: HandyPlan[];
+  /** 選んだプラン商品（menu_items.id）。何個でも入れられる */
+  planItemIds: string[];
   male: number;
   female: number;
   /** 来店経路（VISIT_SOURCES のラベル）。未選択は '' */
@@ -222,8 +237,8 @@ export interface VisitDraft {
 }
 
 export const DEFAULT_VISIT_DRAFT: VisitDraft = {
-  plan: 'normal',
-  planItemId: null,
+  plans: ['normal'],
+  planItemIds: [],
   male: 0,
   female: 0,
   source: '',
@@ -252,7 +267,9 @@ export function validateVisitDraft(d: VisitDraft): string | null {
       if (warningIssue) return warningIssue;
     }
   }
-  if (!HANDY_PLANS.some((p) => p.id === d.plan)) return 'モードを選択してください';
+  if (d.plans.length === 0 || d.plans.some((p) => !HANDY_PLANS.some((h) => h.id === p))) {
+    return 'モードを選択してください';
+  }
   // 範囲（12時間前〜今）は時刻で変わるので、選ぶ画面とサーバー（startWalkIn）で見る。ここでは形だけ
   if (d.startTime !== null && !isStartHm(d.startTime)) return '開始時間を選び直してください';
   return null;
@@ -333,10 +350,10 @@ export function parseCustomHm(hoursText: string, minutesText: string): string | 
 export function visitMemo(
   d: Pick<
     VisitDraft,
-    'plan' | 'male' | 'female' | 'source' | 'timed' | 'duration' | 'warningEnabled' | 'warningMinutes'
+    'plans' | 'male' | 'female' | 'source' | 'timed' | 'duration' | 'warningEnabled' | 'warningMinutes'
   >
 ): string {
-  const parts = [planName(d.plan), `男${d.male}・女${d.female}`];
+  const parts = [planNames(d.plans), `男${d.male}・女${d.female}`];
   if (d.source) parts.push(String(d.source));
   if (d.timed) {
     parts.push(
