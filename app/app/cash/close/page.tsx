@@ -256,6 +256,7 @@ export default async function CashClosePage() {
                 showRegisterName={openSessions.length > 1 || cards.length > 1}
                 canOperate={canOperate}
                 today={today}
+                openSlipCount={openCount}
               />
             ))}
             {openSessions.length === 0 && (
