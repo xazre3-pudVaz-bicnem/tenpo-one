@@ -154,7 +154,7 @@ export async function generateKitchenJobs(admin: Admin, printer: PrinterRow) {
   }
   const tickets = groupKitchenTickets((data ?? []) as ClaimedKitchenItem[]);
   if (tickets.length === 0) return;
-  const { split, textSize, language } = await kitchenTicketSettingsForStore(admin, printer.store_id);
+  const { split, textSize, language, buzzer } = await kitchenTicketSettingsForStore(admin, printer.store_id);
 
   const stations = (printer.kitchen_stations ?? ['kitchen']) as KitchenStation[];
   const title = `${stations.map((s) => STATION_LABELS[s] ?? s).join('・')} 伝票`;
@@ -190,9 +190,9 @@ export async function generateKitchenJobs(admin: Admin, printer: PrinterRow) {
       target: 'cloudprnt',
       content_type: MARKUP,
       payload: {
-        body: kitchenTicketsMarkup(starSlips),
-        starprnt: kitchenTicketsStarPrnt(starSlips).toString('base64'),
-        epos: kitchenTicketsEpos(eposSlips),
+        body: kitchenTicketsMarkup(starSlips, { buzzer }),
+        starprnt: kitchenTicketsStarPrnt(starSlips, { buzzer }).toString('base64'),
+        epos: kitchenTicketsEpos(eposSlips, { buzzer }),
       },
       status: 'queued',
     };

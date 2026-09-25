@@ -18,6 +18,7 @@ import {
   ticketSlips,
   type ClaimedKitchenItem,
   type LayoutLine,
+  kitchenTicketBuzzerFrom,
 } from '@/lib/kitchen-ticket';
 import { kitchenTicketMarkup, kitchenTicketsMarkup } from '@/lib/receipt-markup';
 import { kitchenTicketStarPrnt, kitchenTicketsStarPrnt } from '@/lib/starprnt';
@@ -274,6 +275,7 @@ describe('厨房伝票の文字の大きさ（2026-09-21 店舗要望「Word の
       split: 'order',
       textSize: 'large',
       language: 'en',
+      buzzer: 'none',
     });
   });
 
@@ -477,5 +479,47 @@ describe('上下さかさまのプリンター（180度回して出す）', () =
   it('日本語もそのまま逆順にできる', () => {
     const out = rotateLines180([{ text: 'キッチン', align: 'center', size: 'tall' }]);
     expect(out[0].text).toBe('ンチッキ');
+  });
+});
+
+describe('厨房伝票のブザー', () => {
+  it('未設定・不明な値は「鳴らさない」', () => {
+    expect(kitchenTicketBuzzerFrom(null)).toBe('none');
+    expect(kitchenTicketBuzzerFrom({})).toBe('none');
+    expect(kitchenTicketBuzzerFrom({ kitchenTicket: { buzzer: 'loud' } })).toBe('none');
+  });
+
+  it('設定した端子を読む', () => {
+    expect(kitchenTicketBuzzerFrom({ kitchenTicket: { buzzer: 'drawer1' } })).toBe('drawer1');
+    expect(kitchenTicketBuzzerFrom({ kitchenTicket: { buzzer: 'drawer2' } })).toBe('drawer2');
+  });
+
+  it('StarPRNT: 鳴らさない設定では余計なバイトを足さない', () => {
+    const slips = [[{ text: 'TEST', align: 'left' as const, size: 'normal' as const }]];
+    const plain = kitchenTicketsStarPrnt(slips);
+    expect(kitchenTicketsStarPrnt(slips, { buzzer: 'none' })).toEqual(plain);
+  });
+
+  it('StarPRNT: 伝票が何枚でもブザーは最後の1回だけ', () => {
+    const one = [[{ text: 'A', align: 'left' as const, size: 'normal' as const }]];
+    const two = [
+      [{ text: 'A', align: 'left' as const, size: 'normal' as const }],
+      [{ text: 'B', align: 'left' as const, size: 'normal' as const }],
+    ];
+    const plain1 = kitchenTicketsStarPrnt(one);
+    const buzz1 = kitchenTicketsStarPrnt(one, { buzzer: 'drawer1' });
+    expect(buzz1.length).toBe(plain1.length + 1);
+    expect(buzz1[buzz1.length - 1]).toBe(0x07);
+
+    const buzz2 = kitchenTicketsStarPrnt(two, { buzzer: 'drawer2' });
+    expect(buzz2.length).toBe(kitchenTicketsStarPrnt(two).length + 1);
+    expect(buzz2[buzz2.length - 1]).toBe(0x1a);
+  });
+
+  it('Markup: 端子に合わせた命令を最後に足す', () => {
+    const slips = [[{ text: 'A', align: 'left' as const, size: 'normal' as const }]];
+    expect(kitchenTicketsMarkup(slips)).toBe(kitchenTicketsMarkup(slips, { buzzer: 'none' }));
+    expect(kitchenTicketsMarkup(slips, { buzzer: 'drawer1' })).toContain('[drawer: 1]');
+    expect(kitchenTicketsMarkup(slips, { buzzer: 'drawer2' })).toContain('[drawer: 2]');
   });
 });

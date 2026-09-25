@@ -5,7 +5,11 @@ import { revalidatePath } from 'next/cache';
 import { requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import type { PrintResultStatus } from '@/lib/printing/types';
-import { isKitchenTicketTextSize, type KitchenTicketSettings } from '@/lib/kitchen-ticket';
+import {
+  isKitchenTicketBuzzer,
+  isKitchenTicketTextSize,
+  type KitchenTicketSettings,
+} from '@/lib/kitchen-ticket';
 import { normalizeVisitSourceIds } from '@/lib/handy-visit';
 
 export interface ActionResult {
@@ -362,6 +366,7 @@ export async function saveKitchenTicketSettings(
   if (next.split !== 'item' && next.split !== 'order') return { error: '伝票の分け方が正しくありません' };
   if (!isKitchenTicketTextSize(next.textSize)) return { error: '文字の大きさが正しくありません' };
   if (next.language !== 'both' && next.language !== 'en') return { error: '商品名の言語が正しくありません' };
+  if (!isKitchenTicketBuzzer(next.buzzer)) return { error: 'ブザーの設定が正しくありません' };
 
   const supabase = await createClient();
   const { data: existing } = await supabase
@@ -373,7 +378,13 @@ export async function saveKitchenTicketSettings(
   const before = (current.kitchenTicket as Record<string, unknown> | undefined) ?? {};
   const nextSettings = {
     ...current,
-    kitchenTicket: { ...before, split: next.split, textSize: next.textSize, language: next.language },
+    kitchenTicket: {
+      ...before,
+      split: next.split,
+      textSize: next.textSize,
+      language: next.language,
+      buzzer: next.buzzer,
+    },
   };
 
   const { error } = await supabase
