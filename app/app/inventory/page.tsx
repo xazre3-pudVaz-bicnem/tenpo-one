@@ -309,6 +309,8 @@ export default async function InventoryPage({
         .eq('organization_id', ctx.organizationId)
         .or(`store_id.is.null,store_id.eq.${currentStore.id}`)
         .eq('status', 'active')
+        // 選択肢（オプション）はレジの商品一覧に出ないので、在庫の一覧にも出さない（2026-09-25 店舗要望）
+        .neq('item_type', 'option')
         .order('sort_order')
         .order('name'),
       supabase
