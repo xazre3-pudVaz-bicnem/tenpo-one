@@ -15,12 +15,20 @@ export function LoginForm({ next }: { next?: string }) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    // Safari の自動入力は onChange が飛ばないことがあるので、フォームから直接読む
+    const fd = new FormData(e.currentTarget);
+    const mail = ((fd.get('email') as string | null) ?? email).trim();
+    const pass = (fd.get('password') as string | null) ?? password;
+    if (!mail || !pass) {
+      setError('メールアドレスとパスワードを入れてください');
+      return;
+    }
     setBusy(true);
     setError(null);
     const supabase = createClient();
-    const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
+    const { error: authError } = await supabase.auth.signInWithPassword({ email: mail, password: pass });
     if (authError) {
       setError('メールアドレスまたはパスワードが正しくありません');
       setBusy(false);
@@ -38,6 +46,7 @@ export function LoginForm({ next }: { next?: string }) {
             <Label htmlFor="email">メールアドレス</Label>
             <Input
               id="email"
+              name="email"
               type="email"
               autoComplete="email"
               required
@@ -50,6 +59,7 @@ export function LoginForm({ next }: { next?: string }) {
             <Label htmlFor="password">パスワード</Label>
             <Input
               id="password"
+              name="password"
               type="password"
               autoComplete="current-password"
               required
@@ -58,7 +68,7 @@ export function LoginForm({ next }: { next?: string }) {
             />
           </div>
           <FieldError message={error ?? undefined} />
-          <Button type="submit" className="w-full" size="lg" disabled={busy || !email || !password}>
+          <Button type="submit" className="w-full" size="lg" disabled={busy}>
             {busy ? 'ログイン中…' : 'ログイン'}
           </Button>
         </form>
