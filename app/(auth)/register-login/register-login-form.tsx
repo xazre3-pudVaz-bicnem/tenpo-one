@@ -53,18 +53,29 @@ export function RegisterLoginForm() {
     });
   }, []);
 
-  const submit = async (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    // iPad の Safari は、パスワードの自動入力で onChange が飛ばないことがある。
+    // そのときは画面の値（state）が空のままなので、フォームから直接読む（2026-09-25 現場報告
+    // 「iPad の Safari でログインのボタンが押せない」）。
+    const fd = new FormData(e.currentTarget);
+    const org = ((fd.get('orgCode') as string | null) ?? orgCode).trim();
+    const user = ((fd.get('storeUser') as string | null) ?? storeUser).trim();
+    const pass = (fd.get('password') as string | null) ?? password;
+    if (!org || !user || !pass) {
+      setError('企業番号・店舗ユーザー名・レジ用パスワードを入れてください');
+      return;
+    }
     setBusy(true);
     setError(null);
-    const res = await signInRegister({ orgCode, storeUser, password });
+    const res = await signInRegister({ orgCode: org, storeUser: user, password: pass });
     if (res.error) {
       setError(res.error);
       setBusy(false);
       return;
     }
     try {
-      if (remember) window.localStorage.setItem(REMEMBER_KEY, JSON.stringify({ orgCode, storeUser }));
+      if (remember) window.localStorage.setItem(REMEMBER_KEY, JSON.stringify({ orgCode: org, storeUser: user }));
       else window.localStorage.removeItem(REMEMBER_KEY);
     } catch {
       // プライベートブラウズなどで保存できなくても、ログインは続ける
@@ -82,6 +93,7 @@ export function RegisterLoginForm() {
             <Label htmlFor="org-code">企業番号</Label>
             <Input
               id="org-code"
+              name="orgCode"
               value={orgCode}
               onChange={(e) => setOrgCode(e.target.value.replace(/[^0-9]/g, '').slice(0, 6))}
               placeholder="184203"
@@ -97,6 +109,7 @@ export function RegisterLoginForm() {
             <Label htmlFor="store-user">店舗ユーザー名</Label>
             <Input
               id="store-user"
+              name="storeUser"
               value={storeUser}
               onChange={(e) => setStoreUser(e.target.value.replace(/[^A-Za-z0-9-]/g, '').toLowerCase().slice(0, 32))}
               placeholder="ronnies-house"
@@ -112,6 +125,7 @@ export function RegisterLoginForm() {
             <Label htmlFor="register-password">レジ用パスワード</Label>
             <Input
               id="register-password"
+              name="password"
               type={showPassword ? 'text' : 'password'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -146,7 +160,7 @@ export function RegisterLoginForm() {
           </div>
 
           <FieldError message={error ?? undefined} />
-          <Button type="submit" className="w-full" size="lg" disabled={busy || !orgCode || !storeUser || !password}>
+          <Button type="submit" className="w-full" size="lg" disabled={busy}>
             {busy ? 'ログイン中…' : 'レジを開く'}
           </Button>
         </form>
