@@ -1,5 +1,7 @@
 'use client';
 
+import Link from 'next/link';
+
 import { useMemo, useState, useTransition } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -38,12 +40,15 @@ export function RegisterCountCard({
   showRegisterName,
   canOperate,
   today,
+  openSlipCount = 0,
 }: {
   session: CountSession;
   showRegisterName: boolean;
   canOperate: boolean;
   /** 当日の営業日。session.businessDate と違えば「前営業日から開きっぱなし」として警告する */
   today?: string;
+  /** 未会計の伝票の数。1枚でも残っていたらクローズさせない（2026-09-25 店舗要望） */
+  openSlipCount?: number;
 }) {
   // 金種別に数えた枚数。合計がそのまま実査額になる（電卓で足し算しなくてよい）
   const [counts, setCounts] = useState<DenominationCounts>({});
@@ -155,13 +160,22 @@ export function RegisterCountCard({
           </div>
         )}
 
+        {/* 未会計の伝票が残っているとクローズできない（締めたあとに会計すると現金が合わなくなるため） */}
+        {openSlipCount > 0 && (
+          <p className="mt-4 rounded-xl border border-danger/30 bg-danger/8 px-3 py-2.5 text-[13px] font-bold text-danger">
+            未会計の伝票が{openSlipCount}件あります。すべて会計するか取消してからクローズできます
+            <Link href="/app/orders?status=open" className="ml-1.5 underline">
+              未会計を見る
+            </Link>
+          </p>
+        )}
         {canOperate ? (
           <Button
             size="lg"
             variant={needsReason ? 'danger' : 'primary'}
             className="mt-4 w-full"
             onClick={handleClose}
-            disabled={pending || (needsReason && !reason.trim())}
+            disabled={pending || openSlipCount > 0 || (needsReason && !reason.trim())}
           >
             {pending ? 'クローズ中…' : 'レジをクローズする / Close register'}
           </Button>

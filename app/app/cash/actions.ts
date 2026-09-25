@@ -175,6 +175,30 @@ export async function closeRegister(
   if (!session || !ctx.stores.some((s) => s.id === session.store_id)) {
     return actionFail('対象のレジセッションが見つかりません');
   }
+
+  // 未会計の伝票が1枚でも残っていたらレジクローズさせない（2026-09-25 店舗要望
+  // 「レジクローズは全部会計終わらないとできない」）。締めたあとに会計すると現金が合わなくなるため。
+  const { data: openRows } = await supabase
+    .from('orders')
+    .select('order_no, restaurant_tables(name)')
+    .eq('store_id', session.store_id)
+    .eq('status', 'open')
+    .order('opened_at')
+    .limit(20);
+  if (openRows && openRows.length > 0) {
+    const where = openRows
+      .slice(0, 5)
+      .map((o) => {
+        const t = o.restaurant_tables as unknown as { name: string } | null;
+        return t?.name ? `${t.name}(#${o.order_no})` : `#${o.order_no}`;
+      })
+      .join('・');
+    return actionFail(
+      `未会計の伝票が${openRows.length}件あります（${where}${openRows.length > 5 ? ' ほか' : ''}）。` +
+        'すべて会計するか取消してから、レジクローズしてください'
+    );
+  }
+
   let { error } = await supabase.rpc('close_register_session', {
     p_session_id: sessionId,
     p_counted_cash: countedCash,

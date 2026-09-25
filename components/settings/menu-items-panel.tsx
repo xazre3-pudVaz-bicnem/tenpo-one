@@ -4,12 +4,11 @@ import { useMemo, useState, useTransition } from 'react';
 import { Plus, Pencil, Trash2, Search, ArrowUpDown, List } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
+import { Input, Label, Select } from '@/components/ui/input';
 import { TableWrap, Table, THead, TBody, Tr, Th, Td } from '@/components/ui/table';
 import { EmptyState } from '@/components/ui/state';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useToast } from '@/components/ui/toast';
-import { cn } from '@/lib/utils';
 import { yen } from '@/lib/format';
 import { toggleSoldOut, deleteMenuItem } from '@/app/app/settings/menu/actions';
 import { MenuItemDialog, type MenuItemRow } from './menu-item-dialog';
@@ -63,6 +62,9 @@ export function MenuItemsPanel({
   const usedCategoryIds = new Set(visibleItems.map((i) => i.categoryId));
   const chipCategories = mode === 'all' ? categories : categories.filter((c) => usedCategoryIds.has(c.id));
   const hasUncategorized = mode === 'all' || usedCategoryIds.has(null);
+  // プルダウンに出す「カテゴリごとの品数」
+  const countByCategory = new Map<string | null, number>();
+  for (const i of visibleItems) countByCategory.set(i.categoryId, (countByCategory.get(i.categoryId) ?? 0) + 1);
   // 並び順はカテゴリの中で決めるので、カテゴリを1つ選んで検索していないときだけ変えられる
   const canReorder = activeCategory !== 'all' && activeCategory !== 'uncategorized' && !search.trim();
   const showReorder = reorder && canReorder;
@@ -94,41 +96,30 @@ export function MenuItemsPanel({
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          onClick={() => setActiveCategory('all')}
-          className={cn(
-            'rounded-full px-3 py-1.5 text-xs font-medium',
-            activeCategory === 'all' ? 'bg-navy text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-          )}
-        >
-          すべて
-        </button>
-        {chipCategories.map((c) => (
-          <button
-            key={c.id}
-            type="button"
-            onClick={() => setActiveCategory(c.id)}
-            className={cn(
-              'rounded-full px-3 py-1.5 text-xs font-medium',
-              activeCategory === c.id ? 'bg-navy text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-            )}
+      {/* カテゴリは数が多い店舗で100近くになるため、チップを並べず1つのプルダウンで選ぶ
+          （2026-09-25 店舗要望「カテゴリをちゃんと綺麗に選択できるように」） */}
+      <div className="flex flex-wrap items-end gap-2">
+        <div className="min-w-[260px] flex-1">
+          <Label htmlFor="menu-category">カテゴリ</Label>
+          <Select
+            id="menu-category"
+            value={activeCategory}
+            onChange={(e) => setActiveCategory(e.target.value)}
+            className="h-11 w-full text-[15px]"
           >
-            {c.name}
-          </button>
-        ))}
-        {hasUncategorized && (
-        <button
-          type="button"
-          onClick={() => setActiveCategory('uncategorized')}
-          className={cn(
-            'rounded-full px-3 py-1.5 text-xs font-medium',
-            activeCategory === 'uncategorized' ? 'bg-navy text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-          )}
-        >
-          未分類
-        </button>
+            <option value="all">すべて（{visibleItems.length}{noun}）</option>
+            {chipCategories.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}（{countByCategory.get(c.id) ?? 0}）
+              </option>
+            ))}
+            {hasUncategorized && <option value="uncategorized">未分類（{countByCategory.get(null) ?? 0}）</option>}
+          </Select>
+        </div>
+        {activeCategory !== 'all' && (
+          <Button variant="secondary" size="md" className="h-11" onClick={() => setActiveCategory('all')}>
+            すべてに戻す
+          </Button>
         )}
       </div>
 
