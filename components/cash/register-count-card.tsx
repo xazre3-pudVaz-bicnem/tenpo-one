@@ -61,14 +61,28 @@ export function RegisterCountCard({
   const countedValue = useMemo(() => sumDenominations(counts), [counts]);
   const diff = entered ? countedValue - session.theoreticalCash : null;
   const needsReason = diff != null && diff !== 0;
+  /** レジクローズの担当者（必ず選ぶ。精算レシートに出る） */
+  const clerkName = clerkGate?.clerk?.name ?? null;
+  const blocked = openSlipCount > 0 || !entered || diff !== 0 || !clerkName;
 
   const handleClose = () => {
     if (!entered) {
       toast('金種ごとの枚数を入力してください（0円のときは1円に0と入れてください）', 'error');
       return;
     }
-    if (needsReason && !reason.trim()) {
-      toast('差額がある場合は理由を入力してください', 'error');
+    if (openSlipCount > 0) {
+      toast('未会計の伝票があります。すべて会計してからクローズしてください', 'error');
+      return;
+    }
+    // 差額があるままでは締められない（2026-09-25 店舗要望「レジの金額合わないとできない」）。
+    // 過不足は入出金（現金過不足）に記録して、実際の現金と理論在高を合わせてから締める。
+    if (diff !== 0) {
+      toast('実査額と理論在高が合っていません。数え直すか、差額を入出金に記録してから締めてください', 'error');
+      return;
+    }
+    if (!clerkName) {
+      toast('レジクローズの担当者を選んでください', 'error');
+      clerkGate?.change();
       return;
     }
     startTransition(async () => {
@@ -76,9 +90,9 @@ export function RegisterCountCard({
         const result = await closeRegister(
           session.id,
           countedValue,
-          needsReason ? reason.trim() : null,
+          reason.trim() || null,
           denominationsToJson(counts),
-          clerkGate?.clerk?.name ?? null
+          clerkName
         );
         if (!result.ok) {
           toast(result.error, 'error');
@@ -160,13 +174,40 @@ export function RegisterCountCard({
           </div>
         )}
 
-        {/* 未会計の伝票が残っているとクローズできない（締めたあとに会計すると現金が合わなくなるため） */}
-        {openSlipCount > 0 && (
-          <p className="mt-4 rounded-xl border border-danger/30 bg-danger/8 px-3 py-2.5 text-[13px] font-bold text-danger">
-            未会計の伝票が{openSlipCount}件あります。すべて会計するか取消してからクローズできます
-            <Link href="/app/orders?status=open" className="ml-1.5 underline">
-              未会計を見る
-            </Link>
+        {/* 締められない理由（2026-09-25 店舗要望の3つのルール） */}
+        {blocked && (
+          <ul className="mt-4 space-y-1 rounded-xl border border-danger/30 bg-danger/8 px-3 py-2.5 text-[13px] font-bold text-danger">
+            {openSlipCount > 0 && (
+              <li>
+                未会計の伝票が{openSlipCount}件あります。すべて会計するか取消してください
+                <Link href="/app/orders?status=open" className="ml-1.5 underline">
+                  未会計を見る
+                </Link>
+              </li>
+            )}
+            {!entered && <li>金種ごとの枚数を入れてください</li>}
+            {entered && diff !== 0 && (
+              <li>
+                実査額が理論在高と {yen(Math.abs(diff ?? 0))} {(diff ?? 0) > 0 ? '多い' : '少ない'}です。
+                数え直すか、差額を入出金に記録して合わせてください
+                <Link href="/app/cash" className="ml-1.5 underline">
+                  入出金へ
+                </Link>
+              </li>
+            )}
+            {!clerkName && (
+              <li>
+                レジクローズの担当者を選んでください
+                <button type="button" onClick={() => clerkGate?.change()} className="ml-1.5 underline">
+                  担当者を選ぶ
+                </button>
+              </li>
+            )}
+          </ul>
+        )}
+        {clerkName && (
+          <p className="mt-3 text-center text-[12px] text-ink-3">
+            レジクローズ担当者 <b className="text-navy">{clerkName}</b>
           </p>
         )}
         {canOperate ? (
@@ -175,7 +216,7 @@ export function RegisterCountCard({
             variant={needsReason ? 'danger' : 'primary'}
             className="mt-4 w-full"
             onClick={handleClose}
-            disabled={pending || openSlipCount > 0 || (needsReason && !reason.trim())}
+            disabled={pending || blocked}
           >
             {pending ? 'クローズ中…' : 'レジをクローズする / Close register'}
           </Button>

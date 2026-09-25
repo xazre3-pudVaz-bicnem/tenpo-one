@@ -9,6 +9,8 @@ import { captureServerError } from '@/lib/observability-server';
 import { actionFail, actionOk, type ActionResult } from '@/lib/action-error';
 import { enqueueRegisterReportPrint } from '@/lib/register-report-loader';
 import type { CloseRegisterResult, DenominationJson } from '@/lib/register-report';
+import { expectedCash } from '@/lib/metrics';
+import { IN_KINDS, OUT_KINDS, type CashKind } from '@/components/cash/labels';
 
 /** 店舗日次締め（close_store_day）を実行できるロール。DB側 close_store_day のapp_role_inと一致させること。 */
 const STORE_DAY_CLOSE_ROLES: Role[] = ['org_owner', 'hq_admin', 'area_manager', 'store_manager', 'assistant_manager'];
@@ -196,6 +198,48 @@ export async function closeRegister(
     return actionFail(
       `未会計の伝票が${openRows.length}件あります（${where}${openRows.length > 5 ? ' ほか' : ''}）。` +
         'すべて会計するか取消してから、レジクローズしてください'
+    );
+  }
+
+  // レジクローズの担当者は必ず選ぶ（精算レシートに出す。2026-09-25 店舗要望）
+  if (!clerkName || !clerkName.trim()) {
+    return actionFail('レジクローズの担当者を選んでください');
+  }
+
+  // 実査額が理論在高と合っていないと締められない（2026-09-25 店舗要望「レジの金額合わないとできない」）。
+  // 過不足は入出金（現金過不足）に記録してから締める。
+  const { data: cashRows } = await supabase
+    .from('cash_transactions')
+    .select('kind, amount')
+    .eq('register_session_id', sessionId);
+  let cashSales = 0;
+  let cashRefunds = 0;
+  let cashIn = 0;
+  let cashOut = 0;
+  for (const r of (cashRows ?? []) as { kind: string; amount: number }[]) {
+    const amount = Number(r.amount ?? 0);
+    if (r.kind === 'sale') cashSales += amount;
+    else if (r.kind === 'refund') cashRefunds += amount;
+    else if (IN_KINDS.includes(r.kind as CashKind)) cashIn += amount;
+    else if (OUT_KINDS.includes(r.kind as CashKind)) cashOut += amount;
+  }
+  const { data: sessionRow } = await supabase
+    .from('register_sessions')
+    .select('opening_float')
+    .eq('id', sessionId)
+    .maybeSingle();
+  const theoretical = expectedCash({
+    openingFloat: Number(sessionRow?.opening_float ?? 0),
+    cashSales,
+    cashIn,
+    cashRefunds,
+    cashOut,
+  });
+  if (countedCash !== theoretical) {
+    const gap = countedCash - theoretical;
+    return actionFail(
+      `実査額と理論在高が合っていません（理論 ${theoretical.toLocaleString('ja-JP')}円 / 実査 ${countedCash.toLocaleString('ja-JP')}円・` +
+        `${gap > 0 ? '＋' : '−'}${Math.abs(gap).toLocaleString('ja-JP')}円）。数え直すか、差額を入出金に記録してから締めてください`
     );
   }
 
