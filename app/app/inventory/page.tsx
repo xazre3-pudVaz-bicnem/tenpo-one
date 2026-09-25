@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { ChevronRight, Package } from 'lucide-react';
 import { requireFeature } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { PageHeader } from '@/components/ui/page-header';
@@ -535,7 +536,27 @@ export default async function InventoryPage({
         ))}
 
       {tab === 'menu' && (
-        <MenuStockPanel storeId={currentStore.id} rows={menuStockRows} saveAction={setMenuStockLimit} />
+        <div className="space-y-4">
+          {/* レジ（iPad）で使う在庫管理の画面。左がカテゴリ・右が残り数（2026-09-25 店舗要望） */}
+          <Link
+            href="/app/inventory/menu-stock"
+            className="tap3d flex items-center justify-between gap-3 rounded-2xl border border-line bg-white px-4 py-3.5 hover:bg-lilac-soft"
+          >
+            <span className="flex items-center gap-3">
+              <Package className="h-5 w-5 shrink-0 text-royal" aria-hidden />
+              <span>
+                <span className="block text-[15px] font-bold text-navy">
+                  在庫管理<span className="ml-1.5 text-[11px] font-semibold text-ink-3">Stock</span>
+                </span>
+                <span className="block text-[12px] text-ink-3">
+                  カテゴリごとに、残りの数を指で入れる（レジのiPad向け・在庫印刷つき）
+                </span>
+              </span>
+            </span>
+            <ChevronRight className="h-5 w-5 shrink-0 text-ink-3" aria-hidden />
+          </Link>
+          <MenuStockPanel storeId={currentStore.id} rows={menuStockRows} saveAction={setMenuStockLimit} />
+        </div>
       )}
 
       {tab === 'transfers' && <TransferList rows={transferRows} currentStoreId={currentStore.id} />}

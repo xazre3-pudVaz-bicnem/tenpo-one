@@ -462,3 +462,72 @@ export async function enqueueExpoSlipPrint(orderId: string): Promise<EnqueueResu
 export async function enqueueSelectedItemsPrint(orderId: string, itemIds: string[]): Promise<EnqueueResult> {
   return enqueueOrderItemsTicket(orderId, itemIds, '選択印刷', 'SELECTED');
 }
+
+/** 在庫印刷に載せる1品（2026-09-25 店舗要望） */
+export interface StockPrintLine {
+  name: string;
+  nameEn?: string | null;
+  /** 残り数 */
+  remaining: number;
+}
+
+/**
+ * 在庫印刷: いま在庫管理している商品と残り数を、レジのレシート機に出す（2026-09-25 店舗要望）。
+ * 厨房伝票と同じ組み方なので、キッチンに貼っておける。
+ */
+export async function enqueueStockListPrint(storeId: string, lines: StockPrintLine[]): Promise<EnqueueResult> {
+  const ctx = await requirePermission('pos.order');
+  if (!assertStore(ctx, storeId)) return { ok: false, error: 'この店舗へのアクセス権がありません' };
+  if (!Array.isArray(lines) || lines.length === 0) return { ok: false, error: '在庫管理している商品がありません' };
+
+  const supabase = await createClient();
+  const printer = await getCloudPrntPrinter(supabase, storeId);
+  if (!printer) return { ok: false, error: 'CloudPRNT対応プリンタが未設定です' };
+
+  const { data: store } = await supabase.from('stores').select('organization_id').eq('id', storeId).single();
+
+  const ticket: KitchenTicket = {
+    orderId: storeId,
+    orderNo: '',
+    tableName: null,
+    guestCount: null,
+    clerkName: null,
+    lines: lines.slice(0, 200).map((l) => ({
+      name: l.name,
+      nameEn: l.nameEn ?? null,
+      modifiers: [],
+      memo: null,
+      delta: Math.max(0, Math.trunc(l.remaining)),
+    })),
+  };
+
+  const printedAt = new Date().toLocaleString('ja-JP', {
+    timeZone: 'Asia/Tokyo',
+    dateStyle: 'short',
+    timeStyle: 'short',
+  });
+  const paperWidth = printer.paper_width_mm === 58 ? 58 : 80;
+  const common = { title: '在庫（残り）', titleEn: 'STOCK', printedAt, textSize: 'medium' as const, language: 'both' as const };
+  const starLines = layoutKitchenTicket(ticket, { ...common, paperWidth, ...STAR_WIDTH_OPTIONS });
+  const eposLines = layoutKitchenTicket(ticket, { ...common, columns: eposCols(paperWidth) });
+  const star = printer.upside_down ? rotateLines180(starLines, colsFor(paperWidth)) : starLines;
+  const epos = printer.upside_down ? rotateLines180(eposLines, eposCols(paperWidth)) : eposLines;
+
+  const { error } = await supabase.from('print_jobs').insert({
+    organization_id: store?.organization_id,
+    store_id: storeId,
+    printer_config_id: printer.id,
+    job_type: 'test',
+    target: 'cloudprnt',
+    content_type: MARKUP_CONTENT_TYPE,
+    payload: {
+      body: kitchenTicketsMarkup([star]),
+      starprnt: kitchenTicketsStarPrnt([star]).toString('base64'),
+      epos: kitchenTicketsEpos([epos]),
+    },
+    status: 'queued',
+    created_by: ctx.userId,
+  });
+  if (error) return { ok: false, error: `印刷ジョブの登録に失敗しました: ${error.message}` };
+  return { ok: true, queued: 1 };
+}
