@@ -14,7 +14,7 @@ import { colsFor, twoCol as twoColBase, wrapText as wrapTextBase, yen, STAR_WIDT
 /** Star 機の全角幅（半角2桁よりわずかに広い）を見込んだ桁揃え・折り返し */
 const twoCol = (left: string, right: string, width: number) => twoColBase(left, right, width, STAR_WIDTH_OPTIONS);
 const wrapText = (text: string, width: number) => wrapTextBase(text, width, STAR_WIDTH_OPTIONS);
-import type { LayoutLine } from './kitchen-ticket';
+import type { KitchenTicketBuzzer, LayoutLine } from './kitchen-ticket';
 
 const ESC = 0x1b;
 const GS = 0x1d;
@@ -341,10 +341,26 @@ export function kitchenTicketStarPrnt(
   return b.toBuffer();
 }
 
-/** 厨房伝票を複数枚続けて出す（商品の種類ごとに1枚・1枚ごとにカット）。 */
+/**
+ * 厨房伝票のブザー。ドロア端子につないだブザーを鳴らす（1回の印刷につき1度だけ）。
+ * Star はコネクタ1=BEL(0x07)・コネクタ2=SUB(0x1A)。none のときは何も足さない。
+ */
+export function buzzerStarPrnt(buzzer: KitchenTicketBuzzer | undefined): Buffer {
+  if (buzzer === 'drawer1') return Buffer.from(CMD.drawer1);
+  if (buzzer === 'drawer2') return Buffer.from(CMD.drawer2);
+  return Buffer.alloc(0);
+}
+
+/**
+ * 厨房伝票を複数枚続けて出す（商品の種類ごとに1枚・1枚ごとにカット）。
+ * ブザーは最後に1度だけ鳴らす（種類ごとに1枚出す設定で何度も鳴ると厨房がうるさいため）。
+ */
 export function kitchenTicketsStarPrnt(
   slips: LayoutLine[][],
-  opts: { currency?: CurrencyStyle; encoding?: TextEncoding } = {}
+  opts: { currency?: CurrencyStyle; encoding?: TextEncoding; buzzer?: KitchenTicketBuzzer } = {}
 ): Buffer {
-  return Buffer.concat(slips.map((lines) => kitchenTicketStarPrnt(lines, opts)));
+  return Buffer.concat([
+    ...slips.map((lines) => kitchenTicketStarPrnt(lines, opts)),
+    buzzerStarPrnt(opts.buzzer),
+  ]);
 }

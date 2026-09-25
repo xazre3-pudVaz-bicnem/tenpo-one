@@ -12,7 +12,7 @@ import { colsFor, twoCol as twoColBase, wrapText as wrapTextBase, yen, STAR_WIDT
 /** Star 機の全角幅（半角2桁よりわずかに広い）を見込んだ桁揃え・折り返し */
 const twoCol = (left: string, right: string, width: number) => twoColBase(left, right, width, STAR_WIDTH_OPTIONS);
 const wrapText = (text: string, width: number) => wrapTextBase(text, width, STAR_WIDTH_OPTIONS);
-import type { LayoutLine } from './kitchen-ticket';
+import type { KitchenTicketBuzzer, LayoutLine } from './kitchen-ticket';
 
 /** Markup構文で意味を持つ文字を無害化（角括弧・バックスラッシュ）。 */
 function esc(s: string): string {
@@ -311,6 +311,16 @@ export function kitchenTicketMarkup(lines: LayoutLine[]): string {
  * 厨房伝票を複数枚続けて出す（商品の種類ごとに1枚）。1枚ごとに紙を切る。
  * 1回の注文を1つの印刷ジョブにまとめるので、ポーリング1回で全部出て、順番も崩れない。
  */
-export function kitchenTicketsMarkup(slips: LayoutLine[][]): string {
-  return slips.map((lines) => kitchenTicketMarkup(lines)).join('');
+export function kitchenTicketsMarkup(slips: LayoutLine[][], opts: { buzzer?: KitchenTicketBuzzer } = {}): string {
+  return slips.map((lines) => kitchenTicketMarkup(lines)).join('') + buzzerMarkup(opts.buzzer);
+}
+
+/**
+ * 厨房伝票のブザー（Markup）。ドロア端子につないだブザーを1度だけ鳴らす。
+ * Markup ではドロアと同じ命令で端子を叩く。none のときは空文字。
+ */
+export function buzzerMarkup(buzzer: KitchenTicketBuzzer | undefined): string {
+  if (buzzer === 'drawer1') return '[drawer: 1]\n';
+  if (buzzer === 'drawer2') return '[drawer: 2]\n';
+  return '';
 }
