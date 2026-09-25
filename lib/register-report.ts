@@ -50,6 +50,12 @@ export interface RegisterReportData {
     refunds: number;
     ordersCount: number;
     guests: number;
+    /** 組数（会計した伝票の数。日計レポートの「組数」） */
+    groups: number;
+    /** 客単価（総売上 ÷ 客数） */
+    avgSpend: number;
+    /** 総売上点数（売れた商品の個数の合計） */
+    itemQuantity: number;
     /** 税率別（総売上ベース）。rate は % */
     taxByRate: { rate: number; taxable: number; tax: number }[];
   };
@@ -74,7 +80,13 @@ export interface RegisterReportData {
     difference: number | null;
     /** 締め時の金種別枚数。未保存なら null（旧データ） */
     denominations: DenominationCounts | null;
+    /** お預かり現金（現金会計でお客様から受け取った額の合計） */
+    tendered: number;
+    /** おつり（お預かり現金 − 現金売上） */
+    change: number;
   };
+  /** 差異の理由（締めのときに入れた文。無ければ null） */
+  differenceReason: string | null;
   cashIns: { purpose: string; amount: number }[];
   cashOuts: { purpose: string; amount: number }[];
   /** 業務履歴（レジ会計・領収書発行・取消・返金・注文減数・注文キャンセル） */
@@ -196,6 +208,11 @@ export function layoutRegisterReport(data: RegisterReportData, options: Register
   if (data.sales.refunds > 0) kv('返金', `-${yen(data.sales.refunds)}`);
   blank();
   kcv('会計件数', `${data.sales.ordersCount}件`, `${data.sales.guests}名`);
+  blank();
+  kv('組数', `${data.sales.groups}組`);
+  kv('客数', `${data.sales.guests}客`);
+  kv('客単価', yen(data.sales.avgSpend));
+  kv('総売上点数', `${data.sales.itemQuantity}点`);
   subSep();
   sub('税率別 ( 総売上 )');
   const taxRow = (rate: number) => data.sales.taxByRate.find((t) => t.rate === rate);
@@ -210,6 +227,11 @@ export function layoutRegisterReport(data: RegisterReportData, options: Register
   section('支払情報');
   if (data.payments.length === 0) line('会計はありません');
   for (const p of data.payments) kcv(p.label, `${p.count}件`, yen(p.amount));
+  if (data.cash.tendered > 0) {
+    blank();
+    kv('お預かり現金', yen(data.cash.tendered));
+    kv('おつり', yen(data.cash.change));
+  }
   if (data.refundsByMethod.length > 0) {
     subSep();
     sub('返金');
@@ -249,6 +271,7 @@ export function layoutRegisterReport(data: RegisterReportData, options: Register
   kv('想定金額', yen(data.cash.expected));
   kv('在高実績', data.cash.counted == null ? '未入力' : yen(data.cash.counted));
   kv('差額', data.cash.difference == null ? '未入力' : signedYen(data.cash.difference));
+  kv('差異理由', data.differenceReason?.trim() || '未選択');
   if (data.cash.denominations) {
     subSep();
     sub('金種');

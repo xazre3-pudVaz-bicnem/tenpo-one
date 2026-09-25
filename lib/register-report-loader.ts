@@ -104,7 +104,7 @@ export async function loadRegisterReportData(
       .limit(5000),
     supabase
       .from('payments')
-      .select('method, amount')
+      .select('method, amount, tendered')
       .eq('store_id', storeId)
       .eq('business_date', bd)
       .eq('status', 'completed')
@@ -180,6 +180,18 @@ export async function loadRegisterReportData(
   const netBeforeDiscount = gross > 0 ? Math.round((net * grossBeforeDiscount) / gross) : 0;
   const refundTotal = (refunds ?? []).reduce((a, r) => a + r.amount, 0);
   const guests = settled.reduce((a, o) => a + (o.guest_count ?? 0), 0);
+  // 日計レポートの上段（組数・客単価・総売上点数）。2026-09-25 店舗要望で見本の項目に合わせた
+  const groups = settled.length;
+  const avgSpend = guests > 0 ? Math.round(gross / guests) : 0;
+  const itemQuantity = (items ?? []).reduce((a, it) => a + (it.quantity as number), 0);
+  // お預かり現金・おつり（現金会計でお客様から受け取った額。tendered が無い行は金額どおり）
+  const cashPayments = (payments ?? []).filter((p) => p.method === 'cash');
+  const tendered = cashPayments.reduce(
+    (a, p) => a + Number((p as { tendered?: number | null }).tendered ?? p.amount),
+    0
+  );
+  const cashPaid = cashPayments.reduce((a, p) => a + p.amount, 0);
+  const change = Math.max(0, tendered - cashPaid);
 
   const taxByRate = taxByRateFor(
     (items ?? []).map((it) => ({ lineTotal: it.line_total as number, taxRate: Number(it.tax_rate) })),
@@ -302,6 +314,9 @@ export async function loadRegisterReportData(
       refunds: refundTotal,
       ordersCount: settled.length,
       guests,
+      groups,
+      avgSpend,
+      itemQuantity,
       taxByRate,
     },
     payments: paymentsByMethod,
@@ -320,7 +335,10 @@ export async function loadRegisterReportData(
       counted: session.counted_cash as number | null,
       difference: session.difference as number | null,
       denominations: parseDenominations(session.counted_denominations),
+      tendered,
+      change,
     },
+    differenceReason: (session.difference_reason as string | null) ?? null,
     cashIns,
     cashOuts,
     activity,

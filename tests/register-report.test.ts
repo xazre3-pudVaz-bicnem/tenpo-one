@@ -34,6 +34,9 @@ const sample = (over: Partial<RegisterReportData> = {}): RegisterReportData => (
     refunds: 0,
     ordersCount: 61,
     guests: 132,
+    groups: 61,
+    avgSpend: 1074,
+    itemQuantity: 230,
     taxByRate: [
       { rate: 10, taxable: 141800, tax: 12891 },
       { rate: 8, taxable: 0, tax: 0 },
@@ -68,6 +71,8 @@ const sample = (over: Partial<RegisterReportData> = {}): RegisterReportData => (
     counted: 119900,
     difference: 0,
     denominations: { 1: 10, 10: 20, 100: 30, 500: 8, 1000: 40, 5000: 4, 10000: 5 },
+    tendered: 80000,
+    change: 7100,
   },
   cashIns: [],
   cashOuts: [{ purpose: '食材 買い出し', amount: 3000 }],
@@ -80,6 +85,7 @@ const sample = (over: Partial<RegisterReportData> = {}): RegisterReportData => (
     { label: '注文キャンセル', count: 0, amount: 0 },
   ],
   note: null,
+  differenceReason: null,
   ...over,
 });
 
@@ -237,6 +243,21 @@ describe('layoutRegisterReport', () => {
     for (const t of amountLines) expect(dispWidth(t, opts)).toBe(cols);
   });
 
+  it('日計レポートの項目（組数・客数・客単価・総売上点数・お預かり現金・おつり・差異理由）が出る', () => {
+    const text = layoutRegisterReport(sample())
+      .map((l) => l.text)
+      .join('\n');
+    expect(text).toContain('組数');
+    expect(text).toContain('61組');
+    expect(text).toContain('客単価');
+    expect(text).toContain('総売上点数');
+    expect(text).toContain('230点');
+    expect(text).toContain('お預かり現金');
+    expect(text).toContain('おつり');
+    expect(text).toContain('差異理由');
+    expect(text).toContain('未選択');
+  });
+
   it('差額があれば符号付き、実査が無ければ「未入力」、金種が無ければ金種表は出ない', () => {
     const lines = layoutRegisterReport(
       sample({
@@ -248,6 +269,8 @@ describe('layoutRegisterReport', () => {
           cashOut: 0,
           expected: 51000,
           counted: 50500,
+          tendered: 0,
+          change: 0,
           difference: -500,
           denominations: null,
         },
