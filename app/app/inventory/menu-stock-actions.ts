@@ -76,3 +76,77 @@ export async function setMenuStockLimit(
   revalidatePath('/handy');
   return {};
 }
+
+/**
+ * 在庫管理（本日の食数）をまとめて保存する（2026-09-25 店舗要望「レジの在庫管理と同じ画面に」）。
+ * 1品ずつ保存すると「登録」を押すたびに何度も通信するため、変えた分だけを1回で書く。
+ * limit が null の品は在庫管理をやめる。
+ */
+export async function setMenuStockLimits(
+  storeId: string,
+  entries: { itemId: string; limit: number | null }[]
+): Promise<{ error?: string; saved?: number }> {
+  const ctx = await requirePermission('pos.order');
+  if (typeof storeId !== 'string' || !UUID.test(storeId)) return { error: '店舗の指定が正しくありません' };
+  if (!ctx.isHq && !ctx.stores.some((s) => s.id === storeId)) return { error: 'この店舗は操作できません' };
+  if (!Array.isArray(entries) || entries.length === 0) return { saved: 0 };
+  if (entries.length > 500) return { error: '一度に保存できるのは500品までです' };
+
+  const patch: Record<string, number | null> = {};
+  for (const e of entries) {
+    if (typeof e?.itemId !== 'string' || !UUID.test(e.itemId)) return { error: '商品の指定が正しくありません' };
+    const limit = e.limit;
+    if (limit !== null && (!Number.isInteger(limit) || limit < 0 || limit > MENU_STOCK_MAX)) {
+      return { error: `食数は0〜${MENU_STOCK_MAX}で入力してください` };
+    }
+    patch[e.itemId] = limit;
+  }
+
+  const admin = createAdminClient();
+  const ids = Object.keys(patch);
+  const { data: items } = await admin
+    .from('menu_items')
+    .select('id')
+    .eq('organization_id', ctx.organizationId)
+    .neq('status', 'deleted')
+    .in('id', ids);
+  if ((items ?? []).length !== ids.length) {
+    return { error: '商品が見つかりません。画面を開き直してください' };
+  }
+
+  const { data: existing } = await admin
+    .from('store_settings')
+    .select('settings')
+    .eq('store_id', storeId)
+    .maybeSingle();
+  const current = (existing?.settings as Record<string, unknown> | null) ?? {};
+  const nextLimits = mergeMenuStockLimits(menuStockLimitsFrom(current), patch);
+
+  const { error } = await admin.from('store_settings').upsert(
+    {
+      organization_id: ctx.organizationId,
+      store_id: storeId,
+      settings: { ...current, menuStock: nextLimits },
+      updated_by: ctx.userId,
+    },
+    { onConflict: 'store_id' }
+  );
+  if (error) return { error: `在庫の保存に失敗しました: ${error.message}` };
+
+  await admin.rpc('log_audit', {
+    p_org: ctx.organizationId,
+    p_store: storeId,
+    p_action: 'inventory.menu_stock_bulk_update',
+    p_target_table: 'menu_items',
+    p_target_id: null,
+    p_before: null,
+    p_after: { changed: ids.length },
+    p_note: null,
+  });
+
+  revalidatePath('/app/inventory');
+  revalidatePath('/app/inventory/menu-stock');
+  revalidatePath('/app/pos');
+  revalidatePath('/handy', 'layout');
+  return { saved: ids.length };
+}
