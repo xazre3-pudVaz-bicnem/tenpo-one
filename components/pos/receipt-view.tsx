@@ -16,7 +16,9 @@ import { PrintButton } from './print-button';
 import { CloudPrintButton } from './cloud-print-button';
 import {
   RYOSHUSHO_DEFAULT_PURPOSE,
+  RYOSHUSHO_INVOICE_NOTE,
   RYOSHUSHO_ISSUED_MESSAGE,
+  RYOSHUSHO_NO_STAMP_NOTE,
   jstShortDateTime,
   type RyoshushoIssueState,
 } from '@/lib/ryoshusho-issue';
@@ -488,12 +490,9 @@ function InvoiceBody({
       )}
       <p className="mt-2">{receipt.issuedAt}</p>
       {receipt.staffName && <p>担当 {receipt.staffName}</p>}
-      {/* 印鑑欄（右寄せ）。印字では罫線の枠（lib/receipt-layout.ts stampBoxLines） */}
-      <div className="mt-2 flex justify-end">
-        <div className="flex h-[72px] w-[72px] items-start justify-center rounded-sm border border-gray-500 pt-1 text-[10px] text-gray-500">
-          印
-        </div>
-      </div>
+      {/* 押印は省略（インボイス対応）。最後に小さく注記（2026-09-26 Ronnie） */}
+      <p className="mt-3 text-[10px] text-gray-500">{RYOSHUSHO_NO_STAMP_NOTE}</p>
+      {receipt.registrationNumber && <p className="text-[10px] text-gray-500">{RYOSHUSHO_INVOICE_NOTE}</p>}
     </>
   );
 }
