@@ -6,7 +6,6 @@ import { requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import type { PrintResultStatus } from '@/lib/printing/types';
 import {
-  isKitchenTicketBuzzer,
   isKitchenTicketTextSize,
   type KitchenTicketSettings,
 } from '@/lib/kitchen-ticket';
@@ -352,21 +351,24 @@ export async function saveDrawerSettings(storeId: string, drawer: DrawerSettings
   return {};
 }
 
+export interface KitchenTicketSettingsInput {
+  split: KitchenTicketSettings['split'];
+  language: KitchenTicketSettings['language'];
+  /** 省略時は今の値のまま（レジ iPad の画面では文字の大きさを出さないため） */
+  textSize?: KitchenTicketSettings['textSize'];
+}
+
 /**
- * 厨房伝票の分け方・文字の大きさ・商品名の言語（店舗ごと。store_settings.settings.kitchenTicket）。
- * settings の他の項目（ドロア・印字文字など）と kitchenTicket の他の項目は消さずに上書きする。
+ * 厨房伝票の分け方・商品名の言語・（パソコンの管理画面だけ）文字の大きさ（店舗ごと。store_settings.settings.kitchenTicket）。
+ * settings の他の項目（ドロア・印字文字など）と kitchenTicket の他の項目（buzzer など）は消さずに上書きする。
  */
-export async function saveKitchenTicketSettings(
-  storeId: string,
-  next: KitchenTicketSettings
-): Promise<ActionResult> {
+export async function saveKitchenTicketSettings(storeId: string, next: KitchenTicketSettingsInput): Promise<ActionResult> {
   const ctx = await requirePermission('store.settings');
   const err = assertStoreAccess(ctx.stores.map((s) => s.id), storeId);
   if (err) return { error: err };
   if (next.split !== 'item' && next.split !== 'order') return { error: '伝票の分け方が正しくありません' };
-  if (!isKitchenTicketTextSize(next.textSize)) return { error: '文字の大きさが正しくありません' };
+  if (next.textSize !== undefined && !isKitchenTicketTextSize(next.textSize)) return { error: '文字の大きさが正しくありません' };
   if (next.language !== 'both' && next.language !== 'en') return { error: '商品名の言語が正しくありません' };
-  if (!isKitchenTicketBuzzer(next.buzzer)) return { error: 'ブザーの設定が正しくありません' };
 
   const supabase = await createClient();
   const { data: existing } = await supabase
@@ -381,9 +383,8 @@ export async function saveKitchenTicketSettings(
     kitchenTicket: {
       ...before,
       split: next.split,
-      textSize: next.textSize,
       language: next.language,
-      buzzer: next.buzzer,
+      ...(next.textSize !== undefined ? { textSize: next.textSize } : {}),
     },
   };
 
@@ -402,7 +403,7 @@ export async function saveKitchenTicketSettings(
     p_target_table: 'store_settings',
     p_target_id: storeId,
     p_before: { split: before.split ?? null, textSize: before.textSize ?? null, language: before.language ?? null },
-    p_after: { split: next.split, textSize: next.textSize, language: next.language },
+    p_after: { split: next.split, textSize: next.textSize ?? before.textSize ?? null, language: next.language },
     p_note: null,
   });
 

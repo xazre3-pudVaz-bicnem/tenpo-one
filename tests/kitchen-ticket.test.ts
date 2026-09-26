@@ -267,13 +267,15 @@ describe('厨房伝票の文字の大きさ（2026-09-21 店舗要望「Word の
   const opts = { title: 'ドリンク', titleEn: 'DRINK', printedAt: '18:33', paperWidth: 80 as const };
 
   it('既定は「大きめ」。設定で「標準」（これまで）にできる', () => {
-    expect(DEFAULT_KITCHEN_TICKET_TEXT_SIZE).toBe('large');
-    expect(kitchenTicketTextSizeFrom(null)).toBe('large');
+    // 2026-09-26 Ronnie「全店 中」：既定は medium（明示的に large/normal にした店舗はそのまま）
+    expect(DEFAULT_KITCHEN_TICKET_TEXT_SIZE).toBe('medium');
+    expect(kitchenTicketTextSizeFrom(null)).toBe('medium');
     expect(kitchenTicketTextSizeFrom({ kitchenTicket: { textSize: 'normal' } })).toBe('normal');
-    expect(kitchenTicketTextSizeFrom({ kitchenTicket: { textSize: 'huge' } })).toBe('large');
+    expect(kitchenTicketTextSizeFrom({ kitchenTicket: { textSize: 'large' } })).toBe('large');
+    expect(kitchenTicketTextSizeFrom({ kitchenTicket: { textSize: 'huge' } })).toBe('medium');
     expect(kitchenTicketSettingsFrom({ kitchenTicket: { split: 'order' } })).toEqual({
       split: 'order',
-      textSize: 'large',
+      textSize: 'medium',
       language: 'en',
       buzzer: 'drawer1',
     });
@@ -328,8 +330,8 @@ describe('厨房伝票の文字の大きさ（2026-09-21 店舗要望「Word の
     expect(isKitchenTicketTextSize('small')).toBe(false);
     expect(KITCHEN_TICKET_TEXT_SIZES).toEqual(['large', 'medium', 'normal']);
     expect(KITCHEN_TICKET_TEXT_SIZE_LABELS.medium).toContain('12');
-    // 既定は変えない（ほかの店は大きめのまま）
-    expect(kitchenTicketTextSizeFrom({ kitchenTicket: {} })).toBe('large');
+    // 2026-09-26 から既定は中くらい（Ronnie「全店 中」）
+    expect(kitchenTicketTextSizeFrom({ kitchenTicket: {} })).toBe('medium');
   });
 
   it('中くらい: 商品名（英語・日本語）・選択肢・メモ・伝票番号は縦2倍、卓名だけ縦横2倍', () => {

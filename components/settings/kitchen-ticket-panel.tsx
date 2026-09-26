@@ -7,13 +7,10 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/components/ui/toast';
 import {
-  KITCHEN_TICKET_BUZZERS,
-  KITCHEN_TICKET_BUZZER_LABELS,
   KITCHEN_TICKET_LANGUAGE_LABELS,
   KITCHEN_TICKET_SPLIT_LABELS,
   KITCHEN_TICKET_TEXT_SIZE_LABELS,
   KITCHEN_TICKET_TEXT_SIZES,
-  type KitchenTicketBuzzer,
   type KitchenTicketLanguage,
   type KitchenTicketSettings,
   type KitchenTicketSplit,
@@ -31,13 +28,6 @@ const SIZE_DESCRIPTIONS: Record<KitchenTicketTextSize, string> = {
   medium:
     '商品名・選択肢・メモ・伝票番号を縦2倍（幅はふつう）、卓名だけ縦横2倍。1行に48桁入るので、長い商品名も途中で折り返しません。',
   normal: '商品名は縦2倍、日本語名・選択肢は普通の大きさ（これまでの印字）。',
-};
-
-const BUZZER_DESCRIPTIONS: Record<KitchenTicketBuzzer, string> = {
-  none: '音は鳴りません。',
-  drawer1:
-    '伝票が出るとき、プリンターのドロア／ブザー端子につないだブザーを鳴らします（既定・全店）。1回の注文につき1度だけ鳴ります。',
-  drawer2: '鳴らない場合はこちら。同じ端子でも配線（ピン）が違うことがあります。',
 };
 
 const LANGUAGE_DESCRIPTIONS: Record<KitchenTicketLanguage, string> = {
@@ -83,22 +73,36 @@ function RadioCard<T extends string>({
  * 既定は「商品の種類ごとに1枚ずつ」「大きめ」「英語と日本語」（2026-09-21 店舗要望）。
  * 文字の大きさは 大きめ（Word の16くらい）／中くらい（Word の12くらい）／標準（これまで）。
  */
-export function KitchenTicketPanel({ storeId, initial }: { storeId: string; initial: KitchenTicketSettings }) {
+/**
+ * 厨房伝票の設定。
+ * - showTextSize=false（レジ iPad の「レジの設定」）：文字の大きさは出さず、保存しても今の値のまま
+ *   （2026-09-26 Ronnie「文字の大きさはパソコンの管理画面だけ」）
+ * - ブザーは全店で鳴らす前提なので設定に出さない（2026-09-26）
+ */
+export function KitchenTicketPanel({
+  storeId,
+  initial,
+  showTextSize = true,
+}: {
+  storeId: string;
+  initial: KitchenTicketSettings;
+  showTextSize?: boolean;
+}) {
   const { toast } = useToast();
   const [split, setSplit] = useState<KitchenTicketSplit>(initial.split);
   const [textSize, setTextSize] = useState<KitchenTicketTextSize>(initial.textSize);
   const [language, setLanguage] = useState<KitchenTicketLanguage>(initial.language);
-  const [buzzer, setBuzzer] = useState<KitchenTicketBuzzer>(initial.buzzer);
   const [pending, startTransition] = useTransition();
   const changed =
-    split !== initial.split ||
-    textSize !== initial.textSize ||
-    language !== initial.language ||
-    buzzer !== initial.buzzer;
+    split !== initial.split || (showTextSize && textSize !== initial.textSize) || language !== initial.language;
 
   const save = () => {
     startTransition(async () => {
-      const result = await saveKitchenTicketSettings(storeId, { split, textSize, language, buzzer });
+      const result = await saveKitchenTicketSettings(storeId, {
+        split,
+        language,
+        ...(showTextSize ? { textSize } : {}),
+      });
       if (result.error) {
         toast(result.error, 'error');
         return;
@@ -130,20 +134,22 @@ export function KitchenTicketPanel({ storeId, initial }: { storeId: string; init
           ))}
         </div>
 
-        <div className="space-y-2" role="radiogroup" aria-label="厨房伝票の文字の大きさ">
-          <p className="text-xs font-semibold text-gray-600">文字の大きさ</p>
-          {KITCHEN_TICKET_TEXT_SIZES.map((value) => (
-            <RadioCard
-              key={value}
-              name="kitchen-ticket-text-size"
-              value={value}
-              checked={textSize === value}
-              label={KITCHEN_TICKET_TEXT_SIZE_LABELS[value]}
-              description={SIZE_DESCRIPTIONS[value]}
-              onChange={setTextSize}
-            />
-          ))}
-        </div>
+        {showTextSize && (
+          <div className="space-y-2" role="radiogroup" aria-label="厨房伝票の文字の大きさ">
+            <p className="text-xs font-semibold text-gray-600">文字の大きさ</p>
+            {KITCHEN_TICKET_TEXT_SIZES.map((value) => (
+              <RadioCard
+                key={value}
+                name="kitchen-ticket-text-size"
+                value={value}
+                checked={textSize === value}
+                label={KITCHEN_TICKET_TEXT_SIZE_LABELS[value]}
+                description={SIZE_DESCRIPTIONS[value]}
+                onChange={setTextSize}
+              />
+            ))}
+          </div>
+        )}
 
         <div className="space-y-2" role="radiogroup" aria-label="厨房伝票の商品名の言語">
           <p className="text-xs font-semibold text-gray-600">商品名の言語</p>
@@ -158,24 +164,6 @@ export function KitchenTicketPanel({ storeId, initial }: { storeId: string; init
               onChange={setLanguage}
             />
           ))}
-        </div>
-
-        <div className="space-y-2" role="radiogroup" aria-label="厨房伝票のブザー">
-          <p className="text-xs font-semibold text-gray-600">印刷時のブザー</p>
-          {KITCHEN_TICKET_BUZZERS.map((value) => (
-            <RadioCard
-              key={value}
-              name="kitchen-ticket-buzzer"
-              value={value}
-              checked={buzzer === value}
-              label={KITCHEN_TICKET_BUZZER_LABELS[value]}
-              description={BUZZER_DESCRIPTIONS[value]}
-              onChange={setBuzzer}
-            />
-          ))}
-          <p className="text-xs text-gray-500">
-            音はプリンター本体ではなく、ドロア／ブザー端子につないだブザーが鳴らします（ブザーが付いていないと鳴りません）。
-          </p>
         </div>
 
         <p className="text-xs text-gray-500">
