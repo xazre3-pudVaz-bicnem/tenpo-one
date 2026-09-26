@@ -36,6 +36,14 @@ export interface SeatTimeState {
   /** 終了予定（ms）。無ければ null（時間制なし） */
   endMs: number | null;
   courseId: string | null;
+  /** 人数。渡すとダイアログで人数も一緒に直せる（2026-09-26 店舗要望） */
+  guestCount?: number;
+}
+
+/** 人数として受け付ける範囲（setGuestCount と同じ） */
+export const GUEST_COUNT_MAX = 999;
+export function isGuestCount(n: unknown): n is number {
+  return typeof n === 'number' && Number.isInteger(n) && n >= 1 && n <= GUEST_COUNT_MAX;
 }
 
 /** 開始と終了予定から「時間（分）」。終了予定が無い・逆転していれば null */

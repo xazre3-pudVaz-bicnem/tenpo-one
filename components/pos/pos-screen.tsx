@@ -1078,7 +1078,7 @@ export function PosScreen({
         <SeatTimeDialog
           onClose={() => setSeatTimeOpen(false)}
           orderId={order.id}
-          current={seatTime}
+          current={{ ...seatTime, guestCount: order.guestCount }}
           courses={seatCourses}
           setSeatTimeAction={setSeatTimeAction}
         />

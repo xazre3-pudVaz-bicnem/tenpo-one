@@ -752,7 +752,12 @@ export function TableSheet({
         <SeatTimeDialog
           onClose={() => setSeatTimeOpen(false)}
           orderId={selected.id}
-          current={{ startMs: table.order.openedAtMs, endMs: table.order.endAtMs, courseId: table.order.courseId }}
+          current={{
+            startMs: table.order.openedAtMs,
+            endMs: table.order.endAtMs,
+            courseId: table.order.courseId,
+            guestCount: selected.guestCount ?? table.order.guestCount,
+          }}
           courses={seatCourses}
           setSeatTimeAction={setSeatTimeAction}
         />

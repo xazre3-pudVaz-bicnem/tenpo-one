@@ -2,6 +2,7 @@
 
 import { useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import { Minus, Plus } from 'lucide-react';
 import { Dialog } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label, Select } from '@/components/ui/input';
@@ -10,9 +11,11 @@ import { cn } from '@/lib/utils';
 import {
   DURATION_MAX_MINUTES,
   DURATION_MIN_MINUTES,
+  GUEST_COUNT_MAX,
   SEAT_DURATION_CHOICES,
   durationForCourse,
   durationLabel,
+  isGuestCount,
   isSeatDuration,
   jstHm,
   seatDurationMinutes,
@@ -47,6 +50,10 @@ export function SeatTimeDialog({
   const [startHm, setStartHm] = useState(initialStart);
   const [minutes, setMinutes] = useState<number | null>(seatDurationMinutes(current));
   const [courseId, setCourseId] = useState<string>(current.courseId ?? '');
+  // 人数（伝票画面から開いたときだけ渡ってくる。2026-09-26 店舗要望「この画面で人数の変更ができるといい」）
+  const hasGuests = current.guestCount != null;
+  const [guests, setGuests] = useState<number>(current.guestCount ?? 1);
+  const clampGuests = (n: number) => Math.min(GUEST_COUNT_MAX, Math.max(1, Math.floor(n) || 1));
 
   const endLabel =
     minutes != null && /^\d{2}:\d{2}$/.test(startHm)
@@ -63,6 +70,11 @@ export function SeatTimeDialog({
       toast(`時間は${DURATION_MIN_MINUTES}分〜${DURATION_MAX_MINUTES / 60}時間で入れてください`, 'error');
       return;
     }
+    if (hasGuests && !isGuestCount(guests)) {
+      toast(`人数は1〜${GUEST_COUNT_MAX}名で入れてください`, 'error');
+      return;
+    }
+    const guestChanged = hasGuests && guests !== current.guestCount;
     inFlightRef.current = true;
     startTransition(async () => {
       try {
@@ -70,8 +82,9 @@ export function SeatTimeDialog({
           startTime: startHm !== initialStart ? startHm : null,
           durationMinutes: minutes,
           courseId: courseId || null,
+          guestCount: guestChanged ? guests : null,
         });
-        toast('席の時間・コースを変更しました', 'success');
+        toast(guestChanged ? `席の時間・コース・人数（${guests}名）を変更しました` : '席の時間・コースを変更しました', 'success');
         router.refresh();
         onClose();
       } catch (e) {
@@ -102,6 +115,47 @@ export function SeatTimeDialog({
             <p className="flex h-12 items-center text-2xl font-bold tabular-nums text-navy">{endLabel ?? '—'}</p>
           </div>
         </div>
+
+        {hasGuests && (
+          <div>
+            <Label htmlFor="seat-guests">人数 / Guests</Label>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                aria-label="1名減らす"
+                onClick={() => setGuests((v) => clampGuests(v - 1))}
+                disabled={pending || guests <= 1}
+                className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-gray-200 text-navy hover:bg-gray-50 disabled:opacity-40"
+              >
+                <Minus className="h-5 w-5" />
+              </button>
+              <input
+                id="seat-guests"
+                type="number"
+                inputMode="numeric"
+                min={1}
+                max={GUEST_COUNT_MAX}
+                value={guests}
+                onChange={(e) => setGuests(clampGuests(Number(e.target.value)))}
+                disabled={pending}
+                className="h-12 w-24 rounded-xl border border-gray-300 bg-white text-center text-2xl font-bold tabular-nums text-navy focus:border-primary focus:outline-2 focus:outline-primary/30"
+              />
+              <span className="text-base font-semibold text-gray-500">名</span>
+              <button
+                type="button"
+                aria-label="1名増やす"
+                onClick={() => setGuests((v) => clampGuests(v + 1))}
+                disabled={pending || guests >= GUEST_COUNT_MAX}
+                className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-gray-200 text-navy hover:bg-gray-50 disabled:opacity-40"
+              >
+                <Plus className="h-5 w-5" />
+              </button>
+              {guests !== current.guestCount && (
+                <span className="ml-1 text-xs text-gray-500">今 {current.guestCount}名 → {guests}名（金額は変わりません）</span>
+              )}
+            </div>
+          </div>
+        )}
 
         <div>
           <p className="mb-1.5 text-sm font-medium text-gray-700">時間 / Duration</p>
