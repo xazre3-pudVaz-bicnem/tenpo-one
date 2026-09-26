@@ -9,7 +9,7 @@
  *  - 画面遷移はネットワーク優先。通信不可のときだけオフライン画面を返す。
  *  - GET以外（Server ActionsのPOST等）は素通し。
  */
-const VERSION = 'v1';
+const VERSION = 'v2';
 const STATIC_CACHE = `tenpo-one-static-${VERSION}`;
 const OFFLINE_URL = '/offline';
 const PRECACHE = [OFFLINE_URL, '/manifest.webmanifest', '/icon-192.png', '/favicon-32.png', '/logo-mark.png'];
@@ -80,4 +80,57 @@ self.addEventListener('fetch', (event) => {
   if (request.mode === 'navigate') {
     event.respondWith(networkThenOffline(request));
   }
+});
+
+/* ---------------------------------------------------------------------------
+ * 予約の通知（Web Push）
+ * サーバー（lib/push-server.ts）が送る payload: { title, body, url, tag }
+ * iPad / iPhone は「ホーム画面に追加」したアプリでだけ受け取れる（iOS 16.4+）。
+ * 音は OS の通知音が鳴る（Web Push 側で音は選べない）。
+ * ------------------------------------------------------------------------- */
+self.addEventListener('push', (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    data = { title: 'TENPO ONE', body: event.data ? event.data.text() : '' };
+  }
+  const title = data.title || '新しい予約';
+  const options = {
+    body: data.body || '',
+    tag: data.tag || undefined,
+    renotify: true,
+    icon: '/icon-192.png',
+    badge: '/icon-192.png',
+    data: { url: data.url || '/app/reservations' },
+    // 端末が対応していれば振動（iPhone は無視される）
+    vibrate: [200, 100, 200, 100, 200],
+  };
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const url = (event.notification.data && event.notification.data.url) || '/app/reservations';
+  event.waitUntil(
+    (async () => {
+      const target = new URL(url, self.location.origin).href;
+      const all = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+      // 開いているタブがあればそれを前に出して移動、無ければ新しく開く
+      for (const client of all) {
+        if ('focus' in client) {
+          await client.focus();
+          if ('navigate' in client) {
+            try {
+              await client.navigate(target);
+            } catch {
+              /* 別オリジン等で移動できないときはそのまま */
+            }
+          }
+          return;
+        }
+      }
+      await self.clients.openWindow(target);
+    })()
+  );
 });

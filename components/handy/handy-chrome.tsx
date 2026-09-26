@@ -21,6 +21,8 @@ import { formatTime } from '@/lib/format';
 import { signOut } from '@/app/app/actions';
 import { StoreSwitcher } from '@/components/layout/store-switcher';
 import { useStoreRealtimeRefresh } from '@/components/realtime/use-store-refresh';
+import { ReservationAlert } from '@/components/notifications/reservation-alert';
+import { PushSubscribeButton } from '@/components/notifications/push-subscribe-button';
 import { useNow } from '@/components/floor/use-now';
 import type { StoreRef } from '@/lib/auth';
 import { elapsedLabel, serviceCallLabel, sortServiceCalls, type HandyServiceCall } from './logic';
@@ -107,6 +109,8 @@ export function HandyChrome({
     <HandyChromeContext.Provider value={api}>
       <div className="theme-regi fixed inset-0 flex flex-col overflow-hidden bg-[#f6f3fb] text-[#2a2138]">
         {children}
+        {/* 新しいネット予約のチャイム＋バナー */}
+        <ReservationAlert storeId={storeId} ledgerHref="/handy/reservations" />
 
         <div className="flex-none">
           {sorted.length > 0 && (
@@ -213,6 +217,7 @@ export function HandyChrome({
           <SheetLink href="/handy/sold-out" icon={<PackageX className="h-[18px] w-[18px]" aria-hidden />}>
             品切れ設定（売切・販売再開）
           </SheetLink>
+          <PushSubscribeButton variant="row" />
           <button
             type="button"
             onClick={() => {
