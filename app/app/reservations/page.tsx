@@ -122,12 +122,14 @@ interface RawReservation {
   course: { name: string } | null;
   reservation_sources: { name: string } | null;
   reservation_tables: { table_id: string; restaurant_tables: { name: string } | null }[];
+  /** この予約の伝票（会計した時刻＝退店時刻に使う） */
+  orders?: { closed_at: string | null }[] | null;
 }
 
 const RESERVATION_SELECT = `id, code, store_id, reserved_date, start_at, end_at, guest_name, guest_name_kana, guest_phone, guest_email,
    party_size, adults, children, status, seat_type, purpose, allergy_note, request_note, memo, created_via, created_at, is_private_hire,
    staff_id, profiles(display_name), course:menu_items(name), reservation_sources(name),
-   reservation_tables(table_id, restaurant_tables(name))`;
+   reservation_tables(table_id, restaurant_tables(name)), orders(closed_at)`;
 
 function mapReservationRow(r: RawReservation, storeName: string | null): ReservationCardData {
   return {
@@ -160,7 +162,17 @@ function mapReservationRow(r: RawReservation, storeName: string | null): Reserva
     staffName: r.profiles?.display_name ?? null,
     isPrivateHire: r.is_private_hire,
     createdAt: r.created_at,
+    leftAt: latestClosedAt(r.orders),
   };
+}
+
+/** 伝票が複数あれば一番あとに会計した時刻を退店時刻にする */
+function latestClosedAt(orders: { closed_at: string | null }[] | null | undefined): string | null {
+  let latest: string | null = null;
+  for (const o of orders ?? []) {
+    if (o.closed_at && (!latest || o.closed_at > latest)) latest = o.closed_at;
+  }
+  return latest;
 }
 
 interface SearchParams {

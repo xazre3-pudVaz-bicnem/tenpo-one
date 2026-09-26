@@ -68,6 +68,8 @@ export interface PrinterRow {
   bill_slips?: boolean;
   /** プリンターを上下さかさまに付けているとき true（印字を180度回して出す） */
   upside_down?: boolean;
+  /** メーカー（'EPSON' / 'Star' 等）。接続方式の判定に使う */
+  maker?: string | null;
 }
 
 type Admin = ReturnType<typeof createAdminClient>;
@@ -77,7 +79,7 @@ export async function resolvePrinter(token: string): Promise<{ admin: Admin; pri
   const admin = createAdminClient();
   const { data } = await admin
     .from('printer_configs')
-    .select('id, organization_id, store_id, name, usage, paper_width_mm, kitchen_stations, auto_print, floor_ids, bill_slips, upside_down')
+    .select('id, organization_id, store_id, name, usage, paper_width_mm, kitchen_stations, auto_print, floor_ids, bill_slips, upside_down, maker')
     .eq('cloudprnt_token', token)
     .eq('cloudprnt_enabled', true)
     .eq('status', 'active')
