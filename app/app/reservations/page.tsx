@@ -11,7 +11,6 @@ import { Badge } from '@/components/ui/badge';
 import { StoreRealtimeRefresh } from '@/components/realtime/store-realtime-refresh';
 import { GourmetPanel } from '@/components/reservations/gourmet-panel';
 import { DateNav } from '@/components/reservations/date-nav';
-import type { ReservationCardData } from '@/components/reservations/reservation-card';
 import { WaitlistDialog } from '@/components/reservations/waitlist-dialog';
 import { WaitlistPanel, type WaitlistRow, type WaitlistStatus } from '@/components/reservations/waitlist-panel';
 import { WaitingTicketDialog } from '@/components/reservations/waiting-ticket-dialog';
@@ -19,9 +18,10 @@ import { WaitingQueuePanel, type WaitingTicketRow, type WaitingHint } from '@/co
 import type { GuideTableOption } from '@/components/reservations/guide-table-dialog';
 import { ACTIVE_TIMELINE_STATUSES, BOARD_SLOT } from '@/components/reservations/constants';
 import { loadLedgerChrome } from '@/components/reservations/ledger-data';
+import { RESERVATION_ROW_SELECT, mapReservationRow, type RawReservationRow } from '@/components/reservations/row-mapper';
 import { LedgerTop } from '@/components/reservations/ledger-header';
 import { ScheduleBoard, type BoardTable } from '@/components/reservations/schedule-board';
-import { suggestTables, type TableLike, type ReservationStatus } from '@/lib/reservations';
+import { suggestTables, type TableLike } from '@/lib/reservations';
 import { cn } from '@/lib/utils';
 
 export const metadata: Metadata = { title: '店舗台帳' };
@@ -93,87 +93,6 @@ interface BusinessHourRow {
 }
 
 // ---- 予約データ取得・整形 ----
-
-interface RawReservation {
-  id: string;
-  code: string;
-  store_id: string;
-  reserved_date: string;
-  start_at: string;
-  end_at: string;
-  guest_name: string;
-  guest_name_kana: string | null;
-  guest_phone: string;
-  guest_email: string | null;
-  party_size: number;
-  adults: number;
-  children: number;
-  status: ReservationStatus;
-  seat_type: string | null;
-  purpose: string | null;
-  allergy_note: string | null;
-  request_note: string | null;
-  memo: string | null;
-  created_via: string;
-  created_at: string;
-  is_private_hire: boolean;
-  staff_id: string | null;
-  profiles: { display_name: string } | null;
-  course: { name: string } | null;
-  reservation_sources: { name: string } | null;
-  reservation_tables: { table_id: string; restaurant_tables: { name: string } | null }[];
-  /** この予約の伝票（会計した時刻＝退店時刻に使う） */
-  orders?: { closed_at: string | null }[] | null;
-}
-
-const RESERVATION_SELECT = `id, code, store_id, reserved_date, start_at, end_at, guest_name, guest_name_kana, guest_phone, guest_email,
-   party_size, adults, children, status, seat_type, purpose, allergy_note, request_note, memo, created_via, created_at, is_private_hire,
-   staff_id, profiles(display_name), course:menu_items(name), reservation_sources(name),
-   reservation_tables(table_id, restaurant_tables(name)), orders(closed_at)`;
-
-function mapReservationRow(r: RawReservation, storeName: string | null): ReservationCardData {
-  return {
-    id: r.id,
-    code: r.code,
-    storeId: r.store_id,
-    reservedDate: r.reserved_date,
-    startAt: r.start_at,
-    endAt: r.end_at,
-    guestName: r.guest_name,
-    guestNameKana: r.guest_name_kana,
-    guestPhone: r.guest_phone,
-    guestEmail: r.guest_email,
-    partySize: r.party_size,
-    adults: r.adults,
-    children: r.children,
-    status: r.status,
-    courseName: r.course?.name ?? null,
-    seatType: r.seat_type,
-    purpose: r.purpose,
-    allergyNote: r.allergy_note,
-    requestNote: r.request_note,
-    memo: r.memo,
-    sourceName: r.reservation_sources?.name ?? null,
-    createdVia: r.created_via,
-    storeName,
-    tableIds: (r.reservation_tables ?? []).map((t) => t.table_id),
-    tableNames: (r.reservation_tables ?? []).map((t) => t.restaurant_tables?.name).filter((n): n is string => !!n),
-    staffId: r.staff_id,
-    staffName: r.profiles?.display_name ?? null,
-    isPrivateHire: r.is_private_hire,
-    createdAt: r.created_at,
-    leftAt: latestClosedAt(r.orders),
-  };
-}
-
-/** 伝票が複数あれば一番あとに会計した時刻を退店時刻にする */
-function latestClosedAt(orders: { closed_at: string | null }[] | null | undefined): string | null {
-  let latest: string | null = null;
-  for (const o of orders ?? []) {
-    if (o.closed_at && (!latest || o.closed_at > latest)) latest = o.closed_at;
-  }
-  return latest;
-}
 
 interface SearchParams {
   date?: string;
@@ -259,13 +178,13 @@ export default async function ReservationsLedgerPage({ searchParams }: { searchP
 
     const { data: reservationsData } = await supabase
       .from('reservations')
-      .select(RESERVATION_SELECT)
+      .select(RESERVATION_ROW_SELECT)
       .eq('store_id', store.id)
       .eq('reserved_date', date)
       .in('status', ACTIVE_TIMELINE_STATUSES)
       .order('start_at');
 
-    const raw = (reservationsData ?? []) as unknown as RawReservation[];
+    const raw = (reservationsData ?? []) as unknown as RawReservationRow[];
     const reservations = raw.map((r) => mapReservationRow(r, null));
     const isToday = date === today;
 
@@ -345,13 +264,13 @@ export default async function ReservationsLedgerPage({ searchParams }: { searchP
 
     const { data: gourmetData } = await supabase
       .from('reservations')
-      .select(RESERVATION_SELECT)
+      .select(RESERVATION_ROW_SELECT)
       .eq('store_id', store.id)
       .eq('reserved_date', date)
       .in('status', ACTIVE_TIMELINE_STATUSES)
       .order('start_at');
 
-    const rows = ((gourmetData ?? []) as unknown as RawReservation[]).map((r) => mapReservationRow(r, null));
+    const rows = ((gourmetData ?? []) as unknown as RawReservationRow[]).map((r) => mapReservationRow(r, null));
     body = <GourmetPanel reservations={rows} dateLabel={date.replaceAll('-', '/')} />;
   } else if (view === 'week') {
     title = '週間';

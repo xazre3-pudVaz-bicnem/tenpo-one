@@ -28,6 +28,8 @@ function revalidateAll() {
   revalidatePath('/app/reservations');
   revalidatePath('/app/reservations/list');
   revalidatePath('/app/reservations/calendar');
+  // レジのホーム（本日のご予約一覧）からも予約を直せる（2026-09-26）
+  revalidatePath('/app/floor');
 }
 
 async function loadReservation(
@@ -409,6 +411,47 @@ export async function updateReservationStaff(reservationId: string, staffId: str
     .update({ staff_id: staffId, updated_by: ctx.userId })
     .eq('id', reservationId);
   if (error) throw new Error('担当者の更新に失敗しました');
+
+  revalidateAll();
+}
+
+/**
+ * コースの変更（レジのホームの予約詳細から。2026-09-26 Ronnie「変更もできないと」）。
+ * その店舗のコース商品（item_type='course'）だけ。null でコースなし。時間は変えない（時間は日時変更で直す）。
+ */
+export async function updateReservationCourse(reservationId: string, courseId: string | null) {
+  const ctx = await requirePermission('reservations.write');
+  const supabase = await createClient();
+  const reservation = await loadReservation(supabase, ctx, reservationId);
+
+  if (courseId) {
+    const { data: course } = await supabase
+      .from('menu_items')
+      .select('id')
+      .eq('id', courseId)
+      .eq('store_id', reservation.store_id)
+      .eq('item_type', 'course')
+      .neq('status', 'deleted')
+      .maybeSingle();
+    if (!course) throw new Error('コースが見つかりません');
+  }
+
+  const { error } = await supabase
+    .from('reservations')
+    .update({ course_id: courseId, updated_by: ctx.userId })
+    .eq('id', reservationId);
+  if (error) throw new Error('コースの更新に失敗しました');
+
+  await supabase.rpc('log_audit', {
+    p_org: ctx.organizationId,
+    p_store: reservation.store_id,
+    p_action: 'reservation.course_update',
+    p_target_table: 'reservations',
+    p_target_id: reservationId,
+    p_before: { course_id: reservation.course_id },
+    p_after: { course_id: courseId },
+    p_note: null,
+  });
 
   revalidateAll();
 }

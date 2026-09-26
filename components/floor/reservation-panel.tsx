@@ -1,8 +1,12 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import type { PanelReservation } from './types';
+import type { ReservationListRow } from '@/components/reservations/list-types';
+import type { AssignableTable } from '@/components/reservations/assign-table-dialog';
+import { ReservationSheet, type SheetCourseOption } from '@/components/reservations/reservation-sheet';
 
 const NOT_ARRIVED = ['pending', 'confirmed', 'waiting'];
 const ARRIVED = ['arrived', 'seated', 'billing', 'completed'];
@@ -53,10 +57,21 @@ function Sum({ label, groups, people }: { label: string; groups: number; people?
 export function ReservationPanel({
   reservations,
   now,
+  rows = [],
+  tables = [],
+  staffOptions = [],
+  courses = [],
 }: {
   reservations: PanelReservation[];
   now: number;
+  /** 予約詳細（お名前を押すと開く。2026-09-26 Ronnie 要望）用のデータ */
+  rows?: ReservationListRow[];
+  tables?: AssignableTable[];
+  staffOptions?: { id: string; name: string }[];
+  courses?: SheetCourseOption[];
 }) {
+  const [openId, setOpenId] = useState<string | null>(null);
+  const openRow = openId ? (rows.find((r) => r.id === openId) ?? null) : null;
   const sameDay = reservations.filter((r) => r.createdToday);
   const arrived = reservations.filter((r) => ARRIVED.includes(r.status));
   const waiting = reservations.filter((r) => NOT_ARRIVED.includes(r.status));
@@ -94,27 +109,32 @@ export function ReservationPanel({
           {reservations.map((r) => {
             const c = chip(r, now);
             return (
-              <li
-                key={r.id}
-                className="flex min-w-0 items-center gap-2 border-b border-line px-1.5 py-[7px] last:border-b-0"
-              >
-                <time className="w-[42px] flex-none text-[13.5px] leading-none font-bold text-royal tabular-nums">
-                  {r.time}
-                </time>
-                <span className="flex min-w-0 flex-1 flex-col leading-snug">
-                  <b className="truncate text-[13px] font-medium text-ink">{r.name.replace(/ ?様$/, '')} 様</b>
-                  <span className="truncate text-[11.5px] text-ink-3">
-                    <span className="tabular-nums">{r.partySize}</span>名 ・ {r.tableLabel}
-                  </span>
-                </span>
-                <span
-                  className={cn(
-                    'flex-none rounded-full px-[7px] py-px text-[10.5px] font-bold whitespace-nowrap',
-                    c.className
-                  )}
+              <li key={r.id} className="border-b border-line last:border-b-0">
+                {/* 押すと予約詳細（お客様情報・変更・キャンセル・来店）が開く */}
+                <button
+                  type="button"
+                  onClick={() => setOpenId(r.id)}
+                  disabled={!rows.some((x) => x.id === r.id)}
+                  className="flex w-full min-w-0 items-center gap-2 rounded-lg px-1.5 py-[7px] text-left hover:bg-lilac-soft disabled:cursor-default disabled:hover:bg-transparent"
                 >
-                  {c.label}
-                </span>
+                  <time className="w-[42px] flex-none text-[13.5px] leading-none font-bold text-royal tabular-nums">
+                    {r.time}
+                  </time>
+                  <span className="flex min-w-0 flex-1 flex-col leading-snug">
+                    <b className="truncate text-[13px] font-medium text-ink">{r.name.replace(/ ?様$/, '')} 様</b>
+                    <span className="truncate text-[11.5px] text-ink-3">
+                      <span className="tabular-nums">{r.partySize}</span>名 ・ {r.tableLabel}
+                    </span>
+                  </span>
+                  <span
+                    className={cn(
+                      'flex-none rounded-full px-[7px] py-px text-[10.5px] font-bold whitespace-nowrap',
+                      c.className
+                    )}
+                  >
+                    {c.label}
+                  </span>
+                </button>
               </li>
             );
           })}
@@ -134,6 +154,18 @@ export function ReservationPanel({
           すべて表示 ›
         </Link>
       </footer>
+
+      {openRow && (
+        <ReservationSheet
+          key={openRow.id}
+          reservation={openRow}
+          now={now}
+          tables={tables}
+          staffOptions={staffOptions}
+          courses={courses}
+          onClose={() => setOpenId(null)}
+        />
+      )}
     </section>
   );
 }

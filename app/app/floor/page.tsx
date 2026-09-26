@@ -9,6 +9,7 @@ import { todayJst, formatTime } from '@/lib/format';
 import { PageHeader } from '@/components/ui/page-header';
 import { EmptyState } from '@/components/ui/state';
 import { CREATED_VIA_LABEL } from '@/components/reservations/constants';
+import { RESERVATION_ROW_SELECT, mapReservationRow, type RawReservationRow } from '@/components/reservations/row-mapper';
 import { FloorBoard } from '@/components/floor/floor-board';
 import type {
   FloorTable,
@@ -88,16 +89,6 @@ interface OrderRow {
   >;
 }
 
-interface ReservationRow extends ReservationSource {
-  id: string;
-  start_at: string;
-  guest_name: string;
-  party_size: number;
-  status: string;
-  created_at: string;
-  reservation_tables: { table_id: string }[] | null;
-}
-
 export default async function FloorPage() {
   const ctx = await requireFeature('pos');
   const supabase = await createClient();
@@ -151,14 +142,24 @@ export default async function FloorPage() {
         .order('opened_at'),
       supabase
         .from('reservations')
-        .select(
-          'id, start_at, guest_name, party_size, status, created_at, created_via, reservation_sources(name), reservation_tables(table_id)'
-        )
+        // 予約詳細（お客様情報・変更・キャンセル）をホームから開けるよう、台帳と同じ項目を読む（2026-09-26）
+        .select(RESERVATION_ROW_SELECT)
         .eq('store_id', store.id)
         .eq('reserved_date', today)
         .in('status', PANEL_STATUSES)
         .order('start_at'),
     ]);
+
+  // 予約詳細のテーブル変更・担当者の選択肢
+  const { data: staffData } = await supabase
+    .from('memberships')
+    .select('profile_id, profiles(display_name), membership_stores!inner(store_id)')
+    .eq('organization_id', ctx.organizationId)
+    .eq('status', 'active')
+    .eq('membership_stores.store_id', store.id);
+  const staffOptions = ((staffData ?? []) as { profile_id: string; profiles: { display_name: string } | { display_name: string }[] | null }[])
+    .map((m) => ({ id: m.profile_id, name: one(m.profiles)?.display_name ?? '不明' }))
+    .sort((a, b) => a.name.localeCompare(b.name, 'ja'));
 
   // 選択印刷で選べるように、未会計伝票の品を読む（2026-09-25 店舗要望）
   const openOrderIds = ((orderRows ?? []) as { id: string }[]).map((o) => o.id);
@@ -235,7 +236,8 @@ export default async function FloorPage() {
     });
   }
 
-  const reservationsToday = (reservationRows ?? []) as unknown as ReservationRow[];
+  const reservationsToday = (reservationRows ?? []) as unknown as RawReservationRow[];
+  const panelRows = reservationsToday.filter((r) => r.created_via !== 'walk_in').map((r) => mapReservationRow(r, null));
 
   // テーブルごとの未来店予約（開始時刻順）
   const upcomingByTable = new Map<string, UpcomingReservation[]>();
@@ -322,6 +324,9 @@ export default async function FloorPage() {
           defaultFloorId={floorBoardFrom(settings?.settings).defaultFloorId}
           tables={tableViews}
           reservations={panel}
+          reservationRows={panelRows}
+          assignableTables={tableRows.map((t) => ({ id: t.id, name: t.name, capacityMin: t.capacity_min, capacityMax: t.capacity_max }))}
+          staffOptions={staffOptions}
           serverNow={serverNow}
           canOperate={canOperate}
           startWalkInAction={startWalkIn}
