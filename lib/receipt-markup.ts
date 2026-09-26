@@ -7,7 +7,8 @@
  * キャッシュドロアはMarkupに機種依存があるため drawerKickMarkup() で別ジョブとして扱う。
  */
 import type { ReceiptData } from './receipts';
-import { billSlipLines, colsFor, twoCol as twoColBase, wrapText as wrapTextBase, yen, STAR_WIDTH_OPTIONS, type PaperWidth } from './receipt-layout';
+import { RYOSHUSHO_DEFAULT_PURPOSE } from '@/lib/ryoshusho-issue';
+import { billSlipLines, colsFor, twoCol as twoColBase, wrapText as wrapTextBase, yen, STAR_WIDTH_OPTIONS, type PaperWidth, stampBoxLines } from './receipt-layout';
 
 /** Star 機の全角幅（半角2桁よりわずかに広い）を見込んだ桁揃え・折り返し */
 const twoCol = (left: string, right: string, width: number) => twoColBase(left, right, width, STAR_WIDTH_OPTIONS);
@@ -104,7 +105,7 @@ export function receiptToStarMarkup(receipt: ReceiptData, options: ReceiptMarkup
 export interface RyoshushoOptions extends ReceiptMarkupOptions {
   /** 宛名（空欄なら「上様」） */
   recipientName?: string | null;
-  /** 但し書き（空欄なら「お品代として」） */
+  /** 但し書き（空欄なら「飲食代として」） */
   purpose?: string | null;
   /**
    * 分割発行の1枚ぶん。会計は分けず、証憑だけを分ける（lib/ryoshusho-split.ts）。
@@ -126,7 +127,7 @@ export function ryoshushoToStarMarkup(receipt: ReceiptData, options: RyoshushoOp
   const raw = (s: string) => L.push(s);
 
   const recipient = (options.recipientName ?? '').trim() || '上様';
-  const purpose = (options.purpose ?? '').trim() || 'お品代として';
+  const purpose = (options.purpose ?? '').trim() || RYOSHUSHO_DEFAULT_PURPOSE;
 
   const split = options.split ?? null;
   const amount = split ? split.amount : receipt.netPaid;
@@ -138,6 +139,13 @@ export function ryoshushoToStarMarkup(receipt: ReceiptData, options: RyoshushoOp
   line('領 収 書');
   raw('[magnify: width 1; height 1]');
   if (split && split.count > 1) line(`${splitLabel(split)} 分割発行`);
+  // 発行元は上（2026-09-26 Ronnie「店名・住所は上に」）
+  line(receipt.storeName);
+  raw('[bold: off]');
+  if (receipt.storeAddress) line(receipt.storeAddress);
+  if (receipt.storePhone) line(`TEL ${receipt.storePhone}`);
+  if (receipt.registrationNumber) line(`登録番号 ${receipt.registrationNumber}`);
+  raw('[bold: on]');
   line();
 
   raw('[align: left]');
@@ -174,17 +182,16 @@ export function ryoshushoToStarMarkup(receipt: ReceiptData, options: RyoshushoOp
   }
   line(rule);
 
-  // 発行元
-  line(receipt.storeName);
-  if (receipt.storeAddress) line(receipt.storeAddress);
-  if (receipt.storePhone) line(`TEL ${receipt.storePhone}`);
-  if (receipt.registrationNumber) line(`登録番号 ${receipt.registrationNumber}`);
   line(twoCol(`発行 ${receipt.issuedAt}`, `No.${receipt.orderNo}`, width));
+  // 担当者（誰が出した領収書か分かるように。2026-09-26 Ronnie）
+  if (receipt.staffName) line(`担当 ${receipt.staffName}`);
   // 収入印紙は「1枚の領収額」で決まるので、分割したらこの1枚の金額で見る
   if (amount >= 50000) {
     line();
     line('[ 収入印紙 ]');
   }
+  // 印鑑欄（右寄せの枠）。折り返さないよう raw で入れる
+  for (const s of stampBoxLines(width)) raw(esc(s));
   raw('[feed]');
   raw('[cut: feed; partial]');
 

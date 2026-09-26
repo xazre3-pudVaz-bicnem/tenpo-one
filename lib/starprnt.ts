@@ -8,8 +8,9 @@
  * 桁揃えは receipt-layout.ts を Markup 版と共有するため、同一注文なら両形式で同じ見た目になる。
  */
 import iconv from 'iconv-lite';
+import { RYOSHUSHO_DEFAULT_PURPOSE } from '@/lib/ryoshusho-issue';
 import type { ReceiptData } from './receipts';
-import { billSlipLines, colsFor, twoCol as twoColBase, wrapText as wrapTextBase, yen, STAR_WIDTH_OPTIONS, type PaperWidth } from './receipt-layout';
+import { billSlipLines, colsFor, twoCol as twoColBase, wrapText as wrapTextBase, yen, STAR_WIDTH_OPTIONS, type PaperWidth, stampBoxLines } from './receipt-layout';
 
 /** Star 機の全角幅（半角2桁よりわずかに広い）を見込んだ桁揃え・折り返し */
 const twoCol = (left: string, right: string, width: number) => twoColBase(left, right, width, STAR_WIDTH_OPTIONS);
@@ -196,7 +197,7 @@ export function ryoshushoToStarPrnt(
   const rule = '-'.repeat(width);
   const b = new StarBuffer(options.currency ?? DEFAULT_CURRENCY, options.encoding ?? DEFAULT_ENCODING, width);
   const recipient = (options.recipientName ?? '').trim() || '上様';
-  const purpose = (options.purpose ?? '').trim() || 'お品代として';
+  const purpose = (options.purpose ?? '').trim() || RYOSHUSHO_DEFAULT_PURPOSE;
   const split = options.split ?? null;
   const amount = split ? split.amount : receipt.netPaid;
 
@@ -207,7 +208,12 @@ export function ryoshushoToStarPrnt(
   // （横2倍だと1行に収まらず、紙も文字も大きくなりすぎる）
   b.cmd(CMD.magnify(0, 1)).line('領 収 書').cmd(CMD.magnify(0, 0));
   if (split && split.count > 1) b.line(`${splitLabel(split)} 分割発行`);
-  b.line();
+  // 発行元は上（2026-09-26 Ronnie「店名・住所は上に」）
+  b.line(receipt.storeName).cmd(CMD.emphasizeOff);
+  if (receipt.storeAddress) b.line(receipt.storeAddress);
+  if (receipt.storePhone) b.line(`TEL ${receipt.storePhone}`);
+  if (receipt.registrationNumber) b.line(`登録番号 ${receipt.registrationNumber}`);
+  b.cmd(CMD.emphasizeOn).line();
   b.cmd(CMD.alignLeft).line(`${recipient} 様`).line(rule);
 
   // 一部返金がある場合は実際に受け取った額（netPaid）を領収額とする
@@ -232,13 +238,13 @@ export function ryoshushoToStarPrnt(
   }
   b.line(rule);
 
-  b.line(receipt.storeName);
-  if (receipt.storeAddress) b.line(receipt.storeAddress);
-  if (receipt.storePhone) b.line(`TEL ${receipt.storePhone}`);
-  if (receipt.registrationNumber) b.line(`登録番号 ${receipt.registrationNumber}`);
   b.line(twoCol(`発行 ${receipt.issuedAt}`, `No.${receipt.orderNo}`, width));
+  // 担当者（誰が出した領収書か分かるように。2026-09-26 Ronnie）
+  if (receipt.staffName) b.line(`担当 ${receipt.staffName}`);
   // 収入印紙はこの1枚の領収額で決まる
   if (amount >= 50000) b.line().line('[ 収入印紙 ]');
+  // 印鑑欄（右寄せの枠）
+  for (const s of stampBoxLines(width)) b.line(s);
   b.line().line().cmd(CMD.cut);
   return b.toBuffer();
 }

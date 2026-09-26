@@ -112,10 +112,10 @@ describe('ryoshushoToEposXml', () => {
     expect(xml).toContain('<cut type="feed"/>');
   });
 
-  it('宛名・但し書きが空なら「上様」「お品代として」を使う', () => {
+  it('宛名・但し書きが空なら「上様」「飲食代として」を使う', () => {
     const xml = ryoshushoToEposXml(base, { paperWidth: 58 });
     expect(xml).toContain('上様 様');
-    expect(xml).toContain('但 お品代として');
+    expect(xml).toContain('但 飲食代として');
   });
 
   it('お客様に渡す紙なので英語の見出しを混ぜない', () => {

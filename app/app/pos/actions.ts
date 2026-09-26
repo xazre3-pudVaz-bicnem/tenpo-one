@@ -12,6 +12,7 @@ import { validateCoupon, COUPON_REJECT_LABELS, type CouponLike } from '@/lib/cou
 import { resolveOptionSelection } from '@/lib/menu-options';
 import { resolveStartTime, startTimeProblem } from '@/lib/handy-visit';
 import { isGuestCount, isSeatDuration } from '@/lib/seat-time';
+import { RYOSHUSHO_ISSUED_MESSAGE, ryoshushoIssuedFrom } from '@/lib/ryoshusho-issue';
 import { dynamicUnitPrice } from '@/lib/dynamic-pricing';
 import { loadDynamicRules } from '@/lib/dynamic-pricing-server';
 import { clerkCanCancel } from '@/lib/clerk-roles';
@@ -1422,6 +1423,16 @@ export async function logPrintJob(orderId: string, jobType: 'receipt' | 'ryoshus
     .single();
   if (!order) throw new Error('注文が見つかりません');
   await assertStoreAccess(ctx, order.store_id);
+
+  // 領収書は一度きり（ブラウザ印刷・PDF でも同じ。2026-09-26 Ronnie）
+  if (jobType === 'ryoshusho') {
+    const { data: jobs } = await supabase
+      .from('print_jobs')
+      .select('job_type, status, printed_at, created_at')
+      .eq('order_id', orderId)
+      .eq('job_type', 'ryoshusho');
+    if (ryoshushoIssuedFrom(jobs ?? []).issued) throw new Error(RYOSHUSHO_ISSUED_MESSAGE);
+  }
 
   await supabase.from('print_jobs').insert({
     organization_id: order.organization_id,

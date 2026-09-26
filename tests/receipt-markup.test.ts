@@ -77,10 +77,19 @@ describe('ryoshushoToStarMarkup（領収書）', () => {
     expect(m.trimEnd().endsWith('[cut: feed; partial]')).toBe(true);
   });
 
-  it('宛名・但し書きは未指定なら「上様」「お品代として」', () => {
+  it('宛名・但し書きは未指定なら「上様」「飲食代として」', () => {
     const m = ryoshushoToStarMarkup(base);
     expect(m).toContain('上様 様');
-    expect(m).toContain('但 お品代として');
+    expect(m).toContain('但 飲食代として');
+  });
+
+  it('発行元は上（宛名より前）、下に担当と印鑑欄の枠が出る（2026-09-26 Ronnie）', () => {
+    const m = ryoshushoToStarMarkup({ ...base, staffName: 'Sankar' });
+    expect(m.indexOf(base.storeName)).toBeLessThan(m.indexOf('上様 様'));
+    expect(m).toContain('担当 Sankar');
+    expect(m).toContain('┌──────┐');
+    expect(m).toContain('│　　印　　　│');
+    expect(m).toContain('└──────┘');
   });
 
   it('宛名・但し書きを指定すればそのまま印字する', () => {

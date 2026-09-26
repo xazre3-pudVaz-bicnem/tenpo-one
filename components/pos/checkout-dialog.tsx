@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useTransition } from 'react';
+import { RYOSHUSHO_DEFAULT_PURPOSE } from '@/lib/ryoshusho-issue';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft,
@@ -212,7 +213,10 @@ export function CheckoutDialog({
   /** 会計完了のあとに出す「レシート／領収書」。領収書は宛名・但し書きを入れてから印字する */
   const [invoiceOpen, setInvoiceOpen] = useState(false);
   const [recipientName, setRecipientName] = useState('');
-  const [invoicePurpose, setInvoicePurpose] = useState('お品代として');
+  /** 但し書きは「飲食代として」固定（レジ iPad からは変えない。2026-09-26 Ronnie） */
+  const invoicePurpose = RYOSHUSHO_DEFAULT_PURPOSE;
+  /** 領収書は一度きり。この画面で出したら二度と出せない（サーバー側でも弾く） */
+  const [invoiceIssued, setInvoiceIssued] = useState(false);
   const [printPending, startPrint] = useTransition();
   const router = useRouter();
   // 二度押し・連打対策: pending state に加えて同期フラグでも多重送信を防ぐ
@@ -602,7 +606,10 @@ export function CheckoutDialog({
         return;
       }
       toast(jobType === 'ryoshusho' ? '領収書をプリンタへ送りました' : 'レシートをプリンタへ送りました');
-      if (jobType === 'ryoshusho') setInvoiceOpen(false);
+      if (jobType === 'ryoshusho') {
+        setInvoiceOpen(false);
+        setInvoiceIssued(true);
+      }
     });
 
   /** 伝票分割の画面（見本のレジと同じ：左＝元の伝票、右＝分ける伝票。2026-09-25 店舗要望） */
@@ -768,10 +775,10 @@ export function CheckoutDialog({
               variant="secondary"
               size="pos"
               className="h-[52px] text-[15px]"
-              disabled={printPending}
+              disabled={printPending || invoiceIssued}
               onClick={() => setInvoiceOpen(true)}
             >
-              領収書発行
+              {invoiceIssued ? '領収書 発行済み' : '領収書発行'}
             </Button>
           </div>
 
@@ -812,16 +819,9 @@ export function CheckoutDialog({
                       className="h-12"
                     />
                   </div>
-                  <div>
-                    <Label htmlFor="inv-purpose">但し書き / For</Label>
-                    <Input
-                      id="inv-purpose"
-                      value={invoicePurpose}
-                      onChange={(e) => setInvoicePurpose(e.target.value)}
-                      placeholder="お品代として"
-                      className="h-12"
-                    />
-                  </div>
+                  <p className="text-xs leading-relaxed text-ink-3">
+                    但し書きは「{invoicePurpose}」で印字されます。領収書は一度しか発行できません（二重発行の防止）。宛名を確認してから印刷してください。
+                  </p>
                 </div>
                 <div className="mt-4 grid grid-cols-2 gap-3">
                   <Button variant="secondary" className="h-12" onClick={() => setInvoiceOpen(false)}>
