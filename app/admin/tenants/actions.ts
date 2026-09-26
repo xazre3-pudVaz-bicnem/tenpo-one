@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { requireCypressAdmin } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
+import { normalizeStoreSlug } from '@/lib/store-slug';
 import { ROLES } from '@/lib/permissions';
 import {
   ENVIRONMENTS,
@@ -631,4 +632,29 @@ export async function saveStoreRegisterUsername(input: { storeId: string; userna
   revalidatePath(`/admin/tenants/${input.storeId}`);
   revalidatePath(`/admin/organizations/${store.organization_id as string}`);
   return { username: wanted };
+}
+
+/**
+ * 公開予約URLのスラッグ（stores.slug）を変える（運営だけ。2026-09-27 Ronnie「店舗からは変えられないように」）。
+ * 変えると、これまでに配った予約URL・QRコードは開けなくなる（画面側で確認する）。
+ */
+export async function updateTenantStoreSlug(input: { storeId: string; slug: string }): Promise<{ error?: string }> {
+  await requireCypressAdmin();
+  const { slug, error: slugError } = normalizeStoreSlug(input.slug);
+  if (slugError) return { error: slugError };
+  const admin = createAdminClient();
+  const { data: store } = await admin.from('stores').select('id, organization_id, slug').eq('id', input.storeId).maybeSingle();
+  if (!store) return { error: '店舗が見つかりません' };
+  if (store.slug === slug) return {};
+  const { error } = await admin.from('stores').update({ slug }).eq('id', input.storeId);
+  if (error) {
+    if ((error as { code?: string }).code === '23505') return { error: 'この予約URL（スラッグ）は既に使われています。別の文字列を指定してください' };
+    return { error: `予約URLの変更に失敗しました: ${error.message}` };
+  }
+  await audit(store.organization_id as string, input.storeId, 'admin.store.slug_update', 'stores', input.storeId, { before: store.slug, after: slug }, '公開予約URLのスラッグを変更（既存URL・QRは無効化）');
+  revalidatePath(`/admin/tenants/${input.storeId}`);
+  revalidatePath('/admin/stores');
+  revalidatePath('/app/settings/booking');
+  revalidatePath('/app/settings/store');
+  return {};
 }

@@ -13,6 +13,7 @@ import { StoreSlugEditor } from '@/components/settings/store-slug-editor';
 import { ReminderPanel } from '@/components/settings/reminder-panel';
 import { PushSubscribeButton } from '@/components/notifications/push-subscribe-button';
 import { pushSubscriptionsFrom } from '@/lib/push-subscriptions';
+import { SLUG_CHANGE_BY_CYPRESS_ONLY } from '@/lib/store-slug';
 
 export const metadata: Metadata = { title: '予約設定 | 設定' };
 
@@ -86,7 +87,16 @@ export default async function BookingSettingsPage() {
             storeName={targetStore.name}
             slugEditor={
               store?.slug ? (
-                <StoreSlugEditor storeId={targetStore.id} slug={store.slug} baseUrl={`${siteUrl}/book/`} />
+                ctx.isCypressAdmin ? (
+                  <StoreSlugEditor storeId={targetStore.id} slug={store.slug} baseUrl={`${siteUrl}/book/`} />
+                ) : (
+                  // 店舗・本部からは変えられない（2026-09-27 Ronnie「URL は CYPRESS からだけ」）
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+                    <span className="text-gray-500">スラッグ：</span>
+                    <span className="font-mono font-medium text-navy">{store.slug}</span>
+                    <span className="text-xs text-ink-3">{SLUG_CHANGE_BY_CYPRESS_ONLY}</span>
+                  </div>
+                )
               ) : undefined
             }
           />

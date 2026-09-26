@@ -10,16 +10,20 @@ import { updateStoreSlug } from '@/app/app/settings/booking/actions';
 /**
  * 公開予約URLのスラッグ編集。既定は表示のみ。「編集」で入力欄を開き、
  * 変更時は既存URL・QRが無効になる旨を確認してから保存する。
+ * 2026-09-27 Ronnie「店舗からは変えられないように」→ 店舗設定では運営（CYPRESS）でログインしているときだけ出す。
  */
 export function StoreSlugEditor({
   storeId,
   slug,
   baseUrl,
+  action = updateStoreSlug,
 }: {
   storeId: string;
   slug: string;
   /** 例: https://www.tenpo-one.com/book/ （末尾スラッシュ付き） */
   baseUrl: string;
+  /** 保存に使うサーバーアクション（CYPRESS 運営画面では管理用のものを渡す） */
+  action?: (input: { storeId: string; slug: string }) => Promise<{ error?: string }>;
 }) {
   const { toast } = useToast();
   const [editing, setEditing] = useState(false);
@@ -55,7 +59,7 @@ export function StoreSlugEditor({
     }
     setError(null);
     startTransition(async () => {
-      const result = await updateStoreSlug({ storeId, slug: next });
+      const result = await action({ storeId, slug: next });
       if (result.error) {
         setError(result.error);
         return;
