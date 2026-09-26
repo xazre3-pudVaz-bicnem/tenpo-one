@@ -10,10 +10,10 @@ export default function TableNotFound() {
       <Link href="/" className="mt-6 text-xs text-ink-3 underline">
         トップページへ
       </Link>
-      <p className="mt-10 text-[10px] text-[#9788a6]">
+      <p className="mt-10 text-[10px] text-[#8f7f8b]">
         Powered by{' '}
-        <strong className="font-num text-[11px] tracking-wide text-[#59436f]">
-          <span className="text-[#9161cb]">TENPO</span> ONE
+        <strong className="font-num text-[11px] tracking-wide text-[#5a4458]">
+          <span className="text-[#b4468a]">TENPO</span> ONE
         </strong>
       </p>
     </div>

@@ -52,7 +52,7 @@ export async function loadMenuSettingsData(ctx: MenuCtx, storeId: string): Promi
     id: c.id,
     name: c.name,
     nameEn: c.name_en ?? '',
-    color: c.color ?? '#7B3FF2',
+    color: c.color ?? '#9f2c6c',
     sortOrder: c.sort_order,
   }));
 

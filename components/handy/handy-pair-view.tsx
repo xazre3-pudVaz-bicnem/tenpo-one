@@ -44,9 +44,9 @@ export function HandyPairView({
   };
 
   return (
-    <div className="min-h-screen bg-[#F6F3FB] px-5 py-8">
+    <div className="min-h-screen bg-[#f9f5f8] px-5 py-8">
       <div className="mx-auto max-w-sm">
-        <div className="rounded-2xl bg-[#241436] px-5 py-6 text-center text-white">
+        <div className="rounded-2xl bg-[#211c28] px-5 py-6 text-center text-white">
           <Smartphone className="mx-auto h-8 w-8" aria-hidden />
           <p className="mt-2 text-lg font-bold">ハンディの設定</p>
           <p className="mt-1 text-xs text-white/70">TENPO ONE</p>
@@ -60,10 +60,10 @@ export function HandyPairView({
 
         {code && !done && (
           <div className="mt-5 rounded-2xl bg-white px-5 py-6 shadow-sm">
-            <p className="text-sm text-[#2A2138]">
+            <p className="text-sm text-[#2a1f2e]">
               この端末をハンディとして登録します。登録すると、次回からはQRコードなしで開けます。
             </p>
-            <p className="mt-2 text-xs text-[#7A7090]">
+            <p className="mt-2 text-xs text-[#7f6e7a]">
               お店のWi-Fiに接続した状態で行ってください。スマホの回線では登録できません。
             </p>
             {error && (
@@ -76,7 +76,7 @@ export function HandyPairView({
               type="button"
               onClick={handlePair}
               disabled={pending}
-              className="mt-5 h-14 w-full rounded-xl bg-[#7B3FE4] text-base font-bold text-white disabled:opacity-60"
+              className="mt-5 h-14 w-full rounded-xl bg-[#9f2c6c] text-base font-bold text-white disabled:opacity-60"
             >
               {pending ? '登録しています…' : 'この端末を登録'}
             </button>
@@ -84,7 +84,7 @@ export function HandyPairView({
         )}
 
         {done !== null && (
-          <div className="mt-5 flex items-center gap-2 rounded-2xl bg-white px-5 py-6 text-sm font-semibold text-[#2A2138] shadow-sm">
+          <div className="mt-5 flex items-center gap-2 rounded-2xl bg-white px-5 py-6 text-sm font-semibold text-[#2a1f2e] shadow-sm">
             <CheckCircle2 className="h-5 w-5 text-emerald-600" aria-hidden />
             {done ? `${done} のハンディとして登録しました` : '登録しました'}
           </div>

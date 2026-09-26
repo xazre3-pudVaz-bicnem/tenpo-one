@@ -28,7 +28,7 @@ export const metadata: Metadata = {
   applicationName: 'ハンディ',
   appleWebApp: { capable: true, title: 'ハンディ', statusBarStyle: 'black' },
 };
-export const viewport = { themeColor: '#241436' };
+export const viewport = { themeColor: '#211c28' };
 
 /** 描画の基準時刻（リクエスト時点）。クライアントの時計のハイドレーション初期値にも使う */
 function requestTime() {
@@ -78,10 +78,10 @@ export default async function HandyLayout({ children }: { children: React.ReactN
     return (
       <>
         <ThemeBody />
-        <div className="flex min-h-dvh items-center justify-center bg-[#F6F3FB] px-6 text-center">
+        <div className="flex min-h-dvh items-center justify-center bg-[#f9f5f8] px-6 text-center">
           <div className="rounded-2xl bg-white px-6 py-8 shadow-sm">
-            <p className="text-base font-bold text-[#2A2138]">お店の回線からご利用ください</p>
-            <p className="mt-2 text-sm leading-relaxed text-[#5A4F6E]">{ACCESS_MESSAGE.network}</p>
+            <p className="text-base font-bold text-[#2a1f2e]">お店の回線からご利用ください</p>
+            <p className="mt-2 text-sm leading-relaxed text-[#5e4e5a]">{ACCESS_MESSAGE.network}</p>
           </div>
         </div>
       </>

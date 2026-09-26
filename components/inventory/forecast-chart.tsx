@@ -18,11 +18,11 @@ export function ForecastChart({ data, unit }: { data: WeekdayAvgPoint[]; unit: s
           <YAxis tick={{ fontSize: 11, fill: '#6B7280' }} tickLine={false} axisLine={false} width={40} />
           <Tooltip
             formatter={(value) => [`${value}${unit}`, '平均']}
-            labelStyle={{ color: '#0F1120', fontWeight: 600 }}
+            labelStyle={{ color: '#211c28', fontWeight: 600 }}
             contentStyle={{ borderRadius: 12, border: '1px solid #E5E7EB', fontSize: 12 }}
-            cursor={{ fill: '#7B3FF2', fillOpacity: 0.06 }}
+            cursor={{ fill: '#9f2c6c', fillOpacity: 0.06 }}
           />
-          <Bar dataKey="avg" fill="#7B3FF2" radius={[4, 4, 0, 0]} maxBarSize={32} />
+          <Bar dataKey="avg" fill="#9f2c6c" radius={[4, 4, 0, 0]} maxBarSize={32} />
         </BarChart>
       </ResponsiveContainer>
     </div>

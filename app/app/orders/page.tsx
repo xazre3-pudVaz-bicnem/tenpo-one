@@ -221,7 +221,7 @@ export default async function OrdersPage({
                       href={buildHref({ from: p.from, to: p.to })}
                       className={cn(
                         'rounded-full border px-3 py-1 text-[13px] font-semibold',
-                        p.from === from && p.to === to ? 'border-royal bg-royal text-white' : 'border-line text-ink-2 hover:bg-lilac-soft'
+                        p.from === from && p.to === to ? 'on-sunset border-transparent text-white' : 'border-line text-ink-2 hover:bg-lilac-soft'
                       )}
                     >
                       {p.label}

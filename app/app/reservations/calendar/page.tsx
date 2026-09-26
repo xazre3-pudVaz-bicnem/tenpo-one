@@ -203,7 +203,7 @@ export default async function ReservationsCalendarPage({
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-line bg-lilac-soft px-4 py-2 text-[11.5px] font-medium text-ink-2">
             <span>数字＝組数（名数）</span>
             <span className="inline-flex items-center gap-1.5">
-              <i className="inline-block h-[9px] w-[9px] rounded-full bg-[#CFC9DA]" />
+              <i className="inline-block h-[9px] w-[9px] rounded-full bg-[#d4cbd1]" />
               グレー＝休業日
             </span>
             <span className="inline-flex items-center gap-1.5">

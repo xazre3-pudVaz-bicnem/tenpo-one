@@ -127,9 +127,9 @@ export function PushSubscribeButton({ variant = 'card', className }: { variant?:
 
   if (variant === 'row') {
     return (
-      <div className={cn('border-b border-[#eee8f6] py-3', className)}>
+      <div className={cn('border-b border-[#efe6ec] py-3', className)}>
         {button}
-        <p className="mt-1.5 text-[11px] leading-relaxed text-[#8a769d]">
+        <p className="mt-1.5 text-[11px] leading-relaxed text-[#7f6e7a]">
           {hint ?? (state === 'on' ? 'ネット予約が入ると、この端末に音つきで通知が来ます。' : 'ネット予約が入ったら、この端末に音つきで知らせます。')}
         </p>
       </div>

@@ -173,7 +173,7 @@ async function resolveCategoryIds(
           organization_id: ctx.organizationId,
           store_id: storeId,
           name,
-          color: '#7B3FF2',
+          color: '#9f2c6c',
           sort_order: 0,
           created_by: ctx.userId,
           updated_by: ctx.userId,

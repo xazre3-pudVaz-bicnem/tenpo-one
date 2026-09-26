@@ -19,14 +19,14 @@ export interface RfmCustomerRow {
 }
 
 /** M（累計利用額）の平均に応じた5段階のセル配色（primaryの単色ランプ、薄→濃） */
-const HEAT_STEPS = ['#ede4fc', '#d1c2f5', '#b098ec', '#8e6fe4', '#714bdc', '#5a2ed6'];
+const HEAT_STEPS = ['#f7e4ee', '#e8c6d9', '#d68ab8', '#b8508f', '#9f2c6c', '#7e2256'];
 const RANKS: RfmScore['rank'][] = ['S', 'A', 'B', 'C', 'D'];
 
 function heatStyle(avgMonetary: number, maxAvg: number): { bg: string; text: string } {
   if (avgMonetary <= 0 || maxAvg <= 0) return { bg: '#f9fafb', text: '#9ca3af' };
   const ratio = Math.min(1, avgMonetary / maxAvg);
   const idx = Math.max(1, Math.min(HEAT_STEPS.length - 1, Math.ceil(ratio * (HEAT_STEPS.length - 1))));
-  return { bg: HEAT_STEPS[idx], text: idx >= 4 ? '#ffffff' : '#0f1120' };
+  return { bg: HEAT_STEPS[idx], text: idx >= 4 ? '#ffffff' : '#211c28' };
 }
 
 export function RfmView({

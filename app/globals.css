@@ -1,9 +1,12 @@
 @import "tailwindcss";
 
 /*
- * 配色は2系統ある。
- *   既定（:root）      … これまでの TENPO ONE 配色。LP・ログイン・公開予約/QR・CYPRESS運営管理画面で使う。
- *   .theme-regi 配下   … 店舗画面（/app）。D&DREAM レジ v32 準拠（濃紫の上部バー・薄紫の背景・アイリスのアクセント）。
+ * 配色は2系統ある。どちらも「Midnight Sunset」（2026-09-27 デザイナー指定）:
+ *   グラデーション linear-gradient(90deg, #6B3094 → #9E2B6C → #B92859 → #C95034 → #CF8F38)
+ *   暗い背景 #211C28 ／ 主ボタン #9F2C6C ／ 文字 #FFFFFF
+ *   グラデーションはロゴまわり・見出し・選択中の表示だけ。レジ操作のボタンは読みやすい単色。
+ *   既定（:root）      … LP・ログイン・公開予約/QR・CYPRESS運営管理画面で使う。
+ *   .theme-regi 配下   … 店舗画面（/app）。濃い上部バー・淡い背景・マゼンタのアクセント。
  * 既存画面は primary / navy / surface / gray-* を使っているため、.theme-regi でこれらの変数を上書きするだけで
  * 店舗画面全体の配色が切り替わる。共通UI部品の形（角丸・影・太さ）は下の --ui-* 変数で切り替える。
  * 店舗画面だけに付けたいユーティリティは `regi:` バリアントで書ける（例: regi:bg-lilac）。
@@ -12,12 +15,12 @@
 
 @theme {
   /* 既定の役割色（lib/brand.ts と同期） */
-  --color-primary: #7b3ff2;
-  --color-primary-deep: #5a2ed6;
-  --color-primary-soft: #f3ecfe;
-  --color-navy: #0f1120;
-  --color-navy-soft: #1c1f33;
-  --color-surface: #f2f4f7;
+  --color-primary: #9f2c6c;
+  --color-primary-deep: #7e2256;
+  --color-primary-soft: #f7e4ee;
+  --color-navy: #211c28;
+  --color-navy-soft: #35293d;
+  --color-surface: #f4f1f4;
   --color-success: #15803d;
   --color-success-soft: #ecfdf3;
   --color-warning: #ea580c;
@@ -25,25 +28,29 @@
   --color-danger: #dc2626;
   --color-danger-soft: #fdecec;
 
-  /* 店舗画面（D&DREAM レジ v32）のパレット。店舗画面の部品だけが使う */
-  --color-plum: #241436;
-  --color-plum-2: #3a2356;
-  --color-royal: #5b2c8f;
-  --color-iris: #7b3fe4;
-  --color-iris-deep: #6630c7;
-  --color-iris-soft: #e9e0fa;
-  --color-wisteria: #c9b8ea;
-  --color-lilac: #efeaf8;
-  --color-lilac-soft: #f6f3fb;
-  --color-line: #e3dbf1;
-  --color-ink: #2a2138;
-  --color-ink-2: #5e5470;
-  --color-ink-3: #7a7090;
-  --color-saffron: #bd660f;
-  --color-saffron-soft: #fbefdf;
-  --color-gold: #f6c77a;
+  /* 店舗画面のパレット（Midnight Sunset）。店舗画面の部品だけが使う */
+  --color-plum: #211c28;
+  --color-plum-2: #35293d;
+  --color-royal: #6b3094;
+  --color-iris: #9f2c6c;
+  --color-iris-deep: #7e2256;
+  --color-iris-soft: #f7e4ee;
+  --color-wisteria: #d9b7cb;
+  --color-lilac: #f3ecf1;
+  --color-lilac-soft: #f9f5f8;
+  --color-line: #e8dce4;
+  --color-ink: #2a1f2e;
+  --color-ink-2: #5e4e5a;
+  --color-ink-3: #7f6e7a;
+  --color-saffron: #c2541f;
+  --color-saffron-soft: #fcefe4;
+  --color-gold: #cf8f38;
 
-  --shadow-card: 0 1px 2px rgba(36, 20, 54, 0.05), 0 8px 20px rgba(36, 20, 54, 0.07);
+  /* Midnight Sunset のグラデーション（bg-sunset / bg-sunset-deep）。deep は明るい橙を省いた見出し用 */
+  --background-image-sunset: linear-gradient(90deg, #6b3094 0%, #9e2b6c 25%, #b92859 50%, #c95034 75%, #cf8f38 100%);
+  --background-image-sunset-deep: linear-gradient(90deg, #6b3094 0%, #9e2b6c 40%, #b92859 75%, #c95034 100%);
+
+  --shadow-card: 0 1px 2px rgba(33, 28, 40, 0.05), 0 8px 20px rgba(33, 28, 40, 0.07);
 
   --font-sans: var(--font-noto-sans-jp), "Noto Sans JP", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", Meiryo, system-ui, sans-serif;
   /* 数字・英字ラベル用 */
@@ -56,32 +63,32 @@ body {
   font-feature-settings: "palt";
 }
 
-/* 店舗画面: 役割色と灰色階調を紫系に置き換える */
+/* 店舗画面: 役割色と灰色階調を Midnight Sunset の紫〜マゼンタ系に置き換える */
 .theme-regi {
-  --color-primary: #7b3fe4;
-  --color-primary-deep: #6630c7;
-  --color-primary-soft: #e9e0fa;
-  --color-navy: #241436;
-  --color-navy-soft: #3a2356;
-  --color-surface: #efeaf8;
+  --color-primary: #9f2c6c;
+  --color-primary-deep: #7e2256;
+  --color-primary-soft: #f7e4ee;
+  --color-navy: #211c28;
+  --color-navy-soft: #35293d;
+  --color-surface: #f3ecf1;
   --color-success: #1e8f62;
   --color-success-soft: #dff3ea;
-  --color-warning: #bd660f;
-  --color-warning-soft: #fbefdf;
+  --color-warning: #c2541f;
+  --color-warning-soft: #fcefe4;
   --color-danger: #b3341f;
   --color-danger-soft: #fdebe7;
 
-  --color-gray-50: #f6f3fb;
-  --color-gray-100: #efeaf8;
-  --color-gray-200: #e3dbf1;
-  --color-gray-300: #d3c8e6;
-  --color-gray-400: #a69bbb;
-  --color-gray-500: #7a7090;
-  --color-gray-600: #5e5470;
-  --color-gray-700: #463d57;
-  --color-gray-800: #2a2138;
-  --color-gray-900: #1e1729;
-  --color-gray-950: #140e1c;
+  --color-gray-50: #f9f5f8;
+  --color-gray-100: #f3ecf1;
+  --color-gray-200: #e8dce4;
+  --color-gray-300: #d7c8d1;
+  --color-gray-400: #a896a2;
+  --color-gray-500: #7f6e7a;
+  --color-gray-600: #5e4e5a;
+  --color-gray-700: #463844;
+  --color-gray-800: #2a1f2e;
+  --color-gray-900: #1e1622;
+  --color-gray-950: #140e17;
 
   color: var(--color-ink);
   -webkit-font-smoothing: antialiased;
@@ -106,7 +113,7 @@ body.theme-regi {
   --ui-btn-radius: 0.5rem;
   --ui-btn-weight: 500;
   --ui-btn2-bg: #ffffff;
-  --ui-btn2-fg: #0f1120;
+  --ui-btn2-fg: #211c28;
   --ui-btn2-border: #d1d5db;
   --ui-btn2-hover: #f9fafb;
   --ui-input-radius: 0.5rem;
@@ -122,10 +129,10 @@ body.theme-regi {
   --ui-stat-shadow: none;
   --ui-btn-radius: 9px;
   --ui-btn-weight: 700;
-  --ui-btn2-bg: #e9e0fa;
-  --ui-btn2-fg: #5b2c8f;
+  --ui-btn2-bg: #f7e4ee;
+  --ui-btn2-fg: #7e2256;
   --ui-btn2-border: transparent;
-  --ui-btn2-hover: #c9b8ea;
+  --ui-btn2-hover: #e9c6d8;
   --ui-input-radius: 10px;
 }
 
@@ -171,8 +178,8 @@ body.theme-regi {
   .tap3d {
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.9),
-      0 2px 0 rgba(94, 71, 119, 0.22),
-      0 4px 10px rgba(36, 20, 54, 0.14);
+      0 2px 0 rgba(90, 62, 82, 0.22),
+      0 4px 10px rgba(33, 28, 40, 0.14);
     transition:
       transform 0.06s ease,
       box-shadow 0.06s ease,
@@ -185,8 +192,8 @@ body.theme-regi {
     transform: translateY(2px);
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.7),
-      0 0 0 rgba(94, 71, 119, 0.22),
-      0 1px 3px rgba(36, 20, 54, 0.14);
+      0 0 0 rgba(90, 62, 82, 0.22),
+      0 1px 3px rgba(33, 28, 40, 0.14);
     filter: brightness(0.97);
   }
   .tap3d:disabled {
@@ -197,12 +204,12 @@ body.theme-regi {
    * .tap3d と同じ押し心地で、まわりに TENPO ONE の紫のにじみを足したもの。
    */
   .tapneon {
-    background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(246, 243, 251, 0.92));
+    background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(249, 245, 248, 0.92));
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 1),
-      0 0 0 1px rgba(123, 63, 228, 0.09),
-      0 2px 0 rgba(94, 71, 119, 0.14),
-      0 4px 12px rgba(123, 63, 228, 0.13);
+      0 0 0 1px rgba(159, 44, 108, 0.09),
+      0 2px 0 rgba(90, 62, 82, 0.14),
+      0 4px 12px rgba(159, 44, 108, 0.13);
     transition:
       transform 0.06s ease,
       box-shadow 0.06s ease,
@@ -213,9 +220,9 @@ body.theme-regi {
     .tapneon:hover {
       box-shadow:
         inset 0 1px 0 rgba(255, 255, 255, 1),
-        0 0 0 1px rgba(123, 63, 228, 0.2),
-        0 2px 0 rgba(94, 71, 119, 0.14),
-        0 6px 18px rgba(123, 63, 228, 0.22);
+        0 0 0 1px rgba(159, 44, 108, 0.2),
+        0 2px 0 rgba(90, 62, 82, 0.14),
+        0 6px 18px rgba(159, 44, 108, 0.22);
     }
   }
   .tapneon:active:not(:disabled) {
@@ -223,26 +230,29 @@ body.theme-regi {
     transform: translateY(2px);
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.8),
-      0 0 0 1px rgba(123, 63, 228, 0.26),
-      0 1px 5px rgba(123, 63, 228, 0.2);
+      0 0 0 1px rgba(159, 44, 108, 0.26),
+      0 1px 5px rgba(159, 44, 108, 0.2);
     filter: brightness(0.98);
   }
-  /* 選ばれている側（紫で塗ったボタン・タブ）。地の色を消さずに光らせる */
+  /* 選ばれている側（タブ・チップ）。Midnight Sunset のグラデーションで塗って光らせる */
   .tapneon-on {
-    background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.18), rgba(0, 0, 0, 0.06));
+    background-image:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.18), rgba(0, 0, 0, 0.06)),
+      var(--background-image-sunset);
+    color: #fff;
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.35),
-      0 0 0 1px rgba(123, 63, 228, 0.35),
-      0 2px 0 rgba(60, 32, 110, 0.32),
-      0 6px 18px rgba(123, 63, 228, 0.38);
+      0 0 0 1px rgba(159, 44, 108, 0.35),
+      0 2px 0 rgba(96, 26, 66, 0.32),
+      0 6px 18px rgba(159, 44, 108, 0.38);
   }
   .tapneon-on:active:not(:disabled) {
     transition-duration: 0s;
     transform: translateY(2px);
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.25),
-      0 0 0 1px rgba(123, 63, 228, 0.4),
-      0 1px 6px rgba(123, 63, 228, 0.35);
+      0 0 0 1px rgba(159, 44, 108, 0.4),
+      0 1px 6px rgba(159, 44, 108, 0.35);
   }
   /* 濃い色のバーの上に置くボタン（上部バーの「ホーム」など）用の立体ボタン */
   .tap3d-dark {
@@ -267,6 +277,30 @@ body.theme-regi {
   }
 
   /*
+   * 「選択中」の表示（タブ・絞り込みチップ・切り替えの ON 側）。Midnight Sunset のグラデーションで塗る。
+   * レジ操作の実行ボタン（会計・注文など）には使わない（そちらは読みやすい単色のまま）。
+   */
+  .on-sunset {
+    background-image: var(--background-image-sunset);
+    background-color: #9f2c6c;
+    border-color: transparent;
+    color: #fff;
+  }
+  /* 見出し・ロゴの文字をグラデーションで塗る */
+  .text-sunset {
+    background-image: var(--background-image-sunset);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .text-sunset-deep {
+    background-image: var(--background-image-sunset-deep);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /*
    * 店舗画面（レジ・ハンディ）のボタンは全部立体にする（2026-09-24 店舗要望「レジ全体を3Dに」）。
    * Button コンポーネント（.ui-btn）を通るものはこれで一括。個別に .tap3d を付けたものは
    * そちらが後勝ちで上書きされる（同じ押し心地なので見た目は揃う）。
@@ -275,8 +309,8 @@ body.theme-regi {
     background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(0, 0, 0, 0.05));
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.38),
-      0 2px 0 rgba(60, 32, 110, 0.2),
-      0 4px 12px rgba(36, 20, 54, 0.16);
+      0 2px 0 rgba(96, 26, 66, 0.2),
+      0 4px 12px rgba(33, 28, 40, 0.16);
     transition:
       transform 0.06s ease,
       box-shadow 0.06s ease,
@@ -289,15 +323,15 @@ body.theme-regi {
     transform: translateY(2px);
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.3),
-      0 1px 4px rgba(36, 20, 54, 0.2);
+      0 1px 4px rgba(33, 28, 40, 0.2);
     filter: brightness(0.98);
   }
   /* カードも少しだけ浮かせて、画面全体を立体的に見せる */
   .theme-regi .ui-card {
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.9),
-      0 1px 0 rgba(94, 71, 119, 0.08),
-      0 6px 18px rgba(36, 20, 54, 0.1);
+      0 1px 0 rgba(90, 62, 82, 0.08),
+      0 6px 18px rgba(33, 28, 40, 0.1);
   }
 }
 
