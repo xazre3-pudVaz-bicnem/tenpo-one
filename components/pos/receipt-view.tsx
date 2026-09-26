@@ -153,11 +153,15 @@ export function ReceiptView({
             />
           )}
 
-          <PrintButton
-            orderId={orderId}
-            jobType={tab === 'receipt' ? 'receipt' : 'ryoshusho'}
-            logPrintJobAction={logPrintJobAction}
-          />
+          {/* レジのレシートプリンター（CloudPRNT）があるときはそちらだけ出す。
+              iPad のブラウザ印刷（AirPrint）と並ぶと、どれがレシートプリンターか分からない（2026-09-26 Ronnie） */}
+          {!cloudPrntAvailable && (
+            <PrintButton
+              orderId={orderId}
+              jobType={tab === 'receipt' ? 'receipt' : 'ryoshusho'}
+              logPrintJobAction={logPrintJobAction}
+            />
+          )}
         </div>
       </div>
 
