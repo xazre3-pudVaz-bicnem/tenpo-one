@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
+import { businessDayProblem, toDbTime } from '@/lib/business-hours';
 
 export interface ActionResult {
   error?: string;
@@ -16,9 +17,9 @@ export interface BusinessHourInput {
   lastEntryTime: string | null;
 }
 
+/** 画面の値（'25:00' まで可）→ DB の time（24 以上は 24 を引く）。壊れた値は null */
 function normalizeTime(v: string | null): string | null {
-  if (!v) return null;
-  return /^\d{2}:\d{2}$/.test(v) ? v : null;
+  return toDbTime(v);
 }
 
 /** 曜日別営業時間の一括保存 */
@@ -37,6 +38,9 @@ export async function saveBusinessHours(storeId: string, hours: BusinessHourInpu
     if (!normalizeTime(h.openTime) || !normalizeTime(h.closeTime)) {
       return { error: `${dayNames[h.dayOfWeek]}曜日の開店・閉店時刻を入力してください（休業の場合は定休日に設定）` };
     }
+    // 閉店・最終入店は 24:00〜30:00（翌朝6時）まで。開店より後・最終入店は閉店まで（2026-09-27）
+    const problem = businessDayProblem(h.openTime, h.closeTime, h.lastEntryTime);
+    if (problem) return { error: `${dayNames[h.dayOfWeek]}曜日：${problem}` };
   }
 
   const supabase = await createClient();
