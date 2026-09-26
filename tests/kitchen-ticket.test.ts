@@ -275,7 +275,7 @@ describe('厨房伝票の文字の大きさ（2026-09-21 店舗要望「Word の
       split: 'order',
       textSize: 'large',
       language: 'en',
-      buzzer: 'none',
+      buzzer: 'drawer1',
     });
   });
 
@@ -483,10 +483,12 @@ describe('上下さかさまのプリンター（180度回して出す）', () =
 });
 
 describe('厨房伝票のブザー', () => {
-  it('未設定・不明な値は「鳴らさない」', () => {
-    expect(kitchenTicketBuzzerFrom(null)).toBe('none');
-    expect(kitchenTicketBuzzerFrom({})).toBe('none');
-    expect(kitchenTicketBuzzerFrom({ kitchenTicket: { buzzer: 'loud' } })).toBe('none');
+  it('未設定・不明な値は既定（コネクタ1で鳴らす。2026-09-26 全店で有効化）', () => {
+    expect(kitchenTicketBuzzerFrom(null)).toBe('drawer1');
+    expect(kitchenTicketBuzzerFrom({})).toBe('drawer1');
+    expect(kitchenTicketBuzzerFrom({ kitchenTicket: { buzzer: 'loud' } })).toBe('drawer1');
+    // 明示的に「鳴らさない」にした店舗はそのまま
+    expect(kitchenTicketBuzzerFrom({ kitchenTicket: { buzzer: 'none' } })).toBe('none');
   });
 
   it('設定した端子を読む', () => {

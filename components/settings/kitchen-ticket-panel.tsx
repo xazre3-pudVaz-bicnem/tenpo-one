@@ -34,9 +34,9 @@ const SIZE_DESCRIPTIONS: Record<KitchenTicketTextSize, string> = {
 };
 
 const BUZZER_DESCRIPTIONS: Record<KitchenTicketBuzzer, string> = {
-  none: '音は鳴りません（これまでの動き）。',
+  none: '音は鳴りません。',
   drawer1:
-    '伝票が出るとき、プリンターのドロア／ブザー端子につないだブザーを鳴らします。1回の注文につき1度だけ鳴ります。',
+    '伝票が出るとき、プリンターのドロア／ブザー端子につないだブザーを鳴らします（既定・全店）。1回の注文につき1度だけ鳴ります。',
   drawer2: '鳴らない場合はこちら。同じ端子でも配線（ピン）が違うことがあります。',
 };
 
