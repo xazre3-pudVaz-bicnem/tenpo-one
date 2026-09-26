@@ -67,6 +67,7 @@ export function FloorBoard({
   printSelectedItemsAction,
   seatCourses = [],
   setSeatTimeAction,
+  clearTableAction,
   releaseFinishedCleaningAction,
   topSlot,
   bottomSlot,
@@ -96,6 +97,8 @@ export function FloorBoard({
   /** 席の時間・コースを卓のポップアップから直す（2026-09-25 店舗要望） */
   seatCourses?: SeatCourseOption[];
   setSeatTimeAction?: (orderId: string, input: SeatTimeInput) => Promise<void>;
+  /** テーブルクリア: 卓の伝票を丸ごと取消して空席に戻す（2026-09-25 店舗要望） */
+  clearTableAction?: (orderId: string, reason: string, approvedByClerkId?: string | null) => Promise<{ cancelledItems: number }>;
   /** テーブルの上に出すもの（テイクアウト）。右のご予約は一番上から出したいのでここに入れる */
   topSlot?: ReactNode;
   /** テーブルの下に出すもの（色の見方）。上に置くとテーブルが下がるので一番下に置く */
@@ -357,6 +360,7 @@ export function FloorBoard({
         printSelectedItemsAction={printSelectedItemsAction}
         seatCourses={seatCourses}
         setSeatTimeAction={setSeatTimeAction}
+        clearTableAction={clearTableAction}
         allTables={tables}
       />
     </div>
