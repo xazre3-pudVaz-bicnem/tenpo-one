@@ -11,7 +11,7 @@ import { ClerkChip } from '@/components/pos/clerk-gate';
 import { HandyQrChip } from './handy-qr-chip';
 
 /**
- * 上部バー（暗い #211C28・高さ58px・下端に Midnight Sunset のグラデーション線）:
+ * 上部バー（暗い #15121a・高さ58px・下端に紫のグラデーション線）:
  *   左: ホームへ戻る・ブランド・店舗ピル / 中央: 画面タイトル（日英） / 右: 日時・通知・ユーザー
  */
 export function TopBar({
@@ -30,7 +30,7 @@ export function TopBar({
   return (
     <header className="sticky top-0 z-40 grid h-[58px] grid-cols-[1fr_minmax(0,auto)_1fr] items-center gap-2 bg-plum px-3 text-white sm:gap-3 sm:px-5">
       {/* ロゴまわり・上部バーの下端にグラデーションの線 */}
-      <span aria-hidden className="bg-sunset pointer-events-none absolute inset-x-0 bottom-0 h-[3px]" />
+      <span aria-hidden className="bg-brand pointer-events-none absolute inset-x-0 bottom-0 h-[3px]" />
       <div className="flex min-w-0 items-center gap-3">
         {showMenuLink && (
           <Link
@@ -49,7 +49,7 @@ export function TopBar({
           aria-label="ホームへ"
           className="flex shrink-0 items-center gap-3 rounded-[10px] py-0.5 pr-1.5 pl-0.5 transition-colors hover:bg-white/10"
         >
-          <span className="bg-sunset grid h-[36px] w-[36px] place-items-center rounded-[10px] p-[2px]">
+          <span className="bg-brand grid h-[36px] w-[36px] place-items-center rounded-[10px] p-[2px]">
             <span className="grid h-full w-full place-items-center rounded-[8px] bg-white">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src="/logo-mark.png" alt="" className="h-6 w-6" />

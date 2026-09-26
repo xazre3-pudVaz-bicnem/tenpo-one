@@ -88,17 +88,17 @@ export function HandyJoinView({
   }, [joinWithToken, heartbeatAction, loggedOut]);
 
   return (
-    <div className="min-h-dvh bg-[#f9f5f8] px-5 py-8">
+    <div className="min-h-dvh bg-[#f6f3fb] px-5 py-8">
       <div className="mx-auto max-w-sm">
-        <div className="rounded-2xl bg-[#211c28] px-5 py-6 text-center text-white">
+        <div className="rounded-2xl bg-[#15121a] px-5 py-6 text-center text-white">
           <Smartphone className="mx-auto h-8 w-8" aria-hidden />
           <p className="mt-2 text-lg font-bold">ハンディ</p>
           <p className="mt-1 text-xs text-white/70">TENPO ONE</p>
         </div>
 
         {state === 'loading' && (
-          <div className="mt-6 flex flex-col items-center gap-3 text-sm text-[#5e4e5a]">
-            <Loader2 className="h-7 w-7 animate-spin text-[#9f2c6c]" aria-hidden />
+          <div className="mt-6 flex flex-col items-center gap-3 text-sm text-[#5e5470]">
+            <Loader2 className="h-7 w-7 animate-spin text-[#7b3fe4]" aria-hidden />
             ハンディを開いています…
           </div>
         )}
@@ -109,7 +109,7 @@ export function HandyJoinView({
               <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
               {error}
             </p>
-            <p className="mt-3 flex items-center gap-2 text-xs text-[#7f6e7a]">
+            <p className="mt-3 flex items-center gap-2 text-xs text-[#7a7090]">
               <Wifi className="h-4 w-4" aria-hidden />
               iPhone の「設定 → Wi-Fi」でお店のWi-Fiにつないでから、カメラでQRコードを読み取ってください。
             </p>
@@ -118,11 +118,11 @@ export function HandyJoinView({
 
         {state === 'logged-out' && (
           <div className="mt-5 rounded-2xl bg-white px-5 py-5 shadow-sm">
-            <p className="flex items-start gap-2 text-sm font-semibold text-[#2a1f2e]">
+            <p className="flex items-start gap-2 text-sm font-semibold text-[#2a2138]">
               <WifiOff className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden />
               お店のWi-Fiから離れたため、ログアウトしました
             </p>
-            <p className="mt-2 text-xs leading-relaxed text-[#7f6e7a]">
+            <p className="mt-2 text-xs leading-relaxed text-[#7a7090]">
               お店に戻ったら、お店のWi-Fiにつないで、貼ってあるQRコードをカメラで読み取るとまた開けます。
             </p>
           </div>
@@ -130,8 +130,8 @@ export function HandyJoinView({
 
         {state === 'no-code' && (
           <div className="mt-5 rounded-2xl bg-white px-5 py-5 text-center shadow-sm">
-            <p className="text-sm font-semibold text-[#2a1f2e]">ハンディ ログイン</p>
-            <p className="mt-1 text-xs leading-relaxed text-[#7f6e7a]">
+            <p className="text-sm font-semibold text-[#2a2138]">ハンディ ログイン</p>
+            <p className="mt-1 text-xs leading-relaxed text-[#7a7090]">
               レジ（iPad）の「iPhoneハンディ」に出ているQRコードを読み取ると、そのまま開きます。ID・パスワードは要りません。
             </p>
           </div>
@@ -142,7 +142,7 @@ export function HandyJoinView({
           <button
             type="button"
             onClick={() => setScanning(true)}
-            className="mt-4 flex h-14 w-full items-center justify-center gap-2 rounded-2xl border-2 border-[#211c28] bg-white text-[17px] font-bold text-[#211c28] active:bg-[#f3ecf1]"
+            className="mt-4 flex h-14 w-full items-center justify-center gap-2 rounded-2xl border-2 border-[#15121a] bg-white text-[17px] font-bold text-[#15121a] active:bg-[#efeaf8]"
           >
             <ScanLine className="h-6 w-6" aria-hidden />
             QR Code
@@ -150,7 +150,7 @@ export function HandyJoinView({
         )}
 
         {state !== 'loading' && (
-          <p className="mt-6 text-center text-xs text-[#7f6e7a]">
+          <p className="mt-6 text-center text-xs text-[#7a7090]">
             <Link href="/login" className="underline">
               メールとパスワードでログイン
             </Link>

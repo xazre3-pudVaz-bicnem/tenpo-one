@@ -68,13 +68,13 @@ export function SoldOutBoard({
       <div className="space-y-2 px-3 pt-3 pb-2">
         <label className="relative block">
           <span className="sr-only">商品名で探す</span>
-          <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-[#a896a2]" aria-hidden />
+          <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-[#a69bbb]" aria-hidden />
           <input
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="商品名で探す"
-            className="h-11 w-full rounded-lg border border-[#e8dce4] bg-white pr-3 pl-9 text-sm text-[#2a1f2e] outline-none focus:border-[#9f2c6c]"
+            className="h-11 w-full rounded-lg border border-[#e3dbf1] bg-white pr-3 pl-9 text-sm text-[#2a2138] outline-none focus:border-[#7b3fe4]"
           />
         </label>
         <div className="flex gap-2" role="group" aria-label="表示する商品">
@@ -91,29 +91,29 @@ export function SoldOutBoard({
               onClick={() => setFilter(value)}
               className={cn(
                 'min-h-10 rounded-full border px-4 text-sm font-bold',
-                filter === value ? 'border-[#9f2c6c] bg-[#9f2c6c] text-white' : 'border-[#e8dce4] bg-white text-[#5e4e5a]'
+                filter === value ? 'border-[#7b3fe4] bg-[#7b3fe4] text-white' : 'border-[#e3dbf1] bg-white text-[#5e5470]'
               )}
             >
               {label}
             </button>
           ))}
         </div>
-        <p className="text-xs leading-relaxed text-[#7f6e7a]">
+        <p className="text-xs leading-relaxed text-[#7a7090]">
           売切にした商品は、レジ・ハンディ・お客様QRで注文できなくなります。入荷したら「販売再開」を押してください。
         </p>
       </div>
 
       {sections.length === 0 ? (
-        <p className="px-6 py-10 text-center text-sm text-[#7f6e7a]">
+        <p className="px-6 py-10 text-center text-sm text-[#7a7090]">
           {filter === 'soldOut' && !query ? '売切中の商品はありません' : '該当する商品がありません'}
         </p>
       ) : (
         sections.map((section) => (
           <section key={section.id} className="mt-2">
-            <h2 className="sticky top-0 z-10 bg-[#f9f5f8]/95 px-3 py-1.5 text-xs font-bold tracking-wide text-[#5e4e5a] backdrop-blur">
+            <h2 className="sticky top-0 z-10 bg-[#f6f3fb]/95 px-3 py-1.5 text-xs font-bold tracking-wide text-[#5e5470] backdrop-blur">
               {section.name}
             </h2>
-            <ul className="mx-3 divide-y divide-[#efe6ec] overflow-hidden rounded-xl border border-[#e8dce4] bg-white">
+            <ul className="mx-3 divide-y divide-[#eee8f6] overflow-hidden rounded-xl border border-[#e3dbf1] bg-white">
               {section.items.map((item) => {
                 const busy = pendingId === item.id;
                 return (
@@ -122,15 +122,15 @@ export function SoldOutBoard({
                     className={cn('flex min-h-[56px] items-center gap-3 px-3 py-2', item.isSoldOut && 'bg-[#fdf1ef]')}
                   >
                     <div className="min-w-0 flex-1">
-                      <p className={cn('text-sm font-bold break-words text-[#2a1f2e]', item.isSoldOut && 'text-[#9b3a2a]')}>
+                      <p className={cn('text-sm font-bold break-words text-[#2a2138]', item.isSoldOut && 'text-[#9b3a2a]')}>
                         {item.name}
                       </p>
-                      <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-[#7f6e7a]">
+                      <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-[#7a7090]">
                         <span className="tabular-nums">{yen(item.price)}</span>
                         {item.isSoldOut && (
                           <span className="rounded bg-[#b3341f] px-1.5 py-0.5 text-[10px] font-bold text-white">売切中</span>
                         )}
-                        {item.shared && <span className="rounded bg-[#f3ecf1] px-1.5 py-0.5 text-[10px]">全店共通</span>}
+                        {item.shared && <span className="rounded bg-[#efeaf8] px-1.5 py-0.5 text-[10px]">全店共通</span>}
                       </p>
                     </div>
                     <button

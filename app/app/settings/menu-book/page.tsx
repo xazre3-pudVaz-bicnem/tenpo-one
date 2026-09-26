@@ -96,7 +96,7 @@ export default async function MenuBookPage({ searchParams }: { searchParams: Pro
       id: c.id,
       name: c.name,
       nameEn: c.name_en ?? '',
-      color: c.color ?? '#9f2c6c',
+      color: c.color ?? '#7b3fe4',
       sortOrder: c.sort_order,
       shared: c.store_id === null,
       itemCount: mine.length,

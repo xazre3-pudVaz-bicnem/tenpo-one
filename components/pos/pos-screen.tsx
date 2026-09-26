@@ -873,7 +873,7 @@ export function PosScreen({
                   onClick={() => openPage(pg.key)}
                   className={cn(
                     'tap3d flex shrink-0 items-center gap-2 rounded-xl px-3.5 py-2 text-left',
-                    on ? 'on-sunset text-white' : 'bg-white text-ink-2 hover:bg-lilac-soft'
+                    on ? 'on-brand text-white' : 'bg-white text-ink-2 hover:bg-lilac-soft'
                   )}
                 >
                   <span
@@ -913,7 +913,7 @@ export function PosScreen({
                       'tap3d w-full border-b border-line px-3.5 py-3.5 text-left text-[15px] font-bold leading-tight last:border-b-0',
                       on ? 'text-white' : 'text-ink-2 hover:bg-lilac-soft'
                     )}
-                    style={on ? { backgroundColor: c.color ?? '#9f2c6c' } : undefined}
+                    style={on ? { backgroundColor: c.color ?? '#7b3fe4' } : undefined}
                   >
                     <span className="block">{c.en ?? c.name}</span>
                     {c.en && <span className={cn('block text-[11px] font-medium', on ? 'text-white/80' : 'text-ink-3')}>{c.name}</span>}
@@ -951,7 +951,7 @@ export function PosScreen({
                       'tap3d shrink-0 rounded-full px-4 py-2 text-sm font-semibold',
                       activeCategory === c.id ? 'text-white' : 'bg-lilac text-ink-2'
                     )}
-                    style={activeCategory === c.id ? { backgroundColor: c.color ?? '#9f2c6c' } : undefined}
+                    style={activeCategory === c.id ? { backgroundColor: c.color ?? '#7b3fe4' } : undefined}
                   >
                     {c.en ?? c.name}
                   </button>

@@ -57,7 +57,7 @@ export function ItemSheet({
           </div>
         )}
 
-        <p className="font-num text-lg font-bold tabular-nums text-[#5e4e5a]">
+        <p className="font-num text-lg font-bold tabular-nums text-[#5e5470]">
           {yen(item.price)} <span className="text-[10px] font-medium text-ink-3">{qrStrings.menu.taxIncluded}</span>
         </p>
 

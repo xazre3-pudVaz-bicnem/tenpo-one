@@ -73,7 +73,7 @@ export function CashEntryForm({ storeId, sessions }: { storeId: string; sessions
             onClick={() => switchKind(k)}
             className={cn(
               'py-3 text-center text-[15px] font-bold transition-colors',
-              kind === k ? 'on-sunset text-white' : 'bg-white text-ink-2 hover:bg-lilac-soft'
+              kind === k ? 'on-brand text-white' : 'bg-white text-ink-2 hover:bg-lilac-soft'
             )}
           >
             {k === 'deposit' ? '入金' : '出金'}

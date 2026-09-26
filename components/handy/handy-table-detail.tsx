@@ -186,19 +186,19 @@ export function HandyTableDetail({
                   'rounded-[10px] border-l-4 p-3',
                   call.kind === 'checkout'
                     ? 'border-l-[#bd660f] bg-[#fbefdf]'
-                    : 'border-l-[#9f2c6c] bg-[#f3ecf1]'
+                    : 'border-l-[#7b3fe4] bg-[#efeaf8]'
                 )}
               >
                 <p className="flex items-baseline justify-between gap-2 text-sm">
-                  <b className="font-bold text-[#4a3444]">{serviceCallLabel(call.kind)}</b>
-                  <span className="text-[11px] text-[#7f6e7a]">
+                  <b className="font-bold text-[#4f3868]">{serviceCallLabel(call.kind)}</b>
+                  <span className="text-[11px] text-[#7a7090]">
                     {formatTime(new Date(call.createdAtMs))}
                     {elapsedLabel(call.createdAtMs, now)}経過
                   </span>
                 </p>
                 <button
                   type="button"
-                  className="mt-2 min-h-[40px] w-full rounded-[9px] bg-[#9f2c6c] text-sm font-bold text-white disabled:opacity-40"
+                  className="mt-2 min-h-[40px] w-full rounded-[9px] bg-[#7b3fe4] text-sm font-bold text-white disabled:opacity-40"
                   disabled={pending}
                   onClick={() => handleResolve(call)}
                 >
@@ -210,42 +210,42 @@ export function HandyTableDetail({
         )}
 
         {slips.length === 0 ? (
-          <div className="m-3 rounded-[10px] border border-[#e8dce4] bg-white p-3.5">
-            <p className="text-center text-[13px] text-[#7f6e7a]">
+          <div className="m-3 rounded-[10px] border border-[#e3dbf1] bg-white p-3.5">
+            <p className="text-center text-[13px] text-[#7a7090]">
               この卓に未会計の注文はありません。
             </p>
             {canStartOrder(state) ? (
               state !== 'occupied' && (
-                <p className="mt-3 text-center text-[10px] leading-relaxed text-[#7f6e7a]">
+                <p className="mt-3 text-center text-[10px] leading-relaxed text-[#7a7090]">
                   「注文を開始」で人数・モード（飲み放題など）・時間制を入力し、
                   この卓を着席にして新しい伝票を作ります。
                 </p>
               )
             ) : (
-              <p className="mt-2 text-center text-[11px] text-[#7f6e7a]">
+              <p className="mt-2 text-center text-[11px] text-[#7a7090]">
                 {TABLE_STATE_LABEL[state]}の卓には注文を作れません。フロア画面で状態を変更してください。
               </p>
             )}
           </div>
         ) : (
           <>
-            <p className="mx-3 mt-2.5 flex items-baseline justify-between text-[13px] text-[#7f6e7a]">
+            <p className="mx-3 mt-2.5 flex items-baseline justify-between text-[13px] text-[#7a7090]">
               未会計合計
-              <b className="text-[23px] font-bold text-[#4a3444] tabular-nums">{yen(totalAmount)}</b>
+              <b className="text-[23px] font-bold text-[#4f3868] tabular-nums">{yen(totalAmount)}</b>
             </p>
             {slips.map((slip) => (
               <section
                 key={slip.id}
-                className="m-3 rounded-[10px] border border-[#e8dce4] bg-white p-3.5"
+                className="m-3 rounded-[10px] border border-[#e3dbf1] bg-white p-3.5"
               >
-                <h2 className="flex items-baseline justify-between text-sm font-bold text-[#4a3444]">
+                <h2 className="flex items-baseline justify-between text-sm font-bold text-[#4f3868]">
                   伝票 #{slip.orderNo}
-                  <span className="text-[11px] font-normal text-[#7f6e7a]">
+                  <span className="text-[11px] font-normal text-[#7a7090]">
                     {slip.guestCount}名 · {formatTime(new Date(slip.openedAtMs))}〜
                   </span>
                 </h2>
                 {slip.items.length === 0 ? (
-                  <p className="py-4 text-center text-[13px] text-[#7f6e7a]">まだ注文はありません。</p>
+                  <p className="py-4 text-center text-[13px] text-[#7a7090]">まだ注文はありません。</p>
                 ) : (
                   <ul>
                     {slip.items.map((item) => (
@@ -254,24 +254,24 @@ export function HandyTableDetail({
                         className="my-2.5 flex items-baseline justify-between gap-2 text-xs"
                       >
                         <span className="min-w-0">
-                          <span className="block text-[#2a1f2e]">
+                          <span className="block text-[#2a2138]">
                             {item.name}
-                            <span className="ml-1.5 text-[#7f6e7a]">×{item.quantity}</span>
+                            <span className="ml-1.5 text-[#7a7090]">×{item.quantity}</span>
                           </span>
                           {item.optionLabel && (
-                            <small className="block text-[9px] text-[#7f6e7a]">
+                            <small className="block text-[9px] text-[#7a7090]">
                               {item.optionLabel}
                             </small>
                           )}
                         </span>
-                        <b className="shrink-0 font-bold text-[#4a3444] tabular-nums">
+                        <b className="shrink-0 font-bold text-[#4f3868] tabular-nums">
                           {yen(item.lineTotal)}
                         </b>
                       </li>
                     ))}
                   </ul>
                 )}
-                <strong className="mt-2 block border-t border-[#e8dce4] pt-2 text-right text-lg font-bold text-[#4a3444] tabular-nums">
+                <strong className="mt-2 block border-t border-[#e3dbf1] pt-2 text-right text-lg font-bold text-[#4f3868] tabular-nums">
                   {yen(slip.total)}
                 </strong>
                 {printBillAction && slip.items.length > 0 && (
@@ -288,7 +288,7 @@ export function HandyTableDetail({
                 {slips.length > 1 && (
                   <Link
                     href={`/handy/${table.id}/order?order=${slip.id}`}
-                    className="mt-2.5 flex min-h-[42px] items-center justify-center rounded-[9px] border border-[#9f2c6c] text-sm font-bold text-[#9f2c6c]"
+                    className="mt-2.5 flex min-h-[42px] items-center justify-center rounded-[9px] border border-[#7b3fe4] text-sm font-bold text-[#7b3fe4]"
                   >
                     この伝票に注文を追加
                   </Link>

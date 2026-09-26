@@ -17,7 +17,7 @@ const STATUS_STYLES: Record<KitchenStatus, string> = {
   pending: 'bg-lilac text-ink-3',
   preparing: 'bg-saffron-soft text-saffron',
   ready: 'bg-success-soft text-success',
-  served: 'bg-lilac text-[#5e4e5a]',
+  served: 'bg-lilac text-[#5e5470]',
 };
 
 export function HistoryView({

@@ -9,7 +9,7 @@ export interface SegmentedTab {
 }
 
 /**
- * 画面上部のタブ（白い枠の中で選択中だけ Midnight Sunset のグラデーション）。
+ * 画面上部のタブ（白い枠の中で選択中だけ紫のグラデーション）。
  * リンクで切り替えるため、searchParams やパスに応じて active を渡す。
  */
 export function SegmentedTabs({
@@ -35,7 +35,7 @@ export function SegmentedTabs({
             aria-current={on ? 'page' : undefined}
             className={cn(
               'flex shrink-0 flex-col items-center rounded-lg px-3.5 py-1.5 text-center text-sm leading-tight font-bold whitespace-nowrap transition-colors',
-              on ? 'on-sunset text-white' : 'text-ink-2 hover:bg-lilac-soft hover:text-royal'
+              on ? 'on-brand text-white' : 'text-ink-2 hover:bg-lilac-soft hover:text-royal'
             )}
           >
             {t.label}
