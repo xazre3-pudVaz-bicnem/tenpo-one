@@ -23,12 +23,16 @@ import type { ReservationListRow } from './list-types';
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return value ? (
-    <div className="flex justify-between gap-4 border-b border-gray-100 py-2 text-sm last:border-0">
+    <div className="flex justify-between gap-3 border-b border-gray-100 py-1.5 text-[13px] last:border-0">
       <dt className="shrink-0 text-gray-500">{label}</dt>
       <dd className="text-right font-medium text-navy">{value}</dd>
     </div>
   ) : null;
 }
+
+/** 入力欄はコンパクト（1画面に収める。2026-09-26 Ronnie「箱を小さく・中身を箱に合わせて」） */
+const FIELD = 'h-9 text-[13px]';
+const LBL = 'mb-0.5 text-[12px]';
 
 /**
  * 予約詳細ダイアログ。reservation.id をキーに毎回フレッシュな内部状態で再マウントする
@@ -176,9 +180,9 @@ function ReservationDetailDialogContent({
   );
 
   return (
-    <Dialog open onClose={onClose} title="予約詳細" wide>
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <span className="text-lg font-bold tracking-wider text-primary-deep tabular-nums">{reservation.code}</span>
+    <Dialog open onClose={onClose} title="予約詳細" wide className="sm:max-w-2xl">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <span className="text-base font-bold tracking-wider text-primary-deep tabular-nums">{reservation.code}</span>
         <div className="flex items-center gap-2">
           {prepay && <Badge tone="success">事前決済済み {yen(prepay.amount)}</Badge>}
           {reservation.isPrivateHire && <Badge tone="primary">貸切</Badge>}
@@ -187,11 +191,11 @@ function ReservationDetailDialogContent({
       </div>
 
       {reservation.status === 'completed' && (
-        <p className="mb-2 text-xs text-gray-500">
+        <p className="mb-2 text-[11px] leading-snug text-gray-500">
           会計済みの予約です。予約内容・日時の訂正と、予約の取り消し（記録の訂正。会計・売上は変わりません）ができます。
         </p>
       )}
-      <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg bg-gray-50 p-3">
+      <div className="mb-3 flex flex-wrap items-center gap-1.5 rounded-lg bg-gray-50 p-2">
         <StatusActions reservationId={reservation.id} status={reservation.status} size="sm" />
         {ASSIGNABLE_STATUSES.includes(reservation.status) && (
           <AssignTableDialog
@@ -209,94 +213,39 @@ function ReservationDetailDialogContent({
         )}
       </div>
 
-      <dl>
-        <Row
-          label="日時"
-          value={`${formatDate(reservation.reservedDate)} ${formatTime(reservation.startAt)}〜${formatTime(reservation.endAt)}`}
-        />
-        <Row label="滞在予定" value={`${formatMinutes(stayMinutes)}（${stayMinutes}分）`} />
-        <Row label="お名前" value={`${reservation.guestName} 様`} />
-        <Row label="フリガナ" value={reservation.guestNameKana} />
-        <Row label="コース" value={reservation.courseName} />
-        <Row label="割当テーブル" value={reservation.tableNames.length > 0 ? reservation.tableNames.join('、') : '未割当'} />
-        <Row label="経路" value={reservation.sourceName} />
-        <Row label="登録方法" value={CREATED_VIA_LABEL[reservation.createdVia] ?? reservation.createdVia} />
-        {reservation.storeName && <Row label="店舗" value={reservation.storeName} />}
-      </dl>
-
-      <div className="mt-4 rounded-lg border border-gray-200 p-3">
-        <p className="mb-3 text-sm font-semibold text-navy">予約内容</p>
-        <div className="grid gap-3 sm:grid-cols-4">
-          <div>
-            <Label htmlFor="detail-adults">大人</Label>
-            <Input
-              id="detail-adults"
-              type="number"
-              min={0}
-              value={details.adults}
-              onChange={(e) => setDetail('adults', Number(e.target.value))}
-            />
+      {/* 左：予約の情報 ／ 右：予約内容の編集。1画面に収まるように2列 */}
+      <div className="grid gap-3 md:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
+        <dl className="self-start rounded-lg border border-gray-200 px-3 py-1">
+          <Row
+            label="日時"
+            value={`${formatDate(reservation.reservedDate)} ${formatTime(reservation.startAt)}〜${formatTime(reservation.endAt)}`}
+          />
+          <Row label="滞在予定" value={`${formatMinutes(stayMinutes)}（${stayMinutes}分）`} />
+          <Row label="お名前" value={`${reservation.guestName} 様`} />
+          <Row label="フリガナ" value={reservation.guestNameKana} />
+          <Row label="コース" value={reservation.courseName} />
+          <Row label="割当テーブル" value={reservation.tableNames.length > 0 ? reservation.tableNames.join('、') : '未割当'} />
+          <Row label="経路" value={reservation.sourceName} />
+          <Row label="登録方法" value={CREATED_VIA_LABEL[reservation.createdVia] ?? reservation.createdVia} />
+          {reservation.storeName && <Row label="店舗" value={reservation.storeName} />}
+          <div className="py-1.5">
+            <Label htmlFor="detail-staff" className={LBL}>
+              担当者
+            </Label>
+            <Select id="detail-staff" value={staffId} disabled={staffPending} onChange={(e) => changeStaff(e.target.value)} className={FIELD}>
+              <option value="">未設定</option>
+              {staffOptions.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </Select>
           </div>
-          <div>
-            <Label htmlFor="detail-children">子ども</Label>
-            <Input
-              id="detail-children"
-              type="number"
-              min={0}
-              value={details.children}
-              onChange={(e) => setDetail('children', Number(e.target.value))}
-            />
-          </div>
-          <div className="sm:col-span-2">
-            <Label htmlFor="detail-phone">電話番号</Label>
-            <Input id="detail-phone" type="tel" value={details.guestPhone} onChange={(e) => setDetail('guestPhone', e.target.value)} />
-          </div>
-          <div className="sm:col-span-2">
-            <Label htmlFor="detail-email">メール</Label>
-            <Input id="detail-email" type="email" value={details.guestEmail} onChange={(e) => setDetail('guestEmail', e.target.value)} />
-          </div>
-          <div className="sm:col-span-2">
-            <Label htmlFor="detail-seat">席の希望</Label>
-            <Input id="detail-seat" value={details.seatType} onChange={(e) => setDetail('seatType', e.target.value)} />
-          </div>
-          <div className="sm:col-span-4">
-            <Label htmlFor="detail-purpose">利用目的</Label>
-            <Input id="detail-purpose" value={details.purpose} onChange={(e) => setDetail('purpose', e.target.value)} />
-          </div>
-          <div className="sm:col-span-2">
-            <Label htmlFor="detail-allergy">アレルギー</Label>
-            <Textarea id="detail-allergy" rows={2} value={details.allergyNote} onChange={(e) => setDetail('allergyNote', e.target.value)} />
-          </div>
-          <div className="sm:col-span-2">
-            <Label htmlFor="detail-request">お客様のご要望</Label>
-            <Textarea id="detail-request" rows={2} value={details.requestNote} onChange={(e) => setDetail('requestNote', e.target.value)} />
-          </div>
-        </div>
-        <div className="mt-2 flex justify-end">
-          <Button size="sm" onClick={saveDetails} disabled={detailsPending}>
-            予約内容を保存
-          </Button>
-        </div>
-      </div>
-
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        <div>
-          <Label htmlFor="detail-staff">担当者</Label>
-          <Select id="detail-staff" value={staffId} disabled={staffPending} onChange={(e) => changeStaff(e.target.value)}>
-            <option value="">未設定</option>
-            {staffOptions.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </Select>
-        </div>
-        <div>
-          <Label htmlFor="detail-private">貸切設定</Label>
           <label
-            className={`flex h-10 items-center gap-2 rounded-lg border border-gray-300 px-3 text-sm ${
+            className={`mb-1.5 flex h-9 items-center gap-2 rounded-lg border border-gray-300 px-2.5 text-[12px] ${
               canManagePrivateHire ? 'cursor-pointer' : 'cursor-not-allowed bg-gray-100 text-gray-400'
             }`}
+            title="貸切に設定すると、この時間帯はオンライン予約でも満席として表示されます"
           >
             <input
               id="detail-private"
@@ -306,20 +255,76 @@ function ReservationDetailDialogContent({
               onChange={(e) => togglePrivateHire(e.target.checked)}
               className="h-4 w-4 rounded border-gray-300"
             />
-            この時間帯は他の予約を受け付けない
+            貸切（この時間帯は他の予約を受けない）
           </label>
-        </div>
-      </div>
-      {!canManagePrivateHire && <p className="mt-1 text-xs text-gray-400">貸切設定の変更には店舗設定の権限が必要です。</p>}
-      <p className="mt-1 text-xs text-gray-400">貸切に設定すると、この時間帯はオンライン予約でも満席として表示されます。</p>
+        </dl>
 
-      <div className="mt-4">
-        <Label htmlFor="detail-memo">内部メモ（店舗スタッフのみ表示）</Label>
-        <Textarea id="detail-memo" value={memo} onChange={(e) => setMemo(e.target.value)} rows={3} />
-        <div className="mt-2 flex justify-end">
-          <Button size="sm" onClick={saveMemo} disabled={memoPending}>
-            メモを保存
-          </Button>
+        <div className="rounded-lg border border-gray-200 p-3">
+          <p className="mb-2 text-[13px] font-semibold text-navy">予約内容</p>
+          <div className="grid gap-2 sm:grid-cols-4">
+            <div>
+              <Label htmlFor="detail-adults" className={LBL}>
+                大人
+              </Label>
+              <Input id="detail-adults" type="number" min={0} value={details.adults} onChange={(e) => setDetail('adults', Number(e.target.value))} className={FIELD} />
+            </div>
+            <div>
+              <Label htmlFor="detail-children" className={LBL}>
+                子ども
+              </Label>
+              <Input id="detail-children" type="number" min={0} value={details.children} onChange={(e) => setDetail('children', Number(e.target.value))} className={FIELD} />
+            </div>
+            <div className="sm:col-span-2">
+              <Label htmlFor="detail-phone" className={LBL}>
+                電話番号
+              </Label>
+              <Input id="detail-phone" type="tel" value={details.guestPhone} onChange={(e) => setDetail('guestPhone', e.target.value)} className={FIELD} />
+            </div>
+            <div className="sm:col-span-2">
+              <Label htmlFor="detail-email" className={LBL}>
+                メール
+              </Label>
+              <Input id="detail-email" type="email" value={details.guestEmail} onChange={(e) => setDetail('guestEmail', e.target.value)} className={FIELD} />
+            </div>
+            <div className="sm:col-span-2">
+              <Label htmlFor="detail-seat" className={LBL}>
+                席の希望
+              </Label>
+              <Input id="detail-seat" value={details.seatType} onChange={(e) => setDetail('seatType', e.target.value)} className={FIELD} />
+            </div>
+            <div className="sm:col-span-4">
+              <Label htmlFor="detail-purpose" className={LBL}>
+                利用目的
+              </Label>
+              <Input id="detail-purpose" value={details.purpose} onChange={(e) => setDetail('purpose', e.target.value)} className={FIELD} />
+            </div>
+            <div className="sm:col-span-2">
+              <Label htmlFor="detail-allergy" className={LBL}>
+                アレルギー
+              </Label>
+              <Textarea id="detail-allergy" rows={2} value={details.allergyNote} onChange={(e) => setDetail('allergyNote', e.target.value)} className="text-[13px]" />
+            </div>
+            <div className="sm:col-span-2">
+              <Label htmlFor="detail-request" className={LBL}>
+                お客様のご要望
+              </Label>
+              <Textarea id="detail-request" rows={2} value={details.requestNote} onChange={(e) => setDetail('requestNote', e.target.value)} className="text-[13px]" />
+            </div>
+            <div className="sm:col-span-4">
+              <Label htmlFor="detail-memo" className={LBL}>
+                内部メモ（店舗スタッフのみ表示）
+              </Label>
+              <Textarea id="detail-memo" value={memo} onChange={(e) => setMemo(e.target.value)} rows={2} className="text-[13px]" />
+            </div>
+          </div>
+          <div className="mt-2 flex justify-end gap-2">
+            <Button size="sm" variant="secondary" onClick={saveMemo} disabled={memoPending}>
+              メモを保存
+            </Button>
+            <Button size="sm" onClick={saveDetails} disabled={detailsPending}>
+              予約内容を保存
+            </Button>
+          </div>
         </div>
       </div>
     </Dialog>
