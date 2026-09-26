@@ -177,9 +177,11 @@ export default async function PrintersSettingsPage() {
       <div className="grid gap-5 @5xl:grid-cols-3">
         {/* min-w-0: 中の表（横スクロール）が列幅を押し広げて画面からはみ出すのを防ぐ */}
         <div className="min-w-0 space-y-5 @5xl:col-span-1">
-          <RegistersPanel storeId={targetStore.id} initial={registerRows} />
-          <DrawerPanel storeId={targetStore.id} initial={drawerInitial} />
-          <KitchenTicketPanel storeId={targetStore.id} initial={kitchenTicket} />
+          {/* key: 店舗を切り替えたとき、前の店舗の入力値（useState）が残ったまま保存されないようにする
+              （2026-09-26 店舗切替→保存で文字の大きさが別店舗の値で上書きされた） */}
+          <RegistersPanel key={`reg-${targetStore.id}`} storeId={targetStore.id} initial={registerRows} />
+          <DrawerPanel key={`drawer-${targetStore.id}`} storeId={targetStore.id} initial={drawerInitial} />
+          <KitchenTicketPanel key={`kt-${targetStore.id}`} storeId={targetStore.id} initial={kitchenTicket} />
         </div>
         <div className="min-w-0 space-y-5 @5xl:col-span-2">
           {drinkCategoryWarnings.length > 0 && (

@@ -76,7 +76,7 @@ export default async function RegisterSettingsPage({
           <span className="ml-1.5 text-xs font-normal text-gray-400">Kitchen tickets</span>
         </h2>
         {kitchen ? (
-          <KitchenTicketPanel storeId={store.id} initial={kitchen} />
+          <KitchenTicketPanel key={store.id} storeId={store.id} initial={kitchen} />
         ) : (
           <div className="flex items-center gap-2 rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-500">
             <Lock className="h-4 w-4 text-gray-300" aria-hidden />
