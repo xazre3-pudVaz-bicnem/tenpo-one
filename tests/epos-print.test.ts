@@ -9,6 +9,8 @@ import {
   kitchenTicketsEpos,
   serverDirectPrintResponse,
   parsePrintResultXml,
+  sdpJobId,
+  jobIdFromSdp,
   escXml,
   eposCols,
   EPOS_NS,
@@ -243,17 +245,33 @@ describe('serverDirectPrintResponse', () => {
     expectWellFormed(xml);
     expect(xml.startsWith('<?xml version="1.0" encoding="utf-8"?>')).toBe(true);
     expect(xml).toContain('<PrintRequestInfo Version="2.00">');
+    // UUID でない id は 30 文字までに切る
     expect(tagText(xml, 'printjobid')).toBe('job-1');
     expect(tagText(xml, 'devid')).toBe('local_printer');
     expect(tagText(xml, 'timeout')).toBe('10000');
     expect(xml).toContain(`<PrintData><epos-print xmlns="${EPOS_NS}">`);
   });
 
-  it('ジョブが無いときは空の応答を返す', () => {
-    const xml = serverDirectPrintResponse(null);
-    expectWellFormed(xml);
-    expect(xml).toContain('<PrintRequestInfo Version="2.00"></PrintRequestInfo>');
-    expect(xml).not.toContain('ePOSPrint');
+  it('ジョブが無いときは本文なし（Content-Length: 0 が仕様）', () => {
+    expect(serverDirectPrintResponse(null)).toBe('');
+  });
+
+  it('UUID の printjobid は 30 文字以内（22文字の base64url）にして、結果通知で元に戻せる', () => {
+    const uuid = '2d53b465-7119-41cf-9023-fef9a7d01bde';
+    const short = sdpJobId(uuid);
+    expect(short).toHaveLength(22);
+    expect(short).toMatch(/^[A-Za-z0-9_-]+$/);
+    expect(jobIdFromSdp(short)).toBe(uuid);
+    const xml = serverDirectPrintResponse({ id: uuid, xml: testPrintEpos({ storeName: 'F', issuedAt: 'now' }) });
+    expect(tagText(xml, 'printjobid')).toBe(short);
+    expect(tagText(xml, 'printjobid')!.length).toBeLessThanOrEqual(30);
+  });
+
+  it('jobIdFromSdp は UUID そのまま・不正な値も扱える', () => {
+    expect(jobIdFromSdp('2d53b465-7119-41cf-9023-fef9a7d01bde')).toBe('2d53b465-7119-41cf-9023-fef9a7d01bde');
+    expect(jobIdFromSdp('')).toBeNull();
+    expect(jobIdFromSdp(null)).toBeNull();
+    expect(jobIdFromSdp('not valid!')).toBeNull();
   });
 });
 

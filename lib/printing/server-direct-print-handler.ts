@@ -1,6 +1,6 @@
 import 'server-only';
 import { NextResponse } from 'next/server';
-import { serverDirectPrintResponse, parsePrintResultXml } from '@/lib/epos-print';
+import { serverDirectPrintResponse, parsePrintResultXml, jobIdFromSdp } from '@/lib/epos-print';
 import {
   claimNextJob,
   expireStaleJobs,
@@ -20,9 +20,9 @@ type Admin = ReturnType<typeof createAdminClient>;
 
 const XML_HEADERS = { 'Content-Type': 'text/xml; charset=utf-8' };
 
-/** 空の応答（印刷するものが無いとき）。プリンタは次の間隔まで待つ。 */
+/** 空の応答（印刷するものが無いとき＝本文なし・Content-Length: 0）。プリンタは次の間隔まで待つ。 */
 export function emptyServerDirectPrintResponse() {
-  return new NextResponse(serverDirectPrintResponse(null), { status: 200, headers: XML_HEADERS });
+  return new NextResponse('', { status: 200, headers: { ...XML_HEADERS, 'Content-Length': '0' } });
 }
 
 /**
@@ -38,8 +38,9 @@ export async function handleServerDirectPrint(admin: Admin, printer: PrinterRow,
   // 印字結果の通知
   if (connectionType === 'SetResponse') {
     const result = parsePrintResultXml(form.get('ResponseFile') ?? '');
-    if (result.jobId) {
-      await finishJob(admin, printer.id, result.jobId, result.success, result.code);
+    const jobId = jobIdFromSdp(result.jobId);
+    if (jobId) {
+      await finishJob(admin, printer.id, jobId, result.success, result.code);
     }
     await touchPrinter(admin, printer.id);
     return new NextResponse('', { status: 200 });
@@ -63,5 +64,9 @@ export async function handleServerDirectPrint(admin: Admin, printer: PrinterRow,
     return emptyServerDirectPrintResponse();
   }
 
-  return new NextResponse(serverDirectPrintResponse({ id: job.id, xml }), { status: 200, headers: XML_HEADERS });
+  const body = serverDirectPrintResponse({ id: job.id, xml });
+  return new NextResponse(body, {
+    status: 200,
+    headers: { ...XML_HEADERS, 'Content-Length': String(Buffer.byteLength(body, 'utf8')) },
+  });
 }
