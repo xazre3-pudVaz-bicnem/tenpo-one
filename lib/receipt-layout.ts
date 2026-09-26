@@ -111,3 +111,21 @@ export function twoCol(left: string, right: string, width: number, options: Widt
   const pad = Math.max(0, Math.floor(width - dispWidth(right, options)));
   return `${left}\n${' '.repeat(pad)}${right}`;
 }
+
+/**
+ * お会計伝票に出す明細だけを選ぶ。
+ *
+ * 飲み放題・食べ放題・コースの中身は 0円で伝票に積まれるため、そのまま印字すると
+ * お客様の「お会計伝票」が 0円の行で埋まってしまう
+ * （2026-09-25 店舗要望 FULL MOoN 御茶ノ水「¥0のオーダーも印字されるので出ないように」）。
+ * 金額の付いた行（本体または選択肢に値段があるもの）だけを残す。
+ *
+ * ただし 0円の行しか無い伝票（コース代が別会計など）は空の伝票になってしまうので、
+ * その場合だけ元の明細をそのまま返す。
+ */
+export function billSlipLines<T extends { lineTotal: number; modifiers?: { price: number }[] }>(lines: T[]): T[] {
+  const priced = lines.filter(
+    (l) => l.lineTotal !== 0 || (l.modifiers ?? []).some((m) => (m.price ?? 0) !== 0)
+  );
+  return priced.length > 0 ? priced : lines;
+}

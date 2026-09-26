@@ -15,6 +15,8 @@ export function CloudPrintButton({
   reissue,
   recipientName,
   purpose,
+  splitAmounts,
+  disabled,
 }: {
   orderId: string;
   jobType: 'receipt' | 'ryoshusho';
@@ -23,6 +25,10 @@ export function CloudPrintButton({
   recipientName?: string;
   /** 領収書の但し書き。空欄なら「お品代として」 */
   purpose?: string;
+  /** 領収書を分割して出すときの1枚ぶんの金額。2枚以上で渡すとその枚数だけ印字される */
+  splitAmounts?: number[] | null;
+  /** 分割の合計が合っていないときなど、押させたくないとき */
+  disabled?: boolean;
 }) {
   const { toast } = useToast();
   const [pending, startTransition] = useTransition();
@@ -33,9 +39,14 @@ export function CloudPrintButton({
       const res = await enqueueReceiptPrint(orderId, {
         reissue,
         jobType,
-        ...(jobType === 'ryoshusho' ? { recipientName: recipientName ?? null, purpose: purpose ?? null } : {}),
+        ...(jobType === 'ryoshusho'
+          ? { recipientName: recipientName ?? null, purpose: purpose ?? null, splitAmounts: splitAmounts ?? null }
+          : {}),
       });
-      if (res.ok) toast('プリンタへ送信しました（数秒後に印字されます）');
+      if (res.ok) {
+        const n = res.queued ?? 1;
+        toast(n > 1 ? `プリンタへ送信しました（${n}枚・数秒後に印字されます）` : 'プリンタへ送信しました（数秒後に印字されます）');
+      }
       else toast(res.error ?? '送信に失敗しました', 'error');
     });
 
@@ -43,11 +54,15 @@ export function CloudPrintButton({
     <button
       type="button"
       onClick={handleClick}
-      disabled={pending}
+      disabled={pending || disabled}
       className="flex h-14 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-white hover:bg-primary-deep disabled:opacity-60 print:hidden"
     >
       {pending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Printer className="h-5 w-5" />}
-      {jobType === 'ryoshusho' ? '領収書をプリンタで印刷' : 'プリンタで印刷'}
+      {jobType === 'ryoshusho'
+        ? splitAmounts && splitAmounts.length > 1
+          ? `領収書を${splitAmounts.length}枚に分けて印刷`
+          : '領収書をプリンタで印刷'
+        : 'プリンタで印刷'}
     </button>
   );
 }

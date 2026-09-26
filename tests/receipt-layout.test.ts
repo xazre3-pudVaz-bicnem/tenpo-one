@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { dispWidth, twoCol, wrapText, STAR_WIDTH_OPTIONS } from '@/lib/receipt-layout';
+import { dispWidth, twoCol, wrapText, STAR_WIDTH_OPTIONS,
+  billSlipLines,
+} from '@/lib/receipt-layout';
 import { layoutKitchenTicket, groupKitchenTickets, type ClaimedKitchenItem } from '@/lib/kitchen-ticket';
 
 /**
@@ -81,5 +83,34 @@ describe('厨房伝票（Star 向け）', () => {
     const lines = layoutKitchenTicket(t, { title: 'キッチン', printedAt: '18:21', paperWidth: 80, ...STAR_WIDTH_OPTIONS });
     for (const l of lines) expect(dispWidth(l.text, STAR_WIDTH_OPTIONS)).toBeLessThanOrEqual(48);
     expect(lines.some((l) => l.text.includes('和牛ユッケ'))).toBe(true);
+  });
+});
+
+describe('お会計伝票の明細（0円の行を出さない）', () => {
+  const L = (name: string, lineTotal: number, modifiers: { price: number }[] = []) => ({
+    name,
+    quantity: 1,
+    unitPrice: lineTotal,
+    lineTotal,
+    modifiers,
+  });
+
+  it('0円の行（飲み放題の中身など）を落とす', () => {
+    const lines = [L('生ビール', 0), L('自家製サングリア', 700), L('ウーロン茶', 0), L('マルゲリータ', 980)];
+    expect(billSlipLines(lines).map((l) => l.name)).toEqual(['自家製サングリア', 'マルゲリータ']);
+  });
+
+  it('本体0円でも選択肢に値段があれば残す', () => {
+    const lines = [L('ハイボール', 0, [{ price: 100 }]), L('ウーロン茶', 0, [{ price: 0 }])];
+    expect(billSlipLines(lines).map((l) => l.name)).toEqual(['ハイボール']);
+  });
+
+  it('全部0円のときは伝票が空にならないよう元の明細を返す', () => {
+    const lines = [L('生ビール', 0), L('ウーロン茶', 0)];
+    expect(billSlipLines(lines)).toEqual(lines);
+  });
+
+  it('明細が無いときは空のまま', () => {
+    expect(billSlipLines([])).toEqual([]);
   });
 });
