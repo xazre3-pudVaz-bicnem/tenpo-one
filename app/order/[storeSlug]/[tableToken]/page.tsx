@@ -10,6 +10,7 @@ import { filterNestedMenu, nestedMenuPages } from "@/lib/menu-book";
 import { jstNowHm, loadQrMenuBook } from "@/lib/menu-book-server";
 import { dynamicUnitPrice } from "@/lib/dynamic-pricing";
 import { isMenuSoldOut } from "@/lib/menu-stock";
+import { isPlanTimeOver } from "@/lib/plan-time";
 
 interface PageParams {
   params: Promise<{ storeSlug: string; tableToken: string }>;
@@ -45,7 +46,7 @@ export default async function QrOrderPage({ params }: PageParams) {
   const [
     { data: menu },
     { data: reservedCourse },
-    { book, plan, dynamicRules, stationById, menuStock },
+    { book, plan, dynamicRules, stationById, menuStock, planEndsAtMs },
   ] = await Promise.all([
     supabase.rpc("get_qr_menu", { p_slug: storeSlug, p_token: tableToken }),
     supabase.rpc("get_qr_reserved_course", {
@@ -85,10 +86,17 @@ export default async function QrOrderPage({ params }: PageParams) {
           })),
         }
       : rawMenu;
+  // プランの時間切れ：終了予定を過ぎた卓は、QR からプラン・放題の中身を注文できないようにする
+  // （2026-09-25 店舗要望。止めるのは QR だけで、レジ・ハンディからは今までどおり足せる）
+  const planOver = isPlanTimeOver(planEndsAtMs, now.getTime());
+
   // メニューブックで絞る：飲み放題・食べ放題・コースが伝票に無い卓には、その中身（F の0円商品など）を出さない。
   // 予約でコースが決まっている卓は、コースが伝票に入る前からプランありとして扱う
-  const effectivePlan =
-    course && !plan.hasPlan ? { hasPlan: true, planItemIds: [] } : plan;
+  const effectivePlan = planOver
+    ? { hasPlan: false, planItemIds: [] }
+    : course && !plan.hasPlan
+      ? { hasPlan: true, planItemIds: [] }
+      : plan;
   const categories = filterNestedMenu(qrMenu.categories, book, {
     channel: "qr",
     plan: effectivePlan,
@@ -110,6 +118,7 @@ export default async function QrOrderPage({ params }: PageParams) {
       menu={{ ...qrMenu, categories }}
       pages={pages}
       reservedCourse={course}
+      planOver={planOver}
     />
   );
 }
