@@ -19,14 +19,17 @@ import { RegisterCountCard } from '@/components/cash/register-count-card';
 import { ReceiptCell, splitPurpose } from '@/components/cash/cash-history';
 import { METHOD_LABELS, METHOD_LABELS_EN } from '@/components/cash/labels';
 import { loadRegisterBoard, loadTodayCashRows, receiptStateOf, STORE_DAY_CLOSE_ROLES } from './data';
+import { loadCloseBreakdown, type BreakdownPeriod } from './breakdown-data';
+import { CloseBreakdownCard } from '@/components/cash/close-breakdown';
 
 export const metadata: Metadata = { title: 'レジクローズ' };
 
 /** 支払方法別の表で常に表示する方法（プロトタイプ: 現金・クレジット・QR・電子マネー） */
 const BASE_METHODS = ['cash', 'credit', 'qr', 'emoney'];
 
-export default async function CashClosePage() {
+export default async function CashClosePage({ searchParams }: { searchParams: Promise<{ period?: string; date?: string }> }) {
   const ctx = await requireFeature('accounting');
+  const sp = await searchParams;
   const store = ctx.currentStore ?? ctx.stores[0] ?? null;
 
   if (!store) {
@@ -40,11 +43,17 @@ export default async function CashClosePage() {
 
   const supabase = await createClient();
   const today = todayJst();
+  // 売上の内訳の期間（日次／月次。2026-09-27 Ronnie）
+  const period: BreakdownPeriod = sp.period === 'month' ? 'month' : 'day';
+  const bdDate =
+    period === 'day'
+      ? (sp.date && /^\d{4}-\d{2}-\d{2}$/.test(sp.date) ? sp.date : today)
+      : (sp.date && /^\d{4}-\d{2}$/.test(sp.date) ? sp.date : today.slice(0, 7));
   const canOperate = can(ctx.role, 'register.operate');
   const canScan = can(ctx.role, 'documents.write') && can(ctx.role, 'cash.write');
   const canSettle = can(ctx.role, 'cash.write');
 
-  const [board, cashRows, { data: settledOrders }, { data: refunds }, { data: openOrders }, { data: payments }, { data: orgKpiRow }] =
+  const [board, cashRows, { data: settledOrders }, { data: refunds }, { data: openOrders }, { data: payments }, { data: orgKpiRow }, breakdown] =
     await Promise.all([
       loadRegisterBoard(store.id, today),
       loadTodayCashRows(store.id, today),
@@ -71,6 +80,7 @@ export default async function CashClosePage() {
         .eq('status', 'completed')
         .limit(10000),
       supabase.from('organizations').select('kpi_settings').eq('id', ctx.organizationId).maybeSingle(),
+      loadCloseBreakdown(store.id, period, bdDate),
     ]);
 
   const metricsOpts: SalesMetricsOptions = {
@@ -152,6 +162,9 @@ export default async function CashClosePage() {
             </div>
           </CardContent>
         </Card>
+
+        {/* 売上の内訳（予約経路別・担当別・コース／メニュー・飲み放題。画面だけ） */}
+        <CloseBreakdownCard data={breakdown} period={period} date={bdDate} today={today} basePath="/app/cash/close" />
 
         {/* 本日の出金レシート */}
         <Card className="overflow-hidden">
