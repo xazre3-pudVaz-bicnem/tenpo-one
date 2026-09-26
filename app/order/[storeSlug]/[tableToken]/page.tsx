@@ -11,6 +11,7 @@ import { jstNowHm, loadQrMenuBook } from "@/lib/menu-book-server";
 import { dynamicUnitPrice } from "@/lib/dynamic-pricing";
 import { isMenuSoldOut } from "@/lib/menu-stock";
 import { isPlanTimeOver } from "@/lib/plan-time";
+import { resolveQrGroupToken } from "@/lib/table-group-server";
 
 interface PageParams {
   params: Promise<{ storeSlug: string; tableToken: string }>;
@@ -41,7 +42,11 @@ export async function generateMetadata({
 }
 
 export default async function QrOrderPage({ params }: PageParams) {
-  const { storeSlug, tableToken } = await params;
+  const { storeSlug, tableToken: openedToken } = await params;
+  // テーブルグループ：伝票を持っていない側の卓なら、伝票を持つ卓のトークンで動かす
+  // （グループの卓は同じ伝票。飲み放題・時間・注文・履歴がすべて1つにまとまる。2026-09-25 店舗報告）
+  const resolved = await resolveQrGroupToken(storeSlug, openedToken);
+  const tableToken = resolved.token;
   const supabase = await createClient();
   const [
     { data: menu },
@@ -58,7 +63,11 @@ export default async function QrOrderPage({ params }: PageParams) {
   if (!menu) notFound();
 
   const course = (reservedCourse as ReservedCourse | null) ?? null;
-  const rawMenu = menu as QrMenuData;
+  // 卓名はお客様が座っている卓（QR を開いた卓）のまま見せる
+  const rawMenu: QrMenuData = {
+    ...(menu as QrMenuData),
+    table_name: resolved.tableName ?? (menu as QrMenuData).table_name,
+  };
   // ダイナミックプライシング：今の時間帯の値段で見せる（注文の値段は create_qr_order が同じ計算で決める）
   // 売り切り（本日の食数）：残り0の商品は QR でも「売り切れ」にする（2026-09-25 店舗要望）
   const now = new Date();

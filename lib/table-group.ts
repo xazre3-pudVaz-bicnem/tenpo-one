@@ -47,3 +47,31 @@ export function setTableGroup(groups: TableGroup[], tableIds: string[], newId: s
   if (picked.size >= 2) rest.push({ id: newId, tableIds: [...picked] });
   return rest;
 }
+
+/**
+ * グループの中で「伝票を持っている卓」を選ぶ（QR の振り向け先）。
+ *
+ * 2026-09-25 店舗報告（FULL MOoN 御茶ノ水）「グループにされた側に飲み放題などの設定が反映されない」:
+ * QR は卓のトークンで動くため、伝票の立っていない側の卓からは飲み放題（プラン）が見えず、
+ * 注文も別伝票になってしまっていた。グループの卓はどれも同じ伝票なので、
+ * 伝票を持つ卓の QR として動かす（メニュー・プラン・注文・履歴がすべて同じ伝票になる）。
+ *
+ * @param group      その卓のグループ（無ければ null）
+ * @param tableId    QR を開いた卓
+ * @param openOrders 店の open 伝票の (table_id, opened_at ms)。新しい順でなくてよい
+ * @returns 振り向け先の卓ID。振り向け不要（グループ無し・自分が伝票持ち・誰も伝票無し）なら null
+ */
+export function groupOrderTable(
+  group: TableGroup | null,
+  tableId: string,
+  openOrders: { tableId: string; openedAtMs: number }[]
+): string | null {
+  if (!group || !group.tableIds.includes(tableId)) return null;
+  const inGroup = openOrders
+    .filter((o) => group.tableIds.includes(o.tableId))
+    .sort((a, b) => b.openedAtMs - a.openedAtMs);
+  if (inGroup.length === 0) return null;
+  // 自分の卓に伝票があればそのまま（振り向け不要）
+  if (inGroup.some((o) => o.tableId === tableId)) return null;
+  return inGroup[0].tableId;
+}
