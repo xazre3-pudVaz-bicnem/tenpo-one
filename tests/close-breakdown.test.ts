@@ -3,7 +3,7 @@ import { computeCloseBreakdown, monthRange, shiftDay, shiftMonth, WALK_IN_LABEL,
 
 const orders: BreakdownOrder[] = [
   { id: 'o1', total: 12000, guestCount: 4, clerkName: 'Ronnie', sourceName: '食べログ', orderType: 'dine_in' },
-  { id: 'o2', total: 3000, guestCount: 1, clerkName: 'Xitri', sourceName: null, orderType: 'dine_in' },
+  { id: 'o2', total: 3000, guestCount: 1, clerkName: 'XITRI', sourceName: null, orderType: 'dine_in' },
   { id: 'o3', total: 5000, guestCount: 2, clerkName: null, sourceName: 'ホットペッパー', orderType: 'dine_in' },
   { id: 'o4', total: 1500, guestCount: 1, clerkName: 'Ronnie', sourceName: null, orderType: 'takeout' },
 ];
@@ -33,6 +33,8 @@ describe('レジクローズの売上内訳（2026-09-27 Ronnie）', () => {
     const ronnie = b.byClerk.find((r) => r.label === 'Ronnie')!;
     expect(ronnie).toMatchObject({ orders: 2, guests: 5, sales: 13500, items: 14 });
     expect(b.byClerk.find((r) => r.label === '担当なし')).toMatchObject({ orders: 1, sales: 5000 });
+    // 大文字で入っていた担当名も Xitri にまとまる
+    expect(b.byClerk.find((r) => r.label === 'Xitri')).toMatchObject({ orders: 1, sales: 3000 });
   });
 
   it('コース・フード・ドリンクの出数（取消は除く・オプションは入れない）', () => {
