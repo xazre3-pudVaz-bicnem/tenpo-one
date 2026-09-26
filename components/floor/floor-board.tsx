@@ -252,7 +252,7 @@ export function FloorBoard({
                     onClick={() => setView(key)}
                     className={cn(
                       'inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-[12.5px] font-semibold transition-colors',
-                      view === key ? 'on-sunset text-white' : 'text-ink-2 hover:bg-lilac-soft'
+                      view === key ? 'on-brand text-white' : 'text-ink-2 hover:bg-lilac-soft'
                     )}
                   >
                     <Icon className="h-3.5 w-3.5" aria-hidden />

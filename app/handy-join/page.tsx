@@ -9,7 +9,7 @@ export const metadata: Metadata = {
   applicationName: 'ハンディ',
   appleWebApp: { capable: true, title: 'ハンディ', statusBarStyle: 'black' },
 };
-export const viewport = { themeColor: '#211c28' };
+export const viewport = { themeColor: '#15121a' };
 
 /**
  * iPhone用ハンディの入口。お店の固定QRコード（/handy-join#<QRの値>）を読むと、

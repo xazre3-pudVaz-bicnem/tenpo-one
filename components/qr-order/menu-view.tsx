@@ -89,7 +89,7 @@ export function MenuView({
                 'flex min-h-[62px] w-auto min-w-[88px] max-w-[136px] shrink-0 flex-col items-center justify-center gap-0.5 rounded-t-xl border px-2.5 py-1.5 text-[11px] font-bold leading-tight',
                 selected
                   ? 'border-line bg-lilac-soft text-iris'
-                  : 'border-[#5a4458] bg-plum-2 text-[#cdb6c6]'
+                  : 'border-[#59416f] bg-plum-2 text-[#c4afd8]'
               )}
             >
               <b className="font-num text-lg leading-none">{index + 1}</b>
@@ -154,7 +154,7 @@ export function MenuView({
           visibleSections.map((section) => (
             <section key={section.id}>
               {active.sections.length > 1 && (
-                <h3 className="flex items-center gap-2 px-3 pb-2 pt-1 text-[12px] font-bold text-[#5e4e5a]">
+                <h3 className="flex items-center gap-2 px-3 pb-2 pt-1 text-[12px] font-bold text-[#5e5470]">
                   <span className="h-3 w-1 rounded bg-iris" aria-hidden />
                   {localizedName(locale, section.name, section.name_en)}
                 </h3>
@@ -232,7 +232,7 @@ function MenuCard({
               {qrStrings.menu.soldOutBadge}
             </span>
           ) : (
-            <strong className="mt-1.5 block font-num text-[13px] font-bold text-[#5e4e5a]">
+            <strong className="mt-1.5 block font-num text-[13px] font-bold text-[#5e5470]">
               {yen(item.price)} <em className="text-[8px] font-medium not-italic text-ink-3">{qrStrings.menu.taxIncluded}</em>
             </strong>
           )}

@@ -541,7 +541,7 @@ export default async function ReservationsLedgerPage({ searchParams }: { searchP
                     aria-current={wstatus === o.key ? 'page' : undefined}
                     className={cn(
                       'rounded-full border px-3.5 py-1.5 text-[13px] font-semibold transition-colors',
-                      wstatus === o.key ? 'on-sunset border-transparent text-white' : 'border-line bg-white text-ink-2 hover:bg-lilac-soft'
+                      wstatus === o.key ? 'on-brand border-transparent text-white' : 'border-line bg-white text-ink-2 hover:bg-lilac-soft'
                     )}
                   >
                     {o.label}

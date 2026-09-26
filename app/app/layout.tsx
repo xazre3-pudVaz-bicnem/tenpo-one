@@ -22,7 +22,7 @@ import { ReservationAlert } from '@/components/notifications/reservation-alert';
 import { PushAutoSubscribe } from '@/components/notifications/push-auto-subscribe';
 
 /** 店舗画面はブラウザのツールバー色も上部バー（濃紫）に合わせる */
-export const viewport = { themeColor: '#211c28' };
+export const viewport = { themeColor: '#15121a' };
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const ctx = await requireSession();

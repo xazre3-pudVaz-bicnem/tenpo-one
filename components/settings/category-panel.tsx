@@ -19,7 +19,7 @@ export interface CategoryRow {
 }
 
 export const CATEGORY_COLORS = [
-  '#9f2c6c', '#EA580C', '#15803D', '#DC2626', '#2563EB', '#CA8A04', '#DB2777', '#0891B2',
+  '#7b3fe4', '#EA580C', '#15803D', '#DC2626', '#2563EB', '#CA8A04', '#DB2777', '#0891B2',
 ];
 
 const EMPTY: Omit<CategoryInput, 'storeId'> = { name: '', nameEn: '', color: CATEGORY_COLORS[0], sortOrder: 0 };

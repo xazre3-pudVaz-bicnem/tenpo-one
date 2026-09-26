@@ -228,7 +228,7 @@ export async function createCustomerTag(name: string, color: string): Promise<{ 
     .insert({
       organization_id: ctx.organizationId,
       name: trimmed,
-      color: color || '#9f2c6c',
+      color: color || '#7b3fe4',
       created_by: ctx.userId,
       updated_by: ctx.userId,
     })

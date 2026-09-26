@@ -100,7 +100,7 @@ export function SettingsSubTabs({ item, pathname }: { item: SettingsNavItem; pat
             aria-current={t.on ? 'page' : undefined}
             className={cn(
               'tap3d flex shrink-0 items-center gap-2 rounded-xl px-3.5 py-2 text-left leading-tight whitespace-nowrap',
-              t.on ? 'on-sunset text-white' : 'bg-white text-ink-2 hover:bg-lilac-soft'
+              t.on ? 'on-brand text-white' : 'bg-white text-ink-2 hover:bg-lilac-soft'
             )}
           >
             <Icon className={cn('h-[18px] w-[18px] shrink-0', t.on ? 'text-white' : 'text-saffron')} aria-hidden />

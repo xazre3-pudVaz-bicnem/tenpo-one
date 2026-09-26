@@ -12,7 +12,7 @@ export default function GlobalError({
     <html lang="ja">
       <body style={{ fontFamily: 'sans-serif', display: 'flex', minHeight: '100vh', alignItems: 'center', justifyContent: 'center', background: '#F2F4F7' }}>
         <div style={{ textAlign: 'center', padding: 24 }}>
-          <h1 style={{ color: '#211c28', fontSize: 18 }}>システムエラーが発生しました</h1>
+          <h1 style={{ color: '#15121a', fontSize: 18 }}>システムエラーが発生しました</h1>
           <p style={{ color: '#6B7280', fontSize: 14, marginTop: 8 }}>
             時間をおいて再度アクセスしてください。
             {error.digest ? ` (エラーID: ${error.digest})` : ''}
@@ -20,7 +20,7 @@ export default function GlobalError({
           <button
             type="button"
             onClick={reset}
-            style={{ marginTop: 24, background: '#9f2c6c', color: '#fff', border: 0, borderRadius: 8, padding: '10px 20px', cursor: 'pointer' }}
+            style={{ marginTop: 24, background: '#7b3fe4', color: '#fff', border: 0, borderRadius: 8, padding: '10px 20px', cursor: 'pointer' }}
           >
             再試行する
           </button>

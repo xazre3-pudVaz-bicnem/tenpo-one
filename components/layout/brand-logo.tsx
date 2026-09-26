@@ -3,7 +3,7 @@ import { cn } from '@/lib/utils';
 
 /**
  * ロゴ。六角マーク（透過PNG・濃色/淡色どちらの背景でも使用可）＋ワードマーク。
- * Midnight Sunset のグラデーション（.text-sunset）はロゴと見出し・選択中の表示のみに使う。
+ * 紫のグラデーション（.text-brand）はロゴと見出し・選択中の表示のみに使う。
  * markOnly でマークのみ、showMark=false でワードマークのみ表示できる。
  */
 export function BrandLogo({
@@ -31,7 +31,7 @@ export function BrandLogo({
       )}
       {!markOnly && (
         <span className="inline-flex items-baseline gap-1">
-          <span className="text-sunset">TENPO</span>
+          <span className="text-brand">TENPO</span>
           <span className={light ? 'text-white' : 'text-navy'}>ONE</span>
         </span>
       )}

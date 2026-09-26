@@ -163,7 +163,7 @@ export function HandySetupScreen({
       />
 
       <HandyMain>
-        <div className="m-3 rounded-[10px] border border-[#e8dce4] bg-white">
+        <div className="m-3 rounded-[10px] border border-[#e3dbf1] bg-white">
           <Row label="テーブル" en="Table" value={tableName} />
           <RowButton label="モード" en="Mode" value={planNames(draft.plans)} onClick={() => setPicker('plan')} />
           {plansHaveItems(draft.plans) && (
@@ -184,9 +184,9 @@ export function HandySetupScreen({
         </div>
 
         <SectionTitle en="Timer">タイマー設定</SectionTitle>
-        <div className="mx-3 rounded-[10px] border border-[#e8dce4] bg-white">
-          <div className="flex min-h-[46px] items-center justify-between gap-2 border-b border-[#efe6ec] px-3.5 text-[13px]">
-            <span className="flex items-baseline gap-1 text-[#5e4e5a]">
+        <div className="mx-3 rounded-[10px] border border-[#e3dbf1] bg-white">
+          <div className="flex min-h-[46px] items-center justify-between gap-2 border-b border-[#eee8f6] px-3.5 text-[13px]">
+            <span className="flex items-baseline gap-1 text-[#5e5470]">
               時間制 <Sub>Time limit</Sub>
             </span>
             <span className="flex items-center gap-2">
@@ -195,15 +195,15 @@ export function HandySetupScreen({
                 type="button"
                 disabled={!draft.timed}
                 onClick={() => setPicker('duration')}
-                className="flex min-h-9 items-center gap-0.5 font-bold text-[#4a3444] disabled:text-[#a896a2]"
+                className="flex min-h-9 items-center gap-0.5 font-bold text-[#4f3868] disabled:text-[#a69bbb]"
               >
                 {draft.timed ? durationLabel(draft.duration) : '設定なし'}
-                <ChevronRight className="h-4 w-4 text-[#d9b7cb]" aria-hidden />
+                <ChevronRight className="h-4 w-4 text-[#c9b8ea]" aria-hidden />
               </button>
             </span>
           </div>
-          <div className="flex min-h-[46px] items-center justify-between gap-2 border-b border-[#efe6ec] px-3.5 text-[13px]">
-            <span className="flex items-baseline gap-1 text-[#5e4e5a]">
+          <div className="flex min-h-[46px] items-center justify-between gap-2 border-b border-[#eee8f6] px-3.5 text-[13px]">
+            <span className="flex items-baseline gap-1 text-[#5e5470]">
               終了前注意 <Sub>Last call</Sub>
             </span>
             <span className="flex items-center gap-2">
@@ -217,10 +217,10 @@ export function HandySetupScreen({
                 type="button"
                 disabled={!draft.timed || !draft.warningEnabled}
                 onClick={() => setPicker('warning')}
-                className="flex min-h-9 items-center gap-0.5 font-bold text-[#4a3444] disabled:text-[#a896a2]"
+                className="flex min-h-9 items-center gap-0.5 font-bold text-[#4f3868] disabled:text-[#a69bbb]"
               >
                 {draft.timed && draft.warningEnabled ? `${durationLabel(draft.warningMinutes)}前` : '設定なし'}
-                <ChevronRight className="h-4 w-4 text-[#d9b7cb]" aria-hidden />
+                <ChevronRight className="h-4 w-4 text-[#c9b8ea]" aria-hidden />
               </button>
             </span>
           </div>
@@ -239,12 +239,12 @@ export function HandySetupScreen({
           en="Guests"
           required
           right={
-            <span className="text-[11px] font-normal text-[#7f6e7a]">合計：{total}人</span>
+            <span className="text-[11px] font-normal text-[#7a7090]">合計：{total}人</span>
           }
         >
           人数
         </SectionTitle>
-        <div className="mx-3 rounded-[10px] border border-[#e8dce4] bg-white px-3.5 py-2">
+        <div className="mx-3 rounded-[10px] border border-[#e3dbf1] bg-white px-3.5 py-2">
           {(
             [
               ['male', '男性', 'Male'],
@@ -252,10 +252,10 @@ export function HandySetupScreen({
             ] as const
           ).map(([key, label, en]) => (
             <section key={key} className="py-2">
-              <p className="mb-2 text-xs text-[#5e4e5a]">
+              <p className="mb-2 text-xs text-[#5e5470]">
                 {label}
                 {/* 日本語を読まないスタッフ向けに英語も小さく添える（2026-09-24 店舗要望） */}
-                <span className="ml-1 text-[10px] font-normal text-[#7f6e7a]">{en}</span>
+                <span className="ml-1 text-[10px] font-normal text-[#7a7090]">{en}</span>
                 {draft[key] > 5 ? `：${draft[key]}名` : ''}
               </p>
               <div className="grid grid-cols-6 gap-[7px]" role="group" aria-label={label}>
@@ -266,8 +266,8 @@ export function HandySetupScreen({
                     aria-pressed={draft[key] === n}
                     onClick={() => set({ [key]: draft[key] === n ? 0 : n } as Partial<VisitDraft>)}
                     className={cn(
-                      'min-h-[40px] rounded-[7px] border-[1.5px] border-[#9f2c6c] text-[19px] tabular-nums',
-                      draft[key] === n ? 'bg-[#9f2c6c] text-white' : 'bg-white text-[#9f2c6c]'
+                      'min-h-[40px] rounded-[7px] border-[1.5px] border-[#7b3fe4] text-[19px] tabular-nums',
+                      draft[key] === n ? 'bg-[#7b3fe4] text-white' : 'bg-white text-[#7b3fe4]'
                     )}
                   >
                     {n}
@@ -279,8 +279,8 @@ export function HandySetupScreen({
                   aria-pressed={draft[key] > 5}
                   onClick={() => setPicker(key)}
                   className={cn(
-                    'min-h-[40px] rounded-[7px] border-[1.5px] border-[#9f2c6c] text-[19px]',
-                    draft[key] > 5 ? 'bg-[#9f2c6c] text-white' : 'bg-white text-[#9f2c6c]'
+                    'min-h-[40px] rounded-[7px] border-[1.5px] border-[#7b3fe4] text-[19px]',
+                    draft[key] > 5 ? 'bg-[#7b3fe4] text-white' : 'bg-white text-[#7b3fe4]'
                   )}
                 >
                   ＋
@@ -292,7 +292,7 @@ export function HandySetupScreen({
 
         {/* 来店経路（人気順・色はそろえる。使わない経路は 設定 > レジ から外せる。2026-09-24 店舗要望） */}
         <SectionTitle en="Source" required>来店経路</SectionTitle>
-        <div className="mx-3 mb-3 rounded-[10px] border border-[#e8dce4] bg-white px-3.5 py-3">
+        <div className="mx-3 mb-3 rounded-[10px] border border-[#e3dbf1] bg-white px-3.5 py-3">
           <div className="flex flex-wrap gap-1.5" role="group" aria-label="来店経路">
             {sources.map((src) => {
               const on = draft.source === src.label;
@@ -303,8 +303,8 @@ export function HandySetupScreen({
                   aria-pressed={on}
                   onClick={() => set({ source: src.label })}
                   className={cn(
-                    'tap3d min-h-[32px] rounded-full border-[1.5px] border-[#9f2c6c] px-2.5 text-[11px] font-bold',
-                    on ? 'bg-[#9f2c6c] text-white' : 'bg-white text-[#9f2c6c]'
+                    'tap3d min-h-[32px] rounded-full border-[1.5px] border-[#7b3fe4] px-2.5 text-[11px] font-bold',
+                    on ? 'bg-[#7b3fe4] text-white' : 'bg-white text-[#7b3fe4]'
                   )}
                 >
                   {src.label}
@@ -316,9 +316,9 @@ export function HandySetupScreen({
 
       </HandyMain>
 
-      <div className="flex-none bg-[#f9f5f8] px-3.5 pt-2 pb-2.5">
+      <div className="flex-none bg-[#f6f3fb] px-3.5 pt-2 pb-2.5">
         {problem && (
-          <p className="mb-1.5 text-center text-[11px] text-[#7f6e7a]" aria-live="polite">
+          <p className="mb-1.5 text-center text-[11px] text-[#7a7090]" aria-live="polite">
             {problem}
           </p>
         )}
@@ -420,7 +420,7 @@ export function HandySetupScreen({
 
 /** 日本語を読まないスタッフ向けに小さく添える英語（2026-09-24 店舗要望） */
 function Sub({ children }: { children: React.ReactNode }) {
-  return <span className="text-[10px] font-normal text-[#7f6e7a]">{children}</span>;
+  return <span className="text-[10px] font-normal text-[#7a7090]">{children}</span>;
 }
 
 function SectionTitle({
@@ -435,7 +435,7 @@ function SectionTitle({
   right?: React.ReactNode;
 }) {
   return (
-    <h2 className="mx-3 mt-4 mb-1.5 flex items-baseline gap-1.5 text-sm font-bold text-[#4a3444]">
+    <h2 className="mx-3 mt-4 mb-1.5 flex items-baseline gap-1.5 text-sm font-bold text-[#4f3868]">
       {children}
       {en && <Sub>{en}</Sub>}
       {required && <span className="text-[#b3341f]">＊</span>}
@@ -446,12 +446,12 @@ function SectionTitle({
 
 function Row({ label, en, value }: { label: string; en?: string; value: string }) {
   return (
-    <div className="flex min-h-[46px] items-center justify-between gap-3 border-b border-[#efe6ec] px-3.5 text-[13px] last:border-b-0">
-      <span className="flex shrink-0 items-baseline gap-1 text-[#5e4e5a]">
+    <div className="flex min-h-[46px] items-center justify-between gap-3 border-b border-[#eee8f6] px-3.5 text-[13px] last:border-b-0">
+      <span className="flex shrink-0 items-baseline gap-1 text-[#5e5470]">
         {label}
         {en && <Sub>{en}</Sub>}
       </span>
-      <span className="min-w-0 truncate font-bold text-[#4a3444]">{value}</span>
+      <span className="min-w-0 truncate font-bold text-[#4f3868]">{value}</span>
     </div>
   );
 }
@@ -473,20 +473,20 @@ function RowButton({
     <button
       type="button"
       onClick={onClick}
-      className="flex min-h-[46px] w-full items-center justify-between gap-3 border-b border-[#efe6ec] px-3.5 text-left text-[13px] last:border-b-0 active:bg-[#f9f5f8]"
+      className="flex min-h-[46px] w-full items-center justify-between gap-3 border-b border-[#eee8f6] px-3.5 text-left text-[13px] last:border-b-0 active:bg-[#f6f3fb]"
     >
-      <span className="flex shrink-0 items-baseline gap-1 text-[#5e4e5a]">
+      <span className="flex shrink-0 items-baseline gap-1 text-[#5e5470]">
         {label}
         {en && <Sub>{en}</Sub>}
       </span>
       <span
         className={cn(
           'flex min-w-0 items-center gap-0.5 font-bold',
-          muted ? 'text-[#a896a2]' : 'text-[#9f2c6c]'
+          muted ? 'text-[#a69bbb]' : 'text-[#7b3fe4]'
         )}
       >
         <span className="truncate">{value}</span>
-        <ChevronRight className="h-4 w-4 shrink-0 text-[#d9b7cb]" aria-hidden />
+        <ChevronRight className="h-4 w-4 shrink-0 text-[#c9b8ea]" aria-hidden />
       </span>
     </button>
   );
@@ -513,7 +513,7 @@ function Switch({
       onClick={() => onChange(!checked)}
       className={cn(
         'inline-flex h-[26px] w-11 shrink-0 items-center rounded-full p-0.5 transition-colors disabled:opacity-40',
-        checked ? 'justify-end bg-[#9f2c6c]' : 'justify-start bg-[#c9c4d2]'
+        checked ? 'justify-end bg-[#7b3fe4]' : 'justify-start bg-[#c9c4d2]'
       )}
     >
       <span className="block h-[22px] w-[22px] rounded-full bg-white shadow" />
@@ -538,7 +538,7 @@ function Sheet({
       role="dialog"
       aria-modal="true"
       aria-label={title}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-[#211c2888] p-3"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[#15121a88] p-3"
       onClick={onClose}
     >
       <div
@@ -546,13 +546,13 @@ function Sheet({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-3 flex items-center justify-between gap-2">
-          <h2 className="text-lg font-bold text-[#2a1f2e]">{title}</h2>
+          <h2 className="text-lg font-bold text-[#2a2138]">{title}</h2>
           {closeButton && (
             <button
               type="button"
               onClick={onClose}
               aria-label="閉じる"
-              className="-my-1 -mr-2 flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[#7f6e7a] active:bg-[#f9f5f8]"
+              className="-my-1 -mr-2 flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[#7a7090] active:bg-[#f6f3fb]"
             >
               <X className="h-5 w-5" aria-hidden />
             </button>
@@ -589,13 +589,13 @@ function ChoiceList({
             className={cn(
               'flex min-h-[46px] w-full items-center justify-between gap-2 rounded-[9px] border-[1.5px] px-3.5 text-left text-sm',
               o.selected
-                ? 'border-[#9f2c6c] bg-[#9f2c6c] text-white'
-                : 'border-[#9f2c6c] bg-white text-[#4a3444]'
+                ? 'border-[#7b3fe4] bg-[#7b3fe4] text-white'
+                : 'border-[#7b3fe4] bg-white text-[#4f3868]'
             )}
           >
             <span className="min-w-0 truncate font-bold">{o.label}</span>
             {o.note && (
-              <span className={cn('shrink-0 text-xs', o.selected ? 'text-white/85' : 'text-[#7f6e7a]')}>
+              <span className={cn('shrink-0 text-xs', o.selected ? 'text-white/85' : 'text-[#7a7090]')}>
                 {o.note}
               </span>
             )}
@@ -632,13 +632,13 @@ function ChoiceSheet({
   return (
     <Sheet title={title} onClose={onClose}>
       {nothing && empty && (
-        <p className="py-3 text-[13px] leading-relaxed text-[#7f6e7a]">{empty}</p>
+        <p className="py-3 text-[13px] leading-relaxed text-[#7a7090]">{empty}</p>
       )}
       <ChoiceList options={options} onSelect={onSelect} />
       {moreOptions.length > 0 && (
         <>
           {moreTitle && (
-            <p className="mt-4 mb-2 text-xs font-bold text-[#7f6e7a]">{moreTitle}</p>
+            <p className="mt-4 mb-2 text-xs font-bold text-[#7a7090]">{moreTitle}</p>
           )}
           <div className={moreTitle ? undefined : options.length > 0 ? 'mt-2' : undefined}>
             <ChoiceList options={moreOptions} onSelect={onSelect} />
@@ -649,7 +649,7 @@ function ChoiceSheet({
         <button
           type="button"
           onClick={onClear}
-          className="mt-3 min-h-[43px] w-full rounded-lg border border-[#e8dce4] text-sm text-[#b3341f]"
+          className="mt-3 min-h-[43px] w-full rounded-lg border border-[#e3dbf1] text-sm text-[#b3341f]"
         >
           {clearLabel}
         </button>
@@ -657,7 +657,7 @@ function ChoiceSheet({
       <button
         type="button"
         onClick={onClose}
-        className="mt-3 min-h-[43px] w-full rounded-lg bg-[#f3ecf1] text-center text-sm font-bold text-[#5e4e5a]"
+        className="mt-3 min-h-[43px] w-full rounded-lg bg-[#efeaf8] text-center text-sm font-bold text-[#5e5470]"
       >
         {nothing ? 'プラン無しで続ける' : '閉じる'}
       </button>
@@ -681,8 +681,8 @@ function PickButton({
       aria-pressed={selected}
       onClick={onClick}
       className={cn(
-        'min-h-[46px] rounded-[9px] border-[1.5px] border-[#9f2c6c] text-base font-bold tabular-nums',
-        selected ? 'bg-[#9f2c6c] text-white' : 'bg-white text-[#9f2c6c]'
+        'min-h-[46px] rounded-[9px] border-[1.5px] border-[#7b3fe4] text-base font-bold tabular-nums',
+        selected ? 'bg-[#7b3fe4] text-white' : 'bg-white text-[#7b3fe4]'
       )}
     >
       {children}
@@ -757,11 +757,11 @@ function TimePickerSheet({
   };
 
   const inputClass =
-    'h-12 w-16 rounded-lg border-[1.5px] border-[#ddc9d6] text-center text-2xl font-bold text-[#2a1f2e] tabular-nums focus:border-[#9f2c6c] focus:outline-none';
+    'h-12 w-16 rounded-lg border-[1.5px] border-[#d9ccef] text-center text-2xl font-bold text-[#2a2138] tabular-nums focus:border-[#7b3fe4] focus:outline-none';
 
   return (
     <Sheet title={title} onClose={onClose} closeButton>
-      <p className="mb-2 text-xs font-bold text-[#5e4e5a]">時間</p>
+      <p className="mb-2 text-xs font-bold text-[#5e5470]">時間</p>
       <div className="grid grid-cols-2 gap-2" role="group" aria-label="時間">
         {HOUR_CHOICES.map((h) => (
           <PickButton key={h} selected={!custom && hours === h} onClick={() => pick({ hours: h })}>
@@ -770,7 +770,7 @@ function TimePickerSheet({
         ))}
       </div>
 
-      <p className="mt-4 mb-2 text-xs font-bold text-[#5e4e5a]">分</p>
+      <p className="mt-4 mb-2 text-xs font-bold text-[#5e5470]">分</p>
       <div className="grid grid-cols-2 gap-2" role="group" aria-label="分">
         {MINUTE_CHOICES.map((m) => (
           <PickButton key={m} selected={!custom && minutes === m} onClick={() => pick({ minutes: m })}>
@@ -779,14 +779,14 @@ function TimePickerSheet({
         ))}
       </div>
 
-      <div className="mt-4 border-t border-[#e8dce4] pt-4">
+      <div className="mt-4 border-t border-[#e3dbf1] pt-4">
         <div className="grid grid-cols-2 gap-2">
           <PickButton selected={custom} onClick={openCustom}>
             カスタム
           </PickButton>
         </div>
         {custom && (
-          <div className="mt-3 flex items-center justify-center gap-2 text-sm font-bold text-[#5e4e5a]">
+          <div className="mt-3 flex items-center justify-center gap-2 text-sm font-bold text-[#5e5470]">
             <input
               type="text"
               inputMode="numeric"
@@ -822,9 +822,9 @@ function TimePickerSheet({
         {problem ? (
           <span className="text-xs leading-relaxed text-[#b3341f]">{problem}</span>
         ) : total !== null ? (
-          <span className="text-sm text-[#7f6e7a]">
+          <span className="text-sm text-[#7a7090]">
             {summaryPrefix}{' '}
-            <b className="text-lg font-bold text-[#4a3444] tabular-nums">{format(total)}</b>
+            <b className="text-lg font-bold text-[#4f3868] tabular-nums">{format(total)}</b>
           </span>
         ) : null}
       </p>
@@ -832,7 +832,7 @@ function TimePickerSheet({
         type="button"
         disabled={total === null || !!problem}
         onClick={save}
-        className="mt-3 min-h-[46px] w-full rounded-lg bg-[#9f2c6c] text-base font-bold text-white disabled:opacity-40"
+        className="mt-3 min-h-[46px] w-full rounded-lg bg-[#7b3fe4] text-base font-bold text-white disabled:opacity-40"
       >
         設定
       </button>
@@ -905,7 +905,7 @@ function StartTimeSheet({
   };
 
   const inputClass =
-    'h-12 w-16 rounded-lg border-[1.5px] border-[#ddc9d6] text-center text-2xl font-bold text-[#2a1f2e] tabular-nums focus:border-[#9f2c6c] focus:outline-none';
+    'h-12 w-16 rounded-lg border-[1.5px] border-[#d9ccef] text-center text-2xl font-bold text-[#2a2138] tabular-nums focus:border-[#7b3fe4] focus:outline-none';
 
   return (
     <Sheet title="開始時間" onClose={onClose} closeButton>
@@ -920,7 +920,7 @@ function StartTimeSheet({
         ))}
       </div>
 
-      <p className="mt-4 mb-2 text-xs font-bold text-[#5e4e5a]">時</p>
+      <p className="mt-4 mb-2 text-xs font-bold text-[#5e5470]">時</p>
       <div className="grid grid-cols-4 gap-2" role="group" aria-label="時">
         {hours.map((h) => (
           <PickButton key={h} selected={!custom && selH === h} onClick={() => pickHour(h)}>
@@ -929,7 +929,7 @@ function StartTimeSheet({
         ))}
       </div>
 
-      <p className="mt-4 mb-2 text-xs font-bold text-[#5e4e5a]">分</p>
+      <p className="mt-4 mb-2 text-xs font-bold text-[#5e5470]">分</p>
       <div className="grid grid-cols-4 gap-2" role="group" aria-label="分">
         {minuteChoices.map((m) => (
           <PickButton key={m} selected={!custom && selM === m} onClick={() => pickMinute(m)}>
@@ -938,14 +938,14 @@ function StartTimeSheet({
         ))}
       </div>
 
-      <div className="mt-4 border-t border-[#e8dce4] pt-4">
+      <div className="mt-4 border-t border-[#e3dbf1] pt-4">
         <div className="grid grid-cols-2 gap-2">
           <PickButton selected={custom} onClick={openCustom}>
             カスタム
           </PickButton>
         </div>
         {custom && (
-          <div className="mt-3 flex items-center justify-center gap-2 text-sm font-bold text-[#5e4e5a]">
+          <div className="mt-3 flex items-center justify-center gap-2 text-sm font-bold text-[#5e5470]">
             <input
               type="text"
               inputMode="numeric"
@@ -981,15 +981,15 @@ function StartTimeSheet({
         {problem ? (
           <span className="text-xs leading-relaxed text-[#b3341f]">{problem}</span>
         ) : (
-          <span className="text-sm text-[#7f6e7a]">
+          <span className="text-sm text-[#7a7090]">
             開始{' '}
-            <b className="text-lg font-bold text-[#4a3444] tabular-nums">
+            <b className="text-lg font-bold text-[#4f3868] tabular-nums">
               {effective === null ? `今（${nowHm}）` : effective}
             </b>
             {timed && startMs !== null && (
               <>
                 {' '}
-                ／ 終了予定 <b className="font-bold text-[#4a3444] tabular-nums">{jstHm(startMs + duration * 60_000)}</b>
+                ／ 終了予定 <b className="font-bold text-[#4f3868] tabular-nums">{jstHm(startMs + duration * 60_000)}</b>
               </>
             )}
           </span>
@@ -999,7 +999,7 @@ function StartTimeSheet({
         type="button"
         disabled={invalidCustom || !!problem}
         onClick={save}
-        className="mt-3 min-h-[46px] w-full rounded-lg bg-[#9f2c6c] text-base font-bold text-white disabled:opacity-40"
+        className="mt-3 min-h-[46px] w-full rounded-lg bg-[#7b3fe4] text-base font-bold text-white disabled:opacity-40"
       >
         設定
       </button>
@@ -1032,21 +1032,21 @@ function NumberSheet({
         autoFocus
         onChange={(e) => setText(e.target.value)}
         aria-label={title}
-        className="min-h-12 w-full rounded-lg border border-[#e8dce4] px-3 text-center text-2xl font-bold text-[#2a1f2e] tabular-nums"
+        className="min-h-12 w-full rounded-lg border border-[#e3dbf1] px-3 text-center text-2xl font-bold text-[#2a2138] tabular-nums"
       />
-      <p className="mt-2 text-[11px] text-[#7f6e7a]">0〜{MAX_GUESTS}名</p>
+      <p className="mt-2 text-[11px] text-[#7a7090]">0〜{MAX_GUESTS}名</p>
       <button
         type="button"
         disabled={!valid}
         onClick={() => onSave(n)}
-        className="mt-3 min-h-[43px] w-full rounded-lg bg-[#9f2c6c] text-sm font-bold text-white disabled:opacity-40"
+        className="mt-3 min-h-[43px] w-full rounded-lg bg-[#7b3fe4] text-sm font-bold text-white disabled:opacity-40"
       >
         決定
       </button>
       <button
         type="button"
         onClick={onClose}
-        className="mt-2 min-h-[43px] w-full rounded-lg bg-[#f3ecf1] text-center text-sm font-bold text-[#5e4e5a]"
+        className="mt-2 min-h-[43px] w-full rounded-lg bg-[#efeaf8] text-center text-sm font-bold text-[#5e5470]"
       >
         キャンセル
       </button>

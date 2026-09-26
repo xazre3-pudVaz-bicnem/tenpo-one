@@ -280,7 +280,7 @@ export default async function ReservationListPage({ searchParams }: { searchPara
                   aria-current={status === c.key ? 'page' : undefined}
                   className={cn(
                     'rounded-full border px-3.5 py-1.5 text-[13px] font-semibold transition-colors',
-                    status === c.key ? 'on-sunset border-transparent text-white' : 'border-line bg-white text-ink-2 hover:bg-lilac-soft'
+                    status === c.key ? 'on-brand border-transparent text-white' : 'border-line bg-white text-ink-2 hover:bg-lilac-soft'
                   )}
                 >
                   {c.label}
@@ -378,7 +378,7 @@ export default async function ReservationListPage({ searchParams }: { searchPara
                 href={pageHref(p)}
                 className={cn(
                   'flex h-9 min-w-9 items-center justify-center rounded-[9px] px-2 text-sm font-bold tabular-nums',
-                  p === page ? 'on-sunset text-white' : 'border border-line bg-white text-ink-2 hover:bg-lilac-soft'
+                  p === page ? 'on-brand text-white' : 'border border-line bg-white text-ink-2 hover:bg-lilac-soft'
                 )}
               >
                 {p}

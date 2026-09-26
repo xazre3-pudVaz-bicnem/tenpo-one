@@ -10,13 +10,13 @@ export const brand = {
   company: '株式会社サイプレス',
   supportEmail: 'info@cypress-all.co.jp',
   colors: {
-    // Midnight Sunset（2026-09-27 デザイナー指定）。app/globals.css の @theme と同期
-    primary: '#9F2C6C', // 主ボタン（マゼンタ）
-    primaryDeep: '#7E2256', // 主ボタンの濃い側
-    navy: '#211C28', // 暗い背景
-    lightGray: '#F4F1F4',
-    /** ロゴまわり・見出し・選択中の表示に使うグラデーション */
-    gradient: 'linear-gradient(90deg, #6B3094 0%, #9E2B6C 25%, #B92859 50%, #C95034 75%, #CF8F38 100%)',
+    // 紫と黒だけ（2026-09-27 Ronnie）。app/globals.css の @theme と同期
+    primary: '#7B3FF2', // 主ボタン（紫）
+    primaryDeep: '#5A2ED6', // 主ボタンの濃い側
+    navy: '#15121A', // 暗い背景（黒）
+    lightGray: '#F2F4F7',
+    /** ロゴまわり・見出し・選択中の表示に使うグラデーション（紫の濃淡だけ） */
+    gradient: 'linear-gradient(90deg, #3D1C68 0%, #5B2C8F 45%, #7B3FE4 100%)',
     white: '#FFFFFF',
     success: '#15803D',
     warning: '#EA580C',

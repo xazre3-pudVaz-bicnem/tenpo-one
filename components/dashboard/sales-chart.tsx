@@ -16,8 +16,8 @@ export function SalesChart({ data }: { data: DailyPoint[] }) {
         <AreaChart data={data} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
           <defs>
             <linearGradient id="salesGradient" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#9f2c6c" stopOpacity={0.25} />
-              <stop offset="100%" stopColor="#9f2c6c" stopOpacity={0} />
+              <stop offset="0%" stopColor="#7b3fe4" stopOpacity={0.25} />
+              <stop offset="100%" stopColor="#7b3fe4" stopOpacity={0} />
             </linearGradient>
           </defs>
           <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" vertical={false} />
@@ -31,10 +31,10 @@ export function SalesChart({ data }: { data: DailyPoint[] }) {
           />
           <Tooltip
             formatter={(value) => [`¥${Number(value).toLocaleString('ja-JP')}`, '売上']}
-            labelStyle={{ color: '#211c28', fontWeight: 600 }}
+            labelStyle={{ color: '#15121a', fontWeight: 600 }}
             contentStyle={{ borderRadius: 12, border: '1px solid #E5E7EB', fontSize: 12 }}
           />
-          <Area type="monotone" dataKey="sales" stroke="#9f2c6c" strokeWidth={2} fill="url(#salesGradient)" />
+          <Area type="monotone" dataKey="sales" stroke="#7b3fe4" strokeWidth={2} fill="url(#salesGradient)" />
         </AreaChart>
       </ResponsiveContainer>
     </div>

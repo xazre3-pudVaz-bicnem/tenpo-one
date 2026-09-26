@@ -55,7 +55,7 @@ export default async function PosSoldOutPage({
       {error ? (
         <EmptyState title="商品を読み込めませんでした" description="画面を更新してください" />
       ) : (
-        <div className="overflow-hidden rounded-xl bg-[#f9f5f8]">
+        <div className="overflow-hidden rounded-xl bg-[#f6f3fb]">
           <SoldOutBoard categories={categories} items={items} canManageShared={can(ctx.role, 'menu.manage')} />
         </div>
       )}
