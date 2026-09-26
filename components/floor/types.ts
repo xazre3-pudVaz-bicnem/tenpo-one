@@ -66,6 +66,8 @@ export interface TableOrderInfo {
   course: { label: string; minutes: number } | null;
   /** 滞在終了予定（コース時間 → 予約の終了時刻 → 店舗の既定滞在時間 の順で決定） */
   endAtMs: number;
+  /** 席のコース（reservations.course_id）。卓のポップアップから時間・コースを直すときに使う */
+  courseId: string | null;
   /** この卓の未会計伝票すべて（古い順）。1枚だけのときも入る */
   slips: TableSlip[];
 }
