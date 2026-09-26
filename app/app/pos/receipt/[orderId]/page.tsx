@@ -17,10 +17,12 @@ export default async function ReceiptPage({
   searchParams,
 }: {
   params: Promise<{ orderId: string }>;
-  searchParams: Promise<{ reissue?: string }>;
+  /** tab=invoice … 領収書のタブを最初から出す／from=orders … 伝票明細から開いた（戻り先を変える） */
+  searchParams: Promise<{ reissue?: string; tab?: string; from?: string }>;
 }) {
   const { orderId } = await params;
-  const { reissue } = await searchParams;
+  const { reissue, tab, from } = await searchParams;
+  const fromOrders = from === 'orders';
   const ctx = await requireMember();
   const supabase = await createClient();
   const store = ctx.currentStore ?? ctx.stores[0];
@@ -158,9 +160,12 @@ export default async function ReceiptPage({
   return (
     <div className="mx-auto max-w-2xl">
       <div className="mb-4 flex items-center justify-between print:hidden">
-        <Link href="/app/pos" className="flex items-center gap-1 text-sm font-medium text-gray-600 hover:text-primary">
+        <Link
+          href={fromOrders ? '/app/orders' : '/app/pos'}
+          className="flex items-center gap-1 text-sm font-medium text-gray-600 hover:text-primary"
+        >
           <ArrowLeft className="h-4 w-4" />
-          POSへ戻る
+          {fromOrders ? '伝票明細へ戻る' : 'POSへ戻る'}
         </Link>
       </div>
 
@@ -170,6 +175,7 @@ export default async function ReceiptPage({
         qrDataUrl={qrDataUrl}
         logPrintJobAction={logPrintJob}
         cloudPrntAvailable={cloudPrntAvailable}
+        initialTab={tab === 'invoice' ? 'invoice' : 'receipt'}
       />
     </div>
   );
