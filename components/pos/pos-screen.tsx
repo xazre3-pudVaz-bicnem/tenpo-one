@@ -973,6 +973,10 @@ export function PosScreen({
                   {visibleItems.map((m) => {
                     const price = isTakeoutLike ? (m.takeout_price ?? m.price) : m.price;
                     const category = categories.find((c) => c.id === m.category_id);
+                    const en = englishByItemId.get(m.id);
+                    const label = en ?? m.name;
+                    // コース名のような長い名前はタイルが縦に伸びるので、文字を小さくして3行までに収める
+                    const labelSize = label.length > 28 ? 'text-[12px]' : label.length > 18 ? 'text-[13px]' : 'text-[14px]';
                     return (
                       <button
                         key={m.id}
@@ -985,17 +989,15 @@ export function PosScreen({
                         )}
                         style={!m.is_sold_out && category?.color ? { borderTop: `4px solid ${category.color}` } : undefined}
                       >
-                        <span className="flex items-center gap-1 text-[15px] font-bold leading-tight text-navy">
+                        <span className={cn('flex items-center gap-1 font-bold leading-tight text-navy', labelSize)}>
                           {m.is_recommended && <Star className="h-3.5 w-3.5 shrink-0 fill-warning text-warning" />}
-                          {englishByItemId.get(m.id) ?? m.name}
+                          <span className="line-clamp-3">{label}</span>
                         </span>
-                        {englishByItemId.get(m.id) && (
-                          <span className="text-[11px] leading-tight text-ink-3">{m.name}</span>
-                        )}
+                        {en && <span className="line-clamp-2 text-[10px] leading-tight text-ink-3">{m.name}</span>}
                         {m.is_sold_out ? (
                           <Badge tone="gray">売切 / Sold out</Badge>
                         ) : (
-                          <span className="text-[17px] font-extrabold tabular-nums text-royal">{yen(price)}</span>
+                          <span className="text-[15px] font-extrabold tabular-nums text-royal">{yen(price)}</span>
                         )}
                       </button>
                     );
