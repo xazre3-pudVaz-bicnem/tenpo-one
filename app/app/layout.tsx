@@ -19,6 +19,7 @@ import { InstallPrompt } from '@/components/pwa/install-prompt';
 import { ClerkGate, type GateClerk } from '@/components/pos/clerk-gate';
 import { loadStoreClerks } from '@/lib/pos-clerks-server';
 import { ReservationAlert } from '@/components/notifications/reservation-alert';
+import { PushAutoSubscribe } from '@/components/notifications/push-auto-subscribe';
 
 /** 店舗画面はブラウザのツールバー色も上部バー（濃紫）に合わせる */
 export const viewport = { themeColor: '#211c28' };
@@ -112,6 +113,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <TopBar ctx={ctx} unreadCount={unreadCount ?? 0} showMenuLink={posFullscreen} />
         {/* 新しいネット予約のチャイム＋バナー（レジ・パソコンどの画面でも） */}
         {ctx.currentStore && <ReservationAlert storeId={ctx.currentStore.id} ledgerHref="/app/reservations" />}
+        {/* ログインした端末は予約の通知を自動でオンにする（2026-09-27 Ronnie） */}
+        {ctx.currentStore && <PushAutoSubscribe />}
         {!posFullscreen && (
           <Sidebar
             tiles={tiles}

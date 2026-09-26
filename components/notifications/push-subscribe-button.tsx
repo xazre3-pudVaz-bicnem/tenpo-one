@@ -130,7 +130,7 @@ export function PushSubscribeButton({ variant = 'card', className }: { variant?:
       <div className={cn('border-b border-[#efe6ec] py-3', className)}>
         {button}
         <p className="mt-1.5 text-[11px] leading-relaxed text-[#7f6e7a]">
-          {hint ?? (state === 'on' ? 'ネット予約が入ると、この端末に音つきで通知が来ます。' : 'ネット予約が入ったら、この端末に音つきで知らせます。')}
+          {hint ?? (state === 'on' ? 'ネット予約が入ると、この端末に音つきで通知が来ます。' : 'ログインした端末は自動でオンになります。オンにならないときはこのボタンで。')}
         </p>
       </div>
     );
@@ -145,9 +145,9 @@ export function PushSubscribeButton({ variant = 'card', className }: { variant?:
         <div className="min-w-0 flex-1">
           <p className="text-[15px] font-bold text-navy">予約の通知（この端末）</p>
           <p className="mt-1 text-sm leading-relaxed text-ink-2">
-            お客様のネット予約が入ると、レジの iPad・スタッフの iPhone に音つきで知らせます。
-            通知を受け取りたい端末それぞれで、このボタンを一度押してください。
-            開いている画面には、通知のオン・オフに関係なくチャイムとお知らせが出ます。
+            お客様のネット予約が入ると、ログインしているレジの iPad・スタッフの iPhone に音つきで知らせます。
+            ログインした端末は自動でオンになります（「通知を許可しますか」と出たら「許可」を押してください）。
+            オンにならない端末は、この画面のボタンで入れられます。開いている画面には、通知のオン・オフに関係なくチャイムとお知らせが出ます。
           </p>
           {hint && <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-800">{hint}</p>}
           <div className="mt-3">{button}</div>
