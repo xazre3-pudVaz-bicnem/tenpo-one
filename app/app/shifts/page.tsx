@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { businessHoursLabel } from '@/lib/business-hours';
 import Link from 'next/link';
 import { AlertTriangle } from 'lucide-react';
 import { requireFeature } from '@/lib/auth';
@@ -389,14 +390,19 @@ export default async function ShiftsPage({
       continue;
     }
     if (!bh.open_time || !bh.close_time) continue;
-    if (minutesOf(row.start_time) < minutesOf(bh.open_time) || minutesOf(row.end_time) > minutesOf(bh.close_time)) {
+    // 深夜営業（閉店が開店より前＝翌日）と、日をまたぐシフト（終了が開始より前）は +24h で比べる
+    const openMin = minutesOf(bh.open_time);
+    const closeMin = minutesOf(bh.close_time) <= openMin ? minutesOf(bh.close_time) + 24 * 60 : minutesOf(bh.close_time);
+    const startMin = minutesOf(row.start_time);
+    const endMin = minutesOf(row.end_time) < startMin ? minutesOf(row.end_time) + 24 * 60 : minutesOf(row.end_time);
+    if (startMin < openMin || endMin > closeMin) {
       outOfHoursWarnings.push({
         date: row.shift_date,
         label,
         name,
         startTime: row.start_time.slice(0, 5),
         endTime: row.end_time.slice(0, 5),
-        reason: `営業時間 ${bh.open_time.slice(0, 5)}〜${bh.close_time.slice(0, 5)} 外`,
+        reason: `営業時間 ${businessHoursLabel(bh.open_time, bh.close_time)} 外`,
       });
     }
   }

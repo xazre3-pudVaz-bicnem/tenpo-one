@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { toBusinessDayTime } from '@/lib/business-hours';
 import { requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { todayJst } from '@/lib/format';
@@ -38,8 +39,9 @@ export default async function HoursSettingsPage() {
       dayOfWeek: day,
       isClosed: h?.is_closed ?? false,
       openTime: h?.open_time?.slice(0, 5) ?? null,
-      closeTime: h?.close_time?.slice(0, 5) ?? null,
-      lastEntryTime: h?.last_entry_time?.slice(0, 5) ?? null,
+      // 閉店・最終入店は営業日の表記（開店より前なら翌日 +24h → 25:00 など）
+      closeTime: toBusinessDayTime(h?.close_time, h?.open_time),
+      lastEntryTime: toBusinessDayTime(h?.last_entry_time, h?.open_time),
     };
   });
 

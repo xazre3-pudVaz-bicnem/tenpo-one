@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { businessHoursLabel } from '@/lib/business-hours';
 import { notFound } from 'next/navigation';
 import { MapPin, Phone, Clock, Info, AlertCircle } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
@@ -11,9 +12,6 @@ interface PageParams {
 
 const WEEKDAY_LABEL = ['日', '月', '火', '水', '木', '金', '土'];
 
-function hhmm(t: string | null): string {
-  return t ? t.slice(0, 5) : '';
-}
 
 /** 営業時間を「曜日: 開店〜閉店（L.O. ラスト入店）」の行に整形。定休日は「定休日」。 */
 function formatBusinessHours(rows: BookingBusinessHour[]): { label: string; value: string; closed: boolean }[] {
@@ -23,8 +21,8 @@ function formatBusinessHours(rows: BookingBusinessHour[]): { label: string; valu
     if (!r || r.is_closed || !r.open_time || !r.close_time) {
       return { label: WEEKDAY_LABEL[dow], value: '定休日', closed: true };
     }
-    const lastEntry = r.last_entry_time ? `（最終入店 ${hhmm(r.last_entry_time)}）` : '';
-    return { label: WEEKDAY_LABEL[dow], value: `${hhmm(r.open_time)}〜${hhmm(r.close_time)}${lastEntry}`, closed: false };
+    // 深夜営業は 25:00 のような営業日の表記（lib/business-hours.ts）
+    return { label: WEEKDAY_LABEL[dow], value: businessHoursLabel(r.open_time, r.close_time, r.last_entry_time), closed: false };
   });
 }
 

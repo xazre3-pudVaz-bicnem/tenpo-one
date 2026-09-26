@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { businessHoursLabel } from '@/lib/business-hours';
 import Link from 'next/link';
 import { Pencil } from 'lucide-react';
 import { requirePermission } from '@/lib/auth';
@@ -56,7 +57,7 @@ export default async function SettingsHubPage() {
     new Set(
       (hours ?? [])
         .filter((h) => !h.is_closed && h.open_time && h.close_time)
-        .map((h) => `${h.open_time!.slice(0, 5)}〜${h.close_time!.slice(0, 5)}`)
+        .map((h) => businessHoursLabel(h.open_time, h.close_time))
     )
   );
 

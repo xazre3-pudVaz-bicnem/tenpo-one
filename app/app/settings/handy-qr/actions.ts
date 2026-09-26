@@ -142,3 +142,30 @@ export async function removeShopNetwork(storeId: string, key: string): Promise<A
   if (!result.error) await audit(ctx, storeId, 'handy.network_remove', { network: key });
   return result;
 }
+
+/**
+ * 上部バーの「ハンディQR」から使う：この店舗の固定QRの値を返す（無ければ null）。
+ * レジを使える人なら見られる（QR は お店のWi-Fi の中でしか効かない）。2026-09-27 Ronnie「上にハンディQRのボタンを」
+ */
+export async function loadHandyQrToken(storeId: string): Promise<{ token: string | null; storeName: string; canSetup: boolean; error?: string }> {
+  const ctx = await requirePermission('pos.order');
+  try {
+    assertStoreAccess(ctx, storeId);
+  } catch {
+    return { token: null, storeName: '', canSetup: false, error: 'この店舗へのアクセス権がありません' };
+  }
+  const supabase = await createClient();
+  const [{ data: row }, { data: store }] = await Promise.all([
+    supabase.from('store_settings').select('settings').eq('store_id', storeId).maybeSingle(),
+    supabase.from('stores').select('name').eq('id', storeId).maybeSingle(),
+  ]);
+  const qr = handyQrFrom(row?.settings ?? null);
+  let canSetup = false;
+  try {
+    await requirePermission('store.settings');
+    canSetup = true;
+  } catch {
+    canSetup = false;
+  }
+  return { token: qr.token, storeName: store?.name ?? '', canSetup };
+}

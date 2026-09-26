@@ -8,6 +8,7 @@ import { HelpPopover } from '@/components/help/help-popover';
 import { StoreSwitcher } from './store-switcher';
 import { BackHome, LiveClock, ScreenTitle } from './top-bar-parts';
 import { ClerkChip } from '@/components/pos/clerk-gate';
+import { HandyQrChip } from './handy-qr-chip';
 
 /**
  * 上部バー（濃紫・高さ58px）。D&DREAM レジ v32 準拠:
@@ -107,6 +108,8 @@ export function TopBar({
             <span className="hidden truncate text-[11px] font-medium text-[#D9CCF3] 2xl:inline">{roleLabel}</span>
           )}
         </span>
+        {/* ハンディ ログインQR（店名とログアウトの間。2026-09-27 Ronnie） */}
+        {ctx.currentStore && <HandyQrChip storeId={ctx.currentStore.id} />}
         <form action={signOut}>
           <button
             type="submit"

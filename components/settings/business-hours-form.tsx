@@ -2,21 +2,68 @@
 
 import { useState, useTransition } from 'react';
 import { Button } from '@/components/ui/button';
-import { Input, Label, FieldError } from '@/components/ui/input';
+import { Label, FieldError, Select } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { useToast } from '@/components/ui/toast';
 import { saveBusinessHours, type BusinessHourInput } from '@/app/app/settings/hours/actions';
+import { businessHourOptions } from '@/lib/business-hours';
 
 const WEEKDAY_LABELS = ['日', '月', '火', '水', '木', '金', '土'];
 
+/** 開店は当日（00:00〜23:45）、閉店・最終入店は翌朝 6:00（30:00）まで */
+const OPEN_OPTIONS = businessHourOptions(0, 23 * 60 + 45);
+const CLOSE_OPTIONS = businessHourOptions(0, 30 * 60);
+
+function TimeSelect({
+  value,
+  onChange,
+  options,
+  disabled,
+  label,
+}: {
+  value: string | null;
+  onChange: (v: string | null) => void;
+  options: string[];
+  disabled?: boolean;
+  label: string;
+}) {
+  return (
+    <Select aria-label={label} disabled={disabled} value={value ?? ''} onChange={(e) => onChange(e.target.value || null)}>
+      <option value="">--:--</option>
+      {options.map((o) => (
+        <option key={o} value={o}>
+          {o}
+        </option>
+      ))}
+    </Select>
+  );
+}
+
+/**
+ * 曜日別の営業時間。
+ * - 閉店・最終入店は 24:00〜30:00（翌朝 6:00）まで選べる（同じ営業日として扱う。2026-09-27 Ronnie）
+ * - 「全曜日をまとめて変更」で 7 曜日を一度に入れられる
+ */
 export function BusinessHoursForm({ storeId, initial }: { storeId: string; initial: BusinessHourInput[] }) {
   const [rows, setRows] = useState<BusinessHourInput[]>(initial);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const { toast } = useToast();
+  // まとめて変更の入力（開店・閉店・最終入店）
+  const [bulk, setBulk] = useState<{ openTime: string | null; closeTime: string | null; lastEntryTime: string | null }>({
+    openTime: initial.find((r) => !r.isClosed)?.openTime ?? null,
+    closeTime: initial.find((r) => !r.isClosed)?.closeTime ?? null,
+    lastEntryTime: initial.find((r) => !r.isClosed)?.lastEntryTime ?? null,
+  });
 
   const update = (day: number, patch: Partial<BusinessHourInput>) => {
     setRows((prev) => prev.map((r) => (r.dayOfWeek === day ? { ...r, ...patch } : r)));
+  };
+
+  /** 全曜日に同じ時間を入れる（定休日の曜日は定休日のまま、時間だけ入れておく） */
+  const applyBulk = () => {
+    setRows((prev) => prev.map((r) => ({ ...r, openTime: bulk.openTime, closeTime: bulk.closeTime, lastEntryTime: bulk.lastEntryTime })));
+    toast('全曜日に反映しました（保存ボタンで確定します）');
   };
 
   const handleSubmit = () => {
@@ -34,6 +81,31 @@ export function BusinessHoursForm({ storeId, initial }: { storeId: string; initi
   return (
     <Card>
       <CardContent className="space-y-3 p-5">
+        {/* 全曜日をまとめて変更（2026-09-27 Ronnie「一緒に変更する場合のも」） */}
+        <div className="rounded-xl border border-line bg-lilac-soft/60 p-3">
+          <p className="mb-2 text-sm font-semibold text-navy">
+            全曜日をまとめて変更
+            <span className="ml-2 text-xs font-normal text-ink-3">閉店・最終入店は 24:00〜30:00（翌朝6時）まで選べます</span>
+          </p>
+          <div className="grid grid-cols-2 items-end gap-3 sm:grid-cols-4">
+            <div>
+              <Label className="text-xs">開店</Label>
+              <TimeSelect label="開店（全曜日）" value={bulk.openTime} options={OPEN_OPTIONS} onChange={(v) => setBulk((b) => ({ ...b, openTime: v }))} />
+            </div>
+            <div>
+              <Label className="text-xs">閉店</Label>
+              <TimeSelect label="閉店（全曜日）" value={bulk.closeTime} options={CLOSE_OPTIONS} onChange={(v) => setBulk((b) => ({ ...b, closeTime: v }))} />
+            </div>
+            <div>
+              <Label className="text-xs">最終入店</Label>
+              <TimeSelect label="最終入店（全曜日）" value={bulk.lastEntryTime} options={CLOSE_OPTIONS} onChange={(v) => setBulk((b) => ({ ...b, lastEntryTime: v }))} />
+            </div>
+            <Button variant="secondary" onClick={applyBulk} disabled={pending || !bulk.openTime || !bulk.closeTime}>
+              全曜日に反映
+            </Button>
+          </div>
+        </div>
+
         {rows.map((r) => (
           <div
             key={r.dayOfWeek}
@@ -51,30 +123,15 @@ export function BusinessHoursForm({ storeId, initial }: { storeId: string; initi
             </label>
             <div>
               <Label className="text-xs">開店</Label>
-              <Input
-                type="time"
-                disabled={r.isClosed}
-                value={r.openTime ?? ''}
-                onChange={(e) => update(r.dayOfWeek, { openTime: e.target.value })}
-              />
+              <TimeSelect label={`${WEEKDAY_LABELS[r.dayOfWeek]}曜日の開店`} disabled={r.isClosed} value={r.openTime} options={OPEN_OPTIONS} onChange={(v) => update(r.dayOfWeek, { openTime: v })} />
             </div>
             <div>
               <Label className="text-xs">閉店</Label>
-              <Input
-                type="time"
-                disabled={r.isClosed}
-                value={r.closeTime ?? ''}
-                onChange={(e) => update(r.dayOfWeek, { closeTime: e.target.value })}
-              />
+              <TimeSelect label={`${WEEKDAY_LABELS[r.dayOfWeek]}曜日の閉店`} disabled={r.isClosed} value={r.closeTime} options={CLOSE_OPTIONS} onChange={(v) => update(r.dayOfWeek, { closeTime: v })} />
             </div>
             <div className="col-span-2 sm:col-span-2">
               <Label className="text-xs">最終入店</Label>
-              <Input
-                type="time"
-                disabled={r.isClosed}
-                value={r.lastEntryTime ?? ''}
-                onChange={(e) => update(r.dayOfWeek, { lastEntryTime: e.target.value })}
-              />
+              <TimeSelect label={`${WEEKDAY_LABELS[r.dayOfWeek]}曜日の最終入店`} disabled={r.isClosed} value={r.lastEntryTime} options={CLOSE_OPTIONS} onChange={(v) => update(r.dayOfWeek, { lastEntryTime: v })} />
             </div>
           </div>
         ))}
