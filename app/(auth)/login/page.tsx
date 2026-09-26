@@ -43,6 +43,12 @@ export default async function LoginPage({
               レジ（iPad）からのログインはこちら
             </Link>
           </p>
+          {/* iPhone ハンディは QR コードを読んでログイン（ID・パスワード不要。2026-09-26 Ronnie） */}
+          <p>
+            <Link href="/handy-join" className="text-primary hover:underline">
+              ハンディ（iPhone）ログインはこちら
+            </Link>
+          </p>
           <p className="text-xs text-gray-400">
             アカウントは所属企業の管理者から発行されます
           </p>
