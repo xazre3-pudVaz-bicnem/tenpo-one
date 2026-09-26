@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 
 export interface ActionResult {
   error?: string;
@@ -63,6 +64,10 @@ export async function updateStoreInfo(input: {
     .eq('organization_id', ctx.organizationId);
   if (storeErr) return { error: `店舗情報の更新に失敗しました: ${storeErr.message}` };
 
+  // レジ用アカウントの表示名「<店舗名>（レジ）」も新しい店舗名に揃える
+  // （2026-09-27 Ronnie「店舗名を変えたのにレジの名前が前の店名のまま」）。失敗しても店舗情報の保存は止めない
+  await renameRegisterAccount(input.storeId, name).catch(() => undefined);
+
   const { error: settingsErr } = await supabase
     .from('store_settings')
     .upsert(
@@ -101,4 +106,15 @@ export async function updateStoreInfo(input: {
 
   revalidatePath('/app/settings/store');
   return {};
+}
+
+/** レジ用アカウント（store_register_credentials.profile_id）の表示名を「<店舗名>（レジ）」にする */
+async function renameRegisterAccount(storeId: string, storeName: string) {
+  const admin = createAdminClient();
+  const { data: cred } = await admin.from('store_register_credentials').select('profile_id').eq('store_id', storeId).maybeSingle();
+  const profileId = (cred?.profile_id as string | null) ?? null;
+  if (!profileId) return;
+  const displayName = `${storeName}（レジ）`;
+  await admin.from('profiles').update({ display_name: displayName }).eq('id', profileId);
+  await admin.auth.admin.updateUserById(profileId, { user_metadata: { display_name: displayName, register_device: true } }).catch(() => undefined);
 }
