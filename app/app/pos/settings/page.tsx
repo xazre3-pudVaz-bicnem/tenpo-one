@@ -18,7 +18,7 @@ export const metadata: Metadata = { title: 'レジの設定' };
 /**
  * レジの設定（POSレジ・注文画面・フロア・左メニューの「レジの設定」から開く）。
  * 2026-09-21 店舗要望「レジから今までのことを変えられるように」:
- *   厨房伝票（分け方・文字の大きさ・商品名の言語）はこの画面でその場で変える。
+ *   厨房伝票（分け方・商品名の言語）はこの画面でその場で変える。文字の大きさはパソコンの管理画面だけ（2026-09-26）。
  *   メニュー（品切れ・商品の編集・並び順・カテゴリの出し方・ページ・プラン・ランチ・選択肢）、
  *   キッチンの振り分け・プリンター、テーブルQRの印刷、ハンディ・担当者、予約・営業時間は、ボタンで各画面を開く
  *   （開いた画面の上の「レジの設定に戻る」でここに戻る）。
@@ -76,11 +76,12 @@ export default async function RegisterSettingsPage({
           <span className="ml-1.5 text-xs font-normal text-gray-400">Kitchen tickets</span>
         </h2>
         {kitchen ? (
-          <KitchenTicketPanel key={store.id} storeId={store.id} initial={kitchen} />
+          // 文字の大きさはパソコンの管理画面（設定 > レジ・プリンター）だけ（2026-09-26 Ronnie）
+          <KitchenTicketPanel key={store.id} storeId={store.id} initial={kitchen} showTextSize={false} />
         ) : (
           <div className="flex items-center gap-2 rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-500">
             <Lock className="h-4 w-4 text-gray-300" aria-hidden />
-            分け方・文字の大きさ・商品名の言語は、店長以上が変更できます
+            分け方・商品名の言語は、店長以上が変更できます
           </div>
         )}
       </section>

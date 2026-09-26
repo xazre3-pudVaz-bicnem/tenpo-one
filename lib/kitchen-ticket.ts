@@ -56,7 +56,8 @@ export function kitchenTicketSplitFrom(settings: unknown): KitchenTicketSplit {
  */
 export type KitchenTicketTextSize = 'large' | 'medium' | 'normal';
 
-export const DEFAULT_KITCHEN_TICKET_TEXT_SIZE: KitchenTicketTextSize = 'large';
+/** 既定は「中くらい」（2026-09-26 Ronnie「全店 中」。以前は large） */
+export const DEFAULT_KITCHEN_TICKET_TEXT_SIZE: KitchenTicketTextSize = 'medium';
 
 export const KITCHEN_TICKET_TEXT_SIZE_LABELS: Record<KitchenTicketTextSize, string> = {
   large: '大きめ（Word の16ポイントくらい）',
@@ -98,14 +99,13 @@ export function kitchenTicketLanguageFrom(settings: unknown): KitchenTicketLangu
 }
 
 /**
- * 厨房伝票を出したときにブザーを鳴らすか（店舗設定 store_settings.settings.kitchenTicket.buzzer）。
+ * 厨房伝票を出したときのブザー信号（store_settings.settings.kitchenTicket.buzzer）。
  * 厨房は音がないと伝票が出たことに気付けないため（2026-09-25 店舗要望）。
  * 音はプリンター本体ではなく、ドロア／ブザー端子につないだブザー（Star mC-Sound 等）が鳴らす。
- *   none    … 鳴らさない
- *   drawer1 … コネクタ1（Star: BEL / EPSON: 2番ピン）← 既定（2026-09-26 Ronnie「全店で鳴らす」。未設定の店舗も鳴る）
- *   drawer2 … コネクタ2（Star: SUB / EPSON: 5番ピン）
- * どちらの番号で鳴るかは配線しだいなので、鳴らなければもう一方を選ぶ。
- * ブザーをつないでいない厨房機では信号を出しても何も起きない（厨房機にドロアはつながない前提）。
+ *   drawer1 … コネクタ1（Star: BEL / EPSON: 2番ピン）← 既定・全店（2026-09-26 Ronnie「鳴るのは当たり前。設定に出さない」）
+ *   drawer2 … コネクタ2（Star: SUB / EPSON: 5番ピン）。配線が違うときに DB で切り替える用
+ *   none    … 鳴らさない（画面からは選べない。DB に残っている値の互換用）
+ * 設定画面には出さない（2026-09-26 に外した）。ブザーをつないでいない厨房機では信号を出しても何も起きない。
  */
 export type KitchenTicketBuzzer = 'none' | 'drawer1' | 'drawer2';
 

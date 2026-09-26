@@ -181,7 +181,13 @@ export default async function PrintersSettingsPage() {
               （2026-09-26 店舗切替→保存で文字の大きさが別店舗の値で上書きされた） */}
           <RegistersPanel key={`reg-${targetStore.id}`} storeId={targetStore.id} initial={registerRows} />
           <DrawerPanel key={`drawer-${targetStore.id}`} storeId={targetStore.id} initial={drawerInitial} />
-          <KitchenTicketPanel key={`kt-${targetStore.id}`} storeId={targetStore.id} initial={kitchenTicket} />
+          {/* 文字の大きさはパソコンの管理画面だけ。レジ iPad（register-login）で開いたときは出さない（2026-09-26 Ronnie） */}
+          <KitchenTicketPanel
+            key={`kt-${targetStore.id}`}
+            storeId={targetStore.id}
+            initial={kitchenTicket}
+            showTextSize={!ctx.isRegisterDevice}
+          />
         </div>
         <div className="min-w-0 space-y-5 @5xl:col-span-2">
           {drinkCategoryWarnings.length > 0 && (
