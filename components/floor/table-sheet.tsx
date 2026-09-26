@@ -3,7 +3,8 @@
 import { useLayoutEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { enqueueOrderSlipPrint } from '@/app/app/pos/print-actions';
-import { Lock, LockOpen } from 'lucide-react';
+import { BellRing, Lock, LockOpen } from 'lucide-react';
+import { resolveServiceCall } from '@/app/app/handy/actions';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast';
 import { yen } from '@/lib/format';
@@ -249,6 +250,35 @@ export function TableSheet({
       >
       {/* 見本と同じく、卓名だけを真ん中に出す（状態はタイルの色で分かる。外を押すと閉じる） */}
       <p className="mb-2 text-center text-[17px] font-extrabold text-navy">{table.name}</p>
+
+      {/* お客様QRからの呼び出し（2026-09-28 Ronnie）。対応したらここで「対応済み」 */}
+      {table.calls.length > 0 && (
+        <div className="mb-2 rounded-xl border border-[#ee853e] bg-[#fff1e6] p-2">
+          {table.calls.map((c) => (
+            <div key={c.id} className="flex items-center gap-2 py-1">
+              <BellRing className="h-4 w-4 shrink-0 animate-bounce text-[#b44814]" aria-hidden />
+              <span className="min-w-0 flex-1 text-[13px] font-bold text-[#842f0b]">
+                {c.kind === 'checkout' ? 'お会計希望' : 'スタッフ呼び出し'}
+                <span className="ml-1 text-[11px] font-medium text-[#9b3a2a]">{jstHm(new Date(c.createdAt).getTime())}</span>
+              </span>
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() =>
+                  run(async () => {
+                    const r = await resolveServiceCall(c.id);
+                    toast(r.alreadyResolved ? '別の端末で対応済みでした' : '対応済みにしました');
+                    router.refresh();
+                  })
+                }
+                className="tap3d h-8 shrink-0 rounded-lg bg-[#b44814] px-3 text-[12px] font-bold text-white disabled:opacity-50"
+              >
+                対応済み
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
 
       {table.groupTableIds.length > 1 && (
         <div className="mb-2 rounded-lg bg-royal/10 px-2.5 py-1.5 text-[11px] font-bold text-royal">

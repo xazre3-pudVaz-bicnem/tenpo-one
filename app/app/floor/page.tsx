@@ -16,6 +16,7 @@ import type {
   PanelReservation,
   TableOrderInfo,
   TableView,
+  TableCall,
   UpcomingReservation,
 } from '@/components/floor/types';
 import { saveTableGroup } from './group-actions';
@@ -265,11 +266,26 @@ export default async function FloorPage() {
     for (const id of g.tableIds) if (!orderByTable.has(id)) orderByTable.set(id, withOrder);
   }
 
+  // お客様QRからの未対応の呼び出し（卓に鈴のマークで出す。2026-09-28 Ronnie）
+  const { data: callRows } = await supabase
+    .from('service_calls')
+    .select('id, table_id, kind, created_at')
+    .eq('store_id', store.id)
+    .eq('status', 'open')
+    .order('created_at');
+  const callsByTable = new Map<string, TableCall[]>();
+  for (const c of callRows ?? []) {
+    const list = callsByTable.get(c.table_id as string) ?? [];
+    list.push({ id: c.id as string, kind: c.kind as TableCall['kind'], createdAt: c.created_at as string });
+    callsByTable.set(c.table_id as string, list);
+  }
+
   const tableViews: TableView[] = tableRows.map((t) => ({
     ...t,
     order: orderByTable.get(t.id) ?? null,
     upcoming: upcomingByTable.get(t.id) ?? [],
     groupTableIds: groupOfTable(tableGroups, t.id)?.tableIds ?? [],
+    calls: callsByTable.get(t.id) ?? [],
   }));
 
   // 席の時間・コースを卓のポップアップから直すときに選ぶコース（2026-09-25 店舗要望）
