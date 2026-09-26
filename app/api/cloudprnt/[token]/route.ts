@@ -75,10 +75,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
   // （設定画面でメーカーを Star にしたまま EPSON 機に URL を入れると、JSON を返しても印字されず
   //   ジョブが「払い出し済み」のまま残る。2026-09-26 FOGO 新宿のドリンク機で発生）
   if (looksLikeServerDirectPrint(bodyText, request.headers.get('content-type'))) {
-    if (!/epson/i.test(printer.maker ?? '')) {
-      // 設定画面の接続手順・URLが EPSON 用に切り替わるよう、メーカーを直しておく
-      await admin.from('printer_configs').update({ maker: 'EPSON' }).eq('id', printer.id);
-    }
+    await recordPollDiag(admin, printer.store_id, printer.id, request, bodyText, 'sdp');
     return handleServerDirectPrint(admin, printer, bodyText);
   }
 
@@ -88,6 +85,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
     mac = body?.printerMAC ?? null;
   } catch {
     /* 本文なし/非JSONは許容 */
+    await recordPollDiag(admin, printer.store_id, printer.id, request, bodyText, 'non-json');
   }
   await touchPrinter(admin, printer.id, mac);
 
@@ -164,4 +162,34 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ t
   await finishJob(admin, printer.id, jobToken, success, success ? null : `code ${code}`);
 
   return new NextResponse('ok', { status: 200 });
+}
+
+/**
+ * 何が来ているか分からないプリンタ（JSON でない本文）の直近の POST を店舗設定に残す（診断用・最大1件/プリンタ）。
+ * 本文は 400 文字まで。個人情報は含まれない（プリンタの状態と ID だけ）。
+ */
+async function recordPollDiag(
+  admin: Awaited<ReturnType<typeof resolvePrinter>>['admin'],
+  storeId: string,
+  printerId: string,
+  request: Request,
+  bodyText: string,
+  kind: 'sdp' | 'non-json'
+) {
+  try {
+    const { data } = await admin.from('store_settings').select('settings').eq('store_id', storeId).maybeSingle();
+    const settings = ((data?.settings as Record<string, unknown> | null) ?? {}) as Record<string, unknown>;
+    const diag = ((settings.printerDiag as Record<string, unknown> | undefined) ?? {}) as Record<string, unknown>;
+    diag[printerId] = {
+      at: new Date().toISOString(),
+      kind,
+      method: request.method,
+      contentType: request.headers.get('content-type'),
+      userAgent: request.headers.get('user-agent'),
+      body: bodyText.slice(0, 400),
+    };
+    await admin.from('store_settings').update({ settings: { ...settings, printerDiag: diag } }).eq('store_id', storeId);
+  } catch {
+    /* 診断だけなので失敗しても印刷には影響させない */
+  }
 }
