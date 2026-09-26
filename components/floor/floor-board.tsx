@@ -9,6 +9,8 @@ import { useStoreRealtimeRefresh } from '@/components/realtime/use-store-refresh
 import { TableSheet } from './table-sheet';
 import { TableCard } from './table-card';
 import { ReservationPanel } from './reservation-panel';
+import type { ReservationListRow } from '@/components/reservations/list-types';
+import type { AssignableTable } from '@/components/reservations/assign-table-dialog';
 import { useNow } from './use-now';
 import type { WalkInSeatOptions } from './table-sheet';
 import type { SeatCourseOption } from '@/lib/seat-time';
@@ -52,6 +54,9 @@ export function FloorBoard({
   defaultFloorId = null,
   tables,
   reservations,
+  reservationRows,
+  assignableTables,
+  staffOptions,
   serverNow,
   canOperate,
   startWalkInAction,
@@ -78,6 +83,10 @@ export function FloorBoard({
   defaultFloorId?: string | null;
   tables: TableView[];
   reservations: PanelReservation[];
+  /** 予約詳細（ホームから開く）用。reservations と同じ予約の詳細データ（2026-09-26） */
+  reservationRows?: ReservationListRow[];
+  assignableTables?: AssignableTable[];
+  staffOptions?: { id: string; name: string }[];
   serverNow: number;
   canOperate: boolean;
   startWalkInAction: (tableId: string, partySize: number, options?: WalkInSeatOptions) => Promise<{ orderId: string }>;
@@ -334,7 +343,14 @@ export function FloorBoard({
       </div>
 
       <div className="min-w-0 lg:h-full lg:min-h-0">
-        <ReservationPanel reservations={reservations} now={now} />
+        <ReservationPanel
+          reservations={reservations}
+          now={now}
+          rows={reservationRows ?? []}
+          tables={assignableTables ?? []}
+          staffOptions={staffOptions ?? []}
+          courses={seatCourses}
+        />
       </div>
 
       <TableSheet

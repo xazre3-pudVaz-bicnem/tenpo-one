@@ -15,6 +15,8 @@ export interface ReservationListRow {
   adults: number;
   children: number;
   status: ReservationStatus;
+  /** コース（menu_items.id）。取得していない画面では省略 */
+  courseId?: string | null;
   courseName: string | null;
   seatType: string | null;
   purpose: string | null;
@@ -33,4 +35,7 @@ export interface ReservationListRow {
   createdAt?: string;
   /** 退店（会計）した時刻。伝票の closed_at。会計前・取得していない画面では null／省略 */
   leftAt?: string | null;
+  /** 顧客台帳の来店回数・前回来店日（紐付いていなければ null。取得していない画面では省略） */
+  visitCount?: number | null;
+  lastVisitAt?: string | null;
 }
