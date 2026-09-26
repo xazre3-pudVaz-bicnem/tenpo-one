@@ -5,7 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Input, Label, Select, FieldError } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { useToast } from '@/components/ui/toast';
-import { updateBookingSettings } from '@/app/app/settings/booking/actions';
+import { importStorePhotoFromPage, updateBookingSettings } from '@/app/app/settings/booking/actions';
+import { ImageDown, Loader2 } from 'lucide-react';
 
 export interface BookingSettingsData {
   storeId: string;
@@ -28,6 +29,16 @@ export function BookingSettingsForm({ initial }: { initial: BookingSettingsData 
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const { toast } = useToast();
+  const [pageUrl, setPageUrl] = useState('');
+  const [importing, startImport] = useTransition();
+
+  const importPhoto = () =>
+    startImport(async () => {
+      const r = await importStorePhotoFromPage({ storeId: initial.storeId, pageUrl });
+      if (r.error) return toast(r.error, 'error');
+      if (r.photoUrl) setForm((f) => ({ ...f, bookingPhotoUrl: r.photoUrl! }));
+      toast('写真を取り込みました');
+    });
 
   const set = <K extends keyof BookingSettingsData>(key: K, value: BookingSettingsData[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
@@ -132,17 +143,37 @@ export function BookingSettingsForm({ initial }: { initial: BookingSettingsData 
           <p className="mb-3 text-sm font-semibold text-navy">公開予約ページの表示内容</p>
           <div className="space-y-4">
             <div>
-              <Label htmlFor="photo-url">店舗写真URL</Label>
-              <Input
-                id="photo-url"
-                type="text"
-                placeholder="/store-photo.jpg または https://..."
-                value={form.bookingPhotoUrl}
-                onChange={(e) => set('bookingPhotoUrl', e.target.value)}
-              />
+              <Label htmlFor="photo-page-url">店舗写真</Label>
+              {/* 食べログ・ホットペッパー・ホームページの URL を貼ると、そのページの写真を取り込む（2026-09-28 Ronnie） */}
+              <div className="flex flex-wrap gap-2">
+                <Input
+                  id="photo-page-url"
+                  type="text"
+                  placeholder="食べログ・ホットペッパー・お店のホームページの URL を貼る（https://…）"
+                  value={pageUrl}
+                  onChange={(e) => setPageUrl(e.target.value)}
+                  className="min-w-0 flex-1"
+                />
+                <Button type="button" variant="secondary" onClick={importPhoto} disabled={importing || !pageUrl.trim()}>
+                  {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImageDown className="h-4 w-4" />}
+                  写真を取り込む
+                </Button>
+              </div>
               <p className="mt-1 text-xs text-gray-500">
-                公開予約ページ上部に表示します。同一サイトのパス（/…）または https のURLを指定してください。
+                貼った URL のページの代表写真（お店の写真）を自動で取り込みます。写真の URL（.jpg）を直接貼っても使えます。
               </p>
+              {form.bookingPhotoUrl && (
+                <div className="mt-2 flex items-center gap-3">
+                  {/* eslint-disable-next-line @next/next/no-img-element -- 保存済みの店舗写真のプレビュー */}
+                  <img src={form.bookingPhotoUrl} alt="店舗写真" className="h-20 w-32 rounded-lg object-cover" />
+                  <div className="min-w-0 text-xs text-gray-500">
+                    <p>公開予約ページの上部に出ます。</p>
+                    <button type="button" onClick={() => set('bookingPhotoUrl', '')} className="mt-1 text-danger underline">
+                      写真を外す
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
             <div>
               <Label htmlFor="booking-notes">ご予約時の注意事項</Label>
