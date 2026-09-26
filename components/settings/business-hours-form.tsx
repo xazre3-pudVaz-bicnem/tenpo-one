@@ -42,7 +42,7 @@ function TimeSelect({
 /**
  * 曜日別の営業時間。
  * - 閉店・最終入店は 24:00〜30:00（翌朝 6:00）まで選べる（同じ営業日として扱う。2026-09-27 Ronnie）
- * - 「全曜日をまとめて変更」で 7 曜日を一度に入れられる
+ * - 「まとめて変更」で 7 曜日を一度に入れて、そのまま保存できる（2026-09-27 Ronnie「全曜日に反映は要らない。営業時間を保存にして」）
  */
 export function BusinessHoursForm({ storeId, initial }: { storeId: string; initial: BusinessHourInput[] }) {
   const [rows, setRows] = useState<BusinessHourInput[]>(initial);
@@ -60,16 +60,10 @@ export function BusinessHoursForm({ storeId, initial }: { storeId: string; initi
     setRows((prev) => prev.map((r) => (r.dayOfWeek === day ? { ...r, ...patch } : r)));
   };
 
-  /** 全曜日に同じ時間を入れる（定休日の曜日は定休日のまま、時間だけ入れておく） */
-  const applyBulk = () => {
-    setRows((prev) => prev.map((r) => ({ ...r, openTime: bulk.openTime, closeTime: bulk.closeTime, lastEntryTime: bulk.lastEntryTime })));
-    toast('全曜日に反映しました（保存ボタンで確定します）');
-  };
-
-  const handleSubmit = () => {
+  const save = (next: BusinessHourInput[]) => {
     setError(null);
     startTransition(async () => {
-      const result = await saveBusinessHours(storeId, rows);
+      const result = await saveBusinessHours(storeId, next);
       if (result.error) {
         setError(result.error);
         return;
@@ -78,13 +72,22 @@ export function BusinessHoursForm({ storeId, initial }: { storeId: string; initi
     });
   };
 
+  /** まとめて変更: 全曜日に同じ時間を入れて、そのまま保存する（定休日の曜日は定休日のまま、時間だけ入れておく） */
+  const saveBulk = () => {
+    const next = rows.map((r) => ({ ...r, openTime: bulk.openTime, closeTime: bulk.closeTime, lastEntryTime: bulk.lastEntryTime }));
+    setRows(next);
+    save(next);
+  };
+
+  const handleSubmit = () => save(rows);
+
   return (
     <Card>
       <CardContent className="space-y-3 p-5">
-        {/* 全曜日をまとめて変更（2026-09-27 Ronnie「一緒に変更する場合のも」） */}
+        {/* まとめて変更（2026-09-27 Ronnie「一緒に変更する場合のも」。ボタン1つで全曜日に入れて保存まで） */}
         <div className="rounded-xl border border-line bg-lilac-soft/60 p-3">
           <p className="mb-2 text-sm font-semibold text-navy">
-            全曜日をまとめて変更
+            営業時間をまとめて変更
             <span className="ml-2 text-xs font-normal text-ink-3">閉店・最終入店は 24:00〜30:00（翌朝6時）まで選べます</span>
           </p>
           <div className="grid grid-cols-2 items-end gap-3 sm:grid-cols-4">
@@ -100,8 +103,8 @@ export function BusinessHoursForm({ storeId, initial }: { storeId: string; initi
               <Label className="text-xs">最終入店</Label>
               <TimeSelect label="最終入店（全曜日）" value={bulk.lastEntryTime} options={CLOSE_OPTIONS} onChange={(v) => setBulk((b) => ({ ...b, lastEntryTime: v }))} />
             </div>
-            <Button variant="secondary" onClick={applyBulk} disabled={pending || !bulk.openTime || !bulk.closeTime}>
-              全曜日に反映
+            <Button onClick={saveBulk} disabled={pending || !bulk.openTime || !bulk.closeTime}>
+              {pending ? '保存中…' : '営業時間を保存'}
             </Button>
           </div>
         </div>
