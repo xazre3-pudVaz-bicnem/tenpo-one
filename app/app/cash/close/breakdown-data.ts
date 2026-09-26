@@ -1,7 +1,7 @@
 import 'server-only';
 import { createClient } from '@/lib/supabase/server';
 import { SETTLED_ORDER_STATUSES } from '@/lib/metrics';
-import { computeCloseBreakdown, monthRange, type BreakdownItem, type BreakdownOrder, type CloseBreakdown } from '@/lib/close-breakdown';
+import { computeCloseBreakdown, monthRange, sourceLabelFromCreatedVia, type BreakdownItem, type BreakdownOrder, type CloseBreakdown } from '@/lib/close-breakdown';
 
 export type BreakdownPeriod = 'day' | 'month';
 
@@ -32,8 +32,8 @@ export async function loadCloseBreakdown(storeId: string, period: BreakdownPerio
 
   const [{ data: reservations }, itemRows] = await Promise.all([
     reservationIds.length
-      ? supabase.from('reservations').select('id, source_id, reservation_sources(name)').in('id', reservationIds)
-      : Promise.resolve({ data: [] as { id: string; source_id: string | null; reservation_sources: unknown }[] }),
+      ? supabase.from('reservations').select('id, source_id, created_via, reservation_sources(name)').in('id', reservationIds)
+      : Promise.resolve({ data: [] as { id: string; source_id: string | null; created_via: string | null; reservation_sources: unknown }[] }),
     loadItems(orderIds),
   ]);
 
@@ -41,7 +41,8 @@ export async function loadCloseBreakdown(storeId: string, period: BreakdownPerio
   for (const r of reservations ?? []) {
     const src = r.reservation_sources as { name: string } | { name: string }[] | null;
     const name = Array.isArray(src) ? src[0]?.name : src?.name;
-    if (name) sourceByReservation.set(r.id as string, name);
+    // 経路が付いていない予約（レジで着席したときに作られたもの等）は作られ方から決める
+    sourceByReservation.set(r.id as string, name ?? sourceLabelFromCreatedVia(r.created_via as string | null));
   }
 
   // メニューの種類（コース／ドリンク…）とカテゴリのステーション
@@ -69,7 +70,7 @@ export async function loadCloseBreakdown(storeId: string, period: BreakdownPerio
     total: (o.total as number) ?? 0,
     guestCount: (o.guest_count as number) ?? 0,
     clerkName: (o.clerk_name as string | null) ?? null,
-    sourceName: o.reservation_id ? (sourceByReservation.get(o.reservation_id as string) ?? 'ネット予約') : null,
+    sourceName: o.reservation_id ? (sourceByReservation.get(o.reservation_id as string) ?? null) : null,
     orderType: (o.order_type as string | null) ?? null,
   }));
   const bi: BreakdownItem[] = itemRows.map((i) => {

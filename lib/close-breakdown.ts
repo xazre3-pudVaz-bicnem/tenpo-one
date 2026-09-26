@@ -1,3 +1,5 @@
+import { normalizeClerkName } from '@/lib/clerk-name';
+
 /**
  * レジクローズの「売上の内訳」（2026-09-27 Ronnie）:
  *   予約経路別（グルメサイトごと・ウォークイン）／担当者別／よく出たコース・メニュー／飲み放題で出たドリンク（杯数）
@@ -70,7 +72,23 @@ export interface CloseBreakdown {
   totals: { orders: number; guests: number; sales: number };
 }
 
-export const WALK_IN_LABEL = 'ウォークイン・電話';
+export const WALK_IN_LABEL = 'ウォークイン';
+
+/** 予約経路が無い予約の、作られ方（reservations.created_via）から経路の名前を決める */
+export function sourceLabelFromCreatedVia(createdVia: string | null | undefined): string {
+  switch (createdVia) {
+    case 'web':
+      return '公式Web予約';
+    case 'phone':
+      return '電話';
+    case 'manual':
+      return '台帳で登録';
+    case 'gourmet_mail':
+      return 'グルメサイト';
+    default:
+      return WALK_IN_LABEL;
+  }
+}
 export const TAKEOUT_LABEL = 'テイクアウト';
 export const NO_CLERK_LABEL = '担当なし';
 
@@ -122,7 +140,8 @@ export function computeCloseBreakdown(orders: BreakdownOrder[], items: Breakdown
     const qty = its.reduce((a, i) => a + i.quantity, 0);
     const source = o.orderType === 'takeout' ? TAKEOUT_LABEL : (o.sourceName ?? WALK_IN_LABEL);
     addCount(bySource, source, o, qty);
-    addCount(byClerk, o.clerkName?.trim() || NO_CLERK_LABEL, o, qty);
+    // 担当名は Ronnie / RONNIE のような大文字小文字の違いをまとめる（過去の伝票の表記ゆれ）
+    addCount(byClerk, o.clerkName?.trim() ? normalizeClerkName(o.clerkName) : NO_CLERK_LABEL, o, qty);
     totals.orders += 1;
     totals.guests += o.guestCount;
     totals.sales += o.total;
