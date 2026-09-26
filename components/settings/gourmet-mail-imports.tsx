@@ -23,7 +23,7 @@ export interface GourmetMailImportRow {
   reservationId: string | null;
   error: string | null;
   resolvedAt: string | null;
-  parsed: { date?: string | null; time?: string | null; partySize?: number | null; guestName?: string | null; phone?: string | null } | null;
+  parsed: { date?: string | null; time?: string | null; partySize?: number | null; guestName?: string | null; phone?: string | null; links?: string[] } | null;
   bodyText: string | null;
 }
 
@@ -89,6 +89,7 @@ export function GourmetMailImports({ storeId, rows }: { storeId: string; rows: G
                       {p.date ? `${p.date} ${p.time ?? ''} ${p.partySize ?? '?'}名 ${p.guestName ?? ''}` : (r.subject ?? '')}
                     </span>
                     <Badge tone={review ? 'danger' : r.resolvedAt ? 'gray' : st.tone}>{r.resolvedAt ? '対応済み' : st.label}</Badge>
+                    {r.kind === 'verify' && (p.links?.length ?? 0) > 0 && !r.resolvedAt && <Badge tone="warning">要クリック</Badge>}
                     <ChevronDown className={cn('h-4 w-4 shrink-0 text-wisteria transition-transform', open && 'rotate-180')} aria-hidden />
                   </button>
                   {open && (
@@ -99,6 +100,19 @@ export function GourmetMailImports({ storeId, rows }: { storeId: string; rows: G
                       {r.error && <p className="text-danger"><b>理由：</b>{r.error}</p>}
                       {r.bodyText && (
                         <pre className="mt-2 max-h-60 overflow-auto rounded-lg bg-white p-2 text-[12px] whitespace-pre-wrap text-navy">{r.bodyText.slice(0, 3000)}</pre>
+                      )}
+                      {/* 認証メール: サイトの「このリンクを開いて認証」をここから開ける（2026-09-28） */}
+                      {r.kind === 'verify' && (p.links?.length ?? 0) > 0 && (
+                        <div className="mt-2 rounded-lg border border-line bg-white p-2">
+                          <p className="mb-1 text-[11px] font-bold text-ink-2">認証メールのリンク（開くとサイト側の登録が完了します）</p>
+                          <div className="flex flex-wrap gap-2">
+                            {p.links!.map((u) => (
+                              <a key={u} href={u} target="_blank" rel="noopener noreferrer" className="inline-flex h-9 max-w-full items-center truncate rounded-lg bg-royal px-3 text-[12.5px] font-bold text-white">
+                                認証リンクを開く
+                              </a>
+                            ))}
+                          </div>
+                        </div>
                       )}
                       <div className="mt-2 flex flex-wrap gap-2">
                         {r.reservationId && (

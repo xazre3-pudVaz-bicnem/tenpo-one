@@ -125,6 +125,16 @@ describe('グルメサイト メール取り込み（2026-09-27 Ronnie）', () =
     expect(p.guestName).toBe('田中');
   });
 
+  it('認証メールのリンクを取り出す', () => {
+    const p = parseGourmetMail({
+      from: 'noreply@tabelog.com',
+      subject: '【食べログ】メールアドレスの認証',
+      text: '以下のURLを開いて認証してください。\nhttps://owner.tabelog.com/verify?token=abc123 。\nお問い合わせ https://owner.tabelog.com/help',
+    }, NOW);
+    expect(p.kind).toBe('verify');
+    expect(p.links).toEqual(['https://owner.tabelog.com/verify?token=abc123', 'https://owner.tabelog.com/help']);
+  });
+
   it('日本時間 → ISO', () => {
     expect(jstToIso('2026-10-03', '19:00')).toBe('2026-10-03T10:00:00.000Z');
     expect(jstToIso('2026-10-03', '25:00')).toBe('2026-10-03T16:00:00.000Z');

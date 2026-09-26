@@ -332,9 +332,23 @@ export function extractRequest(body: string): string | null {
   return s && !/^(なし|無し|-|—|特になし)$/.test(s) ? s : null;
 }
 
+/** 本文の URL（認証メールの「このリンクを開いて認証」用。最大 5 件） */
+export function extractLinks(text: string | null | undefined, html?: string | null): string[] {
+  const out: string[] = [];
+  const push = (u: string) => {
+    const clean = u.replace(/[)\]>"'。、」]+$/g, '');
+    if (/^https?:\/\//i.test(clean) && !out.includes(clean) && out.length < 5) out.push(clean);
+  };
+  for (const m of (html ?? '').matchAll(/href=["'](https?:\/\/[^"']+)["']/gi)) push(m[1]);
+  for (const m of (text ?? '').matchAll(/https?:\/\/[^\s<>"]+/g)) push(m[0]);
+  return out;
+}
+
 export interface ParsedGourmetMail {
   site: GourmetSiteKey;
   kind: MailKind;
+  /** 本文のリンク（認証メールはここのリンクを開くと登録が完了する） */
+  links: string[];
   externalId: string | null;
   date: string | null;
   time: string | null;
@@ -363,6 +377,7 @@ export function parseGourmetMail(
   return {
     site,
     kind,
+    links: extractLinks(input.text, input.html),
     externalId: extractExternalId(body, subject),
     date: dt?.date ?? null,
     time: dt?.time ?? null,
