@@ -45,6 +45,7 @@ export function GourmetMailPanel({
   settings,
   domain,
   inboundReady,
+  canRegenerate = false,
 }: {
   storeId: string;
   storeName: string;
@@ -53,6 +54,8 @@ export function GourmetMailPanel({
   domain: string;
   /** サーバーにメールの受け口（INBOUND_MAIL_SECRET）が設定されているか */
   inboundReady: boolean;
+  /** アドレスを作り直せるか（運営 CYPRESS だけ。2026-09-28 Ronnie「店舗からは変えられないように」） */
+  canRegenerate?: boolean;
 }) {
   const router = useRouter();
   const { toast } = useToast();
@@ -156,12 +159,15 @@ export function GourmetMailPanel({
                   {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                   コピー
                 </Button>
-                <Button variant="ghost" size="sm" onClick={regenerate} disabled={pending} title="アドレスを作り直す">
-                  <RefreshCw className="h-4 w-4" />
-                </Button>
+                {canRegenerate && (
+                  <Button variant="ghost" size="sm" onClick={regenerate} disabled={pending} title="アドレスを作り直す（運営のみ）">
+                    <RefreshCw className="h-4 w-4" />
+                  </Button>
+                )}
               </div>
               <p className="mt-1.5 text-[11px] text-ink-3">
                 ※ 各サイトの店舗管理画面（ID／パスワード）が必要です。登録すると、サイトから確認メールや予約メールが届いた時点で「設定済」になります。
+                このアドレスは固定です（変更は運営 CYPRESS のみ）。
               </p>
             </div>
 

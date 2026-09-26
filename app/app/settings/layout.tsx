@@ -62,7 +62,7 @@ export default async function SettingsLayout({ children }: { children: React.Rea
       en: 'Booking',
       icon: 'booking',
       rows: [
-        { href: '/app/settings/reservation-book', label: 'ご予約台帳設定', en: 'Reservation book', icon: 'booking', description: 'グルメサイト（食べログ・ホットペッパー・ぐるなび…）の予約を自動で台帳に取り込む', visible: true },
+        { href: '/app/settings/reservation-book', label: '予約台帳設定', en: 'Reservation book', icon: 'booking', description: 'グルメサイト（食べログ・ホットペッパー・ぐるなび…）の予約を自動で台帳に取り込む', visible: true },
         { href: '/app/settings/booking', label: '予約受付ルール', en: 'Booking rules', icon: 'booking', description: '予約枠間隔・受付期間・キャンセル期限', visible: true },
         { href: '/app/settings/tables', label: 'テーブル・フロア', en: 'Tables', icon: 'tables', description: 'フロア構成、テーブルの席数・種別・利用停止', visible: true, exact: true },
         { href: '/app/staff', label: 'スタッフ・権限', en: 'Staff', icon: 'staff', description: 'スタッフの招待・役割（権限）・利用停止', visible: can(role, 'staff.manage') && featureOn('/app/staff'), matchActive: false },

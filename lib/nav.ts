@@ -183,7 +183,7 @@ const EXTRA_TITLES: { href: string; label: string; en: string }[] = [
   { href: '/app/settings/handy-qr', label: 'iPhoneハンディ', en: 'Handy QR' },
   { href: '/app/settings/payments', label: '決済・端末', en: 'Payments' },
   { href: '/app/settings/booking', label: '予約設定', en: 'Booking rules' },
-  { href: '/app/settings/reservation-book', label: 'ご予約台帳設定', en: 'Reservation book' },
+  { href: '/app/settings/reservation-book', label: '予約台帳設定', en: 'Reservation book' },
   { href: '/app/settings/tables', label: 'テーブル・フロア', en: 'Tables' },
   { href: '/app/settings/menu', label: 'メニュー', en: 'Menu' },
   { href: '/app/settings/store', label: '店舗情報', en: 'Store' },

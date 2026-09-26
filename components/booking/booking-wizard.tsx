@@ -65,7 +65,7 @@ function Stepper({
   );
 }
 
-export function BookingWizard({ store }: { store: BookingStore }) {
+export function BookingWizard({ store, sourceCode = 'web' }: { store: BookingStore; sourceCode?: string }) {
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
 
@@ -169,7 +169,7 @@ export function BookingWizard({ store }: { store: BookingStore }) {
         purpose: purpose || null,
         allergy: allergy.trim() || null,
         request: request.trim() || null,
-        sourceCode: 'web',
+        sourceCode,
         consent,
       });
       if (errorMessage || !data) {
