@@ -193,7 +193,7 @@ export function DailyBudgetBoard({
                 type="button"
                 onClick={() => setTaxIncluded(o.k)}
                 className={`tap3d rounded-lg px-3 py-1.5 text-[13px] font-bold ${
-                  taxIncluded === o.k ? 'bg-plum text-white' : 'text-gray-600'
+                  taxIncluded === o.k ? 'on-sunset text-white' : 'text-gray-600'
                 }`}
               >
                 {o.ja}

@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils';
 /**
  * QR画面だけで使う小さな部品。
  * /app（.theme-regi）のテーマはこの画面に掛からないため、承認済みレイアウトの配色を
- * ここで明示する（プラム #241436 / 藤色 #f6f3fb / アイリス #7b3fe4）。
+ * ここで明示する（プラム #211c28 / 藤色 #f9f5f8 / アイリス #9f2c6c）。
  */
 
 /** 各タブ冒頭の見出し（英字のeyebrow＋和文タイトル＋説明） */
@@ -53,7 +53,7 @@ export function BillSummary({ label, amount }: { label: string; amount: string }
   return (
     <div className="mx-5 my-5 flex items-center justify-between gap-3 rounded-2xl bg-lilac px-5 py-4">
       <span className="text-xs font-semibold text-iris">{label}</span>
-      <b className="font-num text-[22px] font-extrabold tabular-nums text-[#59356f]">{amount}</b>
+      <b className="font-num text-[22px] font-extrabold tabular-nums text-[#5a3050]">{amount}</b>
     </div>
   );
 }
@@ -79,7 +79,7 @@ export function DishArt({ drink, className }: { drink?: boolean; className?: str
   return (
     <div
       aria-hidden="true"
-      className={cn('grid h-[76px] w-full place-items-center rounded-lg bg-lilac text-[#9a77c0]', className)}
+      className={cn('grid h-[76px] w-full place-items-center rounded-lg bg-lilac text-[#b8628f]', className)}
     >
       <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" className="h-10 w-10">
         {drink ? (

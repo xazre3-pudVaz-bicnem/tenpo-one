@@ -146,7 +146,7 @@ export function FindSeatsDialog({
               }}
               className={cn(
                 'rounded-full border px-3 py-1 text-[13px] font-semibold tabular-nums transition-colors',
-                time === t ? 'border-royal bg-royal text-white' : 'border-line bg-white text-ink-2 hover:bg-lilac-soft'
+                time === t ? 'on-sunset border-transparent text-white' : 'border-line bg-white text-ink-2 hover:bg-lilac-soft'
               )}
             >
               {t}

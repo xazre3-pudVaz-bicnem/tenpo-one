@@ -79,7 +79,7 @@ const BAR_CLASS: Record<BarKind, string> = {
   arrived: 'border-iris bg-iris-soft text-royal',
   in: 'border-iris bg-iris text-white',
   pay: 'border-iris bg-iris text-white',
-  out: 'border-transparent bg-[#DDD8E6] text-ink-2',
+  out: 'border-transparent bg-[#e3d7de] text-ink-2',
   unset: 'border-danger bg-white text-danger',
 };
 
@@ -102,7 +102,7 @@ const STATUS_BADGE: Partial<Record<BarKind, { label: string; className: string }
   arrived: { label: '来店', className: 'bg-iris text-white' },
   in: { label: '来店中', className: 'bg-white text-royal' },
   pay: { label: '会計中', className: 'bg-gold text-navy' },
-  out: { label: '退店', className: 'bg-[#8B83A0] text-white' },
+  out: { label: '退店', className: 'bg-[#8f7f8b] text-white' },
 };
 
 interface Placed {
@@ -567,7 +567,7 @@ export function ScheduleBoard({
           <Legend className="border-2 border-dashed border-ink-3 bg-white">仮予約</Legend>
           <Legend className="border-2 border-iris bg-white">来店待ち</Legend>
           <Legend className="bg-iris">来店中（着席）</Legend>
-          <Legend className="bg-[#CFC9DA]">退店（会計済み）</Legend>
+          <Legend className="bg-[#d4cbd1]">退店（会計済み）</Legend>
           <Legend className="bg-danger">席未定</Legend>
           {bufferMinutes > 0 && <Legend className="board-buffer border border-line">清掃（{bufferMinutes}分）</Legend>}
           {isToday && <Legend className="bg-saffron">現在時刻</Legend>}

@@ -21,7 +21,7 @@ import { loadStoreClerks } from '@/lib/pos-clerks-server';
 import { ReservationAlert } from '@/components/notifications/reservation-alert';
 
 /** 店舗画面はブラウザのツールバー色も上部バー（濃紫）に合わせる */
-export const viewport = { themeColor: '#241436' };
+export const viewport = { themeColor: '#211c28' };
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const ctx = await requireSession();

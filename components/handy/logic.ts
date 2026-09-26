@@ -143,13 +143,13 @@ export interface HandyPagesConfig {
 
 /** 承認済みUIのタイル下線の紫系アクセント（並び順に循環させる） */
 export const TILE_ACCENTS = [
-  '#7b3fe4',
-  '#a778dc',
-  '#5e4777',
-  '#b99bd8',
-  '#8d6baa',
-  '#c6afdf',
-  '#684298',
+  '#9f2c6c',
+  '#c7729f',
+  '#5e4e5a',
+  '#cf9dbb',
+  '#8a4a7a',
+  '#dcb3c8',
+  '#6b3094',
 ] as const;
 
 /** 'HH:MM[:SS]' を0〜1439の分に直す。読めない値は null */

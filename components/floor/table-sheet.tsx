@@ -52,7 +52,7 @@ function PopBtn({
       onClick={onClick}
       className={cn(
         'tap3d flex h-[46px] flex-col items-center justify-center rounded-xl border px-1 text-[12px] font-bold leading-tight disabled:opacity-40',
-        on ? 'border-royal bg-royal text-white' : danger ? 'border-danger/40 bg-white text-danger' : 'border-line bg-white text-navy'
+        on ? 'on-sunset border-transparent text-white' : danger ? 'border-danger/40 bg-white text-danger' : 'border-line bg-white text-navy'
       )}
     >
       {ja}
@@ -684,7 +684,7 @@ export function TableSheet({
                   }
                   className={cn(
                     'tap3d h-9 rounded-lg border text-[12px] font-bold disabled:opacity-100',
-                    on ? 'border-royal bg-royal text-white' : 'border-line bg-white text-navy'
+                    on ? 'on-sunset border-transparent text-white' : 'border-line bg-white text-navy'
                   )}
                 >
                   {t.name}

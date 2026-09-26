@@ -29,7 +29,7 @@ export function TagsEditor({
   const [selectId, setSelectId] = useState('');
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState('');
-  const [newColor, setNewColor] = useState('#7B3FF2');
+  const [newColor, setNewColor] = useState('#9f2c6c');
   const [pending, startTransition] = useTransition();
   const { toast } = useToast();
 
