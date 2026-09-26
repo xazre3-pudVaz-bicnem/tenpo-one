@@ -128,7 +128,7 @@ export function SettingsSubTabs({ item, pathname }: { item: SettingsNavItem; pat
 /** 設定メニュー（左ペイン）。スマホの設定トップでは全幅の一覧として使い、説明文も表示する。 */
 export function SettingsNav({ groups, pathname }: { groups: SettingsNavGroup[]; pathname: string }) {
   return (
-    <nav aria-label="設定メニュー" className="py-1.5">
+    <nav aria-label="設定メニュー" className="py-1.5 lg:py-1">
       {groups.map((g, gi) => (
         <div key={`${gi}-${g.label}`}>
           {g.label && (
@@ -150,7 +150,8 @@ export function SettingsNav({ groups, pathname }: { groups: SettingsNavGroup[]; 
                     href={item.href}
                     aria-current={active ? 'page' : undefined}
                     className={cn(
-                      'flex min-h-[52px] items-center gap-2.5 px-[18px] py-2.5 text-sm font-medium text-ink-2 transition-colors hover:bg-lilac-soft',
+                      // パソコンの左ペインは 1 行（2026-09-28 Ronnie「もっとスリムに」）。スマホの設定トップは説明つきの一覧
+                      'flex min-h-[52px] items-center gap-2.5 px-[18px] py-2.5 text-sm font-medium text-ink-2 transition-colors hover:bg-lilac-soft lg:min-h-[40px] lg:px-3.5 lg:py-1.5',
                       active && 'bg-iris-soft font-bold text-royal hover:bg-iris-soft',
                       hubActive && 'lg:bg-iris-soft lg:font-bold lg:text-royal lg:hover:bg-iris-soft'
                     )}
@@ -164,8 +165,11 @@ export function SettingsNav({ groups, pathname }: { groups: SettingsNavGroup[]; 
                       aria-hidden
                     />
                     <span className="min-w-0 flex-1 leading-tight">
-                      <span className="block">{item.label}</span>
-                      <span className="en-sub">{item.en}</span>
+                      <span className="block truncate">
+                        {item.label}
+                        <span className="en-inline hidden text-[10.5px] lg:inline">{item.en}</span>
+                      </span>
+                      <span className="en-sub lg:hidden">{item.en}</span>
                       <span className="mt-0.5 block text-xs font-normal text-ink-3 lg:hidden">{item.description}</span>
                     </span>
                     <ChevronRight
@@ -203,7 +207,7 @@ export function SettingsShell({ groups, children }: { groups: SettingsNavGroup[]
         <p className="mt-0.5 text-[13px] text-ink-3">店舗・メニュー・機器・スタッフの設定（オーナー・店長のみ変更可）</p>
       </div>
 
-      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[270px_minmax(0,1fr)]">
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[228px_minmax(0,1fr)]">
         <aside className={cn('print:hidden', isHub ? 'block' : 'hidden lg:block')}>
           <div className="ui-card overflow-hidden border border-line bg-white">
             <SettingsNav groups={groups} pathname={pathname} />
