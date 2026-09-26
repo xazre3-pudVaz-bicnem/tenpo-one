@@ -25,6 +25,7 @@ const ja = {
     addAria: (name: string) => `${name}をカートに追加`,
     note: 'アレルギーやお料理についてはスタッフにお声がけください。',
     taxIncluded: '税込',
+    planOver: '飲み放題・食べ放題のお時間が終了しました。延長・追加のご注文はスタッフにお声がけください。',
   },
   itemSheet: {
     quantityLabel: '数量',
@@ -111,6 +112,7 @@ const en: QrStrings = {
     addAria: (name: string) => `Add ${name} to cart`,
     note: 'Please ask our staff about allergies or any dish.',
     taxIncluded: 'tax incl.',
+    planOver: 'Your all-you-can-eat / drink time has ended. Please ask our staff to extend or order more.',
   },
   itemSheet: {
     quantityLabel: 'Quantity',

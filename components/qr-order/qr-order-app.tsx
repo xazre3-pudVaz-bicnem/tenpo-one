@@ -125,6 +125,7 @@ export function QrOrderApp({
   menu,
   pages,
   reservedCourse,
+  planOver = false,
 }: {
   storeSlug: string;
   tableToken: string;
@@ -132,6 +133,8 @@ export function QrOrderApp({
   /** メニューブックのページ（タブのまとめ方。飲み放題・コースの卓は飲み放題のページが先頭） */
   pages?: QrMenuPage[] | null;
   reservedCourse?: ReservedCourse | null;
+  /** プラン（飲み放題等）の時間が終わっているか。終わっていたらお客様にその旨を出す */
+  planOver?: boolean;
 }) {
   const [tab, setTab] = useState<Tab>('menu');
   const [locale, setLocale] = useState<QrLocale>('ja');
@@ -309,6 +312,7 @@ export function QrOrderApp({
               cart={cart}
               onSelectItem={setSelectedItem}
               onQuickAdd={(item) => addToCart(item, 1, '', [])}
+              planOver={planOver}
             />
           )}
           {tab === 'cart' && (

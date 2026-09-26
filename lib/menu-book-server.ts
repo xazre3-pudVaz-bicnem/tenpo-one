@@ -1,4 +1,5 @@
 import 'server-only';
+import { toMs } from './plan-time';
 import type { DynamicPriceRule } from './dynamic-pricing';
 import { loadDynamicRules } from './dynamic-pricing-server';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -88,6 +89,11 @@ export async function loadQrMenuBook(
   stationById: Map<string, string | null>;
   /** 商品ID → 本日の残数（売り切り設定のある商品だけ。2026-09-25 店舗要望） */
   menuStock: Map<string, MenuStockState>;
+  /**
+   * プラン（飲み放題・食べ放題・コース）の終了予定（ms）。時間制でなければ null。
+   * これを過ぎた卓では QR からプランの中身を注文できないようにする（lib/plan-time.ts）。
+   */
+  planEndsAtMs: number | null;
 }> {
   try {
     const admin = createAdminClient();
@@ -99,12 +105,19 @@ export async function loadQrMenuBook(
       .eq('status', 'active')
       .maybeSingle();
     if (!table)
-      return { book: emptyMenuBook(), plan: NO_PLAN, dynamicRules: [], stationById: new Map(), menuStock: new Map() };
+      return {
+        book: emptyMenuBook(),
+        plan: NO_PLAN,
+        dynamicRules: [],
+        stationById: new Map(),
+        menuStock: new Map(),
+        planEndsAtMs: null,
+      };
     const [book, { data: order }, dynamicRules, { data: categoryRows }, menuStock] = await Promise.all([
       loadMenuBook(admin, table.store_id),
       admin
         .from('orders')
-        .select('id')
+        .select('id, reservation_id')
         .eq('table_id', table.id)
         .eq('status', 'open')
         .order('opened_at', { ascending: false })
@@ -121,12 +134,29 @@ export async function loadQrMenuBook(
       loadMenuStock(admin, table.store_id),
     ]);
     const plan = order ? await loadOrderPlanState(admin, order.id) : NO_PLAN;
+    // 終了予定は予約（ウォークイン含む）の end_at。席の時間はここで持っている（lib/seat-time.ts）
+    let planEndsAtMs: number | null = null;
+    if (order?.reservation_id) {
+      const { data: rsv } = await admin
+        .from('reservations')
+        .select('end_at')
+        .eq('id', order.reservation_id)
+        .maybeSingle();
+      planEndsAtMs = toMs((rsv as { end_at: string | null } | null)?.end_at ?? null);
+    }
     const stationById = new Map<string, string | null>(
       ((categoryRows ?? []) as { id: string; station: string | null }[]).map((c) => [c.id, c.station])
     );
-    return { book, plan, dynamicRules, stationById, menuStock };
+    return { book, plan, dynamicRules, stationById, menuStock, planEndsAtMs };
   } catch (e) {
     console.error('[menu-book] qr context failed', e instanceof Error ? e.message : e);
-    return { book: emptyMenuBook(), plan: NO_PLAN, dynamicRules: [], stationById: new Map(), menuStock: new Map() };
+    return {
+      book: emptyMenuBook(),
+      plan: NO_PLAN,
+      dynamicRules: [],
+      stationById: new Map(),
+      menuStock: new Map(),
+      planEndsAtMs: null,
+    };
   }
 }

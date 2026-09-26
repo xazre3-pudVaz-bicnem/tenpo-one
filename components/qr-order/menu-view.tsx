@@ -21,6 +21,7 @@ export function MenuView({
   cart,
   onSelectItem,
   onQuickAdd,
+  planOver = false,
 }: {
   tableName: string;
   categories: QrMenuCategory[];
@@ -29,6 +30,8 @@ export function MenuView({
   cart: CartLine[];
   onSelectItem: (item: QrMenuItem) => void;
   onQuickAdd: (item: QrMenuItem) => void;
+  /** プラン（飲み放題等）の時間が終わっているか */
+  planOver?: boolean;
 }) {
   const qrStrings = useQrStrings();
   const locale = useQrLocale();
@@ -131,6 +134,11 @@ export function MenuView({
         )}
       </div>
 
+      {planOver && (
+        <p className="mx-3 mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          {qrStrings.menu.planOver}
+        </p>
+      )}
       <QrNote className="pt-3">{qrStrings.menu.note}</QrNote>
     </div>
   );
