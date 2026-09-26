@@ -43,6 +43,16 @@ export function MenuView({
 
   const [activeId, setActiveId] = useState<string | null>(null);
   const active = tabs.find((t) => t.id === activeId) ?? tabs[0] ?? null;
+  // ページの中のカテゴリ（SOUP・SALAD…）を小さなタブで絞る（2026-09-25 店舗要望「タブがあるとオーダーしやすい」）。
+  // null＝全部。ページを切り替えたら「すべて」に戻す
+  const [sectionId, setSectionId] = useState<string | null>(null);
+  const [sectionPage, setSectionPage] = useState<string | null>(active?.id ?? null);
+  if (active && sectionPage !== active.id) {
+    setSectionPage(active.id);
+    setSectionId(null);
+  }
+  const visibleSections =
+    active && sectionId ? active.sections.filter((c) => c.id === sectionId) : (active?.sections ?? []);
   /** タブの名前（ページの名前・おすすめ、無ければカテゴリ名を言語に合わせてつなぐ） */
   const tabLabel = (t: QrMenuTab) =>
     t.name ?? t.sections.map((c) => localizedName(locale, c.name, c.name_en)).join('・');
@@ -107,10 +117,41 @@ export function MenuView({
           <span className="shrink-0 font-num text-[10px] text-ink-3">{qrStrings.menu.countSuffix(active.itemCount)}</span>
         </div>
 
+        {/* カテゴリのタブ（ページに2つ以上あるときだけ）。押すとそのカテゴリだけに絞る */}
+        {active.sections.length > 1 && (
+          <div className="sticky top-0 z-10 flex gap-1.5 overflow-x-auto border-b border-line bg-white px-2.5 py-2 [scrollbar-width:none]">
+            <button
+              type="button"
+              aria-pressed={sectionId === null}
+              onClick={() => setSectionId(null)}
+              className={cn(
+                'shrink-0 rounded-full border px-3 py-1.5 text-[11px] font-bold',
+                sectionId === null ? 'border-iris bg-iris text-white' : 'border-line bg-white text-ink-2'
+              )}
+            >
+              {qrStrings.menu.allSections}
+            </button>
+            {active.sections.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                aria-pressed={sectionId === c.id}
+                onClick={() => setSectionId(c.id)}
+                className={cn(
+                  'shrink-0 rounded-full border px-3 py-1.5 text-[11px] font-bold',
+                  sectionId === c.id ? 'border-iris bg-iris text-white' : 'border-line bg-white text-ink-2'
+                )}
+              >
+                {localizedName(locale, c.name, c.name_en)}
+              </button>
+            ))}
+          </div>
+        )}
+
         {active.itemCount === 0 ? (
           <QrEmpty>{qrStrings.menu.categoryEmpty}</QrEmpty>
         ) : (
-          active.sections.map((section) => (
+          visibleSections.map((section) => (
             <section key={section.id}>
               {active.sections.length > 1 && (
                 <h3 className="flex items-center gap-2 px-3 pb-2 pt-1 text-[12px] font-bold text-[#5e4777]">

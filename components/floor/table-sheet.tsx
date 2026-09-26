@@ -9,6 +9,9 @@ import { useToast } from '@/components/ui/toast';
 import { yen } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { nextReservation, type TableView } from './types';
+import { SeatTimeDialog } from '@/components/pos/seat-time-dialog';
+import { jstHm, type SeatCourseOption } from '@/lib/seat-time';
+import type { SeatTimeInput } from '@/app/app/pos/actions';
 
 /** 着席（ファーストオーダー）のときに決めるコース・時間 */
 export interface WalkInSeatOptions {
@@ -81,6 +84,8 @@ export function TableSheet({
   setPaymentMemoAction,
   printExpoSlipAction,
   printSelectedItemsAction,
+  seatCourses = [],
+  setSeatTimeAction,
 }: {
   table: TableView | null;
   /** 押したテーブルの画面上の位置。その近くに小さく出す */
@@ -107,6 +112,9 @@ export function TableSheet({
   printExpoSlipAction: (orderId: string) => Promise<{ ok: boolean; error?: string }>;
   /** 選択印刷 */
   printSelectedItemsAction: (orderId: string, itemIds: string[]) => Promise<{ ok: boolean; error?: string }>;
+  /** 席の時間・コース（卓のポップアップから直す。2026-09-25 店舗要望 FULL MOoN 御茶ノ水） */
+  seatCourses?: SeatCourseOption[];
+  setSeatTimeAction?: (orderId: string, input: SeatTimeInput) => Promise<void>;
 }) {
   const router = useRouter();
   const popRef = useRef<HTMLDivElement>(null);
@@ -132,6 +140,8 @@ export function TableSheet({
   const [groupPick, setGroupPick] = useState<string[] | null>(null);
   /** 着席中の卓で開いているパネル（合算・選択印刷・お客様情報・支払メモ） */
   const [panel, setPanel] = useState<'merge' | 'print' | 'guest' | 'memo' | null>(null);
+  /** 席の時間・コースのダイアログ */
+  const [seatTimeOpen, setSeatTimeOpen] = useState(false);
   const [printPick, setPrintPick] = useState<string[]>([]);
   const [memoText, setMemoText] = useState('');
   const [guestEdit, setGuestEdit] = useState<number | null>(null);
@@ -357,6 +367,17 @@ export function TableSheet({
                 }}
               />
             </div>
+            {/* 席の時間・コース: 飲み放題の延長や、間違えた時間をここで直す（レジの伝票画面と同じダイアログ） */}
+            {setSeatTimeAction && table.order && (
+              <div className="mt-1.5 grid grid-cols-1">
+                <PopBtn
+                  ja={`時間の変更　${jstHm(table.order.openedAtMs)}〜${jstHm(table.order.endAtMs)}`}
+                  en="Seat time / course"
+                  disabled={pending || !selected}
+                  onClick={() => setSeatTimeOpen(true)}
+                />
+              </div>
+            )}
 
             {/* テーブル合算: お客様が入っている他の卓を選ぶと、その伝票がこの卓の伝票にまとまる */}
             {panel === 'merge' && (
@@ -673,6 +694,15 @@ export function TableSheet({
         )}
       </div>
       </div>
+      {seatTimeOpen && selected && table.order && setSeatTimeAction && (
+        <SeatTimeDialog
+          onClose={() => setSeatTimeOpen(false)}
+          orderId={selected.id}
+          current={{ startMs: table.order.openedAtMs, endMs: table.order.endAtMs, courseId: table.order.courseId }}
+          courses={seatCourses}
+          setSeatTimeAction={setSeatTimeAction}
+        />
+      )}
     </div>
   );
 }

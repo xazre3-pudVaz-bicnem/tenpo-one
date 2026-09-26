@@ -11,6 +11,8 @@ import { TableCard } from './table-card';
 import { ReservationPanel } from './reservation-panel';
 import { useNow } from './use-now';
 import type { WalkInSeatOptions } from './table-sheet';
+import type { SeatCourseOption } from '@/lib/seat-time';
+import type { SeatTimeInput } from '@/app/app/pos/actions';
 import { initialFloorFilter, stepFloor, swipeDirection } from '@/lib/floor-nav';
 import {
   TILE_LABEL,
@@ -63,6 +65,8 @@ export function FloorBoard({
   setPaymentMemoAction,
   printExpoSlipAction,
   printSelectedItemsAction,
+  seatCourses = [],
+  setSeatTimeAction,
   releaseFinishedCleaningAction,
   topSlot,
   bottomSlot,
@@ -89,6 +93,9 @@ export function FloorBoard({
   setPaymentMemoAction: (orderId: string, memo: string) => Promise<{ error?: string }>;
   printExpoSlipAction: (orderId: string) => Promise<{ ok: boolean; error?: string }>;
   printSelectedItemsAction: (orderId: string, itemIds: string[]) => Promise<{ ok: boolean; error?: string }>;
+  /** 席の時間・コースを卓のポップアップから直す（2026-09-25 店舗要望） */
+  seatCourses?: SeatCourseOption[];
+  setSeatTimeAction?: (orderId: string, input: SeatTimeInput) => Promise<void>;
   /** テーブルの上に出すもの（テイクアウト）。右のご予約は一番上から出したいのでここに入れる */
   topSlot?: ReactNode;
   /** テーブルの下に出すもの（色の見方）。上に置くとテーブルが下がるので一番下に置く */
@@ -348,6 +355,8 @@ export function FloorBoard({
         setPaymentMemoAction={setPaymentMemoAction}
         printExpoSlipAction={printExpoSlipAction}
         printSelectedItemsAction={printSelectedItemsAction}
+        seatCourses={seatCourses}
+        setSeatTimeAction={setSeatTimeAction}
         allTables={tables}
       />
     </div>

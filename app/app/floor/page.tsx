@@ -18,7 +18,7 @@ import type {
   UpcomingReservation,
 } from '@/components/floor/types';
 import { saveTableGroup } from './group-actions';
-import { mergeOrders, setGuestCount, setPaymentMemo } from '@/app/app/pos/actions';
+import { mergeOrders, setGuestCount, setPaymentMemo, setSeatTime } from '@/app/app/pos/actions';
 import { enqueueExpoSlipPrint, enqueueSelectedItemsPrint } from '@/app/app/pos/print-actions';
 import { startWalkIn, goToOrder, completeCleaning, setTableAvailability, releaseFinishedCleaning } from './actions';
 
@@ -78,6 +78,7 @@ interface OrderRow {
       guest_name: string;
       start_at: string | null;
       end_at: string;
+      course_id: string | null;
       menu_items: One<{
         duration_minutes: number | null;
         course_includes_drinks: boolean | null;
@@ -141,7 +142,7 @@ export default async function FloorPage() {
         .select(
           `id, order_no, table_id, opened_at, guest_count, total, clerk_name,
            customers(name, visit_count),
-           reservations(guest_name, created_via, start_at, end_at, reservation_sources(name),
+           reservations(guest_name, created_via, start_at, end_at, course_id, reservation_sources(name),
              menu_items(duration_minutes, course_includes_drinks, course_includes_ayce))`
         )
         .eq('store_id', store.id)
@@ -228,6 +229,7 @@ export default async function FloorPage() {
       clerkName: o.clerk_name ?? prev?.clerkName ?? null,
       course: courseInfo ?? prev?.course ?? null,
       endAtMs: prev ? Math.max(prev.endAtMs, endAtMs) : endAtMs,
+      courseId: resv?.course_id ?? prev?.courseId ?? null,
       // 会計できない伝票が卓に残らないよう、卓のポップアップからすべての伝票を開けるようにする
       slips: [...(prev?.slips ?? []), slip],
     });
@@ -267,6 +269,19 @@ export default async function FloorPage() {
     upcoming: upcomingByTable.get(t.id) ?? [],
     groupTableIds: groupOfTable(tableGroups, t.id)?.tableIds ?? [],
   }));
+
+  // 席の時間・コースを卓のポップアップから直すときに選ぶコース（2026-09-25 店舗要望）
+  const { data: courseRows } = await supabase
+    .from('menu_items')
+    .select('id, name, duration_minutes')
+    .eq('organization_id', ctx.organizationId)
+    .or(`store_id.is.null,store_id.eq.${store.id}`)
+    .eq('status', 'active')
+    .eq('item_type', 'course')
+    .order('sort_order');
+  const seatCourses = ((courseRows ?? []) as { id: string; name: string; duration_minutes: number | null }[]).map(
+    (m) => ({ id: m.id, name: m.name, durationMinutes: m.duration_minutes ?? null })
+  );
 
   // 右パネル: ウォークイン（直接来店）は予約ではないので除外
   const panel: PanelReservation[] = reservationsToday
@@ -320,6 +335,8 @@ export default async function FloorPage() {
           setPaymentMemoAction={setPaymentMemo}
           printExpoSlipAction={enqueueExpoSlipPrint}
           printSelectedItemsAction={enqueueSelectedItemsPrint}
+          seatCourses={seatCourses}
+          setSeatTimeAction={setSeatTime}
           releaseFinishedCleaningAction={releaseFinishedCleaning}
           bottomSlot={<Legend />}
         />
