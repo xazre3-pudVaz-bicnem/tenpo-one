@@ -2,7 +2,7 @@ import { requireMember } from '@/lib/auth';
 import { can } from '@/lib/permissions';
 import { featureForRoute } from '@/lib/features';
 import { canWriteAccounting } from '@/components/accounting/roles';
-import { SettingsShell, type SettingsNavGroup, type SettingsNavItem } from '@/components/settings/settings-nav';
+import { SettingsShell, type SettingsIconKey, type SettingsNavGroup, type SettingsNavItem } from '@/components/settings/settings-nav';
 
 type Row = SettingsNavItem & { visible: boolean };
 
@@ -15,50 +15,39 @@ export default async function SettingsLayout({ children }: { children: React.Rea
     return !f || !ctx.disabledFeatures.has(f);
   };
 
-  // メニューの中の画面（左メニューには出さず、メニュー系の画面の上にタブで出す）
-  const menuChildrenAll: Row[] = [
-    { href: '/app/settings/plans', label: 'プラン', en: 'Plans', icon: 'plans', description: 'コース・飲み放題・食べ放題の価格と時間', visible: can(role, 'menu.manage') },
-    { href: '/app/settings/options', label: 'オプション', en: 'Options', icon: 'options', description: 'サイズ・トッピング等の選択肢と追加料金', visible: true },
-    { href: '/app/settings/categories', label: 'カテゴリ', en: 'Categories', icon: 'categories', description: 'カテゴリの追加・名前・色と、キッチン／ドリンク／焼き場への振り分け', visible: can(role, 'menu.manage') },
-    { href: '/app/settings/menu-book', label: 'メニューブック', en: 'Menu book', icon: 'menubook', description: 'ハンディ・お客様QRのカテゴリの並び順と出し方、プランで出すカテゴリ', visible: can(role, 'menu.manage') },
-    { href: '/app/settings/menu-bulk', label: '一括編集', en: 'Bulk edit', icon: 'bulk', description: '商品名・カテゴリ・価格・表示・売切を表でまとめて変更', visible: can(role, 'menu.manage') },
-    { href: '/app/settings/dynamic-pricing', label: 'ダイナミックプライシング', en: 'Dynamic pricing', icon: 'dynamic', description: '曜日・時間帯で値段を自動で変える（ハッピーアワー・深夜料金）', visible: can(role, 'menu.manage') },
-  ];
-  const menuChildren = menuChildrenAll.filter((r) => r.visible);
-  const menuParent: Row = {
-    href: '/app/settings/menu',
-    label: 'メニュー',
-    en: 'Menu',
-    icon: 'menu',
-    description: '商品・プラン・オプション・カテゴリ・メニューブック・一括編集・ダイナミックプライシング',
-    visible: can(role, 'menu.manage'),
-    exact: true,
-    children: menuChildren.map(({ visible: _v, ...c }) => c),
-  };
-  // メニューを触れない役割（オプションだけ触れる等）は、中の画面をそのまま並べる
-  const menuRows: Row[] = menuParent.visible ? [menuParent] : menuChildren;
-
-  const groups: { label: string; en: string; rows: Row[] }[] = [
+  // 各グループを「まとめ」1つにする（2026-09-27 Ronnie「設定は全部メニューみたいにまとめてきれいに」）。
+  // 左メニューには 店舗／メニュー／デバイス管理／予約・顧客／会計／運用・管理 の6つだけ。中の画面は上のタブで切り替える
+  const groups: { label: string; en: string; icon: SettingsIconKey; rows: Row[] }[] = [
     {
       label: '店舗',
       en: 'Store',
+      icon: 'store',
       rows: [
         { href: '/app/settings/store', label: '店舗情報', en: 'Store', icon: 'store', description: '名称・住所・連絡先・紹介文・公開予約URL', visible: true, hubDefault: true },
-        { href: '/app/settings/company', label: '企業情報', en: 'Company', icon: 'company', description: '会社名・住所・連絡先・請求情報の管理', visible: can(role, 'org.settings') },
         { href: '/app/settings/hours', label: '営業時間・休業日', en: 'Hours', icon: 'hours', description: '曜日別の営業時間、定休日、臨時休業の設定', visible: true },
         { href: '/app/settings/clerks', label: 'POS担当者', en: 'Clerks', icon: 'clerks', description: '会計時に選ぶ担当者名の登録（アカウント不要）', visible: true },
+        { href: '/app/settings/company', label: '企業情報', en: 'Company', icon: 'company', description: '会社名・住所・連絡先・請求情報の管理', visible: can(role, 'org.settings') },
       ],
     },
     {
-      // 2026-09-23 dinii と同じく メニュー／プラン／オプション／カテゴリ を別の画面に分けた（全店舗共通）。
-      // 2026-09-27 Ronnie「全部メニューの中に入れたほうがきれい」→ 左には「メニュー」だけ。中の画面は上のタブで切り替える
+      // 2026-09-23 dinii と同じく メニュー／プラン／オプション／カテゴリ を別の画面に分けた（全店舗共通）
       label: 'メニュー',
       en: 'Menu',
-      rows: menuRows,
+      icon: 'menu',
+      rows: [
+        { href: '/app/settings/menu', label: 'メニュー', en: 'Menu', icon: 'menu', description: '単品の商品の登録、価格、英語名、売切管理', visible: can(role, 'menu.manage'), exact: true },
+        { href: '/app/settings/plans', label: 'プラン', en: 'Plans', icon: 'plans', description: 'コース・飲み放題・食べ放題の価格と時間', visible: can(role, 'menu.manage') },
+        { href: '/app/settings/options', label: 'オプション', en: 'Options', icon: 'options', description: 'サイズ・トッピング等の選択肢と追加料金', visible: true },
+        { href: '/app/settings/categories', label: 'カテゴリ', en: 'Categories', icon: 'categories', description: 'カテゴリの追加・名前・色と、キッチン／ドリンク／焼き場への振り分け', visible: can(role, 'menu.manage') },
+        { href: '/app/settings/menu-book', label: 'メニューブック', en: 'Menu book', icon: 'menubook', description: 'ハンディ・お客様QRのカテゴリの並び順と出し方、プランで出すカテゴリ', visible: can(role, 'menu.manage') },
+        { href: '/app/settings/menu-bulk', label: '一括編集', en: 'Bulk edit', icon: 'bulk', description: '商品名・カテゴリ・価格・表示・売切を表でまとめて変更', visible: can(role, 'menu.manage') },
+        { href: '/app/settings/dynamic-pricing', label: 'ダイナミックプライシング', en: 'Dynamic pricing', icon: 'dynamic', description: '曜日・時間帯で値段を自動で変える（ハッピーアワー・深夜料金）', visible: can(role, 'menu.manage') },
+      ],
     },
     {
       label: 'デバイス管理',
-      en: 'Devices & management',
+      en: 'Devices',
+      icon: 'printers',
       rows: [
         // メニュー一覧から移したので、設定の中から開けるようにする（2026-09-23 要望）
         { href: '/app/pos/settings', label: 'レジの設定', en: 'Register settings', icon: 'printers', description: '厨房伝票・品切れ・メニュー・QR・ハンディなど、レジで変える設定', visible: can(role, 'pos.order'), matchActive: false },
@@ -71,15 +60,18 @@ export default async function SettingsLayout({ children }: { children: React.Rea
     {
       label: '予約・顧客',
       en: 'Booking',
+      icon: 'booking',
       rows: [
+        { href: '/app/settings/reservation-book', label: 'ご予約台帳設定', en: 'Reservation book', icon: 'booking', description: 'グルメサイト（食べログ・ホットペッパー・ぐるなび…）の予約を自動で台帳に取り込む', visible: true },
+        { href: '/app/settings/booking', label: '予約受付ルール', en: 'Booking rules', icon: 'booking', description: '予約枠間隔・受付期間・キャンセル期限', visible: true },
         { href: '/app/settings/tables', label: 'テーブル・フロア', en: 'Tables', icon: 'tables', description: 'フロア構成、テーブルの席数・種別・利用停止', visible: true, exact: true },
         { href: '/app/staff', label: 'スタッフ・権限', en: 'Staff', icon: 'staff', description: 'スタッフの招待・役割（権限）・利用停止', visible: can(role, 'staff.manage') && featureOn('/app/staff'), matchActive: false },
-        { href: '/app/settings/booking', label: '予約受付ルール', en: 'Booking rules', icon: 'booking', description: '予約枠間隔・受付期間・キャンセル期限', visible: true },
       ],
     },
     {
       label: '会計',
       en: 'Payments',
+      icon: 'payments',
       rows: [
         { href: '/app/settings/payments', label: '決済・端末', en: 'Payments', icon: 'payments', description: 'Stripe接続・決済端末・予約事前決済', visible: true },
         { href: '/app/settings/tax', label: '税率', en: 'Tax', icon: 'tax', description: '税率マスタの登録・既定税率の設定', visible: true },
@@ -90,6 +82,7 @@ export default async function SettingsLayout({ children }: { children: React.Rea
     {
       label: '運用・管理',
       en: 'Operations',
+      icon: 'integrations',
       rows: [
         { href: '/app/settings/loyalty', label: '会員・ポイント', en: 'Loyalty', icon: 'loyalty', description: 'ポイント付与率・利用設定（例: 100円=1pt）', visible: can(role, 'org.settings') },
         { href: '/app/settings/alerts', label: '異常検知の閾値', en: 'Alerts', icon: 'alerts', description: '現金差異・値引率・原価率・人件費率などの閾値', visible: true },
@@ -100,13 +93,25 @@ export default async function SettingsLayout({ children }: { children: React.Rea
     },
   ];
 
-  const navGroups: SettingsNavGroup[] = groups
-    .map((g) => ({
-      label: g.label,
-      en: g.en,
-      items: g.rows.filter((r) => r.visible).map(({ visible: _visible, ...item }) => item),
-    }))
-    .filter((g) => g.items.length > 0);
+  const hubs: SettingsNavItem[] = groups
+    .map((g) => {
+      const kids = g.rows.filter((r) => r.visible).map(({ visible: _visible, ...item }) => item);
+      if (kids.length === 0) return null;
+      const hub: SettingsNavItem = {
+        href: kids[0].href,
+        label: g.label,
+        en: g.en,
+        icon: g.icon,
+        description: kids.map((k) => k.label).join('・'),
+        hub: true,
+        children: kids,
+        hubDefault: kids.some((k) => k.hubDefault),
+      };
+      return hub;
+    })
+    .filter((h): h is SettingsNavItem => h !== null);
+  // 見出しなしの1グループ（まとめ6つだけの一覧）
+  const navGroups: SettingsNavGroup[] = [{ label: '', en: '', items: hubs }];
 
   return <SettingsShell groups={navGroups}>{children}</SettingsShell>;
 }

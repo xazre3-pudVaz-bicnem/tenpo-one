@@ -60,9 +60,15 @@ export interface SettingsNavItem {
    * 左メニューには親だけを出し、親か子を開いているときは画面の上に親＋子のタブを出す。
    */
   children?: SettingsNavItem[];
+  /**
+   * true なら自分の画面を持たない「まとめ」（店舗・デバイス管理…）。href は最初の子の画面で、
+   * 上のタブには子だけを並べる（2026-09-27 Ronnie「設定は全部メニューみたいにまとめてきれいに」）。
+   */
+  hub?: boolean;
 }
 
 export interface SettingsNavGroup {
+  /** 空なら見出しを出さない */
   label: string;
   en: string;
   items: SettingsNavItem[];
@@ -79,8 +85,9 @@ function isSelf(pathname: string, item: SettingsNavItem) {
   return pathname === item.href || pathname.startsWith(item.href + '/');
 }
 
-/** 自分か、自分の中の画面（children）を開いているか */
+/** 自分か、自分の中の画面（children）を開いているか（まとめは子で判定する） */
 function isActive(pathname: string, item: SettingsNavItem): boolean {
+  if (item.hub) return item.children?.some((c) => isActive(pathname, c)) ?? false;
   return isSelf(pathname, item) || (item.children?.some((c) => isActive(pathname, c)) ?? false);
 }
 
@@ -88,7 +95,10 @@ function isActive(pathname: string, item: SettingsNavItem): boolean {
 export function SettingsSubTabs({ item, pathname }: { item: SettingsNavItem; pathname: string }) {
   const kids = item.children ?? [];
   const childOn = kids.some((c) => isActive(pathname, c));
-  const tabs = [{ ...item, on: !childOn && isSelf(pathname, item) }, ...kids.map((c) => ({ ...c, on: isActive(pathname, c) }))];
+  const tabs = [
+    ...(item.hub ? [] : [{ ...item, on: !childOn && isSelf(pathname, item) }]),
+    ...kids.map((c) => ({ ...c, on: isActive(pathname, c) })),
+  ];
   return (
     <nav aria-label={`${item.label}の設定`} className="mb-4 flex gap-1.5 overflow-x-auto rounded-2xl border border-line bg-white p-1.5 [scrollbar-width:none]">
       {tabs.map((t) => {
@@ -119,13 +129,15 @@ export function SettingsSubTabs({ item, pathname }: { item: SettingsNavItem; pat
 export function SettingsNav({ groups, pathname }: { groups: SettingsNavGroup[]; pathname: string }) {
   return (
     <nav aria-label="設定メニュー" className="py-1.5">
-      {groups.map((g) => (
-        <div key={g.label}>
-          <p className="px-[18px] pb-1 pt-2.5 text-[11px] font-bold tracking-[0.04em] text-ink-3">
-            {g.label}
-            <span className="mx-1 font-normal text-wisteria">／</span>
-            <span className="font-num">{g.en}</span>
-          </p>
+      {groups.map((g, gi) => (
+        <div key={`${gi}-${g.label}`}>
+          {g.label && (
+            <p className="px-[18px] pb-1 pt-2.5 text-[11px] font-bold tracking-[0.04em] text-ink-3">
+              {g.label}
+              <span className="mx-1 font-normal text-wisteria">／</span>
+              <span className="font-num">{g.en}</span>
+            </p>
+          )}
           <ul>
             {g.items.map((item) => {
               const Icon = ICONS[item.icon];

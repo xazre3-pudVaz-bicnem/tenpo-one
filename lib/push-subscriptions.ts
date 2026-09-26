@@ -101,6 +101,7 @@ const VIA_LABEL: Record<string, string> = {
   phone: '電話予約',
   walk_in: '来店',
   manual: '予約登録',
+  gourmet_mail: 'グルメサイト予約',
 };
 
 export function createdViaLabel(createdVia: string | null | undefined): string {
