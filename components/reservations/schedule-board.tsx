@@ -83,13 +83,27 @@ const BAR_CLASS: Record<BarKind, string> = {
   unset: 'border-danger bg-white text-danger',
 };
 
-const SOURCE_SHORT: Record<string, string> = { web: 'WEB', phone: 'TEL', walk_in: '来店', manual: '手動' };
+const SOURCE_SHORT: Record<string, string> = { web: 'WEB', phone: 'TEL', manual: '手動' };
 
+/**
+ * 入り口（WEB・TEL・手動・食べログ…）の小さな印。
+ * ウォークインは名前が「ウォークイン 様」なので印は出さない（以前は赤い「来店」を出していて、
+ * 「いま来店中」と読めてしまった。2026-09-26 店舗要望）。
+ */
 function sourceBadge(r: ReservationListRow): string | null {
-  if (r.createdVia === 'phone' || r.createdVia === 'walk_in' || r.createdVia === 'manual') return SOURCE_SHORT[r.createdVia];
+  if (r.createdVia === 'walk_in') return null;
+  if (r.createdVia === 'phone' || r.createdVia === 'manual') return SOURCE_SHORT[r.createdVia];
   if (r.sourceName) return r.sourceName.length <= 4 ? r.sourceName : r.sourceName.slice(0, 3);
   return SOURCE_SHORT[r.createdVia] ?? null;
 }
+
+/** いまの状態の印（来店中／会計中／退店）。バーの色と合わせて一目で分かるようにする */
+const STATUS_BADGE: Partial<Record<BarKind, { label: string; className: string }>> = {
+  arrived: { label: '来店', className: 'bg-iris text-white' },
+  in: { label: '来店中', className: 'bg-white text-royal' },
+  pay: { label: '会計中', className: 'bg-gold text-navy' },
+  out: { label: '退店', className: 'bg-[#8B83A0] text-white' },
+};
 
 interface Placed {
   r: ReservationListRow;
@@ -211,6 +225,9 @@ export function ScheduleBoard({
     const left = x(s) + 2;
     const width = Math.max(18, x(e) - x(s) - 4);
     const badge = sourceBadge(r);
+    // 会計した時刻（退店）。予定の終了時刻とは別に出す
+    let leftMin: number | null = r.leftAt ? jstMinutes(r.leftAt) : null;
+    if (leftMin !== null && leftMin < s) leftMin += 1440; // 日付をまたいで退店
     const sameDay = r.createdAt && r.createdVia !== 'walk_in' && jstDate(r.createdAt) === r.reservedDate;
     const filled = kind === 'in' || kind === 'pay';
     const extraTables = !unassignedRow && r.tableNames.length > 1 ? r.tableNames.join('+') : null;
@@ -278,11 +295,21 @@ export function ScheduleBoard({
               {r.partySize}
               <span className="font-sans">名</span>
             </span>
+            {STATUS_BADGE[kind] && (
+              <span
+                className={cn(
+                  'rounded-[5px] px-1.5 text-[10px] leading-[1.4] font-extrabold whitespace-nowrap',
+                  STATUS_BADGE[kind]!.className
+                )}
+              >
+                {STATUS_BADGE[kind]!.label}
+              </span>
+            )}
             {badge && (
               <span
                 className={cn(
-                  'rounded-[5px] px-1.5 font-[family-name:var(--font-num)] text-[10px] leading-[1.4] font-extrabold',
-                  filled ? 'bg-white/25 text-white' : 'bg-danger text-white'
+                  'rounded-[5px] px-1.5 font-[family-name:var(--font-num)] text-[10px] leading-[1.4] font-bold',
+                  filled ? 'bg-white/25 text-white' : kind === 'out' ? 'bg-white/60 text-ink-2' : 'bg-iris-soft text-royal'
                 )}
               >
                 {badge}
@@ -302,7 +329,11 @@ export function ScheduleBoard({
           </b>
           <span className="truncate text-[10.5px] whitespace-nowrap opacity-90">
             {r.guestName} 様{r.courseName ? `・${r.courseName}` : ''}
-            {extraTables ? `・${extraTables}` : ''}・<span className="tabular-nums">{hm(s)}〜{hm(e)}</span>
+            {extraTables ? `・${extraTables}` : ''}・
+            <span className="tabular-nums">
+              {hm(s)}〜{hm(e)}
+              {kind === 'out' && leftMin !== null && `（退店 ${hm(leftMin)}）`}
+            </span>
           </span>
         </span>
         {kind === 'pay' && (
@@ -535,8 +566,8 @@ export function ScheduleBoard({
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 font-medium text-ink-2">
           <Legend className="border-2 border-dashed border-ink-3 bg-white">仮予約</Legend>
           <Legend className="border-2 border-iris bg-white">来店待ち</Legend>
-          <Legend className="bg-iris">来店済み</Legend>
-          <Legend className="bg-[#CFC9DA]">退店</Legend>
+          <Legend className="bg-iris">来店中（着席）</Legend>
+          <Legend className="bg-[#CFC9DA]">退店（会計済み）</Legend>
           <Legend className="bg-danger">席未定</Legend>
           {bufferMinutes > 0 && <Legend className="board-buffer border border-line">清掃（{bufferMinutes}分）</Legend>}
           {isToday && <Legend className="bg-saffron">現在時刻</Legend>}

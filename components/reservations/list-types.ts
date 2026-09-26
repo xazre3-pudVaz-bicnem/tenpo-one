@@ -31,4 +31,6 @@ export interface ReservationListRow {
   isPrivateHire: boolean;
   /** 予約の受付日時（当日予約の判定用。取得していない画面では省略） */
   createdAt?: string;
+  /** 退店（会計）した時刻。伝票の closed_at。会計前・取得していない画面では null／省略 */
+  leftAt?: string | null;
 }
