@@ -26,6 +26,7 @@ const ja = {
     note: 'アレルギーやお料理についてはスタッフにお声がけください。',
     taxIncluded: '税込',
     planOver: '飲み放題・食べ放題のお時間が終了しました。延長・追加のご注文はスタッフにお声がけください。',
+    allSections: 'すべて',
   },
   itemSheet: {
     quantityLabel: '数量',
@@ -113,6 +114,7 @@ const en: QrStrings = {
     note: 'Please ask our staff about allergies or any dish.',
     taxIncluded: 'tax incl.',
     planOver: 'Your all-you-can-eat / drink time has ended. Please ask our staff to extend or order more.',
+    allSections: 'All',
   },
   itemSheet: {
     quantityLabel: 'Quantity',
