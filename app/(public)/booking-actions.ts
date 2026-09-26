@@ -1,7 +1,10 @@
 'use server';
 
 import { headers } from 'next/headers';
+import { after } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { pushNewReservation } from '@/lib/push-server';
 import { rateLimiter, RATE_LIMITS } from '@/lib/rate-limit';
 import { safePublicErrorCode } from '@/lib/observability';
 import type { CreateReservationResult } from '@/components/booking/types';
@@ -80,5 +83,34 @@ export async function createPublicReservation(
   });
 
   if (error) return { data: null, errorMessage: safePublicErrorCode(error.message, { route: 'booking:create_public_reservation' }) };
-  return { data: data as CreateReservationResult, errorMessage: null };
+  const result = data as CreateReservationResult;
+
+  // お店の端末（iPad・iPhone）へ「新しい予約」を知らせる（Web Push）。
+  // 返事を待たせないよう、レスポンスを返したあとに送る。失敗しても予約は成立している。
+  after(() => notifyStoreOfReservation(result.id));
+
+  return { data: result, errorMessage: null };
+}
+
+async function notifyStoreOfReservation(reservationId: string) {
+  try {
+    const admin = createAdminClient();
+    const { data: r } = await admin
+      .from('reservations')
+      .select('store_id, code, guest_name, party_size, start_at, created_via, stores(name)')
+      .eq('id', reservationId)
+      .maybeSingle();
+    if (!r) return;
+    const store = (Array.isArray(r.stores) ? r.stores[0] : r.stores) as { name: string } | null;
+    await pushNewReservation(r.store_id, {
+      storeName: store?.name ?? '',
+      guestName: r.guest_name,
+      partySize: r.party_size,
+      startAt: r.start_at,
+      code: r.code,
+      createdVia: r.created_via,
+    });
+  } catch (e) {
+    console.error('[booking] reservation notify failed', e instanceof Error ? e.message : e);
+  }
 }

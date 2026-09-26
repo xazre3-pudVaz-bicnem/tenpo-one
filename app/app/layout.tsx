@@ -18,6 +18,7 @@ import { ThemeBody } from '@/components/layout/theme-body';
 import { InstallPrompt } from '@/components/pwa/install-prompt';
 import { ClerkGate, type GateClerk } from '@/components/pos/clerk-gate';
 import { loadStoreClerks } from '@/lib/pos-clerks-server';
+import { ReservationAlert } from '@/components/notifications/reservation-alert';
 
 /** 店舗画面はブラウザのツールバー色も上部バー（濃紫）に合わせる */
 export const viewport = { themeColor: '#241436' };
@@ -109,6 +110,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <div className="theme-regi min-h-screen bg-lilac">
         {/* 上部バー（全幅）→ その下に左メニュー（固定）と本文 */}
         <TopBar ctx={ctx} unreadCount={unreadCount ?? 0} showMenuLink={posFullscreen} />
+        {/* 新しいネット予約のチャイム＋バナー（レジ・パソコンどの画面でも） */}
+        {ctx.currentStore && <ReservationAlert storeId={ctx.currentStore.id} ledgerHref="/app/reservations" />}
         {!posFullscreen && (
           <Sidebar
             tiles={tiles}

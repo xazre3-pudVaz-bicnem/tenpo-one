@@ -11,6 +11,8 @@ import { BookingSettingsForm } from '@/components/settings/booking-settings-form
 import { BookingUrlPanel } from '@/components/settings/booking-url-panel';
 import { StoreSlugEditor } from '@/components/settings/store-slug-editor';
 import { ReminderPanel } from '@/components/settings/reminder-panel';
+import { PushSubscribeButton } from '@/components/notifications/push-subscribe-button';
+import { pushSubscriptionsFrom } from '@/lib/push-subscriptions';
 
 export const metadata: Metadata = { title: '予約設定 | 設定' };
 
@@ -33,12 +35,14 @@ export default async function BookingSettingsPage() {
     supabase.from('stores').select('slug, booking_enabled').eq('id', targetStore.id).single(),
     supabase
       .from('store_settings')
-      .select('slot_minutes, default_stay_minutes, booking_cutoff_minutes, booking_window_days, max_party_size, cancel_deadline_hours, cleaning_buffer_minutes, booking_photo_url, booking_notes, cancellation_policy, reminder_enabled, reminder_hours_before')
+      .select('slot_minutes, default_stay_minutes, booking_cutoff_minutes, booking_window_days, max_party_size, cancel_deadline_hours, cleaning_buffer_minutes, booking_photo_url, booking_notes, cancellation_policy, reminder_enabled, reminder_hours_before, settings')
       .eq('store_id', targetStore.id)
       .maybeSingle(),
   ]);
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? '';
+  // 予約の通知を受け取る端末（store_settings.settings.pushSubscriptions）
+  const pushDevices = pushSubscriptionsFrom((settings?.settings as Record<string, unknown> | null) ?? {});
   const bookingUrl = `${siteUrl}/book/${store?.slug ?? ''}`;
 
   // 公開予約URLのQRコード（掲出用）。data URLはCSP img-src data:許可で表示可。
@@ -92,6 +96,13 @@ export default async function BookingSettingsPage() {
           公開URL・QRコードを表示するには、環境変数 <code className="font-mono">NEXT_PUBLIC_SITE_URL</code> の設定が必要です。
         </div>
       )}
+
+      <div className="mb-5">
+        <PushSubscribeButton />
+        <p className="mt-2 px-1 text-xs text-ink-3">
+          通知を受け取る端末：{pushDevices.length === 0 ? 'まだありません' : `${pushDevices.length}台（${pushDevices.map((d) => d.label ?? '端末').join('・')}）`}
+        </p>
+      </div>
 
       <BookingSettingsForm
         initial={{
