@@ -100,15 +100,16 @@ export function kitchenTicketLanguageFrom(settings: unknown): KitchenTicketLangu
 /**
  * 厨房伝票を出したときにブザーを鳴らすか（店舗設定 store_settings.settings.kitchenTicket.buzzer）。
  * 厨房は音がないと伝票が出たことに気付けないため（2026-09-25 店舗要望）。
- * 音はプリンター本体ではなく、ドロア／ブザー端子につないだブザーが鳴らす。
- *   none    … 鳴らさない（既定・これまでの動き）
- *   drawer1 … コネクタ1（Star: BEL / EPSON: 2番ピン）
+ * 音はプリンター本体ではなく、ドロア／ブザー端子につないだブザー（Star mC-Sound 等）が鳴らす。
+ *   none    … 鳴らさない
+ *   drawer1 … コネクタ1（Star: BEL / EPSON: 2番ピン）← 既定（2026-09-26 Ronnie「全店で鳴らす」。未設定の店舗も鳴る）
  *   drawer2 … コネクタ2（Star: SUB / EPSON: 5番ピン）
  * どちらの番号で鳴るかは配線しだいなので、鳴らなければもう一方を選ぶ。
+ * ブザーをつないでいない厨房機では信号を出しても何も起きない（厨房機にドロアはつながない前提）。
  */
 export type KitchenTicketBuzzer = 'none' | 'drawer1' | 'drawer2';
 
-export const DEFAULT_KITCHEN_TICKET_BUZZER: KitchenTicketBuzzer = 'none';
+export const DEFAULT_KITCHEN_TICKET_BUZZER: KitchenTicketBuzzer = 'drawer1';
 
 export const KITCHEN_TICKET_BUZZERS: KitchenTicketBuzzer[] = ['none', 'drawer1', 'drawer2'];
 
@@ -122,7 +123,7 @@ export function isKitchenTicketBuzzer(v: unknown): v is KitchenTicketBuzzer {
   return v === 'none' || v === 'drawer1' || v === 'drawer2';
 }
 
-/** store_settings.settings からブザー設定を読む。未設定・不明な値は既定（鳴らさない） */
+/** store_settings.settings からブザー設定を読む。未設定・不明な値は既定（コネクタ1で鳴らす） */
 export function kitchenTicketBuzzerFrom(settings: unknown): KitchenTicketBuzzer {
   const v = (settings as { kitchenTicket?: { buzzer?: unknown } } | null)?.kitchenTicket?.buzzer;
   return isKitchenTicketBuzzer(v) ? v : DEFAULT_KITCHEN_TICKET_BUZZER;
