@@ -55,6 +55,11 @@ export interface SettingsNavItem {
   exact?: boolean;
   /** 設定トップ（PC）で右ペインに概要を出している項目として強調する */
   hubDefault?: boolean;
+  /**
+   * この項目の中に入れる画面（2026-09-27 Ronnie「プラン・オプション・カテゴリ…は全部メニューの中に」）。
+   * 左メニューには親だけを出し、親か子を開いているときは画面の上に親＋子のタブを出す。
+   */
+  children?: SettingsNavItem[];
 }
 
 export interface SettingsNavGroup {
@@ -68,10 +73,46 @@ const HUB = '/app/settings';
 /** 設定の2ペイン枠を付けない画面（印刷専用など） */
 const BARE_PREFIXES = ['/app/settings/printers/test-print'];
 
-function isActive(pathname: string, item: SettingsNavItem) {
+function isSelf(pathname: string, item: SettingsNavItem) {
   if (item.matchActive === false) return false;
   if (item.exact) return pathname === item.href;
   return pathname === item.href || pathname.startsWith(item.href + '/');
+}
+
+/** 自分か、自分の中の画面（children）を開いているか */
+function isActive(pathname: string, item: SettingsNavItem): boolean {
+  return isSelf(pathname, item) || (item.children?.some((c) => isActive(pathname, c)) ?? false);
+}
+
+/** 親＋子のタブ（メニュー／プラン／オプション…）。親か子の画面の上に出す */
+export function SettingsSubTabs({ item, pathname }: { item: SettingsNavItem; pathname: string }) {
+  const kids = item.children ?? [];
+  const childOn = kids.some((c) => isActive(pathname, c));
+  const tabs = [{ ...item, on: !childOn && isSelf(pathname, item) }, ...kids.map((c) => ({ ...c, on: isActive(pathname, c) }))];
+  return (
+    <nav aria-label={`${item.label}の設定`} className="mb-4 flex gap-1.5 overflow-x-auto rounded-2xl border border-line bg-white p-1.5 [scrollbar-width:none]">
+      {tabs.map((t) => {
+        const Icon = ICONS[t.icon];
+        return (
+          <Link
+            key={t.href}
+            href={t.href}
+            aria-current={t.on ? 'page' : undefined}
+            className={cn(
+              'tap3d flex shrink-0 items-center gap-2 rounded-xl px-3.5 py-2 text-left leading-tight whitespace-nowrap',
+              t.on ? 'on-sunset text-white' : 'bg-white text-ink-2 hover:bg-lilac-soft'
+            )}
+          >
+            <Icon className={cn('h-[18px] w-[18px] shrink-0', t.on ? 'text-white' : 'text-saffron')} aria-hidden />
+            <span>
+              <span className="block text-[14px] font-bold">{t.label}</span>
+              <span className={cn('block font-num text-[10.5px] font-semibold', t.on ? 'text-white/80' : 'text-ink-3')}>{t.en}</span>
+            </span>
+          </Link>
+        );
+      })}
+    </nav>
+  );
 }
 
 /** 設定メニュー（左ペイン）。スマホの設定トップでは全幅の一覧として使い、説明文も表示する。 */
@@ -138,6 +179,8 @@ export function SettingsShell({ groups, children }: { groups: SettingsNavGroup[]
   const pathname = usePathname() ?? HUB;
   if (BARE_PREFIXES.some((p) => pathname.startsWith(p))) return <>{children}</>;
   const isHub = pathname === HUB;
+  // 中に画面を持つ項目（メニュー）を開いているときは、画面の上に親＋子のタブを出す
+  const parent = groups.flatMap((g) => g.items).find((i) => i.children?.length && isActive(pathname, i));
 
   return (
     <div className="flex flex-col gap-4">
@@ -159,6 +202,7 @@ export function SettingsShell({ groups, children }: { groups: SettingsNavGroup[]
           <Suspense fallback={null}>
             <RegisterReturnBar />
           </Suspense>
+          {parent && <SettingsSubTabs item={parent} pathname={pathname} />}
           {children}
         </div>
       </div>
