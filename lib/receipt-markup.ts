@@ -7,8 +7,8 @@
  * キャッシュドロアはMarkupに機種依存があるため drawerKickMarkup() で別ジョブとして扱う。
  */
 import type { ReceiptData } from './receipts';
-import { RYOSHUSHO_DEFAULT_PURPOSE } from '@/lib/ryoshusho-issue';
-import { billSlipLines, colsFor, twoCol as twoColBase, wrapText as wrapTextBase, yen, STAR_WIDTH_OPTIONS, type PaperWidth, stampBoxLines } from './receipt-layout';
+import { RYOSHUSHO_DEFAULT_PURPOSE, RYOSHUSHO_INVOICE_NOTE, RYOSHUSHO_NO_STAMP_NOTE } from '@/lib/ryoshusho-issue';
+import { billSlipLines, colsFor, twoCol as twoColBase, wrapText as wrapTextBase, yen, STAR_WIDTH_OPTIONS, type PaperWidth } from './receipt-layout';
 
 /** Star 機の全角幅（半角2桁よりわずかに広い）を見込んだ桁揃え・折り返し */
 const twoCol = (left: string, right: string, width: number) => twoColBase(left, right, width, STAR_WIDTH_OPTIONS);
@@ -190,8 +190,11 @@ export function ryoshushoToStarMarkup(receipt: ReceiptData, options: RyoshushoOp
     line();
     line('[ 収入印紙 ]');
   }
-  // 印鑑欄（右寄せの枠）。折り返さないよう raw で入れる
-  for (const s of stampBoxLines(width)) raw(esc(s));
+  // 押印は省略（インボイス対応なので不要）。最後に小さく注記する
+  line();
+  raw('[bold: off]');
+  line(RYOSHUSHO_NO_STAMP_NOTE);
+  if (receipt.registrationNumber) line(RYOSHUSHO_INVOICE_NOTE);
   raw('[feed]');
   raw('[cut: feed; partial]');
 

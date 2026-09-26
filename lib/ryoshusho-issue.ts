@@ -61,3 +61,10 @@ export function jstShortDateTime(iso: string | null): string {
 }
 
 export const RYOSHUSHO_ISSUED_MESSAGE = 'この伝票の領収書は発行済みです。領収書は一度しか発行できません';
+
+/**
+ * 領収書の末尾の注記（2026-09-26 Ronnie「印鑑要らないと最後に小さく書く」）。
+ * 登録番号入りのインボイス対応領収書なので押印は省略する（枠も出さない）。
+ */
+export const RYOSHUSHO_NO_STAMP_NOTE = '※本領収書は押印を省略しております';
+export const RYOSHUSHO_INVOICE_NOTE = '（適格簡易請求書・登録番号記載）';

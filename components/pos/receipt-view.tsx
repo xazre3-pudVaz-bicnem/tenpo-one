@@ -16,7 +16,9 @@ import { PrintButton } from './print-button';
 import { CloudPrintButton } from './cloud-print-button';
 import {
   RYOSHUSHO_DEFAULT_PURPOSE,
+  RYOSHUSHO_INVOICE_NOTE,
   RYOSHUSHO_ISSUED_MESSAGE,
+  RYOSHUSHO_NO_STAMP_NOTE,
   jstShortDateTime,
   type RyoshushoIssueState,
 } from '@/lib/ryoshusho-issue';
@@ -168,69 +170,99 @@ export function ReceiptView({
         </div>
       )}
 
-      {/* 領収書の分割発行。会計は分けず、証憑だけを人数ぶんに分ける */}
+      {/* 領収書の分割発行。会計は分けず、証憑だけを人数ぶんに分ける。
+          既定は「分けない」（全額1枚）。「分ける」を押したときだけ枚数と1枚ずつの金額を出す（2026-09-26 Ronnie）。
+          合計は領収額とぴったり同じでないと印刷できない（領収額を超える領収書は違反） */}
       {tab === 'invoice' && !invoiceLocked && (
         <div className="mb-4 rounded-xl border border-gray-200 bg-gray-50 p-3 print:hidden">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm font-medium text-gray-700">分割発行</span>
-            <div className="flex flex-wrap gap-1">
-              {[1, 2, 3, 4, 5, 6].filter((n) => n <= maxSplit).map((n) => (
-                <button
-                  key={n}
-                  type="button"
-                  onClick={() => changeSplitCount(n)}
-                  className={cn(
-                    'rounded-full px-3 py-1 text-sm font-medium',
-                    splitCount === n ? 'bg-navy text-white' : 'bg-white text-gray-600 border border-gray-300'
-                  )}
-                >
-                  {n === 1 ? '分けない' : `${n}枚`}
-                </button>
-              ))}
+            <span className="text-sm font-medium text-gray-700">分割発行 / Split</span>
+            <div className="flex gap-1">
+              <button
+                type="button"
+                onClick={() => changeSplitCount(1)}
+                className={cn(
+                  'h-10 rounded-full px-4 text-sm font-semibold',
+                  splitCount === 1 ? 'bg-navy text-white' : 'bg-white text-gray-600 border border-gray-300'
+                )}
+              >
+                分けない
+              </button>
+              <button
+                type="button"
+                onClick={() => splitCount === 1 && changeSplitCount(Math.min(2, maxSplit))}
+                disabled={maxSplit < 2}
+                className={cn(
+                  'h-10 rounded-full px-4 text-sm font-semibold disabled:opacity-40',
+                  splitCount > 1 ? 'bg-navy text-white' : 'bg-white text-gray-600 border border-gray-300'
+                )}
+              >
+                分ける
+              </button>
             </div>
-            {maxSplit > 6 && (
-              <Input
-                type="number"
-                min={2}
-                max={maxSplit}
-                value={splitCount > 1 ? splitCount : ''}
-                onChange={(e) => {
-                  const n = Number(e.target.value);
-                  if (Number.isInteger(n) && n >= 2 && n <= maxSplit) changeSplitCount(n);
-                }}
-                placeholder="枚数"
-                className="w-24"
-              />
-            )}
           </div>
 
           {isSplit && (
             <>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <span className="text-sm text-gray-700">何枚に分けますか</span>
+                <div className="flex flex-wrap gap-1">
+                  {[2, 3, 4, 5, 6].filter((n) => n <= maxSplit).map((n) => (
+                    <button
+                      key={n}
+                      type="button"
+                      onClick={() => changeSplitCount(n)}
+                      className={cn(
+                        'h-10 rounded-full px-3 text-sm font-medium',
+                        splitCount === n ? 'bg-navy text-white' : 'bg-white text-gray-600 border border-gray-300'
+                      )}
+                    >
+                      {n}枚
+                    </button>
+                  ))}
+                </div>
+                {maxSplit > 6 && (
+                  <Input
+                    type="number"
+                    inputMode="numeric"
+                    min={2}
+                    max={maxSplit}
+                    value={splitCount}
+                    onChange={(e) => {
+                      const n = Number(e.target.value);
+                      if (Number.isInteger(n) && n >= 2 && n <= maxSplit) changeSplitCount(n);
+                    }}
+                    aria-label="枚数"
+                    className="h-10 w-24"
+                  />
+                )}
+              </div>
+
               <div className="mt-3 grid gap-2 sm:grid-cols-3">
                 {amounts.map((a, i) => (
                   <label key={i} className="text-sm">
                     <span className="mb-1 block text-gray-600">{i + 1}枚目</span>
                     <Input
                       type="number"
+                      inputMode="numeric"
                       min={1}
                       value={a}
                       onChange={(e) => changeAmount(i, Number(e.target.value))}
-                      className="tabular-nums"
+                      className="h-11 tabular-nums"
                     />
                   </label>
                 ))}
               </div>
-              <p
-                className={cn(
-                  'mt-2 text-sm tabular-nums',
-                  balanced ? 'text-gray-600' : 'font-semibold text-danger'
-                )}
-              >
+              <p className={cn('mt-2 text-sm tabular-nums', balanced ? 'text-gray-600' : 'font-semibold text-danger')}>
                 合計 {yen(splitSum)} / 領収額 {yen(receipt.netPaid)}
-                {!balanced && <>　← 差額 {yen(receipt.netPaid - splitSum)}。合わせないと印刷できません</>}
+                {!balanced &&
+                  (splitSum > receipt.netPaid
+                    ? `　← 領収額を ${yen(splitSum - receipt.netPaid)} 超えています。領収額より多い領収書は出せません`
+                    : `　← 差額 ${yen(receipt.netPaid - splitSum)}。合わせないと印刷できません`)}
               </p>
               <p className="mt-1 text-xs text-gray-500">
                 会計・売上は分かれません。領収書だけを {splitCount} 枚に分けて出します（1枚ずつ「{splitLabel({ index: 1, count: splitCount })}」が入ります）。
+                分けて出したあとも、この伝票の領収書は二度と出せません。
               </p>
             </>
           )}
@@ -488,12 +520,9 @@ function InvoiceBody({
       )}
       <p className="mt-2">{receipt.issuedAt}</p>
       {receipt.staffName && <p>担当 {receipt.staffName}</p>}
-      {/* 印鑑欄（右寄せ）。印字では罫線の枠（lib/receipt-layout.ts stampBoxLines） */}
-      <div className="mt-2 flex justify-end">
-        <div className="flex h-[72px] w-[72px] items-start justify-center rounded-sm border border-gray-500 pt-1 text-[10px] text-gray-500">
-          印
-        </div>
-      </div>
+      {/* 押印は省略（インボイス対応）。最後に小さく注記（2026-09-26 Ronnie） */}
+      <p className="mt-3 text-[10px] text-gray-500">{RYOSHUSHO_NO_STAMP_NOTE}</p>
+      {receipt.registrationNumber && <p className="text-[10px] text-gray-500">{RYOSHUSHO_INVOICE_NOTE}</p>}
     </>
   );
 }

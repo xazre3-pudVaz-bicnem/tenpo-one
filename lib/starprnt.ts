@@ -8,9 +8,9 @@
  * 桁揃えは receipt-layout.ts を Markup 版と共有するため、同一注文なら両形式で同じ見た目になる。
  */
 import iconv from 'iconv-lite';
-import { RYOSHUSHO_DEFAULT_PURPOSE } from '@/lib/ryoshusho-issue';
+import { RYOSHUSHO_DEFAULT_PURPOSE, RYOSHUSHO_INVOICE_NOTE, RYOSHUSHO_NO_STAMP_NOTE } from '@/lib/ryoshusho-issue';
 import type { ReceiptData } from './receipts';
-import { billSlipLines, colsFor, twoCol as twoColBase, wrapText as wrapTextBase, yen, STAR_WIDTH_OPTIONS, type PaperWidth, stampBoxLines } from './receipt-layout';
+import { billSlipLines, colsFor, twoCol as twoColBase, wrapText as wrapTextBase, yen, STAR_WIDTH_OPTIONS, type PaperWidth } from './receipt-layout';
 
 /** Star 機の全角幅（半角2桁よりわずかに広い）を見込んだ桁揃え・折り返し */
 const twoCol = (left: string, right: string, width: number) => twoColBase(left, right, width, STAR_WIDTH_OPTIONS);
@@ -243,8 +243,9 @@ export function ryoshushoToStarPrnt(
   if (receipt.staffName) b.line(`担当 ${receipt.staffName}`);
   // 収入印紙はこの1枚の領収額で決まる
   if (amount >= 50000) b.line().line('[ 収入印紙 ]');
-  // 印鑑欄（右寄せの枠）
-  for (const s of stampBoxLines(width)) b.line(s);
+  // 押印は省略（インボイス対応なので不要）。最後に小さく注記する
+  b.line().cmd(CMD.emphasizeOff).line(RYOSHUSHO_NO_STAMP_NOTE);
+  if (receipt.registrationNumber) b.line(RYOSHUSHO_INVOICE_NOTE);
   b.line().line().cmd(CMD.cut);
   return b.toBuffer();
 }
