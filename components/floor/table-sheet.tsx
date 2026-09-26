@@ -3,7 +3,7 @@
 import { useLayoutEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { enqueueOrderSlipPrint } from '@/app/app/pos/print-actions';
-import { Lock, LockOpen } from 'lucide-react';
+import { ChevronDown, Lock, LockOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast';
 import { yen } from '@/lib/format';
@@ -152,6 +152,8 @@ export function TableSheet({
   const [seatTimeOpen, setSeatTimeOpen] = useState(false);
   /** テーブルクリアの確認ダイアログ */
   const [clearOpen, setClearOpen] = useState(false);
+  /** テーブルクリアは「その他の操作」を開いたときだけ出す（2026-09-26 Ronnie「簡単に出さない。押すと会計が0になる」） */
+  const [moreOpen, setMoreOpen] = useState(false);
   const clerkGate = useClerkGate();
 
   /** テーブルクリア: レジ端末では店長以上の承認をもらってから、伝票を丸ごと取消して空席に戻す */
@@ -400,27 +402,47 @@ export function TableSheet({
                 }}
               />
             </div>
-            {/* 席の時間・コース: 飲み放題の延長や、間違えた時間をここで直す（レジの伝票画面と同じダイアログ） */}
+            {/* お客様情報（人数・席の時間・コース）: 飲み放題の延長や、間違えた時間・人数をここで直す
+                （レジの伝票画面と同じダイアログ。2026-09-26 Ronnie「お客様情報」の名前に） */}
             {setSeatTimeAction && table.order && (
               <div className="mt-1.5 grid grid-cols-1">
                 <PopBtn
-                  ja={`時間の変更　${jstHm(table.order.openedAtMs)}〜${jstHm(table.order.endAtMs)}`}
-                  en="Seat time / course"
+                  ja={`お客様情報　${jstHm(table.order.openedAtMs)}〜${jstHm(table.order.endAtMs)}`}
+                  en="Guest info / time"
                   disabled={pending || !selected}
                   onClick={() => setSeatTimeOpen(true)}
                 />
               </div>
             )}
-            {/* テーブルクリア: 伝票を丸ごと取消して空席に戻す（売上には入らない。支払済みは不可） */}
+            {/* テーブルクリア: 伝票を丸ごと取消して空席に戻す（売上には入らない。支払済みは不可）。
+                押し間違い・不正を防ぐため「その他の操作」を開かないと出さない（店長の承認も必要） */}
             {clearTableAction && table.order && (
-              <div className="mt-1.5 grid grid-cols-1">
-                <PopBtn
-                  ja="テーブルクリア"
-                  en="Clear table"
-                  danger
-                  disabled={pending || !selected}
-                  onClick={() => setClearOpen(true)}
-                />
+              <div className="mt-1.5">
+                <button
+                  type="button"
+                  onClick={() => setMoreOpen((v) => !v)}
+                  aria-expanded={moreOpen}
+                  className="flex h-8 w-full items-center justify-center gap-1 text-[11px] font-bold text-ink-3"
+                >
+                  その他の操作 / More
+                  <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', moreOpen && 'rotate-180')} aria-hidden />
+                </button>
+                {moreOpen && (
+                  <div className="rounded-xl border border-danger/30 bg-danger-soft/40 p-2">
+                    <p className="mb-1.5 text-[10px] leading-snug text-ink-2">
+                      伝票を丸ごと取消して空席に戻します。売上には入りません。店長の承認と理由が必要です。
+                    </p>
+                    <div className="grid grid-cols-1">
+                      <PopBtn
+                        ja="テーブルクリア"
+                        en="Clear table"
+                        danger
+                        disabled={pending || !selected}
+                        onClick={() => setClearOpen(true)}
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 

@@ -199,3 +199,17 @@ describe('お客様に渡す紙は日本語のまま（英語を混ぜない）'
     expect(m).toContain('お会計伝票');
   });
 });
+
+describe('レシートの0円明細（2026-09-26 店舗要望「飲み放題などの¥0のオーダーがまだ出ている」）', () => {
+  it('0円の行は出さず、金額のある行だけ出す', () => {
+    const m = receiptToStarMarkup({
+      ...base,
+      lines: [
+        { name: '(A) 2H Course Nomihodai', quantity: 4, unitPrice: 0, lineTotal: 0, cancelled: false, modifiers: [] },
+        { name: 'ハイボール', quantity: 2, unitPrice: 500, lineTotal: 1000, cancelled: false, modifiers: [] },
+      ],
+    });
+    expect(m).toContain('ハイボール');
+    expect(m).not.toContain('Nomihodai');
+  });
+});
