@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { businessHoursLabel } from '@/lib/business-hours';
+import { sourceCodeFromSrc } from '@/lib/reservation-book';
 import { notFound } from 'next/navigation';
 import { MapPin, Phone, Clock, Info, AlertCircle } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
@@ -8,6 +9,8 @@ import type { BookingStore, BookingBusinessHour } from '@/components/booking/typ
 
 interface PageParams {
   params: Promise<{ storeSlug: string }>;
+  /** ?src=instagram など（SNS・Google に貼った予約リンク。予約経路として記録する。2026-09-28 Ronnie） */
+  searchParams?: Promise<{ src?: string }>;
 }
 
 const WEEKDAY_LABEL = ['日', '月', '火', '水', '木', '金', '土'];
@@ -43,10 +46,11 @@ export async function generateMetadata({ params }: PageParams): Promise<Metadata
   };
 }
 
-export default async function BookStorePage({ params }: PageParams) {
+export default async function BookStorePage({ params, searchParams }: PageParams) {
   const { storeSlug } = await params;
   const store = await fetchStore(storeSlug);
   if (!store) notFound();
+  const sourceCode = sourceCodeFromSrc((await searchParams)?.src);
 
   const hours = formatBusinessHours(store.business_hours);
 
@@ -81,7 +85,7 @@ export default async function BookStorePage({ params }: PageParams) {
         {store.description && <p className="mt-3 text-sm leading-relaxed text-gray-600">{store.description}</p>}
       </div>
 
-      <BookingWizard store={store} />
+      <BookingWizard store={store} sourceCode={sourceCode} />
 
       {/* 営業時間 */}
       <section className="mt-8 rounded-2xl border border-gray-200 bg-white p-5">

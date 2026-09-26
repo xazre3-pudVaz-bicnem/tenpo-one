@@ -10,9 +10,6 @@ import { SettingsBackLink } from '@/components/settings/back-link';
 import { BookingSettingsForm } from '@/components/settings/booking-settings-form';
 import { BookingUrlPanel } from '@/components/settings/booking-url-panel';
 import { StoreSlugEditor } from '@/components/settings/store-slug-editor';
-import { ReminderPanel } from '@/components/settings/reminder-panel';
-import { PushSubscribeButton } from '@/components/notifications/push-subscribe-button';
-import { pushSubscriptionsFrom } from '@/lib/push-subscriptions';
 import { SLUG_CHANGE_BY_CYPRESS_ONLY } from '@/lib/store-slug';
 
 export const metadata: Metadata = { title: '予約設定 | 設定' };
@@ -42,8 +39,6 @@ export default async function BookingSettingsPage() {
   ]);
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? '';
-  // 予約の通知を受け取る端末（store_settings.settings.pushSubscriptions）
-  const pushDevices = pushSubscriptionsFrom((settings?.settings as Record<string, unknown> | null) ?? {});
   const bookingUrl = `${siteUrl}/book/${store?.slug ?? ''}`;
 
   // 公開予約URLのQRコード（掲出用）。data URLはCSP img-src data:許可で表示可。
@@ -107,12 +102,7 @@ export default async function BookingSettingsPage() {
         </div>
       )}
 
-      <div className="mb-5">
-        <PushSubscribeButton />
-        <p className="mt-2 px-1 text-xs text-ink-3">
-          通知を受け取る端末：{pushDevices.length === 0 ? 'まだありません' : `${pushDevices.length}台（${pushDevices.map((d) => d.label ?? '端末').join('・')}）`}
-        </p>
-      </div>
+      {/* 予約の通知・リマインダーの送信準備は 予約台帳設定 に移した（2026-09-28 Ronnie） */}
 
       <BookingSettingsForm
         initial={{
@@ -132,11 +122,6 @@ export default async function BookingSettingsPage() {
         }}
       />
 
-      {settings?.reminder_enabled && (
-        <div className="mt-5">
-          <ReminderPanel storeId={targetStore.id} />
-        </div>
-      )}
     </div>
   );
 }
