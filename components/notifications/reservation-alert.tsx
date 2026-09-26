@@ -61,7 +61,8 @@ export function ReservationAlert({ storeId, ledgerHref }: { storeId: string; led
         (payload) => {
           const r = payload.new as Partial<ReservationRow>;
           if (!r?.id || !r.code || !r.start_at) return;
-          if (r.created_via !== 'web') return;
+          // ネット予約と、グルメサイトのメールから自動で入った予約を知らせる（電話・手入力は自分で入れたものなので鳴らさない）
+          if (r.created_via !== 'web' && r.created_via !== 'gourmet_mail') return;
           if (r.status === 'cancelled') return;
           if (seen.current.has(r.id)) return;
           seen.current.add(r.id);
