@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { yen } from '@/lib/format';
+import { billSlipLines } from '@/lib/receipt-layout';
 import { Input } from '@/components/ui/input';
 import type { ReceiptData } from '@/lib/receipts';
 import {
@@ -63,7 +64,8 @@ export function ReceiptView({
   const [splitCount, setSplitCount] = useState(1);
   const [amounts, setAmounts] = useState<number[]>([]);
 
-  const visibleLines = useMemo(() => receipt.lines.filter((l) => !l.cancelled), [receipt.lines]);
+  // 取消済みと0円の明細（飲み放題・コースの中身）は出さない（印字と同じ。2026-09-26 店舗要望）
+  const visibleLines = useMemo(() => billSlipLines(receipt.lines.filter((l) => !l.cancelled)), [receipt.lines]);
   const invoiceTaxTotal = useMemo(() => receipt.taxRows.reduce((a, r) => a + r.tax, 0), [receipt.taxRows]);
 
   // 枚数で割り切れる上限（1枚あたり1円以上）

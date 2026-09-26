@@ -130,7 +130,8 @@ export function receiptToStarPrnt(receipt: ReceiptData, options: StarPrntOptions
   b.line(rule);
 
   // 明細
-  for (const it of receipt.lines) {
+  // 0円の明細（飲み放題・食べ放題・コースの中身）はレシートにも出さない（お会計伝票と同じ。2026-09-26 店舗要望）
+  for (const it of billSlipLines(receipt.lines)) {
     if (it.cancelled) continue;
     b.line(it.name);
     b.line(twoCol(`  ${it.quantity} x ${yen(it.unitPrice)}`, yen(it.lineTotal), width));
