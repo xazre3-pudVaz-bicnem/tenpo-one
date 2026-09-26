@@ -1,6 +1,6 @@
 'use client';
 
-import { Clock, Lock, Sparkles, Users } from 'lucide-react';
+import { BellRing, Clock, Lock, Sparkles, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { yen } from '@/lib/format';
 import {
@@ -89,6 +89,16 @@ export function TableCard({
         state === 'unavailable' && 'opacity-70'
       )}
     >
+      {/* お客様QRからの呼び出し（2026-09-28 Ronnie「呼び出しを卓に出す」）。対応するまで鈴が揺れる */}
+      {t.calls.length > 0 && (
+        <span
+          className="absolute top-1.5 right-1.5 z-10 inline-flex items-center gap-1 rounded-full bg-[#b44814] px-2 py-1 text-[11px] font-bold text-white shadow-md"
+          aria-label={t.calls.some((c) => c.kind === 'checkout') ? 'お会計希望' : 'スタッフ呼び出し'}
+        >
+          <BellRing className="h-3.5 w-3.5 animate-bounce" aria-hidden />
+          {t.calls.some((c) => c.kind === 'checkout') ? '会計希望' : '呼び出し'}
+        </span>
+      )}
       {/* 1行目: テーブル名・人数 */}
       <span className="flex min-w-0 items-center justify-between gap-1.5">
         <b

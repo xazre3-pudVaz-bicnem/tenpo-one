@@ -20,6 +20,7 @@ import { ClerkGate, type GateClerk } from '@/components/pos/clerk-gate';
 import { loadStoreClerks } from '@/lib/pos-clerks-server';
 import { ReservationAlert } from '@/components/notifications/reservation-alert';
 import { PushAutoSubscribe } from '@/components/notifications/push-auto-subscribe';
+import { ServiceCallAlert } from '@/components/notifications/service-call-alert';
 
 /** 店舗画面はブラウザのツールバー色も上部バー（濃紫）に合わせる */
 export const viewport = { themeColor: '#15121a' };
@@ -115,6 +116,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         {ctx.currentStore && <ReservationAlert storeId={ctx.currentStore.id} ledgerHref="/app/reservations" />}
         {/* ログインした端末は予約の通知を自動でオンにする（2026-09-27 Ronnie） */}
         {ctx.currentStore && <PushAutoSubscribe />}
+        {/* お客様QRからの呼び出し（鈴の音＋バナー。2026-09-28 Ronnie） */}
+        {ctx.currentStore && <ServiceCallAlert storeId={ctx.currentStore.id} />}
         {!posFullscreen && (
           <Sidebar
             tiles={tiles}

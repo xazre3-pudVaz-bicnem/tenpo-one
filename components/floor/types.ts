@@ -82,11 +82,20 @@ export interface UpcomingReservation {
   sourceLabel: string;
 }
 
+/** お客様QRからの未対応の呼び出し（2026-09-28 Ronnie「呼び出しをレジの卓に出して音も鳴らす」） */
+export interface TableCall {
+  id: string;
+  kind: 'staff' | 'checkout';
+  createdAt: string;
+}
+
 export interface TableView extends FloorTable {
   order: TableOrderInfo | null;
   upcoming: UpcomingReservation[];
   /** 同じ組としてまとめている卓（自分を含む）。まとめていなければ空（2026-09-25 店舗要望） */
   groupTableIds: string[];
+  /** 未対応の呼び出し（スタッフ・会計希望） */
+  calls: TableCall[];
 }
 
 /** 右パネル「本日のご予約」の1行 */

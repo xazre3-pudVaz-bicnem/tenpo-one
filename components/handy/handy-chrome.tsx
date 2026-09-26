@@ -23,6 +23,7 @@ import { useStoreRealtimeRefresh } from '@/components/realtime/use-store-refresh
 import { ReservationAlert } from '@/components/notifications/reservation-alert';
 import { PushSubscribeButton } from '@/components/notifications/push-subscribe-button';
 import { PushAutoSubscribe } from '@/components/notifications/push-auto-subscribe';
+import { ServiceCallAlert } from '@/components/notifications/service-call-alert';
 import { useNow } from '@/components/floor/use-now';
 import type { StoreRef } from '@/lib/auth';
 import { elapsedLabel, serviceCallLabel, sortServiceCalls, type HandyServiceCall } from './logic';
@@ -113,6 +114,8 @@ export function HandyChrome({
         <ReservationAlert storeId={storeId} ledgerHref="/handy/reservations" />
         {/* ログインした iPhone は予約の通知を自動でオンにする（2026-09-27 Ronnie） */}
         <PushAutoSubscribe />
+        {/* お客様QRからの呼び出し（鈴の音＋バナー。下の「呼び出し N件」も Realtime で増える） */}
+        <ServiceCallAlert storeId={storeId} />
 
         <div className="flex-none">
           {sorted.length > 0 && (

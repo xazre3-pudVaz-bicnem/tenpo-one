@@ -147,4 +147,30 @@ export class Chime {
     }
     return true;
   }
+
+  /** お客様の呼び出し用のベル（チリン ×3。予約のピンポーンと聞き分けられるように高めの音） */
+  playBell(): boolean {
+    const ctx = this.ctx;
+    if (!ctx || ctx.state !== 'running') return false;
+    const ding = (at: number) => {
+      for (const [freq, vol] of [
+        [1319, 0.5],
+        [2637, 0.18],
+      ] as const) {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0.0001, at);
+        gain.gain.exponentialRampToValueAtTime(vol, at + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.6);
+        osc.connect(gain).connect(ctx.destination);
+        osc.start(at);
+        osc.stop(at + 0.65);
+      }
+    };
+    const t = ctx.currentTime + 0.02;
+    for (let i = 0; i < 3; i++) ding(t + i * 0.28);
+    return true;
+  }
 }
