@@ -1,9 +1,18 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { CircleAlert, Loader2, Smartphone, Wifi, WifiOff } from 'lucide-react';
+import { CircleAlert, Loader2, ScanLine, Smartphone, Wifi, WifiOff } from 'lucide-react';
 import type { HeartbeatResult, JoinResult } from '@/app/handy-join/actions';
+import { QrScanner } from './qr-scanner';
+
+/** 読み取った文字列からハンディQRの値（48桁の16進）を取り出す。QRのURL（…/handy-join#値）でも値だけでも可 */
+export function handyTokenFromScan(text: string): string | null {
+  const t = text.trim();
+  const m = t.match(/#([0-9a-f]{48})\b/i) ?? t.match(/^([0-9a-f]{48})$/i);
+  return m ? m[1].toLowerCase() : null;
+}
 
 /**
  * iPhone用ハンディの入口（お店の固定QRから開く）。
@@ -21,15 +30,13 @@ export function HandyJoinView({
   const router = useRouter();
   const [state, setState] = useState<'loading' | 'error' | 'no-code' | 'logged-out'>('loading');
   const [error, setError] = useState('');
+  const [scanning, setScanning] = useState(false);
   const started = useRef(false);
 
-  useEffect(() => {
-    if (started.current) return;
-    started.current = true;
-    const token = window.location.hash.slice(1);
-    if (/^[0-9a-f]{48}$/i.test(token)) {
-      // 読み取った値はすぐ URL から消す（画面共有・履歴に残さない）
-      window.history.replaceState(null, '', window.location.pathname);
+  /** QR を読んだら、そのままログインしてハンディを開く（ID・パスワードは要らない。2026-09-26 Ronnie） */
+  const joinWithToken = useCallback(
+    (token: string) => {
+      setState('loading');
       joinAction(token)
         .then((r) => {
           if (r.ok) router.replace('/handy');
@@ -42,6 +49,32 @@ export function HandyJoinView({
           setError('通信できませんでした。お店のWi-Fiにつながっているか確認して、もう一度QRコードを読み取ってください');
           setState('error');
         });
+    },
+    [joinAction, router]
+  );
+
+  const onScan = useCallback(
+    (text: string) => {
+      setScanning(false);
+      const token = handyTokenFromScan(text);
+      if (!token) {
+        setError('これはハンディのQRコードではありません。レジ（iPad）の「iPhoneハンディ」のQRコードを読み取ってください');
+        setState('error');
+        return;
+      }
+      joinWithToken(token);
+    },
+    [joinWithToken]
+  );
+
+  useEffect(() => {
+    if (started.current) return;
+    started.current = true;
+    const token = window.location.hash.slice(1);
+    if (/^[0-9a-f]{48}$/i.test(token)) {
+      // 読み取った値はすぐ URL から消す（画面共有・履歴に残さない）
+      window.history.replaceState(null, '', window.location.pathname);
+      void Promise.resolve().then(() => joinWithToken(token));
       return;
     }
     if (loggedOut) {
@@ -52,7 +85,7 @@ export function HandyJoinView({
       return;
     }
     void Promise.resolve().then(() => setState('no-code'));
-  }, [joinAction, heartbeatAction, loggedOut, router]);
+  }, [joinWithToken, heartbeatAction, loggedOut]);
 
   return (
     <div className="min-h-dvh bg-[#F6F3FB] px-5 py-8">
@@ -96,11 +129,36 @@ export function HandyJoinView({
         )}
 
         {state === 'no-code' && (
-          <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-900">
-            お店に貼ってあるハンディのQRコードを、iPhone のカメラで読み取ってください（お店のWi-Fiにつないだ状態で）。
+          <div className="mt-5 rounded-2xl bg-white px-5 py-5 text-center shadow-sm">
+            <p className="text-sm font-semibold text-[#2A2138]">ハンディ ログイン</p>
+            <p className="mt-1 text-xs leading-relaxed text-[#7A7090]">
+              レジ（iPad）の「iPhoneハンディ」に出ているQRコードを読み取ると、そのまま開きます。ID・パスワードは要りません。
+            </p>
           </div>
         )}
+
+        {/* QR コードのボタン（見本のアプリと同じ）。読めたらすぐログイン */}
+        {state !== 'loading' && (
+          <button
+            type="button"
+            onClick={() => setScanning(true)}
+            className="mt-4 flex h-14 w-full items-center justify-center gap-2 rounded-2xl border-2 border-[#241436] bg-white text-[17px] font-bold text-[#241436] active:bg-[#F0EAF8]"
+          >
+            <ScanLine className="h-6 w-6" aria-hidden />
+            QR Code
+          </button>
+        )}
+
+        {state !== 'loading' && (
+          <p className="mt-6 text-center text-xs text-[#7A7090]">
+            <Link href="/login" className="underline">
+              メールとパスワードでログイン
+            </Link>
+          </p>
+        )}
       </div>
+
+      {scanning && <QrScanner onResult={onScan} onClose={() => setScanning(false)} />}
     </div>
   );
 }
