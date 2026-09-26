@@ -5,6 +5,7 @@ import { requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { CLERK_ROLES, parseClerkRole, type ClerkRole } from '@/lib/clerk-roles';
 import { isMissingColumnError } from '@/lib/schema-compat';
+import { normalizeClerkName } from '@/lib/clerk-name';
 
 export interface ActionResult {
   error?: string;
@@ -20,7 +21,8 @@ export async function addPosClerk(storeId: string, name: string, role: string = 
   const err = assertStoreAccess(ctx.stores.map((s) => s.id), storeId);
   if (err) return { error: err };
 
-  const trimmed = name.trim();
+  // 英字は Ronnie のように先頭だけ大文字（2026-09-27 Ronnie）
+  const trimmed = normalizeClerkName(name);
   if (!trimmed) return { error: '担当者名を入力してください' };
   if (trimmed.length > 50) return { error: '担当者名は50文字以内で入力してください' };
 
@@ -72,7 +74,8 @@ export async function renamePosClerk(id: string, storeId: string, name: string):
   const err = assertStoreAccess(ctx.stores.map((s) => s.id), storeId);
   if (err) return { error: err };
 
-  const trimmed = name.trim();
+  // 英字は Ronnie のように先頭だけ大文字（2026-09-27 Ronnie）
+  const trimmed = normalizeClerkName(name);
   if (!trimmed) return { error: '担当者名を入力してください' };
 
   const supabase = await createClient();
