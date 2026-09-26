@@ -10,7 +10,6 @@ import {
   LogOut,
   Menu,
   NotebookText,
-  PackageX,
   RotateCw,
   ShoppingCart,
   UserRound,
@@ -217,9 +216,7 @@ export function HandyChrome({
           >
             今日の予約
           </SheetLink>
-          <SheetLink href="/handy/sold-out" icon={<PackageX className="h-[18px] w-[18px]" aria-hidden />}>
-            品切れ設定（売切・販売再開）
-          </SheetLink>
+          {/* 品切れ設定はハンディのメニューには出さない（2026-09-28 Ronnie「ハンディにこのオプションは要らない」。レジの設定から） */}
           <PushSubscribeButton variant="row" />
           <button
             type="button"
