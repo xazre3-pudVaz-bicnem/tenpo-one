@@ -129,3 +129,23 @@ export function billSlipLines<T extends { lineTotal: number; modifiers?: { price
   );
   return priced.length > 0 ? priced : lines;
 }
+
+/**
+ * 領収書の印鑑欄（2026-09-26 Ronnie「印鑑押すところも作って」）。
+ * 罫線素片（JIS）で右寄せの枠を描く。全角8文字（16桁）×5行 ≒ 24mm×19mm（80mm紙）で、認印・角印が収まる。
+ * 罫線素片は Star・EPSON とも Shift_JIS の漢字フォントに入っている。右寄せは半角スペースの左詰めで行う。
+ */
+export const STAMP_BOX_COLS = 16;
+export function stampBoxLines(width: number, label = '印'): string[] {
+  const inner = 6; // 全角
+  const pad = ' '.repeat(Math.max(0, width - STAMP_BOX_COLS));
+  const blank = '　'.repeat(inner);
+  const labelLine = '　'.repeat(2) + label + '　'.repeat(inner - 2 - 1);
+  return [
+    `${pad}┌${'─'.repeat(inner)}┐`,
+    `${pad}│${labelLine}│`,
+    `${pad}│${blank}│`,
+    `${pad}│${blank}│`,
+    `${pad}└${'─'.repeat(inner)}┘`,
+  ];
+}

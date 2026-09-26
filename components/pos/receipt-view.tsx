@@ -1,7 +1,6 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { FileDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { yen } from '@/lib/format';
 import { Input } from '@/components/ui/input';
@@ -15,15 +14,23 @@ import {
 } from '@/lib/ryoshusho-split';
 import { PrintButton } from './print-button';
 import { CloudPrintButton } from './cloud-print-button';
+import {
+  RYOSHUSHO_DEFAULT_PURPOSE,
+  RYOSHUSHO_ISSUED_MESSAGE,
+  jstShortDateTime,
+  type RyoshushoIssueState,
+} from '@/lib/ryoshusho-issue';
 
-type PaperWidth = 58 | 80;
+/** 画面の控えは 80mm 幅のレシートに合わせる */
+const PAPER_CLASS = 'max-w-[300px] text-xs';
 
-/** 58mm/80mm切替に応じた幅・フォントサイズのプリセット */
-const WIDTH_CLASSES: Record<PaperWidth, string> = {
-  58: 'max-w-[220px] text-[10.5px]',
-  80: 'max-w-[300px] text-xs',
-};
-
+/**
+ * レシート／領収書の画面。
+ * - 紙幅の切替（58/80mm）・PDF 保存は出さない。印刷ボタンは下に1つだけ：レシートプリンター（CloudPRNT）へ、
+ *   無い店舗だけブラウザ印刷（2026-09-26 Ronnie「レシートプリンターに出るのは当たり前。印刷だけ下に」）
+ * - 但し書きは「飲食代として」で固定（入力欄は無し。領収書の中に自動で入る）
+ * - 領収書は一度きり。発行済みなら入力とボタンを出さず「発行済み」だけ出す（サーバー側でも弾く）
+ */
 export function ReceiptView({
   receipt,
   orderId,
@@ -31,6 +38,7 @@ export function ReceiptView({
   logPrintJobAction,
   cloudPrntAvailable = false,
   initialTab = 'receipt',
+  ryoshushoIssued,
 }: {
   receipt: ReceiptData;
   orderId: string;
@@ -39,11 +47,16 @@ export function ReceiptView({
   cloudPrntAvailable?: boolean;
   /** 伝票明細の「領収書」ボタンから開いたときは、領収書のタブを最初から出す */
   initialTab?: 'receipt' | 'invoice';
+  /** 領収書の発行状況（サーバーで print_jobs から読む） */
+  ryoshushoIssued?: RyoshushoIssueState;
 }) {
   const [tab, setTab] = useState<'receipt' | 'invoice'>(initialTab);
-  const [paperWidth, setPaperWidth] = useState<PaperWidth>(80);
   const [recipientName, setRecipientName] = useState('');
-  const [purpose, setPurpose] = useState('お品代として');
+  /** 但し書きは「飲食代として」固定。画面では入力させず、領収書の中に自動で入る（2026-09-26 Ronnie） */
+  const purpose = RYOSHUSHO_DEFAULT_PURPOSE;
+  // 領収書の発行済み（サーバーの値 → この画面で出したら即 true）
+  const [issued, setIssued] = useState<RyoshushoIssueState>(ryoshushoIssued ?? { issued: false, at: null, count: 0 });
+  const invoiceLocked = tab === 'invoice' && issued.issued;
   // 領収書の分割発行。1 のときは今までどおり全額1枚
   const [splitCount, setSplitCount] = useState(1);
   const [amounts, setAmounts] = useState<number[]>([]);
@@ -76,10 +89,41 @@ export function ReceiptView({
     });
   };
 
-  const handlePdfSave = () => {
-    window.print();
-    void logPrintJobAction(orderId, tab === 'receipt' ? 'receipt' : 'ryoshusho');
-  };
+  /** 下の印刷ボタン。レシートプリンターがあればそこへ、無い店舗だけブラウザ印刷（AirPrint） */
+  const printButton = invoiceLocked ? null : cloudPrntAvailable ? (
+    <CloudPrintButton
+      orderId={orderId}
+      jobType={tab === 'receipt' ? 'receipt' : 'ryoshusho'}
+      reissue={receipt.isReissue}
+      recipientName={recipientName}
+      purpose={purpose}
+      splitAmounts={balanced ? amounts : null}
+      disabled={tab === 'invoice' && isSplit && !balanced}
+      onPrinted={(n) => {
+        if (tab === 'invoice') setIssued({ issued: true, at: new Date().toISOString(), count: n });
+      }}
+      className="h-16 w-full justify-center text-base"
+    />
+  ) : (
+    <PrintButton
+      orderId={orderId}
+      jobType={tab === 'receipt' ? 'receipt' : 'ryoshusho'}
+      logPrintJobAction={(id, jobType) =>
+        logPrintJobAction(id, jobType).then(() => {
+          if (jobType === 'ryoshusho') setIssued({ issued: true, at: new Date().toISOString(), count: 1 });
+        })
+      }
+    />
+  );
+
+  const issuedNotice = invoiceLocked && (
+    <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 print:hidden">
+      <p className="font-bold">
+        領収書 発行済み{issued.at && `（${jstShortDateTime(issued.at)}${issued.count > 1 ? `・${issued.count}枚` : ''}）`}
+      </p>
+      <p className="mt-0.5 text-xs leading-relaxed">{RYOSHUSHO_ISSUED_MESSAGE}。二重発行を防ぐため、再発行はできません。</p>
+    </div>
+  );
 
   return (
     <div>
@@ -107,83 +151,25 @@ export function ReceiptView({
           </button>
         </div>
 
-        <div className="flex items-center gap-2">
-          <div className="flex gap-1 rounded-full bg-gray-100 p-0.5 text-xs">
-            {([58, 80] as PaperWidth[]).map((w) => (
-              <button
-                key={w}
-                type="button"
-                onClick={() => setPaperWidth(w)}
-                className={cn(
-                  'rounded-full px-3 py-1 font-medium transition-colors',
-                  paperWidth === w ? 'bg-white text-navy shadow-sm' : 'text-gray-500'
-                )}
-              >
-                {w}mm
-              </button>
-            ))}
-          </div>
-
-          <div className="group relative inline-block print:hidden">
-            <button
-              type="button"
-              onClick={handlePdfSave}
-              className="flex h-14 items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 text-sm font-medium text-navy hover:bg-gray-50"
-            >
-              <FileDown className="h-5 w-5" />
-              PDFで保存
-            </button>
-            <div
-              role="tooltip"
-              className="pointer-events-none absolute right-0 top-full z-10 mt-2 hidden w-64 rounded-lg bg-navy px-3 py-2 text-xs leading-relaxed text-white shadow-lg group-hover:block group-focus-within:block"
-            >
-              印刷ダイアログの「PDFに保存」を選択して保存してください（専用のPDF生成は行っていません。ブラウザ標準の印刷機能を案内しています）
-            </div>
-          </div>
-
-          {cloudPrntAvailable && (
-            <CloudPrintButton
-              orderId={orderId}
-              jobType={tab === 'receipt' ? 'receipt' : 'ryoshusho'}
-              reissue={receipt.isReissue}
-              recipientName={recipientName}
-              purpose={purpose}
-              splitAmounts={balanced ? amounts : null}
-              disabled={tab === 'invoice' && isSplit && !balanced}
-            />
-          )}
-
-          {/* レジのレシートプリンター（CloudPRNT）があるときはそちらだけ出す。
-              iPad のブラウザ印刷（AirPrint）と並ぶと、どれがレシートプリンターか分からない（2026-09-26 Ronnie） */}
-          {!cloudPrntAvailable && (
-            <PrintButton
-              orderId={orderId}
-              jobType={tab === 'receipt' ? 'receipt' : 'ryoshusho'}
-              logPrintJobAction={logPrintJobAction}
-            />
-          )}
-        </div>
+        {/* 紙幅は 80mm 固定・PDF 保存は無し（2026-09-26 Ronnie「要らない」）。印刷ボタンは下に1つ */}
       </div>
 
-      {tab === 'invoice' && (
-        <div className="mb-4 grid gap-2 sm:grid-cols-2 print:hidden">
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">宛名</label>
-            <Input
-              value={recipientName}
-              onChange={(e) => setRecipientName(e.target.value)}
-              placeholder="お客様名（空欄可）"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">但し書き</label>
-            <Input value={purpose} onChange={(e) => setPurpose(e.target.value)} />
-          </div>
+      {issuedNotice}
+
+      {tab === 'invoice' && !invoiceLocked && (
+        <div className="mb-4 print:hidden">
+          <label className="mb-1 block text-sm font-medium text-gray-700">宛名 / Name</label>
+          <Input
+            value={recipientName}
+            onChange={(e) => setRecipientName(e.target.value)}
+            placeholder="お客様名（空欄なら「上様」）"
+            className="h-12"
+          />
         </div>
       )}
 
       {/* 領収書の分割発行。会計は分けず、証憑だけを人数ぶんに分ける */}
-      {tab === 'invoice' && (
+      {tab === 'invoice' && !invoiceLocked && (
         <div className="mb-4 rounded-xl border border-gray-200 bg-gray-50 p-3 print:hidden">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-sm font-medium text-gray-700">分割発行</span>
@@ -254,7 +240,7 @@ export function ReceiptView({
       <div
         className={cn(
           'print-area mx-auto rounded-xl border border-gray-200 bg-white p-4 text-gray-800 shadow-sm',
-          WIDTH_CLASSES[paperWidth]
+          PAPER_CLASS
         )}
       >
         {tab === 'receipt' ? (
@@ -417,6 +403,9 @@ export function ReceiptView({
         )}
       </div>
 
+      {/* 印刷ボタンは下に1つだけ（2026-09-26 Ronnie） */}
+      {printButton && <div className="mx-auto mt-4 max-w-md print:hidden">{printButton}</div>}
+
       {/* 分割したときは、実際に出る枚数ぶんの控えを並べて確認できるようにする */}
       {tab === 'invoice' && balanced && slips.length > 1 && (
         <div className="mt-4 print:hidden">
@@ -429,7 +418,7 @@ export function ReceiptView({
                 key={sl.index}
                 className={cn(
                   'rounded-xl border border-gray-200 bg-white p-4 text-gray-800 shadow-sm',
-                  WIDTH_CLASSES[paperWidth]
+                  PAPER_CLASS
                 )}
               >
                 <InvoiceBody
@@ -468,6 +457,13 @@ function InvoiceBody({
   return (
     <>
       <p className="text-center text-sm font-bold">領収書{label && <span className="ml-1 font-normal">{label}</span>}</p>
+      {/* 発行元は上（2026-09-26 Ronnie）。印字（lib/receipt-markup.ts 等）と同じ並び */}
+      <div className="mt-1 text-center">
+        <p className="font-bold">{receipt.storeName}</p>
+        {receipt.storeAddress && <p>{receipt.storeAddress}</p>}
+        {receipt.storePhone && <p>TEL {receipt.storePhone}</p>}
+        {receipt.registrationNumber && <p>登録番号 {receipt.registrationNumber}</p>}
+      </div>
       <div className="my-2 border-t border-dashed border-gray-300" />
       <p className="border-b border-gray-400 pb-1 text-sm">
         {recipientName ? `${recipientName} 様` : '　　　　　　　様'}
@@ -491,10 +487,13 @@ function InvoiceBody({
         </div>
       )}
       <p className="mt-2">{receipt.issuedAt}</p>
-      <p className="mt-2 font-bold">{receipt.storeName}</p>
-      {receipt.storeAddress && <p>{receipt.storeAddress}</p>}
-      {receipt.storePhone && <p>TEL {receipt.storePhone}</p>}
-      {receipt.registrationNumber && <p>登録番号 {receipt.registrationNumber}</p>}
+      {receipt.staffName && <p>担当 {receipt.staffName}</p>}
+      {/* 印鑑欄（右寄せ）。印字では罫線の枠（lib/receipt-layout.ts stampBoxLines） */}
+      <div className="mt-2 flex justify-end">
+        <div className="flex h-[72px] w-[72px] items-start justify-center rounded-sm border border-gray-500 pt-1 text-[10px] text-gray-500">
+          印
+        </div>
+      </div>
     </>
   );
 }

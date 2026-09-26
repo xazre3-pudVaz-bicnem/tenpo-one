@@ -14,6 +14,7 @@ import {
   RYOSHUSHO_SPLIT_MIN,
   type RyoshushoSlip,
 } from '@/lib/ryoshusho-split';
+import { RYOSHUSHO_ISSUED_MESSAGE, ryoshushoIssuedFrom, type RyoshushoIssueState } from '@/lib/ryoshusho-issue';
 import { receiptToEposXml, ryoshushoToEposXml, orderSlipEposXml, drawerKickEpos, kitchenTicketsEpos, eposCols } from '@/lib/epos-print';
 import { layoutKitchenTicket, rotateLines180, type KitchenTicket } from '@/lib/kitchen-ticket';
 import { kitchenTicketsMarkup } from '@/lib/receipt-markup';
@@ -85,6 +86,19 @@ async function getCloudPrntPrinter(
   };
 }
 
+/** この伝票で領収書を出したことがあるか（print_jobs の job_type='ryoshusho'。失敗ジョブは数えない） */
+export async function ryoshushoIssuedForOrder(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  orderId: string
+): Promise<RyoshushoIssueState> {
+  const { data } = await supabase
+    .from('print_jobs')
+    .select('job_type, status, printed_at, created_at')
+    .eq('order_id', orderId)
+    .eq('job_type', 'ryoshusho');
+  return ryoshushoIssuedFrom(data ?? []);
+}
+
 /**
  * レシートを CloudPRNT キューへ積む。プリンタがポーリング時に取得して印字する。
  * drawer=true かつプリンタのドロアキックが有効なら、ドロア開放を別ジョブとして併せて積む
@@ -98,7 +112,7 @@ export async function enqueueReceiptPrint(
     jobType?: 'receipt' | 'ryoshusho';
     /** 領収書の宛名（空欄なら「上様」） */
     recipientName?: string | null;
-    /** 領収書の但し書き（空欄なら「お品代として」） */
+    /** 領収書の但し書き（空欄なら「飲食代として」） */
     purpose?: string | null;
     /**
      * 領収書の分割発行（1枚ぶんの金額の配列）。合計が領収額と一致するときだけ受け付ける。
@@ -121,6 +135,13 @@ export async function enqueueReceiptPrint(
   const printer = await getCloudPrntPrinter(supabase, order.store_id);
   if (!printer) {
     return { ok: false, error: 'CloudPRNT対応プリンタが未設定です（設定 > プリンター で有効化してください）' };
+  }
+
+  // 領収書は一度きり（2026-09-26 Ronnie「同じ金額でいろんなところに使われたらやばい」）。
+  // 全額1枚でも分割でも、この伝票で一度出していたら二度と出さない（lib/ryoshusho-issue.ts）。
+  if (opts.jobType === 'ryoshusho') {
+    const issued = await ryoshushoIssuedForOrder(supabase, orderId);
+    if (issued.issued) return { ok: false, error: RYOSHUSHO_ISSUED_MESSAGE };
   }
 
   const loaded = await loadReceiptData(supabase, orderId, { isReissue: opts.reissue });

@@ -9,6 +9,7 @@ import { METHOD_LABELS } from '@/components/cash/labels';
 import { EmptyState } from '@/components/ui/state';
 import { ReceiptView } from '@/components/pos/receipt-view';
 import { logPrintJob } from '@/app/app/pos/actions';
+import { ryoshushoIssuedFrom } from '@/lib/ryoshusho-issue';
 
 export const metadata: Metadata = { title: 'レシート' };
 
@@ -23,6 +24,7 @@ export default async function ReceiptPage({
   const { orderId } = await params;
   const { reissue, tab, from } = await searchParams;
   const fromOrders = from === 'orders';
+  // ※ 領収書には再発行が無い（一度きり）。reissue はレシートだけに効く
   const ctx = await requireMember();
   const supabase = await createClient();
   const store = ctx.currentStore ?? ctx.stores[0];
@@ -51,7 +53,7 @@ export default async function ReceiptPage({
     );
   }
 
-  const [{ data: items }, { data: payments }, { data: settings }, { data: refunds }, { data: pointTx }] =
+  const [{ data: items }, { data: payments }, { data: settings }, { data: refunds }, { data: pointTx }, { data: ryoshushoJobs }] =
     await Promise.all([
       supabase
         .from('order_items')
@@ -71,7 +73,10 @@ export default async function ReceiptPage({
         .maybeSingle(),
       supabase.from('refunds').select('amount').eq('order_id', orderId),
       supabase.from('point_transactions').select('kind, points').eq('order_id', orderId),
+      // 領収書は一度きり（2026-09-26 Ronnie）。出したことがあるかを print_jobs から読む
+      supabase.from('print_jobs').select('job_type, status, printed_at, created_at').eq('order_id', orderId).eq('job_type', 'ryoshusho'),
     ]);
+  const ryoshushoIssued = ryoshushoIssuedFrom(ryoshushoJobs ?? []);
 
   let registerName: string | null = null;
   if (order.register_session_id) {
@@ -176,6 +181,7 @@ export default async function ReceiptPage({
         logPrintJobAction={logPrintJob}
         cloudPrntAvailable={cloudPrntAvailable}
         initialTab={tab === 'invoice' ? 'invoice' : 'receipt'}
+        ryoshushoIssued={ryoshushoIssued}
       />
     </div>
   );
