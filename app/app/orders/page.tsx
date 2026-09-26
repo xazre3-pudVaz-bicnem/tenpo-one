@@ -13,7 +13,7 @@ import { EmptyState } from '@/components/ui/state';
 import { OrderStatusBadge } from '@/components/orders/status-badge';
 import { LinkChips } from '@/components/orders/link-chips';
 import { Badge } from '@/components/ui/badge';
-import { Printer, Receipt, Utensils } from 'lucide-react';
+import { FileText, Printer, Receipt, Utensils } from 'lucide-react';
 import { METHOD_LABELS } from '@/components/cash/labels';
 
 export const metadata: Metadata = { title: '伝票明細' };
@@ -379,12 +379,22 @@ export default async function OrdersPage({
                     ) : (
                       <>
                         <Link
-                          href={`/app/pos/receipt/${o.id}`}
+                          href={`/app/pos/receipt/${o.id}?from=orders`}
                           className={cn(buttonVariants({ variant: 'outline', size: 'md' }), 'h-9 border-wisteria px-3 text-[13px] text-royal')}
                         >
                           <Printer className="h-4 w-4" aria-hidden />
                           レシート
                         </Link>
+                        {/* 会計済の伝票は、ここから領収書（宛名・但し書き入力→プリンタ印字）も出せる（2026-09-26 店舗要望） */}
+                        {o.status === 'paid' && !isVoided && (
+                          <Link
+                            href={`/app/pos/receipt/${o.id}?tab=invoice&from=orders`}
+                            className={cn(buttonVariants({ variant: 'outline', size: 'md' }), 'h-9 border-wisteria px-3 text-[13px] text-royal')}
+                          >
+                            <FileText className="h-4 w-4" aria-hidden />
+                            領収書
+                          </Link>
+                        )}
                         <Link href={`/app/orders/${o.id}`} className={cn(buttonVariants({ variant: 'secondary', size: 'md' }), 'h-9 px-3.5 text-[13px]')}>
                           詳細
                         </Link>

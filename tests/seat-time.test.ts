@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   durationForCourse,
+  isGuestCount,
   isSeatDuration,
   jstHm,
   seatBadgeLabel,
@@ -37,5 +38,13 @@ describe('seat-time', () => {
       '18:03〜21:03・3h 3980 course'
     );
     expect(seatBadgeLabel({ startMs: start, endMs: null, courseId: null }, courses)).toBe('18:03〜');
+  });
+  it('人数は 1〜999 の整数だけ', () => {
+    expect(isGuestCount(1)).toBe(true);
+    expect(isGuestCount(999)).toBe(true);
+    expect(isGuestCount(0)).toBe(false);
+    expect(isGuestCount(1000)).toBe(false);
+    expect(isGuestCount(2.5)).toBe(false);
+    expect(isGuestCount('4')).toBe(false);
   });
 });

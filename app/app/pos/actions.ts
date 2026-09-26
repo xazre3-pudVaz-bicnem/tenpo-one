@@ -11,7 +11,7 @@ import { applicableTaxRate } from '@/lib/tax';
 import { validateCoupon, COUPON_REJECT_LABELS, type CouponLike } from '@/lib/coupons';
 import { resolveOptionSelection } from '@/lib/menu-options';
 import { resolveStartTime, startTimeProblem } from '@/lib/handy-visit';
-import { isSeatDuration } from '@/lib/seat-time';
+import { isGuestCount, isSeatDuration } from '@/lib/seat-time';
 import { dynamicUnitPrice } from '@/lib/dynamic-pricing';
 import { loadDynamicRules } from '@/lib/dynamic-pricing-server';
 import { clerkCanCancel } from '@/lib/clerk-roles';
@@ -1219,6 +1219,8 @@ export interface SeatTimeInput {
   durationMinutes: number | null;
   /** コース（menu_items.id、item_type='course'）。null ならコースなし */
   courseId: string | null;
+  /** 人数。null/未指定なら今のまま（2026-09-26 店舗要望：席の時間の画面で人数も直す） */
+  guestCount?: number | null;
 }
 
 /**
@@ -1237,6 +1239,12 @@ export async function setSeatTime(orderId: string, input: SeatTimeInput): Promis
   if (input.durationMinutes !== null && !isSeatDuration(input.durationMinutes)) {
     throw new Error('時間は15分〜8時間で選んでください');
   }
+  const guestCount = input.guestCount ?? null;
+  if (guestCount !== null && !isGuestCount(guestCount)) {
+    throw new Error('人数は1〜999名で入力してください');
+  }
+  const guestChanged = guestCount !== null && guestCount !== order.guest_count;
+  const nextGuestCount = guestChanged ? guestCount : (order.guest_count as number) || 1;
   const nowMs = Date.now();
   let startMs = new Date(order.opened_at as string).getTime();
   if (input.startTime) {
@@ -1284,8 +1292,8 @@ export async function setSeatTime(orderId: string, input: SeatTimeInput): Promis
           reserved_date: startAt.toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' }),
           start_at: startAt.toISOString(),
           end_at: endAt.toISOString(),
-          party_size: order.guest_count || 1,
-          adults: order.guest_count || 1,
+          party_size: nextGuestCount,
+          adults: nextGuestCount,
           children: 0,
           guest_name: 'ウォークイン',
           guest_phone: '-',
@@ -1314,6 +1322,8 @@ export async function setSeatTime(orderId: string, input: SeatTimeInput): Promis
         start_at: startAt.toISOString(),
         end_at: endAt.toISOString(),
         course_id: courseId,
+        // 予約表と伝票で人数が食い違わないよう、人数を変えたときは予約の人数も揃える（setGuestCount と同じ）
+        ...(guestChanged ? { party_size: nextGuestCount } : {}),
         updated_by: ctx.userId,
       })
       .eq('id', reservationId);
@@ -1323,6 +1333,7 @@ export async function setSeatTime(orderId: string, input: SeatTimeInput): Promis
   const orderPatch: Record<string, unknown> = {
     opened_at: startAt.toISOString(),
     reservation_id: reservationId,
+    ...(guestChanged ? { guest_count: nextGuestCount } : {}),
     updated_by: ctx.userId,
   };
   // 店内・コースの伝票だけ種類を合わせる（テイクアウト等はそのまま）
@@ -1342,8 +1353,8 @@ export async function setSeatTime(orderId: string, input: SeatTimeInput): Promis
     p_action: 'order.set_seat_time',
     p_target_table: 'orders',
     p_target_id: orderId,
-    p_before: { opened_at: order.opened_at, reservation_id: order.reservation_id },
-    p_after: { opened_at: startAt.toISOString(), end_at: endAt.toISOString(), course_id: courseId },
+    p_before: { opened_at: order.opened_at, reservation_id: order.reservation_id, guest_count: order.guest_count },
+    p_after: { opened_at: startAt.toISOString(), end_at: endAt.toISOString(), course_id: courseId, guest_count: nextGuestCount },
     p_note: null,
   });
 

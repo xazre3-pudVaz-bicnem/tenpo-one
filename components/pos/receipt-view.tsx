@@ -30,14 +30,17 @@ export function ReceiptView({
   qrDataUrl,
   logPrintJobAction,
   cloudPrntAvailable = false,
+  initialTab = 'receipt',
 }: {
   receipt: ReceiptData;
   orderId: string;
   qrDataUrl: string;
   logPrintJobAction: (orderId: string, jobType: 'receipt' | 'ryoshusho') => Promise<void>;
   cloudPrntAvailable?: boolean;
+  /** 伝票明細の「領収書」ボタンから開いたときは、領収書のタブを最初から出す */
+  initialTab?: 'receipt' | 'invoice';
 }) {
-  const [tab, setTab] = useState<'receipt' | 'invoice'>('receipt');
+  const [tab, setTab] = useState<'receipt' | 'invoice'>(initialTab);
   const [paperWidth, setPaperWidth] = useState<PaperWidth>(80);
   const [recipientName, setRecipientName] = useState('');
   const [purpose, setPurpose] = useState('お品代として');
