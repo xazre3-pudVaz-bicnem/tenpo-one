@@ -664,7 +664,7 @@ export function PosScreen({
             {linkedCustomer ? linkedCustomer.name : '顧客 未設定'}
           </button>
           {seatTime && setSeatTimeAction && (
-            <button type="button" onClick={() => setSeatTimeOpen(true)} aria-label="席の時間・コースを変更する" className={cn(metaChip, 'max-w-[15rem]')}>
+            <button type="button" onClick={() => setSeatTimeOpen(true)} aria-label="お客様情報（人数・席の時間・コース）を変更する" className={cn(metaChip, 'max-w-[15rem]')}>
               <Clock className="h-3.5 w-3.5 shrink-0" aria-hidden />
               <span className="truncate">{seatBadgeLabel(seatTime, seatCourses)}</span>
             </button>

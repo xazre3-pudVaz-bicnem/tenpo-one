@@ -84,7 +84,7 @@ export function SeatTimeDialog({
           courseId: courseId || null,
           guestCount: guestChanged ? guests : null,
         });
-        toast(guestChanged ? `席の時間・コース・人数（${guests}名）を変更しました` : '席の時間・コースを変更しました', 'success');
+        toast(guestChanged ? `お客様情報を変更しました（${guests}名）` : 'お客様情報（席の時間・コース）を変更しました', 'success');
         router.refresh();
         onClose();
       } catch (e) {
@@ -96,7 +96,7 @@ export function SeatTimeDialog({
   };
 
   return (
-    <Dialog open onClose={onClose} title="席の時間・コース / Seat time & course">
+    <Dialog open onClose={onClose} title="お客様情報 / Guest info">
       <div className="space-y-5">
         <div className="grid grid-cols-2 gap-3">
           <div>
