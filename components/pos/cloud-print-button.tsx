@@ -58,11 +58,16 @@ export function CloudPrintButton({
       className="flex h-14 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-white hover:bg-primary-deep disabled:opacity-60 print:hidden"
     >
       {pending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Printer className="h-5 w-5" />}
-      {jobType === 'ryoshusho'
-        ? splitAmounts && splitAmounts.length > 1
-          ? `領収書を${splitAmounts.length}枚に分けて印刷`
-          : '領収書をプリンタで印刷'
-        : 'プリンタで印刷'}
+      <span className="flex flex-col items-start leading-tight">
+        <span>
+          {jobType === 'ryoshusho'
+            ? splitAmounts && splitAmounts.length > 1
+              ? `領収書を${splitAmounts.length}枚に分けて印刷`
+              : '領収書を印刷'
+            : 'レシートを印刷'}
+        </span>
+        <span className="text-[11px] font-normal opacity-80">レジのレシートプリンター / Receipt printer</span>
+      </span>
     </button>
   );
 }
