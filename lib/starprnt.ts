@@ -9,12 +9,13 @@
  */
 import iconv from 'iconv-lite';
 import type { ReceiptData } from './receipts';
-import { colsFor, twoCol as twoColBase, wrapText as wrapTextBase, yen, STAR_WIDTH_OPTIONS, type PaperWidth } from './receipt-layout';
+import { billSlipLines, colsFor, twoCol as twoColBase, wrapText as wrapTextBase, yen, STAR_WIDTH_OPTIONS, type PaperWidth } from './receipt-layout';
 
 /** Star 機の全角幅（半角2桁よりわずかに広い）を見込んだ桁揃え・折り返し */
 const twoCol = (left: string, right: string, width: number) => twoColBase(left, right, width, STAR_WIDTH_OPTIONS);
 const wrapText = (text: string, width: number) => wrapTextBase(text, width, STAR_WIDTH_OPTIONS);
 import type { KitchenTicketBuzzer, LayoutLine } from './kitchen-ticket';
+import { splitLabel, type RyoshushoSlip } from './ryoshusho-split';
 
 const ESC = 0x1b;
 const GS = 0x1d;
@@ -184,35 +185,50 @@ export function receiptToStarPrnt(receipt: ReceiptData, options: StarPrntOptions
 /** 領収書（StarPRNT）。Markup版 ryoshushoToStarMarkup と同じ並びにする。 */
 export function ryoshushoToStarPrnt(
   receipt: ReceiptData,
-  options: StarPrntOptions & { recipientName?: string | null; purpose?: string | null } = {}
+  options: StarPrntOptions & {
+    recipientName?: string | null;
+    purpose?: string | null;
+    /** 分割発行の1枚ぶん（lib/ryoshusho-split.ts）。渡すとこの1枚の金額だけを領収額にする */
+    split?: RyoshushoSlip | null;
+  } = {}
 ): Buffer {
   const width = colsFor(options.paperWidth);
   const rule = '-'.repeat(width);
   const b = new StarBuffer(options.currency ?? DEFAULT_CURRENCY, options.encoding ?? DEFAULT_ENCODING, width);
   const recipient = (options.recipientName ?? '').trim() || '上様';
   const purpose = (options.purpose ?? '').trim() || 'お品代として';
+  const split = options.split ?? null;
+  const amount = split ? split.amount : receipt.netPaid;
 
   b.cmd(CMD.init).cmd(CMD.emphasizeOn);
   b.cmd(CMD.alignCenter);
   if (receipt.isReissue) b.line('※ 再発行');
   // 拡大は magnify(横, 縦) で 0=等倍・1=2倍。見出しと金額は縦だけ伸ばし、横は等倍にする
   // （横2倍だと1行に収まらず、紙も文字も大きくなりすぎる）
-  b.cmd(CMD.magnify(0, 1)).line('領 収 書').cmd(CMD.magnify(0, 0)).line();
+  b.cmd(CMD.magnify(0, 1)).line('領 収 書').cmd(CMD.magnify(0, 0));
+  if (split && split.count > 1) b.line(`${splitLabel(split)} 分割発行`);
+  b.line();
   b.cmd(CMD.alignLeft).line(`${recipient} 様`).line(rule);
 
   // 一部返金がある場合は実際に受け取った額（netPaid）を領収額とする
-  b.cmd(CMD.alignCenter).cmd(CMD.magnify(0, 1)).line(yen(receipt.netPaid)).cmd(CMD.magnify(0, 0));
+  b.cmd(CMD.alignCenter).cmd(CMD.magnify(0, 1)).line(yen(amount)).cmd(CMD.magnify(0, 0));
   b.cmd(CMD.alignLeft).line(`但 ${purpose}`).line('上記正に領収いたしました').line(rule);
 
-  b.line(twoCol('小計', yen(receipt.subtotal), width));
-  for (const t of receipt.taxRows) {
-    b.line(twoCol(`  (税${t.rate}%対象 ${yen(t.taxable)})`, `税${yen(t.tax)}`, width));
-  }
-  if (receipt.serviceCharge > 0) b.line(twoCol('サービス料', yen(receipt.serviceCharge), width));
-  if (receipt.discount > 0) b.line(twoCol('値引', `-${yen(receipt.discount)}`, width));
-  b.line(twoCol('合計', yen(receipt.total), width));
-  if (receipt.payments.length > 0) {
-    b.line(twoCol('お支払方法', receipt.payments.map((p) => p.label).join(' / '), width));
+  if (split && split.count > 1) {
+    // 分割発行はこの1枚ぶんの消費税と「全体のうちいくらか」だけ（税率別の対象額は全額に読めるため出さない）
+    b.line(twoCol('内消費税', yen(split.tax), width));
+    b.line(twoCol(`合計 ${yen(receipt.netPaid)} のうち`, `${split.index}/${split.count}`, width));
+  } else {
+    b.line(twoCol('小計', yen(receipt.subtotal), width));
+    for (const t of receipt.taxRows) {
+      b.line(twoCol(`  (税${t.rate}%対象 ${yen(t.taxable)})`, `税${yen(t.tax)}`, width));
+    }
+    if (receipt.serviceCharge > 0) b.line(twoCol('サービス料', yen(receipt.serviceCharge), width));
+    if (receipt.discount > 0) b.line(twoCol('値引', `-${yen(receipt.discount)}`, width));
+    b.line(twoCol('合計', yen(receipt.total), width));
+    if (receipt.payments.length > 0) {
+      b.line(twoCol('お支払方法', receipt.payments.map((p) => p.label).join(' / '), width));
+    }
   }
   b.line(rule);
 
@@ -221,7 +237,8 @@ export function ryoshushoToStarPrnt(
   if (receipt.storePhone) b.line(`TEL ${receipt.storePhone}`);
   if (receipt.registrationNumber) b.line(`登録番号 ${receipt.registrationNumber}`);
   b.line(twoCol(`発行 ${receipt.issuedAt}`, `No.${receipt.orderNo}`, width));
-  if (receipt.netPaid >= 50000) b.line().line('[ 収入印紙 ]');
+  // 収入印紙はこの1枚の領収額で決まる
+  if (amount >= 50000) b.line().line('[ 収入印紙 ]');
   b.line().line().cmd(CMD.cut);
   return b.toBuffer();
 }
@@ -258,7 +275,7 @@ export function orderSlipStarPrnt(slip: OrderSlipData, options: StarPrntOptions 
   if (meta) b.line(meta);
   b.line(`発行 ${slip.issuedAt}`).line(rule);
 
-  for (const it of slip.lines) {
+  for (const it of billSlipLines(slip.lines)) {
     b.line(it.name);
     b.line(twoCol(`  ${it.quantity} x ${yen(it.unitPrice)}`, yen(it.lineTotal), width));
     for (const m of it.modifiers) b.line(twoCol(`   + ${m.name}`, m.price ? yen(m.price) : '', width));

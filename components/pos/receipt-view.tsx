@@ -6,6 +6,13 @@ import { cn } from '@/lib/utils';
 import { yen } from '@/lib/format';
 import { Input } from '@/components/ui/input';
 import type { ReceiptData } from '@/lib/receipts';
+import {
+  isSplitBalanced,
+  ryoshushoSlips,
+  splitAmounts as equalSplit,
+  splitLabel,
+  RYOSHUSHO_SPLIT_MAX,
+} from '@/lib/ryoshusho-split';
 import { PrintButton } from './print-button';
 import { CloudPrintButton } from './cloud-print-button';
 
@@ -34,9 +41,37 @@ export function ReceiptView({
   const [paperWidth, setPaperWidth] = useState<PaperWidth>(80);
   const [recipientName, setRecipientName] = useState('');
   const [purpose, setPurpose] = useState('お品代として');
+  // 領収書の分割発行。1 のときは今までどおり全額1枚
+  const [splitCount, setSplitCount] = useState(1);
+  const [amounts, setAmounts] = useState<number[]>([]);
 
   const visibleLines = useMemo(() => receipt.lines.filter((l) => !l.cancelled), [receipt.lines]);
   const invoiceTaxTotal = useMemo(() => receipt.taxRows.reduce((a, r) => a + r.tax, 0), [receipt.taxRows]);
+
+  // 枚数で割り切れる上限（1枚あたり1円以上）
+  const maxSplit = Math.max(1, Math.min(RYOSHUSHO_SPLIT_MAX, Math.floor(receipt.netPaid)));
+  const isSplit = splitCount > 1 && amounts.length === splitCount;
+  const splitSum = amounts.reduce((a, b) => a + b, 0);
+  const balanced = isSplit && isSplitBalanced(amounts, receipt.netPaid);
+  const slips = useMemo(
+    () => (balanced ? ryoshushoSlips(amounts, invoiceTaxTotal) : []),
+    [balanced, amounts, invoiceTaxTotal]
+  );
+
+  /** 枚数を変えたら等分でやり直す（端数は1枚目に寄る） */
+  const changeSplitCount = (n: number) => {
+    setSplitCount(n);
+    setAmounts(n > 1 ? equalSplit(receipt.netPaid, n) : []);
+  };
+
+  /** 1枚の金額を直したら、差額は最後の1枚で吸収して合計を保つ */
+  const changeAmount = (i: number, value: number) => {
+    setAmounts((prev) => {
+      const next = [...prev];
+      next[i] = Number.isFinite(value) ? Math.max(0, Math.round(value)) : 0;
+      return next;
+    });
+  };
 
   const handlePdfSave = () => {
     window.print();
@@ -110,6 +145,8 @@ export function ReceiptView({
               reissue={receipt.isReissue}
               recipientName={recipientName}
               purpose={purpose}
+              splitAmounts={balanced ? amounts : null}
+              disabled={tab === 'invoice' && isSplit && !balanced}
             />
           )}
 
@@ -135,6 +172,75 @@ export function ReceiptView({
             <label className="mb-1 block text-sm font-medium text-gray-700">但し書き</label>
             <Input value={purpose} onChange={(e) => setPurpose(e.target.value)} />
           </div>
+        </div>
+      )}
+
+      {/* 領収書の分割発行。会計は分けず、証憑だけを人数ぶんに分ける */}
+      {tab === 'invoice' && (
+        <div className="mb-4 rounded-xl border border-gray-200 bg-gray-50 p-3 print:hidden">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-medium text-gray-700">分割発行</span>
+            <div className="flex flex-wrap gap-1">
+              {[1, 2, 3, 4, 5, 6].filter((n) => n <= maxSplit).map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => changeSplitCount(n)}
+                  className={cn(
+                    'rounded-full px-3 py-1 text-sm font-medium',
+                    splitCount === n ? 'bg-navy text-white' : 'bg-white text-gray-600 border border-gray-300'
+                  )}
+                >
+                  {n === 1 ? '分けない' : `${n}枚`}
+                </button>
+              ))}
+            </div>
+            {maxSplit > 6 && (
+              <Input
+                type="number"
+                min={2}
+                max={maxSplit}
+                value={splitCount > 1 ? splitCount : ''}
+                onChange={(e) => {
+                  const n = Number(e.target.value);
+                  if (Number.isInteger(n) && n >= 2 && n <= maxSplit) changeSplitCount(n);
+                }}
+                placeholder="枚数"
+                className="w-24"
+              />
+            )}
+          </div>
+
+          {isSplit && (
+            <>
+              <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                {amounts.map((a, i) => (
+                  <label key={i} className="text-sm">
+                    <span className="mb-1 block text-gray-600">{i + 1}枚目</span>
+                    <Input
+                      type="number"
+                      min={1}
+                      value={a}
+                      onChange={(e) => changeAmount(i, Number(e.target.value))}
+                      className="tabular-nums"
+                    />
+                  </label>
+                ))}
+              </div>
+              <p
+                className={cn(
+                  'mt-2 text-sm tabular-nums',
+                  balanced ? 'text-gray-600' : 'font-semibold text-danger'
+                )}
+              >
+                合計 {yen(splitSum)} / 領収額 {yen(receipt.netPaid)}
+                {!balanced && <>　← 差額 {yen(receipt.netPaid - splitSum)}。合わせないと印刷できません</>}
+              </p>
+              <p className="mt-1 text-xs text-gray-500">
+                会計・売上は分かれません。領収書だけを {splitCount} 枚に分けて出します（1枚ずつ「{splitLabel({ index: 1, count: splitCount })}」が入ります）。
+              </p>
+            </>
+          )}
         </div>
       )}
 
@@ -293,32 +399,95 @@ export function ReceiptView({
             </div>
           </>
         ) : (
-          <>
-            <p className="text-center text-sm font-bold">領収書</p>
-            <div className="my-2 border-t border-dashed border-gray-300" />
-            <p className="border-b border-gray-400 pb-1 text-sm">
-              {recipientName ? `${recipientName} 様` : '　　　　　　　様'}
-            </p>
-            {/* 一部返金がある場合は実質お支払い額（netPaid）を表示する。receipt.total のままだと
-                返金分を含んだ金額が「領収」した金額として証憑に残ってしまう */}
-            <p className="mt-3 text-center text-lg font-bold tabular-nums">{yen(receipt.netPaid)}−</p>
-            <p className="mt-1 text-center text-[10px] text-gray-500">（税込）</p>
-            <div className="my-2 border-t border-dashed border-gray-300" />
-            <p>但し {purpose}</p>
-            <p className="mt-1">上記正に領収いたしました</p>
-            <div className="my-2 border-t border-dashed border-gray-300" />
-            <div className="flex justify-between text-[10px] text-gray-500">
-              <span>内消費税</span>
-              <span className="tabular-nums">{yen(invoiceTaxTotal)}</span>
-            </div>
-            <p className="mt-2">{receipt.issuedAt}</p>
-            <p className="mt-2 font-bold">{receipt.storeName}</p>
-            {receipt.storeAddress && <p>{receipt.storeAddress}</p>}
-            {receipt.storePhone && <p>TEL {receipt.storePhone}</p>}
-            {receipt.registrationNumber && <p>登録番号 {receipt.registrationNumber}</p>}
-          </>
+          <InvoiceBody
+            receipt={receipt}
+            recipientName={recipientName}
+            purpose={purpose}
+            amount={receipt.netPaid}
+            tax={invoiceTaxTotal}
+            label=""
+          />
         )}
       </div>
+
+      {/* 分割したときは、実際に出る枚数ぶんの控えを並べて確認できるようにする */}
+      {tab === 'invoice' && balanced && slips.length > 1 && (
+        <div className="mt-4 print:hidden">
+          <p className="mb-2 text-center text-sm font-medium text-gray-600">
+            この {slips.length} 枚が印刷されます
+          </p>
+          <div className="flex flex-wrap justify-center gap-3">
+            {slips.map((sl) => (
+              <div
+                key={sl.index}
+                className={cn(
+                  'rounded-xl border border-gray-200 bg-white p-4 text-gray-800 shadow-sm',
+                  WIDTH_CLASSES[paperWidth]
+                )}
+              >
+                <InvoiceBody
+                  receipt={receipt}
+                  recipientName={recipientName}
+                  purpose={purpose}
+                  amount={sl.amount}
+                  tax={sl.tax}
+                  label={splitLabel(sl)}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
+  );
+}
+
+/** 領収書の中身。分割発行では金額・内消費税・通し番号だけを差し替えて同じ体裁で出す。 */
+function InvoiceBody({
+  receipt,
+  recipientName,
+  purpose,
+  amount,
+  tax,
+  label,
+}: {
+  receipt: ReceiptData;
+  recipientName: string;
+  purpose: string;
+  amount: number;
+  tax: number;
+  label: string;
+}) {
+  return (
+    <>
+      <p className="text-center text-sm font-bold">領収書{label && <span className="ml-1 font-normal">{label}</span>}</p>
+      <div className="my-2 border-t border-dashed border-gray-300" />
+      <p className="border-b border-gray-400 pb-1 text-sm">
+        {recipientName ? `${recipientName} 様` : '　　　　　　　様'}
+      </p>
+      {/* 一部返金がある場合は実質お支払い額（netPaid）を表示する。receipt.total のままだと
+          返金分を含んだ金額が「領収」した金額として証憑に残ってしまう */}
+      <p className="mt-3 text-center text-lg font-bold tabular-nums">{yen(amount)}−</p>
+      <p className="mt-1 text-center text-[10px] text-gray-500">（税込）</p>
+      <div className="my-2 border-t border-dashed border-gray-300" />
+      <p>但し {purpose}</p>
+      <p className="mt-1">上記正に領収いたしました</p>
+      <div className="my-2 border-t border-dashed border-gray-300" />
+      <div className="flex justify-between text-[10px] text-gray-500">
+        <span>内消費税</span>
+        <span className="tabular-nums">{yen(tax)}</span>
+      </div>
+      {label && (
+        <div className="flex justify-between text-[10px] text-gray-500">
+          <span>合計 {yen(receipt.netPaid)} のうち</span>
+          <span>{label.replace(/[()]/g, '')}</span>
+        </div>
+      )}
+      <p className="mt-2">{receipt.issuedAt}</p>
+      <p className="mt-2 font-bold">{receipt.storeName}</p>
+      {receipt.storeAddress && <p>{receipt.storeAddress}</p>}
+      {receipt.storePhone && <p>TEL {receipt.storePhone}</p>}
+      {receipt.registrationNumber && <p>登録番号 {receipt.registrationNumber}</p>}
+    </>
   );
 }

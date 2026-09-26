@@ -7,12 +7,13 @@
  * キャッシュドロアはMarkupに機種依存があるため drawerKickMarkup() で別ジョブとして扱う。
  */
 import type { ReceiptData } from './receipts';
-import { colsFor, twoCol as twoColBase, wrapText as wrapTextBase, yen, STAR_WIDTH_OPTIONS, type PaperWidth } from './receipt-layout';
+import { billSlipLines, colsFor, twoCol as twoColBase, wrapText as wrapTextBase, yen, STAR_WIDTH_OPTIONS, type PaperWidth } from './receipt-layout';
 
 /** Star 機の全角幅（半角2桁よりわずかに広い）を見込んだ桁揃え・折り返し */
 const twoCol = (left: string, right: string, width: number) => twoColBase(left, right, width, STAR_WIDTH_OPTIONS);
 const wrapText = (text: string, width: number) => wrapTextBase(text, width, STAR_WIDTH_OPTIONS);
 import type { KitchenTicketBuzzer, LayoutLine } from './kitchen-ticket';
+import { splitLabel, type RyoshushoSlip } from './ryoshusho-split';
 
 /** Markup構文で意味を持つ文字を無害化（角括弧・バックスラッシュ）。 */
 function esc(s: string): string {
@@ -105,6 +106,11 @@ export interface RyoshushoOptions extends ReceiptMarkupOptions {
   recipientName?: string | null;
   /** 但し書き（空欄なら「お品代として」） */
   purpose?: string | null;
+  /**
+   * 分割発行の1枚ぶん。会計は分けず、証憑だけを分ける（lib/ryoshusho-split.ts）。
+   * 渡すと金額はこの1枚ぶんになり、見出しに「(2/4)」が付く。
+   */
+  split?: RyoshushoSlip | null;
 }
 
 /**
@@ -122,38 +128,49 @@ export function ryoshushoToStarMarkup(receipt: ReceiptData, options: RyoshushoOp
   const recipient = (options.recipientName ?? '').trim() || '上様';
   const purpose = (options.purpose ?? '').trim() || 'お品代として';
 
+  const split = options.split ?? null;
+  const amount = split ? split.amount : receipt.netPaid;
+
   raw('[bold: on]');
   raw('[align: middle]');
   if (receipt.isReissue) line('※ 再発行');
   raw('[magnify: width 1; height 2]');
   line('領 収 書');
   raw('[magnify: width 1; height 1]');
+  if (split && split.count > 1) line(`${splitLabel(split)} 分割発行`);
   line();
 
   raw('[align: left]');
   line(`${recipient} 様`);
   line(rule);
 
-  // 金額（いちばん大きく）。一部返金がある場合は実際に受け取った額（netPaid）を領収額とする
+  // 金額（いちばん大きく）。一部返金がある場合は実際に受け取った額（netPaid）を領収額とする。
+  // 分割発行のときはこの1枚ぶんの金額だけを出す（合計は下に but し書きとして残す）
   raw('[align: middle]');
   raw('[magnify: width 1; height 2]');
-  line(`${yen(receipt.netPaid)}`);
+  line(`${yen(amount)}`);
   raw('[magnify: width 1; height 1]');
   raw('[align: left]');
   line(`但 ${purpose}`);
   line('上記正に領収いたしました');
   line(rule);
 
-  // 内訳（適格請求書の要件: 税率ごとの対象額と消費税額）
-  line(twoCol('小計', yen(receipt.subtotal), width));
-  for (const t of receipt.taxRows) {
-    line(twoCol(`  (税${t.rate}%対象 ${yen(t.taxable)})`, `税${yen(t.tax)}`, width));
-  }
-  if (receipt.serviceCharge > 0) line(twoCol('サービス料', yen(receipt.serviceCharge), width));
-  if (receipt.discount > 0) line(twoCol('値引', `-${yen(receipt.discount)}`, width));
-  line(twoCol('合計', yen(receipt.total), width));
-  if (receipt.payments.length > 0) {
-    line(twoCol('お支払方法', receipt.payments.map((p) => p.label).join(' / '), width));
+  // 内訳。分割発行のときは、この1枚ぶんの消費税と「全体のうちいくらか」だけを出す
+  // （税率ごとの対象額をそのまま載せると、1枚で全額を領収したように読めてしまうため）
+  if (split && split.count > 1) {
+    line(twoCol('内消費税', yen(split.tax), width));
+    line(twoCol(`合計 ${yen(receipt.netPaid)} のうち`, `${split.index}/${split.count}`, width));
+  } else {
+    line(twoCol('小計', yen(receipt.subtotal), width));
+    for (const t of receipt.taxRows) {
+      line(twoCol(`  (税${t.rate}%対象 ${yen(t.taxable)})`, `税${yen(t.tax)}`, width));
+    }
+    if (receipt.serviceCharge > 0) line(twoCol('サービス料', yen(receipt.serviceCharge), width));
+    if (receipt.discount > 0) line(twoCol('値引', `-${yen(receipt.discount)}`, width));
+    line(twoCol('合計', yen(receipt.total), width));
+    if (receipt.payments.length > 0) {
+      line(twoCol('お支払方法', receipt.payments.map((p) => p.label).join(' / '), width));
+    }
   }
   line(rule);
 
@@ -163,7 +180,8 @@ export function ryoshushoToStarMarkup(receipt: ReceiptData, options: RyoshushoOp
   if (receipt.storePhone) line(`TEL ${receipt.storePhone}`);
   if (receipt.registrationNumber) line(`登録番号 ${receipt.registrationNumber}`);
   line(twoCol(`発行 ${receipt.issuedAt}`, `No.${receipt.orderNo}`, width));
-  if (receipt.netPaid >= 50000) {
+  // 収入印紙は「1枚の領収額」で決まるので、分割したらこの1枚の金額で見る
+  if (amount >= 50000) {
     line();
     line('[ 収入印紙 ]');
   }
@@ -217,7 +235,7 @@ export function orderSlipMarkup(
   line(`発行 ${slip.issuedAt}`);
   line(rule);
 
-  for (const it of slip.lines) {
+  for (const it of billSlipLines(slip.lines)) {
     line(it.name);
     line(twoCol(`  ${it.quantity} x ${yen(it.unitPrice)}`, yen(it.lineTotal), width));
     for (const m of it.modifiers) line(twoCol(`   + ${m.name}`, m.price ? yen(m.price) : '', width));

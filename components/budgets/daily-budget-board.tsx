@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Calendar, ChevronLeft, ChevronRight, Printer, Save } from 'lucide-react';
 import { useToast } from '@/components/ui/toast';
@@ -49,12 +49,16 @@ export function DailyBudgetBoard({
   const [active, setActive] = useState<string>(days[0] ?? '');
   const [entry, setEntry] = useState<string>('');
 
-  // 月が変わったら入れ直す
-  useEffect(() => {
+  // 月が変わったら入れ直す。
+  // useEffect で setState すると描画が二度走るので、描画中に「前回の月」と比べて入れ替える
+  // （React が勧める書き方。https://react.dev/learn/you-might-not-need-an-effect）
+  const [shownMonth, setShownMonth] = useState(month);
+  if (shownMonth !== month) {
+    setShownMonth(month);
     setValues(initial);
     setActive(monthDays(month)[0] ?? '');
     setEntry('');
-  }, [initial, month]);
+  }
 
   const total = monthTotal(values);
   const shown = (v: number) => (taxIncluded ? v : withoutTax(v));

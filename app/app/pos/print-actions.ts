@@ -6,6 +6,14 @@ import { loadReceiptData } from '@/lib/receipts-loader';
 import { receiptToStarMarkup, ryoshushoToStarMarkup, orderSlipMarkup, drawerKickMarkup } from '@/lib/receipt-markup';
 import { receiptToStarPrnt, ryoshushoToStarPrnt, orderSlipStarPrnt, drawerKickStarPrnt } from '@/lib/starprnt';
 import { normalizeFloorIds, pickDefaultPrinter, pickPrinterForFloor } from '@/lib/printer-floors';
+import {
+  isSplitBalanced,
+  isSplitCount,
+  ryoshushoSlips,
+  RYOSHUSHO_SPLIT_MAX,
+  RYOSHUSHO_SPLIT_MIN,
+  type RyoshushoSlip,
+} from '@/lib/ryoshusho-split';
 import { receiptToEposXml, ryoshushoToEposXml, orderSlipEposXml, drawerKickEpos, kitchenTicketsEpos, eposCols } from '@/lib/epos-print';
 import { layoutKitchenTicket, rotateLines180, type KitchenTicket } from '@/lib/kitchen-ticket';
 import { kitchenTicketsMarkup } from '@/lib/receipt-markup';
@@ -92,6 +100,11 @@ export async function enqueueReceiptPrint(
     recipientName?: string | null;
     /** 領収書の但し書き（空欄なら「お品代として」） */
     purpose?: string | null;
+    /**
+     * 領収書の分割発行（1枚ぶんの金額の配列）。合計が領収額と一致するときだけ受け付ける。
+     * 会計・売上は分けない（証憑だけを分ける）。省略すれば今までどおり全額1枚。
+     */
+    splitAmounts?: number[] | null;
   } = {}
 ): Promise<EnqueueResult> {
   const ctx = await requirePermission('pos.checkout');
@@ -118,25 +131,39 @@ export async function enqueueReceiptPrint(
   // （Star機はMarkupかStarPRNT、EPSON機はePOS-Print XMLを取りに来る）。
   // 領収書はレシートとは別レイアウト（見出し「領収書」・宛名・但し書き・金額を大きく）。
   const isRyoshusho = opts.jobType === 'ryoshusho';
-  const ryoshushoOpts = {
-    paperWidth: paper,
-    recipientName: opts.recipientName ?? null,
-    purpose: opts.purpose ?? null,
-  } as const;
-  const markup = isRyoshusho
-    ? ryoshushoToStarMarkup(loaded.receipt, ryoshushoOpts)
-    : receiptToStarMarkup(loaded.receipt, { paperWidth: paper });
-  const starprnt = (
-    isRyoshusho
-      ? ryoshushoToStarPrnt(loaded.receipt, ryoshushoOpts)
-      : receiptToStarPrnt(loaded.receipt, { paperWidth: paper })
-  ).toString('base64');
-  const epos = isRyoshusho
-    ? ryoshushoToEposXml(loaded.receipt, ryoshushoOpts)
-    : receiptToEposXml(loaded.receipt, { paperWidth: paper });
 
-  const rows: Record<string, unknown>[] = [
-    {
+  // 領収書の分割発行: 金額の配列をもらったら、その枚数ぶんジョブを積む（1枚ずつ別の領収書として出る）。
+  // 合計が領収額と合わないものは、証憑がズレるので受け付けない。
+  const amounts = isRyoshusho ? (opts.splitAmounts ?? null) : null;
+  if (amounts && amounts.length > 1) {
+    if (!isSplitCount(amounts.length)) return { ok: false, error: `分割は${RYOSHUSHO_SPLIT_MIN}〜${RYOSHUSHO_SPLIT_MAX}枚までです` };
+    if (!isSplitBalanced(amounts, loaded.receipt.netPaid)) {
+      return { ok: false, error: '分割した金額の合計が領収額と一致しません' };
+    }
+  }
+  const taxTotal = loaded.receipt.taxRows.reduce((a, r) => a + r.tax, 0);
+  const slips =
+    amounts && amounts.length > 1 ? ryoshushoSlips(amounts, taxTotal) : [null as RyoshushoSlip | null];
+
+  const rows: Record<string, unknown>[] = slips.map((split) => {
+    const ryoshushoOpts = {
+      paperWidth: paper,
+      recipientName: opts.recipientName ?? null,
+      purpose: opts.purpose ?? null,
+      split,
+    } as const;
+    const markup = isRyoshusho
+      ? ryoshushoToStarMarkup(loaded.receipt, ryoshushoOpts)
+      : receiptToStarMarkup(loaded.receipt, { paperWidth: paper });
+    const starprnt = (
+      isRyoshusho
+        ? ryoshushoToStarPrnt(loaded.receipt, ryoshushoOpts)
+        : receiptToStarPrnt(loaded.receipt, { paperWidth: paper })
+    ).toString('base64');
+    const epos = isRyoshusho
+      ? ryoshushoToEposXml(loaded.receipt, ryoshushoOpts)
+      : receiptToEposXml(loaded.receipt, { paperWidth: paper });
+    return {
       organization_id: order.organization_id,
       store_id: order.store_id,
       printer_config_id: printer.id,
@@ -147,8 +174,8 @@ export async function enqueueReceiptPrint(
       payload: { body: markup, starprnt, epos },
       status: 'queued',
       created_by: ctx.userId,
-    },
-  ];
+    };
+  });
   if (opts.drawer && printer.drawer_kick) {
     rows.push({
       organization_id: order.organization_id,
