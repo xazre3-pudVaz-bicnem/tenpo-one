@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { SLUG_CHANGE_BY_CYPRESS_ONLY, normalizeStoreSlug } from '@/lib/store-slug';
 import { requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 
@@ -11,31 +12,24 @@ export interface ActionResult {
 const SLOT_MINUTES_VALUES = [15, 30, 60];
 
 // 予約URLに使えないスラッグ（ルーティング・混乱回避）
-const RESERVED_SLUGS = new Set(['book', 'booking', 'order', 'admin', 'app', 'api', 'login', 'www', 'assets', 'public']);
-// 3〜50文字・英小文字/数字/ハイフン・先頭末尾は英数字・連続ハイフン不可
-const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 /**
  * 公開予約URLのスラッグ（stores.slug）を変更する。
+ * 2026-09-27 Ronnie「店舗からは変えられないように。CYPRESS からだけ」→ 運営（is_cypress_admin）だけが呼べる。
  * グローバル一意（全テナント横断）のため、DBのunique制約(23505)で重複を検出する
  * （他組織の店舗はRLSで参照できないため、アプリ側の事前チェックは自組織内に限られる）。
  * 変更すると既存の公開URL・QRコードは無効になる（呼び出し側UIで警告する）。
  */
 export async function updateStoreSlug(input: { storeId: string; slug: string }): Promise<ActionResult> {
   const ctx = await requirePermission('store.settings');
+  if (!ctx.isCypressAdmin) {
+    return { error: SLUG_CHANGE_BY_CYPRESS_ONLY };
+  }
   if (!ctx.stores.some((s) => s.id === input.storeId)) {
     return { error: '対象店舗にアクセス権がありません' };
   }
-  const slug = input.slug.trim().toLowerCase();
-  if (slug.length < 3 || slug.length > 50) {
-    return { error: 'スラッグは3〜50文字で入力してください' };
-  }
-  if (!SLUG_RE.test(slug)) {
-    return { error: '英小文字・数字・ハイフンのみ使用できます（先頭末尾は英数字、ハイフンの連続不可）' };
-  }
-  if (RESERVED_SLUGS.has(slug)) {
-    return { error: 'このスラッグは使用できません。別の文字列を指定してください' };
-  }
+  const { slug, error: slugError } = normalizeStoreSlug(input.slug);
+  if (slugError) return { error: slugError };
 
   const supabase = await createClient();
   const { error } = await supabase

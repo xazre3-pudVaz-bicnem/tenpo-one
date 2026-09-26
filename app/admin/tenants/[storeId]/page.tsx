@@ -19,7 +19,8 @@ import { TenantSupportNotes } from '@/components/admin/tenant-support-notes';
 import { TenantAccessPolicy } from '@/components/admin/tenant-access-policy';
 import { policyFrom } from '@/lib/store-access';
 import { readStoreRegisterPassword } from '@/lib/tenant-provisioning';
-import { saveStoreAccessPolicy, revokeRegisterDevice, reissueRegisterPassword, revealRegisterPassword, saveStoreRegisterUsername } from '../actions';
+import { saveStoreAccessPolicy, revokeRegisterDevice, reissueRegisterPassword, revealRegisterPassword, saveStoreRegisterUsername, updateTenantStoreSlug } from '../actions';
+import { StoreSlugEditor } from '@/components/settings/store-slug-editor';
 
 export const metadata: Metadata = { title: '店舗導入管理' };
 
@@ -144,7 +145,12 @@ export default async function TenantDetailPage({ params }: { params: Promise<{ s
           <CardContent className="space-y-1.5 text-sm">
             <InfoRow label="会社" value={org?.name} />
             <InfoRow label="店舗" value={store.name} />
-            <InfoRow label="slug" value={store.slug} mono />
+            {/* 予約URL（スラッグ）は運営だけが変えられる（2026-09-27 Ronnie） */}
+            {siteUrl ? (
+              <StoreSlugEditor storeId={storeId} slug={store.slug as string} baseUrl={`${siteUrl}/book/`} action={updateTenantStoreSlug} />
+            ) : (
+              <InfoRow label="slug" value={store.slug} mono />
+            )}
             <InfoRow label="住所" value={store.address} />
             <InfoRow label="電話" value={store.phone} />
             <InfoRow label="店舗状態" value={store.status} />
