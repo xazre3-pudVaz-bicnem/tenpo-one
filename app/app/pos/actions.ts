@@ -1068,6 +1068,66 @@ export async function cancelEmptyOrder(
 }
 
 /**
+ * テーブルクリア（2026-09-25 店舗要望 FULL MOoN 御茶ノ水「ここにテーブルクリアがほしい」）。
+ * 卓の伝票を空席に戻す。閉店前の片付けや、間違えて立てた伝票のため。
+ *
+ * 新しい一括処理は作らず、いまある「品目取消」と「品目なし伝票の取消」を順番に呼ぶだけにする。
+ * こうすると承認ルール・監査ログ・キッチンへの取消伝票が、1品ずつ取消したときと完全に同じになる。
+ *   - 支払記録のある伝票は消せない（cancelEmptyOrder が止める）
+ *   - レジ端末では店長以上の承認が要る（requireCancelApproval）
+ *   - 売上には入らない（会計ではなく取消）
+ *   - グループの卓はどれも同じ伝票なので、伝票が消えればグループの卓も空席に戻る
+ */
+export async function clearTable(
+  orderId: string,
+  reason: string,
+  approvedByClerkId?: string | null
+): Promise<{ cancelledItems: number }> {
+  const ctx = await requirePermission('pos.checkout');
+  const why = reason.trim();
+  if (!why) throw new Error('理由を入力してください');
+  const supabase = await createClient();
+  const order = await loadOpenOrder(supabase, ctx, orderId);
+
+  const { count: paymentCount } = await supabase
+    .from('payments')
+    .select('id', { count: 'exact', head: true })
+    .eq('order_id', orderId);
+  if ((paymentCount ?? 0) > 0) {
+    throw new Error('支払記録のある伝票はクリアできません。取引履歴から返金・取消してください');
+  }
+
+  const { data: lines } = await supabase
+    .from('order_items')
+    .select('id')
+    .eq('order_id', orderId)
+    .eq('status', 'active')
+    .order('created_at');
+  const ids = ((lines ?? []) as { id: string }[]).map((l) => l.id);
+
+  // 1品ずつ取消（承認・監査・取消伝票は cancelItem の中）
+  for (const id of ids) {
+    await cancelItem(orderId, id, `テーブルクリア: ${why}`, approvedByClerkId);
+  }
+  // 品目が無くなった伝票を取消して卓を空席に戻す（cancelEmptyOrder の中で卓・予約も戻す）
+  await cancelEmptyOrder(orderId, `テーブルクリア: ${why}`, approvedByClerkId);
+
+  await supabase.rpc('log_audit', {
+    p_org: order.organization_id,
+    p_store: order.store_id,
+    p_action: 'order.clear_table',
+    p_target_table: 'orders',
+    p_target_id: orderId,
+    p_before: { status: 'open', table_id: order.table_id, items: ids.length },
+    p_after: { status: 'cancelled' },
+    p_note: why,
+  });
+
+  revalidatePath('/app/floor');
+  return { cancelledItems: ids.length };
+}
+
+/**
  * 支払メモを伝票に残す（2026-09-25 店舗要望）。
  * 例「カード決済のつもりが現金で受領」。会計画面で入れるメモと同じ場所（orders.memo）に書くので、
  * 伝票明細・レジ締めからそのまま読める。会計の前でも後からでも直せる。

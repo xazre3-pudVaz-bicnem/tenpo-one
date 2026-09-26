@@ -18,7 +18,7 @@ import type {
   UpcomingReservation,
 } from '@/components/floor/types';
 import { saveTableGroup } from './group-actions';
-import { mergeOrders, setGuestCount, setPaymentMemo, setSeatTime } from '@/app/app/pos/actions';
+import { clearTable, mergeOrders, setGuestCount, setPaymentMemo, setSeatTime } from '@/app/app/pos/actions';
 import { enqueueExpoSlipPrint, enqueueSelectedItemsPrint } from '@/app/app/pos/print-actions';
 import { startWalkIn, goToOrder, completeCleaning, setTableAvailability, releaseFinishedCleaning } from './actions';
 
@@ -337,6 +337,7 @@ export default async function FloorPage() {
           printSelectedItemsAction={enqueueSelectedItemsPrint}
           seatCourses={seatCourses}
           setSeatTimeAction={setSeatTime}
+          clearTableAction={clearTable}
           releaseFinishedCleaningAction={releaseFinishedCleaning}
           bottomSlot={<Legend />}
         />

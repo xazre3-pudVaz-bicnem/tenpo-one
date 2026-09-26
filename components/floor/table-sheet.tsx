@@ -10,6 +10,8 @@ import { yen } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { nextReservation, type TableView } from './types';
 import { SeatTimeDialog } from '@/components/pos/seat-time-dialog';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { useClerkGate } from '@/components/pos/clerk-gate';
 import { jstHm, type SeatCourseOption } from '@/lib/seat-time';
 import type { SeatTimeInput } from '@/app/app/pos/actions';
 
@@ -30,12 +32,15 @@ function PopBtn({
   ja,
   en,
   on,
+  danger,
   disabled,
   onClick,
 }: {
   ja: string;
   en: string;
   on?: boolean;
+  /** 取り消し系（テーブルクリア）。赤で出して押し間違いを防ぐ */
+  danger?: boolean;
   disabled?: boolean;
   onClick: () => void;
 }) {
@@ -47,7 +52,7 @@ function PopBtn({
       onClick={onClick}
       className={cn(
         'tap3d flex h-[46px] flex-col items-center justify-center rounded-xl border px-1 text-[12px] font-bold leading-tight disabled:opacity-40',
-        on ? 'border-royal bg-royal text-white' : 'border-line bg-white text-navy'
+        on ? 'border-royal bg-royal text-white' : danger ? 'border-danger/40 bg-white text-danger' : 'border-line bg-white text-navy'
       )}
     >
       {ja}
@@ -86,6 +91,7 @@ export function TableSheet({
   printSelectedItemsAction,
   seatCourses = [],
   setSeatTimeAction,
+  clearTableAction,
 }: {
   table: TableView | null;
   /** 押したテーブルの画面上の位置。その近くに小さく出す */
@@ -115,6 +121,8 @@ export function TableSheet({
   /** 席の時間・コース（卓のポップアップから直す。2026-09-25 店舗要望 FULL MOoN 御茶ノ水） */
   seatCourses?: SeatCourseOption[];
   setSeatTimeAction?: (orderId: string, input: SeatTimeInput) => Promise<void>;
+  /** テーブルクリア（2026-09-25 店舗要望）。品目取消と同じ承認ルール */
+  clearTableAction?: (orderId: string, reason: string, approvedByClerkId?: string | null) => Promise<{ cancelledItems: number }>;
 }) {
   const router = useRouter();
   const popRef = useRef<HTMLDivElement>(null);
@@ -142,6 +150,31 @@ export function TableSheet({
   const [panel, setPanel] = useState<'merge' | 'print' | 'guest' | 'memo' | null>(null);
   /** 席の時間・コースのダイアログ */
   const [seatTimeOpen, setSeatTimeOpen] = useState(false);
+  /** テーブルクリアの確認ダイアログ */
+  const [clearOpen, setClearOpen] = useState(false);
+  const clerkGate = useClerkGate();
+
+  /** テーブルクリア: レジ端末では店長以上の承認をもらってから、伝票を丸ごと取消して空席に戻す */
+  const handleClearTable = async (reason: string) => {
+    if (!clearTableAction || !selected) return;
+    let approverId: string | null = null;
+    if (clerkGate) {
+      const answer = await clerkGate.askApprover();
+      if (!answer.ok) {
+        toast('テーブルクリアには店長以上の承認が必要です / Manager approval required', 'error');
+        return;
+      }
+      approverId = answer.approver?.id ?? null;
+    }
+    try {
+      const r = await clearTableAction(selected.id, reason, approverId);
+      toast(r.cancelledItems > 0 ? `テーブルをクリアしました（${r.cancelledItems}品を取消）` : 'テーブルをクリアしました');
+      onClose();
+      router.refresh();
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'テーブルクリアに失敗しました', 'error');
+    }
+  };
   const [printPick, setPrintPick] = useState<string[]>([]);
   const [memoText, setMemoText] = useState('');
   const [guestEdit, setGuestEdit] = useState<number | null>(null);
@@ -375,6 +408,18 @@ export function TableSheet({
                   en="Seat time / course"
                   disabled={pending || !selected}
                   onClick={() => setSeatTimeOpen(true)}
+                />
+              </div>
+            )}
+            {/* テーブルクリア: 伝票を丸ごと取消して空席に戻す（売上には入らない。支払済みは不可） */}
+            {clearTableAction && table.order && (
+              <div className="mt-1.5 grid grid-cols-1">
+                <PopBtn
+                  ja="テーブルクリア"
+                  en="Clear table"
+                  danger
+                  disabled={pending || !selected}
+                  onClick={() => setClearOpen(true)}
                 />
               </div>
             )}
@@ -694,6 +739,15 @@ export function TableSheet({
         )}
       </div>
       </div>
+      <ConfirmDialog
+        open={clearOpen}
+        onClose={() => setClearOpen(false)}
+        title="テーブルをクリアしますか / Clear this table?"
+        message={`${table.name} の伝票${selected ? ` #${selected.orderNo}` : ''}（${yen(table.order?.total ?? 0)}）の品目をすべて取消し、空席に戻します。売上には入りません。支払済みの伝票はクリアできません。理由を記録してください。`}
+        confirmLabel="テーブルをクリアする / Clear table"
+        requireReason
+        onConfirm={handleClearTable}
+      />
       {seatTimeOpen && selected && table.order && setSeatTimeAction && (
         <SeatTimeDialog
           onClose={() => setSeatTimeOpen(false)}
