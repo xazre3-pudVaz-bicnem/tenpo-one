@@ -13,6 +13,7 @@ import {
   STARPRNT,
   type JobPayload,
 } from '@/lib/print-queue';
+import { handleServerDirectPrint, looksLikeServerDirectPrint } from '@/lib/printing/server-direct-print-handler';
 
 /**
  * Star CloudPRNT サーバーエンドポイント。
@@ -63,9 +64,27 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
   if (!printer) return NextResponse.json({ jobReady: false }, { status: 404 });
 
   // ポーリングのたびに死活情報を更新。POST本文はプリンタのMAC/状態を含む（欠損許容）。
+  let bodyText = '';
+  try {
+    bodyText = await request.text();
+  } catch {
+    bodyText = '';
+  }
+
+  // EPSON（Server Direct Print）機が Star 用のこのURLにつながれているときは、EPSON として受ける。
+  // （設定画面でメーカーを Star にしたまま EPSON 機に URL を入れると、JSON を返しても印字されず
+  //   ジョブが「払い出し済み」のまま残る。2026-09-26 FOGO 新宿のドリンク機で発生）
+  if (looksLikeServerDirectPrint(bodyText, request.headers.get('content-type'))) {
+    if (!/epson/i.test(printer.maker ?? '')) {
+      // 設定画面の接続手順・URLが EPSON 用に切り替わるよう、メーカーを直しておく
+      await admin.from('printer_configs').update({ maker: 'EPSON' }).eq('id', printer.id);
+    }
+    return handleServerDirectPrint(admin, printer, bodyText);
+  }
+
   let mac: string | null = null;
   try {
-    const body = (await request.json()) as { printerMAC?: string };
+    const body = JSON.parse(bodyText) as { printerMAC?: string };
     mac = body?.printerMAC ?? null;
   } catch {
     /* 本文なし/非JSONは許容 */
