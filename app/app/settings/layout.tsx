@@ -15,6 +15,29 @@ export default async function SettingsLayout({ children }: { children: React.Rea
     return !f || !ctx.disabledFeatures.has(f);
   };
 
+  // メニューの中の画面（左メニューには出さず、メニュー系の画面の上にタブで出す）
+  const menuChildrenAll: Row[] = [
+    { href: '/app/settings/plans', label: 'プラン', en: 'Plans', icon: 'plans', description: 'コース・飲み放題・食べ放題の価格と時間', visible: can(role, 'menu.manage') },
+    { href: '/app/settings/options', label: 'オプション', en: 'Options', icon: 'options', description: 'サイズ・トッピング等の選択肢と追加料金', visible: true },
+    { href: '/app/settings/categories', label: 'カテゴリ', en: 'Categories', icon: 'categories', description: 'カテゴリの追加・名前・色と、キッチン／ドリンク／焼き場への振り分け', visible: can(role, 'menu.manage') },
+    { href: '/app/settings/menu-book', label: 'メニューブック', en: 'Menu book', icon: 'menubook', description: 'ハンディ・お客様QRのカテゴリの並び順と出し方、プランで出すカテゴリ', visible: can(role, 'menu.manage') },
+    { href: '/app/settings/menu-bulk', label: '一括編集', en: 'Bulk edit', icon: 'bulk', description: '商品名・カテゴリ・価格・表示・売切を表でまとめて変更', visible: can(role, 'menu.manage') },
+    { href: '/app/settings/dynamic-pricing', label: 'ダイナミックプライシング', en: 'Dynamic pricing', icon: 'dynamic', description: '曜日・時間帯で値段を自動で変える（ハッピーアワー・深夜料金）', visible: can(role, 'menu.manage') },
+  ];
+  const menuChildren = menuChildrenAll.filter((r) => r.visible);
+  const menuParent: Row = {
+    href: '/app/settings/menu',
+    label: 'メニュー',
+    en: 'Menu',
+    icon: 'menu',
+    description: '商品・プラン・オプション・カテゴリ・メニューブック・一括編集・ダイナミックプライシング',
+    visible: can(role, 'menu.manage'),
+    exact: true,
+    children: menuChildren.map(({ visible: _v, ...c }) => c),
+  };
+  // メニューを触れない役割（オプションだけ触れる等）は、中の画面をそのまま並べる
+  const menuRows: Row[] = menuParent.visible ? [menuParent] : menuChildren;
+
   const groups: { label: string; en: string; rows: Row[] }[] = [
     {
       label: '店舗',
@@ -27,18 +50,11 @@ export default async function SettingsLayout({ children }: { children: React.Rea
       ],
     },
     {
-      // 2026-09-23 dinii と同じく メニュー／プラン／オプション／カテゴリ を別の画面に分けた（全店舗共通）
+      // 2026-09-23 dinii と同じく メニュー／プラン／オプション／カテゴリ を別の画面に分けた（全店舗共通）。
+      // 2026-09-27 Ronnie「全部メニューの中に入れたほうがきれい」→ 左には「メニュー」だけ。中の画面は上のタブで切り替える
       label: 'メニュー',
       en: 'Menu',
-      rows: [
-        { href: '/app/settings/menu', label: 'メニュー', en: 'Menu', icon: 'menu', description: '単品の商品の登録、価格、英語名、売切管理', visible: can(role, 'menu.manage') },
-        { href: '/app/settings/plans', label: 'プラン', en: 'Plans', icon: 'plans', description: 'コース・飲み放題・食べ放題の価格と時間', visible: can(role, 'menu.manage') },
-        { href: '/app/settings/options', label: 'オプション', en: 'Options', icon: 'options', description: 'サイズ・トッピング等の選択肢と追加料金', visible: true },
-        { href: '/app/settings/categories', label: 'カテゴリ', en: 'Categories', icon: 'categories', description: 'カテゴリの追加・名前・色と、キッチン／ドリンク／焼き場への振り分け', visible: can(role, 'menu.manage') },
-        { href: '/app/settings/menu-book', label: 'メニューブック', en: 'Menu book', icon: 'menubook', description: 'ハンディ・お客様QRのカテゴリの並び順と出し方、プランで出すカテゴリ', visible: can(role, 'menu.manage') },
-        { href: '/app/settings/menu-bulk', label: 'メニュー一括編集', en: 'Bulk edit', icon: 'bulk', description: '商品名・カテゴリ・価格・表示・売切を表でまとめて変更', visible: can(role, 'menu.manage') },
-        { href: '/app/settings/dynamic-pricing', label: 'ダイナミックプライシング', en: 'Dynamic pricing', icon: 'dynamic', description: '曜日・時間帯で値段を自動で変える（ハッピーアワー・深夜料金）', visible: can(role, 'menu.manage') },
-      ],
+      rows: menuRows,
     },
     {
       label: 'デバイス管理',
