@@ -7,6 +7,7 @@ import { PageHeader } from '@/components/ui/page-header';
 import { NavIcon } from '@/components/layout/nav-icons';
 import { MenuList } from '@/components/layout/menu-list';
 import { signOut } from '@/app/app/actions';
+import { AppModeSwitch } from '@/components/native/app-mode-switch';
 import { menuLayout } from './data';
 
 export const metadata: Metadata = { title: 'メニュー' };
@@ -48,6 +49,9 @@ export default async function MenuPage() {
       )}
 
       <MenuList groups={[{ items: main }]} />
+
+      {/* iPhone アプリ（オーナー）の中だけ：ハンディ／オーナーの切り替え */}
+      <AppModeSwitch className="mt-6 justify-center rounded-xl border border-gray-200 bg-white px-4 py-3.5 font-medium" />
 
       <form action={signOut} className="mt-6">
         <button

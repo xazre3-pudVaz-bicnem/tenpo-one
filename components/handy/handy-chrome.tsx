@@ -24,6 +24,7 @@ import { ReservationAlert } from '@/components/notifications/reservation-alert';
 import { PushSubscribeButton } from '@/components/notifications/push-subscribe-button';
 import { PushAutoSubscribe } from '@/components/notifications/push-auto-subscribe';
 import { ServiceCallAlert } from '@/components/notifications/service-call-alert';
+import { AppModeSwitch } from '@/components/native/app-mode-switch';
 import { useNow } from '@/components/floor/use-now';
 import type { StoreRef } from '@/lib/auth';
 import { elapsedLabel, serviceCallLabel, sortServiceCalls, type HandyServiceCall } from './logic';
@@ -235,6 +236,8 @@ export function HandyChrome({
             </span>
             <span className="text-xs text-[#7a7090]">{sorted.length}件</span>
           </button>
+          {/* iPhone アプリの中だけ：ハンディ／オーナーの切り替え */}
+          <AppModeSwitch className="min-h-[49px] border-b border-[#eee8f6]" />
           <form action={signOut}>
             <button
               type="submit"

@@ -1,0 +1,625 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 60;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		0BE507E946AF89EC72FBC983 = {
+			isa = PBXBuildFile;
+			fileRef = D1C63866AF23AC6389BB9EF5;
+		};
+		190F41D00D639E718139B94D = {
+			isa = PBXBuildFile;
+			fileRef = "627F40489429FE536C5776CA";
+		};
+		25DEDA1A36B8E76C915DC452 = {
+			isa = PBXBuildFile;
+			fileRef = "243BE9663516E557BDACA240";
+		};
+		29F74DB7D48E02E1E5D812A6 = {
+			isa = PBXBuildFile;
+			fileRef = "956DFE02BC7361B56EDD90D3";
+		};
+		30ACE982A1ABD4F029859EDC = {
+			isa = PBXBuildFile;
+			fileRef = D50F3B6D3D6758DFA4C1AC6A;
+		};
+		38402EF1EDCCBA0BC9DD3FD9 = {
+			isa = PBXBuildFile;
+			fileRef = "627F40489429FE536C5776CA";
+		};
+		4FBAF71E741367D9C134067C = {
+			isa = PBXBuildFile;
+			fileRef = "75DC12C17FB620987F5695C3";
+		};
+		636F5EE40DA35EAC7D6CA449 = {
+			isa = PBXBuildFile;
+			fileRef = "9D530487492B80382188A125";
+		};
+		6D54528A22E5BC95D701C81C = {
+			isa = PBXBuildFile;
+			fileRef = "956DFE02BC7361B56EDD90D3";
+		};
+		8189007344559C2C9C64ADB5 = {
+			isa = PBXBuildFile;
+			fileRef = "04D9FFDF2FAAB7F134E5C9AE";
+		};
+		897926AF33B140CE6C91331D = {
+			isa = PBXBuildFile;
+			fileRef = "75DC12C17FB620987F5695C3";
+		};
+		96D472BB7E4E720F620C5C5A = {
+			isa = PBXBuildFile;
+			fileRef = "7BCDF55397833DFC4E8C5157";
+		};
+		9D7153EBF398E8641DD62F46 = {
+			isa = PBXBuildFile;
+			fileRef = "45CF6BB4A7256001043A912F";
+		};
+		9D7C4BFE3CB792E16BD269CE = {
+			isa = PBXBuildFile;
+			fileRef = C3D69C5471DBB48FE4065539;
+		};
+		A976602315C16B760ECF3E3E = {
+			isa = PBXBuildFile;
+			fileRef = "7BCDF55397833DFC4E8C5157";
+		};
+		ABD21A8D0DE11A01880BEE25 = {
+			isa = PBXBuildFile;
+			fileRef = "04D9FFDF2FAAB7F134E5C9AE";
+		};
+		ACE5679C463AC3777572E4B9 = {
+			isa = PBXBuildFile;
+			fileRef = "243BE9663516E557BDACA240";
+		};
+		AF281E51486B3A1A630F948C = {
+			isa = PBXBuildFile;
+			fileRef = C3D69C5471DBB48FE4065539;
+		};
+		B6724023031F8991CD059857 = {
+			isa = PBXBuildFile;
+			fileRef = F6E0ADFD2B231AA49BFF895E;
+		};
+		BB3C3EE3CF9D067EA886C12C = {
+			isa = PBXBuildFile;
+			fileRef = D50F3B6D3D6758DFA4C1AC6A;
+		};
+		C107B2CBBAF99C863892860E = {
+			isa = PBXBuildFile;
+			fileRef = "45CF6BB4A7256001043A912F";
+		};
+		FD5BABB940F3365CFE32EBD8 = {
+			isa = PBXBuildFile;
+			fileRef = "9D530487492B80382188A125";
+		};
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		04D9FFDF2FAAB7F134E5C9AE = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = TenpoOneApp.swift;
+			sourceTree = "<group>";
+		};
+		243BE9663516E557BDACA240 = {
+			isa = PBXFileReference;
+			lastKnownFileType = folder.assetcatalog;
+			path = Shared.xcassets;
+			sourceTree = "<group>";
+		};
+		45CF6BB4A7256001043A912F = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = WebViewController.swift;
+			sourceTree = "<group>";
+		};
+		58BA243280D9E0F214843609 = {
+			isa = PBXFileReference;
+			lastKnownFileType = text.plist.xml;
+			path = Info.plist;
+			sourceTree = "<group>";
+		};
+		5D3D701252D0F7AE870FC99C = {
+			isa = PBXFileReference;
+			lastKnownFileType = text.plist.entitlements;
+			path = Handy.entitlements;
+			sourceTree = "<group>";
+		};
+		627F40489429FE536C5776CA = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = StartViews.swift;
+			sourceTree = "<group>";
+		};
+		75DC12C17FB620987F5695C3 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = AppState.swift;
+			sourceTree = "<group>";
+		};
+		77A4FAEC7CD5420BE67863C7 = {
+			isa = PBXFileReference;
+			lastKnownFileType = text.plist.xml;
+			path = Info.plist;
+			sourceTree = "<group>";
+		};
+		7BCDF55397833DFC4E8C5157 = {
+			isa = PBXFileReference;
+			lastKnownFileType = audio.wav;
+			path = bell.wav;
+			sourceTree = "<group>";
+		};
+		840D4EDC0AA3875E0C5A106D = {
+			isa = PBXFileReference;
+			explicitFileType = wrapper.application;
+			includeInIndex = "0";
+			path = Regi.app;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		84243B4E03990F791CB5271C = {
+			isa = PBXFileReference;
+			explicitFileType = wrapper.application;
+			includeInIndex = "0";
+			path = Handy.app;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		956DFE02BC7361B56EDD90D3 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = Haptics.swift;
+			sourceTree = "<group>";
+		};
+		9D530487492B80382188A125 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = PushManager.swift;
+			sourceTree = "<group>";
+		};
+		C3D69C5471DBB48FE4065539 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = AppConfig.swift;
+			sourceTree = "<group>";
+		};
+		D1C63866AF23AC6389BB9EF5 = {
+			isa = PBXFileReference;
+			lastKnownFileType = folder.assetcatalog;
+			path = Assets.xcassets;
+			sourceTree = "<group>";
+		};
+		D50F3B6D3D6758DFA4C1AC6A = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = QRScannerView.swift;
+			sourceTree = "<group>";
+		};
+		E598371A4D5CE3EAC2004E99 = {
+			isa = PBXFileReference;
+			lastKnownFileType = text.plist.entitlements;
+			path = Regi.entitlements;
+			sourceTree = "<group>";
+		};
+		F6E0ADFD2B231AA49BFF895E = {
+			isa = PBXFileReference;
+			lastKnownFileType = folder.assetcatalog;
+			path = Assets.xcassets;
+			sourceTree = "<group>";
+		};
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		2B834C7197D20C58176F07A1 = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = "2147483647";
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = "0";
+		};
+		EF6F42B5CB73A1321C6977E6 = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = "2147483647";
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = "0";
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		2AC8BA37DAC32D5437812408 = {
+			isa = PBXGroup;
+			children = (
+				"840D4EDC0AA3875E0C5A106D",
+				"84243B4E03990F791CB5271C",
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		3621AE26F7D695E8428161F7 = {
+			isa = PBXGroup;
+			children = (
+				D1C63866AF23AC6389BB9EF5,
+				"58BA243280D9E0F214843609",
+				E598371A4D5CE3EAC2004E99,
+			);
+			path = Regi;
+			sourceTree = "<group>";
+		};
+		4EAE695AD1F489F78EA3E1C6 = {
+			isa = PBXGroup;
+			children = (
+				"9D10A42589C8F5479091BEBD",
+				"3621AE26F7D695E8428161F7",
+				E6D3E49484328C60AD6A590F,
+				"2AC8BA37DAC32D5437812408",
+			);
+			sourceTree = "<group>";
+		};
+		9D10A42589C8F5479091BEBD = {
+			isa = PBXGroup;
+			children = (
+				C3D69C5471DBB48FE4065539,
+				"75DC12C17FB620987F5695C3",
+				"956DFE02BC7361B56EDD90D3",
+				"9D530487492B80382188A125",
+				D50F3B6D3D6758DFA4C1AC6A,
+				"627F40489429FE536C5776CA",
+				"04D9FFDF2FAAB7F134E5C9AE",
+				"45CF6BB4A7256001043A912F",
+				"243BE9663516E557BDACA240",
+				"7BCDF55397833DFC4E8C5157",
+			);
+			path = Shared;
+			sourceTree = "<group>";
+		};
+		E6D3E49484328C60AD6A590F = {
+			isa = PBXGroup;
+			children = (
+				F6E0ADFD2B231AA49BFF895E,
+				"77A4FAEC7CD5420BE67863C7",
+				"5D3D701252D0F7AE870FC99C",
+			);
+			path = Handy;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		4D19308B371C55ABD37F2E8D = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = "7C87987C384A8309ABFB9909";
+			buildPhases = (
+				A8826C0D1EF2203F2FBC1B75,
+				"2B834C7197D20C58176F07A1",
+				"186FB64022C3429843A2A11A",
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Handy;
+			productName = Handy;
+			productReference = "84243B4E03990F791CB5271C";
+			productType = "com.apple.product-type.application";
+		};
+		A1F8A150F33F5500E31B353E = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = EDB38C5BF683962F116B6C87;
+			buildPhases = (
+				"2CCA4904E7060DE92742ED13",
+				EF6F42B5CB73A1321C6977E6,
+				AC94E6244E91ABB7EB73DC21,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Regi;
+			productName = Regi;
+			productReference = "840D4EDC0AA3875E0C5A106D";
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		46F86FAA6BBF9AC94A7E4595 = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = "1";
+				LastSwiftUpdateCheck = "1600";
+				LastUpgradeCheck = "1600";
+				TargetAttributes = {
+					"4D19308B371C55ABD37F2E8D" = {
+						CreatedOnToolsVersion = "16.0";
+					};
+					A1F8A150F33F5500E31B353E = {
+						CreatedOnToolsVersion = "16.0";
+					};
+				};
+			};
+			buildConfigurationList = B61A476A5531CC175278BDCF;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = ja;
+			hasScannedForEncodings = "0";
+			knownRegions = (
+				ja,
+				en,
+				Base,
+			);
+			mainGroup = "4EAE695AD1F489F78EA3E1C6";
+			productRefGroup = "2AC8BA37DAC32D5437812408";
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				A1F8A150F33F5500E31B353E,
+				"4D19308B371C55ABD37F2E8D",
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		186FB64022C3429843A2A11A = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = "2147483647";
+			files = (
+				"25DEDA1A36B8E76C915DC452",
+				A976602315C16B760ECF3E3E,
+				B6724023031F8991CD059857,
+			);
+			runOnlyForDeploymentPostprocessing = "0";
+		};
+		AC94E6244E91ABB7EB73DC21 = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = "2147483647";
+			files = (
+				ACE5679C463AC3777572E4B9,
+				"96D472BB7E4E720F620C5C5A",
+				"0BE507E946AF89EC72FBC983",
+			);
+			runOnlyForDeploymentPostprocessing = "0";
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		2CCA4904E7060DE92742ED13 = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = "2147483647";
+			files = (
+				"9D7C4BFE3CB792E16BD269CE",
+				"897926AF33B140CE6C91331D",
+				"6D54528A22E5BC95D701C81C",
+				FD5BABB940F3365CFE32EBD8,
+				BB3C3EE3CF9D067EA886C12C,
+				"190F41D00D639E718139B94D",
+				"8189007344559C2C9C64ADB5",
+				C107B2CBBAF99C863892860E,
+			);
+			runOnlyForDeploymentPostprocessing = "0";
+		};
+		A8826C0D1EF2203F2FBC1B75 = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = "2147483647";
+			files = (
+				AF281E51486B3A1A630F948C,
+				"4FBAF71E741367D9C134067C",
+				"29F74DB7D48E02E1E5D812A6",
+				"636F5EE40DA35EAC7D6CA449",
+				"30ACE982A1ABD4F029859EDC",
+				"38402EF1EDCCBA0BC9DD3FD9",
+				ABD21A8D0DE11A01880BEE25,
+				"9D7153EBF398E8641DD62F46",
+			);
+			runOnlyForDeploymentPostprocessing = "0";
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		036340592A6F3672788F42AC = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Handy/Handy.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = "1";
+				DEVELOPMENT_TEAM = "";
+				ENABLE_PREVIEWS = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Handy/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "TENPO ONE";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.business";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
+				MARKETING_VERSION = "1.0";
+				PRODUCT_BUNDLE_IDENTIFIER = com.tenpoone.handy;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) HANDY";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = "1";
+			};
+			name = Debug;
+		};
+		08723DE70035A45CE7E33CC1 = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				IPHONEOS_DEPLOYMENT_TARGET = "16.0";
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_VERSION = "5.0";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		28B1E20B45DF5569A3145F55 = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Regi/Regi.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = "1";
+				DEVELOPMENT_TEAM = "";
+				ENABLE_PREVIEWS = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Regi/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "TENPO ONE レジ";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.business";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UIRequiresFullScreen = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
+				MARKETING_VERSION = "1.0";
+				PRODUCT_BUNDLE_IDENTIFIER = com.tenpoone.regi;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) REGI";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = "2";
+			};
+			name = Release;
+		};
+		4027A45E5955280B04A1E889 = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Handy/Handy.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = "1";
+				DEVELOPMENT_TEAM = "";
+				ENABLE_PREVIEWS = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Handy/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "TENPO ONE";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.business";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
+				MARKETING_VERSION = "1.0";
+				PRODUCT_BUNDLE_IDENTIFIER = com.tenpoone.handy;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) HANDY";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = "1";
+			};
+			name = Release;
+		};
+		6118F9303785D932B9FBD95D = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Regi/Regi.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = "1";
+				DEVELOPMENT_TEAM = "";
+				ENABLE_PREVIEWS = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Regi/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "TENPO ONE レジ";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.business";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UIRequiresFullScreen = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
+				MARKETING_VERSION = "1.0";
+				PRODUCT_BUNDLE_IDENTIFIER = com.tenpoone.regi;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) REGI";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = "2";
+			};
+			name = Debug;
+		};
+		80DB6ACE13380ADC3D86D6C5 = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_OPTIMIZATION_LEVEL = "0";
+				IPHONEOS_DEPLOYMENT_TARGET = "16.0";
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = "5.0";
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		7C87987C384A8309ABFB9909 = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				"036340592A6F3672788F42AC",
+				"4027A45E5955280B04A1E889",
+			);
+			defaultConfigurationIsVisible = "0";
+			defaultConfigurationName = Release;
+		};
+		B61A476A5531CC175278BDCF = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				"80DB6ACE13380ADC3D86D6C5",
+				"08723DE70035A45CE7E33CC1",
+			);
+			defaultConfigurationIsVisible = "0";
+			defaultConfigurationName = Release;
+		};
+		EDB38C5BF683962F116B6C87 = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				"6118F9303785D932B9FBD95D",
+				"28B1E20B45DF5569A3145F55",
+			);
+			defaultConfigurationIsVisible = "0";
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+	};
+	rootObject = 46F86FAA6BBF9AC94A7E4595;
+}

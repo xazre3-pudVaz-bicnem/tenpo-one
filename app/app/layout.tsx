@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 import { headers } from 'next/headers';
 import { requireSession } from '@/lib/auth';
-import { isPhoneUserAgent } from '@/lib/device-kind';
+import { isPhoneUserAgent, phoneMayOpenApp } from '@/lib/device-kind';
 import { createClient } from '@/lib/supabase/server';
 import { visibleNavGroups, visibleNavTiles, MOBILE_NAV, TABLET_NAV } from '@/lib/nav';
 import { can } from '@/lib/permissions';
@@ -42,7 +42,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   // スマホからは ハンディ だけ（2026-09-23 要望）。
   // 売上・設定などの本体はパソコンと iPad から。iPad はここに入らない（lib/device-kind.ts）。
-  if (isPhoneUserAgent((await headers()).get('user-agent'))) redirect('/handy');
+  // iPhone アプリの「オーナー・店長」モードだけは、スマホでも本体を開ける（2026-09-28 Ronnie「オーナー用の iPhone アプリ」）
+  const userAgent = (await headers()).get('user-agent');
+  if (isPhoneUserAgent(userAgent) && !phoneMayOpenApp(userAgent)) redirect('/handy');
 
   const supabase = await createClient();
 
