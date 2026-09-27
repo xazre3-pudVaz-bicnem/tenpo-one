@@ -3,6 +3,7 @@
 import { useEffect, useState, useTransition } from 'react';
 import { BellRing, BellOff, Loader2, Share } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { nativeBridge } from '@/lib/native-app';
 import { useToast } from '@/components/ui/toast';
 import { savePushSubscription, deletePushSubscription } from '@/app/app/push-actions';
 import {
@@ -34,6 +35,41 @@ async function detectPushState(): Promise<{ support: PushSupport; state: State }
  * iPhone/iPad は「ホーム画面に追加」したアプリからでないと押せない（案内を出す）。
  */
 export function PushSubscribeButton({ variant = 'card', className }: { variant?: 'card' | 'row'; className?: string }) {
+  // TENPO ONE の iPhone/iPad アプリの中では、アプリの通知（APNs）を使う（ホーム画面に追加の案内は出さない）
+  const [inApp, setInApp] = useState(false);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- window.TenpoNative は client でしか読めない
+    setInApp(nativeBridge() !== null);
+  }, []);
+  if (inApp) return <NativePushButton variant={variant} className={className} />;
+  return <WebPushButton variant={variant} className={className} />;
+}
+
+/** アプリの中：押すと OS の「通知を許可しますか」（許可済みなら何も起きない）。トークンはアプリがサーバーへ送る */
+function NativePushButton({ variant, className }: { variant: 'card' | 'row'; className?: string }) {
+  const { toast } = useToast();
+  const onClick = () => {
+    nativeBridge()?.requestPush();
+    toast('通知の許可を確認しました。届かないときは iPhone/iPad の 設定 > 通知 > TENPO ONE をオンにしてください');
+  };
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        variant === 'row'
+          ? 'flex min-h-[49px] w-full items-center gap-2 border-b border-[#eee8f6] text-left text-sm text-[#7b3fe4]'
+          : 'inline-flex items-center gap-2 rounded-xl border border-line bg-white px-4 py-2.5 text-sm font-bold text-royal',
+        className
+      )}
+    >
+      <BellRing className="h-[18px] w-[18px]" aria-hidden />
+      通知（呼び出し・予約）をオンにする
+    </button>
+  );
+}
+
+function WebPushButton({ variant = 'card', className }: { variant?: 'card' | 'row'; className?: string }) {
   const { toast } = useToast();
   const [support, setSupport] = useState<PushSupport>({ kind: 'unsupported' });
   const [state, setState] = useState<State>('checking');

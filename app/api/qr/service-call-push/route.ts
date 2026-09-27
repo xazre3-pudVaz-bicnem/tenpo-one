@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { sendPushToStore, vapidConfigured } from '@/lib/push-server';
+import { apnsConfigured, sendNativePushToStore } from '@/lib/apns-server';
 import { isFreshCall, serviceCallPushPayload } from '@/lib/service-call-alert';
 
 /**
@@ -27,7 +28,8 @@ export async function POST(request: Request) {
   const token = typeof body.token === 'string' ? body.token.slice(0, 200) : '';
   const callId = typeof body.callId === 'string' ? body.callId : '';
   if (!slug || !token || !UUID.test(callId)) return NextResponse.json({ ok: false }, { status: 400 });
-  if (!vapidConfigured()) return NextResponse.json({ ok: true, sent: 0, reason: 'push-not-configured' });
+  // ブラウザの通知（VAPID）と iPhone/iPad アプリの通知（APNs）。どちらも鍵があるときだけ送る
+  if (!vapidConfigured() && !apnsConfigured()) return NextResponse.json({ ok: true, sent: 0, reason: 'push-not-configured' });
 
   let admin: ReturnType<typeof createAdminClient>;
   try {
@@ -46,9 +48,14 @@ export async function POST(request: Request) {
   if (!table || table.qr_token !== token || !store || store.slug !== slug) return NextResponse.json({ ok: false }, { status: 404 });
   if (call.status !== 'open' || !isFreshCall(call.created_at as string, Date.now())) return NextResponse.json({ ok: true, sent: 0 });
 
-  const result = await sendPushToStore(
-    call.store_id as string,
-    serviceCallPushPayload({ tableName: table.name, kind: call.kind === 'checkout' ? 'checkout' : 'staff', callId: call.id as string })
-  );
-  return NextResponse.json({ ok: true, sent: result.sent });
+  const payload = serviceCallPushPayload({
+    tableName: table.name,
+    kind: call.kind === 'checkout' ? 'checkout' : 'staff',
+    callId: call.id as string,
+  });
+  const [web, native] = await Promise.all([
+    sendPushToStore(call.store_id as string, payload),
+    sendNativePushToStore(call.store_id as string, { ...payload, sound: 'bell', timeSensitive: true }, ['regi', 'handy']),
+  ]);
+  return NextResponse.json({ ok: true, sent: web.sent + native.sent });
 }

@@ -1,5 +1,8 @@
+import { nativeBridge } from './native-app';
+
 /**
- * 端末を震わせる（ブラウザ）。
+ * 端末を震わせる。
+ * - TENPO ONE の iPhone アプリ：アプリが本当に振動させる（window.TenpoNative。画面が消えているときは通知が震わせる）
  * - Android など navigator.vibrate がある端末：そのまま振動
  * - iPhone（Safari）：Web から振動は使えない。iOS 18 以降は「スイッチ」の触覚フィードバックを使う（画面が点いているときだけ）。
  *   画面が消えている・ポケットの中で震わせるには通知（Push）が要る（lib/push-server.ts・sw.js）
@@ -24,6 +27,11 @@ function iosSwitch(): HTMLLabelElement | null {
 }
 
 export function hapticPulse(pattern: number[]): void {
+  const native = nativeBridge();
+  if (native) {
+    native.haptic(pattern);
+    return;
+  }
   try {
     if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function' && navigator.vibrate(pattern)) return;
   } catch {

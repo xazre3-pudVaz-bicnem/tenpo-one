@@ -1,6 +1,7 @@
 import 'server-only';
 import webpush from 'web-push';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { sendNativePushToStore } from '@/lib/apns-server';
 import {
   pushSubscriptionsFrom,
   reservationPushPayload,
@@ -91,7 +92,13 @@ export async function sendPushToStore(storeId: string, payload: ReservationPushP
 /** 新しい予約を店舗の端末へ知らせる（Web Push）。失敗しても投げない */
 export async function pushNewReservation(storeId: string, notice: ReservationNotice): Promise<PushSendResult> {
   try {
-    return await sendPushToStore(storeId, reservationPushPayload(notice));
+    const payload = reservationPushPayload(notice);
+    // iPhone/iPad アプリ（APNs）にも同じ知らせを送る（鍵が無ければ何もしない）
+    const [web] = await Promise.all([
+      sendPushToStore(storeId, payload),
+      sendNativePushToStore(storeId, { ...payload, timeSensitive: true }, ['regi', 'handy']),
+    ]);
+    return web;
   } catch (e) {
     console.error('[push] reservation push failed', storeId, e instanceof Error ? e.message : e);
     return { sent: 0, failed: 0, removed: 0 };

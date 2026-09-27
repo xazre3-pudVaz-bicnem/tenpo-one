@@ -29,3 +29,23 @@ export function isPhoneUserAgent(userAgent: string | null | undefined): boolean 
 
   return false;
 }
+
+/**
+ * TENPO ONE の iPhone/iPad アプリ（ios/）が User-Agent に付ける印：`TenpoOneApp/<mode>/<version>`
+ *   regi … レジ（iPad）、handy … ハンディ（iPhone・スタッフ）、owner … オーナー・店長（iPhone）
+ * 2026-09-28 Ronnie「iPhone と iPad のアプリ。レジは iPad、ハンディとオーナーは iPhone」
+ */
+export type NativeAppMode = 'regi' | 'handy' | 'owner';
+
+export function nativeAppMode(userAgent: string | null | undefined): NativeAppMode | null {
+  const m = /tenpooneapp\/(regi|handy|owner)\b/i.exec(userAgent ?? '');
+  return m ? (m[1].toLowerCase() as NativeAppMode) : null;
+}
+
+/**
+ * スマホでも本体（/app）を開いてよいか：iPhone アプリの「オーナー・店長」モードだけ。
+ * それ以外のスマホは今まで通り ハンディ（/handy）へ
+ */
+export function phoneMayOpenApp(userAgent: string | null | undefined): boolean {
+  return nativeAppMode(userAgent) === 'owner';
+}
