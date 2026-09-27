@@ -185,3 +185,47 @@ export async function saveLunchUntil(storeId: string, lunchUntil: string): Promi
   revalidatePath('/app/settings/hours');
   return {};
 }
+
+/**
+ * 翌準備金（毎日レジに残す金額・円）の保存。null で「その日の釣銭準備金と同じ」に戻す。
+ * レジ精算で数えた現金のうち、これを超える分が 預入金（銀行・預り金）、足りない分が 準備金不足（マイナス）になる
+ * （2026-09-28 Ronnie。DB の close_register_session が store_settings.settings.registerReport.nextFloat を読む）
+ */
+export async function saveNextFloat(storeId: string, nextFloat: number | null): Promise<ActionResult> {
+  const ctx = await requirePermission('store.settings');
+  if (!ctx.stores.some((s) => s.id === storeId)) return { error: '対象店舗にアクセス権がありません' };
+  if (nextFloat != null && (!Number.isInteger(nextFloat) || nextFloat < 0 || nextFloat > 10_000_000)) {
+    return { error: '金額は 0〜10,000,000 円の整数で入れてください' };
+  }
+  const supabase = await createClient();
+  const { data: existing, error: readError } = await supabase.from('store_settings').select('settings').eq('store_id', storeId).maybeSingle();
+  if (readError) return { error: `店舗設定の読み込みに失敗しました: ${readError.message}` };
+  const current = (existing?.settings as Record<string, unknown> | null) ?? {};
+  const rr = (current.registerReport && typeof current.registerReport === 'object' ? current.registerReport : {}) as Record<string, unknown>;
+  const nextRr: Record<string, unknown> = { ...rr };
+  if (nextFloat == null) delete nextRr.nextFloat;
+  else nextRr.nextFloat = nextFloat;
+  const { error } = await supabase.from('store_settings').upsert(
+    {
+      organization_id: ctx.organizationId,
+      store_id: storeId,
+      settings: { ...current, registerReport: nextRr },
+      updated_by: ctx.userId,
+    },
+    { onConflict: 'store_id' }
+  );
+  if (error) return { error: `保存に失敗しました: ${error.message}` };
+  await supabase.rpc('log_audit', {
+    p_org: ctx.organizationId,
+    p_store: storeId,
+    p_action: 'settings.register_report.next_float',
+    p_target_table: 'store_settings',
+    p_target_id: storeId,
+    p_before: null,
+    p_after: { nextFloat },
+    p_note: null,
+  });
+  revalidatePath('/app/settings/hours');
+  revalidatePath('/app/cash/close');
+  return {};
+}

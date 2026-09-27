@@ -112,6 +112,18 @@ export interface RegisterReportData {
     tendered: number;
     /** おつり（お預かり現金 − 現金売上） */
     change: number;
+    /** 開局の比較：前回のレジクローズで残した翌準備金（記録が無ければ null） */
+    openingExpected?: number | null;
+    /** 開局時の過不足 ＝ 釣銭準備金 − 前回の翌準備金 */
+    openingDifference?: number | null;
+    /** 開局時の過不足の理由 */
+    openingDifferenceReason?: string | null;
+    /** 締めで翌日のためにレジに残した額（翌準備金）。無ければ 釣銭準備金 と同じとみなす */
+    nextFloat?: number | null;
+    /** 締めでレジから出した額（預入金＝銀行・預り金） */
+    depositAmount?: number | null;
+    /** 翌準備金の目標に足りない額（準備金不足・マイナス） */
+    floatShortage?: number;
   };
   /** 差異の理由（締めのときに入れた文。無ければ null） */
   differenceReason: string | null;
@@ -374,13 +386,19 @@ export function layoutSettlementReport(data: RegisterReportData, options: Regist
   const { line, kv, kcv, blank, section, sub, subSep } = t;
   const c = data.cash;
   const dep = data.deposits ?? { bank: 0, safe: 0, security: 0 };
-  const depositTotal = dep.bank + dep.safe + dep.security;
-  const nextFloat = c.openingFloat;
-  const collected = c.counted == null ? null : Math.max(0, c.counted - nextFloat);
+  const nextFloat = c.nextFloat ?? c.openingFloat;
+  const collected = c.depositAmount ?? (c.counted == null ? null : Math.max(0, c.counted - nextFloat));
+  const depositTotal = c.depositAmount ?? dep.bank + dep.safe + dep.security;
 
   reportHead(t, data, 'レジ精算 精算情報');
   section('精算情報');
   kv('釣銭準備金', yen(c.openingFloat));
+  // 開局で数えた額と、前回のレジクローズで残した額（翌準備金）の比較（2026-09-28 Ronnie）
+  if (c.openingExpected != null) {
+    kv('  前回の翌準備金', yen(c.openingExpected));
+    kv('  開局時過不足', signedYen(c.openingDifference ?? c.openingFloat - c.openingExpected));
+    if (c.openingDifferenceReason?.trim()) kv('  過不足理由', c.openingDifferenceReason.trim());
+  }
   kv('現金受領', yen(c.cashSales));
   if (c.cashRefunds > 0) kv('現金返金', `-${yen(c.cashRefunds)}`);
   kv('入出金計', signedYen(c.cashIn - c.cashOut));
@@ -392,6 +410,7 @@ export function layoutSettlementReport(data: RegisterReportData, options: Regist
   kv('差異理由', data.differenceReason?.trim() || '未選択');
   blank();
   kv('翌準備金', yen(nextFloat));
+  if ((c.floatShortage ?? 0) > 0) kv('準備金不足', `-${yen(c.floatShortage ?? 0)}`);
   kv('預入金', yen(depositTotal));
   kv('  銀行振込', yen(dep.bank));
   kv('  貸金庫預け', yen(dep.safe));

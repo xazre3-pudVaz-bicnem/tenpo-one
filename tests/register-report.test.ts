@@ -372,6 +372,42 @@ describe('layoutRegisterReport（2026-09-28 Ronnie が選んだ並び）', () =>
     expect(mainOpen).toMatch(/差異合計\s+未入力/);
   });
 
+  it('精算情報：開局の比較（前回の翌準備金・過不足・理由）と、締めの 翌準備金・預入金・準備金不足（2026-09-28 Ronnie）', () => {
+    const lines = layoutSettlementReport(
+      sample({
+        cash: {
+          ...sample().cash,
+          openingFloat: 100000,
+          counted: 60000,
+          openingExpected: 101000,
+          openingDifference: -1000,
+          openingDifferenceReason: '両替に使った',
+          nextFloat: 60000,
+          depositAmount: 0,
+          floatShortage: 40000,
+        },
+      }),
+      { paperWidth: 80 }
+    );
+    const text = lines.map((l) => l.text).join('\n');
+    expect(text).toMatch(/前回の翌準備金\s+¥101,000/);
+    expect(text).toMatch(/開局時過不足\s+-¥1,000/);
+    expect(text).toContain('両替に使った');
+    expect(text).toMatch(/翌準備金\s+¥60,000/);
+    expect(text).toMatch(/準備金不足\s+-¥40,000/);
+    expect(text).toMatch(/預入金\s+¥0/);
+    expect(text).toMatch(/回収金額\s+¥0/);
+
+    const ok = layoutSettlementReport(
+      sample({ cash: { ...sample().cash, openingFloat: 100000, counted: 160000, nextFloat: 100000, depositAmount: 60000, floatShortage: 0 } })
+    )
+      .map((l) => l.text)
+      .join('\n');
+    expect(ok).toMatch(/預入金\s+¥60,000/);
+    expect(ok).not.toContain('準備金不足');
+    expect(ok).not.toContain('前回の翌準備金');
+  });
+
   it('長い備考は桁数で折り返され、1行が用紙幅を超えない', () => {
     const note = 'あ'.repeat(40) + 'い'.repeat(40);
     const lines = layoutRegisterReport(sample({ note }), { paperWidth: 80 });

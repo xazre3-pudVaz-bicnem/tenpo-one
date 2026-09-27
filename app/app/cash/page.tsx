@@ -31,6 +31,8 @@ import { StoreDayClosePanel } from '@/components/cash/store-day-close-panel';
 import { CashEntryForm } from '@/components/cash/cash-entry-form';
 import { sortShops } from '@/lib/cash-shops';
 import { loadStoreClerks } from '@/lib/pos-clerks-server';
+import { loadExpectedOpening, loadStoreDay } from '@/lib/register-day-server';
+import { registerDayFlowActive } from '@/lib/register-day';
 import { CashHistoryTable, splitPurpose } from '@/components/cash/cash-history';
 import { approvePettyCash, rejectPettyCash } from '@/app/app/cash/actions';
 import {
@@ -156,8 +158,10 @@ async function RegisterTab({
   canScan: boolean;
   canPetty: boolean;
 }) {
-  const today = todayJst();
   const supabase = await createClient();
+  // 「今日」＝いまの営業日（レジ精算をするまでは日付をまたいでも前の営業日。2026-09-28 Ronnie）
+  const [storeDay, lastClose] = await Promise.all([loadStoreDay(supabase, storeId), loadExpectedOpening(supabase, storeId)]);
+  const today = storeDay.businessDate;
   const [board, rows, { data: vendorRows }, clerkRows] = await Promise.all([
     loadRegisterBoard(storeId, today),
     loadTodayCashRows(storeId, today),
@@ -289,7 +293,14 @@ async function RegisterTab({
           <div className="grid gap-4 lg:grid-cols-2">
             {cards.map((c) =>
               c.type === 'unopened' ? (
-                <RegisterOpenCard key={c.registerId} storeId={storeId} registerId={c.registerId} registerName={c.registerName} />
+                <RegisterOpenCard
+                  key={c.registerId}
+                  storeId={storeId}
+                  registerId={c.registerId}
+                  registerName={c.registerName}
+                  expectedOpening={registerDayFlowActive(storeDay.clock) ? lastClose.expected : null}
+                  expectedFrom={lastClose.businessDate}
+                />
               ) : c.type === 'open' ? (
                 <SessionCard
                   key={c.session.id}

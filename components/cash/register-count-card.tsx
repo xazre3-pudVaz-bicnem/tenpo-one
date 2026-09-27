@@ -16,6 +16,7 @@ import { denominationsToJson } from '@/lib/register-report';
 import { CashDenominationCounter } from '@/components/cash/cash-denomination-counter';
 import { useClerkGate } from '@/components/pos/clerk-gate';
 import { signOutRegister } from '@/app/app/actions';
+import { closePlan } from '@/lib/register-day';
 
 export interface CountSession {
   id: string;
@@ -41,6 +42,7 @@ export function RegisterCountCard({
   canOperate,
   today,
   openSlipCount = 0,
+  nextFloatTarget,
 }: {
   session: CountSession;
   showRegisterName: boolean;
@@ -49,6 +51,8 @@ export function RegisterCountCard({
   today?: string;
   /** 未会計の伝票の数。1枚でも残っていたらクローズさせない（2026-09-25 店舗要望） */
   openSlipCount?: number;
+  /** 翌準備金の目標（店舗設定、無ければ その日の釣銭準備金）。2026-09-28 Ronnie */
+  nextFloatTarget?: number;
 }) {
   // 金種別に数えた枚数。合計がそのまま実査額になる（電卓で足し算しなくてよい）
   const [counts, setCounts] = useState<DenominationCounts>({});
@@ -61,6 +65,10 @@ export function RegisterCountCard({
   const countedValue = useMemo(() => sumDenominations(counts), [counts]);
   const diff = entered ? countedValue - session.theoreticalCash : null;
   const needsReason = diff != null && diff !== 0;
+  /** 数えた現金の分け方：翌準備金（レジに残す）・預入金（銀行・預り金）・準備金不足 */
+  const plan = entered
+    ? closePlan({ counted: countedValue, openingFloat: session.openingFloat, nextFloatSetting: nextFloatTarget ?? null })
+    : null;
   /** レジクローズの担当者（必ず選ぶ。精算レシートに出る） */
   const clerkName = clerkGate?.clerk?.name ?? null;
   const blocked = openSlipCount > 0 || !entered || diff !== 0 || !clerkName;
@@ -158,6 +166,31 @@ export function RegisterCountCard({
           >
             {diff == null ? '—' : `${diff > 0 ? '+' : diff < 0 ? '−' : '±'}${yen(Math.abs(diff))}`}
           </b>
+        </div>
+
+        {/* 数えた現金の分け方（2026-09-28 Ronnie「現金売上で買い物の分が戻れば、残りは銀行・預り金。足りなければマイナス」） */}
+        <div className="space-y-1.5 border-b border-line py-3 text-sm">
+          <p className="flex items-center justify-between gap-3">
+            <span className="text-ink-2">
+              翌準備金<span className="ml-1 text-[11px] text-ink-3">明日レジに残す</span>
+            </span>
+            <b className="tabular-nums text-ink">{plan ? yen(plan.nextFloat) : '—'}</b>
+          </p>
+          <p className="flex items-center justify-between gap-3">
+            <span className="text-ink-2">
+              預入金<span className="ml-1 text-[11px] text-ink-3">銀行・預り金へ</span>
+            </span>
+            <b className={cn('tabular-nums', plan && plan.deposit > 0 ? 'text-royal' : 'text-ink')}>{plan ? yen(plan.deposit) : '—'}</b>
+          </p>
+          {plan && plan.shortage > 0 && (
+            <p className="flex items-center justify-between gap-3 font-bold text-danger">
+              <span>準備金不足（マイナス）</span>
+              <b className="tabular-nums">−{yen(plan.shortage)}</b>
+            </p>
+          )}
+          <p className="text-[11px] text-ink-3">
+            目標 {yen(nextFloatTarget ?? session.openingFloat)}（{nextFloatTarget != null && nextFloatTarget !== session.openingFloat ? '店舗設定' : '今日の釣銭準備金と同じ'}）
+          </p>
         </div>
 
         {needsReason && (

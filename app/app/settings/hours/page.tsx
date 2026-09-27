@@ -10,6 +10,8 @@ import { BusinessHoursForm } from '@/components/settings/business-hours-form';
 import { HolidaysPanel } from '@/components/settings/holidays-panel';
 import { DaypartForm } from '@/components/settings/daypart-form';
 import { daypartSettingsFrom } from '@/lib/daypart';
+import { NextFloatForm } from '@/components/settings/next-float-form';
+import { nextFloatSettingFrom } from '@/lib/register-day';
 import type { BusinessHourInput } from './actions';
 
 export const metadata: Metadata = { title: '営業時間・休業日 | 設定' };
@@ -73,6 +75,8 @@ export default async function HoursSettingsPage() {
         <BusinessHoursForm storeId={targetStore.id} initial={initialHours} />
         {/* レジ精算レシートの ランチ／ディナー の区切り（2026-09-28 Ronnie） */}
         <DaypartForm storeId={targetStore.id} initial={daypart.lunchUntil} />
+        {/* 翌準備金（毎日レジに残す金額。2026-09-28 Ronnie） */}
+        <NextFloatForm storeId={targetStore.id} initial={nextFloatSettingFrom(settingsRow?.settings)} />
         <HolidaysPanel storeId={targetStore.id} initial={initialHolidays} />
       </div>
     </div>

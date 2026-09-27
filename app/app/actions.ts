@@ -3,8 +3,10 @@
 import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { STORE_COOKIE, requireSession } from '@/lib/auth';
+import { STORE_COOKIE, getSessionContext, requireSession } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
+import { canSignOutRegister } from '@/lib/register-day';
+import { loadStoreDay } from '@/lib/register-day-server';
 
 /** 店舗切替（アクセス可能店舗か検証してCookieへ保存） */
 export async function switchStore(storeId: string) {
@@ -32,6 +34,15 @@ export async function switchStore(storeId: string) {
  */
 export async function signOut() {
   const supabase = await createClient();
+  // レジ端末は、開いているレジがあればログアウトさせない。レジ精算（レジクローズ）をすると自動でログアウトする
+  // （2026-09-28 Ronnie「レジ精算をしないとログアウトできない」）。パソコン・ハンディは今まで通り
+  const ctx = await getSessionContext();
+  if (ctx?.isRegisterDevice && ctx.currentStore) {
+    const day = await loadStoreDay(supabase, ctx.currentStore.id);
+    if (!canSignOutRegister({ isRegisterDevice: true, openSessionCount: day.openCount, today: day.clock })) {
+      redirect('/app/cash/close?logout=blocked');
+    }
+  }
   await supabase.auth.signOut({ scope: 'local' });
   redirect('/login');
 }

@@ -5,7 +5,9 @@ import { requireFeature } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { can } from '@/lib/permissions';
 import { computeSalesMetrics, SETTLED_ORDER_STATUSES, type SalesMetricsOptions } from '@/lib/metrics';
-import { yen, formatTime, todayJst } from '@/lib/format';
+import { yen, formatTime } from '@/lib/format';
+import { loadExpectedOpening, loadStoreDay } from '@/lib/register-day-server';
+import { mdLabel, registerDayFlowActive } from '@/lib/register-day';
 import { cn } from '@/lib/utils';
 import { PageHeader } from '@/components/ui/page-header';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -29,7 +31,11 @@ export const metadata: Metadata = { title: 'レジクローズ' };
 /** 支払方法別の表で常に表示する方法（プロトタイプ: 現金・クレジット・QR・電子マネー） */
 const BASE_METHODS = ['cash', 'credit', 'qr', 'emoney'];
 
-export default async function CashClosePage({ searchParams }: { searchParams: Promise<{ period?: string; date?: string }> }) {
+export default async function CashClosePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ period?: string; date?: string; logout?: string }>;
+}) {
   const ctx = await requireFeature('accounting');
   const sp = await searchParams;
   const store = ctx.currentStore ?? ctx.stores[0] ?? null;
@@ -44,7 +50,9 @@ export default async function CashClosePage({ searchParams }: { searchParams: Pr
   }
 
   const supabase = await createClient();
-  const today = todayJst();
+  // 「今日」＝いまの営業日。レジ精算をするまでは日付をまたいでも前の営業日のまま（2026-09-28 Ronnie）
+  const [storeDay, lastClose] = await Promise.all([loadStoreDay(supabase, store.id), loadExpectedOpening(supabase, store.id)]);
+  const today = storeDay.businessDate;
   // 売上の内訳の期間（日次／月次。2026-09-27 Ronnie）
   const period: BreakdownPeriod = sp.period === 'month' ? 'month' : 'day';
   const bdDate =
@@ -148,10 +156,17 @@ export default async function CashClosePage({ searchParams }: { searchParams: Pr
       />
 
       <div className="space-y-4">
+        {/* レジ端末でログアウトを押したが、レジが開いている（2026-09-28 Ronnie「レジ精算をしないとログアウトできない」） */}
+        {sp.logout === 'blocked' && storeDay.openCount > 0 && (
+          <p className="rounded-xl border border-danger/30 bg-danger-soft px-4 py-3 text-[14px] font-bold text-danger">
+            レジが開いたままなのでログアウトできません。現金を数えてレジ精算（レジクローズ）をすると、自動でログアウトします。
+          </p>
+        )}
+
         {/* 本日の売上 */}
         <Card>
           <CardHeader className="flex flex-wrap items-center justify-between gap-2">
-            <CardTitle>本日の売上（会計済）</CardTitle>
+            <CardTitle>{storeDay.continuing ? `${mdLabel(today)} の営業日の売上（会計済）` : '本日の売上（会計済）'}</CardTitle>
             {openCount > 0 ? (
               <Link href="/app/orders?status=open" className="text-[13px] text-ink-3 hover:text-royal hover:underline">
                 未会計 <span className="tabular-nums">{openCount}</span>卓 <span className="tabular-nums">{yen(openTotal)}</span>
@@ -299,6 +314,7 @@ export default async function CashClosePage({ searchParams }: { searchParams: Pr
                 canOperate={canOperate}
                 today={today}
                 openSlipCount={openCount}
+                nextFloatTarget={storeDay.nextFloatSetting ?? s.openingFloat}
               />
             ))}
             {openSessions.length === 0 && (
@@ -311,13 +327,20 @@ export default async function CashClosePage({ searchParams }: { searchParams: Pr
                     {cards.length === 0
                       ? 'レジが登録されていません。設定からレジを登録してください。'
                       : closedCards.length > 0
-                        ? '開局中のレジはありません（本日のレジはクローズ済みです）。下の「店舗日次締め」で営業日を締めてください。'
+                        ? '開局中のレジはありません（レジ精算ずみ）。レジ精算がすむと営業日完了になります。'
                         : '開局中のレジはありません。開局すると現金実査とクローズができます。'}
                   </p>
                   {canOperate &&
                     unopenedCards.map((c) =>
                       c.type === 'unopened' ? (
-                        <RegisterOpenCard key={c.registerId} storeId={store.id} registerId={c.registerId} registerName={c.registerName} />
+                        <RegisterOpenCard
+                          key={c.registerId}
+                          storeId={store.id}
+                          registerId={c.registerId}
+                          registerName={c.registerName}
+                          expectedOpening={registerDayFlowActive(storeDay.clock) ? lastClose.expected : null}
+                          expectedFrom={lastClose.businessDate}
+                        />
                       ) : null
                     )}
                 </CardContent>
