@@ -239,7 +239,15 @@ export function TableSheet({
   );
 
   return (
-    <div className="fixed inset-0 z-50" onClick={onClose} role="presentation">
+    // 外（暗い所）を押したときだけ閉じる。ポップアップの下に出す確認ダイアログ（テーブルクリアの理由など）の中を押しても
+    // ここまで click が上がってくるので、押した場所そのものが外のときだけにする（2026-09-28 店舗「理由をタップすると消える」）
+    <div
+      className="fixed inset-0 z-50"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      role="presentation"
+    >
       <div
         ref={popRef}
         role="dialog"
