@@ -105,9 +105,9 @@ export function HandyJoinView({
 
         {state === 'error' && (
           <div className="mt-5 rounded-2xl bg-white px-5 py-5 shadow-sm">
-            <p className="flex items-start gap-2 text-sm text-red-700">
+            <p className="flex items-start gap-2 text-sm whitespace-pre-line text-red-700">
               <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-              {error}
+              <span>{error}</span>
             </p>
             <p className="mt-3 flex items-center gap-2 text-xs text-[#7a7090]">
               <Wifi className="h-4 w-4" aria-hidden />
