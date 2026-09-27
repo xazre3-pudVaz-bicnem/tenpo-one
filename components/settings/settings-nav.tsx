@@ -197,6 +197,8 @@ export function SettingsShell({ groups, children }: { groups: SettingsNavGroup[]
   const isHub = pathname === HUB;
   // 中に画面を持つ項目（メニュー）を開いているときは、画面の上に親＋子のタブを出す
   const parent = groups.flatMap((g) => g.items).find((i) => i.children?.length && isActive(pathname, i));
+  // 中の画面が1つだけのまとめ（集計）はタブを出さない
+  const showTabs = !!parent && !(parent.hub && (parent.children?.length ?? 0) < 2);
 
   return (
     <div className="flex flex-col gap-4">
@@ -218,7 +220,7 @@ export function SettingsShell({ groups, children }: { groups: SettingsNavGroup[]
           <Suspense fallback={null}>
             <RegisterReturnBar />
           </Suspense>
-          {parent && <SettingsSubTabs item={parent} pathname={pathname} />}
+          {parent && showTabs && <SettingsSubTabs item={parent} pathname={pathname} />}
           {children}
         </div>
       </div>

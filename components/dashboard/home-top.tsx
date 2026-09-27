@@ -1,6 +1,6 @@
 /**
  * ホーム上段（プロトタイプ 01-home の配置）:
- * お知らせ → [予算達成率(2/3) | 時計(1/3)] → KPI 5タイル
+ * お知らせ&アラート → [予算達成率(2/3) | 時計(1/3)] → KPI 5タイル
  */
 import { Suspense } from 'react';
 import { BudgetCard } from './budget-card';
@@ -26,6 +26,8 @@ export function HomeTop({
       <HomeNotices
         announcements={data.announcements}
         unreadCount={data.unreadCount}
+        alerts={data.alerts}
+        alertCount={data.alertCount}
         autoNotices={data.autoNotices}
         todos={data.todos}
       />

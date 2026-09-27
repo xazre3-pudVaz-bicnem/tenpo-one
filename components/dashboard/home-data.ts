@@ -33,6 +33,7 @@ import {
   type RepeatSummary,
 } from '@/lib/home-todos';
 import { collectDashboardAlerts, type DashboardAlert } from './alerts';
+import { notificationTypeLabel } from '@/app/app/notifications/labels';
 
 type SupabaseClient = Awaited<ReturnType<typeof createClient>>;
 
@@ -49,9 +50,23 @@ export interface HomeAnnouncement {
   unread: boolean;
 }
 
+/** 自分宛の未読の通知（アラート）。ホームの「お知らせ&アラート」に出す（2026-09-28 Ronnie） */
+export interface HomeAlert {
+  id: string;
+  /** 種別ラベル（予約・レジ・現金・在庫…） */
+  kindLabel: string;
+  title: string;
+  href: string;
+  createdAt: string;
+}
+
 export interface HomeData {
   announcements: HomeAnnouncement[];
   unreadCount: number;
+  /** 未読の通知（アラート）。新しい順・最大10件 */
+  alerts: HomeAlert[];
+  /** 未読の通知の合計件数 */
+  alertCount: number;
   autoNotices: AutoNotice[];
   todos: HomeTodo[];
   /** 実績（本日の会計済み純売上 + 未会計の注文合計） */
@@ -129,6 +144,7 @@ export async function loadHomeData({
     periodsRes,
     storeAddressRes,
     alerts,
+    notificationsRes,
   ] = await Promise.all([
     supabase
       .from('orders')
@@ -219,6 +235,16 @@ export async function loadHomeData({
       : Promise.resolve({ data: [] as { month: string; status: string }[] }),
     supabase.from('stores').select('address').in('id', storeIds.slice(0, 1)).maybeSingle(),
     collectDashboardAlerts(supabase, organizationId, stores, isAllStores),
+    // 自分宛の未読の通知（アラート）。本部からのお知らせ（announcement）は上の一覧と重なるので除く
+    supabase
+      .from('notifications')
+      .select('id, type, title, link, created_at, store_id', { count: 'exact' })
+      .eq('recipient_id', userId)
+      .is('read_at', null)
+      .neq('type', 'announcement')
+      .or(`store_id.is.null,store_id.in.(${storeIn})`)
+      .order('created_at', { ascending: false })
+      .limit(10),
   ]);
 
   // ---- 売上・客数 ----
@@ -284,6 +310,17 @@ export async function loadHomeData({
     .sort((a, b) => Number(b.unread) - Number(a.unread));
   const unreadCount = announcements.filter((a) => a.unread).length;
 
+  // ---- 未読の通知（アラート） ----
+  const alertRows = (notificationsRes.data ?? []) as { id: string; type: string; title: string; link: string | null; created_at: string }[];
+  const homeAlerts: HomeAlert[] = alertRows.map((n) => ({
+    id: n.id,
+    kindLabel: notificationTypeLabel(n.type),
+    title: n.title,
+    href: n.link && n.link.startsWith('/') ? n.link : '/app/notifications',
+    createdAt: noticeTime(n.created_at, today),
+  }));
+  const alertCount = notificationsRes.count ?? homeAlerts.length;
+
   // ---- 自動検知（ルール判定） ----
   const storeName = new Map(stores.map((s) => [s.id, s.name]));
   const registerNotices = buildRegisterDiffNotices(
@@ -332,6 +369,8 @@ export async function loadHomeData({
   return {
     announcements,
     unreadCount,
+    alerts: homeAlerts,
+    alertCount,
     autoNotices,
     todos,
     actualSales,

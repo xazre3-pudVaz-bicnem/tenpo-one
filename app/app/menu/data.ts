@@ -16,6 +16,7 @@ const MOVED_OUT_OF_MENU = new Set([
   '/app/inventory', // → 「仕入・在庫」の中へ（下で入れ直す）
   '/app/staff', // → 設定 > 予約・顧客（スタッフ・権限）
   '/app/dashboard', // → 上部バーの「ホーム」ボタンとロゴから開く（スマホは下部ナビにもある）
+  '/app/notifications', // → ホームの「お知らせ&アラート」の中（上部バーの鈴からも。2026-09-28 Ronnie）
 ]);
 
 /**
@@ -31,23 +32,23 @@ const BEFORE_EXPENSES = '/app/cash/close';
 const INVENTORY = '/app/inventory';
 const BEFORE_INVENTORY = '/app/settings';
 
-/** 集計（店舗運営・仕入・在庫・経理・管理・チームをまとめた画面） */
+/**
+ * 集計（店舗運営・仕入・在庫・経理・労務・経営・店舗内共有・管理をまとめた画面）。
+ * 2026-09-28 Ronnie「集計は設定の中に」→ 設定 > 集計（/app/settings/summary）。一覧には出さない
+ */
 export const SUMMARY_ITEM: NavItem = {
-  href: '/app/menu/summary',
+  href: '/app/settings/summary',
   label: '集計',
   en: 'Reports & admin',
   icon: 'chart',
 };
 
-/** 集計ボタンを差し込む位置（この href の手前に入れる） */
-const SUMMARY_BEFORE = '/app/notifications';
-
 export interface MenuLayout {
   /** 上の大きなタイル */
   tiles: NavTile[];
-  /** 一覧の先頭グループ（レジ業務）。集計ボタンを含む */
+  /** 一覧の先頭グループ（レジ業務）。集計・アラートは含まない（設定の中・ホームの中） */
   main: NavItem[];
-  /** 集計の中に入るグループ */
+  /** 設定 > 集計 の中に入るグループ */
   summaryGroups: NavGroup[];
 }
 
@@ -91,14 +92,5 @@ export function menuLayout(
   // 「在庫設定」は左メニューの「設定」の手前だけに出す（集計＞仕入・在庫 には入れない）
   const summaryGroups = trimmed.filter((g) => g.label !== null);
 
-  // 集計ボタンは アラート の手前（＝設定とアラートの間）に入れる
-  const at = main.findIndex((i) => i.href === SUMMARY_BEFORE);
-  const withSummary =
-    summaryGroups.length === 0
-      ? main
-      : at < 0
-        ? [...main, SUMMARY_ITEM]
-        : [...main.slice(0, at), SUMMARY_ITEM, ...main.slice(at)];
-
-  return { tiles, main: withSummary, summaryGroups };
+  return { tiles, main, summaryGroups };
 }
