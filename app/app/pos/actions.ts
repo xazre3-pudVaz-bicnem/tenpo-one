@@ -973,6 +973,22 @@ export async function moveTable(orderId: string, newTableId: string): Promise<{ 
 }
 
 /**
+ * 品を1つも入れずに注文画面を離れた伝票を、何も無かったことにする（卓は空席へ）。
+ * 2026-09-28 Ronnie「Order を決定していなければ、その卓に ¥0 で残らない」。中身は lib/discard-untouched-order.ts
+ */
+export async function discardUntouchedOrderAction(orderId: string): Promise<{ discarded: boolean }> {
+  const ctx = await requirePermission('pos.order');
+  const supabase = await createClient();
+  const { discardUntouchedOrder } = await import('@/lib/discard-untouched-order');
+  const r = await discardUntouchedOrder(supabase, ctx, orderId);
+  if (r.discarded) {
+    revalidatePath('/app/floor');
+    revalidatePath('/app/pos');
+  }
+  return { discarded: r.discarded };
+}
+
+/**
  * 品目のない注文（会計前・¥0）を取消する。
  * 誤ってウォークイン着席した／お客様が注文せずに退店した等で残った空の注文を「会計待ち」から消すための操作。
  * - 有効な品目が1つでも残っていれば取消できない（先に品目取消 or 会計を行う）

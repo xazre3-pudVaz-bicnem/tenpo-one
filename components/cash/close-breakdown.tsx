@@ -38,14 +38,7 @@ export function CloseBreakdownCard({
       <CardHeader className="flex flex-wrap items-center justify-between gap-2">
         <CardTitle en="Sales breakdown">売上の内訳</CardTitle>
         <div className="flex flex-wrap items-center gap-2">
-          <nav className="inline-flex rounded-xl border border-line bg-white p-1" aria-label="期間">
-            <Link href={href('day', today)} className={cn('rounded-lg px-3 py-1.5 text-[13px] font-bold', isDay ? 'on-brand text-white' : 'text-ink-2 hover:bg-lilac-soft')}>
-              日次<span className="ml-1 font-num text-[10.5px] font-semibold opacity-80">Daily</span>
-            </Link>
-            <Link href={href('month', month)} className={cn('rounded-lg px-3 py-1.5 text-[13px] font-bold', !isDay ? 'on-brand text-white' : 'text-ink-2 hover:bg-lilac-soft')}>
-              月次<span className="ml-1 font-num text-[10.5px] font-semibold opacity-80">Monthly</span>
-            </Link>
-          </nav>
+          {/* 日次／月次の切り替えは画面の右上（2026-09-28）。ここは前後の移動だけ */}
           <div className="inline-flex items-center rounded-xl border border-line bg-white">
             <Link href={href(period, prev)} aria-label="前へ" className="grid h-9 w-9 place-items-center rounded-l-xl text-ink-2 hover:bg-lilac-soft">
               <ChevronLeft className="h-4 w-4" />

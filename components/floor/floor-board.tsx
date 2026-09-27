@@ -75,6 +75,7 @@ export function FloorBoard({
   clearTableAction,
   releaseFinishedCleaningAction,
   topSlot,
+  aboveTables,
   bottomSlot,
 }: {
   storeId: string;
@@ -110,6 +111,8 @@ export function FloorBoard({
   clearTableAction?: (orderId: string, reason: string, approvedByClerkId?: string | null) => Promise<{ cancelledItems: number }>;
   /** テーブルの上に出すもの（テイクアウト）。右のご予約は一番上から出したいのでここに入れる */
   topSlot?: ReactNode;
+  /** テーブルの並びのすぐ上（卓1の上）に出す小さいもの。テイクアウトのボタンなど（2026-09-28 Ronnie） */
+  aboveTables?: ReactNode;
   /** テーブルの下に出すもの（色の見方）。上に置くとテーブルが下がるので一番下に置く */
   bottomSlot?: ReactNode;
   /** 清掃中のまま時間が過ぎたテーブルを空席に戻す。省略時は自動解除しない */
@@ -270,6 +273,7 @@ export function FloorBoard({
           onTouchStart={canSwipeFloor ? onTouchStart : undefined}
           onTouchEnd={canSwipeFloor ? onTouchEnd : undefined}
         >
+          {aboveTables && <div className="mb-2 flex">{aboveTables}</div>}
           {view === 'map' && hasPlacement ? (
             <div className="space-y-3">
               {mapGroups.map((g) => {

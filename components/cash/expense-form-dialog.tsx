@@ -9,16 +9,23 @@ import { todayJst } from '@/lib/format';
 import { addExpense, seedExpenseAccounts } from '@/app/app/expenses/actions';
 import { PAID_VIA_LABELS, type PaidVia } from '@/components/cash/labels';
 
+/**
+ * 仕入・経費の登録。支払先は企業の仕入先（vendors）から選べる（ABC／五十音順・2026-09-28 Ronnie）。
+ * 仕入先に無い店は「その他（手入力）」で今まで通り名前を打つ。保存先は今まで通り vendor_name。
+ */
 export function ExpenseFormDialog({
   storeId,
   accounts,
+  vendors = [],
   canSeedAccounts,
 }: {
   storeId: string;
   accounts: { id: string; name: string }[];
+  vendors?: { id: string; name: string }[];
   canSeedAccounts: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const [vendorId, setVendorId] = useState('');
   const [accountId, setAccountId] = useState(accounts[0]?.id ?? '');
   const [amount, setAmount] = useState('');
   const [taxAmount, setTaxAmount] = useState('0');
@@ -35,6 +42,7 @@ export function ExpenseFormDialog({
     setAmount('');
     setTaxAmount('0');
     setPaidVia('petty_cash');
+    setVendorId('');
     setVendorName('');
     setMemo('');
     setBusinessDate(todayJst());
@@ -141,8 +149,36 @@ export function ExpenseFormDialog({
               </Select>
             </div>
             <div>
+              <Label htmlFor="exp-vendor-pick">仕入先</Label>
+              <Select
+                id="exp-vendor-pick"
+                value={vendorId}
+                onChange={(e) => {
+                  const id = e.target.value;
+                  setVendorId(id);
+                  const v = vendors.find((x) => x.id === id);
+                  setVendorName(v ? v.name : '');
+                }}
+              >
+                <option value="">{vendors.length === 0 ? '仕入先が未登録（手入力）' : 'その他（手入力）'}</option>
+                {vendors.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div>
               <Label htmlFor="exp-vendor">支払先名</Label>
-              <Input id="exp-vendor" value={vendorName} onChange={(e) => setVendorName(e.target.value)} placeholder="例：〇〇商店" />
+              <Input
+                id="exp-vendor"
+                value={vendorName}
+                onChange={(e) => {
+                  setVendorName(e.target.value);
+                  setVendorId('');
+                }}
+                placeholder="例：〇〇商店（仕入先を選ぶと自動で入ります）"
+              />
             </div>
             <div>
               <Label htmlFor="exp-memo">メモ</Label>

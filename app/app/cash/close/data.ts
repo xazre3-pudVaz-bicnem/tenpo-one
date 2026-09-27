@@ -4,6 +4,7 @@
  * app/app/cash/actions.ts の既存サーバーアクションだけを使う（ここでは書き込まない）。
  */
 import { createClient } from '@/lib/supabase/server';
+import { cleanRegisterName, pickMainRegister } from '@/lib/register-name';
 import { expectedCash } from '@/lib/metrics';
 import type { ChecklistItem } from '@/components/cash/checklist-card';
 import type { RegisterBreakdownRow } from '@/components/cash/closing-snapshot';
@@ -106,7 +107,7 @@ export async function loadRegisterBoard(storeId: string, today: string) {
     { count: openTasksCount },
     { count: printerCount },
   ] = await Promise.all([
-    supabase.from('registers').select('id, name').eq('store_id', storeId).eq('status', 'active').order('name'),
+    supabase.from('registers').select('id, name, created_at').eq('store_id', storeId).eq('status', 'active').order('created_at'),
     // 当日分に加えて、別の営業日から開きっぱなしのセッションも拾う。
     // 当日分だけを見ると、前営業日から開いたままのレジが画面上「未開局」に見えるのに
     // open_register_session は SESSION_ALREADY_OPEN で拒否する（＝開局も締めもできない）状態になる。
@@ -212,15 +213,17 @@ export async function loadRegisterBoard(storeId: string, today: string) {
   const nameOf = (id: string | null) => (id ? (nameById.get(id) ?? '—') : '—');
 
   const openSessions: OpenSessionState[] = [];
-  const cards: RegisterCardState[] = (registers ?? []).map((r) => {
+  // 開局の箱は店に1つだけ（2026-09-28 Ronnie）。開局中・締め済みのカードは実際のセッションなので全部出す
+  const mainRegister = pickMainRegister((registers ?? []).map((r) => ({ id: r.id, name: r.name, createdAt: r.created_at as string | null })));
+  const allCards: RegisterCardState[] = (registers ?? []).map((r) => {
     const arr = sessionsByRegister.get(r.id) ?? [];
       // 開局中セッションは営業日を問わず最優先（前営業日から開きっぱなしのレジをここで締められるようにする）。
     // 締め済みカードは当日分だけを見る（別日の締め済みセッションは今日の画面に出さない）。
     const todayArr = arr.filter((s) => s.business_date === today);
     const session =
       arr.find((s) => s.status === 'open') ?? (todayArr.length === 0 ? null : todayArr[todayArr.length - 1]);
-    if (!session) return { type: 'unopened', registerId: r.id, registerName: r.name };
-    const registerName = (session.registers as unknown as { name: string } | null)?.name ?? r.name;
+    if (!session) return { type: 'unopened', registerId: r.id, registerName: cleanRegisterName(r.name) };
+    const registerName = cleanRegisterName((session.registers as unknown as { name: string } | null)?.name ?? r.name);
     if (session.status === 'open') {
       const breakdown = breakdownBySession.get(session.id) ?? {};
       const cashSales = breakdown.sale ?? 0;
@@ -262,6 +265,11 @@ export async function loadRegisterBoard(storeId: string, today: string) {
     };
   });
 
+  // 未開局の箱は「その店のレジ」1つだけ。すでに開局中のレジがあれば未開局の箱は出さない
+  const cards: RegisterCardState[] = allCards.filter(
+    (c) => c.type !== 'unopened' || (openSessions.length === 0 && c.registerId === mainRegister?.id)
+  );
+
   const unservedKdsCount = (unservedKdsRows ?? []).length;
   const lowStockCount = (lowStockRows ?? []).filter(
     (i) => i.reorder_point != null && Number(i.current_quantity) <= Number(i.reorder_point)
@@ -270,7 +278,7 @@ export async function loadRegisterBoard(storeId: string, today: string) {
   /** 別の営業日から開きっぱなしのレジ（今日の画面では「未開局」に見えてしまっていたもの） */
   const staleOpenCount = openSessions.filter((s) => s.businessDate !== today).length;
   const closedTodayCount = cards.filter((c) => c.type === 'closed').length;
-  const totalRegistersCount = (registers ?? []).length;
+  const totalRegistersCount = mainRegister ? 1 : 0;
 
   // ---- 開店チェックリスト ----
   const openingItems: ChecklistItem[] = [

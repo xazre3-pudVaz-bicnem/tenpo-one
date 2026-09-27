@@ -21,6 +21,8 @@ import { METHOD_LABELS, METHOD_LABELS_EN } from '@/components/cash/labels';
 import { loadRegisterBoard, loadTodayCashRows, receiptStateOf, STORE_DAY_CLOSE_ROLES } from './data';
 import { loadCloseBreakdown, type BreakdownPeriod } from './breakdown-data';
 import { CloseBreakdownCard } from '@/components/cash/close-breakdown';
+import { RegisterReportPreview } from '@/components/cash/register-report-preview';
+import { CalendarDays, CalendarRange } from 'lucide-react';
 
 export const metadata: Metadata = { title: 'レジクローズ' };
 
@@ -119,10 +121,29 @@ export default async function CashClosePage({ searchParams }: { searchParams: Pr
         en="Close register"
         description="本日の締め処理。現金を実査して差額を確認してからクローズします"
         actions={
-          <Link href="/app/cash" className={cn(buttonVariants({ variant: 'secondary' }))}>
-            <ArrowLeft className="h-4 w-4" />
-            入出金
-          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            {/* 右上の 日次／月次（2026-09-28 Ronnie「レジクローズに月毎で見るタブを右上に」） */}
+            <nav className="inline-flex rounded-xl border border-line bg-white p-1" aria-label="期間">
+              <Link
+                href={`/app/cash/close?period=day&date=${today}`}
+                className={cn('flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[13px] font-bold', period === 'day' ? 'on-brand text-white' : 'text-ink-2 hover:bg-lilac-soft')}
+              >
+                <CalendarDays className="h-3.5 w-3.5" />
+                日次<span className="font-num text-[10.5px] font-semibold opacity-80">Daily</span>
+              </Link>
+              <Link
+                href={`/app/cash/close?period=month&date=${today.slice(0, 7)}`}
+                className={cn('flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[13px] font-bold', period === 'month' ? 'on-brand text-white' : 'text-ink-2 hover:bg-lilac-soft')}
+              >
+                <CalendarRange className="h-3.5 w-3.5" />
+                月次<span className="font-num text-[10.5px] font-semibold opacity-80">Monthly</span>
+              </Link>
+            </nav>
+            <Link href="/app/cash" className={cn(buttonVariants({ variant: 'secondary' }))}>
+              <ArrowLeft className="h-4 w-4" />
+              入出金
+            </Link>
+          </div>
         }
       />
 
@@ -165,6 +186,14 @@ export default async function CashClosePage({ searchParams }: { searchParams: Pr
 
         {/* 売上の内訳（予約経路別・担当別・コース／メニュー・飲み放題。画面だけ） */}
         <CloseBreakdownCard data={breakdown} period={period} date={bdDate} today={today} basePath="/app/cash/close" />
+
+        {/* レジ精算をレシートそっくりに（開局中の途中集計 or 今日の締め。2026-09-28 Ronnie） */}
+        {period === 'day' && (openSessions[0] || closedCards[closedCards.length - 1]) && (
+          <RegisterReportPreview
+            sessionId={openSessions[0]?.id ?? (closedCards[closedCards.length - 1] as { session: { id: string } }).session.id}
+            live={openSessions.length > 0}
+          />
+        )}
 
         {/* 本日の出金レシート */}
         <Card className="overflow-hidden">

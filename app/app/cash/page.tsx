@@ -29,6 +29,8 @@ import { TodayClosingSummary } from '@/components/cash/today-closing-summary';
 import { ChecklistCard } from '@/components/cash/checklist-card';
 import { StoreDayClosePanel } from '@/components/cash/store-day-close-panel';
 import { CashEntryForm } from '@/components/cash/cash-entry-form';
+import { sortShops } from '@/lib/cash-shops';
+import { loadStoreClerks } from '@/lib/pos-clerks-server';
 import { CashHistoryTable, splitPurpose } from '@/components/cash/cash-history';
 import { approvePettyCash, rejectPettyCash } from '@/app/app/cash/actions';
 import {
@@ -155,7 +157,19 @@ async function RegisterTab({
   canPetty: boolean;
 }) {
   const today = todayJst();
-  const [board, rows] = await Promise.all([loadRegisterBoard(storeId, today), loadTodayCashRows(storeId, today)]);
+  const supabase = await createClient();
+  const [board, rows, { data: vendorRows }, clerkRows] = await Promise.all([
+    loadRegisterBoard(storeId, today),
+    loadTodayCashRows(storeId, today),
+    // 出金の買い物先＝企業の仕入先（ABC／五十音順。2026-09-28 Ronnie）
+    supabase.from('vendors').select('id, name, name_kana').eq('status', 'active').limit(300),
+    // 買い物を払った担当者（必ず選ぶ。2026-09-28 Ronnie）
+    loadStoreClerks(supabase, storeId),
+  ]);
+  const clerks = clerkRows.map((c) => ({ id: c.id, name: c.name }));
+  const shops = sortShops((vendorRows ?? []).map((v) => ({ id: v.id as string, name: v.name as string, kana: (v.name_kana as string | null) ?? null }))).map(
+    ({ id, name }) => ({ id, name })
+  );
   const { cards, openSessions, todayClosing } = board;
   const theoretical = openSessions.reduce((a, s) => a + s.theoreticalCash, 0);
   const openAdvances = rows.filter((r) => r.kind === 'petty_advance' && r.advanceOpen);
@@ -230,6 +244,8 @@ async function RegisterTab({
             <CashEntryForm
               storeId={storeId}
               sessions={openSessions.map((s) => ({ id: s.id, registerName: s.registerName }))}
+              shops={shops}
+              clerks={clerks}
             />
           </CardContent>
         </Card>
