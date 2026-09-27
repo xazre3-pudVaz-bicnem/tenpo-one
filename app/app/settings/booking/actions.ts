@@ -5,7 +5,7 @@ import { SLUG_CHANGE_BY_CYPRESS_ONLY, normalizeStoreSlug } from '@/lib/store-slu
 import { requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { extractPageMeta, isFetchablePageUrl } from '@/lib/page-photo';
+import { extractPageMeta, isFetchablePageUrl, type PageMeta } from '@/lib/page-photo';
 
 export interface ActionResult {
   error?: string;
@@ -174,6 +174,27 @@ async function fetchWithLimit(url: string, maxBytes: number, accept: string): Pr
   }
 }
 
+/**
+ * リンクプレビューのサービス（microlink.io。ブラウザで開いて OGP を返してくれる）で写真の URL を取る。
+ * 食べログのようにサーバーからの直接取得を止めているサイト用。失敗したら null（呼び出し側で案内を出す）。
+ */
+async function fetchPreviewMeta(pageUrl: string): Promise<PageMeta | null> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 25000);
+  try {
+    const res = await fetch(`https://api.microlink.io/?url=${encodeURIComponent(pageUrl)}`, { signal: ctrl.signal, headers: { Accept: 'application/json' } });
+    if (!res.ok) return null;
+    const json = (await res.json()) as { status?: string; data?: { title?: string | null; description?: string | null; image?: { url?: string | null } | null } };
+    if (json.status !== 'success' || !json.data) return null;
+    const url = json.data.image?.url ?? null;
+    return { imageUrl: url && /^https:\/\//i.test(url) ? url : null, title: json.data.title ?? null, description: json.data.description ?? null };
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export interface ImportPhotoResult {
   error?: string;
   /** 保存した写真の公開 URL（店舗写真URLに入る） */
@@ -199,16 +220,26 @@ export async function importStorePhotoFromPage(input: { storeId: string; pageUrl
   if (/\.(jpe?g|png|webp)(\?.*)?$/i.test(pageUrl)) {
     imageUrl = pageUrl;
   } else {
-    const page = await fetchWithLimit(pageUrl, 3 * 1024 * 1024, 'text/html,application/xhtml+xml');
-    const blockedHint = 'このサイトはサーバーからの取得を止めています。ページの写真を長押し（右クリック）→「画像アドレスをコピー」して、その URL（.jpg）を貼ってください';
-    if ('error' in page) return { error: /tabelog\.com/i.test(pageUrl) ? blockedHint : page.error };
-    const html = new TextDecoder('utf-8').decode(page.bytes);
-    // Cloudflare 等のボット確認ページ（食べログなど）
-    if (/<title>\s*Just a moment/i.test(html) || /challenges\.cloudflare\.com/.test(html)) return { error: blockedHint };
-    const m = extractPageMeta(html, pageUrl);
+    const blockedHint = 'このサイトから写真を取れませんでした。ページの写真を長押し（右クリック）→「画像アドレスをコピー」して、その URL（.jpg）を貼ってください';
+    // 食べログはサーバーからの取得をボット確認で止めるので、最初からプレビューサービス経由で読む
+    const useService = /tabelog\.com/i.test(pageUrl);
+    let m: PageMeta | null = null;
+    if (!useService) {
+      const page = await fetchWithLimit(pageUrl, 3 * 1024 * 1024, 'text/html,application/xhtml+xml');
+      if (!('error' in page)) {
+        const html = new TextDecoder('utf-8').decode(page.bytes);
+        // Cloudflare 等のボット確認ページでなければ、そのページの OGP を読む
+        if (!/<title>\s*Just a moment/i.test(html) && !/challenges\.cloudflare\.com/.test(html)) m = extractPageMeta(html, pageUrl);
+      }
+    }
+    if (!m?.imageUrl) {
+      // 直接読めないページ（食べログ等）はリンクプレビューのサービスで OGP を取る
+      const viaService = await fetchPreviewMeta(pageUrl);
+      if (viaService?.imageUrl) m = viaService;
+    }
+    if (!m?.imageUrl) return { error: blockedHint };
     meta = { title: m.title, description: m.description };
     imageUrl = m.imageUrl;
-    if (!imageUrl) return { error: 'このページから写真が見つかりませんでした（写真の URL を直接貼ることもできます）' };
   }
 
   const img = await fetchWithLimit(imageUrl, 8 * 1024 * 1024, 'image/*');
