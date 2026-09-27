@@ -91,6 +91,15 @@ export default async function SettingsLayout({ children }: { children: React.Rea
         { href: '/app/settings/audit', label: '監査ログ', en: 'Audit log', icon: 'audit', description: '権限変更・停止・設定変更などの操作履歴', visible: can(role, 'audit.view') },
       ],
     },
+    {
+      // レジ（iPad）の一覧にあった「集計」ボタンを設定の中へ（2026-09-28 Ronnie）。パソコンは左メニューにそのまま出ているので出さない
+      label: '集計',
+      en: 'Reports & admin',
+      icon: 'reports',
+      rows: [
+        { href: '/app/settings/summary', label: '集計', en: 'Reports & admin', icon: 'reports', description: '店舗運営・仕入・在庫・経理・労務・経営・店舗内共有・管理の画面', visible: ctx.isRegisterDevice === true },
+      ],
+    },
   ];
 
   const hubs: SettingsNavItem[] = groups

@@ -31,17 +31,13 @@ describe('menuLayout（iPad・スマホのメニュー一覧）', () => {
     expect(purchasing?.items.map((i) => i.href)).not.toContain('/app/inventory');
   });
 
-  it('集計ボタンはアラートの手前（設定とアラートの間）に入れる', () => {
-    const at = mainHrefs.indexOf(SUMMARY_ITEM.href);
-    expect(at).toBeGreaterThanOrEqual(0);
-    expect(mainHrefs[at + 1]).toBe('/app/notifications');
-  });
-
-  it('権限で集計の中身が無ければ集計ボタンも出さない', () => {
-    const staff = menuLayout('staff');
-    if (staff.summaryGroups.length === 0) {
-      expect(staff.main.map((i) => i.href)).not.toContain(SUMMARY_ITEM.href);
-    }
+  it('集計は一覧に出さず 設定 > 集計 に、アラートはホームの「お知らせ&アラート」に（2026-09-28 Ronnie）', () => {
+    expect(mainHrefs).not.toContain(SUMMARY_ITEM.href);
+    expect(mainHrefs).not.toContain('/app/menu/summary');
+    expect(mainHrefs).not.toContain('/app/notifications');
+    expect(SUMMARY_ITEM.href).toBe('/app/settings/summary');
+    // 設定の中に入れた集計には、これまでの中身（店舗運営〜管理）がそのまま入る
+    expect(layout.summaryGroups.map((g) => g.label)).toContain('経理');
   });
 });
 
