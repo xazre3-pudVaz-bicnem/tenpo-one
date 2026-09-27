@@ -189,6 +189,7 @@ export function PosScreen({
   openTableMove = false,
   moveTableAction,
   cancelEmptyOrderAction,
+  discardUntouchedOrderAction,
   splitOrderAction,
   setGuestCountAction,
   seatTime,
@@ -262,6 +263,8 @@ export function PosScreen({
   moveTableAction: (orderId: string, newTableId: string) => Promise<{ tableName: string }>;
   /** 品目のない注文（会計前・¥0）を取消する。省略時はボタンを表示しない */
   cancelEmptyOrderAction?: (orderId: string, reason: string, approvedByClerkId?: string | null) => Promise<void>;
+  /** 品を入れずに画面を離れたとき、伝票を消して卓を空席に戻す（2026-09-28 Ronnie） */
+  discardUntouchedOrderAction?: (orderId: string) => Promise<{ discarded: boolean }>;
   /** 別々会計：選んだ品目を別の伝票に移す（移した伝票をそのまま会計する） */
   splitOrderAction?: (
     orderId: string,
@@ -315,6 +318,35 @@ export function PosScreen({
    * ハンディと同じ作りで、Order を押した時に伝票へ入り、厨房へ出て、テーブルにも金額が出る。
    */
   const [cart, setCart] = useState<CartLine[]>([]);
+
+  /**
+   * 「注文」で伝票を立てたが、品を入れずに（Order をスワイプせずに）画面を離れたら、その伝票は無かったことにして卓を空席に戻す
+   * （2026-09-28 Ronnie「Order を決定していなければ ¥0 で卓に残らない。何も起きていない状態に」）。
+   * 判定はサーバーでもう一度する（品が1つでも入った伝票・支払のある伝票は消さない）。
+   * 画面内の移動（ホーム・フロアへ）は unmount で、タブを閉じる・スワイプで戻るは pagehide（sendBeacon）で拾う。
+   */
+  // カート（タップしただけで Order を押していない品）は「決定していない」ので、あっても消す対象
+  const untouchedRef = useRef(items.length === 0);
+  useEffect(() => {
+    untouchedRef.current = items.length === 0;
+  }, [items.length]);
+  useEffect(() => {
+    if (!discardUntouchedOrderAction) return;
+    const orderId = order.id;
+    const onPageHide = () => {
+      if (!untouchedRef.current) return;
+      try {
+        navigator.sendBeacon('/api/pos/discard-untouched', new Blob([JSON.stringify({ orderId })], { type: 'application/json' }));
+      } catch {
+        /* 送れなければ次にフロアを開いたときそのまま（手でテーブルクリア） */
+      }
+    };
+    window.addEventListener('pagehide', onPageHide);
+    return () => {
+      window.removeEventListener('pagehide', onPageHide);
+      if (untouchedRef.current) void discardUntouchedOrderAction(orderId).catch(() => undefined);
+    };
+  }, [discardUntouchedOrderAction, order.id]);
   const [linkedCustomer, setLinkedCustomer] = useState(customer);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -638,9 +670,21 @@ export function PosScreen({
       {/* 左: 伝票（テーブル・人数・顧客と、追加した品目） */}
       <section className="flex min-h-0 w-full shrink-0 flex-col overflow-hidden rounded-2xl border border-line bg-white lg:w-[380px]">
         <div className="flex items-center gap-2 border-b border-line px-4 py-3">
-          <Link href="/app/floor" aria-label="フロアへ戻る" className="rounded-lg p-1.5 text-ink-3 hover:bg-lilac">
+          <button
+            type="button"
+            aria-label="フロアへ戻る"
+            className="rounded-lg p-1.5 text-ink-3 hover:bg-lilac"
+            onClick={async () => {
+              // 品を入れていなければ、先に伝票を消してからフロアへ（フロアに ¥0 の卓が一瞬も出ないように）
+              if (untouchedRef.current && discardUntouchedOrderAction) {
+                untouchedRef.current = false; // unmount でもう一度呼ばない
+                await discardUntouchedOrderAction(order.id).catch(() => undefined);
+              }
+              router.push('/app/floor');
+            }}
+          >
             <ArrowLeft className="h-5 w-5" />
-          </Link>
+          </button>
           <span className="text-2xl font-extrabold leading-none text-royal">
             {tableName ?? ORDER_TYPE_LABELS[order.orderType] ?? order.orderType}
           </span>

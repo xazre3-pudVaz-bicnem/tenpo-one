@@ -21,12 +21,15 @@ export function CashDenominationCounter({
   onChange,
   disabled,
   idPrefix,
+  compact = false,
 }: {
   counts: DenominationCounts;
   onChange: (next: DenominationCounts) => void;
   disabled?: boolean;
   /** 同じ画面に複数出るため、input の id を衝突させないための接頭辞 */
   idPrefix: string;
+  /** 小さく（開局の箱。2026-09-28 Ronnie「箱を小さく」） */
+  compact?: boolean;
 }) {
   const total = useMemo(() => sumDenominations(counts), [counts]);
 
@@ -55,12 +58,12 @@ export function CashDenominationCounter({
               const subtotal = denominationSubtotal(denom, count);
               return (
                 <tr key={denom} className="border-t border-line">
-                  <td className="px-3 py-2">
+                  <td className={compact ? 'px-3 py-1' : 'px-3 py-2'}>
                     <label htmlFor={`${idPrefix}-denom-${denom}`} className="font-semibold text-ink">
                       {denominationLabel(denom)}
                     </label>
                   </td>
-                  <td className="px-3 py-1.5 text-right">
+                  <td className={compact ? 'px-3 py-1 text-right' : 'px-3 py-1.5 text-right'}>
                     <input
                       id={`${idPrefix}-denom-${denom}`}
                       inputMode="numeric"
@@ -69,10 +72,14 @@ export function CashDenominationCounter({
                       disabled={disabled}
                       placeholder="0"
                       aria-label={`${denominationLabel(denom)}の枚数`}
-                      className="h-12 w-24 rounded-lg border border-line bg-white px-3 text-right text-xl font-bold text-ink tabular-nums placeholder:text-ink-3 focus:border-iris focus:outline-2 focus:outline-iris/25 disabled:bg-gray-100"
+                      className={
+                        compact
+                          ? 'h-9 w-20 rounded-lg border border-line bg-white px-2 text-right text-base font-bold text-ink tabular-nums placeholder:text-ink-3 focus:border-iris focus:outline-2 focus:outline-iris/25 disabled:bg-gray-100'
+                          : 'h-12 w-24 rounded-lg border border-line bg-white px-3 text-right text-xl font-bold text-ink tabular-nums placeholder:text-ink-3 focus:border-iris focus:outline-2 focus:outline-iris/25 disabled:bg-gray-100'
+                      }
                     />
                   </td>
-                  <td className="px-3 py-2 text-right text-base tabular-nums text-ink-2">
+                  <td className={compact ? 'px-3 py-1 text-right text-sm tabular-nums text-ink-2' : 'px-3 py-2 text-right text-base tabular-nums text-ink-2'}>
                     {subtotal === 0 ? '—' : yen(subtotal)}
                   </td>
                 </tr>
@@ -82,9 +89,9 @@ export function CashDenominationCounter({
         </table>
       </div>
 
-      <div className="mt-2 flex items-center justify-between rounded-xl bg-surface px-4 py-3">
-        <span className="text-base font-semibold text-ink">合計（実査額）</span>
-        <b className="text-3xl font-extrabold tabular-nums text-ink">{yen(total)}</b>
+      <div className={compact ? 'mt-2 flex items-center justify-between rounded-xl bg-surface px-3 py-2' : 'mt-2 flex items-center justify-between rounded-xl bg-surface px-4 py-3'}>
+        <span className={compact ? 'text-sm font-semibold text-ink' : 'text-base font-semibold text-ink'}>合計（実査額）</span>
+        <b className={compact ? 'text-2xl font-extrabold tabular-nums text-ink' : 'text-3xl font-extrabold tabular-nums text-ink'}>{yen(total)}</b>
       </div>
     </div>
   );

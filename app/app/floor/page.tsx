@@ -11,6 +11,8 @@ import { EmptyState } from '@/components/ui/state';
 import { CREATED_VIA_LABEL } from '@/components/reservations/constants';
 import { RESERVATION_ROW_SELECT, mapReservationRow, type RawReservationRow } from '@/components/reservations/row-mapper';
 import { FloorBoard } from '@/components/floor/floor-board';
+import { TakeoutRow } from '@/components/layout/takeout-row';
+import { ShoppingBag } from 'lucide-react';
 import type {
   FloorTable,
   PanelReservation,
@@ -360,6 +362,16 @@ export default async function FloorPage() {
           setSeatTimeAction={setSeatTime}
           clearTableAction={clearTable}
           releaseFinishedCleaningAction={releaseFinishedCleaning}
+          // 持ち帰り（即会計）はテーブルの並びのすぐ上、卓1の上の小さい横長ボタンから（2026-09-28 Ronnie「メニューには要らない」）
+          aboveTables={
+            canOperate ? (
+              <TakeoutRow className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-line bg-white px-5 text-[12.5px] font-bold text-royal shadow-sm hover:bg-lilac-soft disabled:opacity-60">
+                <ShoppingBag className="h-3.5 w-3.5" aria-hidden />
+                テイクアウト
+                <span className="text-[10px] font-semibold text-ink-3">Take out</span>
+              </TakeoutRow>
+            ) : null
+          }
           bottomSlot={<Legend />}
         />
       )}

@@ -14,14 +14,15 @@ describe('menuLayout（iPad・スマホのメニュー一覧）', () => {
     }
   });
 
-  it('テイクアウト→伝票明細→入出金の順、仕入・経費はレジクローズの手前（大きなタイルにはしない）', () => {
+  it('伝票明細→入出金の順、仕入・経費はレジクローズの手前（大きなタイルにはしない）。テイクアウトは出さない', () => {
     const tiles = layout.tiles.map((t) => t.href);
     expect(tiles).not.toContain('/app/cash');
     expect(tiles).not.toContain('/app/expenses');
-    // テイクアウトは伝票明細の上（2026-09-24 要望でテーブル一覧の上のボタンから移した）
-    expect(mainHrefs[0]).toBe('#takeout');
-    expect(mainHrefs[1]).toBe('/app/orders');
-    expect(mainHrefs[2]).toBe('/app/cash');
+    // テイクアウトはテーブル一覧（卓1の上の小さいボタン）から。メニューには出さない（2026-09-28 Ronnie）
+    expect(mainHrefs).not.toContain('#takeout');
+    expect(menuLayout('org_owner', undefined, { keepActions: true }).main.map((i) => i.href)).not.toContain('#takeout');
+    expect(mainHrefs[0]).toBe('/app/orders');
+    expect(mainHrefs[1]).toBe('/app/cash');
     expect(mainHrefs.indexOf('/app/expenses')).toBe(mainHrefs.indexOf('/app/cash/close') - 1);
   });
 

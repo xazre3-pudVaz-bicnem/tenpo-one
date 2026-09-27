@@ -17,6 +17,7 @@ import { ApprovalActions } from '@/components/cash/approval-actions';
 import { JournalSourceLink } from '@/components/accounting/journal-source-link';
 import { approveExpense, rejectExpense } from '@/app/app/expenses/actions';
 import { APPROVAL_LABELS, APPROVAL_TONES, PAID_VIA_LABELS, type ApprovalStatus, type PaidVia } from '@/components/cash/labels';
+import { sortShops } from '@/lib/cash-shops';
 
 export const metadata: Metadata = { title: '経費' };
 
@@ -53,7 +54,7 @@ export default async function ExpensesPage({
   if (statusFilter) query = query.eq('approval_status', statusFilter);
 
   // 費目マスタ・承認ルール・経費一覧・当月合計は相互に独立のため並列取得する。
-  const [{ data: accounts }, { data: approvalRulesData }, { data: rows }, { data: monthRows }] = await Promise.all([
+  const [{ data: accounts }, { data: approvalRulesData }, { data: rows }, { data: monthRows }, { data: vendorRows }] = await Promise.all([
     ctx.organizationId
       ? supabase
           .from('expense_accounts')
@@ -75,7 +76,12 @@ export default async function ExpensesPage({
       .eq('status', 'active')
       .gte('business_date', monthStart)
       .lte('business_date', todayJst()),
+    // 支払先＝企業の仕入先（ABC／五十音順で選べる。2026-09-28 Ronnie）
+    supabase.from('vendors').select('id, name, name_kana').eq('status', 'active').limit(300),
   ]);
+  const vendors = sortShops(
+    (vendorRows ?? []).map((v) => ({ id: v.id as string, name: v.name as string, kana: (v.name_kana as string | null) ?? null }))
+  ).map(({ id, name }) => ({ id, name }));
 
   const approvalRules: ApprovalRuleLike[] = (approvalRulesData ?? []).map((r) => ({
     target: r.target as ApprovalRuleLike['target'],
@@ -151,7 +157,7 @@ export default async function ExpensesPage({
             </div>
           )}
 
-          {canWrite && <ExpenseFormDialog storeId={store.id} accounts={accounts ?? []} canSeedAccounts={canApprove} />}
+          {canWrite && <ExpenseFormDialog storeId={store.id} accounts={accounts ?? []} vendors={vendors} canSeedAccounts={canApprove} />}
 
           <PeriodFilter action="/app/expenses" from={from} to={to}>
             <div>

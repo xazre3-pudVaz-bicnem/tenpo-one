@@ -201,6 +201,24 @@ export async function closeRegister(
     );
   }
 
+  // お客様が入ったままの卓（着席中・注文中・会計待ち）が残っていたらレジクローズさせない
+  // （2026-09-28 Ronnie「全部の会計が終わってテーブルをクリアするまでレジクローズできない」）
+  const { data: busyTables } = await supabase
+    .from('restaurant_tables')
+    .select('name')
+    .eq('store_id', session.store_id)
+    .eq('status', 'active')
+    .in('current_status', ['seated', 'ordering', 'billing'])
+    .order('name')
+    .limit(20);
+  if (busyTables && busyTables.length > 0) {
+    const names = busyTables.slice(0, 8).map((t) => t.name).join('・');
+    return actionFail(
+      `お客様が入ったままの卓が${busyTables.length}卓あります（${names}${busyTables.length > 8 ? ' ほか' : ''}）。` +
+        '会計するかテーブルクリアで空席に戻してから、レジクローズしてください'
+    );
+  }
+
   // レジクローズの担当者は必ず選ぶ（精算レシートに出す。2026-09-25 店舗要望）
   if (!clerkName || !clerkName.trim()) {
     return actionFail('レジクローズの担当者を選んでください');

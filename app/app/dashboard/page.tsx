@@ -1,5 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
+import { shouldGoToOpenRegister } from '@/lib/register-open-gate';
 import { requireMember } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { can } from '@/lib/permissions';
@@ -85,6 +87,25 @@ async function getSalesMetricsOptions(organizationId: string): Promise<SalesMetr
 export default async function DashboardPage() {
   const ctx = await requireMember();
   const today = todayJst();
+
+  // レジ端末はログイン直後、まだ開局していなければ「レジの中の現金を数える」開局画面へ（2026-09-28 Ronnie）
+  if (ctx.isRegisterDevice && ctx.currentStore) {
+    const supabase = await createClient();
+    const [{ count: openCount }, { count: registerCount }] = await Promise.all([
+      supabase.from('register_sessions').select('id', { count: 'exact', head: true }).eq('store_id', ctx.currentStore.id).eq('status', 'open'),
+      supabase.from('registers').select('id', { count: 'exact', head: true }).eq('store_id', ctx.currentStore.id).eq('status', 'active'),
+    ]);
+    if (
+      shouldGoToOpenRegister({
+        isRegisterDevice: true,
+        hasStore: true,
+        hasOpenSession: (openCount ?? 0) > 0,
+        hasRegister: (registerCount ?? 0) > 0,
+      })
+    ) {
+      redirect('/app/cash/open');
+    }
+  }
   const setupPercent = ctx.organizationId && can(ctx.role, 'org.settings') ? await getSetupProgressPercent(ctx.organizationId) : null;
   const metricsOpts = await getSalesMetricsOptions(ctx.organizationId);
   const asOf = nowStampJst();

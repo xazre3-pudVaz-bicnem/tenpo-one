@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -22,11 +23,15 @@ export function RegisterOpenCard({
   storeId,
   registerId,
   registerName,
+  afterOpenHref,
 }: {
   storeId: string;
   registerId: string;
   registerName: string;
+  /** 開局できたら移る画面（朝いちばんの開局画面 → テーブル一覧）。無ければその場に残る */
+  afterOpenHref?: string;
 }) {
+  const router = useRouter();
   const [counts, setCounts] = useState<DenominationCounts>({});
   const [pending, startTransition] = useTransition();
   const { toast } = useToast();
@@ -47,8 +52,9 @@ export function RegisterOpenCard({
           toast(result.error, 'error');
           return;
         }
-        toast(`${registerName}を開局しました（釣銭準備金 ${yen(openingFloat)}）`);
+        toast(`${registerName || 'レジ'}を開局しました（釣銭準備金 ${yen(openingFloat)}）`);
         setCounts({});
+        if (afterOpenHref) router.push(afterOpenHref);
       } catch (err) {
         toast(toUserMessage(err, '開局に失敗しました'), 'error');
       }
@@ -56,20 +62,18 @@ export function RegisterOpenCard({
   };
 
   return (
-    <Card>
-      <CardHeader className="flex flex-wrap items-center justify-between gap-2">
-        <CardTitle en="Open register">{registerName}</CardTitle>
-        <Badge tone="gray">未開局 / Not opened</Badge>
+    <Card className="max-w-md">
+      {/* 箱は1つ・小さく。レジ名（プリンターの名前）は出さない（2026-09-28 Ronnie） */}
+      <CardHeader className="flex flex-wrap items-center justify-between gap-2 py-3">
+        <CardTitle en="Open register">レジ開局</CardTitle>
+        <Badge tone="gray">未開局</Badge>
       </CardHeader>
-      <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-3">
-          <div>
-            <p className="text-sm font-medium text-ink">釣銭準備金（開始現金）を数える / Count the opening cash</p>
-            <p className="text-xs text-ink-3">レジに入っている現金を金種ごとに数えて枚数を入力します。合計がそのまま釣銭準備金になります。</p>
-          </div>
-          <CashDenominationCounter idPrefix={`open-${registerId}`} counts={counts} onChange={setCounts} disabled={pending} />
+      <CardContent className="pt-0">
+        <form onSubmit={handleSubmit} className="space-y-2.5">
+          <p className="text-xs text-ink-3">釣銭準備金（レジに入っている現金）を金種ごとに数えて枚数を入れる。合計がそのまま釣銭準備金。</p>
+          <CashDenominationCounter idPrefix={`open-${registerId}`} counts={counts} onChange={setCounts} disabled={pending} compact />
           <Button type="submit" size="lg" className="w-full" disabled={pending || !entered}>
-            {pending ? '開局中…' : `このレジを開局 / Open register（${yen(openingFloat)}）`}
+            {pending ? '開局中…' : `開局する / Open（${yen(openingFloat)}）`}
           </Button>
         </form>
       </CardContent>
