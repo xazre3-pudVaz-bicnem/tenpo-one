@@ -4,6 +4,7 @@ import {
   denominationReportLabel,
   denominationsToJson,
   layoutRegisterReport,
+  layoutSettlementReport,
   parseDenominations,
   taxByRateFor,
   threeCol,
@@ -187,39 +188,105 @@ describe('金種別枚数の保存形式', () => {
   });
 });
 
-describe('layoutRegisterReport', () => {
-  it('dinii のレジ精算と同じ区画がすべて入り、全行が用紙幅に収まる', () => {
+describe('layoutRegisterReport（2026-09-28 Ronnie が選んだ並び）', () => {
+  it('上から：締め → 客数・売上 → 控除 → サービス料・値引 → ＊支払情報＊ → ＊入出金情報＊ → ＊レジ実績入力＊ → 【入出金情報】 → 【業務履歴】', () => {
     const lines = layoutRegisterReport(sample(), { paperWidth: 80 });
     const text = lines.map((l) => l.text).join('\n');
-    for (const section of [
-      '【売上情報】',
-      '【支払情報】',
-      '【割引・割増情報】',
-      '【売上詳細情報 ( 税込 )】',
-      '【精算情報】',
+    const order = [
+      '締め: 2026/9/20 23:12  Ronnie',
+      '組数',
+      '  男性',
+      '  選択なし',
+      '客単価',
+      '総売上点数',
+      '税率  10%',
+      '(内消費税)',
+      '消費税',
+      '純売上',
+      '控除点数',
+      '控除後純売上',
+      'サービス料',
+      '深夜料',
+      '値割引',
+      '端数値引',
+      '＊支払情報＊',
+      'お預かり現金',
+      'おつり',
+      '取消（赤伝票）',
+      '訂正（黒伝票）',
+      '未回収',
+      '領収書',
+      '＊入出金情報＊',
+      'レジオープン時現金',
+      '現金在高',
+      '＊レジクローズ時 レジ実績入力情報＊',
+      '差異合計',
+      '差異理由',
+      '銀行振込',
+      '貸金庫預け',
+      '警備会社預け',
       '【入出金情報】',
+      '<出金情報>',
+      '食材 買い出し',
       '【業務履歴】',
-    ]) {
-      expect(text).toContain(section);
+      'レジ会計',
+      '印刷日時: 2026/9/20 23:12',
+      '担当者: Ronnie',
+    ];
+    let at = -1;
+    for (const key of order) {
+      const idx = text.indexOf(key, at + 1);
+      expect(idx, key).toBeGreaterThan(at);
+      at = idx;
     }
     expect(lines[0]).toEqual({ text: 'レジ精算', align: 'center', size: 'large' });
     expect(text).toContain('営業日: 2026/09/20（日）');
-    expect(text).toContain('総売上');
-    expect(text).toContain('¥141,800');
-    expect(text).toContain('10%対象額');
-    expect(text).toContain('うち消費税');
-    expect(text).toContain('¥12,891');
-    expect(text).toContain('釣銭準備金');
-    expect(text).toContain('在高実績');
-    expect(text).toContain('千円紙幣');
-    expect(text).toMatch(/千円紙幣\s+40枚\s+¥40,000/);
-    expect(text).toContain('[HOT PEPPER]');
-    expect(text).toContain('食材 買い出し');
-    expect(text).toContain('レジ会計');
-    expect(text).toContain('印刷日時: 2026/9/20 23:12');
+    expect(text).toMatch(/売上\s+¥141,800/);
+    expect(text).toMatch(/\(内消費税\)\s+\(¥12,891\)/);
+    expect(text).toMatch(/純売上\s+¥128,909/);
+    expect(text).toMatch(/組数\s+61組/);
+    expect(text).toMatch(/客数\s+132客/);
+    expect(text).toMatch(/選択なし\s+132客/);
+    expect(text).toMatch(/現金\s+25件\s+¥72,900/);
     for (const l of text.split('\n')) {
       expect(dispWidth(l)).toBeLessThanOrEqual(48);
     }
+  });
+
+  it('本紙には精算情報（釣銭準備金・金種・在高実績）を出さない。8% は売上があった日だけ', () => {
+    const text = layoutRegisterReport(sample()).map((l) => l.text).join('\n');
+    expect(text).not.toContain('【精算情報】');
+    expect(text).not.toContain('釣銭準備金');
+    expect(text).not.toContain('千円紙幣');
+    expect(text).not.toContain('在高実績');
+    expect(text).not.toContain('税率  8%');
+    const withEight = layoutRegisterReport(
+      sample({ sales: { ...sample().sales, taxByRate: [{ rate: 10, taxable: 100000, tax: 9091 }, { rate: 8, taxable: 41800, tax: 3096 }] } })
+    )
+      .map((l) => l.text)
+      .join('\n');
+    expect(withEight).toMatch(/税率  8%\s+¥41,800/);
+  });
+
+  it('控除（返金・取消）と 訂正・未回収・領収書 が出る', () => {
+    const text = layoutRegisterReport(
+      sample({
+        deductions: { count: 2, amount: 3300, tax: 300, items: ['返金', '取消'] },
+        corrections: { label: '訂正（黒伝票）', count: 1, amount: 2840 },
+        uncollected: { label: '未回収', count: 1, amount: 5000 },
+        receipts: { count: 3 },
+      })
+    )
+      .map((l) => l.text)
+      .join('\n');
+    expect(text).toMatch(/控除点数\s+2点/);
+    expect(text).toMatch(/控除額\s+¥3,300/);
+    expect(text).toContain('控除項目 返金・取消');
+    expect(text).toMatch(/控除項目税額\s+¥300/);
+    expect(text).toMatch(/控除後純売上\s+¥125,909/);
+    expect(text).toMatch(/訂正（黒伝票）\s+1件\s+¥2,840/);
+    expect(text).toMatch(/未回収\s+1件\s+¥5,000/);
+    expect(text).toMatch(/領収書\s+3件/);
   });
 
   it('58mm でも全行が32桁に収まる', () => {
@@ -258,8 +325,19 @@ describe('layoutRegisterReport', () => {
     expect(text).toContain('未選択');
   });
 
-  it('差額があれば符号付き、実査が無ければ「未入力」、金種が無ければ金種表は出ない', () => {
-    const lines = layoutRegisterReport(
+  it('精算情報の紙：釣銭準備金〜金種。差額があれば符号付き、実査が無ければ「未入力」、金種が無ければ金種表は出ない', () => {
+    const full = layoutSettlementReport(sample(), { paperWidth: 80 });
+    const fullText = full.map((l) => l.text).join('\n');
+    expect(full[0]).toEqual({ text: 'レジ精算 精算情報', align: 'center', size: 'large' });
+    expect(fullText).toContain('【精算情報】');
+    expect(fullText).toMatch(/釣銭準備金\s+¥50,000/);
+    expect(fullText).toMatch(/在高実績\s+¥119,900/);
+    expect(fullText).toMatch(/回収金額\s+¥69,900/);
+    expect(fullText).toMatch(/翌準備金\s+¥50,000/);
+    expect(fullText).toMatch(/千円紙幣\s+40枚\s+¥40,000/);
+    for (const l of fullText.split('\n')) expect(dispWidth(l)).toBeLessThanOrEqual(48);
+
+    const lines = layoutSettlementReport(
       sample({
         cash: {
           openingFloat: 50000,
@@ -280,11 +358,14 @@ describe('layoutRegisterReport', () => {
     const text = lines.map((l) => l.text).join('\n');
     expect(text).toMatch(/差額\s+-¥500/);
     expect(text).not.toContain('千円紙幣');
-    expect(text).toContain('備考: 差額理由: 釣銭の渡し間違い');
 
-    const open = layoutRegisterReport(sample({ cash: { ...sample().cash, counted: null, difference: null } }));
+    const open = layoutSettlementReport(sample({ cash: { ...sample().cash, counted: null, difference: null } }));
     const openText = open.map((l) => l.text).join('\n');
     expect(openText).toMatch(/在高実績\s+未入力/);
+    const mainOpen = layoutRegisterReport(sample({ cash: { ...sample().cash, counted: null, difference: null } }))
+      .map((l) => l.text)
+      .join('\n');
+    expect(mainOpen).toMatch(/差異合計\s+未入力/);
   });
 
   it('長い備考は桁数で折り返され、1行が用紙幅を超えない', () => {
@@ -295,16 +376,12 @@ describe('layoutRegisterReport', () => {
     for (const l of lines) expect(dispWidth(l.text)).toBeLessThanOrEqual(48);
   });
 
-  it('返金があれば売上と支払の両方に返金行が出る', () => {
-    const lines = layoutRegisterReport(
-      sample({
-        sales: { ...sample().sales, refunds: 3300 },
-        refundsByMethod: [{ label: '現金', count: 1, amount: 3300 }],
-      })
-    );
-    const text = lines.map((l) => l.text).join('\n');
-    expect(text).toMatch(/返金\s+-¥3,300/);
-    expect(text).toContain('<返金>');
+  it('備考があれば印刷日時の前に出る', () => {
+    const text = layoutRegisterReport(sample({ note: '他のレジが開局中のため、売上情報は締め時点までの店舗全体の集計です' }))
+      .map((l) => l.text)
+      .join('\n');
+    expect(text).toContain('備考: 他のレジが開局中');
+    expect(text.indexOf('備考:')).toBeLessThan(text.indexOf('印刷日時:'));
   });
 
   it('3種のレンダラで印字データにできる（Markup / StarPRNT cp932 / ePOS XML）', () => {
@@ -312,13 +389,13 @@ describe('layoutRegisterReport', () => {
     const markup = kitchenTicketMarkup(lines);
     expect(markup).toContain('[magnify: width 2; height 2]');
     expect(markup).toContain('レジ精算');
-    expect(markup).toContain('\\[全体\\]'); // Star Markup では [ ] をエスケープ
+    expect(markup).toContain('＊支払情報＊');
     expect(markup).toContain('[cut: feed; partial]');
 
     const buf = kitchenTicketStarPrnt(lines);
     const decoded = iconv.decode(buf, 'Shift_JIS');
-    expect(decoded).toContain('【精算情報】');
-    expect(decoded).toContain('千円紙幣');
+    expect(decoded).toContain('【業務履歴】');
+    expect(decoded).toContain('レジオープン時現金');
 
     const epos = kitchenTicketEpos(lines);
     expect(epos).toContain('<epos-print');

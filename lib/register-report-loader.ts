@@ -9,6 +9,7 @@ import { STAR_WIDTH_OPTIONS } from '@/lib/receipt-layout';
 import { isCheckViolation, isMissingColumnError } from '@/lib/schema-compat';
 import {
   layoutRegisterReport,
+  layoutSettlementReport,
   parseDenominations,
   taxByRateFor,
   type RegisterReportData,
@@ -90,7 +91,7 @@ export async function loadRegisterReportData(
   ] = await Promise.all([
     supabase
       .from('orders')
-      .select('id, total, discount_total, service_charge, tax_total, guest_count, status, reservation_id')
+      .select('id, total, discount_total, service_charge, tax_total, guest_count, status, reservation_id, rounding_adjustment, source_order_id')
       .eq('store_id', storeId)
       .eq('business_date', bd)
       .in('status', ['paid', 'refunded'])
@@ -209,8 +210,23 @@ export async function loadRegisterReportData(
     }
     return [...m.values()].sort((a, b) => b.amount - a.amount);
   };
-  const paymentsByMethod = groupByMethod(payments ?? []);
+  // 支払方法は使っていなくても 0件 で全部出す（2026-09-28 Ronnie。他社の日計レポートと同じ）。
+  // 決まった並びの後ろに、その日に使った他の方法（サイトのポイント・外部端末・その他）を足す
+  const usedByMethod = groupByMethod(payments ?? []);
+  const FIXED_METHODS = ['cash', 'credit', 'qr', 'emoney', 'points', 'voucher', 'on_account'];
+  const paymentsByMethod: ReportCountAmount[] = [
+    ...FIXED_METHODS.map((m) => usedByMethod.find((p) => p.label === METHOD_LABELS[m]) ?? { label: METHOD_LABELS[m], count: 0, amount: 0 }),
+    ...usedByMethod.filter((p) => !FIXED_METHODS.some((m) => METHOD_LABELS[m] === p.label)),
+  ];
   const refundsByMethod = groupByMethod(refunds ?? []);
+  // 訂正（黒伝票）＝会計後に作り直した再会計伝票、未回収＝掛売、端数値引＝端数調整
+  const corrections = settled.filter((o) => (o as { source_order_id?: string | null }).source_order_id);
+  const onAccount = (payments ?? []).filter((p) => p.method === 'on_account');
+  const rounded = settled.filter((o) => Number((o as { rounding_adjustment?: number }).rounding_adjustment ?? 0) !== 0);
+  const roundingAmount = rounded.reduce((a, o) => a + Math.abs(Number((o as { rounding_adjustment?: number }).rounding_adjustment ?? 0)), 0);
+  // 控除＝返金・取消（内消費税は 10% で逆算）
+  const deductionTax = (refunds ?? []).reduce((a, r) => a + (r.amount - Math.round(r.amount / 1.1)), 0);
+  const deductionItems = [...new Set((refunds ?? []).map((r) => (r.kind === 'void' ? '取消' : '返金')))];
 
   // ---- メニュータイプ別 ----
   const byType = new Map<string, { quantity: number; amount: number }>();
@@ -318,7 +334,16 @@ export async function loadRegisterReportData(
       avgSpend,
       itemQuantity,
       taxByRate,
+      tax: taxTotal,
+      // 男性・女性の入力はまだ無い（お客様情報に足せば出せる）。それまでは全員「選択なし」
+      guestsMale: 0,
+      guestsFemale: 0,
+      lateNight: { count: 0, amount: 0 },
+      rounding: { count: rounded.length, amount: roundingAmount },
     },
+    deductions: { count: (refunds ?? []).length, amount: refundTotal, tax: deductionTax, items: deductionItems },
+    corrections: { label: '訂正（黒伝票）', count: corrections.length, amount: corrections.reduce((a, o) => a + o.total, 0) },
+    uncollected: { label: '未回収', count: onAccount.length, amount: onAccount.reduce((a, p) => a + p.amount, 0) },
     payments: paymentsByMethod,
     refundsByMethod,
     discounts: { count: settled.filter((o) => o.discount_total > 0).length, amount: discount },
@@ -339,6 +364,14 @@ export async function loadRegisterReportData(
       change,
     },
     differenceReason: (session.difference_reason as string | null) ?? null,
+    receipts: { count: ryoshushoOrders.size },
+    // レジ実績入力：現金は数えた在高（未入力なら理論値）、現金以外は記録どおり（まだ数える欄が無い）
+    countedByMethod: paymentsByMethod.map((p) =>
+      p.label === METHOD_LABELS.cash
+        ? { label: p.label, amount: (session.counted_cash as number | null) ?? expected }
+        : { label: p.label, amount: p.amount }
+    ),
+    deposits: { bank: 0, safe: 0, security: 0 },
     cashIns,
     cashOuts,
     activity,
@@ -362,7 +395,9 @@ export async function enqueueRegisterReportPrint(
   sessionId: string,
   userId: string,
   /** レジで選んでいる担当者（レジ閉めをした人）。無ければログインアカウントの名前で出す */
-  clerkName?: string | null
+  clerkName?: string | null,
+  /** 'main'＝レジ精算（本紙）。'settlement'＝精算情報の紙（釣銭準備金〜金種。レジクローズの「精算情報を印刷」） */
+  kind: 'main' | 'settlement' = 'main'
 ): Promise<RegisterReportPrintResult> {
   const loaded = await loadRegisterReportData(supabase, sessionId, clerkName);
   if (!loaded) return { ok: false, error: '対象のレジセッションが見つかりません' };
@@ -380,9 +415,10 @@ export async function enqueueRegisterReportPrint(
   if (!printer) return { ok: false, error: 'レシートプリンターが未設定のため、レジ精算レシートを印刷できません' };
 
   const paper = printer.paper_width_mm === 58 ? 58 : 80;
-  const lines = layoutRegisterReport(loaded.data, { paperWidth: paper, ...STAR_WIDTH_OPTIONS });
+  const layout = kind === 'settlement' ? layoutSettlementReport : layoutRegisterReport;
+  const lines = layout(loaded.data, { paperWidth: paper, ...STAR_WIDTH_OPTIONS });
   // EPSON機は1行の桁数が少なく「¥」が全角幅のため、専用の桁数で組み直す（厨房伝票と同じ扱い）
-  const eposLines = layoutRegisterReport(loaded.data, { columns: eposCols(paper), yenFullWidth: true });
+  const eposLines = layout(loaded.data, { columns: eposCols(paper), yenFullWidth: true });
   const job = (jobType: 'register_report' | 'receipt') => ({
     organization_id: loaded.organizationId,
     store_id: loaded.storeId,
@@ -394,7 +430,7 @@ export async function enqueueRegisterReportPrint(
       body: kitchenTicketMarkup(lines),
       starprnt: kitchenTicketStarPrnt(lines).toString('base64'),
       epos: kitchenTicketEpos(eposLines),
-      kind: 'register_report',
+      kind: kind === 'settlement' ? 'register_settlement' : 'register_report',
       register_session_id: sessionId,
     },
     status: 'queued',
