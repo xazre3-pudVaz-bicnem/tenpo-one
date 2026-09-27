@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast';
 import { yen, formatDateTime } from '@/lib/format';
-import { reprintRegisterReport } from '@/app/app/cash/actions';
+import { printSettlementReport, reprintRegisterReport } from '@/app/app/cash/actions';
 import { toUserMessage } from '@/lib/action-error';
 
 export interface ClosedRegisterCardData {
@@ -38,7 +38,24 @@ export function RegisterClosedCard({
   canOperate?: boolean;
 }) {
   const [pending, startTransition] = useTransition();
+  const [pendingSettle, startSettle] = useTransition();
   const { toast } = useToast();
+
+  /** 精算情報（釣銭準備金〜金種）だけの紙。本紙には出さない（2026-09-28 Ronnie） */
+  const handleSettlement = () => {
+    startSettle(async () => {
+      try {
+        const result = await printSettlementReport(session.id);
+        if (!result.ok) {
+          toast(result.error, 'error');
+          return;
+        }
+        toast('精算情報を印刷しています');
+      } catch (err) {
+        toast(toUserMessage(err, '印刷に失敗しました'), 'error');
+      }
+    });
+  };
 
   const handleReprint = () => {
     startTransition(async () => {
@@ -88,7 +105,11 @@ export function RegisterClosedCard({
           />
         </div>
         {canOperate && (
-          <div className="mt-3 flex justify-end">
+          <div className="mt-3 flex flex-wrap justify-end gap-2">
+            <Button type="button" variant="ghost" size="sm" onClick={handleSettlement} disabled={pendingSettle}>
+              <Printer className="h-4 w-4" />
+              {pendingSettle ? '印刷中…' : '精算情報を印刷 / Cash count'}
+            </Button>
             <Button type="button" variant="secondary" size="sm" onClick={handleReprint} disabled={pending}>
               <Printer className="h-4 w-4" />
               {pending ? '印刷中…' : '精算レシートを再印刷 / Reprint'}

@@ -298,6 +298,26 @@ export async function reprintRegisterReport(sessionId: string): Promise<ActionRe
 }
 
 /**
+ * 精算情報の紙（釣銭準備金・現金受領・想定金額・在高実績・差額・翌準備金・預入金・金種）を印刷する。
+ * 本紙には出さず、要るときだけここから（2026-09-28 Ronnie「精算情報はレジクローズのオプション」）。
+ */
+export async function printSettlementReport(sessionId: string): Promise<ActionResult> {
+  const ctx = await requirePermission('register.operate');
+  const supabase = await createClient();
+  const { data: session } = await supabase
+    .from('register_sessions')
+    .select('id, store_id')
+    .eq('id', sessionId)
+    .maybeSingle();
+  if (!session || !ctx.stores.some((s) => s.id === session.store_id)) {
+    return actionFail('対象のレジセッションが見つかりません');
+  }
+  const printed = await enqueueRegisterReportPrint(supabase, sessionId, ctx.userId, null, 'settlement');
+  if (!printed.ok) return actionFail(printed.error ?? '精算情報を印刷できませんでした');
+  return actionOk();
+}
+
+/**
  * 小口現金の入出金・立替・精算登録（承認待ちで作成）。
  * register_session_id は常にnull（レジ台帳とは別台帳。POSの現金売上=saleはここでは扱わない）。
  * petty_advance（立替）は現金が動かない記録のため、残高計算からは除外される（labels.ts の IN_KINDS/OUT_KINDS 参照）。
