@@ -13,7 +13,7 @@ export const viewport = { themeColor: '#15121a' };
 
 /**
  * iPhone用ハンディの入口。お店の固定QRコード（/handy-join#<QRの値>）を読むと、
- * お店のWi-Fiにつないでいればそのままハンディが開く。
+ * QR を読めばそのままハンディが開く（「お店のWi-Fiだけで使う」がオンの店は、登録した回線からだけ）。
  * ?out=1 は Wi-Fi の外に出て自動でログアウトしたとき。
  */
 export default async function HandyJoinPage({ searchParams }: { searchParams: Promise<{ out?: string }> }) {

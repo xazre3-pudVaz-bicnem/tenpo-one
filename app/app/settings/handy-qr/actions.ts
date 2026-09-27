@@ -169,3 +169,15 @@ export async function loadHandyQrToken(storeId: string): Promise<{ token: string
   }
   return { token: qr.token, storeName: store?.name ?? '', canSetup };
 }
+
+/**
+ * 「お店のWi-Fiだけで使う」のオン・オフ。既定はオフ＝QR を読めばどこからでも開く
+ * （2026-09-28 Ronnie「普通に QR を読んだら開くように。みんな分からなくて困る」）
+ */
+export async function setHandyWifiOnly(storeId: string, wifiOnly: boolean): Promise<ActionResult> {
+  const ctx = await requirePermission('store.settings');
+  assertStoreAccess(ctx, storeId);
+  const result = await writeHandyQr(ctx, storeId, (qr) => ({ ...qr, wifiOnly }));
+  if (!result.error) await audit(ctx, storeId, 'handy.wifi_only', { wifiOnly });
+  return result;
+}

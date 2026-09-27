@@ -12,7 +12,7 @@ import {
 import { networkKey } from '@/lib/handy-pairing';
 import { loadStorePolicy } from '@/lib/store-access-server';
 import { ACCESS_MESSAGE, canAddHandyDevice, isAllowedNetwork, isRestricted } from '@/lib/store-access';
-import { HANDY_OUTSIDE_COOKIE, handyQrFrom, isHandyQrToken, isShopNetwork } from '@/lib/handy-qr';
+import { HANDY_OUTSIDE_COOKIE, handyQrFrom, isHandyQrToken, isShopNetwork, isWifiGuarded } from '@/lib/handy-qr';
 
 export type JoinResult = { ok: true; storeName: string } | { ok: false; error: string };
 
@@ -20,7 +20,7 @@ export type JoinResult = { ok: true; storeName: string } | { ok: false; error: s
  * iPhone用ハンディ：お店の固定QRを読んだ端末を、そのままハンディとしてログインさせる。
  * 呼び出し元は未ログインの端末なので、次をすべて満たすときだけ成立させる:
  *   - QR の値がどこかの店舗の今のQRと一致する（再発行した古いQRは使えない）
- *   - お店のWi-Fi（レジで登録した回線）から来ている
+ *   - 「お店のWi-Fiだけで使う」がオンの店なら、お店のWi-Fi（レジで登録した回線）から来ている
  */
 export async function joinHandyByQr(token: string): Promise<JoinResult> {
   if (!isHandyQrToken(token)) return { ok: false, error: 'このQRコードは使えません。お店に貼ってあるQRコードを読み取ってください' };
@@ -46,7 +46,9 @@ export async function joinHandyByQr(token: string): Promise<JoinResult> {
   const ip = await currentRequestIp();
   // 契約で運営が登録した回線（store_access_policies）でも開ける
   const policy = await loadStorePolicy(store.id as string);
-  const allowed = isShopNetwork(qr, ip) || (isRestricted(policy) && isAllowedNetwork(policy, ip));
+  // 「お店のWi-Fiだけで使う」をオンにした店（か運営が回線を制限した店）だけ回線を見る。既定はどこからでも開く
+  const guarded = isWifiGuarded(qr) || isRestricted(policy);
+  const allowed = !guarded || isShopNetwork(qr, ip) || (isRestricted(policy) && isAllowedNetwork(policy, ip));
   if (!allowed) {
     // iPhone の iCloud プライベートリレー（Safari）がオンだと、お店の Wi-Fi でも Apple 側の回線（172.224.0.0/12 など）に見える
     // （2026-09-27 FULLMOoN 新宿で 172.226.x.x のまま入れなかった）。その場合は切り方を案内する

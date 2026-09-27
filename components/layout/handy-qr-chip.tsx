@@ -93,7 +93,7 @@ export function HandyQrChip({ storeId }: { storeId: string }) {
                     className="mt-3 inline-flex h-11 items-center gap-2 rounded-lg bg-primary px-5 text-sm font-semibold text-white hover:bg-primary-deep disabled:opacity-60"
                   >
                     {pending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <QrCode className="h-4 w-4" aria-hidden />}
-                    QRコードを作る（お店のWi-Fiのレジから）
+                    QRコードを作る
                   </button>
                 ) : (
                   <p className="mt-2 text-xs text-gray-500">店長以上が 設定 &gt; iPhoneハンディ で作れます。</p>
@@ -106,7 +106,7 @@ export function HandyQrChip({ storeId }: { storeId: string }) {
                 {/* eslint-disable-next-line @next/next/no-img-element -- data URI のQR */}
                 <img src={dataUrl} alt="ハンディ ログインQRコード" className="mx-auto mt-3 h-[300px] w-[300px] rounded-lg" />
                 <p className="mt-2 text-[12px] leading-relaxed text-gray-600">
-                  iPhone で TENPO ONE を開く →「ハンディ（iPhone）ログインはこちら」→「QR Code」でこのコードを読むと、そのままハンディが開きます（お店のWi-Fiで）。
+                  iPhone で TENPO ONE を開く →「ハンディ（iPhone）ログインはこちら」→「QR Code」でこのコードを読むと、そのままハンディが開きます。
                 </p>
               </>
             )}

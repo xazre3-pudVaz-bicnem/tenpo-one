@@ -8,6 +8,7 @@ import {
   decideOutside,
   handyQrFrom,
   isShopNetwork,
+  isWifiGuarded,
   parseOutsideSince,
   type HandyQrSettings,
   type OutsideDecision,
@@ -153,7 +154,7 @@ export async function checkHandyNetwork(): Promise<HandyGuardResult> {
   const ip = await currentRequestIp();
   const jar = await cookies();
   const decision = decideOutside({
-    guarded: qr.networks.length > 0 || isRestricted(policy),
+    guarded: isWifiGuarded(qr) || isRestricted(policy),
     inside: isShopNetwork(qr, ip) || (isRestricted(policy) && isAllowedNetwork(policy, ip)),
     outsideSince: parseOutsideSince(jar.get(HANDY_OUTSIDE_COOKIE)?.value),
     now: Date.now(),

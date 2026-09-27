@@ -2,8 +2,8 @@
  * iPhone用ハンディ（2026-09-23 店舗要望）。
  *
  * - 店ごとに1つの「固定QRコード」（毎日は変えない。壁に貼っておける）
- * - お店のWi-Fiにつないだスマホで読むと、そのままハンディが開く（パスワードなし）
- * - お店のWi-Fiの外に出て 3 分たつと自動でログアウト（端末は解除。戻ったらQRを読み直す）
+ * - スマホのカメラで読むと、そのままハンディが開く（パスワードなし）
+ * - 「お店のWi-Fiだけで使う」（wifiOnly・既定オフ）をオンにした店だけ、登録した回線の外に出て 3 分たつと自動でログアウト
  *
  * 「お店のWi-Fi」は、ブラウザからは Wi-Fi の名前が読めないため、お店のインターネット回線
  * （接続元IP。IPv6 は上位64ビット）で判定する。回線はレジの画面（設定 > iPhone用ハンディ）から登録する。
@@ -30,6 +30,11 @@ export interface HandyQrSettings {
   /** QR に入れる値（48桁の16進）。null はまだ作っていない */
   token: string | null;
   networks: ShopNetwork[];
+  /**
+   * true のときだけ「お店のWi-Fi（登録した回線）からしか開けない・外に出ると3分でログアウト」を効かせる。
+   * 既定は false ＝ QR を読めばどこからでも開く（2026-09-28 Ronnie「普通に QR を読んだら開くように。みんな分からなくて困る」）
+   */
+  wifiOnly: boolean;
 }
 
 export function isHandyQrToken(v: unknown): v is string {
@@ -53,7 +58,12 @@ export function handyQrFrom(settings: unknown): HandyQrSettings {
         }))
         .slice(0, MAX_SHOP_NETWORKS)
     : [];
-  return { token: isHandyQrToken(o.token) ? o.token.toLowerCase() : null, networks };
+  return { token: isHandyQrToken(o.token) ? o.token.toLowerCase() : null, networks, wifiOnly: o.wifiOnly === true };
+}
+
+/** 回線の判定を効かせる店か（Wi-Fi だけで使う設定 ＋ 回線が登録されている） */
+export function isWifiGuarded(s: HandyQrSettings): boolean {
+  return s.wifiOnly && s.networks.length > 0;
 }
 
 /** 回線を追加（同じ回線は1つだけ。多すぎれば古いものから消す） */
