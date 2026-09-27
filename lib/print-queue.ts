@@ -6,7 +6,6 @@
  * ジョブの期限切れ・取りこぼし回収・厨房伝票の生成は同じロジックでよい。表現（Markup / StarPRNT / ePOS-Print XML）
  * だけが方式ごとに異なり、payload に3種とも載せてプリンタ側に選ばせる。
  */
-import { normalizeFloorIds, printerServesFloor, printsBillSlips } from '@/lib/printer-floors';
 import { createAdminClient } from '@/lib/supabase/admin';
 import {
   groupKitchenTickets,
@@ -20,11 +19,10 @@ import {
   type KitchenStation,
   type KitchenTicketSettings,
 } from '@/lib/kitchen-ticket';
-import { kitchenTicketsMarkup, orderSlipMarkup } from '@/lib/receipt-markup';
+import { kitchenTicketsMarkup } from '@/lib/receipt-markup';
 import { colsFor, STAR_WIDTH_OPTIONS } from '@/lib/receipt-layout';
-import { kitchenTicketsStarPrnt, orderSlipStarPrnt } from '@/lib/starprnt';
-import { kitchenTicketsEpos, orderSlipEposXml, eposCols } from '@/lib/epos-print';
-import { selectCheckoutBillsToPrint, CHECKOUT_BILL_WINDOW_MS } from '@/lib/qr-bill';
+import { kitchenTicketsStarPrnt } from '@/lib/starprnt';
+import { kitchenTicketsEpos, eposCols } from '@/lib/epos-print';
 
 export const MARKUP = 'text/vnd.star.markup';
 export const STARPRNT = 'application/vnd.star.starprnt';
@@ -60,7 +58,7 @@ export interface PrinterRow {
   usage: string;
   paper_width_mm: number;
   kitchen_stations: string[] | null;
-  /** レジ機: お客様が QR 画面で「お会計」を押したら、お会計伝票を自動で印字する（設定 > プリンター「自動印刷」） */
+  /** レジ機: 会計のあとレシートを自動で印字する（設定 > プリンター「自動印刷」）。お会計伝票の自動印字は無い（2026-09-28 Ronnie「自動はオフ」） */
   auto_print?: boolean;
   /** 担当フロア（floors.id）。空＝既定プリンター（lib/printer-floors.ts） */
   floor_ids?: string[] | null;
@@ -205,172 +203,6 @@ export async function generateKitchenJobs(admin: Admin, printer: PrinterRow) {
     // 明細は伝達済みに更新済みのため、ここで失敗すると伝票が出ない。KDS画面で確認できるよう記録を残す。
     console.error('[print-queue] kitchen job insert failed', printer.id, insErr.message);
   }
-}
-
-/**
- * レジ機のポーリング時に、お客様が QR 画面で「お会計」を押した卓の「お会計伝票」を自動で積む。
- * 端末（iPad等）を開いていなくても、レジプリンターから伝票が出るので、スタッフはそれを持って卓へ行く
- * （2026-09-28 Ronnie「お客様がお会計を押したら卓に通知、スタッフが伝票を持って行く」）。
- *
- * - 対象: そのプリンタが usage='receipt' かつ「自動印刷」ON（printer_configs.auto_print）のときだけ
- * - 判定: 30分以内の「お会計」呼び出し（service_calls.kind='checkout'）で、その注文がまだ未会計、
- *   かつ 呼び出しの後にまだお会計伝票を出していないもの（1回の「お会計」に1枚）
- * - 品が追加されるたびに全明細を印字し直す方式はやめた（FULLMOoN 新宿「オーダーのたびに会計伝票が出る」）
- * - 重複防止: 印字済みかどうかは print_jobs（job_type='order_slip'）の作成時刻で判定する。新しい列は作らない
- */
-export async function generateCheckoutBillJobs(admin: Admin, printer: PrinterRow) {
-  // お会計伝票はレシート機だけから出す。ドリンク機は新しい注文の厨房伝票だけ（2026-09-24 FULL MOoN）。
-  // ドリンク機の「会計伝票も出す」は、会計伝票ボタンを押したときのフロア担当として今までどおり使う。
-  if (printer.usage !== 'receipt' || !printsBillSlips(printer) || !printer.auto_print) return;
-
-  // 30分以内の「お会計」呼び出し（対応済みでも、呼び出しの後に伝票を出していなければ出す）
-  const { data: calls, error: callsErr } = await admin
-    .from('service_calls')
-    .select('order_id, created_at')
-    .eq('store_id', printer.store_id)
-    .eq('kind', 'checkout')
-    .not('order_id', 'is', null)
-    .gte('created_at', isoAgo(CHECKOUT_BILL_WINDOW_MS))
-    .order('created_at', { ascending: false })
-    .limit(50);
-  if (callsErr) {
-    console.error('[print-queue] checkout bill: service_calls query failed', printer.id, callsErr.message);
-    return;
-  }
-  const requestedAt = new Map<string, number>();
-  for (const c of calls ?? []) {
-    const oid = c.order_id as string;
-    if (!requestedAt.has(oid)) requestedAt.set(oid, Date.parse(c.created_at as string));
-  }
-  if (requestedAt.size === 0) return;
-
-  const { data: orders, error } = await admin
-    .from('orders')
-    .select('id, order_no, guest_count, clerk_name, subtotal, tax_total, service_charge, discount_total, total, restaurant_tables(name, floor_id), stores(name)')
-    .in('id', [...requestedAt.keys()])
-    .eq('status', 'open');
-  if (error) {
-    console.error('[print-queue] checkout bill: orders query failed', printer.id, error.message);
-    return;
-  }
-  if (!orders || orders.length === 0) return;
-
-  // 担当フロア: このプリンターが担当する卓の伝票だけ出す（3F の卓 → 3F のプリンター）。
-  // 比較対象は同じ店の「自動印刷ON・実機接続ON」のレシート機（どれか1台から1回だけ出るように）
-  const { data: peers } = await admin
-    .from('printer_configs')
-    .select('id, floor_ids')
-    .eq('store_id', printer.store_id)
-    .eq('status', 'active')
-    .eq('cloudprnt_enabled', true)
-    .eq('usage', 'receipt')
-    .eq('auto_print', true);
-  const peerList = ((peers ?? []) as { id: string; floor_ids: string[] | null }[]).map((p) => ({
-    id: p.id,
-    floorIds: normalizeFloorIds(p.floor_ids),
-  }));
-  const self = { id: printer.id, floorIds: normalizeFloorIds(printer.floor_ids) };
-  if (!peerList.some((p) => p.id === self.id)) peerList.push(self);
-  const mine = orders.filter((o) => {
-    const t = o.restaurant_tables as unknown as { floor_id: string | null } | null;
-    return printerServesFloor(self, t?.floor_id ?? null, peerList);
-  });
-  if (mine.length === 0) return;
-  const orderIds = mine.map((o) => o.id as string);
-
-  const [{ data: items }, { data: slips }] = await Promise.all([
-    admin
-      .from('order_items')
-      .select('order_id, name, unit_price, quantity, line_total, modifiers, created_at')
-      .in('order_id', orderIds)
-      .eq('status', 'active')
-      .order('created_at'),
-    admin
-      .from('print_jobs')
-      .select('order_id, created_at')
-      .in('order_id', orderIds)
-      .eq('job_type', 'order_slip')
-      .order('created_at', { ascending: false }),
-  ]);
-
-  const lastSlipAt = new Map<string, number>();
-  for (const j of slips ?? []) {
-    const oid = j.order_id as string;
-    if (!lastSlipAt.has(oid)) lastSlipAt.set(oid, Date.parse(j.created_at as string));
-  }
-  const itemsByOrder = new Map<string, NonNullable<typeof items>>();
-  for (const it of items ?? []) {
-    const oid = it.order_id as string;
-    (itemsByOrder.get(oid) ?? itemsByOrder.set(oid, []).get(oid)!).push(it);
-  }
-
-  const toPrint = new Set(
-    selectCheckoutBillsToPrint(
-      mine.map((o) => ({
-        orderId: o.id as string,
-        requestedAt: requestedAt.get(o.id as string) ?? 0,
-        hasItems: (itemsByOrder.get(o.id as string) ?? []).length > 0,
-        lastSlipAt: lastSlipAt.get(o.id as string),
-      })),
-      Date.now()
-    )
-  );
-  if (toPrint.size === 0) return;
-
-  const paperWidth = printer.paper_width_mm === 58 ? 58 : 80;
-  const issuedAt = new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo', dateStyle: 'short', timeStyle: 'short' });
-  const rows: Record<string, unknown>[] = [];
-
-  for (const o of mine) {
-    const oid = o.id as string;
-    if (!toPrint.has(oid)) continue;
-    const lines = itemsByOrder.get(oid) ?? [];
-
-    const table = o.restaurant_tables as unknown as { name: string } | null;
-    const store = o.stores as unknown as { name: string } | null;
-    const slip = {
-      storeName: store?.name ?? '',
-      orderNo: String(o.order_no),
-      tableName: table?.name ?? null,
-      guestCount: (o.guest_count as number | null) ?? null,
-      clerkName: (o.clerk_name as string | null) ?? null,
-      issuedAt,
-      lines: lines.map((it) => ({
-        name: it.name as string,
-        quantity: it.quantity as number,
-        unitPrice: it.unit_price as number,
-        lineTotal: it.line_total as number,
-        modifiers: ((it.modifiers ?? []) as { name: string; price?: number }[]).map((m) => ({
-          name: m.name,
-          price: m.price ?? 0,
-        })),
-      })),
-      subtotal: o.subtotal as number,
-      taxTotal: o.tax_total as number,
-      serviceCharge: o.service_charge as number,
-      discount: o.discount_total as number,
-      total: o.total as number,
-    };
-    rows.push({
-      organization_id: printer.organization_id,
-      store_id: printer.store_id,
-      printer_config_id: printer.id,
-      job_type: 'order_slip',
-      order_id: oid,
-      target: 'cloudprnt',
-      content_type: MARKUP,
-      payload: {
-        body: orderSlipMarkup(slip, { paperWidth }),
-        starprnt: orderSlipStarPrnt(slip, { paperWidth }).toString('base64'),
-        epos: orderSlipEposXml(slip, { paperWidth }),
-      },
-      status: 'queued',
-    });
-  }
-  if (rows.length === 0) return;
-
-  const { error: insErr } = await admin.from('print_jobs').insert(rows);
-  if (insErr) console.error('[print-queue] checkout bill job insert failed', printer.id, insErr.message);
 }
 
 /** このプリンタ宛ての最古の queued を1件取り出し、claimed にする。 */

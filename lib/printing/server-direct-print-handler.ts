@@ -6,7 +6,6 @@ import {
   expireStaleJobs,
   finishJob,
   generateKitchenJobs,
-  generateCheckoutBillJobs,
   reclaimStaleJobs,
   touchPrinter,
   type JobPayload,
@@ -51,8 +50,7 @@ export async function handleServerDirectPrint(admin: Admin, printer: PrinterRow,
   await reclaimStaleJobs(admin, printer.id);
 
   if (printer.usage === 'kitchen') await generateKitchenJobs(admin, printer);
-  // お客様が QR で「お会計」を押した卓のお会計伝票（レシート機・自動印刷ONだけ。関数の中で判定する）
-  await generateCheckoutBillJobs(admin, printer);
+  // お会計伝票の自動印字は無い（2026-09-28 Ronnie「自動はオフ」。卓のポップアップ・ハンディの「会計伝票」ボタンで出す）
 
   const job = await claimNextJob(admin, printer.id);
   if (!job) return emptyServerDirectPrintResponse();
