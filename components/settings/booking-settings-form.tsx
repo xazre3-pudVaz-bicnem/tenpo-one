@@ -160,7 +160,7 @@ export function BookingSettingsForm({ initial }: { initial: BookingSettingsData 
                 </Button>
               </div>
               <p className="mt-1 text-xs text-gray-500">
-                貼った URL のページの代表写真（お店の写真）を自動で取り込みます。写真の URL（.jpg）を直接貼っても使えます。
+                貼った URL のページの代表写真（お店の写真）を自動で取り込みます。食べログ・ホットペッパー・ホームページどれでも可。写真の URL（.jpg）を直接貼っても使えます。
               </p>
               {form.bookingPhotoUrl && (
                 <div className="mt-2 flex items-center gap-3">
