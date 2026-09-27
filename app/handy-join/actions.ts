@@ -48,9 +48,19 @@ export async function joinHandyByQr(token: string): Promise<JoinResult> {
   const policy = await loadStorePolicy(store.id as string);
   const allowed = isShopNetwork(qr, ip) || (isRestricted(policy) && isAllowedNetwork(policy, ip));
   if (!allowed) {
+    // iPhone の iCloud プライベートリレー（Safari）がオンだと、お店の Wi-Fi でも Apple 側の回線（172.224.0.0/12 など）に見える
+    // （2026-09-27 FULLMOoN 新宿で 172.226.x.x のまま入れなかった）。その場合は切り方を案内する
+    const ua = (await headers()).get('user-agent') ?? '';
+    const relay = ip ? isLikelyPrivateRelay(ip) : false;
+    const ios = /iPhone|iPad/i.test(ua);
+    const hint = relay
+      ? '\n\niPhone の「プライベートリレー」がオンのため、お店のWi-Fiでも別の回線に見えています。設定 → Wi-Fi → お店のWi-Fiの (i) →「IPアドレスのトラッキングを制限」をオフ（または 設定 → Apple ID → iCloud → プライベートリレー をオフ）にして、もう一度読み取ってください。'
+      : ios
+        ? '\n\nお店のWi-Fiにつないでいるのに開けないときは、設定 → Wi-Fi → お店のWi-Fiの (i) →「IPアドレスのトラッキングを制限」をオフにしてから、もう一度読み取ってください。'
+        : '';
     return {
       ok: false,
-      error: `お店のWi-Fiに接続してから読み取ってください（スマホの回線やほかのWi-Fiでは開けません）。この端末の回線: ${ip ? networkKey(ip) : '不明'}`,
+      error: `お店のWi-Fiに接続してから読み取ってください（スマホの回線やほかのWi-Fiでは開けません）。この端末の回線: ${ip ? networkKey(ip) : '不明'}${hint}`,
     };
   }
 
@@ -144,4 +154,13 @@ export async function handyHeartbeat(): Promise<HeartbeatResult> {
   const supabase = await createClient();
   await supabase.auth.signOut().catch(() => undefined);
   return { kind: 'logout' };
+}
+
+/** iCloud プライベートリレーの出口（Akamai 172.224.0.0/12・Cloudflare 104.28.0.0/16 等）らしい IP か */
+function isLikelyPrivateRelay(ip: string): boolean {
+  const m = /^(\d{1,3})\.(\d{1,3})\./.exec(ip);
+  if (!m) return false;
+  const a = Number(m[1]);
+  const b = Number(m[2]);
+  return (a === 172 && b >= 224 && b <= 239) || (a === 104 && b === 28);
 }
