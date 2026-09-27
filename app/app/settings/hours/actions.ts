@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { businessDayProblem, toDbTime } from '@/lib/business-hours';
+import { isHHMM } from '@/lib/daypart';
 
 export interface ActionResult {
   error?: string;
@@ -144,6 +145,43 @@ export async function deleteHoliday(holidayId: string, storeId: string): Promise
     p_note: null,
   });
 
+  revalidatePath('/app/settings/hours');
+  return {};
+}
+
+/**
+ * レジ精算レシートの「ランチ売上／ディナー売上」の区切り時刻（2026-09-28 Ronnie）。
+ * この時刻までに始まった伝票がランチ、それより後がディナー。store_settings.settings.registerReport.lunchUntil
+ */
+export async function saveLunchUntil(storeId: string, lunchUntil: string): Promise<ActionResult> {
+  const ctx = await requirePermission('store.settings');
+  if (!ctx.stores.some((s) => s.id === storeId)) return { error: '対象店舗にアクセス権がありません' };
+  if (!isHHMM(lunchUntil)) return { error: '時刻は 15:00 のように入れてください' };
+  const supabase = await createClient();
+  const { data: existing, error: readError } = await supabase.from('store_settings').select('settings').eq('store_id', storeId).maybeSingle();
+  if (readError) return { error: `店舗設定の読み込みに失敗しました: ${readError.message}` };
+  const current = (existing?.settings as Record<string, unknown> | null) ?? {};
+  const rr = (current.registerReport && typeof current.registerReport === 'object' ? current.registerReport : {}) as Record<string, unknown>;
+  const { error } = await supabase.from('store_settings').upsert(
+    {
+      organization_id: ctx.organizationId,
+      store_id: storeId,
+      settings: { ...current, registerReport: { ...rr, lunchUntil } },
+      updated_by: ctx.userId,
+    },
+    { onConflict: 'store_id' }
+  );
+  if (error) return { error: `保存に失敗しました: ${error.message}` };
+  await supabase.rpc('log_audit', {
+    p_org: ctx.organizationId,
+    p_store: storeId,
+    p_action: 'settings.register_report.lunch_until',
+    p_target_table: 'store_settings',
+    p_target_id: storeId,
+    p_before: null,
+    p_after: { lunchUntil },
+    p_note: null,
+  });
   revalidatePath('/app/settings/hours');
   return {};
 }

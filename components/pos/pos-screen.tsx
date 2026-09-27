@@ -288,7 +288,8 @@ export function PosScreen({
   const [pending, startTransition] = useTransition();
   /**
    * テイクアウトの伝票は「テイクアウト」のカテゴリがあればそこから開く（2026-09-24 店舗要望）。
-   * 無ければ今までどおり最初のカテゴリ。ここは最初の1回だけで、あとは押したカテゴリに従う。
+   * それ以外は上の 1 番のタブ「おすすめ」から（2026-09-28 Ronnie「注文を押すと食べ放題のタブに行ってしまう。1番に」。
+   * 以前は並び順で最初のカテゴリ＝SHUNKA では食べ放題の F YAKITORI が開いていた）。ここは最初の1回だけで、あとは押したカテゴリに従う。
    */
   const [activeCategory, setActiveCategory] = useState<string>(() => {
     const takeoutSlip =
@@ -297,7 +298,7 @@ export function PosScreen({
       const takeoutCategory = categories.find((c) => TAKEOUT_CATEGORY.test(c.name));
       if (takeoutCategory) return takeoutCategory.id;
     }
-    return categories[0]?.id ?? '';
+    return FAVORITES_TAB;
   });
   const [searchQuery, setSearchQuery] = useState('');
   const [cancelTarget, setCancelTarget] = useState<PosOrderItem | null>(null);

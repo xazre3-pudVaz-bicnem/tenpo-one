@@ -307,18 +307,14 @@ export function TableSheet({
       <div className="space-y-1.5">
         {!seated && status !== 'cleaning' && status !== 'unavailable' && (
           <>
-            {/* 見本と同じく「注文」1つだけ。人数は注文画面の人数から直す（2026-09-25 店舗要望） */}
+            {/* 「注文」を押すと、ハンディと同じ「お客様情報」（男女の人数・来店経路・時間制）を先に入れる。
+                2026-09-25 にいきなり伝票を立てる形にしていたが、2026-09-28 Ronnie「iPad で卓を始めるとき、この画面が出なくなった」
+                （レジ精算の 男性／女性 もここで入れた人数から出す）。お客様情報を確定するとそのまま伝票画面へ進む */}
             <Button
               size="pos"
               className="h-[48px] w-full flex-col gap-0 text-[16px] leading-tight"
               disabled={pending}
-              onClick={() =>
-                goPos(() =>
-                  startWalkInAction(table.id, DEFAULT_PARTY_SIZE, {
-                    durationMinutes: defaultStayMinutes,
-                  })
-                )
-              }
+              onClick={() => router.push(`/app/floor/${table.id}/setup`)}
             >
               注文
               <span className="text-[10px] font-semibold opacity-80">Order</span>
