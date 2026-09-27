@@ -68,6 +68,13 @@ export interface RegisterReportData {
     /** 端数値引（orders.rounding_adjustment） */
     rounding?: { count: number; amount: number };
   };
+  /** ランチ売上／ディナー売上（区切りの時刻までに始まった伝票と、それより後）。無ければ出さない */
+  daypart?: {
+    lunchUntil: string;
+    dinnerFrom: string;
+    lunch: { sales: number; groups: number; guests: number; avg: number };
+    dinner: { sales: number; groups: number; guests: number; avg: number };
+  };
   /** 控除＝返金・取消（点数・金額・内消費税・種類）。控除後純売上 ＝ 純売上 − (控除額 − 控除税額) */
   deductions?: { count: number; amount: number; tax: number; items: string[] };
   /** 訂正（黒伝票）＝会計後に作り直した再会計伝票 */
@@ -246,6 +253,20 @@ export function layoutRegisterReport(data: RegisterReportData, options: Register
   kv('  女性', `${female}客`);
   kv('  選択なし', `${unselected}客`);
   kv('客単価', yen(s.avgSpend));
+  // ---- ランチ／ディナー（区切りの時刻は店の設定） ----
+  if (data.daypart) {
+    const d = data.daypart;
+    blank();
+    kv(`ランチ売上（〜${d.lunchUntil}）`, yen(d.lunch.sales));
+    kv('  組', `${d.lunch.groups}組`);
+    kv('  名様', `${d.lunch.guests}名様`);
+    kv('  単価', yen(d.lunch.avg));
+    blank();
+    kv(`ディナー売上（${d.dinnerFrom}〜）`, yen(d.dinner.sales));
+    kv('  組', `${d.dinner.groups}組`);
+    kv('  名様', `${d.dinner.guests}名様`);
+    kv('  単価', yen(d.dinner.avg));
+  }
   blank();
   kv('総売上点数', `${s.itemQuantity}点`);
   kv('売上', yen(s.gross));
@@ -284,6 +305,20 @@ export function layoutRegisterReport(data: RegisterReportData, options: Register
   kcv('訂正（黒伝票）', cnt(data.corrections?.count ?? 0), yen(data.corrections?.amount ?? 0));
   kcv('未回収', cnt(data.uncollected?.count ?? 0), yen(data.uncollected?.amount ?? 0));
   kv('領収書', cnt(data.receipts?.count ?? data.activity.find((a) => a.label === '領収書発行')?.count ?? 0));
+
+  // ---- 売上詳細情報：媒体別（お客様情報の来店経路ごと。2026-09-28 Ronnie「来店経路の選択のデータをレジ精算に」） ----
+  if (data.byChannel.length > 0) {
+    section('売上詳細情報 ( 税込 )');
+    sub('媒体別');
+    for (const c of data.byChannel) {
+      blank();
+      line(`[${c.label}]`);
+      kv('売上', yen(c.sales));
+      kv('人数', `${c.guests}人`);
+      kv('組数', `${c.groups}組`);
+      kv('客単価', c.guests > 0 ? yen(Math.round(c.sales / c.guests)) : yen(0));
+    }
+  }
 
   // ---- 入出金情報（件数と現金在高） ----
   starSection('入出金情報');

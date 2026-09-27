@@ -8,6 +8,8 @@ import { EmptyState } from '@/components/ui/state';
 import { SettingsBackLink } from '@/components/settings/back-link';
 import { BusinessHoursForm } from '@/components/settings/business-hours-form';
 import { HolidaysPanel } from '@/components/settings/holidays-panel';
+import { DaypartForm } from '@/components/settings/daypart-form';
+import { daypartSettingsFrom } from '@/lib/daypart';
 import type { BusinessHourInput } from './actions';
 
 export const metadata: Metadata = { title: '営業時間・休業日 | 設定' };
@@ -45,6 +47,9 @@ export default async function HoursSettingsPage() {
     };
   });
 
+  const { data: settingsRow } = await supabase.from('store_settings').select('settings').eq('store_id', targetStore.id).maybeSingle();
+  const daypart = daypartSettingsFrom(settingsRow?.settings);
+
   const { data: holidays } = await supabase
     .from('holidays')
     .select('id, holiday_date, name, is_temporary')
@@ -66,6 +71,8 @@ export default async function HoursSettingsPage() {
 
       <div className="space-y-5">
         <BusinessHoursForm storeId={targetStore.id} initial={initialHours} />
+        {/* レジ精算レシートの ランチ／ディナー の区切り（2026-09-28 Ronnie） */}
+        <DaypartForm storeId={targetStore.id} initial={daypart.lunchUntil} />
         <HolidaysPanel storeId={targetStore.id} initial={initialHolidays} />
       </div>
     </div>

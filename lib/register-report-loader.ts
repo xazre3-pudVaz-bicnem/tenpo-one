@@ -7,6 +7,8 @@ import { kitchenTicketStarPrnt } from '@/lib/starprnt';
 import { kitchenTicketEpos, eposCols } from '@/lib/epos-print';
 import { STAR_WIDTH_OPTIONS } from '@/lib/receipt-layout';
 import { isCheckViolation, isMissingColumnError } from '@/lib/schema-compat';
+import { daypartSettingsFrom, guestGenderFromMemo, splitDaypart } from '@/lib/daypart';
+import { visitSourceByLabel } from '@/lib/handy-visit';
 import {
   layoutRegisterReport,
   layoutSettlementReport,
@@ -88,10 +90,11 @@ export async function loadRegisterReportData(
     { data: sessionTx },
     { data: ryoshushoJobs },
     { data: otherOpen },
+    { data: storeSettingsRow },
   ] = await Promise.all([
     supabase
       .from('orders')
-      .select('id, total, discount_total, service_charge, tax_total, guest_count, status, reservation_id, rounding_adjustment, source_order_id')
+      .select('id, total, discount_total, service_charge, tax_total, guest_count, status, reservation_id, rounding_adjustment, source_order_id, opened_at, created_at, memo')
       .eq('store_id', storeId)
       .eq('business_date', bd)
       .in('status', ['paid', 'refunded'])
@@ -146,6 +149,7 @@ export async function loadRegisterReportData(
       .eq('status', 'open')
       .neq('id', sessionId)
       .limit(5),
+    supabase.from('store_settings').select('settings').eq('store_id', storeId).maybeSingle(),
   ]);
 
   // 担当者名
@@ -161,13 +165,16 @@ export async function loadRegisterReportData(
   const { data: reservations } = reservationIds.length
     ? await supabase
         .from('reservations')
-        .select('id, created_via, reservation_sources(name)')
+        .select('id, created_via, purpose, reservation_sources(name)')
         .in('id', reservationIds)
-    : { data: [] as { id: string; created_via: string; reservation_sources: unknown }[] };
+    : { data: [] as { id: string; created_via: string; purpose: string | null; reservation_sources: unknown }[] };
   const channelOfReservation = new Map<string, string>();
   for (const r of reservations ?? []) {
     const source = r.reservation_sources as unknown as { name: string } | null;
-    channelOfReservation.set(r.id, source?.name ?? CREATED_VIA_LABELS[r.created_via] ?? r.created_via);
+    // お客様情報（レジ・ハンディ）で選んだ来店経路は、reservation_sources に無いもの（ホームページ・SNS・CATCH…）は purpose に入っている
+    const purpose = (r as { purpose?: string | null }).purpose?.trim();
+    const fromPurpose = purpose && visitSourceByLabel(purpose) ? purpose : null;
+    channelOfReservation.set(r.id, source?.name ?? fromPurpose ?? CREATED_VIA_LABELS[r.created_via] ?? r.created_via);
   }
 
   // ---- 売上 ----
@@ -224,6 +231,28 @@ export async function loadRegisterReportData(
   const onAccount = (payments ?? []).filter((p) => p.method === 'on_account');
   const rounded = settled.filter((o) => Number((o as { rounding_adjustment?: number }).rounding_adjustment ?? 0) !== 0);
   const roundingAmount = rounded.reduce((a, o) => a + Math.abs(Number((o as { rounding_adjustment?: number }).rounding_adjustment ?? 0)), 0);
+  // ランチ／ディナー（区切りの時刻は 設定 > 営業時間・休業日）
+  const daypart = splitDaypart(
+    settled.map((o) => ({
+      openedAt: ((o as { opened_at?: string | null }).opened_at ?? null) as string | null,
+      createdAt: ((o as { created_at?: string | null }).created_at ?? null) as string | null,
+      total: o.total,
+      guests: o.guest_count ?? 0,
+    })),
+    bd,
+    daypartSettingsFrom(storeSettingsRow?.settings).lunchUntil
+  );
+  const gender = settled.reduce(
+    (acc, o) => {
+      const g = guestGenderFromMemo((o as { memo?: string | null }).memo);
+      if (g) {
+        acc.male += g.male;
+        acc.female += g.female;
+      }
+      return acc;
+    },
+    { male: 0, female: 0 }
+  );
   // 控除＝返金・取消（内消費税は 10% で逆算）
   const deductionTax = (refunds ?? []).reduce((a, r) => a + (r.amount - Math.round(r.amount / 1.1)), 0);
   const deductionItems = [...new Set((refunds ?? []).map((r) => (r.kind === 'void' ? '取消' : '返金')))];
@@ -335,12 +364,13 @@ export async function loadRegisterReportData(
       itemQuantity,
       taxByRate,
       tax: taxTotal,
-      // 男性・女性の入力はまだ無い（お客様情報に足せば出せる）。それまでは全員「選択なし」
-      guestsMale: 0,
-      guestsFemale: 0,
+      // 男性・女性はお客様情報で入れた人数（伝票メモ「男2・女1」）から。入れていない伝票は「選択なし」
+      guestsMale: gender.male,
+      guestsFemale: gender.female,
       lateNight: { count: 0, amount: 0 },
       rounding: { count: rounded.length, amount: roundingAmount },
     },
+    daypart,
     deductions: { count: (refunds ?? []).length, amount: refundTotal, tax: deductionTax, items: deductionItems },
     corrections: { label: '訂正（黒伝票）', count: corrections.length, amount: corrections.reduce((a, o) => a + o.total, 0) },
     uncollected: { label: '未回収', count: onAccount.length, amount: onAccount.reduce((a, p) => a + p.amount, 0) },
