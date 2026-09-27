@@ -7,18 +7,29 @@ import {
   handyQrUrl,
   isHandyQrToken,
   isShopNetwork,
+  isWifiGuarded,
   parseOutsideSince,
 } from '@/lib/handy-qr';
 
 const TOKEN = 'a'.repeat(48);
 
-describe('iPhone用ハンディ（固定QR・お店のWi-Fiだけ・外に3分で自動ログアウト）', () => {
-  it('設定の読み込み', () => {
-    expect(handyQrFrom(null)).toEqual({ token: null, networks: [] });
+describe('iPhone用ハンディ（固定QR・Wi-Fi限定は任意・外に3分で自動ログアウト）', () => {
+  it('設定の読み込み（既定は wifiOnly=false ＝ どこからでも開く）', () => {
+    expect(handyQrFrom(null)).toEqual({ token: null, networks: [], wifiOnly: false });
     const s = handyQrFrom({ handyQr: { token: TOKEN.toUpperCase(), networks: [{ key: '203.0.113.5', label: 'レジ', addedAt: 'x' }, { bad: 1 }] } });
     expect(s.token).toBe(TOKEN);
     expect(s.networks).toHaveLength(1);
     expect(isHandyQrToken('xyz')).toBe(false);
+    expect(s.wifiOnly).toBe(false);
+    expect(handyQrFrom({ handyQr: { token: TOKEN, networks: [], wifiOnly: true } }).wifiOnly).toBe(true);
+    expect(handyQrFrom({ handyQr: { token: TOKEN, networks: [], wifiOnly: 'yes' } }).wifiOnly).toBe(false);
+  });
+
+  it('回線の判定を効かせるのは「Wi-Fiだけで使う」オン ＋ 回線あり のときだけ（2026-09-28 Ronnie）', () => {
+    const net = [{ key: '203.0.113.5', label: 'レジ', addedAt: 'x' }];
+    expect(isWifiGuarded({ token: TOKEN, networks: net, wifiOnly: false })).toBe(false);
+    expect(isWifiGuarded({ token: TOKEN, networks: [], wifiOnly: true })).toBe(false);
+    expect(isWifiGuarded({ token: TOKEN, networks: net, wifiOnly: true })).toBe(true);
   });
 
   it('お店の回線（IPv4 はそのまま、IPv6 は上位64ビット）', () => {

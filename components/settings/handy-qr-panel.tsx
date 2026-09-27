@@ -3,7 +3,8 @@
 import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import QRCode from 'qrcode';
-import { Printer, RefreshCw, Trash2, Wifi, WifiOff } from 'lucide-react';
+import { Printer, RefreshCw, ShieldCheck, Trash2, Wifi, WifiOff } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -14,14 +15,16 @@ import { handyQrUrl, type ShopNetwork } from '@/lib/handy-qr';
 type Action<A extends unknown[]> = (...args: A) => Promise<{ error?: string }>;
 
 /**
- * iPhone用ハンディの設定（固定QRコード・お店のWi-Fi）。
+ * iPhone用ハンディの設定（固定QRコード）。
  * QRは毎日変わらない。印刷してレジ横などに貼っておき、スタッフは iPhone のカメラで読むだけ。
+ * 「お店のWi-Fiだけで使う」は任意（既定オフ）。2026-09-28 Ronnie「普通に QR を読んだら開くように。みんな分からなくて困る」
  */
 export function HandyQrPanel({
   storeId,
   storeName,
   token,
   networks,
+  wifiOnly,
   currentNetwork,
   currentIsShop,
   activeDevices,
@@ -29,11 +32,14 @@ export function HandyQrPanel({
   regenerateAction,
   addNetworkAction,
   removeNetworkAction,
+  setWifiOnlyAction,
 }: {
   storeId: string;
   storeName: string;
   token: string | null;
   networks: ShopNetwork[];
+  /** true のときだけ登録した回線からしか開けない（外に出ると3分でログアウト） */
+  wifiOnly: boolean;
   currentNetwork: string | null;
   currentIsShop: boolean;
   activeDevices: number;
@@ -41,6 +47,7 @@ export function HandyQrPanel({
   regenerateAction: Action<[string]>;
   addNetworkAction: Action<[string, string, string[]]>;
   removeNetworkAction: Action<[string, string]>;
+  setWifiOnlyAction: Action<[string, boolean]>;
 }) {
   const router = useRouter();
   const { toast } = useToast();
@@ -96,7 +103,7 @@ export function HandyQrPanel({
       `<html><head><title>ハンディ QR</title></head><body style="font-family:sans-serif;text-align:center;padding:24px">` +
         `<h2 style="margin:0 0 4px">${storeName.replace(/</g, '&lt;')}</h2><p style="margin:0 0 16px">ハンディ（iPhone のカメラで読み取り）</p>` +
         `<img src="${qrDataUrl}" style="width:280px;height:280px"/>` +
-        `<p style="font-size:12px;color:#555">お店のWi-Fiにつないでから読み取ってください</p>` +
+        `<p style="font-size:12px;color:#555">${wifiOnly ? 'お店のWi-Fiにつないでから読み取ってください' : 'iPhone のカメラで読み取ると、そのままハンディが開きます'}</p>` +
         `<script>window.onload=()=>{window.print()}</script></body></html>`
     );
     w.document.close();
@@ -106,11 +113,10 @@ export function HandyQrPanel({
     return (
       <div className="space-y-4 rounded-xl border border-gray-200 bg-white p-5">
         <p className="text-sm text-gray-700">
-          お店に1つだけの「ハンディのQRコード」を作ります。スタッフはお店のWi-Fiにつないだ iPhone のカメラでこのQRを読むだけで、ハンディが開きます（パスワードなし）。
-          お店のWi-Fiの外に出て3分たつと、自動でログアウトします。
+          お店に1つだけの「ハンディのQRコード」を作ります。スタッフは iPhone のカメラでこのQRを読むだけで、ハンディが開きます（パスワードなし）。
         </p>
-        <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">
-          いまお使いの端末の回線を「お店のWi-Fi」として登録します。必ず<strong>お店のWi-Fiにつないだレジ</strong>で押してください。
+        <p className="rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-600">
+          いまお使いの端末の回線も「お店のWi-Fi」として覚えておきます（あとで「お店のWi-Fiだけで使う」をオンにしたときに使います）。
         </p>
         <Button onClick={() => run(async () => setupAction(storeId, await lookupIps()), 'QRコードを作りました')} disabled={pending}>
           QRコードを作る
@@ -142,19 +148,45 @@ export function HandyQrPanel({
           いまログインしているハンディ: <strong className="tabular-nums">{activeDevices}</strong>台
         </p>
         <ol className="mt-4 space-y-1 text-left text-xs leading-relaxed text-gray-600">
-          <li>1. iPhone をお店のWi-Fiにつなぐ</li>
-          <li>2. カメラでこのQRを読む → ハンディがそのまま開く</li>
-          <li>3. 初回は Safari の共有ボタン →「ホーム画面に追加」で、次からアイコンで開ける</li>
-          <li>4. お店のWi-Fiの外に3分いると自動でログアウト。戻ったらQRを読み直す</li>
+          {wifiOnly && <li>1. iPhone をお店のWi-Fiにつなぐ</li>}
+          <li>{wifiOnly ? '2' : '1'}. iPhone のカメラでこのQRを読む → ハンディがそのまま開く</li>
+          <li>{wifiOnly ? '3' : '2'}. 初回は Safari の共有ボタン →「ホーム画面に追加」で、次からアイコンで開ける</li>
+          {wifiOnly && <li>4. お店のWi-Fiの外に3分いると自動でログアウト。戻ったらQRを読み直す</li>}
         </ol>
       </div>
 
       <div className="space-y-4 rounded-xl border border-gray-200 bg-white p-5">
+        {/* お店のWi-Fi だけで使う（任意・既定オフ） */}
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-line bg-lilac-soft/60 px-4 py-3">
+          <div className="min-w-0">
+            <p className="flex items-center gap-1.5 text-[15px] font-bold text-navy">
+              <ShieldCheck className="h-4 w-4 text-royal" aria-hidden />
+              お店のWi-Fiだけで使う
+            </p>
+            <p className="mt-0.5 text-xs leading-relaxed text-ink-3">
+              {wifiOnly
+                ? 'オン：下に登録した回線からだけQRで開け、外に3分いると自動でログアウトします'
+                : 'オフ：QRを読めばどこからでも開きます（iPhone のプライベートリレーがオンでも大丈夫）'}
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={wifiOnly}
+            disabled={pending}
+            onClick={() => run(() => setWifiOnlyAction(storeId, !wifiOnly), !wifiOnly ? 'お店のWi-Fiだけで使うようにしました' : 'どこからでも開けるようにしました')}
+            className={cn('relative h-8 w-14 shrink-0 rounded-full transition-colors disabled:opacity-50', wifiOnly ? 'bg-iris' : 'bg-gray-300')}
+          >
+            <span className={cn('absolute top-1 h-6 w-6 rounded-full bg-white shadow transition-all', wifiOnly ? 'left-7' : 'left-1')} />
+          </button>
+        </div>
         <div>
           <p className="text-sm font-semibold text-navy">お店のWi-Fi（インターネット回線）</p>
           <p className="mt-1 text-xs leading-relaxed text-gray-500">
             ブラウザからはWi-Fiの名前が読めないため、お店のインターネット回線で「お店のWi-Fiか」を判定します。
-            ここに登録した回線からだけQRで開け、それ以外（スマホの回線・ほかのWi-Fi）に3分いるとログアウトします。
+            {wifiOnly
+              ? 'ここに登録した回線からだけQRで開け、それ以外（スマホの回線・ほかのWi-Fi）に3分いるとログアウトします。'
+              : '「お店のWi-Fiだけで使う」がオフの間は、この一覧は使われません。'}
             ルーターの再起動などで回線が変わったら、お店のWi-Fiにつないだレジで「この回線を追加」を押してください。
           </p>
         </div>
@@ -183,7 +215,9 @@ export function HandyQrPanel({
             </li>
           ))}
           {networks.length === 0 && (
-            <li className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">回線が登録されていないため、QRでは開けません。</li>
+            <li className={cn('rounded-lg px-3 py-2 text-xs', wifiOnly ? 'bg-amber-50 text-amber-900' : 'bg-gray-50 text-gray-500')}>
+              {wifiOnly ? '回線が登録されていないため、いまはどこからでも開ける状態です。「この回線を追加」を押してください。' : '回線は登録されていません。'}
+            </li>
           )}
         </ul>
         {!currentIsShop && (

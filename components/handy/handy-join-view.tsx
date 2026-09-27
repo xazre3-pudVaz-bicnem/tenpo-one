@@ -46,7 +46,7 @@ export function HandyJoinView({
           }
         })
         .catch(() => {
-          setError('通信できませんでした。お店のWi-Fiにつながっているか確認して、もう一度QRコードを読み取ってください');
+          setError('通信できませんでした。電波のよいところで、もう一度QRコードを読み取ってください');
           setState('error');
         });
     },
@@ -111,7 +111,7 @@ export function HandyJoinView({
             </p>
             <p className="mt-3 flex items-center gap-2 text-xs text-[#7a7090]">
               <Wifi className="h-4 w-4" aria-hidden />
-              iPhone の「設定 → Wi-Fi」でお店のWi-Fiにつないでから、カメラでQRコードを読み取ってください。
+              お店に貼ってあるQRコードを、iPhone のカメラでもう一度読み取ってください。それでも開かないときは店長に確認してください。
             </p>
           </div>
         )}

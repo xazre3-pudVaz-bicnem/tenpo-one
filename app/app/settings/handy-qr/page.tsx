@@ -10,14 +10,14 @@ import { HandyQrPanel } from '@/components/settings/handy-qr-panel';
 import { handyQrFrom, isShopNetwork } from '@/lib/handy-qr';
 import { currentRequestIp } from '@/lib/handy-device-server';
 import { networkKey } from '@/lib/handy-pairing';
-import { addCurrentShopNetwork, regenerateHandyQr, removeShopNetwork, setupHandyQr } from './actions';
+import { addCurrentShopNetwork, regenerateHandyQr, removeShopNetwork, setHandyWifiOnly, setupHandyQr } from './actions';
 
 export const metadata: Metadata = { title: 'iPhoneハンディ | 設定' };
 
 /**
  * 設定 > iPhoneハンディ（全店舗共通の機能）。
- * 店ごとに1つの固定QRコード。お店のWi-Fiにつないだ iPhone で読むとハンディが開き、
- * Wi-Fi の外に3分いると自動でログアウトする。
+ * 店ごとに1つの固定QRコード。iPhone のカメラで読むとハンディが開く。
+ * 「お店のWi-Fiだけで使う」をオンにした店だけ、登録した回線の外に3分いると自動でログアウト（既定オフ・2026-09-28 Ronnie）。
  */
 export default async function HandyQrPage() {
   const ctx = await requirePermission('store.settings');
@@ -44,12 +44,13 @@ export default async function HandyQrPage() {
   return (
     <div>
       <SettingsBackLink />
-      <PageHeader title="iPhoneハンディ" en="Handy QR" description={`${store.name}・QRコードを読むだけでハンディが開く（お店のWi-Fiだけ）`} />
+      <PageHeader title="iPhoneハンディ" en="Handy QR" description={`${store.name}・QRコードを読むだけでハンディが開く${qr.wifiOnly ? '（お店のWi-Fiだけ）' : ''}`} />
       <HandyQrPanel
         storeId={store.id}
         storeName={store.name}
         token={qr.token}
         networks={qr.networks}
+        wifiOnly={qr.wifiOnly}
         currentNetwork={ip ? networkKey(ip) : null}
         currentIsShop={isShopNetwork(qr, ip)}
         activeDevices={activeDevices ?? 0}
@@ -57,6 +58,7 @@ export default async function HandyQrPage() {
         regenerateAction={regenerateHandyQr}
         addNetworkAction={addCurrentShopNetwork}
         removeNetworkAction={removeShopNetwork}
+        setWifiOnlyAction={setHandyWifiOnly}
       />
 
       {/* メニュー一覧から「ハンディ」を外したので、この画面からそのまま開けるようにする（2026-09-23 要望） */}
