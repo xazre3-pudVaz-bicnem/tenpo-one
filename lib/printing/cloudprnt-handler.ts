@@ -6,7 +6,7 @@ import {
   expireStaleJobs,
   finishJob,
   generateKitchenJobs,
-  generateQrBillJobs,
+  generateCheckoutBillJobs,
   reclaimStaleJobs,
   touchPrinter,
   MARKUP,
@@ -90,8 +90,8 @@ export async function printerPoll(admin: Admin, printer: PrinterRow, request: Re
   await reclaimStaleJobs(admin, printer.id);
 
   if (printer.usage === 'kitchen') await generateKitchenJobs(admin, printer);
-  // レシート機と「会計伝票も出す」厨房（ドリンク）機（関数の中で判定する）
-  await generateQrBillJobs(admin, printer);
+  // お客様が QR で「お会計」を押した卓のお会計伝票（レシート機・自動印刷ONだけ。関数の中で判定する）
+  await generateCheckoutBillJobs(admin, printer);
 
   const job = await claimNextJob(admin, printer.id);
   if (!job) return NextResponse.json({ jobReady: false });

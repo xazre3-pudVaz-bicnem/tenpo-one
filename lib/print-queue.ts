@@ -24,7 +24,7 @@ import { kitchenTicketsMarkup, orderSlipMarkup } from '@/lib/receipt-markup';
 import { colsFor, STAR_WIDTH_OPTIONS } from '@/lib/receipt-layout';
 import { kitchenTicketsStarPrnt, orderSlipStarPrnt } from '@/lib/starprnt';
 import { kitchenTicketsEpos, orderSlipEposXml, eposCols } from '@/lib/epos-print';
-import { selectQrOrdersToPrint, QR_BILL_WINDOW_MS } from '@/lib/qr-bill';
+import { selectCheckoutBillsToPrint, CHECKOUT_BILL_WINDOW_MS } from '@/lib/qr-bill';
 
 export const MARKUP = 'text/vnd.star.markup';
 export const STARPRNT = 'application/vnd.star.starprnt';
@@ -60,7 +60,7 @@ export interface PrinterRow {
   usage: string;
   paper_width_mm: number;
   kitchen_stations: string[] | null;
-  /** レジ機: QR注文が入ったらお会計伝票を自動で印字する（設定 > プリンター「自動印刷」） */
+  /** レジ機: お客様が QR 画面で「お会計」を押したら、お会計伝票を自動で印字する（設定 > プリンター「自動印刷」） */
   auto_print?: boolean;
   /** 担当フロア（floors.id）。空＝既定プリンター（lib/printer-floors.ts） */
   floor_ids?: string[] | null;
@@ -207,33 +207,50 @@ export async function generateKitchenJobs(admin: Admin, printer: PrinterRow) {
   }
 }
 
-/** このプリンタ宛ての最古の queued を1件取り出し、claimed にする。 */
 /**
- * レジ機のポーリング時に、QR注文（お客様のスマホ注文）の「お会計伝票」を自動で積む。
- * 端末（iPad等）を開いていなくても、注文が入るたびにレジプリンターから伝票が出る（dinii と同じ運用）。
+ * レジ機のポーリング時に、お客様が QR 画面で「お会計」を押した卓の「お会計伝票」を自動で積む。
+ * 端末（iPad等）を開いていなくても、レジプリンターから伝票が出るので、スタッフはそれを持って卓へ行く
+ * （2026-09-28 Ronnie「お客様がお会計を押したら卓に通知、スタッフが伝票を持って行く」）。
  *
  * - 対象: そのプリンタが usage='receipt' かつ「自動印刷」ON（printer_configs.auto_print）のときだけ
- * - 判定: order_source='qr' の未会計注文で、最後に伝票を出した後に品が追加されているもの
- *   （追加のたびに現在の全明細と合計を印字し直す＝常に最新のお会計伝票が手元に残る）
- * - まとめ: 品の追加から3秒待ってから出す（1回の注文で複数品が入っても1枚にする）
+ * - 判定: 30分以内の「お会計」呼び出し（service_calls.kind='checkout'）で、その注文がまだ未会計、
+ *   かつ 呼び出しの後にまだお会計伝票を出していないもの（1回の「お会計」に1枚）
+ * - 品が追加されるたびに全明細を印字し直す方式はやめた（FULLMOoN 新宿「オーダーのたびに会計伝票が出る」）
  * - 重複防止: 印字済みかどうかは print_jobs（job_type='order_slip'）の作成時刻で判定する。新しい列は作らない
  */
-export async function generateQrBillJobs(admin: Admin, printer: PrinterRow) {
-  // QR注文のたびに出す「お会計伝票（履歴）」はレシート機だけから出す。
-  // 厨房（ドリンク）機は新しい注文の伝票だけでよい、という店舗要望（2026-09-24 FULL MOoN）。
+export async function generateCheckoutBillJobs(admin: Admin, printer: PrinterRow) {
+  // お会計伝票はレシート機だけから出す。ドリンク機は新しい注文の厨房伝票だけ（2026-09-24 FULL MOoN）。
   // ドリンク機の「会計伝票も出す」は、会計伝票ボタンを押したときのフロア担当として今までどおり使う。
   if (printer.usage !== 'receipt' || !printsBillSlips(printer) || !printer.auto_print) return;
+
+  // 30分以内の「お会計」呼び出し（対応済みでも、呼び出しの後に伝票を出していなければ出す）
+  const { data: calls, error: callsErr } = await admin
+    .from('service_calls')
+    .select('order_id, created_at')
+    .eq('store_id', printer.store_id)
+    .eq('kind', 'checkout')
+    .not('order_id', 'is', null)
+    .gte('created_at', isoAgo(CHECKOUT_BILL_WINDOW_MS))
+    .order('created_at', { ascending: false })
+    .limit(50);
+  if (callsErr) {
+    console.error('[print-queue] checkout bill: service_calls query failed', printer.id, callsErr.message);
+    return;
+  }
+  const requestedAt = new Map<string, number>();
+  for (const c of calls ?? []) {
+    const oid = c.order_id as string;
+    if (!requestedAt.has(oid)) requestedAt.set(oid, Date.parse(c.created_at as string));
+  }
+  if (requestedAt.size === 0) return;
 
   const { data: orders, error } = await admin
     .from('orders')
     .select('id, order_no, guest_count, clerk_name, subtotal, tax_total, service_charge, discount_total, total, restaurant_tables(name, floor_id), stores(name)')
-    .eq('store_id', printer.store_id)
-    .eq('order_source', 'qr')
-    .eq('status', 'open')
-    .gte('updated_at', isoAgo(QR_BILL_WINDOW_MS))
-    .limit(50);
+    .in('id', [...requestedAt.keys()])
+    .eq('status', 'open');
   if (error) {
-    console.error('[print-queue] qr bill: orders query failed', printer.id, error.message);
+    console.error('[print-queue] checkout bill: orders query failed', printer.id, error.message);
     return;
   }
   if (!orders || orders.length === 0) return;
@@ -288,10 +305,11 @@ export async function generateQrBillJobs(admin: Admin, printer: PrinterRow) {
   }
 
   const toPrint = new Set(
-    selectQrOrdersToPrint(
+    selectCheckoutBillsToPrint(
       mine.map((o) => ({
         orderId: o.id as string,
-        itemAddedAt: (itemsByOrder.get(o.id as string) ?? []).map((l) => Date.parse(l.created_at as string)),
+        requestedAt: requestedAt.get(o.id as string) ?? 0,
+        hasItems: (itemsByOrder.get(o.id as string) ?? []).length > 0,
         lastSlipAt: lastSlipAt.get(o.id as string),
       })),
       Date.now()
@@ -352,9 +370,10 @@ export async function generateQrBillJobs(admin: Admin, printer: PrinterRow) {
   if (rows.length === 0) return;
 
   const { error: insErr } = await admin.from('print_jobs').insert(rows);
-  if (insErr) console.error('[print-queue] qr bill job insert failed', printer.id, insErr.message);
+  if (insErr) console.error('[print-queue] checkout bill job insert failed', printer.id, insErr.message);
 }
 
+/** このプリンタ宛ての最古の queued を1件取り出し、claimed にする。 */
 export async function claimNextJob(admin: Admin, printerId: string) {
   const queued = () =>
     admin

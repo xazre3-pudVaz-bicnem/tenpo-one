@@ -1,39 +1,33 @@
 import { describe, it, expect } from 'vitest';
-import { selectQrOrdersToPrint, QR_BILL_BATCH_DELAY_MS, QR_BILL_WINDOW_MS } from '@/lib/qr-bill';
+import { selectCheckoutBillsToPrint, CHECKOUT_BILL_WINDOW_MS } from '@/lib/qr-bill';
 
 const now = 1_800_000_000_000;
 
-describe('selectQrOrdersToPrint（QR注文のお会計伝票を出すか）', () => {
-  it('まだ一度も出していない注文は、最後の追加から3秒経てば出す', () => {
-    expect(selectQrOrdersToPrint([{ orderId: 'a', itemAddedAt: [now - 5_000] }], now)).toEqual(['a']);
+describe('selectCheckoutBillsToPrint（お客様が「お会計」を押したときだけお会計伝票を出す。2026-09-28）', () => {
+  it('「お会計」のあとまだ出していなければ出す', () => {
+    expect(selectCheckoutBillsToPrint([{ orderId: 'a', requestedAt: now - 5_000, hasItems: true }], now)).toEqual(['a']);
   });
 
-  it('最後の追加から3秒未満なら待つ（1回の注文で複数品が入っても1枚にまとめる）', () => {
-    expect(selectQrOrdersToPrint([{ orderId: 'a', itemAddedAt: [now - 10_000, now - 1_000] }], now)).toEqual([]);
-    expect(selectQrOrdersToPrint([{ orderId: 'a', itemAddedAt: [now - 10_000, now - QR_BILL_BATCH_DELAY_MS] }], now)).toEqual(['a']);
+  it('「お会計」のあとに一度出していれば出さない（ポーリングのたびに重複しない・追加注文でも出さない）', () => {
+    expect(selectCheckoutBillsToPrint([{ orderId: 'a', requestedAt: now - 60_000, hasItems: true, lastSlipAt: now - 30_000 }], now)).toEqual([]);
+    expect(selectCheckoutBillsToPrint([{ orderId: 'a', requestedAt: now - 60_000, hasItems: true, lastSlipAt: now - 60_000 }], now)).toEqual([]);
   });
 
-  it('前回の伝票以降に追加が無ければ出さない（ポーリングのたびに重複しない）', () => {
-    expect(selectQrOrdersToPrint([{ orderId: 'a', itemAddedAt: [now - 60_000], lastSlipAt: now - 30_000 }], now)).toEqual([]);
+  it('前の伝票より後にもう一度「お会計」を押せば、また1枚出す', () => {
+    expect(selectCheckoutBillsToPrint([{ orderId: 'a', requestedAt: now - 5_000, hasItems: true, lastSlipAt: now - 30_000 }], now)).toEqual(['a']);
   });
 
-  it('前回の伝票の後に追加注文が入れば、もう一度（最新の全明細で）出す', () => {
-    expect(
-      selectQrOrdersToPrint([{ orderId: 'a', itemAddedAt: [now - 60_000, now - 5_000], lastSlipAt: now - 30_000 }], now)
-    ).toEqual(['a']);
-  });
-
-  it('明細が無い注文・古すぎる注文は出さない', () => {
-    expect(selectQrOrdersToPrint([{ orderId: 'a', itemAddedAt: [] }], now)).toEqual([]);
-    expect(selectQrOrdersToPrint([{ orderId: 'a', itemAddedAt: [now - QR_BILL_WINDOW_MS - 1] }], now)).toEqual([]);
+  it('明細が無い注文・古すぎる「お会計」は出さない', () => {
+    expect(selectCheckoutBillsToPrint([{ orderId: 'a', requestedAt: now - 5_000, hasItems: false }], now)).toEqual([]);
+    expect(selectCheckoutBillsToPrint([{ orderId: 'a', requestedAt: now - CHECKOUT_BILL_WINDOW_MS - 1, hasItems: true }], now)).toEqual([]);
   });
 
   it('複数の注文を独立に判定する', () => {
-    const r = selectQrOrdersToPrint(
+    const r = selectCheckoutBillsToPrint(
       [
-        { orderId: 'a', itemAddedAt: [now - 5_000] },
-        { orderId: 'b', itemAddedAt: [now - 1_000] },
-        { orderId: 'c', itemAddedAt: [now - 5_000], lastSlipAt: now - 4_000 },
+        { orderId: 'a', requestedAt: now - 5_000, hasItems: true },
+        { orderId: 'b', requestedAt: now - 5_000, hasItems: false },
+        { orderId: 'c', requestedAt: now - 5_000, hasItems: true, lastSlipAt: now - 4_000 },
       ],
       now
     );

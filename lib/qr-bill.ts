@@ -1,17 +1,20 @@
 /**
- * QR注文の「お会計伝票」を今このタイミングで出すべきか、の判定（純関数・テスト対象）。
- * 実際の取得と印刷ジョブ登録は lib/print-queue.ts の generateQrBillJobs が行う。
+ * お客様が QR 画面で「お会計」を押したときの「お会計伝票」を、今このタイミングで出すべきか（純関数・テスト対象）。
+ * 実際の取得と印刷ジョブ登録は lib/print-queue.ts の generateCheckoutBillJobs が行う。
+ *
+ * 2026-09-28 FULLMOoN 新宿「オーダーのたびに会計伝票が出る」→ Ronnie「お客様がお会計を押したら卓に通知、
+ * スタッフが伝票を持って行く」。品が追加されるたびに出す方式（dinii 風の履歴伝票）はやめた。
  */
 
-/** 同じ注文に続けて品が入ったら1枚にまとめる待ち（ミリ秒） */
-export const QR_BILL_BATCH_DELAY_MS = 3_000;
-/** これより古い追加は伝票にしない（プリンタ復帰時に昔の注文が大量に出るのを防ぐ） */
-export const QR_BILL_WINDOW_MS = 30 * 60_000;
+/** これより古い「お会計」は伝票にしない（プリンタ復帰時に昔の呼び出しが大量に出るのを防ぐ） */
+export const CHECKOUT_BILL_WINDOW_MS = 30 * 60_000;
 
-export interface QrBillCandidate {
+export interface CheckoutBillCandidate {
   orderId: string;
-  /** その注文の有効な明細の追加時刻（ミリ秒） */
-  itemAddedAt: number[];
+  /** お客様が「お会計」を押した時刻（ミリ秒）。同じ注文に複数あれば一番新しいもの */
+  requestedAt: number;
+  /** 有効な明細があるか（無ければ出すものが無い） */
+  hasItems: boolean;
   /** 前回この注文のお会計伝票を積んだ時刻（ミリ秒）。無ければ undefined */
   lastSlipAt?: number;
 }
@@ -19,18 +22,15 @@ export interface QrBillCandidate {
 /**
  * 印字対象の注文IDを返す。
  * - 明細が無い注文は出さない
- * - 前回の伝票以降に追加が無ければ出さない（重複防止）
- * - 最後の追加から BATCH_DELAY 経つまでは待つ（1回の注文を1枚にまとめる）
- * - 最後の追加が WINDOW より古ければ出さない
+ * - 「お会計」のあとに一度でも伝票を出していれば出さない（1回の呼び出しに1枚。ポーリングのたびに重複しない）
+ * - 「お会計」が WINDOW より古ければ出さない
  */
-export function selectQrOrdersToPrint(candidates: QrBillCandidate[], now: number): string[] {
+export function selectCheckoutBillsToPrint(candidates: CheckoutBillCandidate[], now: number): string[] {
   const out: string[] = [];
   for (const c of candidates) {
-    if (c.itemAddedAt.length === 0) continue;
-    const latestAdd = Math.max(...c.itemAddedAt);
-    if (latestAdd <= (c.lastSlipAt ?? 0)) continue;
-    if (now - latestAdd < QR_BILL_BATCH_DELAY_MS) continue;
-    if (now - latestAdd > QR_BILL_WINDOW_MS) continue;
+    if (!c.hasItems) continue;
+    if (now - c.requestedAt > CHECKOUT_BILL_WINDOW_MS) continue;
+    if ((c.lastSlipAt ?? 0) >= c.requestedAt) continue;
     out.push(c.orderId);
   }
   return out;
