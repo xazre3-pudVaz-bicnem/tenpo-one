@@ -17,6 +17,9 @@ import { OfflineBanner } from '@/components/offline/offline-banner';
 import { ThemeBody } from '@/components/layout/theme-body';
 import { InstallPrompt } from '@/components/pwa/install-prompt';
 import { ClerkGate, type GateClerk } from '@/components/pos/clerk-gate';
+import { RegisterDayBanner } from '@/components/cash/register-day-banner';
+import { AnnouncementPopup } from '@/components/notifications/announcement-popup';
+import { loadPopupAnnouncements } from '@/lib/announcement-popup-server';
 import { loadStoreClerks } from '@/lib/pos-clerks-server';
 import { ReservationAlert } from '@/components/notifications/reservation-alert';
 import { PushAutoSubscribe } from '@/components/notifications/push-auto-subscribe';
@@ -45,7 +48,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   // オンボーディング状態と未読通知数を並列取得（往復回数削減）
   const needsOnboardingCheck = ctx.role === 'org_owner' || ctx.role === 'hq_admin';
-  const [orgRes, unreadRes] = await Promise.all([
+  const [orgRes, unreadRes, popupAnnouncements] = await Promise.all([
     needsOnboardingCheck
       ? supabase
           .from('organizations')
@@ -58,6 +61,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       .select('id', { count: 'exact', head: true })
       .eq('recipient_id', ctx.userId)
       .is('read_at', null),
+    // 重要なお知らせのポップアップ（了解を押すまで時々出す。2026-09-28 Ronnie）
+    ctx.organizationId
+      ? loadPopupAnnouncements(supabase, {
+          organizationId: ctx.organizationId,
+          userId: ctx.userId,
+          storeIds: ctx.currentStore ? [ctx.currentStore.id] : ctx.stores.map((s) => s.id),
+        }).catch(() => [])
+      : Promise.resolve([]),
   ]);
 
   const pathname = (await headers()).get('x-pathname') ?? '';
@@ -118,6 +129,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         {ctx.currentStore && <PushAutoSubscribe />}
         {/* お客様QRからの呼び出し（鈴の音＋バナー。2026-09-28 Ronnie） */}
         {ctx.currentStore && <ServiceCallAlert storeId={ctx.currentStore.id} />}
+        {/* 重要なお知らせ：了解を押すまで時々ポップアップ（注文画面では出さない。2026-09-28 Ronnie） */}
+        {popupAnnouncements.length > 0 && <AnnouncementPopup items={popupAnnouncements} />}
         {!posFullscreen && (
           <Sidebar
             tiles={tiles}
@@ -138,7 +151,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               allowAll={ctx.isHq}
             />
           </div>
-          <main className="px-4 pt-4 pb-24 lg:px-[22px] lg:pt-[18px] lg:pb-8">{children}</main>
+          <main className="px-4 pt-4 pb-24 lg:px-[22px] lg:pt-[18px] lg:pb-8">
+            {/* レジがまだ閉まっていない（前の営業日のまま・朝10時すぎ／2日以上前から）ときの知らせ（2026-09-28 Ronnie） */}
+            {ctx.currentStore && !posFullscreen && <RegisterDayBanner storeId={ctx.currentStore.id} />}
+            {children}
+          </main>
         </ContentArea>
         <MobileNav items={mobileItems} />
       </div>

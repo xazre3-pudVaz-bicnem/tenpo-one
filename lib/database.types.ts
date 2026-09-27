@@ -6183,11 +6183,16 @@ export type Database = {
           difference: number | null
           difference_reason: string | null
           expected_cash: number | null
+          deposit_amount: number | null
           id: string
+          next_float: number | null
           note: string | null
           opened_at: string
           opened_by: string | null
           opening_denominations: Json | null
+          opening_difference: number | null
+          opening_difference_reason: string | null
+          opening_expected: number | null
           opening_float: number
           organization_id: string
           register_id: string
@@ -6209,11 +6214,16 @@ export type Database = {
           difference?: number | null
           difference_reason?: string | null
           expected_cash?: number | null
+          deposit_amount?: number | null
           id?: string
+          next_float?: number | null
           note?: string | null
           opened_at?: string
           opened_by?: string | null
           opening_denominations?: Json | null
+          opening_difference?: number | null
+          opening_difference_reason?: string | null
+          opening_expected?: number | null
           opening_float?: number
           organization_id: string
           register_id: string
@@ -6235,11 +6245,16 @@ export type Database = {
           difference?: number | null
           difference_reason?: string | null
           expected_cash?: number | null
+          deposit_amount?: number | null
           id?: string
+          next_float?: number | null
           note?: string | null
           opened_at?: string
           opened_by?: string | null
           opening_denominations?: Json | null
+          opening_difference?: number | null
+          opening_difference_reason?: string | null
+          opening_expected?: number | null
           opening_float?: number
           organization_id?: string
           register_id?: string
@@ -8572,6 +8587,7 @@ export type Database = {
       open_register_session: {
         Args: {
           p_opening_denominations?: Json
+          p_opening_difference_reason?: string
           p_opening_float: number
           p_register_id: string
           p_store_id: string

@@ -8,6 +8,7 @@ import { kitchenTicketEpos, eposCols } from '@/lib/epos-print';
 import { STAR_WIDTH_OPTIONS } from '@/lib/receipt-layout';
 import { isCheckViolation, isMissingColumnError } from '@/lib/schema-compat';
 import { daypartSettingsFrom, guestGenderFromMemo, splitDaypart } from '@/lib/daypart';
+import { nextFloatSettingFrom } from '@/lib/register-day';
 import { visitSourceByLabel } from '@/lib/handy-visit';
 import {
   layoutRegisterReport,
@@ -151,6 +152,13 @@ export async function loadRegisterReportData(
       .limit(5),
     supabase.from('store_settings').select('settings').eq('store_id', storeId).maybeSingle(),
   ]);
+
+  // 開局の比較・締めの分け方（migration 00087。まだ列が無い DB では読めないので無しで出す）
+  const { data: dayRow } = await supabase
+    .from('register_sessions')
+    .select('next_float, deposit_amount, opening_expected, opening_difference, opening_difference_reason')
+    .eq('id', sessionId)
+    .maybeSingle();
 
   // 担当者名
   const profileIds = [session.opened_by, session.closed_by].filter((v): v is string => !!v);
@@ -392,6 +400,19 @@ export async function loadRegisterReportData(
       denominations: parseDenominations(session.counted_denominations),
       tendered,
       change,
+      // 2026-09-28 Ronnie：開局は前回の翌準備金と比べる／締めは 翌準備金・預入金（銀行・預り金）・準備金不足
+      openingExpected: dayRow?.opening_expected ?? null,
+      openingDifference: dayRow?.opening_difference ?? null,
+      openingDifferenceReason: dayRow?.opening_difference_reason ?? null,
+      nextFloat: dayRow?.next_float ?? null,
+      depositAmount: dayRow?.deposit_amount ?? null,
+      floatShortage:
+        session.counted_cash == null
+          ? 0
+          : Math.max(
+              0,
+              (nextFloatSettingFrom(storeSettingsRow?.settings) ?? openingFloat) - (session.counted_cash as number)
+            ),
     },
     differenceReason: (session.difference_reason as string | null) ?? null,
     receipts: { count: ryoshushoOrders.size },

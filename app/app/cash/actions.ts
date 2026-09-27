@@ -10,6 +10,7 @@ import { actionFail, actionOk, type ActionResult } from '@/lib/action-error';
 import { enqueueRegisterReportPrint } from '@/lib/register-report-loader';
 import type { CloseRegisterResult, DenominationJson } from '@/lib/register-report';
 import { expectedCash } from '@/lib/metrics';
+import { registerDayFlowActive } from '@/lib/register-day';
 import { IN_KINDS, OUT_KINDS, type CashKind } from '@/components/cash/labels';
 
 /** 店舗日次締め（close_store_day）を実行できるロール。DB側 close_store_day のapp_role_inと一致させること。 */
@@ -25,6 +26,9 @@ const STORE_DAY_REOPEN_ROLES: Role[] = ['org_owner', 'hq_admin', 'area_manager']
 function translateRegisterError(message: string): string {
   if (message.includes('SESSION_ALREADY_OPEN')) {
     return 'このレジは既に開局しています。前営業日から開いたままの可能性があります。レジクローズ画面の「開局中のレジ」を締めてから、もう一度開局してください。';
+  }
+  if (message.includes('OPENING_REASON_REQUIRED')) {
+    return '前回のレジクローズで残した金額（翌準備金）と合っていません。数え直すか、違う理由を入れてから開局してください';
   }
   if (message.includes('SESSION_NOT_FOUND')) return '対象のレジセッションが見つかりません';
   if (message.includes('SESSION_NOT_OPEN')) return 'このレジは既に締められています';
@@ -85,7 +89,9 @@ export async function openRegister(
   storeId: string,
   registerId: string,
   openingFloat: number,
-  denominations: DenominationJson | null = null
+  denominations: DenominationJson | null = null,
+  /** 前回の翌準備金と違うときの理由（2026-09-28 Ronnie。違えば必須。DB でも確かめる） */
+  openingDifferenceReason: string | null = null
 ): Promise<ActionResult> {
   // 失敗を throw ではなく戻り値で返す（throw すると本番でメッセージが伏せられ、
   // 画面には「Minified React error #441」しか出ない。lib/action-error.ts 参照）。
@@ -98,12 +104,23 @@ export async function openRegister(
   }
   if (!validDenominations(denominations)) return actionFail('金種別の枚数が正しくありません');
   const supabase = await createClient();
+  const reason = openingDifferenceReason?.trim().slice(0, 200) || undefined;
   let { error } = await supabase.rpc('open_register_session', {
     p_store_id: storeId,
     p_register_id: registerId,
     p_opening_float: openingFloat,
     p_opening_denominations: denominations ?? undefined,
+    p_opening_difference_reason: reason,
   });
+  // migration 00087 がまだの DB：理由の引数を付けずに呼び直す（開局は止めない）
+  if (error && reason && /opening_difference_reason/.test(error.message) && /function|PGRST202|schema cache/i.test(error.message)) {
+    ({ error } = await supabase.rpc('open_register_session', {
+      p_store_id: storeId,
+      p_register_id: registerId,
+      p_opening_float: openingFloat,
+      p_opening_denominations: denominations ?? undefined,
+    }));
+  }
   if (error && denominations && isUnknownDenominationsArg(error.message)) {
     ({ error } = await supabase.rpc('open_register_session', {
       p_store_id: storeId,
@@ -133,10 +150,19 @@ export async function addCashTransaction(input: {
   if (!input.purpose.trim()) throw new Error('用途を入力してください');
 
   const supabase = await createClient();
+  // 入出金はそのレジの営業日に入れる（日付をまたいでも、レジ精算までは前の営業日。2026-09-28 Ronnie）
+  const { data: sessionRow } = await supabase
+    .from('register_sessions')
+    .select('business_date, status, store_id')
+    .eq('id', input.registerSessionId)
+    .maybeSingle();
+  if (!sessionRow || sessionRow.store_id !== input.storeId) throw new Error('対象のレジが見つかりません');
+  if (sessionRow.status !== 'open') throw new Error('このレジは締められています。開局してから登録してください');
   const { error } = await supabase.from('cash_transactions').insert({
     organization_id: ctx.organizationId,
     store_id: input.storeId,
     register_session_id: input.registerSessionId,
+    business_date: sessionRow.business_date as string,
     kind: input.kind,
     amount: input.amount,
     purpose: input.purpose.trim(),
@@ -147,6 +173,50 @@ export async function addCashTransaction(input: {
     updated_by: ctx.userId,
   });
   if (error) throw new Error(error.message);
+  revalidatePath('/app/cash');
+}
+
+/**
+ * レジ精算のあとの「営業日完了」（close_store_day）。その営業日に開いているレジが残っていなければ実行する。
+ * close_store_day は店長代理以上。スタッフのパソコンで締めたときなどは実行できないので、何もしない（締めは完了している）
+ */
+async function completeBusinessDayAfterClose(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  ctx: Awaited<ReturnType<typeof requirePermission>>,
+  sessionId: string
+): Promise<void> {
+  try {
+    const { data: closed } = await supabase
+      .from('register_sessions')
+      .select('store_id, business_date')
+      .eq('id', sessionId)
+      .maybeSingle();
+    if (!closed) return;
+    // REGISTER_DAY_FLOW_FROM（9/29）より前の営業日は今まで通り（店舗日次締めは手で）
+    if (!registerDayFlowActive(closed.business_date as string)) return;
+    const { count } = await supabase
+      .from('register_sessions')
+      .select('id', { count: 'exact', head: true })
+      .eq('store_id', closed.store_id)
+      .eq('business_date', closed.business_date)
+      .eq('status', 'open');
+    if ((count ?? 0) > 0) return;
+    if (!ctx.role || !STORE_DAY_CLOSE_ROLES.includes(ctx.role)) return;
+    const { error } = await supabase.rpc('close_store_day', {
+      p_store_id: closed.store_id as string,
+      p_business_date: closed.business_date as string,
+    });
+    if (error) {
+      await captureServerError(new Error(error.message), {
+        route: 'cash.close_register.day_complete',
+        organizationId: ctx.organizationId,
+        storeId: closed.store_id as string,
+        userId: ctx.userId,
+      });
+    }
+  } catch (err) {
+    await captureServerError(err, { route: 'cash.close_register.day_complete', organizationId: ctx.organizationId, userId: ctx.userId });
+  }
   revalidatePath('/app/cash');
 }
 
@@ -275,6 +345,10 @@ export async function closeRegister(
     }));
   }
   if (error) return actionFail(translateRegisterError(error.message));
+
+  // レジ精算がすんだら、その営業日を「営業日完了」にする（2026-09-28 Ronnie「レジ精算をしてはじめて営業日完了」）。
+  // 同じ営業日にまだ開いているレジがあれば、最後のレジを締めたときに完了する。権限・失敗でも締めは取り消さない
+  await completeBusinessDayAfterClose(supabase, ctx, sessionId);
 
   let printWarning: string | null = null;
   try {
