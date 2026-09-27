@@ -188,7 +188,7 @@ function HandyTableTile({
   const sheet = onPick && usesSheet(state);
 
   const className = cn(
-        'tap3d flex aspect-square w-full flex-col items-start rounded-[10px] border p-2 text-left',
+        'tap3d relative flex aspect-square w-full flex-col items-start rounded-[10px] border p-2 text-left',
         'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#7b3fe4]',
         callKind === 'checkout'
           ? 'border-[#bd660f] bg-[#fbefdf]'
@@ -204,6 +204,16 @@ function HandyTableTile({
 
   const body = (
     <>
+      {/* 呼び出し中の卓は 箱の枠が点滅（2026-09-28 Ronnie「卓の箱に知らせを」） */}
+      {callKind && (
+        <span
+          className={cn(
+            'pointer-events-none absolute inset-0 animate-pulse rounded-[10px] ring-[3px] ring-inset',
+            callKind === 'checkout' ? 'ring-[#bd660f]' : 'ring-[#7b3fe4]'
+          )}
+          aria-hidden
+        />
+      )}
       <span className="flex w-full items-start justify-between gap-1">
         <b className="min-w-0 truncate text-[15px] leading-tight font-semibold text-[#5e5470]">
           {table.name}

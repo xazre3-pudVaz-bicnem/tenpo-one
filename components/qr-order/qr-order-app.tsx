@@ -239,7 +239,16 @@ export function QrOrderApp({
         return;
       }
       // 送信できたときだけ「呼び出し中」に変える。表示は次のポーリングでサーバー側と一致する
-      const created = data as { kind?: string; created_at?: string };
+      const created = data as { id?: string; kind?: string; created_at?: string };
+      // お店のハンディ・レジへ通知（Push）。失敗してもお客様の画面には影響させない（2026-09-28 Ronnie「ハンディを振動」）
+      if (typeof created.id === 'string') {
+        void fetch('/api/qr/service-call-push', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ slug: storeSlug, token: tableToken, callId: created.id }),
+          keepalive: true,
+        }).catch(() => undefined);
+      }
       setCalls((prev) =>
         openServiceCall(prev, kind)
           ? prev
