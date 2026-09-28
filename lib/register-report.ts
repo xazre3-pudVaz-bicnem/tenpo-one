@@ -282,7 +282,7 @@ function reportHead(t: ReturnType<typeof makeLineTools>, data: RegisterReportDat
  *   - 1行に詰め込まない（男性・女性、ランチ／ディナーの 組・名様・単価、内消費税 は1項目1行）。行間もそのまま
  *   - 媒体別は表にして1媒体1行（組数・人数・客単価・売上。Ronnie「同じ行にして少しスペースを減らす」）
  *   - 媒体別の [全体]（上の 組数・客数・売上・客単価 と同じ）と、入出金が無い日の空の見出し・区切り線は出さない
- *   - 0件・¥0 の行は出さない（現金・現金在高・差異合計・レジオープン時現金・レジ会計 は 0 でも出す）
+ *   - 0件・¥0 の行も全部出す（2026-09-28 Ronnie「0 が無いと freee・MF などの会計ソフトが読めない。0 でも印刷」→ 40cm でいい）
  *   - レジ実績入力（現金以外）は支払情報に、現金は現金在高にまとめる（額が違うときだけ「実績」の行）
  *   - 出金の「銀行へ預入」（Cash to bank）は 出金 に入れず、＊入出金情報＊ の中の別の行（Ronnie「出金の中に入れない」）
  */
@@ -298,8 +298,6 @@ export function layoutRegisterReport(data: RegisterReportData, options: Register
   const lateNight = s.lateNight ?? { count: 0, amount: 0 };
   const rounding = s.rounding ?? { count: 0, amount: 0 };
   const cnt = (n: number) => `${n}件`;
-  /** 0件・¥0 の行は出さない */
-  const nonZero = (x: { count: number; amount: number }) => x.count !== 0 || x.amount !== 0;
   const cashLabel = (label: string) => label === '現金';
 
   reportHead(t, data, 'レジ精算');
@@ -308,12 +306,9 @@ export function layoutRegisterReport(data: RegisterReportData, options: Register
   // ---- 客数・売上 ----
   kv('組数', `${s.groups}組`);
   kv('客数', `${s.guests}客`);
-  // 男性・女性が入っている日だけ内訳（0 の区分は出さない）
-  if (male + female > 0) {
-    if (male > 0) kv('  男性', `${male}客`);
-    if (female > 0) kv('  女性', `${female}客`);
-    if (unselected > 0) kv('  選択なし', `${unselected}客`);
-  }
+  kv('  男性', `${male}客`);
+  kv('  女性', `${female}客`);
+  kv('  選択なし', `${unselected}客`);
   kv('客単価', yen(s.avgSpend));
   // ---- ランチ／ディナー（区切りの時刻は店の設定。紙には時刻を出さない：2026-09-28 Ronnie「（〜15:00）（15:01〜）は要らない」） ----
   if (data.daypart) {
@@ -322,7 +317,6 @@ export function layoutRegisterReport(data: RegisterReportData, options: Register
       ['ディナー売上', data.daypart.dinner],
     ] as const;
     for (const [label, p] of parts) {
-      if (p.groups === 0 && p.sales === 0) continue;
       blank();
       kv(label, yen(p.sales));
       kv('  組', `${p.groups}組`);
@@ -342,27 +336,22 @@ export function layoutRegisterReport(data: RegisterReportData, options: Register
   }
   kv('消費税', yen(taxTotal));
   kv('純売上', yen(s.net));
-  // ---- 控除（返金・取消）。無い日は出さない ----
-  if (ded.count !== 0 || ded.amount !== 0) {
-    blank();
-    kv('控除点数', `${ded.count}点`);
-    kv('控除額', yen(ded.amount));
-    if (ded.items.length) line(`控除項目 ${ded.items.join('・')}`);
-    kv('控除項目税額', yen(ded.tax));
-    kv('控除後純売上', yen(s.net - (ded.amount - ded.tax)));
-  }
-  const charges = [
-    ['サービス料', data.surcharges],
-    ['深夜料', lateNight],
-    ['値割引', data.discounts],
-    ['端数値引', rounding],
-  ] as const;
-  if (charges.some(([, x]) => nonZero(x))) blank();
-  for (const [label, x] of charges) if (nonZero(x)) kcv(label, cnt(x.count), yen(x.amount));
+  // ---- 控除（返金・取消） ----
+  blank();
+  kv('控除点数', `${ded.count}点`);
+  kv('控除額', yen(ded.amount));
+  line(`控除項目${ded.items.length ? ` ${ded.items.join('・')}` : ''}`);
+  kv('控除項目税額', yen(ded.tax));
+  kv('控除後純売上', yen(s.net - (ded.amount - ded.tax)));
+  blank();
+  kcv('サービス料', cnt(data.surcharges.count), yen(data.surcharges.amount));
+  kcv('深夜料', cnt(lateNight.count), yen(lateNight.amount));
+  kcv('値割引', cnt(data.discounts.count), yen(data.discounts.amount));
+  kcv('端数値引', cnt(rounding.count), yen(rounding.amount));
 
-  // ---- 支払情報（現金は 0 でも出す） ----
+  // ---- 支払情報（支払方法は 0件 でも全部） ----
   starSection('支払情報');
-  const payments = data.payments.filter((p) => cashLabel(p.label) || nonZero(p));
+  const payments = data.payments;
   if (payments.length === 0) line('会計はありません');
   // レジクローズ時 レジ実績入力（現金以外）は支払情報と同じ額なので、この中にまとめる
   // （2026-09-28 Ronnie「丸をつけた2つは同じ。まとめて」）。違う額が入ったときだけ「実績」の行を足す
@@ -376,25 +365,14 @@ export function layoutRegisterReport(data: RegisterReportData, options: Register
     // 支払情報に無い方法で実績だけあるもの
     if (!cashLabel(c.label) && c.amount !== 0 && !payments.some((p) => p.label === c.label)) kv(`${c.label}  実績`, yen(c.amount));
   }
-  if (data.cash.tendered !== 0 || data.cash.change !== 0) {
-    kv('お預かり現金', yen(data.cash.tendered));
-    kv('おつり', yen(data.cash.change));
-  }
+  kv('お預かり現金', yen(data.cash.tendered));
+  kv('おつり', yen(data.cash.change));
+  blank();
   const voids = data.activity.find((a) => a.label.startsWith('取消'));
-  const voidRow = { count: voids?.count ?? 0, amount: Math.abs(voids?.amount ?? 0) };
-  const receiptCount = data.receipts?.count ?? data.activity.find((a) => a.label === '領収書発行')?.count ?? 0;
-  const others = [
-    nonZero(voidRow) ? () => kcv('取消（赤伝票）', cnt(voidRow.count), yen(voidRow.amount)) : null,
-    data.corrections && nonZero(data.corrections)
-      ? () => kcv('訂正（黒伝票）', cnt(data.corrections!.count), yen(data.corrections!.amount))
-      : null,
-    data.uncollected && nonZero(data.uncollected)
-      ? () => kcv('未回収', cnt(data.uncollected!.count), yen(data.uncollected!.amount))
-      : null,
-    receiptCount > 0 ? () => kv('領収書', cnt(receiptCount)) : null,
-  ].filter((f): f is () => void => f !== null);
-  if (others.length > 0) blank();
-  for (const f of others) f();
+  kcv('取消（赤伝票）', cnt(voids?.count ?? 0), yen(Math.abs(voids?.amount ?? 0)));
+  kcv('訂正（黒伝票）', cnt(data.corrections?.count ?? 0), yen(data.corrections?.amount ?? 0));
+  kcv('未回収', cnt(data.uncollected?.count ?? 0), yen(data.uncollected?.amount ?? 0));
+  kv('領収書', cnt(data.receipts?.count ?? data.activity.find((a) => a.label === '領収書発行')?.count ?? 0));
 
   // ---- 媒体別（お客様情報の来店経路ごと。2026-09-28 Ronnie「来店経路の選択のデータをレジ精算に」）。
   //      [全体] は上の 組数・客数・売上・客単価 と同じなので出さない ----
@@ -414,46 +392,36 @@ export function layoutRegisterReport(data: RegisterReportData, options: Register
   // ---- 入出金情報（件数・明細と現金在高） ----
   starSection('入出金情報');
   kcv('レジオープン時現金', '1件', yen(data.cash.openingFloat));
-  if (data.cashIns.length > 0 || data.cash.cashIn !== 0) {
-    blank();
-    kcv('入金', cnt(data.cashIns.length), yen(data.cash.cashIn));
-    for (const x of data.cashIns) kv(`  ${x.purpose}`, yen(x.amount));
-  }
+  blank();
+  kcv('入金', cnt(data.cashIns.length), yen(data.cash.cashIn));
+  for (const x of data.cashIns) kv(`  ${x.purpose}`, yen(x.amount));
   // 銀行へ預入（Cash to bank）は 出金 に入れず別の行にする（2026-09-28 Ronnie「Cash to bank は 出金の中に入れない」）
   const bankOuts = data.cashOuts.filter((x) => isBankDepositPurpose(x.purpose));
   const spendOuts = data.cashOuts.filter((x) => !isBankDepositPurpose(x.purpose));
   const bankTotal = bankOuts.reduce((a, x) => a + x.amount, 0);
   const spendTotal = data.cash.cashOut - bankTotal;
-  if (spendOuts.length > 0 || spendTotal !== 0) {
-    blank();
-    kcv('出金', cnt(spendOuts.length), yen(spendTotal));
-    for (const x of spendOuts) kv(`  ${x.purpose}`, `-${yen(x.amount)}`);
-  }
-  if (bankOuts.length > 0) {
-    blank();
-    kcv(BANK_DEPOSIT_LABEL, cnt(bankOuts.length), yen(bankTotal));
-    for (const x of bankOuts) {
-      const memo = bankDepositMemo(x.purpose);
-      if (memo || bankOuts.length > 1) kv(`  ${memo || BANK_DEPOSIT_LABEL}`, `-${yen(x.amount)}`);
-    }
+  blank();
+  kcv('出金', cnt(spendOuts.length), yen(spendTotal));
+  for (const x of spendOuts) kv(`  ${x.purpose}`, `-${yen(x.amount)}`);
+  blank();
+  kcv(BANK_DEPOSIT_LABEL, cnt(bankOuts.length), yen(bankTotal));
+  for (const x of bankOuts) {
+    const memo = bankDepositMemo(x.purpose);
+    if (memo || bankOuts.length > 1) kv(`  ${memo || BANK_DEPOSIT_LABEL}`, `-${yen(x.amount)}`);
   }
   // レジ実績入力の「現金」＝数えた在高なので、現金在高の行にまとめる。差異合計はそのすぐ下
   blank();
   kv('現金在高', data.cash.counted == null ? yen(data.cash.expected) : yen(data.cash.counted));
   kv('差異合計', data.cash.difference == null ? '未入力' : signedYen(data.cash.difference));
-  const reason = data.differenceReason?.trim();
-  if (reason || (data.cash.difference != null && data.cash.difference !== 0)) kv('差異理由', reason || '未選択');
+  kv('差異理由', data.differenceReason?.trim() || '未選択');
   const dep = data.deposits ?? { bank: 0, safe: 0, security: 0 };
-  if (dep.bank !== 0) kv('銀行振込', yen(dep.bank));
-  if (dep.safe !== 0) kv('貸金庫預け', yen(dep.safe));
-  if (dep.security !== 0) kv('警備会社預け', yen(dep.security));
+  kv('銀行振込', yen(dep.bank));
+  kv('貸金庫預け', yen(dep.safe));
+  kv('警備会社預け', yen(dep.security));
 
-  // ---- 業務履歴（0件の行は出さない。レジ会計は出す） ----
+  // ---- 業務履歴 ----
   starSection('業務履歴');
-  for (const a of data.activity) {
-    if (a.label !== 'レジ会計' && a.count === 0) continue;
-    kcv(a.label, cnt(a.count), a.amount < 0 ? `-${yen(-a.amount)}` : yen(a.amount));
-  }
+  for (const a of data.activity) kcv(a.label, cnt(a.count), a.amount < 0 ? `-${yen(-a.amount)}` : yen(a.amount));
 
   blank();
   if (data.note) line(`備考: ${data.note}`);

@@ -246,46 +246,40 @@ describe('layoutRegisterReport（2026-09-28 Ronnie が選んだ並び）', () =>
     }
   });
 
-  it('短く（40cm くらい・ゴチャゴチャにしない）：0件・¥0 の行、[全体]、空の見出し、男女の無い日の内訳は出さない（2026-09-28 Ronnie）', () => {
+  it('0件・¥0 の行も全部出す（freee・MF などの会計ソフトが読むため。2026-09-28 Ronnie）。[全体]・レジ実績入力 の重なりは出さない', () => {
     const lines = layoutRegisterReport(sample(), { paperWidth: 80 });
     const text = lines.map((l) => l.text).join('\n');
-    for (const hidden of [
-      'サービス料', '深夜料', '端数値引', '控除', '取消（赤伝票）', '訂正（黒伝票）', '未回収', '差異理由', '未選択',
-      '銀行振込', '貸金庫預け', '警備会社預け', '[全体]', '【', '<入金情報>', '入金 ', '男性', '選択なし',
-      '取消（VOID）', '返金', '注文キャンセル',
+    for (const shown of [
+      /  男性\s+0客/, /  女性\s+0客/, /  選択なし\s+132客/,
+      /控除点数\s+0点/, /控除額\s+¥0/, /^控除項目$/m, /控除項目税額\s+¥0/, /控除後純売上\s+¥128,909/,
+      /サービス料\s+0件\s+¥0/, /深夜料\s+0件\s+¥0/, /端数値引\s+0件\s+¥0/,
+      /取消（赤伝票）\s+0件\s+¥0/, /訂正（黒伝票）\s+0件\s+¥0/, /未回収\s+0件\s+¥0/,
+      /入金\s+0件\s+¥0/, /銀行へ預入\s+0件\s+¥0/,
+      /差異理由\s+未選択/, /銀行振込\s+¥0/, /貸金庫預け\s+¥0/, /警備会社預け\s+¥0/,
+      /取消（VOID）\s+0件\s+¥0/, /返金\s+0件\s+¥0/, /注文キャンセル\s+0件\s+¥0/,
     ]) {
-      expect(text, hidden).not.toContain(hidden);
+      expect(text, String(shown)).toMatch(shown);
     }
-    // 0 でも出す行：現金・現金在高・差異合計・レジオープン時現金・レジ会計
+    for (const hidden of ['[全体]', 'レジ実績入力', '【', '<入金情報>']) expect(text, hidden).not.toContain(hidden);
+    // 支払方法は 0件 でも全部
     const empty = layoutRegisterReport(
-      sample({
-        payments: [{ label: '現金', count: 0, amount: 0 }, { label: 'クレジット', count: 0, amount: 0 }],
-        activity: [{ label: 'レジ会計', count: 0, amount: 0 }],
-        cashOuts: [],
-        cash: { ...sample().cash, cashOut: 0, tendered: 0, change: 0 },
-      })
+      sample({ payments: [{ label: '現金', count: 0, amount: 0 }, { label: 'クレジット', count: 0, amount: 0 }] })
     )
       .map((l) => l.text)
       .join('\n');
     expect(empty).toMatch(/現金\s+0件\s+¥0/);
-    expect(empty).not.toContain('クレジット');
-    expect(empty).toMatch(/レジ会計\s+0件\s+¥0/);
-    expect(empty).toContain('現金在高');
-    expect(empty).toContain('差異合計');
-    expect(empty).toContain('レジオープン時現金');
-    expect(empty).not.toContain('お預かり現金');
-    expect(empty).not.toMatch(/^出金/m);
-    // 1項目1行のまま、前の紙（100行以上）より短い
-    expect(lines.length).toBeLessThanOrEqual(80);
+    expect(empty).toMatch(/クレジット\s+0件\s+¥0/);
     // 1行に詰め込まない
-    expect(text).not.toMatch(/組 \d+名様 単価|人 客単価|\(内消費税 ¥/);
+    expect(text).not.toMatch(/組 \d+名様 単価|\(内消費税 ¥/);
+    // 40cm くらい（前の紙は 135行ほど）
+    expect(lines.length).toBeLessThanOrEqual(100);
   });
 
-  it('男性・女性が入っている日は 客数 の下に1行ずつ（0 の区分は出さない）', () => {
+  it('男性・女性・選択なし は 客数 の下に1行ずつ（0 でも出す）', () => {
     const text = layoutRegisterReport(sample({ sales: { ...sample().sales, guestsMale: 50, guestsFemale: 82 } }))
       .map((l) => l.text)
       .join('\n');
-    expect(text).toMatch(/客数\s+132客\n  男性\s+50客\n  女性\s+82客\n客単価/);
+    expect(text).toMatch(/客数\s+132客\n  男性\s+50客\n  女性\s+82客\n  選択なし\s+0客\n客単価/);
     const withUnselected = layoutRegisterReport(sample({ sales: { ...sample().sales, guestsMale: 50, guestsFemale: 80 } }))
       .map((l) => l.text)
       .join('\n');
@@ -336,13 +330,13 @@ describe('layoutRegisterReport（2026-09-28 Ronnie が選んだ並び）', () =>
     expect(text.indexOf('銀行へ預入')).toBeGreaterThan(text.indexOf('Osibori'));
     expect(text.indexOf('銀行へ預入')).toBeLessThan(text.indexOf('現金在高'));
 
-    // 銀行へ預入だけ（メモ無し）→ 出金 の行は出ない、銀行へ預入 は1行
+    // 銀行へ預入だけ（メモ無し）→ 出金 は 0件、銀行へ預入 は1行
     const only = layoutRegisterReport(
       sample({ cashOuts: [{ purpose: '銀行へ預入', amount: 20000 }], cash: { ...sample().cash, cashOut: 20000 } })
     )
       .map((l) => l.text)
       .join('\n');
-    expect(only).not.toMatch(/^出金/m);
+    expect(only).toMatch(/^出金\s+0件\s+¥0$/m);
     expect(only).toMatch(/銀行へ預入\s+1件\s+¥20,000\n\n現金在高/);
   });
 
