@@ -23,6 +23,12 @@ describe('品を入れずに離れた伝票は無かったことにする', () =
   it('画面：品が入っていなければ 戻るボタン・unmount・pagehide で消す（カートだけは決定していない扱い）', () => {
     expect(screen).toContain('untouchedRef.current = items.length === 0;');
     expect(screen).toContain("navigator.sendBeacon('/api/pos/discard-untouched'");
-    expect(screen).toContain('if (untouchedRef.current) void discardUntouchedOrderAction(orderId)');
+    expect(screen).toContain('if (untouchedRef.current && discard) void discard(orderId)');
+  });
+  it('使っている最中に消さない：片付けの依存にサーバーアクションを入れない（2026-09-28 11時台の不具合）', () => {
+    // Realtime・router.refresh のたびにサーバーアクションは別の関数になる。依存に入れると片付けが走って伝票が消える
+    expect(screen).not.toContain('}, [discardUntouchedOrderAction, order.id]);');
+    expect(screen).toContain('}, [canDiscard, order.id]);');
+    expect(screen).toContain('discardRef.current = discardUntouchedOrderAction;');
   });
 });
