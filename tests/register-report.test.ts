@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { describe, it, expect } from 'vitest';
 import iconv from 'iconv-lite';
 import {
@@ -15,7 +13,7 @@ import {
 import { dispWidth } from '@/lib/receipt-layout';
 import { kitchenTicketMarkup } from '@/lib/receipt-markup';
 import { kitchenTicketStarPrnt } from '@/lib/starprnt';
-import { kitchenTicketEpos, eposCols, EPOS_TIGHT_LINE_SPACING } from '@/lib/epos-print';
+import { kitchenTicketEpos, eposCols } from '@/lib/epos-print';
 
 const sample = (over: Partial<RegisterReportData> = {}): RegisterReportData => ({
   storeName: 'FULL MOoN 御茶ノ水店',
@@ -200,7 +198,8 @@ describe('layoutRegisterReport（2026-09-28 Ronnie が選んだ並び）', () =>
       '客数',
       '客単価',
       '総売上点数',
-      '税率  10% (内消費税 ¥12,891)',
+      '税率  10%',
+      '(内消費税)',
       '消費税',
       '純売上',
       '値割引',
@@ -211,8 +210,8 @@ describe('layoutRegisterReport（2026-09-28 Ronnie が選んだ並び）', () =>
       'おつり',
       '領収書',
       '＊媒体別（税込）＊',
-      'フリー',
-      'HOT PEPPER',
+      '[フリー]',
+      '[HOT PEPPER]',
       '＊入出金情報＊',
       'レジオープン時現金',
       '出金',
@@ -238,14 +237,14 @@ describe('layoutRegisterReport（2026-09-28 Ronnie が選んだ並び）', () =>
     expect(text).toMatch(/客数\s+132客/);
     expect(text).toMatch(/現金\s+25件\s+¥72,900/);
     expect(text).toMatch(/食材 買い出し\s+-¥3,000/);
-    expect(text).toMatch(/HOT PEPPER\s+¥20,000/);
-    expect(text).toMatch(/  6組 20人 客単価\s+¥1,000/);
+    expect(text).toMatch(/\[HOT PEPPER\]\n売上\s+¥20,000\n人数\s+20人\n組数\s+6組\n客単価\s+¥1,000/);
+    expect(text).toMatch(/\(内消費税\)\s+\(¥12,891\)/);
     for (const l of text.split('\n')) {
       expect(dispWidth(l)).toBeLessThanOrEqual(48);
     }
   });
 
-  it('30cm に：0件・¥0 の行、[全体]、空の見出し、男女の無い日の内訳は出さない（2026-09-28 Ronnie）', () => {
+  it('短く（40cm くらい・ゴチャゴチャにしない）：0件・¥0 の行、[全体]、空の見出し、男女の無い日の内訳は出さない（2026-09-28 Ronnie）', () => {
     const lines = layoutRegisterReport(sample(), { paperWidth: 80 });
     const text = lines.map((l) => l.text).join('\n');
     for (const hidden of [
@@ -274,19 +273,21 @@ describe('layoutRegisterReport（2026-09-28 Ronnie が選んだ並び）', () =>
     expect(empty).toContain('レジオープン時現金');
     expect(empty).not.toContain('お預かり現金');
     expect(empty).not.toMatch(/^出金/m);
-    // 普通の日（SEABIRD 9/28 くらい）で 60行以内（行間 3mm で 20cm 前後）
-    expect(lines.length).toBeLessThanOrEqual(60);
+    // 1項目1行のまま、前の紙（100行以上）より短い
+    expect(lines.length).toBeLessThanOrEqual(80);
+    // 1行に詰め込まない
+    expect(text).not.toMatch(/組 \d+名様 単価|人 客単価|\(内消費税 ¥/);
   });
 
-  it('男性・女性が入っている日は 客数 の行に内訳（0 の区分は出さない）', () => {
+  it('男性・女性が入っている日は 客数 の下に1行ずつ（0 の区分は出さない）', () => {
     const text = layoutRegisterReport(sample({ sales: { ...sample().sales, guestsMale: 50, guestsFemale: 82 } }))
       .map((l) => l.text)
       .join('\n');
-    expect(text).toMatch(/客数（男性50・女性82）\s+132客/);
+    expect(text).toMatch(/客数\s+132客\n  男性\s+50客\n  女性\s+82客\n客単価/);
     const withUnselected = layoutRegisterReport(sample({ sales: { ...sample().sales, guestsMale: 50, guestsFemale: 80 } }))
       .map((l) => l.text)
       .join('\n');
-    expect(withUnselected).toMatch(/客数（男性50・女性80・選択なし2）\s+132客/);
+    expect(withUnselected).toMatch(/  女性\s+80客\n  選択なし\s+2客/);
   });
 
   it('レジ実績入力は 支払情報・現金在高 にまとめる（2026-09-28 Ronnie「同じもの。まとめて」）', () => {
@@ -334,7 +335,7 @@ describe('layoutRegisterReport（2026-09-28 Ronnie が選んだ並び）', () =>
     )
       .map((l) => l.text)
       .join('\n');
-    expect(withEight).toMatch(/税率  8% \(内消費税 ¥3,096\)\s+¥41,800/);
+    expect(withEight).toMatch(/税率  8%\s+¥41,800/);
   });
 
   it('控除（返金・取消）と 訂正・未回収・領収書 が出る', () => {
@@ -348,7 +349,8 @@ describe('layoutRegisterReport（2026-09-28 Ronnie が選んだ並び）', () =>
     )
       .map((l) => l.text)
       .join('\n');
-    expect(text).toMatch(/控除\s+2点\s+¥3,300/);
+    expect(text).toMatch(/控除点数\s+2点/);
+    expect(text).toMatch(/控除額\s+¥3,300/);
     expect(text).toContain('控除項目 返金・取消');
     expect(text).toMatch(/控除項目税額\s+¥300/);
     expect(text).toMatch(/控除後純売上\s+¥125,909/);
@@ -503,19 +505,5 @@ describe('layoutRegisterReport（2026-09-28 Ronnie が選んだ並び）', () =>
     expect(epos).toContain('<epos-print');
     expect(epos).toContain('レジ精算');
     expect(epos).toContain('<cut');
-  });
-
-  it('レジ精算の紙は行間 3mm（Star：ESC 0／EPSON：linespc 24）。厨房伝票などは今までどおり（2026-09-28 Ronnie「30cm に」）', () => {
-    const lines = layoutRegisterReport(sample());
-    const tight = kitchenTicketStarPrnt(lines, { tightLines: true });
-    const normal = kitchenTicketStarPrnt(lines);
-    // init（ESC @）・太字（ESC E）のすぐ後に ESC 0
-    expect([...tight.subarray(0, 6)]).toEqual([0x1b, 0x40, 0x1b, 0x45, 0x1b, 0x30]);
-    expect([...normal.subarray(0, 6)]).not.toEqual([0x1b, 0x40, 0x1b, 0x45, 0x1b, 0x30]);
-    expect(kitchenTicketEpos(lines, { lineSpacing: EPOS_TIGHT_LINE_SPACING })).toContain('<feed linespc="24"/>');
-    expect(kitchenTicketEpos(lines)).not.toContain('linespc');
-    const loader = readFileSync(join(__dirname, '..', 'lib', 'register-report-loader.ts'), 'utf8');
-    expect(loader).toContain('kitchenTicketStarPrnt(lines, { tightLines: true })');
-    expect(loader).toContain('kitchenTicketEpos(eposLines, { lineSpacing: EPOS_TIGHT_LINE_SPACING })');
   });
 });

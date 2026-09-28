@@ -48,9 +48,10 @@ describe('ランチ売上／ディナー売上（2026-09-28 Ronnie「3時まで�
     // 区切りの時刻（〜15:00／15:01〜）は紙に出さない（2026-09-28 Ronnie「要らない」）
     expect(text).not.toContain('15:00');
     expect(text).not.toContain('15:01');
-    expect(text).toMatch(/  3組 4名様 単価\s+¥1,500/);
+    expect(text).toMatch(/  組\s+3組/);
+    expect(text).toMatch(/  名様\s+4名様/);
+    expect(text).toMatch(/  単価\s+¥1,500/);
     expect(text).toMatch(/ディナー売上\s+¥13,000/);
-    expect(text).toMatch(/  2組 6名様 単価\s+¥2,167/);
     expect(text.indexOf('客単価')).toBeLessThan(text.indexOf('ランチ売上'));
     expect(text.indexOf('ディナー売上')).toBeLessThan(text.indexOf('総売上点数'));
   });

@@ -242,12 +242,11 @@ function reportHead(t: ReturnType<typeof makeLineTools>, data: RegisterReportDat
  *   ＊レジクローズ時 レジ実績入力情報＊ は支払情報・現金在高と同じ額なので、そこへまとめた（2026-09-28 Ronnie「同じもの。まとめて」）
  *   釣銭準備金〜金種の【精算情報】は本紙には出さず、別の紙（layoutSettlementReport）にした。
  *
- * 紙を 30cm 以内に（2026-09-28 Ronnie「スリップが長い。30cm にしたい」→ 相談で決めたこと）：
- *   - 空行・区切り線を減らし、ランチ／ディナー・媒体別は 2行、男性／女性は客数の行、内消費税は税率の行にまとめる
- *   - 媒体別の [全体]（上の 組数・客数・売上・客単価 と同じ）と、入出金が無い日の空の見出しは出さない
+ * 紙を短く（2026-09-28 Ronnie「スリップが長い」→ 相談 →「40cm くらいでいい。ゴチャゴチャにしない」）：
+ *   - 1行に詰め込まない（男性・女性、ランチ／ディナーの 組・名様・単価、内消費税、媒体別の 売上・人数・組数・客単価 は1項目1行）。行間もそのまま
+ *   - 媒体別の [全体]（上の 組数・客数・売上・客単価 と同じ）と、入出金が無い日の空の見出し・区切り線は出さない
  *   - 0件・¥0 の行は出さない（現金・現金在高・差異合計・レジオープン時現金・レジ会計 は 0 でも出す）
  *   - レジ実績入力（現金以外）は支払情報に、現金は現金在高にまとめる（額が違うときだけ「実績」の行）
- *   - 行間を 3mm に詰める（印字データ側：registerReportStarPrnt / registerReportEpos）
  */
 export function layoutRegisterReport(data: RegisterReportData, options: RegisterReportOptions = {}): LayoutLine[] {
   const t = makeLineTools(options);
@@ -270,20 +269,13 @@ export function layoutRegisterReport(data: RegisterReportData, options: Register
 
   // ---- 客数・売上 ----
   kv('組数', `${s.groups}組`);
-  const genders = [
-    ['男性', male],
-    ['女性', female],
-    ['選択なし', unselected],
-  ] as const;
-  // 男性・女性が入っている日だけ内訳を出す（0 の区分は出さない）
-  const genderNote =
-    male + female > 0
-      ? `（${genders
-          .filter(([, n]) => n > 0)
-          .map(([k, n]) => `${k}${n}`)
-          .join('・')}）`
-      : '';
-  kv(`客数${genderNote}`, `${s.guests}客`);
+  kv('客数', `${s.guests}客`);
+  // 男性・女性が入っている日だけ内訳（0 の区分は出さない）
+  if (male + female > 0) {
+    if (male > 0) kv('  男性', `${male}客`);
+    if (female > 0) kv('  女性', `${female}客`);
+    if (unselected > 0) kv('  選択なし', `${unselected}客`);
+  }
   kv('客単価', yen(s.avgSpend));
   // ---- ランチ／ディナー（区切りの時刻は店の設定。紙には時刻を出さない：2026-09-28 Ronnie「（〜15:00）（15:01〜）は要らない」） ----
   if (data.daypart) {
@@ -293,31 +285,42 @@ export function layoutRegisterReport(data: RegisterReportData, options: Register
     ] as const;
     for (const [label, p] of parts) {
       if (p.groups === 0 && p.sales === 0) continue;
+      blank();
       kv(label, yen(p.sales));
-      kv(`  ${p.groups}組 ${p.guests}名様 単価`, yen(p.avg));
+      kv('  組', `${p.groups}組`);
+      kv('  名様', `${p.guests}名様`);
+      kv('  単価', yen(p.avg));
     }
   }
+  blank();
   kv('総売上点数', `${s.itemQuantity}点`);
   kv('売上', yen(s.gross));
-  // 税率は売上のあった率だけ（10% は常に）。内消費税はその率の分を同じ行に
+  // 税率は売上のあった率だけ（10% は常に）。内消費税はその率の分
   const rates = s.taxByRate.filter((r) => r.rate === 10 || r.taxable > 0).sort((a, b) => b.rate - a.rate);
   if (!rates.some((r) => r.rate === 10)) rates.unshift({ rate: 10, taxable: 0, tax: 0 });
   for (const r of rates) {
-    kv(r.rate === 0 ? '税率  非課税' : `税率  ${r.rate}% (内消費税 ${yen(r.tax)})`, yen(r.taxable));
+    kv(`税率  ${r.rate === 0 ? '非課税' : `${r.rate}%`}`, yen(r.taxable));
+    if (r.rate !== 0) kv('        (内消費税)', `(${yen(r.tax)})`);
   }
   kv('消費税', yen(taxTotal));
   kv('純売上', yen(s.net));
   // ---- 控除（返金・取消）。無い日は出さない ----
   if (ded.count !== 0 || ded.amount !== 0) {
-    kcv('控除', `${ded.count}点`, yen(ded.amount));
-    if (ded.items.length) line(`  控除項目 ${ded.items.join('・')}`);
-    kv('  控除項目税額', yen(ded.tax));
+    blank();
+    kv('控除点数', `${ded.count}点`);
+    kv('控除額', yen(ded.amount));
+    if (ded.items.length) line(`控除項目 ${ded.items.join('・')}`);
+    kv('控除項目税額', yen(ded.tax));
     kv('控除後純売上', yen(s.net - (ded.amount - ded.tax)));
   }
-  if (nonZero(data.surcharges)) kcv('サービス料', cnt(data.surcharges.count), yen(data.surcharges.amount));
-  if (nonZero(lateNight)) kcv('深夜料', cnt(lateNight.count), yen(lateNight.amount));
-  if (nonZero(data.discounts)) kcv('値割引', cnt(data.discounts.count), yen(data.discounts.amount));
-  if (nonZero(rounding)) kcv('端数値引', cnt(rounding.count), yen(rounding.amount));
+  const charges = [
+    ['サービス料', data.surcharges],
+    ['深夜料', lateNight],
+    ['値割引', data.discounts],
+    ['端数値引', rounding],
+  ] as const;
+  if (charges.some(([, x]) => nonZero(x))) blank();
+  for (const [label, x] of charges) if (nonZero(x)) kcv(label, cnt(x.count), yen(x.amount));
 
   // ---- 支払情報（現金は 0 でも出す） ----
   starSection('支払情報');
@@ -341,11 +344,19 @@ export function layoutRegisterReport(data: RegisterReportData, options: Register
   }
   const voids = data.activity.find((a) => a.label.startsWith('取消'));
   const voidRow = { count: voids?.count ?? 0, amount: Math.abs(voids?.amount ?? 0) };
-  if (nonZero(voidRow)) kcv('取消（赤伝票）', cnt(voidRow.count), yen(voidRow.amount));
-  if (data.corrections && nonZero(data.corrections)) kcv('訂正（黒伝票）', cnt(data.corrections.count), yen(data.corrections.amount));
-  if (data.uncollected && nonZero(data.uncollected)) kcv('未回収', cnt(data.uncollected.count), yen(data.uncollected.amount));
   const receiptCount = data.receipts?.count ?? data.activity.find((a) => a.label === '領収書発行')?.count ?? 0;
-  if (receiptCount > 0) kv('領収書', cnt(receiptCount));
+  const others = [
+    nonZero(voidRow) ? () => kcv('取消（赤伝票）', cnt(voidRow.count), yen(voidRow.amount)) : null,
+    data.corrections && nonZero(data.corrections)
+      ? () => kcv('訂正（黒伝票）', cnt(data.corrections!.count), yen(data.corrections!.amount))
+      : null,
+    data.uncollected && nonZero(data.uncollected)
+      ? () => kcv('未回収', cnt(data.uncollected!.count), yen(data.uncollected!.amount))
+      : null,
+    receiptCount > 0 ? () => kv('領収書', cnt(receiptCount)) : null,
+  ].filter((f): f is () => void => f !== null);
+  if (others.length > 0) blank();
+  for (const f of others) f();
 
   // ---- 媒体別（お客様情報の来店経路ごと。2026-09-28 Ronnie「来店経路の選択のデータをレジ精算に」）。
   //      [全体] は上の 組数・客数・売上・客単価 と同じなので出さない ----
@@ -353,8 +364,12 @@ export function layoutRegisterReport(data: RegisterReportData, options: Register
   if (channels.length > 0) {
     starSection('媒体別（税込）');
     for (const c of channels) {
-      kv(c.label, yen(c.sales));
-      kv(`  ${c.groups}組 ${c.guests}人 客単価`, c.guests > 0 ? yen(Math.round(c.sales / c.guests)) : yen(0));
+      blank();
+      line(`[${c.label}]`);
+      kv('売上', yen(c.sales));
+      kv('人数', `${c.guests}人`);
+      kv('組数', `${c.groups}組`);
+      kv('客単価', c.guests > 0 ? yen(Math.round(c.sales / c.guests)) : yen(0));
     }
   }
 
@@ -362,14 +377,17 @@ export function layoutRegisterReport(data: RegisterReportData, options: Register
   starSection('入出金情報');
   kcv('レジオープン時現金', '1件', yen(data.cash.openingFloat));
   if (data.cashIns.length > 0 || data.cash.cashIn !== 0) {
+    blank();
     kcv('入金', cnt(data.cashIns.length), yen(data.cash.cashIn));
     for (const x of data.cashIns) kv(`  ${x.purpose}`, yen(x.amount));
   }
   if (data.cashOuts.length > 0 || data.cash.cashOut !== 0) {
+    blank();
     kcv('出金', cnt(data.cashOuts.length), yen(data.cash.cashOut));
     for (const x of data.cashOuts) kv(`  ${x.purpose}`, `-${yen(x.amount)}`);
   }
   // レジ実績入力の「現金」＝数えた在高なので、現金在高の行にまとめる。差異合計はそのすぐ下
+  blank();
   kv('現金在高', data.cash.counted == null ? yen(data.cash.expected) : yen(data.cash.counted));
   kv('差異合計', data.cash.difference == null ? '未入力' : signedYen(data.cash.difference));
   const reason = data.differenceReason?.trim();
