@@ -10,6 +10,7 @@ import {
 import { cn } from '@/lib/utils';
 import { yen } from '@/lib/format';
 import { englishName } from '@/lib/romaji';
+import { optionPriceLookup, repriceLines } from '@/lib/cart-reprice';
 import { groupMenuPages, menuPageLabel, type MenuBookSettings } from '@/lib/menu-book';
 import type { DiscountPreset, PointBrand } from '@/lib/checkout-presets';
 import { Button } from '@/components/ui/button';
@@ -361,7 +362,8 @@ export function PosScreen({
 
   // QRからの追加注文が同じ order_items を更新するため、変更をRealtimeで検知して伝票へ反映する。
   // order_idまでは絞り込まず、store_id単位で購読する（filter仕様上のシンプルさを優先）。
-  useStoreRealtimeRefresh({ storeId, tables: ['order_items'] });
+  // menu_items：メニュー設定で値段を変えたら、レジのメニューの値段もすぐ出し直す（2026-09-28 Ronnie）
+  useStoreRealtimeRefresh({ storeId, tables: ['order_items', 'menu_items'] });
 
   // キーボードショートカット（F2=検索フォーカス / F4=会計を開く）。Escでのダイアログ閉じは
   // components/ui/dialog.tsx 側で共通実装済みのためここでは扱わない。
@@ -451,8 +453,22 @@ export function PosScreen({
         .filter((l) => l.quantity > 0)
     );
 
-  const cartCount = cart.reduce((n, l) => n + l.quantity, 0);
-  const cartTotal = cart.reduce((n, l) => n + l.unitPrice * l.quantity, 0);
+  // メニュー設定で値段が変わったら（menu_items の Realtime で読み直す）、まだ注文していない品も新しい値段で出す
+  // （2026-09-28 Ronnie。注文したときの値段はサーバーが決める。注文済みの明細は変えない）
+  const pricedCart = useMemo(() => {
+    const byId = new Map(menuItems.map((m) => [m.id, m]));
+    return repriceLines(
+      cart,
+      (id) => {
+        const m = byId.get(id);
+        if (!m) return undefined;
+        return Number(isTakeoutLike ? (m.takeout_price ?? m.price) : m.price);
+      },
+      optionPriceLookup(optionGroupsByItem)
+    );
+  }, [cart, menuItems, optionGroupsByItem, isTakeoutLike]);
+  const cartCount = pricedCart.reduce((n, l) => n + l.quantity, 0);
+  const cartTotal = pricedCart.reduce((n, l) => n + l.unitPrice * l.quantity, 0);
 
   const handleAdd = (menuItemId: string) => {
     // 選択肢グループが設定された商品は、先に選択ダイアログを出す
@@ -762,7 +778,7 @@ export function PosScreen({
                 <span className="ml-1 font-normal text-ink-3">Order を押すと注文になります</span>
               </p>
               <ul>
-                {cart.map((l) => (
+                {pricedCart.map((l) => (
                   <li key={l.key} className="flex items-center gap-2.5 px-3 py-2.5">
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-[15px] font-bold leading-tight text-navy">

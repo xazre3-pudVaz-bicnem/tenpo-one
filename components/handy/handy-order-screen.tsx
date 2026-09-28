@@ -21,6 +21,7 @@ import {
   cartTotal,
   changeCartQuantity,
   MAX_LINE_QUANTITY,
+  repriceCart,
   TILE_ACCENTS,
   type HandyCartLine,
   type HandyMenuItemView,
@@ -83,8 +84,10 @@ export function HandyOrderScreen({
     return map;
   }, [cart]);
 
-  const count = cartCount(cart);
-  const total = cartTotal(cart);
+  // メニュー設定で値段が変わったら（Realtime で画面が読み直される）、カートの値段も新しい値段で出す
+  const pricedCart = useMemo(() => repriceCart(cart, tabs, optionGroupsByItem), [cart, tabs, optionGroupsByItem]);
+  const count = cartCount(pricedCart);
+  const total = cartTotal(pricedCart);
   const seatLabel = `${tableName} · ${guestCount}名`;
 
   const pushToCart = (item: HandyMenuItemView, optionItemIds: string[], optionLabel: string) => {
@@ -186,7 +189,7 @@ export function HandyOrderScreen({
                 注文する商品がありません。
               </p>
             ) : (
-              cart.map((line) => (
+              pricedCart.map((line) => (
                 <article
                   key={line.key}
                   className="mb-2.5 rounded-[10px] border border-[#e3dbf1] bg-white p-3.5"
