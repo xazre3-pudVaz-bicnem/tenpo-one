@@ -4,7 +4,7 @@ import { METHOD_LABELS } from '@/components/cash/labels';
 import { formatDateTime, weekdayJa } from '@/lib/format';
 import { kitchenTicketMarkup } from '@/lib/receipt-markup';
 import { kitchenTicketStarPrnt } from '@/lib/starprnt';
-import { kitchenTicketEpos, eposCols } from '@/lib/epos-print';
+import { kitchenTicketEpos, eposCols, EPOS_TIGHT_LINE_SPACING } from '@/lib/epos-print';
 import { STAR_WIDTH_OPTIONS } from '@/lib/receipt-layout';
 import { isCheckViolation, isMissingColumnError } from '@/lib/schema-compat';
 import { daypartSettingsFrom, guestGenderFromMemo, splitDaypart } from '@/lib/daypart';
@@ -479,8 +479,9 @@ export async function enqueueRegisterReportPrint(
     content_type: RECEIPT_CONTENT_TYPE,
     payload: {
       body: kitchenTicketMarkup(lines),
-      starprnt: kitchenTicketStarPrnt(lines).toString('base64'),
-      epos: kitchenTicketEpos(eposLines),
+      // 行間を 3mm に詰める（2026-09-28 Ronnie「レジ精算のスリップを 30cm に」）
+      starprnt: kitchenTicketStarPrnt(lines, { tightLines: true }).toString('base64'),
+      epos: kitchenTicketEpos(eposLines, { lineSpacing: EPOS_TIGHT_LINE_SPACING }),
       kind: kind === 'settlement' ? 'register_settlement' : 'register_report',
       register_session_id: sessionId,
     },

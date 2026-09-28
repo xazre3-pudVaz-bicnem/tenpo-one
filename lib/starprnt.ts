@@ -37,6 +37,11 @@ const CMD = {
   emphasizeOff: [ESC, 0x46],
   /** フィードして部分カット。 */
   cut: [ESC, 0x64, 0x03],
+  /**
+   * 行間を 3mm にする（ESC 0。初期値は 4mm）。レジ精算の紙を短くするため（2026-09-28 Ronnie「30cm に」）。
+   * init（ESC @）で初期値に戻るので、次のジョブには持ち越さない。
+   */
+  lineSpacing3mm: [ESC, 0x30],
   /** ドロアキック。1番=BEL, 2番=SUB（機種で割り当てが異なるため設定で切替可能にする）。 */
   drawer1: [0x07],
   drawer2: [0x1a],
@@ -341,11 +346,13 @@ export function testPrintStarPrnt(opts: {
 /** 厨房伝票（StarPRNT）。行の組み立ては lib/kitchen-ticket.ts と共有する。 */
 export function kitchenTicketStarPrnt(
   lines: LayoutLine[],
-  opts: { currency?: CurrencyStyle; encoding?: TextEncoding } = {}
+  opts: { currency?: CurrencyStyle; encoding?: TextEncoding; tightLines?: boolean } = {}
 ): Buffer {
   // 厨房伝票の行は layoutKitchenTicket が桁数どおりに組んであるので、ここでは折り返さない
   const b = new StarBuffer(opts.currency ?? DEFAULT_CURRENCY, opts.encoding ?? DEFAULT_ENCODING);
   b.cmd(CMD.init).cmd(CMD.emphasizeOn);
+  // tightLines：行間 3mm（レジ精算の紙。厨房伝票・レシートは今までどおり）
+  if (opts.tightLines) b.cmd(CMD.lineSpacing3mm);
   let align = '';
   let size = '';
   for (const l of lines) {

@@ -236,14 +236,20 @@ function reportHead(t: ReturnType<typeof makeLineTools>, data: RegisterReportDat
 /**
  * レジ精算レシートの本文（2026-09-28 Ronnie が3枚の紙から選んだ並び）。
  *   上：レジ精算・店名・営業日・処理番号・締め
- *   組数・客数（男性／女性／選択なし）・客単価 → 総売上点数・売上・税率・消費税・純売上 → 控除 →
- *   サービス料・深夜料 → 値割引・端数値引 → ＊支払情報＊（支払方法は全部出す・お預かり・おつり・取消・訂正・未回収・領収書）
- *   → ＊入出金情報＊ → ＊レジクローズ時 レジ実績入力情報＊ → 【入出金情報】（入金・出金の明細）→ 【業務履歴】 → 印刷日時・担当者
+ *   組数・客数・客単価 → ランチ／ディナー → 総売上点数・売上・税率・消費税・純売上 → 控除 →
+ *   サービス料・深夜料 → 値割引・端数値引 → ＊支払情報＊（お預かり・おつり・取消・訂正・未回収・領収書）
+ *   → ＊媒体別＊ → ＊入出金情報＊（入金・出金の明細も） → ＊レジクローズ時 レジ実績入力情報＊ → ＊業務履歴＊ → 印刷日時・担当者
  *   釣銭準備金〜金種の【精算情報】は本紙には出さず、別の紙（layoutSettlementReport）にした。
+ *
+ * 紙を 30cm 以内に（2026-09-28 Ronnie「スリップが長い。30cm にしたい」→ 相談で決めたこと）：
+ *   - 空行・区切り線を減らし、ランチ／ディナー・媒体別は 2行、男性／女性は客数の行、内消費税は税率の行にまとめる
+ *   - 媒体別の [全体]（上の 組数・客数・売上・客単価 と同じ）と、入出金が無い日の空の見出しは出さない
+ *   - 0件・¥0 の行は出さない（現金・現金在高・差異合計・レジオープン時現金・レジ会計 は 0 でも出す）
+ *   - 行間を 3mm に詰める（印字データ側：registerReportStarPrnt / registerReportEpos）
  */
 export function layoutRegisterReport(data: RegisterReportData, options: RegisterReportOptions = {}): LayoutLine[] {
   const t = makeLineTools(options);
-  const { line, kv, kcv, blank, section, starSection, sub, subSep } = t;
+  const { line, kv, kcv, blank, starSection } = t;
   const s = data.sales;
   const taxTotal = s.tax ?? s.taxByRate.reduce((a, r) => a + r.tax, 0);
   const male = s.guestsMale ?? 0;
@@ -253,127 +259,131 @@ export function layoutRegisterReport(data: RegisterReportData, options: Register
   const lateNight = s.lateNight ?? { count: 0, amount: 0 };
   const rounding = s.rounding ?? { count: 0, amount: 0 };
   const cnt = (n: number) => `${n}件`;
+  /** 0件・¥0 の行は出さない */
+  const nonZero = (x: { count: number; amount: number }) => x.count !== 0 || x.amount !== 0;
+  const cashLabel = (label: string) => label === '現金';
 
   reportHead(t, data, 'レジ精算');
-  blank();
   line(t.dotted);
 
   // ---- 客数・売上 ----
   kv('組数', `${s.groups}組`);
-  kv('客数', `${s.guests}客`);
-  kv('  男性', `${male}客`);
-  kv('  女性', `${female}客`);
-  kv('  選択なし', `${unselected}客`);
+  const genders = [
+    ['男性', male],
+    ['女性', female],
+    ['選択なし', unselected],
+  ] as const;
+  // 男性・女性が入っている日だけ内訳を出す（0 の区分は出さない）
+  const genderNote =
+    male + female > 0
+      ? `（${genders
+          .filter(([, n]) => n > 0)
+          .map(([k, n]) => `${k}${n}`)
+          .join('・')}）`
+      : '';
+  kv(`客数${genderNote}`, `${s.guests}客`);
   kv('客単価', yen(s.avgSpend));
   // ---- ランチ／ディナー（区切りの時刻は店の設定。紙には時刻を出さない：2026-09-28 Ronnie「（〜15:00）（15:01〜）は要らない」） ----
   if (data.daypart) {
-    const d = data.daypart;
-    blank();
-    kv('ランチ売上', yen(d.lunch.sales));
-    kv('  組', `${d.lunch.groups}組`);
-    kv('  名様', `${d.lunch.guests}名様`);
-    kv('  単価', yen(d.lunch.avg));
-    blank();
-    kv('ディナー売上', yen(d.dinner.sales));
-    kv('  組', `${d.dinner.groups}組`);
-    kv('  名様', `${d.dinner.guests}名様`);
-    kv('  単価', yen(d.dinner.avg));
+    const parts = [
+      ['ランチ売上', data.daypart.lunch],
+      ['ディナー売上', data.daypart.dinner],
+    ] as const;
+    for (const [label, p] of parts) {
+      if (p.groups === 0 && p.sales === 0) continue;
+      kv(label, yen(p.sales));
+      kv(`  ${p.groups}組 ${p.guests}名様 単価`, yen(p.avg));
+    }
   }
-  blank();
   kv('総売上点数', `${s.itemQuantity}点`);
   kv('売上', yen(s.gross));
-  // 税率は売上のあった率だけ（10% は常に）。内消費税はその率の分
+  // 税率は売上のあった率だけ（10% は常に）。内消費税はその率の分を同じ行に
   const rates = s.taxByRate.filter((r) => r.rate === 10 || r.taxable > 0).sort((a, b) => b.rate - a.rate);
   if (!rates.some((r) => r.rate === 10)) rates.unshift({ rate: 10, taxable: 0, tax: 0 });
   for (const r of rates) {
-    kv(`税率  ${r.rate === 0 ? '非課税' : `${r.rate}%`}`, yen(r.taxable));
-    if (r.rate !== 0) kv('        (内消費税)', `(${yen(r.tax)})`);
+    kv(r.rate === 0 ? '税率  非課税' : `税率  ${r.rate}% (内消費税 ${yen(r.tax)})`, yen(r.taxable));
   }
   kv('消費税', yen(taxTotal));
   kv('純売上', yen(s.net));
-  blank();
-  // ---- 控除（返金・取消） ----
-  kv('控除点数', `${ded.count}点`);
-  kv('控除額', yen(ded.amount));
-  line(`控除項目${ded.items.length ? ` ${ded.items.join('・')}` : ''}`);
-  kv('控除項目税額', yen(ded.tax));
-  kv('控除後純売上', yen(s.net - (ded.amount - ded.tax)));
-  blank();
-  kcv('サービス料', cnt(data.surcharges.count), yen(data.surcharges.amount));
-  kcv('深夜料', cnt(lateNight.count), yen(lateNight.amount));
-  blank();
-  kcv('値割引', cnt(data.discounts.count), yen(data.discounts.amount));
-  kcv('端数値引', cnt(rounding.count), yen(rounding.amount));
+  // ---- 控除（返金・取消）。無い日は出さない ----
+  if (ded.count !== 0 || ded.amount !== 0) {
+    kcv('控除', `${ded.count}点`, yen(ded.amount));
+    if (ded.items.length) line(`  控除項目 ${ded.items.join('・')}`);
+    kv('  控除項目税額', yen(ded.tax));
+    kv('控除後純売上', yen(s.net - (ded.amount - ded.tax)));
+  }
+  if (nonZero(data.surcharges)) kcv('サービス料', cnt(data.surcharges.count), yen(data.surcharges.amount));
+  if (nonZero(lateNight)) kcv('深夜料', cnt(lateNight.count), yen(lateNight.amount));
+  if (nonZero(data.discounts)) kcv('値割引', cnt(data.discounts.count), yen(data.discounts.amount));
+  if (nonZero(rounding)) kcv('端数値引', cnt(rounding.count), yen(rounding.amount));
 
-  // ---- 支払情報 ----
+  // ---- 支払情報（現金は 0 でも出す） ----
   starSection('支払情報');
-  if (data.payments.length === 0) line('会計はありません');
-  for (const p of data.payments) kcv(p.label, cnt(p.count), yen(p.amount));
-  kv('お預かり現金', yen(data.cash.tendered));
-  kv('おつり', yen(data.cash.change));
-  blank();
+  const payments = data.payments.filter((p) => cashLabel(p.label) || nonZero(p));
+  if (payments.length === 0) line('会計はありません');
+  for (const p of payments) kcv(p.label, cnt(p.count), yen(p.amount));
+  if (data.cash.tendered !== 0 || data.cash.change !== 0) {
+    kv('お預かり現金', yen(data.cash.tendered));
+    kv('おつり', yen(data.cash.change));
+  }
   const voids = data.activity.find((a) => a.label.startsWith('取消'));
-  kcv('取消（赤伝票）', cnt(voids?.count ?? 0), yen(Math.abs(voids?.amount ?? 0)));
-  kcv('訂正（黒伝票）', cnt(data.corrections?.count ?? 0), yen(data.corrections?.amount ?? 0));
-  kcv('未回収', cnt(data.uncollected?.count ?? 0), yen(data.uncollected?.amount ?? 0));
-  kv('領収書', cnt(data.receipts?.count ?? data.activity.find((a) => a.label === '領収書発行')?.count ?? 0));
+  const voidRow = { count: voids?.count ?? 0, amount: Math.abs(voids?.amount ?? 0) };
+  if (nonZero(voidRow)) kcv('取消（赤伝票）', cnt(voidRow.count), yen(voidRow.amount));
+  if (data.corrections && nonZero(data.corrections)) kcv('訂正（黒伝票）', cnt(data.corrections.count), yen(data.corrections.amount));
+  if (data.uncollected && nonZero(data.uncollected)) kcv('未回収', cnt(data.uncollected.count), yen(data.uncollected.amount));
+  const receiptCount = data.receipts?.count ?? data.activity.find((a) => a.label === '領収書発行')?.count ?? 0;
+  if (receiptCount > 0) kv('領収書', cnt(receiptCount));
 
-  // ---- 売上詳細情報：媒体別（お客様情報の来店経路ごと。2026-09-28 Ronnie「来店経路の選択のデータをレジ精算に」） ----
-  if (data.byChannel.length > 0) {
-    section('売上詳細情報 ( 税込 )');
-    sub('媒体別');
-    for (const c of data.byChannel) {
-      blank();
-      line(`[${c.label}]`);
-      kv('売上', yen(c.sales));
-      kv('人数', `${c.guests}人`);
-      kv('組数', `${c.groups}組`);
-      kv('客単価', c.guests > 0 ? yen(Math.round(c.sales / c.guests)) : yen(0));
+  // ---- 媒体別（お客様情報の来店経路ごと。2026-09-28 Ronnie「来店経路の選択のデータをレジ精算に」）。
+  //      [全体] は上の 組数・客数・売上・客単価 と同じなので出さない ----
+  const channels = data.byChannel.filter((c) => c.label !== '全体');
+  if (channels.length > 0) {
+    starSection('媒体別（税込）');
+    for (const c of channels) {
+      kv(c.label, yen(c.sales));
+      kv(`  ${c.groups}組 ${c.guests}人 客単価`, c.guests > 0 ? yen(Math.round(c.sales / c.guests)) : yen(0));
     }
   }
 
-  // ---- 入出金情報（件数と現金在高） ----
+  // ---- 入出金情報（件数・明細と現金在高） ----
   starSection('入出金情報');
   kcv('レジオープン時現金', '1件', yen(data.cash.openingFloat));
-  kcv('入金', cnt(data.cashIns.length), yen(data.cash.cashIn));
-  kcv('出金', cnt(data.cashOuts.length), yen(data.cash.cashOut));
+  if (data.cashIns.length > 0 || data.cash.cashIn !== 0) {
+    kcv('入金', cnt(data.cashIns.length), yen(data.cash.cashIn));
+    for (const x of data.cashIns) kv(`  ${x.purpose}`, yen(x.amount));
+  }
+  if (data.cashOuts.length > 0 || data.cash.cashOut !== 0) {
+    kcv('出金', cnt(data.cashOuts.length), yen(data.cash.cashOut));
+    for (const x of data.cashOuts) kv(`  ${x.purpose}`, `-${yen(x.amount)}`);
+  }
   kv('現金在高', data.cash.counted == null ? yen(data.cash.expected) : yen(data.cash.counted));
 
-  // ---- レジクローズ時 レジ実績入力情報 ----
+  // ---- レジクローズ時 レジ実績入力情報（現金・差異合計は 0 でも出す） ----
   starSection('レジクローズ時 レジ実績入力情報');
   const counted = data.countedByMethod ?? [
     { label: '現金', amount: data.cash.counted ?? data.cash.expected },
     ...data.payments.filter((p) => p.label !== '現金').map((p) => ({ label: p.label, amount: p.amount })),
   ];
-  for (const c of counted) kv(c.label, yen(c.amount));
-  blank();
+  for (const c of counted) if (cashLabel(c.label) || c.amount !== 0) kv(c.label, yen(c.amount));
   kv('差異合計', data.cash.difference == null ? '未入力' : signedYen(data.cash.difference));
-  kv('差異理由', data.differenceReason?.trim() || '未選択');
+  const reason = data.differenceReason?.trim();
+  if (reason || (data.cash.difference != null && data.cash.difference !== 0)) kv('差異理由', reason || '未選択');
   const dep = data.deposits ?? { bank: 0, safe: 0, security: 0 };
-  kv('銀行振込', yen(dep.bank));
-  kv('貸金庫預け', yen(dep.safe));
-  kv('警備会社預け', yen(dep.security));
+  if (dep.bank !== 0) kv('銀行振込', yen(dep.bank));
+  if (dep.safe !== 0) kv('貸金庫預け', yen(dep.safe));
+  if (dep.security !== 0) kv('警備会社預け', yen(dep.security));
 
-  // ---- 入出金の明細 ----
-  section('入出金情報');
-  sub('入金情報');
-  for (const x of data.cashIns) kv(`  ${x.purpose}`, yen(x.amount));
-  subSep();
-  sub('出金情報');
-  for (const x of data.cashOuts) kv(`  ${x.purpose}`, `-${yen(x.amount)}`);
-
-  // ---- 業務履歴 ----
-  section('業務履歴');
-  for (const a of data.activity) kcv(a.label, cnt(a.count), a.amount < 0 ? `-${yen(-a.amount)}` : yen(a.amount));
+  // ---- 業務履歴（0件の行は出さない。レジ会計は出す） ----
+  starSection('業務履歴');
+  for (const a of data.activity) {
+    if (a.label !== 'レジ会計' && a.count === 0) continue;
+    kcv(a.label, cnt(a.count), a.amount < 0 ? `-${yen(-a.amount)}` : yen(a.amount));
+  }
 
   blank();
-  if (data.note) {
-    line(`備考: ${data.note}`);
-    blank();
-  }
+  if (data.note) line(`備考: ${data.note}`);
   line(`印刷日時: ${data.printedAtLabel}`);
   line(`担当者: ${data.closedBy}`);
-  blank();
   return t.L;
 }
 

@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, it, expect } from 'vitest';
 import iconv from 'iconv-lite';
 import {
@@ -13,7 +15,7 @@ import {
 import { dispWidth } from '@/lib/receipt-layout';
 import { kitchenTicketMarkup } from '@/lib/receipt-markup';
 import { kitchenTicketStarPrnt } from '@/lib/starprnt';
-import { kitchenTicketEpos, eposCols } from '@/lib/epos-print';
+import { kitchenTicketEpos, eposCols, EPOS_TIGHT_LINE_SPACING } from '@/lib/epos-print';
 
 const sample = (over: Partial<RegisterReportData> = {}): RegisterReportData => ({
   storeName: 'FULL MOoN 御茶ノ水店',
@@ -189,50 +191,36 @@ describe('金種別枚数の保存形式', () => {
 });
 
 describe('layoutRegisterReport（2026-09-28 Ronnie が選んだ並び）', () => {
-  it('上から：締め → 客数・売上 → 控除 → サービス料・値引 → ＊支払情報＊ → ＊入出金情報＊ → ＊レジ実績入力＊ → 【入出金情報】 → 【業務履歴】', () => {
+  it('上から：締め → 客数・売上 → 値引 → ＊支払情報＊ → ＊媒体別＊ → ＊入出金情報＊（明細も） → ＊レジ実績入力＊ → ＊業務履歴＊', () => {
     const lines = layoutRegisterReport(sample(), { paperWidth: 80 });
     const text = lines.map((l) => l.text).join('\n');
     const order = [
       '締め: 2026/9/20 23:12  Ronnie',
       '組数',
-      '  男性',
-      '  選択なし',
+      '客数',
       '客単価',
       '総売上点数',
-      '税率  10%',
-      '(内消費税)',
+      '税率  10% (内消費税 ¥12,891)',
       '消費税',
       '純売上',
-      '控除点数',
-      '控除後純売上',
-      'サービス料',
-      '深夜料',
       '値割引',
-      '端数値引',
       '＊支払情報＊',
+      '現金',
+      'クレジット',
       'お預かり現金',
       'おつり',
-      '取消（赤伝票）',
-      '訂正（黒伝票）',
-      '未回収',
       '領収書',
-      '【売上詳細情報 ( 税込 )】',
-      '<媒体別>',
-      '[全体]',
-      '[HOT PEPPER]',
+      '＊媒体別（税込）＊',
+      'フリー',
+      'HOT PEPPER',
       '＊入出金情報＊',
       'レジオープン時現金',
+      '出金',
+      '食材 買い出し',
       '現金在高',
       '＊レジクローズ時 レジ実績入力情報＊',
       '差異合計',
-      '差異理由',
-      '銀行振込',
-      '貸金庫預け',
-      '警備会社預け',
-      '【入出金情報】',
-      '<出金情報>',
-      '食材 買い出し',
-      '【業務履歴】',
+      '＊業務履歴＊',
       'レジ会計',
       '印刷日時: 2026/9/20 23:12',
       '担当者: Ronnie',
@@ -246,15 +234,68 @@ describe('layoutRegisterReport（2026-09-28 Ronnie が選んだ並び）', () =>
     expect(lines[0]).toEqual({ text: 'レジ精算', align: 'center', size: 'large' });
     expect(text).toContain('営業日: 2026/09/20（日）');
     expect(text).toMatch(/売上\s+¥141,800/);
-    expect(text).toMatch(/\(内消費税\)\s+\(¥12,891\)/);
     expect(text).toMatch(/純売上\s+¥128,909/);
     expect(text).toMatch(/組数\s+61組/);
     expect(text).toMatch(/客数\s+132客/);
-    expect(text).toMatch(/選択なし\s+132客/);
     expect(text).toMatch(/現金\s+25件\s+¥72,900/);
+    expect(text).toMatch(/食材 買い出し\s+-¥3,000/);
+    expect(text).toMatch(/HOT PEPPER\s+¥20,000/);
+    expect(text).toMatch(/  6組 20人 客単価\s+¥1,000/);
     for (const l of text.split('\n')) {
       expect(dispWidth(l)).toBeLessThanOrEqual(48);
     }
+  });
+
+  it('30cm に：0件・¥0 の行、[全体]、空の見出し、男女の無い日の内訳は出さない（2026-09-28 Ronnie）', () => {
+    const lines = layoutRegisterReport(sample(), { paperWidth: 80 });
+    const text = lines.map((l) => l.text).join('\n');
+    for (const hidden of [
+      'サービス料', '深夜料', '端数値引', '控除', '取消（赤伝票）', '訂正（黒伝票）', '未回収', '差異理由', '未選択',
+      '銀行振込', '貸金庫預け', '警備会社預け', '[全体]', '【', '<入金情報>', '入金 ', '男性', '選択なし',
+      '取消（VOID）', '返金', '注文キャンセル',
+    ]) {
+      expect(text, hidden).not.toContain(hidden);
+    }
+    // 0 でも出す行：現金・現金在高・差異合計・レジオープン時現金・レジ会計
+    const empty = layoutRegisterReport(
+      sample({
+        payments: [{ label: '現金', count: 0, amount: 0 }, { label: 'クレジット', count: 0, amount: 0 }],
+        activity: [{ label: 'レジ会計', count: 0, amount: 0 }],
+        cashOuts: [],
+        cash: { ...sample().cash, cashOut: 0, tendered: 0, change: 0 },
+      })
+    )
+      .map((l) => l.text)
+      .join('\n');
+    expect(empty).toMatch(/現金\s+0件\s+¥0/);
+    expect(empty).not.toContain('クレジット');
+    expect(empty).toMatch(/レジ会計\s+0件\s+¥0/);
+    expect(empty).toContain('現金在高');
+    expect(empty).toContain('差異合計');
+    expect(empty).toContain('レジオープン時現金');
+    expect(empty).not.toContain('お預かり現金');
+    expect(empty).not.toMatch(/^出金/m);
+    // 普通の日（SEABIRD 9/28 くらい）で 60行以内（行間 3mm で 20cm 前後）
+    expect(lines.length).toBeLessThanOrEqual(60);
+  });
+
+  it('男性・女性が入っている日は 客数 の行に内訳（0 の区分は出さない）', () => {
+    const text = layoutRegisterReport(sample({ sales: { ...sample().sales, guestsMale: 50, guestsFemale: 82 } }))
+      .map((l) => l.text)
+      .join('\n');
+    expect(text).toMatch(/客数（男性50・女性82）\s+132客/);
+    const withUnselected = layoutRegisterReport(sample({ sales: { ...sample().sales, guestsMale: 50, guestsFemale: 80 } }))
+      .map((l) => l.text)
+      .join('\n');
+    expect(withUnselected).toMatch(/客数（男性50・女性80・選択なし2）\s+132客/);
+  });
+
+  it('差額がある日・理由がある日は 差異理由 を出す', () => {
+    const text = layoutRegisterReport(sample({ cash: { ...sample().cash, counted: 119400, difference: -500 } }))
+      .map((l) => l.text)
+      .join('\n');
+    expect(text).toMatch(/差異合計\s+-¥500/);
+    expect(text).toMatch(/差異理由\s+未選択/);
   });
 
   it('本紙には精算情報（釣銭準備金・金種・在高実績）を出さない。8% は売上があった日だけ', () => {
@@ -269,7 +310,7 @@ describe('layoutRegisterReport（2026-09-28 Ronnie が選んだ並び）', () =>
     )
       .map((l) => l.text)
       .join('\n');
-    expect(withEight).toMatch(/税率  8%\s+¥41,800/);
+    expect(withEight).toMatch(/税率  8% \(内消費税 ¥3,096\)\s+¥41,800/);
   });
 
   it('控除（返金・取消）と 訂正・未回収・領収書 が出る', () => {
@@ -283,8 +324,7 @@ describe('layoutRegisterReport（2026-09-28 Ronnie が選んだ並び）', () =>
     )
       .map((l) => l.text)
       .join('\n');
-    expect(text).toMatch(/控除点数\s+2点/);
-    expect(text).toMatch(/控除額\s+¥3,300/);
+    expect(text).toMatch(/控除\s+2点\s+¥3,300/);
     expect(text).toContain('控除項目 返金・取消');
     expect(text).toMatch(/控除項目税額\s+¥300/);
     expect(text).toMatch(/控除後純売上\s+¥125,909/);
@@ -314,7 +354,7 @@ describe('layoutRegisterReport（2026-09-28 Ronnie が選んだ並び）', () =>
     for (const t of amountLines) expect(dispWidth(t, opts)).toBe(cols);
   });
 
-  it('日計レポートの項目（組数・客数・客単価・総売上点数・お預かり現金・おつり・差異理由）が出る', () => {
+  it('日計レポートの項目（組数・客数・客単価・総売上点数・お預かり現金・おつり）が出る', () => {
     const text = layoutRegisterReport(sample())
       .map((l) => l.text)
       .join('\n');
@@ -325,8 +365,6 @@ describe('layoutRegisterReport（2026-09-28 Ronnie が選んだ並び）', () =>
     expect(text).toContain('230点');
     expect(text).toContain('お預かり現金');
     expect(text).toContain('おつり');
-    expect(text).toContain('差異理由');
-    expect(text).toContain('未選択');
   });
 
   it('精算情報の紙：釣銭準備金〜金種。差額があれば符号付き、実査が無ければ「未入力」、金種が無ければ金種表は出ない', () => {
@@ -434,12 +472,26 @@ describe('layoutRegisterReport（2026-09-28 Ronnie が選んだ並び）', () =>
 
     const buf = kitchenTicketStarPrnt(lines);
     const decoded = iconv.decode(buf, 'Shift_JIS');
-    expect(decoded).toContain('【業務履歴】');
+    expect(decoded).toContain('＊業務履歴＊');
     expect(decoded).toContain('レジオープン時現金');
 
     const epos = kitchenTicketEpos(lines);
     expect(epos).toContain('<epos-print');
     expect(epos).toContain('レジ精算');
     expect(epos).toContain('<cut');
+  });
+
+  it('レジ精算の紙は行間 3mm（Star：ESC 0／EPSON：linespc 24）。厨房伝票などは今までどおり（2026-09-28 Ronnie「30cm に」）', () => {
+    const lines = layoutRegisterReport(sample());
+    const tight = kitchenTicketStarPrnt(lines, { tightLines: true });
+    const normal = kitchenTicketStarPrnt(lines);
+    // init（ESC @）・太字（ESC E）のすぐ後に ESC 0
+    expect([...tight.subarray(0, 6)]).toEqual([0x1b, 0x40, 0x1b, 0x45, 0x1b, 0x30]);
+    expect([...normal.subarray(0, 6)]).not.toEqual([0x1b, 0x40, 0x1b, 0x45, 0x1b, 0x30]);
+    expect(kitchenTicketEpos(lines, { lineSpacing: EPOS_TIGHT_LINE_SPACING })).toContain('<feed linespc="24"/>');
+    expect(kitchenTicketEpos(lines)).not.toContain('linespc');
+    const loader = readFileSync(join(__dirname, '..', 'lib', 'register-report-loader.ts'), 'utf8');
+    expect(loader).toContain('kitchenTicketStarPrnt(lines, { tightLines: true })');
+    expect(loader).toContain('kitchenTicketEpos(eposLines, { lineSpacing: EPOS_TIGHT_LINE_SPACING })');
   });
 });
