@@ -212,8 +212,8 @@ describe('layoutRegisterReport（2026-09-28 Ronnie が選んだ並び）', () =>
       'おつり',
       '領収書',
       '＊媒体別（税込）＊',
-      '[フリー]',
-      '[HOT PEPPER]',
+      'フリー',
+      'HOT PEPPER',
       '＊入出金情報＊',
       'レジオープン時現金',
       '出金',
@@ -239,7 +239,7 @@ describe('layoutRegisterReport（2026-09-28 Ronnie が選んだ並び）', () =>
     expect(text).toMatch(/客数\s+132客/);
     expect(text).toMatch(/現金\s+25件\s+¥72,900/);
     expect(text).toMatch(/食材 買い出し\s+-¥3,000/);
-    expect(text).toMatch(/\[HOT PEPPER\]\n売上\s+¥20,000\n人数\s+20人\n組数\s+6組\n客単価\s+¥1,000/);
+    expect(text).toMatch(/HOT PEPPER\s+6組\s+20人\s+¥1,000\s+¥20,000/);
     expect(text).toMatch(/\(内消費税\)\s+\(¥12,891\)/);
     for (const l of text.split('\n')) {
       expect(dispWidth(l)).toBeLessThanOrEqual(48);
@@ -353,6 +353,32 @@ describe('layoutRegisterReport（2026-09-28 Ronnie が選んだ並び）', () =>
     expect(isBankDepositPurpose(null)).toBe(false);
     expect(bankDepositMemo('銀行へ預入：Cash to bank')).toBe('Cash to bank');
     expect(bankDepositMemo('銀行へ預入')).toBe('');
+  });
+
+  it('媒体別は表で1媒体1行（組数・人数・客単価・売上）。名前が長い媒体は名前の次の行に数字（2026-09-28 Ronnie）', () => {
+    const lines = layoutRegisterReport(sample(), { paperWidth: 80 }).map((l) => l.text);
+    const head = lines.findIndex((l) => l.includes('＊媒体別（税込）＊'));
+    expect(lines[head + 1]).toMatch(/^\s+組数\s+人数\s+客単価\s+売上$/);
+    expect(lines[head + 2]).toMatch(/^フリー\s+55組\s+112人\s+¥1,088\s+¥121,800$/);
+    expect(lines[head + 3]).toMatch(/^HOT PEPPER\s+6組\s+20人\s+¥1,000\s+¥20,000$/);
+    // 列の右端がそろう（売上は用紙の右端）
+    for (const l of lines.slice(head + 1, head + 4)) expect(dispWidth(l)).toBe(48);
+    // 人数の列の右端もそろう
+    const endOf = (l: string, token: string) => dispWidth(l.slice(0, l.indexOf(token) + token.length));
+    expect(endOf(lines[head + 2], '112人')).toBe(endOf(lines[head + 3], '20人'));
+
+    const long = layoutRegisterReport(
+      sample({
+        byChannel: [
+          { label: '全体', sales: 141800, guests: 132, groups: 61 },
+          { label: 'ホットペッパーグルメ（ネット予約・クーポン）', sales: 20000, guests: 20, groups: 6 },
+        ],
+      }),
+      { paperWidth: 80 }
+    ).map((l) => l.text);
+    const i = long.indexOf('ホットペッパーグルメ（ネット予約・クーポン）');
+    expect(i).toBeGreaterThan(0);
+    expect(long[i + 1]).toMatch(/^\s+6組\s+20人\s+¥1,000\s+¥20,000$/);
   });
 
   it('差額がある日・理由がある日は 差異理由 を出す', () => {

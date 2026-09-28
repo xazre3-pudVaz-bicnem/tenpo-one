@@ -233,7 +233,30 @@ function makeLineTools(options: RegisterReportOptions) {
     line(dotted);
     blank();
   };
-  return { L, width, line, center, kv, kcv, blank, section, starSection, sub, subSep, solid, dotted };
+  /**
+   * 表の行（左に名前、右に列を右寄せ。一番右は金額で、ほかの金額の行と右端がそろう）。
+   * 列幅は全部の行（見出しを含む）で一番長いものに合わせる。名前が入りきらない行は、名前だけ先に1行出して次の行に列を出す。
+   */
+  const table = (header: string[], rows: { label: string; cells: string[] }[]) => {
+    const w = (x: string) => dispWidth(x, widthOpts);
+    const colW = header.map((h, i) => Math.max(w(h), ...rows.map((r) => w(r.cells[i] ?? ''))));
+    const cellsText = (cells: string[], gap: number) =>
+      cells.map((c, i) => ' '.repeat(gap + colW[i] - w(c)) + c).join('');
+    // 列のあいだは2桁、入りきらなければ1桁
+    const gap = colW.reduce((a, c) => a + c + 2, 0) + 6 <= width ? 2 : 1;
+    const rightW = colW.reduce((a, c) => a + c + gap, 0);
+    const pad = (left: string, right: string) => left + ' '.repeat(Math.max(0, Math.floor(width - w(left) - w(right)))) + right;
+    line(pad('', cellsText(header, gap)));
+    for (const r of rows) {
+      const right = cellsText(r.cells, gap);
+      if (w(r.label) <= width - rightW) line(pad(r.label, right));
+      else {
+        line(r.label);
+        line(pad('', right));
+      }
+    }
+  };
+  return { L, width, line, center, kv, kcv, blank, section, starSection, sub, subSep, solid, dotted, table };
 }
 
 /** 紙の一番上（レジ精算・店名・営業日・処理番号・締め） */
@@ -256,7 +279,8 @@ function reportHead(t: ReturnType<typeof makeLineTools>, data: RegisterReportDat
  *   釣銭準備金〜金種の【精算情報】は本紙には出さず、別の紙（layoutSettlementReport）にした。
  *
  * 紙を短く（2026-09-28 Ronnie「スリップが長い」→ 相談 →「40cm くらいでいい。ゴチャゴチャにしない」）：
- *   - 1行に詰め込まない（男性・女性、ランチ／ディナーの 組・名様・単価、内消費税、媒体別の 売上・人数・組数・客単価 は1項目1行）。行間もそのまま
+ *   - 1行に詰め込まない（男性・女性、ランチ／ディナーの 組・名様・単価、内消費税 は1項目1行）。行間もそのまま
+ *   - 媒体別は表にして1媒体1行（組数・人数・客単価・売上。Ronnie「同じ行にして少しスペースを減らす」）
  *   - 媒体別の [全体]（上の 組数・客数・売上・客単価 と同じ）と、入出金が無い日の空の見出し・区切り線は出さない
  *   - 0件・¥0 の行は出さない（現金・現金在高・差異合計・レジオープン時現金・レジ会計 は 0 でも出す）
  *   - レジ実績入力（現金以外）は支払情報に、現金は現金在高にまとめる（額が違うときだけ「実績」の行）
@@ -377,14 +401,14 @@ export function layoutRegisterReport(data: RegisterReportData, options: Register
   const channels = data.byChannel.filter((c) => c.label !== '全体');
   if (channels.length > 0) {
     starSection('媒体別（税込）');
-    for (const c of channels) {
-      blank();
-      line(`[${c.label}]`);
-      kv('売上', yen(c.sales));
-      kv('人数', `${c.guests}人`);
-      kv('組数', `${c.groups}組`);
-      kv('客単価', c.guests > 0 ? yen(Math.round(c.sales / c.guests)) : yen(0));
-    }
+    // 1つの媒体を1行に（2026-09-28 Ronnie「同じ行にして少しスペースを減らせないか」）
+    t.table(
+      ['組数', '人数', '客単価', '売上'],
+      channels.map((c) => ({
+        label: c.label,
+        cells: [`${c.groups}組`, `${c.guests}人`, c.guests > 0 ? yen(Math.round(c.sales / c.guests)) : yen(0), yen(c.sales)],
+      }))
+    );
   }
 
   // ---- 入出金情報（件数・明細と現金在高） ----
