@@ -8,6 +8,8 @@ import {
   parseDenominations,
   taxByRateFor,
   threeCol,
+  isBankDepositPurpose,
+  bankDepositMemo,
   type RegisterReportData,
 } from '@/lib/register-report';
 import { dispWidth } from '@/lib/receipt-layout';
@@ -313,6 +315,44 @@ describe('layoutRegisterReport（2026-09-28 Ronnie が選んだ並び）', () =>
       .join('\n');
     expect(diff).toMatch(/クレジット\s+30件\s+¥60,700\n  実績\s+¥60,000/);
     expect(diff.match(/実績/g)?.length).toBe(1);
+  });
+
+  it('銀行へ預入（Cash to bank）は 出金 に入れず別の行（2026-09-28 Ronnie）', () => {
+    const text = layoutRegisterReport(
+      sample({
+        cashOuts: [
+          { purpose: 'その他：Komai', amount: 14656 },
+          { purpose: 'その他：Osibori', amount: 13332 },
+          { purpose: '銀行へ預入：Cash to bank', amount: 14162 },
+        ],
+        cash: { ...sample().cash, cashOut: 42150 },
+      })
+    )
+      .map((l) => l.text)
+      .join('\n');
+    expect(text).toMatch(/出金\s+2件\s+¥27,988\n  その他：Komai\s+-¥14,656\n  その他：Osibori\s+-¥13,332\n/);
+    expect(text).toMatch(/銀行へ預入\s+1件\s+¥14,162\n  Cash to bank\s+-¥14,162/);
+    expect(text).not.toContain('銀行へ預入：');
+    expect(text.indexOf('銀行へ預入')).toBeGreaterThan(text.indexOf('Osibori'));
+    expect(text.indexOf('銀行へ預入')).toBeLessThan(text.indexOf('現金在高'));
+
+    // 銀行へ預入だけ（メモ無し）→ 出金 の行は出ない、銀行へ預入 は1行
+    const only = layoutRegisterReport(
+      sample({ cashOuts: [{ purpose: '銀行へ預入', amount: 20000 }], cash: { ...sample().cash, cashOut: 20000 } })
+    )
+      .map((l) => l.text)
+      .join('\n');
+    expect(only).not.toMatch(/^出金/m);
+    expect(only).toMatch(/銀行へ預入\s+1件\s+¥20,000\n\n現金在高/);
+  });
+
+  it('銀行へ預入の見分け方', () => {
+    expect(isBankDepositPurpose('銀行へ預入')).toBe(true);
+    expect(isBankDepositPurpose('銀行へ預入：Cash to bank')).toBe(true);
+    expect(isBankDepositPurpose('買い物：店 品')).toBe(false);
+    expect(isBankDepositPurpose(null)).toBe(false);
+    expect(bankDepositMemo('銀行へ預入：Cash to bank')).toBe('Cash to bank');
+    expect(bankDepositMemo('銀行へ預入')).toBe('');
   });
 
   it('差額がある日・理由がある日は 差異理由 を出す', () => {

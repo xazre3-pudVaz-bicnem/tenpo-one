@@ -186,6 +186,19 @@ export function threeCol(left: string, mid: string, right: string, width: number
 
 const signedYen = (n: number): string => (n < 0 ? `-${yen(-n)}` : yen(n));
 
+/** 入出金の「銀行へ預入」（出金の理由。用途は「銀行へ預入」または「銀行へ預入：メモ」で保存される） */
+export const BANK_DEPOSIT_LABEL = '銀行へ預入';
+
+/** 出金のうち銀行へ預け入れたもの（レジ精算では 出金 に入れず別の行にする） */
+export function isBankDepositPurpose(purpose: string | null | undefined): boolean {
+  return (purpose ?? '').trim().startsWith(BANK_DEPOSIT_LABEL);
+}
+
+/** 「銀行へ預入：Cash to bank」→「Cash to bank」（メモが無ければ空） */
+export function bankDepositMemo(purpose: string): string {
+  return purpose.trim().slice(BANK_DEPOSIT_LABEL.length).replace(/^[：:\s]+/, '').trim();
+}
+
 /** 用紙幅・桁数から「行を作る道具」をそろえる（本紙と精算情報の紙で共通） */
 function makeLineTools(options: RegisterReportOptions) {
   const width = options.columns ?? colsFor(options.paperWidth);
@@ -247,6 +260,7 @@ function reportHead(t: ReturnType<typeof makeLineTools>, data: RegisterReportDat
  *   - 媒体別の [全体]（上の 組数・客数・売上・客単価 と同じ）と、入出金が無い日の空の見出し・区切り線は出さない
  *   - 0件・¥0 の行は出さない（現金・現金在高・差異合計・レジオープン時現金・レジ会計 は 0 でも出す）
  *   - レジ実績入力（現金以外）は支払情報に、現金は現金在高にまとめる（額が違うときだけ「実績」の行）
+ *   - 出金の「銀行へ預入」（Cash to bank）は 出金 に入れず、＊入出金情報＊ の中の別の行（Ronnie「出金の中に入れない」）
  */
 export function layoutRegisterReport(data: RegisterReportData, options: RegisterReportOptions = {}): LayoutLine[] {
   const t = makeLineTools(options);
@@ -381,10 +395,23 @@ export function layoutRegisterReport(data: RegisterReportData, options: Register
     kcv('入金', cnt(data.cashIns.length), yen(data.cash.cashIn));
     for (const x of data.cashIns) kv(`  ${x.purpose}`, yen(x.amount));
   }
-  if (data.cashOuts.length > 0 || data.cash.cashOut !== 0) {
+  // 銀行へ預入（Cash to bank）は 出金 に入れず別の行にする（2026-09-28 Ronnie「Cash to bank は 出金の中に入れない」）
+  const bankOuts = data.cashOuts.filter((x) => isBankDepositPurpose(x.purpose));
+  const spendOuts = data.cashOuts.filter((x) => !isBankDepositPurpose(x.purpose));
+  const bankTotal = bankOuts.reduce((a, x) => a + x.amount, 0);
+  const spendTotal = data.cash.cashOut - bankTotal;
+  if (spendOuts.length > 0 || spendTotal !== 0) {
     blank();
-    kcv('出金', cnt(data.cashOuts.length), yen(data.cash.cashOut));
-    for (const x of data.cashOuts) kv(`  ${x.purpose}`, `-${yen(x.amount)}`);
+    kcv('出金', cnt(spendOuts.length), yen(spendTotal));
+    for (const x of spendOuts) kv(`  ${x.purpose}`, `-${yen(x.amount)}`);
+  }
+  if (bankOuts.length > 0) {
+    blank();
+    kcv(BANK_DEPOSIT_LABEL, cnt(bankOuts.length), yen(bankTotal));
+    for (const x of bankOuts) {
+      const memo = bankDepositMemo(x.purpose);
+      if (memo || bankOuts.length > 1) kv(`  ${memo || BANK_DEPOSIT_LABEL}`, `-${yen(x.amount)}`);
+    }
   }
   // レジ実績入力の「現金」＝数えた在高なので、現金在高の行にまとめる。差異合計はそのすぐ下
   blank();
