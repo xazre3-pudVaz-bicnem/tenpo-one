@@ -191,7 +191,7 @@ describe('金種別枚数の保存形式', () => {
 });
 
 describe('layoutRegisterReport（2026-09-28 Ronnie が選んだ並び）', () => {
-  it('上から：締め → 客数・売上 → 値引 → ＊支払情報＊ → ＊媒体別＊ → ＊入出金情報＊（明細も） → ＊レジ実績入力＊ → ＊業務履歴＊', () => {
+  it('上から：締め → 客数・売上 → 値引 → ＊支払情報＊ → ＊媒体別＊ → ＊入出金情報＊（明細・現金在高・差異合計） → ＊業務履歴＊', () => {
     const lines = layoutRegisterReport(sample(), { paperWidth: 80 });
     const text = lines.map((l) => l.text).join('\n');
     const order = [
@@ -218,7 +218,6 @@ describe('layoutRegisterReport（2026-09-28 Ronnie が選んだ並び）', () =>
       '出金',
       '食材 買い出し',
       '現金在高',
-      '＊レジクローズ時 レジ実績入力情報＊',
       '差異合計',
       '＊業務履歴＊',
       'レジ会計',
@@ -288,6 +287,31 @@ describe('layoutRegisterReport（2026-09-28 Ronnie が選んだ並び）', () =>
       .map((l) => l.text)
       .join('\n');
     expect(withUnselected).toMatch(/客数（男性50・女性80・選択なし2）\s+132客/);
+  });
+
+  it('レジ実績入力は 支払情報・現金在高 にまとめる（2026-09-28 Ronnie「同じもの。まとめて」）', () => {
+    const lines = layoutRegisterReport(sample(), { paperWidth: 80 });
+    const text = lines.map((l) => l.text).join('\n');
+    expect(text).not.toContain('レジ実績入力');
+    expect(text).not.toContain('実績');
+    // 現金は1回だけ（支払情報）。在高は 現金在高 の行
+    expect(text.match(/^現金\s/gm)?.length).toBe(1);
+    expect(text.match(/^クレジット/gm)?.length).toBe(1);
+    expect(text).toMatch(/現金在高\s+¥119,900\n差異合計\s+¥0/);
+    // 現金以外で記録と違う額が入ったときだけ「実績」
+    const diff = layoutRegisterReport(
+      sample({
+        countedByMethod: [
+          { label: '現金', amount: 119900 },
+          { label: 'クレジット', amount: 60000 },
+          { label: 'QRコード決済（PayPay等）', amount: 8200 },
+        ],
+      })
+    )
+      .map((l) => l.text)
+      .join('\n');
+    expect(diff).toMatch(/クレジット\s+30件\s+¥60,700\n  実績\s+¥60,000/);
+    expect(diff.match(/実績/g)?.length).toBe(1);
   });
 
   it('差額がある日・理由がある日は 差異理由 を出す', () => {

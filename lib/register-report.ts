@@ -238,13 +238,15 @@ function reportHead(t: ReturnType<typeof makeLineTools>, data: RegisterReportDat
  *   上：レジ精算・店名・営業日・処理番号・締め
  *   組数・客数・客単価 → ランチ／ディナー → 総売上点数・売上・税率・消費税・純売上 → 控除 →
  *   サービス料・深夜料 → 値割引・端数値引 → ＊支払情報＊（お預かり・おつり・取消・訂正・未回収・領収書）
- *   → ＊媒体別＊ → ＊入出金情報＊（入金・出金の明細も） → ＊レジクローズ時 レジ実績入力情報＊ → ＊業務履歴＊ → 印刷日時・担当者
+ *   → ＊媒体別＊ → ＊入出金情報＊（入金・出金の明細・現金在高・差異合計） → ＊業務履歴＊ → 印刷日時・担当者
+ *   ＊レジクローズ時 レジ実績入力情報＊ は支払情報・現金在高と同じ額なので、そこへまとめた（2026-09-28 Ronnie「同じもの。まとめて」）
  *   釣銭準備金〜金種の【精算情報】は本紙には出さず、別の紙（layoutSettlementReport）にした。
  *
  * 紙を 30cm 以内に（2026-09-28 Ronnie「スリップが長い。30cm にしたい」→ 相談で決めたこと）：
  *   - 空行・区切り線を減らし、ランチ／ディナー・媒体別は 2行、男性／女性は客数の行、内消費税は税率の行にまとめる
  *   - 媒体別の [全体]（上の 組数・客数・売上・客単価 と同じ）と、入出金が無い日の空の見出しは出さない
  *   - 0件・¥0 の行は出さない（現金・現金在高・差異合計・レジオープン時現金・レジ会計 は 0 でも出す）
+ *   - レジ実績入力（現金以外）は支払情報に、現金は現金在高にまとめる（額が違うときだけ「実績」の行）
  *   - 行間を 3mm に詰める（印字データ側：registerReportStarPrnt / registerReportEpos）
  */
 export function layoutRegisterReport(data: RegisterReportData, options: RegisterReportOptions = {}): LayoutLine[] {
@@ -321,7 +323,18 @@ export function layoutRegisterReport(data: RegisterReportData, options: Register
   starSection('支払情報');
   const payments = data.payments.filter((p) => cashLabel(p.label) || nonZero(p));
   if (payments.length === 0) line('会計はありません');
-  for (const p of payments) kcv(p.label, cnt(p.count), yen(p.amount));
+  // レジクローズ時 レジ実績入力（現金以外）は支払情報と同じ額なので、この中にまとめる
+  // （2026-09-28 Ronnie「丸をつけた2つは同じ。まとめて」）。違う額が入ったときだけ「実績」の行を足す
+  const countedOf = new Map((data.countedByMethod ?? []).map((c) => [c.label, c.amount]));
+  for (const p of payments) {
+    kcv(p.label, cnt(p.count), yen(p.amount));
+    const counted = countedOf.get(p.label);
+    if (!cashLabel(p.label) && counted !== undefined && counted !== p.amount) kv('  実績', yen(counted));
+  }
+  for (const c of data.countedByMethod ?? []) {
+    // 支払情報に無い方法で実績だけあるもの
+    if (!cashLabel(c.label) && c.amount !== 0 && !payments.some((p) => p.label === c.label)) kv(`${c.label}  実績`, yen(c.amount));
+  }
   if (data.cash.tendered !== 0 || data.cash.change !== 0) {
     kv('お預かり現金', yen(data.cash.tendered));
     kv('おつり', yen(data.cash.change));
@@ -356,15 +369,8 @@ export function layoutRegisterReport(data: RegisterReportData, options: Register
     kcv('出金', cnt(data.cashOuts.length), yen(data.cash.cashOut));
     for (const x of data.cashOuts) kv(`  ${x.purpose}`, `-${yen(x.amount)}`);
   }
+  // レジ実績入力の「現金」＝数えた在高なので、現金在高の行にまとめる。差異合計はそのすぐ下
   kv('現金在高', data.cash.counted == null ? yen(data.cash.expected) : yen(data.cash.counted));
-
-  // ---- レジクローズ時 レジ実績入力情報（現金・差異合計は 0 でも出す） ----
-  starSection('レジクローズ時 レジ実績入力情報');
-  const counted = data.countedByMethod ?? [
-    { label: '現金', amount: data.cash.counted ?? data.cash.expected },
-    ...data.payments.filter((p) => p.label !== '現金').map((p) => ({ label: p.label, amount: p.amount })),
-  ];
-  for (const c of counted) if (cashLabel(c.label) || c.amount !== 0) kv(c.label, yen(c.amount));
   kv('差異合計', data.cash.difference == null ? '未入力' : signedYen(data.cash.difference));
   const reason = data.differenceReason?.trim();
   if (reason || (data.cash.difference != null && data.cash.difference !== 0)) kv('差異理由', reason || '未選択');
