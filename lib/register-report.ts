@@ -265,16 +265,16 @@ export function layoutRegisterReport(data: RegisterReportData, options: Register
   kv('  女性', `${female}客`);
   kv('  選択なし', `${unselected}客`);
   kv('客単価', yen(s.avgSpend));
-  // ---- ランチ／ディナー（区切りの時刻は店の設定） ----
+  // ---- ランチ／ディナー（区切りの時刻は店の設定。紙には時刻を出さない：2026-09-28 Ronnie「（〜15:00）（15:01〜）は要らない」） ----
   if (data.daypart) {
     const d = data.daypart;
     blank();
-    kv(`ランチ売上（〜${d.lunchUntil}）`, yen(d.lunch.sales));
+    kv('ランチ売上', yen(d.lunch.sales));
     kv('  組', `${d.lunch.groups}組`);
     kv('  名様', `${d.lunch.guests}名様`);
     kv('  単価', yen(d.lunch.avg));
     blank();
-    kv(`ディナー売上（${d.dinnerFrom}〜）`, yen(d.dinner.sales));
+    kv('ディナー売上', yen(d.dinner.sales));
     kv('  組', `${d.dinner.groups}組`);
     kv('  名様', `${d.dinner.guests}名様`);
     kv('  単価', yen(d.dinner.avg));
