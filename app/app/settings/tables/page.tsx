@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { QrCode } from 'lucide-react';
 import { requirePermission } from '@/lib/auth';
+import { ADMIN_ONLY_SETTINGS_NOTE } from '@/lib/admin-only-settings';
 import { createClient } from '@/lib/supabase/server';
 import { PageHeader } from '@/components/ui/page-header';
 import { EmptyState } from '@/components/ui/state';
@@ -16,6 +17,16 @@ export const metadata: Metadata = { title: 'フロア・テーブル | 設定' }
 
 export default async function TablesSettingsPage() {
   const ctx = await requirePermission('store.settings');
+  // テーブル・フロアの設定は管理画面だけ（2026-09-29 Ronnie「管理画面だけ」）。フロア画面での案内・グループはそのまま使える
+  if (ctx.isRegisterDevice) {
+    return (
+      <div>
+        <SettingsBackLink />
+        <PageHeader title="フロア・テーブル" en="Tables" />
+        <EmptyState title="管理画面で変更してください" description={ADMIN_ONLY_SETTINGS_NOTE} />
+      </div>
+    );
+  }
   const targetStore = ctx.currentStore ?? ctx.stores[0];
 
   if (!targetStore) {

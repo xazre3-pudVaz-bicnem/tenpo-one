@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { SLUG_CHANGE_BY_CYPRESS_ONLY, normalizeStoreSlug } from '@/lib/store-slug';
 import { requirePermission } from '@/lib/auth';
+import { ADMIN_ONLY_SETTINGS_NOTE } from '@/lib/admin-only-settings';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { extractPageMeta, isFetchablePageUrl, type PageMeta } from '@/lib/page-photo';
@@ -78,6 +79,8 @@ export async function updateBookingSettings(input: {
   reminderHoursBefore: number;
 }): Promise<ActionResult> {
   const ctx = await requirePermission('store.settings');
+  // 予約受付ルール・公開予約ページの表示内容・リマインダーは管理画面だけ（2026-09-29 Ronnie）
+  if (ctx.isRegisterDevice) return { error: ADMIN_ONLY_SETTINGS_NOTE };
   if (!ctx.stores.some((s) => s.id === input.storeId)) {
     return { error: '対象店舗にアクセス権がありません' };
   }
@@ -210,6 +213,8 @@ export interface ImportPhotoResult {
  */
 export async function importStorePhotoFromPage(input: { storeId: string; pageUrl: string }): Promise<ImportPhotoResult> {
   const ctx = await requirePermission('store.settings');
+  // 予約受付ルール・公開予約ページの表示内容・リマインダーは管理画面だけ（2026-09-29 Ronnie）
+  if (ctx.isRegisterDevice) return { error: ADMIN_ONLY_SETTINGS_NOTE };
   if (!ctx.stores.some((s) => s.id === input.storeId)) return { error: '対象店舗にアクセス権がありません' };
   const pageUrl = input.pageUrl.trim();
   if (!isFetchablePageUrl(pageUrl)) return { error: 'https:// から始まるページの URL を入れてください' };

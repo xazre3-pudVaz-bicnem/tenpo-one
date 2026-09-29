@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/components/ui/toast';
 import { updateStoreInfo } from '@/app/app/settings/store/actions';
+import { Lock } from 'lucide-react';
 
 export interface StoreFormData {
   storeId: string;
@@ -32,7 +33,14 @@ const ROUNDING_OPTIONS = [
   { value: 'round', label: '四捨五入' },
 ];
 
-export function StoreForm({ initial }: { initial: StoreFormData }) {
+export function StoreForm({
+  initial,
+  receiptLocked = false,
+}: {
+  initial: StoreFormData;
+  /** レシート・インボイス設定（ヘッダー・フッター・登録番号・サービス料率・端数処理）を変えられない（レジ端末＝iPad）。2026-09-29 Ronnie「管理画面だけ」 */
+  receiptLocked?: boolean;
+}) {
   const [form, setForm] = useState(initial);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -129,20 +137,30 @@ export function StoreForm({ initial }: { initial: StoreFormData }) {
           <CardTitle>レシート・インボイス設定</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
+          {receiptLocked && (
+            <p className="flex items-center gap-2 rounded-lg border border-dashed border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-500">
+              <Lock className="h-3.5 w-3.5 shrink-0 text-gray-400" aria-hidden />
+              <span>
+                レシート・インボイス設定は管理画面（パソコン）で変更します
+                <span className="block text-[11px] text-gray-400">Receipt and invoice settings are changed from the admin screen</span>
+              </span>
+            </p>
+          )}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <Label htmlFor="receipt-header">レシートヘッダー</Label>
-              <Textarea id="receipt-header" value={form.receiptHeader} onChange={(e) => set('receiptHeader', e.target.value)} />
+              <Textarea id="receipt-header" disabled={receiptLocked} value={form.receiptHeader} onChange={(e) => set('receiptHeader', e.target.value)} />
             </div>
             <div>
               <Label htmlFor="receipt-footer">レシートフッター</Label>
-              <Textarea id="receipt-footer" value={form.receiptFooter} onChange={(e) => set('receiptFooter', e.target.value)} />
+              <Textarea id="receipt-footer" disabled={receiptLocked} value={form.receiptFooter} onChange={(e) => set('receiptFooter', e.target.value)} />
             </div>
           </div>
           <div>
             <Label htmlFor="invoice-number">インボイス登録番号</Label>
             <Input
               id="invoice-number"
+              disabled={receiptLocked}
               value={form.invoiceRegistrationNumber}
               onChange={(e) => set('invoiceRegistrationNumber', e.target.value)}
               placeholder="T1234567890123"
@@ -153,6 +171,7 @@ export function StoreForm({ initial }: { initial: StoreFormData }) {
               <Label htmlFor="service-charge">サービス料率（%）</Label>
               <Input
                 id="service-charge"
+                disabled={receiptLocked}
                 type="number"
                 min={0}
                 max={100}
@@ -163,7 +182,7 @@ export function StoreForm({ initial }: { initial: StoreFormData }) {
             </div>
             <div>
               <Label htmlFor="rounding">端数処理</Label>
-              <Select id="rounding" value={form.rounding} onChange={(e) => set('rounding', e.target.value)}>
+              <Select id="rounding" disabled={receiptLocked} value={form.rounding} onChange={(e) => set('rounding', e.target.value)}>
                 {ROUNDING_OPTIONS.map((r) => (
                   <option key={r.value} value={r.value}>
                     {r.label}

@@ -68,17 +68,25 @@ export async function updateStoreInfo(input: {
   // （2026-09-27 Ronnie「店舗名を変えたのにレジの名前が前の店名のまま」）。失敗しても店舗情報の保存は止めない
   await renameRegisterAccount(input.storeId, name).catch(() => undefined);
 
+  // レシート・インボイス設定（ヘッダー・フッター・登録番号・サービス料率・端数処理）は管理画面だけ。
+  // レジ端末（iPad）から保存したときは今の値のまま（2026-09-29 Ronnie「管理画面から。レジからは要らない」）
+  const receiptLocked = ctx.isRegisterDevice === true;
+  const receiptFields = receiptLocked
+    ? {}
+    : {
+        receipt_header: input.receiptHeader.trim() || null,
+        receipt_footer: input.receiptFooter.trim() || null,
+        invoice_registration_number: input.invoiceRegistrationNumber.trim() || null,
+        service_charge_rate: input.serviceChargeRate,
+        rounding: input.rounding as Rounding,
+      };
   const { error: settingsErr } = await supabase
     .from('store_settings')
     .upsert(
       {
         organization_id: ctx.organizationId,
         store_id: input.storeId,
-        receipt_header: input.receiptHeader.trim() || null,
-        receipt_footer: input.receiptFooter.trim() || null,
-        invoice_registration_number: input.invoiceRegistrationNumber.trim() || null,
-        service_charge_rate: input.serviceChargeRate,
-        rounding: input.rounding as Rounding,
+        ...receiptFields,
         allow_negative_stock: input.allowNegativeStock,
         updated_by: ctx.userId,
       },
@@ -97,8 +105,7 @@ export async function updateStoreInfo(input: {
       name,
       seat_count: input.seatCount,
       booking_enabled: input.bookingEnabled,
-      service_charge_rate: input.serviceChargeRate,
-      rounding: input.rounding,
+      ...(receiptLocked ? {} : { service_charge_rate: input.serviceChargeRate, rounding: input.rounding }),
       allow_negative_stock: input.allowNegativeStock,
     },
     p_note: null,

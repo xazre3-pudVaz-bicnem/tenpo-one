@@ -1,6 +1,7 @@
 import { can, type Role } from '@/lib/permissions';
 import { featureForRoute } from '@/lib/features';
 import { canWriteAccounting } from '@/components/accounting/roles';
+import { isAdminOnlySetting } from '@/lib/admin-only-settings';
 import type { SettingsIconKey, SettingsNavItem } from '@/components/settings/settings-nav';
 
 type Row = SettingsNavItem & { visible: boolean };
@@ -111,7 +112,10 @@ export function settingsHubs(ctx: {
 
   const hubs: SettingsNavItem[] = groups
     .map((g) => {
-      const kids = g.rows.filter((r) => r.visible).map(({ visible: _visible, ...item }) => item);
+      // 管理画面だけの設定はレジ端末（iPad）に出さない（lib/admin-only-settings.ts）
+      const kids = g.rows
+        .filter((r) => r.visible && !(ctx.isRegisterDevice === true && isAdminOnlySetting(r.href)))
+        .map(({ visible: _visible, ...item }) => item);
       if (kids.length === 0) return null;
       const hub: SettingsNavItem = {
         href: kids[0].href,

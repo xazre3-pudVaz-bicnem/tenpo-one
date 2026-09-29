@@ -4,7 +4,11 @@ import { createClient } from '@/lib/supabase/server';
 import { PageHeader } from '@/components/ui/page-header';
 import { EmptyState } from '@/components/ui/state';
 import { SettingsBackLink } from '@/components/settings/back-link';
-import { CopyLink } from '@/components/settings/copy-link';
+import { BookingUrlPanel } from '@/components/settings/booking-url-panel';
+import { StoreSlugEditor } from '@/components/settings/store-slug-editor';
+import { SLUG_CHANGE_BY_CYPRESS_ONLY } from '@/lib/store-slug';
+import { resolveSiteOrigin } from '@/lib/site-origin';
+import { tableQrDataUrl } from '@/lib/table-qr';
 import { StoreForm, type StoreFormData } from '@/components/settings/store-form';
 
 export const metadata: Metadata = { title: '店舗情報 | 設定' };
@@ -46,8 +50,11 @@ export default async function StoreSettingsPage() {
     );
   }
 
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? '';
+  // 公開予約ページ（URL・スラッグ・予約QR）。予約受付ルールから移した（2026-09-30 Ronnie「店舗情報に置いて」）
+  const siteUrl = await resolveSiteOrigin();
   const bookingUrl = `${siteUrl}/book/${store.slug}`;
+  const qrDataUrl = store.slug ? await tableQrDataUrl(bookingUrl, 600).catch(() => null) : null;
+  const cardAddress = store.address ? `${store.postal_code ? `〒${store.postal_code} ` : ''}${store.address}` : null;
 
   const initial: StoreFormData = {
     storeId: store.id,
@@ -74,10 +81,31 @@ export default async function StoreSettingsPage() {
       <PageHeader title="店舗情報" en="Store" description={store.name} />
 
       <div className="mb-5">
-        <CopyLink url={bookingUrl} label="公開予約ページURL" />
+        <BookingUrlPanel
+          url={bookingUrl}
+          qrDataUrl={qrDataUrl}
+          storeName={store.name}
+          address={cardAddress}
+          phone={store.phone}
+          slugEditor={
+            store.slug ? (
+              ctx.isCypressAdmin ? (
+                <StoreSlugEditor storeId={store.id} slug={store.slug} baseUrl={`${siteUrl}/book/`} />
+              ) : (
+                // 店舗・本部からは変えられない（2026-09-27 Ronnie「URL は CYPRESS からだけ」）
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+                  <span className="text-gray-500">スラッグ：</span>
+                  <span className="font-mono font-medium text-navy">{store.slug}</span>
+                  <span className="text-xs text-ink-3">{SLUG_CHANGE_BY_CYPRESS_ONLY}</span>
+                </div>
+              )
+            ) : undefined
+          }
+        />
       </div>
 
-      <StoreForm initial={initial} />
+      {/* レシート・インボイス設定はレジ（iPad）からは変えられない（2026-09-29 Ronnie「管理画面から」） */}
+      <StoreForm initial={initial} receiptLocked={ctx.isRegisterDevice === true} />
     </div>
   );
 }

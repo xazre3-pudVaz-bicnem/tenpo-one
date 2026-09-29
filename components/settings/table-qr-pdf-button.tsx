@@ -8,13 +8,19 @@ import { useToast } from "@/components/ui/toast";
  * 画面に並んだ A6 の QR カード（data-qr-card）を、1枚1ページの A6 の PDF にしてダウンロードする。
  * ダウンロードした PDF は「倍率 100%・用紙 A6」で印刷するだけ（2026-09-29 Ronnie「ダウンロードして印刷するだけ」）。
  * 1枚ずつ画像（約300dpi）にしてページに貼るので、印刷しても見た目が崩れない。
+ * format="png" は最初の1枚を PNG 画像で保存する（お店の予約QR。SNS・HP に載せる用。2026-09-30）。
  */
 export function TableQrPdfButton({
   fileName,
   className,
+  format = "pdf",
+  label,
 }: {
   fileName: string;
   className?: string;
+  format?: "pdf" | "png";
+  /** ボタンの文字（既定は「PDFでダウンロード（A6）」） */
+  label?: string;
 }) {
   const [busy, setBusy] = useState<{ done: number; total: number } | null>(
     null,
@@ -39,6 +45,18 @@ export function TableQrPdfButton({
       const fontEmbedCSS = await getFontEmbedCSS(cards[0]).catch(
         () => undefined,
       );
+      if (format === "png") {
+        const png = await toPng(cards[0], {
+          pixelRatio: 3,
+          backgroundColor: "#ffffff",
+          fontEmbedCSS,
+        });
+        const a = document.createElement("a");
+        a.href = png;
+        a.download = fileName;
+        a.click();
+        return;
+      }
       const pdf = new jsPDF({
         unit: "mm",
         format: "a6",
@@ -59,7 +77,9 @@ export function TableQrPdfButton({
     } catch (e) {
       console.error("[table-qr-pdf]", e);
       toast(
-        "PDFを作れませんでした。「印刷する」から A6 で印刷してください",
+        format === "png"
+          ? "画像を作れませんでした。もう一度お試しください"
+          : "PDFを作れませんでした。「印刷する」から A6 で印刷してください",
         "error",
       );
     } finally {
@@ -76,8 +96,10 @@ export function TableQrPdfButton({
     >
       <Download className="h-4 w-4" aria-hidden />
       {busy
-        ? `PDFを作成中… ${busy.done}/${busy.total}`
-        : "PDFでダウンロード（A6）"}
+        ? format === "png"
+          ? "画像を作成中…"
+          : `PDFを作成中… ${busy.done}/${busy.total}`
+        : (label ?? "PDFでダウンロード（A6）")}
     </button>
   );
 }

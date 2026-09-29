@@ -3,6 +3,7 @@
 import { randomUUID } from 'crypto';
 import { revalidatePath } from 'next/cache';
 import { requirePermission } from '@/lib/auth';
+import { ADMIN_ONLY_SETTINGS_NOTE } from '@/lib/admin-only-settings';
 import { createClient } from '@/lib/supabase/server';
 import { resolveSiteOrigin } from '@/lib/site-origin';
 import { tableOrderUrl, tableQrDataUrl } from '@/lib/table-qr';
@@ -22,6 +23,7 @@ function assertStoreAccess(storeIds: string[], storeId: string): string | null {
  */
 export async function saveDefaultFloor(storeId: string, floorId: string | null): Promise<ActionResult> {
   const ctx = await requirePermission('store.settings');
+  if (ctx.isRegisterDevice) return { error: ADMIN_ONLY_SETTINGS_NOTE };
   const err = assertStoreAccess(
     ctx.stores.map((s) => s.id),
     storeId
@@ -81,6 +83,7 @@ export async function saveDefaultFloor(storeId: string, floorId: string | null):
 /** フロア追加 */
 export async function addFloor(storeId: string, name: string): Promise<ActionResult> {
   const ctx = await requirePermission('store.settings');
+  if (ctx.isRegisterDevice) return { error: ADMIN_ONLY_SETTINGS_NOTE };
   const err = assertStoreAccess(
     ctx.stores.map((s) => s.id),
     storeId
@@ -116,6 +119,7 @@ export async function addFloor(storeId: string, name: string): Promise<ActionRes
 /** フロア名変更 */
 export async function renameFloor(floorId: string, storeId: string, name: string): Promise<ActionResult> {
   const ctx = await requirePermission('store.settings');
+  if (ctx.isRegisterDevice) return { error: ADMIN_ONLY_SETTINGS_NOTE };
   const err = assertStoreAccess(
     ctx.stores.map((s) => s.id),
     storeId
@@ -149,6 +153,7 @@ export async function renameFloor(floorId: string, storeId: string, name: string
 /** フロア削除（論理削除） */
 export async function deleteFloor(floorId: string, storeId: string): Promise<ActionResult> {
   const ctx = await requirePermission('store.settings');
+  if (ctx.isRegisterDevice) return { error: ADMIN_ONLY_SETTINGS_NOTE };
   const err = assertStoreAccess(
     ctx.stores.map((s) => s.id),
     storeId
@@ -194,6 +199,7 @@ export interface TableInput {
 /** テーブル追加・更新 */
 export async function saveTable(input: TableInput): Promise<ActionResult> {
   const ctx = await requirePermission('store.settings');
+  if (ctx.isRegisterDevice) return { error: ADMIN_ONLY_SETTINGS_NOTE };
   const err = assertStoreAccess(
     ctx.stores.map((s) => s.id),
     input.storeId
@@ -245,6 +251,7 @@ export async function saveTable(input: TableInput): Promise<ActionResult> {
 /** テーブルの利用停止・再開（current_status） */
 export async function toggleTableAvailability(tableId: string, storeId: string, available: boolean): Promise<ActionResult> {
   const ctx = await requirePermission('store.settings');
+  if (ctx.isRegisterDevice) return { error: ADMIN_ONLY_SETTINGS_NOTE };
   const err = assertStoreAccess(
     ctx.stores.map((s) => s.id),
     storeId
@@ -276,6 +283,7 @@ export async function toggleTableAvailability(tableId: string, storeId: string, 
 /** テーブル削除（論理削除・予約履歴保全） */
 export async function deleteTable(tableId: string, storeId: string): Promise<ActionResult> {
   const ctx = await requirePermission('store.settings');
+  if (ctx.isRegisterDevice) return { error: ADMIN_ONLY_SETTINGS_NOTE };
   const err = assertStoreAccess(
     ctx.stores.map((s) => s.id),
     storeId
@@ -319,6 +327,7 @@ export async function saveTablePlacement(
   posY: number | null
 ): Promise<ActionResult> {
   const ctx = await requirePermission('store.settings');
+  if (ctx.isRegisterDevice) return { error: ADMIN_ONLY_SETTINGS_NOTE };
   const err = assertStoreAccess(
     ctx.stores.map((s) => s.id),
     storeId
@@ -359,6 +368,7 @@ export async function saveTablePlacement(
 /** テーブルの形状（square/round/counter）を保存する */
 export async function saveTableShape(tableId: string, storeId: string, shape: TableShape): Promise<ActionResult> {
   const ctx = await requirePermission('store.settings');
+  if (ctx.isRegisterDevice) return { error: ADMIN_ONLY_SETTINGS_NOTE };
   const err = assertStoreAccess(
     ctx.stores.map((s) => s.id),
     storeId
@@ -443,6 +453,7 @@ export async function getTableQr(tableId: string): Promise<TableQrResult> {
 /** テーブルのQRトークンを無効化する（QR注文の即時停止・再開は再発行で行う） */
 export async function invalidateTableQrToken(tableId: string): Promise<TableQrResult> {
   const ctx = await requirePermission('store.settings');
+  if (ctx.isRegisterDevice) return { error: ADMIN_ONLY_SETTINGS_NOTE };
   const result = await loadTableForQr(ctx, tableId);
   if ('error' in result) return { error: result.error };
   if (!result.table.qr_token) return { invalidated: true };
@@ -473,6 +484,7 @@ export async function invalidateTableQrToken(tableId: string): Promise<TableQrRe
 /** テーブルのQRトークンを再発行する（旧QRコードは即時に無効化される） */
 export async function regenerateTableQrToken(tableId: string): Promise<TableQrResult> {
   const ctx = await requirePermission('store.settings');
+  if (ctx.isRegisterDevice) return { error: ADMIN_ONLY_SETTINGS_NOTE };
   const result = await loadTableForQr(ctx, tableId);
   if ('error' in result) return { error: result.error };
 

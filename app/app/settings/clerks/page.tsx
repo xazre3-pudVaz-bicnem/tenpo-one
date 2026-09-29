@@ -35,7 +35,7 @@ export default async function ClerksSettingsPage() {
     <div>
       <SettingsBackLink />
       <PageHeader title="POS担当者" en="Clerks" description={targetStore.name} />
-      <ClerksPanel storeId={targetStore.id} initial={rows} />
+      <ClerksPanel storeId={targetStore.id} initial={rows} lockOwner={ctx.isRegisterDevice === true} />
     </div>
   );
 }

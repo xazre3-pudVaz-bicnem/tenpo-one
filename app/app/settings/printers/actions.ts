@@ -11,7 +11,7 @@ import {
 } from '@/lib/kitchen-ticket';
 import { normalizeVisitSourceIds } from '@/lib/handy-visit';
 // ハードウェア（レジ端末・プリンター・ドロア）の変更は管理画面だけ。レジ端末（iPad）からは断る（2026-09-29 Ronnie）
-import { ADMIN_ONLY_MESSAGE } from '@/lib/admin-only-settings';
+import { ADMIN_ONLY_MESSAGE, ADMIN_ONLY_SETTINGS_NOTE } from '@/lib/admin-only-settings';
 
 export interface ActionResult {
   error?: string;
@@ -372,6 +372,7 @@ export interface KitchenTicketSettingsInput {
  */
 export async function saveKitchenTicketSettings(storeId: string, next: KitchenTicketSettingsInput): Promise<ActionResult> {
   const ctx = await requirePermission('store.settings');
+  if (ctx.isRegisterDevice) return { error: ADMIN_ONLY_SETTINGS_NOTE };
   const err = assertStoreAccess(ctx.stores.map((s) => s.id), storeId);
   if (err) return { error: err };
   if (next.split !== 'item' && next.split !== 'order') return { error: '伝票の分け方が正しくありません' };
@@ -575,6 +576,7 @@ export async function enqueueCloudPrntTest(
  */
 export async function saveVisitSources(storeId: string, ids: string[]): Promise<ActionResult> {
   const ctx = await requirePermission('store.settings');
+  if (ctx.isRegisterDevice) return { error: ADMIN_ONLY_SETTINGS_NOTE };
   const err = assertStoreAccess(ctx.stores.map((s) => s.id), storeId);
   if (err) return { error: err };
 
