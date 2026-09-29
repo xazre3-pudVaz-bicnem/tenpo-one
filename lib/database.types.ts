@@ -4417,6 +4417,7 @@ export type Database = {
           modifiers: Json
           name: string
           order_id: string
+          ordered_table_id: string | null
           organization_id: string
           quantity: number
           served_at: string | null
@@ -4446,6 +4447,7 @@ export type Database = {
           modifiers?: Json
           name: string
           order_id: string
+          ordered_table_id?: string | null
           organization_id: string
           quantity?: number
           served_at?: string | null
@@ -4475,6 +4477,7 @@ export type Database = {
           modifiers?: Json
           name?: string
           order_id?: string
+          ordered_table_id?: string | null
           organization_id?: string
           quantity?: number
           served_at?: string | null
@@ -8504,6 +8507,10 @@ export type Database = {
       }
       create_qr_order: {
         Args: { p_items: Json; p_slug: string; p_token: string }
+        Returns: Json
+      }
+      create_qr_order_at_seat: {
+        Args: { p_items: Json; p_seat_token: string; p_slug: string; p_token: string }
         Returns: Json
       }
       create_qr_service_call: {

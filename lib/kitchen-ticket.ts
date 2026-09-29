@@ -212,7 +212,9 @@ export function groupKitchenTickets(rows: ClaimedKitchenItem[]): KitchenTicket[]
   const byOrder = new Map<string, { ticket: KitchenTicket; byKey: Map<string, KitchenTicketLine> }>();
   for (const r of rows) {
     if (!r.delta) continue;
-    let entry = byOrder.get(r.order_id);
+    // テーブルグループは1伝票でも、注文した卓ごとに分けて出す（卓名＝注文した卓。2026-09-29 FULL MOoN 御茶ノ水）
+    const ticketKey = `${r.order_id}|${r.table_name ?? ''}`;
+    let entry = byOrder.get(ticketKey);
     if (!entry) {
       entry = {
         ticket: {
@@ -225,7 +227,7 @@ export function groupKitchenTickets(rows: ClaimedKitchenItem[]): KitchenTicket[]
         },
         byKey: new Map(),
       };
-      byOrder.set(r.order_id, entry);
+      byOrder.set(ticketKey, entry);
     }
     const line: KitchenTicketLine = {
       name: r.item_name,

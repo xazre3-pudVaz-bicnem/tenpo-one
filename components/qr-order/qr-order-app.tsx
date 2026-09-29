@@ -126,9 +126,15 @@ export function QrOrderApp({
   pages,
   reservedCourse,
   planOver = false,
+  seatToken = null,
 }: {
   storeSlug: string;
   tableToken: string;
+  /**
+   * テーブルグループで、伝票の卓とは別の卓の QR を開いたときの その卓のトークン（振り向けていなければ null）。
+   * 注文した品に「注文した卓」を残し、厨房伝票にその卓の番号を出す（2026-09-29 FULL MOoN 御茶ノ水）
+   */
+  seatToken?: string | null;
   menu: QrMenuData;
   /** メニューブックのページ（タブのまとめ方。飲み放題・コースの卓は飲み放題のページが先頭） */
   pages?: QrMenuPage[] | null;
@@ -197,16 +203,20 @@ export function QrOrderApp({
     setSubmitError(null);
     try {
       const supabase = createClient();
-      const { error } = await supabase.rpc('create_qr_order', {
-        p_slug: storeSlug,
-        p_token: tableToken,
-        p_items: cart.map((l) => ({
-          menu_item_id: l.menuItemId,
-          quantity: l.quantity,
-          memo: l.memo || null,
-          modifier_ids: l.modifiers.map((m) => m.id),
-        })),
-      });
+      const items = cart.map((l) => ({
+        menu_item_id: l.menuItemId,
+        quantity: l.quantity,
+        memo: l.memo || null,
+        modifier_ids: l.modifiers.map((m) => m.id),
+      }));
+      const { error } = seatToken
+        ? await supabase.rpc('create_qr_order_at_seat', {
+            p_slug: storeSlug,
+            p_token: tableToken,
+            p_items: items,
+            p_seat_token: seatToken,
+          })
+        : await supabase.rpc('create_qr_order', { p_slug: storeSlug, p_token: tableToken, p_items: items });
       if (error) {
         setSubmitError(qrOrderErrorMessage(error.message));
         setSubmitting(false);
