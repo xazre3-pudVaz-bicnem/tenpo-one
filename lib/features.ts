@@ -40,6 +40,7 @@ export const ROUTE_FEATURES: [string, FeatureKey][] = [
   ['/app/reservations', 'reservations'],
   ['/app/floor', 'pos'],
   ['/app/pos', 'pos'],
+  ['/app/quick-pay', 'pos'],
   ['/app/handy', 'pos'],
   ['/app/orders', 'pos'],
   ['/app/kitchen', 'kds'],

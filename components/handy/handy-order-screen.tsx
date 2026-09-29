@@ -50,6 +50,8 @@ export function HandyOrderScreen({
   initialTabId,
   optionGroupsByItem,
   submitAction,
+  onClose,
+  onSubmitted,
 }: {
   tableId: string;
   tableName: string;
@@ -63,6 +65,10 @@ export function HandyOrderScreen({
   initialTabId?: string | null;
   optionGroupsByItem: Record<string, PosOptionGroup[]>;
   submitAction: (orderId: string, lines: HandyOrderLineInput[]) => Promise<HandySubmitResult>;
+  /** 画面の中のポップアップとして使うとき（即会計の「メニュー選択」）: 戻るで閉じる。無ければ卓の画面へ戻る */
+  onClose?: () => void;
+  /** 送信できたとき（ポップアップ用）。無ければ卓の画面へ移る */
+  onSubmitted?: (sentQuantity: number) => void;
 }) {
   const router = useRouter();
   const { toast } = useToast();
@@ -160,6 +166,10 @@ export function HandyOrderScreen({
           return;
         }
         setCart([]);
+        if (onSubmitted) {
+          onSubmitted(result.sentQuantity);
+          return;
+        }
         // 送信できた点数を卓の伝票画面に伝え、「厨房に送信しました」を出す
         router.push(`/handy/${tableId}?sent=${result.sentQuantity}`);
         router.refresh();
@@ -266,13 +276,14 @@ export function HandyOrderScreen({
     <>
       <header className="flex-none bg-[#15121a]">
         <div className="flex h-12 items-stretch border-b-2 border-[#7b3fe4]">
-          <Link
-            href={`/handy/${tableId}`}
+          <BackToTable
+            tableId={tableId}
+            onClose={onClose}
             aria-label="卓の画面へ戻る"
             className="grid w-11 flex-none place-items-center text-white"
           >
             <ChevronLeft className="h-6 w-6" strokeWidth={2.2} aria-hidden />
-          </Link>
+          </BackToTable>
           <div className="flex min-w-0 flex-1 items-stretch overflow-x-auto">
             {tabs.map((t, i) => (
               <button
@@ -313,14 +324,15 @@ export function HandyOrderScreen({
               戻る
             </button>
           ) : (
-            <Link
-              href={`/handy/${tableId}`}
+            <BackToTable
+              tableId={tableId}
+              onClose={onClose}
               aria-label="卓の画面へ戻る"
               className="flex min-h-[34px] shrink-0 items-center gap-0.5 rounded-[8px] border border-[#d9ccef] bg-white pr-2.5 pl-1 text-[12px] font-bold text-[#7b3fe4] shadow-[0_1px_2px_#00000008] active:bg-[#e9e0fa]"
             >
               <ChevronLeft className="h-4 w-4" strokeWidth={2.4} aria-hidden />
               戻る
-            </Link>
+            </BackToTable>
           )}
           {page ? (
             <>
@@ -338,12 +350,13 @@ export function HandyOrderScreen({
             <span className="truncate">{tab?.label ?? '—'}</span>
           )}
         </span>
-        <Link
-          href={`/handy/${tableId}`}
+        <BackToTable
+          tableId={tableId}
+          onClose={onClose}
           className="min-h-[30px] shrink-0 py-1.5 text-[10px] whitespace-nowrap text-[#7b3fe4]"
         >
           {seatLabel} · 伝票#{orderNo}
-        </Link>
+        </BackToTable>
       </div>
 
       <HandyMain>
@@ -495,5 +508,33 @@ function PageTileLabel({ page }: { page: HandyPageView }) {
       ))}
       {rest > 0 && <span className="text-[10px] font-normal text-[#7a7090]">ほか{rest}</span>}
     </span>
+  );
+}
+
+/** 卓の画面へ戻るリンク。ポップアップ（onClose あり）のときは閉じるボタンになる */
+function BackToTable({
+  tableId,
+  onClose,
+  className,
+  children,
+  'aria-label': ariaLabel,
+}: {
+  tableId: string;
+  onClose?: () => void;
+  className: string;
+  children: React.ReactNode;
+  'aria-label'?: string;
+}) {
+  if (onClose) {
+    return (
+      <button type="button" onClick={onClose} aria-label={ariaLabel ? '閉じる' : undefined} className={className}>
+        {children}
+      </button>
+    );
+  }
+  return (
+    <Link href={`/handy/${tableId}`} aria-label={ariaLabel} className={className}>
+      {children}
+    </Link>
   );
 }

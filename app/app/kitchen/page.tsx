@@ -83,7 +83,8 @@ export default async function KitchenPage() {
     sound: savedKdsSettings?.sound ?? DEFAULT_KDS_SETTINGS.sound,
   };
 
-  const typedRows = (rows ?? []) as unknown as OrderItemRow[];
+  // 即会計で電卓から入れた金額（メニューに無い明細）は厨房に出さない（2026-09-30）
+  const typedRows = ((rows ?? []) as unknown as OrderItemRow[]).filter((r) => r.menu_item_id != null);
 
   // menu_item_id → menu_categories.station を解決する（未紐付けは「キッチン」扱い）
   const menuItemIds = [...new Set(typedRows.map((r) => r.menu_item_id).filter((v): v is string => !!v))];
