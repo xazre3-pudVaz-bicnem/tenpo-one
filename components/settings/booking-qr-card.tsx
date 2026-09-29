@@ -4,12 +4,14 @@
  *
  * 紙の大きさそのもの（105mm × 148mm）で描く。PDF（A6）・PNG のダウンロード（TableQrPdfButton が
  * data-qr-card の要素を画像にする）でこの見た目がそのまま出る。暗い枠は用紙の端から 5mm 内側。
+ * 当店のクーポン（lib/booking-coupons.ts）があれば「ご予約」の下に出す（2026-09-30 Ronnie「上のほうに」）。
  */
 export function BookingQrCard({
   storeName,
   address,
   phone,
   dataUrl,
+  coupons = [],
 }: {
   storeName: string;
   /** 〒 付きの住所（無ければ出さない） */
@@ -18,10 +20,13 @@ export function BookingQrCard({
   phone: string | null;
   /** 予約ページの QR（data URL。周りの白4マス込み） */
   dataUrl: string;
+  /** 当店のクーポン（表示する文。3つまで出す） */
+  coupons?: string[];
 }) {
   const storeSize = storeName.length <= 14 ? 'text-[17pt]' : storeName.length <= 22 ? 'text-[14.5pt]' : 'text-[12.5pt]';
-  // 店名が2行になるほど長いときは QR を少し小さくして、住所・電話番号まで1枚に収める
-  const qrSize = storeName.length > 22 ? 'h-[45mm] w-[45mm]' : 'h-[50mm] w-[50mm]';
+  const shown = coupons.filter((c) => c.trim()).slice(0, 3);
+  // 店名が2行になるほど長いとき・クーポンがあるときは QR を少し小さくして、住所・電話番号まで1枚に収める
+  const qrMm = (storeName.length > 22 ? 45 : 50) - (shown.length > 0 ? 6 + 5 * (shown.length - 1) : 0);
   return (
     <div
       data-qr-card
@@ -42,6 +47,16 @@ export function BookingQrCard({
             <span className="text-[6.5pt] font-extrabold tracking-[0.3em] text-[#b89aff]">RESERVATION</span>
             <span className="text-[11pt] leading-[1.3] font-bold">ご予約</span>
           </p>
+          {shown.length > 0 && (
+            <div className="relative mx-auto mt-[2.6mm] max-w-[80mm] rounded-[2.5mm] border border-dashed border-[#f5c451]/80 bg-[#f5c451]/10 px-[3mm] py-[1.4mm]">
+              <p className="text-[6pt] font-extrabold tracking-[0.25em] text-[#f5c451]">当店のクーポン COUPON</p>
+              {shown.map((c) => (
+                <p key={c} className="mt-[0.5mm] line-clamp-1 text-[9pt] leading-[1.35] font-bold">
+                  {c}
+                </p>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* まんなか：QR（白地・紫の枠）と読み取りの案内 */}
@@ -55,7 +70,8 @@ export function BookingQrCard({
                   alt={`${storeName}の予約QRコード`}
                   width={600}
                   height={600}
-                  className={`block ${qrSize} [image-rendering:pixelated]`}
+                  className="block [image-rendering:pixelated]"
+                  style={{ width: `${qrMm}mm`, height: `${qrMm}mm` }}
                 />
               </div>
             </div>

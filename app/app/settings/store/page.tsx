@@ -9,6 +9,7 @@ import { StoreSlugEditor } from '@/components/settings/store-slug-editor';
 import { SLUG_CHANGE_BY_CYPRESS_ONLY } from '@/lib/store-slug';
 import { resolveSiteOrigin } from '@/lib/site-origin';
 import { tableQrDataUrl } from '@/lib/table-qr';
+import { bookingCouponsFrom, couponLabel } from '@/lib/booking-coupons';
 import { StoreForm, type StoreFormData } from '@/components/settings/store-form';
 
 export const metadata: Metadata = { title: '店舗情報 | 設定' };
@@ -36,7 +37,7 @@ export default async function StoreSettingsPage() {
 
   const { data: settings } = await supabase
     .from('store_settings')
-    .select('receipt_header, receipt_footer, invoice_registration_number, service_charge_rate, rounding, allow_negative_stock')
+    .select('receipt_header, receipt_footer, invoice_registration_number, service_charge_rate, rounding, allow_negative_stock, settings')
     .eq('store_id', targetStore.id)
     .maybeSingle();
 
@@ -87,6 +88,7 @@ export default async function StoreSettingsPage() {
           storeName={store.name}
           address={cardAddress}
           phone={store.phone}
+          coupons={bookingCouponsFrom(settings?.settings ?? null).map(couponLabel)}
           slugEditor={
             store.slug ? (
               ctx.isCypressAdmin ? (

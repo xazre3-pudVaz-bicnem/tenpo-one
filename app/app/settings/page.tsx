@@ -10,6 +10,8 @@ import { EmptyState } from '@/components/ui/state';
 import { resolveSiteOrigin } from '@/lib/site-origin';
 import { ShareLinkButtons } from '@/components/settings/share-link-buttons';
 import { BookingQrDownload } from '@/components/settings/booking-qr-download';
+import { BookingCouponsEditor } from '@/components/settings/booking-coupons-editor';
+import { bookingCouponsFrom, couponLabel } from '@/lib/booking-coupons';
 import { tableQrDataUrl } from '@/lib/table-qr';
 
 export const metadata: Metadata = { title: '設定' };
@@ -43,7 +45,7 @@ export default async function SettingsHubPage() {
   }
 
   const supabase = await createClient();
-  const [{ data: store }, { data: hours }] = await Promise.all([
+  const [{ data: store }, { data: hours }, { data: storeSettings }] = await Promise.all([
     supabase
       .from('stores')
       .select('name, slug, postal_code, address, phone, email, seat_count, booking_enabled')
@@ -53,7 +55,11 @@ export default async function SettingsHubPage() {
       .from('business_hours')
       .select('day_of_week, is_closed, open_time, close_time')
       .eq('store_id', targetStore.id),
+    supabase.from('store_settings').select('settings').eq('store_id', targetStore.id).maybeSingle(),
   ]);
+  // 当店のクーポン（予約ページ・予約QRカード・店舗名刺に出る。2026-09-30 Ronnie）
+  const coupons = bookingCouponsFrom(storeSettings?.settings ?? null);
+  const couponLabels = coupons.map(couponLabel);
 
   const closedDays = (hours ?? [])
     .filter((h) => h.is_closed)
@@ -116,10 +122,14 @@ export default async function SettingsHubPage() {
                   address={store.address ? `${store.postal_code ? `〒${store.postal_code} ` : ''}${store.address}` : null}
                   phone={store.phone}
                   qrDataUrl={bookingQr}
+                  coupons={couponLabels}
                   align="end"
                 />
               </Field>
             )}
+            <Field label="当店のクーポン" en="Coupons">
+              <BookingCouponsEditor key={targetStore.id} storeId={targetStore.id} initial={coupons} />
+            </Field>
             <Field label="店舗名">{store.name}</Field>
             <Field label="会社">{ctx.organizationName || muted}</Field>
             <Field label="住所">
