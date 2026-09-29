@@ -18,6 +18,9 @@ import {
   HandyReservationList,
   type HandyReservationRow,
 } from '@/components/handy/handy-reservation-list';
+import { HandyBookingShare } from '@/components/handy/handy-booking-share';
+import { resolveSiteOrigin } from '@/lib/site-origin';
+import { tableQrDataUrl } from '@/lib/table-qr';
 
 export const metadata: Metadata = { title: '今日の予約' };
 
@@ -83,7 +86,7 @@ export default async function HandyReservationsPage() {
 
   const supabase = await createClient();
   const today = todayJst();
-  const [{ data: rows }, { data: openOrders }] = await Promise.all([
+  const [{ data: rows }, { data: openOrders }, { data: storeRow }] = await Promise.all([
     supabase
       .from('reservations')
       .select(
@@ -100,7 +103,11 @@ export default async function HandyReservationsPage() {
       .eq('store_id', store.id)
       .eq('status', 'open')
       .not('reservation_id', 'is', null),
+    supabase.from('stores').select('slug').eq('id', store.id).maybeSingle(),
   ]);
+  // お客様にご予約ページを紹介する QR（2026-09-30 Ronnie「注文を取りに行ったときに紹介・共有しやすいように」）
+  const bookingUrl = storeRow?.slug ? `${await resolveSiteOrigin()}/book/${storeRow.slug}` : null;
+  const bookingQr = bookingUrl ? await tableQrDataUrl(bookingUrl, 480).catch(() => null) : null;
   const tableByReservation = new Map<string, string>();
   for (const o of openOrders ?? []) {
     if (o.reservation_id && o.table_id) tableByReservation.set(o.reservation_id, o.table_id);
@@ -140,6 +147,11 @@ export default async function HandyReservationsPage() {
         note={`${handyDateLabel(requestTime())} · ${reservations.length}件`}
       />
       <HandyMain>
+        {bookingUrl && bookingQr && (
+          <div className="flex justify-end px-3 pt-2">
+            <HandyBookingShare url={bookingUrl} storeName={store.name} qrDataUrl={bookingQr} />
+          </div>
+        )}
         <HandyReservationList reservations={reservations} />
         <p className="px-5 pb-5 text-center text-[10px] leading-relaxed text-[#7a7090]">
           予約の登録・変更・来店処理はレジ（管理画面）の予約台帳で行います。
