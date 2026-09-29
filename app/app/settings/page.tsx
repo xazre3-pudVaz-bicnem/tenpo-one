@@ -14,10 +14,13 @@ export const metadata: Metadata = { title: '設定' };
 
 const DAY_LABELS = ['日', '月', '火', '水', '木', '金', '土'];
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, en, children }: { label: string; en?: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-1 border-b border-line py-3.5 last:border-b-0 sm:flex-row sm:items-center sm:gap-6">
-      <dt className="w-40 shrink-0 text-sm text-ink-2">{label}</dt>
+      <dt className="w-40 shrink-0 text-sm text-ink-2">
+        {label}
+        {en && <span className="block text-[11px] text-ink-3">{en}</span>}
+      </dt>
       <dd className="min-w-0 flex-1 text-sm font-medium text-ink sm:text-right">{children}</dd>
     </div>
   );
@@ -108,7 +111,8 @@ export default async function SettingsHubPage() {
             <Field label="オンライン予約">
               {store.booking_enabled ? <Badge tone="success">受付中</Badge> : <Badge tone="gray">停止中</Badge>}
             </Field>
-            <Field label="店舗ご予約">
+            {/* 編集を押さなくても見える（2026-09-29 Ronnie「店舗ご予約リンク / Reservation link」） */}
+            <Field label="店舗ご予約リンク" en="Reservation link">
               {bookingUrl ? (
                 <span className="flex flex-col items-stretch gap-2 sm:items-end">
                   <a
