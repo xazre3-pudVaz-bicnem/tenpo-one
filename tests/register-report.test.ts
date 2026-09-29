@@ -381,6 +381,29 @@ describe('layoutRegisterReport（2026-09-28 Ronnie が選んだ並び）', () =>
     for (const l of narrow) expect(dispWidth(l)).toBeLessThanOrEqual(32);
   });
 
+  it('ランチ｜ディナーを左右半分ずつ（2026-09-29 Ronnie）。入りきらない紙幅では縦に', () => {
+    const daypart = {
+      lunchUntil: '15:00',
+      dinnerFrom: '15:01',
+      lunch: { sales: 35800, groups: 21, guests: 33, avg: 1085 },
+      dinner: { sales: 34440, groups: 5, guests: 11, avg: 3131 },
+    };
+    const lines = layoutRegisterReport(sample({ daypart }), { paperWidth: 80 }).map((l) => l.text);
+    const i = lines.findIndex((l) => l.startsWith('ランチ売上'));
+    expect(lines[i]).toMatch(/^ランチ売上\s+¥35,800  ディナー売上\s+¥34,440$/);
+    expect(lines[i + 1]).toMatch(/^  組\s+21組    組\s+5組$/);
+    expect(lines[i + 2]).toMatch(/^  名様\s+33名様    名様\s+11名様$/);
+    expect(lines[i + 3]).toMatch(/^  単価\s+¥1,085    単価\s+¥3,131$/);
+    for (const l of lines.slice(i, i + 4)) expect(dispWidth(l)).toBe(48);
+    // 右半分の始まり（半分 23桁＋間 2桁＝25桁目）がそろう
+    expect(dispWidth(lines[i].slice(0, lines[i].indexOf('ディナー売上')))).toBe(25);
+    expect(dispWidth(lines[i + 1].slice(0, lines[i + 1].lastIndexOf('  組')))).toBe(25);
+    expect(dispWidth(lines[i + 3].slice(0, lines[i + 3].lastIndexOf('  単価')))).toBe(25);
+    // 58mm は半分に入らないので縦
+    const narrow = layoutRegisterReport(sample({ daypart }), { paperWidth: 58 }).map((l) => l.text).join('\n');
+    expect(narrow).toMatch(/ランチ売上\s+¥35,800\n  組\s+21組\n  名様\s+33名様\n  単価\s+¥1,085\n\nディナー売上\s+¥34,440/);
+  });
+
   it('差額がある日・理由がある日は 差異理由 を出す', () => {
     const text = layoutRegisterReport(sample({ cash: { ...sample().cash, counted: 119400, difference: -500 } }))
       .map((l) => l.text)

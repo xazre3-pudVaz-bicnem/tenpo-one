@@ -262,7 +262,24 @@ function makeLineTools(options: RegisterReportOptions) {
       }
     }
   };
-  return { L, width, widthOpts, line, center, kv, kcv, blank, section, starSection, sub, subSep, solid, dotted, table };
+  /**
+   * 左右半分ずつに2つの「名前・値」の列を並べる（ランチ｜ディナー。2026-09-29 Ronnie「半分ずつに」）。
+   * どこか1行でも半分に入りきらなければ false を返して何も出さない（呼ぶ側は縦に並べる）
+   */
+  const halves = (left: [string, string][], right: [string, string][]): boolean => {
+    const w = (x: string) => dispWidth(x, widthOpts);
+    const gap = 2;
+    const half = Math.floor((width - gap) / 2);
+    const rows = Math.max(left.length, right.length);
+    const fits = (r: [string, string] | undefined) => !r || w(r[0]) + 1 + w(r[1]) <= half;
+    for (let i = 0; i < rows; i++) if (!fits(left[i]) || !fits(right[i])) return false;
+    const cell = (r: [string, string] | undefined, cw: number) =>
+      r ? r[0] + ' '.repeat(Math.max(1, Math.floor(cw - w(r[0]) - w(r[1])))) + r[1] : ' '.repeat(cw);
+    const rightW = width - half - gap;
+    for (let i = 0; i < rows; i++) line(cell(left[i], half) + ' '.repeat(gap) + cell(right[i], rightW));
+    return true;
+  };
+  return { L, width, widthOpts, line, center, kv, kcv, blank, section, starSection, sub, subSep, solid, dotted, table, halves };
 }
 
 /**
@@ -339,16 +356,21 @@ export function layoutRegisterReport(data: RegisterReportData, options: Register
   kv('客単価', yen(s.avgSpend));
   // ---- ランチ／ディナー（区切りの時刻は店の設定。紙には時刻を出さない：2026-09-28 Ronnie「（〜15:00）（15:01〜）は要らない」） ----
   if (data.daypart) {
-    const parts = [
-      ['ランチ売上', data.daypart.lunch],
-      ['ディナー売上', data.daypart.dinner],
-    ] as const;
-    for (const [label, p] of parts) {
-      blank();
-      kv(label, yen(p.sales));
-      kv('  組', `${p.groups}組`);
-      kv('  名様', `${p.guests}名様`);
-      kv('  単価', yen(p.avg));
+    const rowsOf = (label: string, p: { sales: number; groups: number; guests: number; avg: number }): [string, string][] => [
+      [label, yen(p.sales)],
+      ['  組', `${p.groups}組`],
+      ['  名様', `${p.guests}名様`],
+      ['  単価', yen(p.avg)],
+    ];
+    const lunch = rowsOf('ランチ売上', data.daypart.lunch);
+    const dinner = rowsOf('ディナー売上', data.daypart.dinner);
+    blank();
+    // 左にランチ・右にディナー（2026-09-29 Ronnie「ランチとディナーを半分ずつに」）。入りきらない紙幅では縦に
+    if (!t.halves(lunch, dinner)) {
+      for (const [i, rows] of [lunch, dinner].entries()) {
+        if (i > 0) blank();
+        for (const [label, value] of rows) kv(label, value);
+      }
     }
   }
   blank();
