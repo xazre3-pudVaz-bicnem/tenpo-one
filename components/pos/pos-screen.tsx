@@ -20,6 +20,7 @@ import { useToast } from '@/components/ui/toast';
 import { useStoreRealtimeRefresh } from '@/components/realtime/use-store-refresh';
 import { createMockDrawerProvider } from '@/lib/printing/providers';
 import { enqueueDrawerKick } from '@/app/app/pos/print-actions';
+import type { PosSteraTerminal } from '@/components/pos/stera-pay-panel';
 import { ClerkSelector, type ClerkOption } from './clerk-selector';
 import { useClerkGate } from './clerk-gate';
 import { OptionDialog, type PosOptionGroup } from './option-dialog';
@@ -178,6 +179,7 @@ export function PosScreen({
   canCheckout,
   registerOpen = true,
   terminalReaders,
+  steraTerminals = [],
   paymentAvailability,
   availableTables,
   addItemAction,
@@ -234,6 +236,8 @@ export function PosScreen({
   /** レジが開局しているか。未開局だと会計は受け付けない（先にレジクローズ画面で開局する） */
   registerOpen?: boolean;
   terminalReaders: PosTerminalReader[];
+  /** stera 端末（2026-09-29 Ronnie「stera を押したら金額が端末へ・会計・ドロア」） */
+  steraTerminals?: PosSteraTerminal[];
   paymentAvailability: PosPaymentAvailability;
   availableTables: AvailableTable[];
   /** 戻り値（追加した明細のID）はレジでは使わない（ハンディが厨房送信に使う） */
@@ -607,6 +611,20 @@ export function PosScreen({
     void attemptOpenDrawer(payments.map((p) => p.method));
     // 画面遷移はしない: 会計ダイアログが「会計完了（お預り・おつり）」を出し、
     // そこから レシート／テーブル一覧／連続会計 を選ぶ
+  };
+
+  // stera で会計まで確定したら、ドロアを開けてレシートへ（Ronnie「ドロアまで開くように」。キャッシュレスでも開ける）
+  const handleSteraFinalized = (method: string, brand: string | null) => {
+    toast(`stera の決済が完了しました${brand ? `（${brand}）` : ''}`, 'success');
+    void (async () => {
+      try {
+        const res = await enqueueDrawerKick(storeId);
+        if (!res.ok) await attemptOpenDrawer([method]);
+      } catch {
+        // ドロアはベストエフォート（会計は完了済み）
+      }
+    })();
+    router.push(`/app/pos/receipt/${order.id}`);
   };
 
   const handleTerminalPaymentFinalized = () => {
@@ -1190,6 +1208,8 @@ export function PosScreen({
         checkTerminalPaymentAction={checkTerminalPaymentAction}
         cancelTerminalPaymentAction={cancelTerminalPaymentAction}
         onTerminalPaymentFinalized={handleTerminalPaymentFinalized}
+        steraTerminals={steraTerminals}
+        onSteraFinalized={handleSteraFinalized}
         clerks={clerks}
         currentClerkId={currentClerkId}
         discountPresets={discountPresets}

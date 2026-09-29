@@ -4,6 +4,8 @@ import { BookOpen, PackageX, Settings } from 'lucide-react';
 import { requireFeature } from '@/lib/auth';
 import { storeAccessBlock } from '@/components/pos/store-access-guard';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { isSteraOnline } from '@/lib/stera';
 import { loadMenuBook } from '@/lib/menu-book-server';
 import { loadMenuStock } from '@/lib/menu-stock-server';
 import { filterTakeoutItems, isTakeoutLikeOrder, takeoutMenuFrom } from '@/lib/takeout-menu';
@@ -311,6 +313,8 @@ export default async function PosPage({
     lastSeenAt: string | null;
   }[] = [];
   let availableTables: { id: string; name: string; capacityMax: number }[] = [];
+  // stera 端末（設定 > 決済・端末 の「stera 連携」。サーバー専用のテーブルなので service role で読む）
+  let steraTerminals: { id: string; name: string; online: boolean }[] = [];
   // レジが開局しているか（未開局だと会計を受け付けない。画面にも先に出しておく）
   let registerOpen = true;
 
@@ -339,6 +343,18 @@ export default async function PosPage({
         (a, b) =>
           (statusOrder[a.status] ?? 1) - (statusOrder[b.status] ?? 1) || a.label.localeCompare(b.label, 'ja')
       );
+    const { data: steraRows } = await createAdminClient()
+      .from('stera_terminals')
+      .select('id, name, last_seen_at')
+      .eq('store_id', store.id)
+      .eq('status', 'active')
+      .order('created_at');
+    const steraNow = new Date().getTime();
+    steraTerminals = (steraRows ?? []).map((t) => ({
+      id: t.id as string,
+      name: t.name as string,
+      online: isSteraOnline(t.last_seen_at as string | null, steraNow),
+    }));
     if (order.table_id) {
       const { data: tables } = await supabase
         .from('restaurant_tables')
@@ -419,6 +435,7 @@ export default async function PosPage({
         canCheckout={canCheckout}
         registerOpen={registerOpen}
         terminalReaders={terminalReaders}
+        steraTerminals={steraTerminals}
         paymentAvailability={paymentAvailability}
         availableTables={availableTables}
         addItemAction={seatTableId ? addItemAtSeat.bind(null, seatTableId) : addItem}
