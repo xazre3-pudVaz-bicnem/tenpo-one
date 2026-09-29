@@ -22,7 +22,6 @@ import { signOut } from '@/app/app/actions';
 import { StoreSwitcher } from '@/components/layout/store-switcher';
 import { useStoreRealtimeRefresh } from '@/components/realtime/use-store-refresh';
 import { ReservationAlert } from '@/components/notifications/reservation-alert';
-import { PushSubscribeButton } from '@/components/notifications/push-subscribe-button';
 import { PushAutoSubscribe } from '@/components/notifications/push-auto-subscribe';
 import { ServiceCallAlert } from '@/components/notifications/service-call-alert';
 import { AppModeSwitch } from '@/components/native/app-mode-switch';
@@ -244,7 +243,7 @@ export function HandyChrome({
             </button>
           )}
           {/* 品切れ設定はハンディのメニューには出さない（2026-09-28 Ronnie「ハンディにこのオプションは要らない」。レジの設定から） */}
-          <PushSubscribeButton variant="row" />
+          {/* 予約・呼び出しの通知は自動でオン（PushAutoSubscribe）。ボタンは出さない（2026-09-30 Ronnie「受け取るは自動。ここに出さなくていい」） */}
           <button
             type="button"
             onClick={() => {
