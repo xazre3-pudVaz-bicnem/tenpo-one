@@ -4,7 +4,6 @@ import { useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { CalendarDays, CornerDownRight, House, LogOut, Zap } from 'lucide-react';
-import { NO_CLERK_NAME } from '@/lib/handy-clerk';
 
 export interface HandyClerkOption {
   id: string;
@@ -36,17 +35,18 @@ export function HandyLoginScreen({
   signOutAction: () => Promise<void>;
 }) {
   const router = useRouter();
-  const [clerkId, setClerkId] = useState<string>(clerks[0]?.id ?? '');
+  // 担当者は自分で選ぶ（最初は未選択。選ばないと Login できない。2026-09-30 Ronnie）
+  const [clerkId, setClerkId] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [setupOpen, setSetupOpen] = useState(false);
   const [pending, startTransition] = useTransition();
 
   const login = () => {
-    if (pending) return;
+    if (pending || !clerkId) return;
     setError(null);
     startTransition(async () => {
       try {
-        await loginAction(clerkId || null);
+        await loginAction(clerkId);
         router.replace('/handy');
         router.refresh();
       } catch (e) {
@@ -104,19 +104,21 @@ export function HandyLoginScreen({
           onChange={(e) => setClerkId(e.target.value)}
           className="min-h-10 w-full rounded-lg border border-[#e3dbf1] bg-white px-[7px] text-base text-[#2a2138]"
         >
+          <option value="" disabled>
+            {clerks.length === 0 ? '担当者が登録されていません' : '担当者を選んでください'}
+          </option>
           {clerks.map((c) => (
             <option key={c.id} value={c.id}>
               {c.name}
             </option>
           ))}
-          <option value="">{NO_CLERK_NAME}</option>
         </select>
       </div>
 
       <button
         type="button"
         onClick={login}
-        disabled={pending}
+        disabled={pending || !clerkId}
         className="mt-5 flex min-h-11 w-full items-center justify-center gap-2 rounded-[9px] bg-[#7b3fe4] text-[19px] font-semibold text-white shadow-[0_3px_10px_#7b3fe41a] active:bg-[#6630c7] disabled:opacity-45"
       >
         <CornerDownRight className="h-5 w-5" aria-hidden />
@@ -129,8 +131,8 @@ export function HandyLoginScreen({
       )}
       <p className="mt-2.5 text-center text-[9px] leading-relaxed text-[#d8c6f1]">
         {clerks.length === 0
-          ? '担当者は 設定 → POS担当者 で登録できます（未登録でも使えます）。'
-          : '担当者を選んで Login。ハンディで作った伝票の担当者になります。'}
+          ? '担当者が登録されていません。レジの 設定 → POS担当者 で登録してからログインしてください。'
+          : '担当者を選ばないと Login できません。ハンディで作った伝票の担当者になります。'}
       </p>
 
       {setupOpen && (

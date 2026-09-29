@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { assertStoreAccess, requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
-import { HANDY_CLERK_COOKIE, NO_CLERK_NAME, serializeHandyClerk } from '@/lib/handy-clerk';
+import { HANDY_CLERK_COOKIE, serializeHandyClerk } from '@/lib/handy-clerk';
 import { readHandyClerk } from '@/lib/handy-session';
 import { validateVisitDraft, visitMemo, type VisitDraft } from '@/lib/handy-visit';
 import { addItem, sendItemsToKitchen } from '../pos/actions';
@@ -28,27 +28,25 @@ const clerkCookieOptions = {
 
 /**
  * ログイン画面の「Login」: 担当者（POS担当者）をこの端末に覚える。
- * clerkId が null なら「担当者なし」で使う（担当者を登録していない店）。
+ * 担当者を選ばないとログインできない（2026-09-30 Ronnie「担当選択なしではログインできない」）。
  * 担当者は現在の店舗の有効な行だけ受け付ける（他店舗の担当者を指定できないようにする）。
  */
 export async function loginHandyClerk(clerkId: string | null): Promise<void> {
   const ctx = await requirePermission('pos.order');
   const store = ctx.currentStore ?? ctx.stores[0];
   if (!store) throw new Error('アクセス可能な店舗がありません');
+  if (!clerkId) throw new Error('担当者を選んでください');
 
-  let value = serializeHandyClerk({ id: null, name: NO_CLERK_NAME });
-  if (clerkId) {
-    const supabase = await createClient();
-    const { data: clerk } = await supabase
-      .from('pos_clerks')
-      .select('id, name')
-      .eq('id', clerkId)
-      .eq('store_id', store.id)
-      .eq('status', 'active')
-      .maybeSingle();
-    if (!clerk) throw new Error('この担当者は選べません。担当者を選び直してください');
-    value = serializeHandyClerk({ id: clerk.id, name: clerk.name });
-  }
+  const supabase = await createClient();
+  const { data: clerk } = await supabase
+    .from('pos_clerks')
+    .select('id, name')
+    .eq('id', clerkId)
+    .eq('store_id', store.id)
+    .eq('status', 'active')
+    .maybeSingle();
+  if (!clerk) throw new Error('この担当者は選べません。担当者を選び直してください');
+  const value = serializeHandyClerk({ id: clerk.id, name: clerk.name });
 
   const jar = await cookies();
   jar.set(HANDY_CLERK_COOKIE, value, clerkCookieOptions);
