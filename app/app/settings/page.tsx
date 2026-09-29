@@ -9,6 +9,8 @@ import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/ui/state';
 import { resolveSiteOrigin } from '@/lib/site-origin';
 import { ShareLinkButtons } from '@/components/settings/share-link-buttons';
+import { BookingQrDownload } from '@/components/settings/booking-qr-download';
+import { tableQrDataUrl } from '@/lib/table-qr';
 
 export const metadata: Metadata = { title: '設定' };
 
@@ -61,6 +63,8 @@ export default async function SettingsHubPage() {
   // 店舗ご予約のリンク（お客様がネットで予約するページ）。ここでは見る・コピー・共有だけ（変えられない）
   const origin = await resolveSiteOrigin();
   const bookingUrl = store?.slug ? `${origin}/book/${store.slug}` : null;
+  // 予約QR（A6 カード・店舗名・住所・電話番号入り）も編集を押さずに見られる・ダウンロードできる（2026-09-30 Ronnie）
+  const bookingQr = bookingUrl ? await tableQrDataUrl(bookingUrl, 600).catch(() => null) : null;
 
   const openRanges = Array.from(
     new Set(
@@ -129,6 +133,17 @@ export default async function SettingsHubPage() {
                 muted
               )}
             </Field>
+            {bookingQr && (
+              <Field label="予約QRコード" en="Reservation QR">
+                <BookingQrDownload
+                  storeName={store.name}
+                  address={store.address ? `${store.postal_code ? `〒${store.postal_code} ` : ''}${store.address}` : null}
+                  phone={store.phone}
+                  qrDataUrl={bookingQr}
+                  align="end"
+                />
+              </Field>
+            )}
           </dl>
         ) : (
           <EmptyState title="店舗情報を取得できませんでした" className="my-6" />

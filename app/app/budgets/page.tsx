@@ -1,10 +1,19 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { CalendarDays } from 'lucide-react';
+import { CalendarDays, CalendarCheck, Target } from 'lucide-react';
 import { requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { yen, todayJst } from '@/lib/format';
-import { monthBounds, diffDaysStr } from '@/components/reports/period';
+import { monthBounds, diffDaysStr, addDaysStr } from '@/components/reports/period';
+import {
+  bookingForecast,
+  seatOnlyUnitPrices,
+  SEAT_ONLY_UNIT_DAYS,
+  UPCOMING_RESERVATION_STATUSES,
+  type ForecastReservation,
+  type SeatOnlyUnit,
+  type UnitPriceOrder,
+} from '@/lib/booking-forecast';
 import { linearLandingForecast } from '@/lib/forecast';
 import { summarizeItemCosts, type CostableOrderItem } from '@/components/reports/cost';
 import { estimateLaborCost, type TimeEntryForLabor, type PayrollRuleForLabor } from '@/components/reports/labor';
@@ -23,6 +32,7 @@ import { Input, Label } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { TableWrap, Table, THead, TBody, Tr, Th, Td } from '@/components/ui/table';
 import { BudgetForm, type BudgetFormData } from './budget-form';
+import { MonthlyTargetForm } from './monthly-target-form';
 
 export const metadata: Metadata = { title: '予算管理' };
 
@@ -217,6 +227,69 @@ export default async function BudgetsPage({
     });
   }
 
+  // ── 今月の売上目標（金額入力）とご予約から見込む売上（2026-09-30 Ronnie） ──
+  // 対象：ヘッダーで選んだ店舗（全店舗のときは全社）
+  const targetRow = rows.find((r) => r.storeId === (ctx.currentStore?.id ?? null)) ?? rows[0];
+  const targetEditable =
+    canEdit && (targetRow.storeId === null ? ctx.role === 'org_owner' || ctx.role === 'hq_admin' : true);
+  const isThisMonth = monthFirst.slice(0, 7) === today.slice(0, 7);
+  const monthLabel = isThisMonth ? '今月' : `${Number(monthFirst.slice(5, 7))}月`;
+
+  // これからのご予約（本日〜月末。来店済み・会計済みは実績に入っているので入れない）
+  const showForecast = monthLast >= today;
+  const forecastFrom = today > monthFirst ? today : monthFirst;
+  const unitFrom = addDaysStr(today, -SEAT_ONLY_UNIT_DAYS);
+  const unitTo = addDaysStr(today, -1);
+  let forecast: ReturnType<typeof bookingForecast> | null = null;
+  let singleUnit: SeatOnlyUnit | null = null;
+  if (showForecast) {
+    const [upcomingRes, ...unitOrderResults] = await Promise.all([
+      supabase
+        .from('reservations')
+        .select('store_id, party_size, course_id, menu_items:course_id(price)')
+        .in('store_id', storeIds)
+        .gte('reserved_date', forecastFrom)
+        .lte('reserved_date', monthLast)
+        .in('status', [...UPCOMING_RESERVATION_STATUSES])
+        .neq('created_via', 'walk_in'),
+      // 席のみ客単価：直近7日（昨日まで）の会計。店ごとに取る（1回の取得の上限を超えないように）
+      ...storeIds.map((sid) =>
+        supabase
+          .from('orders')
+          .select('store_id, total, guest_count, reservations(party_size, course_id)')
+          .eq('store_id', sid)
+          .in('status', SETTLED_ORDER_STATUSES)
+          .gte('business_date', unitFrom)
+          .lte('business_date', unitTo)
+      ),
+    ]);
+    const one = <T,>(v: T | T[] | null | undefined): T | null => (Array.isArray(v) ? (v[0] ?? null) : (v ?? null));
+    const unitOrders: UnitPriceOrder[] = unitOrderResults.flatMap((res) =>
+      (res.data ?? []).map((o) => {
+        const rsv = one(o.reservations as { party_size: number; course_id: string | null } | { party_size: number; course_id: string | null }[] | null);
+        return {
+          storeId: o.store_id,
+          total: Number(o.total) || 0,
+          guests: (o.guest_count ?? 0) > 0 ? (o.guest_count as number) : (rsv?.party_size ?? 0),
+          seatOnlyReservation: rsv ? rsv.course_id == null : null,
+        };
+      })
+    );
+    const units = seatOnlyUnitPrices(storeIds, unitOrders);
+    const upcoming: ForecastReservation[] = (upcomingRes.data ?? []).map((r) => {
+      const course = one(r.menu_items as { price: number } | { price: number }[] | null);
+      return {
+        storeId: r.store_id,
+        partySize: r.party_size,
+        coursePrice: r.course_id ? (course?.price ?? null) : null,
+      };
+    });
+    forecast = bookingForecast(upcoming, units);
+    singleUnit = storeIds.length === 1 ? (units.get(storeIds[0]) ?? null) : null;
+  }
+  const landing = forecast ? targetRow.actual.sales + forecast.total : null;
+  const targetAmount = targetRow.budget?.sales_budget ?? null;
+
   return (
     <div>
       <PageHeader
@@ -247,6 +320,114 @@ export default async function BudgetsPage({
       <p className="mb-3 text-xs text-gray-500">
         経過{elapsedDays}日／{daysInMonth}日（{monthFirst.slice(0, 7).replaceAll('-', '/')}）。着地予測 = 実績 ÷ 経過日数 × 月日数（lib/forecast.ts の線形予測）。
       </p>
+
+      <div className="mb-4 grid gap-4 lg:grid-cols-2">
+        {/* 今月の売上目標（金額を入れて保存） */}
+        <Card>
+          <CardContent className="space-y-3">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <h2 className="flex items-center gap-1.5 text-[15px] font-bold text-navy">
+                <Target className="h-4 w-4 text-iris" aria-hidden />
+                {monthLabel}の売上目標
+                <span className="text-[11px] font-semibold text-ink-3">Monthly sales target</span>
+              </h2>
+              <span className="text-xs text-ink-3">
+                {targetRow.storeName}｜{monthFirst.slice(0, 7).replaceAll('-', '/')}
+              </span>
+            </div>
+            {targetEditable ? (
+              <MonthlyTargetForm
+                key={`${targetRow.storeId ?? 'all'}-${monthFirst}`}
+                storeId={targetRow.storeId}
+                month={monthFirst}
+                current={targetAmount}
+              />
+            ) : (
+              <p className="text-2xl font-bold text-ink tabular-nums">{targetAmount != null ? yen(targetAmount) : '未設定'}</p>
+            )}
+            <dl className="grid grid-cols-2 gap-2 text-sm">
+              <div className="rounded-xl bg-lilac-soft px-3 py-2">
+                <dt className="text-[11px] text-ink-3">実績（純売上）<span className="ml-1">Sales</span></dt>
+                <dd className="text-lg font-bold text-saffron tabular-nums">{yen(targetRow.actual.sales)}</dd>
+              </div>
+              <div className="rounded-xl bg-lilac-soft px-3 py-2">
+                <dt className="text-[11px] text-ink-3">達成率<span className="ml-1">Achievement</span></dt>
+                <dd className="text-lg font-bold text-royal tabular-nums">
+                  {targetRow.achievementPct != null ? `${targetRow.achievementPct.toFixed(1)}%` : '—'}
+                </dd>
+              </div>
+            </dl>
+          </CardContent>
+        </Card>
+
+        {/* ご予約から見込む売上（自動計算） */}
+        <Card>
+          <CardContent className="space-y-3">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <h2 className="flex items-center gap-1.5 text-[15px] font-bold text-navy">
+                <CalendarCheck className="h-4 w-4 text-iris" aria-hidden />
+                ご予約から見込む売上
+                <span className="text-[11px] font-semibold text-ink-3">Booking forecast</span>
+              </h2>
+              <Badge tone="navy">自動計算</Badge>
+            </div>
+            {forecast ? (
+              <>
+                <p className="text-xs text-ink-3">
+                  {forecastFrom.slice(5).replace('-', '/')}〜{monthLast.slice(5).replace('-', '/')} に入っているご予約（キャンセル・来店済みを除く）
+                </p>
+                <dl className="divide-y divide-line rounded-xl border border-line text-sm">
+                  <div className="flex items-center justify-between gap-3 px-3 py-2">
+                    <dt>
+                      コースのご予約
+                      <span className="ml-1.5 text-xs text-ink-3 tabular-nums">
+                        {forecast.course.count}件・{forecast.course.guests}名
+                      </span>
+                      <span className="block text-[11px] text-ink-3">コースの金額 × 人数</span>
+                    </dt>
+                    <dd className="font-bold tabular-nums">{yen(forecast.course.amount)}</dd>
+                  </div>
+                  <div className="flex items-center justify-between gap-3 px-3 py-2">
+                    <dt>
+                      席のみのご予約
+                      <span className="ml-1.5 text-xs text-ink-3 tabular-nums">
+                        {forecast.seatOnly.count}件・{forecast.seatOnly.guests}名
+                      </span>
+                      <span className="block text-[11px] text-ink-3">
+                        {singleUnit
+                          ? singleUnit.basis === 'seat_only'
+                            ? `席のみ客単価 ${yen(singleUnit.unit)} × 人数（直近${SEAT_ONLY_UNIT_DAYS}日の席のみ ${singleUnit.samples}組の平均）`
+                            : singleUnit.basis === 'store'
+                              ? `客単価 ${yen(singleUnit.unit)} × 人数（直近${SEAT_ONLY_UNIT_DAYS}日に席のみが無いため店全体の平均）`
+                              : `直近${SEAT_ONLY_UNIT_DAYS}日の会計が無いため計算できません`
+                          : `店舗ごとの席のみ客単価（直近${SEAT_ONLY_UNIT_DAYS}日の平均）× 人数`}
+                      </span>
+                    </dt>
+                    <dd className="font-bold tabular-nums">{yen(forecast.seatOnly.amount)}</dd>
+                  </div>
+                  <div className="flex items-center justify-between gap-3 bg-iris-soft/60 px-3 py-2">
+                    <dt className="font-bold text-navy">予約見込み 合計</dt>
+                    <dd className="text-lg font-extrabold text-royal tabular-nums">{yen(forecast.total)}</dd>
+                  </div>
+                </dl>
+                {landing != null && (
+                  <p className="text-sm text-ink-2">
+                    実績 {yen(targetRow.actual.sales)} ＋ 予約見込み {yen(forecast.total)} ＝{' '}
+                    <b className="text-navy tabular-nums">{yen(landing)}</b>
+                    {targetAmount != null && targetAmount > 0 && (
+                      <Badge className="ml-1.5" tone={achievementTone((landing / targetAmount) * 100)}>
+                        目標の {((landing / targetAmount) * 100).toFixed(0)}%
+                      </Badge>
+                    )}
+                  </p>
+                )}
+              </>
+            ) : (
+              <p className="text-sm text-ink-3">過去の月のため、これからのご予約はありません</p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
 
       <Card>
         <CardContent className="p-0">

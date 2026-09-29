@@ -66,3 +66,46 @@ export async function upsertBudget(input: BudgetInput) {
   revalidatePath(PATH);
   revalidatePath('/app/reports');
 }
+
+/**
+ * 月の売上目標（budgets.sales_budget）だけを保存する（予算管理の「今月の売上目標」。2026-09-30 Ronnie）。
+ * ほかの目標（原価率・人件費率…）はそのまま。全社は本社(org_owner/hq_admin)のみ
+ */
+export async function saveMonthlySalesTarget(input: {
+  storeId: string | null;
+  month: string;
+  amount: number;
+}): Promise<{ error?: string }> {
+  const ctx = await requirePermission('store.settings');
+  if (input.storeId === null) {
+    if (ctx.role !== 'org_owner' && ctx.role !== 'hq_admin') return { error: '全社の目標は本社管理者のみ変更できます' };
+  } else if (!ctx.stores.some((s) => s.id === input.storeId)) {
+    return { error: '担当外の店舗です' };
+  }
+  if (!/^\d{4}-\d{2}-01$/.test(input.month)) return { error: '対象月が正しくありません' };
+  const amount = Math.round(Number(input.amount));
+  if (!Number.isFinite(amount) || amount < 0 || amount > 100_000_000_000) {
+    return { error: '売上目標を正しく入力してください' };
+  }
+
+  const supabase = await createClient();
+  let existingQuery = supabase.from('budgets').select('id').eq('organization_id', ctx.organizationId).eq('month', input.month);
+  existingQuery = input.storeId === null ? existingQuery.is('store_id', null) : existingQuery.eq('store_id', input.storeId);
+  const { data: existing } = await existingQuery.maybeSingle();
+
+  const { error } = existing
+    ? await supabase.from('budgets').update({ sales_budget: amount, updated_by: ctx.userId }).eq('id', existing.id)
+    : await supabase.from('budgets').insert({
+        organization_id: ctx.organizationId,
+        store_id: input.storeId,
+        month: input.month,
+        sales_budget: amount,
+        created_by: ctx.userId,
+        updated_by: ctx.userId,
+      });
+  if (error) return { error: `保存できませんでした: ${error.message}` };
+  revalidatePath(PATH);
+  revalidatePath('/app/reports');
+  revalidatePath('/app');
+  return {};
+}
