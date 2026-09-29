@@ -81,6 +81,8 @@ export interface HomeData {
   guests: number;
   guestsYesterday: number;
   avgSpend: number;
+  /** 1組あたりの売上（本日の会計済み。まだ無ければ昨日。応援メッセージの「あと何組」に使う） */
+  perGroupSales: number | null;
   repeat: RepeatSummary;
   lowStock: { count: number; names: string[] };
   /** 天気の地点に使う住所 */
@@ -402,6 +404,12 @@ export async function loadHomeData({
     guests: todayMetrics.guests,
     guestsYesterday: yMetrics.guests,
     avgSpend: todayMetrics.guests > 0 ? Math.floor(actualSales / todayMetrics.guests) : 0,
+    perGroupSales:
+      todayMetrics.transactionCount > 0 && todayMetrics.netSales > 0
+        ? Math.round(todayMetrics.netSales / todayMetrics.transactionCount)
+        : yMetrics.transactionCount > 0 && yMetrics.netSales > 0
+          ? Math.round(yMetrics.netSales / yMetrics.transactionCount)
+          : null,
     repeat,
     lowStock: { count: lowStockRows.length, names: lowStockRows.slice(0, 4).map((r) => r.name) },
     address: storeAddressRes.data?.address ?? null,

@@ -39,6 +39,7 @@ export function HomeTop({
           budget={data.dailyBudget}
           pct={data.achievementPct}
           ringPct={data.ringPct}
+          perGroup={data.perGroupSales}
           asOf={asOf}
         />
         <ClockCard
