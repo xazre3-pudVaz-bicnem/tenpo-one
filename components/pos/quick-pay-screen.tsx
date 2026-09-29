@@ -3,11 +3,18 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Calculator, Minus, Plus, ShoppingBag, UtensilsCrossed, X, Wallet } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { TakeoutRow } from '@/components/layout/takeout-row';
-import { QUICK_PAY_MAX_QUANTITY, type QuickPayLine } from '@/lib/quick-pay';
+import {
+  QUICK_PAY_MAX_QUANTITY,
+  quickPayDiscountAmount,
+  quickPayDiscountReason,
+  type QuickPayDiscount,
+  type QuickPayLine,
+} from '@/lib/quick-pay';
 import { useToast } from '@/components/ui/toast';
 import { yen } from '@/lib/format';
-import { Tenkey, appendTenkeyDigit, appendTenkeyDoubleZero, type TenkeyKey } from '@/components/pos/tenkey';
+import { appendTenkeyDigit, appendTenkeyDoubleZero } from '@/components/pos/tenkey';
 import { HandyOrderScreen } from '@/components/handy/handy-order-screen';
 import type { HandyMenuData } from '@/lib/handy-menu-server';
 import type { HandyOrderLineInput, HandySubmitResult } from '@/app/app/handy/actions';
@@ -22,12 +29,15 @@ export interface QuickPayOrderedLine {
 }
 
 /**
- * 即会計（電卓のレジ）。金額を打って「追加」→ 伝票の行、「会計する」でいつもの会計画面へ。
+ * 即会計（電卓のレジ）。金額を打って「登録」→ 伝票の行、「会計する」でいつもの会計画面へ。
  * 「×」で個数も入れられる（530 × 2 → ¥1,060。2026-09-30 Ronnie）。
+ * キーはクラシックなレジの形（訂正・取消・ドロア・C・×・値引・割引・登録。2026-09-30 Ronnie「ボタンをクラシックの形に。
+ * クラシックのレジにある大事なボタンも」）。
  * 右上の「メニュー選択」はハンディと同じメニュー（ポップアップ）。選んだ商品は注文として厨房へ送る。
  * 2026-09-30 Ronnie「手書き伝票の合計だけで会計するお店のため。電卓レジのように金額で会計。ほかの会計は同じ」。
  */
 export function QuickPayScreen({
+  storeId,
   staffName,
   lineName,
   order,
@@ -35,7 +45,9 @@ export function QuickPayScreen({
   startOrderAction,
   prepareCheckoutAction,
   submitMenuAction,
+  drawerAction,
 }: {
+  storeId: string;
   staffName: string;
   lineName: string;
   /** 「メニュー選択」で作った伝票（まだ無ければ null） */
@@ -46,8 +58,11 @@ export function QuickPayScreen({
     orderId: string | null;
     guestCount: number;
     lines: QuickPayLine[];
+    discount: QuickPayDiscount | null;
   }) => Promise<{ orderId?: string; error?: string }>;
   submitMenuAction: (orderId: string, lines: HandyOrderLineInput[]) => Promise<HandySubmitResult>;
+  /** ドロアを開く（クラシックレジの「#／ドロア」キー） */
+  drawerAction: (storeId: string) => Promise<{ ok: boolean; error?: string }>;
 }) {
   const router = useRouter();
   const { toast } = useToast();
@@ -58,11 +73,13 @@ export function QuickPayScreen({
   const [unit, setUnit] = useState<number | null>(null);
   const [lines, setLines] = useState<QuickPayLine[]>([]);
   const [guests, setGuests] = useState(order?.guestCount ?? 1);
+  /** 値引（円）・割引（%） */
+  const [discount, setDiscount] = useState<QuickPayDiscount | null>(null);
   const [wantMenu, setWantMenu] = useState(false);
 
   const orderedTotal = (order?.lines ?? []).reduce((a, l) => a + l.lineTotal, 0);
   const linesTotal = lines.reduce((a, l) => a + l.amount * l.quantity, 0);
-  /** 打っている途中の行（「追加」を押さずに会計しても入る） */
+  /** 打っている途中の行（「登録」を押さずに会計しても入る） */
   const pendingLine: QuickPayLine | null =
     unit != null
       ? { amount: unit, quantity: Math.min(QUICK_PAY_MAX_QUANTITY, Math.max(1, amount)) }
@@ -70,19 +87,67 @@ export function QuickPayScreen({
         ? { amount, quantity: 1 }
         : null;
   const pendingTotal = pendingLine ? pendingLine.amount * pendingLine.quantity : 0;
-  const total = orderedTotal + linesTotal + pendingTotal;
+  const subtotal = orderedTotal + linesTotal + pendingTotal;
+  const discountAmount = quickPayDiscountAmount(subtotal, discount);
+  const total = subtotal - discountAmount;
 
-  const onKey = (k: TenkeyKey) => {
-    if (k === 'C') {
-      // 打っている数を消す。何も打っていなければ「×」も取り消す
-      if (amount > 0) setAmount(0);
-      else setUnit(null);
-      return;
-    }
-    const next = k === '00' ? appendTenkeyDoubleZero(amount) : appendTenkeyDigit(amount, k);
+  const onDigit = (d: Digit) => {
+    let next: number;
+    if (d === '00') next = appendTenkeyDoubleZero(amount);
+    else if (d === '000') next = appendTenkeyDigit(appendTenkeyDoubleZero(amount), '0');
+    else next = appendTenkeyDigit(amount, d);
     // 個数は 99 まで
     setAmount(unit != null ? Math.min(QUICK_PAY_MAX_QUANTITY, next) : next);
   };
+
+  /** C：打っている数を消す。何も打っていなければ「×」も取り消す */
+  const clearEntry = () => {
+    if (amount > 0) setAmount(0);
+    else setUnit(null);
+  };
+
+  /** 訂正：打っている途中なら消す。無ければ最後に登録した行を消す */
+  const voidLast = () => {
+    if (pendingLine) {
+      setAmount(0);
+      setUnit(null);
+      return;
+    }
+    setLines((prev) => prev.slice(0, -1));
+  };
+
+  /** 取消：電卓で入れたものを全部消す（メニューで注文した商品は残る） */
+  const cancelAll = () => {
+    setAmount(0);
+    setUnit(null);
+    setLines([]);
+    setDiscount(null);
+  };
+
+  /** 値引（円）：打った金額を値引にする */
+  const discountYen = () => {
+    if (unit != null || amount <= 0) return;
+    setDiscount({ kind: 'yen', value: amount });
+    setAmount(0);
+  };
+
+  /** 割引（%）：打った数を % にする（1〜100） */
+  const discountPercent = () => {
+    if (unit != null || amount <= 0) return;
+    if (amount > 100) {
+      toast('割引は 1〜100% で入れてください', 'error');
+      return;
+    }
+    setDiscount({ kind: 'percent', value: amount });
+    setAmount(0);
+  };
+
+  const openDrawer = () =>
+    startTransition(async () => {
+      const res = await drawerAction(storeId);
+      if (res.ok) toast('ドロアを開きます / Opening drawer');
+      else toast(res.error ?? 'ドロアを開けませんでした', 'error');
+    });
 
   /** 「×」: 打った金額を単価にして、続けて個数を打つ */
   const times = () => {
@@ -121,7 +186,12 @@ export function QuickPayScreen({
       return;
     }
     startTransition(async () => {
-      const res = await prepareCheckoutAction({ orderId: order?.id ?? null, guestCount: guests, lines: allLines });
+      const res = await prepareCheckoutAction({
+        orderId: order?.id ?? null,
+        guestCount: guests,
+        lines: allLines,
+        discount: discountAmount > 0 ? discount : null,
+      });
       if (res.error || !res.orderId) {
         toast(res.error ?? '会計に進めませんでした', 'error');
         return;
@@ -129,6 +199,7 @@ export function QuickPayScreen({
       setLines([]);
       setAmount(0);
       setUnit(null);
+      setDiscount(null);
       // ここからはいつもの会計（支払方法・お預かり・お釣り・レシート・ドロア）
       router.push(`/app/pos?order=${res.orderId}&checkout=1`);
     });
@@ -138,13 +209,18 @@ export function QuickPayScreen({
 
   return (
     <div className="mx-auto max-w-5xl">
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+      {/* 左：即会計／真ん中：クラシックレジ（2026-09-30 Ronnie「真ん中に Classic レジと書くとスマート」）／右：テイクアウト・メニュー選択 */}
+      <div className="mb-3 grid grid-cols-1 items-center gap-3 sm:grid-cols-[1fr_auto_1fr]">
         <h1 className="flex items-center gap-2 text-xl font-bold text-navy">
           <Calculator className="h-6 w-6 text-iris" aria-hidden />
           即会計
           <span className="text-xs font-semibold text-ink-3">Quick pay</span>
         </h1>
-        <div className="flex flex-wrap items-center gap-2">
+        <p className="hidden text-center sm:block">
+          <span className="block text-[15px] font-extrabold tracking-[0.12em] text-royal">クラシックレジ</span>
+          <span className="block text-[10px] font-bold tracking-[0.3em] text-ink-3">CLASSIC REGISTER</span>
+        </p>
+        <div className="flex flex-wrap items-center gap-2 sm:justify-end">
         {/* テイクアウト（持ち帰りの伝票を作って注文画面へ）。テーブル一覧の上から移した（2026-09-30 Ronnie「メニュー選択の左に」） */}
         <TakeoutRow className="tap3d inline-flex h-11 items-center gap-1.5 rounded-xl border-2 border-line bg-white px-4 text-[14px] font-bold text-royal disabled:opacity-60">
           <ShoppingBag className="h-4 w-4" aria-hidden />
@@ -183,28 +259,28 @@ export function QuickPayScreen({
               <p className="text-4xl font-extrabold tabular-nums">{yen(amount)}</p>
             )}
           </div>
-          <Tenkey onKey={onKey} disabled={pending} />
-          <div className="mt-2 grid grid-cols-[minmax(0,1fr)_minmax(0,2fr)] gap-2">
-            {/* ×：530 × 2 のように個数を入れる */}
-            <button
-              type="button"
-              onClick={times}
-              disabled={pending || unit != null || amount <= 0}
-              aria-label="かける（個数）"
-              className="tap3d flex h-14 items-center justify-center gap-1.5 rounded-xl border-2 border-line bg-white text-2xl font-bold text-navy disabled:opacity-40"
-            >
-              ×<span className="text-xs font-semibold text-ink-3">個数 Qty</span>
-            </button>
-            <button
-              type="button"
-              onClick={addLine}
-              disabled={pending || !pendingLine}
-              className="tap3d flex h-14 items-center justify-center gap-2 rounded-xl border-2 border-iris bg-iris-soft text-lg font-bold text-royal disabled:opacity-50"
-            >
-              <Plus className="h-5 w-5" aria-hidden />
-              追加
-              <span className="text-xs font-semibold text-ink-3">Add</span>
-            </button>
+          {/* クラシックなレジのキー */}
+          <div className="grid grid-cols-4 gap-2" role="group" aria-label="レジのキー">
+            <RegiKey tone="gray" label="訂正" en="Void" onClick={voidLast} disabled={pending || (!pendingLine && lines.length === 0)} />
+            <RegiKey tone="gray" label="取消" en="Cancel" onClick={cancelAll} disabled={pending || (!pendingLine && lines.length === 0 && !discount)} />
+            <RegiKey tone="dark" label="ドロア" en="Drawer" onClick={openDrawer} disabled={pending} />
+            <RegiKey tone="red" label="C" en="Clear" onClick={clearEntry} disabled={pending || (amount === 0 && unit == null)} big />
+            {(['7', '8', '9'] as const).map((d) => (
+              <RegiKey key={d} label={d} onClick={() => onDigit(d)} disabled={pending} big />
+            ))}
+            <RegiKey tone="blue" label="×" en="Qty" onClick={times} disabled={pending || unit != null || amount <= 0} big />
+            {(['4', '5', '6'] as const).map((d) => (
+              <RegiKey key={d} label={d} onClick={() => onDigit(d)} disabled={pending} big />
+            ))}
+            <RegiKey tone="amber" label="値引" en="¥ off" onClick={discountYen} disabled={pending || unit != null || amount <= 0} />
+            {(['1', '2', '3'] as const).map((d) => (
+              <RegiKey key={d} label={d} onClick={() => onDigit(d)} disabled={pending} big />
+            ))}
+            <RegiKey tone="amber" label="割引" en="% off" onClick={discountPercent} disabled={pending || unit != null || amount <= 0} />
+            {(['0', '00', '000'] as const).map((d) => (
+              <RegiKey key={d} label={d} onClick={() => onDigit(d)} disabled={pending} big />
+            ))}
+            <RegiKey tone="brand" label="登録" en="Add" onClick={addLine} disabled={pending || !pendingLine} />
           </div>
         </section>
 
@@ -287,9 +363,26 @@ export function QuickPayScreen({
                 <span className="tabular-nums">{yen(pendingTotal)}</span>
               </li>
             )}
+            {discount && discountAmount > 0 && (
+              <li className="flex items-center justify-between gap-2 px-3 py-2 text-saffron">
+                <span>{quickPayDiscountReason(discount)}</span>
+                <span className="flex items-center gap-2">
+                  <span className="font-semibold tabular-nums">−{yen(discountAmount)}</span>
+                  <button
+                    type="button"
+                    aria-label="値引・割引を消す"
+                    onClick={() => setDiscount(null)}
+                    disabled={pending}
+                    className="grid h-8 w-8 place-items-center rounded-lg text-ink-3 hover:bg-danger-soft hover:text-danger"
+                  >
+                    <X className="h-4 w-4" aria-hidden />
+                  </button>
+                </span>
+              </li>
+            )}
             {(order?.lines.length ?? 0) === 0 && lines.length === 0 && !pendingLine && (
               <li className="px-3 py-6 text-center text-xs text-ink-3">
-                金額を打って「追加」、または右上の「メニュー選択」
+                金額を打って「登録」、または右上の「メニュー選択」
                 <span className="block">Enter an amount, or choose from the menu</span>
               </li>
             )}
@@ -349,5 +442,50 @@ export function QuickPayScreen({
         </div>
       )}
     </div>
+  );
+}
+
+type Digit = '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | '00' | '000';
+
+const KEY_TONES = {
+  // 数字：白いキー
+  white: 'from-white to-[#ebe8f1] text-navy border-[#cfc9dc] border-b-[#b3abc4]',
+  gray: 'from-[#eeecf3] to-[#d9d4e3] text-navy border-[#c9c2d7] border-b-[#a9a1bb]',
+  dark: 'from-[#3a3246] to-[#221c2b] text-white border-[#15121a] border-b-[#0b090e]',
+  red: 'from-[#fdebe7] to-[#f5cdc5] text-[#b3341f] border-[#ebb9ae] border-b-[#d69a8d]',
+  blue: 'from-[#e8eefb] to-[#cbd8f3] text-[#27468f] border-[#b8c8ec] border-b-[#97acdb]',
+  amber: 'from-[#fdf2df] to-[#f6ddb0] text-[#8a4b08] border-[#ecd09c] border-b-[#d8b16e]',
+  brand: 'from-[#8b5cf6] to-[#6630c7] text-white border-[#5b2c8f] border-b-[#41206a]',
+} as const;
+
+/** クラシックなレジのキー（立体的な押しボタン。押すと沈む） */
+function RegiKey({
+  label,
+  en,
+  tone = 'white',
+  big = false,
+  onClick,
+  disabled,
+}: {
+  label: string;
+  en?: string;
+  tone?: keyof typeof KEY_TONES;
+  big?: boolean;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={cn(
+        'flex h-16 flex-col items-center justify-center rounded-lg border border-b-4 bg-linear-to-b leading-none font-bold shadow-[0_1px_2px_rgba(21,18,26,0.12)] transition-transform select-none active:translate-y-[2px] active:border-b-2 disabled:opacity-45',
+        KEY_TONES[tone]
+      )}
+    >
+      <span className={cn('tabular-nums', big ? 'text-2xl' : 'text-[17px]')}>{label}</span>
+      {en && <span className="mt-1 text-[9.5px] font-semibold opacity-70">{en}</span>}
+    </button>
   );
 }

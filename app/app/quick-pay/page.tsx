@@ -9,6 +9,7 @@ import { QUICK_PAY_LINE_NAME } from '@/lib/quick-pay';
 import { submitHandyOrder } from '@/app/app/handy/actions';
 import { QuickPayScreen, type QuickPayOrderedLine } from '@/components/pos/quick-pay-screen';
 import { startQuickOrder, prepareQuickCheckout } from './actions';
+import { enqueueDrawerKick } from '@/app/app/pos/print-actions';
 
 export const metadata: Metadata = { title: '即会計' };
 
@@ -72,6 +73,7 @@ export default async function QuickPayPage({ searchParams }: { searchParams: Pro
 
   return (
     <QuickPayScreen
+      storeId={store.id}
       staffName={ctx.displayName}
       lineName={QUICK_PAY_LINE_NAME}
       order={order}
@@ -79,6 +81,7 @@ export default async function QuickPayPage({ searchParams }: { searchParams: Pro
       startOrderAction={startQuickOrder}
       prepareCheckoutAction={prepareQuickCheckout}
       submitMenuAction={submitHandyOrder}
+      drawerAction={enqueueDrawerKick}
     />
   );
 }
