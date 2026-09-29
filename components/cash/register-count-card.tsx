@@ -126,7 +126,7 @@ export function RegisterCountCard({
       <CardHeader className="flex flex-wrap items-center justify-between gap-2">
         <CardTitle en="Cash count">現金実査{showRegisterName ? ` — ${session.registerName}` : ''}</CardTitle>
       </CardHeader>
-      <CardContent className="pt-2">
+      <CardContent className="px-3 pt-1 pb-3 sm:px-4">
         {/* 前営業日から開きっぱなしのレジ。これを締めないと、そのレジは新しく開局できない */}
         {today && session.businessDate && session.businessDate !== today && (
           <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
@@ -134,7 +134,7 @@ export function RegisterCountCard({
             の営業日から開いたままです。先にこのレジを締めてください（締めるまで、このレジは新しく開局できません）。
           </p>
         )}
-        <div className="flex items-center justify-between gap-3 border-b border-line py-4">
+        <div className="flex items-center justify-between gap-3 border-b border-line py-2.5">
           <div className="min-w-0">
             <p className="text-sm font-medium text-ink">理論在高</p>
             <p className="text-xs text-ink-3">釣銭準備金 ＋ 現金売上 ＋ 入金 − 出金 − 現金返金</p>
@@ -143,24 +143,26 @@ export function RegisterCountCard({
               {session.cashRefunds > 0 && ` − ${yen(session.cashRefunds)}`}
             </p>
           </div>
-          <b className="shrink-0 text-xl font-extrabold text-ink tabular-nums">{yen(session.theoreticalCash)}</b>
+          <b className="shrink-0 text-lg font-extrabold text-ink tabular-nums">{yen(session.theoreticalCash)}</b>
         </div>
 
-        <div className="border-b border-line py-4">
-          <p className="mb-2 text-sm font-medium text-ink">実査額（数えた現金）</p>
+        <div className="border-b border-line py-2.5">
+          <p className="mb-1.5 text-sm font-medium text-ink">実査額（数えた現金）</p>
+          {/* 開局の箱と同じ小さい形（2026-09-29 Ronnie「この箱も小さく」） */}
           <CashDenominationCounter
             idPrefix={`count-${session.id}`}
             counts={counts}
             onChange={setCounts}
             disabled={!canOperate}
+            compact
           />
         </div>
 
-        <div className="flex items-center justify-between gap-3 border-b border-line py-4">
+        <div className="flex items-center justify-between gap-3 border-b border-line py-2">
           <span className="text-sm font-medium text-ink">差額</span>
           <b
             className={cn(
-              'text-xl font-extrabold tabular-nums',
+              'text-lg font-extrabold tabular-nums',
               diff == null ? 'text-ink' : diff === 0 ? 'text-success' : 'text-danger'
             )}
           >
@@ -169,7 +171,7 @@ export function RegisterCountCard({
         </div>
 
         {/* 数えた現金の分け方（2026-09-28 Ronnie「現金売上で買い物の分が戻れば、残りは銀行・預り金。足りなければマイナス」） */}
-        <div className="space-y-1.5 border-b border-line py-3 text-sm">
+        <div className="space-y-1 border-b border-line py-2 text-sm">
           <p className="flex items-center justify-between gap-3">
             <span className="text-ink-2">
               翌準備金<span className="ml-1 text-[11px] text-ink-3">明日レジに残す</span>
@@ -209,7 +211,7 @@ export function RegisterCountCard({
 
         {/* 締められない理由（2026-09-25 店舗要望の3つのルール） */}
         {blocked && (
-          <ul className="mt-4 space-y-1 rounded-xl border border-danger/30 bg-danger/8 px-3 py-2.5 text-[13px] font-bold text-danger">
+          <ul className="mt-3 space-y-1 rounded-xl border border-danger/30 bg-danger/8 px-3 py-2.5 text-[13px] font-bold text-danger">
             {openSlipCount > 0 && (
               <li>
                 未会計の伝票が{openSlipCount}件あります。すべて会計するか取消してください
@@ -247,7 +249,7 @@ export function RegisterCountCard({
           <Button
             size="lg"
             variant={needsReason ? 'danger' : 'primary'}
-            className="mt-4 w-full"
+            className="mt-3 w-full"
             onClick={handleClose}
             disabled={pending || blocked}
           >
