@@ -70,7 +70,7 @@ export function menuLayout(
       // ドロアオープン等の操作行は左メニューだけ（メニュー一覧の画面からは押せない）
       items: g.items.filter(
         (i) =>
-          // テイクアウトはテーブル一覧（卓1の上）のボタンから。メニューには出さない（2026-09-28 Ronnie）
+          // テイクアウトは 即会計 の画面（メニュー選択の左）のボタンから。メニューには出さない（2026-09-28・09-30 Ronnie）
           i.action !== 'takeout' &&
           (options?.keepActions || i.action !== 'drawer') &&
           !MOVED_OUT_OF_MENU.has(i.href) &&

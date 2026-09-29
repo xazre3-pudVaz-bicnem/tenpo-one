@@ -72,7 +72,6 @@ export default async function QuickPayPage({ searchParams }: { searchParams: Pro
 
   return (
     <QuickPayScreen
-      storeName={store.name}
       staffName={ctx.displayName}
       lineName={QUICK_PAY_LINE_NAME}
       order={order}

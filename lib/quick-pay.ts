@@ -15,12 +15,24 @@ export const QUICK_PAY_MAX_AMOUNT = 9_999_999;
 /** 1回の会計で入れられる行の上限 */
 export const QUICK_PAY_MAX_LINES = 50;
 
+/** 「×」で入れる個数の上限（530 × 2 のように。2026-09-30 Ronnie） */
+export const QUICK_PAY_MAX_QUANTITY = 99;
+
+/** 電卓で入れた1行（単価 × 個数。「×」を使わなければ個数 1） */
+export interface QuickPayLine {
+  amount: number;
+  quantity: number;
+}
+
 /** 金額の行を確かめる。問題なければ null */
-export function quickPayProblem(amounts: readonly number[]): string | null {
-  if (amounts.length > QUICK_PAY_MAX_LINES) return `一度に入れられるのは${QUICK_PAY_MAX_LINES}行までです`;
-  for (const a of amounts) {
+export function quickPayProblem(lines: readonly QuickPayLine[]): string | null {
+  if (lines.length > QUICK_PAY_MAX_LINES) return `一度に入れられるのは${QUICK_PAY_MAX_LINES}行までです`;
+  for (const { amount: a, quantity: q } of lines) {
     if (!Number.isInteger(a) || a <= 0) return '金額は1円以上の整数で入れてください';
     if (a > QUICK_PAY_MAX_AMOUNT) return `1行の金額は${QUICK_PAY_MAX_AMOUNT.toLocaleString('ja-JP')}円までです`;
+    if (!Number.isInteger(q) || q < 1 || q > QUICK_PAY_MAX_QUANTITY) {
+      return `個数は1〜${QUICK_PAY_MAX_QUANTITY}で入れてください`;
+    }
   }
   return null;
 }
