@@ -91,7 +91,9 @@ export async function openRegister(
   openingFloat: number,
   denominations: DenominationJson | null = null,
   /** 前回の翌準備金と違うときの理由（2026-09-28 Ronnie。違えば必須。DB でも確かめる） */
-  openingDifferenceReason: string | null = null
+  openingDifferenceReason: string | null = null,
+  /** 開局した担当者（レジで選んでいる POS 担当者）。レジ精算の「開局 10:55 担当」に出す（2026-09-29 Ronnie） */
+  openedClerkName: string | null = null
 ): Promise<ActionResult> {
   // 失敗を throw ではなく戻り値で返す（throw すると本番でメッセージが伏せられ、
   // 画面には「Minified React error #441」しか出ない。lib/action-error.ts 参照）。
@@ -105,7 +107,7 @@ export async function openRegister(
   if (!validDenominations(denominations)) return actionFail('金種別の枚数が正しくありません');
   const supabase = await createClient();
   const reason = openingDifferenceReason?.trim().slice(0, 200) || undefined;
-  let { error } = await supabase.rpc('open_register_session', {
+  let { data: opened, error } = await supabase.rpc('open_register_session', {
     p_store_id: storeId,
     p_register_id: registerId,
     p_opening_float: openingFloat,
@@ -114,7 +116,7 @@ export async function openRegister(
   });
   // migration 00087 がまだの DB：理由の引数を付けずに呼び直す（開局は止めない）
   if (error && reason && /opening_difference_reason/.test(error.message) && /function|PGRST202|schema cache/i.test(error.message)) {
-    ({ error } = await supabase.rpc('open_register_session', {
+    ({ data: opened, error } = await supabase.rpc('open_register_session', {
       p_store_id: storeId,
       p_register_id: registerId,
       p_opening_float: openingFloat,
@@ -122,13 +124,23 @@ export async function openRegister(
     }));
   }
   if (error && denominations && isUnknownDenominationsArg(error.message)) {
-    ({ error } = await supabase.rpc('open_register_session', {
+    ({ data: opened, error } = await supabase.rpc('open_register_session', {
       p_store_id: storeId,
       p_register_id: registerId,
       p_opening_float: openingFloat,
     }));
   }
   if (error) return actionFail(translateRegisterError(error.message));
+  // 開局した担当者を残す（migration 00090 がまだなら何もしない。開局は止めない）
+  const sessionId = (opened as { session_id?: string } | null)?.session_id;
+  const clerk = openedClerkName?.trim().slice(0, 60);
+  if (sessionId && clerk) {
+    const { error: clerkError } = await supabase.rpc('set_register_open_clerk', {
+      p_session_id: sessionId,
+      p_clerk_name: clerk,
+    });
+    if (clerkError) console.error('[cash] 開局の担当者を保存できませんでした', clerkError.message);
+  }
   revalidatePath('/app/cash');
   revalidatePath('/app/pos');
   return actionOk();

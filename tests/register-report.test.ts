@@ -10,6 +10,7 @@ import {
   threeCol,
   isBankDepositPurpose,
   cashToBank,
+  openedNote,
   type RegisterReportData,
 } from '@/lib/register-report';
 import { dispWidth } from '@/lib/receipt-layout';
@@ -359,6 +360,25 @@ describe('layoutRegisterReport（2026-09-28 Ronnie が選んだ並び）', () =>
     expect(cashToBank(100000, 0, 110000)).toBe(-10000);
     expect(cashToBank(100000, 0, 90000)).toBe(10000);
     expect(cashToBank(100000, 5000, 90000)).toBe(5000);
+  });
+
+  it('営業日の横に 開局の時間と担当（2026-09-29 Ronnie）', () => {
+    const lines = layoutRegisterReport(sample({ businessDateLabel: '2026/9/20 (日)' }), { paperWidth: 80 }).map((l) => l.text);
+    expect(lines).toContain('営業日: 2026/9/20 (日)  開局 10:58 Ronnie');
+    // 精算情報の紙も同じ
+    const settle = layoutSettlementReport(sample({ businessDateLabel: '2026/9/20 (日)' })).map((l) => l.text);
+    expect(settle).toContain('営業日: 2026/9/20 (日)  開局 10:58 Ronnie');
+    // 開局が前の日なら日付も
+    expect(openedNote({ businessDateLabel: '2026/9/28 (月)', openedAtLabel: '2026/9/27 23:50', openedBy: 'Raju' })).toBe('開局 2026/9/27 23:50 Raju');
+    expect(openedNote({ businessDateLabel: '2026/9/28 (月)', openedAtLabel: '', openedBy: 'Raju' })).toBe('');
+    // 入りきらなければ次の行
+    const narrow = layoutRegisterReport(
+      sample({ businessDateLabel: '2026/9/20 (日)', openedBy: 'ラジュ・シュレスタ・グルン・タパ' }),
+      { paperWidth: 58 }
+    ).map((l) => l.text);
+    expect(narrow).toContain('営業日: 2026/9/20 (日)');
+    expect(narrow.some((l) => l.startsWith('開局: 2026/9/20 10:58'))).toBe(true);
+    for (const l of narrow) expect(dispWidth(l)).toBeLessThanOrEqual(32);
   });
 
   it('差額がある日・理由がある日は 差異理由 を出す', () => {

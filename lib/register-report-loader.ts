@@ -167,6 +167,22 @@ export async function loadRegisterReportData(
     : { data: [] as { id: string; display_name: string }[] };
   const nameOf = (id: string | null) =>
     id ? ((profiles ?? []).find((p) => p.id === id)?.display_name ?? '—') : '—';
+  // 開局した担当者（migration 00090。開局の画面で選んでいた POS 担当者）。
+  // 無いとき（前からのセッション）は開いたアカウントの名前。ただしレジの共用アカウント「<店舗名>（レジ）」は人ではないので出さない
+  const { data: openClerkRow, error: openClerkError } = await supabase
+    .from('register_sessions')
+    .select('opened_clerk_name')
+    .eq('id', sessionId)
+    .maybeSingle();
+  const openedClerk = openClerkError
+    ? null
+    : ((openClerkRow as { opened_clerk_name?: string | null } | null)?.opened_clerk_name ?? null);
+  const sessionStoreName = (session.stores as unknown as { name: string } | null)?.name ?? '';
+  const openerName = (() => {
+    if (openedClerk?.trim()) return openedClerk.trim();
+    const n = nameOf(session.opened_by as string | null);
+    return n === '—' || n === `${sessionStoreName}（レジ）` ? '' : n;
+  })();
 
   // 媒体別（予約経路）。予約に紐付かない注文は「フリー」
   const reservationIds = [...new Set((orders ?? []).map((o) => o.reservation_id).filter((v): v is string => !!v))];
@@ -353,7 +369,7 @@ export async function loadRegisterReportData(
     businessDateLabel: businessDateLabel(bd),
     sessionNo: String(session.id).slice(0, 8).toUpperCase(),
     openedAtLabel: formatDateTime(session.opened_at as string),
-    openedBy: nameOf(session.opened_by as string | null),
+    openedBy: openerName,
     closedAtLabel: session.closed_at ? formatDateTime(session.closed_at as string) : '—（開局中）',
     closedBy: clerkName?.trim() || nameOf(session.closed_by as string | null),
     printedAtLabel: jstNowLabel(),

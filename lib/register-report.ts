@@ -262,15 +262,35 @@ function makeLineTools(options: RegisterReportOptions) {
       }
     }
   };
-  return { L, width, line, center, kv, kcv, blank, section, starSection, sub, subSep, solid, dotted, table };
+  return { L, width, widthOpts, line, center, kv, kcv, blank, section, starSection, sub, subSep, solid, dotted, table };
 }
 
-/** 紙の一番上（レジ精算・店名・営業日・処理番号・締め） */
+/**
+ * 営業日の横に出す「開局 10:58 Raju」（2026-09-29 Ronnie「日付の横にレジを開けた時間と担当を」）。
+ * 開局が営業日と同じ日なら時刻だけ、違う日なら日付も。開局の記録が無ければ空
+ */
+export function openedNote(data: Pick<RegisterReportData, 'businessDateLabel' | 'openedAtLabel' | 'openedBy'>): string {
+  const at = (data.openedAtLabel ?? '').trim();
+  if (!at || at === '—') return '';
+  const day = data.businessDateLabel.split(' ')[0];
+  const when = at.startsWith(`${day} `) ? at.slice(day.length + 1) : at;
+  return `開局 ${when}${data.openedBy?.trim() ? ` ${data.openedBy.trim()}` : ''}`;
+}
+
+/** 紙の一番上（レジ精算・店名・営業日と開局・処理番号・締め） */
 function reportHead(t: ReturnType<typeof makeLineTools>, data: RegisterReportData, title: string) {
   t.center(title, 'large');
   t.center(data.storeName);
   t.blank();
-  t.line(`営業日: ${data.businessDateLabel}`);
+  const date = `営業日: ${data.businessDateLabel}`;
+  const opened = openedNote(data);
+  if (!opened) t.line(date);
+  else if (dispWidth(`${date}  ${opened}`, t.widthOpts) <= t.width) t.line(`${date}  ${opened}`);
+  else {
+    // 入りきらない（名前が長い・用紙が狭い）ときは次の行に 締め と同じ形で
+    t.line(date);
+    t.line(`開局: ${data.openedAtLabel}  ${data.openedBy}`.trimEnd());
+  }
   t.line(`処理番号: ${data.sessionNo}`);
   t.line(`締め: ${data.closedAtLabel}  ${data.closedBy}`);
 }
