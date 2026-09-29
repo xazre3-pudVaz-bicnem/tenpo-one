@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Check, Copy, Share2, X, CalendarPlus } from 'lucide-react';
 
 /**
- * ハンディの「今日の予約」に置く小さな「ご予約を紹介」ボタン。
+ * ハンディの「今日の予約」に置く小さな「ご予約リンクを紹介」ボタン（2026-09-30 Ronnie「ご予約リンク紹介」）。
  * 押すとお店の予約ページの QR を大きく出す（お客様がその場で読み取れる）。共有（LINE・メール・AirDrop）とコピーも。
  * 2026-09-30 Ronnie「注文を取りに行ったときにお客様に紹介・共有しやすいように、ハンディの予約に小さなボタンを」。
  */
@@ -51,7 +51,7 @@ export function HandyBookingShare({
         className="inline-flex h-8 items-center gap-1 rounded-full border border-[#d9ccf3] bg-[#f4effc] px-3 text-[12px] font-bold text-[#6630c7] active:bg-[#e9e0fa]"
       >
         <CalendarPlus className="h-3.5 w-3.5" aria-hidden />
-        ご予約を紹介
+        ご予約リンクを紹介
         <span className="text-[9.5px] font-semibold text-[#9a8cb6]">Share</span>
       </button>
 
