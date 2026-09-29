@@ -1,5 +1,7 @@
 'use client';
 
+import Link from 'next/link';
+import { IdCard } from 'lucide-react';
 import { BookingQrCard } from '@/components/settings/booking-qr-card';
 import { TableQrPdfButton } from '@/components/settings/table-qr-pdf-button';
 
@@ -46,6 +48,14 @@ export function BookingQrDownload({
             label="PNGをダウンロード"
             className="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-navy hover:bg-gray-50 disabled:opacity-70"
           />
+          {/* A4 に立名刺 9枚（切り取り線入り）。2026-09-30 Ronnie「店舗名刺としてプリントする」 */}
+          <Link
+            href="/app/settings/store/business-cards"
+            className="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-navy hover:bg-gray-50"
+          >
+            <IdCard className="h-4 w-4" aria-hidden />
+            店舗名刺としてプリントする
+          </Link>
         </div>
       </div>
     </div>

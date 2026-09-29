@@ -90,31 +90,7 @@ export default async function SettingsHubPage() {
         <p className="text-[13px] text-ink-3">店舗名・住所・営業時間などの基本情報（左のメニューから各設定を変更できます）</p>
         {store ? (
           <dl className="mt-2">
-            <Field label="店舗名">{store.name}</Field>
-            <Field label="会社">{ctx.organizationName || muted}</Field>
-            <Field label="住所">
-              {store.address ? `${store.postal_code ? `〒${store.postal_code} ` : ''}${store.address}` : muted}
-            </Field>
-            <Field label="電話番号">
-              <span className="tabular-nums">{store.phone || muted}</span>
-            </Field>
-            <Field label="メールアドレス">{store.email || muted}</Field>
-            <Field label="営業時間">
-              {openRanges.length > 0 ? (
-                <span className="tabular-nums">{openRanges.join(' / ')}</span>
-              ) : (
-                <Link href="/app/settings/hours" className="font-normal text-iris hover:underline">
-                  営業時間を設定する
-                </Link>
-              )}
-            </Field>
-            <Field label="定休日">{closedDays.length > 0 ? `${closedDays.join('・')}曜日` : '無休'}</Field>
-            <Field label="座席数">
-              <span className="tabular-nums">{store.seat_count ?? 0}</span> 席
-            </Field>
-            <Field label="オンライン予約">
-              {store.booking_enabled ? <Badge tone="success">受付中</Badge> : <Badge tone="gray">停止中</Badge>}
-            </Field>
+            {/* 予約リンク・予約QR はいちばん上に（2026-09-30 Ronnie「下に出ている。上に」） */}
             {/* 編集を押さなくても見える（2026-09-29 Ronnie「店舗ご予約リンク / Reservation link」） */}
             <Field label="店舗ご予約リンク" en="Reservation link">
               {bookingUrl ? (
@@ -144,6 +120,31 @@ export default async function SettingsHubPage() {
                 />
               </Field>
             )}
+            <Field label="店舗名">{store.name}</Field>
+            <Field label="会社">{ctx.organizationName || muted}</Field>
+            <Field label="住所">
+              {store.address ? `${store.postal_code ? `〒${store.postal_code} ` : ''}${store.address}` : muted}
+            </Field>
+            <Field label="電話番号">
+              <span className="tabular-nums">{store.phone || muted}</span>
+            </Field>
+            <Field label="メールアドレス">{store.email || muted}</Field>
+            <Field label="営業時間">
+              {openRanges.length > 0 ? (
+                <span className="tabular-nums">{openRanges.join(' / ')}</span>
+              ) : (
+                <Link href="/app/settings/hours" className="font-normal text-iris hover:underline">
+                  営業時間を設定する
+                </Link>
+              )}
+            </Field>
+            <Field label="定休日">{closedDays.length > 0 ? `${closedDays.join('・')}曜日` : '無休'}</Field>
+            <Field label="座席数">
+              <span className="tabular-nums">{store.seat_count ?? 0}</span> 席
+            </Field>
+            <Field label="オンライン予約">
+              {store.booking_enabled ? <Badge tone="success">受付中</Badge> : <Badge tone="gray">停止中</Badge>}
+            </Field>
           </dl>
         ) : (
           <EmptyState title="店舗情報を取得できませんでした" className="my-6" />

@@ -7,6 +7,7 @@ import {
   QUICK_PAY_MAX_LINES,
   QUICK_PAY_MAX_QUANTITY,
   QUICK_PAY_TAX_RATE,
+  isQuickPayOrder,
 } from '@/lib/quick-pay';
 import { NAV_TILES } from '@/lib/nav';
 
@@ -51,6 +52,15 @@ describe('即会計', () => {
     expect(src).toContain("kitchen_status: 'served'");
     expect(read('app/app/kitchen/page.tsx')).toContain('.filter((r) => r.menu_item_id != null)');
     expect(read('supabase/migrations/00093_quick_pay_no_kitchen.sql')).toContain('and oi.menu_item_id is not null');
+  });
+
+  it('即会計の伝票は「即会計 / Quick pay」と出す（店内 / Dine-in ではなく）', () => {
+    expect(isQuickPayOrder({ table_id: null, order_type: 'dine_in', memo: '即会計' })).toBe(true);
+    expect(isQuickPayOrder({ table_id: null, order_type: 'dine_in', memo: '即会計 / 支払メモ: カード' })).toBe(true);
+    expect(isQuickPayOrder({ table_id: 't1', order_type: 'dine_in', memo: '即会計' })).toBe(false);
+    expect(isQuickPayOrder({ table_id: null, order_type: 'takeout', memo: '即会計' })).toBe(false);
+    expect(isQuickPayOrder({ table_id: null, order_type: 'dine_in', memo: null })).toBe(false);
+    expect(read('app/app/pos/page.tsx')).toContain('QUICK_PAY_ORDER_LABEL');
   });
 
   it('会計はいつもの会計画面（checkout=1）', () => {
