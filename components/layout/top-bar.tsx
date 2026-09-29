@@ -31,6 +31,8 @@ export function TopBar({
       {/* ロゴまわり・上部バーの下端にグラデーションの線 */}
       <span aria-hidden className="bg-brand pointer-events-none absolute inset-x-0 bottom-0 h-[3px]" />
       <div className="flex min-w-0 items-center gap-3">
+        {/* 「ホーム」は店名の左（2026-09-30 Ronnie）。「メニュー」はホームと同じ画面なので出さない */}
+        <BackHome />
         {/* 店名は左の角（2026-09-30 Ronnie「店舗名を左の角に」）。お店のマーク＋店名だけ（企業名・アカウント名は出さない。
             2026-09-25 店舗要望）。複数店舗を見るアカウントは今までどおりアカウント名を出す */}
         <span
@@ -47,8 +49,6 @@ export function TopBar({
             <span className="hidden truncate text-[11px] font-medium text-white/70 2xl:inline">{roleLabel}</span>
           )}
         </span>
-        {/* 「メニュー」は「ホーム」と同じ画面なので出さない（2026-09-30 Ronnie「ホームだけでいい」） */}
-        <BackHome />
         {/* 店舗を1つしか持たない端末（レジのiPad）では、左の角に店名が出るので店舗の切り替えは出さない
             （2026-09-25 店舗要望「2か所は要らない。右だけ」） */}
         {(ctx.isHq || ctx.stores.length > 1) && (
