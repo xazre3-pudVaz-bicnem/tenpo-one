@@ -2,7 +2,7 @@ import {
   Home, BookOpen, List, Calendar, CalendarDays, LayoutGrid, MonitorSmartphone,
   ReceiptJapaneseYen, Users, Banknote, Wallet, FileText, Truck, ClipboardList, Package,
   Clock, JapaneseYen, BarChart3, UserCog, Settings, MoreHorizontal, Lock, Bell,
-  Ticket, Landmark, Mail, Inbox, Camera, ConciergeBell, SlidersHorizontal, ShoppingBag,
+  Ticket, Landmark, Mail, Inbox, Camera, ConciergeBell, SlidersHorizontal, ShoppingBag, Calculator,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -39,6 +39,7 @@ const ICONS: Record<string, LucideIcon> = {
   drawer: Inbox,
   bag: ShoppingBag,
   camera: Camera,
+  calculator: Calculator,
 };
 
 export function NavIcon({ name, className }: { name: string; className?: string }) {

@@ -35,7 +35,6 @@ export interface NavTile {
 
 export const NAV_TILES: NavTile[] = [
   {
-    // 即会計（Quick pay）はこの中（テーブル一覧）の「テイクアウト」ボタンから。左メニューには出さない
     href: '/app/floor',
     label: 'オーダー・会計',
     en: 'Order & Pay',
@@ -50,6 +49,15 @@ export const NAV_TILES: NavTile[] = [
     icon: 'calendar',
     permission: 'reservations.view',
     match: ['/app/reservations'],
+  },
+  {
+    // 即会計（電卓のレジのように金額だけで会計。メニュー選択もできる）。店舗台帳の下（2026-09-30 Ronnie）
+    href: '/app/quick-pay',
+    label: '即会計',
+    en: 'Quick pay',
+    icon: 'calculator',
+    permission: 'pos.checkout',
+    match: ['/app/quick-pay'],
   },
 ];
 
