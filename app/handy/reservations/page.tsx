@@ -8,6 +8,7 @@ import { requireHandyClerk } from '@/lib/handy-session';
 import { RESERVATION_STATUS, type ReservationStatus } from '@/lib/reservations';
 import { CREATED_VIA_LABEL } from '@/components/reservations/constants';
 import {
+  HandyBookingShareButton,
   HandyMain,
   HandyMenuButton,
   HandyOperatorBar,
@@ -140,6 +141,9 @@ export default async function HandyReservationsPage() {
         note={`${handyDateLabel(requestTime())} · ${reservations.length}件`}
       />
       <HandyMain>
+        <div className="flex justify-end px-3 pt-2 empty:hidden">
+          <HandyBookingShareButton />
+        </div>
         <HandyReservationList reservations={reservations} />
         <p className="px-5 pb-5 text-center text-[10px] leading-relaxed text-[#7a7090]">
           予約の登録・変更・来店処理はレジ（管理画面）の予約台帳で行います。

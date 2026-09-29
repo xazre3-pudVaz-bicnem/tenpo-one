@@ -42,12 +42,15 @@ interface HandyChromeApi {
   openDrawer: () => void;
   refresh: () => void;
   refreshing: boolean;
+  /** 「ご予約リンクを紹介」を開く（予約ページの無い店は null） */
+  openBookingShare: (() => void) | null;
 }
 
 const HandyChromeContext = createContext<HandyChromeApi>({
   openDrawer: () => {},
   refresh: () => {},
   refreshing: false,
+  openBookingShare: null,
 });
 
 export function useHandyChrome() {
@@ -110,6 +113,7 @@ export function HandyChrome({
     openDrawer: () => setDrawerOpen(true),
     refresh: () => startRefresh(() => router.refresh()),
     refreshing,
+    openBookingShare: booking ? () => setShareOpen(true) : null,
   };
 
   return (
@@ -364,6 +368,26 @@ export function HandyRefreshButton() {
       disabled={refreshing}
     >
       <RotateCw className={cn('h-7 w-7', refreshing && 'animate-spin')} strokeWidth={2.2} aria-hidden />
+    </button>
+  );
+}
+
+/**
+ * 今日の予約の上の小さな「ご予約リンクを紹介」（≡ の中にもある。2026-09-30 Ronnie「ここにも置いて」）。
+ * 押すと予約ページの QR・共有・コピーのポップアップ。予約ページの無い店では出さない
+ */
+export function HandyBookingShareButton() {
+  const { openBookingShare } = useHandyChrome();
+  if (!openBookingShare) return null;
+  return (
+    <button
+      type="button"
+      onClick={openBookingShare}
+      className="inline-flex h-8 items-center gap-1 rounded-full border border-[#d9ccf3] bg-[#f4effc] px-3 text-[12px] font-bold text-[#6630c7] active:bg-[#e9e0fa]"
+    >
+      <CalendarPlus className="h-3.5 w-3.5" aria-hidden />
+      ご予約リンクを紹介
+      <span className="text-[9.5px] font-semibold text-[#9a8cb6]">Share</span>
     </button>
   );
 }
