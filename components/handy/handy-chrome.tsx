@@ -14,6 +14,7 @@ import {
   ShoppingCart,
   UserRound,
   UserRoundPen,
+  CalendarPlus,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatTime } from '@/lib/format';
@@ -28,6 +29,7 @@ import { AppModeSwitch } from '@/components/native/app-mode-switch';
 import { useNow } from '@/components/floor/use-now';
 import type { StoreRef } from '@/lib/auth';
 import { elapsedLabel, serviceCallLabel, sortServiceCalls, type HandyServiceCall } from './logic';
+import { HandyBookingShareDialog } from './handy-booking-share';
 
 /**
  * 承認済みレイアウト（2026-09-21）のハンディは、TENPO ONE本体の上部バー・左メニュー・下部5タブが
@@ -68,6 +70,7 @@ export function HandyChrome({
   calls,
   serverNow,
   resolveServiceCallAction,
+  booking = null,
   children,
 }: {
   storeId: string;
@@ -83,6 +86,8 @@ export function HandyChrome({
   calls: HandyServiceCall[];
   serverNow: number;
   resolveServiceCallAction: (callId: string) => Promise<{ alreadyResolved: boolean }>;
+  /** お店の予約ページ（≡ の「ご予約リンクを紹介」。slug が無い店は null） */
+  booking?: { url: string; qrDataUrl: string } | null;
   children: React.ReactNode;
 }) {
   const router = useRouter();
@@ -91,6 +96,7 @@ export function HandyChrome({
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [callsOpen, setCallsOpen] = useState(false);
   const [selectOpen, setSelectOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const [refreshing, startRefresh] = useTransition();
 
   // 注文・呼び出しは他端末やお客様QRからも増える。router.refresh() は外枠（layout）と
@@ -221,6 +227,22 @@ export function HandyChrome({
           >
             今日の予約
           </SheetLink>
+          {/* ご予約リンクを紹介（今日の予約の上から ≡ の中へ。2026-09-30 Ronnie） */}
+          {booking && (
+            <button
+              type="button"
+              onClick={() => {
+                setDrawerOpen(false);
+                setShareOpen(true);
+              }}
+              className="flex min-h-[49px] w-full items-center gap-2 border-b border-[#eee8f6] text-left text-sm text-[#7b3fe4]"
+            >
+              <CalendarPlus className="h-[18px] w-[18px]" aria-hidden />
+              ご予約リンクを紹介
+              <span className="text-[10px] font-semibold text-[#9a8cb6]">Share</span>
+              <ChevronRight className="ml-auto h-4 w-4 text-[#c9b8ea]" aria-hidden />
+            </button>
+          )}
           {/* 品切れ設定はハンディのメニューには出さない（2026-09-28 Ronnie「ハンディにこのオプションは要らない」。レジの設定から） */}
           <PushSubscribeButton variant="row" />
           <button
@@ -263,6 +285,15 @@ export function HandyChrome({
             RESERVATION · 今日の予約
           </SheetLink>
         </HandySheet>
+      )}
+
+      {shareOpen && booking && (
+        <HandyBookingShareDialog
+          url={booking.url}
+          storeName={storeName}
+          qrDataUrl={booking.qrDataUrl}
+          onClose={() => setShareOpen(false)}
+        />
       )}
 
       {callsOpen && (
