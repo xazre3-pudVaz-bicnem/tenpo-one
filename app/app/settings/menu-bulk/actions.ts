@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { requirePermission } from '@/lib/auth';
+import { ADMIN_ONLY_SETTINGS_NOTE } from '@/lib/admin-only-settings';
 import { createClient } from '@/lib/supabase/server';
 import { bulkPatchProblem, type BulkPatch } from '@/lib/menu-bulk';
 
@@ -18,6 +19,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
  */
 export async function saveMenuBulk(storeId: string, patches: BulkPatch[]): Promise<BulkSaveResult> {
   const ctx = await requirePermission('menu.manage');
+  if (ctx.isRegisterDevice) return { error: ADMIN_ONLY_SETTINGS_NOTE };
   if (!ctx.stores.some((s) => s.id === storeId)) return { error: '対象店舗にアクセス権がありません' };
   if (!Array.isArray(patches) || patches.length === 0) return { error: '変更がありません' };
   if (patches.length > 2000) return { error: '一度に保存できるのは2000件までです' };

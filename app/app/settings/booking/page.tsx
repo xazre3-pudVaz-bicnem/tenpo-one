@@ -1,21 +1,28 @@
 import type { Metadata } from 'next';
 import { ExternalLink } from 'lucide-react';
-import QRCode from 'qrcode';
 import { requirePermission } from '@/lib/auth';
+import { ADMIN_ONLY_SETTINGS_NOTE } from '@/lib/admin-only-settings';
 import { createClient } from '@/lib/supabase/server';
 import { PageHeader } from '@/components/ui/page-header';
 import { EmptyState } from '@/components/ui/state';
 import { Button } from '@/components/ui/button';
 import { SettingsBackLink } from '@/components/settings/back-link';
 import { BookingSettingsForm } from '@/components/settings/booking-settings-form';
-import { BookingUrlPanel } from '@/components/settings/booking-url-panel';
-import { StoreSlugEditor } from '@/components/settings/store-slug-editor';
-import { SLUG_CHANGE_BY_CYPRESS_ONLY } from '@/lib/store-slug';
 
 export const metadata: Metadata = { title: '予約設定 | 設定' };
 
 export default async function BookingSettingsPage() {
   const ctx = await requirePermission('store.settings');
+  // 予約受付ルール（予約枠・受付期間・公開予約ページの表示内容・リマインダー）は管理画面だけ（2026-09-29 Ronnie「管理画面」）
+  if (ctx.isRegisterDevice) {
+    return (
+      <div>
+        <SettingsBackLink />
+        <PageHeader title="予約設定" en="Booking rules" />
+        <EmptyState title="管理画面で変更してください" description={ADMIN_ONLY_SETTINGS_NOTE} />
+      </div>
+    );
+  }
   const targetStore = ctx.currentStore ?? ctx.stores[0];
 
   if (!targetStore) {
@@ -41,16 +48,6 @@ export default async function BookingSettingsPage() {
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? '';
   const bookingUrl = `${siteUrl}/book/${store?.slug ?? ''}`;
 
-  // 公開予約URLのQRコード（掲出用）。data URLはCSP img-src data:許可で表示可。
-  let qrDataUrl: string | null = null;
-  if (store?.slug && siteUrl) {
-    try {
-      qrDataUrl = await QRCode.toDataURL(bookingUrl, { width: 320, margin: 1 });
-    } catch {
-      qrDataUrl = null;
-    }
-  }
-
   return (
     <div>
       <SettingsBackLink />
@@ -74,33 +71,7 @@ export default async function BookingSettingsPage() {
         </div>
       )}
 
-      {siteUrl ? (
-        <div className="mb-5">
-          <BookingUrlPanel
-            url={bookingUrl}
-            qrDataUrl={qrDataUrl}
-            storeName={targetStore.name}
-            slugEditor={
-              store?.slug ? (
-                ctx.isCypressAdmin ? (
-                  <StoreSlugEditor storeId={targetStore.id} slug={store.slug} baseUrl={`${siteUrl}/book/`} />
-                ) : (
-                  // 店舗・本部からは変えられない（2026-09-27 Ronnie「URL は CYPRESS からだけ」）
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-                    <span className="text-gray-500">スラッグ：</span>
-                    <span className="font-mono font-medium text-navy">{store.slug}</span>
-                    <span className="text-xs text-ink-3">{SLUG_CHANGE_BY_CYPRESS_ONLY}</span>
-                  </div>
-                )
-              ) : undefined
-            }
-          />
-        </div>
-      ) : (
-        <div className="mb-5 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
-          公開URL・QRコードを表示するには、環境変数 <code className="font-mono">NEXT_PUBLIC_SITE_URL</code> の設定が必要です。
-        </div>
-      )}
+      {/* 公開予約ページ（URL・スラッグ・予約QR）は 店舗情報 に移した（2026-09-30 Ronnie「店舗情報に。予約受付ルールには要らない」） */}
 
       {/* 予約の通知・リマインダーの送信準備は 予約台帳設定 に移した（2026-09-28 Ronnie） */}
 

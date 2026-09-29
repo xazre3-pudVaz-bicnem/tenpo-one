@@ -49,7 +49,9 @@ export default async function RegisterSettingsPage({
     );
   }
 
-  const canKitchen = can(ctx.role, 'store.settings');
+  // 厨房伝票（分け方・言語）と来店経路は管理画面だけ。レジ（iPad）には出さない（2026-09-29 Ronnie「管理画面だけ」）
+  const adminOnly = ctx.isRegisterDevice === true;
+  const canKitchen = can(ctx.role, 'store.settings') && !adminOnly;
   let kitchen = null;
   let visitSourceIds: string[] = [];
   if (canKitchen) {
@@ -78,6 +80,15 @@ export default async function RegisterSettingsPage({
         description={`${store.name}｜レジから変えられる設定をまとめています。保存すると、次の注文からレジ・ハンディ・お客様QR・プリンターに反映されます`}
       />
 
+      {adminOnly ? (
+        <div className="mb-6 flex items-center gap-2 rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-500">
+          <Lock className="h-4 w-4 shrink-0 text-gray-300" aria-hidden />
+          <span>
+            厨房伝票（分け方・言語）と来店経路は管理画面（パソコン）で変更します
+            <span className="block text-xs text-gray-400">Kitchen tickets and visit sources are changed from the admin screen</span>
+          </span>
+        </div>
+      ) : (
       <section aria-labelledby="register-settings-kitchen-ticket" className="mb-6">
         <h2 id="register-settings-kitchen-ticket" className="mb-2 text-sm font-bold text-navy">
           厨房伝票（キッチン・ドリンクのプリンター）
@@ -93,6 +104,7 @@ export default async function RegisterSettingsPage({
           </div>
         )}
       </section>
+      )}
 
       {/* 来店経路（お客様情報のボタン）。使わないサイトは外せる（2026-09-24 店舗要望） */}
       {kitchen && (

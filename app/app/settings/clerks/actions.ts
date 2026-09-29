@@ -15,6 +15,21 @@ function assertStoreAccess(storeIds: string[], storeId: string): string | null {
   return storeIds.includes(storeId) ? null : '対象店舗にアクセス権がありません';
 }
 
+/** オーナーの担当者はレジ（iPad）から消せない・役職を変えられない（2026-09-30 Ronnie「オーナーはレジから削除できないように」） */
+const OWNER_CLERK_LOCKED_MESSAGE =
+  'オーナーの担当者はレジ（iPad）からは削除・役職の変更ができません。管理画面（パソコン）で変更してください';
+
+/** 担当者の今の役職（role 列がまだ無い DB ではスタッフ扱い） */
+async function currentClerkRole(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  id: string,
+  storeId: string
+): Promise<ClerkRole> {
+  const { data, error } = await supabase.from('pos_clerks').select('role').eq('id', id).eq('store_id', storeId).maybeSingle();
+  if (error) return 'staff';
+  return parseClerkRole((data as { role?: unknown } | null)?.role);
+}
+
 /** POS担当者を追加する（アカウントは作らず、名前と役職だけを店舗の台帳に登録する） */
 export async function addPosClerk(storeId: string, name: string, role: string = 'staff'): Promise<ActionResult> {
   const ctx = await requirePermission('store.settings');
@@ -139,6 +154,10 @@ export async function setPosClerkRole(id: string, storeId: string, role: ClerkRo
   if (!CLERK_ROLES.includes(role)) return { error: '役職が不正です' };
 
   const supabase = await createClient();
+  // オーナーを別の役職に下げてから消す、をレジからできないように
+  if (ctx.isRegisterDevice && role !== 'owner' && (await currentClerkRole(supabase, id, storeId)) === 'owner') {
+    return { error: OWNER_CLERK_LOCKED_MESSAGE };
+  }
   const { error } = await supabase
     .from('pos_clerks')
     .update({ role, updated_by: ctx.userId })
@@ -184,6 +203,9 @@ export async function deletePosClerk(id: string, storeId: string): Promise<Actio
     .eq('store_id', storeId)
     .maybeSingle();
   if (!clerk) return { error: '担当者が見つかりません' };
+  if (ctx.isRegisterDevice && (await currentClerkRole(supabase, id, storeId)) === 'owner') {
+    return { error: OWNER_CLERK_LOCKED_MESSAGE };
+  }
 
   const { count } = await supabase
     .from('orders')

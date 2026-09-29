@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { requirePermission } from '@/lib/auth';
+import { ADMIN_ONLY_SETTINGS_NOTE } from '@/lib/admin-only-settings';
 import { PageHeader } from '@/components/ui/page-header';
 import { EmptyState } from '@/components/ui/state';
 import { SettingsBackLink } from '@/components/settings/back-link';
@@ -11,6 +12,15 @@ export const metadata: Metadata = { title: 'メニュー一括編集 | 設定' }
 /** 設定 > メニュー一括編集（全店舗共通の機能） */
 export default async function MenuBulkPage() {
   const ctx = await requirePermission('menu.manage');
+  // 一括編集は管理画面だけ（2026-09-29 Ronnie）
+  if (ctx.isRegisterDevice) {
+    return (
+      <div>
+        <PageHeader title="メニュー一括編集" en="Bulk edit" />
+        <EmptyState title="管理画面で編集してください" description={ADMIN_ONLY_SETTINGS_NOTE} />
+      </div>
+    );
+  }
   const targetStore = ctx.currentStore ?? ctx.stores[0];
 
   if (!targetStore) {

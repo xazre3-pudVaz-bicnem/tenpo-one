@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, EyeOff, Eye, Pencil, Check, X, Loader2, Trash2 } from 'lucide-react';
+import { Plus, EyeOff, Eye, Pencil, Check, X, Loader2, Trash2, Lock } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input, Select } from '@/components/ui/input';
@@ -25,7 +25,16 @@ export interface ClerkRow {
  * POS担当者（名前のみ）の管理。ログインアカウントは作らず、会計時に選ぶ名前だけを登録する。
  * 退職者は「非表示」にする（削除しない＝過去の伝票・レシートの担当名表示を壊さないため）。
  */
-export function ClerksPanel({ storeId, initial }: { storeId: string; initial: ClerkRow[] }) {
+export function ClerksPanel({
+  storeId,
+  initial,
+  lockOwner = false,
+}: {
+  storeId: string;
+  initial: ClerkRow[];
+  /** レジ端末（iPad）: オーナーの担当者は削除・役職の変更ができない（2026-09-30 Ronnie「オーナーはレジから削除できないように」） */
+  lockOwner?: boolean;
+}) {
   const router = useRouter();
   const { toast } = useToast();
   const [pending, startTransition] = useTransition();
@@ -97,7 +106,9 @@ export function ClerksPanel({ storeId, initial }: { storeId: string; initial: Cl
           <EmptyState title="担当者が登録されていません" description="上の入力欄から担当者名を追加してください" />
         ) : (
           <ul className="divide-y divide-gray-100 rounded-xl border border-gray-200">
-            {initial.map((c) => (
+            {initial.map((c) => {
+              const ownerLocked = lockOwner && c.role === 'owner';
+              return (
               <li key={c.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
                 {editingId === c.id ? (
                   <div className="flex flex-1 items-center gap-2">
@@ -139,7 +150,7 @@ export function ClerksPanel({ storeId, initial }: { storeId: string; initial: Cl
                         }
                         className="h-9 max-w-[11rem] text-sm"
                         aria-label={`${c.name}の役職`}
-                        disabled={pending}
+                        disabled={pending || ownerLocked}
                       >
                         {CLERK_ROLES.map((r) => (
                           <option key={r} value={r}>
@@ -175,23 +186,38 @@ export function ClerksPanel({ storeId, initial }: { storeId: string; initial: Cl
                         {c.status === 'hidden' ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
                         {c.status === 'hidden' ? '表示に戻す' : '非表示'}
                       </Button>
-                      {/* 伝票で使っていない担当者は消せる（使っていれば「非表示」を案内する） */}
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="text-danger hover:bg-danger-soft"
-                        aria-label={`${c.name}を削除`}
-                        disabled={pending}
-                        onClick={() => setDeleteTarget(c)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                        削除
-                      </Button>
+                      {/* 伝票で使っていない担当者は消せる（使っていれば「非表示」を案内する）。
+                          オーナーはレジ（iPad）からは消せない（管理画面だけ） */}
+                      {ownerLocked ? (
+                        <span
+                          className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-400"
+                          title="オーナーは管理画面（パソコン）で削除できます"
+                        >
+                          <Lock className="h-3.5 w-3.5" aria-hidden />
+                          <span className="leading-tight">
+                            削除不可
+                            <span className="block text-[10px]">Admin only</span>
+                          </span>
+                        </span>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="text-danger hover:bg-danger-soft"
+                          aria-label={`${c.name}を削除`}
+                          disabled={pending}
+                          onClick={() => setDeleteTarget(c)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                          削除
+                        </Button>
+                      )}
                     </div>
                   </>
                 )}
               </li>
-            ))}
+              );
+            })}
           </ul>
         )}
 
