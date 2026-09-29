@@ -15,12 +15,15 @@ export function TableQrPdfButton({
   className,
   format = "pdf",
   label,
+  page = "a6",
 }: {
   fileName: string;
   className?: string;
   format?: "pdf" | "png";
   /** ボタンの文字（既定は「PDFでダウンロード（A6）」） */
   label?: string;
+  /** PDF の用紙（既定 A6。店舗名刺の A4 シートは a4） */
+  page?: "a6" | "a4";
 }) {
   const [busy, setBusy] = useState<{ done: number; total: number } | null>(
     null,
@@ -57,9 +60,10 @@ export function TableQrPdfButton({
         a.click();
         return;
       }
+      const [pw, ph] = page === "a4" ? [210, 297] : [105, 148];
       const pdf = new jsPDF({
         unit: "mm",
-        format: "a6",
+        format: page,
         orientation: "portrait",
         compress: true,
       });
@@ -69,8 +73,8 @@ export function TableQrPdfButton({
           backgroundColor: "#ffffff",
           fontEmbedCSS,
         });
-        if (i > 0) pdf.addPage("a6", "portrait");
-        pdf.addImage(png, "PNG", 0, 0, 105, 148, undefined, "FAST");
+        if (i > 0) pdf.addPage(page, "portrait");
+        pdf.addImage(png, "PNG", 0, 0, pw, ph, undefined, "FAST");
         setBusy({ done: i + 1, total: cards.length });
       }
       pdf.save(fileName);
