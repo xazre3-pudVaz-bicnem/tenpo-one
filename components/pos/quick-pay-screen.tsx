@@ -222,21 +222,26 @@ export function QuickPayScreen({
         </p>
         <div className="flex flex-wrap items-center gap-2 sm:justify-end">
         {/* テイクアウト（持ち帰りの伝票を作って注文画面へ）。テーブル一覧の上から移した（2026-09-30 Ronnie「メニュー選択の左に」） */}
-        <TakeoutRow className="tap3d inline-flex h-11 items-center gap-1.5 rounded-xl border-2 border-line bg-white px-4 text-[14px] font-bold text-royal disabled:opacity-60">
-          <ShoppingBag className="h-4 w-4" aria-hidden />
-          テイクアウト
-          <span className="text-[10px] font-semibold text-ink-3">Take out</span>
+        {/* 日本語の下に小さく英語・少し大きいボタン（2026-09-30 Ronnie） */}
+        <TakeoutRow className="tap3d inline-flex h-14 items-center gap-2 rounded-xl border-2 border-line bg-white px-5 text-royal disabled:opacity-60">
+          <ShoppingBag className="h-5 w-5" aria-hidden />
+          <span className="flex flex-col items-start leading-tight">
+            <span className="text-[15px] font-bold">テイクアウト</span>
+            <span className="text-[10.5px] font-semibold text-ink-3">Take out</span>
+          </span>
         </TakeoutRow>
         {/* 右上：メニュー選択（ハンディと同じメニュー。選んだ商品は注文として厨房へ） */}
         <button
           type="button"
           onClick={openMenu}
           disabled={pending}
-          className="tap3d inline-flex h-11 items-center gap-1.5 rounded-xl bg-plum px-4 text-[14px] font-bold text-white disabled:opacity-60"
+          className="tap3d inline-flex h-14 items-center gap-2 rounded-xl bg-plum px-5 text-white disabled:opacity-60"
         >
-          <UtensilsCrossed className="h-4 w-4" aria-hidden />
-          メニュー選択
-          <span className="text-[10px] font-semibold opacity-70">Menu</span>
+          <UtensilsCrossed className="h-5 w-5" aria-hidden />
+          <span className="flex flex-col items-start leading-tight">
+            <span className="text-[15px] font-bold">メニュー選択</span>
+            <span className="text-[10.5px] font-semibold opacity-70">Order from menu</span>
+          </span>
         </button>
         </div>
       </div>
