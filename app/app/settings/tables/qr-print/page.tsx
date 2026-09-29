@@ -9,13 +9,17 @@ import { PageHeader } from '@/components/ui/page-header';
 import { EmptyState } from '@/components/ui/state';
 import { SettingsBackLink } from '@/components/settings/back-link';
 import { PrintButton } from '@/components/reservations/print-button';
+import { TableQrCard } from '@/components/settings/table-qr-card';
+import { TableQrPdfButton } from '@/components/settings/table-qr-pdf-button';
 
 export const metadata: Metadata = { title: 'テーブルQRコードをまとめて印刷 | 設定' };
 
 /**
- * テーブルのお客様QRをまとめて印刷（A4 に6枚・切り取り線つき）。
+ * テーブルのお客様QRをまとめて印刷。
  * 2026-09-21 店舗報告「QRコードが読み取れない卓がある」→ 全卓を同じ読み取りやすい形（周りの白4マス）で
  * 刷り直せるようにした。トークンは変えない（印刷済みの正しいQRはそのまま使える）。
+ * 2026-09-29 Ronnie「A6 で、黒と紫（TENPO ONE の色）、ダウンロードして印刷するだけ」→ 1卓1枚の A6 カード
+ * （components/settings/table-qr-card.tsx）。PDF でダウンロード（A6・1枚1ページ）か、そのまま印刷（@page A6）。
  */
 export default async function TableQrPrintPage() {
   const ctx = await requirePermission('store.settings');
@@ -52,6 +56,7 @@ export default async function TableQrPrintPage() {
     }))
   );
   const stopped = cards.filter((c) => !c.dataUrl);
+  const storeName = storeRow?.name ?? store.name;
 
   return (
     <div>
@@ -59,16 +64,23 @@ export default async function TableQrPrintPage() {
       <PageHeader
         title="テーブルQRコードをまとめて印刷"
         en="Table QR codes"
-        description={`${storeRow?.name ?? store.name}｜A4に6枚・切り取り線つき。読めないQRは刷り直して貼り替えてください`}
+        description={`${storeName}｜A6（105×148mm）に1卓1枚。PDFでダウンロードして印刷するだけ`}
         actions={
-          <PrintButton className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-primary px-4 text-sm font-semibold text-white hover:bg-primary-deep">
-            <Printer className="h-4 w-4" aria-hidden />
-            印刷する
-          </PrintButton>
+          <div className="flex flex-wrap items-center gap-2">
+            <TableQrPdfButton
+              fileName={`${storeName}_テーブルQR_A6.pdf`}
+              className="on-brand inline-flex h-10 items-center gap-1.5 rounded-lg px-4 text-sm font-semibold text-white disabled:opacity-70"
+            />
+            <PrintButton className="inline-flex h-10 items-center gap-1.5 rounded-lg border border-line bg-white px-4 text-sm font-semibold text-ink hover:bg-lilac-soft">
+              <Printer className="h-4 w-4" aria-hidden />
+              印刷する
+            </PrintButton>
+          </div>
         }
       />
       <div className="mb-4 space-y-1 rounded-lg border border-gray-200 bg-white p-3 text-xs leading-relaxed text-gray-600">
-        <p>・印刷のときは「倍率 100%（実際のサイズ）」「用紙 A4」にしてください。QRは約5cm角で、周りの白いフチも切り落とさないでください。</p>
+        <p>・「PDFでダウンロード」→ PDF を開いて「倍率 100%（実際のサイズ）」「用紙 A6」で印刷してください。1ページに1卓です。</p>
+        <p>・A4 の紙しか無いときは、印刷の設定で「1枚に4ページ」にすると A4 1枚に4卓（ちょうど A6 の大きさ）で出ます。</p>
         <p>・QRの中身（URL）は今のものと同じです。「トークン再発行」はしていないので、正しく読めている卓はそのまま使えます。</p>
         {stopped.length > 0 && (
           <p className="font-semibold text-danger">
@@ -88,31 +100,13 @@ export default async function TableQrPrintPage() {
         <EmptyState title="テーブルがありません" description="フロア・テーブルでテーブルを追加してください" />
       ) : (
         <div className="print-area">
-          <style>{'@page { size: A4; margin: 10mm; }'}</style>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 print:grid-cols-2 print:gap-0">
+          <style>{'@page { size: A6 portrait; margin: 0; }'}</style>
+          <div className="flex flex-wrap gap-4 print:block">
             {cards
               .filter((c) => c.dataUrl)
               .map((c) => (
-                <div
-                  key={c.id}
-                  className="flex flex-col items-center justify-center border border-dashed border-gray-300 bg-white px-3 py-4 text-center [break-inside:avoid] print:h-[92mm] print:py-0"
-                >
-                  <p className="text-[11px] font-bold tracking-wide text-gray-500">{storeRow?.name ?? store.name}</p>
-                  <p className="mt-1 text-4xl leading-none font-extrabold text-navy">{c.name}</p>
-                  {/* eslint-disable-next-line @next/next/no-img-element -- サーバーで作った QR の data URL */}
-                  <img
-                    src={c.dataUrl as string}
-                    alt={`${c.name}の注文用QRコード`}
-                    width={600}
-                    height={600}
-                    className="mt-2 h-[52mm] w-[52mm] [image-rendering:pixelated]"
-                  />
-                  <p className="mt-1 text-[13px] leading-snug font-bold text-navy">
-                    スマートフォンのカメラで読み取って
-                    <br />
-                    ご注文ください
-                  </p>
-                  <p className="text-[10px] text-gray-500">Scan with your phone camera to order</p>
+                <div key={c.id} className="rounded-lg shadow-[0_1px_4px_rgba(21,18,26,0.12)] print:rounded-none print:shadow-none">
+                  <TableQrCard storeName={storeName} tableName={c.name} dataUrl={c.dataUrl as string} />
                 </div>
               ))}
           </div>
