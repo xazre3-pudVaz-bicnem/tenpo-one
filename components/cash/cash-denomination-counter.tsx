@@ -38,6 +38,8 @@ export function CashDenominationCounter({
   const total = useMemo(() => sumDenominations(counts), [counts]);
   /** 2列のときは左右の余白を詰める（iPad の半分の幅に入れる） */
   const padX = columns === 2 ? 'px-2' : 'px-3';
+  /** 2列（レジの iPad）はさらに小さく（2026-09-29 Ronnie「現金実査をもっと小さく」） */
+  const dense = columns === 2;
 
   const setCount = (denom: CashDenomination, raw: string) => {
     const digits = raw.replace(/[^\d]/g, '');
@@ -55,9 +57,9 @@ export function CashDenominationCounter({
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-surface text-ink-2">
-                  <th className={cn(padX, 'py-2 text-left font-medium')}>金種</th>
-                  <th className={cn(padX, 'py-2 text-right font-medium')}>枚数</th>
-                  <th className={cn(padX, 'py-2 text-right font-medium')}>金額</th>
+                  <th className={cn(padX, dense ? 'py-1 text-left text-xs font-medium' : 'py-2 text-left font-medium')}>金種</th>
+                  <th className={cn(padX, dense ? 'py-1 text-right text-xs font-medium' : 'py-2 text-right font-medium')}>枚数</th>
+                  <th className={cn(padX, dense ? 'py-1 text-right text-xs font-medium' : 'py-2 text-right font-medium')}>金額</th>
                 </tr>
               </thead>
               <tbody>
@@ -66,12 +68,12 @@ export function CashDenominationCounter({
                   const subtotal = denominationSubtotal(denom, count);
                   return (
                     <tr key={denom} className="border-t border-line">
-                      <td className={cn(padX, compact ? 'py-1' : 'py-2')}>
+                      <td className={cn(padX, dense ? 'py-0.5 text-[13px]' : compact ? 'py-1' : 'py-2')}>
                         <label htmlFor={`${idPrefix}-denom-${denom}`} className="font-semibold text-ink">
                           {denominationLabel(denom)}
                         </label>
                       </td>
-                      <td className={cn(padX, compact ? 'py-1 text-right' : 'py-1.5 text-right')}>
+                      <td className={cn(padX, dense ? 'py-0.5 text-right' : compact ? 'py-1 text-right' : 'py-1.5 text-right')}>
                         <input
                           id={`${idPrefix}-denom-${denom}`}
                           inputMode="numeric"
@@ -81,13 +83,15 @@ export function CashDenominationCounter({
                           placeholder="0"
                           aria-label={`${denominationLabel(denom)}の枚数`}
                           className={
-                            compact
+                            dense
+                            ? 'h-8 w-16 rounded-md border border-line bg-white px-1.5 text-right text-sm font-bold text-ink tabular-nums placeholder:text-ink-3 focus:border-iris focus:outline-2 focus:outline-iris/25 disabled:bg-gray-100'
+                            : compact
                               ? 'h-9 w-20 rounded-lg border border-line bg-white px-2 text-right text-base font-bold text-ink tabular-nums placeholder:text-ink-3 focus:border-iris focus:outline-2 focus:outline-iris/25 disabled:bg-gray-100'
                               : 'h-12 w-24 rounded-lg border border-line bg-white px-3 text-right text-xl font-bold text-ink tabular-nums placeholder:text-ink-3 focus:border-iris focus:outline-2 focus:outline-iris/25 disabled:bg-gray-100'
                           }
                         />
                       </td>
-                      <td className={cn(padX, compact ? 'py-1 text-right text-sm tabular-nums text-ink-2' : 'py-2 text-right text-base tabular-nums text-ink-2')}>
+                      <td className={cn(padX, dense ? 'py-0.5 text-right text-xs tabular-nums text-ink-2' : compact ? 'py-1 text-right text-sm tabular-nums text-ink-2' : 'py-2 text-right text-base tabular-nums text-ink-2')}>
                         {subtotal === 0 ? '—' : yen(subtotal)}
                       </td>
                     </tr>
@@ -99,9 +103,9 @@ export function CashDenominationCounter({
         ))}
       </div>
 
-      <div className={compact ? 'mt-2 flex items-center justify-between rounded-xl bg-surface px-3 py-2' : 'mt-2 flex items-center justify-between rounded-xl bg-surface px-4 py-3'}>
+      <div className={dense ? 'mt-1.5 flex items-center justify-between rounded-lg bg-surface px-3 py-1.5' : compact ? 'mt-2 flex items-center justify-between rounded-xl bg-surface px-3 py-2' : 'mt-2 flex items-center justify-between rounded-xl bg-surface px-4 py-3'}>
         <span className={compact ? 'text-sm font-semibold text-ink' : 'text-base font-semibold text-ink'}>合計（実査額）</span>
-        <b className={compact ? 'text-2xl font-extrabold tabular-nums text-ink' : 'text-3xl font-extrabold tabular-nums text-ink'}>{yen(total)}</b>
+        <b className={dense ? 'text-xl font-extrabold tabular-nums text-ink' : compact ? 'text-2xl font-extrabold tabular-nums text-ink' : 'text-3xl font-extrabold tabular-nums text-ink'}>{yen(total)}</b>
       </div>
     </div>
   );

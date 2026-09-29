@@ -204,6 +204,81 @@ export default async function CashClosePage({
     </Card>
   );
 
+  // 入出金と現金残り（2026-09-29 Ronnie「支払方法別の下に 入出金 と 現金残り も」）。開局中のレジの数字（理論在高と同じ計算）
+  const cashFlow = openSessions.reduce(
+    (a, x) => ({
+      opening: a.opening + x.openingFloat,
+      sales: a.sales + x.cashSales,
+      cashIn: a.cashIn + x.cashIn,
+      cashOut: a.cashOut + x.cashOut,
+      refunds: a.refunds + x.cashRefunds,
+      remaining: a.remaining + x.theoreticalCash,
+    }),
+    { opening: 0, sales: 0, cashIn: 0, cashOut: 0, refunds: 0, remaining: 0 }
+  );
+  const registerMoves = cashRows
+    .filter((r) => r.kind === 'deposit' || r.kind === 'withdrawal')
+    .sort((a, b) => a.occurredAt.localeCompare(b.occurredAt));
+  const cashFlowCard =
+    openSessions.length > 0 ? (
+      <Card className="overflow-hidden">
+        <CardHeader>
+          <CardTitle en="Cash in / out">入出金・現金残り</CardTitle>
+        </CardHeader>
+        <table className="w-full text-sm">
+          <tbody>
+            <CashFlowRow label="レジオープン金額" en="Opening cash" value={yen(cashFlow.opening)} />
+            <CashFlowRow label="現金売上" en="Cash sales" value={`＋${yen(cashFlow.sales)}`} />
+            <CashFlowRow
+              label="入金"
+              en="Cash in"
+              value={`＋${yen(cashFlow.cashIn)}`}
+              sub={`${registerMoves.filter((r) => r.kind === 'deposit').length}件`}
+            />
+            <CashFlowRow
+              label="出金"
+              en="Cash out"
+              value={`−${yen(cashFlow.cashOut)}`}
+              sub={`${registerMoves.filter((r) => r.kind === 'withdrawal').length}件`}
+            />
+            {cashFlow.refunds > 0 && <CashFlowRow label="現金返金" en="Cash refunds" value={`−${yen(cashFlow.refunds)}`} />}
+          </tbody>
+          <tfoot>
+            <tr className="bg-lilac-soft">
+              <td className="px-4 py-2 font-bold text-ink sm:px-5">
+                現金残り<span className="ml-1 text-[11px] font-medium text-ink-3">Cash in drawer</span>
+              </td>
+              <td />
+              <td className="px-4 py-2 text-right text-[16px] font-extrabold text-royal tabular-nums sm:px-5">{yen(cashFlow.remaining)}</td>
+            </tr>
+          </tfoot>
+        </table>
+        {registerMoves.length > 0 && (
+          <ul className="border-t border-line text-[12.5px]">
+            {registerMoves.slice(-8).map((r) => {
+              const { main, sub } = splitPurpose(r.purpose, r.kind);
+              return (
+                <li key={r.id} className="grid grid-cols-[44px_minmax(0,1fr)_auto] items-center gap-2 border-b border-line px-4 py-1.5 last:border-b-0 sm:px-5">
+                  <time className="text-[11px] font-bold text-ink-3 tabular-nums">{formatTime(r.occurredAt)}</time>
+                  <span className="min-w-0 truncate text-ink">
+                    {main}
+                    {sub && <span className="ml-1 text-[11px] text-ink-3">{sub}</span>}
+                  </span>
+                  <b className={cn('tabular-nums', r.kind === 'deposit' ? 'text-success' : 'text-ink')}>
+                    {r.kind === 'deposit' ? '＋' : '−'}
+                    {yen(r.amount)}
+                  </b>
+                </li>
+              );
+            })}
+            {registerMoves.length > 8 && (
+              <li className="px-4 py-1.5 text-[11px] text-ink-3 sm:px-5">ほか {registerMoves.length - 8}件（入出金の画面で見られます）</li>
+            )}
+          </ul>
+        )}
+      </Card>
+    ) : null;
+
   // 締めたレジ（再印刷など）
   const closedSection =
     closedCards.length > 0 ? (
@@ -373,6 +448,7 @@ export default async function CashClosePage({
               <div className="space-y-3">
                 {salesCard}
                 {methodCard}
+                {cashFlowCard}
                 {ngRows.length > 0 && (
                   <p className="flex items-start gap-1.5 rounded-xl border border-danger/30 bg-danger-soft px-3 py-2 text-[12.5px] font-bold text-danger">
                     <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
@@ -388,7 +464,10 @@ export default async function CashClosePage({
             {/* レジクローズ（現金実査）はいちばん上（2026-09-29 Ronnie「レジクローズする所を上に」）。支払方法別はその横／下 */}
             <div className="grid items-start gap-3 lg:grid-cols-2">
               {countSection}
-              {methodCard}
+              <div className="space-y-3">
+                {methodCard}
+                {cashFlowCard}
+              </div>
             </div>
             {closedSection}
             {salesCard}
@@ -425,5 +504,18 @@ function Kv({ label, value, sub }: { label: string; value: string; sub?: string 
       <b className="text-[17px] leading-tight font-extrabold text-ink tabular-nums">{value}</b>
       {sub && <span className="text-[11px] text-ink-3 tabular-nums">{sub}</span>}
     </div>
+  );
+}
+
+function CashFlowRow({ label, en, value, sub }: { label: string; en: string; value: string; sub?: string }) {
+  return (
+    <tr className="border-b border-line">
+      <td className="px-4 py-1.5 text-ink sm:px-5">
+        {label}
+        <span className="ml-1 text-[11px] text-ink-3">{en}</span>
+      </td>
+      <td className="px-2 py-1.5 text-[12px] text-ink-3 tabular-nums">{sub ?? ''}</td>
+      <td className="px-4 py-1.5 text-right font-bold text-ink tabular-nums sm:px-5">{value}</td>
+    </tr>
   );
 }

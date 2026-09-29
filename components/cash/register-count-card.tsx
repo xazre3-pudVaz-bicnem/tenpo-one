@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { useMemo, useState, useTransition } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Dialog } from '@/components/ui/dialog';
+import { AlertTriangle, Lock } from 'lucide-react';
 import { Textarea } from '@/components/ui/input';
 import { useToast } from '@/components/ui/toast';
 import { cn } from '@/lib/utils';
@@ -75,27 +77,43 @@ export function RegisterCountCard({
   /** レジクローズの担当者（必ず選ぶ。精算レシートに出る） */
   const clerkName = clerkGate?.clerk?.name ?? null;
   const blocked = openSlipCount > 0 || !entered || diff !== 0 || !clerkName;
+  /**
+   * 締められない理由（日本語と英語）。押したときにポップアップで出す
+   * （2026-09-29 Ronnie「レジクローズで間違いがあったら、何が間違いか日本語と英語で出るポップアップを」）。
+   * 差額があるままでは締められない（2026-09-25 店舗要望「レジの金額合わないとできない」）。
+   */
+  const problems: CloseProblem[] = [];
+  if (openSlipCount > 0) {
+    problems.push({
+      ja: `未会計の伝票が${openSlipCount}件あります。すべて会計するか取消してからクローズしてください。`,
+      en: `There ${openSlipCount === 1 ? 'is 1 unpaid slip' : `are ${openSlipCount} unpaid slips`}. Please check out or cancel them before closing.`,
+    });
+  }
+  if (!entered) {
+    problems.push({
+      ja: '金種ごとの枚数を入れてください（0円のときは1円に0と入れてください）。',
+      en: 'Please enter the number of coins and bills for each denomination (enter 0 for ¥1 if there is no cash).',
+    });
+  } else if (diff !== 0 && diff != null) {
+    problems.push({
+      ja: `数えた現金が理論在高より ${yen(Math.abs(diff))} ${diff > 0 ? '多い' : '少ない'}です。数え直すか、差額を入出金に記録して合わせてください。`,
+      en: `The counted cash is ${yen(Math.abs(diff))} ${diff > 0 ? 'more' : 'less'} than the expected cash. Please count again, or record the difference in Cash in / out.`,
+    });
+  }
+  if (!clerkName) {
+    problems.push({
+      ja: 'レジクローズの担当者を選んでください。',
+      en: 'Please select the staff member who is closing the register.',
+    });
+  }
+  const [problemPopup, setProblemPopup] = useState<CloseProblem[] | null>(null);
 
   const handleClose = () => {
-    if (!entered) {
-      toast('金種ごとの枚数を入力してください（0円のときは1円に0と入れてください）', 'error');
+    if (problems.length > 0) {
+      setProblemPopup(problems);
       return;
     }
-    if (openSlipCount > 0) {
-      toast('未会計の伝票があります。すべて会計してからクローズしてください', 'error');
-      return;
-    }
-    // 差額があるままでは締められない（2026-09-25 店舗要望「レジの金額合わないとできない」）。
-    // 過不足は入出金（現金過不足）に記録して、実際の現金と理論在高を合わせてから締める。
-    if (diff !== 0) {
-      toast('実査額と理論在高が合っていません。数え直すか、差額を入出金に記録してから締めてください', 'error');
-      return;
-    }
-    if (!clerkName) {
-      toast('レジクローズの担当者を選んでください', 'error');
-      clerkGate?.change();
-      return;
-    }
+    if (!clerkName) return;
     startTransition(async () => {
       try {
         const result = await closeRegister(
@@ -106,7 +124,7 @@ export function RegisterCountCard({
           clerkName
         );
         if (!result.ok) {
-          toast(result.error, 'error');
+          setProblemPopup([{ ja: result.error, en: 'The register could not be closed. Please check the message above and try again.' }]);
           return;
         }
         if (result.printWarning) {
@@ -119,7 +137,9 @@ export function RegisterCountCard({
         // レジ端末は締めたらログアウト（レジのログイン画面へ戻る）
         if (result.signOutAfter) await signOutRegister();
       } catch (err) {
-        toast(toUserMessage(err, 'クローズに失敗しました'), 'error');
+        setProblemPopup([
+          { ja: toUserMessage(err, 'クローズに失敗しました'), en: 'The register could not be closed. Please try again.' },
+        ]);
       }
     });
   };
@@ -134,9 +154,11 @@ export function RegisterCountCard({
             size="sm"
             variant={needsReason ? 'danger' : 'primary'}
             onClick={handleClose}
-            disabled={pending || blocked}
+            disabled={pending}
+            className={cn('h-auto flex-col gap-0 py-1 leading-tight', blocked && 'opacity-60')}
           >
             {pending ? 'クローズ中…' : 'レジクローズする'}
+            <span className="text-[10px] font-semibold opacity-80">Close register</span>
           </Button>
         )}
       </CardHeader>
@@ -148,6 +170,16 @@ export function RegisterCountCard({
             の営業日から開いたままです。先にこのレジを締めてください（締めるまで、このレジは新しく開局できません）。
           </p>
         )}
+        {/* レジオープン金額（開局のときに数えた釣銭準備金）。ここでは変えられない（2026-09-29 Ronnie） */}
+        <div className="flex items-center justify-between gap-3 border-b border-line py-2">
+          <p className="text-sm font-medium text-ink">
+            レジオープン金額<span className="ml-1 text-[11px] text-ink-3">Opening cash</span>
+          </p>
+          <span className="flex items-center gap-1.5">
+            <Lock className="h-3.5 w-3.5 text-ink-3" aria-label="変更できません" />
+            <b className="text-base font-extrabold text-ink tabular-nums">{yen(session.openingFloat)}</b>
+          </span>
+        </div>
         <div className="flex items-center justify-between gap-3 border-b border-line py-2.5">
           <div className="min-w-0">
             <p className="text-sm font-medium text-ink">理論在高</p>
@@ -264,11 +296,14 @@ export function RegisterCountCard({
           <Button
             size="lg"
             variant={needsReason ? 'danger' : 'primary'}
-            className="mt-3 w-full"
+            className={cn('mt-3 w-full', blocked && 'opacity-60')}
             onClick={handleClose}
-            disabled={pending || blocked}
+            disabled={pending}
           >
-            {pending ? 'クローズ中…' : 'レジをクローズする / Close register'}
+            <span className="flex flex-col items-center leading-tight">
+              {pending ? 'クローズ中…' : 'レジをクローズする'}
+              <span className="text-[11px] font-semibold opacity-80">Close register</span>
+            </span>
           </Button>
         ) : (
           <p className="mt-4 text-center text-xs text-ink-3">レジ操作の権限がありません</p>
@@ -279,6 +314,42 @@ export function RegisterCountCard({
           </p>
         )}
       </CardContent>
+      {/* 締められないとき・失敗したときのポップアップ（日本語と英語） */}
+      <Dialog open={problemPopup !== null} onClose={() => setProblemPopup(null)} title="レジクローズできません / Cannot close the register">
+        <ul className="space-y-3">
+          {(problemPopup ?? []).map((p, i) => (
+            <li key={i} className="flex gap-2.5 rounded-xl border border-danger/30 bg-danger-soft px-3 py-2.5">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-danger" aria-hidden />
+              <span>
+                <span className="block text-[14px] font-bold text-danger">{p.ja}</span>
+                <span className="mt-0.5 block text-[12px] text-ink-2">{p.en}</span>
+              </span>
+            </li>
+          ))}
+        </ul>
+        <div className="mt-4 flex flex-wrap justify-end gap-2">
+          {!clerkName && clerkGate && (
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                setProblemPopup(null);
+                clerkGate.change();
+              }}
+            >
+              担当者を選ぶ / Select staff
+            </Button>
+          )}
+          <Button type="button" onClick={() => setProblemPopup(null)}>
+            OK
+          </Button>
+        </div>
+      </Dialog>
     </Card>
   );
+}
+
+interface CloseProblem {
+  ja: string;
+  en: string;
 }

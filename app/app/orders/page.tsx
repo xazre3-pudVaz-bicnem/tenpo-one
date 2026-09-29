@@ -4,7 +4,8 @@ import { CalendarDays, ChevronDown, Download } from 'lucide-react';
 import { requireFeature } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { can } from '@/lib/permissions';
-import { yen, formatTime, todayJst, daysAgoJst, weekdayJa } from '@/lib/format';
+import { yen, formatTime, todayJst, weekdayJa } from '@/lib/format';
+import { orderPeriodPresets } from '@/lib/order-period-presets';
 import { PageHeader } from '@/components/ui/page-header';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Input, Label, Select } from '@/components/ui/input';
@@ -134,7 +135,7 @@ export default async function OrdersPage({
     // 見出しの集計（期間内・状態絞込に依存しない）
     supabase
       .from('orders')
-      .select('status, total')
+      .select('status, total, guest_count')
       .eq('store_id', store.id)
       .gte('business_date', from)
       .lte('business_date', to)
@@ -144,6 +145,10 @@ export default async function OrdersPage({
   const settled = (periodRows ?? []).filter((o) => o.status === 'paid' || o.status === 'refunded');
   const unsettled = (periodRows ?? []).filter((o) => o.status === 'open');
   const sum = (rows: { total: number }[]) => rows.reduce((a, o) => a + o.total, 0);
+  // 選んだ期間の売上（会計済）。iPad でも見出しの下に出す（2026-09-29 Ronnie「下に売上も選んだ期間で」）
+  const settledSales = sum(settled);
+  const settledGuests = settled.reduce((a, o) => a + Number(o.guest_count ?? 0), 0);
+  const perGuest = settledGuests > 0 ? Math.round(settledSales / settledGuests) : 0;
 
   // 返金/取消バッジ・純額表示・支払方法用（このページに表示される注文のみを対象にした軽量クエリ）
   const orderIds = (orders ?? []).map((o) => o.id);
@@ -184,13 +189,8 @@ export default async function OrdersPage({
   };
 
   const periodLabel = multiDay ? `${from.replaceAll('-', '/')} 〜 ${to.slice(5).replaceAll('-', '/')}` : dayLabel(from);
-  const yesterday = daysAgoJst(1);
-  const presets = [
-    { label: '今日', from: today, to: today },
-    { label: '昨日', from: yesterday, to: yesterday },
-    { label: '過去7日', from: daysAgoJst(6), to: today },
-    { label: '過去30日', from: daysAgoJst(29), to: today },
-  ];
+  // 今日・昨日・一昨日・今週・今月・過去7日・過去30日（2026-09-29 Ronnie）。日付は下の 開始日／終了日 で選ぶ
+  const presets = orderPeriodPresets(today);
   const hasAdvanced = !!method || !!q;
 
   return (
@@ -276,6 +276,15 @@ export default async function OrdersPage({
           </>
         }
       />
+
+      {/* 選んだ期間の売上 */}
+      <div className="mb-3 grid grid-cols-2 gap-2 md:grid-cols-5">
+        <SalesTile label={`売上（${multiDay ? '期間' : dayLabel(from)}・会計済）`} value={yen(settledSales)} strong />
+        <SalesTile label="会計件数" value={`${settled.length}件`} />
+        <SalesTile label="客数" value={`${settledGuests}名`} />
+        <SalesTile label="客単価" value={yen(perGuest)} />
+        <SalesTile label="未会計" value={`${unsettled.length}件 ${yen(sum(unsettled))}`} />
+      </div>
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <LinkChips
@@ -441,6 +450,15 @@ export default async function OrdersPage({
           )}
         </>
       )}
+    </div>
+  );
+}
+
+function SalesTile({ label, value, strong = false }: { label: string; value: string; strong?: boolean }) {
+  return (
+    <div className={cn('rounded-xl border px-3 py-2', strong ? 'border-transparent bg-lilac' : 'border-line bg-white')}>
+      <p className="truncate text-[11px] text-ink-3">{label}</p>
+      <p className={cn('mt-0.5 font-extrabold text-ink tabular-nums', strong ? 'text-[18px] text-royal' : 'text-[15px]')}>{value}</p>
     </div>
   );
 }
