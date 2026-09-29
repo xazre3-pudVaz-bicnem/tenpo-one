@@ -38,7 +38,11 @@ export function MonthlyTargetForm({
         toast(res.error, 'error');
         return;
       }
-      toast('売上目標を保存しました');
+      toast(
+        res.dailyDistributed
+          ? '売上目標を保存しました。曜日ごとの売上に合わせて日別予算も作りました'
+          : '売上目標を保存しました'
+      );
       router.refresh();
     });
   };

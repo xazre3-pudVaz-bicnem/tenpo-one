@@ -74,3 +74,67 @@ export function withoutTax(included: number): number {
 export function withTax(excluded: number): number {
   return Math.round(excluded * (1 + TAX_RATE));
 }
+
+// ---------------------------------------------------------------------------
+// 月の目標を曜日の売上に合わせて日ごとに分ける（2026-09-30 Ronnie「金曜 100万・月曜 40万のように、毎日同じではない。
+// 前の月・前の週の曜日ごとの売上をもとに日報の目標予算を自動で。1か月分をそのままホームに」）
+// ---------------------------------------------------------------------------
+
+/** 曜日を見る日数（直近8週＝前の月と前の週を含む） */
+export const WEEKDAY_WEIGHT_DAYS = 56;
+
+/**
+ * 曜日ごとの1日あたりの売上（0=日〜6=土）。売上のあった最初の日から最後の日までの日を数える
+ * （TENPO ONE を使い始める前の日は数えない。休みの曜日は 0 になる）。
+ */
+export function weekdayWeights(daily: readonly { date: string; sales: number }[]): number[] {
+  const withSales = daily.filter((d) => d.sales > 0).map((d) => d.date).sort();
+  const sums = Array(7).fill(0) as number[];
+  const counts = Array(7).fill(0) as number[];
+  if (withSales.length === 0) return sums;
+  const first = withSales[0];
+  const last = withSales[withSales.length - 1];
+  const byDate = new Map<string, number>();
+  for (const d of daily) byDate.set(d.date, (byDate.get(d.date) ?? 0) + Math.max(0, d.sales));
+  for (let date = first; date <= last; date = nextDate(date)) {
+    const w = weekdayOf(date);
+    sums[w] += byDate.get(date) ?? 0;
+    counts[w] += 1;
+  }
+  return sums.map((s, i) => (counts[i] > 0 ? s / counts[i] : 0));
+}
+
+function nextDate(date: string): string {
+  const [y, m, d] = date.split('-').map(Number);
+  const t = new Date(Date.UTC(y, m - 1, d + 1));
+  return `${t.getUTCFullYear()}-${String(t.getUTCMonth() + 1).padStart(2, '0')}-${String(t.getUTCDate()).padStart(2, '0')}`;
+}
+
+/**
+ * 月の目標（税込）を曜日の重みで日ごとに分ける。100円単位に丸め、合計はぴったり目標に合わせる
+ * （端数はいちばん売れる日に足す）。重みが全部 0（売上の記録が無い）なら毎日同じ。
+ */
+export function distributeByWeekday(total: number, month: string, weights: readonly number[]): DailyBudgetMap {
+  const days = monthDays(month);
+  if (days.length === 0 || !(total > 0)) return {};
+  const raw = days.map((d) => Math.max(0, weights[weekdayOf(d)] ?? 0));
+  const sum = raw.reduce((a, b) => a + b, 0);
+  const w = sum > 0 ? raw : days.map(() => 1);
+  const wSum = w.reduce((a, b) => a + b, 0);
+  const out: DailyBudgetMap = {};
+  let used = 0;
+  days.forEach((d, i) => {
+    const v = Math.floor((total * w[i]) / wSum / 100) * 100;
+    if (v > 0) out[d] = v;
+    used += v;
+  });
+  const rest = Math.round(total) - used;
+  if (rest > 0) {
+    let best = 0;
+    w.forEach((x, i) => {
+      if (x > w[best]) best = i;
+    });
+    out[days[best]] = (out[days[best]] ?? 0) + rest;
+  }
+  return out;
+}

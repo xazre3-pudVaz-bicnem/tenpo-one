@@ -117,7 +117,7 @@ export function BudgetCard({
           <p className="m-0 text-[11.5px] text-ink-3">
             ※実績売上高には未会計分の金額が含まれています
             {openSales > 0 && <span className="tabular-nums">（未会計 {yen(openSales)}）</span>}
-            {budget != null && <span>。予算は月予算の日割りです</span>}
+            {budget != null && <span>。予算は本日の目標（月の目標を曜日の売上に合わせて日ごとに分けたもの）です</span>}
           </p>
         </dl>
       </div>
