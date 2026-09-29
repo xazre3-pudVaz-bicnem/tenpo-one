@@ -33,14 +33,13 @@ export function Sidebar({
   groups,
   alertCount,
   currentStoreId,
-  iconFirst = false,
   homeOnly = false,
 }: {
   tiles: NavTile[];
   groups: NavGroup[];
   alertCount: number;
   currentStoreId: string | null;
-  /** タイルのアイコンを左に置く（レジ端末。パソコンは文字が左のまま） */
+  /** 以前のタイル（横長）でアイコンを左に置く指定。タイルは正方形・アイコンが上になったので使っていない */
   iconFirst?: boolean;
   /** レジ端末：左メニューはホーム画面だけに出し、開いた画面は全幅で使う */
   homeOnly?: boolean;
@@ -85,7 +84,8 @@ export function Sidebar({
     >
       <nav className="flex-1 overflow-y-auto">
         {tiles.length > 0 && (
-          <div className="space-y-1.5 border-b border-line p-2">
+          // 大きなボタンは正方形のタイルを横一列に（2026-09-30 Ronnie「四角く。一列に」）
+          <div className="grid grid-cols-3 gap-1.5 border-b border-line p-2">
             {tiles.map((t) => {
               const active = t.match.some((m) => pathname === m || pathname.startsWith(m + '/'));
               return (
@@ -95,23 +95,21 @@ export function Sidebar({
                   aria-current={active ? 'page' : undefined}
                   className={cn(
                     // 押した感じの出る立体的なタブ（2026-09-24 店舗要望）
-                    'tapneon flex items-center gap-3 rounded-xl px-3.5 py-3.5 text-royal',
-                    // レジは下の一覧と縦を揃えるためアイコンを左に。パソコンは今まで通り文字が左
-                    iconFirst ? 'justify-start' : 'flex-row-reverse justify-between',
+                    'tapneon flex aspect-square flex-col items-center justify-center gap-1 rounded-xl px-1 text-center text-royal',
                     active && 'bg-iris-soft'
                   )}
                 >
                   <span
                     className={cn(
-                      'grid h-11 w-11 shrink-0 place-items-center rounded-xl',
+                      'grid h-9 w-9 shrink-0 place-items-center rounded-lg',
                       active ? 'bg-iris text-white' : 'bg-iris-soft text-iris'
                     )}
                   >
-                    <NavIcon name={t.icon} className="h-6 w-6" />
+                    <NavIcon name={t.icon} className="h-5 w-5" />
                   </span>
                   <span className="min-w-0">
-                    <span className="block text-[17px] leading-tight font-bold whitespace-nowrap">{t.label}</span>
-                    <span className="mt-0.5 block text-xs text-ink-3">{t.en}</span>
+                    <span className="block text-[12px] leading-tight font-bold">{t.label}</span>
+                    <span className="block text-[9px] leading-tight text-ink-3">{t.en}</span>
                   </span>
                 </Link>
               );

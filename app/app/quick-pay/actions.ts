@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { assertStoreAccess, requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
-import { QUICK_PAY_LINE_NAME, QUICK_PAY_TAX_RATE, quickPayProblem } from '@/lib/quick-pay';
+import { QUICK_PAY_LINE_NAME, QUICK_PAY_TAX_RATE, quickPayProblem, type QuickPayLine } from '@/lib/quick-pay';
 
 /**
  * 即会計（2026-09-30 Ronnie「電卓のレジのように金額だけで会計できるように。手書きの伝票の合計だけで会計するお店のため」）。
@@ -64,11 +64,15 @@ export async function startQuickOrder(guestCount: number): Promise<{ orderId: st
 export async function prepareQuickCheckout(input: {
   orderId: string | null;
   guestCount: number;
-  amounts: number[];
+  /** 単価 × 個数（530 × 2 など） */
+  lines: QuickPayLine[];
 }): Promise<{ orderId?: string; error?: string }> {
   const ctx = await requirePermission('pos.checkout');
-  const amounts = (input.amounts ?? []).map((a) => Math.round(Number(a)));
-  const problem = quickPayProblem(amounts);
+  const lines: QuickPayLine[] = (input.lines ?? []).map((l) => ({
+    amount: Math.round(Number(l?.amount)),
+    quantity: Math.round(Number(l?.quantity)),
+  }));
+  const problem = quickPayProblem(lines);
   if (problem) return { error: problem };
   const guests =
     Number.isInteger(input.guestCount) && input.guestCount >= 1 && input.guestCount <= 999 ? input.guestCount : 1;
@@ -79,7 +83,7 @@ export async function prepareQuickCheckout(input: {
     if (orderId) {
       await loadQuickOrder(supabase, ctx, orderId);
     } else {
-      if (amounts.length === 0) return { error: '金額を入れてください' };
+      if (lines.length === 0) return { error: '金額を入れてください' };
       ({ orderId } = await startQuickOrder(guests));
     }
   } catch (e) {
@@ -89,26 +93,26 @@ export async function prepareQuickCheckout(input: {
 
   await supabase.from('orders').update({ guest_count: guests, updated_by: ctx.userId }).eq('id', orderId);
 
-  if (amounts.length > 0) {
+  if (lines.length > 0) {
     const now = new Date().toISOString();
     const { error } = await supabase.from('order_items').insert(
-      amounts.map((amount) => ({
+      lines.map(({ amount, quantity }) => ({
         organization_id: order.organization_id,
         store_id: order.store_id,
         order_id: orderId as string,
         menu_item_id: null,
         name: QUICK_PAY_LINE_NAME,
         unit_price: amount,
-        quantity: 1,
+        quantity,
         tax_rate: QUICK_PAY_TAX_RATE,
         tax_included: true,
-        line_total: amount,
+        line_total: amount * quantity,
         modifiers: [],
         staff_id: ctx.userId,
         status: 'active',
         created_by: ctx.userId,
         kitchen_sent_at: now,
-        kitchen_printed_qty: 1,
+        kitchen_printed_qty: quantity,
         kitchen_status: 'served',
       }))
     );
