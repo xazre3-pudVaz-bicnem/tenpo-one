@@ -322,7 +322,8 @@ function reportHead(t: ReturnType<typeof makeLineTools>, data: RegisterReportDat
  *   釣銭準備金〜金種の【精算情報】は本紙には出さず、別の紙（layoutSettlementReport）にした。
  *
  * 紙を短く（2026-09-28 Ronnie「スリップが長い」→ 相談 →「40cm くらいでいい。ゴチャゴチャにしない」）：
- *   - 1行に詰め込まない（男性・女性、ランチ／ディナーの 組・名様・単価、内消費税 は1項目1行）。行間もそのまま
+ *   - 1行に詰め込まない（男性・女性 は1項目1行）。ランチ｜ディナーは左右半分ずつ。行間もそのまま
+ *   - 内消費税・消費税は紙に出さない（管理画面の「売上の内訳」に出す。2026-09-29 Ronnie）
  *   - 媒体別は表にして1媒体1行（組数・人数・客単価・売上。Ronnie「同じ行にして少しスペースを減らす」）
  *   - 媒体別の [全体]（上の 組数・客数・売上・客単価 と同じ）と、入出金が無い日の空の見出し・区切り線は出さない
  *   - 0件・¥0 の行も全部出す（2026-09-28 Ronnie「0 が無いと freee・MF などの会計ソフトが読めない。0 でも印刷」→ 40cm でいい）
@@ -334,7 +335,6 @@ export function layoutRegisterReport(data: RegisterReportData, options: Register
   const t = makeLineTools(options);
   const { line, kv, kcv, blank, starSection } = t;
   const s = data.sales;
-  const taxTotal = s.tax ?? s.taxByRate.reduce((a, r) => a + r.tax, 0);
   const male = s.guestsMale ?? 0;
   const female = s.guestsFemale ?? 0;
   const unselected = Math.max(0, s.guests - male - female);
@@ -376,14 +376,11 @@ export function layoutRegisterReport(data: RegisterReportData, options: Register
   blank();
   kv('総売上点数', `${s.itemQuantity}点`);
   kv('売上', yen(s.gross));
-  // 税率は売上のあった率だけ（10% は常に）。内消費税はその率の分
+  // 税率は売上のあった率だけ（10% は常に）。
+  // 内消費税・消費税は紙に出さず、管理画面（レジクローズの「売上の内訳」）に出す（2026-09-29 Ronnie「管理画面の中でいい」）
   const rates = s.taxByRate.filter((r) => r.rate === 10 || r.taxable > 0).sort((a, b) => b.rate - a.rate);
   if (!rates.some((r) => r.rate === 10)) rates.unshift({ rate: 10, taxable: 0, tax: 0 });
-  for (const r of rates) {
-    kv(`税率  ${r.rate === 0 ? '非課税' : `${r.rate}%`}`, yen(r.taxable));
-    if (r.rate !== 0) kv('        (内消費税)', `(${yen(r.tax)})`);
-  }
-  kv('消費税', yen(taxTotal));
+  for (const r of rates) kv(`税率  ${r.rate === 0 ? '非課税' : `${r.rate}%`}`, yen(r.taxable));
   kv('純売上', yen(s.net));
   // ---- 控除（返金・取消） ----
   blank();

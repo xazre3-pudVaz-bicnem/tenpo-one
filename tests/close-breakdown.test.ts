@@ -60,3 +60,32 @@ describe('レジクローズの売上内訳（2026-09-27 Ronnie）', () => {
     expect(shiftMonth('2026-01', -1)).toBe('2025-12');
   });
 });
+
+describe('売上の内訳の 消費税（レシートではなく管理画面に。2026-09-29 Ronnie）', () => {
+  it('税率ごとの税込売上・内消費税（売上から逆算）と、伝票ごとの消費税の合計', () => {
+    const b = computeCloseBreakdown(
+      [
+        { id: 'a', total: 70240, guestCount: 44, clerkName: null, sourceName: null, orderType: 'dine_in', taxTotal: 6407 },
+      ],
+      [
+        { orderId: 'a', menuItemId: 'x', name: 'カレー', unitPrice: 70240, quantity: 1, lineTotal: 70240, cancelled: false, taxRate: 10, itemType: 'food', station: null, includesDrinks: false },
+      ]
+    );
+    expect(b.tax.byRate).toEqual([{ rate: 10, taxable: 70240, tax: 6386 }]);
+    expect(b.tax.orderTax).toBe(6407);
+  });
+
+  it('伝票が無い日は 0', () => {
+    const b = computeCloseBreakdown([], []);
+    expect(b.tax).toEqual({ byRate: [], orderTax: 0 });
+  });
+
+  it('画面に 消費税 の枠（内消費税・伝票ごとの合計・差の説明）', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { join } = await import('node:path');
+    const src = readFileSync(join(__dirname, '..', 'components', 'cash', 'close-breakdown.tsx'), 'utf8');
+    expect(src).toContain('<TaxPanel tax={data.tax} />');
+    expect(src).toContain('消費税（伝票ごとの合計）');
+    expect(src).toContain('伝票ごとに1円未満を切り捨てて足しているため');
+  });
+});
