@@ -2,8 +2,10 @@ import type { Metadata } from 'next';
 import { businessHoursLabel } from '@/lib/business-hours';
 import { sourceCodeFromSrc } from '@/lib/reservation-book';
 import { notFound } from 'next/navigation';
-import { MapPin, Phone, Clock, Info, AlertCircle } from 'lucide-react';
+import { MapPin, Phone, Clock, Info, AlertCircle, Ticket } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { bookingCouponsFrom, couponLabel } from '@/lib/booking-coupons';
 import { BookingWizard } from '@/components/booking/booking-wizard';
 import type { BookingStore, BookingBusinessHour } from '@/components/booking/types';
 
@@ -27,6 +29,16 @@ function formatBusinessHours(rows: BookingBusinessHour[]): { label: string; valu
     // 深夜営業は 25:00 のような営業日の表記（lib/business-hours.ts）
     return { label: WEEKDAY_LABEL[dow], value: businessHoursLabel(r.open_time, r.close_time, r.last_entry_time), closed: false };
   });
+}
+
+/** 当店のクーポン（店舗設定。匿名では読めないのでサーバーで読む。出すのは文だけ） */
+async function fetchCoupons(storeId: string): Promise<{ id: string; label: string }[]> {
+  try {
+    const { data } = await createAdminClient().from('store_settings').select('settings').eq('store_id', storeId).maybeSingle();
+    return bookingCouponsFrom(data?.settings ?? null).map((c) => ({ id: c.id, label: couponLabel(c) }));
+  } catch {
+    return [];
+  }
 }
 
 async function fetchStore(storeSlug: string): Promise<BookingStore | null> {
@@ -53,6 +65,8 @@ export default async function BookStorePage({ params, searchParams }: PageParams
   const sourceCode = sourceCodeFromSrc((await searchParams)?.src);
 
   const hours = formatBusinessHours(store.business_hours);
+  // 当店のクーポン。ご予約のときに選べる（2026-09-30 Ronnie「ご予約リンクを開いても出て、選べるように」）
+  const coupons = await fetchCoupons(store.id);
 
   return (
     <div className="mx-auto max-w-lg px-4 py-6">
@@ -85,7 +99,24 @@ export default async function BookStorePage({ params, searchParams }: PageParams
         {store.description && <p className="mt-3 text-sm leading-relaxed text-gray-600">{store.description}</p>}
       </div>
 
-      <BookingWizard store={store} sourceCode={sourceCode} />
+      {coupons.length > 0 && (
+        <section className="mb-6 rounded-2xl border border-dashed border-amber-300 bg-amber-50/70 p-4">
+          <h2 className="mb-2 flex items-center gap-1.5 text-sm font-bold text-navy">
+            <Ticket className="h-4 w-4 text-amber-600" />
+            当店のクーポン
+            <span className="text-xs font-normal text-gray-500">ご予約のときに選べます</span>
+          </h2>
+          <ul className="space-y-1.5">
+            {coupons.map((c) => (
+              <li key={c.id} className="rounded-lg bg-white px-3 py-2 text-sm font-bold text-navy shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+                {c.label}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      <BookingWizard store={store} sourceCode={sourceCode} coupons={coupons} />
 
       {/* 営業時間 */}
       <section className="mt-8 rounded-2xl border border-gray-200 bg-white p-5">

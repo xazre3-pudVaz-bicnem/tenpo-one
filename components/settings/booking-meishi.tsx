@@ -24,10 +24,13 @@ export interface MeishiData {
   phone: string | null;
   /** 予約ページの QR（data URL。周りの白4マス込み） */
   qrDataUrl: string;
+  /** 当店のクーポン（表示する文。名刺はいちばん上の1つだけ） */
+  coupons?: string[];
 }
 
 /** 名刺1枚（55×91mm。縁なしの黒） */
-export function BookingMeishiCard({ storeName, address, phone, qrDataUrl }: MeishiData) {
+export function BookingMeishiCard({ storeName, address, phone, qrDataUrl, coupons = [] }: MeishiData) {
+  const coupon = coupons.find((c) => c.trim()) ?? null;
   const nameSize = storeName.length <= 10 ? 'text-[10.5pt]' : storeName.length <= 16 ? 'text-[9pt]' : 'text-[7.8pt]';
   return (
     <div
@@ -46,6 +49,12 @@ export function BookingMeishiCard({ storeName, address, phone, qrDataUrl }: Meis
           <span className="text-[4.4pt] font-extrabold tracking-[0.25em] text-[#b89aff]">RESERVATION</span>
           <span className="text-[7pt] font-bold">ご予約</span>
         </p>
+        {coupon && (
+          <p className="mx-auto mt-[1.6mm] line-clamp-1 rounded-[1.4mm] border border-dashed border-[#f5c451]/80 bg-[#f5c451]/10 px-[1.6mm] py-[0.5mm] text-[5.6pt] font-bold">
+            <span className="mr-[1mm] text-[4pt] tracking-[0.15em] text-[#f5c451]">COUPON</span>
+            {coupon}
+          </p>
+        )}
       </div>
 
       {/* まんなか：QR と案内 */}
@@ -58,7 +67,7 @@ export function BookingMeishiCard({ storeName, address, phone, qrDataUrl }: Meis
               alt={`${storeName}の予約QRコード`}
               width={480}
               height={480}
-              className="block h-[31mm] w-[31mm] [image-rendering:pixelated]"
+              className={`block [image-rendering:pixelated] ${coupon ? 'h-[27mm] w-[27mm]' : 'h-[31mm] w-[31mm]'}`}
             />
           </div>
         </div>

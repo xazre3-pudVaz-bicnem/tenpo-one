@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2, Minus, Plus, Check } from 'lucide-react';
+import { Loader2, Minus, Plus, Check, Ticket } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
 import { yen, todayJst } from '@/lib/format';
@@ -65,7 +65,16 @@ function Stepper({
   );
 }
 
-export function BookingWizard({ store, sourceCode = 'web' }: { store: BookingStore; sourceCode?: string }) {
+export function BookingWizard({
+  store,
+  sourceCode = 'web',
+  coupons = [],
+}: {
+  store: BookingStore;
+  sourceCode?: string;
+  /** 当店のクーポン（選べる。2026-09-30 Ronnie） */
+  coupons?: { id: string; label: string }[];
+}) {
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
 
@@ -88,6 +97,8 @@ export function BookingWizard({ store, sourceCode = 'web' }: { store: BookingSto
   const [email, setEmail] = useState('');
   const [allergy, setAllergy] = useState('');
   const [request, setRequest] = useState('');
+  const [couponId, setCouponId] = useState('');
+  const selectedCoupon = coupons.find((c) => c.id === couponId) ?? null;
   const [consent, setConsent] = useState(false);
 
   const [submitting, setSubmitting] = useState(false);
@@ -169,6 +180,7 @@ export function BookingWizard({ store, sourceCode = 'web' }: { store: BookingSto
         purpose: purpose || null,
         allergy: allergy.trim() || null,
         request: request.trim() || null,
+        couponId: selectedCoupon?.id ?? null,
         sourceCode,
         consent,
       });
@@ -426,6 +438,36 @@ export function BookingWizard({ store, sourceCode = 'web' }: { store: BookingSto
               ))}
             </div>
           </div>
+
+          {/* 当店のクーポン（使うものを1つ選ぶ。お店が会計のときに割引します） */}
+          {coupons.length > 0 && (
+            <div>
+              <p className="mb-1 flex items-center gap-1 text-sm font-medium text-gray-700">
+                <Ticket className="h-4 w-4 text-amber-600" />
+                当店のクーポン（任意）
+              </p>
+              <div className="grid gap-2">
+                {[{ id: '', label: '使わない' }, ...coupons].map((c) => (
+                  <button
+                    key={c.id || 'none'}
+                    type="button"
+                    onClick={() => setCouponId(c.id)}
+                    aria-pressed={couponId === c.id}
+                    className={cn(
+                      'flex min-h-11 items-center justify-between gap-2 rounded-lg border px-3 py-2 text-left text-sm font-medium transition-colors',
+                      couponId === c.id
+                        ? 'border-amber-400 bg-amber-50 text-navy'
+                        : 'border-gray-300 text-navy hover:border-amber-300'
+                    )}
+                  >
+                    <span>{c.label}</span>
+                    {couponId === c.id && <Check className="h-4 w-4 shrink-0 text-amber-600" />}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-1 text-xs text-gray-500">ご来店時にお店でクーポンを使います（ご予約にクーポン名が残ります）。</p>
+            </div>
+          )}
         </div>
       )}
 
@@ -529,6 +571,7 @@ export function BookingWizard({ store, sourceCode = 'web' }: { store: BookingSto
         <div className="mt-5 rounded-xl bg-gray-50 px-4 py-3 text-xs text-gray-600">
           {date.replaceAll('-', '/')}　{time}〜　大人{adults}名
           {children > 0 ? `・子ども${children}名` : ''}
+          {selectedCoupon && <span className="mt-1 block font-bold text-amber-700">クーポン：{selectedCoupon.label}</span>}
         </div>
       )}
 

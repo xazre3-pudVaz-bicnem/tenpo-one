@@ -15,6 +15,7 @@ export function BookingUrlPanel({
   storeName,
   address,
   phone,
+  coupons = [],
   slugEditor,
 }: {
   url: string;
@@ -24,6 +25,8 @@ export function BookingUrlPanel({
   /** 〒 付きの住所（無ければカードに出さない） */
   address: string | null;
   phone: string | null;
+  /** 当店のクーポン（表示する文） */
+  coupons?: string[];
   /** スラッグ編集UI（サーバー側で組み立てて渡す） */
   slugEditor?: React.ReactNode;
 }) {
@@ -38,7 +41,7 @@ export function BookingUrlPanel({
 
       {qrDataUrl && (
         <div className="mt-4">
-          <BookingQrDownload storeName={storeName} address={address} phone={phone} qrDataUrl={qrDataUrl} />
+          <BookingQrDownload storeName={storeName} address={address} phone={phone} qrDataUrl={qrDataUrl} coupons={coupons} />
         </div>
       )}
     </div>

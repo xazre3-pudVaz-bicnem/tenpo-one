@@ -8,6 +8,7 @@ import { pushNewReservation } from '@/lib/push-server';
 import { rateLimiter, RATE_LIMITS } from '@/lib/rate-limit';
 import { safePublicErrorCode } from '@/lib/observability';
 import type { CreateReservationResult } from '@/components/booking/types';
+import { bookingCouponsFrom, couponLabel, requestWithCoupon } from '@/lib/booking-coupons';
 
 /** 匿名公開アクションのIPベースレート制限キー（x-forwarded-for優先、無ければx-real-ip） */
 async function requestIp(): Promise<string> {
@@ -31,6 +32,8 @@ export interface CreatePublicReservationInput {
   purpose: string | null;
   allergy: string | null;
   request: string | null;
+  /** 選んだ当店のクーポン（id。無ければ null） */
+  couponId?: string | null;
   sourceCode: string;
   consent: boolean;
 }
@@ -61,6 +64,11 @@ export async function createPublicReservation(
     return { data: null, errorMessage: 'RATE_LIMITED' };
   }
 
+  // 選んだクーポンは、ご予約の「ご要望」の先頭に【クーポン】として残す（台帳・ハンディで見える）。
+  // 文はお店の設定から作る（お客様の画面から来た文は使わない）
+  const couponText = input.couponId ? await couponLabelFor(input.slug, input.couponId) : null;
+  const request = requestWithCoupon(couponText, input.request);
+
   const supabase = await createClient();
   const { data, error } = await supabase.rpc('create_public_reservation', {
     p_slug: input.slug,
@@ -77,7 +85,7 @@ export async function createPublicReservation(
     p_seat_type: input.seatType,
     p_purpose: input.purpose,
     p_allergy: input.allergy,
-    p_request: input.request,
+    p_request: request,
     p_source_code: input.sourceCode,
     p_consent: input.consent,
   });
@@ -90,6 +98,20 @@ export async function createPublicReservation(
   after(() => notifyStoreOfReservation(result.id));
 
   return { data: result, errorMessage: null };
+}
+
+/** 店舗（slug）の当店のクーポンの文。見つからなければ null */
+async function couponLabelFor(slug: string, couponId: string): Promise<string | null> {
+  try {
+    const admin = createAdminClient();
+    const { data: store } = await admin.from('stores').select('id').eq('slug', slug).maybeSingle();
+    if (!store) return null;
+    const { data } = await admin.from('store_settings').select('settings').eq('store_id', store.id).maybeSingle();
+    const coupon = bookingCouponsFrom(data?.settings ?? null).find((c) => c.id === couponId);
+    return coupon ? couponLabel(coupon) : null;
+  } catch {
+    return null;
+  }
 }
 
 async function notifyStoreOfReservation(reservationId: string) {

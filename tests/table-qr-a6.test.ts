@@ -26,7 +26,10 @@ describe('テーブルQR（A6）', () => {
     expect(page).toContain("@page { size: A6 portrait; margin: 0; }");
     expect(page).toContain('<TableQrCard');
     expect(page).toContain('<TableQrPdfButton');
-    expect(pdf).toMatch(/format: ["']a6["']/);
-    expect(pdf).toMatch(/pdf\.addImage\(png, ["']PNG["'], 0, 0, 105, 148/);
+    // 用紙は既定 A6（店舗名刺の A4 シートだけ page="a4"）
+    expect(pdf).toMatch(/page = ["']a6["']/);
+    expect(pdf).toContain('format: page');
+    expect(pdf).toContain('[210, 297] : [105, 148]');
+    expect(pdf).toMatch(/pdf\.addImage\(png, ["']PNG["'], 0, 0, pw, ph/);
   });
 });

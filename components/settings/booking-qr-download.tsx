@@ -14,6 +14,7 @@ export function BookingQrDownload({
   address,
   phone,
   qrDataUrl,
+  coupons = [],
   align = 'start',
 }: {
   storeName: string;
@@ -21,6 +22,8 @@ export function BookingQrDownload({
   phone: string | null;
   /** 予約ページの QR（data URL。周りの白4マス込み） */
   qrDataUrl: string;
+  /** 当店のクーポン（表示する文） */
+  coupons?: string[];
   /** ボタンの並び（設定トップは右寄せ） */
   align?: 'start' | 'end';
 }) {
@@ -29,7 +32,7 @@ export function BookingQrDownload({
       {/* A6 のカードを半分の大きさで見せる（ダウンロードは元の大きさで画像にする） */}
       <div className="h-[74mm] w-[52.5mm] shrink-0 overflow-hidden rounded-lg shadow-[0_1px_4px_rgba(21,18,26,0.12)]">
         <div className="origin-top-left scale-50">
-          <BookingQrCard storeName={storeName} address={address} phone={phone} dataUrl={qrDataUrl} />
+          <BookingQrCard storeName={storeName} address={address} phone={phone} dataUrl={qrDataUrl} coupons={coupons} />
         </div>
       </div>
       <div className="text-left text-sm">
