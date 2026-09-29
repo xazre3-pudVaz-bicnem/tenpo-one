@@ -3,6 +3,8 @@ import { requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { ROLES, ROLE_LABELS, HQ_ROLES, type Role } from '@/lib/permissions';
 import { PageHeader } from '@/components/ui/page-header';
+import { SettingsSubTabs } from '@/components/settings/settings-nav';
+import { settingsHubOf, settingsHubs } from '@/lib/settings-hubs';
 import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/ui/state';
 import { TableWrap, Table, THead, TBody, Tr, Th, Td } from '@/components/ui/table';
@@ -61,8 +63,12 @@ export default async function StaffPage({
     rows = rows.filter((r) => r.membership_stores.some((ms) => ms.store_id === storeFilter));
   }
 
+  // 設定の「予約・顧客」の中の画面なので、設定と同じ上のタブを出す（2026-09-29 Ronnie「設定の中は全部このタブを」）
+  const hub = settingsHubOf(settingsHubs(ctx), '/app/staff');
+
   return (
     <div>
+      {hub && (hub.children?.length ?? 0) > 1 && <SettingsSubTabs item={hub} pathname="/app/staff" activeHref="/app/staff" />}
       <PageHeader
         title="スタッフ管理"
         description={`${ctx.organizationName ?? ''}の登録スタッフ`}

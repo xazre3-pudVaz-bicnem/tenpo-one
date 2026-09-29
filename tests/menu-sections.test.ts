@@ -29,7 +29,7 @@ describe('設定のメニューを dinii と同じく メニュー／プラン�
   });
 
   it('設定の左メニューに「メニュー」のまとまりがある', () => {
-    const src = readFileSync(join(ROOT, 'app/app/settings/layout.tsx'), 'utf8');
+    const src = readFileSync(join(ROOT, 'lib/settings-hubs.ts'), 'utf8');
     const i = src.indexOf("label: 'メニュー',");
     expect(i).toBeGreaterThan(0);
     const group = src.slice(i, src.indexOf('],', i));

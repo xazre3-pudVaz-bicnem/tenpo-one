@@ -12,8 +12,12 @@ import { KitchenTicketPanel } from '@/components/settings/kitchen-ticket-panel';
 import { VisitSourcesPanel } from '@/components/settings/visit-sources-panel';
 import { visitSourcesFrom } from '@/lib/handy-visit';
 import { RegisterSettingsList } from '@/components/pos/register-settings-list';
+import { SettingsSubTabs } from '@/components/settings/settings-nav';
+import { settingsHubOf, settingsHubs } from '@/lib/settings-hubs';
 
 export const metadata: Metadata = { title: 'レジの設定' };
+
+const SELF_HREF = '/app/pos/settings';
 
 /**
  * レジの設定（POSレジ・注文画面・フロア・左メニューの「レジの設定」から開く）。
@@ -55,6 +59,9 @@ export default async function RegisterSettingsPage({
     visitSourceIds = visitSourcesFrom(data?.settings ?? null).map((s) => s.id);
   }
 
+  // 設定の中と同じ上のタブ（レジの設定／ハードウェア／iPhoneハンディ…）。2026-09-29 Ronnie「設定の中は全部このタブを」
+  const hub = settingsHubOf(settingsHubs(ctx), SELF_HREF);
+
   return (
     <div className="mx-auto max-w-5xl">
       <Link
@@ -64,6 +71,7 @@ export default async function RegisterSettingsPage({
         <ChevronLeft className="h-4 w-4" aria-hidden />
         {orderId ? '伝票に戻る' : 'POSレジへ戻る'}
       </Link>
+      {hub && (hub.children?.length ?? 0) > 1 && <SettingsSubTabs item={hub} pathname={SELF_HREF} activeHref={SELF_HREF} />}
       <PageHeader
         title="レジの設定"
         en="Register settings"
