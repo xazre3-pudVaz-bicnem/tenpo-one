@@ -43,6 +43,7 @@ export function RegisterCountCard({
   today,
   openSlipCount = 0,
   nextFloatTarget,
+  denominationColumns = 1,
 }: {
   session: CountSession;
   showRegisterName: boolean;
@@ -53,6 +54,8 @@ export function RegisterCountCard({
   openSlipCount?: number;
   /** 翌準備金の目標（店舗設定、無ければ その日の釣銭準備金）。2026-09-28 Ronnie */
   nextFloatTarget?: number;
+  /** 金種の表を2列に（レジの iPad で1画面に収める。2026-09-29 Ronnie） */
+  denominationColumns?: 1 | 2;
 }) {
   // 金種別に数えた枚数。合計がそのまま実査額になる（電卓で足し算しなくてよい）
   const [counts, setCounts] = useState<DenominationCounts>({});
@@ -125,6 +128,17 @@ export function RegisterCountCard({
     <Card>
       <CardHeader className="flex flex-wrap items-center justify-between gap-2">
         <CardTitle en="Cash count">現金実査{showRegisterName ? ` — ${session.registerName}` : ''}</CardTitle>
+        {/* 上にも「レジクローズする」（2026-09-29 Ronnie）。下のボタンと同じ働き・同じ条件 */}
+        {canOperate && (
+          <Button
+            size="sm"
+            variant={needsReason ? 'danger' : 'primary'}
+            onClick={handleClose}
+            disabled={pending || blocked}
+          >
+            {pending ? 'クローズ中…' : 'レジクローズする'}
+          </Button>
+        )}
       </CardHeader>
       <CardContent className="px-3 pt-1 pb-3 sm:px-4">
         {/* 前営業日から開きっぱなしのレジ。これを締めないと、そのレジは新しく開局できない */}
@@ -155,6 +169,7 @@ export function RegisterCountCard({
             onChange={setCounts}
             disabled={!canOperate}
             compact
+            columns={denominationColumns}
           />
         </div>
 
