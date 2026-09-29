@@ -9,10 +9,18 @@ const read = (p: string) => readFileSync(join(__dirname, '..', p), 'utf8');
 describe('設定の上のタブ', () => {
   const hubs = settingsHubs({ role: 'org_owner', disabledFeatures: new Set(), isRegisterDevice: true });
 
-  it('レジの設定は デバイス管理 のタブ（レジの設定／ハードウェア／iPhoneハンディ／ハンディ端末／テーブルQRコード）', () => {
+  it('レジの設定は デバイス管理 のタブ（レジ端末ではハードウェアを出さない。2026-09-29 管理画面だけ）', () => {
     const hub = settingsHubOf(hubs, '/app/pos/settings');
     expect(hub?.label).toBe('デバイス管理');
-    expect(hub?.children?.map((c) => c.label)).toEqual(['レジの設定', 'ハードウェア', 'iPhoneハンディ', 'ハンディ端末', 'テーブルQRコード']);
+    expect(hub?.children?.map((c) => c.label)).toEqual(['レジの設定', 'iPhoneハンディ', 'ハンディ端末', 'テーブルQRコード']);
+    const admin = settingsHubs({ role: 'org_owner', disabledFeatures: new Set(), isRegisterDevice: false });
+    expect(settingsHubOf(admin, '/app/pos/settings')?.children?.map((c) => c.label)).toEqual([
+      'レジの設定',
+      'ハードウェア',
+      'iPhoneハンディ',
+      'ハンディ端末',
+      'テーブルQRコード',
+    ]);
   });
 
   it('スタッフは 予約・顧客 のタブ', () => {

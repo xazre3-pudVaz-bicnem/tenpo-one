@@ -5,6 +5,7 @@
  * ここから開いた画面には ?from=register を付け、設定画面の上に「レジの設定に戻る」を出す。
  */
 import { can, type PermissionAction, type Role } from './permissions';
+import { isAdminOnlySetting } from './admin-only-settings';
 
 /** レジの設定の画面 */
 export const REGISTER_SETTINGS_PATH = '/app/pos/settings';
@@ -243,15 +244,22 @@ export interface RegisterSettingSectionView extends Omit<RegisterSettingSection,
 }
 
 /** ロールに合わせて押せる／押せないを付けた一覧 */
-export function registerSettingSections(role: Role | null, orderId?: string | null): RegisterSettingSectionView[] {
+export function registerSettingSections(
+  role: Role | null,
+  orderId?: string | null,
+  opts: { isRegisterDevice?: boolean } = {}
+): RegisterSettingSectionView[] {
   return REGISTER_SETTING_SECTIONS.map((section) => ({
     ...section,
-    links: section.links.map((link) => ({
-      ...link,
-      allowed: can(role, link.permission),
-      url: withFromRegister(link.href, orderId),
-    })),
-  }));
+    links: section.links
+      // 管理画面だけの設定（ハードウェア）はレジ端末（iPad）に出さない
+      .filter((link) => !(opts.isRegisterDevice && isAdminOnlySetting(link.href)))
+      .map((link) => ({
+        ...link,
+        allowed: can(role, link.permission),
+        url: withFromRegister(link.href, orderId),
+      })),
+  })).filter((section) => section.links.length > 0);
 }
 
 /** 権限の短い説明（押せない項目に出す） */

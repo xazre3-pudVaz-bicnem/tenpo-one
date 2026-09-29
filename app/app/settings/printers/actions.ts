@@ -10,6 +10,8 @@ import {
   type KitchenTicketSettings,
 } from '@/lib/kitchen-ticket';
 import { normalizeVisitSourceIds } from '@/lib/handy-visit';
+// ハードウェア（レジ端末・プリンター・ドロア）の変更は管理画面だけ。レジ端末（iPad）からは断る（2026-09-29 Ronnie）
+import { ADMIN_ONLY_MESSAGE } from '@/lib/admin-only-settings';
 
 export interface ActionResult {
   error?: string;
@@ -26,6 +28,7 @@ function assertStoreAccess(storeIds: string[], storeId: string): string | null {
 /** レジ端末の追加 */
 export async function addRegister(storeId: string, name: string): Promise<ActionResult> {
   const ctx = await requirePermission('store.settings');
+  if (ctx.isRegisterDevice) return { error: ADMIN_ONLY_MESSAGE };
   const err = assertStoreAccess(ctx.stores.map((s) => s.id), storeId);
   if (err) return { error: err };
   if (!name.trim()) return { error: 'レジ名を入力してください' };
@@ -58,6 +61,7 @@ export async function addRegister(storeId: string, name: string): Promise<Action
 /** レジ端末の名前変更 */
 export async function renameRegister(id: string, storeId: string, name: string): Promise<ActionResult> {
   const ctx = await requirePermission('store.settings');
+  if (ctx.isRegisterDevice) return { error: ADMIN_ONLY_MESSAGE };
   const err = assertStoreAccess(ctx.stores.map((s) => s.id), storeId);
   if (err) return { error: err };
   if (!name.trim()) return { error: 'レジ名を入力してください' };
@@ -88,6 +92,7 @@ export async function renameRegister(id: string, storeId: string, name: string):
 /** レジ端末の無効化・有効化 */
 export async function toggleRegisterActive(id: string, storeId: string, active: boolean): Promise<ActionResult> {
   const ctx = await requirePermission('store.settings');
+  if (ctx.isRegisterDevice) return { error: ADMIN_ONLY_MESSAGE };
   const err = assertStoreAccess(ctx.stores.map((s) => s.id), storeId);
   if (err) return { error: err };
 
@@ -137,6 +142,7 @@ export interface PrinterConfigInput {
 /** プリンター設定の追加・更新 */
 export async function savePrinterConfig(input: PrinterConfigInput): Promise<ActionResult> {
   const ctx = await requirePermission('store.settings');
+  if (ctx.isRegisterDevice) return { error: ADMIN_ONLY_MESSAGE };
   const err = assertStoreAccess(ctx.stores.map((s) => s.id), input.storeId);
   if (err) return { error: err };
   if (!input.name.trim()) return { error: 'プリンター名を入力してください' };
@@ -202,6 +208,7 @@ export async function savePrinterConfig(input: PrinterConfigInput): Promise<Acti
 /** プリンター設定の削除（論理削除） */
 export async function deletePrinterConfig(id: string, storeId: string): Promise<ActionResult> {
   const ctx = await requirePermission('store.settings');
+  if (ctx.isRegisterDevice) return { error: ADMIN_ONLY_MESSAGE };
   const err = assertStoreAccess(ctx.stores.map((s) => s.id), storeId);
   if (err) return { error: err };
 
@@ -317,6 +324,7 @@ export async function getDrawerSettings(storeId: string): Promise<DrawerSettings
 /** ドロア設定を保存する（他のsettingsキーを壊さないよう既存jsonbへマージする） */
 export async function saveDrawerSettings(storeId: string, drawer: DrawerSettings): Promise<ActionResult> {
   const ctx = await requirePermission('store.settings');
+  if (ctx.isRegisterDevice) return { error: ADMIN_ONLY_MESSAGE };
   const err = assertStoreAccess(ctx.stores.map((s) => s.id), storeId);
   if (err) return { error: err };
 
@@ -429,6 +437,7 @@ export async function setCloudPrntConfig(input: {
   kitchenStations?: string[];
 }): Promise<ActionResult> {
   const ctx = await requirePermission('store.settings');
+  if (ctx.isRegisterDevice) return { error: ADMIN_ONLY_MESSAGE };
   const err = assertStoreAccess(ctx.stores.map((s) => s.id), input.storeId);
   if (err) return { error: err };
 
@@ -474,6 +483,7 @@ export async function setCloudPrntConfig(input: {
 /** CloudPRNTトークンを再発行する（漏洩時など。既存URLは無効になる）。 */
 export async function regenerateCloudPrntToken(id: string, storeId: string): Promise<ActionResult> {
   const ctx = await requirePermission('store.settings');
+  if (ctx.isRegisterDevice) return { error: ADMIN_ONLY_MESSAGE };
   const err = assertStoreAccess(ctx.stores.map((s) => s.id), storeId);
   if (err) return { error: err };
 
