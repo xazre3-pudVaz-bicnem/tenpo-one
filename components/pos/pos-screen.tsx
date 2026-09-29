@@ -330,8 +330,16 @@ export function PosScreen({
   useEffect(() => {
     untouchedRef.current = items.length === 0;
   }, [items.length]);
+  // サーバーアクションは画面の再取得（router.refresh・Realtime）のたびに別の関数になる。
+  // 依存に入れると、使っている最中に「画面を離れた」と同じ片付けが走って伝票を消してしまう（2026-09-28 11時台の不具合）。
+  // なので ref に入れ、片付けは伝票が変わったとき・本当に画面を離れたときだけにする
+  const discardRef = useRef(discardUntouchedOrderAction);
   useEffect(() => {
-    if (!discardUntouchedOrderAction) return;
+    discardRef.current = discardUntouchedOrderAction;
+  }, [discardUntouchedOrderAction]);
+  const canDiscard = !!discardUntouchedOrderAction;
+  useEffect(() => {
+    if (!canDiscard) return;
     const orderId = order.id;
     const onPageHide = () => {
       if (!untouchedRef.current) return;
@@ -344,9 +352,10 @@ export function PosScreen({
     window.addEventListener('pagehide', onPageHide);
     return () => {
       window.removeEventListener('pagehide', onPageHide);
-      if (untouchedRef.current) void discardUntouchedOrderAction(orderId).catch(() => undefined);
+      const discard = discardRef.current;
+      if (untouchedRef.current && discard) void discard(orderId).catch(() => undefined);
     };
-  }, [discardUntouchedOrderAction, order.id]);
+  }, [canDiscard, order.id]);
   const [linkedCustomer, setLinkedCustomer] = useState(customer);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -532,7 +541,15 @@ export function PosScreen({
         // （2026-09-25 店舗要望）
         if (res.printWarning) toast(res.printWarning, 'error');
       } catch (e) {
-        toast(e instanceof Error ? e.message : '注文に失敗しました', 'error');
+        // 本番ではサーバーのエラー文が伏せられて「Minified React error #441」になる。現場で分かる言葉にする
+        const raw = e instanceof Error ? e.message : '';
+        toast(
+          !raw || /Minified React error|Server Components render|digest/i.test(raw)
+            ? '注文できませんでした。この伝票が閉じられている可能性があります。テーブル一覧から開き直してください'
+            : raw,
+          'error'
+        );
+        router.refresh();
       }
     });
   };
