@@ -11,6 +11,7 @@ import { mdLabel, openingCheck } from '@/lib/register-day';
 import { useToast } from '@/components/ui/toast';
 import { yen } from '@/lib/format';
 import { openRegister } from '@/app/app/cash/actions';
+import { useClerkGate } from '@/components/pos/clerk-gate';
 import { toUserMessage } from '@/lib/action-error';
 import { hasAnyCount, sumDenominations, type DenominationCounts } from '@/lib/cash-count';
 import { denominationsToJson } from '@/lib/register-report';
@@ -45,6 +46,8 @@ export function RegisterOpenCard({
   const [reason, setReason] = useState('');
   const [pending, startTransition] = useTransition();
   const { toast } = useToast();
+  // レジで選んでいる担当者（レジ精算の「開局 10:55 担当」に出す。2026-09-29 Ronnie）
+  const clerkGate = useClerkGate();
 
   const entered = hasAnyCount(counts);
   const openingFloat = useMemo(() => sumDenominations(counts), [counts]);
@@ -61,6 +64,12 @@ export function RegisterOpenCard({
       toast('前回のレジクローズで残した金額と違います。違う理由を入れてください', 'error');
       return;
     }
+    // レジ端末では担当者を選んでから開局（レジ精算に「開局 10:55 担当」と出す）
+    if (clerkGate && !clerkGate.clerk) {
+      toast('レジ開局の担当者を選んでください', 'error');
+      clerkGate.change();
+      return;
+    }
     startTransition(async () => {
       try {
         const result = await openRegister(
@@ -68,7 +77,8 @@ export function RegisterOpenCard({
           registerId,
           openingFloat,
           denominationsToJson(counts),
-          needsReason ? reason.trim() : null
+          needsReason ? reason.trim() : null,
+          clerkGate?.clerk?.name ?? null
         );
         if (!result.ok) {
           toast(result.error, 'error');
@@ -132,6 +142,22 @@ export function RegisterOpenCard({
                 placeholder="例：昨日の締めのあと両替した／本部に持って行った"
               />
             </div>
+          )}
+          {clerkGate && (
+            <p className="text-center text-[12px] text-ink-3">
+              {clerkGate.clerk ? (
+                <>
+                  レジ開局担当者 <b className="text-navy">{clerkGate.clerk.name}</b>
+                </>
+              ) : (
+                <>
+                  レジ開局の担当者を選んでください
+                  <button type="button" onClick={() => clerkGate.change()} className="ml-1.5 underline">
+                    担当者を選ぶ
+                  </button>
+                </>
+              )}
+            </p>
           )}
           <Button type="submit" size="lg" className="w-full" disabled={pending || !entered || (needsReason && !reason.trim())}>
             {pending ? '開局中…' : `開局する / Open（${yen(openingFloat)}）`}

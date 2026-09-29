@@ -44,11 +44,14 @@ describe('ランチ売上／ディナー売上（2026-09-28 Ronnie「3時まで�
       differenceReason: null, cashIns: [], cashOuts: [], activity: [], note: null,
     };
     const text = layoutRegisterReport(base, { paperWidth: 80 }).map((l) => l.text).join('\n');
-    expect(text).toMatch(/ランチ売上（〜15:00）\s+¥6,000/);
+    expect(text).toMatch(/ランチ売上\s+¥6,000/);
+    // 区切りの時刻（〜15:00／15:01〜）は紙に出さない（2026-09-28 Ronnie「要らない」）
+    expect(text).not.toContain('15:00');
+    expect(text).not.toContain('15:01');
     expect(text).toMatch(/  組\s+3組/);
     expect(text).toMatch(/  名様\s+4名様/);
     expect(text).toMatch(/  単価\s+¥1,500/);
-    expect(text).toMatch(/ディナー売上（15:01〜）\s+¥13,000/);
+    expect(text).toMatch(/ディナー売上\s+¥13,000/);
     expect(text.indexOf('客単価')).toBeLessThan(text.indexOf('ランチ売上'));
     expect(text.indexOf('ディナー売上')).toBeLessThan(text.indexOf('総売上点数'));
   });
