@@ -268,7 +268,7 @@ export function QuickPayScreen({
             {(['7', '8', '9'] as const).map((d) => (
               <RegiKey key={d} label={d} onClick={() => onDigit(d)} disabled={pending} big />
             ))}
-            <RegiKey tone="blue" label="×" en="Qty" onClick={times} disabled={pending || unit != null || amount <= 0} big />
+            <RegiKey tone="blue" label="×" en="個数 Quantity" onClick={times} disabled={pending || unit != null || amount <= 0} big />
             {(['4', '5', '6'] as const).map((d) => (
               <RegiKey key={d} label={d} onClick={() => onDigit(d)} disabled={pending} big />
             ))}

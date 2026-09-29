@@ -33,13 +33,14 @@ export function Sidebar({
   groups,
   alertCount,
   currentStoreId,
+  iconFirst = false,
   homeOnly = false,
 }: {
   tiles: NavTile[];
   groups: NavGroup[];
   alertCount: number;
   currentStoreId: string | null;
-  /** 以前のタイル（横長）でアイコンを左に置く指定。タイルは正方形・アイコンが上になったので使っていない */
+  /** タイルのアイコンを左に置く（レジ端末。パソコンは文字が左のまま） */
   iconFirst?: boolean;
   /** レジ端末：左メニューはホーム画面だけに出し、開いた画面は全幅で使う */
   homeOnly?: boolean;
@@ -84,10 +85,36 @@ export function Sidebar({
     >
       <nav className="flex-1 overflow-y-auto">
         {tiles.length > 0 && (
-          // 大きなボタンは正方形のタイルを横一列に（2026-09-30 Ronnie「四角く。一列に」）
-          <div className="grid grid-cols-3 gap-1.5 border-b border-line p-2">
-            {tiles.map((t) => {
+          <div className="space-y-1.5 border-b border-line p-2">
+            {tiles.map((t, i) => {
               const active = t.match.some((m) => pathname === m || pathname.startsWith(m + '/'));
+              // いちばん上の「オーダー・会計」だけ大きな正方形（2026-09-30 Ronnie「オーダー・会計を大きな四角に。ほかは今まで通り」）
+              if (i === 0) {
+                return (
+                  <Link
+                    key={t.href}
+                    href={t.href}
+                    aria-current={active ? 'page' : undefined}
+                    className={cn(
+                      'tapneon flex aspect-square w-full flex-col items-center justify-center gap-3 rounded-2xl px-3 text-center text-royal',
+                      active && 'bg-iris-soft'
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        'grid h-20 w-20 shrink-0 place-items-center rounded-2xl',
+                        active ? 'bg-iris text-white' : 'bg-iris-soft text-iris'
+                      )}
+                    >
+                      <NavIcon name={t.icon} className="h-11 w-11" />
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block text-[24px] leading-tight font-extrabold whitespace-nowrap">{t.label}</span>
+                      <span className="mt-1 block text-sm text-ink-3">{t.en}</span>
+                    </span>
+                  </Link>
+                );
+              }
               return (
                 <Link
                   key={t.href}
@@ -95,21 +122,23 @@ export function Sidebar({
                   aria-current={active ? 'page' : undefined}
                   className={cn(
                     // 押した感じの出る立体的なタブ（2026-09-24 店舗要望）
-                    'tapneon flex aspect-square flex-col items-center justify-center gap-1 rounded-xl px-1 text-center text-royal',
+                    'tapneon flex items-center gap-3 rounded-xl px-3.5 py-3.5 text-royal',
+                    // レジは下の一覧と縦を揃えるためアイコンを左に。パソコンは今まで通り文字が左
+                    iconFirst ? 'justify-start' : 'flex-row-reverse justify-between',
                     active && 'bg-iris-soft'
                   )}
                 >
                   <span
                     className={cn(
-                      'grid h-9 w-9 shrink-0 place-items-center rounded-lg',
+                      'grid h-11 w-11 shrink-0 place-items-center rounded-xl',
                       active ? 'bg-iris text-white' : 'bg-iris-soft text-iris'
                     )}
                   >
-                    <NavIcon name={t.icon} className="h-5 w-5" />
+                    <NavIcon name={t.icon} className="h-6 w-6" />
                   </span>
                   <span className="min-w-0">
-                    <span className="block text-[12px] leading-tight font-bold">{t.label}</span>
-                    <span className="block text-[9px] leading-tight text-ink-3">{t.en}</span>
+                    <span className="block text-[17px] leading-tight font-bold whitespace-nowrap">{t.label}</span>
+                    <span className="mt-0.5 block text-xs text-ink-3">{t.en}</span>
                   </span>
                 </Link>
               );
