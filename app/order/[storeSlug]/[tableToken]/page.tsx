@@ -128,6 +128,7 @@ export default async function QrOrderPage({ params }: PageParams) {
       pages={pages}
       reservedCourse={course}
       planOver={planOver}
+      seatToken={resolved.redirected ? openedToken : null}
     />
   );
 }

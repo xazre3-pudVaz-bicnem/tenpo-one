@@ -17,6 +17,7 @@ import { dynamicUnitPrice } from '@/lib/dynamic-pricing';
 import { loadDynamicRules } from '@/lib/dynamic-pricing-server';
 import { clerkCanCancel } from '@/lib/clerk-roles';
 import { loadStoreClerks } from '@/lib/pos-clerks-server';
+import { groupOfTable, tableGroupsFrom } from '@/lib/table-group';
 
 const COUPON_PREFIX = 'クーポン: ';
 
@@ -153,6 +154,31 @@ export async function addItem(
   optionItemIds: string[] = [],
   quantity = 1
 ): Promise<{ id: string | null }> {
+  return insertOrderItem(orderId, menuItemId, optionItemIds, quantity, null);
+}
+
+/**
+ * テーブルグループの別の卓（seatTableId）から注文するとき。明細に「注文した卓」を残し、
+ * 厨房伝票にその卓の番号を出す（2026-09-29 FULL MOoN 御茶ノ水「まとめた卓でも番号を分けて出して」）。
+ * 伝票の卓と同じグループの卓でなければ、普通の addItem と同じ（卓は残さない）。
+ */
+export async function addItemAtSeat(
+  seatTableId: string,
+  orderId: string,
+  menuItemId: string,
+  optionItemIds: string[] = [],
+  quantity = 1
+): Promise<{ id: string | null }> {
+  return insertOrderItem(orderId, menuItemId, optionItemIds, quantity, seatTableId);
+}
+
+async function insertOrderItem(
+  orderId: string,
+  menuItemId: string,
+  optionItemIds: string[],
+  quantity: number,
+  seatTableId: string | null
+): Promise<{ id: string | null }> {
   if (!Number.isInteger(quantity) || quantity < 1 || quantity > 99) {
     throw new Error('数量は1〜99で指定してください');
   }
@@ -216,6 +242,18 @@ export async function addItem(
   const { modifiers, extraPrice } = await resolveOptions(supabase, order.store_id, item.id, optionItemIds);
   const finalUnitPrice = unitPrice + extraPrice;
 
+  // テーブルグループの別の卓から入れた品は、その卓を残す（厨房伝票の卓名になる）
+  let orderedTableId: string | null = null;
+  if (seatTableId && order.table_id && seatTableId !== order.table_id) {
+    const { data: groupSettings } = await supabase
+      .from('store_settings')
+      .select('settings')
+      .eq('store_id', order.store_id)
+      .maybeSingle();
+    const group = groupOfTable(tableGroupsFrom(groupSettings?.settings ?? null), order.table_id);
+    if (group?.tableIds.includes(seatTableId)) orderedTableId = seatTableId;
+  }
+
   const row = {
     organization_id: order.organization_id,
     store_id: order.store_id,
@@ -232,6 +270,7 @@ export async function addItem(
     staff_id: ctx.userId,
     status: 'active',
     created_by: ctx.userId,
+    ...(orderedTableId ? { ordered_table_id: orderedTableId } : {}),
   };
   // レジで貯めている途中（未送信）。「厨房へオーダー」を押すまで厨房伝票・KDS には出さない。
   // タップした瞬間に厨房へ流れると押し間違いがそのまま厨房に届くため（店舗要望）。

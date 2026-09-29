@@ -17,6 +17,7 @@ import { OrderPicker } from '@/components/pos/order-picker';
 import { PosScreen, type PosOrderItem } from '@/components/pos/pos-screen';
 import {
   addItem,
+  addItemAtSeat,
   updateQty,
   cancelItem,
   setDiscount,
@@ -55,9 +56,11 @@ async function loadOrderItems(supabase: Awaited<ReturnType<typeof createClient>>
 export default async function PosPage({
   searchParams,
 }: {
-  searchParams: Promise<{ order?: string; checkout?: string; move?: string }>;
+  searchParams: Promise<{ order?: string; checkout?: string; move?: string; seat?: string }>;
 }) {
-  const { order: orderId, checkout: openCheckout, move: openMove } = await searchParams;
+  const { order: orderId, checkout: openCheckout, move: openMove, seat } = await searchParams;
+  // テーブルグループの別の卓から開いたとき、その卓（注文した卓として明細に残す。addItemAtSeat がグループを確かめる）
+  const seatTableId = seat && /^[0-9a-f-]{36}$/i.test(seat) ? seat : null;
   const ctx = await requireFeature('pos');
   const supabase = await createClient();
   const store = ctx.currentStore ?? ctx.stores[0];
@@ -418,7 +421,7 @@ export default async function PosPage({
         terminalReaders={terminalReaders}
         paymentAvailability={paymentAvailability}
         availableTables={availableTables}
-        addItemAction={addItem}
+        addItemAction={seatTableId ? addItemAtSeat.bind(null, seatTableId) : addItem}
         updateQtyAction={updateQty}
         cancelItemAction={cancelItem}
         setDiscountAction={setDiscount}

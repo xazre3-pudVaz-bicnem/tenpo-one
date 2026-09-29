@@ -389,7 +389,12 @@ export function TableSheet({
                 className="h-[46px] w-full flex-col gap-0 text-[15px] leading-tight"
                 disabled={pending}
                 onClick={() =>
-                  selected ? router.push(`/app/pos?order=${selected.id}`) : goPos(() => goToOrderAction(table.id))
+                  selected
+                    ? // テーブルグループの卓からは、その卓で注文（厨房伝票にこの卓の番号が出る。2026-09-29）
+                      router.push(
+                        `/app/pos?order=${selected.id}${table.groupTableIds.length > 1 ? `&seat=${table.id}` : ''}`
+                      )
+                    : goPos(() => goToOrderAction(table.id))
                 }
               >
                 注文
