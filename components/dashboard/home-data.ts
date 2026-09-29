@@ -4,6 +4,7 @@
  * 件数の算出などの純ロジックは lib/home-todos.ts。
  */
 import type { createClient } from '@/lib/supabase/server';
+import { dailyBudgetsFrom } from '@/lib/daily-budget';
 import { daysAgoJst } from '@/lib/format';
 import { UNPAID_INVOICE_STATUSES } from '@/components/invoices/labels';
 import { stockWarningLevel } from '@/components/inventory/labels';
@@ -145,6 +146,7 @@ export async function loadHomeData({
     storeAddressRes,
     alerts,
     notificationsRes,
+    storeSettingsRes,
   ] = await Promise.all([
     supabase
       .from('orders')
@@ -245,6 +247,8 @@ export async function loadHomeData({
       .or(`store_id.is.null,store_id.in.(${storeIn})`)
       .order('created_at', { ascending: false })
       .limit(10),
+    // 日別予算（曜日の売上に合わせて分けた本日の予算。lib/daily-budget.ts）
+    supabase.from('store_settings').select('store_id, settings').in('store_id', storeIds),
   ]);
 
   // ---- 売上・客数 ----
@@ -268,7 +272,22 @@ export async function loadHomeData({
   } else {
     monthly = budgetRows.filter((b) => b.store_id !== null).reduce((a, b) => a + b.sales_budget, 0) || null;
   }
-  const dailyBudget = dailyBudgetFromMonthly(monthly, today);
+  // 本日の予算：日別予算（月の目標を曜日の売上に合わせて分けたもの）があればそれ。無ければ月予算の日割り
+  // （2026-09-30 Ronnie「金曜 100万・月曜 40万のように。1か月分をそのままホームに」）
+  const orgMonthly = isAllStores ? (budgetRows.find((b) => b.store_id === null)?.sales_budget ?? null) : null;
+  const dailyMaps = new Map(
+    (storeSettingsRes.data ?? []).map((r) => [r.store_id as string, dailyBudgetsFrom(r.settings, today.slice(0, 7))])
+  );
+  const hasDaily = storeIds.some((id) => (dailyMaps.get(id)?.[today] ?? 0) > 0);
+  const dailyBudget =
+    hasDaily && orgMonthly == null
+      ? storeIds.reduce((sum, id) => {
+          const d = dailyMaps.get(id)?.[today];
+          if (d != null && d > 0) return sum + d;
+          const m = budgetRows.find((b) => b.store_id === id)?.sales_budget ?? 0;
+          return sum + (dailyBudgetFromMonthly(m, today) ?? 0);
+        }, 0) || null
+      : dailyBudgetFromMonthly(monthly, today);
   const achievement = budgetAchievement(actualSales, dailyBudget);
 
   // ---- リピーター率 ----
