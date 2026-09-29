@@ -58,3 +58,11 @@ export function quickPayDiscountAmount(subtotal: number, discount: QuickPayDisco
 export function quickPayDiscountReason(discount: QuickPayDiscount): string {
   return discount.kind === 'percent' ? `割引 ${discount.value}%` : `値引 ¥${discount.value.toLocaleString('ja-JP')}`;
 }
+
+/** 即会計の伝票の見出し（「店内 / Dine-in」の代わり。2026-09-30 Ronnie「即会計から会計すると Dine-in と出る。Quick pay に」） */
+export const QUICK_PAY_ORDER_LABEL = '即会計 / Quick pay';
+
+/** 即会計で作った伝票か（卓なしの店内伝票で、メモが「即会計」で始まる） */
+export function isQuickPayOrder(order: { table_id: string | null; order_type: string; memo: string | null }): boolean {
+  return !order.table_id && order.order_type === 'dine_in' && (order.memo ?? '').startsWith(QUICK_PAY_LINE_NAME);
+}

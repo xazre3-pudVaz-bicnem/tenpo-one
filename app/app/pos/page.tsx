@@ -9,6 +9,7 @@ import { isSteraOnline } from '@/lib/stera';
 import { loadMenuBook } from '@/lib/menu-book-server';
 import { loadMenuStock } from '@/lib/menu-stock-server';
 import { filterTakeoutItems, isTakeoutLikeOrder, takeoutMenuFrom } from '@/lib/takeout-menu';
+import { isQuickPayOrder, QUICK_PAY_ORDER_LABEL } from '@/lib/quick-pay';
 import { isMenuSoldOut } from '@/lib/menu-stock';
 import { BRANDED_METHODS, checkoutPresetsFrom, discountPresetsOf, methodBrandsOf, pointBrandsOf } from '@/lib/checkout-presets';
 import { isMissingColumnError } from '@/lib/schema-compat';
@@ -86,7 +87,7 @@ export default async function PosPage({
   if (!orderId) {
     const { data: openOrders, error: openOrdersError } = await supabase
       .from('orders')
-      .select('id, order_no, order_type, guest_count, opened_at, source_order_id, restaurant_tables(name)')
+      .select('id, order_no, order_type, guest_count, opened_at, source_order_id, table_id, memo, restaurant_tables(name)')
       .eq('store_id', store.id)
       .eq('status', 'open')
       .order('opened_at', { ascending: false });
@@ -138,7 +139,9 @@ export default async function PosPage({
             orderType: o.order_type,
             guestCount: o.guest_count,
             openedAt: o.opened_at,
-            tableName: (o.restaurant_tables as unknown as { name: string } | null)?.name ?? null,
+            tableName:
+              (o.restaurant_tables as unknown as { name: string } | null)?.name ??
+              (isQuickPayOrder(o) ? QUICK_PAY_ORDER_LABEL : null),
             isDerived: !!o.source_order_id,
           }))}
           startTakeoutAction={startTakeout}
@@ -150,7 +153,7 @@ export default async function PosPage({
   const { data: order, error: orderError } = await supabase
     .from('orders')
     .select(
-      'id, order_no, order_type, status, guest_count, discount_total, discount_reason, coupon_code, customer_id, subtotal, tax_total, service_charge, total, store_id, table_id, staff_id, clerk_id, opened_at, restaurant_tables(name), profiles(display_name), reservations(start_at, end_at, course_id)'
+      'id, order_no, order_type, status, guest_count, discount_total, discount_reason, coupon_code, customer_id, subtotal, tax_total, service_charge, total, store_id, table_id, staff_id, clerk_id, opened_at, memo, restaurant_tables(name), profiles(display_name), reservations(start_at, end_at, course_id)'
     )
     .eq('id', orderId)
     .single();
@@ -423,7 +426,8 @@ export default async function PosPage({
         methodBrands={methodBrands}
         menuItems={menuItemsWithStock}
         bestSellerIds={bestSellerIds}
-        tableName={table?.name ?? null}
+        // 即会計の伝票は「店内 / Dine-in」ではなく「即会計 / Quick pay」（2026-09-30 Ronnie）
+        tableName={table?.name ?? (isQuickPayOrder(order) ? QUICK_PAY_ORDER_LABEL : null)}
         staffName={staff?.display_name ?? null}
         clerks={clerkOptions}
         currentClerkId={order.clerk_id ?? null}
