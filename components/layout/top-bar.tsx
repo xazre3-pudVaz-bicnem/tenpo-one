@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Bell, LogOut, Menu, Store, UserRound } from 'lucide-react';
+import { Bell, LogOut, Store, UserRound } from 'lucide-react';
 import type { SessionContext } from '@/lib/auth';
 import { ROLE_LABELS } from '@/lib/permissions';
 import { signOut } from '@/app/app/actions';
@@ -17,11 +17,10 @@ import { HandyQrChip } from './handy-qr-chip';
 export function TopBar({
   ctx,
   unreadCount,
-  showMenuLink = false,
 }: {
   ctx: SessionContext;
   unreadCount: number;
-  /** 左メニューを出さない画面（レジ全画面）で、代わりにメニュー画面へのボタンを出す */
+  /** 以前はレジ全画面でメニュー画面へのボタンを出していた（ホームと同じなので今は出さない） */
   showMenuLink?: boolean;
 }) {
   const roleLabel = ctx.role ? ROLE_LABELS[ctx.role] : ctx.isCypressAdmin ? '運営管理者' : '';
@@ -32,17 +31,7 @@ export function TopBar({
       {/* ロゴまわり・上部バーの下端にグラデーションの線 */}
       <span aria-hidden className="bg-brand pointer-events-none absolute inset-x-0 bottom-0 h-[3px]" />
       <div className="flex min-w-0 items-center gap-3">
-        {showMenuLink && (
-          <Link
-            href="/app/menu"
-            aria-label="メニュー"
-            title="メニュー / Menu"
-            className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-white/12 px-2 py-1.5 text-[13px] font-semibold text-white hover:bg-white/20"
-          >
-            <Menu className="h-[18px] w-[18px]" />
-            <span className="hidden md:inline">メニュー</span>
-          </Link>
-        )}
+        {/* 「メニュー」は「ホーム」と同じ画面なので出さない（2026-09-30 Ronnie「ホームだけでいい」） */}
         <BackHome />
         <Link
           href="/app/dashboard"

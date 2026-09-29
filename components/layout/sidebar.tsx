@@ -88,7 +88,8 @@ export function Sidebar({
           <div className="space-y-1.5 border-b border-line p-2">
             {tiles.map((t, i) => {
               const active = t.match.some((m) => pathname === m || pathname.startsWith(m + '/'));
-              // いちばん上の「オーダー・会計」だけ大きな正方形（2026-09-30 Ronnie「オーダー・会計を大きな四角に。ほかは今まで通り」）
+              // いちばん上の「オーダー・会計」だけ大きく（2026-09-30 Ronnie「オーダー・会計を大きな四角に」→
+              // 「メニューをスクロールしないで収まるように。高さは少し低くていい。正方形でなくていい」）
               if (i === 0) {
                 return (
                   <Link
@@ -96,21 +97,21 @@ export function Sidebar({
                     href={t.href}
                     aria-current={active ? 'page' : undefined}
                     className={cn(
-                      'tapneon flex aspect-square w-full flex-col items-center justify-center gap-3 rounded-2xl px-3 text-center text-royal',
+                      'tapneon flex h-[124px] w-full flex-col items-center justify-center gap-1.5 rounded-2xl px-3 text-center text-royal',
                       active && 'bg-iris-soft'
                     )}
                   >
                     <span
                       className={cn(
-                        'grid h-20 w-20 shrink-0 place-items-center rounded-2xl',
+                        'grid h-14 w-14 shrink-0 place-items-center rounded-2xl',
                         active ? 'bg-iris text-white' : 'bg-iris-soft text-iris'
                       )}
                     >
-                      <NavIcon name={t.icon} className="h-11 w-11" />
+                      <NavIcon name={t.icon} className="h-8 w-8" />
                     </span>
                     <span className="min-w-0">
-                      <span className="block text-[24px] leading-tight font-extrabold whitespace-nowrap">{t.label}</span>
-                      <span className="mt-1 block text-sm text-ink-3">{t.en}</span>
+                      <span className="block text-[21px] leading-tight font-extrabold whitespace-nowrap">{t.label}</span>
+                      <span className="block text-xs text-ink-3">{t.en}</span>
                     </span>
                   </Link>
                 );
@@ -122,7 +123,7 @@ export function Sidebar({
                   aria-current={active ? 'page' : undefined}
                   className={cn(
                     // 押した感じの出る立体的なタブ（2026-09-24 店舗要望）
-                    'tapneon flex items-center gap-3 rounded-xl px-3.5 py-3.5 text-royal',
+                    'tapneon flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-royal',
                     // レジは下の一覧と縦を揃えるためアイコンを左に。パソコンは今まで通り文字が左
                     iconFirst ? 'justify-start' : 'flex-row-reverse justify-between',
                     active && 'bg-iris-soft'
