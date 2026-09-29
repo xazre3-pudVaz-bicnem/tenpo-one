@@ -194,9 +194,15 @@ export function isBankDepositPurpose(purpose: string | null | undefined): boolea
   return (purpose ?? '').trim().startsWith(BANK_DEPOSIT_LABEL);
 }
 
-/** 「銀行へ預入：Cash to bank」→「Cash to bank」（メモが無ければ空） */
-export function bankDepositMemo(purpose: string): string {
-  return purpose.trim().slice(BANK_DEPOSIT_LABEL.length).replace(/^[：:\s]+/, '').trim();
+/** レジ精算の Cash to bank の行の名前 */
+export const CASH_TO_BANK_LABEL = 'Cash to bank（銀行へ預入）';
+
+/**
+ * Cash to bank ＝ 今日の現金売上（現金返金を引く）− 出金（買い物・経費。銀行へ預入は含めない）。
+ * 出金のほうが多ければマイナス（2026-09-29 Ronnie）。入金（釣銭補充など）は売上ではないので入れない
+ */
+export function cashToBank(cashSales: number, cashRefunds: number, spend: number): number {
+  return cashSales - cashRefunds - spend;
 }
 
 /** 用紙幅・桁数から「行を作る道具」をそろえる（本紙と精算情報の紙で共通） */
@@ -284,7 +290,8 @@ function reportHead(t: ReturnType<typeof makeLineTools>, data: RegisterReportDat
  *   - 媒体別の [全体]（上の 組数・客数・売上・客単価 と同じ）と、入出金が無い日の空の見出し・区切り線は出さない
  *   - 0件・¥0 の行も全部出す（2026-09-28 Ronnie「0 が無いと freee・MF などの会計ソフトが読めない。0 でも印刷」→ 40cm でいい）
  *   - レジ実績入力（現金以外）は支払情報に、現金は現金在高にまとめる（額が違うときだけ「実績」の行）
- *   - 出金の「銀行へ預入」（Cash to bank）は 出金 に入れず、＊入出金情報＊ の中の別の行（Ronnie「出金の中に入れない」）
+ *   - 出金の「銀行へ預入」は 出金 に入れない（Ronnie「出金の中に入れない」）。
+ *     ＊入出金情報＊ に Cash to bank ＝ 現金売上 − 出金（出金が多ければ −）。実際に預入した額が違うときだけその額も
  */
 export function layoutRegisterReport(data: RegisterReportData, options: RegisterReportOptions = {}): LayoutLine[] {
   const t = makeLineTools(options);
@@ -403,12 +410,13 @@ export function layoutRegisterReport(data: RegisterReportData, options: Register
   blank();
   kcv('出金', cnt(spendOuts.length), yen(spendTotal));
   for (const x of spendOuts) kv(`  ${x.purpose}`, `-${yen(x.amount)}`);
+  // Cash to bank ＝ 今日の現金売上 − 出金。出金のほうが多ければマイナス（2026-09-29 Ronnie
+  // 「売上 10万・出金 11万なら −1万、出金 9万なら 1万。売上からマイナスになったら − を付ける」）。
+  // 入出金で「銀行へ預入」として実際に出した額が違うときだけ、その額を下に出す
+  const toBank = cashToBank(data.cash.cashSales, data.cash.cashRefunds, spendTotal);
   blank();
-  kcv(BANK_DEPOSIT_LABEL, cnt(bankOuts.length), yen(bankTotal));
-  for (const x of bankOuts) {
-    const memo = bankDepositMemo(x.purpose);
-    if (memo || bankOuts.length > 1) kv(`  ${memo || BANK_DEPOSIT_LABEL}`, `-${yen(x.amount)}`);
-  }
+  kv(CASH_TO_BANK_LABEL, signedYen(toBank));
+  if (bankOuts.length > 0 && bankTotal !== toBank) kv('  実際の預入', yen(bankTotal));
   // レジ実績入力の「現金」＝数えた在高なので、現金在高の行にまとめる。差異合計はそのすぐ下
   blank();
   kv('現金在高', data.cash.counted == null ? yen(data.cash.expected) : yen(data.cash.counted));

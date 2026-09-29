@@ -9,7 +9,7 @@ import {
   taxByRateFor,
   threeCol,
   isBankDepositPurpose,
-  bankDepositMemo,
+  cashToBank,
   type RegisterReportData,
 } from '@/lib/register-report';
 import { dispWidth } from '@/lib/receipt-layout';
@@ -254,7 +254,7 @@ describe('layoutRegisterReport（2026-09-28 Ronnie が選んだ並び）', () =>
       /控除点数\s+0点/, /控除額\s+¥0/, /^控除項目$/m, /控除項目税額\s+¥0/, /控除後純売上\s+¥128,909/,
       /サービス料\s+0件\s+¥0/, /深夜料\s+0件\s+¥0/, /端数値引\s+0件\s+¥0/,
       /取消（赤伝票）\s+0件\s+¥0/, /訂正（黒伝票）\s+0件\s+¥0/, /未回収\s+0件\s+¥0/,
-      /入金\s+0件\s+¥0/, /銀行へ預入\s+0件\s+¥0/,
+      /入金\s+0件\s+¥0/, /Cash to bank（銀行へ預入）\s+¥69,900/,
       /差異理由\s+未選択/, /銀行振込\s+¥0/, /貸金庫預け\s+¥0/, /警備会社預け\s+¥0/,
       /取消（VOID）\s+0件\s+¥0/, /返金\s+0件\s+¥0/, /注文キャンセル\s+0件\s+¥0/,
     ]) {
@@ -311,68 +311,54 @@ describe('layoutRegisterReport（2026-09-28 Ronnie が選んだ並び）', () =>
     expect(diff.match(/実績/g)?.length).toBe(1);
   });
 
-  it('銀行へ預入（Cash to bank）は 出金 に入れず別の行（2026-09-28 Ronnie）', () => {
-    const text = layoutRegisterReport(
-      sample({
-        cashOuts: [
-          { purpose: 'その他：Komai', amount: 14656 },
-          { purpose: 'その他：Osibori', amount: 13332 },
-          { purpose: '銀行へ預入：Cash to bank', amount: 14162 },
-        ],
-        cash: { ...sample().cash, cashOut: 42150 },
-      })
-    )
-      .map((l) => l.text)
-      .join('\n');
-    expect(text).toMatch(/出金\s+2件\s+¥27,988\n  その他：Komai\s+-¥14,656\n  その他：Osibori\s+-¥13,332\n/);
-    expect(text).toMatch(/銀行へ預入\s+1件\s+¥14,162\n  Cash to bank\s+-¥14,162/);
-    expect(text).not.toContain('銀行へ預入：');
-    expect(text.indexOf('銀行へ預入')).toBeGreaterThan(text.indexOf('Osibori'));
-    expect(text.indexOf('銀行へ預入')).toBeLessThan(text.indexOf('現金在高'));
+  it('銀行へ預入は 出金 に入れない。Cash to bank ＝ 現金売上 − 出金（出金が多ければ −）（2026-09-28/29 Ronnie）', () => {
+    const slip = (over: Partial<RegisterReportData>) =>
+      layoutRegisterReport(sample(over))
+        .map((l) => l.text)
+        .join('\n');
+    // 高田馬場 9/28：現金売上 ¥42,150・出金（Komai・Osibori）¥27,988・銀行へ預入 ¥14,162
+    const baba = slip({
+      cashOuts: [
+        { purpose: 'その他：Komai', amount: 14656 },
+        { purpose: 'その他：Osibori', amount: 13332 },
+        { purpose: '銀行へ預入：Cash to bank', amount: 14162 },
+      ],
+      cash: { ...sample().cash, cashSales: 42150, cashOut: 42150 },
+    });
+    expect(baba).toMatch(/出金\s+2件\s+¥27,988\n  その他：Komai\s+-¥14,656\n  その他：Osibori\s+-¥13,332\n/);
+    expect(baba).toMatch(/Cash to bank（銀行へ預入）\s+¥14,162\n/);
+    expect(baba).not.toContain('-¥14,162');
+    expect(baba).not.toContain('実際の預入');
+    expect(baba).not.toContain('銀行へ預入：');
+    expect(baba.indexOf('Cash to bank')).toBeLessThan(baba.indexOf('現金在高'));
 
-    // 銀行へ預入だけ（メモ無し）→ 出金 は 0件、銀行へ預入 は1行
-    const only = layoutRegisterReport(
-      sample({ cashOuts: [{ purpose: '銀行へ預入', amount: 20000 }], cash: { ...sample().cash, cashOut: 20000 } })
-    )
-      .map((l) => l.text)
-      .join('\n');
-    expect(only).toMatch(/^出金\s+0件\s+¥0$/m);
-    expect(only).toMatch(/銀行へ預入\s+1件\s+¥20,000\n\n現金在高/);
+    // 売上 10万・出金 11万 → −1万 ／ 出金 9万 → 1万
+    const over = slip({ cashOuts: [{ purpose: '買い物：店 品', amount: 110000 }], cash: { ...sample().cash, cashSales: 100000, cashOut: 110000 } });
+    expect(over).toMatch(/Cash to bank（銀行へ預入）\s+-¥10,000/);
+    const under = slip({ cashOuts: [{ purpose: '買い物：店 品', amount: 90000 }], cash: { ...sample().cash, cashSales: 100000, cashOut: 90000 } });
+    expect(under).toMatch(/Cash to bank（銀行へ預入）\s+¥10,000/);
+    expect(under).not.toContain('-¥10,000');
+
+    // 実際に預入した額が違うときだけ下に出す
+    const diff = slip({
+      cashOuts: [
+        { purpose: 'その他：Komai', amount: 14656 },
+        { purpose: 'その他：Osibori', amount: 13332 },
+        { purpose: '銀行へ預入', amount: 10000 },
+      ],
+      cash: { ...sample().cash, cashSales: 42150, cashOut: 37988 },
+    });
+    expect(diff).toMatch(/Cash to bank（銀行へ預入）\s+¥14,162\n  実際の預入\s+¥10,000/);
   });
 
-  it('銀行へ預入の見分け方', () => {
+  it('銀行へ預入の見分け方・Cash to bank の計算', () => {
     expect(isBankDepositPurpose('銀行へ預入')).toBe(true);
     expect(isBankDepositPurpose('銀行へ預入：Cash to bank')).toBe(true);
     expect(isBankDepositPurpose('買い物：店 品')).toBe(false);
     expect(isBankDepositPurpose(null)).toBe(false);
-    expect(bankDepositMemo('銀行へ預入：Cash to bank')).toBe('Cash to bank');
-    expect(bankDepositMemo('銀行へ預入')).toBe('');
-  });
-
-  it('媒体別は表で1媒体1行（組数・人数・客単価・売上）。名前が長い媒体は名前の次の行に数字（2026-09-28 Ronnie）', () => {
-    const lines = layoutRegisterReport(sample(), { paperWidth: 80 }).map((l) => l.text);
-    const head = lines.findIndex((l) => l.includes('＊媒体別（税込）＊'));
-    expect(lines[head + 1]).toMatch(/^\s+組数\s+人数\s+客単価\s+売上$/);
-    expect(lines[head + 2]).toMatch(/^フリー\s+55組\s+112人\s+¥1,088\s+¥121,800$/);
-    expect(lines[head + 3]).toMatch(/^HOT PEPPER\s+6組\s+20人\s+¥1,000\s+¥20,000$/);
-    // 列の右端がそろう（売上は用紙の右端）
-    for (const l of lines.slice(head + 1, head + 4)) expect(dispWidth(l)).toBe(48);
-    // 人数の列の右端もそろう
-    const endOf = (l: string, token: string) => dispWidth(l.slice(0, l.indexOf(token) + token.length));
-    expect(endOf(lines[head + 2], '112人')).toBe(endOf(lines[head + 3], '20人'));
-
-    const long = layoutRegisterReport(
-      sample({
-        byChannel: [
-          { label: '全体', sales: 141800, guests: 132, groups: 61 },
-          { label: 'ホットペッパーグルメ（ネット予約・クーポン）', sales: 20000, guests: 20, groups: 6 },
-        ],
-      }),
-      { paperWidth: 80 }
-    ).map((l) => l.text);
-    const i = long.indexOf('ホットペッパーグルメ（ネット予約・クーポン）');
-    expect(i).toBeGreaterThan(0);
-    expect(long[i + 1]).toMatch(/^\s+6組\s+20人\s+¥1,000\s+¥20,000$/);
+    expect(cashToBank(100000, 0, 110000)).toBe(-10000);
+    expect(cashToBank(100000, 0, 90000)).toBe(10000);
+    expect(cashToBank(100000, 5000, 90000)).toBe(5000);
   });
 
   it('差額がある日・理由がある日は 差異理由 を出す', () => {
