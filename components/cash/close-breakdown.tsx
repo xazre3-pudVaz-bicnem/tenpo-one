@@ -61,6 +61,8 @@ export function CloseBreakdownCard({
           <span className="ml-2">※画面だけの表示です（クローズのレシートには印字しません）</span>
         </p>
 
+        <TaxPanel tax={data.tax} />
+
         <div className="grid items-start gap-4 lg:grid-cols-2">
           <CountTable title="予約経路別" en="By source" hint="グルメサイトごと・ウォークイン・テイクアウト" rows={data.bySource} />
           <CountTable title="担当者別" en="By clerk" hint="担当が付いた伝票の数・客数・品数・売上" rows={data.byClerk} showItems />
@@ -105,6 +107,57 @@ export function CloseBreakdownCard({
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+/**
+ * 消費税（2026-09-29 Ronnie「内消費税・消費税はレシートではなく管理画面に」）。
+ * 内消費税＝税率ごとの税込売上から逆算。消費税＝伝票ごとの消費税の合計（伝票ごとに端数を切り捨てるので数円ずれることがある）
+ */
+function TaxPanel({ tax }: { tax: CloseBreakdown['tax'] }) {
+  const rates = tax.byRate.filter((r) => r.rate === 10 || r.taxable > 0);
+  if (!rates.some((r) => r.rate === 10)) rates.unshift({ rate: 10, taxable: 0, tax: 0 });
+  const inner = rates.reduce((a, r) => a + r.tax, 0);
+  const diff = tax.orderTax - inner;
+  return (
+    <div className="rounded-2xl border border-line">
+      <div className="border-b border-line px-4 py-2.5">
+        <p className="text-[15px] font-bold text-navy">
+          消費税<span className="en-inline text-xs">Consumption tax</span>
+        </p>
+        <p className="text-[11px] text-ink-3">レジ精算のレシートには出さない項目（内消費税・消費税）</p>
+      </div>
+      <table className="w-full text-[13px]">
+        <thead>
+          <tr className="bg-lilac-soft text-[11px] text-ink-3">
+            <th className="px-4 py-1.5 text-left font-bold">税率</th>
+            <th className="px-2 py-1.5 text-right font-bold">税込売上</th>
+            <th className="px-4 py-1.5 text-right font-bold">内消費税</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rates.map((r) => (
+            <tr key={r.rate} className="border-t border-line">
+              <td className="px-4 py-1.5">{r.rate === 0 ? '非課税' : `${r.rate}%`}</td>
+              <td className="px-2 py-1.5 text-right tabular-nums">{yen(r.taxable)}</td>
+              <td className="px-4 py-1.5 text-right tabular-nums">{r.rate === 0 ? '—' : yen(r.tax)}</td>
+            </tr>
+          ))}
+          <tr className="border-t border-line">
+            <td className="px-4 py-1.5 font-bold" colSpan={2}>
+              消費税（伝票ごとの合計）
+            </td>
+            <td className="px-4 py-1.5 text-right font-bold tabular-nums">{yen(tax.orderTax)}</td>
+          </tr>
+        </tbody>
+      </table>
+      {diff !== 0 && (
+        <p className="border-t border-line px-4 py-2 text-[11px] text-ink-3">
+          内消費税との差 {diff > 0 ? '+' : '−'}
+          {yen(Math.abs(diff))}：伝票ごとに1円未満を切り捨てて足しているため
+        </p>
+      )}
+    </div>
   );
 }
 

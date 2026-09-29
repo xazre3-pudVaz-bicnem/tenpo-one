@@ -202,8 +202,6 @@ describe('layoutRegisterReport（2026-09-28 Ronnie が選んだ並び）', () =>
       '客単価',
       '総売上点数',
       '税率  10%',
-      '(内消費税)',
-      '消費税',
       '純売上',
       '値割引',
       '＊支払情報＊',
@@ -241,7 +239,9 @@ describe('layoutRegisterReport（2026-09-28 Ronnie が選んだ並び）', () =>
     expect(text).toMatch(/現金\s+25件\s+¥72,900/);
     expect(text).toMatch(/食材 買い出し\s+-¥3,000/);
     expect(text).toMatch(/HOT PEPPER\s+6組\s+20人\s+¥1,000\s+¥20,000/);
-    expect(text).toMatch(/\(内消費税\)\s+\(¥12,891\)/);
+    // 内消費税・消費税は紙に出さない（管理画面の「売上の内訳」。2026-09-29 Ronnie）
+    expect(text).not.toContain('内消費税');
+    expect(text).not.toMatch(/^消費税/m);
     for (const l of text.split('\n')) {
       expect(dispWidth(l)).toBeLessThanOrEqual(48);
     }

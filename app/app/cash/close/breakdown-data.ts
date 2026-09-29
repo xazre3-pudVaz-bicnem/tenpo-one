@@ -14,7 +14,7 @@ export async function loadCloseBreakdown(storeId: string, period: BreakdownPerio
 
   let q = supabase
     .from('orders')
-    .select('id, total, guest_count, clerk_name, reservation_id, order_type')
+    .select('id, total, tax_total, guest_count, clerk_name, reservation_id, order_type')
     .eq('store_id', storeId)
     .in('status', [...SETTLED_ORDER_STATUSES])
     .limit(20000);
@@ -72,6 +72,7 @@ export async function loadCloseBreakdown(storeId: string, period: BreakdownPerio
     clerkName: (o.clerk_name as string | null) ?? null,
     sourceName: o.reservation_id ? (sourceByReservation.get(o.reservation_id as string) ?? null) : null,
     orderType: (o.order_type as string | null) ?? null,
+    taxTotal: (o.tax_total as number | null) ?? 0,
   }));
   const bi: BreakdownItem[] = itemRows.map((i) => {
     const meta = i.menu_item_id ? menuMeta.get(i.menu_item_id as string) : undefined;
@@ -83,6 +84,7 @@ export async function loadCloseBreakdown(storeId: string, period: BreakdownPerio
       quantity: (i.quantity as number) ?? 0,
       lineTotal: (i.line_total as number) ?? 0,
       cancelled: i.status === 'cancelled',
+      taxRate: i.tax_rate == null ? 10 : Number(i.tax_rate),
       itemType: meta?.itemType ?? null,
       station: meta?.station ?? null,
       includesDrinks: meta?.includesDrinks ?? false,
@@ -98,6 +100,7 @@ interface ItemRowDb {
   unit_price: number;
   quantity: number;
   line_total: number;
+  tax_rate: number | string | null;
   status: string;
 }
 
@@ -108,7 +111,7 @@ async function loadItems(orderIds: string[]): Promise<ItemRowDb[]> {
     const chunk = orderIds.slice(i, i + 300);
     const { data } = await supabase
       .from('order_items')
-      .select('order_id, menu_item_id, name, unit_price, quantity, line_total, status')
+      .select('order_id, menu_item_id, name, unit_price, quantity, line_total, tax_rate, status')
       .in('order_id', chunk)
       .limit(20000);
     for (const r of data ?? []) out.push(r as unknown as ItemRowDb);

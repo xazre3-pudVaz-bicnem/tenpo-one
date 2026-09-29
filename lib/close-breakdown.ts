@@ -1,4 +1,5 @@
 import { normalizeClerkName } from '@/lib/clerk-name';
+import { taxByRateFor } from '@/lib/register-report';
 
 /**
  * レジクローズの「売上の内訳」（2026-09-27 Ronnie）:
@@ -15,6 +16,8 @@ export interface BreakdownOrder {
   /** 予約経路の名前（予約なし＝null → ウォークイン） */
   sourceName: string | null;
   orderType: string | null;
+  /** 伝票の消費税（orders.tax_total。伝票ごとに端数を切り捨てた額） */
+  taxTotal?: number;
 }
 
 export interface BreakdownItem {
@@ -25,6 +28,8 @@ export interface BreakdownItem {
   quantity: number;
   lineTotal: number;
   cancelled: boolean;
+  /** 明細の税率（%）。無ければ 10 */
+  taxRate?: number;
   /** menu_items.item_type（course / food / drink / option）。無ければ null */
   itemType: string | null;
   /** カテゴリのステーション（kitchen / drink / grill …） */
@@ -70,6 +75,12 @@ export interface CloseBreakdown {
   drinks: ItemRow[];
   nomihoudai: NomihoudaiSummary;
   totals: { orders: number; guests: number; sales: number };
+  /**
+   * 消費税（2026-09-29 Ronnie「内消費税・消費税はレシートではなく管理画面に」）。
+   * byRate：税率ごとの税込売上と、そこから逆算した内消費税（レジ精算の「税率」と同じ計算）
+   * orderTax：伝票ごとの消費税の合計（伝票ごとに端数を切り捨てるので、内消費税と数円ずれることがある）
+   */
+  tax: { byRate: { rate: number; taxable: number; tax: number }[]; orderTax: number };
 }
 
 export const WALK_IN_LABEL = 'ウォークイン';
@@ -135,6 +146,7 @@ export function computeCloseBreakdown(orders: BreakdownOrder[], items: Breakdown
   const bySource = new Map<string, CountRow>();
   const byClerk = new Map<string, CountRow>();
   const totals = { orders: 0, guests: 0, sales: 0 };
+  let orderTax = 0;
   for (const o of orders) {
     const its = itemsByOrder.get(o.id) ?? [];
     const qty = its.reduce((a, i) => a + i.quantity, 0);
@@ -145,6 +157,7 @@ export function computeCloseBreakdown(orders: BreakdownOrder[], items: Breakdown
     totals.orders += 1;
     totals.guests += o.guestCount;
     totals.sales += o.total;
+    orderTax += o.taxTotal ?? 0;
   }
 
   const courses = new Map<string, ItemRow>();
@@ -190,6 +203,13 @@ export function computeCloseBreakdown(orders: BreakdownOrder[], items: Breakdown
       orders: nomiOrders.size,
     },
     totals,
+    tax: {
+      byRate: taxByRateFor(
+        live.map((i) => ({ lineTotal: i.lineTotal, taxRate: i.taxRate ?? 10 })),
+        totals.sales
+      ),
+      orderTax,
+    },
   };
 }
 
