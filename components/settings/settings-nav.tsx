@@ -91,13 +91,17 @@ function isActive(pathname: string, item: SettingsNavItem): boolean {
   return isSelf(pathname, item) || (item.children?.some((c) => isActive(pathname, c)) ?? false);
 }
 
-/** 親＋子のタブ（メニュー／プラン／オプション…）。親か子の画面の上に出す */
-export function SettingsSubTabs({ item, pathname }: { item: SettingsNavItem; pathname: string }) {
+/**
+ * 親＋子のタブ（メニュー／プラン／オプション…）。親か子の画面の上に出す。
+ * activeHref：設定の枠の外にある画面（レジの設定・スタッフ）で、どのタブを選択中にするか
+ */
+export function SettingsSubTabs({ item, pathname, activeHref }: { item: SettingsNavItem; pathname: string; activeHref?: string }) {
   const kids = item.children ?? [];
-  const childOn = kids.some((c) => isActive(pathname, c));
+  const on = (c: SettingsNavItem) => (activeHref ? c.href === activeHref : isActive(pathname, c));
+  const childOn = kids.some(on);
   const tabs = [
-    ...(item.hub ? [] : [{ ...item, on: !childOn && isSelf(pathname, item) }]),
-    ...kids.map((c) => ({ ...c, on: isActive(pathname, c) })),
+    ...(item.hub ? [] : [{ ...item, on: !childOn && (activeHref ? item.href === activeHref : isSelf(pathname, item)) }]),
+    ...kids.map((c) => ({ ...c, on: on(c) })),
   ];
   return (
     <nav aria-label={`${item.label}の設定`} className="mb-4 flex gap-1.5 overflow-x-auto rounded-2xl border border-line bg-white p-1.5 [scrollbar-width:none]">
