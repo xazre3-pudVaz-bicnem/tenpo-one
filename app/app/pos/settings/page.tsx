@@ -105,7 +105,7 @@ export default async function RegisterSettingsPage({
         </section>
       )}
 
-      <RegisterSettingsList sections={registerSettingSections(ctx.role, orderId)} />
+      <RegisterSettingsList sections={registerSettingSections(ctx.role, orderId, { isRegisterDevice: ctx.isRegisterDevice === true })} />
     </div>
   );
 }

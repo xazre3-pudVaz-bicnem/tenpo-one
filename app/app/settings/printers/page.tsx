@@ -14,12 +14,24 @@ import Link from 'next/link';
 import { KitchenTicketPanel } from '@/components/settings/kitchen-ticket-panel';
 import { kitchenTicketSettingsFrom, misroutedDrinkCategories } from '@/lib/kitchen-ticket';
 import { normalizeFloorIds } from '@/lib/printer-floors';
+import { ADMIN_ONLY_MESSAGE } from '@/lib/admin-only-settings';
 
 export const metadata: Metadata = { title: 'レジ・プリンター | 設定' };
 
 export default async function PrintersSettingsPage() {
   const ctx = await requirePermission('store.settings');
   const targetStore = ctx.currentStore ?? ctx.stores[0];
+
+  // ハードウェアは管理画面だけ。レジ端末（iPad）からは開けない（2026-09-29 Ronnie）
+  if (ctx.isRegisterDevice) {
+    return (
+      <div>
+        <SettingsBackLink />
+        <PageHeader title="ハードウェア" en="Hardware" />
+        <EmptyState title="管理画面で設定してください" description={ADMIN_ONLY_MESSAGE} />
+      </div>
+    );
+  }
 
   if (!targetStore) {
     return (
