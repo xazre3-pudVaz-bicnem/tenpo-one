@@ -33,19 +33,6 @@ export function TopBar({
       <div className="flex min-w-0 items-center gap-3">
         {/* 「メニュー」は「ホーム」と同じ画面なので出さない（2026-09-30 Ronnie「ホームだけでいい」） */}
         <BackHome />
-        <Link
-          href="/app/dashboard"
-          aria-label="ホームへ"
-          className="flex shrink-0 items-center gap-3 rounded-[10px] py-0.5 pr-1.5 pl-0.5 transition-colors hover:bg-white/10"
-        >
-          <span className="bg-brand grid h-[36px] w-[36px] place-items-center rounded-[10px] p-[2px]">
-            <span className="grid h-full w-full place-items-center rounded-[8px] bg-white">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/logo-mark.png" alt="" className="h-6 w-6" />
-            </span>
-          </span>
-          <span className="hidden text-[15px] font-bold whitespace-nowrap xl:inline">TENPO ONE</span>
-        </Link>
         {/* 店舗を1つしか持たない端末（レジのiPad）では、右に店名が出るので左には出さない
             （2026-09-25 店舗要望「2か所は要らない。右だけ」） */}
         {(ctx.isHq || ctx.stores.length > 1) && (
@@ -104,6 +91,19 @@ export function TopBar({
         {ctx.currentStore && <HandyQrChip storeId={ctx.currentStore.id} />}
         {/* 検索はログアウトのすぐ左（2026-09-29 Ronnie） */}
         <CommandPaletteIconTrigger tone="dark" />
+        {/* ロゴはログアウトのすぐ左（2026-09-30 Ronnie「ロゴをログアウトの左に」） */}
+        <Link
+          href="/app/dashboard"
+          aria-label="ホームへ"
+          className="flex shrink-0 items-center rounded-[10px] p-0.5 transition-colors hover:bg-white/10"
+        >
+          <span className="bg-brand grid h-[34px] w-[34px] place-items-center rounded-[10px] p-[2px]">
+            <span className="grid h-full w-full place-items-center rounded-[8px] bg-white">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/logo-mark.png" alt="" className="h-6 w-6" />
+            </span>
+          </span>
+        </Link>
         <form action={signOut}>
           <button
             type="submit"
