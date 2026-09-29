@@ -155,7 +155,8 @@ export default async function CashClosePage({
         }
       />
 
-      <div className="space-y-4">
+      {/* レジクローズの箱はすべて小さく（2026-09-29 Ronnie「レジクローズの箱を全部小さく」）。カードの見出しの上下も詰める */}
+      <div className="space-y-3 [--ui-card-header-py:0.5rem] [--ui-card-title-size:0.9375rem]">
         {/* レジ端末でログアウトを押したが、レジが開いている（2026-09-28 Ronnie「レジ精算をしないとログアウトできない」） */}
         {sp.logout === 'blocked' && storeDay.openCount > 0 && (
           <p className="rounded-xl border border-danger/30 bg-danger-soft px-4 py-3 text-[14px] font-bold text-danger">
@@ -164,9 +165,9 @@ export default async function CashClosePage({
         )}
 
         {/* レジクローズ（現金実査）はいちばん上（2026-09-29 Ronnie「レジクローズする所を上に」）。支払方法別はその横／下 */}
-        <div className="grid items-start gap-4 lg:grid-cols-2">
+        <div className="grid items-start gap-3 lg:grid-cols-2">
           {/* 現金実査 */}
-          <div className="space-y-4">
+          <div className="space-y-3">
             {openSessions.map((s) => (
               <RegisterCountCard
                 key={s.id}
@@ -183,7 +184,7 @@ export default async function CashClosePage({
                 <CardHeader>
                   <CardTitle en="Cash count">現金実査</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-3">
+                <CardContent className="space-y-3 p-3 sm:p-4">
                   <p className="text-sm text-ink-2">
                     {cards.length === 0
                       ? 'レジが登録されていません。設定からレジを登録してください。'
@@ -217,20 +218,20 @@ export default async function CashClosePage({
               <tbody>
                 {[...byMethod.entries()].map(([method, v]) => (
                   <tr key={method} className="border-b border-line last:border-b-0">
-                    <td className="px-4 py-3 text-ink sm:px-5">
+                    <td className="px-4 py-2 text-ink sm:px-5">
                       {METHOD_LABELS[method] ?? method}
                       <span className="ml-1 text-[11px] text-ink-3">{METHOD_LABELS_EN[method] ?? ''}</span>
                     </td>
-                    <td className="px-4 py-3 text-[12.5px] text-ink-3 tabular-nums">{v.count}件</td>
-                    <td className="px-4 py-3 text-right font-bold text-ink tabular-nums sm:px-5">{yen(v.amount)}</td>
+                    <td className="px-4 py-2 text-[12.5px] text-ink-3 tabular-nums">{v.count}件</td>
+                    <td className="px-4 py-2 text-right font-bold text-ink tabular-nums sm:px-5">{yen(v.amount)}</td>
                   </tr>
                 ))}
               </tbody>
               <tfoot>
                 <tr className="bg-lilac-soft">
-                  <td className="px-4 py-3 font-bold text-ink sm:px-5">合計</td>
-                  <td className="px-4 py-3 text-[12.5px] text-ink-3 tabular-nums">{(payments ?? []).length}件</td>
-                  <td className="px-4 py-3 text-right font-extrabold text-saffron tabular-nums sm:px-5">
+                  <td className="px-4 py-2 font-bold text-ink sm:px-5">合計</td>
+                  <td className="px-4 py-2 text-[12.5px] text-ink-3 tabular-nums">{(payments ?? []).length}件</td>
+                  <td className="px-4 py-2 text-right font-extrabold text-saffron tabular-nums sm:px-5">
                     {yen((payments ?? []).reduce((a, p) => a + p.amount, 0))}
                   </td>
                 </tr>
@@ -240,7 +241,7 @@ export default async function CashClosePage({
         </div>
 
         {closedCards.length > 0 && (
-          <div className="grid gap-4 lg:grid-cols-2">
+          <div className="grid gap-3 lg:grid-cols-2">
             {closedCards.map((c) =>
               c.type === 'closed' ? (
                 <RegisterClosedCard key={c.session.id} storeDayClosed={!!todayClosing} session={c.session} canOperate={canOperate} />
@@ -262,15 +263,15 @@ export default async function CashClosePage({
               <span className="text-[13px] text-ink-3">未会計はありません</span>
             )}
           </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <CardContent className="p-3 sm:p-4">
+            <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
               <Kv label="売上合計（税込）" value={yen(metrics.grossSales)} sub={metrics.refunds > 0 ? `返金 −${yen(metrics.refunds)} ／ 純売上 ${yen(metrics.netSales)}` : undefined} />
               <Kv label="会計件数" value={`${metrics.transactionCount}件`} />
               <Kv label="客数" value={`${metrics.guests}名`} />
               <Kv label="客単価" value={yen(metrics.avgSpend)} />
             </div>
             {/* 支払方法別（現場の要望: 締めのときに 現金・カード・PayPay 等の合計を一目で見たい） */}
-            <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <div className="mt-2 grid grid-cols-2 gap-2 lg:grid-cols-4">
               {[...byMethod.entries()]
                 .filter(([m, v]) => BASE_METHODS.includes(m) || v.count > 0)
                 .map(([method, v]) => (
@@ -310,7 +311,7 @@ export default async function CashClosePage({
             </span>
           </CardHeader>
           {receiptRows.length === 0 ? (
-            <p className="px-5 py-6 text-sm text-ink-3">本日の出金（経費）はありません</p>
+            <p className="px-5 py-3 text-sm text-ink-3">本日の出金（経費）はありません</p>
           ) : (
             <ul>
               {receiptRows.map((r) => {
@@ -320,7 +321,7 @@ export default async function CashClosePage({
                   <li
                     key={r.id}
                     className={cn(
-                      'grid grid-cols-[52px_minmax(0,1fr)_auto_auto] items-center gap-2.5 border-b border-line px-4 py-2.5 text-[13px] sm:px-5',
+                      'grid grid-cols-[52px_minmax(0,1fr)_auto_auto] items-center gap-2.5 border-b border-line px-4 py-1.5 text-[13px] sm:px-5',
                       state !== 'ok' && 'bg-danger-soft'
                     )}
                   >
@@ -339,7 +340,7 @@ export default async function CashClosePage({
               })}
             </ul>
           )}
-          <p className="flex items-start gap-1.5 px-5 py-2.5 text-xs text-ink-2">
+          <p className="flex items-start gap-1.5 px-5 py-2 text-xs text-ink-2">
             {ngRows.length > 0 ? (
               <>
                 <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-danger" />
@@ -375,9 +376,9 @@ export default async function CashClosePage({
 
 function Kv({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
-    <div className="flex flex-col gap-1.5 rounded-xl bg-lilac-soft px-3.5 py-3">
-      <span className="text-xs text-ink-3">{label}</span>
-      <b className="text-[22px] leading-tight font-extrabold text-ink tabular-nums">{value}</b>
+    <div className="flex flex-col gap-0.5 rounded-xl bg-lilac-soft px-3 py-2">
+      <span className="text-[11px] text-ink-3">{label}</span>
+      <b className="text-[17px] leading-tight font-extrabold text-ink tabular-nums">{value}</b>
       {sub && <span className="text-[11px] text-ink-3 tabular-nums">{sub}</span>}
     </div>
   );

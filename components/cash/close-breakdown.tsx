@@ -54,7 +54,7 @@ export function CloseBreakdownCard({
           </div>
         </div>
       </CardHeader>
-      <CardContent className="space-y-5">
+      <CardContent className="space-y-3 p-3 sm:p-4">
         <p className="text-[12px] text-ink-3">
           {label}：会計 <b className="tabular-nums text-ink">{data.totals.orders}</b>件 ／ 客数{' '}
           <b className="tabular-nums text-ink">{data.totals.guests}</b>名 ／ 売上 <b className="tabular-nums text-ink">{yen(data.totals.sales)}</b>
@@ -63,12 +63,12 @@ export function CloseBreakdownCard({
 
         <TaxPanel tax={data.tax} />
 
-        <div className="grid items-start gap-4 lg:grid-cols-2">
+        <div className="grid items-start gap-3 lg:grid-cols-2">
           <CountTable title="予約経路別" en="By source" hint="グルメサイトごと・ウォークイン・テイクアウト" rows={data.bySource} />
           <CountTable title="担当者別" en="By clerk" hint="担当が付いた伝票の数・客数・品数・売上" rows={data.byClerk} showItems />
         </div>
 
-        <div className="grid items-start gap-4 lg:grid-cols-3">
+        <div className="grid items-start gap-3 lg:grid-cols-3">
           <ItemTable title="コース・プラン" en="Courses" rows={data.courses} unit="組" />
           <ItemTable title="フード" en="Food" rows={data.foods} unit="個" />
           <ItemTable title="ドリンク" en="Drinks" rows={data.drinks} unit="杯" />
@@ -76,8 +76,8 @@ export function CloseBreakdownCard({
 
         {/* 飲み放題 */}
         <div className="rounded-2xl border border-line">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-4 py-3">
-            <p className="flex items-center gap-2 text-[15px] font-bold text-navy">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-4 py-2">
+            <p className="flex items-center gap-2 text-[14px] font-bold text-navy">
               <Wine className="h-4 w-4 text-royal" aria-hidden />
               飲み放題<span className="en-inline text-xs">All-you-can-drink</span>
             </p>
@@ -121,8 +121,8 @@ function TaxPanel({ tax }: { tax: CloseBreakdown['tax'] }) {
   const diff = tax.orderTax - inner;
   return (
     <div className="rounded-2xl border border-line">
-      <div className="border-b border-line px-4 py-2.5">
-        <p className="text-[15px] font-bold text-navy">
+      <div className="border-b border-line px-4 py-1.5">
+        <p className="text-[14px] font-bold text-navy">
           消費税<span className="en-inline text-xs">Consumption tax</span>
         </p>
         <p className="text-[11px] text-ink-3">レジ精算のレシートには出さない項目（内消費税・消費税）</p>
@@ -174,8 +174,8 @@ function fmtMonth(ym: string): string {
 function CountTable({ title, en, hint, rows, showItems }: { title: string; en: string; hint: string; rows: CountRow[]; showItems?: boolean }) {
   return (
     <div className="overflow-hidden rounded-2xl border border-line">
-      <div className="border-b border-line px-4 py-2.5">
-        <p className="text-[15px] font-bold text-navy">
+      <div className="border-b border-line px-4 py-1.5">
+        <p className="text-[14px] font-bold text-navy">
           {title}
           <span className="en-inline text-xs">{en}</span>
         </p>
@@ -216,7 +216,7 @@ function ItemTable({ title, en, rows, unit }: { title: string; en: string; rows:
   return (
     <div className="overflow-hidden rounded-2xl border border-line">
       <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
-        <p className="text-[15px] font-bold text-navy">
+        <p className="text-[14px] font-bold text-navy">
           {title}
           <span className="en-inline text-xs">{en}</span>
         </p>

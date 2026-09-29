@@ -26,15 +26,20 @@ export async function RegisterReportPreview({ sessionId, live }: { sessionId: st
           {live ? '開局中の途中集計。レジ締めをするとこの内容で本紙が出ます' : '本日の締め時点。本紙はレジ締めのときに出ています'}
         </span>
       </CardHeader>
-      <CardContent>
-        <div className="grid items-start gap-5 lg:grid-cols-2">
+      <CardContent className="p-3 sm:p-4">
+        {/* 箱を小さく（2026-09-29 Ronnie）。紙は枠の中でスクロールして見る */}
+        <div className="grid items-start gap-3 lg:grid-cols-2">
           <div>
-            <p className="mb-2 text-[12px] font-bold text-ink-2">本紙（レジ締めで自動）</p>
-            <ReceiptPaper rows={main} />
+            <p className="mb-1.5 text-[12px] font-bold text-ink-2">本紙（レジ締めで自動）</p>
+            <div className="max-h-[420px] overflow-y-auto rounded-lg">
+              <ReceiptPaper rows={main} />
+            </div>
           </div>
           <div>
-            <p className="mb-2 text-[12px] font-bold text-ink-2">別紙「精算情報」（「精算情報を印刷」を押したときだけ）</p>
-            <ReceiptPaper rows={settlement} />
+            <p className="mb-1.5 text-[12px] font-bold text-ink-2">別紙「精算情報」（「精算情報を印刷」を押したときだけ）</p>
+            <div className="max-h-[420px] overflow-y-auto rounded-lg">
+              <ReceiptPaper rows={settlement} />
+            </div>
           </div>
         </div>
       </CardContent>
