@@ -52,8 +52,12 @@ export function StoreDayClosePanel({
       <div className="flex items-center justify-end gap-3">
         {!canClose && <p className="text-xs text-gray-500">実行には店長以上の権限が必要です</p>}
         {canClose && (
-          <Button onClick={handleClose} disabled={pending} size="lg">
+          <Button onClick={handleClose} disabled={pending} size="lg" className="h-auto flex-col gap-0 py-2 leading-tight">
             {pending ? '処理中…' : alreadyClosed ? '店舗日次締めを再実行（集計を更新）' : '店舗日次締めを実行'}
+            {/* 小さく英語も（2026-09-29 Ronnie） */}
+            <span className="text-[10.5px] font-semibold opacity-80">
+              {pending ? 'Processing…' : alreadyClosed ? 'Re-run store day close' : 'Close store day'}
+            </span>
           </Button>
         )}
       </div>

@@ -135,8 +135,10 @@ export function RegisterCountCard({
             variant={needsReason ? 'danger' : 'primary'}
             onClick={handleClose}
             disabled={pending || blocked}
+            className="h-auto flex-col gap-0 py-1 leading-tight"
           >
             {pending ? 'クローズ中…' : 'レジクローズする'}
+            <span className="text-[10px] font-semibold opacity-80">Close register</span>
           </Button>
         )}
       </CardHeader>
@@ -268,7 +270,10 @@ export function RegisterCountCard({
             onClick={handleClose}
             disabled={pending || blocked}
           >
-            {pending ? 'クローズ中…' : 'レジをクローズする / Close register'}
+            <span className="flex flex-col items-center leading-tight">
+              {pending ? 'クローズ中…' : 'レジをクローズする'}
+              <span className="text-[11px] font-semibold opacity-80">Close register</span>
+            </span>
           </Button>
         ) : (
           <p className="mt-4 text-center text-xs text-ink-3">レジ操作の権限がありません</p>

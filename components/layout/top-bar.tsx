@@ -78,7 +78,6 @@ export function TopBar({
         <span className="mr-2 hidden 2xl:inline-flex">
           <LiveClock />
         </span>
-        <CommandPaletteIconTrigger tone="dark" />
         <span className="hidden text-white sm:inline-flex [&_button]:text-white [&_button:hover]:bg-white/10">
           <HelpPopover />
         </span>
@@ -114,6 +113,8 @@ export function TopBar({
         </span>
         {/* ハンディ ログインQR（店名とログアウトの間。2026-09-27 Ronnie） */}
         {ctx.currentStore && <HandyQrChip storeId={ctx.currentStore.id} />}
+        {/* 検索はログアウトのすぐ左（2026-09-29 Ronnie） */}
+        <CommandPaletteIconTrigger tone="dark" />
         <form action={signOut}>
           <button
             type="submit"
