@@ -1,9 +1,8 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { CalendarDays, CornerDownRight, House, LogOut, Zap } from 'lucide-react';
+import { CalendarDays, CornerDownRight, LogOut, Zap } from 'lucide-react';
 
 export interface HandyClerkOption {
   id: string;
@@ -15,7 +14,7 @@ export interface HandyClerkOption {
  *
  * 端末は QR で登録済み（端末用アカウントでログイン済み）なので、ここで選ぶのは
  * 「誰が操作しているか」＝POS担当者だけ。パスワードは無い。
- * 左上の「POS設定」は接続状態（店舗）の確認と、この端末のログアウト。
+ * 左上の「POS設定」は接続状態（店舗）の確認と、この端末のログアウト（本体へのリンクは出さない）。
  */
 export function HandyLoginScreen({
   storeName,
@@ -166,13 +165,7 @@ export function HandyLoginScreen({
               別の店舗につなぎ直すときは、レジ（管理画面）の 設定 → ハンディ端末 でこの端末を解除し、
               新しい QR を読み取ってください。
             </p>
-            <Link
-              href="/app/dashboard"
-              className="mt-2 flex min-h-[46px] items-center gap-2 border-b border-[#eee8f6] text-sm text-[#7b3fe4]"
-            >
-              <House className="h-[18px] w-[18px]" aria-hidden />
-              TENPO ONE（本体）へ
-            </Link>
+            {/* ハンディはハンディだけ。本体（/app）へのリンクは出さない（2026-09-30 Ronnie） */}
             <form action={signOutAction}>
               <button
                 type="submit"

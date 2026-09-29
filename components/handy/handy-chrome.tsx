@@ -6,7 +6,6 @@ import { usePathname, useRouter } from 'next/navigation';
 import {
   ChevronLeft,
   ChevronRight,
-  House,
   LogOut,
   Menu,
   NotebookText,
@@ -217,9 +216,7 @@ export function HandyChrome({
               </button>
             </form>
           )}
-          <SheetLink href="/app/dashboard" icon={<House className="h-[18px] w-[18px]" aria-hidden />}>
-            TENPO ONE（本体）へ戻る
-          </SheetLink>
+          {/* ハンディはハンディだけ。本体（/app）へは行けない（2026-09-30 Ronnie） */}
           <SheetLink
             href="/handy/reservations"
             icon={<NotebookText className="h-[18px] w-[18px]" aria-hidden />}
