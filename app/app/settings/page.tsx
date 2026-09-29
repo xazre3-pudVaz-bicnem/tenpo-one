@@ -7,6 +7,8 @@ import { createClient } from '@/lib/supabase/server';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/ui/state';
+import { resolveSiteOrigin } from '@/lib/site-origin';
+import { ShareLinkButtons } from '@/components/settings/share-link-buttons';
 
 export const metadata: Metadata = { title: '設定' };
 
@@ -39,7 +41,7 @@ export default async function SettingsHubPage() {
   const [{ data: store }, { data: hours }] = await Promise.all([
     supabase
       .from('stores')
-      .select('name, postal_code, address, phone, email, seat_count, booking_enabled')
+      .select('name, slug, postal_code, address, phone, email, seat_count, booking_enabled')
       .eq('id', targetStore.id)
       .maybeSingle(),
     supabase
@@ -53,6 +55,10 @@ export default async function SettingsHubPage() {
     .map((h) => h.day_of_week)
     .sort((a, b) => a - b)
     .map((d) => DAY_LABELS[d]);
+  // 店舗ご予約のリンク（お客様がネットで予約するページ）。ここでは見る・コピー・共有だけ（変えられない）
+  const origin = await resolveSiteOrigin();
+  const bookingUrl = store?.slug ? `${origin}/book/${store.slug}` : null;
+
   const openRanges = Array.from(
     new Set(
       (hours ?? [])
@@ -101,6 +107,23 @@ export default async function SettingsHubPage() {
             </Field>
             <Field label="オンライン予約">
               {store.booking_enabled ? <Badge tone="success">受付中</Badge> : <Badge tone="gray">停止中</Badge>}
+            </Field>
+            <Field label="店舗ご予約">
+              {bookingUrl ? (
+                <span className="flex flex-col items-stretch gap-2 sm:items-end">
+                  <a
+                    href={bookingUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="truncate font-mono text-[13px] text-royal hover:underline"
+                  >
+                    {bookingUrl}
+                  </a>
+                  <ShareLinkButtons url={bookingUrl} title={`${store.name} ご予約`} />
+                </span>
+              ) : (
+                muted
+              )}
             </Field>
           </dl>
         ) : (
