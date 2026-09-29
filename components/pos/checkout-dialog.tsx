@@ -37,6 +37,7 @@ import {
 import { appendTenkeyDigit, appendTenkeyDoubleZero } from './tenkey';
 import type { CheckoutPayment, ApplyCouponResult } from '@/app/app/pos/actions';
 import type { TerminalPaymentState } from '@/app/app/pos/payment-actions';
+import { SteraPayPanel, type PosSteraTerminal } from '@/components/pos/stera-pay-panel';
 
 const COUPON_PREFIX = 'クーポン: ';
 const QUICK_CASH_AMOUNTS = [1000, 5000, 10000] as const;
@@ -146,6 +147,8 @@ export function CheckoutDialog({
   pointBrands = [],
   methodBrands = {},
   splitOrderAction,
+  steraTerminals = [],
+  onSteraFinalized,
 }: {
   onClose: () => void;
   order: CheckoutOrder;
@@ -162,6 +165,10 @@ export function CheckoutDialog({
   checkTerminalPaymentAction: (localIntentId: string) => Promise<TerminalPaymentState>;
   cancelTerminalPaymentAction: (localIntentId: string) => Promise<TerminalPaymentState>;
   onTerminalPaymentFinalized: () => void;
+  /** stera 端末（設定 > 決済・端末 の「stera 連携」。2026-09-29 Ronnie） */
+  steraTerminals?: PosSteraTerminal[];
+  /** stera で会計まで確定したとき（ドロアを開く・レシートへ） */
+  onSteraFinalized?: (method: CheckoutPayment['method'], brand: string | null) => void;
   /** 店舗のPOS担当者。会計画面でそのまま選べる（2026-09-25 要望） */
   clerks?: ClerkOption[];
   /** いまの伝票の担当者 */
@@ -233,7 +240,9 @@ export function CheckoutDialog({
   const remaining = order.total - paid;
   const maxPointsUsable = Math.min(pointsAvailability.balance * pointsAvailability.pointValue, order.total);
   // 端末決済が進行中/未解決の間は、他の支払方法の操作を排他する
-  const terminalBlocking = terminalStatus === 'sending' || terminalStatus === 'polling' || terminalStatus === 'timeout';
+  const [steraBusy, setSteraBusy] = useState(false);
+  const terminalBlocking =
+    terminalStatus === 'sending' || terminalStatus === 'polling' || terminalStatus === 'timeout' || steraBusy;
 
   useEffect(() => {
     if (terminalStatus !== 'polling' || !terminalIntentId) return;
@@ -1225,6 +1234,18 @@ export function CheckoutDialog({
                     )}
                   </button>
                 </div>
+
+                {/* stera 端末へ金額を送る（2026-09-29 Ronnie「stera を押したら金額が端末へ行って会計・ドロアまで」） */}
+                {steraTerminals.length > 0 && onSteraFinalized && (
+                  <SteraPayPanel
+                    orderId={order.id}
+                    total={order.total}
+                    terminals={steraTerminals}
+                    disabled={clerkMissing || order.total <= 0}
+                    onBusyChange={setSteraBusy}
+                    onFinalized={onSteraFinalized}
+                  />
+                )}
 
                 {paymentAvailability.configured && terminalReaders.length > 0 && (
                   <div className="mt-3 rounded-xl border border-line p-3">

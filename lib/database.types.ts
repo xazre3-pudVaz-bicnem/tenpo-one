@@ -7709,6 +7709,141 @@ export type Database = {
           },
         ]
       }
+      stera_payment_requests: {
+        Row: {
+          amount: number
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          finalized_at: string | null
+          id: string
+          order_id: string
+          organization_id: string
+          payment_type: string
+          result: Json | null
+          sent_at: string | null
+          slip_number: string
+          status: string
+          store_id: string
+          tax: number
+          terminal_id: string
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          finalized_at?: string | null
+          id?: string
+          order_id: string
+          organization_id: string
+          payment_type: string
+          result?: Json | null
+          sent_at?: string | null
+          slip_number: string
+          status?: string
+          store_id: string
+          tax?: number
+          terminal_id: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          finalized_at?: string | null
+          id?: string
+          order_id?: string
+          organization_id?: string
+          payment_type?: string
+          result?: Json | null
+          sent_at?: string | null
+          slip_number?: string
+          status?: string
+          store_id?: string
+          tax?: number
+          terminal_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stera_payment_requests_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stera_payment_requests_terminal_id_fkey"
+            columns: ["terminal_id"]
+            isOneToOne: false
+            referencedRelation: "stera_terminals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stera_payment_requests_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      stera_terminals: {
+        Row: {
+          app_version: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          last_seen_at: string | null
+          link_code: string
+          name: string
+          organization_id: string
+          status: string
+          store_id: string
+          terminal_no: string | null
+          updated_at: string
+        }
+        Insert: {
+          app_version?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          last_seen_at?: string | null
+          link_code: string
+          name: string
+          organization_id: string
+          status?: string
+          store_id: string
+          terminal_no?: string | null
+          updated_at?: string
+        }
+        Update: {
+          app_version?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          last_seen_at?: string | null
+          link_code?: string
+          name?: string
+          organization_id?: string
+          status?: string
+          store_id?: string
+          terminal_no?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stera_terminals_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       stores: {
         Row: {
           address: string | null

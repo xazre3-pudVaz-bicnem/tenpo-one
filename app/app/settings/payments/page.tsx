@@ -12,6 +12,11 @@ import { BookingPaymentSettingsForm } from '@/components/settings/booking-paymen
 import { CheckoutPresetsPanel } from '@/components/settings/checkout-presets-panel';
 import { checkoutPresetsFrom } from '@/lib/checkout-presets';
 import type { BookingPaymentMode } from './actions';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { resolveSiteOrigin } from '@/lib/site-origin';
+import { isSteraOnline } from '@/lib/stera';
+import { formatTime } from '@/lib/format';
+import { SteraTerminalsPanel, type SteraTerminalView } from '@/components/settings/stera-terminals-panel';
 
 export const metadata: Metadata = { title: '決済・端末 | 設定' };
 
@@ -45,6 +50,30 @@ export default async function PaymentsSettingsPage() {
       .eq('store_id', targetStore.id)
       .maybeSingle(),
   ]);
+
+  // stera 端末（サーバー専用のテーブル。この画面は store.settings の権限で開いている）
+  const { data: steraRows } = await createAdminClient()
+    .from('stera_terminals')
+    .select('id, name, terminal_no, link_code, status, last_seen_at, app_version')
+    .eq('store_id', targetStore.id)
+    .neq('status', 'deleted')
+    .order('created_at');
+  const renderedAt = new Date().getTime();
+  const steraTerminals: SteraTerminalView[] = (steraRows ?? []).map((t) => ({
+    id: t.id as string,
+    name: t.name as string,
+    terminalNo: (t.terminal_no as string | null) ?? null,
+    linkCode: t.link_code as string,
+    active: t.status === 'active',
+    online: t.status === 'active' && isSteraOnline(t.last_seen_at as string | null, renderedAt),
+    lastSeenLabel: t.last_seen_at
+      ? new Date(t.last_seen_at as string).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo', month: 'numeric', day: 'numeric' }) +
+        ' ' +
+        formatTime(t.last_seen_at as string)
+      : null,
+    appVersion: (t.app_version as string | null) ?? null,
+  }));
+  const serverUrl = await resolveSiteOrigin();
 
   const readerRows: TerminalReaderRow[] = (readers ?? []).map((r) => ({
     id: r.id,
@@ -120,9 +149,15 @@ export default async function PaymentsSettingsPage() {
               <li className="flex items-center justify-between gap-3 px-4 py-3">
                 <div className="min-w-0">
                   <span className="text-sm font-medium text-navy">stera（SMBC / stera pack）</span>
-                  <p className="text-xs text-gray-500">自動連携なし。POSの「外部端末（stera等）」決済で手動会計できます。</p>
+                  <p className="text-xs text-gray-500">
+                    {steraTerminals.length > 0
+                      ? '自動連携（端末の「TENPO ONE 連携」アプリ）。下の「stera 連携」で端末を管理します。'
+                      : '下の「stera 連携」で端末を追加すると自動連携できます。それまでは「外部端末（stera等）」決済で手動会計。'}
+                  </p>
                 </div>
-                <Badge tone="gray">手動運用</Badge>
+                <Badge tone={steraTerminals.some((t) => t.online) ? 'success' : 'gray'}>
+                  {steraTerminals.some((t) => t.online) ? '接続済み' : steraTerminals.length > 0 ? '未接続' : '手動運用'}
+                </Badge>
               </li>
               <li className="flex items-center justify-between gap-3 px-4 py-3">
                 <div className="min-w-0">
@@ -141,6 +176,13 @@ export default async function PaymentsSettingsPage() {
             </ul>
           </CardContent>
         </Card>
+
+        <SteraTerminalsPanel
+          storeId={targetStore.id}
+          terminals={steraTerminals}
+          canEdit={ctx.isRegisterDevice !== true}
+          serverUrl={serverUrl}
+        />
 
         <PaymentReadersPanel storeId={targetStore.id} testMode={testMode} initial={readerRows} />
 
