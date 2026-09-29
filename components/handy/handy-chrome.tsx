@@ -95,9 +95,10 @@ export function HandyChrome({
 
   // 注文・呼び出しは他端末やお客様QRからも増える。router.refresh() は外枠（layout）と
   // 画面（page）の両方を取り直すため、購読はここ1か所にまとめる。
+  // menu_items：メニュー設定で値段・売り切れを変えたら、ハンディのメニューもすぐ出し直す（2026-09-28 Ronnie）
   useStoreRealtimeRefresh({
     storeId,
-    tables: ['orders', 'order_items', 'restaurant_tables', 'service_calls'],
+    tables: ['orders', 'order_items', 'restaurant_tables', 'service_calls', 'menu_items'],
   });
 
   const sorted = sortServiceCalls(calls);

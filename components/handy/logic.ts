@@ -6,6 +6,7 @@
  * 上位分類（フード／ドリンク…）の判定 classifyMenuItem はメニューブック画面の見出しなどで使う。
  */
 import { groupMenuPages, menuPageLabel, type MenuPageDef } from '@/lib/menu-book';
+import { optionPriceLookup, repriceLines } from '@/lib/cart-reprice';
 
 export type HandyGroupId = 'food' | 'drink' | 'course' | 'service' | 'other';
 
@@ -318,6 +319,23 @@ export function addCartLine(
     quantity: Math.min(next[index].quantity + quantity, MAX_LINE_QUANTITY),
   };
   return next;
+}
+
+/**
+ * カートの単価を、いま画面に出ているメニューの値段で付け直す（lib/cart-reprice.ts。レジ iPad と共通）
+ * （2026-09-28 Ronnie「メニュー設定で値段を変えたら、ハンディでも変わるように。これから入れる注文から」）。
+ */
+export function repriceCart(
+  lines: HandyCartLine[],
+  tabs: readonly Pick<HandyTabView, 'pages'>[],
+  optionGroupsByItem: Record<string, readonly { items: readonly { id: string; price: number }[] }[]>
+): HandyCartLine[] {
+  const priceById = new Map<string, number>();
+  for (const tab of tabs)
+    for (const page of tab.pages)
+      for (const category of page.categories)
+        for (const item of category.items) priceById.set(item.id, item.price);
+  return repriceLines(lines, (id) => priceById.get(id), optionPriceLookup(optionGroupsByItem));
 }
 
 /** 数量を増減する。0以下になった行は取り除く */

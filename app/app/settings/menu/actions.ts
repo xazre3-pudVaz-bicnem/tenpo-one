@@ -184,6 +184,9 @@ export async function saveMenuItem(input: MenuItemInput): Promise<ActionResult> 
   revalidatePath('/app/settings/plans');
   revalidatePath('/app/settings/categories');
   revalidatePath('/app/settings/menu-book');
+  // 値段などの変更をレジ・ハンディのメニューにも出す（これから入れる注文から。注文済みの明細は変えない）
+  revalidatePath('/app/pos');
+  revalidatePath('/handy', 'layout');
   return {};
 }
 
