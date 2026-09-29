@@ -3,7 +3,16 @@
 import { revalidatePath } from 'next/cache';
 import { assertStoreAccess, requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
-import { QUICK_PAY_LINE_NAME, QUICK_PAY_TAX_RATE, quickPayProblem, type QuickPayLine } from '@/lib/quick-pay';
+import {
+  QUICK_PAY_LINE_NAME,
+  QUICK_PAY_TAX_RATE,
+  quickPayDiscountAmount,
+  quickPayDiscountReason,
+  quickPayProblem,
+  type QuickPayDiscount,
+  type QuickPayLine,
+} from '@/lib/quick-pay';
+import { setDiscount } from '@/app/app/pos/actions';
 
 /**
  * 即会計（2026-09-30 Ronnie「電卓のレジのように金額だけで会計できるように。手書きの伝票の合計だけで会計するお店のため」）。
@@ -66,6 +75,8 @@ export async function prepareQuickCheckout(input: {
   guestCount: number;
   /** 単価 × 個数（530 × 2 など） */
   lines: QuickPayLine[];
+  /** 値引（円）・割引（%）。無ければ null */
+  discount?: QuickPayDiscount | null;
 }): Promise<{ orderId?: string; error?: string }> {
   const ctx = await requirePermission('pos.checkout');
   const lines: QuickPayLine[] = (input.lines ?? []).map((l) => ({
@@ -120,6 +131,26 @@ export async function prepareQuickCheckout(input: {
   }
 
   await supabase.rpc('recalc_order_totals', { p_order_id: orderId });
+
+  // 値引・割引（クラシックレジの「値引」「割引」キー）。伝票の値引として入れる（会計画面・レシートにも出る）
+  const discount = input.discount ?? null;
+  if (discount && (discount.kind === 'yen' || discount.kind === 'percent')) {
+    const { data: before } = await supabase
+      .from('orders')
+      .select('total, discount_total')
+      .eq('id', orderId)
+      .maybeSingle();
+    const base = Number(before?.total ?? 0) + Number(before?.discount_total ?? 0);
+    const off = quickPayDiscountAmount(base, { kind: discount.kind, value: Math.round(Number(discount.value)) });
+    if (off > 0) {
+      try {
+        await setDiscount(orderId, off, quickPayDiscountReason({ kind: discount.kind, value: Math.round(Number(discount.value)) }));
+      } catch (e) {
+        return { orderId, error: e instanceof Error ? e.message : '値引できませんでした' };
+      }
+    }
+  }
+
   const { data: totals } = await supabase.from('orders').select('total').eq('id', orderId).maybeSingle();
   if (!totals || Number(totals.total) <= 0) return { orderId, error: '会計する金額がありません' };
 

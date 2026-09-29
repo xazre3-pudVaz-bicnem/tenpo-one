@@ -37,3 +37,24 @@ export function quickPayProblem(lines: readonly QuickPayLine[]): string | null {
   return null;
 }
 
+
+/** 値引（円）・割引（%）。クラシックレジの「値引」「割引」キー（2026-09-30 Ronnie「クラシックのレジにある大事なボタンも」） */
+export interface QuickPayDiscount {
+  kind: 'yen' | 'percent';
+  value: number;
+}
+
+/** 値引・割引の金額（小計を超えない。% は円未満切り捨て）。不正なら 0 */
+export function quickPayDiscountAmount(subtotal: number, discount: QuickPayDiscount | null): number {
+  if (!discount || !(subtotal > 0) || !Number.isInteger(discount.value) || discount.value <= 0) return 0;
+  if (discount.kind === 'percent') {
+    if (discount.value > 100) return 0;
+    return Math.floor((subtotal * discount.value) / 100);
+  }
+  return Math.min(discount.value, subtotal);
+}
+
+/** 伝票に残す値引の理由（レシート・伝票明細に出る） */
+export function quickPayDiscountReason(discount: QuickPayDiscount): string {
+  return discount.kind === 'percent' ? `割引 ${discount.value}%` : `値引 ¥${discount.value.toLocaleString('ja-JP')}`;
+}
