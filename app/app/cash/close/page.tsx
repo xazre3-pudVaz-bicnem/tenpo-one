@@ -163,6 +163,92 @@ export default async function CashClosePage({
           </p>
         )}
 
+        {/* レジクローズ（現金実査）はいちばん上（2026-09-29 Ronnie「レジクローズする所を上に」）。支払方法別はその横／下 */}
+        <div className="grid items-start gap-4 lg:grid-cols-2">
+          {/* 現金実査 */}
+          <div className="space-y-4">
+            {openSessions.map((s) => (
+              <RegisterCountCard
+                key={s.id}
+                session={s}
+                showRegisterName={openSessions.length > 1 || cards.length > 1}
+                canOperate={canOperate}
+                today={today}
+                openSlipCount={openCount}
+                nextFloatTarget={storeDay.nextFloatSetting ?? s.openingFloat}
+              />
+            ))}
+            {openSessions.length === 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle en="Cash count">現金実査</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <p className="text-sm text-ink-2">
+                    {cards.length === 0
+                      ? 'レジが登録されていません。設定からレジを登録してください。'
+                      : closedCards.length > 0
+                        ? '開局中のレジはありません（レジ精算ずみ）。レジ精算がすむと営業日完了になります。'
+                        : '開局中のレジはありません。開局すると現金実査とクローズができます。'}
+                  </p>
+                  {canOperate &&
+                    unopenedCards.map((c) =>
+                      c.type === 'unopened' ? (
+                        <RegisterOpenCard
+                          key={c.registerId}
+                          storeId={store.id}
+                          registerId={c.registerId}
+                          registerName={c.registerName}
+                          expectedOpening={registerDayFlowActive(storeDay.clock) ? lastClose.expected : null}
+                          expectedFrom={lastClose.businessDate}
+                        />
+                      ) : null
+                    )}
+                </CardContent>
+              </Card>
+            )}
+          </div>
+          {/* 支払方法別 */}
+          <Card className="overflow-hidden">
+            <CardHeader>
+              <CardTitle en="By method">支払方法別</CardTitle>
+            </CardHeader>
+            <table className="w-full text-sm">
+              <tbody>
+                {[...byMethod.entries()].map(([method, v]) => (
+                  <tr key={method} className="border-b border-line last:border-b-0">
+                    <td className="px-4 py-3 text-ink sm:px-5">
+                      {METHOD_LABELS[method] ?? method}
+                      <span className="ml-1 text-[11px] text-ink-3">{METHOD_LABELS_EN[method] ?? ''}</span>
+                    </td>
+                    <td className="px-4 py-3 text-[12.5px] text-ink-3 tabular-nums">{v.count}件</td>
+                    <td className="px-4 py-3 text-right font-bold text-ink tabular-nums sm:px-5">{yen(v.amount)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="bg-lilac-soft">
+                  <td className="px-4 py-3 font-bold text-ink sm:px-5">合計</td>
+                  <td className="px-4 py-3 text-[12.5px] text-ink-3 tabular-nums">{(payments ?? []).length}件</td>
+                  <td className="px-4 py-3 text-right font-extrabold text-saffron tabular-nums sm:px-5">
+                    {yen((payments ?? []).reduce((a, p) => a + p.amount, 0))}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </Card>
+        </div>
+
+        {closedCards.length > 0 && (
+          <div className="grid gap-4 lg:grid-cols-2">
+            {closedCards.map((c) =>
+              c.type === 'closed' ? (
+                <RegisterClosedCard key={c.session.id} storeDayClosed={!!todayClosing} session={c.session} canOperate={canOperate} />
+              ) : null
+            )}
+          </div>
+        )}
+
         {/* 本日の売上 */}
         <Card>
           <CardHeader className="flex flex-wrap items-center justify-between gap-2">
@@ -272,92 +358,6 @@ export default async function CashClosePage({
             )}
           </p>
         </Card>
-
-        <div className="grid items-start gap-4 lg:grid-cols-2">
-          {/* 支払方法別 */}
-          <Card className="overflow-hidden">
-            <CardHeader>
-              <CardTitle en="By method">支払方法別</CardTitle>
-            </CardHeader>
-            <table className="w-full text-sm">
-              <tbody>
-                {[...byMethod.entries()].map(([method, v]) => (
-                  <tr key={method} className="border-b border-line last:border-b-0">
-                    <td className="px-4 py-3 text-ink sm:px-5">
-                      {METHOD_LABELS[method] ?? method}
-                      <span className="ml-1 text-[11px] text-ink-3">{METHOD_LABELS_EN[method] ?? ''}</span>
-                    </td>
-                    <td className="px-4 py-3 text-[12.5px] text-ink-3 tabular-nums">{v.count}件</td>
-                    <td className="px-4 py-3 text-right font-bold text-ink tabular-nums sm:px-5">{yen(v.amount)}</td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr className="bg-lilac-soft">
-                  <td className="px-4 py-3 font-bold text-ink sm:px-5">合計</td>
-                  <td className="px-4 py-3 text-[12.5px] text-ink-3 tabular-nums">{(payments ?? []).length}件</td>
-                  <td className="px-4 py-3 text-right font-extrabold text-saffron tabular-nums sm:px-5">
-                    {yen((payments ?? []).reduce((a, p) => a + p.amount, 0))}
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
-          </Card>
-
-          {/* 現金実査 */}
-          <div className="space-y-4">
-            {openSessions.map((s) => (
-              <RegisterCountCard
-                key={s.id}
-                session={s}
-                showRegisterName={openSessions.length > 1 || cards.length > 1}
-                canOperate={canOperate}
-                today={today}
-                openSlipCount={openCount}
-                nextFloatTarget={storeDay.nextFloatSetting ?? s.openingFloat}
-              />
-            ))}
-            {openSessions.length === 0 && (
-              <Card>
-                <CardHeader>
-                  <CardTitle en="Cash count">現金実査</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <p className="text-sm text-ink-2">
-                    {cards.length === 0
-                      ? 'レジが登録されていません。設定からレジを登録してください。'
-                      : closedCards.length > 0
-                        ? '開局中のレジはありません（レジ精算ずみ）。レジ精算がすむと営業日完了になります。'
-                        : '開局中のレジはありません。開局すると現金実査とクローズができます。'}
-                  </p>
-                  {canOperate &&
-                    unopenedCards.map((c) =>
-                      c.type === 'unopened' ? (
-                        <RegisterOpenCard
-                          key={c.registerId}
-                          storeId={store.id}
-                          registerId={c.registerId}
-                          registerName={c.registerName}
-                          expectedOpening={registerDayFlowActive(storeDay.clock) ? lastClose.expected : null}
-                          expectedFrom={lastClose.businessDate}
-                        />
-                      ) : null
-                    )}
-                </CardContent>
-              </Card>
-            )}
-          </div>
-        </div>
-
-        {closedCards.length > 0 && (
-          <div className="grid gap-4 lg:grid-cols-2">
-            {closedCards.map((c) =>
-              c.type === 'closed' ? (
-                <RegisterClosedCard key={c.session.id} storeDayClosed={!!todayClosing} session={c.session} canOperate={canOperate} />
-              ) : null
-            )}
-          </div>
-        )}
 
         <StoreDayClosePanel
           storeId={store.id}
