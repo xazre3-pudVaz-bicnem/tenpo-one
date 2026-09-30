@@ -1,10 +1,8 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { CalendarDays, CornerDownRight, House, LogOut, Zap } from 'lucide-react';
-import { NO_CLERK_NAME } from '@/lib/handy-clerk';
+import { CalendarDays, CornerDownRight, LogOut, Zap } from 'lucide-react';
 
 export interface HandyClerkOption {
   id: string;
@@ -16,7 +14,7 @@ export interface HandyClerkOption {
  *
  * 端末は QR で登録済み（端末用アカウントでログイン済み）なので、ここで選ぶのは
  * 「誰が操作しているか」＝POS担当者だけ。パスワードは無い。
- * 左上の「POS設定」は接続状態（店舗）の確認と、この端末のログアウト。
+ * 左上の「POS設定」は接続状態（店舗）の確認と、この端末のログアウト（本体へのリンクは出さない）。
  */
 export function HandyLoginScreen({
   storeName,
@@ -36,17 +34,18 @@ export function HandyLoginScreen({
   signOutAction: () => Promise<void>;
 }) {
   const router = useRouter();
-  const [clerkId, setClerkId] = useState<string>(clerks[0]?.id ?? '');
+  // 担当者は自分で選ぶ（最初は未選択。選ばないと Login できない。2026-09-30 Ronnie）
+  const [clerkId, setClerkId] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [setupOpen, setSetupOpen] = useState(false);
   const [pending, startTransition] = useTransition();
 
   const login = () => {
-    if (pending) return;
+    if (pending || !clerkId) return;
     setError(null);
     startTransition(async () => {
       try {
-        await loginAction(clerkId || null);
+        await loginAction(clerkId);
         router.replace('/handy');
         router.refresh();
       } catch (e) {
@@ -104,19 +103,21 @@ export function HandyLoginScreen({
           onChange={(e) => setClerkId(e.target.value)}
           className="min-h-10 w-full rounded-lg border border-[#e3dbf1] bg-white px-[7px] text-base text-[#2a2138]"
         >
+          <option value="" disabled>
+            {clerks.length === 0 ? '担当者が登録されていません' : '担当者を選んでください'}
+          </option>
           {clerks.map((c) => (
             <option key={c.id} value={c.id}>
               {c.name}
             </option>
           ))}
-          <option value="">{NO_CLERK_NAME}</option>
         </select>
       </div>
 
       <button
         type="button"
         onClick={login}
-        disabled={pending}
+        disabled={pending || !clerkId}
         className="mt-5 flex min-h-11 w-full items-center justify-center gap-2 rounded-[9px] bg-[#7b3fe4] text-[19px] font-semibold text-white shadow-[0_3px_10px_#7b3fe41a] active:bg-[#6630c7] disabled:opacity-45"
       >
         <CornerDownRight className="h-5 w-5" aria-hidden />
@@ -129,8 +130,8 @@ export function HandyLoginScreen({
       )}
       <p className="mt-2.5 text-center text-[9px] leading-relaxed text-[#d8c6f1]">
         {clerks.length === 0
-          ? '担当者は 設定 → POS担当者 で登録できます（未登録でも使えます）。'
-          : '担当者を選んで Login。ハンディで作った伝票の担当者になります。'}
+          ? '担当者が登録されていません。レジの 設定 → POS担当者 で登録してからログインしてください。'
+          : '担当者を選ばないと Login できません。ハンディで作った伝票の担当者になります。'}
       </p>
 
       {setupOpen && (
@@ -164,13 +165,7 @@ export function HandyLoginScreen({
               別の店舗につなぎ直すときは、レジ（管理画面）の 設定 → ハンディ端末 でこの端末を解除し、
               新しい QR を読み取ってください。
             </p>
-            <Link
-              href="/app/dashboard"
-              className="mt-2 flex min-h-[46px] items-center gap-2 border-b border-[#eee8f6] text-sm text-[#7b3fe4]"
-            >
-              <House className="h-[18px] w-[18px]" aria-hidden />
-              TENPO ONE（本体）へ
-            </Link>
+            {/* ハンディはハンディだけ。本体（/app）へのリンクは出さない（2026-09-30 Ronnie） */}
             <form action={signOutAction}>
               <button
                 type="submit"

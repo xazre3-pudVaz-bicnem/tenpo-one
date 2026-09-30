@@ -4,11 +4,13 @@ import { HANDY_CLERK_COOKIE, parseHandyClerk, type HandyClerk } from './handy-cl
 
 /**
  * ハンディの担当者（ログイン画面で選んだ POS担当者）を Cookie から読む。
- * 未選択・壊れた値は null（＝ /handy でログイン画面を出す）。
+ * 未選択・壊れた値・「担当者なし」は null（＝ /handy でログイン画面を出す）。
+ * 担当者を選ばないとログインできない（2026-09-30 Ronnie「担当選択なしではログインできない」）。
  */
 export async function readHandyClerk(): Promise<HandyClerk | null> {
   const store = await cookies();
-  return parseHandyClerk(store.get(HANDY_CLERK_COOKIE)?.value);
+  const clerk = parseHandyClerk(store.get(HANDY_CLERK_COOKIE)?.value);
+  return clerk?.id ? clerk : null;
 }
 
 /**

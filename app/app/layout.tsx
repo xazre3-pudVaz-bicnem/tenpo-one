@@ -18,6 +18,7 @@ import { ThemeBody } from '@/components/layout/theme-body';
 import { InstallPrompt } from '@/components/pwa/install-prompt';
 import { ClerkGate, type GateClerk } from '@/components/pos/clerk-gate';
 import { RegisterDayBanner } from '@/components/cash/register-day-banner';
+import { RegisterCloseReminder } from '@/components/cash/register-close-reminder';
 import { AnnouncementPopup } from '@/components/notifications/announcement-popup';
 import { loadPopupAnnouncements } from '@/lib/announcement-popup-server';
 import { loadStoreClerks } from '@/lib/pos-clerks-server';
@@ -133,6 +134,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         {ctx.currentStore && <ServiceCallAlert storeId={ctx.currentStore.id} />}
         {/* 重要なお知らせ：了解を押すまで時々ポップアップ（注文画面では出さない。2026-09-28 Ronnie） */}
         {popupAnnouncements.length > 0 && <AnnouncementPopup items={popupAnnouncements} />}
+        {/* レジクローズを忘れた店のレジ（iPad）に、次の日「〇〇さん、レジクローズがまだです」（いちばんレジを担当した人あて。2026-09-30 Ronnie） */}
+        {isRegi && ctx.currentStore && <RegisterCloseReminder storeId={ctx.currentStore.id} />}
         {!posFullscreen && (
           <Sidebar
             tiles={tiles}

@@ -6,7 +6,6 @@ import { usePathname, useRouter } from 'next/navigation';
 import {
   ChevronLeft,
   ChevronRight,
-  House,
   LogOut,
   Menu,
   NotebookText,
@@ -14,6 +13,7 @@ import {
   ShoppingCart,
   UserRound,
   UserRoundPen,
+  CalendarPlus,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatTime } from '@/lib/format';
@@ -21,13 +21,13 @@ import { signOut } from '@/app/app/actions';
 import { StoreSwitcher } from '@/components/layout/store-switcher';
 import { useStoreRealtimeRefresh } from '@/components/realtime/use-store-refresh';
 import { ReservationAlert } from '@/components/notifications/reservation-alert';
-import { PushSubscribeButton } from '@/components/notifications/push-subscribe-button';
 import { PushAutoSubscribe } from '@/components/notifications/push-auto-subscribe';
 import { ServiceCallAlert } from '@/components/notifications/service-call-alert';
 import { AppModeSwitch } from '@/components/native/app-mode-switch';
 import { useNow } from '@/components/floor/use-now';
 import type { StoreRef } from '@/lib/auth';
 import { elapsedLabel, serviceCallLabel, sortServiceCalls, type HandyServiceCall } from './logic';
+import { HandyBookingShareDialog } from './handy-booking-share';
 
 /**
  * 承認済みレイアウト（2026-09-21）のハンディは、TENPO ONE本体の上部バー・左メニュー・下部5タブが
@@ -42,12 +42,15 @@ interface HandyChromeApi {
   openDrawer: () => void;
   refresh: () => void;
   refreshing: boolean;
+  /** 「ご予約リンクを紹介」を開く（予約ページの無い店は null） */
+  openBookingShare: (() => void) | null;
 }
 
 const HandyChromeContext = createContext<HandyChromeApi>({
   openDrawer: () => {},
   refresh: () => {},
   refreshing: false,
+  openBookingShare: null,
 });
 
 export function useHandyChrome() {
@@ -68,6 +71,7 @@ export function HandyChrome({
   calls,
   serverNow,
   resolveServiceCallAction,
+  booking = null,
   children,
 }: {
   storeId: string;
@@ -83,6 +87,8 @@ export function HandyChrome({
   calls: HandyServiceCall[];
   serverNow: number;
   resolveServiceCallAction: (callId: string) => Promise<{ alreadyResolved: boolean }>;
+  /** お店の予約ページ（≡ の「ご予約リンクを紹介」。slug が無い店は null） */
+  booking?: { url: string; qrDataUrl: string } | null;
   children: React.ReactNode;
 }) {
   const router = useRouter();
@@ -91,6 +97,7 @@ export function HandyChrome({
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [callsOpen, setCallsOpen] = useState(false);
   const [selectOpen, setSelectOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const [refreshing, startRefresh] = useTransition();
 
   // 注文・呼び出しは他端末やお客様QRからも増える。router.refresh() は外枠（layout）と
@@ -106,6 +113,7 @@ export function HandyChrome({
     openDrawer: () => setDrawerOpen(true),
     refresh: () => startRefresh(() => router.refresh()),
     refreshing,
+    openBookingShare: booking ? () => setShareOpen(true) : null,
   };
 
   return (
@@ -212,17 +220,31 @@ export function HandyChrome({
               </button>
             </form>
           )}
-          <SheetLink href="/app/dashboard" icon={<House className="h-[18px] w-[18px]" aria-hidden />}>
-            TENPO ONE（本体）へ戻る
-          </SheetLink>
+          {/* ハンディはハンディだけ。本体（/app）へは行けない（2026-09-30 Ronnie） */}
           <SheetLink
             href="/handy/reservations"
             icon={<NotebookText className="h-[18px] w-[18px]" aria-hidden />}
           >
             今日の予約
           </SheetLink>
+          {/* ご予約リンクを紹介（今日の予約の上から ≡ の中へ。2026-09-30 Ronnie） */}
+          {booking && (
+            <button
+              type="button"
+              onClick={() => {
+                setDrawerOpen(false);
+                setShareOpen(true);
+              }}
+              className="flex min-h-[49px] w-full items-center gap-2 border-b border-[#eee8f6] text-left text-sm text-[#7b3fe4]"
+            >
+              <CalendarPlus className="h-[18px] w-[18px]" aria-hidden />
+              ご予約リンクを紹介
+              <span className="text-[10px] font-semibold text-[#9a8cb6]">Share</span>
+              <ChevronRight className="ml-auto h-4 w-4 text-[#c9b8ea]" aria-hidden />
+            </button>
+          )}
           {/* 品切れ設定はハンディのメニューには出さない（2026-09-28 Ronnie「ハンディにこのオプションは要らない」。レジの設定から） */}
-          <PushSubscribeButton variant="row" />
+          {/* 予約・呼び出しの通知は自動でオン（PushAutoSubscribe）。ボタンは出さない（2026-09-30 Ronnie「受け取るは自動。ここに出さなくていい」） */}
           <button
             type="button"
             onClick={() => {
@@ -263,6 +285,15 @@ export function HandyChrome({
             RESERVATION · 今日の予約
           </SheetLink>
         </HandySheet>
+      )}
+
+      {shareOpen && booking && (
+        <HandyBookingShareDialog
+          url={booking.url}
+          storeName={storeName}
+          qrDataUrl={booking.qrDataUrl}
+          onClose={() => setShareOpen(false)}
+        />
       )}
 
       {callsOpen && (
@@ -337,6 +368,26 @@ export function HandyRefreshButton() {
       disabled={refreshing}
     >
       <RotateCw className={cn('h-7 w-7', refreshing && 'animate-spin')} strokeWidth={2.2} aria-hidden />
+    </button>
+  );
+}
+
+/**
+ * 今日の予約の上の小さな「ご予約リンクを紹介」（≡ の中にもある。2026-09-30 Ronnie「ここにも置いて」）。
+ * 押すと予約ページの QR・共有・コピーのポップアップ。予約ページの無い店では出さない
+ */
+export function HandyBookingShareButton() {
+  const { openBookingShare } = useHandyChrome();
+  if (!openBookingShare) return null;
+  return (
+    <button
+      type="button"
+      onClick={openBookingShare}
+      className="inline-flex h-8 items-center gap-1 rounded-full border border-[#d9ccf3] bg-[#f4effc] px-3 text-[12px] font-bold text-[#6630c7] active:bg-[#e9e0fa]"
+    >
+      <CalendarPlus className="h-3.5 w-3.5" aria-hidden />
+      ご予約リンクを紹介
+      <span className="text-[9.5px] font-semibold text-[#9a8cb6]">Share</span>
     </button>
   );
 }

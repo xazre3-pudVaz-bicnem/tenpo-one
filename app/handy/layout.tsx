@@ -12,6 +12,8 @@ import { isRequestFromStoreNetwork } from '@/lib/store-access-server';
 import { ACCESS_MESSAGE } from '@/lib/store-access';
 import { HandyNetworkWatch } from '@/components/handy/handy-network-watch';
 import { handyHeartbeat } from '@/app/handy-join/actions';
+import { resolveSiteOrigin } from '@/lib/site-origin';
+import { tableQrDataUrl } from '@/lib/table-qr';
 
 /**
  * ハンディは TENPO ONE 本体（/app）の外に置く独立した全画面アプリ。
@@ -49,9 +51,10 @@ export default async function HandyLayout({ children }: { children: React.ReactN
   const clerk = await readHandyClerk();
 
   let calls: HandyServiceCall[] = [];
+  let booking: { url: string; qrDataUrl: string } | null = null;
   if (store) {
     const supabase = await createClient();
-    const [{ data: rows }, { data: tables }] = await Promise.all([
+    const [{ data: rows }, { data: tables }, { data: storeRow }] = await Promise.all([
       supabase
         .from('service_calls')
         .select('id, table_id, kind, note, created_at')
@@ -62,7 +65,12 @@ export default async function HandyLayout({ children }: { children: React.ReactN
         .from('restaurant_tables')
         .select('id, name')
         .eq('store_id', store.id),
+      supabase.from('stores').select('slug').eq('id', store.id).maybeSingle(),
     ]);
+    // ≡ の「ご予約リンクを紹介」（お客様にお店の予約ページの QR を見せる。2026-09-30 Ronnie）
+    const bookingUrl = storeRow?.slug ? `${await resolveSiteOrigin()}/book/${storeRow.slug}` : null;
+    const bookingQr = bookingUrl ? await tableQrDataUrl(bookingUrl, 480).catch(() => null) : null;
+    booking = bookingUrl && bookingQr ? { url: bookingUrl, qrDataUrl: bookingQr } : null;
     const nameById = new Map((tables ?? []).map((t) => [t.id, t.name]));
     calls = (rows ?? []).map((c) => ({
       id: c.id,
@@ -105,6 +113,7 @@ export default async function HandyLayout({ children }: { children: React.ReactN
         calls={calls}
         serverNow={requestTime()}
         resolveServiceCallAction={resolveServiceCall}
+        booking={booking}
       >
         {children}
       </HandyChrome>
