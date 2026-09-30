@@ -27,6 +27,7 @@ function isItemActive(pathname: string, href: string): boolean {
  * 折りたたみ状態は localStorage に保持し、現在地を含むグループは常に展開する。
  */
 const HOME_PATH = '/app/dashboard';
+const POS_PATH = '/app/pos';
 
 export function Sidebar({
   tiles,
@@ -75,6 +76,8 @@ export function Sidebar({
     });
   };
 
+  // 注文画面（/app/pos）は商品と伝票に画面の幅を全部使う（ContentArea と同じ判定）
+  if (pathname === POS_PATH) return null;
   // レジ：ホーム画面だけに出す。開いた画面は全幅で使い、戻るのは上部バーの「ホーム」
   if (homeOnly && pathname !== HOME_PATH) return null;
 
