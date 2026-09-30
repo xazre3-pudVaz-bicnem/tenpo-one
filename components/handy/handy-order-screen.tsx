@@ -29,6 +29,7 @@ import {
   type HandyTabView,
 } from './logic';
 import type { HandyOrderLineInput, HandySubmitResult } from '@/app/app/handy/actions';
+import { SlideToConfirm } from './slide-to-confirm';
 
 /**
  * 注文画面（承認済みレイアウトの menu / review）。
@@ -170,8 +171,9 @@ export function HandyOrderScreen({
           onSubmitted(result.sentQuantity);
           return;
         }
-        // 送信できた点数を卓の伝票画面に伝え、「厨房に送信しました」を出す
-        router.push(`/handy/${tableId}?sent=${result.sentQuantity}`);
+        // オーダー決定のあとはそのままテーブル一覧へ（2026-09-30 Ronnie「スライドしたら直接テーブルへ」）
+        toast(`${tableName}：厨房に送信しました（${result.sentQuantity}点）`, 'success');
+        router.push('/handy');
         router.refresh();
       } catch (e) {
         toast(e instanceof Error ? e.message : '送信に失敗しました', 'error');
@@ -249,22 +251,22 @@ export function HandyOrderScreen({
               <b className="text-[23px] font-bold tabular-nums">{yen(total)}</b>
             </div>
             <p className="px-3 py-2 text-center text-[10px] leading-[1.7] text-[#7a7090]">
-              お客様に読み上げて確認してから送信してください。
+              お客様に読み上げて確認してから、下をスライドしてオーダー決定してください。
               <br />
               送信すると伝票 #{orderNo}（現在 {yen(unpaidTotal)}）に追加され、厨房へ流れます。
             </p>
           </div>
         </HandyMain>
 
+        {/* オーダー決定はスライド（うっかりタップで送らない。2026-09-30 Ronnie） */}
         <div className="flex-none bg-[#f6f3fb] px-3.5 pt-3 pb-2.5">
-          <button
-            type="button"
-            disabled={pending || count === 0}
-            onClick={handleSubmit}
-            className="flex min-h-[42px] w-full items-center justify-center rounded-[9px] bg-[#7b3fe4] text-base font-bold text-white shadow-[0_3px_10px_#7b3fe41a] active:bg-[#6630c7] disabled:opacity-40"
-          >
-            {pending ? '送信中…' : '注文を送信'}
-          </button>
+          <SlideToConfirm
+            label="オーダー決定"
+            en="Slide to order"
+            disabled={count === 0}
+            pending={pending}
+            onConfirm={handleSubmit}
+          />
         </div>
       </>
     );

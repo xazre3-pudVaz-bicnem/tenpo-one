@@ -24,6 +24,8 @@ interface OrderItemRow {
   unit_price: number;
   line_total: number;
   modifiers: unknown;
+  /** 厨房へ送った時刻（注文の回 1st・2nd… に使う。未送信は null） */
+  kitchen_sent_at: string | null;
 }
 
 /** order_items.modifiers（[{name, price}]）から表示用のラベルを作る */
@@ -101,7 +103,7 @@ export default async function HandyTablePage({
   const { data: itemRows } = orderIds.length
     ? await supabase
         .from('order_items')
-        .select('id, order_id, name, quantity, unit_price, line_total, modifiers')
+        .select('id, order_id, name, quantity, unit_price, line_total, modifiers, kitchen_sent_at')
         .in('order_id', orderIds)
         .eq('status', 'active')
         .order('created_at')
@@ -129,6 +131,7 @@ export default async function HandyTablePage({
       unitPrice: Number(i.unit_price ?? 0),
       lineTotal: Number(i.line_total ?? 0),
       optionLabel: modifierLabel(i.modifiers),
+      sentAtMs: i.kitchen_sent_at ? new Date(i.kitchen_sent_at).getTime() : null,
     })),
   }));
 

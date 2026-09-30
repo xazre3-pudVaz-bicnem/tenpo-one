@@ -18,6 +18,8 @@ import {
 import {
   canStartOrder,
   elapsedLabel,
+  groupOrderRounds,
+  ordinalLabel,
   serviceCallLabel,
   sortServiceCalls,
   tableState,
@@ -32,6 +34,8 @@ export interface HandySlipItem {
   unitPrice: number;
   lineTotal: number;
   optionLabel: string | null;
+  /** 厨房へ送った時刻（注文の回 1st・2nd… に使う。未送信は null） */
+  sentAtMs: number | null;
 }
 
 export interface HandySlip {
@@ -247,29 +251,51 @@ export function HandyTableDetail({
                 {slip.items.length === 0 ? (
                   <p className="py-4 text-center text-[13px] text-[#7a7090]">まだ注文はありません。</p>
                 ) : (
-                  <ul>
-                    {slip.items.map((item) => (
-                      <li
-                        key={item.id}
-                        className="my-2.5 flex items-baseline justify-between gap-2 text-xs"
-                      >
-                        <span className="min-w-0">
-                          <span className="block text-[#2a2138]">
-                            {item.name}
-                            <span className="ml-1.5 text-[#7a7090]">×{item.quantity}</span>
+                  // 注文の回ごと（左に 1st・2nd・3rd…。2026-09-30 Ronnie）
+                  <div className="mt-1 divide-y divide-dashed divide-[#e3dbf1]">
+                    {groupOrderRounds(slip.items).map((round) => (
+                      <div key={round.index ?? 'unsent'} className="flex gap-2.5 py-2">
+                        <div className="w-11 shrink-0 pt-0.5 text-center">
+                          <span
+                            className={cn(
+                              'block rounded-md py-1 text-[12px] leading-none font-extrabold',
+                              round.index == null ? 'bg-[#fbefdf] text-[#8a4a0b]' : 'bg-[#efeaf8] text-[#7b3fe4]'
+                            )}
+                          >
+                            {round.index == null ? '未送信' : ordinalLabel(round.index)}
                           </span>
-                          {item.optionLabel && (
-                            <small className="block text-[9px] text-[#7a7090]">
-                              {item.optionLabel}
+                          {round.sentAtMs != null && (
+                            <small className="mt-0.5 block text-[9px] text-[#7a7090] tabular-nums">
+                              {formatTime(new Date(round.sentAtMs))}
                             </small>
                           )}
-                        </span>
-                        <b className="shrink-0 font-bold text-[#4f3868] tabular-nums">
-                          {yen(item.lineTotal)}
-                        </b>
-                      </li>
+                        </div>
+                        <ul className="min-w-0 flex-1">
+                          {round.items.map((item) => (
+                            <li
+                              key={item.id}
+                              className="my-1 flex items-baseline justify-between gap-2 text-xs"
+                            >
+                              <span className="min-w-0">
+                                <span className="block text-[#2a2138]">
+                                  {item.name}
+                                  <span className="ml-1.5 text-[#7a7090]">×{item.quantity}</span>
+                                </span>
+                                {item.optionLabel && (
+                                  <small className="block text-[9px] text-[#7a7090]">
+                                    {item.optionLabel}
+                                  </small>
+                                )}
+                              </span>
+                              <b className="shrink-0 font-bold text-[#4f3868] tabular-nums">
+                                {yen(item.lineTotal)}
+                              </b>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
                     ))}
-                  </ul>
+                  </div>
                 )}
                 <strong className="mt-2 block border-t border-[#e3dbf1] pt-2 text-right text-lg font-bold text-[#4f3868] tabular-nums">
                   {yen(slip.total)}
