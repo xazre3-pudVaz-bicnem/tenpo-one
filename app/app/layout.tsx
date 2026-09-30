@@ -18,6 +18,7 @@ import { ThemeBody } from '@/components/layout/theme-body';
 import { InstallPrompt } from '@/components/pwa/install-prompt';
 import { ClerkGate, type GateClerk } from '@/components/pos/clerk-gate';
 import { RegisterDayBanner } from '@/components/cash/register-day-banner';
+import { HideOnPos } from '@/components/layout/hide-on-pos';
 import { RegisterCloseReminder } from '@/components/cash/register-close-reminder';
 import { AnnouncementPopup } from '@/components/notifications/announcement-popup';
 import { loadPopupAnnouncements } from '@/lib/announcement-popup-server';
@@ -136,16 +137,17 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         {popupAnnouncements.length > 0 && <AnnouncementPopup items={popupAnnouncements} />}
         {/* レジクローズを忘れた店のレジ（iPad）に、次の日「〇〇さん、レジクローズがまだです」（いちばんレジを担当した人あて。2026-09-30 Ronnie） */}
         {isRegi && ctx.currentStore && <RegisterCloseReminder storeId={ctx.currentStore.id} />}
-        {!posFullscreen && (
-          <Sidebar
-            tiles={tiles}
-            groups={groups}
-            alertCount={unreadCount ?? 0}
-            currentStoreId={ctx.currentStore?.id ?? null}
-            iconFirst={isRegi}
-            homeOnly={isRegi}
-          />
-        )}
+        {/* 左メニューは常に置き、注文画面（/app/pos）で隠すのは Sidebar 側（クライアント）で判定する。
+            layout は画面の移動で作り直されないので、ここで隠すと 注文 → ホーム に戻ったときに左メニューが出なくなる
+            （2026-09-30 Ronnie「ホームに戻ると左メニューが消える。忙しい時間に困る」） */}
+        <Sidebar
+          tiles={tiles}
+          groups={groups}
+          alertCount={unreadCount ?? 0}
+          currentStoreId={ctx.currentStore?.id ?? null}
+          iconFirst={isRegi}
+          homeOnly={isRegi}
+        />
         <ContentArea homeOnly={isRegi}>
           <InstallPrompt />
           {/* スマホは店舗切替を上部バーの下に表示 */}
@@ -158,7 +160,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </div>
           <main className="px-4 pt-4 pb-24 lg:px-[22px] lg:pt-[18px] lg:pb-8">
             {/* レジがまだ閉まっていない（前の営業日のまま・朝10時すぎ／2日以上前から）ときの知らせ（2026-09-28 Ronnie） */}
-            {ctx.currentStore && !posFullscreen && <RegisterDayBanner storeId={ctx.currentStore.id} />}
+            {ctx.currentStore && (
+              <HideOnPos>
+                <RegisterDayBanner storeId={ctx.currentStore.id} />
+              </HideOnPos>
+            )}
             {children}
           </main>
         </ContentArea>
