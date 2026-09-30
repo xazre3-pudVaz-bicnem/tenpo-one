@@ -11,14 +11,12 @@ import {
   monthTotal,
   shiftMonth,
   weekdayOf,
-  withTax,
-  withoutTax,
   type DailyBudgetMap,
 } from '@/lib/daily-budget';
 
 /**
  * 日別予算登録（2026-09-25 店舗要望「レジの見本と同じ画面に」）。
- * 左が日付の一覧、右がテンキー。金額は税込で保存し、税抜表示は入力の切り替えだけ。
+ * 左が日付の一覧、右がテンキー。金額は税込（予算はいつも税込なので、税込・税抜の切り替えは出さない。2026-09-30 Ronnie）。
  */
 
 const yen = (n: number) => `¥${n.toLocaleString('ja-JP')}`;
@@ -43,7 +41,6 @@ export function DailyBudgetBoard({
   const router = useRouter();
   const { toast } = useToast();
   const [values, setValues] = useState<DailyBudgetMap>(initial);
-  const [taxIncluded, setTaxIncluded] = useState(true);
   const [busy, setBusy] = useState(false);
   const days = useMemo(() => monthDays(month), [month]);
   const [active, setActive] = useState<string>(days[0] ?? '');
@@ -61,14 +58,13 @@ export function DailyBudgetBoard({
   }
 
   const total = monthTotal(values);
-  const shown = (v: number) => (taxIncluded ? v : withoutTax(v));
 
   const commit = (date: string, raw: string) => {
     const n = Number(raw);
     setValues((prev) => {
       const next = { ...prev };
       if (!raw || !Number.isFinite(n) || n <= 0) delete next[date];
-      else next[date] = taxIncluded ? Math.round(n) : withTax(Math.round(n));
+      else next[date] = Math.round(n);
       return next;
     });
   };
@@ -120,7 +116,7 @@ export function DailyBudgetBoard({
       toast('先に金額を入れてください', 'error');
       return;
     }
-    const v = taxIncluded ? Math.round(n) : withTax(Math.round(n));
+    const v = Math.round(n);
     const next: DailyBudgetMap = {};
     for (const d of days) next[d] = v;
     setValues(next);
@@ -138,7 +134,7 @@ export function DailyBudgetBoard({
 
   const handleSave = async () => {
     if (!canEdit || busy) return;
-    const body = entry ? { ...values, [active]: taxIncluded ? Number(entry) : withTax(Number(entry)) } : values;
+    const body = entry ? { ...values, [active]: Number(entry) } : values;
     setBusy(true);
     try {
       const res = await saveDailyBudgets(storeId, month, body);
@@ -168,7 +164,7 @@ export function DailyBudgetBoard({
 
   return (
     <div className="space-y-3 print:space-y-1">
-      {/* 月の切り替え・税抜税込・PDF */}
+      {/* 月の切り替え・PDF */}
       <div className="flex flex-wrap items-center gap-2">
         <button type="button" onClick={() => go(-1)} className="tap3d rounded-xl bg-white px-3 py-2 text-sm font-bold text-plum print:hidden">
           <ChevronLeft className="h-4 w-4" />
@@ -183,25 +179,6 @@ export function DailyBudgetBoard({
         <span className="ml-1 text-sm font-semibold text-gray-600">{storeName}</span>
 
         <div className="ml-auto flex items-center gap-2 print:hidden">
-          <div className="inline-flex overflow-hidden rounded-xl bg-white p-1">
-            {[
-              { k: true, ja: '税込', en: 'Incl. tax' },
-              { k: false, ja: '税抜', en: 'Excl. tax' },
-            ].map((o) => (
-              <button
-                key={String(o.k)}
-                type="button"
-                onClick={() => setTaxIncluded(o.k)}
-                className={`tap3d rounded-lg px-3 py-1.5 text-[13px] font-bold ${
-                  taxIncluded === o.k ? 'on-brand text-white' : 'text-gray-600'
-                }`}
-              >
-                {o.ja}
-                <span className="ml-1 text-[10px] font-semibold opacity-70">{o.en}</span>
-              </button>
-            ))}
-          </div>
-          <span className="rounded-full bg-iris/12 px-3 py-1.5 text-[12px] font-bold text-iris">消費税 10%</span>
           <button
             type="button"
             onClick={() => window.print()}
@@ -220,14 +197,14 @@ export function DailyBudgetBoard({
           <div className="grid grid-cols-[72px_1fr_auto] items-center gap-2 border-b border-gray-100 px-4 py-2 text-[12px] font-bold text-gray-500">
             <span>日付</span>
             <span>曜日</span>
-            <span>売上予算（{taxIncluded ? '税込' : '税抜'}）</span>
+            <span>売上予算</span>
           </div>
           <div className="max-h-[62vh] overflow-auto print:max-h-none">
             {days.map((d) => {
               const w = weekdayOf(d);
               const on = d === active;
               const v = values[d] ?? 0;
-              const text = on && entry ? entry : v ? String(shown(v)) : '';
+              const text = on && entry ? entry : v ? String(v) : '';
               return (
                 <button
                   key={d}
@@ -258,7 +235,7 @@ export function DailyBudgetBoard({
             <span className="text-[13px] font-bold text-gray-500">
               月合計 <span className="ml-1 text-[10px] font-semibold">MONTH TOTAL</span>
             </span>
-            <span className="text-[22px] font-extrabold text-plum tabular-nums">{yen(shown(total))}</span>
+            <span className="text-[22px] font-extrabold text-plum tabular-nums">{yen(total)}</span>
           </div>
         </div>
 
@@ -269,7 +246,7 @@ export function DailyBudgetBoard({
               {active ? `${Number(active.slice(5, 7))}/${Number(active.slice(8))}（${WEEKDAY_JA[weekdayOf(active)]}）` : ''}
             </div>
             <div className="text-[26px] font-extrabold text-white tabular-nums">
-              {yen(Number(entry || (values[active] ? shown(values[active]) : 0)))}
+              {yen(Number(entry || (values[active] ?? 0)))}
             </div>
           </div>
           <button type="button" onClick={() => press('same')} className="tap3d w-full rounded-xl bg-iris/12 py-2.5 text-[14px] font-bold text-iris">

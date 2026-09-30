@@ -2,7 +2,8 @@
 
 /**
  * 予算達成率カード（プロトタイプの .card.budget）。
- * 実績 = 本日の会計済み純売上 + 未会計の注文合計。予算 = 月予算（/app/budgets）の日割り。
+ * 実績 = 本日の会計済み純売上 + 未会計の注文合計。予算 = 本日の日別予算（無ければ月予算の日割り）。
+ * 目標に届いていなければ応援メッセージ（lib/budget-motivation.ts）を出す。
  * 「(時点)」はサーバー描画時刻。再読込ボタンで router.refresh() する。
  */
 import { useTransition } from 'react';
@@ -12,6 +13,7 @@ import { RefreshCw } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { budgetMotivation } from '@/lib/budget-motivation';
 
 const RING_R = 50;
 const RING_C = 2 * Math.PI * RING_R;
@@ -24,6 +26,7 @@ export function BudgetCard({
   budget,
   pct,
   ringPct,
+  perGroup = null,
   asOf,
   className,
 }: {
@@ -32,6 +35,8 @@ export function BudgetCard({
   budget: number | null;
   pct: number | null;
   ringPct: number;
+  /** 1組あたりの売上（応援メッセージの「あと何組」） */
+  perGroup?: number | null;
   /** 'YYYY/MM/DD HH:MM' */
   asOf: string;
   className?: string;
@@ -39,6 +44,17 @@ export function BudgetCard({
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const hasBudget = budget != null && pct != null;
+  // 目標に届いていないときの応援メッセージ（2026-09-30 Ronnie「もうちょい頑張ろう・あと何組で達成」）
+  const cheer =
+    budget != null
+      ? budgetMotivation({
+          actual,
+          budget,
+          perGroup,
+          hour: Number(asOf.slice(11, 13)) || 0,
+          seed: asOf.slice(0, 10),
+        })
+      : null;
 
   return (
     <Card className={cn('flex min-w-0 flex-col', className)}>
@@ -117,10 +133,27 @@ export function BudgetCard({
           <p className="m-0 text-[11.5px] text-ink-3">
             ※実績売上高には未会計分の金額が含まれています
             {openSales > 0 && <span className="tabular-nums">（未会計 {yen(openSales)}）</span>}
-            {budget != null && <span>。予算は本日の目標（月の目標を曜日の売上に合わせて日ごとに分けたもの）です</span>}
+            {/* 予算の決め方の説明は予算登録（/app/budgets）に書く（2026-09-30 Ronnie「ホームには要らない」） */}
           </p>
         </dl>
       </div>
+
+      {cheer && (
+        <div className="mx-5 mb-1 rounded-2xl border border-iris/25 bg-lilac-soft px-4 py-3" role="status">
+          <p className="m-0 text-[16px] leading-snug font-extrabold text-royal">{cheer.headline}</p>
+          <p className="m-0 mt-1 flex flex-wrap items-baseline gap-x-2 text-[14px] font-bold text-ink">
+            <span>
+              目標まで あと<span className="mx-0.5 text-[18px] text-saffron tabular-nums">{yen(cheer.remaining)}</span>
+            </span>
+            {cheer.groupsNeeded != null && (
+              <span>
+                ＝ あと<span className="mx-0.5 text-[18px] text-iris tabular-nums">{cheer.groupsNeeded}</span>組お迎えで達成！
+              </span>
+            )}
+          </p>
+          <p className="m-0 mt-1 text-[12.5px] text-ink-2">💡 {cheer.tip}</p>
+        </div>
+      )}
 
       <footer className="flex items-center justify-between gap-3 px-5 pt-2 pb-3.5 text-xs text-ink-3 tabular-nums">
         <span>（{asOf}時点）</span>

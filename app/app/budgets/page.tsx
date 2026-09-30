@@ -345,6 +345,13 @@ export default async function BudgetsPage({
             ) : (
               <p className="text-2xl font-bold text-ink tabular-nums">{targetAmount != null ? yen(targetAmount) : '未設定'}</p>
             )}
+            {/* 予算の説明はホームではなくここに（2026-09-30 Ronnie） */}
+            {targetRow.storeId && (
+              <p className="text-xs leading-relaxed text-ink-3">
+                保存すると、直近8週の曜日ごとの売上に合わせて日別予算を自動で作ります（よく売れる曜日ほど多め）。
+                ホームの「予算売上高」はその日の分です。1日ずつ直すときは「日別予算」から。
+              </p>
+            )}
             <dl className="grid grid-cols-2 gap-2 text-sm">
               <div className="rounded-xl bg-lilac-soft px-3 py-2">
                 <dt className="text-[11px] text-ink-3">実績（純売上）<span className="ml-1">Sales</span></dt>
