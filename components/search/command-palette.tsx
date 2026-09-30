@@ -24,7 +24,7 @@ function staticCommands(): StaticCommand[] {
     { id: 'nav-dashboard', label: 'ダッシュボード', href: '/app/dashboard', permission: 'dashboard.view' },
     { id: 'nav-reservation-new', label: '新規予約', href: '/app/reservations/list', permission: 'reservations.write' },
     { id: 'nav-reservation-today', label: '本日の予約', href: `/app/reservations/list?from=${today}&to=${today}`, permission: 'reservations.view' },
-    { id: 'nav-pos', label: 'POSを開く', href: '/app/pos', permission: 'pos.order' },
+    { id: 'nav-pos', label: 'POSを開く', href: '/app/floor', permission: 'pos.order' },
     { id: 'nav-inventory', label: '在庫', href: '/app/inventory', permission: 'inventory.view' },
     { id: 'nav-invoice-add', label: '請求書を追加', href: '/app/invoices', permission: 'documents.write' },
     { id: 'nav-settings', label: '設定', href: '/app/settings', permission: 'store.settings' },

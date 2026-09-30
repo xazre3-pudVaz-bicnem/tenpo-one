@@ -44,8 +44,8 @@ export default async function ReceiptPage({
           title="レシートが見つかりません"
           description="この注文は存在しないか、アクセスできません"
           action={
-            <Link href="/app/pos" className="text-sm font-medium text-primary hover:underline">
-              POSへ戻る
+            <Link href="/app/dashboard" className="text-sm font-medium text-primary hover:underline">
+              ホームへ戻る
             </Link>
           }
         />
@@ -166,11 +166,11 @@ export default async function ReceiptPage({
     <div className="mx-auto max-w-2xl">
       <div className="mb-4 flex items-center justify-between print:hidden">
         <Link
-          href={fromOrders ? '/app/orders' : '/app/pos'}
+          href={fromOrders ? '/app/orders' : '/app/dashboard'}
           className="flex items-center gap-1 text-sm font-medium text-gray-600 hover:text-primary"
         >
           <ArrowLeft className="h-4 w-4" />
-          {fromOrders ? '伝票明細へ戻る' : 'POSへ戻る'}
+          {fromOrders ? '伝票明細へ戻る' : 'ホームへ戻る'}
         </Link>
       </div>
 

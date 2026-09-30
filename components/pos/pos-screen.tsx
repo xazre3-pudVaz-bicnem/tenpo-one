@@ -525,7 +525,7 @@ export function PosScreen({
     }
   };
 
-  // 品目のない注文の取消。成功したら注文一覧（会計待ち）へ戻る
+  // 品目のない注文の取消。成功したらホーム（左メニューあり）へ戻る（2026-09-30 Ronnie）
   const handleCancelEmptyOrder = async (reason: string) => {
     if (!cancelEmptyOrderAction) return;
     const approval = await askCancelApproval();
@@ -533,7 +533,7 @@ export function PosScreen({
     try {
       await cancelEmptyOrderAction(order.id, reason, approval.approverId);
       toast(`注文 #${order.orderNo} を取消しました`, 'success');
-      router.push('/app/pos');
+      router.push('/app/dashboard');
     } catch (e) {
       toast(e instanceof Error ? e.message : '注文の取消に失敗しました', 'error');
     }

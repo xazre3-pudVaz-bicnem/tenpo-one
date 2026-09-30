@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 import { BookOpen, PackageX, Settings } from 'lucide-react';
 import { requireFeature } from '@/lib/auth';
 import { storeAccessBlock } from '@/components/pos/store-access-guard';
@@ -94,6 +95,10 @@ export default async function PosPage({
     if (openOrdersError) {
       throw new Error('注文一覧の読み込みに失敗しました');
     }
+    // この画面（会計する注文を選ぶ一覧）は、卓のない未会計（テイクアウト・即会計）があるときだけ出す。
+    // 卓の伝票はテーブル一覧から開けるので、無ければそのままホーム（左メニューあり）へ
+    // （2026-09-30 Ronnie「なぜこの画面が出るのか。そのままホームとメニューバーを。この画面は要らない」）
+    if (!(openOrders ?? []).some((o) => o.table_id == null)) redirect('/app/dashboard');
 
     return (
       <div>
@@ -169,8 +174,8 @@ export default async function PosPage({
           title="注文が見つかりません"
           description="この注文は存在しないか、現在の店舗からアクセスできません"
           action={
-            <Link href="/app/pos" className="text-sm font-medium text-primary hover:underline">
-              注文選択画面へ戻る
+            <Link href="/app/dashboard" className="text-sm font-medium text-primary hover:underline">
+              ホームへ戻る
             </Link>
           }
         />
