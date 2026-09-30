@@ -431,3 +431,52 @@ export const TABLE_STATE_LABEL: Record<HandyTableState, string> = {
   cleaning: '清掃中',
   blocked: '使用不可',
 };
+
+/* ------------------------------------------------------------------ 注文の回（1st・2nd…） */
+
+/** 英語の序数（1 → 1st, 2 → 2nd, 3 → 3rd, 4 → 4th, 11 → 11th, 21 → 21st） */
+export function ordinalLabel(n: number): string {
+  const mod100 = n % 100;
+  if (mod100 >= 11 && mod100 <= 13) return `${n}th`;
+  switch (n % 10) {
+    case 1:
+      return `${n}st`;
+    case 2:
+      return `${n}nd`;
+    case 3:
+      return `${n}rd`;
+    default:
+      return `${n}th`;
+  }
+}
+
+/** 同じ回とみなす送信時刻の差（ミリ秒）。1回の「オーダー決定」は同じ時刻で厨房へ送られる */
+export const ROUND_GAP_MS = 5_000;
+
+export interface OrderRound<T> {
+  /** 1 から（未送信は null） */
+  index: number | null;
+  /** その回を厨房へ送った時刻（未送信は null） */
+  sentAtMs: number | null;
+  items: T[];
+}
+
+/**
+ * 伝票の品目を「注文の回」に分ける（2026-09-30 Ronnie「左に 1st・2nd・3rd・4th の注文を」）。
+ * 厨房へ送った時刻（kitchen_sent_at）が近いものを同じ回にし、送った順に 1st, 2nd… 。まだ送っていない品目は最後にまとめる。
+ */
+export function groupOrderRounds<T extends { sentAtMs: number | null }>(items: readonly T[]): OrderRound<T>[] {
+  const sent = items.filter((i) => i.sentAtMs != null).sort((a, b) => (a.sentAtMs as number) - (b.sentAtMs as number));
+  const rounds: OrderRound<T>[] = [];
+  for (const item of sent) {
+    const last = rounds[rounds.length - 1];
+    if (last && last.sentAtMs != null && (item.sentAtMs as number) - last.sentAtMs <= ROUND_GAP_MS) {
+      last.items.push(item);
+    } else {
+      rounds.push({ index: rounds.length + 1, sentAtMs: item.sentAtMs, items: [item] });
+    }
+  }
+  const unsent = items.filter((i) => i.sentAtMs == null);
+  if (unsent.length > 0) rounds.push({ index: null, sentAtMs: null, items: unsent });
+  return rounds;
+}
