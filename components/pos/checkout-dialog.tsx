@@ -800,7 +800,8 @@ export function CheckoutDialog({
             >
               伝票明細
             </Button>
-            <Button size="pos" className="h-[56px] text-[17px]" onClick={() => router.push('/app/pos')}>
+            {/* 会計のあとはホーム（左メニューあり）へ。注文を選ぶ一覧（/app/pos）には行かない（2026-09-30 Ronnie） */}
+            <Button size="pos" className="h-[56px] text-[17px]" onClick={() => router.push('/app/dashboard')}>
               続けて会計
             </Button>
           </div>
