@@ -98,7 +98,7 @@ export interface PointsAvailability {
 const BASE_METHODS: CheckoutPayment['method'][] = ['credit', 'qr', 'emoney', 'external', 'other'];
 /** 支払方法のボタン（日本語の下に小さく英語）。スクロールせずに収まる高さにする */
 const payMethodBtn =
-  'flex h-[46px] flex-col items-center justify-center rounded-xl border px-1.5 text-center text-[14px] font-bold leading-tight transition-colors disabled:opacity-50';
+  'flex h-[42px] flex-col items-center justify-center rounded-xl border px-1.5 text-center text-[14px] font-bold leading-tight transition-colors disabled:opacity-50';
 const payMethodOn = 'border-iris bg-iris text-white';
 const payMethodOff = 'border-line bg-white text-navy active:bg-lilac-soft';
 /** どのポイントかを選ぶボタン（ポイントを押したあとに出る） */
@@ -593,10 +593,10 @@ export function CheckoutDialog({
   const changeTotal = cashRow ? calcChange(cashRow.amount, cashRow.tendered ?? 0) : 0;
 
   const keyBtn =
-    'flex h-[52px] items-center justify-center rounded-xl border border-line bg-white text-2xl font-bold tabular-nums text-navy transition-colors active:bg-lilac disabled:opacity-40';
+    'flex h-full min-h-0 items-center justify-center rounded-xl border border-line bg-white text-2xl font-bold tabular-nums text-navy transition-colors active:bg-lilac disabled:opacity-40';
   // 文字のキー（C・ちょうど・訂正）は日本語の下に小さく英語
   const keySmall =
-    'flex h-[52px] flex-col items-center justify-center rounded-xl border border-line bg-iris-soft text-base font-bold leading-tight text-royal transition-colors active:bg-wisteria disabled:opacity-40';
+    'flex h-full min-h-0 flex-col items-center justify-center rounded-xl border border-line bg-iris-soft text-base font-bold leading-tight text-royal transition-colors active:bg-wisteria disabled:opacity-40';
   const keySmallEn = 'text-[10px] font-semibold text-royal/70';
   const sumRow = 'flex items-center justify-between py-2 text-[15px] text-ink-2';
 
@@ -1022,7 +1022,8 @@ export function CheckoutDialog({
               支払<span className="en-inline">Payment</span>
             </h3>
           </div>
-          <div className="min-h-0 flex-1 overflow-y-auto p-3">
+          {/* スクロールせずに1画面に収める：テンキーが残りの高さを使う（2026-09-30 Ronnie「会計画面をスクロールなしで」） */}
+          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-3">
             {/* 一番多い「現金」は一番上に大きく（2026-09-24 要望） */}
             {rightTab === 'pay' && (
               <button
@@ -1031,7 +1032,7 @@ export function CheckoutDialog({
                 aria-pressed={payments.some((p) => p.method === 'cash')}
                 onClick={() => selectPayment('cash')}
                 className={cn(
-                  'mb-2 flex h-[54px] w-full flex-col items-center justify-center rounded-xl border text-center text-[18px] font-extrabold leading-tight transition-colors disabled:opacity-50',
+                  'mb-1.5 flex h-[50px] w-full shrink-0 flex-col items-center justify-center rounded-xl border text-center text-[18px] font-extrabold leading-tight transition-colors disabled:opacity-50',
                   payments.some((p) => p.method === 'cash') ? payMethodOn : payMethodOff
                 )}
               >
@@ -1049,9 +1050,7 @@ export function CheckoutDialog({
 
             {rightTab === 'pay' ? (
               <>
-                <p className="mb-1.5 text-[11px] font-bold text-ink-3">支払方法 / Payment method</p>
-
-                <div className="grid grid-cols-2 gap-1.5">
+                <div className="grid shrink-0 grid-cols-2 gap-1.5" aria-label="支払方法 / Payment method">
                   {BASE_METHODS.map((m) => {
                     // 支払を足したもの＝色、種類（VISA など）を選んでいる最中のものも色（2026-09-24 店舗要望）
                     const selected = payments.some((p) => p.method === m) || openMethod === m;
@@ -1161,28 +1160,29 @@ export function CheckoutDialog({
                 )}
 
                 {/* 金額表示とテンキー（選んだ支払方法の金額・現金は預り金を入力する） */}
-                <div className="mt-2 rounded-xl bg-plum px-4 py-2 text-right text-[30px] font-extrabold tabular-nums text-white">
-                  {activeRow ? activeValue.toLocaleString() : 0}
+                <div className="mt-2 flex shrink-0 items-center justify-between gap-2 rounded-xl bg-plum px-4 py-1 text-white">
+                  <span className="min-w-0 text-[11px] font-semibold text-white/70">
+                    {activeRow ? (activeRow.method === 'cash' ? '預り金を入力' : `${METHOD_LABELS[activeRow.method]}の金額`) : '支払方法を選んでください'}
+                  </span>
+                  <span className="text-[28px] font-extrabold tabular-nums">{activeRow ? activeValue.toLocaleString() : 0}</span>
                 </div>
-                <p className="mt-1 text-right text-[11px] text-ink-3">
-                  {activeRow ? (activeRow.method === 'cash' ? '預り金を入力' : `${METHOD_LABELS[activeRow.method]}の金額`) : '支払方法を選んでください'}
-                </p>
 
-                <div className="mt-1.5 grid grid-cols-3 gap-1.5">
+                <div className="mt-1.5 grid shrink-0 grid-cols-3 gap-1.5">
                   {QUICK_CASH_AMOUNTS.map((amt) => (
                     <button
                       key={amt}
                       type="button"
                       disabled={!activeRow}
                       onClick={() => setActiveValue(activeValue + amt)}
-                      className="flex h-10 items-center justify-center rounded-xl border border-line bg-white text-[15px] font-bold tabular-nums text-navy active:bg-lilac disabled:opacity-40"
+                      className="flex h-9 items-center justify-center rounded-xl border border-line bg-white text-[15px] font-bold tabular-nums text-navy active:bg-lilac disabled:opacity-40"
                     >
                       {amt.toLocaleString()}
                     </button>
                   ))}
                 </div>
 
-                <div className="mt-1.5 grid grid-cols-3 gap-1.5">
+                {/* テンキー 5段（残りの高さいっぱい。小さい画面でも 1段 35px 以上、大きい画面でも 56px まで） */}
+                <div className="mt-1.5 grid max-h-[304px] min-h-[200px] flex-1 grid-cols-3 grid-rows-5 gap-1.5">
                   <button type="button" disabled={!activeRow} onClick={() => setActiveValue(0)} className={cn(keySmall, 'text-danger')}>
                     C
                     <span className="text-[10px] font-semibold text-danger/70">Clear</span>
@@ -1223,7 +1223,7 @@ export function CheckoutDialog({
                     type="button"
                     disabled={!canConfirm || checkoutPending}
                     onClick={handleConfirm}
-                    className="tap3d flex h-[52px] flex-col items-center justify-center rounded-xl bg-iris text-[15px] font-bold leading-tight text-white active:bg-iris-deep disabled:opacity-40"
+                    className="tap3d flex h-full min-h-0 flex-col items-center justify-center rounded-xl bg-iris text-[15px] font-bold leading-tight text-white active:bg-iris-deep disabled:opacity-40"
                   >
                     {checkoutPending ? (
                       <Loader2 className="h-5 w-5 animate-spin" />
