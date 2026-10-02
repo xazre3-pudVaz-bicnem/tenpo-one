@@ -14,6 +14,7 @@ import {
   isStaffOnlyItem,
   isWithinHm,
   menuBookFrom,
+  menuBookPages,
   menuBookToJson,
   moveInList,
   nestedMenuPages,
@@ -21,7 +22,11 @@ import {
   orderPlanState,
   PAGE_NAME_MAX,
   planCategoryIds,
+  picksSlot,
+  PICKS_PAGE_KEY,
   planPagesFirst,
+  STANDARD_MENU_PAGES,
+  withPicksPage,
   type MenuBookContext,
   type MenuBookItemInput,
   type MenuBookSettings,
@@ -438,6 +443,69 @@ describe('メニューブック：ページ（レジ・ハンディ・お客様Q
     const planIds = new Set([P.fYakitori.id, P.fSour.id]);
     const first = planPagesFirst(pages, (c) => planIds.has(c.id));
     expect(first.slice(0, 2).map((p) => p.key)).toEqual(['tabehodai', 'nomihodai']);
+  });
+
+  describe('レジの「おすすめ」タブの順番（2026-10-02 御茶ノ水「店によって順番が変えられるといい」）', () => {
+    it('並びに無ければ先頭（今までどおり）。並びに入れたらそこへ', () => {
+      expect(picksSlot(empty, ['lunch', 'drink', 'food'])).toBe(0);
+      const book = {
+        pages: [
+          { key: 'lunch', name: 'ランチ' },
+          { key: 'drink', name: 'ドリンク' },
+          { key: PICKS_PAGE_KEY, name: 'おすすめ' },
+          { key: 'food', name: 'フード' },
+        ],
+      };
+      expect(picksSlot(book, ['lunch', 'drink', 'food'])).toBe(2);
+      // 前にあるタブがカテゴリ無しで出ないときは、出るタブの数で数える
+      expect(picksSlot(book, ['drink', 'food'])).toBe(1);
+      expect(picksSlot({ pages: [{ key: 'food', name: 'フード' }, { key: PICKS_PAGE_KEY, name: 'おすすめ' }] }, ['food'])).toBe(1);
+    });
+
+    it('おすすめにはカテゴリを入れない（ハンディ・お客様QRにも出ない）', () => {
+      const book = {
+        pages: [{ key: PICKS_PAGE_KEY, name: 'おすすめ' }, ...STANDARD_MENU_PAGES.map((p) => ({ key: p.key, name: p.name }))],
+        categoryPage: { [P.salad.id]: PICKS_PAGE_KEY },
+      };
+      const pages = groupMenuPages(ordered, book);
+      expect(pages.map((p) => p.key)).not.toContain(PICKS_PAGE_KEY);
+      // おすすめに入れられていたカテゴリは自動の行き先へ
+      expect(names(pages.find((p) => p.key === 'food')!.categories)).toContain('サラダ');
+      expect(menuBookPages(book).map((p) => p.key)).not.toContain(PICKS_PAGE_KEY);
+    });
+
+    it('おすすめが最後でも、行き先の無いカテゴリがおすすめに入らない', () => {
+      const book = {
+        pages: [
+          { key: 'food', name: 'フード' },
+          { key: PICKS_PAGE_KEY, name: 'おすすめ' },
+        ],
+        categoryPage: {},
+      };
+      const pages = groupMenuPages(ordered, book);
+      expect(pages.map((p) => p.key)).toEqual(['food']);
+      expect(pages[0].categories).toHaveLength(ordered.length);
+    });
+
+    it('おすすめだけ残っていたら標準の8タブ', () => {
+      expect(menuBookPages({ pages: [{ key: PICKS_PAGE_KEY, name: 'おすすめ' }] }).map((p) => p.key)).toEqual(
+        STANDARD_MENU_PAGES.map((p) => p.key)
+      );
+    });
+
+    it('編集画面：並びに無ければ先頭に足す（2回足さない）', () => {
+      const base = [{ key: 'food', name: 'フード' }];
+      expect(withPicksPage(base).map((p) => p.key)).toEqual([PICKS_PAGE_KEY, 'food']);
+      const moved = [{ key: 'food', name: 'フード' }, { key: PICKS_PAGE_KEY, name: 'おすすめ' }];
+      expect(withPicksPage(moved).map((p) => p.key)).toEqual(['food', PICKS_PAGE_KEY]);
+    });
+
+    it('保存した並びを読み直してもおすすめの位置が残る', () => {
+      const book = menuBookFrom({
+        menuBook: { pages: [{ key: 'lunch', name: 'ランチ' }, { key: PICKS_PAGE_KEY, name: 'おすすめ' }] },
+      });
+      expect(book.pages.map((p) => p.key)).toEqual(['lunch', PICKS_PAGE_KEY]);
+    });
   });
 
   it('「プランのときだけ」のカテゴリ（設定・自動）', () => {

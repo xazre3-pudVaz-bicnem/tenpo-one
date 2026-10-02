@@ -442,6 +442,7 @@ export default async function PosPage({
         drawerConfig={drawerConfig}
         canDiscount={can(ctx.role, 'pos.discount')}
         canCheckout={canCheckout}
+        canEditPages={can(ctx.role, 'menu.manage')}
         registerOpen={registerOpen}
         terminalReaders={terminalReaders}
         steraTerminals={steraTerminals}

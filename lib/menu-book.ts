@@ -90,8 +90,41 @@ export const FALLBACK_PAGE_KEY = 'other';
 /** ページのkeyの形（保存・URLで使うので英数字とハイフンだけ） */
 export const PAGE_KEY_RE = /^[a-z0-9][a-z0-9-]{0,23}$/;
 
-export function menuBookPages(book: Pick<MenuBookSettings, 'pages'>): MenuPageDef[] {
+/** 並び順の元（保存が無ければ標準の8タブ）。レジの「おすすめ」も入ったまま */
+function savedOrStandardPages(book: Pick<MenuBookSettings, 'pages'>): MenuPageDef[] {
   return book.pages.length > 0 ? book.pages : STANDARD_MENU_PAGES.map((p) => ({ key: p.key, name: p.name }));
+}
+
+/** カテゴリを入れるページ（レジの「おすすめ」は除く。おすすめにはカテゴリを入れない） */
+export function menuBookPages(book: Pick<MenuBookSettings, 'pages'>): MenuPageDef[] {
+  const pages = savedOrStandardPages(book).filter((p) => p.key !== PICKS_PAGE_KEY);
+  return pages.length > 0 ? pages : STANDARD_MENU_PAGES.map((p) => ({ key: p.key, name: p.name }));
+}
+
+/**
+ * レジ（POS）の「おすすめ」タブ（おすすめ・売れ筋）。カテゴリを持たない、レジだけのタブ。
+ * 2026-10-02 FULL MOoN 御茶ノ水「ランチが多い店、コースや飲み放題が多い店、単品が多い店があるので、順番が変えられるといい」で、
+ * おすすめもページの並びに入れて動かせるようにした（保存した並びに 'picks' として入る）。
+ * カテゴリが無いので、ハンディ・お客様QRには出ない（groupMenuPages は menuBookPages の中だけを使う）。
+ */
+export const PICKS_PAGE_KEY = 'picks';
+export const PICKS_PAGE_NAME = 'おすすめ';
+
+/** 並びに「おすすめ」が無ければ先頭に足す（今までどおり1番） */
+export function withPicksPage(pages: readonly MenuPageDef[]): MenuPageDef[] {
+  return pages.some((p) => p.key === PICKS_PAGE_KEY) ? [...pages] : [{ key: PICKS_PAGE_KEY, name: PICKS_PAGE_NAME }, ...pages];
+}
+
+/**
+ * レジのタブで「おすすめ」を何番目に入れるか（0 = 先頭）。
+ * visibleKeys は実際に出すページ（カテゴリの入ったページ）の key。並びで「おすすめ」より前にあるものの数。
+ */
+export function picksSlot(book: Pick<MenuBookSettings, 'pages'>, visibleKeys: readonly string[]): number {
+  const defs = savedOrStandardPages(book);
+  const at = defs.findIndex((p) => p.key === PICKS_PAGE_KEY);
+  if (at <= 0) return 0;
+  const before = new Set(defs.slice(0, at).map((p) => p.key));
+  return visibleKeys.filter((k) => before.has(k)).length;
 }
 
 /** ページの名前の最大文字数（ハンディのタイル・お客様QRのタブに収まる長さ） */
