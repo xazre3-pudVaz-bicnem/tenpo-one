@@ -10,9 +10,13 @@ import {
   menuBookToJson,
   normalizePageName,
   PAGE_KEY_RE,
+  PICKS_PAGE_KEY,
+  PICKS_PAGE_NAME,
   type MenuBookSettings,
   type MenuBookShow,
+  type MenuPageDef,
 } from '@/lib/menu-book';
+import { menuBookCategoryRows, type MenuBookCategoryRow } from '@/components/settings/menu-book-rows';
 import { cleanTakeoutItemIds } from '@/lib/takeout-menu';
 
 /**
@@ -270,12 +274,14 @@ export async function saveMenuBookPages(storeId: string, input: MenuBookPagesInp
     if (!name) return { error: 'ページの名前を入れてください' };
     if (keys.has(key)) return { error: `同じ記号のページが2つあります: ${key}` };
     keys.add(key);
-    pages.push({ key, name });
+    // レジの「おすすめ」は名前を変えない（並びだけ動かせる）
+    pages.push({ key, name: key === PICKS_PAGE_KEY ? PICKS_PAGE_NAME : name });
   }
+  if (!pages.some((p) => p.key !== PICKS_PAGE_KEY)) return { error: 'カテゴリを入れるページを1つ以上残してください' };
 
   const ids = rawMap.map(([id]) => id);
   if (ids.some((id) => !UUID.test(id))) return { error: 'カテゴリの指定が正しくありません' };
-  if (rawMap.some(([, key]) => typeof key !== 'string' || !keys.has(key))) {
+  if (rawMap.some(([, key]) => typeof key !== 'string' || !keys.has(key) || key === PICKS_PAGE_KEY)) {
     return { error: '無いページにカテゴリを入れようとしています。画面を開き直してください' };
   }
 
@@ -308,6 +314,48 @@ export async function saveMenuBookPages(storeId: string, input: MenuBookPagesInp
   });
   revalidateMenus();
   return {};
+}
+
+export interface MenuPagesEditorData {
+  categories: MenuBookCategoryRow[];
+  pages: MenuPageDef[];
+  categoryPage: Record<string, string>;
+  error?: string;
+}
+
+/**
+ * レジの「タブを編集」で開くページの設定（設定 → メニューブック → ページ と同じ中身）を読む。
+ * 2026-10-02 FULL MOoN 御茶ノ水「上のタブを店で編集できるように」。店長以上（menu.manage）だけ。
+ */
+export async function loadMenuPagesEditor(storeId: string): Promise<MenuPagesEditorData> {
+  const empty = { categories: [], pages: [], categoryPage: {} };
+  const ctx = await requirePermission('menu.manage');
+  if (!canUseStore(ctx, storeId)) return { ...empty, error: 'この店舗の操作はできません' };
+  const supabase = await createClient();
+  const [{ data: categories, error: catError }, { data: items, error: itemError }, { data: settingsRow }] = await Promise.all([
+    supabase
+      .from('menu_categories')
+      .select('id, name, name_en, color, sort_order, station, store_id')
+      .eq('organization_id', ctx.organizationId)
+      .eq('status', 'active')
+      .or(`store_id.is.null,store_id.eq.${storeId}`)
+      .order('sort_order')
+      .order('name'),
+    supabase
+      .from('menu_items')
+      .select('category_id, name, price, item_type')
+      .eq('organization_id', ctx.organizationId)
+      .eq('status', 'active')
+      .or(`store_id.is.null,store_id.eq.${storeId}`),
+    supabase.from('store_settings').select('settings').eq('store_id', storeId).maybeSingle(),
+  ]);
+  if (catError || itemError) return { ...empty, error: 'メニューの読み込みに失敗しました' };
+  const book = menuBookFrom(settingsRow?.settings ?? null);
+  return {
+    categories: menuBookCategoryRows(categories ?? [], items ?? [], book),
+    pages: book.pages,
+    categoryPage: book.categoryPage,
+  };
 }
 
 /** ランチの時間帯（「ランチの時間だけ」のカテゴリを出す時間） */

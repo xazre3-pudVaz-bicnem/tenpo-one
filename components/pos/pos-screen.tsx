@@ -5,13 +5,13 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   Minus, Plus, X, ArrowLeft, Search, Star, User,
-  Users, Clock,
+  Users, Clock, Pencil,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { yen } from '@/lib/format';
 import { englishName } from '@/lib/romaji';
 import { optionPriceLookup, repriceLines } from '@/lib/cart-reprice';
-import { groupMenuPages, menuPageLabel, type MenuBookSettings } from '@/lib/menu-book';
+import { groupMenuPages, menuPageLabel, PICKS_PAGE_KEY, picksSlot, type MenuBookSettings } from '@/lib/menu-book';
 import type { DiscountPreset, PointBrand } from '@/lib/checkout-presets';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -39,6 +39,7 @@ import { SeatTimeDialog } from './seat-time-dialog';
 import { seatBadgeLabel, type SeatCourseOption, type SeatTimeState } from '@/lib/seat-time';
 import type { SeatTimeInput } from '@/app/app/pos/actions';
 import { CustomerLinkDialog } from './customer-link-dialog';
+import { MenuPagesDialog } from './menu-pages-dialog';
 import type {
   CheckoutPayment, CheckoutOutcome, ApplyCouponResult,
   PosCustomerSearchResult, SetOrderCustomerResult, SendOrderResult,
@@ -156,6 +157,54 @@ function matchesQuery(item: PosMenuItem, query: string): boolean {
   );
 }
 
+/**
+ * 上のタブ（ページ）と、その中のカテゴリ。中央の縦リストと上のタブで同じものを使う。
+ * ページはメニューブックの設定（ハンディ・お客様QRと同じ）をそのまま使う。
+ * 「おすすめ・売れ筋」のページは、店舗が並べた位置（picksSlot。決めていなければ先頭）に置く
+ * （2026-10-02 FULL MOoN 御茶ノ水「店によって順番が変えられるといい」）。
+ */
+function buildPosPages(
+  categories: PosCategory[],
+  menuItems: PosMenuItem[],
+  menuPages: Pick<MenuBookSettings, 'pages' | 'categoryPage'> | undefined
+) {
+  const book = { pages: menuPages?.pages ?? [], categoryPage: menuPages?.categoryPage ?? {} };
+  // 0円だけのカテゴリ＝食べ放題・飲み放題の中身。ページの自動振り分けに使う
+  const zeroOnly = new Map<string, boolean>();
+  for (const m of menuItems) {
+    if (!m.category_id) continue;
+    const zero = Number(m.price) === 0;
+    zeroOnly.set(m.category_id, (zeroOnly.get(m.category_id) ?? true) && zero);
+  }
+  const forPages = categories.map((c) => ({ ...c, allZeroPrice: zeroOnly.get(c.id) ?? false }));
+  const grouped = groupMenuPages(forPages, book).map((pg) => {
+    const label = menuPageLabel(pg, (c) => c.name);
+    const first = pg.categories[0];
+    return {
+      key: pg.key,
+      label,
+      en: pg.categories.length === 1 ? englishName(first.name, null, first.name_en) : englishName(label, null, null),
+      categories: pg.categories.map((c) => ({
+        id: c.id,
+        name: c.name,
+        en: englishName(c.name, null, c.name_en),
+        color: c.color,
+      })),
+    };
+  });
+  const picks = {
+    key: PICKS_PAGE_KEY,
+    label: 'おすすめ',
+    en: 'Picks' as string | null,
+    categories: [
+      { id: FAVORITES_TAB, name: 'おすすめ', en: 'Picks' as string | null, color: null as string | null },
+      { id: BESTSELLERS_TAB, name: '売れ筋', en: 'Popular' as string | null, color: null as string | null },
+    ],
+  };
+  const at = picksSlot(book, grouped.map((pg) => pg.key));
+  return [...grouped.slice(0, at), picks, ...grouped.slice(at)];
+}
+
 export function PosScreen({
   storeId,
   order,
@@ -177,6 +226,7 @@ export function PosScreen({
   drawerConfig,
   canDiscount,
   canCheckout,
+  canEditPages = false,
   registerOpen = true,
   terminalReaders,
   steraTerminals = [],
@@ -233,6 +283,8 @@ export function PosScreen({
   drawerConfig: DrawerConfig;
   canDiscount: boolean;
   canCheckout: boolean;
+  /** 上のタブ（ページ）を編集できるか（店長以上＝menu.manage） */
+  canEditPages?: boolean;
   /** レジが開局しているか。未開局だと会計は受け付けない（先にレジクローズ画面で開局する） */
   registerOpen?: boolean;
   terminalReaders: PosTerminalReader[];
@@ -296,7 +348,7 @@ export function PosScreen({
   const [pending, startTransition] = useTransition();
   /**
    * テイクアウトの伝票は「テイクアウト」のカテゴリがあればそこから開く（2026-09-24 店舗要望）。
-   * それ以外は上の 1 番のタブ「おすすめ」から（2026-09-28 Ronnie「注文を押すと食べ放題のタブに行ってしまう。1番に」。
+   * それ以外は上の 1 番のタブから（決めていなければ「おすすめ」。2026-09-28 Ronnie「注文を押すと食べ放題のタブに行ってしまう。1番に」。
    * 以前は並び順で最初のカテゴリ＝SHUNKA では食べ放題の F YAKITORI が開いていた）。ここは最初の1回だけで、あとは押したカテゴリに従う。
    */
   const [activeCategory, setActiveCategory] = useState<string>(() => {
@@ -306,13 +358,15 @@ export function PosScreen({
       const takeoutCategory = categories.find((c) => TAKEOUT_CATEGORY.test(c.name));
       if (takeoutCategory) return takeoutCategory.id;
     }
-    return FAVORITES_TAB;
+    // いちばん左のタブ（店舗が並べた1番。決めていなければ おすすめ）
+    return buildPosPages(categories, menuItems, menuPages)[0]?.categories[0]?.id ?? FAVORITES_TAB;
   });
   const [searchQuery, setSearchQuery] = useState('');
   const [cancelTarget, setCancelTarget] = useState<PosOrderItem | null>(null);
   const [checkoutOpen, setCheckoutOpen] = useState(openCheckout);
   const [tableMoveOpen, setTableMoveOpen] = useState(openTableMove);
   const [cancelOrderOpen, setCancelOrderOpen] = useState(false);
+  const [pagesEditOpen, setPagesEditOpen] = useState(false);
   const [guestCountOpen, setGuestCountOpen] = useState(false);
   const [seatTimeOpen, setSeatTimeOpen] = useState(false);
   const [customerOpen, setCustomerOpen] = useState(false);
@@ -654,50 +708,8 @@ export function PosScreen({
     unsentCount: unsentItems.length,
   };
 
-  /** カテゴリの並び（おすすめ・売れ筋 → 各カテゴリ）。中央の縦リストと、幅が狭いときの横並びで同じものを使う */
-  /**
-   * 上のタブ（ページ）と、その中のカテゴリ。
-   * ページはメニューブックの設定（ハンディ・お客様QRと同じ）をそのまま使う。
-   * 先頭に「おすすめ・売れ筋」のページを置く。
-   */
-  const pages = useMemo(() => {
-    const book = { pages: menuPages?.pages ?? [], categoryPage: menuPages?.categoryPage ?? {} };
-    // 0円だけのカテゴリ＝食べ放題・飲み放題の中身。ページの自動振り分けに使う
-    const zeroOnly = new Map<string, boolean>();
-    for (const m of menuItems) {
-      if (!m.category_id) continue;
-      const zero = Number(m.price) === 0;
-      zeroOnly.set(m.category_id, (zeroOnly.get(m.category_id) ?? true) && zero);
-    }
-    const forPages = categories.map((c) => ({ ...c, allZeroPrice: zeroOnly.get(c.id) ?? false }));
-    const grouped = groupMenuPages(forPages, book).map((pg) => {
-      const label = menuPageLabel(pg, (c) => c.name);
-      const first = pg.categories[0];
-      return {
-        key: pg.key,
-        label,
-        en: pg.categories.length === 1 ? englishName(first.name, null, first.name_en) : englishName(label, null, null),
-        categories: pg.categories.map((c) => ({
-          id: c.id,
-          name: c.name,
-          en: englishName(c.name, null, c.name_en),
-          color: c.color,
-        })),
-      };
-    });
-    return [
-      {
-        key: 'picks',
-        label: 'おすすめ',
-        en: 'Picks',
-        categories: [
-          { id: FAVORITES_TAB, name: 'おすすめ', en: 'Picks', color: null as string | null },
-          { id: BESTSELLERS_TAB, name: '売れ筋', en: 'Popular', color: null as string | null },
-        ],
-      },
-      ...grouped,
-    ];
-  }, [categories, menuItems, menuPages]);
+  /** 上のタブ（ページ）と、その中のカテゴリ（buildPosPages） */
+  const pages = useMemo(() => buildPosPages(categories, menuItems, menuPages), [categories, menuItems, menuPages]);
 
   const activePage = pages.find((pg) => pg.categories.some((c) => c.id === activeCategory)) ?? pages[0];
 
@@ -969,7 +981,8 @@ export function PosScreen({
       {/* 右側: 上が「ページ」のタブ（フード・ドリンク…）、下が「カテゴリの列 + 商品」 */}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3">
         {!isTakeoutLike && !searchQuery.trim() && pages.length > 1 && (
-          <nav className="flex shrink-0 gap-1.5 overflow-x-auto rounded-2xl border border-line bg-white p-1.5">
+          <div className="flex shrink-0 items-stretch gap-1.5 rounded-2xl border border-line bg-white p-1.5">
+          <nav className="flex min-w-0 flex-1 gap-1.5 overflow-x-auto">
             {pages.map((pg, i) => {
               const on = activePage?.key === pg.key;
               return (
@@ -1002,6 +1015,21 @@ export function PosScreen({
               );
             })}
           </nav>
+          {/* タブの順番・名前・中身を店で変える（2026-10-02 FULL MOoN 御茶ノ水。店長以上） */}
+          {canEditPages && (
+            <button
+              type="button"
+              onClick={() => setPagesEditOpen(true)}
+              className="tap3d flex shrink-0 flex-col items-center justify-center rounded-xl border border-line px-3 text-ink-3 hover:bg-lilac-soft"
+            >
+              <span className="flex items-center gap-1 text-[13px] font-bold">
+                <Pencil className="h-3.5 w-3.5" aria-hidden />
+                編集
+              </span>
+              <span className="text-[9px] font-semibold">Edit tabs</span>
+            </button>
+          )}
+          </div>
         )}
 
         <div className="flex min-h-0 flex-1 flex-col gap-3 lg:flex-row">
@@ -1246,6 +1274,8 @@ export function PosScreen({
           />
         );
       })()}
+
+      {canEditPages && <MenuPagesDialog storeId={storeId} open={pagesEditOpen} onClose={() => setPagesEditOpen(false)} />}
 
       <CustomerLinkDialog
         open={customerOpen}

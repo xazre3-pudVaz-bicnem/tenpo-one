@@ -20,7 +20,10 @@ import {
   MENU_BOOK_SHOWS,
   moveInList,
   PAGE_NAME_MAX,
+  PICKS_PAGE_KEY,
+  PICKS_PAGE_NAME,
   STANDARD_MENU_PAGES,
+  withPicksPage,
   type MenuBookLunch,
   type MenuPageDef,
   type MenuBookShow,
@@ -28,6 +31,7 @@ import {
 } from '@/lib/menu-book';
 import { RESERVATION_TIME_OPTIONS } from '@/lib/reservation-time';
 import { MenuItemDialog, type MenuItemRow } from './menu-item-dialog';
+import type { MenuBookCategoryRow } from './menu-book-rows';
 import { ItemOrderList, MoveButtons, SaveBar, sortItems } from './item-order-list';
 import {
   saveCategoryLayout,
@@ -37,24 +41,7 @@ import {
   saveTakeoutMenu,
 } from '@/app/app/settings/menu-book/actions';
 
-export interface MenuBookCategoryRow {
-  id: string;
-  name: string;
-  nameEn: string;
-  color: string;
-  sortOrder: number;
-  /** 全店共通のカテゴリ（並び順を変えると全店に効く） */
-  shared: boolean;
-  itemCount: number;
-  /** 厨房のステーション（ページの自動振り分けに使う） */
-  station: string | null;
-  /** 売る商品が全部0円か（＝食べ放題・飲み放題の中身） */
-  allZeroPrice: boolean;
-  /** ハンディの上位分類（フード／ドリンク…） */
-  group: string;
-  show: MenuBookShow | 'auto';
-  autoShow: MenuBookShow;
-}
+export type { MenuBookCategoryRow } from './menu-book-rows';
 
 export interface MenuBookPlanRow {
   id: string;
@@ -214,26 +201,37 @@ function nextPageKey(pages: readonly MenuPageDef[]): string {
   return `page${Date.now().toString(36)}`;
 }
 
-function PagesTab({
+/**
+ * ページ（上のタブ）の並び・名前・中身。設定のメニューブックと、レジの「タブを編集」（components/pos/menu-pages-dialog.tsx）で共通。
+ * レジの「おすすめ」も並びに入れて動かせる（名前・削除は不可。カテゴリは入れない）。
+ */
+export function MenuPagesEditor({
   storeId,
   categories,
   pages: savedPages,
   categoryPage: savedMap,
+  onSaved,
 }: {
   storeId: string;
   categories: MenuBookCategoryRow[];
   pages: MenuPageDef[];
   categoryPage: Record<string, string>;
+  /** 保存できたら（レジのダイアログを閉じる） */
+  onSaved?: () => void;
 }) {
   const router = useRouter();
   const { toast } = useToast();
   // 設定していない店舗は標準の8タブから始める（これは「未保存の変更」ではない）
-  const basePages = savedPages.length > 0 ? savedPages : STANDARD_MENU_PAGES.map((p) => ({ key: p.key, name: p.name }));
+  const basePages = withPicksPage(
+    savedPages.length > 0 ? savedPages : STANDARD_MENU_PAGES.map((p) => ({ key: p.key, name: p.name }))
+  );
   const [pages, setPages] = useState<MenuPageDef[]>(basePages);
   const [map, setMap] = useState<Record<string, string>>(savedMap);
   const [pending, startTransition] = useTransition();
 
-  const known = new Set(pages.map((p) => p.key));
+  // カテゴリを入れられるページ（おすすめは除く）
+  const categoryPages = pages.filter((p) => p.key !== PICKS_PAGE_KEY);
+  const known = new Set(categoryPages.map((p) => p.key));
   /** いまの画面での行き先（設定が無ければ自動判定） */
   const pageKeyOf = (c: MenuBookCategoryRow) => {
     const set = map[c.id];
@@ -256,7 +254,10 @@ function PagesTab({
   const addPage = () =>
     setPages((list) => (list.length >= 40 ? list : [...list, { key: nextPageKey(list), name: '' }]));
   const removePage = (key: string) => {
-    setPages((list) => (list.length <= 1 ? list : list.filter((p) => p.key !== key)));
+    if (key === PICKS_PAGE_KEY) return;
+    setPages((list) =>
+      list.filter((p) => p.key !== PICKS_PAGE_KEY).length <= 1 ? list : list.filter((p) => p.key !== key)
+    );
     setMap((m) => {
       const next = { ...m };
       for (const [id, k] of Object.entries(next)) if (k === key) delete next[id];
@@ -284,6 +285,7 @@ function PagesTab({
       }
       toast('ページを保存しました（レジ・ハンディ・お客様QRに反映）');
       router.refresh();
+      onSaved?.();
     });
   };
 
@@ -301,6 +303,10 @@ function PagesTab({
             名前は自由に変えられます。「ページを追加」でタブを足せます。
           </p>
           <p>
+            ランチが多い店・コースや飲み放題が多い店・単品が多い店に合わせて、↑↓で順番を変えられます。
+            レジ（POS）はいちばん上のタブを最初に開きます。「おすすめ」（おすすめ・売れ筋）はレジだけのタブで、順番だけ変えられます。
+          </p>
+          <p>
             カテゴリが1つも入っていないタブは、レジ・ハンディ・お客様QRには出ません（押せないタブを出さないため）。
           </p>
           <p>
@@ -312,33 +318,45 @@ function PagesTab({
 
       <h3 className="mb-2 text-sm font-bold text-navy">1. タブの並びと名前</h3>
       <ol className="mb-6 space-y-2">
-        {pages.map((p, i) => (
-          <li key={p.key} className="flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-white px-2 py-2">
-            <span className="w-6 shrink-0 text-center text-xs font-bold text-iris tabular-nums">{i + 1}</span>
-            <Label htmlFor={`page-name-${p.key}`} className="sr-only">
-              {i + 1}番目のタブの名前
-            </Label>
-            <Input
-              id={`page-name-${p.key}`}
-              value={p.name}
-              maxLength={PAGE_NAME_MAX}
-              placeholder="タブの名前"
-              onChange={(e) => renamePage(p.key, e.target.value)}
-              className="h-11 min-w-[8rem] flex-1 sm:max-w-xs"
-            />
-            <span className="shrink-0 text-xs text-gray-400 tabular-nums">{countOf.get(p.key) ?? 0}カテゴリ</span>
-            <MoveButtons index={i} count={pages.length} onMove={(to) => movePage(i, to)} label={p.name || `${i + 1}番目のタブ`} />
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={pages.length <= 1}
-              onClick={() => removePage(p.key)}
-              aria-label={`${p.name || `${i + 1}番目のタブ`}を消す`}
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          </li>
-        ))}
+        {pages.map((p, i) =>
+          p.key === PICKS_PAGE_KEY ? (
+            <li key={p.key} className="flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-lilac-soft px-2 py-2">
+              <span className="w-6 shrink-0 text-center text-xs font-bold text-iris tabular-nums">{i + 1}</span>
+              <div className="flex h-11 min-w-[8rem] flex-1 flex-col justify-center px-1 sm:max-w-xs">
+                <span className="text-sm font-semibold text-navy">{PICKS_PAGE_NAME}</span>
+                <span className="text-[11px] text-gray-500">おすすめ・売れ筋</span>
+              </div>
+              <span className="shrink-0 text-xs text-gray-400">レジだけ</span>
+              <MoveButtons index={i} count={pages.length} onMove={(to) => movePage(i, to)} label={PICKS_PAGE_NAME} />
+            </li>
+          ) : (
+            <li key={p.key} className="flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-white px-2 py-2">
+              <span className="w-6 shrink-0 text-center text-xs font-bold text-iris tabular-nums">{i + 1}</span>
+              <Label htmlFor={`page-name-${p.key}`} className="sr-only">
+                {i + 1}番目のタブの名前
+              </Label>
+              <Input
+                id={`page-name-${p.key}`}
+                value={p.name}
+                maxLength={PAGE_NAME_MAX}
+                placeholder="タブの名前"
+                onChange={(e) => renamePage(p.key, e.target.value)}
+                className="h-11 min-w-[8rem] flex-1 sm:max-w-xs"
+              />
+              <span className="shrink-0 text-xs text-gray-400 tabular-nums">{countOf.get(p.key) ?? 0}カテゴリ</span>
+              <MoveButtons index={i} count={pages.length} onMove={(to) => movePage(i, to)} label={p.name || `${i + 1}番目のタブ`} />
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={categoryPages.length <= 1}
+                onClick={() => removePage(p.key)}
+                aria-label={`${p.name || `${i + 1}番目のタブ`}を消す`}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </li>
+          )
+        )}
       </ol>
       <Button variant="outline" className="mb-8 h-11" disabled={pages.length >= 40} onClick={addPage}>
         <Plus className="h-4 w-4" />
@@ -370,11 +388,13 @@ function PagesTab({
                 onChange={(e) => assign(c.id, e.target.value)}
                 className="h-11 w-[11rem] shrink-0"
               >
-                {pages.map((p, i) => (
-                  <option key={p.key} value={p.key}>
-                    {p.name || `${i + 1}番目のタブ`}
-                  </option>
-                ))}
+                {pages.map((p, i) =>
+                  p.key === PICKS_PAGE_KEY ? null : (
+                    <option key={p.key} value={p.key}>
+                      {p.name || `${i + 1}番目のタブ`}
+                    </option>
+                  )
+                )}
               </Select>
             </li>
           );
@@ -713,7 +733,7 @@ export function MenuBookEditor({
         <CategoriesTab key={categoryKey} storeId={storeId} initial={categories} pageOf={pageOf} />
       )}
       {tab === 'pages' && (
-        <PagesTab key={pagesKey} storeId={storeId} categories={categories} pages={pages} categoryPage={categoryPage} />
+        <MenuPagesEditor key={pagesKey} storeId={storeId} categories={categories} pages={pages} categoryPage={categoryPage} />
       )}
       {tab === 'items' && <ItemsTab storeId={storeId} categories={categories} items={items} taxRates={taxRates} />}
       {tab === 'plans' && (

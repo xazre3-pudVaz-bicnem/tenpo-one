@@ -7,16 +7,8 @@ import { takeoutMenuFrom } from '@/lib/takeout-menu';
 import { SettingsBackLink } from '@/components/settings/back-link';
 import { MenuBookEditor, type MenuBookCategoryRow, type MenuBookPlanRow } from '@/components/settings/menu-book-editor';
 import type { MenuItemRow } from '@/components/settings/menu-item-dialog';
-import { classifyMenuItem, HANDY_GROUPS, type HandyGroupId } from '@/components/handy/logic';
-import {
-  autoCategoryShow,
-  categoryShow,
-  isMenuBookTab,
-  isPlanAddOn,
-  isPlanItem,
-  menuBookFrom,
-  type MenuBookItemInput,
-} from '@/lib/menu-book';
+import { menuBookCategoryRows } from '@/components/settings/menu-book-rows';
+import { isMenuBookTab, isPlanAddOn, isPlanItem, menuBookFrom } from '@/lib/menu-book';
 
 export const metadata: Metadata = { title: 'メニューブック | 設定' };
 
@@ -74,40 +66,7 @@ export default async function MenuBookPage({ searchParams }: { searchParams: Pro
   const book = menuBookFrom(settingsRow?.settings ?? null);
   const takeoutMenu = takeoutMenuFrom(settingsRow?.settings ?? null);
   const activeItems = (items ?? []).filter((i) => i.status === 'active');
-  const itemInputs: MenuBookItemInput[] = activeItems.map((i) => ({
-    categoryId: i.category_id,
-    name: i.name,
-    price: Number(i.price),
-    itemType: i.item_type,
-  }));
-  const groupLabel = new Map(HANDY_GROUPS.map((g) => [g.id, g.label]));
-
-  const categoryRows: MenuBookCategoryRow[] = (categories ?? []).map((c) => {
-    const mine = activeItems.filter((i) => i.category_id === c.id);
-    // ハンディの上位分類（フード／ドリンク…）は商品の種類で決まる。カテゴリでいちばん多いものを見出しに出す
-    const counts = new Map<HandyGroupId, number>();
-    for (const i of mine) {
-      const g = classifyMenuItem(i.item_type, c.station);
-      counts.set(g, (counts.get(g) ?? 0) + 1);
-    }
-    const top = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
-    const { show, auto } = categoryShow({ id: c.id, name: c.name }, itemInputs, book);
-    return {
-      id: c.id,
-      name: c.name,
-      nameEn: c.name_en ?? '',
-      color: c.color ?? '#7b3fe4',
-      sortOrder: c.sort_order,
-      shared: c.store_id === null,
-      itemCount: mine.length,
-      station: c.station ?? null,
-      // 0円だけのカテゴリ＝食べ放題・飲み放題の中身（ページの自動振り分けに使う）
-      allZeroPrice: mine.length > 0 && mine.every((i) => Number(i.price) === 0),
-      group: top ? (groupLabel.get(top) ?? '') : '',
-      show: auto ? 'auto' : show,
-      autoShow: autoCategoryShow({ id: c.id, name: c.name }, itemInputs),
-    };
-  });
+  const categoryRows: MenuBookCategoryRow[] = menuBookCategoryRows(categories ?? [], activeItems, book);
 
   const itemRows: MenuItemRow[] = (items ?? []).map((i) => ({
     id: i.id,
