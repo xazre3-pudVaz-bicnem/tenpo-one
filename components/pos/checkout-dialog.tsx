@@ -217,6 +217,11 @@ export function CheckoutDialog({
   const [done, setDone] = useState<{ total: number; tendered: number; change: number } | null>(null);
   /** 支払メモ（レジ締めや取引履歴で読む。2026-09-25 店舗要望） */
   const [payMemo, setPayMemo] = useState('');
+  /**
+   * テンキーで打ち始めた支払行。支払方法を選んだ直後は金額が自動で入っているので、最初の数字はその金額を消して打ち直す
+   * （2026-10-02 FULL MOoN 御茶ノ水「7,310 の後ろに足されて 73,108,000 になる。消えるように」）
+   */
+  const [typedKey, setTypedKey] = useState<string | null>(null);
   /** 会計完了のあとに出す「レシート／領収書」。領収書は宛名・但し書きを入れてから印字する */
   const [invoiceOpen, setInvoiceOpen] = useState(false);
   const [recipientName, setRecipientName] = useState('');
@@ -588,6 +593,12 @@ export function CheckoutDialog({
     }
   };
   const activeValue = activeRow ? (activeRow.method === 'cash' ? (activeRow.tendered ?? 0) : activeRow.amount) : 0;
+  /** まだ打っていない（自動で入った金額のまま）なら、数字は 0 から打ち直す */
+  const typingBase = activeRow && typedKey === activeRow.key ? activeValue : 0;
+  const typeValue = (next: number) => {
+    setActiveValue(next);
+    if (activeRow) setTypedKey(activeRow.key);
+  };
   const cashRow = payments.find((p) => p.method === 'cash') ?? null;
   const tenderedTotal = cashRow ? (cashRow.tendered ?? 0) : 0;
   const changeTotal = cashRow ? calcChange(cashRow.amount, cashRow.tendered ?? 0) : 0;
@@ -800,8 +811,8 @@ export function CheckoutDialog({
             >
               伝票明細
             </Button>
-            {/* 会計のあとはホーム（左メニューあり）へ。注文を選ぶ一覧（/app/pos）には行かない（2026-09-30 Ronnie） */}
-            <Button size="pos" className="h-[56px] text-[17px]" onClick={() => router.push('/app/dashboard')}>
+            {/* 続けて会計はテーブル一覧へ（2026-10-02 FULL MOoN 御茶ノ水「この画面に戻ってほしい」）。注文を選ぶ一覧（/app/pos）には行かない */}
+            <Button size="pos" className="h-[56px] text-[17px]" onClick={() => router.push('/app/floor')}>
               続けて会計
             </Button>
           </div>
@@ -1173,7 +1184,7 @@ export function CheckoutDialog({
                       key={amt}
                       type="button"
                       disabled={!activeRow}
-                      onClick={() => setActiveValue(activeValue + amt)}
+                      onClick={() => typeValue(typingBase + amt)}
                       className="flex h-9 items-center justify-center rounded-xl border border-line bg-white text-[15px] font-bold tabular-nums text-navy active:bg-lilac disabled:opacity-40"
                     >
                       {amt.toLocaleString()}
@@ -1183,14 +1194,17 @@ export function CheckoutDialog({
 
                 {/* テンキー 5段（残りの高さいっぱい。小さい画面でも 1段 35px 以上、大きい画面でも 56px まで） */}
                 <div className="mt-1.5 grid max-h-[304px] min-h-[200px] flex-1 grid-cols-3 grid-rows-5 gap-1.5">
-                  <button type="button" disabled={!activeRow} onClick={() => setActiveValue(0)} className={cn(keySmall, 'text-danger')}>
+                  <button type="button" disabled={!activeRow} onClick={() => typeValue(0)} className={cn(keySmall, 'text-danger')}>
                     C
                     <span className="text-[10px] font-semibold text-danger/70">Clear</span>
                   </button>
                   <button
                     type="button"
                     disabled={!activeRow}
-                    onClick={() => setActiveValue(activeRow?.method === 'cash' ? (activeRow?.amount ?? 0) : Math.max(0, remaining) + (activeRow?.amount ?? 0))}
+                    onClick={() => {
+                      setActiveValue(activeRow?.method === 'cash' ? (activeRow?.amount ?? 0) : Math.max(0, remaining) + (activeRow?.amount ?? 0));
+                      setTypedKey(null);
+                    }}
                     className={keySmall}
                   >
                     ちょうど
@@ -1199,7 +1213,7 @@ export function CheckoutDialog({
                   <button
                     type="button"
                     disabled={!activeRow}
-                    onClick={() => setActiveValue(Math.floor(activeValue / 10))}
+                    onClick={() => typeValue(Math.floor(activeValue / 10))}
                     className={keySmall}
                     aria-label="1文字消す / Delete"
                   >
@@ -1208,14 +1222,14 @@ export function CheckoutDialog({
                     <span className={keySmallEn}>Delete</span>
                   </button>
                   {(['7', '8', '9', '4', '5', '6', '1', '2', '3'] as const).map((k) => (
-                    <button key={k} type="button" disabled={!activeRow} onClick={() => setActiveValue(appendTenkeyDigit(activeValue, k))} className={keyBtn}>
+                    <button key={k} type="button" disabled={!activeRow} onClick={() => typeValue(appendTenkeyDigit(typingBase, k))} className={keyBtn}>
                       {k}
                     </button>
                   ))}
-                  <button type="button" disabled={!activeRow} onClick={() => setActiveValue(appendTenkeyDigit(activeValue, '0'))} className={keyBtn}>
+                  <button type="button" disabled={!activeRow} onClick={() => typeValue(appendTenkeyDigit(typingBase, '0'))} className={keyBtn}>
                     0
                   </button>
-                  <button type="button" disabled={!activeRow} onClick={() => setActiveValue(appendTenkeyDoubleZero(activeValue))} className={keyBtn}>
+                  <button type="button" disabled={!activeRow} onClick={() => typeValue(appendTenkeyDoubleZero(typingBase))} className={keyBtn}>
                     00
                   </button>
                   {/* テンキーの一番下は会計の締め。左にあった「会計する」はここに一本化した（2026-09-25 店舗要望） */}
