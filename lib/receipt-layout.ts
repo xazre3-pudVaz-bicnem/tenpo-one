@@ -122,10 +122,51 @@ export function twoCol(left: string, right: string, width: number, options: Widt
  *
  * ただし 0円の行しか無い伝票（コース代が別会計など）は空の伝票になってしまうので、
  * その場合だけ元の明細をそのまま返す。
+ * 同じものは1行にまとめる（mergeSameLines）。
  */
-export function billSlipLines<T extends { lineTotal: number; modifiers?: { price: number }[] }>(lines: T[]): T[] {
+export function billSlipLines<T extends SlipLine>(lines: T[]): T[] {
   const priced = lines.filter(
     (l) => l.lineTotal !== 0 || (l.modifiers ?? []).some((m) => (m.price ?? 0) !== 0)
   );
-  return priced.length > 0 ? priced : lines;
+  return mergeSameLines(priced.length > 0 ? priced : lines);
+}
+
+/** レシート・お会計伝票の1行（まとめる・0円を落とすのに使う項目だけ） */
+export interface SlipLine {
+  name: string;
+  quantity: number;
+  unitPrice: number;
+  lineTotal: number;
+  modifiers?: { name?: string; price: number }[];
+  cancelled?: boolean;
+}
+
+/**
+ * 同じものを1行にまとめる（2026-10-02 FULL MOoN 御茶ノ水 宮崎さん「レシートで同じものがまとまるように」）。
+ * 追加注文のたびに別の行になり「ウーロン茶 1 x ¥480」「ウーロン茶 3 x ¥480」と並んでいたのを
+ * 「ウーロン茶 4 x ¥480 ¥1,920」にする。
+ *
+ * 同じもの＝名前・単価・選択肢（名前と値段。並び順は問わない）がすべて同じ。数量と金額を足し、
+ * 最初に出てきた位置に置く。取消済みの行はまとめない（そのまま残す）。
+ */
+export function mergeSameLines<T extends SlipLine>(lines: T[]): T[] {
+  const out: T[] = [];
+  const at = new Map<string, number>();
+  for (const l of lines) {
+    if (l.cancelled) {
+      out.push(l);
+      continue;
+    }
+    const mods = (l.modifiers ?? []).map((m) => `${m.name ?? ''}\u0000${m.price ?? 0}`).sort();
+    const key = JSON.stringify([l.name, l.unitPrice, mods]);
+    const i = at.get(key);
+    if (i === undefined) {
+      at.set(key, out.length);
+      out.push(l);
+      continue;
+    }
+    const prev = out[i];
+    out[i] = { ...prev, quantity: prev.quantity + l.quantity, lineTotal: prev.lineTotal + l.lineTotal };
+  }
+  return out;
 }
