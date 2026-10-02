@@ -76,6 +76,8 @@ export function HandyOrderScreen({
   const [step, setStep] = useState<'menu' | 'review'>('menu');
   const [tabId, setTabId] = useState<string>(initialTabId ?? tabs[0]?.id ?? 'alacarte');
   const [pageKey, setPageKey] = useState<string | null>(null);
+  /** ページの中のカテゴリで絞る（null＝すべて）。ページを変えたら「すべて」に戻る（お客様QRと同じ。2026-10-02 FULL MOoN） */
+  const [catFilter, setCatFilter] = useState<{ pageKey: string; catId: string } | null>(null);
   const [optionTarget, setOptionTarget] = useState<HandyMenuItemView | null>(null);
   const [cart, setCart] = useState<HandyCartLine[]>([]);
   const [pending, startTransition] = useTransition();
@@ -84,6 +86,8 @@ export function HandyOrderScreen({
 
   const tab = tabs.find((t) => t.id === tabId) ?? tabs[0] ?? null;
   const page = tab?.pages.find((p) => p.key === pageKey) ?? null;
+  const catId = page && catFilter?.pageKey === page.key ? catFilter.catId : null;
+  const shownCategories = page ? (catId ? page.categories.filter((c) => c.id === catId) : page.categories) : [];
 
   const quantityByItem = useMemo(() => {
     const map = new Map<string, number>();
@@ -361,6 +365,33 @@ export function HandyOrderScreen({
         </BackToTable>
       </div>
 
+      {/* ページの中のカテゴリのタブ（すべて・BEER・HIGHBALL…。2026-10-02 FULL MOoN 御茶ノ水「お客様QRのようなタブがほしい」） */}
+      {page && page.categories.length > 1 && (
+        <div className="flex flex-none gap-1.5 overflow-x-auto px-1.5 pb-1.5" role="group" aria-label="カテゴリ">
+          {[{ id: null as string | null, label: 'すべて' }, ...page.categories.map((c) => ({ id: c.id as string | null, label: c.nameEn ?? c.name }))].map(
+            (chip) => {
+              const on = chip.id === catId;
+              return (
+                <button
+                  key={chip.id ?? 'all'}
+                  type="button"
+                  aria-pressed={on}
+                  onClick={() => setCatFilter(chip.id ? { pageKey: page.key, catId: chip.id } : null)}
+                  className={cn(
+                    'min-h-[34px] shrink-0 rounded-full border px-3.5 text-[12px] font-bold whitespace-nowrap',
+                    on
+                      ? 'border-[#7b3fe4] bg-[#7b3fe4] text-white'
+                      : 'border-[#d9ccef] bg-white text-[#5e5470] active:bg-[#e9e0fa]'
+                  )}
+                >
+                  {chip.label}
+                </button>
+              );
+            }
+          )}
+        </div>
+      )}
+
       <HandyMain>
         {tabs.length === 0 ? (
           <p className="px-6 py-9 text-center text-[13px] leading-loose text-[#7a7090]">
@@ -387,9 +418,9 @@ export function HandyOrderScreen({
           </ul>
         ) : (
           <div className="px-[5px] pt-2 pb-5">
-            {page.categories.map((c) => (
+            {shownCategories.map((c) => (
               <section key={c.id} className="mb-4 last:mb-0">
-                {page.categories.length > 1 && (
+                {shownCategories.length > 1 && (
                   <h2 className="mb-2 flex items-center gap-2 px-1 text-[11px] font-bold tracking-wide text-[#5e5470]">
                     <span className="h-3 w-1 rounded bg-[#7b3fe4]" aria-hidden />
                     {c.nameEn ?? c.name}
