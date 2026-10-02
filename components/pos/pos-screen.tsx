@@ -748,6 +748,16 @@ export function PosScreen({
             <span className="text-sm text-ink-3">{order.guestCount}名</span>
           )}
           <span className="ml-auto text-xs text-ink-3">#{order.orderNo}</span>
+          {/* 伝票の上からもレジ会計（2026-10-02 FULL MOoN 御茶ノ水「ここにレジ会計がほしい」） */}
+          <button
+            type="button"
+            disabled={items.length === 0 || pending || clerkMissing}
+            onClick={() => setCheckoutOpen(true)}
+            className="tap3d flex h-10 shrink-0 flex-col items-center justify-center rounded-xl bg-iris px-3 text-[14px] leading-tight font-bold text-white active:bg-iris-deep disabled:opacity-40"
+          >
+            会計
+            <span className="text-[9px] font-semibold text-white/75">Checkout</span>
+          </button>
         </div>
 
         <div className="flex flex-wrap items-center gap-1.5 border-b border-line px-4 py-2">

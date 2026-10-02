@@ -11,8 +11,8 @@ describe('POS の注文一覧（/app/pos）', () => {
     expect(page).toContain("if (!(openOrders ?? []).some((o) => o.table_id == null)) redirect('/app/dashboard');");
   });
 
-  it('会計完了の「続けて会計」・空の伝票の取消はホームへ', () => {
-    expect(read('components/pos/checkout-dialog.tsx')).toContain("router.push('/app/dashboard')");
+  it('会計完了の「続けて会計」はテーブル一覧へ（2026-10-02 FULL MOoN）・空の伝票の取消は一覧に戻らない', () => {
+    expect(read('components/pos/checkout-dialog.tsx')).toContain("router.push('/app/floor')");
     expect(read('components/pos/pos-screen.tsx')).not.toContain("router.push('/app/pos')");
   });
 });

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { dispWidth, twoCol, wrapText, STAR_WIDTH_OPTIONS,
   billSlipLines,
+  mergeSameLines,
 } from '@/lib/receipt-layout';
 import { layoutKitchenTicket, groupKitchenTickets, type ClaimedKitchenItem } from '@/lib/kitchen-ticket';
 
@@ -112,5 +113,69 @@ describe('お会計伝票の明細（0円の行を出さない）', () => {
 
   it('明細が無いときは空のまま', () => {
     expect(billSlipLines([])).toEqual([]);
+  });
+});
+
+describe('同じものを1行にまとめる（2026-10-02 御茶ノ水「レシートで同じものがまとまるように」）', () => {
+  const L = (
+    name: string,
+    quantity: number,
+    unitPrice: number,
+    modifiers: { name: string; price: number }[] = [],
+    cancelled = false
+  ) => ({
+    name,
+    quantity,
+    unitPrice,
+    lineTotal: quantity * (unitPrice + modifiers.reduce((a, m) => a + m.price, 0)),
+    modifiers,
+    cancelled,
+  });
+
+  it('同じ名前・単価は数量と金額を足して1行（最初の位置）', () => {
+    const lines = [L('ウーロン茶', 1, 480), L('プレーンバゲット', 1, 300), L('ウーロン茶', 3, 480)];
+    const merged = mergeSameLines(lines);
+    expect(merged.map((l) => [l.name, l.quantity, l.lineTotal])).toEqual([
+      ['ウーロン茶', 4, 1920],
+      ['プレーンバゲット', 1, 300],
+    ]);
+  });
+
+  it('単価が違えば別の行', () => {
+    const merged = mergeSameLines([L('生ハム', 1, 1200), L('生ハム', 1, 1500)]);
+    expect(merged).toHaveLength(2);
+  });
+
+  it('選択肢が同じならまとめる（並び順は問わない）・違えば別の行', () => {
+    const a = { name: '大盛り', price: 100 };
+    const b = { name: 'チーズ', price: 200 };
+    expect(mergeSameLines([L('ポテト', 1, 600, [a, b]), L('ポテト', 2, 600, [b, a])])).toHaveLength(1);
+    expect(mergeSameLines([L('ポテト', 1, 600, [a, b]), L('ポテト', 2, 600, [b, a])])[0].lineTotal).toBe(2700);
+    expect(mergeSameLines([L('ポテト', 1, 600, [a]), L('ポテト', 1, 600)])).toHaveLength(2);
+  });
+
+  it('取消済みの行はまとめない', () => {
+    const merged = mergeSameLines([L('ウーロン茶', 1, 480), L('ウーロン茶', 1, 480, [], true), L('ウーロン茶', 2, 480)]);
+    expect(merged.map((l) => [l.quantity, l.cancelled])).toEqual([
+      [3, false],
+      [1, true],
+    ]);
+  });
+
+  it('元の明細は書き換えない', () => {
+    const lines = [L('ウーロン茶', 1, 480), L('ウーロン茶', 3, 480)];
+    mergeSameLines(lines);
+    expect(lines[0].quantity).toBe(1);
+  });
+
+  it('お会計伝票（billSlipLines）でもまとまる・0円の行は落ちたまま', () => {
+    const lines = [L('ウーロン茶', 1, 480), L('生ビール', 1, 0), L('ウーロン茶', 3, 480)];
+    expect(billSlipLines(lines).map((l) => [l.name, l.quantity, l.lineTotal])).toEqual([['ウーロン茶', 4, 1920]]);
+  });
+
+  it('合計金額は変わらない', () => {
+    const lines = [L('A', 1, 480), L('B', 2, 300), L('A', 3, 480), L('B', 1, 300)];
+    const sum = (ls: { lineTotal: number }[]) => ls.reduce((a, l) => a + l.lineTotal, 0);
+    expect(sum(mergeSameLines(lines))).toBe(sum(lines));
   });
 });
