@@ -19,7 +19,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useToast } from '@/components/ui/toast';
 import { useStoreRealtimeRefresh } from '@/components/realtime/use-store-refresh';
 import { createMockDrawerProvider } from '@/lib/printing/providers';
-import { enqueueDrawerKick } from '@/app/app/pos/print-actions';
+import { enqueueDrawerKick, enqueueOrderSlipPrint } from '@/app/app/pos/print-actions';
 import type { PosSteraTerminal } from '@/components/pos/stera-pay-panel';
 import { ClerkSelector, type ClerkOption } from './clerk-selector';
 import { useClerkGate } from './clerk-gate';
@@ -346,6 +346,7 @@ export function PosScreen({
   const { toast } = useToast();
   const clerkGate = useClerkGate();
   const [pending, startTransition] = useTransition();
+  const [billPending, startBillTransition] = useTransition();
   /**
    * テイクアウトの伝票は「テイクアウト」のカテゴリがあればそこから開く（2026-09-24 店舗要望）。
    * それ以外は上の 1 番のタブから（決めていなければ「おすすめ」。2026-09-28 Ronnie「注文を押すと食べ放題のタブに行ってしまう。1番に」。
@@ -645,6 +646,22 @@ export function PosScreen({
     }
   };
 
+  /**
+   * 会計伝票（お会計前の中間伝票）をその場で印刷する（2026-10-03 FULL MOoN 御茶ノ水 宮崎さん
+   * 「この画面から会計伝票が出るように。『会計』のとなりに」）。テーブル一覧のポップアップの「会計伝票」と同じ印字で、
+   * 会計・売上には影響しない。担当者の選択は要らない（お客様に合計を見せるだけ）。
+   */
+  const handlePrintBill = () => {
+    startBillTransition(async () => {
+      try {
+        const res = await enqueueOrderSlipPrint(order.id);
+        toast(res.ok ? '会計伝票を印刷します / Printing bill' : (res.error ?? '会計伝票の印刷に失敗しました'), res.ok ? 'success' : 'error');
+      } catch (e) {
+        toast(e instanceof Error ? e.message : '会計伝票の印刷に失敗しました', 'error');
+      }
+    });
+  };
+
   const handleCheckout = async (payments: CheckoutPayment[], paymentMemo?: string) => {
     const result = await checkoutAction(order.id, payments, paymentMemo);
     if (result.registerClosed) {
@@ -732,7 +749,7 @@ export function PosScreen({
     <div className="flex h-[calc(100vh-4rem)] flex-col gap-3 lg:flex-row">
       {/* 左: 伝票（テーブル・人数・顧客と、追加した品目） */}
       <section className="flex min-h-0 w-full shrink-0 flex-col overflow-hidden rounded-2xl border border-line bg-white lg:w-[380px]">
-        <div className="flex items-center gap-2 border-b border-line px-4 py-3">
+        <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1.5 border-b border-line px-3 py-3">
           <button
             type="button"
             aria-label="フロアへ戻る"
@@ -748,7 +765,7 @@ export function PosScreen({
           >
             <ArrowLeft className="h-5 w-5" />
           </button>
-          <span className="text-2xl font-extrabold leading-none text-royal">
+          <span className="max-w-full truncate text-2xl font-extrabold leading-none text-royal">
             {tableName ?? ORDER_TYPE_LABELS[order.orderType] ?? order.orderType}
           </span>
           {setGuestCountAction ? (
@@ -759,17 +776,30 @@ export function PosScreen({
           ) : (
             <span className="text-sm text-ink-3">{order.guestCount}名</span>
           )}
-          <span className="ml-auto text-xs text-ink-3">#{order.orderNo}</span>
-          {/* 伝票の上からもレジ会計（2026-10-02 FULL MOoN 御茶ノ水「ここにレジ会計がほしい」） */}
-          <button
-            type="button"
-            disabled={items.length === 0 || pending || clerkMissing}
-            onClick={() => setCheckoutOpen(true)}
-            className="tap3d flex h-10 shrink-0 flex-col items-center justify-center rounded-xl bg-iris px-3 text-[14px] leading-tight font-bold text-white active:bg-iris-deep disabled:opacity-40"
-          >
-            会計
-            <span className="text-[9px] font-semibold text-white/75">Checkout</span>
-          </button>
+          <span className="shrink-0 text-xs text-ink-3">#{order.orderNo}</span>
+          {/* 会計伝票と会計のボタン。名前が長くて1行に入らないときは、2つ一緒に次の行へ（名前を切らない） */}
+          <div className="ml-auto flex shrink-0 items-center gap-1.5">
+            {/* 会計伝票（お会計前の中間伝票）。「会計」のとなり（2026-10-03 FULL MOoN 御茶ノ水 宮崎さん） */}
+            <button
+              type="button"
+              disabled={items.length === 0 || billPending}
+              onClick={handlePrintBill}
+              className="tap3d flex h-10 shrink-0 flex-col items-center justify-center rounded-xl border border-iris bg-white px-2 text-[12px] leading-tight font-bold text-royal active:bg-iris-soft disabled:opacity-40"
+            >
+              会計伝票
+              <span className="text-[9px] font-semibold text-ink-3">Bill</span>
+            </button>
+            {/* 伝票の上からもレジ会計（2026-10-02 FULL MOoN 御茶ノ水「ここにレジ会計がほしい」） */}
+            <button
+              type="button"
+              disabled={items.length === 0 || pending || clerkMissing}
+              onClick={() => setCheckoutOpen(true)}
+              className="tap3d flex h-10 shrink-0 flex-col items-center justify-center rounded-xl bg-iris px-3 text-[14px] leading-tight font-bold text-white active:bg-iris-deep disabled:opacity-40"
+            >
+              会計
+              <span className="text-[9px] font-semibold text-white/75">Checkout</span>
+            </button>
+          </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-1.5 border-b border-line px-4 py-2">
