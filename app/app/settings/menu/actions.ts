@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
+import { courseStepsFrom, MAX_COURSE_STEPS, normalizeStepIds, type CourseSteps } from '@/lib/course-steps';
 
 export interface ActionResult {
   error?: string;
@@ -266,5 +267,67 @@ export async function toggleSoldOut(id: string, soldOut: boolean): Promise<Actio
   revalidatePath('/app/settings/plans');
   revalidatePath('/app/settings/categories');
   revalidatePath('/app/settings/menu-book');
+  return {};
+}
+
+/**
+ * コースの料理（出す順）を保存する（店舗ごと。store_settings.settings.courseSteps）。
+ * 料理はその店のメニューにある商品から選ぶ。コースを注文すると厨房伝票に 1st / 2nd … と順番に出る
+ * （lib/course-steps.ts。2026-10-03 御茶ノ水 Miyazaki「コースをオーダーしたとき料理が順番にプリントされるように」）。
+ * settings の他の項目は消さずに courseSteps だけ書き換える。空にしたら、そのコースはこれまでどおりコース名だけ出す。
+ */
+export async function saveCourseSteps(storeId: string, courseId: string, itemIds: string[]): Promise<ActionResult> {
+  const ctx = await requirePermission('menu.manage');
+  if (!ctx.stores.some((s) => s.id === storeId)) return { error: '対象店舗にアクセス権がありません' };
+  const ids = normalizeStepIds(itemIds);
+  if (Array.isArray(itemIds) && itemIds.length > MAX_COURSE_STEPS) {
+    return { error: `1つのコースに入れられる料理は${MAX_COURSE_STEPS}品までです` };
+  }
+
+  const supabase = await createClient();
+  // コースと料理が、この会社・この店のメニューにあるか確かめる（他店の商品を入れさせない）
+  const { data: found, error: findErr } = await supabase
+    .from('menu_items')
+    .select('id, item_type')
+    .eq('organization_id', ctx.organizationId)
+    .neq('status', 'deleted')
+    .or(`store_id.is.null,store_id.eq.${storeId}`)
+    .in('id', [courseId, ...ids]);
+  if (findErr) return { error: `メニューの確認に失敗しました: ${findErr.message}` };
+  const byId = new Map((found ?? []).map((m) => [m.id as string, m.item_type as string]));
+  if (byId.get(courseId) !== 'course') return { error: 'コースが見つかりません' };
+  if (ids.some((id) => !byId.has(id))) return { error: 'メニューにない商品が入っています。画面を開き直してください' };
+  if (ids.some((id) => id === courseId || byId.get(id) === 'course')) return { error: 'コースの中にコースは入れられません' };
+
+  const { data: existing } = await supabase.from('store_settings').select('settings').eq('store_id', storeId).maybeSingle();
+  const current = (existing?.settings as Record<string, unknown> | null) ?? {};
+  const before = courseStepsFrom(current);
+  const nextSteps: CourseSteps = { ...before };
+  if (ids.length > 0) nextSteps[courseId] = ids;
+  else delete nextSteps[courseId];
+  const nextSettings: Record<string, unknown> = { ...current };
+  if (Object.keys(nextSteps).length > 0) nextSettings.courseSteps = nextSteps;
+  else delete nextSettings.courseSteps;
+
+  const { error } = await supabase
+    .from('store_settings')
+    .upsert(
+      { organization_id: ctx.organizationId, store_id: storeId, settings: nextSettings, updated_by: ctx.userId },
+      { onConflict: 'store_id' }
+    );
+  if (error) return { error: `コースの料理の保存に失敗しました: ${error.message}` };
+
+  await supabase.rpc('log_audit', {
+    p_org: ctx.organizationId,
+    p_store: storeId,
+    p_action: 'settings.menu.course_steps_update',
+    p_target_table: 'store_settings',
+    p_target_id: courseId,
+    p_before: { steps: before[courseId] ?? [] },
+    p_after: { steps: ids },
+    p_note: null,
+  });
+
+  revalidatePath('/app/settings/plans');
   return {};
 }

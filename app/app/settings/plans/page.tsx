@@ -5,7 +5,7 @@ import { PageHeader } from '@/components/ui/page-header';
 import { EmptyState } from '@/components/ui/state';
 import { SettingsBackLink } from '@/components/settings/back-link';
 import { MenuItemsPanel } from '@/components/settings/menu-items-panel';
-import { loadMenuSettingsData } from '../menu/data';
+import { loadCourseSteps, loadMenuSettingsData } from '../menu/data';
 
 export const metadata: Metadata = { title: 'プラン | 設定' };
 
@@ -28,7 +28,7 @@ export default async function PlanSettingsPage() {
     );
   }
 
-  const data = await loadMenuSettingsData(ctx, targetStore.id);
+  const [data, courseSteps] = await Promise.all([loadMenuSettingsData(ctx, targetStore.id), loadCourseSteps(targetStore.id)]);
 
   return (
     <div>
@@ -52,6 +52,7 @@ export default async function PlanSettingsPage() {
         categories={data.categoryRows}
         taxRates={data.taxRates}
         initial={data.itemRows}
+        courseSteps={courseSteps}
       />
     </div>
   );

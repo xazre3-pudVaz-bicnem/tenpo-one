@@ -1,5 +1,6 @@
 import 'server-only';
 import { createClient } from '@/lib/supabase/server';
+import { courseStepsFrom, type CourseSteps } from '@/lib/course-steps';
 import type { MenuItemRow } from '@/components/settings/menu-item-dialog';
 import type { CategoryRow } from '@/components/settings/category-panel';
 
@@ -83,4 +84,11 @@ export async function loadMenuSettingsData(ctx: MenuCtx, storeId: string): Promi
     itemRows,
     taxRates: (taxRates ?? []).map((t) => ({ id: t.id, name: t.name })),
   };
+}
+
+/** 設定 > プラン で出す「コースの料理（出す順）」（店舗設定 store_settings.settings.courseSteps） */
+export async function loadCourseSteps(storeId: string): Promise<CourseSteps> {
+  const supabase = await createClient();
+  const { data } = await supabase.from('store_settings').select('settings').eq('store_id', storeId).maybeSingle();
+  return courseStepsFrom(data?.settings ?? null);
 }

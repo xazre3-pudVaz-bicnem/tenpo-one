@@ -14,6 +14,8 @@ import { toggleSoldOut, deleteMenuItem } from '@/app/app/settings/menu/actions';
 import { MenuItemDialog, type MenuItemRow } from './menu-item-dialog';
 import { ItemOrderList, sortItems } from './item-order-list';
 import type { CategoryRow } from './category-panel';
+import type { CourseDishOption } from './course-steps-editor';
+import type { CourseSteps } from '@/lib/course-steps';
 
 const ITEM_TYPE_LABEL: Record<string, string> = { food: 'フード', drink: 'ドリンク', course: 'コース', option: 'オプション' };
 
@@ -37,12 +39,15 @@ export function MenuItemsPanel({
   categories,
   taxRates,
   initial,
+  courseSteps,
 }: {
   mode?: MenuItemsMode;
   storeId: string;
   categories: CategoryRow[];
   taxRates: { id: string; name: string }[];
   initial: MenuItemRow[];
+  /** 設定 > プラン だけ: コースの料理（出す順）。コースの id → 料理の商品 id の並び */
+  courseSteps?: CourseSteps;
 }) {
   const items = initial;
 
@@ -82,6 +87,21 @@ export function MenuItemsPanel({
   }, [visibleItems, activeCategory, search]);
 
   const categoryName = (id: string | null) => categories.find((c) => c.id === id)?.name ?? '未分類';
+
+  // コースの料理に選べる商品＝その店のメニューにある、コースとオプション以外の商品（非表示の商品も選べる）
+  const courseDishOptions = useMemo<CourseDishOption[] | undefined>(() => {
+    if (!isPlan || !courseSteps) return undefined;
+    const names = new Map(categories.map((c) => [c.id, c.name]));
+    return items
+      .filter((i) => i.status !== 'deleted' && i.itemType !== 'course' && i.itemType !== 'option')
+      .map((i) => ({
+        id: i.id,
+        name: i.name,
+        nameEn: i.nameEn,
+        categoryName: (i.categoryId ? names.get(i.categoryId) : null) ?? '未分類',
+        hidden: i.status === 'hidden',
+      }));
+  }, [isPlan, courseSteps, items, categories]);
 
   const handleToggleSoldOut = (item: MenuItemRow) => {
     startTransition(async () => {
@@ -195,6 +215,7 @@ export function MenuItemsPanel({
                 <Th>{noun}名</Th>
                 <Th>カテゴリ</Th>
                 {isPlan ? <Th className="text-right">時間</Th> : <Th>種別</Th>}
+                {isPlan && courseSteps && <Th className="text-right">料理（出す順）</Th>}
                 <Th className="text-right">価格</Th>
                 {!isPlan && <Th className="text-right">テイクアウト</Th>}
                 {!isPlan && <Th className="text-right">原価</Th>}
@@ -223,6 +244,11 @@ export function MenuItemsPanel({
                     <Td className="text-right tabular-nums">{i.durationMinutes ? `${i.durationMinutes}分` : '—'}</Td>
                   ) : (
                     <Td>{ITEM_TYPE_LABEL[i.itemType] ?? i.itemType}</Td>
+                  )}
+                  {isPlan && courseSteps && (
+                    <Td className="text-right tabular-nums">
+                      {courseSteps[i.id]?.length ? `${courseSteps[i.id].length}品` : '—'}
+                    </Td>
                   )}
                   <Td className="text-right tabular-nums">{yen(i.price)}</Td>
                   {!isPlan && <Td className="text-right tabular-nums">{i.takeoutPrice != null ? yen(i.takeoutPrice) : '—'}</Td>}
@@ -275,6 +301,8 @@ export function MenuItemsPanel({
           taxRates={taxRates}
           editing={editing}
           defaultItemType={isPlan ? 'course' : undefined}
+          courseDishOptions={courseDishOptions}
+          courseStepIds={editing ? courseSteps?.[editing.id] : undefined}
           defaultCategoryId={activeCategory === 'all' || activeCategory === 'uncategorized' ? null : activeCategory}
           onClose={() => setDialogOpen(false)}
         />
