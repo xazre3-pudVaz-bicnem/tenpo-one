@@ -8,7 +8,7 @@
  * 桁揃えは receipt-layout.ts を Markup 版と共有するため、同一注文なら両形式で同じ見た目になる。
  */
 import iconv from 'iconv-lite';
-import { RYOSHUSHO_DEFAULT_PURPOSE, RYOSHUSHO_INVOICE_NOTE, RYOSHUSHO_NO_STAMP_NOTE } from '@/lib/ryoshusho-issue';
+import { RYOSHUSHO_DEFAULT_PURPOSE, RYOSHUSHO_INVOICE_NOTE, RYOSHUSHO_NO_STAMP_NOTE, ryoshushoRecipientLine } from '@/lib/ryoshusho-issue';
 import type { ReceiptData } from './receipts';
 import { billSlipLines, colsFor, twoCol as twoColBase, wrapText as wrapTextBase, yen, STAR_WIDTH_OPTIONS, type PaperWidth } from './receipt-layout';
 
@@ -197,7 +197,7 @@ export function ryoshushoToStarPrnt(
   const width = colsFor(options.paperWidth);
   const rule = '-'.repeat(width);
   const b = new StarBuffer(options.currency ?? DEFAULT_CURRENCY, options.encoding ?? DEFAULT_ENCODING, width);
-  const recipient = (options.recipientName ?? '').trim() || '上様';
+  const recipient = ryoshushoRecipientLine(options.recipientName);
   const purpose = (options.purpose ?? '').trim() || RYOSHUSHO_DEFAULT_PURPOSE;
   const split = options.split ?? null;
   const amount = split ? split.amount : receipt.netPaid;
@@ -215,7 +215,7 @@ export function ryoshushoToStarPrnt(
   if (receipt.storePhone) b.line(`TEL ${receipt.storePhone}`);
   if (receipt.registrationNumber) b.line(`登録番号 ${receipt.registrationNumber}`);
   b.cmd(CMD.emphasizeOn).line();
-  b.cmd(CMD.alignLeft).line(`${recipient} 様`).line(rule);
+  b.cmd(CMD.alignLeft).line(recipient).line(rule);
 
   // 一部返金がある場合は実際に受け取った額（netPaid）を領収額とする
   b.cmd(CMD.alignCenter).cmd(CMD.magnify(0, 1)).line(yen(amount)).cmd(CMD.magnify(0, 0));

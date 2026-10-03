@@ -121,8 +121,10 @@ describe('ryoshushoToStarPrnt（領収書）', () => {
     expect(t).not.toContain('照会番号');
   });
 
-  it('宛名・但し書きは未指定なら既定値、指定すればその値', () => {
-    expect(asSjis(ryoshushoToStarPrnt(base))).toContain('上様 様');
+  it('宛名は未指定なら手書き用の下線の空欄（「上様」は出さない）、但し書きは既定値、指定すればその値', () => {
+    const blank = asSjis(ryoshushoToStarPrnt(base));
+    expect(blank).toContain(`${'_'.repeat(20)} 様`);
+    expect(blank).not.toContain('上様');
     const t = asSjis(ryoshushoToStarPrnt(base, { recipientName: '株式会社D&DREAM', purpose: '御飲食代として' }));
     expect(t).toContain('株式会社D&DREAM 様');
     expect(t).toContain('但 御飲食代として');

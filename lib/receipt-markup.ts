@@ -7,7 +7,7 @@
  * キャッシュドロアはMarkupに機種依存があるため drawerKickMarkup() で別ジョブとして扱う。
  */
 import type { ReceiptData } from './receipts';
-import { RYOSHUSHO_DEFAULT_PURPOSE, RYOSHUSHO_INVOICE_NOTE, RYOSHUSHO_NO_STAMP_NOTE } from '@/lib/ryoshusho-issue';
+import { RYOSHUSHO_DEFAULT_PURPOSE, RYOSHUSHO_INVOICE_NOTE, RYOSHUSHO_NO_STAMP_NOTE, ryoshushoRecipientLine } from '@/lib/ryoshusho-issue';
 import { billSlipLines, colsFor, twoCol as twoColBase, wrapText as wrapTextBase, yen, STAR_WIDTH_OPTIONS, type PaperWidth } from './receipt-layout';
 
 /** Star 機の全角幅（半角2桁よりわずかに広い）を見込んだ桁揃え・折り返し */
@@ -104,7 +104,7 @@ export function receiptToStarMarkup(receipt: ReceiptData, options: ReceiptMarkup
 }
 
 export interface RyoshushoOptions extends ReceiptMarkupOptions {
-  /** 宛名（空欄なら「上様」） */
+  /** 宛名（空欄なら手書き用の下線の空欄。「上様」は出さない） */
   recipientName?: string | null;
   /** 但し書き（空欄なら「飲食代として」） */
   purpose?: string | null;
@@ -127,7 +127,7 @@ export function ryoshushoToStarMarkup(receipt: ReceiptData, options: RyoshushoOp
   const line = (s = '') => { for (const w of wrapText(s, width)) L.push(esc(w)); };
   const raw = (s: string) => L.push(s);
 
-  const recipient = (options.recipientName ?? '').trim() || '上様';
+  const recipient = ryoshushoRecipientLine(options.recipientName);
   const purpose = (options.purpose ?? '').trim() || RYOSHUSHO_DEFAULT_PURPOSE;
 
   const split = options.split ?? null;
@@ -150,7 +150,7 @@ export function ryoshushoToStarMarkup(receipt: ReceiptData, options: RyoshushoOp
   line();
 
   raw('[align: left]');
-  line(`${recipient} 様`);
+  line(recipient);
   line(rule);
 
   // 金額（いちばん大きく）。一部返金がある場合は実際に受け取った額（netPaid）を領収額とする。

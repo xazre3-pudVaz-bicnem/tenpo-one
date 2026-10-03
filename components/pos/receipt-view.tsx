@@ -166,7 +166,7 @@ export function ReceiptView({
           <Input
             value={recipientName}
             onChange={(e) => setRecipientName(e.target.value)}
-            placeholder="お客様名（空欄なら「上様」）"
+            placeholder="お客様名（空欄なら手書き用の空欄で印字）"
             className="h-12"
           />
         </div>

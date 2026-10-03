@@ -2,8 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   RYOSHUSHO_DEFAULT_PURPOSE,
   jstShortDateTime,
-  ryoshushoIssuedFrom,
-} from '@/lib/ryoshusho-issue';
+  ryoshushoIssuedFrom, ryoshushoRecipientLine, RYOSHUSHO_BLANK_RECIPIENT } from '@/lib/ryoshusho-issue';
 
 describe('領収書は一度きり（2026-09-26 Ronnie）', () => {
   it('領収書のジョブが無ければ未発行', () => {
@@ -46,5 +45,23 @@ describe('領収書は一度きり（2026-09-26 Ronnie）', () => {
     expect(jstShortDateTime('2026-09-26T12:12:00Z')).toBe('9/26 21:12');
     expect(jstShortDateTime(null)).toBe('');
     expect(jstShortDateTime('junk')).toBe('');
+  });
+});
+
+describe('ryoshushoRecipientLine（宛名の行）', () => {
+  it('名前があればそのまま「◯◯ 様」', () => {
+    expect(ryoshushoRecipientLine(' 株式会社D&DREAM ')).toBe('株式会社D&DREAM 様');
+  });
+
+  it('空欄・空白・未指定は「上様」ではなく手書き用の下線の空欄（2026-10-03 Miyazaki）', () => {
+    for (const v of [undefined, null, '', '   ']) {
+      expect(ryoshushoRecipientLine(v)).toBe(`${RYOSHUSHO_BLANK_RECIPIENT} 様`);
+    }
+    expect(ryoshushoRecipientLine('')).not.toContain('上様');
+  });
+
+  it('下線の行は58mmの狭い紙（EPSON 28桁）にも折り返さずに収まる', () => {
+    // 半角20桁 + 半角スペース + 「様」(全角=2桁) = 23桁
+    expect(RYOSHUSHO_BLANK_RECIPIENT.length + 1 + 2).toBeLessThanOrEqual(28);
   });
 });
