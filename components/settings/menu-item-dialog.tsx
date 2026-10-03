@@ -7,6 +7,7 @@ import { Input, Textarea, Label, Select, FieldError } from '@/components/ui/inpu
 import { useToast } from '@/components/ui/toast';
 import { saveMenuItem } from '@/app/app/settings/menu/actions';
 import type { CategoryRow } from './category-panel';
+import { CourseStepsEditor, type CourseDishOption } from './course-steps-editor';
 
 export interface MenuItemRow {
   id: string;
@@ -66,6 +67,8 @@ export function MenuItemDialog({
   defaultCategoryId,
   defaultItemType,
   defaultSortOrder,
+  courseDishOptions,
+  courseStepIds,
   onClose,
 }: {
   storeId: string;
@@ -77,6 +80,10 @@ export function MenuItemDialog({
   defaultItemType?: string;
   /** 追加するときの並び順（メニューブックではカテゴリのいちばん下） */
   defaultSortOrder?: number;
+  /** コースの料理に選べる商品（設定 > プラン から開いたときだけ。コースの料理を順番どおりに出す） */
+  courseDishOptions?: CourseDishOption[];
+  /** このコースの料理（出す順。商品の id） */
+  courseStepIds?: string[];
   onClose: () => void;
 }) {
   const [form, setForm] = useState<MenuItemRow>(
@@ -236,6 +243,21 @@ export function MenuItemDialog({
             </div>
           )}
         </div>
+
+        {form.itemType === 'course' && courseDishOptions && (
+          editing?.id ? (
+            <CourseStepsEditor
+              storeId={storeId}
+              courseId={editing.id}
+              initialIds={courseStepIds ?? []}
+              options={courseDishOptions}
+            />
+          ) : (
+            <p className="rounded-lg border border-dashed border-gray-300 bg-gray-50 px-3 py-2 text-xs text-gray-500">
+              コースを保存したあと、もう一度開くと「コースの料理（出す順）」を設定できます。
+            </p>
+          )
+        )}
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <div>

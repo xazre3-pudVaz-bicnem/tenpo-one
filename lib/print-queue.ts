@@ -19,6 +19,7 @@ import {
   type KitchenStation,
   type KitchenTicketSettings,
 } from '@/lib/kitchen-ticket';
+import { courseStepsFrom, expandCourseRows, type CourseDish, type CourseSteps } from '@/lib/course-steps';
 import { kitchenTicketsMarkup } from '@/lib/receipt-markup';
 import { colsFor, STAR_WIDTH_OPTIONS } from '@/lib/receipt-layout';
 import { kitchenTicketsStarPrnt } from '@/lib/starprnt';
@@ -128,13 +129,54 @@ export async function reclaimStaleJobs(admin: Admin, printerId: string) {
  * 店舗の「厨房伝票の分け方・文字の大きさ・商品名の言語」（設定 > レジ・プリンター）。読めなければ既定（種類ごと・大きめ・英語と日本語）。
  * 伝票が1枚も無いポーリングでは呼ばない（毎回の問い合わせを増やさない）。
  */
-async function kitchenTicketSettingsForStore(admin: Admin, storeId: string): Promise<KitchenTicketSettings> {
+async function kitchenTicketSettingsForStore(
+  admin: Admin,
+  storeId: string
+): Promise<KitchenTicketSettings & { courseSteps: CourseSteps }> {
   const { data, error } = await admin.from('store_settings').select('settings').eq('store_id', storeId).maybeSingle();
   if (error) {
     console.error('[print-queue] store_settings read failed', storeId, error.message);
-    return kitchenTicketSettingsFrom(null);
+    return { ...kitchenTicketSettingsFrom(null), courseSteps: {} };
   }
-  return kitchenTicketSettingsFrom(data?.settings ?? null);
+  const settings = data?.settings ?? null;
+  return { ...kitchenTicketSettingsFrom(settings), courseSteps: courseStepsFrom(settings) };
+}
+
+/**
+ * コースの注文を「料理の行（1st, 2nd…）」に置き換える（lib/course-steps.ts）。
+ * その店でコースの料理を決めていなければ何もしない。調べられなくても伝票は止めず、これまでどおりコース名で出す。
+ */
+async function expandCourseItems(admin: Admin, rows: ClaimedKitchenItem[], steps: CourseSteps): Promise<ClaimedKitchenItem[]> {
+  if (Object.keys(steps).length === 0) return rows;
+  const orderItemIds = rows.map((r) => r.order_item_id).filter((id): id is string => !!id);
+  if (orderItemIds.length === 0) return rows;
+  const { data: oi, error } = await admin.from('order_items').select('id, menu_item_id').in('id', orderItemIds);
+  if (error) {
+    console.error('[print-queue] course expand: order_items read failed', error.message);
+    return rows;
+  }
+  const menuItemIdByOrderItem = new Map<string, string | null>((oi ?? []).map((x) => [x.id as string, (x.menu_item_id as string | null) ?? null]));
+  const dishIds = new Set<string>();
+  for (const id of menuItemIdByOrderItem.values()) {
+    if (id && steps[id]) for (const d of steps[id]) dishIds.add(d);
+  }
+  if (dishIds.size === 0) return rows;
+  const { data: items, error: dErr } = await admin
+    .from('menu_items')
+    .select('id, name, name_en, name_kana')
+    .in('id', [...dishIds])
+    .neq('status', 'deleted');
+  if (dErr) {
+    console.error('[print-queue] course expand: menu_items read failed', dErr.message);
+    return rows;
+  }
+  const dishes = new Map<string, CourseDish>(
+    (items ?? []).map((m) => [
+      m.id as string,
+      { id: m.id as string, name: m.name as string, nameEn: (m.name_en as string | null) ?? null, nameKana: (m.name_kana as string | null) ?? null },
+    ])
+  );
+  return expandCourseRows(rows, menuItemIdByOrderItem, steps, dishes);
 }
 
 /**
@@ -152,9 +194,12 @@ export async function generateKitchenJobs(admin: Admin, printer: PrinterRow) {
     console.error('[print-queue] claim_kitchen_items failed', printer.id, error.message);
     return;
   }
-  const tickets = groupKitchenTickets((data ?? []) as ClaimedKitchenItem[]);
+  const claimed = (data ?? []) as ClaimedKitchenItem[];
+  if (claimed.length === 0) return;
+  const { split, textSize, language, buzzer, courseSteps } = await kitchenTicketSettingsForStore(admin, printer.store_id);
+  // コースの注文は、その店で決めた料理の順（1st, 2nd…）に置き換えて伝票にする
+  const tickets = groupKitchenTickets(await expandCourseItems(admin, claimed, courseSteps));
   if (tickets.length === 0) return;
-  const { split, textSize, language, buzzer } = await kitchenTicketSettingsForStore(admin, printer.store_id);
 
   const stations = (printer.kitchen_stations ?? ['kitchen']) as KitchenStation[];
   const title = `${stations.map((s) => STATION_LABELS[s] ?? s).join('・')} 伝票`;

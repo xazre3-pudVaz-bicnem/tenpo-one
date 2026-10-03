@@ -158,8 +158,41 @@ export function misroutedDrinkCategories(
   return categories.filter((c) => drinkIds.has(c.id) && (c.station ?? 'kitchen') !== 'drink').map((c) => c.name);
 }
 
+/**
+ * コースの料理の1品（出す順）。コースを注文すると、厨房伝票にはコースの名前ではなく
+ * 「1st 前菜 / 2nd サラダ …」と料理が順番に出る（lib/course-steps.ts が claim の行を展開する）。
+ */
+export interface CourseStepInfo {
+  /** 何番目か（1始まり） */
+  index: number;
+  /** そのコースの料理の数 */
+  total: number;
+  /** コースの名前（英語があれば英語）。伝票に「どのコースの料理か」を添える */
+  course: string;
+}
+
+/** 1st / 2nd / 3rd / 4th … （厨房伝票は英語が主） */
+export function ordinalEn(n: number): string {
+  const v = n % 100;
+  if (v >= 11 && v <= 13) return `${n}th`;
+  switch (n % 10) {
+    case 1:
+      return `${n}st`;
+    case 2:
+      return `${n}nd`;
+    case 3:
+      return `${n}rd`;
+    default:
+      return `${n}th`;
+  }
+}
+
 /** claim_kitchen_items の1行 */
 export interface ClaimedKitchenItem {
+  /** 明細の id（claim_kitchen_items が返す）。コースの展開で、どの商品の明細かを調べるのに使う */
+  order_item_id?: string;
+  /** コースの料理として展開した行のとき、何番目か */
+  course_step?: CourseStepInfo | null;
   order_id: string;
   order_no: number | string;
   table_name: string | null;
@@ -185,6 +218,8 @@ export interface KitchenTicketLine {
   /** 選択肢。英語名があれば英語、無ければ日本語 */
   modifiers: string[];
   memo: string | null;
+  /** コースの料理（出す順）として出す行のとき、何番目か。普通の商品は無し */
+  step?: CourseStepInfo | null;
 }
 
 export interface KitchenTicket {
@@ -200,7 +235,9 @@ export interface KitchenTicket {
 
 /** 同じ商品として1行にまとめるためのキー（追加と取消は別行） */
 function lineKey(l: KitchenTicketLine): string {
-  return [l.delta > 0 ? '+' : '-', l.name, l.nameEn ?? '', l.modifiers.join('\u0001'), l.memo ?? ''].join('\u0002');
+  // コースの料理は「どのコースの何番目か」まで同じものだけまとめる（単品の同じ商品とは混ぜない）
+  const step = l.step ? `${l.step.course}\u0003${l.step.index}` : '';
+  return [l.delta > 0 ? '+' : '-', l.name, l.nameEn ?? '', l.modifiers.join('\u0001'), l.memo ?? '', step].join('\u0002');
 }
 
 /**
@@ -236,6 +273,7 @@ export function groupKitchenTickets(rows: ClaimedKitchenItem[]): KitchenTicket[]
       // 選択肢（セットのカレー・ナン/ご飯など）も英語優先。厨房が作るものそのものなので特に重要
       modifiers: (r.modifiers ?? []).map((m) => (m.name_en?.trim() || m.name)).filter(Boolean),
       memo: r.memo,
+      ...(r.course_step ? { step: r.course_step } : {}),
     };
     const key = lineKey(line);
     const same = entry.byKey.get(key);
@@ -358,10 +396,14 @@ export function layoutKitchenTicket(ticket: KitchenTicket, opts: KitchenLayoutOp
     // （英語が作れない商品は日本語のみ。情報は落とさない）
     const qty = `x${Math.abs(l.delta)}`;
     const head = l.nameEn ?? l.name;
+    // コースの料理は「1st 前菜」のように出す順を頭に付ける（2026-10-03 御茶ノ水 Miyazaki「コースの料理を順番に」）
+    const stepLabel = l.step ? `${ordinalEn(l.step.index)} ` : '';
     // 取消の印は商品名と別の行にする（同じ行だと大きい文字で商品名の途中から折り返して読みにくい）
     if (l.delta < 0) push(enOnly ? '[CANCEL]' : '[CANCEL / 取消]', itemSize);
-    push(`${head}  ${qty}`, itemSize);
+    push(`${stepLabel}${head}  ${qty}`, itemSize);
     if (l.nameEn && !enOnly) push(`${indent}${l.name}`, nameJaSize);
+    // どのコースの料理か（コースの名前）。細かい文字で添える
+    if (l.step) push(`   [${l.step.course}]`, detailSize);
     for (const m of l.modifiers) push(`   ・${m}`, detailSize);
     if (l.memo) push(`   ※${l.memo}`, detailSize);
   }
