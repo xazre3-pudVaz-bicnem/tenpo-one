@@ -24,7 +24,7 @@ export function CloudPrintButton({
   orderId: string;
   jobType: 'receipt' | 'ryoshusho';
   reissue?: boolean;
-  /** 領収書の宛名。画面で入力した内容をそのまま印字する（空欄なら「上様」） */
+  /** 領収書の宛名。画面で入力した内容をそのまま印字する（空欄なら手書き用の空欄） */
   recipientName?: string;
   /** 領収書の但し書き。空欄なら「飲食代として」 */
   purpose?: string;

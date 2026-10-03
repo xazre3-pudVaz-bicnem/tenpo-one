@@ -112,9 +112,10 @@ describe('ryoshushoToEposXml', () => {
     expect(xml).toContain('<cut type="feed"/>');
   });
 
-  it('宛名・但し書きが空なら「上様」「飲食代として」を使う', () => {
+  it('宛名が空なら「上様」ではなく手書き用の下線の空欄、但し書きは「飲食代として」（2026-10-03 Miyazaki）', () => {
     const xml = ryoshushoToEposXml(base, { paperWidth: 58 });
-    expect(xml).toContain('上様 様');
+    expect(xml).toContain(`${'_'.repeat(20)} 様`);
+    expect(xml).not.toContain('上様');
     expect(xml).toContain('但 飲食代として');
   });
 

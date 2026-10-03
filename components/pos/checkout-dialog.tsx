@@ -831,12 +831,12 @@ export function CheckoutDialog({
                 </p>
                 <div className="mt-3 space-y-3">
                   <div>
-                    <Label htmlFor="inv-name">宛名 / Name（空欄なら「上様」）</Label>
+                    <Label htmlFor="inv-name">宛名 / Name（空欄なら手書き用の空欄で印字）</Label>
                     <Input
                       id="inv-name"
                       value={recipientName}
                       onChange={(e) => setRecipientName(e.target.value)}
-                      placeholder="上様"
+                      placeholder="お客様名 / Customer name"
                       className="h-12"
                     />
                   </div>

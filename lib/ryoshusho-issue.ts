@@ -16,6 +16,18 @@
 /** 領収書の但し書きの既定（2026-09-26 Ronnie「飲食代として」。以前は「お品代として」） */
 export const RYOSHUSHO_DEFAULT_PURPOSE = '飲食代として';
 
+/**
+ * 領収書の宛名の行。
+ * 空欄のときは「上様」ではなく、手書きできる下線の空欄にする
+ * （2026-10-03 FULL MOoN 御茶ノ水 Miyazaki「領収書の宛名のデフォルトを空欄にしてほしい。今は上様になっている」。全店共通）。
+ * 下線は半角の「_」20個＋「 様」＝23桁（58mm のEPSON 28桁・Star 32桁にも収まる）。
+ */
+export const RYOSHUSHO_BLANK_RECIPIENT = '_'.repeat(20);
+export function ryoshushoRecipientLine(name: string | null | undefined): string {
+  const n = (name ?? '').trim();
+  return `${n || RYOSHUSHO_BLANK_RECIPIENT} 様`;
+}
+
 export interface RyoshushoJobRow {
   job_type: string;
   status: string;

@@ -110,7 +110,7 @@ export async function enqueueReceiptPrint(
     reissue?: boolean;
     drawer?: boolean;
     jobType?: 'receipt' | 'ryoshusho';
-    /** 領収書の宛名（空欄なら「上様」） */
+    /** 領収書の宛名（空欄なら手書き用の下線の空欄） */
     recipientName?: string | null;
     /** 領収書の但し書き（空欄なら「飲食代として」） */
     purpose?: string | null;
