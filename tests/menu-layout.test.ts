@@ -26,6 +26,13 @@ describe('menuLayout（iPad・スマホのメニュー一覧）', () => {
     expect(mainHrefs.indexOf('/app/expenses')).toBe(mainHrefs.indexOf('/app/cash/close') - 1);
   });
 
+  it('管理画面だけの画面（月次清算）はレジのメニュー・集計に出さない。パソコンの左メニューには出す（2026-10-04 Ronnie）', () => {
+    expect(allHrefs).not.toContain('/app/settlement');
+    const pcHrefs = NAV_GROUPS.flatMap((g) => g.items).map((i) => i.href);
+    expect(pcHrefs).toContain('/app/settlement');
+    expect(NAV_GROUPS.flatMap((g) => g.items).find((i) => i.href === '/app/settlement')?.adminOnly).toBe(true);
+  });
+
   it('在庫設定は一覧に出し、集計の中には入れない', () => {
     expect(mainHrefs).toContain('/app/inventory');
     const purchasing = layout.summaryGroups.find((g) => g.label === '仕入・在庫');
