@@ -8,7 +8,8 @@ import {
   Users, Clock, Pencil,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { yen } from '@/lib/format';
+import { yen, formatTime } from '@/lib/format';
+import { groupOrderRounds, ordinalLabel } from '@/components/handy/logic';
 import { englishName } from '@/lib/romaji';
 import { optionPriceLookup, repriceLines } from '@/lib/cart-reprice';
 import { groupMenuPages, menuPageLabel, PICKS_PAGE_KEY, picksSlot, type MenuBookSettings } from '@/lib/menu-book';
@@ -599,6 +600,16 @@ export function PosScreen({
   // 未送信（厨房にまだ伝えていない）品目。タップした瞬間ではなく、このボタンで初めて厨房伝票・KDS に出る
   const unsentItems = items.filter((it) => it.kitchen_sent_at === null);
   /**
+   * 伝票の品目を「注文の回」（1st・2nd…）に分けて、オーダーが入った時刻を出す
+   * （2026-10-04 御茶ノ水 Miyazaki「オーダーの履歴のところで、オーダーが入った時間もわかるといいです」。ハンディの卓の伝票と同じ分け方）。
+   * kitchen_sent_at が読めない（列が無い）ときは今までどおり1つの並びで出す。
+   */
+  const orderRounds = useMemo(() => {
+    const withTime = items.map((it) => ({ ...it, sentAtMs: it.kitchen_sent_at ? new Date(it.kitchen_sent_at).getTime() : null }));
+    const known = items.some((it) => it.kitchen_sent_at !== undefined);
+    return known ? groupOrderRounds(withTime) : [{ index: null, sentAtMs: null, items: withTime }];
+  }, [items]);
+  /**
    * Order（決定）。カートの品をまとめて伝票に入れ、そのまま厨房へ送る。
    * ここではじめて伝票・テーブルの金額・厨房伝票に出る（2026-09-25 店舗要望）。
    */
@@ -901,73 +912,94 @@ export function PosScreen({
 
           {items.length > 0 && (
             <ul className="divide-y divide-line">
-              {items.map((it) => (
-                <li key={it.id} className="flex items-center gap-2.5 px-3 py-2.5">
-                  <div className="min-w-0 flex-1">
-                    {/* レジの画面は英語を主にする（日本語を読まないスタッフが打つため。2026-09-24 店舗要望）。
-                        日本語名は下に小さく残す。印刷する会計伝票は日本語のまま */}
-                    <p className="truncate text-[15px] font-bold leading-tight text-navy">
-                      {(it.menu_item_id && englishByItemId.get(it.menu_item_id)) || it.name}
-                      {it.kitchen_sent_at === null && (
-                        <span className="ml-1.5 inline-block rounded bg-amber-100 px-1.5 py-0.5 align-middle text-[10px] font-bold text-amber-800">
-                          未送信
+              {orderRounds.flatMap((round) => [
+                // 回の見出し: 1st・2nd… と厨房へ送った時刻（未送信の品はまとめて最後に）。1回だけ・時刻も無いときは出さない
+                ...(round.index != null || round.sentAtMs != null || orderRounds.length > 1
+                  ? [
+                      <li
+                        key={`round-${round.index ?? 'unsent'}`}
+                        className="flex items-center gap-2 bg-lilac-soft/60 px-3 py-1 text-[11px] font-bold text-ink-3"
+                      >
+                        <span
+                          className={cn(
+                            'rounded px-1.5 py-0.5 leading-none',
+                            round.index == null ? 'bg-amber-100 text-amber-800' : 'bg-iris-soft text-royal'
+                          )}
+                        >
+                          {round.index == null ? '未送信' : ordinalLabel(round.index)}
                         </span>
-                      )}
-                    </p>
-                    <p className="truncate text-xs leading-tight text-ink-3">
-                      {it.menu_item_id && englishByItemId.get(it.menu_item_id) ? it.name : ''}
-                    </p>
-                  </div>
-                  {/* 金額 × 数量（2026-09-25 店舗要望） */}
-                  <span className="w-[72px] shrink-0 text-right text-[15px] font-bold tabular-nums text-navy">
-                    {yen(it.unit_price)}
-                  </span>
-                  <span className="shrink-0 text-[13px] font-bold text-ink-3">×</span>
-                  {/* 数量は指で押せる大きさに（レジは iPad で使う） */}
-                  <div className="flex shrink-0 items-center overflow-hidden rounded-xl border border-line">
+                        {round.sentAtMs != null && <span className="tabular-nums">{formatTime(new Date(round.sentAtMs))}</span>}
+                      </li>,
+                    ]
+                  : []),
+                ...round.items.map((it) => (
+                  <li key={it.id} className="flex items-center gap-2.5 px-3 py-2.5">
+                    <div className="min-w-0 flex-1">
+                      {/* レジの画面は英語を主にする（日本語を読まないスタッフが打つため。2026-09-24 店舗要望）。
+                          日本語名は下に小さく残す。印刷する会計伝票は日本語のまま */}
+                      <p className="truncate text-[15px] font-bold leading-tight text-navy">
+                        {(it.menu_item_id && englishByItemId.get(it.menu_item_id)) || it.name}
+                        {it.kitchen_sent_at === null && (
+                          <span className="ml-1.5 inline-block rounded bg-amber-100 px-1.5 py-0.5 align-middle text-[10px] font-bold text-amber-800">
+                            未送信
+                          </span>
+                        )}
+                      </p>
+                      <p className="truncate text-xs leading-tight text-ink-3">
+                        {it.menu_item_id && englishByItemId.get(it.menu_item_id) ? it.name : ''}
+                      </p>
+                    </div>
+                    {/* 金額 × 数量（2026-09-25 店舗要望） */}
+                    <span className="w-[72px] shrink-0 text-right text-[15px] font-bold tabular-nums text-navy">
+                      {yen(it.unit_price)}
+                    </span>
+                    <span className="shrink-0 text-[13px] font-bold text-ink-3">×</span>
+                    {/* 数量は指で押せる大きさに（レジは iPad で使う） */}
+                    <div className="flex shrink-0 items-center overflow-hidden rounded-xl border border-line">
+                      <button
+                        type="button"
+                        aria-label={`${it.name}を1つ減らす`}
+                        disabled={pending}
+                        onClick={() => handleQty(it.id, -1)}
+                        className="flex h-11 w-11 items-center justify-center bg-lilac-soft text-royal disabled:opacity-50"
+                      >
+                        <Minus className="h-4 w-4" />
+                      </button>
+                      <input
+                        key={it.quantity}
+                        type="number"
+                        min={1}
+                        disabled={pending}
+                        defaultValue={it.quantity}
+                        onBlur={(e) => handleQtyDirectInput(it, Number(e.target.value))}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') e.currentTarget.blur();
+                        }}
+                        aria-label={`${it.name}の数量`}
+                        // ブラウザの上下の矢印は出さない（数は −／＋ で変える。2026-09-24 要望）
+                        className="h-11 w-11 border-0 text-center text-base font-bold tabular-nums text-navy focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                      />
+                      <button
+                        type="button"
+                        aria-label={`${it.name}を1つ増やす`}
+                        disabled={pending}
+                        onClick={() => handleQty(it.id, 1)}
+                        className="flex h-11 w-11 items-center justify-center bg-lilac-soft text-royal disabled:opacity-50"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </button>
+                    </div>
                     <button
                       type="button"
-                      aria-label={`${it.name}を1つ減らす`}
-                      disabled={pending}
-                      onClick={() => handleQty(it.id, -1)}
-                      className="flex h-11 w-11 items-center justify-center bg-lilac-soft text-royal disabled:opacity-50"
+                      aria-label="取消"
+                      onClick={() => setCancelTarget(it)}
+                      className="shrink-0 rounded-lg p-1.5 text-ink-3 hover:bg-danger-soft hover:text-danger"
                     >
-                      <Minus className="h-4 w-4" />
+                      <X className="h-4 w-4" />
                     </button>
-                    <input
-                      key={it.quantity}
-                      type="number"
-                      min={1}
-                      disabled={pending}
-                      defaultValue={it.quantity}
-                      onBlur={(e) => handleQtyDirectInput(it, Number(e.target.value))}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') e.currentTarget.blur();
-                      }}
-                      aria-label={`${it.name}の数量`}
-                      // ブラウザの上下の矢印は出さない（数は −／＋ で変える。2026-09-24 要望）
-                      className="h-11 w-11 border-0 text-center text-base font-bold tabular-nums text-navy focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                    />
-                    <button
-                      type="button"
-                      aria-label={`${it.name}を1つ増やす`}
-                      disabled={pending}
-                      onClick={() => handleQty(it.id, 1)}
-                      className="flex h-11 w-11 items-center justify-center bg-lilac-soft text-royal disabled:opacity-50"
-                    >
-                      <Plus className="h-4 w-4" />
-                    </button>
-                  </div>
-                  <button
-                    type="button"
-                    aria-label="取消"
-                    onClick={() => setCancelTarget(it)}
-                    className="shrink-0 rounded-lg p-1.5 text-ink-3 hover:bg-danger-soft hover:text-danger"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </li>
-              ))}
+                  </li>
+                )),
+              ])}
             </ul>
           )}
         </div>
