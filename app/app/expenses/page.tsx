@@ -13,6 +13,7 @@ import { EmptyState } from '@/components/ui/state';
 import { TableWrap, Table, THead, TBody, Tr, Th, Td } from '@/components/ui/table';
 import { PeriodFilter } from '@/components/cash/period-filter';
 import { ExpenseFormDialog } from '@/components/cash/expense-form-dialog';
+import { VendorBillDialog } from '@/components/cash/vendor-bill-dialog';
 import { ApprovalActions } from '@/components/cash/approval-actions';
 import { JournalSourceLink } from '@/components/accounting/journal-source-link';
 import { approveExpense, rejectExpense } from '@/app/app/expenses/actions';
@@ -54,7 +55,7 @@ export default async function ExpensesPage({
   if (statusFilter) query = query.eq('approval_status', statusFilter);
 
   // 費目マスタ・承認ルール・経費一覧・当月合計は相互に独立のため並列取得する。
-  const [{ data: accounts }, { data: approvalRulesData }, { data: rows }, { data: monthRows }, { data: vendorRows }] = await Promise.all([
+  const [{ data: accounts }, { data: approvalRulesData }, { data: rows }, { data: monthRows }, { data: vendorRows }, { data: billRows }] = await Promise.all([
     ctx.organizationId
       ? supabase
           .from('expense_accounts')
@@ -78,7 +79,19 @@ export default async function ExpensesPage({
       .lte('business_date', todayJst()),
     // 支払先＝企業の仕入先（ABC／五十音順で選べる。2026-09-28 Ronnie）
     supabase.from('vendors').select('id, name, name_kana').eq('status', 'active').limit(300),
+    // 当月に入れた仕入の請求書（件数・合計だけ。一覧は管理画面の 月次清算）
+    store
+      ? supabase
+          .from('invoices')
+          .select('amount')
+          .eq('store_id', store.id)
+          .neq('status', 'rejected')
+          .gte('issue_date', monthStart)
+          .lte('issue_date', todayJst())
+      : Promise.resolve({ data: [] as { amount: number }[] }),
   ]);
+  const billCount = (billRows ?? []).length;
+  const billTotal = (billRows ?? []).reduce((s, r) => s + Number(r.amount ?? 0), 0);
   const vendors = sortShops(
     (vendorRows ?? []).map((v) => ({ id: v.id as string, name: v.name as string, kana: (v.name_kana as string | null) ?? null }))
   ).map(({ id, name }) => ({ id, name }));
@@ -157,7 +170,25 @@ export default async function ExpensesPage({
             </div>
           )}
 
-          {canWrite && <ExpenseFormDialog storeId={store.id} accounts={accounts ?? []} vendors={vendors} canSeedAccounts={canApprove} />}
+          {/* 仕入の請求書はレジ（iPad）からもその場で入れる。見るのは管理画面の 月次清算（2026-10-04 Ronnie） */}
+          <div className="flex flex-wrap items-center gap-2">
+            {canWrite && <ExpenseFormDialog storeId={store.id} accounts={accounts ?? []} vendors={vendors} canSeedAccounts={canApprove} />}
+            {can(ctx.role, 'documents.write') && <VendorBillDialog storeId={store.id} vendors={vendors} />}
+            {can(ctx.role, 'documents.write') && (
+              <span className="text-xs text-gray-500">
+                今月の仕入の請求書 {billCount}件・{yen(billTotal)}
+                {!ctx.isRegisterDevice && (
+                  <>
+                    （
+                    <Link href="/app/settlement" className="font-semibold text-primary underline">
+                      月次清算
+                    </Link>
+                    で仕入先ごとに見る）
+                  </>
+                )}
+              </span>
+            )}
+          </div>
 
           <PeriodFilter action="/app/expenses" from={from} to={to}>
             <div>
