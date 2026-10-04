@@ -267,6 +267,9 @@ export async function createInvoice(input: {
   if (invErr) throw new Error(invErr.message);
 
   revalidatePath(PATH);
+  // レジの「仕入・経費」から入れた請求書は、管理画面の 月次清算 と 仕入・経費 の当月件数にすぐ出す
+  revalidatePath('/app/expenses');
+  revalidatePath('/app/settlement');
 }
 
 /** 請求書の編集（支払済みは編集不可）。取引先の紐付け(vendor_id)は変更しない */
