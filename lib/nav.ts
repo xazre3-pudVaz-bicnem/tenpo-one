@@ -14,6 +14,8 @@ export interface NavItem {
   /** リンクではなく操作ボタンとして表示する */
   /** リンクではなくその場で動くもの（ドロアを開く・テイクアウトの伝票を作る） */
   action?: 'drawer' | 'takeout';
+  /** 管理画面（パソコン）だけ。レジ端末（iPad）のメニュー・集計には出さない */
+  adminOnly?: boolean;
 }
 
 export interface NavGroup {
@@ -132,6 +134,8 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: '/app/reports', label: 'レポート', en: 'Reports', icon: 'chart', permission: 'reports.view' },
       { href: '/app/budgets', label: '予算管理', en: 'Budgets', icon: 'yen', permission: 'reports.view' },
+      // 月次清算（売上・仕入請求書・家賃/電気/水道/給料・今週の赤字黒字）。管理画面だけ（2026-10-04 Ronnie「レジではなく管理画面に」）
+      { href: '/app/settlement', label: '月次清算', en: 'Monthly P&L', icon: 'yen', permission: 'reports.view', adminOnly: true },
       { href: '/app/daily-reports', label: '日報', en: 'Daily reports', icon: 'clipboard', permission: 'dashboard.view' },
     ],
   },

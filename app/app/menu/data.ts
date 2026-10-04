@@ -73,6 +73,8 @@ export function menuLayout(
           // テイクアウトは 即会計 の画面（メニュー選択の左）のボタンから。メニューには出さない（2026-09-28・09-30 Ronnie）
           i.action !== 'takeout' &&
           (options?.keepActions || i.action !== 'drawer') &&
+          // 管理画面だけの画面（月次清算など）はレジのメニュー・集計に出さない
+          !i.adminOnly &&
           !MOVED_OUT_OF_MENU.has(i.href) &&
           !MOVED_IN_LIST.includes(i.href)
       ),
