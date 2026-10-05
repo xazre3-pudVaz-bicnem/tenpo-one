@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useTransition } from 'react';
+import { ClipboardList, Link2, Utensils } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/state';
@@ -318,9 +319,11 @@ export function ScheduleBoard({
         )}
         style={{ left, width, transform: drag?.id === r.id ? `translate(${drag.dx}px, ${drag.dy}px)` : undefined, touchAction: 'none' }}
       >
+        {/* 参考画像（2026-10-05 Ronnie）の形: 上に人数、下に名前を大きく。右に印（コース・メモ・複数卓）と小さな時刻。
+            バーの長さ＝卓に座っていた時間なので、時刻は小さく添えるだけ */}
         <span className="flex min-w-0 flex-1 flex-col justify-center gap-px">
-          <b className="flex items-center gap-1 truncate font-[family-name:var(--font-num)] text-[12.5px] font-bold whitespace-nowrap">
-            <span className="tabular-nums">
+          <span className="flex items-center gap-1 truncate text-[11px] leading-tight whitespace-nowrap opacity-90">
+            <span className="font-[family-name:var(--font-num)] font-semibold tabular-nums">
               {r.partySize}
               <span className="font-sans">名</span>
             </span>
@@ -355,15 +358,21 @@ export function ScheduleBoard({
                 貸切
               </span>
             )}
-          </b>
-          <span className="truncate text-[10.5px] whitespace-nowrap opacity-90">
-            {r.guestName} 様{r.courseName ? `・${r.courseName}` : ''}
-            {extraTables ? `・${extraTables}` : ''}・
-            {/* 入った時間と出た時間をはっきり（2026-10-05 Ronnie）。来店前は予定の時間 */}
-            <span className="tabular-nums">
-              {span.inAt !== null ? `入店 ${hm(span.inAt)}` : hm(s)}
-              {span.outAt !== null ? ` → 退店 ${hm(span.outAt)}` : `〜${hm(e)}${span.inAt !== null ? '（予定）' : ''}`}
-            </span>
+          </span>
+          <span className="flex min-w-0 items-center gap-1.5 whitespace-nowrap">
+            <b className="min-w-0 flex-1 truncate text-[13px] leading-tight font-bold">{r.guestName} 様</b>
+            {width >= 120 && (
+              <span className="flex shrink-0 items-center gap-1 opacity-80" aria-hidden>
+                {r.courseName && <Utensils className="h-3.5 w-3.5" />}
+                {(r.memo || r.requestNote || r.allergyNote) && <ClipboardList className="h-3.5 w-3.5" />}
+                {extraTables && <Link2 className="h-3.5 w-3.5" />}
+              </span>
+            )}
+            {width >= 170 && (
+              <span className="shrink-0 text-[10px] tabular-nums opacity-80" title="入店〜退店">
+                {span.inAt !== null ? hm(span.inAt) : hm(s)}–{span.outAt !== null ? hm(span.outAt) : hm(e)}
+              </span>
+            )}
           </span>
         </span>
         {kind === 'pay' && (
