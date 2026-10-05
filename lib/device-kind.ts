@@ -49,3 +49,30 @@ export function nativeAppMode(userAgent: string | null | undefined): NativeAppMo
 export function phoneMayOpenApp(userAgent: string | null | undefined): boolean {
   return nativeAppMode(userAgent) === 'owner';
 }
+
+/**
+ * レジ（iPad）か：User-Agent に iPad／Android タブレット／iPad アプリ（regi）の印があるか、
+ * 画面がタッチ（maxTouchPoints > 1。iPadOS は「デスクトップ用サイト」で Macintosh を名乗るので UA だけでは分からない）。
+ * パソコン（マウス・タッチ無し）は false。
+ */
+export function isRegisterTablet(userAgent: string | null | undefined, touchPoints: number | null | undefined): boolean {
+  const ua = (userAgent ?? '').toLowerCase();
+  if (nativeAppMode(userAgent) === 'regi') return true;
+  if (ua.includes('ipad')) return true;
+  if (ua.includes('android') && !ua.includes('mobile')) return true;
+  return (touchPoints ?? 0) > 1;
+}
+
+/**
+ * ログアウトを止めるか（レジを閉めていないとき）。
+ * 止めるのは「レジのアカウントで入った iPad（タブレット）」だけ。同じレジのアカウントでもパソコンから入った管理画面は
+ * ログアウトできる（2026-10-05 Ronnie「レジを閉めていないとパソコンの管理画面からもログアウトできない。パソコン版はログアウトできるように」）。
+ * パソコン・ハンディ・メール＋パスワードのログインは今までどおり止めない。
+ */
+export function shouldBlockRegisterSignOut(input: {
+  isRegisterDevice: boolean;
+  userAgent: string | null | undefined;
+  touchPoints: number | null | undefined;
+}): boolean {
+  return input.isRegisterDevice && isRegisterTablet(input.userAgent, input.touchPoints);
+}

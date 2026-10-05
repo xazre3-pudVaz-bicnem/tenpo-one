@@ -7,6 +7,7 @@ import { PageHeader } from '@/components/ui/page-header';
 import { NavIcon } from '@/components/layout/nav-icons';
 import { MenuList } from '@/components/layout/menu-list';
 import { signOut } from '@/app/app/actions';
+import { TouchHint } from '@/components/layout/touch-hint';
 import { AppModeSwitch } from '@/components/native/app-mode-switch';
 import { menuLayout } from './data';
 
@@ -54,6 +55,7 @@ export default async function MenuPage() {
       <AppModeSwitch className="mt-6 justify-center rounded-xl border border-gray-200 bg-white px-4 py-3.5 font-medium" />
 
       <form action={signOut} className="mt-6">
+        <TouchHint />
         <button
           type="submit"
           className="flex w-full items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-3.5 text-sm font-medium text-danger active:bg-gray-50"
