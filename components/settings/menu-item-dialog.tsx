@@ -8,6 +8,7 @@ import { useToast } from '@/components/ui/toast';
 import { saveMenuItem } from '@/app/app/settings/menu/actions';
 import type { CategoryRow } from './category-panel';
 import { CourseStepsEditor, type CourseDishOption } from './course-steps-editor';
+import { canHaveCourseSteps } from '@/lib/menu-book';
 
 export interface MenuItemRow {
   id: string;
@@ -244,7 +245,8 @@ export function MenuItemDialog({
           )}
         </div>
 
-        {form.itemType === 'course' && courseDishOptions && (
+        {/* コースの料理（出す順）。種別がコースの商品と、カテゴリ・名前がコースの商品（取り込んだままの店）に出す */}
+        {courseDishOptions && canHaveCourseSteps(form.itemType, form.name, categories.find((c) => c.id === form.categoryId)?.name) && (
           editing?.id ? (
             <CourseStepsEditor
               storeId={storeId}
@@ -254,7 +256,7 @@ export function MenuItemDialog({
             />
           ) : (
             <p className="rounded-lg border border-dashed border-gray-300 bg-gray-50 px-3 py-2 text-xs text-gray-500">
-              コースを保存したあと、もう一度開くと「コースの料理（出す順）」を設定できます。
+              商品を保存したあと、もう一度開くと「コースの料理（出す順）」を設定できます。
             </p>
           )
         )}

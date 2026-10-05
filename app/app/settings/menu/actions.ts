@@ -295,7 +295,8 @@ export async function saveCourseSteps(storeId: string, courseId: string, itemIds
     .in('id', [courseId, ...ids]);
   if (findErr) return { error: `メニューの確認に失敗しました: ${findErr.message}` };
   const byId = new Map((found ?? []).map((m) => [m.id as string, m.item_type as string]));
-  if (byId.get(courseId) !== 'course') return { error: 'コースが見つかりません' };
+  // コースは種別「コース」でなくてもよい（取り込んだままで種別がフードのコースもある。2026-10-05 御茶ノ水）
+  if (!byId.has(courseId) || byId.get(courseId) === 'option') return { error: 'コースが見つかりません' };
   if (ids.some((id) => !byId.has(id))) return { error: 'メニューにない商品が入っています。画面を開き直してください' };
   if (ids.some((id) => id === courseId || byId.get(id) === 'course')) return { error: 'コースの中にコースは入れられません' };
 
@@ -329,5 +330,6 @@ export async function saveCourseSteps(storeId: string, courseId: string, itemIds
   });
 
   revalidatePath('/app/settings/plans');
+  revalidatePath('/app/settings/menu');
   return {};
 }

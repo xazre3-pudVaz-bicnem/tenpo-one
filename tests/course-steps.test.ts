@@ -121,7 +121,7 @@ describe('expandCourseRows', () => {
 describe('コースの厨房伝票', () => {
   const opts = { title: 'キッチン', titleEn: 'KITCHEN', printedAt: '18:21', paperWidth: 80 as const, language: 'en' as const };
 
-  it('1枚にまとめるときは 1st … 7th の順に出て、コース名が添えられる', () => {
+  it('1枚に 1st … 7th の順に出て、コース名は見出しに1回だけ（宮崎さんの手書きの形）', () => {
     const rows = expandCourseRows([row({})], MENU_IDS, STEPS, DISHES);
     const [t] = groupKitchenTickets(rows);
     const texts = layoutKitchenTicket(t, opts).map((l) => l.text);
@@ -135,18 +135,34 @@ describe('コースの厨房伝票', () => {
       '6th Main  x4',
       '7th Dessert  x4',
     ]);
-    expect(texts.filter((x) => x === '   [(4800/2H) Girls party 12 (adult)]')).toHaveLength(7);
+    // コース名は卓名・伝票番号の下に1回。行ごとには出さない
+    expect(texts.filter((x) => x === '[(4800/2H) Girls party 12 (adult)]')).toHaveLength(1);
+    expect(texts.some((x) => x === '   [(4800/2H) Girls party 12 (adult)]')).toBe(false);
+    expect(texts.indexOf('[(4800/2H) Girls party 12 (adult)]')).toBeLessThan(texts.indexOf('1st Appetizer  x4'));
   });
 
-  it('商品の種類ごとに1枚（既定）でも、1st から順に1枚ずつ出る', () => {
-    const rows = expandCourseRows([row({})], MENU_IDS, STEPS, DISHES);
+  it('商品の種類ごとに1枚（既定）でも、コースの料理は1枚にまとめて 1st→7th の順。単品は1商品1枚', () => {
+    const single = row({ order_item_id: 'oi-curry', item_name: 'ナン', item_name_en: 'Naan', delta: 2 });
+    const rows = [...expandCourseRows([row({})], MENU_IDS, STEPS, DISHES), single];
     const [t] = groupKitchenTickets(rows);
     const slips = ticketSlips(t, 'item');
-    expect(slips).toHaveLength(7);
-    expect(slips.map((s) => s.lines[0].step?.index)).toEqual([1, 2, 3, 4, 5, 6, 7]);
-    expect(slips.map((s) => s.part)).toEqual(
-      [1, 2, 3, 4, 5, 6, 7].map((index) => ({ index, total: 7 }))
-    );
+    expect(slips).toHaveLength(2);
+    expect(slips[0].lines.map((l) => l.step?.index)).toEqual([1, 2, 3, 4, 5, 6, 7]);
+    expect(slips[0].part).toEqual({ index: 1, total: 2 });
+    expect(slips[1].lines.map((l) => l.name)).toEqual(['ナン']);
+    // 2つの違うコースは別の紙。追加と取消も別の紙
+    const b = row({ order_item_id: 'oi-course-b', item_name: 'Course B', item_name_en: 'Course B' });
+    const ids = new Map(MENU_IDS).set('oi-course-b', 'course-b');
+    const steps = { ...STEPS, 'course-b': ['d-salad', 'd-main'] };
+    const cancel = row({ delta: -1 });
+    const [t2] = groupKitchenTickets(expandCourseRows([row({}), b, cancel], ids, steps, DISHES));
+    const slips2 = ticketSlips(t2, 'item');
+    expect(slips2.map((s) => s.lines.map((l) => `${l.delta > 0 ? '+' : '-'}${l.step?.course}`).join(','))).toEqual([
+      '-(4800/2H) Girls party 12 (adult),-(4800/2H) Girls party 12 (adult),-(4800/2H) Girls party 12 (adult),-(4800/2H) Girls party 12 (adult),-(4800/2H) Girls party 12 (adult),-(4800/2H) Girls party 12 (adult),-(4800/2H) Girls party 12 (adult)',
+      '+(4800/2H) Girls party 12 (adult),+(4800/2H) Girls party 12 (adult),+(4800/2H) Girls party 12 (adult),+(4800/2H) Girls party 12 (adult),+(4800/2H) Girls party 12 (adult),+(4800/2H) Girls party 12 (adult),+(4800/2H) Girls party 12 (adult)',
+      '+Course B,+Course B',
+    ]);
+    expect(slips2[2].lines.map((l) => l.name)).toEqual(['サラダ', 'メイン']);
   });
 
   it('コースを2回注文したら、同じ番号の料理は数をまとめる（順番は崩れない）', () => {
