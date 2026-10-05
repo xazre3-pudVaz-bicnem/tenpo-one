@@ -14,6 +14,8 @@ export interface RepriceableLine {
   optionItemIds: string[];
   /** 選択肢の追加料金を含む単価 */
   unitPrice: number;
+  /** レジで打った金額（¥0 の商品＝キャンセル料など）。入っていればメニューの値段ではなくこれを使う */
+  openPrice?: number | null;
 }
 
 export function repriceLines<L extends RepriceableLine>(
@@ -23,7 +25,7 @@ export function repriceLines<L extends RepriceableLine>(
 ): L[] {
   let changed = false;
   const next = lines.map((line) => {
-    const base = basePriceOf(line.menuItemId);
+    const base = line.openPrice != null ? line.openPrice : basePriceOf(line.menuItemId);
     if (base === undefined || !Number.isFinite(base)) return line;
     let extra = 0;
     for (const id of line.optionItemIds) {

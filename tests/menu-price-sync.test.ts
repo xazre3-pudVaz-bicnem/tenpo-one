@@ -62,6 +62,17 @@ describe('repriceCart（カートの値段を、いまのメニューの値段�
     const next = repriceCart(cart, tabsWith([{ id: 'curry', price: 1200 }]), { curry: [{ items: [] }] });
     expect(next).toBe(cart);
   });
+
+  it('レジで打った金額（¥0 の商品＝キャンセル料など）は、メニューの値段で上書きしない', () => {
+    // 2026-10-05 御茶ノ水 宮崎さん「キャンセル料の金額をこの画面で入れたい」
+    const lines = [
+      { menuItemId: 'cancel', optionItemIds: [], unitPrice: 0, openPrice: 3000 },
+      { menuItemId: 'cancel', optionItemIds: ['opt'], unitPrice: 0, openPrice: 3000 },
+      { menuItemId: 'cancel', optionItemIds: [], unitPrice: 0, openPrice: null },
+    ];
+    const next = repriceLines(lines, () => 0, () => 100);
+    expect(next.map((l) => l.unitPrice)).toEqual([3000, 3100, 0]);
+  });
 });
 
 describe('migration 00089（menu_items を Realtime に載せる。注文済みの明細は変えない）', () => {

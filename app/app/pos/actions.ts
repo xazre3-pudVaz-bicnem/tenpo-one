@@ -152,9 +152,11 @@ export async function addItem(
   orderId: string,
   menuItemId: string,
   optionItemIds: string[] = [],
-  quantity = 1
+  quantity = 1,
+  /** レジで打った金額（¥0 の商品＝キャンセル料などだけ。2026-10-05 御茶ノ水 宮崎さん） */
+  openPrice: number | null = null
 ): Promise<{ id: string | null }> {
-  return insertOrderItem(orderId, menuItemId, optionItemIds, quantity, null);
+  return insertOrderItem(orderId, menuItemId, optionItemIds, quantity, null, openPrice);
 }
 
 /**
@@ -167,17 +169,22 @@ export async function addItemAtSeat(
   orderId: string,
   menuItemId: string,
   optionItemIds: string[] = [],
-  quantity = 1
+  quantity = 1,
+  openPrice: number | null = null
 ): Promise<{ id: string | null }> {
-  return insertOrderItem(orderId, menuItemId, optionItemIds, quantity, seatTableId);
+  return insertOrderItem(orderId, menuItemId, optionItemIds, quantity, seatTableId, openPrice);
 }
+
+/** レジで打てる金額の上限（キャンセル料・時価など） */
+const OPEN_PRICE_MAX = 9_999_999;
 
 async function insertOrderItem(
   orderId: string,
   menuItemId: string,
   optionItemIds: string[],
   quantity: number,
-  seatTableId: string | null
+  seatTableId: string | null,
+  openPrice: number | null = null
 ): Promise<{ id: string | null }> {
   if (!Number.isInteger(quantity) || quantity < 1 || quantity > 99) {
     throw new Error('数量は1〜99で指定してください');
@@ -225,7 +232,7 @@ async function insertOrderItem(
   const basePrice = isTakeoutLike ? (item.takeout_price ?? item.price) : item.price;
   // ダイナミックプライシング（曜日・時間帯の値段。お客様QRは SQL の dynamic_menu_price で同じ計算）
   const dynamicRules = await loadDynamicRules(supabase, order.store_id);
-  const unitPrice = dynamicRules.length
+  let unitPrice = dynamicRules.length
     ? dynamicUnitPrice(
         dynamicRules,
         { id: item.id, categoryId: (item.category_id as string | null) ?? null, itemType: item.item_type },
@@ -233,6 +240,15 @@ async function insertOrderItem(
         new Date()
       ).price
     : basePrice;
+  // レジで打った金額（キャンセル料・時価など）。メニューの値段が ¥0 の商品だけ受ける
+  // （値段のある商品の値引きは会計の「値引」で。2026-10-05 御茶ノ水 宮崎さん「キャンセル料の金額をこの画面で入れたい」）
+  if (openPrice != null) {
+    if (!Number.isInteger(openPrice) || openPrice < 0 || openPrice > OPEN_PRICE_MAX) {
+      throw new Error(`金額は0〜${OPEN_PRICE_MAX.toLocaleString('ja-JP')}円の整数で入力してください`);
+    }
+    if (Number(basePrice) !== 0) throw new Error('金額を入力できるのは ¥0 の商品（キャンセル料など）だけです');
+    unitPrice = openPrice;
+  }
   const taxRate = isTakeoutLike
     ? applicableTaxRate(order.order_type as 'takeout' | 'delivery' | 'pre_order', item.item_type === 'drink')
     : (taxRateRow?.rate ?? 10);
