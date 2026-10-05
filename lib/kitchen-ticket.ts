@@ -5,6 +5,7 @@
  */
 import { colsFor, twoCol, wrapText, type PaperWidth, type WidthOptions } from './receipt-layout';
 import { englishName } from './romaji';
+import { QUICK_PAY_LINE_NAME } from './quick-pay';
 
 export type KitchenStation = 'kitchen' | 'drink' | 'dessert' | 'grill';
 
@@ -399,7 +400,14 @@ export function layoutKitchenTicket(ticket: KitchenTicket, opts: KitchenLayoutOp
   if (opts.titleEn) push(opts.titleEn, 'normal', 'center');
   if (!enOnly || !opts.titleEn) push(opts.title, 'normal', 'center');
   // 卓名と取消の見出し: 標準は縦2倍、大きめは縦横2倍（卓名は短いので半分の桁数でも収まる）。中くらいは卓名だけ縦横2倍
-  push(ticket.tableName ?? (enOnly ? 'TAKEOUT' : 'TAKEOUT / テイクアウト'), big || mid ? 'large' : 'tall', 'center');
+  // 卓名。卓なしは「テイクアウト」。即会計の「メニュー選択」の伝票は claim_kitchen_items が卓名に「即会計」を返す（00094）
+  const tableHead =
+    ticket.tableName === QUICK_PAY_LINE_NAME
+      ? enOnly
+        ? 'QUICK PAY'
+        : `QUICK PAY / ${QUICK_PAY_LINE_NAME}`
+      : (ticket.tableName ?? (enOnly ? 'TAKEOUT' : 'TAKEOUT / テイクアウト'));
+  push(tableHead, big || mid ? 'large' : 'tall', 'center');
   if (hasCancel && !hasAdd) push(enOnly ? '*** CANCEL ***' : '*** CANCEL / 取消 ***', big ? 'large' : 'tall', 'center');
   const part = ticket.part && ticket.part.total > 1 ? `  (${ticket.part.index}/${ticket.part.total})` : '';
   push(twoCol(`No.${ticket.orderNo}${part}`, opts.printedAt, width, opts), big || mid ? 'tall' : 'normal');

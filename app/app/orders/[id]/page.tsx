@@ -18,6 +18,7 @@ import { RefundDialog, type RefundableItem, type PaymentMethodBreakdown } from '
 import { ReopenDialog } from '@/components/orders/reopen-dialog';
 import { JournalSourceLink } from '@/components/accounting/journal-source-link';
 import { refundOrder, reopenOrder, type RefundMethod } from '../actions';
+import { QUICK_PAY_LINE_NAME, isQuickPayOrder } from '@/lib/quick-pay';
 
 const REFUND_KIND_LABELS: Record<string, string> = { refund: '返金', void: '取消（VOID）' };
 
@@ -43,7 +44,7 @@ export default async function OrderDetailPage({
   const { data: order } = await supabase
     .from('orders')
     .select(
-      'id, order_no, order_type, status, guest_count, subtotal, tax_total, service_charge, discount_total, discount_reason, total, opened_at, closed_at, created_at, store_id, source_order_id, reservation_id, customer_id, restaurant_tables(name), profiles(display_name), customers(name)'
+      'id, order_no, order_type, status, guest_count, subtotal, tax_total, service_charge, discount_total, discount_reason, total, opened_at, closed_at, created_at, store_id, table_id, memo, source_order_id, reservation_id, customer_id, restaurant_tables(name), profiles(display_name), customers(name)'
     )
     .eq('id', id)
     .single();
@@ -312,7 +313,7 @@ export default async function OrderDetailPage({
       <PageHeader
         title={`伝票 #${order.order_no}`}
         en="Slip detail"
-        description={`${table?.name ?? ORDER_TYPE_LABELS[order.order_type] ?? order.order_type}｜${formatDateTime(order.opened_at)}`}
+        description={`${table?.name ?? (isQuickPayOrder(order) ? QUICK_PAY_LINE_NAME : (ORDER_TYPE_LABELS[order.order_type] ?? order.order_type))}｜${formatDateTime(order.opened_at)}`}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <OrderStatusBadge status={order.status} />
