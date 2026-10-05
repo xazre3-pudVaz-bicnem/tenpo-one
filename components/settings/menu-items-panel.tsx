@@ -90,7 +90,7 @@ export function MenuItemsPanel({
 
   // コースの料理に選べる商品＝その店のメニューにある、コースとオプション以外の商品（非表示の商品も選べる）
   const courseDishOptions = useMemo<CourseDishOption[] | undefined>(() => {
-    if (!isPlan || !courseSteps) return undefined;
+    if (!courseSteps) return undefined;
     const names = new Map(categories.map((c) => [c.id, c.name]));
     return items
       .filter((i) => i.status !== 'deleted' && i.itemType !== 'course' && i.itemType !== 'option')
@@ -101,7 +101,7 @@ export function MenuItemsPanel({
         categoryName: (i.categoryId ? names.get(i.categoryId) : null) ?? '未分類',
         hidden: i.status === 'hidden',
       }));
-  }, [isPlan, courseSteps, items, categories]);
+  }, [courseSteps, items, categories]);
 
   const handleToggleSoldOut = (item: MenuItemRow) => {
     startTransition(async () => {

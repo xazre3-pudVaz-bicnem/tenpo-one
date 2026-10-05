@@ -364,6 +364,16 @@ export function isPlanItem(itemType: string | null, name: string): boolean {
   return itemType === 'course' || looksLikePlanName(name);
 }
 
+/**
+ * 「コースの料理（出す順）」を設定できる商品か。種別がコースの商品に加えて、dinii から取り込んだままで種別が
+ * フードのままのコース（「Course」「(C) 食事」「3300/2500 course」などのカテゴリ・名前）も含める
+ * （2026-10-05 御茶ノ水「コースがまだタイトルしか出てこない」→ 設定 > メニュー からも入れられるように）。
+ */
+export function canHaveCourseSteps(itemType: string | null, name: string, categoryName: string | null | undefined): boolean {
+  if (itemType === 'option') return false;
+  return isPlanItem(itemType, name) || COURSE_PAGE_CATEGORY.test(categoryName ?? '') || /コース|course/i.test(name);
+}
+
 /** プランの追加（アップグレード「A→AB」・延長）。プランで出すカテゴリでは上の段のカテゴリを選ぶ */
 export function isPlanAddOn(name: string): boolean {
   return /→|->|⇒|延長/.test(name);

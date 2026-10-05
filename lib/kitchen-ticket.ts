@@ -294,8 +294,35 @@ export function groupKitchenTickets(rows: ClaimedKitchenItem[]): KitchenTicket[]
  * 何枚目かが分かるよう part（1/3 など）を付ける（1枚だけのときは印字しない）。
  */
 export function splitTicketByItem(ticket: KitchenTicket): KitchenTicket[] {
-  const total = ticket.lines.length;
-  return ticket.lines.map((line, i) => ({ ...ticket, lines: [line], part: { index: i + 1, total } }));
+  // コースの料理（step あり）は、同じコースの分を1枚にまとめて 1st→Nth の順に並べる
+  // （2026-10-05 御茶ノ水 宮崎さんの手書き「1枚に 1st Zensai … 7th Dessert」。料理ごとに7枚出すと厨房で順番が分からない）。
+  // 追加と取消は別の紙。単品は今までどおり1商品1枚
+  const groups: KitchenTicketLine[][] = [];
+  const byCourse = new Map<string, KitchenTicketLine[]>();
+  for (const line of ticket.lines) {
+    if (!line.step) {
+      groups.push([line]);
+      continue;
+    }
+    const key = `${line.delta > 0 ? '+' : '-'}\u0002${line.step.course}`;
+    let g = byCourse.get(key);
+    if (!g) {
+      g = [];
+      byCourse.set(key, g);
+      groups.push(g);
+    }
+    g.push(line);
+  }
+  for (const g of groups) if (g.length > 1) g.sort((a, b) => (a.step?.index ?? 0) - (b.step?.index ?? 0));
+  const total = groups.length;
+  return groups.map((lines, i) => ({ ...ticket, lines, part: { index: i + 1, total } }));
+}
+
+/** 伝票の全部の行が同じコースの料理なら、そのコースの名前（見出しに1回だけ出すため） */
+export function singleCourseOf(lines: readonly KitchenTicketLine[]): string | null {
+  if (lines.length === 0 || !lines[0].step) return null;
+  const course = lines[0].step.course;
+  return lines.every((l) => l.step && l.step.course === course) ? course : null;
 }
 
 /** 店舗設定の分け方に従って、1回の注文を何枚の伝票にするかを決める */
@@ -365,6 +392,8 @@ export function layoutKitchenTicket(ticket: KitchenTicket, opts: KitchenLayoutOp
   const hasCancel = ticket.lines.some((l) => l.delta < 0);
   const hasAdd = ticket.lines.some((l) => l.delta > 0);
   const enOnly = opts.language === 'en';
+  // 1枚が全部同じコースの料理なら、コース名は見出しに1回だけ（行ごとには出さない）
+  const courseHeader = singleCourseOf(ticket.lines);
 
   // 厨房は英語主体（日本語を読まないスタッフが作る）。「英語と日本語」は日本語も残して両方読めるようにする。
   if (opts.titleEn) push(opts.titleEn, 'normal', 'center');
@@ -382,6 +411,7 @@ export function layoutKitchenTicket(ticket: KitchenTicket, opts: KitchenLayoutOp
     .join('  ');
   if (meta) push(meta);
   out.push({ text: rule, size: 'normal', align: 'left', rule: true });
+  if (courseHeader) push(`[${courseHeader}]`, big || mid ? 'tall' : 'normal');
 
   // 商品名: 大きめは英語・日本語とも縦横2倍（Word の16ポイントくらい）、選択肢・メモは縦2倍。
   // 中くらいは商品名（英語・日本語）・選択肢・メモとも縦2倍（Word の12ポイントくらい。1行48桁のまま）。
@@ -402,8 +432,8 @@ export function layoutKitchenTicket(ticket: KitchenTicket, opts: KitchenLayoutOp
     if (l.delta < 0) push(enOnly ? '[CANCEL]' : '[CANCEL / 取消]', itemSize);
     push(`${stepLabel}${head}  ${qty}`, itemSize);
     if (l.nameEn && !enOnly) push(`${indent}${l.name}`, nameJaSize);
-    // どのコースの料理か（コースの名前）。細かい文字で添える
-    if (l.step) push(`   [${l.step.course}]`, detailSize);
+    // どのコースの料理か（コースの名前）。1枚に他の商品も混ざるときだけ行ごとに添える（1枚が全部同じコースなら見出しに1回）
+    if (l.step && !courseHeader) push(`   [${l.step.course}]`, detailSize);
     for (const m of l.modifiers) push(`   ・${m}`, detailSize);
     if (l.memo) push(`   ※${l.memo}`, detailSize);
   }
