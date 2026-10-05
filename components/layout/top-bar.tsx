@@ -3,6 +3,7 @@ import { Bell, LogOut, Store, UserRound } from 'lucide-react';
 import type { SessionContext } from '@/lib/auth';
 import { ROLE_LABELS } from '@/lib/permissions';
 import { signOut } from '@/app/app/actions';
+import { TouchHint } from '@/components/layout/touch-hint';
 import { CommandPaletteIconTrigger } from '@/components/search/command-palette';
 import { HelpPopover } from '@/components/help/help-popover';
 import { StoreSwitcher } from './store-switcher';
@@ -105,6 +106,7 @@ export function TopBar({
           </span>
         </Link>
         <form action={signOut}>
+          <TouchHint />
           <button
             type="submit"
             className="rounded-lg p-2 text-white/80 hover:bg-white/10 hover:text-white"

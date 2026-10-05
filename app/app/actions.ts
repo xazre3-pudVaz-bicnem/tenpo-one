@@ -1,11 +1,12 @@
 'use server';
 
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { STORE_COOKIE, getSessionContext, requireSession } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { canSignOutRegister } from '@/lib/register-day';
+import { shouldBlockRegisterSignOut } from '@/lib/device-kind';
 import { loadStoreDay } from '@/lib/register-day-server';
 
 /** 店舗切替（アクセス可能店舗か検証してCookieへ保存） */
@@ -32,12 +33,17 @@ export async function switchStore(storeId: string) {
  * ログアウトすると営業中の他店のレジまで落ちる事故になっていた。
  * （停止ユーザー・契約停止の強制ログアウトも lib/auth.ts 側で端末単位に直した）
  */
-export async function signOut() {
+export async function signOut(formData?: FormData) {
   const supabase = await createClient();
-  // レジ端末は、開いているレジがあればログアウトさせない。レジ精算（レジクローズ）をすると自動でログアウトする
-  // （2026-09-28 Ronnie「レジ精算をしないとログアウトできない」）。パソコン・ハンディは今まで通り
+  // レジ（iPad）は、開いているレジがあればログアウトさせない。レジ精算（レジクローズ）をすると自動でログアウトする
+  // （2026-09-28 Ronnie「レジ精算をしないとログアウトできない」）。
+  // 同じレジのアカウントでも、パソコンから入った管理画面はログアウトできる（2026-10-05 Ronnie）。
+  // iPad かどうかは User-Agent と、画面から送る touch（maxTouchPoints）で見る（lib/device-kind.ts）
   const ctx = await getSessionContext();
-  if (ctx?.isRegisterDevice && ctx.currentStore) {
+  const touchRaw = formData?.get('touch');
+  const touchPoints = typeof touchRaw === 'string' && touchRaw !== '' ? Number(touchRaw) : null;
+  const userAgent = (await headers()).get('user-agent');
+  if (ctx?.currentStore && shouldBlockRegisterSignOut({ isRegisterDevice: ctx.isRegisterDevice === true, userAgent, touchPoints })) {
     const day = await loadStoreDay(supabase, ctx.currentStore.id);
     if (!canSignOutRegister({ isRegisterDevice: true, openSessionCount: day.openCount, today: day.clock })) {
       redirect('/app/cash/close?logout=blocked');
