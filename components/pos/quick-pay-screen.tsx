@@ -1,10 +1,13 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Calculator, Minus, Plus, ShoppingBag, UtensilsCrossed, X, Wallet } from 'lucide-react';
+import { Calculator, History, Minus, Plus, Receipt, ShoppingBag, UtensilsCrossed, X, Wallet } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { TakeoutRow } from '@/components/layout/takeout-row';
+import { Dialog } from '@/components/ui/dialog';
+import { OrderStatusBadge } from '@/components/orders/status-badge';
 import {
   QUICK_PAY_MAX_QUANTITY,
   quickPayDiscountAmount,
@@ -13,7 +16,7 @@ import {
   type QuickPayLine,
 } from '@/lib/quick-pay';
 import { useToast } from '@/components/ui/toast';
-import { yen } from '@/lib/format';
+import { formatTime, yen } from '@/lib/format';
 import { appendTenkeyDigit, appendTenkeyDoubleZero } from '@/components/pos/tenkey';
 import { HandyOrderScreen } from '@/components/handy/handy-order-screen';
 import type { HandyMenuData } from '@/lib/handy-menu-server';
@@ -28,12 +31,28 @@ export interface QuickPayOrderedLine {
   isAmount: boolean;
 }
 
+/** 即会計の履歴の1行（今日の営業日・即会計で作った伝票だけ） */
+export interface QuickPayHistoryRow {
+  id: string;
+  orderNo: number;
+  /** open（未会計）・paid・refunded */
+  status: string;
+  /** 会計した時刻（未会計なら作った時刻）ISO */
+  at: string;
+  total: number;
+  guestCount: number;
+  clerkName: string | null;
+  /** 支払方法（日本語。併用なら複数） */
+  methods: string[];
+}
+
 /**
  * 即会計（電卓のレジ）。金額を打って「登録」→ 伝票の行、「会計する」でいつもの会計画面へ。
  * 「×」で個数も入れられる（530 × 2 → ¥1,060。2026-09-30 Ronnie）。
  * キーはクラシックなレジの形（訂正・取消・ドロア・C・×・値引・割引・登録。2026-09-30 Ronnie「ボタンをクラシックの形に。
  * クラシックのレジにある大事なボタンも」）。
  * 右上の「メニュー選択」はハンディと同じメニュー（ポップアップ）。選んだ商品は注文として厨房へ送る。
+ * 「履歴」は即会計から会計した伝票だけの一覧（今日）。テーブルの会計は混ぜない（2026-10-05 Ronnie）。
  * 2026-09-30 Ronnie「手書き伝票の合計だけで会計するお店のため。電卓レジのように金額で会計。ほかの会計は同じ」。
  */
 export function QuickPayScreen({
@@ -42,6 +61,7 @@ export function QuickPayScreen({
   lineName,
   order,
   menu,
+  history,
   startOrderAction,
   prepareCheckoutAction,
   submitMenuAction,
@@ -53,6 +73,8 @@ export function QuickPayScreen({
   /** 「メニュー選択」で作った伝票（まだ無ければ null） */
   order: { id: string; orderNo: number; guestCount: number; lines: QuickPayOrderedLine[] } | null;
   menu: HandyMenuData;
+  /** 今日の即会計の履歴（新しい順） */
+  history: QuickPayHistoryRow[];
   startOrderAction: (guestCount: number) => Promise<{ orderId: string }>;
   prepareCheckoutAction: (input: {
     orderId: string | null;
@@ -76,6 +98,9 @@ export function QuickPayScreen({
   /** 値引（円）・割引（%） */
   const [discount, setDiscount] = useState<QuickPayDiscount | null>(null);
   const [wantMenu, setWantMenu] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const paidHistory = history.filter((h) => h.status === 'paid' || h.status === 'refunded');
+  const paidHistoryTotal = paidHistory.reduce((a, h) => a + h.total, 0);
 
   const orderedTotal = (order?.lines ?? []).reduce((a, l) => a + l.lineTotal, 0);
   const linesTotal = lines.reduce((a, l) => a + l.amount * l.quantity, 0);
@@ -221,6 +246,21 @@ export function QuickPayScreen({
           <span className="block text-[10px] font-bold tracking-[0.3em] text-ink-3">CLASSIC REGISTER</span>
         </p>
         <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+        {/* 履歴：即会計から会計した伝票だけ（今日）。2026-10-05 Ronnie「即会計の中に、即会計で会計したものだけの履歴」 */}
+        <button
+          type="button"
+          onClick={() => setHistoryOpen(true)}
+          className="tap3d inline-flex h-14 items-center gap-2 rounded-xl border-2 border-line bg-white px-5 text-royal"
+        >
+          <History className="h-5 w-5" aria-hidden />
+          <span className="flex flex-col items-start leading-tight">
+            <span className="text-[15px] font-bold">
+              履歴
+              {paidHistory.length > 0 && <span className="ml-1 text-xs font-semibold text-ink-3 tabular-nums">{paidHistory.length}件</span>}
+            </span>
+            <span className="text-[10.5px] font-semibold text-ink-3">History</span>
+          </span>
+        </button>
         {/* テイクアウト（持ち帰りの伝票を作って注文画面へ）。テーブル一覧の上から移した（2026-09-30 Ronnie「メニュー選択の左に」） */}
         {/* 日本語の下に小さく英語・少し大きいボタン（2026-09-30 Ronnie） */}
         <TakeoutRow className="tap3d inline-flex h-14 items-center gap-2 rounded-xl border-2 border-line bg-white px-5 text-royal disabled:opacity-60">
@@ -414,6 +454,63 @@ export function QuickPayScreen({
           </button>
         </section>
       </div>
+
+      {/* 即会計の履歴（今日・即会計の伝票だけ）。会計済はレシート画面へ、未会計はその伝票を開く */}
+      <Dialog open={historyOpen} onClose={() => setHistoryOpen(false)} title="即会計の履歴（今日） / Quick pay history">
+        <div className="space-y-3">
+          <div className="flex items-baseline justify-between rounded-xl bg-lilac px-4 py-2.5">
+            <span className="text-sm font-semibold text-ink-3">
+              会計済 <span className="tabular-nums text-navy">{paidHistory.length}</span>件
+              <span className="en-inline">Paid</span>
+            </span>
+            <span className="text-xl font-extrabold text-navy tabular-nums">{yen(paidHistoryTotal)}</span>
+          </div>
+          {history.length === 0 ? (
+            <p className="px-2 py-6 text-center text-sm text-ink-3">
+              今日の即会計はまだありません
+              <span className="block text-xs">No quick pay checkouts today</span>
+            </p>
+          ) : (
+            <ul className="max-h-[60dvh] divide-y divide-line overflow-y-auto rounded-xl border border-line text-sm">
+              {history.map((h) => {
+                const isOpen = h.status === 'open';
+                return (
+                  <li key={h.id}>
+                    <Link
+                      href={isOpen ? `/app/quick-pay?order=${h.id}` : `/app/pos/receipt/${h.id}`}
+                      onClick={() => setHistoryOpen(false)}
+                      className="flex items-center gap-3 px-3 py-2.5 hover:bg-lilac-soft/60"
+                    >
+                      <span className="w-12 shrink-0 text-base font-bold text-navy tabular-nums">{formatTime(h.at)}</span>
+                      <span className="min-w-0 flex-1">
+                        <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                          <span className="font-bold text-royal tabular-nums">#{h.orderNo}</span>
+                          <span className="text-xs text-ink-3 tabular-nums">{h.guestCount}名</span>
+                          <OrderStatusBadge status={h.status} className="text-[11px]" />
+                        </span>
+                        <span className="block truncate text-xs text-ink-3">
+                          {h.methods.length > 0 ? h.methods.join('・') : isOpen ? '未会計（開く）' : '—'}
+                          {h.clerkName && <span className="ml-2">{h.clerkName}</span>}
+                        </span>
+                      </span>
+                      <span className="shrink-0 text-right">
+                        <span className="block text-base font-extrabold text-navy tabular-nums">{yen(h.total)}</span>
+                        {!isOpen && (
+                          <span className="flex items-center justify-end gap-0.5 text-[10.5px] font-semibold text-ink-3">
+                            <Receipt className="h-3 w-3" aria-hidden />
+                            レシート
+                          </span>
+                        )}
+                      </span>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          <p className="text-[11px] text-ink-3">テーブルの会計は入りません。全部の伝票は「伝票明細」で見られます。</p>
+        </div>
+      </Dialog>
 
       {/* メニュー選択（ハンディの注文画面をそのまま出す） */}
       {menuVisible && order && (

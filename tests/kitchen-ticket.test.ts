@@ -101,6 +101,16 @@ describe('layoutKitchenTicket', () => {
     expect(layoutKitchenTicket(t, opts).map((l) => l.text)).toContain('TAKEOUT / テイクアウト');
   });
 
+  it('即会計の「メニュー選択」の伝票（卓名が「即会計」）は QUICK PAY と出す。テイクアウトとは言わない', () => {
+    const [t] = groupKitchenTickets([row({ table_name: '即会計' })]);
+    const both = layoutKitchenTicket(t, opts).map((l) => l.text);
+    expect(both).toContain('QUICK PAY / 即会計');
+    expect(both.some((x) => /TAKEOUT/.test(x))).toBe(false);
+    const en = layoutKitchenTicket(t, { ...opts, language: 'en' }).map((l) => l.text);
+    expect(en).toContain('QUICK PAY');
+    expect(en.some((x) => /即会計|TAKEOUT/.test(x))).toBe(false);
+  });
+
   it('選択肢とメモを明細の下に出す', () => {
     const [t] = groupKitchenTickets([row({ modifiers: [{ name: '大盛り' }], memo: 'パクチー抜き' })]);
     const texts = layoutKitchenTicket(t, opts).map((l) => l.text);

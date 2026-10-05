@@ -16,6 +16,7 @@ import { LinkChips } from '@/components/orders/link-chips';
 import { Badge } from '@/components/ui/badge';
 import { FileText, Printer, Receipt, Utensils } from 'lucide-react';
 import { METHOD_LABELS } from '@/components/cash/labels';
+import { QUICK_PAY_LINE_NAME, isQuickPayOrder } from '@/lib/quick-pay';
 
 export const metadata: Metadata = { title: '伝票明細' };
 
@@ -116,7 +117,7 @@ export default async function OrdersPage({
   let query = supabase
     .from('orders')
     .select(
-      'id, order_no, opened_at, closed_at, status, total, discount_total, guest_count, order_type, clerk_name, restaurant_tables(name), profiles(display_name)',
+      'id, order_no, opened_at, closed_at, status, total, discount_total, guest_count, order_type, table_id, memo, clerk_name, restaurant_tables(name), profiles(display_name)',
       { count: 'exact' }
     )
     .eq('store_id', store.id)
@@ -331,7 +332,7 @@ export default async function OrdersPage({
                     </Link>
                     <p className="mt-0.5 flex items-center gap-1.5 text-[13px] font-bold text-ink">
                       <Utensils className="h-3.5 w-3.5 shrink-0 text-ink-3" aria-hidden />
-                      {table?.name ?? (o.order_type === 'takeout' ? 'テイクアウト' : '—')}
+                      {table?.name ?? (o.order_type === 'takeout' ? 'テイクアウト' : isQuickPayOrder(o) ? QUICK_PAY_LINE_NAME : '—')}
                     </p>
                     <div className="mt-1.5 flex flex-wrap items-center gap-1">
                       <OrderStatusBadge status={o.status} />

@@ -6,8 +6,10 @@ import { PageHeader } from '@/components/ui/page-header';
 import { EmptyState } from '@/components/ui/state';
 import { loadHandyMenu } from '@/lib/handy-menu-server';
 import { QUICK_PAY_LINE_NAME } from '@/lib/quick-pay';
+import { todayJst } from '@/lib/format';
+import { METHOD_LABELS } from '@/components/cash/labels';
 import { submitHandyOrder } from '@/app/app/handy/actions';
-import { QuickPayScreen, type QuickPayOrderedLine } from '@/components/pos/quick-pay-screen';
+import { QuickPayScreen, type QuickPayHistoryRow, type QuickPayOrderedLine } from '@/components/pos/quick-pay-screen';
 import { startQuickOrder, prepareQuickCheckout } from './actions';
 import { enqueueDrawerKick } from '@/app/app/pos/print-actions';
 
@@ -71,6 +73,33 @@ export default async function QuickPayPage({ searchParams }: { searchParams: Pro
 
   const menu = await loadHandyMenu(supabase, ctx.organizationId, store.id, order?.id ?? null);
 
+  // 即会計の履歴（今日の営業日・即会計で作った伝票だけ。2026-10-05 Ronnie「即会計の中に、即会計から会計したものだけの履歴」）
+  const { data: historyRows } = await supabase
+    .from('orders')
+    .select('id, order_no, status, closed_at, opened_at, total, guest_count, clerk_name, payments(method, amount, status)')
+    .eq('store_id', store.id)
+    .eq('order_type', 'dine_in')
+    .is('table_id', null)
+    .like('memo', `${QUICK_PAY_LINE_NAME}%`)
+    .eq('business_date', todayJst())
+    .in('status', ['paid', 'refunded', 'open'])
+    .order('opened_at', { ascending: false })
+    .limit(200);
+  const history: QuickPayHistoryRow[] = (historyRows ?? []).map((o) => {
+    const pays = ((o.payments ?? []) as { method: string; amount: number; status: string }[]).filter((p) => p.status === 'completed');
+    const methods = [...new Set(pays.map((p) => METHOD_LABELS[p.method] ?? p.method))];
+    return {
+      id: o.id as string,
+      orderNo: o.order_no as number,
+      status: o.status as string,
+      at: (o.closed_at ?? o.opened_at) as string,
+      total: Number(o.total ?? 0),
+      guestCount: (o.guest_count as number | null) ?? 1,
+      clerkName: (o.clerk_name as string | null) ?? null,
+      methods,
+    };
+  });
+
   return (
     <QuickPayScreen
       storeId={store.id}
@@ -82,6 +111,7 @@ export default async function QuickPayPage({ searchParams }: { searchParams: Pro
       prepareCheckoutAction={prepareQuickCheckout}
       submitMenuAction={submitHandyOrder}
       drawerAction={enqueueDrawerKick}
+      history={history}
     />
   );
 }
