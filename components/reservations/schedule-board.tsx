@@ -79,7 +79,7 @@ const BAR_CLASS: Record<BarKind, string> = {
   arrived: 'border-iris bg-iris-soft text-royal',
   in: 'border-iris bg-iris text-white',
   pay: 'border-iris bg-iris text-white',
-  out: 'border-transparent bg-[#ddd8e6] text-ink-2',
+  out: 'border-[#c7c0d4] bg-[#e6e2ee] text-ink-2',
   unset: 'border-danger bg-white text-danger',
 };
 
@@ -109,6 +109,30 @@ interface Placed {
   r: ReservationListRow;
   s: number;
   e: number;
+}
+
+/**
+ * バーに出す「実際の滞在」（2026-10-05 Ronnie「お客様同士がつながって見える。入った時間と出た時間がはっきり分かるように。
+ * 会計したら同じ時刻で退店」）。
+ *   来店中・会計中 … 入店（伝票を開いた時刻）〜 予定の終了
+ *   退店（会計済み）… 入店 〜 退店（会計した時刻）。予定の終了まで伸ばさない（次のお客様とつながって見えていた）
+ *   来店前         … 予定どおり
+ * 時刻はその日の分（0〜1439＋翌日ぶん）。入店が無ければ予定の開始、退店が無ければ予定の終了を使う。
+ */
+export function actualSpan(
+  kind: BarKind,
+  planned: { s: number; e: number },
+  arrivedMin: number | null,
+  leftMin: number | null
+): { s: number; e: number; inAt: number | null; outAt: number | null } {
+  const seated = kind === 'in' || kind === 'pay' || kind === 'out';
+  const inAt = seated && arrivedMin !== null ? arrivedMin : null;
+  const outAt = kind === 'out' && leftMin !== null ? leftMin : null;
+  const s = inAt ?? planned.s;
+  let e = outAt ?? planned.e;
+  // 退店が入店より前に見える（日付をまたいだ・時計のずれ）ときは、最低 10 分の幅で出す
+  if (e <= s) e = s + 10;
+  return { s, e, inAt, outAt };
 }
 
 function place(list: ReservationListRow[], viewStart: number, viewEnd: number): Placed[] {
@@ -222,12 +246,17 @@ export function ScheduleBoard({
 
   const renderBar = ({ r, s, e }: Placed, unassignedRow: boolean, rowIndex = -1) => {
     const kind = barKind(r.status, unassignedRow);
-    const left = x(s) + 2;
-    const width = Math.max(18, x(e) - x(s) - 4);
     const badge = sourceBadge(r);
-    // 会計した時刻（退店）。予定の終了時刻とは別に出す
+    // 入店（伝票を開いた時刻）と退店（会計した時刻）。予定の開始・終了とは別に持つ
+    let arrivedMin: number | null = r.arrivedAt ? jstMinutes(r.arrivedAt) : null;
+    if (arrivedMin !== null && arrivedMin < s - 720) arrivedMin += 1440; // 日付をまたいで入店（予定より半日以上前に見えるとき）
     let leftMin: number | null = r.leftAt ? jstMinutes(r.leftAt) : null;
     if (leftMin !== null && leftMin < s) leftMin += 1440; // 日付をまたいで退店
+    // バーの位置は「実際の滞在」。ドラッグで動かすときは予定の時刻（s・e）を使う
+    const span = actualSpan(kind, { s, e }, arrivedMin, leftMin);
+    // 隣のお客様とくっつかないよう左右に 3px ずつあける
+    const left = x(span.s) + 3;
+    const width = Math.max(18, x(span.e) - x(span.s) - 6);
     const sameDay = r.createdAt && r.createdVia !== 'walk_in' && jstDate(r.createdAt) === r.reservedDate;
     const filled = kind === 'in' || kind === 'pay';
     const extraTables = !unassignedRow && r.tableNames.length > 1 ? r.tableNames.join('+') : null;
@@ -281,7 +310,7 @@ export function ScheduleBoard({
             setSelected(r);
           }
         }}
-        title={`${r.guestName} 様 ${hm(s)}〜${hm(e)}`}
+        title={`${r.guestName} 様 ${span.inAt !== null ? `入店 ${hm(span.inAt)}` : hm(s)}〜${span.outAt !== null ? `退店 ${hm(span.outAt)}` : hm(e)}`}
         className={cn(
           'absolute top-[6px] flex h-10 cursor-pointer items-center gap-2 overflow-hidden rounded-lg border-[1.5px] py-1 pr-1.5 pl-2 text-left text-xs leading-tight transition-shadow hover:z-[2] hover:shadow-card focus-visible:z-[2] focus-visible:outline-2 focus-visible:outline-saffron',
           BAR_CLASS[kind],
@@ -330,9 +359,10 @@ export function ScheduleBoard({
           <span className="truncate text-[10.5px] whitespace-nowrap opacity-90">
             {r.guestName} 様{r.courseName ? `・${r.courseName}` : ''}
             {extraTables ? `・${extraTables}` : ''}・
+            {/* 入った時間と出た時間をはっきり（2026-10-05 Ronnie）。来店前は予定の時間 */}
             <span className="tabular-nums">
-              {hm(s)}〜{hm(e)}
-              {kind === 'out' && leftMin !== null && `（退店 ${hm(leftMin)}）`}
+              {span.inAt !== null ? `入店 ${hm(span.inAt)}` : hm(s)}
+              {span.outAt !== null ? ` → 退店 ${hm(span.outAt)}` : `〜${hm(e)}${span.inAt !== null ? '（予定）' : ''}`}
             </span>
           </span>
         </span>
