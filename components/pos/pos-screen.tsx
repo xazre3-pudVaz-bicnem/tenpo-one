@@ -36,6 +36,7 @@ import {
 } from './checkout-dialog';
 import { TableMoveDialog, type AvailableTable } from './table-move-dialog';
 import { GuestCountDialog } from './guest-count-dialog';
+import { OpenPriceDialog } from './open-price-dialog';
 import { SeatTimeDialog } from './seat-time-dialog';
 import { seatBadgeLabel, type SeatCourseOption, type SeatTimeState } from '@/lib/seat-time';
 import type { SeatTimeInput } from '@/app/app/pos/actions';
@@ -75,6 +76,8 @@ interface CartLine {
   quantity: number;
   optionItemIds: string[];
   optionLabel: string | null;
+  /** レジで打った金額（¥0 の商品＝キャンセル料・時価など）。null = メニューの値段のまま */
+  openPrice?: number | null;
 }
 
 const FAVORITES_TAB = '__favorites__';
@@ -298,7 +301,9 @@ export function PosScreen({
     orderId: string,
     menuItemId: string,
     optionItemIds?: string[],
-    quantity?: number
+    quantity?: number,
+    /** レジで打った金額（¥0 の商品だけ） */
+    openPrice?: number | null
   ) => Promise<unknown>;
   updateQtyAction: (orderId: string, orderItemId: string, delta: number) => Promise<void>;
   cancelItemAction: (
@@ -365,6 +370,8 @@ export function PosScreen({
   });
   const [searchQuery, setSearchQuery] = useState('');
   const [cancelTarget, setCancelTarget] = useState<PosOrderItem | null>(null);
+  /** 金額を打っているカートの行（¥0 の商品＝キャンセル料など） */
+  const [openPriceTarget, setOpenPriceTarget] = useState<CartLine | null>(null);
   const [checkoutOpen, setCheckoutOpen] = useState(openCheckout);
   const [tableMoveOpen, setTableMoveOpen] = useState(openTableMove);
   const [cancelOrderOpen, setCancelOrderOpen] = useState(false);
@@ -513,6 +520,16 @@ export function PosScreen({
         .filter((l) => l.quantity > 0)
     );
 
+  /**
+   * 金額をレジで打てる商品＝メニューの値段が ¥0 の商品（キャンセル料・時価など。2026-10-05 御茶ノ水 宮崎さん）。
+   * 値段のある商品は変えられない（値引きは会計の「値引」で）。サーバー（addItem）も同じ条件で確かめる
+   */
+  const isOpenPriceItem = (menuItemId: string) => {
+    const m = menuItems.find((x) => x.id === menuItemId);
+    if (!m) return false;
+    return Number(isTakeoutLike ? (m.takeout_price ?? m.price) : m.price) === 0;
+  };
+
   // メニュー設定で値段が変わったら（menu_items の Realtime で読み直す）、まだ注文していない品も新しい値段で出す
   // （2026-09-28 Ronnie。注文したときの値段はサーバーが決める。注文済みの明細は変えない）
   const pricedCart = useMemo(() => {
@@ -618,7 +635,7 @@ export function PosScreen({
     startTransition(async () => {
       try {
         for (const line of cart) {
-          await addItemAction(order.id, line.menuItemId, line.optionItemIds, line.quantity);
+          await addItemAction(order.id, line.menuItemId, line.optionItemIds, line.quantity, line.openPrice ?? null);
         }
         setCart([]);
         if (!sendOrderAction) return;
@@ -870,10 +887,22 @@ export function PosScreen({
                         {l.optionLabel ? `${l.nameEn ? ' ・ ' : ''}${l.optionLabel}` : ''}
                       </p>
                     </div>
-                    {/* 金額 × 数量（2026-09-25 店舗要望） */}
-                    <span className="w-[72px] shrink-0 text-right text-[15px] font-bold tabular-nums text-navy">
-                      {yen(l.unitPrice)}
-                    </span>
+                    {/* 金額 × 数量（2026-09-25 店舗要望）。¥0 の商品（キャンセル料など）は押して金額を打つ */}
+                    {isOpenPriceItem(l.menuItemId) ? (
+                      <button
+                        type="button"
+                        onClick={() => setOpenPriceTarget(l)}
+                        aria-label={`${l.name}の金額を入力`}
+                        className="flex h-11 w-[84px] shrink-0 flex-col items-center justify-center rounded-xl border border-iris bg-white px-1 text-[14px] font-bold tabular-nums leading-tight text-royal active:bg-iris-soft"
+                      >
+                        {yen(l.unitPrice)}
+                        <span className="text-[9px] font-semibold text-ink-3">{l.openPrice != null ? '変更 / Edit' : '金額入力 / Amount'}</span>
+                      </button>
+                    ) : (
+                      <span className="w-[72px] shrink-0 text-right text-[15px] font-bold tabular-nums text-navy">
+                        {yen(l.unitPrice)}
+                      </span>
+                    )}
                     <span className="shrink-0 text-[13px] font-bold text-ink-3">×</span>
                     <div className="flex shrink-0 items-center overflow-hidden rounded-xl border border-line bg-white">
                       <button
@@ -1287,6 +1316,19 @@ export function PosScreen({
           orderId={order.id}
           currentGuestCount={order.guestCount}
           setGuestCountAction={setGuestCountAction}
+        />
+      )}
+
+      {openPriceTarget && (
+        <OpenPriceDialog
+          itemName={openPriceTarget.nameEn ?? openPriceTarget.name}
+          initial={openPriceTarget.openPrice ?? null}
+          onClose={() => setOpenPriceTarget(null)}
+          onConfirm={(amount) => {
+            const key = openPriceTarget.key;
+            setCart((cur) => cur.map((x) => (x.key === key ? { ...x, openPrice: amount } : x)));
+            setOpenPriceTarget(null);
+          }}
         />
       )}
 
