@@ -18,6 +18,7 @@ import { loadDynamicRules } from '@/lib/dynamic-pricing-server';
 import { clerkCanCancel } from '@/lib/clerk-roles';
 import { loadStoreClerks } from '@/lib/pos-clerks-server';
 import { groupOfTable, tableGroupsFrom } from '@/lib/table-group';
+import { dissolveTableGroupOf } from '@/lib/table-group-server';
 
 const COUPON_PREFIX = 'クーポン: ';
 
@@ -692,6 +693,9 @@ export async function checkout(
           .update({ current_status: 'available' })
           .eq('id', order.table_id)
           .eq('current_status', 'cleaning');
+        // テーブル連携（グループ）は会計完了で自動解除。残したままだと次のお客様の注文が
+        // 連携先の卓にも出てしまう（2026-10-06 Ronnie 高田馬場「T3 の注文が T1 にも出た」）
+        await dissolveTableGroupOf(order.store_id, order.table_id, ctx.userId);
       }
     } catch (e) {
       console.error('[pos.checkout] table not freed:', e);
@@ -1183,6 +1187,15 @@ export async function clearTable(
   }
   // 品目が無くなった伝票を取消して卓を空席に戻す（cancelEmptyOrder の中で卓・予約も戻す）
   await cancelEmptyOrder(orderId, `テーブルクリア: ${why}`, approvedByClerkId);
+  // テーブル連携（グループ）も解除（会計完了と同じ。卓を空に戻すのに連携だけ残さない）
+  if (order.table_id) {
+    const { count: stillOpen } = await supabase
+      .from('orders')
+      .select('id', { count: 'exact', head: true })
+      .eq('table_id', order.table_id)
+      .eq('status', 'open');
+    if ((stillOpen ?? 0) === 0) await dissolveTableGroupOf(order.store_id, order.table_id, ctx.userId);
+  }
 
   await supabase.rpc('log_audit', {
     p_org: order.organization_id,

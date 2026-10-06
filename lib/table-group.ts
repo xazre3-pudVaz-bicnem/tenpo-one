@@ -49,6 +49,15 @@ export function setTableGroup(groups: TableGroup[], tableIds: string[], newId: s
 }
 
 /**
+ * その卓が入っているグループをまるごと解除する（卓が入っていなければそのまま）。
+ * 「解除」ボタンと、会計完了・テーブルクリアで卓が空いたときに使う
+ * （2026-10-06 Ronnie「テーブル連携しても会計完了したらリセットされないと。会計が済んでも連携したままはだめ」）。
+ */
+export function removeGroupOfTable(groups: TableGroup[], tableId: string): TableGroup[] {
+  return groups.filter((g) => !g.tableIds.includes(tableId));
+}
+
+/**
  * グループの中で「伝票を持っている卓」を選ぶ（QR の振り向け先）。
  *
  * 2026-09-25 店舗報告（FULL MOoN 御茶ノ水）「グループにされた側に飲み放題などの設定が反映されない」:

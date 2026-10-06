@@ -1,6 +1,6 @@
 'use client';
 
-import { BellRing, Clock, Lock, Sparkles, Users } from 'lucide-react';
+import { BellRing, Clock, Link2, Lock, Sparkles, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { yen } from '@/lib/format';
 import {
@@ -75,17 +75,21 @@ export function TableCard({
   const order = t.order;
   const empty = !order && state !== 'seated' && state !== 'pay';
   const dashed = state === 'free' || state === 'reserved' || state === 'waiting';
+  // テーブル連携（グループ）。同じ伝票を分けて使っている卓には印を出す
+  // （2026-10-06 Ronnie「連携したら連携の印も見えるように」。印が無いと T3 の注文が T1 にも出た理由が分からない）
+  const linked = t.groupTableNames.length > 1 ? t.groupTableNames : null;
 
   return (
     <button
       type="button"
       onClick={(e) => onSelect(t, e.currentTarget)}
-      aria-label={`${t.name} ${TILE_LABEL[state]}`}
+      aria-label={`${t.name} ${TILE_LABEL[state]}${linked ? `（連携 ${linked.join('+')}）` : ''}`}
       className={cn(
         'tap3d relative flex min-h-[170px] min-w-0 flex-col gap-[3px] overflow-hidden rounded-[10px] border border-line bg-white px-3 pt-2.5 text-left',
         SURFACE[state],
         dashed && 'border-dashed border-wisteria',
         state === 'reserved' && 'border-royal',
+        linked && 'border-solid border-royal ring-2 ring-royal/25 ring-inset',
         state === 'unavailable' && 'opacity-70'
       )}
     >
@@ -118,6 +122,17 @@ export function TableCard({
           {order ? `${order.guestCount}名` : capacityText(t)}
         </span>
       </span>
+
+      {/* 連携の印：同じ伝票の卓を全部並べる（T1+T3）。会計完了・テーブルクリアで自動的に消える */}
+      {linked && (
+        <span
+          title={`テーブル連携（同じ伝票）: ${linked.join(' + ')}`}
+          className="inline-flex w-fit max-w-full items-center gap-1 rounded-full bg-royal px-1.5 py-px text-[10px] font-extrabold leading-[1.5] whitespace-nowrap text-white"
+        >
+          <Link2 className="h-3 w-3 flex-none" strokeWidth={2.5} aria-hidden />
+          <span className="truncate">連携 {linked.join('+')}</span>
+        </span>
+      )}
 
       {order ? (
         <OccupiedBody t={t} now={now} state={state} next={next} />
