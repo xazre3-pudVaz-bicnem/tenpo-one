@@ -94,6 +94,8 @@ export interface TableView extends FloorTable {
   upcoming: UpcomingReservation[];
   /** 同じ組としてまとめている卓（自分を含む）。まとめていなければ空（2026-09-25 店舗要望） */
   groupTableIds: string[];
+  /** 同じ組の卓の名前（自分を含む・フロアの並び順）。卓の箱の「連携」の印に出す（2026-10-06 Ronnie） */
+  groupTableNames: string[];
   /** 未対応の呼び出し（スタッフ・会計希望） */
   calls: TableCall[];
 }

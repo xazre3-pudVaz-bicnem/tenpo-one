@@ -725,7 +725,8 @@ export function TableSheet({
                 disabled={pending}
                 onClick={() =>
                   run(async () => {
-                const res = await saveTableGroupAction([]);
+                // 1卓だけ渡す＝その卓が入っているグループをまるごと解除（空の配列は何もしない）
+                const res = await saveTableGroupAction([table.id]);
                 if (res.error) throw new Error(res.error);
                 setGroupOpen(false);
                 toast('グループを解除しました');

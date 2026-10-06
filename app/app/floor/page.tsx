@@ -285,6 +285,9 @@ export default async function FloorPage() {
     order: orderByTable.get(t.id) ?? null,
     upcoming: upcomingByTable.get(t.id) ?? [],
     groupTableIds: groupOfTable(tableGroups, t.id)?.tableIds ?? [],
+    groupTableNames: tableRows
+      .filter((x) => (groupOfTable(tableGroups, t.id)?.tableIds ?? []).includes(x.id))
+      .map((x) => x.name),
     calls: callsByTable.get(t.id) ?? [],
   }));
 

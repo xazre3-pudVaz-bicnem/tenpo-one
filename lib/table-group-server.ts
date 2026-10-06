@@ -8,7 +8,7 @@
  * 判定の純粋な部分は lib/table-group.ts の groupOrderTable()。
  */
 import { createAdminClient } from '@/lib/supabase/admin';
-import { groupOfTable, groupOrderTable, tableGroupsFrom } from '@/lib/table-group';
+import { groupOfTable, groupOrderTable, removeGroupOfTable, tableGroupsFrom } from '@/lib/table-group';
 
 export interface QrGroupResolution {
   /** QR の RPC に渡すトークン（振り向けが無ければ元のまま） */
@@ -67,5 +67,34 @@ export async function resolveQrGroupToken(storeSlug: string, tableToken: string)
   } catch (e) {
     console.error('[table-group] qr resolve failed', e instanceof Error ? e.message : e);
     return asIs;
+  }
+}
+
+/**
+ * 卓が空いたとき（会計完了・テーブルクリア）、その卓が入っているテーブルグループを自動で解除する
+ * （2026-10-06 Ronnie「テーブル連携しても会計完了したらリセットされないと。会計が済んでも連携したままはだめ」。
+ *  高田馬場で前の組のグループ T1+T3 が残っていて、T3 に入れた注文が T1 にも出た）。
+ * 失敗しても会計は成立させる（呼び出し側は待つだけ。エラーはログに残す）。
+ * @returns 解除したら true
+ */
+export async function dissolveTableGroupOf(storeId: string, tableId: string, userId: string | null): Promise<boolean> {
+  try {
+    const admin = createAdminClient();
+    const { data: row } = await admin.from('store_settings').select('settings').eq('store_id', storeId).maybeSingle();
+    const current = (row?.settings as Record<string, unknown> | null) ?? {};
+    const groups = tableGroupsFrom(current);
+    if (!groupOfTable(groups, tableId)) return false;
+    const { error } = await admin
+      .from('store_settings')
+      .update({ settings: { ...current, tableGroups: removeGroupOfTable(groups, tableId) }, updated_by: userId })
+      .eq('store_id', storeId);
+    if (error) {
+      console.error('[table-group] dissolve failed', error.message);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.error('[table-group] dissolve failed', e instanceof Error ? e.message : e);
+    return false;
   }
 }
