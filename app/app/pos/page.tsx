@@ -19,6 +19,7 @@ import { PageHeader } from '@/components/ui/page-header';
 import { EmptyState } from '@/components/ui/state';
 import { OrderPicker } from '@/components/pos/order-picker';
 import { PosScreen, type PosOrderItem } from '@/components/pos/pos-screen';
+import { isSeatCourseItem } from '@/lib/menu-book';
 import {
   addItem,
   addItemAtSeat,
@@ -398,8 +399,9 @@ export default async function PosPage({
   const takeoutMenu = takeoutMenuFrom(storeSettings?.settings ?? null);
   const menuItemsWithStock = takeout ? filterTakeoutItems(withStock, takeoutMenu) : withStock;
 
+  // 「お客様情報」のコース欄に出す商品。種別コースに加えて、名前が コース／course の商品（dinii 取込の種別フードのコース）も
   const seatCourses = (menuItems ?? [])
-    .filter((m) => m.item_type === 'course')
+    .filter((m) => isSeatCourseItem(m.item_type as string | null, m.name as string))
     .map((m) => ({ id: m.id as string, name: m.name as string, durationMinutes: (m.duration_minutes as number | null) ?? null }));
 
   return (

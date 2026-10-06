@@ -18,6 +18,7 @@ import { loadDynamicRules } from '@/lib/dynamic-pricing-server';
 import { clerkCanCancel } from '@/lib/clerk-roles';
 import { loadStoreClerks } from '@/lib/pos-clerks-server';
 import { groupOfTable, tableGroupsFrom } from '@/lib/table-group';
+import { isSeatCourseItem } from '@/lib/menu-book';
 import { dissolveTableGroupOf } from '@/lib/table-group-server';
 
 const COUPON_PREFIX = 'クーポン: ';
@@ -1340,15 +1341,18 @@ export async function setSeatTime(orderId: string, input: SeatTimeInput): Promis
 
   let courseId: string | null = null;
   if (input.courseId) {
+    // この会社の、この店舗か全店共通のコース（種別コース、または名前が コース／course の商品。lib/menu-book isSeatCourseItem）
     const { data: course } = await supabase
       .from('menu_items')
-      .select('id')
+      .select('id, name, item_type')
       .eq('id', input.courseId)
-      .eq('store_id', order.store_id)
-      .eq('item_type', 'course')
+      .eq('organization_id', order.organization_id)
+      .or(`store_id.is.null,store_id.eq.${order.store_id}`)
       .neq('status', 'deleted')
       .maybeSingle();
-    if (!course) throw new Error('コースが見つかりません');
+    if (!course || !isSeatCourseItem(course.item_type as string | null, course.name as string)) {
+      throw new Error('コースが見つかりません');
+    }
     courseId = course.id as string;
   }
 

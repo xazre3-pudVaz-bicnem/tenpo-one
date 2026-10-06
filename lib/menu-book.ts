@@ -379,6 +379,17 @@ export function isPlanAddOn(name: string): boolean {
   return /→|->|⇒|延長/.test(name);
 }
 
+/**
+ * 席の「コース」（お客様情報のコース欄・予約の course_id・卓の箱のコース表示）に選べる商品か。
+ * 種別がコースの商品に加えて、dinii から取り込んだままで種別がフードのコース（名前に コース／course）も
+ * （2026-10-06 FULL MOoN 御茶ノ水 宮崎さん「お客様情報でプラン (AB) 2H Course Nomihodai を選んでも、
+ * 次の画面のコースが なし(アラカルト) になる」）。飲み放題だけの商品・アップグレード・延長・選択肢は入れない。
+ */
+export function isSeatCourseItem(itemType: string | null, name: string): boolean {
+  if (itemType === 'option' || isPlanAddOn(name)) return false;
+  return itemType === 'course' || /コース|course/i.test(name);
+}
+
 /** お客様QRに出さない商品（席料・お通し・チャージ・キャンセル料・サービス料・アップグレード・延長） */
 export function isStaffOnlyItem(name: string): boolean {
   const n = name.trim();

@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { isSeatCourseItem } from '@/lib/menu-book';
 import { assertStoreAccess, requireMember, requirePermission } from '@/lib/auth';
 import { can } from '@/lib/permissions';
 import { createClient } from '@/lib/supabase/server';
@@ -94,19 +95,22 @@ export async function startWalkIn(
     .eq('store_id', table.store_id)
     .maybeSingle();
 
-  // コース（オーダー・会計の着席画面・ハンディから）。この店舗のコースだけ受け付ける
+  // コース（オーダー・会計の着席画面・ハンディから）。この会社の、この店舗か全店共通のコースだけ受け付ける
+  // （全店共通＝store_id なし のコースも、メニューと同じく選べる）
   let courseId: string | null = null;
   let courseMinutes: number | null = null;
   if (options.courseId) {
     const { data: course } = await supabase
       .from('menu_items')
-      .select('id, duration_minutes')
+      .select('id, name, item_type, duration_minutes')
       .eq('id', options.courseId)
-      .eq('store_id', table.store_id)
-      .eq('item_type', 'course')
+      .eq('organization_id', table.organization_id)
+      .or(`store_id.is.null,store_id.eq.${table.store_id}`)
       .neq('status', 'deleted')
       .maybeSingle();
-    if (!course) throw new Error('コースが見つかりません');
+    if (!course || !isSeatCourseItem(course.item_type as string | null, course.name as string)) {
+      throw new Error('コースが見つかりません');
+    }
     courseId = course.id as string;
     courseMinutes = (course.duration_minutes as number | null) ?? null;
   }
