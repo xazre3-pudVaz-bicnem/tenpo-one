@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase/server';
 import { HANDY_CLERK_COOKIE, serializeHandyClerk } from '@/lib/handy-clerk';
 import { readHandyClerk } from '@/lib/handy-session';
 import { validateVisitDraft, visitMemo, type VisitDraft } from '@/lib/handy-visit';
+import { isSeatCourseItem } from '@/lib/menu-book';
 import { addItem, sendItemsToKitchen } from '../pos/actions';
 import { setOrderClerk } from '../pos/clerk-actions';
 import { goToOrder, startWalkIn } from '../floor/actions';
@@ -77,6 +78,20 @@ async function assignHandyClerk(orderId: string): Promise<void> {
 
 /* ------------------------------------------------------- 来店・伝票 */
 
+/** 選んだプラン商品のうち、いちばん先に選んだコース（種別コース、または名前が コース／course。isSeatCourseItem）の id。無ければ null */
+async function firstCoursePlanItem(planItemIds: string[]): Promise<string | null> {
+  const ids = planItemIds.filter((v) => typeof v === 'string' && v);
+  if (ids.length === 0) return null;
+  const supabase = await createClient();
+  const { data } = await supabase.from('menu_items').select('id, name, item_type').in('id', ids).neq('status', 'deleted');
+  const courses = new Set(
+    ((data ?? []) as { id: string; name: string; item_type: string | null }[])
+      .filter((r) => isSeatCourseItem(r.item_type, r.name))
+      .map((r) => r.id)
+  );
+  return ids.find((id) => courses.has(id)) ?? null;
+}
+
 /**
  * 「お客様情報」の確定: 空席の卓に来店を登録して伝票を作る（フロア画面のウォークインと同じ startWalkIn）。
  * 人数（男女）は合計を guest_count に、内訳・モード・利用シーン・時間制は伝票メモと予約（purpose / end_at）に残す。
@@ -91,8 +106,13 @@ export async function startHandyVisit(
   if (problem) throw new Error(problem);
 
   const guests = draft.male + draft.female;
+  // 選んだプランのうちコースがあれば、席のコース（reservations.course_id）にも入れる。
+  // これまでは伝票に商品を入れるだけだったので、注文画面の「お客様情報」のコースが「なし（アラカルト）」のままだった
+  // （2026-10-06 FULL MOoN 御茶ノ水 宮崎さん「この画面でモードやプランを設定しても、次の画面で なし(アラカルト) になる」）。
+  const seatCourseId = await firstCoursePlanItem(draft.planItemIds);
   const { orderId } = await startWalkIn(tableId, guests, {
     durationMinutes: draft.timed ? draft.duration : undefined,
+    courseId: seatCourseId ?? undefined,
     purpose: draft.source || undefined,
     sourceLabel: draft.source || undefined,
     memo: visitMemo(draft),

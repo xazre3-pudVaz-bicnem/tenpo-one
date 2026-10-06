@@ -1,4 +1,5 @@
 import { groupOfTable, tableGroupsFrom } from '@/lib/table-group';
+import { isSeatCourseItem } from '@/lib/menu-book';
 import { floorBoardFrom } from '@/lib/floor-nav';
 import type { Metadata } from 'next';
 import { requireFeature } from '@/lib/auth';
@@ -291,18 +292,19 @@ export default async function FloorPage() {
     calls: callsByTable.get(t.id) ?? [],
   }));
 
-  // 席の時間・コースを卓のポップアップから直すときに選ぶコース（2026-09-25 店舗要望）
+  // 席の時間・コースを卓のポップアップから直すときに選ぶコース（2026-09-25 店舗要望）。
+  // 種別コースに加えて、名前が コース／course の商品（dinii 取込の種別フードのコース）も（isSeatCourseItem）
   const { data: courseRows } = await supabase
     .from('menu_items')
-    .select('id, name, duration_minutes')
+    .select('id, name, item_type, duration_minutes')
     .eq('organization_id', ctx.organizationId)
     .or(`store_id.is.null,store_id.eq.${store.id}`)
     .eq('status', 'active')
-    .eq('item_type', 'course')
+    .neq('item_type', 'option')
     .order('sort_order');
-  const seatCourses = ((courseRows ?? []) as { id: string; name: string; duration_minutes: number | null }[]).map(
-    (m) => ({ id: m.id, name: m.name, durationMinutes: m.duration_minutes ?? null })
-  );
+  const seatCourses = ((courseRows ?? []) as { id: string; name: string; item_type: string | null; duration_minutes: number | null }[])
+    .filter((m) => isSeatCourseItem(m.item_type, m.name))
+    .map((m) => ({ id: m.id, name: m.name, durationMinutes: m.duration_minutes ?? null }));
 
   // 右パネル: ウォークイン（直接来店）は予約ではないので除外
   const panel: PanelReservation[] = reservationsToday
