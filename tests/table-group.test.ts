@@ -102,10 +102,18 @@ describe('removeGroupOfTable（解除・会計完了・テーブルクリア）'
 });
 
 describe('テーブル連携は会計完了・テーブルクリアで自動解除、卓の箱に連携の印（2026-10-06 Ronnie 高田馬場）', () => {
-  it('会計（checkout）とテーブルクリアで dissolveTableGroupOf を呼ぶ', () => {
+  it('会計（checkout・stera も通る）と、卓が空く取消（cancelEmptyOrder。テーブルクリアもここを通る）で dissolveTableGroupOf を呼ぶ', () => {
     const src = read('app/app/pos/actions.ts');
     expect(src).toContain("import { dissolveTableGroupOf } from '@/lib/table-group-server'");
     expect(src.split('dissolveTableGroupOf(order.store_id, order.table_id, ctx.userId)').length - 1).toBe(2);
+    const clear = src.slice(src.indexOf('export async function clearTable'));
+    expect(clear.indexOf('await cancelEmptyOrder(orderId')).toBeGreaterThan(0);
+    expect(read('app/app/pos/stera-actions.ts')).toContain('await checkout(');
+  });
+
+  it('カード端末（Stripe Terminal）の会計完了でも解除する', () => {
+    const src = read('app/app/pos/payment-actions.ts');
+    expect(src).toContain('await dissolveTableGroupOf(order.store_id, order.table_id, ctx.userId)');
   });
 
   it('「解除」は自分の卓を1つ渡す（空の配列は何もしない。前は解除が効いていなかった）', () => {

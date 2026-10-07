@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { dissolveTableGroupOf } from '@/lib/table-group-server';
 import { requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { getPaymentProvider, isPaymentConfigured, isPaymentTestMode } from '@/lib/payments';
@@ -191,6 +192,17 @@ export async function checkTerminalPayment(localIntentId: string): Promise<Termi
     p_register_session_id: session?.id ?? null,
   });
   if (finError) return { ok: false, error: `会計確定に失敗しました: ${finError.message}` };
+
+  // テーブル連携（グループ）は会計完了で自動解除（レジの会計 checkout と同じ。2026-10-07 Ronnie
+  // 「会計完了したら自動で連携を外す」）。同じ卓に会計前の伝票が残っていれば外さない
+  if (order.table_id) {
+    const { count: otherOpen } = await supabase
+      .from('orders')
+      .select('id', { count: 'exact', head: true })
+      .eq('table_id', order.table_id)
+      .eq('status', 'open');
+    if ((otherOpen ?? 0) === 0) await dissolveTableGroupOf(order.store_id, order.table_id, ctx.userId);
+  }
 
   // payments 行へStripeのIDを関連付け
   await supabase

@@ -1256,6 +1256,8 @@ export async function cancelEmptyOrder(
         .update({ current_status: 'available' })
         .eq('id', order.table_id)
         .in('current_status', ['seated', 'ordering', 'billing', 'cleaning']);
+      // テーブル連携（グループ）も解除（会計完了と同じ。卓を空に戻すのに連携だけ残さない。テーブルクリアもここを通る）
+      await dissolveTableGroupOf(order.store_id, order.table_id, ctx.userId);
     }
   }
 
@@ -1329,15 +1331,7 @@ export async function clearTable(
   }
   // 品目が無くなった伝票を取消して卓を空席に戻す（cancelEmptyOrder の中で卓・予約も戻す）
   await cancelEmptyOrder(orderId, `テーブルクリア: ${why}`, approvedByClerkId);
-  // テーブル連携（グループ）も解除（会計完了と同じ。卓を空に戻すのに連携だけ残さない）
-  if (order.table_id) {
-    const { count: stillOpen } = await supabase
-      .from('orders')
-      .select('id', { count: 'exact', head: true })
-      .eq('table_id', order.table_id)
-      .eq('status', 'open');
-    if ((stillOpen ?? 0) === 0) await dissolveTableGroupOf(order.store_id, order.table_id, ctx.userId);
-  }
+  // テーブル連携（グループ）の解除は cancelEmptyOrder の中で（卓が空いたとき）
 
   await supabase.rpc('log_audit', {
     p_org: order.organization_id,
