@@ -281,6 +281,8 @@ export interface HandyCartLine {
   optionItemIds: string[];
   /** 「大盛り・チーズ」のような表示用ラベル */
   optionLabel: string;
+  /** 「その他（価格入力）」の行（menuItemId はカートの仮の ID。lib/custom-price） */
+  custom?: { categoryId: string | null; price: number; memo: string | null };
 }
 
 /** 商品＋選択肢の組み合わせで一意になるキー（選択肢の並び順に依存しない） */

@@ -9,7 +9,7 @@ import { HANDY_CLERK_COOKIE, serializeHandyClerk } from '@/lib/handy-clerk';
 import { readHandyClerk } from '@/lib/handy-session';
 import { validateVisitDraft, visitMemo, type VisitDraft } from '@/lib/handy-visit';
 import { isSeatCourseItem } from '@/lib/menu-book';
-import { addItem, sendItemsToKitchen } from '../pos/actions';
+import { addCustomPriceItem, addItem, sendItemsToKitchen } from '../pos/actions';
 import { setOrderClerk } from '../pos/clerk-actions';
 import { goToOrder, startWalkIn } from '../floor/actions';
 import { MAX_LINE_QUANTITY } from '@/components/handy/logic';
@@ -233,6 +233,11 @@ export interface HandyOrderLineInput {
   quantity: number;
   /** エラー文面に出す商品名（保存はサーバー側でDBの名前を使う） */
   name: string;
+  /**
+   * 「その他（価格入力）」の行（カテゴリの最後のボタン。2026-10-07 Ronnie）。あれば menuItemId はカートの仮の ID で、
+   * 金額・内容はここから入れる（addCustomPriceItem）
+   */
+  custom?: { categoryId: string | null; price: number; memo: string | null };
 }
 
 export interface HandySubmitResult {
@@ -298,7 +303,14 @@ export async function submitHandyOrder(
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     try {
-      const { id } = await addItem(orderId, line.menuItemId, line.optionItemIds, line.quantity);
+      const { id } = line.custom
+        ? await addCustomPriceItem(orderId, {
+            categoryId: line.custom.categoryId,
+            price: line.custom.price,
+            quantity: line.quantity,
+            memo: line.custom.memo,
+          })
+        : await addItem(orderId, line.menuItemId, line.optionItemIds, line.quantity);
       if (id) addedIds.push(id);
       sentQuantity += line.quantity;
     } catch (e) {

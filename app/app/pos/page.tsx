@@ -23,6 +23,8 @@ import { isSeatCourseItem } from '@/lib/menu-book';
 import {
   addItem,
   addItemAtSeat,
+  addCustomPriceItem,
+  addCustomPriceItemAtSeat,
   updateQty,
   cancelItem,
   setDiscount,
@@ -451,6 +453,7 @@ export default async function PosPage({
         paymentAvailability={paymentAvailability}
         availableTables={availableTables}
         addItemAction={seatTableId ? addItemAtSeat.bind(null, seatTableId) : addItem}
+        addCustomItemAction={seatTableId ? addCustomPriceItemAtSeat.bind(null, seatTableId) : addCustomPriceItem}
         updateQtyAction={updateQty}
         cancelItemAction={cancelItem}
         setDiscountAction={setDiscount}

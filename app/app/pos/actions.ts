@@ -20,6 +20,15 @@ import { loadStoreClerks } from '@/lib/pos-clerks-server';
 import { groupOfTable, tableGroupsFrom } from '@/lib/table-group';
 import { isSeatCourseItem } from '@/lib/menu-book';
 import { dissolveTableGroupOf } from '@/lib/table-group-server';
+import { createAdminClient } from '@/lib/supabase/admin';
+import {
+  CUSTOM_PRICE_ITEM_NAME,
+  CUSTOM_PRICE_MARKER,
+  customHelperItemType,
+  customItemName,
+  customPriceProblem,
+  type CustomPriceInput,
+} from '@/lib/custom-price';
 
 const COUPON_PREFIX = 'クーポン: ';
 
@@ -175,6 +184,138 @@ export async function addItemAtSeat(
   openPrice: number | null = null
 ): Promise<{ id: string | null }> {
   return insertOrderItem(orderId, menuItemId, optionItemIds, quantity, seatTableId, openPrice);
+}
+
+/**
+ * 「その他（価格入力）」— カテゴリの最後のボタンから、金額と内容を打って入れる
+ * （2026-10-07 Ronnie「お客様が何か追加したとき金額を自分で打てる Other を全カテゴリの最後に。ハンディと iPad」）。
+ * 明細はそのカテゴリの非表示の商品「その他」（無ければ作る）として入れるので、厨房伝票の持ち場・フロア、税率、
+ * 売上のカテゴリは普通の商品と同じ。明細の名前は打った内容（無ければ「その他」）。レジと同じく未送信で入る。
+ */
+export async function addCustomPriceItem(orderId: string, input: CustomPriceInput): Promise<{ id: string | null }> {
+  return insertCustomPriceItem(orderId, input, null);
+}
+
+/** テーブルグループの別の卓から（addItemAtSeat と同じ。明細に注文した卓を残す） */
+export async function addCustomPriceItemAtSeat(
+  seatTableId: string,
+  orderId: string,
+  input: CustomPriceInput
+): Promise<{ id: string | null }> {
+  return insertCustomPriceItem(orderId, input, seatTableId);
+}
+
+async function insertCustomPriceItem(
+  orderId: string,
+  input: CustomPriceInput,
+  seatTableId: string | null
+): Promise<{ id: string | null }> {
+  const price = Math.round(Number(input?.price));
+  const quantity = Math.round(Number(input?.quantity ?? 1));
+  const problem = customPriceProblem(price, quantity);
+  if (problem) throw new Error(problem);
+  const ctx = await requirePermission('pos.order');
+  const supabase = await createClient();
+  const order = await loadOpenOrder(supabase, ctx, orderId);
+
+  // カテゴリはこの会社の、この店舗か全店共通のものだけ
+  const categoryId = typeof input.categoryId === 'string' && input.categoryId ? input.categoryId : null;
+  let station: string | null = null;
+  if (categoryId) {
+    const { data: category } = await supabase
+      .from('menu_categories')
+      .select('id, station')
+      .eq('id', categoryId)
+      .eq('organization_id', order.organization_id)
+      .or(`store_id.is.null,store_id.eq.${order.store_id}`)
+      .neq('status', 'deleted')
+      .maybeSingle();
+    if (!category) throw new Error('カテゴリが見つかりません');
+    station = (category.station as string | null) ?? null;
+  }
+
+  // そのカテゴリの非表示の「その他」商品（説明欄の印で見分ける）。無ければ作る。
+  // 商品を作る権限はレジ・ハンディのスタッフに無いので、ここだけサービスロールで（カテゴリと伝票は上で確かめた）
+  const admin = createAdminClient();
+  let helperQuery = admin
+    .from('menu_items')
+    .select('id, item_type, tax_rates(rate, is_inclusive)')
+    .eq('organization_id', order.organization_id)
+    .eq('store_id', order.store_id)
+    .eq('description', CUSTOM_PRICE_MARKER)
+    .neq('status', 'deleted')
+    .order('created_at')
+    .limit(1);
+  helperQuery = categoryId ? helperQuery.eq('category_id', categoryId) : helperQuery.is('category_id', null);
+  const { data: found } = await helperQuery.maybeSingle();
+  let helper = found as { id: string; item_type: string; tax_rates: unknown } | null;
+  if (!helper) {
+    const { data: created, error: createError } = await admin
+      .from('menu_items')
+      .insert({
+        organization_id: order.organization_id,
+        store_id: order.store_id,
+        category_id: categoryId,
+        name: CUSTOM_PRICE_ITEM_NAME,
+        description: CUSTOM_PRICE_MARKER,
+        item_type: customHelperItemType(station),
+        price: 0,
+        sort_order: 99999,
+        status: 'hidden',
+        created_by: ctx.userId,
+        updated_by: ctx.userId,
+      })
+      .select('id, item_type, tax_rates(rate, is_inclusive)')
+      .single();
+    if (createError || !created) throw new Error(`「その他」を入れられませんでした: ${createError?.message ?? ''}`);
+    helper = created as { id: string; item_type: string; tax_rates: unknown };
+  }
+
+  const taxRateRow = helper.tax_rates as { rate: number; is_inclusive: boolean } | null;
+  const isTakeoutLike =
+    order.order_type === 'takeout' || order.order_type === 'delivery' || order.order_type === 'pre_order';
+  const taxRate = isTakeoutLike
+    ? applicableTaxRate(order.order_type as 'takeout' | 'delivery' | 'pre_order', helper.item_type === 'drink')
+    : (taxRateRow?.rate ?? 10);
+
+  let orderedTableId: string | null = null;
+  if (seatTableId && order.table_id && seatTableId !== order.table_id) {
+    const { data: groupSettings } = await supabase
+      .from('store_settings')
+      .select('settings')
+      .eq('store_id', order.store_id)
+      .maybeSingle();
+    const group = groupOfTable(tableGroupsFrom(groupSettings?.settings ?? null), order.table_id);
+    if (group?.tableIds.includes(seatTableId)) orderedTableId = seatTableId;
+  }
+
+  const { data: inserted, error } = await supabase
+    .from('order_items')
+    .insert({
+      organization_id: order.organization_id,
+      store_id: order.store_id,
+      order_id: orderId,
+      menu_item_id: helper.id,
+      name: customItemName(input.memo),
+      unit_price: price,
+      quantity,
+      tax_rate: taxRate,
+      tax_included: taxRateRow?.is_inclusive ?? true,
+      line_total: price * quantity,
+      modifiers: [],
+      staff_id: ctx.userId,
+      status: 'active',
+      created_by: ctx.userId,
+      kitchen_sent_at: null,
+      ...(orderedTableId ? { ordered_table_id: orderedTableId } : {}),
+    })
+    .select('id')
+    .single();
+  if (error) throw new Error(error.message);
+
+  await supabase.rpc('recalc_order_totals', { p_order_id: orderId });
+  revalidatePath('/app/pos');
+  return { id: (inserted?.id as string | undefined) ?? null };
 }
 
 /** レジで打てる金額の上限（キャンセル料・時価など） */

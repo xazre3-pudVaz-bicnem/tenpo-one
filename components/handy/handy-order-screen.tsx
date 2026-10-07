@@ -3,11 +3,13 @@
 import { useMemo, useRef, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, PenLine } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { yen } from '@/lib/format';
 import { useToast } from '@/components/ui/toast';
 import { OptionDialog, type PosOptionGroup } from '@/components/pos/option-dialog';
+import { OpenPriceDialog } from '@/components/pos/open-price-dialog';
+import { customItemName, customLineId, normalizeCustomMemo } from '@/lib/custom-price';
 import {
   HandyBackButton,
   HandyMain,
@@ -79,6 +81,10 @@ export function HandyOrderScreen({
   /** ページの中のカテゴリで絞る（null＝すべて）。ページを変えたら「すべて」に戻る（お客様QRと同じ。2026-10-02 FULL MOoN） */
   const [catFilter, setCatFilter] = useState<{ pageKey: string; catId: string } | null>(null);
   const [optionTarget, setOptionTarget] = useState<HandyMenuItemView | null>(null);
+  /** 「その他（価格入力）」を押したカテゴリ */
+  const [customTarget, setCustomTarget] = useState<{ categoryId: string; label: string } | null>(null);
+  /** 「その他」の行を入れるたびに別の行にするための番号 */
+  const customSeq = useRef(0);
   const [cart, setCart] = useState<HandyCartLine[]>([]);
   const [pending, startTransition] = useTransition();
   // 二重送信の保険（連打で startTransition が2回走るのを防ぐ）
@@ -144,6 +150,30 @@ export function HandyOrderScreen({
     setOptionTarget(null);
   };
 
+  /** 「その他（価格入力）」で金額と内容を打ったとき。1回ごとに別の行（内容・金額が違えばまとめない） */
+  const handleCustomConfirm = (amount: number, memo: string) => {
+    const target = customTarget;
+    if (!target) return;
+    const text = normalizeCustomMemo(memo);
+    customSeq.current += 1;
+    setCart((prev) =>
+      addCartLine(
+        prev,
+        {
+          menuItemId: customLineId(target.categoryId, customSeq.current),
+          name: customItemName(text),
+          nameEn: text ? null : 'Other',
+          unitPrice: amount,
+          optionItemIds: [],
+          optionLabel: target.label,
+          custom: { categoryId: target.categoryId, price: amount, memo: text || null },
+        },
+        1
+      )
+    );
+    setCustomTarget(null);
+  };
+
   const handleSubmit = () => {
     if (pending || sendingRef.current || cart.length === 0) return;
     sendingRef.current = true;
@@ -152,6 +182,7 @@ export function HandyOrderScreen({
       optionItemIds: l.optionItemIds,
       quantity: l.quantity,
       name: l.name,
+      ...(l.custom ? { custom: l.custom } : {}),
     }));
     startTransition(async () => {
       try {
@@ -482,6 +513,19 @@ export function HandyOrderScreen({
                       </li>
                     );
                   })}
+                  {/* 最後に「その他（価格入力）」。お客様が何か追加したとき金額を打って入れる（2026-10-07 Ronnie） */}
+                  <li>
+                    <button
+                      type="button"
+                      onClick={() => setCustomTarget({ categoryId: c.id, label: c.nameEn ?? c.name })}
+                      aria-label={`${c.name}：その他（金額を入力）`}
+                      className="tap3d relative flex aspect-square w-full flex-col items-center justify-center gap-1 overflow-hidden rounded-[10px] border border-dashed border-[#b9a6dc] bg-[#f8f6fc] px-[7px] py-[9px] text-center text-xs font-bold text-[#7b3fe4] active:bg-[#e9e0fa]"
+                    >
+                      <PenLine className="h-5 w-5" aria-hidden />
+                      <span>Other</span>
+                      <span className="text-[9px] font-normal text-[#7a7090]">その他・金額入力</span>
+                    </button>
+                  </li>
                 </ul>
               </section>
             ))}
@@ -500,6 +544,16 @@ export function HandyOrderScreen({
           <span className="tabular-nums">{yen(total)}</span>
         </button>
       </div>
+
+      {customTarget && (
+        <OpenPriceDialog
+          itemName={`その他 / Other（${customTarget.label}）`}
+          initial={null}
+          withMemo
+          onClose={() => setCustomTarget(null)}
+          onConfirm={handleCustomConfirm}
+        />
+      )}
 
       {optionTarget && (
         <OptionDialog

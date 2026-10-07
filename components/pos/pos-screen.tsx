@@ -5,8 +5,9 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   Minus, Plus, X, ArrowLeft, Search, Star, User,
-  Users, Clock, Pencil,
+  Users, Clock, Pencil, PenLine,
 } from 'lucide-react';
+import { customItemName, customLineId, normalizeCustomMemo, type CustomPriceInput } from '@/lib/custom-price';
 import { cn } from '@/lib/utils';
 import { yen, formatTime } from '@/lib/format';
 import { groupOrderRounds, ordinalLabel } from '@/components/handy/logic';
@@ -78,6 +79,8 @@ interface CartLine {
   optionLabel: string | null;
   /** レジで打った金額（¥0 の商品＝キャンセル料・時価など）。null = メニューの値段のまま */
   openPrice?: number | null;
+  /** 「その他（価格入力）」の行（menuItemId はカートの仮の ID。lib/custom-price） */
+  custom?: { categoryId: string | null; price: number; memo: string | null };
 }
 
 const FAVORITES_TAB = '__favorites__';
@@ -237,6 +240,7 @@ export function PosScreen({
   paymentAvailability,
   availableTables,
   addItemAction,
+  addCustomItemAction,
   updateQtyAction,
   cancelItemAction,
   setDiscountAction,
@@ -305,6 +309,8 @@ export function PosScreen({
     /** レジで打った金額（¥0 の商品だけ） */
     openPrice?: number | null
   ) => Promise<unknown>;
+  /** 「その他（価格入力）」の行を入れる（カテゴリの最後のボタン。2026-10-07 Ronnie）。無ければボタンを出さない */
+  addCustomItemAction?: (orderId: string, input: CustomPriceInput) => Promise<unknown>;
   updateQtyAction: (orderId: string, orderItemId: string, delta: number) => Promise<void>;
   cancelItemAction: (
     orderId: string,
@@ -372,6 +378,10 @@ export function PosScreen({
   const [cancelTarget, setCancelTarget] = useState<PosOrderItem | null>(null);
   /** 金額を打っているカートの行（¥0 の商品＝キャンセル料など） */
   const [openPriceTarget, setOpenPriceTarget] = useState<CartLine | null>(null);
+  /** 「その他（価格入力）」を押したカテゴリ（categoryId null＝カテゴリなし・テイクアウトの一覧） */
+  const [customTarget, setCustomTarget] = useState<{ categoryId: string | null; label: string } | null>(null);
+  /** 「その他」の行を入れるたびに別の行にするための番号 */
+  const customSeq = useRef(0);
   const [checkoutOpen, setCheckoutOpen] = useState(openCheckout);
   const [tableMoveOpen, setTableMoveOpen] = useState(openTableMove);
   const [cancelOrderOpen, setCancelOrderOpen] = useState(false);
@@ -547,6 +557,45 @@ export function PosScreen({
   const cartCount = pricedCart.reduce((n, l) => n + l.quantity, 0);
   const cartTotal = pricedCart.reduce((n, l) => n + l.unitPrice * l.quantity, 0);
 
+  /**
+   * 「その他（価格入力）」（2026-10-07 Ronnie「お客様が何か追加したとき金額を打てる Other を全カテゴリの最後に」）。
+   * 出すのはカテゴリを開いているとき（おすすめ・売れ筋・検索の一覧には出さない）。テイクアウトは一覧の最後に1つ
+   */
+  const customCategory: { categoryId: string | null; label: string } | null =
+    !addCustomItemAction || searchQuery.trim()
+      ? null
+      : isTakeoutLike
+        ? { categoryId: null, label: 'テイクアウト' }
+        : activeCategory === FAVORITES_TAB || activeCategory === BESTSELLERS_TAB
+          ? null
+          : (() => {
+              const c = categories.find((x) => x.id === activeCategory);
+              return c ? { categoryId: c.id, label: c.name_en || c.name } : { categoryId: null, label: 'その他' };
+            })();
+
+  const handleCustomConfirm = (amount: number, memo: string) => {
+    const target = customTarget;
+    if (!target) return;
+    const text = normalizeCustomMemo(memo);
+    customSeq.current += 1;
+    const id = customLineId(target.categoryId, customSeq.current);
+    setCart((cur) => [
+      ...cur,
+      {
+        key: id,
+        menuItemId: id,
+        name: customItemName(text),
+        nameEn: text ? null : 'Other',
+        unitPrice: amount,
+        quantity: 1,
+        optionItemIds: [],
+        optionLabel: target.label,
+        custom: { categoryId: target.categoryId, price: amount, memo: text || null },
+      },
+    ]);
+    setCustomTarget(null);
+  };
+
   const handleAdd = (menuItemId: string) => {
     // 選択肢グループが設定された商品は、先に選択ダイアログを出す
     const groups = optionGroupsByItem[menuItemId];
@@ -635,6 +684,16 @@ export function PosScreen({
     startTransition(async () => {
       try {
         for (const line of cart) {
+          if (line.custom) {
+            if (!addCustomItemAction) throw new Error('「その他」を入れられませんでした。画面を開き直してください');
+            await addCustomItemAction(order.id, {
+              categoryId: line.custom.categoryId,
+              price: line.custom.price,
+              quantity: line.quantity,
+              memo: line.custom.memo,
+            });
+            continue;
+          }
           await addItemAction(order.id, line.menuItemId, line.optionItemIds, line.quantity, line.openPrice ?? null);
         }
         setCart([]);
@@ -1185,7 +1244,7 @@ export function PosScreen({
             )}
 
             <div className="min-h-0 flex-1 overflow-y-auto p-3">
-              {visibleItems.length === 0 ? (
+              {visibleItems.length === 0 && !customCategory ? (
                 <p className="p-6 text-center text-sm text-ink-3">
                   {searchQuery.trim()
                     ? '該当する商品が見つかりません / No items found'
@@ -1227,6 +1286,20 @@ export function PosScreen({
                       </button>
                     );
                   })}
+                  {/* 最後に「その他（価格入力）」。お客様が何か追加したとき金額と内容を打って入れる（2026-10-07 Ronnie） */}
+                  {customCategory && (
+                    <button
+                      type="button"
+                      disabled={pending}
+                      onClick={() => setCustomTarget(customCategory)}
+                      aria-label={`${customCategory.label}：その他（金額を入力）`}
+                      className="tap3d flex min-h-[92px] flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-wisteria bg-lilac-soft px-2.5 py-3 text-center text-royal hover:bg-lilac disabled:opacity-60"
+                    >
+                      <PenLine className="h-5 w-5" aria-hidden />
+                      <span className="text-[14px] font-bold leading-tight">Other</span>
+                      <span className="text-[10px] leading-tight text-ink-3">その他・金額入力</span>
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -1316,6 +1389,16 @@ export function PosScreen({
           orderId={order.id}
           currentGuestCount={order.guestCount}
           setGuestCountAction={setGuestCountAction}
+        />
+      )}
+
+      {customTarget && (
+        <OpenPriceDialog
+          itemName={`その他 / Other（${customTarget.label}）`}
+          initial={null}
+          withMemo
+          onClose={() => setCustomTarget(null)}
+          onConfirm={handleCustomConfirm}
         />
       )}
 

@@ -1,4 +1,5 @@
 import 'server-only';
+import { isCustomPriceHelper } from '@/lib/custom-price';
 import { createClient } from '@/lib/supabase/server';
 import { courseStepsFrom, type CourseSteps } from '@/lib/course-steps';
 import type { MenuItemRow } from '@/components/settings/menu-item-dialog';
@@ -57,7 +58,8 @@ export async function loadMenuSettingsData(ctx: MenuCtx, storeId: string): Promi
     sortOrder: c.sort_order,
   }));
 
-  const itemRows: MenuItemRow[] = (items ?? []).map((i) => ({
+  // 「その他（価格入力）」ボタン用の非表示の商品（lib/custom-price）は一覧に出さない（消す・表示に戻すと困るため）
+  const itemRows: MenuItemRow[] = (items ?? []).filter((i) => !isCustomPriceHelper(i)).map((i) => ({
     id: i.id,
     categoryId: i.category_id,
     name: i.name,
