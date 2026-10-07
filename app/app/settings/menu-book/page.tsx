@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { isCustomPriceHelper } from '@/lib/custom-price';
 import { requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { PageHeader } from '@/components/ui/page-header';
@@ -68,7 +69,8 @@ export default async function MenuBookPage({ searchParams }: { searchParams: Pro
   const activeItems = (items ?? []).filter((i) => i.status === 'active');
   const categoryRows: MenuBookCategoryRow[] = menuBookCategoryRows(categories ?? [], activeItems, book);
 
-  const itemRows: MenuItemRow[] = (items ?? []).map((i) => ({
+  // 「その他（価格入力）」ボタン用の非表示の商品（lib/custom-price）は出さない
+  const itemRows: MenuItemRow[] = (items ?? []).filter((i) => !isCustomPriceHelper(i)).map((i) => ({
     id: i.id,
     categoryId: i.category_id,
     name: i.name,

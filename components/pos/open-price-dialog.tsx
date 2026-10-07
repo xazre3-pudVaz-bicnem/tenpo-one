@@ -6,6 +6,7 @@ import { Dialog } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { yen } from '@/lib/format';
 import { cn } from '@/lib/utils';
+import { CUSTOM_PRICE_MEMO_MAX } from '@/lib/custom-price';
 
 /** レジで打てる金額の上限（サーバーの OPEN_PRICE_MAX と同じ） */
 export const OPEN_PRICE_MAX = 9_999_999;
@@ -18,15 +19,22 @@ export const OPEN_PRICE_MAX = 9_999_999;
 export function OpenPriceDialog({
   itemName,
   initial,
+  withMemo = false,
   onClose,
   onConfirm,
 }: {
   itemName: string;
   initial: number | null;
+  /**
+   * 内容（任意）の欄を出す（「その他（価格入力）」のボタン。2026-10-07 Ronnie）。
+   * 打った内容は伝票・レシート・厨房伝票の商品名になる
+   */
+  withMemo?: boolean;
   onClose: () => void;
-  onConfirm: (amount: number) => void;
+  onConfirm: (amount: number, memo: string) => void;
 }) {
   const [typed, setTyped] = useState<string>(initial != null && initial > 0 ? String(initial) : '');
+  const [memo, setMemo] = useState('');
   const value = typed === '' ? 0 : Number(typed);
 
   const press = (k: string) => {
@@ -44,6 +52,19 @@ export function OpenPriceDialog({
         <p className="text-sm text-gray-600">
           <span className="font-bold text-navy">{itemName}</span> の金額（1つあたり・税込）を入れます。
         </p>
+        {withMemo && (
+          <label className="block">
+            <span className="text-xs font-semibold text-ink-3">内容（任意） / Item</span>
+            <input
+              type="text"
+              value={memo}
+              maxLength={CUSTOM_PRICE_MEMO_MAX}
+              onChange={(e) => setMemo(e.target.value)}
+              placeholder="例：大盛り・チーズ追加・持込料"
+              className="mt-1 h-11 w-full rounded-xl border border-line bg-white px-3 text-[15px] text-navy placeholder:text-ink-3 focus:border-iris focus:outline-2 focus:outline-iris/30"
+            />
+          </label>
+        )}
         <div className="flex items-center justify-between rounded-xl bg-lilac px-4 py-3">
           <span className="text-sm font-semibold text-ink-3">金額 / Amount</span>
           <span className="text-3xl font-extrabold tabular-nums text-navy">{yen(value)}</span>
@@ -70,7 +91,7 @@ export function OpenPriceDialog({
           <Button type="button" variant="secondary" onClick={onClose}>
             キャンセル
           </Button>
-          <Button type="button" onClick={() => onConfirm(value)}>
+          <Button type="button" onClick={() => onConfirm(value, memo)}>
             決定 / OK
           </Button>
         </div>
