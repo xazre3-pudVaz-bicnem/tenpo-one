@@ -32,13 +32,29 @@ export function isDesktopUserAgent(userAgent: string | null | undefined): boolea
   return true;
 }
 
-/** 新しい管理画面を試せる人（会社のオーナーのパソコンだけ。レジ・ハンディのアカウントは不可） */
-export function canTryAdminV2(ctx: ViewerLike, userAgent: string | null | undefined): boolean {
+/**
+ * iPad の Safari（「デスクトップ用サイト」が既定）は Mac と同じ名乗り（Macintosh）なので、User-Agent だけでは分からない。
+ * 画面のタッチ（navigator.maxTouchPoints > 1）で見分ける（Mac は 0）。サーバーでは分からないので画面側から渡す。
+ */
+export function isIpadDesktopMode(userAgent: string | null | undefined, touchPoints: number | null | undefined): boolean {
+  return /macintosh/i.test(userAgent ?? '') && (touchPoints ?? 0) > 1;
+}
+
+/**
+ * 新しい管理画面を試せる人（会社のオーナーのパソコンだけ。レジ・ハンディのアカウントは不可）。
+ * touchPoints を渡したとき（画面側・ボタン）は、Mac を名乗る iPad も不可（2026-10-10 Ronnie「iPad とハンディは絶対に変えない」）。
+ */
+export function canTryAdminV2(
+  ctx: ViewerLike,
+  userAgent: string | null | undefined,
+  touchPoints?: number | null
+): boolean {
   return (
     ctx.role === 'org_owner' &&
     ctx.isRegisterDevice !== true &&
     ctx.isHandyDevice !== true &&
-    isDesktopUserAgent(userAgent)
+    isDesktopUserAgent(userAgent) &&
+    !isIpadDesktopMode(userAgent, touchPoints)
   );
 }
 
