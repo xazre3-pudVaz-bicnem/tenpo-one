@@ -5,6 +5,7 @@ import {
   adminV2On,
   canTryAdminV2,
   isDesktopUserAgent,
+  isIpadDesktopMode,
   linkPath,
   V2_SECTIONS,
   V2_SETTINGS,
@@ -48,6 +49,20 @@ describe('新しい管理画面を出す人・出さない人', () => {
       expect(isDesktopUserAgent(ua)).toBe(false);
       expect(adminV2On(owner, '1', ua)).toBe(false);
     }
+  });
+
+  it('Mac を名乗る iPad の Safari（タッチあり）も試せない。本物の Mac（タッチ 0）・Windows は試せる', () => {
+    const IPAD_DESKTOP = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15';
+    expect(isIpadDesktopMode(IPAD_DESKTOP, 5)).toBe(true);
+    expect(canTryAdminV2(owner, IPAD_DESKTOP, 5)).toBe(false);
+    expect(canTryAdminV2(owner, MAC, 0)).toBe(true);
+    expect(canTryAdminV2(owner, WIN, 10)).toBe(true);
+    const action = read('app/app/admin-v2-actions.ts');
+    expect(action).toContain("typeof touchPoints !== 'number'");
+    expect(action).toContain('canTryAdminV2(ctx, userAgent, touchPoints)');
+    const sw = read('components/admin-v2/admin-v2-switch.tsx');
+    expect(sw).toContain('if (touchPoints < 0) return null;');
+    expect(sw).toContain('isIpadDesktopMode(');
   });
 
   it('ON（cookie=1）のときだけ。OFF・cookie なしは今の管理画面', () => {
