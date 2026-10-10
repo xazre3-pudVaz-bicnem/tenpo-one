@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import { headers } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import { requireSession } from '@/lib/auth';
 import { isPhoneUserAgent, phoneMayOpenApp } from '@/lib/device-kind';
 import { createClient } from '@/lib/supabase/server';
@@ -26,6 +26,9 @@ import { loadStoreClerks } from '@/lib/pos-clerks-server';
 import { ReservationAlert } from '@/components/notifications/reservation-alert';
 import { PushAutoSubscribe } from '@/components/notifications/push-auto-subscribe';
 import { ServiceCallAlert } from '@/components/notifications/service-call-alert';
+import { ADMIN_V2_COOKIE, adminV2On, canTryAdminV2, visibleV2Sections } from '@/lib/admin-v2';
+import { SidebarV2 } from '@/components/admin-v2/sidebar-v2';
+import { AdminV2Switch } from '@/components/admin-v2/admin-v2-switch';
 
 /** 店舗画面はブラウザのツールバー色も上部バー（濃紫）に合わせる */
 export const viewport = { themeColor: '#15121a' };
@@ -107,6 +110,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   const unreadCount = 'count' in unreadRes ? unreadRes.count : 0;
 
+  // 新しい管理画面（2026-10-10 Ronnie）。会社のオーナーがパソコンで「試す」を押したときだけ。
+  // レジ（iPad）・ハンディ・スマホは必ず今のまま（isRegi・lib/admin-v2.ts の canTryAdminV2 で止める）
+  const adminV2Eligible = !isRegi && canTryAdminV2(ctx, userAgent);
+  const adminV2 = adminV2Eligible && adminV2On(ctx, (await cookies()).get(ADMIN_V2_COOKIE)?.value ?? null, userAgent);
+
   // レジ端末は「入金出金・仕入経費を上のタイルに」「ハンディ・レジの設定・スキャン・スタッフは設定などの中へ」
   // 「在庫設定は仕入・在庫の中へ」「店舗運営〜チームは集計ひとつに」まとめた並び（app/app/menu/data.ts）
   const regiLayout = isRegi ? menuLayout(ctx.role, ctx.disabledFeatures, { keepActions: true }) : null;
@@ -140,14 +148,24 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         {/* 左メニューは常に置き、注文画面（/app/pos）で隠すのは Sidebar 側（クライアント）で判定する。
             layout は画面の移動で作り直されないので、ここで隠すと 注文 → ホーム に戻ったときに左メニューが出なくなる
             （2026-09-30 Ronnie「ホームに戻ると左メニューが消える。忙しい時間に困る」） */}
-        <Sidebar
-          tiles={tiles}
-          groups={groups}
-          alertCount={unreadCount ?? 0}
-          currentStoreId={ctx.currentStore?.id ?? null}
-          iconFirst={isRegi}
-          homeOnly={isRegi}
-        />
+        {adminV2 ? (
+          <SidebarV2
+            sections={visibleV2Sections(ctx.role, ctx.disabledFeatures)}
+            showStaff={can(ctx.role, 'staff.manage')}
+            currentStoreId={ctx.currentStore?.id ?? null}
+            footer={<AdminV2Switch on />}
+          />
+        ) : (
+          <Sidebar
+            tiles={tiles}
+            groups={groups}
+            alertCount={unreadCount ?? 0}
+            currentStoreId={ctx.currentStore?.id ?? null}
+            iconFirst={isRegi}
+            homeOnly={isRegi}
+            footer={adminV2Eligible ? <AdminV2Switch on={false} /> : undefined}
+          />
+        )}
         <ContentArea homeOnly={isRegi}>
           <InstallPrompt />
           {/* スマホは店舗切替を上部バーの下に表示 */}

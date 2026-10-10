@@ -3,6 +3,7 @@ import {
   ReceiptJapaneseYen, Users, Banknote, Wallet, FileText, Truck, ClipboardList, Package,
   Clock, JapaneseYen, BarChart3, UserCog, Settings, MoreHorizontal, Lock, Bell,
   Ticket, Landmark, Mail, Inbox, Camera, ConciergeBell, SlidersHorizontal, ShoppingBag, Calculator,
+  Store, TrendingUp, Heart, MessageSquareText, ShieldCheck,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -40,6 +41,12 @@ const ICONS: Record<string, LucideIcon> = {
   bag: ShoppingBag,
   camera: Camera,
   calculator: Calculator,
+  // 新しい管理画面の左メニュー（lib/admin-v2.ts）
+  store: Store,
+  trend: TrendingUp,
+  heart: Heart,
+  message: MessageSquareText,
+  shield: ShieldCheck,
 };
 
 export function NavIcon({ name, className }: { name: string; className?: string }) {
