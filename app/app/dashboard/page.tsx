@@ -28,6 +28,8 @@ import { KpiStrip, type KpiCell } from '@/components/dashboard/kpi-strip';
 import { loadHomeData } from '@/components/dashboard/home-data';
 import { HomeTop } from '@/components/dashboard/home-top';
 import { computeSalesMetrics, SETTLED_ORDER_STATUSES, type RefundLike, type SettledOrderLike, type SalesMetricsOptions } from '@/lib/metrics';
+import { isAdminV2Request } from '@/lib/admin-v2-server';
+import { HomeV2 } from '@/components/admin-v2/home-v2';
 
 export const metadata: Metadata = { title: 'ホーム' };
 
@@ -108,6 +110,10 @@ export default async function DashboardPage() {
   }
   const setupPercent = ctx.organizationId && can(ctx.role, 'org.settings') ? await getSetupProgressPercent(ctx.organizationId) : null;
   const metricsOpts = await getSalesMetricsOptions(ctx.organizationId);
+  // 新しい管理画面（会社のオーナーがパソコンで ON にしたときだけ。レジ・ハンディは今のまま。lib/admin-v2.ts）
+  if (await isAdminV2Request(ctx)) {
+    return <HomeV2 ctx={ctx} today={today} metricsOpts={metricsOpts} />;
+  }
   const asOf = nowStampJst();
 
   if (ctx.currentStore) {

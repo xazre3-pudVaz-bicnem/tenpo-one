@@ -209,6 +209,9 @@ const EXTRA_TITLES: { href: string; label: string; en: string }[] = [
   { href: '/app/settings/import', label: 'データ取込', en: 'Import' },
   { href: '/app/settings/integrations', label: '連携', en: 'Integrations' },
   { href: '/app/settings/audit', label: '監査ログ', en: 'Audit log' },
+  // 新しい管理画面（lib/admin-v2.ts）
+  { href: '/app/now', label: '店舗ナウ', en: 'Store now' },
+  { href: '/app/settings-all', label: '設定の一覧', en: 'Settings' },
 ];
 
 export function screenTitleFor(pathname: string): { label: string; en: string } | null {

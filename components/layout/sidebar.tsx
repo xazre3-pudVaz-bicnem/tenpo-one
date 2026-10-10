@@ -36,6 +36,7 @@ export function Sidebar({
   currentStoreId,
   iconFirst = false,
   homeOnly = false,
+  footer,
 }: {
   tiles: NavTile[];
   groups: NavGroup[];
@@ -45,6 +46,8 @@ export function Sidebar({
   iconFirst?: boolean;
   /** レジ端末：左メニューはホーム画面だけに出し、開いた画面は全幅で使う */
   homeOnly?: boolean;
+  /** メニューの一番下（会社のオーナーのパソコンだけ「新しい管理画面を試す」。lib/admin-v2.ts） */
+  footer?: React.ReactNode;
 }) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
@@ -191,6 +194,7 @@ export function Sidebar({
             </div>
           );
         })}
+        {footer && <div className="px-2 pt-3 pb-4">{footer}</div>}
       </nav>
     </aside>
   );
