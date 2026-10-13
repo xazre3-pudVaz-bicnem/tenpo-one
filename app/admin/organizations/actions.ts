@@ -8,6 +8,7 @@ import { ROLES } from '@/lib/permissions';
 import { FEATURE_KEYS } from '@/lib/features';
 import { withErrorCapture } from '@/lib/observability-server';
 import { assignOrgCode, assignStoreUsername, setupStoreContract } from '@/lib/tenant-provisioning';
+import { STORE_SETTINGS_COLUMNS_TO_COPY, cloneRow, copyMenuSettings } from '@/lib/store-menu-copy';
 
 function randomPassword() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!#$%';
@@ -611,4 +612,192 @@ export async function applyPlanDefaultsToOrg(organizationId: string): Promise<{ 
 
   revalidatePath(`/admin/organizations/${organizationId}`);
   return { disabledKeys };
+}
+
+// =============================================================
+// 店舗のメニューを別の店舗にコピー（2026-10-14 Ronnie「FULLMOoN 五反田を追加。メニューとレジの設定は肉ギャング渋谷と同じ」）
+// =============================================================
+
+export interface CopyStoreMenuInput {
+  organizationId: string;
+  sourceStoreId: string;
+  targetStoreId: string;
+}
+
+export interface CopyStoreMenuResult {
+  categories: number;
+  items: number;
+  variants: number;
+  optionGroups: number;
+  optionItems: number;
+  itemOptionLinks: number;
+  modifierLinks: number;
+}
+
+type Row = Record<string, unknown>;
+
+/** 1000 件ずつ全部読む（Supabase は1回 1000 件まで） */
+async function selectAll(
+  query: (from: number, to: number) => PromiseLike<{ data: Row[] | null; error: { message: string } | null }>
+): Promise<Row[]> {
+  const out: Row[] = [];
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await query(from, from + 999);
+    if (error) throw new Error(error.message);
+    out.push(...(data ?? []));
+    if (!data || data.length < 1000) return out;
+  }
+}
+
+async function insertAll(admin: ReturnType<typeof createAdminClient>, table: string, rows: Row[]) {
+  for (let i = 0; i < rows.length; i += 500) {
+    const { error } = await admin.from(table).insert(rows.slice(i, i + 500));
+    if (error) throw new Error(`${table} のコピーに失敗しました: ${error.message}`);
+  }
+}
+
+/**
+ * コピー元の店舗だけのメニュー（カテゴリ・商品・サイズ・トッピング・選択肢）と、メニューに関わるレジの設定を、
+ * コピー先の店舗に入れる（運営管理だけ）。コピー先にもうメニューがあるときはしない（二重にならないように）。
+ * 全店共通（store_id なし）のカテゴリ・商品はコピーしない（もう出ている）。品切れは外す。
+ */
+export async function copyStoreMenu(input: CopyStoreMenuInput): Promise<CopyStoreMenuResult> {
+  const ctx = await requireCypressAdmin();
+  const admin = createAdminClient();
+  const { organizationId: org, sourceStoreId: src, targetStoreId: dst } = input;
+  if (src === dst) throw new Error('コピー元とコピー先が同じ店舗です');
+
+  const { data: stores } = await admin.from('stores').select('id, name, organization_id').in('id', [src, dst]);
+  const source = stores?.find((s) => s.id === src);
+  const target = stores?.find((s) => s.id === dst);
+  if (!source || !target || source.organization_id !== org || target.organization_id !== org) {
+    throw new Error('店舗が見つかりません（同じ企業の店舗だけコピーできます）');
+  }
+
+  // コピー先が空か（二重にコピーしない）
+  const [{ count: dstCats }, { count: dstItems }, { count: dstGroups }] = await Promise.all([
+    admin.from('menu_categories').select('id', { count: 'exact', head: true }).eq('store_id', dst).neq('status', 'deleted'),
+    admin.from('menu_items').select('id', { count: 'exact', head: true }).eq('store_id', dst).neq('status', 'deleted'),
+    admin.from('menu_option_groups').select('id', { count: 'exact', head: true }).eq('store_id', dst).neq('status', 'deleted'),
+  ]);
+  if ((dstCats ?? 0) + (dstItems ?? 0) + (dstGroups ?? 0) > 0) {
+    throw new Error(`「${target.name}」にはもうメニューがあります。空の店舗にだけコピーできます`);
+  }
+
+  const cats = await selectAll((a, b) =>
+    admin.from('menu_categories').select('*').eq('organization_id', org).eq('store_id', src).neq('status', 'deleted').order('sort_order').range(a, b)
+  );
+  const items = await selectAll((a, b) =>
+    admin.from('menu_items').select('*').eq('organization_id', org).eq('store_id', src).neq('status', 'deleted').order('sort_order').range(a, b)
+  );
+  const groups = await selectAll((a, b) =>
+    admin.from('menu_option_groups').select('*').eq('organization_id', org).eq('store_id', src).neq('status', 'deleted').order('sort_order').range(a, b)
+  );
+  const optItems = await selectAll((a, b) =>
+    admin.from('menu_option_items').select('*').eq('organization_id', org).eq('store_id', src).neq('status', 'deleted').order('sort_order').range(a, b)
+  );
+  const links = await selectAll((a, b) =>
+    admin.from('menu_item_option_groups').select('*').eq('organization_id', org).eq('store_id', src).order('sort_order').range(a, b)
+  );
+  const itemIds = items.map((i) => i.id as string);
+  const variants: Row[] = [];
+  const modLinks: Row[] = [];
+  for (let i = 0; i < itemIds.length; i += 200) {
+    const chunk = itemIds.slice(i, i + 200);
+    const [{ data: v, error: ve }, { data: m, error: me }] = await Promise.all([
+      admin.from('menu_variants').select('*').in('menu_item_id', chunk).neq('status', 'deleted'),
+      admin.from('menu_item_modifiers').select('*').in('menu_item_id', chunk),
+    ]);
+    if (ve || me) throw new Error((ve ?? me)!.message);
+    variants.push(...(v ?? []));
+    modLinks.push(...(m ?? []));
+  }
+
+  // 古い ID → 新しい ID
+  const map = new Map<string, string>();
+  for (const r of [...cats, ...items, ...groups, ...optItems]) map.set(r.id as string, crypto.randomUUID());
+  const idOf = (old: unknown) => (typeof old === 'string' ? (map.get(old) ?? old) : old);
+  const by = { created_by: ctx.userId, updated_by: ctx.userId };
+
+  await insertAll(admin, 'menu_categories', cats.map((r) => cloneRow(r, { ...by, id: map.get(r.id as string), store_id: dst })));
+  await insertAll(
+    admin,
+    'menu_items',
+    items.map((r) =>
+      cloneRow(r, { ...by, id: map.get(r.id as string), store_id: dst, category_id: idOf(r.category_id), is_sold_out: false })
+    )
+  );
+  await insertAll(
+    admin,
+    'menu_variants',
+    variants
+      .filter((r) => map.has(r.menu_item_id as string))
+      .map((r) => cloneRow(r, { ...by, id: crypto.randomUUID(), menu_item_id: map.get(r.menu_item_id as string) }))
+  );
+  await insertAll(
+    admin,
+    'menu_item_modifiers',
+    modLinks
+      .filter((r) => map.has(r.menu_item_id as string))
+      .map((r) => ({ id: crypto.randomUUID(), menu_item_id: map.get(r.menu_item_id as string), modifier_id: r.modifier_id }))
+  );
+  await insertAll(admin, 'menu_option_groups', groups.map((r) => cloneRow(r, { ...by, id: map.get(r.id as string), store_id: dst })));
+  await insertAll(
+    admin,
+    'menu_option_items',
+    optItems
+      .filter((r) => map.has(r.group_id as string))
+      .map((r) => cloneRow(r, { ...by, id: map.get(r.id as string), store_id: dst, group_id: map.get(r.group_id as string) }))
+  );
+  const copiedLinks = links
+    .filter((r) => map.has(r.group_id as string))
+    .map((r) =>
+      cloneRow(r, { ...by, id: crypto.randomUUID(), store_id: dst, menu_item_id: idOf(r.menu_item_id), group_id: map.get(r.group_id as string) })
+    );
+  await insertAll(admin, 'menu_item_option_groups', copiedLinks);
+
+  // レジの設定（メニューに関わるものだけ。ID はコピー先のものに置き換える）
+  const { data: srcSettings } = await admin
+    .from('store_settings')
+    .select(['settings', ...STORE_SETTINGS_COLUMNS_TO_COPY].join(', '))
+    .eq('store_id', src)
+    .maybeSingle();
+  const { data: dstSettings } = await admin.from('store_settings').select('id, settings').eq('store_id', dst).maybeSingle();
+  if (srcSettings) {
+    const s = srcSettings as unknown as Row;
+    const patch: Row = { settings: copyMenuSettings(s.settings, (dstSettings as Row | null)?.settings, map), updated_by: ctx.userId };
+    for (const col of STORE_SETTINGS_COLUMNS_TO_COPY) if (col in s) patch[col] = s[col];
+    if (dstSettings) {
+      const { error } = await admin.from('store_settings').update(patch).eq('store_id', dst);
+      if (error) throw new Error(`レジの設定のコピーに失敗しました: ${error.message}`);
+    } else {
+      const { error } = await admin.from('store_settings').insert({ organization_id: org, store_id: dst, ...patch });
+      if (error) throw new Error(`レジの設定のコピーに失敗しました: ${error.message}`);
+    }
+  }
+
+  const result: CopyStoreMenuResult = {
+    categories: cats.length,
+    items: items.length,
+    variants: variants.filter((r) => map.has(r.menu_item_id as string)).length,
+    optionGroups: groups.length,
+    optionItems: optItems.filter((r) => map.has(r.group_id as string)).length,
+    itemOptionLinks: copiedLinks.length,
+    modifierLinks: modLinks.filter((r) => map.has(r.menu_item_id as string)).length,
+  };
+
+  const supabase = await createClient();
+  await supabase.rpc('log_audit', {
+    p_org: org,
+    p_store: dst,
+    p_action: 'store.menu_copy',
+    p_target_table: 'menu_items',
+    p_target_id: dst,
+    p_before: null,
+    p_after: { from_store: src, from_name: source.name, ...result },
+    p_note: '運営管理：店舗のメニューをコピー',
+  });
+
+  revalidatePath(`/admin/organizations/${org}`);
+  return result;
 }
