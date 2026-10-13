@@ -14,8 +14,8 @@ struct NativeOrderView: View {
     var body: some View {
         VStack(spacing: 0) {
             NativeTopBar(
-                storeName: model.storeName, title: "オーダー・会計", subtitle: "Order & Pay",
-                userName: model.clerkName ?? "担当 未設定",
+                storeName: model.storeName, title: "Order & Pay", subtitle: "オーダー・会計",
+                userName: model.clerkName ?? "No staff",
                 onHome: onHome,
                 onWeb: model.isLive ? { model.openInWeb() } : nil
             )
@@ -57,7 +57,7 @@ struct NativeOrderView: View {
             if model.loading {
                 ZStack {
                     NT.page.opacity(0.85).ignoresSafeArea()
-                    ProgressView("読み込み中…").font(.system(size: 16, weight: .bold)).tint(NT.purple)
+                    ProgressView("Loading…").font(.system(size: 16, weight: .bold)).tint(NT.purple)
                 }
             }
         }
@@ -80,7 +80,7 @@ struct NativeOrderView: View {
             }
         }
         .animation(.easeOut(duration: 0.22), value: showCheckout)
-        .confirmationDialog("担当者を選んでください", isPresented: $pickClerk, titleVisibility: .visible) {
+        .confirmationDialog("Choose staff", isPresented: $pickClerk, titleVisibility: .visible) {
             ForEach(model.clerks, id: \.id) { c in
                 Button(c.name) {
                     let then = afterClerk
@@ -91,16 +91,16 @@ struct NativeOrderView: View {
                     }
                 }
             }
-            Button("キャンセル", role: .cancel) { afterClerk = nil }
+            Button("Cancel", role: .cancel) { afterClerk = nil }
         }
         .alert(
-            "今までの画面で入れてください",
+            "Use the classic screen",
             isPresented: Binding(get: { model.webOnlyItem != nil }, set: { if !$0 { model.webOnlyItem = nil } })
         ) {
-            Button("今までの画面で開く") { model.openInWeb() }
-            Button("閉じる", role: .cancel) {}
+            Button("Open classic screen") { model.openInWeb() }
+            Button("Close", role: .cancel) {}
         } message: {
-            Text("「\(model.webOnlyItem?.name ?? "")」は選択肢がある商品です。サーバーが古いため、今までの画面で入れます。")
+            Text("\"\(model.webOnlyItem.map { $0.english ?? $0.name } ?? "")\" has options. Please add it on the classic screen.")
         }
     }
 
@@ -144,9 +144,9 @@ struct NativeTopBar: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            barButton(icon: "chevron.left", text: "戻る", action: onHome)
+            barButton(icon: "chevron.left", text: "Back", action: onHome)
             if let onWeb {
-                barButton(icon: "safari", text: "今までの画面", action: onWeb)
+                barButton(icon: "safari", text: "Classic screen", action: onWeb)
             }
             Image("BrandMark")
                 .resizable()
@@ -217,7 +217,7 @@ private struct SlipPanel: View {
                 Text(model.order.tableName).font(.system(size: 32, weight: .heavy)).foregroundColor(NT.purple)
                 HStack(spacing: 4) {
                     Image(systemName: "person.2")
-                    Text(verbatim: "\(model.order.guestCount)名")
+                    Text(verbatim: "\(model.order.guestCount) pax")
                 }
                 .lineLimit(1)
                 .fixedSize()
@@ -234,17 +234,17 @@ private struct SlipPanel: View {
             // 顧客・時間・担当
             VStack(alignment: .leading, spacing: 8) {
                 WrapLayout(spacing: 8) {
-                    chip(icon: "person", text: model.order.customerName.map { "\($0) 様" } ?? "顧客 未設定")
+                    chip(icon: "person", text: model.order.customerName ?? "No customer")
                     if let from = model.order.seatFrom, let to = model.order.seatTo {
                         chip(icon: "clock", text: "\(from)〜\(to)")
                     }
                     // 来店経路（booking source）
                     let source = (NPVisitSource.defaults + NPVisitSource.extras).first { $0.id == model.order.visitSourceId }
-                    chip(icon: "signpost.right", text: source?.label ?? "経路 未設定")
+                    chip(icon: "signpost.right", text: source?.english ?? "No source")
                 }
                 Button(action: onClerk) {
                     HStack(spacing: 4) {
-                        Text("担当 \(model.clerkName ?? "未設定")")
+                        Text("Staff: \(model.clerkName ?? "not set")")
                         if !model.clerks.isEmpty { Image(systemName: "chevron.down").font(.system(size: 10, weight: .bold)) }
                     }
                     .font(.system(size: 13, weight: model.clerkMissing ? .bold : .medium))
@@ -260,7 +260,7 @@ private struct SlipPanel: View {
             // 明細
             if model.order.lines.isEmpty {
                 Spacer()
-                Text("商品をタップして追加してください\nTap an item to add")
+                Text("Tap an item to add")
                     .multilineTextAlignment(.center)
                     .font(.system(size: 15)).foregroundColor(NT.ink3)
                 Spacer()
@@ -288,11 +288,11 @@ private struct SlipPanel: View {
             // 合計
             VStack(spacing: 6) {
                 Divider().overlay(NT.line)
-                totalRow("小計", NT.yen(model.subtotal))
-                totalRow("消費税", NT.yen(model.tax))
+                totalRow("Subtotal", NT.yen(model.subtotal))
+                totalRow("Tax", NT.yen(model.tax))
                 Divider().overlay(NT.line)
                 HStack(alignment: .lastTextBaseline) {
-                    Text("合計（税込）").font(.system(size: 17, weight: .bold)).foregroundColor(NT.ink)
+                    Text("Total (tax incl.)").font(.system(size: 17, weight: .bold)).foregroundColor(NT.ink)
                     Spacer()
                     Text(NT.yen(model.total)).font(.system(size: 34, weight: .heavy)).foregroundColor(NT.purple)
                         .contentTransition(.numericText())
@@ -300,12 +300,12 @@ private struct SlipPanel: View {
                 }
                 // 伝票の操作
                 FlowChips(onTap: { model.openInWeb() }, items: [
-                    ("arrow.triangle.branch", "伝票分割", false),
-                    ("doc.badge.plus", "伝票追加", false),
-                    ("square.on.square", "伝票統合", false),
-                    ("arrow.left.arrow.right", "テーブル移動", false),
-                    ("printer", "お会計伝票", false),
-                    ("xmark.circle", "この注文を取消", true),
+                    ("arrow.triangle.branch", "Split bill", false),
+                    ("doc.badge.plus", "New bill", false),
+                    ("square.on.square", "Merge bills", false),
+                    ("arrow.left.arrow.right", "Move table", false),
+                    ("printer", "Print bill", false),
+                    ("xmark.circle", "Cancel order", true),
                 ])
                 .padding(.top, 4)
             }
@@ -345,14 +345,16 @@ private struct LineRow: View {
     var body: some View {
         HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 4) {
-                Text(line.name).font(.system(size: 16, weight: .semibold)).foregroundColor(NT.ink).lineLimit(2)
-                if !line.optionNames.isEmpty {
-                    Text(line.optionNames.joined(separator: "・"))
-                        .font(.system(size: 12, weight: .semibold)).foregroundColor(NT.ink2).lineLimit(2)
+                Text(line.displayName).font(.system(size: 16, weight: .semibold)).foregroundColor(NT.ink).lineLimit(2)
+                if let jp = line.japaneseSub {
+                    Text(jp).font(.system(size: 11)).foregroundColor(NT.ink3).lineLimit(1)
+                }
+                if let opts = line.optionLabel {
+                    Text(opts).font(.system(size: 12, weight: .semibold)).foregroundColor(NT.ink2).lineLimit(2)
                 }
                 HStack(spacing: 6) {
                     Text(NT.yen(line.unitPrice)).font(.system(size: 12)).foregroundColor(NT.ink3)
-                    Text(line.sent ? "送信済み" : "未送信")
+                    Text(line.sent ? "Sent" : "Not sent")
                         .font(.system(size: 11, weight: .bold))
                         .lineLimit(1)
                         .fixedSize()
@@ -430,9 +432,9 @@ private struct CategoryColumn: View {
                         model.selectedCategory = cat.id
                     } label: {
                         VStack(alignment: .leading, spacing: 3) {
-                            Text(cat.name).font(.system(size: 19, weight: .heavy))
-                            if let sub = cat.sub {
-                                Text(sub).font(.system(size: 12, weight: .medium)).opacity(0.75)
+                            Text(cat.sub ?? cat.name).font(.system(size: 19, weight: .heavy)).lineLimit(2).minimumScaleFactor(0.8)
+                            if let sub = cat.sub, sub != cat.name {
+                                Text(cat.name).font(.system(size: 12, weight: .medium)).opacity(0.75).lineLimit(1)
                             }
                         }
                         .foregroundColor(selected ? .white : NT.ink)
@@ -462,7 +464,7 @@ private struct ItemsPanel: View {
         VStack(spacing: 0) {
             HStack(spacing: 10) {
                 Image(systemName: "magnifyingglass").foregroundColor(NT.ink3)
-                TextField("商品名・カナ・英語で検索 / Search", text: $model.search)
+                TextField("Search (English / 日本語 / カナ)", text: $model.search)
                     .font(.system(size: 17))
                     .textInputAutocapitalization(.never)
                     .disableAutocorrection(true)
@@ -488,7 +490,7 @@ private struct ItemsPanel: View {
             }
 
             if !model.registerOpen {
-                Text("レジが未開局です。会計の前に「レジクローズ」画面で釣銭準備金を数えてレジを開局してください")
+                Text("The register is not open. Before checkout, open it on the Register close screen (count the change float).")
                     .font(.system(size: 14, weight: .semibold)).foregroundColor(NT.danger)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(12)
@@ -501,7 +503,7 @@ private struct ItemsPanel: View {
                 Button(action: onSend) {
                     HStack(spacing: 8) {
                         Image(systemName: "bell")
-                        Text(model.unsentCount > 0 ? "注文確定（\(model.unsentCount)品を送信）" : "注文確定（未送信なし）")
+                        Text(model.unsentCount > 0 ? "Send order (\(model.unsentCount))" : "Send order (nothing new)")
                             .lineLimit(1)
                             .minimumScaleFactor(0.6)
                     }
@@ -514,7 +516,7 @@ private struct ItemsPanel: View {
                 .disabled(model.unsentCount == 0 || model.busy)
 
                 Button(action: onCheckout) {
-                    Text("会計へ（\(NT.yen(model.total))）")
+                    Text("Checkout \(NT.yen(model.total))")
                         .lineLimit(1)
                         .minimumScaleFactor(0.6)
                         .font(.system(size: 21, weight: .heavy))
@@ -540,17 +542,20 @@ private struct ItemTile: View {
     var body: some View {
         Button(action: onTap) {
             VStack(spacing: 8) {
-                Text(item.name)
+                Text(item.english ?? item.name)
                     .font(.system(size: 17, weight: .bold))
                     .foregroundColor(item.soldOut ? NT.ink3 : NT.ink)
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
                     .minimumScaleFactor(0.8)
+                if item.english != nil {
+                    Text(item.name).font(.system(size: 11)).foregroundColor(NT.ink3).lineLimit(1)
+                }
                 Text(NT.yen(item.price))
                     .font(.system(size: 19, weight: .heavy))
                     .foregroundColor(item.soldOut ? NT.ink3 : NT.purple)
                 if item.hasOptions || item.openPrice {
-                    Text(item.openPrice ? "金額を入力" : "選択あり").font(.system(size: 11, weight: .bold)).foregroundColor(NT.ink3)
+                    Text(item.openPrice ? "Enter price" : "Options").font(.system(size: 11, weight: .bold)).foregroundColor(NT.ink3)
                 }
             }
             .padding(10)
@@ -568,7 +573,7 @@ private struct ItemTile: View {
             }
             .overlay {
                 if item.soldOut {
-                    Text("売り切れ")
+                    Text("Sold out")
                         .font(.system(size: 13, weight: .heavy)).foregroundColor(.white)
                         .padding(.horizontal, 10).padding(.vertical, 4)
                         .background(Capsule().fill(NT.danger))

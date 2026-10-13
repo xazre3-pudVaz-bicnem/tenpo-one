@@ -37,20 +37,38 @@ struct NPOrderLine: Identifiable, Hashable {
     var local: Bool = false
     /// 選んだ選択肢（名前は明細の下に出す。id は注文確定で送る）
     var optionNames: [String] = []
+    /// 選択肢の英語名（iPad は英語を主に出す）
+    var optionNamesEn: [String] = []
+    /// 商品の英語名（iPad は英語を主に出し、日本語は下に小さく。Web のレジと同じ）
+    var english: String? = nil
     var optionItemIds: [String] = []
     /// ¥0 の商品にレジで打った金額（カートだけ）
     var openPrice: Int? = nil
 
     var lineTotal: Int { unitPrice * quantity }
+    var displayName: String { english ?? name }
+    var japaneseSub: String? { english != nil && english != name ? name : nil }
+    /// 選択肢（英語。無ければ日本語）
+    var optionLabel: String? {
+        let list = optionNamesEn.isEmpty ? optionNames : optionNamesEn
+        return list.isEmpty ? nil : list.joined(separator: ", ")
+    }
     /// 同じ品・同じ選択・同じ金額ならカートで1行にまとめる
     var cartKey: String { [menuItemId ?? "", optionItemIds.sorted().joined(separator: ","), openPrice.map(String.init) ?? ""].joined(separator: "|") }
 }
 
 /// 商品の選択肢グループ（Web のレジの選択ダイアログと同じ：必須・最小/最大・追加料金）
 struct NPOptionGroup: Identifiable, Hashable {
-    struct Option: Identifiable, Hashable { let id: String; let name: String; let price: Int }
+    struct Option: Identifiable, Hashable {
+        let id: String
+        let name: String
+        var english: String? = nil
+        let price: Int
+        var title: String { english ?? name }
+    }
     let id: String
     let name: String
+    var english: String? = nil
     let isRequired: Bool
     let minSelect: Int
     let maxSelect: Int
@@ -58,9 +76,10 @@ struct NPOptionGroup: Identifiable, Hashable {
 
     /// 最低いくつ選ぶか（必須なら1つ以上）
     var minimum: Int { isRequired ? max(1, minSelect) : minSelect }
+    var title: String { english ?? name }
     var rule: String {
-        if maxSelect == 1 { return minimum >= 1 ? "1つ選ぶ" : "1つまで" }
-        return minimum == maxSelect ? "\(maxSelect)つ選ぶ" : "\(minimum)〜\(maxSelect)つ"
+        if maxSelect == 1 { return minimum >= 1 ? "Choose 1" : "Up to 1" }
+        return minimum == maxSelect ? "Choose \(maxSelect)" : "Choose \(minimum)–\(maxSelect)"
     }
 }
 
@@ -72,6 +91,7 @@ struct NPPendingItem: Identifiable, Equatable {
     /// 選択肢を選び終えたあと（金額入力の商品は次にテンキー）
     var chosen: [String] = []
     var chosenNames: [String] = []
+    var chosenNamesEn: [String] = []
     var extra: Int = 0
     var askingPrice: Bool
 }
@@ -199,6 +219,12 @@ final class NativeOrderModel: ObservableObject {
     var clerkName: String? { clerks.first { $0.id == order.clerkId }?.name ?? order.clerkName }
     var clerkMissing: Bool { clerkRequired && order.clerkId == nil }
 
+    /// 商品の英語名（明細を英語で出すため）
+    func englishOf(_ menuItemId: String?) -> String? {
+        guard let id = menuItemId else { return nil }
+        return items.first { $0.id == id }?.english
+    }
+
     func qtyInOrder(_ item: NPMenuItem) -> Int {
         order.lines.filter { $0.menuItemId == item.id }.reduce(0) { $0 + $1.quantity }
     }
@@ -218,36 +244,37 @@ final class NativeOrderModel: ObservableObject {
             pending = NPPendingItem(item: item, groups: groups, askingPrice: groups.isEmpty)
             return
         }
-        addToCart(item, optionIds: [], optionNames: [], extra: 0, openPrice: nil)
+        addToCart(item, optionIds: [], optionNames: [], optionNamesEn: [], extra: 0, openPrice: nil)
     }
 
     /// 選択肢を選び終えた
-    func chooseOptions(_ ids: [String], names: [String], extra: Int) {
+    func chooseOptions(_ ids: [String], names: [String], namesEn: [String], extra: Int) {
         guard var p = pending else { return }
         if p.item.openPrice {
             p.chosen = ids
             p.chosenNames = names
+            p.chosenNamesEn = namesEn
             p.extra = extra
             p.askingPrice = true
             pending = p
             return
         }
         pending = nil
-        addToCart(p.item, optionIds: ids, optionNames: names, extra: extra, openPrice: nil)
+        addToCart(p.item, optionIds: ids, optionNames: names, optionNamesEn: namesEn, extra: extra, openPrice: nil)
     }
 
     /// 金額を打ち終えた（¥0 の商品）
     func choosePrice(_ yen: Int) {
         guard let p = pending else { return }
         pending = nil
-        addToCart(p.item, optionIds: p.chosen, optionNames: p.chosenNames, extra: p.extra, openPrice: yen)
+        addToCart(p.item, optionIds: p.chosen, optionNames: p.chosenNames, optionNamesEn: p.chosenNamesEn, extra: p.extra, openPrice: yen)
     }
 
-    private func addToCart(_ item: NPMenuItem, optionIds: [String], optionNames: [String], extra: Int, openPrice: Int?) {
+    private func addToCart(_ item: NPMenuItem, optionIds: [String], optionNames: [String], optionNamesEn: [String], extra: Int, openPrice: Int?) {
         let line = NPOrderLine(
             id: "cart-" + UUID().uuidString, menuItemId: item.id, name: item.name, quantity: 1,
             unitPrice: (openPrice ?? item.price) + extra, sent: false, local: true,
-            optionNames: optionNames, optionItemIds: optionIds, openPrice: openPrice
+            optionNames: optionNames, optionNamesEn: optionNamesEn, english: item.english, optionItemIds: optionIds, openPrice: openPrice
         )
         if let i = order.lines.firstIndex(where: { $0.local && $0.cartKey == line.cartKey }) {
             order.lines[i].quantity += 1
@@ -284,7 +311,7 @@ final class NativeOrderModel: ObservableObject {
             notice = e.message
             if e.useWeb { openInWeb() }
         } catch {
-            notice = "読み込めませんでした。通信を確かめてください"
+            notice = "Couldn't load. Check the connection."
         }
     }
 
@@ -301,8 +328,8 @@ final class NativeOrderModel: ObservableObject {
         }
         optionGroups = (p.optionGroups ?? [:]).mapValues { list in
             list.map { g in
-                NPOptionGroup(id: g.id, name: g.name, isRequired: g.isRequired, minSelect: g.minSelect, maxSelect: g.maxSelect,
-                              items: g.items.map { NPOptionGroup.Option(id: $0.id, name: $0.name, price: $0.price) })
+                NPOptionGroup(id: g.id, name: g.name, english: g.english, isRequired: g.isRequired, minSelect: g.minSelect, maxSelect: g.maxSelect,
+                              items: g.items.map { NPOptionGroup.Option(id: $0.id, name: $0.name, english: $0.english, price: $0.price) })
             }
         }
         clerks = p.clerks
@@ -328,7 +355,7 @@ final class NativeOrderModel: ObservableObject {
             customerName: o.customerName, seatFrom: o.seatFrom, seatTo: o.seatTo, clerkName: nil,
             lines: o.lines.map {
                 NPOrderLine(id: $0.id, menuItemId: $0.menuItemId, name: $0.name, quantity: $0.quantity, unitPrice: $0.unitPrice, sent: $0.sent,
-                            optionNames: $0.options ?? [])
+                            optionNames: $0.options ?? [], optionNamesEn: $0.optionsEn ?? [], english: englishOf($0.menuItemId))
             } + cart,
             visitSourceId: o.visitSourceId, serviceCharge: o.serviceCharge, discountTotal: o.discountTotal,
             discountReason: o.discountReason, clerkId: o.clerkId,
@@ -416,7 +443,7 @@ final class NativeOrderModel: ObservableObject {
             return d
         }
         guard let r = await act(["type": "checkout", "orderId": orderId, "payments": body, "memo": memo]) else { return false }
-        if r.alreadyPaid == true { notice = "この伝票は既に会計済みです" }
+        if r.alreadyPaid == true { notice = "This order has already been paid." }
         // ドロア（店の設定で開くか決める）
         let methods = Array(Set(payments.map { $0.method.rawValue }))
         _ = try? await NativeAPI.shared.act(["type": "drawer", "orderId": orderId, "methods": methods], throwOnFail: false)
@@ -445,53 +472,54 @@ extension NativeOrderModel {
             NPMenuItem(id: id, categoryId: c, name: n, kana: kana, english: en, price: p, soldOut: soldOut, hasOptions: options)
         }
         let items = [
-            m("i1", "c0", "本日の刺身盛り合わせ", 1580, en: "Sashimi"),
-            m("i2", "c0", "黒毛和牛ステーキ", 2980, en: "Wagyu steak", options: true),
-            m("i3", "c0", "自家製ポテトサラダ", 480),
+            m("i1", "c0", "本日の刺身盛り合わせ", 1580, en: "Today's sashimi platter"),
+            m("i2", "c0", "黒毛和牛ステーキ", 2980, en: "Wagyu beef steak", options: true),
+            m("i3", "c0", "自家製ポテトサラダ", 480, en: "Homemade potato salad"),
             m("i4", "c1", "枝豆", 390, kana: "エダマメ", en: "Edamame"),
             m("i5", "c1", "唐揚げ", 580, kana: "カラアゲ", en: "Karaage"),
-            m("i6", "c1", "だし巻き玉子", 520),
-            m("i7", "c1", "シーザーサラダ", 690),
-            m("i8", "c1", "焼き鳥 盛り合わせ（5本）", 980, options: true),
-            m("i9", "c1", "たこわさ", 420, soldOut: true),
-            m("i10", "c1", "ガーリックライス", 650),
+            m("i6", "c1", "だし巻き玉子", 520, en: "Dashi rolled omelette"),
+            m("i7", "c1", "シーザーサラダ", 690, en: "Caesar salad"),
+            m("i8", "c1", "焼き鳥 盛り合わせ（5本）", 980, en: "Yakitori platter (5)", options: true),
+            m("i9", "c1", "たこわさ", 420, en: "Octopus wasabi", soldOut: true),
+            m("i10", "c1", "ガーリックライス", 650, en: "Garlic rice"),
             m("i11", "c2", "生ビール", 590, kana: "ナマビール", en: "Draft beer"),
             m("i12", "c2", "ハイボール", 490, en: "Highball"),
-            m("i13", "c2", "レモンサワー", 490),
-            m("i14", "c2", "ウーロン茶", 350),
-            m("i15", "c2", "日本酒（一合）", 780, options: true),
-            m("i16", "c3", "飲み放題 2時間", 2200),
-            m("i17", "c3", "宴会コース 5,000円", 5000),
+            m("i13", "c2", "レモンサワー", 490, en: "Lemon sour"),
+            m("i14", "c2", "ウーロン茶", 350, en: "Oolong tea"),
+            m("i15", "c2", "日本酒（一合）", 780, en: "Sake (180ml)", options: true),
+            m("i16", "c3", "飲み放題 2時間", 2200, en: "All-you-can-drink 2h"),
+            m("i17", "c3", "宴会コース 5,000円", 5000, en: "Party course ¥5,000"),
             NPMenuItem(id: "i19", categoryId: "c3", name: "キャンセル料", kana: nil, english: "Cancel fee", price: 0, soldOut: false, hasOptions: false, openPrice: true),
-            m("i18", "c4", "抹茶アイス", 380),
+            m("i18", "c4", "抹茶アイス", 380, en: "Matcha ice cream"),
         ]
         let order = NPOrder(
             id: "o1", orderNo: 5998, tableName: "T3", guestCount: 2, customerName: nil,
             seatFrom: "18:30", seatTo: "20:30", clerkName: "Bimal",
             lines: [
-                NPOrderLine(id: "l1", menuItemId: "i11", name: "生ビール", quantity: 2, unitPrice: 590, sent: true),
-                NPOrderLine(id: "l2", menuItemId: "i4", name: "枝豆", quantity: 1, unitPrice: 390, sent: true),
-                NPOrderLine(id: "l3", menuItemId: "i5", name: "唐揚げ", quantity: 1, unitPrice: 580, sent: false, local: true),
+                NPOrderLine(id: "l1", menuItemId: "i11", name: "生ビール", quantity: 2, unitPrice: 590, sent: true, english: "Draft beer"),
+                NPOrderLine(id: "l2", menuItemId: "i4", name: "枝豆", quantity: 1, unitPrice: 390, sent: true, english: "Edamame"),
+                NPOrderLine(id: "l3", menuItemId: "i5", name: "唐揚げ", quantity: 1, unitPrice: 580, sent: false, local: true, english: "Karaage"),
             ],
             visitSourceId: "tabelog"
         )
         let model = NativeOrderModel(storeName: "MEAT CROWN 新横浜", categories: cats, items: items, order: order, registerOpen: true)
         model.selectedCategory = "c1"
-        func o(_ id: String, _ n: String, _ p: Int = 0) -> NPOptionGroup.Option { NPOptionGroup.Option(id: id, name: n, price: p) }
+        func o(_ id: String, _ n: String, _ en: String, _ p: Int = 0) -> NPOptionGroup.Option { NPOptionGroup.Option(id: id, name: n, english: en, price: p) }
         model.optionGroups = [
             "i2": [
-                NPOptionGroup(id: "g1", name: "焼き加減", isRequired: true, minSelect: 1, maxSelect: 1,
-                              items: [o("o1", "レア"), o("o2", "ミディアムレア"), o("o3", "ミディアム"), o("o4", "ウェルダン")]),
-                NPOptionGroup(id: "g2", name: "ソース", isRequired: true, minSelect: 1, maxSelect: 1,
-                              items: [o("o5", "わさび醤油"), o("o6", "ガーリック"), o("o7", "岩塩")]),
-                NPOptionGroup(id: "g3", name: "トッピング", isRequired: false, minSelect: 0, maxSelect: 3,
-                              items: [o("o8", "フォアグラ", 800), o("o9", "目玉焼き", 150), o("o10", "トリュフ", 500), o("o11", "大盛りライス", 100)]),
+                NPOptionGroup(id: "g1", name: "焼き加減", english: "Doneness", isRequired: true, minSelect: 1, maxSelect: 1,
+                              items: [o("o1", "レア", "Rare"), o("o2", "ミディアムレア", "Medium rare"), o("o3", "ミディアム", "Medium"), o("o4", "ウェルダン", "Well done")]),
+                NPOptionGroup(id: "g2", name: "ソース", english: "Sauce", isRequired: true, minSelect: 1, maxSelect: 1,
+                              items: [o("o5", "わさび醤油", "Wasabi soy"), o("o6", "ガーリック", "Garlic"), o("o7", "岩塩", "Rock salt")]),
+                NPOptionGroup(id: "g3", name: "トッピング", english: "Toppings", isRequired: false, minSelect: 0, maxSelect: 3,
+                              items: [o("o8", "フォアグラ", "Foie gras", 800), o("o9", "目玉焼き", "Fried egg", 150), o("o10", "トリュフ", "Truffle", 500), o("o11", "大盛りライス", "Large rice", 100)]),
             ],
-            "i8": [NPOptionGroup(id: "g4", name: "味", isRequired: true, minSelect: 1, maxSelect: 1, items: [o("o12", "塩"), o("o13", "タレ"), o("o14", "半々")])],
-            "i15": [NPOptionGroup(id: "g5", name: "温度", isRequired: true, minSelect: 1, maxSelect: 1, items: [o("o15", "冷"), o("o16", "常温"), o("o17", "燗", 50)])],
+            "i8": [NPOptionGroup(id: "g4", name: "味", english: "Flavor", isRequired: true, minSelect: 1, maxSelect: 1, items: [o("o12", "塩", "Salt"), o("o13", "タレ", "Sauce"), o("o14", "半々", "Half & half")])],
+            "i15": [NPOptionGroup(id: "g5", name: "温度", english: "Temperature", isRequired: true, minSelect: 1, maxSelect: 1, items: [o("o15", "冷", "Cold"), o("o16", "常温", "Room temp"), o("o17", "燗", "Hot", 50)])],
         ]
         model.order.lines.insert(
-            NPOrderLine(id: "l4", menuItemId: "i8", name: "焼き鳥 盛り合わせ（5本）", quantity: 1, unitPrice: 980, sent: true, optionNames: ["タレ"]), at: 2)
+            NPOrderLine(id: "l4", menuItemId: "i8", name: "焼き鳥 盛り合わせ（5本）", quantity: 1, unitPrice: 980, sent: true,
+                        optionNames: ["タレ"], optionNamesEn: ["Sauce"], english: "Yakitori platter (5)"), at: 2)
         return model
     }
 }

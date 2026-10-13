@@ -136,7 +136,15 @@ describe('今の Web・レジは変えない／守り', () => {
     expect(out.a.map((x) => x.id)).toEqual(['1', '2']);
     expect(out.a[0]).toMatchObject({ isRequired: false, minSelect: 0, maxSelect: 3 });
     expect(out.a[0].items.map((o) => o.id)).toEqual(['y', 'z']);
-    expect(out.a[1].items).toEqual([{ id: 'x', name: 'Ox', price: 100 }]);
+    expect(out.a[1].items).toEqual([{ id: 'x', name: 'Ox', english: null, price: 100 }]);
+    // 英語名（name_en）があれば英語を主に（iPad は英語。2026-10-13 Ronnie「iPad は全部英語」）
+    const en = optionGroupsFrom([
+      {
+        menu_item_id: 'a',
+        menu_option_groups: g('5', [{ id: 'r', status: 'active', sort_order: 0, name_en: 'Rare' } as never]),
+      },
+    ]);
+    expect(en.a[0].items[0].english).toBe('Rare');
   });
 
   it('Web のレジのページは変えていない', () => {

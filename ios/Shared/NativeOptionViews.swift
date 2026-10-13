@@ -13,7 +13,7 @@ struct NativePendingItemPanel: View {
             Group {
                 if pending.askingPrice {
                     NativeOpenPricePad(
-                        item: pending.item, extra: pending.extra, optionNames: pending.chosenNames,
+                        item: pending.item, extra: pending.extra, optionNames: pending.chosenNamesEn,
                         onCancel: { model.pending = nil },
                         onDone: { model.choosePrice($0) }
                     )
@@ -22,7 +22,7 @@ struct NativePendingItemPanel: View {
                     NativeOptionPicker(
                         item: pending.item, groups: pending.groups,
                         onCancel: { model.pending = nil },
-                        onDone: { ids, names, extra in model.chooseOptions(ids, names: names, extra: extra) }
+                        onDone: { ids, names, namesEn, extra in model.chooseOptions(ids, names: names, namesEn: namesEn, extra: extra) }
                     )
                     .frame(maxWidth: 780)
                 }
@@ -38,7 +38,7 @@ struct NativeOptionPicker: View {
     let item: NPMenuItem
     let groups: [NPOptionGroup]
     let onCancel: () -> Void
-    let onDone: (_ ids: [String], _ names: [String], _ extra: Int) -> Void
+    let onDone: (_ ids: [String], _ names: [String], _ namesEn: [String], _ extra: Int) -> Void
     /// グループ → 選んだ選択肢（選んだ順）
     @State private var chosen: [String: [String]] = [:]
 
@@ -66,18 +66,18 @@ struct NativeOptionPicker: View {
         VStack(spacing: 0) {
             HStack(alignment: .center, spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(item.name).font(.system(size: 22, weight: .heavy)).foregroundColor(NT.ink).lineLimit(2)
-                    Text("選択肢を選んでください").font(.system(size: 13, weight: .semibold)).foregroundColor(NT.ink3)
+                    Text(item.english ?? item.name).font(.system(size: 22, weight: .heavy)).foregroundColor(NT.ink).lineLimit(2)
+                    Text(item.english != nil ? "\(item.name) · Choose options" : "Choose options").font(.system(size: 13, weight: .semibold)).foregroundColor(NT.ink3)
                 }
                 Spacer(minLength: 8)
                 VStack(alignment: .trailing, spacing: 2) {
                     if item.openPrice {
-                        Text("金額は次で入力").font(.system(size: 14, weight: .bold)).foregroundColor(NT.ink2)
+                        Text("Price next").font(.system(size: 14, weight: .bold)).foregroundColor(NT.ink2)
                     } else {
                         Text(NT.yen(item.price + extra)).font(.system(size: 26, weight: .heavy)).foregroundColor(NT.purple)
                     }
                     if extra > 0 {
-                        Text("選択肢 +\(NT.yen(extra))").font(.system(size: 12, weight: .bold)).foregroundColor(NT.ink3)
+                        Text("Options +\(NT.yen(extra))").font(.system(size: 12, weight: .bold)).foregroundColor(NT.ink3)
                     }
                 }
             }
@@ -90,8 +90,11 @@ struct NativeOptionPicker: View {
                     ForEach(groups) { g in
                         VStack(alignment: .leading, spacing: 10) {
                             HStack(spacing: 8) {
-                                Text(g.name).font(.system(size: 17, weight: .bold)).foregroundColor(NT.ink)
-                                Text(g.minimum >= 1 ? "必須" : "任意")
+                                Text(g.title).font(.system(size: 17, weight: .bold)).foregroundColor(NT.ink)
+                                if g.english != nil {
+                                    Text(g.name).font(.system(size: 12)).foregroundColor(NT.ink3)
+                                }
+                                Text(g.minimum >= 1 ? "Required" : "Optional")
                                     .font(.system(size: 11, weight: .heavy))
                                     .foregroundColor(g.minimum >= 1 ? NT.danger : NT.ink2)
                                     .padding(.horizontal, 7).padding(.vertical, 2)
@@ -118,16 +121,16 @@ struct NativeOptionPicker: View {
 
             HStack(spacing: 12) {
                 Button(action: onCancel) {
-                    Text("キャンセル").font(.system(size: 17, weight: .bold)).foregroundColor(NT.ink2)
+                    Text("Cancel").font(.system(size: 17, weight: .bold)).foregroundColor(NT.ink2)
                         .frame(minWidth: 140, minHeight: 56)
                         .background(RoundedRectangle(cornerRadius: 14).fill(NT.lilac))
                 }
                 .buttonStyle(PressableStyle())
                 Spacer(minLength: 8)
                 Button {
-                    onDone(picked.map(\.id), picked.map(\.name), extra)
+                    onDone(picked.map(\.id), picked.map(\.name), picked.map(\.title), extra)
                 } label: {
-                    Text(item.openPrice ? "次へ（金額）" : "カートに入れる")
+                    Text(item.openPrice ? "Next: price" : "Add to order")
                         .font(.system(size: 18, weight: .heavy)).foregroundColor(.white)
                         .frame(minWidth: 240, minHeight: 56)
                         .background(RoundedRectangle(cornerRadius: 14).fill(allOk ? NT.purple : NT.ink3.opacity(0.5)))
@@ -150,7 +153,10 @@ struct NativeOptionPicker: View {
                 Image(systemName: on ? (g.maxSelect == 1 ? "largecircle.fill.circle" : "checkmark.square.fill") : (g.maxSelect == 1 ? "circle" : "square"))
                     .font(.system(size: 18, weight: .semibold))
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(o.name).font(.system(size: 16, weight: .bold)).lineLimit(1)
+                    Text(o.title).font(.system(size: 16, weight: .bold)).lineLimit(1)
+                    if o.english != nil {
+                        Text(o.name).font(.system(size: 11)).opacity(0.7).lineLimit(1)
+                    }
                     if o.price != 0 {
                         Text(verbatim: (o.price > 0 ? "+" : "") + NT.yen(o.price)).font(.system(size: 12, weight: .bold)).opacity(0.8)
                     }
@@ -194,12 +200,12 @@ struct NativeOpenPricePad: View {
     var body: some View {
         VStack(spacing: 14) {
             VStack(spacing: 4) {
-                Text(item.name).font(.system(size: 20, weight: .heavy)).foregroundColor(NT.ink).lineLimit(2).multilineTextAlignment(.center)
-                Text(optionNames.isEmpty ? "金額を入力してください" : optionNames.joined(separator: "・"))
+                Text(item.english ?? item.name).font(.system(size: 20, weight: .heavy)).foregroundColor(NT.ink).lineLimit(2).multilineTextAlignment(.center)
+                Text(optionNames.isEmpty ? "Enter the price" : optionNames.joined(separator: ", "))
                     .font(.system(size: 13, weight: .semibold)).foregroundColor(NT.ink3).lineLimit(2)
             }
             HStack(alignment: .firstTextBaseline) {
-                Text("金額").font(.system(size: 14, weight: .bold)).foregroundColor(NT.ink2)
+                Text("Price").font(.system(size: 14, weight: .bold)).foregroundColor(NT.ink2)
                 Spacer()
                 Text(NT.yen(yen)).font(.system(size: 36, weight: .heavy)).foregroundColor(yen > 0 ? NT.ink : NT.ink3)
                     .lineLimit(1).minimumScaleFactor(0.6)
@@ -207,7 +213,7 @@ struct NativeOpenPricePad: View {
             .padding(.horizontal, 16).padding(.vertical, 12)
             .background(RoundedRectangle(cornerRadius: 14).fill(NT.lilac))
             if extra > 0 {
-                Text("選択肢 +\(NT.yen(extra))（合計 \(NT.yen(yen + extra))）")
+                Text("Options +\(NT.yen(extra)) (total \(NT.yen(yen + extra)))")
                     .font(.system(size: 13, weight: .bold)).foregroundColor(NT.ink2)
             }
             let keys = ["7", "8", "9", "4", "5", "6", "1", "2", "3", "00", "0", "⌫"]
@@ -227,13 +233,13 @@ struct NativeOpenPricePad: View {
             }
             HStack(spacing: 10) {
                 Button(action: onCancel) {
-                    Text("キャンセル").font(.system(size: 17, weight: .bold)).foregroundColor(NT.ink2)
+                    Text("Cancel").font(.system(size: 17, weight: .bold)).foregroundColor(NT.ink2)
                         .frame(maxWidth: .infinity, minHeight: 56)
                         .background(RoundedRectangle(cornerRadius: 14).fill(NT.lilac))
                 }
                 .buttonStyle(PressableStyle())
                 Button { onDone(yen) } label: {
-                    Text("カートに入れる").font(.system(size: 18, weight: .heavy)).foregroundColor(.white)
+                    Text("Add to order").font(.system(size: 18, weight: .heavy)).foregroundColor(.white)
                         .frame(maxWidth: .infinity, minHeight: 56)
                         .background(RoundedRectangle(cornerRadius: 14).fill(yen > 0 ? NT.purple : NT.ink3.opacity(0.5)))
                 }

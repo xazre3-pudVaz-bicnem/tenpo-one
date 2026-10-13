@@ -6,6 +6,16 @@ struct NPVisitSource: Identifiable, Codable, Hashable {
     let id: String
     let label: String
 
+    /// iPad は英語で出す（2026-10-13 Ronnie「iPad は全部英語」）。知らない経路は登録の名前のまま
+    var english: String { Self.englishLabels[id] ?? label }
+    private static let englishLabels: [String: String] = [
+        "free": "Walk in", "phone": "Phone (same day)", "tabelog": "Tabelog", "hotpepper": "Hot Pepper",
+        "gurunavi": "Gurunavi", "retty": "Retty", "google": "Google", "website": "Website", "sns": "SNS",
+        "line": "LINE", "catch": "CATCH", "other": "Other", "ikyu": "Ikyu", "ozmall": "OZmall", "epark": "EPARK",
+        "hitosara": "Hitosara", "tablecheck": "TableCheck", "toreta": "Toreta", "ebica": "ebica",
+        "instagram": "Instagram", "repeat": "Repeat guest",
+    ]
+
     /// 既定で出す12個（設定 > レジ > 来店経路 で変えられる）
     static let defaults: [NPVisitSource] = [
         .init(id: "free", label: "Walk in"),
@@ -54,15 +64,17 @@ enum NPPayMethod: String, CaseIterable, Identifiable, Codable {
         }
     }
 
+    /// iPad の画面は英語を主に出す（日本語は下に小さく）
     var english: String {
         switch self {
         case .cash: return "Cash"
-        case .credit: return "Card"
-        case .qr: return "QR"
-        case .emoney: return "IC / e-money"
-        case .external: return "Terminal"
+        case .credit: return "Credit card"
+        case .qr: return "QR code"
+        case .emoney: return "E-money / IC"
+        case .external: return "Other terminal"
         case .other: return "Other"
-        case .points, .sitePoints: return "Points"
+        case .points: return "Store points"
+        case .sitePoints: return "Site points"
         }
     }
 
@@ -82,6 +94,13 @@ enum NPPayMethod: String, CaseIterable, Identifiable, Codable {
 struct NPBrand: Identifiable, Hashable, Codable {
     let id: String
     let name: String
+
+    /// iPad は英語で出す。知らないもの（店で足した名前）はそのまま
+    var english: String { Self.englishNames[id] ?? name }
+    private static let englishNames: [String: String] = [
+        "unionpay": "UnionPay", "rakutenpay": "Rakuten Pay", "dbarai": "d Barai", "merpay": "Merpay",
+        "transit": "Transit IC", "edy": "Rakuten Edy", "hotpepper": "Hot Pepper", "gurunavi": "Gurunavi", "tabelog": "Tabelog",
+    ]
 }
 
 /// 支払方法の内訳（設定していない店舗の既定。Web の DEFAULT_METHOD_BRANDS と同じ）
@@ -123,6 +142,9 @@ struct NPDiscountPreset: Identifiable, Hashable {
     let kind: Kind
     let value: Int
 
+    /// iPad は英語で出す（店で付けた名前はそのまま）
+    var english: String { id == "kanji-free" || name == "幹事様無料" ? "Organizer free" : name }
+
     static let defaults: [NPDiscountPreset] = [
         .init(id: "kanji-free", name: "幹事様無料", kind: .manual, value: 0),
     ]
@@ -137,5 +159,5 @@ struct NPPaymentRow: Identifiable, Hashable {
     /// 現金の預り金
     var tendered: Int = 0
 
-    var title: String { brand.map { "\(method.label)・\($0.name)" } ?? method.label }
+    var title: String { brand.map { "\(method.english) · \($0.english)" } ?? method.english }
 }
