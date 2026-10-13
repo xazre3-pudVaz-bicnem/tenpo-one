@@ -20,6 +20,18 @@ export interface TenpoNativeBridge {
    * （2026-10-13 Ronnie「レシートプリンター＋ドロアは iPad と Bluetooth」。ios/Shared/BluetoothPrinters.swift）
    */
   bluetooth?: NativeBluetooth;
+  /**
+   * ネイティブのオーダー・会計画面（試験中）。アプリが対応していれば入っている（iPad だけ）
+   * （2026-10-13 Ronnie「Airレジのように全部ネイティブ」。ios/Shared/NativeOrderView.swift）
+   */
+  nativePos?: NativeNativePos;
+}
+
+export interface NativeNativePos {
+  /** いま ON か */
+  enabled: boolean;
+  /** ON/OFF を変える（この iPad だけ） */
+  set: (on: boolean) => Promise<{ ok: boolean; enabled?: boolean }>;
 }
 
 export interface NativeBluetoothDevice {
@@ -52,6 +64,11 @@ declare global {
 export function nativeBridge(): TenpoNativeBridge | null {
   if (typeof window === 'undefined') return null;
   return window.TenpoNative?.isApp ? window.TenpoNative : null;
+}
+
+/** ネイティブのオーダー・会計画面が使えるアプリか */
+export function nativePos(): NativeNativePos | null {
+  return nativeBridge()?.nativePos ?? null;
 }
 
 /** Bluetooth のレシートプリンターが使えるアプリか */

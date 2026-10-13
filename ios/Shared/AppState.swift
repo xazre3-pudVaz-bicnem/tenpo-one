@@ -22,6 +22,19 @@ final class AppState: ObservableObject {
     @Published var needsHandyLogin = false
     /// Web の画面を作り直す（モードを変えたとき）
     @Published var webSession = UUID()
+    /// ネイティブのオーダー・会計画面で開いている伝票（nil＝出していない）
+    @Published var nativeOrder: NativeOrderRef?
+
+    private let nativePosKey = "tenpo.nativePos"
+    /// ネイティブのオーダー・会計画面（試験中）を使うか。この iPad だけ。既定は OFF（今まで通り）
+    var nativePosEnabled: Bool {
+        get { AppConfig.isPad && UserDefaults.standard.bool(forKey: nativePosKey) }
+        set { UserDefaults.standard.set(newValue, forKey: nativePosKey) }
+    }
+    /// 「今までの画面で開く」を選んだ伝票（もう一度ネイティブで開かない）
+    private var webChosenOrders = Set<String>()
+    /// 閉じたばかりの伝票（戻る途中にもう一度開かないように）
+    private var recentlyClosed: (id: String, at: Date)?
 
     private init() {
         if AppConfig.isPad {
@@ -80,6 +93,33 @@ final class AppState: ObservableObject {
         return nil
     }
 
+    /// Web の画面の行き先を見て、オーダー・会計（/app/pos?order=…）ならネイティブの画面で開く
+    func maybeOpenNativePos(for url: URL) {
+        guard mode == .regi, nativePosEnabled, nativeOrder == nil, AppConfig.isOwnHost(url), url.path == "/app/pos" else { return }
+        let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+        guard let orderId = items.first(where: { $0.name == "order" })?.value,
+              orderId.range(of: "^[0-9a-fA-F-]{36}$", options: .regularExpression) != nil else { return }
+        // テーブルグループの別の卓から（seat）・テーブル移動（move）は今までの画面で
+        if items.contains(where: { $0.name == "seat" || $0.name == "move" }) { return }
+        if webChosenOrders.contains(orderId) { return }
+        if let r = recentlyClosed, r.id == orderId, Date().timeIntervalSince(r.at) < 4 { return }
+        nativeOrder = NativeOrderRef(id: orderId)
+    }
+
+    /// ネイティブの画面を閉じる。openWebPath があれば Web でそこを開き（その伝票はもうネイティブで開かない）、無ければ前の画面へ戻る
+    func closeNativePos(openWebPath: String?) {
+        let current = nativeOrder?.id
+        nativeOrder = nil
+        if let id = current { recentlyClosed = (id, Date()) }
+        guard let web = WebViewController.current else { return }
+        if let path = openWebPath {
+            if let id = current { webChosenOrders.insert(id) }
+            web.load(AppConfig.url(path))
+        } else {
+            web.goBackOrHome()
+        }
+    }
+
     /// QR を読んだ結果
     func handleScanned(_ text: String) {
         scanning = false
@@ -90,4 +130,9 @@ final class AppState: ObservableObject {
         needsHandyLogin = false
         WebViewController.current?.load(url)
     }
+}
+
+/// ネイティブで開く伝票（fullScreenCover の item）
+struct NativeOrderRef: Identifiable, Equatable {
+    let id: String
 }

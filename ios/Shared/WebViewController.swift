@@ -117,6 +117,15 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         let bluetooth = AppConfig.isPad
             ? "bluetooth: { discover: function(maker){ return call('btDiscover', { maker: maker || 'all' }); }, print: function(job){ return call('btPrint', job || {}); } },"
             : ""
+        // iPad だけ：ネイティブのオーダー・会計画面（試験中）の ON/OFF（レジの設定に出る）
+        let nativePosOn = AppState.shared.nativePosEnabled ? "true" : "false"
+        let nativePos = AppConfig.isPad
+            ? "nativePos: { enabled: \(nativePosOn), set: function(on){ return call('setNativePos', { on: !!on }).then(function(r){ if (r && r.ok && window.TenpoNative && window.TenpoNative.nativePos) { window.TenpoNative.nativePos.enabled = !!r.enabled; } return r; }); } },"
+            : ""
+        // iPad だけ：画面の行き先を知らせる（オーダー・会計をネイティブで開くため。Next の画面の切り替えは pushState）
+        let routeHook = AppConfig.isPad
+            ? "(function(){ var notify = function(){ post({ type: 'route', url: location.href }); }; var wrap = function(n){ var o = history[n]; history[n] = function(){ var r = o.apply(this, arguments); try { notify(); } catch (e) {} return r; }; }; wrap('pushState'); wrap('replaceState'); window.addEventListener('popstate', notify); })();"
+            : ""
         return """
         (function(){
           if (window.TenpoNative) return;
@@ -137,7 +146,9 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
             changeMode: function(){ post({ type: 'changeMode' }); },
             requestPush: function(){ post({ type: 'requestPush' }); },
             \(bluetooth)
+            \(nativePos)
           };
+          \(routeHook)
           try { document.documentElement.classList.add('tenpo-app'); } catch (e) {}
         })();
         """
@@ -172,9 +183,30 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
                 if let code { res["code"] = code }
                 self?.reply(reqId, res)
             }
+        case "setNativePos":
+            let reqId = body["reqId"] as? String ?? ""
+            AppState.shared.nativePosEnabled = (body["on"] as? Bool) ?? false
+            refreshBridgeScript()
+            reply(reqId, ["ok": true, "enabled": AppState.shared.nativePosEnabled])
+        case "route":
+            if let s = body["url"] as? String, let url = URL(string: s) {
+                AppState.shared.maybeOpenNativePos(for: url)
+            }
         default:
             break
         }
+    }
+
+    /// ネイティブの設定を変えたとき、次に読み込む画面のブリッジを作り直す
+    private func refreshBridgeScript() {
+        let cc = webView.configuration.userContentController
+        cc.removeAllUserScripts()
+        cc.addUserScript(WKUserScript(source: Self.bridgeScript(), injectionTime: .atDocumentStart, forMainFrameOnly: true))
+    }
+
+    /// ネイティブの画面を閉じたあと：前の画面へ戻る（無ければホーム）
+    func goBackOrHome() {
+        webView.evaluateJavaScript("if (history.length > 1) { history.back(); } else { location.href = '/app/dashboard'; }", completionHandler: nil)
     }
 
     /// Web の Promise に返す（window.__tenpoNativeReply）
@@ -244,6 +276,7 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         errorView.isHidden = true
+        if let url = webView.url { AppState.shared.maybeOpenNativePos(for: url) }
         if let url = webView.url, AppConfig.isOwnHost(url) {
             let path = url.path
             if path.hasPrefix("/app") || path.hasPrefix("/handy") {

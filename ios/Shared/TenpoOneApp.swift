@@ -19,7 +19,10 @@ struct RootView: View {
     var body: some View {
         ZStack {
             Brand.background.ignoresSafeArea()
-            if state.mode == nil {
+            if let preview = NativePreview.current {
+                // 画面の確認用（起動の引数 -tenpoNativePreview order|checkout のときだけ。ふだんは出ない）
+                NativePreviewView(kind: preview)
+            } else if state.mode == nil {
                 ModeChooserView()
             } else {
                 WebContainer()
@@ -31,6 +34,11 @@ struct RootView: View {
         }
         // レジ（iPad）は画面いっぱいに使う
         .statusBarHidden(state.mode == .regi)
+        // ネイティブのオーダー・会計画面（試験中。レジの設定で ON にした iPad だけ）
+        .fullScreenCover(item: $state.nativeOrder) { ref in
+            NativeLiveOrderScreen(orderId: ref.id)
+                .statusBarHidden(true)
+        }
         .sheet(isPresented: $state.scanning) {
             QRScannerView(
                 onCode: { code in state.handleScanned(code) },

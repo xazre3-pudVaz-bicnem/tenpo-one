@@ -1,0 +1,294 @@
+import 'server-only';
+import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
+import type { SessionContext } from '@/lib/auth';
+import { can } from '@/lib/permissions';
+import { isSteraOnline, STERA_PAYMENT_TYPES } from '@/lib/stera';
+import { loadMenuBook } from '@/lib/menu-book-server';
+import { loadMenuStock } from '@/lib/menu-stock-server';
+import { isMenuSoldOut } from '@/lib/menu-stock';
+import { filterTakeoutItems, isTakeoutLikeOrder, takeoutMenuFrom } from '@/lib/takeout-menu';
+import { isQuickPayOrder, QUICK_PAY_ORDER_LABEL } from '@/lib/quick-pay';
+import { groupMenuPages, picksSlot } from '@/lib/menu-book';
+import { englishName } from '@/lib/romaji';
+import { BRANDED_METHODS, checkoutPresetsFrom, discountPresetsOf, methodBrandsOf, pointBrandsOf } from '@/lib/checkout-presets';
+import { VISIT_SOURCES, visitSourceByLabel, visitSourcesFrom } from '@/lib/handy-visit';
+import { isMissingColumnError } from '@/lib/schema-compat';
+import {
+  jstHm,
+  NATIVE_BESTSELLERS_TAB,
+  NATIVE_FAVORITES_TAB,
+  type NativePosCategory,
+  type NativePosItem,
+  type NativePosLine,
+  type NativePosOrder,
+  type NativePosPayload,
+} from '@/lib/native-pos';
+
+/**
+ * iPad アプリのネイティブ画面（オーダー・会計）に渡すデータ。Web のレジ（app/app/pos/page.tsx）と同じものを、
+ * 同じ決まり（メニューブックのページ・売り切れ・テイクアウトのメニュー・担当者・会計の選択肢）で読む。
+ * Web のページは変えない（こちらは読むだけの別の入口）。
+ */
+
+type Client = Awaited<ReturnType<typeof createClient>>;
+
+const ORDER_COLUMNS =
+  'id, order_no, order_type, status, guest_count, discount_total, discount_reason, customer_id, subtotal, tax_total, service_charge, total, store_id, table_id, clerk_id, opened_at, memo, restaurant_tables(name), customers(name), reservations(start_at, end_at, purpose, source_id, reservation_sources(code))';
+
+/** 伝票の明細（未送信も送信済みも。取消は出さない） */
+async function loadLines(supabase: Client, orderId: string): Promise<NativePosLine[]> {
+  const cols = 'id, menu_item_id, name, unit_price, quantity, line_total, status';
+  const first = await supabase.from('order_items').select(`${cols}, kitchen_sent_at`).eq('order_id', orderId).eq('status', 'active').order('created_at');
+  let rows = first.data as Record<string, unknown>[] | null;
+  if (first.error && isMissingColumnError(first.error.message, 'kitchen_sent_at')) {
+    rows = ((await supabase.from('order_items').select(cols).eq('order_id', orderId).eq('status', 'active').order('created_at')).data ?? []).map(
+      (r) => ({ ...(r as Record<string, unknown>), kitchen_sent_at: 'legacy' })
+    );
+  } else if (first.error) {
+    throw new Error('注文内容の読み込みに失敗しました');
+  }
+  return (rows ?? []).map((r) => ({
+    id: r.id as string,
+    menuItemId: (r.menu_item_id as string | null) ?? null,
+    name: r.name as string,
+    quantity: Number(r.quantity),
+    unitPrice: Number(r.unit_price),
+    lineTotal: Number(r.line_total),
+    sent: r.kitchen_sent_at != null,
+  }));
+}
+
+/** 伝票の来店経路（予約の経路 → VISIT_SOURCES の id。経路の行が無い店は予約の目的に名前が残っている） */
+function visitSourceIdOf(resv: { purpose: string | null; reservation_sources: { code: string } | { code: string }[] | null } | null): string | null {
+  if (!resv) return null;
+  const src = Array.isArray(resv.reservation_sources) ? resv.reservation_sources[0] : resv.reservation_sources;
+  if (src?.code) {
+    const hit = VISIT_SOURCES.find((s) => (s.codes as readonly string[]).includes(src.code));
+    if (hit) return hit.id;
+  }
+  if (resv.purpose) return visitSourceByLabel(resv.purpose)?.id ?? null;
+  return null;
+}
+
+/** 伝票の部分だけ（操作のあとアプリに返す） */
+export async function loadNativeOrder(supabase: Client, ctx: SessionContext, orderId: string): Promise<NativePosOrder | null> {
+  const { data: order } = await supabase.from('orders').select(ORDER_COLUMNS).eq('id', orderId).maybeSingle();
+  if (!order) return null;
+  const allowed = ctx.isHq || ctx.stores.some((s) => s.id === order.store_id);
+  if (!allowed) return null;
+  const table = order.restaurant_tables as unknown as { name: string } | null;
+  const customer = order.customers as unknown as { name: string } | null;
+  const resvRaw = order.reservations as unknown;
+  const resv = (Array.isArray(resvRaw) ? resvRaw[0] : resvRaw) as {
+    start_at: string | null;
+    end_at: string | null;
+    purpose: string | null;
+    reservation_sources: { code: string } | { code: string }[] | null;
+  } | null;
+  return {
+    id: order.id as string,
+    orderNo: Number(order.order_no),
+    orderType: order.order_type as string,
+    tableName:
+      table?.name ??
+      (isQuickPayOrder({ table_id: order.table_id as string | null, order_type: order.order_type as string, memo: order.memo as string | null })
+        ? QUICK_PAY_ORDER_LABEL
+        : null),
+    guestCount: Number(order.guest_count),
+    clerkId: (order.clerk_id as string | null) ?? null,
+    customerName: customer?.name ?? null,
+    seatFrom: order.table_id ? jstHm(order.opened_at as string) : null,
+    seatTo: order.table_id ? jstHm(resv?.end_at) : null,
+    visitSourceId: visitSourceIdOf(resv),
+    subtotal: Number(order.subtotal),
+    taxTotal: Number(order.tax_total),
+    serviceCharge: Number(order.service_charge),
+    discountTotal: Number(order.discount_total),
+    discountReason: (order.discount_reason as string | null) ?? null,
+    total: Number(order.total),
+    lines: await loadLines(supabase, orderId),
+  };
+}
+
+export type NativeLoadResult =
+  | NativePosPayload
+  | { ok: false; status: number; error: string; /** Web の画面で開いてもらう（端末の登録・回線の制限など） */ useWeb?: boolean };
+
+/** オーダー画面を開くときの全部（メニュー・担当者・会計の選択肢・stera） */
+export async function loadNativePos(ctx: SessionContext, orderId: string): Promise<NativeLoadResult> {
+  const supabase = await createClient();
+  const order = await loadNativeOrder(supabase, ctx, orderId);
+  if (!order) return { ok: false, status: 404, error: '注文が見つかりません' };
+  const { data: orderRow } = await supabase.from('orders').select('store_id, status, organization_id').eq('id', orderId).single();
+  if (!orderRow || orderRow.status !== 'open') return { ok: false, status: 409, error: 'この注文は既に会計済み・取消済みです' };
+  const storeId = orderRow.store_id as string;
+  const store = ctx.stores.find((s) => s.id === storeId) ?? null;
+  const organizationId = orderRow.organization_id as string;
+
+  const [menuBook, { data: settingsRow }, { data: categories }, { data: menuItems }, { data: recentSales }, { data: clerks }, { data: optionLinks }] =
+    await Promise.all([
+      loadMenuBook(supabase, storeId),
+      supabase.from('store_settings').select('settings').eq('store_id', storeId).maybeSingle(),
+      supabase
+        .from('menu_categories')
+        .select('id, name, name_en, sort_order, station')
+        .eq('organization_id', organizationId)
+        .or(`store_id.is.null,store_id.eq.${storeId}`)
+        .eq('status', 'active')
+        .order('sort_order'),
+      supabase
+        .from('menu_items')
+        .select('id, category_id, name, name_en, name_kana, price, takeout_price, is_sold_out, is_recommended, sort_order')
+        .eq('organization_id', organizationId)
+        .or(`store_id.is.null,store_id.eq.${storeId}`)
+        .eq('status', 'active')
+        .neq('item_type', 'option')
+        .order('sort_order'),
+      supabase.rpc('get_best_sellers', { p_store: storeId, p_days: 30, p_limit: 12 }),
+      supabase.from('pos_clerks').select('id, name').eq('store_id', storeId).eq('status', 'active').order('sort_order').order('name'),
+      supabase
+        .from('menu_item_option_groups')
+        .select('menu_item_id, menu_option_groups!inner(status, menu_option_items(status))')
+        .eq('store_id', storeId)
+        .eq('menu_option_groups.status', 'active'),
+    ]);
+  const settings = (settingsRow as { settings?: unknown } | null)?.settings ?? null;
+
+  // 選択肢のある商品（有効な選択肢が1つでもあるグループ）
+  const withOptions = new Set<string>();
+  for (const link of (optionLinks ?? []) as { menu_item_id: string; menu_option_groups: unknown }[]) {
+    const g = link.menu_option_groups as { menu_option_items?: { status: string }[] } | null;
+    if (g?.menu_option_items?.some((o) => o.status === 'active')) withOptions.add(link.menu_item_id);
+  }
+
+  // 売り切れ（本日の食数が0になったものも）・テイクアウトのメニュー
+  const stock = await loadMenuStock(supabase, storeId);
+  const takeout = isTakeoutLikeOrder(order.orderType);
+  type Row = {
+    id: string; category_id: string | null; name: string; name_en: string | null; name_kana: string | null;
+    price: number; takeout_price: number | null; is_sold_out: boolean | null; is_recommended: boolean | null;
+  };
+  let rows = (menuItems ?? []) as Row[];
+  if (takeout) rows = filterTakeoutItems(rows, takeoutMenuFrom(settings));
+  const bestRank = new Map(((recentSales ?? []) as { menu_item_id: string }[]).map((r, i) => [r.menu_item_id, i]));
+  const items: NativePosItem[] = rows.map((m) => {
+    const price = Number(takeout ? (m.takeout_price ?? m.price) : m.price);
+    return {
+      id: m.id,
+      categoryId: m.category_id,
+      name: m.name,
+      kana: m.name_kana,
+      english: englishName(m.name, m.name_kana, m.name_en),
+      price,
+      soldOut: isMenuSoldOut(!!m.is_sold_out, stock.get(m.id)),
+      recommended: !!m.is_recommended,
+      bestRank: bestRank.get(m.id) ?? null,
+      hasOptions: withOptions.has(m.id),
+      openPrice: price === 0,
+    };
+  });
+
+  // 中央のカテゴリの並び（Web のレジの buildPosPages と同じ：メニューブックのページ順、おすすめ・売れ筋は店の決めた位置）
+  type Cat = { id: string; name: string; name_en: string | null; station: string | null };
+  const cats = (categories ?? []) as Cat[];
+  const zeroOnly = new Map<string, boolean>();
+  for (const m of rows) {
+    if (!m.category_id) continue;
+    zeroOnly.set(m.category_id, (zeroOnly.get(m.category_id) ?? true) && Number(m.price) === 0);
+  }
+  const book = { pages: menuBook.pages ?? [], categoryPage: menuBook.categoryPage ?? {} };
+  const grouped = groupMenuPages(
+    cats.map((c) => ({ ...c, allZeroPrice: zeroOnly.get(c.id) ?? false })),
+    book
+  ).filter((pg) => pg.categories.length > 0);
+  const pageCats: NativePosCategory[][] = grouped.map((pg) =>
+    pg.categories.map((c) => ({ id: c.id, name: c.name, sub: englishName(c.name, null, c.name_en) }))
+  );
+  const picks: NativePosCategory[] = [
+    { id: NATIVE_FAVORITES_TAB, name: 'おすすめ', sub: 'Picks' },
+    { id: NATIVE_BESTSELLERS_TAB, name: '売れ筋', sub: 'Popular' },
+  ];
+  const at = picksSlot(book, grouped.map((pg) => pg.key));
+  const nativeCategories = takeout
+    ? [{ id: '__takeout__', name: 'テイクアウト', sub: 'Takeout' }]
+    : [...pageCats.slice(0, at).flat(), ...picks, ...pageCats.slice(at).flat()];
+
+  // 会計の選択肢（設定 > 決済・端末）
+  const presets = checkoutPresetsFrom(settings);
+  const methodBrands = Object.fromEntries(BRANDED_METHODS.map((m) => [m, methodBrandsOf(presets, m).map((b) => ({ id: b.key, name: b.name }))]));
+
+  const canCheckout = can(ctx.role, 'pos.checkout');
+  let registerOpen = true;
+  let steraTerminals: { id: string; name: string; online: boolean }[] = [];
+  if (canCheckout) {
+    const [{ data: openSession }, { data: steraRows }] = await Promise.all([
+      supabase.from('register_sessions').select('id').eq('store_id', storeId).eq('status', 'open').limit(1).maybeSingle(),
+      createAdminClient().from('stera_terminals').select('id, name, last_seen_at').eq('store_id', storeId).eq('status', 'active').order('created_at'),
+    ]);
+    registerOpen = !!openSession;
+    const now = Date.now();
+    steraTerminals = (steraRows ?? []).map((t) => ({
+      id: t.id as string,
+      name: t.name as string,
+      online: isSteraOnline(t.last_seen_at as string | null, now),
+    }));
+  }
+
+  const clerkList = (clerks ?? []).map((c) => ({ id: c.id as string, name: c.name as string }));
+  return {
+    ok: true,
+    store: { id: storeId, name: store?.name ?? '' },
+    order,
+    categories: nativeCategories,
+    items,
+    clerks: clerkList,
+    clerkRequired: clerkList.length > 0,
+    visitSources: visitSourcesFrom(settings).map((s) => ({ id: s.id, label: s.label })),
+    methodBrands,
+    pointBrands: pointBrandsOf(presets).map((b) => ({ id: b.key, name: b.name })),
+    discountPresets: discountPresetsOf(presets).map((d) => ({ id: d.key, name: d.name, kind: d.kind, value: d.value })),
+    steraTerminals,
+    steraPaymentTypes: STERA_PAYMENT_TYPES.map((t) => ({ code: t.code, method: t.method, label: t.label })),
+    registerOpen,
+    canCheckout,
+    canDiscount: can(ctx.role, 'pos.discount'),
+  };
+}
+
+/**
+ * 伝票の来店経路を変える（会計の画面の「来店経路」）。予約の経路（source_id）に入れ、経路の行が無い店は予約の目的に名前を残す
+ * （ハンディの「お客様情報」と同じ残し方。app/app/floor/actions.ts の startWalkIn）。予約の無い伝票（即会計など）は何もしない。
+ */
+export async function setOrderVisitSource(ctx: SessionContext, orderId: string, sourceId: string | null): Promise<{ ok: boolean; error?: string }> {
+  const supabase = await createClient();
+  const { data: order } = await supabase.from('orders').select('id, store_id, organization_id, reservation_id, status').eq('id', orderId).maybeSingle();
+  if (!order || !(ctx.isHq || ctx.stores.some((s) => s.id === order.store_id))) return { ok: false, error: '注文が見つかりません' };
+  if (!order.reservation_id) return { ok: false, error: 'この伝票には来店経路を残せません（テーブルの伝票だけ）' };
+  const source = sourceId ? VISIT_SOURCES.find((s) => s.id === sourceId) : null;
+  if (sourceId && !source) return { ok: false, error: '来店経路が正しくありません' };
+
+  let sourceRowId: string | null = null;
+  if (source) {
+    const { data: srcRow } = await supabase
+      .from('reservation_sources')
+      .select('id')
+      .in('code', source.codes as string[])
+      .eq('status', 'active')
+      .or(`organization_id.is.null,organization_id.eq.${order.organization_id}`)
+      .limit(1)
+      .maybeSingle();
+    sourceRowId = (srcRow?.id as string | undefined) ?? null;
+  }
+  // 経路の行が無い店は予約の目的に名前を残している。経路を変える・外すときは、前の経路の名前だけ消す（ほかの目的は残す）
+  const { data: resv } = await supabase.from('reservations').select('purpose').eq('id', order.reservation_id).maybeSingle();
+  const oldPurpose = (resv?.purpose as string | null | undefined) ?? null;
+  const purposeIsSource = !!oldPurpose && !!visitSourceByLabel(oldPurpose);
+  const purpose = source && !sourceRowId ? source.label : purposeIsSource ? null : oldPurpose;
+  const { error } = await supabase
+    .from('reservations')
+    .update({ source_id: sourceRowId, purpose })
+    .eq('id', order.reservation_id);
+  if (error) return { ok: false, error: '来店経路を保存できませんでした' };
+  return { ok: true };
+}

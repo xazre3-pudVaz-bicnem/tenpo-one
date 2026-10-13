@@ -15,6 +15,7 @@ import { RegisterSettingsList } from '@/components/pos/register-settings-list';
 import { SettingsSubTabs } from '@/components/settings/settings-nav';
 import { settingsHubOf, settingsHubs } from '@/lib/settings-hubs';
 import { DevicePrinterPanel, type DevicePrinterOption } from '@/components/pos/device-printer-panel';
+import { NativePosToggle } from '@/components/pos/native-pos-toggle';
 import { devicePrinterId } from '@/lib/device-printer-server';
 
 export const metadata: Metadata = { title: 'レジの設定' };
@@ -148,6 +149,9 @@ export default async function RegisterSettingsPage({
           selectedId={devicePrinters.some((p) => p.id === selectedPrinterId) ? selectedPrinterId : null}
         />
       </section>
+
+      {/* アプリの中だけ出る（ブラウザでは何も出ない） */}
+      <NativePosToggle />
 
       <RegisterSettingsList sections={registerSettingSections(ctx.role, orderId, { isRegisterDevice: ctx.isRegisterDevice === true })} />
     </div>
