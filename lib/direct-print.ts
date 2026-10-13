@@ -182,6 +182,22 @@ export function bluetoothMakerOf(maker: string | null | undefined): BtMaker | nu
   return 'escpos';
 }
 
+/** iPad から追加したプリンターに入れるメーカー名（管理画面の「メーカー」の選択肢と同じ言い方） */
+export const BT_MAKER_SETTING: Record<BtMaker, string> = { star: 'Star', epson: 'EPSON', sii: 'SII', escpos: 'その他' };
+
+/**
+ * iPad で見つけた機械の名前から、プリンターの名前を作る（2026-10-13 Ronnie「iPad でプリンターの設定。レシートは Bluetooth」）。
+ * 見えない文字を消して 60 文字まで。空なら「EPSON レシート」のように。
+ */
+export function deviceReceiptPrinterName(name: string | null | undefined, maker: BtMaker): string {
+  const clean = String(name ?? '')
+    .replace(/[\u0000-\u001f\u007f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 60);
+  return clean || `${BT_MAKER_SETTING[maker] === 'その他' ? 'ESC/POS' : BT_MAKER_SETTING[maker]} レシート`;
+}
+
 /** メーカー名が EPSON か */
 export function isEpsonMaker(maker: string | null | undefined): boolean {
   return /epson/i.test(maker ?? '');
