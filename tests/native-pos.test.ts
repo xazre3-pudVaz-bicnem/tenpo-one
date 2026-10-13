@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { jstHm, parseNativePosAction } from '@/lib/native-pos';
+import { jstHm, optionGroupsFrom, parseNativePosAction } from '@/lib/native-pos';
 
 const read = (p: string) => readFileSync(join(__dirname, '..', p), 'utf8');
 const ID = '11111111-2222-4333-8444-555555555555';
@@ -11,7 +11,10 @@ const ID2 = '66666666-7777-4888-9999-000000000000';
 describe('iPad アプリのネイティブ画面の操作（/api/app/v1/pos）', () => {
   it('注文確定：明細をまとめて送る（数量 1〜99・選択肢は id だけ）', () => {
     const ok = parseNativePosAction({ type: 'send', orderId: ID, lines: [{ menuItemId: ID2, quantity: 2 }] });
-    expect(ok).toEqual({ ok: true, action: { type: 'send', orderId: ID, lines: [{ menuItemId: ID2, quantity: 2, optionItemIds: [] }] } });
+    expect(ok).toEqual({
+      ok: true,
+      action: { type: 'send', orderId: ID, lines: [{ menuItemId: ID2, quantity: 2, optionItemIds: [], openPrice: null }] },
+    });
     expect(parseNativePosAction({ type: 'send', orderId: ID, lines: [{ menuItemId: ID2, quantity: 0 }] }).ok).toBe(false);
     expect(parseNativePosAction({ type: 'send', orderId: ID, lines: [{ menuItemId: ID2, quantity: 100 }] }).ok).toBe(false);
     expect(parseNativePosAction({ type: 'send', orderId: ID, lines: [{ menuItemId: 'x', quantity: 1 }] }).ok).toBe(false);
@@ -85,6 +88,55 @@ describe('今の Web・レジは変えない／守り', () => {
     expect(route).toContain("from '@/app/app/pos/actions'");
     expect(route).toContain('await sendOrderToKitchen(action.orderId)');
     expect(route).toContain('await checkout(action.orderId, action.payments');
+  });
+
+  it('選択肢・レジで打つ金額（¥0 の商品）もアプリから送れる', () => {
+    const ok = parseNativePosAction({
+      type: 'send',
+      orderId: ID,
+      lines: [{ menuItemId: ID2, quantity: 1, optionItemIds: [ID, ID], openPrice: 3000 }],
+    });
+    expect(ok).toEqual({
+      ok: true,
+      action: { type: 'send', orderId: ID, lines: [{ menuItemId: ID2, quantity: 1, optionItemIds: [ID], openPrice: 3000 }] },
+    });
+    for (const openPrice of [-1, 1.5, '3000', 10_000_001]) {
+      expect(parseNativePosAction({ type: 'send', orderId: ID, lines: [{ menuItemId: ID2, quantity: 1, openPrice }] }).ok).toBe(false);
+    }
+    // サーバーは Web と同じ addItem に金額を渡す（¥0 の商品か・上限はそこで確かめる）
+    expect(route).toContain('l.quantity, l.openPrice)');
+  });
+
+  it('選択肢グループ：有効な選択肢だけ・並び順・必須と最小/最大（Web のレジと同じ）', () => {
+    const g = (id: string, items: { id: string; status: string; sort_order: number; price?: number }[], extra = {}) => ({
+      id,
+      name: `G${id}`,
+      is_required: true,
+      min_select: 1,
+      max_select: 1,
+      status: 'active',
+      menu_option_items: items.map((o) => ({ name: `O${o.id}`, price: o.price ?? 0, ...o })),
+      ...extra,
+    });
+    const out = optionGroupsFrom([
+      { menu_item_id: 'a', sort_order: 2, menu_option_groups: g('2', [{ id: 'x', status: 'active', sort_order: 0, price: 100 }]) },
+      {
+        menu_item_id: 'a',
+        sort_order: 1,
+        menu_option_groups: g('1', [
+          { id: 'z', status: 'active', sort_order: 2 },
+          { id: 'y', status: 'active', sort_order: 1 },
+          { id: 'off', status: 'inactive', sort_order: 0 },
+        ], { is_required: false, min_select: 0, max_select: 3 }),
+      },
+      { menu_item_id: 'b', sort_order: 0, menu_option_groups: g('3', [{ id: 'w', status: 'inactive', sort_order: 0 }]) },
+      { menu_item_id: 'c', sort_order: 0, menu_option_groups: g('4', [{ id: 'v', status: 'active', sort_order: 0 }], { status: 'archived' }) },
+    ]);
+    expect(Object.keys(out)).toEqual(['a']);
+    expect(out.a.map((x) => x.id)).toEqual(['1', '2']);
+    expect(out.a[0]).toMatchObject({ isRequired: false, minSelect: 0, maxSelect: 3 });
+    expect(out.a[0].items.map((o) => o.id)).toEqual(['y', 'z']);
+    expect(out.a[1].items).toEqual([{ id: 'x', name: 'Ox', price: 100 }]);
   });
 
   it('Web のレジのページは変えていない', () => {

@@ -142,7 +142,12 @@ struct NativeCheckoutView: View {
                 LazyVStack(spacing: 0) {
                     ForEach(model.order.lines) { l in
                         HStack(spacing: 8) {
-                            Text(l.name).font(.system(size: 15, weight: .bold)).foregroundColor(NT.ink).lineLimit(1)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(l.name).font(.system(size: 15, weight: .bold)).foregroundColor(NT.ink).lineLimit(1)
+                                if !l.optionNames.isEmpty {
+                                    Text(l.optionNames.joined(separator: "・")).font(.system(size: 12)).foregroundColor(NT.ink3).lineLimit(1)
+                                }
+                            }
                             Spacer(minLength: 4)
                             Text(verbatim: "×\(l.quantity)").font(.system(size: 14, weight: .semibold)).foregroundColor(NT.ink2)
                                 .frame(width: 40, alignment: .trailing)

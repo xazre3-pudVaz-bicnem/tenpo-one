@@ -61,6 +61,14 @@ struct NativeOrderView: View {
                 }
             }
         }
+        // 選択肢・金額を選ぶパネル
+        .overlay {
+            if let p = model.pending {
+                NativePendingItemPanel(model: model, pending: p)
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeOut(duration: 0.15), value: model.pending)
         // 会計は同じ画面の上に重ねる（fullScreenCover にすると、下の Web が止まって Bluetooth の印刷・ドロアが出ない）
         .overlay {
             if showCheckout {
@@ -92,7 +100,7 @@ struct NativeOrderView: View {
             Button("今までの画面で開く") { model.openInWeb() }
             Button("閉じる", role: .cancel) {}
         } message: {
-            Text("「\(model.webOnlyItem?.name ?? "")」は選択肢（または金額の入力）がある商品です。最初の版では今までの画面で入れます。")
+            Text("「\(model.webOnlyItem?.name ?? "")」は選択肢がある商品です。サーバーが古いため、今までの画面で入れます。")
         }
     }
 
@@ -338,6 +346,10 @@ private struct LineRow: View {
         HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(line.name).font(.system(size: 16, weight: .semibold)).foregroundColor(NT.ink).lineLimit(2)
+                if !line.optionNames.isEmpty {
+                    Text(line.optionNames.joined(separator: "・"))
+                        .font(.system(size: 12, weight: .semibold)).foregroundColor(NT.ink2).lineLimit(2)
+                }
                 HStack(spacing: 6) {
                     Text(NT.yen(line.unitPrice)).font(.system(size: 12)).foregroundColor(NT.ink3)
                     Text(line.sent ? "送信済み" : "未送信")
@@ -537,8 +549,8 @@ private struct ItemTile: View {
                 Text(NT.yen(item.price))
                     .font(.system(size: 19, weight: .heavy))
                     .foregroundColor(item.soldOut ? NT.ink3 : NT.purple)
-                if item.hasOptions {
-                    Text("選択あり").font(.system(size: 11, weight: .bold)).foregroundColor(NT.ink3)
+                if item.hasOptions || item.openPrice {
+                    Text(item.openPrice ? "金額を入力" : "選択あり").font(.system(size: 11, weight: .bold)).foregroundColor(NT.ink3)
                 }
             }
             .padding(10)

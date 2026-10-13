@@ -31,12 +31,49 @@ struct NPOrderLine: Identifiable, Hashable {
     let menuItemId: String?
     let name: String
     var quantity: Int
-    let unitPrice: Int        // 税込
+    let unitPrice: Int        // 税込（選択肢の追加料金こみ）
     var sent: Bool            // 厨房へ送信済み（サーバーの明細）
     /// 手元のカート（まだ伝票に入れていない。注文確定で送る）
     var local: Bool = false
+    /// 選んだ選択肢（名前は明細の下に出す。id は注文確定で送る）
+    var optionNames: [String] = []
+    var optionItemIds: [String] = []
+    /// ¥0 の商品にレジで打った金額（カートだけ）
+    var openPrice: Int? = nil
 
     var lineTotal: Int { unitPrice * quantity }
+    /// 同じ品・同じ選択・同じ金額ならカートで1行にまとめる
+    var cartKey: String { [menuItemId ?? "", optionItemIds.sorted().joined(separator: ","), openPrice.map(String.init) ?? ""].joined(separator: "|") }
+}
+
+/// 商品の選択肢グループ（Web のレジの選択ダイアログと同じ：必須・最小/最大・追加料金）
+struct NPOptionGroup: Identifiable, Hashable {
+    struct Option: Identifiable, Hashable { let id: String; let name: String; let price: Int }
+    let id: String
+    let name: String
+    let isRequired: Bool
+    let minSelect: Int
+    let maxSelect: Int
+    let items: [Option]
+
+    /// 最低いくつ選ぶか（必須なら1つ以上）
+    var minimum: Int { isRequired ? max(1, minSelect) : minSelect }
+    var rule: String {
+        if maxSelect == 1 { return minimum >= 1 ? "1つ選ぶ" : "1つまで" }
+        return minimum == maxSelect ? "\(maxSelect)つ選ぶ" : "\(minimum)〜\(maxSelect)つ"
+    }
+}
+
+/// 選択肢・金額を選ぶ途中の商品
+struct NPPendingItem: Identifiable, Equatable {
+    var id: String { item.id }
+    let item: NPMenuItem
+    let groups: [NPOptionGroup]
+    /// 選択肢を選び終えたあと（金額入力の商品は次にテンキー）
+    var chosen: [String] = []
+    var chosenNames: [String] = []
+    var extra: Int = 0
+    var askingPrice: Bool
 }
 
 struct NPOrder: Hashable {
@@ -82,8 +119,12 @@ final class NativeOrderModel: ObservableObject {
     @Published var busy = false
     /// 画面の上に出すお知らせ（エラー・注意）
     @Published var notice: String?
-    /// Web の画面で入れてもらう商品（選択肢・金額入力）
+    /// Web の画面で入れてもらう商品（古いサーバーで選択肢が分からないとき）
     @Published var webOnlyItem: NPMenuItem?
+    /// 商品ごとの選択肢グループ
+    @Published var optionGroups: [String: [NPOptionGroup]] = [:]
+    /// 選択肢・金額を選んでいる途中の商品（画面に選ぶパネルを出す）
+    @Published var pending: NPPendingItem?
     @Published var clerks: [APIClerk] = []
     @Published var clerkRequired = false
     @Published var methodBrands: [String: [NPBrand]] = [:]
@@ -166,16 +207,52 @@ final class NativeOrderModel: ObservableObject {
 
     func add(_ item: NPMenuItem) {
         guard !item.soldOut else { return }
-        if isLive && (item.hasOptions || item.openPrice) {
-            // 選択肢・金額入力のある商品は、最初の版では Web の画面で入れる
+        let groups = optionGroups[item.id] ?? []
+        if item.hasOptions && groups.isEmpty && isLive {
+            // 選択肢の中身が来ていない（古いサーバー）：今までの画面で入れる
             webOnlyItem = item
             return
         }
-        if let i = order.lines.firstIndex(where: { $0.menuItemId == item.id && $0.local }) {
+        if !groups.isEmpty || item.openPrice {
+            // 選択肢を選ぶ → （¥0 の商品は）金額を打つ → カートへ
+            pending = NPPendingItem(item: item, groups: groups, askingPrice: groups.isEmpty)
+            return
+        }
+        addToCart(item, optionIds: [], optionNames: [], extra: 0, openPrice: nil)
+    }
+
+    /// 選択肢を選び終えた
+    func chooseOptions(_ ids: [String], names: [String], extra: Int) {
+        guard var p = pending else { return }
+        if p.item.openPrice {
+            p.chosen = ids
+            p.chosenNames = names
+            p.extra = extra
+            p.askingPrice = true
+            pending = p
+            return
+        }
+        pending = nil
+        addToCart(p.item, optionIds: ids, optionNames: names, extra: extra, openPrice: nil)
+    }
+
+    /// 金額を打ち終えた（¥0 の商品）
+    func choosePrice(_ yen: Int) {
+        guard let p = pending else { return }
+        pending = nil
+        addToCart(p.item, optionIds: p.chosen, optionNames: p.chosenNames, extra: p.extra, openPrice: yen)
+    }
+
+    private func addToCart(_ item: NPMenuItem, optionIds: [String], optionNames: [String], extra: Int, openPrice: Int?) {
+        let line = NPOrderLine(
+            id: "cart-" + UUID().uuidString, menuItemId: item.id, name: item.name, quantity: 1,
+            unitPrice: (openPrice ?? item.price) + extra, sent: false, local: true,
+            optionNames: optionNames, optionItemIds: optionIds, openPrice: openPrice
+        )
+        if let i = order.lines.firstIndex(where: { $0.local && $0.cartKey == line.cartKey }) {
             order.lines[i].quantity += 1
             lastAddedLineId = order.lines[i].id
         } else {
-            let line = NPOrderLine(id: "cart-" + UUID().uuidString, menuItemId: item.id, name: item.name, quantity: 1, unitPrice: item.price, sent: false, local: true)
             order.lines.append(line)
             lastAddedLineId = line.id
         }
@@ -222,6 +299,12 @@ final class NativeOrderModel: ObservableObject {
             // おすすめ・売れ筋より、最初の普通のカテゴリを先に開く（Web のレジと同じ）
             selectedCategory = categories.first(where: { !$0.id.hasPrefix("__") })?.id ?? categories.first?.id ?? ""
         }
+        optionGroups = (p.optionGroups ?? [:]).mapValues { list in
+            list.map { g in
+                NPOptionGroup(id: g.id, name: g.name, isRequired: g.isRequired, minSelect: g.minSelect, maxSelect: g.maxSelect,
+                              items: g.items.map { NPOptionGroup.Option(id: $0.id, name: $0.name, price: $0.price) })
+            }
+        }
         clerks = p.clerks
         clerkRequired = p.clerkRequired
         visitSources = p.visitSources.map { NPVisitSource(id: $0.id, label: $0.label) }
@@ -243,7 +326,10 @@ final class NativeOrderModel: ObservableObject {
         order = NPOrder(
             id: o.id, orderNo: o.orderNo, tableName: o.tableName ?? "", guestCount: o.guestCount,
             customerName: o.customerName, seatFrom: o.seatFrom, seatTo: o.seatTo, clerkName: nil,
-            lines: o.lines.map { NPOrderLine(id: $0.id, menuItemId: $0.menuItemId, name: $0.name, quantity: $0.quantity, unitPrice: $0.unitPrice, sent: $0.sent) } + cart,
+            lines: o.lines.map {
+                NPOrderLine(id: $0.id, menuItemId: $0.menuItemId, name: $0.name, quantity: $0.quantity, unitPrice: $0.unitPrice, sent: $0.sent,
+                            optionNames: $0.options ?? [])
+            } + cart,
             visitSourceId: o.visitSourceId, serviceCharge: o.serviceCharge, discountTotal: o.discountTotal,
             discountReason: o.discountReason, clerkId: o.clerkId,
             serverSubtotal: o.subtotal, serverTax: o.taxTotal, serverTotal: o.total
@@ -272,13 +358,15 @@ final class NativeOrderModel: ObservableObject {
             for i in order.lines.indices { order.lines[i].sent = true; order.lines[i].local = false }
             return true
         }
-        // 同じ品はまとめる
-        var merged: [(String, Int)] = []
-        for l in cartLines {
-            guard let mid = l.menuItemId else { continue }
-            if let i = merged.firstIndex(where: { $0.0 == mid }) { merged[i].1 += l.quantity } else { merged.append((mid, l.quantity)) }
+        // 同じ品・同じ選択・同じ金額はまとめる
+        var merged: [NPOrderLine] = []
+        for l in cartLines where l.menuItemId != nil {
+            if let i = merged.firstIndex(where: { $0.cartKey == l.cartKey }) { merged[i].quantity += l.quantity } else { merged.append(l) }
         }
-        let lines = merged.map { ["menuItemId": $0.0, "quantity": $0.1, "optionItemIds": [String]()] as [String: Any] }
+        let lines: [[String: Any]] = merged.map { l in
+            ["menuItemId": l.menuItemId ?? "", "quantity": l.quantity, "optionItemIds": l.optionItemIds,
+             "openPrice": l.openPrice.map { $0 as Any } ?? NSNull()]
+        }
         // 送ったカートは手元から消す（サーバーの明細に入る）。失敗したら戻す
         let backup = order.lines
         order.lines.removeAll { $0.local }
@@ -374,6 +462,7 @@ extension NativeOrderModel {
             m("i15", "c2", "日本酒（一合）", 780, options: true),
             m("i16", "c3", "飲み放題 2時間", 2200),
             m("i17", "c3", "宴会コース 5,000円", 5000),
+            NPMenuItem(id: "i19", categoryId: "c3", name: "キャンセル料", kana: nil, english: "Cancel fee", price: 0, soldOut: false, hasOptions: false, openPrice: true),
             m("i18", "c4", "抹茶アイス", 380),
         ]
         let order = NPOrder(
@@ -388,6 +477,21 @@ extension NativeOrderModel {
         )
         let model = NativeOrderModel(storeName: "MEAT CROWN 新横浜", categories: cats, items: items, order: order, registerOpen: true)
         model.selectedCategory = "c1"
+        func o(_ id: String, _ n: String, _ p: Int = 0) -> NPOptionGroup.Option { NPOptionGroup.Option(id: id, name: n, price: p) }
+        model.optionGroups = [
+            "i2": [
+                NPOptionGroup(id: "g1", name: "焼き加減", isRequired: true, minSelect: 1, maxSelect: 1,
+                              items: [o("o1", "レア"), o("o2", "ミディアムレア"), o("o3", "ミディアム"), o("o4", "ウェルダン")]),
+                NPOptionGroup(id: "g2", name: "ソース", isRequired: true, minSelect: 1, maxSelect: 1,
+                              items: [o("o5", "わさび醤油"), o("o6", "ガーリック"), o("o7", "岩塩")]),
+                NPOptionGroup(id: "g3", name: "トッピング", isRequired: false, minSelect: 0, maxSelect: 3,
+                              items: [o("o8", "フォアグラ", 800), o("o9", "目玉焼き", 150), o("o10", "トリュフ", 500), o("o11", "大盛りライス", 100)]),
+            ],
+            "i8": [NPOptionGroup(id: "g4", name: "味", isRequired: true, minSelect: 1, maxSelect: 1, items: [o("o12", "塩"), o("o13", "タレ"), o("o14", "半々")])],
+            "i15": [NPOptionGroup(id: "g5", name: "温度", isRequired: true, minSelect: 1, maxSelect: 1, items: [o("o15", "冷"), o("o16", "常温"), o("o17", "燗", 50)])],
+        ]
+        model.order.lines.insert(
+            NPOrderLine(id: "l4", menuItemId: "i8", name: "焼き鳥 盛り合わせ（5本）", quantity: 1, unitPrice: 980, sent: true, optionNames: ["タレ"]), at: 2)
         return model
     }
 }
