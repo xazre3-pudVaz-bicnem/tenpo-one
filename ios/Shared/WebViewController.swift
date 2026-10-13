@@ -54,6 +54,13 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         webView.uiDelegate = self
         webView.allowsBackForwardNavigationGestures = AppState.shared.mode != .regi
         webView.scrollView.contentInsetAdjustmentBehavior = .never
+        // 画面を固定（2026-10-14 Ronnie「アプリはズームなど一切できない。画面にぴったり固定」）：
+        // 引っぱっても揺れない・横に動かない・ピンチで拡大しない（中のリストのスクロールは今まで通り）
+        webView.scrollView.bounces = false
+        webView.scrollView.alwaysBounceHorizontal = false
+        webView.scrollView.showsHorizontalScrollIndicator = false
+        webView.scrollView.isDirectionalLockEnabled = true
+        webView.scrollView.pinchGestureRecognizer?.isEnabled = false
         webView.isOpaque = false
         webView.backgroundColor = view.backgroundColor
         #if DEBUG
@@ -99,6 +106,41 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         Self.current = self
     }
 
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        applyPadViewport()
+    }
+
+    /// iPad：画面の文字・ボタン・ポップアップを全部少し大きく（2026-10-14 Ronnie「全部少し大きく」。Airレジくらい）。
+    /// Web の幅（viewport）を少し狭くして、iPad が画面いっぱいに拡大して見せる（横にはみ出さない・画面が動かない）。
+    /// 最大 110%。拡大しても左のメニューが出る幅（1024px 以上）のままになる分だけ。縦向きは今まで通り（100%）。
+    /// （WKWebView の pageZoom は横にはみ出して画面が動いたので使わない）
+    static func padZoom(forWidth width: CGFloat) -> CGFloat {
+        let fit = width / 1040
+        return fit <= 1 ? 1 : min(1.1, fit)
+    }
+
+    /// 今の Web の幅（0＝ふつう：width=device-width）と、そのときの拡大率
+    private static var padViewportWidth = 0
+    private static var padViewportScale = "1"
+
+    private func applyPadViewport() {
+        guard AppConfig.isPad, webView != nil else { return }
+        let width = view.bounds.width
+        guard width > 0 else { return }
+        let zoom = Self.padZoom(forWidth: width)
+        let w = zoom > 1 ? Int((width / zoom).rounded(.down)) : 0
+        guard w != Self.padViewportWidth else { return }
+        Self.padViewportWidth = w
+        // 画面の幅 ÷ Web の幅（この倍率で固定。拡大・縮小させない）
+        Self.padViewportScale = w > 0 ? String(format: "%.4f", Double(width) / Double(w)) : "1"
+        refreshBridgeScript()
+        webView.evaluateJavaScript(
+            "window.__tenpoSetViewport && window.__tenpoSetViewport(\(w), \(Self.padViewportScale));",
+            completionHandler: nil
+        )
+    }
+
     func load(_ url: URL) {
         errorView.isHidden = true
         webView.load(URLRequest(url: url))
@@ -130,6 +172,9 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         let nativePos = AppConfig.isPad
             ? "nativePos: { enabled: \(nativePosOn), set: function(on){ return call('setNativePos', { on: !!on }).then(function(r){ if (r && r.ok && window.TenpoNative && window.TenpoNative.nativePos) { window.TenpoNative.nativePos.enabled = !!r.enabled; } return r; }); } },"
             : ""
+        // 画面を固定（2026-10-14 Ronnie「アプリはズームなど一切できない。画面にぴったり固定」）：拡大・縮小させない。
+        // iPad は少し大きく（viewport の幅を狭くして画面いっぱいに拡大。applyPadViewport）。Next が書き直しても戻す
+        let viewport = "(function(){ var W = \(padViewportWidth); var m = null; var want = function(){ if (W > 0) { var k = W > 0 && window.__tenpoScale ? window.__tenpoScale : 1; return 'width=' + W + ', initial-scale=' + k + ', minimum-scale=' + k + ', maximum-scale=' + k + ', user-scalable=no'; } return 'width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no'; }; var apply = function(){ if (!m) return; var v = want(); if (m.getAttribute('content') !== v) m.setAttribute('content', v); }; var watch = function(){ var n = document.querySelector('meta[name=viewport]'); if (!n || n === m) return !!n; m = n; apply(); new MutationObserver(apply).observe(m, { attributes: true, attributeFilter: ['content'] }); return true; }; window.__tenpoSetViewport = function(w, k){ W = w | 0; window.__tenpoScale = k || 1; watch(); apply(); }; window.__tenpoScale = \(padViewportScale); try { document.documentElement.style.touchAction = 'manipulation'; } catch (e) {} if (!watch()) { var mo = new MutationObserver(function(){ if (watch()) { mo.disconnect(); if (document.head) new MutationObserver(watch).observe(document.head, { childList: true }); } }); mo.observe(document, { childList: true, subtree: true }); } else if (document.head) { new MutationObserver(watch).observe(document.head, { childList: true }); } })();"
         // iPad だけ：画面の行き先を知らせる（オーダー・会計をネイティブで開くため。Next の画面の切り替えは pushState）
         let routeHook = AppConfig.isPad
             ? "(function(){ var notify = function(){ post({ type: 'route', url: location.href }); }; var wrap = function(n){ var o = history[n]; history[n] = function(){ var r = o.apply(this, arguments); try { notify(); } catch (e) {} return r; }; }; wrap('pushState'); wrap('replaceState'); window.addEventListener('popstate', notify); })();"
@@ -157,6 +202,7 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
             \(nativePos)
           };
           \(routeHook)
+          \(viewport)
           try { document.documentElement.classList.add('tenpo-app'); } catch (e) {}
         })();
         """
@@ -287,6 +333,8 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        // 読み込みごとにピンチの拡大を止め直す（画面を固定）
+        webView.scrollView.pinchGestureRecognizer?.isEnabled = false
         if AppState.shared.mode == .regi {
             RegisterDeviceKeychain.capture(from: webView.configuration.websiteDataStore.httpCookieStore)
         }
