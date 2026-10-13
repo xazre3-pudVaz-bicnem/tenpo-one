@@ -31,7 +31,7 @@ struct NativePreviewView: View {
             NativeOrderView(model: model)
                 .statusBarHidden(true)
         case .checkout:
-            NativeCheckoutView(total: model.total, tableName: model.order.tableName, onClose: {})
+            NativeCheckoutView(model: model, onClose: {})
                 .statusBarHidden(true)
         }
     }

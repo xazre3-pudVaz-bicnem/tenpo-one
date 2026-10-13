@@ -71,6 +71,10 @@
 			isa = PBXBuildFile;
 			fileRef = A1FEC2419F1052C49E973173;
 		};
+		D2D8D62E926C484E717902E9 = {
+			isa = PBXBuildFile;
+			fileRef = DAFCD483AB1A2AE75EF85DD2;
+		};
 		D324719F2D7AEE62FB625347 = {
 			isa = PBXBuildFile;
 			fileRef = "956DFE02BC7361B56EDD90D3";
@@ -209,6 +213,12 @@
 			path = TenpoOne.entitlements;
 			sourceTree = "<group>";
 		};
+		DAFCD483AB1A2AE75EF85DD2 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = NativeCheckoutData.swift;
+			sourceTree = "<group>";
+		};
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -258,6 +268,7 @@
 				"75DC12C17FB620987F5695C3",
 				"8349BD58E504E19E3C5631D9",
 				"956DFE02BC7361B56EDD90D3",
+				DAFCD483AB1A2AE75EF85DD2,
 				A1FEC2419F1052C49E973173,
 				BEE174B4C52DC439864EC2D6,
 				"413CA5766E9AEECBFB339B62",
@@ -356,6 +367,7 @@
 				"5EC034E111252F0B7CB2F1E1",
 				"9251238DBD5E9F2872052E3A",
 				D324719F2D7AEE62FB625347,
+				D2D8D62E926C484E717902E9,
 				CE94213B0C8B6AFEA7536D85,
 				"02831771C1B71EF0AF471A4D",
 				"276B012ACAE09C98CCBFE760",

@@ -43,6 +43,11 @@ struct NPOrder: Codable, Hashable {
     let seatTo: String?
     let clerkName: String?
     var lines: [NPOrderLine]
+    /// 来店経路（Walk in・食べログ・ホットペッパー…。NPVisitSource.id）
+    var visitSourceId: String? = nil
+    var serviceCharge: Int = 0
+    var discountTotal: Int = 0
+    var discountReason: String? = nil
 }
 
 /// オーダー画面の状態（タップはすぐ画面に出す。サーバーへの保存は後ろで）
@@ -55,6 +60,8 @@ final class NativeOrderModel: ObservableObject {
     @Published var selectedCategory: String
     @Published var search = ""
     @Published var registerOpen: Bool
+    /// この店で使う来店経路（設定 > レジ > 来店経路。既定は12個）
+    @Published var visitSources: [NPVisitSource] = NPVisitSource.defaults
     /// 最後に足した行（行を光らせる）
     @Published var lastAddedLineId: String?
 
@@ -75,10 +82,13 @@ final class NativeOrderModel: ObservableObject {
         }
     }
 
-    /// 合計（税込）。内税 10% として消費税を出す（表示用。正しい値はサーバーから）
-    var total: Int { order.lines.reduce(0) { $0 + $1.lineTotal } }
+    /// 品目の合計（税込）
+    var itemsTotal: Int { order.lines.reduce(0) { $0 + $1.lineTotal } }
+    /// お支払い金額（税込）＝ 品目 ＋ サービス料 − 値引き（表示用。正しい値はサーバーから）
+    var total: Int { max(0, itemsTotal + order.serviceCharge - order.discountTotal) }
+    /// 内税 10% として消費税を出す
     var tax: Int { total * 10 / 110 }
-    var subtotal: Int { total - tax }
+    var subtotal: Int { itemsTotal - itemsTotal * 10 / 110 }
     var unsentCount: Int { order.lines.filter { !$0.sent }.reduce(0) { $0 + $1.quantity } }
     var itemCount: Int { order.lines.reduce(0) { $0 + $1.quantity } }
 
@@ -155,7 +165,8 @@ extension NativeOrderModel {
                 NPOrderLine(id: "l1", menuItemId: "i11", name: "生ビール", quantity: 2, unitPrice: 590, sent: true),
                 NPOrderLine(id: "l2", menuItemId: "i4", name: "枝豆", quantity: 1, unitPrice: 390, sent: true),
                 NPOrderLine(id: "l3", menuItemId: "i5", name: "唐揚げ", quantity: 1, unitPrice: 580, sent: false),
-            ]
+            ],
+            visitSourceId: "tabelog"
         )
         let model = NativeOrderModel(storeName: "MEAT CROWN 新横浜", categories: cats, items: items, order: order, registerOpen: true)
         model.selectedCategory = "c1"

@@ -26,8 +26,8 @@ struct NativeOrderView: View {
             .background(NT.page)
         }
         .background(NT.page.ignoresSafeArea())
-        .sheet(isPresented: $showCheckout) {
-            NativeCheckoutView(total: model.total, tableName: model.order.tableName, onClose: { showCheckout = false })
+        .fullScreenCover(isPresented: $showCheckout) {
+            NativeCheckoutView(model: model, onClose: { showCheckout = false })
         }
     }
 }
@@ -130,11 +130,14 @@ private struct SlipPanel: View {
 
             // 顧客・時間・担当
             VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 8) {
+                WrapLayout(spacing: 8) {
                     chip(icon: "person", text: model.order.customerName.map { "\($0) 様" } ?? "顧客 未設定")
                     if let from = model.order.seatFrom, let to = model.order.seatTo {
                         chip(icon: "clock", text: "\(from)〜\(to)")
                     }
+                    // 来店経路（booking source）
+                    let source = (NPVisitSource.defaults + NPVisitSource.extras).first { $0.id == model.order.visitSourceId }
+                    chip(icon: "signpost.right", text: source?.label ?? "経路 未設定")
                 }
                 Text("担当 \(model.order.clerkName ?? "未設定")")
                     .font(.system(size: 13, weight: .medium)).foregroundColor(NT.ink2)
