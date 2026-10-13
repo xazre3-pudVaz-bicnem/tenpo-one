@@ -69,6 +69,8 @@ export interface PrinterRow {
   upside_down?: boolean;
   /** メーカー（'EPSON' / 'Star' 等）。接続方式の判定に使う */
   maker?: string | null;
+  /** お店の中のアドレス（Wi-Fi で直接印刷するときの送り先。loadPrinterRow だけが読む） */
+  ip_address?: string | null;
 }
 
 type Admin = ReturnType<typeof createAdminClient>;
@@ -251,7 +253,11 @@ export async function generateKitchenJobs(admin: Admin, printer: PrinterRow) {
 }
 
 /** このプリンタ宛ての最古の queued を1件取り出し、claimed にする。 */
-export async function claimNextJob(admin: Admin, printerId: string) {
+export async function claimNextJob(
+  admin: Admin,
+  printerId: string,
+  attempt = 0
+): Promise<{ id: string; content_type: string | null; payload: JobPayload | null } | null> {
   const queued = () =>
     admin
       .from('print_jobs')
@@ -273,11 +279,42 @@ export async function claimNextJob(admin: Admin, printerId: string) {
   const job = drawer ?? (await queued().order('created_at', { ascending: true }).limit(1).maybeSingle()).data;
   if (!job) return null;
 
-  await admin
+  // まだ queued のときだけ claimed にする（プリンター自身と、Wi-Fi で直接印刷する iPad が同時に取りに来ても
+  // 同じ伝票が2枚出ないように。lib/direct-print.ts）
+  const { data: claimed } = await admin
     .from('print_jobs')
     .update({ status: 'claimed', claimed_at: new Date().toISOString() })
-    .eq('id', job.id);
+    .eq('id', job.id)
+    .eq('status', 'queued')
+    .select('id');
+  if (!claimed || claimed.length === 0) {
+    // ほかが先に取った。次の1件を見る（1回だけ）
+    if (attempt < 1) return claimNextJob(admin, printerId, attempt + 1);
+    return null;
+  }
   return job as { id: string; content_type: string | null; payload: JobPayload | null };
+}
+
+/** Wi-Fi で直接印刷できなかった（iPad からプリンターにつながらない）ジョブを、プリンター自身の印刷に戻す */
+export async function releaseJob(admin: Admin, printerId: string, jobId: string) {
+  await admin
+    .from('print_jobs')
+    .update({ status: 'queued', claimed_at: null })
+    .eq('id', jobId)
+    .eq('printer_config_id', printerId)
+    .eq('status', 'claimed');
+}
+
+/** プリンター1台の行（Wi-Fi で直接印刷する iPad 用。トークンではなく id で引く。呼ぶ側で店舗の権限を確かめてから） */
+export async function loadPrinterRow(admin: Admin, printerId: string): Promise<PrinterRow | null> {
+  const { data } = await admin
+    .from('printer_configs')
+    .select('id, organization_id, store_id, name, usage, paper_width_mm, kitchen_stations, auto_print, floor_ids, bill_slips, upside_down, maker, ip_address')
+    .eq('id', printerId)
+    .eq('cloudprnt_enabled', true)
+    .eq('status', 'active')
+    .maybeSingle();
+  return (data as PrinterRow | null) ?? null;
 }
 
 /**
