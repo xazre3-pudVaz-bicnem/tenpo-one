@@ -1,5 +1,6 @@
 import Foundation
 import CoreBluetooth
+import ExternalAccessory
 #if canImport(StarIO10)
 import StarIO10
 #endif
@@ -9,7 +10,8 @@ import StarIO10
 ///
 /// Web（components/printing/direct-print-agent.tsx）が印刷のバイト列（base64）を渡し、ここが送るだけ。
 ///   star   … Star mC-Print3 など（StarXpand SDK・StarIO10。Bluetooth / USB）。StarPRNT
-///   epson  … EPSON TM-m30III など（ePOS SDK。Bluetooth / USB）。ESC/POS。SDK を ios/Vendor に置いたときだけ（EPSON_SDK）
+///   epson  … EPSON TM-m30III など。ESC/POS。iPad とペアリングすれば SDK なしで送れる（External Accessory「com.epson.escpos」）。
+///            ePOS SDK を ios/Vendor に置いたときは SDK でも探す（EPSON_SDK）
 ///   sii    … SII RP-F10 など。ESC/POS。SII の SDK を入れるまでは Bluetooth LE で試す
 ///   escpos … そのほかの ESC/POS プリンター（Bluetooth LE）
 /// Bluetooth（MFi）の Star・EPSON・SII は App Store に出すとき各社の MFi 承認が要る（ios/README.md）。
@@ -20,6 +22,7 @@ final class BluetoothPrinters: NSObject {
     typealias Done = (_ ok: Bool, _ code: String?) -> Void
 
     private let ble = BLEEscPosPrinter()
+    private let accessory = AccessoryEscPosPrinters()
     #if canImport(StarIO10)
     private let star = StarPrinters()
     #endif
@@ -45,6 +48,12 @@ final class BluetoothPrinters: NSObject {
             group.enter()
             epson.discover { add($0); group.leave() }
         }
+        #else
+        if maker == "epson" || maker == "all" {
+            group.enter()
+            // EPSON だけを探していて見つからないときは、iOS のペアリングの一覧を出す
+            accessory.discover(pairIfNone: maker == "epson") { add($0); group.leave() }
+        }
         #endif
         if maker == "escpos" || maker == "sii" || maker == "all" {
             group.enter()
@@ -56,6 +65,11 @@ final class BluetoothPrinters: NSObject {
     /// バイト列を送る（Star＝StarPRNT、それ以外＝ESC/POS）
     func print(deviceId: String, maker: String, via: String, data: Data, completion: @escaping Done) {
         let done: Done = { ok, code in DispatchQueue.main.async { completion(ok, code) } }
+        // iPad とペアリングした EPSON（External Accessory）。メーカーを「その他」で登録していても同じ
+        if deviceId.hasPrefix(AccessoryEscPosPrinters.idPrefix) {
+            accessory.print(deviceId: deviceId, data: data, completion: done)
+            return
+        }
         switch maker {
         case "star":
             #if canImport(StarIO10)
@@ -187,6 +201,188 @@ private final class EpsonPrinters: NSObject, Epos2DiscoveryDelegate, Epos2PtrRec
     }
 }
 #endif
+
+// MARK: - EPSON（Bluetooth・USB。SDK なし：iOS の External Accessory で ESC/POS をそのまま送る）
+
+/// EPSON の TM プリンター（TM-m30III など。MFi）は、iPad の 設定 > Bluetooth でペアリングすると
+/// External Accessory（プロトコル com.epson.escpos。App/Info.plist の UISupportedExternalAccessoryProtocols）で見える。
+/// そこへ Web が作った ESC/POS のバイト列を送るだけで、レシート・領収書・ドロアが動く（ePOS SDK は要らない）。
+/// 2026-10-13 Ronnie「五反田の EPSON を Bluetooth で。Airレジのように」
+/// つないだまま使う（2枚目からは速い）。プリンターが切れたら、次の印刷でつなぎ直す。
+private final class AccessoryEscPosPrinters: NSObject, StreamDelegate {
+    static let idPrefix = "ea:"
+    static let epsonProtocol = "com.epson.escpos"
+
+    private final class Job: NSObject {
+        let accessory: EAAccessory
+        let data: Data
+        let done: BluetoothPrinters.Done
+        init(accessory: EAAccessory, data: Data, done: @escaping BluetoothPrinters.Done) {
+            self.accessory = accessory
+            self.data = data
+            self.done = done
+        }
+    }
+
+    // ここから下の queue・current・session は印刷用のスレッド（thread）でだけ触る
+    private var thread: Thread!
+    private var queue: [Job] = []
+    private var current: Job?
+    private var offset = 0
+    private var session: EASession?
+    private var timer: Timer?
+
+    override init() {
+        super.init()
+        thread = Thread(target: self, selector: #selector(threadMain), object: nil)
+        thread.name = "tenpo.printer.accessory"
+        thread.start()
+        EAAccessoryManager.shared().registerForLocalNotifications()
+        NotificationCenter.default.addObserver(self, selector: #selector(accessoryDidDisconnect(_:)), name: .EAAccessoryDidDisconnect, object: nil)
+    }
+
+    @objc private func threadMain() {
+        RunLoop.current.add(Port(), forMode: .default)
+        while true {
+            autoreleasepool { _ = RunLoop.current.run(mode: .default, before: .distantFuture) }
+        }
+    }
+
+    private static func epsonAccessories() -> [EAAccessory] {
+        EAAccessoryManager.shared().connectedAccessories.filter { $0.protocolStrings.contains(epsonProtocol) }
+    }
+
+    /// 機械の目印（シリアル番号。無ければ名前）
+    static func deviceId(of a: EAAccessory) -> String {
+        idPrefix + (a.serialNumber.isEmpty ? a.name : a.serialNumber)
+    }
+
+    private static func devices() -> [BluetoothPrinters.Device] {
+        epsonAccessories().map { a in
+            let name = a.name.isEmpty ? "EPSON" : a.name
+            return ["deviceId": deviceId(of: a), "name": a.serialNumber.isEmpty ? name : "\(name)（\(a.serialNumber)）", "maker": "epson", "via": "bluetooth"]
+        }
+    }
+
+    // 探す（ペアリング済み・つながっているもの）
+    func discover(pairIfNone: Bool, completion: @escaping ([BluetoothPrinters.Device]) -> Void) {
+        DispatchQueue.main.async {
+            let list = Self.devices()
+            guard list.isEmpty, pairIfNone else { return completion(list) }
+            // まだペアリングしていない：iOS の一覧を出す（選ぶとペアリング）。終わったらもう一度見る
+            EAAccessoryManager.shared().showBluetoothAccessoryPicker(withNameFilter: nil) { _ in
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { completion(Self.devices()) }
+            }
+        }
+    }
+
+    // 送る
+    func print(deviceId: String, data: Data, completion: @escaping BluetoothPrinters.Done) {
+        DispatchQueue.main.async {
+            guard let a = Self.epsonAccessories().first(where: { Self.deviceId(of: $0) == deviceId }) else {
+                return completion(false, "not_found")
+            }
+            guard !data.isEmpty else { return completion(true, nil) }
+            let job = Job(accessory: a, data: data, done: completion)
+            self.perform(#selector(self.enqueue(_:)), on: self.thread, with: job, waitUntilDone: false)
+        }
+    }
+
+    // MARK: 印刷用のスレッド
+
+    @objc private func enqueue(_ job: Job) {
+        queue.append(job)
+        startNext()
+    }
+
+    private func startNext() {
+        guard current == nil, !queue.isEmpty else { return }
+        let job = queue.removeFirst()
+        current = job
+        offset = 0
+        if session == nil || session?.accessory?.connectionID != job.accessory.connectionID {
+            closeSession()
+            guard let s = EASession(accessory: job.accessory, forProtocol: Self.epsonProtocol) else {
+                return finish(false, "connect")
+            }
+            session = s
+            let streams: [Stream?] = [s.inputStream, s.outputStream]
+            for st in streams.compactMap({ $0 }) {
+                st.delegate = self
+                st.schedule(in: .current, forMode: .default)
+                st.open()
+            }
+        }
+        timer = Timer.scheduledTimer(withTimeInterval: 15, repeats: false) { [weak self] _ in
+            self?.closeSession()
+            self?.finish(false, "timeout")
+        }
+        write()
+    }
+
+    private func write() {
+        guard let job = current, let out = session?.outputStream else { return }
+        while offset < job.data.count, out.hasSpaceAvailable {
+            let n = job.data.withUnsafeBytes { raw -> Int in
+                guard let base = raw.bindMemory(to: UInt8.self).baseAddress else { return -1 }
+                return out.write(base + offset, maxLength: min(job.data.count - offset, 4096))
+            }
+            if n < 0 {
+                closeSession()
+                return finish(false, "connect")
+            }
+            if n == 0 { break }
+            offset += n
+        }
+        if offset >= job.data.count { finish(true, nil) }
+    }
+
+    func stream(_ aStream: Stream, handle eventCode: Stream.Event) {
+        switch eventCode {
+        case .hasSpaceAvailable:
+            write()
+        case .hasBytesAvailable:
+            // プリンターからの返事（状態）は使わないので読み捨てる
+            if let input = aStream as? InputStream {
+                var buf = [UInt8](repeating: 0, count: 256)
+                while input.hasBytesAvailable, input.read(&buf, maxLength: buf.count) > 0 {}
+            }
+        case .errorOccurred, .endEncountered:
+            closeSession()
+            if current != nil { finish(false, "connect") }
+        default:
+            break
+        }
+    }
+
+    private func finish(_ ok: Bool, _ code: String?) {
+        timer?.invalidate()
+        timer = nil
+        guard let job = current else { return }
+        current = nil
+        job.done(ok, code)
+        startNext()
+    }
+
+    private func closeSession() {
+        guard let s = session else { return }
+        session = nil
+        let streams: [Stream?] = [s.inputStream, s.outputStream]
+        for st in streams.compactMap({ $0 }) {
+            st.delegate = nil
+            st.close()
+            st.remove(from: .current, forMode: .default)
+        }
+    }
+
+    @objc private func accessoryDidDisconnect(_ note: Notification) {
+        perform(#selector(dropSession), on: thread, with: nil, waitUntilDone: false)
+    }
+
+    @objc private func dropSession() {
+        closeSession()
+    }
+}
 
 // MARK: - そのほかの ESC/POS（Bluetooth LE。SDK なしで動く）
 

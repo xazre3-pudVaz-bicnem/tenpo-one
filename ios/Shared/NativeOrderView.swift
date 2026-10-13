@@ -61,12 +61,17 @@ struct NativeOrderView: View {
                 }
             }
         }
-        .fullScreenCover(isPresented: $showCheckout) {
-            NativeCheckoutView(model: model, onClose: { showCheckout = false }, onFinished: {
-                showCheckout = false
-                if model.isLive { AppState.shared.closeNativePos(openWebPath: nil) }
-            })
+        // 会計は同じ画面の上に重ねる（fullScreenCover にすると、下の Web が止まって Bluetooth の印刷・ドロアが出ない）
+        .overlay {
+            if showCheckout {
+                NativeCheckoutView(model: model, onClose: { showCheckout = false }, onFinished: {
+                    showCheckout = false
+                    if model.isLive { AppState.shared.closeNativePos(openWebPath: nil) }
+                })
+                .transition(.move(edge: .trailing))
+            }
         }
+        .animation(.easeOut(duration: 0.22), value: showCheckout)
         .confirmationDialog("担当者を選んでください", isPresented: $pickClerk, titleVisibility: .visible) {
             ForEach(model.clerks, id: \.id) { c in
                 Button(c.name) {
