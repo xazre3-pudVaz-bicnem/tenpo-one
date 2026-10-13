@@ -91,6 +91,7 @@ export default async function PrintersSettingsPage() {
       maker: p.maker ?? '',
       model: p.model ?? '',
       usage: p.usage as 'receipt' | 'kitchen',
+      connectionType: (p.connection_type as string | null) ?? null,
       cloudprntEnabled: p.cloudprnt_enabled ?? false,
       cloudprntToken: p.cloudprnt_token ?? null,
       drawerKick: p.drawer_kick,

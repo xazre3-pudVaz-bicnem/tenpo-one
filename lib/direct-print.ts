@@ -105,21 +105,81 @@ export function eposErrorLabel(code: string | null): string {
   }
 }
 
+/**
+ * iPad とつなぐレシートプリンターの種類（2026-10-13 Ronnie「ESC/POS・Star・RP-F10（Bluetooth / USB）を選べるように」）。
+ *   star   … Star（mC-Print3 など）。StarPRNT を送る（StarXpand SDK）
+ *   epson  … EPSON（TM-m30III など）。ESC/POS を送る（ePOS SDK）
+ *   sii    … SII セイコー（RP-F10 など）。ESC/POS を送る（SII の SDK）
+ *   escpos … そのほかの ESC/POS 対応プリンター（Bluetooth LE）
+ */
+export type BtMaker = 'star' | 'epson' | 'sii' | 'escpos';
+export const BT_MAKERS: readonly BtMaker[] = ['star', 'epson', 'sii', 'escpos'];
+export const BT_MAKER_LABEL: Record<BtMaker, string> = { star: 'Star', epson: 'EPSON', sii: 'SII（セイコー）', escpos: 'ESC/POS' };
+
+/** 送るデータの形：Star は StarPRNT、それ以外は ESC/POS */
+export function btFormatOf(maker: BtMaker): 'starprnt' | 'escpos' {
+  return maker === 'star' ? 'starprnt' : 'escpos';
+}
+
+/** iPad と Bluetooth・USB でつないだレシートプリンター（TENPO ONE レジ アプリだけ） */
+export interface BluetoothLink {
+  /** TENPO ONE のプリンター（printer_configs.id） */
+  printerId: string;
+  /** アプリが見つけた機械（Star の identifier / EPSON の target / SII・BLE の識別子） */
+  deviceId: string;
+  deviceName: string;
+  maker: BtMaker;
+  /** つなぎ方 */
+  via?: 'bluetooth' | 'usb';
+}
+
 export interface DirectPrintConfig {
   /** この端末から Wi-Fi で直接印刷するプリンター（printer_configs.id） */
   printerIds: string[];
+  /** この端末と Bluetooth でつないだプリンター */
+  bluetooth?: BluetoothLink[];
 }
 
 /** localStorage の値を読む（壊れていたら空） */
 export function parseDirectPrintConfig(raw: string | null | undefined): DirectPrintConfig {
-  if (!raw) return { printerIds: [] };
+  if (!raw) return { printerIds: [], bluetooth: [] };
   try {
-    const v = JSON.parse(raw) as { printerIds?: unknown };
+    const v = JSON.parse(raw) as { printerIds?: unknown; bluetooth?: unknown };
     const ids = Array.isArray(v?.printerIds) ? v.printerIds.filter((x): x is string => typeof x === 'string' && x.length > 0) : [];
-    return { printerIds: [...new Set(ids)].slice(0, 8) };
+    const bt = Array.isArray(v?.bluetooth)
+      ? (v.bluetooth as Partial<BluetoothLink>[]).filter(
+          (x): x is BluetoothLink =>
+            !!x &&
+            typeof x.printerId === 'string' &&
+            typeof x.deviceId === 'string' &&
+            x.deviceId.length > 0 &&
+            BT_MAKERS.includes(x.maker as BtMaker)
+        )
+      : [];
+    const seen = new Set<string>();
+    const links: BluetoothLink[] = bt
+      .filter((x) => (seen.has(x.printerId) ? false : (seen.add(x.printerId), true)))
+      .map((x) => ({
+        printerId: x.printerId,
+        deviceId: x.deviceId,
+        deviceName: String(x.deviceName ?? ''),
+        maker: x.maker,
+        via: x.via === 'usb' ? 'usb' : 'bluetooth',
+      }));
+    return { printerIds: [...new Set(ids)].slice(0, 8), bluetooth: links.slice(0, 4) };
   } catch {
-    return { printerIds: [] };
+    return { printerIds: [], bluetooth: [] };
   }
+}
+
+/** プリンター設定のメーカー名から、iPad とつなぐときの種類。分からなければ ESC/POS（多くの機械が対応） */
+export function bluetoothMakerOf(maker: string | null | undefined): BtMaker | null {
+  const m = (maker ?? '').trim();
+  if (/epson/i.test(m)) return 'epson';
+  if (/star|スター/i.test(m)) return 'star';
+  if (/sii|seiko|セイコー/i.test(m)) return 'sii';
+  if (/esc\/?pos|その他|other/i.test(m) || m === '') return 'escpos';
+  return 'escpos';
 }
 
 /** メーカー名が EPSON か */

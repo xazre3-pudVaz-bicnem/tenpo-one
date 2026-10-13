@@ -113,16 +113,32 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         let mode = AppState.shared.userAgentTag
         let version = AppConfig.version
         let isPhone = UIDevice.current.userInterfaceIdiom == .phone ? "true" : "false"
+        // iPad のレジだけ：Bluetooth・USB のレシートプリンター（ios/Shared/BluetoothPrinters.swift）
+        #if REGI
+        let bluetooth = "bluetooth: { discover: function(maker){ return call('btDiscover', { maker: maker || 'all' }); }, print: function(job){ return call('btPrint', job || {}); } },"
+        #else
+        let bluetooth = ""
+        #endif
         return """
         (function(){
           if (window.TenpoNative) return;
           var post = function(m){ try { window.webkit.messageHandlers.tenpo.postMessage(m); } catch (e) {} };
+          var seq = 0, waits = {};
+          window.__tenpoNativeReply = function(id, res){ var f = waits[id]; if (f) { delete waits[id]; f(res); } };
+          var call = function(type, payload){
+            return new Promise(function(resolve){
+              var id = String(++seq); waits[id] = resolve;
+              var m = Object.assign({}, payload || {}); m.type = type; m.reqId = id; post(m);
+              setTimeout(function(){ if (waits[id]) { delete waits[id]; resolve({ ok: false, code: 'timeout' }); } }, 30000);
+            });
+          };
           window.TenpoNative = {
             isApp: true, app: '\(app)', mode: '\(mode)', version: '\(version)', canVibrate: \(isPhone),
             haptic: function(pattern){ post({ type: 'haptic', pattern: pattern || [300] }); return true; },
             scanQR: function(){ post({ type: 'scanQR' }); },
             changeMode: function(){ post({ type: 'changeMode' }); },
-            requestPush: function(){ post({ type: 'requestPush' }); }
+            requestPush: function(){ post({ type: 'requestPush' }); },
+            \(bluetooth)
           };
           try { document.documentElement.classList.add('tenpo-app'); } catch (e) {}
         })();
@@ -141,9 +157,34 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
             AppState.shared.resetMode()
         case "requestPush":
             PushManager.shared.requestAuthorization()
+        case "btDiscover":
+            let reqId = body["reqId"] as? String ?? ""
+            BluetoothPrinters.shared.discover(maker: body["maker"] as? String ?? "all") { [weak self] devices in
+                self?.reply(reqId, ["ok": true, "devices": devices])
+            }
+        case "btPrint":
+            let reqId = body["reqId"] as? String ?? ""
+            guard let deviceId = body["deviceId"] as? String, let maker = body["maker"] as? String,
+                  let b64 = body["data"] as? String, let data = Data(base64Encoded: b64) else {
+                reply(reqId, ["ok": false, "code": "bad_request"])
+                return
+            }
+            BluetoothPrinters.shared.print(deviceId: deviceId, maker: maker, via: body["via"] as? String ?? "bluetooth", data: data) { [weak self] ok, code in
+                var res: [String: Any] = ["ok": ok]
+                if let code { res["code"] = code }
+                self?.reply(reqId, res)
+            }
         default:
             break
         }
+    }
+
+    /// Web の Promise に返す（window.__tenpoNativeReply）
+    private func reply(_ reqId: String, _ result: [String: Any]) {
+        guard !reqId.isEmpty, let data = try? JSONSerialization.data(withJSONObject: result),
+              let json = String(data: data, encoding: .utf8) else { return }
+        let id = reqId.replacingOccurrences(of: "'", with: "")
+        webView.evaluateJavaScript("window.__tenpoNativeReply && window.__tenpoNativeReply('\(id)', \(json));", completionHandler: nil)
     }
 
     /// 端末の通知トークンをサーバーに渡す（ログインしている Web のセッションで送る）

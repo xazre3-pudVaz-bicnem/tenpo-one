@@ -34,13 +34,14 @@ export interface FloorOption {
   name: string;
 }
 
-const MAKER_OPTIONS = ['EPSON', 'Star', 'その他'];
+// ESC/POS・Star・SII（RP-F10）を選べる（2026-10-13 Ronnie）。「その他」は ESC/POS として扱う（lib/direct-print.ts の bluetoothMakerOf）
+const MAKER_OPTIONS = ['EPSON', 'Star', 'SII', 'その他'];
 const CONNECTION_OPTIONS = [
   { value: 'browser', label: 'ブラウザ印刷' },
   { value: 'wifi', label: 'Wi-Fi' },
   { value: 'lan', label: '有線LAN' },
-  { value: 'bluetooth', label: 'Bluetooth' },
-  { value: 'usb', label: 'USB' },
+  { value: 'bluetooth', label: 'Bluetooth（iPad とつなぐ・レシート）' },
+  { value: 'usb', label: 'USB（iPad とつなぐ・レシート）' },
 ];
 const USAGE_OPTIONS = [
   { value: 'receipt', label: 'レシート' },
@@ -129,7 +130,7 @@ export function PrinterDialog({
             <Select id="printer-maker" value={form.maker} onChange={(e) => set('maker', e.target.value)}>
               {MAKER_OPTIONS.map((m) => (
                 <option key={m} value={m}>
-                  {m}
+                  {m === 'SII' ? 'SII（セイコー・RP-F10 など）' : m === 'その他' ? 'その他（ESC/POS）' : m}
                 </option>
               ))}
             </Select>
@@ -148,7 +149,14 @@ export function PrinterDialog({
               </option>
             ))}
           </Select>
-          {form.connectionType !== 'browser' && (
+          {(form.connectionType === 'bluetooth' || form.connectionType === 'usb') && (
+            <p className="mt-1.5 text-xs text-gray-500">
+              レシートプリンター（＋ドロア）を iPad と Bluetooth・USB でつなぎます（Star mC-Print3・EPSON・SII RP-F10・そのほかの ESC/POS）。
+              保存したら、iPad の「TENPO ONE レジ」アプリの レジの設定 &gt; このiPadのプリンター で「プリンターを探す」を押してつなぎます。
+              厨房・ドリンクのプリンターは 有線LAN・Wi-Fi にしてください
+            </p>
+          )}
+          {form.connectionType !== 'browser' && form.connectionType !== 'bluetooth' && form.connectionType !== 'usb' && (
             <p className="mt-1.5 text-xs text-gray-500">
               Wi-Fi / 有線LAN のどちらでもOK（有線が安定）。実機のレシート印字は、保存後に下の「プリンター接続」で有効化します。プリンタがインターネットに接続できれば利用できます。
             </p>

@@ -4,6 +4,9 @@ TenpoOne.xcodeproj を作る（Mac に XcodeGen が無いので、ファイル�
 ファイルを足したら ios/ で `python3 tools/gen_project.py` を実行し直す。
   target Regi  … iPad「TENPO ONE レジ」  com.tenpoone.regi   （SWIFT 条件 REGI）
   target Handy … iPhone「TENPO ONE」     com.tenpoone.handy  （SWIFT 条件 HANDY：ハンディ＋オーナー）
+レシートプリンター（Bluetooth・USB。ios/Shared/BluetoothPrinters.swift）:
+  Star  … StarXpand SDK（Swift Package・StarIO10）を Regi に入れる（Xcode が最初のビルドで取ってくる）
+  EPSON … ePOS SDK を EPSON のサイトから取って ios/Vendor/libepos2.xcframework に置くと、Regi に入れて EPSON_SDK を付ける
 """
 import hashlib, os, json
 
@@ -40,7 +43,11 @@ def add(id_, isa, **fields):
     objs[id_] = (isa, fields)
     return id_
 
+EPSON_SDK = os.path.isdir(os.path.join(ROOT, 'Vendor', 'libepos2.xcframework'))
+
 def ftype(name):
+    if name.endswith('.xcframework'): return 'wrapper.xcframework'
+    if name.endswith('.h'): return 'sourcecode.c.h'
     if name.endswith('.swift'): return 'sourcecode.swift'
     if name.endswith('.xcassets'): return 'folder.assetcatalog'
     if name.endswith('.wav'): return 'audio.wav'
@@ -63,7 +70,18 @@ for t in TARGETS:
     products[t] = add(uid('product', t), 'PBXFileReference', explicitFileType='wrapper.application', includeInIndex='0', path=f'{t}.app', sourceTree='BUILT_PRODUCTS_DIR')
 
 products_group = add(uid('group', 'Products'), 'PBXGroup', children=list(products.values()), name='Products', sourceTree='<group>')
-main_group = add(uid('group', 'main'), 'PBXGroup', children=[shared_group] + list(target_groups.values()) + [products_group], sourceTree='<group>')
+extra_groups = []
+epson_ref = None
+if EPSON_SDK:
+    epson_ref = add(uid('ref', 'Vendor', 'libepos2.xcframework'), 'PBXFileReference', lastKnownFileType='wrapper.xcframework', path='libepos2.xcframework', sourceTree='<group>')
+    extra_groups.append(add(uid('group', 'Vendor'), 'PBXGroup', children=[epson_ref], path='Vendor', sourceTree='<group>'))
+main_group = add(uid('group', 'main'), 'PBXGroup', children=[shared_group] + list(target_groups.values()) + extra_groups + [products_group], sourceTree='<group>')
+
+# Star の SDK（Swift Package）。レジ（iPad）だけ
+star_pkg = add(uid('pkg', 'StarXpand'), 'XCRemoteSwiftPackageReference',
+               repositoryURL='https://github.com/star-micronics/StarXpand-SDK-iOS',
+               requirement={'kind': 'upToNextMajorVersion', 'minimumVersion': '2.0.0'})
+star_dep = add(uid('pkgdep', 'Regi', 'StarIO10'), 'XCSwiftPackageProductDependency', package=star_pkg, productName='StarIO10')
 
 # ---- build settings ----
 common = {
@@ -100,6 +118,10 @@ for t, info in TARGETS.items():
         'TARGETED_DEVICE_FAMILY': info['family'],
     }
     s.update(info['orient'])
+    if t == 'Regi' and EPSON_SDK:
+        s['SWIFT_ACTIVE_COMPILATION_CONDITIONS'] += ' EPSON_SDK'
+        s['SWIFT_OBJC_BRIDGING_HEADER'] = 'Regi/Regi-Bridging-Header.h'
+        s['OTHER_LDFLAGS'] = '$(inherited) -ObjC -lxml2'
     cfgs = [add(uid('cfg', t, n), 'XCBuildConfiguration', buildSettings=dict(s), name=n) for n in ('Debug', 'Release')]
     cfg_list = add(uid('cfglist', t), 'XCConfigurationList', buildConfigurations=cfgs, defaultConfigurationIsVisible='0', defaultConfigurationName='Release')
 
@@ -108,17 +130,26 @@ for t, info in TARGETS.items():
     res_files.append(add(uid('bf', t, 'res', 'Assets.xcassets'), 'PBXBuildFile', fileRef=target_files[t]['Assets.xcassets']))
     src_phase = add(uid('phase', t, 'src'), 'PBXSourcesBuildPhase', buildActionMask='2147483647', files=src_files, runOnlyForDeploymentPostprocessing='0')
     res_phase = add(uid('phase', t, 'res'), 'PBXResourcesBuildPhase', buildActionMask='2147483647', files=res_files, runOnlyForDeploymentPostprocessing='0')
-    fw_phase = add(uid('phase', t, 'fw'), 'PBXFrameworksBuildPhase', buildActionMask='2147483647', files=[], runOnlyForDeploymentPostprocessing='0')
+    fw_files = []
+    pkg_deps = []
+    if t == 'Regi':
+        fw_files.append(add(uid('bf', t, 'fw', 'StarIO10'), 'PBXBuildFile', productRef=star_dep))
+        pkg_deps.append(star_dep)
+        if epson_ref:
+            fw_files.append(add(uid('bf', t, 'fw', 'libepos2'), 'PBXBuildFile', fileRef=epson_ref))
+    fw_phase = add(uid('phase', t, 'fw'), 'PBXFrameworksBuildPhase', buildActionMask='2147483647', files=fw_files, runOnlyForDeploymentPostprocessing='0')
     native_targets.append(add(uid('target', t), 'PBXNativeTarget', buildConfigurationList=cfg_list,
                               buildPhases=[src_phase, fw_phase, res_phase], buildRules=[], dependencies=[],
                               name=t, productName=t, productReference=products[t],
-                              productType='com.apple.product-type.application'))
+                              productType='com.apple.product-type.application',
+                              packageProductDependencies=pkg_deps))
 
 project = add(uid('project'), 'PBXProject',
               attributes={'BuildIndependentTargetsInParallel': '1', 'LastSwiftUpdateCheck': '1600', 'LastUpgradeCheck': '1600',
                           'TargetAttributes': {tid: {'CreatedOnToolsVersion': '16.0'} for tid in native_targets}},
               buildConfigurationList=proj_cfg_list, compatibilityVersion='Xcode 14.0', developmentRegion='ja',
               hasScannedForEncodings='0', knownRegions=['ja', 'en', 'Base'], mainGroup=main_group,
+              packageReferences=[star_pkg],
               productRefGroup=products_group, projectDirPath='', projectRoot='', targets=native_targets)
 
 # ---- write pbxproj ----

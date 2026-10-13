@@ -7,6 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		059EE2A9E8F8AB1912416903 = {
+			isa = PBXBuildFile;
+			fileRef = "8349BD58E504E19E3C5631D9";
+		};
 		0BE507E946AF89EC72FBC983 = {
 			isa = PBXBuildFile;
 			fileRef = D1C63866AF23AC6389BB9EF5;
@@ -22,6 +26,10 @@
 		29F74DB7D48E02E1E5D812A6 = {
 			isa = PBXBuildFile;
 			fileRef = "956DFE02BC7361B56EDD90D3";
+		};
+		2E4E4EC7562293BF842F6C18 = {
+			isa = PBXBuildFile;
+			fileRef = "8349BD58E504E19E3C5631D9";
 		};
 		30ACE982A1ABD4F029859EDC = {
 			isa = PBXBuildFile;
@@ -46,6 +54,10 @@
 		8189007344559C2C9C64ADB5 = {
 			isa = PBXBuildFile;
 			fileRef = "04D9FFDF2FAAB7F134E5C9AE";
+		};
+		87C0FFE69EFFF11E82856BAF = {
+			isa = PBXBuildFile;
+			productRef = BD43D48F43391F4DBA961790;
 		};
 		897926AF33B140CE6C91331D = {
 			isa = PBXBuildFile;
@@ -152,6 +164,12 @@
 			path = bell.wav;
 			sourceTree = "<group>";
 		};
+		8349BD58E504E19E3C5631D9 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = BluetoothPrinters.swift;
+			sourceTree = "<group>";
+		};
 		840D4EDC0AA3875E0C5A106D = {
 			isa = PBXFileReference;
 			explicitFileType = wrapper.application;
@@ -222,6 +240,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = "2147483647";
 			files = (
+				"87C0FFE69EFFF11E82856BAF",
 			);
 			runOnlyForDeploymentPostprocessing = "0";
 		};
@@ -262,6 +281,7 @@
 			children = (
 				C3D69C5471DBB48FE4065539,
 				"75DC12C17FB620987F5695C3",
+				"8349BD58E504E19E3C5631D9",
 				"956DFE02BC7361B56EDD90D3",
 				"9D530487492B80382188A125",
 				D50F3B6D3D6758DFA4C1AC6A,
@@ -300,6 +320,8 @@
 			dependencies = (
 			);
 			name = Handy;
+			packageProductDependencies = (
+			);
 			productName = Handy;
 			productReference = "84243B4E03990F791CB5271C";
 			productType = "com.apple.product-type.application";
@@ -317,6 +339,9 @@
 			dependencies = (
 			);
 			name = Regi;
+			packageProductDependencies = (
+				BD43D48F43391F4DBA961790,
+			);
 			productName = Regi;
 			productReference = "840D4EDC0AA3875E0C5A106D";
 			productType = "com.apple.product-type.application";
@@ -349,6 +374,9 @@
 				Base,
 			);
 			mainGroup = "4EAE695AD1F489F78EA3E1C6";
+			packageReferences = (
+				"914DDF620B05225A8E9580E9",
+			);
 			productRefGroup = "2AC8BA37DAC32D5437812408";
 			projectDirPath = "";
 			projectRoot = "";
@@ -389,6 +417,7 @@
 			files = (
 				"9D7C4BFE3CB792E16BD269CE",
 				"897926AF33B140CE6C91331D",
+				"059EE2A9E8F8AB1912416903",
 				"6D54528A22E5BC95D701C81C",
 				FD5BABB940F3365CFE32EBD8,
 				BB3C3EE3CF9D067EA886C12C,
@@ -404,6 +433,7 @@
 			files = (
 				AF281E51486B3A1A630F948C,
 				"4FBAF71E741367D9C134067C",
+				"2E4E4EC7562293BF842F6C18",
 				"29F74DB7D48E02E1E5D812A6",
 				"636F5EE40DA35EAC7D6CA449",
 				"30ACE982A1ABD4F029859EDC",
@@ -619,6 +649,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		914DDF620B05225A8E9580E9 = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/star-micronics/StarXpand-SDK-iOS";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = "2.0.0";
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		BD43D48F43391F4DBA961790 = {
+			isa = XCSwiftPackageProductDependency;
+			package = "914DDF620B05225A8E9580E9";
+			productName = StarIO10;
+		};
+/* End XCSwiftPackageProductDependency section */
 
 	};
 	rootObject = 46F86FAA6BBF9AC94A7E4595;
