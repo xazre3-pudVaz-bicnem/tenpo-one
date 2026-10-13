@@ -1,16 +1,20 @@
 import Foundation
+import UIKit
 
-/// TENPO ONE アプリの設定（レジ iPad／ハンディ・オーナー iPhone で共通）。
-/// どちらのアプリかはコンパイル時の REGI / HANDY で決める（Xcode の target ごとの SWIFT_ACTIVE_COMPILATION_CONDITIONS）。
+/// TENPO ONE アプリの設定。アプリは1つ（2026-10-13 Ronnie「funfo のように1つのアプリでいろいろ」）。
+/// 何の画面になるかは、開いた端末で決める（コンパイルの印ではなく、動いている端末を見る）:
+///   iPad   … レジ（Bluetooth・USB のレシートプリンター＋ドロア）
+///   iPhone … 最初に「ハンディ（スタッフ）」か「オーナー・店長」を選ぶ
+/// パソコンはアプリを使わない（ブラウザの管理画面）。
 enum AppConfig {
     static let baseURL = URL(string: "https://www.tenpo-one.com")!
     static let ownHosts: Set<String> = ["www.tenpo-one.com", "tenpo-one.com"]
 
-    #if REGI
-    static let appKind = "regi"
-    #else
-    static let appKind = "handy"
-    #endif
+    /// iPad で動いているか（iPad＝レジ）
+    static let isPad: Bool = UIDevice.current.userInterfaceIdiom == .pad
+
+    /// Web に渡す「アプリの種類」（window.TenpoNative.app）
+    static var appKind: String { isPad ? "regi" : "handy" }
 
     static var version: String {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0"

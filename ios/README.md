@@ -1,15 +1,23 @@
-# TENPO ONE iPhone / iPad アプリ
+# TENPO ONE iPhone / iPad アプリ（アプリは1つ）
 
 2026-09-28 Ronnie「iPhone と iPad のアプリを早く。レジは iPad、ハンディとオーナーは iPhone」
+2026-10-13 Ronnie「funfo のように1つのアプリでいろいろ。まず iPad（レジ）から」→ **アプリを1つにした**
 
-| target | 端末 | 名前 | bundle id | 中身 |
-| --- | --- | --- | --- | --- |
-| Regi | iPad | TENPO ONE レジ | com.tenpoone.regi | レジ。/register-login でログイン → /app。画面を消さない |
-| Handy | iPhone | TENPO ONE | com.tenpoone.handy | 最初に「ハンディ（スタッフ）」か「オーナー・店長」を選ぶ |
+| アプリ | bundle id | 端末 |
+| --- | --- | --- |
+| TENPO ONE | com.tenpoone.app | iPhone・iPad（ユニバーサル） |
 
+| 開いた端末 | 何になるか |
+| --- | --- |
+| iPad | **レジ**（/register-login → /app。画面を消さない。Bluetooth・USB のレシートプリンター＋ドロア） |
+| iPhone | 最初に選ぶ：**ハンディ（スタッフ）**＝/handy（お店の QR でログイン）／**オーナー・店長**＝/app（売上・予約…） |
+| パソコン | アプリは使わない（ブラウザの管理画面） |
+
+- 端末の見分けは `Shared/AppConfig.swift` の `isPad`（コンパイルの印ではなく、動いている端末を見る）
 - 中身は https://www.tenpo-one.com をそのまま動かす（Web を直せばアプリも変わる。アプリの出し直しは要らない）
 - アプリだけの機能（`window.TenpoNative`、`lib/native-app.ts`）：本当の振動（iPhone）、通知（APNs・画面が消えていても 音＋振動）、
-  QR を読む（ハンディのログイン）、アプリの使い方を変える、iPad の画面を消さない、つながらないときの再読み込み画面
+  QR を読む（ハンディのログイン）、アプリの使い方を変える、iPad の画面を消さない、つながらないときの再読み込み画面、
+  **iPad の Bluetooth・USB レシートプリンター**（`window.TenpoNative.bluetooth`）
 - User-Agent に `TenpoOneApp/<regi|handy|owner>/<version>` を付ける。サーバーは `lib/device-kind.ts` の `nativeAppMode` で見分ける
   （オーナーモードだけ、スマホでも /app を開ける）
 - 通知：アプリが端末のトークンを `/api/native/push-token` に送る（`native_push_tokens`、migration 00088）。
@@ -18,12 +26,14 @@
 ## プロジェクト
 - `TenpoOne.xcodeproj` は `tools/gen_project.py` で作る（Mac に XcodeGen が無いため）。Swift のファイルを足したら
   `python3 tools/gen_project.py` を実行し直す
+- 無料の Apple ID（個人のチーム）で自分の iPad・iPhone に入れて試すとき：`TENPO_NO_PUSH=1 python3 tools/gen_project.py`
+  （通知の権限は有料の Apple Developer でないと署名できないので、通知だけ外す。試すだけなら問題なし）
 - 署名は Automatic。Apple Developer のチームを Xcode に入れてから `DEVELOPMENT_TEAM` を入れる
 
 ## 出すまで
 1. Apple Developer Program（会社：株式会社D&DREAM、¥12,980/年）に登録（Ronnie 本人）
 2. Xcode の Settings > Accounts に Apple ID を入れる（Ronnie 本人）
-3. App Store Connect にアプリを2つ作る（TENPO ONE レジ／TENPO ONE）、APNs のキーを作って Vercel に入れる
+3. App Store Connect にアプリを1つ作る（TENPO ONE・com.tenpoone.app）、APNs のキーを作って Vercel に入れる
 4. `xcodebuild archive` → App Store Connect に上げる → TestFlight で確かめる → 審査に出す
    - 審査用のデモアカウント（TENPO ONE DEMO）・スクリーンショット（iPad 13インチ・iPhone 6.9インチ）・プライバシーポリシー（/privacy）
 
@@ -32,7 +42,7 @@ Ronnie「レシートプリンター＋ドロアは iPad と Bluetooth、チケ�
 
 | 種類 | SDK | つなぎ方 | 送るもの |
 | --- | --- | --- | --- |
-| Star（mC-Print3 など） | StarXpand SDK（Swift Package `StarIO10`。gen_project.py が Regi に入れる） | Bluetooth・USB | StarPRNT |
+| Star（mC-Print3 など） | StarXpand SDK（Swift Package `StarIO10`。gen_project.py が入れる） | Bluetooth・USB | StarPRNT |
 | EPSON（TM-m30III など） | ePOS SDK（EPSON のサイトから取り、`ios/Vendor/libepos2.xcframework` に置く → gen_project.py が `EPSON_SDK`） | Bluetooth・USB | ESC/POS |
 | SII（RP-F10 など） | SII の SDK（未。入れるまでは Bluetooth LE で試す） | Bluetooth・USB | ESC/POS |
 | そのほか ESC/POS | なし（CoreBluetooth・BLE） | Bluetooth LE | ESC/POS |
@@ -40,6 +50,6 @@ Ronnie「レシートプリンター＋ドロアは iPad と Bluetooth、チケ�
 - Web 側：レジの設定「このiPadのプリンター」→「プリンターを探す」→ 選ぶ → 試し印刷・ドロア（`components/pos/device-printer-panel.tsx`）。
   印刷は `components/printing/direct-print-agent.tsx` が `/api/print/direct`（next-bt）で受け取り、`window.TenpoNative.bluetooth.print` に渡す
 - アプリ側：`ios/Shared/BluetoothPrinters.swift`、ブリッジは `WebViewController.swift`（btDiscover / btPrint → `window.__tenpoNativeReply`）
-- Info.plist（Regi）：`UISupportedExternalAccessoryProtocols`（jp.star-m.starpro・com.epson.escpos）、`NSBluetoothAlwaysUsageDescription`
+- Info.plist（App/Info.plist）：`UISupportedExternalAccessoryProtocols`（jp.star-m.starpro・com.epson.escpos）、`NSBluetoothAlwaysUsageDescription`
 - **App Store に出すとき**：Bluetooth・USB（MFi）のアプリは各社の承認が要る（EPSON：フォーム → 約5営業日で PPID → 審査メモに書く。Star・SII も申請）
 - 自分の iPad で試すだけなら、無料の Apple ID で Xcode から入れられる（7日ごとに入れ直し）

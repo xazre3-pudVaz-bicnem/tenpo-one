@@ -2,11 +2,16 @@
 """
 TenpoOne.xcodeproj を作る（Mac に XcodeGen が無いので、ファイル一覧から project.pbxproj を書き出す）。
 ファイルを足したら ios/ で `python3 tools/gen_project.py` を実行し直す。
-  target Regi  … iPad「TENPO ONE レジ」  com.tenpoone.regi   （SWIFT 条件 REGI）
-  target Handy … iPhone「TENPO ONE」     com.tenpoone.handy  （SWIFT 条件 HANDY：ハンディ＋オーナー）
-レシートプリンター（Bluetooth・USB。ios/Shared/BluetoothPrinters.swift）:
-  Star  … StarXpand SDK（Swift Package・StarIO10）を Regi に入れる（Xcode が最初のビルドで取ってくる）
-  EPSON … ePOS SDK を EPSON のサイトから取って ios/Vendor/libepos2.xcframework に置くと、Regi に入れて EPSON_SDK を付ける
+
+アプリは1つ「TENPO ONE」（com.tenpoone.app・iPhone と iPad 両方。2026-10-13 Ronnie「funfo のように1つのアプリ」）。
+何の画面になるかは端末で決まる（Shared/AppConfig.swift の isPad）：iPad＝レジ、iPhone＝ハンディ／オーナー。
+  ios/App/      … Info.plist・Assets.xcassets（アイコン）・TenpoOne.entitlements（通知）
+  ios/Shared/   … Swift（全部）
+レシートプリンター（Bluetooth・USB。Shared/BluetoothPrinters.swift）:
+  Star  … StarXpand SDK（Swift Package・StarIO10）を入れる（Xcode が最初のビルドで取ってくる）
+  EPSON … ePOS SDK を EPSON のサイトから取って ios/Vendor/libepos2.xcframework に置くと、入れて EPSON_SDK を付ける
+無料の Apple ID（個人のチーム）で自分の iPad・iPhone に入れて試すとき：TENPO_NO_PUSH=1 python3 tools/gen_project.py
+  （通知の権限は有料の Apple Developer でないと署名できないため、通知だけ外す）
 """
 import hashlib, os, json
 
@@ -26,17 +31,18 @@ SHARED_SWIFT = sorted(f for f in os.listdir(os.path.join(ROOT, 'Shared')) if f.e
 SHARED_RES = ['Shared.xcassets', 'bell.wav']
 
 TARGETS = {
-    'Regi': {
-        'bundle': 'com.tenpoone.regi', 'display': 'TENPO ONE レジ', 'cond': 'REGI', 'family': '2',
-        'orient': {'INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad':
-                   'UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown',
-                   'INFOPLIST_KEY_UIRequiresFullScreen': 'YES'},
-    },
-    'Handy': {
-        'bundle': 'com.tenpoone.handy', 'display': 'TENPO ONE', 'cond': 'HANDY', 'family': '1',
-        'orient': {'INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone': 'UIInterfaceOrientationPortrait'},
+    'TenpoOne': {
+        'bundle': 'com.tenpoone.app', 'display': 'TENPO ONE', 'cond': 'TENPOONE', 'family': '1,2', 'dir': 'App',
+        'orient': {
+            'INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad':
+                'UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown',
+            'INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone': 'UIInterfaceOrientationPortrait',
+            'INFOPLIST_KEY_UIRequiresFullScreen': 'YES',
+        },
     },
 }
+APP = 'TenpoOne'
+NO_PUSH = os.environ.get('TENPO_NO_PUSH') == '1'
 
 objs = {}  # id -> (isa, dict)
 def add(id_, isa, **fields):
@@ -62,11 +68,12 @@ for f in SHARED_SWIFT + SHARED_RES:
 shared_group = add(uid('group', 'Shared'), 'PBXGroup', children=[shared_refs[f] for f in SHARED_SWIFT + SHARED_RES], path='Shared', sourceTree='<group>')
 
 target_groups, target_files, products = {}, {}, {}
-for t in TARGETS:
-    files = ['Assets.xcassets', 'Info.plist', f'{t}.entitlements']
+for t, info in TARGETS.items():
+    d = info['dir']
+    files = ['Assets.xcassets', 'Info.plist', f'{t}.entitlements', f'{t}-Bridging-Header.h']
     refs = {f: add(uid('ref', t, f), 'PBXFileReference', lastKnownFileType=ftype(f), path=f, sourceTree='<group>') for f in files}
     target_files[t] = refs
-    target_groups[t] = add(uid('group', t), 'PBXGroup', children=list(refs.values()), path=t, sourceTree='<group>')
+    target_groups[t] = add(uid('group', t), 'PBXGroup', children=list(refs.values()), path=d, sourceTree='<group>')
     products[t] = add(uid('product', t), 'PBXFileReference', explicitFileType='wrapper.application', includeInIndex='0', path=f'{t}.app', sourceTree='BUILT_PRODUCTS_DIR')
 
 products_group = add(uid('group', 'Products'), 'PBXGroup', children=list(products.values()), name='Products', sourceTree='<group>')
@@ -81,7 +88,7 @@ main_group = add(uid('group', 'main'), 'PBXGroup', children=[shared_group] + lis
 star_pkg = add(uid('pkg', 'StarXpand'), 'XCRemoteSwiftPackageReference',
                repositoryURL='https://github.com/star-micronics/StarXpand-SDK-iOS',
                requirement={'kind': 'upToNextMajorVersion', 'minimumVersion': '2.0.0'})
-star_dep = add(uid('pkgdep', 'Regi', 'StarIO10'), 'XCSwiftPackageProductDependency', package=star_pkg, productName='StarIO10')
+star_dep = add(uid('pkgdep', APP, 'StarIO10'), 'XCSwiftPackageProductDependency', package=star_pkg, productName='StarIO10')
 
 # ---- build settings ----
 common = {
@@ -101,10 +108,11 @@ proj_cfg_list = add(uid('cfglist', 'project'), 'XCConfigurationList', buildConfi
 
 native_targets = []
 for t, info in TARGETS.items():
+    d = info['dir']
     s = {
-        'ASSETCATALOG_COMPILER_APPICON_NAME': 'AppIcon', 'CODE_SIGN_ENTITLEMENTS': f'{t}/{t}.entitlements',
+        'ASSETCATALOG_COMPILER_APPICON_NAME': 'AppIcon', 'CODE_SIGN_ENTITLEMENTS': f'{d}/{t}.entitlements',
         'CODE_SIGN_STYLE': 'Automatic', 'CURRENT_PROJECT_VERSION': '1', 'DEVELOPMENT_TEAM': '',
-        'ENABLE_PREVIEWS': 'NO', 'GENERATE_INFOPLIST_FILE': 'YES', 'INFOPLIST_FILE': f'{t}/Info.plist',
+        'ENABLE_PREVIEWS': 'NO', 'GENERATE_INFOPLIST_FILE': 'YES', 'INFOPLIST_FILE': f'{d}/Info.plist',
         'INFOPLIST_KEY_CFBundleDisplayName': info['display'],
         'INFOPLIST_KEY_LSApplicationCategoryType': 'public.app-category.business',
         'INFOPLIST_KEY_UIApplicationSceneManifest_Generation': 'YES',
@@ -118,9 +126,11 @@ for t, info in TARGETS.items():
         'TARGETED_DEVICE_FAMILY': info['family'],
     }
     s.update(info['orient'])
-    if t == 'Regi' and EPSON_SDK:
+    if NO_PUSH:
+        del s['CODE_SIGN_ENTITLEMENTS']
+    if EPSON_SDK:
         s['SWIFT_ACTIVE_COMPILATION_CONDITIONS'] += ' EPSON_SDK'
-        s['SWIFT_OBJC_BRIDGING_HEADER'] = 'Regi/Regi-Bridging-Header.h'
+        s['SWIFT_OBJC_BRIDGING_HEADER'] = f'{d}/{t}-Bridging-Header.h'
         s['OTHER_LDFLAGS'] = '$(inherited) -ObjC -lxml2'
     cfgs = [add(uid('cfg', t, n), 'XCBuildConfiguration', buildSettings=dict(s), name=n) for n in ('Debug', 'Release')]
     cfg_list = add(uid('cfglist', t), 'XCConfigurationList', buildConfigurations=cfgs, defaultConfigurationIsVisible='0', defaultConfigurationName='Release')
@@ -132,7 +142,7 @@ for t, info in TARGETS.items():
     res_phase = add(uid('phase', t, 'res'), 'PBXResourcesBuildPhase', buildActionMask='2147483647', files=res_files, runOnlyForDeploymentPostprocessing='0')
     fw_files = []
     pkg_deps = []
-    if t == 'Regi':
+    if t == APP:
         fw_files.append(add(uid('bf', t, 'fw', 'StarIO10'), 'PBXBuildFile', productRef=star_dep))
         pkg_deps.append(star_dep)
         if epson_ref:
