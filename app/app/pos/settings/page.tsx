@@ -14,6 +14,8 @@ import { visitSourcesFrom } from '@/lib/handy-visit';
 import { RegisterSettingsList } from '@/components/pos/register-settings-list';
 import { SettingsSubTabs } from '@/components/settings/settings-nav';
 import { settingsHubOf, settingsHubs } from '@/lib/settings-hubs';
+import { DevicePrinterPanel, type DevicePrinterOption } from '@/components/pos/device-printer-panel';
+import { devicePrinterId } from '@/lib/device-printer-server';
 
 export const metadata: Metadata = { title: 'レジの設定' };
 
@@ -60,6 +62,25 @@ export default async function RegisterSettingsPage({
     kitchen = kitchenTicketSettingsFrom(data?.settings ?? null);
     visitSourceIds = visitSourcesFrom(data?.settings ?? null).map((s) => s.id);
   }
+
+  // このiPadのプリンター（端末ごとに選ぶ・EPSON は Wi-Fi で直接印刷。2026-10-13 Ronnie「Airレジのように」）
+  const supabaseForPrinters = await createClient();
+  const { data: printerRows } = await supabaseForPrinters
+    .from('printer_configs')
+    .select('id, name, maker, usage, bill_slips, ip_address')
+    .eq('store_id', store.id)
+    .eq('status', 'active')
+    .eq('cloudprnt_enabled', true)
+    .order('name');
+  const devicePrinters: DevicePrinterOption[] = (printerRows ?? []).map((p) => ({
+    id: p.id as string,
+    name: p.name as string,
+    maker: (p.maker as string | null) ?? null,
+    usage: (p.usage as string) ?? 'receipt',
+    billSlips: p.bill_slips === true,
+    ip: ((p.ip_address as string | null) ?? '').trim() || null,
+  }));
+  const selectedPrinterId = await devicePrinterId();
 
   // 設定の中と同じ上のタブ（レジの設定／ハードウェア／iPhoneハンディ…）。2026-09-29 Ronnie「設定の中は全部このタブを」
   const hub = settingsHubOf(settingsHubs(ctx), SELF_HREF);
@@ -116,6 +137,17 @@ export default async function RegisterSettingsPage({
           <VisitSourcesPanel storeId={store.id} initial={visitSourceIds} />
         </section>
       )}
+
+      <section aria-labelledby="register-settings-device-printer" className="mb-6">
+        <h2 id="register-settings-device-printer" className="mb-2 text-sm font-bold text-navy">
+          このiPadのプリンター
+          <span className="ml-1.5 text-xs font-normal text-gray-400">This iPad&apos;s printer</span>
+        </h2>
+        <DevicePrinterPanel
+          printers={devicePrinters}
+          selectedId={devicePrinters.some((p) => p.id === selectedPrinterId) ? selectedPrinterId : null}
+        />
+      </section>
 
       <RegisterSettingsList sections={registerSettingSections(ctx.role, orderId, { isRegisterDevice: ctx.isRegisterDevice === true })} />
     </div>

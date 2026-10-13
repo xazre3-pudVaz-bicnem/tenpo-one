@@ -19,6 +19,9 @@ function buildCsp(): string {
 
   // api.ipify.org / api6.ipify.org: iPhoneハンディでお店の回線（IPv4・IPv6）を登録するときだけ使う
   const connectSrc = ["'self'", 'https://api.ipify.org', 'https://api6.ipify.org'];
+  // Wi-Fi で直接印刷（EPSON ePOS-Print）：お店の中のプリンター（https://192.168.x.x 等）へ iPad から送る。
+  // CSP は IP の範囲を書けないため https: を許す（送り先は lib/direct-print.ts の isLocalPrinterHost でお店の中だけに絞る）
+  connectSrc.push('https:');
   const imgSrc = ["'self'", 'data:', 'blob:'];
   if (supabaseHost) {
     // Supabase REST/Storage(https) と Realtime(wss) の両方を許可する

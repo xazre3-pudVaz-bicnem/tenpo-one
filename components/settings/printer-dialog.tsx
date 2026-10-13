@@ -158,8 +158,8 @@ export function PrinterDialog({
           <Label htmlFor="printer-ip">IPアドレス（任意）</Label>
           <Input id="printer-ip" value={form.ipAddress} onChange={(e) => set('ipAddress', e.target.value)} placeholder="192.168.1.100" />
           <p className="mt-1.5 text-xs text-gray-500">
-            メモ用（任意）。プリンタ側からTENPO ONEへ通信するため、ここのIP登録は不要です。
-            （EPSON機はこのIPをブラウザで開いて設定画面に入ります）
+            Star は メモ用（任意）。EPSON は入れておくと、レジの設定「このiPadのプリンター」から
+            <strong>Wi-Fi で直接印刷（速い）</strong>が使えます（EPSON機はこのIPをブラウザで開いて設定画面にも入ります）
           </p>
         </div>
         <div className="grid grid-cols-2 gap-3">

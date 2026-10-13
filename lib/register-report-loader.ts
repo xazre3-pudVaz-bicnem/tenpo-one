@@ -1,4 +1,5 @@
 import 'server-only';
+import { devicePrinterId } from '@/lib/device-printer-server';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { METHOD_LABELS } from '@/components/cash/labels';
 import { formatDateTime, weekdayJa } from '@/lib/format';
@@ -469,7 +470,7 @@ export async function enqueueRegisterReportPrint(
   const loaded = await loadRegisterReportData(supabase, sessionId, clerkName);
   if (!loaded) return { ok: false, error: '対象のレジセッションが見つかりません' };
 
-  const { data: printer } = await supabase
+  const { data: receiptPrinters } = await supabase
     .from('printer_configs')
     .select('id, paper_width_mm')
     .eq('store_id', loaded.storeId)
@@ -477,8 +478,11 @@ export async function enqueueRegisterReportPrint(
     .eq('cloudprnt_enabled', true)
     .eq('usage', 'receipt')
     .order('created_at', { ascending: true })
-    .limit(1)
-    .maybeSingle();
+    .limit(20);
+  // この iPad で選んだレシートプリンター（レジの設定「このiPadのプリンター」）があればそれ、無ければ今まで通り最初の1台
+  const preferredId = await devicePrinterId();
+  const rows = (receiptPrinters ?? []) as { id: string; paper_width_mm: number }[];
+  const printer = rows.find((r) => r.id === preferredId) ?? rows[0] ?? null;
   if (!printer) return { ok: false, error: 'レシートプリンターが未設定のため、レジ精算レシートを印刷できません' };
 
   const paper = printer.paper_width_mm === 58 ? 58 : 80;

@@ -20,6 +20,7 @@ import { layoutKitchenTicket, rotateLines180, type KitchenTicket } from '@/lib/k
 import { kitchenTicketsMarkup } from '@/lib/receipt-markup';
 import { kitchenTicketsStarPrnt } from '@/lib/starprnt';
 import { colsFor, STAR_WIDTH_OPTIONS } from '@/lib/receipt-layout';
+import { devicePrinterId } from '@/lib/device-printer-server';
 
 /**
  * ジョブに載せる既定の形式。実際にどの形式で印字されるかはプリンタが
@@ -75,7 +76,11 @@ async function getCloudPrntPrinter(
     .map((r) => ({ ...r, floorIds: normalizeFloorIds(r.floor_ids) }))
     // 既定（担当フロアなし）はレシート機を優先する
     .sort((a, b) => Number(b.usage === 'receipt') - Number(a.usage === 'receipt'));
-  const picked = floor ? pickPrinterForFloor(rows, floor.floorId) : pickDefaultPrinter(rows);
+  // この iPad で選んだプリンター（レジの設定「このiPadのプリンター」）があれば、それに出す（Airレジのように端末ごとに選ぶ）。
+  // 選んでいない・この店のレシート機でないときは今まで通り
+  const preferredId = await devicePrinterId();
+  const preferred = preferredId ? rows.find((r) => r.id === preferredId) : undefined;
+  const picked = preferred ?? (floor ? pickPrinterForFloor(rows, floor.floorId) : pickDefaultPrinter(rows));
   if (!picked) return null;
   return {
     upside_down: picked.upside_down === true,
