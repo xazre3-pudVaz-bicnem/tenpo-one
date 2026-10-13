@@ -19,7 +19,10 @@ struct RootView: View {
     var body: some View {
         ZStack {
             Brand.background.ignoresSafeArea()
-            if state.mode == nil {
+            if let preview = NativePreview.current {
+                // 画面の確認用（起動の引数 -tenpoNativePreview order|checkout のときだけ。ふだんは出ない）
+                NativePreviewView(kind: preview)
+            } else if state.mode == nil {
                 ModeChooserView()
             } else {
                 WebContainer()
