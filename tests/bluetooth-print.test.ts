@@ -203,6 +203,8 @@ describe('「プリンターを探す」はプリンターだけ', () => {
     expect(swift).toContain(`pattern: #"${PRINTER_NAME_PATTERN.source}"#`);
     expect(swift).toContain('m[m.startIndex] == 0x4C');
     expect(swift).toContain('guard byService || Self.looksLikePrinter(name) else { return nil }');
+    // プリンター以外も使う汎用のサービスでは出さない
+    expect(swift).not.toMatch(/CBUUID\(string: "(FF00|FFE0|AE30|49535343-FE7D-4AE5-8FA9-9FAFD205E455)"\)/);
     const panel = read('components/pos/device-printer-panel.tsx');
     expect(panel.match(/\.filter\(isLikelyPrinter\)/g)?.length).toBe(2);
   });
