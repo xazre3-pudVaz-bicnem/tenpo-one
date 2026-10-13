@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, it, expect } from 'vitest';
 import { isPhoneUserAgent, nativeAppMode, phoneMayOpenApp } from '@/lib/device-kind';
 import { APNS_TOPIC, apnsPayload, base64url, isDeadTokenResponse, isDeviceToken, isNativeApp } from '@/lib/apns';
@@ -45,5 +47,36 @@ describe('アプリの通知（APNs）', () => {
     expect(isDeadTokenResponse(400, 'BadDeviceToken')).toBe(true);
     expect(isDeadTokenResponse(429, 'TooManyRequests')).toBe(false);
     expect(base64url('ab?>')).toBe('YWI_Pg');
+  });
+});
+
+/** 2026-10-14 Ronnie「（iPad アプリの）全部を少し大きく」「画面が動く（はみ出す）のは直す」 */
+describe('アプリの画面（iPad は少し大きく・拡大縮小できない固定の画面）', () => {
+  const swift = readFileSync(join(__dirname, '..', 'ios/Shared/WebViewController.swift'), 'utf8');
+  // Swift の padZoom と同じ計算
+  const padZoom = (width: number) => {
+    const fit = width / 1040;
+    return fit <= 1 ? 1 : Math.min(1.1, fit);
+  };
+  const viewportWidth = (width: number) => (padZoom(width) > 1 ? Math.floor(width / padZoom(width)) : 0);
+
+  it('横向きは最大 110%、拡大しても左のメニューが出る幅（1024px 以上）のまま。縦向きは今まで通り', () => {
+    expect(padZoom(1194)).toBe(1.1); // iPad Pro 11・iPad Air 11 横
+    expect(viewportWidth(1194)).toBe(1085);
+    for (const w of [1080, 1180, 1194, 1210, 1366]) expect(viewportWidth(w)).toBeGreaterThanOrEqual(1024);
+    expect(viewportWidth(834)).toBe(0); // 縦はふつう
+    expect(viewportWidth(1024)).toBe(0);
+  });
+
+  it('pageZoom（はみ出して画面が動いた）ではなく viewport の幅で拡大する', () => {
+    expect(swift).not.toContain('.pageZoom =');
+    expect(swift).toContain('let fit = width / 1040');
+    expect(swift).toContain('let w = zoom > 1 ? Int((width / zoom).rounded(.down)) : 0');
+    expect(swift).toContain("', user-scalable=no'");
+    expect(swift).toContain("'width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no'");
+    // 画面を固定：揺れない・ピンチで拡大しない（Ronnie「ズームなど一切できない」）
+    expect(swift).toContain('webView.scrollView.bounces = false');
+    expect(swift).toContain('webView.scrollView.pinchGestureRecognizer?.isEnabled = false');
+    expect(swift).toContain('window.__tenpoSetViewport && window.__tenpoSetViewport');
   });
 });
