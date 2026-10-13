@@ -122,7 +122,7 @@ private final class StarPrinters: NSObject, StarDeviceDiscoveryManagerDelegate {
             do {
                 try await printer.open()
                 defer { Task { await printer.close() } }
-                try await printer.printRawData([UInt8](data))
+                try await printer.print(raw: data)
                 completion(true, nil)
             } catch {
                 completion(false, "connect")
