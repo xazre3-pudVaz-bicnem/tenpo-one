@@ -99,6 +99,25 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         Self.current = self
     }
 
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        applyPadZoom()
+    }
+
+    /// iPad：画面の文字・ボタンを全部少し大きく（2026-10-14 Ronnie「全部少し大きく」。Airレジくらい）。
+    /// Safari の「ページの拡大」と同じ（px の大きさも全部そろって大きくなる）。最大 110%。
+    /// 拡大しても Web の並び（左のメニューが出る幅 1024px 以上）が変わらない分だけ。縦向きは 100%（今まで通り）
+    static func padZoom(forWidth width: CGFloat) -> CGFloat {
+        let fit = width / 1040
+        return fit <= 1 ? 1 : min(1.1, fit)
+    }
+
+    private func applyPadZoom() {
+        guard AppConfig.isPad, let webView else { return }
+        let zoom = Self.padZoom(forWidth: view.bounds.width)
+        if abs(webView.pageZoom - zoom) > 0.001 { webView.pageZoom = zoom }
+    }
+
     func load(_ url: URL) {
         errorView.isHidden = true
         webView.load(URLRequest(url: url))

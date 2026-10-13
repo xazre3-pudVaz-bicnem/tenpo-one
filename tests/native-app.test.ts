@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, it, expect } from 'vitest';
 import { isPhoneUserAgent, nativeAppMode, phoneMayOpenApp } from '@/lib/device-kind';
 import { APNS_TOPIC, apnsPayload, base64url, isDeadTokenResponse, isDeviceToken, isNativeApp } from '@/lib/apns';
@@ -45,5 +47,31 @@ describe('アプリの通知（APNs）', () => {
     expect(isDeadTokenResponse(400, 'BadDeviceToken')).toBe(true);
     expect(isDeadTokenResponse(429, 'TooManyRequests')).toBe(false);
     expect(base64url('ab?>')).toBe('YWI_Pg');
+  });
+});
+
+/** 2026-10-14 Ronnie「（iPad アプリの）全部を少し大きく」：Safari のページ拡大と同じ方法で 110% まで */
+describe('iPad アプリの画面の大きさ', () => {
+  const swift = readFileSync(join(__dirname, '..', 'ios/Shared/WebViewController.swift'), 'utf8');
+  // Swift の padZoom と同じ計算
+  const padZoom = (width: number) => {
+    const fit = width / 1040;
+    return fit <= 1 ? 1 : Math.min(1.1, fit);
+  };
+
+  it('横向きは最大 110%、拡大しても左のメニューが出る幅（1024px 以上）のまま。縦向きは今まで通り', () => {
+    expect(padZoom(1194)).toBe(1.1); // iPad Pro 11・iPad Air 11 横
+    expect(padZoom(1366)).toBe(1.1); // iPad Pro 12.9 横
+    expect(1080 / padZoom(1080)).toBeGreaterThanOrEqual(1024); // iPad 10.2 横
+    for (const w of [1080, 1180, 1194, 1210, 1366]) expect(w / padZoom(w)).toBeGreaterThanOrEqual(1024);
+    expect(padZoom(834)).toBe(1); // 縦
+    expect(padZoom(1024)).toBe(1);
+  });
+
+  it('アプリ（iPad だけ）で使っている', () => {
+    expect(swift).toContain('let fit = width / 1040');
+    expect(swift).toContain('return fit <= 1 ? 1 : min(1.1, fit)');
+    expect(swift).toContain('guard AppConfig.isPad, let webView else { return }');
+    expect(swift).toContain('webView.pageZoom = zoom');
   });
 });
