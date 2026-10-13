@@ -7,27 +7,113 @@ struct NativeOrderView: View {
     @ObservedObject var model: NativeOrderModel
     var onHome: () -> Void = {}
     @State private var showCheckout = false
+    @State private var pickClerk = false
+    /// 担当者を選んだあとにすること（注文確定・会計へ）
+    @State private var afterClerk: (() -> Void)?
 
     var body: some View {
         VStack(spacing: 0) {
-            NativeTopBar(storeName: model.storeName, title: "オーダー・会計", subtitle: "Order & Pay", onHome: onHome)
+            NativeTopBar(
+                storeName: model.storeName, title: "オーダー・会計", subtitle: "Order & Pay",
+                userName: model.clerkName ?? "担当 未設定",
+                onHome: onHome,
+                onWeb: model.isLive ? { model.openInWeb() } : nil
+            )
             GeometryReader { geo in
                 let slipW = max(320, geo.size.width * 0.30)
                 let catW = max(150, geo.size.width * 0.13)
                 HStack(alignment: .top, spacing: 12) {
-                    SlipPanel(model: model)
+                    SlipPanel(model: model, onClerk: { pickClerk = true })
                         .frame(width: slipW)
                     CategoryColumn(model: model)
                         .frame(width: catW)
-                    ItemsPanel(model: model, onCheckout: { showCheckout = true })
+                    ItemsPanel(model: model, onSend: send, onCheckout: goCheckout)
                 }
                 .padding(12)
             }
             .background(NT.page)
         }
         .background(NT.page.ignoresSafeArea())
+        .overlay(alignment: .top) {
+            if let n = model.notice {
+                Button { model.notice = nil } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                        Text(n).multilineTextAlignment(.leading)
+                        Spacer(minLength: 8)
+                        Image(systemName: "xmark")
+                    }
+                    .font(.system(size: 15, weight: .bold)).foregroundColor(NT.danger)
+                    .padding(14)
+                    .background(RoundedRectangle(cornerRadius: 14).fill(NT.dangerBg))
+                    .overlay(RoundedRectangle(cornerRadius: 14).stroke(NT.danger.opacity(0.3), lineWidth: 1))
+                    .frame(maxWidth: 720)
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 74)
+            }
+        }
+        .overlay {
+            if model.loading {
+                ZStack {
+                    NT.page.opacity(0.85).ignoresSafeArea()
+                    ProgressView("読み込み中…").font(.system(size: 16, weight: .bold)).tint(NT.purple)
+                }
+            }
+        }
         .fullScreenCover(isPresented: $showCheckout) {
-            NativeCheckoutView(model: model, onClose: { showCheckout = false })
+            NativeCheckoutView(model: model, onClose: { showCheckout = false }, onFinished: {
+                showCheckout = false
+                if model.isLive { AppState.shared.closeNativePos(openWebPath: nil) }
+            })
+        }
+        .confirmationDialog("担当者を選んでください", isPresented: $pickClerk, titleVisibility: .visible) {
+            ForEach(model.clerks, id: \.id) { c in
+                Button(c.name) {
+                    let then = afterClerk
+                    afterClerk = nil
+                    Task {
+                        await model.setClerk(c.id)
+                        then?()
+                    }
+                }
+            }
+            Button("キャンセル", role: .cancel) { afterClerk = nil }
+        }
+        .alert(
+            "今までの画面で入れてください",
+            isPresented: Binding(get: { model.webOnlyItem != nil }, set: { if !$0 { model.webOnlyItem = nil } })
+        ) {
+            Button("今までの画面で開く") { model.openInWeb() }
+            Button("閉じる", role: .cancel) {}
+        } message: {
+            Text("「\(model.webOnlyItem?.name ?? "")」は選択肢（または金額の入力）がある商品です。最初の版では今までの画面で入れます。")
+        }
+    }
+
+    /// 担当者が要る店で、まだ選んでいなければ先に選ぶ（Web のレジと同じ）
+    private func requireClerk(_ then: @escaping () -> Void) {
+        if model.clerkMissing {
+            afterClerk = then
+            pickClerk = true
+        } else {
+            then()
+        }
+    }
+
+    private func send() {
+        requireClerk { Task { await model.sendToKitchen() } }
+    }
+
+    /// 会計へ：まだ送っていないカートは先に注文確定（伝票に入れて厨房へ）
+    private func goCheckout() {
+        requireClerk {
+            Task {
+                if !model.cartLines.isEmpty {
+                    guard await model.sendToKitchen() else { return }
+                }
+                showCheckout = true
+            }
         }
     }
 }
@@ -38,12 +124,17 @@ struct NativeTopBar: View {
     let storeName: String
     let title: String
     let subtitle: String
+    var userName: String = ""
     var onHome: () -> Void = {}
+    /// 今までの（Web の）画面で開く。ライブのときだけ
+    var onWeb: (() -> Void)? = nil
 
     var body: some View {
         HStack(spacing: 10) {
-            barButton(icon: "line.3.horizontal", text: "メニュー") {}
-            barButton(icon: "chevron.left", text: "ホーム", action: onHome)
+            barButton(icon: "chevron.left", text: "戻る", action: onHome)
+            if let onWeb {
+                barButton(icon: "safari", text: "今までの画面", action: onWeb)
+            }
             Image("BrandMark")
                 .resizable()
                 .scaledToFit()
@@ -68,11 +159,9 @@ struct NativeTopBar: View {
                 Text(title).font(.system(size: 20, weight: .heavy)).foregroundColor(.white).fixedSize()
             }
             Spacer(minLength: 8)
-            Image(systemName: "magnifyingglass").foregroundColor(.white).font(.system(size: 19, weight: .semibold))
-            Image(systemName: "bell").foregroundColor(.white).font(.system(size: 19, weight: .semibold)).padding(.horizontal, 6)
             HStack(spacing: 6) {
                 Image(systemName: "person")
-                Text("Bimal")
+                Text(userName).lineLimit(1)
             }
             .font(.system(size: 15, weight: .semibold))
             .foregroundColor(.white)
@@ -105,6 +194,7 @@ struct NativeTopBar: View {
 
 private struct SlipPanel: View {
     @ObservedObject var model: NativeOrderModel
+    var onClerk: () -> Void = {}
 
     var body: some View {
         VStack(spacing: 0) {
@@ -139,8 +229,16 @@ private struct SlipPanel: View {
                     let source = (NPVisitSource.defaults + NPVisitSource.extras).first { $0.id == model.order.visitSourceId }
                     chip(icon: "signpost.right", text: source?.label ?? "経路 未設定")
                 }
-                Text("担当 \(model.order.clerkName ?? "未設定")")
-                    .font(.system(size: 13, weight: .medium)).foregroundColor(NT.ink2)
+                Button(action: onClerk) {
+                    HStack(spacing: 4) {
+                        Text("担当 \(model.clerkName ?? "未設定")")
+                        if !model.clerks.isEmpty { Image(systemName: "chevron.down").font(.system(size: 10, weight: .bold)) }
+                    }
+                    .font(.system(size: 13, weight: model.clerkMissing ? .bold : .medium))
+                    .foregroundColor(model.clerkMissing ? NT.danger : NT.ink2)
+                }
+                .buttonStyle(.plain)
+                .disabled(model.clerks.isEmpty)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 16).padding(.vertical, 10)
@@ -159,6 +257,7 @@ private struct SlipPanel: View {
                         LazyVStack(spacing: 0) {
                             ForEach(model.order.lines) { line in
                                 LineRow(line: line, highlighted: line.id == model.lastAddedLineId,
+                                        editable: model.canChange(line),
                                         onMinus: { model.change(line, by: -1) },
                                         onPlus: { model.change(line, by: 1) })
                                     .id(line.id)
@@ -187,7 +286,7 @@ private struct SlipPanel: View {
                         .animation(.easeOut(duration: 0.15), value: model.total)
                 }
                 // 伝票の操作
-                FlowChips(items: [
+                FlowChips(onTap: { model.openInWeb() }, items: [
                     ("arrow.triangle.branch", "伝票分割", false),
                     ("doc.badge.plus", "伝票追加", false),
                     ("square.on.square", "伝票統合", false),
@@ -226,6 +325,7 @@ private struct SlipPanel: View {
 private struct LineRow: View {
     let line: NPOrderLine
     let highlighted: Bool
+    var editable: Bool = true
     let onMinus: () -> Void
     let onPlus: () -> Void
 
@@ -245,12 +345,16 @@ private struct LineRow: View {
                 }
             }
             Spacer(minLength: 6)
-            HStack(spacing: 0) {
-                stepButton("minus", action: onMinus)
-                Text("\(line.quantity)").font(.system(size: 17, weight: .bold)).foregroundColor(NT.ink).frame(minWidth: 30)
-                stepButton("plus", action: onPlus)
+            if editable {
+                HStack(spacing: 0) {
+                    stepButton("minus", action: onMinus)
+                    Text("\(line.quantity)").font(.system(size: 17, weight: .bold)).foregroundColor(NT.ink).frame(minWidth: 30)
+                    stepButton("plus", action: onPlus)
+                }
+                .background(Capsule().fill(NT.lilac))
+            } else {
+                Text(verbatim: "×\(line.quantity)").font(.system(size: 17, weight: .bold)).foregroundColor(NT.ink2).frame(minWidth: 44)
             }
-            .background(Capsule().fill(NT.lilac))
             Text(NT.yen(line.lineTotal))
                 .font(.system(size: 16, weight: .bold)).foregroundColor(NT.ink)
                 .frame(minWidth: 74, alignment: .trailing)
@@ -270,13 +374,14 @@ private struct LineRow: View {
 }
 
 private struct FlowChips: View {
+    var onTap: () -> Void = {}
     let items: [(String, String, Bool)]
 
     var body: some View {
         let cols = [GridItem(.adaptive(minimum: 128), spacing: 8, alignment: .leading)]
         LazyVGrid(columns: cols, alignment: .leading, spacing: 8) {
             ForEach(items, id: \.1) { icon, text, danger in
-                Button {} label: {
+                Button(action: onTap) {
                     HStack(spacing: 5) {
                         Image(systemName: icon)
                         Text(text).lineLimit(1)
@@ -333,6 +438,7 @@ private struct CategoryColumn: View {
 
 private struct ItemsPanel: View {
     @ObservedObject var model: NativeOrderModel
+    let onSend: () -> Void
     let onCheckout: () -> Void
 
     var body: some View {
@@ -375,7 +481,7 @@ private struct ItemsPanel: View {
 
             Divider().overlay(NT.line)
             HStack(spacing: 14) {
-                Button(action: { model.sendToKitchen() }) {
+                Button(action: onSend) {
                     HStack(spacing: 8) {
                         Image(systemName: "bell")
                         Text(model.unsentCount > 0 ? "注文確定（\(model.unsentCount)品を送信）" : "注文確定（未送信なし）")
@@ -388,7 +494,7 @@ private struct ItemsPanel: View {
                     .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(NT.lilac))
                 }
                 .buttonStyle(PressableStyle())
-                .disabled(model.unsentCount == 0)
+                .disabled(model.unsentCount == 0 || model.busy)
 
                 Button(action: onCheckout) {
                     Text("会計へ（\(NT.yen(model.total))）")
@@ -400,7 +506,7 @@ private struct ItemsPanel: View {
                         .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(model.total > 0 ? NT.purple : NT.purple.opacity(0.4)))
                 }
                 .buttonStyle(PressableStyle())
-                .disabled(model.total == 0)
+                .disabled(model.total == 0 || model.busy || !model.canCheckout)
             }
             .padding(14)
         }

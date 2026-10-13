@@ -36,3 +36,17 @@ struct NativePreviewView: View {
         }
     }
 }
+
+/// サーバーの伝票をネイティブの画面で開く（Web の「オーダー・会計」の代わり）
+struct NativeLiveOrderScreen: View {
+    @StateObject private var model: NativeOrderModel
+
+    init(orderId: String) {
+        _model = StateObject(wrappedValue: NativeOrderModel(orderId: orderId))
+    }
+
+    var body: some View {
+        NativeOrderView(model: model, onHome: { AppState.shared.closeNativePos(openWebPath: nil) })
+            .task { await model.load() }
+    }
+}

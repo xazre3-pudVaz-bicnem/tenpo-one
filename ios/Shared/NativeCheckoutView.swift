@@ -7,6 +7,8 @@ import SwiftUI
 struct NativeCheckoutView: View {
     @ObservedObject var model: NativeOrderModel
     let onClose: () -> Void
+    /// 会計が終わって「閉じる」（ライブはオーダー画面も閉じて前の画面へ）
+    var onFinished: () -> Void = {}
 
     enum Tab { case pay, discount }
     enum DiscountMode { case amount, percent }
@@ -20,6 +22,19 @@ struct NativeCheckoutView: View {
     @State private var showMoreSources = false
     @State private var discountMode: DiscountMode = .amount
     @State private var discountInput = ""
+    @State private var paying = false
+    /// 決めておいた値引き（金額はレジで打つもの）の名前
+    @State private var pendingReason: String?
+    // stera（金額を端末へ送って決済）
+    @State private var steraPick = false
+    @State private var stera: SteraState?
+
+    struct SteraState: Equatable {
+        var requestId: String?
+        var label: String
+        var status: String   // starting / queued / sent / succeeded / failed / canceled / expired
+        var message: String?
+    }
 
     // MARK: 金額
     private var total: Int { model.total }
@@ -49,6 +64,50 @@ struct NativeCheckoutView: View {
             }
         }
         .background(NT.page.ignoresSafeArea())
+        .overlay { if let st = stera { steraOverlay(st) } }
+        .overlay(alignment: .top) {
+            if let n = model.notice {
+                Button { model.notice = nil } label: {
+                    Text(n).font(.system(size: 15, weight: .bold)).foregroundColor(NT.danger)
+                        .padding(14).frame(maxWidth: 720)
+                        .background(RoundedRectangle(cornerRadius: 14).fill(NT.dangerBg))
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 74)
+            }
+        }
+    }
+
+    private func steraOverlay(_ st: SteraState) -> some View {
+        ZStack {
+            Color.black.opacity(0.35).ignoresSafeArea()
+            VStack(spacing: 16) {
+                if ["failed", "canceled", "expired"].contains(st.status) {
+                    Image(systemName: "xmark.octagon.fill").font(.system(size: 52)).foregroundColor(NT.danger)
+                } else {
+                    ProgressView().scaleEffect(1.6).tint(NT.purple)
+                }
+                Text("stera・\(st.label)").font(.system(size: 22, weight: .heavy)).foregroundColor(NT.ink)
+                Text(NT.yen(total)).font(.system(size: 40, weight: .heavy)).foregroundColor(NT.purple)
+                if let msg = st.message {
+                    Text(msg).font(.system(size: 15, weight: .semibold)).foregroundColor(NT.ink2).multilineTextAlignment(.center)
+                }
+                HStack(spacing: 12) {
+                    if ["failed", "canceled", "expired"].contains(st.status) {
+                        Button("閉じる") { stera = nil }
+                            .font(.system(size: 17, weight: .bold)).foregroundColor(.white)
+                            .frame(width: 180, height: 52).background(RoundedRectangle(cornerRadius: 12).fill(NT.purple))
+                    } else {
+                        Button("取り消す") { cancelStera() }
+                            .font(.system(size: 17, weight: .bold)).foregroundColor(NT.danger)
+                            .frame(width: 180, height: 52).background(RoundedRectangle(cornerRadius: 12).fill(NT.dangerBg))
+                    }
+                }
+            }
+            .padding(32)
+            .frame(maxWidth: 460)
+            .background(RoundedRectangle(cornerRadius: 22).fill(NT.card))
+        }
     }
 
     private var header: some View {
@@ -125,7 +184,7 @@ struct NativeCheckoutView: View {
                 ForEach(sources) { s in
                     let on = model.order.visitSourceId == s.id
                     Button {
-                        model.order.visitSourceId = on ? nil : s.id
+                        Task { await model.setVisitSource(on ? nil : s.id) }
                     } label: {
                         Text(s.label)
                             .font(.system(size: 13, weight: .bold))
@@ -154,7 +213,9 @@ struct NativeCheckoutView: View {
             Divider().overlay(NT.line)
             ScrollView {
                 VStack(spacing: 8) {
-                    Button {} label: {
+                    Button {
+                        if let id = model.orderId { model.openInWeb(path: "/app/pos?order=\(id)&checkout=1") }
+                    } label: {
                         VStack(spacing: 1) {
                             Text("別々会計").font(.system(size: 15, weight: .bold))
                             Text("Separate payment").font(.system(size: 10, weight: .semibold)).opacity(0.7)
@@ -261,15 +322,34 @@ struct NativeCheckoutView: View {
             if tab == .pay { payPanel } else { discountPanel }
 
             Spacer(minLength: 0)
-            Button { withAnimation(.easeOut(duration: 0.2)) { done = true } } label: {
-                Text(canPay ? "会計する（\(NT.yen(total))）" : "残り \(NT.yen(remaining)) の支払方法を選んでください")
+            if showSteraButton, let m = openMethod {
+                Button { steraPick = true } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "creditcard.and.123")
+                        Text("stera で決済（\(NT.yen(total))）")
+                    }
+                    .font(.system(size: 18, weight: .heavy)).foregroundColor(NT.purple)
+                    .frame(maxWidth: .infinity, minHeight: 56)
+                    .background(RoundedRectangle(cornerRadius: 14).fill(NT.lilac))
+                    .overlay(RoundedRectangle(cornerRadius: 14).stroke(NT.purple, lineWidth: 1.5))
+                }
+                .buttonStyle(PressableStyle())
+                .confirmationDialog("stera で何で払いますか", isPresented: $steraPick, titleVisibility: .visible) {
+                    ForEach(steraTypes(for: m), id: \.code) { t in
+                        Button(t.label) { startStera(t) }
+                    }
+                    Button("キャンセル", role: .cancel) {}
+                }
+            }
+            Button(action: pay) {
+                Text(paying ? "会計しています…" : canPay ? "会計する（\(NT.yen(total))）" : "残り \(NT.yen(remaining)) の支払方法を選んでください")
                     .font(.system(size: 20, weight: .heavy)).foregroundColor(.white)
                     .lineLimit(1).minimumScaleFactor(0.6)
                     .frame(maxWidth: .infinity, minHeight: 68)
                     .background(RoundedRectangle(cornerRadius: 16).fill(canPay ? NT.purple : NT.purple.opacity(0.35)))
             }
             .buttonStyle(PressableStyle())
-            .disabled(!canPay)
+            .disabled(!canPay || paying)
         }
         .padding(12)
         .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(NT.card))
@@ -312,12 +392,12 @@ struct NativeCheckoutView: View {
             }
 
             // 内訳（クレジット→VISA…、QR→PayPay…、サイトポイント→ホットペッパー…）
-            if let m = openMethod, !NPBrands.of(m).isEmpty {
+            if let m = openMethod, !brands(m).isEmpty {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(m == .sitePoints ? "どのサイトのポイントですか / Choose" : "\(m.label)の種類 / Choose")
                         .font(.system(size: 12, weight: .bold)).foregroundColor(NT.ink3)
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 96), spacing: 6)], spacing: 6) {
-                        ForEach(NPBrands.of(m)) { b in
+                        ForEach(brands(m)) { b in
                             let on = payments.contains { $0.method == m && $0.brand == b }
                             Button { addRow(m, brand: b) } label: {
                                 Text(b.name).font(.system(size: 13, weight: .bold))
@@ -348,11 +428,17 @@ struct NativeCheckoutView: View {
             VStack(alignment: .leading, spacing: 6) {
                 Text("決まった値引き・クーポン / Presets").font(.system(size: 12, weight: .bold)).foregroundColor(NT.ink3)
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: 6)], spacing: 6) {
-                    ForEach(NPDiscountPreset.defaults) { p in
+                    ForEach(model.discountPresets) { p in
                         Button {
-                            model.order.discountReason = p.name
-                            if p.kind == .amount { model.order.discountTotal = p.value }
-                            if p.kind == .percent { model.order.discountTotal = model.itemsTotal * p.value / 100 }
+                            switch p.kind {
+                            case .amount: Task { await model.setDiscount(amount: p.value, reason: p.name) }
+                            case .percent: Task { await model.setDiscount(amount: model.itemsTotal * p.value / 100, reason: p.name) }
+                            case .manual:
+                                // 金額はレジで打つ（「幹事様無料」など）
+                                pendingReason = p.name
+                                discountMode = .amount
+                                discountInput = ""
+                            }
                         } label: {
                             Text(p.name).font(.system(size: 14, weight: .bold)).foregroundColor(NT.purple)
                                 .frame(maxWidth: .infinity, minHeight: 42)
@@ -376,7 +462,7 @@ struct NativeCheckoutView: View {
             .background(RoundedRectangle(cornerRadius: 12).fill(Color(hex: 0xF8F6FC)))
             keypad(onKey: keyForDiscount, quick: [
                 ("値引きを適用", applyDiscount),
-                ("値引きを外す", { model.order.discountTotal = 0; model.order.discountReason = nil; discountInput = "" }),
+                ("値引きを外す", { discountInput = ""; pendingReason = nil; Task { await model.setDiscount(amount: 0, reason: "") } }),
             ])
         }
     }
@@ -424,8 +510,15 @@ struct NativeCheckoutView: View {
 
     // MARK: - 操作
 
+    /// 支払方法の内訳（店の設定。無ければ既定）
+    private func brands(_ m: NPPayMethod) -> [NPBrand] {
+        if m == .sitePoints { return model.pointBrands.isEmpty ? NPBrands.sitePoints : model.pointBrands }
+        if let set = model.methodBrands[m.rawValue], !set.isEmpty { return set }
+        return NPBrands.of(m)
+    }
+
     private func tapMethod(_ m: NPPayMethod) {
-        if !NPBrands.of(m).isEmpty {
+        if !brands(m).isEmpty {
             openMethod = (openMethod == m) ? nil : m
             return
         }
@@ -492,16 +585,108 @@ struct NativeCheckoutView: View {
     private func applyDiscount() {
         let v = Int(discountInput) ?? 0
         guard v > 0 else { return }
+        let amount: Int
+        let reason: String
         if discountMode == .amount {
-            model.order.discountTotal = min(v, model.itemsTotal)
-            model.order.discountReason = model.order.discountReason ?? "値引き"
+            amount = min(v, model.itemsTotal)
+            reason = pendingReason ?? "値引き"
         } else {
             let p = min(100, v)
-            model.order.discountTotal = model.itemsTotal * p / 100
-            model.order.discountReason = "\(p)%値引き"
+            amount = model.itemsTotal * p / 100
+            reason = pendingReason.map { "\($0)（\(p)%）" } ?? "\(p)%値引き"
         }
         discountInput = ""
+        pendingReason = nil
         tab = .pay
+        Task { await model.setDiscount(amount: amount, reason: reason) }
+    }
+
+    // MARK: - 会計を確定
+
+    private func pay() {
+        guard canPay, !paying else { return }
+        paying = true
+        let rows = payments
+        let due = cashDue
+        let note = memo
+        Task {
+            let ok = await model.checkout(payments: rows, cashDue: due, memo: note)
+            paying = false
+            if ok { withAnimation(.easeOut(duration: 0.2)) { done = true } }
+        }
+    }
+
+    // MARK: - stera（金額を端末へ送って決済。Web のレジと同じ流れ）
+
+    private var steraMethods: Set<NPPayMethod> { [.credit, .qr, .emoney] }
+    private var showSteraButton: Bool {
+        model.isLive && !model.steraTerminals.isEmpty && (openMethod.map { steraMethods.contains($0) } ?? false)
+    }
+
+    private func steraTypes(for m: NPPayMethod) -> [APISteraType] {
+        model.steraTypes.filter { $0.method == m.rawValue }
+    }
+
+    private func startStera(_ t: APISteraType) {
+        guard let orderId = model.orderId else { return }
+        let terminal = model.steraTerminals.first(where: { $0.online }) ?? model.steraTerminals.first
+        guard let terminal else { return }
+        stera = SteraState(requestId: nil, label: t.label, status: "starting", message: "stera に金額を送っています…")
+        Task {
+            do {
+                let r = try await NativeAPI.shared.act(["type": "steraStart", "orderId": orderId, "terminalId": terminal.id, "paymentType": t.code], throwOnFail: false)
+                if !r.ok {
+                    stera?.status = "failed"
+                    stera?.message = r.error ?? "stera に送れませんでした"
+                    return
+                }
+                if r.finalized == true { steraDone(r); return }
+                stera?.requestId = r.requestId
+                stera?.status = r.status ?? "queued"
+                stera?.message = "\(terminal.name) でお客様にお支払いいただいてください"
+                await pollStera()
+            } catch {
+                stera?.status = "failed"
+                stera?.message = error.localizedDescription
+            }
+        }
+    }
+
+    private func pollStera() async {
+        while let s = stera, let id = s.requestId, ["queued", "sent", "succeeded"].contains(s.status) {
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            guard stera?.requestId == id else { return }
+            guard let r = try? await NativeAPI.shared.act(["type": "steraCheck", "requestId": id], throwOnFail: false) else { continue }
+            if r.finalized == true { steraDone(r); return }
+            if let st = r.status { stera?.status = st }
+            if !r.ok || ["failed", "canceled", "expired"].contains(r.status ?? "") {
+                stera?.status = r.status ?? "failed"
+                stera?.message = r.error ?? "決済できませんでした"
+                return
+            }
+        }
+    }
+
+    private func steraDone(_ r: APIResult) {
+        stera = nil
+        guard let orderId = model.orderId else { return }
+        // ドロア（キャッシュレスは店の設定しだい）
+        Task {
+            _ = try? await NativeAPI.shared.act(["type": "drawer", "orderId": orderId, "methods": [r.method ?? "credit"]], throwOnFail: false)
+        }
+        withAnimation(.easeOut(duration: 0.2)) { done = true }
+    }
+
+    private func cancelStera() {
+        guard let id = stera?.requestId else { stera = nil; return }
+        Task {
+            let r = try? await NativeAPI.shared.act(["type": "steraCancel", "requestId": id], throwOnFail: false)
+            if r?.ok == false {
+                stera?.message = r?.error ?? "端末で決済中は取り消せません。端末で終えるか取り消してください"
+            } else {
+                stera = nil
+            }
+        }
     }
 
     // MARK: - 完了
@@ -515,9 +700,8 @@ struct NativeCheckoutView: View {
                 Text("おつり \(NT.yen(change))").font(.system(size: 44, weight: .heavy)).foregroundColor(NT.ok)
             }
             HStack(spacing: 14) {
-                doneButton("printer", "レシート印刷")
-                doneButton("doc.text", "領収書")
-                Button(action: onClose) {
+                doneButton("printer", "レシート・領収書")
+                Button(action: model.isLive ? onFinished : onClose) {
                     Text("閉じる").font(.system(size: 19, weight: .heavy)).foregroundColor(.white)
                         .frame(width: 200, height: 64)
                         .background(RoundedRectangle(cornerRadius: 14).fill(NT.purple))
@@ -531,7 +715,10 @@ struct NativeCheckoutView: View {
     }
 
     private func doneButton(_ icon: String, _ text: String) -> some View {
-        Button {} label: {
+        Button {
+            // レシート・領収書は今までの画面（印刷・再発行・宛名）で
+            if let id = model.orderId { model.openInWeb(path: "/app/pos/receipt/\(id)") }
+        } label: {
             HStack(spacing: 8) { Image(systemName: icon); Text(text) }
                 .font(.system(size: 18, weight: .bold)).foregroundColor(NT.purple)
                 .frame(width: 200, height: 64)

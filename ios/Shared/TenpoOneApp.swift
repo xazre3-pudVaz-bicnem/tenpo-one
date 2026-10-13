@@ -34,6 +34,11 @@ struct RootView: View {
         }
         // レジ（iPad）は画面いっぱいに使う
         .statusBarHidden(state.mode == .regi)
+        // ネイティブのオーダー・会計画面（試験中。レジの設定で ON にした iPad だけ）
+        .fullScreenCover(item: $state.nativeOrder) { ref in
+            NativeLiveOrderScreen(orderId: ref.id)
+                .statusBarHidden(true)
+        }
         .sheet(isPresented: $state.scanning) {
             QRScannerView(
                 onCode: { code in state.handleScanned(code) },
