@@ -33,10 +33,20 @@ export interface NativePosItem {
   recommended: boolean;
   /** 売れ筋の順位（0 が1位）。売れ筋でなければ null */
   bestRank: number | null;
-  /** 選択肢（トッピング等）がある。最初の版はアプリから Web の画面で入れる */
+  /** 選択肢（トッピング等）がある。中身は NativePosPayload.optionGroups（アプリで選ぶ） */
   hasOptions: boolean;
-  /** 金額をレジで打つ商品（¥0 の商品）。最初の版は Web の画面で入れる */
+  /** 金額をレジで打つ商品（¥0 の商品＝キャンセル料など）。アプリのテンキーで打つ */
   openPrice: boolean;
+}
+
+/** 商品の選択肢グループ（Web のレジの選択ダイアログと同じ：必須・最小/最大・追加料金） */
+export interface NativePosOptionGroup {
+  id: string;
+  name: string;
+  isRequired: boolean;
+  minSelect: number;
+  maxSelect: number;
+  items: { id: string; name: string; price: number }[];
 }
 
 export interface NativePosLine {
@@ -48,6 +58,8 @@ export interface NativePosLine {
   lineTotal: number;
   /** 厨房へ送信済み */
   sent: boolean;
+  /** 選んだ選択肢の名前（明細の下に出す） */
+  options: string[];
 }
 
 export interface NativePosOrder {
@@ -82,6 +94,8 @@ export interface NativePosPayload {
   order: NativePosOrder;
   categories: NativePosCategory[];
   items: NativePosItem[];
+  /** 商品ごとの選択肢グループ（menuItemId → グループ。選択肢のある商品だけ） */
+  optionGroups: Record<string, NativePosOptionGroup[]>;
   clerks: { id: string; name: string }[];
   /** 担当者が登録されている店では、注文確定・会計に担当者が必要 */
   clerkRequired: boolean;
@@ -100,8 +114,17 @@ export interface NativePosPayload {
 export const NATIVE_PAY_METHODS = ['cash', 'credit', 'qr', 'emoney', 'points', 'site_points', 'external', 'other'] as const;
 export type NativePayMethod = (typeof NATIVE_PAY_METHODS)[number];
 
+/** 注文確定で送る1行（選択肢・レジで打った金額つき） */
+export interface NativeSendLine {
+  menuItemId: string;
+  quantity: number;
+  optionItemIds: string[];
+  /** ¥0 の商品にレジで打った金額（無ければ null） */
+  openPrice: number | null;
+}
+
 export type NativePosAction =
-  | { type: 'send'; orderId: string; lines: { menuItemId: string; quantity: number; optionItemIds: string[] }[] }
+  | { type: 'send'; orderId: string; lines: NativeSendLine[] }
   | { type: 'qty'; orderId: string; lineId: string; delta: 1 | -1 }
   | { type: 'clerk'; orderId: string; clerkId: string | null }
   | { type: 'discount'; orderId: string; amount: number; reason: string }
@@ -117,6 +140,46 @@ export type NativePosAction =
   | { type: 'steraCancel'; requestId: string }
   /** 会計のあとドロアを開く（店の設定：現金は開く・キャッシュレスは設定しだい。Web のレジと同じ） */
   | { type: 'drawer'; orderId: string; methods: NativePayMethod[] };
+
+/**
+ * menu_item_option_groups の行（menu_option_groups と menu_option_items つき）を商品ごとのグループに。
+ * 有効な選択肢が1つも無いグループは出さない（Web のレジ app/app/pos/page.tsx と同じ）。
+ */
+export function optionGroupsFrom(links: unknown[]): Record<string, NativePosOptionGroup[]> {
+  const out: Record<string, NativePosOptionGroup[]> = {};
+  const sorted = [...links].sort(
+    (a, b) => Number((a as { sort_order?: number }).sort_order ?? 0) - Number((b as { sort_order?: number }).sort_order ?? 0)
+  );
+  for (const raw of sorted) {
+    const link = raw as { menu_item_id?: unknown; menu_option_groups?: unknown };
+    if (typeof link.menu_item_id !== 'string') continue;
+    const g = (Array.isArray(link.menu_option_groups) ? link.menu_option_groups[0] : link.menu_option_groups) as {
+      id: string;
+      name: string;
+      is_required: boolean | null;
+      min_select: number | null;
+      max_select: number | null;
+      status?: string;
+      menu_option_items?: { id: string; name: string; price: number | null; sort_order: number | null; status: string }[];
+    } | null;
+    if (!g || (g.status && g.status !== 'active')) continue;
+    const items = (g.menu_option_items ?? [])
+      .filter((o) => o.status === 'active')
+      .sort((a, b) => Number(a.sort_order ?? 0) - Number(b.sort_order ?? 0))
+      .map((o) => ({ id: o.id, name: o.name, price: Number(o.price ?? 0) }));
+    if (items.length === 0) continue;
+    const minSelect = Math.max(0, Number(g.min_select ?? 0));
+    (out[link.menu_item_id] ??= []).push({
+      id: g.id,
+      name: g.name,
+      isRequired: !!g.is_required,
+      minSelect,
+      maxSelect: Math.max(1, Number(g.max_select ?? 1), minSelect),
+      items,
+    });
+  }
+  return out;
+}
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export const isUuid = (v: unknown): v is string => typeof v === 'string' && UUID.test(v);
@@ -139,15 +202,17 @@ export function parseNativePosAction(raw: unknown): Parsed {
   switch (b.type) {
     case 'send': {
       if (!isUuid(b.orderId) || !Array.isArray(b.lines) || b.lines.length > 100) return bad();
-      const lines: { menuItemId: string; quantity: number; optionItemIds: string[] }[] = [];
+      const lines: NativeSendLine[] = [];
       for (const l of b.lines as unknown[]) {
         if (!l || typeof l !== 'object') return bad();
         const r = l as Record<string, unknown>;
         const q = r.quantity;
         const opts = r.optionItemIds ?? [];
+        const open = r.openPrice ?? null;
         if (!isUuid(r.menuItemId) || typeof q !== 'number' || !Number.isInteger(q) || q < 1 || q > 99) return bad();
         if (!Array.isArray(opts) || opts.length > 30 || !opts.every(isUuid)) return bad();
-        lines.push({ menuItemId: r.menuItemId, quantity: q, optionItemIds: opts as string[] });
+        if (open !== null && !isYen(open)) return bad('金額が正しくありません');
+        lines.push({ menuItemId: r.menuItemId, quantity: q, optionItemIds: [...new Set(opts as string[])], openPrice: open });
       }
       return { ok: true, action: { type: 'send', orderId: b.orderId, lines } };
     }

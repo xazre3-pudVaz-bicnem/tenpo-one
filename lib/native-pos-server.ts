@@ -18,6 +18,7 @@ import {
   jstHm,
   NATIVE_BESTSELLERS_TAB,
   NATIVE_FAVORITES_TAB,
+  optionGroupsFrom,
   type NativePosCategory,
   type NativePosItem,
   type NativePosLine,
@@ -38,7 +39,7 @@ const ORDER_COLUMNS =
 
 /** 伝票の明細（未送信も送信済みも。取消は出さない） */
 async function loadLines(supabase: Client, orderId: string): Promise<NativePosLine[]> {
-  const cols = 'id, menu_item_id, name, unit_price, quantity, line_total, status';
+  const cols = 'id, menu_item_id, name, unit_price, quantity, line_total, status, modifiers';
   const first = await supabase.from('order_items').select(`${cols}, kitchen_sent_at`).eq('order_id', orderId).eq('status', 'active').order('created_at');
   let rows = first.data as Record<string, unknown>[] | null;
   if (first.error && isMissingColumnError(first.error.message, 'kitchen_sent_at')) {
@@ -56,7 +57,16 @@ async function loadLines(supabase: Client, orderId: string): Promise<NativePosLi
     unitPrice: Number(r.unit_price),
     lineTotal: Number(r.line_total),
     sent: r.kitchen_sent_at != null,
+    options: optionNames(r.modifiers),
   }));
+}
+
+/** 明細の modifiers（[{ name, ... }]）から選択肢の名前 */
+function optionNames(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((m) => (m && typeof m === 'object' ? (m as { name?: unknown }).name : null))
+    .filter((n): n is string => typeof n === 'string' && n.trim() !== '');
 }
 
 /** 伝票の来店経路（予約の経路 → VISIT_SOURCES の id。経路の行が無い店は予約の目的に名前が残っている） */
@@ -147,20 +157,21 @@ export async function loadNativePos(ctx: SessionContext, orderId: string): Promi
         .order('sort_order'),
       supabase.rpc('get_best_sellers', { p_store: storeId, p_days: 30, p_limit: 12 }),
       supabase.from('pos_clerks').select('id, name').eq('store_id', storeId).eq('status', 'active').order('sort_order').order('name'),
+      // Web のレジ（app/app/pos/page.tsx）と同じ取り方。グループに name_en は無い（付けるとクエリごと失敗する）
       supabase
         .from('menu_item_option_groups')
-        .select('menu_item_id, menu_option_groups!inner(status, menu_option_items(status))')
+        .select(
+          'menu_item_id, sort_order, menu_option_groups!inner(id, name, is_required, min_select, max_select, status, menu_option_items(id, name, price, sort_order, status))'
+        )
         .eq('store_id', storeId)
-        .eq('menu_option_groups.status', 'active'),
+        .eq('menu_option_groups.status', 'active')
+        .order('sort_order'),
     ]);
   const settings = (settingsRow as { settings?: unknown } | null)?.settings ?? null;
 
-  // 選択肢のある商品（有効な選択肢が1つでもあるグループ）
-  const withOptions = new Set<string>();
-  for (const link of (optionLinks ?? []) as { menu_item_id: string; menu_option_groups: unknown }[]) {
-    const g = link.menu_option_groups as { menu_option_items?: { status: string }[] } | null;
-    if (g?.menu_option_items?.some((o) => o.status === 'active')) withOptions.add(link.menu_item_id);
-  }
+  // 商品ごとの選択肢グループ（有効な選択肢が1つでもあるグループだけ。Web のレジと同じ）
+  const optionGroups = optionGroupsFrom(optionLinks ?? []);
+  const withOptions = new Set(Object.keys(optionGroups));
 
   // 売り切れ（本日の食数が0になったものも）・テイクアウトのメニュー
   const stock = await loadMenuStock(supabase, storeId);
@@ -242,6 +253,7 @@ export async function loadNativePos(ctx: SessionContext, orderId: string): Promi
     order,
     categories: nativeCategories,
     items,
+    optionGroups: Object.fromEntries(Object.entries(optionGroups).filter(([id]) => withOptions.has(id) && items.some((i) => i.id === id))),
     clerks: clerkList,
     clerkRequired: clerkList.length > 0,
     visitSources: visitSourcesFrom(settings).map((s) => ({ id: s.id, label: s.label })),

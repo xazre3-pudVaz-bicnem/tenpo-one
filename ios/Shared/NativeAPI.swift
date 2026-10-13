@@ -29,6 +29,18 @@ struct APILine: Codable {
     let unitPrice: Int
     let lineTotal: Int
     let sent: Bool
+    /// 選んだ選択肢の名前（古いサーバーは無い）
+    let options: [String]?
+}
+
+struct APIOptionItem: Codable { let id: String; let name: String; let price: Int }
+struct APIOptionGroup: Codable {
+    let id: String
+    let name: String
+    let isRequired: Bool
+    let minSelect: Int
+    let maxSelect: Int
+    let items: [APIOptionItem]
 }
 
 struct APIOrder: Codable {
@@ -64,6 +76,8 @@ struct APIPayload: Codable {
     let order: APIOrder
     let categories: [APICategory]
     let items: [APIItem]
+    /// 商品ごとの選択肢グループ（古いサーバーは無い → 選択肢の商品は今までの画面で）
+    let optionGroups: [String: [APIOptionGroup]]?
     let clerks: [APIClerk]
     let clerkRequired: Bool
     let visitSources: [APISource]

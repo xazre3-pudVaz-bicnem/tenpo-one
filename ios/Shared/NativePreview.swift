@@ -1,9 +1,9 @@
 import SwiftUI
 
 /// ネイティブ画面を見本のデータで開く（シミュレーターで形を確かめる用）。
-/// 起動の引数 `-tenpoNativePreview order` か `-tenpoNativePreview checkout` のときだけ。お店で使うときは出ない。
+/// 起動の引数 `-tenpoNativePreview order|checkout|options|price` のときだけ。お店で使うときは出ない。
 enum NativePreview: String {
-    case order, checkout
+    case order, checkout, options, price
 
     static var current: NativePreview? {
         guard let raw = UserDefaults.standard.string(forKey: "tenpoNativePreview") else { return nil }
@@ -33,6 +33,15 @@ struct NativePreviewView: View {
         case .checkout:
             NativeCheckoutView(model: model, onClose: {})
                 .statusBarHidden(true)
+        case .options, .price:
+            NativeOrderView(model: model)
+                .statusBarHidden(true)
+                .onAppear {
+                    if let item = model.items.first(where: { $0.id == (kind == .options ? "i2" : "i19") }) {
+                        model.selectedCategory = item.categoryId ?? model.selectedCategory
+                        model.add(item)
+                    }
+                }
         }
     }
 }

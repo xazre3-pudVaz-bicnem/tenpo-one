@@ -127,7 +127,7 @@ export async function POST(request: Request) {
       case 'send': {
         // Web のレジの「注文確定」と同じ：カートの品を伝票に入れてから、まとめて厨房へ
         for (const l of action.lines) {
-          await addItem(action.orderId, l.menuItemId, l.optionItemIds, l.quantity, null);
+          await addItem(action.orderId, l.menuItemId, l.optionItemIds, l.quantity, l.openPrice);
         }
         const res = await sendOrderToKitchen(action.orderId);
         return json({ ok: true, printWarning: res.printWarning ?? null, order: await freshOrder(action.orderId) });
