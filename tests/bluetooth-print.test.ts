@@ -3,7 +3,8 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import iconv from 'iconv-lite';
 import { eposXmlToEscPos } from '@/lib/escpos';
-import { drawerKickEpos, testPrintEpos } from '@/lib/epos-print';
+import { drawerKickEpos, kitchenTicketsEpos, orderSlipEposXml, receiptToEposXml, ryoshushoToEposXml, testPrintEpos } from '@/lib/epos-print';
+import { baseReceipt } from './fixtures/receipt';
 import { bluetoothMakerOf, btFormatOf, parseDirectPrintConfig } from '@/lib/direct-print';
 
 const read = (p: string) => readFileSync(join(__dirname, '..', p), 'utf8');
@@ -42,6 +43,52 @@ describe('ePOS-Print XML → ESC/POS（EPSON・SII RP-F10・そのほか）', ()
     const b = eposXmlToEscPos(testPrintEpos({ storeName: 'FULL MOoN 五反田', paperWidth: 80, issuedAt: '2026/10/13 12:00' }));
     expect(b.length).toBeGreaterThan(50);
     expect(hex(b)).toContain(hex(iconv.encode('FULL MOoN 五反田', 'Shift_JIS')));
+  });
+});
+
+describe('EPSON をレジのレシートプリンターに（Bluetooth・USB でも同じ中身）', () => {
+  // 2026-10-13 Ronnie「EPSON をレジのレシートでも使えるように。EPSON は Bluetooth でもつながる」
+  const HANDLED = new Set(['epos-print', 'text', 'feed', 'cut', 'pulse']);
+  const tags = (xml: string) => [...new Set([...xml.matchAll(/<([a-zA-Z][\w:-]*)/g)].map((m) => m[1]))];
+  const docs: [string, string][] = [
+    ['レシート 80mm', receiptToEposXml(baseReceipt, { paperWidth: 80 })],
+    ['レシート 58mm', receiptToEposXml(baseReceipt, { paperWidth: 58 })],
+    ['領収書', ryoshushoToEposXml(baseReceipt, { paperWidth: 80, recipientName: '株式会社テスト', purpose: '飲食代として' })],
+    [
+      '会計伝票',
+      orderSlipEposXml(
+        {
+          storeName: 'FULL MOoN 五反田',
+          orderNo: '1',
+          tableName: 'T-1',
+          guestCount: 2,
+          clerkName: 'Ronnie',
+          issuedAt: '2026/10/13 19:30',
+          lines: [{ name: 'カレーセット', quantity: 1, unitPrice: 1200, lineTotal: 1200, modifiers: [] }],
+          subtotal: 1200,
+          taxTotal: 120,
+          serviceCharge: 0,
+          discount: 0,
+          total: 1320,
+        },
+        { paperWidth: 80 }
+      ),
+    ],
+    ['厨房伝票（ブザー）', kitchenTicketsEpos([[{ text: 'T-1  ナン ×2', align: 'left', size: 'large' }]], { buzzer: 'drawer1' })],
+    ['ドロア', drawerKickEpos(null)],
+  ];
+
+  it.each(docs)('%s：今の EPSON 用データの要素は全部 ESC/POS にできる', (_name, xml) => {
+    expect(tags(xml).filter((t) => !HANDLED.has(t))).toEqual([]);
+    const b = eposXmlToEscPos(xml);
+    expect(hex(b.subarray(0, 2))).toBe('1b40');
+    expect(b.length).toBeGreaterThan(6); // ドロアは ESC @ ＋ ESC p の7バイト
+  });
+
+  it('レシートの店名・合計が Shift_JIS で入り、最後に切る', () => {
+    const b = eposXmlToEscPos(receiptToEposXml(baseReceipt, { paperWidth: 80 }));
+    expect(hex(b)).toContain(hex(iconv.encode(baseReceipt.storeName, 'Shift_JIS')));
+    expect(hex(b)).toContain('1d564200');
   });
 });
 
