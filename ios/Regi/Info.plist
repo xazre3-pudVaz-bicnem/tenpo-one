@@ -15,5 +15,12 @@
 	<string>レシート・請求書の写真を選んで添付するときに使います。</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>お店の Wi-Fi のレシートプリンター・キッチンプリンターとつなぐために使います。</string>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Bluetooth のレシートプリンター（ドロア）とつなぐために使います。</string>
+	<key>UISupportedExternalAccessoryProtocols</key>
+	<array>
+		<string>jp.star-m.starpro</string>
+		<string>com.epson.escpos</string>
+	</array>
 </dict>
 </plist>

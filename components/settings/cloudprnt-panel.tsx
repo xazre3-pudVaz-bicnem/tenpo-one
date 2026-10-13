@@ -23,6 +23,8 @@ export interface CloudPrntPrinter {
   maker: string;
   model: string;
   usage: 'receipt' | 'kitchen';
+  /** つなぎ方。'bluetooth' / 'usb' は iPad（TENPO ONE レジ アプリ）とつなぐプリンター（接続用URLは使わない） */
+  connectionType?: string | null;
   cloudprntEnabled: boolean;
   cloudprntToken: string | null;
   drawerKick: boolean;
@@ -203,6 +205,8 @@ function PrinterRow({
   const now = useSyncExternalStore(subscribeClock, getClock, getServerClock);
 
   const isKitchen = printer.usage === 'kitchen';
+  // iPad と Bluetooth・USB でつなぐプリンター（2026-10-13 Ronnie「レシート＋ドロアは iPad と Bluetooth」）。接続用URLは使わない
+  const viaIpad = printer.connectionType === 'bluetooth' || printer.connectionType === 'usb';
   const status = statusOf({ ...printer, cloudprntEnabled: enabled }, now);
   const protocol = PROTOCOL[makerKind(printer.maker)];
   const pollUrl =
@@ -244,7 +248,11 @@ function PrinterRow({
             </span>
           </p>
           <div className="mt-1 flex flex-wrap items-center gap-2">
-            <StatusBadge status={status} printer={printer} now={now} />
+            {viaIpad ? (
+              <Badge tone="gray">iPad（{printer.connectionType === 'usb' ? 'USB' : 'Bluetooth'}）でつなぐ</Badge>
+            ) : (
+              <StatusBadge status={status} printer={printer} now={now} />
+            )}
             {printer.pendingJobs > 0 && <Badge tone="gray">印刷待ち {printer.pendingJobs}件</Badge>}
             {status === 'online' && printer.macAddress && (
               <span className="text-xs text-gray-400">MAC {printer.macAddress}</span>
@@ -269,19 +277,26 @@ function PrinterRow({
 
       {enabled && (
         <div className="space-y-4">
-          {status === 'never' &&
+          {viaIpad && (
+            <div className="rounded-lg border border-primary/30 bg-primary-soft/40 px-3 py-2 text-xs leading-relaxed text-gray-700">
+              このプリンターは iPad の「TENPO ONE レジ」アプリから {printer.connectionType === 'usb' ? 'USB' : 'Bluetooth'} で印刷します。
+              iPad で レジの設定 &gt; このiPadのプリンター を開き、「プリンターを探す」でつないでください（接続用URLは使いません）
+            </div>
+          )}
+          {!viaIpad && status === 'never' &&
             (makerKind(printer.maker) === 'epson' ? (
               <EpsonSetupGuide setupQr={setupQr} />
             ) : (
               <SetupGuide setupQr={setupQr} />
             ))}
-          {status === 'offline' && (
+          {!viaIpad && status === 'offline' && (
             <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-800">
               以前はつながっていましたが、現在プリンタから通信がありません。電源・LANケーブル・用紙切れ・
               店舗のインターネット回線を確認してください。復旧すると自動で「接続中」に戻ります。
             </div>
           )}
 
+          {!viaIpad && (
           <div>
             <Label>接続用URL（プリンタの {protocol.urlField} に設定）</Label>
             <div className="flex items-center gap-2">
@@ -291,6 +306,7 @@ function PrinterRow({
               </Button>
             </div>
           </div>
+          )}
 
           {isKitchen && (
             <div>

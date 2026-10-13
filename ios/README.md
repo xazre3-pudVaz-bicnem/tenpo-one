@@ -26,3 +26,20 @@
 3. App Store Connect にアプリを2つ作る（TENPO ONE レジ／TENPO ONE）、APNs のキーを作って Vercel に入れる
 4. `xcodebuild archive` → App Store Connect に上げる → TestFlight で確かめる → 審査に出す
    - 審査用のデモアカウント（TENPO ONE DEMO）・スクリーンショット（iPad 13インチ・iPhone 6.9インチ）・プライバシーポリシー（/privacy）
+
+## レシートプリンター（＋ドロア）を iPad と Bluetooth・USB でつなぐ（2026-10-13〜・まだビルドしていない）
+Ronnie「レシートプリンター＋ドロアは iPad と Bluetooth、チケットプリンターは LAN・Wi-Fi。ESC/POS・Star・RP-F10 を選べるように。Airレジ・funfo と同じ」
+
+| 種類 | SDK | つなぎ方 | 送るもの |
+| --- | --- | --- | --- |
+| Star（mC-Print3 など） | StarXpand SDK（Swift Package `StarIO10`。gen_project.py が Regi に入れる） | Bluetooth・USB | StarPRNT |
+| EPSON（TM-m30III など） | ePOS SDK（EPSON のサイトから取り、`ios/Vendor/libepos2.xcframework` に置く → gen_project.py が `EPSON_SDK`） | Bluetooth・USB | ESC/POS |
+| SII（RP-F10 など） | SII の SDK（未。入れるまでは Bluetooth LE で試す） | Bluetooth・USB | ESC/POS |
+| そのほか ESC/POS | なし（CoreBluetooth・BLE） | Bluetooth LE | ESC/POS |
+
+- Web 側：レジの設定「このiPadのプリンター」→「プリンターを探す」→ 選ぶ → 試し印刷・ドロア（`components/pos/device-printer-panel.tsx`）。
+  印刷は `components/printing/direct-print-agent.tsx` が `/api/print/direct`（next-bt）で受け取り、`window.TenpoNative.bluetooth.print` に渡す
+- アプリ側：`ios/Shared/BluetoothPrinters.swift`、ブリッジは `WebViewController.swift`（btDiscover / btPrint → `window.__tenpoNativeReply`）
+- Info.plist（Regi）：`UISupportedExternalAccessoryProtocols`（jp.star-m.starpro・com.epson.escpos）、`NSBluetoothAlwaysUsageDescription`
+- **App Store に出すとき**：Bluetooth・USB（MFi）のアプリは各社の承認が要る（EPSON：フォーム → 約5営業日で PPID → 審査メモに書く。Star・SII も申請）
+- 自分の iPad で試すだけなら、無料の Apple ID で Xcode から入れられる（7日ごとに入れ直し）
