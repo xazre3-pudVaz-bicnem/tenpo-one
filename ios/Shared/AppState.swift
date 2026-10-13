@@ -132,7 +132,7 @@ final class AppState: ObservableObject {
     }
 }
 
-/// ネイティブで開く伝票（fullScreenCover の item）
+/// ネイティブで開く伝票（Web の上に重ねて出す）
 struct NativeOrderRef: Identifiable, Equatable {
     let id: String
 }

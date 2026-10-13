@@ -27,18 +27,24 @@ struct RootView: View {
             } else {
                 WebContainer()
                     .id(state.webSession)
+                    .accessibilityHidden(state.nativeOrder != nil)
                 if state.needsHandyLogin {
                     HandyLoginView()
                 }
+                // ネイティブのオーダー・会計画面（試験中。レジの設定で ON にした iPad だけ）。
+                // Web の画面の上に重ねる（fullScreenCover だと下の Web が「見えない」扱いになって止まり、
+                // Bluetooth のレシート・ドロアの印刷（Web の DirectPrintAgent）が出なくなるため）
+                if let ref = state.nativeOrder {
+                    NativeLiveOrderScreen(orderId: ref.id)
+                        .id(ref.id)
+                        .transition(.move(edge: .bottom))
+                        .zIndex(10)
+                }
             }
         }
+        .animation(.easeOut(duration: 0.22), value: state.nativeOrder)
         // レジ（iPad）は画面いっぱいに使う
-        .statusBarHidden(state.mode == .regi)
-        // ネイティブのオーダー・会計画面（試験中。レジの設定で ON にした iPad だけ）
-        .fullScreenCover(item: $state.nativeOrder) { ref in
-            NativeLiveOrderScreen(orderId: ref.id)
-                .statusBarHidden(true)
-        }
+        .statusBarHidden(state.mode == .regi || state.nativeOrder != nil)
         .sheet(isPresented: $state.scanning) {
             QRScannerView(
                 onCode: { code in state.handleScanned(code) },
