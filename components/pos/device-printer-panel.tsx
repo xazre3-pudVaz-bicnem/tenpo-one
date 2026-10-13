@@ -11,6 +11,7 @@ import {
   bluetoothMakerOf,
   eposErrorLabel,
   isEpsonMaker,
+  isLikelyPrinter,
   isLocalPrinterHost,
   printerCertUrl,
   type BluetoothLink,
@@ -356,7 +357,8 @@ function BluetoothCard({
     setFound(null);
     try {
       const res = await bt.discover(maker === 'escpos' ? 'all' : maker);
-      const devices = res.devices ?? [];
+      // プリンターと使える機械だけ（テレビ・イヤホン・パソコンなどは出さない）
+      const devices = (res.devices ?? []).filter(isLikelyPrinter);
       if (!res.ok || devices.length === 0) {
         toast('見つかりません。プリンターの電源を入れ、iPad の 設定 > Bluetooth でペアリング（USB はケーブルをつなぐ）してから、もう一度押してください', 'error');
         return;
@@ -403,7 +405,8 @@ function BluetoothCard({
     setAddFound(null);
     try {
       const res = await bt.discover('all');
-      const devices = res.devices ?? [];
+      // プリンターと使える機械だけ（テレビ・イヤホン・パソコンなどは出さない）
+      const devices = (res.devices ?? []).filter(isLikelyPrinter);
       if (!res.ok || devices.length === 0) {
         toast('見つかりません。プリンターの電源を入れ、iPad の 設定 > Bluetooth でペアリング（USB はケーブルをつなぐ）してから、もう一度押してください', 'error');
         return;

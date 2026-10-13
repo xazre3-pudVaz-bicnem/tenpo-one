@@ -390,6 +390,9 @@ private final class BLEEscPosPrinter: NSObject, CBCentralManagerDelegate, CBPeri
     private var central: CBCentralManager!
     private var ready: [() -> Void] = []
     private var seen: [UUID: CBPeripheral] = [:]
+    /// 見つけた機械がプリンターのサービスを出していたか（広告に入っている UUID）
+    private var printerish: Set<UUID> = []
+    private var apple: Set<UUID> = []
     private var scanning: (maker: String, done: ([BluetoothPrinters.Device]) -> Void)?
 
     private var target: CBPeripheral?
@@ -421,13 +424,18 @@ private final class BLEEscPosPrinter: NSObject, CBCentralManagerDelegate, CBPeri
     func discover(maker: String, completion: @escaping ([BluetoothPrinters.Device]) -> Void) {
         whenOn({
             self.seen = [:]
+            self.printerish = []
+            self.apple = []
             self.scanning = (maker, completion)
             self.central.scanForPeripherals(withServices: nil, options: [CBCentralManagerScanOptionAllowDuplicatesKey: false])
             DispatchQueue.main.asyncAfter(deadline: .now() + 6) {
                 self.central.stopScan()
+                // プリンターと使える機械だけ（2026-10-13 Ronnie「プリンターと使えるものだけ」。テレビ・イヤホン・Mac などは出さない）
                 let list: [BluetoothPrinters.Device] = self.seen.values.compactMap { p in
-                    guard let name = p.name, !name.isEmpty else { return nil }
-                    return ["deviceId": p.identifier.uuidString, "name": name, "maker": maker, "via": "bluetooth"]
+                    guard let name = p.name, !name.isEmpty, !self.apple.contains(p.identifier) else { return nil }
+                    let byService = self.printerish.contains(p.identifier)
+                    guard byService || Self.looksLikePrinter(name) else { return nil }
+                    return ["deviceId": p.identifier.uuidString, "name": name, "maker": maker, "via": "bluetooth", "printer": "1"]
                 }
                 let done = self.scanning?.done
                 self.scanning = nil
@@ -438,6 +446,36 @@ private final class BLEEscPosPrinter: NSObject, CBCentralManagerDelegate, CBPeri
 
     func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String: Any], rssi RSSI: NSNumber) {
         seen[peripheral.identifier] = peripheral
+        // Apple の機械（AirPods・Mac・iPhone など。メーカーのデータの先頭が 0x004C）は出さない
+        if let m = advertisementData[CBAdvertisementDataManufacturerDataKey] as? Data, m.count >= 2, m[m.startIndex] == 0x4C, m[m.startIndex + 1] == 0x00 {
+            apple.insert(peripheral.identifier)
+        }
+        let uuids = (advertisementData[CBAdvertisementDataServiceUUIDsKey] as? [CBUUID] ?? [])
+            + (advertisementData[CBAdvertisementDataOverflowServiceUUIDsKey] as? [CBUUID] ?? [])
+        if uuids.contains(where: { Self.printerServices.contains($0) }) {
+            printerish.insert(peripheral.identifier)
+        }
+    }
+
+    /// Bluetooth LE のレシート・ラベルプリンターがよく出すサービス
+    private static let printerServices: Set<CBUUID> = [
+        CBUUID(string: "18F0"),
+        CBUUID(string: "E7810A71-73AE-499D-8C15-FAA9AEF0C3F2"),
+        CBUUID(string: "49535343-FE7D-4AE5-8FA9-9FAFD205E455"),
+        CBUUID(string: "FF00"),
+        CBUUID(string: "FFE0"),
+        CBUUID(string: "AE30"),
+    ]
+
+    /// プリンターらしい名前（lib/direct-print.ts の PRINTER_NAME_PATTERN と同じ）
+    private static let printerNamePattern = try? NSRegularExpression(
+        pattern: #"(print|prt|pos\b|pos[-_ ]|receipt|thermal|label|\btm[-_ ]?[a-z0-9]|mc[-_ ]?print|\brp[-_ ]?[a-z]?\d|\bmpt|\bpt[-_ ]?\d|\bxp[-_ ]?[a-z]?\d|\bgp[-_ ]?[a-z]?\d|\btsp\d|\bsm[-_ ]?[a-z]\d|\bspp[-_ ]?r|\bcmp[-_ ]?\d|\bmtp|\brpp|\bztp|epson|\bstar\b|\bsii\b|seiko|citizen|bixolon|sunmi|hprt|xprinter|munbyn|rongta|gainscha|zebra|brother|58mm|80mm)"#,
+        options: [.caseInsensitive]
+    )
+
+    static func looksLikePrinter(_ name: String) -> Bool {
+        guard let re = printerNamePattern else { return false }
+        return re.firstMatch(in: name, range: NSRange(name.startIndex..., in: name)) != nil
     }
 
     // 送る
