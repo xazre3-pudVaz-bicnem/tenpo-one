@@ -373,7 +373,7 @@ function BluetoothCard({ printers, onLinked }: { printers: DevicePrinterOption[]
         </div>
         {!inApp ? (
           <p className="rounded-lg bg-gray-50 px-3 py-2 text-sm text-gray-500">
-            Bluetooth・USB は「TENPO ONE レジ」アプリで使えます（Safari では使えません）。アプリはいま準備中です
+            Bluetooth・USB は iPad の「TENPO ONE」アプリで使えます（Safari では使えません）
           </p>
         ) : printers.length === 0 ? (
           <p className="rounded-lg bg-gray-50 px-3 py-2 text-sm text-gray-500">
