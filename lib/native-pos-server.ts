@@ -57,16 +57,19 @@ async function loadLines(supabase: Client, orderId: string): Promise<NativePosLi
     unitPrice: Number(r.unit_price),
     lineTotal: Number(r.line_total),
     sent: r.kitchen_sent_at != null,
-    options: optionNames(r.modifiers),
+    ...optionNames(r.modifiers),
   }));
 }
 
-/** 明細の modifiers（[{ name, ... }]）から選択肢の名前 */
-function optionNames(raw: unknown): string[] {
-  if (!Array.isArray(raw)) return [];
-  return raw
-    .map((m) => (m && typeof m === 'object' ? (m as { name?: unknown }).name : null))
-    .filter((n): n is string => typeof n === 'string' && n.trim() !== '');
+/** 明細の modifiers（[{ name, name_en?, ... }]）から選択肢の名前（日本語・英語。英語が無ければ日本語） */
+function optionNames(raw: unknown): { options: string[]; optionsEn: string[] } {
+  const list = (Array.isArray(raw) ? raw : [])
+    .map((m) => (m && typeof m === 'object' ? (m as { name?: unknown; name_en?: unknown }) : null))
+    .filter((m): m is { name: string; name_en?: unknown } => !!m && typeof m.name === 'string' && m.name.trim() !== '');
+  return {
+    options: list.map((m) => m.name),
+    optionsEn: list.map((m) => englishName(m.name, null, typeof m.name_en === 'string' ? m.name_en : null) ?? m.name),
+  };
 }
 
 /** 伝票の来店経路（予約の経路 → VISIT_SOURCES の id。経路の行が無い店は予約の目的に名前が残っている） */
@@ -161,7 +164,7 @@ export async function loadNativePos(ctx: SessionContext, orderId: string): Promi
       supabase
         .from('menu_item_option_groups')
         .select(
-          'menu_item_id, sort_order, menu_option_groups!inner(id, name, is_required, min_select, max_select, status, menu_option_items(id, name, price, sort_order, status))'
+          'menu_item_id, sort_order, menu_option_groups!inner(id, name, is_required, min_select, max_select, status, menu_option_items(id, name, name_en, price, sort_order, status))'
         )
         .eq('store_id', storeId)
         .eq('menu_option_groups.status', 'active')
@@ -261,7 +264,7 @@ export async function loadNativePos(ctx: SessionContext, orderId: string): Promi
     pointBrands: pointBrandsOf(presets).map((b) => ({ id: b.key, name: b.name })),
     discountPresets: discountPresetsOf(presets).map((d) => ({ id: d.key, name: d.name, kind: d.kind, value: d.value })),
     steraTerminals,
-    steraPaymentTypes: STERA_PAYMENT_TYPES.map((t) => ({ code: t.code, method: t.method, label: t.label })),
+    steraPaymentTypes: STERA_PAYMENT_TYPES.map((t) => ({ code: t.code, method: t.method, label: t.label, en: t.en })),
     registerOpen,
     canCheckout,
     canDiscount: can(ctx.role, 'pos.discount'),

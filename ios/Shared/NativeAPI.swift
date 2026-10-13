@@ -31,12 +31,15 @@ struct APILine: Codable {
     let sent: Bool
     /// 選んだ選択肢の名前（古いサーバーは無い）
     let options: [String]?
+    /// 選んだ選択肢の英語名（iPad は英語を主に出す。古いサーバーは無い）
+    let optionsEn: [String]?
 }
 
-struct APIOptionItem: Codable { let id: String; let name: String; let price: Int }
+struct APIOptionItem: Codable { let id: String; let name: String; let english: String?; let price: Int }
 struct APIOptionGroup: Codable {
     let id: String
     let name: String
+    let english: String?
     let isRequired: Bool
     let minSelect: Int
     let maxSelect: Int
@@ -68,7 +71,7 @@ struct APIClerk: Codable { let id: String; let name: String }
 struct APISource: Codable { let id: String; let label: String }
 struct APIDiscountPreset: Codable { let id: String; let name: String; let kind: String; let value: Int }
 struct APISteraTerminal: Codable { let id: String; let name: String; let online: Bool }
-struct APISteraType: Codable { let code: String; let method: String; let label: String }
+struct APISteraType: Codable { let code: String; let method: String; let label: String; let en: String? }
 struct APIStore: Codable { let id: String; let name: String }
 
 struct APIPayload: Codable {

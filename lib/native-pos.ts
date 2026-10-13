@@ -1,3 +1,4 @@
+import { englishName } from '@/lib/romaji';
 /**
  * iPad アプリのネイティブ画面（オーダー・会計）とサーバーの決まりごと（2026-10-13 Ronnie「Airレジのように全部ネイティブ。
  * まずネットがある時に Airレジと同じように」）。
@@ -43,10 +44,13 @@ export interface NativePosItem {
 export interface NativePosOptionGroup {
   id: string;
   name: string;
+  /** 英語の名前（グループには英語名の欄が無いので、よく使う言い方・ローマ字。無ければ null） */
+  english: string | null;
   isRequired: boolean;
   minSelect: number;
   maxSelect: number;
-  items: { id: string; name: string; price: number }[];
+  /** english：選択肢の英語名（name_en。無ければよく使う言い方・ローマ字。無ければ null） */
+  items: { id: string; name: string; english: string | null; price: number }[];
 }
 
 export interface NativePosLine {
@@ -60,6 +64,8 @@ export interface NativePosLine {
   sent: boolean;
   /** 選んだ選択肢の名前（明細の下に出す） */
   options: string[];
+  /** 選んだ選択肢の英語名（iPad は英語を主に出す。無ければ日本語） */
+  optionsEn: string[];
 }
 
 export interface NativePosOrder {
@@ -104,7 +110,7 @@ export interface NativePosPayload {
   pointBrands: NativePosBrand[];
   discountPresets: { id: string; name: string; kind: 'percent' | 'amount' | 'manual'; value: number }[];
   steraTerminals: { id: string; name: string; online: boolean }[];
-  steraPaymentTypes: { code: string; method: string; label: string }[];
+  steraPaymentTypes: { code: string; method: string; label: string; en: string }[];
   registerOpen: boolean;
   canCheckout: boolean;
   canDiscount: boolean;
@@ -160,18 +166,19 @@ export function optionGroupsFrom(links: unknown[]): Record<string, NativePosOpti
       min_select: number | null;
       max_select: number | null;
       status?: string;
-      menu_option_items?: { id: string; name: string; price: number | null; sort_order: number | null; status: string }[];
+      menu_option_items?: { id: string; name: string; name_en?: string | null; price: number | null; sort_order: number | null; status: string }[];
     } | null;
     if (!g || (g.status && g.status !== 'active')) continue;
     const items = (g.menu_option_items ?? [])
       .filter((o) => o.status === 'active')
       .sort((a, b) => Number(a.sort_order ?? 0) - Number(b.sort_order ?? 0))
-      .map((o) => ({ id: o.id, name: o.name, price: Number(o.price ?? 0) }));
+      .map((o) => ({ id: o.id, name: o.name, english: englishName(o.name, null, o.name_en ?? null), price: Number(o.price ?? 0) }));
     if (items.length === 0) continue;
     const minSelect = Math.max(0, Number(g.min_select ?? 0));
     (out[link.menu_item_id] ??= []).push({
       id: g.id,
       name: g.name,
+      english: englishName(g.name, null, null),
       isRequired: !!g.is_required,
       minSelect,
       maxSelect: Math.max(1, Number(g.max_select ?? 1), minSelect),
