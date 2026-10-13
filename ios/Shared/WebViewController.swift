@@ -83,7 +83,15 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         // レジ（iPad）は営業中に画面を消さない
         UIApplication.shared.isIdleTimerDisabled = AppState.shared.mode == .regi
 
-        load(PushManager.shared.takePendingURL() ?? startURL)
+        // レジ（iPad）：入れ直す前のレジ端末の目印を戻してから最初の画面を読む（同じ iPad を新しい端末として数えない）
+        let first = PushManager.shared.takePendingURL() ?? startURL
+        if AppState.shared.mode == .regi {
+            RegisterDeviceKeychain.restore(into: webView.configuration.websiteDataStore.httpCookieStore) { [weak self] in
+                DispatchQueue.main.async { self?.load(first) }
+            }
+        } else {
+            load(first)
+        }
     }
 
     override func viewDidAppear(_ animated: Bool) {
@@ -192,6 +200,10 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
             if let s = body["url"] as? String, let url = URL(string: s) {
                 AppState.shared.maybeOpenNativePos(for: url)
             }
+            // レジ端末として登録した直後（画面の切り替えだけで読み直さないとき）も目印を残す
+            if AppState.shared.mode == .regi {
+                RegisterDeviceKeychain.capture(from: webView.configuration.websiteDataStore.httpCookieStore)
+            }
         default:
             break
         }
@@ -275,6 +287,9 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        if AppState.shared.mode == .regi {
+            RegisterDeviceKeychain.capture(from: webView.configuration.websiteDataStore.httpCookieStore)
+        }
         errorView.isHidden = true
         if let url = webView.url { AppState.shared.maybeOpenNativePos(for: url) }
         if let url = webView.url, AppConfig.isOwnHost(url) {
