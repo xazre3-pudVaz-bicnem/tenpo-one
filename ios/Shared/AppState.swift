@@ -26,9 +26,10 @@ final class AppState: ObservableObject {
     @Published var nativeOrder: NativeOrderRef?
 
     private let nativePosKey = "tenpo.nativePos"
-    /// ネイティブのオーダー・会計画面（試験中）を使うか。この iPad だけ。既定は OFF（今まで通り）
+    /// ネイティブのオーダー・会計画面を使うか。この iPad だけ。
+    /// 既定は ON（2026-10-13 Ronnie「Native ON」）。レジの設定で OFF にできる。画面の並び（レイアウト）は Web と同じ
     var nativePosEnabled: Bool {
-        get { AppConfig.isPad && UserDefaults.standard.bool(forKey: nativePosKey) }
+        get { AppConfig.isPad && (UserDefaults.standard.object(forKey: nativePosKey) as? Bool ?? true) }
         set { UserDefaults.standard.set(newValue, forKey: nativePosKey) }
     }
     /// 「今までの画面で開く」を選んだ伝票（もう一度ネイティブで開かない）

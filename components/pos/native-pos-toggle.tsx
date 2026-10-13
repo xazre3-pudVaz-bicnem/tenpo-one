@@ -36,13 +36,12 @@ export function NativePosToggle() {
   return (
     <section aria-labelledby="register-settings-native-pos" className="mb-6">
       <h2 id="register-settings-native-pos" className="mb-2 text-sm font-bold text-navy">
-        ネイティブのレジ画面（試験中）
-        <span className="ml-1.5 text-xs font-normal text-gray-400">Native register screen (beta)</span>
+        アプリのオーダー・会計画面
+        <span className="ml-1.5 text-xs font-normal text-gray-400">Native Order &amp; Pay</span>
       </h2>
       <div className="flex items-center justify-between gap-4 rounded-2xl border border-line bg-white px-4 py-3">
         <p className="text-sm text-ink-2">
-          ON にすると、この iPad では「オーダー・会計」がアプリの画面（速い）で開きます。選択肢のある商品などは今までの画面で入れます。
-          OFF にすると今まで通りです。
+          ON（既定）：この iPad では「オーダー・会計」がアプリの画面（同じ並び・速い）で開きます。OFF にすると今まで通りの画面です。
         </p>
         <button
           type="button"
