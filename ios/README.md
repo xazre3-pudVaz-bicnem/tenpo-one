@@ -37,13 +37,13 @@
 4. `xcodebuild archive` → App Store Connect に上げる → TestFlight で確かめる → 審査に出す
    - 審査用のデモアカウント（TENPO ONE DEMO）・スクリーンショット（iPad 13インチ・iPhone 6.9インチ）・プライバシーポリシー（/privacy）
 
-## レシートプリンター（＋ドロア）を iPad と Bluetooth・USB でつなぐ（2026-10-13〜・まだビルドしていない）
+## レシートプリンター（＋ドロア）を iPad と Bluetooth・USB でつなぐ（2026-10-13〜。Ronnie の iPad に入れて試し中）
 Ronnie「レシートプリンター＋ドロアは iPad と Bluetooth、チケットプリンターは LAN・Wi-Fi。ESC/POS・Star・RP-F10 を選べるように。Airレジ・funfo と同じ」
 
 | 種類 | SDK | つなぎ方 | 送るもの |
 | --- | --- | --- | --- |
 | Star（mC-Print3 など） | StarXpand SDK（Swift Package `StarIO10`。gen_project.py が入れる） | Bluetooth・USB | StarPRNT |
-| EPSON（TM-m30III など） | ePOS SDK（EPSON のサイトから取り、`ios/Vendor/libepos2.xcframework` に置く → gen_project.py が `EPSON_SDK`） | Bluetooth・USB | ESC/POS |
+| EPSON（TM-m30III など） | **要らない**：iPad とペアリングすると External Accessory（`com.epson.escpos`）で見えるので、そこへ ESC/POS をそのまま送る（#260）。ePOS SDK を `ios/Vendor/libepos2.xcframework` に置けば SDK でも探す（`EPSON_SDK`） | Bluetooth・USB | ESC/POS |
 | SII（RP-F10 など） | SII の SDK（未。入れるまでは Bluetooth LE で試す） | Bluetooth・USB | ESC/POS |
 | そのほか ESC/POS | なし（CoreBluetooth・BLE） | Bluetooth LE | ESC/POS |
 
@@ -53,3 +53,5 @@ Ronnie「レシートプリンター＋ドロアは iPad と Bluetooth、チケ�
 - Info.plist（App/Info.plist）：`UISupportedExternalAccessoryProtocols`（jp.star-m.starpro・com.epson.escpos）、`NSBluetoothAlwaysUsageDescription`
 - **App Store に出すとき**：Bluetooth・USB（MFi）のアプリは各社の承認が要る（EPSON：フォーム → 約5営業日で PPID → 審査メモに書く。Star・SII も申請）
 - 自分の iPad で試すだけなら、無料の Apple ID で Xcode から入れられる（7日ごとに入れ直し）
+- ネイティブのオーダー・会計（試験中）は Web の上に**重ねて**出す（fullScreenCover にすると下の Web が「見えない」扱いで止まり、
+  Bluetooth のレシート・ドロアの印刷＝DirectPrintAgent が出なくなる。#260）
