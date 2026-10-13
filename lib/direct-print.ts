@@ -198,6 +198,26 @@ export function deviceReceiptPrinterName(name: string | null | undefined, maker:
   return clean || `${BT_MAKER_SETTING[maker] === 'その他' ? 'ESC/POS' : BT_MAKER_SETTING[maker]} レシート`;
 }
 
+/**
+ * プリンターらしい名前（Bluetooth LE で見つかった機械を絞る。ios/Shared/BluetoothPrinters.swift の printerNamePattern と同じ）。
+ * EPSON・Star・SII・Citizen・Bixolon・Xprinter など、レシート・ラベルのプリンターの型番・言い方
+ */
+export const PRINTER_NAME_PATTERN =
+  /(print|prt|pos\b|pos[-_ ]|receipt|thermal|label|\btm[-_ ]?[a-z0-9]|mc[-_ ]?print|\brp[-_ ]?[a-z]?\d|\bmpt|\bpt[-_ ]?\d|\bxp[-_ ]?[a-z]?\d|\bgp[-_ ]?[a-z]?\d|\btsp\d|\bsm[-_ ]?[a-z]\d|\bspp[-_ ]?r|\bcmp[-_ ]?\d|\bmtp|\brpp|\bztp|epson|\bstar\b|\bsii\b|seiko|citizen|bixolon|sunmi|hprt|xprinter|munbyn|rongta|gainscha|zebra|brother|58mm|80mm)/i;
+
+/**
+ * iPad の「プリンターを探す」に出してよい機械か（2026-10-13 Ronnie「プリンターと使えるものだけ出す」。
+ * テレビ・イヤホン・パソコンなどを出さない）
+ *   USB・EPSON（iPad とペアリングした EPSON は External Accessory で見える）・Star は出す
+ *   Bluetooth LE（ESC/POS・SII）は、アプリがプリンターと判断したもの、またはプリンターらしい名前だけ
+ */
+export function isLikelyPrinter(d: { name?: string | null; maker: string; via?: string | null; printer?: boolean | string | null }): boolean {
+  if (d.via === 'usb') return true;
+  if (d.maker === 'epson' || d.maker === 'star') return true;
+  if (d.printer === true || d.printer === '1' || d.printer === 'yes') return true;
+  return PRINTER_NAME_PATTERN.test(String(d.name ?? ''));
+}
+
 /** メーカー名が EPSON か */
 export function isEpsonMaker(maker: string | null | undefined): boolean {
   return /epson/i.test(maker ?? '');

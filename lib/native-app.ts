@@ -39,6 +39,8 @@ export interface NativeBluetoothDevice {
   name: string;
   maker: 'star' | 'epson' | 'sii' | 'escpos';
   via?: 'bluetooth' | 'usb';
+  /** アプリがプリンターと判断した機械（Bluetooth LE でプリンターのサービスを出している）。古いアプリには無い */
+  printer?: boolean | string;
 }
 
 export interface NativeBluetooth {

@@ -5,7 +5,16 @@ import iconv from 'iconv-lite';
 import { eposXmlToEscPos } from '@/lib/escpos';
 import { drawerKickEpos, kitchenTicketsEpos, orderSlipEposXml, receiptToEposXml, ryoshushoToEposXml, testPrintEpos } from '@/lib/epos-print';
 import { baseReceipt } from './fixtures/receipt';
-import { BT_MAKERS, BT_MAKER_SETTING, bluetoothMakerOf, btFormatOf, deviceReceiptPrinterName, parseDirectPrintConfig } from '@/lib/direct-print';
+import {
+  BT_MAKERS,
+  BT_MAKER_SETTING,
+  PRINTER_NAME_PATTERN,
+  bluetoothMakerOf,
+  btFormatOf,
+  deviceReceiptPrinterName,
+  isLikelyPrinter,
+  parseDirectPrintConfig,
+} from '@/lib/direct-print';
 
 const read = (p: string) => readFileSync(join(__dirname, '..', p), 'utf8');
 const hex = (b: Buffer) => b.toString('hex');
@@ -163,5 +172,38 @@ describe('iPad からレシートプリンターを追加する', () => {
     // 選べるレシートの出し先は、印刷を受けるものだけ（今まで通り）
     const panel = read('components/pos/device-printer-panel.tsx');
     expect(panel).toContain("printers.filter((p) => p.enabled && (p.usage === 'receipt' || p.billSlips))");
+  });
+});
+
+/** 2026-10-13 Ronnie「プリンターと使えるものだけ出す」（テレビ・イヤホン・Mac が出ていた） */
+describe('「プリンターを探す」はプリンターだけ', () => {
+  const ble = (name: string) => ({ name, maker: 'escpos', via: 'bluetooth' });
+
+  it('テレビ・イヤホン・パソコン・名前の分からない機械は出さない', () => {
+    for (const n of ['Home Theater', 'LE_BRAVIA Theatre Bar 8', 'Ronnies AirPods Pro 202607-', 'Ronnies MacBook Air', 'G185060', 'BP106A', 'Ronnies', 'Galaxy Buds', 'JBL Flip 5', 'Apple Watch']) {
+      expect(isLikelyPrinter(ble(n)), n).toBe(false);
+    }
+  });
+
+  it('プリンターの名前は出す', () => {
+    for (const n of ['TM-m30III', 'mC-Print3', 'Star mC-Print3', 'RP-F10', 'SII RP-D10', 'MPT-II', 'PT-210', 'XP-P323B', 'TSP143', 'SM-L200', 'POS-58', 'BlueTooth Printer']) {
+      expect(isLikelyPrinter(ble(n)), n).toBe(true);
+    }
+  });
+
+  it('EPSON（iPad とペアリング）・Star・USB・アプリがプリンターと判断したものは名前に関係なく出す', () => {
+    expect(isLikelyPrinter({ name: 'G185060', maker: 'epson', via: 'bluetooth' })).toBe(true);
+    expect(isLikelyPrinter({ name: 'X', maker: 'star', via: 'bluetooth' })).toBe(true);
+    expect(isLikelyPrinter({ name: 'X', maker: 'escpos', via: 'usb' })).toBe(true);
+    expect(isLikelyPrinter({ name: 'G185060', maker: 'escpos', via: 'bluetooth', printer: '1' })).toBe(true);
+  });
+
+  it('アプリ（Swift）も同じ名前の決まり・Apple の機械を外す', () => {
+    const swift = read('ios/Shared/BluetoothPrinters.swift');
+    expect(swift).toContain(`pattern: #"${PRINTER_NAME_PATTERN.source}"#`);
+    expect(swift).toContain('m[m.startIndex] == 0x4C');
+    expect(swift).toContain('guard byService || Self.looksLikePrinter(name) else { return nil }');
+    const panel = read('components/pos/device-printer-panel.tsx');
+    expect(panel.match(/\.filter\(isLikelyPrinter\)/g)?.length).toBe(2);
   });
 });
