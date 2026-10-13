@@ -113,6 +113,64 @@ struct APIResult: Decodable {
     let opened: Bool?
 }
 
+// MARK: - テーブル一覧（/api/app/v1/floor。Web の lib/native-floor.ts）
+
+struct APIFloor: Codable, Identifiable, Hashable { let id: String; let name: String }
+struct APIFloorSlip: Codable, Hashable { let id: String; let orderNo: Int }
+struct APIFloorOrder: Codable, Hashable {
+    let id: String
+    let orderNo: Int
+    let openedAtMs: Double
+    let endAtMs: Double
+    let guestCount: Int
+    let total: Int
+    let clerkName: String?
+    let guestName: String?
+    let sourceLabel: String
+    let courseLabel: String?
+    let slips: [APIFloorSlip]
+}
+struct APIFloorUpcoming: Codable, Hashable { let id: String; let startMs: Double; let time: String; let name: String; let partySize: Int; let sourceLabel: String }
+struct APIFloorCall: Codable, Hashable { let kind: String }
+struct APIFloorTable: Codable, Identifiable, Hashable {
+    let id: String
+    let floorId: String?
+    let name: String
+    let capacityMin: Int
+    let capacityMax: Int
+    let status: String
+    let isCounter: Bool
+    let isPrivateRoom: Bool
+    let order: APIFloorOrder?
+    let upcoming: [APIFloorUpcoming]
+    let groupNames: [String]
+    let calls: [APIFloorCall]
+}
+struct APIFloorReservation: Codable, Identifiable, Hashable {
+    let id: String
+    let startMs: Double
+    let time: String
+    let name: String
+    let partySize: Int
+    let tableLabel: String
+    let status: String
+}
+struct APIFloorPayload: Codable {
+    let store: APIStore
+    let floors: [APIFloor]
+    let defaultFloorId: String?
+    let tables: [APIFloorTable]
+    let reservations: [APIFloorReservation]
+    let canOperate: Bool
+    let serverNow: Double
+}
+struct APIFloorResult: Decodable {
+    let ok: Bool
+    let error: String?
+    let orderId: String?
+    let useWeb: Bool?
+}
+
 struct NativeAPIError: LocalizedError {
     let message: String
     let useWeb: Bool
@@ -125,6 +183,7 @@ final class NativeAPI {
 
     private let session: URLSession
     private let path = "/api/app/v1/pos"
+    private let floorPath = "/api/app/v1/floor"
 
     private init() {
         let config = URLSessionConfiguration.default
@@ -169,7 +228,7 @@ final class NativeAPI {
             await saveCookies(from: http, url: url)
             if http.statusCode >= 400 {
                 let r = try? JSONDecoder().decode(APIResult.self, from: data)
-                throw NativeAPIError(message: r?.error ?? "通信できませんでした（\(http.statusCode)）", useWeb: r?.useWeb ?? false)
+                throw NativeAPIError(message: r?.error ?? "Network error (\(http.statusCode))", useWeb: r?.useWeb ?? false)
             }
         }
         return data
@@ -191,7 +250,25 @@ final class NativeAPI {
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
         let data = try await send(req)
         let result = try JSONDecoder().decode(APIResult.self, from: data)
-        if throwOnFail && !result.ok { throw NativeAPIError(message: result.error ?? "うまくいきませんでした", useWeb: result.useWeb ?? false) }
+        if throwOnFail && !result.ok { throw NativeAPIError(message: result.error ?? "Something went wrong", useWeb: result.useWeb ?? false) }
+        return result
+    }
+
+    /// テーブル一覧
+    func loadFloor() async throws -> APIFloorPayload {
+        let data = try await send(URLRequest(url: AppConfig.url(floorPath)))
+        return try JSONDecoder().decode(APIFloorPayload.self, from: data)
+    }
+
+    /// テーブル一覧の操作（walkIn・openOrder・cleaningDone）
+    func floorAct(_ body: [String: Any]) async throws -> APIFloorResult {
+        var req = URLRequest(url: AppConfig.url(floorPath))
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "content-type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        let data = try await send(req)
+        let result = try JSONDecoder().decode(APIFloorResult.self, from: data)
+        if !result.ok { throw NativeAPIError(message: result.error ?? "Something went wrong", useWeb: result.useWeb ?? false) }
         return result
     }
 }

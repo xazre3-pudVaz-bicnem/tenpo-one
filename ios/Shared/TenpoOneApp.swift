@@ -27,9 +27,20 @@ struct RootView: View {
             } else {
                 WebContainer()
                     .id(state.webSession)
-                    .accessibilityHidden(state.nativeOrder != nil)
+                    .accessibilityHidden(state.nativeOrder != nil || state.nativeScreen != .none)
                 if state.needsHandyLogin {
                     HandyLoginView()
+                }
+                // ネイティブのホーム・テーブル一覧（レジの iPad。Web の /app/dashboard・/app/floor の代わりに重ねる）
+                if state.nativeScreen == .home {
+                    NativeHomeView()
+                        .transition(.opacity)
+                        .zIndex(5)
+                }
+                if state.nativeScreen == .floor {
+                    NativeFloorView()
+                        .transition(.opacity)
+                        .zIndex(6)
                 }
                 // ネイティブのオーダー・会計画面（試験中。レジの設定で ON にした iPad だけ）。
                 // Web の画面の上に重ねる（fullScreenCover だと下の Web が「見えない」扱いになって止まり、
@@ -43,6 +54,7 @@ struct RootView: View {
             }
         }
         .animation(.easeOut(duration: 0.22), value: state.nativeOrder)
+        .animation(.easeOut(duration: 0.18), value: state.nativeScreen)
         // レジ（iPad）は画面いっぱいに使う
         .statusBarHidden(state.mode == .regi || state.nativeOrder != nil)
         .sheet(isPresented: $state.scanning) {

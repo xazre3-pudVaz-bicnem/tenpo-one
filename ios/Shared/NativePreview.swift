@@ -3,7 +3,7 @@ import SwiftUI
 /// ネイティブ画面を見本のデータで開く（シミュレーターで形を確かめる用）。
 /// 起動の引数 `-tenpoNativePreview order|checkout|options|price` のときだけ。お店で使うときは出ない。
 enum NativePreview: String {
-    case order, checkout, options, price
+    case order, checkout, options, price, floor, home
 
     static var current: NativePreview? {
         guard let raw = UserDefaults.standard.string(forKey: "tenpoNativePreview") else { return nil }
@@ -32,6 +32,13 @@ struct NativePreviewView: View {
                 .statusBarHidden(true)
         case .checkout:
             NativeCheckoutView(model: model, onClose: {})
+                .statusBarHidden(true)
+        case .floor:
+            NativeFloorView(model: NativeFloorModel.sample())
+                .statusBarHidden(true)
+        case .home:
+            NativeHomeView()
+                .environmentObject(AppState.shared)
                 .statusBarHidden(true)
         case .options, .price:
             NativeOrderView(model: model)

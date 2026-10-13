@@ -317,6 +317,7 @@ final class NativeOrderModel: ObservableObject {
 
     private func apply(payload p: APIPayload) {
         storeName = p.store.name
+        if AppState.shared.storeName != p.store.name { AppState.shared.storeName = p.store.name }
         categories = p.categories.map { NPCategory(id: $0.id, name: $0.name, sub: $0.sub) }
         items = p.items.map {
             NPMenuItem(id: $0.id, categoryId: $0.categoryId, name: $0.name, kana: $0.kana, english: $0.english, price: $0.price,

@@ -141,10 +141,16 @@ struct NativeTopBar: View {
     var onHome: () -> Void = {}
     /// 今までの（Web の）画面で開く。ライブのときだけ
     var onWeb: (() -> Void)? = nil
+    /// 左の戻るボタンの文字（nil＝出さない。ホーム）
+    var backText: String? = "Back"
+    /// 右の丸の印（担当者＝person、時計＝clock）
+    var rightIcon: String = "person"
 
     var body: some View {
         HStack(spacing: 10) {
-            barButton(icon: "chevron.left", text: "Back", action: onHome)
+            if let backText {
+                barButton(icon: "chevron.left", text: backText, action: onHome)
+            }
             if let onWeb {
                 barButton(icon: "safari", text: "Classic screen", action: onWeb)
             }
@@ -173,7 +179,7 @@ struct NativeTopBar: View {
             }
             Spacer(minLength: 8)
             HStack(spacing: 6) {
-                Image(systemName: "person")
+                Image(systemName: rightIcon)
                 Text(userName).lineLimit(1)
             }
             .font(.system(size: 15, weight: .semibold))
