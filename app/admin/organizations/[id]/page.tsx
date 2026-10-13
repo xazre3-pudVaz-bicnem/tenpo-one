@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { TableWrap, Table, THead, TBody, Tr, Th, Td } from '@/components/ui/table';
 import { EmptyState } from '@/components/ui/state';
 import { CreateStoreDialog } from '@/components/admin/create-store-dialog';
+import { CopyStoreMenuDialog } from '@/components/admin/copy-store-menu-dialog';
 import { StoreRegisterPassword } from '@/components/admin/store-register-password';
 import { readOrgRegisterPasswords } from '@/lib/tenant-provisioning';
 import { revealRegisterPassword, reissueRegisterPassword, saveStoreRegisterUsername } from '@/app/admin/tenants/actions';
@@ -244,7 +245,13 @@ export default async function OrganizationDetailPage({ params }: { params: Promi
                   {' ＋ '}店舗ごとのレジ用パスワード
                 </p>
               </div>
-              <CreateStoreDialog organizationId={org.id} />
+              <div className="flex flex-wrap gap-2">
+                <CopyStoreMenuDialog
+                  organizationId={org.id}
+                  stores={(stores ?? []).map((s) => ({ id: s.id as string, name: s.name as string }))}
+                />
+                <CreateStoreDialog organizationId={org.id} />
+              </div>
             </CardHeader>
             <CardContent className="p-0">
               {(stores ?? []).length === 0 ? (
