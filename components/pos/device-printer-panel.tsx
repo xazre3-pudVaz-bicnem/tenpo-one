@@ -2,13 +2,12 @@
 
 import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Bluetooth, Check, Loader2, Plus, Printer, ShieldCheck, Wifi } from 'lucide-react';
+import { Bluetooth, Check, Loader2, Printer, Search, ShieldCheck, Wifi } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { useToast } from '@/components/ui/toast';
 import { cn } from '@/lib/utils';
 import {
   BT_MAKER_LABEL,
-  bluetoothMakerOf,
   eposErrorLabel,
   isEpsonMaker,
   isLikelyPrinter,
@@ -17,7 +16,17 @@ import {
   type BluetoothLink,
 } from '@/lib/direct-print';
 import { nativeBluetooth, type NativeBluetoothDevice } from '@/lib/native-app';
-import { addDeviceReceiptPrinter, setDevicePrinter } from '@/app/app/pos/device-printer-actions';
+import { addDeviceReceiptPrinter, saveDeviceReceiptPrinterSettings, setDevicePrinter } from '@/app/app/pos/device-printer-actions';
+import {
+  PRINTER_MAKER_LABEL,
+  PRINTER_MAKER_ORDER,
+  PRINTER_MODELS,
+  deviceMatchesModel,
+  discoverKindOf,
+  printerModelById,
+  printerModelOf,
+  type PrinterModel,
+} from '@/lib/printer-models';
 import { postDirect, readDirectPrintConfig, sendToEposPrinter, writeDirectPrintConfig } from '@/components/printing/direct-print-client';
 
 export interface DevicePrinterOption {
@@ -31,6 +40,11 @@ export interface DevicePrinterOption {
   enabled: boolean;
   /** つなぎ方（'bluetooth' / 'usb' / 'lan' / 'wifi' / 'browser'） */
   connection: string | null;
+  /** 機種（mC-Print3・TM-m30III など） */
+  model?: string | null;
+  paperWidthMm?: 58 | 80;
+  autoPrint?: boolean;
+  drawerKick?: boolean;
 }
 
 const isDeviceLink = (p: DevicePrinterOption) => p.connection === 'bluetooth' || p.connection === 'usb';
@@ -66,7 +80,11 @@ export function DevicePrinterPanel({
     return () => window.removeEventListener('tenpo-direct-print-changed', sync);
   }, []);
 
-  const receiptPrinters = printers.filter((p) => p.enabled && (p.usage === 'receipt' || p.billSlips));
+  // 出し先に選べるのは Wi-Fi・LAN のプリンター（＋いま選んでいるこのiPadの Bluetooth のプリンター）。
+  // ほかの iPad とつないだ Bluetooth のプリンターは出さない
+  const receiptPrinters = printers.filter(
+    (p) => p.enabled && (p.usage === 'receipt' || p.billSlips) && (!isDeviceLink(p) || p.id === selected)
+  );
   // Wi-Fi で直接印刷は Wi-Fi・LAN の EPSON だけ（iPad と Bluetooth・USB でつなぐものは下の Bluetooth のカード）
   const epsonPrinters = printers.filter((p) => p.enabled && isEpsonMaker(p.maker) && !isDeviceLink(p));
   // iPad とつなぐレシート機：印刷を受けるもの＋管理画面で Bluetooth・USB として足しただけのもの
@@ -122,21 +140,24 @@ export function DevicePrinterPanel({
 
   return (
     <div className="space-y-4">
+      <BluetoothPrinterForm printers={bluetoothPrinters} canAdd={canAdd} onSelected={(id) => setSelected(id)} />
+
       <Card>
         <CardContent className="space-y-3">
           <div className="flex items-start gap-2">
             <Printer className="mt-0.5 h-5 w-5 shrink-0 text-primary" aria-hidden />
             <div>
-              <p className="text-sm font-bold text-navy">このiPadのレシートプリンター</p>
+              <p className="text-sm font-bold text-navy">レシートの出し先</p>
               <p className="text-xs text-gray-500">
-                レシート・領収書・会計伝票・ドロア・レジ精算をどのプリンターに出すか、このiPadだけで選びます（店の設定は変わりません）
+                レシート・領収書・会計伝票・ドロア・レジ精算をどのプリンターに出すか、このiPadだけで選びます（店の設定は変わりません）。
+                上の Bluetooth のプリンターをつなぐと、そのプリンターになります
               </p>
             </div>
           </div>
           {receiptPrinters.length === 0 ? (
             <p className="rounded-lg bg-gray-50 px-3 py-2 text-sm text-gray-500">
               {canAdd
-                ? 'レシート用のプリンターがありません。iPad の「TENPO ONE」アプリでは下の「プリンターを追加」（Bluetooth・USB）、パソコンでは 設定 > レジ・プリンター で追加できます'
+                ? 'Wi-Fi・LAN のレシートプリンターはありません。iPad の「TENPO ONE」アプリでは上の「プリンター」（Bluetooth）、パソコンでは 設定 > レジ・プリンター で追加できます'
                 : 'レシート用のプリンターがありません。管理画面（パソコン）の 設定 > レジ・プリンター で追加してください'}
             </p>
           ) : (
@@ -157,12 +178,7 @@ export function DevicePrinterPanel({
         </CardContent>
       </Card>
 
-      <BluetoothCard
-        printers={bluetoothPrinters}
-        canAdd={canAdd}
-        onLinked={(id) => choose(id)}
-        onAdded={(id) => setSelected(id)}
-      />
+
 
       {epsonPrinters.length > 0 && (
         <Card>
@@ -301,33 +317,39 @@ function Choice({
   );
 }
 
+
+/** 保存してある機種名・メーカー名から、フォームの機種を決める（分からなければメーカーの代表機種） */
+function initialModelOf(p: DevicePrinterOption | null): PrinterModel | null {
+  if (!p) return null;
+  const byName = printerModelOf(p.model);
+  if (byName) return byName;
+  const maker = (p.maker ?? '').toLowerCase();
+  if (maker.includes('star')) return printerModelById('star-mcp31');
+  if (maker.includes('epson')) return printerModelById('epson-tm-m30iii');
+  return printerModelById(p.paperWidthMm === 58 ? 'escpos-ble-58' : 'escpos-ble-80');
+}
+
 /**
- * Bluetooth のレシートプリンター（＋ドロア）。TENPO ONE レジ アプリの中だけで使える（Safari では Bluetooth を使えない）。
- * 2026-10-13 Ronnie「レシートプリンター＋ドロアは iPad と Bluetooth。チケットプリンターは LAN・Wi-Fi。Airレジ・funfo と同じ」
+ * このiPadのプリンター（Bluetooth）。Airレジの「レジ・プリンター」と同じ並び：
+ *   プリンター利用・プリンター（機種）・接続（探す）・レシート紙幅・会計レシート自動印刷・キャッシュドロア利用・試し印刷・保存する
+ * 2026-10-14 Ronnie「プリンター選択がいる。日本で人気の Bluetooth のプリンター（Star・EPSON・Brother など）を全部」
+ * TENPO ONE レジ アプリの中だけ（Safari では Bluetooth を使えない）。
  */
-function BluetoothCard({
+function BluetoothPrinterForm({
   printers,
   canAdd,
-  onLinked,
-  onAdded,
+  onSelected,
 }: {
+  /** この店の iPad とつなぐレシートプリンター（Bluetooth・USB）と、印刷を受けるレシート機 */
   printers: DevicePrinterOption[];
   canAdd: boolean;
-  /** つないだ（このiPadのレシートの出し先にする） */
-  onLinked: (printerId: string) => void;
-  /** iPad から追加した・使えるようにした（出し先はサーバーで決め済み） */
-  onAdded: (printerId: string) => void;
+  /** このiPadのレシートの出し先が変わった（null＝おまかせ） */
+  onSelected: (printerId: string | null) => void;
 }) {
   const { toast } = useToast();
   const router = useRouter();
-  const [adding, setAdding] = useState(false);
-  const [addFound, setAddFound] = useState<NativeBluetoothDevice[] | null>(null);
-  const [saving, setSaving] = useState<string | null>(null);
   const [inApp, setInApp] = useState(false);
   const [links, setLinks] = useState<BluetoothLink[]>([]);
-  const [finding, setFinding] = useState<string | null>(null);
-  const [found, setFound] = useState<{ printerId: string; devices: NativeBluetoothDevice[] } | null>(null);
-  const [testing, setTesting] = useState<string | null>(null);
 
   useEffect(() => {
     const sync = () => {
@@ -339,7 +361,35 @@ function BluetoothCard({
     return () => window.removeEventListener('tenpo-direct-print-changed', sync);
   }, []);
 
-  const save = (next: BluetoothLink[]) => {
+  // このiPadとつないでいるプリンター（1台）
+  const link = links.find((l) => printers.some((p) => p.id === l.printerId)) ?? null;
+  const linked = link ? (printers.find((p) => p.id === link.printerId) ?? null) : null;
+
+  const [use, setUse] = useState(false);
+  const [modelId, setModelId] = useState('');
+  const [paper, setPaper] = useState<58 | 80>(80);
+  const [autoPrint, setAutoPrint] = useState(false);
+  const [drawer, setDrawer] = useState(true);
+  const [found, setFound] = useState<NativeBluetoothDevice[] | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+
+  // つないでいるプリンターの設定をフォームに入れる（読み込み・つなぎ直したとき）
+  const linkedKey = linked ? `${linked.id}:${linked.model ?? ''}:${linked.paperWidthMm}:${linked.autoPrint}:${linked.drawerKick}` : '';
+  useEffect(() => {
+    if (!linked) return;
+    const m = initialModelOf(linked);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setUse(true);
+    setModelId(m?.id ?? '');
+    setPaper(linked.paperWidthMm === 58 ? 58 : 80);
+    setAutoPrint(linked.autoPrint === true);
+    setDrawer(linked.drawerKick !== false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [linkedKey]);
+
+  const model = printerModelById(modelId);
+
+  const saveLinks = (next: BluetoothLink[]) => {
     if (!writeDirectPrintConfig({ ...readDirectPrintConfig(), bluetooth: next })) {
       toast('このiPadに保存できませんでした', 'error');
       return false;
@@ -348,273 +398,338 @@ function BluetoothCard({
     return true;
   };
 
-  const find = async (p: DevicePrinterOption) => {
-    const bt = nativeBluetooth();
-    const maker = bluetoothMakerOf(p.maker);
-    if (!bt || !maker) return;
-    // 種類が分からない（その他）ときは全部探す
-    setFinding(p.id);
+  const chooseModel = (id: string) => {
+    const m = printerModelById(id);
+    setModelId(id);
     setFound(null);
-    try {
-      const res = await bt.discover(maker === 'escpos' ? 'all' : maker);
-      // プリンターと使える機械だけ（テレビ・イヤホン・パソコンなどは出さない）
-      const devices = (res.devices ?? []).filter(isLikelyPrinter);
-      if (!res.ok || devices.length === 0) {
-        toast('見つかりません。プリンターの電源を入れ、iPad の 設定 > Bluetooth でペアリング（USB はケーブルをつなぐ）してから、もう一度押してください', 'error');
-        return;
-      }
-      setFound({ printerId: p.id, devices });
-    } finally {
-      setFinding(null);
+    if (m) {
+      setPaper(m.paper);
+      setDrawer(m.drawer);
     }
   };
 
-  const link = async (p: DevicePrinterOption, d: NativeBluetoothDevice) => {
-    // 管理画面で Bluetooth・USB として足しただけのプリンターは、ここで印刷を受けられる状態にする
-    if (!p.enabled) {
-      setSaving(d.deviceId);
-      try {
-        const res = await addDeviceReceiptPrinter({ printerId: p.id, maker: d.maker, via: d.via ?? 'bluetooth' });
-        if (!res.ok) {
-          toast(res.error, 'error');
-          return;
-        }
-      } finally {
-        setSaving(null);
-      }
+  const toggleUse = async () => {
+    if (!use) {
+      setUse(true);
+      return;
     }
-    const next: BluetoothLink[] = [
-      ...links.filter((l) => l.printerId !== p.id),
-      { printerId: p.id, deviceId: d.deviceId, deviceName: d.name, maker: d.maker, via: d.via ?? 'bluetooth' },
-    ];
-    if (!save(next)) return;
-    setFound(null);
-    if (p.enabled) onLinked(p.id);
-    else {
-      onAdded(p.id);
+    // 使わない：このiPadとのつながりを外し、レシートは店の既定（おまかせ）に。店のプリンターの設定は消さない
+    setBusy('use');
+    try {
+      if (link && !saveLinks(links.filter((l) => l.printerId !== link.printerId))) return;
+      const res = await setDevicePrinter(null);
+      if (!res.ok) {
+        toast(res.error, 'error');
+        return;
+      }
+      setUse(false);
+      setFound(null);
+      onSelected(null);
       router.refresh();
+      toast('このiPadのプリンターを使わない設定にしました（レシートは店の既定のプリンター）');
+    } finally {
+      setBusy(null);
     }
-    toast(`「${p.name}」を ${d.via === 'usb' ? 'USB' : 'Bluetooth'}（${d.name}）でつなぎました`);
   };
 
-  /** iPad で見つけたプリンターを、この店のレシートプリンターとして追加してつなぐ（パソコン不要） */
-  const findNew = async () => {
+  const search = async () => {
     const bt = nativeBluetooth();
-    if (!bt) return;
-    setAdding(true);
-    setAddFound(null);
+    if (!bt || !model) return;
+    setBusy('search');
+    setFound(null);
     try {
-      const res = await bt.discover('all');
-      // プリンターと使える機械だけ（テレビ・イヤホン・パソコンなどは出さない）
-      const devices = (res.devices ?? []).filter(isLikelyPrinter);
+      const res = await bt.discover(discoverKindOf(model));
+      // 選んだメーカーのプリンターだけ（テレビ・イヤホン・パソコンなどは出さない）
+      const devices = (res.devices ?? []).filter((d) => deviceMatchesModel(model, d) && isLikelyPrinter(d));
       if (!res.ok || devices.length === 0) {
-        toast('見つかりません。プリンターの電源を入れ、iPad の 設定 > Bluetooth でペアリング（USB はケーブルをつなぐ）してから、もう一度押してください', 'error');
+        toast(
+          model.maker === 'escpos'
+            ? '見つかりません。プリンターの電源を入れ、iPad の近くでもう一度押してください'
+            : '見つかりません。プリンターの電源を入れ、iPad の 設定 > Bluetooth でプリンターをペアリングしてから、もう一度押してください',
+          'error'
+        );
         return;
       }
-      setAddFound(devices);
+      setFound(devices);
     } finally {
-      setAdding(false);
+      setBusy(null);
     }
   };
 
-  const addNew = async (d: NativeBluetoothDevice) => {
-    setSaving(d.deviceId);
+  const connect = async (d: NativeBluetoothDevice) => {
+    if (!model) return;
+    setBusy(`connect:${d.deviceId}`);
     try {
-      const res = await addDeviceReceiptPrinter({ name: d.name, maker: d.maker, via: d.via ?? 'bluetooth' });
+      const res = await addDeviceReceiptPrinter({
+        printerId: linked?.id ?? null,
+        name: d.name,
+        maker: d.maker,
+        via: d.via ?? 'bluetooth',
+        modelId: model.id,
+        paperWidthMm: paper,
+        autoPrint,
+        drawerKick: drawer,
+      });
       if (!res.ok) {
         toast(res.error, 'error');
         return;
       }
       const next: BluetoothLink[] = [
-        ...links.filter((l) => l.printerId !== res.printer.id && l.deviceId !== d.deviceId),
+        ...links.filter((l) => l.printerId !== res.printer.id && l.printerId !== linked?.id && l.deviceId !== d.deviceId),
         { printerId: res.printer.id, deviceId: d.deviceId, deviceName: d.name, maker: d.maker, via: d.via ?? 'bluetooth' },
       ];
-      if (!save(next)) return;
-      setAddFound(null);
-      onAdded(res.printer.id);
+      if (!saveLinks(next)) return;
+      setFound(null);
+      onSelected(res.printer.id);
       router.refresh();
-      toast(`「${res.printer.name}」を追加しました。「試し印刷」で確かめてください`);
+      toast(`「${d.name}」とつなぎました。「試し印刷」で確かめてください`);
     } finally {
-      setSaving(null);
+      setBusy(null);
     }
   };
 
-  const unlink = (p: DevicePrinterOption) => {
-    if (save(links.filter((l) => l.printerId !== p.id))) toast(`「${p.name}」の Bluetooth を外しました`);
+  const save = async () => {
+    if (!linked) {
+      toast('先に「プリンターを探す」でプリンターとつないでください', 'error');
+      return;
+    }
+    setBusy('save');
+    try {
+      const res = await saveDeviceReceiptPrinterSettings({
+        printerId: linked.id,
+        modelId: model?.id ?? null,
+        paperWidthMm: paper,
+        autoPrint,
+        drawerKick: drawer,
+      });
+      if (!res.ok) {
+        toast(res.error, 'error');
+        return;
+      }
+      router.refresh();
+      toast('保存しました');
+    } finally {
+      setBusy(null);
+    }
   };
 
-  const test = async (p: DevicePrinterOption, l: BluetoothLink, kind: 'receipt' | 'drawer') => {
+  const test = async (kind: 'receipt' | 'drawer') => {
     const bt = nativeBluetooth();
-    if (!bt) return;
-    setTesting(`${p.id}:${kind}`);
+    if (!bt || !link) return;
+    setBusy(kind);
     try {
-      const res = await postDirect<{ ok: boolean; data?: string; error?: string }>({ action: 'test-bt', printerId: p.id, kind });
+      const res = await postDirect<{ ok: boolean; data?: string; error?: string }>({ action: 'test-bt', printerId: link.printerId, kind });
       if (!res?.ok || !res.data) {
         toast(res?.error ?? '試し印刷のデータを作れませんでした', 'error');
         return;
       }
-      const sent = await bt.print({ deviceId: l.deviceId, maker: l.maker, via: l.via, data: res.data });
+      const sent = await bt.print({ deviceId: link.deviceId, maker: link.maker, via: link.via, data: res.data });
       if (sent.ok) toast(kind === 'drawer' ? 'ドロアが開きました' : '印刷できました');
       else toast(`つながりません（${sent.code ?? 'エラー'}）。プリンターの電源と iPad の Bluetooth を確かめてください`, 'error');
     } finally {
-      setTesting(null);
+      setBusy(null);
     }
   };
 
+  const off = !use;
+  const locked = !canAdd;
+
   return (
     <Card>
-      <CardContent className="space-y-3">
-        <div className="flex items-start gap-2">
-          <Bluetooth className="mt-0.5 h-5 w-5 shrink-0 text-primary" aria-hidden />
+      <CardContent className="p-0">
+        <div className="flex items-start gap-2 border-b border-gray-100 px-5 py-4">
+          <Bluetooth className="mt-0.5 h-6 w-6 shrink-0 text-primary" aria-hidden />
           <div>
-            <p className="text-sm font-bold text-navy">iPad とつなぐレシートプリンター（＋ドロア）：Bluetooth・USB</p>
-            <p className="text-xs text-gray-500">
-              レシートプリンターとドロアは iPad と Bluetooth・USB、厨房・ドリンクのプリンターは LAN・Wi-Fi でつなぎます
-              （Star mC-Print3・EPSON・SII RP-F10・そのほかの ESC/POS）
+            <p className="text-base font-bold text-navy">
+              このiPadのプリンター（Bluetooth）
+              <span className="ml-1.5 text-xs font-normal text-gray-400">Receipt printer</span>
             </p>
+            <p className="text-sm text-gray-500">レシートプリンターとドロアは iPad と Bluetooth でつなぎます（厨房・ドリンクのプリンターは LAN・Wi-Fi）</p>
           </div>
         </div>
+
         {!inApp ? (
-          <p className="rounded-lg bg-gray-50 px-3 py-2 text-sm text-gray-500">
-            Bluetooth・USB は iPad の「TENPO ONE」アプリで使えます（Safari では使えません）
-          </p>
-        ) : printers.length === 0 && !canAdd ? (
-          <p className="rounded-lg bg-gray-50 px-3 py-2 text-sm text-gray-500">
-            レシートプリンターがありません。管理画面（パソコン）の 設定 &gt; レジ・プリンター で、メーカー（Star・EPSON・SII・ESC/POS）と
-            つなぎ方（Bluetooth・USB）を選んで追加してください
+          <p className="m-5 rounded-lg bg-gray-50 px-4 py-3 text-base text-gray-500">
+            Bluetooth のプリンターは iPad の「TENPO ONE」アプリで使えます（Safari では使えません）
           </p>
         ) : (
-          <>
-          {printers.length > 0 && (
-          <ul className="divide-y divide-gray-100">
-            {printers.map((p) => {
-              const l = links.find((x) => x.printerId === p.id);
-              return (
-                <li key={p.id} className="space-y-2 py-3">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold text-ink">{p.name}</p>
-                      <p className="text-xs text-gray-500">
-                        {BT_MAKER_LABEL[bluetoothMakerOf(p.maker) ?? 'escpos']}・
-                        {l ? `つないでいる機械：${l.deviceName || l.deviceId}（${l.via === 'usb' ? 'USB' : 'Bluetooth'}）` : 'まだつないでいません'}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      disabled={finding !== null}
-                      onClick={() => void find(p)}
-                      className="inline-flex h-11 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 text-sm font-medium text-ink hover:bg-gray-50 disabled:opacity-60"
-                    >
-                      {finding === p.id && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
-                      {l ? 'つなぎ直す' : 'プリンターを探す'}
-                    </button>
-                    {l && (
-                      <>
-                        <button
-                          type="button"
-                          disabled={testing !== null}
-                          onClick={() => void test(p, l, 'receipt')}
-                          className="inline-flex h-11 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 text-sm font-medium text-ink hover:bg-gray-50 disabled:opacity-60"
-                        >
-                          {testing === `${p.id}:receipt` && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}試し印刷
-                        </button>
-                        <button
-                          type="button"
-                          disabled={testing !== null}
-                          onClick={() => void test(p, l, 'drawer')}
-                          className="inline-flex h-11 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 text-sm font-medium text-ink hover:bg-gray-50 disabled:opacity-60"
-                        >
-                          {testing === `${p.id}:drawer` && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}ドロア
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => unlink(p)}
-                          className="inline-flex h-11 items-center rounded-lg px-3 text-sm font-medium text-gray-500 hover:bg-gray-50"
-                        >
-                          外す
-                        </button>
-                      </>
-                    )}
-                  </div>
-                  {found?.printerId === p.id && (
-                    <div className="rounded-lg border border-primary/30 bg-primary-soft/40 p-2">
-                      <p className="px-1 pb-1 text-xs text-gray-600">見つかったプリンター（押すとつなぎます）</p>
-                      <div className="grid gap-2 sm:grid-cols-2">
-                        {found.devices.map((d) => (
-                          <button
-                            key={d.deviceId}
-                            type="button"
-                            disabled={saving !== null}
-                            onClick={() => void link(p, d)}
-                            className="flex min-h-12 flex-col items-start justify-center rounded-lg border border-gray-200 bg-white px-3 py-2 text-left hover:border-primary disabled:opacity-60"
-                          >
-                            <span className="flex items-center gap-1.5 text-sm font-bold text-ink">
-                              {saving === d.deviceId && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
-                              {d.name}
-                            </span>
-                            <span className="text-xs text-gray-500">
-                              {BT_MAKER_LABEL[d.maker]}・{d.via === 'usb' ? 'USB' : 'Bluetooth'}
-                            </span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-          )}
-          {canAdd ? (
-            <div className="space-y-2 border-t border-gray-100 pt-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <p className="min-w-0 flex-1 text-xs text-gray-500">
-                  {printers.length === 0 ? 'まだレシートプリンターがありません。' : ''}
-                  プリンターの電源を入れ、iPad の 設定 &gt; Bluetooth でペアリング（USB はケーブルをつなぐ）してから押してください
-                </p>
-                <button
-                  type="button"
-                  disabled={adding || saving !== null}
-                  onClick={() => void findNew()}
-                  className="inline-flex h-11 items-center gap-1.5 rounded-lg bg-primary px-4 text-sm font-bold text-white hover:opacity-90 disabled:opacity-60"
+          <div className="divide-y divide-gray-100">
+            <Row label="プリンター利用" en="Use printer">
+              <Switch on={use} disabled={busy !== null || locked} onClick={() => void toggleUse()} label="プリンター利用" />
+            </Row>
+
+            <Row label="プリンター" en="Printer model" dim={off}>
+              <div className="w-full max-w-xl space-y-2">
+                <select
+                  value={modelId}
+                  disabled={off || locked || busy !== null}
+                  onChange={(e) => chooseModel(e.target.value)}
+                  className="h-14 w-full rounded-xl border border-gray-200 bg-white px-4 text-base text-ink disabled:bg-gray-50 disabled:text-gray-400"
+                  aria-label="プリンターの機種"
                 >
-                  {adding ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Plus className="h-4 w-4" aria-hidden />}
-                  プリンターを追加
-                </button>
+                  <option value="">選択してください</option>
+                  {PRINTER_MAKER_ORDER.map((maker) => (
+                    <optgroup key={maker} label={PRINTER_MAKER_LABEL[maker]}>
+                      {PRINTER_MODELS.filter((m) => m.maker === maker).map((m) => (
+                        <option key={m.id} value={m.id} disabled={!m.ready}>
+                          {m.name}
+                          {m.mobile ? '（モバイル）' : ''}
+                          {m.ready ? '' : '（準備中）'}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
+                <p className="text-sm text-gray-500">
+                  使えるのは Star・EPSON（Bluetooth）とそのほかの ESC/POS（Bluetooth LE）。SII・Citizen・Brother は準備中です
+                </p>
               </div>
-              {addFound && (
-                <div className="rounded-lg border border-primary/30 bg-primary-soft/40 p-2">
-                  <p className="px-1 pb-1 text-xs text-gray-600">見つかったプリンター（押すと、この店のレシートプリンターに追加してつなぎます）</p>
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    {addFound.map((d) => {
-                      const linked = links.some((l) => l.deviceId === d.deviceId && printers.some((p) => p.id === l.printerId));
-                      return (
+            </Row>
+
+            <Row label="接続" en="Connection" dim={off}>
+              <div className="w-full max-w-xl space-y-2">
+                <div className="flex flex-wrap items-center gap-3">
+                  <p className="min-w-0 flex-1 text-base text-ink">
+                    {link ? (
+                      <>
+                        <span className="font-bold">{link.deviceName || link.deviceId}</span>
+                        <span className="ml-1 text-sm text-gray-500">（{link.via === 'usb' ? 'USB' : 'Bluetooth'}・つないでいます）</span>
+                      </>
+                    ) : (
+                      <span className="text-gray-500">まだつないでいません</span>
+                    )}
+                  </p>
+                  <button
+                    type="button"
+                    disabled={off || locked || !model || busy !== null}
+                    onClick={() => void search()}
+                    className="inline-flex h-14 items-center gap-2 rounded-xl border border-primary/40 bg-white px-5 text-base font-bold text-primary hover:bg-primary-soft/40 disabled:opacity-50"
+                  >
+                    {busy === 'search' ? <Loader2 className="h-5 w-5 animate-spin" aria-hidden /> : <Search className="h-5 w-5" aria-hidden />}
+                    {link ? 'つなぎ直す' : 'プリンターを探す'}
+                  </button>
+                </div>
+                {!model && use && <p className="text-sm text-gray-500">先に「プリンター」で機種を選んでください</p>}
+                {found && (
+                  <div className="rounded-xl border border-primary/30 bg-primary-soft/40 p-3">
+                    <p className="px-1 pb-2 text-sm text-gray-600">見つかったプリンター（押すとつなぎます）</p>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {found.map((d) => (
                         <button
                           key={d.deviceId}
                           type="button"
-                          disabled={linked || saving !== null}
-                          onClick={() => void addNew(d)}
-                          className="flex min-h-12 flex-col items-start justify-center rounded-lg border border-gray-200 bg-white px-3 py-2 text-left hover:border-primary disabled:opacity-60"
+                          disabled={busy !== null}
+                          onClick={() => void connect(d)}
+                          className="flex min-h-16 flex-col items-start justify-center rounded-xl border border-gray-200 bg-white px-4 py-2 text-left hover:border-primary disabled:opacity-60"
                         >
-                          <span className="flex items-center gap-1.5 text-sm font-bold text-ink">
-                            {saving === d.deviceId && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
+                          <span className="flex items-center gap-1.5 text-base font-bold text-ink">
+                            {busy === `connect:${d.deviceId}` && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
                             {d.name}
                           </span>
-                          <span className="text-xs text-gray-500">
+                          <span className="text-sm text-gray-500">
                             {BT_MAKER_LABEL[d.maker]}・{d.via === 'usb' ? 'USB' : 'Bluetooth'}
-                            {linked ? '・つないでいます' : ''}
                           </span>
                         </button>
-                      );
-                    })}
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
+            </Row>
+
+            <Row label="レシート紙幅" en="Paper width" dim={off}>
+              <div className="flex gap-3" role="radiogroup" aria-label="レシート紙幅">
+                {([58, 80] as const).map((w) => (
+                  <button
+                    key={w}
+                    type="button"
+                    role="radio"
+                    aria-checked={paper === w}
+                    disabled={off || locked}
+                    onClick={() => setPaper(w)}
+                    className={cn(
+                      'inline-flex h-12 min-w-24 items-center justify-center gap-2 rounded-full border px-5 text-base font-bold disabled:opacity-50',
+                      paper === w ? 'border-primary bg-primary-soft text-primary' : 'border-gray-200 bg-white text-gray-600'
+                    )}
+                  >
+                    <span className={cn('h-4 w-4 rounded-full border', paper === w ? 'border-4 border-primary' : 'border-gray-300')} aria-hidden />
+                    {w}mm
+                  </button>
+                ))}
+              </div>
+            </Row>
+
+            <Row label="会計レシート自動印刷" en="Print receipt after checkout" dim={off}>
+              <Switch on={autoPrint} disabled={off || locked} onClick={() => setAutoPrint((v) => !v)} label="会計レシート自動印刷" />
+            </Row>
+
+            <Row label="キャッシュドロア利用" en="Cash drawer" dim={off}>
+              <Switch on={drawer} disabled={off || locked} onClick={() => setDrawer((v) => !v)} label="キャッシュドロア利用" />
+            </Row>
+
+            <div className="flex flex-wrap items-center gap-3 px-5 py-4">
+              <button
+                type="button"
+                disabled={off || !link || busy !== null}
+                onClick={() => void test('receipt')}
+                className="inline-flex h-14 items-center gap-2 rounded-xl border border-gray-200 bg-white px-5 text-base font-bold text-ink hover:bg-gray-50 disabled:opacity-50"
+              >
+                {busy === 'receipt' && <Loader2 className="h-5 w-5 animate-spin" aria-hidden />}
+                試し印刷
+              </button>
+              <button
+                type="button"
+                disabled={off || !link || !drawer || busy !== null}
+                onClick={() => void test('drawer')}
+                className="inline-flex h-14 items-center gap-2 rounded-xl border border-gray-200 bg-white px-5 text-base font-bold text-ink hover:bg-gray-50 disabled:opacity-50"
+              >
+                {busy === 'drawer' && <Loader2 className="h-5 w-5 animate-spin" aria-hidden />}
+                ドロアを開く
+              </button>
+              <span className="flex-1" />
+              {locked && <span className="text-sm text-gray-500">プリンターの設定は店長以上のアカウントで変えられます</span>}
+              <button
+                type="button"
+                disabled={off || locked || !link || busy !== null}
+                onClick={() => void save()}
+                className="inline-flex h-14 min-w-40 items-center justify-center gap-2 rounded-xl bg-primary px-6 text-base font-bold text-white hover:opacity-90 disabled:opacity-50"
+              >
+                {busy === 'save' && <Loader2 className="h-5 w-5 animate-spin" aria-hidden />}
+                保存する
+              </button>
             </div>
-          ) : null}
-          </>
+          </div>
         )}
       </CardContent>
     </Card>
+  );
+}
+
+/** Airレジの設定と同じ 1 行（左に項目名、右に操作） */
+function Row({ label, en, dim, children }: { label: string; en: string; dim?: boolean; children: React.ReactNode }) {
+  return (
+    <div className={cn('flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center', dim && 'opacity-60')}>
+      <div className="sm:w-60 sm:shrink-0">
+        <p className="text-base font-bold text-ink">{label}</p>
+        <p className="text-xs text-gray-400">{en}</p>
+      </div>
+      <div className="flex min-w-0 flex-1 items-center">{children}</div>
+    </div>
+  );
+}
+
+function Switch({ on, disabled, onClick, label }: { on: boolean; disabled?: boolean; onClick: () => void; label: string }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      aria-label={label}
+      disabled={disabled}
+      onClick={onClick}
+      className={cn('relative h-9 w-16 shrink-0 rounded-full transition-colors disabled:opacity-50', on ? 'bg-primary' : 'bg-gray-300')}
+    >
+      <span className={cn('absolute top-1 h-7 w-7 rounded-full bg-white shadow transition-all', on ? 'left-8' : 'left-1')} />
+    </button>
   );
 }

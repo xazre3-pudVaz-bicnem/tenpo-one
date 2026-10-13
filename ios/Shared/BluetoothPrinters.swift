@@ -48,13 +48,21 @@ final class BluetoothPrinters: NSObject {
             group.enter()
             epson.discover { add($0); group.leave() }
         }
-        #else
-        if maker == "epson" || maker == "all" {
-            group.enter()
-            // EPSON だけを探していて見つからないときは、iOS のペアリングの一覧を出す
-            accessory.discover(pairIfNone: maker == "epson") { add($0); group.leave() }
-        }
         #endif
+        // iPad とペアリングした EPSON・Star（MFi。External Accessory でそのまま送る。SDK なし）
+        // 2026-10-14 Ronnie「プリンター選択。日本で人気の Bluetooth のプリンター（Star・EPSON…）」
+        var accessoryMakers: [String] = []
+        #if !EPSON_SDK
+        if maker == "epson" || maker == "all" { accessoryMakers.append("epson") }
+        #endif
+        #if !canImport(StarIO10)
+        if maker == "star" || maker == "all" { accessoryMakers.append("star") }
+        #endif
+        if !accessoryMakers.isEmpty {
+            group.enter()
+            // メーカーを選んで探していて見つからないときは、iOS のペアリングの一覧を出す
+            accessory.discover(makers: accessoryMakers, pairIfNone: maker != "all") { add($0); group.leave() }
+        }
         if maker == "escpos" || maker == "sii" || maker == "all" {
             group.enter()
             ble.discover(maker: maker == "sii" ? "sii" : "escpos") { add($0); group.leave() }
@@ -211,14 +219,19 @@ private final class EpsonPrinters: NSObject, Epos2DiscoveryDelegate, Epos2PtrRec
 /// つないだまま使う（2枚目からは速い）。プリンターが切れたら、次の印刷でつなぎ直す。
 private final class AccessoryEscPosPrinters: NSObject, StreamDelegate {
     static let idPrefix = "ea:"
-    static let epsonProtocol = "com.epson.escpos"
+    /// プロトコル → メーカー（App/Info.plist の UISupportedExternalAccessoryProtocols と同じ）
+    static let protocols: [String: String] = ["com.epson.escpos": "epson", "jp.star-m.starpro": "star"]
 
     private final class Job: NSObject {
         let accessory: EAAccessory
+        let proto: String
         let data: Data
         let done: BluetoothPrinters.Done
-        init(accessory: EAAccessory, data: Data, done: @escaping BluetoothPrinters.Done) {
+        /// つながらなかったときに、つなぎ直して送り直した回数
+        var retried = 0
+        init(accessory: EAAccessory, proto: String, data: Data, done: @escaping BluetoothPrinters.Done) {
             self.accessory = accessory
+            self.proto = proto
             self.data = data
             self.done = done
         }
@@ -248,8 +261,16 @@ private final class AccessoryEscPosPrinters: NSObject, StreamDelegate {
         }
     }
 
-    private static func epsonAccessories() -> [EAAccessory] {
-        EAAccessoryManager.shared().connectedAccessories.filter { $0.protocolStrings.contains(epsonProtocol) }
+    /// この機械で使うプロトコル（EPSON・Star）
+    static func protocolOf(_ a: EAAccessory) -> String? {
+        a.protocolStrings.first { protocols[$0] != nil }
+    }
+
+    private static func accessories(makers: [String]? = nil) -> [EAAccessory] {
+        EAAccessoryManager.shared().connectedAccessories.filter { a in
+            guard let proto = protocolOf(a), let maker = protocols[proto] else { return false }
+            return makers == nil || makers!.contains(maker)
+        }
     }
 
     /// 機械の目印（シリアル番号。無ければ名前）
@@ -257,21 +278,28 @@ private final class AccessoryEscPosPrinters: NSObject, StreamDelegate {
         idPrefix + (a.serialNumber.isEmpty ? a.name : a.serialNumber)
     }
 
-    private static func devices() -> [BluetoothPrinters.Device] {
-        epsonAccessories().map { a in
-            let name = a.name.isEmpty ? "EPSON" : a.name
-            return ["deviceId": deviceId(of: a), "name": a.serialNumber.isEmpty ? name : "\(name)（\(a.serialNumber)）", "maker": "epson", "via": "bluetooth"]
+    private static func devices(makers: [String]) -> [BluetoothPrinters.Device] {
+        accessories(makers: makers).compactMap { a in
+            guard let proto = protocolOf(a), let maker = protocols[proto] else { return nil }
+            let name = a.name.isEmpty ? (maker == "star" ? "Star" : "EPSON") : a.name
+            return [
+                "deviceId": deviceId(of: a),
+                "name": a.serialNumber.isEmpty ? name : "\(name)（\(a.serialNumber)）",
+                "maker": maker,
+                "via": "bluetooth",
+                "printer": "1",
+            ]
         }
     }
 
     // 探す（ペアリング済み・つながっているもの）
-    func discover(pairIfNone: Bool, completion: @escaping ([BluetoothPrinters.Device]) -> Void) {
+    func discover(makers: [String], pairIfNone: Bool, completion: @escaping ([BluetoothPrinters.Device]) -> Void) {
         DispatchQueue.main.async {
-            let list = Self.devices()
+            let list = Self.devices(makers: makers)
             guard list.isEmpty, pairIfNone else { return completion(list) }
             // まだペアリングしていない：iOS の一覧を出す（選ぶとペアリング）。終わったらもう一度見る
             EAAccessoryManager.shared().showBluetoothAccessoryPicker(withNameFilter: nil) { _ in
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { completion(Self.devices()) }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { completion(Self.devices(makers: makers)) }
             }
         }
     }
@@ -279,11 +307,12 @@ private final class AccessoryEscPosPrinters: NSObject, StreamDelegate {
     // 送る
     func print(deviceId: String, data: Data, completion: @escaping BluetoothPrinters.Done) {
         DispatchQueue.main.async {
-            guard let a = Self.epsonAccessories().first(where: { Self.deviceId(of: $0) == deviceId }) else {
+            guard let a = Self.accessories().first(where: { Self.deviceId(of: $0) == deviceId }),
+                  let proto = Self.protocolOf(a) else {
                 return completion(false, "not_found")
             }
             guard !data.isEmpty else { return completion(true, nil) }
-            let job = Job(accessory: a, data: data, done: completion)
+            let job = Job(accessory: a, proto: proto, data: data, done: completion)
             self.perform(#selector(self.enqueue(_:)), on: self.thread, with: job, waitUntilDone: false)
         }
     }
@@ -302,8 +331,8 @@ private final class AccessoryEscPosPrinters: NSObject, StreamDelegate {
         offset = 0
         if session == nil || session?.accessory?.connectionID != job.accessory.connectionID {
             closeSession()
-            guard let s = EASession(accessory: job.accessory, forProtocol: Self.epsonProtocol) else {
-                return finish(false, "connect")
+            guard let s = EASession(accessory: job.accessory, forProtocol: job.proto) else {
+                return failConnect()
             }
             session = s
             let streams: [Stream?] = [s.inputStream, s.outputStream]
@@ -328,8 +357,7 @@ private final class AccessoryEscPosPrinters: NSObject, StreamDelegate {
                 return out.write(base + offset, maxLength: min(job.data.count - offset, 4096))
             }
             if n < 0 {
-                closeSession()
-                return finish(false, "connect")
+                return failConnect()
             }
             if n == 0 { break }
             offset += n
@@ -348,11 +376,24 @@ private final class AccessoryEscPosPrinters: NSObject, StreamDelegate {
                 while input.hasBytesAvailable, input.read(&buf, maxLength: buf.count) > 0 {}
             }
         case .errorOccurred, .endEncountered:
-            closeSession()
-            if current != nil { finish(false, "connect") }
+            if current != nil { failConnect() } else { closeSession() }
         default:
             break
         }
+    }
+
+    /// つながらなかった：まだ1バイトも送っていなければ、1回だけつなぎ直して送り直す
+    /// （プリンターが眠っていた・電波が一瞬途切れた・前のつながりが古くなっていたとき。2026-10-14 Ronnie「Bluetooth を強く」）
+    private func failConnect() {
+        closeSession()
+        guard let job = current, job.retried == 0, offset == 0 else { return finish(false, "connect") }
+        job.retried = 1
+        timer?.invalidate()
+        timer = nil
+        current = nil
+        queue.insert(job, at: 0)
+        Thread.sleep(forTimeInterval: 0.6)
+        startNext()
     }
 
     private func finish(_ ok: Bool, _ code: String?) {
