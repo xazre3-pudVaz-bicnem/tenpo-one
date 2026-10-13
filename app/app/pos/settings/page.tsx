@@ -68,7 +68,7 @@ export default async function RegisterSettingsPage({
   const supabaseForPrinters = await createClient();
   const { data: printerRows } = await supabaseForPrinters
     .from('printer_configs')
-    .select('id, name, maker, usage, bill_slips, ip_address, connection_type, cloudprnt_enabled')
+    .select('id, name, maker, model, usage, bill_slips, ip_address, connection_type, cloudprnt_enabled, paper_width_mm, auto_print, drawer_kick')
     .eq('store_id', store.id)
     .eq('status', 'active')
     // 印刷を受けるプリンター＋管理画面で Bluetooth・USB として足しただけのもの（iPad でつなぐと使えるようになる）
@@ -83,6 +83,10 @@ export default async function RegisterSettingsPage({
     ip: ((p.ip_address as string | null) ?? '').trim() || null,
     enabled: p.cloudprnt_enabled === true,
     connection: (p.connection_type as string | null) ?? null,
+    model: (p.model as string | null) ?? null,
+    paperWidthMm: p.paper_width_mm === 58 ? 58 : 80,
+    autoPrint: p.auto_print === true,
+    drawerKick: p.drawer_kick === true,
   }));
   const selectedPrinterId = await devicePrinterId();
 

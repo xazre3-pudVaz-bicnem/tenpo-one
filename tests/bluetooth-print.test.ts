@@ -171,7 +171,7 @@ describe('iPad からレシートプリンターを追加する', () => {
     expect(action).toContain('cloudprnt_enabled: true,');
     // 選べるレシートの出し先は、印刷を受けるものだけ（今まで通り）
     const panel = read('components/pos/device-printer-panel.tsx');
-    expect(panel).toContain("printers.filter((p) => p.enabled && (p.usage === 'receipt' || p.billSlips))");
+    expect(panel).toContain("(p) => p.enabled && (p.usage === 'receipt' || p.billSlips) && (!isDeviceLink(p) || p.id === selected)");
   });
 });
 
@@ -206,6 +206,6 @@ describe('「プリンターを探す」はプリンターだけ', () => {
     // プリンター以外も使う汎用のサービスでは出さない
     expect(swift).not.toMatch(/CBUUID\(string: "(FF00|FFE0|AE30|49535343-FE7D-4AE5-8FA9-9FAFD205E455)"\)/);
     const panel = read('components/pos/device-printer-panel.tsx');
-    expect(panel.match(/\.filter\(isLikelyPrinter\)/g)?.length).toBe(2);
+    expect(panel).toContain('.filter((d) => deviceMatchesModel(model, d) && isLikelyPrinter(d))');
   });
 });
