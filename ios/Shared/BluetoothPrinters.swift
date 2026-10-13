@@ -457,14 +457,11 @@ private final class BLEEscPosPrinter: NSObject, CBCentralManagerDelegate, CBPeri
         }
     }
 
-    /// Bluetooth LE のレシート・ラベルプリンターがよく出すサービス
+    /// Bluetooth LE のレシート・ラベルプリンターだけが出すサービス
+    /// （FF00・FFE0・49535343… はプリンター以外の機械（血圧計・スピーカーなど）も使うので入れない）
     private static let printerServices: Set<CBUUID> = [
         CBUUID(string: "18F0"),
         CBUUID(string: "E7810A71-73AE-499D-8C15-FAA9AEF0C3F2"),
-        CBUUID(string: "49535343-FE7D-4AE5-8FA9-9FAFD205E455"),
-        CBUUID(string: "FF00"),
-        CBUUID(string: "FFE0"),
-        CBUUID(string: "AE30"),
     ]
 
     /// プリンターらしい名前（lib/direct-print.ts の PRINTER_NAME_PATTERN と同じ）
