@@ -68,10 +68,11 @@ export default async function RegisterSettingsPage({
   const supabaseForPrinters = await createClient();
   const { data: printerRows } = await supabaseForPrinters
     .from('printer_configs')
-    .select('id, name, maker, usage, bill_slips, ip_address')
+    .select('id, name, maker, usage, bill_slips, ip_address, connection_type, cloudprnt_enabled')
     .eq('store_id', store.id)
     .eq('status', 'active')
-    .eq('cloudprnt_enabled', true)
+    // 印刷を受けるプリンター＋管理画面で Bluetooth・USB として足しただけのもの（iPad でつなぐと使えるようになる）
+    .or('cloudprnt_enabled.eq.true,connection_type.in.(bluetooth,usb)')
     .order('name');
   const devicePrinters: DevicePrinterOption[] = (printerRows ?? []).map((p) => ({
     id: p.id as string,
@@ -80,6 +81,8 @@ export default async function RegisterSettingsPage({
     usage: (p.usage as string) ?? 'receipt',
     billSlips: p.bill_slips === true,
     ip: ((p.ip_address as string | null) ?? '').trim() || null,
+    enabled: p.cloudprnt_enabled === true,
+    connection: (p.connection_type as string | null) ?? null,
   }));
   const selectedPrinterId = await devicePrinterId();
 
@@ -147,6 +150,7 @@ export default async function RegisterSettingsPage({
         <DevicePrinterPanel
           printers={devicePrinters}
           selectedId={devicePrinters.some((p) => p.id === selectedPrinterId) ? selectedPrinterId : null}
+          canAdd={can(ctx.role, 'store.settings')}
         />
       </section>
 

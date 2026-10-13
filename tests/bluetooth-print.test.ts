@@ -5,7 +5,7 @@ import iconv from 'iconv-lite';
 import { eposXmlToEscPos } from '@/lib/escpos';
 import { drawerKickEpos, kitchenTicketsEpos, orderSlipEposXml, receiptToEposXml, ryoshushoToEposXml, testPrintEpos } from '@/lib/epos-print';
 import { baseReceipt } from './fixtures/receipt';
-import { bluetoothMakerOf, btFormatOf, parseDirectPrintConfig } from '@/lib/direct-print';
+import { BT_MAKERS, BT_MAKER_SETTING, bluetoothMakerOf, btFormatOf, deviceReceiptPrinterName, parseDirectPrintConfig } from '@/lib/direct-print';
 
 const read = (p: string) => readFileSync(join(__dirname, '..', p), 'utf8');
 const hex = (b: Buffer) => b.toString('hex');
@@ -131,5 +131,37 @@ describe('プリンターの種類を選ぶ（ESC/POS・Star・SII）', () => {
     expect(route).toContain('eposXmlToEscPos(job.payload.epos)');
     const agent = read('components/printing/direct-print-agent.tsx');
     expect(agent).toContain('const links = nativeBluetooth() ? (config.bluetooth ?? []) : [];');
+  });
+});
+
+/** 2026-10-13 Ronnie「iPad アプリでプリンターの設定。レシートは Bluetooth から」（パソコンを使わず iPad だけで） */
+describe('iPad からレシートプリンターを追加する', () => {
+  it('入れるメーカー名は、読み直すと同じ種類になる（管理画面の選択肢と同じ言い方）', () => {
+    for (const m of BT_MAKERS) expect(bluetoothMakerOf(BT_MAKER_SETTING[m])).toBe(m);
+    expect(Object.values(BT_MAKER_SETTING)).toEqual(['Star', 'EPSON', 'SII', 'その他']);
+  });
+
+  it('名前：見つけた機械の名前（見えない文字は消す・60文字まで）、空ならメーカー＋レシート', () => {
+    expect(deviceReceiptPrinterName('  TM-m30III\u0000 ', 'epson')).toBe('TM-m30III');
+    expect(deviceReceiptPrinterName('mC-Print3   (BT)', 'star')).toBe('mC-Print3 (BT)');
+    expect(deviceReceiptPrinterName('x'.repeat(80), 'sii')).toHaveLength(60);
+    expect(deviceReceiptPrinterName('', 'epson')).toBe('EPSON レシート');
+    expect(deviceReceiptPrinterName(null, 'escpos')).toBe('ESC/POS レシート');
+  });
+
+  it('iPad の設定に、管理画面で Bluetooth・USB として足しただけのプリンターも出す・追加は店長以上', () => {
+    const page = read('app/app/pos/settings/page.tsx');
+    expect(page).toContain(".or('cloudprnt_enabled.eq.true,connection_type.in.(bluetooth,usb)')");
+    expect(page).toContain("canAdd={can(ctx.role, 'store.settings')}");
+    const action = read('app/app/pos/device-printer-actions.ts');
+    expect(action).toContain("if (!can(ctx.role, 'store.settings'))");
+    // レシート機だけ・Bluetooth・USB だけ（厨房・Wi-Fi・LAN は管理画面）
+    expect(action).toContain("if (existing.usage !== 'receipt')");
+    expect(action).toContain("existing.connection_type !== 'bluetooth' && existing.connection_type !== 'usb'");
+    expect(action).toContain("usage: 'receipt',");
+    expect(action).toContain('cloudprnt_enabled: true,');
+    // 選べるレシートの出し先は、印刷を受けるものだけ（今まで通り）
+    const panel = read('components/pos/device-printer-panel.tsx');
+    expect(panel).toContain("printers.filter((p) => p.enabled && (p.usage === 'receipt' || p.billSlips))");
   });
 });
