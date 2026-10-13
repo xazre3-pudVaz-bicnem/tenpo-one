@@ -2,6 +2,7 @@ import SwiftUI
 
 /// アプリ全体の状態（どのモードで開くか・QR を読んでいるか）。
 ///
+/// アプリは1つ。iPad か iPhone かで決まる（AppConfig.isPad）
 /// - レジ（iPad）：いつもレジ。ログインしていなければ /register-login
 /// - iPhone：最初に「ハンディ（スタッフ）」か「オーナー・店長」を選ぶ（あとで変えられる）
 ///   - ハンディ：/handy。ログインはお店の QR を読む（/handy-join）
@@ -23,15 +24,14 @@ final class AppState: ObservableObject {
     @Published var webSession = UUID()
 
     private init() {
-        #if REGI
-        mode = .regi
-        #else
-        if let raw = UserDefaults.standard.string(forKey: modeKey), let saved = Mode(rawValue: raw), saved != .regi {
+        if AppConfig.isPad {
+            // iPad はいつもレジ
+            mode = .regi
+        } else if let raw = UserDefaults.standard.string(forKey: modeKey), let saved = Mode(rawValue: raw), saved != .regi {
             mode = saved
         } else {
             mode = nil
         }
-        #endif
     }
 
     /// User-Agent に付ける印（サーバーが「アプリのどのモードか」を見分ける）
@@ -54,11 +54,10 @@ final class AppState: ObservableObject {
 
     /// Web の「アプリのモードを変える」から
     func resetMode() {
-        #if !REGI
+        guard !AppConfig.isPad else { return } // iPad はレジのまま
         UserDefaults.standard.removeObject(forKey: modeKey)
         needsHandyLogin = false
         mode = nil
-        #endif
     }
 
     /// Web の画面に行く前に差し替える行き先（ログイン画面をモードに合わせる）。nil ならそのまま

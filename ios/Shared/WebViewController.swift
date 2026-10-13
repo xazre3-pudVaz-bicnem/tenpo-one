@@ -113,12 +113,10 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         let mode = AppState.shared.userAgentTag
         let version = AppConfig.version
         let isPhone = UIDevice.current.userInterfaceIdiom == .phone ? "true" : "false"
-        // iPad のレジだけ：Bluetooth・USB のレシートプリンター（ios/Shared/BluetoothPrinters.swift）
-        #if REGI
-        let bluetooth = "bluetooth: { discover: function(maker){ return call('btDiscover', { maker: maker || 'all' }); }, print: function(job){ return call('btPrint', job || {}); } },"
-        #else
-        let bluetooth = ""
-        #endif
+        // iPad（レジ）だけ：Bluetooth・USB のレシートプリンター（ios/Shared/BluetoothPrinters.swift）
+        let bluetooth = AppConfig.isPad
+            ? "bluetooth: { discover: function(maker){ return call('btDiscover', { maker: maker || 'all' }); }, print: function(job){ return call('btPrint', job || {}); } },"
+            : ""
         return """
         (function(){
           if (window.TenpoNative) return;
