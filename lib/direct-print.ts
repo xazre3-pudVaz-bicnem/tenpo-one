@@ -129,8 +129,11 @@ export interface BluetoothLink {
   deviceId: string;
   deviceName: string;
   maker: BtMaker;
-  /** つなぎ方 */
-  via?: 'bluetooth' | 'usb';
+  /**
+   * つなぎ方。agent … Safari から SII の無料アプリ「SII URL Print Agent」を通して印刷する
+   * （SII の RP-F10 など。lib/sii-url-print.ts。アプリが無くても Bluetooth で印刷できる）
+   */
+  via?: 'bluetooth' | 'usb' | 'agent';
 }
 
 export interface DirectPrintConfig {
@@ -164,7 +167,7 @@ export function parseDirectPrintConfig(raw: string | null | undefined): DirectPr
         deviceId: x.deviceId,
         deviceName: String(x.deviceName ?? ''),
         maker: x.maker,
-        via: x.via === 'usb' ? 'usb' : 'bluetooth',
+        via: x.via === 'usb' ? 'usb' : x.via === 'agent' ? 'agent' : 'bluetooth',
       }));
     return { printerIds: [...new Set(ids)].slice(0, 8), bluetooth: links.slice(0, 4) };
   } catch {

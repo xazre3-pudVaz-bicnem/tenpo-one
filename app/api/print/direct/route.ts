@@ -26,15 +26,17 @@ import { eposXmlToEscPos } from '@/lib/escpos';
  *   next-bt / test-bt … iPad と Bluetooth・USB でつないだレシートプリンター（TENPO ONE レジ アプリ）用。
  *     Star は StarPRNT、EPSON・SII（RP-F10）・そのほかは ESC/POS のバイト列（base64）を返し、アプリが送る
  *     （2026-10-13 Ronnie「レシートプリンター＋ドロアは iPad と Bluetooth。チケットプリンターは LAN・Wi-Fi」）
+ *     format: 'epos' … バイト列ではなく ePOS-Print XML を返す（Safari が画像・PDF にして SII URL Print Agent で印刷する。
+ *     lib/sii-url-print.ts。2026-10-14 Ronnie「SII RP-F10 を Safari でも」）
  * ログインしている人の店舗のプリンターだけ。Wi-Fi は EPSON・お店の中のアドレス（IP）があるものだけ。
  */
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 type Body =
-  | { action: 'next' | 'next-bt'; printerIds?: unknown }
+  | { action: 'next' | 'next-bt'; printerIds?: unknown; format?: unknown }
   | { action: 'done'; printerId?: unknown; jobId?: unknown; result?: unknown; code?: unknown }
-  | { action: 'test' | 'test-bt'; printerId?: unknown; kind?: unknown };
+  | { action: 'test' | 'test-bt'; printerId?: unknown; kind?: unknown; format?: unknown };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const isId = (v: unknown): v is string => typeof v === 'string' && UUID.test(v);
@@ -103,6 +105,23 @@ export async function POST(request: Request) {
       await reclaimStaleJobs(admin, printer.id);
       const job = await claimNextJob(admin, printer.id);
       if (!job) continue;
+      if (body.format === 'epos') {
+        const epos = job.payload?.epos;
+        if (!epos) {
+          await finishJob(admin, printer.id, job.id, false, 'SII URL Print Agent 用の印刷データがありません');
+          continue;
+        }
+        return NextResponse.json({
+          ok: true,
+          job: {
+            id: job.id,
+            printerId: printer.id,
+            printerName: printer.name,
+            epos,
+            paper: printer.paper_width_mm === 58 ? 58 : 80,
+          },
+        });
+      }
       const bytes =
         maker === 'star'
           ? job.payload?.starprnt
@@ -133,6 +152,10 @@ export async function POST(request: Request) {
     const paper = printer.paper_width_mm === 58 ? 58 : 80;
     const issuedAt = new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
     const storeName = `${store?.name ?? 'TENPO ONE'}（Bluetooth）`;
+    if (body.format === 'epos') {
+      const epos = body.kind === 'drawer' ? drawerKickEpos(null) : testPrintEpos({ storeName, paperWidth: paper, issuedAt });
+      return NextResponse.json({ ok: true, maker, epos, paper });
+    }
     const bytes =
       maker === 'star'
         ? body.kind === 'drawer'

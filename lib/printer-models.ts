@@ -6,6 +6,8 @@
  *   Star・EPSON：iPad の 設定 > Bluetooth でペアリング → アプリが External Accessory（MFi）でそのまま送る（SDK なし）
  *   その他の ESC/POS：Bluetooth LE（ペアリング不要）
  * ready=false … 一覧には出すが選べない（メーカーの接続の許可（MFi）や専用の命令が要る。届きしだい使えるようにする）
+ * agent=true … iPad の Safari から SII の無料アプリ「SII URL Print Agent」を通して使える（lib/sii-url-print.ts。
+ *   2026-10-14 Ronnie「MEAT CROWN 新横浜の Airレジの SII RP-F10 を Bluetooth で。アプリはまだ無いので Safari でも」）
  */
 export type PrinterModelMaker = 'star' | 'epson' | 'sii' | 'citizen' | 'brother' | 'escpos';
 
@@ -20,6 +22,8 @@ export interface PrinterModel {
   /** 持ち歩く小さいプリンター */
   mobile?: boolean;
   ready: boolean;
+  /** Safari から SII URL Print Agent で使える */
+  agent?: boolean;
 }
 
 export const PRINTER_MAKER_LABEL: Record<PrinterModelMaker, string> = {
@@ -46,8 +50,8 @@ export const PRINTER_MODELS: readonly PrinterModel[] = [
   { id: 'epson-tm-p20ii', maker: 'epson', name: 'TM-P20II', paper: 58, drawer: false, mobile: true, ready: true },
   { id: 'epson-tm-p80ii', maker: 'epson', name: 'TM-P80II', paper: 80, drawer: false, mobile: true, ready: true },
   // 準備中（メーカーの接続の許可・専用の命令が要る）
-  { id: 'sii-rp-f10', maker: 'sii', name: 'RP-F10', paper: 80, drawer: true, ready: false },
-  { id: 'sii-mp-b20', maker: 'sii', name: 'MP-B20', paper: 58, drawer: false, mobile: true, ready: false },
+  { id: 'sii-rp-f10', maker: 'sii', name: 'RP-F10', paper: 80, drawer: true, ready: false, agent: true },
+  { id: 'sii-mp-b20', maker: 'sii', name: 'MP-B20', paper: 58, drawer: false, mobile: true, ready: false, agent: true },
   { id: 'citizen-ct-s751', maker: 'citizen', name: 'CT-S751', paper: 80, drawer: true, ready: false },
   { id: 'citizen-cmp-30ii', maker: 'citizen', name: 'CMP-30II', paper: 80, drawer: false, mobile: true, ready: false },
   { id: 'brother-rj-4250wb', maker: 'brother', name: 'RJ-4250WB', paper: 80, drawer: false, mobile: true, ready: false },
@@ -56,6 +60,9 @@ export const PRINTER_MODELS: readonly PrinterModel[] = [
   { id: 'escpos-ble-80', maker: 'escpos', name: 'そのほかの ESC/POS（80mm）', paper: 80, drawer: true, ready: true },
   { id: 'escpos-ble-58', maker: 'escpos', name: 'そのほかの ESC/POS（58mm）', paper: 58, drawer: false, ready: true },
 ];
+
+/** Safari から SII URL Print Agent で使える機種 */
+export const AGENT_PRINTER_MODELS: readonly PrinterModel[] = PRINTER_MODELS.filter((m) => m.agent);
 
 export const PRINTER_MAKER_ORDER: readonly PrinterModelMaker[] = ['star', 'epson', 'sii', 'citizen', 'brother', 'escpos'];
 

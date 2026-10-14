@@ -21,6 +21,7 @@ import {
   PRINTER_MAKER_LABEL,
   PRINTER_MAKER_ORDER,
   PRINTER_MODELS,
+  AGENT_PRINTER_MODELS,
   deviceMatchesModel,
   discoverKindOf,
   printerModelById,
@@ -28,6 +29,8 @@ import {
   type PrinterModel,
 } from '@/lib/printer-models';
 import { postDirect, readDirectPrintConfig, sendToEposPrinter, writeDirectPrintConfig } from '@/components/printing/direct-print-client';
+import { buildSiiAgentPrint, openSiiAgent } from '@/components/printing/sii-agent-client';
+import { SII_AGENT_APP_STORE_URL, SII_AGENT_DEVICE_ID } from '@/lib/sii-url-print';
 
 export interface DevicePrinterOption {
   id: string;
@@ -523,7 +526,7 @@ function BluetoothPrinterForm({
         toast(res?.error ?? '試し印刷のデータを作れませんでした', 'error');
         return;
       }
-      const sent = await bt.print({ deviceId: link.deviceId, maker: link.maker, via: link.via, data: res.data });
+      const sent = await bt.print({ deviceId: link.deviceId, maker: link.maker, via: link.via === 'usb' ? 'usb' : 'bluetooth', data: res.data });
       if (sent.ok) toast(kind === 'drawer' ? 'ドロアが開きました' : '印刷できました');
       else toast(`つながりません（${sent.code ?? 'エラー'}）。プリンターの電源と iPad の Bluetooth を確かめてください`, 'error');
     } finally {
@@ -549,9 +552,7 @@ function BluetoothPrinterForm({
         </div>
 
         {!inApp ? (
-          <p className="m-5 rounded-lg bg-gray-50 px-4 py-3 text-base text-gray-500">
-            Bluetooth のプリンターは iPad の「TENPO ONE」アプリで使えます（Safari では使えません）
-          </p>
+          <SiiAgentForm printers={printers} canAdd={canAdd} onSelected={onSelected} />
         ) : (
           <div className="divide-y divide-gray-100">
             <Row label="プリンター利用" en="Use printer">
@@ -702,6 +703,303 @@ function BluetoothPrinterForm({
         )}
       </CardContent>
     </Card>
+  );
+}
+
+/**
+ * Safari で使う SII（セイコー）の Bluetooth プリンター（RP-F10 など）。SII の無料アプリ「SII URL Print Agent」を通す
+ * （lib/sii-url-print.ts。2026-10-14 Ronnie「MEAT CROWN 新横浜の Airレジの SII RP-F10 を Bluetooth で。アプリはまだ無いので Safari でも」）。
+ * 並びは Airレジ と同じ：プリンター利用・プリンター・接続・レシート紙幅・会計レシート自動印刷・キャッシュドロア利用・試し印刷・保存する
+ */
+function SiiAgentForm({
+  printers,
+  canAdd,
+  onSelected,
+}: {
+  printers: DevicePrinterOption[];
+  canAdd: boolean;
+  onSelected: (printerId: string | null) => void;
+}) {
+  const { toast } = useToast();
+  const router = useRouter();
+  const [links, setLinks] = useState<BluetoothLink[]>([]);
+
+  useEffect(() => {
+    const sync = () => setLinks(readDirectPrintConfig().bluetooth ?? []);
+    sync();
+    window.addEventListener('tenpo-direct-print-changed', sync);
+    return () => window.removeEventListener('tenpo-direct-print-changed', sync);
+  }, []);
+
+  const link = links.find((l) => l.via === 'agent' && printers.some((p) => p.id === l.printerId)) ?? null;
+  const linked = link ? (printers.find((p) => p.id === link.printerId) ?? null) : null;
+
+  const [use, setUse] = useState(false);
+  const [modelId, setModelId] = useState(AGENT_PRINTER_MODELS[0]?.id ?? '');
+  const [paper, setPaper] = useState<58 | 80>(80);
+  const [autoPrint, setAutoPrint] = useState(false);
+  const [drawer, setDrawer] = useState(true);
+  const [busy, setBusy] = useState<string | null>(null);
+
+  const linkedKey = linked ? `${linked.id}:${linked.model ?? ''}:${linked.paperWidthMm}:${linked.autoPrint}:${linked.drawerKick}` : '';
+  useEffect(() => {
+    if (!linked) return;
+    const m = printerModelOf(linked.model);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setUse(true);
+    if (m?.agent) setModelId(m.id);
+    setPaper(linked.paperWidthMm === 58 ? 58 : 80);
+    setAutoPrint(linked.autoPrint === true);
+    setDrawer(linked.drawerKick !== false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [linkedKey]);
+
+  const model = printerModelById(modelId);
+  const off = !use;
+  const locked = !canAdd;
+
+  const saveLinks = (next: BluetoothLink[]) => {
+    if (!writeDirectPrintConfig({ ...readDirectPrintConfig(), bluetooth: next })) {
+      toast('このiPadに保存できませんでした（プライベートブラウズを切ってください）', 'error');
+      return false;
+    }
+    setLinks(next);
+    return true;
+  };
+
+  const toggleUse = async () => {
+    if (!use) {
+      setUse(true);
+      return;
+    }
+    setBusy('use');
+    try {
+      if (link && !saveLinks(links.filter((l) => l.printerId !== link.printerId))) return;
+      const res = await setDevicePrinter(null);
+      if (!res.ok) {
+        toast(res.error, 'error');
+        return;
+      }
+      setUse(false);
+      onSelected(null);
+      router.refresh();
+      toast('このiPadのプリンターを使わない設定にしました（レシートは店の既定のプリンター）');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const connect = async () => {
+    if (!model) return;
+    setBusy('connect');
+    try {
+      const res = await addDeviceReceiptPrinter({
+        printerId: linked?.id ?? null,
+        name: model.name,
+        maker: 'sii',
+        via: 'agent',
+        modelId: model.id,
+        paperWidthMm: paper,
+        autoPrint,
+        drawerKick: drawer,
+      });
+      if (!res.ok) {
+        toast(res.error, 'error');
+        return;
+      }
+      const next: BluetoothLink[] = [
+        ...links.filter((l) => l.printerId !== res.printer.id && l.printerId !== linked?.id && l.deviceId !== SII_AGENT_DEVICE_ID),
+        { printerId: res.printer.id, deviceId: SII_AGENT_DEVICE_ID, deviceName: 'SII URL Print Agent', maker: 'sii', via: 'agent' },
+      ];
+      if (!saveLinks(next)) return;
+      onSelected(res.printer.id);
+      router.refresh();
+      toast(`「${res.printer.name}」をこのiPadのレシートプリンターにしました。「試し印刷」で確かめてください`);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const save = async () => {
+    if (!linked) return;
+    setBusy('save');
+    try {
+      const res = await saveDeviceReceiptPrinterSettings({
+        printerId: linked.id,
+        modelId: model?.id ?? null,
+        paperWidthMm: paper,
+        autoPrint,
+        drawerKick: drawer,
+      });
+      if (!res.ok) {
+        toast(res.error, 'error');
+        return;
+      }
+      router.refresh();
+      toast('保存しました');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const test = async (kind: 'receipt' | 'drawer') => {
+    if (!link) return;
+    setBusy(kind);
+    try {
+      const res = await postDirect<{ ok: boolean; epos?: string; paper?: number; error?: string }>({
+        action: 'test-bt',
+        printerId: link.printerId,
+        kind,
+        format: 'epos',
+      });
+      if (!res?.ok || !res.epos) {
+        toast(res?.error ?? '試し印刷のデータを作れませんでした', 'error');
+        return;
+      }
+      const print = await buildSiiAgentPrint(res.epos, res.paper === 58 ? 58 : 80, { drawerAllowed: true });
+      openSiiAgent(print.url);
+    } catch {
+      toast('試し印刷のデータを作れませんでした', 'error');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <div className="divide-y divide-gray-100">
+      <div className="space-y-2 px-5 py-4">
+        <p className="text-base text-ink">
+          Safari では、<span className="font-bold">SII（セイコー）のプリンター</span>を SII の無料アプリ「SII URL Print Agent」を通して使えます。
+          <span className="text-gray-500">（Star・EPSON などは iPad の「TENPO ONE」アプリで使えます）</span>
+        </p>
+        <ol className="list-decimal space-y-1 rounded-lg bg-gray-50 py-3 pr-4 pl-8 text-sm text-gray-600">
+          <li>
+            App Store で
+            <a href={SII_AGENT_APP_STORE_URL} target="_blank" rel="noreferrer" className="mx-1 font-bold text-primary underline">
+              SII URL Print Agent
+            </a>
+            を入れる（無料）
+          </li>
+          <li>プリンターの電源を切り、電源ボタンを 7 秒押し続ける（ランプが点滅）→ iPad の 設定 &gt; Bluetooth で「RP-F10」を押す</li>
+          <li>SII URL Print Agent を開き、「PRINTER SELECT」でプリンターを選ぶ</li>
+          <li>下の「このiPadで使う」→「試し印刷」。Safari が「開きますか？」と聞いたら「開く」。印刷のあとは左上の「◀ Safari」で戻る</li>
+        </ol>
+      </div>
+
+      <Row label="プリンター利用" en="Use printer">
+        <Switch on={use} disabled={busy !== null || locked} onClick={() => void toggleUse()} label="プリンター利用" />
+      </Row>
+
+      <Row label="プリンター" en="Printer model" dim={off}>
+        <select
+          value={modelId}
+          disabled={off || locked || busy !== null}
+          onChange={(e) => {
+            const m = printerModelById(e.target.value);
+            setModelId(e.target.value);
+            if (m) {
+              setPaper(m.paper);
+              setDrawer(m.drawer);
+            }
+          }}
+          className="h-14 w-full max-w-xl rounded-xl border border-gray-200 bg-white px-4 text-base text-ink disabled:bg-gray-50 disabled:text-gray-400"
+          aria-label="プリンターの機種"
+        >
+          {AGENT_PRINTER_MODELS.map((m) => (
+            <option key={m.id} value={m.id}>
+              SII {m.name}
+              {m.mobile ? '（モバイル）' : ''}
+            </option>
+          ))}
+        </select>
+      </Row>
+
+      <Row label="接続" en="Connection" dim={off}>
+        <div className="flex w-full max-w-xl flex-wrap items-center gap-3">
+          <p className="min-w-0 flex-1 text-base text-ink">
+            {link && linked ? (
+              <>
+                <span className="font-bold">{linked.name}</span>
+                <span className="ml-1 text-sm text-gray-500">（SII URL Print Agent・このiPadで使っています）</span>
+              </>
+            ) : (
+              <span className="text-gray-500">まだ使っていません</span>
+            )}
+          </p>
+          <button
+            type="button"
+            disabled={off || locked || !model || busy !== null}
+            onClick={() => void connect()}
+            className="inline-flex h-14 items-center gap-2 rounded-xl border border-primary/40 bg-white px-5 text-base font-bold text-primary hover:bg-primary-soft/40 disabled:opacity-50"
+          >
+            {busy === 'connect' ? <Loader2 className="h-5 w-5 animate-spin" aria-hidden /> : <Bluetooth className="h-5 w-5" aria-hidden />}
+            {link ? 'もう一度つなぐ' : 'このiPadで使う'}
+          </button>
+        </div>
+      </Row>
+
+      <Row label="レシート紙幅" en="Paper width" dim={off}>
+        <div className="flex gap-3" role="radiogroup" aria-label="レシート紙幅">
+          {([58, 80] as const).map((w) => (
+            <button
+              key={w}
+              type="button"
+              role="radio"
+              aria-checked={paper === w}
+              disabled={off || locked}
+              onClick={() => setPaper(w)}
+              className={cn(
+                'inline-flex h-12 min-w-24 items-center justify-center gap-2 rounded-full border px-5 text-base font-bold disabled:opacity-50',
+                paper === w ? 'border-primary bg-primary-soft text-primary' : 'border-gray-200 bg-white text-gray-600'
+              )}
+            >
+              <span className={cn('h-4 w-4 rounded-full border', paper === w ? 'border-4 border-primary' : 'border-gray-300')} aria-hidden />
+              {w}mm
+            </button>
+          ))}
+        </div>
+      </Row>
+
+      <Row label="会計レシート自動印刷" en="Print receipt after checkout" dim={off}>
+        <Switch on={autoPrint} disabled={off || locked} onClick={() => setAutoPrint((v) => !v)} label="会計レシート自動印刷" />
+      </Row>
+
+      <Row label="キャッシュドロア利用" en="Cash drawer" dim={off}>
+        <Switch on={drawer} disabled={off || locked} onClick={() => setDrawer((v) => !v)} label="キャッシュドロア利用" />
+      </Row>
+
+      <div className="flex flex-wrap items-center gap-3 px-5 py-4">
+        <button
+          type="button"
+          disabled={off || !link || busy !== null}
+          onClick={() => void test('receipt')}
+          className="inline-flex h-14 items-center gap-2 rounded-xl border border-gray-200 bg-white px-5 text-base font-bold text-ink hover:bg-gray-50 disabled:opacity-50"
+        >
+          {busy === 'receipt' && <Loader2 className="h-5 w-5 animate-spin" aria-hidden />}
+          試し印刷
+        </button>
+        <button
+          type="button"
+          disabled={off || !link || !drawer || busy !== null}
+          onClick={() => void test('drawer')}
+          className="inline-flex h-14 items-center gap-2 rounded-xl border border-gray-200 bg-white px-5 text-base font-bold text-ink hover:bg-gray-50 disabled:opacity-50"
+        >
+          {busy === 'drawer' && <Loader2 className="h-5 w-5 animate-spin" aria-hidden />}
+          ドロアを開く
+        </button>
+        <span className="flex-1" />
+        {locked && <span className="text-sm text-gray-500">プリンターの設定は店長以上のアカウントで変えられます</span>}
+        <button
+          type="button"
+          disabled={off || locked || !link || busy !== null}
+          onClick={() => void save()}
+          className="inline-flex h-14 min-w-40 items-center justify-center gap-2 rounded-xl bg-primary px-6 text-base font-bold text-white hover:opacity-90 disabled:opacity-50"
+        >
+          {busy === 'save' && <Loader2 className="h-5 w-5 animate-spin" aria-hidden />}
+          保存する
+        </button>
+      </div>
+    </div>
   );
 }
 

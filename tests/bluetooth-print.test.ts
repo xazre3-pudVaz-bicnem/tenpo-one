@@ -139,7 +139,8 @@ describe('プリンターの種類を選ぶ（ESC/POS・Star・SII）', () => {
     expect(route).toContain("if (body.action === 'next-bt')");
     expect(route).toContain('eposXmlToEscPos(job.payload.epos)');
     const agent = read('components/printing/direct-print-agent.tsx');
-    expect(agent).toContain('const links = nativeBluetooth() ? (config.bluetooth ?? []) : [];');
+    expect(agent).toContain("const links = inApp ? all.filter((l) => l.via !== 'agent') : [];");
+    expect(agent).toContain("const agentLinks = inApp ? [] : all.filter((l) => l.via === 'agent');");
   });
 });
 

@@ -5,6 +5,7 @@ import { useToast } from '@/components/ui/toast';
 import { DIRECT_BACKOFF_MS, DIRECT_POLL_MS, eposErrorLabel, type BluetoothLink } from '@/lib/direct-print';
 import { nativeBluetooth } from '@/lib/native-app';
 import { postDirect, readDirectPrintConfig, sendToEposPrinter } from './direct-print-client';
+import { buildSiiAgentPrint, openSiiAgent } from './sii-agent-client';
 
 interface NextJob {
   id: string;
@@ -21,6 +22,17 @@ interface NextBtJob {
   data: string;
 }
 
+interface NextAgentJob {
+  id: string;
+  printerId: string;
+  printerName: string;
+  epos: string;
+  paper: 58 | 80;
+}
+
+/** SII URL Print Agent を開いてから、開けなかった（Safari の「開きますか？」で開かなかった）とみなすまで */
+const AGENT_OPEN_TIMEOUT_MS = 30_000;
+
 /** Bluetooth で送れなかったときの理由（アプリが返す code）のうち、「つながらない」もの */
 const BT_UNREACHABLE = new Set(['not_found', 'connect', 'unreachable', 'bluetooth_off', 'timeout', 'no_sdk']);
 
@@ -30,6 +42,8 @@ const BT_UNREACHABLE = new Set(['not_found', 'connect', 'unreachable', 'bluetoot
  *     つながらないときは印刷をキューに戻し、プリンター自身の Server Direct Print に任せる。
  *   - Bluetooth・USB（TENPO ONE レジ アプリだけ）：レシートプリンター＋ドロアを iPad とつなぐ。
  *     アプリ（ios/Shared/BluetoothPrinters.swift）が Star は StarPRNT、EPSON・SII・ESC/POS は ESC/POS を送る。
+ *   - SII URL Print Agent（Safari。SII の RP-F10 など）：印刷を受け取り、画像・PDF にして SII の無料アプリを開く
+ *     （lib/sii-url-print.ts）。アプリが印刷して Safari に戻ってきたら次の印刷。
  */
 export function DirectPrintAgent() {
   const { toast } = useToast();
@@ -42,6 +56,10 @@ export function DirectPrintAgent() {
     let btBackoffUntil = 0;
     let warnedWifi = false;
     let warnedBt = false;
+    /** SII URL Print Agent を開いたところ（戻ってくるまで次を出さない） */
+    let agentOpenedAt = 0;
+    let agentLeft = false;
+    let agentResumeAt = 0;
     let config = readDirectPrintConfig();
 
     const schedule = (ms: number) => {
@@ -68,7 +86,7 @@ export function DirectPrintAgent() {
         await done(job, 'unreachable');
         return false;
       }
-      const sent = await bt.print({ deviceId: link.deviceId, maker: link.maker, via: link.via, data: job.data });
+      const sent = await bt.print({ deviceId: link.deviceId, maker: link.maker, via: link.via === 'usb' ? 'usb' : 'bluetooth', data: job.data });
       if (sent.ok) {
         await done(job, 'printed');
         warnedBt = false;
@@ -87,6 +105,41 @@ export function DirectPrintAgent() {
       await done(job, 'failed', `bt: ${sent.code ?? 'error'}`);
       toast(`${job.printerName}：${eposErrorLabel(sent.code ?? null)}`, 'error');
       return false;
+    }
+
+    /** SII URL Print Agent（Safari）。アプリを開いたら true（戻ってくるまで待つ） */
+    async function agentOnce(links: BluetoothLink[]): Promise<boolean> {
+      if (links.length === 0) return false;
+      if (agentOpenedAt > 0) {
+        // 開いたのに Safari から出ていかない＝「開きますか？」で開かなかった・アプリが入っていない
+        if (!agentLeft && Date.now() - agentOpenedAt > AGENT_OPEN_TIMEOUT_MS) {
+          agentOpenedAt = 0;
+          toast('SII URL Print Agent が開きませんでした。App Store で入れてあるか確かめ、レシートを印刷し直してください', 'error');
+        }
+        return false;
+      }
+      if (Date.now() < agentResumeAt) return false;
+      const res = await postDirect<{ ok: boolean; job: NextAgentJob | null }>({
+        action: 'next-bt',
+        printerIds: links.map((l) => l.printerId),
+        format: 'epos',
+      });
+      const job = res?.job ?? null;
+      if (!job) return false;
+      let url: string;
+      try {
+        url = (await buildSiiAgentPrint(job.epos, job.paper === 58 ? 58 : 80, { drawerAllowed: true })).url;
+      } catch {
+        await done(job, 'failed', 'sii-agent: render');
+        toast(`${job.printerName}：印刷データを作れませんでした`, 'error');
+        return false;
+      }
+      // 先に「印刷した」にする（アプリに移ると、この画面は止まるため。2枚出ないように）
+      await done(job, 'printed');
+      agentOpenedAt = Date.now();
+      agentLeft = false;
+      openSiiAgent(url);
+      return true;
     }
 
     /** Wi-Fi で直接印刷（EPSON）。印刷したら true */
@@ -125,14 +178,20 @@ export function DirectPrintAgent() {
     async function tick() {
       if (stopped) return;
       if (running) return schedule(DIRECT_POLL_MS);
-      const links = nativeBluetooth() ? (config.bluetooth ?? []) : [];
-      if (config.printerIds.length === 0 && links.length === 0) return; // この端末は使っていない（何もしない）
+      const inApp = nativeBluetooth() !== null;
+      const all = config.bluetooth ?? [];
+      // アプリ：Bluetooth・USB。Safari：SII URL Print Agent だけ
+      const links = inApp ? all.filter((l) => l.via !== 'agent') : [];
+      const agentLinks = inApp ? [] : all.filter((l) => l.via === 'agent');
+      if (config.printerIds.length === 0 && links.length === 0 && agentLinks.length === 0) return; // この端末は使っていない（何もしない）
       if (document.visibilityState !== 'visible') return schedule(DIRECT_POLL_MS);
 
       running = true;
       try {
         const printedBt = await bluetoothOnce(links);
+        const openedAgent = await agentOnce(agentLinks);
         const printedWifi = await wifiOnce(config.printerIds);
+        if (openedAgent) return schedule(DIRECT_POLL_MS);
         return schedule(printedBt || printedWifi ? 0 : DIRECT_POLL_MS); // 印刷したら続けて次の1件
       } finally {
         running = false;
@@ -146,7 +205,17 @@ export function DirectPrintAgent() {
       schedule(0);
     };
     const onVisible = () => {
-      if (document.visibilityState === 'visible') schedule(0);
+      if (document.visibilityState === 'hidden') {
+        if (agentOpenedAt > 0) agentLeft = true;
+        return;
+      }
+      if (agentOpenedAt > 0 && agentLeft) {
+        // SII URL Print Agent から戻ってきた → 少し待って次の印刷（アプリは印刷中の次の依頼を受け付けない）
+        agentOpenedAt = 0;
+        agentLeft = false;
+        agentResumeAt = Date.now() + 1500;
+      }
+      schedule(0);
     };
 
     window.addEventListener('tenpo-direct-print-changed', onChange);

@@ -64,7 +64,7 @@ describe('今の印刷は壊さない', () => {
 
   it('ON にしていない端末では何もしない（設定が空ならループを止める）', () => {
     const agent = read('components/printing/direct-print-agent.tsx');
-    expect(agent).toContain('if (config.printerIds.length === 0 && links.length === 0) return;');
+    expect(agent).toContain('if (config.printerIds.length === 0 && links.length === 0 && agentLinks.length === 0) return;');
     expect(read('app/app/layout.tsx')).toContain('<DirectPrintAgent />');
   });
 
