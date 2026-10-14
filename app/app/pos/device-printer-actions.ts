@@ -163,10 +163,12 @@ export async function addDeviceReceiptPrinter(
   if (!store) return { ok: false, error: '店舗を選んでください' };
   if (!BT_MAKERS.includes(input.maker as BtMaker)) return { ok: false, error: 'プリンターの種類が分かりません' };
   const maker = input.maker as BtMaker;
+  // agent（Safari から SII URL Print Agent）も、店のプリンターとしては Bluetooth
+  const viaAgent = input.via === 'agent';
   const via: 'bluetooth' | 'usb' = input.via === 'usb' ? 'usb' : 'bluetooth';
   const model = printerModelById(input.modelId);
   if (input.modelId && !model) return { ok: false, error: 'プリンターの機種が分かりません' };
-  if (model && !model.ready) return { ok: false, error: `${model.name} は準備中です` };
+  if (model && !(model.ready || (viaAgent && model.agent))) return { ok: false, error: `${model.name} は準備中です` };
   const patch = settingsPatch(input, model);
 
   const supabase = await createClient();
@@ -270,7 +272,7 @@ export async function saveDeviceReceiptPrinterSettings(
   if (!can(ctx.role, 'store.settings')) return { ok: false, error: 'プリンターの設定は店長以上のアカウントで変えられます' };
   const model = printerModelById(input.modelId);
   if (input.modelId && !model) return { ok: false, error: 'プリンターの機種が分かりません' };
-  if (model && !model.ready) return { ok: false, error: `${model.name} は準備中です` };
+  if (model && !(model.ready || model.agent)) return { ok: false, error: `${model.name} は準備中です` };
 
   const supabase = await createClient();
   const found = await myDeviceReceiptPrinter(supabase, ctx, input.printerId);
