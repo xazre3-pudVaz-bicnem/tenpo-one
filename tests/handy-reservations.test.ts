@@ -69,3 +69,19 @@ describe('ハンディの予約：追加', () => {
     expect(read('app/app/reservations/actions.ts')).toContain("revalidatePath('/handy/reservations');");
   });
 });
+
+/** 2026-10-15 Ronnie「予約一覧をこの形に」（予約アプリの予約リストと同じ並び） */
+describe('ハンディの予約一覧の形', () => {
+  it('左：状態・お名前・電話 ／ 右：時間〜人数・席・コース・経路・要望・メモ・キャンセルを除く', () => {
+    const list = read('components/handy/handy-reservation-list.tsx');
+    expect(list).toContain('キャンセルを除く');
+    expect(list).toContain('{r.time}〜 {r.partySize}名');
+    expect(list).toContain('href={`tel:${r.phone}`}');
+    expect(list).toContain('要望：{request ||');
+    expect(list).toContain('メモ：{r.memo ||');
+    const page = read('app/handy/reservations/page.tsx');
+    expect(page).toContain('guest_phone, party_size');
+    expect(page).toContain('course:menu_items(name)');
+    expect(page).toContain('courseName: one(r.course)?.name ?? null,');
+  });
+});

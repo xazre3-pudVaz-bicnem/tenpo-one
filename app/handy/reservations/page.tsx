@@ -45,11 +45,13 @@ interface ReservationRow {
   start_at: string;
   end_at: string | null;
   guest_name: string;
+  guest_phone: string | null;
   party_size: number;
   status: string;
   created_via: string;
   request_note: string | null;
   memo: string | null;
+  course: One<{ name: string }>;
   reservation_sources: One<{ name: string }>;
   reservation_tables: { table_id: string; restaurant_tables: One<{ name: string }> }[] | null;
 }
@@ -91,7 +93,7 @@ export default async function HandyReservationsPage({
     supabase
       .from('reservations')
       .select(
-        'id, start_at, end_at, guest_name, party_size, status, created_via, request_note, memo, reservation_sources(name), reservation_tables(table_id, restaurant_tables(name))'
+        'id, start_at, end_at, guest_name, guest_phone, party_size, status, created_via, request_note, memo, course:menu_items(name), reservation_sources(name), reservation_tables(table_id, restaurant_tables(name))'
       )
       .eq('store_id', store.id)
       .eq('reserved_date', date)
@@ -120,12 +122,16 @@ export default async function HandyReservationsPage({
       time: formatTime(r.start_at),
       endTime: r.end_at ? formatTime(r.end_at) : null,
       name: r.guest_name,
+      phone: r.guest_phone?.trim() || null,
       partySize: r.party_size,
       tableLabel: names.length > 0 ? names.join('+') : '席未定',
       sourceLabel: one(r.reservation_sources)?.name ?? CREATED_VIA_LABEL[r.created_via] ?? r.created_via,
+      courseName: one(r.course)?.name ?? null,
       status,
       statusLabel: RESERVATION_STATUS[status].label,
       upcoming: UPCOMING.has(status),
+      request: r.request_note || null,
+      memo: r.memo || null,
       note: r.request_note || r.memo || null,
       tableId: tableByReservation.get(r.id) ?? null,
     };
