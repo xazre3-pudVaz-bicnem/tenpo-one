@@ -12,7 +12,7 @@ import { RESERVATION_STATUS } from '@/lib/reservations';
 import {
   updateReservationMemo,
   updateReservationDetails,
-  updateReservationStaff,
+  updateReservationClerk,
   updateReservationPrivateHire,
   updateReservationSource,
 } from '@/app/app/reservations/actions';
@@ -162,7 +162,7 @@ function ReservationDetailDialogContent({
     setStaffId(value);
     startStaffTransition(async () => {
       try {
-        await updateReservationStaff(reservation.id, value || null);
+        await updateReservationClerk(reservation.id, value || null);
         toast('担当者を更新しました');
       } catch (e) {
         toast(e instanceof Error ? e.message : '更新に失敗しました', 'error');

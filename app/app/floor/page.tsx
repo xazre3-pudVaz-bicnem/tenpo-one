@@ -11,6 +11,7 @@ import { PageHeader } from '@/components/ui/page-header';
 import { EmptyState } from '@/components/ui/state';
 import { CREATED_VIA_LABEL } from '@/components/reservations/constants';
 import { RESERVATION_ROW_SELECT, mapReservationRow, type RawReservationRow } from '@/components/reservations/row-mapper';
+import { reservationClerkOptions } from '@/lib/reservation-clerks-server';
 import { FloorBoard } from '@/components/floor/floor-board';
 import type {
   FloorTable,
@@ -153,15 +154,8 @@ export default async function FloorPage() {
     ]);
 
   // 予約詳細のテーブル変更・担当者の選択肢
-  const { data: staffData } = await supabase
-    .from('memberships')
-    .select('profile_id, profiles(display_name), membership_stores!inner(store_id)')
-    .eq('organization_id', ctx.organizationId)
-    .eq('status', 'active')
-    .eq('membership_stores.store_id', store.id);
-  const staffOptions = ((staffData ?? []) as { profile_id: string; profiles: { display_name: string } | { display_name: string }[] | null }[])
-    .map((m) => ({ id: m.profile_id, name: one(m.profiles)?.display_name ?? '不明' }))
-    .sort((a, b) => a.name.localeCompare(b.name, 'ja'));
+  // 予約の担当者＝レジの担当名（2026-10-15 Ronnie「レジと台帳は同じ」）
+  const staffOptions = (await reservationClerkOptions(supabase, [store.id]))[store.id] ?? [];
 
   // 選択印刷で選べるように、未会計伝票の品を読む（2026-09-25 店舗要望）
   const openOrderIds = ((orderRows ?? []) as { id: string }[]).map((o) => o.id);

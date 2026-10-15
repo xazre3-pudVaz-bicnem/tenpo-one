@@ -418,6 +418,37 @@ export async function updateReservationStaff(reservationId: string, staffId: str
 }
 
 /**
+ * 予約の担当者＝レジの担当名（pos_clerks）を設定・解除（2026-10-15 Ronnie「台帳の担当者は端末ではなくレジの担当名。レジと台帳は同じ」）。
+ * その予約の店舗の、表示中の担当者だけ。名前も一緒に残す（担当者を後で消しても予約には名前が残る）。
+ */
+export async function updateReservationClerk(reservationId: string, clerkId: string | null) {
+  const ctx = await requirePermission('reservations.write');
+  const supabase = await createClient();
+  const reservation = await loadReservation(supabase, ctx, reservationId);
+
+  let clerkName: string | null = null;
+  if (clerkId) {
+    const { data: clerk } = await supabase
+      .from('pos_clerks')
+      .select('id, name, store_id, status')
+      .eq('id', clerkId)
+      .maybeSingle();
+    if (!clerk || clerk.store_id !== reservation.store_id || clerk.status !== 'active') {
+      throw new Error('この店舗の担当者ではありません');
+    }
+    clerkName = clerk.name as string;
+  }
+
+  const { error } = await supabase
+    .from('reservations')
+    .update({ clerk_id: clerkId, clerk_name: clerkName, updated_by: ctx.userId })
+    .eq('id', reservationId);
+  if (error) throw new Error('担当者の更新に失敗しました');
+
+  revalidateAll();
+}
+
+/**
  * 予約経路（どこから来た予約か：電話・食べログ・ホットペッパー・TABLE ONE など）を直す
  * （2026-10-15 Ronnie「台帳で予約がどこから来たか（経路）を選べるように」）。
  * 選べるのは共通の経路と、この企業の経路だけ。監査ログに前後を残す。

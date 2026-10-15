@@ -19,7 +19,7 @@ import {
   transitionReservationStatus,
   updateReservationCourse,
   updateReservationDetails,
-  updateReservationStaff,
+  updateReservationClerk,
 } from '@/app/app/reservations/actions';
 import { CREATED_VIA_LABEL, ASSIGNABLE_STATUSES, MOVABLE_STATUSES } from './constants';
 import { AssignTableDialog, type AssignableTable } from './assign-table-dialog';
@@ -161,7 +161,7 @@ export function ReservationSheet({
           requestNote: form.request || null,
         });
         if ((form.courseId || null) !== (r.courseId ?? null)) await updateReservationCourse(r.id, form.courseId || null);
-        if ((form.staffId || null) !== (r.staffId ?? null)) await updateReservationStaff(r.id, form.staffId || null);
+        if ((form.staffId || null) !== (r.staffId ?? null)) await updateReservationClerk(r.id, form.staffId || null);
       },
       '予約を変更しました',
       () => setEditing(false)
