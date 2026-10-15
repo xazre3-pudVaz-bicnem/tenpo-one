@@ -418,6 +418,47 @@ export async function updateReservationStaff(reservationId: string, staffId: str
 }
 
 /**
+ * 予約経路（どこから来た予約か：電話・食べログ・ホットペッパー・TABLE ONE など）を直す
+ * （2026-10-15 Ronnie「台帳で予約がどこから来たか（経路）を選べるように」）。
+ * 選べるのは共通の経路と、この企業の経路だけ。監査ログに前後を残す。
+ */
+export async function updateReservationSource(reservationId: string, sourceId: string | null) {
+  const ctx = await requirePermission('reservations.write');
+  const supabase = await createClient();
+  const reservation = await loadReservation(supabase, ctx, reservationId);
+
+  const { data: before } = await supabase.from('reservations').select('source_id').eq('id', reservationId).maybeSingle();
+  if (sourceId) {
+    const { data: source } = await supabase
+      .from('reservation_sources')
+      .select('id, organization_id, status')
+      .eq('id', sourceId)
+      .maybeSingle();
+    const usable = source && source.status === 'active' && (source.organization_id == null || source.organization_id === ctx.organizationId);
+    if (!usable) throw new Error('この経路は選べません');
+  }
+
+  const { error } = await supabase
+    .from('reservations')
+    .update({ source_id: sourceId, updated_by: ctx.userId })
+    .eq('id', reservationId);
+  if (error) throw new Error('経路の更新に失敗しました');
+
+  await supabase.rpc('log_audit', {
+    p_org: ctx.organizationId,
+    p_store: reservation.store_id,
+    p_action: 'reservation.source_change',
+    p_target_table: 'reservations',
+    p_target_id: reservationId,
+    p_before: { source_id: before?.source_id ?? null },
+    p_after: { source_id: sourceId },
+    p_note: null,
+  });
+
+  revalidateAll();
+}
+
+/**
  * コースの変更（レジのホームの予約詳細から。2026-09-26 Ronnie「変更もできないと」）。
  * その店舗のコース商品（item_type='course'）だけ。null でコースなし。時間は変えない（時間は日時変更で直す）。
  */
