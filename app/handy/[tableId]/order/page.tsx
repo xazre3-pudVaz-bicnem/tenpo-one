@@ -19,10 +19,10 @@ function problem(tableId: string, message: string) {
         title="注文"
       />
       <HandyMain>
-        <p className="px-6 py-10 text-center text-[13px] leading-loose text-[#7a7090]">
+        <p className="px-6 py-10 text-center text-[13px] leading-loose text-[#766b62]">
           {message}
           <br />
-          <Link href={`/handy/${tableId}`} className="font-bold text-[#7b3fe4] underline">
+          <Link href={`/handy/${tableId}`} className="font-bold text-[#bc5940] underline">
             卓の画面へ戻る
           </Link>
         </p>

@@ -120,7 +120,7 @@ export function ClockCard({
           aria-live="off"
         >
           {ready ? `${pad(h)}:${pad(m)}` : '--:--'}
-          <small className="ml-1 text-lg font-semibold text-[#d9ccf3]">{ready ? pad(s) : '--'}</small>
+          <small className="ml-1 text-lg font-semibold text-[#ead9cc]">{ready ? pad(s) : '--'}</small>
         </div>
         {weather}
       </div>

@@ -12,7 +12,7 @@ import { ClerkChip } from '@/components/pos/clerk-gate';
 import { HandyQrChip } from './handy-qr-chip';
 
 /**
- * 上部バー（暗い #15121a・高さ58px・下端に紫のグラデーション線）:
+ * 上部バー（暗い #292725・高さ58px・下端に紫のグラデーション線）:
  *   左: ホームへ戻る・ブランド・店舗ピル / 中央: 画面タイトル（日英） / 右: 日時・通知・ユーザー
  */
 export function TopBar({

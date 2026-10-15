@@ -254,7 +254,7 @@ export function TableSheet({
         aria-label={table.name}
         onClick={(e) => e.stopPropagation()}
         style={{ width: POP_W, visibility: 'hidden' }}
-        className="absolute max-h-[calc(100vh-72px)] overflow-y-auto rounded-2xl border border-line bg-white p-2.5 shadow-[0_18px_44px_rgba(36,20,54,0.28)]"
+        className="absolute max-h-[calc(100vh-72px)] overflow-y-auto rounded-2xl border border-line bg-white p-2.5 shadow-[0_18px_44px_rgba(41,39,37,0.28)]"
       >
       {/* 見本と同じく、卓名だけを真ん中に出す（状態はタイルの色で分かる。外を押すと閉じる） */}
       <p className="mb-2 text-center text-[17px] font-extrabold text-navy">{table.name}</p>

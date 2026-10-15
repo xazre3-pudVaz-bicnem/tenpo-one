@@ -76,8 +76,8 @@ export function HandyReservationForm({
     });
   };
 
-  const field = 'h-12 w-full rounded-[9px] border border-[#e3dbf1] bg-white px-3 text-base text-[#2a2138] outline-none focus:border-[#7b3fe4]';
-  const label = 'mb-1 block text-[12px] font-bold text-[#5e5470]';
+  const field = 'h-12 w-full rounded-[9px] border border-[#e5dfd5] bg-white px-3 text-base text-[#292725] outline-none focus:border-[#bc5940]';
+  const label = 'mb-1 block text-[12px] font-bold text-[#5c5650]';
 
   return (
     <form
@@ -117,7 +117,7 @@ export function HandyReservationForm({
 
       <div>
         <label htmlFor="hr-name" className={label}>
-          お名前 <span className="text-[#b3341f]">*</span>
+          お名前 <span className="text-[#c62828]">*</span>
         </label>
         <input
           id="hr-name"
@@ -132,7 +132,7 @@ export function HandyReservationForm({
 
       <div>
         <label htmlFor="hr-phone" className={label}>
-          電話番号 <span className="text-[#b3341f]">*</span>
+          電話番号 <span className="text-[#c62828]">*</span>
         </label>
         <input
           id="hr-phone"
@@ -146,7 +146,7 @@ export function HandyReservationForm({
           required
         />
         {form.phone.length > 0 && phoneDigits.length < 10 && (
-          <p className="mt-1 text-[11px] text-[#b3341f]">電話番号は10桁以上で入れてください</p>
+          <p className="mt-1 text-[11px] text-[#c62828]">電話番号は10桁以上で入れてください</p>
         )}
       </div>
 
@@ -191,18 +191,18 @@ export function HandyReservationForm({
           onChange={(e) => set('note', e.target.value)}
           rows={3}
           placeholder="アレルギー・記念日など"
-          className="w-full rounded-[9px] border border-[#e3dbf1] bg-white px-3 py-2.5 text-base text-[#2a2138] outline-none focus:border-[#7b3fe4]"
+          className="w-full rounded-[9px] border border-[#e5dfd5] bg-white px-3 py-2.5 text-base text-[#292725] outline-none focus:border-[#bc5940]"
         />
       </div>
 
-      <p className="text-[10.5px] leading-relaxed text-[#7a7090]">
+      <p className="text-[10.5px] leading-relaxed text-[#766b62]">
         席の割り当て・変更・来店処理はレジ（管理画面）の予約台帳で行います。
       </p>
 
       <button
         type="submit"
         disabled={!ready || pending}
-        className="flex min-h-[48px] w-full items-center justify-center gap-2 rounded-[9px] bg-[#7b3fe4] px-4 text-base font-bold text-white shadow-[0_3px_10px_#7b3fe41a] active:bg-[#6630c7] disabled:opacity-40"
+        className="flex min-h-[48px] w-full items-center justify-center gap-2 rounded-[9px] bg-[#bc5940] px-4 text-base font-bold text-white shadow-[0_3px_10px_#bc59401a] active:bg-[#9f4630] disabled:opacity-40"
       >
         {pending && <Loader2 className="h-5 w-5 animate-spin" aria-hidden />}
         予約を追加する
@@ -214,15 +214,15 @@ export function HandyReservationForm({
 
 function Counter({ label, value, min, onChange }: { label: string; value: number; min: number; onChange: (v: number) => void }) {
   const btn =
-    'flex h-12 w-12 shrink-0 items-center justify-center rounded-[9px] border border-[#e3dbf1] bg-white text-[#4f3868] active:bg-[#efe8fa] disabled:opacity-40';
+    'flex h-12 w-12 shrink-0 items-center justify-center rounded-[9px] border border-[#e5dfd5] bg-white text-[#45403b] active:bg-[#f6ebe3] disabled:opacity-40';
   return (
     <div>
-      <span className="mb-1 block text-[12px] font-bold text-[#5e5470]">{label}</span>
+      <span className="mb-1 block text-[12px] font-bold text-[#5c5650]">{label}</span>
       <div className="flex items-center gap-1.5">
         <button type="button" aria-label={`${label}を減らす`} className={btn} disabled={value <= min} onClick={() => onChange(Math.max(min, value - 1))}>
           <Minus className="h-4 w-4" strokeWidth={2.6} aria-hidden />
         </button>
-        <span className={cn('flex-1 text-center text-xl font-bold tabular-nums text-[#2a2138]')}>{value}</span>
+        <span className={cn('flex-1 text-center text-xl font-bold tabular-nums text-[#292725]')}>{value}</span>
         <button type="button" aria-label={`${label}を増やす`} className={btn} disabled={value >= 99} onClick={() => onChange(Math.min(99, value + 1))}>
           <Plus className="h-4 w-4" strokeWidth={2.6} aria-hidden />
         </button>

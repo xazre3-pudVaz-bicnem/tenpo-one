@@ -88,7 +88,7 @@ export function SlideToConfirm({
     <div
       ref={trackRef}
       className={cn(
-        'relative h-[60px] w-full overflow-hidden rounded-full bg-linear-to-r from-[#5b2c8f] to-[#7b3fe4] shadow-[0_3px_10px_#7b3fe433] select-none',
+        'relative h-[60px] w-full overflow-hidden rounded-full bg-linear-to-r from-[#8a3f2c] to-[#bc5940] shadow-[0_3px_10px_#bc594033] select-none',
         locked && !pending && 'opacity-40'
       )}
     >
@@ -120,7 +120,7 @@ export function SlideToConfirm({
           }
         }}
         className={cn(
-          'absolute top-1 left-1 grid touch-none place-items-center rounded-full bg-white text-[#7b3fe4] shadow-md',
+          'absolute top-1 left-1 grid touch-none place-items-center rounded-full bg-white text-[#bc5940] shadow-md',
           !dragging && 'transition-transform duration-200 ease-out'
         )}
         style={{ width: KNOB, height: KNOB, transform: `translateX(${shown}px)` }}

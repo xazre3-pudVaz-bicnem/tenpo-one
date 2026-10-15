@@ -32,7 +32,7 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = UIColor(red: 0.965, green: 0.953, blue: 0.984, alpha: 1)
+        view.backgroundColor = UIColor(red: 0.984, green: 0.976, blue: 0.961, alpha: 1)
 
         let config = WKWebViewConfiguration()
         config.websiteDataStore = .default()
@@ -318,7 +318,7 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
             if isMainFrame, let other = AppState.shared.redirect(for: url) {
                 decisionHandler(.cancel)
                 if other.scheme == "about" {
-                    webView.loadHTMLString("<html><body style='background:#f6f3fb'></body></html>", baseURL: nil)
+                    webView.loadHTMLString("<html><body style='background:#fbf9f5'></body></html>", baseURL: nil)
                 } else {
                     load(other)
                 }
@@ -473,23 +473,23 @@ final class ConnectionErrorView: UIView {
 
     override init(frame: CGRect) {
         super.init(frame: frame)
-        backgroundColor = UIColor(red: 0.965, green: 0.953, blue: 0.984, alpha: 1)
+        backgroundColor = UIColor(red: 0.984, green: 0.976, blue: 0.961, alpha: 1)
 
         let title = UILabel()
         title.text = "つながりません"
         title.font = .systemFont(ofSize: 22, weight: .bold)
-        title.textColor = UIColor(red: 0.165, green: 0.129, blue: 0.220, alpha: 1)
+        title.textColor = UIColor(red: 0.161, green: 0.153, blue: 0.145, alpha: 1)
 
         let body = UILabel()
         body.text = "Wi-Fi・インターネットを確かめて、もう一度読み込んでください。\nNo connection. Check Wi-Fi and try again."
         body.numberOfLines = 0
         body.textAlignment = .center
         body.font = .systemFont(ofSize: 14)
-        body.textColor = UIColor(red: 0.369, green: 0.329, blue: 0.439, alpha: 1)
+        body.textColor = UIColor(red: 0.361, green: 0.337, blue: 0.314, alpha: 1)
 
         var buttonConfig = UIButton.Configuration.filled()
         buttonConfig.title = "もう一度読み込む / Retry"
-        buttonConfig.baseBackgroundColor = UIColor(red: 0.482, green: 0.247, blue: 0.894, alpha: 1)
+        buttonConfig.baseBackgroundColor = UIColor(red: 0.737, green: 0.349, blue: 0.251, alpha: 1)
         buttonConfig.cornerStyle = .large
         buttonConfig.contentInsets = NSDirectionalEdgeInsets(top: 14, leading: 28, bottom: 14, trailing: 28)
         let button = UIButton(configuration: buttonConfig)

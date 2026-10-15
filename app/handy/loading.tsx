@@ -1,7 +1,7 @@
 export default function Loading() {
   return (
     <>
-      <header className="min-h-[53px] flex-none border-b border-[#262030] bg-[#15121a]" />
+      <header className="min-h-[53px] flex-none border-b border-[#45403b] bg-[#292725]" />
       <main
         className="min-h-0 flex-1 overflow-hidden px-2 pt-8"
         aria-busy="true"
@@ -11,7 +11,7 @@ export default function Loading() {
           {Array.from({ length: 12 }).map((_, i) => (
             <li
               key={i}
-              className="aspect-square w-full animate-pulse rounded-[10px] border border-[#e3dbf1] bg-white/70"
+              className="aspect-square w-full animate-pulse rounded-[10px] border border-[#e5dfd5] bg-white/70"
             />
           ))}
         </ul>

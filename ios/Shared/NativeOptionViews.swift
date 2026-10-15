@@ -225,7 +225,7 @@ struct NativeOpenPricePad: View {
                         }
                         .font(.system(size: 24, weight: .bold)).foregroundColor(NT.ink)
                         .frame(maxWidth: .infinity, minHeight: 58)
-                        .background(RoundedRectangle(cornerRadius: 12).fill(Color(hex: 0xF8F6FC)))
+                        .background(RoundedRectangle(cornerRadius: 12).fill(Color(hex: 0xFBF9F5)))
                         .overlay(RoundedRectangle(cornerRadius: 12).stroke(NT.lilacLine, lineWidth: 1))
                     }
                     .buttonStyle(PressableStyle(scale: 0.93))

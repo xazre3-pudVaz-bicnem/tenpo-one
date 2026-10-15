@@ -189,20 +189,20 @@ export function HandyTableDetail({
                 className={cn(
                   'rounded-[10px] border-l-4 p-3',
                   call.kind === 'checkout'
-                    ? 'border-l-[#bd660f] bg-[#fbefdf]'
-                    : 'border-l-[#7b3fe4] bg-[#efeaf8]'
+                    ? 'border-l-[#b7791f] bg-[#fbf1d9]'
+                    : 'border-l-[#bc5940] bg-[#f3efe8]'
                 )}
               >
                 <p className="flex items-baseline justify-between gap-2 text-sm">
-                  <b className="font-bold text-[#4f3868]">{serviceCallLabel(call.kind)}</b>
-                  <span className="text-[11px] text-[#7a7090]">
+                  <b className="font-bold text-[#45403b]">{serviceCallLabel(call.kind)}</b>
+                  <span className="text-[11px] text-[#766b62]">
                     {formatTime(new Date(call.createdAtMs))}
                     {elapsedLabel(call.createdAtMs, now)}経過
                   </span>
                 </p>
                 <button
                   type="button"
-                  className="mt-2 min-h-[40px] w-full rounded-[9px] bg-[#7b3fe4] text-sm font-bold text-white disabled:opacity-40"
+                  className="mt-2 min-h-[40px] w-full rounded-[9px] bg-[#bc5940] text-sm font-bold text-white disabled:opacity-40"
                   disabled={pending}
                   onClick={() => handleResolve(call)}
                 >
@@ -214,58 +214,58 @@ export function HandyTableDetail({
         )}
 
         {slips.length === 0 ? (
-          <div className="m-3 rounded-[10px] border border-[#e3dbf1] bg-white p-3.5">
-            <p className="text-center text-[13px] text-[#7a7090]">
+          <div className="m-3 rounded-[10px] border border-[#e5dfd5] bg-white p-3.5">
+            <p className="text-center text-[13px] text-[#766b62]">
               この卓に未会計の注文はありません。
             </p>
             {canStartOrder(state) ? (
               state !== 'occupied' && (
-                <p className="mt-3 text-center text-[10px] leading-relaxed text-[#7a7090]">
+                <p className="mt-3 text-center text-[10px] leading-relaxed text-[#766b62]">
                   「注文を開始」で人数・モード（飲み放題など）・時間制を入力し、
                   この卓を着席にして新しい伝票を作ります。
                 </p>
               )
             ) : (
-              <p className="mt-2 text-center text-[11px] text-[#7a7090]">
+              <p className="mt-2 text-center text-[11px] text-[#766b62]">
                 {TABLE_STATE_LABEL[state]}の卓には注文を作れません。フロア画面で状態を変更してください。
               </p>
             )}
           </div>
         ) : (
           <>
-            <p className="mx-3 mt-2.5 flex items-baseline justify-between text-[13px] text-[#7a7090]">
+            <p className="mx-3 mt-2.5 flex items-baseline justify-between text-[13px] text-[#766b62]">
               未会計合計
-              <b className="text-[23px] font-bold text-[#4f3868] tabular-nums">{yen(totalAmount)}</b>
+              <b className="text-[23px] font-bold text-[#45403b] tabular-nums">{yen(totalAmount)}</b>
             </p>
             {slips.map((slip) => (
               <section
                 key={slip.id}
-                className="m-3 rounded-[10px] border border-[#e3dbf1] bg-white p-3.5"
+                className="m-3 rounded-[10px] border border-[#e5dfd5] bg-white p-3.5"
               >
-                <h2 className="flex items-baseline justify-between text-sm font-bold text-[#4f3868]">
+                <h2 className="flex items-baseline justify-between text-sm font-bold text-[#45403b]">
                   伝票 #{slip.orderNo}
-                  <span className="text-[11px] font-normal text-[#7a7090]">
+                  <span className="text-[11px] font-normal text-[#766b62]">
                     {slip.guestCount}名 · {formatTime(new Date(slip.openedAtMs))}〜
                   </span>
                 </h2>
                 {slip.items.length === 0 ? (
-                  <p className="py-4 text-center text-[13px] text-[#7a7090]">まだ注文はありません。</p>
+                  <p className="py-4 text-center text-[13px] text-[#766b62]">まだ注文はありません。</p>
                 ) : (
                   // 注文の回ごと（左に 1st・2nd・3rd…。2026-09-30 Ronnie）
-                  <div className="mt-1 divide-y divide-dashed divide-[#e3dbf1]">
+                  <div className="mt-1 divide-y divide-dashed divide-[#e5dfd5]">
                     {groupOrderRounds(slip.items).map((round) => (
                       <div key={round.index ?? 'unsent'} className="flex gap-2.5 py-2">
                         <div className="w-11 shrink-0 pt-0.5 text-center">
                           <span
                             className={cn(
                               'block rounded-md py-1 text-[12px] leading-none font-extrabold',
-                              round.index == null ? 'bg-[#fbefdf] text-[#8a4a0b]' : 'bg-[#efeaf8] text-[#7b3fe4]'
+                              round.index == null ? 'bg-[#fbf1d9] text-[#8a4a0b]' : 'bg-[#f3efe8] text-[#bc5940]'
                             )}
                           >
                             {round.index == null ? '未送信' : ordinalLabel(round.index)}
                           </span>
                           {round.sentAtMs != null && (
-                            <small className="mt-0.5 block text-[9px] text-[#7a7090] tabular-nums">
+                            <small className="mt-0.5 block text-[9px] text-[#766b62] tabular-nums">
                               {formatTime(new Date(round.sentAtMs))}
                             </small>
                           )}
@@ -277,17 +277,17 @@ export function HandyTableDetail({
                               className="my-1 flex items-baseline justify-between gap-2 text-xs"
                             >
                               <span className="min-w-0">
-                                <span className="block text-[#2a2138]">
+                                <span className="block text-[#292725]">
                                   {item.name}
-                                  <span className="ml-1.5 text-[#7a7090]">×{item.quantity}</span>
+                                  <span className="ml-1.5 text-[#766b62]">×{item.quantity}</span>
                                 </span>
                                 {item.optionLabel && (
-                                  <small className="block text-[9px] text-[#7a7090]">
+                                  <small className="block text-[9px] text-[#766b62]">
                                     {item.optionLabel}
                                   </small>
                                 )}
                               </span>
-                              <b className="shrink-0 font-bold text-[#4f3868] tabular-nums">
+                              <b className="shrink-0 font-bold text-[#45403b] tabular-nums">
                                 {yen(item.lineTotal)}
                               </b>
                             </li>
@@ -297,7 +297,7 @@ export function HandyTableDetail({
                     ))}
                   </div>
                 )}
-                <strong className="mt-2 block border-t border-[#e3dbf1] pt-2 text-right text-lg font-bold text-[#4f3868] tabular-nums">
+                <strong className="mt-2 block border-t border-[#e5dfd5] pt-2 text-right text-lg font-bold text-[#45403b] tabular-nums">
                   {yen(slip.total)}
                 </strong>
                 {printBillAction && slip.items.length > 0 && (
@@ -305,7 +305,7 @@ export function HandyTableDetail({
                     type="button"
                     disabled={pending}
                     onClick={() => handlePrintBill(slip)}
-                    className="mt-2.5 flex min-h-[42px] w-full items-center justify-center gap-1.5 rounded-[9px] border border-[#bd660f] bg-[#fbefdf] text-sm font-bold text-[#8a4a0b] active:bg-[#f6e0c4] disabled:opacity-40"
+                    className="mt-2.5 flex min-h-[42px] w-full items-center justify-center gap-1.5 rounded-[9px] border border-[#b7791f] bg-[#fbf1d9] text-sm font-bold text-[#8a4a0b] active:bg-[#f6e0c4] disabled:opacity-40"
                   >
                     <Printer className="h-4 w-4" aria-hidden />
                     {pending && busy === `bill:${slip.id}` ? '印刷中…' : '会計伝票を出す'}
@@ -314,7 +314,7 @@ export function HandyTableDetail({
                 {slips.length > 1 && (
                   <Link
                     href={`/handy/${table.id}/order?order=${slip.id}`}
-                    className="mt-2.5 flex min-h-[42px] items-center justify-center rounded-[9px] border border-[#7b3fe4] text-sm font-bold text-[#7b3fe4]"
+                    className="mt-2.5 flex min-h-[42px] items-center justify-center rounded-[9px] border border-[#bc5940] text-sm font-bold text-[#bc5940]"
                   >
                     この伝票に注文を追加
                   </Link>

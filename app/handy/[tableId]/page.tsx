@@ -42,10 +42,10 @@ function notFound(message: string) {
     <>
       <HandyTopBar left={<HandyBackButton href="/handy" label="テーブル一覧" />} title="卓の注文" />
       <HandyMain>
-        <p className="px-6 py-10 text-center text-[13px] leading-loose text-[#7a7090]">
+        <p className="px-6 py-10 text-center text-[13px] leading-loose text-[#766b62]">
           {message}
           <br />
-          <Link href="/handy" className="font-bold text-[#7b3fe4] underline">
+          <Link href="/handy" className="font-bold text-[#bc5940] underline">
             テーブル一覧へ戻る
           </Link>
         </p>

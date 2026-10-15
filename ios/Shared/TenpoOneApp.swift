@@ -56,8 +56,8 @@ struct RootView: View {
 }
 
 enum Brand {
-    static let background = Color(red: 0.965, green: 0.953, blue: 0.984) // #f6f3fb
-    static let purple = Color(red: 0.482, green: 0.247, blue: 0.894) // #7b3fe4
-    static let ink = Color(red: 0.165, green: 0.129, blue: 0.220) // #2a2138
-    static let ink2 = Color(red: 0.369, green: 0.329, blue: 0.439) // #5e5470
+    static let background = Color(red: 0.984, green: 0.976, blue: 0.961) // #fbf9f5
+    static let purple = Color(red: 0.737, green: 0.349, blue: 0.251) // #bc5940
+    static let ink = Color(red: 0.161, green: 0.153, blue: 0.145) // #292725
+    static let ink2 = Color(red: 0.361, green: 0.337, blue: 0.314) // #5c5650
 }

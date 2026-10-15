@@ -35,14 +35,14 @@ export async function StoreWeatherInfo({ address }: { address: string | null }) 
       <WeatherGlyph icon={w.weather.icon} />
       <div className="flex flex-col leading-tight">
         <b className="text-[13px] font-bold tabular-nums">{w.temperature}°C</b>
-        <span className="text-[11.5px] text-[#d9ccf3]">{w.weather.label}</span>
+        <span className="text-[11.5px] text-[#ead9cc]">{w.weather.label}</span>
       </div>
     </div>
   );
 }
 
 const SUN = '#f6c77a';
-const CLOUD_FILL = '#5b2c8f';
+const CLOUD_FILL = '#8a3f2c';
 
 function Sun({ cx = 15, cy = 15, r = 7 }: { cx?: number; cy?: number; r?: number }) {
   const rays = [0, 45, 90, 135, 180, 225, 270, 315];

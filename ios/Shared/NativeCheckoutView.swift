@@ -270,7 +270,7 @@ struct NativeCheckoutView: View {
                                     }
                                 }
                                 .padding(.horizontal, 10).padding(.vertical, 6)
-                                .background(RoundedRectangle(cornerRadius: 12).fill(active ? NT.lilac : Color(hex: 0xF8F6FC)))
+                                .background(RoundedRectangle(cornerRadius: 12).fill(active ? NT.lilac : Color(hex: 0xFBF9F5)))
                                 .overlay(RoundedRectangle(cornerRadius: 12).stroke(active ? NT.purple : Color.clear, lineWidth: 1.5))
                                 .onTapGesture { activeId = p.id }
                             }
@@ -385,7 +385,7 @@ struct NativeCheckoutView: View {
                         }
                         .foregroundColor(on ? .white : NT.ink)
                         .frame(maxWidth: .infinity, minHeight: 74)
-                        .background(RoundedRectangle(cornerRadius: 12).fill(on ? NT.purple : Color(hex: 0xF8F6FC)))
+                        .background(RoundedRectangle(cornerRadius: 12).fill(on ? NT.purple : Color(hex: 0xFBF9F5)))
                         .overlay(RoundedRectangle(cornerRadius: 12).stroke(NT.lilacLine, lineWidth: on ? 0 : 1))
                     }
                     .buttonStyle(PressableStyle())
@@ -460,7 +460,7 @@ struct NativeCheckoutView: View {
                     .font(.system(size: 26, weight: .heavy)).foregroundColor(NT.ink)
             }
             .padding(.horizontal, 14).frame(height: 54)
-            .background(RoundedRectangle(cornerRadius: 12).fill(Color(hex: 0xF8F6FC)))
+            .background(RoundedRectangle(cornerRadius: 12).fill(Color(hex: 0xFBF9F5)))
             keypad(onKey: keyForDiscount, quick: [
                 ("Apply discount", applyDiscount),
                 ("Remove discount", { discountInput = ""; pendingReason = nil; Task { await model.setDiscount(amount: 0, reason: "") } }),
@@ -500,7 +500,7 @@ struct NativeCheckoutView: View {
                         }
                         .font(.system(size: 24, weight: .bold)).foregroundColor(NT.ink)
                         .frame(maxWidth: .infinity, minHeight: 54)
-                        .background(RoundedRectangle(cornerRadius: 12).fill(Color(hex: 0xF8F6FC)))
+                        .background(RoundedRectangle(cornerRadius: 12).fill(Color(hex: 0xFBF9F5)))
                         .overlay(RoundedRectangle(cornerRadius: 12).stroke(NT.lilacLine, lineWidth: 1))
                     }
                     .buttonStyle(PressableStyle(scale: 0.93))

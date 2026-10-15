@@ -232,26 +232,26 @@ export function HandyOrderScreen({
         <HandyMain>
           <div className="p-3">
             {cart.length === 0 ? (
-              <p className="px-4 py-9 text-center text-[13px] leading-loose text-[#7a7090]">
+              <p className="px-4 py-9 text-center text-[13px] leading-loose text-[#766b62]">
                 注文する商品がありません。
               </p>
             ) : (
               pricedCart.map((line) => (
                 <article
                   key={line.key}
-                  className="mb-2.5 rounded-[10px] border border-[#e3dbf1] bg-white p-3.5"
+                  className="mb-2.5 rounded-[10px] border border-[#e5dfd5] bg-white p-3.5"
                 >
                   <div className="flex items-center justify-between gap-2 text-[13px]">
-                    <b className="min-w-0 font-bold break-words text-[#2a2138]">{line.nameEn ?? line.name}</b>
-                    <strong className="shrink-0 font-bold text-[#2a2138] tabular-nums">
+                    <b className="min-w-0 font-bold break-words text-[#292725]">{line.nameEn ?? line.name}</b>
+                    <strong className="shrink-0 font-bold text-[#292725] tabular-nums">
                       {yen(line.unitPrice * line.quantity)}
                     </strong>
                   </div>
                   {line.optionLabel && (
-                    <p className="my-2 text-[11px] break-words text-[#7a7090]">{line.optionLabel}</p>
+                    <p className="my-2 text-[11px] break-words text-[#766b62]">{line.optionLabel}</p>
                   )}
                   <div className="flex items-center justify-between gap-2">
-                    <small className="text-[10px] text-[#7a7090] tabular-nums">
+                    <small className="text-[10px] text-[#766b62] tabular-nums">
                       {yen(line.unitPrice)} / 点
                     </small>
                     <div className="mt-2.5 flex items-center gap-[11px]">
@@ -259,7 +259,7 @@ export function HandyOrderScreen({
                         type="button"
                         aria-label={`${line.name}を減らす`}
                         onClick={() => setCart((prev) => changeCartQuantity(prev, line.key, -1))}
-                        className="h-10 w-10 rounded-[4px] border border-[#7b3fe4] text-[21px] leading-none text-[#7b3fe4]"
+                        className="h-10 w-10 rounded-[4px] border border-[#bc5940] text-[21px] leading-none text-[#bc5940]"
                       >
                         −
                       </button>
@@ -271,7 +271,7 @@ export function HandyOrderScreen({
                         aria-label={`${line.name}を増やす`}
                         disabled={line.quantity >= MAX_LINE_QUANTITY}
                         onClick={() => setCart((prev) => changeCartQuantity(prev, line.key, 1))}
-                        className="h-10 w-10 rounded-[4px] border border-[#7b3fe4] text-[21px] leading-none text-[#7b3fe4] disabled:opacity-40"
+                        className="h-10 w-10 rounded-[4px] border border-[#bc5940] text-[21px] leading-none text-[#bc5940] disabled:opacity-40"
                       >
                         ＋
                       </button>
@@ -285,7 +285,7 @@ export function HandyOrderScreen({
               <span>{count}点 · 合計（税込）</span>
               <b className="text-[23px] font-bold tabular-nums">{yen(total)}</b>
             </div>
-            <p className="px-3 py-2 text-center text-[10px] leading-[1.7] text-[#7a7090]">
+            <p className="px-3 py-2 text-center text-[10px] leading-[1.7] text-[#766b62]">
               お客様に読み上げて確認してから、下をスライドしてオーダー決定してください。
               <br />
               送信すると伝票 #{orderNo}（現在 {yen(unpaidTotal)}）に追加され、厨房へ流れます。
@@ -294,7 +294,7 @@ export function HandyOrderScreen({
         </HandyMain>
 
         {/* オーダー決定はスライド（うっかりタップで送らない。2026-09-30 Ronnie） */}
-        <div className="flex-none bg-[#f6f3fb] px-3.5 pt-3 pb-2.5">
+        <div className="flex-none bg-[#fbf9f5] px-3.5 pt-3 pb-2.5">
           <SlideToConfirm
             label="オーダー決定"
             en="Slide to order"
@@ -311,8 +311,8 @@ export function HandyOrderScreen({
 
   return (
     <>
-      <header className="flex-none bg-[#15121a]">
-        <div className="flex h-12 items-stretch border-b-2 border-[#7b3fe4]">
+      <header className="flex-none bg-[#292725]">
+        <div className="flex h-12 items-stretch border-b-2 border-[#bc5940]">
           <BackToTable
             tableId={tableId}
             onClose={onClose}
@@ -334,8 +334,8 @@ export function HandyOrderScreen({
                 className={cn(
                   'flex min-w-[86px] flex-1 flex-col items-center justify-center gap-[3px] rounded-t-[11px] border border-b-0 px-1 text-xs leading-[1.15] font-bold whitespace-nowrap',
                   t.id === tab?.id
-                    ? 'border-[#f8f6fc] bg-[#f8f6fc] text-[#7b3fe4]'
-                    : 'border-[#59416f] bg-[#262030] text-[#c4afd8]'
+                    ? 'border-[#fbf9f5] bg-[#fbf9f5] text-[#bc5940]'
+                    : 'border-[#4a433d] bg-[#45403b] text-[#dcc0b0]'
                 )}
               >
                 <b className="block text-lg">{i + 1}</b>
@@ -355,7 +355,7 @@ export function HandyOrderScreen({
               type="button"
               onClick={() => setPageKey(null)}
               aria-label={`${tab?.label ?? 'ページ一覧'}へ戻る`}
-              className="flex min-h-[34px] shrink-0 items-center gap-0.5 rounded-[8px] border border-[#d9ccef] bg-white pr-2.5 pl-1 text-[12px] font-bold text-[#7b3fe4] shadow-[0_1px_2px_#00000008] active:bg-[#e9e0fa]"
+              className="flex min-h-[34px] shrink-0 items-center gap-0.5 rounded-[8px] border border-[#ead9cc] bg-white pr-2.5 pl-1 text-[12px] font-bold text-[#bc5940] shadow-[0_1px_2px_#00000008] active:bg-[#f6e4da]"
             >
               <ChevronLeft className="h-4 w-4" strokeWidth={2.4} aria-hidden />
               戻る
@@ -365,7 +365,7 @@ export function HandyOrderScreen({
               tableId={tableId}
               onClose={onClose}
               aria-label="卓の画面へ戻る"
-              className="flex min-h-[34px] shrink-0 items-center gap-0.5 rounded-[8px] border border-[#d9ccef] bg-white pr-2.5 pl-1 text-[12px] font-bold text-[#7b3fe4] shadow-[0_1px_2px_#00000008] active:bg-[#e9e0fa]"
+              className="flex min-h-[34px] shrink-0 items-center gap-0.5 rounded-[8px] border border-[#ead9cc] bg-white pr-2.5 pl-1 text-[12px] font-bold text-[#bc5940] shadow-[0_1px_2px_#00000008] active:bg-[#f6e4da]"
             >
               <ChevronLeft className="h-4 w-4" strokeWidth={2.4} aria-hidden />
               戻る
@@ -376,7 +376,7 @@ export function HandyOrderScreen({
               <button
                 type="button"
                 onClick={() => setPageKey(null)}
-                className="min-h-[30px] shrink-0 text-[10px] text-[#7b3fe4]"
+                className="min-h-[30px] shrink-0 text-[10px] text-[#bc5940]"
               >
                 {tab?.label}
               </button>
@@ -390,7 +390,7 @@ export function HandyOrderScreen({
         <BackToTable
           tableId={tableId}
           onClose={onClose}
-          className="min-h-[30px] shrink-0 py-1.5 text-[10px] whitespace-nowrap text-[#7b3fe4]"
+          className="min-h-[30px] shrink-0 py-1.5 text-[10px] whitespace-nowrap text-[#bc5940]"
         >
           {seatLabel} · 伝票#{orderNo}
         </BackToTable>
@@ -411,8 +411,8 @@ export function HandyOrderScreen({
                   className={cn(
                     'min-h-[34px] shrink-0 rounded-full border px-3.5 text-[12px] font-bold whitespace-nowrap',
                     on
-                      ? 'border-[#7b3fe4] bg-[#7b3fe4] text-white'
-                      : 'border-[#d9ccef] bg-white text-[#5e5470] active:bg-[#e9e0fa]'
+                      ? 'border-[#bc5940] bg-[#bc5940] text-white'
+                      : 'border-[#ead9cc] bg-white text-[#5c5650] active:bg-[#f6e4da]'
                   )}
                 >
                   {chip.label}
@@ -425,7 +425,7 @@ export function HandyOrderScreen({
 
       <HandyMain>
         {tabs.length === 0 ? (
-          <p className="px-6 py-9 text-center text-[13px] leading-loose text-[#7a7090]">
+          <p className="px-6 py-9 text-center text-[13px] leading-loose text-[#766b62]">
             注文できる商品がありません。
             <br />
             メニュー設定を確認してください。
@@ -439,10 +439,10 @@ export function HandyOrderScreen({
                   onClick={() => setPageKey(p.key)}
                   aria-label={`${p.label}（${p.itemCount}品）`}
                   style={{ borderBottomColor: TILE_ACCENTS[i % TILE_ACCENTS.length] }}
-                  className="tap3d flex aspect-square w-full items-center justify-between gap-1 overflow-hidden rounded-[10px] border border-[#e3dbf1] bg-white px-3 py-2.5 text-left text-xs font-bold break-words text-[#4f3868] active:bg-[#e9e0fa]"
+                  className="tap3d flex aspect-square w-full items-center justify-between gap-1 overflow-hidden rounded-[10px] border border-[#e5dfd5] bg-white px-3 py-2.5 text-left text-xs font-bold break-words text-[#45403b] active:bg-[#f6e4da]"
                 >
                   <PageTileLabel page={p} />
-                  <ChevronRight className="h-[13px] w-[13px] shrink-0 text-[#d1c7de]" aria-hidden />
+                  <ChevronRight className="h-[13px] w-[13px] shrink-0 text-[#d8cec2]" aria-hidden />
                 </button>
               </li>
             ))}
@@ -452,10 +452,10 @@ export function HandyOrderScreen({
             {shownCategories.map((c) => (
               <section key={c.id} className="mb-4 last:mb-0">
                 {shownCategories.length > 1 && (
-                  <h2 className="mb-2 flex items-center gap-2 px-1 text-[11px] font-bold tracking-wide text-[#5e5470]">
-                    <span className="h-3 w-1 rounded bg-[#7b3fe4]" aria-hidden />
+                  <h2 className="mb-2 flex items-center gap-2 px-1 text-[11px] font-bold tracking-wide text-[#5c5650]">
+                    <span className="h-3 w-1 rounded bg-[#bc5940]" aria-hidden />
                     {c.nameEn ?? c.name}
-                    <span className="font-normal text-[#a69bbb]">{c.items.length}</span>
+                    <span className="font-normal text-[#a89e92]">{c.items.length}</span>
                   </h2>
                 )}
                 <ul className="grid grid-cols-3 gap-x-2 gap-y-[17px] sm:grid-cols-4 lg:grid-cols-6">
@@ -473,9 +473,9 @@ export function HandyOrderScreen({
                             disabled ? undefined : { borderBottomColor: TILE_ACCENTS[i % TILE_ACCENTS.length] }
                           }
                           className={cn(
-                            'tap3d relative flex aspect-square w-full items-center justify-center overflow-hidden rounded-[10px] border border-[#e3dbf1] bg-white px-[7px] py-[9px] text-center text-xs font-bold break-words text-[#4f3868]',
-                            disabled ? 'border-b-[#e3dbf1] opacity-50' : 'active:bg-[#e9e0fa]',
-                            inCart > 0 && !disabled && 'border-[#7b3fe4] bg-[#e9e0fa]'
+                            'tap3d relative flex aspect-square w-full items-center justify-center overflow-hidden rounded-[10px] border border-[#e5dfd5] bg-white px-[7px] py-[9px] text-center text-xs font-bold break-words text-[#45403b]',
+                            disabled ? 'border-b-[#e5dfd5] opacity-50' : 'active:bg-[#f6e4da]',
+                            inCart > 0 && !disabled && 'border-[#bc5940] bg-[#f6e4da]'
                           )}
                         >
                           {/* ハンディは英語を主にする（日本語を読まないスタッフが打つため。2026-09-24 店舗要望）。
@@ -483,29 +483,29 @@ export function HandyOrderScreen({
                           <span className="flex flex-col gap-0.5 pb-[18px]">
                             <span>{item.nameEn ?? item.name}</span>
                             {item.nameEn && (
-                              <span className="text-[9px] font-normal text-[#7a7090]">{item.name}</span>
+                              <span className="text-[9px] font-normal text-[#766b62]">{item.name}</span>
                             )}
                           </span>
-                          <span className="absolute inset-x-0 bottom-[9px] text-[9px] font-normal text-[#7a7090] tabular-nums">
+                          <span className="absolute inset-x-0 bottom-[9px] text-[9px] font-normal text-[#766b62] tabular-nums">
                             {yen(item.price)}
                           </span>
                           {item.isSoldOut && (
-                            <span className="absolute inset-x-1.5 top-1/2 -translate-y-1/2 rounded bg-[#b3341f] px-1 py-0.5 text-[11px] font-bold text-white">
+                            <span className="absolute inset-x-1.5 top-1/2 -translate-y-1/2 rounded bg-[#c62828] px-1 py-0.5 text-[11px] font-bold text-white">
                               売切
                             </span>
                           )}
                           {!item.isSoldOut && item.offHours && (
-                            <span className="absolute inset-x-1.5 top-1/2 -translate-y-1/2 rounded bg-[#7a7090] px-1 py-0.5 text-[11px] font-bold text-white">
+                            <span className="absolute inset-x-1.5 top-1/2 -translate-y-1/2 rounded bg-[#766b62] px-1 py-0.5 text-[11px] font-bold text-white">
                               時間外
                             </span>
                           )}
                           {inCart > 0 && (
-                            <span className="absolute top-[5px] right-[5px] min-w-[21px] rounded-xl bg-[#7b3fe4] px-[5px] py-0.5 text-[10px] font-bold text-white">
+                            <span className="absolute top-[5px] right-[5px] min-w-[21px] rounded-xl bg-[#bc5940] px-[5px] py-0.5 text-[10px] font-bold text-white">
                               {inCart}
                             </span>
                           )}
                           {item.hasOptions && (
-                            <span className="absolute top-[5px] left-[5px] text-[9px] font-normal text-[#7a7090]">
+                            <span className="absolute top-[5px] left-[5px] text-[9px] font-normal text-[#766b62]">
                               選択肢
                             </span>
                           )}
@@ -519,11 +519,11 @@ export function HandyOrderScreen({
                       type="button"
                       onClick={() => setCustomTarget({ categoryId: c.id, label: c.nameEn ?? c.name })}
                       aria-label={`${c.name}：その他（金額を入力）`}
-                      className="tap3d relative flex aspect-square w-full flex-col items-center justify-center gap-1 overflow-hidden rounded-[10px] border border-dashed border-[#b9a6dc] bg-[#f8f6fc] px-[7px] py-[9px] text-center text-xs font-bold text-[#7b3fe4] active:bg-[#e9e0fa]"
+                      className="tap3d relative flex aspect-square w-full flex-col items-center justify-center gap-1 overflow-hidden rounded-[10px] border border-dashed border-[#d4b3a3] bg-[#fbf9f5] px-[7px] py-[9px] text-center text-xs font-bold text-[#bc5940] active:bg-[#f6e4da]"
                     >
                       <PenLine className="h-5 w-5" aria-hidden />
                       <span>Other</span>
-                      <span className="text-[9px] font-normal text-[#7a7090]">その他・金額入力</span>
+                      <span className="text-[9px] font-normal text-[#766b62]">その他・金額入力</span>
                     </button>
                   </li>
                 </ul>
@@ -533,12 +533,12 @@ export function HandyOrderScreen({
         )}
       </HandyMain>
 
-      <div className="flex-none bg-[#f6f3fb] px-3.5 pt-2 pb-2.5">
+      <div className="flex-none bg-[#fbf9f5] px-3.5 pt-2 pb-2.5">
         <button
           type="button"
           disabled={count === 0}
           onClick={() => setStep('review')}
-          className="flex min-h-[48px] w-full items-center justify-between gap-2 rounded-[9px] bg-[#7b3fe4] px-4 text-base font-bold text-white shadow-[0_3px_10px_#7b3fe41a] active:bg-[#6630c7] disabled:opacity-40"
+          className="flex min-h-[48px] w-full items-center justify-between gap-2 rounded-[9px] bg-[#bc5940] px-4 text-base font-bold text-white shadow-[0_3px_10px_#bc59401a] active:bg-[#9f4630] disabled:opacity-40"
         >
           <span>注文確認へ（{count}点）</span>
           <span className="tabular-nums">{yen(total)}</span>
@@ -580,7 +580,7 @@ function PageTileLabel({ page }: { page: HandyPageView }) {
     return (
       <span className="flex min-w-0 flex-col gap-0.5">
         <span>{en ?? page.name ?? only?.name}</span>
-        {en && <span className="text-[9px] font-normal text-[#7a7090]">{only?.name}</span>}
+        {en && <span className="text-[9px] font-normal text-[#766b62]">{only?.name}</span>}
       </span>
     );
   }
@@ -593,7 +593,7 @@ function PageTileLabel({ page }: { page: HandyPageView }) {
           {c.nameEn ?? c.name}
         </span>
       ))}
-      {rest > 0 && <span className="text-[10px] font-normal text-[#7a7090]">ほか{rest}</span>}
+      {rest > 0 && <span className="text-[10px] font-normal text-[#766b62]">ほか{rest}</span>}
     </span>
   );
 }

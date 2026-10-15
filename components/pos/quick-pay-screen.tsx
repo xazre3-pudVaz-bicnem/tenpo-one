@@ -520,7 +520,7 @@ export function QuickPayScreen({
           aria-label="メニュー選択"
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-2 sm:p-4"
         >
-          <div className="theme-regi flex h-[94dvh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-[#f6f3fb] text-[#2a2138] shadow-2xl">
+          <div className="theme-regi flex h-[94dvh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-[#fbf9f5] text-[#292725] shadow-2xl">
             <HandyOrderScreen
               tableId=""
               tableName={lineName}
@@ -551,13 +551,13 @@ type Digit = '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | '00' | 
 
 const KEY_TONES = {
   // 数字：白いキー
-  white: 'from-white to-[#ebe8f1] text-navy border-[#cfc9dc] border-b-[#b3abc4]',
-  gray: 'from-[#eeecf3] to-[#d9d4e3] text-navy border-[#c9c2d7] border-b-[#a9a1bb]',
-  dark: 'from-[#3a3246] to-[#221c2b] text-white border-[#15121a] border-b-[#0b090e]',
-  red: 'from-[#fdebe7] to-[#f5cdc5] text-[#b3341f] border-[#ebb9ae] border-b-[#d69a8d]',
+  white: 'from-white to-[#ece7e0] text-navy border-[#d9d2c7] border-b-[#beb5aa]',
+  gray: 'from-[#efebe5] to-[#ddd6cc] text-navy border-[#d2cabe] border-b-[#aca398]',
+  dark: 'from-[#3d3833] to-[#252220] text-white border-[#292725] border-b-[#0d0c0b]',
+  red: 'from-[#fdecec] to-[#f5cdc5] text-[#c62828] border-[#ebb9ae] border-b-[#d69a8d]',
   blue: 'from-[#e8eefb] to-[#cbd8f3] text-[#27468f] border-[#b8c8ec] border-b-[#97acdb]',
   amber: 'from-[#fdf2df] to-[#f6ddb0] text-[#8a4b08] border-[#ecd09c] border-b-[#d8b16e]',
-  brand: 'from-[#8b5cf6] to-[#6630c7] text-white border-[#5b2c8f] border-b-[#41206a]',
+  brand: 'from-[#bc5940] to-[#9f4630] text-white border-[#8a3f2c] border-b-[#3a2a22]',
 } as const;
 
 /** クラシックなレジのキー（立体的な押しボタン。押すと沈む） */
@@ -582,7 +582,7 @@ function RegiKey({
       onClick={onClick}
       disabled={disabled}
       className={cn(
-        'flex h-16 flex-col items-center justify-center rounded-lg border border-b-4 bg-linear-to-b leading-none font-bold shadow-[0_1px_2px_rgba(21,18,26,0.12)] transition-transform select-none active:translate-y-[2px] active:border-b-2 disabled:opacity-45',
+        'flex h-16 flex-col items-center justify-center rounded-lg border border-b-4 bg-linear-to-b leading-none font-bold shadow-[0_1px_2px_rgba(41, 39, 37,0.12)] transition-transform select-none active:translate-y-[2px] active:border-b-2 disabled:opacity-45',
         KEY_TONES[tone]
       )}
     >

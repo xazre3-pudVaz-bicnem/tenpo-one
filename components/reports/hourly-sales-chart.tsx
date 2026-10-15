@@ -24,11 +24,11 @@ export function HourlySalesChart({ data }: { data: HourlySalesPoint[] }) {
           />
           <Tooltip
             formatter={(value) => [`¥${Number(value).toLocaleString('ja-JP')}`, '売上']}
-            labelStyle={{ color: '#15121a', fontWeight: 600 }}
+            labelStyle={{ color: '#292725', fontWeight: 600 }}
             contentStyle={{ borderRadius: 12, border: '1px solid #E5E7EB', fontSize: 12 }}
-            cursor={{ fill: '#7b3fe4', fillOpacity: 0.06 }}
+            cursor={{ fill: '#bc5940', fillOpacity: 0.06 }}
           />
-          <Bar dataKey="sales" fill="#7b3fe4" radius={[4, 4, 0, 0]} maxBarSize={20} />
+          <Bar dataKey="sales" fill="#bc5940" radius={[4, 4, 0, 0]} maxBarSize={20} />
         </BarChart>
       </ResponsiveContainer>
     </div>

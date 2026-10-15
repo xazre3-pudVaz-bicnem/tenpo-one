@@ -20,7 +20,7 @@ export function AppModeSwitch({ className }: { className?: string }) {
     <button
       type="button"
       onClick={() => nativeBridge()?.changeMode()}
-      className={cn('flex w-full items-center gap-2 text-left text-sm text-[#7b3fe4]', className)}
+      className={cn('flex w-full items-center gap-2 text-left text-sm text-[#bc5940]', className)}
     >
       <Smartphone className="h-[18px] w-[18px]" aria-hidden />
       アプリの使い方を変える（ハンディ／オーナー）

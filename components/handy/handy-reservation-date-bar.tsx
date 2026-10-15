@@ -45,7 +45,7 @@ export function HandyReservationDateBar({
   };
 
   const navBtn =
-    'flex h-10 w-10 shrink-0 items-center justify-center rounded-[9px] border border-[#e3dbf1] bg-white text-[#4f3868] active:bg-[#efe8fa]';
+    'flex h-10 w-10 shrink-0 items-center justify-center rounded-[9px] border border-[#e5dfd5] bg-white text-[#45403b] active:bg-[#f6ebe3]';
 
   return (
     <div className="space-y-2 px-3 pt-2.5">
@@ -56,12 +56,12 @@ export function HandyReservationDateBar({
         <button
           type="button"
           onClick={openPicker}
-          className="relative flex h-10 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-[9px] border border-[#d9ccf3] bg-[#f4effc] px-2 text-[15px] font-bold text-[#4f3868] active:bg-[#e9e0fa]"
+          className="relative flex h-10 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-[9px] border border-[#ead9cc] bg-[#f9ede6] px-2 text-[15px] font-bold text-[#45403b] active:bg-[#f6e4da]"
           aria-label="日付を選ぶ"
         >
-          <CalendarDays className="h-4 w-4 shrink-0 text-[#7b3fe4]" aria-hidden />
+          <CalendarDays className="h-4 w-4 shrink-0 text-[#bc5940]" aria-hidden />
           <span className="truncate tabular-nums">{handyDayLabel(date)}</span>
-          {date === today && <span className="shrink-0 text-[10px] font-semibold text-[#7b3fe4]">今日</span>}
+          {date === today && <span className="shrink-0 text-[10px] font-semibold text-[#bc5940]">今日</span>}
           <input
             ref={pickerRef}
             type="date"
@@ -83,7 +83,7 @@ export function HandyReservationDateBar({
         {date !== today && (
           <Link
             href={handyReservationsHref(today, today)}
-            className="inline-flex h-8 items-center rounded-full border border-[#e3dbf1] bg-white px-3 text-[12px] font-bold text-[#5e5470] active:bg-[#efe8fa]"
+            className="inline-flex h-8 items-center rounded-full border border-[#e5dfd5] bg-white px-3 text-[12px] font-bold text-[#5c5650] active:bg-[#f6ebe3]"
           >
             今日に戻る
           </Link>
@@ -92,7 +92,7 @@ export function HandyReservationDateBar({
         {canAdd && (
           <Link
             href={handyNewReservationHref(date)}
-            className="inline-flex h-8 items-center gap-1 rounded-full bg-[#7b3fe4] px-3.5 text-[12px] font-bold text-white shadow-[0_3px_10px_#7b3fe41a] active:bg-[#6630c7]"
+            className="inline-flex h-8 items-center gap-1 rounded-full bg-[#bc5940] px-3.5 text-[12px] font-bold text-white shadow-[0_3px_10px_#bc59401a] active:bg-[#9f4630]"
           >
             <Plus className="h-3.5 w-3.5" strokeWidth={2.6} aria-hidden />
             予約を追加

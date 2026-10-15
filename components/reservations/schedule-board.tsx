@@ -80,7 +80,7 @@ const BAR_CLASS: Record<BarKind, string> = {
   arrived: 'border-iris bg-iris-soft text-royal',
   in: 'border-iris bg-iris text-white',
   pay: 'border-iris bg-iris text-white',
-  out: 'border-[#c7c0d4] bg-[#e6e2ee] text-ink-2',
+  out: 'border-[#d0c8bc] bg-[#e8e2da] text-ink-2',
   unset: 'border-danger bg-white text-danger',
 };
 
@@ -103,7 +103,7 @@ const STATUS_BADGE: Partial<Record<BarKind, { label: string; className: string }
   arrived: { label: '来店', className: 'bg-iris text-white' },
   in: { label: '来店中', className: 'bg-white text-royal' },
   pay: { label: '会計中', className: 'bg-gold text-navy' },
-  out: { label: '退店', className: 'bg-[#9788a6] text-white' },
+  out: { label: '退店', className: 'bg-[#8f857b] text-white' },
 };
 
 interface Placed {
@@ -466,7 +466,7 @@ export function ScheduleBoard({
       : null;
 
   const rowBg = {
-    backgroundImage: `repeating-linear-gradient(to right, var(--color-line) 0 1px, transparent 1px ${SLOT_W * 2}px), repeating-linear-gradient(to right, rgba(227,219,241,.55) 0 1px, transparent 1px ${SLOT_W}px)`,
+    backgroundImage: `repeating-linear-gradient(to right, var(--color-line) 0 1px, transparent 1px ${SLOT_W * 2}px), repeating-linear-gradient(to right, rgba(229,223,213,.55) 0 1px, transparent 1px ${SLOT_W}px)`,
   } as const;
 
   const unassignedPlaced = place(unassigned, viewStartMin, viewEndMin);
@@ -474,12 +474,12 @@ export function ScheduleBoard({
   return (
     <Card className="overflow-hidden print:shadow-none">
       <style>{`
-        .board-off{background:repeating-linear-gradient(135deg,rgba(201,184,234,.35) 0 6px,transparent 6px 12px);pointer-events:none}
-        .board-buffer{background:repeating-linear-gradient(45deg,rgba(122,112,144,.18) 0 3px,transparent 3px 6px);pointer-events:auto}
-        .board-past{background:rgba(36,20,54,.06);pointer-events:none}
+        .board-off{background:repeating-linear-gradient(135deg,rgba(214,205,192,.35) 0 6px,transparent 6px 12px);pointer-events:none}
+        .board-buffer{background:repeating-linear-gradient(45deg,rgba(118,107,98,.18) 0 3px,transparent 3px 6px);pointer-events:auto}
+        .board-past{background:rgba(41,39,37,.06);pointer-events:none}
         /* 卓などのチップは少し浮き上がった（3D）ボタンに見せる（店舗要望 2026-09-24） */
-        .board-chip{background-image:linear-gradient(180deg,rgba(255,255,255,.85) 0%,rgba(255,255,255,0) 60%);box-shadow:inset 0 1px 0 rgba(255,255,255,.95),0 2px 0 rgba(122,63,228,.16),0 3px 7px rgba(36,20,54,.13)}
-        .board-chip:active{transform:translateY(1px);box-shadow:inset 0 1px 0 rgba(255,255,255,.8),0 1px 0 rgba(122,63,228,.16),0 1px 3px rgba(36,20,54,.12)}
+        .board-chip{background-image:linear-gradient(180deg,rgba(255,255,255,.85) 0%,rgba(255,255,255,0) 60%);box-shadow:inset 0 1px 0 rgba(255,255,255,.95),0 2px 0 rgba(188,89,64,.16),0 3px 7px rgba(41,39,37,.13)}
+        .board-chip:active{transform:translateY(1px);box-shadow:inset 0 1px 0 rgba(255,255,255,.8),0 1px 0 rgba(188,89,64,.16),0 1px 3px rgba(41,39,37,.12)}
       `}</style>
       {/* 見出しは出さない（店舗要望 2026-09-24）。日付ナビは上のバー、
           「最終更新・組数・人数・営業時間」は下の行にまとめた */}
@@ -606,7 +606,7 @@ export function ScheduleBoard({
           <Legend className="border-2 border-dashed border-ink-3 bg-white">仮予約</Legend>
           <Legend className="border-2 border-iris bg-white">来店待ち</Legend>
           <Legend className="bg-iris">来店中（着席）</Legend>
-          <Legend className="bg-[#cfc9da]">退店（会計済み）</Legend>
+          <Legend className="bg-[#d9d2c7]">退店（会計済み）</Legend>
           <Legend className="bg-danger">席未定</Legend>
           {bufferMinutes > 0 && <Legend className="board-buffer border border-line">清掃（{bufferMinutes}分）</Legend>}
           {isToday && <Legend className="bg-saffron">現在時刻</Legend>}
@@ -625,7 +625,7 @@ export function ScheduleBoard({
               left: Math.min(Math.max(8, slot.x - 110), Math.max(8, window.innerWidth - 228)),
               top: Math.min(Math.max(64, slot.y - 8), Math.max(64, window.innerHeight - 190)),
             }}
-            className="absolute w-[220px] rounded-xl border border-line bg-white p-2 shadow-[0_18px_44px_rgba(36,20,54,0.28)]"
+            className="absolute w-[220px] rounded-xl border border-line bg-white p-2 shadow-[0_18px_44px_rgba(41,39,37,0.28)]"
           >
             <p className="mb-1.5 px-1 text-[12px] font-bold text-navy">
               {slot.tableName}

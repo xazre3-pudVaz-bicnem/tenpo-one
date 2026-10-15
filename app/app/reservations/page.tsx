@@ -387,7 +387,7 @@ export default async function ReservationsLedgerPage({ searchParams }: { searchP
                         <Link
                           href={`/app/reservations?date=${d}`}
                           className="block px-2 py-2 transition-colors hover:bg-lilac-soft"
-                          style={cell ? { backgroundColor: `rgba(123, 63, 228, ${(0.06 + heat * 0.22).toFixed(2)})` } : undefined}
+                          style={cell ? { backgroundColor: `rgba(188, 89, 64, ${(0.06 + heat * 0.22).toFixed(2)})` } : undefined}
                         >
                           {cell ? (
                             <span className="font-bold text-royal tabular-nums">

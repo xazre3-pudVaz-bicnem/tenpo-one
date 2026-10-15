@@ -58,7 +58,7 @@ function NativePushButton({ variant, className }: { variant: 'card' | 'row'; cla
       onClick={onClick}
       className={cn(
         variant === 'row'
-          ? 'flex min-h-[49px] w-full items-center gap-2 border-b border-[#eee8f6] text-left text-sm text-[#7b3fe4]'
+          ? 'flex min-h-[49px] w-full items-center gap-2 border-b border-[#f1ece4] text-left text-sm text-[#bc5940]'
           : 'inline-flex items-center gap-2 rounded-xl border border-line bg-white px-4 py-2.5 text-sm font-bold text-royal',
         className
       )}
@@ -163,9 +163,9 @@ function WebPushButton({ variant = 'card', className }: { variant?: 'card' | 'ro
 
   if (variant === 'row') {
     return (
-      <div className={cn('border-b border-[#eee8f6] py-3', className)}>
+      <div className={cn('border-b border-[#f1ece4] py-3', className)}>
         {button}
-        <p className="mt-1.5 text-[11px] leading-relaxed text-[#7a7090]">
+        <p className="mt-1.5 text-[11px] leading-relaxed text-[#766b62]">
           {hint ?? (state === 'on' ? 'ネット予約が入ると、この端末に音つきで通知が来ます。' : 'ログインした端末は自動でオンになります。オンにならないときはこのボタンで。')}
         </p>
       </div>

@@ -35,7 +35,7 @@ import { HandyBookingShareDialog } from './handy-booking-share';
  * RESERVATION／呼び出しバナー）をここにまとめる。
  *
  * 配色は本体の .theme-regi に依存できないため（/handy は /app の外）、外枠側で theme-regi を
- * 付けたうえで、プロトタイプの色は直接指定する（#15121a / #7b3fe4 / #f6f3fb …）。
+ * 付けたうえで、プロトタイプの色は直接指定する（#292725 / #bc5940 / #fbf9f5 …）。
  */
 
 interface HandyChromeApi {
@@ -118,7 +118,7 @@ export function HandyChrome({
 
   return (
     <HandyChromeContext.Provider value={api}>
-      <div className="theme-regi fixed inset-0 flex flex-col overflow-hidden bg-[#f6f3fb] text-[#2a2138]">
+      <div className="theme-regi fixed inset-0 flex flex-col overflow-hidden bg-[#fbf9f5] text-[#292725]">
         {children}
         {/* 新しいネット予約のチャイム＋バナー */}
         <ReservationAlert storeId={storeId} ledgerHref="/handy/reservations" />
@@ -158,12 +158,12 @@ export function HandyChrome({
 
           <nav
             aria-label="アプリ切り替え"
-            className="border-t border-[#e3dbf1] bg-white px-2 pb-[calc(6px+env(safe-area-inset-bottom))]"
+            className="border-t border-[#e5dfd5] bg-white px-2 pb-[calc(6px+env(safe-area-inset-bottom))]"
           >
             <button
               type="button"
               onClick={() => setSelectOpen(true)}
-              className="mx-auto block min-h-[22px] px-[18px] py-0.5 text-[8px] font-bold tracking-[1.4px] text-[#7a7090]"
+              className="mx-auto block min-h-[22px] px-[18px] py-0.5 text-[8px] font-bold tracking-[1.4px] text-[#766b62]"
             >
               SELECT ▴
             </button>
@@ -174,8 +174,8 @@ export function HandyChrome({
                 className={cn(
                   'flex min-h-[46px] items-center justify-center gap-2.5 rounded-[9px] text-[11px] font-extrabold tracking-[0.5px]',
                   onReservations
-                    ? 'text-[#7a7090] active:bg-[#f6f3fb]'
-                    : 'bg-[#efeaf8] text-[#7b3fe4]'
+                    ? 'text-[#766b62] active:bg-[#fbf9f5]'
+                    : 'bg-[#f3efe8] text-[#bc5940]'
                 )}
               >
                 <ShoppingCart className="h-[21px] w-[21px]" aria-hidden />
@@ -187,8 +187,8 @@ export function HandyChrome({
                 className={cn(
                   'flex min-h-[46px] items-center justify-center gap-2.5 rounded-[9px] text-[11px] font-extrabold tracking-[0.5px]',
                   onReservations
-                    ? 'bg-[#efeaf8] text-[#7b3fe4]'
-                    : 'text-[#7a7090] active:bg-[#f6f3fb]'
+                    ? 'bg-[#f3efe8] text-[#bc5940]'
+                    : 'text-[#766b62] active:bg-[#fbf9f5]'
                 )}
               >
                 <NotebookText className="h-[21px] w-[21px]" aria-hidden />
@@ -201,22 +201,22 @@ export function HandyChrome({
 
       {drawerOpen && (
         <HandySheet title="TENPO ONE" onClose={() => setDrawerOpen(false)}>
-          <p className="mb-3 text-[11px] leading-relaxed text-[#7a7090]">
+          <p className="mb-3 text-[11px] leading-relaxed text-[#766b62]">
             {storeName} ／ {staffName}
           </p>
-          <div className="mb-2 flex items-center justify-between gap-2 border-b border-[#eee8f6] py-2">
-            <span className="text-sm font-bold text-[#4f3868]">店舗</span>
+          <div className="mb-2 flex items-center justify-between gap-2 border-b border-[#f1ece4] py-2">
+            <span className="text-sm font-bold text-[#45403b]">店舗</span>
             <StoreSwitcher stores={stores} currentStoreId={currentStoreId} allowAll={allowAll} />
           </div>
           {clerkSelected && (
             <form action={changeClerkAction}>
               <button
                 type="submit"
-                className="flex min-h-[49px] w-full items-center gap-2 border-b border-[#eee8f6] text-left text-sm text-[#7b3fe4]"
+                className="flex min-h-[49px] w-full items-center gap-2 border-b border-[#f1ece4] text-left text-sm text-[#bc5940]"
               >
                 <UserRoundPen className="h-[18px] w-[18px]" aria-hidden />
                 担当者を変更（{staffName}）
-                <ChevronRight className="ml-auto h-4 w-4 text-[#c9b8ea]" aria-hidden />
+                <ChevronRight className="ml-auto h-4 w-4 text-[#e8c4b4]" aria-hidden />
               </button>
             </form>
           )}
@@ -235,12 +235,12 @@ export function HandyChrome({
                 setDrawerOpen(false);
                 setShareOpen(true);
               }}
-              className="flex min-h-[49px] w-full items-center gap-2 border-b border-[#eee8f6] text-left text-sm text-[#7b3fe4]"
+              className="flex min-h-[49px] w-full items-center gap-2 border-b border-[#f1ece4] text-left text-sm text-[#bc5940]"
             >
               <CalendarPlus className="h-[18px] w-[18px]" aria-hidden />
               ご予約リンクを紹介
-              <span className="text-[10px] font-semibold text-[#9a8cb6]">Share</span>
-              <ChevronRight className="ml-auto h-4 w-4 text-[#c9b8ea]" aria-hidden />
+              <span className="text-[10px] font-semibold text-[#a8958a]">Share</span>
+              <ChevronRight className="ml-auto h-4 w-4 text-[#e8c4b4]" aria-hidden />
             </button>
           )}
           {/* 品切れ設定はハンディのメニューには出さない（2026-09-28 Ronnie「ハンディにこのオプションは要らない」。レジの設定から） */}
@@ -251,20 +251,20 @@ export function HandyChrome({
               setDrawerOpen(false);
               setCallsOpen(true);
             }}
-            className="flex min-h-[49px] w-full items-center justify-between gap-2 border-b border-[#eee8f6] text-left text-sm text-[#7b3fe4]"
+            className="flex min-h-[49px] w-full items-center justify-between gap-2 border-b border-[#f1ece4] text-left text-sm text-[#bc5940]"
           >
             <span className="flex items-center gap-2">
               <UserRound className="h-[18px] w-[18px]" aria-hidden />
               お客様の呼び出し
             </span>
-            <span className="text-xs text-[#7a7090]">{sorted.length}件</span>
+            <span className="text-xs text-[#766b62]">{sorted.length}件</span>
           </button>
           {/* iPhone アプリの中だけ：ハンディ／オーナーの切り替え */}
-          <AppModeSwitch className="min-h-[49px] border-b border-[#eee8f6]" />
+          <AppModeSwitch className="min-h-[49px] border-b border-[#f1ece4]" />
           <form action={signOut}>
             <button
               type="submit"
-              className="flex min-h-[49px] w-full items-center gap-2 border-b border-[#eee8f6] text-left text-sm text-[#b3341f]"
+              className="flex min-h-[49px] w-full items-center gap-2 border-b border-[#f1ece4] text-left text-sm text-[#c62828]"
             >
               <LogOut className="h-[18px] w-[18px]" aria-hidden />
               ログアウト
@@ -324,12 +324,12 @@ export function HandyTopBar({
   right?: React.ReactNode;
 }) {
   return (
-    <header className="flex-none bg-[#15121a] text-white">
-      <div className="grid min-h-[53px] grid-cols-[110px_1fr_110px] items-center border-b border-[#262030] px-[7px] max-[350px]:grid-cols-[86px_1fr_86px]">
+    <header className="flex-none bg-[#292725] text-white">
+      <div className="grid min-h-[53px] grid-cols-[110px_1fr_110px] items-center border-b border-[#45403b] px-[7px] max-[350px]:grid-cols-[86px_1fr_86px]">
         {left ?? <span />}
         <div className="min-w-0 py-0.5 text-center">
           {storeName && (
-            <span className="flex h-[26px] items-center justify-center truncate text-[10px] text-[#ded1ed]">
+            <span className="flex h-[26px] items-center justify-center truncate text-[10px] text-[#e9dfd3]">
               {storeName}
             </span>
           )}
@@ -383,11 +383,11 @@ export function HandyBookingShareButton() {
     <button
       type="button"
       onClick={openBookingShare}
-      className="inline-flex h-8 items-center gap-1 rounded-full border border-[#d9ccf3] bg-[#f4effc] px-3 text-[12px] font-bold text-[#6630c7] active:bg-[#e9e0fa]"
+      className="inline-flex h-8 items-center gap-1 rounded-full border border-[#ead9cc] bg-[#f9ede6] px-3 text-[12px] font-bold text-[#9f4630] active:bg-[#f6e4da]"
     >
       <CalendarPlus className="h-3.5 w-3.5" aria-hidden />
       ご予約リンクを紹介
-      <span className="text-[9.5px] font-semibold text-[#9a8cb6]">Share</span>
+      <span className="text-[9.5px] font-semibold text-[#a8958a]">Share</span>
     </button>
   );
 }
@@ -403,7 +403,7 @@ export function HandyBackButton({
   onClick?: () => void;
 }) {
   const className =
-    'flex min-h-11 items-center gap-0.5 text-xs font-medium text-[#ded1ed] active:text-white';
+    'flex min-h-11 items-center gap-0.5 text-xs font-medium text-[#e9dfd3] active:text-white';
   const body = (
     <>
       <ChevronLeft className="h-[19px] w-[19px] shrink-0" strokeWidth={2.2} aria-hidden />
@@ -437,10 +437,10 @@ export function HandyOperatorBar({
   showIcon?: boolean;
 }) {
   return (
-    <div className="flex min-h-[28px] flex-none items-center gap-[7px] px-2.5 py-1.5 text-[13px] text-[#5e5470]">
-      {showIcon && <UserRound className="h-[17px] w-[17px] shrink-0 text-[#a69bbb]" aria-hidden />}
+    <div className="flex min-h-[28px] flex-none items-center gap-[7px] px-2.5 py-1.5 text-[13px] text-[#5c5650]">
+      {showIcon && <UserRound className="h-[17px] w-[17px] shrink-0 text-[#a89e92]" aria-hidden />}
       <b className={cn('min-w-0 truncate', showIcon ? 'font-bold' : 'font-normal')}>{label}</b>
-      {note && <span className="ml-auto shrink-0 text-[9px] text-[#7a7090]">{note}</span>}
+      {note && <span className="ml-auto shrink-0 text-[9px] text-[#766b62]">{note}</span>}
     </div>
   );
 }
@@ -471,10 +471,10 @@ export function HandyFooterButton({
   onClick?: () => void;
 }) {
   return (
-    <div className="flex-none bg-[#f6f3fb] px-3.5 pt-3 pb-2.5">
+    <div className="flex-none bg-[#fbf9f5] px-3.5 pt-3 pb-2.5">
       <button
         type="button"
-        className="flex min-h-[42px] w-full items-center justify-center gap-2 rounded-[9px] bg-[#7b3fe4] px-4 text-base font-bold text-white shadow-[0_3px_10px_#7b3fe41a] active:bg-[#6630c7] disabled:opacity-40"
+        className="flex min-h-[42px] w-full items-center justify-center gap-2 rounded-[9px] bg-[#bc5940] px-4 text-base font-bold text-white shadow-[0_3px_10px_#bc59401a] active:bg-[#9f4630] disabled:opacity-40"
         disabled={disabled}
         onClick={onClick}
       >
@@ -498,11 +498,11 @@ function SheetLink({
   return (
     <Link
       href={href}
-      className="flex min-h-[49px] items-center gap-2 border-b border-[#eee8f6] text-sm text-[#7b3fe4]"
+      className="flex min-h-[49px] items-center gap-2 border-b border-[#f1ece4] text-sm text-[#bc5940]"
     >
       {icon}
       {children}
-      <ChevronRight className="ml-auto h-4 w-4 text-[#c9b8ea]" aria-hidden />
+      <ChevronRight className="ml-auto h-4 w-4 text-[#e8c4b4]" aria-hidden />
     </Link>
   );
 }
@@ -521,19 +521,19 @@ function HandySheet({
       role="dialog"
       aria-modal="true"
       aria-label={title}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-[#15121a88] p-3"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[#29272588] p-3"
       onClick={onClose}
     >
       <div
         className="max-h-[88dvh] w-full max-w-[370px] overflow-y-auto rounded-xl bg-white p-5 shadow-[0_20px_90px_#0005]"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="mb-4 text-lg font-bold text-[#2a2138]">{title}</h2>
+        <h2 className="mb-4 text-lg font-bold text-[#292725]">{title}</h2>
         {children}
         <button
           type="button"
           onClick={onClose}
-          className="mt-3 min-h-[43px] w-full rounded-lg bg-[#efeaf8] text-center text-sm font-bold text-[#5e5470]"
+          className="mt-3 min-h-[43px] w-full rounded-lg bg-[#f3efe8] text-center text-sm font-bold text-[#5c5650]"
         >
           閉じる
         </button>
@@ -582,28 +582,28 @@ function HandyCallsSheet({
   return (
     <HandySheet title="お客様の呼び出し" onClose={onClose}>
       {message && (
-        <p role="status" className="mb-2 rounded-lg bg-[#efeaf8] p-2 text-[11px] text-[#5e5470]">
+        <p role="status" className="mb-2 rounded-lg bg-[#f3efe8] p-2 text-[11px] text-[#5c5650]">
           {message}
         </p>
       )}
       {calls.length === 0 ? (
-        <p className="py-6 text-center text-[13px] text-[#7a7090]">未対応の呼び出しはありません。</p>
+        <p className="py-6 text-center text-[13px] text-[#766b62]">未対応の呼び出しはありません。</p>
       ) : (
         <ul className="space-y-2.5">
           {calls.map((call) => (
-            <li key={call.id} className="rounded-[10px] border border-[#e3dbf1] p-3">
-              <h3 className="flex items-baseline justify-between text-sm font-bold text-[#4f3868]">
+            <li key={call.id} className="rounded-[10px] border border-[#e5dfd5] p-3">
+              <h3 className="flex items-baseline justify-between text-sm font-bold text-[#45403b]">
                 {call.tableName ?? '—'}
                 <span
                   className={cn(
                     'rounded-md px-1.5 py-0.5 text-[11px] font-bold text-white',
-                    call.kind === 'checkout' ? 'bg-[#bd660f]' : 'bg-[#7b3fe4]'
+                    call.kind === 'checkout' ? 'bg-[#b7791f]' : 'bg-[#bc5940]'
                   )}
                 >
                   {serviceCallLabel(call.kind)}
                 </span>
               </h3>
-              <p className="my-2 text-[11px] text-[#7a7090]">
+              <p className="my-2 text-[11px] text-[#766b62]">
                 {formatTime(new Date(call.createdAtMs))}　{elapsedLabel(call.createdAtMs, now)}経過
                 {call.note ? `　${call.note}` : ''}
               </p>
@@ -611,7 +611,7 @@ function HandyCallsSheet({
                 type="button"
                 disabled={pending}
                 onClick={() => handleResolve(call)}
-                className="min-h-[42px] w-full rounded-[9px] bg-[#7b3fe4] text-sm font-bold text-white disabled:opacity-40"
+                className="min-h-[42px] w-full rounded-[9px] bg-[#bc5940] text-sm font-bold text-white disabled:opacity-40"
               >
                 {pending && busy === call.id ? '処理中…' : '対応済みにする'}
               </button>

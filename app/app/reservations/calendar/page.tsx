@@ -159,7 +159,7 @@ export default async function ReservationsCalendarPage({
                             className={cn(
                               'relative flex h-full flex-col gap-1 p-2 transition-colors hover:bg-iris-soft',
                               !cell.inMonth && 'bg-lilac-soft/60',
-                              holidayName && cell.inMonth && 'bg-[#EEECF1]',
+                              holidayName && cell.inMonth && 'bg-[#EFEBE5]',
                               isTodayCell && 'ring-2 ring-iris ring-inset'
                             )}
                           >
@@ -186,7 +186,7 @@ export default async function ReservationsCalendarPage({
                             {count > 0 && (
                               <span
                                 className="mt-auto self-start rounded-md px-1.5 py-0.5 text-[12px] font-bold text-royal tabular-nums"
-                                style={{ backgroundColor: `rgba(123, 63, 228, ${(0.1 + heat * 0.25).toFixed(2)})` }}
+                                style={{ backgroundColor: `rgba(188, 89, 64, ${(0.1 + heat * 0.25).toFixed(2)})` }}
                               >
                                 {count}組<span className="ml-1 font-medium text-ink-2">({guests}名)</span>
                               </span>
@@ -203,7 +203,7 @@ export default async function ReservationsCalendarPage({
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-line bg-lilac-soft px-4 py-2 text-[11.5px] font-medium text-ink-2">
             <span>数字＝組数（名数）</span>
             <span className="inline-flex items-center gap-1.5">
-              <i className="inline-block h-[9px] w-[9px] rounded-full bg-[#cfc9da]" />
+              <i className="inline-block h-[9px] w-[9px] rounded-full bg-[#d9d2c7]" />
               グレー＝休業日
             </span>
             <span className="inline-flex items-center gap-1.5">
