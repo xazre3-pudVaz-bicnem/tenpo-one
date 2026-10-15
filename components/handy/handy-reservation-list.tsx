@@ -69,21 +69,21 @@ export function HandyReservationList({
 
   return (
     <div className="pt-1 pb-4">
-      <div className="px-3.5 pt-2 text-[12px] text-[#5e5470]">時間が早い順</div>
-      <div className="flex items-center gap-2 px-3.5 pt-1 pb-2">
+      <div className="flex items-center gap-2 px-3.5 pt-1.5 pb-1.5">
         <span className="text-[13px] font-bold text-[#2a2138] tabular-nums">{shown.length}件</span>
+        <span className="text-[11px] text-[#7a7090]">時間が早い順</span>
         <span className="flex-1" />
-        <span className="text-[12px] text-[#5e5470]">キャンセルを除く</span>
+        <span className="text-[11.5px] text-[#5e5470]">キャンセルを除く</span>
         <button
           type="button"
           role="switch"
           aria-checked={hideCancelled}
           aria-label="キャンセルを除く"
           onClick={() => setHideCancelled((v) => !v)}
-          className={cn('relative h-7 w-12 shrink-0 rounded-full transition-colors', hideCancelled ? 'bg-[#7b3fe4]' : 'bg-[#cfc7dc]')}
+          className={cn('relative h-6 w-10 shrink-0 rounded-full transition-colors', hideCancelled ? 'bg-[#7b3fe4]' : 'bg-[#cfc7dc]')}
         >
           <span
-            className={cn('absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-all', hideCancelled ? 'left-[22px]' : 'left-0.5')}
+            className={cn('absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all', hideCancelled ? 'left-[18px]' : 'left-0.5')}
           />
         </button>
       </div>
@@ -91,7 +91,7 @@ export function HandyReservationList({
       {shown.length === 0 ? (
         <p className="px-6 py-9 text-center text-[13px] leading-loose text-[#7a7090]">キャンセル以外の予約はありません。</p>
       ) : (
-        <ul className="space-y-2 px-2.5">
+        <ul className="space-y-1.5 px-2">
           {shown.map((r) => {
             const cancelled = CANCELLED.has(r.status);
             const request = r.request ?? (r.memo == null ? r.note : null);
@@ -99,59 +99,61 @@ export function HandyReservationList({
               <li
                 key={r.id}
                 className={cn(
-                  'rounded-[10px] border border-[#e3dbf1] p-3 shadow-[0_1px_3px_#2a213810]',
+                  'rounded-[9px] border border-[#e3dbf1] px-2.5 py-2 shadow-[0_1px_3px_#2a213810]',
                   cancelled ? 'bg-[#efedf2]' : 'bg-white',
                   !r.upcoming && !cancelled && 'opacity-80'
                 )}
               >
-                <div className="flex gap-3">
+                <div className="flex gap-2.5">
                   {/* 左：状態・お名前・電話番号 */}
-                  <div className="flex w-[42%] min-w-0 shrink-0 flex-col">
+                  <div className="flex w-[40%] min-w-0 shrink-0 flex-col">
                     <span
                       className={cn(
-                        'self-start rounded-[4px] border-2 px-2 py-0.5 text-[12px] font-bold',
+                        'self-start rounded-[4px] border-[1.5px] px-1.5 py-px text-[10.5px] font-bold',
                         STATUS_TONE[r.status] ?? 'border-[#7a7090] bg-white text-[#5e5470]'
                       )}
                     >
                       {r.statusLabel}
                     </span>
-                    <div className="mt-auto pt-3">
-                      <b className={cn('block text-[16px] leading-snug font-bold break-words', cancelled ? 'text-[#5e5470]' : 'text-[#2a2138]')}>
+                    <div className="pt-1.5">
+                      <b className={cn('block text-[14px] leading-snug font-bold break-words', cancelled ? 'text-[#5e5470]' : 'text-[#2a2138]')}>
                         {r.name} 様
                       </b>
                       {r.phone ? (
-                        <a href={`tel:${r.phone}`} className="mt-0.5 block text-[15px] font-bold tracking-wide text-[#2a2138] tabular-nums">
+                        <a href={`tel:${r.phone}`} className="block text-[12.5px] font-bold text-[#2a2138] tabular-nums">
                           {r.phone}
                         </a>
                       ) : (
-                        <span className="mt-0.5 block text-[15px] font-bold text-[#7a7090]">-</span>
+                        <span className="block text-[12.5px] font-bold text-[#7a7090]">-</span>
                       )}
                     </div>
                   </div>
 
                   {/* 右：時間〜人数・席・コース・経路・要望・メモ */}
                   <div className="min-w-0 flex-1">
-                    <p className={cn('text-[16px] font-bold tabular-nums', cancelled ? 'text-[#5e5470]' : 'text-[#2a2138]')}>
-                      {r.time}〜 {r.partySize}名
+                    <p className="flex items-center gap-2">
+                      <span className={cn('text-[14px] font-bold tabular-nums', cancelled ? 'text-[#5e5470]' : 'text-[#2a2138]')}>
+                        {r.time}〜 {r.partySize}名
+                      </span>
+                      <span className="flex min-w-0 items-center gap-1 text-[12px] font-bold text-[#4f3868]">
+                        <Armchair className="h-3.5 w-3.5 shrink-0 text-[#7a7090]" aria-hidden />
+                        <span className="truncate">{r.tableLabel}</span>
+                      </span>
                     </p>
-                    <p className="mt-1 flex items-center gap-1.5 text-[13px] font-bold text-[#4f3868]">
-                      <Armchair className="h-4 w-4 shrink-0 text-[#7a7090]" aria-hidden />
-                      <span className="truncate">{r.tableLabel}</span>
-                    </p>
-                    <div className="mt-1.5 space-y-1 border-l-2 border-[#d9d2e4] pl-2.5 text-[12px] text-[#5e5470]">
-                      <p className="flex items-start gap-1.5">
-                        <Utensils className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
-                        <span className="min-w-0 break-words">{r.courseName || '-'}</span>
+                    <div className="mt-1 space-y-px border-l-2 border-[#d9d2e4] pl-2 text-[11px] leading-[1.45] text-[#5e5470]">
+                      <p className="flex items-center gap-1">
+                        <Utensils className="h-3 w-3 shrink-0" aria-hidden />
+                        <span className="min-w-0 truncate">{r.courseName || '-'}</span>
                       </p>
-                      <p className="flex items-start gap-1.5">
-                        <Tag className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
-                        <span className="min-w-0 break-words">{r.sourceLabel || '-'}</span>
+                      <p className="flex items-center gap-1">
+                        <Tag className="h-3 w-3 shrink-0" aria-hidden />
+                        <span className="min-w-0 truncate">{r.sourceLabel || '-'}</span>
                       </p>
-                      <div className="flex items-start gap-1.5">
-                        <ClipboardList className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
-                        <div className="min-w-0 space-y-0.5">
-                          <p className="line-clamp-2 break-words">要望：{request || '-'}</p>
-                          <p className="line-clamp-2 break-words">メモ：{r.memo || '-'}</p>
+                      <div className="flex items-start gap-1">
+                        <ClipboardList className="mt-[2px] h-3 w-3 shrink-0" aria-hidden />
+                        <div className="min-w-0">
+                          <p className="truncate">要望：{request || '-'}</p>
+                          <p className="truncate">メモ：{r.memo || '-'}</p>
                         </div>
                       </div>
                     </div>
@@ -160,7 +162,7 @@ export function HandyReservationList({
                 {r.tableId && !cancelled && (
                   <Link
                     href={`/handy/${r.tableId}`}
-                    className="mt-2.5 flex min-h-[40px] items-center justify-center rounded-[9px] border border-[#7b3fe4] text-[13px] font-bold text-[#7b3fe4] active:bg-[#e9e0fa]"
+                    className="mt-2 flex min-h-[36px] items-center justify-center rounded-[8px] border border-[#7b3fe4] text-[12.5px] font-bold text-[#7b3fe4] active:bg-[#e9e0fa]"
                   >
                     HANDYで注文
                   </Link>
