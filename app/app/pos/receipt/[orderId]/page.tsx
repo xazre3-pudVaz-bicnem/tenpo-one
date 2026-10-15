@@ -74,7 +74,7 @@ export default async function ReceiptPage({
       supabase.from('refunds').select('amount').eq('order_id', orderId),
       supabase.from('point_transactions').select('kind, points').eq('order_id', orderId),
       // 領収書は一度きり（2026-09-26 Ronnie）。出したことがあるかを print_jobs から読む
-      supabase.from('print_jobs').select('job_type, status, printed_at, created_at').eq('order_id', orderId).eq('job_type', 'ryoshusho'),
+      supabase.from('print_jobs').select('job_type, status, printed_at, created_at, sheets:payload->sheets').eq('order_id', orderId).eq('job_type', 'ryoshusho'),
     ]);
   const ryoshushoIssued = ryoshushoIssuedFrom(ryoshushoJobs ?? []);
 

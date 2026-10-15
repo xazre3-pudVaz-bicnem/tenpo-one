@@ -89,3 +89,22 @@ export function validatePayments(total: number, payments: { amount: number }[]):
 export function calcChange(amountDue: number, tendered: number): number {
   return Math.max(0, tendered - amountDue);
 }
+
+/**
+ * 現金で払う額＝お預かりと残り（この現金で払うべき額）の小さいほう。
+ * お預かりが足りなければ、払えたのはお預かりの分だけ（残りは残額として残り、会計完了は押せない）。
+ * 2026-10-14 宮崎さん（御茶ノ水）「お会計のときに金額が足りなくても会計ができてしまう」
+ * （お預かり ¥1,080 で ¥5,280 の会計が完了し、おつり ¥0 になった）
+ */
+export function cashPaidAmount(tendered: number, due: number): number {
+  const t = Number.isFinite(tendered) ? Math.max(0, Math.floor(tendered)) : 0;
+  const d = Number.isFinite(due) ? Math.max(0, Math.floor(due)) : 0;
+  return Math.min(t, d);
+}
+
+/** 現金のお預かりが、その現金で払う額に足りているか（お預かりを入れていない行は「ちょうど」とみなす） */
+export function isCashCovered(p: { method: string; amount: number; tendered?: number | null }): boolean {
+  if (p.method !== 'cash') return true;
+  if (p.tendered == null) return true;
+  return p.tendered >= p.amount;
+}

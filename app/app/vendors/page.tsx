@@ -4,7 +4,9 @@ import { createClient } from '@/lib/supabase/server';
 import { todayJst } from '@/lib/format';
 import { PageHeader } from '@/components/ui/page-header';
 import { Input, Select } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
+import Link from 'next/link';
+import { ArrowLeft } from 'lucide-react';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { VendorForm } from './vendor-form';
 import { VendorTable, type VendorRow } from './vendor-table';
 
@@ -94,7 +96,20 @@ export default async function VendorsPage({
 
   return (
     <div>
-      <PageHeader title="仕入先" description="発注・請求書で使用する取引先マスタを管理します" actions={<VendorForm />} />
+      <PageHeader
+        title="仕入先"
+        description="発注・請求書で使用する取引先マスタを管理します"
+        actions={
+          // 仕入先の画面から入出金へ（2026-10-14 宮崎さん「仕入先の画面から入出金の画面に進めるように」。レジクローズの「← 入出金」と同じボタン）
+          <div className="flex flex-wrap items-center gap-2">
+            <Link href="/app/cash" className={buttonVariants({ variant: 'secondary' })}>
+              <ArrowLeft className="h-4 w-4" />
+              入出金
+            </Link>
+            <VendorForm />
+          </div>
+        }
+      />
 
       <form method="GET" className="mb-4 flex flex-wrap items-end gap-2">
         <div>
