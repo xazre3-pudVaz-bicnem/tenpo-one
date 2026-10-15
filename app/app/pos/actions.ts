@@ -14,6 +14,7 @@ import { resolveStartTime, startTimeProblem } from '@/lib/handy-visit';
 import { isGuestCount, isSeatDuration } from '@/lib/seat-time';
 import { RYOSHUSHO_ISSUED_MESSAGE, ryoshushoIssuedFrom } from '@/lib/ryoshusho-issue';
 import { dynamicUnitPrice } from '@/lib/dynamic-pricing';
+import { isCashCovered } from '@/lib/money';
 import { loadDynamicRules } from '@/lib/dynamic-pricing-server';
 import { clerkCanCancel } from '@/lib/clerk-roles';
 import { loadStoreClerks } from '@/lib/pos-clerks-server';
@@ -788,6 +789,12 @@ export async function checkout(
     .maybeSingle();
   if (!session) {
     return { ok: false, registerClosed: true };
+  }
+
+  // 現金のお預かりが足りない会計は受け付けない（2026-10-14 宮崎さん「金額が足りなくても会計ができてしまう」。
+  // 画面でも止めているが、古い画面・アプリから来ても売上とお金がずれないようにここでも止める）
+  if (!payments.every(isCashCovered)) {
+    throw new Error('お預かり金額が足りません。お預かり金額を確かめてください');
   }
 
   // 未送信のまま会計する品目（先払い・テイクアウトなど）は、会計と同時に厨房へ送る。
@@ -1651,7 +1658,7 @@ export async function logPrintJob(orderId: string, jobType: 'receipt' | 'ryoshus
   if (jobType === 'ryoshusho') {
     const { data: jobs } = await supabase
       .from('print_jobs')
-      .select('job_type, status, printed_at, created_at')
+      .select('job_type, status, printed_at, created_at, sheets:payload->sheets')
       .eq('order_id', orderId)
       .eq('job_type', 'ryoshusho');
     if (ryoshushoIssuedFrom(jobs ?? []).issued) throw new Error(RYOSHUSHO_ISSUED_MESSAGE);

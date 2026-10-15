@@ -22,7 +22,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useToast } from '@/components/ui/toast';
 import { cn } from '@/lib/utils';
 import { yen } from '@/lib/format';
-import { calcChange } from '@/lib/money';
+import { calcChange, cashPaidAmount, isCashCovered } from '@/lib/money';
 import { METHOD_LABELS, METHOD_LABELS_EN } from '@/components/cash/labels';
 import { setOrderClerk } from '@/app/app/pos/clerk-actions';
 import { enqueueReceiptPrint } from '@/app/app/pos/print-actions';
@@ -529,6 +529,8 @@ export function CheckoutDialog({
    */
   const canConfirm =
     !clerkMissing && !terminalBlocking && paid === order.total &&
+    // 現金のお預かりが足りないときは会計できない（2026-10-14 宮崎さん「金額が足りなくても会計ができてしまう」）
+    payments.every(isCashCovered) &&
     (order.total === 0 ? true : payments.length > 0 && payments.every((p) => p.amount > 0));
 
   const handleConfirm = () => {
@@ -583,10 +585,16 @@ export function CheckoutDialog({
   /** テンキーなどが編集する対象の支払行（最後に選んだもの） */
   const activeRow = payments[payments.length - 1] ?? null;
 
+  /** この行で払うべき額（合計から、ほかの支払行の分を引いた残り） */
+  const dueFor = (row: PaymentRow) =>
+    Math.max(0, order.total - payments.filter((p) => p.key !== row.key).reduce((a, p) => a + p.amount, 0));
+
   const setActiveValue = (next: number) => {
     if (!activeRow) return;
     if (activeRow.method === 'cash') {
-      updatePayment(activeRow.key, { tendered: Math.max(0, next) });
+      // 現金で払う額はお預かりまで。足りなければ残額が残り、会計完了は押せない（ほかの方法で残りを払える）
+      const tendered = Math.max(0, next);
+      updatePayment(activeRow.key, { tendered, amount: cashPaidAmount(tendered, dueFor(activeRow)) });
     } else {
       const cap = activeRow.method === 'points' ? maxPointsUsable : Number.MAX_SAFE_INTEGER;
       updatePayment(activeRow.key, { amount: Math.max(0, Math.min(cap, next)) });
@@ -1202,7 +1210,7 @@ export function CheckoutDialog({
                     type="button"
                     disabled={!activeRow}
                     onClick={() => {
-                      setActiveValue(activeRow?.method === 'cash' ? (activeRow?.amount ?? 0) : Math.max(0, remaining) + (activeRow?.amount ?? 0));
+                      setActiveValue(activeRow?.method === 'cash' ? dueFor(activeRow) : Math.max(0, remaining) + (activeRow?.amount ?? 0));
                       setTypedKey(null);
                     }}
                     className={keySmall}

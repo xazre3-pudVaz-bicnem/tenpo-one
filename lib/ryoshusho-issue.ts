@@ -33,6 +33,8 @@ export interface RyoshushoJobRow {
   status: string;
   printed_at?: string | null;
   created_at?: string | null;
+  /** 1つの印刷ジョブに入れた枚数（分割発行をまとめて1回で出す。payload.sheets。無ければ1枚） */
+  sheets?: unknown;
 }
 
 export interface RyoshushoIssueState {
@@ -52,7 +54,11 @@ export function ryoshushoIssuedFrom(jobs: readonly RyoshushoJobRow[] | null | un
     .map((j) => j.printed_at ?? j.created_at ?? null)
     .filter((t): t is string => typeof t === 'string' && t.length > 0)
     .sort();
-  return { issued: true, at: times[0] ?? null, count: rows.length };
+  const count = rows.reduce((n, j) => {
+    const sheets = Math.floor(Number(j.sheets ?? 1));
+    return n + (Number.isFinite(sheets) && sheets >= 1 ? sheets : 1);
+  }, 0);
+  return { issued: true, at: times[0] ?? null, count };
 }
 
 /** 「9/26 21:12」のような日本時間の短い表記（発行済みの案内に使う） */
