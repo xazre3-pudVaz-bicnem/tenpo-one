@@ -17,6 +17,7 @@ import { LedgerTop } from '@/components/reservations/ledger-header';
 import { RESERVATION_STATUS, type ReservationStatus } from '@/lib/reservations';
 import type { ReservationListRow } from '@/components/reservations/list-types';
 import { cn } from '@/lib/utils';
+import { reservationClerkOptions } from '@/lib/reservation-clerks-server';
 
 export const metadata: Metadata = { title: '予約リスト' };
 
@@ -51,16 +52,13 @@ interface RawListRow {
   is_private_hire: boolean;
   staff_id: string | null;
   source_id?: string | null;
+  clerk_id?: string | null;
+  clerk_name?: string | null;
   profiles: { display_name: string } | null;
   stores: { name: string } | null;
   course: { name: string } | null;
   reservation_sources: { name: string } | null;
   reservation_tables: { table_id: string; restaurant_tables: { name: string } | null }[];
-}
-
-interface StaffMembershipRow {
-  store_id: string;
-  memberships: { profile_id: string; profiles: { display_name: string } | null } | null;
 }
 
 interface SearchParams {
@@ -121,7 +119,7 @@ export default async function ReservationListPage({ searchParams }: { searchPara
     .select(
       `id, code, reserved_date, start_at, end_at, guest_name, guest_name_kana, guest_phone, guest_email,
        party_size, adults, children, status, seat_type, purpose, allergy_note, request_note, memo, created_via, created_at, store_id,
-       is_private_hire, staff_id, source_id, profiles(display_name),
+       is_private_hire, staff_id, source_id, clerk_id, clerk_name, profiles(display_name),
        stores(name), course:menu_items(name), reservation_sources(name), reservation_tables(table_id, restaurant_tables(name))`,
       { count: 'exact' }
     )
@@ -169,8 +167,9 @@ export default async function ReservationListPage({ searchParams }: { searchPara
     tableNames: (r.reservation_tables ?? [])
       .map((t) => t.restaurant_tables?.name)
       .filter((n): n is string => !!n),
-    staffId: r.staff_id,
-    staffName: r.profiles?.display_name ?? null,
+    // 担当者＝レジの担当名（無ければ前の形のログインアカウント名）
+    staffId: r.clerk_id ?? null,
+    staffName: r.clerk_name ?? r.profiles?.display_name ?? null,
     isPrivateHire: r.is_private_hire,
     createdAt: r.created_at,
   }));
@@ -193,20 +192,8 @@ export default async function ReservationListPage({ searchParams }: { searchPara
     (storeAssignableTables[t.store_id] ??= []).push({ id: t.id, name: t.name, capacityMin: t.capacity_min, capacityMax: t.capacity_max });
   }
 
-  const { data: staffRows } = await supabase
-    .from('membership_stores')
-    .select('store_id, memberships!inner(profile_id, organization_id, status, profiles(display_name))')
-    .in('store_id', storeIds)
-    .eq('memberships.organization_id', ctx.organizationId)
-    .eq('memberships.status', 'active');
-  const staffByStore: Record<string, { id: string; name: string }[]> = {};
-  for (const row of (staffRows ?? []) as unknown as StaffMembershipRow[]) {
-    if (!row.memberships) continue;
-    (staffByStore[row.store_id] ??= []).push({
-      id: row.memberships.profile_id,
-      name: row.memberships.profiles?.display_name ?? '不明',
-    });
-  }
+  // 予約の担当者＝レジの担当名（2026-10-15 Ronnie「レジと台帳は同じ」）
+  const staffByStore = await reservationClerkOptions(supabase, storeIds);
 
   const canManagePrivateHire = can(ctx.role, 'store.settings');
 

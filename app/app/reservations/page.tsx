@@ -23,6 +23,7 @@ import { LedgerTop } from '@/components/reservations/ledger-header';
 import { ScheduleBoard, type BoardTable } from '@/components/reservations/schedule-board';
 import { suggestTables, type TableLike } from '@/lib/reservations';
 import { cn } from '@/lib/utils';
+import { reservationClerkOptions } from '@/lib/reservation-clerks-server';
 
 export const metadata: Metadata = { title: '店舗台帳' };
 
@@ -125,7 +126,7 @@ export default async function ReservationsLedgerPage({ searchParams }: { searchP
 
   const supabase = await createClient();
 
-  const [{ data: tablesData }, { data: businessHoursData }, { data: staffData }, { data: bookingSettings }] = await Promise.all([
+  const [{ data: tablesData }, { data: businessHoursData }, clerksByStore, { data: bookingSettings }] = await Promise.all([
     supabase
       .from('restaurant_tables')
       .select('id, name, capacity_min, capacity_max, current_status')
@@ -133,21 +134,15 @@ export default async function ReservationsLedgerPage({ searchParams }: { searchP
       .eq('status', 'active')
       .order('sort_order'),
     supabase.from('business_hours').select('day_of_week, is_closed, open_time, close_time').eq('store_id', store.id),
-    supabase
-      .from('memberships')
-      .select('profile_id, profiles(display_name), membership_stores!inner(store_id)')
-      .eq('organization_id', ctx.organizationId)
-      .eq('status', 'active')
-      .eq('membership_stores.store_id', store.id),
+    // 予約の担当者＝レジの担当名（2026-10-15 Ronnie「レジと台帳は同じ」）
+    reservationClerkOptions(supabase, [store.id]),
     supabase.from('store_settings').select('cleaning_buffer_minutes').eq('store_id', store.id).maybeSingle(),
   ]);
   const bufferMinutes = bookingSettings?.cleaning_buffer_minutes ?? 0;
 
   const totalCapacity = (tablesData ?? []).reduce((sum, t) => sum + t.capacity_max, 0);
   const businessHoursMap = new Map<number, BusinessHourRow>((businessHoursData ?? []).map((b) => [b.day_of_week, b]));
-  const staffOptions = (staffData ?? [])
-    .map((m) => ({ id: m.profile_id as string, name: (m.profiles as unknown as { display_name: string } | null)?.display_name ?? '不明' }))
-    .sort((a, b) => a.name.localeCompare(b.name, 'ja'));
+  const staffOptions = clerksByStore[store.id] ?? [];
 
   let body: React.ReactNode;
   let title = 'スケジュール';
