@@ -22,19 +22,19 @@ export function CategorySalesChart({ data }: { data: CategorySalesPoint[] }) {
             axisLine={false}
             tickFormatter={(v: number) => (v >= 10000 ? `${Math.round(v / 10000)}万` : String(v))}
           />
-          <YAxis type="category" dataKey="category" tick={{ fontSize: 12, fill: '#15121a' }} tickLine={false} axisLine={false} width={104} />
+          <YAxis type="category" dataKey="category" tick={{ fontSize: 12, fill: '#292725' }} tickLine={false} axisLine={false} width={104} />
           <Tooltip
             formatter={(value) => [`¥${Number(value).toLocaleString('ja-JP')}`, '売上']}
-            labelStyle={{ color: '#15121a', fontWeight: 600 }}
+            labelStyle={{ color: '#292725', fontWeight: 600 }}
             contentStyle={{ borderRadius: 12, border: '1px solid #E5E7EB', fontSize: 12 }}
-            cursor={{ fill: '#7b3fe4', fillOpacity: 0.06 }}
+            cursor={{ fill: '#bc5940', fillOpacity: 0.06 }}
           />
-          <Bar dataKey="sales" fill="#7b3fe4" radius={[0, 4, 4, 0]} maxBarSize={22}>
+          <Bar dataKey="sales" fill="#bc5940" radius={[0, 4, 4, 0]} maxBarSize={22}>
             <LabelList
               dataKey="sales"
               position="right"
               formatter={(v) => `¥${Number(v).toLocaleString('ja-JP')}`}
-              style={{ fill: '#15121a', fontSize: 11, fontWeight: 600 }}
+              style={{ fill: '#292725', fontSize: 11, fontWeight: 600 }}
             />
           </Bar>
         </BarChart>

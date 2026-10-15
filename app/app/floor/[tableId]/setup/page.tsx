@@ -29,16 +29,16 @@ export default async function FloorSetupPage({ params }: { params: Promise<{ tab
   const store = ctx.currentStore ?? ctx.stores[0];
 
   const shell = (children: React.ReactNode) => (
-    <div className="theme-regi mx-auto flex h-[calc(100dvh-7rem)] max-w-2xl flex-col overflow-hidden rounded-2xl border border-[#e3dbf1] bg-[#f6f3fb] text-[#2a2138]">
+    <div className="theme-regi mx-auto flex h-[calc(100dvh-7rem)] max-w-2xl flex-col overflow-hidden rounded-2xl border border-[#e5dfd5] bg-[#fbf9f5] text-[#292725]">
       {children}
     </div>
   );
   const problem = (message: string) =>
     shell(
-      <p className="px-6 py-10 text-center text-[13px] leading-loose text-[#7a7090]">
+      <p className="px-6 py-10 text-center text-[13px] leading-loose text-[#766b62]">
         {message}
         <br />
-        <Link href="/app/floor" className="font-bold text-[#7b3fe4] underline">
+        <Link href="/app/floor" className="font-bold text-[#bc5940] underline">
           テーブル一覧へ戻る
         </Link>
       </p>

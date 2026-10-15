@@ -105,7 +105,7 @@ export default async function TableQrPrintPage() {
             {cards
               .filter((c) => c.dataUrl)
               .map((c) => (
-                <div key={c.id} className="rounded-lg shadow-[0_1px_4px_rgba(21,18,26,0.12)] print:rounded-none print:shadow-none">
+                <div key={c.id} className="rounded-lg shadow-[0_1px_4px_rgba(41, 39, 37,0.12)] print:rounded-none print:shadow-none">
                   <TableQrCard storeName={storeName} tableName={c.name} dataUrl={c.dataUrl as string} />
                 </div>
               ))}

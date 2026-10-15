@@ -37,8 +37,8 @@ export function HourlyCompareChart({ data, nowHour }: { data: HourlyCompare; now
     <svg viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label="時間帯別の売上（本日と前週の同じ曜日）" className="block h-auto">
       {ticks.map((t) => (
         <g key={t}>
-          <line x1={x0} x2={x1} y1={y(t)} y2={y(t)} stroke="#efeaf6" strokeWidth={1} />
-          <text x={x0 - 8} y={y(t) + 4} textAnchor="end" fontSize={11} fill="#6b6180">
+          <line x1={x0} x2={x1} y1={y(t)} y2={y(t)} stroke="#f2ede6" strokeWidth={1} />
+          <text x={x0 - 8} y={y(t) + 4} textAnchor="end" fontSize={11} fill="#6a625b">
             {manLabel(t)}
           </text>
         </g>
@@ -55,10 +55,10 @@ export function HourlyCompareChart({ data, nowHour }: { data: HourlyCompare; now
                 width={bw}
                 height={Math.max(0, y1 - y(v))}
                 rx={4}
-                fill={i === nowIdx ? '#c4a8f5' : '#7b3fe4'}
+                fill={i === nowIdx ? '#eab39d' : '#bc5940'}
               />
             )}
-            <text x={cx} y={y1 + 18} textAnchor="middle" fontSize={11} fill="#6b6180">
+            <text x={cx} y={y1 + 18} textAnchor="middle" fontSize={11} fill="#6a625b">
               {h}時
             </text>
           </g>
@@ -71,7 +71,7 @@ export function HourlyCompareChart({ data, nowHour }: { data: HourlyCompare; now
           x2={x0 + slot * nowIdx + slot / 2}
           y1={y0}
           y2={y1}
-          stroke="#15121a"
+          stroke="#292725"
           strokeWidth={1.5}
           strokeDasharray="3 3"
           opacity={0.6}

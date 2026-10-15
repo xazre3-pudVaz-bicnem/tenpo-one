@@ -74,7 +74,7 @@ export default async function HandyReservationsPage({
       <>
         <HandyTopBar left={<HandyMenuButton />} title="今日の予約" />
         <HandyMain>
-          <p className="px-6 py-10 text-center text-[13px] leading-loose text-[#7a7090]">
+          <p className="px-6 py-10 text-center text-[13px] leading-loose text-[#766b62]">
             {store
               ? '予約を見る権限がありません。店長・管理者に権限の付与を依頼してください。'
               : 'アクセス可能な店舗がありません。管理者に店舗の割り当てを依頼してください。'}
@@ -152,7 +152,7 @@ export default async function HandyReservationsPage({
           <HandyBookingShareButton />
         </div>
         <HandyReservationList reservations={reservations} emptyText={handyEmptyText(date, today)} />
-        <p className="px-5 pb-5 text-center text-[10px] leading-relaxed text-[#7a7090]">
+        <p className="px-5 pb-5 text-center text-[10px] leading-relaxed text-[#766b62]">
           予約の変更・来店処理はレジ（管理画面）の予約台帳で行います。
         </p>
       </HandyMain>

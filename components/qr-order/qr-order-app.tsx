@@ -308,7 +308,7 @@ export function QrOrderApp({
 
         {reservedCourse && (
           <div className="flex-none border-b border-line bg-lilac px-4 py-2 text-center">
-            <p className="text-[11px] font-bold text-[#5e5470]">ご予約コース：{reservedCourse.name}</p>
+            <p className="text-[11px] font-bold text-[#5c5650]">ご予約コース：{reservedCourse.name}</p>
             <p className="mt-0.5 text-[10px] leading-relaxed text-ink-3">
               {[
                 reservedCourse.includes_ayce && '食べ放題',
@@ -403,7 +403,7 @@ export function QrOrderApp({
                 onClick={() => goToTab(id)}
                 className={cn(
                   'relative flex min-h-[52px] flex-col items-center justify-center gap-1 rounded-[9px] px-0.5 py-2 text-[10px] font-semibold',
-                  selected ? 'bg-[#f4edfc] text-iris' : 'text-[#a69bbb]'
+                  selected ? 'bg-[#f9ede6] text-iris' : 'text-[#a89e92]'
                 )}
               >
                 <Icon className="h-[22px] w-[22px]" strokeWidth={1.5} />
@@ -417,10 +417,10 @@ export function QrOrderApp({
           })}
         </nav>
 
-        <footer className="flex-none bg-white px-2.5 pb-[calc(6px+env(safe-area-inset-bottom))] pt-1 text-center text-[10px] leading-snug text-[#9788a6]">
+        <footer className="flex-none bg-white px-2.5 pb-[calc(6px+env(safe-area-inset-bottom))] pt-1 text-center text-[10px] leading-snug text-[#8f857b]">
           {qrStrings.poweredBy}{' '}
-          <strong className="font-num text-[11px] tracking-wide text-[#59416f]">
-            <span className="text-[#9161cb]">TENPO</span> ONE
+          <strong className="font-num text-[11px] tracking-wide text-[#4a433d]">
+            <span className="text-[#c46a50]">TENPO</span> ONE
           </strong>
         </footer>
 

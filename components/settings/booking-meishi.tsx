@@ -34,19 +34,19 @@ export function BookingMeishiCard({ storeName, address, phone, qrDataUrl, coupon
   const nameSize = storeName.length <= 10 ? 'text-[10.5pt]' : storeName.length <= 16 ? 'text-[9pt]' : 'text-[7.8pt]';
   return (
     <div
-      className="relative flex flex-col overflow-hidden bg-[#15121a] text-white"
+      className="relative flex flex-col overflow-hidden bg-[#292725] text-white"
       style={{ width: `${MEISHI_W}mm`, height: `${MEISHI_H}mm` }}
     >
       <div
         aria-hidden
-        className="absolute -top-[10mm] left-1/2 h-[24mm] w-[46mm] -translate-x-1/2 rounded-full bg-[radial-gradient(ellipse,rgba(123,63,228,0.5),rgba(123,63,228,0)_70%)]"
+        className="absolute -top-[10mm] left-1/2 h-[24mm] w-[46mm] -translate-x-1/2 rounded-full bg-[radial-gradient(ellipse,rgba(188, 89, 64,0.5),rgba(188, 89, 64,0)_70%)]"
       />
       {/* 上：店名・ご予約 */}
       <div className="relative px-[3.5mm] pt-[4.5mm] text-center">
         <p className={`line-clamp-2 leading-[1.25] font-extrabold tracking-[0.03em] text-balance ${nameSize}`}>{storeName}</p>
-        <div aria-hidden className="mx-auto mt-[1.4mm] h-[0.45mm] w-[8mm] rounded-full bg-linear-to-r from-[#9d6bff] to-[#5b2c8f]" />
-        <p className="mt-[1.6mm] inline-flex items-center gap-[1.2mm] rounded-full border border-[#7b3fe4]/70 bg-[#7b3fe4]/20 px-[2.2mm] py-[0.4mm]">
-          <span className="text-[4.4pt] font-extrabold tracking-[0.25em] text-[#b89aff]">RESERVATION</span>
+        <div aria-hidden className="mx-auto mt-[1.4mm] h-[0.45mm] w-[8mm] rounded-full bg-linear-to-r from-[#e07a5c] to-[#8a3f2c]" />
+        <p className="mt-[1.6mm] inline-flex items-center gap-[1.2mm] rounded-full border border-[#bc5940]/70 bg-[#bc5940]/20 px-[2.2mm] py-[0.4mm]">
+          <span className="text-[4.4pt] font-extrabold tracking-[0.25em] text-[#f29b7b]">RESERVATION</span>
           <span className="text-[7pt] font-bold">ご予約</span>
         </p>
         {coupon && (
@@ -59,7 +59,7 @@ export function BookingMeishiCard({ storeName, address, phone, qrDataUrl, coupon
 
       {/* まんなか：QR と案内 */}
       <div className="relative flex flex-1 flex-col items-center justify-center">
-        <div className="rounded-[2.2mm] bg-linear-to-br from-[#9d6bff] to-[#5b2c8f] p-[0.8mm]">
+        <div className="rounded-[2.2mm] bg-linear-to-br from-[#e07a5c] to-[#8a3f2c] p-[0.8mm]">
           <div className="rounded-[1.6mm] bg-white p-[1.2mm]">
             {/* eslint-disable-next-line @next/next/no-img-element -- サーバーで作った QR の data URL */}
             <img
@@ -76,25 +76,25 @@ export function BookingMeishiCard({ storeName, address, phone, qrDataUrl, coupon
           <br />
           ご予約ください
         </p>
-        <p className="mt-[0.4mm] text-[4.3pt] text-[#b9a9d9]">Scan to book a table</p>
+        <p className="mt-[0.4mm] text-[4.3pt] text-[#cdb9a9]">Scan to book a table</p>
       </div>
 
       {/* 下：住所・電話・帯 */}
       {(address || phone) && (
         <div className="relative mx-[3.5mm] border-t border-white/15 pt-[1.5mm] pb-[1.6mm] text-center">
-          {address && <p className="line-clamp-2 text-[4.8pt] leading-[1.45] text-[#e3d6ff]">{address}</p>}
+          {address && <p className="line-clamp-2 text-[4.8pt] leading-[1.45] text-[#ffdfcb]">{address}</p>}
           {phone && (
             <p className="mt-[0.4mm] text-[7pt] font-bold tracking-[0.05em] tabular-nums">
-              <span className="mr-[1mm] text-[4.4pt] font-extrabold tracking-[0.2em] text-[#b89aff]">TEL</span>
+              <span className="mr-[1mm] text-[4.4pt] font-extrabold tracking-[0.2em] text-[#f29b7b]">TEL</span>
               {phone}
             </p>
           )}
         </div>
       )}
-      <div className="relative flex shrink-0 items-center justify-between bg-linear-to-r from-[#7b3fe4] to-[#5b2c8f] px-[3.5mm] py-[1.3mm]">
+      <div className="relative flex shrink-0 items-center justify-between bg-linear-to-r from-[#bc5940] to-[#8a3f2c] px-[3.5mm] py-[1.3mm]">
         <span className="text-[4.4pt] font-bold tracking-[0.12em]">WEB RESERVATION</span>
         <span className="text-[4.4pt] font-extrabold tracking-[0.16em]">
-          TENPO <span className="text-[#e3d6ff]">ONE</span>
+          TENPO <span className="text-[#ffdfcb]">ONE</span>
         </span>
       </div>
     </div>
@@ -108,11 +108,11 @@ export function BookingMeishiCard({ storeName, address, phone, qrDataUrl, coupon
 export function BookingMeishiSheet(props: MeishiData) {
   const xs = Array.from({ length: MEISHI_COLS + 1 }, (_, i) => LEFT + i * MEISHI_W);
   const ys = Array.from({ length: MEISHI_ROWS + 1 }, (_, i) => TOP + i * MEISHI_H);
-  const mark = 'absolute bg-[#15121a]';
+  const mark = 'absolute bg-[#292725]';
   return (
     <div
       data-qr-card
-      className="relative shrink-0 bg-white text-[#15121a] [-webkit-print-color-adjust:exact] [print-color-adjust:exact]"
+      className="relative shrink-0 bg-white text-[#292725] [-webkit-print-color-adjust:exact] [print-color-adjust:exact]"
       style={{ width: `${A4_W}mm`, height: `${A4_H}mm` }}
     >
       {/* 名刺 3×3 */}
@@ -135,7 +135,7 @@ export function BookingMeishiSheet(props: MeishiData) {
         <div
           key={`v${x}`}
           aria-hidden
-          className="absolute border-l border-dashed border-[#9a93a8]"
+          className="absolute border-l border-dashed border-[#9c948a]"
           style={{ left: `${x}mm`, top: `${TOP}mm`, height: `${GRID_H}mm`, width: 0 }}
         />
       ))}
@@ -143,7 +143,7 @@ export function BookingMeishiSheet(props: MeishiData) {
         <div
           key={`h${y}`}
           aria-hidden
-          className="absolute border-t border-dashed border-[#9a93a8]"
+          className="absolute border-t border-dashed border-[#9c948a]"
           style={{ top: `${y}mm`, left: `${LEFT}mm`, width: `${GRID_W}mm`, height: 0 }}
         />
       ))}
@@ -164,7 +164,7 @@ export function BookingMeishiSheet(props: MeishiData) {
 
       {/* 下の余白：切り方（まんなかの列の下。トンボに重ならないように） */}
       <p
-        className="absolute text-center text-[5.8pt] leading-tight text-[#7a7090]"
+        className="absolute text-center text-[5.8pt] leading-tight text-[#766b62]"
         style={{ top: `${TOP + GRID_H + 2.4}mm`, left: `${LEFT + MEISHI_W + 1}mm`, width: `${MEISHI_W - 2}mm` }}
       >
         ✂ 線に沿って切ってください

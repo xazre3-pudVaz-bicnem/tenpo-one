@@ -69,7 +69,7 @@ export function menuBookCategoryRows(
       id: c.id,
       name: c.name,
       nameEn: c.name_en ?? '',
-      color: c.color ?? '#7b3fe4',
+      color: c.color ?? '#bc5940',
       sortOrder: c.sort_order,
       shared: c.store_id === null,
       itemCount: mine.length,

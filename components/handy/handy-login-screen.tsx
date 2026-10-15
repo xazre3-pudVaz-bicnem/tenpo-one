@@ -57,11 +57,11 @@ export function HandyLoginScreen({
   return (
     <section
       aria-label="ハンディ ログイン"
-      className="fixed inset-0 z-40 flex flex-col overflow-y-auto bg-[#15121a] px-7 pt-[max(16px,env(safe-area-inset-top))] pb-7 text-white"
+      className="fixed inset-0 z-40 flex flex-col overflow-y-auto bg-[#292725] px-7 pt-[max(16px,env(safe-area-inset-top))] pb-7 text-white"
     >
       <div className="-mx-2.5 flex items-center gap-2.5 text-[11px]">
         <span
-          className="inline-flex h-[25px] w-11 items-center justify-end rounded-[20px] bg-[#7b3fe4] p-0.5"
+          className="inline-flex h-[25px] w-11 items-center justify-end rounded-[20px] bg-[#bc5940] p-0.5"
           aria-hidden
         >
           <i className="block h-[21px] w-[21px] rounded-full bg-white" />
@@ -69,7 +69,7 @@ export function HandyLoginScreen({
         <button
           type="button"
           onClick={() => setSetupOpen(true)}
-          className="flex min-h-[35px] items-center gap-1 rounded border border-[#ffffff26] bg-[#ffffff16] px-2.5 text-[#e3dbf1]"
+          className="flex min-h-[35px] items-center gap-1 rounded border border-[#ffffff26] bg-[#ffffff16] px-2.5 text-[#e5dfd5]"
         >
           <Zap className="h-3.5 w-3.5" aria-hidden />
           POS設定
@@ -81,19 +81,19 @@ export function HandyLoginScreen({
           {/* 本体の BrandLogo と同じくプレーン img（固定サイズのロゴに next/image は不向き） */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/logo-mark.png" alt="" className="h-12 w-[45px] object-contain" />
-          <span className="text-[#b18aff]">TENPO</span>
+          <span className="text-[#f0a080]">TENPO</span>
           <span className="ml-1 text-white">ONE</span>
         </span>
         <p className="mt-7 text-[11px] font-semibold tracking-[0.1em]">HANDY · TENPO ONE</p>
         <p className="mt-[22px] flex items-center justify-center gap-1.5 text-base">
-          <CalendarDays className="h-4 w-4 text-[#d8c6f1]" aria-hidden />
+          <CalendarDays className="h-4 w-4 text-[#ebd2c4]" aria-hidden />
           {today}
         </p>
       </div>
 
       <div className="my-auto grid grid-cols-[60px_1fr] items-center gap-[13px] py-9 text-[13px]">
         <span>店舗名</span>
-        <span className="flex min-h-10 w-full items-center rounded-lg border border-[#e3dbf1] bg-white px-2 text-base text-[#2a2138]">
+        <span className="flex min-h-10 w-full items-center rounded-lg border border-[#e5dfd5] bg-white px-2 text-base text-[#292725]">
           <span className="truncate">{storeName}</span>
         </span>
         <label htmlFor="handy-clerk">担当者</label>
@@ -101,7 +101,7 @@ export function HandyLoginScreen({
           id="handy-clerk"
           value={clerkId}
           onChange={(e) => setClerkId(e.target.value)}
-          className="min-h-10 w-full rounded-lg border border-[#e3dbf1] bg-white px-[7px] text-base text-[#2a2138]"
+          className="min-h-10 w-full rounded-lg border border-[#e5dfd5] bg-white px-[7px] text-base text-[#292725]"
         >
           <option value="" disabled>
             {clerks.length === 0 ? '担当者が登録されていません' : '担当者を選んでください'}
@@ -118,7 +118,7 @@ export function HandyLoginScreen({
         type="button"
         onClick={login}
         disabled={pending || !clerkId}
-        className="mt-5 flex min-h-11 w-full items-center justify-center gap-2 rounded-[9px] bg-[#7b3fe4] text-[19px] font-semibold text-white shadow-[0_3px_10px_#7b3fe41a] active:bg-[#6630c7] disabled:opacity-45"
+        className="mt-5 flex min-h-11 w-full items-center justify-center gap-2 rounded-[9px] bg-[#bc5940] text-[19px] font-semibold text-white shadow-[0_3px_10px_#bc59401a] active:bg-[#9f4630] disabled:opacity-45"
       >
         <CornerDownRight className="h-5 w-5" aria-hidden />
         {pending ? 'ログイン中…' : 'Login'}
@@ -128,7 +128,7 @@ export function HandyLoginScreen({
           {error}
         </p>
       )}
-      <p className="mt-2.5 text-center text-[9px] leading-relaxed text-[#d8c6f1]">
+      <p className="mt-2.5 text-center text-[9px] leading-relaxed text-[#ebd2c4]">
         {clerks.length === 0
           ? '担当者が登録されていません。レジの 設定 → POS担当者 で登録してからログインしてください。'
           : '担当者を選ばないと Login できません。ハンディで作った伝票の担当者になります。'}
@@ -139,29 +139,29 @@ export function HandyLoginScreen({
           role="dialog"
           aria-modal="true"
           aria-label="POS設定"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-[#15121a88] p-3"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-[#29272588] p-3"
           onClick={() => setSetupOpen(false)}
         >
           <div
-            className="w-full max-w-[370px] rounded-xl bg-white p-5 text-[#2a2138] shadow-[0_20px_90px_#0005]"
+            className="w-full max-w-[370px] rounded-xl bg-white p-5 text-[#292725] shadow-[0_20px_90px_#0005]"
             onClick={(e) => e.stopPropagation()}
           >
             <h2 className="mb-3 text-lg font-bold">POS設定</h2>
             <dl className="text-sm">
-              <div className="flex items-center justify-between gap-2 border-b border-[#eee8f6] py-2.5">
-                <dt className="text-[#7a7090]">接続</dt>
+              <div className="flex items-center justify-between gap-2 border-b border-[#f1ece4] py-2.5">
+                <dt className="text-[#766b62]">接続</dt>
                 <dd className="font-bold text-[#1e6b4d]">接続済み</dd>
               </div>
-              <div className="flex items-center justify-between gap-2 border-b border-[#eee8f6] py-2.5">
-                <dt className="text-[#7a7090]">店舗</dt>
-                <dd className="truncate font-bold text-[#4f3868]">{storeName}</dd>
+              <div className="flex items-center justify-between gap-2 border-b border-[#f1ece4] py-2.5">
+                <dt className="text-[#766b62]">店舗</dt>
+                <dd className="truncate font-bold text-[#45403b]">{storeName}</dd>
               </div>
-              <div className="flex items-center justify-between gap-2 border-b border-[#eee8f6] py-2.5">
-                <dt className="text-[#7a7090]">端末</dt>
-                <dd className="truncate text-[#4f3868]">{accountName}</dd>
+              <div className="flex items-center justify-between gap-2 border-b border-[#f1ece4] py-2.5">
+                <dt className="text-[#766b62]">端末</dt>
+                <dd className="truncate text-[#45403b]">{accountName}</dd>
               </div>
             </dl>
-            <p className="mt-3 text-[11px] leading-relaxed text-[#7a7090]">
+            <p className="mt-3 text-[11px] leading-relaxed text-[#766b62]">
               別の店舗につなぎ直すときは、レジ（管理画面）の 設定 → ハンディ端末 でこの端末を解除し、
               新しい QR を読み取ってください。
             </p>
@@ -169,7 +169,7 @@ export function HandyLoginScreen({
             <form action={signOutAction}>
               <button
                 type="submit"
-                className="flex min-h-[46px] w-full items-center gap-2 text-left text-sm text-[#b3341f]"
+                className="flex min-h-[46px] w-full items-center gap-2 text-left text-sm text-[#c62828]"
               >
                 <LogOut className="h-[18px] w-[18px]" aria-hidden />
                 この端末をログアウト
@@ -178,7 +178,7 @@ export function HandyLoginScreen({
             <button
               type="button"
               onClick={() => setSetupOpen(false)}
-              className="mt-3 min-h-[43px] w-full rounded-lg bg-[#efeaf8] text-center text-sm font-bold text-[#5e5470]"
+              className="mt-3 min-h-[43px] w-full rounded-lg bg-[#f3efe8] text-center text-sm font-bold text-[#5c5650]"
             >
               閉じる
             </button>

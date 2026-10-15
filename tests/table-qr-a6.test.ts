@@ -13,7 +13,7 @@ describe('テーブルQR（A6）', () => {
   it('カードは用紙そのものの大きさ（105mm × 148mm）、暗い枠は 5mm 内側、印刷でも色が出る', () => {
     expect(card).toContain('h-[148mm] w-[105mm]');
     expect(card).toContain('p-[5mm]');
-    expect(card).toContain('bg-[#15121a]');
+    expect(card).toContain('bg-[#292725]');
     expect(card).toContain('[print-color-adjust:exact]');
     expect(card).toContain('data-qr-card');
   });

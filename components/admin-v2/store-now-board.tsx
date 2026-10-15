@@ -46,7 +46,7 @@ export function StoreNowBoard({ data, serverNow }: { data: StoreNowData; serverN
             <h2 className="text-base font-extrabold text-ink">いまの店内</h2>
             <div className="flex flex-wrap gap-3 text-xs text-ink-2">
               <Legend swatch="border border-line bg-white" label="空席" />
-              <Legend swatch="border border-wisteria bg-[#f4eefd]" label="使用中" />
+              <Legend swatch="border border-wisteria bg-[#f9ede6]" label="使用中" />
               <Legend swatch="border border-[#ecc98a] bg-[#fff4e0]" label="会計待ち" />
               <Legend swatch="border-[1.5px] border-dashed border-iris bg-white" label="このあと予約" />
               <span className="inline-flex items-center gap-1">
@@ -108,7 +108,7 @@ export function StoreNowBoard({ data, serverNow }: { data: StoreNowData; serverN
                   const done = r.status === 'completed' || r.status === 'no_show';
                   const here = r.status === 'arrived' || r.status === 'seated' || r.status === 'billing';
                   return (
-                    <tr key={r.id} className={cn('border-b border-line/60', done && 'text-ink-3', here && 'bg-[#faf7ff]')}>
+                    <tr key={r.id} className={cn('border-b border-line/60', done && 'text-ink-3', here && 'bg-[#fdfaf6]')}>
                       <td className="px-3 py-2.5 pl-4 font-bold tabular-nums">{r.time}</td>
                       <td className="px-3 py-2.5 font-bold">{r.name}様</td>
                       <td className="px-3 py-2.5 tabular-nums">{r.partySize}名</td>
@@ -174,7 +174,7 @@ function TableTile({ table: t, now, selected, onSelect }: { table: NowTable; now
       className={cn(
         'flex min-h-[92px] flex-col gap-0.5 rounded-[10px] px-3 py-2.5 text-left text-ink transition-shadow',
         t.status === 'pay' && 'border border-[#ecc98a] bg-[#fff4e0]',
-        t.status === 'used' && 'border border-wisteria bg-[#f4eefd]',
+        t.status === 'used' && 'border border-wisteria bg-[#f9ede6]',
         !o && t.next && 'border-[1.5px] border-dashed border-iris bg-white',
         !o && !t.next && 'border border-line bg-white text-ink-3',
         selected && 'ring-2 ring-iris ring-offset-1'

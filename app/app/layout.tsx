@@ -32,7 +32,7 @@ import { SidebarV2 } from '@/components/admin-v2/sidebar-v2';
 import { AdminV2Switch } from '@/components/admin-v2/admin-v2-switch';
 
 /** 店舗画面はブラウザのツールバー色も上部バー（濃紫）に合わせる */
-export const viewport = { themeColor: '#15121a' };
+export const viewport = { themeColor: '#292725' };
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const ctx = await requireSession();

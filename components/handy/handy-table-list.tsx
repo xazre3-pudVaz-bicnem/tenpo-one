@@ -55,7 +55,7 @@ export function HandyTableList({
 
   if (tables.length === 0) {
     return (
-      <p className="px-6 py-9 text-center text-[13px] leading-loose text-[#7a7090]">
+      <p className="px-6 py-9 text-center text-[13px] leading-loose text-[#766b62]">
         テーブルが登録されていません。
         <br />
         設定画面からフロア・テーブルを登録してください。
@@ -117,15 +117,15 @@ function HandyTableSheet({
       role="dialog"
       aria-modal="true"
       aria-label={table.name}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-[#15121a88] p-3"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[#29272588] p-3"
       onClick={onClose}
     >
       <div
         className="w-full max-w-[250px] rounded-xl bg-white p-3.5 shadow-[0_20px_90px_#0005]"
         onClick={(e) => e.stopPropagation()}
       >
-        <p className="text-center text-[15px] font-bold text-[#2a2138]">{table.name}</p>
-        <p className="mt-0.5 text-center text-[11px] text-[#7a7090]">
+        <p className="text-center text-[15px] font-bold text-[#292725]">{table.name}</p>
+        <p className="mt-0.5 text-center text-[11px] text-[#766b62]">
           {table.capacityMax}名席 · {TABLE_STATE_LABEL[state]}
         </p>
         <div className="mt-3 grid gap-1.5">
@@ -134,7 +134,7 @@ function HandyTableSheet({
               type="button"
               disabled={pending}
               onClick={() => router.push(`/handy/${table.id}/setup`)}
-              className="min-h-[43px] rounded-lg bg-[#7b3fe4] text-sm font-bold text-white disabled:opacity-40"
+              className="min-h-[43px] rounded-lg bg-[#bc5940] text-sm font-bold text-white disabled:opacity-40"
             >
               注文を開始
             </button>
@@ -154,14 +154,14 @@ function HandyTableSheet({
                 }
               })
             }
-            className="min-h-[43px] rounded-lg border border-[#e3dbf1] bg-[#f4effb] text-sm font-bold text-[#4f3868] disabled:opacity-40"
+            className="min-h-[43px] rounded-lg border border-[#e5dfd5] bg-[#f9f3ed] text-sm font-bold text-[#45403b] disabled:opacity-40"
           >
             {locked ? 'ロック解除' : 'テーブルをロック'}
           </button>
           <button
             type="button"
             onClick={onClose}
-            className="min-h-[38px] rounded-lg bg-[#efeaf8] text-[13px] font-bold text-[#5e5470]"
+            className="min-h-[38px] rounded-lg bg-[#f3efe8] text-[13px] font-bold text-[#5c5650]"
           >
             閉じる
           </button>
@@ -189,16 +189,16 @@ function HandyTableTile({
 
   const className = cn(
         'tap3d relative flex aspect-square w-full flex-col items-start rounded-[10px] border p-2 text-left',
-        'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#7b3fe4]',
+        'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#bc5940]',
         callKind === 'checkout'
-          ? 'border-[#bd660f] bg-[#fbefdf]'
+          ? 'border-[#b7791f] bg-[#fbf1d9]'
           : callKind === 'staff'
-            ? 'border-[#7b3fe4] bg-[#e9e0fa]'
+            ? 'border-[#bc5940] bg-[#f6e4da]'
             : occupied
-              ? 'border-[#cdb4ef] bg-[#efeaf8]'
+              ? 'border-[#eac0ad] bg-[#f3efe8]'
               : state === 'blocked'
-                ? 'border-[#c9c4d2] bg-[#e3dbf1]'
-                : 'border-[#e3dbf1] bg-white'
+                ? 'border-[#d3ccc2] bg-[#e5dfd5]'
+                : 'border-[#e5dfd5] bg-white'
   );
   const label = `${table.name} ${TABLE_STATE_LABEL[state]}${callKind ? ` ${serviceCallLabel(callKind)}` : ''}`;
 
@@ -209,20 +209,20 @@ function HandyTableTile({
         <span
           className={cn(
             'pointer-events-none absolute inset-0 animate-pulse rounded-[10px] ring-[3px] ring-inset',
-            callKind === 'checkout' ? 'ring-[#bd660f]' : 'ring-[#7b3fe4]'
+            callKind === 'checkout' ? 'ring-[#b7791f]' : 'ring-[#bc5940]'
           )}
           aria-hidden
         />
       )}
       <span className="flex w-full items-start justify-between gap-1">
-        <b className="min-w-0 truncate text-[15px] leading-tight font-semibold text-[#5e5470]">
+        <b className="min-w-0 truncate text-[15px] leading-tight font-semibold text-[#5c5650]">
           {table.name}
         </b>
         {callKind && (
           <span
             className={cn(
               'shrink-0 rounded-full p-0.5 text-white',
-              callKind === 'checkout' ? 'bg-[#bd660f]' : 'bg-[#7b3fe4]'
+              callKind === 'checkout' ? 'bg-[#b7791f]' : 'bg-[#bc5940]'
             )}
             aria-hidden
           >
@@ -250,7 +250,7 @@ function HandyTableTile({
           <TileRow label="未会計" value={yen(table.total)} small />
         </>
       ) : (
-        <span className="m-auto text-[9px] text-[#7a7090]">
+        <span className="m-auto text-[9px] text-[#766b62]">
           {state === 'available' ? `${table.capacityMax}名席` : TABLE_STATE_LABEL[state]}
         </span>
       )}
@@ -284,15 +284,15 @@ function TileRow({
 }) {
   return (
     <span className="flex w-full items-baseline justify-between gap-1 leading-[1.5]">
-      <small className="shrink-0 text-[9px] text-[#7a7090]">{label}</small>
+      <small className="shrink-0 text-[9px] text-[#766b62]">{label}</small>
       <b
         className={cn(
           'min-w-0 truncate tabular-nums',
           accent
-            ? 'text-[15px] font-bold text-[#7b3fe4]'
+            ? 'text-[15px] font-bold text-[#bc5940]'
             : small
-              ? 'text-[11px] font-bold text-[#5e5470]'
-              : 'text-[13px] font-bold text-[#5e5470]'
+              ? 'text-[11px] font-bold text-[#5c5650]'
+              : 'text-[13px] font-bold text-[#5c5650]'
         )}
       >
         {value}

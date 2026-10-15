@@ -9,7 +9,7 @@ export function ReceiptPaper({ rows, className }: { rows: PaperRow[]; className?
   return (
     <div
       className={cn(
-        'mx-auto w-full max-w-[420px] rounded-md border border-line bg-[#fffdf9] px-3 py-4 text-[12.5px] leading-[1.35] text-[#1c1626] shadow-[0_8px_24px_rgba(44,24,80,.12)] tabular-nums',
+        'mx-auto w-full max-w-[420px] rounded-md border border-line bg-[#fffdf9] px-3 py-4 text-[12.5px] leading-[1.35] text-[#1f1d1b] shadow-[0_8px_24px_rgba(41,39,37,.12)] tabular-nums',
         className
       )}
     >
@@ -44,14 +44,14 @@ export function ReceiptPaper({ rows, className }: { rows: PaperRow[]; className?
             return (
               <div key={i} className="flex items-baseline gap-2 py-px">
                 <span className="min-w-0 flex-1 whitespace-pre-wrap [overflow-wrap:anywhere]">{r.label}</span>
-                <span className="w-[3.4em] shrink-0 text-right text-[#6b6478]">{r.count}</span>
+                <span className="w-[3.4em] shrink-0 text-right text-[#6a625b]">{r.count}</span>
                 <span className="w-[6em] shrink-0 text-right">{r.value}</span>
               </div>
             );
           case 'solid':
-            return <div key={i} className="my-1.5 h-px bg-[#b9b3c4]" />;
+            return <div key={i} className="my-1.5 h-px bg-[#c4bcb1]" />;
           case 'dotted':
-            return <div key={i} className="my-1.5 border-t border-dashed border-[#b9b3c4]" />;
+            return <div key={i} className="my-1.5 border-t border-dashed border-[#c4bcb1]" />;
           default:
             return <div key={i} className="h-2" />;
         }
