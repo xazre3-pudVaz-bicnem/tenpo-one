@@ -24,6 +24,8 @@ export interface ReservationListRow {
   requestNote: string | null;
   memo: string | null;
   sourceName: string | null;
+  /** 予約経路（reservation_sources.id）。予約詳細で直せる（2026-10-15 Ronnie） */
+  sourceId?: string | null;
   createdVia: string;
   storeName: string | null;
   tableIds: string[];

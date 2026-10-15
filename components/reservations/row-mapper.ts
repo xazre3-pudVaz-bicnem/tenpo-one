@@ -7,7 +7,7 @@ import type { ReservationListRow } from './list-types';
  */
 export const RESERVATION_ROW_SELECT = `id, code, store_id, reserved_date, start_at, end_at, guest_name, guest_name_kana, guest_phone, guest_email,
    party_size, adults, children, status, seat_type, purpose, allergy_note, request_note, memo, created_via, created_at, is_private_hire,
-   staff_id, course_id, profiles(display_name), course:menu_items(name), reservation_sources(name),
+   staff_id, course_id, source_id, profiles(display_name), course:menu_items(name), reservation_sources(name),
    reservation_tables(table_id, restaurant_tables(name)), orders(opened_at, closed_at), customer:customers(visit_count, last_visit_at)`;
 
 export interface RawReservationRow {
@@ -38,6 +38,7 @@ export interface RawReservationRow {
   profiles: { display_name: string } | null;
   course: { name: string } | null;
   reservation_sources: { name: string } | null;
+  source_id?: string | null;
   reservation_tables: { table_id: string; restaurant_tables: { name: string } | null }[];
   /** この予約の伝票（伝票を開いた時刻＝入店、会計した時刻＝退店に使う） */
   orders?: { opened_at?: string | null; closed_at: string | null }[] | null;
@@ -90,6 +91,7 @@ export function mapReservationRow(r: RawReservationRow, storeName: string | null
     requestNote: r.request_note,
     memo: r.memo,
     sourceName: r.reservation_sources?.name ?? null,
+    sourceId: r.source_id ?? null,
     createdVia: r.created_via,
     storeName,
     tableIds: (r.reservation_tables ?? []).map((t) => t.table_id),

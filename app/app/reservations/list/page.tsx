@@ -50,6 +50,7 @@ interface RawListRow {
   store_id: string;
   is_private_hire: boolean;
   staff_id: string | null;
+  source_id?: string | null;
   profiles: { display_name: string } | null;
   stores: { name: string } | null;
   course: { name: string } | null;
@@ -120,7 +121,7 @@ export default async function ReservationListPage({ searchParams }: { searchPara
     .select(
       `id, code, reserved_date, start_at, end_at, guest_name, guest_name_kana, guest_phone, guest_email,
        party_size, adults, children, status, seat_type, purpose, allergy_note, request_note, memo, created_via, created_at, store_id,
-       is_private_hire, staff_id, profiles(display_name),
+       is_private_hire, staff_id, source_id, profiles(display_name),
        stores(name), course:menu_items(name), reservation_sources(name), reservation_tables(table_id, restaurant_tables(name))`,
       { count: 'exact' }
     )
@@ -161,6 +162,7 @@ export default async function ReservationListPage({ searchParams }: { searchPara
     requestNote: r.request_note,
     memo: r.memo,
     sourceName: r.reservation_sources?.name ?? null,
+    sourceId: r.source_id ?? null,
     createdVia: r.created_via,
     storeName: r.stores?.name ?? null,
     tableIds: (r.reservation_tables ?? []).map((t) => t.table_id),

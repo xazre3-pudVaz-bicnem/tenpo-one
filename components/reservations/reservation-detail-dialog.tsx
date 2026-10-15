@@ -14,6 +14,7 @@ import {
   updateReservationDetails,
   updateReservationStaff,
   updateReservationPrivateHire,
+  updateReservationSource,
 } from '@/app/app/reservations/actions';
 import { CREATED_VIA_LABEL, ASSIGNABLE_STATUSES, MOVABLE_STATUSES } from './constants';
 import { StatusActions } from './status-actions';
@@ -86,6 +87,10 @@ function ReservationDetailDialogContent({
   const [privateHire, setPrivateHire] = useState(reservation.isPrivateHire);
   const [privatePending, startPrivateTransition] = useTransition();
   const [prepay, setPrepay] = useState<{ amount: number } | null>(null);
+  // 予約経路（どこから来た予約か）を選び直す（2026-10-15 Ronnie「台帳で予約がどこから来たかを選べるように」）
+  const [sources, setSources] = useState<{ id: string; name: string }[]>([]);
+  const [sourceId, setSourceId] = useState(reservation.sourceId ?? '');
+  const [sourcePending, startSourceTransition] = useTransition();
   const [details, setDetails] = useState({
     adults: reservation.adults,
     children: reservation.children,
@@ -115,6 +120,32 @@ function ReservationDetailDialogContent({
       cancelled = true;
     };
   }, [reservation.id, supabase]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      // 共通の経路＋この企業の経路（RLS で自分の企業のものだけ見える）
+      const { data } = await supabase.from('reservation_sources').select('id, name').eq('status', 'active').order('sort_order');
+      if (!cancelled) setSources(((data ?? []) as { id: string; name: string }[]).map((s) => ({ id: s.id, name: s.name })));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [supabase]);
+
+  const changeSource = (value: string) => {
+    const prev = sourceId;
+    setSourceId(value);
+    startSourceTransition(async () => {
+      try {
+        await updateReservationSource(reservation.id, value || null);
+        toast('経路を更新しました');
+      } catch (e) {
+        setSourceId(prev);
+        toast(e instanceof Error ? e.message : '更新に失敗しました', 'error');
+      }
+    });
+  };
 
   const saveMemo = () => {
     startMemoTransition(async () => {
@@ -225,7 +256,29 @@ function ReservationDetailDialogContent({
           <Row label="フリガナ" value={reservation.guestNameKana} />
           <Row label="コース" value={reservation.courseName} />
           <Row label="割当テーブル" value={reservation.tableNames.length > 0 ? reservation.tableNames.join('、') : '未割当'} />
-          <Row label="経路" value={reservation.sourceName} />
+          {sources.length > 0 ? (
+            <div className="flex items-center justify-between gap-3 border-b border-gray-100 py-1.5 text-[13px]">
+              <label htmlFor="detail-source" className="shrink-0 text-gray-500">
+                経路
+              </label>
+              <Select
+                id="detail-source"
+                value={sourceId}
+                disabled={sourcePending}
+                onChange={(e) => changeSource(e.target.value)}
+                className="h-8 w-auto max-w-[60%] text-right text-[13px] font-medium"
+              >
+                <option value="">未設定</option>
+                {sources.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          ) : (
+            <Row label="経路" value={reservation.sourceName} />
+          )}
           <Row label="登録方法" value={CREATED_VIA_LABEL[reservation.createdVia] ?? reservation.createdVia} />
           {reservation.storeName && <Row label="店舗" value={reservation.storeName} />}
           <div className="py-1.5">
