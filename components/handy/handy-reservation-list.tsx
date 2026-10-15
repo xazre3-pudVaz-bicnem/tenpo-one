@@ -34,16 +34,18 @@ const STATUS_TONE: Record<string, string> = {
 };
 
 /**
- * 今日の予約（承認済みレイアウトの RESERVATION）。
- * ハンディからは閲覧と「HANDYで注文」だけ。登録・変更・来店処理はレジ（管理画面）の予約台帳で行う。
+ * 予約の一覧（承認済みレイアウトの RESERVATION）。
+ * ハンディからは閲覧・追加と「HANDYで注文」。変更・来店処理はレジ（管理画面）の予約台帳で行う。
  */
-export function HandyReservationList({ reservations }: { reservations: HandyReservationRow[] }) {
+export function HandyReservationList({
+  reservations,
+  emptyText = '今日の予約はありません。',
+}: {
+  reservations: HandyReservationRow[];
+  emptyText?: string;
+}) {
   if (reservations.length === 0) {
-    return (
-      <p className="px-6 py-9 text-center text-[13px] leading-loose text-[#7a7090]">
-        今日の予約はありません。
-      </p>
-    );
+    return <p className="px-6 py-9 text-center text-[13px] leading-loose text-[#7a7090]">{emptyText}</p>;
   }
 
   return (

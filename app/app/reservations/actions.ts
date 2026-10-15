@@ -30,6 +30,8 @@ function revalidateAll() {
   revalidatePath('/app/reservations/calendar');
   // レジのホーム（本日のご予約一覧）からも予約を直せる（2026-09-26）
   revalidatePath('/app/floor');
+  // ハンディの予約（ほかの日・予約の追加。2026-10-15）
+  revalidatePath('/handy/reservations');
 }
 
 async function loadReservation(

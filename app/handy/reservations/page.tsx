@@ -3,8 +3,9 @@ import { requireFeature } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { can } from '@/lib/permissions';
 import { formatTime, todayJst } from '@/lib/format';
-import { handyDateLabel } from '@/lib/handy-clerk';
 import { requireHandyClerk } from '@/lib/handy-session';
+import { handyDayLabel, handyEmptyText, handyReservationsTitle, parseHandyDate } from '@/lib/handy-reservations';
+import { HandyReservationDateBar } from '@/components/handy/handy-reservation-date-bar';
 import { RESERVATION_STATUS, type ReservationStatus } from '@/lib/reservations';
 import { CREATED_VIA_LABEL } from '@/components/reservations/constants';
 import {
@@ -20,12 +21,7 @@ import {
   type HandyReservationRow,
 } from '@/components/handy/handy-reservation-list';
 
-export const metadata: Metadata = { title: '今日の予約' };
-
-/** 描画の基準時刻（リクエスト時点） */
-function requestTime() {
-  return Date.now();
-}
+export const metadata: Metadata = { title: '予約' };
 
 /** ハンディに出す予約の状態（キャンセル待ちは台帳側の管理なので出さない） */
 const LISTED_STATUSES: ReservationStatus[] = [
@@ -59,10 +55,15 @@ interface ReservationRow {
 }
 
 /**
- * 今日の予約（承認済みレイアウトの RESERVATION）。
+ * 予約（承認済みレイアウトの RESERVATION）。既定は今日。?date=YYYY-MM-DD でほかの日も見られる
+ * （2026-10-15 Ronnie「ハンディの予約でほかの日も見られるように。予約の追加もハンディで」）。
  * ウォークイン（ハンディ・フロアで着席させたもの）は予約ではないので出さない。
  */
-export default async function HandyReservationsPage() {
+export default async function HandyReservationsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ date?: string | string[] }>;
+}) {
   const ctx = await requireFeature('pos');
   const store = ctx.currentStore ?? ctx.stores[0];
 
@@ -84,6 +85,8 @@ export default async function HandyReservationsPage() {
 
   const supabase = await createClient();
   const today = todayJst();
+  const date = parseHandyDate((await searchParams).date, today);
+  const title = handyReservationsTitle(date, today);
   const [{ data: rows }, { data: openOrders }] = await Promise.all([
     supabase
       .from('reservations')
@@ -91,7 +94,7 @@ export default async function HandyReservationsPage() {
         'id, start_at, end_at, guest_name, party_size, status, created_via, request_note, memo, reservation_sources(name), reservation_tables(table_id, restaurant_tables(name))'
       )
       .eq('store_id', store.id)
-      .eq('reserved_date', today)
+      .eq('reserved_date', date)
       .in('status', LISTED_STATUSES)
       .neq('created_via', 'walk_in')
       .order('start_at'),
@@ -133,20 +136,18 @@ export default async function HandyReservationsPage() {
       <HandyTopBar
         left={<HandyMenuButton />}
         storeName={store.name}
-        title="今日の予約"
+        title={title}
         right={<HandyRefreshButton />}
       />
-      <HandyOperatorBar
-        label={clerk.name}
-        note={`${handyDateLabel(requestTime())} · ${reservations.length}件`}
-      />
+      <HandyOperatorBar label={clerk.name} note={`${handyDayLabel(date)} · ${reservations.length}件`} />
       <HandyMain>
+        <HandyReservationDateBar date={date} today={today} canAdd={can(ctx.role, 'reservations.write')} />
         <div className="flex justify-end px-3 pt-2 empty:hidden">
           <HandyBookingShareButton />
         </div>
-        <HandyReservationList reservations={reservations} />
+        <HandyReservationList reservations={reservations} emptyText={handyEmptyText(date, today)} />
         <p className="px-5 pb-5 text-center text-[10px] leading-relaxed text-[#7a7090]">
-          予約の登録・変更・来店処理はレジ（管理画面）の予約台帳で行います。
+          予約の変更・来店処理はレジ（管理画面）の予約台帳で行います。
         </p>
       </HandyMain>
     </>
