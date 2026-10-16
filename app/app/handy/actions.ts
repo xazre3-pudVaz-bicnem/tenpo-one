@@ -101,6 +101,26 @@ export async function startHandyVisit(
   tableId: string,
   draft: VisitDraft
 ): Promise<{ orderId: string; planItemError: string | null }> {
+  return startVisit(tableId, draft, { sendPlanNow: true });
+}
+
+/**
+ * レジ（iPad）の「お客様情報」の確定。ハンディと同じだが、選んだプラン商品（飲み放題・コースなど）は
+ * 伝票に「未送信」で入れるだけで、厨房へは送らない。レジの注文画面で Order をスライドしたときに送る
+ * （2026-10-16 Ronnie「Order をスライドしていないのに注文が行った」SHUNKA 新宿 T401）。
+ */
+export async function startRegisterVisit(
+  tableId: string,
+  draft: VisitDraft
+): Promise<{ orderId: string; planItemError: string | null }> {
+  return startVisit(tableId, draft, { sendPlanNow: false });
+}
+
+async function startVisit(
+  tableId: string,
+  draft: VisitDraft,
+  { sendPlanNow }: { sendPlanNow: boolean }
+): Promise<{ orderId: string; planItemError: string | null }> {
   await requirePermission('pos.order');
   const problem = validateVisitDraft(draft);
   if (problem) throw new Error(problem);
@@ -134,8 +154,8 @@ export async function startHandyVisit(
       planItemError = e instanceof Error ? e.message : 'プラン商品を伝票に入れられませんでした';
     }
   }
-  // ハンディで入れた品は厨房（ドリンク）へもすぐ送る
-  if (addedIds.length > 0) {
+  // ハンディで入れた品は厨房（ドリンク）へもすぐ送る（レジは Order のスライドで送る）
+  if (sendPlanNow && addedIds.length > 0) {
     try {
       await sendItemsToKitchen(orderId, addedIds);
     } catch {

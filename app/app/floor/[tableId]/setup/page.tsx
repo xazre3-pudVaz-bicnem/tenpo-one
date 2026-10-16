@@ -8,7 +8,7 @@ import { formatTime } from '@/lib/format';
 import { HandySetupScreen } from '@/components/handy/handy-setup-screen';
 import { visitSourcesFrom } from '@/lib/handy-visit';
 import { tableState } from '@/components/handy/logic';
-import { startHandyVisit } from '@/app/app/handy/actions';
+import { startRegisterVisit } from '@/app/app/handy/actions';
 import { loadSetupPlanItems } from '@/app/app/handy/setup-data';
 
 export const metadata: Metadata = { title: 'お客様情報 | オーダー・会計' };
@@ -94,7 +94,8 @@ export default async function FloorSetupPage({ params }: { params: Promise<{ tab
       planItems={planItems}
       startLabel={formatTime(new Date(requestTime()))}
       sources={visitSources}
-      confirmAction={startHandyVisit}
+      // プラン商品は「未送信」で伝票へ。厨房へは注文画面の Order スライドで送る（2026-10-16 Ronnie）
+      confirmAction={startRegisterVisit}
     />
   );
 }
