@@ -20,6 +20,7 @@ export const metadata: Metadata = { title: 'テーブルQRコードをまとめ�
  * 刷り直せるようにした。トークンは変えない（印刷済みの正しいQRはそのまま使える）。
  * 2026-09-29 Ronnie「A6 で、黒と紫（TENPO ONE の色）、ダウンロードして印刷するだけ」→ 1卓1枚の A6 カード
  * （components/settings/table-qr-card.tsx）。PDF でダウンロード（A6・1枚1ページ）か、そのまま印刷（@page A6）。
+ * 2026-10-16 Ronnie「a4 paper ma katna milne tarikale pdf」→ A4 1枚に4卓＋切り取り線の PDF も選べるようにした。
  */
 export default async function TableQrPrintPage() {
   const ctx = await requirePermission('store.settings');
@@ -64,12 +65,18 @@ export default async function TableQrPrintPage() {
       <PageHeader
         title="テーブルQRコードをまとめて印刷"
         en="Table QR codes"
-        description={`${storeName}｜A6（105×148mm）に1卓1枚。PDFでダウンロードして印刷するだけ`}
+        description={`${storeName}｜A6（105×148mm）に1卓1枚。A4に4卓並べて切る形でも出せます`}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <TableQrPdfButton
-              fileName={`${storeName}_テーブルQR_A6.pdf`}
+              fileName={`${storeName}_テーブルQR_A4_4面.pdf`}
+              layout="a4-4up"
+              label="PDFでダウンロード（A4・4面）"
               className="on-brand inline-flex h-10 items-center gap-1.5 rounded-lg px-4 text-sm font-semibold text-white disabled:opacity-70"
+            />
+            <TableQrPdfButton
+              fileName={`${storeName}_テーブルQR_A6.pdf`}
+              className="inline-flex h-10 items-center gap-1.5 rounded-lg border border-line bg-white px-4 text-sm font-semibold text-ink hover:bg-lilac-soft disabled:opacity-70"
             />
             <PrintButton className="inline-flex h-10 items-center gap-1.5 rounded-lg border border-line bg-white px-4 text-sm font-semibold text-ink hover:bg-lilac-soft">
               <Printer className="h-4 w-4" aria-hidden />
@@ -79,8 +86,11 @@ export default async function TableQrPrintPage() {
         }
       />
       <div className="mb-4 space-y-1 rounded-lg border border-gray-200 bg-white p-3 text-xs leading-relaxed text-gray-600">
-        <p>・「PDFでダウンロード」→ PDF を開いて「倍率 100%（実際のサイズ）」「用紙 A6」で印刷してください。1ページに1卓です。</p>
-        <p>・A4 の紙しか無いときは、印刷の設定で「1枚に4ページ」にすると A4 1枚に4卓（ちょうど A6 の大きさ）で出ます。</p>
+        <p className="font-semibold text-ink">
+          ・ふつうは「PDFでダウンロード（A4・4面）」。A4 の紙にそのまま刷って、点線で切るだけで A6 のカードになります（倍率は
+          100%・実際のサイズ）。
+        </p>
+        <p>・A6 の紙に1枚ずつ刷れるプリンターなら「PDFでダウンロード（A6）」。1ページに1卓です。</p>
         <p>・QRの中身（URL）は今のものと同じです。「トークン再発行」はしていないので、正しく読めている卓はそのまま使えます。</p>
         {stopped.length > 0 && (
           <p className="font-semibold text-danger">

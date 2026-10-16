@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase/server';
 import { resolveSiteOrigin } from '@/lib/site-origin';
 import { tableOrderUrl, tableQrDataUrl } from '@/lib/table-qr';
 import { floorBoardFrom, floorBoardToJson } from '@/lib/floor-nav';
+import { changedTableOrders, renumberTablesByName } from '@/lib/table-sort';
 
 export interface ActionResult {
   error?: string;
@@ -246,6 +247,84 @@ export async function saveTable(input: TableInput): Promise<ActionResult> {
 
   revalidatePath('/app/settings/tables');
   return {};
+}
+
+/**
+ * テーブルの並び順を「フロア順 → 名前の自然順」で振り直す。
+ * 2026-10-16 SHUNKA 新宿本店：あとから足した卓が一覧の後ろに出て
+ * 「table number 順番 ma xaina」となったため、1卓ずつ直さず1回で揃えられるようにした。
+ * 押したときだけ動く（勝手に並び替わることはない）。
+ */
+export async function reorderTablesByName(storeId: string): Promise<ActionResult & { updated?: number }> {
+  const ctx = await requirePermission('store.settings');
+  if (ctx.isRegisterDevice) return { error: ADMIN_ONLY_SETTINGS_NOTE };
+  const err = assertStoreAccess(
+    ctx.stores.map((s) => s.id),
+    storeId
+  );
+  if (err) return { error: err };
+
+  const supabase = await createClient();
+  const [{ data: floors, error: floorError }, { data: tables, error: tableError }] = await Promise.all([
+    supabase
+      .from('floors')
+      .select('id')
+      .eq('store_id', storeId)
+      .eq('status', 'active')
+      .order('sort_order')
+      .order('name'),
+    supabase
+      .from('restaurant_tables')
+      .select('id, name, floor_id, sort_order')
+      .eq('store_id', storeId)
+      .eq('status', 'active'),
+  ]);
+  if (floorError) return { error: `フロアの読み込みに失敗しました: ${floorError.message}` };
+  if (tableError) return { error: `テーブルの読み込みに失敗しました: ${tableError.message}` };
+
+  const rows = tables ?? [];
+  if (rows.length === 0) return { updated: 0 };
+
+  const plan = renumberTablesByName(
+    rows.map((t) => ({ id: t.id, name: t.name, floorId: t.floor_id })),
+    (floors ?? []).map((f) => f.id)
+  );
+  const changed = changedTableOrders(plan, new Map(rows.map((t) => [t.id, t.sort_order])));
+  if (changed.length === 0) return { updated: 0 };
+
+  // 件数が多い店舗（50卓以上）でも待たされないように少しずつまとめて書く
+  const CHUNK = 20;
+  for (let i = 0; i < changed.length; i += CHUNK) {
+    const results = await Promise.all(
+      changed.slice(i, i + CHUNK).map((c) =>
+        supabase
+          .from('restaurant_tables')
+          .update({ sort_order: c.sortOrder, updated_by: ctx.userId })
+          .eq('id', c.id)
+          .eq('store_id', storeId)
+      )
+    );
+    const failed = results.find((r) => r.error);
+    if (failed?.error) return { error: `並び順の保存に失敗しました: ${failed.error.message}` };
+  }
+
+  await supabase.rpc('log_audit', {
+    p_org: ctx.organizationId,
+    p_store: storeId,
+    p_action: 'settings.tables.reorder_by_name',
+    p_target_table: 'restaurant_tables',
+    p_target_id: storeId,
+    p_before: null,
+    p_after: { updated: changed.length, total: rows.length },
+    p_note: null,
+  });
+
+  revalidatePath('/app/settings/tables');
+  revalidatePath('/app/settings/tables/qr-print');
+  revalidatePath('/app/floor');
+  revalidatePath('/app/pos');
+  revalidatePath('/handy');
+  return { updated: changed.length };
 }
 
 /** テーブルの利用停止・再開（current_status） */

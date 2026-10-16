@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useEffect, useMemo, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { BellRing, Wallet } from 'lucide-react';
@@ -8,6 +8,13 @@ import { cn } from '@/lib/utils';
 import { yen, formatTime } from '@/lib/format';
 import { useToast } from '@/components/ui/toast';
 import { useNow } from '@/components/floor/use-now';
+import {
+  filterHandyTables,
+  handyFloorStorageKey,
+  handyFloorTabs,
+  initialHandyFloor,
+  type HandyFloorOption,
+} from '@/lib/handy-floor';
 import {
   callToneByTable,
   canStartOrder,
@@ -22,6 +29,8 @@ import {
 export interface HandyTableCard {
   id: string;
   name: string;
+  /** フロア（決めていない卓は null） */
+  floorId: string | null;
   capacityMax: number;
   currentStatus: string | null;
   /** 未会計伝票の枚数（0なら空席・清掃中など） */
@@ -40,15 +49,52 @@ export function HandyTableList({
   calls,
   serverNow,
   setTableLockAction,
+  floors = [],
+  defaultFloorId = null,
+  storeId,
 }: {
   tables: HandyTableCard[];
   calls: HandyServiceCall[];
   serverNow: number;
+  /** フロア（3F・4F・5F）。2つ以上あるときだけ上にタブを出す（2026-10-16 SHUNKA 新宿） */
+  floors?: HandyFloorOption[];
+  /** 店舗の「レジで最初に出すフロア」。端末で選び直すまではこのフロアから始まる */
+  defaultFloorId?: string | null;
+  storeId?: string;
   /** 卓ロック（お客様が入っていない卓だけ）。レジのテーブル一覧と同じ（2026-09-24 店舗要望） */
   setTableLockAction?: (tableId: string, unavailable: boolean) => Promise<void>;
 }) {
   const now = useNow(serverNow);
   const toneByTable = callToneByTable(calls);
+  // フロアのタブ（3F・4F・5F）。卓が多い店でも担当のフロアだけ見られるように
+  const hasUnassigned = tables.some((t) => !t.floorId);
+  const floorTabs = useMemo(() => handyFloorTabs(floors, hasUnassigned), [floors, hasUnassigned]);
+  const tabIds = useMemo(() => floorTabs.map((t) => t.id), [floorTabs]);
+  const [floor, setFloor] = useState(() => initialHandyFloor(tabIds, defaultFloorId));
+  // 端末で前に選んだフロアを思い出す。
+  // SSRとのhydration不一致を避けるためマウント後に復元する（effect本体での同期setStateを避けてタスクへ遅延。components/layout/sidebar.tsx と同じ形）
+  useEffect(() => {
+    if (!storeId || tabIds.length === 0) return;
+    const timer = setTimeout(() => {
+      try {
+        const saved = window.localStorage.getItem(handyFloorStorageKey(storeId));
+        setFloor(initialHandyFloor(tabIds, defaultFloorId, saved));
+      } catch {
+        // プライベートブラウズなどで localStorage が使えないときは店舗の設定のまま
+      }
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [storeId, tabIds, defaultFloorId]);
+  const pickFloor = (id: string) => {
+    setFloor(id);
+    if (!storeId) return;
+    try {
+      window.localStorage.setItem(handyFloorStorageKey(storeId), id);
+    } catch {
+      // 覚えられなくても動く
+    }
+  };
+  const shown = floorTabs.length > 0 ? filterHandyTables(tables, floor) : tables;
   // 空いている卓はタップで画面遷移せず、真ん中に小さいポップアップを出す（2026-09-24 店舗要望）
   const [sheetTableId, setSheetTableId] = useState<string | null>(null);
   const sheetTable = tables.find((t) => t.id === sheetTableId) ?? null;
@@ -65,8 +111,37 @@ export function HandyTableList({
 
   return (
     <>
+      {floorTabs.length > 0 && (
+        <div
+          className="flex gap-1.5 overflow-x-auto px-2 pt-1.5 pb-0.5"
+          role="group"
+          aria-label="フロア"
+        >
+          {floorTabs.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              aria-pressed={t.id === floor}
+              onClick={() => pickFloor(t.id)}
+              className={cn(
+                'min-h-[34px] shrink-0 rounded-full border px-4 text-[12.5px] font-bold whitespace-nowrap',
+                t.id === floor
+                  ? 'border-[#bc5940] bg-[#bc5940] text-white'
+                  : 'border-[#ead9cc] bg-white text-[#5c5650] active:bg-[#f6e4da]'
+              )}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      )}
+      {shown.length === 0 && (
+        <p className="px-6 py-9 text-center text-[13px] leading-loose text-[#766b62]">
+          このフロアにテーブルがありません。
+        </p>
+      )}
       <ul className="grid grid-cols-3 content-start gap-2 px-2 pt-1.5 pb-2.5 sm:grid-cols-4 lg:grid-cols-6">
-        {tables.map((t) => (
+        {shown.map((t) => (
           <li key={t.id}>
             <HandyTableTile
               table={t}
