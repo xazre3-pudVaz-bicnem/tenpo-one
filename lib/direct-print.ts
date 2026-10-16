@@ -141,13 +141,21 @@ export interface DirectPrintConfig {
   printerIds: string[];
   /** この端末と Bluetooth でつないだプリンター */
   bluetooth?: BluetoothLink[];
+  /**
+   * この iPad（TENPO ONE アプリ）から LAN で送るプリンター（printer_configs.id）。
+   * SII RP-F10 など、自分からインターネットに印刷を取りに行けないプリンター（2026-10-16 Ronnie「EPSON と RP-F10 を LAN で」）
+   */
+  lan?: string[];
 }
+
+const idList = (v: unknown, max: number): string[] =>
+  Array.isArray(v) ? [...new Set(v.filter((x): x is string => typeof x === 'string' && x.length > 0))].slice(0, max) : [];
 
 /** localStorage の値を読む（壊れていたら空） */
 export function parseDirectPrintConfig(raw: string | null | undefined): DirectPrintConfig {
-  if (!raw) return { printerIds: [], bluetooth: [] };
+  if (!raw) return { printerIds: [], bluetooth: [], lan: [] };
   try {
-    const v = JSON.parse(raw) as { printerIds?: unknown; bluetooth?: unknown };
+    const v = JSON.parse(raw) as { printerIds?: unknown; bluetooth?: unknown; lan?: unknown };
     const ids = Array.isArray(v?.printerIds) ? v.printerIds.filter((x): x is string => typeof x === 'string' && x.length > 0) : [];
     const bt = Array.isArray(v?.bluetooth)
       ? (v.bluetooth as Partial<BluetoothLink>[]).filter(
@@ -169,10 +177,59 @@ export function parseDirectPrintConfig(raw: string | null | undefined): DirectPr
         maker: x.maker,
         via: x.via === 'usb' ? 'usb' : x.via === 'agent' ? 'agent' : 'bluetooth',
       }));
-    return { printerIds: [...new Set(ids)].slice(0, 8), bluetooth: links.slice(0, 4) };
+    return { printerIds: [...new Set(ids)].slice(0, 8), bluetooth: links.slice(0, 4), lan: idList(v?.lan, 8) };
   } catch {
-    return { printerIds: [], bluetooth: [] };
+    return { printerIds: [], bluetooth: [], lan: [] };
   }
+}
+
+/** LAN のプリンターに ESC/POS をそのまま送るときのポート（RAW。EPSON・SII・多くの ESC/POS 機） */
+export const LAN_RAW_PORT = 9100;
+
+/**
+ * プリンター設定の IPアドレス欄から、LAN の送り先（お店の中のアドレスだけ）。
+ * 「192.168.1.50」または「192.168.1.50:9100」。それ以外は null
+ */
+export function parseLanTarget(ip: string | null | undefined): { host: string; port: number } | null {
+  const raw = (ip ?? '').trim();
+  if (!raw) return null;
+  const m = /^(.+?)(?::(\d{1,5}))?$/.exec(raw);
+  if (!m) return null;
+  const host = m[1].trim();
+  const port = m[2] ? Number(m[2]) : LAN_RAW_PORT;
+  if (!isLocalPrinterHost(host) || !Number.isInteger(port) || port < 1 || port > 65535) return null;
+  return { host, port };
+}
+
+/**
+ * プリンターに印刷がどう届くか（設定・接続の画面と iPad の画面で同じ判定。2026-10-16 Ronnie
+ * 「Star・EPSON・RP-F10 をどの店でも選べるように。LAN で」）。
+ *   cloudprnt … Star。プリンターが TENPO ONE に取りに来る（CloudPRNT）
+ *   sdp       … EPSON。プリンターが TENPO ONE に取りに来る（Server Direct Print）。
+ *               その機能が無い機種は、レジの iPad（アプリ）から LAN で送ることもできる
+ *   ipad-lan  … SII RP-F10・そのほかの ESC/POS。プリンターは取りに来られないので、レジの iPad（アプリ）が LAN で送る
+ *   ipad      … iPad と Bluetooth・USB でつなぐ
+ *   browser   … ブラウザ印刷
+ */
+export type PrinterDelivery = 'cloudprnt' | 'sdp' | 'ipad-lan' | 'ipad' | 'browser';
+
+export function printerDeliveryOf(p: { maker?: string | null; connection?: string | null }): PrinterDelivery {
+  const conn = (p.connection ?? '').trim();
+  if (conn === 'bluetooth' || conn === 'usb') return 'ipad';
+  if (conn === 'browser') return 'browser';
+  const maker = bluetoothMakerOf(p.maker);
+  if (maker === 'epson') return 'sdp';
+  if (maker === 'sii' || maker === 'escpos') {
+    // 「その他」で、メーカー名が空のまま（今までの Star の行など）は今まで通り CloudPRNT
+    return (p.maker ?? '').trim() ? 'ipad-lan' : 'cloudprnt';
+  }
+  return 'cloudprnt';
+}
+
+/** この iPad から LAN で送れるプリンターか（Wi-Fi・有線LAN で、Star 以外、IPアドレスが入っている） */
+export function isLanRelayPrinter(p: { maker?: string | null; connection?: string | null; ip?: string | null }): boolean {
+  const d = printerDeliveryOf(p);
+  return (d === 'sdp' || d === 'ipad-lan') && parseLanTarget(p.ip) !== null;
 }
 
 /** プリンター設定のメーカー名から、iPad とつなぐときの種類。分からなければ ESC/POS（多くの機械が対応） */

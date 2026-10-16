@@ -167,6 +167,10 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         let bluetooth = AppConfig.isPad
             ? "bluetooth: { discover: function(maker){ return call('btDiscover', { maker: maker || 'all' }); }, print: function(job){ return call('btPrint', job || {}); } },"
             : ""
+        // iPad（レジ）だけ：LAN のプリンター（SII RP-F10・EPSON など）へ ESC/POS をそのまま送る（ios/Shared/LanPrinters.swift）
+        let lan = AppConfig.isPad
+            ? "lan: { print: function(job){ return call('lanPrint', job || {}); } },"
+            : ""
         // iPad だけ：ネイティブのオーダー・会計画面（試験中）の ON/OFF（レジの設定に出る）
         let nativePosOn = AppState.shared.nativePosEnabled ? "true" : "false"
         let nativePos = AppConfig.isPad
@@ -199,6 +203,7 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
             changeMode: function(){ post({ type: 'changeMode' }); },
             requestPush: function(){ post({ type: 'requestPush' }); },
             \(bluetooth)
+            \(lan)
             \(nativePos)
           };
           \(routeHook)
@@ -233,6 +238,18 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
                 return
             }
             BluetoothPrinters.shared.print(deviceId: deviceId, maker: maker, via: body["via"] as? String ?? "bluetooth", data: data) { [weak self] ok, code in
+                var res: [String: Any] = ["ok": ok]
+                if let code { res["code"] = code }
+                self?.reply(reqId, res)
+            }
+        case "lanPrint":
+            let reqId = body["reqId"] as? String ?? ""
+            guard let host = body["host"] as? String, let b64 = body["data"] as? String, let data = Data(base64Encoded: b64) else {
+                reply(reqId, ["ok": false, "code": "bad_request"])
+                return
+            }
+            let port = (body["port"] as? NSNumber)?.intValue ?? 9100
+            LanPrinters.shared.print(host: host, port: port, data: data) { [weak self] ok, code in
                 var res: [String: Any] = ["ok": ok]
                 if let code { res["code"] = code }
                 self?.reply(reqId, res)

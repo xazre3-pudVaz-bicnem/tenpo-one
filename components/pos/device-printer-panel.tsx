@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Bluetooth, Check, Loader2, Printer, Search, ShieldCheck, Wifi } from 'lucide-react';
+import { Bluetooth, Cable, Check, Loader2, Printer, Search, ShieldCheck, Wifi } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { useToast } from '@/components/ui/toast';
 import { cn } from '@/lib/utils';
@@ -12,10 +12,12 @@ import {
   isEpsonMaker,
   isLikelyPrinter,
   isLocalPrinterHost,
+  parseLanTarget,
   printerCertUrl,
+  printerDeliveryOf,
   type BluetoothLink,
 } from '@/lib/direct-print';
-import { nativeBluetooth, type NativeBluetoothDevice } from '@/lib/native-app';
+import { nativeBluetooth, nativeLan, type NativeBluetoothDevice } from '@/lib/native-app';
 import { addDeviceReceiptPrinter, saveDeviceReceiptPrinterSettings, setDevicePrinter } from '@/app/app/pos/device-printer-actions';
 import {
   PRINTER_MAKER_LABEL,
@@ -183,6 +185,8 @@ export function DevicePrinterPanel({
 
 
 
+      <LanPrintersCard printers={printers} />
+
       {epsonPrinters.length > 0 && (
         <Card>
           <CardContent className="space-y-3">
@@ -275,6 +279,154 @@ export function DevicePrinterPanel({
         </Card>
       )}
     </div>
+  );
+}
+
+/**
+ * LAN（有線・Wi-Fi）のプリンターへ、この iPad（TENPO ONE アプリ）から送る（2026-10-16 Ronnie「EPSON と SII RP-F10 を LAN で。
+ * どの店でも選べるように」）。SII RP-F10 は自分から印刷を取りに来られないので、レジの iPad が送る。
+ * EPSON は Server Direct Print（プリンター自身）でも出るが、その機能が無い機種はこれで送る。厨房・ドリンクの伝票も。
+ */
+function LanPrintersCard({ printers }: { printers: DevicePrinterOption[] }) {
+  const { toast } = useToast();
+  const [inApp, setInApp] = useState(false);
+  const [ids, setIds] = useState<string[]>([]);
+  const [testing, setTesting] = useState<string | null>(null);
+
+  useEffect(() => {
+    const sync = () => {
+      setInApp(nativeLan() !== null);
+      setIds(readDirectPrintConfig().lan ?? []);
+    };
+    sync();
+    window.addEventListener('tenpo-direct-print-changed', sync);
+    return () => window.removeEventListener('tenpo-direct-print-changed', sync);
+  }, []);
+
+  const list = printers.filter((p) => {
+    if (!p.enabled || (p.connection !== 'lan' && p.connection !== 'wifi')) return false;
+    const d = printerDeliveryOf({ maker: p.maker, connection: p.connection });
+    return d === 'sdp' || d === 'ipad-lan';
+  });
+  if (list.length === 0) return null;
+
+  const toggle = (id: string) => {
+    const next = ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id];
+    if (!writeDirectPrintConfig({ ...readDirectPrintConfig(), lan: next })) {
+      toast('このiPadに保存できませんでした', 'error');
+      return;
+    }
+    setIds(next);
+    toast(next.includes(id) ? 'この iPad から LAN で送ります（この iPad だけ）' : 'この iPad から LAN で送るのをやめました');
+  };
+
+  const test = async (p: DevicePrinterOption, kind: 'receipt' | 'drawer') => {
+    const lan = nativeLan();
+    if (!lan) return;
+    setTesting(`${p.id}:${kind}`);
+    try {
+      const res = await postDirect<{ ok: boolean; host?: string; port?: number; data?: string; error?: string }>({
+        action: 'test-lan',
+        printerId: p.id,
+        kind,
+      });
+      if (!res?.ok || !res.host || !res.data) {
+        toast(res?.error ?? '試し印刷のデータを作れませんでした', 'error');
+        return;
+      }
+      const sent = await lan.print({ host: res.host, port: res.port, data: res.data });
+      if (sent.ok) toast(kind === 'drawer' ? 'ドロアを開きました（LAN）' : '送りました（LAN）。紙が出たか確かめてください');
+      else if (sent.code === 'timeout_sent') toast('プリンターの返事がありません。紙が出たか確かめてください', 'error');
+      else toast('つながりません。プリンターの電源・LAN ケーブル・IPアドレス、iPad が同じネットワークか確かめてください', 'error');
+    } finally {
+      setTesting(null);
+    }
+  };
+
+  return (
+    <Card>
+      <CardContent className="space-y-3">
+        <div className="flex items-start gap-2">
+          <Cable className="mt-0.5 h-5 w-5 shrink-0 text-primary" aria-hidden />
+          <div>
+            <p className="text-sm font-bold text-navy">LAN のプリンター（EPSON・SII RP-F10 など）</p>
+            <p className="text-xs text-gray-500">
+              この iPad から、お店の LAN（有線・Wi-Fi）でプリンターへ送ります。レシートも厨房・ドリンクの伝票も出ます。
+              SII RP-F10 は自分から印刷を取りに来られないので、この方法で出します（レジの iPad は TENPO ONE アプリを開いたままに）
+            </p>
+          </div>
+        </div>
+        {!inApp && (
+          <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-800">
+            iPad の「TENPO ONE」アプリで使えます（Safari では使えません）。Safari の iPad では、EPSON はプリンター自身（Server Direct Print）で、
+            SII RP-F10 のレシートは上の「SII URL Print Agent」で出せます
+          </p>
+        )}
+        <ul className="divide-y divide-gray-100">
+          {list.map((p) => {
+            const target = parseLanTarget(p.ip);
+            const on = ids.includes(p.id);
+            const needsIpad = printerDeliveryOf({ maker: p.maker, connection: p.connection }) === 'ipad-lan';
+            return (
+              <li key={p.id} className="flex flex-wrap items-center gap-2 py-3">
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-ink">
+                    {p.name}
+                    {p.model ? <span className="ml-1 text-xs font-normal text-gray-500">{p.model}</span> : null}
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    {p.maker ?? 'メーカー未設定'}・{USAGE_LABEL[p.usage] ?? p.usage}・
+                    {target ? `${target.host}${target.port !== 9100 ? `:${target.port}` : ''}` : 'IPアドレスが未入力（管理画面 > 設定 > レジ・プリンター で入れてください）'}
+                  </p>
+                  <p className={cn('text-xs', needsIpad ? 'font-semibold text-primary' : 'text-gray-400')}>
+                    {needsIpad ? 'どれか1台の iPad で「このiPadから送る」を ON にしてください' : 'プリンター自身（Server Direct Print）でも出ます'}
+                  </p>
+                </div>
+                {inApp && target && (
+                  <>
+                    <button
+                      type="button"
+                      disabled={testing !== null}
+                      onClick={() => void test(p, 'receipt')}
+                      className="inline-flex h-11 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 text-sm font-medium text-ink hover:bg-gray-50 disabled:opacity-60"
+                    >
+                      {testing === `${p.id}:receipt` && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}試し印刷
+                    </button>
+                    {p.usage === 'receipt' && (
+                      <button
+                        type="button"
+                        disabled={testing !== null}
+                        onClick={() => void test(p, 'drawer')}
+                        className="inline-flex h-11 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 text-sm font-medium text-ink hover:bg-gray-50 disabled:opacity-60"
+                      >
+                        {testing === `${p.id}:drawer` && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}ドロア
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={on}
+                      onClick={() => toggle(p.id)}
+                      className={cn(
+                        'inline-flex h-11 items-center gap-2 rounded-lg px-3 text-sm font-bold',
+                        on ? 'bg-primary text-white' : 'border border-gray-200 bg-white text-gray-600'
+                      )}
+                    >
+                      <span className={cn('relative h-5 w-9 rounded-full transition-colors', on ? 'bg-white/40' : 'bg-gray-200')} aria-hidden>
+                        <span
+                          className={cn('absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all', on ? 'left-[18px]' : 'left-0.5')}
+                        />
+                      </span>
+                      このiPadから送る
+                    </button>
+                  </>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -880,8 +1032,12 @@ function SiiAgentForm({
             </a>
             を入れる（無料）
           </li>
-          <li>プリンターの電源を切り、電源ボタンを 7 秒押し続ける（ランプが点滅）→ iPad の 設定 &gt; Bluetooth で「RP-F10」を押す</li>
-          <li>SII URL Print Agent を開き、「PRINTER SELECT」でプリンターを選ぶ</li>
+          <li>
+            Bluetooth：プリンターの電源を切り、電源ボタンを 7 秒押し続ける（ランプが点滅）→ iPad の 設定 &gt; Bluetooth で「RP-F10」を押す
+            <br />
+            有線LAN：プリンターを LAN ケーブルでお店のルーターにつなぐ（iPad と同じネットワーク）
+          </li>
+          <li>SII URL Print Agent を開き、「PRINTER SELECT」でプリンターを選ぶ（有線LAN はプリンターの IP アドレス）</li>
           <li>下の「このiPadで使う」→「試し印刷」。Safari が「開きますか？」と聞いたら「開く」。印刷のあとは左上の「◀ Safari」で戻る</li>
         </ol>
       </div>

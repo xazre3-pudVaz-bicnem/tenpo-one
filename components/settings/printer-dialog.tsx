@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input, Label, Select, FieldError } from '@/components/ui/input';
 import { useToast } from '@/components/ui/toast';
 import { savePrinterConfig } from '@/app/app/settings/printers/actions';
+import { parseLanTarget, printerDeliveryOf } from '@/lib/direct-print';
 
 export interface PrinterConfigRow {
   id: string;
@@ -36,6 +37,16 @@ export interface FloorOption {
 
 // ESC/POS・Star・SII（RP-F10）を選べる（2026-10-13 Ronnie）。「その他」は ESC/POS として扱う（lib/direct-print.ts の bluetoothMakerOf）
 const MAKER_OPTIONS = ['EPSON', 'Star', 'SII', 'その他'];
+/**
+ * 型番の候補（メーカーごと。手で入れてもよい）。2026-10-16 Ronnie「Star・EPSON・RP-F10 をどの店でも選べるように」
+ */
+const MODEL_SUGGESTIONS: Record<string, string[]> = {
+  Star: ['mC-Print3', 'mC-Print2', 'TSP100IV', 'TSP650II', 'mPOP'],
+  EPSON: ['TM-m30III', 'TM-m30II', 'TM-m30III-H', 'TM-T88VII', 'TM-m50II', 'TM-m10'],
+  SII: ['RP-F10', 'RP-E10', 'RP-E11'],
+  その他: [],
+};
+
 const CONNECTION_OPTIONS = [
   { value: 'browser', label: 'ブラウザ印刷' },
   { value: 'wifi', label: 'Wi-Fi' },
@@ -85,10 +96,19 @@ export function PrinterDialog({
   const set = <K extends keyof PrinterConfigRow>(key: K, value: PrinterConfigRow[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
 
+  const delivery = printerDeliveryOf({ maker: form.maker, connection: form.connectionType });
+  const lanTarget = parseLanTarget(form.ipAddress);
+  const modelOptions = MODEL_SUGGESTIONS[form.maker] ?? [];
+
   const handleSubmit = () => {
     setError(null);
     if (!form.name.trim()) {
       setError('プリンター名を入力してください');
+      return;
+    }
+    // SII RP-F10 など（LAN）は iPad が IP あてに送るので、IP が要る
+    if (delivery === 'ipad-lan' && !lanTarget) {
+      setError('このプリンターはレジの iPad から LAN で送ります。IPアドレス（192.168.…）を入れてください');
       return;
     }
     startTransition(async () => {
@@ -137,7 +157,20 @@ export function PrinterDialog({
           </div>
           <div>
             <Label htmlFor="printer-model">型番</Label>
-            <Input id="printer-model" value={form.model} onChange={(e) => set('model', e.target.value)} />
+            <Input
+              id="printer-model"
+              list={modelOptions.length > 0 ? 'printer-model-options' : undefined}
+              value={form.model}
+              onChange={(e) => set('model', e.target.value)}
+              placeholder={modelOptions[0] ?? ''}
+            />
+            {modelOptions.length > 0 && (
+              <datalist id="printer-model-options">
+                {modelOptions.map((m) => (
+                  <option key={m} value={m} />
+                ))}
+              </datalist>
+            )}
           </div>
         </div>
         <div>
@@ -158,17 +191,31 @@ export function PrinterDialog({
           )}
           {form.connectionType !== 'browser' && form.connectionType !== 'bluetooth' && form.connectionType !== 'usb' && (
             <p className="mt-1.5 text-xs text-gray-500">
-              Wi-Fi / 有線LAN のどちらでもOK（有線が安定）。実機のレシート印字は、保存後に下の「プリンター接続」で有効化します。プリンタがインターネットに接続できれば利用できます。
+              Wi-Fi / 有線LAN のどちらでもOK（有線が安定）。保存後に下の「プリンター接続」で「このプリンタを使う」を ON にします。
+              {delivery === 'cloudprnt' && ' Star は「接続用URL」をプリンターの CloudPRNT に入れます（プリンターがインターネットに取りに来ます）。'}
+              {delivery === 'sdp' &&
+                ' EPSON は「接続用URL」をプリンターの Server Direct Print に入れます（TM-m30III など）。その機能が無い機種は、IPアドレスを入れて、レジの iPad（TENPO ONE アプリ）から LAN で送れます。'}
+              {delivery === 'ipad-lan' && (
+                <strong className="font-semibold text-primary">
+                  {' '}
+                  SII RP-F10 などは自分からインターネットに印刷を取りに来られないため、レジの iPad（TENPO ONE アプリ）が お店の LAN で送ります。
+                  IPアドレスを入れて保存し、iPad の レジの設定 &gt; このiPadのプリンター で「このiPadから送る」を ON にしてください。
+                </strong>
+              )}
             </p>
           )}
         </div>
         <div>
-          <Label htmlFor="printer-ip">IPアドレス（任意）</Label>
+          <Label htmlFor="printer-ip">{delivery === 'ipad-lan' ? 'IPアドレス（必須）' : 'IPアドレス（任意）'}</Label>
           <Input id="printer-ip" value={form.ipAddress} onChange={(e) => set('ipAddress', e.target.value)} placeholder="192.168.1.100" />
           <p className="mt-1.5 text-xs text-gray-500">
             Star は メモ用（任意）。EPSON は入れておくと、レジの設定「このiPadのプリンター」から
-            <strong>Wi-Fi で直接印刷（速い）</strong>が使えます（EPSON機はこのIPをブラウザで開いて設定画面にも入ります）
+            <strong>Wi-Fi で直接印刷（速い）</strong>・<strong>LAN で送る</strong>が使えます（EPSON機はこのIPをブラウザで開いて設定画面にも入ります）。
+            SII RP-F10 は必須（電源を入れたままフィードボタンを押して出る紙の IP Address）。ポートを変えているときは「192.168.1.100:9100」
           </p>
+          {delivery === 'ipad-lan' && form.ipAddress.trim() !== '' && !lanTarget && (
+            <FieldError message="お店の中のアドレス（192.168.… / 10.… / 172.16〜31.…）を入れてください" />
+          )}
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>

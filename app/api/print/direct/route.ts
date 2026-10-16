@@ -13,7 +13,14 @@ import {
   touchPrinter,
   type PrinterRow,
 } from '@/lib/print-queue';
-import { bluetoothMakerOf, eposSoapEnvelope, isEpsonMaker, isLocalPrinterHost } from '@/lib/direct-print';
+import {
+  bluetoothMakerOf,
+  eposSoapEnvelope,
+  isEpsonMaker,
+  isLanRelayPrinter,
+  isLocalPrinterHost,
+  parseLanTarget,
+} from '@/lib/direct-print';
 import { drawerKickEpos, testPrintEpos } from '@/lib/epos-print';
 import { drawerKickStarPrnt, testPrintStarPrnt } from '@/lib/starprnt';
 import { eposXmlToEscPos } from '@/lib/escpos';
@@ -28,15 +35,21 @@ import { eposXmlToEscPos } from '@/lib/escpos';
  *     （2026-10-13 Ronnie「レシートプリンター＋ドロアは iPad と Bluetooth。チケットプリンターは LAN・Wi-Fi」）
  *     format: 'epos' … バイト列ではなく ePOS-Print XML を返す（Safari が画像・PDF にして SII URL Print Agent で印刷する。
  *     lib/sii-url-print.ts。2026-10-14 Ronnie「SII RP-F10 を Safari でも」）
+ *   next-lan / test-lan … LAN（有線・Wi-Fi）のプリンターへ iPad（TENPO ONE アプリ）が ESC/POS をそのまま送る用
+ *     （TCP 9100。ios/Shared/LanPrinters.swift）。SII RP-F10 など、自分から印刷を取りに来られないプリンター。
+ *     EPSON の Server Direct Print の無い機種もこれで送れる（2026-10-16 Ronnie「EPSON と RP-F10 を LAN で」）
  * ログインしている人の店舗のプリンターだけ。Wi-Fi は EPSON・お店の中のアドレス（IP）があるものだけ。
  */
+
+/** iPad から LAN で送っているプリンターの「最後に取りに来た時刻」を書く間隔（毎秒書かない） */
+const LAN_TOUCH_EVERY_MS = 20_000;
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 type Body =
-  | { action: 'next' | 'next-bt'; printerIds?: unknown; format?: unknown }
+  | { action: 'next' | 'next-bt' | 'next-lan'; printerIds?: unknown; format?: unknown }
   | { action: 'done'; printerId?: unknown; jobId?: unknown; result?: unknown; code?: unknown }
-  | { action: 'test' | 'test-bt'; printerId?: unknown; kind?: unknown; format?: unknown };
+  | { action: 'test' | 'test-bt' | 'test-lan'; printerId?: unknown; kind?: unknown; format?: unknown };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const isId = (v: unknown): v is string => typeof v === 'string' && UUID.test(v);
@@ -93,6 +106,71 @@ export async function POST(request: Request) {
       });
     }
     return NextResponse.json({ ok: true, job: null });
+  }
+
+  /** この人の店舗の、iPad から LAN で送れるプリンター（Wi-Fi・有線LAN、Star 以外、お店の中の IP） */
+  const lanUsable = async (id: unknown): Promise<(PrinterRow & { host: string; port: number }) | null> => {
+    const row = await mine(id);
+    if (!row || !isLanRelayPrinter({ maker: row.maker, connection: row.connection_type, ip: row.ip_address })) return null;
+    const target = parseLanTarget(row.ip_address);
+    return target ? { ...row, ...target } : null;
+  };
+
+  if (body.action === 'next-lan') {
+    const ids = Array.isArray(body.printerIds) ? body.printerIds.slice(0, 8) : [];
+    for (const id of ids) {
+      const printer = await lanUsable(id);
+      if (!printer) continue;
+      // 「接続中」の表示（iPad が取りに来ている）。毎秒は書かない
+      const last = printer.last_polled_at ? new Date(printer.last_polled_at).getTime() : 0;
+      if (Date.now() - last > LAN_TOUCH_EVERY_MS) await touchPrinter(admin, printer.id);
+      await expireStaleJobs(admin, printer.id);
+      await reclaimStaleJobs(admin, printer.id);
+      if (printer.usage === 'kitchen') await generateKitchenJobs(admin, printer);
+      const job = await claimNextJob(admin, printer.id);
+      if (!job) continue;
+      const epos = job.payload?.epos;
+      const bytes = epos ? eposXmlToEscPos(epos) : null;
+      if (!bytes) {
+        await finishJob(admin, printer.id, job.id, false, 'LAN 用の印刷データがありません');
+        continue;
+      }
+      return NextResponse.json({
+        ok: true,
+        job: {
+          id: job.id,
+          printerId: printer.id,
+          printerName: printer.name,
+          host: printer.host,
+          port: printer.port,
+          data: Buffer.from(bytes).toString('base64'),
+        },
+      });
+    }
+    return NextResponse.json({ ok: true, job: null });
+  }
+
+  if (body.action === 'test-lan') {
+    const printer = await lanUsable(body.printerId);
+    if (!printer) {
+      return NextResponse.json(
+        { ok: false, error: 'Wi-Fi・有線LAN のプリンター（Star 以外）で、IPアドレス（192.168.…）が入っているものだけ送れます' },
+        { status: 404 }
+      );
+    }
+    const store = ctx.stores.find((s) => s.id === printer.store_id);
+    const paper = printer.paper_width_mm === 58 ? 58 : 80;
+    const issuedAt = new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
+    const xml =
+      body.kind === 'drawer'
+        ? drawerKickEpos(null)
+        : testPrintEpos({ storeName: `${store?.name ?? 'TENPO ONE'}（LAN）`, paperWidth: paper, issuedAt });
+    return NextResponse.json({
+      ok: true,
+      host: printer.host,
+      port: printer.port,
+      data: Buffer.from(eposXmlToEscPos(xml)).toString('base64'),
+    });
   }
 
   if (body.action === 'next-bt') {

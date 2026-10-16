@@ -15,6 +15,7 @@ import {
   regenerateCloudPrntToken,
   enqueueCloudPrntTest,
 } from '@/app/app/settings/printers/actions';
+import { printerDeliveryOf } from '@/lib/direct-print';
 
 export interface CloudPrntPrinter {
   id: string;
@@ -133,6 +134,7 @@ export function CloudPrntPanel({
           Star mC-Print3（CloudPRNT）や EPSON TM-m30III-H（Server Direct Print）等を TENPO ONE につなぎます。レシート機は会計時のレシートとドロア開放、
           キッチン機は注文が入ると厨房伝票を<strong>自動で</strong>印刷します（レジ端末が起動していなくてもQR注文の伝票が出ます）。
           プリンタがインターネットにつながっていれば、店内LANの設定は不要です。
+          SII RP-F10 など（自分から取りに来られないプリンター）は、レジの iPad（TENPO ONE アプリ）が お店の LAN で送ります。
         </p>
         {!siteUrl && (
           <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
@@ -183,6 +185,37 @@ function StatusBadge({ status, printer, now }: { status: Status; printer: CloudP
   }
 }
 
+/** iPad から LAN で送るプリンター（SII RP-F10 など）の状態。iPad が取りに来ると「接続中」 */
+function LanStatusBadge({ status, printer, now }: { status: Status; printer: CloudPrntPrinter; now: number }) {
+  switch (status) {
+    case 'online':
+      return (
+        <Badge tone="success">
+          <Wifi className="mr-1 inline h-3 w-3" />
+          接続中（iPad から LAN）
+        </Badge>
+      );
+    case 'offline':
+      return (
+        <Badge tone="warning">
+          <WifiOff className="mr-1 inline h-3 w-3" />
+          iPad から送っていません（最終 {printer.lastPolledAt ? ago(printer.lastPolledAt, now) : '-'}）
+        </Badge>
+      );
+    case 'never':
+      return (
+        <Badge tone="danger">
+          <CircleAlert className="mr-1 inline h-3 w-3" />
+          未接続（iPad の「このiPadから送る」が OFF）
+        </Badge>
+      );
+    case 'checking':
+      return <Badge tone="gray">確認中…</Badge>;
+    default:
+      return <Badge tone="gray">未使用</Badge>;
+  }
+}
+
 function PrinterRow({
   storeId,
   siteUrl,
@@ -207,6 +240,8 @@ function PrinterRow({
   const isKitchen = printer.usage === 'kitchen';
   // iPad と Bluetooth・USB でつなぐプリンター（2026-10-13 Ronnie「レシート＋ドロアは iPad と Bluetooth」）。接続用URLは使わない
   const viaIpad = printer.connectionType === 'bluetooth' || printer.connectionType === 'usb';
+  // SII RP-F10 など：レジの iPad（TENPO ONE アプリ）が LAN で送る（2026-10-16 Ronnie「EPSON と RP-F10 を LAN で」）。接続用URLは使わない
+  const viaLan = !viaIpad && printerDeliveryOf({ maker: printer.maker, connection: printer.connectionType }) === 'ipad-lan';
   const status = statusOf({ ...printer, cloudprntEnabled: enabled }, now);
   const protocol = PROTOCOL[makerKind(printer.maker)];
   const pollUrl =
@@ -250,6 +285,8 @@ function PrinterRow({
           <div className="mt-1 flex flex-wrap items-center gap-2">
             {viaIpad ? (
               <Badge tone="gray">iPad（{printer.connectionType === 'usb' ? 'USB' : 'Bluetooth'}）でつなぐ</Badge>
+            ) : viaLan ? (
+              <LanStatusBadge status={status} printer={printer} now={now} />
             ) : (
               <StatusBadge status={status} printer={printer} now={now} />
             )}
@@ -283,20 +320,35 @@ function PrinterRow({
               iPad で レジの設定 &gt; このiPadのプリンター を開き、「プリンターを探す」でつないでください（接続用URLは使いません）
             </div>
           )}
-          {!viaIpad && status === 'never' &&
+          {viaLan && (
+            <div className="rounded-lg border border-primary/30 bg-primary-soft/40 px-3 py-2 text-xs leading-relaxed text-gray-700">
+              <p className="font-semibold text-navy">このプリンターはレジの iPad（TENPO ONE アプリ）から お店の LAN で送ります（接続用URLは使いません）</p>
+              <ol className="mt-1 list-decimal space-y-0.5 pl-5">
+                <li>プリンターを LAN ケーブルでお店のルーターにつなぎ、電源を入れる</li>
+                <li>
+                  プリンターの IP アドレスを「プリンター編集」に入れる（RP-F10：電源を入れたままフィードボタンを押すと設定の紙が出ます）
+                </li>
+                <li>
+                  レジの iPad の TENPO ONE アプリで レジの設定 &gt; このiPadのプリンター &gt;「LAN のプリンター」→「試し印刷」→「このiPadから送る」を ON
+                </li>
+                <li>その iPad は TENPO ONE アプリを開いたままにする（閉じている間は印刷が待ちになり、開くと出ます）</li>
+              </ol>
+            </div>
+          )}
+          {!viaIpad && !viaLan && status === 'never' &&
             (makerKind(printer.maker) === 'epson' ? (
               <EpsonSetupGuide setupQr={setupQr} />
             ) : (
               <SetupGuide setupQr={setupQr} />
             ))}
-          {!viaIpad && status === 'offline' && (
+          {!viaIpad && !viaLan && status === 'offline' && (
             <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-800">
               以前はつながっていましたが、現在プリンタから通信がありません。電源・LANケーブル・用紙切れ・
               店舗のインターネット回線を確認してください。復旧すると自動で「接続中」に戻ります。
             </div>
           )}
 
-          {!viaIpad && (
+          {!viaIpad && !viaLan && (
           <div>
             <Label>接続用URL（プリンタの {protocol.urlField} に設定）</Label>
             <div className="flex items-center gap-2">
@@ -331,6 +383,7 @@ function PrinterRow({
           )}
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {!viaLan && (
             <div>
               <Label htmlFor={`poll-${printer.id}`}>問い合わせ間隔（秒）</Label>
               <Input
@@ -342,10 +395,11 @@ function PrinterRow({
                 onChange={(e) => setPollInterval(Number(e.target.value))}
               />
             </div>
+            )}
             {!isKitchen &&
               printer.drawerKick &&
-              // EPSON機はピン番号で指定するため、コマンド文字列ではなく接続ピンを選ばせる
-              (protocol.path === 'epson' ? (
+              // EPSON機・iPad から LAN で送る機（ESC/POS）はピン番号で指定するため、コマンド文字列ではなく接続ピンを選ばせる
+              (protocol.path === 'epson' || viaLan ? (
                 <div>
                   <Label htmlFor={`drawer-${printer.id}`}>ドロアの接続ピン（開かない場合に変更）</Label>
                   <Select
@@ -417,6 +471,7 @@ function PrinterRow({
                 ドロアを開く
               </Button>
             )}
+            {!viaLan && (
             <Button
               type="button"
               variant="ghost"
@@ -431,6 +486,7 @@ function PrinterRow({
               <RefreshCw className="h-4 w-4" />
               URLを再発行
             </Button>
+            )}
           </div>
           {status !== 'online' && (
             <p className="text-xs text-gray-500">
