@@ -16,7 +16,7 @@ import {
   updateReservationPrivateHire,
   updateReservationSource,
 } from '@/app/app/reservations/actions';
-import { CREATED_VIA_LABEL, ASSIGNABLE_STATUSES, MOVABLE_STATUSES } from './constants';
+import { CREATED_VIA_LABEL, ASSIGNABLE_STATUSES, MOVABLE_STATUSES, canChangeReservationSource } from './constants';
 import { StatusActions } from './status-actions';
 import { AssignTableDialog, type AssignableTable } from './assign-table-dialog';
 import { MoveDialog } from './move-dialog';
@@ -256,7 +256,7 @@ function ReservationDetailDialogContent({
           <Row label="フリガナ" value={reservation.guestNameKana} />
           <Row label="コース" value={reservation.courseName} />
           <Row label="割当テーブル" value={reservation.tableNames.length > 0 ? reservation.tableNames.join('、') : '未割当'} />
-          {sources.length > 0 ? (
+          {sources.length > 0 && canChangeReservationSource(reservation.createdVia) ? (
             <div className="flex items-center justify-between gap-3 border-b border-gray-100 py-1.5 text-[13px]">
               <label htmlFor="detail-source" className="shrink-0 text-gray-500">
                 経路
@@ -277,7 +277,15 @@ function ReservationDetailDialogContent({
               </Select>
             </div>
           ) : (
-            <Row label="経路" value={reservation.sourceName} />
+            // 予約リンク・TABLE ONE・グルメサイトの自動取込は経路を変えられない（2026-10-16 Ronnie「手入力だけ変更できるように」）
+            <Row
+              label="経路"
+              value={
+                canChangeReservationSource(reservation.createdVia)
+                  ? reservation.sourceName
+                  : `${reservation.sourceName ?? CREATED_VIA_LABEL[reservation.createdVia] ?? '-'}（自動・変更不可）`
+              }
+            />
           )}
           <Row label="登録方法" value={CREATED_VIA_LABEL[reservation.createdVia] ?? reservation.createdVia} />
           {reservation.storeName && <Row label="店舗" value={reservation.storeName} />}
