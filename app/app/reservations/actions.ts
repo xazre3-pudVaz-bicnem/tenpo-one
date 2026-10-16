@@ -6,7 +6,7 @@ import { requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { canTransition, RESERVATION_STATUS, type ReservationStatus } from '@/lib/reservations';
 import { isValidStayMinutes } from '@/lib/reservation-time';
-import { MOVABLE_STATUSES, OCCUPYING_STATUSES } from '@/components/reservations/constants';
+import { MOVABLE_STATUSES, OCCUPYING_STATUSES, canChangeReservationSource } from '@/components/reservations/constants';
 import { todayJst } from '@/lib/format';
 
 interface ReservationRow {
@@ -458,7 +458,11 @@ export async function updateReservationSource(reservationId: string, sourceId: s
   const supabase = await createClient();
   const reservation = await loadReservation(supabase, ctx, reservationId);
 
-  const { data: before } = await supabase.from('reservations').select('source_id').eq('id', reservationId).maybeSingle();
+  const { data: before } = await supabase.from('reservations').select('source_id, created_via').eq('id', reservationId).maybeSingle();
+  // 予約リンク・TABLE ONE（web）とグルメサイトの自動取込（gourmet_mail）は経路を変えない（2026-10-16 Ronnie）
+  if (!canChangeReservationSource((before?.created_via as string | null) ?? null)) {
+    throw new Error('Web予約・自動取込の予約は経路を変更できません（手入力の予約だけ変更できます）');
+  }
   if (sourceId) {
     const { data: source } = await supabase
       .from('reservation_sources')

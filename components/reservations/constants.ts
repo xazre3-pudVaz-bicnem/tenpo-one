@@ -20,7 +20,17 @@ export const CREATED_VIA_LABEL: Record<string, string> = {
   phone: '電話',
   walk_in: 'ウォークイン',
   manual: '手動登録',
+  gourmet_mail: 'グルメサイト（自動取込）',
 };
+
+/**
+ * 経路を変えられる予約か（2026-10-16 Ronnie「手入力の予約だけ経路を変えられるように。自動読み取りは変更できない」）。
+ * お客様が予約リンク・TABLE ONE から入れた予約（web）と、グルメサイトのメールから自動で取り込んだ予約（gourmet_mail）は、
+ * 経路が自動で決まっているので変えない。電話・手動登録・ウォークイン（お店が手で入れた予約）だけ変えられる。
+ */
+export function canChangeReservationSource(createdVia: string | null | undefined): boolean {
+  return createdVia === 'phone' || createdVia === 'manual' || createdVia === 'walk_in';
+}
 
 /** 予約台帳・カレンダー集計に表示する対象ステータス（進行中〜完了。キャンセル・来店なしは除外） */
 export const ACTIVE_TIMELINE_STATUSES: ReservationStatus[] = [
