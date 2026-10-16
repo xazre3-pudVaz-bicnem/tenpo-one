@@ -16,7 +16,7 @@ import {
 } from '@/lib/ryoshusho-split';
 import { RYOSHUSHO_ISSUED_MESSAGE, ryoshushoIssuedFrom, type RyoshushoIssueState } from '@/lib/ryoshusho-issue';
 import { receiptToEposXml, ryoshushoToEposXml, orderSlipEposXml, drawerKickEpos, kitchenTicketsEpos, eposCols, mergeEposDocs } from '@/lib/epos-print';
-import { layoutKitchenTicket, rotateLines180, type KitchenTicket } from '@/lib/kitchen-ticket';
+import { layoutKitchenTicket, rotateLines180, kitchenTicketSettingsFrom, type KitchenTicket } from '@/lib/kitchen-ticket';
 import { kitchenTicketsMarkup } from '@/lib/receipt-markup';
 import { kitchenTicketsStarPrnt } from '@/lib/starprnt';
 import { colsFor, STAR_WIDTH_OPTIONS } from '@/lib/receipt-layout';
@@ -363,6 +363,19 @@ export interface CancelSlipLine {
  * 厨房ぶんは claim_kitchen_items のマイナス差分で今までどおり出るので、ここはレジ側だけ。
  * 印刷できなくても取消そのものは成立させる（呼び出し側で握りつぶす）。
  */
+/**
+ * 店舗の厨房伝票の設定（文字の大きさ・商品名の言語）。取消伝票・再印刷も通常の厨房伝票と同じ大きさで出す
+ * （2026-10-16 SHUNKA 新宿 Ronnie「取消伝票の文字が大きすぎる」。以前は large 固定だった）。
+ */
+async function kitchenTicketStyleForStore(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  storeId: string
+): Promise<{ textSize: ReturnType<typeof kitchenTicketSettingsFrom>['textSize']; language: ReturnType<typeof kitchenTicketSettingsFrom>['language'] }> {
+  const { data } = await supabase.from('store_settings').select('settings').eq('store_id', storeId).maybeSingle();
+  const s = kitchenTicketSettingsFrom(data?.settings ?? null);
+  return { textSize: s.textSize, language: s.language };
+}
+
 export async function enqueueCancelSlipPrint(orderId: string, lines: CancelSlipLine[]): Promise<EnqueueResult> {
   const ctx = await requirePermission('pos.order');
   if (lines.length === 0) return { ok: false, error: '取消した品がありません' };
@@ -398,7 +411,7 @@ export async function enqueueCancelSlipPrint(orderId: string, lines: CancelSlipL
 
   const printedAt = new Date().toLocaleTimeString('ja-JP', { timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit' });
   const paperWidth = printer.paper_width_mm === 58 ? 58 : 80;
-  const common = { title: '取消 伝票', titleEn: 'CANCEL', printedAt, textSize: 'large' as const, language: 'both' as const };
+  const common = { title: '取消 伝票', titleEn: 'CANCEL', printedAt, ...(await kitchenTicketStyleForStore(supabase, order.store_id)) };
   const starLines = layoutKitchenTicket(ticket, { ...common, paperWidth, ...STAR_WIDTH_OPTIONS });
   const eposLines = layoutKitchenTicket(ticket, { ...common, columns: eposCols(paperWidth) });
   // プリンターを上下さかさまに付けている店舗は、印字を180度回して出す
@@ -490,7 +503,7 @@ async function enqueueOrderItemsTicket(
     minute: '2-digit',
   });
   const paperWidth = printer.paper_width_mm === 58 ? 58 : 80;
-  const common = { title, titleEn, printedAt, textSize: 'large' as const, language: 'both' as const };
+  const common = { title, titleEn, printedAt, ...(await kitchenTicketStyleForStore(supabase, order.store_id)) };
   const starLines = layoutKitchenTicket(ticket, { ...common, paperWidth, ...STAR_WIDTH_OPTIONS });
   const eposLines = layoutKitchenTicket(ticket, { ...common, columns: eposCols(paperWidth) });
   const star = printer.upside_down ? rotateLines180(starLines, colsFor(paperWidth)) : starLines;
