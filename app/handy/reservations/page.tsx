@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { requireFeature } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { can } from '@/lib/permissions';
-import { formatTime, todayJst } from '@/lib/format';
+import { formatDateTime, formatTime, todayJst } from '@/lib/format';
 import { requireHandyClerk } from '@/lib/handy-session';
 import { handyDayLabel, handyEmptyText, handyReservationsTitle, parseHandyDate } from '@/lib/handy-reservations';
 import { HandyReservationDateBar } from '@/components/handy/handy-reservation-date-bar';
@@ -51,6 +51,17 @@ interface ReservationRow {
   created_via: string;
   request_note: string | null;
   memo: string | null;
+  code: string | null;
+  guest_name_kana: string | null;
+  guest_email: string | null;
+  adults: number | null;
+  children: number | null;
+  allergy_note: string | null;
+  seat_type: string | null;
+  purpose: string | null;
+  clerk_name?: string | null;
+  cancel_reason: string | null;
+  created_at: string | null;
   course: One<{ name: string }>;
   reservation_sources: One<{ name: string }>;
   reservation_tables: { table_id: string; restaurant_tables: One<{ name: string }> }[] | null;
@@ -93,7 +104,7 @@ export default async function HandyReservationsPage({
     supabase
       .from('reservations')
       .select(
-        'id, start_at, end_at, guest_name, guest_phone, party_size, status, created_via, request_note, memo, course:menu_items(name), reservation_sources(name), reservation_tables(table_id, restaurant_tables(name))'
+        'id, start_at, end_at, guest_name, guest_phone, party_size, status, created_via, request_note, memo, code, guest_name_kana, guest_email, adults, children, allergy_note, seat_type, purpose, clerk_name, cancel_reason, created_at, course:menu_items(name), reservation_sources(name), reservation_tables(table_id, restaurant_tables(name))'
       )
       .eq('store_id', store.id)
       .eq('reserved_date', date)
@@ -134,6 +145,18 @@ export default async function HandyReservationsPage({
       memo: r.memo || null,
       note: r.request_note || r.memo || null,
       tableId: tableByReservation.get(r.id) ?? null,
+      // 詳細のポップアップ（2026-10-16 Ronnie「予約を押したら詳細をポップアップで」）
+      code: r.code || null,
+      nameKana: r.guest_name_kana?.trim() || null,
+      adults: r.adults ?? null,
+      children: r.children ?? null,
+      email: r.guest_email?.trim() || null,
+      allergy: r.allergy_note?.trim() || null,
+      seatType: r.seat_type?.trim() || null,
+      purpose: r.purpose?.trim() || null,
+      clerkName: r.clerk_name?.trim() || null,
+      cancelReason: r.cancel_reason?.trim() || null,
+      receivedAt: r.created_at ? formatDateTime(r.created_at) : null,
     };
   });
 
@@ -151,7 +174,7 @@ export default async function HandyReservationsPage({
         <div className="flex justify-end px-3 pt-2 empty:hidden">
           <HandyBookingShareButton />
         </div>
-        <HandyReservationList reservations={reservations} emptyText={handyEmptyText(date, today)} />
+        <HandyReservationList reservations={reservations} emptyText={handyEmptyText(date, today)} dateLabel={handyDayLabel(date)} />
         <p className="px-5 pb-5 text-center text-[10px] leading-relaxed text-[#766b62]">
           予約の変更・来店処理はレジ（管理画面）の予約台帳で行います。
         </p>

@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { Armchair, ClipboardList, Tag, Utensils } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { HandyReservationDetail } from './handy-reservation-detail';
 
 export interface HandyReservationRow {
   id: string;
@@ -29,6 +30,23 @@ export interface HandyReservationRow {
   note: string | null;
   /** 着席済みなら、その卓（HANDY で注文へ） */
   tableId: string | null;
+  /* ↓ 詳細のポップアップだけで使う（2026-10-16 Ronnie「予約を押したら詳細をポップアップで」） */
+  /** 予約番号 */
+  code?: string | null;
+  nameKana?: string | null;
+  adults?: number | null;
+  children?: number | null;
+  email?: string | null;
+  allergy?: string | null;
+  /** 席の希望（テーブル・カウンター・個室など） */
+  seatType?: string | null;
+  /** 利用目的 */
+  purpose?: string | null;
+  /** 担当（レジの担当名） */
+  clerkName?: string | null;
+  cancelReason?: string | null;
+  /** 受付日時（10/15 21:30） */
+  receivedAt?: string | null;
 }
 
 /** 状態のバッジ（予約一覧のアプリと同じく、これから来るものは枠線、終わったもの・キャンセルは灰色） */
@@ -56,11 +74,17 @@ const CANCELLED: ReadonlySet<string> = new Set(['cancelled', 'no_show']);
 export function HandyReservationList({
   reservations,
   emptyText = '今日の予約はありません。',
+  dateLabel,
 }: {
   reservations: HandyReservationRow[];
   emptyText?: string;
+  /** 詳細のポップアップに出す日付（10/16（金）） */
+  dateLabel?: string;
 }) {
   const [hideCancelled, setHideCancelled] = useState(false);
+  // 押した予約の詳細（ポップアップ）
+  const [openId, setOpenId] = useState<string | null>(null);
+  const opened = reservations.find((r) => r.id === openId) ?? null;
   const shown = hideCancelled ? reservations.filter((r) => !CANCELLED.has(r.status)) : reservations;
 
   if (reservations.length === 0) {
@@ -98,8 +122,18 @@ export function HandyReservationList({
             return (
               <li
                 key={r.id}
+                role="button"
+                tabIndex={0}
+                aria-label={`${r.name} 様 ${r.time} の予約の詳細`}
+                onClick={() => setOpenId(r.id)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setOpenId(r.id);
+                  }
+                }}
                 className={cn(
-                  'rounded-[9px] border border-[#e5dfd5] px-2.5 py-2 shadow-[0_1px_3px_#29272510]',
+                  'cursor-pointer rounded-[9px] border border-[#e5dfd5] px-2.5 py-2 shadow-[0_1px_3px_#29272510] active:scale-[0.99] active:border-[#e8c4b4]',
                   cancelled ? 'bg-[#efebe5]' : 'bg-white',
                   !r.upcoming && !cancelled && 'opacity-80'
                 )}
@@ -120,7 +154,11 @@ export function HandyReservationList({
                         {r.name} 様
                       </b>
                       {r.phone ? (
-                        <a href={`tel:${r.phone}`} className="block text-[12.5px] font-bold text-[#292725] tabular-nums">
+                        <a
+                          href={`tel:${r.phone}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="block text-[12.5px] font-bold text-[#292725] tabular-nums"
+                        >
                           {r.phone}
                         </a>
                       ) : (
@@ -162,6 +200,7 @@ export function HandyReservationList({
                 {r.tableId && !cancelled && (
                   <Link
                     href={`/handy/${r.tableId}`}
+                    onClick={(e) => e.stopPropagation()}
                     className="mt-2 flex min-h-[36px] items-center justify-center rounded-[8px] border border-[#bc5940] text-[12.5px] font-bold text-[#bc5940] active:bg-[#f6e4da]"
                   >
                     HANDYで注文
@@ -171,6 +210,14 @@ export function HandyReservationList({
             );
           })}
         </ul>
+      )}
+      {opened && (
+        <HandyReservationDetail
+          reservation={opened}
+          statusTone={STATUS_TONE[opened.status] ?? 'border-[#766b62] bg-white text-[#5c5650]'}
+          dateLabel={dateLabel}
+          onClose={() => setOpenId(null)}
+        />
       )}
     </div>
   );
