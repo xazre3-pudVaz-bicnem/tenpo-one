@@ -3,7 +3,7 @@
 import { useEffect } from 'react';
 import { useToast } from '@/components/ui/toast';
 import { DIRECT_BACKOFF_MS, DIRECT_POLL_MS, eposErrorLabel, type BluetoothLink } from '@/lib/direct-print';
-import { nativeBluetooth } from '@/lib/native-app';
+import { nativeBluetooth, nativeLan } from '@/lib/native-app';
 import { postDirect, readDirectPrintConfig, sendToEposPrinter } from './direct-print-client';
 import { buildSiiAgentPrint, openSiiAgent } from './sii-agent-client';
 
@@ -30,6 +30,18 @@ interface NextAgentJob {
   paper: 58 | 80;
 }
 
+interface NextLanJob {
+  id: string;
+  printerId: string;
+  printerName: string;
+  host: string;
+  port: number;
+  data: string;
+}
+
+/** LAN のプリンターにつながらなかったとき、そのプリンターを次に試すまで（ほかのプリンターは止めない） */
+const LAN_BACKOFF_MS = 5000;
+
 /** SII URL Print Agent を開いてから、開けなかった（Safari の「開きますか？」で開かなかった）とみなすまで */
 const AGENT_OPEN_TIMEOUT_MS = 30_000;
 
@@ -44,6 +56,8 @@ const BT_UNREACHABLE = new Set(['not_found', 'connect', 'unreachable', 'bluetoot
  *     アプリ（ios/Shared/BluetoothPrinters.swift）が Star は StarPRNT、EPSON・SII・ESC/POS は ESC/POS を送る。
  *   - SII URL Print Agent（Safari。SII の RP-F10 など）：印刷を受け取り、画像・PDF にして SII の無料アプリを開く
  *     （lib/sii-url-print.ts）。アプリが印刷して Safari に戻ってきたら次の印刷。
+ *   - LAN（TENPO ONE レジ アプリだけ）：SII RP-F10（有線LAN）・EPSON など、Wi-Fi・有線LAN のプリンターへ
+ *     ESC/POS をそのまま送る（ios/Shared/LanPrinters.swift）。厨房・ドリンクの伝票も。2026-10-16 Ronnie「LAN で」
  */
 export function DirectPrintAgent() {
   const { toast } = useToast();
@@ -56,6 +70,9 @@ export function DirectPrintAgent() {
     let btBackoffUntil = 0;
     let warnedWifi = false;
     let warnedBt = false;
+    /** LAN：つながらなかったプリンターごとの、次に試す時刻 */
+    const lanBackoff = new Map<string, number>();
+    const lanWarned = new Set<string>();
     /** SII URL Print Agent を開いたところ（戻ってくるまで次を出さない） */
     let agentOpenedAt = 0;
     let agentLeft = false;
@@ -142,6 +159,43 @@ export function DirectPrintAgent() {
       return true;
     }
 
+    /** LAN のプリンター（アプリ）。印刷したら true（続けて次を見る） */
+    async function lanOnce(ids: string[]): Promise<boolean> {
+      const lan = nativeLan();
+      const now = Date.now();
+      const ready = ids.filter((id) => (lanBackoff.get(id) ?? 0) <= now);
+      if (!lan || ready.length === 0) return false;
+      const res = await postDirect<{ ok: boolean; job: NextLanJob | null }>({ action: 'next-lan', printerIds: ready });
+      const job = res?.job ?? null;
+      if (!job) return false;
+      const sent = await lan.print({ host: job.host, port: job.port, data: job.data });
+      if (sent.ok) {
+        await done(job, 'printed');
+        lanBackoff.delete(job.printerId);
+        lanWarned.delete(job.printerId);
+        return true;
+      }
+      if (sent.code === 'timeout_sent') {
+        // 送りかけて返事が無い：もう一度送ると2枚出るかもしれないので、戻さない
+        await done(job, 'failed', 'lan: timeout');
+        toast(`${job.printerName} の返事がありません。印刷されたか確かめてください`, 'error');
+        return false;
+      }
+      if (sent.code === 'unreachable' || sent.code === 'timeout') {
+        // 戻して、少し待ってからもう一度（つながれば出る。EPSON はその間プリンター自身の印刷に任せる）
+        await done(job, 'unreachable');
+        lanBackoff.set(job.printerId, Date.now() + LAN_BACKOFF_MS);
+        if (!lanWarned.has(job.printerId)) {
+          toast(`${job.printerName} に LAN でつながりません。プリンターの電源・LAN ケーブル・IPアドレスを確かめてください`, 'error');
+          lanWarned.add(job.printerId);
+        }
+        return false;
+      }
+      await done(job, 'failed', `lan: ${sent.code ?? 'error'}`);
+      toast(`${job.printerName}：${eposErrorLabel(sent.code ?? null)}`, 'error');
+      return false;
+    }
+
     /** Wi-Fi で直接印刷（EPSON）。印刷したら true */
     async function wifiOnce(ids: string[]): Promise<boolean> {
       if (ids.length === 0 || Date.now() < wifiBackoffUntil) return false;
@@ -183,7 +237,9 @@ export function DirectPrintAgent() {
       // アプリ：Bluetooth・USB。Safari：SII URL Print Agent だけ
       const links = inApp ? all.filter((l) => l.via !== 'agent') : [];
       const agentLinks = inApp ? [] : all.filter((l) => l.via === 'agent');
-      if (config.printerIds.length === 0 && links.length === 0 && agentLinks.length === 0) return; // この端末は使っていない（何もしない）
+      // LAN はアプリ（iPad）だけ
+      const lanIds = nativeLan() ? (config.lan ?? []) : [];
+      if (config.printerIds.length === 0 && links.length === 0 && agentLinks.length === 0 && lanIds.length === 0) return; // この端末は使っていない（何もしない）
       if (document.visibilityState !== 'visible') return schedule(DIRECT_POLL_MS);
 
       running = true;
@@ -191,8 +247,9 @@ export function DirectPrintAgent() {
         const printedBt = await bluetoothOnce(links);
         const openedAgent = await agentOnce(agentLinks);
         const printedWifi = await wifiOnce(config.printerIds);
+        const printedLan = await lanOnce(lanIds);
         if (openedAgent) return schedule(DIRECT_POLL_MS);
-        return schedule(printedBt || printedWifi ? 0 : DIRECT_POLL_MS); // 印刷したら続けて次の1件
+        return schedule(printedBt || printedWifi || printedLan ? 0 : DIRECT_POLL_MS); // 印刷したら続けて次の1件
       } finally {
         running = false;
       }
@@ -202,6 +259,7 @@ export function DirectPrintAgent() {
       config = readDirectPrintConfig();
       wifiBackoffUntil = 0;
       btBackoffUntil = 0;
+      lanBackoff.clear();
       schedule(0);
     };
     const onVisible = () => {

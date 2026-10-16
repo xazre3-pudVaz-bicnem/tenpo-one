@@ -12,6 +12,7 @@ import {
 import { normalizeVisitSourceIds } from '@/lib/handy-visit';
 // ハードウェア（レジ端末・プリンター・ドロア）の変更は管理画面だけ。レジ端末（iPad）からは断る（2026-09-29 Ronnie）
 import { ADMIN_ONLY_MESSAGE, ADMIN_ONLY_SETTINGS_NOTE } from '@/lib/admin-only-settings';
+import { parseLanTarget, printerDeliveryOf } from '@/lib/direct-print';
 
 export interface ActionResult {
   error?: string;
@@ -146,6 +147,13 @@ export async function savePrinterConfig(input: PrinterConfigInput): Promise<Acti
   const err = assertStoreAccess(ctx.stores.map((s) => s.id), input.storeId);
   if (err) return { error: err };
   if (!input.name.trim()) return { error: 'プリンター名を入力してください' };
+  // SII RP-F10 など（LAN）はレジの iPad が IP あてに送るので、お店の中の IP が要る（2026-10-16 Ronnie「LAN で」）
+  if (
+    printerDeliveryOf({ maker: input.maker, connection: input.connectionType }) === 'ipad-lan' &&
+    !parseLanTarget(input.ipAddress)
+  ) {
+    return { error: 'このプリンターはレジの iPad から LAN で送ります。IPアドレス（192.168.…）を入れてください' };
+  }
 
   const supabase = await createClient();
 

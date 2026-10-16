@@ -49,9 +49,9 @@ describe('Wi-Fi で直接印刷（EPSON ePOS-Print）', () => {
   });
 
   it('この端末の設定（壊れていたら空＝何もしない）', () => {
-    expect(parseDirectPrintConfig(null)).toEqual({ printerIds: [], bluetooth: [] });
-    expect(parseDirectPrintConfig('{bad')).toEqual({ printerIds: [], bluetooth: [] });
-    expect(parseDirectPrintConfig(JSON.stringify({ printerIds: ['a', 'a', 3, 'b'] }))).toEqual({ printerIds: ['a', 'b'], bluetooth: [] });
+    expect(parseDirectPrintConfig(null)).toEqual({ printerIds: [], bluetooth: [], lan: [] });
+    expect(parseDirectPrintConfig('{bad')).toEqual({ printerIds: [], bluetooth: [], lan: [] });
+    expect(parseDirectPrintConfig(JSON.stringify({ printerIds: ['a', 'a', 3, 'b'] }))).toEqual({ printerIds: ['a', 'b'], bluetooth: [], lan: [] });
     expect(isEpsonMaker('EPSON')).toBe(true);
     expect(isEpsonMaker('Star')).toBe(false);
   });
@@ -64,7 +64,7 @@ describe('今の印刷は壊さない', () => {
 
   it('ON にしていない端末では何もしない（設定が空ならループを止める）', () => {
     const agent = read('components/printing/direct-print-agent.tsx');
-    expect(agent).toContain('if (config.printerIds.length === 0 && links.length === 0 && agentLinks.length === 0) return;');
+    expect(agent).toContain('if (config.printerIds.length === 0 && links.length === 0 && agentLinks.length === 0 && lanIds.length === 0) return;');
     expect(read('app/app/layout.tsx')).toContain('<DirectPrintAgent />');
   });
 

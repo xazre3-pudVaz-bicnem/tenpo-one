@@ -73,6 +73,8 @@ export interface PrinterRow {
   ip_address?: string | null;
   /** つなぎ方（'lan' / 'wifi' / 'bluetooth' …。loadPrinterRow だけが読む） */
   connection_type?: string | null;
+  /** 最後に印刷を取りに来た時刻（loadPrinterRow だけが読む。iPad から LAN で送るときの「接続中」の表示に使う） */
+  last_polled_at?: string | null;
 }
 
 type Admin = ReturnType<typeof createAdminClient>;
@@ -311,7 +313,7 @@ export async function releaseJob(admin: Admin, printerId: string, jobId: string)
 export async function loadPrinterRow(admin: Admin, printerId: string): Promise<PrinterRow | null> {
   const { data } = await admin
     .from('printer_configs')
-    .select('id, organization_id, store_id, name, usage, paper_width_mm, kitchen_stations, auto_print, floor_ids, bill_slips, upside_down, maker, ip_address, connection_type')
+    .select('id, organization_id, store_id, name, usage, paper_width_mm, kitchen_stations, auto_print, floor_ids, bill_slips, upside_down, maker, ip_address, connection_type, last_polled_at')
     .eq('id', printerId)
     .eq('cloudprnt_enabled', true)
     .eq('status', 'active')

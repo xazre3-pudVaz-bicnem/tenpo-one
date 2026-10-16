@@ -21,6 +21,11 @@ export interface TenpoNativeBridge {
    */
   bluetooth?: NativeBluetooth;
   /**
+   * LAN（有線・Wi-Fi）のプリンターへ ESC/POS をそのまま送る（TCP 9100）。アプリが対応していれば入っている（iPad だけ）
+   * （2026-10-16 Ronnie「EPSON と SII RP-F10 を LAN で」。ios/Shared/LanPrinters.swift）
+   */
+  lan?: NativeLan;
+  /**
    * ネイティブのオーダー・会計画面（試験中）。アプリが対応していれば入っている（iPad だけ）
    * （2026-10-13 Ronnie「Airレジのように全部ネイティブ」。ios/Shared/NativeOrderView.swift）
    */
@@ -57,6 +62,14 @@ export interface NativeBluetooth {
   }) => Promise<{ ok: boolean; code?: string }>;
 }
 
+export interface NativeLan {
+  /**
+   * バイト列（base64）を LAN のプリンター（host:port）へ送る。
+   * code: unreachable（つながらない・送っていない）/ timeout_sent（送りかけて返事が無い＝出たか分からない）/ bad_host
+   */
+  print: (job: { host: string; port?: number; data: string }) => Promise<{ ok: boolean; code?: string }>;
+}
+
 declare global {
   interface Window {
     TenpoNative?: TenpoNativeBridge;
@@ -76,4 +89,9 @@ export function nativePos(): NativeNativePos | null {
 /** Bluetooth のレシートプリンターが使えるアプリか */
 export function nativeBluetooth(): NativeBluetooth | null {
   return nativeBridge()?.bluetooth ?? null;
+}
+
+/** LAN のプリンターに送れるアプリか（iPad の TENPO ONE アプリ） */
+export function nativeLan(): NativeLan | null {
+  return nativeBridge()?.lan ?? null;
 }
