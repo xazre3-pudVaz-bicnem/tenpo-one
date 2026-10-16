@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, useTransition } from 'react';
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { BellRing, Wallet } from 'lucide-react';
@@ -8,6 +8,8 @@ import { cn } from '@/lib/utils';
 import { yen, formatTime } from '@/lib/format';
 import { useToast } from '@/components/ui/toast';
 import { useNow } from '@/components/floor/use-now';
+import { ChipButton } from '@/components/ui/chip';
+import { stepFloor, swipeDirection } from '@/lib/floor-nav';
 import {
   filterHandyTables,
   handyFloorStorageKey,
@@ -95,6 +97,22 @@ export function HandyTableList({
     }
   };
   const shown = floorTabs.length > 0 ? filterHandyTables(tables, floor) : tables;
+  // 左右スライドで隣のフロアへ（レジと同じ。右 → 次のフロア、左 → 前のフロア。ALL・未分類は除く）
+  const floorOnlyIds = useMemo(() => floors.map((f) => f.id).filter((id) => tabIds.includes(id)), [floors, tabIds]);
+  const touchStart = useRef<{ x: number; y: number } | null>(null);
+  const canSwipe = floorOnlyIds.length > 1;
+  const onTouchStart = (e: React.TouchEvent) => {
+    const t = e.touches[0];
+    touchStart.current = t ? { x: t.clientX, y: t.clientY } : null;
+  };
+  const onTouchEnd = (e: React.TouchEvent) => {
+    const s = touchStart.current;
+    touchStart.current = null;
+    const t = e.changedTouches[0];
+    if (!s || !t) return;
+    const dir = swipeDirection(t.clientX - s.x, t.clientY - s.y);
+    if (dir) pickFloor(stepFloor(floorOnlyIds, floor, dir, defaultFloorId));
+  };
   // 空いている卓はタップで画面遷移せず、真ん中に小さいポップアップを出す（2026-09-24 店舗要望）
   const [sheetTableId, setSheetTableId] = useState<string | null>(null);
   const sheetTable = tables.find((t) => t.id === sheetTableId) ?? null;
@@ -110,29 +128,23 @@ export function HandyTableList({
   }
 
   return (
-    <>
+    <div onTouchStart={canSwipe ? onTouchStart : undefined} onTouchEnd={canSwipe ? onTouchEnd : undefined} className="min-h-full">
       {floorTabs.length > 0 && (
-        <div
-          className="flex gap-1.5 overflow-x-auto px-2 pt-1.5 pb-0.5"
-          role="group"
-          aria-label="フロア"
-        >
-          {floorTabs.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              aria-pressed={t.id === floor}
-              onClick={() => pickFloor(t.id)}
-              className={cn(
-                'min-h-[34px] shrink-0 rounded-full border px-4 text-[12.5px] font-bold whitespace-nowrap',
-                t.id === floor
-                  ? 'border-[#bc5940] bg-[#bc5940] text-white'
-                  : 'border-[#ead9cc] bg-white text-[#5c5650] active:bg-[#f6e4da]'
-              )}
-            >
-              {t.label}
-            </button>
-          ))}
+        // レジ（オーダー・会計）と同じ見た目のタブ。真ん中に並べ、一覧をスクロールしても上に残す
+        // （2026-10-16 Ronnie「ハンディにもレジのような ALL・3F・4F・5F」）
+        <div className="sticky top-0 z-10 bg-[#fbf9f5]/95 px-2 pt-1.5 pb-1.5 backdrop-blur">
+          <div className="flex justify-center gap-1.5 overflow-x-auto" role="group" aria-label="フロア">
+            {floorTabs.map((t) => (
+              <ChipButton
+                key={t.id}
+                on={t.id === floor}
+                onClick={() => pickFloor(t.id)}
+                className="min-h-[38px] shrink-0 px-4 text-[14px] whitespace-nowrap"
+              >
+                {t.label}
+              </ChipButton>
+            ))}
+          </div>
         </div>
       )}
       {shown.length === 0 && (
@@ -159,7 +171,7 @@ export function HandyTableList({
           onClose={() => setSheetTableId(null)}
         />
       )}
-    </>
+    </div>
   );
 }
 
