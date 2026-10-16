@@ -3,6 +3,7 @@ import { requireFeature } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { can } from '@/lib/permissions';
 import { handyDateLabel } from '@/lib/handy-clerk';
+import { floorBoardFrom } from '@/lib/floor-nav';
 import { readHandyClerk } from '@/lib/handy-session';
 import {
   HandyMain,
@@ -68,10 +69,11 @@ export default async function HandyTablesPage() {
     );
   }
 
-  const [{ data: tables }, { data: orders }, { data: calls }] = await Promise.all([
+  const [{ data: tables }, { data: orders }, { data: calls }, { data: floorRows }, { data: storeSettings }] =
+    await Promise.all([
     supabase
       .from('restaurant_tables')
-      .select('id, name, capacity_max, current_status, sort_order')
+      .select('id, name, capacity_max, current_status, sort_order, floor_id')
       .eq('store_id', store.id)
       .eq('status', 'active')
       .order('sort_order')
@@ -89,6 +91,14 @@ export default async function HandyTablesPage() {
       .eq('store_id', store.id)
       .eq('status', 'open')
       .order('created_at'),
+    // フロア（ハンディのテーブル一覧のタブ。2026-10-16 SHUNKA 新宿）
+    supabase
+      .from('floors')
+      .select('id, name, sort_order')
+      .eq('store_id', store.id)
+      .order('sort_order')
+      .order('name'),
+    supabase.from('store_settings').select('settings').eq('store_id', store.id).maybeSingle(),
   ]);
 
   const tableRows = tables ?? [];
@@ -125,6 +135,7 @@ export default async function HandyTablesPage() {
     return {
       id: t.id,
       name: t.name,
+      floorId: (t as { floor_id?: string | null }).floor_id ?? null,
       capacityMax: t.capacity_max,
       currentStatus: t.current_status,
       orderCount: summary?.orderCount ?? 0,
@@ -149,6 +160,9 @@ export default async function HandyTablesPage() {
           calls={serviceCalls}
           serverNow={requestTime()}
           setTableLockAction={setTableAvailability}
+          floors={(floorRows ?? []).map((f) => ({ id: f.id, name: f.name }))}
+          defaultFloorId={floorBoardFrom((storeSettings as { settings?: unknown } | null)?.settings).defaultFloorId}
+          storeId={store.id}
         />
       </HandyMain>
     </>

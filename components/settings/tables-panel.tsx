@@ -1,14 +1,14 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { Plus, Pencil, Trash2, Ban, RotateCcw, QrCode } from 'lucide-react';
+import { Plus, Pencil, Trash2, Ban, RotateCcw, QrCode, ArrowDownAZ } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { TableWrap, Table, THead, TBody, Tr, Th, Td } from '@/components/ui/table';
 import { EmptyState } from '@/components/ui/state';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useToast } from '@/components/ui/toast';
-import { toggleTableAvailability, deleteTable } from '@/app/app/settings/tables/actions';
+import { toggleTableAvailability, deleteTable, reorderTablesByName } from '@/app/app/settings/tables/actions';
 import { TableDialog, type TableRow } from './table-dialog';
 import { TableQrDialog } from './table-qr-dialog';
 import type { FloorRow } from './floors-panel';
@@ -36,6 +36,22 @@ export function TablesPanel({
   const [pending, startTransition] = useTransition();
   const { toast } = useToast();
 
+  // 「名前順に並べ直す」：あとから足した卓が後ろに出てしまったときに1回で揃える（2026-10-16）
+  const handleReorder = () => {
+    startTransition(async () => {
+      const result = await reorderTablesByName(storeId);
+      if (result.error) {
+        toast(result.error, 'error');
+        return;
+      }
+      toast(
+        result.updated
+          ? `並び順をフロア順・名前順に直しました（${result.updated}卓）`
+          : '並び順はすでに名前順です'
+      );
+    });
+  };
+
   const handleToggle = (t: TableListRow) => {
     const nextAvailable = t.currentStatus === 'unavailable';
     startTransition(async () => {
@@ -50,7 +66,13 @@ export function TablesPanel({
 
   return (
     <div className="space-y-3">
-      <div className="flex justify-end">
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        {tables.length > 1 && (
+          <Button size="sm" variant="secondary" onClick={handleReorder} disabled={pending}>
+            <ArrowDownAZ className="h-4 w-4" />
+            名前順に並べ直す
+          </Button>
+        )}
         <Button
           size="sm"
           onClick={() => {
@@ -62,6 +84,9 @@ export function TablesPanel({
           テーブル追加
         </Button>
       </div>
+      <p className="text-right text-xs leading-relaxed text-gray-600">
+        卓を足したあとに「名前順に並べ直す」を押すと、レジ・ハンディ・QR印刷の並びがフロア順→番号順にそろいます。
+      </p>
 
       {tables.length === 0 ? (
         <EmptyState title="テーブルが登録されていません" description="「テーブル追加」から登録してください" />
