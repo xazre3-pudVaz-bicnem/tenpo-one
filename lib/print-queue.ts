@@ -188,65 +188,79 @@ async function expandCourseItems(admin: Admin, rows: ClaimedKitchenItem[], steps
 }
 
 /**
- * セットのドリンク（ランチドリンクなど、名前に「ドリンク」が入る選択肢グループ）を、料理と別の紙にする行に分ける
- * （2026-10-17 Ronnie「ランチは同じテーブルでもランチドリンクだけ別に切って出す」）。
- * 調べられなくても伝票は止めず、これまでどおり選択肢として料理の紙に出す。
+ * ドリンクを料理と別の紙にする行に分ける（2026-10-17 Ronnie）。
+ *   - ドリンクの商品（持ち場がドリンクのカテゴリ、または商品の種別がドリンク）
+ *     「1台のキッチンプリンターでフードとドリンクを一緒に出すときは、ドリンクとフードを別の紙に切る」
+ *   - セットのドリンク（ランチドリンクなど、名前に「ドリンク」が入る選択肢グループの選択肢）
+ *     「ランチのドリンクの選択肢も、ランチの料理と一緒に出さず切って出す」
+ * 調べられなくても伝票は止めない（持ち場がドリンクの行だけは分ける）。
  */
 async function splitSetDrinks(admin: Admin, rows: ClaimedKitchenItem[]): Promise<ClaimedKitchenItem[]> {
+  // 1品だけ・選択肢なしの注文は紙が1枚なので調べない（問い合わせを増やさない）
+  const withOptions = rows.some((r) => (r.modifiers?.length ?? 0) > 0);
+  if (rows.length <= 1 && !withOptions) return splitSetDrinkRows(rows, new Map());
   const ids = [
-    ...new Set(
-      rows
-        .filter((r) => r.order_item_id && !r.course_step && r.station !== 'drink' && (r.modifiers?.length ?? 0) > 0)
-        .map((r) => r.order_item_id as string)
-    ),
+    ...new Set(rows.filter((r) => r.order_item_id && !r.course_step && r.station !== 'drink').map((r) => r.order_item_id as string)),
   ];
-  if (ids.length === 0) return rows;
+  if (ids.length === 0) return splitSetDrinkRows(rows, new Map());
   const { data: oi, error: oiErr } = await admin.from('order_items').select('id, menu_item_id').in('id', ids);
   if (oiErr) {
-    console.error('[print-queue] set drinks: order_items read failed', oiErr.message);
-    return rows;
+    console.error('[print-queue] drinks: order_items read failed', oiErr.message);
+    return splitSetDrinkRows(rows, new Map());
   }
   const menuByOrderItem = new Map<string, string>();
   for (const x of oi ?? []) if (x.menu_item_id) menuByOrderItem.set(x.id as string, x.menu_item_id as string);
   const menuIds = [...new Set(menuByOrderItem.values())];
-  if (menuIds.length === 0) return rows;
-  const { data: links, error: lErr } = await admin
-    .from('menu_item_option_groups')
-    .select('menu_item_id, group_id')
-    .in('menu_item_id', menuIds);
-  if (lErr || !links || links.length === 0) return rows;
-  const { data: groups, error: gErr } = await admin
-    .from('menu_option_groups')
-    .select('id, name')
-    .in('id', [...new Set(links.map((l) => l.group_id as string))]);
-  if (gErr) return rows;
-  const drinkGroups = new Set((groups ?? []).filter((g) => isDrinkOptionGroupName(g.name as string)).map((g) => g.id as string));
-  if (drinkGroups.size === 0) return rows;
-  const { data: options, error: oErr } = await admin
-    .from('menu_option_items')
-    .select('group_id, name')
-    .in('group_id', [...drinkGroups]);
-  if (oErr) return rows;
-  const namesByGroup = new Map<string, Set<string>>();
-  for (const o of options ?? []) {
-    const g = o.group_id as string;
-    if (!namesByGroup.has(g)) namesByGroup.set(g, new Set());
-    namesByGroup.get(g)!.add(o.name as string);
-  }
-  const namesByMenu = new Map<string, Set<string>>();
-  for (const l of links) {
-    const names = namesByGroup.get(l.group_id as string);
-    if (!names) continue;
-    const m = l.menu_item_id as string;
-    if (!namesByMenu.has(m)) namesByMenu.set(m, new Set());
-    for (const n of names) namesByMenu.get(m)!.add(n);
-  }
+  if (menuIds.length === 0) return splitSetDrinkRows(rows, new Map());
+
+  // 種別がドリンクの商品（カテゴリの持ち場がキッチンのままでも、ドリンクの紙にする）
+  const drinkOrderItems = new Set<string>();
+  const { data: menus, error: mErr } = await admin.from('menu_items').select('id, item_type').in('id', menuIds);
+  if (mErr) console.error('[print-queue] drinks: menu_items read failed', mErr.message);
+  const drinkMenus = new Set((menus ?? []).filter((m) => m.item_type === 'drink').map((m) => m.id as string));
+  for (const [orderItemId, menuId] of menuByOrderItem) if (drinkMenus.has(menuId)) drinkOrderItems.add(orderItemId);
+
+  // セットのドリンク（選択肢）
   const byOrderItem = new Map<string, Set<string>>();
-  for (const [orderItemId, menuId] of menuByOrderItem) {
-    const names = namesByMenu.get(menuId);
-    if (names) byOrderItem.set(orderItemId, names);
+  if (withOptions) {
+    const { data: links, error: lErr } = await admin
+      .from('menu_item_option_groups')
+      .select('menu_item_id, group_id')
+      .in('menu_item_id', menuIds);
+    const groupIds = [...new Set((links ?? []).map((l) => l.group_id as string))];
+    const { data: groups, error: gErr } =
+      !lErr && groupIds.length > 0
+        ? await admin.from('menu_option_groups').select('id, name').in('id', groupIds)
+        : { data: [] as { id: string; name: string }[], error: null };
+    const drinkGroups = new Set(
+      (gErr ? [] : (groups ?? [])).filter((g) => isDrinkOptionGroupName(g.name as string)).map((g) => g.id as string)
+    );
+    if (drinkGroups.size > 0) {
+      const { data: options, error: oErr } = await admin
+        .from('menu_option_items')
+        .select('group_id, name')
+        .in('group_id', [...drinkGroups]);
+      const namesByGroup = new Map<string, Set<string>>();
+      for (const o of oErr ? [] : (options ?? [])) {
+        const g = o.group_id as string;
+        if (!namesByGroup.has(g)) namesByGroup.set(g, new Set());
+        namesByGroup.get(g)!.add(o.name as string);
+      }
+      const namesByMenu = new Map<string, Set<string>>();
+      for (const l of links ?? []) {
+        const names = namesByGroup.get(l.group_id as string);
+        if (!names) continue;
+        const m = l.menu_item_id as string;
+        if (!namesByMenu.has(m)) namesByMenu.set(m, new Set());
+        for (const n of names) namesByMenu.get(m)!.add(n);
+      }
+      for (const [orderItemId, menuId] of menuByOrderItem) {
+        const names = namesByMenu.get(menuId);
+        if (names) byOrderItem.set(orderItemId, names);
+      }
+    }
   }
-  return splitSetDrinkRows(rows, byOrderItem);
+  return splitSetDrinkRows(rows, byOrderItem, drinkOrderItems);
 }
 
 /**
