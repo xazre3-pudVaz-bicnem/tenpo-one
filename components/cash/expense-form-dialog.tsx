@@ -8,6 +8,7 @@ import { useToast } from '@/components/ui/toast';
 import { todayJst } from '@/lib/format';
 import { addExpense, seedExpenseAccounts } from '@/app/app/expenses/actions';
 import { PAID_VIA_LABELS, type PaidVia } from '@/components/cash/labels';
+import { NumberPadScope, PadNumberField } from '@/components/ui/number-pad';
 
 /**
  * 仕入・経費の登録。支払先は企業の仕入先（vendors）から選べる（ABC／五十音順・2026-09-28 Ronnie）。
@@ -117,6 +118,8 @@ export function ExpenseFormDialog({
             )}
           </div>
         ) : (
+          // 金額は画面のテンキーで入れる（iPad のキーボードは出さない。2026-10-17 Ronnie）
+          <NumberPadScope inline>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <Label htmlFor="exp-account">勘定科目</Label>
@@ -131,11 +134,11 @@ export function ExpenseFormDialog({
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label htmlFor="exp-amount">金額</Label>
-                <Input id="exp-amount" type="number" inputMode="numeric" min={1} step={1} value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="5000" />
+                <PadNumberField id="exp-amount" label="金額" value={amount} onChange={setAmount} grouped suffix="円" maxDigits={9} placeholder="5000" className="ui-input h-10 w-full border border-gray-300 bg-white px-3 text-sm font-semibold text-gray-900 tabular-nums disabled:bg-gray-100 disabled:text-gray-500" />
               </div>
               <div>
                 <Label htmlFor="exp-tax">税額</Label>
-                <Input id="exp-tax" type="number" inputMode="numeric" min={0} step={1} value={taxAmount} onChange={(e) => setTaxAmount(e.target.value)} placeholder="0" />
+                <PadNumberField id="exp-tax" label="消費税額" value={taxAmount} onChange={setTaxAmount} grouped suffix="円" maxDigits={9} placeholder="0" className="ui-input h-10 w-full border border-gray-300 bg-white px-3 text-sm font-semibold text-gray-900 tabular-nums disabled:bg-gray-100 disabled:text-gray-500" />
               </div>
             </div>
             <div>
@@ -197,6 +200,7 @@ export function ExpenseFormDialog({
               </Button>
             </div>
           </form>
+          </NumberPadScope>
         )}
       </Dialog>
     </>

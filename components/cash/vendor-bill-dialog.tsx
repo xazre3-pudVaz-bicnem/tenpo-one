@@ -9,6 +9,7 @@ import { Input, Label, Select, Textarea } from '@/components/ui/input';
 import { useToast } from '@/components/ui/toast';
 import { todayJst } from '@/lib/format';
 import { createInvoice } from '@/app/app/invoices/actions';
+import { NumberPadScope, PadNumberField } from '@/components/ui/number-pad';
 
 /**
  * 仕入の請求書（仕入先からの請求・納品の金額）をその場で入れる（2026-10-04 Ronnie
@@ -85,6 +86,8 @@ export function VendorBillDialog({ storeId, vendors = [] }: { storeId: string; v
         <span className="en-inline">Vendor bill</span>
       </Button>
       <Dialog open={open} onClose={close} title="仕入の請求書を登録">
+        {/* 金額は画面のテンキーで入れる（iPad のキーボードは出さない。2026-10-17 Ronnie） */}
+        <NumberPadScope inline>
         <form onSubmit={handleSubmit} className="space-y-4">
           <p className="text-xs text-gray-500">
             仕入先からの請求書・納品書の金額を入れます。管理画面の「月次清算」で仕入先ごと・日ごとに集計されます。
@@ -124,16 +127,7 @@ export function VendorBillDialog({ storeId, vendors = [] }: { storeId: string; v
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label htmlFor="bill-amount">金額（税込）</Label>
-              <Input
-                id="bill-amount"
-                type="number"
-                inputMode="numeric"
-                min={1}
-                step={1}
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                placeholder="9537"
-              />
+              <PadNumberField id="bill-amount" label="金額（税込）" value={amount} onChange={setAmount} grouped suffix="円" maxDigits={9} placeholder="9537" className="ui-input h-10 w-full border border-gray-300 bg-white px-3 text-sm font-semibold text-gray-900 tabular-nums disabled:bg-gray-100 disabled:text-gray-500" />
             </div>
             <div>
               <Label htmlFor="bill-date">日付</Label>
@@ -153,6 +147,7 @@ export function VendorBillDialog({ storeId, vendors = [] }: { storeId: string; v
             </Button>
           </div>
         </form>
+        </NumberPadScope>
       </Dialog>
     </>
   );

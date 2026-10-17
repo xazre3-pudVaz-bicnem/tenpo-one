@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Label, Select } from '@/components/ui/input';
 import { useToast } from '@/components/ui/toast';
 import { cn } from '@/lib/utils';
+import { NumberPadScope, PadNumberField } from '@/components/ui/number-pad';
 import {
   DURATION_MAX_MINUTES,
   DURATION_MIN_MINUTES,
@@ -97,6 +98,8 @@ export function SeatTimeDialog({
 
   return (
     <Dialog open onClose={onClose} title="お客様情報 / Guest info">
+      {/* 人数・時間は画面のテンキーで入れる（iPad のキーボードは出さない。2026-10-17 Ronnie） */}
+      <NumberPadScope inline>
       <div className="space-y-5">
         <div className="grid grid-cols-2 gap-3">
           <div>
@@ -129,16 +132,15 @@ export function SeatTimeDialog({
               >
                 <Minus className="h-5 w-5" />
               </button>
-              <input
+              <PadNumberField
                 id="seat-guests"
-                type="number"
-                inputMode="numeric"
-                min={1}
-                max={GUEST_COUNT_MAX}
-                value={guests}
-                onChange={(e) => setGuests(clampGuests(Number(e.target.value)))}
+                label="人数"
+                value={String(guests)}
+                onChange={(v) => setGuests(clampGuests(Number(v || '1')))}
+                maxDigits={3}
+                suffix="名"
                 disabled={pending}
-                className="h-12 w-24 rounded-xl border border-gray-300 bg-white text-center text-2xl font-bold tabular-nums text-navy focus:border-primary focus:outline-2 focus:outline-primary/30"
+                className="h-12 w-24 justify-center rounded-xl border border-gray-300 bg-white text-center text-2xl font-bold tabular-nums text-navy"
               />
               <span className="text-base font-semibold text-gray-500">名</span>
               <button
@@ -187,18 +189,16 @@ export function SeatTimeDialog({
             </button>
           </div>
           <div className="mt-2 flex items-center gap-2 text-sm text-gray-600">
-            <input
-              type="number"
-              inputMode="numeric"
-              min={DURATION_MIN_MINUTES}
-              max={DURATION_MAX_MINUTES}
-              step={5}
-              value={minutes ?? ''}
+            <PadNumberField
+              id="seat-minutes"
+              label="時間（分）"
+              value={minutes == null ? '' : String(minutes)}
+              onChange={(v) => setMinutes(v === '' ? null : Math.round(Number(v)))}
+              maxDigits={3}
+              suffix="分"
               placeholder="分"
-              onChange={(e) => setMinutes(e.target.value === '' ? null : Math.round(Number(e.target.value)))}
               disabled={pending}
-              aria-label="時間（分）"
-              className="h-10 w-24 rounded-lg border border-gray-300 bg-white px-2 text-center text-base tabular-nums"
+              className="h-10 w-24 justify-center rounded-lg border border-gray-300 bg-white px-2 text-center text-base tabular-nums"
             />
             分（{DURATION_MIN_MINUTES}分〜{DURATION_MAX_MINUTES / 60}時間）
           </div>
@@ -239,6 +239,7 @@ export function SeatTimeDialog({
           </Button>
         </div>
       </div>
+      </NumberPadScope>
     </Dialog>
   );
 }

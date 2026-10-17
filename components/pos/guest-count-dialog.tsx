@@ -6,6 +6,7 @@ import { Dialog } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast';
 import { cn } from '@/lib/utils';
+import { NumberPadScope, PadNumberField } from '@/components/ui/number-pad';
 
 const MAX_GUESTS = 999;
 /** よくある人数はワンタップで決められるようにする（iPadの現場操作を速くするため） */
@@ -64,6 +65,8 @@ export function GuestCountDialog({
 
   return (
     <Dialog open={open} onClose={onClose} title="人数の変更 / Change guests">
+      {/* 人数は画面のテンキーで入れる（iPad のキーボードは出さない。2026-10-17 Ronnie） */}
+      <NumberPadScope inline>
       <div className="space-y-5">
         <p className="text-sm text-gray-600">
           現在 {currentGuestCount}名 / Now {currentGuestCount} guests。人数を変えても合計金額は変わりません / Total does not change.
@@ -80,16 +83,15 @@ export function GuestCountDialog({
             <Minus className="h-7 w-7" />
           </button>
           <div className="flex min-w-[6rem] items-baseline justify-center gap-1">
-            <input
-              type="number"
-              inputMode="numeric"
-              min={1}
-              max={MAX_GUESTS}
-              value={value}
-              onChange={(e) => setValue(clamp(Number(e.target.value)))}
+            <PadNumberField
+              id="guest-count-value"
+              label="人数"
+              value={String(value)}
+              onChange={(v) => setValue(clamp(Number(v || '1')))}
+              maxDigits={3}
+              suffix="名"
               disabled={pending}
-              aria-label="人数"
-              className="w-24 rounded-xl border border-gray-300 bg-white py-2 text-center text-4xl font-bold tabular-nums text-navy focus:border-primary focus:outline-2 focus:outline-primary/30"
+              className="w-24 justify-center rounded-xl border border-gray-300 bg-white py-2 text-center text-4xl font-bold tabular-nums text-navy"
             />
             <span className="text-xl font-semibold text-gray-500">名</span>
           </div>
@@ -132,6 +134,7 @@ export function GuestCountDialog({
           </Button>
         </div>
       </div>
+      </NumberPadScope>
     </Dialog>
   );
 }
