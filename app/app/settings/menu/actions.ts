@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { courseStepsFrom, MAX_COURSE_STEPS, normalizeStepIds, type CourseSteps } from '@/lib/course-steps';
+import { findOrphanMenuItemIds } from '@/lib/orphan-menu-items';
 
 export interface ActionResult {
   error?: string;
@@ -250,6 +251,64 @@ export async function deleteMenuItem(id: string): Promise<ActionResult> {
   revalidatePath('/app/settings/categories');
   revalidatePath('/app/settings/menu-book');
   return {};
+}
+
+export interface DeleteOrphanResult extends ActionResult {
+  deleted?: number;
+}
+
+/** 1回の update に入れる id の数（URL が長くなりすぎないように） */
+const ORPHAN_CHUNK = 200;
+
+/**
+ * 消したカテゴリに残っている商品（＋カテゴリ無しの商品。レジの「その他（価格入力）」用は除く）をまとめて削除扱いにする。
+ * カテゴリの削除は商品を消さないので、店のメニューを入れ直したあとに旧商品がこの状態で溜まり、
+ * 商品が 1,000 件を超えるとレジ・ハンディ・設定画面が最初の 1,000 件しか読めなくなる
+ * （2026-10-17 SHUNKA 新宿本店：旧商品 919 件）。店長以上（menu.manage）。対象はいま選んでいる店舗だけ。
+ */
+export async function deleteOrphanMenuItems(storeId: string): Promise<DeleteOrphanResult> {
+  const ctx = await requirePermission('menu.manage');
+  if (!ctx.isHq && !ctx.stores.some((s) => s.id === storeId)) return { error: 'この店舗の操作はできません' };
+  const supabase = await createClient();
+
+  let ids: string[];
+  try {
+    ids = await findOrphanMenuItemIds(supabase, ctx.organizationId, storeId);
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : '商品の読み込みに失敗しました' };
+  }
+  if (ids.length === 0) return { deleted: 0 };
+
+  let deleted = 0;
+  for (let i = 0; i < ids.length; i += ORPHAN_CHUNK) {
+    const chunk = ids.slice(i, i + ORPHAN_CHUNK);
+    const { error } = await supabase
+      .from('menu_items')
+      .update({ status: 'deleted', updated_by: ctx.userId })
+      .in('id', chunk)
+      .eq('organization_id', ctx.organizationId)
+      .eq('store_id', storeId)
+      .neq('status', 'deleted');
+    if (error) return { error: `${deleted}件削除したあと、失敗しました: ${error.message}（画面を開き直して確認してください）`, deleted };
+    deleted += chunk.length;
+  }
+
+  await supabase.rpc('log_audit', {
+    p_org: ctx.organizationId,
+    p_store: storeId,
+    p_action: 'settings.menu.orphan_items_delete',
+    p_target_table: 'menu_items',
+    p_target_id: storeId,
+    p_before: null,
+    p_after: { status: 'deleted', items: deleted },
+    p_note: null,
+  });
+
+  for (const path of ['/app/settings/menu', '/app/settings/plans', '/app/settings/categories', '/app/settings/menu-book', '/app/settings/menu-bulk', '/app/pos', '/app/pos/sold-out']) {
+    revalidatePath(path);
+  }
+  revalidatePath('/handy', 'layout');
+  return { deleted };
 }
 
 /** 売切トグル（POSに即時反映） */
