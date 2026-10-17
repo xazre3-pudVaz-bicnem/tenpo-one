@@ -83,3 +83,21 @@ describe('選択肢の英語名', () => {
     expect(resolveOptionSelection([group], [{ ...base, nameEn: 'ナン' }]).modifiers).toEqual([{ name: 'ナン', price: 0 }]);
   });
 });
+
+describe('選択肢の並び（2026-10-17 Ronnie「ナン/ライス → カレー → 辛さ」）', () => {
+  it('グループの並び順に関係なく、ナン/ライス → カレー → その他 → 辛さ → ドリンク', () => {
+    const groups: OptionGroup[] = [
+      { id: 'drink', name: 'ランチドリンク', isRequired: true, minSelect: 1, maxSelect: 1 },
+      { id: 'spice', name: '辛さ', isRequired: true, minSelect: 1, maxSelect: 1 },
+      { id: 'curry', name: 'カレーを選ぶ', isRequired: true, minSelect: 1, maxSelect: 1 },
+      { id: 'staple', name: '主食（ナン・ライス）', isRequired: true, minSelect: 1, maxSelect: 1 },
+    ];
+    const pick: OptionItem[] = [
+      { id: 'a', name: 'ラッシー', price: 0, groupId: 'drink' },
+      { id: 'b', name: 'マイルド', price: 0, groupId: 'spice' },
+      { id: 'c', name: '本日のカレー', price: 0, groupId: 'curry' },
+      { id: 'd', name: 'ナン', price: 0, groupId: 'staple' },
+    ];
+    expect(resolveOptionSelection(groups, pick).modifiers.map((m) => m.name)).toEqual(['ナン', '本日のカレー', 'マイルド', 'ラッシー']);
+  });
+});

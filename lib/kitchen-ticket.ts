@@ -339,6 +339,20 @@ export function isDrinkOptionGroupName(name: string | null | undefined): boolean
 }
 
 /**
+ * 選択肢を並べる順（小さいほど先）。グループの名前で決める。
+ * 2026-10-17 Ronnie「ナン/ライス → カレー → 辛さ の順に出す」。それ以外（トッピングなど）はカレーと辛さの間、ドリンクは最後。
+ *   0 主食（ナン・ライス・ご飯）/ 1 カレー / 2 その他 / 3 辛さ / 4 ドリンク
+ */
+export function optionGroupRank(name: string | null | undefined): number {
+  const n = name ?? '';
+  if (isDrinkOptionGroupName(n)) return 4;
+  if (/辛|spice|spicy/i.test(n)) return 3;
+  if (/主食|ナン|ライス|ご飯|ごはん|naan|rice/i.test(n)) return 0;
+  if (/カレー|curry/i.test(n)) return 1;
+  return 2;
+}
+
+/**
  * ドリンクを料理と別の紙にする行に分ける（slip='drink'＝別の紙に切って出す）。2026-10-17 Ronnie。
  *   - ドリンクの商品（station=drink、または drinkOrderItems＝商品の種別がドリンクの明細）は、行ごとドリンクの紙へ
  *     「1台のキッチンプリンターでフードとドリンクを一緒に出すときは、ドリンクとフードを別の紙に切る」
@@ -350,10 +364,15 @@ export function isDrinkOptionGroupName(name: string | null | undefined): boolean
 export function splitSetDrinkRows(
   rows: readonly ClaimedKitchenItem[],
   drinkOptionsByOrderItem: ReadonlyMap<string, ReadonlySet<string>>,
-  drinkOrderItems: ReadonlySet<string> = new Set()
+  drinkOrderItems: ReadonlySet<string> = new Set(),
+  /** 明細の id → 選択肢の名前 → 並べる順（optionGroupRank）。分かる明細だけ、選択肢をこの順に並べ替える */
+  optionRankByOrderItem: ReadonlyMap<string, ReadonlyMap<string, number>> = new Map()
 ): ClaimedKitchenItem[] {
   const out: ClaimedKitchenItem[] = [];
-  for (const r of rows) {
+  for (const raw of rows) {
+    const ranks = raw.order_item_id ? optionRankByOrderItem.get(raw.order_item_id) : undefined;
+    const r: ClaimedKitchenItem =
+      ranks && (raw.modifiers?.length ?? 0) > 1 ? { ...raw, modifiers: sortModifiersByRank(raw.modifiers ?? [], ranks) } : raw;
     if (r.slip === 'drink') {
       out.push(r);
       continue;
@@ -389,6 +408,14 @@ export function splitSetDrinkRows(
     }
   }
   return out;
+}
+
+/** 選択肢を optionGroupRank の順に並べ替える（同じ順位は元の並びのまま。分からない名前は「その他」） */
+function sortModifiersByRank<T extends { name: string }>(mods: readonly T[], ranks: ReadonlyMap<string, number>): T[] {
+  return mods
+    .map((m, i) => ({ m, i, k: ranks.get(m.name) ?? 2 }))
+    .sort((a, b) => a.k - b.k || a.i - b.i)
+    .map((x) => x.m);
 }
 
 /**
