@@ -39,7 +39,7 @@ export function BookingMeishiCard({ storeName, address, phone, qrDataUrl, coupon
     >
       <div
         aria-hidden
-        className="absolute -top-[10mm] left-1/2 h-[24mm] w-[46mm] -translate-x-1/2 rounded-full bg-[radial-gradient(ellipse,rgba(188, 89, 64,0.5),rgba(188, 89, 64,0)_70%)]"
+        className="absolute -top-[10mm] left-1/2 h-[24mm] w-[46mm] -translate-x-1/2 rounded-full bg-[radial-gradient(ellipse,rgba(188,89,64,0.5),rgba(188,89,64,0)_70%)]"
       />
       {/* 上：店名・ご予約 */}
       <div className="relative px-[3.5mm] pt-[4.5mm] text-center">

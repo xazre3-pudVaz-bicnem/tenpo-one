@@ -30,7 +30,7 @@ export function BookingQrDownload({
   return (
     <div className={`flex flex-wrap items-center gap-5 ${align === 'end' ? 'sm:justify-end' : ''}`}>
       {/* A6 のカードを半分の大きさで見せる（ダウンロードは元の大きさで画像にする） */}
-      <div className="h-[74mm] w-[52.5mm] shrink-0 overflow-hidden rounded-lg shadow-[0_1px_4px_rgba(41, 39, 37,0.12)]">
+      <div className="h-[74mm] w-[52.5mm] shrink-0 overflow-hidden rounded-lg shadow-[0_1px_4px_rgba(41,39,37,0.12)]">
         <div className="origin-top-left scale-50">
           <BookingQrCard storeName={storeName} address={address} phone={phone} dataUrl={qrDataUrl} coupons={coupons} />
         </div>
