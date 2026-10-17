@@ -58,4 +58,10 @@ describe('画面のテンキー', () => {
     expect(s).toContain("window.addEventListener('keydown', onKey)");
     expect(s).toContain("else if (e.key === 'Enter' || e.key === 'Tab') press('next');");
   });
+
+  it('テンキーは欄のすぐ横に大きく出す（2026-10-17 Ronnie「もう少し大きく、すぐ横に」）', () => {
+    const s = read('components/ui/number-pad.tsx');
+    expect(s).toContain('const left = Math.round(r.right + PANEL_GAP);');
+    expect(s).toContain("big ? 'h-[74px] text-[32px]' : 'h-14 text-[24px]'");
+  });
 });

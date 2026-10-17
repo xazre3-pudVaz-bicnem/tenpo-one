@@ -12,7 +12,8 @@ import { applyPadKey, isPadDigit, padDisplay, type PadKey } from '@/lib/number-p
  *     <PadNumberField … />     … 押すとその欄が選ばれ、テンキーで入る（iPad のキーボードは出ない）
  *   </NumberPadScope>
  *
- * テンキーは画面の右横に出る（inline のときはその場の下に出る＝ダイアログの中）。
+ * テンキーは数字の欄のすぐ横に大きく出る（2026-10-17 Ronnie「もう少し大きく、すぐ横に」）。
+ * 横に入らない狭い画面では画面の右（スマホは下）。inline のときはその場の下に出る（ダイアログの中）。
  * 選んだ欄に最初に打った数字は前の値と入れ替わる（続けて打つと桁が増える）。
  * 「次へ」で次の欄へ、「完了」で閉じる。パソコンのキーボードの数字・Backspace・Enter（次へ）・Esc（完了）も使える。
  * NumberPadScope の外に置いた PadNumberField は普通の数字の入力欄になる。
@@ -35,6 +36,10 @@ interface PadContext {
 }
 
 const NumberPadCtx = createContext<PadContext | null>(null);
+
+/** テンキーの幅と、欄からの間（px） */
+const PANEL_W = 372;
+const PANEL_GAP = 28;
 
 export function NumberPadScope({
   children,
@@ -127,6 +132,41 @@ export function NumberPadScope({
     return () => window.removeEventListener('keydown', onKey);
   }, [activeId, press]);
 
+  // 欄のすぐ横に置く位置。入らなければ null（画面の右・スマホは下）
+  const panelRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
+  useEffect(() => {
+    if (!activeId || inline) return;
+    let raf = 0;
+    const place = () => {
+      const root = containerRef.current;
+      if (!root) return;
+      const r = root.getBoundingClientRect();
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      const h = panelRef.current?.offsetHeight ?? 560;
+      if (vw < 768 || r.right + PANEL_GAP + PANEL_W > vw - 8) {
+        setPos(null);
+        return;
+      }
+      const left = Math.round(r.right + PANEL_GAP);
+      const top = Math.round(Math.min(Math.max(12, r.top), Math.max(12, vh - h - 12)));
+      setPos((p) => (p && p.left === left && p.top === top ? p : { left, top }));
+    };
+    const schedule = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(place);
+    };
+    schedule();
+    window.addEventListener('resize', schedule);
+    window.addEventListener('scroll', schedule, true);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('resize', schedule);
+      window.removeEventListener('scroll', schedule, true);
+    };
+  }, [activeId, inline]);
+
   const ctx = useMemo<PadContext>(() => ({ activeId, activate, register, unregister }), [activeId, activate, register, unregister]);
   const active = activeId ? shown : null;
 
@@ -136,7 +176,7 @@ export function NumberPadScope({
         {children}
         {active && inline && <NumberPadPanel field={active} onKey={press} inline />}
       </div>
-      {active && !inline && <NumberPadPanel field={active} onKey={press} />}
+      {active && !inline && <NumberPadPanel field={active} onKey={press} pos={pos} panelRef={panelRef} />}
     </NumberPadCtx.Provider>
   );
 }
@@ -152,67 +192,90 @@ function NumberPadPanel({
   field,
   onKey,
   inline = false,
+  pos = null,
+  panelRef,
 }: {
   field: FieldEntry;
   onKey: (key: PadKey | 'next' | 'done') => void;
   inline?: boolean;
+  /** 欄のすぐ横の位置（無ければ画面の右・スマホは下） */
+  pos?: { left: number; top: number } | null;
+  panelRef?: React.RefObject<HTMLDivElement | null>;
 }) {
   const shown = padDisplay(field.value, field.grouped);
+  // ダイアログの中（inline）は少し小さく、横に出すときは大きく（2026-10-17 Ronnie「もう少し大きく」）
+  const big = !inline;
   return (
     <div
+      ref={panelRef}
       role="group"
       aria-label={`${field.label}のテンキー`}
+      style={pos ? { left: pos.left, top: pos.top, width: PANEL_W } : undefined}
       className={cn(
-        'rounded-2xl border border-line bg-white p-3 shadow-[0_10px_40px_rgba(41,39,37,0.18)]',
+        'rounded-2xl border border-line bg-white shadow-[0_10px_40px_rgba(41,39,37,0.18)]',
         inline
-          ? 'mt-3'
-          : 'fixed inset-x-3 bottom-3 z-[60] md:inset-x-auto md:right-5 md:bottom-auto md:top-1/2 md:w-[300px] md:-translate-y-1/2'
+          ? 'mt-3 p-3'
+          : pos
+            ? 'fixed z-[60] p-4'
+            : 'fixed inset-x-3 bottom-3 z-[60] p-3 md:inset-x-auto md:right-5 md:bottom-auto md:top-1/2 md:w-[372px] md:-translate-y-1/2 md:p-4'
       )}
       // テンキーを押しても欄の選択（フォーカス）が外れないように
       onMouseDown={(e) => e.preventDefault()}
     >
-      <div className="mb-2 rounded-xl bg-lilac-soft px-3 py-2">
-        <p className="truncate text-[12px] font-bold text-ink-2">{field.label}</p>
-        <p className="text-right font-num text-[30px] leading-tight font-extrabold text-ink tabular-nums">
+      <div className={cn('rounded-xl bg-lilac-soft', big ? 'mb-3 px-4 py-2.5' : 'mb-2 px-3 py-2')}>
+        <p className={cn('truncate font-bold text-ink-2', big ? 'text-[15px]' : 'text-[12px]')}>{field.label}</p>
+        <p className={cn('text-right font-num leading-tight font-extrabold text-ink tabular-nums', big ? 'text-[42px]' : 'text-[30px]')}>
           {shown || <span className="text-ink-3">0</span>}
-          {field.suffix && <span className="ml-1 text-[14px] font-bold text-ink-3">{field.suffix}</span>}
+          {field.suffix && <span className={cn('ml-1 font-bold text-ink-3', big ? 'text-[18px]' : 'text-[14px]')}>{field.suffix}</span>}
         </p>
       </div>
-      <div className="grid grid-cols-3 gap-2">
+      <div className={cn('grid grid-cols-3', big ? 'gap-2.5' : 'gap-2')}>
         {KEY_ROWS.flat().map((k) => (
           <button
             key={k}
             type="button"
             onClick={() => onKey(k)}
             aria-label={k === 'back' ? '1文字消す' : k}
-            className="flex h-14 items-center justify-center rounded-xl border border-line bg-white font-num text-[24px] font-bold text-ink tabular-nums active:scale-95 active:bg-lilac-soft"
+            className={cn(
+              'flex items-center justify-center rounded-xl border border-line bg-white font-num font-bold text-ink tabular-nums active:scale-95 active:bg-lilac-soft',
+              big ? 'h-[74px] text-[32px]' : 'h-14 text-[24px]'
+            )}
           >
-            {k === 'back' ? <Delete className="h-6 w-6" aria-hidden /> : k}
+            {k === 'back' ? <Delete className={big ? 'h-8 w-8' : 'h-6 w-6'} aria-hidden /> : k}
           </button>
         ))}
       </div>
-      <div className="mt-2 grid grid-cols-3 gap-2">
+      <div className={cn('grid grid-cols-3', big ? 'mt-2.5 gap-2.5' : 'mt-2 gap-2')}>
         <button
           type="button"
           onClick={() => onKey('clear')}
-          className="h-12 rounded-xl border border-danger/30 bg-danger-soft text-[14px] font-bold text-danger active:scale-95"
+          className={cn(
+            'rounded-xl border border-danger/30 bg-danger-soft font-bold text-danger active:scale-95',
+            big ? 'h-16 text-[17px]' : 'h-12 text-[14px]'
+          )}
         >
           C クリア
         </button>
         <button
           type="button"
           onClick={() => onKey('next')}
-          className="flex h-12 items-center justify-center gap-1 rounded-xl border border-line bg-white text-[14px] font-bold text-royal active:scale-95"
+          className={cn(
+            'flex items-center justify-center gap-1 rounded-xl border border-line bg-white font-bold text-royal active:scale-95',
+            big ? 'h-16 text-[17px]' : 'h-12 text-[14px]'
+          )}
         >
-          <ArrowDown className="h-4 w-4" aria-hidden />
+          <ArrowDown className={big ? 'h-5 w-5' : 'h-4 w-4'} aria-hidden />
           次へ
         </button>
         <button
           type="button"
           onClick={() => onKey('done')}
-          className="flex h-12 items-center justify-center gap-1 rounded-xl bg-iris text-[14px] font-bold text-white active:scale-95"
+          className={cn(
+            'flex items-center justify-center gap-1 rounded-xl bg-iris font-bold text-white active:scale-95',
+            big ? 'h-16 text-[17px]' : 'h-12 text-[14px]'
+          )}
         >
-          <Check className="h-4 w-4" aria-hidden />
+          <Check className={big ? 'h-5 w-5' : 'h-4 w-4'} aria-hidden />
           完了
         </button>
       </div>
