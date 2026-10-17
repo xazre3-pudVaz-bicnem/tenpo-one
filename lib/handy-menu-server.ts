@@ -12,6 +12,7 @@ import { englishName } from '@/lib/romaji';
 import { loadMenuStock } from '@/lib/menu-stock-server';
 import { isMenuSoldOut } from '@/lib/menu-stock';
 import { jstNowHm, loadMenuBook, loadOrderPlanState } from '@/lib/menu-book-server';
+import { sortOptionGroupLinks } from '@/lib/option-group-order';
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
@@ -56,7 +57,7 @@ export async function loadHandyMenu(
     supabase
       .from('menu_item_option_groups')
       .select(
-        'menu_item_id, sort_order, menu_option_groups!inner(id, name, is_required, min_select, max_select, status, menu_option_items(id, name, name_en, price, sort_order, status))'
+        'menu_item_id, sort_order, menu_option_groups!inner(id, name, is_required, min_select, max_select, sort_order, status, menu_option_items(id, name, name_en, price, sort_order, status))'
       )
       .eq('store_id', storeId)
       .eq('menu_option_groups.status', 'active')
@@ -68,7 +69,9 @@ export async function loadHandyMenu(
 
   // 商品ごとの選択肢グループ（POS画面と同じ構造・同じダイアログを使う）
   const optionGroupsByItem: Record<string, PosOptionGroup[]> = {};
-  for (const link of optionLinks ?? []) {
+  const groupOf = (l: { menu_option_groups: unknown }) =>
+    l.menu_option_groups as { sort_order?: number | null } | null;
+  for (const link of sortOptionGroupLinks(optionLinks ?? [], groupOf, (l) => l.sort_order)) {
     const g = link.menu_option_groups as unknown as {
       id: string;
       name: string;

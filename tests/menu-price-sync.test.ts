@@ -96,7 +96,7 @@ describe('ハンディ・レジは menu_items の変更で読み直す', () => {
   });
   it('レジ（iPad）', () => {
     const src = read('components/pos/pos-screen.tsx');
-    expect(src).toContain("tables: ['order_items', 'menu_items']");
+    expect(src).toContain("tables: ['order_items', 'menu_items', 'menu_categories', 'store_settings']");
     expect(src).toContain('pricedCart.map((l) =>');
     expect(src).toContain('Number(isTakeoutLike ? (m.takeout_price ?? m.price) : m.price)');
   });

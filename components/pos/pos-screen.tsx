@@ -440,7 +440,8 @@ export function PosScreen({
   // QRからの追加注文が同じ order_items を更新するため、変更をRealtimeで検知して伝票へ反映する。
   // order_idまでは絞り込まず、store_id単位で購読する（filter仕様上のシンプルさを優先）。
   // menu_items：メニュー設定で値段を変えたら、レジのメニューの値段もすぐ出し直す（2026-09-28 Ronnie）
-  useStoreRealtimeRefresh({ storeId, tables: ['order_items', 'menu_items'] });
+  // menu_categories・store_settings も：カテゴリ・メニューブックの変更をレジ iPad にもすぐ出す（2026-10-17）
+  useStoreRealtimeRefresh({ storeId, tables: ['order_items', 'menu_items', 'menu_categories', 'store_settings'] });
 
   // キーボードショートカット（F2=検索フォーカス / F4=会計を開く）。Escでのダイアログ閉じは
   // components/ui/dialog.tsx 側で共通実装済みのためここでは扱わない。

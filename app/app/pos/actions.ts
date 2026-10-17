@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { sortOptionGroupLinks } from '@/lib/option-group-order';
 import { after } from 'next/server';
 import { generateKitchenJobsForStore } from '@/lib/print-queue';
 import { assertStoreAccess, requirePermission } from '@/lib/auth';
@@ -114,12 +115,17 @@ async function resolveOptions(
 ): Promise<{ modifiers: { name: string; name_en?: string; price: number }[]; extraPrice: number }> {
   const { data: links } = await supabase
     .from('menu_item_option_groups')
-    .select('group_id, sort_order, menu_option_groups(id, name, is_required, min_select, max_select, status)')
+    .select('group_id, sort_order, menu_option_groups(id, name, is_required, min_select, max_select, sort_order, status)')
     .eq('menu_item_id', menuItemId)
     .eq('store_id', storeId)
     .order('sort_order');
 
-  const groups = (links ?? [])
+  // グループの並び（設定の上へ・下へ）→ 伝票・レシートの選択肢もこの順で出る（lib/menu-options.ts が groups の順で並べる）
+  const groups = sortOptionGroupLinks(
+    (links ?? []) as { sort_order: number | null; menu_option_groups: unknown }[],
+    (l) => l.menu_option_groups as { sort_order?: number | null } | null,
+    (l) => l.sort_order
+  )
     .map((l: { menu_option_groups: unknown }) => l.menu_option_groups as {
       id: string; name: string; is_required: boolean; min_select: number; max_select: number; status: string;
     } | null)
