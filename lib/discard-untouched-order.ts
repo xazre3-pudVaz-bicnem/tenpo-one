@@ -21,12 +21,10 @@ export async function discardUntouchedOrder(
 ): Promise<DiscardResult> {
   const { data: order } = await supabase
     .from('orders')
-    .select('id, organization_id, store_id, table_id, reservation_id, status, order_source')
+    .select('id, organization_id, store_id, table_id, reservation_id, status')
     .eq('id', orderId)
     .maybeSingle();
   if (!order) return { discarded: false, reason: '注文が見つかりません' };
-  // お客様が QR の最初の画面で人数を選んで開いた伝票は、レジで開いて離れても消さない（2026-10-17）
-  if (order.order_source === 'qr') return { discarded: false, reason: 'お客様が QR で開いた伝票はそのまま' };
   if (order.organization_id !== ctx.organizationId) return { discarded: false, reason: 'この注文は操作できません' };
   if (!ctx.isHq && !ctx.stores.some((s) => s.id === order.store_id)) return { discarded: false, reason: 'この店舗へのアクセス権がありません' };
   if (order.status !== 'open') return { discarded: false, reason: '会計前の注文ではありません' };

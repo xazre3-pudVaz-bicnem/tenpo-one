@@ -35,20 +35,26 @@ describe('QR の最初の画面（ご来店の人数）', () => {
     expect(page).toContain('startRequired={noOpenOrder && !course}');
     const app = read('components/qr-order/qr-order-app.tsx');
     expect(app).toContain('useState(!startRequired)');
-    expect(app).toContain("fetch('/api/qr/start'");
     expect(app).toContain('<QrGuestStart');
   });
 
-  it('サーバー：すでに伝票がある卓は何もしない・人数は guest_count、内訳は guest_female / guest_male', () => {
+  it('人数を選んだだけでは伝票を開かない（卓は最初の注文で着席に。2026-10-17 Ronnie）', () => {
+    const app = read('components/qr-order/qr-order-app.tsx');
+    // 確定ではサーバーを呼ばず、人数を覚えておくだけ
+    expect(app).toContain('pendingGuests.current = counts;');
+    // 最初の注文が通ったあとに人数を入れる
+    const submit = app.indexOf("await supabase.rpc('create_qr_order'");
+    const apply = app.indexOf("fetch('/api/qr/start'");
+    expect(submit).toBeGreaterThan(-1);
+    expect(apply).toBeGreaterThan(submit);
     const s = read('lib/qr-visit-server.ts');
-    expect(s).toContain('if (await openOrderOf(admin, table.id)) return { ok: true, started: false };');
-    expect(s).toContain('guest_count: guests.total');
-    expect(s).toContain('guest_female: guests.female, guest_male: guests.male');
-    // 同時に2台で押したときは1枚に
-    expect(s).toContain("status: 'cancelled'");
-    // レジで開いて離れても、お客様が QR で開いた伝票は消さない
-    expect(read('lib/discard-untouched-order.ts')).toContain("if (order.order_source === 'qr') return { discarded: false");
+    expect(s).not.toContain(".from('orders')\n    .insert(");
+    expect(s).not.toContain("current_status: 'seated'");
+    // お客様の QR で開いた伝票で、まだ内訳が無いときだけ
+    expect(s).toContain("order.order_source !== 'qr' || order.guest_female != null || order.guest_male != null");
+    expect(s).toContain('guest_count: guests.total, guest_female: guests.female, guest_male: guests.male');
     const route = read('app/api/qr/start/route.ts');
     expect(route).toContain('parseQrGuestCounts(body.female, body.male)');
+    expect(route).toContain('applyQrGuests(');
   });
 });
