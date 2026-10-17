@@ -321,3 +321,38 @@ export async function convertOptionProductsToGroups(storeId: string): Promise<Ac
   revalidatePath('/app/pos');
   return { groups: createdGroups, options: rows.length, skipped };
 }
+
+/** グループの並び（レジ・ハンディのダイアログで上から出す順）を1つ上/下へ動かす */
+export async function moveOptionGroup(input: { id: string; storeId: string; direction: 'up' | 'down' }): Promise<ActionResult> {
+  const ctx = await requirePermission('store.settings');
+  const err = assertStoreAccess(ctx.stores.map((s) => s.id), input.storeId);
+  if (err) return { error: err };
+
+  const supabase = await createClient();
+  const { data: rows, error: readErr } = await supabase
+    .from('menu_option_groups')
+    .select('id, sort_order')
+    .eq('store_id', input.storeId)
+    .eq('status', 'active')
+    .order('sort_order')
+    .order('created_at');
+  if (readErr) return { error: `グループの読み込みに失敗しました: ${readErr.message}` };
+  const ids = (rows ?? []).map((r) => r.id as string);
+  const index = ids.indexOf(input.id);
+  if (index < 0) return { error: 'グループが見つかりません' };
+  const target = input.direction === 'up' ? index - 1 : index + 1;
+  if (target < 0 || target >= ids.length) return {};
+  [ids[index], ids[target]] = [ids[target], ids[index]];
+
+  // 0,1,2… と振り直す（同じ sort_order が並んでいても確実に順番が変わるように）
+  for (let i = 0; i < ids.length; i++) {
+    const { error } = await supabase
+      .from('menu_option_groups')
+      .update({ sort_order: i, updated_by: ctx.userId })
+      .eq('id', ids[i])
+      .eq('store_id', input.storeId);
+    if (error) return { error: `並び替えに失敗しました: ${error.message}` };
+  }
+  revalidatePath('/app/settings/options');
+  return {};
+}
