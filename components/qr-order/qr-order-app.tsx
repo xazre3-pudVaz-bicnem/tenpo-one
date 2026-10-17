@@ -11,6 +11,7 @@ import { ItemSheet } from './item-sheet';
 import { CartView } from './cart-view';
 import { HistoryView } from './history-view';
 import { CallView } from './call-view';
+import { QrGuestStart } from './guest-start';
 import { QR_STRINGS, type QrLocale } from './strings';
 import { QrStringsProvider } from './strings-context';
 import {
@@ -127,9 +128,15 @@ export function QrOrderApp({
   reservedCourse,
   planOver = false,
   seatToken = null,
+  startRequired = false,
 }: {
   storeSlug: string;
   tableToken: string;
+  /**
+   * 卓にまだ伝票が無い（最初のお客様）。先にご来店の人数（女性・男性）を選んでもらってから注文へ進む
+   * （2026-10-17 Ronnie「Air レジのように」）
+   */
+  startRequired?: boolean;
   /**
    * テーブルグループで、伝票の卓とは別の卓の QR を開いたときの その卓のトークン（振り向けていなければ null）。
    * 注文した品に「注文した卓」を残し、厨房伝票にその卓の番号を出す（2026-09-29 FULL MOoN 御茶ノ水）
@@ -144,6 +151,7 @@ export function QrOrderApp({
 }) {
   const [tab, setTab] = useState<Tab>('menu');
   const [locale, setLocale] = useState<QrLocale>('ja');
+  const [started, setStarted] = useState(!startRequired);
   const qrStrings = QR_STRINGS[locale];
   const [cart, setCart] = useState<CartLine[]>([]);
   const [selectedItem, setSelectedItem] = useState<QrMenuItem | null>(null);
@@ -280,6 +288,21 @@ export function QrOrderApp({
     }
   };
 
+  // ご来店の人数を確定 → 伝票を開いて卓を着席に。失敗しても注文へは進める（最初の注文で伝票が開く）
+  const handleStart = async (counts: { female: number; male: number }) => {
+    try {
+      await fetch('/api/qr/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slug: storeSlug, token: tableToken, ...counts }),
+      });
+    } catch {
+      // 続ける
+    }
+    setStarted(true);
+    mainRef.current?.scrollTo({ top: 0 });
+  };
+
   const navItems: { id: Tab; label: string; icon: typeof LayoutGrid }[] = [
     { id: 'menu', label: qrStrings.nav.menu, icon: LayoutGrid },
     { id: 'cart', label: qrStrings.nav.cart, icon: ShoppingCart },
@@ -313,7 +336,13 @@ export function QrOrderApp({
           </div>
         </header>
 
-        {reservedCourse && (
+        {!started && (
+          <main ref={mainRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+            <QrGuestStart strings={qrStrings.start} tableName={menu.table_name} onConfirm={handleStart} />
+          </main>
+        )}
+
+        {started && reservedCourse && (
           <div className="flex-none border-b border-line bg-lilac px-4 py-2 text-center">
             <p className="text-[11px] font-bold text-[#5c5650]">ご予約コース：{reservedCourse.name}</p>
             <p className="mt-0.5 text-[10px] leading-relaxed text-ink-3">
@@ -329,6 +358,7 @@ export function QrOrderApp({
           </div>
         )}
 
+        {started && (
         <main ref={mainRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
           {tab === 'menu' && (
             <MenuView
@@ -374,9 +404,10 @@ export function QrOrderApp({
             />
           )}
         </main>
+        )}
 
         {/* カートの控え（メニュー閲覧中のみ）。送信はカートタブで行う */}
-        {tab === 'menu' && count > 0 && (
+        {started && tab === 'menu' && count > 0 && (
           <div className="flex-none bg-lilac-soft px-4 py-2.5">
             <button
               type="button"
@@ -392,6 +423,7 @@ export function QrOrderApp({
           </div>
         )}
 
+        {started && (
         <nav
           aria-label={qrStrings.nav.menu}
           className="grid flex-none grid-cols-4 gap-1 border-t border-line bg-white px-2.5 pb-1 pt-[7px]"
@@ -423,6 +455,7 @@ export function QrOrderApp({
             );
           })}
         </nav>
+        )}
 
         <footer className="flex-none bg-white px-2.5 pb-[calc(6px+env(safe-area-inset-bottom))] pt-1 text-center text-[10px] leading-snug text-[#8f857b]">
           {qrStrings.poweredBy}{' '}

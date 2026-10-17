@@ -12,6 +12,7 @@ import { dynamicUnitPrice } from "@/lib/dynamic-pricing";
 import { isMenuSoldOut } from "@/lib/menu-stock";
 import { isPlanTimeOver } from "@/lib/plan-time";
 import { resolveQrGroupToken } from "@/lib/table-group-server";
+import { qrStartRequired } from "@/lib/qr-visit-server";
 
 interface PageParams {
   params: Promise<{ storeSlug: string; tableToken: string }>;
@@ -52,6 +53,7 @@ export default async function QrOrderPage({ params }: PageParams) {
     { data: menu },
     { data: reservedCourse },
     { book, plan, dynamicRules, stationById, menuStock, planEndsAtMs },
+    noOpenOrder,
   ] = await Promise.all([
     supabase.rpc("get_qr_menu", { p_slug: storeSlug, p_token: tableToken }),
     supabase.rpc("get_qr_reserved_course", {
@@ -59,6 +61,8 @@ export default async function QrOrderPage({ params }: PageParams) {
       p_token: tableToken,
     }),
     loadQrMenuBook(storeSlug, tableToken),
+    // グループの別の卓（伝票の卓へ振り向けた）は伝票があるので調べない
+    resolved.redirected ? Promise.resolve(false) : qrStartRequired(storeSlug, tableToken),
   ]);
   if (!menu) notFound();
 
@@ -129,6 +133,9 @@ export default async function QrOrderPage({ params }: PageParams) {
       reservedCourse={course}
       planOver={planOver}
       seatToken={resolved.redirected ? openedToken : null}
+      // 卓にまだ伝票が無ければ、先にご来店の人数（女性・男性）を選んでもらう（2026-10-17 Ronnie）。
+      // 予約でコースが決まっている卓はレジで着席するので出さない
+      startRequired={noOpenOrder && !course}
     />
   );
 }
