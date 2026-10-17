@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { yen } from '@/lib/format';
+import { categoryEnglishName } from '@/lib/romaji';
 import { useQrStrings, useQrLocale, localizedName } from './strings-context';
 import { itemQuantityInCart, menuTabs, type QrMenuPage, type QrMenuTab } from './logic';
 import { isPublicImageUrl, type CartLine, type QrMenuCategory, type QrMenuItem, hasOptions } from './types';
@@ -55,7 +56,7 @@ export function MenuView({
     active && sectionId ? active.sections.filter((c) => c.id === sectionId) : (active?.sections ?? []);
   /** タブの名前（ページの名前・おすすめ、無ければカテゴリ名を言語に合わせてつなぐ） */
   const tabLabel = (t: QrMenuTab) =>
-    t.name ?? t.sections.map((c) => localizedName(locale, c.name, c.name_en)).join('・');
+    t.name ?? t.sections.map((c) => localizedName(locale, c.name, categoryEnglishName(c.name, c.name_en))).join('・');
 
   if (!active) {
     return <QrEmpty>{qrStrings.menu.empty}</QrEmpty>;
@@ -100,7 +101,7 @@ export function MenuView({
                 <span className="flex max-w-full flex-col items-center text-[10px] leading-[1.25]">
                   {(t.sections.length > 3 ? t.sections.slice(0, 2) : t.sections).map((c) => (
                     <span key={c.id} className="max-w-full truncate">
-                      {localizedName(locale, c.name, c.name_en)}
+                      {localizedName(locale, c.name, categoryEnglishName(c.name, c.name_en))}
                     </span>
                   ))}
                   {t.sections.length > 3 && <span className="font-normal">+{t.sections.length - 2}</span>}
@@ -142,7 +143,7 @@ export function MenuView({
                   sectionId === c.id ? 'border-iris bg-iris text-white' : 'border-line bg-white text-ink-2'
                 )}
               >
-                {localizedName(locale, c.name, c.name_en)}
+                {localizedName(locale, c.name, categoryEnglishName(c.name, c.name_en))}
               </button>
             ))}
           </div>

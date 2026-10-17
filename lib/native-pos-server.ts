@@ -10,7 +10,7 @@ import { isMenuSoldOut } from '@/lib/menu-stock';
 import { filterTakeoutItems, isTakeoutLikeOrder, takeoutMenuFrom } from '@/lib/takeout-menu';
 import { isQuickPayOrder, QUICK_PAY_ORDER_LABEL } from '@/lib/quick-pay';
 import { groupMenuPages, picksSlot } from '@/lib/menu-book';
-import { englishName } from '@/lib/romaji';
+import { categoryEnglishName, englishName } from '@/lib/romaji';
 import { BRANDED_METHODS, checkoutPresetsFrom, discountPresetsOf, methodBrandsOf, pointBrandsOf } from '@/lib/checkout-presets';
 import { VISIT_SOURCES, visitSourceByLabel, visitSourcesFrom } from '@/lib/handy-visit';
 import { isMissingColumnError } from '@/lib/schema-compat';
@@ -217,7 +217,7 @@ export async function loadNativePos(ctx: SessionContext, orderId: string): Promi
     book
   ).filter((pg) => pg.categories.length > 0);
   const pageCats: NativePosCategory[][] = grouped.map((pg) =>
-    pg.categories.map((c) => ({ id: c.id, name: c.name, sub: englishName(c.name, null, c.name_en) }))
+    pg.categories.map((c) => ({ id: c.id, name: c.name, sub: categoryEnglishName(c.name, c.name_en) }))
   );
   const picks: NativePosCategory[] = [
     { id: NATIVE_FAVORITES_TAB, name: 'おすすめ', sub: 'Picks' },
