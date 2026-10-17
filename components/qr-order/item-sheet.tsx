@@ -7,10 +7,15 @@ import { Textarea, Label } from '@/components/ui/input';
 import { yen } from '@/lib/format';
 import { useQrStrings, useQrLocale, localizedName } from './strings-context';
 import { MAX_LINE_QUANTITY } from './logic';
-import { isPublicImageUrl, type QrMenuItem, type QrMenuModifier } from './types';
+import { isPublicImageUrl, optionSelectionError, type QrMenuItem, type QrMenuModifier, type QrOptionGroup } from './types';
 import { DishArt, PrimaryButton } from './ui';
 
-/** メニュー商品をタップした際に開く、数量・オプション・メモ入力シート */
+/**
+ * メニュー商品をタップした際に開く、数量・オプション・メモ入力シート。
+ * 選択肢グループ（レジ・ハンディと同じ 設定 > メニュー選択肢：ナン/ライス・辛さ・ランチドリンクなど）は
+ * 1つだけ選ぶグループはラジオ、複数選べるグループはチェックで出す（2026-10-17 Ronnie「レジにあるものをそのまま QR にも」）。
+ * 必須のグループが未選択のあいだは「カートに追加」を押せない。
+ */
 export function ItemSheet({
   item,
   onClose,
@@ -26,12 +31,32 @@ export function ItemSheet({
   const [quantity, setQuantity] = useState(1);
   const [memo, setMemo] = useState('');
   const [selectedModifierIds, setSelectedModifierIds] = useState<string[]>([]);
+  const groups: QrOptionGroup[] = (item.option_groups ?? []).filter((g) => g.items.length > 0);
+  const [selectedOptionIds, setSelectedOptionIds] = useState<string[]>([]);
 
   const selectedModifiers = item.modifiers.filter((m) => selectedModifierIds.includes(m.id));
-  const unitPrice = item.price + selectedModifiers.reduce((sum, m) => sum + m.price, 0);
+  // 選択肢グループの選択（グループの順のまま。kind='option' で古い modifiers と区別する）
+  const selectedOptions: QrMenuModifier[] = groups.flatMap((g) =>
+    g.items.filter((o) => selectedOptionIds.includes(o.id)).map((o) => ({ id: o.id, name: o.name, name_en: o.name_en, price: o.price, kind: 'option' as const }))
+  );
+  const unitPrice = item.price + [...selectedOptions, ...selectedModifiers].reduce((sum, m) => sum + m.price, 0);
+  const missingGroup = optionSelectionError(groups, selectedOptionIds);
 
   const toggleModifier = (id: string) => {
     setSelectedModifierIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
+  const pickOption = (g: QrOptionGroup, id: string) => {
+    setSelectedOptionIds((prev) => {
+      const inGroup = new Set(g.items.map((o) => o.id));
+      if (g.max_select <= 1) {
+        // 1つだけ：同じグループの他を外して入れ替える（必須でなければもう一度押すと外れる）
+        const others = prev.filter((x) => !inGroup.has(x));
+        return prev.includes(id) && !g.is_required ? others : [...others, id];
+      }
+      if (prev.includes(id)) return prev.filter((x) => x !== id);
+      const n = prev.filter((x) => inGroup.has(x)).length;
+      return n >= g.max_select ? prev : [...prev, id];
+    });
   };
 
   return (
@@ -60,6 +85,58 @@ export function ItemSheet({
         <p className="font-num text-lg font-bold tabular-nums text-[#5c5650]">
           {yen(item.price)} <span className="text-[10px] font-medium text-ink-3">{qrStrings.menu.taxIncluded}</span>
         </p>
+
+        {groups.map((g) => {
+          const single = g.max_select <= 1;
+          const chosen = g.items.filter((o) => selectedOptionIds.includes(o.id)).length;
+          return (
+            <fieldset key={g.id} className="rounded-xl border border-line p-2">
+              <legend className="flex items-center gap-2 px-1 text-sm font-bold text-ink">
+                {g.name}
+                <span
+                  className={
+                    g.is_required
+                      ? 'rounded-md bg-iris px-1.5 py-0.5 text-[10px] font-bold text-white'
+                      : 'rounded-md bg-lilac px-1.5 py-0.5 text-[10px] font-bold text-ink-3'
+                  }
+                >
+                  {g.is_required ? qrStrings.itemSheet.requiredBadge : qrStrings.itemSheet.optionalBadge}
+                </span>
+                {!single && <span className="text-[11px] font-medium text-ink-3">{qrStrings.itemSheet.chooseUpTo(g.max_select)}</span>}
+              </legend>
+              <ul className="mt-1 space-y-1">
+                {g.items.map((o) => {
+                  const on = selectedOptionIds.includes(o.id);
+                  const full = !single && !on && chosen >= g.max_select;
+                  return (
+                    <li key={o.id}>
+                      <label
+                        className={`flex min-h-[44px] cursor-pointer items-center justify-between gap-3 rounded-lg px-2 py-1.5 ${on ? 'bg-[#f9ede6]' : 'hover:bg-lilac-soft'} ${full ? 'opacity-40' : ''}`}
+                      >
+                        <span className="flex items-center gap-2.5 text-[15px] text-ink">
+                          <input
+                            type={single ? 'radio' : 'checkbox'}
+                            name={`og-${g.id}`}
+                            className="h-5 w-5 border-line accent-[#bc5940] focus:ring-iris"
+                            checked={on}
+                            disabled={full}
+                            onChange={() => pickOption(g, o.id)}
+                            onClick={() => {
+                              // ラジオはもう一度押しても onChange が来ないので、任意のグループは click で外せるようにする
+                              if (single && on && !g.is_required) pickOption(g, o.id);
+                            }}
+                          />
+                          {localizedName(locale, o.name, o.name_en)}
+                        </span>
+                        <span className="font-num text-sm tabular-nums text-ink-3">{o.price > 0 ? `+${yen(o.price)}` : ''}</span>
+                      </label>
+                    </li>
+                  );
+                })}
+              </ul>
+            </fieldset>
+          );
+        })}
 
         {item.modifiers.length > 0 && (
           <div>
@@ -124,10 +201,14 @@ export function ItemSheet({
         </div>
 
         <PrimaryButton
-          disabled={item.is_sold_out}
-          onClick={() => onAdd(quantity, memo.trim(), selectedModifiers)}
+          disabled={item.is_sold_out || !!missingGroup}
+          onClick={() => onAdd(quantity, memo.trim(), [...selectedOptions, ...selectedModifiers])}
         >
-          {item.is_sold_out ? qrStrings.itemSheet.soldOut : qrStrings.itemSheet.addToCart(yen(unitPrice * quantity))}
+          {item.is_sold_out
+            ? qrStrings.itemSheet.soldOut
+            : missingGroup
+              ? qrStrings.itemSheet.chooseRequired(missingGroup)
+              : qrStrings.itemSheet.addToCart(yen(unitPrice * quantity))}
         </PrimaryButton>
       </div>
     </Dialog>

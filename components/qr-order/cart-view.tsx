@@ -2,7 +2,7 @@
 
 import { Minus, Plus, X } from 'lucide-react';
 import { yen } from '@/lib/format';
-import { useQrStrings } from './strings-context';
+import { localizedName, useQrLocale, useQrStrings } from './strings-context';
 import { cartCount, cartTotal, MAX_LINE_QUANTITY } from './logic';
 import { cartLineUnitPrice, type CartLine } from './types';
 import { BillSummary, PageTitle, QrEmpty, QrError, QrNote } from './ui';
@@ -27,6 +27,7 @@ export function CartView({
   onBackToMenu: () => void;
 }) {
   const qrStrings = useQrStrings();
+  const locale = useQrLocale();
   const count = cartCount(cart);
   const total = cartTotal(cart);
 
@@ -75,7 +76,7 @@ export function CartView({
                 </div>
 
                 {line.modifiers.length > 0 && (
-                  <p className="mt-1 text-[10px] text-ink-3">{line.modifiers.map((m) => m.name).join('、')}</p>
+                  <p className="mt-1 text-[10px] text-ink-3">{line.modifiers.map((m) => localizedName(locale, m.name, m.name_en ?? null)).join(locale === 'en' ? ', ' : '、')}</p>
                 )}
                 {line.memo && <p className="mt-1 text-[10px] text-ink-3">{line.memo}</p>}
 

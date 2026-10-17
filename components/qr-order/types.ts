@@ -7,6 +7,20 @@ export interface QrMenuModifier {
   id: string;
   name: string;
   price: number;
+  /** 英語名（選択肢グループの選択肢だけ。English のとき表示に使う） */
+  name_en?: string | null;
+  /** 'option' = 設定 > メニュー選択肢（グループ）の選択肢。無印は古い menu_modifiers */
+  kind?: 'option';
+}
+
+/** 選択肢グループ（レジ・ハンディと同じ menu_option_groups。get_qr_menu の option_groups） */
+export interface QrOptionGroup {
+  id: string;
+  name: string;
+  is_required: boolean;
+  min_select: number;
+  max_select: number;
+  items: { id: string; name: string; name_en: string | null; price: number }[];
 }
 
 export interface QrMenuItem {
@@ -21,6 +35,25 @@ export interface QrMenuItem {
   /** 内部Storageの相対パスの場合がある。anonからは参照できないため、http(s)絶対URLの場合のみ表示する */
   image_path: string | null;
   modifiers: QrMenuModifier[];
+  /** 選択肢グループ（古いデータベースでは無い） */
+  option_groups?: QrOptionGroup[] | null;
+}
+
+/** 商品に選択肢（グループ・古い modifiers）があるか（あればタップでシートを開く） */
+export function hasOptions(item: Pick<QrMenuItem, 'modifiers' | 'option_groups'>): boolean {
+  return item.modifiers.length > 0 || (item.option_groups ?? []).some((g) => g.items.length > 0);
+}
+
+/** 必須の選択肢が選ばれているか・各グループの最大を超えていないか（レジの resolveOptionSelection と同じ判定） */
+export function optionSelectionError(groups: QrOptionGroup[] | null | undefined, selectedIds: readonly string[]): string | null {
+  for (const g of groups ?? []) {
+    if (g.items.length === 0) continue;
+    const n = g.items.filter((o) => selectedIds.includes(o.id)).length;
+    const min = g.is_required ? Math.max(1, g.min_select) : g.min_select;
+    if (n < min) return g.name;
+    if (n > g.max_select) return g.name;
+  }
+  return null;
 }
 
 export interface QrMenuCategory {
@@ -104,6 +137,9 @@ const QR_ERROR_MESSAGES: Record<string, string> = {
   RATE_LIMITED: '短時間にご注文が集中しました。少し時間をおいてから再度お試しください。',
   INVALID_QUANTITY: '数量の指定が正しくありません。',
   ITEM_UNAVAILABLE: '一部の商品が販売終了・品切れになりました。内容をご確認のうえ再度お試しください。',
+  OPTION_REQUIRED: '選択肢（ナン・ライス、辛さ、ドリンクなど）が選ばれていない商品があります。カートから商品を入れ直してください。',
+  INVALID_MODIFIER: '選択肢の内容が変わりました。カートから商品を入れ直してください。',
+  TOO_MANY_MODIFIERS: '選択肢の数が多すぎます。',
   NOT_IN_SERVICE: 'ご利用の受付が終了しています。スタッフにお声がけください。',
 };
 
