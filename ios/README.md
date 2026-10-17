@@ -34,7 +34,8 @@
 1. Apple Developer Program（会社：株式会社D&DREAM、¥12,980/年）に登録（Ronnie 本人）
 2. Xcode の Settings > Accounts に Apple ID を入れる（Ronnie 本人）
 3. App Store Connect にアプリを1つ作る（TENPO ONE・com.tenpoone.app）、APNs のキーを作って Vercel に入れる
-4. `xcodebuild archive` → App Store Connect に上げる → TestFlight で確かめる → 審査に出す
+4. `TEAM_ID=チームID tools/release.sh`（v1.0 は `TENPO_NO_MFI=1` も付ける）→ archive・App Store Connect へアップロードまで1回で
+   → TestFlight で確かめる → 審査に出す（2026-10-17、Release の archive が通ることを確認ずみ・Xcode 27.1）
    - 審査用のデモアカウント（TENPO ONE DEMO）・スクリーンショット（iPad 13インチ・iPhone 6.9インチ）・プライバシーポリシー（/privacy）
    - プライバシーマニフェスト `Shared/PrivacyInfo.xcprivacy`（追跡なし・UserDefaults CA92.1・集めるデータ）。
      App Store Connect の「App のプライバシー」も同じ答えにする
