@@ -1,4 +1,3 @@
-import { optionGroupRank } from './kitchen-ticket';
 
 /**
  * メニュー選択肢（オプション）の検証（純関数・テスト対象）。
@@ -53,14 +52,10 @@ export function resolveOptionSelection(groups: OptionGroup[], selected: OptionIt
     if (count > g.maxSelect) throw new Error(`「${g.name}」は${g.maxSelect}つまでしか選べません`);
   }
 
-  // ナン/ライス → カレー → その他 → 辛さ → ドリンク の順（2026-10-17 Ronnie。厨房伝票・レシートとも同じ順）。
-  // 同じ順位どうしはグループの並び順で安定させる
+  // グループの並び（設定 > メニュー選択肢 の「上へ・下へ」= menu_option_groups.sort_order。呼び出し側がその順で groups を渡す）。
+  // 厨房伝票・レシート・レジのダイアログが同じ順になる（2026-10-17 Ronnie「順番は店で決める。カレー → 辛さ → ナン/ライス → 飲み物」）
   const order = new Map<string, number>(groups.map((g, i) => [g.id, i]));
-  const rank = new Map<string, number>(groups.map((g) => [g.id, optionGroupRank(g.name)]));
-  const sorted = [...selected].sort(
-    (a, b) =>
-      (rank.get(a.groupId) ?? 2) - (rank.get(b.groupId) ?? 2) || (order.get(a.groupId) ?? 0) - (order.get(b.groupId) ?? 0)
-  );
+  const sorted = [...selected].sort((a, b) => (order.get(a.groupId) ?? 0) - (order.get(b.groupId) ?? 0));
 
   return {
     modifiers: sorted.map((o) => {

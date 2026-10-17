@@ -339,6 +339,8 @@ export function isDrinkOptionGroupName(name: string | null | undefined): boolean
 }
 
 /**
+ * 【名前による順。いまは使っていない】設定 > メニュー選択肢 の「上へ・下へ」（menu_option_groups.sort_order）で
+ * 店が決めるようになった（2026-10-17 Ronnie「カレー → 辛さ → ナン/ライス → 飲み物」）。lib/print-queue.ts はそちらを使う。
  * 選択肢を並べる順（小さいほど先）。グループの名前で決める。
  * 2026-10-17 Ronnie「ナン/ライス → カレー → 辛さ の順に出す」。それ以外（トッピングなど）はカレーと辛さの間、ドリンクは最後。
  *   0 主食（ナン・ライス・ご飯）/ 1 カレー / 2 その他 / 3 辛さ / 4 ドリンク
@@ -365,7 +367,7 @@ export function splitSetDrinkRows(
   rows: readonly ClaimedKitchenItem[],
   drinkOptionsByOrderItem: ReadonlyMap<string, ReadonlySet<string>>,
   drinkOrderItems: ReadonlySet<string> = new Set(),
-  /** 明細の id → 選択肢の名前 → 並べる順（optionGroupRank）。分かる明細だけ、選択肢をこの順に並べ替える */
+  /** 明細の id → 選択肢の名前 → 並べる順（グループの sort_order）。分かる明細だけ、選択肢をこの順に並べ替える */
   optionRankByOrderItem: ReadonlyMap<string, ReadonlyMap<string, number>> = new Map()
 ): ClaimedKitchenItem[] {
   const out: ClaimedKitchenItem[] = [];
@@ -410,7 +412,7 @@ export function splitSetDrinkRows(
   return out;
 }
 
-/** 選択肢を optionGroupRank の順に並べ替える（同じ順位は元の並びのまま。分からない名前は「その他」） */
+/** 選択肢を順位（グループの sort_order）の順に並べ替える（同じ順位は元の並びのまま。分からない名前は真ん中） */
 function sortModifiersByRank<T extends { name: string }>(mods: readonly T[], ranks: ReadonlyMap<string, number>): T[] {
   return mods
     .map((m, i) => ({ m, i, k: ranks.get(m.name) ?? 2 }))
