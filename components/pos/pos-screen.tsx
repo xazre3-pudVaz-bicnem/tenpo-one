@@ -1352,13 +1352,17 @@ export function PosScreen({
         </div>
       </div>
 
+      {/* 品目の取消は理由を書かなくてよい（担当者を選ぶだけ）。伝票ごとの取消は理由が要る（2026-10-17 Ronnie） */}
       <ConfirmDialog
         open={!!cancelTarget}
         onClose={() => setCancelTarget(null)}
         title="品目を取消しますか / Cancel this item?"
-        message={cancelTarget ? `「${cancelTarget.name}」を取消します。取消理由を記録してください。` : ''}
+        message={
+          cancelTarget
+            ? `「${cancelTarget.name}」を取消します。${clerkGate ? 'このあと担当者を選んでください。' : ''}`
+            : ''
+        }
         confirmLabel="取消する / Cancel item"
-        requireReason
         onConfirm={handleCancel}
       />
 

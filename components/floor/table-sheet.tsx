@@ -663,11 +663,12 @@ export function TableSheet({
 
             {/* テーブルクリア: 伝票を丸ごと取消して空席に戻す（売上には入らない。支払済みは不可）。
                 一番下に、¥0 の卓（まだ何も注文していない）にだけ出す。注文が入った卓には出さない
-                （2026-09-27 Ronnie「最後に置く。¥0 のテーブルだけ。隠さなくていい」）。店長の承認も必要 */}
+                （2026-09-27 Ronnie「最後に置く。¥0 のテーブルだけ。隠さなくていい」）。店長の承認も必要。
+                理由は書かなくてよい（担当者を選ぶだけ。2026-10-17 Ronnie「金額0 のときは担当選択だけ」） */}
             {clearTableAction && table.order && total === 0 && (
               <div className="mt-1.5 rounded-xl border border-danger/30 bg-danger-soft/40 p-2">
                 <p className="mb-1.5 text-[10px] leading-snug text-ink-2">
-                  注文のない卓を空席に戻します（売上には入りません。店長の承認と理由が必要です）。
+                  注文のない卓を空席に戻します（売上には入りません。担当者（店長以上）を選ぶだけで、理由は要りません）。
                 </p>
                 <div className="grid grid-cols-1">
                   <PopBtn
@@ -791,9 +792,8 @@ export function TableSheet({
         open={clearOpen}
         onClose={() => setClearOpen(false)}
         title="テーブルをクリアしますか / Clear this table?"
-        message={`${table.name} の伝票${selected ? ` #${selected.orderNo}` : ''}（${yen(table.order?.total ?? 0)}）の品目をすべて取消し、空席に戻します。売上には入りません。支払済みの伝票はクリアできません。理由を記録してください。`}
+        message={`${table.name} の伝票${selected ? ` #${selected.orderNo}` : ''}（${yen(table.order?.total ?? 0)}）の品目をすべて取消し、空席に戻します。売上には入りません。支払済みの伝票はクリアできません。${clerkGate ? 'このあと担当者を選んでください。' : ''}`}
         confirmLabel="テーブルをクリアする / Clear table"
-        requireReason
         onConfirm={handleClearTable}
       />
       {seatTimeOpen && selected && table.order && setSeatTimeAction && (
