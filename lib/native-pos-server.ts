@@ -164,7 +164,7 @@ export async function loadNativePos(ctx: SessionContext, orderId: string): Promi
       supabase
         .from('menu_item_option_groups')
         .select(
-          'menu_item_id, sort_order, menu_option_groups!inner(id, name, is_required, min_select, max_select, status, menu_option_items(id, name, name_en, price, sort_order, status))'
+          'menu_item_id, sort_order, menu_option_groups!inner(id, name, is_required, min_select, max_select, sort_order, status, menu_option_items(id, name, name_en, price, sort_order, status))'
         )
         .eq('store_id', storeId)
         .eq('menu_option_groups.status', 'active')

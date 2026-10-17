@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Trash2, Loader2, Link2 } from 'lucide-react';
+import { Plus, Trash2, Loader2, Link2, ArrowUp, ArrowDown } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input, Label } from '@/components/ui/input';
@@ -19,6 +19,7 @@ import {
   deleteOptionItem,
   setGroupMenuItems,
   convertOptionProductsToGroups,
+  moveOptionGroup,
 } from '@/app/app/settings/options/actions';
 
 export interface OptionGroupRow {
@@ -126,7 +127,7 @@ export function OptionGroupsPanel({
       {groups.length === 0 ? (
         <EmptyState title="選択肢グループがありません" description="上の入力欄からグループを追加してください" />
       ) : (
-        groups.map((g) => (
+        groups.map((g, i) => (
           <GroupCard
             key={g.id}
             storeId={storeId}
@@ -135,6 +136,8 @@ export function OptionGroupsPanel({
             pending={pending}
             run={run}
             onOpenLink={() => setLinkTarget(g)}
+            isFirst={i === 0}
+            isLast={i === groups.length - 1}
           />
         ))
       )}
@@ -159,6 +162,8 @@ function GroupCard({
   pending,
   run,
   onOpenLink,
+  isFirst,
+  isLast,
 }: {
   storeId: string;
   group: OptionGroupRow;
@@ -166,6 +171,9 @@ function GroupCard({
   pending: boolean;
   run: RunFn;
   onOpenLink: () => void;
+  /** 並び（上から出す順）。先頭・末尾では上へ／下へを押せない */
+  isFirst: boolean;
+  isLast: boolean;
 }) {
   const [name, setName] = useState(group.name);
   const [isRequired, setIsRequired] = useState(group.isRequired);
@@ -234,6 +242,27 @@ function GroupCard({
           <Button size="sm" variant="secondary" onClick={onOpenLink} disabled={pending}>
             <Link2 className="h-4 w-4" />
             対象商品（{group.menuItemIds.length}）
+          </Button>
+          {/* レジ・ハンディのダイアログで上から出す順（2026-10-17 MEAT CROWN「ナン/ライス → カレー → 辛さ → 飲み物」） */}
+          <Button
+            size="sm"
+            variant="secondary"
+            aria-label={`${group.name}を上へ`}
+            onClick={() => run(() => moveOptionGroup({ id: group.id, storeId, direction: 'up' }), '並びを変えました')}
+            disabled={pending || isFirst}
+          >
+            <ArrowUp className="h-4 w-4" />
+            上へ
+          </Button>
+          <Button
+            size="sm"
+            variant="secondary"
+            aria-label={`${group.name}を下へ`}
+            onClick={() => run(() => moveOptionGroup({ id: group.id, storeId, direction: 'down' }), '並びを変えました')}
+            disabled={pending || isLast}
+          >
+            <ArrowDown className="h-4 w-4" />
+            下へ
           </Button>
           <Button
             size="sm"

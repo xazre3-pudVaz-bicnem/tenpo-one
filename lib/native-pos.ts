@@ -1,4 +1,5 @@
 import { englishName } from '@/lib/romaji';
+import { sortOptionGroupLinks } from './option-group-order';
 /**
  * iPad アプリのネイティブ画面（オーダー・会計）とサーバーの決まりごと（2026-10-13 Ronnie「Airレジのように全部ネイティブ。
  * まずネットがある時に Airレジと同じように」）。
@@ -153,8 +154,14 @@ export type NativePosAction =
  */
 export function optionGroupsFrom(links: unknown[]): Record<string, NativePosOptionGroup[]> {
   const out: Record<string, NativePosOptionGroup[]> = {};
-  const sorted = [...links].sort(
-    (a, b) => Number((a as { sort_order?: number }).sort_order ?? 0) - Number((b as { sort_order?: number }).sort_order ?? 0)
+  // グループの並び（設定画面の上へ・下へ）→ 紐付けの順
+  const sorted = sortOptionGroupLinks(
+    links,
+    (l) => {
+      const g = (l as { menu_option_groups?: unknown }).menu_option_groups;
+      return (Array.isArray(g) ? g[0] : g) as { sort_order?: number | null } | null;
+    },
+    (l) => (l as { sort_order?: number }).sort_order
   );
   for (const raw of sorted) {
     const link = raw as { menu_item_id?: unknown; menu_option_groups?: unknown };
