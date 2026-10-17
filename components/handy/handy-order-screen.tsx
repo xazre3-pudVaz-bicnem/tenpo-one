@@ -83,6 +83,12 @@ export function HandyOrderScreen({
   const [optionTarget, setOptionTarget] = useState<HandyMenuItemView | null>(null);
   /** 「その他（価格入力）」を押したカテゴリ */
   const [customTarget, setCustomTarget] = useState<{ categoryId: string; label: string } | null>(null);
+  /**
+   * 金額を打つ商品（¥0 の単品＝延長・キャンセル料・時価など。レジの「金額入力」と同じ）を押したとき。
+   * 2026-10-18 Ronnie「延長は open price。スタッフがそのとき金額を打つ」。飲み放題の中身（¥0 の F. …）は
+   * コース・飲み放題タブにあるので出ない
+   */
+  const [openPriceTarget, setOpenPriceTarget] = useState<HandyMenuItemView | null>(null);
   /** 「その他」の行を入れるたびに別の行にするための番号 */
   const customSeq = useRef(0);
   const [cart, setCart] = useState<HandyCartLine[]>([]);
@@ -107,7 +113,12 @@ export function HandyOrderScreen({
   const total = cartTotal(pricedCart);
   const seatLabel = `${tableName} · ${guestCount}名`;
 
-  const pushToCart = (item: HandyMenuItemView, optionItemIds: string[], optionLabel: string) => {
+  const pushToCart = (
+    item: HandyMenuItemView,
+    optionItemIds: string[],
+    optionLabel: string,
+    openPrice: number | null = null
+  ) => {
     const extra = (optionGroupsByItem[item.id] ?? [])
       .flatMap((g) => g.items)
       .filter((o) => optionItemIds.includes(o.id))
@@ -119,23 +130,39 @@ export function HandyOrderScreen({
           menuItemId: item.id,
           name: item.name,
           nameEn: item.nameEn,
-          unitPrice: item.price + extra,
+          unitPrice: (openPrice ?? item.price) + extra,
           optionItemIds,
           optionLabel,
+          ...(openPrice != null ? { openPrice } : {}),
         },
         1
       )
     );
   };
 
+  /** 金額を打つ商品か（¥0 の単品。コース・飲み放題タブの ¥0＝プランの中身、サービスタブの ¥0 は打たない） */
+  const isOpenPriceItem = (item: HandyMenuItemView) => tab?.id === 'alacarte' && Number(item.price) === 0;
+
   const handleItemTap = (item: HandyMenuItemView) => {
     if (item.isSoldOut || item.offHours) return;
+    if (isOpenPriceItem(item)) {
+      setOpenPriceTarget(item);
+      return;
+    }
     const optionGroups = optionGroupsByItem[item.id];
     if (optionGroups && optionGroups.length > 0) {
       setOptionTarget(item);
       return;
     }
     pushToCart(item, [], '');
+  };
+
+  /** 金額を打ったとき（¥0 の商品）。金額が違えば別の行 */
+  const handleOpenPriceConfirm = (amount: number) => {
+    const item = openPriceTarget;
+    if (!item) return;
+    pushToCart(item, [], '', amount);
+    setOpenPriceTarget(null);
   };
 
   const handleOptionConfirm = (optionItemIds: string[]) => {
@@ -183,6 +210,7 @@ export function HandyOrderScreen({
       quantity: l.quantity,
       name: l.name,
       ...(l.custom ? { custom: l.custom } : {}),
+      ...(l.openPrice != null ? { openPrice: l.openPrice } : {}),
     }));
     startTransition(async () => {
       try {
@@ -193,7 +221,7 @@ export function HandyOrderScreen({
             const byKey = new Map(prev.map((l) => [l.key, l]));
             return result.remaining
               .map((r) => {
-                const base = byKey.get(cartLineKey(r.menuItemId, r.optionItemIds));
+                const base = byKey.get(cartLineKey(r.menuItemId, r.optionItemIds, r.openPrice));
                 return base ? { ...base, quantity: r.quantity } : null;
               })
               .filter((l): l is HandyCartLine => !!l);
@@ -544,6 +572,15 @@ export function HandyOrderScreen({
           <span className="tabular-nums">{yen(total)}</span>
         </button>
       </div>
+
+      {openPriceTarget && (
+        <OpenPriceDialog
+          itemName={openPriceTarget.nameEn ?? openPriceTarget.name}
+          initial={null}
+          onClose={() => setOpenPriceTarget(null)}
+          onConfirm={(amount) => handleOpenPriceConfirm(amount)}
+        />
+      )}
 
       {customTarget && (
         <OpenPriceDialog

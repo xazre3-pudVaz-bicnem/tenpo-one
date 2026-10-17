@@ -14,6 +14,9 @@ import { setOrderClerk } from '../pos/clerk-actions';
 import { goToOrder, startWalkIn } from '../floor/actions';
 import { MAX_LINE_QUANTITY } from '@/components/handy/logic';
 
+/** ハンディで打てる金額の上限（レジの金額入力と同じ。app/app/pos/actions.ts） */
+const OPEN_PRICE_MAX = 9_999_999;
+
 /* ------------------------------------------------------------ 担当者 */
 
 /** 担当者 Cookie の寿命。端末の登録（30日）より短くし、日をまたいだら選び直させる */
@@ -258,6 +261,8 @@ export interface HandyOrderLineInput {
    * 金額・内容はここから入れる（addCustomPriceItem）
    */
   custom?: { categoryId: string | null; price: number; memo: string | null };
+  /** ハンディで打った金額（¥0 の商品＝延長・キャンセル料など。レジの「金額入力」と同じ。addItem が ¥0 の商品にだけ受ける） */
+  openPrice?: number | null;
 }
 
 export interface HandySubmitResult {
@@ -291,6 +296,9 @@ export async function submitHandyOrder(
   for (const line of lines) {
     if (!Number.isInteger(line.quantity) || line.quantity < 1 || line.quantity > MAX_LINE_QUANTITY) {
       throw new Error(`数量は1〜${MAX_LINE_QUANTITY}で指定してください`);
+    }
+    if (line.openPrice != null && (!Number.isInteger(line.openPrice) || line.openPrice < 0 || line.openPrice > OPEN_PRICE_MAX)) {
+      throw new Error(`金額は0〜${OPEN_PRICE_MAX.toLocaleString('ja-JP')}円の整数で入力してください`);
     }
   }
 
@@ -330,7 +338,7 @@ export async function submitHandyOrder(
             quantity: line.quantity,
             memo: line.custom.memo,
           })
-        : await addItem(orderId, line.menuItemId, line.optionItemIds, line.quantity);
+        : await addItem(orderId, line.menuItemId, line.optionItemIds, line.quantity, line.openPrice ?? null);
       if (id) addedIds.push(id);
       sentQuantity += line.quantity;
     } catch (e) {

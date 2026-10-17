@@ -283,11 +283,17 @@ export interface HandyCartLine {
   optionLabel: string;
   /** 「その他（価格入力）」の行（menuItemId はカートの仮の ID。lib/custom-price） */
   custom?: { categoryId: string | null; price: number; memo: string | null };
+  /**
+   * ハンディで打った金額（¥0 の商品＝延長・キャンセル料・時価など。レジの「金額入力」と同じ）。
+   * 入っていれば unitPrice はこの金額（lib/cart-reprice.ts）。サーバー（addItem）は ¥0 の商品にだけ受ける
+   */
+  openPrice?: number | null;
 }
 
-/** 商品＋選択肢の組み合わせで一意になるキー（選択肢の並び順に依存しない） */
-export function cartLineKey(menuItemId: string, optionItemIds: string[]): string {
-  return [menuItemId, ...[...optionItemIds].sort()].join('|');
+/** 商品＋選択肢（＋打った金額）の組み合わせで一意になるキー（選択肢の並び順に依存しない）。金額が違えば別の行 */
+export function cartLineKey(menuItemId: string, optionItemIds: string[], openPrice?: number | null): string {
+  const key = [menuItemId, ...[...optionItemIds].sort()].join('|');
+  return openPrice != null ? `${key}|¥${openPrice}` : key;
 }
 
 export function cartCount(lines: HandyCartLine[]): number {
@@ -310,7 +316,7 @@ export function addCartLine(
   line: Omit<HandyCartLine, 'key' | 'quantity'>,
   quantity: number
 ): HandyCartLine[] {
-  const key = cartLineKey(line.menuItemId, line.optionItemIds);
+  const key = cartLineKey(line.menuItemId, line.optionItemIds, line.openPrice);
   const index = lines.findIndex((l) => l.key === key);
   if (index < 0) {
     return [...lines, { ...line, key, quantity: Math.min(quantity, MAX_LINE_QUANTITY) }];
