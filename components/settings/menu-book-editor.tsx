@@ -640,7 +640,7 @@ function LunchTab({ storeId, lunch }: { storeId: string; lunch: MenuBookLunch })
   return (
     <div className="max-w-md">
       <p className="mb-3 text-xs text-gray-500">
-        「ランチの時間だけ」のカテゴリ（TODAY&apos;S LUNCH・Spice Lunch・(L) … など）を、ハンディ・お客様QRに出す時間帯です。
+        「ランチの時間だけ」のカテゴリ（TODAY&apos;S LUNCH・Spice Lunch・(L) … など）を、お客様QRに出す時間帯です（ハンディ・レジにはいつも出ます）。
       </p>
       <div className="grid grid-cols-2 gap-3">
         <div>

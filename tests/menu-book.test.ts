@@ -290,15 +290,19 @@ describe('メニューブック：絞り込み', () => {
     });
   });
 
-  it('ランチのカテゴリはランチの時間帯だけ', () => {
-    const lunch = filterMenuBook(categories, items, emptyMenuBook(), ctx({ nowHm: '12:30' }));
+  it('ランチのカテゴリはお客様QRではランチの時間帯だけ。ハンディにはいつも出す', () => {
+    const lunch = filterMenuBook(categories, items, emptyMenuBook(), ctx({ channel: 'qr', nowHm: '12:30' }));
     expect(names(lunch.categories)).toEqual(expect.arrayContaining(["TODAY'S LUNCH", '(L) Ahijo or Niku']));
-    const dinner = filterMenuBook(categories, items, emptyMenuBook(), ctx({ nowHm: '19:00' }));
+    const dinner = filterMenuBook(categories, items, emptyMenuBook(), ctx({ channel: 'qr', nowHm: '19:00' }));
     expect(names(dinner.categories)).not.toContain("TODAY'S LUNCH");
     const book: MenuBookSettings = { ...emptyMenuBook(), lunch: { start: '11:30', end: '14:00' } };
-    expect(names(filterMenuBook(categories, items, book, ctx({ nowHm: '14:30' })).categories)).not.toContain(
-      "TODAY'S LUNCH"
-    );
+    expect(
+      names(filterMenuBook(categories, items, book, ctx({ channel: 'qr', nowHm: '14:30' })).categories)
+    ).not.toContain("TODAY'S LUNCH");
+    // ハンディ（スタッフ）は時間外でもランチを打てる（2026-10-17 MEAT CROWN）
+    expect(
+      names(filterMenuBook(categories, items, book, ctx({ channel: 'handy', nowHm: '19:00' })).categories)
+    ).toContain("TODAY'S LUNCH");
   });
 
   it('「ハンディだけ」はハンディに出してお客様QRには出さない。「出さない」はどちらにも出さない', () => {

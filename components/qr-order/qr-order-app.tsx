@@ -52,6 +52,8 @@ const REFRESH_INTERVAL_MS = 10000;
  * そのプランの中身（F）がメニューに出るようになるため、画面に戻ったとき・メニューを開き直したときに取り直す。
  */
 const MENU_REFRESH_MIN_MS = 30000;
+/** 開きっぱなしのお客様QRでメニューを取り直す間隔（カテゴリ・値段の変更、ランチの終わりを反映する） */
+const MENU_REFRESH_INTERVAL_MS = 60000;
 const NOTICE_MS = 3200;
 
 type Tab = 'menu' | 'cart' | 'history' | 'call';
@@ -174,7 +176,14 @@ export function QrOrderApp({
       if (document.visibilityState === 'visible') refreshMenu();
     };
     document.addEventListener('visibilitychange', onVisible);
-    return () => document.removeEventListener('visibilitychange', onVisible);
+    // 開きっぱなしでも、メニューの変更やランチの終わり（時間でお客様QRから消える）を追いかける
+    const id = setInterval(() => {
+      if (document.visibilityState === 'visible') refreshMenu();
+    }, MENU_REFRESH_INTERVAL_MS);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      clearInterval(id);
+    };
   }, [refreshMenu]);
 
   useEffect(() => {
