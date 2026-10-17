@@ -554,7 +554,7 @@ describe('セットのドリンクは別の紙（2026-10-17 Ronnie「ランチ�
     expect(out[0].modifiers?.map((m) => m.name)).toEqual(['ナン', 'ミディアム']);
     expect(out[1]).toMatchObject({ item_name: 'ラッシー', item_name_en: 'Lassi', station: 'drink', slip: 'drink', delta: 1, modifiers: [] });
     // ドリンクの商品・コースの料理・ドリンクの選択肢が無い行はそのまま
-    expect(splitSetDrinkRows([{ ...base, station: 'drink' }], drinks)).toHaveLength(1);
+    expect(splitSetDrinkRows([{ ...base, station: 'drink' }], drinks)).toMatchObject([{ slip: 'drink' }]);
     expect(splitSetDrinkRows([{ ...base, modifiers: [{ name: 'ナン' }] }], drinks)).toHaveLength(1);
     expect(splitSetDrinkRows([base], new Map())).toHaveLength(1);
   });
@@ -571,6 +571,26 @@ describe('セットのドリンクは別の紙（2026-10-17 Ronnie「ランチ�
     }
     const [c] = groupKitchenTickets(splitSetDrinkRows([{ ...base, delta: -1 }], drinks));
     expect(ticketSlips(c, 'order').map((s) => s.lines[0].delta)).toEqual([-1, -1]);
+  });
+
+  it('1台のプリンターでフードとドリンクを一緒に出すときは、ドリンクの商品を別の紙に切る', () => {
+    const beer: ClaimedKitchenItem = { ...base, order_item_id: 'oi2', item_name: 'キングフィッシャー', item_name_en: 'Kingfisher', modifiers: [], station: 'drink' };
+    // カテゴリの持ち場がキッチンのままでも、商品の種別がドリンクならドリンクの紙
+    const highball: ClaimedKitchenItem = { ...base, order_item_id: 'oi3', item_name: 'ハイボール', item_name_en: 'Highball', modifiers: [], station: 'kitchen' };
+    const rows = splitSetDrinkRows([base, beer, highball], drinks, new Set(['oi3']));
+    expect(rows.filter((r) => r.slip === 'drink').map((r) => r.item_name)).toEqual(['ラッシー', 'キングフィッシャー', 'ハイボール']);
+    const [t] = groupKitchenTickets(rows);
+    const slips = ticketSlips(t, 'order');
+    expect(slips).toHaveLength(2);
+    expect(slips[0].lines.map((l) => l.nameEn)).toEqual(["Today's Curry Set"]);
+    expect(slips[1].drinkSlip).toBe(true);
+    expect(slips[1].lines.map((l) => l.nameEn)).toEqual(['Lassi', 'Kingfisher', 'Highball']);
+    // ドリンクだけの注文は1枚（DRINK）
+    const [d] = groupKitchenTickets(splitSetDrinkRows([beer], new Map()));
+    expect(ticketSlips(d, 'order')).toHaveLength(1);
+    expect(ticketSlips(d, 'order')[0].drinkSlip).toBe(true);
+    // コースの料理はドリンクの紙にしない
+    expect(splitSetDrinkRows([{ ...beer, course_step: { index: 1, total: 3, course: 'Course' } }], new Map())[0].slip).toBeUndefined();
   });
 
   it('ドリンクが無い注文は今まで通り1枚', () => {

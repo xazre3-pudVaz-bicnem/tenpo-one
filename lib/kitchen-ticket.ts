@@ -339,20 +339,33 @@ export function isDrinkOptionGroupName(name: string | null | undefined): boolean
 }
 
 /**
- * 料理の行の選択肢のうち、セットのドリンク（ランチドリンクなど）を別の行にする（slip='drink'＝別の紙に切って出す）。
- * 2026-10-17 Ronnie「ランチは同じテーブルでもランチドリンクだけ別に切って出す」。
+ * ドリンクを料理と別の紙にする行に分ける（slip='drink'＝別の紙に切って出す）。2026-10-17 Ronnie。
+ *   - ドリンクの商品（station=drink、または drinkOrderItems＝商品の種別がドリンクの明細）は、行ごとドリンクの紙へ
+ *     「1台のキッチンプリンターでフードとドリンクを一緒に出すときは、ドリンクとフードを別の紙に切る」
+ *   - 料理の行の選択肢のうちセットのドリンク（ランチドリンクなど）は、別の行にしてドリンクの紙へ
+ *     「ランチのドリンクの選択肢も、ランチの料理と一緒に出さず切って出す」
  * drinkOptionsByOrderItem は 明細の id → その商品のドリンクの選択肢の名前（日本語名）。
- * ドリンクの商品そのもの（station=drink）・コースの料理・選択肢の無い行はそのまま。
+ * コースの料理はそのまま（料理の紙）。
  */
 export function splitSetDrinkRows(
   rows: readonly ClaimedKitchenItem[],
-  drinkOptionsByOrderItem: ReadonlyMap<string, ReadonlySet<string>>
+  drinkOptionsByOrderItem: ReadonlyMap<string, ReadonlySet<string>>,
+  drinkOrderItems: ReadonlySet<string> = new Set()
 ): ClaimedKitchenItem[] {
   const out: ClaimedKitchenItem[] = [];
   for (const r of rows) {
+    if (r.slip === 'drink') {
+      out.push(r);
+      continue;
+    }
+    // ドリンクの商品そのもの
+    if (!r.course_step && (r.station === 'drink' || (r.order_item_id && drinkOrderItems.has(r.order_item_id)))) {
+      out.push({ ...r, slip: 'drink' });
+      continue;
+    }
     const names = r.order_item_id ? drinkOptionsByOrderItem.get(r.order_item_id) : undefined;
     const mods = r.modifiers ?? [];
-    if (!names || names.size === 0 || mods.length === 0 || r.course_step || r.station === 'drink' || r.slip === 'drink') {
+    if (!names || names.size === 0 || mods.length === 0 || r.course_step) {
       out.push(r);
       continue;
     }
