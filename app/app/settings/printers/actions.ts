@@ -6,6 +6,7 @@ import { requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import type { PrintResultStatus } from '@/lib/printing/types';
 import {
+  isKitchenTicketSplit,
   isKitchenTicketTextSize,
   type KitchenTicketSettings,
 } from '@/lib/kitchen-ticket';
@@ -383,7 +384,7 @@ export async function saveKitchenTicketSettings(storeId: string, next: KitchenTi
   if (ctx.isRegisterDevice) return { error: ADMIN_ONLY_SETTINGS_NOTE };
   const err = assertStoreAccess(ctx.stores.map((s) => s.id), storeId);
   if (err) return { error: err };
-  if (next.split !== 'item' && next.split !== 'order') return { error: '伝票の分け方が正しくありません' };
+  if (!isKitchenTicketSplit(next.split)) return { error: '伝票の分け方が正しくありません' };
   if (next.textSize !== undefined && !isKitchenTicketTextSize(next.textSize)) return { error: '文字の大きさが正しくありません' };
   if (next.language !== 'both' && next.language !== 'en') return { error: '商品名の言語が正しくありません' };
 

@@ -9,6 +9,7 @@ import { useToast } from '@/components/ui/toast';
 import {
   KITCHEN_TICKET_LANGUAGE_LABELS,
   KITCHEN_TICKET_SPLIT_LABELS,
+  KITCHEN_TICKET_SPLITS,
   KITCHEN_TICKET_TEXT_SIZE_LABELS,
   KITCHEN_TICKET_TEXT_SIZES,
   type KitchenTicketLanguage,
@@ -20,6 +21,8 @@ import { saveKitchenTicketSettings } from '@/app/app/settings/printers/actions';
 
 const SPLIT_DESCRIPTIONS: Record<KitchenTicketSplit, string> = {
   item: '唐揚げ×2・ポテト×1 を注文 → 「唐揚げ x2」「ポテト x1」の2枚。同じ商品はまとめて1枚（x2）。',
+  station:
+    '唐揚げ・ポテト・ビール を注文 → 「キッチン：唐揚げ・ポテト」「ドリンク：ビール」の2枚。1台のプリンターでキッチンとドリンクを両方出す店向け。',
   order: '1回の注文の商品を1枚にまとめて出します（これまでの出し方）。',
 };
 
@@ -121,7 +124,7 @@ export function KitchenTicketPanel({
 
         <div className="space-y-2" role="radiogroup" aria-label="厨房伝票の分け方">
           <p className="text-xs font-semibold text-gray-600">分け方</p>
-          {(['item', 'order'] as const).map((value) => (
+          {KITCHEN_TICKET_SPLITS.map((value) => (
             <RadioCard
               key={value}
               name="kitchen-ticket-split"
