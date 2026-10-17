@@ -278,6 +278,20 @@ describe('カート', () => {
     expect(lines[0].quantity).toBe(3);
   });
 
+  it('金額を打った商品（¥0 の延長など）は、金額が違えば別の行・同じなら数量を足す（2026-10-18 SHUNKA）', () => {
+    const encho = { ...base, menuItemId: 'encho', name: '延長', unitPrice: 500, openPrice: 500 };
+    let lines = addCartLine([], encho, 1);
+    lines = addCartLine(lines, { ...encho, unitPrice: 1000, openPrice: 1000 }, 1);
+    lines = addCartLine(lines, encho, 1);
+    expect(lines).toHaveLength(2);
+    expect(lines.map((l) => [l.openPrice, l.quantity])).toEqual([
+      [500, 2],
+      [1000, 1],
+    ]);
+    expect(cartLineKey('encho', [], 500)).not.toBe(cartLineKey('encho', [], 1000));
+    expect(cartLineKey('encho', [], null)).toBe(cartLineKey('encho', []));
+  });
+
   it('選択肢が違えば別の行になる', () => {
     let lines = addCartLine([], base, 1);
     lines = addCartLine(lines, { ...base, optionItemIds: ['o1'], unitPrice: 1330 }, 1);
