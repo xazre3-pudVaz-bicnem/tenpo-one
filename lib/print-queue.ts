@@ -16,9 +16,11 @@ import {
   layoutKitchenTicket,
   STATION_LABELS,
   STATION_LABELS_EN,
+  slipStation,
   ticketSlips,
   type ClaimedKitchenItem,
   type KitchenStation,
+  type KitchenTicket,
   type KitchenTicketSettings,
 } from '@/lib/kitchen-ticket';
 import { courseStepsFrom, expandCourseRows, type CourseDish, type CourseSteps } from '@/lib/course-steps';
@@ -286,11 +288,17 @@ export async function generateKitchenJobs(admin: Admin, printer: PrinterRow, opt
   });
   const paperWidth = printer.paper_width_mm === 58 ? 58 : 80;
 
+  // 「持ち場ごとに1枚」で紙が1つの持ち場だけなら、見出しもその持ち場にする（「ドリンク 伝票 / DRINK」）
+  const titlesFor = (slip: KitchenTicket): { title: string; titleEn: string } => {
+    const st = split === 'station' ? slipStation(slip) : null;
+    if (!st || stations.length < 2) return { title, titleEn };
+    return { title: `${STATION_LABELS[st]} 伝票`, titleEn: STATION_LABELS_EN[st] };
+  };
   const rows = tickets.map((t) => {
     const slips = ticketSlips(t, split);
     // Star 機向け: 全角がわずかに広い分を見込んで桁揃え（STAR_WIDTH_OPTIONS）
     const starSlips = slips.map((slip) => {
-      const head = slip.drinkSlip ? { title: drinkTitle, titleEn: drinkTitleEn } : { title, titleEn };
+      const head = slip.drinkSlip ? { title: drinkTitle, titleEn: drinkTitleEn } : titlesFor(slip);
       const lines = layoutKitchenTicket(slip, { ...head, printedAt, paperWidth, textSize, language, ...STAR_WIDTH_OPTIONS });
       // プリンターを上下さかさまに付けている店舗は、印字を180度回して出す
       return printer.upside_down ? rotateLines180(lines, colsFor(paperWidth)) : lines;
@@ -298,7 +306,7 @@ export async function generateKitchenJobs(admin: Admin, printer: PrinterRow, opt
     // EPSON機は1行の桁数が少ないため、専用の桁数で組み直す（Star用の行をそのまま渡すと折り返す）
     const eposSlips = slips.map((slip) => {
       const cols = eposCols(paperWidth);
-      const head = slip.drinkSlip ? { title: drinkTitle, titleEn: drinkTitleEn } : { title, titleEn };
+      const head = slip.drinkSlip ? { title: drinkTitle, titleEn: drinkTitleEn } : titlesFor(slip);
       const lines = layoutKitchenTicket(slip, { ...head, printedAt, columns: cols, textSize, language });
       return printer.upside_down ? rotateLines180(lines, cols) : lines;
     });

@@ -30,19 +30,30 @@ export const STATION_LABELS_EN: Record<KitchenStation, string> = {
  *   order … 1回の注文を1枚にまとめる（これまでの動き）
  * どちらも1回の注文は1つの印刷ジョブで出し、1枚ごとに紙を切る（ポーリング1回で全部出る・順番が崩れない）。
  */
-export type KitchenTicketSplit = 'item' | 'order';
+export type KitchenTicketSplit = 'item' | 'order' | 'station';
 
 export const DEFAULT_KITCHEN_TICKET_SPLIT: KitchenTicketSplit = 'item';
 
+export const KITCHEN_TICKET_SPLITS: readonly KitchenTicketSplit[] = ['item', 'station', 'order'];
+
 export const KITCHEN_TICKET_SPLIT_LABELS: Record<KitchenTicketSplit, string> = {
   item: '商品の種類ごとに1枚ずつ',
+  /**
+   * 1台のプリンターがキッチンとドリンクの両方を出す店で、フードとドリンクを別の紙にする
+   * （2026-10-17 MEAT CROWN 新横浜 Ronnie「food ra drink ekai choti order huda cut huna paryo」）
+   */
+  station: '持ち場ごとに1枚（キッチン／ドリンク）',
   order: '1回の注文をまとめて1枚',
 };
+
+export function isKitchenTicketSplit(v: unknown): v is KitchenTicketSplit {
+  return v === 'item' || v === 'order' || v === 'station';
+}
 
 /** store_settings.settings から分け方を読む。未設定・不明な値は既定（種類ごと） */
 export function kitchenTicketSplitFrom(settings: unknown): KitchenTicketSplit {
   const v = (settings as { kitchenTicket?: { split?: unknown } } | null)?.kitchenTicket?.split;
-  return v === 'item' || v === 'order' ? v : DEFAULT_KITCHEN_TICKET_SPLIT;
+  return isKitchenTicketSplit(v) ? v : DEFAULT_KITCHEN_TICKET_SPLIT;
 }
 
 /**
@@ -225,6 +236,8 @@ export interface KitchenTicketLine {
   step?: CourseStepInfo | null;
   /** セットのドリンク（ランチドリンクなど）。料理とは別の紙に切って出す */
   drinkSlip?: boolean;
+  /** 持ち場（kitchen / drink / dessert / grill）。「持ち場ごとに1枚」で紙を分けるのに使う */
+  station?: string | null;
 }
 
 export interface KitchenTicket {
@@ -280,6 +293,7 @@ export function groupKitchenTickets(rows: ClaimedKitchenItem[]): KitchenTicket[]
       // 選択肢（セットのカレー・ナン/ご飯など）も英語優先。厨房が作るものそのものなので特に重要
       modifiers: (r.modifiers ?? []).map((m) => (m.name_en?.trim() || m.name)).filter(Boolean),
       memo: r.memo,
+      station: r.station ?? null,
       ...(r.course_step ? { step: r.course_step } : {}),
       ...(r.slip === 'drink' ? { drinkSlip: true } : {}),
     };
@@ -379,14 +393,46 @@ export function splitSetDrinkRows(
 }
 
 /**
+ * 1回の注文の伝票を持ち場（キッチン／ドリンク…）ごとの伝票に分ける。
+ * フードとドリンクを同時に注文しても、別の紙で出て切れる（同じ持ち場の商品は1枚にまとまる）。
+ * 追加と取消は別の紙。順番は注文に出てきた持ち場の順。
+ */
+export function splitTicketByStation(ticket: KitchenTicket): KitchenTicket[] {
+  const groups: KitchenTicketLine[][] = [];
+  const byKey = new Map<string, KitchenTicketLine[]>();
+  for (const line of ticket.lines) {
+    const key = `${line.delta > 0 ? '+' : '-'}\u0002${line.station ?? 'kitchen'}`;
+    let g = byKey.get(key);
+    if (!g) {
+      g = [];
+      byKey.set(key, g);
+      groups.push(g);
+    }
+    g.push(line);
+  }
+  const total = groups.length;
+  return groups.map((lines, i) => ({ ...ticket, lines, part: total > 1 ? { index: i + 1, total } : null }));
+}
+
+/** 伝票の行が全部同じ持ち場なら、その持ち場（見出しを「ドリンク 伝票」のように絞るため）。混ざっていれば null */
+export function slipStation(slip: KitchenTicket): KitchenStation | null {
+  const set = new Set(slip.lines.map((l) => l.station ?? 'kitchen'));
+  if (set.size !== 1) return null;
+  const s = [...set][0];
+  return s in STATION_LABELS ? (s as KitchenStation) : null;
+}
+
+/**
  * 店舗設定の分け方に従って、1回の注文を何枚の伝票にするかを決める。
- * セットのドリンク（ランチドリンクなど）は、同じ卓・同じ注文でも料理とは別の紙に切って出す
- * （2026-10-17 Ronnie「ランチは同じテーブルでもランチドリンクだけ別に切って出す」）。
+ * - 持ち場ごとに1枚：フードとドリンクを同時に注文しても別の紙（セットのドリンクは station=drink なのでドリンクの紙）
+ * - 1注文1枚：セットのドリンク（ランチドリンクなど）だけは料理とは別の紙に切って出す
+ *   （2026-10-17 Ronnie「ランチは同じテーブルでもランチドリンクだけ別に切って出す」）
  */
 export function ticketSlips(ticket: KitchenTicket, split: KitchenTicketSplit): KitchenTicket[] {
   const markDrink = (t: KitchenTicket): KitchenTicket =>
     t.lines.length > 0 && t.lines.every((l) => l.drinkSlip) ? { ...t, drinkSlip: true } : t;
   if (split === 'item') return splitTicketByItem(ticket).map(markDrink);
+  if (split === 'station') return splitTicketByStation(ticket).map(markDrink);
   const drinks = ticket.lines.filter((l) => l.drinkSlip);
   if (drinks.length === 0) return [ticket];
   const food = ticket.lines.filter((l) => !l.drinkSlip);
