@@ -9,7 +9,9 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 import {
   groupKitchenTickets,
+  isDrinkOptionGroupName,
   kitchenTicketSettingsFrom,
+  splitSetDrinkRows,
   rotateLines180,
   layoutKitchenTicket,
   STATION_LABELS,
@@ -186,6 +188,68 @@ async function expandCourseItems(admin: Admin, rows: ClaimedKitchenItem[], steps
 }
 
 /**
+ * セットのドリンク（ランチドリンクなど、名前に「ドリンク」が入る選択肢グループ）を、料理と別の紙にする行に分ける
+ * （2026-10-17 Ronnie「ランチは同じテーブルでもランチドリンクだけ別に切って出す」）。
+ * 調べられなくても伝票は止めず、これまでどおり選択肢として料理の紙に出す。
+ */
+async function splitSetDrinks(admin: Admin, rows: ClaimedKitchenItem[]): Promise<ClaimedKitchenItem[]> {
+  const ids = [
+    ...new Set(
+      rows
+        .filter((r) => r.order_item_id && !r.course_step && r.station !== 'drink' && (r.modifiers?.length ?? 0) > 0)
+        .map((r) => r.order_item_id as string)
+    ),
+  ];
+  if (ids.length === 0) return rows;
+  const { data: oi, error: oiErr } = await admin.from('order_items').select('id, menu_item_id').in('id', ids);
+  if (oiErr) {
+    console.error('[print-queue] set drinks: order_items read failed', oiErr.message);
+    return rows;
+  }
+  const menuByOrderItem = new Map<string, string>();
+  for (const x of oi ?? []) if (x.menu_item_id) menuByOrderItem.set(x.id as string, x.menu_item_id as string);
+  const menuIds = [...new Set(menuByOrderItem.values())];
+  if (menuIds.length === 0) return rows;
+  const { data: links, error: lErr } = await admin
+    .from('menu_item_option_groups')
+    .select('menu_item_id, group_id')
+    .in('menu_item_id', menuIds);
+  if (lErr || !links || links.length === 0) return rows;
+  const { data: groups, error: gErr } = await admin
+    .from('menu_option_groups')
+    .select('id, name')
+    .in('id', [...new Set(links.map((l) => l.group_id as string))]);
+  if (gErr) return rows;
+  const drinkGroups = new Set((groups ?? []).filter((g) => isDrinkOptionGroupName(g.name as string)).map((g) => g.id as string));
+  if (drinkGroups.size === 0) return rows;
+  const { data: options, error: oErr } = await admin
+    .from('menu_option_items')
+    .select('group_id, name')
+    .in('group_id', [...drinkGroups]);
+  if (oErr) return rows;
+  const namesByGroup = new Map<string, Set<string>>();
+  for (const o of options ?? []) {
+    const g = o.group_id as string;
+    if (!namesByGroup.has(g)) namesByGroup.set(g, new Set());
+    namesByGroup.get(g)!.add(o.name as string);
+  }
+  const namesByMenu = new Map<string, Set<string>>();
+  for (const l of links) {
+    const names = namesByGroup.get(l.group_id as string);
+    if (!names) continue;
+    const m = l.menu_item_id as string;
+    if (!namesByMenu.has(m)) namesByMenu.set(m, new Set());
+    for (const n of names) namesByMenu.get(m)!.add(n);
+  }
+  const byOrderItem = new Map<string, Set<string>>();
+  for (const [orderItemId, menuId] of menuByOrderItem) {
+    const names = namesByMenu.get(menuId);
+    if (names) byOrderItem.set(orderItemId, names);
+  }
+  return splitSetDrinkRows(rows, byOrderItem);
+}
+
+/**
  * キッチン機のポーリング時に、担当ステーションの注文差分を確定して伝票ジョブにする。
  * 端末（iPad等）が起動していなくても、QR注文の伝票がプリンタから出る。
  * 店舗設定が「商品の種類ごと」なら1商品1枚に分け、1回の注文ぶんを1つのジョブ（1枚ごとにカット）にする。
@@ -204,13 +268,17 @@ export async function generateKitchenJobs(admin: Admin, printer: PrinterRow, opt
   if (claimed.length === 0) return;
   const { split, textSize, language, buzzer, courseSteps } = await kitchenTicketSettingsForStore(admin, printer.store_id);
   // コースの注文は、その店で決めた料理の順（1st, 2nd…）に置き換えて伝票にする
-  const tickets = groupKitchenTickets(await expandCourseItems(admin, claimed, courseSteps));
+  // セットのドリンク（ランチドリンクなど）は料理と別の紙にする
+  const tickets = groupKitchenTickets(await splitSetDrinks(admin, await expandCourseItems(admin, claimed, courseSteps)));
   if (tickets.length === 0) return;
 
   const stations = (printer.kitchen_stations ?? ['kitchen']) as KitchenStation[];
   const title = `${stations.map((s) => STATION_LABELS[s] ?? s).join('・')} 伝票`;
   // 厨房伝票は英語を主にする（日本語を読まないスタッフが作るため）
   const titleEn = stations.map((s) => STATION_LABELS_EN[s] ?? String(s).toUpperCase()).join(' / ');
+  // セットのドリンクだけの紙の見出し
+  const drinkTitle = `${STATION_LABELS.drink} 伝票`;
+  const drinkTitleEn = STATION_LABELS_EN.drink;
   const printedAt = new Date().toLocaleTimeString('ja-JP', {
     timeZone: 'Asia/Tokyo',
     hour: '2-digit',
@@ -222,14 +290,16 @@ export async function generateKitchenJobs(admin: Admin, printer: PrinterRow, opt
     const slips = ticketSlips(t, split);
     // Star 機向け: 全角がわずかに広い分を見込んで桁揃え（STAR_WIDTH_OPTIONS）
     const starSlips = slips.map((slip) => {
-      const lines = layoutKitchenTicket(slip, { title, titleEn, printedAt, paperWidth, textSize, language, ...STAR_WIDTH_OPTIONS });
+      const head = slip.drinkSlip ? { title: drinkTitle, titleEn: drinkTitleEn } : { title, titleEn };
+      const lines = layoutKitchenTicket(slip, { ...head, printedAt, paperWidth, textSize, language, ...STAR_WIDTH_OPTIONS });
       // プリンターを上下さかさまに付けている店舗は、印字を180度回して出す
       return printer.upside_down ? rotateLines180(lines, colsFor(paperWidth)) : lines;
     });
     // EPSON機は1行の桁数が少ないため、専用の桁数で組み直す（Star用の行をそのまま渡すと折り返す）
     const eposSlips = slips.map((slip) => {
       const cols = eposCols(paperWidth);
-      const lines = layoutKitchenTicket(slip, { title, titleEn, printedAt, columns: cols, textSize, language });
+      const head = slip.drinkSlip ? { title: drinkTitle, titleEn: drinkTitleEn } : { title, titleEn };
+      const lines = layoutKitchenTicket(slip, { ...head, printedAt, columns: cols, textSize, language });
       return printer.upside_down ? rotateLines180(lines, cols) : lines;
     });
     return {

@@ -6,7 +6,7 @@ import iconv from 'iconv-lite';
  * （2026-10-13 Ronnie「レシートプリンター＋ドロアは iPad と Bluetooth。チケットプリンターは LAN・Wi-Fi」）。
  *
  * 使っている要素だけを変換する（lib/epos-print.ts の冒頭の一覧と同じ）:
- *   <text lang="ja"/> <text align/> <text width height/> <text em/> <text>文字</text> / <feed line/> / <cut/> / <pulse drawer/>
+ *   <text lang="ja"/> <text align/> <text width height/> <text em/> <text rotate/> <text>文字</text> / <feed line/> / <cut/> / <pulse drawer/>
  * 文字は Shift_JIS（漢字モード）。「¥」は EPSON の桁合わせ（全角幅）に合わせて全角の「￥」で出す。
  */
 
@@ -57,6 +57,8 @@ export function eposXmlToEscPos(xml: string): Buffer {
         push([GS, 0x21, ((w - 1) << 4) | (h - 1)]);
       }
       if (a.em) push([ESC, 0x45, a.em === 'true' ? 1 : 0]);
+      // 倒立印字（上下さかさまに付けたプリンター）。ESC { n
+      if (a.rotate) push([ESC, 0x7b, a.rotate === 'true' ? 1 : 0]);
       if (content !== undefined && content.length > 0) {
         const text = decodeEntities(content).replace(/¥/g, '￥').replace(/\r\n?/g, '\n');
         out.push(iconv.encode(text, 'Shift_JIS'));

@@ -13,7 +13,7 @@ import { billSlipLines, colsFor, twoCol as twoColBase, wrapText as wrapTextBase,
 /** Star 機の全角幅（半角2桁よりわずかに広い）を見込んだ桁揃え・折り返し */
 const twoCol = (left: string, right: string, width: number) => twoColBase(left, right, width, STAR_WIDTH_OPTIONS);
 const wrapText = (text: string, width: number) => wrapTextBase(text, width, STAR_WIDTH_OPTIONS);
-import type { KitchenTicketBuzzer, LayoutLine } from './kitchen-ticket';
+import { isUpsideDown, type KitchenTicketBuzzer, type LayoutLine } from './kitchen-ticket';
 import { splitLabel, type RyoshushoSlip } from './ryoshusho-split';
 
 /** Markup構文で意味を持つ文字を無害化（角括弧・バックスラッシュ）。 */
@@ -310,6 +310,9 @@ export function testPrintMarkup(opts: { storeName: string; paperWidth?: PaperWid
 /** 厨房伝票（Markup）。行の組み立ては lib/kitchen-ticket.ts と共有する。 */
 export function kitchenTicketMarkup(lines: LayoutLine[]): string {
   const L: string[] = ['[bold: on]'];
+  // 上下さかさまのプリンター：倒立印字（行の頭で指定・切るまで続ける。行の並びは rotateLines180 が逆にしてある）
+  const upsideDown = isUpsideDown(lines);
+  if (upsideDown) L.push('[invert: on]');
   let align = '';
   let size = '';
   for (const l of lines) {
@@ -331,6 +334,7 @@ export function kitchenTicketMarkup(lines: LayoutLine[]): string {
     L.push(esc(l.text));
   }
   if (size !== '[magnify: width 1; height 1]') L.push('[magnify: width 1; height 1]');
+  if (upsideDown) L.push('[invert: off]');
   L.push('[feed]');
   L.push('[cut: feed; partial]');
   return L.join('\n') + '\n';

@@ -12,8 +12,11 @@ import {
   kitchenTicketSplitFrom,
   kitchenTicketTextSizeFrom,
   layoutKitchenTicket,
+  isDrinkOptionGroupName,
+  isUpsideDown,
   misroutedDrinkCategories,
   rotateLines180,
+  splitSetDrinkRows,
   splitTicketByItem,
   ticketSlips,
   type ClaimedKitchenItem,
@@ -22,6 +25,8 @@ import {
 } from '@/lib/kitchen-ticket';
 import { kitchenTicketMarkup, kitchenTicketsMarkup } from '@/lib/receipt-markup';
 import { kitchenTicketStarPrnt, kitchenTicketsStarPrnt } from '@/lib/starprnt';
+import { kitchenTicketsEpos } from '@/lib/epos-print';
+import { eposXmlToEscPos } from '@/lib/escpos';
 
 const row = (over: Partial<ClaimedKitchenItem>): ClaimedKitchenItem => ({
   order_id: 'o1',
@@ -468,29 +473,109 @@ describe('厨房伝票の商品名の言語（2026-09-21 Ronnie「キッチン�
 });
 
 describe('上下さかさまのプリンター（180度回して出す）', () => {
-  it('行の並びを逆にして、1行の文字も逆順にする', () => {
-    const lines: LayoutLine[] = [
-      { text: 'T9', align: 'center', size: 'large' },
-      { text: 'Curry Naan Lunch  x1', align: 'left', size: 'normal' },
-    ];
-    const out = rotateLines180(lines);
-    expect(out.map((l) => l.text)).toEqual(['1x  hcnuL naaN yrruC', '9T']);
-    // 大きさと寄せ方はそのまま（左寄せは桁数を渡したときだけ右に寄せる）
-    expect(out[0].size).toBe('normal');
-    expect(out[1].align).toBe('center');
+  // 2026-10-17 直し：文字の並びを逆にするだけでは字の形が回らず読めない。プリンターの倒立印字で1行ずつ回す
+  const lines: LayoutLine[] = [
+    { text: 'KITCHEN', align: 'center', size: 'normal' },
+    { text: 'T-1', align: 'center', size: 'large' },
+    { text: "Today's Curry Set  x1", align: 'left', size: 'tall' },
+    { text: '   ・Naan', align: 'left', size: 'tall' },
+  ];
+
+  it('行の並びだけ逆にする（文字はそのまま・右に寄せない）', () => {
+    const out = rotateLines180(lines, 48);
+    expect(out.map((l) => l.text)).toEqual(['   ・Naan', "Today's Curry Set  x1", 'T-1', 'KITCHEN']);
+    expect(out.every((l) => l.upsideDown)).toBe(true);
+    expect(out[2].size).toBe('large');
+    expect(out[3].align).toBe('center');
+    expect(isUpsideDown(out)).toBe(true);
+    expect(isUpsideDown(lines)).toBe(false);
   });
 
-  it('桁数を渡すと、左寄せの行は右に寄せる（回すと左寄せに見える）', () => {
-    const out = rotateLines180([{ text: 'abc', align: 'left', size: 'normal' }], 10);
-    expect(out[0].text).toBe('       cba');
-    // 縦横2倍の行は1行の桁数が半分
-    const big = rotateLines180([{ text: 'ab', align: 'left', size: 'large' }], 20);
-    expect(big[0].text).toBe('        ba');
+  it('Star Markup は [invert: on] で倒立印字し、切る前に戻す', () => {
+    const m = kitchenTicketMarkup(rotateLines180(lines));
+    expect(m.startsWith('[bold: on]\n[invert: on]\n')).toBe(true);
+    expect(m.indexOf('[invert: off]')).toBeLessThan(m.indexOf('[cut: feed; partial]'));
+    expect(m).toContain('   ・Naan');
+    // ふつうの向きのときは出さない
+    expect(kitchenTicketMarkup(lines)).not.toContain('invert');
   });
 
-  it('日本語もそのまま逆順にできる', () => {
-    const out = rotateLines180([{ text: 'キッチン', align: 'center', size: 'tall' }]);
-    expect(out[0].text).toBe('ンチッキ');
+  it('StarPRNT は SI（0x0F）で倒立・DC2（0x12）で戻す', () => {
+    const on = kitchenTicketStarPrnt(rotateLines180(lines));
+    expect(on.includes(0x0f)).toBe(true);
+    expect(on.includes(0x12)).toBe(true);
+    const off = kitchenTicketStarPrnt(lines);
+    expect(off.includes(0x0f)).toBe(false);
+  });
+
+  it('EPSON（ePOS）は <text rotate="true"/>、iPad から送る ESC/POS は ESC { 1', () => {
+    const x = kitchenTicketsEpos([rotateLines180(lines)]);
+    expect(x).toContain('<text rotate="true"/>');
+    expect(x).toContain('<text rotate="false"/>');
+    expect(kitchenTicketsEpos([lines])).not.toContain('rotate');
+    const b = eposXmlToEscPos(x);
+    expect([...b].some((v, i) => v === 0x1b && b[i + 1] === 0x7b && b[i + 2] === 1)).toBe(true);
+    expect([...b].some((v, i) => v === 0x1b && b[i + 1] === 0x7b && b[i + 2] === 0)).toBe(true);
+  });
+});
+
+describe('セットのドリンクは別の紙（2026-10-17 Ronnie「ランチドリンクだけ別に切って出す」）', () => {
+  const base: ClaimedKitchenItem = {
+    order_item_id: 'oi1',
+    order_id: 'o1',
+    order_no: 7849,
+    table_name: 'T-1',
+    guest_count: 10,
+    clerk_name: 'Bimal',
+    item_name: '本日のカレーセット',
+    item_name_en: "Today's Curry Set",
+    modifiers: [
+      { name: 'ナン', name_en: 'Naan' },
+      { name: 'ミディアム', name_en: 'Medium' },
+      { name: 'ラッシー', name_en: 'Lassi' },
+    ],
+    memo: null,
+    station: 'kitchen',
+    delta: 1,
+  };
+  const drinks = new Map([['oi1', new Set(['ラッシー', 'マンゴーラッシー', 'アイスティー'])]]);
+
+  it('選択肢グループの名前に「ドリンク」「Drink」が入っていればセットのドリンク', () => {
+    expect(isDrinkOptionGroupName('ランチドリンク')).toBe(true);
+    expect(isDrinkOptionGroupName('Set Drink')).toBe(true);
+    expect(isDrinkOptionGroupName('辛さ')).toBe(false);
+    expect(isDrinkOptionGroupName('主食（ナン・ライス）')).toBe(false);
+    expect(isDrinkOptionGroupName(null)).toBe(false);
+  });
+
+  it('料理の行からドリンクの選択肢を外し、ドリンクの行を別に作る', () => {
+    const out = splitSetDrinkRows([base], drinks);
+    expect(out).toHaveLength(2);
+    expect(out[0].modifiers?.map((m) => m.name)).toEqual(['ナン', 'ミディアム']);
+    expect(out[1]).toMatchObject({ item_name: 'ラッシー', item_name_en: 'Lassi', station: 'drink', slip: 'drink', delta: 1, modifiers: [] });
+    // ドリンクの商品・コースの料理・ドリンクの選択肢が無い行はそのまま
+    expect(splitSetDrinkRows([{ ...base, station: 'drink' }], drinks)).toHaveLength(1);
+    expect(splitSetDrinkRows([{ ...base, modifiers: [{ name: 'ナン' }] }], drinks)).toHaveLength(1);
+    expect(splitSetDrinkRows([base], new Map())).toHaveLength(1);
+  });
+
+  it('同じ卓・同じ注文でも、ドリンクは料理と別の紙（見出し DRINK）。取消も同じ', () => {
+    const [t] = groupKitchenTickets(splitSetDrinkRows([base], drinks));
+    for (const split of ['order', 'item'] as const) {
+      const slips = ticketSlips(t, split);
+      expect(slips).toHaveLength(2);
+      expect(slips[0].drinkSlip).toBeFalsy();
+      expect(slips[0].lines[0].modifiers).toEqual(['Naan', 'Medium']);
+      expect(slips[1].drinkSlip).toBe(true);
+      expect(slips[1].lines.map((l) => l.nameEn)).toEqual(['Lassi']);
+    }
+    const [c] = groupKitchenTickets(splitSetDrinkRows([{ ...base, delta: -1 }], drinks));
+    expect(ticketSlips(c, 'order').map((s) => s.lines[0].delta)).toEqual([-1, -1]);
+  });
+
+  it('ドリンクが無い注文は今まで通り1枚', () => {
+    const [t] = groupKitchenTickets([{ ...base, modifiers: [{ name: 'ナン', name_en: 'Naan' }] }]);
+    expect(ticketSlips(t, 'order')).toHaveLength(1);
   });
 });
 
