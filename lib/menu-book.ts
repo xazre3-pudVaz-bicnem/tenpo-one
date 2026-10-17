@@ -28,7 +28,7 @@ export const MENU_BOOK_SHOWS: readonly MenuBookShow[] = ['always', 'plan', 'lunc
 export const MENU_BOOK_SHOW_LABELS: Record<MenuBookShow, string> = {
   always: 'いつも出す',
   plan: 'プランのときだけ',
-  lunch: 'ランチの時間だけ',
+  lunch: 'ランチの時間だけ（お客様QR）',
   staff: 'ハンディだけ',
   hidden: '出さない（レジだけ）',
 };
@@ -36,7 +36,7 @@ export const MENU_BOOK_SHOW_LABELS: Record<MenuBookShow, string> = {
 export const MENU_BOOK_SHOW_NOTES: Record<MenuBookShow, string> = {
   always: 'ハンディ・お客様QRにいつも出す',
   plan: '飲み放題・食べ放題・コースが伝票に入っているときだけ出す（F＝フリーの中身など）',
-  lunch: 'ランチの時間帯だけ出す',
+  lunch: 'お客様QRにはランチの時間帯だけ出す。ハンディ・レジにはいつも出す（スタッフは時間外でも打てる）',
   staff: 'ハンディには出す。お客様QRには出さない（席料・延長など）',
   hidden: 'ハンディ・お客様QRには出さない。レジでは打てる',
 };
@@ -460,7 +460,9 @@ export function isShowVisible(
     case 'plan':
       return planAllows(categoryId, book, ctx.plan);
     case 'lunch':
-      return isWithinHm(ctx.nowHm, book.lunch.start, book.lunch.end);
+      // お客様QRだけ時間で絞る。ハンディ・レジはいつも出す（2026-10-17 MEAT CROWN 新横浜：
+      // 「QRは16時まで。ハンディと iPad には出してよい」）
+      return ctx.channel !== 'qr' || isWithinHm(ctx.nowHm, book.lunch.start, book.lunch.end);
     case 'staff':
       return ctx.channel === 'handy';
     case 'hidden':
