@@ -1,3 +1,5 @@
+import { optionGroupRank } from './kitchen-ticket';
+
 /**
  * メニュー選択肢（オプション）の検証（純関数・テスト対象）。
  * 必須・最小/最大の選択数を検証し、レシート表記用のモディファイアと追加料金を返す。
@@ -51,9 +53,14 @@ export function resolveOptionSelection(groups: OptionGroup[], selected: OptionIt
     if (count > g.maxSelect) throw new Error(`「${g.name}」は${g.maxSelect}つまでしか選べません`);
   }
 
-  // グループの並び順で安定させ、レシートの表示順を一定にする
+  // ナン/ライス → カレー → その他 → 辛さ → ドリンク の順（2026-10-17 Ronnie。厨房伝票・レシートとも同じ順）。
+  // 同じ順位どうしはグループの並び順で安定させる
   const order = new Map<string, number>(groups.map((g, i) => [g.id, i]));
-  const sorted = [...selected].sort((a, b) => (order.get(a.groupId) ?? 0) - (order.get(b.groupId) ?? 0));
+  const rank = new Map<string, number>(groups.map((g) => [g.id, optionGroupRank(g.name)]));
+  const sorted = [...selected].sort(
+    (a, b) =>
+      (rank.get(a.groupId) ?? 2) - (rank.get(b.groupId) ?? 2) || (order.get(a.groupId) ?? 0) - (order.get(b.groupId) ?? 0)
+  );
 
   return {
     modifiers: sorted.map((o) => {

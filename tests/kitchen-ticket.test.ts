@@ -14,6 +14,7 @@ import {
   layoutKitchenTicket,
   isDrinkOptionGroupName,
   isUpsideDown,
+  optionGroupRank,
   misroutedDrinkCategories,
   rotateLines180,
   splitSetDrinkRows,
@@ -591,6 +592,32 @@ describe('セットのドリンクは別の紙（2026-10-17 Ronnie「ランチ�
     expect(ticketSlips(d, 'order')[0].drinkSlip).toBe(true);
     // コースの料理はドリンクの紙にしない
     expect(splitSetDrinkRows([{ ...beer, course_step: { index: 1, total: 3, course: 'Course' } }], new Map())[0].slip).toBeUndefined();
+  });
+
+  it('選択肢は ナン/ライス → カレー → その他 → 辛さ の順（2026-10-17 Ronnie）', () => {
+    expect(optionGroupRank('主食（ナン・ライス）')).toBe(0);
+    expect(optionGroupRank('Rice or Naan')).toBe(0);
+    expect(optionGroupRank('カレーを選ぶ（2種）')).toBe(1);
+    expect(optionGroupRank('Choice Curry (Lunch)')).toBe(1);
+    expect(optionGroupRank('トッピング')).toBe(2);
+    expect(optionGroupRank('辛さ')).toBe(3);
+    expect(optionGroupRank('Spice Level')).toBe(3);
+    expect(optionGroupRank('ランチドリンク')).toBe(4);
+    const cheeseNaan: ClaimedKitchenItem = {
+      ...base,
+      item_name: 'チーズナンセット',
+      item_name_en: 'Cheese Naan Set',
+      modifiers: [
+        { name: 'ラッシー', name_en: 'Lassi' },
+        { name: 'マイルド', name_en: 'Mild' },
+        { name: '本日のカレー', name_en: "Today's Curry" },
+        { name: 'ナン', name_en: 'Naan' },
+      ],
+    };
+    const ranks = new Map([['oi1', new Map([['ナン', 0], ['本日のカレー', 1], ['マイルド', 3], ['ラッシー', 4]])]]);
+    const rows = splitSetDrinkRows([cheeseNaan], drinks, new Set(), ranks);
+    expect(rows[0].modifiers?.map((m) => m.name_en)).toEqual(['Naan', "Today's Curry", 'Mild']);
+    expect(rows[1].item_name_en).toBe('Lassi');
   });
 
   it('ドリンクが無い注文は今まで通り1枚', () => {
