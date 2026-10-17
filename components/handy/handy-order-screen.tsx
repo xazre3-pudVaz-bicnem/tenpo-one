@@ -10,6 +10,7 @@ import { useToast } from '@/components/ui/toast';
 import { OptionDialog, type PosOptionGroup } from '@/components/pos/option-dialog';
 import { OpenPriceDialog } from '@/components/pos/open-price-dialog';
 import { customItemName, customLineId, normalizeCustomMemo } from '@/lib/custom-price';
+import { groupMenuItems } from '@/lib/menu-groups';
 import {
   HandyBackButton,
   HandyMain,
@@ -123,6 +124,12 @@ export function HandyOrderScreen({
       }
     return map;
   }, [pages, quantityByItem]);
+
+  /** 開いているカテゴリを銘柄ごとにまとめたもの（まとまらなければ null＝今までどおりのタイル） */
+  const groupedItems = useMemo(
+    () => (category ? groupMenuItems(category.items, (i) => ({ name: i.name, nameEn: i.nameEn })) : null),
+    [category]
+  );
 
   // メニュー設定で値段が変わったら（Realtime で画面が読み直される）、カートの値段も新しい値段で出す
   const pricedCart = useMemo(() => repriceCart(cart, tabs, optionGroupsByItem), [cart, tabs, optionGroupsByItem]);
@@ -354,6 +361,27 @@ export function HandyOrderScreen({
 
   /* --------------------------------------------------------- メニュー */
 
+  const withRail = (page?.categories.length ?? 0) > 1;
+  /** 大きいタイル（1つだけの商品）と、銘柄の見出しの下の小さめのタイルの列の数 */
+  const tileCols = withRail ? 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5' : 'grid-cols-3 sm:grid-cols-4 lg:grid-cols-6';
+  const compactCols = withRail ? 'grid-cols-3 sm:grid-cols-4 lg:grid-cols-6' : 'grid-cols-4 sm:grid-cols-5 lg:grid-cols-8';
+  /** 単品のカテゴリの最後に「その他（価格入力）」。お客様が何か追加したとき金額を打って入れる（2026-10-07 Ronnie） */
+  const otherTile =
+    category && category.tabId === 'alacarte' ? (
+      <li>
+        <button
+          type="button"
+          onClick={() => setCustomTarget({ categoryId: category.id, label: category.nameEn ?? category.name })}
+          aria-label={`${category.name}：その他（金額を入力）`}
+          className="tap3d relative flex h-[100px] w-full flex-col items-center justify-center gap-1 overflow-hidden rounded-[10px] border border-dashed border-[#d4b3a3] bg-[#fbf9f5] px-2 py-2 text-center text-[13px] font-bold text-[#bc5940] active:bg-[#f6e4da]"
+        >
+          <PenLine className="h-5 w-5" aria-hidden />
+          <span>Other</span>
+          <span className="text-[9px] font-normal text-[#766b62]">その他・金額入力</span>
+        </button>
+      </li>
+    ) : null;
+
   return (
     <>
       <header className="flex-none bg-[#292725]">
@@ -447,14 +475,15 @@ export function HandyOrderScreen({
                     aria-pressed={on}
                     onClick={() => setCatByPage((cur) => ({ ...cur, [page.key]: c.id }))}
                     className={cn(
-                      'relative flex min-h-[54px] w-full flex-col items-start justify-center gap-0.5 border-b border-[#e3dbd0] px-2 py-2 text-left text-[12px] leading-[1.2] font-bold break-words',
+                      'relative flex h-[58px] w-full flex-col items-start justify-center gap-0.5 overflow-hidden border-b border-[#e3dbd0] px-2 py-1.5 text-left text-[12px] leading-[1.2] font-bold break-words',
                       on
                         ? 'border-l-4 border-l-[#bc5940] bg-[#fbf9f5] pl-[6px] text-[#bc5940]'
                         : 'text-[#5c5650] active:bg-[#f6e4da]'
                     )}
                   >
-                    <span>{c.nameEn ?? c.name}</span>
-                    {c.nameEn && <span className="text-[9px] font-normal text-[#8a8178]">{c.name}</span>}
+                    {/* 名前が長くても行の高さは同じ（英語は2行まで・日本語は1行。はみ出す分は「…」） */}
+                    <span className="line-clamp-2 w-full">{c.nameEn ?? c.name}</span>
+                    {c.nameEn && <span className="w-full truncate text-[9px] font-normal text-[#8a8178]">{c.name}</span>}
                     {n > 0 && (
                       <span className="absolute top-1 right-1 min-w-[18px] rounded-full bg-[#bc5940] px-1 py-px text-center text-[10px] font-bold text-white">
                         {n}
@@ -466,7 +495,8 @@ export function HandyOrderScreen({
             </nav>
           )}
 
-          {/* 右：開いているカテゴリの商品 */}
+          {/* 右：開いているカテゴリの商品。同じ銘柄が2つ以上あれば見出し（White Horse ——）の下に種類を小さめのタイルで
+              ぎっしり並べる（2026-10-18 Ronnie「全部のカテゴリで、見出しの下に商品をぎっしり」。lib/menu-groups） */}
           <HandyMain className="bg-[#f6f3ef]">
             {category && (
               <div className="px-2 pt-2 pb-5">
@@ -475,72 +505,72 @@ export function HandyOrderScreen({
                   {category.nameEn && <span className="truncate text-[10px] font-normal text-[#8a8178]">{category.name}</span>}
                   <span className="ml-auto shrink-0 text-[11px] font-normal text-[#a89e92]">{category.items.length}品</span>
                 </h2>
-                <ul
-                  className={cn(
-                    'grid gap-2',
-                    page.categories.length > 1 ? 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5' : 'grid-cols-3 sm:grid-cols-4 lg:grid-cols-6'
-                  )}
-                >
-                  {category.items.map((item, i) => {
-                    const inCart = quantityByItem.get(item.id) ?? 0;
-                    const disabled = item.isSoldOut || item.offHours;
-                    return (
+                {groupedItems ? (
+                  <>
+                    {groupedItems.map((section, si) =>
+                      section.kind === 'group' ? (
+                        <section key={section.key} className="mb-3.5">
+                          <h3 className="mb-1.5 flex items-center gap-2 px-0.5 text-[14px] leading-tight font-extrabold text-[#292725]">
+                            <span className="min-w-0 [overflow-wrap:anywhere]">{section.labelEn ?? section.label}</span>
+                            {section.labelEn && (
+                              <span className="min-w-0 truncate text-[10px] font-normal text-[#8a8178]">{section.label}</span>
+                            )}
+                            <span aria-hidden className="h-0.5 min-w-4 flex-1 rounded bg-[#bc5940]/35" />
+                          </h3>
+                          <ul className={cn('grid gap-1.5', compactCols)}>
+                            {section.members.map((m) => (
+                              <li key={m.item.id}>
+                                <HandyItemTile
+                                  compact
+                                  item={m.item}
+                                  label={m.labelEn ?? m.label}
+                                  subLabel={m.labelEn ? m.label : null}
+                                  accent={TILE_ACCENTS[si % TILE_ACCENTS.length]}
+                                  inCart={quantityByItem.get(m.item.id) ?? 0}
+                                  onTap={() => handleItemTap(m.item)}
+                                />
+                              </li>
+                            ))}
+                          </ul>
+                        </section>
+                      ) : (
+                        <ul key={section.key} className={cn('mb-3.5 grid gap-2', tileCols)}>
+                          {section.items.map((item) => (
+                            <li key={item.id}>
+                              <HandyItemTile
+                                item={item}
+                                label={item.nameEn ?? item.name}
+                                subLabel={item.nameEn ? item.name : null}
+                                accent={TILE_ACCENTS[category.items.indexOf(item) % TILE_ACCENTS.length]}
+                                inCart={quantityByItem.get(item.id) ?? 0}
+                                onTap={() => handleItemTap(item)}
+                              />
+                            </li>
+                          ))}
+                        </ul>
+                      )
+                    )}
+                    {otherTile && <ul className={cn('grid gap-2', tileCols)}>{otherTile}</ul>}
+                  </>
+                ) : (
+                  <ul className={cn('grid gap-2', tileCols)}>
+                    {category.items.map((item, i) => (
                       <li key={item.id}>
-                        <button
-                          type="button"
-                          disabled={disabled}
-                          onClick={() => handleItemTap(item)}
-                          aria-label={`${item.name} ${yen(item.price)} を追加`}
-                          style={disabled ? undefined : { borderBottomColor: TILE_ACCENTS[i % TILE_ACCENTS.length] }}
-                          className={cn(
-                            'tap3d relative flex min-h-[92px] w-full flex-col items-center justify-center gap-1 overflow-hidden rounded-[10px] border border-[#e5dfd5] bg-white px-2 pt-3 pb-2.5 text-center text-[15px] leading-[1.25] font-bold [overflow-wrap:anywhere] text-[#45403b]',
-                            disabled ? 'border-b-[#e5dfd5] opacity-50' : 'active:bg-[#f6e4da]',
-                            inCart > 0 && !disabled && 'border-[#bc5940] bg-[#f6e4da]'
-                          )}
-                        >
-                          {/* ハンディは英語を主にする（日本語を読まないスタッフが打つため。2026-09-24 店舗要望）。
-                              日本語名は下に小さく残す */}
-                          <span>{item.nameEn ?? item.name}</span>
-                          {item.nameEn && <span className="text-[10px] font-normal text-[#766b62]">{item.name}</span>}
-                          <span className="text-[13px] font-bold text-[#bc5940] tabular-nums">{yen(item.price)}</span>
-                          {item.isSoldOut && (
-                            <span className="absolute inset-x-1.5 top-1/2 -translate-y-1/2 rounded bg-[#c62828] px-1 py-0.5 text-[11px] font-bold text-white">
-                              売切
-                            </span>
-                          )}
-                          {!item.isSoldOut && item.offHours && (
-                            <span className="absolute inset-x-1.5 top-1/2 -translate-y-1/2 rounded bg-[#766b62] px-1 py-0.5 text-[11px] font-bold text-white">
-                              時間外
-                            </span>
-                          )}
-                          {inCart > 0 && (
-                            <span className="absolute top-[5px] right-[5px] min-w-[22px] rounded-xl bg-[#bc5940] px-[6px] py-0.5 text-[11px] font-bold text-white">
-                              {inCart}
-                            </span>
-                          )}
-                          {item.hasOptions && (
-                            <span className="absolute top-[5px] left-[6px] text-[9px] font-normal text-[#766b62]">選択肢</span>
-                          )}
-                        </button>
+                        {/* ハンディは英語を主にする（日本語を読まないスタッフが打つため。2026-09-24 店舗要望）。
+                            日本語名は下に小さく残す */}
+                        <HandyItemTile
+                          item={item}
+                          label={item.nameEn ?? item.name}
+                          subLabel={item.nameEn ? item.name : null}
+                          accent={TILE_ACCENTS[i % TILE_ACCENTS.length]}
+                          inCart={quantityByItem.get(item.id) ?? 0}
+                          onTap={() => handleItemTap(item)}
+                        />
                       </li>
-                    );
-                  })}
-                  {/* 単品のカテゴリの最後に「その他（価格入力）」。お客様が何か追加したとき金額を打って入れる（2026-10-07 Ronnie） */}
-                  {category.tabId === 'alacarte' && (
-                    <li>
-                      <button
-                        type="button"
-                        onClick={() => setCustomTarget({ categoryId: category.id, label: category.nameEn ?? category.name })}
-                        aria-label={`${category.name}：その他（金額を入力）`}
-                        className="tap3d relative flex min-h-[92px] w-full flex-col items-center justify-center gap-1 overflow-hidden rounded-[10px] border border-dashed border-[#d4b3a3] bg-[#fbf9f5] px-2 py-2 text-center text-[13px] font-bold text-[#bc5940] active:bg-[#f6e4da]"
-                      >
-                        <PenLine className="h-5 w-5" aria-hidden />
-                        <span>Other</span>
-                        <span className="text-[9px] font-normal text-[#766b62]">その他・金額入力</span>
-                      </button>
-                    </li>
-                  )}
-                </ul>
+                    ))}
+                    {otherTile}
+                  </ul>
+                )}
               </div>
             )}
           </HandyMain>
@@ -589,6 +619,94 @@ export function HandyOrderScreen({
         />
       )}
     </>
+  );
+}
+
+/**
+ * 商品のタイル（名前・値段・カートの点数・売切/時間外/選択肢）。
+ * compact＝銘柄の見出しの下に並べる小さめのタイル（種類の名前だけ。例：White Horse の下の「Rock」）。
+ * 大きさは固定（名前が長くても伸びない。英語2行・日本語1行まで）
+ */
+function HandyItemTile({
+  item,
+  label,
+  subLabel,
+  accent,
+  inCart,
+  compact = false,
+  onTap,
+}: {
+  item: HandyMenuItemView;
+  /** 大きく出す名前（英語。無ければ日本語） */
+  label: string;
+  /** 下に小さく出す日本語（英語を出しているとき） */
+  subLabel: string | null;
+  accent: string;
+  inCart: number;
+  compact?: boolean;
+  onTap: () => void;
+}) {
+  const disabled = item.isSoldOut || item.offHours;
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onTap}
+      aria-label={`${item.name} ${yen(item.price)} を追加`}
+      style={disabled ? undefined : { borderBottomColor: accent }}
+      className={cn(
+        'tap3d relative flex w-full flex-col items-center justify-center overflow-hidden border border-[#e5dfd5] bg-white text-center font-bold [overflow-wrap:anywhere] text-[#45403b]',
+        compact
+          ? 'h-[78px] gap-0.5 rounded-[9px] px-1 pt-2.5 pb-1.5 text-[13px] leading-[1.15]'
+          : 'h-[100px] gap-1 rounded-[10px] px-2 pt-3 pb-2.5 text-[15px] leading-[1.25]',
+        disabled ? 'border-b-[#e5dfd5] opacity-50' : 'active:bg-[#f6e4da]',
+        inCart > 0 && !disabled && 'border-[#bc5940] bg-[#f6e4da]'
+      )}
+    >
+      {/* タイルはいつも同じ大きさ（2026-10-18 Ronnie「名前が長くても大きくしない。英語は2行まで、入らなければ…」）。
+          全部の名前はカート・注文確認・伝票に出る */}
+      <span className="line-clamp-2 w-full">{label}</span>
+      {subLabel && (
+        <span className={cn('w-full truncate font-normal text-[#766b62]', compact ? 'text-[9px] leading-tight' : 'text-[10px]')}>
+          {subLabel}
+        </span>
+      )}
+      <span className={cn('shrink-0 font-bold text-[#bc5940] tabular-nums', compact ? 'text-[12px]' : 'text-[13px]')}>
+        {yen(item.price)}
+      </span>
+      {item.isSoldOut && (
+        <span className="absolute inset-x-1 top-1/2 -translate-y-1/2 rounded bg-[#c62828] px-1 py-0.5 text-[11px] font-bold text-white">
+          売切
+        </span>
+      )}
+      {!item.isSoldOut && item.offHours && (
+        <span className="absolute inset-x-1 top-1/2 -translate-y-1/2 rounded bg-[#766b62] px-1 py-0.5 text-[11px] font-bold text-white">
+          時間外
+        </span>
+      )}
+      {inCart > 0 && (
+        <span
+          className={cn(
+            'absolute rounded-xl bg-[#bc5940] font-bold text-white',
+            compact
+              ? 'top-[3px] right-[3px] min-w-[18px] px-1 py-px text-[10px]'
+              : 'top-[5px] right-[5px] min-w-[22px] px-[6px] py-0.5 text-[11px]'
+          )}
+        >
+          {inCart}
+        </span>
+      )}
+      {item.hasOptions && (
+        <span
+          className={cn(
+            'absolute font-normal text-[#766b62]',
+            compact ? 'top-[3px] left-[4px] text-[8px]' : 'top-[5px] left-[6px] text-[9px]'
+          )}
+        >
+          選択肢
+        </span>
+      )}
+    </button>
   );
 }
 
