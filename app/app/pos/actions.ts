@@ -642,7 +642,11 @@ async function requireCancelApproval(
   return approver.name;
 }
 
-/** 品目取消（理由必須・監査ログ） */
+/**
+ * 品目取消（監査ログ）。理由は書かなくてよい（レジでは担当者＝店長以上を選ぶだけ。
+ * 2026-10-17 Ronnie「1品の取消は理由なし・担当選択だけ。伝票ごとの取消は理由が要る」）。
+ * 理由が無いときは「担当: 〇〇」を取消理由として残す（伝票明細で誰が取消したか分かるように）。
+ */
 export async function cancelItem(
   orderId: string,
   orderItemId: string,
@@ -650,7 +654,7 @@ export async function cancelItem(
   approvedByClerkId?: string | null
 ) {
   const ctx = await requirePermission('pos.order');
-  if (!reason.trim()) throw new Error('取消理由を入力してください');
+  const why = (reason ?? '').trim();
   const supabase = await createClient();
   const order = await loadOpenOrder(supabase, ctx, orderId);
   const approver = await requireCancelApproval(supabase, ctx, order.store_id, approvedByClerkId);
@@ -667,7 +671,7 @@ export async function cancelItem(
     .from('order_items')
     .update({
       status: 'cancelled',
-      cancel_reason: reason,
+      cancel_reason: why || (approver ? `担当: ${approver}` : null),
       cancelled_at: new Date().toISOString(),
       updated_by: ctx.userId,
     })
@@ -682,7 +686,7 @@ export async function cancelItem(
     p_target_id: orderItemId,
     p_before: { status: line.status, name: line.name, quantity: line.quantity },
     p_after: { status: 'cancelled', approved_by: approver },
-    p_note: approver ? `${reason}（承認: ${approver}）` : reason,
+    p_note: approver ? `${why || '理由なし'}（承認: ${approver}）` : why || '理由なし',
   });
 
   await supabase.rpc('recalc_order_totals', { p_order_id: order.id });
@@ -1329,10 +1333,12 @@ export async function clearTable(
   approvedByClerkId?: string | null
 ): Promise<{ cancelledItems: number }> {
   const ctx = await requirePermission('pos.checkout');
-  const why = reason.trim();
-  if (!why) throw new Error('理由を入力してください');
+  const why = (reason ?? '').trim();
   const supabase = await createClient();
   const order = await loadOpenOrder(supabase, ctx, orderId);
+  // ¥0 の卓は理由なしでよい（担当者を選ぶだけ。2026-10-17 Ronnie）。金額のある伝票は理由が要る
+  if (!why && Number(order.total ?? 0) !== 0) throw new Error('理由を入力してください');
+  const note = why ? `テーブルクリア: ${why}` : 'テーブルクリア';
 
   const { count: paymentCount } = await supabase
     .from('payments')
@@ -1352,10 +1358,10 @@ export async function clearTable(
 
   // 1品ずつ取消（承認・監査・取消伝票は cancelItem の中）
   for (const id of ids) {
-    await cancelItem(orderId, id, `テーブルクリア: ${why}`, approvedByClerkId);
+    await cancelItem(orderId, id, note, approvedByClerkId);
   }
   // 品目が無くなった伝票を取消して卓を空席に戻す（cancelEmptyOrder の中で卓・予約も戻す）
-  await cancelEmptyOrder(orderId, `テーブルクリア: ${why}`, approvedByClerkId);
+  await cancelEmptyOrder(orderId, note, approvedByClerkId);
   // テーブル連携（グループ）の解除は cancelEmptyOrder の中で（卓が空いたとき）
 
   await supabase.rpc('log_audit', {
@@ -1366,7 +1372,7 @@ export async function clearTable(
     p_target_id: orderId,
     p_before: { status: 'open', table_id: order.table_id, items: ids.length },
     p_after: { status: 'cancelled' },
-    p_note: why,
+    p_note: why || '理由なし（¥0）',
   });
 
   revalidatePath('/app/floor');
