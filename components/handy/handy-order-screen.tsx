@@ -493,7 +493,7 @@ export function HandyOrderScreen({
                           aria-label={`${item.name} ${yen(item.price)} を追加`}
                           style={disabled ? undefined : { borderBottomColor: TILE_ACCENTS[i % TILE_ACCENTS.length] }}
                           className={cn(
-                            'tap3d relative flex min-h-[92px] w-full flex-col items-center justify-center gap-1 overflow-hidden rounded-[10px] border border-[#e5dfd5] bg-white px-2 pt-3 pb-2.5 text-center text-[15px] leading-[1.25] font-bold break-words text-[#45403b]',
+                            'tap3d relative flex min-h-[92px] w-full flex-col items-center justify-center gap-1 overflow-hidden rounded-[10px] border border-[#e5dfd5] bg-white px-2 pt-3 pb-2.5 text-center text-[15px] leading-[1.25] font-bold [overflow-wrap:anywhere] text-[#45403b]',
                             disabled ? 'border-b-[#e5dfd5] opacity-50' : 'active:bg-[#f6e4da]',
                             inCart > 0 && !disabled && 'border-[#bc5940] bg-[#f6e4da]'
                           )}

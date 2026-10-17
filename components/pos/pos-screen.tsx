@@ -11,7 +11,7 @@ import { customItemName, customLineId, normalizeCustomMemo, type CustomPriceInpu
 import { cn } from '@/lib/utils';
 import { yen, formatTime } from '@/lib/format';
 import { groupOrderRounds, ordinalLabel } from '@/components/handy/logic';
-import { englishName } from '@/lib/romaji';
+import { categoryEnglishName, englishName } from '@/lib/romaji';
 import { optionPriceLookup, repriceLines } from '@/lib/cart-reprice';
 import { groupMenuPages, menuPageLabel, PICKS_PAGE_KEY, picksSlot, type MenuBookSettings } from '@/lib/menu-book';
 import type { DiscountPreset, PointBrand } from '@/lib/checkout-presets';
@@ -194,7 +194,7 @@ function buildPosPages(
       categories: pg.categories.map((c) => ({
         id: c.id,
         name: c.name,
-        en: englishName(c.name, null, c.name_en),
+        en: categoryEnglishName(c.name, c.name_en),
         color: c.color,
       })),
     };

@@ -195,7 +195,92 @@ const COMMON_EN: Record<string, string> = {
   焼き鳥: 'Yakitori',
   揚げ物: 'Fried',
   デリバリー: 'Delivery',
+  // 2026-10-18 SHUNKA「Sawaa hai・Uisukii haibooru・梅酒 のカテゴリ名を正しい英語に」
+  ハイ: 'Hi',
+  酎ハイ: 'Chuhai',
+  チューハイ: 'Chuhai',
+  レモンサワー: 'Lemon sour',
+  梅酒: 'Umeshu',
+  果実酒: 'Fruit liqueur',
+  プレミアムカクテル: 'Premium cocktails',
+  赤ワイン: 'Red wine',
+  白ワイン: 'White wine',
+  スパークリング: 'Sparkling',
+  シャンパン: 'Champagne',
+  紹興酒: 'Shaoxing wine',
+  マッコリ: 'Makgeolli',
+  ボトル: 'Bottle',
+  ジュース: 'Juice',
+  お茶: 'Tea',
+  ティー: 'Tea',
+  コーヒー: 'Coffee',
+  おつまみ: 'Snacks',
+  つまみ: 'Snacks',
+  一品料理: 'A la carte',
+  焼き物: 'Grilled',
+  焼物: 'Grilled',
+  串焼き: 'Skewers',
+  串: 'Skewers',
+  炭火焼き: 'Charcoal grill',
+  焼肉: 'Yakiniku',
+  ホルモン: 'Offal',
+  肉料理: 'Meat dishes',
+  魚料理: 'Fish dishes',
+  海鮮: 'Seafood',
+  肉寿司: 'Meat sushi',
+  お鍋: 'Hot pot',
+  鍋料理: 'Hot pot',
+  鍋単品: 'Hot pot add-ons',
+  おでん: 'Oden',
+  餃子: 'Gyoza',
+  ご飯物: 'Rice dishes',
+  ごはんもの: 'Rice dishes',
+  ご飯もの: 'Rice dishes',
+  麺類: 'Noodles',
+  特別メニュー: 'Special menu',
+  延長: 'Extension',
+  席料: 'Table charge',
+  お通し: 'Otoshi',
 };
+
+/**
+ * 「サワー・ハイ」「ウイスキー・ハイボール」「(A) 飲み放題 サワー・ハイ」のような組み合わせの名前は、
+ * 区切り（・／/&、と空白）ごとに上の表で英語にする（全部の言葉が表にあるときだけ。1つでも無ければ null）。
+ * 「(A)」のような括弧は残す。ほかの言葉と組み合わさった飲み放題・食べ放題は短く Nomihodai・Tabehodai、
+ * 「(A)」が付いていれば飲み放題の言葉は省く（飲み放題のタブの中なので「(A) SOUR / HI」で分かる。左の一覧が長くならない）。
+ */
+const COMPOUND_SHORT_EN: Record<string, string> = {
+  飲み放題: 'Nomihodai',
+  食べ放題: 'Tabehodai',
+  食べ飲み放題: 'Tabenomihodai',
+};
+
+function compoundEnglishName(name: string): string | null {
+  const tokens = name.trim().split(/[\s\u3000]+/).filter(Boolean);
+  if (tokens.length === 0) return null;
+  const words = tokens.map((t) => t.split(/[・／/&＆、]+/).filter(Boolean));
+  const many = words.flat().length > 1;
+  if (!many) return null;
+  const isPrefix = (t: string) => /^[(（][^()（）]{1,6}[)）]$/.test(t);
+  const hasPrefix = tokens.some(isPrefix);
+  const out: string[] = [];
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i];
+    if (hasPrefix && COMPOUND_SHORT_EN[token]) continue;
+    if (isPrefix(token)) {
+      out.push(token.replace('（', '(').replace('）', ')'));
+      continue;
+    }
+    const parts: string[] = [];
+    for (const w of words[i]) {
+      const en = COMPOUND_SHORT_EN[w] ?? COMMON_EN[w];
+      if (!en) return null;
+      parts.push(en);
+    }
+    out.push(parts.join(' / '));
+  }
+  return out.join(' ');
+}
 
 /** よく使う言い方の英語（完全一致のみ）。無ければ null */
 export function commonEnglishName(name: string): string | null {
@@ -243,5 +328,18 @@ export function englishName(
   // 「ドリンク→Dorinku」のようなローマ字にならないよう、よく使う言い方は先に英語にする
   const common = commonEnglishName(name);
   if (common) return common;
+  // 「サワー・ハイ → Sawaa hai」にならないよう、組み合わせの名前も言葉ごとに英語にする
+  const compound = compoundEnglishName(name);
+  if (compound) return compound;
   return romanItemName(name, nameKana ?? null);
+}
+
+/**
+ * カテゴリの英語名（レジ・ハンディ・お客様QRのカテゴリ一覧・見出し）。全部大文字にそろえる
+ * （2026-10-18 Ronnie「カテゴリ名は自動で CAPITAL LETTER」。手で入れた英語名も大文字で出す）。
+ * 英語名が作れなければ null（日本語だけ出す）
+ */
+export function categoryEnglishName(name: string, nameEn?: string | null): string | null {
+  const en = englishName(name, null, nameEn);
+  return en ? en.toUpperCase() : null;
 }

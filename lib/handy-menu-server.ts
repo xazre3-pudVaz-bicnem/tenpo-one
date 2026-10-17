@@ -11,7 +11,7 @@ import {
 } from '@/components/handy/logic';
 import type { PosOptionGroup } from '@/components/pos/option-dialog';
 import { filterMenuBook, menuBookPages, planCategoryIds } from '@/lib/menu-book';
-import { englishName } from '@/lib/romaji';
+import { categoryEnglishName, englishName } from '@/lib/romaji';
 import { loadMenuStock } from '@/lib/menu-stock-server';
 import { isMenuSoldOut } from '@/lib/menu-stock';
 import { jstNowHm, loadMenuBook, loadOrderPlanState } from '@/lib/menu-book-server';
@@ -113,7 +113,7 @@ export async function loadHandyMenu(
   const categoryInputs: HandyCategoryInput[] = (categories ?? []).map((c) => ({
     id: c.id,
     name: c.name,
-    nameEn: englishName(c.name, null, c.name_en),
+    nameEn: categoryEnglishName(c.name, c.name_en),
     station: c.station,
     sortOrder: c.sort_order,
   }));
