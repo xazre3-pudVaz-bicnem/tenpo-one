@@ -6,6 +6,9 @@ import { EmptyState } from '@/components/ui/state';
 import { Card, CardContent } from '@/components/ui/card';
 import { SettingsBackLink } from '@/components/settings/back-link';
 import { CategoryPanel } from '@/components/settings/category-panel';
+import { OrphanItemsPanel } from '@/components/settings/orphan-items-panel';
+import { countOrphanMenuItems } from '@/lib/orphan-menu-items';
+import { createClient } from '@/lib/supabase/server';
 import { StationPanel } from '../menu/station-panel';
 import { loadMenuSettingsData } from '../menu/data';
 
@@ -29,7 +32,11 @@ export default async function CategorySettingsPage() {
     );
   }
 
-  const data = await loadMenuSettingsData(ctx, targetStore.id);
+  const supabase = await createClient();
+  const [data, orphanCount] = await Promise.all([
+    loadMenuSettingsData(ctx, targetStore.id),
+    countOrphanMenuItems(supabase, ctx.organizationId, targetStore.id),
+  ]);
 
   return (
     <div>
@@ -49,8 +56,9 @@ export default async function CategorySettingsPage() {
       />
       <div className="grid gap-5 @4xl:grid-cols-2">
         <Card>
-          <CardContent>
+          <CardContent className="space-y-4">
             <CategoryPanel storeId={targetStore.id} initial={data.categoryRows} />
+            <OrphanItemsPanel storeId={targetStore.id} count={orphanCount} />
           </CardContent>
         </Card>
         <Card>
