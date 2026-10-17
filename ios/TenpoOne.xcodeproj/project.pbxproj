@@ -99,6 +99,10 @@
 			isa = PBXBuildFile;
 			fileRef = D50F3B6D3D6758DFA4C1AC6A;
 		};
+		F39F04A4335C823BFD93FDF2 = {
+			isa = PBXBuildFile;
+			fileRef = F276879EB380E7B06FBB4E80;
+		};
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -259,6 +263,12 @@
 			path = NativeCheckoutData.swift;
 			sourceTree = "<group>";
 		};
+		F276879EB380E7B06FBB4E80 = {
+			isa = PBXFileReference;
+			lastKnownFileType = text.xml;
+			path = PrivacyInfo.xcprivacy;
+			sourceTree = "<group>";
+		};
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -325,6 +335,7 @@
 				"45CF6BB4A7256001043A912F",
 				"243BE9663516E557BDACA240",
 				"7BCDF55397833DFC4E8C5157",
+				F276879EB380E7B06FBB4E80,
 			);
 			path = Shared;
 			sourceTree = "<group>";
@@ -396,6 +407,7 @@
 			files = (
 				"18591ACF20960A8015F5594B",
 				"927460F67966A286B1CBF437",
+				F39F04A4335C823BFD93FDF2,
 				"2B1BC75905078A324F6A1D0C",
 			);
 			runOnlyForDeploymentPostprocessing = "0";
