@@ -222,6 +222,13 @@ export function QrOrderApp({
         setSubmitting(false);
         return;
       }
+      // 厨房の伝票をその場で作る（プリンターの問い合わせを待たない。2026-10-17 Ronnie「印刷を速く」）
+      void fetch('/api/qr/kitchen-now', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slug: storeSlug, token: tableToken }),
+        keepalive: true,
+      }).catch(() => undefined);
       setCart([]);
       setSubmitting(false);
       setNotice(qrStrings.cart.sent);
