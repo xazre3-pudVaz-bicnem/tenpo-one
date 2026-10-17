@@ -4,9 +4,10 @@ import { useState, useTransition } from 'react';
 import { Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
-import { Input, Label, FieldError } from '@/components/ui/input';
+import { Label, FieldError } from '@/components/ui/input';
 import { useToast } from '@/components/ui/toast';
 import { updatePettyOpeningBalance } from '@/app/app/cash/actions';
+import { NumberPadScope, PadNumberField } from '@/components/ui/number-pad';
 
 /** 小口現金の開始残高を編集するダイアログ（cash.approve権限者のみ表示） */
 export function PettyOpeningBalanceDialog({ storeId, currentAmount }: { storeId: string; currentAmount: number }) {
@@ -49,21 +50,15 @@ export function PettyOpeningBalanceDialog({ storeId, currentAmount }: { storeId:
         開始残高を編集
       </Button>
       <Dialog open={open} onClose={close} title="小口現金の開始残高を編集">
+        {/* 金額は画面のテンキーで入れる（iPad のキーボードは出さない。2026-10-17 Ronnie） */}
+        <NumberPadScope inline>
         <form onSubmit={handleSubmit} className="space-y-4">
           <p className="text-sm text-gray-600">
             理論残高の起点となる金額です。運用開始時の手元現金や、実査で確定した金額に合わせて調整してください。
           </p>
           <div>
             <Label htmlFor="opening-balance">開始残高（円）</Label>
-            <Input
-              id="opening-balance"
-              type="number"
-              inputMode="numeric"
-              min={0}
-              step={1}
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-            />
+            <PadNumberField id="opening-balance" label="開始残高" value={amount} onChange={setAmount} grouped suffix="円" maxDigits={9} className="ui-input h-10 w-full border border-gray-300 bg-white px-3 text-sm font-semibold text-gray-900 tabular-nums disabled:bg-gray-100 disabled:text-gray-500" />
           </div>
           <FieldError message={error ?? undefined} />
           <div className="flex justify-end gap-2">
@@ -75,6 +70,7 @@ export function PettyOpeningBalanceDialog({ storeId, currentAmount }: { storeId:
             </Button>
           </div>
         </form>
+        </NumberPadScope>
       </Dialog>
     </>
   );

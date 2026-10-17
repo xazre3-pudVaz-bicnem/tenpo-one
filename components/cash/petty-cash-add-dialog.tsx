@@ -8,6 +8,7 @@ import { useToast } from '@/components/ui/toast';
 import { yen, formatDate } from '@/lib/format';
 import { addPettyCash } from '@/app/app/cash/actions';
 import { KIND_LABELS } from '@/components/cash/labels';
+import { NumberPadScope, PadNumberField } from '@/components/ui/number-pad';
 
 type PettyKind = 'petty_in' | 'petty_out' | 'petty_advance' | 'petty_settlement';
 
@@ -93,6 +94,8 @@ export function PettyCashAddDialog({
     <>
       <Button onClick={() => setOpen(true)}>入出金を登録</Button>
       <Dialog open={open} onClose={close} title="小口現金の入出金を登録">
+        {/* 金額は画面のテンキーで入れる（iPad のキーボードは出さない。2026-10-17 Ronnie） */}
+        <NumberPadScope inline>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <Label htmlFor="petty-kind">区分</Label>
@@ -138,7 +141,7 @@ export function PettyCashAddDialog({
 
           <div>
             <Label htmlFor="petty-amount">金額</Label>
-            <Input id="petty-amount" type="number" inputMode="numeric" min={1} step={1} value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="1000" />
+            <PadNumberField id="petty-amount" label="金額" value={amount} onChange={setAmount} grouped suffix="円" maxDigits={8} placeholder="1000" className="ui-input h-10 w-full border border-gray-300 bg-white px-3 text-sm font-semibold text-gray-900 tabular-nums disabled:bg-gray-100 disabled:text-gray-500" />
           </div>
           <div>
             <Label htmlFor="petty-purpose">{kind === 'petty_advance' ? '内容（任意）' : '用途・メモ'}</Label>
@@ -164,6 +167,7 @@ export function PettyCashAddDialog({
             </Button>
           </div>
         </form>
+        </NumberPadScope>
       </Dialog>
     </>
   );

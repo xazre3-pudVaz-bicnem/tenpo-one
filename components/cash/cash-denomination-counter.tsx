@@ -3,6 +3,7 @@
 import { useMemo } from 'react';
 import { yen } from '@/lib/format';
 import { cn } from '@/lib/utils';
+import { NumberPadScope, PadNumberField } from '@/components/ui/number-pad';
 import {
   CASH_DENOMINATIONS,
   denominationLabel,
@@ -16,6 +17,8 @@ import {
  * 現金実査の金種別カウンター。
  * 1円から1万円までレジのトレイと同じ順に並べ、枚数を入れると金額が出て、いちばん下に合計が出る。
  * 合計がそのまま実査額になるので、電卓も紙も要らない。
+ * 枚数は画面の右横のテンキーで入れる（iPad のキーボードは出さない。2026-10-17 Ronnie）。
+ * 枚数の欄を押すと選ばれ、テンキーの「次へ」で次の金種へ進む。
  */
 export function CashDenominationCounter({
   counts,
@@ -50,7 +53,7 @@ export function CashDenominationCounter({
   };
 
   return (
-    <div>
+    <NumberPadScope>
       <div className={columns === 2 ? 'grid grid-cols-2 gap-2' : undefined}>
         {denominationGroups(columns).map((group, gi) => (
           <div key={gi} className="overflow-hidden rounded-xl border border-line">
@@ -74,14 +77,15 @@ export function CashDenominationCounter({
                         </label>
                       </td>
                       <td className={cn(padX, dense ? 'py-0.5 text-right' : compact ? 'py-1 text-right' : 'py-1.5 text-right')}>
-                        <input
+                        <PadNumberField
                           id={`${idPrefix}-denom-${denom}`}
-                          inputMode="numeric"
-                          value={count ?? ''}
-                          onChange={(e) => setCount(denom, e.target.value)}
+                          label={`${denominationLabel(denom)}の枚数`}
+                          value={count == null ? '' : String(count)}
+                          onChange={(v) => setCount(denom, v)}
+                          maxDigits={4}
+                          suffix="枚"
                           disabled={disabled}
                           placeholder="0"
-                          aria-label={`${denominationLabel(denom)}の枚数`}
                           className={
                             dense
                             ? 'h-8 w-16 rounded-md border border-line bg-white px-1.5 text-right text-sm font-bold text-ink tabular-nums placeholder:text-ink-3 focus:border-iris focus:outline-2 focus:outline-iris/25 disabled:bg-gray-100'
@@ -107,7 +111,7 @@ export function CashDenominationCounter({
         <span className={compact ? 'text-sm font-semibold text-ink' : 'text-base font-semibold text-ink'}>合計（実査額）</span>
         <b className={dense ? 'text-xl font-extrabold tabular-nums text-ink' : compact ? 'text-2xl font-extrabold tabular-nums text-ink' : 'text-3xl font-extrabold tabular-nums text-ink'}>{yen(total)}</b>
       </div>
-    </div>
+    </NumberPadScope>
   );
 }
 

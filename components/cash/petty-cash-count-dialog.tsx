@@ -9,6 +9,7 @@ import { useToast } from '@/components/ui/toast';
 import { yen, todayJst } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { recordPettyCashCount } from '@/app/app/cash/actions';
+import { NumberPadScope, PadNumberField } from '@/components/ui/number-pad';
 
 /** 小口現金の実査（理論残高との突合）を記録するダイアログ */
 export function PettyCashCountDialog({ storeId, expectedAmount }: { storeId: string; expectedAmount: number }) {
@@ -68,6 +69,8 @@ export function PettyCashCountDialog({ storeId, expectedAmount }: { storeId: str
         実残高を数える
       </Button>
       <Dialog open={open} onClose={close} title="小口現金の実査">
+        {/* 金額は画面のテンキーで入れる（iPad のキーボードは出さない。2026-10-17 Ronnie） */}
+        <NumberPadScope inline>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <Label htmlFor="count-date">実査日</Label>
@@ -81,16 +84,7 @@ export function PettyCashCountDialog({ storeId, expectedAmount }: { storeId: str
 
           <div>
             <Label htmlFor="count-amount">実残高（数えた金額）</Label>
-            <Input
-              id="count-amount"
-              type="number"
-              inputMode="numeric"
-              min={0}
-              step={1}
-              value={counted}
-              onChange={(e) => setCounted(e.target.value)}
-              placeholder="0"
-            />
+            <PadNumberField id="count-amount" label="実残高（数えた金額）" value={counted} onChange={setCounted} grouped suffix="円" maxDigits={9} placeholder="0" className="ui-input h-10 w-full border border-gray-300 bg-white px-3 text-sm font-semibold text-gray-900 tabular-nums disabled:bg-gray-100 disabled:text-gray-500" />
           </div>
 
           {difference !== null && counted !== '' && (
@@ -117,6 +111,7 @@ export function PettyCashCountDialog({ storeId, expectedAmount }: { storeId: str
             </Button>
           </div>
         </form>
+        </NumberPadScope>
       </Dialog>
     </>
   );

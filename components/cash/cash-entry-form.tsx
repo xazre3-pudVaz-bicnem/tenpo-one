@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast';
 import { cn } from '@/lib/utils';
+import { NumberPadScope, PadNumberField } from '@/components/ui/number-pad';
 import { addCashTransaction } from '@/app/app/cash/actions';
 import { buildShoppingPurpose, shoppingSpent, validateShopping, type EntryShop } from '@/lib/cash-shops';
 
@@ -126,6 +127,8 @@ export function CashEntryForm({
   };
 
   return (
+    // 金額・お釣りは画面の右横のテンキーで入れる（iPad のキーボードは出さない。2026-10-17 Ronnie）
+    <NumberPadScope>
     <form onSubmit={handleSubmit} className="space-y-1">
       <div className="grid grid-cols-2 overflow-hidden rounded-[10px] border border-line" role="tablist" aria-label="入金・出金の切替">
         {(['deposit', 'withdrawal'] as const).map((k) => (
@@ -263,13 +266,16 @@ export function CashEntryForm({
 
       <label className="flex items-center gap-3 border-b border-line py-3">
         <span className="w-16 shrink-0 text-sm leading-tight font-medium text-ink">{shopping ? '持ち出した金額' : '金額'}</span>
-        <input
-          inputMode="numeric"
+        <PadNumberField
+          id="cash-entry-amount"
+          label={shopping ? '持ち出した金額' : '金額'}
           value={amount}
-          onChange={(e) => setAmount(digits(e.target.value))}
+          onChange={(v) => setAmount(digits(v))}
+          grouped
+          suffix="円"
+          maxDigits={8}
           placeholder="0"
           disabled={disabled}
-          aria-label={shopping ? '持ち出した金額' : '金額'}
           className="h-14 w-full min-w-0 rounded-lg border border-line bg-white px-4 text-right text-[26px] font-extrabold text-royal tabular-nums placeholder:text-ink-3 focus:border-iris focus:outline-2 focus:outline-iris/25 disabled:bg-lilac-soft"
         />
       </label>
@@ -280,13 +286,16 @@ export function CashEntryForm({
             <span className="w-16 shrink-0 text-sm leading-tight font-medium text-ink">
               お釣り<span className="ml-1 text-[10.5px] font-bold text-danger">必須</span>
             </span>
-            <input
-              inputMode="numeric"
+            <PadNumberField
+              id="cash-entry-change"
+              label="お釣り"
               value={change}
-              onChange={(e) => setChange(digits(e.target.value))}
+              onChange={(v) => setChange(digits(v))}
+              grouped
+              suffix="円"
+              maxDigits={8}
               placeholder="0"
               disabled={disabled}
-              aria-label="お釣り"
               className="h-12 w-full min-w-0 rounded-lg border border-line bg-white px-4 text-right text-[20px] font-extrabold text-ink tabular-nums placeholder:text-ink-3 focus:border-iris focus:outline-2 focus:outline-iris/25 disabled:bg-lilac-soft"
             />
             <button
@@ -330,5 +339,6 @@ export function CashEntryForm({
         <p className="pt-1 text-center text-xs text-ink-3">開局中のレジがありません。下の「レジ」から開局すると登録できます。</p>
       )}
     </form>
+    </NumberPadScope>
   );
 }
