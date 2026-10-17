@@ -224,7 +224,9 @@ export function QrOrderApp({
         menu_item_id: l.menuItemId,
         quantity: l.quantity,
         memo: l.memo || null,
-        modifier_ids: l.modifiers.map((m) => m.id),
+        modifier_ids: l.modifiers.filter((m) => m.kind !== 'option').map((m) => m.id),
+        // 選択肢グループ（レジと同じ 設定 > メニュー選択肢）の選択肢
+        option_item_ids: l.modifiers.filter((m) => m.kind === 'option').map((m) => m.id),
       }));
       const { error } = seatToken
         ? await supabase.rpc('create_qr_order_at_seat', {

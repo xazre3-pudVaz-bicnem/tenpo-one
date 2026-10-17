@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils';
 import { yen } from '@/lib/format';
 import { useQrStrings, useQrLocale, localizedName } from './strings-context';
 import { itemQuantityInCart, menuTabs, type QrMenuPage, type QrMenuTab } from './logic';
-import { isPublicImageUrl, type CartLine, type QrMenuCategory, type QrMenuItem } from './types';
+import { isPublicImageUrl, type CartLine, type QrMenuCategory, type QrMenuItem, hasOptions } from './types';
 import { DishArt, QrEmpty, QrNote } from './ui';
 
 /**
@@ -166,7 +166,7 @@ export function MenuView({
                     item={item}
                     quantity={itemQuantityInCart(cart, item.id)}
                     onOpen={() => onSelectItem(item)}
-                    onAdd={() => (item.modifiers.length > 0 ? onSelectItem(item) : onQuickAdd(item))}
+                    onAdd={() => (hasOptions(item) ? onSelectItem(item) : onQuickAdd(item))}
                   />
                 ))}
               </ul>
