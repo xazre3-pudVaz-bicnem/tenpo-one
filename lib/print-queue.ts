@@ -11,7 +11,6 @@ import {
   groupKitchenTickets,
   isDrinkOptionGroupName,
   kitchenTicketSettingsFrom,
-  optionGroupRank,
   splitSetDrinkRows,
   rotateLines180,
   layoutKitchenTicket,
@@ -232,11 +231,15 @@ async function splitSetDrinks(admin: Admin, rows: ClaimedKitchenItem[]): Promise
     const groupIds = [...new Set((links ?? []).map((l) => l.group_id as string))];
     const { data: groups, error: gErr } =
       !lErr && groupIds.length > 0
-        ? await admin.from('menu_option_groups').select('id, name').in('id', groupIds)
-        : { data: [] as { id: string; name: string }[], error: null };
+        ? await admin.from('menu_option_groups').select('id, name, sort_order').in('id', groupIds)
+        : { data: [] as { id: string; name: string; sort_order: number | null }[], error: null };
     const groupName = new Map<string, string>((gErr ? [] : (groups ?? [])).map((g) => [g.id as string, g.name as string]));
+    // 並べる順＝設定 > メニュー選択肢 の「上へ・下へ」（menu_option_groups.sort_order）。レジのダイアログ・レシートと同じ
+    const groupOrder = new Map<string, number>(
+      (gErr ? [] : (groups ?? [])).map((g) => [g.id as string, Number((g as { sort_order?: number | null }).sort_order ?? 0)])
+    );
     if (groupName.size > 0) {
-      // 全部の選択肢（ドリンクを分ける・ナン/ライス → カレー → 辛さ の順に並べる）
+      // 全部の選択肢（ドリンクを分ける・設定の順に並べる）
       const { data: options, error: oErr } = await admin
         .from('menu_option_items')
         .select('group_id, name')
@@ -260,7 +263,7 @@ async function splitSetDrinks(admin: Admin, rows: ClaimedKitchenItem[]): Promise
         for (const g of groupsByMenu.get(menuId) ?? []) {
           const name = groupName.get(g);
           if (name === undefined) continue;
-          const rank = optionGroupRank(name);
+          const rank = groupOrder.get(g) ?? 0;
           for (const opt of optionsByGroup.get(g) ?? []) {
             if (!ranks.has(opt)) ranks.set(opt, rank);
             if (isDrinkOptionGroupName(name)) drinks.add(opt);

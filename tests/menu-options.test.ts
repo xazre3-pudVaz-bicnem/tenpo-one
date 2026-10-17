@@ -84,20 +84,20 @@ describe('選択肢の英語名', () => {
   });
 });
 
-describe('選択肢の並び（2026-10-17 Ronnie「ナン/ライス → カレー → 辛さ」）', () => {
-  it('グループの並び順に関係なく、ナン/ライス → カレー → その他 → 辛さ → ドリンク', () => {
+describe('選択肢の並び（2026-10-17 Ronnie「順番は店で決める」）', () => {
+  it('groups に渡した順（設定 > メニュー選択肢 の上へ・下へ）のまま。名前では並べ替えない', () => {
     const groups: OptionGroup[] = [
-      { id: 'drink', name: 'ランチドリンク', isRequired: true, minSelect: 1, maxSelect: 1 },
-      { id: 'spice', name: '辛さ', isRequired: true, minSelect: 1, maxSelect: 1 },
       { id: 'curry', name: 'カレーを選ぶ', isRequired: true, minSelect: 1, maxSelect: 1 },
+      { id: 'spice', name: '辛さ', isRequired: true, minSelect: 1, maxSelect: 1 },
       { id: 'staple', name: '主食（ナン・ライス）', isRequired: true, minSelect: 1, maxSelect: 1 },
+      { id: 'drink', name: 'ランチドリンク', isRequired: true, minSelect: 1, maxSelect: 1 },
     ];
     const pick: OptionItem[] = [
       { id: 'a', name: 'ラッシー', price: 0, groupId: 'drink' },
+      { id: 'd', name: 'ナン', price: 0, groupId: 'staple' },
       { id: 'b', name: 'マイルド', price: 0, groupId: 'spice' },
       { id: 'c', name: '本日のカレー', price: 0, groupId: 'curry' },
-      { id: 'd', name: 'ナン', price: 0, groupId: 'staple' },
     ];
-    expect(resolveOptionSelection(groups, pick).modifiers.map((m) => m.name)).toEqual(['ナン', '本日のカレー', 'マイルド', 'ラッシー']);
+    expect(resolveOptionSelection(groups, pick).modifiers.map((m) => m.name)).toEqual(['本日のカレー', 'マイルド', 'ナン', 'ラッシー']);
   });
 });
