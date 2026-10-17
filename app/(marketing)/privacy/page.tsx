@@ -3,10 +3,20 @@ import { brand } from '@/lib/brand';
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
 
+/**
+ * このポリシーの運営事業者（2026-10-17 Ronnie：App Store の販売元に合わせて D&DREAM。
+ * 本店は履歴事項全部証明書（令和8年7月24日）の本店）
+ */
+const operator = {
+  name: '株式会社D&DREAM',
+  address: '〒160-0022 東京都新宿区新宿二丁目15番29号 Relink701',
+  email: 'ronnieworks@tenpo.one',
+} as const;
+
 export const metadata: Metadata = {
   title: 'プライバシーポリシー',
   description:
-    `${brand.name}（運営: ${brand.company}）におけるお客様情報の取得・利用目的・第三者提供・安全管理措置等を定めるプライバシーポリシーです。`,
+    `${brand.name}（運営: ${operator.name}）におけるお客様情報の取得・利用目的・第三者提供・安全管理措置等を定めるプライバシーポリシーです。`,
   ...(siteUrl ? { alternates: { canonical: '/privacy' } } : {}),
 };
 
@@ -17,14 +27,15 @@ export default function PrivacyPage() {
 
       <div className="prose-sm mt-10 space-y-8 text-sm leading-relaxed text-gray-700">
         <p>
-          {brand.company}（以下「当社」といいます）は、当社が提供するクラウド型店舗管理システム「{brand.name}」（以下「本サービス」といいます）における、お客様の個人情報の取扱いについて、以下のとおりプライバシーポリシー（以下「本ポリシー」といいます）を定めます。
+          {operator.name}（以下「当社」といいます）は、当社が提供するクラウド型店舗管理システム「{brand.name}」（以下「本サービス」といいます）における、お客様の個人情報の取扱いについて、以下のとおりプライバシーポリシー（以下「本ポリシー」といいます）を定めます。
         </p>
 
         <section>
           <h2 className="text-lg font-bold text-navy">1. 事業者情報</h2>
           <p className="mt-2">
-            運営事業者: {brand.company}<br />
-            お問い合わせ先: {brand.supportEmail}
+            運営事業者: {operator.name}<br />
+            所在地: {operator.address}<br />
+            お問い合わせ先: {operator.email}
           </p>
         </section>
 
@@ -117,7 +128,7 @@ export default function PrivacyPage() {
         <section>
           <h2 className="text-lg font-bold text-navy">11. お問い合わせ窓口</h2>
           <p className="mt-2">
-            本ポリシーに関するお問い合わせは、{brand.supportEmail} までご連絡ください。
+            本ポリシーに関するお問い合わせは、{operator.email} までご連絡ください。
           </p>
         </section>
 
