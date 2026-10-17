@@ -15,7 +15,7 @@ import { billSlipLines, colsFor, twoCol as twoColBase, wrapText as wrapTextBase,
 /** Star 機の全角幅（半角2桁よりわずかに広い）を見込んだ桁揃え・折り返し */
 const twoCol = (left: string, right: string, width: number) => twoColBase(left, right, width, STAR_WIDTH_OPTIONS);
 const wrapText = (text: string, width: number) => wrapTextBase(text, width, STAR_WIDTH_OPTIONS);
-import type { KitchenTicketBuzzer, LayoutLine } from './kitchen-ticket';
+import { isUpsideDown, type KitchenTicketBuzzer, type LayoutLine } from './kitchen-ticket';
 import { splitLabel, type RyoshushoSlip } from './ryoshusho-split';
 
 const ESC = 0x1b;
@@ -35,6 +35,9 @@ const CMD = {
   /** 強調（太字）。本文全体に掛ける（店舗要望「文字を少し太く」）。init の直後に送る */
   emphasizeOn: [ESC, 0x45],
   emphasizeOff: [ESC, 0x46],
+  /** 倒立印字（1行ずつ180度回す。行の頭で指定）。SI で開始・DC2 で解除（Star ライン・StarPRNT 共通） */
+  upsideDownOn: [0x0f],
+  upsideDownOff: [0x12],
   /** フィードして部分カット。 */
   cut: [ESC, 0x64, 0x03],
   /** ドロアキック。1番=BEL, 2番=SUB（機種で割り当てが異なるため設定で切替可能にする）。 */
@@ -346,6 +349,9 @@ export function kitchenTicketStarPrnt(
   // 厨房伝票の行は layoutKitchenTicket が桁数どおりに組んであるので、ここでは折り返さない
   const b = new StarBuffer(opts.currency ?? DEFAULT_CURRENCY, opts.encoding ?? DEFAULT_ENCODING);
   b.cmd(CMD.init).cmd(CMD.emphasizeOn);
+  // 上下さかさまのプリンター：倒立印字（行の並びは rotateLines180 が逆にしてある）
+  const upsideDown = isUpsideDown(lines);
+  if (upsideDown) b.cmd(CMD.upsideDownOn);
   let align = '';
   let size = '';
   for (const l of lines) {
@@ -361,6 +367,7 @@ export function kitchenTicketStarPrnt(
     b.line(l.text);
   }
   b.cmd(CMD.magnify(0, 0));
+  if (upsideDown) b.cmd(CMD.upsideDownOff);
   b.line().line();
   b.cmd(CMD.cut);
   return b.toBuffer();

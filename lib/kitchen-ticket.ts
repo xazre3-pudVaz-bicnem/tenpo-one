@@ -208,6 +208,8 @@ export interface ClaimedKitchenItem {
   memo: string | null;
   station: string;
   delta: number;
+  /** 'drink' = セットのドリンク（選択肢）を別の紙に出す行（lib/print-queue.ts の splitSetDrinks が作る） */
+  slip?: 'drink' | null;
 }
 
 export interface KitchenTicketLine {
@@ -221,6 +223,8 @@ export interface KitchenTicketLine {
   memo: string | null;
   /** コースの料理（出す順）として出す行のとき、何番目か。普通の商品は無し */
   step?: CourseStepInfo | null;
+  /** セットのドリンク（ランチドリンクなど）。料理とは別の紙に切って出す */
+  drinkSlip?: boolean;
 }
 
 export interface KitchenTicket {
@@ -232,13 +236,15 @@ export interface KitchenTicket {
   lines: KitchenTicketLine[];
   /** 種類ごとに分けたときの「何枚目／全何枚」（1枚だけのときは付けない） */
   part?: { index: number; total: number } | null;
+  /** ドリンクだけの紙（セットのドリンクを料理と別に切ったもの）。見出しを DRINK にする */
+  drinkSlip?: boolean;
 }
 
 /** 同じ商品として1行にまとめるためのキー（追加と取消は別行） */
 function lineKey(l: KitchenTicketLine): string {
   // コースの料理は「どのコースの何番目か」まで同じものだけまとめる（単品の同じ商品とは混ぜない）
   const step = l.step ? `${l.step.course}\u0003${l.step.index}` : '';
-  return [l.delta > 0 ? '+' : '-', l.name, l.nameEn ?? '', l.modifiers.join('\u0001'), l.memo ?? '', step].join('\u0002');
+  return [l.delta > 0 ? '+' : '-', l.name, l.nameEn ?? '', l.modifiers.join('\u0001'), l.memo ?? '', step, l.drinkSlip ? 'D' : ''].join('\u0002');
 }
 
 /**
@@ -275,6 +281,7 @@ export function groupKitchenTickets(rows: ClaimedKitchenItem[]): KitchenTicket[]
       modifiers: (r.modifiers ?? []).map((m) => (m.name_en?.trim() || m.name)).filter(Boolean),
       memo: r.memo,
       ...(r.course_step ? { step: r.course_step } : {}),
+      ...(r.slip === 'drink' ? { drinkSlip: true } : {}),
     };
     const key = lineKey(line);
     const same = entry.byKey.get(key);
@@ -326,9 +333,64 @@ export function singleCourseOf(lines: readonly KitchenTicketLine[]): string | nu
   return lines.every((l) => l.step && l.step.course === course) ? course : null;
 }
 
-/** 店舗設定の分け方に従って、1回の注文を何枚の伝票にするかを決める */
+/** セットのドリンクの選択肢グループか（名前で判断。例: ランチドリンク・セットドリンク・Drink） */
+export function isDrinkOptionGroupName(name: string | null | undefined): boolean {
+  return /ドリンク|drink|飲み物|beverage/i.test(name ?? '');
+}
+
+/**
+ * 料理の行の選択肢のうち、セットのドリンク（ランチドリンクなど）を別の行にする（slip='drink'＝別の紙に切って出す）。
+ * 2026-10-17 Ronnie「ランチは同じテーブルでもランチドリンクだけ別に切って出す」。
+ * drinkOptionsByOrderItem は 明細の id → その商品のドリンクの選択肢の名前（日本語名）。
+ * ドリンクの商品そのもの（station=drink）・コースの料理・選択肢の無い行はそのまま。
+ */
+export function splitSetDrinkRows(
+  rows: readonly ClaimedKitchenItem[],
+  drinkOptionsByOrderItem: ReadonlyMap<string, ReadonlySet<string>>
+): ClaimedKitchenItem[] {
+  const out: ClaimedKitchenItem[] = [];
+  for (const r of rows) {
+    const names = r.order_item_id ? drinkOptionsByOrderItem.get(r.order_item_id) : undefined;
+    const mods = r.modifiers ?? [];
+    if (!names || names.size === 0 || mods.length === 0 || r.course_step || r.station === 'drink' || r.slip === 'drink') {
+      out.push(r);
+      continue;
+    }
+    const drinks = mods.filter((m) => names.has(m.name));
+    if (drinks.length === 0) {
+      out.push(r);
+      continue;
+    }
+    out.push({ ...r, modifiers: mods.filter((m) => !names.has(m.name)) });
+    for (const m of drinks) {
+      out.push({
+        ...r,
+        item_name: m.name,
+        item_name_en: m.name_en ?? null,
+        item_name_kana: null,
+        modifiers: [],
+        memo: null,
+        station: 'drink',
+        slip: 'drink',
+      });
+    }
+  }
+  return out;
+}
+
+/**
+ * 店舗設定の分け方に従って、1回の注文を何枚の伝票にするかを決める。
+ * セットのドリンク（ランチドリンクなど）は、同じ卓・同じ注文でも料理とは別の紙に切って出す
+ * （2026-10-17 Ronnie「ランチは同じテーブルでもランチドリンクだけ別に切って出す」）。
+ */
 export function ticketSlips(ticket: KitchenTicket, split: KitchenTicketSplit): KitchenTicket[] {
-  return split === 'item' ? splitTicketByItem(ticket) : [ticket];
+  const markDrink = (t: KitchenTicket): KitchenTicket =>
+    t.lines.length > 0 && t.lines.every((l) => l.drinkSlip) ? { ...t, drinkSlip: true } : t;
+  if (split === 'item') return splitTicketByItem(ticket).map(markDrink);
+  const drinks = ticket.lines.filter((l) => l.drinkSlip);
+  if (drinks.length === 0) return [ticket];
+  const food = ticket.lines.filter((l) => !l.drinkSlip);
+  return [...(food.length > 0 ? [{ ...ticket, lines: food }] : []), { ...ticket, lines: drinks, drinkSlip: true }];
 }
 
 /** レンダラ非依存の1行 */
@@ -338,6 +400,8 @@ export interface LayoutLine {
   /** normal=等倍 / tall=縦倍（桁数は変わらない）/ large=縦横倍 */
   size: 'normal' | 'tall' | 'large';
   rule?: boolean;
+  /** 上下さかさまで印字する行（プリンターの倒立印字。rotateLines180 が付ける） */
+  upsideDown?: boolean;
 }
 
 export interface KitchenLayoutOptions extends WidthOptions {
@@ -359,21 +423,21 @@ export interface KitchenLayoutOptions extends WidthOptions {
 /** 伝票1枚ぶんの行を組み立てる。 */
 /**
  * プリンターを上下さかさまに取り付けている店舗向けに、印字を180度回す（2026-09-25 要望）。
- * 行の並びを逆にして、1行の文字も逆順にする。紙をさかさまに読むと正しく見える。
- * 左寄せの行は回すと右寄せに見えるので、あらかじめ右に寄せておく（桁数が分かるときだけ）。
- * 機種ごとのコマンドに頼らないので、Star でも EPSON でも同じように効く。
+ * 行の並びを逆にして、各行に upsideDown を付ける。文字そのものはプリンターの倒立印字で1行ずつ180度回す
+ * （Star の Markup は [invert: on]・StarPRNT は SI、EPSON は <text rotate="true"/>＝ESC {）。
+ * 紙ごと回すと、見出しが上・字も正しい向きで読める。
+ *
+ * 2026-10-17 直し：以前は文字の並びを逆にして右に寄せていただけで、字の形は回っていなかった
+ * （どちら向きにしても読めない・全角「・」の行が1桁はみ出して改行し、行の間が空いていた）。
+ * columns は前の呼び方との互換のため受け取るだけ（使わない）。
  */
-export function rotateLines180(lines: readonly LayoutLine[], columns?: number): LayoutLine[] {
-  return [...lines].reverse().map((l) => {
-    const text = [...l.text].reverse().join('');
-    if (l.align === 'left' && columns && columns > 0) {
-      // large（縦横2倍）は1行に入る桁数が半分になる
-      const cols = l.size === 'large' ? Math.max(8, Math.floor(columns / 2)) : columns;
-      const pad = Math.max(0, cols - [...text].length);
-      return { ...l, text: ' '.repeat(pad) + text };
-    }
-    return { ...l, text };
-  });
+export function rotateLines180(lines: readonly LayoutLine[], _columns?: number): LayoutLine[] {
+  return [...lines].reverse().map((l) => ({ ...l, upsideDown: true }));
+}
+
+/** 上下さかさまで出す伝票か（1行でも upsideDown があれば、その紙は全部倒立で印字する） */
+export function isUpsideDown(lines: readonly LayoutLine[]): boolean {
+  return lines.some((l) => l.upsideDown);
 }
 
 export function layoutKitchenTicket(ticket: KitchenTicket, opts: KitchenLayoutOptions): LayoutLine[] {
