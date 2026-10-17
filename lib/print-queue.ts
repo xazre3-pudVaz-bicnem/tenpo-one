@@ -39,7 +39,11 @@ export const TTL_TEST_MS = 10 * 60_000;
 export const TTL_PRINT_MS = 30 * 60_000; // レシート・厨房伝票（必要ならレシート画面から再印刷できる）
 
 /** キッチン伝票の生成パラメータ（claim_kitchen_items） */
-const KITCHEN_BATCH_DELAY_SECONDS = 3; // 連続タップを1枚にまとめる待ち
+/**
+ * 連続タップを1枚にまとめる待ち。レジが「まとめて送信」（kitchen_sent_at）で送るようになったので待たなくてよい。
+ * 2026-10-17 Ronnie「注文したらすぐ（1秒で）印刷」→ 0 秒。プリンター側の問い合わせ間隔（CloudPRNT）も 1〜2 秒にする
+ */
+const KITCHEN_BATCH_DELAY_SECONDS = 0;
 const KITCHEN_WINDOW_MINUTES = 30; // これより古い変更は伝票にしない（TTL_PRINT_MS と揃える）
 
 
