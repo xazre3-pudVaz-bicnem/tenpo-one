@@ -530,7 +530,8 @@ export function QuickPayScreen({
               guestCount={guests}
               unpaidTotal={orderedTotal}
               tabs={menu.tabs}
-              initialTabId={menu.initialTabId}
+              pages={menu.pages}
+              initialPageKey={menu.initialPageKey}
               optionGroupsByItem={menu.optionGroupsByItem}
               submitAction={submitMenuAction}
               onClose={() => setWantMenu(false)}

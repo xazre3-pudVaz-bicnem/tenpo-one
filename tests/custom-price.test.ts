@@ -74,9 +74,11 @@ describe('カートの「その他」の行', () => {
 });
 
 describe('画面とサーバー', () => {
-  it('ハンディ：各カテゴリの最後に Other。送るときは addCustomPriceItem', () => {
+  it('ハンディ：単品の各カテゴリの最後に Other。送るときは addCustomPriceItem', () => {
     const screen = read('components/handy/handy-order-screen.tsx');
-    expect(screen).toContain('setCustomTarget({ categoryId: c.id');
+    // 2026-10-18 左のカテゴリ一覧 → 右に開いているカテゴリの商品。Other はそのカテゴリ（単品）の最後
+    expect(screen).toContain("category.tabId === 'alacarte'");
+    expect(screen).toContain('setCustomTarget({ categoryId: category.id');
     expect(screen).toContain('<OpenPriceDialog');
     expect(screen).toContain('...(l.custom ? { custom: l.custom } : {})');
     const actions = read('app/app/handy/actions.ts');
