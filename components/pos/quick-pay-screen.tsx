@@ -582,7 +582,7 @@ function RegiKey({
       onClick={onClick}
       disabled={disabled}
       className={cn(
-        'flex h-16 flex-col items-center justify-center rounded-lg border border-b-4 bg-linear-to-b leading-none font-bold shadow-[0_1px_2px_rgba(41, 39, 37,0.12)] transition-transform select-none active:translate-y-[2px] active:border-b-2 disabled:opacity-45',
+        'flex h-16 flex-col items-center justify-center rounded-lg border border-b-4 bg-linear-to-b leading-none font-bold shadow-[0_1px_2px_rgba(41,39,37,0.12)] transition-transform select-none active:translate-y-[2px] active:border-b-2 disabled:opacity-45',
         KEY_TONES[tone]
       )}
     >

@@ -30,7 +30,7 @@ export function TableQrCard({
         <div className="relative px-[6mm] pt-[7mm] pb-[2mm] text-center">
           <div
             aria-hidden
-            className="absolute -top-[20mm] left-1/2 h-[44mm] w-[70mm] -translate-x-1/2 rounded-full bg-[radial-gradient(ellipse,rgba(188, 89, 64,0.45),rgba(188, 89, 64,0)_70%)]"
+            className="absolute -top-[20mm] left-1/2 h-[44mm] w-[70mm] -translate-x-1/2 rounded-full bg-[radial-gradient(ellipse,rgba(188,89,64,0.45),rgba(188,89,64,0)_70%)]"
           />
           <p className={`relative line-clamp-2 leading-[1.25] font-extrabold tracking-[0.04em] text-balance ${storeSize}`}>
             {storeName}

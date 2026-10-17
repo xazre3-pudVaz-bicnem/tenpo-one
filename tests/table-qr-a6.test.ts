@@ -51,3 +51,41 @@ describe('テーブルQR（A6）', () => {
     expect(page).toContain('テーブルQR_A6.pdf');
   });
 });
+
+describe('テーブルQR（名刺サイズ・A4に10面）', () => {
+  // 2026-10-17 Ronnie「名刺サイズ（91×55mm）を A4 に 2列×5段＝10面の PDF」
+  const bc = read('components/settings/table-qr-business-card.tsx');
+  const page = read('app/app/settings/tables/qr-print/page.tsx');
+  const pdf = read('components/settings/table-qr-pdf-button.tsx');
+
+  it('カードは名刺の大きさ（91mm × 55mm）・QR は 37mm・TENPO ONE のロゴ入り', () => {
+    expect(bc).toContain('data-qr-card-bc');
+    expect(bc).toContain('h-[55mm] w-[91mm]');
+    expect(bc).toContain('h-[37mm] w-[37mm]');
+    expect(bc).toContain('/logo-mark.png');
+    expect(bc).toContain('ご注文はスマホから');
+    expect(bc).toContain('ORDER FROM YOUR PHONE');
+    expect(bc).toContain('bg-[#F7F5F0]');
+    expect(bc).toContain('bg-[#BC5940]');
+  });
+
+  it('PDF は A4 に 2列×5段（91/55mm）・10卓ごとに改ページ・点線の切り取り線', () => {
+    expect(pdf).toContain('[data-qr-card-bc]');
+    expect(pdf).toContain('const BC_W = 91');
+    expect(pdf).toContain('const BC_H = 55');
+    expect(pdf).toContain('const BC_COLS = 2');
+    expect(pdf).toContain('const BC_ROWS = 5');
+    expect(pdf).toContain('const slot = i % BC_PER_PAGE');
+    expect(pdf).toContain('if (i > 0 && slot === 0) pdf.addPage("a4", "portrait")');
+    expect(pdf).toMatch(/pdf\.addImage\(png, ["']PNG["'], x, y, BC_W, BC_H/);
+    expect(pdf).toContain('pdf.setLineDashPattern([2, 2], 0)');
+  });
+
+  it('印刷ページに「名刺サイズ・A4に10面」のボタン（A4・4面の右）と画面外のカード', () => {
+    expect(page).toContain('layout="a4-business-card"');
+    expect(page).toContain('PDFでダウンロード（名刺サイズ・A4に10面）');
+    expect(page).toContain('テーブルQR_名刺サイズ.pdf');
+    expect(page).toContain('<TableQrBusinessCard');
+    expect(page.indexOf('PDFでダウンロード（A4・4面）')).toBeLessThan(page.indexOf('PDFでダウンロード（名刺サイズ・A4に10面）'));
+  });
+});
