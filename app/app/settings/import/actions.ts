@@ -96,7 +96,10 @@ async function fetchExistingKeys(
 
 /**
  * 対象店舗の商品（削除済みを除く）を「カテゴリ名|商品名」キー付きで返す。
- * カテゴリ名は menu_categories から引く（カテゴリ未設定の商品はカテゴリ名を空として扱う）。
+ * カテゴリ名は menu_categories から引く。
+ * 削除したカテゴリに残っている商品・カテゴリ未設定の商品は「登録済み」とみなさない
+ * （レジ・ハンディ・QR のどこにも出ない商品に、取込の行が「重複」として吸われて価格もカテゴリも
+ *  更新されなかった。2026-10-17 SHUNKA 新宿本店：カテゴリを全部消してメニューを入れ直したら 80 行がスキップ）。
  */
 async function fetchStoreMenuItems(
   ctx: Ctx,
@@ -114,14 +117,17 @@ async function fetchStoreMenuItems(
       .from('menu_categories')
       .select('id, name')
       .eq('organization_id', ctx.organizationId)
-      .eq('store_id', storeId),
+      .eq('store_id', storeId)
+      .eq('status', 'active'),
   ]);
   const catName = new Map(((cats ?? []) as { id: string; name: string }[]).map((c) => [c.id, c.name]));
-  return ((items ?? []) as { id: string; name: string; category_id: string | null }[]).map((r) => ({
-    id: r.id,
-    name: r.name,
-    key: menuItemDupKey(r.category_id ? (catName.get(r.category_id) ?? '') : '', r.name),
-  }));
+  return ((items ?? []) as { id: string; name: string; category_id: string | null }[])
+    .filter((r) => r.category_id !== null && catName.has(r.category_id))
+    .map((r) => ({
+      id: r.id,
+      name: r.name,
+      key: menuItemDupKey(catName.get(r.category_id as string) ?? '', r.name),
+    }));
 }
 
 /**
