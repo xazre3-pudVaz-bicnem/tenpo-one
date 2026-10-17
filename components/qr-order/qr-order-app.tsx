@@ -154,6 +154,8 @@ export function QrOrderApp({
   const [tab, setTab] = useState<Tab>('menu');
   const [locale, setLocale] = useState<QrLocale>('ja');
   const [started, setStarted] = useState(!startRequired);
+  // 最初の画面で選んだ人数。最初の注文を送ったあとに伝票へ入れる（選んだだけでは伝票を開かない）
+  const pendingGuests = useRef<{ female: number; male: number } | null>(null);
   const qrStrings = QR_STRINGS[locale];
   const [cart, setCart] = useState<CartLine[]>([]);
   const [selectedItem, setSelectedItem] = useState<QrMenuItem | null>(null);
@@ -241,6 +243,17 @@ export function QrOrderApp({
         setSubmitting(false);
         return;
       }
+      // 最初の画面で選んだ人数を、いま開いた伝票に入れる（2026-10-17 Ronnie「注文してから着席にする」）
+      const guests = pendingGuests.current;
+      if (guests) {
+        pendingGuests.current = null;
+        void fetch('/api/qr/start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ slug: storeSlug, token: tableToken, ...guests }),
+          keepalive: true,
+        }).catch(() => undefined);
+      }
       // 厨房の伝票をその場で作る（プリンターの問い合わせを待たない。2026-10-17 Ronnie「印刷を速く」）
       void fetch('/api/qr/kitchen-now', {
         method: 'POST',
@@ -299,17 +312,10 @@ export function QrOrderApp({
     }
   };
 
-  // ご来店の人数を確定 → 伝票を開いて卓を着席に。失敗しても注文へは進める（最初の注文で伝票が開く）
-  const handleStart = async (counts: { female: number; male: number }) => {
-    try {
-      await fetch('/api/qr/start', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ slug: storeSlug, token: tableToken, ...counts }),
-      });
-    } catch {
-      // 続ける
-    }
+  // ご来店の人数を確定 → メニューへ。伝票はまだ開かない（卓は最初の注文で着席になる。2026-10-17 Ronnie）。
+  // 人数は最初の注文を送ったあとに伝票へ入れる
+  const handleStart = (counts: { female: number; male: number }) => {
+    pendingGuests.current = counts;
     setStarted(true);
     mainRef.current?.scrollTo({ top: 0 });
   };
