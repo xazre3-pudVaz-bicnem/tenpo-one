@@ -228,16 +228,35 @@ export function QrOrderApp({
         // 選択肢グループ（レジと同じ 設定 > メニュー選択肢）の選択肢
         option_item_ids: l.modifiers.filter((m) => m.kind === 'option').map((m) => m.id),
       }));
-      const { error } = seatToken
-        ? await supabase.rpc('create_qr_order_at_seat', {
-            p_slug: storeSlug,
-            p_token: tableToken,
-            p_items: items,
-            p_seat_token: seatToken,
-          })
-        : await supabase.rpc('create_qr_order', { p_slug: storeSlug, p_token: tableToken, p_items: items });
-      if (error) {
-        setSubmitError(qrOrderErrorMessage(error.message));
+      // 選択肢グループ（設定 > メニュー選択肢）を選んだ注文は、サーバー（/api/qr/order）で入れる。
+      // データベースの create_qr_order が選択肢を知らない環境でも、レジと同じ検証で明細に残る（2026-10-17）
+      const hasOptions = items.some((i) => i.option_item_ids.length > 0);
+      let errorMessage: string | null = null;
+      if (hasOptions) {
+        try {
+          const res = await fetch('/api/qr/order', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ slug: storeSlug, token: tableToken, seatToken, items }),
+          });
+          const json = (await res.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
+          if (!res.ok || !json?.ok) errorMessage = json?.error ?? 'ORDER_FAILED';
+        } catch {
+          errorMessage = 'NETWORK';
+        }
+      } else {
+        const { error } = seatToken
+          ? await supabase.rpc('create_qr_order_at_seat', {
+              p_slug: storeSlug,
+              p_token: tableToken,
+              p_items: items,
+              p_seat_token: seatToken,
+            })
+          : await supabase.rpc('create_qr_order', { p_slug: storeSlug, p_token: tableToken, p_items: items });
+        if (error) errorMessage = error.message;
+      }
+      if (errorMessage) {
+        setSubmitError(qrOrderErrorMessage(errorMessage));
         setSubmitting(false);
         return;
       }

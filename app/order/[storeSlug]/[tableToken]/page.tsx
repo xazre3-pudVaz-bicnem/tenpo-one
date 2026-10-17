@@ -12,6 +12,8 @@ import { dynamicUnitPrice } from "@/lib/dynamic-pricing";
 import { isMenuSoldOut } from "@/lib/menu-stock";
 import { isPlanTimeOver } from "@/lib/plan-time";
 import { resolveQrGroupToken } from "@/lib/table-group-server";
+import { attachQrOptionGroups, findQrTable, loadQrOptionGroups } from "@/lib/qr-order-server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { qrStartRequired } from "@/lib/qr-visit-server";
 
 interface PageParams {
@@ -68,10 +70,25 @@ export default async function QrOrderPage({ params }: PageParams) {
 
   const course = (reservedCourse as ReservedCourse | null) ?? null;
   // 卓名はお客様が座っている卓（QR を開いた卓）のまま見せる
-  const rawMenu: QrMenuData = {
-    ...(menu as QrMenuData),
-    table_name: resolved.tableName ?? (menu as QrMenuData).table_name,
-  };
+  // 選択肢グループ：データベースの get_qr_menu が option_groups を返さない（00097 未適用）環境でも、
+  // サーバーで読んで足す（レジと同じ 設定 > メニュー選択肢。2026-10-17 MEAT CROWN 新横浜）
+  const optionGroupsByItem = await (async () => {
+    try {
+      const admin = createAdminClient();
+      const table = await findQrTable(admin, storeSlug, tableToken);
+      return table ? await loadQrOptionGroups(admin, table.store_id) : new Map();
+    } catch (e) {
+      console.error("[qr] option groups read failed", e instanceof Error ? e.message : e);
+      return new Map();
+    }
+  })();
+  const rawMenu: QrMenuData = attachQrOptionGroups(
+    {
+      ...(menu as QrMenuData),
+      table_name: resolved.tableName ?? (menu as QrMenuData).table_name,
+    },
+    optionGroupsByItem,
+  );
   // ダイナミックプライシング：今の時間帯の値段で見せる（注文の値段は create_qr_order が同じ計算で決める）
   // 売り切り（本日の食数）：残り0の商品は QR でも「売り切れ」にする（2026-09-25 店舗要望）
   const now = new Date();
