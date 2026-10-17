@@ -15,10 +15,6 @@ export default function PrivacyPage() {
     <div className="mx-auto max-w-3xl px-4 py-16 sm:px-6 sm:py-20">
       <h1 className="text-3xl font-bold text-navy">プライバシーポリシー</h1>
 
-      <p className="mt-4 rounded-lg bg-warning-soft px-4 py-3 text-xs text-warning">
-        （本文書はひな形です。正式表記は事業者確認後に差し替えてください）
-      </p>
-
       <div className="prose-sm mt-10 space-y-8 text-sm leading-relaxed text-gray-700">
         <p>
           {brand.company}（以下「当社」といいます）は、当社が提供するクラウド型店舗管理システム「{brand.name}」（以下「本サービス」といいます）における、お客様の個人情報の取扱いについて、以下のとおりプライバシーポリシー（以下「本ポリシー」といいます）を定めます。
@@ -66,7 +62,7 @@ export default function PrivacyPage() {
         <section>
           <h2 className="text-lg font-bold text-navy">5. 業務委託</h2>
           <p className="mt-2">
-            当社は、利用目的の達成に必要な範囲内において、個人情報の取扱いの全部または一部を委託する場合があります。この場合、委託先に対して適切な監督を行います。
+            当社は、利用目的の達成に必要な範囲内において、個人情報の取扱いの全部または一部を委託する場合があります。この場合、委託先に対して適切な監督を行います。主な委託先は、データの保管・サーバー運用のためのクラウドサービス事業者、およびスマートフォン・タブレットへの通知の配信を行う Apple Inc.（Apple Push Notification service）です。
           </p>
         </section>
 
@@ -92,18 +88,40 @@ export default function PrivacyPage() {
         </section>
 
         <section>
-          <h2 className="text-lg font-bold text-navy">9. 本ポリシーの改定</h2>
+          <h2 className="text-lg font-bold text-navy">9. iPhone・iPad アプリ（{brand.name}）について</h2>
+          <p className="mt-2">
+            {brand.name} の iPhone・iPad アプリ（以下「本アプリ」といいます）は、店舗のスタッフ・オーナーが本サービスを使うためのアプリです。本アプリは、以下の端末の機能を、お客様が許可した場合に限り、記載の目的のためだけに使います。
+          </p>
+          <ul className="mt-2 list-disc space-y-1 pl-5">
+            <li>カメラ：お店の QR コードの読み取り（ハンディのログイン）、レシート・請求書の撮影</li>
+            <li>写真：レシート・請求書の写真を選んで添付するとき</li>
+            <li>ローカルネットワーク：店内の Wi-Fi・LAN のレシートプリンター・キッチンプリンターとの接続</li>
+            <li>Bluetooth：Bluetooth のレシートプリンター（キャッシュドロア）との接続</li>
+            <li>通知：新しい注文・呼び出し・予約などのお知らせ。通知の配信のため、端末の通知用の識別子（デバイストークン）を当社のサーバーに保存します</li>
+          </ul>
+          <p className="mt-2">
+            撮影・選択した写真は、お客様が添付したときだけ本サービスに送信されます。本アプリは、広告の表示、広告目的の追跡（他社のアプリやウェブサイトをまたいだ追跡）、位置情報の取得、端末の連絡先の読み取りを行いません。各機能の許可は、端末の「設定」アプリからいつでも取り消すことができます。
+          </p>
+          <p className="mt-2">
+            本アプリのアカウントは、本サービスの契約企業が発行・管理します。アカウントの削除をご希望の場合は、所属する企業の管理者、または下記のお問い合わせ先までご連絡ください。
+          </p>
+        </section>
+
+        <section>
+          <h2 className="text-lg font-bold text-navy">10. 本ポリシーの改定</h2>
           <p className="mt-2">
             当社は、必要に応じて本ポリシーを改定することがあります。改定後のポリシーは、本ページに掲載した時点から効力を生じるものとします。
           </p>
         </section>
 
         <section>
-          <h2 className="text-lg font-bold text-navy">10. お問い合わせ窓口</h2>
+          <h2 className="text-lg font-bold text-navy">11. お問い合わせ窓口</h2>
           <p className="mt-2">
             本ポリシーに関するお問い合わせは、{brand.supportEmail} までご連絡ください。
           </p>
         </section>
+
+        <p className="text-right text-xs text-gray-500">2026年10月17日 改定</p>
       </div>
     </div>
   );

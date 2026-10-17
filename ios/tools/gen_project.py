@@ -12,6 +12,10 @@ TenpoOne.xcodeproj を作る（Mac に XcodeGen が無いので、ファイル�
   EPSON … ePOS SDK を EPSON のサイトから取って ios/Vendor/libepos2.xcframework に置くと、入れて EPSON_SDK を付ける
 無料の Apple ID（個人のチーム）で自分の iPad・iPhone に入れて試すとき：TENPO_NO_PUSH=1 python3 tools/gen_project.py
   （通知の権限は有料の Apple Developer でないと署名できないため、通知だけ外す）
+App Store に出すとき、Star・EPSON の MFi の承認（PPID）がまだなら：TENPO_NO_MFI=1 python3 tools/gen_project.py
+  （Info.plist から UISupportedExternalAccessoryProtocols を外した App/Info-noMFI.plist で作る。
+   Bluetooth・USB の MFi プリンターは使えないが、LAN・Wi-Fi のプリンター（CloudPRNT・LAN）はそのまま使える。
+   PPID がそろったら、ふつうに作り直して出し直す）
 """
 import hashlib, os, json
 
@@ -28,7 +32,7 @@ def q(v):
     return '"' + s.replace('\\', '\\\\').replace('"', '\\"') + '"'
 
 SHARED_SWIFT = sorted(f for f in os.listdir(os.path.join(ROOT, 'Shared')) if f.endswith('.swift'))
-SHARED_RES = ['Shared.xcassets', 'bell.wav']
+SHARED_RES = ['Shared.xcassets', 'bell.wav', 'PrivacyInfo.xcprivacy']
 
 TARGETS = {
     'TenpoOne': {
@@ -43,6 +47,7 @@ TARGETS = {
 }
 APP = 'TenpoOne'
 NO_PUSH = os.environ.get('TENPO_NO_PUSH') == '1'
+NO_MFI = os.environ.get('TENPO_NO_MFI') == '1'
 
 objs = {}  # id -> (isa, dict)
 def add(id_, isa, **fields):
@@ -57,6 +62,7 @@ def ftype(name):
     if name.endswith('.swift'): return 'sourcecode.swift'
     if name.endswith('.xcassets'): return 'folder.assetcatalog'
     if name.endswith('.wav'): return 'audio.wav'
+    if name.endswith('.xcprivacy'): return 'text.xml'
     if name.endswith('.entitlements'): return 'text.plist.entitlements'
     if name.endswith('.plist'): return 'text.plist.xml'
     return 'text'
@@ -128,6 +134,15 @@ for t, info in TARGETS.items():
     s.update(info['orient'])
     if NO_PUSH:
         del s['CODE_SIGN_ENTITLEMENTS']
+    if NO_MFI:
+        # MFi の承認（PPID）が無いまま審査に出すと止まるので、外部アクセサリーの宣言だけ外した Info.plist で作る
+        import plistlib
+        with open(os.path.join(ROOT, d, 'Info.plist'), 'rb') as fh:
+            plist = plistlib.load(fh)
+        plist.pop('UISupportedExternalAccessoryProtocols', None)
+        with open(os.path.join(ROOT, d, 'Info-noMFI.plist'), 'wb') as fh:
+            plistlib.dump(plist, fh)
+        s['INFOPLIST_FILE'] = f'{d}/Info-noMFI.plist'
     if EPSON_SDK:
         s['SWIFT_ACTIVE_COMPILATION_CONDITIONS'] += ' EPSON_SDK'
         s['SWIFT_OBJC_BRIDGING_HEADER'] = f'{d}/{t}-Bridging-Header.h'

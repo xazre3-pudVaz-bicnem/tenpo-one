@@ -36,6 +36,10 @@
 3. App Store Connect にアプリを1つ作る（TENPO ONE・com.tenpoone.app）、APNs のキーを作って Vercel に入れる
 4. `xcodebuild archive` → App Store Connect に上げる → TestFlight で確かめる → 審査に出す
    - 審査用のデモアカウント（TENPO ONE DEMO）・スクリーンショット（iPad 13インチ・iPhone 6.9インチ）・プライバシーポリシー（/privacy）
+   - プライバシーマニフェスト `Shared/PrivacyInfo.xcprivacy`（追跡なし・UserDefaults CA92.1・集めるデータ）。
+     App Store Connect の「App のプライバシー」も同じ答えにする
+   - Star・EPSON の MFi の承認（PPID）がまだなら `TENPO_NO_MFI=1 python3 tools/gen_project.py` で作って出す
+     （Bluetooth・USB の MFi プリンターだけ使えない。LAN・Wi-Fi のプリンターは使える）。PPID がそろったら、ふつうに作って出し直す
 
 ## レシートプリンター（＋ドロア）を iPad と Bluetooth・USB でつなぐ（2026-10-13〜。Ronnie の iPad に入れて試し中）
 Ronnie「レシートプリンター＋ドロアは iPad と Bluetooth、チケットプリンターは LAN・Wi-Fi。ESC/POS・Star・RP-F10 を選べるように。Airレジ・funfo と同じ」
