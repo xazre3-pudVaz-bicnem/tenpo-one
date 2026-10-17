@@ -62,7 +62,7 @@ export default async function HandyOrderPage({
     return problem(tableId, 'この伝票には注文できません。既に会計済み・取消済みの可能性があります。');
   }
 
-  const { tabs, initialTabId, optionGroupsByItem } = await loadHandyMenu(supabase, ctx.organizationId, store.id, order.id);
+  const { tabs, pages, initialPageKey, optionGroupsByItem } = await loadHandyMenu(supabase, ctx.organizationId, store.id, order.id);
   const tableName = (order.restaurant_tables as unknown as { name: string } | null)?.name ?? '—';
 
   return (
@@ -75,7 +75,8 @@ export default async function HandyOrderPage({
       guestCount={order.guest_count}
       unpaidTotal={Number(order.total ?? 0)}
       tabs={tabs}
-      initialTabId={initialTabId}
+      pages={pages}
+      initialPageKey={initialPageKey}
       optionGroupsByItem={optionGroupsByItem}
       submitAction={submitHandyOrder}
     />

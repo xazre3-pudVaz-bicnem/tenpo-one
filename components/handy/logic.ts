@@ -267,6 +267,85 @@ export function initialHandyTab(
   return tabs[0]?.id ?? null;
 }
 
+/* ------------------------------------------------ 上のタブ＝ページ（2026-10-18） */
+
+export interface HandyPageTabCategory extends HandyCategoryView {
+  /** 元の論理タブ（単品／コース・飲み放題／サービス）。¥0 の商品に金額を打つかの判定に使う */
+  tabId: HandyTabId;
+}
+
+/** 注文画面の上のタブ1つ＝メニューブックのページ（ドリンク・飲み放題・フード・コース・OTHER…） */
+export interface HandyPageTab {
+  key: string;
+  name: string | null;
+  label: string;
+  categories: HandyPageTabCategory[];
+  itemCount: number;
+  /** コース・飲み放題（プランの中身）のカテゴリを含む */
+  hasPlanContent: boolean;
+}
+
+/**
+ * 上のタブを「単品／コース・飲み放題／サービス」ではなく、レジと同じメニューブックのページ
+ * （ドリンク・飲み放題・フード・コース・OTHER…）にする（2026-10-18 Ronnie「左にカテゴリのタテ一覧。全店舗で」）。
+ * buildHandyTabs の結果（論理タブ → ページ → カテゴリ）を、ページごとに論理タブをまたいでまとめ直す。
+ * ページ・カテゴリの並びは pageOrder / categoryOrder（メニューブックの並び。無いものは後ろ）。
+ */
+export function handyPageTabs(
+  tabs: readonly HandyTabView[],
+  pageOrder: readonly string[],
+  categoryOrder: readonly string[]
+): HandyPageTab[] {
+  const rank = (order: readonly string[], key: string) => {
+    const i = order.indexOf(key);
+    return i < 0 ? order.length : i;
+  };
+  const byPage = new Map<string, { tabId: HandyTabId; page: HandyPageView }[]>();
+  for (const t of tabs)
+    for (const p of t.pages) byPage.set(p.key, [...(byPage.get(p.key) ?? []), { tabId: t.id, page: p }]);
+
+  const out: HandyPageTab[] = [];
+  for (const [key, parts] of byPage) {
+    const categories: HandyPageTabCategory[] = [];
+    for (const part of parts) {
+      for (const c of part.page.categories) {
+        const existing = categories.find((x) => x.id === c.id);
+        if (existing) {
+          // 同じカテゴリに単品とコースが混ざる（種類がバラバラ）ときは商品を足す
+          existing.items = [...existing.items, ...c.items].sort(byOrderThenName);
+        } else {
+          categories.push({ ...c, items: [...c.items], tabId: part.tabId });
+        }
+      }
+    }
+    categories.sort((a, b) => rank(categoryOrder, a.id) - rank(categoryOrder, b.id));
+    const first = parts[0].page;
+    out.push({
+      key,
+      name: first.name,
+      label: first.name ?? categories.map((c) => c.name).join('・'),
+      categories,
+      itemCount: categories.reduce((n, c) => n + c.items.length, 0),
+      hasPlanContent: parts.some((x) => x.tabId === 'plan'),
+    });
+  }
+  return out
+    .filter((p) => p.itemCount > 0)
+    .sort((a, b) => rank(pageOrder, a.key) - rank(pageOrder, b.key));
+}
+
+/**
+ * 注文画面を開いたときのページ。飲み放題・コースの卓（initialTabId が plan）なら、プランの中身があるページ。
+ * それ以外は先頭のページ
+ */
+export function initialHandyPage(pages: readonly HandyPageTab[], initialTabId: HandyTabId | null | undefined): string | null {
+  if (initialTabId === 'plan') {
+    const planPage = pages.find((p) => p.hasPlanContent);
+    if (planPage) return planPage.key;
+  }
+  return pages[0]?.key ?? null;
+}
+
 /* ---------------------------------------------------------------- カート */
 
 export interface HandyCartLine {

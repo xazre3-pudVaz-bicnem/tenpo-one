@@ -3,7 +3,7 @@
 import { useMemo, useRef, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ChevronLeft, ChevronRight, PenLine } from 'lucide-react';
+import { ChevronLeft, PenLine } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { yen } from '@/lib/format';
 import { useToast } from '@/components/ui/toast';
@@ -27,7 +27,8 @@ import {
   TILE_ACCENTS,
   type HandyCartLine,
   type HandyMenuItemView,
-  type HandyPageView,
+  type HandyPageTab,
+  type HandyPageTabCategory,
   type HandyTabView,
 } from './logic';
 import type { HandyOrderLineInput, HandySubmitResult } from '@/app/app/handy/actions';
@@ -36,10 +37,12 @@ import { SlideToConfirm } from './slide-to-confirm';
 /**
  * 注文画面（承認済みレイアウトの menu / review）。
  *
- * 上のタブ（1 単品／2 コース・飲み放題／3 サービス）→ ページのタイル（メニューブックのページ。
- * SOUP・APPETIZER・SALAD のようにカテゴリをまとめたもの）→ 商品のタイル（カテゴリごとに見出し）、と
- * 画面を切り替えながらカートへ入れ、「注文確認へ」で独立した注文確認画面に移る。注文確認はお客様の横で
- * 読み上げて確かめるための画面なので、下部バーに畳まず1画面まるごと使う。
+ * 上のタブ＝レジと同じメニューブックのページ（1 ドリンク／2 飲み放題／3 フード／4 コース／5 OTHER…）。
+ * その下は 左にカテゴリのタテ一覧、右にそのカテゴリの商品（名前・値段の大きいタイル）。カテゴリは1タップで
+ * 切り替わり、どのカテゴリを開いているかが左でいつも分かる（2026-10-18 Ronnie「左にタテ一覧。全店舗で」。
+ * それまでは 単品／コース・飲み放題／サービス のタブ → ページのタイル → カテゴリ見出し付きの小さいタイル）。
+ * 「注文確認へ」で独立した注文確認画面に移る。注文確認はお客様の横で読み上げて確かめるための画面なので、
+ * 下部バーに畳まず1画面まるごと使う。
  */
 export function HandyOrderScreen({
   tableId,
@@ -50,7 +53,8 @@ export function HandyOrderScreen({
   guestCount,
   unpaidTotal,
   tabs,
-  initialTabId,
+  pages,
+  initialPageKey,
   optionGroupsByItem,
   submitAction,
   onClose,
@@ -63,9 +67,12 @@ export function HandyOrderScreen({
   orderNo: number;
   guestCount: number;
   unpaidTotal: number;
+  /** 商品の値段の付け直し（repriceCart）用。画面の並びは pages で出す */
   tabs: HandyTabView[];
-  /** 開いたときのタブ（飲み放題・コースの卓は 2 コース・飲み放題） */
-  initialTabId?: string | null;
+  /** 上のタブ＝メニューブックのページ（lib/handy-menu-server の loadHandyMenu） */
+  pages: HandyPageTab[];
+  /** 開いたときのページ（飲み放題・コースの卓はプランの中身があるページ） */
+  initialPageKey?: string | null;
   optionGroupsByItem: Record<string, PosOptionGroup[]>;
   submitAction: (orderId: string, lines: HandyOrderLineInput[]) => Promise<HandySubmitResult>;
   /** 画面の中のポップアップとして使うとき（即会計の「メニュー選択」）: 戻るで閉じる。無ければ卓の画面へ戻る */
@@ -76,10 +83,9 @@ export function HandyOrderScreen({
   const router = useRouter();
   const { toast } = useToast();
   const [step, setStep] = useState<'menu' | 'review'>('menu');
-  const [tabId, setTabId] = useState<string>(initialTabId ?? tabs[0]?.id ?? 'alacarte');
-  const [pageKey, setPageKey] = useState<string | null>(null);
-  /** ページの中のカテゴリで絞る（null＝すべて）。ページを変えたら「すべて」に戻る（お客様QRと同じ。2026-10-02 FULL MOoN） */
-  const [catFilter, setCatFilter] = useState<{ pageKey: string; catId: string } | null>(null);
+  const [pageKey, setPageKey] = useState<string | null>(initialPageKey ?? pages[0]?.key ?? null);
+  /** ページごとに開いているカテゴリ（タブを行き来しても戻ってくる）。無ければ先頭のカテゴリ */
+  const [catByPage, setCatByPage] = useState<Record<string, string>>({});
   const [optionTarget, setOptionTarget] = useState<HandyMenuItemView | null>(null);
   /** 「その他（価格入力）」を押したカテゴリ */
   const [customTarget, setCustomTarget] = useState<{ categoryId: string; label: string } | null>(null);
@@ -96,16 +102,27 @@ export function HandyOrderScreen({
   // 二重送信の保険（連打で startTransition が2回走るのを防ぐ）
   const sendingRef = useRef(false);
 
-  const tab = tabs.find((t) => t.id === tabId) ?? tabs[0] ?? null;
-  const page = tab?.pages.find((p) => p.key === pageKey) ?? null;
-  const catId = page && catFilter?.pageKey === page.key ? catFilter.catId : null;
-  const shownCategories = page ? (catId ? page.categories.filter((c) => c.id === catId) : page.categories) : [];
+  const page = pages.find((p) => p.key === pageKey) ?? pages[0] ?? null;
+  const category: HandyPageTabCategory | null = page
+    ? (page.categories.find((c) => c.id === catByPage[page.key]) ?? page.categories[0] ?? null)
+    : null;
 
   const quantityByItem = useMemo(() => {
     const map = new Map<string, number>();
     for (const line of cart) map.set(line.menuItemId, (map.get(line.menuItemId) ?? 0) + line.quantity);
     return map;
   }, [cart]);
+  /** カテゴリごとのカートの点数（左の一覧のバッジ。どこに何を入れたかが分かる） */
+  const quantityByCategory = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const p of pages)
+      for (const c of p.categories) {
+        let n = 0;
+        for (const i of c.items) n += quantityByItem.get(i.id) ?? 0;
+        if (n > 0) map.set(c.id, n);
+      }
+    return map;
+  }, [pages, quantityByItem]);
 
   // メニュー設定で値段が変わったら（Realtime で画面が読み直される）、カートの値段も新しい値段で出す
   const pricedCart = useMemo(() => repriceCart(cart, tabs, optionGroupsByItem), [cart, tabs, optionGroupsByItem]);
@@ -140,8 +157,8 @@ export function HandyOrderScreen({
     );
   };
 
-  /** 金額を打つ商品か（¥0 の単品。コース・飲み放題タブの ¥0＝プランの中身、サービスタブの ¥0 は打たない） */
-  const isOpenPriceItem = (item: HandyMenuItemView) => tab?.id === 'alacarte' && Number(item.price) === 0;
+  /** 金額を打つ商品か（¥0 の単品。コース・飲み放題の ¥0＝プランの中身、サービスの ¥0 は打たない） */
+  const isOpenPriceItem = (item: HandyMenuItemView) => category?.tabId === 'alacarte' && Number(item.price) === 0;
 
   const handleItemTap = (item: HandyMenuItemView) => {
     if (item.isSoldOut || item.offHours) return;
@@ -349,25 +366,26 @@ export function HandyOrderScreen({
           >
             <ChevronLeft className="h-6 w-6" strokeWidth={2.2} aria-hidden />
           </BackToTable>
+          {/* 上のタブ＝メニューブックのページ（レジと同じ並び） */}
           <div className="flex min-w-0 flex-1 items-stretch overflow-x-auto">
-            {tabs.map((t, i) => (
+            {pages.map((p, i) => (
               <button
-                key={t.id}
+                key={p.key}
                 type="button"
-                aria-pressed={t.id === tab?.id}
-                onClick={() => {
-                  setTabId(t.id);
-                  setPageKey(null);
+                aria-pressed={p.key === page?.key}
+                ref={(el) => {
+                  if (el && p.key === page?.key) el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
                 }}
+                onClick={() => setPageKey(p.key)}
                 className={cn(
-                  'flex min-w-[86px] flex-1 flex-col items-center justify-center gap-[3px] rounded-t-[11px] border border-b-0 px-1 text-xs leading-[1.15] font-bold whitespace-nowrap',
-                  t.id === tab?.id
+                  'flex min-w-[64px] flex-1 flex-col items-center justify-center gap-[3px] rounded-t-[11px] border border-b-0 px-1 text-xs leading-[1.15] font-bold whitespace-nowrap',
+                  p.key === page?.key
                     ? 'border-[#fbf9f5] bg-[#fbf9f5] text-[#bc5940]'
                     : 'border-[#4a433d] bg-[#45403b] text-[#dcc0b0]'
                 )}
               >
                 <b className="block text-lg">{i + 1}</b>
-                {t.label}
+                {p.label}
               </button>
             ))}
           </div>
@@ -376,43 +394,22 @@ export function HandyOrderScreen({
 
       <div className="flex min-h-[27px] flex-none items-center justify-between gap-2 px-1.5 py-[5px] text-[10px] text-[#8a8a8a]">
         <span className="flex min-w-0 items-center gap-1.5">
-          {/* 1ページ前に戻る（2026-09-22 店舗要望「全部の画面で1ページ前に戻るボタンがほしい」）:
-              商品の画面 → ページのタイル、ページのタイル → 卓の画面 */}
-          {page ? (
-            <button
-              type="button"
-              onClick={() => setPageKey(null)}
-              aria-label={`${tab?.label ?? 'ページ一覧'}へ戻る`}
-              className="flex min-h-[34px] shrink-0 items-center gap-0.5 rounded-[8px] border border-[#ead9cc] bg-white pr-2.5 pl-1 text-[12px] font-bold text-[#bc5940] shadow-[0_1px_2px_#00000008] active:bg-[#f6e4da]"
-            >
-              <ChevronLeft className="h-4 w-4" strokeWidth={2.4} aria-hidden />
-              戻る
-            </button>
-          ) : (
-            <BackToTable
-              tableId={tableId}
-              onClose={onClose}
-              aria-label="卓の画面へ戻る"
-              className="flex min-h-[34px] shrink-0 items-center gap-0.5 rounded-[8px] border border-[#ead9cc] bg-white pr-2.5 pl-1 text-[12px] font-bold text-[#bc5940] shadow-[0_1px_2px_#00000008] active:bg-[#f6e4da]"
-            >
-              <ChevronLeft className="h-4 w-4" strokeWidth={2.4} aria-hidden />
-              戻る
-            </BackToTable>
-          )}
-          {page ? (
+          {/* 卓の画面へ戻る（2026-09-22 店舗要望「全部の画面で1ページ前に戻るボタンがほしい」） */}
+          <BackToTable
+            tableId={tableId}
+            onClose={onClose}
+            aria-label="卓の画面へ戻る"
+            className="flex min-h-[34px] shrink-0 items-center gap-0.5 rounded-[8px] border border-[#ead9cc] bg-white pr-2.5 pl-1 text-[12px] font-bold text-[#bc5940] shadow-[0_1px_2px_#00000008] active:bg-[#f6e4da]"
+          >
+            <ChevronLeft className="h-4 w-4" strokeWidth={2.4} aria-hidden />
+            戻る
+          </BackToTable>
+          <span className="truncate">{page?.label ?? '—'}</span>
+          {category && page && page.categories.length > 1 && (category.nameEn ?? category.name) !== page.label && (
             <>
-              <button
-                type="button"
-                onClick={() => setPageKey(null)}
-                className="min-h-[30px] shrink-0 text-[10px] text-[#bc5940]"
-              >
-                {tab?.label}
-              </button>
               <span className="shrink-0">›</span>
-              <span className="truncate">{page.label}</span>
+              <span className="truncate text-[#5c5650]">{category.nameEn ?? category.name}</span>
             </>
-          ) : (
-            <span className="truncate">{tab?.label ?? '—'}</span>
           )}
         </span>
         <BackToTable
@@ -424,70 +421,67 @@ export function HandyOrderScreen({
         </BackToTable>
       </div>
 
-      {/* ページの中のカテゴリのタブ（すべて・BEER・HIGHBALL…。2026-10-02 FULL MOoN 御茶ノ水「お客様QRのようなタブがほしい」） */}
-      {page && page.categories.length > 1 && (
-        <div className="flex flex-none gap-1.5 overflow-x-auto px-1.5 pb-1.5" role="group" aria-label="カテゴリ">
-          {[{ id: null as string | null, label: 'すべて' }, ...page.categories.map((c) => ({ id: c.id as string | null, label: c.nameEn ?? c.name }))].map(
-            (chip) => {
-              const on = chip.id === catId;
-              return (
-                <button
-                  key={chip.id ?? 'all'}
-                  type="button"
-                  aria-pressed={on}
-                  onClick={() => setCatFilter(chip.id ? { pageKey: page.key, catId: chip.id } : null)}
-                  className={cn(
-                    'min-h-[34px] shrink-0 rounded-full border px-3.5 text-[12px] font-bold whitespace-nowrap',
-                    on
-                      ? 'border-[#bc5940] bg-[#bc5940] text-white'
-                      : 'border-[#ead9cc] bg-white text-[#5c5650] active:bg-[#f6e4da]'
-                  )}
-                >
-                  {chip.label}
-                </button>
-              );
-            }
-          )}
-        </div>
-      )}
-
-      <HandyMain>
-        {tabs.length === 0 ? (
+      {pages.length === 0 || !page ? (
+        <HandyMain>
           <p className="px-6 py-9 text-center text-[13px] leading-loose text-[#766b62]">
             注文できる商品がありません。
             <br />
             メニュー設定を確認してください。
           </p>
-        ) : !page ? (
-          <ul className="grid grid-cols-3 gap-x-2 gap-y-[17px] px-[5px] pt-2 pb-5 sm:grid-cols-4 lg:grid-cols-6">
-            {(tab?.pages ?? []).map((p, i) => (
-              <li key={p.key}>
-                <button
-                  type="button"
-                  onClick={() => setPageKey(p.key)}
-                  aria-label={`${p.label}（${p.itemCount}品）`}
-                  style={{ borderBottomColor: TILE_ACCENTS[i % TILE_ACCENTS.length] }}
-                  className="tap3d flex aspect-square w-full items-center justify-between gap-1 overflow-hidden rounded-[10px] border border-[#e5dfd5] bg-white px-3 py-2.5 text-left text-xs font-bold break-words text-[#45403b] active:bg-[#f6e4da]"
+        </HandyMain>
+      ) : (
+        <div className="flex min-h-0 flex-1">
+          {/* 左：カテゴリのタテ一覧（1タップで切り替え。カートに入れた点数をバッジで） */}
+          {page.categories.length > 1 && (
+            <nav
+              aria-label="カテゴリ"
+              className="w-[104px] flex-none overflow-y-auto overscroll-contain border-r border-[#e5dfd5] bg-[#efe9e2] sm:w-[136px]"
+            >
+              {page.categories.map((c) => {
+                const on = c.id === category?.id;
+                const n = quantityByCategory.get(c.id) ?? 0;
+                return (
+                  <button
+                    key={c.id}
+                    type="button"
+                    aria-pressed={on}
+                    onClick={() => setCatByPage((cur) => ({ ...cur, [page.key]: c.id }))}
+                    className={cn(
+                      'relative flex min-h-[54px] w-full flex-col items-start justify-center gap-0.5 border-b border-[#e3dbd0] px-2 py-2 text-left text-[12px] leading-[1.2] font-bold break-words',
+                      on
+                        ? 'border-l-4 border-l-[#bc5940] bg-[#fbf9f5] pl-[6px] text-[#bc5940]'
+                        : 'text-[#5c5650] active:bg-[#f6e4da]'
+                    )}
+                  >
+                    <span>{c.nameEn ?? c.name}</span>
+                    {c.nameEn && <span className="text-[9px] font-normal text-[#8a8178]">{c.name}</span>}
+                    {n > 0 && (
+                      <span className="absolute top-1 right-1 min-w-[18px] rounded-full bg-[#bc5940] px-1 py-px text-center text-[10px] font-bold text-white">
+                        {n}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </nav>
+          )}
+
+          {/* 右：開いているカテゴリの商品 */}
+          <HandyMain className="bg-[#f6f3ef]">
+            {category && (
+              <div className="px-2 pt-2 pb-5">
+                <h2 className="mb-2 flex items-baseline gap-1.5 px-0.5 text-[13px] font-bold text-[#45403b]">
+                  <span className="truncate">{category.nameEn ?? category.name}</span>
+                  {category.nameEn && <span className="truncate text-[10px] font-normal text-[#8a8178]">{category.name}</span>}
+                  <span className="ml-auto shrink-0 text-[11px] font-normal text-[#a89e92]">{category.items.length}品</span>
+                </h2>
+                <ul
+                  className={cn(
+                    'grid gap-2',
+                    page.categories.length > 1 ? 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5' : 'grid-cols-3 sm:grid-cols-4 lg:grid-cols-6'
+                  )}
                 >
-                  <PageTileLabel page={p} />
-                  <ChevronRight className="h-[13px] w-[13px] shrink-0 text-[#d8cec2]" aria-hidden />
-                </button>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <div className="px-[5px] pt-2 pb-5">
-            {shownCategories.map((c) => (
-              <section key={c.id} className="mb-4 last:mb-0">
-                {shownCategories.length > 1 && (
-                  <h2 className="mb-2 flex items-center gap-2 px-1 text-[11px] font-bold tracking-wide text-[#5c5650]">
-                    <span className="h-3 w-1 rounded bg-[#bc5940]" aria-hidden />
-                    {c.nameEn ?? c.name}
-                    <span className="font-normal text-[#a89e92]">{c.items.length}</span>
-                  </h2>
-                )}
-                <ul className="grid grid-cols-3 gap-x-2 gap-y-[17px] sm:grid-cols-4 lg:grid-cols-6">
-                  {c.items.map((item, i) => {
+                  {category.items.map((item, i) => {
                     const inCart = quantityByItem.get(item.id) ?? 0;
                     const disabled = item.isSoldOut || item.offHours;
                     return (
@@ -497,26 +491,18 @@ export function HandyOrderScreen({
                           disabled={disabled}
                           onClick={() => handleItemTap(item)}
                           aria-label={`${item.name} ${yen(item.price)} を追加`}
-                          style={
-                            disabled ? undefined : { borderBottomColor: TILE_ACCENTS[i % TILE_ACCENTS.length] }
-                          }
+                          style={disabled ? undefined : { borderBottomColor: TILE_ACCENTS[i % TILE_ACCENTS.length] }}
                           className={cn(
-                            'tap3d relative flex aspect-square w-full items-center justify-center overflow-hidden rounded-[10px] border border-[#e5dfd5] bg-white px-[7px] py-[9px] text-center text-xs font-bold break-words text-[#45403b]',
+                            'tap3d relative flex min-h-[92px] w-full flex-col items-center justify-center gap-1 overflow-hidden rounded-[10px] border border-[#e5dfd5] bg-white px-2 pt-3 pb-2.5 text-center text-[15px] leading-[1.25] font-bold break-words text-[#45403b]',
                             disabled ? 'border-b-[#e5dfd5] opacity-50' : 'active:bg-[#f6e4da]',
                             inCart > 0 && !disabled && 'border-[#bc5940] bg-[#f6e4da]'
                           )}
                         >
                           {/* ハンディは英語を主にする（日本語を読まないスタッフが打つため。2026-09-24 店舗要望）。
                               日本語名は下に小さく残す */}
-                          <span className="flex flex-col gap-0.5 pb-[18px]">
-                            <span>{item.nameEn ?? item.name}</span>
-                            {item.nameEn && (
-                              <span className="text-[9px] font-normal text-[#766b62]">{item.name}</span>
-                            )}
-                          </span>
-                          <span className="absolute inset-x-0 bottom-[9px] text-[9px] font-normal text-[#766b62] tabular-nums">
-                            {yen(item.price)}
-                          </span>
+                          <span>{item.nameEn ?? item.name}</span>
+                          {item.nameEn && <span className="text-[10px] font-normal text-[#766b62]">{item.name}</span>}
+                          <span className="text-[13px] font-bold text-[#bc5940] tabular-nums">{yen(item.price)}</span>
                           {item.isSoldOut && (
                             <span className="absolute inset-x-1.5 top-1/2 -translate-y-1/2 rounded bg-[#c62828] px-1 py-0.5 text-[11px] font-bold text-white">
                               売切
@@ -528,38 +514,38 @@ export function HandyOrderScreen({
                             </span>
                           )}
                           {inCart > 0 && (
-                            <span className="absolute top-[5px] right-[5px] min-w-[21px] rounded-xl bg-[#bc5940] px-[5px] py-0.5 text-[10px] font-bold text-white">
+                            <span className="absolute top-[5px] right-[5px] min-w-[22px] rounded-xl bg-[#bc5940] px-[6px] py-0.5 text-[11px] font-bold text-white">
                               {inCart}
                             </span>
                           )}
                           {item.hasOptions && (
-                            <span className="absolute top-[5px] left-[5px] text-[9px] font-normal text-[#766b62]">
-                              選択肢
-                            </span>
+                            <span className="absolute top-[5px] left-[6px] text-[9px] font-normal text-[#766b62]">選択肢</span>
                           )}
                         </button>
                       </li>
                     );
                   })}
-                  {/* 最後に「その他（価格入力）」。お客様が何か追加したとき金額を打って入れる（2026-10-07 Ronnie） */}
-                  <li>
-                    <button
-                      type="button"
-                      onClick={() => setCustomTarget({ categoryId: c.id, label: c.nameEn ?? c.name })}
-                      aria-label={`${c.name}：その他（金額を入力）`}
-                      className="tap3d relative flex aspect-square w-full flex-col items-center justify-center gap-1 overflow-hidden rounded-[10px] border border-dashed border-[#d4b3a3] bg-[#fbf9f5] px-[7px] py-[9px] text-center text-xs font-bold text-[#bc5940] active:bg-[#f6e4da]"
-                    >
-                      <PenLine className="h-5 w-5" aria-hidden />
-                      <span>Other</span>
-                      <span className="text-[9px] font-normal text-[#766b62]">その他・金額入力</span>
-                    </button>
-                  </li>
+                  {/* 単品のカテゴリの最後に「その他（価格入力）」。お客様が何か追加したとき金額を打って入れる（2026-10-07 Ronnie） */}
+                  {category.tabId === 'alacarte' && (
+                    <li>
+                      <button
+                        type="button"
+                        onClick={() => setCustomTarget({ categoryId: category.id, label: category.nameEn ?? category.name })}
+                        aria-label={`${category.name}：その他（金額を入力）`}
+                        className="tap3d relative flex min-h-[92px] w-full flex-col items-center justify-center gap-1 overflow-hidden rounded-[10px] border border-dashed border-[#d4b3a3] bg-[#fbf9f5] px-2 py-2 text-center text-[13px] font-bold text-[#bc5940] active:bg-[#f6e4da]"
+                      >
+                        <PenLine className="h-5 w-5" aria-hidden />
+                        <span>Other</span>
+                        <span className="text-[9px] font-normal text-[#766b62]">その他・金額入力</span>
+                      </button>
+                    </li>
+                  )}
                 </ul>
-              </section>
-            ))}
-          </div>
-        )}
-      </HandyMain>
+              </div>
+            )}
+          </HandyMain>
+        </div>
+      )}
 
       <div className="flex-none bg-[#fbf9f5] px-3.5 pt-2 pb-2.5">
         <button
@@ -603,35 +589,6 @@ export function HandyOrderScreen({
         />
       )}
     </>
-  );
-}
-
-/**
- * ページのタイルの文字。名前を付けたページは名前、1カテゴリのページはカテゴリ名、
- * 複数カテゴリのページはカテゴリ名を1行ずつ（多いときは4つ目以降を「ほかN」にまとめる）。
- */
-function PageTileLabel({ page }: { page: HandyPageView }) {
-  if (page.name || page.categories.length === 1) {
-    const only = page.categories.length === 1 ? page.categories[0] : null;
-    const en = page.name ? null : (only?.nameEn ?? null);
-    return (
-      <span className="flex min-w-0 flex-col gap-0.5">
-        <span>{en ?? page.name ?? only?.name}</span>
-        {en && <span className="text-[9px] font-normal text-[#766b62]">{only?.name}</span>}
-      </span>
-    );
-  }
-  const shown = page.categories.length > 4 ? page.categories.slice(0, 3) : page.categories;
-  const rest = page.categories.length - shown.length;
-  return (
-    <span className="flex min-w-0 flex-col gap-1 text-[11px] leading-[1.2]">
-      {shown.map((c) => (
-        <span key={c.id} className="line-clamp-2 break-words">
-          {c.nameEn ?? c.name}
-        </span>
-      ))}
-      {rest > 0 && <span className="text-[10px] font-normal text-[#766b62]">ほか{rest}</span>}
-    </span>
   );
 }
 

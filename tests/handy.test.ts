@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import {
   addCartLine,
   buildHandyTabs,
+  handyPageTabs,
+  initialHandyPage,
   callToneByTable,
   cartCount,
   cartLineKey,
@@ -381,5 +383,62 @@ describe('tableState', () => {
     expect(tableState('billing', false)).toBe('occupied');
     expect(tableState('waiting', false)).toBe('available');
     expect(tableState(null, false)).toBe('available');
+  });
+});
+
+describe('handyPageTabs（上のタブ＝ページ。2026-10-18 Ronnie「左にカテゴリのタテ一覧」）', () => {
+  const categories = [
+    category('c-soup', 'SOUP', 'kitchen', 10),
+    category('c-app', 'APPETIZER', 'kitchen', 20),
+    category('c-beer', 'BEER', 'drink', 40),
+    category('c-fsoft', '(F) SOFT DRINK', 'drink', 50),
+    category('c-plan', '飲み放題', 'drink', 45),
+    category('c-course', 'Course', 'kitchen', 60),
+    category('c-opt', 'オプション', 'kitchen', 70),
+  ];
+  const items = [
+    item('i-soup', 'c-soup', 'food'),
+    item('i-app', 'c-app', 'food'),
+    item('i-beer', 'c-beer', 'drink'),
+    item('i-ftea', 'c-fsoft', 'drink', { price: 0 }),
+    item('i-nomi', 'c-plan', 'course'),
+    item('i-course', 'c-course', 'course'),
+    item('i-opt', 'c-opt', 'option'),
+  ];
+  const planCategoryIds = new Set(['c-fsoft']);
+  const pagesConfig = {
+    pages: [
+      { key: 'drink', name: 'ドリンク' },
+      { key: 'nomihodai', name: '飲み放題' },
+      { key: 'food', name: 'フード' },
+      { key: 'course', name: 'コース' },
+      { key: 'service', name: 'サービス' },
+    ],
+    categoryPage: { 'c-soup': 'food', 'c-app': 'food', 'c-beer': 'drink', 'c-fsoft': 'nomihodai', 'c-plan': 'nomihodai', 'c-course': 'course', 'c-opt': 'service' },
+  };
+
+  it('論理タブをまたいで、メニューブックのページの並びで1本のタブ列にする', () => {
+    const tabs = buildHandyTabs(categories, items, '12:00', { planCategoryIds, pages: pagesConfig });
+    const pages = handyPageTabs(tabs, pagesConfig.pages.map((p) => p.key), [...categories].sort((a, b) => a.sortOrder - b.sortOrder).map((c) => c.id));
+    expect(pages.map((p) => p.label)).toEqual(['ドリンク', '飲み放題', 'フード', 'コース', 'サービス']);
+    const nomi = pages[1];
+    // 飲み放題ページ＝プラン（コース扱い）と (F) の中身（プランのときだけ）が同じページにまとまる。カテゴリは並び順
+    expect(nomi.categories.map((c) => c.name)).toEqual(['飲み放題', '(F) SOFT DRINK']);
+    expect(nomi.hasPlanContent).toBe(true);
+    expect(nomi.itemCount).toBe(2);
+    // 単品のカテゴリは tabId が alacarte（¥0 の商品に金額を打つ判定に使う）
+    expect(pages[2].categories.map((c) => [c.name, c.tabId])).toEqual([
+      ['SOUP', 'alacarte'],
+      ['APPETIZER', 'alacarte'],
+    ]);
+    expect(pages[4].categories[0].tabId).toBe('service');
+  });
+
+  it('開いたときのページ：飲み放題・コースの卓はプランの中身があるページ、それ以外は先頭', () => {
+    const tabs = buildHandyTabs(categories, items, '12:00', { planCategoryIds, pages: pagesConfig });
+    const pages = handyPageTabs(tabs, pagesConfig.pages.map((p) => p.key), [...categories].sort((a, b) => a.sortOrder - b.sortOrder).map((c) => c.id));
+    expect(initialHandyPage(pages, 'plan')).toBe('nomihodai');
+    expect(initialHandyPage(pages, 'alacarte')).toBe('drink');
+    expect(initialHandyPage([], 'plan')).toBeNull();
   });
 });

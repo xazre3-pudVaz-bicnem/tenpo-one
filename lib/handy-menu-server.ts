@@ -1,13 +1,16 @@
 import type { createClient } from '@/lib/supabase/server';
 import {
   buildHandyTabs,
+  handyPageTabs,
+  initialHandyPage,
   initialHandyTab,
   type HandyCategoryInput,
   type HandyMenuItemInput,
+  type HandyPageTab,
   type HandyTabView,
 } from '@/components/handy/logic';
 import type { PosOptionGroup } from '@/components/pos/option-dialog';
-import { filterMenuBook, planCategoryIds } from '@/lib/menu-book';
+import { filterMenuBook, menuBookPages, planCategoryIds } from '@/lib/menu-book';
 import { englishName } from '@/lib/romaji';
 import { loadMenuStock } from '@/lib/menu-stock-server';
 import { isMenuSoldOut } from '@/lib/menu-stock';
@@ -17,8 +20,12 @@ import { sortOptionGroupLinks } from '@/lib/option-group-order';
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
 export interface HandyMenuData {
+  /** 論理タブ（単品／コース・飲み放題／サービス）→ ページ → カテゴリ → 商品。値段の付け直しに使う */
   tabs: HandyTabView[];
   initialTabId: string | null;
+  /** 注文画面の上のタブ＝メニューブックのページ（2026-10-18。レジと同じ並び） */
+  pages: HandyPageTab[];
+  initialPageKey: string | null;
   optionGroupsByItem: Record<string, PosOptionGroup[]>;
 }
 
@@ -137,5 +144,11 @@ export async function loadHandyMenu(
   const planIds = planCategoryIds(categoryInputs, itemInputs, menuBook);
   const tabs = buildHandyTabs(categoryInputs, visible.items, nowHm, { planCategoryIds: planIds, pages: menuBook });
   const initialTabId = initialHandyTab(tabs, planIds, plan.hasPlan);
-  return { tabs, initialTabId, optionGroupsByItem };
+  // 注文画面の上のタブ＝メニューブックのページ（レジと同じ）。左のカテゴリ一覧もメニューブックの並び
+  const categoryOrder = [...categoryInputs]
+    .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name, 'ja'))
+    .map((c) => c.id);
+  const pages = handyPageTabs(tabs, menuBookPages(menuBook).map((p) => p.key), categoryOrder);
+  const initialPageKey = initialHandyPage(pages, initialTabId);
+  return { tabs, initialTabId, pages, initialPageKey, optionGroupsByItem };
 }
