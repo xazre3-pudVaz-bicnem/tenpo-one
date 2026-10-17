@@ -1,6 +1,8 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { after } from 'next/server';
+import { generateKitchenJobsForStore } from '@/lib/print-queue';
 import { assertStoreAccess, requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { isMissingColumnError } from '@/lib/schema-compat';
@@ -32,6 +34,20 @@ import {
 } from '@/lib/custom-price';
 
 const COUPON_PREFIX = 'クーポン: ';
+
+/**
+ * 厨房へ送ったら、その場でキッチン機の伝票ジョブを作る（2026-10-17 Ronnie「印刷が遅い。0秒で出るように」）。
+ * 返事は待たない（after）。失敗しても今まで通りプリンターの問い合わせのときに作られる。
+ */
+function kickKitchenPrint(storeId: string) {
+  after(async () => {
+    try {
+      await generateKitchenJobsForStore(createAdminClient(), storeId);
+    } catch (e) {
+      console.error('[pos] immediate kitchen print failed', storeId, e instanceof Error ? e.message : e);
+    }
+  });
+}
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
@@ -461,7 +477,7 @@ async function insertOrderItem(
 export async function sendItemsToKitchen(orderId: string, itemIds: string[]): Promise<SendOrderResult> {
   const ctx = await requirePermission('pos.order');
   const supabase = await createClient();
-  await loadOpenOrder(supabase, ctx, orderId);
+  const order = await loadOpenOrder(supabase, ctx, orderId);
   const ids = [...new Set(itemIds.filter(Boolean))];
   if (ids.length === 0) return { sent: 0 };
 
@@ -476,6 +492,7 @@ export async function sendItemsToKitchen(orderId: string, itemIds: string[]): Pr
     if (isMissingColumnError(error.message, 'kitchen_sent_at')) return { sent: ids.length };
     throw new Error(error.message);
   }
+  if ((data ?? []).length > 0) kickKitchenPrint(order.store_id);
   revalidatePath(`/app/pos`);
   revalidatePath(`/app/kitchen`);
   return { sent: (data ?? []).length };
@@ -542,6 +559,7 @@ export async function sendOrderToKitchen(orderId: string): Promise<SendOrderResu
   if (sent == null) {
     throw new Error('厨房へのまとめ送信はまだ有効になっていません（DB更新待ち）。品目は追加時に厨房へ送られています');
   }
+  if (sent > 0) kickKitchenPrint(order.store_id);
   revalidatePath(`/app/pos`);
   revalidatePath(`/app/kitchen`);
   // 送れたときは何も出さない。印刷されていない恐れがあるときだけ知らせる

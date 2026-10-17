@@ -190,10 +190,10 @@ async function expandCourseItems(admin: Admin, rows: ClaimedKitchenItem[], steps
  * 端末（iPad等）が起動していなくても、QR注文の伝票がプリンタから出る。
  * 店舗設定が「商品の種類ごと」なら1商品1枚に分け、1回の注文ぶんを1つのジョブ（1枚ごとにカット）にする。
  */
-export async function generateKitchenJobs(admin: Admin, printer: PrinterRow) {
+export async function generateKitchenJobs(admin: Admin, printer: PrinterRow, opts: { batchDelaySeconds?: number } = {}) {
   const { data, error } = await admin.rpc('claim_kitchen_items', {
     p_printer: printer.id,
-    p_batch_delay_seconds: KITCHEN_BATCH_DELAY_SECONDS,
+    p_batch_delay_seconds: opts.batchDelaySeconds ?? KITCHEN_BATCH_DELAY_SECONDS,
     p_window_minutes: KITCHEN_WINDOW_MINUTES,
   });
   if (error) {
@@ -254,6 +254,35 @@ export async function generateKitchenJobs(admin: Admin, printer: PrinterRow) {
     // 明細は伝達済みに更新済みのため、ここで失敗すると伝票が出ない。KDS画面で確認できるよう記録を残す。
     console.error('[print-queue] kitchen job insert failed', printer.id, insErr.message);
   }
+}
+
+/**
+ * 厨房へ送ったその場で、その店のキッチン機すべての伝票ジョブを作る（2026-10-17 Ronnie「印刷が遅い。すぐ出るように」）。
+ * これまでは「プリンターが次に問い合わせてきたとき」に、送ってから 3 秒たった品だけを伝票にしていたので、
+ * 問い合わせ間隔＋3 秒（MEAT CROWN で平均 11 秒）待ってから伝票ができていた。
+ * Order のスライド・ハンディの送信・お客様QRの注文は「送る」と決めた瞬間なので、待たずに今つくる（まとめる待ちは 0 秒）。
+ * プリンターは次の問い合わせ（1〜5 秒）ですぐ受け取る。同じ品を2枚にしないのは claim_kitchen_items（skip locked・印刷済み数）。
+ * 失敗しても注文は成立させる（今まで通り、プリンターの問い合わせのときに作られる）。
+ */
+export async function generateKitchenJobsForStore(admin: Admin, storeId: string): Promise<number> {
+  const { data } = await admin
+    .from('printer_configs')
+    .select('id, organization_id, store_id, name, usage, paper_width_mm, kitchen_stations, auto_print, floor_ids, bill_slips, upside_down, maker')
+    .eq('store_id', storeId)
+    .eq('usage', 'kitchen')
+    .eq('cloudprnt_enabled', true)
+    .eq('status', 'active');
+  const printers = (data ?? []) as PrinterRow[];
+  let done = 0;
+  for (const printer of printers) {
+    try {
+      await generateKitchenJobs(admin, printer, { batchDelaySeconds: 0 });
+      done += 1;
+    } catch (e) {
+      console.error('[print-queue] immediate kitchen jobs failed', printer.id, e instanceof Error ? e.message : e);
+    }
+  }
+  return done;
 }
 
 /** このプリンタ宛ての最古の queued を1件取り出し、claimed にする。 */
