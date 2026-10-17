@@ -15,6 +15,20 @@ const ja = {
     badge: 'モバイルオーダー',
     hint: 'お手元のスマートフォンからご注文いただけます',
   },
+  /** QR を読んで最初の画面（ご来店の人数。女性・男性。2026-10-17 Ronnie「Air レジのように、人数を選んでから注文へ」） */
+  start: {
+    welcome: 'いらっしゃいませ',
+    title: 'ご来店の人数を選んでください',
+    women: '女性',
+    men: '男性',
+    total: (n: number) => `合計 ${n}名`,
+    unit: '名',
+    decreaseAria: (label: string) => `${label}を1名減らす`,
+    increaseAria: (label: string) => `${label}を1名増やす`,
+    submit: '人数を確定して、注文へ進む',
+    submitting: '準備中…',
+    note: '※後から来店される方の人数も含めてください。',
+  },
   menu: {
     empty: '現在ご注文いただけるメニューがありません。店員にお声がけください。',
     categoryEmpty: 'このカテゴリに商品がありません',
@@ -102,6 +116,19 @@ const en: QrStrings = {
   visit: {
     badge: 'Mobile order',
     hint: 'Order right from your phone',
+  },
+  start: {
+    welcome: 'Welcome',
+    title: 'How many guests are in your party?',
+    women: 'Women',
+    men: 'Men',
+    total: (n: number) => `Total ${n}`,
+    unit: '',
+    decreaseAria: (label: string) => `One less (${label})`,
+    increaseAria: (label: string) => `One more (${label})`,
+    submit: 'Confirm and start ordering',
+    submitting: 'Getting ready…',
+    note: '*Please include guests who will join later.',
   },
   menu: {
     empty: 'No items are available right now. Please ask our staff.',
