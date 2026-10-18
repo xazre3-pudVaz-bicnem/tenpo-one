@@ -30,8 +30,9 @@ describe('テーブルQR（A6）', () => {
     expect(pdf).toMatch(/page = ["']a6["']/);
     expect(pdf).toMatch(/layout = ["']one-per-page["']/);
     expect(pdf).toContain('const sheet = fourUp ? "a4" : page');
-    expect(pdf).toContain('format: sheet');
-    expect(pdf).toContain('[210, 297] : [105, 148]');
+    expect(pdf).toContain('format: pageFormat');
+    expect(pdf).toContain('const pageFormat: string | number[] = card ? [BC_H, BC_W] : sheet;');
+    expect(pdf).toContain('card ? [BC_W, BC_H] : [105, 148]');
     expect(pdf).toMatch(/pdf\.addImage\(png, ["']PNG["'], 0, 0, pw, ph/);
   });
 

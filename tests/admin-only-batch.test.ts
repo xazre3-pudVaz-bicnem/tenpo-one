@@ -111,6 +111,7 @@ describe('管理画面だけの設定', () => {
     expect(read('app/app/settings/booking/page.tsx')).not.toContain('<BookingUrlPanel');
     const card = read('components/settings/booking-qr-card.tsx');
     expect(card).toContain('data-qr-card');
-    expect(card).toContain('h-[148mm] w-[105mm]');
+    // 2026-10-18 横の名刺サイズ（91×55mm）に変更
+    expect(card).toContain('h-[55mm] w-[91mm]');
   });
 });

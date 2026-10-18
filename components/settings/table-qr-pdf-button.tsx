@@ -37,8 +37,8 @@ export function TableQrPdfButton({
   format?: "pdf" | "png";
   /** ボタンの文字（既定は「PDFでダウンロード（A6）」） */
   label?: string;
-  /** PDF の用紙（既定 A6。店舗名刺の A4 シートは a4） */
-  page?: "a6" | "a4";
+  /** PDF の用紙（既定 A6。店舗名刺の A4 シートは a4。card は横の名刺サイズ 91×55mm＝お店の予約QR） */
+  page?: "a6" | "a4" | "card";
   /** "a4-4up" は A4 1枚に A6 を4面＋切り取り線。"a4-business-card" は名刺サイズを A4 に10面＋切り取り線。既定は1枚1ページ */
   layout?: "one-per-page" | "a4-4up" | "a4-business-card";
 }) {
@@ -126,11 +126,16 @@ export function TableQrPdfButton({
       }
       const fourUp = layout === "a4-4up";
       const sheet = fourUp ? "a4" : page;
-      const [pw, ph] = sheet === "a4" ? [210, 297] : [105, 148];
+      const card = sheet === "card";
+      const [pw, ph] =
+        sheet === "a4" ? [210, 297] : card ? [BC_W, BC_H] : [105, 148];
+      // 横の名刺（91×55mm）は横向きの1ページ（jsPDF は [短辺, 長辺] ＋ landscape で横長になる）
+      const pageFormat: string | number[] = card ? [BC_H, BC_W] : sheet;
+      const pageOrientation = card ? "landscape" : "portrait";
       const pdf = new jsPDF({
         unit: "mm",
-        format: sheet,
-        orientation: "portrait",
+        format: pageFormat,
+        orientation: pageOrientation,
         compress: true,
       });
       // A4（210×297mm）をちょうど4等分すると A6 とほぼ同じ 105×148.5mm になる
@@ -154,7 +159,7 @@ export function TableQrPdfButton({
           const [x, y] = slots[slot];
           pdf.addImage(png, "PNG", x, y, CW, CH, undefined, "FAST");
         } else {
-          if (i > 0) pdf.addPage(sheet, "portrait");
+          if (i > 0) pdf.addPage(pageFormat, pageOrientation);
           pdf.addImage(png, "PNG", 0, 0, pw, ph, undefined, "FAST");
         }
         setBusy({ done: i + 1, total: cards.length });
