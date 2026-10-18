@@ -66,12 +66,12 @@ export function BudgetCard({
         <div className="flex flex-wrap gap-2">
           <Link href="/app/budgets" className={buttonVariants({ variant: 'secondary', size: 'md' })}>
             <span className="flex flex-col items-center leading-tight">
-              予算登録<span className="en-under mt-0 text-current opacity-80">Set</span>
+              予算登録<span className="block font-[family-name:var(--font-num)] text-[10.5px] leading-tight font-semibold tracking-[0.03em] opacity-85">Set</span>
             </span>
           </Link>
           <Link href="/app/reports" className={buttonVariants({ variant: 'primary', size: 'md' })}>
             <span className="flex flex-col items-center leading-tight">
-              店舗分析<span className="en-under mt-0 text-current opacity-80">Analytics</span>
+              店舗分析<span className="block font-[family-name:var(--font-num)] text-[10.5px] leading-tight font-semibold tracking-[0.03em] opacity-85">Analytics</span>
             </span>
           </Link>
         </div>
