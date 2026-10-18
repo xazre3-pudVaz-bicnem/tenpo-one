@@ -8,6 +8,7 @@
  * 判定の純粋な部分は lib/table-group.ts の groupOrderTable()。
  */
 import { createAdminClient } from '@/lib/supabase/admin';
+import type { createClient } from '@/lib/supabase/server';
 import { groupOfTable, groupOrderTable, removeGroupOfTable, tableGroupsFrom } from '@/lib/table-group';
 
 export interface QrGroupResolution {
@@ -97,4 +98,34 @@ export async function dissolveTableGroupOf(storeId: string, tableId: string, use
     console.error('[table-group] dissolve failed', e instanceof Error ? e.message : e);
     return false;
   }
+}
+
+type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
+
+/**
+ * ハンディで、まとめた卓（テーブルグループ）の伝票を持つ卓を探す（2026-10-18 Ronnie「Table merge」）。
+ * T-1 と T-2 をまとめて T-1 で注文を始めたあと、T-2 を開いたら T-1 の伝票へ行く（2つ目の伝票を立てない）。
+ * 自分の卓に伝票がある・組んでいない・組のどこにも伝票が無いときは null。
+ */
+export async function groupHostTableId(
+  supabase: SupabaseServerClient,
+  storeId: string,
+  tableId: string
+): Promise<string | null> {
+  const { data: row } = await supabase.from('store_settings').select('settings').eq('store_id', storeId).maybeSingle();
+  const group = groupOfTable(tableGroupsFrom(row?.settings), tableId);
+  if (!group) return null;
+  const { data: orders } = await supabase
+    .from('orders')
+    .select('table_id, opened_at')
+    .eq('store_id', storeId)
+    .eq('status', 'open')
+    .in('table_id', group.tableIds);
+  return groupOrderTable(
+    group,
+    tableId,
+    ((orders ?? []) as { table_id: string | null; opened_at: string | null }[])
+      .filter((o) => !!o.table_id)
+      .map((o) => ({ tableId: o.table_id as string, openedAtMs: o.opened_at ? Date.parse(o.opened_at) : 0 }))
+  );
 }

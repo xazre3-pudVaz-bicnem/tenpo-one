@@ -84,3 +84,32 @@ export function groupOrderTable(
   if (inGroup.some((o) => o.tableId === tableId)) return null;
   return inGroup[0].tableId;
 }
+
+/**
+ * ハンディのテーブル一覧でまとめた卓に出すもの（2026-10-18 Ronnie「Table merge pani banau」）。
+ * レジのテーブル一覧と同じく、まとめた卓のどれかに伝票があれば、伝票の無い卓も同じ伝票の卓として出す。
+ *
+ * @returns groupTableIds 同じ組の卓（組んでいなければ空）
+ *          orderTableId  自分の卓に伝票が無く、組のほかの卓に伝票があるときのその卓（タップでその伝票を開く）。無ければ null
+ */
+export function handyGroupView(
+  groups: TableGroup[],
+  tableId: string,
+  openOrders: { tableId: string; openedAtMs: number }[]
+): { groupTableIds: string[]; orderTableId: string | null } {
+  const group = groupOfTable(groups, tableId);
+  return { groupTableIds: group?.tableIds ?? [], orderTableId: groupOrderTable(group, tableId, openOrders) };
+}
+
+/** まとめた卓の名前を一覧の並び順で（T-1 + T-2）。組んでいなければ空文字 */
+export function groupTableLabel(
+  groupTableIds: string[],
+  tables: { id: string; name: string }[],
+  separator = ' + '
+): string {
+  if (groupTableIds.length < 2) return '';
+  return tables
+    .filter((t) => groupTableIds.includes(t.id))
+    .map((t) => t.name)
+    .join(separator);
+}

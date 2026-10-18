@@ -3,13 +3,14 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { BellRing, Wallet } from 'lucide-react';
+import { BellRing, Link2, Wallet } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { yen, formatTime } from '@/lib/format';
 import { useToast } from '@/components/ui/toast';
 import { useNow } from '@/components/floor/use-now';
 import { ChipButton } from '@/components/ui/chip';
 import { stepFloor, swipeDirection } from '@/lib/floor-nav';
+import { groupTableLabel } from '@/lib/table-group';
 import { HandyBiLabel } from './handy-chrome';
 import {
   filterHandyTables,
@@ -42,6 +43,10 @@ export interface HandyTableCard {
   openedAtMs: number | null;
   guestCount: number;
   total: number;
+  /** まとめた卓（テーブルグループ）。組んでいなければ空（2026-10-18 Ronnie「Table merge」） */
+  groupTableIds?: string[];
+  /** 自分の卓に伝票が無く、まとめた卓の伝票に入っているときの、その伝票の卓（タップでそこを開く） */
+  orderTableId?: string | null;
 }
 
 /**
@@ -53,6 +58,7 @@ export function HandyTableList({
   calls,
   serverNow,
   setTableLockAction,
+  saveTableGroupAction,
   floors = [],
   defaultFloorId = null,
   storeId,
@@ -67,6 +73,8 @@ export function HandyTableList({
   storeId?: string;
   /** 卓ロック（お客様が入っていない卓だけ）。レジのテーブル一覧と同じ（2026-09-24 店舗要望） */
   setTableLockAction?: (tableId: string, unavailable: boolean) => Promise<void>;
+  /** 卓をまとめる（テーブルグループ）。レジの「テーブルグループ設定」と同じ（2026-10-18 Ronnie「Table merge」） */
+  saveTableGroupAction?: (tableIds: string[]) => Promise<{ error?: string }>;
 }) {
   const now = useNow(serverNow);
   const toneByTable = callToneByTable(calls);
@@ -161,6 +169,7 @@ export function HandyTableList({
               table={t}
               now={now}
               callKind={toneByTable.get(t.id) ?? null}
+              groupLabel={groupTableLabel(t.groupTableIds ?? [], tables, '+')}
               onPick={setTableLockAction ? () => setSheetTableId(t.id) : undefined}
             />
           </li>
@@ -169,7 +178,9 @@ export function HandyTableList({
       {sheetTable && setTableLockAction && (
         <HandyTableSheet
           table={sheetTable}
+          tables={tables}
           setTableLockAction={setTableLockAction}
+          saveTableGroupAction={saveTableGroupAction}
           onClose={() => setSheetTableId(null)}
         />
       )}
@@ -184,15 +195,19 @@ function usesSheet(state: HandyTableState): boolean {
 
 /**
  * 卓のポップアップ（承認済みレイアウトの一覧の上に小さく出す）。
- * 「注文を開始」と「テーブルをロック」だけ。お客様が入っている卓では出さない。
+ * 「注文を開始」「テーブルをまとめる」「テーブルをロック」。お客様が入っている卓では出さない。
  */
 function HandyTableSheet({
   table,
+  tables,
   setTableLockAction,
+  saveTableGroupAction,
   onClose,
 }: {
   table: HandyTableCard;
+  tables: HandyTableCard[];
   setTableLockAction: (tableId: string, unavailable: boolean) => Promise<void>;
+  saveTableGroupAction?: (tableIds: string[]) => Promise<{ error?: string }>;
   onClose: () => void;
 }) {
   const router = useRouter();
@@ -200,6 +215,30 @@ function HandyTableSheet({
   const [pending, startTransition] = useTransition();
   const state = tableState(table.currentStatus, table.orderCount > 0);
   const locked = state === 'blocked';
+  // まとめた卓（テーブルグループ）。2026-10-18 Ronnie「Table merge pani banau」。
+  // 大人数を T-1 + T-2 のように分けて通すとき、卓を1組にまとめてから注文を始める（レジの「テーブルグループ設定」と同じ保存先）
+  const groupIds = table.groupTableIds ?? [];
+  const grouped = groupIds.length > 1;
+  const groupSeats = tables.filter((t) => groupIds.includes(t.id)).reduce((sum, t) => sum + t.capacityMax, 0);
+  /** まとめる卓を選んでいる間だけ配列（null＝選ぶ画面を閉じている） */
+  const [pick, setPick] = useState<string[] | null>(null);
+  const canMerge = !!saveTableGroupAction && canStartOrder(state);
+  // 選べる卓はレジと同じく同じフロアの卓
+  const candidates = tables.filter((t) => (t.floorId ?? null) === (table.floorId ?? null));
+
+  const saveGroup = (ids: string[], done: string) =>
+    startTransition(async () => {
+      if (!saveTableGroupAction) return;
+      try {
+        const res = await saveTableGroupAction(ids);
+        if (res.error) throw new Error(res.error);
+        toast(done);
+        setPick(null);
+        router.refresh();
+      } catch (e) {
+        toast(e instanceof Error ? e.message : '保存できませんでした', 'error');
+      }
+    });
 
   return (
     <div
@@ -221,6 +260,77 @@ function HandyTableSheet({
             {table.capacityMax}名席 · {TABLE_STATE_LABEL[state]}
           </span>
         </p>
+        {grouped && (
+          <div className="mt-2 rounded-lg bg-[#f6e4da] px-2 py-1 text-center text-[#bc5940]">
+            <p className="flex items-center justify-center gap-1 text-[13px] font-bold">
+              <Link2 className="h-3.5 w-3.5 flex-none" strokeWidth={2.5} aria-hidden />
+              <span className="truncate">{groupTableLabel(groupIds, tables)}</span>
+            </p>
+            <p className="text-[10px]">
+              Merged · {groupSeats} seats
+              <span className="block text-[9px]">まとめた卓 · {groupSeats}名席</span>
+            </p>
+          </div>
+        )}
+
+        {pick ? (
+          <>
+            <p className="mt-3 text-center text-[12px] font-bold text-[#45403b]">
+              SELECT TABLES
+              <span className="block text-[9px] font-medium text-[#766b62]">まとめる卓を選ぶ</span>
+            </p>
+            <div className="mt-2 grid max-h-[220px] grid-cols-3 gap-1 overflow-y-auto" role="group" aria-label="まとめる卓">
+              {candidates.map((t) => {
+                const on = pick.includes(t.id);
+                const self = t.id === table.id;
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    disabled={self || pending}
+                    aria-pressed={on}
+                    onClick={() => setPick((prev) => (on ? (prev ?? []).filter((id) => id !== t.id) : [...(prev ?? []), t.id]))}
+                    className={cn(
+                      'min-h-[40px] truncate rounded-lg border px-1 text-[13px] font-bold disabled:opacity-100',
+                      on ? 'border-transparent bg-[#bc5940] text-white' : 'border-[#e5dfd5] bg-white text-[#45403b]'
+                    )}
+                  >
+                    {t.name}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="mt-2.5 grid gap-1.5">
+              <button
+                type="button"
+                disabled={pending || pick.length < 2}
+                onClick={() => saveGroup(pick, `${groupTableLabel(pick, tables)} をまとめました`)}
+                className="min-h-[48px] rounded-lg bg-[#bc5940] py-1 text-[15px] font-bold text-white disabled:opacity-40"
+              >
+                <HandyBiLabel en="MERGE" ja="まとめる" />
+              </button>
+              {grouped && (
+                <button
+                  type="button"
+                  disabled={pending}
+                  // 1卓だけ渡す＝その卓が入っているグループをまるごと解除（レジの「解除」と同じ）
+                  onClick={() => saveGroup([table.id], 'まとめを解除しました')}
+                  className="min-h-[48px] rounded-lg border border-[#e5dfd5] bg-[#f9f3ed] py-1 text-[15px] font-bold text-[#45403b] disabled:opacity-40"
+                >
+                  <HandyBiLabel en="UNMERGE" ja="まとめを解除" />
+                </button>
+              )}
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => setPick(null)}
+                className="min-h-[42px] rounded-lg bg-[#f3efe8] py-1 text-[13px] font-bold text-[#5c5650]"
+              >
+                <HandyBiLabel en="BACK" ja="戻る" />
+              </button>
+            </div>
+          </>
+        ) : (
         <div className="mt-3 grid gap-1.5">
           {canStartOrder(state) && (
             <button
@@ -230,6 +340,20 @@ function HandyTableSheet({
               className="min-h-[48px] rounded-lg bg-[#bc5940] py-1 text-[15px] font-bold text-white disabled:opacity-40"
             >
               <HandyBiLabel en="START ORDER" ja="注文を開始" />
+            </button>
+          )}
+          {canMerge && (
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => setPick(grouped ? groupIds : [table.id])}
+              className="min-h-[48px] rounded-lg border border-[#e5dfd5] bg-[#f9f3ed] py-1 text-[15px] font-bold text-[#45403b] disabled:opacity-40"
+            >
+              {grouped ? (
+                <HandyBiLabel en="EDIT MERGE" ja="まとめを変更" />
+              ) : (
+                <HandyBiLabel en="MERGE TABLES" ja="テーブルをまとめる" />
+              )}
             </button>
           )}
           <button
@@ -263,6 +387,7 @@ function HandyTableSheet({
             <HandyBiLabel en="CLOSE" ja="閉じる" />
           </button>
         </div>
+        )}
       </div>
     </div>
   );
@@ -272,11 +397,14 @@ function HandyTableTile({
   table,
   now,
   callKind,
+  groupLabel,
   onPick,
 }: {
   table: HandyTableCard;
   now: number;
   callKind: 'staff' | 'checkout' | null;
+  /** まとめた卓の名前（T-1+T-2）。組んでいなければ空文字 */
+  groupLabel: string;
   /** 空いている卓のタップ（ポップアップ）。未指定なら従来どおり卓の画面へ移動する */
   onPick?: () => void;
 }) {
@@ -295,9 +423,11 @@ function HandyTableTile({
               ? 'border-[#eac0ad] bg-[#f3efe8]'
               : state === 'blocked'
                 ? 'border-[#d3ccc2] bg-[#e5dfd5]'
-                : 'border-[#e5dfd5] bg-white'
+                : 'border-[#e5dfd5] bg-white',
+        // まとめた卓（テーブルグループ）は枠に印（2026-10-18 Ronnie「Table merge」）
+        groupLabel && 'ring-2 ring-[#bc5940]/30 ring-inset'
   );
-  const label = `${table.name} ${TABLE_STATE_LABEL[state]}${callKind ? ` ${serviceCallLabel(callKind)}` : ''}`;
+  const label = `${table.name} ${TABLE_STATE_LABEL[state]}${groupLabel ? `（まとめ ${groupLabel}）` : ''}${callKind ? ` ${serviceCallLabel(callKind)}` : ''}`;
 
   const body = (
     <>
@@ -337,6 +467,7 @@ function HandyTableTile({
           <span className="mt-px mb-auto block w-full truncate text-[10px] leading-tight font-normal text-black">
             {table.guestCount > 0 ? `${table.guestCount}名` : '利用中'}
             {table.orderCount > 1 ? ` · 伝票${table.orderCount}` : ''}
+            {groupLabel && <span className="font-bold text-[#bc5940]"> · {groupLabel}</span>}
           </span>
           <TileRow label="開始" value={table.openedAtMs !== null ? formatTime(new Date(table.openedAtMs)) : '—'} />
           <TileRow
@@ -346,6 +477,11 @@ function HandyTableTile({
           />
           <TileRow label="未会計" value={yen(table.total)} small />
         </>
+      ) : groupLabel ? (
+        <span className="m-auto flex max-w-full flex-col items-center gap-0.5 text-[9px] text-[#766b62]">
+          <span>{state === 'available' ? `${table.capacityMax}名席` : TABLE_STATE_LABEL[state]}</span>
+          <GroupMark label={groupLabel} />
+        </span>
       ) : (
         <span className="m-auto text-[9px] text-[#766b62]">
           {state === 'available' ? `${table.capacityMax}名席` : TABLE_STATE_LABEL[state]}
@@ -362,9 +498,20 @@ function HandyTableTile({
     );
   }
   return (
-    <Link href={`/handy/${table.id}`} className={className} aria-label={label}>
+    // まとめた卓で伝票がほかの卓にあるときは、その伝票の卓を開く（2つ目の伝票を立てない）
+    <Link href={`/handy/${table.orderTableId ?? table.id}`} className={className} aria-label={label}>
       {body}
     </Link>
+  );
+}
+
+/** まとめた卓の印（T-1+T-2）。会計完了・テーブルクリアで自動的に消える */
+function GroupMark({ label }: { label: string }) {
+  return (
+    <span className="inline-flex max-w-full items-center gap-0.5 rounded-full bg-[#bc5940] px-1.5 py-px text-[9px] leading-[1.5] font-bold whitespace-nowrap text-white">
+      <Link2 className="h-2.5 w-2.5 flex-none" strokeWidth={2.5} aria-hidden />
+      <span className="truncate">{label}</span>
+    </span>
   );
 }
 

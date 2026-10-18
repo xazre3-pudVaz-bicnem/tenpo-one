@@ -17,6 +17,8 @@ import { HandyTableList, type HandyTableCard } from '@/components/handy/handy-ta
 import type { HandyServiceCall } from '@/components/handy/logic';
 import { signOut } from '@/app/app/actions';
 import { setTableAvailability } from '@/app/app/floor/actions';
+import { saveTableGroup } from '@/app/app/floor/group-actions';
+import { handyGroupView, tableGroupsFrom } from '@/lib/table-group';
 import { loginHandyClerk } from '@/app/app/handy/actions';
 
 export const metadata: Metadata = { title: 'テーブル一覧' };
@@ -130,8 +132,16 @@ export default async function HandyTablesPage() {
     note: c.note,
   }));
 
+  // テーブルグループ（まとめた卓。2026-10-18 Ronnie「Table merge」）。レジと同じく、まとめた卓のどれかに伝票があれば
+  // 伝票の無い卓も同じ伝票の卓として出し、タップでその伝票を開く
+  const tableGroups = tableGroupsFrom((storeSettings as { settings?: unknown } | null)?.settings);
+  const openOrderRefs = (orders ?? [])
+    .filter((o) => !!o.table_id)
+    .map((o) => ({ tableId: o.table_id as string, openedAtMs: new Date(o.opened_at).getTime() }));
+
   const cards: HandyTableCard[] = tableRows.map((t) => {
-    const summary = byTable.get(t.id) ?? null;
+    const group = handyGroupView(tableGroups, t.id, openOrderRefs);
+    const summary = byTable.get(t.id) ?? (group.orderTableId ? byTable.get(group.orderTableId) : null) ?? null;
     return {
       id: t.id,
       name: t.name,
@@ -142,6 +152,8 @@ export default async function HandyTablesPage() {
       openedAtMs: summary?.openedAtMs ?? null,
       guestCount: summary?.guestCount ?? 0,
       total: summary?.total ?? 0,
+      groupTableIds: group.groupTableIds,
+      orderTableId: group.orderTableId,
     };
   });
 
@@ -160,6 +172,7 @@ export default async function HandyTablesPage() {
           calls={serviceCalls}
           serverNow={requestTime()}
           setTableLockAction={setTableAvailability}
+          saveTableGroupAction={saveTableGroup}
           floors={(floorRows ?? []).map((f) => ({ id: f.id, name: f.name }))}
           defaultFloorId={floorBoardFrom((storeSettings as { settings?: unknown } | null)?.settings).defaultFloorId}
           storeId={store.id}

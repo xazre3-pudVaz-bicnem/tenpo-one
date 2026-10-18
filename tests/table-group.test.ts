@@ -1,7 +1,15 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { groupOfTable, removeGroupOfTable, setTableGroup, tableGroupsFrom, groupOrderTable } from '@/lib/table-group';
+import {
+  groupOfTable,
+  removeGroupOfTable,
+  setTableGroup,
+  tableGroupsFrom,
+  groupOrderTable,
+  groupTableLabel,
+  handyGroupView,
+} from '@/lib/table-group';
 
 const read = (p: string) => readFileSync(join(__dirname, '..', p), 'utf8');
 
@@ -129,5 +137,50 @@ describe('テーブル連携は会計完了・テーブルクリアで自動解�
     expect(card).toContain("連携 {linked.join('+')}");
     expect(card).toContain('<Link2');
     expect(read('app/app/floor/page.tsx')).toContain('groupTableNames:');
+  });
+});
+
+describe('ハンディでも卓をまとめる（2026-10-18 Ronnie「Table merge pani banau」）', () => {
+  const groups = [{ id: 'g1', tableIds: ['t1', 't2'] }];
+  const tables = [
+    { id: 't2', name: 'T-2' },
+    { id: 't1', name: 'T-1' },
+    { id: 't3', name: 'T-3' },
+  ];
+
+  it('まとめた卓のどれかに伝票があれば、伝票の無い卓はその卓を開く', () => {
+    const orders = [{ tableId: 't1', openedAtMs: 100 }];
+    expect(handyGroupView(groups, 't2', orders)).toEqual({ groupTableIds: ['t1', 't2'], orderTableId: 't1' });
+    // 伝票を持つ卓は自分のまま
+    expect(handyGroupView(groups, 't1', orders)).toEqual({ groupTableIds: ['t1', 't2'], orderTableId: null });
+    // まだ誰も注文していない
+    expect(handyGroupView(groups, 't2', [])).toEqual({ groupTableIds: ['t1', 't2'], orderTableId: null });
+    // 組んでいない卓
+    expect(handyGroupView(groups, 't3', orders)).toEqual({ groupTableIds: [], orderTableId: null });
+  });
+
+  it('卓の名前は一覧の並び順で（T-2 + T-1）。組んでいなければ空', () => {
+    expect(groupTableLabel(['t1', 't2'], tables)).toBe('T-2 + T-1');
+    expect(groupTableLabel(['t1', 't2'], tables, '+')).toBe('T-2+T-1');
+    expect(groupTableLabel(['t1'], tables)).toBe('');
+    expect(groupTableLabel([], tables)).toBe('');
+  });
+
+  it('ハンディの空席のポップアップに「MERGE TABLES」。保存はレジと同じ saveTableGroup', () => {
+    const list = read('components/handy/handy-table-list.tsx');
+    expect(list).toContain('en="MERGE TABLES" ja="テーブルをまとめる"');
+    expect(list).toContain('en="UNMERGE" ja="まとめを解除"');
+    // 解除は自分の卓を1つ渡す（レジと同じ）
+    expect(list).toContain("saveGroup([table.id], 'まとめを解除しました')");
+    // 伝票がほかの卓にあるときは、その卓を開く
+    expect(list).toContain('/handy/${table.orderTableId ?? table.id}');
+    const page = read('app/handy/page.tsx');
+    expect(page).toContain("import { saveTableGroup } from '@/app/app/floor/group-actions'");
+    expect(page).toContain('saveTableGroupAction={saveTableGroup}');
+  });
+
+  it('まとめた卓を開いたら、伝票を持つ卓の画面へ（2つ目の伝票を立てない）', () => {
+    expect(read('app/handy/[tableId]/page.tsx')).toContain('if (host) redirect(`/handy/${host}`)');
+    expect(read('app/handy/[tableId]/setup/page.tsx')).toContain('if (host) redirect(`/handy/${host}`)');
   });
 });
