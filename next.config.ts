@@ -39,7 +39,8 @@ function buildCsp(): string {
     `object-src 'none'`,
     `frame-ancestors 'self'`,
     `form-action 'self'`,
-    `script-src 'self' 'unsafe-inline'`,
+    // 'wasm-unsafe-eval'：メニューの写真・PDF取り込み（Tesseract の WebAssembly）を動かすため。eval は許さない（2026-10-19）
+    `script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'`,
     `style-src 'self' 'unsafe-inline'`,
     `img-src ${imgSrc.join(' ')}`,
     `font-src 'self' data:`,
