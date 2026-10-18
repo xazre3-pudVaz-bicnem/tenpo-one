@@ -184,3 +184,21 @@ describe('ハンディでも卓をまとめる（2026-10-18 Ronnie「Table merge
     expect(read('app/handy/[tableId]/setup/page.tsx')).toContain('if (host) redirect(`/handy/${host}`)');
   });
 });
+
+describe('まとめた卓の金額は MAIN の卓だけ（2026-10-18 Ronnie「Main table ma matra 会計金額」）', () => {
+  it('伝票の無いほうの卓は 開始・経過・未会計 を出さず「MAIN T-7」', () => {
+    const list = read('components/handy/handy-table-list.tsx');
+    expect(list).toContain('occupied && mainTableName ? (');
+    expect(list).toContain('MAIN {mainTableName}');
+    expect(list).toContain('mainTableName={t.orderTableId ?');
+    // 金額の行は伝票の卓の分岐の中だけ
+    const sub = list.slice(list.indexOf('occupied && mainTableName ? ('), list.indexOf(') : occupied ? ('));
+    expect(sub).not.toContain('未会計');
+  });
+
+  it('会計完了・テーブルクリアで、まとめた卓は自動で解除（伝票の卓のグループをまるごと）', () => {
+    const src = read('app/app/pos/actions.ts');
+    expect(src).toContain('dissolveTableGroupOf(order.store_id, order.table_id, ctx.userId)');
+    expect(removeGroupOfTable([{ id: 'g', tableIds: ['t7', 't8'] }], 't7')).toEqual([]);
+  });
+});
