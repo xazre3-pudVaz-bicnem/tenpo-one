@@ -549,6 +549,15 @@ export const TABLE_STATE_LABEL: Record<HandyTableState, string> = {
   blocked: '使用不可',
 };
 
+/** 卓の状態の英語（ポップアップで日本語の上に出す） */
+export const TABLE_STATE_LABEL_EN: Record<HandyTableState, string> = {
+  occupied: 'In use',
+  available: 'Available',
+  reserved: 'Reserved',
+  cleaning: 'Cleaning',
+  blocked: 'Locked',
+};
+
 /* ------------------------------------------------------------------ 注文の回（1st・2nd…） */
 
 /** 英語の序数（1 → 1st, 2 → 2nd, 3 → 3rd, 4 → 4th, 11 → 11th, 21 → 21st） */

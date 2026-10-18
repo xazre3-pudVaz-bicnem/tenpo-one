@@ -433,17 +433,34 @@ export function HandyOperatorBar({
   label,
   note,
   showIcon = true,
+  leading,
 }: {
   label: string;
   note?: string;
   showIcon?: boolean;
+  /** 左はしに置くボタンなど（卓の画面の「人数・時間」のアイコン） */
+  leading?: React.ReactNode;
 }) {
   return (
     <div className="flex min-h-[28px] flex-none items-center gap-[7px] px-2.5 py-1.5 text-[13px] text-[#5c5650]">
+      {leading}
       {showIcon && <UserRound className="h-[17px] w-[17px] shrink-0 text-[#a89e92]" aria-hidden />}
       <b className={cn('min-w-0 truncate', showIcon ? 'font-bold' : 'font-normal')}>{label}</b>
       {note && <span className="ml-auto shrink-0 text-[9px] text-[#766b62]">{note}</span>}
     </div>
+  );
+}
+
+/**
+ * 英語を大きく・日本語をすぐ下に小さく（2026-10-18 Ronnie「英語で。日本語は小さくすぐ下に」。
+ * 日本語を読まないスタッフ向け。ボタンの中で使う）
+ */
+export function HandyBiLabel({ en, ja, className }: { en: string; ja: string; className?: string }) {
+  return (
+    <span className={cn('inline-flex flex-col items-center leading-tight', className)}>
+      <span>{en}</span>
+      <span className="mt-px text-[10px] font-medium opacity-75">{ja}</span>
+    </span>
   );
 }
 
@@ -465,10 +482,13 @@ export function HandyMain({
 /** 画面下の主ボタン（プロトタイプの `.confirm-footer > .blue`） */
 export function HandyFooterButton({
   label,
+  sub,
   disabled,
   onClick,
 }: {
   label: string;
+  /** すぐ下に小さく出す文字（英語のボタンの日本語。HandyBiLabel と同じ形） */
+  sub?: string;
   disabled?: boolean;
   onClick?: () => void;
 }) {
@@ -476,11 +496,11 @@ export function HandyFooterButton({
     <div className="flex-none bg-[#fbf9f5] px-3.5 pt-3 pb-2.5">
       <button
         type="button"
-        className="flex min-h-[42px] w-full items-center justify-center gap-2 rounded-[9px] bg-[#bc5940] px-4 text-base font-bold text-white shadow-[0_3px_10px_#bc59401a] active:bg-[#9f4630] disabled:opacity-40"
+        className="flex min-h-[42px] w-full items-center justify-center gap-2 rounded-[9px] bg-[#bc5940] px-4 py-1 text-base font-bold text-white shadow-[0_3px_10px_#bc59401a] active:bg-[#9f4630] disabled:opacity-40"
         disabled={disabled}
         onClick={onClick}
       >
-        {label}
+        {sub ? <HandyBiLabel en={label} ja={sub} /> : label}
       </button>
     </div>
   );
