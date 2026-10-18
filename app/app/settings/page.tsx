@@ -122,6 +122,7 @@ export default async function SettingsHubPage() {
                   address={store.address ? `${store.postal_code ? `〒${store.postal_code} ` : ''}${store.address}` : null}
                   phone={store.phone}
                   qrDataUrl={bookingQr}
+                  qrValue={bookingUrl ?? undefined}
                   coupons={couponLabels}
                   align="end"
                 />

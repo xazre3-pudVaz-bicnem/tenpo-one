@@ -25,6 +25,8 @@ export interface MeishiData {
   phone: string | null;
   /** 予約ページの QR（data URL。周りの白4マス込み） */
   qrDataUrl: string;
+  /** 予約ページの URL（あれば QR を SVG で描く＝印刷でにじまない） */
+  qrValue?: string;
   /** 当店のクーポン（表示する文。名刺はいちばん上の1つだけ） */
   coupons?: string[];
 }
@@ -60,6 +62,7 @@ export function BookingMeishiSheet(props: MeishiData) {
             address={props.address}
             phone={props.phone}
             dataUrl={props.qrDataUrl}
+            qrValue={props.qrValue}
             coupons={props.coupons}
             printable={false}
           />

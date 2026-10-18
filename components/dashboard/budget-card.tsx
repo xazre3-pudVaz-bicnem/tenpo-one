@@ -4,7 +4,7 @@
  * 予算達成率カード（プロトタイプの .card.budget）。
  * 実績 = 本日の会計済み純売上 + 未会計の注文合計。予算 = 本日の日別予算（無ければ月予算の日割り）。
  * 目標に届いていなければ応援メッセージ（lib/budget-motivation.ts）を出す。
- * 「(時点)」はサーバー描画時刻。再読込ボタンで router.refresh() する。
+ * 「〇〇時点」はサーバー描画時刻。そのすぐ横の再読込ボタンで router.refresh() する。
  */
 import { useTransition } from 'react';
 import Link from 'next/link';
@@ -165,12 +165,13 @@ export function BudgetCard({
               </span>
             )}
           </p>
-          <p className="m-0 mt-1 text-[12.5px] text-ink-2">💡 {cheer.tip}</p>
+          {/* 💡 のひとことは出さない（2026-10-19 Ronnie「これも要らない」） */}
         </div>
       )}
 
-      <footer className="flex items-center justify-between gap-3 px-5 pt-2 pb-3.5 text-xs text-ink-3 tabular-nums">
-        <span>（{asOf}時点）</span>
+      {/* 更新ボタンは時刻のすぐ横。時刻にカッコは付けない（2026-10-19 Ronnie） */}
+      <footer className="flex items-center gap-2 px-5 pt-2 pb-3.5 text-xs text-ink-3 tabular-nums">
+        <span>{asOf}時点</span>
         <button
           type="button"
           aria-label="実績売上高を更新"

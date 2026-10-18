@@ -83,7 +83,7 @@ export default async function StoreBusinessCardsPage() {
       <div className="print-area overflow-x-auto">
         <style>{'@page { size: A4 portrait; margin: 0; }'}</style>
         <div className="inline-block shadow-[0_1px_6px_rgba(41,39,37,0.15)] print:shadow-none">
-          <BookingMeishiSheet storeName={store.name} address={address} phone={store.phone} qrDataUrl={qrDataUrl} coupons={coupons} />
+          <BookingMeishiSheet storeName={store.name} address={address} phone={store.phone} qrDataUrl={qrDataUrl} qrValue={bookingUrl ?? undefined} coupons={coupons} />
         </div>
       </div>
     </div>

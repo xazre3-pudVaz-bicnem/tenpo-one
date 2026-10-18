@@ -1,3 +1,6 @@
+import { QrSvg } from './qr-svg';
+import { PrintStoreName } from './print-store-name';
+
 /**
  * お店の予約QR（横の名刺サイズ 91mm × 55mm・1枚）。
  * 2026-10-18 Ronnie「背景は私たちのスタイルに。黒は要らない。横名刺サイズに変更」→
@@ -11,12 +14,14 @@
  * 紙の大きさそのもの（91mm × 55mm）で描く。PDF（名刺サイズ1枚）・PNG のダウンロード（TableQrPdfButton が
  * data-qr-card の要素を画像にする）でこの見た目がそのまま出る。
  * 文字はいつも左右の真ん中ぞろえ（置かれる場所が右寄せでも崩れないように text-center をカードで決める）。
+ * qrValue（予約ページの URL）を渡すと QR を SVG で描く（印刷・PDF でにじまない。2026-10-19 Ronnie「印刷するとぼやける」）。
  */
 export function BookingQrCard({
   storeName,
   address,
   phone,
   dataUrl,
+  qrValue,
   coupons = [],
   printable = true,
 }: {
@@ -27,12 +32,13 @@ export function BookingQrCard({
   phone: string | null;
   /** 予約ページの QR（data URL。周りの白4マス込み） */
   dataUrl: string;
+  /** 予約ページの URL。あれば QR を SVG（ベクター）で描く */
+  qrValue?: string;
   /** 当店のクーポン（表示する文。名刺はいちばん上の1つだけ） */
   coupons?: string[];
   /** 1枚ずつダウンロードする印（data-qr-card）を付ける。A4 の店舗名刺に並べるときは false（シート全体で1枚にする） */
   printable?: boolean;
 }) {
-  const nameSize = storeName.length <= 12 ? 'text-[11.5pt]' : storeName.length <= 20 ? 'text-[9.5pt]' : 'text-[8pt]';
   const coupon = coupons.find((c) => c.trim()) ?? null;
   // クーポンがあるときは QR を少し小さくして、その下にクーポンを入れる
   const qrMm = coupon ? 27 : 29;
@@ -49,7 +55,7 @@ export function BookingQrCard({
         {/* 左：店名 → ご予約 → RESERVATION（真ん中ぞろえ）と、住所・電話番号 */}
         <div className="flex min-w-0 flex-1 flex-col items-center justify-between">
           <div className="flex w-full flex-col items-center">
-            <p className={`line-clamp-2 w-full leading-[1.2] font-extrabold tracking-[0.03em] ${nameSize}`}>{storeName}</p>
+            <PrintStoreName name={storeName} widthMm={44} brandPt={11.5} branchPt={9} />
             <div aria-hidden className="mt-[1.6mm] h-[0.3mm] w-[9mm] bg-[#BC5940]" />
             <p className="mt-[1.6mm] text-[13pt] leading-none font-extrabold tracking-[0.12em]">ご予約</p>
             <p className="mt-[1mm] font-[family-name:var(--font-num)] text-[5.2pt] leading-none font-bold tracking-[0.42em] text-[#BC5940]">
@@ -71,22 +77,26 @@ export function BookingQrCard({
         {/* 右：QR（白地・角丸・テラコッタの細い枠）と、その下に当店のクーポン */}
         <div className="flex w-[33mm] shrink-0 flex-col items-center justify-center gap-[1.4mm]">
           <div className="rounded-[2mm] border-[0.3mm] border-[#BC5940] bg-white p-[0.9mm]">
-            {/* eslint-disable-next-line @next/next/no-img-element -- サーバーで作った QR の data URL */}
-            <img
-              src={dataUrl}
-              alt={`${storeName}の予約QRコード`}
-              width={600}
-              height={600}
-              className="block [image-rendering:pixelated]"
-              style={{ width: `${qrMm}mm`, height: `${qrMm}mm` }}
-            />
+            {qrValue ? (
+              <QrSvg value={qrValue} sizeMm={qrMm} title={`${storeName}の予約QRコード`} />
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element -- サーバーで作った QR の data URL
+              <img
+                src={dataUrl}
+                alt={`${storeName}の予約QRコード`}
+                width={600}
+                height={600}
+                className="block [image-rendering:pixelated]"
+                style={{ width: `${qrMm}mm`, height: `${qrMm}mm` }}
+              />
+            )}
           </div>
           {coupon && (
             <div className="w-full rounded-[1.2mm] border-[0.25mm] border-dashed border-[#BC5940] bg-[#FBEFE9] px-[1.4mm] py-[0.8mm]">
               <p className="font-[family-name:var(--font-num)] text-[3.8pt] leading-none font-bold tracking-[0.3em] text-[#BC5940]">
                 当店のクーポン COUPON
               </p>
-              <p className="mt-[0.6mm] line-clamp-2 text-[5.6pt] leading-[1.3] font-bold text-[#8B4536]">{coupon}</p>
+              <p className="mt-[0.6mm] line-clamp-2 text-[5.6pt] leading-[1.3] font-bold text-balance text-[#8B4536] [overflow-wrap:anywhere] [word-break:keep-all]">{coupon}</p>
             </div>
           )}
         </div>
