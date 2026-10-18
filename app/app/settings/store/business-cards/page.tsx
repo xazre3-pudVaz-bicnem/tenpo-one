@@ -15,7 +15,7 @@ import { bookingCouponsFrom, couponLabel } from '@/lib/booking-coupons';
 export const metadata: Metadata = { title: '店舗名刺 | 設定' };
 
 /**
- * 店舗名刺（立名刺 55×91mm）を A4 1枚に 9枚。切り取り線とトンボ入り。
+ * 店舗名刺（横名刺 91×55mm）を A4 1枚に 10枚。切り取り線とトンボ入り（2026-10-19 予約QRと同じデザインに）。
  * お店で A4 に印刷して、線に沿って切ってレジに置く（2026-09-30 Ronnie「店舗名刺としてプリントする。システムの中で」）。
  * 中身は予約QRカードと同じ（店舗名・予約QR・住所・電話番号）。
  */
@@ -58,7 +58,7 @@ export default async function StoreBusinessCardsPage() {
       <PageHeader
         title="店舗名刺"
         en="Business cards"
-        description={`${store.name}｜A4 に立名刺（55×91mm）9枚。印刷して線に沿って切り、レジに置いてください`}
+        description={`${store.name}｜A4 に横名刺（91×55mm）10枚。印刷して線に沿って切り、レジに置いてください`}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <TableQrPdfButton
@@ -76,14 +76,14 @@ export default async function StoreBusinessCardsPage() {
       />
       <div className="mb-4 space-y-1 rounded-lg border border-gray-200 bg-white p-3 text-xs leading-relaxed text-gray-600">
         <p>・印刷は「用紙 A4」「倍率 100%（実際のサイズ）」で。フチなし印刷は要りません（まわりの白い余白に切る位置の線があります）。</p>
-        <p>・点線（カードの境目）と、余白の短い線（トンボ）に沿って切ると、立名刺（55×91mm）が9枚できます。</p>
-        <p>・厚めの紙（名刺用紙・画用紙）に印刷すると、レジに立てて置きやすくなります。</p>
+        <p>・点線（カードの境目）と、余白の短い線（トンボ）に沿って切ると、横名刺（91×55mm）が10枚できます。</p>
+        <p>・厚めの紙（名刺用紙・画用紙）に印刷すると、レジに置いたりお客様に渡したりしやすくなります。</p>
       </div>
 
       <div className="print-area overflow-x-auto">
         <style>{'@page { size: A4 portrait; margin: 0; }'}</style>
         <div className="inline-block shadow-[0_1px_6px_rgba(41,39,37,0.15)] print:shadow-none">
-          <BookingMeishiSheet storeName={store.name} address={address} phone={store.phone} qrDataUrl={qrDataUrl} coupons={coupons} />
+          <BookingMeishiSheet storeName={store.name} address={address} phone={store.phone} qrDataUrl={qrDataUrl} qrValue={bookingUrl ?? undefined} coupons={coupons} />
         </div>
       </div>
     </div>

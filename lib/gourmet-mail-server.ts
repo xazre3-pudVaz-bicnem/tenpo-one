@@ -132,8 +132,12 @@ export async function ingestGourmetMail(mail: InboundMail): Promise<IngestResult
             end_at: endAt,
             party_size: parsed.partySize ?? target.party_size,
             adults: parsed.partySize ?? target.party_size,
-            request_note: parsed.request ?? target.request_note,
-            memo: appendMemo(target.memo, `${jstStamp(receivedAt)} ${site.name}のメールで変更（${parsed.date} ${parsed.time} ${parsed.partySize ?? target.party_size}名）`),
+            // コース・ご要望も変更後の内容に（2026-10-19 Ronnie「時間・コース・人数の変更も台帳に自動で」）
+            request_note: changedNote(parsed, target.request_note),
+            memo: appendMemo(
+              target.memo,
+              `${jstStamp(receivedAt)} ${site.name}のメールで変更（${parsed.date} ${parsed.time} ${parsed.partySize ?? target.party_size}名${parsed.course ? `・${parsed.course}` : ''}）`
+            ),
           })
           .eq('id', target.id);
         return finish('updated', `${site.name} の変更を反映しました`, target.id);
@@ -170,6 +174,20 @@ function bodyForRecord(mail: InboundMail): string {
   const t = (mail.text && mail.text.trim()) || '';
   if (t) return t.slice(0, 20000);
   return (mail.html ?? '').slice(0, 20000);
+}
+
+/** 予約の「ご要望」欄：新規と同じ形（コース: 〇〇＋ご要望）。変更メールに無いものは前の内容を残す */
+export function changedNote(
+  parsed: { course: string | null; request: string | null },
+  prev: string | null
+): string | null {
+  const prevLines = (prev ?? '').split('\n');
+  const prevCourse = prevLines.find((l) => l.startsWith('コース: ')) ?? null;
+  const prevRequest = prevLines.filter((l) => !l.startsWith('コース: ')).join('\n').trim() || null;
+  const course = parsed.course ? `コース: ${parsed.course}` : prevCourse;
+  const request = parsed.request ?? prevRequest;
+  const parts = [course, request].filter(Boolean);
+  return parts.length ? parts.join('\n') : null;
 }
 
 function appendMemo(memo: string | null, line: string): string {

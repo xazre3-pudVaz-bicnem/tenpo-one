@@ -15,6 +15,7 @@ export function BookingQrDownload({
   address,
   phone,
   qrDataUrl,
+  qrValue,
   coupons = [],
   align = 'start',
 }: {
@@ -23,6 +24,8 @@ export function BookingQrDownload({
   phone: string | null;
   /** 予約ページの QR（data URL。周りの白4マス込み） */
   qrDataUrl: string;
+  /** 予約ページの URL（あれば QR を SVG で描く＝印刷でにじまない） */
+  qrValue?: string;
   /** 当店のクーポン（表示する文） */
   coupons?: string[];
   /** ボタンの並び（設定トップは右寄せ） */
@@ -32,7 +35,7 @@ export function BookingQrDownload({
     <div className={`flex flex-wrap items-center gap-5 ${align === 'end' ? 'sm:justify-end' : ''}`}>
       {/* 横名刺（91×55mm）をそのままの大きさで見せる。ダウンロードもこの見た目 */}
       <div className="shrink-0 overflow-hidden rounded-lg shadow-[0_1px_4px_rgba(41,39,37,0.12)]">
-        <BookingQrCard storeName={storeName} address={address} phone={phone} dataUrl={qrDataUrl} coupons={coupons} />
+        <BookingQrCard storeName={storeName} address={address} phone={phone} dataUrl={qrDataUrl} qrValue={qrValue} coupons={coupons} />
       </div>
       <div className="text-left text-sm">
         <p className="font-medium text-navy">予約QRコード</p>
@@ -52,7 +55,7 @@ export function BookingQrDownload({
             label="PNGをダウンロード"
             className="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-navy hover:bg-gray-50 disabled:opacity-70"
           />
-          {/* A4 に立名刺 9枚（切り取り線入り）。2026-09-30 Ronnie「店舗名刺としてプリントする」 */}
+          {/* A4 に横名刺 10枚（切り取り線入り）。2026-09-30 Ronnie「店舗名刺としてプリントする」 */}
           <Link
             href="/app/settings/store/business-cards"
             className="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-navy hover:bg-gray-50"

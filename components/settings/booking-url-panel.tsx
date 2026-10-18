@@ -41,7 +41,7 @@ export function BookingUrlPanel({
 
       {qrDataUrl && (
         <div className="mt-4">
-          <BookingQrDownload storeName={storeName} address={address} phone={phone} qrDataUrl={qrDataUrl} coupons={coupons} />
+          <BookingQrDownload storeName={storeName} address={address} phone={phone} qrDataUrl={qrDataUrl} qrValue={url} coupons={coupons} />
         </div>
       )}
     </div>

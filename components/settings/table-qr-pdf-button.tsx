@@ -13,7 +13,18 @@ import { useToast } from "@/components/ui/toast";
  * 「a4 paper ma katna milne tarikale pdf」。A6 の紙が無くても A4 に刷って切れば同じ大きさ）。
  * layout="a4-business-card" は名刺サイズ（91×55mm。data-qr-card-bc）を A4 に 2列×5段＝10面並べて切り取り線を入れる
  * （2026-10-17 Ronnie「名刺サイズ・A4 に 10面」。余白 左右14mm・上下11mm で真ん中に）。
+ * 2026-10-19 Ronnie「印刷するとぼやける。画質を高く」→ 画像の細かさを 約288dpi（pixelRatio 3）から
+ * 約576dpi（pixelRatio 6）に上げた（QR は SVG なのでにじまない）。ただし iPad の Safari は 1枚の画像が
+ * 約1600万画素までなので、A4 1枚まるごと（店舗名刺のシート）は自動で少し下げる（約400dpi）。
  */
+
+/** 画像の細かさ。約576dpi（CSS の 1px＝1/96inch × 6）。大きい要素は 1600万画素に収まるまで下げる */
+const MAX_PIXEL_RATIO = 6;
+const MAX_PIXELS = 16_000_000;
+function pixelRatioFor(el: HTMLElement): number {
+  const area = Math.max(1, el.offsetWidth * el.offsetHeight);
+  return Math.max(2, Math.min(MAX_PIXEL_RATIO, Math.floor(Math.sqrt(MAX_PIXELS / area) * 10) / 10));
+}
 
 /** 名刺サイズのカード（mm）と A4 への並べ方（2列×5段） */
 const BC_W = 91;
@@ -70,7 +81,7 @@ export function TableQrPdfButton({
       );
       if (format === "png") {
         const png = await toPng(cards[0], {
-          pixelRatio: 3,
+          pixelRatio: pixelRatioFor(cards[0]),
           backgroundColor: "#ffffff",
           fontEmbedCSS,
         });
@@ -90,7 +101,7 @@ export function TableQrPdfButton({
         });
         for (let i = 0; i < cards.length; i++) {
           const png = await toPng(cards[i], {
-            pixelRatio: 3,
+            pixelRatio: pixelRatioFor(cards[i]),
             backgroundColor: "#F7F5F0",
             fontEmbedCSS,
           });
@@ -101,23 +112,37 @@ export function TableQrPdfButton({
           pdf.addImage(png, "PNG", x, y, BC_W, BC_H, undefined, "FAST");
           setBusy({ done: i + 1, total: cards.length });
         }
-        // 切り取り線（薄いグレーの点線）。そのページで使った段まで、縦横に入れる
+        // 切り取り線（カードの境目に薄いグレーの点線）と、余白のトンボ（切る位置の短い線）。
+        // 画面の A4 見本（components/settings/a4-cut-sheets.tsx）と同じ。そのページで使った段まで
         const pages = pdf.getNumberOfPages();
         for (let p = 1; p <= pages; p++) {
           pdf.setPage(p);
           const onPage = Math.min(BC_PER_PAGE, cards.length - (p - 1) * BC_PER_PAGE);
           const rows = Math.ceil(onPage / BC_COLS);
+          const right = BC_MX + BC_COLS * BC_W;
           const bottom = BC_MY + rows * BC_H;
-          pdf.setDrawColor(160, 160, 160);
+          pdf.setDrawColor(156, 148, 138);
           pdf.setLineWidth(0.2);
-          pdf.setLineDashPattern([2, 2], 0);
+          pdf.setLineDashPattern([1.5, 1.5], 0);
           for (let c = 0; c <= BC_COLS; c++) {
             const x = BC_MX + c * BC_W;
-            pdf.line(x, 0, x, Math.min(297, bottom + BC_MY));
+            pdf.line(x, BC_MY, x, bottom);
           }
           for (let r = 0; r <= rows; r++) {
             const y = BC_MY + r * BC_H;
-            pdf.line(0, y, 210, y);
+            pdf.line(BC_MX, y, right, y);
+          }
+          pdf.setLineDashPattern([], 0);
+          pdf.setDrawColor(41, 39, 37);
+          for (let c = 0; c <= BC_COLS; c++) {
+            const x = BC_MX + c * BC_W;
+            pdf.line(x, BC_MY - 9, x, BC_MY - 2);
+            pdf.line(x, bottom + 2, x, bottom + 9);
+          }
+          for (let r = 0; r <= rows; r++) {
+            const y = BC_MY + r * BC_H;
+            pdf.line(BC_MX - 12, y, BC_MX - 2, y);
+            pdf.line(right + 2, y, right + 12, y);
           }
         }
         pdf.setLineDashPattern([], 0);
@@ -138,18 +163,19 @@ export function TableQrPdfButton({
         orientation: pageOrientation,
         compress: true,
       });
-      // A4（210×297mm）をちょうど4等分すると A6 とほぼ同じ 105×148.5mm になる
-      const CW = pw / 2;
-      const CH = ph / 2;
+      // A4（210×297mm）に A6（105×148mm）を 2×2。上下 0.5mm ずつあけて真ん中に（画面の A4 見本と同じ）
+      const CW = 105;
+      const CH = 148;
+      const TOP4 = (297 - CH * 2) / 2;
       const slots: [number, number][] = [
-        [0, 0],
-        [CW, 0],
-        [0, CH],
-        [CW, CH],
+        [0, TOP4],
+        [CW, TOP4],
+        [0, TOP4 + CH],
+        [CW, TOP4 + CH],
       ];
       for (let i = 0; i < cards.length; i++) {
         const png = await toPng(cards[i], {
-          pixelRatio: 3,
+          pixelRatio: pixelRatioFor(cards[i]),
           backgroundColor: "#ffffff",
           fontEmbedCSS,
         });
@@ -169,11 +195,12 @@ export function TableQrPdfButton({
         const pages = pdf.getNumberOfPages();
         for (let p = 1; p <= pages; p++) {
           pdf.setPage(p);
-          pdf.setDrawColor(160, 160, 160);
+          const onPage = Math.min(4, cards.length - (p - 1) * 4);
+          pdf.setDrawColor(156, 148, 138);
           pdf.setLineWidth(0.2);
-          pdf.setLineDashPattern([2, 2], 0);
-          pdf.line(CW, 0, CW, ph);
-          pdf.line(0, CH, pw, CH);
+          pdf.setLineDashPattern([1.5, 1.5], 0);
+          pdf.line(CW, 0, CW, onPage > 2 ? ph : TOP4 + CH);
+          pdf.line(0, TOP4 + CH, pw, TOP4 + CH);
         }
         pdf.setLineDashPattern([], 0);
       }

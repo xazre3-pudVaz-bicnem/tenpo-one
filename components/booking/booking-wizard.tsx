@@ -122,6 +122,15 @@ export function BookingWizard({
   };
   // 選択中コースが現在の人数条件に合わない場合は「未選択」として扱う（派生値。effectでのsetStateを避ける）
   const selectedCourse = store.courses.find((x) => x.id === courseId) ?? null;
+  // 完了ページへ：予約コードと、カレンダーに追加に使う日付・時刻・滞在（分）・人数（2026-10-19 Ronnie）
+  const completeQuery = (code: string) =>
+    new URLSearchParams({
+      code,
+      d: date,
+      ...(time ? { t: time } : {}),
+      m: String(selectedCourse?.duration_minutes ?? 120),
+      n: String(adults + children),
+    }).toString();
   const effectiveCourseId = selectedCourse && !courseFits(selectedCourse) ? '' : courseId;
 
   // 予約タイプ（席のみ / コース）。店舗設定 seat_only_enabled / course_enabled で切替。
@@ -203,7 +212,7 @@ export function BookingWizard({
       } catch {
         // 決済案内なしで完了ページへ進める
       }
-      router.push(`/book/${store.slug}/complete?code=${encodeURIComponent(result.code)}`);
+      router.push(`/book/${store.slug}/complete?${completeQuery(result.code)}`);
     } catch {
       setError(bookingErrorMessage(null));
       setSubmitting(false);
@@ -233,7 +242,7 @@ export function BookingWizard({
           </button>
           <button
             type="button"
-            onClick={() => router.push(`/book/${store.slug}/complete?code=${encodeURIComponent(paymentOffer.code)}`)}
+            onClick={() => router.push(`/book/${store.slug}/complete?${completeQuery(paymentOffer.code)}`)}
             className="mt-4 text-xs text-gray-400 underline"
           >
             決済をスキップして完了ページへ進む
