@@ -9,7 +9,7 @@
 import { useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { RefreshCw } from 'lucide-react';
+import { ChevronDown, RefreshCw } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -125,19 +125,28 @@ export function BudgetCard({
             )}
           </div>
           <div className="flex flex-col gap-1 border-b border-dashed border-line pb-2.5">
-            <dt className="text-[13px] font-medium text-ink-2">
-              予算売上高<span className="en-under">Target</span>
-            </dt>
-            {budget != null ? (
-              <dd className="m-0 text-[26px] leading-none font-bold text-ink tabular-nums">{yen(budget)}</dd>
-            ) : (
-              <dd className="m-0 flex flex-wrap items-center gap-x-3 gap-y-1 text-[15px] font-bold text-ink-3">
-                予算が未設定です
-                <Link href="/app/budgets" className="text-[13px] text-iris hover:underline">
-                  予算を登録する ›
-                </Link>
-              </dd>
-            )}
+            {/* 予算売上高は押すと中が開く（2026-10-18 Ronnie「大きい。押したら中に出るように」） */}
+            <dt className="sr-only">予算売上高</dt>
+            <dd className="m-0">
+              <details className="group">
+                <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 text-[13px] font-medium text-ink-2 [&::-webkit-details-marker]:hidden">
+                  <span>
+                    予算売上高<span className="en-under">Target</span>
+                  </span>
+                  <ChevronDown className="h-4 w-4 shrink-0 text-ink-3 transition-transform group-open:rotate-180" aria-hidden />
+                </summary>
+                {budget != null ? (
+                  <p className="m-0 mt-1 text-[18px] leading-none font-bold text-ink tabular-nums">{yen(budget)}</p>
+                ) : (
+                  <p className="m-0 mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-ink-3">
+                    予算が未設定です
+                    <Link href="/app/budgets" className="font-bold text-iris hover:underline">
+                      予算を登録する ›
+                    </Link>
+                  </p>
+                )}
+              </details>
+            </dd>
           </div>
           {/* 「※実績売上高には未会計分の金額が含まれています」は出さない（2026-10-18 Ronnie「書かなくていい」） */}
         </dl>
