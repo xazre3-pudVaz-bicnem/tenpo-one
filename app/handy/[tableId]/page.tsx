@@ -8,7 +8,13 @@ import { requireHandyClerk } from '@/lib/handy-session';
 import { HandyBackButton, HandyMain, HandyTopBar } from '@/components/handy/handy-chrome';
 import { HandyTableDetail, type HandySlip } from '@/components/handy/handy-table-detail';
 import type { HandyServiceCall } from '@/components/handy/logic';
-import { openHandyOrder, resolveServiceCall } from '@/app/app/handy/actions';
+import {
+  cancelRecentHandyItem,
+  extendHandyStay,
+  openHandyOrder,
+  resolveServiceCall,
+  setHandyGuestCount,
+} from '@/app/app/handy/actions';
 
 export const metadata: Metadata = { title: '卓の注文' };
 
@@ -26,6 +32,7 @@ interface OrderItemRow {
   modifiers: unknown;
   /** 厨房へ送った時刻（注文の回 1st・2nd… に使う。未送信は null） */
   kitchen_sent_at: string | null;
+  created_at: string;
 }
 
 /** order_items.modifiers（[{name, price}]）から表示用のラベルを作る */
@@ -87,7 +94,7 @@ export default async function HandyTablePage({
   const [{ data: orders }, { data: calls }] = await Promise.all([
     supabase
       .from('orders')
-      .select('id, order_no, guest_count, opened_at, subtotal, tax_total, discount_total, total')
+      .select('id, order_no, guest_count, opened_at, subtotal, tax_total, discount_total, total, reservation_id')
       .eq('table_id', tableId)
       .eq('status', 'open')
       .order('opened_at'),
@@ -103,11 +110,18 @@ export default async function HandyTablePage({
   const { data: itemRows } = orderIds.length
     ? await supabase
         .from('order_items')
-        .select('id, order_id, name, quantity, unit_price, line_total, modifiers, kitchen_sent_at')
+        .select('id, order_id, name, quantity, unit_price, line_total, modifiers, kitchen_sent_at, created_at')
         .in('order_id', orderIds)
         .eq('status', 'active')
         .order('created_at')
     : { data: [] as (OrderItemRow & { order_id: string })[] };
+
+  // 席の終了予定（時間延長の表示。予約・ウォークインの end_at）
+  const reservationIds = (orders ?? []).map((o) => o.reservation_id as string | null).filter((id): id is string => !!id);
+  const { data: rsvRows } = reservationIds.length
+    ? await supabase.from('reservations').select('id, end_at').in('id', reservationIds)
+    : { data: [] as { id: string; end_at: string | null }[] };
+  const endById = new Map((rsvRows ?? []).map((r) => [r.id as string, (r.end_at as string | null) ?? null]));
 
   const itemsByOrder = new Map<string, OrderItemRow[]>();
   for (const row of (itemRows ?? []) as (OrderItemRow & { order_id: string })[]) {
@@ -124,6 +138,10 @@ export default async function HandyTablePage({
     subtotal: Number(o.subtotal ?? 0),
     discountTotal: Number(o.discount_total ?? 0),
     total: Number(o.total ?? 0),
+    endsAtMs: (() => {
+      const end = o.reservation_id ? endById.get(o.reservation_id as string) : null;
+      return end ? new Date(end).getTime() : null;
+    })(),
     items: (itemsByOrder.get(o.id) ?? []).map((i) => ({
       id: i.id,
       name: i.name,
@@ -132,6 +150,7 @@ export default async function HandyTablePage({
       lineTotal: Number(i.line_total ?? 0),
       optionLabel: modifierLabel(i.modifiers),
       sentAtMs: i.kitchen_sent_at ? new Date(i.kitchen_sent_at).getTime() : null,
+      orderedAtMs: new Date(i.kitchen_sent_at ?? i.created_at).getTime(),
     })),
   }));
 
@@ -163,6 +182,9 @@ export default async function HandyTablePage({
       goToOrderAction={openHandyOrder}
       resolveServiceCallAction={resolveServiceCall}
       printBillAction={enqueueOrderSlipPrint}
+      setGuestCountAction={setHandyGuestCount}
+      extendStayAction={extendHandyStay}
+      cancelItemAction={cancelRecentHandyItem}
     />
   );
 }

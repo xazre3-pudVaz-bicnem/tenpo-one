@@ -9,7 +9,9 @@ import { HANDY_CLERK_COOKIE, serializeHandyClerk } from '@/lib/handy-clerk';
 import { readHandyClerk } from '@/lib/handy-session';
 import { validateVisitDraft, visitMemo, type VisitDraft } from '@/lib/handy-visit';
 import { isSeatCourseItem } from '@/lib/menu-book';
-import { addCustomPriceItem, addItem, sendItemsToKitchen } from '../pos/actions';
+import { addCustomPriceItem, addItem, sendItemsToKitchen, setGuestCount, setSeatTime } from '../pos/actions';
+import { enqueueCancelSlipPrint } from '../pos/print-actions';
+import { canHandyCancel, extendedStayMinutes, HANDY_EXTEND_OPTIONS, normalizeHandyMemo } from '@/lib/handy-cancel';
 import { setOrderClerk } from '../pos/clerk-actions';
 import { goToOrder, startWalkIn } from '../floor/actions';
 import { MAX_LINE_QUANTITY } from '@/components/handy/logic';
@@ -263,6 +265,8 @@ export interface HandyOrderLineInput {
   custom?: { categoryId: string | null; price: number; memo: string | null };
   /** ハンディで打った金額（¥0 の商品＝延長・キャンセル料など。レジの「金額入力」と同じ。addItem が ¥0 の商品にだけ受ける） */
   openPrice?: number | null;
+  /** 注文確認の ☰ で打ったメモ（フリーテキスト）。厨房伝票に「※…」で出る（2026-10-18 Ronnie） */
+  memo?: string | null;
 }
 
 export interface HandySubmitResult {
@@ -339,6 +343,12 @@ export async function submitHandyOrder(
             memo: line.custom.memo,
           })
         : await addItem(orderId, line.menuItemId, line.optionItemIds, line.quantity, line.openPrice ?? null);
+      const memo = line.custom ? null : normalizeHandyMemo(line.memo);
+      if (id && memo) {
+        // 厨房へ送る前にメモを入れる（送ったあとだと厨房伝票にメモが出ない）
+        const { error: memoError } = await supabase.from('order_items').update({ memo }).eq('id', id);
+        if (memoError) console.error('[handy] memo update failed', id, memoError.message);
+      }
       if (id) addedIds.push(id);
       sentQuantity += line.quantity;
     } catch (e) {
@@ -357,3 +367,137 @@ export async function submitHandyOrder(
   revalidatePath('/handy');
   return { sentQuantity, remaining: [], message: sendProblem };
 }
+
+/* ------------------------------------------------- 卓の画面：人数・時間・取消 */
+
+async function loadHandyOpenOrder(orderId: string) {
+  const ctx = await requirePermission('pos.order');
+  const supabase = await createClient();
+  const { data: order } = await supabase
+    .from('orders')
+    .select('id, organization_id, store_id, status, opened_at, reservation_id')
+    .eq('id', orderId)
+    .maybeSingle();
+  if (!order) throw new Error('伝票が見つかりません');
+  if (order.organization_id !== ctx.organizationId) throw new Error('この伝票は操作できません');
+  await assertStoreAccess(ctx, order.store_id);
+  if (order.status !== 'open') throw new Error('この伝票は既に会計済み・取消済みです');
+  return { ctx, supabase, order };
+}
+
+/** 人数変更（レジの「人数」と同じ。予約の人数もそろえる） */
+export async function setHandyGuestCount(orderId: string, guestCount: number): Promise<void> {
+  await setGuestCount(orderId, guestCount);
+  revalidatePath('/handy', 'layout');
+}
+
+/**
+ * 時間延長（2026-10-18 Ronnie）。席の終了予定を今の時間＋延長分にする（開始時刻・コースはそのまま）。
+ * 延長料金はメニューの「延長」（金額を打つ商品）で入れる。ここは時間（フロア・ハンディの残り時間・L.O.）だけ
+ */
+export async function extendHandyStay(orderId: string, minutes: number): Promise<{ endsAt: string }> {
+  if (!(HANDY_EXTEND_OPTIONS as readonly number[]).includes(minutes)) throw new Error('延長は30〜120分で選んでください');
+  const { supabase, order } = await loadHandyOpenOrder(orderId);
+  const openedMs = new Date(order.opened_at as string).getTime();
+  let currentMinutes: number | null = null;
+  let courseId: string | null = null;
+  if (order.reservation_id) {
+    const { data: rsv } = await supabase
+      .from('reservations')
+      .select('end_at, course_id')
+      .eq('id', order.reservation_id as string)
+      .maybeSingle();
+    const endMs = rsv?.end_at ? new Date(rsv.end_at as string).getTime() : NaN;
+    if (Number.isFinite(endMs) && endMs > openedMs) currentMinutes = Math.round((endMs - openedMs) / 60_000);
+    courseId = (rsv?.course_id as string | null) ?? null;
+  }
+  if (currentMinutes === null) {
+    const { data: settings } = await supabase
+      .from('store_settings')
+      .select('default_stay_minutes')
+      .eq('store_id', order.store_id as string)
+      .maybeSingle();
+    currentMinutes = (settings?.default_stay_minutes as number | null) ?? 120;
+  }
+  const next = extendedStayMinutes(currentMinutes, minutes);
+  await setSeatTime(orderId, { startTime: null, durationMinutes: next, courseId });
+  revalidatePath('/handy', 'layout');
+  return { endsAt: new Date(openedMs + next * 60_000).toISOString() };
+}
+
+/**
+ * 送った品を1つ取り消す（ハンディの −。送ってから5分以内だけ。2026-10-18 Ronnie）。
+ * 2つ以上なら1つ減らし、1つなら品目取消。厨房には差分（マイナス）が出て、送信済みの品はレジにも取消の紙を出す。
+ * 5分を過ぎたもの・伝票ごとの取消はレジで（店長以上の承認）。
+ */
+export async function cancelRecentHandyItem(
+  orderId: string,
+  orderItemId: string
+): Promise<{ quantity: number }> {
+  const { ctx, supabase, order } = await loadHandyOpenOrder(orderId);
+  const { data: line } = await supabase
+    .from('order_items')
+    .select('id, order_id, name, quantity, unit_price, status, created_at, kitchen_sent_at, modifiers, memo')
+    .eq('id', orderItemId)
+    .maybeSingle();
+  if (!line || line.order_id !== orderId) throw new Error('品目が見つかりません');
+  if (line.status !== 'active') throw new Error('この品目は既に取消済みです');
+  const orderedAt = (line.kitchen_sent_at as string | null) ?? (line.created_at as string);
+  if (!canHandyCancel(new Date(orderedAt).getTime(), Date.now())) {
+    throw new Error('送ってから5分を過ぎたので、ハンディでは取り消せません。レジで取消してください');
+  }
+
+  const qty = Number(line.quantity);
+  if (qty > 1) {
+    const next = qty - 1;
+    const { error } = await supabase
+      .from('order_items')
+      .update({ quantity: next, line_total: Number(line.unit_price) * next, updated_by: ctx.userId })
+      .eq('id', orderItemId)
+      .eq('status', 'active');
+    if (error) throw new Error(error.message);
+  } else {
+    const { error } = await supabase
+      .from('order_items')
+      .update({
+        status: 'cancelled',
+        cancel_reason: 'ハンディで取消（5分以内）',
+        cancelled_at: new Date().toISOString(),
+        updated_by: ctx.userId,
+      })
+      .eq('id', orderItemId)
+      .eq('status', 'active');
+    if (error) throw new Error(error.message);
+  }
+
+  await supabase.rpc('log_audit', {
+    p_org: order.organization_id,
+    p_store: order.store_id,
+    p_action: 'order_item.handy_cancel',
+    p_target_table: 'order_items',
+    p_target_id: orderItemId,
+    p_before: { status: 'active', name: line.name, quantity: qty },
+    p_after: qty > 1 ? { quantity: qty - 1 } : { status: 'cancelled' },
+    p_note: 'ハンディで取消（送ってから5分以内）',
+  });
+  await supabase.rpc('recalc_order_totals', { p_order_id: orderId });
+
+  // 送信済みの品は、レジにも「取消」の紙を出す（レジの品目取消と同じ。厨房ぶんはマイナス差分で出る）
+  if (line.kitchen_sent_at) {
+    try {
+      const modifiers = ((line.modifiers ?? []) as { name?: string }[])
+        .map((m) => m?.name)
+        .filter((n): n is string => !!n);
+      await enqueueCancelSlipPrint(orderId, [
+        { name: line.name as string, quantity: 1, modifiers, memo: (line.memo as string | null) ?? null },
+      ]);
+    } catch (e) {
+      console.error('[handy.cancelRecentHandyItem] cancel slip print failed:', e);
+    }
+  }
+
+  revalidatePath('/handy', 'layout');
+  revalidatePath('/app/pos');
+  return { quantity: qty > 1 ? qty - 1 : 0 };
+}
+

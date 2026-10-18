@@ -390,6 +390,13 @@ export interface HandyCartLine {
    * 入っていれば unitPrice はこの金額（lib/cart-reprice.ts）。サーバー（addItem）は ¥0 の商品にだけ受ける
    */
   openPrice?: number | null;
+  /** 注文確認の「メモ / NOTE」で打ったフリーテキスト（厨房伝票に「※…」で出る。2026-10-18 Ronnie） */
+  memo?: string | null;
+}
+
+/** カートの行のメモを変える（空なら消す） */
+export function setCartLineMemo(cart: readonly HandyCartLine[], key: string, memo: string | null): HandyCartLine[] {
+  return cart.map((l) => (l.key === key ? { ...l, memo: memo && memo.trim() ? memo.trim() : null } : l));
 }
 
 /** 商品＋選択肢（＋打った金額）の組み合わせで一意になるキー（選択肢の並び順に依存しない）。金額が違えば別の行 */
