@@ -3,11 +3,14 @@
 import { useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { CircleCheckBig, Printer } from 'lucide-react';
+import { CircleCheckBig, Clock, Minus, Printer, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { yen, formatTime } from '@/lib/format';
 import { useToast } from '@/components/ui/toast';
 import { useNow } from '@/components/floor/use-now';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { GuestCountDialog } from '@/components/pos/guest-count-dialog';
+import { canHandyCancel, HANDY_EXTEND_OPTIONS, handyCancelSecondsLeft } from '@/lib/handy-cancel';
 import {
   HandyBackButton,
   HandyFooterButton,
@@ -36,6 +39,8 @@ export interface HandySlipItem {
   optionLabel: string | null;
   /** 厨房へ送った時刻（注文の回 1st・2nd… に使う。未送信は null） */
   sentAtMs: number | null;
+  /** 伝票に入れた時刻（送信済みなら送った時刻）。5分以内なら − で取り消せる */
+  orderedAtMs: number;
 }
 
 export interface HandySlip {
@@ -46,6 +51,8 @@ export interface HandySlip {
   subtotal: number;
   discountTotal: number;
   total: number;
+  /** 席の終了予定（時間制の卓。無ければ null） */
+  endsAtMs: number | null;
   items: HandySlipItem[];
 }
 
@@ -63,6 +70,9 @@ export function HandyTableDetail({
   goToOrderAction,
   resolveServiceCallAction,
   printBillAction,
+  setGuestCountAction,
+  extendStayAction,
+  cancelItemAction,
 }: {
   table: { id: string; name: string; capacityMax: number; currentStatus: string | null };
   staffName: string;
@@ -76,12 +86,20 @@ export function HandyTableDetail({
   resolveServiceCallAction: (callId: string) => Promise<{ alreadyResolved: boolean }>;
   /** 会計伝票（中間伝票）をプリンターへ出す（レジの「伝票印刷」と同じ）。省略時はボタンを出さない */
   printBillAction?: (orderId: string) => Promise<{ ok: boolean; error?: string; queued?: number }>;
+  /** 人数変更（2026-10-18 Ronnie「ハンディでも人数変更・時間延長」） */
+  setGuestCountAction?: (orderId: string, guestCount: number) => Promise<void>;
+  extendStayAction?: (orderId: string, minutes: number) => Promise<{ endsAt: string }>;
+  /** 送ってから5分以内の品を1つ取り消す（伝票ごとの取消はハンディではできない） */
+  cancelItemAction?: (orderId: string, orderItemId: string) => Promise<{ quantity: number }>;
 }) {
   const router = useRouter();
   const { toast } = useToast();
   const now = useNow(serverNow);
   const [pending, startTransition] = useTransition();
   const [busy, setBusy] = useState<string | null>(null);
+  const [guestSlip, setGuestSlip] = useState<HandySlip | null>(null);
+  const [extendSlip, setExtendSlip] = useState<string | null>(null);
+  const [cancelTarget, setCancelTarget] = useState<{ slipId: string; item: HandySlipItem } | null>(null);
 
   const state = tableState(table.currentStatus, slips.length > 0);
   const totalAmount = slips.reduce((n, s) => n + s.total, 0);
@@ -130,6 +148,24 @@ export function HandyTableDetail({
         else toast(result.error ?? '会計伝票を印刷できませんでした', 'error');
       } catch (e) {
         toast(e instanceof Error ? e.message : '会計伝票を印刷できませんでした', 'error');
+      } finally {
+        setBusy(null);
+      }
+    });
+  };
+
+  /** 時間延長（+30分など）。延長料金はメニューの「延長」（金額を打つ）で入れる */
+  const handleExtend = (slip: HandySlip, minutes: number) => {
+    if (pending || !extendStayAction) return;
+    setBusy(`extend:${slip.id}`);
+    startTransition(async () => {
+      try {
+        const { endsAt } = await extendStayAction(slip.id, minutes);
+        toast(`${minutes}分延長しました（〜${formatTime(new Date(endsAt))}）`, 'success');
+        setExtendSlip(null);
+        router.refresh();
+      } catch (e) {
+        toast(e instanceof Error ? e.message : '延長できませんでした', 'error');
       } finally {
         setBusy(null);
       }
@@ -200,6 +236,8 @@ export function HandyTableDetail({
                     {elapsedLabel(call.createdAtMs, now)}経過
                   </span>
                 </p>
+                {/* お客様QRの「サービス」で頼まれたもの（お水×2・お箸×2） */}
+                {call.note && <p className="mt-1 text-[16px] leading-snug font-extrabold text-[#bc5940]">{call.note}</p>}
                 <button
                   type="button"
                   className="mt-2 min-h-[40px] w-full rounded-[9px] bg-[#bc5940] text-sm font-bold text-white disabled:opacity-40"
@@ -246,8 +284,57 @@ export function HandyTableDetail({
                   伝票 #{slip.orderNo}
                   <span className="text-[11px] font-normal text-[#766b62]">
                     {slip.guestCount}名 · {formatTime(new Date(slip.openedAtMs))}〜
+                    {slip.endsAtMs != null && `${formatTime(new Date(slip.endsAtMs))}`}
                   </span>
                 </h2>
+                {/* 人数変更・時間延長（英語も並べる。2026-10-18 Ronnie） */}
+                {(setGuestCountAction || extendStayAction) && (
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+                    {setGuestCountAction && (
+                      <button
+                        type="button"
+                        disabled={pending}
+                        onClick={() => setGuestSlip(slip)}
+                        className="flex min-h-[40px] items-center justify-center gap-1.5 rounded-[9px] border border-[#d4b3a3] bg-[#fbf9f5] text-[12px] font-bold text-[#8a3f2c] active:bg-[#f6e4da] disabled:opacity-40"
+                      >
+                        <Users className="h-4 w-4" aria-hidden />
+                        人数変更 / GUESTS
+                      </button>
+                    )}
+                    {extendStayAction && (
+                      <button
+                        type="button"
+                        disabled={pending}
+                        aria-expanded={extendSlip === slip.id}
+                        onClick={() => setExtendSlip((cur) => (cur === slip.id ? null : slip.id))}
+                        className="flex min-h-[40px] items-center justify-center gap-1.5 rounded-[9px] border border-[#d4b3a3] bg-[#fbf9f5] text-[12px] font-bold text-[#8a3f2c] active:bg-[#f6e4da] disabled:opacity-40"
+                      >
+                        <Clock className="h-4 w-4" aria-hidden />
+                        時間延長 / EXTEND
+                      </button>
+                    )}
+                  </div>
+                )}
+                {extendSlip === slip.id && extendStayAction && (
+                  <div className="mt-2 rounded-[9px] bg-[#f3efe8] p-2">
+                    <p className="mb-1.5 text-[11px] text-[#766b62]">
+                      延長する時間 / Extend by（延長料金はメニューの「延長」で入れてください）
+                    </p>
+                    <div className="grid grid-cols-4 gap-1.5">
+                      {HANDY_EXTEND_OPTIONS.map((m) => (
+                        <button
+                          key={m}
+                          type="button"
+                          disabled={pending}
+                          onClick={() => handleExtend(slip, m)}
+                          className="min-h-[40px] rounded-[8px] bg-[#bc5940] text-[13px] font-bold text-white active:bg-[#9f4630] disabled:opacity-40"
+                        >
+                          {pending && busy === `extend:${slip.id}` ? '…' : `+${m}分`}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 {slip.items.length === 0 ? (
                   <p className="py-4 text-center text-[13px] text-[#766b62]">まだ注文はありません。</p>
                 ) : (
@@ -287,9 +374,25 @@ export function HandyTableDetail({
                                   </small>
                                 )}
                               </span>
-                              <b className="shrink-0 font-bold text-[#45403b] tabular-nums">
-                                {yen(item.lineTotal)}
-                              </b>
+                              <span className="flex shrink-0 items-center gap-2">
+                                <b className="font-bold text-[#45403b] tabular-nums">{yen(item.lineTotal)}</b>
+                                {/* 送ってから5分以内は − で1つ取り消せる（2026-10-18 Ronnie。伝票ごとの取消はレジで） */}
+                                {cancelItemAction && canHandyCancel(item.orderedAtMs, now) && (
+                                  <button
+                                    type="button"
+                                    disabled={pending}
+                                    onClick={() => setCancelTarget({ slipId: slip.id, item })}
+                                    aria-label={`${item.name}を1つ取り消す（あと${handyCancelSecondsLeft(item.orderedAtMs, now)}秒）`}
+                                    className="flex h-8 min-w-8 flex-col items-center justify-center rounded-[6px] border border-[#c62828] px-1 text-[#c62828] active:bg-[#fdecec] disabled:opacity-40"
+                                  >
+                                    <Minus className="h-4 w-4" aria-hidden />
+                                    {/* 時計は30秒ごとに進むので分で出す */}
+                                    <span className="text-[8px] leading-none tabular-nums">
+                                      {Math.max(1, Math.ceil(handyCancelSecondsLeft(item.orderedAtMs, now) / 60))}分
+                                    </span>
+                                  </button>
+                                )}
+                              </span>
                             </li>
                           ))}
                         </ul>
@@ -337,6 +440,44 @@ export function HandyTableDetail({
           }
           disabled={pending}
           onClick={handleStart}
+        />
+      )}
+
+      {guestSlip && setGuestCountAction && (
+        <GuestCountDialog
+          open
+          onClose={() => {
+            setGuestSlip(null);
+            router.refresh();
+          }}
+          orderId={guestSlip.id}
+          currentGuestCount={guestSlip.guestCount}
+          setGuestCountAction={setGuestCountAction}
+        />
+      )}
+
+      {cancelTarget && cancelItemAction && (
+        <ConfirmDialog
+          open
+          onClose={() => setCancelTarget(null)}
+          title="1つ取り消す / Cancel one"
+          message={`「${cancelTarget.item.name}」を1つ取り消します（いま ${cancelTarget.item.quantity}点）。厨房に取消が出ます。`}
+          confirmLabel="取り消す / Cancel"
+          onConfirm={async () => {
+            try {
+              const r = await cancelItemAction(cancelTarget.slipId, cancelTarget.item.id);
+              toast(
+                r.quantity > 0
+                  ? `「${cancelTarget.item.name}」を1つ取り消しました（残り${r.quantity}点）`
+                  : `「${cancelTarget.item.name}」を取り消しました`,
+                'success'
+              );
+              router.refresh();
+            } catch (e) {
+              toast(e instanceof Error ? e.message : '取り消せませんでした', 'error');
+            }
+            setCancelTarget(null);
+          }}
         />
       )}
     </>

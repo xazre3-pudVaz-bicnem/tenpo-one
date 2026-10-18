@@ -11,6 +11,7 @@ import { OptionDialog, type PosOptionGroup } from '@/components/pos/option-dialo
 import { OpenPriceDialog } from '@/components/pos/open-price-dialog';
 import { customItemName, customLineId, normalizeCustomMemo } from '@/lib/custom-price';
 import { groupMenuItems } from '@/lib/menu-groups';
+import { HANDY_MEMO_MAX, normalizeHandyMemo } from '@/lib/handy-cancel';
 import { menuPageSubName } from '@/lib/menu-book';
 import {
   HandyBackButton,
@@ -26,6 +27,7 @@ import {
   changeCartQuantity,
   MAX_LINE_QUANTITY,
   repriceCart,
+  setCartLineMemo,
   TILE_ACCENTS,
   type HandyCartLine,
   type HandyMenuItemView,
@@ -101,6 +103,9 @@ export function HandyOrderScreen({
   /** 「その他」の行を入れるたびに別の行にするための番号 */
   const customSeq = useRef(0);
   const [cart, setCart] = useState<HandyCartLine[]>([]);
+  /** 注文確認でメモ（フリーテキスト）を打っている行 */
+  const [memoKey, setMemoKey] = useState<string | null>(null);
+  const [memoDraft, setMemoDraft] = useState('');
   const [pending, startTransition] = useTransition();
   // 二重送信の保険（連打で startTransition が2回走るのを防ぐ）
   const sendingRef = useRef(false);
@@ -243,6 +248,7 @@ export function HandyOrderScreen({
       name: l.name,
       ...(l.custom ? { custom: l.custom } : {}),
       ...(l.openPrice != null ? { openPrice: l.openPrice } : {}),
+      ...(l.memo ? { memo: l.memo } : {}),
     }));
     startTransition(async () => {
       try {
@@ -310,10 +316,50 @@ export function HandyOrderScreen({
                   {line.optionLabel && (
                     <p className="my-2 text-[11px] break-words text-[#766b62]">{line.optionLabel}</p>
                   )}
+                  {line.memo && memoKey !== line.key && (
+                    <p className="my-1.5 text-[12px] font-bold break-words text-[#8a3f2c]">※ {line.memo}</p>
+                  )}
+                  {memoKey === line.key && (
+                    <div className="my-2 flex items-center gap-1.5">
+                      <input
+                        autoFocus
+                        value={memoDraft}
+                        maxLength={HANDY_MEMO_MAX}
+                        onChange={(e) => setMemoDraft(e.target.value)}
+                        placeholder="例：氷なし・辛さ控えめ / e.g. no ice"
+                        aria-label={`${line.name}のメモ`}
+                        className="h-10 min-w-0 flex-1 rounded-[6px] border border-[#d4b3a3] bg-white px-2 text-[13px]"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCart((prev) => setCartLineMemo(prev, line.key, normalizeHandyMemo(memoDraft)));
+                          setMemoKey(null);
+                        }}
+                        className="h-10 shrink-0 rounded-[6px] bg-[#bc5940] px-3 text-[12px] font-bold text-white"
+                      >
+                        OK
+                      </button>
+                    </div>
+                  )}
                   <div className="flex items-center justify-between gap-2">
-                    <small className="text-[10px] text-[#766b62] tabular-nums">
-                      {yen(line.unitPrice)} / 点
-                    </small>
+                    <span className="flex items-center gap-2">
+                      <small className="text-[10px] text-[#766b62] tabular-nums">{yen(line.unitPrice)} / 点</small>
+                      {/* フリーテキスト（厨房伝票に「※…」で出る。2026-10-18 Ronnie） */}
+                      {!line.custom && memoKey !== line.key && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMemoKey(line.key);
+                            setMemoDraft(line.memo ?? '');
+                          }}
+                          className="mt-2.5 flex h-9 items-center gap-1 rounded-[6px] border border-[#d4b3a3] px-2 text-[11px] font-bold text-[#8a3f2c]"
+                        >
+                          <PenLine className="h-3.5 w-3.5" aria-hidden />
+                          メモ / NOTE
+                        </button>
+                      )}
+                    </span>
                     <div className="mt-2.5 flex items-center gap-[11px]">
                       <button
                         type="button"
