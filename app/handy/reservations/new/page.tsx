@@ -42,7 +42,7 @@ export default async function HandyNewReservationPage({
   const clerk = await requireHandyClerk();
 
   const supabase = await createClient();
-  const [{ data: sources }, { data: courseRows }] = await Promise.all([
+  const [{ data: sources }, { data: courseRows }, { data: tableRows }, { data: floorRows }] = await Promise.all([
     supabase
       .from('reservation_sources')
       .select('code, name')
@@ -56,7 +56,17 @@ export default async function HandyNewReservationPage({
       .eq('item_type', 'course')
       .eq('status', 'active')
       .order('sort_order'),
+    // 席を選べるように（2026-10-18 Ronnie「Handy bata booking garda table sentaku pani」）。並びはテーブル一覧と同じ
+    supabase
+      .from('restaurant_tables')
+      .select('id, name, capacity_max, floor_id')
+      .eq('store_id', store.id)
+      .eq('status', 'active')
+      .order('sort_order')
+      .order('name'),
+    supabase.from('floors').select('id, name').eq('store_id', store.id).order('sort_order').order('name'),
   ]);
+  const floorName = new Map((floorRows ?? []).map((f) => [f.id as string, f.name as string]));
 
   return (
     <>
@@ -74,6 +84,12 @@ export default async function HandyNewReservationPage({
           courses={(courseRows ?? [])
             .filter((c) => c.store_id == null || c.store_id === store.id)
             .map((c) => ({ value: c.id as string, label: c.name as string }))}
+          tables={(tableRows ?? []).map((t) => ({
+            id: t.id as string,
+            name: t.name as string,
+            capacity: (t.capacity_max as number | null) ?? 0,
+            floorName: floorName.get((t as { floor_id?: string | null }).floor_id ?? '') ?? null,
+          }))}
         />
       </HandyMain>
     </>
