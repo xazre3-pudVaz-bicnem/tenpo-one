@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2, Minus, Plus } from 'lucide-react';
+import { ChevronDown, Loader2, Minus, Plus } from 'lucide-react';
 import { useToast } from '@/components/ui/toast';
 import { cn } from '@/lib/utils';
 import { createManualReservation } from '@/app/app/reservations/actions';
@@ -237,7 +237,11 @@ export function HandyReservationForm({
   );
 }
 
-/** テーブル（任意・複数可）。フロアが2つ以上あればフロアごとに分けて出す */
+/**
+ * テーブル（任意・複数可）。ふだんは1行の欄で、押すと下に卓の一覧が開く
+ * （2026-10-18 Ronnie「Table click garepaxi tala jharera dekhine banau na」）。
+ * フロアが2つ以上あればフロアごとに分けて出す
+ */
 function TablePicker({
   tables,
   selected,
@@ -251,12 +255,37 @@ function TablePicker({
   const byFloor = floors.length > 1 ? floors.map((f) => ({ floor: f, list: tables.filter((t) => (t.floorName ?? '') === f) })) : [{ floor: '', list: tables }];
   const picked = tables.filter((t) => selected.includes(t.id));
   const seats = picked.reduce((sum, t) => sum + t.capacity, 0);
+  const [open, setOpen] = useState(false);
   return (
     <div>
       <span className="mb-1 block text-[12px] font-bold text-[#5c5650]">
         テーブル <span className="text-[10.5px] font-medium text-[#766b62]">（任意・複数可）</span>
       </span>
-      <div className="space-y-2">
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+        className={cn(
+          'flex h-12 w-full items-center justify-between gap-2 rounded-[9px] border bg-white px-3 text-left text-base outline-none',
+          open ? 'border-[#bc5940]' : 'border-[#e5dfd5]'
+        )}
+      >
+        {picked.length > 0 ? (
+          <span className="min-w-0 truncate font-bold text-[#bc5940]">
+            {picked.map((t) => t.name).join(' + ')}
+            {seats > 0 && <span className="font-medium"> · {seats}名席</span>}
+          </span>
+        ) : (
+          <span className="text-[#292725]">選ばない</span>
+        )}
+        <ChevronDown
+          className={cn('h-5 w-5 shrink-0 text-[#45403b] transition-transform', open && 'rotate-180')}
+          strokeWidth={2.4}
+          aria-hidden
+        />
+      </button>
+      {open && (
+      <div className="mt-1.5 space-y-2 rounded-[9px] border border-[#e5dfd5] bg-[#fbf9f5] p-2">
         {byFloor.map(({ floor, list }) => (
           <div key={floor || 'all'}>
             {floors.length > 1 && <p className="mb-1 text-[11px] font-bold text-[#766b62]">{floor || 'その他'}</p>}
@@ -285,11 +314,6 @@ function TablePicker({
           </div>
         ))}
       </div>
-      {picked.length > 0 && (
-        <p className="mt-1.5 text-[12px] font-bold text-[#bc5940]">
-          {picked.map((t) => t.name).join(' + ')}
-          {seats > 0 && <span className="font-medium"> · {seats}名席</span>}
-        </p>
       )}
     </div>
   );

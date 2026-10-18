@@ -106,3 +106,13 @@ describe('ハンディの予約：テーブルを選ぶ', () => {
     expect(page).toContain('tables={(tableRows ?? []).map((t) => ({');
   });
 });
+
+describe('ハンディの予約：テーブルは押すと下に開く（2026-10-18 Ronnie「tala jharera dekhine」）', () => {
+  it('ふだんは1行の欄（選ばない / T-7 + T-8 · 12名席）で、押すと卓の一覧が開く', () => {
+    const form = read('components/handy/handy-reservation-form.tsx');
+    expect(form).toContain('aria-expanded={open}');
+    expect(form).toContain('onClick={() => setOpen((v) => !v)}');
+    expect(form).toContain('{open && (');
+    expect(form).toContain('選ばない');
+  });
+});
