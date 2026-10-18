@@ -1,22 +1,23 @@
 /**
- * 店舗名刺（立名刺 55×91mm）。予約QRカード（booking-qr-card.tsx）と同じ TENPO ONE の黒と紫。
- * A4 1枚に 3×3＝9枚並べ、切り取り線（点線）とトンボ（用紙の余白の線）を入れる。
- * お店で A4 に印刷して、線に沿って切ってレジに置く（2026-09-30 Ronnie「店舗名刺としてプリントする。
- * A4 に名刺サイズが入るだけ。切る線も全部。立名刺」）。
+ * 店舗名刺（横名刺 91×55mm）。予約QRカード（booking-qr-card.tsx）と同じデザイン：クリーム地＋テラコッタ。
+ * A4 1枚に 2列×5段＝10枚並べ、切り取り線（点線）とトンボ（用紙の余白の線）を入れる。
+ * お店で A4 に印刷して、線に沿って切ってレジに置く（2026-09-30 Ronnie「店舗名刺としてプリントする」→
+ * 2026-10-19 Ronnie「このデザインも変えて」で黒の立名刺から、予約QRと同じ横名刺に）。
  */
+import { BookingQrCard } from './booking-qr-card';
 
-/** 立名刺の大きさ（mm） */
-export const MEISHI_W = 55;
-export const MEISHI_H = 91;
-/** A4 に 3列 × 3段 */
-export const MEISHI_COLS = 3;
-export const MEISHI_ROWS = 3;
+/** 横名刺の大きさ（mm） */
+export const MEISHI_W = 91;
+export const MEISHI_H = 55;
+/** A4 に 2列 × 5段 */
+export const MEISHI_COLS = 2;
+export const MEISHI_ROWS = 5;
 const A4_W = 210;
 const A4_H = 297;
-const GRID_W = MEISHI_W * MEISHI_COLS; // 165
-const GRID_H = MEISHI_H * MEISHI_ROWS; // 273
-const LEFT = (A4_W - GRID_W) / 2; // 22.5
-const TOP = (A4_H - GRID_H) / 2; // 12
+const GRID_W = MEISHI_W * MEISHI_COLS; // 182
+const GRID_H = MEISHI_H * MEISHI_ROWS; // 275
+const LEFT = (A4_W - GRID_W) / 2; // 14
+const TOP = (A4_H - GRID_H) / 2; // 11
 
 export interface MeishiData {
   storeName: string;
@@ -28,81 +29,8 @@ export interface MeishiData {
   coupons?: string[];
 }
 
-/** 名刺1枚（55×91mm。縁なしの黒） */
-export function BookingMeishiCard({ storeName, address, phone, qrDataUrl, coupons = [] }: MeishiData) {
-  const coupon = coupons.find((c) => c.trim()) ?? null;
-  const nameSize = storeName.length <= 10 ? 'text-[10.5pt]' : storeName.length <= 16 ? 'text-[9pt]' : 'text-[7.8pt]';
-  return (
-    <div
-      className="relative flex flex-col overflow-hidden bg-[#292725] text-white"
-      style={{ width: `${MEISHI_W}mm`, height: `${MEISHI_H}mm` }}
-    >
-      <div
-        aria-hidden
-        className="absolute -top-[10mm] left-1/2 h-[24mm] w-[46mm] -translate-x-1/2 rounded-full bg-[radial-gradient(ellipse,rgba(188,89,64,0.5),rgba(188,89,64,0)_70%)]"
-      />
-      {/* 上：店名・ご予約 */}
-      <div className="relative px-[3.5mm] pt-[4.5mm] text-center">
-        <p className={`line-clamp-2 leading-[1.25] font-extrabold tracking-[0.03em] text-balance ${nameSize}`}>{storeName}</p>
-        <div aria-hidden className="mx-auto mt-[1.4mm] h-[0.45mm] w-[8mm] rounded-full bg-linear-to-r from-[#e07a5c] to-[#8a3f2c]" />
-        <p className="mt-[1.6mm] inline-flex items-center gap-[1.2mm] rounded-full border border-[#bc5940]/70 bg-[#bc5940]/20 px-[2.2mm] py-[0.4mm]">
-          <span className="text-[4.4pt] font-extrabold tracking-[0.25em] text-[#f29b7b]">RESERVATION</span>
-          <span className="text-[7pt] font-bold">ご予約</span>
-        </p>
-        {coupon && (
-          <p className="mx-auto mt-[1.6mm] line-clamp-1 rounded-[1.4mm] border border-dashed border-[#f5c451]/80 bg-[#f5c451]/10 px-[1.6mm] py-[0.5mm] text-[5.6pt] font-bold">
-            <span className="mr-[1mm] text-[4pt] tracking-[0.15em] text-[#f5c451]">COUPON</span>
-            {coupon}
-          </p>
-        )}
-      </div>
-
-      {/* まんなか：QR と案内 */}
-      <div className="relative flex flex-1 flex-col items-center justify-center">
-        <div className="rounded-[2.2mm] bg-linear-to-br from-[#e07a5c] to-[#8a3f2c] p-[0.8mm]">
-          <div className="rounded-[1.6mm] bg-white p-[1.2mm]">
-            {/* eslint-disable-next-line @next/next/no-img-element -- サーバーで作った QR の data URL */}
-            <img
-              src={qrDataUrl}
-              alt={`${storeName}の予約QRコード`}
-              width={480}
-              height={480}
-              className={`block [image-rendering:pixelated] ${coupon ? 'h-[27mm] w-[27mm]' : 'h-[31mm] w-[31mm]'}`}
-            />
-          </div>
-        </div>
-        <p className="mt-[2mm] text-center text-[6.3pt] leading-[1.4] font-bold">
-          スマホのカメラで読み取って
-          <br />
-          ご予約ください
-        </p>
-        <p className="mt-[0.4mm] text-[4.3pt] text-[#cdb9a9]">Scan to book a table</p>
-      </div>
-
-      {/* 下：住所・電話・帯 */}
-      {(address || phone) && (
-        <div className="relative mx-[3.5mm] border-t border-white/15 pt-[1.5mm] pb-[1.6mm] text-center">
-          {address && <p className="line-clamp-2 text-[4.8pt] leading-[1.45] text-[#ffdfcb]">{address}</p>}
-          {phone && (
-            <p className="mt-[0.4mm] text-[7pt] font-bold tracking-[0.05em] tabular-nums">
-              <span className="mr-[1mm] text-[4.4pt] font-extrabold tracking-[0.2em] text-[#f29b7b]">TEL</span>
-              {phone}
-            </p>
-          )}
-        </div>
-      )}
-      <div className="relative flex shrink-0 items-center justify-between bg-linear-to-r from-[#bc5940] to-[#8a3f2c] px-[3.5mm] py-[1.3mm]">
-        <span className="text-[4.4pt] font-bold tracking-[0.12em]">WEB RESERVATION</span>
-        <span className="text-[4.4pt] font-extrabold tracking-[0.16em]">
-          TENPO <span className="text-[#ffdfcb]">ONE</span>
-        </span>
-      </div>
-    </div>
-  );
-}
-
 /**
- * A4（210×297mm）に名刺 9枚。切り取り線（カードの境目の点線）と、余白のトンボ（切る位置の目印）。
+ * A4（210×297mm）に横名刺 10枚。切り取り線（カードの境目の点線）と、余白のトンボ（切る位置の目印）。
  * data-qr-card を付けて、PDF（A4）ダウンロードでこの1枚をそのまま画像にする。
  */
 export function BookingMeishiSheet(props: MeishiData) {
@@ -115,7 +43,7 @@ export function BookingMeishiSheet(props: MeishiData) {
       className="relative shrink-0 bg-white text-[#292725] [-webkit-print-color-adjust:exact] [print-color-adjust:exact]"
       style={{ width: `${A4_W}mm`, height: `${A4_H}mm` }}
     >
-      {/* 名刺 3×3 */}
+      {/* 名刺 2×5（中身は予約QRカードと同じ。1枚ずつの印は付けない＝シート全体で PDF 1ページ） */}
       <div
         className="absolute grid"
         style={{
@@ -126,7 +54,15 @@ export function BookingMeishiSheet(props: MeishiData) {
         }}
       >
         {Array.from({ length: MEISHI_COLS * MEISHI_ROWS }, (_, i) => (
-          <BookingMeishiCard key={i} {...props} />
+          <BookingQrCard
+            key={i}
+            storeName={props.storeName}
+            address={props.address}
+            phone={props.phone}
+            dataUrl={props.qrDataUrl}
+            coupons={props.coupons}
+            printable={false}
+          />
         ))}
       </div>
 
@@ -162,14 +98,12 @@ export function BookingMeishiSheet(props: MeishiData) {
         </div>
       ))}
 
-      {/* 下の余白：切り方（まんなかの列の下。トンボに重ならないように） */}
+      {/* 下の余白：切り方（左の列の下。トンボに重ならないように） */}
       <p
         className="absolute text-center text-[5.8pt] leading-tight text-[#766b62]"
-        style={{ top: `${TOP + GRID_H + 2.4}mm`, left: `${LEFT + MEISHI_W + 1}mm`, width: `${MEISHI_W - 2}mm` }}
+        style={{ top: `${TOP + GRID_H + 2.2}mm`, left: `${LEFT + 20}mm`, width: '60mm' }}
       >
-        ✂ 線に沿って切ってください
-        <br />
-        立名刺 55×91mm × 9枚
+        ✂ 線に沿って切ってください ／ 横名刺 91×55mm × 10枚
       </p>
     </div>
   );

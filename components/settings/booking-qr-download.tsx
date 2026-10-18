@@ -52,7 +52,7 @@ export function BookingQrDownload({
             label="PNGをダウンロード"
             className="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-navy hover:bg-gray-50 disabled:opacity-70"
           />
-          {/* A4 に立名刺 9枚（切り取り線入り）。2026-09-30 Ronnie「店舗名刺としてプリントする」 */}
+          {/* A4 に横名刺 10枚（切り取り線入り）。2026-09-30 Ronnie「店舗名刺としてプリントする」 */}
           <Link
             href="/app/settings/store/business-cards"
             className="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-navy hover:bg-gray-50"
