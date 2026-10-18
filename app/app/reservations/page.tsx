@@ -19,6 +19,7 @@ import type { GuideTableOption } from '@/components/reservations/guide-table-dia
 import { ACTIVE_TIMELINE_STATUSES, BOARD_SLOT } from '@/components/reservations/constants';
 import { loadLedgerChrome } from '@/components/reservations/ledger-data';
 import { RESERVATION_ROW_SELECT, mapReservationRow, type RawReservationRow } from '@/components/reservations/row-mapper';
+import { loadReservationTags } from '@/lib/reservation-tags-server';
 import { LedgerTop } from '@/components/reservations/ledger-header';
 import { ScheduleBoard, type BoardTable } from '@/components/reservations/schedule-board';
 import { suggestTables, type TableLike } from '@/lib/reservations';
@@ -180,7 +181,9 @@ export default async function ReservationsLedgerPage({ searchParams }: { searchP
       .order('start_at');
 
     const raw = (reservationsData ?? []) as unknown as RawReservationRow[];
-    const reservations = raw.map((r) => mapReservationRow(r, null));
+    // キーワード（列が無いデータベースでも台帳は出る。lib/reservation-tags-server.ts）
+    const tagsById = await loadReservationTags(supabase, raw.map((r) => r.id));
+    const reservations = raw.map((r) => ({ ...mapReservationRow(r, null), tags: tagsById.get(r.id) ?? [] }));
     const isToday = date === today;
 
     const boardTables: BoardTable[] = (tablesData ?? []).map((t) => {

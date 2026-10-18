@@ -11,6 +11,7 @@ import { CREATED_VIA_LABEL } from './constants';
 import { ReservationDetailDialog } from './reservation-detail-dialog';
 import type { AssignableTable } from './assign-table-dialog';
 import type { ReservationListRow } from './list-types';
+import { TagChips } from './entry/tag-chips';
 
 export function ReservationListTable({
   reservations,
@@ -75,6 +76,7 @@ export function ReservationListTable({
                       {r.isPrivateHire && <Badge tone="primary">貸切</Badge>}
                     </span>
                     <span className="block text-xs text-ink-3 tabular-nums">{r.guestPhone}</span>
+                    <TagChips tags={r.tags} className="mt-0.5" />
                   </Td>
                   <Td className="text-right font-bold tabular-nums">{r.partySize}名</Td>
                   <Td>

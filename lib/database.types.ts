@@ -6473,6 +6473,7 @@ export type Database = {
           staff_id: string | null
           start_at: string
           status: string
+          tags: string[]
           store_id: string
           updated_at: string
           updated_by: string | null
@@ -6510,6 +6511,7 @@ export type Database = {
           staff_id?: string | null
           start_at: string
           status?: string
+          tags?: string[]
           store_id: string
           updated_at?: string
           updated_by?: string | null
@@ -6547,6 +6549,7 @@ export type Database = {
           staff_id?: string | null
           start_at?: string
           status?: string
+          tags?: string[]
           store_id?: string
           updated_at?: string
           updated_by?: string | null

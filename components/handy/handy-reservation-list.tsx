@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { Armchair, ClipboardList, Tag, Utensils } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { HandyReservationDetail } from './handy-reservation-detail';
+import { TagChips } from '@/components/reservations/entry/tag-chips';
 
 export interface HandyReservationRow {
   id: string;
@@ -16,6 +17,10 @@ export interface HandyReservationRow {
   partySize: number;
   tableLabel: string;
   sourceLabel: string;
+  /** キーワード（reservations.tags。2026-10-19） */
+  tags?: string[];
+  /** 割り当てた卓（テーブル変更の最初の選択） */
+  tableIds?: string[];
   /** コース（無ければ null） */
   courseName?: string | null;
   status: string;
@@ -75,11 +80,14 @@ export function HandyReservationList({
   reservations,
   emptyText = '今日の予約はありません。',
   dateLabel,
+  actions,
 }: {
   reservations: HandyReservationRow[];
   emptyText?: string;
   /** 詳細のポップアップに出す日付（10/16（金）） */
   dateLabel?: string;
+  /** 詳細から 来店・キャンセル・テーブル変更 をする（2026-10-19 Ronnie「レストランボードのように詳細から」）。無ければ見るだけ */
+  actions?: { storeId: string; date: string; today: string; canWrite: boolean; canCancel: boolean };
 }) {
   const [hideCancelled, setHideCancelled] = useState(false);
   // 押した予約の詳細（ポップアップ）
@@ -195,6 +203,7 @@ export function HandyReservationList({
                         </div>
                       </div>
                     </div>
+                    <TagChips tags={r.tags} className="mt-1" />
                   </div>
                 </div>
                 {r.tableId && !cancelled && (
@@ -216,6 +225,7 @@ export function HandyReservationList({
           reservation={opened}
           statusTone={STATUS_TONE[opened.status] ?? 'border-[#766b62] bg-white text-[#5c5650]'}
           dateLabel={dateLabel}
+          actions={actions}
           onClose={() => setOpenId(null)}
         />
       )}

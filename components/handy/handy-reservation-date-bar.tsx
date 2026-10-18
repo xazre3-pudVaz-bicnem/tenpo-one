@@ -2,13 +2,13 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useRef } from 'react';
+import { useState } from 'react';
 import { CalendarDays, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
+import { ReservationCalendarSheet } from '@/components/reservations/entry/reservation-calendar-sheet';
 import {
   handyDayLabel,
   handyNewReservationHref,
   handyReservationsHref,
-  isIsoDate,
   shiftDate,
 } from '@/lib/handy-reservations';
 
@@ -19,22 +19,8 @@ import {
  */
 export function HandyReservationDateBar({ date, today }: { date: string; today: string }) {
   const router = useRouter();
-  const pickerRef = useRef<HTMLInputElement>(null);
-
-  const openPicker = () => {
-    const el = pickerRef.current;
-    if (!el) return;
-    try {
-      if (typeof el.showPicker === 'function') {
-        el.showPicker();
-        return;
-      }
-    } catch {
-      // showPicker が使えないブラウザはフォーカスで開く
-    }
-    el.focus();
-    el.click();
-  };
+  // 日付を押すと日付選択（日ごとの予約人数・休業日・仮予約／要連絡。2026-10-19 Ronnie「レストランボードのように」）
+  const [calendarOpen, setCalendarOpen] = useState(false);
 
   const navBtn =
     'flex h-10 w-10 shrink-0 items-center justify-center rounded-[9px] border border-[#e5dfd5] bg-white text-[#45403b] active:bg-[#f6ebe3]';
@@ -47,26 +33,25 @@ export function HandyReservationDateBar({ date, today }: { date: string; today: 
         </Link>
         <button
           type="button"
-          onClick={openPicker}
+          onClick={() => setCalendarOpen(true)}
           className="relative flex h-10 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-[9px] border border-[#ead9cc] bg-[#f9ede6] px-2 text-[15px] font-bold text-[#45403b] active:bg-[#f6e4da]"
           aria-label="日付を選ぶ"
         >
           <CalendarDays className="h-4 w-4 shrink-0 text-[#bc5940]" aria-hidden />
           <span className="truncate tabular-nums">{handyDayLabel(date)}</span>
           {date === today && <span className="shrink-0 text-[10px] font-semibold text-[#bc5940]">今日</span>}
-          <input
-            ref={pickerRef}
-            type="date"
-            value={date}
-            onChange={(e) => {
-              const next = e.target.value;
-              if (isIsoDate(next)) router.push(handyReservationsHref(next, today));
-            }}
-            className="pointer-events-none absolute inset-0 h-full w-full opacity-0"
-            tabIndex={-1}
-            aria-hidden
-          />
         </button>
+        {calendarOpen && (
+          <ReservationCalendarSheet
+            date={date}
+            today={today}
+            onClose={() => setCalendarOpen(false)}
+            onSelect={(d) => {
+              setCalendarOpen(false);
+              router.push(handyReservationsHref(d, today));
+            }}
+          />
+        )}
         <Link href={handyReservationsHref(shiftDate(date, 1), today)} aria-label="次の日" className={navBtn}>
           <ChevronRight className="h-5 w-5" strokeWidth={2.4} aria-hidden />
         </Link>

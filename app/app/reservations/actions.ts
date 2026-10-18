@@ -8,6 +8,8 @@ import { canTransition, RESERVATION_STATUS, type ReservationStatus } from '@/lib
 import { isValidStayMinutes } from '@/lib/reservation-time';
 import { MOVABLE_STATUSES, OCCUPYING_STATUSES, canChangeReservationSource } from '@/components/reservations/constants';
 import { todayJst } from '@/lib/format';
+import { loadReservationEntryData, type ReservationEntryData } from '@/lib/reservation-entry-server';
+import { normalizeTags } from '@/lib/reservation-entry';
 
 interface ReservationRow {
   id: string;
@@ -736,6 +738,12 @@ export interface ManualReservationInput {
   tableIds?: string[];
   /** 滞在時間の上書き（分）。未指定はコース所要時間 or 店舗既定 */
   stayMinutes?: number | null;
+  /** 予約のステータス（来店待ち＝confirmed／仮予約＝pending）。未指定は confirmed（2026-10-19） */
+  status?: 'confirmed' | 'pending';
+  /** キーワード（複数）。reservations.tags（migration 00099）。列がまだ無いときはメモに残す */
+  tags?: string[];
+  /** 担当者（レジの担当名 pos_clerks.id） */
+  clerkId?: string | null;
   /** キャンセル待ちからの変換の場合に指定。作成成功時に waitlist_entries.status を converted にする */
   waitlistEntryId?: string;
 }
@@ -752,7 +760,7 @@ export async function createManualReservation(input: ManualReservationInput) {
   const sourceCode = input.sourceCode?.trim() || 'phone';
 
   // 滞在時間: 明示指定 > コース所要時間 > 店舗既定
-  let stayMinutes = input.stayMinutes && input.stayMinutes > 0 ? input.stayMinutes : null;
+  let stayMinutes = input.stayMinutes && input.stayMinutes > 0 ? Math.min(720, Math.round(input.stayMinutes)) : null;
   if (!stayMinutes && input.courseId) {
     const { data: course } = await supabase
       .from('menu_items')
@@ -798,8 +806,20 @@ export async function createManualReservation(input: ManualReservationInput) {
     }
   }
 
+  // 担当者（レジの担当名）。この店舗の表示中の担当者だけ（2026-10-19 Ronnie「担当者も選べるように」）
+  let clerk: { id: string; name: string } | null = null;
+  if (input.clerkId) {
+    const { data: c } = await supabase.from('pos_clerks').select('id, name, store_id, status').eq('id', input.clerkId).maybeSingle();
+    if (!c || c.store_id !== input.storeId || c.status !== 'active') throw new Error('この店舗の担当者ではありません');
+    clerk = { id: c.id as string, name: c.name as string };
+  }
+  const tags = normalizeTags(input.tags);
+  const status = input.status === 'pending' ? 'pending' : 'confirmed';
+  // キーワードの列（migration 00099）がまだ無いデータベースでも登録できるように、無ければメモに残して登録し直す
+  let tagsColumn = tags.length > 0;
+
   let lastError: unknown = null;
-  for (let attempt = 0; attempt < 5; attempt++) {
+  for (let attempt = 0; attempt < 6; attempt++) {
     const code = `TEL-${randomDigits(6)}`;
     const { data: inserted, error } = await supabase
       .from('reservations')
@@ -820,11 +840,14 @@ export async function createManualReservation(input: ManualReservationInput) {
         guest_phone: input.phone.trim(),
         guest_email: input.email?.trim() || null,
         request_note: input.note?.trim() || null,
-        status: 'confirmed',
+        status,
         source_id: source?.id ?? null,
         created_via: createdVia,
         consent_accepted: false,
         created_by: ctx.userId,
+        ...(clerk ? { clerk_id: clerk.id, clerk_name: clerk.name } : {}),
+        ...(tagsColumn ? { tags } : {}),
+        ...(!tagsColumn && tags.length > 0 ? { memo: `キーワード：${tags.join('・')}` } : {}),
       })
       .select('id')
       .single();
@@ -844,7 +867,13 @@ export async function createManualReservation(input: ManualReservationInput) {
       return;
     }
     lastError = error;
-    if ((error as { code?: string })?.code !== '23505') break;
+    const errCode = (error as { code?: string; message?: string })?.code;
+    // tags の列が無い（42703 / PGRST204）→ メモに残して登録し直す
+    if (tagsColumn && (errCode === '42703' || errCode === 'PGRST204' || /tags/.test((error as { message?: string })?.message ?? ''))) {
+      tagsColumn = false;
+      continue;
+    }
+    if (errCode !== '23505') break;
   }
   throw new Error(
     lastError instanceof Error ? lastError.message : '手動予約の登録に失敗しました'
@@ -1187,4 +1216,81 @@ export async function guideWaitingTicket(id: string, tableId: string) {
 
   revalidatePath('/app/reservations');
   redirect(`/app/pos?order=${order.id}`);
+}
+
+
+/**
+ * 予約登録（ハンディ・レジ共通）のデータ：その日の卓と予約・確保時間・キーワード・担当者・コースの所要時間
+ * （2026-10-19 Ronnie「その時間に空いているテーブル・人数にピッタリのテーブル」）
+ */
+export async function getReservationEntryData(storeId: string, date: string): Promise<ReservationEntryData> {
+  const ctx = await requirePermission('reservations.write');
+  if (!ctx.stores.some((s) => s.id === storeId)) throw new Error('この店舗へのアクセス権限がありません');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('日付が正しくありません');
+  const supabase = await createClient();
+  return loadReservationEntryData(supabase, storeId, date);
+}
+
+export interface ReservationCalendarData {
+  /** 'YYYY-MM-DD' → その日の予約の人数（キャンセル・無断キャンセル・キャンセル待ち以外）と、仮予約・要連絡があるか */
+  days: Record<string, { guests: number; attention: boolean }>;
+  /** 臨時休業日・休業日（holidays） */
+  closedDates: string[];
+  /** 定休日の曜日（0=日〜6=土。business_hours.is_closed） */
+  closedWeekdays: number[];
+}
+
+/**
+ * 日付選択のカレンダー（2026-10-19 Ronnie「日付を押したらレストランボードのように、日ごとの予約人数・休業日・仮予約/要連絡」）。
+ * storeId を渡さなければ、いま選んでいる店舗。from〜to は最大 100日。
+ */
+export async function getReservationCalendar(storeId: string | null, from: string, to: string): Promise<ReservationCalendarData> {
+  const ctx = await requirePermission('reservations.view');
+  const sid = storeId ?? ctx.currentStore?.id ?? ctx.stores[0]?.id ?? null;
+  const empty: ReservationCalendarData = { days: {}, closedDates: [], closedWeekdays: [] };
+  if (!sid || !ctx.stores.some((s) => s.id === sid)) return empty;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to) || from > to) return empty;
+  if (Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`) > 100 * 86400000) return empty;
+
+  const supabase = await createClient();
+  const [{ data: rows }, { data: holidayRows }, { data: hourRows }] = await Promise.all([
+    supabase
+      .from('reservations')
+      .select('id, reserved_date, party_size, status')
+      .eq('store_id', sid)
+      .gte('reserved_date', from)
+      .lte('reserved_date', to)
+      .not('status', 'in', '(cancelled,no_show,waitlisted)')
+      .limit(5000),
+    supabase.from('holidays').select('holiday_date').eq('store_id', sid).gte('holiday_date', from).lte('holiday_date', to),
+    supabase.from('business_hours').select('day_of_week, is_closed').eq('store_id', sid),
+  ]);
+  const days: ReservationCalendarData['days'] = {};
+  for (const r of rows ?? []) {
+    const d = r.reserved_date as string;
+    const cur = days[d] ?? { guests: 0, attention: false };
+    cur.guests += (r.party_size as number) ?? 0;
+    if (r.status === 'pending') cur.attention = true;
+    days[d] = cur;
+  }
+  // 要連絡（キーワード）。列が無いデータベースでは読めないので飛ばす
+  const { data: contactRows, error: contactErr } = await supabase
+    .from('reservations')
+    .select('reserved_date')
+    .eq('store_id', sid)
+    .gte('reserved_date', from)
+    .lte('reserved_date', to)
+    .not('status', 'in', '(cancelled,no_show,waitlisted,completed)')
+    .contains('tags', ['要連絡']);
+  if (!contactErr) {
+    for (const r of contactRows ?? []) {
+      const d = r.reserved_date as string;
+      days[d] = { guests: days[d]?.guests ?? 0, attention: true };
+    }
+  }
+  return {
+    days,
+    closedDates: (holidayRows ?? []).map((h) => h.holiday_date as string),
+    closedWeekdays: (hourRows ?? []).filter((h) => h.is_closed).map((h) => h.day_of_week as number),
+  };
 }

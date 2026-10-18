@@ -7,12 +7,14 @@ import { requireHandyClerk } from '@/lib/handy-session';
 import { handyDayLabel, handyReservationsHref, parseHandyDate } from '@/lib/handy-reservations';
 import { HandyBackButton, HandyMain, HandyOperatorBar, HandyTopBar } from '@/components/handy/handy-chrome';
 import { HandyReservationForm } from '@/components/handy/handy-reservation-form';
+import { loadReservationEntryData } from '@/lib/reservation-entry-server';
 
 export const metadata: Metadata = { title: '予約を追加' };
 
 /**
  * ハンディで予約を追加する（2026-10-15 Ronnie「予約の追加もハンディでできるように」）。
  * 登録はレジの予約台帳の「電話予約を登録」と同じ（createManualReservation・予約の登録の権限）。
+ * 2026-10-19 Ronnie「レストランボードのように」→ 2ステップ（日時・人数・空いているテーブル → 詳細）。
  */
 export default async function HandyNewReservationPage({
   searchParams,
@@ -42,7 +44,7 @@ export default async function HandyNewReservationPage({
   const clerk = await requireHandyClerk();
 
   const supabase = await createClient();
-  const [{ data: sources }, { data: courseRows }, { data: tableRows }, { data: floorRows }] = await Promise.all([
+  const [{ data: sources }, { data: courseRows }, entry] = await Promise.all([
     supabase
       .from('reservation_sources')
       .select('code, name')
@@ -56,21 +58,13 @@ export default async function HandyNewReservationPage({
       .eq('item_type', 'course')
       .eq('status', 'active')
       .order('sort_order'),
-    // 席を選べるように（2026-10-18 Ronnie「Handy bata booking garda table sentaku pani」）。並びはテーブル一覧と同じ
-    supabase
-      .from('restaurant_tables')
-      .select('id, name, capacity_max, floor_id')
-      .eq('store_id', store.id)
-      .eq('status', 'active')
-      .order('sort_order')
-      .order('name'),
-    supabase.from('floors').select('id, name').eq('store_id', store.id).order('sort_order').order('name'),
+    // 卓・その日の予約・確保時間・キーワード・担当者（予約可能なテーブル・ピッタリの卓。2026-10-19 Ronnie）
+    loadReservationEntryData(supabase, store.id, date),
   ]);
-  const floorName = new Map((floorRows ?? []).map((f) => [f.id as string, f.name as string]));
 
   return (
     <>
-      <HandyTopBar left={back} storeName={store.name} title="予約を追加" />
+      <HandyTopBar left={back} storeName={store.name} title="予約登録" />
       <HandyOperatorBar label={clerk.name} note={handyDayLabel(date)} />
       <HandyMain>
         <HandyReservationForm
@@ -84,12 +78,8 @@ export default async function HandyNewReservationPage({
           courses={(courseRows ?? [])
             .filter((c) => c.store_id == null || c.store_id === store.id)
             .map((c) => ({ value: c.id as string, label: c.name as string }))}
-          tables={(tableRows ?? []).map((t) => ({
-            id: t.id as string,
-            name: t.name as string,
-            capacity: (t.capacity_max as number | null) ?? 0,
-            floorName: floorName.get((t as { floor_id?: string | null }).floor_id ?? '') ?? null,
-          }))}
+          clerk={clerk.id ? { id: clerk.id, name: clerk.name } : null}
+          initialEntry={entry}
         />
       </HandyMain>
     </>
