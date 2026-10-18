@@ -358,9 +358,23 @@ export function HandyMenuButton() {
   );
 }
 
-/** 右端の更新ボタン */
-export function HandyRefreshButton() {
+/** 右端の更新ボタン。labeled は小さく「更新」を下に（予約の画面。右に「予約登録」と並ぶ。2026-10-19 Ronnie） */
+export function HandyRefreshButton({ labeled = false }: { labeled?: boolean }) {
   const { refresh, refreshing } = useHandyChrome();
+  if (labeled) {
+    return (
+      <button
+        type="button"
+        onClick={refresh}
+        aria-label="この画面を更新"
+        className="flex h-12 w-[50px] flex-col items-center justify-center gap-0.5 text-white max-[350px]:w-[42px] disabled:opacity-50"
+        disabled={refreshing}
+      >
+        <RotateCw className={cn('h-[22px] w-[22px]', refreshing && 'animate-spin')} strokeWidth={2.2} aria-hidden />
+        <span className="text-[10px] leading-none font-bold">更新</span>
+      </button>
+    );
+  }
   return (
     <button
       type="button"
@@ -370,26 +384,6 @@ export function HandyRefreshButton() {
       disabled={refreshing}
     >
       <RotateCw className={cn('h-7 w-7', refreshing && 'animate-spin')} strokeWidth={2.2} aria-hidden />
-    </button>
-  );
-}
-
-/**
- * 今日の予約の上の小さな「ご予約リンクを紹介」（≡ の中にもある。2026-09-30 Ronnie「ここにも置いて」）。
- * 押すと予約ページの QR・共有・コピーのポップアップ。予約ページの無い店では出さない
- */
-export function HandyBookingShareButton() {
-  const { openBookingShare } = useHandyChrome();
-  if (!openBookingShare) return null;
-  return (
-    <button
-      type="button"
-      onClick={openBookingShare}
-      className="inline-flex h-8 items-center gap-1 rounded-full border border-[#ead9cc] bg-[#f9ede6] px-3 text-[12px] font-bold text-[#9f4630] active:bg-[#f6e4da]"
-    >
-      <CalendarPlus className="h-3.5 w-3.5" aria-hidden />
-      ご予約リンクを紹介
-      <span className="text-[9.5px] font-semibold text-[#a8958a]">Share</span>
     </button>
   );
 }

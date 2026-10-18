@@ -364,7 +364,7 @@ function HandyTableSheet({
               startTransition(async () => {
                 try {
                   await setTableLockAction(table.id, !locked);
-                  toast(locked ? 'ロックを解除しました' : 'テーブルをロックしました');
+                  // 「ロックしました」のお知らせは出さない（卓が「使用不可」になるので分かる。2026-10-19 Ronnie）
                   router.refresh();
                   onClose();
                 } catch (e) {

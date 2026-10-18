@@ -5,11 +5,10 @@ import { can } from '@/lib/permissions';
 import { formatDateTime, formatTime, todayJst } from '@/lib/format';
 import { requireHandyClerk } from '@/lib/handy-session';
 import { handyDayLabel, handyEmptyText, handyReservationsTitle, parseHandyDate } from '@/lib/handy-reservations';
-import { HandyReservationDateBar } from '@/components/handy/handy-reservation-date-bar';
+import { HandyAddReservationButton, HandyReservationDateBar } from '@/components/handy/handy-reservation-date-bar';
 import { RESERVATION_STATUS, type ReservationStatus } from '@/lib/reservations';
 import { CREATED_VIA_LABEL } from '@/components/reservations/constants';
 import {
-  HandyBookingShareButton,
   HandyMain,
   HandyMenuButton,
   HandyOperatorBar,
@@ -166,14 +165,18 @@ export default async function HandyReservationsPage({
         left={<HandyMenuButton />}
         storeName={store.name}
         title={title}
-        right={<HandyRefreshButton />}
+        right={
+          // 右：更新と ＋予約登録（2026-10-19 Ronnie「予約の追加は上に。すっきりと」）
+          <div className="flex items-center justify-end">
+            <HandyRefreshButton labeled />
+            {can(ctx.role, 'reservations.write') && <HandyAddReservationButton date={date} />}
+          </div>
+        }
       />
       <HandyOperatorBar label={clerk.name} note={`${handyDayLabel(date)} · ${reservations.length}件`} />
       <HandyMain>
-        <HandyReservationDateBar date={date} today={today} canAdd={can(ctx.role, 'reservations.write')} />
-        <div className="flex justify-end px-3 pt-2 empty:hidden">
-          <HandyBookingShareButton />
-        </div>
+        <HandyReservationDateBar date={date} today={today} />
+        {/* 「ご予約リンクを紹介」はここには出さない（≡ の中だけ。2026-10-19 Ronnie「ここには要らない」） */}
         <HandyReservationList reservations={reservations} emptyText={handyEmptyText(date, today)} dateLabel={handyDayLabel(date)} />
         <p className="px-5 pb-5 text-center text-[10px] leading-relaxed text-[#766b62]">
           予約の変更・来店処理はレジ（管理画面）の予約台帳で行います。

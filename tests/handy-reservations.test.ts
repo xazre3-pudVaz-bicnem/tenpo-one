@@ -55,7 +55,11 @@ describe('ハンディの予約：ほかの日', () => {
   it('一覧はその日の予約を読む', () => {
     const page = read('app/handy/reservations/page.tsx');
     expect(page).toContain(".eq('reserved_date', date)");
-    expect(page).toContain("<HandyReservationDateBar date={date} today={today} canAdd={can(ctx.role, 'reservations.write')} />");
+    expect(page).toContain('<HandyReservationDateBar date={date} today={today} />');
+    // ＋予約登録は上のバーの右・更新の横（2026-10-19 Ronnie「予約の追加は上に。すっきりと」）
+    expect(page).toContain("{can(ctx.role, 'reservations.write') && <HandyAddReservationButton date={date} />}");
+    expect(page).toContain('<HandyRefreshButton labeled />');
+    expect(page).not.toContain('HandyBookingShareButton');
   });
 });
 

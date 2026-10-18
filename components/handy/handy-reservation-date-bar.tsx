@@ -14,18 +14,10 @@ import {
 
 /**
  * ハンディの予約の日付バー（2026-10-15 Ronnie「ハンディの予約でほかの日も見られるように。予約の追加もハンディで」）。
- *   ‹ 前の日 ／ 10/16（木）（押すとカレンダー）／ 次の日 ›、今日でないときは「今日」、右に「＋ 予約を追加」
+ *   ‹ 前の日 ／ 10/16（木）（押すとカレンダー）／ 次の日 ›、今日でないときは「今日に戻る」。
+ * 「＋ 予約登録」は上のバーの右（更新の横）。2026-10-19 Ronnie「予約の追加は上に。すっきりと」（レストランボードと同じ置き方）
  */
-export function HandyReservationDateBar({
-  date,
-  today,
-  canAdd,
-}: {
-  date: string;
-  today: string;
-  /** 予約を追加できる（予約の登録の権限がある） */
-  canAdd: boolean;
-}) {
+export function HandyReservationDateBar({ date, today }: { date: string; today: string }) {
   const router = useRouter();
   const pickerRef = useRef<HTMLInputElement>(null);
 
@@ -79,27 +71,33 @@ export function HandyReservationDateBar({
           <ChevronRight className="h-5 w-5" strokeWidth={2.4} aria-hidden />
         </Link>
       </div>
-      <div className="flex items-center gap-2">
-        {date !== today && (
+      {date !== today && (
+        <div className="flex justify-center">
           <Link
             href={handyReservationsHref(today, today)}
             className="inline-flex h-8 items-center rounded-full border border-[#e5dfd5] bg-white px-3 text-[12px] font-bold text-[#5c5650] active:bg-[#f6ebe3]"
           >
             今日に戻る
           </Link>
-        )}
-        <span className="flex-1" />
-        {canAdd && (
-          <Link
-            href={handyNewReservationHref(date)}
-            className="inline-flex h-8 items-center gap-1 rounded-full bg-[#bc5940] px-3.5 text-[12px] font-bold text-white shadow-[0_3px_10px_#bc59401a] active:bg-[#9f4630]"
-          >
-            <Plus className="h-3.5 w-3.5" strokeWidth={2.6} aria-hidden />
-            予約を追加
-            <span className="text-[9.5px] font-semibold text-white/75">Add</span>
-          </Link>
-        )}
-      </div>
+        </div>
+      )}
     </div>
+  );
+}
+
+/**
+ * 上のバーの右の「＋ 予約登録」（更新の横。2026-10-19 Ronnie「予約の追加は上に」）。
+ * 見ている日の予約を登録する画面へ。予約の登録の権限が無い人には出さない（ページ側で canAdd を見る）
+ */
+export function HandyAddReservationButton({ date }: { date: string }) {
+  return (
+    <Link
+      href={handyNewReservationHref(date)}
+      aria-label="予約を登録"
+      className="flex h-12 w-[50px] flex-col items-center justify-center gap-0.5 text-white max-[350px]:w-[42px] active:opacity-70"
+    >
+      <Plus className="h-[22px] w-[22px]" strokeWidth={2.4} aria-hidden />
+      <span className="text-[10px] leading-none font-bold">予約登録</span>
+    </Link>
   );
 }
