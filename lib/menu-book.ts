@@ -59,6 +59,8 @@ export interface MenuBookSettings {
   pages: MenuPageDef[];
   /** カテゴリID → ページのkey。決めていないカテゴリは autoCategoryPage で自動 */
   categoryPage: Record<string, string>;
+  /** ページの並びをどの標準にそろえたか（MENU_PAGES_VERSION より古ければ読むときに標準へそろえる） */
+  pagesVersion?: number;
 }
 
 /** 上のタブ（ページ）1つ分の設定 */
@@ -69,20 +71,55 @@ export interface MenuPageDef {
 }
 
 /**
- * どの店舗でも最初に出す8つのタブ（2026-09-24 全店舗の要望）。
- * 店舗は設定（メニューブック＞ページ）で名前を変えたり、タブを足したりできる。
+ * どの店舗でも同じ8つのタブ（2026-09-24 全店舗の要望）。
+ * 2026-10-18 Ronnie「上の順番はシステムで全店舗同じに：LUNCH（ある店だけ）DRINK FOOD COURSE NOMIHODAI OTHER SERVICE。
+ * 名前は英語なら何語のスタッフ・お客様でも分かる」→ 名前は英語の大文字、その下に日本語を小さく（ja）。
+ * 店舗は設定（メニューブック＞ページ）で名前・並びを変えたり、タブを足したりできる。
  * カテゴリが1つも入っていないタブは、レジ・ハンディ・お客様QRには出さない（押せないタブを出さないため）。
  */
-export const STANDARD_MENU_PAGES: readonly (MenuPageDef & { en: string })[] = [
-  { key: 'lunch', name: 'ランチ', en: 'Lunch' },
-  { key: 'drink', name: 'ドリンク', en: 'Drink' },
-  { key: 'food', name: 'フード', en: 'Food' },
-  { key: 'course', name: 'コース', en: 'Course' },
-  { key: 'tabehodai', name: '食べ放題', en: 'All you can eat' },
-  { key: 'nomihodai', name: '飲み放題', en: 'All you can drink' },
-  { key: 'service', name: 'サービス', en: 'Service' },
-  { key: 'other', name: 'OTHER', en: 'Other' },
+export const STANDARD_MENU_PAGES: readonly (MenuPageDef & { ja: string; en: string })[] = [
+  { key: 'lunch', name: 'LUNCH', ja: 'ランチ', en: 'Lunch' },
+  { key: 'drink', name: 'DRINK', ja: 'ドリンク', en: 'Drink' },
+  { key: 'food', name: 'FOOD', ja: 'フード', en: 'Food' },
+  { key: 'course', name: 'COURSE', ja: 'コース', en: 'Course' },
+  { key: 'nomihodai', name: 'NOMIHODAI', ja: '飲み放題', en: 'All you can drink' },
+  { key: 'tabehodai', name: 'TABEHODAI', ja: '食べ放題', en: 'All you can eat' },
+  { key: 'other', name: 'OTHER', ja: 'その他', en: 'Other' },
+  { key: 'service', name: 'SERVICE', ja: 'サービス', en: 'Service' },
 ];
+
+/**
+ * ページの並びの標準の版。保存した並びがこれより古い店舗は、読むときに標準の並び・名前にそろえる
+ * （2026-10-18 Ronnie「全店舗いますぐ。あとから各店舗で変えられる」）。そろえたあとに保存した並びはそのまま使う
+ */
+export const MENU_PAGES_VERSION = 2;
+
+/**
+ * 標準の並び・名前にそろえる。標準に無い（店舗が足した）ページは OTHER の前に、保存していた順で入れる。
+ * レジの「おすすめ」は今までの位置（すぐ前のページのあと）
+ */
+export function standardizeMenuPages(saved: readonly MenuPageDef[]): MenuPageDef[] {
+  const std = STANDARD_MENU_PAGES.map((p) => ({ key: p.key, name: p.name }));
+  const stdKeys = new Set(std.map((p) => p.key));
+  const custom = saved.filter((p) => !stdKeys.has(p.key) && p.key !== PICKS_PAGE_KEY);
+  const otherAt = std.findIndex((p) => p.key === FALLBACK_PAGE_KEY);
+  const out = [...std.slice(0, otherAt), ...custom, ...std.slice(otherAt)];
+  // レジの「おすすめ」は、保存していた並びですぐ前にあったページのあとに置く（先頭なら先頭。2026-10-02 御茶ノ水）
+  const at = saved.findIndex((p) => p.key === PICKS_PAGE_KEY);
+  if (at < 0) return out;
+  const picks = { key: PICKS_PAGE_KEY, name: PICKS_PAGE_NAME };
+  for (let i = at - 1; i >= 0; i--) {
+    const idx = out.findIndex((p) => p.key === saved[i].key);
+    if (idx >= 0) return [...out.slice(0, idx + 1), picks, ...out.slice(idx + 1)];
+  }
+  return [picks, ...out];
+}
+
+/** ページ名の下に小さく出す日本語（標準のページで、名前が標準の英語のままのときだけ。例：DRINK → ドリンク） */
+export function menuPageSubName(key: string, name: string | null | undefined): string | null {
+  const std = STANDARD_MENU_PAGES.find((p) => p.key === key);
+  return std && name === std.name ? std.ja : null;
+}
 
 /** 何にも当てはまらないカテゴリの行き先 */
 export const FALLBACK_PAGE_KEY = 'other';
@@ -139,7 +176,14 @@ export function isMenuBookTab(value: unknown): value is MenuBookTab {
 }
 
 export function emptyMenuBook(): MenuBookSettings {
-  return { categories: {}, plans: {}, lunch: { ...DEFAULT_MENU_BOOK_LUNCH }, pages: [], categoryPage: {} };
+  return {
+    categories: {},
+    plans: {},
+    lunch: { ...DEFAULT_MENU_BOOK_LUNCH },
+    pages: [],
+    categoryPage: {},
+    pagesVersion: MENU_PAGES_VERSION,
+  };
 }
 
 /** store_settings.settings.menuBook に書く形（項目を足したらここにも足す。書き忘れると保存のたびに消える） */
@@ -150,6 +194,7 @@ export function menuBookToJson(book: MenuBookSettings): Record<string, unknown> 
     lunch: book.lunch,
     pages: book.pages,
     categoryPage: book.categoryPage,
+    pagesVersion: book.pagesVersion ?? MENU_PAGES_VERSION,
   };
 }
 
@@ -205,6 +250,9 @@ export function menuBookFrom(settings: unknown): MenuBookSettings {
       book.pages.push({ key, name });
     }
   }
+  // 古い標準のまま保存していた並びは、今の標準（LUNCH→DRINK→FOOD→COURSE→NOMIHODAI→…）にそろえる
+  const version = typeof root.pagesVersion === 'number' ? root.pagesVersion : 0;
+  if (version < MENU_PAGES_VERSION && book.pages.length > 0) book.pages = standardizeMenuPages(book.pages);
   if (isRecord(root.categoryPage)) {
     for (const [id, v] of Object.entries(root.categoryPage)) {
       if (UUID.test(id) && typeof v === 'string' && PAGE_KEY_RE.test(v)) book.categoryPage[id] = v;
@@ -503,6 +551,40 @@ export function filterMenuBook<C extends MenuBookCategoryInput, I extends MenuBo
     categories: categories.filter((c) => visible.has(c.id)),
     items: kept,
   };
+}
+
+/**
+ * プラン（飲み放題・食べ放題・コース・アップグレード）を足したら新しく出る商品。
+ * ハンディで、プランをカートに入れたらすぐ（送る前でも）その中身（F. のサワーなど）を出すために使う
+ * （2026-10-18 Ronnie「飲み放題を頼むときにメニューが出ていない」。今までは伝票にプランが入ってからだった）。
+ * @returns 商品ID → その商品を出すプラン商品ID（今の伝票ですでに出ている商品は入らない）
+ */
+export function planRevealedItems<C extends MenuBookCategoryInput, I extends MenuBookItemInput & { id: string }>(
+  categories: readonly C[],
+  items: readonly I[],
+  book: MenuBookSettings,
+  ctx: MenuBookContext,
+  /** プランになりうる商品（コース・名前に飲み放題など）。アップグレード（A→B など）は名前で見分ける */
+  candidatePlans: readonly { id: string; name: string }[]
+): Map<string, string[]> {
+  const base = new Set(filterMenuBook(categories, items, book, ctx).items.map((i) => i.id));
+  const out = new Map<string, string[]>();
+  for (const { id: pid, name } of candidatePlans) {
+    if (ctx.plan.planItemIds.includes(pid)) continue;
+    const addOns = isPlanAddOn(name) ? [...(ctx.plan.addOnItemIds ?? []), pid] : ctx.plan.addOnItemIds;
+    const plan: OrderPlanState = {
+      hasPlan: true,
+      planItemIds: [...ctx.plan.planItemIds, pid],
+      ...(addOns && addOns.length > 0 ? { addOnItemIds: addOns } : {}),
+    };
+    for (const i of filterMenuBook(categories, items, book, { ...ctx, plan }).items) {
+      if (base.has(i.id)) continue;
+      const list = out.get(i.id) ?? [];
+      list.push(pid);
+      out.set(i.id, list);
+    }
+  }
+  return out;
 }
 
 /**

@@ -3,6 +3,7 @@ import {
   addCartLine,
   buildHandyTabs,
   handyPageTabs,
+  visibleHandyPages,
   initialHandyPage,
   callToneByTable,
   cartCount,
@@ -161,7 +162,7 @@ describe('buildHandyTabs', () => {
     expect(tabs.map((t) => t.id)).toEqual(['alacarte', 'plan', 'service']);
     expect(tabs.map((t) => t.label)).toEqual(['単品', 'コース・飲み放題', 'サービス']);
     const alacarte = tabs[0];
-    expect(alacarte.pages.map((p) => p.label)).toEqual(['ドリンク', 'フード']);
+    expect(alacarte.pages.map((p) => p.label)).toEqual(['DRINK', 'FOOD']);
     expect(alacarte.itemCount).toBe(5);
     // カテゴリ内は sort_order 順
     expect(alacarte.pages[1].categories[0].items.map((i) => i.id)).toEqual(['i-soup1', 'i-soup2']);
@@ -170,7 +171,7 @@ describe('buildHandyTabs', () => {
   it('飲み放題の中身（プランのときだけのカテゴリ）とコースの商品は 2 コース・飲み放題 に出す', () => {
     const tabs = buildHandyTabs(categories, items, '12:00', { planCategoryIds });
     const plan = tabs.find((t) => t.id === 'plan');
-    expect(plan?.pages.map((p) => p.label)).toEqual(['コース', '飲み放題']);
+    expect(plan?.pages.map((p) => p.label)).toEqual(['COURSE', 'NOMIHODAI']);
     const service = tabs.find((t) => t.id === 'service');
     expect(service?.pages.flatMap((p) => p.categories.flatMap((c) => c.items)).map((i) => i.id)).toEqual(['i-opt']);
   });
@@ -178,8 +179,8 @@ describe('buildHandyTabs', () => {
   it('メニューブックのページ：標準の8タブで自動にまとまる（同じタブのカテゴリは1つのタイル）', () => {
     const tabs = buildHandyTabs(categories, items, '12:00', { planCategoryIds });
     // 単品タブ：フード（SOUP・APPETIZER・SALAD）と ドリンク（BEER）
-    expect(tabs[0].pages.map((p) => p.label)).toEqual(['ドリンク', 'フード']);
-    const food = tabs[0].pages.find((p) => p.label === 'フード');
+    expect(tabs[0].pages.map((p) => p.label)).toEqual(['DRINK', 'FOOD']);
+    const food = tabs[0].pages.find((p) => p.label === 'FOOD');
     expect(food?.categories.map((c) => c.name)).toEqual(['SOUP', 'APPETIZER', 'SALAD']);
     expect(food?.itemCount).toBe(4);
   });
@@ -204,7 +205,7 @@ describe('buildHandyTabs', () => {
   it('商品が無いカテゴリはタイルに出ない（タブの区切りは変わらない）', () => {
     const withoutAppetizer = items.filter((i) => i.id !== 'i-app');
     const tabs = buildHandyTabs(categories, withoutAppetizer, '12:00', { planCategoryIds });
-    const food = tabs[0].pages.find((p) => p.label === 'フード');
+    const food = tabs[0].pages.find((p) => p.label === 'FOOD');
     expect(food?.categories.map((c) => c.name)).toEqual(['SOUP', 'SALAD']);
   });
 
@@ -442,3 +443,49 @@ describe('handyPageTabs（上のタブ＝ページ。2026-10-18 Ronnie「左に�
     expect(initialHandyPage([], 'plan')).toBeNull();
   });
 });
+
+describe('visibleHandyPages（プランをカートに入れたら中身を出す。2026-10-18 Ronnie）', () => {
+  const it2 = (id: string, revealedBy?: string[]) =>
+    ({
+      id,
+      categoryId: 'c',
+      name: id,
+      nameEn: null,
+      price: 0,
+      itemType: 'drink',
+      isSoldOut: false,
+      sortOrder: 0,
+      sellStartTime: null,
+      sellEndTime: null,
+      imagePath: null,
+      hasOptions: false,
+      offHours: false,
+      ...(revealedBy ? { revealedBy } : {}),
+    }) as never;
+  const pages = [
+    {
+      key: 'nomihodai',
+      name: 'NOMIHODAI',
+      label: 'NOMIHODAI',
+      hasPlanContent: true,
+      itemCount: 3,
+      categories: [
+        { id: 'plans', name: '飲み放題', nameEn: null, tabId: 'plan', items: [it2('planA'), it2('planB')] },
+        { id: 'fsour', name: '(A) サワー', nameEn: null, tabId: 'plan', items: [it2('F. レモン', ['planA', 'planB'])] },
+        { id: 'fbeer', name: '(B) ビール', nameEn: null, tabId: 'plan', items: [it2('F. 生', ['planB'])] },
+      ],
+    },
+  ] as never;
+
+  it('カートにプランが無ければ中身は出さない', () => {
+    const out = visibleHandyPages(pages, new Set());
+    expect(out[0].categories.map((c) => c.id)).toEqual(['plans']);
+    expect(out[0].itemCount).toBe(2);
+  });
+
+  it('A をカートに入れたら A の中身だけ、B なら B の中身も', () => {
+    expect(visibleHandyPages(pages, new Set(['planA']))[0].categories.map((c) => c.id)).toEqual(['plans', 'fsour']);
+    expect(visibleHandyPages(pages, new Set(['planB']))[0].categories.map((c) => c.id)).toEqual(['plans', 'fsour', 'fbeer']);
+  });
+});
+

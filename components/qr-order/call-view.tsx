@@ -5,10 +5,13 @@ import { useQrStrings } from './strings-context';
 import { openServiceCall } from './logic';
 import type { QrServiceCall } from './types';
 import { PageTitle, PrimaryButton, QrError, QrNote } from './ui';
+import { ServicePanel } from './service-panel';
+import type { QrServiceItem, QrServiceRequestLine } from '@/lib/qr-service';
 
 /**
  * 呼び出しタブ。スタッフ呼び出し（kind='staff'）を登録する。
  * 会計希望（kind='checkout'）は履歴・会計タブの別種類として扱い、ここでは状況のみ知らせる。
+ * 下に「サービス」（お水・お箸など。メニューの最後のタブと同じ）も出す（2026-10-18 Ronnie）。
  */
 export function CallView({
   tableName,
@@ -17,6 +20,10 @@ export function CallView({
   error,
   onCallStaff,
   onBackToMenu,
+  serviceItems = [],
+  serviceSending = false,
+  serviceError = null,
+  onSendService,
 }: {
   tableName: string;
   calls: QrServiceCall[];
@@ -24,6 +31,10 @@ export function CallView({
   error: string | null;
   onCallStaff: () => void;
   onBackToMenu: () => void;
+  serviceItems?: QrServiceItem[];
+  serviceSending?: boolean;
+  serviceError?: string | null;
+  onSendService?: (lines: QrServiceRequestLine[]) => Promise<boolean>;
 }) {
   const qrStrings = useQrStrings();
   const staffCall = openServiceCall(calls, 'staff');
@@ -63,6 +74,12 @@ export function CallView({
           <p className="mt-3 text-center font-num text-[11px] text-ink-3">
             {qrStrings.call.checkoutPending}（{checkoutCall.created_at}）
           </p>
+        )}
+
+        {serviceItems.length > 0 && onSendService && (
+          <div className="-mx-5 mt-4 border-t border-line">
+            <ServicePanel items={serviceItems} sending={serviceSending} error={serviceError} onSend={onSendService} />
+          </div>
         )}
 
         <button

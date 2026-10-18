@@ -607,8 +607,9 @@ function HandyCallsSheet({
               </h3>
               <p className="my-2 text-[11px] text-[#766b62]">
                 {formatTime(new Date(call.createdAtMs))}　{elapsedLabel(call.createdAtMs, now)}経過
-                {call.note ? `　${call.note}` : ''}
               </p>
+              {/* お客様QRの「サービス」で頼まれたもの（お水×2・お箸×2。2026-10-18 Ronnie）は大きく */}
+              {call.note && <p className="mb-2 text-[17px] leading-snug font-extrabold text-[#bc5940]">{call.note}</p>}
               <button
                 type="button"
                 disabled={pending}

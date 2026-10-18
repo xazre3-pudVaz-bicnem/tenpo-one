@@ -4,11 +4,17 @@ import { useMemo, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { yen } from '@/lib/format';
 import { categoryEnglishName } from '@/lib/romaji';
+import { menuPageSubName } from '@/lib/menu-book';
 import { groupMenuItems, type MenuGroupSection } from '@/lib/menu-groups';
+import type { QrServiceItem, QrServiceRequestLine } from '@/lib/qr-service';
 import { useQrStrings, useQrLocale, localizedName } from './strings-context';
 import { itemQuantityInCart, menuTabs, type QrMenuPage, type QrMenuTab } from './logic';
 import { isPublicImageUrl, type CartLine, type QrMenuCategory, type QrMenuItem, hasOptions } from './types';
 import { DishArt, QrEmpty, QrNote } from './ui';
+import { ServicePanel } from './service-panel';
+
+/** メニューの最後の「サービス」タブ（お水・お箸など。lib/qr-service.ts） */
+const SERVICE_TAB = '__service';
 
 /**
  * メニュータブ。承認済みレイアウトに合わせて
@@ -27,6 +33,10 @@ export function MenuView({
   onSelectItem,
   onQuickAdd,
   planOver = false,
+  serviceItems = [],
+  serviceSending = false,
+  serviceError = null,
+  onSendService,
 }: {
   tableName: string;
   categories: QrMenuCategory[];
@@ -37,6 +47,11 @@ export function MenuView({
   onQuickAdd: (item: QrMenuItem) => void;
   /** プラン（飲み放題等）の時間が終わっているか */
   planOver?: boolean;
+  /** 最後のタブに出す「サービス」（お水・お箸など。空なら出さない。2026-10-18 Ronnie） */
+  serviceItems?: QrServiceItem[];
+  serviceSending?: boolean;
+  serviceError?: string | null;
+  onSendService?: (lines: QrServiceRequestLine[]) => Promise<boolean>;
 }) {
   const qrStrings = useQrStrings();
   const locale = useQrLocale();
@@ -48,6 +63,8 @@ export function MenuView({
 
   const [activeId, setActiveId] = useState<string | null>(null);
   const active = tabs.find((t) => t.id === activeId) ?? tabs[0] ?? null;
+  const serviceOn = serviceItems.length > 0 && !!onSendService;
+  const showService = serviceOn && activeId === SERVICE_TAB;
   /** カテゴリごとの銘柄のまとまり（まとまらなければ null＝今までどおりの写真つきカード2列） */
   const groupsBySection = useMemo(() => {
     const map = new Map<string, MenuGroupSection<QrMenuItem>[] | null>();
@@ -98,7 +115,7 @@ export function MenuView({
       {/* 分類タブ：横スクロール。濃いプラムの帯の上に立つタブ */}
       <div className="flex gap-1 overflow-x-auto border-b-[3px] border-iris bg-plum px-2.5 pt-2 [scrollbar-width:none]">
         {tabs.map((t, index) => {
-          const selected = active.id === t.id;
+          const selected = !showService && active.id === t.id;
           return (
             <button
               key={t.id}
@@ -114,7 +131,13 @@ export function MenuView({
             >
               <b className="font-num text-lg leading-none">{index + 1}</b>
               {t.name || t.sections.length === 1 ? (
-                <span className="line-clamp-2 text-center [overflow-wrap:anywhere]">{tabLabel(t)}</span>
+                <>
+                  <span className="line-clamp-2 text-center [overflow-wrap:anywhere]">{tabLabel(t)}</span>
+                  {/* 標準のページは英語の下に日本語を小さく（DRINK / ドリンク。2026-10-18 Ronnie） */}
+                  {t.id.startsWith('page:') && menuPageSubName(t.id.slice(5), t.name) && (
+                    <span className="text-[9px] font-normal opacity-80">{menuPageSubName(t.id.slice(5), t.name)}</span>
+                  )}
+                </>
               ) : (
                 // 複数カテゴリのページはカテゴリ名を1行ずつ（4つ以上は3つ＋「+N」）
                 <span className="flex max-w-full flex-col items-center text-[10px] leading-[1.25]">
@@ -129,8 +152,28 @@ export function MenuView({
             </button>
           );
         })}
+        {serviceOn && (
+          <button
+            type="button"
+            aria-pressed={showService}
+            onClick={() => setActiveId(SERVICE_TAB)}
+            className={cn(
+              'flex min-h-[62px] w-auto min-w-[88px] max-w-[136px] shrink-0 flex-col items-center justify-center gap-0.5 rounded-t-xl border px-2.5 py-1.5 text-[11px] font-bold leading-tight',
+              showService ? 'border-line bg-lilac-soft text-iris' : 'border-[#4a433d] bg-plum-2 text-[#dcc0b0]'
+            )}
+          >
+            <b className="font-num text-lg leading-none">{tabs.length + 1}</b>
+            <span className="line-clamp-2 text-center">SERVICE</span>
+            <span className="text-[9px] font-normal opacity-80">{qrStrings.service.tab}</span>
+          </button>
+        )}
       </div>
 
+      {showService && onSendService ? (
+        <div className="bg-white">
+          <ServicePanel items={serviceItems} sending={serviceSending} error={serviceError} onSend={onSendService} />
+        </div>
+      ) : (
       <div className="bg-white">
         <div className="flex items-center justify-between gap-3 px-3 pb-2 pt-3.5">
           <h2 className="min-w-0 text-sm font-bold text-ink [overflow-wrap:anywhere]">{tabLabel(active)}</h2>
@@ -182,8 +225,8 @@ export function MenuView({
               {(groupsBySection.get(section.id) ?? [{ kind: 'items' as const, key: 'all', items: section.items }]).map((part) =>
                 part.kind === 'group' ? (
                   <div key={part.key}>
-                    <h4 className="flex items-center gap-2 px-3 pb-1.5 pt-1 text-[13px] font-bold text-ink">
-                      <span className="min-w-0 [overflow-wrap:anywhere]">
+                    <h4 className="flex items-center gap-2 whitespace-nowrap px-3 pb-1.5 pt-1 text-[13px] font-bold text-ink">
+                      <span className="min-w-0 truncate">
                         {locale === 'en' ? (part.labelEn ?? part.label) : part.label}
                       </span>
                       <span aria-hidden className="h-0.5 min-w-4 flex-1 rounded bg-iris/25" />
@@ -219,6 +262,7 @@ export function MenuView({
           ))
         )}
       </div>
+      )}
 
       {planOver && (
         <p className="mx-3 mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">

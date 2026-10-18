@@ -47,6 +47,8 @@ export function settingsHubs(ctx: {
         { href: '/app/settings/options', label: 'オプション', en: 'Options', icon: 'options', description: 'サイズ・トッピング等の選択肢と追加料金', visible: true },
         { href: '/app/settings/categories', label: 'カテゴリ', en: 'Categories', icon: 'categories', description: 'カテゴリの追加・名前・色と、キッチン／ドリンク／焼き場への振り分け', visible: can(role, 'menu.manage') },
         { href: '/app/settings/menu-book', label: 'メニューブック', en: 'Menu book', icon: 'menubook', description: 'ハンディ・お客様QRのカテゴリの並び順と出し方、プランで出すカテゴリ', visible: can(role, 'menu.manage') },
+        // お客様QRの「SERVICE」タブ（お水・お箸など。2026-10-18 Ronnie「全店舗で追加できるように」）
+        { href: '/app/settings/qr-service', label: 'QRのサービス', en: 'QR service', icon: 'qr', description: 'お水・お箸・取り皿交換など、お客様がQRから無料で頼めるもの（スタッフ呼び出しで届く）', visible: can(role, 'menu.manage') },
         { href: '/app/settings/menu-bulk', label: '一括編集', en: 'Bulk edit', icon: 'bulk', description: '商品名・カテゴリ・価格・表示・売切を表でまとめて変更', visible: can(role, 'menu.manage') },
         { href: '/app/settings/dynamic-pricing', label: 'ダイナミックプライシング', en: 'Dynamic pricing', icon: 'dynamic', description: '曜日・時間帯で値段を自動で変える（ハッピーアワー・深夜料金）', visible: can(role, 'menu.manage') },
       ],

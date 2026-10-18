@@ -13,6 +13,7 @@ import { isMenuSoldOut } from "@/lib/menu-stock";
 import { isPlanTimeOver } from "@/lib/plan-time";
 import { resolveQrGroupToken } from "@/lib/table-group-server";
 import { qrStartRequired } from "@/lib/qr-visit-server";
+import { visibleQrServiceItems } from "@/lib/qr-service";
 
 interface PageParams {
   params: Promise<{ storeSlug: string; tableToken: string }>;
@@ -52,7 +53,7 @@ export default async function QrOrderPage({ params }: PageParams) {
   const [
     { data: menu },
     { data: reservedCourse },
-    { book, plan, dynamicRules, stationById, menuStock, planEndsAtMs },
+    { book, plan, dynamicRules, stationById, menuStock, planEndsAtMs, service },
     noOpenOrder,
   ] = await Promise.all([
     supabase.rpc("get_qr_menu", { p_slug: storeSlug, p_token: tableToken }),
@@ -136,6 +137,8 @@ export default async function QrOrderPage({ params }: PageParams) {
       // 卓にまだ伝票が無ければ、先にご来店の人数（女性・男性）を選んでもらう（2026-10-17 Ronnie）。
       // 予約でコースが決まっている卓はレジで着席するので出さない
       startRequired={noOpenOrder && !course}
+      // メニューの最後の「サービス」タブ（お水・お箸など。設定 > メニュー > QRのサービス。2026-10-18 Ronnie）
+      serviceItems={visibleQrServiceItems(service)}
     />
   );
 }

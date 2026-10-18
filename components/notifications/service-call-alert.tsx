@@ -22,6 +22,8 @@ interface CallRow {
   kind: CallKind;
   status: string;
   created_at: string;
+  /** お客様QRの「サービス」で頼まれたもの（「お水×2・お箸×2」）。無ければ null */
+  note: string | null;
 }
 
 interface AlertItem {
@@ -41,7 +43,15 @@ interface AlertItem {
  * - 振動：Android は navigator.vibrate、iPhone は触覚フィードバック（iOS 18〜・画面が点いているとき）。
  *   画面が消えている iPhone を震わせるのは通知（Push。/api/qr/service-call-push → sw.js）
  * - 卓のマークは router.refresh() で出る（テーブル一覧・ハンディの卓一覧が calls を持つ）
+ * - お客様QRの「サービス」（お水・お箸など）は呼び出しの note に入る（作ったすぐあとに UPDATE で入る）。
+ *   バナーに「ご要望：お水×2・お箸×2」を出し、もう一度頼まれたら鳴らし直す（2026-10-18 Ronnie）
  */
+/** バナーの本文（頼まれたものがあればそれを大きく出す） */
+function callBody(note: string | null | undefined): string {
+  const n = (note ?? '').trim();
+  return n ? `ご要望：${n}` : 'お客様のQRからの呼び出しです。対応したら卓のポップアップで「対応済み」を押してください';
+}
+
 export function ServiceCallAlert({ storeId }: { storeId: string }) {
   const router = useRouter();
   const [items, setItems] = useState<AlertItem[]>([]);
@@ -49,6 +59,8 @@ export function ServiceCallAlert({ storeId }: { storeId: string }) {
   const tracked = useRef<Map<string, TrackedCall>>(new Map());
   const dismissed = useRef<Set<string>>(new Set());
   const tableNames = useRef<Map<string, string>>(new Map());
+  /** 呼び出しごとに最後に見た note（同じ内容で鳴らし直さない） */
+  const notes = useRef<Map<string, string>>(new Map());
 
   useEffect(() => {
     const chime = new Chime();
@@ -69,7 +81,7 @@ export function ServiceCallAlert({ storeId }: { storeId: string }) {
 
   /** 呼び出しを1件受け取る（新しく来た／拾い直した） */
   const receive = useCallback(
-    async (r: Pick<CallRow, 'id' | 'table_id' | 'kind'>, supabase: ReturnType<typeof createClient>) => {
+    async (r: Pick<CallRow, 'id' | 'table_id' | 'kind' | 'note'>, supabase: ReturnType<typeof createClient>) => {
       if (tracked.current.has(r.id) || dismissed.current.has(r.id)) return false;
       // 先に覚える（Realtime と拾い直しが同時に来ても1回だけ鳴らす）
       tracked.current.set(r.id, { id: r.id, lastAlertAt: Date.now(), alerts: 1 });
@@ -82,8 +94,9 @@ export function ServiceCallAlert({ storeId }: { storeId: string }) {
       const item: AlertItem = {
         id: r.id,
         title: `${tableName}　${callKindLabel(r.kind === 'checkout' ? 'checkout' : 'staff')}`,
-        body: 'お客様のQRからの呼び出しです。対応したら卓のポップアップで「対応済み」を押してください',
+        body: callBody(r.note),
       };
+      if (r.note) notes.current.set(r.id, r.note);
       if (!tracked.current.has(r.id)) return false; // 名前を引いている間に対応済みになった
       setItems((list) => [item, ...list.filter((x) => x.id !== item.id)].slice(0, 3));
       ring(item.title, `call-${r.id}`);
@@ -92,9 +105,38 @@ export function ServiceCallAlert({ storeId }: { storeId: string }) {
     [ring]
   );
 
+  /** 対応する前に note（頼まれたもの）が入った・増えた：バナーを書き換えて鳴らし直す */
+  const updateNote = useCallback(
+    async (r: Pick<CallRow, 'id' | 'table_id' | 'kind' | 'note'>, supabase: ReturnType<typeof createClient>) => {
+      const note = (r.note ?? '').trim();
+      if (!note || notes.current.get(r.id) === note || dismissed.current.has(r.id)) return;
+      if (!tracked.current.has(r.id)) {
+        await receive(r, supabase);
+        return;
+      }
+      notes.current.set(r.id, note);
+      let title = '';
+      setItems((list) =>
+        list.map((x) => {
+          if (x.id !== r.id) return x;
+          title = x.title;
+          return { ...x, body: callBody(note) };
+        })
+      );
+      const call = tracked.current.get(r.id);
+      if (call) {
+        call.lastAlertAt = Date.now();
+        call.alerts = 1;
+      }
+      ring(title || 'お客様のご要望', `call-${r.id}-${note.length}`);
+    },
+    [receive, ring]
+  );
+
   /** 対応済み・取消になった呼び出しを外す */
   const drop = useCallback((id: string) => {
     tracked.current.delete(id);
+    notes.current.delete(id);
     setItems((list) => list.filter((x) => x.id !== id));
   }, []);
 
@@ -106,7 +148,7 @@ export function ServiceCallAlert({ storeId }: { storeId: string }) {
     const pickup = async () => {
       const { data } = await supabase
         .from('service_calls')
-        .select('id, table_id, kind, status, created_at')
+        .select('id, table_id, kind, status, created_at, note')
         .eq('store_id', storeId)
         .eq('status', 'open')
         .order('created_at', { ascending: false })
@@ -136,16 +178,30 @@ export function ServiceCallAlert({ storeId }: { storeId: string }) {
         async (payload) => {
           const r = payload.new as Partial<CallRow>;
           if (!r?.id || !r.table_id || r.status !== 'open') return;
-          await receive({ id: r.id, table_id: r.table_id, kind: r.kind === 'checkout' ? 'checkout' : 'staff' }, supabase);
+          await receive(
+            { id: r.id, table_id: r.table_id, kind: r.kind === 'checkout' ? 'checkout' : 'staff', note: r.note ?? null },
+            supabase
+          );
           router.refresh();
         }
       )
       .on(
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'service_calls', filter: `store_id=eq.${storeId}` },
-        (payload) => {
+        async (payload) => {
           const r = payload.new as Partial<CallRow>;
-          if (!r?.id || r.status === 'open') return;
+          if (!r?.id) return;
+          if (r.status === 'open') {
+            // お客様QRの「サービス」で頼まれたもの（note）が入った
+            if (r.table_id && r.note) {
+              await updateNote(
+                { id: r.id, table_id: r.table_id, kind: r.kind === 'checkout' ? 'checkout' : 'staff', note: r.note },
+                supabase
+              );
+              router.refresh();
+            }
+            return;
+          }
           drop(r.id);
           router.refresh();
         }
@@ -169,7 +225,7 @@ export function ServiceCallAlert({ storeId }: { storeId: string }) {
       window.clearInterval(timer);
       supabase.removeChannel(channel);
     };
-  }, [storeId, router, receive, drop, ring]);
+  }, [storeId, router, receive, updateNote, drop, ring]);
 
   if (items.length === 0) return null;
 

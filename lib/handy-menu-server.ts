@@ -10,7 +10,7 @@ import {
   type HandyTabView,
 } from '@/components/handy/logic';
 import type { PosOptionGroup } from '@/components/pos/option-dialog';
-import { filterMenuBook, menuBookPages, planCategoryIds } from '@/lib/menu-book';
+import { filterMenuBook, isPlanItem, menuBookPages, planCategoryIds, planRevealedItems } from '@/lib/menu-book';
 import { categoryEnglishName, englishName } from '@/lib/romaji';
 import { loadMenuStock } from '@/lib/menu-stock-server';
 import { isMenuSoldOut } from '@/lib/menu-stock';
@@ -138,11 +138,25 @@ export async function loadHandyMenu(
 
   // ハンディに出すカテゴリだけに絞る（アラカルトの伝票には飲み放題の F などを出さない。レジは今まで通り全部出す）
   const nowHm = jstNowHm();
-  const visible = filterMenuBook(categoryInputs, itemInputs, menuBook, { channel: 'handy', plan, nowHm });
+  const ctx = { channel: 'handy' as const, plan, nowHm };
+  const visible = filterMenuBook(categoryInputs, itemInputs, menuBook, ctx);
+  // プランをカートに入れたらすぐ（送る前でも）その中身（F. のサワーなど）を出す（2026-10-18 Ronnie）。
+  // プランを足すと増える商品も送り、画面の側でカートにそのプランがあるときだけ出す（revealedBy）
+  const reveal = planRevealedItems(
+    categoryInputs,
+    itemInputs,
+    menuBook,
+    ctx,
+    itemInputs.filter((i) => isPlanItem(i.itemType, i.name)).map((i) => ({ id: i.id, name: i.name }))
+  );
+  const shownItems: HandyMenuItemInput[] = [
+    ...visible.items,
+    ...itemInputs.filter((i) => reveal.has(i.id)).map((i) => ({ ...i, revealedBy: reveal.get(i.id) })),
+  ];
   // 上のタブ（1 単品／2 コース・飲み放題／3 サービス）→ メニューブックのページ。ページの区切りは出さないカテゴリも
   // 含めた並び順で決める（時間帯・卓によって区切りが変わらないように）
   const planIds = planCategoryIds(categoryInputs, itemInputs, menuBook);
-  const tabs = buildHandyTabs(categoryInputs, visible.items, nowHm, { planCategoryIds: planIds, pages: menuBook });
+  const tabs = buildHandyTabs(categoryInputs, shownItems, nowHm, { planCategoryIds: planIds, pages: menuBook });
   const initialTabId = initialHandyTab(tabs, planIds, plan.hasPlan);
   // 注文画面の上のタブ＝メニューブックのページ（レジと同じ）。左のカテゴリ一覧もメニューブックの並び
   const categoryOrder = [...categoryInputs]

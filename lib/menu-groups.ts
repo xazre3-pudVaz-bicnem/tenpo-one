@@ -6,16 +6,17 @@
  * 全部のカテゴリで。見出しの下に商品をぎっしり。QR でもハンディでも」。
  *
  * まとめ方（設定は要らない。商品名から自動で決める）
- * 1) 商品名に空白があるもの：最初の空白の前が見出し、後ろが種類
- *    「ホワイトホース ロック」「ホワイトホース ハイボール」→ ホワイトホース —— ロック・ハイボール
- *    「麦焼酎（A） 水割り」「和牛炙り寿司 4貫」も同じ。
- * 2) 空白の無いもの：英語名の最初の単語が同じで、日本語名の頭が2文字以上同じもの
- *    「カシスソーダ／Cassis Soda」「カシスオレンジ／Cassis Orange」→ カシス（Cassis）—— ソーダ・オレンジ
- *    英語名の確認を入れるのは「ライムサワー」「ライチサワー」（頭の「ライ」が同じ）を間違ってまとめないため。
+ * - 商品名に空白があるもの：最初の空白の前が見出し（銘柄）、後ろが種類
+ *   「ホワイトホース ロック」「ホワイトホース ハイボール」→ ホワイトホース —— ロック・ハイボール
+ *   「麦焼酎（A） 水割り」「和牛炙り寿司 4貫」も同じ。店舗は「銘柄 種類」と空白を入れて名前を付ければまとまる
+ * - 空白の無い名前（エビのアヒージョ・エビマヨ、カシスソーダ・カシスオレンジ）はまとめない。頭が同じでも
+ *   別々の料理・飲み物で、1つの商品の種類（サブメニュー）ではないため（2026-10-18 Ronnie「Shrimp の下に
+ *   Ajillo・Mayo はおかしい。ウイスキーとは違う」）
  * - 同じ見出しが2つ以上あるときだけまとめる。1つだけのものは今までどおりの大きいタイル。
  * - 飲み放題の印「F. 」は見出し・種類の判定では無視する（「F. 焼酎 ロック」→ 焼酎 —— ロック）。
  * - 並びはメニューの順番のまま。まとめた商品は、その見出しの最初の商品の位置にそろえる。
  * - 1つもまとまらなければ null（呼び出し側は今までどおり全部を大きいタイルで出す）。
+ *   カテゴリ全部が1つの見出しになるとき、英語名の頭がそろわないときもまとめない（タイルが小さくなるだけのため）。
  *
  * カートに入る商品・伝票の名前は変えない（画面の出し方だけ）。
  */
@@ -60,11 +61,6 @@ export interface GroupMenuOptions<T> {
 /** 飲み放題の中身などに付く印（「F. 」）。英字1〜3文字＋ピリオド */
 const MARKER = /^[A-Za-z]{1,3}\.\s*/;
 const SPACES = /[\s　]+/;
-/** 種類の頭に残ると読みにくい文字（「エビのアヒージョ」→「アヒージョ」） */
-const LEAD_JUNK = /^[の・／/\s　]+/;
-const TRAIL_JUNK = /[の・／/\s　]+$/;
-/** 見出しの切れ目にできない文字（ここで切ると言葉の途中になる） */
-const NO_BREAK_BEFORE = /[ーァィゥェォャュョッぁぃぅぇぉゃゅょっ゛゜]/;
 
 interface Prepared {
   index: number;
@@ -95,29 +91,6 @@ function commonLeadingWords(members: Prepared[]): string[] {
     else break;
   }
   return out;
-}
-
-/** 日本語名の共通の頭（言葉・数字の途中で切らない） */
-function commonPrefix(names: string[]): string {
-  let n = Math.min(...names.map((s) => s.length));
-  for (let i = 0; i < n; i++) {
-    const c = names[0][i];
-    if (names.some((s) => s[i] !== c)) {
-      n = i;
-      break;
-    }
-  }
-  // 「10貫」「12貫」の「1」や、「ー」「ッ」の前で切らない
-  while (n > 0) {
-    const next = names.map((s) => s[n] ?? '');
-    const lastIsDigit = /[0-9０-９]/.test(names[0][n - 1]);
-    if (next.some((c) => NO_BREAK_BEFORE.test(c)) || (lastIsDigit && next.some((c) => /[0-9０-９]/.test(c)))) {
-      n--;
-      continue;
-    }
-    break;
-  }
-  return names[0].slice(0, n);
 }
 
 interface Candidate {
@@ -160,29 +133,19 @@ export function groupMenuItems<T>(
     for (const m of members) grouped.add(m.p.index);
   }
 
-  // 2) 空白の無い名前（と、1つだけだった空白の名前）：英語の最初の単語＋日本語の頭
-  const byWord = new Map<string, Prepared[]>();
-  for (const p of prepared) {
-    if (grouped.has(p.index) || !canGroup(p) || p.enWords.length < 2 || p.ja.length < 3) continue;
-    const k = `${p.enWords[0].toLowerCase()}|${p.ja.slice(0, 2)}`;
-    const list = byWord.get(k) ?? [];
-    list.push(p);
-    byWord.set(k, list);
-  }
-  for (const list of byWord.values()) {
-    if (list.length < 2) continue;
-    const head = commonPrefix(list.map((p) => p.ja)).replace(TRAIL_JUNK, '');
-    if (head.length < 2) continue;
-    const members = list.map((p) => ({ p, label: p.ja.slice(head.length).replace(LEAD_JUNK, '') }));
-    if (members.some((m) => m.label.length === 0)) continue;
-    groups.push({ key: `p:${groups.length}:${head}`, label: head, members });
-    for (const m of members) grouped.add(m.p.index);
-  }
-
-  if (groups.length === 0) return null;
+  // 英語名が全員にあるのに頭がそろわないものはまとめない（見出しが日本語だけになり、小さいタイルに長い英語が入るため。
+  // 例：「飲み放題 Aプラン」All-You-Can-Drink Plan A ／「飲み放題 A→B 変更」Upgrade A→B）
+  const kept = groups.filter((g) => {
+    const ps = g.members.map((m) => m.p);
+    return !(ps.every((p) => p.en) && commonLeadingWords(ps).length === 0);
+  });
+  if (kept.length === 0) return null;
+  // カテゴリ全部が1つの見出しになるときもまとめない（見出しがカテゴリ名と同じになるだけで、タイルが小さくなる。
+  // 2026-10-18 Ronnie「飲み放題だけボタンが小さい」）
+  if (kept.length === 1 && kept[0].members.length === prepared.length) return null;
 
   const groupOf = new Map<number, Candidate>();
-  for (const g of groups) {
+  for (const g of kept) {
     g.members.sort((a, b) => a.p.index - b.p.index);
     for (const m of g.members) groupOf.set(m.p.index, g);
   }

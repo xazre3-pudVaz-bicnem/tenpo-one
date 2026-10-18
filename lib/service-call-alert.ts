@@ -45,13 +45,26 @@ export function isFreshCall(createdAtIso: string, now: number): boolean {
   return Number.isFinite(t) && now - t >= -5_000 && now - t <= CALL_PUSH_FRESH_MS;
 }
 
-/** Push の中身（sw.js が { title, body, url, tag } を表示・振動する） */
-export function serviceCallPushPayload(input: { tableName: string | null; kind: CallKind; callId: string }) {
+/**
+ * Push の中身（sw.js が { title, body, url, tag } を表示・振動する）。
+ * detail＝お客様QRの「サービス」で頼まれたもの（「お水×2・お箸×2」。lib/qr-service.ts）。あれば本文に出し、
+ * 同じ呼び出しにもう一度頼まれたときも鳴るよう tag を分ける（seq）
+ */
+export function serviceCallPushPayload(input: {
+  tableName: string | null;
+  kind: CallKind;
+  callId: string;
+  detail?: string | null;
+  seq?: number;
+}) {
+  const detail = (input.detail ?? '').trim();
   return {
     title: `${input.tableName ?? '卓'}　${callKindLabel(input.kind)}`,
-    body: 'お客様のQRからの呼び出しです。対応したら「対応済み」を押してください',
+    body: detail
+      ? `ご要望：${detail}`
+      : 'お客様のQRからの呼び出しです。対応したら「対応済み」を押してください',
     // iPhone のハンディは /app を開くと /handy に移る。iPad はテーブル一覧
     url: '/app/floor',
-    tag: `call-${input.callId}`,
+    tag: input.seq ? `call-${input.callId}-${input.seq}` : `call-${input.callId}`,
   };
 }
