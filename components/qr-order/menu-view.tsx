@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { yen } from '@/lib/format';
 import { categoryEnglishName } from '@/lib/romaji';
+import { groupMenuItems, type MenuGroupSection } from '@/lib/menu-groups';
 import { useQrStrings, useQrLocale, localizedName } from './strings-context';
 import { itemQuantityInCart, menuTabs, type QrMenuPage, type QrMenuTab } from './logic';
 import { isPublicImageUrl, type CartLine, type QrMenuCategory, type QrMenuItem, hasOptions } from './types';
@@ -14,6 +15,9 @@ import { DishArt, QrEmpty, QrNote } from './ui';
  *   卓のカード → ページの横スクロールタブ（濃いプラムの帯） → 写真つき商品カード2列
  * の並びにする。タブはメニューブックのページ（SOUP・APPETIZER・SALAD など、複数カテゴリは見出しを付けて並べる）。
  * 商品が0件のカテゴリ・タブは出さない。
+ * カテゴリの中に同じ銘柄が2つ以上あれば「ホワイトホース ——」の見出しの下に種類（ロック・ハイボール…）を
+ * 小さいカードで3列に並べる（2026-10-18 Ronnie「QR でもハンディでも見やすく」。lib/menu-groups）。
+ * 写真のある商品は写真つきのカードのまま。
  */
 export function MenuView({
   tableName,
@@ -44,6 +48,21 @@ export function MenuView({
 
   const [activeId, setActiveId] = useState<string | null>(null);
   const active = tabs.find((t) => t.id === activeId) ?? tabs[0] ?? null;
+  /** カテゴリごとの銘柄のまとまり（まとまらなければ null＝今までどおりの写真つきカード2列） */
+  const groupsBySection = useMemo(() => {
+    const map = new Map<string, MenuGroupSection<QrMenuItem>[] | null>();
+    for (const section of active?.sections ?? []) {
+      map.set(
+        section.id,
+        groupMenuItems(section.items, (i) => ({ name: i.name, nameEn: i.name_en }), {
+          groupable: (i) => !isPublicImageUrl(i.image_path),
+        })
+      );
+    }
+    return map;
+  }, [active]);
+  /** ＋ボタン：選択肢のある商品はシートを開く。無ければそのままカートへ */
+  const addItem = (item: QrMenuItem) => (hasOptions(item) ? onSelectItem(item) : onQuickAdd(item));
   // ページの中のカテゴリ（SOUP・SALAD…）を小さなタブで絞る（2026-09-25 店舗要望「タブがあるとオーダーしやすい」）。
   // null＝全部。ページを切り替えたら「すべて」に戻す
   const [sectionId, setSectionId] = useState<string | null>(null);
@@ -160,17 +179,42 @@ export function MenuView({
                   {localizedName(locale, section.name, section.name_en)}
                 </h3>
               )}
-              <ul className="grid grid-cols-2 gap-2 px-2.5 pb-4">
-                {section.items.map((item) => (
-                  <MenuCard
-                    key={item.id}
-                    item={item}
-                    quantity={itemQuantityInCart(cart, item.id)}
-                    onOpen={() => onSelectItem(item)}
-                    onAdd={() => (hasOptions(item) ? onSelectItem(item) : onQuickAdd(item))}
-                  />
-                ))}
-              </ul>
+              {(groupsBySection.get(section.id) ?? [{ kind: 'items' as const, key: 'all', items: section.items }]).map((part) =>
+                part.kind === 'group' ? (
+                  <div key={part.key}>
+                    <h4 className="flex items-center gap-2 px-3 pb-1.5 pt-1 text-[13px] font-bold text-ink">
+                      <span className="min-w-0 [overflow-wrap:anywhere]">
+                        {locale === 'en' ? (part.labelEn ?? part.label) : part.label}
+                      </span>
+                      <span aria-hidden className="h-0.5 min-w-4 flex-1 rounded bg-iris/25" />
+                    </h4>
+                    <ul className="grid grid-cols-3 gap-1.5 px-2.5 pb-3.5">
+                      {part.members.map((m) => (
+                        <VariantCard
+                          key={m.item.id}
+                          item={m.item}
+                          label={locale === 'en' ? (m.labelEn ?? m.label) : m.label}
+                          quantity={itemQuantityInCart(cart, m.item.id)}
+                          onOpen={() => onSelectItem(m.item)}
+                          onAdd={() => addItem(m.item)}
+                        />
+                      ))}
+                    </ul>
+                  </div>
+                ) : (
+                  <ul key={part.key} className="grid grid-cols-2 gap-2 px-2.5 pb-4">
+                    {part.items.map((item) => (
+                      <MenuCard
+                        key={item.id}
+                        item={item}
+                        quantity={itemQuantityInCart(cart, item.id)}
+                        onOpen={() => onSelectItem(item)}
+                        onAdd={() => addItem(item)}
+                      />
+                    ))}
+                  </ul>
+                )
+              )}
             </section>
           ))
         )}
@@ -227,7 +271,7 @@ function MenuCard({
           <DishArt />
         )}
         <div className="pb-9 pt-2">
-          <b className="block text-[11px] font-bold leading-snug text-ink [overflow-wrap:anywhere]">{displayName}</b>
+          <b className="line-clamp-2 text-[11px] font-bold leading-snug text-ink [overflow-wrap:anywhere]">{displayName}</b>
           {item.is_sold_out ? (
             <span className="mt-1.5 inline-block rounded bg-lilac px-1.5 py-0.5 text-[9px] font-semibold text-ink-3">
               {qrStrings.menu.soldOutBadge}
@@ -251,6 +295,63 @@ function MenuCard({
           aria-label={qrStrings.menu.addAria(displayName)}
           onClick={onAdd}
           className="absolute bottom-2 right-2 flex h-9 w-9 items-center justify-center rounded-full border border-line bg-lilac font-num text-base font-bold leading-none text-iris active:scale-95"
+        >
+          {quantity > 0 ? quantity : '＋'}
+        </button>
+      )}
+    </li>
+  );
+}
+
+/** 銘柄の見出しの下に並べる小さいカード（種類の名前・値段・＋）。押すと商品のシート、＋でカートへ */
+function VariantCard({
+  item,
+  label,
+  quantity,
+  onOpen,
+  onAdd,
+}: {
+  item: QrMenuItem;
+  /** 種類の名前（例：ロック）。シート・カートには商品名そのものが出る */
+  label: string;
+  quantity: number;
+  onOpen: () => void;
+  onAdd: () => void;
+}) {
+  const qrStrings = useQrStrings();
+  const locale = useQrLocale();
+  const displayName = localizedName(locale, item.name, item.name_en);
+
+  return (
+    <li
+      className={cn(
+        'relative rounded-[10px] border bg-white',
+        quantity > 0 && !item.is_sold_out ? 'border-iris bg-iris-soft' : 'border-line',
+        item.is_sold_out && 'opacity-55'
+      )}
+    >
+      <button
+        type="button"
+        disabled={item.is_sold_out}
+        onClick={onOpen}
+        aria-label={displayName}
+        className="flex h-[78px] w-full flex-col items-start justify-between gap-1 px-2 pb-2 pt-2 text-left"
+      >
+        <b className="line-clamp-2 text-[12px] font-bold leading-snug text-ink [overflow-wrap:anywhere]">{label}</b>
+        {item.is_sold_out ? (
+          <span className="inline-block rounded bg-lilac px-1.5 py-0.5 text-[9px] font-semibold text-ink-3">
+            {qrStrings.menu.soldOutBadge}
+          </span>
+        ) : (
+          <strong className="block pr-8 font-num text-[12px] font-bold leading-8 text-[#5c5650]">{yen(item.price)}</strong>
+        )}
+      </button>
+      {!item.is_sold_out && (
+        <button
+          type="button"
+          aria-label={qrStrings.menu.addAria(displayName)}
+          onClick={onAdd}
+          className="absolute bottom-1.5 right-1.5 flex h-8 w-8 items-center justify-center rounded-full border border-line bg-lilac font-num text-sm font-bold leading-none text-iris active:scale-95"
         >
           {quantity > 0 ? quantity : '＋'}
         </button>
