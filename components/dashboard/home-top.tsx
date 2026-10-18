@@ -32,7 +32,8 @@ export function HomeTop({
         todos={data.todos}
       />
 
-      <section className="grid gap-4 md:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)] xl:grid-cols-[minmax(0,2fr)_minmax(0,0.95fr)]">
+      {/* 予算達成率と時計は1つの箱（2026-10-18 Ronnie「1つの箱にしたほうがいい」）。間は線で区切る */}
+      <section className="ui-card grid divide-line overflow-hidden border border-line bg-white max-md:divide-y md:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)] md:divide-x xl:grid-cols-[minmax(0,2fr)_minmax(0,0.95fr)]">
         <BudgetCard
           actual={data.actualSales}
           openSales={data.openSales}
@@ -42,8 +43,10 @@ export function HomeTop({
           perGroup={data.perGroupSales}
           avgSpend={data.avgSpend}
           asOf={asOf}
+          className="rounded-none border-0 shadow-none"
         />
         <ClockCard
+          className="rounded-none border-0 shadow-none"
           place={
             <Suspense fallback={<span className="opacity-60">&nbsp;</span>}>
               <StorePlace address={data.address} />
