@@ -15,6 +15,9 @@ import {
   isWithinHm,
   menuBookFrom,
   menuBookPages,
+  menuPageSubName,
+  MENU_PAGES_VERSION,
+  standardizeMenuPages,
   menuBookToJson,
   moveInList,
   nestedMenuPages,
@@ -22,6 +25,7 @@ import {
   orderPlanState,
   PAGE_NAME_MAX,
   planCategoryIds,
+  planRevealedItems,
   picksSlot,
   PICKS_PAGE_KEY,
   planPagesFirst,
@@ -243,6 +247,40 @@ describe('メニューブック：絞り込み', () => {
     ).toContain('(F) BEER');
   });
 
+  it('プランをカートに入れたら出す商品（ハンディ。送る前でも F. のドリンクを出す。2026-10-18 Ronnie）', () => {
+    const planA = id(60);
+    const upAtoAB = id(62);
+    const book: MenuBookSettings = {
+      ...emptyMenuBook(),
+      plans: { [planA]: [C.fSoft.id], [upAtoAB]: [C.fBeer.id] },
+    };
+    const withIds = items.map((i, n) => ({ ...i, id: `item-${n}` }));
+    const nameOf = (itemId: string) => withIds.find((i) => i.id === itemId)?.name;
+    const reveal = planRevealedItems(categories, withIds, book, ctx({ channel: 'handy' }), [
+      { id: planA, name: '飲み放題 Aプラン' },
+      { id: upAtoAB, name: '飲み放題 A→B 変更' },
+    ]);
+    const byPlan = (pid: string) =>
+      [...reveal.entries()].filter(([, pids]) => pids.includes(pid)).map(([itemId]) => nameOf(itemId));
+    // A プラン → (F) SOFT DRINK と、普通のカテゴリに混ざった F. の0円商品
+    expect(byPlan(planA)).toEqual(expect.arrayContaining(['F. ウーロン茶', 'F. 緑茶']));
+    expect(byPlan(planA)).not.toContain('F. 生ビール');
+    // アップグレードは決めたカテゴリだけ
+    expect(byPlan(upAtoAB)).toContain('F. 生ビール');
+    expect(byPlan(upAtoAB)).not.toContain('F. ウーロン茶');
+    // いま出ている商品は入らない
+    expect(reveal.has(withIds.find((i) => i.name === 'ウーロン茶')!.id)).toBe(false);
+    // 伝票にもう A がある卓では A の分は増えない
+    const already = planRevealedItems(
+      categories,
+      withIds,
+      book,
+      ctx({ channel: 'handy', plan: { hasPlan: true, planItemIds: [planA] } }),
+      [{ id: planA, name: '飲み放題 Aプラン' }]
+    );
+    expect(already.size).toBe(0);
+  });
+
   it('席料・お通し・キャンセル料・延長・アップグレードはお客様QRに出さない（ハンディには出す。「いつも出す」にすれば出る）', () => {
     for (const n of ['席料', 'お通し', 'キャンセル料', '延長 (30min)', '飲み放題 (A→AB)', 'コース飲み放題 (A→ABC)', 'Cover charge', 'テーブルチャージ', 'サービス料 10%', '飲み放題アップグレード']) {
       expect(isStaffOnlyItem(n), n).toBe(true);
@@ -409,9 +447,15 @@ describe('メニューブック：ページ（レジ・ハンディ・お客様Q
 
   it('設定なしでも標準の8タブの並びで出る。カテゴリの無いタブは出さない', () => {
     const pages = groupMenuPages(ordered, empty);
+    // 2026-10-18 Ronnie「全店舗 LUNCH→DRINK→FOOD→COURSE→NOMIHODAI→OTHER→SERVICE、名前は英語」
     expect(pages.map((p) => p.name)).toEqual([
-      'ランチ', 'ドリンク', 'フード', 'コース', '食べ放題', '飲み放題', 'サービス', 'OTHER',
+      'LUNCH', 'DRINK', 'FOOD', 'COURSE', 'NOMIHODAI', 'TABEHODAI', 'OTHER', 'SERVICE',
     ]);
+    expect(pages.map((p) => menuPageSubName(p.key, p.name))).toEqual([
+      'ランチ', 'ドリンク', 'フード', 'コース', '飲み放題', '食べ放題', 'その他', 'サービス',
+    ]);
+    // 店舗が名前を変えたページには日本語を足さない
+    expect(menuPageSubName('food', '前菜')).toBeNull();
     expect(names(pages[0].categories)).toEqual(['ランチセット', 'ランチ オプション']);
     // ランチのカテゴリを外すと「ランチ」タブごと消える
     const noLunch = groupMenuPages(ordered, empty, (c) => c.id !== P.lunchSet.id && c.id !== P.lunchOption.id);
@@ -446,7 +490,7 @@ describe('メニューブック：ページ（レジ・ハンディ・お客様Q
     const pages = groupMenuPages(ordered, empty);
     const planIds = new Set([P.fYakitori.id, P.fSour.id]);
     const first = planPagesFirst(pages, (c) => planIds.has(c.id));
-    expect(first.slice(0, 2).map((p) => p.key)).toEqual(['tabehodai', 'nomihodai']);
+    expect(first.slice(0, 2).map((p) => p.key)).toEqual(['nomihodai', 'tabehodai']);
   });
 
   describe('レジの「おすすめ」タブの順番（2026-10-02 御茶ノ水「店によって順番が変えられるといい」）', () => {
@@ -506,9 +550,35 @@ describe('メニューブック：ページ（レジ・ハンディ・お客様Q
 
     it('保存した並びを読み直してもおすすめの位置が残る', () => {
       const book = menuBookFrom({
-        menuBook: { pages: [{ key: 'lunch', name: 'ランチ' }, { key: PICKS_PAGE_KEY, name: 'おすすめ' }] },
+        menuBook: {
+          pages: [{ key: 'lunch', name: 'ランチ' }, { key: PICKS_PAGE_KEY, name: 'おすすめ' }],
+          pagesVersion: MENU_PAGES_VERSION,
+        },
       });
       expect(book.pages.map((p) => p.key)).toEqual(['lunch', PICKS_PAGE_KEY]);
+    });
+
+    it('古い標準のまま保存していた並びは、今の標準にそろえる（おすすめの位置・店舗が足したページは残す）', () => {
+      const book = menuBookFrom({
+        menuBook: {
+          pages: [
+            { key: 'drink', name: 'ドリンク' },
+            { key: 'nomihodai', name: '飲み放題' },
+            { key: 'food', name: 'フード' },
+            { key: PICKS_PAGE_KEY, name: 'おすすめ' },
+            { key: 'page1', name: '季節のおすすめ' },
+            { key: 'course', name: 'コース' },
+          ],
+        },
+      });
+      expect(book.pages.map((p) => p.key)).toEqual([
+        'lunch', 'drink', 'food', PICKS_PAGE_KEY, 'course', 'nomihodai', 'tabehodai', 'page1', 'other', 'service',
+      ]);
+      expect(book.pages.find((p) => p.key === 'drink')?.name).toBe('DRINK');
+      expect(book.pages.find((p) => p.key === 'page1')?.name).toBe('季節のおすすめ');
+      // そろえたあとは保存すると新しい版になり、そのあとは店舗の並びのまま
+      expect(menuBookToJson(book).pagesVersion).toBe(MENU_PAGES_VERSION);
+      expect(standardizeMenuPages([{ key: PICKS_PAGE_KEY, name: 'おすすめ' }])[0].key).toBe(PICKS_PAGE_KEY);
     });
   });
 
@@ -560,6 +630,7 @@ describe('メニューブック：ページ（レジ・ハンディ・お客様Q
           { key: 'food', name: 'フード' },
         ],
         categoryPage: { [Q.soup.id]: 'lunch', [P.beer.id]: 'BAD KEY', bad: 'food', [P.salad.id]: 5 },
+        pagesVersion: MENU_PAGES_VERSION,
       },
     });
     expect(b.pages).toEqual([{ key: 'lunch', name: 'ランチ メニュー' }, { key: 'food', name: 'フード' }]);
@@ -570,6 +641,7 @@ describe('メニューブック：ページ（レジ・ハンディ・お客様Q
       lunch: { start: '10:00', end: '16:00' },
       pages: [{ key: 'lunch', name: 'ランチ メニュー' }, { key: 'food', name: 'フード' }],
       categoryPage: { [Q.soup.id]: 'lunch' },
+      pagesVersion: MENU_PAGES_VERSION,
     });
     expect(normalizePageName('あ'.repeat(PAGE_NAME_MAX + 5))).toHaveLength(PAGE_NAME_MAX);
     expect(normalizePageName('')).toBeNull();

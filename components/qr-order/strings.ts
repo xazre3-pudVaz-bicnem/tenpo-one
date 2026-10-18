@@ -105,6 +105,17 @@ const ja = {
     backToMenu: 'メニューに戻る',
     note: 'お急ぎの場合は、お近くのスタッフに直接お声がけください。',
   },
+  service: {
+    tab: 'サービス',
+    eyebrow: 'SERVICE',
+    title: 'ご要望（無料）',
+    lead: '必要なものを押して「スタッフに送る」を押してください。お会計には入りません。',
+    send: (n: number) => `スタッフに送る（${n}点）`,
+    sending: '送信中…',
+    sent: 'スタッフに伝えました。少々お待ちください。',
+    addAria: (name: string) => `${name}を1つ追加`,
+    minusAria: (name: string) => `${name}を1つ減らす`,
+  },
   poweredBy: 'Powered by',
 };
 
@@ -209,6 +220,17 @@ const en: QrStrings = {
     checkoutPending: 'Your bill request is also open',
     backToMenu: 'Back to menu',
     note: 'If you are in a hurry, please speak to a nearby staff member.',
+  },
+  service: {
+    tab: 'Service',
+    eyebrow: 'SERVICE',
+    title: 'Requests (free)',
+    lead: 'Tap what you need, then “Send to staff”. There is no charge.',
+    send: (n: number) => `Send to staff (${n})`,
+    sending: 'Sending…',
+    sent: 'Sent. A staff member will bring it shortly.',
+    addAria: (name: string) => `Add one ${name}`,
+    minusAria: (name: string) => `Remove one ${name}`,
   },
   poweredBy: 'Powered by',
 };

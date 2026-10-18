@@ -268,6 +268,8 @@ export function TableSheet({
               <span className="min-w-0 flex-1 text-[13px] font-bold text-[#842f0b]">
                 {c.kind === 'checkout' ? 'お会計希望' : 'スタッフ呼び出し'}
                 <span className="ml-1 text-[11px] font-medium text-[#9b3a2a]">{jstHm(new Date(c.createdAt).getTime())}</span>
+                {/* お客様QRの「サービス」で頼まれたもの（2026-10-18 Ronnie） */}
+                {c.note && <span className="mt-0.5 block text-[15px] font-extrabold text-[#842f0b]">{c.note}</span>}
               </span>
               <button
                 type="button"

@@ -87,6 +87,8 @@ export interface TableCall {
   id: string;
   kind: 'staff' | 'checkout';
   createdAt: string;
+  /** お客様QRの「サービス」で頼まれたもの（「お水×2・お箸×2」。lib/qr-service.ts）。無ければ null */
+  note?: string | null;
 }
 
 export interface TableView extends FloorTable {

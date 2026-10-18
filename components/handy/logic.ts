@@ -78,6 +78,11 @@ export interface HandyMenuItemInput {
   imagePath: string | null;
   /** 選択肢グループが設定されている商品か（タップ時にダイアログを出す） */
   hasOptions: boolean;
+  /**
+   * プランの中身（F. の飲み放題ドリンクなど）で、伝票にまだプランが無いもの：このプラン商品のどれかがカートに入ったら出す。
+   * 無ければいつも出す（2026-10-18 Ronnie「飲み放題を頼むときにメニューが出ていない」）
+   */
+  revealedBy?: string[];
 }
 
 export interface HandyMenuItemView extends HandyMenuItemInput {
@@ -332,6 +337,24 @@ export function handyPageTabs(
   return out
     .filter((p) => p.itemCount > 0)
     .sort((a, b) => rank(pageOrder, a.key) - rank(pageOrder, b.key));
+}
+
+/**
+ * プランの中身（revealedBy のある商品）は、そのプランがカートに入っているときだけ出す。
+ * 商品が無くなったカテゴリ・ページは出さない（2026-10-18 Ronnie「飲み放題を頼むときにメニューが出ていない」）
+ */
+export function visibleHandyPages(pages: readonly HandyPageTab[], cartItemIds: ReadonlySet<string>): HandyPageTab[] {
+  const shown = (i: HandyMenuItemView) => !i.revealedBy || i.revealedBy.some((id) => cartItemIds.has(id));
+  if (!pages.some((p) => p.categories.some((c) => c.items.some((i) => i.revealedBy)))) return [...pages];
+  const out: HandyPageTab[] = [];
+  for (const p of pages) {
+    const categories = p.categories
+      .map((c) => (c.items.every(shown) ? c : { ...c, items: c.items.filter(shown) }))
+      .filter((c) => c.items.length > 0);
+    if (categories.length === 0) continue;
+    out.push({ ...p, categories, itemCount: categories.reduce((n, c) => n + c.items.length, 0) });
+  }
+  return out;
 }
 
 /**

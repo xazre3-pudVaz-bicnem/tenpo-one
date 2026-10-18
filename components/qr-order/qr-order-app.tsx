@@ -6,6 +6,7 @@ import { Bell, LayoutGrid, ReceiptText, ShoppingCart } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
 import { yen } from '@/lib/format';
+import type { QrServiceItem, QrServiceRequestLine } from '@/lib/qr-service';
 import { MenuView } from './menu-view';
 import { ItemSheet } from './item-sheet';
 import { CartView } from './cart-view';
@@ -131,6 +132,7 @@ export function QrOrderApp({
   planOver = false,
   seatToken = null,
   startRequired = false,
+  serviceItems = [],
 }: {
   storeSlug: string;
   tableToken: string;
@@ -150,6 +152,8 @@ export function QrOrderApp({
   reservedCourse?: ReservedCourse | null;
   /** プラン（飲み放題等）の時間が終わっているか。終わっていたらお客様にその旨を出す */
   planOver?: boolean;
+  /** メニューの最後の「サービス」タブ・呼び出しタブに出す、無料で頼めるもの（お水・お箸など。lib/qr-service.ts） */
+  serviceItems?: QrServiceItem[];
 }) {
   const [tab, setTab] = useState<Tab>('menu');
   const [locale, setLocale] = useState<QrLocale>('ja');
@@ -163,6 +167,8 @@ export function QrOrderApp({
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [calling, setCalling] = useState(false);
   const [callError, setCallError] = useState<string | null>(null);
+  const [serviceSending, setServiceSending] = useState(false);
+  const [serviceError, setServiceError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const mainRef = useRef<HTMLElement>(null);
   // カート行のキー。描画中に値が変わらないよう、操作のたびに採番する
@@ -312,6 +318,43 @@ export function QrOrderApp({
     }
   };
 
+  /**
+   * 「サービス」（お水・お箸など）を送る。スタッフ呼び出しとして届き、ハンディ・レジに「お水×2・お箸×2」が出る
+   * （2026-10-18 Ronnie）。呼び出しの作成・内容の保存・お店への通知は /api/qr/service-request がまとめて行う
+   */
+  const handleServiceRequest = async (lines: QrServiceRequestLine[]): Promise<boolean> => {
+    setServiceSending(true);
+    setServiceError(null);
+    try {
+      const res = await fetch('/api/qr/service-request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slug: storeSlug, token: tableToken, lines }),
+      });
+      const body = (await res.json().catch(() => null)) as
+        | { ok?: boolean; error?: string; call?: { created_at?: string } }
+        | null;
+      if (!res.ok || !body?.ok) {
+        setServiceError(qrServiceCallErrorMessage(body?.error ?? null));
+        setServiceSending(false);
+        return false;
+      }
+      setCalls((prev) =>
+        openServiceCall(prev, 'staff')
+          ? prev
+          : [...prev, { kind: 'staff', created_at: typeof body.call?.created_at === 'string' ? body.call.created_at : '' }]
+      );
+      setServiceSending(false);
+      setNotice(qrStrings.service.sent);
+      void refresh();
+      return true;
+    } catch {
+      setServiceError(qrServiceCallErrorMessage(null));
+      setServiceSending(false);
+      return false;
+    }
+  };
+
   // ご来店の人数を確定 → メニューへ。伝票はまだ開かない（卓は最初の注文で着席になる。2026-10-17 Ronnie）。
   // 人数は最初の注文を送ったあとに伝票へ入れる
   const handleStart = (counts: { female: number; male: number }) => {
@@ -386,6 +429,10 @@ export function QrOrderApp({
               onSelectItem={setSelectedItem}
               onQuickAdd={(item) => addToCart(item, 1, '', [])}
               planOver={planOver}
+              serviceItems={serviceItems}
+              serviceSending={serviceSending}
+              serviceError={serviceError}
+              onSendService={handleServiceRequest}
             />
           )}
           {tab === 'cart' && (
@@ -418,6 +465,10 @@ export function QrOrderApp({
               error={callError}
               onCallStaff={() => void handleCall('staff')}
               onBackToMenu={() => goToTab('menu')}
+              serviceItems={serviceItems}
+              serviceSending={serviceSending}
+              serviceError={serviceError}
+              onSendService={handleServiceRequest}
             />
           )}
         </main>

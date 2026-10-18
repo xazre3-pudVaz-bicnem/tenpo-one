@@ -40,6 +40,7 @@ describe('設定のメニューを dinii と同じく メニュー／プラン�
       '/app/settings/options',
       '/app/settings/categories',
       '/app/settings/menu-book',
+      '/app/settings/qr-service',
       '/app/settings/menu-bulk',
       '/app/settings/dynamic-pricing',
     ]);

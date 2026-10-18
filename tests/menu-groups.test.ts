@@ -37,36 +37,16 @@ describe('groupMenuItems', () => {
     ]);
   });
 
-  it('空白の無い名前は英語の最初の単語と日本語の頭が同じものをまとめる（カクテル）', () => {
+  it('空白の無い名前は頭が同じでもまとめない（別々の料理・飲み物。2026-10-18 Ronnie「Shrimp の下に Ajillo・Mayo はおかしい」）', () => {
     const items = mk([
+      ['エビのアヒージョ', 'Shrimp Ajillo'],
+      ['エビマヨ', 'Shrimp Mayo'],
       ['カシスソーダ', 'Cassis Soda'],
       ['カシスオレンジ', 'Cassis Orange'],
-      ['ジンリッキー', 'Gin Rickey'],
-      ['ジントニック', 'Gin Tonic'],
-      ['ブルドッグ', 'Bulldog'],
-      ['モスコミュール', 'Moscow Mule'],
-    ]);
-    expect(view(groupMenuItems(items, names))).toEqual([
-      { head: 'カシス', headEn: 'Cassis', v: ['ソーダ|Soda', 'オレンジ|Orange'] },
-      { head: 'ジン', headEn: 'Gin', v: ['リッキー|Rickey', 'トニック|Tonic'] },
-      { loose: ['ブルドッグ', 'モスコミュール'] },
-    ]);
-  });
-
-  it('頭が少し同じでも英語が違えばまとめない（ライムサワー／ライチサワー、青リンゴ／緑茶）', () => {
-    const items = mk([
-      ['ライムサワー', 'Lime Sour'],
-      ['ライチサワー', 'Lychee Sour'],
-      ['青リンゴサワー', 'Green Apple Sour'],
-      ['緑茶ハイ', 'Green Tea Hi'],
+      ['スパイシーチキン', 'Spicy Chicken'],
+      ['スパイシーポーク', 'Spicy Pork'],
     ]);
     expect(groupMenuItems(items, names)).toBeNull();
-  });
-
-  it('英語名が無い（ローマ字1語）空白無しの名前はまとめない', () => {
-    const items = mk([['カシスソーダ', 'Kashisusooda'], ['カシスオレンジ', 'Kashisuorenji']]);
-    expect(groupMenuItems(items, names)).toBeNull();
-    expect(groupMenuItems(mk([['カシスソーダ'], ['カシスオレンジ']]), names)).toBeNull();
   });
 
   it('英語名が無くても空白の名前はまとめる（見出しは日本語だけ）', () => {
@@ -95,42 +75,43 @@ describe('groupMenuItems', () => {
 
   it('離れた位置にある同じ見出しは最初の位置にそろえ、間の商品の順番は変えない', () => {
     const items = mk([
-      ['スパイシーチキン', 'Spicy Chicken'],
-      ['やわらか豚角煮', 'Braised Pork Belly'],
-      ['スパイシーポーク', 'Spicy Pork'],
-      ['黒豚ロースステーキ', 'Black Pork Loin Steak'],
+      ['和牛炙り寿司 4貫', 'Seared Wagyu Sushi 4pcs'],
+      ['生ハム寿司 4貫', 'Prosciutto Sushi 4pcs'],
+      ['和牛炙り寿司 10貫', 'Seared Wagyu Sushi 10pcs'],
+      ['馬刺し寿司 4貫', 'Horse Sashimi Sushi 4pcs'],
     ]);
     expect(view(groupMenuItems(items, names))).toEqual([
-      { head: 'スパイシー', headEn: 'Spicy', v: ['チキン|Chicken', 'ポーク|Pork'] },
-      { loose: ['やわらか豚角煮', '黒豚ロースステーキ'] },
+      { head: '和牛炙り寿司', headEn: 'Seared Wagyu Sushi', v: ['4貫|4pcs', '10貫|10pcs'] },
+      { loose: ['生ハム寿司 4貫', '馬刺し寿司 4貫'] },
     ]);
   });
 
-  it('数字の途中で見出しを切らない（10貫／12貫）・「の」を種類の頭に残さない', () => {
-    const sushi = mk([
-      ['肉寿司10種盛り', 'Assorted Meat Sushi 10 Kinds'],
-      ['肉寿司12種盛り', 'Assorted Meat Sushi 12 Kinds'],
-    ]);
-    expect(view(groupMenuItems(sushi, names))).toEqual([
-      { head: '肉寿司', headEn: 'Assorted Meat Sushi', v: ['10種盛り|10 Kinds', '12種盛り|12 Kinds'] },
-    ]);
-    const shrimp = mk([['エビのアヒージョ', 'Shrimp Ajillo'], ['エビマヨ', 'Shrimp Mayo']]);
-    expect(view(groupMenuItems(shrimp, names))).toEqual([
-      { head: 'エビ', headEn: 'Shrimp', v: ['アヒージョ|Ajillo', 'マヨ|Mayo'] },
-    ]);
-  });
-
-  it('英語の頭がそろわないときは見出しは日本語だけ、種類は英語名まるごと', () => {
+  it('英語名が全員にあるのに頭がそろわないものはまとめない（飲み放題のプラン）', () => {
     const items = mk([
       ['飲み放題 Aプラン（2時間）', 'All-You-Can-Drink Plan A (2h)'],
       ['飲み放題 A→B 変更', 'Upgrade A→B'],
+      ['枝豆', 'Edamame'],
+    ]);
+    expect(groupMenuItems(items, names)).toBeNull();
+  });
+
+  it('カテゴリ全部が1つの見出しになるときはまとめない（2026-10-18「飲み放題だけボタンが小さい」）', () => {
+    const items = mk([
+      ['梅酒 グラス', 'Plum Wine Glass'],
+      ['梅酒 デキャンタ', 'Plum Wine Decanter'],
+    ]);
+    expect(groupMenuItems(items, names)).toBeNull();
+  });
+
+  it('英語名の無い商品が混ざるときは 見出しは日本語だけ・英語のある商品は英語名まるごと', () => {
+    const items = mk([
+      ['陸 ハイボール', 'Kirin Riku Highball'],
+      ['陸 ロック'],
+      ['枝豆', 'Edamame'],
     ]);
     expect(view(groupMenuItems(items, names))).toEqual([
-      {
-        head: '飲み放題',
-        headEn: null,
-        v: ['Aプラン（2時間）|All-You-Can-Drink Plan A (2h)', 'A→B 変更|Upgrade A→B'],
-      },
+      { head: '陸', headEn: null, v: ['ハイボール|Kirin Riku Highball', 'ロック|-'] },
+      { loose: ['枝豆'] },
     ]);
   });
 

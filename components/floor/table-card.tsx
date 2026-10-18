@@ -102,8 +102,11 @@ export function TableCard({
             className="absolute top-1.5 right-1.5 z-10 inline-flex items-center gap-1 rounded-full bg-[#b44814] px-2 py-1 text-[11px] font-bold text-white shadow-md"
             aria-label={t.calls.some((c) => c.kind === 'checkout') ? 'お会計希望' : 'スタッフ呼び出し'}
           >
-            <BellRing className="h-3.5 w-3.5 animate-bounce" aria-hidden />
-            {t.calls.some((c) => c.kind === 'checkout') ? 'お会計希望' : 'スタッフ呼び出し'}
+            <BellRing className="h-3.5 w-3.5 shrink-0 animate-bounce" aria-hidden />
+            {t.calls.some((c) => c.kind === 'checkout')
+              ? 'お会計希望'
+              : // お客様QRの「サービス」で頼まれたものがあれば中身を出す（お水×2・お箸×2）
+                (t.calls.find((c) => c.note)?.note ?? 'スタッフ呼び出し')}
           </span>
         </>
       )}

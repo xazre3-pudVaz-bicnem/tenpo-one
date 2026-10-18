@@ -308,7 +308,7 @@ export function HandyTableDetail({
                     className="mt-2.5 flex min-h-[42px] w-full items-center justify-center gap-1.5 rounded-[9px] border border-[#b7791f] bg-[#fbf1d9] text-sm font-bold text-[#8a4a0b] active:bg-[#f6e0c4] disabled:opacity-40"
                   >
                     <Printer className="h-4 w-4" aria-hidden />
-                    {pending && busy === `bill:${slip.id}` ? '印刷中…' : '会計伝票を出す'}
+                    {pending && busy === `bill:${slip.id}` ? '印刷中… / Printing…' : '会計伝票を出す / PRINT BILL'}
                   </button>
                 )}
                 {slips.length > 1 && (
@@ -316,7 +316,7 @@ export function HandyTableDetail({
                     href={`/handy/${table.id}/order?order=${slip.id}`}
                     className="mt-2.5 flex min-h-[42px] items-center justify-center rounded-[9px] border border-[#bc5940] text-sm font-bold text-[#bc5940]"
                   >
-                    この伝票に注文を追加
+                    この伝票に注文を追加 / ADD ORDER
                   </Link>
                 )}
               </section>
@@ -329,10 +329,11 @@ export function HandyTableDetail({
         <HandyFooterButton
           label={
             pending && busy === 'start'
-              ? '開始中…'
-              : slips.length > 0
-                ? '注文を追加'
-                : '注文を開始'
+              ? '開始中… / Starting…'
+              : // 英語も並べる（日本語を読まないスタッフ向け。2026-10-18 Ronnie）
+                slips.length > 0
+                ? '注文を追加 / ADD ORDER'
+                : '注文を開始 / START ORDER'
           }
           disabled={pending}
           onClick={handleStart}

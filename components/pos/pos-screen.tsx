@@ -13,7 +13,7 @@ import { yen, formatTime } from '@/lib/format';
 import { groupOrderRounds, ordinalLabel } from '@/components/handy/logic';
 import { categoryEnglishName, englishName } from '@/lib/romaji';
 import { optionPriceLookup, repriceLines } from '@/lib/cart-reprice';
-import { groupMenuPages, menuPageLabel, PICKS_PAGE_KEY, picksSlot, type MenuBookSettings } from '@/lib/menu-book';
+import { groupMenuPages, menuPageLabel, menuPageSubName, PICKS_PAGE_KEY, picksSlot, type MenuBookSettings } from '@/lib/menu-book';
 import type { DiscountPreset, PointBrand } from '@/lib/checkout-presets';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -190,7 +190,10 @@ function buildPosPages(
     return {
       key: pg.key,
       label,
-      en: pg.categories.length === 1 ? englishName(first.name, null, first.name_en) : englishName(label, null, null),
+      // 標準のページは英語の名前（DRINK）の下に日本語（ドリンク）を出す（2026-10-18 Ronnie）
+      en:
+        menuPageSubName(pg.key, pg.name) ??
+        (pg.categories.length === 1 ? englishName(first.name, null, first.name_en) : englishName(label, null, null)),
       categories: pg.categories.map((c) => ({
         id: c.id,
         name: c.name,

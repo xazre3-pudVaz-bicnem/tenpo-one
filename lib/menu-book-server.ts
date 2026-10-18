@@ -13,6 +13,7 @@ import {
   type MenuBookSettings,
   type OrderPlanState,
 } from '@/lib/menu-book';
+import { qrServiceFrom, type QrServiceSettings } from '@/lib/qr-service';
 
 /**
  * メニューブック（lib/menu-book.ts）の読み込み。
@@ -38,7 +39,8 @@ type AnyClient = SupabaseClient<any, any, any>;
 
 const NO_PLAN: OrderPlanState = { hasPlan: false, planItemIds: [] };
 
-export async function loadMenuBook(client: AnyClient, storeId: string): Promise<MenuBookSettings> {
+/** store_settings.settings をそのまま読む（読めなければ undefined） */
+async function loadStoreSettingsRaw(client: AnyClient, storeId: string): Promise<unknown> {
   const { data, error } = await client
     .from('store_settings')
     .select('settings')
@@ -46,9 +48,14 @@ export async function loadMenuBook(client: AnyClient, storeId: string): Promise<
     .maybeSingle();
   if (error) {
     console.error('[menu-book] settings read failed', error.message);
-    return emptyMenuBook();
+    return undefined;
   }
-  return menuBookFrom((data as { settings?: unknown } | null)?.settings ?? null);
+  return (data as { settings?: unknown } | null)?.settings ?? null;
+}
+
+export async function loadMenuBook(client: AnyClient, storeId: string): Promise<MenuBookSettings> {
+  const raw = await loadStoreSettingsRaw(client, storeId);
+  return raw === undefined ? emptyMenuBook() : menuBookFrom(raw);
 }
 
 export async function loadOrderPlanState(client: AnyClient, orderId: string): Promise<OrderPlanState> {
@@ -78,6 +85,8 @@ export async function loadOrderPlanState(client: AnyClient, orderId: string): Pr
  * お客様QR（匿名）のメニュー用。卓の店舗のメニューブックと、卓の伝票のプランを読む。
  * 匿名では店舗設定・伝票を読めないため、サービスロールで読む（読むのはこの卓の分だけ）。
  */
+const NO_SERVICE: QrServiceSettings = { enabled: false, items: [] };
+
 export async function loadQrMenuBook(
   storeSlug: string,
   tableToken: string
@@ -94,6 +103,8 @@ export async function loadQrMenuBook(
    * これを過ぎた卓では QR からプランの中身を注文できないようにする（lib/plan-time.ts）。
    */
   planEndsAtMs: number | null;
+  /** お客様QRの「サービス」（お水・お箸など。lib/qr-service.ts）。読めなければ出さない */
+  service: QrServiceSettings;
 }> {
   try {
     const admin = createAdminClient();
@@ -112,9 +123,10 @@ export async function loadQrMenuBook(
         stationById: new Map(),
         menuStock: new Map(),
         planEndsAtMs: null,
+        service: NO_SERVICE,
       };
-    const [book, { data: order }, dynamicRules, { data: categoryRows }, menuStock] = await Promise.all([
-      loadMenuBook(admin, table.store_id),
+    const [rawSettings, { data: order }, dynamicRules, { data: categoryRows }, menuStock] = await Promise.all([
+      loadStoreSettingsRaw(admin, table.store_id),
       admin
         .from('orders')
         .select('id, reservation_id')
@@ -133,6 +145,8 @@ export async function loadQrMenuBook(
       // 売り切り（本日の食数）。QRからも残り0の商品は注文できないようにする（2026-09-25 店舗要望）
       loadMenuStock(admin, table.store_id),
     ]);
+    const book = rawSettings === undefined ? emptyMenuBook() : menuBookFrom(rawSettings);
+    const service = rawSettings === undefined ? NO_SERVICE : qrServiceFrom(rawSettings);
     const plan = order ? await loadOrderPlanState(admin, order.id) : NO_PLAN;
     // 終了予定は予約（ウォークイン含む）の end_at。席の時間はここで持っている（lib/seat-time.ts）
     let planEndsAtMs: number | null = null;
@@ -147,7 +161,7 @@ export async function loadQrMenuBook(
     const stationById = new Map<string, string | null>(
       ((categoryRows ?? []) as { id: string; station: string | null }[]).map((c) => [c.id, c.station])
     );
-    return { book, plan, dynamicRules, stationById, menuStock, planEndsAtMs };
+    return { book, plan, dynamicRules, stationById, menuStock, planEndsAtMs, service };
   } catch (e) {
     console.error('[menu-book] qr context failed', e instanceof Error ? e.message : e);
     return {
@@ -157,6 +171,7 @@ export async function loadQrMenuBook(
       stationById: new Map(),
       menuStock: new Map(),
       planEndsAtMs: null,
+      service: NO_SERVICE,
     };
   }
 }
