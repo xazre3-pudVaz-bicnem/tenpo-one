@@ -15,8 +15,8 @@ export const brand = {
     primaryDeep: '#9F4630', // 主ボタンの濃い側
     navy: '#292725', // 暗い背景（チャコール）
     lightGray: '#F7F5F0', // クリーム
-    /** ロゴまわり・見出し・選択中の表示に使うグラデーション（チャコール〜テラコッタ） */
-    gradient: 'linear-gradient(90deg, #292725 0%, #8A3F2C 45%, #BC5940 100%)',
+    /** ロゴまわり・見出し・選択中の表示に使う色（2026-10-18 グラデーションをやめて濃いテラコッタの単色） */
+    gradient: 'linear-gradient(#8B4536, #8B4536)',
     white: '#FFFFFF',
     success: '#15803D',
     warning: '#B7791F',

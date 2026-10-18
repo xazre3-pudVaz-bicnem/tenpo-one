@@ -35,14 +35,16 @@ export async function StoreWeatherInfo({ address }: { address: string | null }) 
       <WeatherGlyph icon={w.weather.icon} />
       <div className="flex flex-col leading-tight">
         <b className="text-[13px] font-bold tabular-nums">{w.temperature}°C</b>
-        <span className="text-[11.5px] text-[#ead9cc]">{w.weather.label}</span>
+        <span className="text-[11.5px] text-ink-3">{w.weather.label}</span>
       </div>
     </div>
   );
 }
 
-const SUN = '#f6c77a';
-const CLOUD_FILL = '#8a3f2c';
+// 白いカードの上に描く（2026-10-18 時計カードを白に）
+const SUN = '#e9a23b';
+const CLOUD_FILL = '#ffffff';
+const CLOUD_LINE = '#a89e92';
 
 function Sun({ cx = 15, cy = 15, r = 7 }: { cx?: number; cy?: number; r?: number }) {
   const rays = [0, 45, 90, 135, 180, 225, 270, 315];
@@ -78,28 +80,28 @@ export function WeatherGlyph({ icon }: { icon: WeatherIcon }) {
       {icon === 'partly' && (
         <>
           <Sun />
-          <path d={CLOUD_PATH} fill={CLOUD_FILL} stroke="#fff" strokeWidth="2" strokeLinejoin="round" />
+          <path d={CLOUD_PATH} fill={CLOUD_FILL} stroke={CLOUD_LINE} strokeWidth="2" strokeLinejoin="round" />
         </>
       )}
       {icon !== 'sun' && icon !== 'partly' && (
-        <path d={BIG_CLOUD_PATH} fill={CLOUD_FILL} stroke="#fff" strokeWidth="2" strokeLinejoin="round" />
+        <path d={BIG_CLOUD_PATH} fill={CLOUD_FILL} stroke={CLOUD_LINE} strokeWidth="2" strokeLinejoin="round" />
       )}
       {(icon === 'rain' || icon === 'drizzle') && (
-        <g stroke="#9FD0FF" strokeWidth="2" strokeLinecap="round">
+        <g stroke="#3b82c4" strokeWidth="2" strokeLinecap="round">
           <line x1="14" y1="33" x2="12" y2="38" />
           {icon === 'rain' && <line x1="20" y1="33" x2="18" y2="38" />}
           <line x1="26" y1="33" x2="24" y2="38" />
         </g>
       )}
       {icon === 'snow' && (
-        <g fill="#fff">
+        <g fill="#8fb3d9">
           <circle cx="13" cy="35" r="1.6" />
           <circle cx="20" cy="37" r="1.6" />
           <circle cx="27" cy="35" r="1.6" />
         </g>
       )}
       {icon === 'fog' && (
-        <g stroke="#fff" strokeWidth="2" strokeLinecap="round" opacity="0.8">
+        <g stroke={CLOUD_LINE} strokeWidth="2" strokeLinecap="round" opacity="0.8">
           <line x1="9" y1="34" x2="31" y2="34" />
           <line x1="13" y1="38" x2="27" y2="38" />
         </g>

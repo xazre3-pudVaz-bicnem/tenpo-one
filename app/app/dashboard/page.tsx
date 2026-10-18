@@ -4,14 +4,12 @@ import { redirect } from 'next/navigation';
 import { shouldGoToOpenRegister } from '@/lib/register-open-gate';
 import { requireMember } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
-import { can } from '@/lib/permissions';
 import { yen, todayJst, daysAgoJst, formatTime, weekdayJa } from '@/lib/format';
 import { PageHeader } from '@/components/ui/page-header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/ui/state';
 import { SalesChart, type DailyPoint } from '@/components/dashboard/sales-chart';
-import { SetupProgressCard } from '@/components/dashboard/setup-progress-card';
 import { TableWrap, Table, THead, TBody, Tr, Th, Td } from '@/components/ui/table';
 import { WeekdaySalesChart } from '@/components/reports/weekday-sales-chart';
 import { HourlySalesChart } from '@/components/reports/hourly-sales-chart';
@@ -54,24 +52,6 @@ function achievementTone(pct: number): 'success' | 'warning' | 'danger' {
 }
 
 /**
- * オンボーディング完了率（完了済み・かつ100%未満のときのみ数値を返す）。
- * organizations.onboarding.data.completedSteps（実データを保存したステップ）を10ステップに対する割合で算出する。
- */
-async function getSetupProgressPercent(organizationId: string): Promise<number | null> {
-  const supabase = await createClient();
-  const { data: org } = await supabase
-    .from('organizations')
-    .select('onboarding')
-    .eq('id', organizationId)
-    .maybeSingle();
-  const onboarding = (org?.onboarding ?? {}) as { completed?: boolean; data?: { completedSteps?: number[] } };
-  if (!onboarding.completed) return null;
-  const completedSteps = Array.isArray(onboarding.data?.completedSteps) ? onboarding.data.completedSteps : [];
-  const percent = Math.round((new Set(completedSteps).size / 10) * 100);
-  return percent < 100 ? percent : null;
-}
-
-/**
  * 客数KPI設定（organizations.kpi_settings.includeTakeoutGuests）を取得し、
  * computeSalesMetrics へ渡す opts に変換する（省略時true。lib/metrics.ts参照）。
  */
@@ -108,7 +88,7 @@ export default async function DashboardPage() {
       redirect('/app/cash/open');
     }
   }
-  const setupPercent = ctx.organizationId && can(ctx.role, 'org.settings') ? await getSetupProgressPercent(ctx.organizationId) : null;
+  // 初期設定のバーはホームではなく設定画面の上に出す（2026-10-18 Ronnie。app/app/settings/layout.tsx）
   const metricsOpts = await getSalesMetricsOptions(ctx.organizationId);
   // 新しい管理画面（会社のオーナーがパソコンで ON にしたときだけ。レジ・ハンディは今のまま。lib/admin-v2.ts）
   if (await isAdminV2Request(ctx)) {
@@ -117,9 +97,9 @@ export default async function DashboardPage() {
   const asOf = nowStampJst();
 
   if (ctx.currentStore) {
-    return <StoreDashboard ctx={ctx} today={today} asOf={asOf} setupPercent={setupPercent} metricsOpts={metricsOpts} />;
+    return <StoreDashboard ctx={ctx} today={today} asOf={asOf} metricsOpts={metricsOpts} />;
   }
-  return <HqDashboard ctx={ctx} today={today} asOf={asOf} setupPercent={setupPercent} metricsOpts={metricsOpts} />;
+  return <HqDashboard ctx={ctx} today={today} asOf={asOf} metricsOpts={metricsOpts} />;
 }
 
 type Ctx = Awaited<ReturnType<typeof requireMember>>;
@@ -153,13 +133,11 @@ async function HqDashboard({
   ctx,
   today,
   asOf,
-  setupPercent,
   metricsOpts,
 }: {
   ctx: Ctx;
   today: string;
   asOf: string;
-  setupPercent: number | null;
   metricsOpts: SalesMetricsOptions;
 }) {
   const supabase = await createClient();
@@ -630,7 +608,6 @@ async function HqDashboard({
 
   return (
     <div className="flex flex-col gap-4">
-      {setupPercent != null && <SetupProgressCard percent={setupPercent} />}
       <HomeTop
         data={homeData}
         asOf={asOf}
@@ -641,7 +618,7 @@ async function HqDashboard({
       <section aria-label="全店舗サマリー" className="mt-2">
       <div className="mb-3 flex flex-wrap items-baseline gap-x-3 gap-y-1">
         <h2 className="text-base font-bold text-ink">
-          全店舗サマリー<span className="en-inline">All stores</span>
+          全店舗サマリー<span className="en-under">All stores</span>
         </h2>
         <p className="text-xs text-ink-3 tabular-nums">
           {stores.length}店舗｜{today.replaceAll('-', '/')}（{weekdayJa(today)}）時点の今月実績
@@ -879,13 +856,11 @@ async function StoreDashboard({
   ctx,
   today,
   asOf,
-  setupPercent,
   metricsOpts,
 }: {
   ctx: Ctx;
   today: string;
   asOf: string;
-  setupPercent: number | null;
   metricsOpts: SalesMetricsOptions;
 }) {
   const supabase = await createClient();
@@ -943,7 +918,6 @@ async function StoreDashboard({
 
   return (
     <div className="flex flex-col gap-4">
-      {setupPercent != null && <SetupProgressCard percent={setupPercent} />}
       <HomeTop
         data={homeData}
         asOf={asOf}
