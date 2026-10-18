@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server';
 import { can } from '@/lib/permissions';
 import { formatTime } from '@/lib/format';
 import { requireHandyClerk } from '@/lib/handy-session';
+import { groupHostTableId } from '@/lib/table-group-server';
 import { HandyBackButton, HandyMain, HandyTopBar } from '@/components/handy/handy-chrome';
 import { HandySetupScreen } from '@/components/handy/handy-setup-screen';
 import { visitSourcesFrom } from '@/lib/handy-visit';
@@ -77,6 +78,9 @@ export default async function HandySetupPage({
     .eq('status', 'open');
   const state = tableState(table.current_status, (openCount ?? 0) > 0);
   if (state === 'occupied') redirect(`/handy/${tableId}`);
+  // まとめた卓（テーブルグループ）のほかの卓で注文が始まっていたら、その伝票の卓へ（2026-10-18 Ronnie「Table merge」）
+  const host = await groupHostTableId(supabase, store.id, tableId);
+  if (host) redirect(`/handy/${host}`);
   // 清掃中（整理中）でも着席できる（会計が終わった卓へすぐ次のお客様を通すため。2026-09-24 店舗要望）
   if (state !== 'available' && state !== 'cleaning') {
     return problem(

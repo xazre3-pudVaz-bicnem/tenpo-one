@@ -1,10 +1,12 @@
 import { enqueueOrderSlipPrint } from '@/app/app/pos/print-actions';
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 import { requireFeature } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { can } from '@/lib/permissions';
 import { requireHandyClerk } from '@/lib/handy-session';
+import { groupHostTableId } from '@/lib/table-group-server';
 import { HandyBackButton, HandyMain, HandyTopBar } from '@/components/handy/handy-chrome';
 import { HandyTableDetail, type HandySlip } from '@/components/handy/handy-table-detail';
 import type { HandyServiceCall } from '@/components/handy/logic';
@@ -105,6 +107,12 @@ export default async function HandyTablePage({
       .eq('status', 'open')
       .order('created_at'),
   ]);
+
+  // まとめた卓（テーブルグループ）で、伝票がほかの卓にあるときはその卓の画面へ（同じ組に2つ目の伝票を立てない。2026-10-18 Ronnie「Table merge」）
+  if ((orders ?? []).length === 0) {
+    const host = await groupHostTableId(supabase, store.id, tableId);
+    if (host) redirect(`/handy/${host}`);
+  }
 
   const orderIds = (orders ?? []).map((o) => o.id);
   const { data: itemRows } = orderIds.length
