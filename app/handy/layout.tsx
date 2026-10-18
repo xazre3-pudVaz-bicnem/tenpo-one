@@ -30,7 +30,14 @@ export const metadata: Metadata = {
   applicationName: 'ハンディ',
   appleWebApp: { capable: true, title: 'ハンディ', statusBarStyle: 'black' },
 };
-export const viewport = { themeColor: '#292725' };
+// 拡大しない・横にずれない（iPhone・iPad。2026-10-19 Ronnie「ハンディで画面が動く。固定して」。レジ /app と同じ）
+export const viewport = {
+  themeColor: '#292725',
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+};
 
 /** 描画の基準時刻（リクエスト時点）。クライアントの時計のハイドレーション初期値にも使う */
 function requestTime() {

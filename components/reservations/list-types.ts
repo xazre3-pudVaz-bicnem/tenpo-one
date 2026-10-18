@@ -42,4 +42,6 @@ export interface ReservationListRow {
   /** 顧客台帳の来店回数・前回来店日（紐付いていなければ null。取得していない画面では省略） */
   visitCount?: number | null;
   lastVisitAt?: string | null;
+  /** キーワード（reservations.tags。2026-10-19 Ronnie。取得していない画面では省略） */
+  tags?: string[];
 }

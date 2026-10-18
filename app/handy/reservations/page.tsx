@@ -6,6 +6,7 @@ import { formatDateTime, formatTime, todayJst } from '@/lib/format';
 import { requireHandyClerk } from '@/lib/handy-session';
 import { handyDayLabel, handyEmptyText, handyReservationsTitle, parseHandyDate } from '@/lib/handy-reservations';
 import { HandyAddReservationButton, HandyReservationDateBar } from '@/components/handy/handy-reservation-date-bar';
+import { loadReservationTags } from '@/lib/reservation-tags-server';
 import { RESERVATION_STATUS, type ReservationStatus } from '@/lib/reservations';
 import { CREATED_VIA_LABEL } from '@/components/reservations/constants';
 import {
@@ -117,6 +118,8 @@ export default async function HandyReservationsPage({
       .eq('status', 'open')
       .not('reservation_id', 'is', null),
   ]);
+  // キーワード（列が無いデータベースでも一覧は出る。lib/reservation-tags-server.ts）
+  const tagsById = await loadReservationTags(supabase, (rows ?? []).map((r) => r.id as string));
   const tableByReservation = new Map<string, string>();
   for (const o of openOrders ?? []) {
     if (o.reservation_id && o.table_id) tableByReservation.set(o.reservation_id, o.table_id);
@@ -136,6 +139,8 @@ export default async function HandyReservationsPage({
       partySize: r.party_size,
       tableLabel: names.length > 0 ? names.join('+') : '席未定',
       sourceLabel: one(r.reservation_sources)?.name ?? CREATED_VIA_LABEL[r.created_via] ?? r.created_via,
+      tags: tagsById.get(r.id) ?? [],
+      tableIds: (r.reservation_tables ?? []).map((l) => (l as { table_id?: string }).table_id).filter((v): v is string => !!v),
       courseName: one(r.course)?.name ?? null,
       status,
       statusLabel: RESERVATION_STATUS[status].label,
@@ -177,9 +182,20 @@ export default async function HandyReservationsPage({
       <HandyMain>
         <HandyReservationDateBar date={date} today={today} />
         {/* 「ご予約リンクを紹介」はここには出さない（≡ の中だけ。2026-10-19 Ronnie「ここには要らない」） */}
-        <HandyReservationList reservations={reservations} emptyText={handyEmptyText(date, today)} dateLabel={handyDayLabel(date)} />
+        <HandyReservationList
+          reservations={reservations}
+          emptyText={handyEmptyText(date, today)}
+          dateLabel={handyDayLabel(date)}
+          actions={{
+            storeId: store.id,
+            date,
+            today,
+            canWrite: can(ctx.role, 'reservations.write'),
+            canCancel: can(ctx.role, 'reservations.cancel'),
+          }}
+        />
         <p className="px-5 pb-5 text-center text-[10px] leading-relaxed text-[#766b62]">
-          予約の変更・来店処理はレジ（管理画面）の予約台帳で行います。
+          予約を押すと、来店・キャンセル・テーブル変更ができます。
         </p>
       </HandyMain>
     </>

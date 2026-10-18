@@ -9,6 +9,10 @@ import { useToast } from '@/components/ui/toast';
 import { todayJst } from '@/lib/format';
 import { createManualReservation } from '@/app/app/reservations/actions';
 import type { StoreRef } from '@/lib/auth';
+import { entryStatusToDb, normalizeTags, type EntryStatus } from '@/lib/reservation-entry';
+import { PartyCountField } from './entry/party-count-field';
+import { KeywordPicker, StatusPicker, StayControl, TableSuggest } from './entry/entry-parts';
+import { useReservationEntryData } from './entry/use-entry-data';
 
 const EMPTY = {
   storeId: '',
@@ -24,6 +28,11 @@ const EMPTY = {
   sourceCode: 'phone',
   courseId: '',
   tableIds: [] as string[],
+  // 2026-10-19 Ronnie「レストランボードのように。ハンディだけでなくレジ・PC も」
+  tags: [] as string[],
+  stayCustom: null as number | null,
+  status: 'confirmed' as EntryStatus,
+  clerkId: '',
 };
 
 export interface ReservationSourceOption {
@@ -60,7 +69,6 @@ export function ManualReservationDialog({
   prefill,
   sources,
   courses,
-  tables,
   /** キャンセル待ちからの変換の場合に指定。登録成功時に waitlist_entries を converted にする */
   waitlistEntryId,
   triggerLabel = '電話予約を登録',
@@ -102,8 +110,15 @@ export function ManualReservationDialog({
   const [form, setForm] = useState({ ...EMPTY, ...prefill, storeId: initialStoreId });
 
   const set = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) => setForm((f) => ({ ...f, [key]: value }));
+  const [nowMs] = useState(() => Date.now());
+  // 開いているときだけ、その日の卓・予約・キーワード・担当者を読む（予約可能なテーブル・ピッタリ）
+  const { data: entry, loading: entryLoading } = useReservationEntryData(open ? form.storeId : '', form.date);
+  const defaultStay = (form.courseId && entry.courseDurations[form.courseId]) || entry.defaultStay;
+  const stay = form.stayCustom ?? defaultStay;
+  const party = form.adults + form.children;
 
   const submit = () => {
+    const { status, tag } = entryStatusToDb(form.status);
     startTransition(async () => {
       try {
         await createManualReservation({
@@ -120,6 +135,10 @@ export function ManualReservationDialog({
           sourceCode: form.sourceCode || undefined,
           courseId: form.courseId || null,
           tableIds: form.tableIds,
+          stayMinutes: stay,
+          status,
+          tags: normalizeTags([...(tag ? [tag] : []), ...form.tags]),
+          clerkId: form.clerkId || null,
           waitlistEntryId,
         });
         toast(waitlistEntryId ? '予約へ変換しました' : '電話予約を登録しました');
@@ -152,6 +171,7 @@ export function ManualReservationDialog({
           onDialogClose?.();
         }}
         title={waitlistEntryId ? '予約へ変換' : '電話予約の登録'}
+        wide
       >
         <div className="space-y-3">
           {stores.length > 1 && (
@@ -181,35 +201,36 @@ export function ManualReservationDialog({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label htmlFor="mr-date">来店日</Label>
-              <Input id="mr-date" type="date" value={form.date} onChange={(e) => set('date', e.target.value)} />
+              <Input id="mr-date" type="date" value={form.date} onChange={(e) => setForm((f) => ({ ...f, date: e.target.value, tableIds: [] }))} />
             </div>
             <div>
               <Label htmlFor="mr-time">時間</Label>
-              <Input id="mr-time" type="time" value={form.time} onChange={(e) => set('time', e.target.value)} />
+              <Input id="mr-time" type="time" step={300} value={form.time} onChange={(e) => setForm((f) => ({ ...f, time: e.target.value, tableIds: [] }))} />
             </div>
           </div>
+          {/* 人数はテンキーでも入れられる（2026-10-19 Ronnie「150名でも＋を150回押さない」） */}
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label htmlFor="mr-adults">大人</Label>
-              <Input
-                id="mr-adults"
-                type="number"
-                min={0}
-                value={form.adults}
-                onChange={(e) => set('adults', Math.max(0, Math.trunc(Number(e.target.value)) || 0))}
-              />
-            </div>
-            <div>
-              <Label htmlFor="mr-children">子ども</Label>
-              <Input
-                id="mr-children"
-                type="number"
-                min={0}
-                value={form.children}
-                onChange={(e) => set('children', Math.max(0, Math.trunc(Number(e.target.value)) || 0))}
-              />
-            </div>
+            <PartyCountField label="大人" value={form.adults} onChange={(v) => set('adults', v)} />
+            <PartyCountField label="子ども" value={form.children} onChange={(v) => set('children', v)} />
           </div>
+          {/* 予約可能なテーブル（その時間に空いている卓・人数にピッタリの卓。30分後も） */}
+          {entry.tables.length > 0 ? (
+            <TableSuggest
+              tables={entry.tables}
+              booked={entry.booked}
+              date={form.date}
+              time={form.time}
+              stayMinutes={stay}
+              party={party}
+              today={todayJst()}
+              nowMs={nowMs}
+              selected={form.tableIds}
+              loading={entryLoading}
+              onSelect={(ids, time) => setForm((f) => ({ ...f, tableIds: ids, time }))}
+            />
+          ) : (
+            entryLoading && <p className="text-xs text-gray-500">テーブルを確認しています…</p>
+          )}
           {courses && courses.length > 0 && (
             <div>
               <Label htmlFor="mr-course">コース（任意）</Label>
@@ -221,35 +242,6 @@ export function ManualReservationDialog({
                   </option>
                 ))}
               </Select>
-            </div>
-          )}
-          {tables && tables.length > 0 && (
-            <div>
-              <Label>テーブル割当（任意・複数可）</Label>
-              <div className="mt-1 flex flex-wrap gap-1.5">
-                {tables.map((t) => {
-                  const selected = form.tableIds.includes(t.id);
-                  return (
-                    <button
-                      key={t.id}
-                      type="button"
-                      onClick={() =>
-                        set(
-                          'tableIds',
-                          selected ? form.tableIds.filter((id) => id !== t.id) : [...form.tableIds, t.id]
-                        )
-                      }
-                      className={
-                        'rounded-lg border px-2.5 py-1 text-xs font-medium ' +
-                        (selected ? 'border-primary bg-primary-soft text-primary-deep' : 'border-gray-300 text-navy')
-                      }
-                    >
-                      {t.name}
-                    </button>
-                  );
-                })}
-              </div>
-              <p className="mt-1 text-xs text-gray-500">未割当のままでも登録できます（後でフロア/台帳から割当可）。</p>
             </div>
           )}
           <div>
@@ -268,9 +260,25 @@ export function ManualReservationDialog({
             <Label htmlFor="mr-email">メール（任意）</Label>
             <Input id="mr-email" type="email" value={form.email} onChange={(e) => set('email', e.target.value)} />
           </div>
+          <KeywordPicker keywords={entry.keywords} selected={form.tags} onChange={(v) => set('tags', v)} />
+          <StayControl minutes={stay} defaultMinutes={defaultStay} onChange={(m) => set('stayCustom', m === defaultStay ? null : m)} />
+          <StatusPicker value={form.status} onChange={(v) => set('status', v)} />
+          {entry.clerks.length > 0 && (
+            <div>
+              <Label htmlFor="mr-clerk">担当者</Label>
+              <Select id="mr-clerk" value={form.clerkId} onChange={(e) => set('clerkId', e.target.value)}>
+                <option value="">選ばない</option>
+                {entry.clerks.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          )}
           <div>
             <Label htmlFor="mr-note">要望メモ</Label>
-            <Textarea id="mr-note" value={form.note} onChange={(e) => set('note', e.target.value)} />
+            <Textarea id="mr-note" value={form.note} onChange={(e) => set('note', e.target.value)} maxLength={1000} />
           </div>
         </div>
         <div className="mt-5 flex justify-end gap-2">

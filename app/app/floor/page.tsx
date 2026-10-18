@@ -11,6 +11,7 @@ import { PageHeader } from '@/components/ui/page-header';
 import { EmptyState } from '@/components/ui/state';
 import { CREATED_VIA_LABEL } from '@/components/reservations/constants';
 import { RESERVATION_ROW_SELECT, mapReservationRow, type RawReservationRow } from '@/components/reservations/row-mapper';
+import { loadReservationTags } from '@/lib/reservation-tags-server';
 import { reservationClerkOptions } from '@/lib/reservation-clerks-server';
 import { FloorBoard } from '@/components/floor/floor-board';
 import type {
@@ -233,7 +234,9 @@ export default async function FloorPage() {
   }
 
   const reservationsToday = (reservationRows ?? []) as unknown as RawReservationRow[];
-  const panelRows = reservationsToday.filter((r) => r.created_via !== 'walk_in').map((r) => mapReservationRow(r, null));
+  const panelSource = reservationsToday.filter((r) => r.created_via !== 'walk_in');
+  const panelTags = await loadReservationTags(supabase, panelSource.map((r) => r.id));
+  const panelRows = panelSource.map((r) => ({ ...mapReservationRow(r, null), tags: panelTags.get(r.id) ?? [] }));
 
   // テーブルごとの未来店予約（開始時刻順）
   const upcomingByTable = new Map<string, UpcomingReservation[]>();

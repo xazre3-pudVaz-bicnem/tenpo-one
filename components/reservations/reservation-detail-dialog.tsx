@@ -21,6 +21,7 @@ import { StatusActions } from './status-actions';
 import { AssignTableDialog, type AssignableTable } from './assign-table-dialog';
 import { MoveDialog } from './move-dialog';
 import type { ReservationListRow } from './list-types';
+import { TagChips } from './entry/tag-chips';
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return value ? (
@@ -255,6 +256,12 @@ function ReservationDetailDialogContent({
           <Row label="お名前" value={`${reservation.guestName} 様`} />
           <Row label="フリガナ" value={reservation.guestNameKana} />
           <Row label="コース" value={reservation.courseName} />
+          {reservation.tags && reservation.tags.length > 0 && (
+            <div className="flex items-center justify-between gap-3 border-b border-gray-100 py-1.5 text-[13px]">
+              <span className="shrink-0 text-gray-500">キーワード</span>
+              <TagChips tags={reservation.tags} className="justify-end" />
+            </div>
+          )}
           <Row label="割当テーブル" value={reservation.tableNames.length > 0 ? reservation.tableNames.join('、') : '未割当'} />
           {sources.length > 0 && canChangeReservationSource(reservation.createdVia) ? (
             <div className="flex items-center justify-between gap-3 border-b border-gray-100 py-1.5 text-[13px]">

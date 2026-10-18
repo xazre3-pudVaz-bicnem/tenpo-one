@@ -467,7 +467,8 @@ export function HandyMain({
   className?: string;
 }) {
   return (
-    <main className={cn('min-h-0 flex-1 overflow-y-auto overscroll-contain', className)}>
+    // 横には動かない（2026-10-19 Ronnie「ハンディ・iPad で画面が横に動く・揺れる。固定して」）。縦だけスクロール
+    <main className={cn('min-h-0 flex-1 touch-pan-y overflow-x-hidden overflow-y-auto overscroll-contain', className)}>
       {children}
     </main>
   );
