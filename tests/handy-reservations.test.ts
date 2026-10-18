@@ -85,3 +85,24 @@ describe('ハンディの予約一覧の形', () => {
     expect(page).toContain('courseName: one(r.course)?.name ?? null,');
   });
 });
+
+/** 2026-10-18 Ronnie「Handy bata booking garda table sentaku pani garna milne banau」 */
+describe('ハンディの予約：テーブルを選ぶ', () => {
+  it('テーブル（任意・複数可）を選んで、レジと同じ createManualReservation の tableIds で登録', () => {
+    const form = read('components/handy/handy-reservation-form.tsx');
+    expect(form).toContain('<TablePicker');
+    expect(form).toContain('（任意・複数可）');
+    expect(form).toContain('tableIds: form.tableIds,');
+    // 他店の卓を入れない検証は登録側（レジと同じ）
+    expect(read('app/app/reservations/actions.ts')).toContain("throw new Error('指定されたテーブルが正しくありません')");
+  });
+
+  it('選べる卓はこの店の有効な卓（テーブル一覧と同じ並び・フロアつき）', () => {
+    const page = read('app/handy/reservations/new/page.tsx');
+    expect(page).toContain(".from('restaurant_tables')");
+    expect(page).toContain(".eq('store_id', store.id)");
+    expect(page).toContain(".eq('status', 'active')");
+    expect(page).toContain('floorName: floorName.get(');
+    expect(page).toContain('tables={(tableRows ?? []).map((t) => ({');
+  });
+});

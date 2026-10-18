@@ -13,10 +13,21 @@ export interface HandyReservationOption {
   label: string;
 }
 
+/** 予約で選べる卓（テーブル一覧と同じ並び） */
+export interface HandyReservationTable {
+  id: string;
+  name: string;
+  capacity: number;
+  /** フロア（3F・4F など）。決めていない卓は null */
+  floorName: string | null;
+}
+
 /**
  * ハンディで予約を追加する（2026-10-15 Ronnie「予約の追加もハンディでできるように」）。
  * レジの予約台帳の「電話予約を登録」と同じ登録（createManualReservation）。項目もそれに合わせる：
- * 来店日・時間・大人・子ども・お名前・電話番号（必須）・予約経路・コース・ご要望
+ * 来店日・時間・大人・子ども・お名前・電話番号（必須）・予約経路・コース・テーブル・ご要望
+ * テーブルは任意・複数可（2026-10-18 Ronnie「Handy bata booking garda table sentaku pani garna milne banau」。
+ * レジの「テーブル割当（任意・複数可）」と同じ）
  */
 export function HandyReservationForm({
   storeId,
@@ -24,12 +35,14 @@ export function HandyReservationForm({
   today,
   sources,
   courses,
+  tables = [],
 }: {
   storeId: string;
   date: string;
   today: string;
   sources: HandyReservationOption[];
   courses: HandyReservationOption[];
+  tables?: HandyReservationTable[];
 }) {
   const router = useRouter();
   const { toast } = useToast();
@@ -44,6 +57,7 @@ export function HandyReservationForm({
     sourceCode: sources.some((s) => s.value === 'phone') ? 'phone' : (sources[0]?.value ?? 'phone'),
     courseId: '',
     note: '',
+    tableIds: [] as string[],
   });
   const set = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) => setForm((f) => ({ ...f, [key]: value }));
 
@@ -66,6 +80,7 @@ export function HandyReservationForm({
           note: form.note.trim() || undefined,
           sourceCode: form.sourceCode || undefined,
           courseId: form.courseId || null,
+          tableIds: form.tableIds,
         });
         toast('予約を追加しました');
         router.push(handyReservationsHref(form.date, today));
@@ -181,6 +196,16 @@ export function HandyReservationForm({
         </div>
       )}
 
+      {tables.length > 0 && (
+        <TablePicker
+          tables={tables}
+          selected={form.tableIds}
+          onToggle={(id) =>
+            set('tableIds', form.tableIds.includes(id) ? form.tableIds.filter((x) => x !== id) : [...form.tableIds, id])
+          }
+        />
+      )}
+
       <div>
         <label htmlFor="hr-note" className={label}>
           ご要望・メモ
@@ -196,7 +221,7 @@ export function HandyReservationForm({
       </div>
 
       <p className="text-[10.5px] leading-relaxed text-[#766b62]">
-        席の割り当て・変更・来店処理はレジ（管理画面）の予約台帳で行います。
+        席の変更・来店処理はレジ（管理画面）の予約台帳で行います。
       </p>
 
       <button
@@ -209,6 +234,64 @@ export function HandyReservationForm({
         <span className="text-[11px] font-semibold text-white/75">Add</span>
       </button>
     </form>
+  );
+}
+
+/** テーブル（任意・複数可）。フロアが2つ以上あればフロアごとに分けて出す */
+function TablePicker({
+  tables,
+  selected,
+  onToggle,
+}: {
+  tables: HandyReservationTable[];
+  selected: string[];
+  onToggle: (id: string) => void;
+}) {
+  const floors = [...new Set(tables.map((t) => t.floorName ?? ''))];
+  const byFloor = floors.length > 1 ? floors.map((f) => ({ floor: f, list: tables.filter((t) => (t.floorName ?? '') === f) })) : [{ floor: '', list: tables }];
+  const picked = tables.filter((t) => selected.includes(t.id));
+  const seats = picked.reduce((sum, t) => sum + t.capacity, 0);
+  return (
+    <div>
+      <span className="mb-1 block text-[12px] font-bold text-[#5c5650]">
+        テーブル <span className="text-[10.5px] font-medium text-[#766b62]">（任意・複数可）</span>
+      </span>
+      <div className="space-y-2">
+        {byFloor.map(({ floor, list }) => (
+          <div key={floor || 'all'}>
+            {floors.length > 1 && <p className="mb-1 text-[11px] font-bold text-[#766b62]">{floor || 'その他'}</p>}
+            <div className="grid grid-cols-4 gap-1.5" role="group" aria-label={floor ? `${floor} のテーブル` : 'テーブル'}>
+              {list.map((t) => {
+                const on = selected.includes(t.id);
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    aria-pressed={on}
+                    onClick={() => onToggle(t.id)}
+                    className={cn(
+                      'flex min-h-[48px] flex-col items-center justify-center rounded-[9px] border px-1 leading-tight',
+                      on ? 'border-transparent bg-[#bc5940] text-white' : 'border-[#e5dfd5] bg-white text-[#45403b] active:bg-[#f6ebe3]'
+                    )}
+                  >
+                    <span className="max-w-full truncate text-[14px] font-bold">{t.name}</span>
+                    {t.capacity > 0 && (
+                      <span className={cn('text-[9px]', on ? 'text-white/80' : 'text-[#766b62]')}>{t.capacity}名</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+      {picked.length > 0 && (
+        <p className="mt-1.5 text-[12px] font-bold text-[#bc5940]">
+          {picked.map((t) => t.name).join(' + ')}
+          {seats > 0 && <span className="font-medium"> · {seats}名席</span>}
+        </p>
+      )}
+    </div>
   );
 }
 
