@@ -1,57 +1,37 @@
 import { NextResponse } from 'next/server';
-import { ingestGourmetMail, type InboundMail } from '@/lib/gourmet-mail-server';
+import { ingestGourmetMail } from '@/lib/gourmet-mail-server';
+import { toInbound } from '@/lib/inbound-mail-parse';
+import { clientIp, isForwardEmailIp } from '@/lib/forwardemail-verify';
 
 /**
  * グルメサイトの予約通知メールの受け口（2026-09-27 Ronnie）。
  *
- * メール受信サービス（Postmark Inbound / SendGrid Inbound Parse / Mailgun Routes / Cloudflare Email Worker など）が
+ * メール受信サービス（Forward Email〔無料〕/ Postmark Inbound / SendGrid Inbound Parse / Mailgun Routes / Cloudflare Email Worker など）が
  * rsv-<token>@<INBOUND_MAIL_DOMAIN> に届いたメールをここへ POST する。
- *   認証: ヘッダー x-inbound-secret（または ?secret=）が INBOUND_MAIL_SECRET と一致すること
- *   形式: JSON（Postmark 形式・汎用 {to, from, subject, text, html}）か multipart/form-data（SendGrid・Mailgun）
+ *   認証: authorized()（合言葉、または Forward Email の送り元 IP）
+ *   形式: JSON（Postmark 形式・Forward Email の mailparser 形式・汎用 {to, from, subject, text, html}）か multipart/form-data（SendGrid・Mailgun）。
+ *         形の違いは lib/inbound-mail-parse.ts でそろえる
  * 取り込みの成否にかかわらず 200 を返す（受信サービスに再送させない。中身は gourmet_mail_imports に残る）。
  */
 export const runtime = 'nodejs';
 
-function authorized(request: Request): boolean {
-  const secret = process.env.INBOUND_MAIL_SECRET;
-  if (!secret) return false;
+/**
+ * 受け取ってよい送り元か。
+ *   - 合言葉：ヘッダー x-inbound-secret（または ?secret=）が INBOUND_MAIL_SECRET と一致
+ *   - Forward Email（無料。?via=forwardemail）：送り元の IP が forwardemail.net（逆引き＋引き直し）。
+ *     無料プランは URL が DNS で誰でも見えるので合言葉は使わず IP で確かめる（2026-10-19 Ronnie「お金のかからない方法」）
+ */
+async function authorized(request: Request): Promise<boolean> {
   const url = new URL(request.url);
+  const secret = process.env.INBOUND_MAIL_SECRET;
   const given = request.headers.get('x-inbound-secret') ?? url.searchParams.get('secret') ?? '';
-  return given === secret;
-}
-
-function pick(o: Record<string, unknown>, keys: string[]): string | null {
-  for (const k of keys) {
-    const v = o[k];
-    if (typeof v === 'string' && v.trim()) return v;
-  }
-  return null;
-}
-
-/** 受信サービスごとの形の違いを吸収する */
-function toInbound(o: Record<string, unknown>): InboundMail {
-  // Postmark: FromFull.Email / ToFull[].Email / Subject / TextBody / HtmlBody / MessageID / Date
-  const toFull = Array.isArray(o.ToFull) ? (o.ToFull as { Email?: string }[]).map((t) => t.Email ?? '') : [];
-  const ccFull = Array.isArray(o.CcFull) ? (o.CcFull as { Email?: string }[]).map((t) => t.Email ?? '') : [];
-  const fromFull = (o.FromFull as { Email?: string; Name?: string } | undefined)?.Email;
-  const recipients = [
-    ...toFull,
-    ...ccFull,
-    pick(o, ['to', 'To', 'recipient', 'envelope_to', 'OriginalRecipient', 'delivered_to', 'Delivered-To']) ?? '',
-  ].filter(Boolean);
-  return {
-    to: recipients.length ? recipients : (pick(o, ['to', 'To']) ?? ''),
-    from: fromFull ?? pick(o, ['from', 'From', 'sender', 'Sender']),
-    subject: pick(o, ['subject', 'Subject']),
-    text: pick(o, ['text', 'TextBody', 'body-plain', 'stripped-text', 'plain']),
-    html: pick(o, ['html', 'HtmlBody', 'body-html', 'stripped-html']),
-    messageId: pick(o, ['MessageID', 'message_id', 'Message-Id', 'messageId', 'Message-ID']),
-    receivedAt: null,
-  };
+  if (secret && given === secret) return true;
+  if (url.searchParams.get('via') === 'forwardemail') return isForwardEmailIp(clientIp(request));
+  return false;
 }
 
 export async function POST(request: Request) {
-  if (!authorized(request)) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  if (!(await authorized(request))) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
 
   let payload: Record<string, unknown> = {};
   const ct = request.headers.get('content-type') ?? '';

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X } from 'lucide-react';
+import { ChevronDown, ChevronUp, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getReservationCalendar, type ReservationCalendarData } from '@/app/app/reservations/actions';
 import { holidayName } from '@/lib/jp-holidays';
@@ -10,7 +10,7 @@ import { holidayName } from '@/lib/jp-holidays';
 /**
  * 日付選択（2026-10-19 Ronnie「日付を押したら、レストランボードのような日付選択。ハンディ・レジ・PC 全部」）。
  * 月ごとのカレンダーに、その日の予約の人数（〇名）・休業日（グレー）・仮予約／要連絡（赤い点）・祝日（赤）・土曜（青）。
- * 開いた日の月から3か月分。押した日へ移る。
+ * 開いた日の月から3か月分。上の「前の月」・下の「次の月」で前後の月も出せる（2026-10-19 Ronnie「次の月も」）。押した日へ移る。
  */
 const WEEK = ['日', '月', '火', '水', '木', '金', '土'];
 
@@ -37,9 +37,13 @@ export function ReservationCalendarSheet({
   onClose: () => void;
   months?: number;
 }) {
-  const start = monthStart(date);
+  const base = monthStart(date);
+  // 前の月・次の月を足していく（最大 前12か月・全部で24か月）
+  const [before, setBefore] = useState(0);
+  const [count, setCount] = useState(months);
+  const start = { y: base.y + Math.floor((base.m - 1 - before) / 12), m: ((((base.m - 1 - before) % 12) + 12) % 12) + 1 };
   const from = iso(start.y, start.m, 1);
-  const to = iso(start.y, start.m + months, 0);
+  const to = iso(start.y, start.m + count, 0);
   const [data, setData] = useState<ReservationCalendarData | null>(null);
 
   useEffect(() => {
@@ -87,7 +91,20 @@ export function ReservationCalendarSheet({
       </div>
       <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-3 pb-[calc(1rem+env(safe-area-inset-bottom))]">
         <div className="mx-auto max-w-[560px] space-y-6">
-          {Array.from({ length: months }, (_, i) => {
+          {before < 12 && (
+            <button
+              type="button"
+              onClick={() => {
+                setBefore((b) => b + 1);
+                setCount((c) => c + 1);
+              }}
+              className="mx-auto mt-2 flex h-10 items-center gap-1 rounded-full border border-[#e5dfd5] bg-white px-4 text-[13px] font-bold text-[#5c5650] active:bg-[#f6ebe3]"
+            >
+              <ChevronUp className="h-4 w-4" aria-hidden />
+              前の月を見る
+            </button>
+          )}
+          {Array.from({ length: count }, (_, i) => {
             const y = start.y + Math.floor((start.m - 1 + i) / 12);
             const m = ((start.m - 1 + i) % 12) + 1;
             const firstWd = new Date(Date.UTC(y, m - 1, 1)).getUTCDay();
@@ -146,6 +163,16 @@ export function ReservationCalendarSheet({
               </section>
             );
           })}
+          {count < 24 && (
+            <button
+              type="button"
+              onClick={() => setCount((c) => c + 1)}
+              className="mx-auto flex h-11 items-center gap-1 rounded-full border border-[#bc5940] bg-white px-5 text-[14px] font-bold text-[#bc5940] active:bg-[#f6ebe3]"
+            >
+              次の月を見る
+              <ChevronDown className="h-4 w-4" aria-hidden />
+            </button>
+          )}
           {!data && <p className="text-center text-[12px] text-[#766b62]">予約の人数を読み込んでいます…</p>}
         </div>
       </div>

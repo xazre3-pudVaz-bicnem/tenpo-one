@@ -14,7 +14,7 @@ import {
 
 /**
  * ハンディの予約の日付バー（2026-10-15 Ronnie「ハンディの予約でほかの日も見られるように。予約の追加もハンディで」）。
- *   ‹ 前の日 ／ 10/16（木）（押すとカレンダー）／ 次の日 ›、今日でないときは「今日に戻る」。
+ *   ‹ 前の日 ／ 10/16（木）（押すとカレンダー）／ 次の日 ›、今日でないときは日付の欄の左に「今日」。
  * 「＋ 予約登録」は上のバーの右（更新の横）。2026-10-19 Ronnie「予約の追加は上に。すっきりと」（レストランボードと同じ置き方）
  */
 export function HandyReservationDateBar({ date, today }: { date: string; today: string }) {
@@ -26,21 +26,32 @@ export function HandyReservationDateBar({ date, today }: { date: string; today: 
     'flex h-10 w-10 shrink-0 items-center justify-center rounded-[9px] border border-[#e5dfd5] bg-white text-[#45403b] active:bg-[#f6ebe3]';
 
   return (
-    <div className="space-y-2 px-3 pt-2.5">
+    <div className="px-3 pt-2.5">
       <div className="flex items-center gap-2">
         <Link href={handyReservationsHref(shiftDate(date, -1), today)} aria-label="前の日" className={navBtn}>
           <ChevronLeft className="h-5 w-5" strokeWidth={2.4} aria-hidden />
         </Link>
-        <button
-          type="button"
-          onClick={() => setCalendarOpen(true)}
-          className="relative flex h-10 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-[9px] border border-[#ead9cc] bg-[#f9ede6] px-2 text-[15px] font-bold text-[#45403b] active:bg-[#f6e4da]"
-          aria-label="日付を選ぶ"
-        >
-          <CalendarDays className="h-4 w-4 shrink-0 text-[#bc5940]" aria-hidden />
-          <span className="truncate tabular-nums">{handyDayLabel(date)}</span>
-          {date === today && <span className="shrink-0 text-[10px] font-semibold text-[#bc5940]">今日</span>}
-        </button>
+        {/* 日付の欄。今日でないときは左に「今日」（押すと今日へ。2026-10-19 Ronnie「今日に戻るはここに 今日 と」） */}
+        <div className="flex h-10 min-w-0 flex-1 items-center rounded-[9px] border border-[#ead9cc] bg-[#f9ede6]">
+          {date !== today && (
+            <Link
+              href={handyReservationsHref(today, today)}
+              className="ml-1 inline-flex h-8 shrink-0 items-center rounded-[7px] border border-[#ead9cc] bg-white px-2.5 text-[12.5px] font-bold text-[#bc5940] active:bg-[#f6ebe3]"
+            >
+              今日
+            </Link>
+          )}
+          <button
+            type="button"
+            onClick={() => setCalendarOpen(true)}
+            className="flex h-full min-w-0 flex-1 items-center justify-center gap-1.5 px-2 text-[15px] font-bold text-[#45403b] active:bg-[#f6e4da]"
+            aria-label="日付を選ぶ"
+          >
+            <CalendarDays className="h-4 w-4 shrink-0 text-[#bc5940]" aria-hidden />
+            <span className="truncate tabular-nums">{handyDayLabel(date)}</span>
+            {date === today && <span className="shrink-0 text-[10px] font-semibold text-[#bc5940]">今日</span>}
+          </button>
+        </div>
         {calendarOpen && (
           <ReservationCalendarSheet
             date={date}
@@ -56,16 +67,6 @@ export function HandyReservationDateBar({ date, today }: { date: string; today: 
           <ChevronRight className="h-5 w-5" strokeWidth={2.4} aria-hidden />
         </Link>
       </div>
-      {date !== today && (
-        <div className="flex justify-center">
-          <Link
-            href={handyReservationsHref(today, today)}
-            className="inline-flex h-8 items-center rounded-full border border-[#e5dfd5] bg-white px-3 text-[12px] font-bold text-[#5c5650] active:bg-[#f6ebe3]"
-          >
-            今日に戻る
-          </Link>
-        </div>
-      )}
     </div>
   );
 }

@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server';
 import { can } from '@/lib/permissions';
 import { formatDateTime, formatTime, todayJst } from '@/lib/format';
 import { requireHandyClerk } from '@/lib/handy-session';
-import { handyDayLabel, handyEmptyText, handyReservationsTitle, parseHandyDate } from '@/lib/handy-reservations';
+import { handyDayLabel, handyEmptyText, handyReservationsHref, handyReservationsTitle, parseHandyDate } from '@/lib/handy-reservations';
 import { HandyAddReservationButton, HandyReservationDateBar } from '@/components/handy/handy-reservation-date-bar';
 import { loadReservationTags } from '@/lib/reservation-tags-server';
 import { RESERVATION_STATUS, type ReservationStatus } from '@/lib/reservations';
@@ -20,6 +20,13 @@ import {
   HandyReservationList,
   type HandyReservationRow,
 } from '@/components/handy/handy-reservation-list';
+import { loadReservationInbox } from '@/lib/reservation-inbox-server';
+import {
+  InboxNoticeList,
+  InboxTaskList,
+  ReservationInboxTabs,
+  type InboxTab,
+} from '@/components/reservations/inbox/reservation-inbox';
 
 export const metadata: Metadata = { title: '予約' };
 
@@ -75,7 +82,7 @@ interface ReservationRow {
 export default async function HandyReservationsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ date?: string | string[] }>;
+  searchParams: Promise<{ date?: string | string[]; tab?: string | string[] }>;
 }) {
   const ctx = await requireFeature('pos');
   const store = ctx.currentStore ?? ctx.stores[0];
@@ -98,8 +105,13 @@ export default async function HandyReservationsPage({
 
   const supabase = await createClient();
   const today = todayJst();
-  const date = parseHandyDate((await searchParams).date, today);
-  const title = handyReservationsTitle(date, today);
+  const sp = await searchParams;
+  const date = parseHandyDate(sp.date, today);
+  // 上のタブ：予約一覧 ｜ 受付管理 ｜ メッセージ（2026-10-19 Ronnie「予約の画面の上のタブに」）
+  const tabParam = Array.isArray(sp.tab) ? sp.tab[0] : sp.tab;
+  const tab: InboxTab = tabParam === 'inbox' || tabParam === 'messages' ? tabParam : 'list';
+  const title = tab === 'inbox' ? '予約受付管理' : tab === 'messages' ? 'メッセージ' : handyReservationsTitle(date, today);
+  const inboxPromise = loadReservationInbox(supabase, store.id, today);
   const [{ data: rows }, { data: openOrders }] = await Promise.all([
     supabase
       .from('reservations')
@@ -118,6 +130,7 @@ export default async function HandyReservationsPage({
       .eq('status', 'open')
       .not('reservation_id', 'is', null),
   ]);
+  const inbox = await inboxPromise;
   // キーワード（列が無いデータベースでも一覧は出る。lib/reservation-tags-server.ts）
   const tagsById = await loadReservationTags(supabase, (rows ?? []).map((r) => r.id as string));
   const tableByReservation = new Map<string, string>();
@@ -178,25 +191,59 @@ export default async function HandyReservationsPage({
           </div>
         }
       />
-      <HandyOperatorBar label={clerk.name} note={`${handyDayLabel(date)} · ${reservations.length}件`} />
+      <HandyOperatorBar
+        label={clerk.name}
+        note={
+          tab === 'list'
+            ? `${handyDayLabel(date)} · ${reservations.length}件`
+            : tab === 'inbox'
+              ? `やること ${inbox.tasks.length}件`
+              : `お知らせ ${inbox.notices.length}件`
+        }
+      />
+      <ReservationInboxTabs
+        active={tab}
+        hrefs={{
+          list: handyReservationsHref(date, today),
+          inbox: '/handy/reservations?tab=inbox',
+          messages: '/handy/reservations?tab=messages',
+        }}
+        taskCount={inbox.tasks.length}
+        noticeTimes={inbox.notices.map((n) => n.at)}
+        storeId={store.id}
+        variant="handy"
+      />
       <HandyMain>
-        <HandyReservationDateBar date={date} today={today} />
-        {/* 「ご予約リンクを紹介」はここには出さない（≡ の中だけ。2026-10-19 Ronnie「ここには要らない」） */}
-        <HandyReservationList
-          reservations={reservations}
-          emptyText={handyEmptyText(date, today)}
-          dateLabel={handyDayLabel(date)}
-          actions={{
-            storeId: store.id,
-            date,
-            today,
-            canWrite: can(ctx.role, 'reservations.write'),
-            canCancel: can(ctx.role, 'reservations.cancel'),
-          }}
-        />
-        <p className="px-5 pb-5 text-center text-[10px] leading-relaxed text-[#766b62]">
-          予約を押すと、来店・キャンセル・テーブル変更ができます。
-        </p>
+        {tab === 'inbox' ? (
+          <InboxTaskList
+            tasks={inbox.tasks}
+            canAcknowledge={inbox.canAcknowledge}
+            canWrite={can(ctx.role, 'reservations.write')}
+            variant="handy"
+          />
+        ) : tab === 'messages' ? (
+          <InboxNoticeList notices={inbox.notices} storeId={store.id} variant="handy" />
+        ) : (
+          <>
+            <HandyReservationDateBar date={date} today={today} />
+            {/* 「ご予約リンクを紹介」はここには出さない（≡ の中だけ。2026-10-19 Ronnie「ここには要らない」） */}
+            <HandyReservationList
+              reservations={reservations}
+              emptyText={handyEmptyText(date, today)}
+              dateLabel={handyDayLabel(date)}
+              actions={{
+                storeId: store.id,
+                date,
+                today,
+                canWrite: can(ctx.role, 'reservations.write'),
+                canCancel: can(ctx.role, 'reservations.cancel'),
+              }}
+            />
+            <p className="px-5 pb-5 text-center text-[10px] leading-relaxed text-[#766b62]">
+              予約を押すと、来店・キャンセル・テーブル変更ができます。
+            </p>
+          </>
+        )}
       </HandyMain>
     </>
   );
