@@ -3,16 +3,18 @@
 import { useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { CircleCheckBig, Clock, Minus, Printer, Users } from 'lucide-react';
+import { ChevronRight, CircleCheckBig, Clock, Minus, Printer, UserRound, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { yen, formatTime } from '@/lib/format';
 import { useToast } from '@/components/ui/toast';
 import { useNow } from '@/components/floor/use-now';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { Dialog } from '@/components/ui/dialog';
 import { GuestCountDialog } from '@/components/pos/guest-count-dialog';
 import { canHandyCancel, HANDY_EXTEND_OPTIONS, handyCancelSecondsLeft } from '@/lib/handy-cancel';
 import {
   HandyBackButton,
+  HandyBiLabel,
   HandyFooterButton,
   HandyMain,
   HandyOperatorBar,
@@ -98,7 +100,8 @@ export function HandyTableDetail({
   const [pending, startTransition] = useTransition();
   const [busy, setBusy] = useState<string | null>(null);
   const [guestSlip, setGuestSlip] = useState<HandySlip | null>(null);
-  const [extendSlip, setExtendSlip] = useState<string | null>(null);
+  /** 左上の人のアイコンで開く「人数・時間」（2026-10-18 Ronnie「大きいボタンは要らない。人の頭のアイコンだけ左はしに、押したら出る」） */
+  const [seatMenuOpen, setSeatMenuOpen] = useState(false);
   const [cancelTarget, setCancelTarget] = useState<{ slipId: string; item: HandySlipItem } | null>(null);
 
   const state = tableState(table.currentStatus, slips.length > 0);
@@ -162,7 +165,7 @@ export function HandyTableDetail({
       try {
         const { endsAt } = await extendStayAction(slip.id, minutes);
         toast(`${minutes}分延長しました（〜${formatTime(new Date(endsAt))}）`, 'success');
-        setExtendSlip(null);
+        setSeatMenuOpen(false);
         router.refresh();
       } catch (e) {
         toast(e instanceof Error ? e.message : '延長できませんでした', 'error');
@@ -197,6 +200,7 @@ export function HandyTableDetail({
   ]
     .filter(Boolean)
     .join(' · ');
+  const seatMenu = slips.length > 0 && Boolean(setGuestCountAction || extendStayAction);
 
   return (
     <>
@@ -204,7 +208,25 @@ export function HandyTableDetail({
         left={<HandyBackButton href="/handy" label="テーブル一覧" />}
         title={table.name}
       />
-      <HandyOperatorBar label={`${table.name} · ${note}`} note={staffName} showIcon={false} />
+      <HandyOperatorBar
+        label={`${table.name} · ${note}`}
+        note={staffName}
+        showIcon={false}
+        leading={
+          seatMenu && (
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => setSeatMenuOpen(true)}
+              aria-label="人数変更・時間延長 / Guests・Extend"
+              aria-haspopup="dialog"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[#d4b3a3] bg-white text-[#8a3f2c] active:bg-[#f6e4da] disabled:opacity-40"
+            >
+              <UserRound className="h-[19px] w-[19px]" aria-hidden />
+            </button>
+          )
+        }
+      />
 
       <HandyMain>
         {sentQuantity !== null && (
@@ -287,54 +309,6 @@ export function HandyTableDetail({
                     {slip.endsAtMs != null && `${formatTime(new Date(slip.endsAtMs))}`}
                   </span>
                 </h2>
-                {/* 人数変更・時間延長（英語も並べる。2026-10-18 Ronnie） */}
-                {(setGuestCountAction || extendStayAction) && (
-                  <div className="mt-2 grid grid-cols-2 gap-2">
-                    {setGuestCountAction && (
-                      <button
-                        type="button"
-                        disabled={pending}
-                        onClick={() => setGuestSlip(slip)}
-                        className="flex min-h-[40px] items-center justify-center gap-1.5 rounded-[9px] border border-[#d4b3a3] bg-[#fbf9f5] text-[12px] font-bold text-[#8a3f2c] active:bg-[#f6e4da] disabled:opacity-40"
-                      >
-                        <Users className="h-4 w-4" aria-hidden />
-                        人数変更 / GUESTS
-                      </button>
-                    )}
-                    {extendStayAction && (
-                      <button
-                        type="button"
-                        disabled={pending}
-                        aria-expanded={extendSlip === slip.id}
-                        onClick={() => setExtendSlip((cur) => (cur === slip.id ? null : slip.id))}
-                        className="flex min-h-[40px] items-center justify-center gap-1.5 rounded-[9px] border border-[#d4b3a3] bg-[#fbf9f5] text-[12px] font-bold text-[#8a3f2c] active:bg-[#f6e4da] disabled:opacity-40"
-                      >
-                        <Clock className="h-4 w-4" aria-hidden />
-                        時間延長 / EXTEND
-                      </button>
-                    )}
-                  </div>
-                )}
-                {extendSlip === slip.id && extendStayAction && (
-                  <div className="mt-2 rounded-[9px] bg-[#f3efe8] p-2">
-                    <p className="mb-1.5 text-[11px] text-[#766b62]">
-                      延長する時間 / Extend by（延長料金はメニューの「延長」で入れてください）
-                    </p>
-                    <div className="grid grid-cols-4 gap-1.5">
-                      {HANDY_EXTEND_OPTIONS.map((m) => (
-                        <button
-                          key={m}
-                          type="button"
-                          disabled={pending}
-                          onClick={() => handleExtend(slip, m)}
-                          className="min-h-[40px] rounded-[8px] bg-[#bc5940] text-[13px] font-bold text-white active:bg-[#9f4630] disabled:opacity-40"
-                        >
-                          {pending && busy === `extend:${slip.id}` ? '…' : `+${m}分`}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
                 {slip.items.length === 0 ? (
                   <p className="py-4 text-center text-[13px] text-[#766b62]">まだ注文はありません。</p>
                 ) : (
@@ -408,18 +382,22 @@ export function HandyTableDetail({
                     type="button"
                     disabled={pending}
                     onClick={() => handlePrintBill(slip)}
-                    className="mt-2.5 flex min-h-[42px] w-full items-center justify-center gap-1.5 rounded-[9px] border border-[#b7791f] bg-[#fbf1d9] text-sm font-bold text-[#8a4a0b] active:bg-[#f6e0c4] disabled:opacity-40"
+                    className="mt-2.5 flex min-h-[46px] w-full items-center justify-center gap-1.5 rounded-[9px] border border-[#b7791f] bg-[#fbf1d9] py-1 text-sm font-bold text-[#8a4a0b] active:bg-[#f6e0c4] disabled:opacity-40"
                   >
                     <Printer className="h-4 w-4" aria-hidden />
-                    {pending && busy === `bill:${slip.id}` ? '印刷中… / Printing…' : '会計伝票を出す / PRINT BILL'}
+                    {pending && busy === `bill:${slip.id}` ? (
+                      <HandyBiLabel en="PRINTING…" ja="印刷中…" />
+                    ) : (
+                      <HandyBiLabel en="PRINT BILL" ja="会計伝票を出す" />
+                    )}
                   </button>
                 )}
                 {slips.length > 1 && (
                   <Link
                     href={`/handy/${table.id}/order?order=${slip.id}`}
-                    className="mt-2.5 flex min-h-[42px] items-center justify-center rounded-[9px] border border-[#bc5940] text-sm font-bold text-[#bc5940]"
+                    className="mt-2.5 flex min-h-[46px] items-center justify-center rounded-[9px] border border-[#bc5940] py-1 text-sm font-bold text-[#bc5940]"
                   >
-                    この伝票に注文を追加 / ADD ORDER
+                    <HandyBiLabel en={`ADD ORDER #${slip.orderNo}`} ja="この伝票に注文を追加" />
                   </Link>
                 )}
               </section>
@@ -430,17 +408,69 @@ export function HandyTableDetail({
 
       {canStartOrder(state) && (
         <HandyFooterButton
-          label={
-            pending && busy === 'start'
-              ? '開始中… / Starting…'
-              : // 英語も並べる（日本語を読まないスタッフ向け。2026-10-18 Ronnie）
-                slips.length > 0
-                ? '注文を追加 / ADD ORDER'
-                : '注文を開始 / START ORDER'
-          }
+          // 英語を大きく・日本語をすぐ下に小さく（日本語を読まないスタッフ向け。2026-10-18 Ronnie）
+          label={pending && busy === 'start' ? 'STARTING…' : slips.length > 0 ? 'ADD ORDER' : 'START ORDER'}
+          sub={pending && busy === 'start' ? '開始中…' : slips.length > 0 ? '注文を追加' : '注文を開始'}
           disabled={pending}
           onClick={handleStart}
         />
+      )}
+
+      {seatMenu && (
+        <Dialog open={seatMenuOpen} onClose={() => setSeatMenuOpen(false)} title={`${table.name} · GUESTS & TIME（人数・時間）`}>
+          <div className="space-y-4">
+            {slips.map((slip) => (
+              <section key={slip.id} className="space-y-2.5">
+                {slips.length > 1 && <h3 className="text-sm font-bold text-[#45403b]">伝票 #{slip.orderNo}</h3>}
+                {setGuestCountAction && (
+                  <button
+                    type="button"
+                    disabled={pending}
+                    onClick={() => {
+                      setSeatMenuOpen(false);
+                      setGuestSlip(slip);
+                    }}
+                    className="flex min-h-[48px] w-full items-center gap-2 rounded-[10px] border border-[#d4b3a3] bg-[#fbf9f5] px-3 text-left text-[14px] font-bold text-[#8a3f2c] active:bg-[#f6e4da] disabled:opacity-40"
+                  >
+                    <Users className="h-[18px] w-[18px] shrink-0" aria-hidden />
+                    <HandyBiLabel en="GUESTS" ja="人数変更" className="items-start" />
+                    <span className="ml-auto text-[13px] font-normal text-[#5c5650] tabular-nums">{slip.guestCount}名</span>
+                    <ChevronRight className="h-4 w-4 shrink-0 text-[#a89e92]" aria-hidden />
+                  </button>
+                )}
+                {extendStayAction && (
+                  <div className="rounded-[10px] border border-[#e5dfd5] bg-[#f3efe8] p-3">
+                    <p className="flex items-center gap-2 text-[14px] font-bold text-[#8a3f2c]">
+                      <Clock className="h-[18px] w-[18px] shrink-0" aria-hidden />
+                      <HandyBiLabel en="EXTEND" ja="時間延長" className="items-start" />
+                      <span className="ml-auto text-[13px] font-normal text-[#5c5650] tabular-nums">
+                        {formatTime(new Date(slip.openedAtMs))}〜
+                        {slip.endsAtMs != null && formatTime(new Date(slip.endsAtMs))}
+                      </span>
+                    </p>
+                    <div className="mt-2.5 grid grid-cols-4 gap-1.5">
+                      {HANDY_EXTEND_OPTIONS.map((m) => (
+                        <button
+                          key={m}
+                          type="button"
+                          disabled={pending}
+                          onClick={() => handleExtend(slip, m)}
+                          className="min-h-[44px] rounded-[8px] bg-[#bc5940] text-[13px] font-bold text-white active:bg-[#9f4630] disabled:opacity-40"
+                        >
+                          {pending && busy === `extend:${slip.id}` ? '…' : <HandyBiLabel en={`+${m} min`} ja={`${m}分`} />}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="mt-2 text-[10px] leading-snug text-[#766b62]">
+                      Add the extension fee from the menu.
+                      <span className="block">延長料金はメニューの「延長」で入れてください</span>
+                    </p>
+                  </div>
+                )}
+              </section>
+            ))}
+          </div>
+        </Dialog>
       )}
 
       {guestSlip && setGuestCountAction && (

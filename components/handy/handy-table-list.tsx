@@ -10,6 +10,7 @@ import { useToast } from '@/components/ui/toast';
 import { useNow } from '@/components/floor/use-now';
 import { ChipButton } from '@/components/ui/chip';
 import { stepFloor, swipeDirection } from '@/lib/floor-nav';
+import { HandyBiLabel } from './handy-chrome';
 import {
   filterHandyTables,
   handyFloorStorageKey,
@@ -24,6 +25,7 @@ import {
   serviceCallLabel,
   tableState,
   TABLE_STATE_LABEL,
+  TABLE_STATE_LABEL_EN,
   type HandyServiceCall,
   type HandyTableState,
 } from './logic';
@@ -212,8 +214,12 @@ function HandyTableSheet({
         onClick={(e) => e.stopPropagation()}
       >
         <p className="text-center text-[15px] font-bold text-[#292725]">{table.name}</p>
+        {/* 英語を上・日本語を下に小さく（2026-10-18 Ronnie） */}
         <p className="mt-0.5 text-center text-[11px] text-[#766b62]">
-          {table.capacityMax}名席 · {TABLE_STATE_LABEL[state]}
+          {table.capacityMax} seats · {TABLE_STATE_LABEL_EN[state]}
+          <span className="block text-[9px]">
+            {table.capacityMax}名席 · {TABLE_STATE_LABEL[state]}
+          </span>
         </p>
         <div className="mt-3 grid gap-1.5">
           {canStartOrder(state) && (
@@ -221,9 +227,9 @@ function HandyTableSheet({
               type="button"
               disabled={pending}
               onClick={() => router.push(`/handy/${table.id}/setup`)}
-              className="min-h-[43px] rounded-lg bg-[#bc5940] text-sm font-bold text-white disabled:opacity-40"
+              className="min-h-[48px] rounded-lg bg-[#bc5940] py-1 text-[15px] font-bold text-white disabled:opacity-40"
             >
-              注文を開始
+              <HandyBiLabel en="START ORDER" ja="注文を開始" />
             </button>
           )}
           <button
@@ -241,16 +247,20 @@ function HandyTableSheet({
                 }
               })
             }
-            className="min-h-[43px] rounded-lg border border-[#e5dfd5] bg-[#f9f3ed] text-sm font-bold text-[#45403b] disabled:opacity-40"
+            className="min-h-[48px] rounded-lg border border-[#e5dfd5] bg-[#f9f3ed] py-1 text-[15px] font-bold text-[#45403b] disabled:opacity-40"
           >
-            {locked ? 'ロック解除' : 'テーブルをロック'}
+            {locked ? (
+              <HandyBiLabel en="UNLOCK TABLE" ja="ロック解除" />
+            ) : (
+              <HandyBiLabel en="LOCK TABLE" ja="テーブルをロック" />
+            )}
           </button>
           <button
             type="button"
             onClick={onClose}
-            className="min-h-[38px] rounded-lg bg-[#f3efe8] text-[13px] font-bold text-[#5c5650]"
+            className="min-h-[42px] rounded-lg bg-[#f3efe8] py-1 text-[13px] font-bold text-[#5c5650]"
           >
-            閉じる
+            <HandyBiLabel en="CLOSE" ja="閉じる" />
           </button>
         </div>
       </div>
