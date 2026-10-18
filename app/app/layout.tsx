@@ -32,7 +32,8 @@ import { SidebarV2 } from '@/components/admin-v2/sidebar-v2';
 import { AdminV2Switch } from '@/components/admin-v2/admin-v2-switch';
 
 /** 店舗画面はブラウザのツールバー色も上部バー（濃紫）に合わせる */
-export const viewport = { themeColor: '#292725' };
+// iPad（Chrome・Safari）で画面が拡大・ずれないように：拡大しない・横幅は端末の幅（2026-10-19 Ronnie「iPad の Chrome で画面が揺れないように」）
+export const viewport = { themeColor: '#292725', width: 'device-width', initialScale: 1, maximumScale: 1, userScalable: false };
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const ctx = await requireSession();
