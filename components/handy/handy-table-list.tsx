@@ -170,6 +170,7 @@ export function HandyTableList({
               now={now}
               callKind={toneByTable.get(t.id) ?? null}
               groupLabel={groupTableLabel(t.groupTableIds ?? [], tables, '+')}
+              mainTableName={t.orderTableId ? (tables.find((x) => x.id === t.orderTableId)?.name ?? null) : null}
               onPick={setTableLockAction ? () => setSheetTableId(t.id) : undefined}
             />
           </li>
@@ -398,6 +399,7 @@ function HandyTableTile({
   now,
   callKind,
   groupLabel,
+  mainTableName = null,
   onPick,
 }: {
   table: HandyTableCard;
@@ -405,6 +407,8 @@ function HandyTableTile({
   callKind: 'staff' | 'checkout' | null;
   /** まとめた卓の名前（T-1+T-2）。組んでいなければ空文字 */
   groupLabel: string;
+  /** まとめた卓で、伝票（会計）がほかの卓にあるときのその卓の名前。この卓には金額を出さない */
+  mainTableName?: string | null;
   /** 空いている卓のタップ（ポップアップ）。未指定なら従来どおり卓の画面へ移動する */
   onPick?: () => void;
 }) {
@@ -462,7 +466,15 @@ function HandyTableTile({
         )}
       </span>
 
-      {occupied ? (
+      {occupied && mainTableName ? (
+        // まとめた卓のうち伝票の無い卓：金額・時間は伝票の卓（MAIN）だけに出す
+        // （2026-10-18 Ronnie「Main table ma matra 会計金額 haru dekhaye hunxa」）
+        <span className="m-auto flex max-w-full flex-col items-center gap-0.5 text-[#766b62]">
+          <GroupMark label={groupLabel} />
+          <span className="text-[11px] font-bold text-[#5c5650]">MAIN {mainTableName}</span>
+          <span className="text-[9px]">会計は {mainTableName}</span>
+        </span>
+      ) : occupied ? (
         <>
           <span className="mt-px mb-auto block w-full truncate text-[10px] leading-tight font-normal text-black">
             {table.guestCount > 0 ? `${table.guestCount}名` : '利用中'}
