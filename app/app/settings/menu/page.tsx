@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { requirePermission } from '@/lib/auth';
+import { can } from '@/lib/permissions';
 import { PageHeader } from '@/components/ui/page-header';
 import { EmptyState } from '@/components/ui/state';
 import { SettingsBackLink } from '@/components/settings/back-link';
@@ -50,6 +51,15 @@ export default async function MenuSettingsPage() {
             >
               並び順・ハンディ／QRの出し方（メニューブック）
             </Link>
+            {/* 写真・PDF からまとめて登録（2026-10-18 Ronnie「お金がかからないもので」）。登録はデータ取込と同じ権限 */}
+            {can(ctx.role, 'org.settings') && (
+              <Link
+                href="/app/settings/menu/scan"
+                className="inline-flex h-9 items-center rounded-lg border border-gray-300 bg-white px-3 text-sm font-semibold text-navy hover:bg-gray-50"
+              >
+                写真・PDFから登録
+              </Link>
+            )}
           </div>
         }
       />

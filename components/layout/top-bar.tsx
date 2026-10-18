@@ -28,10 +28,12 @@ export function TopBar({
   // 1店舗だけの端末（レジのiPad）は、右上に契約の店名を出す
   const oneStore = !ctx.isHq && ctx.stores.length === 1 ? (ctx.currentStore ?? ctx.stores[0]) : null;
   return (
-    <header className="sticky top-0 z-40 grid h-[58px] grid-cols-[1fr_minmax(0,auto)_1fr] items-center gap-2 bg-plum px-3 text-white sm:gap-3 sm:px-5">
+    // スマホ（md 未満）は横並び（画面名は残りの幅で省略）。右のアイコンが画面名に重ならないように（2026-10-19 Ronnie
+    // 「スマホで ホーム とベルが重なる」）。md 以上は今までどおり画面名を真ん中に
+    <header className="sticky top-0 z-40 flex h-[58px] items-center gap-2 bg-plum px-3 text-white sm:gap-3 sm:px-5 md:grid md:grid-cols-[1fr_minmax(0,auto)_1fr]">
       {/* ロゴまわり・上部バーの下端にグラデーションの線 */}
       <span aria-hidden className="bg-brand pointer-events-none absolute inset-x-0 bottom-0 h-[3px]" />
-      <div className="flex min-w-0 items-center gap-3">
+      <div className="flex min-w-0 items-center gap-3 max-sm:hidden">
         {/* 「ホーム」は店名の左（2026-09-30 Ronnie）。「メニュー」はホームと同じ画面なので出さない */}
         <BackHome />
         {/* 店名は左の角（2026-09-30 Ronnie「店舗名を左の角に」）。お店のマーク＋店名だけ（企業名・アカウント名は出さない。
@@ -64,9 +66,11 @@ export function TopBar({
         )}
       </div>
 
-      <ScreenTitle />
+      <div className="min-w-0 max-md:flex-1">
+        <ScreenTitle />
+      </div>
 
-      <div className="flex min-w-0 items-center justify-end gap-1 sm:gap-2">
+      <div className="flex shrink-0 items-center justify-end gap-0.5 sm:gap-2 md:min-w-0 md:shrink">
         {/* 1366px（iPad横）では画面名と重なるので、時計はもっと広い画面だけに出す */}
         <span className="mr-2 hidden 2xl:inline-flex">
           <LiveClock />
@@ -91,7 +95,9 @@ export function TopBar({
         {/* ハンディ ログインQR（店名とログアウトの間。2026-09-27 Ronnie） */}
         {ctx.currentStore && <HandyQrChip storeId={ctx.currentStore.id} />}
         {/* 検索はログアウトのすぐ左（2026-09-29 Ronnie） */}
-        <CommandPaletteIconTrigger tone="dark" />
+        <span className="contents max-[359px]:hidden">
+          <CommandPaletteIconTrigger tone="dark" />
+        </span>
         {/* ロゴはログアウトのすぐ左（2026-09-30 Ronnie「ロゴをログアウトの左に」） */}
         <Link
           href="/app/dashboard"

@@ -43,3 +43,6 @@ test-results/
 
 # iOS: App Store 用に作る Info.plist（TENPO_NO_MFI=1 python3 ios/tools/gen_project.py）
 ios/App/Info-noMFI.plist
+
+# メニューの写真・PDF取り込みの読み取りファイル（build のときに node_modules からコピー。scripts/copy-ocr-assets.mjs）
+/public/ocr/
