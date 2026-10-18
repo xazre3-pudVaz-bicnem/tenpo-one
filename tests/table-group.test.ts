@@ -186,10 +186,11 @@ describe('ハンディでも卓をまとめる（2026-10-18 Ronnie「Table merge
 });
 
 describe('まとめた卓の金額は MAIN の卓だけ（2026-10-18 Ronnie「Main table ma matra 会計金額」）', () => {
-  it('伝票の無いほうの卓は 開始・経過・未会計 を出さず「MAIN T-7」', () => {
+  it('伝票の無いほうの卓は 開始・経過・未会計 を出さず、印（T-7+T-8）だけ（MAIN・会計は… の文字も出さない）', () => {
     const list = read('components/handy/handy-table-list.tsx');
     expect(list).toContain('occupied && mainTableName ? (');
-    expect(list).toContain('MAIN {mainTableName}');
+    expect(list).not.toContain('MAIN {mainTableName}');
+    expect(list).not.toContain('会計は {mainTableName}');
     expect(list).toContain('mainTableName={t.orderTableId ?');
     // 金額の行は伝票の卓の分岐の中だけ
     const sub = list.slice(list.indexOf('occupied && mainTableName ? ('), list.indexOf(') : occupied ? ('));

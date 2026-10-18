@@ -467,12 +467,10 @@ function HandyTableTile({
       </span>
 
       {occupied && mainTableName ? (
-        // まとめた卓のうち伝票の無い卓：金額・時間は伝票の卓（MAIN）だけに出す
-        // （2026-10-18 Ronnie「Main table ma matra 会計金額 haru dekhaye hunxa」）
-        <span className="m-auto flex max-w-full flex-col items-center gap-0.5 text-[#766b62]">
+        // まとめた卓のうち伝票の無い卓：金額・時間は伝票の卓（MAIN）だけに出し、ここは印だけ
+        // （2026-10-18 Ronnie「Main table ma matra 会計金額 haru dekhaye hunxa」→「MAIN T-7・会計は T-7 は lekhna pardaina」）
+        <span className="m-auto flex max-w-full flex-col items-center">
           <GroupMark label={groupLabel} />
-          <span className="text-[11px] font-bold text-[#5c5650]">MAIN {mainTableName}</span>
-          <span className="text-[9px]">会計は {mainTableName}</span>
         </span>
       ) : occupied ? (
         <>
