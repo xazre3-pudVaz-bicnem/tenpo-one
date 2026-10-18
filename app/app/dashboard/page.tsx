@@ -28,6 +28,7 @@ import { HomeTop } from '@/components/dashboard/home-top';
 import { computeSalesMetrics, SETTLED_ORDER_STATUSES, type RefundLike, type SettledOrderLike, type SalesMetricsOptions } from '@/lib/metrics';
 import { isAdminV2Request } from '@/lib/admin-v2-server';
 import { HomeV2 } from '@/components/admin-v2/home-v2';
+import { cn } from '@/lib/utils';
 
 export const metadata: Metadata = { title: 'ホーム' };
 
@@ -925,7 +926,9 @@ async function StoreDashboard({
         guestsNote={metricsOpts.includeTakeoutGuests === false ? '店内飲食のみ' : undefined}
       />
 
-      <div className="grid gap-4 xl:grid-cols-3">
+      {/* 売上推移（過去30日）は管理画面（パソコン）だけ。レジ（iPad）には出さない（2026-10-18 Ronnie） */}
+      <div className={cn('grid gap-4', ctx.isRegisterDevice !== true && 'xl:grid-cols-3')}>
+        {ctx.isRegisterDevice !== true && (
         <Card className="xl:col-span-2">
           <CardHeader className="flex items-center justify-between gap-3">
             <CardTitle en="Sales trend">売上推移（過去30日）</CardTitle>
@@ -943,6 +946,7 @@ async function StoreDashboard({
             )}
           </CardContent>
         </Card>
+        )}
 
         <Card>
           <CardHeader className="flex items-center justify-between gap-3">
