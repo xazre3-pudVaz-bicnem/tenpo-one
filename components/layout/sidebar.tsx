@@ -102,22 +102,18 @@ export function Sidebar({
                     key={t.href}
                     href={t.href}
                     aria-current={active ? 'page' : undefined}
+                    // テラコッタで塗って白い文字（2026-10-18 Ronnie。場所・大きさは今まで通り、色だけ）
                     className={cn(
-                      'tapneon flex h-[124px] w-full flex-col items-center justify-center gap-1.5 rounded-2xl px-3 text-center text-royal',
-                      active && 'bg-iris-soft'
+                      'tap3d flex h-[124px] w-full flex-col items-center justify-center gap-1.5 rounded-2xl px-3 text-center text-white',
+                      active ? 'bg-iris-deep' : 'bg-iris'
                     )}
                   >
-                    <span
-                      className={cn(
-                        'grid h-14 w-14 shrink-0 place-items-center rounded-2xl',
-                        active ? 'bg-iris text-white' : 'bg-iris-soft text-iris'
-                      )}
-                    >
+                    <span className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-white/20 text-white">
                       <NavIcon name={t.icon} className="h-8 w-8" />
                     </span>
                     <span className="min-w-0">
                       <span className="block text-[21px] leading-tight font-extrabold whitespace-nowrap">{t.label}</span>
-                      <span className="block text-xs text-ink-3">{t.en}</span>
+                      <span className="block text-xs text-white/85">{t.en}</span>
                     </span>
                   </Link>
                 );

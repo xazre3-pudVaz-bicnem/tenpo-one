@@ -56,7 +56,7 @@ export function HomeNotices({
       <header className="flex items-center gap-2.5">
         <Mail className="h-[18px] w-[18px] shrink-0 text-iris" aria-hidden="true" />
         <h2 className="text-sm font-bold text-ink">
-          お知らせ&アラート<span className="en-inline">Notices & Alerts</span>
+          お知らせ&アラート<span className="en-under">Notices & Alerts</span>
         </h2>
         {unreadCount > 0 && (
           <span className="shrink-0 rounded-full bg-iris-soft px-2.5 py-0.5 text-xs font-bold text-royal tabular-nums">
@@ -83,12 +83,7 @@ export function HomeNotices({
       </header>
 
       <ul className="flex flex-col gap-1.5">
-        {rows.length === 0 && (
-          <li className="flex min-w-0 items-center gap-2.5">
-            <span className={cn(chipBase, 'bg-iris-soft text-royal')}>本部・オーナー</span>
-            <p className="min-w-0 flex-1 text-[13.5px] text-ink-3">新しいお知らせ・アラートはありません</p>
-          </li>
-        )}
+        {/* お知らせ・アラートが無いときは何も書かない（2026-10-18 Ronnie「新しいお知らせが無いなら書かなくていい」） */}
         {visible.map((row) =>
           row.type === 'announcement' ? (
             <li key={row.key} className="flex min-w-0 items-center gap-2.5 max-sm:flex-wrap">

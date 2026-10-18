@@ -12,15 +12,20 @@ describe('設定の上のタブ', () => {
   it('レジの設定は デバイス管理 のタブ（レジ端末ではハードウェアを出さない。2026-09-29 管理画面だけ）', () => {
     const hub = settingsHubOf(hubs, '/app/pos/settings');
     expect(hub?.label).toBe('デバイス管理');
-    expect(hub?.children?.map((c) => c.label)).toEqual(['レジの設定', 'iPhoneハンディ', 'ハンディ端末', 'テーブルQRコード']);
+    expect(hub?.children?.map((c) => c.label)).toEqual(['レジの設定', 'iPhoneハンディ', 'ハンディ端末']);
     const admin = settingsHubs({ role: 'org_owner', disabledFeatures: new Set(), isRegisterDevice: false });
     expect(settingsHubOf(admin, '/app/pos/settings')?.children?.map((c) => c.label)).toEqual([
       'レジの設定',
       'ハードウェア',
       'iPhoneハンディ',
       'ハンディ端末',
-      'テーブルQRコード',
     ]);
+  });
+
+  it('POS担当者・テーブルQRコードは 店舗 のタブ（店舗情報のすぐ下。2026-10-18 Ronnie）', () => {
+    const hub = settingsHubOf(hubs, '/app/settings/tables/qr-print');
+    expect(hub?.label).toBe('店舗');
+    expect(hub?.children?.map((c) => c.label).slice(0, 3)).toEqual(['店舗情報', 'POS担当者', 'テーブルQRコード']);
   });
 
   it('スタッフは 予約・顧客 のタブ', () => {

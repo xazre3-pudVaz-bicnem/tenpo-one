@@ -25,7 +25,7 @@ export function StatCard({
     <Card className={cn('ui-stat p-4', className)}>
       <p className="text-xs font-medium text-gray-500">
         {label}
-        {en && <span className="en-inline ml-1">{en}</span>}
+        {en && <span className="en-under">{en}</span>}
       </p>
       <p
         className={cn(

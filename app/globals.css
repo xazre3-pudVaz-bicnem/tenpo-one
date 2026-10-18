@@ -47,8 +47,9 @@
   --color-saffron-soft: #fbf1d9;
   --color-gold: #f6c77a;
 
-  /* ブランドのグラデーション（チャコール〜テラコッタ。bg-brand）。ロゴ・見出し・選択中の表示に使う */
-  --background-image-brand: linear-gradient(90deg, #292725 0%, #8a3f2c 45%, #bc5940 100%);
+  /* ブランドの色（bg-brand）。ロゴ・見出し・選択中の表示に使う。
+     2026-10-18 Ronnie「黒から始まるグラデーションはやめて、少し濃いこの色に」→ 濃いテラコッタ #8B4536 の単色 */
+  --background-image-brand: linear-gradient(#8b4536, #8b4536);
 
   --shadow-card: 0 1px 2px rgba(41, 39, 37, 0.06), 0 8px 20px rgba(41, 39, 37, 0.08);
 
@@ -282,7 +283,7 @@ body.theme-regi {
    */
   .on-brand {
     background-image: var(--background-image-brand);
-    background-color: #8a3f2c;
+    background-color: #8b4536;
     border-color: transparent;
     color: #fff;
   }
@@ -341,6 +342,17 @@ body.theme-regi {
 /* 日英併記の英語ラベル */
 .en-sub {
   display: block;
+  font-family: var(--font-num);
+  font-weight: 600;
+  font-size: 10.5px;
+  line-height: 1.2;
+  letter-spacing: 0.03em;
+  color: var(--color-ink-3);
+}
+/* 日本語の下に小さく英語（2026-10-18 Ronnie「英語は日本語の下に小さく」）。見出し・ボタン・ラベル用 */
+.en-under {
+  display: block;
+  margin-top: 1px;
   font-family: var(--font-num);
   font-weight: 600;
   font-size: 10.5px;

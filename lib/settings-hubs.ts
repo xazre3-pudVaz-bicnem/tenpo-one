@@ -31,8 +31,10 @@ export function settingsHubs(ctx: {
       icon: 'store',
       rows: [
         { href: '/app/settings/store', label: '店舗情報', en: 'Store', icon: 'store', description: '名称・住所・連絡先・紹介文・公開予約URL', visible: true, hubDefault: true },
-        { href: '/app/settings/hours', label: '営業時間・休業日', en: 'Hours', icon: 'hours', description: '曜日別の営業時間、定休日、臨時休業の設定', visible: true },
+        // POS担当者・テーブルQRコードは店舗情報のすぐ下（2026-10-18 Ronnie「店舗の下に」）
         { href: '/app/settings/clerks', label: 'POS担当者', en: 'Clerks', icon: 'clerks', description: '会計時に選ぶ担当者名の登録（アカウント不要）', visible: true },
+        { href: '/app/settings/tables/qr-print', label: 'テーブルQRコード', en: 'TableCode', icon: 'qr', description: '全テーブルのQR注文コードをまとめて印刷（1卓ずつの発行・停止はテーブル・フロアから）', visible: true },
+        { href: '/app/settings/hours', label: '営業時間・休業日', en: 'Hours', icon: 'hours', description: '曜日別の営業時間、定休日、臨時休業の設定', visible: true },
         { href: '/app/settings/company', label: '企業情報', en: 'Company', icon: 'company', description: '会社名・住所・連絡先・請求情報の管理', visible: can(role, 'org.settings') },
       ],
     },
@@ -64,7 +66,6 @@ export function settingsHubs(ctx: {
         { href: '/app/settings/printers', label: 'ハードウェア', en: 'Hardware', icon: 'printers', description: 'レジ端末とレシート・厨房プリンター、キャッシュドロアの設定', visible: ctx.isRegisterDevice !== true },
         { href: '/app/settings/handy-qr', label: 'iPhoneハンディ', en: 'Handy QR', icon: 'qr', description: 'お店に1つの固定QRでハンディにログイン（読むだけで開く。お店のWi-Fi限定にもできる）', visible: true },
         { href: '/app/settings/handy', label: 'ハンディ端末', en: 'Handy devices', icon: 'handy', description: 'スマホをQRコードでハンディとして登録・解除する', visible: true },
-        { href: '/app/settings/tables/qr-print', label: 'テーブルQRコード', en: 'TableCode', icon: 'qr', description: '全テーブルのQR注文コードをまとめて印刷（1卓ずつの発行・停止はテーブル・フロアから）', visible: true },
       ],
     },
     {

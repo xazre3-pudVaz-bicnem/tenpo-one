@@ -12,10 +12,10 @@ export function ScreenTitle() {
   const t = screenTitleFor(pathname);
   if (!t) return null;
   return (
-    // 画面名は右のアイコンに重ならないよう、狭いときは英語を出さず、足りなければ省略する
-    <div className="min-w-0 max-w-full truncate text-center text-[17px] font-bold tracking-[0.12em] text-white">
-      {t.label}
-      <span className="ml-1.5 hidden align-middle font-[family-name:var(--font-num)] text-[11px] font-semibold tracking-[0.06em] text-[#ead9cc] xl:inline">
+    // 画面名は右のアイコンに重ならないよう、足りなければ省略する。英語は日本語の下に小さく（2026-10-18 Ronnie）
+    <div className="flex min-w-0 max-w-full flex-col items-center text-center leading-tight">
+      <span className="max-w-full truncate text-[17px] font-bold tracking-[0.12em] text-white">{t.label}</span>
+      <span className="hidden max-w-full truncate font-[family-name:var(--font-num)] text-[10px] font-semibold tracking-[0.06em] text-[#ead9cc] md:block">
         {t.en}
       </span>
     </div>

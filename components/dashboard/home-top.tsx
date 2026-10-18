@@ -1,6 +1,6 @@
 /**
  * ホーム上段（プロトタイプ 01-home の配置）:
- * お知らせ&アラート → [予算達成率(2/3) | 時計(1/3)] → KPI 5タイル
+ * お知らせ&アラート → [予算達成率(2/3) | 時計(1/3)] → KPI（1つの箱を4つに区切る。客単価は予算達成率の売上の下）
  */
 import { Suspense } from 'react';
 import { BudgetCard } from './budget-card';
@@ -40,6 +40,7 @@ export function HomeTop({
           pct={data.achievementPct}
           ringPct={data.ringPct}
           perGroup={data.perGroupSales}
+          avgSpend={data.avgSpend}
           asOf={asOf}
         />
         <ClockCard
@@ -61,7 +62,6 @@ export function HomeTop({
         groupsYesterday={data.groupsYesterday}
         guests={data.guests}
         guestsYesterday={data.guestsYesterday}
-        avgSpend={data.avgSpend}
         repeat={data.repeat}
         lowStock={data.lowStock}
         guestsNote={guestsNote}

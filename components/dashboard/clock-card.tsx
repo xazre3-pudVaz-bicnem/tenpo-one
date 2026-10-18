@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * 時計カード（プロトタイプの .card.clock）。royal 地・白文字。
+ * 時計カード。白いカードにふつうの時計（2026-10-18 Ronnie「背景の色は要らない。普通の時計だけ」）。
  * 描画中に現在時刻を読まないよう、時刻は外部ストア（1秒ごと）から useSyncExternalStore で受け取る。
  * 地名・天気はサーバー側の Suspense スロット（weather-slot.tsx）で後から差し込む。
  */
@@ -78,18 +78,18 @@ export function ClockCard({
     <article
       aria-label="時計と天気"
       className={cn(
-        'ui-card flex min-w-0 flex-col justify-center gap-[18px] border border-royal bg-royal px-[22px] pt-[18px] pb-5 text-white',
+        'ui-card flex min-w-0 flex-col justify-center gap-[18px] border border-line bg-white px-[22px] pt-[18px] pb-5 text-ink',
         className
       )}
     >
-      <div className="flex min-h-4 items-center justify-between font-[family-name:var(--font-num)] text-[12.5px] leading-none font-semibold tracking-[0.14em] text-white uppercase">
+      <div className="flex min-h-4 items-center justify-between font-[family-name:var(--font-num)] text-[12.5px] leading-none font-semibold tracking-[0.14em] text-ink-2 uppercase">
         {place}
       </div>
 
       <div className="mx-auto aspect-square w-[min(100%,200px)] max-w-full">
         <svg viewBox="0 0 200 200" aria-hidden="true" className="h-full w-full">
-          <circle cx="100" cy="100" r="92" fill="none" stroke="rgba(255,255,255,.55)" strokeWidth="2" />
-          <g stroke="#fff" strokeLinecap="round">
+          <circle cx="100" cy="100" r="92" fill="none" stroke="var(--color-line)" strokeWidth="2" />
+          <g stroke="var(--color-ink)" strokeLinecap="round">
             {TICKS.map((t) => (
               <line
                 key={t.i}
@@ -98,29 +98,29 @@ export function ClockCard({
                 x2={t.x2}
                 y2={t.y2}
                 strokeWidth={t.major ? 2.5 : 1}
-                opacity={t.major ? 0.95 : 0.45}
+                opacity={t.major ? 0.9 : 0.35}
               />
             ))}
           </g>
           {ready && (
             <>
-              <line x1="100" y1="100" x2="100" y2="54" stroke="#fff" strokeWidth="5" strokeLinecap="round" transform={`rotate(${hourDeg} 100 100)`} />
-              <line x1="100" y1="100" x2="100" y2="32" stroke="#fff" strokeWidth="3.5" strokeLinecap="round" transform={`rotate(${minDeg} 100 100)`} />
-              <line x1="100" y1="112" x2="100" y2="26" stroke="var(--color-gold)" strokeWidth="1.5" strokeLinecap="round" transform={`rotate(${secDeg} 100 100)`} />
+              <line x1="100" y1="100" x2="100" y2="54" stroke="var(--color-ink)" strokeWidth="5" strokeLinecap="round" transform={`rotate(${hourDeg} 100 100)`} />
+              <line x1="100" y1="100" x2="100" y2="32" stroke="var(--color-ink)" strokeWidth="3.5" strokeLinecap="round" transform={`rotate(${minDeg} 100 100)`} />
+              <line x1="100" y1="112" x2="100" y2="26" stroke="var(--color-iris)" strokeWidth="1.5" strokeLinecap="round" transform={`rotate(${secDeg} 100 100)`} />
             </>
           )}
-          <circle cx="100" cy="100" r="4" fill="var(--color-gold)" />
+          <circle cx="100" cy="100" r="4" fill="var(--color-iris)" />
         </svg>
       </div>
 
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div
-          className="font-[family-name:var(--font-num)] text-[46px] leading-none font-extrabold tracking-[-0.01em] text-white tabular-nums"
+          className="font-[family-name:var(--font-num)] text-[46px] leading-none font-extrabold tracking-[-0.01em] text-ink tabular-nums"
           role="timer"
           aria-live="off"
         >
           {ready ? `${pad(h)}:${pad(m)}` : '--:--'}
-          <small className="ml-1 text-lg font-semibold text-[#ead9cc]">{ready ? pad(s) : '--'}</small>
+          <small className="ml-1 text-lg font-semibold text-ink-3">{ready ? pad(s) : '--'}</small>
         </div>
         {weather}
       </div>

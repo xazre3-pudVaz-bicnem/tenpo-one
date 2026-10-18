@@ -154,26 +154,23 @@ export function SettingsNav({ groups, pathname }: { groups: SettingsNavGroup[]; 
                     href={item.href}
                     aria-current={active ? 'page' : undefined}
                     className={cn(
-                      // パソコンの左ペインは 1 行（2026-09-28 Ronnie「もっとスリムに」）。スマホの設定トップは説明つきの一覧
-                      'flex min-h-[52px] items-center gap-2.5 px-[18px] py-2.5 text-sm font-medium text-ink-2 transition-colors hover:bg-lilac-soft lg:min-h-[40px] lg:px-3.5 lg:py-1.5',
+                      // 日本語の下に英語（1回だけ）。タブは少し大きく（2026-10-18 Ronnie）。スマホの設定トップは説明つきの一覧
+                      'flex min-h-[60px] items-center gap-3 px-[18px] py-2.5 text-[15px] font-medium text-ink-2 transition-colors hover:bg-lilac-soft lg:min-h-[56px] lg:px-4 lg:py-2',
                       active && 'bg-iris-soft font-bold text-royal hover:bg-iris-soft',
                       hubActive && 'lg:bg-iris-soft lg:font-bold lg:text-royal lg:hover:bg-iris-soft'
                     )}
                   >
                     <Icon
                       className={cn(
-                        'h-[18px] w-[18px] shrink-0',
+                        'h-5 w-5 shrink-0',
                         active ? 'text-royal' : 'text-saffron',
                         hubActive && 'lg:text-royal'
                       )}
                       aria-hidden
                     />
                     <span className="min-w-0 flex-1 leading-tight">
-                      <span className="block truncate">
-                        {item.label}
-                        <span className="en-inline hidden text-[10.5px] lg:inline">{item.en}</span>
-                      </span>
-                      <span className="en-sub lg:hidden">{item.en}</span>
+                      <span className="block truncate">{item.label}</span>
+                      <span className="en-sub">{item.en}</span>
                       <span className="mt-0.5 block text-xs font-normal text-ink-3 lg:hidden">{item.description}</span>
                     </span>
                     <ChevronRight
@@ -195,7 +192,16 @@ export function SettingsNav({ groups, pathname }: { groups: SettingsNavGroup[]; 
  * 設定画面の枠（プロトタイプの .settings）。
  * PC: 見出し＋左メニュー(270px)＋右に各設定。スマホ: 設定トップはメニュー一覧のみ、各設定は右ペインのみ。
  */
-export function SettingsShell({ groups, children }: { groups: SettingsNavGroup[]; children: React.ReactNode }) {
+export function SettingsShell({
+  groups,
+  top,
+  children,
+}: {
+  groups: SettingsNavGroup[];
+  /** 設定画面のいちばん上に出すもの（初期設定の残りのバー） */
+  top?: React.ReactNode;
+  children: React.ReactNode;
+}) {
   const pathname = usePathname() ?? HUB;
   if (BARE_PREFIXES.some((p) => pathname.startsWith(p))) return <>{children}</>;
   const isHub = pathname === HUB;
@@ -206,9 +212,10 @@ export function SettingsShell({ groups, children }: { groups: SettingsNavGroup[]
 
   return (
     <div className="flex flex-col gap-4">
+      {top && <div className="print:hidden">{top}</div>}
       <div className={cn('print:hidden', !isHub && 'hidden lg:block')}>
         <h1 className="text-xl font-bold leading-snug text-ink">
-          設定<span className="en-inline text-xs">Settings</span>
+          設定<span className="en-under">Settings</span>
         </h1>
         <p className="mt-0.5 text-[13px] text-ink-3">店舗・メニュー・機器・スタッフの設定（オーナー・店長のみ変更可）</p>
       </div>

@@ -19,7 +19,7 @@ export function CardTitle({
   return (
     <h3 className={cn('ui-card-title text-navy', className)} {...props}>
       {children}
-      {en && <span className="en-inline">{en}</span>}
+      {en && <span className="en-under">{en}</span>}
     </h3>
   );
 }

@@ -58,7 +58,7 @@ describe('当店のクーポン', () => {
     expect(read('app/(public)/book/[storeSlug]/page.tsx')).toContain('当店のクーポン');
     expect(read('components/booking/booking-wizard.tsx')).toContain('couponId: selectedCoupon?.id ?? null');
     expect(read('app/(public)/booking-actions.ts')).toContain('requestWithCoupon(couponText, input.request)');
-    expect(read('components/settings/booking-qr-card.tsx')).toContain('当店のクーポン COUPON');
+    expect(read('components/settings/booking-qr-card.tsx')).toContain('当店のクーポン');
     expect(read('components/settings/booking-meishi.tsx')).toContain('COUPON');
     expect(read('app/app/settings/page.tsx')).toContain('<BookingCouponsEditor');
   });

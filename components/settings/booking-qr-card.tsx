@@ -1,10 +1,12 @@
 /**
- * お店の予約QR（A6・1枚）。テーブルQR（table-qr-card.tsx）と同じ TENPO ONE の黒と紫。
- * 2026-09-30 Ronnie「ダウンロードしたら店舗名・電話番号・住所も入るように。テーブルと同じデザインで」。
+ * お店の予約QR（横の名刺サイズ 91mm × 55mm・1枚）。
+ * 2026-10-18 Ronnie「背景は私たちのスタイルに。黒は要らない。横名刺サイズに変更」→
+ * テーブルの名刺サイズQR（table-qr-business-card.tsx）と同じ TENPO ONE の配色：
+ * 地はクリーム #F7F5F0・字はチャコール #292725・差し色はテラコッタ #BC5940（黒の地・グラデーションは使わない）。
  *
- * 紙の大きさそのもの（105mm × 148mm）で描く。PDF（A6）・PNG のダウンロード（TableQrPdfButton が
- * data-qr-card の要素を画像にする）でこの見た目がそのまま出る。暗い枠は用紙の端から 5mm 内側。
- * 当店のクーポン（lib/booking-coupons.ts）があれば「ご予約」の下に出す（2026-09-30 Ronnie「上のほうに」）。
+ * 紙の大きさそのもの（91mm × 55mm）で描く。PDF（名刺サイズ1枚）・PNG のダウンロード（TableQrPdfButton が
+ * data-qr-card の要素を画像にする）でこの見た目がそのまま出る。
+ * 店舗名・ご予約・住所・電話番号は左、QR は右。当店のクーポン（lib/booking-coupons.ts）は いちばん上の1つだけ。
  */
 export function BookingQrCard({
   storeName,
@@ -20,92 +22,65 @@ export function BookingQrCard({
   phone: string | null;
   /** 予約ページの QR（data URL。周りの白4マス込み） */
   dataUrl: string;
-  /** 当店のクーポン（表示する文。3つまで出す） */
+  /** 当店のクーポン（表示する文。名刺はいちばん上の1つだけ） */
   coupons?: string[];
 }) {
-  const storeSize = storeName.length <= 14 ? 'text-[17pt]' : storeName.length <= 22 ? 'text-[14.5pt]' : 'text-[12.5pt]';
-  const shown = coupons.filter((c) => c.trim()).slice(0, 3);
-  // 店名が2行になるほど長いとき・クーポンがあるときは QR を少し小さくして、住所・電話番号まで1枚に収める
-  const qrMm = (storeName.length > 22 ? 45 : 50) - (shown.length > 0 ? 6 + 5 * (shown.length - 1) : 0);
+  const nameSize = storeName.length <= 12 ? 'text-[12pt]' : storeName.length <= 20 ? 'text-[10pt]' : 'text-[8.5pt]';
+  const coupon = coupons.find((c) => c.trim()) ?? null;
   return (
     <div
       data-qr-card
-      className="flex h-[148mm] w-[105mm] shrink-0 flex-col bg-white p-[5mm] [break-after:page] [break-inside:avoid] [-webkit-print-color-adjust:exact] [print-color-adjust:exact]"
+      className="relative flex h-[55mm] w-[91mm] shrink-0 overflow-hidden bg-[#F7F5F0] text-[#292725] [-webkit-print-color-adjust:exact] [print-color-adjust:exact]"
     >
-      <div className="flex flex-1 flex-col overflow-hidden rounded-[4mm] bg-[#292725] text-white">
-        {/* 上：店名（真ん中・いちばん大きく）と「ご予約」の紫の枠 */}
-        <div className="relative px-[6mm] pt-[7mm] pb-[2mm] text-center">
-          <div
-            aria-hidden
-            className="absolute -top-[20mm] left-1/2 h-[44mm] w-[70mm] -translate-x-1/2 rounded-full bg-[radial-gradient(ellipse,rgba(188,89,64,0.45),rgba(188,89,64,0)_70%)]"
-          />
-          <p className={`relative line-clamp-2 leading-[1.25] font-extrabold tracking-[0.04em] text-balance ${storeSize}`}>
-            {storeName}
-          </p>
-          <div aria-hidden className="relative mx-auto mt-[2.2mm] h-[0.6mm] w-[12mm] rounded-full bg-linear-to-r from-[#e07a5c] to-[#8a3f2c]" />
-          <p className="relative mt-[2.4mm] inline-flex items-center gap-[2mm] rounded-full border border-[#bc5940]/70 bg-[#bc5940]/20 px-[3.5mm] py-[0.8mm]">
-            <span className="text-[6.5pt] font-extrabold tracking-[0.3em] text-[#f29b7b]">RESERVATION</span>
-            <span className="text-[11pt] leading-[1.3] font-bold">ご予約</span>
-          </p>
-          {shown.length > 0 && (
-            <div className="relative mx-auto mt-[2.6mm] max-w-[80mm] rounded-[2.5mm] border border-dashed border-[#f5c451]/80 bg-[#f5c451]/10 px-[3mm] py-[1.4mm]">
-              <p className="text-[6pt] font-extrabold tracking-[0.25em] text-[#f5c451]">当店のクーポン COUPON</p>
-              {shown.map((c) => (
-                <p key={c} className="mt-[0.5mm] line-clamp-1 text-[9pt] leading-[1.35] font-bold">
-                  {c}
-                </p>
-              ))}
-            </div>
-          )}
-        </div>
+      {/* 上端のテラコッタの帯 */}
+      <div aria-hidden className="absolute inset-x-0 top-0 h-[2mm] bg-[#BC5940]" />
 
-        {/* まんなか：QR（白地・紫の枠）と読み取りの案内 */}
-        <div className="flex flex-1 flex-col justify-center pb-[2mm]">
-          <div className="flex justify-center px-[6mm]">
-            <div className="rounded-[3.5mm] bg-linear-to-br from-[#e07a5c] to-[#8a3f2c] p-[1.2mm]">
-              <div className="rounded-[2.5mm] bg-white p-[2mm]">
-                {/* eslint-disable-next-line @next/next/no-img-element -- サーバーで作った QR の data URL */}
-                <img
-                  src={dataUrl}
-                  alt={`${storeName}の予約QRコード`}
-                  width={600}
-                  height={600}
-                  className="block [image-rendering:pixelated]"
-                  style={{ width: `${qrMm}mm`, height: `${qrMm}mm` }}
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="px-[6mm] pt-[3.5mm] text-center">
-            <p className="text-[11pt] leading-[1.45] font-bold">
-              スマートフォンのカメラで読み取って
-              <br />
-              ご予約ください
+      {/* 左：店名・ご予約・クーポン（上）と 住所・電話番号・TENPO ONE（下） */}
+      <div className="flex min-w-0 flex-1 flex-col justify-between pt-[5mm] pr-[2mm] pb-[3.4mm] pl-[4.5mm]">
+        <div className="min-w-0">
+          <p className={`line-clamp-2 leading-[1.2] font-extrabold tracking-[0.02em] ${nameSize}`}>{storeName}</p>
+          <p className="mt-[1.4mm] flex items-baseline gap-[1.5mm]">
+            <span className="text-[10pt] leading-none font-extrabold">ご予約</span>
+            <span className="text-[5.5pt] leading-none font-bold tracking-[0.2em] text-[#BC5940]">RESERVATION</span>
+          </p>
+          <p className="mt-[1.2mm] text-[5.6pt] leading-[1.4] text-[#766B62]">
+            QRコードを読み取ると予約ページが開きます
+          </p>
+          {coupon && (
+            <p className="mt-[1.2mm] line-clamp-1 rounded-[1mm] border-[0.25mm] border-dashed border-[#BC5940] px-[1.5mm] py-[0.5mm] text-[6pt] leading-[1.35] font-bold text-[#8B4536]">
+              {coupon}
             </p>
-            <p className="mt-[0.8mm] text-[7.5pt] text-[#cdb9a9]">Scan with your phone camera to book a table</p>
-          </div>
-
-          {/* 住所・電話番号（入っているものだけ） */}
-          {(address || phone) && (
-            <div className="mx-[8mm] mt-[3mm] border-t border-white/15 pt-[2.4mm] text-center">
-              {address && <p className="line-clamp-2 text-[7.5pt] leading-[1.45] text-[#ffdfcb]">{address}</p>}
-              {phone && (
-                <p className="mt-[0.8mm] text-[10pt] font-bold tracking-[0.06em] tabular-nums">
-                  <span className="mr-[1.5mm] text-[6.5pt] font-extrabold tracking-[0.2em] text-[#f29b7b]">TEL</span>
-                  {phone}
-                </p>
-              )}
-            </div>
           )}
         </div>
+        <div className="min-w-0">
+          {address && <p className="line-clamp-2 text-[5.4pt] leading-[1.4] text-[#766B62]">{address}</p>}
+          {phone && (
+            <p className="mt-[0.6mm] text-[8.5pt] leading-none font-extrabold tracking-[0.04em] tabular-nums">
+              <span className="mr-[1mm] text-[5pt] font-bold tracking-[0.15em] text-[#BC5940]">TEL</span>
+              {phone}
+            </p>
+          )}
+          <p className="mt-[1.2mm] flex items-center gap-[1mm]">
+            {/* eslint-disable-next-line @next/next/no-img-element -- PDF に画像として写すため素の img */}
+            <img src="/logo-mark.png" alt="" width={64} height={64} className="block h-[3.4mm] w-[3.4mm] shrink-0" />
+            <span className="text-[6pt] leading-none font-extrabold tracking-[0.06em]">
+              <span className="text-[#292725]">TENPO</span> <span className="text-[#BC5940]">ONE</span>
+            </span>
+          </p>
+        </div>
+      </div>
 
-        {/* 下：紫の帯 */}
-        <div className="flex shrink-0 items-center justify-between bg-linear-to-r from-[#bc5940] to-[#8a3f2c] px-[6mm] py-[2.6mm]">
-          <span className="text-[7.5pt] font-bold tracking-[0.12em]">WEB RESERVATION</span>
-          <span className="text-[7.5pt] font-extrabold tracking-[0.18em]">
-            TENPO <span className="text-[#ffdfcb]">ONE</span>
-          </span>
+      {/* 右：QR（白地・角丸・テラコッタの細い枠） */}
+      <div className="flex shrink-0 items-center pt-[2mm] pr-[4.5mm]">
+        <div className="rounded-[2.2mm] border-[0.3mm] border-[#BC5940] bg-white p-[1mm]">
+          {/* eslint-disable-next-line @next/next/no-img-element -- サーバーで作った QR の data URL */}
+          <img
+            src={dataUrl}
+            alt={`${storeName}の予約QRコード`}
+            width={600}
+            height={600}
+            className="block h-[36mm] w-[36mm] [image-rendering:pixelated]"
+          />
         </div>
       </div>
     </div>

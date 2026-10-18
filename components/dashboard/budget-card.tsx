@@ -22,21 +22,24 @@ const yen = (n: number) => `¥${Math.round(n).toLocaleString('ja-JP')}`;
 
 export function BudgetCard({
   actual,
-  openSales,
   budget,
   pct,
   ringPct,
   perGroup = null,
+  avgSpend = null,
   asOf,
   className,
 }: {
   actual: number;
-  openSales: number;
+  /** 未会計分の金額（今はホームに出さない） */
+  openSales?: number;
   budget: number | null;
   pct: number | null;
   ringPct: number;
   /** 1組あたりの売上（応援メッセージの「あと何組」） */
   perGroup?: number | null;
+  /** 客単価（実績売上高 ÷ 客数）。売上の下に小さく出す（2026-10-18 Ronnie「客単価は別の箱にしないで売上の下に小さく」） */
+  avgSpend?: number | null;
   /** 'YYYY/MM/DD HH:MM' */
   asOf: string;
   className?: string;
@@ -62,12 +65,13 @@ export function BudgetCard({
         <CardTitle en="Budget">予算達成率</CardTitle>
         <div className="flex flex-wrap gap-2">
           <Link href="/app/budgets" className={buttonVariants({ variant: 'secondary', size: 'md' })}>
-            予算登録<span className="en-inline -ml-1">Set</span>
+            <span className="flex flex-col items-center leading-tight">
+              予算登録<span className="en-under mt-0 text-current opacity-80">Set</span>
+            </span>
           </Link>
           <Link href="/app/reports" className={buttonVariants({ variant: 'primary', size: 'md' })}>
-            店舗分析
-            <span className="en-inline -ml-1" style={{ color: 'rgba(255,255,255,.82)' }}>
-              Analytics
+            <span className="flex flex-col items-center leading-tight">
+              店舗分析<span className="en-under mt-0 text-current opacity-80">Analytics</span>
             </span>
           </Link>
         </div>
@@ -111,13 +115,18 @@ export function BudgetCard({
         <dl className="m-0 flex min-w-[150px] flex-1 flex-col gap-3">
           <div className="flex flex-col gap-1 border-b border-dashed border-line pb-2.5">
             <dt className="text-[13px] font-medium text-ink-2">
-              実績売上高<span className="en-inline">Sales</span>
+              実績売上高<span className="en-under">Sales</span>
             </dt>
             <dd className="m-0 text-[31px] leading-none font-bold text-saffron tabular-nums">{yen(actual)}</dd>
+            {avgSpend != null && (
+              <dd className="m-0 text-[12px] text-ink-3 tabular-nums">
+                客単価 <b className="font-bold text-ink-2">{yen(avgSpend)}</b>
+              </dd>
+            )}
           </div>
           <div className="flex flex-col gap-1 border-b border-dashed border-line pb-2.5">
             <dt className="text-[13px] font-medium text-ink-2">
-              予算売上高<span className="en-inline">Target</span>
+              予算売上高<span className="en-under">Target</span>
             </dt>
             {budget != null ? (
               <dd className="m-0 text-[26px] leading-none font-bold text-ink tabular-nums">{yen(budget)}</dd>
@@ -130,11 +139,7 @@ export function BudgetCard({
               </dd>
             )}
           </div>
-          <p className="m-0 text-[11.5px] text-ink-3">
-            ※実績売上高には未会計分の金額が含まれています
-            {openSales > 0 && <span className="tabular-nums">（未会計 {yen(openSales)}）</span>}
-            {/* 予算の決め方の説明は予算登録（/app/budgets）に書く（2026-09-30 Ronnie「ホームには要らない」） */}
-          </p>
+          {/* 「※実績売上高には未会計分の金額が含まれています」は出さない（2026-10-18 Ronnie「書かなくていい」） */}
         </dl>
       </div>
 
