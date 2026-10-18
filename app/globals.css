@@ -96,6 +96,17 @@ body {
 }
 body.theme-regi {
   background-color: var(--color-lilac);
+  /* iPad（Chrome・Safari）で画面が揺れない・ずれないように（2026-10-19 Ronnie）：
+     ダブルタップで拡大しない・横にずれない・文字が勝手に大きくならない */
+  touch-action: manipulation;
+  overflow-x: hidden;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+/* 画面の端で引っぱったときのバウンド（ゴムのように揺れる）を止める */
+html:has(body.theme-regi),
+body.theme-regi {
+  overscroll-behavior: none;
 }
 
 /*
