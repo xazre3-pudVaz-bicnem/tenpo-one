@@ -1242,7 +1242,7 @@ export interface ReservationCalendarData {
 
 /**
  * 日付選択のカレンダー（2026-10-19 Ronnie「日付を押したらレストランボードのように、日ごとの予約人数・休業日・仮予約/要連絡」）。
- * storeId を渡さなければ、いま選んでいる店舗。from〜to は最大 100日。
+ * storeId を渡さなければ、いま選んでいる店舗。from〜to は最大 750日（前後の月を足していける）。
  */
 export async function getReservationCalendar(storeId: string | null, from: string, to: string): Promise<ReservationCalendarData> {
   const ctx = await requirePermission('reservations.view');
@@ -1250,7 +1250,7 @@ export async function getReservationCalendar(storeId: string | null, from: strin
   const empty: ReservationCalendarData = { days: {}, closedDates: [], closedWeekdays: [] };
   if (!sid || !ctx.stores.some((s) => s.id === sid)) return empty;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to) || from > to) return empty;
-  if (Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`) > 100 * 86400000) return empty;
+  if (Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`) > 750 * 86400000) return empty;
 
   const supabase = await createClient();
   const [{ data: rows }, { data: holidayRows }, { data: hourRows }] = await Promise.all([
@@ -1261,7 +1261,7 @@ export async function getReservationCalendar(storeId: string | null, from: strin
       .gte('reserved_date', from)
       .lte('reserved_date', to)
       .not('status', 'in', '(cancelled,no_show,waitlisted)')
-      .limit(5000),
+      .limit(20000),
     supabase.from('holidays').select('holiday_date').eq('store_id', sid).gte('holiday_date', from).lte('holiday_date', to),
     supabase.from('business_hours').select('day_of_week, is_closed').eq('store_id', sid),
   ]);
@@ -1293,4 +1293,61 @@ export async function getReservationCalendar(storeId: string | null, from: strin
     closedDates: (holidayRows ?? []).map((h) => h.holiday_date as string),
     closedWeekdays: (hourRows ?? []).filter((h) => h.is_closed).map((h) => h.day_of_week as number),
   };
+}
+
+/* ------------------------------------------------------------------ 予約受付管理（2026-10-19 Ronnie） */
+
+/** キーワードから「要連絡」を外す（tags の列が無いデータベースでは何もしない） */
+async function removeNeedsContactTag(supabase: Awaited<ReturnType<typeof createClient>>, reservationId: string, userId: string) {
+  const { data, error } = await supabase.from('reservations').select('tags').eq('id', reservationId).maybeSingle();
+  if (error || !data) return;
+  const tags = ((data as { tags?: string[] | null }).tags ?? []).filter((t) => t !== '要連絡');
+  await supabase.from('reservations').update({ tags, updated_by: userId }).eq('id', reservationId);
+}
+
+/** 仮予約を確定する（要連絡も外す） */
+export async function confirmPendingReservation(reservationId: string) {
+  const ctx = await requirePermission('reservations.write');
+  const supabase = await createClient();
+  const reservation = await loadReservation(supabase, ctx, reservationId);
+  if (reservation.status === 'pending') await transitionReservationStatus(reservationId, 'confirmed');
+  await removeNeedsContactTag(supabase, reservationId, ctx.userId);
+  // 確定したらネット予約の「未確認」も消す（列が無いデータベースでは何もしない）
+  await supabase.from('reservations').update({ acknowledged_at: new Date().toISOString() } as never).eq('id', reservationId);
+  revalidateAll();
+}
+
+/** 要連絡 → 連絡済み（キーワード「要連絡」を外す） */
+export async function markReservationContacted(reservationId: string) {
+  const ctx = await requirePermission('reservations.write');
+  const supabase = await createClient();
+  await loadReservation(supabase, ctx, reservationId);
+  await removeNeedsContactTag(supabase, reservationId, ctx.userId);
+  revalidateAll();
+}
+
+/** 新しいネット予約・お客様のキャンセルを「確認済み」にする（acknowledged_at。migration 00100） */
+export async function acknowledgeReservation(reservationId: string) {
+  const ctx = await requirePermission('reservations.write');
+  const supabase = await createClient();
+  await loadReservation(supabase, ctx, reservationId);
+  const { error } = await supabase
+    .from('reservations')
+    .update({ acknowledged_at: new Date().toISOString(), updated_by: ctx.userId } as never)
+    .eq('id', reservationId);
+  if (error) throw new Error('確認済みにできませんでした（データベースの更新 00100 が必要です）');
+  revalidateAll();
+}
+
+/** グルメサイトのメール（要確認・変更・キャンセル）を対応済みにする。更新できるのは店長以上（データベースの決まり） */
+export async function resolveInboxImport(importId: string) {
+  const ctx = await requirePermission('reservations.write');
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('gourmet_mail_imports')
+    .update({ resolved_at: new Date().toISOString(), resolved_by: ctx.userId })
+    .eq('id', importId)
+    .select('id');
+  if (error || !data || data.length === 0) throw new Error('対応済みにできませんでした（店長以上の権限で操作してください）');
+  revalidateAll();
 }

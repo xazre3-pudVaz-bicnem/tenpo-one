@@ -25,6 +25,8 @@ import { ScheduleBoard, type BoardTable } from '@/components/reservations/schedu
 import { suggestTables, type TableLike } from '@/lib/reservations';
 import { cn } from '@/lib/utils';
 import { reservationClerkOptions } from '@/lib/reservation-clerks-server';
+import { loadReservationInbox } from '@/lib/reservation-inbox-server';
+import { InboxNoticeList, InboxTaskList, ReservationInboxTabs } from '@/components/reservations/inbox/reservation-inbox';
 
 export const metadata: Metadata = { title: '店舗台帳' };
 
@@ -116,16 +118,21 @@ export default async function ReservationsLedgerPage({ searchParams }: { searchP
   }
 
   const sp = await searchParams;
-  const view = sp.view === 'week' || sp.view === 'waitlist' || sp.view === 'gourmet' ? sp.view : 'day';
+  const view =
+    sp.view === 'week' || sp.view === 'waitlist' || sp.view === 'gourmet' || sp.view === 'inbox' || sp.view === 'messages'
+      ? sp.view
+      : 'day';
   const canManagePrivateHire = can(ctx.role, 'store.settings');
 
   // 集計タイル・操作ボタン用の共通データ（today もここで算出）
   const requestedDate = /^\d{4}-\d{2}-\d{2}$/.test(sp.date ?? '') ? sp.date! : undefined;
-  const chrome = await loadLedgerChrome(ctx, store, view === 'waitlist' ? undefined : requestedDate);
+  const chrome = await loadLedgerChrome(ctx, store, view === 'waitlist' || view === 'inbox' || view === 'messages' ? undefined : requestedDate);
   const today = chrome.today;
   const date = requestedDate ?? today;
 
   const supabase = await createClient();
+  // 上のタブ「予約台帳 ｜ 受付管理 ｜ メッセージ」の数字と中身（2026-10-19 Ronnie「予約の画面の上のタブに」）
+  const inboxPromise = loadReservationInbox(supabase, store.id, today);
 
   const [{ data: tablesData }, { data: businessHoursData }, clerksByStore, { data: bookingSettings }] = await Promise.all([
     supabase
@@ -149,7 +156,17 @@ export default async function ReservationsLedgerPage({ searchParams }: { searchP
   let title = 'スケジュール';
   let nav: React.ReactNode = <DateNav date={date} basePath="/app/reservations" today={today} />;
 
-  if (view === 'day') {
+  const inbox = await inboxPromise;
+
+  if (view === 'inbox') {
+    title = '予約受付管理';
+    nav = null;
+    body = <InboxTaskList tasks={inbox.tasks} canAcknowledge={inbox.canAcknowledge} canWrite={can(ctx.role, 'reservations.write')} variant="ledger" />;
+  } else if (view === 'messages') {
+    title = 'メッセージ';
+    nav = null;
+    body = <InboxNoticeList notices={inbox.notices} storeId={store.id} variant="ledger" />;
+  } else if (view === 'day') {
     const dow = dowOfDateStr(date);
     const bh = businessHoursMap.get(dow);
     let openMin = DEFAULT_START_MIN;
@@ -566,6 +583,19 @@ export default async function ReservationsLedgerPage({ searchParams }: { searchP
         fallbackMs={15_000}
       />
       <h1 className="sr-only">店舗台帳（{store.name}）</h1>
+      <ReservationInboxTabs
+        active={view === 'inbox' ? 'inbox' : view === 'messages' ? 'messages' : 'list'}
+        hrefs={{
+          list: `/app/reservations${date !== today ? `?date=${date}` : ''}`,
+          inbox: '/app/reservations?view=inbox',
+          messages: '/app/reservations?view=messages',
+        }}
+        taskCount={inbox.tasks.length}
+        noticeTimes={inbox.notices.map((n) => n.at)}
+        storeId={store.id}
+        variant="ledger"
+        listLabel="予約台帳"
+      />
       <LedgerTop title={title} date={date} chrome={chrome} nav={nav} />
       <div className="print-area">
         <p className="mb-3 hidden text-base font-bold text-ink print:block">
