@@ -152,7 +152,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         {/* 左メニューは常に置き、注文画面（/app/pos）で隠すのは Sidebar 側（クライアント）で判定する。
             layout は画面の移動で作り直されないので、ここで隠すと 注文 → ホーム に戻ったときに左メニューが出なくなる
             （2026-09-30 Ronnie「ホームに戻ると左メニューが消える。忙しい時間に困る」） */}
-        {adminV2 ? (
+        {/* レジ（iPad）は左メニューを出さない。ホームに大きいボタンと左の列があり、ほかの画面は全幅（2026-10-19 Ronnie の新しいレイアウト） */}
+        {isRegi ? null : adminV2 ? (
           <SidebarV2
             sections={visibleV2Sections(ctx.role, ctx.disabledFeatures)}
             showStaff={can(ctx.role, 'staff.manage')}

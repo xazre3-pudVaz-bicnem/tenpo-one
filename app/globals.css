@@ -398,3 +398,22 @@ body.theme-regi {
     width: 100%;
   }
 }
+
+/* レジ（iPad）の新しいホーム（components/dashboard/regi-home.tsx）：地は白。時刻の「:」は1秒ごとに点滅 */
+.theme-regi:has(.regi-home),
+body.theme-regi:has(.regi-home) {
+  background-color: #ffffff;
+}
+.regi-colon {
+  animation: regi-colon-blink 1s steps(1) infinite;
+}
+@keyframes regi-colon-blink {
+  50% {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .regi-colon {
+    animation: none;
+  }
+}

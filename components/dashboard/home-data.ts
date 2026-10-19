@@ -22,6 +22,7 @@ import {
   buildHomeTodos,
   buildRegisterDiffNotices,
   countReservationTodos,
+  countWalkIns,
   countUnscannedWithdrawals,
   dailyBudgetFromMonthly,
   findUnclosedPreviousMonth,
@@ -84,6 +85,8 @@ export interface HomeData {
   /** 1組あたりの売上（本日の会計済み。まだ無ければ昨日。応援メッセージの「あと何組」に使う） */
   perGroupSales: number | null;
   repeat: RepeatSummary;
+  /** 当日ウォークイン（予約なしで来店した組数。レジのホームに出す） */
+  walkIns: number;
   lowStock: { count: number; names: string[] };
   /** 天気の地点に使う住所 */
   address: string | null;
@@ -152,7 +155,7 @@ export async function loadHomeData({
   ] = await Promise.all([
     supabase
       .from('orders')
-      .select('total, guest_count, status, store_id, order_type, customer_id')
+      .select('total, guest_count, status, store_id, order_type, customer_id, reservation_id, reservations(created_via)')
       .in('store_id', storeIds)
       .eq('business_date', today)
       .in('status', SETTLED_ORDER_STATUSES),
@@ -411,6 +414,13 @@ export async function loadHomeData({
           ? Math.round(yMetrics.netSales / yMetrics.transactionCount)
           : null,
     repeat,
+    walkIns: countWalkIns(
+      (todayOrders as unknown as { order_type: string | null; reservation_id: string | null; reservations: { created_via: string | null } | null }[]).map((o) => ({
+        order_type: o.order_type,
+        reservation_id: o.reservation_id,
+        reservation_created_via: o.reservations?.created_via ?? null,
+      }))
+    ),
     lowStock: { count: lowStockRows.length, names: lowStockRows.slice(0, 4).map((r) => r.name) },
     address: storeAddressRes.data?.address ?? null,
   };

@@ -4,7 +4,8 @@
  * 同じリクエスト内の取得は React.cache で1回にまとめる。
  */
 import { cache } from 'react';
-import { getStoreWeather, type StoreWeather, type WeatherIcon } from '@/lib/weather';
+import { getStoreWeather, placeJaFromAddress, type StoreWeather, type WeatherIcon } from '@/lib/weather';
+import { blueGradientText, REGI_BLUE, thinDigits } from './regi-font';
 
 const WEATHER_DEADLINE_MS = 6000;
 
@@ -107,6 +108,107 @@ export function WeatherGlyph({ icon }: { icon: WeatherIcon }) {
         </g>
       )}
       {icon === 'thunder' && <path d="M21 30l-4 6h4l-2 4 6-7h-4l2-3z" fill={SUN} />}
+    </svg>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// レジ（iPad）ホーム：気温 → 天気アイコン → 地名 を1行で（2026-10-19 Ronnie の新しいレイアウト）。
+// 文字とアイコンは オーダー・会計 と同じ濃い青。地名は店舗の住所から（GPS は使わない）。
+// ---------------------------------------------------------------------------
+
+export async function RegiWeather({ address }: { address: string | null }) {
+  const w = await loadWeather(address);
+  return (
+    <RegiWeatherView
+      temperature={w?.temperature ?? null}
+      icon={w?.weather?.icon ?? null}
+      night={w?.isDay === false}
+      place={placeJaFromAddress(address)}
+    />
+  );
+}
+
+/** 表示だけ（気温 → 天気アイコン → 地名。全部 下にそろえて1行） */
+export function RegiWeatherView({
+  temperature,
+  icon,
+  night,
+  place,
+}: {
+  temperature: number | null;
+  icon: WeatherIcon | null;
+  night: boolean;
+  place: string | null;
+}) {
+  if (temperature == null && !place) return null;
+  return (
+    <div className={`${thinDigits.className} flex items-baseline gap-2.5`} style={{ color: REGI_BLUE }}>
+      {temperature != null && (
+        <span className="text-[44px] leading-none font-extralight lg:text-[60px] tracking-[-0.02em] [font-variant-numeric:tabular-nums]" style={blueGradientText}>
+          {temperature}°
+        </span>
+      )}
+      {temperature != null && icon && (
+        <span className="self-end pb-2">
+          <RegiWeatherGlyph icon={icon} night={night} />
+        </span>
+      )}
+      {place && (
+        <span className="ml-1.5 inline-flex items-center gap-1 text-[13px] font-medium whitespace-nowrap opacity-85 lg:text-[15px]">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M21 3L3 10.5l7.5 2.9L13.4 21z" />
+          </svg>
+          {place}
+        </span>
+      )}
+    </div>
+  );
+}
+
+const RG = REGI_BLUE;
+const RG_CLOUD = 'M12 25h17a7 7 0 0 0 .6-14A9.5 9.5 0 0 0 11.3 12 6.5 6.5 0 0 0 12 25z';
+
+/** レジのホーム用の天気アイコン（1色・濃い青）。晴れの夜は月 */
+export function RegiWeatherGlyph({ icon, night }: { icon: WeatherIcon; night: boolean }) {
+  const moon = <path d="M25.5 6.5a13 13 0 1 0 8 21.5A12 12 0 0 1 25.5 6.5z" fill={RG} />;
+  const sun = (
+    <g>
+      <circle cx="20" cy="20" r="8" fill={RG} />
+      <g stroke={RG} strokeWidth="2.6" strokeLinecap="round">
+        <path d="M20 3.5v4M20 32.5v4M3.5 20h4M32.5 20h4M8.3 8.3l2.8 2.8M28.9 28.9l2.8 2.8M8.3 31.7l2.8-2.8M28.9 11.1l2.8-2.8" />
+      </g>
+    </g>
+  );
+  return (
+    <svg width="40" height="40" viewBox="0 0 40 40" aria-hidden="true" className="block shrink-0">
+      {icon === 'sun' && (night ? moon : sun)}
+      {icon === 'partly' && (
+        <>
+          <g transform="translate(14 -2) scale(0.55)">{night ? moon : sun}</g>
+          <path d="M12 33h17a7 7 0 0 0 .6-14A9.5 9.5 0 0 0 11.3 20 6.5 6.5 0 0 0 12 33z" fill={RG} />
+        </>
+      )}
+      {icon !== 'sun' && icon !== 'partly' && <path d={RG_CLOUD} fill={RG} />}
+      {(icon === 'rain' || icon === 'drizzle') && (
+        <g stroke={RG} strokeWidth="2.6" strokeLinecap="round">
+          <path d="M14 29l-2 5M28 29l-2 5" />
+          {icon === 'rain' && <path d="M21 29l-2 5" />}
+        </g>
+      )}
+      {icon === 'snow' && (
+        <g fill={RG}>
+          <circle cx="13" cy="31" r="1.8" />
+          <circle cx="20" cy="34" r="1.8" />
+          <circle cx="27" cy="31" r="1.8" />
+        </g>
+      )}
+      {icon === 'fog' && (
+        <g stroke={RG} strokeWidth="2.4" strokeLinecap="round">
+          <path d="M9 30h22M13 35h14" />
+        </g>
+      )}
+      {icon === 'thunder' && <path d="M21 25l-5 8h4l-2 6 7-9h-4l2-5z" fill={RG} />}
     </svg>
   );
 }
