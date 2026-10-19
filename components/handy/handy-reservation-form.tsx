@@ -12,6 +12,7 @@ import type { ReservationEntryData } from '@/lib/reservation-entry-server';
 import { PartyCountField } from '@/components/reservations/entry/party-count-field';
 import { KeywordPicker, StatusPicker, StayControl, TableSuggest } from '@/components/reservations/entry/entry-parts';
 import { useReservationEntryData } from '@/components/reservations/entry/use-entry-data';
+import { SelectField, TimeSelect } from '@/components/reservations/entry/entry-select';
 
 export interface HandyReservationOption {
   value: string;
@@ -146,14 +147,12 @@ export function HandyReservationForm({
                 <label htmlFor="hr-time" className={label}>
                   時間 <span className="text-[#c62828]">*</span>
                 </label>
-                <input
+                {/* 時と分を別々に。分は5分ごと（2026-10-19 Ronnie） */}
+                <TimeSelect
                   id="hr-time"
-                  type="time"
-                  step={300}
                   value={form.time}
-                  onChange={(e) => setForm((f) => ({ ...f, time: e.target.value, tableIds: [] }))}
-                  className={field}
-                  required
+                  onChange={(v) => setForm((f) => ({ ...f, time: v, tableIds: [] }))}
+                  className={cn(field, 'px-2.5')}
                 />
               </div>
             </div>
@@ -205,14 +204,14 @@ export function HandyReservationForm({
                 <label htmlFor="hr-course" className={label}>
                   コース
                 </label>
-                <select id="hr-course" value={form.courseId} onChange={(e) => set('courseId', e.target.value)} className={field}>
+                <SelectField id="hr-course" value={form.courseId} onChange={(e) => set('courseId', e.target.value)} className={field}>
                   <option value="">なし（席のみ）</option>
                   {courses.map((c) => (
                     <option key={c.value} value={c.value}>
                       {c.label}
                     </option>
                   ))}
-                </select>
+                </SelectField>
               </div>
             )}
             <KeywordPicker keywords={data.keywords} selected={form.tags} onChange={(v) => set('tags', v)} />
@@ -238,13 +237,13 @@ export function HandyReservationForm({
                 <label htmlFor="hr-source" className={label}>
                   予約経路
                 </label>
-                <select id="hr-source" value={form.sourceCode} onChange={(e) => set('sourceCode', e.target.value)} className={field}>
+                <SelectField id="hr-source" value={form.sourceCode} onChange={(e) => set('sourceCode', e.target.value)} className={field}>
                   {sources.map((s) => (
                     <option key={s.value} value={s.value}>
                       {s.label}
                     </option>
                   ))}
-                </select>
+                </SelectField>
               </div>
             )}
             {data.clerks.length > 0 && (
@@ -252,14 +251,14 @@ export function HandyReservationForm({
                 <label htmlFor="hr-clerk" className={label}>
                   担当者
                 </label>
-                <select id="hr-clerk" value={form.clerkId} onChange={(e) => set('clerkId', e.target.value)} className={field}>
+                <SelectField id="hr-clerk" value={form.clerkId} onChange={(e) => set('clerkId', e.target.value)} className={field}>
                   <option value="">選ばない</option>
                   {data.clerks.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.name}
                     </option>
                   ))}
-                </select>
+                </SelectField>
               </div>
             )}
           </>

@@ -13,6 +13,7 @@ import { entryStatusToDb, normalizeTags, type EntryStatus } from '@/lib/reservat
 import { PartyCountField } from './entry/party-count-field';
 import { KeywordPicker, StatusPicker, StayControl, TableSuggest } from './entry/entry-parts';
 import { useReservationEntryData } from './entry/use-entry-data';
+import { TimeSelect } from './entry/entry-select';
 
 const EMPTY = {
   storeId: '',
@@ -205,7 +206,13 @@ export function ManualReservationDialog({
             </div>
             <div>
               <Label htmlFor="mr-time">時間</Label>
-              <Input id="mr-time" type="time" step={300} value={form.time} onChange={(e) => setForm((f) => ({ ...f, time: e.target.value, tableIds: [] }))} />
+              {/* 時と分を別々に。分は5分ごと（2026-10-19 Ronnie「選べる時間の分は5分毎で」） */}
+              <TimeSelect
+                id="mr-time"
+                value={form.time}
+                onChange={(v) => setForm((f) => ({ ...f, time: v, tableIds: [] }))}
+                className="ui-input h-10 w-full border border-gray-300 bg-white px-3 text-sm text-gray-900 focus:border-primary focus:outline-2 focus:outline-primary/30"
+              />
             </div>
           </div>
           {/* 人数はテンキーでも入れられる（2026-10-19 Ronnie「150名でも＋を150回押さない」） */}

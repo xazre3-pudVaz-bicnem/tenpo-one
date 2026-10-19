@@ -5,12 +5,13 @@ import { Loader2, Search } from 'lucide-react';
 import { Dialog } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input, Label, Select } from '@/components/ui/input';
+import { TimeSelect } from './entry/entry-select';
 import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/ui/state';
 import { useToast } from '@/components/ui/toast';
 import { getOccupiedTableIds } from '@/app/app/reservations/actions';
 import { suggestTables, type TableLike } from '@/lib/reservations';
-import { RESERVATION_TIME_STEP, STAY_MINUTE_OPTIONS, stayOptionLabel } from '@/lib/reservation-time';
+import { STAY_MINUTE_OPTIONS, stayOptionLabel } from '@/lib/reservation-time';
 import { cn } from '@/lib/utils';
 
 export interface FindSeatsTable {
@@ -109,7 +110,7 @@ export function FindSeatsDialog({
           </div>
           <div>
             <Label htmlFor="fs-time">時間</Label>
-            <Input id="fs-time" type="time" step={RESERVATION_TIME_STEP * 60} value={time} onChange={(e) => setTime(e.target.value)} />
+            <TimeSelect id="fs-time" value={time} onChange={setTime} className="h-10 ui-input w-full border border-gray-300 bg-white px-3 text-sm text-gray-900 focus:border-primary focus:outline-2 focus:outline-primary/30" />
           </div>
           <div>
             <Label htmlFor="fs-party">人数</Label>
