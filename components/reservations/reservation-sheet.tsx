@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { X, Loader2, Utensils, Clock, Armchair, StickyNote, Route, UserRound, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input, Label, Select, Textarea } from '@/components/ui/input';
+import { TimeSelect } from './entry/entry-select';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useToast } from '@/components/ui/toast';
 import { cn } from '@/lib/utils';
@@ -240,7 +241,8 @@ export function ReservationSheet({
               </div>
               <div>
                 <Label htmlFor="rs-time">開始時間</Label>
-                <Input id="rs-time" type="time" step={900} value={form.time} onChange={(e) => set('time', e.target.value)} className="h-12" />
+                {/* 分は5分ごと（2026-10-19 Ronnie） */}
+                <TimeSelect id="rs-time" value={form.time} onChange={(v) => set('time', v)} className="h-12 ui-input w-full border border-gray-300 bg-white px-3 text-sm text-gray-900 focus:border-primary focus:outline-2 focus:outline-primary/30" />
               </div>
               <div>
                 <Label htmlFor="rs-stay">確保時間</Label>

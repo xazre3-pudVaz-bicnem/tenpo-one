@@ -10,15 +10,17 @@ import {
   seatsOf,
   stayLabel,
   tableChoices,
+  tableCombos,
   type BookedSpan,
   type EntryStatus,
   type EntryTable,
   type TableChoice,
+  type TableCombo,
 } from '@/lib/reservation-entry';
 
 /**
  * 予約登録（ハンディ・レジ共通）の部品。2026-10-19 Ronnie「レストランボードのように」。
- * - TableSuggest：その時間に空いている卓・人数にピッタリの卓（選んだ時間と30分後）
+ * - TableSuggest：その時間に空いていて人数に合う卓（選んだ時間と30分後）。1卓に入らない人数はつなげて使える卓の組み合わせ
  * - KeywordPicker：キーワード（複数）
  * - StayControl：確保時間（−30・−5・＋5・＋30・元に戻す）
  * - StatusPicker：予約ステータス（来店待ち・仮予約・要連絡）
@@ -60,16 +62,22 @@ export function TableSuggest({
   /** 30分後の行も出す（テーブル変更では出さない） */
   showLater?: boolean;
 }) {
-  const [showBusy, setShowBusy] = useState(false);
+  const [showOther, setShowOther] = useState(false);
   const later = addMinutesToTime(time, 30);
   const slots = useMemo(
     () =>
       [time, showLater && later !== time ? later : null]
         .filter((t): t is string => !!t)
-        .map((t) => ({
-          time: t,
-          choices: tableChoices({ tables, booked, date, time: t, stayMinutes, party, today, nowMs, excludeReservationId }),
-        })),
+        .map((t) => {
+          const choices = tableChoices({ tables, booked, date, time: t, stayMinutes, party, today, nowMs, excludeReservationId });
+          // 人数に合う卓（2026-10-19 Ronnie「全部にピッタリではなく、お客様の人数に合わせた席を出す」）
+          const fits = choices.filter((c) => c.free && (c.fit === 'just' || c.fit === 'ok'));
+          // 1卓に入らないときは、つなげて使える卓（「10名ならこの卓とこの卓をつなげれば入る、と出す」）
+          const combos = fits.length === 0 ? tableCombos({ tables, choices, party }) : [];
+          const others = choices.filter((c) => c.free && (c.fit === 'big' || c.fit === 'small'));
+          const busy = choices.filter((c) => !c.free);
+          return { time: t, fits, combos, others, busy };
+        }),
     [tables, booked, date, time, later, showLater, stayMinutes, party, today, nowMs, excludeReservationId]
   );
   if (tables.length === 0) return null;
@@ -81,6 +89,8 @@ export function TableSuggest({
     }
     onSelect(selected.includes(id) ? selected.filter((x) => x !== id) : [...selected, id], time);
   };
+  const pickCombo = (slotTime: string, ids: string[]) => onSelect(ids, slotTime);
+  const sameSet = (a: readonly string[], b: readonly string[]) => a.length === b.length && a.every((x) => b.includes(x));
   const seats = seatsOf(tables, selected);
   const endLabel = (t: string) => addMinutesToTime(t, stayMinutes);
 
@@ -88,7 +98,7 @@ export function TableSuggest({
     <div>
       <div className="mb-1 flex items-center justify-between">
         <span className={label}>
-          予約可能なテーブル <span className="text-[10.5px] font-medium text-[#766b62]">（複数選択可）</span>
+          予約可能なテーブル <span className="text-[10.5px] font-medium text-[#766b62]">（{party}名に合う席・複数選択可）</span>
         </span>
         {loading && <span className="text-[11px] text-[#766b62]">確認中…</span>}
       </div>
@@ -105,39 +115,75 @@ export function TableSuggest({
       )}
       <div className="space-y-3">
         {slots.map((slot, si) => {
-          const free = slot.choices.filter((c) => c.free);
-          const busy = slot.choices.filter((c) => !c.free);
+          const otherCount = slot.others.length + slot.busy.length;
           return (
             <div key={slot.time}>
               <p className="mb-1.5 flex items-baseline gap-2 border-l-[3px] border-[#bc5940] pl-2 text-[13px] font-bold text-[#45403b] tabular-nums">
                 {slot.time}〜{endLabel(slot.time)}
                 {si === 1 && <span className="text-[10.5px] font-medium text-[#766b62]">※押すと開始が30分後になります</span>}
+                {(slot.fits.length || slot.combos.length) > 3 && (
+                  <span className="ml-auto shrink-0 text-[10.5px] font-semibold text-[#766b62]">
+                    {slot.fits.length > 0 ? `${slot.fits.length}卓` : `${slot.combos.length}通り`}・横にスライド ›
+                  </span>
+                )}
               </p>
-              {free.length === 0 ? (
-                <p className="rounded-[9px] bg-[#f6efe8] px-3 py-2 text-[12px] text-[#9f4630]">この時間に空いているテーブルはありません</p>
-              ) : (
-                <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-4 lg:grid-cols-5">
-                  {free.map((c) => (
-                    <TableCard key={c.table.id} c={c} on={slot.time === time && selected.includes(c.table.id)} onClick={() => pick(slot.time, c.table.id)} />
+              {slot.fits.length > 0 ? (
+                <Slider count={slot.fits.length}>
+                  {slot.fits.map((c) => (
+                    <TableCard
+                      key={c.table.id}
+                      c={c}
+                      on={slot.time === time && selected.includes(c.table.id)}
+                      onClick={() => pick(slot.time, c.table.id)}
+                      className={SLIDE_CARD}
+                    />
                   ))}
-                </div>
+                </Slider>
+              ) : slot.combos.length > 0 ? (
+                <>
+                  <p className="mb-1.5 text-[11.5px] font-semibold text-[#9f4630]">
+                    {party}名は1つのテーブルに入りません。この組み合わせなら入ります：
+                  </p>
+                  <Slider count={slot.combos.length}>
+                    {slot.combos.map((combo) => (
+                      <ComboCard
+                        key={combo.ids.join('+')}
+                        combo={combo}
+                        on={slot.time === time && sameSet(selected, combo.ids)}
+                        onClick={() => pickCombo(slot.time, combo.ids)}
+                        className={SLIDE_COMBO}
+                      />
+                    ))}
+                  </Slider>
+                </>
+              ) : (
+                <p className="rounded-[9px] bg-[#f6efe8] px-3 py-2 text-[12px] text-[#9f4630]">この時間に{party}名入るテーブルはありません</p>
               )}
-              {si === 0 && busy.length > 0 && (
+              {si === 0 && otherCount > 0 && (
                 <button
                   type="button"
-                  onClick={() => setShowBusy((v) => !v)}
+                  onClick={() => setShowOther((v) => !v)}
                   className="mt-1.5 inline-flex items-center gap-1 text-[11.5px] font-semibold text-[#766b62]"
                 >
-                  <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', showBusy && 'rotate-180')} aria-hidden />
-                  空いていないテーブル（{busy.length}）
+                  <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', showOther && 'rotate-180')} aria-hidden />
+                  ほかのテーブル（{otherCount}）
                 </button>
               )}
-              {si === 0 && showBusy && busy.length > 0 && (
-                <div className="mt-1.5 grid grid-cols-3 gap-1.5 sm:grid-cols-4 lg:grid-cols-5">
-                  {busy.map((c) => (
-                    <TableCard key={c.table.id} c={c} on={false} />
+              {si === 0 && showOther && otherCount > 0 && (
+                <Slider count={otherCount} className="mt-1">
+                  {slot.others.map((c) => (
+                    <TableCard
+                      key={c.table.id}
+                      c={c}
+                      on={slot.time === time && selected.includes(c.table.id)}
+                      onClick={() => pick(slot.time, c.table.id)}
+                      className={SLIDE_CARD}
+                    />
                   ))}
-                </div>
+                  {slot.busy.map((c) => (
+                    <TableCard key={c.table.id} c={c} on={false} className={SLIDE_CARD} />
+                  ))}
+                </Slider>
               )}
             </div>
           );
@@ -147,7 +193,50 @@ export function TableSuggest({
   );
 }
 
-function TableCard({ c, on, onClick }: { c: TableChoice; on: boolean; onClick?: () => void }) {
+/** 横にスライドする卓の並び（2026-10-19 Ronnie「テーブルを全部並べると長い。スライドにして」） */
+const SLIDE_CARD = 'w-[80px] shrink-0 snap-start';
+const SLIDE_COMBO = 'w-[150px] shrink-0 snap-start';
+
+function Slider({ count, className, children }: { count: number; className?: string; children: React.ReactNode }) {
+  return (
+    <div className={cn('relative -mx-1', className)}>
+      <div
+        className="flex snap-x snap-mandatory gap-1.5 overflow-x-auto overscroll-x-contain scroll-px-1 px-1 pt-2.5 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        style={{ touchAction: 'pan-x pan-y' }}
+      >
+        {children}
+      </div>
+      {/* 右はしをうすくして、まだ続くことが分かるように */}
+      {count > 3 && (
+        <div aria-hidden className="pointer-events-none absolute inset-y-0 right-0 w-8 rounded-r-[10px] bg-gradient-to-l from-[#29272518] to-transparent" />
+      )}
+    </div>
+  );
+}
+
+/** 卓の組み合わせ（押すとその卓をまとめて選ぶ）。上の札は出さない（2026-10-19 Ronnie「つなげると書かなくていい」） */
+function ComboCard({ combo, on, onClick, className }: { combo: TableCombo; on: boolean; onClick: () => void; className?: string }) {
+  return (
+    <button
+      type="button"
+      aria-pressed={on}
+      onClick={onClick}
+      className={cn(
+        'relative flex min-h-[64px] min-w-0 flex-col items-center justify-center rounded-[10px] border px-1.5 py-1.5 leading-tight',
+        on ? 'border-transparent bg-[#bc5940] text-white' : 'border-[#bc5940] bg-[#fbefe9] text-[#45403b] active:bg-[#f6e4da]',
+        className
+      )}
+    >
+      {on && <Check className="absolute top-1 right-1 h-3.5 w-3.5" strokeWidth={3} aria-hidden />}
+      <span className="max-w-full truncate text-[14px] font-bold">{combo.tables.map((t) => t.name).join(' + ')}</span>
+      <span className={cn('text-[10.5px]', on ? 'text-white/85' : 'text-[#766b62]')}>
+        合計{combo.seats}名{combo.floorName ? `・${combo.floorName}` : ''}
+      </span>
+    </button>
+  );
+}
+
+function TableCard({ c, on, onClick, className }: { c: TableChoice; on: boolean; onClick?: () => void; className?: string }) {
   const cap = c.table.capacityMin > 1 && c.table.capacityMin !== c.table.capacityMax ? `${c.table.capacityMin}〜${c.table.capacityMax}名` : `${c.table.capacityMax}名`;
   return (
     <button
@@ -163,7 +252,8 @@ function TableCard({ c, on, onClick }: { c: TableChoice; on: boolean; onClick?: 
             ? 'border-transparent bg-[#bc5940] text-white'
             : c.best
               ? 'border-[#bc5940] bg-[#fbefe9] text-[#45403b] active:bg-[#f6e4da]'
-              : 'border-[#e5dfd5] bg-white text-[#45403b] active:bg-[#f6ebe3]'
+              : 'border-[#e5dfd5] bg-white text-[#45403b] active:bg-[#f6ebe3]',
+        className
       )}
     >
       {c.best && !on && (

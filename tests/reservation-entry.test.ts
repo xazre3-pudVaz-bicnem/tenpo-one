@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   tableChoices,
+  tableCombos,
+  snugSurplus,
   addMinutesToTime,
   stayLabel,
   adjustStay,
@@ -49,7 +51,8 @@ describe('予約登録：空いているテーブルとピッタリ', () => {
     expect(t2.free).toBe(false);
     expect(t2.reason).toBe('予約あり');
     expect(r.find((c) => c.table.id === 'T6')!.reason).toBe('使用不可');
-    expect(r[0].table.id).toBe('T4a'); // 2名席が埋まっているので4名席がピッタリ
+    expect(r[0].table.id).toBe('T4a'); // 2名席が埋まっているので4名席がいちばん合う（ただし2名に4名席はピッタリではない）
+    expect(r[0].best).toBe(false);
     expect(r.slice(-2).every((c) => !c.free)).toBe(true);
   });
 
@@ -72,6 +75,54 @@ describe('予約登録：空いているテーブルとピッタリ', () => {
   });
 });
 
+describe('予約登録：人数に合う席・つなげて使えるテーブル（2026-10-19 Ronnie）', () => {
+  const six = (n: number, floorName: string | null = '3F') => T(`T-${n}`, 1, 6, { name: `T-${n}`, floorName });
+  const base = { booked: [], date: '2026-10-20', time: '18:00', stayMinutes: 120, today: '2026-10-19', nowMs: Date.parse('2026-10-19T12:00:00+09:00') };
+
+  it('ピッタリの余りは席数の1/3まで（6名席は4〜6名、4名席は3〜4名、2名席は1〜2名）', () => {
+    expect(snugSurplus(6)).toBe(2);
+    expect(snugSurplus(4)).toBe(1);
+    expect(snugSurplus(2)).toBe(1);
+  });
+
+  it('2名に6名席しかない：全部にピッタリとは出さない（人数に合う席として並べるだけ）', () => {
+    const tables = [six(1), six(2), six(3)];
+    const r = tableChoices({ ...base, tables, party: 2 });
+    expect(r.every((c) => c.free && c.fit === 'ok' && !c.best)).toBe(true);
+    expect(tableChoices({ ...base, tables, party: 5 }).every((c) => c.best)).toBe(true);
+  });
+
+  it('10名：1卓に入らない → となりどうしの2卓（T-1 + T-2・12名）を先に', () => {
+    const tables = [six(1), six(2), six(3), six(4)];
+    const choices = tableChoices({ ...base, tables, party: 10 });
+    expect(choices.every((c) => c.fit === 'small')).toBe(true);
+    const combos = tableCombos({ tables, choices, party: 10 });
+    expect(combos[0]).toMatchObject({ ids: ['T-1', 'T-2'], seats: 12, adjacent: true, floorName: '3F' });
+    expect(combos.slice(0, 3).every((c) => c.adjacent)).toBe(true);
+  });
+
+  it('予約の入っている卓は使わない（T-2 が埋まっていれば T-3 + T-4 がとなりどうし）', () => {
+    const tables = [six(1), six(2), six(3), six(4)];
+    const choices = tableChoices({
+      ...base,
+      tables,
+      party: 10,
+      booked: [{ start: '2026-10-20T18:00:00+09:00', end: '2026-10-20T20:00:00+09:00', tableIds: ['T-2'] }],
+    });
+    const combos = tableCombos({ tables, choices, party: 10 });
+    expect(combos.some((c) => c.ids.includes('T-2'))).toBe(false);
+    expect(combos[0]).toMatchObject({ ids: ['T-3', 'T-4'], adjacent: true });
+  });
+
+  it('14名：2卓では足りない → となりどうしの3卓。ちがうフロアの卓はつなげない', () => {
+    const tables = [six(1), six(2), six(3), six(4, '2F'), six(5, '2F')];
+    const choices = tableChoices({ ...base, tables, party: 14 });
+    const combos = tableCombos({ tables, choices, party: 14 });
+    expect(combos[0]).toMatchObject({ ids: ['T-1', 'T-2', 'T-3'], seats: 18 });
+    expect(combos.every((c) => new Set(c.tables.map((t) => t.floorName)).size === 1)).toBe(true);
+  });
+});
+
 describe('予約登録：時間・確保時間・ステータス・キーワード', () => {
   it('時間に分を足す・確保時間の表示と範囲', () => {
     expect(addMinutesToTime('19:00', 30)).toBe('19:30');
@@ -91,5 +142,51 @@ describe('予約登録：時間・確保時間・ステータス・キーワー�
     expect(reservationKeywordsFrom(null)).toEqual([...DEFAULT_RESERVATION_KEYWORDS]);
     expect(reservationKeywordsFrom({ reservation_keywords: [' 個室 ', '個室', '', 3, '誕生日'] })).toEqual(['個室', '誕生日']);
     expect(normalizeTags([' 当日予約', '当日予約', ''])).toEqual(['当日予約']);
+  });
+});
+
+describe('予約の時間は5分ごと・選ぶ欄に▼（2026-10-19 Ronnie）', () => {
+  it('分は 00・05・…・55 の12個。5分ごとでない今の値は消さずに入れる', async () => {
+    const { minuteOptions, HOUR_OPTIONS } = await import('@/components/reservations/entry/entry-select');
+    expect(minuteOptions()).toEqual(['00', '05', '10', '15', '20', '25', '30', '35', '40', '45', '50', '55']);
+    expect(minuteOptions('21')).toContain('21');
+    expect(HOUR_OPTIONS).toHaveLength(24);
+  });
+
+  it('ハンディ・レジ・予約の変更・空席検索の時間は TimeSelect（iPhone の1分ごとの時刻欄は使わない）', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { join } = await import('node:path');
+    const read = (p: string) => readFileSync(join(__dirname, '..', p), 'utf8');
+    for (const f of [
+      'components/handy/handy-reservation-form.tsx',
+      'components/reservations/manual-reservation-dialog.tsx',
+      'components/reservations/reservation-sheet.tsx',
+      'components/reservations/find-seats-dialog.tsx',
+    ]) {
+      const src = read(f);
+      expect(src).toContain('<TimeSelect');
+      expect(src).not.toContain('type="time"');
+    }
+    const handy = read('components/handy/handy-reservation-form.tsx');
+    expect(handy).toContain('<SelectField id="hr-course"');
+    expect(handy).toContain('<SelectField id="hr-source"');
+    expect(handy).toContain('<SelectField id="hr-clerk"');
+  });
+});
+
+describe('予約可能なテーブルは横にスライド（2026-10-19 Ronnie「全部並べると長い。スライドに」）', () => {
+  it('卓・つなげる組み合わせ・ほかのテーブルは Slider（横スクロール・スナップ）に並べる', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { join } = await import('node:path');
+    const src = readFileSync(join(__dirname, '..', 'components/reservations/entry/entry-parts.tsx'), 'utf8');
+    expect(src).toContain('overflow-x-auto');
+    expect(src).toContain('snap-x snap-mandatory');
+    expect(src).toContain('<Slider count={slot.fits.length}>');
+    expect(src).toContain('<Slider count={slot.combos.length}>');
+    expect(src).toContain('横にスライド');
+    // 組み合わせの札に「つなげる」とは書かない（2026-10-19 Ronnie）
+    expect(src).not.toContain("'となりをつなげる'");
+    expect(src).not.toContain('つなげて使えるテーブル：');
+    expect(src).not.toContain('grid grid-cols-3 gap-1.5 sm:grid-cols-4 lg:grid-cols-5');
   });
 });

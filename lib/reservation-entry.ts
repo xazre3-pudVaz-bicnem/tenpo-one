@@ -104,8 +104,17 @@ export interface TableChoice {
   /** 空いていない理由 */
   reason: '予約あり' | '使用中' | '使用不可' | null;
   fit: TableFit;
-  /** ピッタリ（空いていて、人数が入る卓のうちいちばん余りが少ない） */
+  /**
+   * ピッタリ（空いていて、人数が入る卓のうちいちばん余りが少なく、しかも余りが少ない卓）。
+   * 2026-10-19 Ronnie「全部の卓にピッタリと出すのではなく、お客様の人数に合う席を出す」→ 2名に6名席はピッタリではない。
+   * 余りの目安：席数の 1/3 まで（最低1）。6名席なら4〜6名、4名席なら3〜4名、2名席なら1〜2名。
+   */
   best: boolean;
+}
+
+/** ピッタリと言える余り（席数の 1/3 まで・最低1） */
+export function snugSurplus(capacityMax: number): number {
+  return Math.max(1, Math.floor(capacityMax / 3));
 }
 
 /**
@@ -148,7 +157,10 @@ export function tableChoices(input: {
 
   const fitting = list.filter((c) => c.free && c.fit === 'ok');
   const minSurplus = Math.min(...fitting.map((c) => c.table.capacityMax - input.party));
-  for (const c of fitting) if (c.table.capacityMax - input.party === minSurplus) c.best = true;
+  for (const c of fitting) {
+    const surplus = c.table.capacityMax - input.party;
+    if (surplus === minSurplus && surplus <= snugSurplus(c.table.capacityMax)) c.best = true;
+  }
   for (const c of list) if (c.best) c.fit = 'just';
 
   const rank = (c: TableChoice) => (!c.free ? 4 : c.fit === 'just' ? 0 : c.fit === 'ok' ? 1 : c.fit === 'big' ? 2 : 3);
@@ -166,4 +178,72 @@ export function tableChoices(input: {
 /** 選んだ卓の席数の合計 */
 export function seatsOf(tables: EntryTable[], ids: readonly string[]): number {
   return tables.filter((t) => ids.includes(t.id)).reduce((sum, t) => sum + t.capacityMax, 0);
+}
+
+/* ------------------------------------------------------------------ テーブルをつなげる */
+
+export interface TableCombo {
+  ids: string[];
+  tables: EntryTable[];
+  /** 席数の合計 */
+  seats: number;
+  floorName: string | null;
+  /** 並び（sort_order）がとなりどうし */
+  adjacent: boolean;
+}
+
+/**
+ * 1つのテーブルに入らない人数のとき、つなげて使えるテーブルの組み合わせ（2026-10-19 Ronnie
+ * 「10名の予約が来たら1つの席には入らない。この卓とこの卓をつなげればいける、と出す」）。
+ * 同じフロアの空いている卓だけ。2卓はどの組み合わせでも、3〜6卓はとなりどうし（並び順が続いている）だけ。
+ * 並び：卓の数が少ない → となりどうし → 余りが少ない → 並び順。
+ */
+export function tableCombos(input: { tables: EntryTable[]; choices: TableChoice[]; party: number; limit?: number }): TableCombo[] {
+  const free = new Set(input.choices.filter((c) => c.free).map((c) => c.table.id));
+  const floors = new Map<string, EntryTable[]>();
+  for (const t of input.tables) {
+    const key = t.floorName ?? '';
+    floors.set(key, [...(floors.get(key) ?? []), t]);
+  }
+  const out: (TableCombo & { first: number })[] = [];
+  const seen = new Set<string>();
+  const push = (list: EntryTable[], idx: number[], adjacent: boolean) => {
+    const tables = idx.map((i) => list[i]);
+    const seats = tables.reduce((n, t) => n + t.capacityMax, 0);
+    if (seats < input.party) return;
+    const key = tables.map((t) => t.id).sort().join('+');
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push({ ids: tables.map((t) => t.id), tables, seats, floorName: tables[0].floorName, adjacent, first: idx[0] });
+  };
+  for (const list of floors.values()) {
+    // 2卓：どの組み合わせでも
+    for (let i = 0; i < list.length; i++) {
+      if (!free.has(list[i].id)) continue;
+      for (let j = i + 1; j < list.length; j++) {
+        if (!free.has(list[j].id)) continue;
+        push(list, [i, j], j === i + 1);
+      }
+    }
+    // 3〜6卓：となりどうしだけ
+    for (let i = 0; i < list.length; i++) {
+      const idx = [i];
+      if (!free.has(list[i].id)) continue;
+      for (let j = i + 1; j < list.length && idx.length < 6; j++) {
+        if (!free.has(list[j].id)) break;
+        idx.push(j);
+        if (idx.length >= 3) push(list, [...idx], true);
+      }
+    }
+  }
+  return out
+    .sort(
+      (a, b) =>
+        a.tables.length - b.tables.length ||
+        Number(b.adjacent) - Number(a.adjacent) ||
+        a.seats - b.seats ||
+        a.first - b.first
+    )
+    .slice(0, input.limit ?? 6)
+    .map((c) => ({ ids: c.ids, tables: c.tables, seats: c.seats, floorName: c.floorName, adjacent: c.adjacent }));
 }
