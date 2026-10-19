@@ -158,14 +158,15 @@ export function HandyChrome({
             </button>
           )}
 
+          {/* 下のバーも上のバーと同じ黒（2026-10-19 Ronnie「下の HANDY・RESERVATION も上と同じ黒に」） */}
           <nav
             aria-label="アプリ切り替え"
-            className="border-t border-[#e5dfd5] bg-white px-2 pb-[calc(6px+env(safe-area-inset-bottom))]"
+            className="border-t border-[#45403b] bg-[#292725] px-2 pb-[calc(6px+env(safe-area-inset-bottom))]"
           >
             <button
               type="button"
               onClick={() => setSelectOpen(true)}
-              className="mx-auto block min-h-[22px] px-[18px] py-0.5 text-[8px] font-bold tracking-[1.4px] text-[#766b62]"
+              className="mx-auto block min-h-[22px] px-[18px] py-0.5 text-[8px] font-bold tracking-[1.4px] text-[#a89e92]"
             >
               SELECT ▴
             </button>
@@ -176,8 +177,8 @@ export function HandyChrome({
                 className={cn(
                   'flex min-h-[46px] items-center justify-center gap-2.5 rounded-[9px] text-[11px] font-extrabold tracking-[0.5px]',
                   onReservations
-                    ? 'text-[#766b62] active:bg-[#fbf9f5]'
-                    : 'bg-[#f3efe8] text-[#bc5940]'
+                    ? 'text-[#c9bfb3] active:bg-white/10'
+                    : 'bg-[#bc5940] text-white'
                 )}
               >
                 <ShoppingCart className="h-[21px] w-[21px]" aria-hidden />
@@ -189,8 +190,8 @@ export function HandyChrome({
                 className={cn(
                   'flex min-h-[46px] items-center justify-center gap-2.5 rounded-[9px] text-[11px] font-extrabold tracking-[0.5px]',
                   onReservations
-                    ? 'bg-[#f3efe8] text-[#bc5940]'
-                    : 'text-[#766b62] active:bg-[#fbf9f5]'
+                    ? 'bg-[#bc5940] text-white'
+                    : 'text-[#c9bfb3] active:bg-white/10'
                 )}
               >
                 <NotebookText className="h-[21px] w-[21px]" aria-hidden />
