@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { matchWithdrawal, readAmount, readDate, readKind, readCategory, readScan, readVendor } from '@/lib/receipt-read';
+import { isCashPayment, matchWithdrawal, readAmount, readDate, readKind, readCategory, readPayment, readScan, readTax, readVendor } from '@/lib/receipt-read';
 
 const TODAY = '2026-10-20';
 
@@ -65,7 +65,15 @@ describe('readVendor（発行元）', () => {
 describe('readScan', () => {
   it('請求書（電気）', () => {
     const r = readScan(['東京電力エナジーパートナー株式会社', '電気ご使用量のお知らせ', '請求日 2026年10月05日', 'ご請求金額 ¥48,300'], TODAY);
-    expect(r).toEqual({ kind: 'bill', category: 'electric', amount: 48300, date: '2026-10-05', vendorName: '東京電力エナジーパートナー株式会社' });
+    expect(r).toEqual({
+      kind: 'bill',
+      category: 'electric',
+      amount: 48300,
+      date: '2026-10-05',
+      vendorName: '東京電力エナジーパートナー株式会社',
+      tax: null,
+      payment: null,
+    });
   });
 });
 
@@ -95,5 +103,59 @@ describe('PDF・OCR の文字のくせ', () => {
     expect(r.date).toBe('2026-10-05');
     expect(r.vendorName).toBe('東京電力エナジーパートナー株式会社');
     expect(readVendor(['ドン ・ キ ホー テ 歌舞 伎町 店', '2026/10/18'])).toBe('ドン・キホーテ歌舞伎町店');
+  });
+});
+
+describe('readTax（うち消費税）', () => {
+  it('内消費税のまとめの行', () => {
+    expect(readTax(['合計 ¥3,280', '(内消費税等 ¥298)'], 3280)).toBe(298);
+  });
+  it('8%・10% の行を足す（「10%」の数は使わない）', () => {
+    expect(readTax(['合計 ¥1,640', '10%対象 ¥1,100 内税 ¥100', '8%対象 ¥540 内税 ¥40'], 1640)).toBe(140);
+    expect(readTax(['消費税(10%) 300', '合計 3,300'], 3300)).toBe(300);
+  });
+  it('まとめの行と内訳があればまとめの行', () => {
+    expect(readTax(['内消費税等 ¥382', '(10% ¥282)', '(8% ¥100)'], 4500)).toBe(382);
+  });
+  it('請求書：消費税の金額が次の行', () => {
+    expect(readTax(['小計 ¥50,000', '消費税', '¥5,000', 'ご請求金額 ¥55,000'], 55000)).toBe(5000);
+  });
+  it('税込・税抜の金額は消費税ではない。合計の1/10を超えるものも使わない', () => {
+    expect(readTax(['税込合計 ¥3,280', '税抜 ¥2,982'], 3280)).toBeNull();
+    expect(readTax(['消費税 ¥2,000'], 3000)).toBeNull();
+  });
+});
+
+describe('readPayment（支払い方法）', () => {
+  it('現金（お釣りがある）', () => {
+    expect(readPayment(['合計 ¥3,280', 'お預り ¥5,000', 'お釣り ¥1,720'], 'receipt')).toBe('cash');
+  });
+  it('クレジットカード', () => {
+    expect(readPayment(['合計 ¥3,280', 'クレジット ¥3,280', 'お釣り ¥0'], 'receipt')).toBe('card');
+    expect(readPayment(['合計 ¥3,280', 'カード会社 VISA', '承認番号 012345'], 'receipt')).toBe('card');
+  });
+  it('お店の「カード使えます」の案内だけなら現金のまま', () => {
+    expect(readPayment(['合計 ¥500', '現金 ¥500', '各種クレジットカード・電子マネー使えます'], 'receipt')).toBe('cash');
+    expect(readPayment(['合計 ¥500', '各種クレジットカードご利用いただけます'], 'receipt')).toBeNull();
+  });
+  it('電子マネー・QR', () => {
+    expect(readPayment(['合計 ¥540', '交通系IC ¥540', '残高 ¥1,960'], 'receipt')).toBe('emoney');
+    expect(readPayment(['合計 ¥1,100', 'PayPay ¥1,100'], 'receipt')).toBe('qr');
+  });
+  it('請求書：口座振替・振込', () => {
+    expect(readPayment(['電気ご使用量のお知らせ', 'お支払方法 口座振替', '振替日 10月26日'], 'bill')).toBe('debit');
+    expect(readPayment(['請求書', 'ご請求金額 ¥54,000', '振込先 みずほ銀行 新宿支店'], 'bill')).toBe('transfer');
+  });
+  it('出金と突き合わせるのは現金か不明のときだけ', () => {
+    expect(isCashPayment('cash')).toBe(true);
+    expect(isCashPayment(null)).toBe(true);
+    expect(isCashPayment('card')).toBe(false);
+  });
+});
+
+describe('readScan（消費税・支払い方法もいっしょに）', () => {
+  it('カードで払ったレシート', () => {
+    const r = readScan(['業務スーパー 新宿店', '2026/10/19 18:02', '合計 ¥3,280', '(内消費税等 ¥298)', 'クレジット ¥3,280'], TODAY);
+    expect(r).toMatchObject({ kind: 'receipt', amount: 3280, tax: 298, payment: 'card', date: '2026-10-19' });
   });
 });

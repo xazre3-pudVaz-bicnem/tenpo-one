@@ -7,6 +7,7 @@ import type { PanelReservation } from './types';
 import type { ReservationListRow } from '@/components/reservations/list-types';
 import type { AssignableTable } from '@/components/reservations/assign-table-dialog';
 import { ReservationSheet, type SheetCourseOption } from '@/components/reservations/reservation-sheet';
+import { LedgerIcon } from '@/components/dashboard/regi-icons';
 
 const NOT_ARRIVED = ['pending', 'confirmed', 'waiting'];
 const ARRIVED = ['arrived', 'seated', 'billing', 'completed'];
@@ -78,7 +79,8 @@ export function ReservationPanel({
   const people = (rs: PanelReservation[]) => rs.reduce((s, r) => s + r.partySize, 0);
 
   return (
-    <section className="ui-card flex min-h-0 flex-col overflow-hidden border border-line bg-white lg:h-full">
+    // 店舗台帳の機能なので、オーダー・会計の画面の中でもホームの「店舗台帳」と同じテラコッタ（.regi-ledger。2026-10-20 Ronnie）
+    <section className="regi-ledger ui-card flex min-h-0 flex-col overflow-hidden border border-line bg-white lg:h-full">
       {/* 見出しは日本語＋下に小さく英語、台帳は横いっぱいの立体ボタン（2026-09-25 店舗要望） */}
       <header className="px-3.5 pt-3 pb-2.5">
         <h2 className="text-center text-[14.5px] leading-tight font-bold text-ink">
@@ -87,11 +89,18 @@ export function ReservationPanel({
             TODAY&apos;S RESERVATION
           </span>
         </h2>
+        {/* ホームの「店舗台帳」ボタンと同じ見た目（テラコッタのグラデーション・台帳のアイコン） */}
         <Link
           href="/app/reservations"
-          className="tapneon-on mt-2 flex h-11 w-full items-center justify-center rounded-xl bg-iris text-[15px] font-bold text-white hover:bg-iris-deep"
+          className="relative mt-2 flex h-12 w-full items-center justify-center gap-2 overflow-hidden rounded-xl text-white shadow-[0_1px_1px_rgba(0,0,0,0.06),0_3px_8px_rgba(169,78,55,0.28)] active:brightness-95"
+          style={{ backgroundImage: 'linear-gradient(180deg,#d0694f,#a94e37)' }}
         >
-          店舗台帳
+          <span className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.22),rgba(255,255,255,0)_55%)]" />
+          <LedgerIcon className="relative h-[22px] w-[22px]" />
+          <span className="relative leading-tight">
+            <b className="block text-[15px] font-bold">店舗台帳</b>
+            <span className="block text-[10px] text-white/80">Reservation</span>
+          </span>
         </Link>
       </header>
 

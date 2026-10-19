@@ -552,3 +552,49 @@ html:has(body.theme-regi),
 body.theme-regi {
   overflow-x: clip;
 }
+
+/*
+ * iPad のレジ（Chrome・Safari から「ホーム画面に追加」したアプリも）で画面が揺れない（2026-10-20 Ronnie
+ * 「スクロールすると画面全体が上下にゴムのように揺れる・触ると左右に動く」）：
+ * ページ全体（html・body）は固定して動かさず、中の .regi-shell（app/app/layout.tsx）の中だけをスクロールする。
+ * ページそのものにはスクロールするものが無いので、引っぱっても全体が揺れない・左右にずれない。
+ * 上部バーは .regi-shell の中の sticky なので今まで通り上に残る。パソコン・ハンディは今まで通り
+ */
+html:has(body.theme-regi .regi-shell) {
+  height: 100%;
+  overflow: hidden;
+}
+body.theme-regi:has(.regi-shell) {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+}
+.regi-shell {
+  height: 100%;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
+  touch-action: manipulation;
+}
+
+/*
+ * 店舗台帳の機能（オーダー・会計の右の「本日のご予約一覧」など）は、どの画面の中でもホームの「店舗台帳」と同じテラコッタ
+ * （2026-10-20 Ronnie「オーダー会計の右のご予約台帳は台帳の機能なので、箱と色を店舗台帳に合わせる」）
+ */
+.regi-ledger {
+  --color-primary: #bc5940;
+  --color-primary-deep: #a94e37;
+  --color-primary-soft: #f6e4da;
+  --color-iris: #bc5940;
+  --color-iris-deep: #a94e37;
+  --color-iris-soft: #f6e4da;
+  --color-royal: #a94e37;
+  --color-wisteria: #e8c4b4;
+  --color-lilac-soft: #fbefe9;
+  --background-image-brand: linear-gradient(180deg, #d0694f, #a94e37);
+  --ui-btn2-bg: #f6e4da;
+  --ui-btn2-fg: #8a3f2c;
+  --ui-btn2-hover: #e8c4b4;
+}
