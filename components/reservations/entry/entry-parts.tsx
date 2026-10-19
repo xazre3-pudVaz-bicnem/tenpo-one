@@ -142,7 +142,7 @@ export function TableSuggest({
               ) : slot.combos.length > 0 ? (
                 <>
                   <p className="mb-1.5 text-[11.5px] font-semibold text-[#9f4630]">
-                    1つのテーブルには{party}名入りません。つなげて使えるテーブル：
+                    {party}名は1つのテーブルに入りません。この組み合わせなら入ります：
                   </p>
                   <Slider count={slot.combos.length}>
                     {slot.combos.map((combo) => (
@@ -214,7 +214,7 @@ function Slider({ count, className, children }: { count: number; className?: str
   );
 }
 
-/** つなげて使えるテーブルの組み合わせ（押すとその卓をまとめて選ぶ） */
+/** 卓の組み合わせ（押すとその卓をまとめて選ぶ）。上の札は出さない（2026-10-19 Ronnie「つなげると書かなくていい」） */
 function ComboCard({ combo, on, onClick, className }: { combo: TableCombo; on: boolean; onClick: () => void; className?: string }) {
   return (
     <button
@@ -227,11 +227,6 @@ function ComboCard({ combo, on, onClick, className }: { combo: TableCombo; on: b
         className
       )}
     >
-      {!on && (
-        <span className="absolute -top-2 left-1/2 -translate-x-1/2 rounded-full bg-[#bc5940] px-1.5 py-[1px] text-[9.5px] font-bold whitespace-nowrap text-white">
-          {combo.adjacent ? 'となりをつなげる' : 'つなげる'}
-        </span>
-      )}
       {on && <Check className="absolute top-1 right-1 h-3.5 w-3.5" strokeWidth={3} aria-hidden />}
       <span className="max-w-full truncate text-[14px] font-bold">{combo.tables.map((t) => t.name).join(' + ')}</span>
       <span className={cn('text-[10.5px]', on ? 'text-white/85' : 'text-[#766b62]')}>

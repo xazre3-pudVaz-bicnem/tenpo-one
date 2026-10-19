@@ -184,6 +184,9 @@ describe('予約可能なテーブルは横にスライド（2026-10-19 Ronnie�
     expect(src).toContain('<Slider count={slot.fits.length}>');
     expect(src).toContain('<Slider count={slot.combos.length}>');
     expect(src).toContain('横にスライド');
+    // 組み合わせの札に「つなげる」とは書かない（2026-10-19 Ronnie）
+    expect(src).not.toContain("'となりをつなげる'");
+    expect(src).not.toContain('つなげて使えるテーブル：');
     expect(src).not.toContain('grid grid-cols-3 gap-1.5 sm:grid-cols-4 lg:grid-cols-5');
   });
 });
