@@ -90,7 +90,7 @@ export default async function MenuStockPage() {
   );
 
   return (
-    <div className="flex h-[calc(100dvh-9rem)] flex-col">
+    <div className="flex h-[calc(100svh-9rem)] flex-col">
       <PageHeader
         title="在庫管理"
         en="Stock"

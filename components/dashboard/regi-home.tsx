@@ -142,7 +142,7 @@ export function RegiHome({
   ordersHref: string;
 }) {
   return (
-    <div className="regi-home flex flex-col gap-[18px] lg:min-h-[calc(100dvh-58px-18px-32px)]">
+    <div className="regi-home flex flex-col gap-[18px] lg:min-h-[calc(100svh-58px-18px-32px)]">
       {bigTiles.length > 0 && (
         <div className={cn('grid gap-[18px]', bigTiles.length > 1 && 'md:grid-cols-2')}>
           {bigTiles.map((t) => (

@@ -138,7 +138,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <CommandPaletteProvider role={ctx.role}>
       <ThemeBody />
       <OfflineBanner />
-      <div className="theme-regi min-h-screen bg-lilac">
+      <div className="theme-regi min-h-svh bg-lilac">
         {/* 上部バー（全幅）→ その下に左メニュー（固定）と本文 */}
         <TopBar ctx={ctx} unreadCount={unreadCount ?? 0} showMenuLink={posFullscreen} />
         {/* 新しいネット予約のチャイム＋バナー（レジ・パソコンどの画面でも） */}

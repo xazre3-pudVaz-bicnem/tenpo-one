@@ -213,7 +213,7 @@ export function FloorBoard({
 
   return (
     // パソコン・iPad は「テーブル」と「本日のご予約」を別々にスクロールさせる（画面の高さで止める）
-    <div className="grid items-start gap-3.5 lg:h-[calc(100vh-7rem)] lg:grid-cols-[minmax(0,1fr)_270px]">
+    <div className="grid items-start gap-3.5 lg:h-[calc(100svh-7rem)] lg:grid-cols-[minmax(0,1fr)_270px]">
       <div className="min-w-0 space-y-3 lg:h-full lg:overflow-y-auto lg:pr-1">
         {topSlot}
         {showToolbar && (

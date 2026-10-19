@@ -29,7 +29,7 @@ export default async function FloorSetupPage({ params }: { params: Promise<{ tab
   const store = ctx.currentStore ?? ctx.stores[0];
 
   const shell = (children: React.ReactNode) => (
-    <div className="theme-regi mx-auto flex h-[calc(100dvh-7rem)] max-w-2xl flex-col overflow-hidden rounded-2xl border border-[#e5dfd5] bg-[#fbf9f5] text-[#292725]">
+    <div className="theme-regi mx-auto flex h-[calc(100svh-7rem)] max-w-2xl flex-col overflow-hidden rounded-2xl border border-[#e5dfd5] bg-[#fbf9f5] text-[#292725]">
       {children}
     </div>
   );

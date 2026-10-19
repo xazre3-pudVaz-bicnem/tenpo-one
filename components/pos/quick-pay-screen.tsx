@@ -471,7 +471,7 @@ export function QuickPayScreen({
               <span className="block text-xs">No quick pay checkouts today</span>
             </p>
           ) : (
-            <ul className="max-h-[60dvh] divide-y divide-line overflow-y-auto rounded-xl border border-line text-sm">
+            <ul className="max-h-[60svh] divide-y divide-line overflow-y-auto rounded-xl border border-line text-sm">
               {history.map((h) => {
                 const isOpen = h.status === 'open';
                 return (
@@ -520,7 +520,7 @@ export function QuickPayScreen({
           aria-label="メニュー選択"
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-2 sm:p-4"
         >
-          <div className="theme-regi flex h-[94dvh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-[#fbf9f5] text-[#292725] shadow-2xl">
+          <div className="theme-regi flex h-[94svh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-[#fbf9f5] text-[#292725] shadow-2xl">
             <HandyOrderScreen
               tableId=""
               tableName={lineName}
@@ -558,7 +558,8 @@ const KEY_TONES = {
   red: 'from-[#fdecec] to-[#f5cdc5] text-[#c62828] border-[#ebb9ae] border-b-[#d69a8d]',
   blue: 'from-[#e8eefb] to-[#cbd8f3] text-[#27468f] border-[#b8c8ec] border-b-[#97acdb]',
   amber: 'from-[#fdf2df] to-[#f6ddb0] text-[#8a4b08] border-[#ecd09c] border-b-[#d8b16e]',
-  brand: 'from-[#bc5940] to-[#9f4630] text-white border-[#8a3f2c] border-b-[#3a2a22]',
+  // 登録：画面の色（即会計＝緑。app/globals.css の data-regi-accent）
+  brand: 'from-iris to-iris-deep text-white border-iris-deep border-b-[#1c1c1e]/60',
 } as const;
 
 /** クラシックなレジのキー（立体的な押しボタン。押すと沈む） */
