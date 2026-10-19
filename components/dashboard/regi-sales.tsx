@@ -5,13 +5,15 @@
  * 点線を横に通し、上の段に 店舗分析、下の段に 予算登録（どちらも白いボタン・点線から同じ距離）。
  * 金額と丸は オーダー・会計 と同じ濃い青（2026-10-19 Ronnie の新しいレイアウト）。
  */
-import { useTransition } from 'react';
+import { useEffect, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 
 const BLUE_FROM = '#2a6fe6';
 const BLUE_TO = '#0a3fa8';
+/** 売上の自動更新の間隔（1分） */
+const AUTO_REFRESH_MS = 60_000;
 const R = 62;
 const C = 2 * Math.PI * R;
 
@@ -71,6 +73,19 @@ export function RegiSales({
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+
+  // 実績売上高は1分ごとに自動で新しくする（2026-10-20 Ronnie）。画面が見えていないときは止め、戻ったらすぐ新しくする
+  useEffect(() => {
+    const refresh = () => {
+      if (document.visibilityState === 'visible') startTransition(() => router.refresh());
+    };
+    const id = setInterval(refresh, AUTO_REFRESH_MS);
+    document.addEventListener('visibilitychange', refresh);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', refresh);
+    };
+  }, [router]);
   const ring = Math.max(0, Math.min(100, ringPct));
 
   return (
