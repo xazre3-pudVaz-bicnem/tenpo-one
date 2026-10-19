@@ -173,3 +173,17 @@ describe('予約の時間は5分ごと・選ぶ欄に▼（2026-10-19 Ronnie）'
     expect(handy).toContain('<SelectField id="hr-clerk"');
   });
 });
+
+describe('予約可能なテーブルは横にスライド（2026-10-19 Ronnie「全部並べると長い。スライドに」）', () => {
+  it('卓・つなげる組み合わせ・ほかのテーブルは Slider（横スクロール・スナップ）に並べる', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { join } = await import('node:path');
+    const src = readFileSync(join(__dirname, '..', 'components/reservations/entry/entry-parts.tsx'), 'utf8');
+    expect(src).toContain('overflow-x-auto');
+    expect(src).toContain('snap-x snap-mandatory');
+    expect(src).toContain('<Slider count={slot.fits.length}>');
+    expect(src).toContain('<Slider count={slot.combos.length}>');
+    expect(src).toContain('横にスライド');
+    expect(src).not.toContain('grid grid-cols-3 gap-1.5 sm:grid-cols-4 lg:grid-cols-5');
+  });
+});
