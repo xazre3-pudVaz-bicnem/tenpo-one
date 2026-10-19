@@ -15,6 +15,7 @@ export function ContentArea({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const fullWidth = pathname === '/app/pos' || (homeOnly && pathname !== '/app/dashboard');
+  // レジ（iPad）は左メニューを出さないので、ホームも含めて全幅（2026-10-19 Ronnie の新しいレイアウト）
+  const fullWidth = pathname === '/app/pos' || homeOnly;
   return <div className={fullWidth ? undefined : 'lg:pl-[250px]'}>{children}</div>;
 }

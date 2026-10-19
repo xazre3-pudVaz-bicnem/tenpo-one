@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   describeWeatherCode,
+  placeJaFromAddress,
   formatPlaceEn,
   geocodeCandidates,
   parseJapaneseAddress,
@@ -107,5 +108,14 @@ describe('describeWeatherCode', () => {
     expect(describeWeatherCode(42)).toBeNull();
     expect(describeWeatherCode(null)).toBeNull();
     expect(describeWeatherCode(Number.NaN)).toBeNull();
+  });
+});
+
+describe('placeJaFromAddress（レジのホームの地名）', () => {
+  it('東京23区: 区＋町名', () => {
+    expect(placeJaFromAddress('東京都新宿区歌舞伎町1-2-3 ABCビル5F')).toBe('新宿区歌舞伎町');
+  });
+  it('住所が無ければ null', () => {
+    expect(placeJaFromAddress(null)).toBeNull();
   });
 });

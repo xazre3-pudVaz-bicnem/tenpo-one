@@ -87,6 +87,17 @@ export function parseJapaneseAddress(address: string | null | undefined): Parsed
 }
 
 /** 行政区分の接尾辞（市・区・町・村・都・府・県）を外す */
+/**
+ * 住所から日本語の短い地名を作る（例：「東京都新宿区歌舞伎町1-2-3」→「新宿区歌舞伎町」）。
+ * レジ（iPad）のホームで気温の横に出す。GPS は使わず店舗の住所から（2026-10-19 Ronnie）。
+ */
+export function placeJaFromAddress(address: string | null | undefined): string | null {
+  const p = parseJapaneseAddress(address);
+  const area = p.ward ?? p.city;
+  if (area) return `${area}${p.town ?? ''}`;
+  return p.prefecture;
+}
+
 export function stripAdminSuffix(name: string): string {
   if (name === '北海道') return name;
   return name.length > 2 ? name.replace(/(市|区|町|村|都|府|県)$/, '') : name;
@@ -229,6 +240,8 @@ export interface StoreWeather {
   /** 現在の気温（℃・整数）。取得できなければ null */
   temperature: number | null;
   weather: WeatherLabel | null;
+  /** 昼か夜か（Open-Meteo の is_day）。晴れの夜は月のアイコンにする。取得できなければ null */
+  isDay: boolean | null;
 }
 
 const TOKYO = { latitude: 35.6895, longitude: 139.69171, placeEn: 'TOKYO' };
@@ -271,13 +284,14 @@ async function geocode(address: string | null | undefined): Promise<{ latitude: 
 /** 店舗住所から英語の地名と現在の天気を取得する。どこで失敗しても例外は投げない。 */
 export async function getStoreWeather(address: string | null | undefined): Promise<StoreWeather> {
   const place = await geocode(address);
-  const forecast = await getJson<{ current?: { temperature_2m?: number; weather_code?: number } }>(
-    `https://api.open-meteo.com/v1/forecast?latitude=${place.latitude}&longitude=${place.longitude}&current=temperature_2m,weather_code&timezone=Asia%2FTokyo`
+  const forecast = await getJson<{ current?: { temperature_2m?: number; weather_code?: number; is_day?: number } }>(
+    `https://api.open-meteo.com/v1/forecast?latitude=${place.latitude}&longitude=${place.longitude}&current=temperature_2m,weather_code,is_day&timezone=Asia%2FTokyo`
   );
   const temp = forecast?.current?.temperature_2m;
   return {
     placeEn: place.placeEn,
     temperature: typeof temp === 'number' && Number.isFinite(temp) ? Math.round(temp) : null,
     weather: describeWeatherCode(forecast?.current?.weather_code),
+    isDay: typeof forecast?.current?.is_day === 'number' ? forecast.current.is_day === 1 : null,
   };
 }

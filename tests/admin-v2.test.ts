@@ -74,7 +74,8 @@ describe('新しい管理画面を出す人・出さない人', () => {
   it('layout：レジ（isRegi）では新しい左メニューを出さない。OFF の人は今の左メニュー', () => {
     const src = read('app/app/layout.tsx');
     expect(src).toContain('const adminV2Eligible = !isRegi && canTryAdminV2(ctx, userAgent);');
-    expect(src).toContain('{adminV2 ? (');
+    // レジ（iPad）は左メニュー自体を出さない（2026-10-19 新しいホーム）。それ以外は 新しい / 今の 左メニュー
+    expect(src).toContain('{isRegi ? null : adminV2 ? (');
     expect(src).toContain('footer={adminV2Eligible ? <AdminV2Switch on={false} /> : undefined}');
   });
 });

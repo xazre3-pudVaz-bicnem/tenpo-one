@@ -17,6 +17,8 @@ import { VendorBillDialog } from '@/components/cash/vendor-bill-dialog';
 import { ApprovalActions } from '@/components/cash/approval-actions';
 import { JournalSourceLink } from '@/components/accounting/journal-source-link';
 import { approveExpense, rejectExpense } from '@/app/app/expenses/actions';
+import { Suspense } from 'react';
+import { RegiNotices } from '@/components/dashboard/regi-notices';
 import { APPROVAL_LABELS, APPROVAL_TONES, PAID_VIA_LABELS, type ApprovalStatus, type PaidVia } from '@/components/cash/labels';
 import { sortShops } from '@/lib/cash-shops';
 
@@ -124,6 +126,12 @@ export default async function ExpensesPage({
 
   return (
     <div>
+      {/* レジ（iPad）：お知らせ&アラートはホームではなくここ（2026-10-19 Ronnie の新しいレイアウト） */}
+      {ctx.isRegisterDevice && (
+        <Suspense fallback={null}>
+          <RegiNotices ctx={ctx} />
+        </Suspense>
+      )}
       <PageHeader
         title="経費"
         description={store ? `${store.name}を中心に表示しています` : '所属店舗がありません'}

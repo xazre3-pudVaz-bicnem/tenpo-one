@@ -29,6 +29,14 @@ import { computeSalesMetrics, SETTLED_ORDER_STATUSES, type RefundLike, type Sett
 import { isAdminV2Request } from '@/lib/admin-v2-server';
 import { HomeV2 } from '@/components/admin-v2/home-v2';
 import { cn } from '@/lib/utils';
+import { Suspense } from 'react';
+import { can } from '@/lib/permissions';
+import { menuLayout } from '@/app/app/menu/data';
+import { RegiHome, type RegiBigTile } from '@/components/dashboard/regi-home';
+import type { RegiTool } from '@/components/dashboard/regi-tools';
+import { RegiSales } from '@/components/dashboard/regi-sales';
+import { RegiClock } from '@/components/dashboard/regi-clock';
+import { RegiWeather } from '@/components/dashboard/weather-slot';
 
 export const metadata: Metadata = { title: 'ホーム' };
 
@@ -38,6 +46,11 @@ function nowStampJst(): string {
   const date = d.toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' }).replaceAll('-', '/');
   const time = d.toLocaleTimeString('ja-JP', { timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit', hour12: false });
   return `${date} ${time}`;
+}
+
+/** レジのホームの時計の最初の表示（サーバーの時刻。そのあとは端末で1秒ごとに進める） */
+function serverNowMs(): number {
+  return Date.now();
 }
 
 function dateOnlyJst(iso: string | null): string | null {
@@ -97,6 +110,10 @@ export default async function DashboardPage() {
   }
   const asOf = nowStampJst();
 
+  // レジ（iPad）は新しいレイアウトのホーム（2026-10-19 Ronnie。パソコン・ハンディは今まで通り）
+  if (ctx.isRegisterDevice && ctx.currentStore) {
+    return <RegiHomePage ctx={ctx} today={today} asOf={asOf} metricsOpts={metricsOpts} />;
+  }
   if (ctx.currentStore) {
     return <StoreDashboard ctx={ctx} today={today} asOf={asOf} metricsOpts={metricsOpts} />;
   }
@@ -124,6 +141,101 @@ function homeDataArgs(
     today,
     metricsOpts,
   };
+}
+
+// =====================================================================
+// レジ（iPad）のホーム（components/dashboard/regi-home.tsx）
+// =====================================================================
+
+/** 左の列の並び（2026-10-19 Ronnie の新しいレイアウト）。ここに無い項目は後ろに付ける */
+const REGI_TOOL_ORDER = [
+  '/app/quick-pay',
+  '/app/orders',
+  '/app/cash',
+  '/app/expenses',
+  '#drawer',
+  '/app/cash/close',
+  '/app/inventory',
+  '/app/settings',
+];
+/** 上の大きいボタン（この2つだけ。ほかのタイルは左の列へ） */
+const REGI_BIG = ['/app/floor', '/app/reservations'];
+
+async function RegiHomePage({
+  ctx,
+  today,
+  asOf,
+  metricsOpts,
+}: {
+  ctx: Ctx;
+  today: string;
+  asOf: string;
+  metricsOpts: SalesMetricsOptions;
+}) {
+  const supabase = await createClient();
+  const store = ctx.currentStore!;
+  const data = await loadHomeData(homeDataArgs(ctx, supabase, [store], false, today, metricsOpts));
+
+  // 左メニューと同じ権限・機能の絞り込み（app/app/menu/data.ts の menuLayout）
+  const layout = menuLayout(ctx.role, ctx.disabledFeatures, { keepActions: true });
+  const bigTiles: RegiBigTile[] = REGI_BIG.flatMap((href) => {
+    const t = layout.tiles.find((x) => x.href === href);
+    return t ? [{ href: t.href, label: t.label, en: t.en }] : [];
+  });
+  // お知らせ&アラートは 仕入・経費 の中へ。ホームでは件数だけ（未読のお知らせ＋未読のアラート＋要確認）
+  const noticeCount = data.unreadCount + data.alertCount + data.autoNotices.length;
+  const toolSource = [
+    ...layout.tiles.filter((t) => !REGI_BIG.includes(t.href)),
+    ...layout.main,
+  ];
+  const tools: RegiTool[] = toolSource
+    .map((i) => ({
+      href: i.href,
+      label: i.label,
+      en: i.en,
+      icon: i.icon,
+      action: 'action' in i && i.action === 'drawer' ? ('drawer' as const) : undefined,
+      badge: i.href === '/app/expenses' ? noticeCount : undefined,
+    }))
+    .sort((a, b) => {
+      const ia = REGI_TOOL_ORDER.indexOf(a.href);
+      const ib = REGI_TOOL_ORDER.indexOf(b.href);
+      return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+    });
+
+  return (
+    <RegiHome
+      bigTiles={bigTiles}
+      tools={tools}
+      storeId={store.id}
+      ordersHref={`/app/orders?from=${today}&to=${today}`}
+      sales={
+        <RegiSales
+          actual={data.actualSales}
+          avgSpend={data.avgSpend}
+          budget={data.dailyBudget}
+          pct={data.achievementPct}
+          ringPct={data.ringPct}
+          asOf={asOf}
+          canAnalytics={can(ctx.role, 'reports.view')}
+        />
+      }
+      clock={<RegiClock initialMs={serverNowMs()} />}
+      weather={
+        <Suspense fallback={null}>
+          <RegiWeather address={data.address} />
+        </Suspense>
+      }
+      kpis={{
+        groups: data.groups,
+        groupsYesterday: data.groupsYesterday,
+        guests: data.guests,
+        guestsYesterday: data.guestsYesterday,
+        repeaters: data.repeat.ratePct != null ? data.repeat.repeaters : null,
+        walkIns: data.walkIns,
+      }}
+    />
+  );
 }
 
 // =====================================================================

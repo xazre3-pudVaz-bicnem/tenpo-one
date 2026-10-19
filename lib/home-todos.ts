@@ -224,6 +224,21 @@ export function summarizeRepeatRate(
   return { repeaters, newcomers, ratePct: total > 0 ? Math.round((repeaters / total) * 100) : null };
 }
 
+/**
+ * 当日ウォークイン（予約なしで来店した組数）。レジ（iPad）のホームに出す（2026-10-19 Ronnie）。
+ * 本日の会計（来店組数と同じ対象）のうち、予約に紐づかない注文と「直接来店」（walk_in）で作った予約の注文を数える。
+ * テイクアウト・デリバリー・事前注文は来店ではないので除く。
+ */
+export function countWalkIns(
+  orders: { order_type?: string | null; reservation_id?: string | null; reservation_created_via?: string | null }[]
+): number {
+  const offPremise = new Set(['takeout', 'delivery', 'pre_order']);
+  return orders.filter(
+    (o) =>
+      !(o.order_type && offPremise.has(o.order_type)) && (!o.reservation_id || o.reservation_created_via === 'walk_in')
+  ).length;
+}
+
 // ---------------------------------------------------------------------------
 // 予算達成率（本日）
 // ---------------------------------------------------------------------------
