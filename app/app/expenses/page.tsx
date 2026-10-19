@@ -19,6 +19,7 @@ import { JournalSourceLink } from '@/components/accounting/journal-source-link';
 import { approveExpense, rejectExpense } from '@/app/app/expenses/actions';
 import { Suspense } from 'react';
 import { RegiNotices } from '@/components/dashboard/regi-notices';
+import { ScanBulkImport } from '@/components/scan/scan-bulk-import';
 import { APPROVAL_LABELS, APPROVAL_TONES, PAID_VIA_LABELS, type ApprovalStatus, type PaidVia } from '@/components/cash/labels';
 import { sortShops } from '@/lib/cash-shops';
 
@@ -131,6 +132,12 @@ export default async function ExpensesPage({
         <Suspense fallback={null}>
           <RegiNotices ctx={ctx} />
         </Suspense>
+      )}
+      {/* ScanSnap の書類をまとめて取り込む：レシートは出金に、請求書は月払いに自動で入る（2026-10-20 Ronnie） */}
+      {can(ctx.role, 'documents.write') && ctx.currentStore && (
+        <div className="mb-4">
+          <ScanBulkImport organizationId={ctx.organizationId} storeId={ctx.currentStore.id} compact />
+        </div>
       )}
       <PageHeader
         title="経費"
