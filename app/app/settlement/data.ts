@@ -175,3 +175,34 @@ export function costsReader(settings: unknown): (month: string) => MonthlyCosts 
     return c;
   };
 }
+
+/** ScanSnap などで取り込んだ 家賃・電気・水道・ガス の請求書（自動仕分け済み）。月次清算の固定費の入力に「スキャン済み」で出す */
+export interface ScannedFixedBill {
+  documentId: string;
+  category: 'rent' | 'electric' | 'water' | 'gas';
+  amount: number;
+  date: string | null;
+}
+
+export async function loadScannedFixedBills(storeId: string, month: string): Promise<ScannedFixedBill[]> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from('documents')
+    .select('id, amount, doc_date, ocr_payload, created_at')
+    .eq('store_id', storeId)
+    .eq('doc_type', 'invoice')
+    .eq('status', 'filed')
+    .eq('year_month', month)
+    .eq('ocr_payload->>source', 'scan_auto')
+    .in('ocr_payload->>category', ['rent', 'electric', 'water', 'gas'])
+    .order('created_at', { ascending: false })
+    .limit(20);
+  return (data ?? [])
+    .filter((d) => typeof d.amount === 'number' && d.amount > 0)
+    .map((d) => ({
+      documentId: d.id as string,
+      category: (d.ocr_payload as { category: ScannedFixedBill['category'] }).category,
+      amount: d.amount as number,
+      date: (d.doc_date as string | null) ?? null,
+    }));
+}

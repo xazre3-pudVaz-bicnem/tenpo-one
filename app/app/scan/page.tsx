@@ -12,6 +12,7 @@ import { buttonVariants } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/state';
 import { LinkChips } from '@/components/orders/link-chips';
 import { ScanCapture } from '@/components/scan/scan-capture';
+import { ScanBulkImport } from '@/components/scan/scan-bulk-import';
 import { CHIP, splitPurpose } from '@/components/cash/cash-history';
 import { KIND_LABELS, type CashKind } from '@/components/cash/labels';
 import { DOC_TYPE_LABELS, type DocType } from '@/components/invoices/labels';
@@ -193,6 +194,13 @@ export default async function ScanPage({
         </Card>
       )}
 
+      {/* ScanSnap などでスキャンした書類をまとめて取り込み、自動で出金・月払いに仕分ける（2026-10-20 Ronnie） */}
+      {!target && (
+        <div className="mb-4">
+          <ScanBulkImport organizationId={ctx.organizationId} storeId={ctx.currentStore?.id ?? null} />
+        </div>
+      )}
+
       <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)]">
         <div className="space-y-4">
           <Card>
@@ -207,7 +215,7 @@ export default async function ScanPage({
                 txId={target && canLink ? target.id : null}
               />
               <p className="mt-3 text-[11.5px] text-ink-3">
-                PDF・JPEG・PNG・WebP（20MBまで）。保存した書類は「保存ボックス」で種別・金額を仕分けできます（自動読み取りは行いません）。
+                PDF・JPEG・PNG・WebP（20MBまで）。保存した書類は「保存ボックス」で種別・金額を仕分けできます。ScanSnap などでまとめて取り込むときは上の「まとめて取り込む」を使うと、金額・日付を読んで自動で仕分けます。
               </p>
             </CardContent>
           </Card>

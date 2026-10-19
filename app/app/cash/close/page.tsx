@@ -379,8 +379,8 @@ export default async function CashClosePage({
             <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-danger" />
             レシートのない出金・未精算の仮払いは現金差額の原因になります。クローズ前にレシートを撮るか、仮払いを精算してください
             {canScan && (
-              <Link href="/app/scan" className="ml-1 shrink-0 font-bold text-royal hover:underline">
-                スキャンへ
+              <Link href="/app/scan#scan-bulk" className="ml-1 shrink-0 font-bold text-royal hover:underline">
+                スキャン・ScanSnap 取り込みへ
               </Link>
             )}
           </>
@@ -449,11 +449,26 @@ export default async function CashClosePage({
                 {salesCard}
                 {methodCard}
                 {cashFlowCard}
-                {ngRows.length > 0 && (
+                {/* 出金レシート：ScanSnap で取り込むと自動で付く（2026-10-20 Ronnie「スキャン → 出金 → レジクローズにつながる」） */}
+                {ngRows.length > 0 ? (
                   <p className="flex items-start gap-1.5 rounded-xl border border-danger/30 bg-danger-soft px-3 py-2 text-[12.5px] font-bold text-danger">
                     <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                    レシートのない出金・未精算の仮払いが <span className="tabular-nums">{ngRows.length}</span>件（<span className="tabular-nums">{yen(ngTotal)}</span>）あります。現金差額の原因になります
+                    <span className="min-w-0 flex-1">
+                      レシートのない出金・未精算の仮払いが <span className="tabular-nums">{ngRows.length}</span>件（<span className="tabular-nums">{yen(ngTotal)}</span>）あります。現金差額の原因になります
+                    </span>
+                    {canScan && (
+                      <Link href="/app/scan#scan-bulk" className="shrink-0 text-royal hover:underline">
+                        ScanSnap で取り込む ›
+                      </Link>
+                    )}
                   </p>
+                ) : (
+                  receiptRows.length > 0 && (
+                    <p className="flex items-center gap-1.5 rounded-xl border border-success/30 bg-success-soft px-3 py-2 text-[12.5px] font-bold text-success">
+                      <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                      本日の出金 <span className="tabular-nums">{okRows.length}</span>件すべてにレシートがあります
+                    </p>
+                  )
                 )}
               </div>
             </div>

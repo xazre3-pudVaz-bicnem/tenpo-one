@@ -28,7 +28,7 @@ import {
   thisWeekWindow,
   type ProfitLoss,
 } from '@/lib/monthly-settlement';
-import { costsReader, loadSettlementSource, purchaseLines } from './data';
+import { costsReader, loadScannedFixedBills, loadSettlementSource, purchaseLines } from './data';
 
 export const metadata: Metadata = { title: '月次清算' };
 
@@ -220,6 +220,7 @@ export default async function SettlementPage({ searchParams }: { searchParams: P
   const p = perStore[0];
   const table = buildDailyTable(mw.dates, p.sales, purchaseLines(p.invoices), p.expenses);
   const monthInvoices = p.invoices.filter((i) => i.date >= mw.first && i.date <= mw.last).sort((a, b) => a.date.localeCompare(b.date));
+  const scannedBills = await loadScannedFixedBills(p.store.id, month);
 
   return (
     <div className="space-y-5">
@@ -325,7 +326,7 @@ export default async function SettlementPage({ searchParams }: { searchParams: P
           <CardTitle en="Rent / utilities / payroll">家賃・電気・水道・給料（{monthLabel}）</CardTitle>
         </CardHeader>
         <CardContent>
-          <MonthlyCostsForm key={`${p.store.id}:${month}`} storeId={p.store.id} storeName={p.store.name} month={month} initial={p.costs} canEdit={canEdit} />
+          <MonthlyCostsForm key={`${p.store.id}:${month}`} storeId={p.store.id} storeName={p.store.name} month={month} initial={p.costs} canEdit={canEdit} scanned={scannedBills} />
         </CardContent>
       </Card>
 

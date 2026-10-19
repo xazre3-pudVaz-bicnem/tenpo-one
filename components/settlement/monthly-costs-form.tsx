@@ -14,6 +14,9 @@ import {
   type MonthlyCosts,
 } from '@/lib/monthly-settlement';
 import { saveMonthlyCosts } from '@/app/app/settlement/actions';
+import type { ScannedFixedBill } from '@/app/app/settlement/data';
+
+const SCANNED_LABEL: Record<ScannedFixedBill['category'], string> = { rent: '家賃', electric: '電気', water: '水道', gas: 'ガス' };
 
 /**
  * 家賃・電気・水道・給料・その他 を月ごとに入れる（本部だけ）。
@@ -25,12 +28,15 @@ export function MonthlyCostsForm({
   month,
   initial,
   canEdit,
+  scanned = [],
 }: {
   storeId: string;
   storeName: string;
   month: string;
   initial: MonthlyCosts;
   canEdit: boolean;
+  /** レジ（ScanSnap）で取り込んだ 家賃・電気・水道・ガス の請求書。「入れる」で欄に入る（保存は本部が押す） */
+  scanned?: ScannedFixedBill[];
 }) {
   const { toast } = useToast();
   const [form, setForm] = useState<MonthlyCosts>(initial);
@@ -59,8 +65,49 @@ export function MonthlyCostsForm({
 
   const total = fixedCostTotal(form) + form.salary;
 
+  // スキャン済みの請求書を欄に入れる（ガスは「その他」の行。同じ名前があれば金額を上書き）
+  const applyScanned = (b: ScannedFixedBill) => {
+    if (b.category === 'gas') {
+      setForm((f) => {
+        const i = f.other.findIndex((o) => o.name.trim() === 'ガス');
+        if (i >= 0) return { ...f, other: f.other.map((o, j) => (j === i ? { ...o, amount: b.amount } : o)) };
+        if (f.other.length >= MAX_OTHER_COSTS) return f;
+        return { ...f, other: [...f.other, { name: 'ガス', amount: b.amount }] };
+      });
+    } else {
+      setForm((f) => ({ ...f, [b.category]: b.amount }));
+    }
+  };
+  const isApplied = (b: ScannedFixedBill) =>
+    b.category === 'gas' ? form.other.some((o) => o.name.trim() === 'ガス' && o.amount === b.amount) : form[b.category] === b.amount;
+
   return (
     <div className="space-y-3">
+      {scanned.length > 0 && (
+        <div className="rounded-xl border border-iris/25 bg-lilac-soft px-3 py-2.5">
+          <p className="text-[12.5px] font-bold text-ink">
+            レジで取り込んだ請求書（ScanSnap）<span className="en-inline ml-1">Scanned bills</span>
+          </p>
+          <ul className="mt-1.5 flex flex-wrap gap-2">
+            {scanned.map((b) => (
+              <li key={b.documentId} className="flex items-center gap-2 rounded-lg border border-line bg-white px-2.5 py-1 text-[12.5px]">
+                <span className="font-bold">{SCANNED_LABEL[b.category]}</span>
+                <span className="tabular-nums">{yen(b.amount)}</span>
+                {b.date && <span className="text-ink-3 tabular-nums">{b.date.slice(5).replace('-', '/')}</span>}
+                {canEdit &&
+                  (isApplied(b) ? (
+                    <span className="text-[11.5px] font-bold text-success">入力済み</span>
+                  ) : (
+                    <button type="button" disabled={pending} onClick={() => applyScanned(b)} className="text-[11.5px] font-bold text-royal hover:underline">
+                      入れる
+                    </button>
+                  ))}
+              </li>
+            ))}
+          </ul>
+          {canEdit && <p className="mt-1 text-[11px] text-ink-3">「入れる」で下の欄に入ります。確かめてから「保存」を押してください</p>}
+        </div>
+      )}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {FIXED_COST_KINDS.map((k) => (
           <div key={k}>
