@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { AlertTriangle, CheckCircle2, FileText, Inbox, Lock, Package, Receipt } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ChevronDown, FileText, FolderOpen, Inbox, Lock, Package, Receipt } from 'lucide-react';
 import { requireFeature } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { can } from '@/lib/permissions';
@@ -41,6 +41,25 @@ const TAG_CLASS: Partial<Record<DocType, string>> = {
 function DocIcon({ type }: { type: string }) {
   const Icon = type === 'delivery_note' ? Package : type === 'invoice' ? FileText : Receipt;
   return <Icon className="h-5 w-5" />;
+}
+
+/** レシートボックスを日ごとのフォルダにまとめる日数（2026-10-20 Ronnie「1日に何回に分けてスキャンしても1つのフォルダに」） */
+const FOLDER_DAYS = 45;
+
+/** フォルダに出す一番古い取込日時 */
+function folderSince() {
+  return new Date(Date.now() - FOLDER_DAYS * 86_400_000).toISOString();
+}
+
+/** timestamptz → 'YYYY-MM-DD'（JST） */
+function dayOf(value: string) {
+  return new Date(value).toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' });
+}
+
+/** 'YYYY-MM-DD' → '10/20（火）' */
+function dayLabel(day: string) {
+  const w = new Date(`${day}T12:00:00+09:00`).toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo', weekday: 'short' });
+  return `${Number(day.slice(5, 7))}/${Number(day.slice(8, 10))}（${w}）`;
 }
 
 /** 'YYYY-MM-DDTHH..' → '9/16 18:02'（JST） */
@@ -84,8 +103,9 @@ export default async function ScanPage({
     .select('id, created_at, file_name, doc_type, status, amount, title')
     .eq('organization_id', ctx.organizationId)
     .neq('status', 'deleted')
+    .gte('created_at', folderSince())
     .order('created_at', { ascending: false })
-    .limit(40);
+    .limit(400);
   let monthQuery = supabase
     .from('documents')
     .select('doc_type, status')
@@ -125,6 +145,15 @@ export default async function ScanPage({
     ? await supabase.from('cash_transactions').select('receipt_document_id').in('receipt_document_id', docIds)
     : { data: [] as { receipt_document_id: string | null }[] };
   const linkedIds = new Set((linkedRows ?? []).map((r) => r.receipt_document_id));
+
+  // 取り込んだ日ごとのフォルダ（新しい日が上。今日・いちばん新しい日は開いておく）
+  const folders: { day: string; docs: NonNullable<typeof docs> }[] = [];
+  for (const d of docs ?? []) {
+    const day = dayOf(d.created_at);
+    const last = folders[folders.length - 1];
+    if (last && last.day === day) last.docs.push(d);
+    else folders.push({ day, docs: [d] });
+  }
 
   const needsReceipt = cashRows.filter((r) => {
     const s = receiptStateOf(r);
@@ -301,46 +330,68 @@ export default async function ScanPage({
               {filter ? 'この条件の書類はありません' : 'まだスキャンした書類はありません。左の「撮影する」から始めましょう'}
             </p>
           ) : (
-            <ul>
-              {(docs ?? []).map((d) => {
-                const type = d.doc_type as DocType;
+            <div>
+              {folders.map((f, i) => {
+                const inbox = f.docs.filter((d) => d.status === 'inbox').length;
+                const total = f.docs.reduce((a, d) => a + (d.amount ?? 0), 0);
                 return (
-                  <li key={d.id} className="border-b border-line last:border-b-0">
-                    <Link
-                      href={`/app/invoices?tab=${d.status === 'inbox' ? 'inbox' : 'documents'}`}
-                      className="grid grid-cols-[42px_minmax(0,1fr)_auto] items-center gap-2.5 px-4 py-2.5 transition-colors hover:bg-lilac-soft sm:px-5"
-                    >
-                      <span className="grid h-[42px] w-[42px] place-items-center rounded-[9px] bg-lilac text-royal">
-                        <DocIcon type={type} />
+                  <details key={f.day} id={`day-${f.day}`} open={i === 0 || f.day === today} className="group border-b border-line last:border-b-0">
+                    <summary className="flex cursor-pointer list-none items-center gap-2.5 bg-lilac-soft/60 px-4 py-2.5 sm:px-5 [&::-webkit-details-marker]:hidden">
+                      <FolderOpen className="h-[18px] w-[18px] shrink-0 text-iris" aria-hidden />
+                      <b className="text-[13.5px] text-ink tabular-nums">
+                        {dayLabel(f.day)}
+                        {f.day === today && <span className="ml-1.5 text-[11px] font-bold text-iris">今日</span>}
+                      </b>
+                      <span className="text-[12px] text-ink-3 tabular-nums">
+                        {f.docs.length}件{inbox > 0 && <span className="font-bold text-saffron"> ・ 未仕分け {inbox}</span>}
                       </span>
-                      <span className="min-w-0">
-                        <span className="flex min-w-0 items-center gap-1.5">
-                          <span
-                            className={cn(
-                              'shrink-0 rounded-[5px] px-1.5 text-[10px] leading-[1.6] font-extrabold text-white',
-                              TAG_CLASS[type] ?? 'bg-ink-3'
-                            )}
+                      <b className="ml-auto text-[13px] text-ink tabular-nums">{total > 0 ? yen(total) : ''}</b>
+                      <ChevronDown className="h-4 w-4 shrink-0 text-ink-3 transition-transform group-open:rotate-180" aria-hidden />
+                    </summary>
+                    <ul>
+                      {f.docs.map((d) => {
+                      const type = d.doc_type as DocType;
+                      return (
+                        <li key={d.id} className="border-b border-line last:border-b-0">
+                          <Link
+                            href={`/app/invoices?tab=${d.status === 'inbox' ? 'inbox' : 'documents'}`}
+                            className="grid grid-cols-[42px_minmax(0,1fr)_auto] items-center gap-2.5 px-4 py-2.5 transition-colors hover:bg-lilac-soft sm:px-5"
                           >
-                            {DOC_TYPE_LABELS[type] ?? d.doc_type}
-                          </span>
-                          <b className="truncate text-[13px] text-ink">{d.title || d.file_name}</b>
-                        </span>
-                        <small className="block truncate text-[11px] text-ink-3 tabular-nums">
-                          {shortDateTime(d.created_at)} ・ {d.title ? d.file_name : 'スキャン'}
-                          {linkedIds.has(d.id) && <span className="ml-1 font-bold text-success">✓ 出金に紐付け済</span>}
-                        </small>
-                      </span>
-                      <span className="flex flex-col items-end gap-1">
-                        <b className="text-sm font-extrabold text-ink tabular-nums">{d.amount != null ? yen(d.amount) : '—'}</b>
-                        <span className={cn(d.status === 'inbox' ? CHIP.wait : CHIP.ok, 'px-2 text-[10.5px]')}>
-                          {d.status === 'inbox' ? '未仕分け' : '仕分け済'}
-                        </span>
-                      </span>
-                    </Link>
-                  </li>
+                            <span className="grid h-[42px] w-[42px] place-items-center rounded-[9px] bg-lilac text-royal">
+                              <DocIcon type={type} />
+                            </span>
+                            <span className="min-w-0">
+                              <span className="flex min-w-0 items-center gap-1.5">
+                                <span
+                                  className={cn(
+                                    'shrink-0 rounded-[5px] px-1.5 text-[10px] leading-[1.6] font-extrabold text-white',
+                                    TAG_CLASS[type] ?? 'bg-ink-3'
+                                  )}
+                                >
+                                  {DOC_TYPE_LABELS[type] ?? d.doc_type}
+                                </span>
+                                <b className="truncate text-[13px] text-ink">{d.title || d.file_name}</b>
+                              </span>
+                              <small className="block truncate text-[11px] text-ink-3 tabular-nums">
+                                {shortDateTime(d.created_at)} ・ {d.title ? d.file_name : 'スキャン'}
+                                {linkedIds.has(d.id) && <span className="ml-1 font-bold text-success">✓ 出金に紐付け済</span>}
+                              </small>
+                            </span>
+                            <span className="flex flex-col items-end gap-1">
+                              <b className="text-sm font-extrabold text-ink tabular-nums">{d.amount != null ? yen(d.amount) : '—'}</b>
+                              <span className={cn(d.status === 'inbox' ? CHIP.wait : CHIP.ok, 'px-2 text-[10.5px]')}>
+                                {d.status === 'inbox' ? '未仕分け' : '仕分け済'}
+                              </span>
+                            </span>
+                          </Link>
+                        </li>
+                      );
+                      })}
+                    </ul>
+                  </details>
                 );
               })}
-            </ul>
+            </div>
           )}
         </Card>
       </div>

@@ -1,5 +1,5 @@
 /**
- * スキャンしたレシート・請求書の文字から「金額・日付・種類（レシートか請求書か）・費目・発行元」を読む（純関数）。
+ * スキャンしたレシート・請求書の文字から「金額・消費税・日付・支払い方法・種類（レシートか請求書か）・費目・発行元」を読む（純関数）。
  * 2026-10-20 Ronnie「ScanSnap（iX100 など）で iPad からスキャン → 出金・月払いに入って自動で決算・レジクローズにつながるように」。
  *
  * - 文字の読み取りは iPad のブラウザの中（pdf.js の文字・Tesseract。料金なし）。ここは読み取った文字を分けるだけ
@@ -9,6 +9,8 @@
 export type ScanKind = 'receipt' | 'bill';
 /** 月払いの費目。rent・electric・water・gas は本部が入れる固定費（月次清算）、vendor は仕入先の請求書 */
 export type BillCategory = 'rent' | 'electric' | 'water' | 'gas' | 'vendor';
+/** 支払い方法。レシートは現金・カード・電子マネー・QR、請求書は振込・口座振替・カード */
+export type PaymentMethod = 'cash' | 'card' | 'emoney' | 'qr' | 'transfer' | 'debit';
 
 export interface ScanReading {
   kind: ScanKind;
@@ -20,6 +22,34 @@ export interface ScanReading {
   date: string | null;
   /** 発行元（店名・会社名）。読めなければ null */
   vendorName: string | null;
+  /** うち消費税（円）。読めなければ null */
+  tax: number | null;
+  /** 支払い方法。読めなければ null（レシートは現金として出金と突き合わせる） */
+  payment: PaymentMethod | null;
+}
+
+export const PAYMENT_LABELS: Record<PaymentMethod, string> = {
+  cash: '現金',
+  card: 'クレジットカード',
+  emoney: '電子マネー',
+  qr: 'QR決済',
+  transfer: '振込',
+  debit: '口座振替',
+};
+
+/** 請求書（invoices.payment_method）に入れる値 */
+export const INVOICE_PAYMENT_METHOD: Record<PaymentMethod, 'cash' | 'credit' | 'bank_transfer' | 'direct_debit' | 'other'> = {
+  cash: 'cash',
+  card: 'credit',
+  emoney: 'other',
+  qr: 'other',
+  transfer: 'bank_transfer',
+  debit: 'direct_debit',
+};
+
+/** 現金払い（または不明）のレシートだけ、レジの出金と突き合わせる */
+export function isCashPayment(p: PaymentMethod | null): boolean {
+  return p == null || p === 'cash';
 }
 
 export const BILL_CATEGORY_LABELS: Record<BillCategory, string> = {
@@ -184,15 +214,124 @@ export function readVendor(lines: string[]): string | null {
   return first ? first.slice(0, 40) : null;
 }
 
-/** 読み取った文字（行の並び）から、金額・日付・種類・費目・発行元をまとめて読む */
+// ---------------------------------------------------------------------------
+// 消費税
+// ---------------------------------------------------------------------------
+
+const TAX_WORD_SRC = '(内消費税等?|消費税等?|内税|外税|税\\s*額)';
+const TAX_WORD = new RegExp(TAX_WORD_SRC);
+/** 税込・税抜の金額の行、免税・非課税の行は消費税の金額ではない */
+const TAX_SKIP = /(税込|税抜|税別|免税|非課税|不課税|対象外)/;
+
+/** 1行の消費税の金額（消費税・内税などの言葉のあとの金額。「10%」の数は使わない） */
+function taxIn(line: string): number | null {
+  let last = -1;
+  for (const m of line.matchAll(new RegExp(TAX_WORD_SRC, 'g'))) last = (m.index ?? 0) + m[0].length;
+  if (last < 0) return null;
+  const rest = line.slice(last);
+  const yen = amountsIn(rest);
+  if (yen.length > 0) return yen[0];
+  const plain = rest.match(/(?<![\d%.])(\d{1,3}(?:,\d{3})+|\d{1,7})(?![\d%.])/);
+  return plain ? Number(plain[1].replace(/,/g, '')) : null;
+}
+
+/**
+ * うち消費税。「内消費税等 ¥382」のようなまとめの行があればそれ、無ければ 8%・10% の行を足す。
+ * 合計金額がわかるときは、その 1/10 を超える額は消費税ではないので使わない。
+ */
+export function readTax(lines: string[], amount: number | null): number | null {
+  const norm = lines.map(normalize);
+  const generic: number[] = [];
+  const byRate = new Map<string, number>();
+  for (let i = 0; i < norm.length; i++) {
+    const l = norm[i];
+    if (!TAX_WORD.test(l)) continue;
+    if (TAX_SKIP.test(l) && !/(内消費税|内税|消費税等?\s*[¥\d(（]|税額)/.test(l)) continue;
+    let n = taxIn(l);
+    // 「消費税等」だけの行は次の行に金額があることがある
+    if (n == null && i + 1 < norm.length && !TAX_SKIP.test(norm[i + 1])) {
+      const next = amountsIn(norm[i + 1]);
+      n = next.length > 0 ? next[0] : null;
+    }
+    if (n == null || n <= 0) continue;
+    if (amount != null && n > Math.ceil(amount / 10) + 1) continue;
+    const rate = l.match(/(?<!\d)(8|10)\s*%/);
+    if (rate) {
+      if (!byRate.has(rate[1])) byRate.set(rate[1], n);
+    } else generic.push(n);
+  }
+  if (generic.length > 0) return Math.max(...generic);
+  if (byRate.size > 0) return [...byRate.values()].reduce((a, b) => a + b, 0);
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// 支払い方法
+// ---------------------------------------------------------------------------
+
+const PAY_CARD = /(クレジット|VISA|JCB|MASTER|AMEX|アメックス|ダイナース|DINERS|銀聯|UNIONPAY|カード(?:払|支払|決済|売上|ご利用))/i;
+/** カードの控えにしか出ない言葉（金額が無い行でもカード払い） */
+const PAY_CARD_STRONG = /(承認番号|カード会社|会員番号|支払区分|一括払|1回払|お支払方法\s*:?\s*(?:クレジット|カード))/;
+const PAY_EMONEY = /(交通系|Suica|PASMO|ICOCA|nanaco|WAON|Edy|(?<![A-Za-z])iD(?![A-Za-z])|QUICPay|クイックペイ|電子マネー)/;
+const PAY_QR = /(PayPay|ペイペイ|楽天ペイ|d払い|au\s*PAY|メルペイ|LINE\s*Pay|コード決済|QR決済|QR支払)/i;
+const PAY_CASH = /(現金|お預り|お預かり|預り金)/;
+const CHANGE = /(お釣り|おつり|お釣|釣銭|釣り)/;
+const BILL_DEBIT = /(口座振替|口座引落|自動引落|引き落とし|引落し|引落日|振替日)/;
+const BILL_TRANSFER = /(振込先|お振込|振込口座|振込期限|お振り込み|お振込み)/;
+const BILL_CARD = /(クレジットカード払|カード払|カードでのお支払|クレジットカードでのお支払)/;
+
+/** 金額が書いてある行か（その行か次の行） */
+function hasAmountNear(norm: string[], i: number): boolean {
+  return amountsIn(norm[i]).length > 0 || plainCommaNumbers(norm[i]).length > 0 || /\d{2,}/.test(norm[i].replace(/\d+\s*%/g, ''));
+}
+
+/**
+ * 支払い方法。
+ * - レシート：カード・電子マネー・QR の言葉が金額といっしょに出ていればそれ（お店の「各種カード使えます」の案内は金額が無いので使わない）。
+ *   お釣りがある・「現金 ¥…」ならば現金。どちらも無ければ null（現金として扱う）
+ * - 請求書：口座振替 → 振込 → カード の順
+ */
+export function readPayment(lines: string[], kind: ScanKind): PaymentMethod | null {
+  const norm = lines.map(normalize);
+  if (kind === 'bill') {
+    const text = norm.join('\n');
+    if (BILL_DEBIT.test(text)) return 'debit';
+    if (BILL_TRANSFER.test(text)) return 'transfer';
+    if (BILL_CARD.test(text)) return 'card';
+    return null;
+  }
+  let nonCash: PaymentMethod | null = null;
+  let cashLine = false;
+  let change = false;
+  for (let i = 0; i < norm.length; i++) {
+    const l = norm[i];
+    const withAmount = hasAmountNear(norm, i);
+    if (!nonCash) {
+      if (PAY_CARD_STRONG.test(l) || (PAY_CARD.test(l) && withAmount && !/ポイント/.test(l))) nonCash = 'card';
+      else if (PAY_QR.test(l) && withAmount) nonCash = 'qr';
+      else if (PAY_EMONEY.test(l) && withAmount) nonCash = 'emoney';
+    }
+    if (CHANGE.test(l) && [...amountsIn(l), ...plainCommaNumbers(l)].some((n) => n > 0)) change = true;
+    if (PAY_CASH.test(l) && withAmount) cashLine = true;
+  }
+  // お釣りが出た＝現金。カードの「お預り クレジット ¥…」はお釣りが無いのでカードのまま
+  if (change) return 'cash';
+  if (nonCash) return nonCash;
+  return cashLine ? 'cash' : null;
+}
+
+/** 読み取った文字（行の並び）から、金額・消費税・日付・支払い方法・種類・費目・発行元をまとめて読む */
 export function readScan(lines: string[], today: string): ScanReading {
   const kind = readKind(lines);
+  const amount = readAmount(lines);
   return {
     kind,
     category: kind === 'bill' ? readCategory(lines) : null,
-    amount: readAmount(lines),
+    amount,
     date: readDate(lines, today),
     vendorName: readVendor(lines),
+    tax: readTax(lines, amount),
+    payment: readPayment(lines, kind),
   };
 }
 
