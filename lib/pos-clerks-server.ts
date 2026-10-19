@@ -19,6 +19,26 @@ export interface StoreClerk {
   status: 'active' | 'hidden';
 }
 
+/**
+ * 担当者ごとに、最近（既定30日）レジで会計・注文した伝票の数。担当者を選ぶ画面で、よくレジを使う人を上に出す
+ * （2026-10-20 Ronnie「アルファベット順ではなく、いちばんレジを使う人を上に」）。読めなければ空。
+ */
+export async function loadClerkUsage(supabase: Supabase, storeId: string, sinceDate: string): Promise<Map<string, number>> {
+  const { data, error } = await supabase
+    .from('orders')
+    .select('clerk_id')
+    .eq('store_id', storeId)
+    .gte('business_date', sinceDate)
+    .not('clerk_id', 'is', null)
+    .limit(5000);
+  const counts = new Map<string, number>();
+  if (error) return counts;
+  for (const r of (data ?? []) as { clerk_id: string | null }[]) {
+    if (r.clerk_id) counts.set(r.clerk_id, (counts.get(r.clerk_id) ?? 0) + 1);
+  }
+  return counts;
+}
+
 export async function loadStoreClerks(
   supabase: Supabase,
   storeId: string,

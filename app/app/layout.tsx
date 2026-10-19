@@ -22,7 +22,8 @@ import { HideOnPos } from '@/components/layout/hide-on-pos';
 import { RegisterCloseReminder } from '@/components/cash/register-close-reminder';
 import { AnnouncementPopup } from '@/components/notifications/announcement-popup';
 import { loadPopupAnnouncements } from '@/lib/announcement-popup-server';
-import { loadStoreClerks } from '@/lib/pos-clerks-server';
+import { loadClerkUsage, loadStoreClerks } from '@/lib/pos-clerks-server';
+import { daysAgoJst } from '@/lib/format';
 import { ReservationAlert } from '@/components/notifications/reservation-alert';
 import { PushAutoSubscribe } from '@/components/notifications/push-auto-subscribe';
 import { ServiceCallAlert } from '@/components/notifications/service-call-alert';
@@ -94,8 +95,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // 取消の承認（店長以上）にも使うので、役職も一緒に持ってくる。
   let gateClerks: GateClerk[] = [];
   if (isRegi && ctx.currentStore) {
-    const rows = await loadStoreClerks(supabase, ctx.currentStore.id);
-    gateClerks = rows.map((c) => ({ id: c.id, name: c.name, role: c.role }));
+    const [rows, usage] = await Promise.all([
+      loadStoreClerks(supabase, ctx.currentStore.id),
+      loadClerkUsage(supabase, ctx.currentStore.id, daysAgoJst(30)),
+    ]);
+    gateClerks = rows.map((c) => ({ id: c.id, name: c.name, role: c.role, uses: usage.get(c.id) ?? 0 }));
   }
 
   // レジは左メニューをホーム画面だけに出し、そこから開いた画面は全幅で使う（2026-09-23 要望）。
@@ -134,7 +138,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <CommandPaletteProvider role={ctx.role}>
       <ThemeBody />
       <OfflineBanner />
-      <div className="theme-regi min-h-screen bg-lilac">
+      <div className="theme-regi min-h-svh bg-lilac">
         {/* 上部バー（全幅）→ その下に左メニュー（固定）と本文 */}
         <TopBar ctx={ctx} unreadCount={unreadCount ?? 0} showMenuLink={posFullscreen} />
         {/* 新しいネット予約のチャイム＋バナー（レジ・パソコンどの画面でも） */}

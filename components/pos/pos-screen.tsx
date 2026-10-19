@@ -837,7 +837,7 @@ export function PosScreen({
     'flex items-center gap-1 rounded-full bg-lilac px-3 py-1 text-xs font-semibold text-ink-2 transition-colors hover:bg-iris-soft';
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] flex-col gap-3 lg:flex-row">
+    <div className="flex h-[calc(100svh-4rem)] flex-col gap-3 lg:flex-row">
       {/* 左: 伝票（テーブル・人数・顧客と、追加した品目） */}
       <section className="flex min-h-0 w-full shrink-0 flex-col overflow-hidden rounded-2xl border border-line bg-white lg:w-[380px]">
         <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1.5 border-b border-line px-3 py-3">

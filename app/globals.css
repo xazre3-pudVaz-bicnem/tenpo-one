@@ -99,7 +99,6 @@ body.theme-regi {
   /* iPad（Chrome・Safari）で画面が揺れない・ずれないように（2026-10-19 Ronnie）：
      ダブルタップで拡大しない・横にずれない・文字が勝手に大きくならない */
   touch-action: manipulation;
-  overflow-x: hidden;
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
 }
@@ -416,4 +415,140 @@ body.theme-regi:has(.regi-home) {
   .regi-colon {
     animation: none;
   }
+}
+
+/*
+ * レジ（iPad）の画面ごとの色（lib/regi-accent.ts）。ホームのボタンと同じ色を、その画面のボタン・合計・選択中の色にする
+ * （2026-10-20 Ronnie「オーダー・会計は青、即会計は緑…中の画面も同じ色に」）。店舗台帳（ledger）は今のテラコッタのまま。
+ * body に付けるので、画面の外に出るダイアログ・トーストも同じ色になる。中の .theme-regi が色を上書きし直すので、そこにも付ける
+ */
+body:has([data-regi-accent='order']),
+body:has([data-regi-accent='order']) .theme-regi {
+  --color-iris: #1a5ad6;
+  --color-iris-deep: #0a3fa8;
+  --color-iris-soft: #e7effd;
+  --color-royal: #0a3fa8;
+  --color-wisteria: #bcd0f5;
+  --color-primary: #1a5ad6;
+  --color-primary-deep: #0a3fa8;
+  --color-primary-soft: #e7effd;
+  --background-image-brand: linear-gradient(180deg, #2a6fe6, #0a3fa8);
+  --ui-btn2-bg: #e7effd;
+  --ui-btn2-fg: #0a3fa8;
+  --ui-btn2-hover: #bcd0f5;
+}
+body:has([data-regi-accent='quick']),
+body:has([data-regi-accent='quick']) .theme-regi {
+  --color-iris: #1f9a48;
+  --color-iris-deep: #157a37;
+  --color-iris-soft: #e3f4e8;
+  --color-royal: #157a37;
+  --color-wisteria: #b7e0c4;
+  --color-primary: #1f9a48;
+  --color-primary-deep: #157a37;
+  --color-primary-soft: #e3f4e8;
+  --background-image-brand: linear-gradient(180deg, #3fbf63, #1a8a3e);
+  --ui-btn2-bg: #e3f4e8;
+  --ui-btn2-fg: #157a37;
+  --ui-btn2-hover: #b7e0c4;
+}
+body:has([data-regi-accent='cash']),
+body:has([data-regi-accent='cash']) .theme-regi {
+  --color-iris: #1f9a48;
+  --color-iris-deep: #157a37;
+  --color-iris-soft: #e3f4e8;
+  --color-royal: #157a37;
+  --color-wisteria: #b7e0c4;
+  --color-primary: #1f9a48;
+  --color-primary-deep: #157a37;
+  --color-primary-soft: #e3f4e8;
+  --background-image-brand: linear-gradient(180deg, #3fbf63, #1a8a3e);
+  --ui-btn2-bg: #e3f4e8;
+  --ui-btn2-fg: #157a37;
+  --ui-btn2-hover: #b7e0c4;
+}
+body:has([data-regi-accent='slips']),
+body:has([data-regi-accent='slips']) .theme-regi {
+  --color-iris: #636366;
+  --color-iris-deep: #48484a;
+  --color-iris-soft: #ececf0;
+  --color-royal: #3a3a3c;
+  --color-wisteria: #d1d1d6;
+  --color-primary: #636366;
+  --color-primary-deep: #48484a;
+  --color-primary-soft: #ececf0;
+  --background-image-brand: linear-gradient(180deg, #7c7c80, #48484a);
+  --ui-btn2-bg: #ececf0;
+  --ui-btn2-fg: #48484a;
+  --ui-btn2-hover: #d1d1d6;
+}
+body:has([data-regi-accent='settings']),
+body:has([data-regi-accent='settings']) .theme-regi {
+  --color-iris: #636366;
+  --color-iris-deep: #48484a;
+  --color-iris-soft: #ececf0;
+  --color-royal: #3a3a3c;
+  --color-wisteria: #d1d1d6;
+  --color-primary: #636366;
+  --color-primary-deep: #48484a;
+  --color-primary-soft: #ececf0;
+  --background-image-brand: linear-gradient(180deg, #7c7c80, #48484a);
+  --ui-btn2-bg: #ececf0;
+  --ui-btn2-fg: #48484a;
+  --ui-btn2-hover: #d1d1d6;
+}
+body:has([data-regi-accent='bills']),
+body:has([data-regi-accent='bills']) .theme-regi {
+  --color-iris: #1f6fe0;
+  --color-iris-deep: #1858c0;
+  --color-iris-soft: #e8f0fd;
+  --color-royal: #1450b0;
+  --color-wisteria: #c4d8f7;
+  --color-primary: #1f6fe0;
+  --color-primary-deep: #1858c0;
+  --color-primary-soft: #e8f0fd;
+  --background-image-brand: linear-gradient(180deg, #4a9bff, #1f6fe0);
+  --ui-btn2-bg: #e8f0fd;
+  --ui-btn2-fg: #1858c0;
+  --ui-btn2-hover: #c4d8f7;
+}
+body:has([data-regi-accent='close']),
+body:has([data-regi-accent='close']) .theme-regi {
+  --color-iris: #2c2c2e;
+  --color-iris-deep: #1c1c1e;
+  --color-iris-soft: #ececee;
+  --color-royal: #1c1c1e;
+  --color-wisteria: #c7c7cc;
+  --color-primary: #2c2c2e;
+  --color-primary-deep: #1c1c1e;
+  --color-primary-soft: #ececee;
+  --background-image-brand: linear-gradient(180deg, #48484a, #1c1c1e);
+  --ui-btn2-bg: #ececee;
+  --ui-btn2-fg: #1c1c1e;
+  --ui-btn2-hover: #c7c7cc;
+}
+body:has([data-regi-accent='stock']),
+body:has([data-regi-accent='stock']) .theme-regi {
+  --color-iris: #9a7148;
+  --color-iris-deep: #7a5836;
+  --color-iris-soft: #f4ece2;
+  --color-royal: #6e4f30;
+  --color-wisteria: #e0cdb6;
+  --color-primary: #9a7148;
+  --color-primary-deep: #7a5836;
+  --color-primary-soft: #f4ece2;
+  --background-image-brand: linear-gradient(180deg, #c49a6c, #9a7148);
+  --ui-btn2-bg: #f4ece2;
+  --ui-btn2-fg: #7a5836;
+  --ui-btn2-hover: #e0cdb6;
+}
+
+/*
+ * iPad の Chrome・Safari で画面が揺れない（2026-10-20 Ronnie「Chrome で揺れる」）：
+ * 横にずれないように html・body とも横をはみ出させない（clip はスクロールの箱を作らないので sticky を壊さない）。
+ * 画面いっぱいの高さは svh（ツールバーが出ていても収まる高さ）で決め、ページが少しだけ縦に動いて揺れるのを止める
+ */
+html:has(body.theme-regi),
+body.theme-regi {
+  overflow-x: clip;
 }
