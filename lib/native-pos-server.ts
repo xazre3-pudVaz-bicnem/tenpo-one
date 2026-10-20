@@ -1,4 +1,5 @@
 import 'server-only';
+import { createHash } from 'node:crypto';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import type { SessionContext } from '@/lib/auth';
@@ -15,6 +16,8 @@ import { BRANDED_METHODS, checkoutPresetsFrom, discountPresetsOf, methodBrandsOf
 import { VISIT_SOURCES, visitSourceByLabel, visitSourcesFrom } from '@/lib/handy-visit';
 import { isMissingColumnError } from '@/lib/schema-compat';
 import {
+  type NativePosCatalog,
+  type NativePosLive,
   jstHm,
   NATIVE_BESTSELLERS_TAB,
   NATIVE_FAVORITES_TAB,
@@ -128,18 +131,31 @@ export type NativeLoadResult =
   | NativePosPayload
   | { ok: false; status: number; error: string; /** Web の画面で開いてもらう（端末の登録・回線の制限など） */ useWeb?: boolean };
 
-/** オーダー画面を開くときの全部（メニュー・担当者・会計の選択肢・stera） */
-export async function loadNativePos(ctx: SessionContext, orderId: string): Promise<NativeLoadResult> {
-  const supabase = await createClient();
-  const order = await loadNativeOrder(supabase, ctx, orderId);
-  if (!order) return { ok: false, status: 404, error: '注文が見つかりません' };
-  const { data: orderRow } = await supabase.from('orders').select('store_id, status, organization_id').eq('id', orderId).single();
-  if (!orderRow || orderRow.status !== 'open') return { ok: false, status: 409, error: 'この注文は既に会計済み・取消済みです' };
-  const storeId = orderRow.store_id as string;
-  const store = ctx.stores.find((s) => s.id === storeId) ?? null;
-  const organizationId = orderRow.organization_id as string;
+/** 中身のハッシュ（JSON を安定した並びで） */
+function versionOf(value: unknown): string {
+  const stable = (v: unknown): unknown =>
+    Array.isArray(v)
+      ? v.map(stable)
+      : v && typeof v === 'object'
+        ? Object.fromEntries(Object.keys(v as Record<string, unknown>).sort().map((k) => [k, stable((v as Record<string, unknown>)[k])]))
+        : v;
+  return createHash('sha1').update(JSON.stringify(stable(value))).digest('hex').slice(0, 16);
+}
 
-  const [menuBook, { data: settingsRow }, { data: categories }, { data: menuItems }, { data: recentSales }, { data: clerks }, { data: optionLinks }] =
+/**
+ * 店のメニューまわり（伝票に寄らない部分）。アプリが iPad に保存して、次からはそれを先に出す。
+ * takeout のときは テイクアウトメニュー・テイクアウト価格（保存はしない。開くたびに読む）
+ */
+export async function loadNativeCatalog(
+  ctx: SessionContext,
+  supabase: Client,
+  storeId: string,
+  organizationId: string,
+  opts: { takeout?: boolean } = {}
+): Promise<NativePosCatalog> {
+  const store = ctx.stores.find((s) => s.id === storeId) ?? null;
+  const takeout = !!opts.takeout;
+  const [menuBook, { data: settingsRow }, { data: categories }, { data: menuItems }, { data: recentSales }, { data: clerks }, { data: optionLinks }, stock] =
     await Promise.all([
       loadMenuBook(supabase, storeId),
       supabase.from('store_settings').select('settings').eq('store_id', storeId).maybeSingle(),
@@ -169,6 +185,8 @@ export async function loadNativePos(ctx: SessionContext, orderId: string): Promi
         .eq('store_id', storeId)
         .eq('menu_option_groups.status', 'active')
         .order('sort_order'),
+      // 売り切れ（本日の食数が0になったものも）
+      loadMenuStock(supabase, storeId),
     ]);
   const settings = (settingsRow as { settings?: unknown } | null)?.settings ?? null;
 
@@ -176,9 +194,6 @@ export async function loadNativePos(ctx: SessionContext, orderId: string): Promi
   const optionGroups = optionGroupsFrom(optionLinks ?? []);
   const withOptions = new Set(Object.keys(optionGroups));
 
-  // 売り切れ（本日の食数が0になったものも）・テイクアウトのメニュー
-  const stock = await loadMenuStock(supabase, storeId);
-  const takeout = isTakeoutLikeOrder(order.orderType);
   type Row = {
     id: string; category_id: string | null; name: string; name_en: string | null; name_kana: string | null;
     price: number; takeout_price: number | null; is_sold_out: boolean | null; is_recommended: boolean | null;
@@ -231,7 +246,35 @@ export async function loadNativePos(ctx: SessionContext, orderId: string): Promi
   // 会計の選択肢（設定 > 決済・端末）
   const presets = checkoutPresetsFrom(settings);
   const methodBrands = Object.fromEntries(BRANDED_METHODS.map((m) => [m, methodBrandsOf(presets, m).map((b) => ({ id: b.key, name: b.name }))]));
+  const clerkList = (clerks ?? []).map((c) => ({ id: c.id as string, name: c.name as string }));
 
+  const body = {
+    store: { id: storeId, name: store?.name ?? '' },
+    categories: nativeCategories,
+    items,
+    optionGroups: Object.fromEntries(Object.entries(optionGroups).filter(([id]) => withOptions.has(id) && items.some((i) => i.id === id))),
+    clerks: clerkList,
+    clerkRequired: clerkList.length > 0,
+    visitSources: visitSourcesFrom(settings).map((s) => ({ id: s.id, label: s.label })),
+    methodBrands,
+    pointBrands: pointBrandsOf(presets).map((b) => ({ id: b.key, name: b.name })),
+    discountPresets: discountPresetsOf(presets).map((d) => ({ id: d.key, name: d.name, kind: d.kind, value: d.value })),
+    steraPaymentTypes: STERA_PAYMENT_TYPES.map((t) => ({ code: t.code, method: t.method, label: t.label, en: t.en })),
+    canCheckout: can(ctx.role, 'pos.checkout'),
+    canDiscount: can(ctx.role, 'pos.discount'),
+  };
+  return { ...body, version: versionOf(body) };
+}
+
+/** 伝票を開く・読み直すときの軽い部分（伝票・レジの開局・stera の端末）。メニューは別（loadNativeCatalog） */
+export async function loadNativeLive(ctx: SessionContext, supabase: Client, orderId: string): Promise<NativePosLive | { ok: false; status: number; error: string }> {
+  const [order, { data: orderRow }] = await Promise.all([
+    loadNativeOrder(supabase, ctx, orderId),
+    supabase.from('orders').select('store_id, status').eq('id', orderId).single(),
+  ]);
+  if (!order) return { ok: false, status: 404, error: '注文が見つかりません' };
+  if (!orderRow || orderRow.status !== 'open') return { ok: false, status: 409, error: 'この注文は既に会計済み・取消済みです' };
+  const storeId = orderRow.store_id as string;
   const canCheckout = can(ctx.role, 'pos.checkout');
   let registerOpen = true;
   let steraTerminals: { id: string; name: string; online: boolean }[] = [];
@@ -248,26 +291,33 @@ export async function loadNativePos(ctx: SessionContext, orderId: string): Promi
       online: isSteraOnline(t.last_seen_at as string | null, now),
     }));
   }
+  return { order, registerOpen, steraTerminals, storeId };
+}
 
-  const clerkList = (clerks ?? []).map((c) => ({ id: c.id as string, name: c.name as string }));
+/** オーダー画面を開くときの全部（メニュー・担当者・会計の選択肢・stera）。アプリに保存が無いとき・テイクアウトのとき */
+export async function loadNativePos(ctx: SessionContext, orderId: string): Promise<NativeLoadResult> {
+  const supabase = await createClient();
+  const { data: orderRow } = await supabase.from('orders').select('store_id, status, organization_id').eq('id', orderId).single();
+  if (!orderRow) return { ok: false, status: 404, error: '注文が見つかりません' };
+  if (orderRow.status !== 'open') return { ok: false, status: 409, error: 'この注文は既に会計済み・取消済みです' };
+  const storeId = orderRow.store_id as string;
+  const organizationId = orderRow.organization_id as string;
+  const { data: typeRow } = await supabase.from('orders').select('order_type').eq('id', orderId).single();
+  const takeout = isTakeoutLikeOrder((typeRow?.order_type as string | null) ?? null);
+  const [live, catalog] = await Promise.all([
+    loadNativeLive(ctx, supabase, orderId),
+    loadNativeCatalog(ctx, supabase, storeId, organizationId, { takeout }),
+  ]);
+  if ('ok' in live) return live;
+  const { version, ...rest } = catalog;
   return {
     ok: true,
-    store: { id: storeId, name: store?.name ?? '' },
-    order,
-    categories: nativeCategories,
-    items,
-    optionGroups: Object.fromEntries(Object.entries(optionGroups).filter(([id]) => withOptions.has(id) && items.some((i) => i.id === id))),
-    clerks: clerkList,
-    clerkRequired: clerkList.length > 0,
-    visitSources: visitSourcesFrom(settings).map((s) => ({ id: s.id, label: s.label })),
-    methodBrands,
-    pointBrands: pointBrandsOf(presets).map((b) => ({ id: b.key, name: b.name })),
-    discountPresets: discountPresetsOf(presets).map((d) => ({ id: d.key, name: d.name, kind: d.kind, value: d.value })),
-    steraTerminals,
-    steraPaymentTypes: STERA_PAYMENT_TYPES.map((t) => ({ code: t.code, method: t.method, label: t.label, en: t.en })),
-    registerOpen,
-    canCheckout,
-    canDiscount: can(ctx.role, 'pos.discount'),
+    ...rest,
+    order: live.order,
+    // テイクアウトのメニューは保存させない（開くたびに読む）
+    catalogVersion: takeout ? undefined : version,
+    steraTerminals: live.steraTerminals,
+    registerOpen: live.registerOpen,
   };
 }
 

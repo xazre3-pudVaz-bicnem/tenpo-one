@@ -77,6 +77,8 @@ struct APIStore: Codable { let id: String; let name: String }
 struct APIPayload: Codable {
     let store: APIStore
     let order: APIOrder
+    /// 店のメニューまわりのハッシュ（iPad の保存と比べる。テイクアウトは無い）
+    let catalogVersion: String?
     let categories: [APICategory]
     let items: [APIItem]
     /// 商品ごとの選択肢グループ（古いサーバーは無い → 選択肢の商品は今までの画面で）
@@ -100,6 +102,8 @@ struct APIResult: Decodable {
     let error: String?
     let order: APIOrder?
     let printWarning: String?
+    /// 注文確定のあと、iPad から LAN で直接出す厨房伝票（claimed 済み。出したら printDone）
+    let prints: [APIPrintJob]?
     let alreadyPaid: Bool?
     let registerClosed: Bool?
     let useWeb: Bool?
@@ -181,6 +185,25 @@ final class NativeAPI {
         comps.queryItems = [URLQueryItem(name: "order", value: orderId)]
         let data = try await send(URLRequest(url: comps.url!))
         return try JSONDecoder().decode(APIPayload.self, from: data)
+    }
+
+    /// 伝票・レジの開局・stera（軽い。メニューは iPad の保存から）
+    func loadLive(orderId: String) async throws -> APILive {
+        var comps = URLComponents(url: AppConfig.url(path), resolvingAgainstBaseURL: false)!
+        comps.queryItems = [URLQueryItem(name: "order", value: orderId), URLQueryItem(name: "part", value: "live")]
+        let data = try await send(URLRequest(url: comps.url!))
+        return try JSONDecoder().decode(APILive.self, from: data)
+    }
+
+    /// 店のメニューまわり（iPad に保存する）
+    func loadCatalog(storeId: String?) async throws -> APICatalog {
+        var comps = URLComponents(url: AppConfig.url(path), resolvingAgainstBaseURL: false)!
+        var items = [URLQueryItem(name: "part", value: "catalog")]
+        if let storeId { items.append(URLQueryItem(name: "store", value: storeId)) }
+        comps.queryItems = items
+        let data = try await send(URLRequest(url: comps.url!))
+        struct Wrap: Decodable { let catalog: APICatalog }
+        return try JSONDecoder().decode(Wrap.self, from: data).catalog
     }
 
     /// 操作（type と中身）

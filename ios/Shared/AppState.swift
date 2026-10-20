@@ -94,9 +94,15 @@ final class AppState: ObservableObject {
         return nil
     }
 
-    /// Web の画面の行き先を見て、オーダー・会計（/app/pos?order=…）ならネイティブの画面で開く
+    /// Web の画面の行き先を見て、オーダー・会計（/app/pos?order=…）ならネイティブの画面で開く。
+    /// ホーム・テーブル一覧のときは、裏でメニューを読んでおく（最初の伝票もすぐ開く。2026-10-21）
     func maybeOpenNativePos(for url: URL) {
-        guard mode == .regi, nativePosEnabled, nativeOrder == nil, AppConfig.isOwnHost(url), url.path == "/app/pos" else { return }
+        guard mode == .regi, nativePosEnabled, AppConfig.isOwnHost(url) else { return }
+        if url.path == "/app/dashboard" || url.path == "/app/floor" || url.path == "/app" {
+            Task { @MainActor in NativeCatalogCache.shared.refresh() }
+            return
+        }
+        guard nativeOrder == nil, url.path == "/app/pos" else { return }
         let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
         guard let orderId = items.first(where: { $0.name == "order" })?.value,
               orderId.range(of: "^[0-9a-fA-F-]{36}$", options: .regularExpression) != nil else { return }

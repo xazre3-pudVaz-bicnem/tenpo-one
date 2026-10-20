@@ -300,13 +300,53 @@ final class NativeOrderModel: ObservableObject {
 
     // MARK: サーバー
 
+    /**
+     * 開くときの読み込み（2026-10-21 Ronnie「メニューは超速く」）：
+     *   1. iPad に保存してあるメニュー（NativeCatalogCache）があれば、まずそれで画面を出す（待たない）
+     *   2. 伝票だけ軽く読む（?part=live）
+     *   3. 裏でメニューを読み直して、変わっていたら入れ替える
+     * 保存が無いとき・テイクアウトのときは今まで通り全部読む
+     */
     func load() async {
         guard let orderId else { return }
+        if let cached = NativeCatalogCache.shared.load() {
+            apply(catalog: cached)
+            loading = false
+            do {
+                let live = try await NativeAPI.shared.loadLive(orderId: orderId)
+                if live.storeId != cached.store.id || live.order.orderType.contains("takeout") || live.order.orderType == "delivery" {
+                    // 別の店・テイクアウト：全部読み直す
+                    await loadAll(orderId: orderId)
+                    return
+                }
+                apply(live: live)
+                NativeCatalogCache.shared.onUpdate = { [weak self] c in self?.apply(catalog: c) }
+                NativeCatalogCache.shared.refresh(storeId: live.storeId)
+            } catch let e as NativeAPIError {
+                notice = e.message
+                if e.useWeb { openInWeb() }
+            } catch {
+                notice = "Couldn't load. Check the connection."
+            }
+            return
+        }
+        await loadAll(orderId: orderId)
+    }
+
+    private func loadAll(orderId: String) async {
         loading = true
         defer { loading = false }
         do {
             let p = try await NativeAPI.shared.load(orderId: orderId)
             apply(payload: p)
+            // 次から速く開けるように保存（テイクアウトのメニューは保存しない）
+            if let v = p.catalogVersion {
+                NativeCatalogCache.shared.save(APICatalog(
+                    store: p.store, categories: p.categories, items: p.items, optionGroups: p.optionGroups, clerks: p.clerks,
+                    clerkRequired: p.clerkRequired, visitSources: p.visitSources, methodBrands: p.methodBrands, pointBrands: p.pointBrands,
+                    discountPresets: p.discountPresets, steraPaymentTypes: p.steraPaymentTypes, canCheckout: p.canCheckout,
+                    canDiscount: p.canDiscount, version: v))
+            }
         } catch let e as NativeAPIError {
             notice = e.message
             if e.useWeb { openInWeb() }
@@ -315,10 +355,34 @@ final class NativeOrderModel: ObservableObject {
         }
     }
 
+    private func apply(catalog c: APICatalog) {
+        applyCatalog(storeName: c.store.name, categories: c.categories, items: c.items, optionGroups: c.optionGroups, clerks: c.clerks,
+                     clerkRequired: c.clerkRequired, visitSources: c.visitSources, methodBrands: c.methodBrands, pointBrands: c.pointBrands,
+                     discountPresets: c.discountPresets, steraTypes: c.steraPaymentTypes, canCheckout: c.canCheckout, canDiscount: c.canDiscount)
+    }
+
+    private func apply(live l: APILive) {
+        steraTerminals = l.steraTerminals
+        registerOpen = l.registerOpen
+        apply(order: l.order)
+    }
+
     private func apply(payload p: APIPayload) {
-        storeName = p.store.name
-        categories = p.categories.map { NPCategory(id: $0.id, name: $0.name, sub: $0.sub) }
-        items = p.items.map {
+        applyCatalog(storeName: p.store.name, categories: p.categories, items: p.items, optionGroups: p.optionGroups, clerks: p.clerks,
+                     clerkRequired: p.clerkRequired, visitSources: p.visitSources, methodBrands: p.methodBrands, pointBrands: p.pointBrands,
+                     discountPresets: p.discountPresets, steraTypes: p.steraPaymentTypes, canCheckout: p.canCheckout, canDiscount: p.canDiscount)
+        steraTerminals = p.steraTerminals
+        registerOpen = p.registerOpen
+        apply(order: p.order)
+    }
+
+    private func applyCatalog(storeName name: String, categories cats: [APICategory], items list: [APIItem], optionGroups groups: [String: [APIOptionGroup]]?,
+                              clerks cl: [APIClerk], clerkRequired req: Bool, visitSources vs: [APISource], methodBrands mb: [String: [APIBrand]],
+                              pointBrands pb: [APIBrand], discountPresets dp: [APIDiscountPreset], steraTypes st: [APISteraType],
+                              canCheckout cc: Bool, canDiscount cd: Bool) {
+        storeName = name
+        categories = cats.map { NPCategory(id: $0.id, name: $0.name, sub: $0.sub) }
+        items = list.map {
             NPMenuItem(id: $0.id, categoryId: $0.categoryId, name: $0.name, kana: $0.kana, english: $0.english, price: $0.price,
                        soldOut: $0.soldOut, hasOptions: $0.hasOptions, recommended: $0.recommended, bestRank: $0.bestRank, openPrice: $0.openPrice)
         }
@@ -326,26 +390,23 @@ final class NativeOrderModel: ObservableObject {
             // おすすめ・売れ筋より、最初の普通のカテゴリを先に開く（Web のレジと同じ）
             selectedCategory = categories.first(where: { !$0.id.hasPrefix("__") })?.id ?? categories.first?.id ?? ""
         }
-        optionGroups = (p.optionGroups ?? [:]).mapValues { list in
+        optionGroups = (groups ?? [:]).mapValues { list in
             list.map { g in
                 NPOptionGroup(id: g.id, name: g.name, english: g.english, isRequired: g.isRequired, minSelect: g.minSelect, maxSelect: g.maxSelect,
                               items: g.items.map { NPOptionGroup.Option(id: $0.id, name: $0.name, english: $0.english, price: $0.price) })
             }
         }
-        clerks = p.clerks
-        clerkRequired = p.clerkRequired
-        visitSources = p.visitSources.map { NPVisitSource(id: $0.id, label: $0.label) }
-        methodBrands = p.methodBrands.mapValues { $0.map { NPBrand(id: $0.id, name: $0.name) } }
-        pointBrands = p.pointBrands.map { NPBrand(id: $0.id, name: $0.name) }
-        discountPresets = p.discountPresets.map {
+        clerks = cl
+        clerkRequired = req
+        visitSources = vs.map { NPVisitSource(id: $0.id, label: $0.label) }
+        methodBrands = mb.mapValues { $0.map { NPBrand(id: $0.id, name: $0.name) } }
+        pointBrands = pb.map { NPBrand(id: $0.id, name: $0.name) }
+        discountPresets = dp.map {
             NPDiscountPreset(id: $0.id, name: $0.name, kind: $0.kind == "percent" ? .percent : $0.kind == "amount" ? .amount : .manual, value: $0.value)
         }
-        steraTerminals = p.steraTerminals
-        steraTypes = p.steraPaymentTypes
-        registerOpen = p.registerOpen
-        canCheckout = p.canCheckout
-        canDiscount = p.canDiscount
-        apply(order: p.order)
+        steraTypes = st
+        canCheckout = cc
+        canDiscount = cd
     }
 
     private func apply(order o: APIOrder) {
@@ -402,6 +463,8 @@ final class NativeOrderModel: ObservableObject {
             return false
         }
         if let w = r.printWarning, !w.isEmpty { notice = w }
+        // 厨房伝票を iPad から LAN で直接出す（サーバーの返事と一緒に来る。待たない。2026-10-21「印刷は超速く」）
+        if let prints = r.prints, !prints.isEmpty { NativeLanPrint.shared.send(prints) }
         return true
     }
 
