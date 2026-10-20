@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-import { Armchair, ClipboardList, Tag, Utensils } from 'lucide-react';
+import { Armchair, ClipboardList, Receipt, Tag, Utensils } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { HandyReservationDetail } from './handy-reservation-detail';
 import { TagChips } from '@/components/reservations/entry/tag-chips';
@@ -52,7 +52,17 @@ export interface HandyReservationRow {
   cancelReason?: string | null;
   /** 受付日時（10/15 21:30） */
   receivedAt?: string | null;
+  /** ウォークイン（レジで卓を開いたときの予約）。履歴として出す */
+  walkIn?: boolean;
+  /** 会計した金額（別々会計なら合計）。会計前・未会計は null */
+  billTotal?: number | null;
+  /** 会計した伝票の番号 */
+  billOrderNos?: number[];
+  /** 会計した時刻（21:35） */
+  paidAt?: string | null;
 }
+
+const yen = (n: number) => `¥${Math.round(n).toLocaleString('ja-JP')}`;
 
 /** 状態のバッジ（予約一覧のアプリと同じく、これから来るものは枠線、終わったもの・キャンセルは灰色） */
 const STATUS_TONE: Record<string, string> = {
@@ -202,6 +212,15 @@ export function HandyReservationList({
                           <p className="truncate">メモ：{r.memo || '-'}</p>
                         </div>
                       </div>
+                      {r.billTotal != null && (
+                        <p className="flex items-center gap-1 font-bold text-[#292725]">
+                          <Receipt className="h-3 w-3 shrink-0 text-[#766b62]" aria-hidden />
+                          <span className="tabular-nums">
+                            会計 {yen(r.billTotal)}
+                            {r.paidAt ? <span className="ml-1 font-normal text-[#766b62]">{r.paidAt}</span> : null}
+                          </span>
+                        </p>
+                      )}
                     </div>
                     <TagChips tags={r.tags} className="mt-1" />
                   </div>

@@ -12,6 +12,7 @@ import {
   MessageSquareText,
   NotebookPen,
   Phone,
+  Receipt,
   Tag,
   UserRound,
   Users,
@@ -43,6 +44,7 @@ import type { HandyReservationRow } from "./handy-reservation-list";
 const OPEN_STATUSES = new Set(["pending", "confirmed", "waiting"]);
 /** キャンセル理由（2026-10-19 Ronnie「レストランボードと同じ：貴店都合・お客様都合・無断キャンセル」） */
 // キャンセルの種類（lib/reservation-cancel.ts。2026-10-20 Ronnie：お客様キャンセル・店舗キャンセル（担当必須）・無断キャンセル）
+const yen = (n: number) => `¥${Math.round(n).toLocaleString("ja-JP")}`;
 
 /** 'HH:MM'〜'HH:MM' の分（日をまたぐときは翌日として） */
 function minutesBetween(a: string, b: string | null): number {
@@ -288,6 +290,21 @@ export function HandyReservationDetail({
             <Row icon={NotebookPen} label="メモ" multiline>
               {r.memo || "-"}
             </Row>
+            {r.billTotal != null && (
+              <Row icon={Receipt} label="会計" strong>
+                <span className="tabular-nums">{yen(r.billTotal)}</span>
+                {r.paidAt ? (
+                  <span className="ml-1 text-[11px] font-normal text-[#766b62]">
+                    {r.paidAt} 退店
+                  </span>
+                ) : null}
+                {r.billOrderNos && r.billOrderNos.length > 0 ? (
+                  <span className="ml-1 text-[11px] font-normal text-[#766b62] tabular-nums">
+                    伝票 {r.billOrderNos.map((n) => `#${n}`).join("・")}
+                  </span>
+                ) : null}
+              </Row>
+            )}
             {r.cancelReason && (
               <Row icon={X} label="キャンセル理由" multiline>
                 {r.cancelReason}

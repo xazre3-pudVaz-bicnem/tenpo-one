@@ -22,13 +22,13 @@ function chip(r: PanelReservation, now: number): { label: string; className: str
   }
   switch (r.status) {
     case 'arrived':
-      return { label: '来店', className: 'bg-success-soft text-success' };
+      return { label: '来店済み', className: 'bg-success-soft text-success' };
     case 'seated':
-      return { label: '来店済', className: 'bg-success-soft text-success' };
+      return { label: '来店済み', className: 'bg-success-soft text-success' };
     case 'billing':
       return { label: '会計待ち', className: 'bg-saffron-soft text-saffron' };
     case 'completed':
-      return { label: '会計済み', className: 'bg-success-soft text-success' };
+      return { label: '退店', className: 'bg-gray-100 text-ink-3' };
     case 'no_show':
       return { label: '無断キャンセル', className: 'bg-gray-100 text-ink-3' };
     default:

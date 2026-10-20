@@ -72,10 +72,11 @@ export const RESERVATION_STATUS = {
   pending: { label: '仮予約', tone: 'gray' },
   confirmed: { label: '予約確定', tone: 'primary' },
   waiting: { label: '来店待ち', tone: 'primary' },
-  arrived: { label: '来店', tone: 'warning' },
+  // 店にいる＝来店済み、会計して終わった＝退店（2026-10-20 Ronnie。予約台帳の集計「来店済み／退店」と同じ言葉）
+  arrived: { label: '来店済み', tone: 'warning' },
   seated: { label: '着席', tone: 'success' },
   billing: { label: '会計待ち', tone: 'warning' },
-  completed: { label: '会計済み', tone: 'gray' },
+  completed: { label: '退店', tone: 'gray' },
   cancelled: { label: 'キャンセル', tone: 'danger' },
   no_show: { label: '無断キャンセル', tone: 'danger' },
   waitlisted: { label: 'キャンセル待ち', tone: 'gray' },
