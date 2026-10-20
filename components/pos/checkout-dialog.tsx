@@ -484,6 +484,7 @@ export function CheckoutDialog({
    * そのまま会計画面が開く。残りは元の伝票に残るので、次の人も同じように会計できる。
    */
   const splitLines = order.lines ?? [];
+  const splitQty = splitLines.reduce((a, l) => a + l.quantity, 0);
   const splitTotal = splitPick
     ? splitLines.reduce((sum, l) => sum + (splitPick[l.id] ?? 0) * l.unitPrice, 0)
     : 0;
@@ -939,7 +940,7 @@ export function CheckoutDialog({
               <button
                 type="button"
                 onClick={() => setSplitPick(splitPick != null ? null : {})}
-                disabled={terminalBlocking || !splitOrderAction || splitLines.length < 2}
+                disabled={terminalBlocking || !splitOrderAction || splitQty < 2}
                 aria-pressed={splitPick != null}
                 className={cn(
                   'tap3d flex h-[46px] w-full flex-col items-center justify-center rounded-xl border text-[14px] font-bold leading-tight disabled:opacity-40',

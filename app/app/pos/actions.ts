@@ -1022,10 +1022,14 @@ export async function splitOrder(
       }
     } else {
       const remainingQty = line.quantity - m.quantity;
+      const printedAll = Math.max(0, line.kitchen_printed_qty ?? line.quantity);
+      const movedPrinted = Math.min(m.quantity, printedAll);
+      const stayPrinted = printedAll - movedPrinted;
       const { error: updErr } = await supabase
         .from('order_items')
         .update({
           quantity: remainingQty,
+          kitchen_printed_qty: stayPrinted,
           line_total: line.unit_price * remainingQty,
           updated_by: ctx.userId,
         })
@@ -1051,6 +1055,12 @@ export async function splitOrder(
         status: 'active',
         // 元の行がまだ厨房へ未送信なら、分けた側も未送信のまま（既定 now() で勝手に送られないように）
         kitchen_sent_at: line.kitchen_sent_at,
+        kitchen_printed_qty: movedPrinted,
+        kitchen_status: line.kitchen_status,
+        kitchen_started_at: line.kitchen_started_at,
+        kitchen_ready_at: line.kitchen_ready_at,
+        served_at: line.served_at,
+        ordered_table_id: line.ordered_table_id,
         created_by: ctx.userId,
       });
       if (insLineErr) {
