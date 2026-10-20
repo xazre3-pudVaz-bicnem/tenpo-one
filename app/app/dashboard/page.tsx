@@ -33,6 +33,7 @@ import { Suspense } from 'react';
 import { can } from '@/lib/permissions';
 import { menuLayout } from '@/app/app/menu/data';
 import { RegiHome, type RegiBigTile } from '@/components/dashboard/regi-home';
+import { RegisterDayBanner } from '@/components/cash/register-day-banner';
 import type { RegiTool } from '@/components/dashboard/regi-tools';
 import { RegiSales } from '@/components/dashboard/regi-sales';
 import { RegiClock } from '@/components/dashboard/regi-clock';
@@ -205,6 +206,7 @@ async function RegiHomePage({
 
   return (
     <RegiHome
+      notice={<RegisterDayBanner storeId={store.id} compact />}
       bigTiles={bigTiles}
       tools={tools}
       storeId={store.id}

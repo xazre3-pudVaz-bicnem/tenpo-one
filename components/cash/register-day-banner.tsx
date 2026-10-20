@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { cn } from '@/lib/utils';
 import { AlertTriangle } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 import { loadStoreDay } from '@/lib/register-day-server';
@@ -8,7 +9,7 @@ import { dayBannerKind, jstHour, mdLabel } from '@/lib/register-day';
  * 「レジがまだ閉まっていません」（2026-09-28 Ronnie：レジ精算をするまでは前の営業日のまま続ける。
  * 朝10時を過ぎても閉まっていなければ知らせる。2日以上前から開きっぱなしなら、売上は今日の日付に入るので強く知らせる）
  */
-export async function RegisterDayBanner({ storeId }: { storeId: string }) {
+export async function RegisterDayBanner({ storeId, compact }: { storeId: string; compact?: boolean }) {
   const supabase = await createClient();
   const now = new Date();
   const day = await loadStoreDay(supabase, storeId, now);
@@ -17,7 +18,10 @@ export async function RegisterDayBanner({ storeId }: { storeId: string }) {
   return (
     <div
       role="alert"
-      className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-danger/30 bg-danger-soft px-4 py-2.5 text-[13px] font-bold text-danger"
+      className={cn(
+        'flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-danger/30 bg-danger-soft px-4 text-[13px] font-bold text-danger',
+        compact ? 'mb-2 py-2' : 'mb-3 py-2.5',
+      )}
     >
       <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden />
       <span className="min-w-0 flex-1">

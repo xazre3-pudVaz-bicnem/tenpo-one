@@ -37,7 +37,7 @@ function BigTile({ tile }: { tile: RegiBigTile }) {
   return (
     <Link
       href={tile.href}
-      className="flex h-[132px] items-center justify-center gap-[22px] rounded-[18px] bg-[#f2f2f7] px-6 transition-colors active:bg-[#e8e8ed]"
+      className="flex h-[132px] items-center justify-center gap-[22px] rounded-[18px] bg-[#f2f2f7] px-6 transition-colors active:bg-[#e8e8ed] [@media(max-height:820px)]:h-[112px]"
     >
       <span
         className="relative grid h-[76px] w-[76px] shrink-0 place-items-center overflow-hidden rounded-[18px] shadow-[0_1px_1px_rgba(0,0,0,0.06),0_3px_8px_rgba(0,0,0,0.14)]"
@@ -116,6 +116,7 @@ export function RegiHome({
   tools,
   storeId,
   sales,
+  notice,
   clock,
   weather,
   kpis,
@@ -126,6 +127,7 @@ export function RegiHome({
   storeId: string | null;
   /** 売上（RegiSales） */
   sales: React.ReactNode;
+  notice?: React.ReactNode;
   /** 時刻（RegiClock） */
   clock: React.ReactNode;
   /** 天気（RegiWeather。Suspense で包んで渡す） */
@@ -155,9 +157,10 @@ export function RegiHome({
         <RegiTools tools={tools} storeId={storeId} />
 
         <div className="flex min-w-0 flex-col">
+          {notice}
           {sales}
           {/* 日付・時刻 ｜ 気温・天気・地名（下の線のすぐ上・真ん中。全部 下にそろえて1行） */}
-          <div className="flex flex-wrap items-end justify-center gap-y-2 pt-4 pb-4">
+          <div className="flex flex-wrap items-end justify-center gap-y-2 pt-4 pb-4 [@media(max-height:820px)]:pt-2 [@media(max-height:820px)]:pb-2">
             <div className="pr-6 lg:pr-8">{clock}</div>
             <div className="border-l border-[#e5e5ea] pl-6 lg:pl-8">{weather}</div>
           </div>

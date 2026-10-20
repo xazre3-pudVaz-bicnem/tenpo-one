@@ -43,7 +43,7 @@ const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
 };
 
 const rowClass =
-  'flex min-h-[56px] flex-1 items-center gap-3 rounded-[14px] bg-[#f2f2f7] px-3 text-left transition-colors active:bg-[#e8e8ed] disabled:opacity-50';
+  'flex min-h-[48px] flex-1 items-center gap-3 rounded-[14px] bg-[#f2f2f7] px-3 text-left transition-colors active:bg-[#e8e8ed] disabled:opacity-50';
 
 function RowBody({ tool }: { tool: RegiTool }) {
   const Icon = ICONS[tool.href];
