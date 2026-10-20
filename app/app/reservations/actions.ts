@@ -1,5 +1,6 @@
 'use server';
 
+import { storeCancelMissingStaff } from '@/lib/reservation-cancel';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { requirePermission } from '@/lib/auth';
@@ -303,6 +304,8 @@ export async function markNoShow(reservationId: string, reason?: string) {
 export async function cancelReservation(reservationId: string, reason: string) {
   const ctx = await requirePermission('reservations.cancel');
   if (!reason || !reason.trim()) throw new Error('キャンセル理由を入力してください');
+  // 店舗キャンセルは担当が必須（2026-10-20 Ronnie）
+  if (storeCancelMissingStaff(reason)) throw new Error('店舗キャンセルは担当を選んでください');
   const supabase = await createClient();
   const reservation = await loadReservation(supabase, ctx, reservationId);
   if (!canTransition(reservation.status, 'cancelled')) {

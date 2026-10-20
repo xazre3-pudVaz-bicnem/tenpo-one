@@ -21,6 +21,7 @@ import {
   type HandyReservationRow,
 } from '@/components/handy/handy-reservation-list';
 import { loadReservationInbox } from '@/lib/reservation-inbox-server';
+import { reservationClerkOptions } from '@/lib/reservation-clerks-server';
 import {
   InboxNoticeList,
   InboxTaskList,
@@ -112,6 +113,8 @@ export default async function HandyReservationsPage({
   const tab: InboxTab = tabParam === 'inbox' || tabParam === 'messages' ? tabParam : 'list';
   const title = tab === 'inbox' ? '予約受付管理' : tab === 'messages' ? 'メッセージ' : handyReservationsTitle(date, today);
   const inboxPromise = loadReservationInbox(supabase, store.id, today);
+  // 店舗キャンセルの担当（レジの担当名。2026-10-20 Ronnie「担当選択必ず」）
+  const staffPromise = reservationClerkOptions(supabase, [store.id]);
   const [{ data: rows }, { data: openOrders }] = await Promise.all([
     supabase
       .from('reservations')
@@ -131,6 +134,7 @@ export default async function HandyReservationsPage({
       .not('reservation_id', 'is', null),
   ]);
   const inbox = await inboxPromise;
+  const cancelStaff = (await staffPromise)[store.id] ?? [];
   // キーワード（列が無いデータベースでも一覧は出る。lib/reservation-tags-server.ts）
   const tagsById = await loadReservationTags(supabase, (rows ?? []).map((r) => r.id as string));
   const tableByReservation = new Map<string, string>();
@@ -237,6 +241,7 @@ export default async function HandyReservationsPage({
                 today,
                 canWrite: can(ctx.role, 'reservations.write'),
                 canCancel: can(ctx.role, 'reservations.cancel'),
+                staff: cancelStaff,
               }}
             />
             <p className="px-5 pb-5 text-center text-[10px] leading-relaxed text-[#766b62]">

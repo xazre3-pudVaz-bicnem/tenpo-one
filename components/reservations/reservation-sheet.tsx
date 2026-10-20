@@ -11,6 +11,7 @@ import { useToast } from '@/components/ui/toast';
 import { cn } from '@/lib/utils';
 import { formatTime, weekdayJa } from '@/lib/format';
 import { RESERVATION_STATUS, RESERVATION_TRANSITIONS } from '@/lib/reservations';
+import { CANCEL_KINDS, cancelReasonText, type CancelKind } from '@/lib/reservation-cancel';
 import { STAY_MINUTE_OPTIONS, withCurrentStay, hmToMinutes } from '@/lib/reservation-time';
 import {
   cancelReservation,
@@ -33,12 +34,9 @@ export interface SheetCourseOption {
 }
 
 /** キャンセル理由（見本のレジと同じ3択。2026-09-26 Ronnie） */
-const CANCEL_REASONS = [
-  { key: 'store', label: '貴店都合', en: 'Store' },
-  { key: 'guest', label: 'お客様都合', en: 'Guest' },
-  { key: 'no_show', label: '無断キャンセル', en: 'No-show' },
-] as const;
-type CancelKey = (typeof CANCEL_REASONS)[number]['key'];
+// キャンセルの種類（lib/reservation-cancel.ts。2026-10-20 Ronnie：お客様キャンセル・店舗キャンセル（担当必須）・無断キャンセル）
+const CANCEL_REASONS = CANCEL_KINDS;
+type CancelKey = CancelKind;
 
 /** 「2026/09/27 (日) 18:30〜20:30 2名」 */
 function whenLabel(r: ReservationListRow): string {
@@ -112,6 +110,10 @@ export function ReservationSheet({
   const [editing, setEditing] = useState(false);
   const [cancelPick, setCancelPick] = useState(false);
   const [cancelKey, setCancelKey] = useState<CancelKey | null>(null);
+  /** 店舗キャンセルの担当（必須） */
+  const [cancelStaff, setCancelStaff] = useState<string | null>(null);
+  /** 店舗キャンセル：担当を選ぶところ */
+  const [pickStaff, setPickStaff] = useState(false);
   const r = reservation;
   const chip = statusChip(r, now);
   const stayMinutes = Math.max(0, Math.round((new Date(r.endAt).getTime() - new Date(r.startAt).getTime()) / 60000));
@@ -182,13 +184,12 @@ export function ReservationSheet({
 
   const doCancel = (note: string) => {
     if (!cancelKey) return;
-    const reason = CANCEL_REASONS.find((c) => c.key === cancelKey)!;
     run(
       () =>
         cancelKey === 'no_show'
-          ? markNoShow(r.id, note || undefined)
-          : cancelReservation(r.id, note ? `${reason.label}：${note}` : reason.label),
-      cancelKey === 'no_show' ? '無断キャンセルを記録しました' : '予約をキャンセルしました',
+          ? markNoShow(r.id, cancelReasonText('no_show', { note }))
+          : cancelReservation(r.id, cancelReasonText(cancelKey, { note, staffName: cancelStaff })),
+      cancelKey === 'no_show' ? '無断キャンセルを記録しました' : `${CANCEL_KINDS.find((c) => c.key === cancelKey)?.label}にしました`,
       onClose
     );
   };
@@ -367,29 +368,76 @@ export function ReservationSheet({
               <button
                 type="button"
                 disabled={pending}
-                onClick={() => setCancelPick((v) => !v)}
+                onClick={() => {
+                  setPickStaff(false);
+                  setCancelPick((v) => !v);
+                }}
                 className="h-14 rounded-xl border border-line bg-lilac-soft px-4 text-[14px] font-bold text-ink disabled:opacity-50"
               >
                 予約をキャンセルする
               </button>
             )}
             {cancelPick && (
-              <div className="absolute bottom-full left-0 mb-2 w-72 rounded-2xl border border-line bg-white p-2 shadow-xl">
-                <p className="px-2 py-1.5 text-center text-[12px] text-ink-3">キャンセル理由を選択してください。</p>
-                {CANCEL_REASONS.filter((c) => (c.key === 'no_show' ? canNoShow : canCancel)).map((c) => (
-                  <button
-                    key={c.key}
-                    type="button"
-                    onClick={() => {
-                      setCancelPick(false);
-                      setCancelKey(c.key);
-                    }}
-                    className="flex h-12 w-full items-center justify-center rounded-lg text-[16px] font-bold text-royal hover:bg-lilac-soft"
-                  >
-                    {c.label}
-                    <span className="ml-2 text-[11px] font-normal text-ink-3">{c.en}</span>
-                  </button>
-                ))}
+              <div className="absolute bottom-full left-0 mb-2 w-80 rounded-2xl border border-line bg-white p-2 shadow-xl">
+                {pickStaff ? (
+                  <>
+                    <p className="px-2 py-1.5 text-center text-[12px] text-ink-3">店舗キャンセル：担当を選んでください（必須）</p>
+                    {staffOptions.length === 0 ? (
+                      <p className="px-2 py-3 text-center text-[12.5px] text-ink-3">担当がいません。レジの設定で担当を入れてください</p>
+                    ) : (
+                      <div className="grid max-h-64 grid-cols-2 gap-1.5 overflow-y-auto p-1">
+                        {staffOptions.map((st) => (
+                          <button
+                            key={st.id}
+                            type="button"
+                            onClick={() => {
+                              setCancelPick(false);
+                              setPickStaff(false);
+                              setCancelStaff(st.name);
+                              setCancelKey('store');
+                            }}
+                            className="h-11 truncate rounded-lg border border-line px-2 text-[14px] font-bold text-ink hover:bg-lilac-soft"
+                          >
+                            {st.name}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setPickStaff(false)}
+                      className="mt-1 h-10 w-full rounded-lg text-[13px] font-bold text-ink-3 hover:bg-lilac-soft"
+                    >
+                      もどる
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <p className="px-2 py-1.5 text-center text-[12px] text-ink-3">キャンセルの種類を選んでください。</p>
+                    {CANCEL_REASONS.filter((c) => (c.key === 'no_show' ? canNoShow : canCancel)).map((c) => (
+                      <button
+                        key={c.key}
+                        type="button"
+                        onClick={() => {
+                          if (c.key === 'store') {
+                            setPickStaff(true);
+                            return;
+                          }
+                          setCancelPick(false);
+                          setCancelStaff(null);
+                          setCancelKey(c.key);
+                        }}
+                        className="flex h-14 w-full flex-col items-center justify-center rounded-lg leading-tight text-royal hover:bg-lilac-soft"
+                      >
+                        <span className="text-[16px] font-bold">
+                          {c.label}
+                          <span className="ml-2 text-[11px] font-normal text-ink-3">{c.en}</span>
+                        </span>
+                        <span className="text-[11px] font-normal text-ink-3">{c.hint}</span>
+                      </button>
+                    ))}
+                  </>
+                )}
               </div>
             )}
           </div>
@@ -415,7 +463,11 @@ export function ReservationSheet({
       <ConfirmDialog
         open={cancelKey != null}
         onClose={() => setCancelKey(null)}
-        title={cancelKey === 'no_show' ? '無断キャンセルとして記録' : `予約をキャンセル（${CANCEL_REASONS.find((c) => c.key === cancelKey)?.label ?? ''}）`}
+        title={
+          cancelKey === 'no_show'
+            ? '無断キャンセルとして記録'
+            : `${CANCEL_REASONS.find((c) => c.key === cancelKey)?.label ?? ''}${cancelKey === 'store' && cancelStaff ? `（担当: ${cancelStaff}）` : ''}`
+        }
         message={
           cancelKey === 'no_show'
             ? `${r.guestName} 様 ${formatTime(r.startAt)} ${r.partySize}名 の予約を「無断キャンセル」として記録します。`

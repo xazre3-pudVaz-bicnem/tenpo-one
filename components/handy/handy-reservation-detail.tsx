@@ -29,6 +29,11 @@ import {
   transitionReservationStatus,
 } from "@/app/app/reservations/actions";
 import { stayLabel } from "@/lib/reservation-entry";
+import {
+  CANCEL_KINDS,
+  cancelReasonText,
+  type CancelKind,
+} from "@/lib/reservation-cancel";
 import { TableSuggest } from "@/components/reservations/entry/entry-parts";
 import { TagChips } from "@/components/reservations/entry/tag-chips";
 import { useReservationEntryData } from "@/components/reservations/entry/use-entry-data";
@@ -37,7 +42,7 @@ import type { HandyReservationRow } from "./handy-reservation-list";
 /** 詳細から操作できる予約（来店前） */
 const OPEN_STATUSES = new Set(["pending", "confirmed", "waiting"]);
 /** キャンセル理由（2026-10-19 Ronnie「レストランボードと同じ：貴店都合・お客様都合・無断キャンセル」） */
-const CANCEL_REASONS = ["貴店都合", "お客様都合", "無断キャンセル"] as const;
+// キャンセルの種類（lib/reservation-cancel.ts。2026-10-20 Ronnie：お客様キャンセル・店舗キャンセル（担当必須）・無断キャンセル）
 
 /** 'HH:MM'〜'HH:MM' の分（日をまたぐときは翌日として） */
 function minutesBetween(a: string, b: string | null): number {
@@ -70,6 +75,8 @@ export function HandyReservationDetail({
     today: string;
     canWrite: boolean;
     canCancel: boolean;
+    /** 店舗キャンセルの担当（レジの担当名） */
+    staff?: { id: string; name: string }[];
   };
   /** 一覧と同じ状態のバッジの色 */
   statusTone: string;
@@ -105,6 +112,8 @@ export function HandyReservationDetail({
   const { toast } = useToast();
   const [pending, startTransition] = useTransition();
   const [mode, setMode] = useState<null | "cancel" | "tables">(null);
+  /** 店舗キャンセル：担当を選ぶところ */
+  const [storeCancel, setStoreCancel] = useState(false);
   const [nowMs] = useState(() => Date.now());
   const stay = minutesBetween(r.time, r.endTime);
   const canAct = !!actions?.canWrite && OPEN_STATUSES.has(r.status);
@@ -132,15 +141,17 @@ export function HandyReservationDetail({
         await transitionReservationStatus(r.id, "confirmed");
       await transitionReservationStatus(r.id, "arrived");
     }, `${r.name} 様を来店にしました`);
-  const cancel = (reason: (typeof CANCEL_REASONS)[number]) =>
+  const cancel = (kind: CancelKind, staffName?: string) =>
     run(
       () =>
-        reason === "無断キャンセル"
-          ? markNoShow(r.id, reason)
-          : cancelReservation(r.id, reason),
-      reason === "無断キャンセル"
+        kind === "no_show"
+          ? markNoShow(r.id, cancelReasonText("no_show"))
+          : cancelReservation(r.id, cancelReasonText(kind, { staffName })),
+      kind === "no_show"
         ? "無断キャンセルにしました"
-        : `キャンセルしました（${reason}）`,
+        : kind === "store"
+          ? `店舗キャンセルにしました（担当: ${staffName}）`
+          : "お客様キャンセルにしました",
     );
 
   return (
@@ -339,47 +350,93 @@ export function HandyReservationDetail({
         )}
         {canAct && mode === "cancel" && (
           <div className="border-t border-[#efe9e1] bg-[#fbf9f5] px-4 pt-2.5 pb-3">
-            <p className="mb-2 text-[13px] font-bold text-[#45403b]">
-              キャンセル理由を選んでください
-            </p>
-            <div className="grid gap-2">
-              {CANCEL_REASONS.map((reason) => {
-                const allowed =
-                  reason === "無断キャンセル"
-                    ? r.status !== "pending"
-                    : !!actions?.canCancel;
-                return (
+            {storeCancel ? (
+              <>
+                <p className="mb-2 text-[13px] font-bold text-[#45403b]">
+                  店舗キャンセル：担当を選んでください
+                </p>
+                {(actions?.staff ?? []).length === 0 ? (
+                  <p className="mb-2 rounded-[10px] bg-white px-3 py-3 text-[12.5px] text-[#766b62]">
+                    担当がいません。レジの設定で担当を入れてください
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-3 gap-2">
+                    {(actions?.staff ?? []).map((st) => (
+                      <button
+                        key={st.id}
+                        type="button"
+                        disabled={pending}
+                        onClick={() => cancel("store", st.name)}
+                        className="min-h-[46px] truncate rounded-[10px] border border-[#e5dfd5] bg-white px-2 text-[14px] font-bold text-[#292725] active:bg-[#f3efe8] disabled:opacity-40"
+                      >
+                        {st.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setStoreCancel(false)}
+                  className="mt-1 min-h-[40px] w-full text-[13px] font-bold text-[#766b62]"
+                >
+                  もどる
+                </button>
+              </>
+            ) : (
+              <>
+                <p className="mb-2 text-[13px] font-bold text-[#45403b]">
+                  キャンセルの種類を選んでください
+                </p>
+                <div className="grid gap-2">
+                  {CANCEL_KINDS.map((k) => {
+                    const allowed =
+                      k.key === "no_show"
+                        ? r.status !== "pending"
+                        : !!actions?.canCancel;
+                    return (
+                      <button
+                        key={k.key}
+                        type="button"
+                        disabled={pending || !allowed}
+                        onClick={() =>
+                          k.key === "store"
+                            ? setStoreCancel(true)
+                            : cancel(k.key)
+                        }
+                        className={cn(
+                          "flex min-h-[50px] flex-col items-center justify-center rounded-full leading-tight disabled:opacity-40",
+                          k.key === "no_show"
+                            ? "bg-[#f6e4df] text-[#c62828]"
+                            : "bg-[#ece7e0] text-[#292725]",
+                        )}
+                      >
+                        <span className="text-[15px] font-bold">{k.label}</span>
+                        <span className="text-[10.5px] font-semibold opacity-70">
+                          {k.hint}
+                        </span>
+                      </button>
+                    );
+                  })}
                   <button
-                    key={reason}
                     type="button"
-                    disabled={pending || !allowed}
-                    onClick={() => cancel(reason)}
-                    className={cn(
-                      "min-h-[46px] rounded-full text-[15px] font-bold disabled:opacity-40",
-                      reason === "無断キャンセル"
-                        ? "bg-[#f6e4df] text-[#c62828]"
-                        : "bg-[#ece7e0] text-[#292725]",
-                    )}
+                    onClick={() => setMode(null)}
+                    className="min-h-[40px] text-[13px] font-bold text-[#766b62]"
                   >
-                    {reason}
+                    やめる
                   </button>
-                );
-              })}
-              <button
-                type="button"
-                onClick={() => setMode(null)}
-                className="min-h-[40px] text-[13px] font-bold text-[#766b62]"
-              >
-                やめる
-              </button>
-            </div>
+                </div>
+              </>
+            )}
           </div>
         )}
         {canAct && mode === null && (
           <div className="grid grid-cols-3 gap-2 border-t border-[#efe9e1] px-4 pt-2.5">
             <button
               type="button"
-              onClick={() => setMode("cancel")}
+              onClick={() => {
+                setStoreCancel(false);
+                setMode("cancel");
+              }}
               className="min-h-[46px] rounded-[10px] border border-[#e5dfd5] bg-white text-[13.5px] font-bold text-[#c62828] active:bg-[#f3efe8]"
             >
               予約キャンセル

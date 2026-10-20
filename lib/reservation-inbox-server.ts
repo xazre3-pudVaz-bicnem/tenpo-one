@@ -1,4 +1,5 @@
 import 'server-only';
+import { cancelKindLabel, cancelKindOf } from '@/lib/reservation-cancel';
 import type { createClient } from '@/lib/supabase/server';
 import { NEEDS_CONTACT_TAG } from '@/lib/reservation-entry';
 import { GOURMET_SITES } from '@/lib/gourmet-mail';
@@ -210,7 +211,8 @@ export async function loadReservationInbox(supabase: Supabase, storeId: string, 
     notices.push({
       key: `x:${r.id}`,
       kind: walkIn ? 'left' : 'cancel',
-      title: walkIn ? `退店　${r.guest_name} 様` : `${r.status === 'no_show' ? '無断キャンセル' : 'キャンセル'}　${r.guest_name} 様`,
+      // キャンセルの種類（お客様キャンセル・店舗キャンセル・無断キャンセル。lib/reservation-cancel.ts）
+      title: walkIn ? `退店　${r.guest_name} 様` : `${cancelKindLabel(cancelKindOf(r.status, r.cancel_reason))}　${r.guest_name} 様`,
       detail: detailOf(r),
       note: r.cancel_reason || sourceOf(r),
       at: r.cancelled_at ?? r.created_at,

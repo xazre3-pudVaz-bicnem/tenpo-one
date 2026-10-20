@@ -87,7 +87,7 @@ export function HandyReservationList({
   /** 詳細のポップアップに出す日付（10/16（金）） */
   dateLabel?: string;
   /** 詳細から 来店・キャンセル・テーブル変更 をする（2026-10-19 Ronnie「レストランボードのように詳細から」）。無ければ見るだけ */
-  actions?: { storeId: string; date: string; today: string; canWrite: boolean; canCancel: boolean };
+  actions?: { storeId: string; date: string; today: string; canWrite: boolean; canCancel: boolean; staff?: { id: string; name: string }[] };
 }) {
   const [hideCancelled, setHideCancelled] = useState(false);
   // 押した予約の詳細（ポップアップ）
