@@ -20,6 +20,13 @@ describe('品を入れずに離れた伝票は無かったことにする', () =
     expect(lib).toContain("status: 'cancelled', cancel_reason: '注文せずに戻った（自動）'");
   });
 
+  it('同じ予約に別の伝票（会計済み・会計前）があれば、予約は取消にしない（会計したのにキャンセルと出ていた。2026-10-20 Ronnie）', () => {
+    const pos = readFileSync(new URL('../app/app/pos/actions.ts', import.meta.url), 'utf8');
+    expect(lib).toContain("if (order.reservation_id && !(await hasOtherOrder(supabase, order.reservation_id, orderId)))");
+    expect(pos).toContain("if (order.reservation_id && !(await hasOtherOrder(supabase, order.reservation_id, orderId)))");
+    expect(lib).toContain(".neq('status', 'cancelled')");
+  });
+
   it('画面：品が入っていなければ 戻るボタン・unmount・pagehide で消す（カートだけは決定していない扱い）', () => {
     expect(screen).toContain('untouchedRef.current = items.length === 0;');
     expect(screen).toContain("navigator.sendBeacon('/api/pos/discard-untouched'");

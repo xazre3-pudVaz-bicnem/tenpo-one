@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, useTransition } from 'react';
-import { BellRing, CalendarCheck2, CalendarPlus, CalendarX2, Check, ClipboardList, Mail, PencilLine, PhoneCall } from 'lucide-react';
+import { BellRing, CalendarCheck2, CalendarPlus, CalendarX2, Check, ClipboardList, LogOut, Mail, PencilLine, PhoneCall } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/components/ui/toast';
 import {
@@ -256,6 +256,8 @@ const NOTICE_LOOK: Record<InboxNotice['kind'], { icon: typeof Check; label: stri
   new: { icon: CalendarPlus, label: '新規', className: 'bg-[#e8f3ec] text-[#2f6b3f]' },
   change: { icon: PencilLine, label: '変更', className: 'bg-[#e8eefb] text-[#2b4fa8]' },
   cancel: { icon: CalendarX2, label: 'キャンセル', className: 'bg-[#fbeaea] text-[#b42318]' },
+  // ウォークインが帰った（予約台帳の「退店」と同じ茶色がかった灰色）
+  left: { icon: LogOut, label: '退店', className: 'bg-[#efebe7] text-[#6b625a]' },
 };
 
 export function InboxNoticeList({ notices, storeId, variant }: { notices: InboxNotice[]; storeId: string; variant: Variant }) {

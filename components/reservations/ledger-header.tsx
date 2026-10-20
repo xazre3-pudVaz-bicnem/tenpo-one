@@ -16,9 +16,12 @@ import type { LedgerChrome } from './ledger-data';
  * 予約リスト・グルメ別・週間・月間・ウェイティングなどはカレンダーのボタンの中に入れる。
  */
 
-/** 上段のボタン（見本どおり全部同じ形・TENPO ONE の色） */
+/**
+ * 上段のボタン（見本どおり全部同じ形・TENPO ONE の色）。
+ * スマホ（sm 未満）は6つを1行に収める：アイコンの下に小さい字・横に広げる（2026-10-20 Ronnie「スマホではボタンを1行に」）
+ */
 const ACTION =
-  'inline-flex h-10 items-center gap-1.5 rounded-[9px] bg-royal px-3.5 text-[14px] font-bold whitespace-nowrap text-white transition-colors hover:bg-plum';
+  'inline-flex h-11 flex-1 basis-0 flex-col items-center justify-center gap-0.5 rounded-[9px] bg-royal px-1 text-[10px] font-bold whitespace-nowrap text-white transition-colors hover:bg-plum sm:h-10 sm:flex-none sm:basis-auto sm:flex-row sm:gap-1.5 sm:px-3.5 sm:text-[14px]';
 /** カレンダーのボタンの中の1行 */
 const MENU_ITEM =
   'flex h-11 w-full items-center justify-start gap-2 rounded-lg border border-lilac bg-lilac-soft px-3 text-left text-[14px] font-semibold text-royal hover:bg-wisteria';
@@ -45,7 +48,8 @@ export function LedgerTop({
 
       <div className="flex items-center [&>*]:ml-0">{nav}</div>
 
-      <div className="ml-auto flex flex-wrap items-center gap-2">
+      {/* スマホ：6つのボタンを1行に（横いっぱい）。パソコン・iPad：右寄せ */}
+      <div className="flex w-full flex-nowrap items-center gap-1.5 sm:ml-auto sm:w-auto sm:flex-wrap sm:gap-2">
         {chrome.links.tables && (
           <Link href="/app/floor" className={ACTION}>
             <DoorOpen className="h-4 w-4" aria-hidden />

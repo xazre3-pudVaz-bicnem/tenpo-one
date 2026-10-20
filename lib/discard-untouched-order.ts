@@ -61,7 +61,9 @@ export async function discardUntouchedOrder(
         .in('current_status', ['seated', 'ordering', 'billing', 'cleaning']);
     }
   }
-  if (order.reservation_id) {
+  // 同じ予約に別の伝票（会計済み・会計前）があれば、お客様は来店している → 予約は取消にしない
+  // （2026-10-20 Ronnie「会計したのにキャンセルと出る。会計したら来店済み」）
+  if (order.reservation_id && !(await hasOtherOrder(supabase, order.reservation_id, orderId))) {
     await supabase
       .from('reservations')
       .update({ status: 'cancelled', cancel_reason: '注文せずに戻った（自動）', cancelled_at: now, updated_by: ctx.userId })
@@ -79,4 +81,15 @@ export async function discardUntouchedOrder(
     p_note: '品を入れずに画面を離れた伝票を自動で取消',
   });
   return { discarded: true };
+}
+
+/** 同じ予約に、この伝票のほかに取消していない伝票（会計済み・会計前）があるか */
+export async function hasOtherOrder(supabase: AnyClient, reservationId: string, orderId: string): Promise<boolean> {
+  const { count } = await supabase
+    .from('orders')
+    .select('id', { count: 'exact', head: true })
+    .eq('reservation_id', reservationId)
+    .neq('id', orderId)
+    .neq('status', 'cancelled');
+  return (count ?? 0) > 0;
 }

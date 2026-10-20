@@ -5,6 +5,7 @@ import { useToast } from '@/components/ui/toast';
 import { DIRECT_BACKOFF_MS, DIRECT_POLL_MS, eposErrorLabel, type BluetoothLink } from '@/lib/direct-print';
 import { nativeBluetooth, nativeLan } from '@/lib/native-app';
 import { postDirect, readDirectPrintConfig, sendToEposPrinter } from './direct-print-client';
+import { createClient } from '@/lib/supabase/client';
 import { buildSiiAgentPrint, openSiiAgent } from './sii-agent-client';
 
 interface NextJob {
@@ -39,6 +40,12 @@ interface NextLanJob {
   data: string;
 }
 
+/**
+ * 注文・会計が入った直後に、いつもの1秒を待たずに見に行く時刻（2026-10-20 Ronnie「アプリは印刷も速く」）。
+ * 印刷のジョブはサーバーで少しあと（注文の保存の直後）に作られるので、数回だけ早めに見る。
+ */
+const KICK_DELAYS_MS = [150, 600, 1200, 2000];
+
 /** LAN のプリンターにつながらなかったとき、そのプリンターを次に試すまで（ほかのプリンターは止めない） */
 const LAN_BACKOFF_MS = 5000;
 
@@ -59,7 +66,7 @@ const BT_UNREACHABLE = new Set(['not_found', 'connect', 'unreachable', 'bluetoot
  *   - LAN（TENPO ONE レジ アプリだけ）：SII RP-F10（有線LAN）・EPSON など、Wi-Fi・有線LAN のプリンターへ
  *     ESC/POS をそのまま送る（ios/Shared/LanPrinters.swift）。厨房・ドリンクの伝票も。2026-10-16 Ronnie「LAN で」
  */
-export function DirectPrintAgent() {
+export function DirectPrintAgent({ storeId }: { storeId?: string } = {}) {
   const { toast } = useToast();
 
   useEffect(() => {
@@ -83,6 +90,36 @@ export function DirectPrintAgent() {
       if (stopped) return;
       window.clearTimeout(timer);
       timer = window.setTimeout(() => void tick(), ms);
+    };
+
+    /** 注文・会計が入った：いつもの1秒を待たずに何回か早めに見る */
+    let kickTimers: number[] = [];
+    const kick = () => {
+      if (stopped) return;
+      for (const t of kickTimers) window.clearTimeout(t);
+      kickTimers = KICK_DELAYS_MS.map((ms) =>
+        window.setTimeout(() => {
+          if (!running) void tick();
+        }, ms)
+      );
+    };
+    /** この端末で印刷しているときだけ、店の注文・会計の変化を Realtime で受け取る（印刷しない端末はつながない） */
+    const supabase = storeId ? createClient() : null;
+    let channel: ReturnType<NonNullable<typeof supabase>['channel']> | null = null;
+    const usesDevicePrinting = () =>
+      config.printerIds.length > 0 || (config.bluetooth ?? []).length > 0 || (config.lan ?? []).length > 0;
+    const syncRealtime = () => {
+      const want = !!supabase && !!storeId && usesDevicePrinting();
+      if (want && !channel && supabase) {
+        channel = supabase
+          .channel(`direct-print-${storeId}`)
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'order_items', filter: `store_id=eq.${storeId}` }, kick)
+          .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'orders', filter: `store_id=eq.${storeId}` }, kick)
+          .subscribe();
+      } else if (!want && channel && supabase) {
+        void supabase.removeChannel(channel);
+        channel = null;
+      }
     };
 
     const done = (job: { id: string; printerId: string }, result: 'printed' | 'failed' | 'unreachable', code?: string | null) =>
@@ -260,6 +297,7 @@ export function DirectPrintAgent() {
       wifiBackoffUntil = 0;
       btBackoffUntil = 0;
       lanBackoff.clear();
+      syncRealtime();
       schedule(0);
     };
     const onVisible = () => {
@@ -280,14 +318,17 @@ export function DirectPrintAgent() {
     window.addEventListener('storage', onChange);
     document.addEventListener('visibilitychange', onVisible);
     schedule(800);
+    syncRealtime();
     return () => {
       stopped = true;
       window.clearTimeout(timer);
+      for (const t of kickTimers) window.clearTimeout(t);
+      if (channel && supabase) void supabase.removeChannel(channel);
       window.removeEventListener('tenpo-direct-print-changed', onChange);
       window.removeEventListener('storage', onChange);
       document.removeEventListener('visibilitychange', onVisible);
     };
-  }, [toast]);
+  }, [toast, storeId]);
 
   return null;
 }

@@ -23,6 +23,7 @@ import { clerkCanCancel } from '@/lib/clerk-roles';
 import { loadStoreClerks } from '@/lib/pos-clerks-server';
 import { groupOfTable, tableGroupsFrom } from '@/lib/table-group';
 import { isSeatCourseItem } from '@/lib/menu-book';
+import { shareAmounts, sharedName, splitPrintedQty } from '@/lib/split-share';
 import { dissolveTableGroupOf } from '@/lib/table-group-server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import {
@@ -930,6 +931,116 @@ async function receiptPrinterForAutoPrint(
   return data ? { id: data.id } : null;
 }
 
+/** 分けた品・移した品の厨房の状態（調理中・できあがり・提供済み）。厨房の画面に新しい注文として出ないように引き継ぐ */
+function kitchenCopy(line: {
+  kitchen_status?: string | null;
+  kitchen_started_at?: string | null;
+  kitchen_ready_at?: string | null;
+  served_at?: string | null;
+  ordered_table_id?: string | null;
+}) {
+  return {
+    ...(line.kitchen_status ? { kitchen_status: line.kitchen_status } : {}),
+    kitchen_started_at: line.kitchen_started_at ?? null,
+    kitchen_ready_at: line.kitchen_ready_at ?? null,
+    served_at: line.served_at ?? null,
+    ordered_table_id: line.ordered_table_id ?? null,
+  };
+}
+
+/**
+ * 1つの品を何人かで分ける（別々会計。2026-10-20 高田馬場「同じ品を3人で食べると別々会計できない」）。
+ * 品を1つ、n 個の「品名（1/n）」に分ける（金額は n 等分。端数は前から1円ずつ・合計は同じ）。
+ * 分けたあとは伝票分割の画面で1つずつ別の伝票へ移して、それぞれ会計できる。
+ * 厨房へは伝えたままにする（取消・追加の伝票や厨房の画面に新しく出ない）。
+ */
+export async function divideOrderItem(orderId: string, orderItemId: string, parts: number): Promise<void> {
+  const ctx = await requirePermission('pos.checkout');
+  const supabase = await createClient();
+  const order = await loadOpenOrder(supabase, ctx, orderId);
+  const { data: line } = await supabase
+    .from('order_items')
+    .select('*')
+    .eq('id', orderItemId)
+    .eq('order_id', orderId)
+    .eq('status', 'active')
+    .maybeSingle();
+  if (!line) throw new Error('品目が見つかりません');
+  if (line.unit_price <= 0) throw new Error('0円の品は分けられません');
+  const shares = shareAmounts(line.unit_price, parts);
+  const name = sharedName(line.name, parts);
+  const sentAt = line.kitchen_sent_at ?? new Date().toISOString();
+
+  // 品が2つ以上なら1つだけ分ける（残りはそのまま）。1つなら、その行を1人目の分にする
+  const newLines = line.quantity > 1 ? shares : shares.slice(1);
+  if (line.quantity > 1) {
+    const printed = splitPrintedQty(line.kitchen_printed_qty ?? line.quantity, 1);
+    const { error } = await supabase
+      .from('order_items')
+      .update({
+        quantity: line.quantity - 1,
+        line_total: line.unit_price * (line.quantity - 1),
+        kitchen_printed_qty: printed.stay,
+        updated_by: ctx.userId,
+      })
+      .eq('id', line.id)
+      .eq('quantity', line.quantity);
+    if (error) throw new Error('品を分けられませんでした。通信状態を確認して再度お試しください');
+  } else {
+    const { data: updated, error } = await supabase
+      .from('order_items')
+      .update({ name, unit_price: shares[0], line_total: shares[0], updated_by: ctx.userId })
+      .eq('id', line.id)
+      .eq('quantity', 1)
+      .eq('unit_price', line.unit_price)
+      .select('id')
+      .maybeSingle();
+    if (error || !updated) throw new Error('品を分けられませんでした。通信状態を確認して再度お試しください');
+  }
+
+  const { error: insErr } = await supabase.from('order_items').insert(
+    newLines.map((price) => ({
+      organization_id: line.organization_id,
+      store_id: line.store_id,
+      order_id: orderId,
+      menu_item_id: line.menu_item_id,
+      name,
+      unit_price: price,
+      quantity: 1,
+      tax_rate: line.tax_rate,
+      tax_included: line.tax_included,
+      modifiers: line.modifiers,
+      memo: line.memo,
+      line_total: price,
+      staff_id: ctx.userId,
+      status: 'active',
+      kitchen_sent_at: sentAt,
+      ...kitchenCopy(line),
+      // 厨房へは伝えたまま（新しい伝票を出さない）
+      kitchen_printed_qty: 1,
+      created_by: ctx.userId,
+    }))
+  );
+  if (insErr) {
+    console.error('[pos.divideOrderItem] failed to insert shares:', insErr);
+    throw new Error('品を分けられませんでした。通信状態を確認して再度お試しください');
+  }
+
+  await supabase.rpc('recalc_order_totals', { p_order_id: orderId });
+  await supabase.rpc('log_audit', {
+    p_org: order.organization_id,
+    p_store: order.store_id,
+    p_action: 'order.divide_item',
+    p_target_table: 'order_items',
+    p_target_id: line.id,
+    p_before: { name: line.name, unit_price: line.unit_price, quantity: line.quantity },
+    p_after: { name, parts, shares },
+    p_note: `${line.name} を${parts}人で分けた（別々会計）`,
+  });
+
+  revalidatePath('/app/pos');
+}
+
 export interface SplitMove {
   orderItemId: string;
   /** 移動する数量（元品目の数量以下）。全量を指定すると品目ごと移動する */
@@ -1022,11 +1133,14 @@ export async function splitOrder(
       }
     } else {
       const remainingQty = line.quantity - m.quantity;
+      // 厨房へ伝えた数量は合計を変えずに振り分ける（変えると厨房に「取消 -1」「追加 +1」が出てしまう）
+      const printed = splitPrintedQty(line.kitchen_printed_qty ?? line.quantity, m.quantity);
       const { error: updErr } = await supabase
         .from('order_items')
         .update({
           quantity: remainingQty,
           line_total: line.unit_price * remainingQty,
+          kitchen_printed_qty: printed.stay,
           updated_by: ctx.userId,
         })
         .eq('id', line.id);
@@ -1051,6 +1165,8 @@ export async function splitOrder(
         status: 'active',
         // 元の行がまだ厨房へ未送信なら、分けた側も未送信のまま（既定 now() で勝手に送られないように）
         kitchen_sent_at: line.kitchen_sent_at,
+        ...kitchenCopy(line),
+        kitchen_printed_qty: printed.moved,
         created_by: ctx.userId,
       });
       if (insLineErr) {
@@ -1297,7 +1413,9 @@ export async function cancelEmptyOrder(
   }
 
   // 予約（ウォークイン含む）: 来店したが注文なしで終了 → 取消扱い。customers.cancel_count は加算しない（店側操作のため）
-  if (order.reservation_id) {
+  // 同じ予約に別の伝票（会計済み・会計前）があれば来店しているので取消にしない（2026-10-20 Ronnie）
+  const { hasOtherOrder } = await import('@/lib/discard-untouched-order');
+  if (order.reservation_id && !(await hasOtherOrder(supabase, order.reservation_id, orderId))) {
     await supabase
       .from('reservations')
       .update({ status: 'cancelled', cancel_reason: `注文取消: ${reason.trim()}`, cancelled_at: now, updated_by: ctx.userId })

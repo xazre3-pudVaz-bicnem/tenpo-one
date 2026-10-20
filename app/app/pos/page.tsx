@@ -36,6 +36,7 @@ import {
   cancelEmptyOrder,
   discardUntouchedOrderAction,
   splitOrder,
+  divideOrderItem,
   setGuestCount,
   setSeatTime,
   applyCoupon,
@@ -466,6 +467,7 @@ export default async function PosPage({
         cancelEmptyOrderAction={cancelEmptyOrder}
         discardUntouchedOrderAction={discardUntouchedOrderAction}
         splitOrderAction={splitOrder}
+        divideOrderItemAction={divideOrderItem}
         openCheckout={openCheckout === '1'}
         openTableMove={openMove === '1'}
         setGuestCountAction={setGuestCount}

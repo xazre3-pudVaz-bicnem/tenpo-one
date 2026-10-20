@@ -21,6 +21,7 @@ import {
   type HandyReservationRow,
 } from '@/components/handy/handy-reservation-list';
 import { loadReservationInbox } from '@/lib/reservation-inbox-server';
+import { reservationClerkOptions } from '@/lib/reservation-clerks-server';
 import {
   InboxNoticeList,
   InboxTaskList,
@@ -43,6 +44,11 @@ const LISTED_STATUSES: ReservationStatus[] = [
   'cancelled',
 ];
 const UPCOMING: ReadonlySet<string> = new Set(['pending', 'confirmed', 'waiting', 'arrived', 'seated', 'billing']);
+/**
+ * ウォークイン（レジで卓を開いたときに自動でできる予約）は、履歴として出す：店にいる（着席・会計待ち）か、会計して帰った（退店）ものだけ。
+ * 注文せずに戻った・取消したウォークインは出さない（何も起きていないので）。2026-10-20 Ronnie「予約一覧で履歴を見られるように」
+ */
+const WALK_IN_HISTORY: ReadonlySet<string> = new Set(['seated', 'billing', 'completed']);
 
 type One<T> = T | T[] | null;
 const one = <T,>(v: One<T>): T | null => (Array.isArray(v) ? (v[0] ?? null) : v);
@@ -112,6 +118,8 @@ export default async function HandyReservationsPage({
   const tab: InboxTab = tabParam === 'inbox' || tabParam === 'messages' ? tabParam : 'list';
   const title = tab === 'inbox' ? '予約受付管理' : tab === 'messages' ? 'メッセージ' : handyReservationsTitle(date, today);
   const inboxPromise = loadReservationInbox(supabase, store.id, today);
+  // 店舗キャンセルの担当（レジの担当名。2026-10-20 Ronnie「担当選択必ず」）
+  const staffPromise = reservationClerkOptions(supabase, [store.id]);
   const [{ data: rows }, { data: openOrders }] = await Promise.all([
     supabase
       .from('reservations')
@@ -121,24 +129,41 @@ export default async function HandyReservationsPage({
       .eq('store_id', store.id)
       .eq('reserved_date', date)
       .in('status', LISTED_STATUSES)
-      .neq('created_via', 'walk_in')
       .order('start_at'),
+    // 会計前の伝票（HANDY で注文へ）と、会計した伝票（金額を履歴に出す）
     supabase
       .from('orders')
-      .select('reservation_id, table_id')
+      .select('id, order_no, reservation_id, table_id, status, total, closed_at')
       .eq('store_id', store.id)
-      .eq('status', 'open')
-      .not('reservation_id', 'is', null),
+      .in('status', ['open', 'paid'])
+      .not('reservation_id', 'is', null)
+      .gte('created_at', `${date}T00:00:00+09:00`)
+      .lt('created_at', `${date}T23:59:59.999+09:00`)
+      .order('created_at'),
   ]);
   const inbox = await inboxPromise;
+  const cancelStaff = (await staffPromise)[store.id] ?? [];
   // キーワード（列が無いデータベースでも一覧は出る。lib/reservation-tags-server.ts）
   const tagsById = await loadReservationTags(supabase, (rows ?? []).map((r) => r.id as string));
   const tableByReservation = new Map<string, string>();
-  for (const o of openOrders ?? []) {
-    if (o.reservation_id && o.table_id) tableByReservation.set(o.reservation_id, o.table_id);
+  /** 会計した伝票：予約ごとの合計（別々会計なら足す）と伝票番号 */
+  const billByReservation = new Map<string, { total: number; orderNos: number[]; paidAt: string | null }>();
+  for (const o of (openOrders ?? []) as { id: string; order_no: number | null; reservation_id: string | null; table_id: string | null; status: string; total: number | null; closed_at: string | null }[]) {
+    if (!o.reservation_id) continue;
+    if (o.status === 'open' && o.table_id) tableByReservation.set(o.reservation_id, o.table_id);
+    if (o.status === 'paid') {
+      const cur = billByReservation.get(o.reservation_id) ?? { total: 0, orderNos: [], paidAt: null };
+      cur.total += o.total ?? 0;
+      if (o.order_no != null) cur.orderNos.push(o.order_no);
+      if (o.closed_at && (!cur.paidAt || o.closed_at > cur.paidAt)) cur.paidAt = o.closed_at;
+      billByReservation.set(o.reservation_id, cur);
+    }
   }
 
-  const reservations: HandyReservationRow[] = ((rows ?? []) as unknown as ReservationRow[]).map((r) => {
+  const listed = ((rows ?? []) as unknown as ReservationRow[]).filter(
+    (r) => r.created_via !== 'walk_in' || WALK_IN_HISTORY.has(r.status)
+  );
+  const reservations: HandyReservationRow[] = listed.map((r) => {
     const names = (r.reservation_tables ?? [])
       .map((l) => one(l.restaurant_tables)?.name)
       .filter((n): n is string => !!n);
@@ -174,6 +199,10 @@ export default async function HandyReservationsPage({
       clerkName: r.clerk_name?.trim() || null,
       cancelReason: r.cancel_reason?.trim() || null,
       receivedAt: r.created_at ? formatDateTime(r.created_at) : null,
+      walkIn: r.created_via === 'walk_in',
+      billTotal: billByReservation.get(r.id)?.total ?? null,
+      billOrderNos: billByReservation.get(r.id)?.orderNos ?? [],
+      paidAt: billByReservation.get(r.id)?.paidAt ? formatTime(billByReservation.get(r.id)!.paidAt!) : null,
     };
   });
 
@@ -237,6 +266,7 @@ export default async function HandyReservationsPage({
                 today,
                 canWrite: can(ctx.role, 'reservations.write'),
                 canCancel: can(ctx.role, 'reservations.cancel'),
+                staff: cancelStaff,
               }}
             />
             <p className="px-5 pb-5 text-center text-[10px] leading-relaxed text-[#766b62]">

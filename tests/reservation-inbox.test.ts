@@ -56,6 +56,13 @@ describe('予約受付管理・メッセージ', () => {
     expect(ui).toContain('新着');
   });
 
+  it('ウォークインが帰ったのはキャンセルではなく「退店」（2026-10-20 Ronnie）', () => {
+    expect(loader).toContain("const walkIn = r.created_via === 'walk_in';");
+    expect(loader).toContain("kind: walkIn ? 'left' : 'cancel'");
+    expect(loader).toContain('`退店　${r.guest_name} 様`');
+    expect(ui).toContain("left: { icon: LogOut, label: '退店'");
+  });
+
   it('00100：acknowledged_at を足し、今までの予約は確認済みにする（列が無くても画面は出る）', () => {
     expect(sql).toContain('add column if not exists acknowledged_at timestamptz');
     expect(sql).toContain('where acknowledged_at is null');

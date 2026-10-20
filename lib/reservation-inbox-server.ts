@@ -1,4 +1,5 @@
 import 'server-only';
+import { cancelKindLabel, cancelKindOf } from '@/lib/reservation-cancel';
 import type { createClient } from '@/lib/supabase/server';
 import { NEEDS_CONTACT_TAG } from '@/lib/reservation-entry';
 import { GOURMET_SITES } from '@/lib/gourmet-mail';
@@ -39,7 +40,8 @@ export interface InboxTask {
   date: string | null;
 }
 
-export type InboxNoticeKind = 'new' | 'cancel' | 'change';
+/** left … ウォークインが帰った（キャンセルではない。2026-10-20 Ronnie「キャンセルではなく退店」） */
+export type InboxNoticeKind = 'new' | 'cancel' | 'change' | 'left';
 
 export interface InboxNotice {
   key: string;
@@ -204,10 +206,13 @@ export async function loadReservationInbox(supabase: Supabase, storeId: string, 
     notices.push({ key: `n:${r.id}`, kind: 'new', title: `新しい予約　${r.guest_name} 様`, detail: detailOf(r), note: sourceOf(r), at: r.created_at, reservationId: r.id, date: r.reserved_date });
   }
   for (const r of (cancelRows ?? []) as unknown as Row[]) {
+    // ウォークインはお客様のキャンセルではない（注文せずに帰った・伝票を取消した）→「退店」
+    const walkIn = r.created_via === 'walk_in';
     notices.push({
       key: `x:${r.id}`,
-      kind: 'cancel',
-      title: `${r.status === 'no_show' ? '無断キャンセル' : 'キャンセル'}　${r.guest_name} 様`,
+      kind: walkIn ? 'left' : 'cancel',
+      // キャンセルの種類（お客様キャンセル・店舗キャンセル・無断キャンセル。lib/reservation-cancel.ts）
+      title: walkIn ? `退店　${r.guest_name} 様` : `${cancelKindLabel(cancelKindOf(r.status, r.cancel_reason))}　${r.guest_name} 様`,
       detail: detailOf(r),
       note: r.cancel_reason || sourceOf(r),
       at: r.cancelled_at ?? r.created_at,

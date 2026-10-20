@@ -10,6 +10,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Delete,
+  Divide,
   Loader2,
   Trash2,
   Ticket,
@@ -147,6 +148,7 @@ export function CheckoutDialog({
   pointBrands = [],
   methodBrands = {},
   splitOrderAction,
+  divideOrderItemAction,
   steraTerminals = [],
   onSteraFinalized,
 }: {
@@ -184,6 +186,8 @@ export function CheckoutDialog({
     orderId: string,
     moves: { orderItemId: string; quantity: number }[]
   ) => Promise<{ newOrderId: string }>;
+  /** 別々会計：1つの品を何人かで分ける（「品名（1/3）」に分けて、1つずつ移せるようにする） */
+  divideOrderItemAction?: (orderId: string, orderItemId: string, parts: number) => Promise<void>;
 }) {
   const { toast } = useToast();
   const [discountPending, startDiscount] = useTransition();
@@ -207,6 +211,9 @@ export function CheckoutDialog({
    */
   const [splitPick, setSplitPick] = useState<Record<string, number> | null>(null);
   const [splitPending, startSplit] = useTransition();
+  /** 何人で分けるかを選んでいる品（2026-10-20 高田馬場「同じ品を3人で食べると別々会計できない」） */
+  const [divideFor, setDivideFor] = useState<string | null>(null);
+  const [dividePending, startDivide] = useTransition();
   /** 値引きの入れ方（￥ か ％） */
   const [discountMode, setDiscountMode] = useState<'amount' | 'percent'>('amount');
   const [percentInput, setPercentInput] = useState('');
@@ -500,6 +507,31 @@ export function CheckoutDialog({
       return now;
     });
 
+  /** 品が2つ以上ある、または分けられる品がある（1つの品を何人かで食べた）ときだけ別々会計できる */
+  const splitQty = splitLines.reduce((a, l) => a + l.quantity, 0);
+  const canSplit = splitQty >= 2 || (!!divideOrderItemAction && splitLines.some((l) => l.unitPrice > 0));
+
+  const divideLine = (lineId: string, parts: number) => {
+    if (!divideOrderItemAction) return;
+    startDivide(async () => {
+      try {
+        await divideOrderItemAction(order.id, lineId, parts);
+        // 分けた品は数量が変わるので、選んでいた分は戻す
+        setSplitPick((cur) => {
+          if (!cur) return cur;
+          const next = { ...cur };
+          delete next[lineId];
+          return next;
+        });
+        setDivideFor(null);
+        router.refresh();
+        toast(`${parts}人で分けました。1人分ずつ「›」で移してください`);
+      } catch (e) {
+        toast(e instanceof Error ? e.message : '品を分けられませんでした', 'error');
+      }
+    });
+  };
+
   const confirmSplit = () => {
     if (!splitOrderAction || splitCount === 0 || splitIsAll) return;
     const moves = Object.entries(splitPick ?? {}).map(([orderItemId, quantity]) => ({ orderItemId, quantity }));
@@ -667,13 +699,31 @@ export function CheckoutDialog({
             {splitLines.map((l) => {
               const left = l.quantity - (splitPick[l.id] ?? 0);
               if (left <= 0) return null;
+              const canDivide = !!divideOrderItemAction && l.unitPrice > 0;
               return (
-                <li key={l.id} className="flex items-center gap-2 px-4 py-2.5">
+                <li key={l.id} className="px-4 py-2.5">
+                  <div className="flex items-center gap-2">
                   <span className="min-w-0 flex-1 truncate text-[14px] font-bold text-navy">{l.name}</span>
                   <span className="shrink-0 text-[12px] text-ink-3 tabular-nums">×{left}</span>
                   <b className="w-[84px] shrink-0 text-right text-[14px] font-bold text-navy tabular-nums">
                     {yen(l.unitPrice * left)}
                   </b>
+                  {canDivide && (
+                    <button
+                      type="button"
+                      aria-label={`${l.name}を何人かで分ける`}
+                      aria-expanded={divideFor === l.id}
+                      onClick={() => setDivideFor(divideFor === l.id ? null : l.id)}
+                      disabled={dividePending}
+                      className={cn(
+                        'tap3d flex h-9 shrink-0 items-center gap-0.5 rounded-lg border px-2 text-[12px] font-bold',
+                        divideFor === l.id ? 'border-iris bg-iris text-white' : 'border-line bg-white text-royal'
+                      )}
+                    >
+                      <Divide className="h-4 w-4" aria-hidden />
+                      分ける
+                    </button>
+                  )}
                   <button
                     type="button"
                     aria-label={`${l.name}を分ける伝票へ`}
@@ -682,6 +732,30 @@ export function CheckoutDialog({
                   >
                     <ChevronRight className="h-5 w-5" />
                   </button>
+                  </div>
+                  {divideFor === l.id && (
+                    <div className="mt-2 rounded-xl bg-lilac-soft px-3 py-2">
+                      <p className="text-[12px] font-bold text-ink-2">
+                        {l.quantity > 1 ? `1つ（${yen(l.unitPrice)}）を` : ''}何人で分けますか？
+                        <span className="ml-1 font-semibold text-ink-3">How many people shared it?</span>
+                      </p>
+                      <div className="mt-1.5 flex flex-wrap gap-1.5">
+                        {[2, 3, 4, 5, 6].map((n) => (
+                          <button
+                            key={n}
+                            type="button"
+                            disabled={dividePending}
+                            onClick={() => divideLine(l.id, n)}
+                            className="tap3d flex h-11 min-w-[64px] flex-col items-center justify-center rounded-lg border border-line bg-white px-2 leading-tight disabled:opacity-50"
+                          >
+                            <b className="text-[15px] text-navy">{n}人</b>
+                            <span className="text-[10px] text-ink-3 tabular-nums">{yen(Math.ceil(l.unitPrice / n))}〜</span>
+                          </button>
+                        ))}
+                        {dividePending && <Loader2 className="h-5 w-5 animate-spin self-center text-royal" aria-hidden />}
+                      </div>
+                    </div>
+                  )}
                 </li>
               );
             })}
@@ -727,6 +801,9 @@ export function CheckoutDialog({
             {splitCount === 0 && (
               <li className="px-4 py-10 text-center text-[13px] text-ink-3">
                 左の伝票から「›」で品を移してください
+                {divideOrderItemAction && (
+                  <span className="mt-1 block text-[12px]">1つの品を何人かで食べたときは「分ける」で人数分に分けられます</span>
+                )}
               </li>
             )}
           </ul>
@@ -939,7 +1016,7 @@ export function CheckoutDialog({
               <button
                 type="button"
                 onClick={() => setSplitPick(splitPick != null ? null : {})}
-                disabled={terminalBlocking || !splitOrderAction || splitLines.length < 2}
+                disabled={terminalBlocking || !splitOrderAction || !canSplit}
                 aria-pressed={splitPick != null}
                 className={cn(
                   'tap3d flex h-[46px] w-full flex-col items-center justify-center rounded-xl border text-[14px] font-bold leading-tight disabled:opacity-40',

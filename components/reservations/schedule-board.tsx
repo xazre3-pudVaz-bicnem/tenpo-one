@@ -597,12 +597,13 @@ export function ScheduleBoard({
         </div>
       )}
 
+      {/* 下の説明（色の意味・操作の説明）はスマホでは出さない（2026-10-20 Ronnie「スマホでは要らない」）。最終更新だけ */}
       <div className="flex flex-wrap items-center justify-between gap-2.5 border-t border-line bg-lilac-soft px-4 py-2 text-[11.5px] text-ink-3">
         <span className="tabular-nums">
           最終更新 {updatedAt} ・ {live.length}組 {totalGuests}名
           {!isClosedDay && ` ・ ${hm(openMin)}〜${hm(closeMin)}`}
         </span>
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 font-medium text-ink-2">
+        <div className="hidden flex-wrap items-center gap-x-3 gap-y-1 font-medium text-ink-2 sm:flex">
           <Legend className="border-2 border-dashed border-ink-3 bg-white">仮予約</Legend>
           <Legend className="border-2 border-iris bg-white">来店待ち</Legend>
           <Legend className="bg-iris">来店中（着席）</Legend>
