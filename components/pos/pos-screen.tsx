@@ -255,6 +255,7 @@ export function PosScreen({
   cancelEmptyOrderAction,
   discardUntouchedOrderAction,
   splitOrderAction,
+  divideOrderItemAction,
   setGuestCountAction,
   seatTime,
   seatCourses = [],
@@ -342,6 +343,8 @@ export function PosScreen({
     orderId: string,
     moves: { orderItemId: string; quantity: number }[]
   ) => Promise<{ newOrderId: string }>;
+  /** 別々会計：1つの品を何人かで分ける */
+  divideOrderItemAction?: (orderId: string, orderItemId: string, parts: number) => Promise<void>;
   /** 注文後の人数変更。省略時は人数バッジを押しても何も起きない */
   setGuestCountAction?: (orderId: string, guestCount: number) => Promise<void>;
   /** 席の時間・コース（卓の伝票だけ）。省略時はバッジを出さない */
@@ -1434,6 +1437,7 @@ export function PosScreen({
         clearCouponAction={clearCouponAction}
         onCheckout={handleCheckout}
         splitOrderAction={splitOrderAction}
+        divideOrderItemAction={divideOrderItemAction}
         terminalReaders={terminalReaders}
         paymentAvailability={paymentAvailability}
         pointsAvailability={pointsAvailability}
