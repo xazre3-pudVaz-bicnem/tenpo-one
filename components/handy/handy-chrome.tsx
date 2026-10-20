@@ -326,8 +326,9 @@ export function HandyTopBar({
   storeName?: string;
   right?: React.ReactNode;
 }) {
+  // iPhone アプリでは時計のうしろまで黒（env(safe-area-inset-top)。Safari では 0）
   return (
-    <header className="flex-none bg-[#292725] text-white">
+    <header className="flex-none bg-[#292725] pt-[env(safe-area-inset-top)] text-white">
       <div className="grid min-h-[53px] grid-cols-[110px_1fr_110px] items-center border-b border-[#45403b] px-[7px] max-[350px]:grid-cols-[86px_1fr_86px]">
         {left ?? <span />}
         <div className="min-w-0 py-0.5 text-center">

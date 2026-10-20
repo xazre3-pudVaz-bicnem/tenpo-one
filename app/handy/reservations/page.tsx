@@ -12,7 +12,6 @@ import { CREATED_VIA_LABEL } from '@/components/reservations/constants';
 import {
   HandyMain,
   HandyMenuButton,
-  HandyOperatorBar,
   HandyRefreshButton,
   HandyTopBar,
 } from '@/components/handy/handy-chrome';
@@ -107,7 +106,7 @@ export default async function HandyReservationsPage({
       </>
     );
   }
-  const clerk = await requireHandyClerk();
+  await requireHandyClerk(); // 担当者を選んでいなければログイン画面へ
 
   const supabase = await createClient();
   const today = todayJst();
@@ -220,16 +219,7 @@ export default async function HandyReservationsPage({
           </div>
         }
       />
-      <HandyOperatorBar
-        label={clerk.name}
-        note={
-          tab === 'list'
-            ? `${handyDayLabel(date)} · ${reservations.length}件`
-            : tab === 'inbox'
-              ? `やること ${inbox.tasks.length}件`
-              : `お知らせ ${inbox.notices.length}件`
-        }
-      />
+      {/* 担当者の行（Sankar など）は出さない：≡ の中に「担当者を変更（名前）」がある（2026-10-20 Ronnie「人の名前は ≡ の中へ。ここには要らない」） */}
       <ReservationInboxTabs
         active={tab}
         hrefs={{

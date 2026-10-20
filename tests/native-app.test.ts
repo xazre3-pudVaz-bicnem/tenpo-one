@@ -72,8 +72,9 @@ describe('アプリの画面（iPad は少し大きく・拡大縮小できな�
     expect(swift).not.toContain('.pageZoom =');
     expect(swift).toContain('let fit = width / 1040');
     expect(swift).toContain('let w = zoom > 1 ? Int((width / zoom).rounded(.down)) : 0');
-    expect(swift).toContain("', user-scalable=no'");
-    expect(swift).toContain("'width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no'");
+    // iPhone は viewport-fit=cover（時計のうしろまで Web。2026-10-20）。iPad は付かない
+    expect(swift).toContain("', user-scalable=no\\(fit)'");
+    expect(swift).toContain("'width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no\\(fit)'");
     // 画面を固定：揺れない・ピンチで拡大しない（Ronnie「ズームなど一切できない」）
     expect(swift).toContain('webView.scrollView.bounces = false');
     expect(swift).toContain('webView.scrollView.pinchGestureRecognizer?.isEnabled = false');
