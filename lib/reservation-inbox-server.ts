@@ -39,7 +39,8 @@ export interface InboxTask {
   date: string | null;
 }
 
-export type InboxNoticeKind = 'new' | 'cancel' | 'change';
+/** left … ウォークインが帰った（キャンセルではない。2026-10-20 Ronnie「キャンセルではなく退店」） */
+export type InboxNoticeKind = 'new' | 'cancel' | 'change' | 'left';
 
 export interface InboxNotice {
   key: string;
@@ -204,10 +205,12 @@ export async function loadReservationInbox(supabase: Supabase, storeId: string, 
     notices.push({ key: `n:${r.id}`, kind: 'new', title: `新しい予約　${r.guest_name} 様`, detail: detailOf(r), note: sourceOf(r), at: r.created_at, reservationId: r.id, date: r.reserved_date });
   }
   for (const r of (cancelRows ?? []) as unknown as Row[]) {
+    // ウォークインはお客様のキャンセルではない（注文せずに帰った・伝票を取消した）→「退店」
+    const walkIn = r.created_via === 'walk_in';
     notices.push({
       key: `x:${r.id}`,
-      kind: 'cancel',
-      title: `${r.status === 'no_show' ? '無断キャンセル' : 'キャンセル'}　${r.guest_name} 様`,
+      kind: walkIn ? 'left' : 'cancel',
+      title: walkIn ? `退店　${r.guest_name} 様` : `${r.status === 'no_show' ? '無断キャンセル' : 'キャンセル'}　${r.guest_name} 様`,
       detail: detailOf(r),
       note: r.cancel_reason || sourceOf(r),
       at: r.cancelled_at ?? r.created_at,

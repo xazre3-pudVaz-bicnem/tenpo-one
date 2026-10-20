@@ -1307,7 +1307,9 @@ export async function cancelEmptyOrder(
   }
 
   // 予約（ウォークイン含む）: 来店したが注文なしで終了 → 取消扱い。customers.cancel_count は加算しない（店側操作のため）
-  if (order.reservation_id) {
+  // 同じ予約に別の伝票（会計済み・会計前）があれば来店しているので取消にしない（2026-10-20 Ronnie）
+  const { hasOtherOrder } = await import('@/lib/discard-untouched-order');
+  if (order.reservation_id && !(await hasOtherOrder(supabase, order.reservation_id, orderId))) {
     await supabase
       .from('reservations')
       .update({ status: 'cancelled', cancel_reason: `注文取消: ${reason.trim()}`, cancelled_at: now, updated_by: ctx.userId })
