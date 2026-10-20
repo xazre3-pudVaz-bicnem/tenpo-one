@@ -149,7 +149,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         {/* お客様QRからの呼び出し（鈴の音＋バナー。2026-09-28 Ronnie） */}
         {ctx.currentStore && <ServiceCallAlert storeId={ctx.currentStore.id} />}
         {/* Wi-Fi で直接印刷（EPSON）。レジの設定「このiPadのプリンター」で ON にした端末だけ動く。ほかは何もしない */}
-        {ctx.currentStore && <DirectPrintAgent />}
+        {ctx.currentStore && <DirectPrintAgent storeId={ctx.currentStore.id} />}
         {/* 重要なお知らせ：了解を押すまで時々ポップアップ（注文画面では出さない。2026-09-28 Ronnie） */}
         {popupAnnouncements.length > 0 && <AnnouncementPopup items={popupAnnouncements} />}
         {/* レジクローズを忘れた店のレジ（iPad）に、次の日「〇〇さん、レジクローズがまだです」（いちばんレジを担当した人あて。2026-09-30 Ronnie） */}
