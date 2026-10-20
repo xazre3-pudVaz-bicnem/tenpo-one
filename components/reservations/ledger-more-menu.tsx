@@ -49,7 +49,7 @@ export function LedgerMoreMenu({
         onClick={() => setOpen((v) => !v)}
         className={
           icon === 'calendar'
-            ? 'flex h-10 w-10 items-center justify-center rounded-[9px] bg-iris text-white transition-colors hover:bg-royal'
+            ? 'flex h-11 w-11 items-center justify-center rounded-[9px] bg-iris text-white transition-colors hover:bg-royal sm:h-10 sm:w-10'
             : 'flex h-10 w-10 items-center justify-center rounded-[9px] border border-line bg-white text-ink-2 transition-colors hover:border-iris hover:text-iris'
         }
       >
