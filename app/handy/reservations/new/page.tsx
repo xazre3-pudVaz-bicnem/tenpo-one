@@ -4,8 +4,8 @@ import { createClient } from '@/lib/supabase/server';
 import { can } from '@/lib/permissions';
 import { todayJst } from '@/lib/format';
 import { requireHandyClerk } from '@/lib/handy-session';
-import { handyDayLabel, handyReservationsHref, parseHandyDate } from '@/lib/handy-reservations';
-import { HandyBackButton, HandyMain, HandyOperatorBar, HandyTopBar } from '@/components/handy/handy-chrome';
+import { handyReservationsHref, parseHandyDate } from '@/lib/handy-reservations';
+import { HandyBackButton, HandyMain, HandyTopBar } from '@/components/handy/handy-chrome';
 import { HandyReservationForm } from '@/components/handy/handy-reservation-form';
 import { loadReservationEntryData } from '@/lib/reservation-entry-server';
 
@@ -65,7 +65,6 @@ export default async function HandyNewReservationPage({
   return (
     <>
       <HandyTopBar left={back} storeName={store.name} title="予約登録" />
-      <HandyOperatorBar label={clerk.name} note={handyDayLabel(date)} />
       <HandyMain>
         <HandyReservationForm
           storeId={store.id}

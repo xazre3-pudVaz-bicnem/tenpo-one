@@ -30,7 +30,7 @@ export function TopBar({
   return (
     // スマホ（md 未満）は横並び（画面名は残りの幅で省略）。右のアイコンが画面名に重ならないように（2026-10-19 Ronnie
     // 「スマホで ホーム とベルが重なる」）。md 以上は今までどおり画面名を真ん中に
-    <header className="sticky top-0 z-40 flex h-[58px] items-center gap-2 bg-plum px-3 text-white sm:gap-3 sm:px-5 md:grid md:grid-cols-[1fr_minmax(0,auto)_1fr]">
+    <header className="sticky top-0 z-40 flex h-[calc(58px+env(safe-area-inset-top))] items-center gap-2 bg-plum px-3 pt-[env(safe-area-inset-top)] text-white sm:gap-3 sm:px-5 md:grid md:grid-cols-[1fr_minmax(0,auto)_1fr]">
       {/* ロゴまわり・上部バーの下端にグラデーションの線 */}
       <span aria-hidden className="bg-brand pointer-events-none absolute inset-x-0 bottom-0 h-[3px]" />
       <div className="flex min-w-0 items-center gap-3 max-sm:hidden">

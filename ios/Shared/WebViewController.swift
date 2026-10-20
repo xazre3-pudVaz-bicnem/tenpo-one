@@ -32,7 +32,11 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = UIColor(red: 0.984, green: 0.976, blue: 0.961, alpha: 1)
+        // iPhone は上下のバーと同じ黒（Web が読めるまでの間・上の時計のうしろ）。iPad は今まで通りの生成り
+        // （2026-10-20 Ronnie「iPhone は上を全部黒に。下の白いすき間も無くす。レストランボードのように」）
+        view.backgroundColor = AppConfig.isPad
+            ? UIColor(red: 0.984, green: 0.976, blue: 0.961, alpha: 1)
+            : UIColor(red: 0.161, green: 0.153, blue: 0.145, alpha: 1)
 
         let config = WKWebViewConfiguration()
         config.websiteDataStore = .default()
@@ -71,8 +75,10 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         NSLayoutConstraint.activate([
             webView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             webView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            webView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
-            webView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),
+            // iPhone：画面のはしまで Web を広げ、時計のうしろ・下のホームバーのうしろは Web 側が
+            // env(safe-area-inset-top/bottom) で黒く塗る（viewport-fit=cover。bridgeScript）。iPad は今まで通り
+            webView.topAnchor.constraint(equalTo: AppConfig.isPad ? view.safeAreaLayoutGuide.topAnchor : view.topAnchor),
+            webView.bottomAnchor.constraint(equalTo: AppConfig.isPad ? view.safeAreaLayoutGuide.bottomAnchor : view.bottomAnchor),
         ])
 
         errorView.translatesAutoresizingMaskIntoConstraints = false
@@ -178,7 +184,9 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
             : ""
         // 画面を固定（2026-10-14 Ronnie「アプリはズームなど一切できない。画面にぴったり固定」）：拡大・縮小させない。
         // iPad は少し大きく（viewport の幅を狭くして画面いっぱいに拡大。applyPadViewport）。Next が書き直しても戻す
-        let viewport = "(function(){ var W = \(padViewportWidth); var m = null; var want = function(){ if (W > 0) { var k = W > 0 && window.__tenpoScale ? window.__tenpoScale : 1; return 'width=' + W + ', initial-scale=' + k + ', minimum-scale=' + k + ', maximum-scale=' + k + ', user-scalable=no'; } return 'width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no'; }; var apply = function(){ if (!m) return; var v = want(); if (m.getAttribute('content') !== v) m.setAttribute('content', v); }; var watch = function(){ var n = document.querySelector('meta[name=viewport]'); if (!n || n === m) return !!n; m = n; apply(); new MutationObserver(apply).observe(m, { attributes: true, attributeFilter: ['content'] }); return true; }; window.__tenpoSetViewport = function(w, k){ W = w | 0; window.__tenpoScale = k || 1; watch(); apply(); }; window.__tenpoScale = \(padViewportScale); try { document.documentElement.style.touchAction = 'manipulation'; } catch (e) {} if (!watch()) { var mo = new MutationObserver(function(){ if (watch()) { mo.disconnect(); if (document.head) new MutationObserver(watch).observe(document.head, { childList: true }); } }); mo.observe(document, { childList: true, subtree: true }); } else if (document.head) { new MutationObserver(watch).observe(document.head, { childList: true }); } })();"
+        // iPhone は viewport-fit=cover（時計のうしろ・ホームバーのうしろまで Web。env(safe-area-inset-*) が入る）
+        let fit = AppConfig.isPad ? "" : ", viewport-fit=cover"
+        let viewport = "(function(){ var W = \(padViewportWidth); var m = null; var want = function(){ if (W > 0) { var k = W > 0 && window.__tenpoScale ? window.__tenpoScale : 1; return 'width=' + W + ', initial-scale=' + k + ', minimum-scale=' + k + ', maximum-scale=' + k + ', user-scalable=no\(fit)'; } return 'width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no\(fit)'; }; var apply = function(){ if (!m) return; var v = want(); if (m.getAttribute('content') !== v) m.setAttribute('content', v); }; var watch = function(){ var n = document.querySelector('meta[name=viewport]'); if (!n || n === m) return !!n; m = n; apply(); new MutationObserver(apply).observe(m, { attributes: true, attributeFilter: ['content'] }); return true; }; window.__tenpoSetViewport = function(w, k){ W = w | 0; window.__tenpoScale = k || 1; watch(); apply(); }; window.__tenpoScale = \(padViewportScale); try { document.documentElement.style.touchAction = 'manipulation'; } catch (e) {} if (!watch()) { var mo = new MutationObserver(function(){ if (watch()) { mo.disconnect(); if (document.head) new MutationObserver(watch).observe(document.head, { childList: true }); } }); mo.observe(document, { childList: true, subtree: true }); } else if (document.head) { new MutationObserver(watch).observe(document.head, { childList: true }); } })();"
         // iPad だけ：画面の行き先を知らせる（オーダー・会計をネイティブで開くため。Next の画面の切り替えは pushState）
         let routeHook = AppConfig.isPad
             ? "(function(){ var notify = function(){ post({ type: 'route', url: location.href }); }; var wrap = function(n){ var o = history[n]; history[n] = function(){ var r = o.apply(this, arguments); try { notify(); } catch (e) {} return r; }; }; wrap('pushState'); wrap('replaceState'); window.addEventListener('popstate', notify); })();"

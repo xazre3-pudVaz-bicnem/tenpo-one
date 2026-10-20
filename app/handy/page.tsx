@@ -8,7 +8,6 @@ import { readHandyClerk } from '@/lib/handy-session';
 import {
   HandyMain,
   HandyMenuButton,
-  HandyOperatorBar,
   HandyRefreshButton,
   HandyTopBar,
 } from '@/components/handy/handy-chrome';
@@ -165,7 +164,7 @@ export default async function HandyTablesPage() {
         title="テーブル一覧"
         right={<HandyRefreshButton />}
       />
-      <HandyOperatorBar label={clerk.name} note={`${cards.length}テーブル · HANDY`} />
+      {/* 担当者の行は出さない（≡ の中に「担当者を変更（名前）」。2026-10-20 Ronnie） */}
       <HandyMain>
         <HandyTableList
           tables={cards}

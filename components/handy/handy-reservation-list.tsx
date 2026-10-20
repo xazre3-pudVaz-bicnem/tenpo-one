@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { useState } from 'react';
 import { Armchair, ClipboardList, Receipt, Tag, Utensils } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -84,7 +83,7 @@ const CANCELLED: ReadonlySet<string> = new Set(['cancelled', 'no_show']);
  * 予約の一覧（2026-10-15 Ronnie「予約一覧をこの形に」。予約アプリの「予約リスト」と同じ並び）：
  *   左：状態・お名前・電話番号 ／ 右：時間〜人数・席・コース・経路・要望・メモ
  *   上：時間順・件数・「キャンセルを除く」
- * ハンディからは閲覧・追加と「HANDYで注文」。変更・来店処理はレジ（管理画面）の予約台帳で行う。
+ * ハンディからは閲覧・追加。「HANDYで注文」・来店・キャンセルは押した詳細（ポップアップ）から。
  */
 export function HandyReservationList({
   reservations,
@@ -225,15 +224,7 @@ export function HandyReservationList({
                     <TagChips tags={r.tags} className="mt-1" />
                   </div>
                 </div>
-                {r.tableId && !cancelled && (
-                  <Link
-                    href={`/handy/${r.tableId}`}
-                    onClick={(e) => e.stopPropagation()}
-                    className="mt-2 flex min-h-[36px] items-center justify-center rounded-[8px] border border-[#bc5940] text-[12.5px] font-bold text-[#bc5940] active:bg-[#f6e4da]"
-                  >
-                    HANDYで注文
-                  </Link>
-                )}
+                {/* 「HANDYで注文」は一覧には出さない。押した詳細の下にある（2026-10-20 Ronnie「一覧には要らない。押した中に」） */}
               </li>
             );
           })}
