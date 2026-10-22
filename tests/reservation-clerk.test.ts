@@ -17,7 +17,9 @@ describe('予約の担当者＝レジの担当名', () => {
 
   it('選択肢はその店のレジの担当名（台帳・一覧・ホーム）', () => {
     expect(read('app/app/reservations/page.tsx')).toContain('reservationClerkOptions(supabase, [store.id]),');
-    expect(read('app/app/floor/page.tsx')).toContain('(await reservationClerkOptions(supabase, [store.id]))[store.id] ?? [];');
+    // ホームは他の読み込みと一緒に並列で取る（2026-10-21）
+    expect(read('app/app/floor/page.tsx')).toContain('reservationClerkOptions(supabase, [store.id]),');
+    expect(read('app/app/floor/page.tsx')).toContain('const staffOptions = clerkOptionsByStore[store.id] ?? [];');
     expect(read('app/app/reservations/list/page.tsx')).toContain('const staffByStore = await reservationClerkOptions(supabase, storeIds);');
   });
 

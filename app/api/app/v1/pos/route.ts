@@ -3,7 +3,9 @@ import { getSessionContext, type SessionContext } from '@/lib/auth';
 import { can, type PermissionAction } from '@/lib/permissions';
 import { createClient } from '@/lib/supabase/server';
 import { isUuid, NATIVE_APP_HEADER, parseNativePosAction, type NativePosAction } from '@/lib/native-pos';
-import { loadNativeOrder, loadNativePos, setOrderVisitSource } from '@/lib/native-pos-server';
+import { loadNativeCatalog, loadNativeLive, loadNativeOrder, loadNativePos, setOrderVisitSource } from '@/lib/native-pos-server';
+import { claimLanKitchenPrints, finishLanPrint } from '@/lib/native-print-server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { ACCESS_MESSAGE } from '@/lib/store-access';
 import { checkout, sendOrderToKitchen, setDiscount, updateQty, addItem } from '@/app/app/pos/actions';
 import { setOrderClerk } from '@/app/app/pos/clerk-actions';
@@ -15,6 +17,8 @@ import { shouldOpenDrawer } from '@/lib/printing/types';
  * iPad アプリのネイティブ画面（オーダー・会計）用の入口（2026-10-13 Ronnie「Airレジのようにネイティブで」）。
  *   GET  ?order=<id>          … 画面を開くときの全部（メニュー・伝票・担当者・会計の選択肢・stera）
  *   GET  ?order=<id>&part=order … 伝票だけ（読み直し）
+ *   GET  ?order=<id>&part=live  … 伝票・レジの開局・stera（軽い。メニューは iPad の保存から）
+ *   GET  ?part=catalog[&store=<id>] … 店のメニューまわり（iPad に保存する。version で変わったか分かる）
  *   POST { type, … }          … 注文確定（明細を入れて厨房へ）・数量・担当者・値引き・来店経路・会計・stera
  * 中身は Web のレジと同じサーバーの処理（app/app/pos/*-actions.ts）。Web の画面は変えない。
  * アプリは必ず `x-tenpo-app: 1` を付ける（他のサイトから勝手に呼べないように）。
@@ -67,6 +71,7 @@ const PERMISSION: Record<NativePosAction['type'], PermissionAction> = {
   steraCheck: 'pos.checkout',
   steraCancel: 'pos.checkout',
   drawer: 'pos.checkout',
+  printDone: 'pos.order',
 };
 
 export async function GET(request: Request) {
@@ -77,13 +82,30 @@ export async function GET(request: Request) {
   if (ctx.disabledFeatures?.has('pos')) return json({ ok: false, error: 'この機能は使えません', useWeb: true }, 403);
 
   const url = new URL(request.url);
+  const part = url.searchParams.get('part');
+
+  // 店のメニューまわり（伝票に寄らない。iPad に保存して次から先に出す。2026-10-21「メニューは超速く」）
+  if (part === 'catalog') {
+    const storeParam = url.searchParams.get('store');
+    const storeId = isUuid(storeParam) ? storeParam : (ctx.currentStore?.id ?? ctx.stores[0]?.id ?? null);
+    if (!storeId) return json({ ok: false, error: '店舗がありません' }, 404);
+    if (!ctx.isHq && !ctx.stores.some((s) => s.id === storeId)) return json({ ok: false, error: '店舗がありません' }, 404);
+    const catalog = await loadNativeCatalog(ctx, await createClient(), storeId, ctx.organizationId);
+    return json({ ok: true, catalog });
+  }
+
   const orderId = url.searchParams.get('order');
   if (!isUuid(orderId)) return json({ ok: false, error: '伝票が正しくありません' }, 400);
 
-  if (url.searchParams.get('part') === 'order') {
+  if (part === 'order') {
     const order = await loadNativeOrder(await createClient(), ctx, orderId);
     if (!order) return json({ ok: false, error: '注文が見つかりません' }, 404);
     return json({ ok: true, order });
+  }
+  if (part === 'live') {
+    const live = await loadNativeLive(ctx, await createClient(), orderId);
+    if ('ok' in live) return json(live, live.status);
+    return json({ ok: true, ...live });
   }
 
   // お店の回線・レジ端末の台数（Web のレジ画面と同じ）。引っかかったら Web の画面で開いてもらう（登録の画面が出る）
@@ -130,7 +152,23 @@ export async function POST(request: Request) {
           await addItem(action.orderId, l.menuItemId, l.optionItemIds, l.quantity, l.openPrice);
         }
         const res = await sendOrderToKitchen(action.orderId);
-        return json({ ok: true, printWarning: res.printWarning ?? null, order: await freshOrder(action.orderId) });
+        // その場で厨房伝票を作り、iPad から LAN で直接出せる分は印刷データを返事に付ける（2026-10-21「印刷は超速く」）
+        const supabase = await createClient();
+        const [order, { data: row }] = await Promise.all([
+          freshOrder(action.orderId),
+          supabase.from('orders').select('store_id').eq('id', action.orderId).maybeSingle(),
+        ]);
+        const prints = row?.store_id ? await claimLanKitchenPrints(createAdminClient(), row.store_id as string) : [];
+        return json({ ok: true, printWarning: res.printWarning ?? null, order, prints });
+      }
+      case 'printDone': {
+        const admin = createAdminClient();
+        const { data: p } = await admin.from('printer_configs').select('id, organization_id, store_id').eq('id', action.printerId).maybeSingle();
+        if (!p || p.organization_id !== ctx.organizationId || (!ctx.isHq && !ctx.stores.some((s) => s.id === p.store_id))) {
+          return json({ ok: false, error: 'プリンターが見つかりません' }, 404);
+        }
+        await finishLanPrint(admin, action.printerId, action.jobId, action.result, action.code);
+        return json({ ok: true });
       }
       case 'qty':
         await updateQty(action.orderId, action.lineId, action.delta);

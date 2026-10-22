@@ -86,8 +86,20 @@ export default async function PosPage({
     );
   }
 
-  // 契約のアクセス制限（お店の回線・レジ端末の台数）。制限なしの店舗はそのまま
-  const accessBlock = await storeAccessBlock(store, { countDevice: true });
+  // 契約のアクセス制限（お店の回線・レジ端末の台数）。制限なしの店舗はそのまま。
+  // 伝票の読み込みと同時に（画面を速く。2026-10-21 Ronnie「Airレジ・USEN より遅い」：待ちを直列から並列に）
+  const [accessBlock, orderRes] = await Promise.all([
+    storeAccessBlock(store, { countDevice: true }),
+    orderId
+      ? supabase
+          .from('orders')
+          .select(
+            'id, order_no, order_type, status, guest_count, discount_total, discount_reason, coupon_code, customer_id, subtotal, tax_total, service_charge, total, store_id, table_id, staff_id, clerk_id, opened_at, memo, restaurant_tables(name), profiles(display_name), reservations(start_at, end_at, course_id)'
+          )
+          .eq('id', orderId)
+          .single()
+      : Promise.resolve(null),
+  ]);
   if (accessBlock) return accessBlock;
 
   if (!orderId) {
@@ -160,13 +172,7 @@ export default async function PosPage({
     );
   }
 
-  const { data: order, error: orderError } = await supabase
-    .from('orders')
-    .select(
-      'id, order_no, order_type, status, guest_count, discount_total, discount_reason, coupon_code, customer_id, subtotal, tax_total, service_charge, total, store_id, table_id, staff_id, clerk_id, opened_at, memo, restaurant_tables(name), profiles(display_name), reservations(start_at, end_at, course_id)'
-    )
-    .eq('id', orderId)
-    .single();
+  const { data: order, error: orderError } = orderRes!;
   if (orderError && orderError.code !== 'PGRST116') {
     throw new Error('注文の読み込みに失敗しました');
   }
@@ -188,19 +194,12 @@ export default async function PosPage({
     );
   }
 
-  // order は取得済みのため、以降の7クエリ（明細・カテゴリ・商品・売れ筋・顧客・ロイヤリティ・店舗設定）は
-  // すべて相互に独立＝並列取得できる（customer も order.customer_id が判明済み）。
-  const menuBook = await loadMenuBook(supabase, store.id);
-  // 会計の「値引き」「ポイント」の選択肢（設定 > 決済・端末）
-  const { data: checkoutSettings } = await supabase
-    .from('store_settings')
-    .select('settings')
-    .eq('store_id', store.id)
-    .maybeSingle();
-  const checkoutPresets = checkoutPresetsFrom(checkoutSettings?.settings);
-  const methodBrands = Object.fromEntries(BRANDED_METHODS.map((m) => [m, methodBrandsOf(checkoutPresets, m)]));
-
+  // order は取得済みのため、以降の読み込み（メニュー・明細・設定・担当者・選択肢・売切・決済端末・空き卓）は
+  // 互いに独立＝全部まとめて並列に取る（前は 9 回に分けて順番に待っていた → 1 回。2026-10-21）
+  const canCheckout = can(ctx.role, 'pos.checkout');
+  const admin = canCheckout ? createAdminClient() : null;
   const [
+    menuBook,
     { data: items, error: itemsError },
     { data: categories, error: categoriesError },
     { data: menuItems, error: menuItemsError },
@@ -208,7 +207,16 @@ export default async function PosPage({
     { data: customerRow },
     { data: loyalty },
     { data: storeSettings },
+    { data: clerks },
+    { data: optionLinks, error: optionLinksError },
+    menuStock,
+    availability,
+    { data: readers },
+    { data: openSession },
+    { data: steraRows },
+    { data: tables },
   ] = await Promise.all([
+    loadMenuBook(supabase, store.id),
     loadOrderItems(supabase, orderId),
     supabase
       .from('menu_categories')
@@ -232,12 +240,53 @@ export default async function PosPage({
       ? supabase.from('customers').select('id, name, phone, point_balance').eq('id', order.customer_id).maybeSingle()
       : Promise.resolve({ data: null }),
     supabase.from('loyalty_settings').select('enabled, point_value').eq('organization_id', ctx.organizationId).maybeSingle(),
+    // 店舗設定（会計の値引き・ポイントの選択肢、ドロア、テイクアウトメニュー）。1回で読んで使い回す
     supabase.from('store_settings').select('settings').eq('store_id', store.id).maybeSingle(),
+    // 会計時に選べるPOS担当者（この店舗の有効な名前のみ）
+    supabase.from('pos_clerks').select('id, name').eq('store_id', store.id).eq('status', 'active').order('sort_order').order('name'),
+    // 商品ごとの選択肢グループ（必須・最小/最大・追加料金）。
+    // 設定がある商品はPOSでタップした際に選択ダイアログを出す。
+    // 英語名を持つのは選択肢（menu_option_items.name_en）だけで、グループ自体には無い。
+    // グループに name_en を指定するとクエリごと失敗し、選択肢ダイアログが黙って出なくなる。
+    supabase
+      .from('menu_item_option_groups')
+      .select(
+        'menu_item_id, sort_order, menu_option_groups!inner(id, name, is_required, min_select, max_select, sort_order, status, menu_option_items(id, name, name_en, price, sort_order, status))'
+      )
+      .eq('store_id', store.id)
+      .eq('menu_option_groups.status', 'active')
+      .order('sort_order'),
+    // メニューの売り切り（本日の食数）が0になった商品は自動で売切にする（2026-09-24 店舗要望）
+    loadMenuStock(supabase, store.id),
+    // ↓ 会計できる人だけ：決済端末・レジの開局・stera・空き卓
+    canCheckout ? getPaymentAvailability() : Promise.resolve({ configured: false, testMode: false }),
+    canCheckout
+      ? supabase.from('terminal_readers').select('id, label, device_type, is_simulated, status, last_seen_at').eq('store_id', store.id)
+      : Promise.resolve({ data: null }),
+    canCheckout
+      ? supabase.from('register_sessions').select('id').eq('store_id', store.id).eq('status', 'open').limit(1).maybeSingle()
+      : Promise.resolve({ data: null }),
+    // stera 端末（設定 > 決済・端末 の「stera 連携」。サーバー専用のテーブルなので service role で読む）
+    admin
+      ? admin.from('stera_terminals').select('id, name, last_seen_at').eq('store_id', store.id).eq('status', 'active').order('created_at')
+      : Promise.resolve({ data: null }),
+    canCheckout && order.table_id
+      ? supabase
+          .from('restaurant_tables')
+          .select('id, name, capacity_max')
+          .eq('store_id', store.id)
+          .eq('status', 'active')
+          .eq('current_status', 'available')
+          .order('sort_order')
+      : Promise.resolve({ data: null }),
   ]);
 
   if (itemsError || categoriesError || menuItemsError) {
     throw new Error('注文内容の読み込みに失敗しました');
   }
+  // 会計の「値引き」「ポイント」の選択肢（設定 > 決済・端末）
+  const checkoutPresets = checkoutPresetsFrom(storeSettings?.settings);
+  const methodBrands = Object.fromEntries(BRANDED_METHODS.map((m) => [m, methodBrandsOf(checkoutPresets, m)]));
 
   const table = order.restaurant_tables as unknown as { name: string } | null;
   const staff = order.profiles as unknown as { display_name: string } | null;
@@ -261,28 +310,8 @@ export default async function PosPage({
     openOnCashless: drawerSettings?.openOnCashless ?? false,
   };
 
-  // 会計時に選べるPOS担当者（この店舗の有効な名前のみ）
-  const { data: clerks } = await supabase
-    .from('pos_clerks')
-    .select('id, name')
-    .eq('store_id', store.id)
-    .eq('status', 'active')
-    .order('sort_order')
-    .order('name');
   const clerkOptions = (clerks ?? []).map((c) => ({ id: c.id, name: c.name }));
 
-  // 商品ごとの選択肢グループ（必須・最小/最大・追加料金）。
-  // 設定がある商品はPOSでタップした際に選択ダイアログを出す。
-  // 英語名を持つのは選択肢（menu_option_items.name_en）だけで、グループ自体には無い。
-  // グループに name_en を指定するとクエリごと失敗し、選択肢ダイアログが黙って出なくなる。
-  const { data: optionLinks, error: optionLinksError } = await supabase
-    .from('menu_item_option_groups')
-    .select(
-      'menu_item_id, sort_order, menu_option_groups!inner(id, name, is_required, min_select, max_select, sort_order, status, menu_option_items(id, name, name_en, price, sort_order, status))'
-    )
-    .eq('store_id', store.id)
-    .eq('menu_option_groups.status', 'active')
-    .order('sort_order');
   if (optionLinksError) {
     // 取得に失敗すると選択肢が出ないまま会計できてしまうため、気付けるように記録する
     console.error('[pos] 選択肢グループの取得に失敗', optionLinksError.message);
@@ -317,7 +346,6 @@ export default async function PosPage({
     });
   }
 
-  const canCheckout = can(ctx.role, 'pos.checkout');
   let paymentAvailability = { configured: false, testMode: false };
   let terminalReaders: {
     id: string;
@@ -328,20 +356,12 @@ export default async function PosPage({
     lastSeenAt: string | null;
   }[] = [];
   let availableTables: { id: string; name: string; capacityMax: number }[] = [];
-  // stera 端末（設定 > 決済・端末 の「stera 連携」。サーバー専用のテーブルなので service role で読む）
+  // stera 端末（設定 > 決済・端末 の「stera 連携」）
   let steraTerminals: { id: string; name: string; online: boolean }[] = [];
   // レジが開局しているか（未開局だと会計を受け付けない。画面にも先に出しておく）
   let registerOpen = true;
 
   if (canCheckout) {
-    const [availability, { data: readers }, { data: openSession }] = await Promise.all([
-      getPaymentAvailability(),
-      supabase
-        .from('terminal_readers')
-        .select('id, label, device_type, is_simulated, status, last_seen_at')
-        .eq('store_id', store.id),
-      supabase.from('register_sessions').select('id').eq('store_id', store.id).eq('status', 'open').limit(1).maybeSingle(),
-    ]);
     paymentAvailability = availability;
     registerOpen = !!openSession;
     const statusOrder: Record<string, number> = { online: 0, unknown: 1, offline: 2 };
@@ -358,28 +378,13 @@ export default async function PosPage({
         (a, b) =>
           (statusOrder[a.status] ?? 1) - (statusOrder[b.status] ?? 1) || a.label.localeCompare(b.label, 'ja')
       );
-    const { data: steraRows } = await createAdminClient()
-      .from('stera_terminals')
-      .select('id, name, last_seen_at')
-      .eq('store_id', store.id)
-      .eq('status', 'active')
-      .order('created_at');
     const steraNow = new Date().getTime();
     steraTerminals = (steraRows ?? []).map((t) => ({
       id: t.id as string,
       name: t.name as string,
       online: isSteraOnline(t.last_seen_at as string | null, steraNow),
     }));
-    if (order.table_id) {
-      const { data: tables } = await supabase
-        .from('restaurant_tables')
-        .select('id, name, capacity_max')
-        .eq('store_id', store.id)
-        .eq('status', 'active')
-        .eq('current_status', 'available')
-        .order('sort_order');
-      availableTables = (tables ?? []).map((t) => ({ id: t.id, name: t.name, capacityMax: t.capacity_max }));
-    }
+    availableTables = (tables ?? []).map((t) => ({ id: t.id, name: t.name, capacityMax: t.capacity_max }));
   }
 
   // 席の時間・コース（伝票画面の上で直せる）
@@ -393,8 +398,6 @@ export default async function PosPage({
     endMs: seatEndMs != null && seatEndMs > seatStartMs ? seatEndMs : null,
     courseId: seatResv?.course_id ?? null,
   };
-  // メニューの売り切り（本日の食数）が0になった商品は自動で売切にする（2026-09-24 店舗要望）
-  const menuStock = await loadMenuStock(supabase, store.id);
   const withStock = (menuItems ?? []).map((m) => ({
     ...m,
     is_sold_out: isMenuSoldOut(!!m.is_sold_out, menuStock.get(m.id as string)),

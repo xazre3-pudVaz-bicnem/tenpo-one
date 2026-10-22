@@ -98,8 +98,8 @@ export default async function FloorPage() {
   const supabase = await createClient();
   const store = ctx.currentStore ?? ctx.stores[0];
 
-  const accessBlock = store ? await storeAccessBlock(store, { countDevice: false }) : null;
-  if (accessBlock) return accessBlock;
+  // 契約のアクセス制限は、下の読み込みと同時に（画面を速く。2026-10-21）
+  const accessBlockPromise = store ? storeAccessBlock(store, { countDevice: false }) : Promise.resolve(null);
 
   if (!store) {
     return (
@@ -114,8 +114,20 @@ export default async function FloorPage() {
   }
 
   const today = todayJst();
-  const [{ data: floors }, { data: tables }, { data: settings }, { data: orderRows }, { data: reservationRows }] =
+  // 読み込みは全部まとめて並列に（前は 5 回に分けて順番に待っていた。2026-10-21 Ronnie「Airレジ・USEN より遅い」）
+  const [
+    accessBlock,
+    { data: floors },
+    { data: tables },
+    { data: settings },
+    { data: orderRows },
+    { data: reservationRows },
+    clerkOptionsByStore,
+    { data: callRows },
+    { data: courseRows },
+  ] =
     await Promise.all([
+      accessBlockPromise,
       supabase
         .from('floors')
         .select('id, name, sort_order')
@@ -152,22 +164,45 @@ export default async function FloorPage() {
         .eq('reserved_date', today)
         .in('status', PANEL_STATUSES)
         .order('start_at'),
-    ]);
-
-  // 予約詳細のテーブル変更・担当者の選択肢
-  // 予約の担当者＝レジの担当名（2026-10-15 Ronnie「レジと台帳は同じ」）
-  const staffOptions = (await reservationClerkOptions(supabase, [store.id]))[store.id] ?? [];
-
-  // 選択印刷で選べるように、未会計伝票の品を読む（2026-09-25 店舗要望）
-  const openOrderIds = ((orderRows ?? []) as { id: string }[]).map((o) => o.id);
-  const { data: itemRows } = openOrderIds.length
-    ? await supabase
-        .from('order_items')
-        .select('id, order_id, name, quantity')
-        .in('order_id', openOrderIds)
+      // 予約詳細のテーブル変更・担当者の選択肢。予約の担当者＝レジの担当名（2026-10-15 Ronnie「レジと台帳は同じ」）
+      reservationClerkOptions(supabase, [store.id]),
+      // お客様QRからの未対応の呼び出し（卓に鈴のマークで出す。2026-09-28 Ronnie）
+      supabase
+        .from('service_calls')
+        .select('id, table_id, kind, created_at, note')
+        .eq('store_id', store.id)
+        .eq('status', 'open')
+        .order('created_at'),
+      // 席の時間・コースを卓のポップアップから直すときに選ぶコース（2026-09-25 店舗要望）。
+      // 種別コースに加えて、名前が コース／course の商品（dinii 取込の種別フードのコース）も（isSeatCourseItem）
+      supabase
+        .from('menu_items')
+        .select('id, name, item_type, duration_minutes')
+        .eq('organization_id', ctx.organizationId)
+        .or(`store_id.is.null,store_id.eq.${store.id}`)
         .eq('status', 'active')
-        .order('created_at')
-    : { data: [] };
+        .neq('item_type', 'option')
+        .order('sort_order'),
+    ]);
+  if (accessBlock) return accessBlock;
+
+  const staffOptions = clerkOptionsByStore[store.id] ?? [];
+
+  // 2回目（1回目の結果が要るもの）：未会計伝票の品（選択印刷用。2026-09-25 店舗要望）と予約のキーワード。この2つも同時に
+  const openOrderIds = ((orderRows ?? []) as { id: string }[]).map((o) => o.id);
+  const reservationsToday = (reservationRows ?? []) as unknown as RawReservationRow[];
+  const panelSource = reservationsToday.filter((r) => r.created_via !== 'walk_in');
+  const [{ data: itemRows }, panelTags] = await Promise.all([
+    openOrderIds.length
+      ? supabase
+          .from('order_items')
+          .select('id, order_id, name, quantity')
+          .in('order_id', openOrderIds)
+          .eq('status', 'active')
+          .order('created_at')
+      : Promise.resolve({ data: [] }),
+    loadReservationTags(supabase, panelSource.map((r) => r.id)),
+  ]);
   const linesByOrder = new Map<string, { id: string; name: string; quantity: number }[]>();
   for (const it of (itemRows ?? []) as { id: string; order_id: string; name: string; quantity: number }[]) {
     const list = linesByOrder.get(it.order_id) ?? [];
@@ -233,9 +268,6 @@ export default async function FloorPage() {
     });
   }
 
-  const reservationsToday = (reservationRows ?? []) as unknown as RawReservationRow[];
-  const panelSource = reservationsToday.filter((r) => r.created_via !== 'walk_in');
-  const panelTags = await loadReservationTags(supabase, panelSource.map((r) => r.id));
   const panelRows = panelSource.map((r) => ({ ...mapReservationRow(r, null), tags: panelTags.get(r.id) ?? [] }));
 
   // テーブルごとの未来店予約（開始時刻順）
@@ -264,13 +296,6 @@ export default async function FloorPage() {
     for (const id of g.tableIds) if (!orderByTable.has(id)) orderByTable.set(id, withOrder);
   }
 
-  // お客様QRからの未対応の呼び出し（卓に鈴のマークで出す。2026-09-28 Ronnie）
-  const { data: callRows } = await supabase
-    .from('service_calls')
-    .select('id, table_id, kind, created_at, note')
-    .eq('store_id', store.id)
-    .eq('status', 'open')
-    .order('created_at');
   const callsByTable = new Map<string, TableCall[]>();
   for (const c of callRows ?? []) {
     const list = callsByTable.get(c.table_id as string) ?? [];
@@ -294,16 +319,6 @@ export default async function FloorPage() {
     calls: callsByTable.get(t.id) ?? [],
   }));
 
-  // 席の時間・コースを卓のポップアップから直すときに選ぶコース（2026-09-25 店舗要望）。
-  // 種別コースに加えて、名前が コース／course の商品（dinii 取込の種別フードのコース）も（isSeatCourseItem）
-  const { data: courseRows } = await supabase
-    .from('menu_items')
-    .select('id, name, item_type, duration_minutes')
-    .eq('organization_id', ctx.organizationId)
-    .or(`store_id.is.null,store_id.eq.${store.id}`)
-    .eq('status', 'active')
-    .neq('item_type', 'option')
-    .order('sort_order');
   const seatCourses = ((courseRows ?? []) as { id: string; name: string; item_type: string | null; duration_minutes: number | null }[])
     .filter((m) => isSeatCourseItem(m.item_type, m.name))
     .map((m) => ({ id: m.id, name: m.name, durationMinutes: m.duration_minutes ?? null }));

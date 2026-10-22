@@ -95,10 +95,53 @@ export interface NativePosBrand {
   name: string;
 }
 
+/**
+ * 店のメニューまわり（伝票に寄らない部分）。アプリはこれを iPad に保存して、次に開くときは保存したものを先に出す
+ * （Airレジのように押した瞬間に出る。2026-10-21 Ronnie「メニュー・印刷は超速く」）。version が変わったときだけ入れ替える
+ */
+export interface NativePosCatalog {
+  store: { id: string; name: string };
+  categories: NativePosCategory[];
+  items: NativePosItem[];
+  optionGroups: Record<string, NativePosOptionGroup[]>;
+  clerks: { id: string; name: string }[];
+  clerkRequired: boolean;
+  visitSources: { id: string; label: string }[];
+  methodBrands: Record<string, NativePosBrand[]>;
+  pointBrands: NativePosBrand[];
+  discountPresets: { id: string; name: string; kind: 'percent' | 'amount' | 'manual'; value: number }[];
+  steraPaymentTypes: { code: string; method: string; label: string; en: string }[];
+  canCheckout: boolean;
+  canDiscount: boolean;
+  /** 中身のハッシュ（変わったら version も変わる） */
+  version: string;
+}
+
+/** 伝票を開く・読み直すときの軽い部分（伝票・レジの開局・stera の端末） */
+export interface NativePosLive {
+  order: NativePosOrder;
+  registerOpen: boolean;
+  steraTerminals: { id: string; name: string; online: boolean }[];
+  storeId: string;
+}
+
+/** 注文確定のあと、iPad から LAN で直接出す厨房伝票（サーバーで claimed にしてから渡す。印刷したら printDone） */
+export interface NativePrintJob {
+  id: string;
+  printerId: string;
+  printerName: string;
+  host: string;
+  port: number;
+  /** ESC/POS（base64） */
+  data: string;
+}
+
 export interface NativePosPayload {
   ok: true;
   store: { id: string; name: string };
   order: NativePosOrder;
+  /** 店のメニューまわりのハッシュ（アプリの保存と比べる） */
+  catalogVersion?: string;
   categories: NativePosCategory[];
   items: NativePosItem[];
   /** 商品ごとの選択肢グループ（menuItemId → グループ。選択肢のある商品だけ） */
@@ -146,7 +189,9 @@ export type NativePosAction =
   | { type: 'steraCheck'; requestId: string }
   | { type: 'steraCancel'; requestId: string }
   /** 会計のあとドロアを開く（店の設定：現金は開く・キャッシュレスは設定しだい。Web のレジと同じ） */
-  | { type: 'drawer'; orderId: string; methods: NativePayMethod[] };
+  | { type: 'drawer'; orderId: string; methods: NativePayMethod[] }
+  /** iPad から LAN で直接出した厨房伝票の結果（/api/print/direct の done と同じ） */
+  | { type: 'printDone'; printerId: string; jobId: string; result: 'printed' | 'unreachable' | 'failed'; code: string | null };
 
 /**
  * menu_item_option_groups の行（menu_option_groups と menu_option_items つき）を商品ごとのグループに。
@@ -276,6 +321,12 @@ export function parseNativePosAction(raw: unknown): Parsed {
     case 'steraCancel':
       if (!isUuid(b.requestId)) return bad();
       return { ok: true, action: { type: b.type, requestId: b.requestId } };
+    case 'printDone': {
+      if (!isUuid(b.printerId) || !isUuid(b.jobId)) return bad();
+      if (b.result !== 'printed' && b.result !== 'unreachable' && b.result !== 'failed') return bad();
+      const code = typeof b.code === 'string' ? b.code.slice(0, 80) : null;
+      return { ok: true, action: { type: 'printDone', printerId: b.printerId, jobId: b.jobId, result: b.result, code } };
+    }
     default:
       return bad();
   }
