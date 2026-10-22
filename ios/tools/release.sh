@@ -52,7 +52,7 @@ else
   xcodebuild archive \
     -project TenpoOne.xcodeproj -scheme TenpoOne -configuration Release \
     -destination 'generic/platform=iOS' -archivePath "$ARCHIVE" \
-    -allowProvisioningUpdates "${AUTH[@]}" \
+    -allowProvisioningUpdates ${AUTH[@]+"${AUTH[@]}"} \
     DEVELOPMENT_TEAM="$TEAM_ID" CURRENT_PROJECT_VERSION="$BUILD_NO"
 fi
 
@@ -64,7 +64,7 @@ if [ ! -f "$OPTS" ]; then
 fi
 if ! xcodebuild -exportArchive \
   -archivePath "$ARCHIVE" -exportOptionsPlist "$OPTS" -exportPath "$OUT/export" \
-  -allowProvisioningUpdates "${AUTH[@]}"; then
+  -allowProvisioningUpdates ${AUTH[@]+"${AUTH[@]}"}; then
   echo "!! アップロードできませんでした。Xcode のログインがターミナルから使えないとき（Failed to Use Accounts）は、"
   echo "   App Store Connect の API キー（ASC_KEY_ID / ASC_ISSUER_ID / ASC_KEY_PATH）を付けるか、"
   echo "   $ARCHIVE を Xcode の Organizer で開いて Distribute App してください"
