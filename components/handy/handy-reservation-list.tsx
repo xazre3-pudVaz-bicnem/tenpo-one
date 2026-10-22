@@ -81,7 +81,7 @@ const CANCELLED: ReadonlySet<string> = new Set(['cancelled', 'no_show']);
 
 /**
  * 予約の一覧（2026-10-15 Ronnie「予約一覧をこの形に」。予約アプリの「予約リスト」と同じ並び）：
- *   左：状態・お名前・電話番号 ／ 右：時間〜人数・席・コース・経路・要望・メモ
+ *   左：状態・お名前 ／ 右：時間〜人数・席・コース・経路・要望・メモ
  *   上：時間順・件数・「キャンセルを除く」
  * ハンディからは閲覧・追加。「HANDYで注文」・来店・キャンセルは押した詳細（ポップアップ）から。
  */
@@ -156,7 +156,7 @@ export function HandyReservationList({
                 )}
               >
                 <div className="flex gap-2.5">
-                  {/* 左：状態・お名前・電話番号 */}
+                  {/* 左：状態・お名前 */}
                   <div className="flex w-[40%] min-w-0 shrink-0 flex-col">
                     <span
                       className={cn(
@@ -170,17 +170,7 @@ export function HandyReservationList({
                       <b className={cn('block text-[14px] leading-snug font-bold break-words', cancelled ? 'text-[#5c5650]' : 'text-[#292725]')}>
                         {r.name} 様
                       </b>
-                      {r.phone ? (
-                        <a
-                          href={`tel:${r.phone}`}
-                          onClick={(e) => e.stopPropagation()}
-                          className="block text-[12.5px] font-bold text-[#292725] tabular-nums"
-                        >
-                          {r.phone}
-                        </a>
-                      ) : (
-                        <span className="block text-[12.5px] font-bold text-[#766b62]">-</span>
-                      )}
+                      {/* 電話番号は一覧に出さない。押した詳細の「電話」・「電話する」だけ（2026-10-22 Ronnie） */}
                     </div>
                   </div>
 

@@ -10,8 +10,8 @@ describe('ハンディの予約の詳細（ポップアップ）', () => {
   it('予約のカードを押すと詳細を開く（電話番号は今まで通りそのまま動く。HANDYで注文は詳細の下だけ。2026-10-20）', () => {
     expect(list).toContain('onClick={() => setOpenId(r.id)}');
     expect(list).toContain('<HandyReservationDetail');
-    // カードの中の電話は、押してもポップアップを開かない
-    expect(list.match(/onClick=\{\(e\) => e\.stopPropagation\(\)\}/g)?.length).toBe(1);
+    // カードに電話は出さない（2026-10-22）ので、カードの中で押しても止めるものは無い
+    expect(list).not.toContain('e.stopPropagation()');
   });
 
   it('詳細は要望・メモを全部（切らずに）出し、電話・メール・担当・人数の内訳も出す', () => {
