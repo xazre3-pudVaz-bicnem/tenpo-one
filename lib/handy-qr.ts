@@ -10,7 +10,7 @@
  * 設定は store_settings.settings.handyQr（DB の列追加なし）。
  * ここは純粋な関数だけ（DB・Next 非依存・テスト対象）。
  */
-import { networkKey } from './handy-pairing';
+import { networkKey } from './handy-network';
 
 /** Wi-Fi の外に出てからログアウトするまで */
 export const HANDY_OUTSIDE_GRACE_MS = 3 * 60_000;
