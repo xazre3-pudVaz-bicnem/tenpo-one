@@ -39,6 +39,10 @@
 			isa = PBXBuildFile;
 			fileRef = "9EDA6BEACA5C7735606C61EF";
 		};
+		330F2D4C461D8365CEC64FF9 = {
+			isa = PBXBuildFile;
+			fileRef = CB3B0791925E748896E1FE3D;
+		};
 		5D7F42811DC03CBFB0FA4D12 = {
 			isa = PBXBuildFile;
 			fileRef = CCAE011319E602AB57697C9A;
@@ -62,6 +66,10 @@
 		927460F67966A286B1CBF437 = {
 			isa = PBXBuildFile;
 			fileRef = "7BCDF55397833DFC4E8C5157";
+		};
+		9AF96773BD166902440F5FAF = {
+			isa = PBXBuildFile;
+			fileRef = "2EFCD2BF0338380BA1BF2034";
 		};
 		A49AA80EFB77AAFCFB657ECB = {
 			isa = PBXBuildFile;
@@ -135,6 +143,12 @@
 			isa = PBXFileReference;
 			lastKnownFileType = folder.assetcatalog;
 			path = Assets.xcassets;
+			sourceTree = "<group>";
+		};
+		2EFCD2BF0338380BA1BF2034 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = NativeLanPrint.swift;
 			sourceTree = "<group>";
 		};
 		3D3077E5E7F51ABDF8FD96C5 = {
@@ -233,6 +247,12 @@
 			path = AppConfig.swift;
 			sourceTree = "<group>";
 		};
+		CB3B0791925E748896E1FE3D = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = NativeCatalogCache.swift;
+			sourceTree = "<group>";
+		};
 		CCAE011319E602AB57697C9A = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
@@ -320,8 +340,10 @@
 				"956DFE02BC7361B56EDD90D3",
 				"94A43F329BE3F886B7757761",
 				"3DF8150016611E0D18EC1708",
+				CB3B0791925E748896E1FE3D,
 				DAFCD483AB1A2AE75EF85DD2,
 				A1FEC2419F1052C49E973173,
+				"2EFCD2BF0338380BA1BF2034",
 				"3D3077E5E7F51ABDF8FD96C5",
 				BEE174B4C52DC439864EC2D6,
 				"413CA5766E9AEECBFB339B62",
@@ -425,8 +447,10 @@
 				D324719F2D7AEE62FB625347,
 				BF7798D6F9CE7CF387CBFCF6,
 				"739B9B1A67DEC421F63B2156",
+				"330F2D4C461D8365CEC64FF9",
 				D2D8D62E926C484E717902E9,
 				CE94213B0C8B6AFEA7536D85,
+				"9AF96773BD166902440F5FAF",
 				"2968238F8E50CAF64D7A5B9B",
 				"02831771C1B71EF0AF471A4D",
 				"276B012ACAE09C98CCBFE760",
