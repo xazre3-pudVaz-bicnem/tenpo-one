@@ -1,11 +1,11 @@
-import {verifyReportGrant,reportPeriod} from '@/lib/ronix-report-grant';
+import {reportSigningSecret,verifyReportGrant,reportPeriod} from '@/lib/ronix-report-grant';
 import {reportAccess,activeRonixGrant} from '@/lib/ronix-report-access';
 import {computeSalesMetrics,SETTLED_ORDER_STATUSES,type SettledOrderLike,type RefundLike} from '@/lib/metrics';
 import {todayJst} from '@/lib/format';
 export const runtime='nodejs';export const dynamic='force-dynamic';
 export async function GET(request:Request){
  try{
- const token=request.headers.get('authorization')?.match(/^Bearer ([\w.-]+)$/)?.[1]??'';const grant=verifyReportGrant(token,'access',process.env.TENPO_RONIX_REPORT_SECRET??'');await activeRonixGrant(token,grant);
+ const token=request.headers.get('authorization')?.match(/^Bearer ([\w.-]+)$/)?.[1]??'';const grant=verifyReportGrant(token,'access',reportSigningSecret());await activeRonixGrant(token,grant);
  const {db,organization,stores}=await reportAccess(grant.sub,grant.org,grant.stores);const params=new URL(request.url).searchParams;const{from,to}=reportPeriod(params.get('from')??todayJst(),params.get('to')??todayJst());const ids=stores.map(s=>s.id);
  const orders:Array<SettledOrderLike&{store_id:string}>=[],refunds:Array<RefundLike&{store_id:string}>=[];
  // Bound the range and paginate; never silently treat a truncated/error response as zero sales.

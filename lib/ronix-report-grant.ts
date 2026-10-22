@@ -1,5 +1,11 @@
-import {createHmac,createHash,timingSafeEqual} from 'node:crypto';
+import {createHmac,createHash,timingSafeEqual,hkdfSync} from 'node:crypto';
 import {z} from 'zod';
+/** Domain-separated server-only key; no Supabase credential is put in a grant. */
+export function reportSigningSecret(){
+ const dedicated=process.env.TENPO_RONIX_REPORT_SECRET;if(dedicated&&dedicated.length>=32)return dedicated;
+ const root=process.env.SUPABASE_SERVICE_ROLE_KEY;if(!root||root.length<32)throw new Error('CONFIG');
+ return Buffer.from(hkdfSync('sha256',root,'TENPO_ONE_SIGNING_KEYS_V1','ronix-sales-summary-grants-v1',32)).toString('base64url');
+}
 export const RONIX_ORIGIN='https://ronix-agent.vercel.app';
 export const RONIX_CALLBACK=RONIX_ORIGIN+'/api/tenpo-sales/callback';
 const claims=z.object({version:z.literal(1),kind:z.enum(['code','access']),sub:z.string().uuid(),org:z.string().uuid(),stores:z.array(z.string().uuid()).min(1).max(100),jti:z.string().uuid(),iat:z.number().int(),exp:z.number().int(),challenge:z.string().regex(/^[\w-]{43}$/).optional(),scope:z.literal('sales.summary.read'),aud:z.literal('ronix-cloud')});
