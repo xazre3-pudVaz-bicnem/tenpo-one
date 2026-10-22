@@ -14,7 +14,8 @@ concurrency:
   cancel-in-progress: true
 jobs:
   check:
-    runs-on: ubuntu-latest
+    # Pin a supported image instead of waiting on a stalled ubuntu-latest provision.
+    runs-on: ubuntu-22.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
@@ -35,4 +36,6 @@ jobs:
           NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder
           SUPABASE_SERVICE_ROLE_KEY: placeholder
           NEXT_TELEMETRY_DISABLED: '1'
-        run: npm run build
+        # Avoid the intermittent Next/Turbopack Google-font module resolution bug.
+        # Vercel preview/production still verifies the normal production build.
+        run: npm run build -- --webpack
