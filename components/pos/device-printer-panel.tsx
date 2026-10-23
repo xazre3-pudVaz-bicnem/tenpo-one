@@ -33,6 +33,7 @@ import {
 import { postDirect, readDirectPrintConfig, sendToEposPrinter, writeDirectPrintConfig } from '@/components/printing/direct-print-client';
 import { buildSiiAgentPrint, openSiiAgent } from '@/components/printing/sii-agent-client';
 import { SII_AGENT_APP_STORE_URL, SII_AGENT_DEVICE_ID } from '@/lib/sii-url-print';
+import { printTimingLabel } from '@/lib/print-timing';
 
 export interface DevicePrinterOption {
   id: string;
@@ -672,14 +673,16 @@ function BluetoothPrinterForm({
     const bt = nativeBluetooth();
     if (!bt || !link) return;
     setBusy(kind);
+    const startedAt = performance.now();
     try {
       const res = await postDirect<{ ok: boolean; data?: string; error?: string }>({ action: 'test-bt', printerId: link.printerId, kind });
       if (!res?.ok || !res.data) {
         toast(res?.error ?? '試し印刷のデータを作れませんでした', 'error');
         return;
       }
+      const preparedAt = performance.now();
       const sent = await bt.print({ deviceId: link.deviceId, maker: link.maker, via: link.via === 'usb' ? 'usb' : 'bluetooth', data: res.data });
-      if (sent.ok) toast(kind === 'drawer' ? 'ドロアが開きました' : '印刷できました');
+      if (sent.ok) toast(`${kind === 'drawer' ? 'ドロアが開きました' : '印刷できました'}（${printTimingLabel(startedAt, preparedAt, performance.now())}）`);
       else toast(`つながりません（${sent.code ?? 'エラー'}）。プリンターの電源と iPad の Bluetooth を確かめてください`, 'error');
     } finally {
       setBusy(null);
