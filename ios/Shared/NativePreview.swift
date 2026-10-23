@@ -271,3 +271,21 @@ struct NativeCustomersScreen: View {
         NativeCustomersView(model: model, onHome: { state.goNativeHome() }, onWeb: { path in state.leaveNativeFloor(to: path) })
     }
 }
+
+/// ネイティブのスキャン（レシート撮影。2026-10-24）
+struct NativeScanScreen: View {
+    @StateObject private var model = NativeScanModel()
+    @EnvironmentObject var state: AppState
+
+    var body: some View {
+        NativeScanView(
+            model: model,
+            onHome: { state.goNativeHome() },
+            onWeb: { path in state.leaveNativeFloor(to: path) },
+            onCashClose: { state.goNativeCash("/app/cash/close") },
+            onPetty: { state.goNativeCashIo(tab: "petty") }
+        )
+        .onAppear { model.tx = state.scanTx }
+        .onChange(of: state.scanTx) { tx in model.tx = tx }
+    }
+}
