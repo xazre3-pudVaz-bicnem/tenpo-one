@@ -24,6 +24,7 @@ import {
   type SeatTimeState,
 } from '@/lib/seat-time';
 import type { SeatTimeInput } from '@/app/app/pos/actions';
+import { HANDY_PLANS, planHasItems, type HandyPlan, type HandyPlanItem } from '@/lib/handy-visit';
 
 /**
  * 伝票画面の上から「席の時間・コース」を直すダイアログ（2026-09-22 店舗要望）。
@@ -35,12 +36,18 @@ export function SeatTimeDialog({
   current,
   courses,
   setSeatTimeAction,
+  planItems = [],
+  orderMenuItemIds = [],
 }: {
   onClose: () => void;
   orderId: string;
   current: SeatTimeState;
   courses: SeatCourseOption[];
   setSeatTimeAction: (orderId: string, input: SeatTimeInput) => Promise<void>;
+  /** モードのプラン商品（飲み放題B・コースなど）。モードを選ぶと出て、選ぶと伝票に足す */
+  planItems?: HandyPlanItem[];
+  /** いま伝票にある商品（menu_items.id）。プラン商品が入っているかの印に使う */
+  orderMenuItemIds?: string[];
 }) {
   const router = useRouter();
   const { toast } = useToast();
@@ -55,6 +62,26 @@ export function SeatTimeDialog({
   const hasGuests = current.guestCount != null;
   const [guests, setGuests] = useState<number>(current.guestCount ?? 1);
   const clampGuests = (n: number) => Math.min(GUEST_COUNT_MAX, Math.max(1, Math.floor(n) || 1));
+  // モード（2026-10-24 Ronnie「お客様情報でモードも変えられるように」）。渡されたとき（卓の伝票）だけ出す
+  const hasPlans = current.plans !== undefined;
+  const initialPlans: HandyPlan[] = current.plans ?? (current.courseId ? ['course'] : ['normal']);
+  const [plans, setPlans] = useState<HandyPlan[]>(initialPlans);
+  /** 伝票に足すプラン商品（まだ伝票に無いもの） */
+  const [planPick, setPlanPick] = useState<string[]>([]);
+  const togglePlan = (plan: HandyPlan) => {
+    setPlans((prev) => {
+      const on = prev.includes(plan);
+      const next = on ? prev.filter((p) => p !== plan) : [...prev, plan];
+      // モードを外したら、そのモードのプラン商品の選択も外す
+      setPlanPick((pick) => pick.filter((id) => {
+        const item = planItems.find((p) => p.id === id);
+        return item ? next.includes(item.kind) : false;
+      }));
+      return next.length > 0 ? next : prev;
+    });
+  };
+  const itemsForPlans = planItems.filter((p) => planHasItems(p.kind) && plans.includes(p.kind));
+  const plansChanged = hasPlans && plans.join(',') !== initialPlans.join(',');
 
   const endLabel =
     minutes != null && /^\d{2}:\d{2}$/.test(startHm)
@@ -84,8 +111,17 @@ export function SeatTimeDialog({
           durationMinutes: minutes,
           courseId: courseId || null,
           guestCount: guestChanged ? guests : null,
+          plans: plansChanged ? plans : null,
+          planItemIds: planPick,
         });
-        toast(guestChanged ? `お客様情報を変更しました（${guests}名）` : 'お客様情報（席の時間・コース）を変更しました', 'success');
+        toast(
+          planPick.length > 0
+            ? `お客様情報を変更し、${planPick.length}品を伝票に入れました（注文確定で厨房へ）`
+            : guestChanged
+              ? `お客様情報を変更しました（${guests}名）`
+              : 'お客様情報（席の時間・コース）を変更しました',
+          'success'
+        );
         router.refresh();
         onClose();
       } catch (e) {
@@ -156,6 +192,69 @@ export function SeatTimeDialog({
                 <span className="ml-1 text-xs text-gray-500">今 {current.guestCount}名 → {guests}名（金額は変わりません）</span>
               )}
             </div>
+          </div>
+        )}
+
+        {hasPlans && (
+          <div>
+            <p className="mb-1.5 text-sm font-medium text-gray-700">モード / Mode</p>
+            <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
+              {HANDY_PLANS.map((p) => {
+                const on = plans.includes(p.id);
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    aria-pressed={on}
+                    onClick={() => togglePlan(p.id)}
+                    disabled={pending}
+                    className={cn(
+                      'rounded-xl border py-3 text-sm font-semibold transition-colors disabled:opacity-50',
+                      on ? 'border-primary bg-primary-soft text-primary-deep' : 'border-gray-200 text-navy hover:bg-gray-50'
+                    )}
+                  >
+                    {p.name}
+                  </button>
+                );
+              })}
+            </div>
+            {itemsForPlans.length > 0 && (
+              <>
+                <p className="mt-2 mb-1 text-xs text-gray-500">プラン / Plan（選ぶと伝票に入ります。注文確定で厨房へ）</p>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                  {itemsForPlans.map((item) => {
+                    const have = orderMenuItemIds.includes(item.id);
+                    const on = have || planPick.includes(item.id);
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        aria-pressed={on}
+                        disabled={pending || have}
+                        onClick={() => {
+                          setPlanPick((prev) => (prev.includes(item.id) ? prev.filter((id) => id !== item.id) : [...prev, item.id]));
+                          // コースのプラン商品を選んだら、席のコース・時間もそれに合わせる
+                          if (item.kind === 'course' && !planPick.includes(item.id)) {
+                            const c = courses.find((x) => x.id === item.id) ?? null;
+                            if (c) {
+                              setCourseId(c.id);
+                              setMinutes((cur) => durationForCourse(c, cur));
+                            }
+                          }
+                        }}
+                        className={cn(
+                          'flex items-center justify-between gap-2 rounded-xl border px-3 py-2.5 text-left text-sm font-semibold transition-colors disabled:opacity-70',
+                          on ? 'border-primary bg-primary-soft text-primary-deep' : 'border-gray-200 text-navy hover:bg-gray-50'
+                        )}
+                      >
+                        <span className="truncate">{item.name}</span>
+                        <span className="shrink-0 text-xs text-gray-500 tabular-nums">{have ? '伝票にあり' : `¥${item.price.toLocaleString('ja-JP')}`}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            )}
           </div>
         )}
 

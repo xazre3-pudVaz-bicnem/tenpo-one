@@ -46,6 +46,6 @@ describe('着席画面のプラン → 席のコース（reservations.course_id�
 
   it('コース欄の選択肢（注文画面・テーブル一覧）も同じ判定', () => {
     expect(read('app/app/pos/page.tsx')).toContain('isSeatCourseItem(m.item_type as string | null, m.name as string)');
-    expect(read('app/app/floor/page.tsx')).toContain('isSeatCourseItem(m.item_type, m.name)');
+    expect(read('lib/floor-view-server.ts')).toContain('isSeatCourseItem(m.item_type, m.name)');
   });
 });

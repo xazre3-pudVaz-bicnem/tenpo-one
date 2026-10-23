@@ -367,3 +367,39 @@ describe('モードは何個でも選べる（2026-09-24 店舗要望）', () =>
     );
   });
 });
+
+describe('plansFromMemo / memoWithPlans（お客様情報でモードを直す。2026-10-24）', async () => {
+  const { plansFromMemo, memoWithPlans, isPlanList, visitMemo } = await import('@/lib/handy-visit');
+
+  it('visitMemo で作ったメモからモードを読める', () => {
+    const memo = visitMemo({ ...DEFAULT_VISIT_DRAFT, plans: ['drink', 'normal'], male: 2, female: 1, source: '食べログ' });
+    expect(memo.startsWith('ハンディ: 飲み放題・アラカルト / 男2・女1 / 食べログ')).toBe(true);
+    expect(plansFromMemo(memo)).toEqual(['drink', 'normal']);
+  });
+
+  it('ハンディのメモでなければ null', () => {
+    expect(plansFromMemo(null)).toBeNull();
+    expect(plansFromMemo('')).toBeNull();
+    expect(plansFromMemo('カードのつもりが現金')).toBeNull();
+    expect(plansFromMemo('ハンディ: 謎のモード / 男1・女0')).toBeNull();
+  });
+
+  it('モードの部分だけ入れ替え、人数・経路・時間制は残す', () => {
+    const memo = 'ハンディ: アラカルト / 男2・女1 / 食べログ / 2時間制（30分前に声かけ）';
+    expect(memoWithPlans(memo, ['drink'])).toBe('ハンディ: 飲み放題 / 男2・女1 / 食べログ / 2時間制（30分前に声かけ）');
+    expect(memoWithPlans(memo, ['course', 'normal'])).toBe('ハンディ: コース・アラカルト / 男2・女1 / 食べログ / 2時間制（30分前に声かけ）');
+  });
+
+  it('メモが無い・別のメモのときは先頭にモードを足す', () => {
+    expect(memoWithPlans(null, ['buffet'])).toBe('ハンディ: 食べ放題');
+    expect(memoWithPlans('カードのつもりが現金', ['drink'])).toBe('ハンディ: 飲み放題 / カードのつもりが現金');
+    expect(memoWithPlans('ハンディ: 男2・女1', ['drink'])).toBe('ハンディ: 飲み放題 / 男2・女1');
+  });
+
+  it('isPlanList', () => {
+    expect(isPlanList(['drink', 'normal'])).toBe(true);
+    expect(isPlanList([])).toBe(false);
+    expect(isPlanList(['x'])).toBe(false);
+    expect(isPlanList('drink')).toBe(false);
+  });
+});

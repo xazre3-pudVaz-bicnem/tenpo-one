@@ -1,4 +1,5 @@
 /** フロア（テーブル一覧）画面の表示用データ型と状態判定。サーバーで整形してクライアントへ渡す。 */
+import type { HandyPlan } from '@/lib/handy-visit';
 
 export interface ReservationChip {
   time: string;
@@ -45,6 +46,8 @@ export interface TableSlipLine {
   id: string;
   name: string;
   quantity: number;
+  /** 商品（menu_items.id）。削除済み商品・手入力行は null。お客様情報のプラン商品が入っているかの印に使う */
+  menuItemId: string | null;
 }
 
 /** テーブルに紐づく未会計注文（表示用） */
@@ -68,6 +71,8 @@ export interface TableOrderInfo {
   endAtMs: number;
   /** 席のコース（reservations.course_id）。卓のポップアップから時間・コースを直すときに使う */
   courseId: string | null;
+  /** モード（伝票メモ「ハンディ: 飲み放題・アラカルト / …」から）。お客様情報のダイアログで直せる（2026-10-24）。未設定は null */
+  plans: HandyPlan[] | null;
   /** この卓の未会計伝票すべて（古い順）。1枚だけのときも入る */
   slips: TableSlip[];
 }

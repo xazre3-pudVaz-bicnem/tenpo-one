@@ -15,7 +15,7 @@ import { loadMenuStock } from '@/lib/menu-stock-server';
 import { applicableTaxRate } from '@/lib/tax';
 import { validateCoupon, COUPON_REJECT_LABELS, type CouponLike } from '@/lib/coupons';
 import { resolveOptionSelection } from '@/lib/menu-options';
-import { resolveStartTime, startTimeProblem } from '@/lib/handy-visit';
+import { isPlanList, memoWithPlans, plansFromMemo, resolveStartTime, startTimeProblem, type HandyPlan } from '@/lib/handy-visit';
 import { isGuestCount, isSeatDuration } from '@/lib/seat-time';
 import { RYOSHUSHO_ISSUED_MESSAGE, ryoshushoIssuedFrom } from '@/lib/ryoshusho-issue';
 import { dynamicUnitPrice } from '@/lib/dynamic-pricing';
@@ -1604,6 +1604,13 @@ export interface SeatTimeInput {
   courseId: string | null;
   /** 人数。null/未指定なら今のまま（2026-09-26 店舗要望：席の時間の画面で人数も直す） */
   guestCount?: number | null;
+  /**
+   * モード（アラカルト・飲み放題・食べ放題・食べ飲み放題・コース）。null/未指定なら今のまま。
+   * 伝票メモの「ハンディ: 飲み放題・アラカルト / …」のモードの部分を入れ替える（2026-10-24 Ronnie「お客様情報でモードも」）
+   */
+  plans?: HandyPlan[] | null;
+  /** モードのプラン商品（飲み放題B・コースなど menu_items.id）を伝票に足す（未送信）。すでに伝票にある商品は足さない */
+  planItemIds?: string[];
 }
 
 /**
@@ -1628,6 +1635,12 @@ export async function setSeatTime(orderId: string, input: SeatTimeInput): Promis
   }
   const guestChanged = guestCount !== null && guestCount !== order.guest_count;
   const nextGuestCount = guestChanged ? guestCount : (order.guest_count as number) || 1;
+  // モード（伝票メモの最初の部分）。渡されなければ今のまま
+  const plans = input.plans ?? null;
+  if (plans !== null && !isPlanList(plans)) throw new Error('モードを選択してください');
+  const currentPlans = plansFromMemo(order.memo as string | null);
+  const plansChanged = plans !== null && (currentPlans === null || plans.join(',') !== currentPlans.join(','));
+  const planItemIds = (input.planItemIds ?? []).filter((id) => typeof id === 'string' && id);
   const nowMs = Date.now();
   let startMs = new Date(order.opened_at as string).getTime();
   if (input.startTime) {
@@ -1722,9 +1735,11 @@ export async function setSeatTime(orderId: string, input: SeatTimeInput): Promis
     ...(guestChanged ? { guest_count: nextGuestCount } : {}),
     updated_by: ctx.userId,
   };
-  // 店内・コースの伝票だけ種類を合わせる（テイクアウト等はそのまま）
+  if (plansChanged) orderPatch.memo = memoWithPlans(order.memo as string | null, plans);
+  // 店内・コースの伝票だけ種類を合わせる（テイクアウト等はそのまま）。モードにコースがあればコース扱い
   if (order.order_type === 'dine_in' || order.order_type === 'course') {
-    orderPatch.order_type = courseId ? 'course' : 'dine_in';
+    const coursePlan = (plans ?? currentPlans ?? []).includes('course');
+    orderPatch.order_type = courseId || coursePlan ? 'course' : 'dine_in';
   }
   const { error: orderError } = await supabase
     .from('orders')
@@ -1740,9 +1755,25 @@ export async function setSeatTime(orderId: string, input: SeatTimeInput): Promis
     p_target_table: 'orders',
     p_target_id: orderId,
     p_before: { opened_at: order.opened_at, reservation_id: order.reservation_id, guest_count: order.guest_count },
-    p_after: { opened_at: startAt.toISOString(), end_at: endAt.toISOString(), course_id: courseId, guest_count: nextGuestCount },
+    p_after: { opened_at: startAt.toISOString(), end_at: endAt.toISOString(), course_id: courseId, guest_count: nextGuestCount, plans },
     p_note: null,
   });
+
+  // モードのプラン商品（飲み放題B・コースなど）を伝票に足す。すでに伝票にある商品は足さない（未送信で入り、注文確定で厨房へ）
+  if (planItemIds.length > 0) {
+    const { data: existing } = await supabase
+      .from('order_items')
+      .select('menu_item_id')
+      .eq('order_id', orderId)
+      .eq('status', 'active');
+    const have = new Set((existing ?? []).map((r) => r.menu_item_id as string | null).filter(Boolean));
+    for (const id of planItemIds) {
+      if (have.has(id)) continue;
+      // 価格・税率・店舗の検証は addItem に任せる
+      await addItem(orderId, id, [], 1);
+      have.add(id);
+    }
+  }
 
   revalidatePath('/app/pos');
   revalidatePath('/app/floor');

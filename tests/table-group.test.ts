@@ -136,7 +136,7 @@ describe('テーブル連携は会計完了・テーブルクリアで自動解�
     const card = read('components/floor/table-card.tsx');
     expect(card).toContain("連携 {linked.join('+')}");
     expect(card).toContain('<Link2');
-    expect(read('app/app/floor/page.tsx')).toContain('groupTableNames:');
+    expect(read('lib/floor-view-server.ts')).toContain('groupTableNames:');
   });
 });
 

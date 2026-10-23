@@ -21,6 +21,7 @@ import { EmptyState } from '@/components/ui/state';
 import { OrderPicker } from '@/components/pos/order-picker';
 import { PosScreen, type PosOrderItem } from '@/components/pos/pos-screen';
 import { isSeatCourseItem } from '@/lib/menu-book';
+import { buildPlanItems, plansFromMemo } from '@/lib/handy-visit';
 import {
   addItem,
   addItemAtSeat,
@@ -227,7 +228,7 @@ export default async function PosPage({
       .order('sort_order'),
     supabase
       .from('menu_items')
-      .select('id, category_id, name, name_en, name_kana, price, takeout_price, item_type, is_sold_out, is_recommended, sort_order, duration_minutes')
+      .select('id, category_id, name, name_en, name_kana, price, takeout_price, item_type, is_sold_out, is_recommended, sort_order, duration_minutes, course_includes_drinks, course_includes_ayce')
       .eq('organization_id', ctx.organizationId)
       .or(`store_id.is.null,store_id.eq.${store.id}`)
       .eq('status', 'active')
@@ -397,7 +398,24 @@ export default async function PosPage({
     startMs: seatStartMs,
     endMs: seatEndMs != null && seatEndMs > seatStartMs ? seatEndMs : null,
     courseId: seatResv?.course_id ?? null,
+    // モード（伝票メモ「ハンディ: 飲み放題・アラカルト / …」から）。お客様情報のダイアログで直せる（2026-10-24）
+    plans: plansFromMemo(order.memo as string | null),
   };
+  // お客様情報のモードで選ぶプラン商品（飲み放題B・コースなど。ハンディ・レジの来店登録と同じ分け方）
+  const categoryNameById = new Map((categories ?? []).map((c) => [c.id as string, c.name as string]));
+  const planItems = buildPlanItems(
+    (menuItems ?? []).map((m) => ({
+      id: m.id as string,
+      name: m.name as string,
+      categoryName: m.category_id ? (categoryNameById.get(m.category_id as string) ?? null) : null,
+      price: m.price as number,
+      itemType: m.item_type as string,
+      isSoldOut: !!m.is_sold_out,
+      durationMinutes: (m.duration_minutes as number | null) ?? null,
+      courseIncludesDrinks: (m.course_includes_drinks as boolean | null) ?? null,
+      courseIncludesAyce: (m.course_includes_ayce as boolean | null) ?? null,
+    }))
+  );
   const withStock = (menuItems ?? []).map((m) => ({
     ...m,
     is_sold_out: isMenuSoldOut(!!m.is_sold_out, menuStock.get(m.id as string)),
@@ -477,6 +495,7 @@ export default async function PosPage({
         setGuestCountAction={setGuestCount}
         seatTime={order.table_id ? seatTime : undefined}
         seatCourses={seatCourses}
+        planItems={planItems}
         setSeatTimeAction={setSeatTime}
         startTerminalPaymentAction={startTerminalPayment}
         checkTerminalPaymentAction={checkTerminalPayment}

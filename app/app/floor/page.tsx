@@ -1,27 +1,11 @@
-import { groupOfTable, tableGroupsFrom } from '@/lib/table-group';
-import { isSeatCourseItem } from '@/lib/menu-book';
-import { floorBoardFrom } from '@/lib/floor-nav';
 import type { Metadata } from 'next';
 import { requireFeature } from '@/lib/auth';
 import { storeAccessBlock } from '@/components/pos/store-access-guard';
 import { createClient } from '@/lib/supabase/server';
-import { can } from '@/lib/permissions';
-import { todayJst, formatTime } from '@/lib/format';
 import { PageHeader } from '@/components/ui/page-header';
 import { EmptyState } from '@/components/ui/state';
-import { CREATED_VIA_LABEL } from '@/components/reservations/constants';
-import { RESERVATION_ROW_SELECT, mapReservationRow, type RawReservationRow } from '@/components/reservations/row-mapper';
-import { loadReservationTags } from '@/lib/reservation-tags-server';
-import { reservationClerkOptions } from '@/lib/reservation-clerks-server';
 import { FloorBoard } from '@/components/floor/floor-board';
-import type {
-  FloorTable,
-  PanelReservation,
-  TableOrderInfo,
-  TableView,
-  TableCall,
-  UpcomingReservation,
-} from '@/components/floor/types';
+import { loadFloorView } from '@/lib/floor-view-server';
 import { saveTableGroup } from './group-actions';
 import { clearTable, mergeOrders, setGuestCount, setPaymentMemo, setSeatTime } from '@/app/app/pos/actions';
 import { enqueueExpoSlipPrint, enqueueSelectedItemsPrint } from '@/app/app/pos/print-actions';
@@ -29,77 +13,13 @@ import { startWalkIn, goToOrder, completeCleaning, setTableAvailability, release
 
 export const metadata: Metadata = { title: 'テーブル一覧' };
 
-/** 描画の基準時刻（リクエスト時点）。クライアントの時計のハイドレーション初期値にも使う */
-function requestTime() {
-  return Date.now();
-}
-
-function jstDate(iso: string) {
-  return new Date(iso).toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' });
-}
-
-/** 未来店として「次の予約」に出すステータス */
-const UPCOMING_STATUSES = ['pending', 'confirmed', 'waiting'];
-/** 右パネルに出すステータス（キャンセル・キャンセル待ちは除外） */
-const PANEL_STATUSES = ['pending', 'confirmed', 'waiting', 'arrived', 'seated', 'billing', 'completed', 'no_show'];
-
-type One<T> = T | T[] | null;
-const one = <T,>(v: One<T>): T | null => (Array.isArray(v) ? (v[0] ?? null) : v);
-
-interface ReservationSource {
-  created_via: string;
-  reservation_sources: One<{ name: string }>;
-}
-
-function sourceLabel(r: ReservationSource | null): string {
-  if (!r) return '直接来店';
-  // 来店経路（食べログ・ホットペッパーなど）が入っていれば、ウォークインでもその名前を出す
-  const src = one(r.reservation_sources);
-  if (src?.name) return src.name;
-  if (r.created_via === 'walk_in') return '直接来店';
-  return CREATED_VIA_LABEL[r.created_via] ?? r.created_via;
-}
-
-function courseLabel(c: { course_includes_drinks: boolean | null; course_includes_ayce: boolean | null }) {
-  if (c.course_includes_ayce && c.course_includes_drinks) return '食飲放';
-  if (c.course_includes_ayce) return '食放';
-  if (c.course_includes_drinks) return '飲放';
-  return '時間制';
-}
-
-const isWalkInName = (name: string) => name === 'ウォークイン';
-
-interface OrderRow {
-  id: string;
-  order_no: number | null;
-  table_id: string | null;
-  opened_at: string;
-  guest_count: number;
-  total: number;
-  clerk_name: string | null;
-  customers: One<{ name: string; visit_count: number }>;
-  reservations: One<
-    ReservationSource & {
-      guest_name: string;
-      start_at: string | null;
-      end_at: string;
-      course_id: string | null;
-      menu_items: One<{
-        duration_minutes: number | null;
-        course_includes_drinks: boolean | null;
-        course_includes_ayce: boolean | null;
-      }>;
-    }
-  >;
-}
-
+/**
+ * テーブル一覧（Web）。データの組み立ては lib/floor-view-server.ts（iPad アプリのネイティブのフロア画面と共通。2026-10-24）
+ */
 export default async function FloorPage() {
   const ctx = await requireFeature('pos');
   const supabase = await createClient();
   const store = ctx.currentStore ?? ctx.stores[0];
-
-  // 契約のアクセス制限は、下の読み込みと同時に（画面を速く。2026-10-21）
-  const accessBlockPromise = store ? storeAccessBlock(store, { countDevice: false }) : Promise.resolve(null);
 
   if (!store) {
     return (
@@ -113,236 +33,27 @@ export default async function FloorPage() {
     );
   }
 
-  const today = todayJst();
-  // 読み込みは全部まとめて並列に（前は 5 回に分けて順番に待っていた。2026-10-21 Ronnie「Airレジ・USEN より遅い」）
-  const [
-    accessBlock,
-    { data: floors },
-    { data: tables },
-    { data: settings },
-    { data: orderRows },
-    { data: reservationRows },
-    clerkOptionsByStore,
-    { data: callRows },
-    { data: courseRows },
-  ] =
-    await Promise.all([
-      accessBlockPromise,
-      supabase
-        .from('floors')
-        .select('id, name, sort_order')
-        .eq('store_id', store.id)
-        .eq('status', 'active')
-        .order('sort_order')
-        .order('name'),
-      supabase
-        .from('restaurant_tables')
-        .select(
-          'id, floor_id, name, capacity_min, capacity_max, is_private_room, is_counter, current_status, pos_x, pos_y, shape'
-        )
-        .eq('store_id', store.id)
-        .eq('status', 'active')
-        .order('sort_order'),
-      supabase.from('store_settings').select('default_stay_minutes, settings').eq('store_id', store.id).maybeSingle(),
-      supabase
-        .from('orders')
-        .select(
-          `id, order_no, table_id, opened_at, guest_count, total, clerk_name,
-           customers(name, visit_count),
-           reservations(guest_name, created_via, start_at, end_at, course_id, reservation_sources(name),
-             menu_items(duration_minutes, course_includes_drinks, course_includes_ayce))`
-        )
-        .eq('store_id', store.id)
-        .eq('status', 'open')
-        .not('table_id', 'is', null)
-        .order('opened_at'),
-      supabase
-        .from('reservations')
-        // 予約詳細（お客様情報・変更・キャンセル）をホームから開けるよう、台帳と同じ項目を読む（2026-09-26）
-        .select(RESERVATION_ROW_SELECT)
-        .eq('store_id', store.id)
-        .eq('reserved_date', today)
-        .in('status', PANEL_STATUSES)
-        .order('start_at'),
-      // 予約詳細のテーブル変更・担当者の選択肢。予約の担当者＝レジの担当名（2026-10-15 Ronnie「レジと台帳は同じ」）
-      reservationClerkOptions(supabase, [store.id]),
-      // お客様QRからの未対応の呼び出し（卓に鈴のマークで出す。2026-09-28 Ronnie）
-      supabase
-        .from('service_calls')
-        .select('id, table_id, kind, created_at, note')
-        .eq('store_id', store.id)
-        .eq('status', 'open')
-        .order('created_at'),
-      // 席の時間・コースを卓のポップアップから直すときに選ぶコース（2026-09-25 店舗要望）。
-      // 種別コースに加えて、名前が コース／course の商品（dinii 取込の種別フードのコース）も（isSeatCourseItem）
-      supabase
-        .from('menu_items')
-        .select('id, name, item_type, duration_minutes')
-        .eq('organization_id', ctx.organizationId)
-        .or(`store_id.is.null,store_id.eq.${store.id}`)
-        .eq('status', 'active')
-        .neq('item_type', 'option')
-        .order('sort_order'),
-    ]);
+  // 契約のアクセス制限は、読み込みと同時に（画面を速く。2026-10-21）
+  const [accessBlock, view] = await Promise.all([
+    storeAccessBlock(store, { countDevice: false }),
+    loadFloorView(ctx, supabase, store),
+  ]);
   if (accessBlock) return accessBlock;
 
-  const staffOptions = clerkOptionsByStore[store.id] ?? [];
-
-  // 2回目（1回目の結果が要るもの）：未会計伝票の品（選択印刷用。2026-09-25 店舗要望）と予約のキーワード。この2つも同時に
-  const openOrderIds = ((orderRows ?? []) as { id: string }[]).map((o) => o.id);
-  const reservationsToday = (reservationRows ?? []) as unknown as RawReservationRow[];
-  const panelSource = reservationsToday.filter((r) => r.created_via !== 'walk_in');
-  const [{ data: itemRows }, panelTags] = await Promise.all([
-    openOrderIds.length
-      ? supabase
-          .from('order_items')
-          .select('id, order_id, name, quantity')
-          .in('order_id', openOrderIds)
-          .eq('status', 'active')
-          .order('created_at')
-      : Promise.resolve({ data: [] }),
-    loadReservationTags(supabase, panelSource.map((r) => r.id)),
-  ]);
-  const linesByOrder = new Map<string, { id: string; name: string; quantity: number }[]>();
-  for (const it of (itemRows ?? []) as { id: string; order_id: string; name: string; quantity: number }[]) {
-    const list = linesByOrder.get(it.order_id) ?? [];
-    list.push({ id: it.id, name: it.name, quantity: it.quantity });
-    linesByOrder.set(it.order_id, list);
-  }
-
-  const serverNow = requestTime();
-  const stayMinutes = settings?.default_stay_minutes ?? 120;
-  const tableRows = (tables ?? []) as FloorTable[];
-  const tableName = new Map(tableRows.map((t) => [t.id, t.name]));
-
-  // テーブルごとの未会計注文（同一テーブルに複数あれば最も新しいものを代表にし、金額・人数は合算）
-  const orderByTable = new Map<string, TableOrderInfo>();
-  for (const o of (orderRows ?? []) as unknown as OrderRow[]) {
-    if (!o.table_id) continue;
-    const customer = one(o.customers);
-    const resv = one(o.reservations);
-    const course = resv ? one(resv.menu_items) : null;
-    const openedAtMs = new Date(o.opened_at).getTime();
-    const courseInfo =
-      course?.duration_minutes && course.duration_minutes > 0
-        ? { label: courseLabel(course), minutes: course.duration_minutes }
-        : null;
-    // 予約の開始が伝票の開始と同じ（ウォークイン・レジの「席の時間」で直した伝票）なら、予約の終了予定をそのまま使う。
-    // それ以外（予約客が遅れて来た等）は今まで通り: コースの所要時間 → 予約の終了予定 → 店舗の既定滞在時間。
-    const resvStartMs = resv?.start_at ? new Date(resv.start_at).getTime() : NaN;
-    const resvEndMs = resv ? new Date(resv.end_at).getTime() : NaN;
-    const seatTimeSet =
-      Number.isFinite(resvStartMs) && Math.abs(resvStartMs - openedAtMs) < 60_000 && resvEndMs > openedAtMs;
-    const endAtMs = seatTimeSet
-      ? resvEndMs
-      : courseInfo
-        ? openedAtMs + courseInfo.minutes * 60_000
-        : resv && resvEndMs > openedAtMs
-          ? resvEndMs
-          : openedAtMs + stayMinutes * 60_000;
-    const prev = orderByTable.get(o.table_id);
-    const slip = {
-      id: o.id,
-      orderNo: o.order_no ?? 0,
-      openedAtMs,
-      guestCount: o.guest_count,
-      total: Number(o.total ?? 0),
-      lines: linesByOrder.get(o.id) ?? [],
-    };
-    orderByTable.set(o.table_id, {
-      id: o.id,
-      // 経過時間は最初の注文の開始時刻から数える
-      openedAtMs: prev ? Math.min(prev.openedAtMs, openedAtMs) : openedAtMs,
-      guestCount: (prev?.guestCount ?? 0) + o.guest_count,
-      total: (prev?.total ?? 0) + Number(o.total ?? 0),
-      customerName: customer?.name ?? prev?.customerName ?? null,
-      visitCount: customer?.visit_count ?? prev?.visitCount ?? null,
-      guestName: resv && !isWalkInName(resv.guest_name) ? resv.guest_name : (prev?.guestName ?? null),
-      sourceLabel: resv ? sourceLabel(resv) : (prev?.sourceLabel ?? '直接来店'),
-      clerkName: o.clerk_name ?? prev?.clerkName ?? null,
-      course: courseInfo ?? prev?.course ?? null,
-      endAtMs: prev ? Math.max(prev.endAtMs, endAtMs) : endAtMs,
-      courseId: resv?.course_id ?? prev?.courseId ?? null,
-      // 会計できない伝票が卓に残らないよう、卓のポップアップからすべての伝票を開けるようにする
-      slips: [...(prev?.slips ?? []), slip],
-    });
-  }
-
-  const panelRows = panelSource.map((r) => ({ ...mapReservationRow(r, null), tags: panelTags.get(r.id) ?? [] }));
-
-  // テーブルごとの未来店予約（開始時刻順）
-  const upcomingByTable = new Map<string, UpcomingReservation[]>();
-  for (const r of reservationsToday) {
-    if (!UPCOMING_STATUSES.includes(r.status)) continue;
-    for (const link of r.reservation_tables ?? []) {
-      const list = upcomingByTable.get(link.table_id) ?? [];
-      list.push({
-        id: r.id,
-        startMs: new Date(r.start_at).getTime(),
-        time: formatTime(r.start_at),
-        name: r.guest_name,
-        partySize: r.party_size,
-        sourceLabel: sourceLabel(r),
-      });
-      upcomingByTable.set(link.table_id, list);
-    }
-  }
-
-  // テーブルグループ（2026-09-25 店舗要望）。まとめた卓のどれかに伝票があれば、同じ組として全部に出す
-  const tableGroups = tableGroupsFrom(settings?.settings);
-  for (const g of tableGroups) {
-    const withOrder = g.tableIds.map((id) => orderByTable.get(id)).find((o) => !!o);
-    if (!withOrder) continue;
-    for (const id of g.tableIds) if (!orderByTable.has(id)) orderByTable.set(id, withOrder);
-  }
-
-  const callsByTable = new Map<string, TableCall[]>();
-  for (const c of callRows ?? []) {
-    const list = callsByTable.get(c.table_id as string) ?? [];
-    list.push({
-      id: c.id as string,
-      kind: c.kind as TableCall['kind'],
-      createdAt: c.created_at as string,
-      note: (c.note as string | null) ?? null,
-    });
-    callsByTable.set(c.table_id as string, list);
-  }
-
-  const tableViews: TableView[] = tableRows.map((t) => ({
-    ...t,
-    order: orderByTable.get(t.id) ?? null,
-    upcoming: upcomingByTable.get(t.id) ?? [],
-    groupTableIds: groupOfTable(tableGroups, t.id)?.tableIds ?? [],
-    groupTableNames: tableRows
-      .filter((x) => (groupOfTable(tableGroups, t.id)?.tableIds ?? []).includes(x.id))
-      .map((x) => x.name),
-    calls: callsByTable.get(t.id) ?? [],
-  }));
-
-  const seatCourses = ((courseRows ?? []) as { id: string; name: string; item_type: string | null; duration_minutes: number | null }[])
-    .filter((m) => isSeatCourseItem(m.item_type, m.name))
-    .map((m) => ({ id: m.id, name: m.name, durationMinutes: m.duration_minutes ?? null }));
-
-  // 右パネル: ウォークイン（直接来店）は予約ではないので除外
-  const panel: PanelReservation[] = reservationsToday
-    .filter((r) => r.created_via !== 'walk_in')
-    .map((r) => {
-      const names = (r.reservation_tables ?? [])
-        .map((l) => tableName.get(l.table_id))
-        .filter((n): n is string => !!n);
-      return {
-        id: r.id,
-        startMs: new Date(r.start_at).getTime(),
-        time: formatTime(r.start_at),
-        name: r.guest_name,
-        partySize: r.party_size,
-        tableLabel: names.length > 0 ? names.join(' + ') : '席未定',
-        status: r.status,
-        createdToday: jstDate(r.created_at) === today,
-      };
-    });
-
-  const canOperate = can(ctx.role, 'tables.operate');
+  const {
+    serverNow,
+    stayMinutes,
+    defaultFloorId,
+    floors,
+    tableRows,
+    tables: tableViews,
+    panel,
+    panelRows,
+    staffOptions,
+    seatCourses,
+    planItems,
+    canOperate,
+  } = view;
 
   return (
     <div>
@@ -358,8 +69,8 @@ export default async function FloorPage() {
       ) : (
         <FloorBoard
           storeId={store.id}
-          floors={floors ?? []}
-          defaultFloorId={floorBoardFrom(settings?.settings).defaultFloorId}
+          floors={floors}
+          defaultFloorId={defaultFloorId}
           tables={tableViews}
           reservations={panel}
           reservationRows={panelRows}
@@ -379,6 +90,7 @@ export default async function FloorPage() {
           printExpoSlipAction={enqueueExpoSlipPrint}
           printSelectedItemsAction={enqueueSelectedItemsPrint}
           seatCourses={seatCourses}
+          planItems={planItems}
           setSeatTimeAction={setSeatTime}
           clearTableAction={clearTable}
           releaseFinishedCleaningAction={releaseFinishedCleaning}

@@ -8,7 +8,7 @@
  *   - コース … reservations.course_id（コースの所要時間があれば、時間の既定値にする）
  * ここは純粋な関数だけ（DB・Next 非依存・テスト対象）。
  */
-import { DURATION_MAX_MINUTES, DURATION_MIN_MINUTES, durationLabel } from './handy-visit';
+import { DURATION_MAX_MINUTES, DURATION_MIN_MINUTES, durationLabel, type HandyPlan } from './handy-visit';
 
 export { DURATION_MAX_MINUTES, DURATION_MIN_MINUTES, durationLabel };
 
@@ -38,6 +38,11 @@ export interface SeatTimeState {
   courseId: string | null;
   /** 人数。渡すとダイアログで人数も一緒に直せる（2026-09-26 店舗要望） */
   guestCount?: number;
+  /**
+   * モード（アラカルト・飲み放題・食べ放題・食べ飲み放題・コース。伝票メモから読む）。
+   * 渡すとダイアログでモードも直せる（2026-10-24 Ronnie「お客様情報でモードも変えられるように」）。null は未設定
+   */
+  plans?: HandyPlan[] | null;
 }
 
 /** 人数として受け付ける範囲（setGuestCount と同じ） */

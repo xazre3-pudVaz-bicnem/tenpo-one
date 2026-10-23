@@ -15,6 +15,7 @@ import { useNow } from './use-now';
 import type { WalkInSeatOptions } from './table-sheet';
 import type { SeatCourseOption } from '@/lib/seat-time';
 import type { SeatTimeInput } from '@/app/app/pos/actions';
+import type { HandyPlanItem } from '@/lib/handy-visit';
 import { initialFloorFilter, stepFloor, swipeDirection } from '@/lib/floor-nav';
 import {
   TILE_LABEL,
@@ -71,6 +72,7 @@ export function FloorBoard({
   printExpoSlipAction,
   printSelectedItemsAction,
   seatCourses = [],
+  planItems = [],
   setSeatTimeAction,
   clearTableAction,
   releaseFinishedCleaningAction,
@@ -106,6 +108,8 @@ export function FloorBoard({
   printSelectedItemsAction: (orderId: string, itemIds: string[]) => Promise<{ ok: boolean; error?: string }>;
   /** 席の時間・コースを卓のポップアップから直す（2026-09-25 店舗要望） */
   seatCourses?: SeatCourseOption[];
+  /** お客様情報のモードで選ぶプラン商品（飲み放題B・コースなど。2026-10-24） */
+  planItems?: HandyPlanItem[];
   setSeatTimeAction?: (orderId: string, input: SeatTimeInput) => Promise<void>;
   /** テーブルクリア: 卓の伝票を丸ごと取消して空席に戻す（2026-09-25 店舗要望） */
   clearTableAction?: (orderId: string, reason: string, approvedByClerkId?: string | null) => Promise<{ cancelledItems: number }>;
@@ -379,6 +383,7 @@ export function FloorBoard({
         printExpoSlipAction={printExpoSlipAction}
         printSelectedItemsAction={printSelectedItemsAction}
         seatCourses={seatCourses}
+        planItems={planItems}
         setSeatTimeAction={setSeatTimeAction}
         clearTableAction={clearTableAction}
         allTables={tables}

@@ -41,6 +41,7 @@ import { OpenPriceDialog } from './open-price-dialog';
 import { SeatTimeDialog } from './seat-time-dialog';
 import { seatBadgeLabel, type SeatCourseOption, type SeatTimeState } from '@/lib/seat-time';
 import type { SeatTimeInput } from '@/app/app/pos/actions';
+import type { HandyPlanItem } from '@/lib/handy-visit';
 import { CustomerLinkDialog } from './customer-link-dialog';
 import { MenuPagesDialog } from './menu-pages-dialog';
 import type {
@@ -259,6 +260,7 @@ export function PosScreen({
   divideOrderItemAction,
   setGuestCountAction,
   seatTime,
+  planItems = [],
   seatCourses = [],
   setSeatTimeAction,
   startTerminalPaymentAction,
@@ -352,6 +354,8 @@ export function PosScreen({
   /** 席の時間・コース（卓の伝票だけ）。省略時はバッジを出さない */
   seatTime?: SeatTimeState;
   seatCourses?: SeatCourseOption[];
+  /** お客様情報のモードで選ぶプラン商品（飲み放題B・コースなど。2026-10-24） */
+  planItems?: HandyPlanItem[];
   setSeatTimeAction?: (orderId: string, input: SeatTimeInput) => Promise<void>;
   /** 同じテーブルに空の伝票をもう1枚作る（別会計用）。省略時はボタンを表示しない */
   startTerminalPaymentAction: (orderId: string, readerId: string) => Promise<TerminalPaymentState>;
@@ -1393,6 +1397,8 @@ export function PosScreen({
           current={{ ...seatTime, guestCount: order.guestCount }}
           courses={seatCourses}
           setSeatTimeAction={setSeatTimeAction}
+          planItems={planItems}
+          orderMenuItemIds={items.map((i) => i.menu_item_id).filter((id): id is string => !!id)}
         />
       )}
 
