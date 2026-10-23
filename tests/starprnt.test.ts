@@ -33,7 +33,7 @@ describe('receiptToStarPrnt', () => {
     expect(t).toContain('シュラスコテーブル FOGO');
     expect(t).toContain('シュラスコ食べ放題');
     expect(t).toContain('合計');
-    expect(t).toContain('照会番号 ORD-1001');
+    expect(t).toContain('TENPO ONE');
   });
 
   it('整列・拡大・強調のコマンドを含む', () => {

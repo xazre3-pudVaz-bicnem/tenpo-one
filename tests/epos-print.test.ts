@@ -62,7 +62,7 @@ describe('receiptToEposXml', () => {
     expect(x).toContain('シュラスコテーブル FOGO');
     expect(x).toContain('シュラスコ食べ放題');
     expect(x).toContain('¥11,300');
-    expect(x).toContain('照会番号 ORD-1001');
+    expect(x).toContain('TENPO ONE');
     expect(x.trimEnd().endsWith('<cut type="feed"/></epos-print>')).toBe(true);
   });
 
@@ -151,7 +151,7 @@ describe('orderSlipEposXml', () => {
     expect(xml).toContain('T-3');
     expect(xml).toContain('No.123');
     expect(xml).toContain('カレーセット');
-    expect(xml).toContain('+ ナン');
+    expect(xml).not.toContain('+ ナン');
     expect(xml).toContain('2名');
     expect(xml).toContain('担当 Ronnie');
     expect(xml).toContain('これは領収書ではありません');

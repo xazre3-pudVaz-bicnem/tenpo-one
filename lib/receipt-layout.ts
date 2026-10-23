@@ -170,3 +170,23 @@ export function mergeSameLines<T extends SlipLine>(lines: T[]): T[] {
   }
   return out;
 }
+
+/** Compact customer receipt: modifiers remain on kitchen tickets. */
+export function receiptTableLines(lines: SlipLine[], width: number, options: WidthOptions = {}): string[] {
+  const quantityWidth = 5;
+  const priceWidth = 10;
+  const nameWidth = width - quantityWidth - priceWidth - 4;
+  const cell = (value: string, size: number, right = false) => {
+    const spaces = ' '.repeat(Math.max(0, Math.floor(size - dispWidth(value, options))));
+    return right ? spaces + value : value + spaces;
+  };
+  const row = (quantity: string, name: string, price: string) =>
+    '|' + cell(quantity, quantityWidth, true) + '|' + cell(name, nameWidth) + '|' + cell(price, priceWidth, true) + '|';
+  const border = '+' + '-'.repeat(quantityWidth) + '+' + '-'.repeat(nameWidth) + '+' + '-'.repeat(priceWidth) + '+';
+  const result = [border, row('数量', '商品名', '金額'), border];
+  for (const item of billSlipLines(lines.filter((item) => !item.cancelled))) {
+    const names = wrapText(item.name, nameWidth, options);
+    names.forEach((name, index) => result.push(row(index === 0 ? String(item.quantity) : '', name, index === 0 ? yen(item.lineTotal) : '')));
+  }
+  return [...result, border];
+}
