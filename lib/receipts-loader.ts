@@ -18,7 +18,7 @@ export async function loadReceiptData(
   const { data: order } = await supabase
     .from('orders')
     .select(
-      'id, order_no, guest_count, subtotal, tax_total, service_charge, discount_total, coupon_code, customer_id, register_session_id, staff_id, clerk_name, total, closed_at, store_id, stores(name, address, phone), profiles(display_name), restaurant_tables(name)'
+      'id, order_no, guest_count, subtotal, tax_total, service_charge, discount_total, coupon_code, customer_id, register_session_id, staff_id, clerk_name, total, opened_at, closed_at, store_id, stores(name, address, phone), profiles(display_name), restaurant_tables(name)'
     )
     .eq('id', orderId)
     .single();
@@ -85,6 +85,7 @@ export async function loadReceiptData(
     order: {
       orderNo: order.order_no,
       closedAt: order.closed_at,
+      openedAt: order.opened_at,
       subtotal: order.subtotal,
       taxTotal: order.tax_total,
       serviceCharge: order.service_charge,

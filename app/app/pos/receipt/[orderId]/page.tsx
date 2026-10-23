@@ -32,7 +32,7 @@ export default async function ReceiptPage({
   const { data: order } = await supabase
     .from('orders')
     .select(
-      'id, order_no, order_type, guest_count, subtotal, tax_total, service_charge, discount_total, coupon_code, customer_id, register_session_id, staff_id, clerk_name, total, closed_at, business_date, store_id, stores(name, address, phone), profiles(display_name), restaurant_tables(name)'
+      'id, order_no, order_type, guest_count, subtotal, tax_total, service_charge, discount_total, coupon_code, customer_id, register_session_id, staff_id, clerk_name, total, opened_at, closed_at, business_date, store_id, stores(name, address, phone), profiles(display_name), restaurant_tables(name)'
     )
     .eq('id', orderId)
     .single();
@@ -119,6 +119,7 @@ export default async function ReceiptPage({
     order: {
       orderNo: order.order_no,
       closedAt: order.closed_at,
+      openedAt: order.opened_at,
       subtotal: order.subtotal,
       taxTotal: order.tax_total,
       serviceCharge: order.service_charge,

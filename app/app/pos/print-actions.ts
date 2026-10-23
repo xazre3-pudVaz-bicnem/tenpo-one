@@ -6,6 +6,7 @@ import { renderClassicInvoice } from '@/lib/classic-invoice-server';
 
 import { requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
+import { formatReceiptDateTime } from '@/lib/receipts';
 import { loadReceiptData } from '@/lib/receipts-loader';
 import { receiptToStarMarkup, orderSlipMarkup, drawerKickMarkup } from '@/lib/receipt-markup';
 import { receiptToStarPrnt, orderSlipStarPrnt, drawerKickStarPrnt } from '@/lib/starprnt';
@@ -254,7 +255,7 @@ export async function enqueueOrderSlipPrint(orderId: string): Promise<EnqueueRes
   const { data: order } = await supabase
     .from('orders')
     .select(
-      'id, organization_id, store_id, order_no, guest_count, clerk_name, subtotal, tax_total, service_charge, discount_total, total, stores(name), restaurant_tables(name, floor_id)'
+      'id, organization_id, store_id, order_no, guest_count, clerk_name, opened_at, subtotal, tax_total, service_charge, discount_total, total, stores(name), restaurant_tables(name, floor_id)'
     )
     .eq('id', orderId)
     .single();
@@ -285,6 +286,7 @@ export async function enqueueOrderSlipPrint(orderId: string): Promise<EnqueueRes
     guestCount: order.guest_count ?? null,
     clerkName: order.clerk_name ?? null,
     issuedAt: new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo', dateStyle: 'short', timeStyle: 'short' }),
+    startedAt: formatReceiptDateTime(order.opened_at),
     lines: items.map((it) => ({
       name: it.name as string,
       quantity: it.quantity as number,

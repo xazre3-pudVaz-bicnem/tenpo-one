@@ -51,7 +51,10 @@ export function receiptToStarMarkup(receipt: ReceiptData, options: ReceiptMarkup
   const tableRow = twoCol('卓番号', table, width);
   raw(esc(tableRow.slice(0, -table.length)) + '[magnify: width 1; height 2]' + esc(table) + '[magnify: width 1; height 1]');
   line(twoCol(receipt.staffName ? `担当 ${receipt.staffName}` : '', receipt.guestCount != null ? `人数 ${receipt.guestCount}名` : '', width));
-  line(twoCol(receipt.issuedAt, `No.${receipt.orderNo}`, width));
+  line(twoCol('伝票番号', `No.${receipt.orderNo}`, width));
+  line(twoCol('開始日時', receipt.startedAt ?? '—', width));
+  const completedAt = receipt.completedAt === undefined ? receipt.issuedAt : receipt.completedAt;
+  if (completedAt) line(twoCol('会計日時', completedAt, width));
 
   // 明細
   // 0円の明細（飲み放題・食べ放題・コースの中身）はレシートにも出さない（お会計伝票と同じ。2026-09-26 店舗要望）
@@ -209,6 +212,7 @@ export function orderSlipMarkup(
     guestCount: number | null;
     clerkName: string | null;
     issuedAt: string;
+    startedAt?: string | null;
     lines: { name: string; quantity: number; unitPrice: number; lineTotal: number; modifiers: { name: string; price: number }[] }[];
     subtotal: number;
     taxTotal: number;
@@ -236,7 +240,8 @@ export function orderSlipMarkup(
   const tableRow = twoCol('卓番号', table, width);
   raw(esc(tableRow.slice(0, -table.length)) + '[magnify: width 1; height 2]' + esc(table) + '[magnify: width 1; height 1]');
   line(twoCol(slip.clerkName ? `担当 ${slip.clerkName}` : '', slip.guestCount != null ? `人数 ${slip.guestCount}名` : '', width));
-  line(twoCol(slip.issuedAt, `No.${slip.orderNo}`, width));
+  line(twoCol('伝票番号', `No.${slip.orderNo}`, width));
+  line(twoCol('開始日時', slip.startedAt ?? '—', width));
 
   for (const row of receiptTableLines(slip.lines, width, STAR_WIDTH_OPTIONS)) line(row);
   line(dotted);
