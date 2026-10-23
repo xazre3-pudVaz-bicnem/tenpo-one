@@ -62,12 +62,13 @@ describe('receiptToEposXml', () => {
     expect(x).toContain('シュラスコテーブル FOGO');
     expect(x).toContain('シュラスコ食べ放題');
     expect(x).toContain('¥11,300');
-    expect(x).toContain('照会番号 ORD-1001');
+    expect(x).not.toContain('TENPO ONE');
+    expect(x).toContain('またのご来店をお待ちしております');
     expect(x.trimEnd().endsWith('<cut type="feed"/></epos-print>')).toBe(true);
   });
 
   it('卓番号を出す（レジで卓を探せるように）', () => {
-    expect(receiptToEposXml(base, { paperWidth: 80 })).toContain('卓 T-3');
+    expect(receiptToEposXml(base, { paperWidth: 80 })).toContain('T-3');
     expect(receiptToEposXml({ ...base, tableName: null }, { paperWidth: 80 })).not.toContain('卓 ');
   });
 
@@ -151,10 +152,10 @@ describe('orderSlipEposXml', () => {
     expect(xml).toContain('T-3');
     expect(xml).toContain('No.123');
     expect(xml).toContain('カレーセット');
-    expect(xml).toContain('+ ナン');
+    expect(xml).not.toContain('+ ナン');
     expect(xml).toContain('2名');
     expect(xml).toContain('担当 Ronnie');
-    expect(xml).toContain('これは領収書ではありません');
+    expect(xml).not.toContain('これは領収書ではありません');
     expect(xml).toContain('<cut type="feed"/>');
   });
 

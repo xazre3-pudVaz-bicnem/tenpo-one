@@ -170,3 +170,37 @@ export function mergeSameLines<T extends SlipLine>(lines: T[]): T[] {
   }
   return out;
 }
+
+/** Compact customer receipt: one row per product, no vertical rules or modifiers.
+ * Values are never truncated; only the printed name is shortened. DB data is untouched.
+ */
+export function receiptTableLines(lines: SlipLine[], width: number, options: WidthOptions = {}): string[] {
+  const items = billSlipLines(lines.filter(item => !item.cancelled));
+  const quantityWidth = Math.max(2 + (options.cjkExtra ?? 0), ...items.map(item => dispWidth(String(item.quantity), options)));
+  const priceWidth = Math.max(9, ...items.map(item => dispWidth(yen(item.lineTotal), options)));
+  const nameWidth = Math.floor(width - quantityWidth - priceWidth - 2);
+  const fitName = (value: string) => {
+    const clean = value.replace(/[\u0000-\u001f\u007f]/g, ' ').trim();
+    if (dispWidth(clean, options) <= nameWidth) return clean;
+    let result = '';
+    for (const ch of clean) {
+      if (dispWidth(result + ch + '...', options) > nameWidth) break;
+      result += ch;
+    }
+    return result + '...';
+  };
+  const cell = (value: string, size: number, right = false) => {
+    const spaces = ' '.repeat(Math.max(0, Math.floor(size - dispWidth(value, options))));
+    return right ? spaces + value : value + spaces;
+  };
+  const row = (name: string, quantity: string, price: string) =>
+    cell(name, nameWidth) + ' ' + cell(quantity, quantityWidth, true) + ' ' + cell(price, priceWidth, true);
+  return [row('商品名', '数', '金額'), '-'.repeat(width),
+    ...items.map(item => row(fitName(item.name), String(item.quantity), yen(item.lineTotal)))];
+}
+
+/** Keep the prepayment caption together on 80mm; use two balanced lines on narrow rolls. */
+export function customerBillHeading(width: number, options: WidthOptions = {}): string[] {
+  const heading = '（お会計伝票・会計前のご確認用）';
+  return dispWidth(heading, options) <= width ? [heading] : ['お会計伝票', '（会計前のご確認用）'];
+}

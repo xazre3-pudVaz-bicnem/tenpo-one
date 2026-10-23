@@ -36,7 +36,7 @@ const PAPER_CLASS = 'max-w-[300px] text-xs';
 export function ReceiptView({
   receipt,
   orderId,
-  qrDataUrl,
+  qrDataUrl: _qrDataUrl,
   logPrintJobAction,
   cloudPrntAvailable = false,
   initialTab = 'receipt',
@@ -282,46 +282,27 @@ export function ReceiptView({
               <p className="mb-1 text-center text-sm font-bold text-danger">※再発行</p>
             )}
             <div className="text-center">
-              <p className="text-sm font-bold">{receipt.storeName}</p>
+              <p className="text-[18px] font-bold leading-tight">{receipt.storeName}</p>
+              <p className="my-1 font-bold">会計レシート</p>
               {receipt.storeAddress && <p>{receipt.storeAddress}</p>}
               {receipt.storePhone && <p>TEL {receipt.storePhone}</p>}
-              {receipt.headerMessage && <p className="mt-1 whitespace-pre-line">{receipt.headerMessage}</p>}
+              {receipt.registrationNumber && <p>登録番号 {receipt.registrationNumber}</p>}
             </div>
             <div className="my-2 border-t border-dashed border-gray-300" />
-            <p>注文番号 #{receipt.orderNo}{receipt.tableName && <>　卓 {receipt.tableName}</>}</p>
-            <p>{receipt.issuedAt}</p>
-            {(receipt.registerName || receipt.staffName) && (
-              <p className="text-[10px] text-gray-500">
-                {receipt.registerName && <>レジ: {receipt.registerName}　</>}
-                {receipt.staffName && <>担当: {receipt.staffName}</>}
-              </p>
-            )}
+            <div className="grid grid-cols-2 items-baseline gap-y-[1.5mm] leading-tight">
+              <span>卓番号</span><strong className="text-right text-[20px]">{receipt.tableName ?? 'テイクアウト'}</strong>
+              <span>{receipt.staffName ? `担当 ${receipt.staffName}` : ''}</span><span className="text-right">{receipt.guestCount != null ? `人数 ${receipt.guestCount}名` : ''}</span>
+              <span>{receipt.issuedAt}</span><span className="text-right">No.{receipt.orderNo}</span>
+            </div>
             <div className="my-2 border-t border-dashed border-gray-300" />
-            <table className="w-full">
-              <tbody>
-                {visibleLines.map((it, i) => (
-                  <tr key={i}>
-                    <td className="py-0.5 align-top">
-                      {it.name}
-                      {it.modifiers.length > 0 && (
-                        <div className="pl-2 text-[10px] text-gray-500">
-                          {it.modifiers.map((m, mi) => (
-                            <div key={mi}>
-                              ＋{m.name}
-                              {m.price > 0 && <> {yen(m.price)}</>}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      <br />
-                      <span className="text-[10px] text-gray-500">
-                        {yen(it.unitPrice)} × {it.quantity}
-                      </span>
-                    </td>
-                    <td className="py-0.5 text-right align-top tabular-nums">{yen(it.lineTotal)}</td>
-                  </tr>
-                ))}
-              </tbody>
+            <table className="w-full table-fixed border-collapse text-[12px] leading-[1.4]">
+              <colgroup><col /><col className="w-[34px]" /><col className="w-[76px]" /></colgroup>
+              <thead className="border-y border-gray-400"><tr>
+                <th className="py-1 text-left font-normal">商品名</th><th className="py-1 text-right font-normal">数</th><th className="py-1 text-right font-normal">金額</th>
+              </tr></thead>
+              <tbody>{visibleLines.map((it, i) => (
+                <tr key={i}><td className="truncate py-1 pr-1" title={it.name}>{it.name}</td><td className="py-1 text-right align-top">{it.quantity}</td><td className="py-1 text-right align-top tabular-nums">{yen(it.lineTotal)}</td></tr>
+              ))}</tbody>
             </table>
             <div className="my-2 border-t border-dashed border-gray-300" />
             <div className="space-y-0.5">
@@ -341,7 +322,7 @@ export function ReceiptView({
                   <span className="tabular-nums">-{yen(receipt.discount)}</span>
                 </div>
               )}
-              <div className="flex justify-between text-sm font-bold">
+              <div className="flex justify-between border-b border-gray-400 py-1 text-[20px] font-bold">
                 <span>合計</span>
                 <span className="tabular-nums">{yen(receipt.total)}</span>
               </div>
@@ -410,19 +391,8 @@ export function ReceiptView({
                 </div>
               </>
             )}
-            {receipt.registrationNumber && (
-              <>
-                <div className="my-2 border-t border-dashed border-gray-300" />
-                <p>登録番号 {receipt.registrationNumber}</p>
-              </>
-            )}
-            {receipt.footerMessage && (
-              <p className="mt-2 whitespace-pre-line text-center">{receipt.footerMessage}</p>
-            )}
-            <div className="mt-3 flex justify-center">
-              {/* eslint-disable-next-line @next/next/no-img-element -- レシート内埋め込みのdata URI画像。next/imageの最適化は不要かつ非対応 */}
-              <img src={qrDataUrl} alt="取引照会用QRコード" width={80} height={80} />
-            </div>
+            <p className="mt-2 text-center leading-snug">ご来店ありがとうございました<br />またのご来店をお待ちしております</p>
+
           </>
         ) : (
           <InvoiceBody
