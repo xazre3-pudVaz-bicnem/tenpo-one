@@ -98,6 +98,7 @@ struct NativeHomeScreen: View {
                 else if path == "/app/quick-pay" { state.goNativeQuick() }
                 else if path == "/app/orders" { state.goNativeSlips() }
                 else if path == "/app/expenses" { state.goNativeExpenses() }
+                else if path == "/app/inventory" || path == "/app/inventory/menu-stock" { state.goNativeStock() }
                 else { state.leaveNativeFloor(to: path) }
             },
             onFloor: { state.goNativeFloor() }
@@ -198,6 +199,20 @@ struct NativeExpensesScreen: View {
 
     var body: some View {
         NativeExpensesView(
+            model: model,
+            onHome: { state.goNativeHome() },
+            onWeb: { path in state.leaveNativeFloor(to: path) }
+        )
+    }
+}
+
+/// ネイティブの在庫設定（2026-10-24）
+struct NativeStockScreen: View {
+    @StateObject private var model = NativeStockModel()
+    @EnvironmentObject var state: AppState
+
+    var body: some View {
+        NativeStockView(
             model: model,
             onHome: { state.goNativeHome() },
             onWeb: { path in state.leaveNativeFloor(to: path) }
