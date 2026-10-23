@@ -533,7 +533,24 @@ final class NativeOrderModel: ObservableObject {
             if let b = p.brand { d["provider"] = b.id }
             return d
         }
-        guard let r = await act(["type": "checkout", "orderId": orderId, "payments": body, "memo": memo]) else { return false }
+        // Read the paired device before checkout; no extra request or polling after payment.
+        var request: [String: Any] = ["type": "checkout", "orderId": orderId, "payments": body, "memo": memo]
+        if let link = await WebViewController.current?.checkoutBluetoothLink() { request["bluetoothLink"] = link }
+        guard let r = await act(request) else { return false }
+        if let warning = r.warning, !warning.isEmpty { notice = warning }
+        if let receipt = r.receipt {
+            if let bytes = Data(base64Encoded: receipt.data), !bytes.isEmpty,
+               ["star", "epson", "sii", "escpos"].contains(receipt.maker), ["bluetooth", "usb"].contains(receipt.via) {
+                // Start before the drawer request. Never automatically retry an uncertain physical print.
+                WebViewController.printBluetooth(deviceId: receipt.deviceId, maker: receipt.maker, via: receipt.via, data: bytes) { [weak self] ok, _ in
+                    if !ok {
+                        Task { @MainActor [weak self] in self?.notice = "会計は完了しました。レシートの印刷を確認し、必要な場合だけ再発行してください。" }
+                    }
+                }
+            } else {
+                notice = "会計は完了しましたがレシートを印刷できません。再発行してください。"
+            }
+        }
         if r.alreadyPaid == true { notice = "This order has already been paid." }
         // ドロア（店の設定で開くか決める）
         let methods = Array(Set(payments.map { $0.method.rawValue }))

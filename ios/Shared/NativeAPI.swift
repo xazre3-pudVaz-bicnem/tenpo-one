@@ -97,7 +97,16 @@ struct APIPayload: Codable {
 }
 
 /// 操作の返事（order があれば画面をサーバーの値にそろえる）
+struct APICheckoutReceipt: Decodable {
+    let data: String
+    let deviceId: String
+    let maker: String
+    let via: String
+}
+
 struct APIResult: Decodable {
+    let receipt: APICheckoutReceipt?
+    let warning: String?
     let ok: Bool
     let error: String?
     let order: APIOrder?

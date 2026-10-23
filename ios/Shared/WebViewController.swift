@@ -17,6 +17,30 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
     /// いま表示している Web 画面（Push を開く・QR の結果を渡すときに使う）
     static weak var current: WebViewController?
 
+    /// Device-local link only; the server validates printer ownership, auto-print and transport.
+    func checkoutBluetoothLink() async -> [String: Any]? {
+        guard AppConfig.isPad, let url = webView?.url, AppConfig.isOwnHost(url) else { return nil }
+        let script = """
+        (function(){
+          try {
+            var config = JSON.parse(localStorage.getItem('tenpo-direct-print') || '{}');
+            var links = (config.bluetooth || []).filter(function(l){ return l && l.via !== 'agent'; });
+            var match = document.cookie.match(/(?:^|; *)tenpo_device_printer=([^;]*)/);
+            var selected = match ? decodeURIComponent(match[1]) : null;
+            var link = selected ? links.find(function(l){ return l.printerId === selected; }) : (links.length === 1 ? links[0] : null);
+            if (!link) return null;
+            return { printerId: link.printerId, deviceId: link.deviceId, maker: link.maker, via: link.via === 'usb' ? 'usb' : 'bluetooth' };
+          } catch (_) { return null; }
+        })()
+        """
+        return (try? await webView.evaluateJavaScript(script)) as? [String: Any]
+    }
+
+    /// Shared btPrint transport. Native checkout bypasses the Web polling agent, using the same SDK session.
+    static func printBluetooth(deviceId: String, maker: String, via: String, data: Data, completion: @escaping BluetoothPrinters.Done) {
+        BluetoothPrinters.shared.print(deviceId: deviceId, maker: maker, via: via, data: data, completion: completion)
+    }
+
     private let startURL: URL
     private var webView: WKWebView!
     private let errorView = ConnectionErrorView()
@@ -291,7 +315,7 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
                 reply(reqId, ["ok": false, "code": "bad_request"])
                 return
             }
-            BluetoothPrinters.shared.print(deviceId: deviceId, maker: maker, via: body["via"] as? String ?? "bluetooth", data: data) { [weak self] ok, code in
+            Self.printBluetooth(deviceId: deviceId, maker: maker, via: body["via"] as? String ?? "bluetooth", data: data) { [weak self] ok, code in
                 var res: [String: Any] = ["ok": ok]
                 if let code { res["code"] = code }
                 self?.reply(reqId, res)
