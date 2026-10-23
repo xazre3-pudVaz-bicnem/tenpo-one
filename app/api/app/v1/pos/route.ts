@@ -17,7 +17,7 @@ import { isNativeFloorActionType, parseNativeFloorAction, type NativeFloorAction
 import { loadNativeFloor } from '@/lib/native-floor-server';
 import { loadNativeHome } from '@/lib/native-home-server';
 import { isNativeLedgerActionType, parseNativeLedgerAction, type NativeLedgerAction } from '@/lib/native-ledger';
-import { loadNativeLedger, loadNativeLedgerWait, loadNativeLedgerWeek } from '@/lib/native-ledger-server';
+import { loadNativeLedger, loadNativeLedgerMonth, loadNativeLedgerWait, loadNativeLedgerWeek } from '@/lib/native-ledger-server';
 import { isNativeCashActionType, parseNativeCashAction, sumNativeDenominations, type NativeCashAction } from '@/lib/native-cash';
 import { loadNativeCash, loadNativeCashIo } from '@/lib/native-cash-server';
 import { isNativeQuickActionType, parseNativeQuickAction, type NativeQuickAction } from '@/lib/native-quick';
@@ -280,6 +280,15 @@ export async function GET(request: Request) {
     if (ctx.disabledFeatures?.has('reservations')) return json({ ok: false, error: 'この機能は使えません', useWeb: true }, 403);
     const wait = await loadNativeLedgerWait(await createClient(), store, url.searchParams.get('wstatus'), todayJst());
     return json({ ok: true, ...wait });
+  }
+
+  // 店舗台帳の月間カレンダー（Web の /app/reservations/calendar と同じ集計）
+  if (part === 'ledgerMonth') {
+    const store = ctx.currentStore ?? ctx.stores[0] ?? null;
+    if (!store) return json({ ok: false, error: '店舗がありません' }, 404);
+    if (ctx.disabledFeatures?.has('reservations')) return json({ ok: false, error: 'この機能は使えません', useWeb: true }, 403);
+    const m = await loadNativeLedgerMonth(await createClient(), store, url.searchParams.get('month'), todayJst());
+    return json({ ok: true, ...m });
   }
 
   // 店舗台帳の週間（Web の view=week と同じ集計）
