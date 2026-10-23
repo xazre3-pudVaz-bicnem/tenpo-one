@@ -12,7 +12,7 @@ interface MenuCtx {
 export interface MenuSettingsData {
   categoryRows: CategoryRow[];
   /** カテゴリの厨房ステーション（カテゴリ画面の振り分け用） */
-  stations: { id: string; name: string; station: string }[];
+  stations: { id: string; name: string; station: string; printOrderSlip: boolean }[];
   itemRows: MenuItemRow[];
   taxRates: { id: string; name: string }[];
 }
@@ -27,7 +27,7 @@ export async function loadMenuSettingsData(ctx: MenuCtx, storeId: string): Promi
   const [{ data: categories }, { data: items }, { data: taxRates }] = await Promise.all([
     supabase
       .from('menu_categories')
-      .select('id, name, name_en, color, sort_order, station')
+      .select('id, name, name_en, color, sort_order, station, print_order_slip')
       .eq('organization_id', ctx.organizationId)
       .eq('status', 'active')
       .or(`store_id.is.null,store_id.eq.${storeId}`)
@@ -82,7 +82,7 @@ export async function loadMenuSettingsData(ctx: MenuCtx, storeId: string): Promi
 
   return {
     categoryRows,
-    stations: (categories ?? []).map((c) => ({ id: c.id, name: c.name, station: c.station })),
+    stations: (categories ?? []).map((c) => ({ id: c.id, name: c.name, station: c.station, printOrderSlip: c.print_order_slip === true })),
     itemRows,
     taxRates: (taxRates ?? []).map((t) => ({ id: t.id, name: t.name })),
   };

@@ -3594,6 +3594,7 @@ export type Database = {
           name_en: string | null
           organization_id: string
           sort_order: number
+          print_order_slip: boolean
           station: string
           status: string
           store_id: string | null
@@ -3609,6 +3610,7 @@ export type Database = {
           name_en?: string | null
           organization_id: string
           sort_order?: number
+          print_order_slip?: boolean
           station?: string
           status?: string
           store_id?: string | null
@@ -3624,6 +3626,7 @@ export type Database = {
           name_en?: string | null
           organization_id?: string
           sort_order?: number
+          print_order_slip?: boolean
           station?: string
           status?: string
           store_id?: string | null
