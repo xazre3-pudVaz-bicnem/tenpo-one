@@ -280,3 +280,86 @@ export async function loadNativeLedgerWeek(supabase: Supabase, store: { id: stri
     weekGuests: rows.reduce((s, r) => s + Number(r.party_size), 0),
   };
 }
+
+/** ウェイティング（GET ?part=ledgerWait&wstatus=…）。Web の店舗台帳 view=waitlist と同じ（本日の店頭受付・キャンセル待ち） */
+export interface NativeLedgerWaitPayload {
+  today: string;
+  queue: { id: string; ticketNo: number; guestName: string; guestPhone: string | null; partySize: number; seatPreference: string | null; status: string; createdAt: string }[];
+  waitingNow: number;
+  hints: { ticketNo: number; guestName: string; partySize: number; label: string }[];
+  tables: { id: string; name: string; capacityMax: number }[];
+  wstatus: string;
+  entries: { id: string; guestName: string; guestPhone: string; partySize: number; desiredDate: string; desiredTimeFrom: string | null; desiredTimeTo: string | null; note: string | null; status: string }[];
+}
+
+export async function loadNativeLedgerWait(supabase: Supabase, store: { id: string }, wstatusParam: string | null, today: string): Promise<NativeLedgerWaitPayload> {
+  const { suggestTables } = await import('@/lib/reservations');
+  const wstatus = wstatusParam === null ? 'waiting' : ['waiting', 'contacted', 'converted', 'expired', 'cancelled'].includes(wstatusParam) ? wstatusParam : '';
+  let wq = supabase
+    .from('waitlist_entries')
+    .select('id, guest_name, guest_phone, party_size, desired_date, desired_time_from, desired_time_to, note, status')
+    .eq('store_id', store.id)
+    .is('ticket_no', null)
+    .order('desired_date', { ascending: true })
+    .limit(300);
+  if (wstatus) wq = wq.eq('status', wstatus);
+  const [{ data: queueData }, { data: tablesData }, { data: wl }] = await Promise.all([
+    supabase
+      .from('waitlist_entries')
+      .select('id, guest_name, guest_phone, party_size, seat_preference, ticket_no, status, created_at')
+      .eq('store_id', store.id)
+      .eq('desired_date', today)
+      .not('ticket_no', 'is', null)
+      .order('ticket_no', { ascending: true }),
+    supabase
+      .from('restaurant_tables')
+      .select('id, name, capacity_min, capacity_max')
+      .eq('store_id', store.id)
+      .eq('status', 'active')
+      .eq('current_status', 'available')
+      .order('sort_order'),
+    wq,
+  ]);
+  const queue = (queueData ?? []).map((w) => ({
+    id: w.id as string,
+    ticketNo: w.ticket_no as number,
+    guestName: w.guest_name as string,
+    guestPhone: (w.guest_phone as string | null) || null,
+    partySize: w.party_size as number,
+    seatPreference: (w.seat_preference as string | null) ?? null,
+    status: w.status as string,
+    createdAt: w.created_at as string,
+  }));
+  const hints: NativeLedgerWaitPayload['hints'] = [];
+  const used = new Set<string>();
+  for (const w of queue) {
+    if (w.status !== 'waiting') continue;
+    const likes = (tablesData ?? [])
+      .filter((t) => !used.has(t.id as string))
+      .map((t) => ({ id: t.id as string, name: t.name as string, capacityMin: t.capacity_min as number, capacityMax: t.capacity_max as number, isActive: true, isOccupied: false }));
+    const s = suggestTables(likes, w.partySize)[0];
+    if (s) {
+      hints.push({ ticketNo: w.ticketNo, guestName: w.guestName, partySize: w.partySize, label: s.label });
+      for (const id of s.tableIds) used.add(id);
+    }
+  }
+  return {
+    today,
+    queue,
+    waitingNow: queue.filter((w) => w.status === 'waiting' || w.status === 'called').length,
+    hints,
+    tables: (tablesData ?? []).map((t) => ({ id: t.id as string, name: t.name as string, capacityMax: t.capacity_max as number })),
+    wstatus,
+    entries: (wl ?? []).map((w) => ({
+      id: w.id as string,
+      guestName: w.guest_name as string,
+      guestPhone: w.guest_phone as string,
+      partySize: w.party_size as number,
+      desiredDate: w.desired_date as string,
+      desiredTimeFrom: (w.desired_time_from as string | null) ?? null,
+      desiredTimeTo: (w.desired_time_to as string | null) ?? null,
+      note: (w.note as string | null) ?? null,
+      status: w.status as string,
+    })),
+  };
+}
