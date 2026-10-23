@@ -166,6 +166,8 @@ final class NativeLedgerModel: ObservableObject {
     @Published var listMode = false
     /// グルメ別（その日の予約を入り口ごとに。Web の GourmetPanel と同じ）
     @Published var gourmetMode = false
+    /// 週間（Web の view=week）
+    @Published var weekMode = false
     private var clock: Timer?
     private var refresher: Timer?
     private var offset: TimeInterval = 0
@@ -282,7 +284,13 @@ struct NativeLedgerView: View {
             .disabled(exporting)
             if let p = model.payload {
                 summaryRow(p)
-                if model.gourmetMode { ScrollView { gourmetRows(p) } } else if model.listMode { listBody(p) } else { board(p) }
+                if model.weekMode {
+                    NativeLedgerWeekView(date: model.date ?? p.date) { d in
+                        model.weekMode = false; model.listMode = false; model.gourmetMode = false
+                        model.date = d
+                        Task { await model.refresh(silent: false) }
+                    }
+                } else if model.gourmetMode { ScrollView { gourmetRows(p) } } else if model.listMode { listBody(p) } else { board(p) }
             } else {
                 Spacer()
                 if let e = model.error {
@@ -395,9 +403,10 @@ struct NativeLedgerView: View {
             }
             // 表示の切り替え
             HStack(spacing: 0) {
-                modeBtn("スケジュール", on: !model.listMode && !model.gourmetMode) { model.listMode = false; model.gourmetMode = false }
-                modeBtn("予約リスト", on: model.listMode && !model.gourmetMode) { model.listMode = true; model.gourmetMode = false }
-                modeBtn("グルメ別", on: model.gourmetMode) { model.gourmetMode = true }
+                modeBtn("スケジュール", on: !model.listMode && !model.gourmetMode && !model.weekMode) { model.listMode = false; model.gourmetMode = false; model.weekMode = false }
+                modeBtn("予約リスト", on: model.listMode && !model.gourmetMode && !model.weekMode) { model.listMode = true; model.gourmetMode = false; model.weekMode = false }
+                modeBtn("グルメ別", on: model.gourmetMode && !model.weekMode) { model.gourmetMode = true; model.weekMode = false }
+                modeBtn("週間", on: model.weekMode) { model.weekMode = true }
             }
             .background(RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(0.12)))
         }
