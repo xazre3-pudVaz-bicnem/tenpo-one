@@ -30,6 +30,8 @@ final class AppState: ObservableObject {
     @Published var nativeHome = false
     /// ネイティブの店舗台帳を出しているか（Web の /app/reservations の代わり。2026-10-24）
     @Published var nativeLedger = false
+    /// ネイティブのレジ開局・レジクローズ（/app/cash/open・/app/cash/close の代わり。2026-10-24）
+    @Published var nativeCash = false
     /// フロアを読み直してほしいとき（会計完了など）に増やす
     @Published var floorRefreshTick = 0
 
@@ -112,10 +114,12 @@ final class AppState: ObservableObject {
         // ホーム・テーブル一覧はネイティブで（Web の画面の上に重ねる。Native ON の iPad は Web のホーム・テーブル一覧を見せない）
         if url.path == "/app/dashboard" || url.path == "/app" {
             nativeFloor = false
+            nativeCash = false
             if !nativeHome { nativeHome = true }
             return
         }
         if url.path == "/app/floor" {
+            nativeCash = false
             if !nativeFloor { nativeFloor = true }
             return
         }
@@ -129,11 +133,19 @@ final class AppState: ObservableObject {
                 return
             }
         }
+        if url.path == "/app/cash/open" || url.path == "/app/cash/close" {
+            nativeFloor = false
+            nativeHome = false
+            nativeLedger = false
+            if !nativeCash { nativeCash = true }
+            return
+        }
         if url.path != "/app/pos" {
             // 設定など、まだ Web の画面へ行ったらネイティブを閉じる
             nativeFloor = false
             nativeHome = false
             nativeLedger = false
+            nativeCash = false
         }
         guard nativeOrder == nil, url.path == "/app/pos" else { return }
         let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
@@ -179,6 +191,7 @@ final class AppState: ObservableObject {
         nativeFloor = false
         nativeHome = false
         nativeLedger = false
+        nativeCash = false
         WebViewController.current?.load(AppConfig.url(path))
     }
 
@@ -193,6 +206,7 @@ final class AppState: ObservableObject {
     func goNativeHome() {
         nativeFloor = false
         nativeLedger = false
+        nativeCash = false
         nativeHome = true
         WebViewController.current?.load(AppConfig.url("/app/dashboard"))
     }
@@ -200,8 +214,18 @@ final class AppState: ObservableObject {
     /// ネイティブのホームからフロアへ（Web も /app/floor にそろえる＝レシート・ドロアの Web 側の仕組みはそのまま）
     func goNativeFloor() {
         nativeLedger = false
+        nativeCash = false
         nativeFloor = true
         WebViewController.current?.load(AppConfig.url("/app/floor"))
+    }
+
+    /// ネイティブのレジ開局・レジクローズへ（Web も同じ画面にそろえる）
+    func goNativeCash(_ path: String) {
+        nativeFloor = false
+        nativeHome = false
+        nativeLedger = false
+        nativeCash = true
+        WebViewController.current?.load(AppConfig.url(path))
     }
 
     /// 会計完了は必ず最新のフロアを読み直す。

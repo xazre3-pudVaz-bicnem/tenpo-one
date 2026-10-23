@@ -17,6 +17,9 @@ import { loadNativeFloor } from '@/lib/native-floor-server';
 import { loadNativeHome } from '@/lib/native-home-server';
 import { isNativeLedgerActionType, parseNativeLedgerAction, type NativeLedgerAction } from '@/lib/native-ledger';
 import { loadNativeLedger } from '@/lib/native-ledger-server';
+import { isNativeCashActionType, parseNativeCashAction, sumNativeDenominations, type NativeCashAction } from '@/lib/native-cash';
+import { loadNativeCash } from '@/lib/native-cash-server';
+import { closeRegister, openRegister, printSettlementReport, reprintRegisterReport } from '@/app/app/cash/actions';
 import {
   assignTables,
   cancelReservation,
@@ -164,6 +167,15 @@ export async function GET(request: Request) {
     return json({ ok: true, ...ledger });
   }
 
+  // レジ開局・レジクローズ。Web の /app/cash/open と /app/cash/close（レジの iPad）と同じ組み立て（lib/native-cash-server.ts）
+  if (part === 'cash') {
+    const store = ctx.currentStore ?? ctx.stores[0] ?? null;
+    if (!store) return json({ ok: false, error: '店舗がありません' }, 404);
+    if (ctx.disabledFeatures?.has('accounting')) return json({ ok: false, error: 'この機能は使えません', useWeb: true }, 403);
+    const cash = await loadNativeCash(ctx, await createClient(), { id: store.id, name: store.name });
+    return json({ ok: true, ...cash });
+  }
+
   // フロア（テーブル一覧）。Web のテーブル一覧と同じ組み立て（lib/floor-view-server.ts）
   if (part === 'floor') {
     const storeParam = url.searchParams.get('store');
@@ -231,6 +243,21 @@ export async function POST(request: Request) {
     if (problem) return json({ ok: false, error: problem }, 403);
     try {
       return json(await runLedgerAction(ctx, action));
+    } catch (e) {
+      return json({ ok: false, error: errorText(e, 'うまくいきませんでした。もう一度お試しください') }, 400);
+    }
+  }
+
+  // レジ開局・レジクローズの操作（2026-10-24）
+  if (raw && typeof raw === 'object' && isNativeCashActionType((raw as { type?: unknown }).type)) {
+    const parsedCash = parseNativeCashAction(raw);
+    if (!parsedCash.ok) return json({ ok: false, error: parsedCash.error }, 400);
+    const action = parsedCash.action;
+    if (action.type !== 'cashSignOut' && !can(ctx.role, 'register.operate')) return json({ ok: false, error: '権限がありません' }, 403);
+    const problem = action.type === 'cashSignOut' ? null : await networkProblem(ctx);
+    if (problem) return json({ ok: false, error: problem }, 403);
+    try {
+      return json(await runCashAction(ctx, action));
     } catch (e) {
       return json({ ok: false, error: errorText(e, 'うまくいきませんでした。もう一度お試しください') }, 400);
     }
@@ -426,6 +453,38 @@ async function runFloorAction(action: NativeFloorAction): Promise<Record<string,
 }
 
 /** 店舗台帳の操作。中身は Web の予約台帳と同じ Server Action */
+/** レジ開局・レジクローズ。Web の RegisterOpenCard / RegisterCountCard / RegisterClosedCard と同じ Server Action を呼ぶ */
+async function runCashAction(ctx: SessionContext, action: NativeCashAction): Promise<Record<string, unknown>> {
+  switch (action.type) {
+    case 'cashOpen': {
+      const store = ctx.currentStore ?? ctx.stores[0];
+      if (!store) return { ok: false, error: '店舗がありません' };
+      const openingFloat = sumNativeDenominations(action.denominations);
+      const r = await openRegister(store.id, action.registerId, openingFloat, action.denominations, action.reason, action.clerkName);
+      return r.ok ? { ok: true, openingFloat } : { ok: false, error: r.error };
+    }
+    case 'cashClose': {
+      const counted = sumNativeDenominations(action.denominations);
+      const r = await closeRegister(action.sessionId, counted, action.reason, action.denominations, action.clerkName);
+      return r.ok ? { ok: true, printWarning: r.printWarning ?? null, signOutAfter: r.signOutAfter === true } : { ok: false, error: r.error };
+    }
+    case 'cashReprint': {
+      const r = await reprintRegisterReport(action.sessionId);
+      return r.ok ? { ok: true } : { ok: false, error: r.error };
+    }
+    case 'cashSettlement': {
+      const r = await printSettlementReport(action.sessionId);
+      return r.ok ? { ok: true } : { ok: false, error: r.error };
+    }
+    case 'cashSignOut': {
+      // レジ端末はレジ締めのあとログアウト（Web の signOutRegister と同じ。Cookie はアプリの WebView にも戻る）
+      const supabase = await createClient();
+      await supabase.auth.signOut({ scope: 'local' });
+      return { ok: true };
+    }
+  }
+}
+
 async function runLedgerAction(ctx: SessionContext, action: NativeLedgerAction): Promise<Record<string, unknown>> {
   switch (action.type) {
     case 'ledgerCreate': {
