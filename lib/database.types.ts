@@ -3593,6 +3593,7 @@ export type Database = {
           name: string
           name_en: string | null
           organization_id: string
+          print_bill_on_order: boolean
           sort_order: number
           station: string
           status: string
@@ -3608,6 +3609,7 @@ export type Database = {
           name: string
           name_en?: string | null
           organization_id: string
+          print_bill_on_order?: boolean
           sort_order?: number
           station?: string
           status?: string
@@ -3623,6 +3625,7 @@ export type Database = {
           name?: string
           name_en?: string | null
           organization_id?: string
+          print_bill_on_order?: boolean
           sort_order?: number
           station?: string
           status?: string

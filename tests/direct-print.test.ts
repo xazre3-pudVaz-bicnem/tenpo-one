@@ -85,7 +85,8 @@ describe('今の印刷は壊さない', () => {
   });
 
   it('この iPad で選んだプリンター：選んでいなければ今まで通り（店の既定・フロア）', () => {
-    const actions = read('app/app/pos/print-actions.ts');
+    // レシート機の選び方は lib/order-slip-print.ts（お客様QRの会計伝票からも使うため 2026-10-23 に移した）
+    const actions = read('lib/order-slip-print.ts');
     expect(actions).toContain('const picked = preferred ?? (floor ? pickPrinterForFloor(rows, floor.floorId) : pickDefaultPrinter(rows));');
     const report = read('lib/register-report-loader.ts');
     expect(report).toContain('rows.find((r) => r.id === preferredId) ?? rows[0] ?? null');
