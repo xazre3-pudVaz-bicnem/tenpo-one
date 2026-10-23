@@ -10,7 +10,7 @@ import { ACCESS_MESSAGE } from '@/lib/store-access';
 import { checkout, splitOrder, sendOrderToKitchen, setDiscount, updateQty, addItem, startTakeout } from '@/app/app/pos/actions';
 import { setOrderClerk } from '@/app/app/pos/clerk-actions';
 import { cancelSteraPayment, checkSteraPayment, startSteraPayment } from '@/app/app/pos/stera-actions';
-import { enqueueDrawerKick, enqueueExpoSlipPrint, enqueueOrderSlipPrint, enqueueReceiptPrint, enqueueSelectedItemsPrint } from '@/app/app/pos/print-actions';
+import { enqueueDrawerKick, enqueueExpoSlipPrint, enqueueOrderSlipPrint, enqueueReceiptPrint, enqueueSelectedItemsPrint, enqueueStockListPrint } from '@/app/app/pos/print-actions';
 import { shouldOpenDrawer } from '@/lib/printing/types';
 import { isNativeFloorActionType, parseNativeFloorAction, type NativeFloorAction } from '@/lib/native-floor';
 import { loadNativeFloor } from '@/lib/native-floor-server';
@@ -28,6 +28,9 @@ import { isNativeExpenseActionType, parseNativeExpenseAction, type NativeExpense
 import { loadNativeExpenses } from '@/lib/native-expenses-server';
 import { addExpense, approveExpense, rejectExpense, seedExpenseAccounts } from '@/app/app/expenses/actions';
 import { createInvoice } from '@/app/app/invoices/actions';
+import { isNativeStockActionType, parseNativeStockAction } from '@/lib/native-stock';
+import { loadNativeStock } from '@/lib/native-stock-server';
+import { setMenuStockLimits } from '@/app/app/inventory/menu-stock-actions';
 import { prepareQuickCheckout, startQuickOrder } from '@/app/app/quick-pay/actions';
 import { addCashTransaction, closeRegister, openRegister, printSettlementReport, reprintRegisterReport } from '@/app/app/cash/actions';
 import {
@@ -186,6 +189,14 @@ export async function GET(request: Request) {
     return json({ ok: true, ...cash });
   }
 
+  // 在庫設定（本日の残り数。Web の /app/inventory/menu-stock）
+  if (part === 'stock') {
+    const store = ctx.currentStore ?? ctx.stores[0] ?? null;
+    if (!store) return json({ ok: false, error: '店舗がありません' }, 404);
+    const stock = await loadNativeStock(ctx, await createClient(), { id: store.id, name: store.name });
+    return json({ ok: true, ...stock });
+  }
+
   // 仕入・経費（Web の /app/expenses。上にお知らせ&アラート）
   if (part === 'expenses') {
     const store = ctx.currentStore ?? ctx.stores[0] ?? null;
@@ -298,6 +309,24 @@ export async function POST(request: Request) {
     if (problem) return json({ ok: false, error: problem }, 403);
     try {
       return json(await runLedgerAction(ctx, action));
+    } catch (e) {
+      return json({ ok: false, error: errorText(e, 'うまくいきませんでした。もう一度お試しください') }, 400);
+    }
+  }
+
+  // 在庫設定の操作（2026-10-24）
+  if (raw && typeof raw === 'object' && isNativeStockActionType((raw as { type?: unknown }).type)) {
+    const parsedStock = parseNativeStockAction(raw);
+    if (!parsedStock.ok) return json({ ok: false, error: parsedStock.error }, 400);
+    const store = ctx.currentStore ?? ctx.stores[0];
+    if (!store) return json({ ok: false, error: '店舗がありません' }, 404);
+    try {
+      if (parsedStock.action.type === 'stockSave') {
+        const r = await setMenuStockLimits(store.id, parsedStock.action.entries);
+        return json(r.error ? { ok: false, error: r.error } : { ok: true, queued: r.saved ?? parsedStock.action.entries.length });
+      }
+      const r = await enqueueStockListPrint(store.id, parsedStock.action.lines);
+      return json(r.ok ? { ok: true } : { ok: false, error: r.error ?? '在庫の印刷に失敗しました' });
     } catch (e) {
       return json({ ok: false, error: errorText(e, 'うまくいきませんでした。もう一度お試しください') }, 400);
     }
