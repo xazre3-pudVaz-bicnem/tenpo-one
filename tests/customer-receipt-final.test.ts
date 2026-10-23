@@ -46,3 +46,21 @@ describe('approved customer receipt design across all print transports', () => {
     }
   });
 });
+
+it.each([58, 80] as const)('uses dotted summary/footer separators and solid rules around the total (%smm)', paperWidth => {
+  const outputs = [decode(receiptToStarPrnt(receipt, { paperWidth })), receiptToStarMarkup(receipt, { paperWidth }), receiptToEposXml(receipt, { paperWidth })];
+  for (const text of outputs) {
+    const subtotal = text.indexOf('小計');
+    const total = text.indexOf('合計');
+    const change = text.indexOf('お釣り');
+    const thanks = text.indexOf('ご来店ありがとうございました');
+    const before = text.lastIndexOf('___', total);
+    const after = text.indexOf('___', total);
+    expect(text.lastIndexOf('- - ', subtotal)).toBeGreaterThan(0);
+    expect(before).toBeGreaterThan(subtotal);
+    expect(before).toBeLessThan(total);
+    expect(after).toBeGreaterThan(total);
+    expect(after).toBeLessThan(change);
+    expect(text.lastIndexOf('- - ', thanks)).toBeGreaterThan(change);
+  }
+});

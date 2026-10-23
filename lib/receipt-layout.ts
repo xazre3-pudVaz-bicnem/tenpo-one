@@ -195,7 +195,7 @@ export function receiptTableLines(lines: SlipLine[], width: number, options: Wid
   };
   const row = (name: string, quantity: string, price: string) =>
     cell(name, nameWidth) + ' ' + cell(quantity, quantityWidth, true) + ' ' + cell(price, priceWidth, true);
-  return [row('商品名', '数', '金額'), '-'.repeat(width),
+  return ['_'.repeat(width), row('商品名', '数', '金額'), '_'.repeat(width),
     ...items.map(item => row(fitName(item.name), String(item.quantity), yen(item.lineTotal)))];
 }
 

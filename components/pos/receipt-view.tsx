@@ -288,13 +288,11 @@ export function ReceiptView({
               {receipt.storePhone && <p>TEL {receipt.storePhone}</p>}
               {receipt.registrationNumber && <p>登録番号 {receipt.registrationNumber}</p>}
             </div>
-            <div className="my-2 border-t border-dashed border-gray-300" />
             <div className="grid grid-cols-2 items-baseline gap-y-[1.5mm] leading-tight">
               <span>卓番号</span><strong className="text-right text-[20px]">{receipt.tableName ?? '—'}</strong>
               <span>{receipt.staffName ? `担当 ${receipt.staffName}` : ''}</span><span className="text-right">{receipt.guestCount != null ? `人数 ${receipt.guestCount}名` : ''}</span>
               <span>{receipt.issuedAt}</span><span className="text-right">No.{receipt.orderNo}</span>
             </div>
-            <div className="my-2 border-t border-dashed border-gray-300" />
             <table className="w-full table-fixed border-collapse text-[12px] leading-[1.4]">
               <colgroup><col /><col className="w-[34px]" /><col className="w-[76px]" /></colgroup>
               <thead className="border-y border-gray-400"><tr>
@@ -310,6 +308,12 @@ export function ReceiptView({
                 <span>小計</span>
                 <span className="tabular-nums">{yen(receipt.subtotal)}</span>
               </div>
+              {receipt.taxRows.map((row) => (
+                <div key={row.rate} className="flex justify-between text-[10px] text-gray-500">
+                  <span>（内消費税{row.rate}%対象 {yen(row.taxable)}）</span>
+                  <span className="tabular-nums">税額 {yen(row.tax)}</span>
+                </div>
+              ))}
               {receipt.serviceCharge > 0 && (
                 <div className="flex justify-between">
                   <span>サービス料</span>
@@ -322,19 +326,13 @@ export function ReceiptView({
                   <span className="tabular-nums">-{yen(receipt.discount)}</span>
                 </div>
               )}
-              <div className="flex justify-between border-b border-gray-400 py-1 text-[20px] font-bold">
+              <div className="flex justify-between border-y border-gray-400 py-2 text-[20px] font-bold">
                 <span>合計</span>
                 <span className="tabular-nums">{yen(receipt.total)}</span>
               </div>
-              {receipt.taxRows.map((row) => (
-                <div key={row.rate} className="flex justify-between text-[10px] text-gray-500">
-                  <span>（内消費税{row.rate}%対象 {yen(row.taxable)}）</span>
-                  <span className="tabular-nums">税額 {yen(row.tax)}</span>
-                </div>
-              ))}
+
             </div>
-            <div className="my-2 border-t border-dashed border-gray-300" />
-            <div className="space-y-0.5">
+            <div className="mt-2 space-y-0.5">
               {receipt.payments.map((p, i) => (
                 <div key={i} className="flex justify-between">
                   <span>{p.label}</span>
@@ -391,6 +389,7 @@ export function ReceiptView({
                 </div>
               </>
             )}
+            <div className="my-2 border-t border-dashed border-gray-300" />
             <p className="mt-2 text-center leading-snug">ご来店ありがとうございました<br />またのご来店をお待ちしております</p>
 
           </>

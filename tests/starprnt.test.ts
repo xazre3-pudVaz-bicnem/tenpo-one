@@ -60,8 +60,8 @@ describe('receiptToStarPrnt', () => {
   });
 
   it('用紙幅で桁数が変わる（58mm=32桁 / 80mm=48桁）', () => {
-    expect(asSjis(receiptToStarPrnt(base, { paperWidth: 58 }))).toContain('-'.repeat(32));
-    expect(asSjis(receiptToStarPrnt(base, { paperWidth: 80 }))).toContain('-'.repeat(48));
+    expect(asSjis(receiptToStarPrnt(base, { paperWidth: 58 }))).toContain('_'.repeat(32));
+    expect(asSjis(receiptToStarPrnt(base, { paperWidth: 80 }))).toContain('_'.repeat(48));
   });
 
   it('既定では ¥ を 0x5C で出す（半角1桁のまま ￥ と印字され桁揃えが崩れない）', () => {
