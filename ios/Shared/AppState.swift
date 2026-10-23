@@ -47,6 +47,8 @@ final class AppState: ObservableObject {
     @Published var nativeStock = false
     /// ネイティブの通知（/app/notifications。2026-10-24）
     @Published var nativeNotices = false
+    /// 通知の画面のどちらを出すか（notifications・announcements）
+    @Published var noticesTab = "notifications"
     /// フロアを読み直してほしいとき（会計完了など）に増やす
     @Published var floorRefreshTick = 0
 
@@ -166,7 +168,8 @@ final class AppState: ObservableObject {
                 return
             }
         }
-        if url.path == "/app/notifications" {
+        if url.path == "/app/notifications" || url.path == "/app/announcements" {
+            noticesTab = url.path == "/app/announcements" ? "announcements" : "notifications"
             nativeFloor = false; nativeHome = false; nativeLedger = false; nativeCash = false; nativeCashIo = false; nativeQuick = false; nativeSlips = false; nativeExpenses = false; nativeStock = false
             if !nativeNotices { nativeNotices = true }
             return
@@ -339,7 +342,8 @@ final class AppState: ObservableObject {
     }
 
     /// ネイティブの在庫設定へ
-    func goNativeNotices() {
+    func goNativeNotices(tab: String = "notifications") {
+        noticesTab = tab
         nativeFloor = false
         nativeHome = false
         nativeLedger = false
@@ -350,7 +354,7 @@ final class AppState: ObservableObject {
         nativeExpenses = false
         nativeStock = false
         nativeNotices = true
-        WebViewController.current?.load(AppConfig.url("/app/notifications"))
+        WebViewController.current?.load(AppConfig.url(tab == "announcements" ? "/app/announcements" : "/app/notifications"))
     }
 
     func goNativeStock() {
