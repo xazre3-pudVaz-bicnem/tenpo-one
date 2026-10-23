@@ -171,6 +171,11 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         )
     }
 
+    /// Web の印刷係にいますぐ印刷待ちを見に行かせる（direct-print-agent.tsx の 'tenpo-print-ready' と同じ）
+    func kickPrint() {
+        webView.evaluateJavaScript("window.dispatchEvent(new Event('tenpo-print-ready'));", completionHandler: nil)
+    }
+
     func load(_ url: URL) {
         errorView.isHidden = true
         webView.load(URLRequest(url: url))

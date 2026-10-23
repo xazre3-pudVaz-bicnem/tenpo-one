@@ -187,6 +187,11 @@ final class NativeAPI {
                 throw NativeAPIError(message: r?.error ?? "通信できませんでした（\(http.statusCode)）", useWeb: r?.useWeb ?? false)
             }
         }
+        // 操作（POST）のあとは、裏の Web の印刷係（DirectPrintAgent）にすぐ見に行かせる。
+        // 1 秒ごとの見回りや Realtime を待たずにレシート・伝票・ドロアが出る（2026-10-24 Ronnie「プリンターは超速く」）
+        if req.httpMethod == "POST" {
+            await MainActor.run { WebViewController.current?.kickPrint() }
+        }
         return data
     }
 
