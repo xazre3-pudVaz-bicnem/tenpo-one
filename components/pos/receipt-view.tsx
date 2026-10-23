@@ -290,7 +290,7 @@ export function ReceiptView({
             </div>
             <div className="my-2 border-t border-dashed border-gray-300" />
             <div className="grid grid-cols-2 items-baseline gap-y-[1.5mm] leading-tight">
-              <span>卓番号</span><strong className="text-right text-[20px]">{receipt.tableName ?? 'テイクアウト'}</strong>
+              <span>卓番号</span><strong className="text-right text-[20px]">{receipt.tableName ?? '—'}</strong>
               <span>{receipt.staffName ? `担当 ${receipt.staffName}` : ''}</span><span className="text-right">{receipt.guestCount != null ? `人数 ${receipt.guestCount}名` : ''}</span>
               <span>{receipt.issuedAt}</span><span className="text-right">No.{receipt.orderNo}</span>
             </div>
