@@ -187,14 +187,14 @@ export async function POST(request: Request) {
         return json({ ok: true, order: await freshOrder(action.orderId) });
       }
       case 'checkout': {
-        const outcome = await checkout(action.orderId, action.payments, action.memo || undefined);
+        const outcome = await checkout(action.orderId, action.payments, action.memo || undefined, action.bluetoothLink);
         if (outcome.registerClosed) {
           return json(
             { ok: false, registerClosed: true, error: 'レジが未開局のため会計できません。「レジクローズ」画面で釣銭準備金を数えてレジを開局してください' },
             409
           );
         }
-        return json({ ok: true, alreadyPaid: !!outcome.alreadyPaid, warning: outcome.warning ?? null, pointsEarned: outcome.pointsEarned ?? 0 });
+        return json({ ok: true, alreadyPaid: !!outcome.alreadyPaid, warning: outcome.warning ?? null, pointsEarned: outcome.pointsEarned ?? 0, ...(outcome.receipt ? { receipt: outcome.receipt } : {}) });
       }
       case 'steraStart':
         return json(await startSteraPayment(action.orderId, action.terminalId, action.paymentType));

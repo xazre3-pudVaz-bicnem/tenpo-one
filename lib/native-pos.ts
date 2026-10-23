@@ -1,3 +1,4 @@
+import { parseCheckoutBluetoothLink, type CheckoutBluetoothLink } from '@/lib/checkout-bluetooth';
 import { englishName } from '@/lib/romaji';
 import { sortOptionGroupLinks } from './option-group-order';
 /**
@@ -180,6 +181,7 @@ export type NativePosAction =
   | { type: 'discount'; orderId: string; amount: number; reason: string }
   | {
       type: 'checkout';
+      bluetoothLink?: CheckoutBluetoothLink;
       orderId: string;
       payments: { method: NativePayMethod; amount: number; tendered?: number; provider?: string | null }[];
       memo: string;
@@ -304,7 +306,9 @@ export function parseNativePosAction(raw: unknown): Parsed {
         });
       }
       const memo = typeof b.memo === 'string' ? b.memo.slice(0, 200) : '';
-      return { ok: true, action: { type: 'checkout', orderId: b.orderId, payments, memo } };
+      const bluetoothLink = b.bluetoothLink == null ? null : parseCheckoutBluetoothLink(b.bluetoothLink);
+      if (b.bluetoothLink != null && !bluetoothLink) return bad();
+      return { ok: true, action: { type: 'checkout', orderId: b.orderId, payments, memo, ...(bluetoothLink ? { bluetoothLink } : {}) } };
     }
     case 'visitSource':
       if (!isUuid(b.orderId) || !(b.sourceId === null || (typeof b.sourceId === 'string' && SOURCE_ID.test(b.sourceId)))) return bad();
