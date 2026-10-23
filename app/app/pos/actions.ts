@@ -7,7 +7,8 @@ import { generateKitchenJobsForStore } from '@/lib/print-queue';
 import { assertStoreAccess, requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { isMissingColumnError } from '@/lib/schema-compat';
-import { enqueueCancelSlipPrint, enqueueReceiptPrint } from './print-actions';
+import { enqueueCancelSlipPrint, enqueueOrderSlipPrint, enqueueReceiptPrint } from './print-actions';
+import { orderHasBillSlipCategory } from '@/lib/bill-slip-on-order';
 import { allowsTakeoutItem, takeoutMenuFrom } from '@/lib/takeout-menu';
 import { loadMenuStock } from '@/lib/menu-stock-server';
 import { applicableTaxRate } from '@/lib/tax';
@@ -49,6 +50,21 @@ function kickKitchenPrint(storeId: string) {
       console.error('[pos] immediate kitchen print failed', storeId, e instanceof Error ? e.message : e);
     }
   });
+}
+
+/**
+ * 注文時の会計伝票（2026-10-23。設定 > カテゴリ の「注文時に会計伝票を印刷」）。
+ * 厨房へ送ったとき、その注文に ON のカテゴリの商品が1つでもあれば、レジのプリンターに会計伝票を1枚積む（1回の送信で1枚）。
+ * ON のカテゴリが無い店・注文は今まで通り自動では出さない。印刷できなくても厨房への送信は止めない
+ */
+async function printBillSlipOnSend(orderId: string): Promise<void> {
+  try {
+    if (!(await orderHasBillSlipCategory(createAdminClient(), orderId))) return;
+    const res = await enqueueOrderSlipPrint(orderId);
+    if (!res.ok) console.error('[pos] bill slip on order not queued', orderId, res.error);
+  } catch (e) {
+    console.error('[pos] bill slip on order failed', orderId, e instanceof Error ? e.message : e);
+  }
 }
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
@@ -499,7 +515,10 @@ export async function sendItemsToKitchen(orderId: string, itemIds: string[]): Pr
     if (isMissingColumnError(error.message, 'kitchen_sent_at')) return { sent: ids.length };
     throw new Error(error.message);
   }
-  if ((data ?? []).length > 0) kickKitchenPrint(order.store_id);
+  if ((data ?? []).length > 0) {
+    kickKitchenPrint(order.store_id);
+    await printBillSlipOnSend(orderId);
+  }
   revalidatePath(`/app/pos`);
   revalidatePath(`/app/kitchen`);
   return { sent: (data ?? []).length };
@@ -566,7 +585,10 @@ export async function sendOrderToKitchen(orderId: string): Promise<SendOrderResu
   if (sent == null) {
     throw new Error('厨房へのまとめ送信はまだ有効になっていません（DB更新待ち）。品目は追加時に厨房へ送られています');
   }
-  if (sent > 0) kickKitchenPrint(order.store_id);
+  if (sent > 0) {
+    kickKitchenPrint(order.store_id);
+    await printBillSlipOnSend(orderId);
+  }
   revalidatePath(`/app/pos`);
   revalidatePath(`/app/kitchen`);
   // 送れたときは何も出さない。印刷されていない恐れがあるときだけ知らせる
