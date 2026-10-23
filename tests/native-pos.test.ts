@@ -26,6 +26,13 @@ describe('iPad アプリのネイティブ画面の操作（/api/app/v1/pos）',
     expect(parseNativePosAction({ type: 'qty', orderId: ID, lineId: ID2, delta: 5 }).ok).toBe(false);
   });
 
+  it('native split validates item IDs and positive whole quantities', () => {
+    expect(parseNativePosAction({ type: 'split', orderId: ID, moves: [{ orderItemId: ID2, quantity: 1 }] }).ok).toBe(true);
+    for (const moves of [[], [{ orderItemId: 'bad', quantity: 1 }], [{ orderItemId: ID2, quantity: 0 }], [{ orderItemId: ID2, quantity: 1.5 }]]) {
+      expect(parseNativePosAction({ type: 'split', orderId: ID, moves }).ok).toBe(false);
+    }
+  });
+
   it('値引きは理由が要る・金額は 0〜1,000万円の整数', () => {
     expect(parseNativePosAction({ type: 'discount', orderId: ID, amount: 500, reason: '' })).toEqual({ ok: false, error: '値引きの理由を入れてください' });
     expect(parseNativePosAction({ type: 'discount', orderId: ID, amount: 500, reason: '幹事様無料' }).ok).toBe(true);

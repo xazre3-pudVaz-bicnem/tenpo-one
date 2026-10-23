@@ -7,7 +7,7 @@ import { loadNativeCatalog, loadNativeLive, loadNativeOrder, loadNativePos, setO
 import { claimLanKitchenPrints, finishLanPrint } from '@/lib/native-print-server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { ACCESS_MESSAGE } from '@/lib/store-access';
-import { checkout, sendOrderToKitchen, setDiscount, updateQty, addItem } from '@/app/app/pos/actions';
+import { checkout, splitOrder, sendOrderToKitchen, setDiscount, updateQty, addItem } from '@/app/app/pos/actions';
 import { setOrderClerk } from '@/app/app/pos/clerk-actions';
 import { cancelSteraPayment, checkSteraPayment, startSteraPayment } from '@/app/app/pos/stera-actions';
 import { enqueueDrawerKick } from '@/app/app/pos/print-actions';
@@ -61,6 +61,7 @@ async function networkProblem(ctx: SessionContext): Promise<string | null> {
 }
 
 const PERMISSION: Record<NativePosAction['type'], PermissionAction> = {
+  split: 'pos.checkout',
   send: 'pos.order',
   qty: 'pos.order',
   clerk: 'pos.order',
@@ -169,6 +170,10 @@ export async function POST(request: Request) {
         }
         await finishLanPrint(admin, action.printerId, action.jobId, action.result, action.code);
         return json({ ok: true });
+      }
+      case 'split': {
+        const result = await splitOrder(action.orderId, action.moves);
+        return json({ ok: true, newOrderId: result.newOrderId, order: await freshOrder(result.newOrderId) });
       }
       case 'qty':
         await updateQty(action.orderId, action.lineId, action.delta);

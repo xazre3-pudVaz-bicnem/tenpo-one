@@ -174,6 +174,7 @@ export interface NativeSendLine {
 }
 
 export type NativePosAction =
+  | { type: 'split'; orderId: string; moves: { orderItemId: string; quantity: number }[] }
   | { type: 'send'; orderId: string; lines: NativeSendLine[] }
   | { type: 'qty'; orderId: string; lineId: string; delta: 1 | -1 }
   | { type: 'clerk'; orderId: string; clerkId: string | null }
@@ -274,6 +275,17 @@ export function parseNativePosAction(raw: unknown): Parsed {
         lines.push({ menuItemId: r.menuItemId, quantity: q, optionItemIds: [...new Set(opts as string[])], openPrice: open });
       }
       return { ok: true, action: { type: 'send', orderId: b.orderId, lines } };
+    }
+    case 'split': {
+      if (!isUuid(b.orderId) || !Array.isArray(b.moves) || b.moves.length === 0 || b.moves.length > 200) return bad();
+      const moves: { orderItemId: string; quantity: number }[] = [];
+      for (const move of b.moves) {
+        if (!move || typeof move !== 'object') return bad();
+        const m = move as Record<string, unknown>;
+        if (!isUuid(m.orderItemId) || typeof m.quantity !== 'number' || !Number.isSafeInteger(m.quantity) || m.quantity < 1) return bad();
+        moves.push({ orderItemId: m.orderItemId, quantity: m.quantity });
+      }
+      return { ok: true, action: { type: 'split', orderId: b.orderId, moves } };
     }
     case 'qty':
       if (!isUuid(b.orderId) || !isUuid(b.lineId) || (b.delta !== 1 && b.delta !== -1)) return bad();

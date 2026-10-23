@@ -104,6 +104,7 @@ struct APIResult: Decodable {
     let printWarning: String?
     /// 注文確定のあと、iPad から LAN で直接出す厨房伝票（claimed 済み。出したら printDone）
     let prints: [APIPrintJob]?
+    let newOrderId: String?
     let alreadyPaid: Bool?
     let registerClosed: Bool?
     let useWeb: Bool?
