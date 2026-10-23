@@ -291,9 +291,8 @@ export function ReceiptView({
             <div className="my-2 border-t border-dashed border-gray-300" />
             <p>注文番号 #{receipt.orderNo}{receipt.tableName && <>　卓 {receipt.tableName}</>}</p>
             <p>{receipt.issuedAt}</p>
-            {(receipt.registerName || receipt.staffName) && (
+            {receipt.staffName && (
               <p className="text-[10px] text-gray-500">
-                {receipt.registerName && <>レジ: {receipt.registerName}　</>}
                 {receipt.staffName && <>担当: {receipt.staffName}</>}
               </p>
             )}
