@@ -70,7 +70,14 @@ export async function loadNativeSlips(
 
   let orderIdsByMethod: string[] | null = null;
   if (method) {
-    const { data: pays } = await supabase.from('payments').select('order_id').eq('store_id', store.id).eq('method', method);
+    const { data: pays } = await supabase
+      .from('payments')
+      .select('order_id')
+      .eq('store_id', store.id)
+      .eq('method', method)
+      .gte('business_date', from)
+      .lte('business_date', to)
+      .limit(10000);
     orderIdsByMethod = [...new Set((pays ?? []).map((p) => p.order_id as string))];
   }
   let query = supabase
