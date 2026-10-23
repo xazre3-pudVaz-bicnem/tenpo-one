@@ -96,6 +96,7 @@ struct NativeHomeScreen: View {
                 else if path == "/app/cash/close" || path == "/app/cash/open" { state.goNativeCash(path) }
                 else if path == "/app/cash" { state.goNativeCashIo() }
                 else if path == "/app/quick-pay" { state.goNativeQuick() }
+                else if path == "/app/orders" { state.goNativeSlips() }
                 else { state.leaveNativeFloor(to: path) }
             },
             onFloor: { state.goNativeFloor() }
@@ -170,6 +171,21 @@ struct NativeQuickScreen: View {
             onOpenOrder: { id, checkout in state.openNativeOrder(id, checkout: checkout) }
         )
         .onChange(of: state.quickRefreshTick) { _ in Task { await model.refresh() } }
+        .onChange(of: state.nativeOrder) { new in if new == nil { Task { await model.refresh() } } }
+    }
+}
+
+/// ネイティブの伝票明細（2026-10-24）
+struct NativeSlipsScreen: View {
+    @StateObject private var model = NativeSlipsModel()
+    @EnvironmentObject var state: AppState
+
+    var body: some View {
+        NativeSlipsView(
+            model: model,
+            onHome: { state.goNativeHome() },
+            onOpenOrder: { id in state.openNativeOrder(id, checkout: false) }
+        )
         .onChange(of: state.nativeOrder) { new in if new == nil { Task { await model.refresh() } } }
     }
 }

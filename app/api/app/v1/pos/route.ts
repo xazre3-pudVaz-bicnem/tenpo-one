@@ -21,6 +21,9 @@ import { isNativeCashActionType, parseNativeCashAction, sumNativeDenominations, 
 import { loadNativeCash, loadNativeCashIo } from '@/lib/native-cash-server';
 import { isNativeQuickActionType, parseNativeQuickAction, type NativeQuickAction } from '@/lib/native-quick';
 import { loadNativeQuick } from '@/lib/native-quick-server';
+import { isNativeSlipActionType, parseNativeSlipAction, type NativeSlipAction } from '@/lib/native-slips';
+import { loadNativeSlipDetail, loadNativeSlips } from '@/lib/native-slips-server';
+import { refundOrder, reopenOrder } from '@/app/app/orders/actions';
 import { prepareQuickCheckout, startQuickOrder } from '@/app/app/quick-pay/actions';
 import { addCashTransaction, closeRegister, openRegister, printSettlementReport, reprintRegisterReport } from '@/app/app/cash/actions';
 import {
@@ -179,6 +182,24 @@ export async function GET(request: Request) {
     return json({ ok: true, ...cash });
   }
 
+  // 伝票明細（Web の /app/orders・/app/orders/[id]）
+  if (part === 'slips') {
+    const store = ctx.currentStore ?? ctx.stores[0] ?? null;
+    if (!store) return json({ ok: false, error: '店舗がありません' }, 404);
+    const p = url.searchParams;
+    const slips = await loadNativeSlips(ctx, await createClient(), { id: store.id, name: store.name }, {
+      from: p.get('from'), to: p.get('to'), status: p.get('status'), method: p.get('method'), q: p.get('q'), page: p.get('page'),
+    });
+    return json({ ok: true, ...slips });
+  }
+  if (part === 'slip') {
+    const id = url.searchParams.get('id');
+    if (!isUuid(id)) return json({ ok: false, error: '伝票が正しくありません' }, 400);
+    const detail = await loadNativeSlipDetail(ctx, await createClient(), id);
+    if (!detail) return json({ ok: false, error: '注文が見つかりません' }, 404);
+    return json({ ok: true, ...detail });
+  }
+
   // 即会計（Web の /app/quick-pay）
   if (part === 'quick') {
     const store = ctx.currentStore ?? ctx.stores[0] ?? null;
@@ -263,6 +284,22 @@ export async function POST(request: Request) {
     if (problem) return json({ ok: false, error: problem }, 403);
     try {
       return json(await runLedgerAction(ctx, action));
+    } catch (e) {
+      return json({ ok: false, error: errorText(e, 'うまくいきませんでした。もう一度お試しください') }, 400);
+    }
+  }
+
+  // 伝票明細の操作（返金・取消・再会計・領収書・レシート再発行。2026-10-24）
+  if (raw && typeof raw === 'object' && isNativeSlipActionType((raw as { type?: unknown }).type)) {
+    const parsedSlip = parseNativeSlipAction(raw);
+    if (!parsedSlip.ok) return json({ ok: false, error: parsedSlip.error }, 400);
+    const action = parsedSlip.action;
+    const need: PermissionAction = action.type === 'slipRefund' || action.type === 'slipReopen' ? 'pos.refund' : 'pos.checkout';
+    if (!can(ctx.role, need)) return json({ ok: false, error: '権限がありません' }, 403);
+    const problem = await networkProblem(ctx);
+    if (problem) return json({ ok: false, error: problem }, 403);
+    try {
+      return json(await runSlipAction(action));
     } catch (e) {
       return json({ ok: false, error: errorText(e, 'うまくいきませんでした。もう一度お試しください') }, 400);
     }
@@ -488,6 +525,32 @@ async function runFloorAction(action: NativeFloorAction): Promise<Record<string,
 }
 
 /** 店舗台帳の操作。中身は Web の予約台帳と同じ Server Action */
+/** 伝票明細。Web の RefundDialog / ReopenDialog / レシート・領収書と同じ Server Action */
+async function runSlipAction(action: NativeSlipAction): Promise<Record<string, unknown>> {
+  switch (action.type) {
+    case 'slipRefund':
+      await refundOrder(action.orderId, action.amount, action.method, action.reason, action.kind, action.items ?? undefined);
+      return { ok: true };
+    case 'slipReopen': {
+      const { orderId } = await reopenOrder(action.orderId, action.reason);
+      return { ok: true, orderId };
+    }
+    case 'slipRyoshusho': {
+      const r = await enqueueReceiptPrint(action.orderId, {
+        jobType: 'ryoshusho',
+        recipientName: action.recipientName,
+        purpose: action.purpose,
+        splitAmounts: action.splitAmounts,
+      });
+      return r.ok ? { ok: true, queued: r.queued ?? null } : { ok: false, error: r.error ?? '領収書を印刷できませんでした' };
+    }
+    case 'slipReceipt': {
+      const r = await enqueueReceiptPrint(action.orderId, { reissue: true });
+      return r.ok ? { ok: true } : { ok: false, error: r.error ?? 'レシートを印刷できませんでした' };
+    }
+  }
+}
+
 /** 即会計。Web の QuickPayScreen と同じ Server Action（startQuickOrder / prepareQuickCheckout / startTakeout） */
 async function runQuickAction(action: NativeQuickAction): Promise<Record<string, unknown>> {
   switch (action.type) {
