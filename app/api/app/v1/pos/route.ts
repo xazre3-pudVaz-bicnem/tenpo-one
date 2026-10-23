@@ -54,6 +54,9 @@ import { loadNativeAnnouncements, loadNativeNotices } from '@/lib/native-notices
 import { createAnnouncement, deleteAnnouncement, markAnnouncementRead } from '@/app/app/announcements/actions';
 import { markAllRead } from '@/app/app/notifications/actions';
 import { markNotificationRead } from '@/app/app/actions';
+import { isNativeCustomerActionType, parseNativeCustomerAction } from '@/lib/native-customers';
+import { loadNativeCustomer, loadNativeCustomers } from '@/lib/native-customers-server';
+import { addCustomerNote, createCustomer, recalcCustomerStats, updateCustomerAttributes } from '@/app/app/customers/actions';
 import { isNativeBudgetActionType, parseNativeBudgetAction } from '@/lib/native-budget';
 import { dailyBudgetsFrom } from '@/lib/daily-budget';
 import { saveDailyBudgets } from '@/app/app/budgets/daily-actions';
@@ -298,6 +301,28 @@ export async function GET(request: Request) {
     return json({ ok: true, ...io });
   }
 
+  // 顧客台帳（Web の /app/customers・/app/customers/[id]）
+  if (part === 'customers' || part === 'customer') {
+    if (ctx.disabledFeatures?.has('crm')) return json({ ok: false, error: 'この機能は使えません', useWeb: true }, 403);
+    if (!can(ctx.role, 'customers.view')) return json({ ok: false, error: '顧客情報の閲覧には権限が必要です。管理者にお問い合わせください。' }, 403);
+    const supabase = await createClient();
+    if (part === 'customer') {
+      const id = url.searchParams.get('id');
+      if (!isUuid(id)) return json({ ok: false, error: '顧客が見つかりません' }, 404);
+      const c = await loadNativeCustomer(ctx, supabase, id);
+      if (!c) return json({ ok: false, error: '顧客が見つかりません' }, 404);
+      return json({ ok: true, ...c });
+    }
+    const list = await loadNativeCustomers(ctx, supabase, {
+      q: (url.searchParams.get('q') ?? '').slice(0, 100),
+      tag: isUuid(url.searchParams.get('tag')) ? (url.searchParams.get('tag') as string) : '',
+      segment: (url.searchParams.get('segment') ?? '').slice(0, 30),
+      sort: url.searchParams.get('sort') ?? '',
+      page: Number(url.searchParams.get('page') ?? '1') || 1,
+    });
+    return json({ ok: true, ...list });
+  }
+
   // 日別予算登録（Web の /app/budgets/daily）
   if (part === 'budgetDaily') {
     if (!can(ctx.role, 'reports.view')) return json({ ok: false, error: '権限がありません', useWeb: true }, 403);
@@ -468,6 +493,35 @@ export async function POST(request: Request) {
       }
       const r = await enqueueStockListPrint(store.id, parsedStock.action.lines);
       return json(r.ok ? { ok: true } : { ok: false, error: r.error ?? '在庫の印刷に失敗しました' });
+    } catch (e) {
+      return json({ ok: false, error: errorText(e, 'うまくいきませんでした。もう一度お試しください') }, 400);
+    }
+  }
+
+  // 顧客台帳の操作（2026-10-24）
+  if (raw && typeof raw === 'object' && isNativeCustomerActionType((raw as { type?: unknown }).type)) {
+    const parsedCustomer = parseNativeCustomerAction(raw);
+    if (!parsedCustomer.ok) return json({ ok: false, error: parsedCustomer.error }, 400);
+    if (ctx.disabledFeatures?.has('crm')) return json({ ok: false, error: 'この機能は使えません', useWeb: true }, 403);
+    if (!can(ctx.role, 'customers.write')) return json({ ok: false, error: '権限がありません' }, 403);
+    // Route Handler では requirePermission がお店の回線を見ないので、ここで見る（ほかの操作と同じ）
+    const customerProblem = await networkProblem(ctx);
+    if (customerProblem) return json({ ok: false, error: customerProblem }, 403);
+    const ca = parsedCustomer.action;
+    try {
+      if (ca.type === 'customerCreate') {
+        const { type: _t, ...input } = ca;
+        void _t;
+        const r = await createCustomer(input);
+        return json({ ok: true, orderId: r.id });
+      }
+      if (ca.type === 'customerAttributes') {
+        const { type: _t, id, ...input } = ca;
+        void _t;
+        await updateCustomerAttributes(id, input);
+      } else if (ca.type === 'customerNote') await addCustomerNote(ca.id, ca.body);
+      else await recalcCustomerStats(ca.id);
+      return json({ ok: true });
     } catch (e) {
       return json({ ok: false, error: errorText(e, 'うまくいきませんでした。もう一度お試しください') }, 400);
     }
