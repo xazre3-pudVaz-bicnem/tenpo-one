@@ -40,13 +40,11 @@ export function receiptToStarMarkup(receipt: ReceiptData, options: ReceiptMarkup
   raw('[magnify: width 1; height 2]');
   line(receipt.storeName);
   raw('[magnify: width 1; height 1]');
+  line('会計レシート');
   if (receipt.storeAddress) line(receipt.storeAddress);
   if (receipt.storePhone) line(`TEL ${receipt.storePhone}`);
   raw('[align: left]');
   if (receipt.registrationNumber) line(`登録番号 ${receipt.registrationNumber}`);
-  raw('[align: middle]');
-  line('会計レシート');
-  raw('[align: left]');
   line(rule);
   const table = receipt.tableName ?? 'テイクアウト';
   const tableRow = twoCol('卓番号', table, width);

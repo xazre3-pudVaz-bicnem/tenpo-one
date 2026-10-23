@@ -128,11 +128,11 @@ export function receiptToStarPrnt(receipt: ReceiptData, options: StarPrntOptions
   if (receipt.isRefundReceipt) b.line('※ 返金レシート');
 
   b.cmd(CMD.magnify(0, 1)).line(receipt.storeName).cmd(CMD.magnify(0, 0));
+  b.line('会計レシート');
   if (receipt.storeAddress) b.line(receipt.storeAddress);
   if (receipt.storePhone) b.line(`TEL ${receipt.storePhone}`);
   b.cmd(CMD.alignLeft);
   if (receipt.registrationNumber) b.line(`登録番号 ${receipt.registrationNumber}`);
-  b.cmd(CMD.alignCenter).line('会計レシート').cmd(CMD.alignLeft);
   b.line(rule);
   const table = receipt.tableName ?? 'テイクアウト';
   const tableRow = twoCol('卓番号', table, width);

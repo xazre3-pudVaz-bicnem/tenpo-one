@@ -283,11 +283,12 @@ export function ReceiptView({
             )}
             <div className="text-center">
               <p className="text-[18px] font-bold leading-tight">{receipt.storeName}</p>
+              <p className="my-1 font-bold">会計レシート</p>
               {receipt.storeAddress && <p>{receipt.storeAddress}</p>}
               {receipt.storePhone && <p>TEL {receipt.storePhone}</p>}
+              {receipt.registrationNumber && <p>登録番号 {receipt.registrationNumber}</p>}
             </div>
             <div className="my-2 border-t border-dashed border-gray-300" />
-            <p className="mb-2 text-center">会計レシート</p>
             <div className="grid grid-cols-2 items-baseline gap-y-[1.5mm] leading-tight">
               <span>卓番号</span><strong className="text-right text-[20px]">{receipt.tableName ?? 'テイクアウト'}</strong>
               <span>{receipt.staffName ? `担当 ${receipt.staffName}` : ''}</span><span className="text-right">{receipt.guestCount != null ? `人数 ${receipt.guestCount}名` : ''}</span>
@@ -388,12 +389,6 @@ export function ReceiptView({
                     </div>
                   )}
                 </div>
-              </>
-            )}
-            {receipt.registrationNumber && (
-              <>
-                <div className="my-2 border-t border-dashed border-gray-300" />
-                <p>登録番号 {receipt.registrationNumber}</p>
               </>
             )}
             <p className="mt-2 text-center leading-snug">ご来店ありがとうございました<br />またのご来店をお待ちしております</p>
