@@ -33,7 +33,8 @@ describe('receiptToStarPrnt', () => {
     expect(t).toContain('シュラスコテーブル FOGO');
     expect(t).toContain('シュラスコ食べ放題');
     expect(t).toContain('合計');
-    expect(t).toContain('照会番号 ORD-1001');
+    expect(t).not.toContain('TENPO ONE');
+    expect(t).toContain('またのご来店をお待ちしております');
   });
 
   it('整列・拡大・強調のコマンドを含む', () => {
@@ -59,8 +60,8 @@ describe('receiptToStarPrnt', () => {
   });
 
   it('用紙幅で桁数が変わる（58mm=32桁 / 80mm=48桁）', () => {
-    expect(asSjis(receiptToStarPrnt(base, { paperWidth: 58 }))).toContain('-'.repeat(32));
-    expect(asSjis(receiptToStarPrnt(base, { paperWidth: 80 }))).toContain('-'.repeat(48));
+    expect(asSjis(receiptToStarPrnt(base, { paperWidth: 58 }))).toContain('_'.repeat(32));
+    expect(asSjis(receiptToStarPrnt(base, { paperWidth: 80 }))).toContain('_'.repeat(48));
   });
 
   it('既定では ¥ を 0x5C で出す（半角1桁のまま ￥ と印字され桁揃えが崩れない）', () => {
@@ -173,7 +174,7 @@ describe('orderSlipStarPrnt（注文伝票）', () => {
     expect(t).toContain('T-3');
     expect(t).toContain('シュラスコ食べ放題');
     expect(t).toContain(`${BACKSLASH}11,300`);
-    expect(t).toContain('※ これは領収書ではありません');
+    expect(t).not.toContain('※ これは領収書ではありません');
   });
 
   it('拡大は縦のみで、見出しのあとは等倍に戻す（以降が大きいまま印字されない）', () => {

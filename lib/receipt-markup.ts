@@ -1,3 +1,4 @@
+import { formatReceiptAddress } from './receipt-layout';
 /**
  * ReceiptData → Star Document Markup（text/vnd.star.markup）変換（純関数・テスト対象）。
  * Star mC-Print3 等の CloudPRNT 対応機がこのMarkupを解釈して感熱レシートを印字する。
@@ -8,7 +9,7 @@
  */
 import type { ReceiptData } from './receipts';
 import { RYOSHUSHO_DEFAULT_PURPOSE, RYOSHUSHO_INVOICE_NOTE, RYOSHUSHO_NO_STAMP_NOTE, ryoshushoRecipientLine } from '@/lib/ryoshusho-issue';
-import { billSlipLines, colsFor, twoCol as twoColBase, wrapText as wrapTextBase, yen, STAR_WIDTH_OPTIONS, type PaperWidth } from './receipt-layout';
+import { customerBillHeading, receiptTableLines, colsFor, twoCol as twoColBase, wrapText as wrapTextBase, yen, STAR_WIDTH_OPTIONS, type PaperWidth } from './receipt-layout';
 
 /** Star 機の全角幅（半角2桁よりわずかに広い）を見込んだ桁揃え・折り返し */
 const twoCol = (left: string, right: string, width: number) => twoColBase(left, right, width, STAR_WIDTH_OPTIONS);
@@ -27,7 +28,8 @@ export interface ReceiptMarkupOptions {
 
 export function receiptToStarMarkup(receipt: ReceiptData, options: ReceiptMarkupOptions = {}): string {
   const width = colsFor(options.paperWidth);
-  const rule = '-'.repeat(width);
+  const solid = '_'.repeat(width);
+  const dotted = '- '.repeat(Math.floor(width / 2)).trimEnd();
   const L: string[] = [];
   const line = (s = '') => { for (const w of wrapText(s, width)) L.push(esc(w)); };
   const raw = (s: string) => L.push(s); // Markup命令はエスケープしない
@@ -40,27 +42,21 @@ export function receiptToStarMarkup(receipt: ReceiptData, options: ReceiptMarkup
   raw('[magnify: width 1; height 2]');
   line(receipt.storeName);
   raw('[magnify: width 1; height 1]');
-  if (receipt.storeAddress) line(receipt.storeAddress);
+  line('会計レシート');
+  if (receipt.storeAddress) line(formatReceiptAddress(receipt.storeAddress));
   if (receipt.storePhone) line(`TEL ${receipt.storePhone}`);
   raw('[align: left]');
   if (receipt.registrationNumber) line(`登録番号 ${receipt.registrationNumber}`);
-  line(rule);
-  line(`発行 ${receipt.issuedAt}`);
-  line(twoCol(`No.${receipt.orderNo}`, [receipt.registerName, receipt.staffName].filter(Boolean).join(' '), width));
-  if (receipt.tableName) line(`卓 ${receipt.tableName}`);
-  line(rule);
+  const table = receipt.tableName ?? 'テイクアウト';
+  const tableRow = twoCol('卓番号', table, width);
+  raw(esc(tableRow.slice(0, -table.length)) + '[magnify: width 1; height 2]' + esc(table) + '[magnify: width 1; height 1]');
+  line(twoCol(receipt.staffName ? `担当 ${receipt.staffName}` : '', receipt.guestCount != null ? `人数 ${receipt.guestCount}名` : '', width));
+  line(twoCol(receipt.issuedAt, `No.${receipt.orderNo}`, width));
 
   // 明細
   // 0円の明細（飲み放題・食べ放題・コースの中身）はレシートにも出さない（お会計伝票と同じ。2026-09-26 店舗要望）
-  for (const it of billSlipLines(receipt.lines)) {
-    if (it.cancelled) continue;
-    line(it.name);
-    line(twoCol(`  ${it.quantity} x ${yen(it.unitPrice)}`, yen(it.lineTotal), width));
-    for (const m of it.modifiers) {
-      line(twoCol(`   + ${m.name}`, m.price ? yen(m.price) : '', width));
-    }
-  }
-  line(rule);
+  for (const row of receiptTableLines(receipt.lines, width, STAR_WIDTH_OPTIONS)) line(row);
+  line(dotted);
 
   // 金額
   line(twoCol('小計', yen(receipt.subtotal), width));
@@ -71,10 +67,11 @@ export function receiptToStarMarkup(receipt: ReceiptData, options: ReceiptMarkup
   if (receipt.discount > 0) {
     line(twoCol(`値引${receipt.couponCode ? ` (${receipt.couponCode})` : ''}`, `-${yen(receipt.discount)}`, width));
   }
+  line(solid);
   raw('[magnify: width 1; height 2]');
   line(twoCol('合計', yen(receipt.total), width));
   raw('[magnify: width 1; height 1]');
-  line(rule);
+  line(solid);
 
   // 支払
   for (const p of receipt.payments) line(twoCol(p.label, yen(p.amount), width));
@@ -85,18 +82,16 @@ export function receiptToStarMarkup(receipt: ReceiptData, options: ReceiptMarkup
     line(twoCol('差引', yen(receipt.netPaid), width));
   }
   if (receipt.pointsEarned != null || receipt.pointsUsed != null) {
-    line(rule);
+    line(dotted);
     if (receipt.pointsUsed) line(twoCol('利用ポイント', `${receipt.pointsUsed}P`, width));
     if (receipt.pointsEarned) line(twoCol('獲得ポイント', `${receipt.pointsEarned}P`, width));
     if (receipt.pointBalance != null) line(twoCol('ポイント残高', `${receipt.pointBalance}P`, width));
   }
-  line(rule);
+  line(dotted);
 
   raw('[align: middle]');
-  if (receipt.footerMessage) {
-    for (const fl of receipt.footerMessage.split('\n')) line(fl);
-  }
-  line(`照会番号 ${receipt.qrContent}`);
+  line('ご来店ありがとうございました');
+  line('またのご来店をお待ちしております');
   raw('[feed]');
   raw('[cut: feed; partial]');
 
@@ -143,7 +138,7 @@ export function ryoshushoToStarMarkup(receipt: ReceiptData, options: RyoshushoOp
   // 発行元は上（2026-09-26 Ronnie「店名・住所は上に」）
   line(receipt.storeName);
   raw('[bold: off]');
-  if (receipt.storeAddress) line(receipt.storeAddress);
+  if (receipt.storeAddress) line(formatReceiptAddress(receipt.storeAddress));
   if (receipt.storePhone) line(`TEL ${receipt.storePhone}`);
   if (receipt.registrationNumber) line(`登録番号 ${receipt.registrationNumber}`);
   raw('[bold: on]');
@@ -224,7 +219,8 @@ export function orderSlipMarkup(
   options: ReceiptMarkupOptions = {}
 ): string {
   const width = colsFor(options.paperWidth);
-  const rule = '-'.repeat(width);
+  const solid = '_'.repeat(width);
+  const dotted = '- '.repeat(Math.floor(width / 2)).trimEnd();
   const L: string[] = [];
   const line = (s = '') => { for (const w of wrapText(s, width)) L.push(esc(w)); };
   const raw = (s: string) => L.push(s);
@@ -232,36 +228,28 @@ export function orderSlipMarkup(
   raw('[bold: on]');
   raw('[align: middle]');
   raw('[magnify: width 1; height 2]');
-  line('お会計伝票');
-  raw('[magnify: width 1; height 1]');
   line(slip.storeName);
-  line('（会計前のご確認用）');
+  raw('[magnify: width 1; height 1]');
+  for (const heading of customerBillHeading(width, STAR_WIDTH_OPTIONS)) line(heading);
   raw('[align: left]');
-  line(rule);
-  line(twoCol(slip.tableName ?? 'テイクアウト', `No.${slip.orderNo}`, width));
-  const meta = [slip.guestCount ? `${slip.guestCount}名` : null, slip.clerkName ? `担当 ${slip.clerkName}` : null]
-    .filter(Boolean)
-    .join('  ');
-  if (meta) line(meta);
-  line(`発行 ${slip.issuedAt}`);
-  line(rule);
+  const table = slip.tableName ?? 'テイクアウト';
+  const tableRow = twoCol('卓番号', table, width);
+  raw(esc(tableRow.slice(0, -table.length)) + '[magnify: width 1; height 2]' + esc(table) + '[magnify: width 1; height 1]');
+  line(twoCol(slip.clerkName ? `担当 ${slip.clerkName}` : '', slip.guestCount != null ? `人数 ${slip.guestCount}名` : '', width));
+  line(twoCol(slip.issuedAt, `No.${slip.orderNo}`, width));
 
-  for (const it of billSlipLines(slip.lines)) {
-    line(it.name);
-    line(twoCol(`  ${it.quantity} x ${yen(it.unitPrice)}`, yen(it.lineTotal), width));
-    for (const m of it.modifiers) line(twoCol(`   + ${m.name}`, m.price ? yen(m.price) : '', width));
-  }
-  line(rule);
+  for (const row of receiptTableLines(slip.lines, width, STAR_WIDTH_OPTIONS)) line(row);
+  line(dotted);
   line(twoCol('小計', yen(slip.subtotal), width));
   line(twoCol('消費税', yen(slip.taxTotal), width));
   if (slip.serviceCharge > 0) line(twoCol('サービス料', yen(slip.serviceCharge), width));
   if (slip.discount > 0) line(twoCol('値引', `-${yen(slip.discount)}`, width));
+  line(solid);
   raw('[magnify: width 1; height 2]');
   line(twoCol('合計', yen(slip.total), width));
   raw('[magnify: width 1; height 1]');
-  line(rule);
+  line(solid);
   raw('[align: middle]');
-  line('※ これは領収書ではありません');
   raw('[feed]');
   raw('[cut: feed; partial]');
 

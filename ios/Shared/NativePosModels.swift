@@ -134,7 +134,8 @@ final class NativeOrderModel: ObservableObject {
     @Published var lastAddedLineId: String?
 
     // ライブ（サーバーにつながっている）とき
-    let orderId: String?
+    var orderId: String?
+    @Published var splitParentOrderId: String?
     @Published var loading = false
     @Published var busy = false
     /// 画面の上に出すお知らせ（エラー・注意）
@@ -491,6 +492,33 @@ final class NativeOrderModel: ObservableObject {
         await act(["type": "discount", "orderId": orderId, "amount": amount, "reason": reason])
     }
 
+    /// Web と同じ品目単位の伝票分割。サーバーが数量・権限・合計を検証する。
+    func splitForCheckout(_ quantities: [String: Int]) async -> Bool {
+        guard let orderId else { return false }
+        let moves = quantities.filter { $0.value > 0 }.map { ["orderItemId": $0.key, "quantity": $0.value] as [String: Any] }
+        guard !moves.isEmpty,
+              let result = await act(["type": "split", "orderId": orderId, "moves": moves]),
+              let newId = result.newOrderId else { return false }
+        splitParentOrderId = orderId
+        self.orderId = newId
+        return true
+    }
+
+    func resumeSplitParent() async -> Bool {
+        guard let parent = splitParentOrderId else { return false }
+        do {
+            let live = try await NativeAPI.shared.loadLive(orderId: parent)
+            guard !live.order.lines.isEmpty else { return false }
+            orderId = parent
+            splitParentOrderId = nil
+            apply(live: live)
+            return true
+        } catch {
+            notice = error.localizedDescription
+            return false
+        }
+    }
+
     /// 会計を確定する。成功したら true
     func checkout(payments: [NPPaymentRow], cashDue: Int, memo: String) async -> Bool {
         guard let orderId else { return true }
@@ -505,7 +533,24 @@ final class NativeOrderModel: ObservableObject {
             if let b = p.brand { d["provider"] = b.id }
             return d
         }
-        guard let r = await act(["type": "checkout", "orderId": orderId, "payments": body, "memo": memo]) else { return false }
+        // Read the paired device before checkout; no extra request or polling after payment.
+        var request: [String: Any] = ["type": "checkout", "orderId": orderId, "payments": body, "memo": memo]
+        if let link = await WebViewController.current?.checkoutBluetoothLink() { request["bluetoothLink"] = link }
+        guard let r = await act(request) else { return false }
+        if let warning = r.warning, !warning.isEmpty { notice = warning }
+        if let receipt = r.receipt {
+            if let bytes = Data(base64Encoded: receipt.data), !bytes.isEmpty,
+               ["star", "epson", "sii", "escpos"].contains(receipt.maker), ["bluetooth", "usb"].contains(receipt.via) {
+                // Start before the drawer request. Never automatically retry an uncertain physical print.
+                WebViewController.printBluetooth(deviceId: receipt.deviceId, maker: receipt.maker, via: receipt.via, data: bytes) { [weak self] ok, _ in
+                    if !ok {
+                        Task { @MainActor [weak self] in self?.notice = "会計は完了しました。レシートの印刷を確認し、必要な場合だけ再発行してください。" }
+                    }
+                }
+            } else {
+                notice = "会計は完了しましたがレシートを印刷できません。再発行してください。"
+            }
+        }
         if r.alreadyPaid == true { notice = "This order has already been paid." }
         // ドロア（店の設定で開くか決める）
         let methods = Array(Set(payments.map { $0.method.rawValue }))

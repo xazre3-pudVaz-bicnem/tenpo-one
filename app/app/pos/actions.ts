@@ -1,5 +1,7 @@
 'use server';
 
+import { checkoutBluetoothReceipt } from '@/lib/checkout-receipt-server';
+import type { CheckoutBluetoothLink, CheckoutReceipt } from '@/lib/checkout-bluetooth';
 import { revalidatePath } from 'next/cache';
 import { sortOptionGroupLinks } from '@/lib/option-group-order';
 import { after } from 'next/server';
@@ -786,6 +788,7 @@ export interface CheckoutPayment {
 }
 
 export interface CheckoutOutcome {
+  receipt?: CheckoutReceipt;
   ok: boolean;
   /** true の場合は二重会計等で既に確定済み。エラーではなく案内として扱う */
   alreadyPaid?: boolean;
@@ -807,7 +810,8 @@ export async function checkout(
   orderId: string,
   payments: CheckoutPayment[],
   /** 支払メモ（2026-09-25 店舗要望「カードで取ったつもりが現金になった時などの理由を残したい」） */
-  paymentMemo?: string
+  paymentMemo?: string,
+  bluetoothLink?: CheckoutBluetoothLink
 ): Promise<CheckoutOutcome> {
   const ctx = await requirePermission('pos.checkout');
   const supabase = await createClient();
@@ -924,15 +928,19 @@ export async function checkout(
 
   // 会計が終わったらレシートを自動で印字する（2026-09-24 店舗要望）。
   // レシート機の「自動印刷」がONのときだけ。失敗しても会計は成立させる（手動でも印刷できる）。
+  let receipt: CheckoutReceipt | undefined;
+  let warning: string | null = null;
   try {
-    const printer = await receiptPrinterForAutoPrint(supabase, order.store_id);
+    receipt = (await checkoutBluetoothReceipt(supabase, order.store_id, orderId, bluetoothLink)) ?? undefined;
+    const printer = receipt ? null : await receiptPrinterForAutoPrint(supabase, order.store_id);
     if (printer) await enqueueReceiptPrint(orderId);
   } catch (e) {
     console.error('[pos.checkout] receipt auto print failed:', e);
+    warning = '会計は完了しましたが、レシートを自動印刷できませんでした。レシートを再発行してください。';
   }
 
   const result = data as { points_earned?: number } | null;
-  return { ok: true, warning: null, pointsEarned: result?.points_earned ?? 0 };
+  return { ok: true, warning, pointsEarned: result?.points_earned ?? 0, ...(receipt ? { receipt } : {}) };
 }
 
 /** レシートを自動印字してよいプリンタ（usage=receipt・CloudPRNT有効・自動印刷ON）があるか */
@@ -945,7 +953,6 @@ async function receiptPrinterForAutoPrint(
     .select('id')
     .eq('store_id', storeId)
     .eq('status', 'active')
-    .eq('cloudprnt_enabled', true)
     .eq('auto_print', true)
     .eq('usage', 'receipt')
     .limit(1)

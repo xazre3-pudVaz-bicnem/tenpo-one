@@ -1,3 +1,4 @@
+import { formatReceiptAddress } from './receipt-layout';
 /**
  * ReceiptData → StarPRNT ラスタ制御コマンド（application/vnd.star.starprnt）変換。
  *
@@ -10,7 +11,7 @@
 import iconv from 'iconv-lite';
 import { RYOSHUSHO_DEFAULT_PURPOSE, RYOSHUSHO_INVOICE_NOTE, RYOSHUSHO_NO_STAMP_NOTE, ryoshushoRecipientLine } from '@/lib/ryoshusho-issue';
 import type { ReceiptData } from './receipts';
-import { billSlipLines, colsFor, twoCol as twoColBase, wrapText as wrapTextBase, yen, STAR_WIDTH_OPTIONS, type PaperWidth } from './receipt-layout';
+import { customerBillHeading, receiptTableLines, colsFor, twoCol as twoColBase, wrapText as wrapTextBase, yen, STAR_WIDTH_OPTIONS, type PaperWidth } from './receipt-layout';
 
 /** Star 機の全角幅（半角2桁よりわずかに広い）を見込んだ桁揃え・折り返し */
 const twoCol = (left: string, right: string, width: number) => twoColBase(left, right, width, STAR_WIDTH_OPTIONS);
@@ -91,6 +92,12 @@ class StarBuffer {
     this.parts.push(Buffer.from(bytes));
     return this;
   }
+  /** Inline segment without LF, for a normal label with a large table value. */
+  text(s: string): this {
+    const text = applyCurrency(s, this.currency);
+    this.parts.push(this.encoding === 'utf8' ? Buffer.from(text, 'utf8') : iconv.encode(text, 'Shift_JIS'));
+    return this;
+  }
   /** 1行ぶんのテキスト（改行付き）。桁数を超える場合は折り返す。 */
   line(s = ''): this {
     for (const part of this.cols > 0 ? wrapText(s, this.cols) : [s]) {
@@ -114,7 +121,8 @@ class StarBuffer {
 
 export function receiptToStarPrnt(receipt: ReceiptData, options: StarPrntOptions = {}): Buffer {
   const width = colsFor(options.paperWidth);
-  const rule = '-'.repeat(width);
+  const solid = '_'.repeat(width);
+  const dotted = '- '.repeat(Math.floor(width / 2)).trimEnd();
   const b = new StarBuffer(options.currency ?? DEFAULT_CURRENCY, options.encoding ?? DEFAULT_ENCODING, width);
 
   b.cmd(CMD.init).cmd(CMD.emphasizeOn).cmd(CMD.alignCenter);
@@ -122,27 +130,21 @@ export function receiptToStarPrnt(receipt: ReceiptData, options: StarPrntOptions
   if (receipt.isRefundReceipt) b.line('※ 返金レシート');
 
   b.cmd(CMD.magnify(0, 1)).line(receipt.storeName).cmd(CMD.magnify(0, 0));
-  if (receipt.storeAddress) b.line(receipt.storeAddress);
+  b.line('会計レシート');
+  if (receipt.storeAddress) b.line(formatReceiptAddress(receipt.storeAddress));
   if (receipt.storePhone) b.line(`TEL ${receipt.storePhone}`);
   b.cmd(CMD.alignLeft);
   if (receipt.registrationNumber) b.line(`登録番号 ${receipt.registrationNumber}`);
-  b.line(rule);
-  b.line(`発行 ${receipt.issuedAt}`);
-  b.line(twoCol(`No.${receipt.orderNo}`, [receipt.registerName, receipt.staffName].filter(Boolean).join(' '), width));
-  if (receipt.tableName) b.line(`卓 ${receipt.tableName}`);
-  b.line(rule);
+  const table = receipt.tableName ?? 'テイクアウト';
+  const tableRow = twoCol('卓番号', table, width);
+  b.text(tableRow.slice(0, -table.length)).cmd(CMD.magnify(0, 1)).line(table).cmd(CMD.magnify(0, 0));
+  b.line(twoCol(receipt.staffName ? `担当 ${receipt.staffName}` : '', receipt.guestCount != null ? `人数 ${receipt.guestCount}名` : '', width));
+  b.line(twoCol(receipt.issuedAt, `No.${receipt.orderNo}`, width));
 
   // 明細
   // 0円の明細（飲み放題・食べ放題・コースの中身）はレシートにも出さない（お会計伝票と同じ。2026-09-26 店舗要望）
-  for (const it of billSlipLines(receipt.lines)) {
-    if (it.cancelled) continue;
-    b.line(it.name);
-    b.line(twoCol(`  ${it.quantity} x ${yen(it.unitPrice)}`, yen(it.lineTotal), width));
-    for (const m of it.modifiers) {
-      b.line(twoCol(`   + ${m.name}`, m.price ? yen(m.price) : '', width));
-    }
-  }
-  b.line(rule);
+  for (const row of receiptTableLines(receipt.lines, width, STAR_WIDTH_OPTIONS)) b.line(row);
+  b.line(dotted);
 
   // 金額
   b.line(twoCol('小計', yen(receipt.subtotal), width));
@@ -153,8 +155,9 @@ export function receiptToStarPrnt(receipt: ReceiptData, options: StarPrntOptions
   if (receipt.discount > 0) {
     b.line(twoCol(`値引${receipt.couponCode ? ` (${receipt.couponCode})` : ''}`, `-${yen(receipt.discount)}`, width));
   }
-  b.line(twoCol('合計', yen(receipt.total), width));
-  b.line(rule);
+  b.line(solid);
+  b.cmd(CMD.magnify(0, 1)).line(twoCol('合計', yen(receipt.total), width)).cmd(CMD.magnify(0, 0));
+  b.line(solid);
 
   // 支払
   for (const p of receipt.payments) b.line(twoCol(p.label, yen(p.amount), width));
@@ -165,18 +168,16 @@ export function receiptToStarPrnt(receipt: ReceiptData, options: StarPrntOptions
     b.line(twoCol('差引', yen(receipt.netPaid), width));
   }
   if (receipt.pointsEarned != null || receipt.pointsUsed != null) {
-    b.line(rule);
+    b.line(dotted);
     if (receipt.pointsUsed) b.line(twoCol('利用ポイント', `${receipt.pointsUsed}P`, width));
     if (receipt.pointsEarned) b.line(twoCol('獲得ポイント', `${receipt.pointsEarned}P`, width));
     if (receipt.pointBalance != null) b.line(twoCol('ポイント残高', `${receipt.pointBalance}P`, width));
   }
-  b.line(rule);
+  b.line(dotted);
 
   b.cmd(CMD.alignCenter);
-  if (receipt.footerMessage) {
-    for (const fl of receipt.footerMessage.split('\n')) b.line(fl);
-  }
-  b.line(`照会番号 ${receipt.qrContent}`);
+  b.line('ご来店ありがとうございました');
+  b.line('またのご来店をお待ちしております');
   b.line().line();
   b.cmd(CMD.cut);
 
@@ -214,7 +215,7 @@ export function ryoshushoToStarPrnt(
   if (split && split.count > 1) b.line(`${splitLabel(split)} 分割発行`);
   // 発行元は上（2026-09-26 Ronnie「店名・住所は上に」）
   b.line(receipt.storeName).cmd(CMD.emphasizeOff);
-  if (receipt.storeAddress) b.line(receipt.storeAddress);
+  if (receipt.storeAddress) b.line(formatReceiptAddress(receipt.storeAddress));
   if (receipt.storePhone) b.line(`TEL ${receipt.storePhone}`);
   if (receipt.registrationNumber) b.line(`登録番号 ${receipt.registrationNumber}`);
   b.cmd(CMD.emphasizeOn).line();
@@ -272,32 +273,29 @@ export interface OrderSlipData {
 /** 注文伝票（StarPRNT）。会計前の確認用。 */
 export function orderSlipStarPrnt(slip: OrderSlipData, options: StarPrntOptions = {}): Buffer {
   const width = colsFor(options.paperWidth);
-  const rule = '-'.repeat(width);
+  const solid = '_'.repeat(width);
+  const dotted = '- '.repeat(Math.floor(width / 2)).trimEnd();
   const b = new StarBuffer(options.currency ?? DEFAULT_CURRENCY, options.encoding ?? DEFAULT_ENCODING, width);
 
   b.cmd(CMD.init).cmd(CMD.emphasizeOn).cmd(CMD.alignCenter);
-  b.cmd(CMD.magnify(0, 1)).line('お会計伝票').cmd(CMD.magnify(0, 0));
-  b.line(slip.storeName).line('（会計前のご確認用）');
-  b.cmd(CMD.alignLeft).line(rule);
-  b.line(twoCol(slip.tableName ?? 'テイクアウト', `No.${slip.orderNo}`, width));
-  const meta = [slip.guestCount ? `${slip.guestCount}名` : null, slip.clerkName ? `担当 ${slip.clerkName}` : null]
-    .filter(Boolean)
-    .join('  ');
-  if (meta) b.line(meta);
-  b.line(`発行 ${slip.issuedAt}`).line(rule);
+  b.cmd(CMD.magnify(0, 1)).line(slip.storeName).cmd(CMD.magnify(0, 0));
+  for (const heading of customerBillHeading(width, STAR_WIDTH_OPTIONS)) b.line(heading);
+  b.cmd(CMD.alignLeft);
+  const table = slip.tableName ?? 'テイクアウト';
+  const tableRow = twoCol('卓番号', table, width);
+  b.text(tableRow.slice(0, -table.length)).cmd(CMD.magnify(0, 1)).line(table).cmd(CMD.magnify(0, 0));
+  b.line(twoCol(slip.clerkName ? `担当 ${slip.clerkName}` : '', slip.guestCount != null ? `人数 ${slip.guestCount}名` : '', width));
+  b.line(twoCol(slip.issuedAt, `No.${slip.orderNo}`, width));
 
-  for (const it of billSlipLines(slip.lines)) {
-    b.line(it.name);
-    b.line(twoCol(`  ${it.quantity} x ${yen(it.unitPrice)}`, yen(it.lineTotal), width));
-    for (const m of it.modifiers) b.line(twoCol(`   + ${m.name}`, m.price ? yen(m.price) : '', width));
-  }
-  b.line(rule);
+  for (const row of receiptTableLines(slip.lines, width, STAR_WIDTH_OPTIONS)) b.line(row);
+  b.line(dotted);
   b.line(twoCol('小計', yen(slip.subtotal), width));
   b.line(twoCol('消費税', yen(slip.taxTotal), width));
   if (slip.serviceCharge > 0) b.line(twoCol('サービス料', yen(slip.serviceCharge), width));
   if (slip.discount > 0) b.line(twoCol('値引', `-${yen(slip.discount)}`, width));
-  b.line(twoCol('合計', yen(slip.total), width));
-  b.line(rule).cmd(CMD.alignCenter).line('※ これは領収書ではありません');
+  b.line(solid);
+  b.cmd(CMD.magnify(0, 1)).line(twoCol('合計', yen(slip.total), width)).cmd(CMD.magnify(0, 0));
+  b.line(solid);
   b.line().line().cmd(CMD.cut);
   return b.toBuffer();
 }

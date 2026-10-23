@@ -97,13 +97,23 @@ struct APIPayload: Codable {
 }
 
 /// 操作の返事（order があれば画面をサーバーの値にそろえる）
+struct APICheckoutReceipt: Decodable {
+    let data: String
+    let deviceId: String
+    let maker: String
+    let via: String
+}
+
 struct APIResult: Decodable {
+    let receipt: APICheckoutReceipt?
+    let warning: String?
     let ok: Bool
     let error: String?
     let order: APIOrder?
     let printWarning: String?
     /// 注文確定のあと、iPad から LAN で直接出す厨房伝票（claimed 済み。出したら printDone）
     let prints: [APIPrintJob]?
+    let newOrderId: String?
     let alreadyPaid: Bool?
     let registerClosed: Bool?
     let useWeb: Bool?
