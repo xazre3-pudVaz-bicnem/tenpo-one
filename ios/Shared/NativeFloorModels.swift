@@ -353,6 +353,8 @@ final class NativeFloorModel: ObservableObject {
     private var toastTimer: Timer?
 
     var store: NFNamed? { payload?.store }
+    /// 画面の時計（Date）
+    var nowDate: Date { Date(timeIntervalSince1970: now / 1000) }
     var tables: [NFTable] { payload?.tables ?? [] }
     var floors: [NFFloor] { payload?.floors ?? [] }
     var selectedTable: NFTable? { tables.first { $0.id == selectedTableId } }

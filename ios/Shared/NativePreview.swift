@@ -75,8 +75,7 @@ struct NativeFloorScreen: View {
         NativeFloorView(
             model: model,
             onHome: { state.goNativeHome() },
-            // 店舗台帳はまだ Web（次の段階でネイティブに）
-            onLedger: { state.leaveNativeFloor(to: "/app/reservations") },
+            onLedger: { state.goNativeLedger() },
             onOpenOrder: { id, checkout in state.openNativeOrder(id, checkout: checkout) }
         )
         .onChange(of: state.floorRefreshTick) { _ in Task { await model.refresh(silent: true) } }
@@ -92,7 +91,9 @@ struct NativeHomeScreen: View {
     var body: some View {
         NativeHomeView(
             model: model,
-            onWeb: { path in state.leaveNativeFloor(to: path) },
+            onWeb: { path in
+                if path == "/app/reservations" { state.goNativeLedger() } else { state.leaveNativeFloor(to: path) }
+            },
             onFloor: { state.goNativeFloor() }
         )
         .onReceive(model.$payload) { p in
@@ -101,5 +102,21 @@ struct NativeHomeScreen: View {
         }
         .onChange(of: state.nativeFloor) { on in if !on { Task { await model.refresh() } } }
         .onChange(of: state.floorRefreshTick) { _ in Task { await model.refresh() } }
+    }
+}
+
+/// ネイティブの店舗台帳。Web の /app/reservations（1日のスケジュール）の代わり（2026-10-24）
+struct NativeLedgerScreen: View {
+    @StateObject private var model = NativeLedgerModel()
+    @EnvironmentObject var state: AppState
+
+    var body: some View {
+        NativeLedgerView(
+            model: model,
+            onHome: { state.goNativeHome() },
+            onOpenOrder: { id in state.openNativeOrder(id, checkout: false) },
+            onWeb: { path in state.leaveNativeFloor(to: path) }
+        )
+        .onChange(of: state.nativeOrder) { new in if new == nil { Task { await model.refresh(silent: true) } } }
     }
 }

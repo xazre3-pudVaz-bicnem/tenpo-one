@@ -628,6 +628,15 @@ export async function updateReservationMemo(reservationId: string, memo: string)
  * 既に open な注文があればそれを再利用する。
  */
 export async function createOrderFromReservation(reservationId: string) {
+  const orderId = await createOrderForReservation(reservationId);
+  redirect(`/app/pos?order=${orderId}`);
+}
+
+/**
+ * 予約から伝票を立てる（または、その予約・卓に残っている未会計の伝票を返す）。伝票の id を返す。
+ * Web は createOrderFromReservation（redirect）、iPad アプリは API（lib/native-ledger-server.ts）から使う（2026-10-24）
+ */
+export async function createOrderForReservation(reservationId: string): Promise<string> {
   const ctx = await requirePermission('pos.order');
   const supabase = await createClient();
   const reservation = await loadReservation(supabase, ctx, reservationId);
@@ -640,9 +649,7 @@ export async function createOrderFromReservation(reservationId: string) {
     .limit(1)
     .maybeSingle();
 
-  if (existingOrder) {
-    redirect(`/app/pos?order=${existingOrder.id}`);
-  }
+  if (existingOrder) return existingOrder.id as string;
 
   const { data: links } = await supabase
     .from('reservation_tables')
@@ -662,7 +669,7 @@ export async function createOrderFromReservation(reservationId: string) {
       .order('opened_at')
       .limit(1)
       .maybeSingle();
-    if (tableOrder) redirect(`/app/pos?order=${tableOrder.id}`);
+    if (tableOrder) return tableOrder.id as string;
   }
 
   const { data: created, error } = await supabase
@@ -719,7 +726,7 @@ export async function createOrderFromReservation(reservationId: string) {
   }
 
   revalidateAll();
-  redirect(`/app/pos?order=${created.id}`);
+  return created.id as string;
 }
 
 export interface ManualReservationInput {

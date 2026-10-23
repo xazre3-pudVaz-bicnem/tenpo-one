@@ -28,6 +28,8 @@ final class AppState: ObservableObject {
     @Published var nativeFloor = false
     /// ネイティブのホームを出しているか（Web の /app/dashboard の代わり。2026-10-24）
     @Published var nativeHome = false
+    /// ネイティブの店舗台帳を出しているか（Web の /app/reservations の代わり。2026-10-24）
+    @Published var nativeLedger = false
     /// フロアを読み直してほしいとき（会計完了など）に増やす
     @Published var floorRefreshTick = 0
 
@@ -117,10 +119,21 @@ final class AppState: ObservableObject {
             if !nativeFloor { nativeFloor = true }
             return
         }
+        if url.path == "/app/reservations" {
+            let q = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+            let view = q.first { $0.name == "view" }?.value
+            // 1日のスケジュールだけネイティブ（週間・グルメ別・キャンセル待ち・受付管理はまだ Web）
+            if view == nil || view == "day" {
+                nativeFloor = false
+                if !nativeLedger { nativeLedger = true }
+                return
+            }
+        }
         if url.path != "/app/pos" {
-            // 設定・台帳など、まだ Web の画面へ行ったらネイティブを閉じる
+            // 設定など、まだ Web の画面へ行ったらネイティブを閉じる
             nativeFloor = false
             nativeHome = false
+            nativeLedger = false
         }
         guard nativeOrder == nil, url.path == "/app/pos" else { return }
         let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
@@ -165,12 +178,21 @@ final class AppState: ObservableObject {
     func leaveNativeFloor(to path: String) {
         nativeFloor = false
         nativeHome = false
+        nativeLedger = false
         WebViewController.current?.load(AppConfig.url(path))
+    }
+
+    /// ネイティブの店舗台帳へ（Web も /app/reservations にそろえる）
+    func goNativeLedger() {
+        nativeFloor = false
+        nativeLedger = true
+        WebViewController.current?.load(AppConfig.url("/app/reservations"))
     }
 
     /// ネイティブのフロアからホームへ（ネイティブのホームを出す。Web も /app/dashboard にそろえる）
     func goNativeHome() {
         nativeFloor = false
+        nativeLedger = false
         nativeHome = true
         WebViewController.current?.load(AppConfig.url("/app/dashboard"))
     }

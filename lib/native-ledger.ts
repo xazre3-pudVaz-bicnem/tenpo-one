@@ -1,0 +1,161 @@
+import { isUuid } from '@/lib/native-pos';
+import { RESERVATION_STATUS, type ReservationStatus } from '@/lib/reservations';
+
+/**
+ * iPad アプリのネイティブの店舗台帳（予約）とサーバーの決まりごと（2026-10-24 Ronnie「店舗台帳もネイティブ。色は Tableo 風」）。
+ * 読み込みは GET /api/app/v1/pos?part=ledger&date=YYYY-MM-DD（lib/native-ledger-server.ts）、操作は POST { type: 'ledger…' }。
+ * 中身は Web の予約台帳と同じ Server Action（app/app/reservations/actions.ts）。ここは純粋な型と検証だけ。
+ */
+
+export type NativeLedgerAction =
+  /** 電話予約の手動登録 */
+  | {
+      type: 'ledgerCreate';
+      input: {
+        date: string;
+        time: string;
+        adults: number;
+        children: number;
+        name: string;
+        kana: string;
+        phone: string;
+        note: string;
+        sourceCode: string;
+        courseId: string | null;
+        tableIds: string[];
+        stayMinutes: number | null;
+        status: 'confirmed' | 'pending';
+        clerkId: string | null;
+      };
+    }
+  | { type: 'ledgerStatus'; reservationId: string; toStatus: ReservationStatus }
+  | { type: 'ledgerCancel'; reservationId: string; reason: string }
+  | { type: 'ledgerNoShow'; reservationId: string; reason: string }
+  | { type: 'ledgerTables'; reservationId: string; tableIds: string[] }
+  | { type: 'ledgerMove'; reservationId: string; date: string; time: string; stayMinutes: number }
+  | { type: 'ledgerMemo'; reservationId: string; memo: string }
+  | { type: 'ledgerClerk'; reservationId: string; clerkId: string | null }
+  | { type: 'ledgerSource'; reservationId: string; sourceId: string | null }
+  | { type: 'ledgerCourse'; reservationId: string; courseId: string | null }
+  /** 来店 → 伝票を立てて（または残っている伝票を）開く */
+  | { type: 'ledgerSeat'; reservationId: string };
+
+export type NativeLedgerActionType = NativeLedgerAction['type'];
+
+export const NATIVE_LEDGER_ACTION_TYPES: readonly NativeLedgerActionType[] = [
+  'ledgerCreate',
+  'ledgerStatus',
+  'ledgerCancel',
+  'ledgerNoShow',
+  'ledgerTables',
+  'ledgerMove',
+  'ledgerMemo',
+  'ledgerClerk',
+  'ledgerSource',
+  'ledgerCourse',
+  'ledgerSeat',
+];
+
+export function isNativeLedgerActionType(v: unknown): v is NativeLedgerActionType {
+  return typeof v === 'string' && (NATIVE_LEDGER_ACTION_TYPES as readonly string[]).includes(v);
+}
+
+type Parsed = { ok: true; action: NativeLedgerAction } | { ok: false; error: string };
+const bad = (error = '内容が正しくありません'): Parsed => ({ ok: false, error });
+
+const DATE = /^\d{4}-\d{2}-\d{2}$/;
+const HM = /^([01]\d|2[0-3]):([0-5]\d)$/;
+const isInt = (v: unknown, min: number, max: number): v is number =>
+  typeof v === 'number' && Number.isInteger(v) && v >= min && v <= max;
+const str = (v: unknown, max: number): string => (typeof v === 'string' ? v.trim().slice(0, max) : '');
+const optUuid = (v: unknown): string | null | undefined => (v == null || v === '' ? null : isUuid(v) ? v : undefined);
+
+export function parseNativeLedgerAction(raw: unknown): Parsed {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return bad();
+  const b = raw as Record<string, unknown>;
+  switch (b.type) {
+    case 'ledgerCreate': {
+      const i = (b.input ?? {}) as Record<string, unknown>;
+      if (typeof i.date !== 'string' || !DATE.test(i.date)) return bad('日付を確認してください');
+      if (typeof i.time !== 'string' || !HM.test(i.time)) return bad('時刻を確認してください');
+      if (!isInt(i.adults, 0, 999) || !isInt(i.children, 0, 999) || (i.adults as number) + (i.children as number) < 1) return bad('ご人数をご確認ください');
+      const name = str(i.name, 80);
+      const phone = str(i.phone, 30);
+      if (!name) return bad('お名前を入れてください');
+      const courseId = optUuid(i.courseId);
+      if (courseId === undefined) return bad();
+      const tableIds = i.tableIds ?? [];
+      if (!Array.isArray(tableIds) || tableIds.length > 20 || !tableIds.every(isUuid)) return bad();
+      const stay = i.stayMinutes == null ? null : i.stayMinutes;
+      if (stay !== null && !isInt(stay, 15, 720)) return bad('滞在時間を確認してください');
+      const status = i.status === 'pending' ? 'pending' : 'confirmed';
+      const clerkId = optUuid(i.clerkId);
+      if (clerkId === undefined) return bad();
+      return {
+        ok: true,
+        action: {
+          type: 'ledgerCreate',
+          input: {
+            date: i.date,
+            time: i.time,
+            adults: i.adults as number,
+            children: i.children as number,
+            name,
+            kana: str(i.kana, 80),
+            phone,
+            note: str(i.note, 500),
+            sourceCode: str(i.sourceCode, 40) || 'phone',
+            courseId,
+            tableIds: [...new Set(tableIds as string[])],
+            stayMinutes: stay as number | null,
+            status,
+            clerkId,
+          },
+        },
+      };
+    }
+    case 'ledgerStatus': {
+      if (!isUuid(b.reservationId)) return bad();
+      const to = b.toStatus;
+      if (typeof to !== 'string' || !(to in RESERVATION_STATUS)) return bad();
+      return { ok: true, action: { type: 'ledgerStatus', reservationId: b.reservationId, toStatus: to as ReservationStatus } };
+    }
+    case 'ledgerCancel':
+    case 'ledgerNoShow': {
+      if (!isUuid(b.reservationId)) return bad();
+      const reason = str(b.reason, 200);
+      if (b.type === 'ledgerCancel' && !reason) return bad('キャンセル理由を入れてください');
+      return { ok: true, action: { type: b.type, reservationId: b.reservationId, reason } };
+    }
+    case 'ledgerTables': {
+      const ids = b.tableIds;
+      if (!isUuid(b.reservationId) || !Array.isArray(ids) || ids.length > 20 || !ids.every(isUuid)) return bad();
+      return { ok: true, action: { type: 'ledgerTables', reservationId: b.reservationId, tableIds: [...new Set(ids as string[])] } };
+    }
+    case 'ledgerMove': {
+      if (!isUuid(b.reservationId)) return bad();
+      if (typeof b.date !== 'string' || !DATE.test(b.date) || typeof b.time !== 'string' || !HM.test(b.time)) return bad('日時を確認してください');
+      if (!isInt(b.stayMinutes, 15, 720)) return bad('滞在時間を確認してください');
+      return { ok: true, action: { type: 'ledgerMove', reservationId: b.reservationId, date: b.date, time: b.time, stayMinutes: b.stayMinutes } };
+    }
+    case 'ledgerMemo':
+      if (!isUuid(b.reservationId) || typeof b.memo !== 'string') return bad();
+      return { ok: true, action: { type: 'ledgerMemo', reservationId: b.reservationId, memo: b.memo.slice(0, 500) } };
+    case 'ledgerClerk':
+    case 'ledgerSource':
+    case 'ledgerCourse': {
+      if (!isUuid(b.reservationId)) return bad();
+      const key = b.type === 'ledgerClerk' ? 'clerkId' : b.type === 'ledgerSource' ? 'sourceId' : 'courseId';
+      const id = optUuid(b[key]);
+      if (id === undefined) return bad();
+      if (b.type === 'ledgerClerk') return { ok: true, action: { type: 'ledgerClerk', reservationId: b.reservationId, clerkId: id } };
+      if (b.type === 'ledgerSource') return { ok: true, action: { type: 'ledgerSource', reservationId: b.reservationId, sourceId: id } };
+      return { ok: true, action: { type: 'ledgerCourse', reservationId: b.reservationId, courseId: id } };
+    }
+    case 'ledgerSeat':
+      if (!isUuid(b.reservationId)) return bad();
+      return { ok: true, action: { type: 'ledgerSeat', reservationId: b.reservationId } };
+    default:
+      return bad();
+  }
+}
