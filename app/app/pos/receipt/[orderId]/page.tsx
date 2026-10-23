@@ -32,7 +32,7 @@ export default async function ReceiptPage({
   const { data: order } = await supabase
     .from('orders')
     .select(
-      'id, order_no, order_type, guest_count, subtotal, tax_total, service_charge, discount_total, coupon_code, customer_id, register_session_id, staff_id, clerk_name, total, closed_at, business_date, store_id, stores(name, address, phone), profiles(display_name)'
+      'id, order_no, order_type, guest_count, subtotal, tax_total, service_charge, discount_total, coupon_code, customer_id, register_session_id, staff_id, clerk_name, total, closed_at, business_date, store_id, stores(name, address, phone), profiles(display_name), restaurant_tables(name)'
     )
     .eq('id', orderId)
     .single();
@@ -144,6 +144,8 @@ export default async function ReceiptPage({
     registerName,
     // 担当者（レジで選んだ名前）を優先する。印字側（lib/receipts-loader.ts）と同じ
     staffName: order.clerk_name ?? staff?.display_name ?? null,
+    tableName: (order.restaurant_tables as unknown as { name: string } | null)?.name ?? (order.order_type === 'takeout' ? 'テイクアウト' : null),
+    guestCount: order.guest_count ?? null,
     isReissue: reissue === '1',
     methodLabels: METHOD_LABELS,
     // 非会員注文ではポイント欄自体を出さない（buildReceiptは未指定でnull化する）
