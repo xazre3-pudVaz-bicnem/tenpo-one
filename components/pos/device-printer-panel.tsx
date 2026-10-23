@@ -528,6 +528,7 @@ function BluetoothPrinterForm({
   const [drawer, setDrawer] = useState(true);
   const [found, setFound] = useState<NativeBluetoothDevice[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [lastTiming, setLastTiming] = useState<string | null>(null);
 
   // つないでいるプリンターの設定をフォームに入れる（読み込み・つなぎ直したとき）
   const linkedKey = linked ? `${linked.id}:${linked.model ?? ''}:${linked.paperWidthMm}:${linked.autoPrint}:${linked.drawerKick}` : '';
@@ -682,7 +683,11 @@ function BluetoothPrinterForm({
       }
       const preparedAt = performance.now();
       const sent = await bt.print({ deviceId: link.deviceId, maker: link.maker, via: link.via === 'usb' ? 'usb' : 'bluetooth', data: res.data });
-      if (sent.ok) toast(`${kind === 'drawer' ? 'ドロアが開きました' : '印刷できました'}（${printTimingLabel(startedAt, preparedAt, performance.now())}）`);
+      if (sent.ok) {
+        const timing = `${kind === 'drawer' ? 'ドロア' : '試し印刷'}：${printTimingLabel(startedAt, preparedAt, performance.now())}`;
+        setLastTiming(timing);
+        toast(kind === 'drawer' ? 'ドロアが開きました' : '印刷できました');
+      }
       else toast(`つながりません（${sent.code ?? 'エラー'}）。プリンターの電源と iPad の Bluetooth を確かめてください`, 'error');
     } finally {
       setBusy(null);
@@ -854,6 +859,12 @@ function BluetoothPrinterForm({
                 保存する
               </button>
             </div>
+            {lastTiming && (
+              <p role="status" className="px-5 pb-4 text-sm text-gray-500">
+                {lastTiming}<br />
+                応答完了までの計測です。紙が出始める時刻・カット完了の実測ではありません。
+              </p>
+            )}
           </div>
         )}
       </CardContent>
