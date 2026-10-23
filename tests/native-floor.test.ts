@@ -12,7 +12,7 @@ describe('ネイティブのフロア（テーブル一覧）の操作（2026-10
     expect(parseNativeFloorAction({ type: 'floorOrder', tableId: 'x' }).ok).toBe(false);
     expect(isNativeFloorActionType('floorOrder')).toBe(true);
     expect(isNativeFloorActionType('send')).toBe(false);
-    expect(NATIVE_FLOOR_ACTION_TYPES.length).toBe(15);
+    expect(NATIVE_FLOOR_ACTION_TYPES.length).toBe(16);
   });
 
   it('着席（お客様情報）：モード・人数・来店経路・時間制・開始時間', () => {
@@ -55,6 +55,7 @@ describe('ネイティブのフロア（テーブル一覧）の操作（2026-10
   it('印刷・合算・人数・メモ・クリア・呼び出し', () => {
     expect(parseNativeFloorAction({ type: 'floorBill', orderId: U1 }).ok).toBe(true);
     expect(parseNativeFloorAction({ type: 'floorExpo', orderId: U1 }).ok).toBe(true);
+    expect(parseNativeFloorAction({ type: 'floorReceipt', orderId: U1 }).ok).toBe(true);
     expect(parseNativeFloorAction({ type: 'floorPrintSelected', orderId: U1, itemIds: [U2] }).ok).toBe(true);
     expect(parseNativeFloorAction({ type: 'floorPrintSelected', orderId: U1, itemIds: [] }).ok).toBe(false);
     expect(parseNativeFloorAction({ type: 'floorMerge', targetOrderId: U1, sourceOrderId: U2 }).ok).toBe(true);

@@ -155,6 +155,26 @@ final class NativeOrderModel: ObservableObject {
     @Published var steraTypes: [APISteraType] = []
     @Published var canCheckout = true
     @Published var canDiscount = true
+    /// 読み込んだらすぐ会計の画面を出す（卓のポップアップの「レジ会計」）
+    @Published var openCheckoutOnLoad = false
+    /// 直前の会計のレシート（Bluetooth・USB のレシートプリンター用。再発行はこれをもう一度送る）
+    var lastReceipt: APICheckoutReceipt?
+
+    /// レシートを再発行する。Bluetooth・USB のレシートがあればそれをもう一度送る（ネイティブだけで完結）。
+    /// 無ければ（CloudPRNT・LAN のとき）サーバーに再印刷を頼む。どちらもできなければ false
+    func reprintReceipt() async -> Bool {
+        if let receipt = lastReceipt, let bytes = Data(base64Encoded: receipt.data), !bytes.isEmpty,
+           ["star", "epson", "sii", "escpos"].contains(receipt.maker), ["bluetooth", "usb"].contains(receipt.via) {
+            return await withCheckedContinuation { cont in
+                WebViewController.printBluetooth(deviceId: receipt.deviceId, maker: receipt.maker, via: receipt.via, data: bytes) { ok, _ in
+                    cont.resume(returning: ok)
+                }
+            }
+        }
+        guard let orderId else { return false }
+        if let r = try? await NativeAPI.shared.floorAct(["type": "floorReceipt", "orderId": orderId]) { return r.ok }
+        return false
+    }
 
     var isLive: Bool { orderId != nil }
 
@@ -537,8 +557,13 @@ final class NativeOrderModel: ObservableObject {
         var request: [String: Any] = ["type": "checkout", "orderId": orderId, "payments": body, "memo": memo]
         if let link = await WebViewController.current?.checkoutBluetoothLink() { request["bluetoothLink"] = link }
         guard let r = await act(request) else { return false }
+        // 会計が通ったら、前の失敗の知らせは消す（失敗→成功のとき、完了画面に失敗の帯が残っていた。2026-10-24）
+        notice = nil
         if let warning = r.warning, !warning.isEmpty { notice = warning }
+        lastReceipt = nil
         if let receipt = r.receipt {
+            // 再発行（完了画面の「Reprint receipt」）用に取っておく
+            lastReceipt = receipt
             if let bytes = Data(base64Encoded: receipt.data), !bytes.isEmpty,
                ["star", "epson", "sii", "escpos"].contains(receipt.maker), ["bluetooth", "usb"].contains(receipt.via) {
                 // Start before the drawer request. Never automatically retry an uncertain physical print.

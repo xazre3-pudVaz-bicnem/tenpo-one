@@ -79,6 +79,12 @@ struct NativeOrderView: View {
             }
         }
         .animation(.easeOut(duration: 0.22), value: showCheckout)
+        .onReceive(model.$openCheckoutOnLoad) { on in
+            if on {
+                model.openCheckoutOnLoad = false
+                goCheckout()
+            }
+        }
         .confirmationDialog("担当を選ぶ", isPresented: $pickClerk, titleVisibility: .visible) {
             ForEach(model.clerks, id: \.id) { c in
                 Button(c.name) {

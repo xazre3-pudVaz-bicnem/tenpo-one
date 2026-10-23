@@ -31,6 +31,8 @@ export type NativeFloorAction =
   | { type: 'floorMemo'; orderId: string; memo: string }
   | { type: 'floorSeatTime'; orderId: string; input: SeatTimeInput }
   | { type: 'floorBill'; orderId: string }
+  /** レシートの再発行（CloudPRNT・LAN のレシートプリンターへ。Bluetooth は iPad が直前のレシートをもう一度送る） */
+  | { type: 'floorReceipt'; orderId: string }
   | { type: 'floorExpo'; orderId: string }
   | { type: 'floorPrintSelected'; orderId: string; itemIds: string[] }
   | { type: 'floorClear'; orderId: string; reason: string; approvedByClerkId: string | null }
@@ -51,6 +53,7 @@ export const NATIVE_FLOOR_ACTION_TYPES: readonly NativeFloorActionType[] = [
   'floorMemo',
   'floorSeatTime',
   'floorBill',
+  'floorReceipt',
   'floorExpo',
   'floorPrintSelected',
   'floorClear',
@@ -167,6 +170,7 @@ export function parseNativeFloorAction(raw: unknown): Parsed {
       return { ok: true, action: { type: 'floorSeatTime', orderId: b.orderId, input } };
     }
     case 'floorBill':
+    case 'floorReceipt':
     case 'floorExpo':
       if (!isUuid(b.orderId)) return bad();
       return { ok: true, action: { type: b.type, orderId: b.orderId } };

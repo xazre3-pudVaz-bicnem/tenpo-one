@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 /// 来店経路（Web の lib/handy-visit.ts の VISIT_SOURCES と同じ並び・同じ id）。
 /// 2026-10-13 Ronnie「会計の画面にも booking source を全部」
@@ -14,6 +15,34 @@ struct NPVisitSource: Identifiable, Codable, Hashable {
         "line": "LINE", "catch": "CATCH", "other": "Other", "ikyu": "Ikyu", "ozmall": "OZmall", "epark": "EPARK",
         "hitosara": "Hitosara", "tablecheck": "TableCheck", "toreta": "Toreta", "ebica": "ebica",
         "instagram": "Instagram", "repeat": "Repeat guest",
+    ]
+
+    /// 経路ごとの色（各社のブランドの色に寄せる。2026-10-24 Ronnie「ホットペッパーは赤、食べログは黄色のように、それぞれの色で」）
+    var color: Color { Self.colors[id] ?? Color(hex: 0x766B62) }
+    /// 黄色など明るい色は文字を黒に
+    var darkText: Bool { ["tabelog", "hitosara"].contains(id) }
+    private static let colors: [String: Color] = [
+        "free": Color(hex: 0x45403B),        // Walk in：チャコール
+        "phone": Color(hex: 0x0F8A8A),       // 当日電話：ティール
+        "tabelog": Color(hex: 0xFFC400),     // 食べログ：黄
+        "hotpepper": Color(hex: 0xE8362D),   // ホットペッパー：赤
+        "gurunavi": Color(hex: 0xD7000F),    // ぐるなび：赤
+        "retty": Color(hex: 0xF0523F),       // Retty：朱
+        "google": Color(hex: 0x4285F4),      // Google：青
+        "website": Color(hex: 0x3B5BDB),     // ホームページ：藍
+        "sns": Color(hex: 0x8E44AD),         // SNS：紫
+        "line": Color(hex: 0x06C755),        // LINE：緑
+        "catch": Color(hex: 0xF28C28),       // CATCH：橙
+        "other": Color(hex: 0x766B62),       // その他：灰
+        "ikyu": Color(hex: 0x1D3C78),        // 一休：紺
+        "ozmall": Color(hex: 0xE6007E),      // OZmall：ピンク
+        "epark": Color(hex: 0x0099D9),       // EPARK：水色
+        "hitosara": Color(hex: 0xF5B700),    // ヒトサラ：黄
+        "tablecheck": Color(hex: 0x0B2545),  // TableCheck：濃紺
+        "toreta": Color(hex: 0x2DB34A),      // トレタ：緑
+        "ebica": Color(hex: 0x2C7BE5),       // ebica：青
+        "instagram": Color(hex: 0xD62976),   // Instagram：マゼンタ
+        "repeat": Color(hex: 0x1A5AD6),      // リピート：青
     ]
 
     /// 既定で出す12個（設定 > レジ > 来店経路 で変えられる）
@@ -78,6 +107,20 @@ enum NPPayMethod: String, CaseIterable, Identifiable, Codable {
         }
     }
 
+    /// 支払方法ごとの色（2026-10-24 Ronnie「ボタンの色はそれぞれの色で」）
+    var color: Color {
+        switch self {
+        case .cash: return Color(hex: 0x1E8F62)        // 現金：緑
+        case .credit: return Color(hex: 0x1A5AD6)      // クレジット：青
+        case .qr: return Color(hex: 0xE4002B)          // QR：赤（PayPay 等）
+        case .emoney: return Color(hex: 0xF28C28)      // 電子マネー：橙
+        case .external: return Color(hex: 0x6E63B8)    // 外部端末：紫
+        case .other: return Color(hex: 0x766B62)       // その他：灰
+        case .points: return Color(hex: 0xB7791F)      // 自社ポイント：琥珀
+        case .sitePoints: return Color(hex: 0xD98A00)  // サイトのポイント：橙金
+        }
+    }
+
     var icon: String {
         switch self {
         case .cash: return "yensign.circle"
@@ -94,6 +137,18 @@ enum NPPayMethod: String, CaseIterable, Identifiable, Codable {
 struct NPBrand: Identifiable, Hashable, Codable {
     let id: String
     let name: String
+
+    /// 各社のブランドの色（分からないものは nil ＝ 支払方法の色）
+    var color: Color? { Self.colors[id] }
+    private static let colors: [String: Color] = [
+        "visa": Color(hex: 0x1A1F71), "master": Color(hex: 0xEB001B), "jcb": Color(hex: 0x0E4C96), "amex": Color(hex: 0x2E77BC),
+        "diners": Color(hex: 0x0079BE), "unionpay": Color(hex: 0xE21836),
+        "paypay": Color(hex: 0xFF0033), "rakutenpay": Color(hex: 0xBF0000), "dbarai": Color(hex: 0xCC0033), "aupay": Color(hex: 0xEB5505),
+        "alipay": Color(hex: 0x1677FF), "wechatpay": Color(hex: 0x07C160), "merpay": Color(hex: 0x4DC9F6), "linepay": Color(hex: 0x06C755),
+        "transit": Color(hex: 0x1A9A55), "id": Color(hex: 0xE60012), "quicpay": Color(hex: 0x0068B7), "edy": Color(hex: 0xBF0000),
+        "nanaco": Color(hex: 0xF39800), "waon": Color(hex: 0x7F3F98),
+        "hotpepper": Color(hex: 0xE8362D), "gurunavi": Color(hex: 0xD7000F), "tabelog": Color(hex: 0xFFC400),
+    ]
 
     /// iPad は英語で出す。知らないもの（店で足した名前）はそのまま
     var english: String { Self.englishNames[id] ?? name }

@@ -49,13 +49,37 @@ struct NativePreviewView: View {
 /// サーバーの伝票をネイティブの画面で開く（Web の「オーダー・会計」の代わり）
 struct NativeLiveOrderScreen: View {
     @StateObject private var model: NativeOrderModel
+    private let checkout: Bool
 
-    init(orderId: String) {
+    init(orderId: String, checkout: Bool = false) {
         _model = StateObject(wrappedValue: NativeOrderModel(orderId: orderId))
+        self.checkout = checkout
     }
 
     var body: some View {
         NativeOrderView(model: model, onHome: { AppState.shared.closeNativePos(openWebPath: nil) })
-            .task { await model.load() }
+            .task {
+                await model.load()
+                // 卓のポップアップの「レジ会計」からは、開いてすぐ会計の画面に
+                if checkout { model.openCheckoutOnLoad = true }
+            }
+    }
+}
+
+/// ネイティブのフロア（テーブル一覧）。Web の /app/floor の代わり（2026-10-24）
+struct NativeFloorScreen: View {
+    @StateObject private var model = NativeFloorModel()
+    @EnvironmentObject var state: AppState
+
+    var body: some View {
+        NativeFloorView(
+            model: model,
+            onHome: { state.leaveNativeFloor(to: "/app/dashboard") },
+            // 店舗台帳はまだ Web（次の段階でネイティブに）
+            onLedger: { state.leaveNativeFloor(to: "/app/reservations") },
+            onOpenOrder: { id, checkout in state.openNativeOrder(id, checkout: checkout) }
+        )
+        .onChange(of: state.floorRefreshTick) { _, _ in Task { await model.refresh(silent: true) } }
+        .onChange(of: state.nativeOrder) { _, new in if new == nil { Task { await model.refresh(silent: true) } } }
     }
 }

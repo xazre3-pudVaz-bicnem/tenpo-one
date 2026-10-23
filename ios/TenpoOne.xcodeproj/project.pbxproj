@@ -11,6 +11,10 @@
 			isa = PBXBuildFile;
 			fileRef = BEE174B4C52DC439864EC2D6;
 		};
+		0AB79921FD37A2DA45964225 = {
+			isa = PBXBuildFile;
+			fileRef = "185243219C4F64AB0CF32073";
+		};
 		18591ACF20960A8015F5594B = {
 			isa = PBXBuildFile;
 			fileRef = "243BE9663516E557BDACA240";
@@ -43,6 +47,10 @@
 			isa = PBXBuildFile;
 			fileRef = CB3B0791925E748896E1FE3D;
 		};
+		347A59D29095CC8BA32337FE = {
+			isa = PBXBuildFile;
+			fileRef = BB48351715E281C639C3DE03;
+		};
 		5D7F42811DC03CBFB0FA4D12 = {
 			isa = PBXBuildFile;
 			fileRef = CCAE011319E602AB57697C9A;
@@ -70,6 +78,10 @@
 		9AF96773BD166902440F5FAF = {
 			isa = PBXBuildFile;
 			fileRef = "2EFCD2BF0338380BA1BF2034";
+		};
+		A3B97E3BB1A970D16CA8DF72 = {
+			isa = PBXBuildFile;
+			fileRef = "75990B74800A169EBFC3BCF1";
 		};
 		A49AA80EFB77AAFCFB657ECB = {
 			isa = PBXBuildFile;
@@ -111,6 +123,10 @@
 			isa = PBXBuildFile;
 			fileRef = F276879EB380E7B06FBB4E80;
 		};
+		F6DDBC9BB31D52CD9B366A6C = {
+			isa = PBXBuildFile;
+			fileRef = "6334F785D6C268592006A9D1";
+		};
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -126,6 +142,12 @@
 			includeInIndex = "0";
 			path = TenpoOne.app;
 			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		185243219C4F64AB0CF32073 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = NativeFloorModels.swift;
+			sourceTree = "<group>";
 		};
 		243BE9663516E557BDACA240 = {
 			isa = PBXFileReference;
@@ -181,6 +203,18 @@
 			path = StartViews.swift;
 			sourceTree = "<group>";
 		};
+		6334F785D6C268592006A9D1 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = NativeFloorView.swift;
+			sourceTree = "<group>";
+		};
+		75990B74800A169EBFC3BCF1 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = NativeGuestInfoViews.swift;
+			sourceTree = "<group>";
+		};
 		75DC12C17FB620987F5695C3 = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
@@ -233,6 +267,12 @@
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
 			path = NativeCheckoutView.swift;
+			sourceTree = "<group>";
+		};
+		BB48351715E281C639C3DE03 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = NativeTableSheet.swift;
 			sourceTree = "<group>";
 		};
 		BEE174B4C52DC439864EC2D6 = {
@@ -343,11 +383,15 @@
 				CB3B0791925E748896E1FE3D,
 				DAFCD483AB1A2AE75EF85DD2,
 				A1FEC2419F1052C49E973173,
+				"185243219C4F64AB0CF32073",
+				"6334F785D6C268592006A9D1",
+				"75990B74800A169EBFC3BCF1",
 				"2EFCD2BF0338380BA1BF2034",
 				"3D3077E5E7F51ABDF8FD96C5",
 				BEE174B4C52DC439864EC2D6,
 				"413CA5766E9AEECBFB339B62",
 				"9EDA6BEACA5C7735606C61EF",
+				BB48351715E281C639C3DE03,
 				"9B05DD8E9302EC5C604AB18F",
 				"9D530487492B80382188A125",
 				D50F3B6D3D6758DFA4C1AC6A,
@@ -450,11 +494,15 @@
 				"330F2D4C461D8365CEC64FF9",
 				D2D8D62E926C484E717902E9,
 				CE94213B0C8B6AFEA7536D85,
+				"0AB79921FD37A2DA45964225",
+				F6DDBC9BB31D52CD9B366A6C,
+				A3B97E3BB1A970D16CA8DF72,
 				"9AF96773BD166902440F5FAF",
 				"2968238F8E50CAF64D7A5B9B",
 				"02831771C1B71EF0AF471A4D",
 				"276B012ACAE09C98CCBFE760",
 				"3233D09A1479A79CB552DB14",
+				"347A59D29095CC8BA32337FE",
 				BB6ED39285E6B7637BCD7528,
 				AAF070926BA005D488001765,
 				E4121339AE09EB85C5F0ABBF,

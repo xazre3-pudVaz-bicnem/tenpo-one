@@ -10,7 +10,7 @@ import { ACCESS_MESSAGE } from '@/lib/store-access';
 import { checkout, splitOrder, sendOrderToKitchen, setDiscount, updateQty, addItem } from '@/app/app/pos/actions';
 import { setOrderClerk } from '@/app/app/pos/clerk-actions';
 import { cancelSteraPayment, checkSteraPayment, startSteraPayment } from '@/app/app/pos/stera-actions';
-import { enqueueDrawerKick, enqueueExpoSlipPrint, enqueueOrderSlipPrint, enqueueSelectedItemsPrint } from '@/app/app/pos/print-actions';
+import { enqueueDrawerKick, enqueueExpoSlipPrint, enqueueOrderSlipPrint, enqueueReceiptPrint, enqueueSelectedItemsPrint } from '@/app/app/pos/print-actions';
 import { shouldOpenDrawer } from '@/lib/printing/types';
 import { isNativeFloorActionType, parseNativeFloorAction, type NativeFloorAction } from '@/lib/native-floor';
 import { loadNativeFloor } from '@/lib/native-floor-server';
@@ -80,6 +80,7 @@ const FLOOR_PERMISSION: Record<NativeFloorAction['type'], PermissionAction> = {
   floorMemo: 'pos.order',
   floorSeatTime: 'pos.order',
   floorBill: 'pos.order',
+  floorReceipt: 'pos.checkout',
   floorExpo: 'pos.order',
   floorPrintSelected: 'pos.order',
   floorClear: 'pos.checkout',
@@ -323,6 +324,10 @@ async function runFloorAction(action: NativeFloorAction): Promise<Record<string,
     case 'floorBill': {
       const res = await enqueueOrderSlipPrint(action.orderId);
       return res.ok ? { ok: true, queued: res.queued ?? 0 } : { ok: false, error: res.error ?? 'お会計伝票の印刷に失敗しました' };
+    }
+    case 'floorReceipt': {
+      const res = await enqueueReceiptPrint(action.orderId, { reissue: true });
+      return res.ok ? { ok: true, queued: res.queued ?? 0 } : { ok: false, error: res.error ?? 'レシートを再発行できませんでした' };
     }
     case 'floorExpo': {
       const res = await enqueueExpoSlipPrint(action.orderId);
