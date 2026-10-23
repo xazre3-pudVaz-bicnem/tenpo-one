@@ -38,7 +38,11 @@ export type NativeLedgerAction =
   | { type: 'ledgerSource'; reservationId: string; sourceId: string | null }
   | { type: 'ledgerCourse'; reservationId: string; courseId: string | null }
   /** 来店 → 伝票を立てて（または残っている伝票を）開く */
-  | { type: 'ledgerSeat'; reservationId: string };
+  | { type: 'ledgerSeat'; reservationId: string }
+  /** 空席検索（その時間帯に割当のない卓。Web の FindSeatsDialog と同じ） */
+  | { type: 'ledgerFindSeats'; date: string; time: string; stayMinutes: number; partySize: number }
+  /** 直接来店（ウォークイン登録。Web の WalkInDialog と同じ） */
+  | { type: 'ledgerWalkIn'; tableId: string; adults: number; children: number; name: string; phone: string };
 
 export type NativeLedgerActionType = NativeLedgerAction['type'];
 
@@ -54,6 +58,8 @@ export const NATIVE_LEDGER_ACTION_TYPES: readonly NativeLedgerActionType[] = [
   'ledgerSource',
   'ledgerCourse',
   'ledgerSeat',
+  'ledgerFindSeats',
+  'ledgerWalkIn',
 ];
 
 export function isNativeLedgerActionType(v: unknown): v is NativeLedgerActionType {
@@ -155,6 +161,17 @@ export function parseNativeLedgerAction(raw: unknown): Parsed {
     case 'ledgerSeat':
       if (!isUuid(b.reservationId)) return bad();
       return { ok: true, action: { type: 'ledgerSeat', reservationId: b.reservationId } };
+    case 'ledgerFindSeats': {
+      if (typeof b.date !== 'string' || !DATE.test(b.date) || typeof b.time !== 'string' || !HM.test(b.time)) return bad('日時を確認してください');
+      if (!isInt(b.stayMinutes, 15, 720)) return bad('滞在時間を確認してください');
+      if (!isInt(b.partySize, 1, 999)) return bad('人数を確認してください');
+      return { ok: true, action: { type: 'ledgerFindSeats', date: b.date, time: b.time, stayMinutes: b.stayMinutes, partySize: b.partySize } };
+    }
+    case 'ledgerWalkIn': {
+      if (!isUuid(b.tableId)) return bad('テーブルを選択してください');
+      if (!isInt(b.adults, 0, 999) || !isInt(b.children, 0, 999) || (b.adults as number) + (b.children as number) < 1) return bad('ご人数をご確認ください');
+      return { ok: true, action: { type: 'ledgerWalkIn', tableId: b.tableId, adults: b.adults as number, children: b.children as number, name: str(b.name, 80), phone: str(b.phone, 30) } };
+    }
     default:
       return bad();
   }

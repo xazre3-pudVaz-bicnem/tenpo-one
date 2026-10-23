@@ -152,7 +152,7 @@ final class NativeAPI {
 
     private var cookieStore: WKHTTPCookieStore { WKWebsiteDataStore.default().httpCookieStore }
 
-    private func cookies() async -> [HTTPCookie] {
+    func cookies() async -> [HTTPCookie] {
         await withCheckedContinuation { cont in
             cookieStore.getAllCookies { all in
                 cont.resume(returning: all.filter { c in AppConfig.ownHosts.contains { $0.hasSuffix(c.domain.trimmingCharacters(in: CharacterSet(charactersIn: "."))) } })

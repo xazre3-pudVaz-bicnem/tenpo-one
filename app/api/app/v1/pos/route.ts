@@ -22,6 +22,8 @@ import {
   cancelReservation,
   createManualReservation,
   createOrderForReservation,
+  createWalkInReservation,
+  getOccupiedTableIds,
   markNoShow,
   moveReservation,
   transitionReservationStatus,
@@ -223,7 +225,8 @@ export async function POST(request: Request) {
     const parsedLedger = parseNativeLedgerAction(raw);
     if (!parsedLedger.ok) return json({ ok: false, error: parsedLedger.error }, 400);
     const action = parsedLedger.action;
-    if (!can(ctx.role, action.type === 'ledgerSeat' ? 'pos.order' : 'reservations.write')) return json({ ok: false, error: '権限がありません' }, 403);
+    const ledgerPerm: PermissionAction = action.type === 'ledgerSeat' ? 'pos.order' : action.type === 'ledgerFindSeats' ? 'reservations.view' : 'reservations.write';
+    if (!can(ctx.role, ledgerPerm)) return json({ ok: false, error: '権限がありません' }, 403);
     const problem = await networkProblem(ctx);
     if (problem) return json({ ok: false, error: problem }, 403);
     try {
@@ -478,6 +481,47 @@ async function runLedgerAction(ctx: SessionContext, action: NativeLedgerAction):
     case 'ledgerSeat': {
       const orderId = await createOrderForReservation(action.reservationId);
       return { ok: true, orderId };
+    }
+    // 空席検索（Web の FindSeatsDialog と同じ：その時間帯に割当のない卓。清掃バッファも考慮）
+    case 'ledgerFindSeats': {
+      const store = ctx.currentStore ?? ctx.stores[0];
+      if (!store) return { ok: false, error: '店舗がありません' };
+      const startMs = new Date(`${action.date}T${action.time}:00+09:00`).getTime();
+      const occupied = new Set(await getOccupiedTableIds(store.id, new Date(startMs).toISOString(), new Date(startMs + action.stayMinutes * 60000).toISOString()));
+      const supabase = await createClient();
+      const { data: tables } = await supabase
+        .from('restaurant_tables')
+        .select('id, name, capacity_min, capacity_max')
+        .eq('store_id', store.id)
+        .eq('status', 'active')
+        .order('sort_order');
+      const free = (tables ?? []).filter((t) => !occupied.has(t.id as string));
+      const fit = free.filter((t) => (t.capacity_max as number) >= action.partySize);
+      const { suggestTables } = await import('@/lib/reservations');
+      const suggestion = suggestTables(
+        free.map((t) => ({ id: t.id as string, name: t.name as string, capacityMin: t.capacity_min as number, capacityMax: t.capacity_max as number, isActive: true, isOccupied: false })),
+        action.partySize
+      )[0];
+      return {
+        ok: true,
+        free: fit.map((t) => ({ id: t.id, name: t.name, capacityMin: t.capacity_min, capacityMax: t.capacity_max })),
+        busyCount: occupied.size,
+        suggestion: suggestion?.label ?? null,
+      };
+    }
+    // 直接来店（ウォークイン登録。Web の WalkInDialog と同じ）
+    case 'ledgerWalkIn': {
+      const store = ctx.currentStore ?? ctx.stores[0];
+      if (!store) return { ok: false, error: '店舗がありません' };
+      const r = await createWalkInReservation({
+        storeId: store.id,
+        tableId: action.tableId,
+        adults: action.adults,
+        children: action.children,
+        name: action.name || undefined,
+        phone: action.phone || undefined,
+      });
+      return { ok: true, reservationId: r.reservationId };
     }
   }
 }

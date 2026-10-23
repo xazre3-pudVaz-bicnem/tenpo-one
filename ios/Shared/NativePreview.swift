@@ -114,6 +114,7 @@ struct NativeLedgerScreen: View {
         NativeLedgerView(
             model: model,
             onHome: { state.goNativeHome() },
+            onFloor: { state.goNativeFloor() },
             onOpenOrder: { id in state.openNativeOrder(id, checkout: false) },
             onWeb: { path in state.leaveNativeFloor(to: path) }
         )

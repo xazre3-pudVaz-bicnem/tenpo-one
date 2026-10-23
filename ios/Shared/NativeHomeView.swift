@@ -123,22 +123,41 @@ struct NativeHomeView: View {
         VStack(spacing: 0) {
             topBar
             GeometryReader { geo in
-                HStack(alignment: .top, spacing: 18) {
-                    VStack(spacing: 10) {
-                        ForEach(model.payload?.tools ?? []) { t in toolRow(t) }
-                        Spacer(minLength: 0)
+                // 横（1000pt 以上）は左に操作の列・右に売上。縦（ポートレート）は上から順に並べてスクロール
+                // （2026-10-24 Ronnie「縦にするとオーダー・会計とボタンがくっつく」）
+                if geo.size.width >= 1000 {
+                    HStack(alignment: .top, spacing: 18) {
+                        VStack(spacing: 10) {
+                            ForEach(model.payload?.tools ?? []) { t in toolRow(t) }
+                            Spacer(minLength: 0)
+                        }
+                        .frame(width: max(240, geo.size.width * 0.20))
+                        VStack(spacing: 18) {
+                            salesCard(narrow: false)
+                            Spacer(minLength: 0)
+                            clockRow
+                            kpiRow(columns: 4)
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
-                    .frame(width: max(240, geo.size.width * 0.20))
-                    VStack(spacing: 18) {
-                        salesCard
-                        Spacer(minLength: 0)
-                        clockRow
-                        kpiRow
+                    .padding(.horizontal, 18)
+                    .padding(.top, 18)
+                    .padding(.bottom, 14)
+                } else {
+                    ScrollView(showsIndicators: false) {
+                        VStack(spacing: 18) {
+                            LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
+                                ForEach(model.payload?.tools ?? []) { t in toolRow(t) }
+                            }
+                            salesCard(narrow: true)
+                            clockRow
+                            kpiRow(columns: 2)
+                        }
+                        .padding(.horizontal, 18)
+                        .padding(.top, 18)
+                        .padding(.bottom, 24)
                     }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
-                .padding(.horizontal, 18)
-                .padding(.bottom, 14)
             }
         }
         .background(Color.white.ignoresSafeArea())
@@ -221,6 +240,7 @@ struct NativeHomeView: View {
             .background(NT.header.ignoresSafeArea(edges: .top))
 
             HStack(spacing: 18) {
+                Spacer(minLength: 0)
                 ForEach(model.payload?.bigTiles ?? [NHNamed(href: "/app/floor", label: "オーダー・会計", en: "Order & Pay"), NHNamed(href: "/app/reservations", label: "店舗台帳", en: "Reservation")], id: \.href) { t in
                     let isFloor = t.href == "/app/floor"
                     Button { isFloor ? onFloor() : onWeb(t.href) } label: {
@@ -237,11 +257,12 @@ struct NativeHomeView: View {
                             }
                             Spacer()
                         }
-                        .frame(maxWidth: .infinity).frame(height: 150)
+                        .frame(maxWidth: 640).frame(height: 150)
                         .background(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(Self.tileBg))
                     }
                     .buttonStyle(PressableStyle(scale: 0.98))
                 }
+                Spacer(minLength: 0)
             }
             .padding(.horizontal, 18)
         }
@@ -295,10 +316,24 @@ struct NativeHomeView: View {
 
     // MARK: 中：達成率・実績売上
 
-    private var salesCard: some View {
+    private func salesCard(narrow: Bool) -> some View {
         let s = model.payload?.sales
-        return HStack(alignment: .center, spacing: 36) {
+        return VStack(spacing: 18) {
+            HStack(alignment: .center, spacing: narrow ? 24 : 36) {
             Spacer(minLength: 0)
+            ring(s)
+            salesNumbers(s)
+            if !narrow { VStack(spacing: 14) { salesButtons(s) }.frame(width: 200) }
+            Spacer(minLength: 0)
+            }
+            if narrow {
+                HStack(spacing: 12) { salesButtons(s) }
+            }
+        }
+        .padding(.top, narrow ? 0 : 10)
+    }
+
+    private func ring(_ s: NHSales?) -> some View {
             ZStack {
                 Circle().stroke(Color(hex: 0xE5E5EA), lineWidth: 22)
                 Circle().trim(from: 0, to: CGFloat(max(0, min(1, (s?.ringPct ?? 0) / 100))))
@@ -315,6 +350,9 @@ struct NativeHomeView: View {
                 }
             }
             .frame(width: 180, height: 180)
+    }
+
+    private func salesNumbers(_ s: NHSales?) -> some View {
             VStack(alignment: .leading, spacing: 6) {
                 Text("実績売上高").font(.system(size: 15, weight: .semibold)).foregroundColor(NFColor.ink2)
                 Text("Sales").font(.system(size: 11)).foregroundColor(NFColor.ink3)
@@ -340,16 +378,13 @@ struct NativeHomeView: View {
                 .foregroundColor(NFColor.ink3)
             }
             .frame(maxWidth: 420, alignment: .leading)
-            VStack(spacing: 14) {
-                if s?.canAnalytics ?? false {
-                    outlineButton("店舗分析", en: "Analytics") { onWeb("/app/reports") }
-                }
-                outlineButton("予算登録", en: "Set budget") { onWeb("/app/budgets/daily") }
-            }
-            .frame(width: 200)
-            Spacer(minLength: 0)
+    }
+
+    @ViewBuilder private func salesButtons(_ s: NHSales?) -> some View {
+        if s?.canAnalytics ?? false {
+            outlineButton("店舗分析", en: "Analytics") { onWeb("/app/reports") }
         }
-        .padding(.top, 10)
+        outlineButton("予算登録", en: "Set budget") { onWeb("/app/budgets/daily") }
     }
 
     private func outlineButton(_ ja: String, en: String, action: @escaping () -> Void) -> some View {
@@ -414,9 +449,9 @@ struct NativeHomeView: View {
 
     // MARK: 来店組数・客数・リピーター・ウォークイン
 
-    private var kpiRow: some View {
+    private func kpiRow(columns: Int) -> some View {
         let k = model.payload?.kpis
-        return HStack(spacing: 0) {
+        return LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 0), count: columns), spacing: 0) {
             kpi(icon: "person.2.fill", color: Color(hex: 0x1A5AD6), "来店組数", en: "Groups", value: k?.groups, unit: "組", diff: k.map { $0.groups - $0.groupsYesterday })
             kpi(icon: "person.fill", color: Color(hex: 0x6E63B8), "客数", en: "Guests", value: k?.guests, unit: "名", diff: k.map { $0.guests - $0.guestsYesterday })
             kpi(icon: "arrow.triangle.2.circlepath", color: Color(hex: 0xE8603C), "リピーター", en: "Repeat", value: k?.repeaters, unit: "組", diff: nil)
