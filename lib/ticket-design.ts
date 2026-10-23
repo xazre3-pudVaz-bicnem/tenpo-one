@@ -18,6 +18,7 @@ export function kitchenDesign(ticket: KitchenTicket, opts: KitchenLayoutOptions)
     { cells: [cell(`伝票No.${ticket.orderNo}${part}`), cell(opts.printedAt, 'center', .6), cell(ticket.clerkName ? `担当 ${ticket.clerkName}` : '', 'right')], size: 16, rule: 'solid', gap: 10 },
   ];
   if (allCancel) rows.push({ ...text('取消 / CANCEL', 28, 'center'), bold: true, black: true });
+  else if (ticket.lines.every(l => l.delta > 0)) rows.push(text('[ NEW ORDER ]', 14));
   const reasons = [...new Set(ticket.lines.filter(l => l.delta < 0).map(l => l.cancelReason?.trim()).filter((s): s is string => !!s))];
   // A shared reason belongs directly beneath the banner. Different reasons stay with each item.
   if (allCancel && reasons.length === 1) rows.push(text(`取消理由：${reasons[0]}`, 15));
