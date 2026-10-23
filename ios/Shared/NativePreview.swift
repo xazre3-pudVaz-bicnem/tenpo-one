@@ -149,15 +149,25 @@ struct NativeCashScreen: View {
 /// ネイティブの入出金（2026-10-24）
 struct NativeCashIoScreen: View {
     @StateObject private var model = NativeCashIoModel()
+    @StateObject private var petty = NativePettyModel()
+    @StateObject private var closings = NativeClosingsModel()
     @EnvironmentObject var state: AppState
 
     var body: some View {
-        NativeCashIoView(
-            model: model,
-            onHome: { state.goNativeHome() },
-            onWeb: { path in state.leaveNativeFloor(to: path) },
-            onClose: { state.goNativeCash("/app/cash/close") }
-        )
+        switch state.cashTab {
+        case "petty":
+            NativePettyView(model: petty, onHome: { state.goNativeHome() }, onTab: { state.goNativeCashIo(tab: $0) })
+        case "closings":
+            NativeClosingsView(model: closings, onHome: { state.goNativeHome() }, onTab: { state.goNativeCashIo(tab: $0) })
+        default:
+            NativeCashIoView(
+                model: model,
+                onHome: { state.goNativeHome() },
+                onWeb: { path in state.leaveNativeFloor(to: path) },
+                onClose: { state.goNativeCash("/app/cash/close") },
+                onTab: { state.goNativeCashIo(tab: $0) }
+            )
+        }
     }
 }
 

@@ -95,6 +95,8 @@ struct NativeCashIoView: View {
     let onHome: () -> Void
     let onWeb: (String) -> Void
     let onClose: () -> Void
+    /// 小口現金・締め履歴のタブ（ネイティブ）
+    var onTab: (String) -> Void = { _ in }
 
     @State private var kind = "deposit"
     @State private var sessionId = ""
@@ -167,8 +169,8 @@ struct NativeCashIoView: View {
         HStack(spacing: 8) {
             HStack(spacing: 0) {
                 tabBtn("レジ入出金", en: "Register", on: true) {}
-                tabBtn("小口現金", en: "Petty cash", on: false) { onWeb("/app/cash?tab=petty") }
-                tabBtn("締め履歴", en: "Closings", on: false) { onWeb("/app/cash?tab=closings") }
+                tabBtn("小口現金", en: "Petty cash", on: false) { onTab("petty") }
+                tabBtn("締め履歴", en: "Closings", on: false) { onTab("closings") }
             }
             .padding(3).background(RoundedRectangle(cornerRadius: 12).fill(Color.white))
             .overlay(RoundedRectangle(cornerRadius: 12).stroke(NFColor.line, lineWidth: 1))
@@ -245,7 +247,7 @@ struct NativeCashIoView: View {
                 .buttonStyle(.plain)
             }
             if p.canPetty {
-                Button { onWeb("/app/cash?tab=petty") } label: {
+                Button { onTab("petty") } label: {
                     HStack(spacing: 4) { Text("買い物に持ち出し（仮払い）"); Text("Advance").font(.system(size: 10)) }
                         .font(.system(size: 13, weight: .bold)).foregroundColor(NFColor.royal)
                         .padding(.horizontal, 12).frame(height: 36)
@@ -262,7 +264,7 @@ struct NativeCashIoView: View {
                     Text([a.main, a.sub].compactMap { $0 }.joined(separator: " ・ ")).font(.system(size: 12.5)).foregroundColor(NFColor.ink2)
                     HStack(spacing: 6) {
                         if p.canScan { smallBtn("レシートを撮る", filled: true) { onWeb("/app/scan?tx=\(a.id)") } }
-                        smallBtn("精算する", filled: false) { onWeb("/app/cash?tab=petty") }
+                        smallBtn("精算する", filled: false) { onTab("petty") }
                     }
                 }
                 .padding(12).frame(maxWidth: .infinity, alignment: .leading)
@@ -502,7 +504,7 @@ struct NativeCashIoView: View {
         case "ok": Text("✓ 写真").font(.system(size: 11.5, weight: .bold)).foregroundColor(NFColor.success)
         case "advanceDone": Text("精算済").font(.system(size: 11.5, weight: .bold)).foregroundColor(NFColor.success)
         case "advanceOpen":
-            if p.canPetty { smallBtn("精算へ", filled: false) { onWeb("/app/cash?tab=petty") } } else { Text("精算待ち").font(.system(size: 11.5, weight: .bold)).foregroundColor(Color(hex: 0xC27C0E)) }
+            if p.canPetty { smallBtn("精算へ", filled: false) { onTab("petty") } } else { Text("精算待ち").font(.system(size: 11.5, weight: .bold)).foregroundColor(Color(hex: 0xC27C0E)) }
         case "missing":
             if p.canScan { smallBtn("添付する", filled: false) { onWeb("/app/scan?tx=\(r.id)") } } else { Text("レシート未添付").font(.system(size: 11.5, weight: .bold)).foregroundColor(NFColor.ink2) }
         default: Text("—").foregroundColor(NFColor.ink3)
