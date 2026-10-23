@@ -33,11 +33,23 @@ struct RootView: View {
                 if state.needsHandyLogin {
                     HandyLoginView()
                 }
-                // ネイティブのオーダー・会計画面（試験中。レジの設定で ON にした iPad だけ）。
+                // ネイティブのホーム。Web の /app/dashboard の上に重ねる（2026-10-24）
+                if state.nativeHome {
+                    NativeHomeScreen()
+                        .transition(.opacity)
+                        .zIndex(4)
+                }
+                // ネイティブのフロア（テーブル一覧）。Web の /app/floor の上に重ねる（2026-10-24）
+                if state.nativeFloor {
+                    NativeFloorScreen()
+                        .transition(.opacity)
+                        .zIndex(5)
+                }
+                // ネイティブのオーダー・会計画面（レジの設定で ON にした iPad だけ）。
                 // Web の画面の上に重ねる（fullScreenCover だと下の Web が「見えない」扱いになって止まり、
                 // Bluetooth のレシート・ドロアの印刷（Web の DirectPrintAgent）が出なくなるため）
                 if let ref = state.nativeOrder {
-                    NativeLiveOrderScreen(orderId: ref.id)
+                    NativeLiveOrderScreen(orderId: ref.id, checkout: ref.checkout)
                         .id(ref.id)
                         .transition(.move(edge: .bottom))
                         .zIndex(10)
@@ -45,6 +57,8 @@ struct RootView: View {
             }
         }
         .animation(.easeOut(duration: 0.22), value: state.nativeOrder)
+        .animation(.easeOut(duration: 0.18), value: state.nativeFloor)
+        .animation(.easeOut(duration: 0.18), value: state.nativeHome)
         // レジ（iPad）は画面いっぱいに使う
         .statusBarHidden(state.mode == .regi || state.nativeOrder != nil)
         .sheet(isPresented: $state.scanning) {

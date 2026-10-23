@@ -170,7 +170,8 @@ final class NativeAPI {
         }
     }
 
-    private func send(_ request: URLRequest) async throws -> Data {
+    /// Cookie・x-tenpo-app を付けて送る（フロアなど別のファイルの拡張からも使う）
+    func send(_ request: URLRequest) async throws -> Data {
         var req = request
         req.setValue("1", forHTTPHeaderField: "x-tenpo-app")
         req.setValue("application/json", forHTTPHeaderField: "accept")

@@ -24,6 +24,12 @@ final class AppState: ObservableObject {
     @Published var webSession = UUID()
     /// ネイティブのオーダー・会計画面で開いている伝票（nil＝出していない）
     @Published var nativeOrder: NativeOrderRef?
+    /// ネイティブのフロア（テーブル一覧）を出しているか（Web の /app/floor の代わり。2026-10-24）
+    @Published var nativeFloor = false
+    /// ネイティブのホームを出しているか（Web の /app/dashboard の代わり。2026-10-24）
+    @Published var nativeHome = false
+    /// フロアを読み直してほしいとき（会計完了など）に増やす
+    @Published var floorRefreshTick = 0
 
     private let nativePosKey = "tenpo.nativePos"
     /// ネイティブのオーダー・会計画面を使うか。この iPad だけ。
@@ -100,7 +106,21 @@ final class AppState: ObservableObject {
         guard mode == .regi, nativePosEnabled, AppConfig.isOwnHost(url) else { return }
         if url.path == "/app/dashboard" || url.path == "/app/floor" || url.path == "/app" {
             Task { @MainActor in NativeCatalogCache.shared.refresh() }
+        }
+        // ホーム・テーブル一覧はネイティブで（Web の画面の上に重ねる。Native ON の iPad は Web のホーム・テーブル一覧を見せない）
+        if url.path == "/app/dashboard" || url.path == "/app" {
+            nativeFloor = false
+            if !nativeHome { nativeHome = true }
             return
+        }
+        if url.path == "/app/floor" {
+            if !nativeFloor { nativeFloor = true }
+            return
+        }
+        if url.path != "/app/pos" {
+            // 設定・台帳など、まだ Web の画面へ行ったらネイティブを閉じる
+            nativeFloor = false
+            nativeHome = false
         }
         guard nativeOrder == nil, url.path == "/app/pos" else { return }
         let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
@@ -109,8 +129,11 @@ final class AppState: ObservableObject {
         // テーブルグループの別の卓から（seat）・テーブル移動（move）は今までの画面で
         if items.contains(where: { $0.name == "seat" || $0.name == "move" }) { return }
 
-        if let r = recentlyClosed, r.id == orderId, Date().timeIntervalSince(r.at) < 4 { return }
-        nativeOrder = NativeOrderRef(id: orderId)
+        // 閉じた直後（戻るの途中）だけ開き直さない。長いと「戻る→もう一度レジ会計」が Web で開いてしまう（2026-10-24 Ronnie）
+        if let r = recentlyClosed, r.id == orderId, Date().timeIntervalSince(r.at) < 1.5 { return }
+        // Web の卓のポップアップ「レジ会計」（?checkout=1）はすぐ会計の画面に
+        let checkout = items.contains { $0.name == "checkout" && $0.value == "1" }
+        nativeOrder = NativeOrderRef(id: orderId, checkout: checkout)
     }
 
     /// ネイティブの画面を閉じる。openWebPath があれば Web でそこを開き（その伝票はもうネイティブで開かない）、無ければ前の画面へ戻る
@@ -121,10 +144,41 @@ final class AppState: ObservableObject {
         guard let web = WebViewController.current else { return }
         if let path = openWebPath {
             if let id = current { webChosenOrders.insert(id) }
+            nativeFloor = false
             web.load(AppConfig.url(path))
+        } else if nativeFloor {
+            // ネイティブのフロアに戻る（Web は /app/floor のまま。読み直すだけ）
+            floorRefreshTick += 1
         } else {
             web.goBackOrHome()
         }
+    }
+
+    /// ネイティブのフロアから伝票を開く（注文・レジ会計）
+    func openNativeOrder(_ orderId: String, checkout: Bool) {
+        recentlyClosed = nil
+        webChosenOrders.remove(orderId)
+        nativeOrder = NativeOrderRef(id: orderId, checkout: checkout)
+    }
+
+    /// ネイティブの画面を閉じて Web の画面へ（店舗台帳・設定など、まだネイティブに無い画面）
+    func leaveNativeFloor(to path: String) {
+        nativeFloor = false
+        nativeHome = false
+        WebViewController.current?.load(AppConfig.url(path))
+    }
+
+    /// ネイティブのフロアからホームへ（ネイティブのホームを出す。Web も /app/dashboard にそろえる）
+    func goNativeHome() {
+        nativeFloor = false
+        nativeHome = true
+        WebViewController.current?.load(AppConfig.url("/app/dashboard"))
+    }
+
+    /// ネイティブのホームからフロアへ（Web も /app/floor にそろえる＝レシート・ドロアの Web 側の仕組みはそのまま）
+    func goNativeFloor() {
+        nativeFloor = true
+        WebViewController.current?.load(AppConfig.url("/app/floor"))
     }
 
     /// 会計完了は必ず最新のフロアを読み直す。
@@ -132,7 +186,12 @@ final class AppState: ObservableObject {
         nativeOrder = nil
         webChosenOrders.removeAll()
         recentlyClosed = nil
-        WebViewController.current?.load(AppConfig.url("/app/floor"))
+        if nativeFloor {
+            // フロアはネイティブのまま。読み直して卓が空席になったのを見せる
+            floorRefreshTick += 1
+        } else {
+            WebViewController.current?.load(AppConfig.url("/app/floor"))
+        }
     }
 
     /// QR を読んだ結果
@@ -150,4 +209,6 @@ final class AppState: ObservableObject {
 /// ネイティブで開く伝票（Web の上に重ねて出す）
 struct NativeOrderRef: Identifiable, Equatable {
     let id: String
+    /// 開いてすぐ会計の画面にする（卓のポップアップの「レジ会計」）
+    var checkout: Bool = false
 }
