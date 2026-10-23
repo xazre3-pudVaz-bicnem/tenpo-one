@@ -131,6 +131,60 @@ export function mdLabel(date: string): string {
   return `${m}/${d}`;
 }
 
+/** 'YYYY-MM-DD' → 'M/D（曜）'（JST のカレンダー日付として扱う） */
+export function mdWeekdayLabel(date: string): string {
+  const [y, m, d] = date.split('-').map(Number);
+  return `${m}/${d}（${'日月火水木金土'[new Date(Date.UTC(y, m - 1, d)).getUTCDay()]}）`;
+}
+
+/** n 日ずらした営業日（'YYYY-MM-DD'） */
+export function shiftBusinessDate(date: string, days: number): string {
+  const [y, m, d] = date.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
+}
+
+/**
+ * ホームの「売上・達成率」に出す営業日（2026-10-22 Ronnie「レジの営業日で出す」）。
+ *   開いているレジがあればその営業日（いくつかあれば新しいほう）
+ *   → 無ければ最後に閉めたレジの営業日（レジクローズ後、次の開局まで前の営業日の売上を出す）
+ *   → 1つも無ければ今日
+ */
+export function salesDisplayDate(input: { openDates: string[]; lastClosedDate: string | null; today: string }): {
+  date: string;
+  /** 開いているレジが無く、最後に閉めた営業日を出している */
+  closed: boolean;
+} {
+  const open = [...input.openDates].sort();
+  if (open.length > 0) return { date: open[open.length - 1], closed: false };
+  if (input.lastClosedDate) return { date: input.lastClosedDate, closed: true };
+  return { date: input.today, closed: false };
+}
+
+export interface SalesDayView {
+  /** 売上を出す営業日 */
+  date: string;
+  isToday: boolean;
+  /** 「本日」／「10/22（水）」 */
+  dayLabel: string;
+  /** 今日でないときの見出し「10/22（水）の売上」。今日なら null（今まで通り） */
+  heading: string | null;
+  /** 今日でなく、レジクローズ済みのときの小さい注記 */
+  note: string | null;
+}
+
+/** 売上の見出しの出し方。今日なら今まで通り。今日でなければ日付の見出し、閉めたあとなら「次の開局まで表示」 */
+export function salesDayView(input: { date: string; today: string; closed: boolean }): SalesDayView {
+  const isToday = input.date === input.today;
+  const dayLabel = isToday ? '本日' : mdWeekdayLabel(input.date);
+  return {
+    date: input.date,
+    isToday,
+    dayLabel,
+    heading: isToday ? null : `${dayLabel}の売上`,
+    note: !isToday && input.closed ? 'レジクローズ済み・次の開局まで表示' : null,
+  };
+}
+
 /** 前の営業日を続けているときに警告を出し始める時刻（JST）。深夜の営業中は出さない（2026-09-28 提案どおり朝10時） */
 export const CONTINUE_ALERT_HOUR = 10;
 

@@ -14,6 +14,7 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { budgetMotivation } from '@/lib/budget-motivation';
+import type { SalesDayView } from '@/lib/register-day';
 
 const RING_R = 50;
 const RING_C = 2 * Math.PI * RING_R;
@@ -28,6 +29,7 @@ export function BudgetCard({
   perGroup = null,
   avgSpend = null,
   asOf,
+  day,
   className,
 }: {
   actual: number;
@@ -42,14 +44,21 @@ export function BudgetCard({
   avgSpend?: number | null;
   /** 'YYYY/MM/DD HH:MM' */
   asOf: string;
+  /**
+   * 売上を出す営業日（2026-10-22 Ronnie「レジの営業日で出す」）。今日でなければ見出しを「10/22（木）の売上」にし、
+   * レジクローズ済みなら「レジクローズ済み・次の開局まで表示」。省略時は今まで通り（本日）
+   */
+  day?: SalesDayView;
   className?: string;
 }) {
+  const dayLabel = day?.dayLabel ?? '本日';
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const hasBudget = budget != null && pct != null;
   // 目標に届いていないときの応援メッセージ（2026-09-30 Ronnie「もうちょい頑張ろう・あと何組で達成」）
+  // 今日でない営業日（閉めたあと・前の営業日の続き）には「あと何組」は出さない
   const cheer =
-    budget != null
+    budget != null && (day?.isToday ?? true)
       ? budgetMotivation({
           actual,
           budget,
@@ -78,7 +87,7 @@ export function BudgetCard({
       </CardHeader>
 
       <div className="flex flex-1 flex-wrap items-center justify-center gap-x-7 gap-y-5 px-6 py-[18px]">
-        <div className="relative h-[168px] w-[168px] shrink-0" role="img" aria-label={hasBudget ? `本日の予算達成率 ${pct}%` : '予算未設定'}>
+        <div className="relative h-[168px] w-[168px] shrink-0" role="img" aria-label={hasBudget ? `${dayLabel}の予算達成率 ${pct}%` : '予算未設定'}>
           <svg viewBox="0 0 120 120" className="h-full w-full">
             <circle cx="60" cy="60" r={RING_R} fill="none" stroke="var(--color-lilac)" strokeWidth="14" />
             {hasBudget && ringPct > 0 && (
@@ -107,7 +116,7 @@ export function BudgetCard({
               ) : (
                 <b className="block text-[26px] leading-none font-extrabold text-ink-3 tabular-nums">—%</b>
               )}
-              <small className="mt-[5px] block text-[11px] leading-snug text-ink-3">本日の達成率</small>
+              <small className="mt-[5px] block text-[11px] leading-snug text-ink-3">{dayLabel}の達成率</small>
             </span>
           </div>
         </div>
@@ -115,8 +124,10 @@ export function BudgetCard({
         <dl className="m-0 flex min-w-[150px] flex-1 flex-col gap-3">
           <div className="flex flex-col gap-1 border-b border-dashed border-line pb-2.5">
             <dt className="text-[13px] font-medium text-ink-2">
-              実績売上高<span className="en-under">Sales</span>
+              {day?.heading ?? '実績売上高'}
+              <span className="en-under">Sales</span>
             </dt>
+            {day?.note && <dd className="m-0 text-[11px] text-ink-3">{day.note}</dd>}
             <dd className="m-0 text-[31px] leading-none font-bold text-saffron tabular-nums">{yen(actual)}</dd>
             {avgSpend != null && (
               <dd className="m-0 text-[12px] text-ink-3 tabular-nums">

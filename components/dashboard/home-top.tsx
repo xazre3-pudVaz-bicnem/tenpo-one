@@ -9,15 +9,19 @@ import { HomeKpis } from './home-kpis';
 import { HomeNotices } from './home-notices';
 import { StorePlace, StoreWeatherInfo } from './weather-slot';
 import type { HomeData } from './home-data';
+import type { SalesDayView } from '@/lib/register-day';
 
 export function HomeTop({
   data,
   asOf,
   guestsNote,
   ordersHref,
+  day,
 }: {
   data: HomeData;
   asOf: string;
+  /** 売上を出す営業日（レジの営業日。今日でなければ日付の見出し） */
+  day?: SalesDayView;
   guestsNote?: string;
   ordersHref: string;
 }) {
@@ -43,6 +47,7 @@ export function HomeTop({
           perGroup={data.perGroupSales}
           avgSpend={data.avgSpend}
           asOf={asOf}
+          day={day}
           className="rounded-none border-0 shadow-none"
         />
         <ClockCard
@@ -69,6 +74,7 @@ export function HomeTop({
         lowStock={data.lowStock}
         guestsNote={guestsNote}
         ordersHref={ordersHref}
+        dayLabel={day?.dayLabel}
       />
     </div>
   );
