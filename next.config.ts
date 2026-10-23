@@ -69,6 +69,7 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  outputFileTracingIncludes: { '/*': ['./public/fonts/*'] },
   async headers() {
     return [{ source: '/(.*)', headers: securityHeaders }];
   },

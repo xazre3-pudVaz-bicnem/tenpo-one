@@ -43,12 +43,22 @@ const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, M
 export function eposXmlToEscPos(xml: string): Buffer {
   const out: Buffer[] = [Buffer.from(INIT)];
   const push = (bytes: number[]) => out.push(Buffer.from(bytes));
-  const re = /<(text|feed|cut|pulse)\b([^>]*?)(?:\/>|>([\s\S]*?)<\/\1>)/g;
+  const re = /<(text|feed|cut|pulse|image)\b([^>]*?)(?:\/>|>([\s\S]*?)<\/\1>)/g;
   for (const m of xml.matchAll(re)) {
     const tag = m[1];
     const a = attrs(m[2] ?? '');
     const content = m[3];
-    if (tag === 'text') {
+    if (tag === 'image') {
+      const width = Number(a.width), height = Number(a.height);
+      if (!Number.isInteger(width) || width < 1 || width > 576 || !Number.isInteger(height) || height < 1 || height > 8192) {
+        throw new Error('印刷画像のサイズが不正です');
+      }
+      const bytes = Math.ceil(width / 8);
+      const image = Buffer.from(content ?? '', 'base64');
+      if (image.length !== bytes * height) throw new Error('印刷画像のデータ長が不正です');
+      push([GS, 0x76, 0x30, 0, bytes & 255, bytes >> 8, height & 255, height >> 8]);
+      out.push(image);
+    } else if (tag === 'text') {
       if (a.lang === 'ja') push(JAPANESE);
       if (a.align) push([ESC, 0x61, a.align === 'center' ? 1 : a.align === 'right' ? 2 : 0]);
       if (a.width || a.height) {
