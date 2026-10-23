@@ -45,6 +45,12 @@ struct RootView: View {
                         .transition(.opacity)
                         .zIndex(5)
                 }
+                // ネイティブのレジ開局・レジクローズ。Web の /app/cash/open・close の上に重ねる（2026-10-24）
+                if state.nativeCash {
+                    NativeCashScreen()
+                        .transition(.opacity)
+                        .zIndex(5)
+                }
                 // ネイティブのフロア（テーブル一覧）。Web の /app/floor の上に重ねる（2026-10-24）
                 if state.nativeFloor {
                     NativeFloorScreen()
@@ -66,6 +72,7 @@ struct RootView: View {
         .animation(.easeOut(duration: 0.18), value: state.nativeFloor)
         .animation(.easeOut(duration: 0.18), value: state.nativeHome)
         .animation(.easeOut(duration: 0.18), value: state.nativeLedger)
+        .animation(.easeOut(duration: 0.18), value: state.nativeCash)
         // レジ（iPad）は画面いっぱいに使う
         .statusBarHidden(state.mode == .regi || state.nativeOrder != nil)
         .sheet(isPresented: $state.scanning) {

@@ -92,13 +92,15 @@ struct NativeHomeScreen: View {
         NativeHomeView(
             model: model,
             onWeb: { path in
-                if path == "/app/reservations" { state.goNativeLedger() } else { state.leaveNativeFloor(to: path) }
+                if path == "/app/reservations" { state.goNativeLedger() }
+                else if path == "/app/cash/close" || path == "/app/cash/open" { state.goNativeCash(path) }
+                else { state.leaveNativeFloor(to: path) }
             },
             onFloor: { state.goNativeFloor() }
         )
         .onReceive(model.$payload) { p in
             // まだ開局していなければ、Web の「レジの中の現金を数える」開局画面へ（Web のホームと同じ）
-            if let p, p.needsOpenRegister { state.leaveNativeFloor(to: "/app/cash/open") }
+            if let p, p.needsOpenRegister { state.goNativeCash("/app/cash/open") }
         }
         .onChange(of: state.nativeFloor) { on in if !on { Task { await model.refresh() } } }
         .onChange(of: state.floorRefreshTick) { _ in Task { await model.refresh() } }
@@ -119,5 +121,22 @@ struct NativeLedgerScreen: View {
             onWeb: { path in state.leaveNativeFloor(to: path) }
         )
         .onChange(of: state.nativeOrder) { new in if new == nil { Task { await model.refresh(silent: true) } } }
+    }
+}
+
+/// ネイティブのレジ開局・レジクローズ（2026-10-24）
+struct NativeCashScreen: View {
+    @StateObject private var model = NativeCashModel()
+    @EnvironmentObject var state: AppState
+
+    var body: some View {
+        NativeCashView(
+            model: model,
+            mode: "",
+            onHome: { state.goNativeHome() },
+            onOpened: { state.goNativeFloor() },
+            onWeb: { path in state.leaveNativeFloor(to: path) },
+            onSignedOut: { state.leaveNativeFloor(to: "/register-login") }
+        )
     }
 }
