@@ -11,7 +11,7 @@ describe('ネイティブの店舗台帳の操作（2026-10-24 Ronnie「店舗�
     expect(parseNativeLedgerAction({ type: 'floorBill' }).ok).toBe(false);
     expect(isNativeLedgerActionType('ledgerSeat')).toBe(true);
     expect(isNativeLedgerActionType('send')).toBe(false);
-    expect(NATIVE_LEDGER_ACTION_TYPES.length).toBe(13);
+    expect(NATIVE_LEDGER_ACTION_TYPES.length).toBe(21);
   });
 
   it('予約登録：日時・人数・名前・電話・経路・コース・卓・滞在・仮予約', () => {
@@ -60,5 +60,14 @@ describe('ネイティブの店舗台帳の操作（2026-10-24 Ronnie「店舗�
     const actions = readFileSync(new URL('../app/app/reservations/actions.ts', import.meta.url), 'utf8');
     expect(actions).toContain('export async function createOrderForReservation(reservationId: string): Promise<string>');
     expect(actions).toContain('const orderId = await createOrderForReservation(reservationId);\n  redirect(`/app/pos?order=${orderId}`);');
+  });
+
+  it('ウェイティング：呼出・案内・受付・キャンセル待ち', () => {
+    expect(parseNativeLedgerAction({ type: 'ledgerWaitCall', entryId: U1 }).ok).toBe(true);
+    expect(parseNativeLedgerAction({ type: 'ledgerWaitGuide', entryId: U1, tableId: 'x' }).ok).toBe(false);
+    expect(parseNativeLedgerAction({ type: 'ledgerWaitTicket', name: '山田', partySize: 2 }).ok).toBe(true);
+    expect(parseNativeLedgerAction({ type: 'ledgerWaitTicket', name: ' ', partySize: 2 }).ok).toBe(false);
+    expect(parseNativeLedgerAction({ type: 'ledgerWaitlistAdd', name: '山田', phone: '09012345678', partySize: 2, desiredDate: '2026-10-30', timeFrom: '18:00' }).ok).toBe(true);
+    expect(parseNativeLedgerAction({ type: 'ledgerWaitlistAdd', name: '山田', phone: '090', partySize: 2, desiredDate: '2026-10-30' }).ok).toBe(false);
   });
 });

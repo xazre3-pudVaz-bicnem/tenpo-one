@@ -1167,6 +1167,12 @@ export async function markWaitingNoShow(id: string) {
  * 予約(walk_in/seated)を作成したうえで注文(open)も作成し、POSへ遷移する。
  */
 export async function guideWaitingTicket(id: string, tableId: string) {
+  const orderId = await guideWaitingTicketToOrder(id, tableId);
+  redirect(`/app/pos?order=${orderId}`);
+}
+
+/** 案内して作った伝票の ID を返す（画面の移動はしない。iPad アプリのネイティブの台帳から使う。2026-10-24） */
+export async function guideWaitingTicketToOrder(id: string, tableId: string): Promise<string> {
   const ctx = await requirePermission('reservations.write');
   const supabase = await createClient();
   const entry = await loadWaitingTicket(supabase, ctx, id);
@@ -1225,7 +1231,7 @@ export async function guideWaitingTicket(id: string, tableId: string) {
   if (updateError) throw new Error('受付状態の更新に失敗しました');
 
   revalidatePath('/app/reservations');
-  redirect(`/app/pos?order=${order.id}`);
+  return order.id as string;
 }
 
 

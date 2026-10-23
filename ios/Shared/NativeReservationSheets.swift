@@ -324,8 +324,20 @@ struct NativeReservationSheet: View {
 }
 
 /// 予約登録（電話予約の手動登録）。Web の manual-reservation-dialog と同じ項目
+/// キャンセル待ちから「予約へ変換」するときの初期値
+struct NLReservationPrefill {
+    let waitlistEntryId: String
+    let date: String
+    let time: String
+    let adults: Int
+    let name: String
+    let phone: String
+    let note: String
+}
+
 struct NativeNewReservationSheet: View {
     @ObservedObject var model: NativeLedgerModel
+    var prefill: NLReservationPrefill? = nil
     let onClose: () -> Void
 
     @State private var date = Date()
@@ -438,6 +450,14 @@ struct NativeNewReservationSheet: View {
         }
         .presentationDetents([.large])
         .onAppear {
+            if let pf = prefill {
+                let f = DateFormatter()
+                f.timeZone = TimeZone(identifier: "Asia/Tokyo")
+                f.dateFormat = "yyyy-MM-dd HH:mm"
+                if let dt = f.date(from: "\(pf.date) \(pf.time)") { date = dt }
+                adults = pf.adults; name = pf.name; phone = pf.phone; note = pf.note
+                return
+            }
             // 台帳の日の 18:00 を初期値に
             if let d = p?.date {
                 let f = DateFormatter()
@@ -457,7 +477,7 @@ struct NativeNewReservationSheet: View {
         let t = DateFormatter()
         t.timeZone = TimeZone(identifier: "Asia/Tokyo")
         t.dateFormat = "HH:mm"
-        let input: [String: Any] = [
+        var input: [String: Any] = [
             "date": f.string(from: date),
             "time": t.string(from: date),
             "adults": adults,
@@ -473,10 +493,11 @@ struct NativeNewReservationSheet: View {
             "status": pending ? "pending" : "confirmed",
             "clerkId": clerkId.isEmpty ? NSNull() : clerkId,
         ]
+        if let pf = prefill { input["waitlistEntryId"] = pf.waitlistEntryId }
         if let _ = await model.act(["type": "ledgerCreate", "input": input]) {
             model.date = f.string(from: date)
             await model.refresh(silent: true)
-            model.show(toast: "予約を登録しました")
+            model.show(toast: prefill == nil ? "予約を登録しました" : "予約へ変換しました")
             onClose()
         } else {
             problem = model.error

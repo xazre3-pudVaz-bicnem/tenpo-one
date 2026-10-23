@@ -17,7 +17,7 @@ import { isNativeFloorActionType, parseNativeFloorAction, type NativeFloorAction
 import { loadNativeFloor } from '@/lib/native-floor-server';
 import { loadNativeHome } from '@/lib/native-home-server';
 import { isNativeLedgerActionType, parseNativeLedgerAction, type NativeLedgerAction } from '@/lib/native-ledger';
-import { loadNativeLedger, loadNativeLedgerWeek } from '@/lib/native-ledger-server';
+import { loadNativeLedger, loadNativeLedgerWait, loadNativeLedgerWeek } from '@/lib/native-ledger-server';
 import { isNativeCashActionType, parseNativeCashAction, sumNativeDenominations, type NativeCashAction } from '@/lib/native-cash';
 import { loadNativeCash, loadNativeCashIo } from '@/lib/native-cash-server';
 import { isNativeQuickActionType, parseNativeQuickAction, type NativeQuickAction } from '@/lib/native-quick';
@@ -40,6 +40,14 @@ import {
   createManualReservation,
   createOrderForReservation,
   createWalkInReservation,
+  createWaitingTicket,
+  createWaitlistEntry,
+  callWaitingTicket,
+  cancelWaitlistEntry,
+  guideWaitingTicketToOrder,
+  markWaitingNoShow,
+  markWaitlistContacted,
+  markWaitlistExpired,
   getOccupiedTableIds,
   markNoShow,
   moveReservation,
@@ -263,6 +271,15 @@ export async function GET(request: Request) {
     if (ctx.disabledFeatures?.has('accounting')) return json({ ok: false, error: 'この機能は使えません', useWeb: true }, 403);
     const io = await loadNativeCashIo(ctx, await createClient(), { id: store.id, name: store.name });
     return json({ ok: true, ...io });
+  }
+
+  // 店舗台帳のウェイティング（Web の view=waitlist）
+  if (part === 'ledgerWait') {
+    const store = ctx.currentStore ?? ctx.stores[0] ?? null;
+    if (!store) return json({ ok: false, error: '店舗がありません' }, 404);
+    if (ctx.disabledFeatures?.has('reservations')) return json({ ok: false, error: 'この機能は使えません', useWeb: true }, 403);
+    const wait = await loadNativeLedgerWait(await createClient(), store, url.searchParams.get('wstatus'), todayJst());
+    return json({ ok: true, ...wait });
   }
 
   // 店舗台帳の週間（Web の view=week と同じ集計）
@@ -784,6 +801,7 @@ async function runLedgerAction(ctx: SessionContext, action: NativeLedgerAction):
         stayMinutes: i.stayMinutes,
         status: i.status,
         clerkId: i.clerkId,
+        waitlistEntryId: i.waitlistEntryId ?? undefined,
       })) as unknown as { reservationId?: string; id?: string } | void;
       return { ok: true, reservationId: res && typeof res === 'object' ? (res.reservationId ?? res.id ?? null) : null };
     }
@@ -844,6 +862,46 @@ async function runLedgerAction(ctx: SessionContext, action: NativeLedgerAction):
         busyCount: occupied.size,
         suggestion: suggestion?.label ?? null,
       };
+    }
+    case 'ledgerWaitCall':
+      await callWaitingTicket(action.entryId);
+      return { ok: true };
+    case 'ledgerWaitNoShow':
+      await markWaitingNoShow(action.entryId);
+      return { ok: true };
+    case 'ledgerWaitCancel':
+      await cancelWaitlistEntry(action.entryId);
+      return { ok: true };
+    case 'ledgerWaitContacted':
+      await markWaitlistContacted(action.entryId);
+      return { ok: true };
+    case 'ledgerWaitExpired':
+      await markWaitlistExpired(action.entryId);
+      return { ok: true };
+    case 'ledgerWaitGuide': {
+      const orderId = await guideWaitingTicketToOrder(action.entryId, action.tableId);
+      return { ok: true, orderId };
+    }
+    case 'ledgerWaitTicket': {
+      const store = ctx.currentStore ?? ctx.stores[0];
+      if (!store) return { ok: false, error: '店舗がありません' };
+      const r = await createWaitingTicket({ storeId: store.id, name: action.name, partySize: action.partySize, phone: action.phone || undefined, seatPreference: action.seatPreference || undefined });
+      return { ok: true, queued: r.ticketNo };
+    }
+    case 'ledgerWaitlistAdd': {
+      const store = ctx.currentStore ?? ctx.stores[0];
+      if (!store) return { ok: false, error: '店舗がありません' };
+      await createWaitlistEntry({
+        storeId: store.id,
+        name: action.name,
+        phone: action.phone,
+        partySize: action.partySize,
+        desiredDate: action.desiredDate,
+        timeFrom: action.timeFrom ?? undefined,
+        timeTo: action.timeTo ?? undefined,
+        note: action.note || undefined,
+      });
+      return { ok: true };
     }
     // 直接来店（ウォークイン登録。Web の WalkInDialog と同じ）
     case 'ledgerWalkIn': {

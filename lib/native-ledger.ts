@@ -26,6 +26,8 @@ export type NativeLedgerAction =
         stayMinutes: number | null;
         status: 'confirmed' | 'pending';
         clerkId: string | null;
+        /** キャンセル待ちから「予約へ変換」するとき */
+        waitlistEntryId?: string | null;
       };
     }
   | { type: 'ledgerStatus'; reservationId: string; toStatus: ReservationStatus }
@@ -39,6 +41,13 @@ export type NativeLedgerAction =
   | { type: 'ledgerCourse'; reservationId: string; courseId: string | null }
   /** 来店 → 伝票を立てて（または残っている伝票を）開く */
   | { type: 'ledgerSeat'; reservationId: string }
+  /** 店頭ウェイティング：呼出・不在・取消・案内（卓に案内して伝票を開く） */
+  | { type: 'ledgerWaitCall' | 'ledgerWaitNoShow' | 'ledgerWaitCancel' | 'ledgerWaitContacted' | 'ledgerWaitExpired'; entryId: string }
+  | { type: 'ledgerWaitGuide'; entryId: string; tableId: string }
+  /** 店頭受付の登録（受付番号を採番） */
+  | { type: 'ledgerWaitTicket'; name: string; partySize: number; phone: string; seatPreference: string }
+  /** キャンセル待ち（満席時）の登録 */
+  | { type: 'ledgerWaitlistAdd'; name: string; phone: string; partySize: number; desiredDate: string; timeFrom: string | null; timeTo: string | null; note: string }
   /** 空席検索（その時間帯に割当のない卓。Web の FindSeatsDialog と同じ） */
   | { type: 'ledgerFindSeats'; date: string; time: string; stayMinutes: number; partySize: number }
   /** 直接来店（ウォークイン登録。Web の WalkInDialog と同じ） */
@@ -60,6 +69,14 @@ export const NATIVE_LEDGER_ACTION_TYPES: readonly NativeLedgerActionType[] = [
   'ledgerSeat',
   'ledgerFindSeats',
   'ledgerWalkIn',
+  'ledgerWaitCall',
+  'ledgerWaitNoShow',
+  'ledgerWaitCancel',
+  'ledgerWaitContacted',
+  'ledgerWaitExpired',
+  'ledgerWaitGuide',
+  'ledgerWaitTicket',
+  'ledgerWaitlistAdd',
 ];
 
 export function isNativeLedgerActionType(v: unknown): v is NativeLedgerActionType {
@@ -116,6 +133,7 @@ export function parseNativeLedgerAction(raw: unknown): Parsed {
             stayMinutes: stay as number | null,
             status,
             clerkId,
+            waitlistEntryId: isUuid(i.waitlistEntryId) ? (i.waitlistEntryId as string) : null,
           },
         },
       };
@@ -171,6 +189,32 @@ export function parseNativeLedgerAction(raw: unknown): Parsed {
       if (!isUuid(b.tableId)) return bad('テーブルを選択してください');
       if (!isInt(b.adults, 0, 999) || !isInt(b.children, 0, 999) || (b.adults as number) + (b.children as number) < 1) return bad('ご人数をご確認ください');
       return { ok: true, action: { type: 'ledgerWalkIn', tableId: b.tableId, adults: b.adults as number, children: b.children as number, name: str(b.name, 80), phone: str(b.phone, 30) } };
+    }
+    case 'ledgerWaitCall':
+    case 'ledgerWaitNoShow':
+    case 'ledgerWaitCancel':
+    case 'ledgerWaitContacted':
+    case 'ledgerWaitExpired':
+      if (!isUuid(b.entryId)) return bad();
+      return { ok: true, action: { type: b.type, entryId: b.entryId as string } };
+    case 'ledgerWaitGuide':
+      if (!isUuid(b.entryId) || !isUuid(b.tableId)) return bad('テーブルを選択してください');
+      return { ok: true, action: { type: 'ledgerWaitGuide', entryId: b.entryId as string, tableId: b.tableId as string } };
+    case 'ledgerWaitTicket': {
+      const name = str(b.name, 80);
+      if (!name) return bad('お名前を入力してください');
+      if (!isInt(b.partySize, 1, 999)) return bad('ご人数をご確認ください');
+      return { ok: true, action: { type: 'ledgerWaitTicket', name, partySize: b.partySize as number, phone: str(b.phone, 30), seatPreference: str(b.seatPreference, 60) } };
+    }
+    case 'ledgerWaitlistAdd': {
+      const name = str(b.name, 80);
+      const phone = str(b.phone, 30);
+      if (!name || phone.length < 10) return bad('お名前・お電話番号をご確認ください');
+      if (!isInt(b.partySize, 1, 999)) return bad('ご人数をご確認ください');
+      if (typeof b.desiredDate !== 'string' || !DATE.test(b.desiredDate)) return bad('希望日を確認してください');
+      const tf = typeof b.timeFrom === 'string' && HM.test(b.timeFrom) ? b.timeFrom : null;
+      const tt = typeof b.timeTo === 'string' && HM.test(b.timeTo) ? b.timeTo : null;
+      return { ok: true, action: { type: 'ledgerWaitlistAdd', name, phone, partySize: b.partySize as number, desiredDate: b.desiredDate, timeFrom: tf, timeTo: tt, note: str(b.note, 300) } };
     }
     default:
       return bad();
