@@ -1,21 +1,24 @@
 'use server';
 
+import { renderClassicInvoice } from '@/lib/classic-invoice-server';
+
 import { requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { loadReceiptData } from '@/lib/receipts-loader';
-import { receiptToStarMarkup, ryoshushoToStarMarkup, orderSlipMarkup, drawerKickMarkup } from '@/lib/receipt-markup';
-import { receiptToStarPrnt, ryoshushoToStarPrnt, orderSlipStarPrnt, drawerKickStarPrnt } from '@/lib/starprnt';
+import { receiptToStarMarkup, orderSlipMarkup, drawerKickMarkup } from '@/lib/receipt-markup';
+import { receiptToStarPrnt, orderSlipStarPrnt, drawerKickStarPrnt } from '@/lib/starprnt';
 import { normalizeFloorIds, pickDefaultPrinter, pickPrinterForFloor } from '@/lib/printer-floors';
 import {
   isSplitBalanced,
   isSplitCount,
   ryoshushoSlips,
+  splitLabel,
   RYOSHUSHO_SPLIT_MAX,
   RYOSHUSHO_SPLIT_MIN,
   type RyoshushoSlip,
 } from '@/lib/ryoshusho-split';
 import { RYOSHUSHO_ISSUED_MESSAGE, ryoshushoIssuedFrom, type RyoshushoIssueState } from '@/lib/ryoshusho-issue';
-import { receiptToEposXml, ryoshushoToEposXml, orderSlipEposXml, drawerKickEpos, kitchenTicketsEpos, eposCols, mergeEposDocs } from '@/lib/epos-print';
+import { receiptToEposXml, orderSlipEposXml, drawerKickEpos, kitchenTicketsEpos, eposCols, mergeEposDocs } from '@/lib/epos-print';
 import { layoutKitchenTicket, rotateLines180, type KitchenTicket } from '@/lib/kitchen-ticket';
 import { kitchenTicketsMarkup } from '@/lib/receipt-markup';
 import { kitchenTicketsStarPrnt } from '@/lib/starprnt';
@@ -172,24 +175,24 @@ export async function enqueueReceiptPrint(
     amounts && amounts.length > 1 ? ryoshushoSlips(amounts, taxTotal) : [null as RyoshushoSlip | null];
 
   // 1枚ずつの印刷データ（Markup / StarPRNT / ePOS-Print XML）
-  const renders = slips.map((split) => {
+  const renders = await Promise.all(slips.map(async (split) => {
     const ryoshushoOpts = {
       paperWidth: paper,
       recipientName: opts.recipientName ?? null,
       purpose: opts.purpose ?? null,
       split,
     } as const;
-    const markup = isRyoshusho
-      ? ryoshushoToStarMarkup(loaded.receipt, ryoshushoOpts)
-      : receiptToStarMarkup(loaded.receipt, { paperWidth: paper });
-    const starprnt = isRyoshusho
-      ? ryoshushoToStarPrnt(loaded.receipt, ryoshushoOpts)
-      : receiptToStarPrnt(loaded.receipt, { paperWidth: paper });
-    const epos = isRyoshusho
-      ? ryoshushoToEposXml(loaded.receipt, ryoshushoOpts)
-      : receiptToEposXml(loaded.receipt, { paperWidth: paper });
+    if (isRyoshusho) return renderClassicInvoice(loaded.receipt, {
+      ...ryoshushoOpts,
+      amount: split?.amount ?? loaded.receipt.netPaid,
+      tax: split?.tax ?? taxTotal,
+      label: split && split.count > 1 ? splitLabel(split) : undefined,
+    }, paper);
+    const markup = receiptToStarMarkup(loaded.receipt, { paperWidth: paper });
+    const starprnt = receiptToStarPrnt(loaded.receipt, { paperWidth: paper });
+    const epos = receiptToEposXml(loaded.receipt, { paperWidth: paper });
     return { markup, starprnt, epos };
-  });
+  }));
   // 分割した領収書は1つの印刷にまとめて、続けて出す（1枚ずつ別の印刷にすると、プリンターが次を取りに来るまで
   // 2枚目以降が待たされる。2026-10-14 宮崎さん（御茶ノ水）「2枚目以降が出てくるまでかなり時間がかかる」）。
   // 1枚ずつの紙の終わりのカットはそのまま。発行した枚数は payload.sheets に残す（「発行済み・2枚」の表示）。

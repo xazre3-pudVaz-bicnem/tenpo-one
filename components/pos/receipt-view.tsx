@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { ClassicInvoice } from './classic-invoice';
 import { cn } from '@/lib/utils';
 import { yen } from '@/lib/format';
 import { billSlipLines } from '@/lib/receipt-layout';
@@ -17,9 +18,7 @@ import { PrintButton } from './print-button';
 import { CloudPrintButton } from './cloud-print-button';
 import {
   RYOSHUSHO_DEFAULT_PURPOSE,
-  RYOSHUSHO_INVOICE_NOTE,
   RYOSHUSHO_ISSUED_MESSAGE,
-  RYOSHUSHO_NO_STAMP_NOTE,
   jstShortDateTime,
   type RyoshushoIssueState,
 } from '@/lib/ryoshusho-issue';
@@ -274,7 +273,7 @@ export function ReceiptView({
       <div
         className={cn(
           'print-area mx-auto rounded-xl border border-gray-200 bg-white p-4 text-gray-800 shadow-sm',
-          PAPER_CLASS
+          tab === 'invoice' ? 'max-w-[730px] overflow-x-auto' : PAPER_CLASS
         )}
       >
         {tab === 'receipt' ? (
@@ -452,7 +451,7 @@ export function ReceiptView({
                 key={sl.index}
                 className={cn(
                   'rounded-xl border border-gray-200 bg-white p-4 text-gray-800 shadow-sm',
-                  PAPER_CLASS
+                  'w-full max-w-[730px] overflow-x-auto'
                 )}
               >
                 <InvoiceBody
@@ -488,43 +487,5 @@ function InvoiceBody({
   tax: number;
   label: string;
 }) {
-  return (
-    <>
-      <p className="text-center text-sm font-bold">領収書{label && <span className="ml-1 font-normal">{label}</span>}</p>
-      {/* 発行元は上（2026-09-26 Ronnie）。印字（lib/receipt-markup.ts 等）と同じ並び */}
-      <div className="mt-1 text-center">
-        <p className="font-bold">{receipt.storeName}</p>
-        {receipt.storeAddress && <p>{receipt.storeAddress}</p>}
-        {receipt.storePhone && <p>TEL {receipt.storePhone}</p>}
-        {receipt.registrationNumber && <p>登録番号 {receipt.registrationNumber}</p>}
-      </div>
-      <div className="my-2 border-t border-dashed border-gray-300" />
-      <p className="border-b border-gray-400 pb-1 text-sm">
-        {recipientName ? `${recipientName} 様` : '　　　　　　　様'}
-      </p>
-      {/* 一部返金がある場合は実質お支払い額（netPaid）を表示する。receipt.total のままだと
-          返金分を含んだ金額が「領収」した金額として証憑に残ってしまう */}
-      <p className="mt-3 text-center text-lg font-bold tabular-nums">{yen(amount)}−</p>
-      <p className="mt-1 text-center text-[10px] text-gray-500">（税込）</p>
-      <div className="my-2 border-t border-dashed border-gray-300" />
-      <p>但し {purpose}</p>
-      <p className="mt-1">上記正に領収いたしました</p>
-      <div className="my-2 border-t border-dashed border-gray-300" />
-      <div className="flex justify-between text-[10px] text-gray-500">
-        <span>内消費税</span>
-        <span className="tabular-nums">{yen(tax)}</span>
-      </div>
-      {label && (
-        <div className="flex justify-between text-[10px] text-gray-500">
-          <span>合計 {yen(receipt.netPaid)} のうち</span>
-          <span>{label.replace(/[()]/g, '')}</span>
-        </div>
-      )}
-      <p className="mt-2">{receipt.issuedAt}</p>
-      {receipt.staffName && <p>担当 {receipt.staffName}</p>}
-      {/* 押印は省略（インボイス対応）。最後に小さく注記（2026-09-26 Ronnie） */}
-      <p className="mt-3 text-[10px] text-gray-500">{RYOSHUSHO_NO_STAMP_NOTE}</p>
-      {receipt.registrationNumber && <p className="text-[10px] text-gray-500">{RYOSHUSHO_INVOICE_NOTE}</p>}
-    </>
-  );
+  return <ClassicInvoice receipt={receipt} recipientName={recipientName} purpose={purpose} amount={amount} tax={tax} label={label} />;
 }
