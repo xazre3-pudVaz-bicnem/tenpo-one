@@ -199,7 +199,9 @@ struct NativeSlipsScreen: View {
         NativeSlipsView(
             model: model,
             onHome: { state.goNativeHome() },
-            onOpenOrder: { id in state.openNativeOrder(id, checkout: false) }
+            onOpenOrder: { id in state.openNativeOrder(id, checkout: false) },
+            openId: state.slipsOpenId,
+            onOpened: { state.slipsOpenId = nil }
         )
         .onChange(of: state.nativeOrder) { new in if new == nil { Task { await model.refresh() } } }
     }
