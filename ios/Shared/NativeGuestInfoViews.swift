@@ -77,9 +77,10 @@ struct NativeSetupSheet: View {
                 .buttonStyle(.plain)
             } right: { EmptyView() }
 
+            // AnyView で型を切る（中身を 2 回入れると View の型が深くなりすぎて実機で落ちる。2026-10-24）
             ViewThatFits(in: .vertical) {
-                main
-                ScrollView(showsIndicators: true) { main }
+                AnyView(main)
+                ScrollView(showsIndicators: true) { AnyView(main) }
             }
 
             // 下に固定（Web の HandyFooterButton と同じ）
@@ -393,9 +394,10 @@ struct NativeGuestInfoSheet: View {
                 .buttonStyle(PressableStyle())
                 .disabled(saving)
             }
+            // AnyView で型を切る（中身を 2 回入れると View の型が深くなりすぎて実機で落ちる。2026-10-24）
             ViewThatFits(in: .vertical) {
-                main
-                ScrollView(showsIndicators: true) { main }
+                AnyView(main)
+                ScrollView(showsIndicators: true) { AnyView(main) }
             }
         }
     }

@@ -72,9 +72,11 @@ struct NativeTableSheet: View {
 
     private var popup: some View {
         // 入るならそのまま（中身の高さ）、入らなければスクロール（NFCardLayout が高さを決める）
+        // AnyView で型を切る：中身をそのまま 2 回入れると View の型が深くなりすぎて、
+        // 実機（Debug）で型の展開がスタックを使い切って落ちた（2026-10-24 Ronnie「卓で注文しようとするとアプリが閉じる」）
         ViewThatFits(in: .vertical) {
-            popupInner
-            ScrollView(showsIndicators: false) { popupInner }
+            AnyView(popupInner)
+            ScrollView(showsIndicators: false) { AnyView(popupInner) }
         }
         .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.white))
         .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(NFColor.line, lineWidth: 1))
