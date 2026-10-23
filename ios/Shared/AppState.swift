@@ -287,6 +287,7 @@ final class AppState: ObservableObject {
         nativeHome = false
         nativeLedger = false
         nativeCash = false
+        nativeQuick = false
         nativeCashIo = true
         WebViewController.current?.load(AppConfig.url("/app/cash"))
     }
