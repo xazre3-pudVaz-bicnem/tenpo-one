@@ -10,7 +10,7 @@
 import iconv from 'iconv-lite';
 import { RYOSHUSHO_DEFAULT_PURPOSE, RYOSHUSHO_INVOICE_NOTE, RYOSHUSHO_NO_STAMP_NOTE, ryoshushoRecipientLine } from '@/lib/ryoshusho-issue';
 import type { ReceiptData } from './receipts';
-import { billSlipLines, receiptTableLines, colsFor, twoCol as twoColBase, wrapText as wrapTextBase, yen, STAR_WIDTH_OPTIONS, type PaperWidth } from './receipt-layout';
+import { receiptTableLines, colsFor, twoCol as twoColBase, wrapText as wrapTextBase, yen, STAR_WIDTH_OPTIONS, type PaperWidth } from './receipt-layout';
 
 /** Star 機の全角幅（半角2桁よりわずかに広い）を見込んだ桁揃え・折り返し */
 const twoCol = (left: string, right: string, width: number) => twoColBase(left, right, width, STAR_WIDTH_OPTIONS);
@@ -277,11 +277,7 @@ export function orderSlipStarPrnt(slip: OrderSlipData, options: StarPrntOptions 
   if (meta) b.line(meta);
   b.line(`発行 ${slip.issuedAt}`).line(rule);
 
-  for (const it of billSlipLines(slip.lines)) {
-    b.line(it.name);
-    b.line(twoCol(`  ${it.quantity} x ${yen(it.unitPrice)}`, yen(it.lineTotal), width));
-    for (const m of it.modifiers) b.line(twoCol(`   + ${m.name}`, m.price ? yen(m.price) : '', width));
-  }
+  for (const row of receiptTableLines(slip.lines, width, STAR_WIDTH_OPTIONS)) b.line(row);
   b.line(rule);
   b.line(twoCol('小計', yen(slip.subtotal), width));
   b.line(twoCol('消費税', yen(slip.taxTotal), width));

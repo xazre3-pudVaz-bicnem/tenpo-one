@@ -298,7 +298,7 @@ export function ReceiptView({
             )}
             <div className="my-2 border-t border-dashed border-gray-300" />
             <table className="w-full border-collapse border border-gray-400">
-              <thead><tr><th className="border border-gray-400">QT</th><th className="border border-gray-400">MENU</th><th className="border border-gray-400">PRICE</th></tr></thead>
+              <thead><tr><th className="border border-gray-400">数量</th><th className="border border-gray-400">商品名</th><th className="border border-gray-400">金額</th></tr></thead>
               <tbody>{visibleLines.map((it, i) => (
                 <tr key={i}><td className="border border-gray-400 text-right align-top">{it.quantity}</td><td className="border border-gray-400 align-top">{it.name}</td><td className="border border-gray-400 text-right align-top tabular-nums">{yen(it.lineTotal)}</td></tr>
               ))}</tbody>

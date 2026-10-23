@@ -151,7 +151,7 @@ describe('orderSlipEposXml', () => {
     expect(xml).toContain('T-3');
     expect(xml).toContain('No.123');
     expect(xml).toContain('カレーセット');
-    expect(xml).toContain('+ ナン');
+    expect(xml).not.toContain('+ ナン');
     expect(xml).toContain('2名');
     expect(xml).toContain('担当 Ronnie');
     expect(xml).toContain('これは領収書ではありません');

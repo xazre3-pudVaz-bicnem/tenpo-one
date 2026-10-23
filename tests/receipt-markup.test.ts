@@ -158,7 +158,7 @@ describe('orderSlipMarkup（注文伝票）', () => {
     expect(m).toContain('担当 山田');
     expect(m).toContain('シュラスコ食べ放題');
     expect(m).toContain('生ビール');
-    expect(m).toContain('大');
+    expect(m).not.toContain('   + 大');
     expect(m).toContain('¥11,300');
     expect(m).toContain('※ これは領収書ではありません');
     expect(m.trimEnd().endsWith('[cut: feed; partial]')).toBe(true);
