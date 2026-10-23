@@ -170,6 +170,8 @@ final class NativeLedgerModel: ObservableObject {
     @Published var weekMode = false
     /// ウェイティング（Web の view=waitlist）
     @Published var waitMode = false
+    /// 予約リストを未連絡（仮予約）だけにする（Web の 予約リスト status=pending）
+    @Published var pendingOnly = false
     private var clock: Timer?
     private var refresher: Timer?
     private var offset: TimeInterval = 0
@@ -718,16 +720,29 @@ struct NativeLedgerView: View {
         .padding(16)
     }
 
+    private func listChip(_ t: String, on: Bool) -> some View {
+        Text(t).font(.system(size: 13, weight: .semibold)).foregroundColor(on ? .white : NLColor.muted)
+            .padding(.horizontal, 14).frame(height: 34)
+            .background(Capsule().fill(on ? NLColor.navy : NLColor.card))
+            .overlay(Capsule().stroke(on ? Color.clear : NLColor.line, lineWidth: 1))
+    }
+
     private func listBody(_ p: NLPayload) -> some View {
         ScrollView { listRows(p) }
     }
 
     private func listRows(_ p: NLPayload) -> some View {
-            LazyVStack(spacing: 8) {
-                if p.reservations.isEmpty {
-                    Text("この日の予約はありません").font(.system(size: 14)).foregroundColor(NLColor.muted).padding(.vertical, 40)
+            let rows = model.pendingOnly ? p.reservations.filter { $0.status == "pending" } : p.reservations
+            return LazyVStack(spacing: 8) {
+                HStack(spacing: 8) {
+                    Button { model.pendingOnly = false } label: { listChip("すべて", on: !model.pendingOnly) }.buttonStyle(.plain)
+                    Button { model.pendingOnly = true } label: { listChip("未連絡の予約（\(p.reservations.filter { $0.status == "pending" }.count)）", on: model.pendingOnly) }.buttonStyle(.plain)
+                    Spacer()
                 }
-                ForEach(p.reservations) { r in
+                if rows.isEmpty {
+                    Text(model.pendingOnly ? "未連絡の予約はありません" : "この日の予約はありません").font(.system(size: 14)).foregroundColor(NLColor.muted).padding(.vertical, 40)
+                }
+                ForEach(rows) { r in
                     let late = model.isLate(r)
                     let tone = NLColor.tone(r.status, late: late)
                     Button { selected = r } label: {
