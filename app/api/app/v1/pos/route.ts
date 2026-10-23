@@ -15,6 +15,21 @@ import { shouldOpenDrawer } from '@/lib/printing/types';
 import { isNativeFloorActionType, parseNativeFloorAction, type NativeFloorAction } from '@/lib/native-floor';
 import { loadNativeFloor } from '@/lib/native-floor-server';
 import { loadNativeHome } from '@/lib/native-home-server';
+import { isNativeLedgerActionType, parseNativeLedgerAction, type NativeLedgerAction } from '@/lib/native-ledger';
+import { loadNativeLedger } from '@/lib/native-ledger-server';
+import {
+  assignTables,
+  cancelReservation,
+  createManualReservation,
+  createOrderForReservation,
+  markNoShow,
+  moveReservation,
+  transitionReservationStatus,
+  updateReservationClerk,
+  updateReservationCourse,
+  updateReservationMemo,
+  updateReservationSource,
+} from '@/app/app/reservations/actions';
 import { addSlipToTable, cancelEmptyOrder, clearTable, mergeOrders, moveTable, setGuestCount, setPaymentMemo, setSeatTime } from '@/app/app/pos/actions';
 import { completeCleaning, goToOrder, releaseFinishedCleaning, setTableAvailability } from '@/app/app/floor/actions';
 import { saveTableGroup } from '@/app/app/floor/group-actions';
@@ -136,6 +151,17 @@ export async function GET(request: Request) {
     return json({ ok: true, ...home });
   }
 
+  // 店舗台帳（1日のスケジュール）。Web の店舗台帳と同じ組み立て（lib/native-ledger-server.ts）
+  if (part === 'ledger') {
+    const store = ctx.currentStore ?? ctx.stores[0] ?? null;
+    if (!store) return json({ ok: false, error: '店舗がありません' }, 404);
+    if (ctx.disabledFeatures?.has('reservations')) return json({ ok: false, error: 'この機能は使えません', useWeb: true }, 403);
+    const dateParam = url.searchParams.get('date');
+    const date = dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) ? dateParam : null;
+    const ledger = await loadNativeLedger(ctx, await createClient(), store, date);
+    return json({ ok: true, ...ledger });
+  }
+
   // フロア（テーブル一覧）。Web のテーブル一覧と同じ組み立て（lib/floor-view-server.ts）
   if (part === 'floor') {
     const storeParam = url.searchParams.get('store');
@@ -192,6 +218,21 @@ export async function POST(request: Request) {
   } catch {
     return json({ ok: false, error: '内容が正しくありません' }, 400);
   }
+  // 店舗台帳（予約）の操作（2026-10-24）
+  if (raw && typeof raw === 'object' && isNativeLedgerActionType((raw as { type?: unknown }).type)) {
+    const parsedLedger = parseNativeLedgerAction(raw);
+    if (!parsedLedger.ok) return json({ ok: false, error: parsedLedger.error }, 400);
+    const action = parsedLedger.action;
+    if (!can(ctx.role, action.type === 'ledgerSeat' ? 'pos.order' : 'reservations.write')) return json({ ok: false, error: '権限がありません' }, 403);
+    const problem = await networkProblem(ctx);
+    if (problem) return json({ ok: false, error: problem }, 403);
+    try {
+      return json(await runLedgerAction(ctx, action));
+    } catch (e) {
+      return json({ ok: false, error: errorText(e, 'うまくいきませんでした。もう一度お試しください') }, 400);
+    }
+  }
+
   // フロア（テーブル一覧）の操作（2026-10-24）
   if (raw && typeof raw === 'object' && isNativeFloorActionType((raw as { type?: unknown }).type)) {
     const parsedFloor = parseNativeFloorAction(raw);
@@ -377,6 +418,66 @@ async function runFloorAction(action: NativeFloorAction): Promise<Record<string,
       // ホームの「ドロアオープン」（Web の DrawerRow と同じ）
       const res = await enqueueDrawerKick(action.storeId);
       return res.ok ? { ok: true } : { ok: false, error: res.error ?? 'ドロアを開けられませんでした' };
+    }
+  }
+}
+
+/** 店舗台帳の操作。中身は Web の予約台帳と同じ Server Action */
+async function runLedgerAction(ctx: SessionContext, action: NativeLedgerAction): Promise<Record<string, unknown>> {
+  switch (action.type) {
+    case 'ledgerCreate': {
+      const store = ctx.currentStore ?? ctx.stores[0];
+      if (!store) return { ok: false, error: '店舗がありません' };
+      const i = action.input;
+      const res = (await createManualReservation({
+        storeId: store.id,
+        date: i.date,
+        time: i.time,
+        adults: i.adults,
+        children: i.children,
+        name: i.name,
+        kana: i.kana || undefined,
+        phone: i.phone,
+        note: i.note || undefined,
+        sourceCode: i.sourceCode,
+        courseId: i.courseId,
+        tableIds: i.tableIds,
+        stayMinutes: i.stayMinutes,
+        status: i.status,
+        clerkId: i.clerkId,
+      })) as unknown as { reservationId?: string; id?: string } | void;
+      return { ok: true, reservationId: res && typeof res === 'object' ? (res.reservationId ?? res.id ?? null) : null };
+    }
+    case 'ledgerStatus':
+      await transitionReservationStatus(action.reservationId, action.toStatus);
+      return { ok: true };
+    case 'ledgerCancel':
+      await cancelReservation(action.reservationId, action.reason);
+      return { ok: true };
+    case 'ledgerNoShow':
+      await markNoShow(action.reservationId, action.reason || undefined);
+      return { ok: true };
+    case 'ledgerTables':
+      await assignTables(action.reservationId, action.tableIds);
+      return { ok: true };
+    case 'ledgerMove':
+      await moveReservation(action.reservationId, { date: action.date, time: action.time, stayMinutes: action.stayMinutes });
+      return { ok: true };
+    case 'ledgerMemo':
+      await updateReservationMemo(action.reservationId, action.memo);
+      return { ok: true };
+    case 'ledgerClerk':
+      await updateReservationClerk(action.reservationId, action.clerkId);
+      return { ok: true };
+    case 'ledgerSource':
+      await updateReservationSource(action.reservationId, action.sourceId);
+      return { ok: true };
+    case 'ledgerCourse':
+      await updateReservationCourse(action.reservationId, action.courseId);
+      return { ok: true };
+    case 'ledgerSeat': {
+      const orderId = await createOrderForReservation(action.reservationId);
+      return { ok: true, orderId };
     }
   }
 }
