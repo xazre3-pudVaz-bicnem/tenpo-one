@@ -95,6 +95,7 @@ struct NativeHomeScreen: View {
                 if path == "/app/reservations" { state.goNativeLedger() }
                 else if path == "/app/cash/close" || path == "/app/cash/open" { state.goNativeCash(path) }
                 else if path == "/app/cash" { state.goNativeCashIo() }
+                else if path == "/app/quick-pay" { state.goNativeQuick() }
                 else { state.leaveNativeFloor(to: path) }
             },
             onFloor: { state.goNativeFloor() }
@@ -154,5 +155,21 @@ struct NativeCashIoScreen: View {
             onWeb: { path in state.leaveNativeFloor(to: path) },
             onClose: { state.goNativeCash("/app/cash/close") }
         )
+    }
+}
+
+/// ネイティブの即会計（2026-10-24）
+struct NativeQuickScreen: View {
+    @StateObject private var model = NativeQuickModel()
+    @EnvironmentObject var state: AppState
+
+    var body: some View {
+        NativeQuickPayView(
+            model: model,
+            onHome: { state.goNativeHome() },
+            onOpenOrder: { id, checkout in state.openNativeOrder(id, checkout: checkout) }
+        )
+        .onChange(of: state.quickRefreshTick) { _ in Task { await model.refresh() } }
+        .onChange(of: state.nativeOrder) { new in if new == nil { Task { await model.refresh() } } }
     }
 }

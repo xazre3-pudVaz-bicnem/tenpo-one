@@ -7,7 +7,7 @@ import { loadNativeCatalog, loadNativeLive, loadNativeOrder, loadNativePos, setO
 import { claimLanKitchenPrints, finishLanPrint } from '@/lib/native-print-server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { ACCESS_MESSAGE } from '@/lib/store-access';
-import { checkout, splitOrder, sendOrderToKitchen, setDiscount, updateQty, addItem } from '@/app/app/pos/actions';
+import { checkout, splitOrder, sendOrderToKitchen, setDiscount, updateQty, addItem, startTakeout } from '@/app/app/pos/actions';
 import { setOrderClerk } from '@/app/app/pos/clerk-actions';
 import { cancelSteraPayment, checkSteraPayment, startSteraPayment } from '@/app/app/pos/stera-actions';
 import { enqueueDrawerKick, enqueueExpoSlipPrint, enqueueOrderSlipPrint, enqueueReceiptPrint, enqueueSelectedItemsPrint } from '@/app/app/pos/print-actions';
@@ -19,6 +19,9 @@ import { isNativeLedgerActionType, parseNativeLedgerAction, type NativeLedgerAct
 import { loadNativeLedger } from '@/lib/native-ledger-server';
 import { isNativeCashActionType, parseNativeCashAction, sumNativeDenominations, type NativeCashAction } from '@/lib/native-cash';
 import { loadNativeCash, loadNativeCashIo } from '@/lib/native-cash-server';
+import { isNativeQuickActionType, parseNativeQuickAction, type NativeQuickAction } from '@/lib/native-quick';
+import { loadNativeQuick } from '@/lib/native-quick-server';
+import { prepareQuickCheckout, startQuickOrder } from '@/app/app/quick-pay/actions';
 import { addCashTransaction, closeRegister, openRegister, printSettlementReport, reprintRegisterReport } from '@/app/app/cash/actions';
 import {
   assignTables,
@@ -176,6 +179,14 @@ export async function GET(request: Request) {
     return json({ ok: true, ...cash });
   }
 
+  // 即会計（Web の /app/quick-pay）
+  if (part === 'quick') {
+    const store = ctx.currentStore ?? ctx.stores[0] ?? null;
+    if (!store) return json({ ok: false, error: '店舗がありません' }, 404);
+    const quick = await loadNativeQuick(ctx, await createClient(), { id: store.id, name: store.name }, url.searchParams.get('order'));
+    return json({ ok: true, ...quick });
+  }
+
   // 入出金（Web の /app/cash のレジ入出金タブ）
   if (part === 'cashio') {
     const store = ctx.currentStore ?? ctx.stores[0] ?? null;
@@ -252,6 +263,21 @@ export async function POST(request: Request) {
     if (problem) return json({ ok: false, error: problem }, 403);
     try {
       return json(await runLedgerAction(ctx, action));
+    } catch (e) {
+      return json({ ok: false, error: errorText(e, 'うまくいきませんでした。もう一度お試しください') }, 400);
+    }
+  }
+
+  // 即会計の操作（2026-10-24）
+  if (raw && typeof raw === 'object' && isNativeQuickActionType((raw as { type?: unknown }).type)) {
+    const parsedQuick = parseNativeQuickAction(raw);
+    if (!parsedQuick.ok) return json({ ok: false, error: parsedQuick.error }, 400);
+    const action = parsedQuick.action;
+    if (!can(ctx.role, action.type === 'quickCheckout' ? 'pos.checkout' : 'pos.order')) return json({ ok: false, error: '権限がありません' }, 403);
+    const problem = await networkProblem(ctx);
+    if (problem) return json({ ok: false, error: problem }, 403);
+    try {
+      return json(await runQuickAction(action));
     } catch (e) {
       return json({ ok: false, error: errorText(e, 'うまくいきませんでした。もう一度お試しください') }, 400);
     }
@@ -462,6 +488,25 @@ async function runFloorAction(action: NativeFloorAction): Promise<Record<string,
 }
 
 /** 店舗台帳の操作。中身は Web の予約台帳と同じ Server Action */
+/** 即会計。Web の QuickPayScreen と同じ Server Action（startQuickOrder / prepareQuickCheckout / startTakeout） */
+async function runQuickAction(action: NativeQuickAction): Promise<Record<string, unknown>> {
+  switch (action.type) {
+    case 'quickStart': {
+      const { orderId } = await startQuickOrder(action.guestCount);
+      return { ok: true, orderId };
+    }
+    case 'quickTakeout': {
+      const { orderId } = await startTakeout();
+      return { ok: true, orderId };
+    }
+    case 'quickCheckout': {
+      const r = await prepareQuickCheckout({ orderId: action.orderId, guestCount: action.guestCount, lines: action.lines, discount: action.discount });
+      if (r.error || !r.orderId) return { ok: false, error: r.error ?? '会計に進めませんでした', orderId: r.orderId ?? null };
+      return { ok: true, orderId: r.orderId };
+    }
+  }
+}
+
 /** レジ開局・レジクローズ。Web の RegisterOpenCard / RegisterCountCard / RegisterClosedCard と同じ Server Action を呼ぶ */
 async function runCashAction(ctx: SessionContext, action: NativeCashAction): Promise<Record<string, unknown>> {
   switch (action.type) {
