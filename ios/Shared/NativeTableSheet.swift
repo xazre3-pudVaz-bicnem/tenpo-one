@@ -95,6 +95,8 @@ struct NativeTableSheet: View {
 
     // MARK: ポップアップの中身
 
+    @State private var contentHeight: CGFloat = 0
+
     private var popup: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 8) {
@@ -133,8 +135,11 @@ struct NativeTableSheet: View {
                 }
             }
             .padding(12)
+            .background(GeometryReader { g in Color.clear.preference(key: NFContentHeightKey.self, value: g.size.height) })
         }
-        .frame(maxHeight: 760)
+        .onPreferenceChange(NFContentHeightKey.self) { contentHeight = $0 }
+        // 中身の高さだけ（ScrollView は放っておくと画面いっぱいに伸びる）。長いときは 760 で止めて中をスクロール
+        .frame(height: min(max(contentHeight, 60), 760))
         .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.white))
         .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(NFColor.line, lineWidth: 1))
         .shadow(color: Color(hex: 0x292725).opacity(0.28), radius: 22, y: 18)
@@ -562,4 +567,9 @@ struct NativeTableSheet: View {
 struct NFSizeKey: PreferenceKey {
     static var defaultValue: CGSize = .zero
     static func reduce(value: inout CGSize, nextValue: () -> CGSize) { value = nextValue() }
+}
+
+struct NFContentHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
 }

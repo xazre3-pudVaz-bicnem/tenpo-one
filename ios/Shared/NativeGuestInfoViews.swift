@@ -23,6 +23,9 @@ private func nfDurationLabel(_ m: Int) -> String {
 }
 
 // MARK: - 来店登録（空席 → 注文）
+// Web のハンディ・レジの「お客様情報」（components/handy/handy-setup-screen.tsx）と同じ並び：
+//   テーブル／モード → タイマー設定（時間制・終了前注意・開始時間）→ 人数（男性・女性 1〜5・＋）→ 来店経路 → 確定
+// 色はオーダー・会計の青と、来店経路の各社の色（2026-10-24 Ronnie「レイアウトは今の画面のまま、色を合わせて」）
 
 struct NativeSetupSheet: View {
     @ObservedObject var model: NativeFloorModel
@@ -32,101 +35,184 @@ struct NativeSetupSheet: View {
 
     @State private var plans: [String] = ["normal"]
     @State private var planItemIds: [String] = []
+    @State private var modeOpen = false
     @State private var male = 0
     @State private var female = 0
     @State private var source = ""
     @State private var timed = false
     @State private var duration = 120
-    @State private var warningEnabled = true
+    @State private var durationOpen = false
+    @State private var warningEnabled = false
     @State private var warningMinutes = 30
+    @State private var warningOpen = false
     @State private var startNow = true
     @State private var startDate = Date()
+    @State private var startOpen = false
     @State private var saving = false
     @State private var problem: String?
 
     private var payload: NFPayload? { model.payload }
     private var planItems: [NFPlanItem] { (payload?.planItems ?? []).filter { plans.contains($0.kind) } }
     private var guests: Int { male + female }
+    private var planNames: String {
+        let names = payload?.plans ?? []
+        return plans.compactMap { id in names.first { $0.id == id }?.name }.joined(separator: "・")
+    }
+    private var canConfirm: Bool { guests >= 1 && !source.isEmpty && !saving }
 
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    // モード
-                    NFSection("モード / Mode") {
-                        NFChipGrid(items: (payload?.plans ?? []).map { ($0.id, $0.name, NFColor.iris, false) }, selected: plans, columns: 5) { id in
-                            togglePlan(id)
-                        }
-                    }
-                    if !planItems.isEmpty {
-                        NFSection("プラン / Plan") {
-                            NFChipGrid(items: planItems.map { ($0.id, "\($0.name)  ¥\($0.price)", NFColor.iris, false) }, selected: planItemIds, columns: 3) { id in
-                                if planItemIds.contains(id) { planItemIds.removeAll { $0 == id } } else { planItemIds.append(id) }
-                                // コースを選んだらコースの時間を時間制の既定に
-                                if let item = planItems.first(where: { $0.id == id }), item.kind == "course", let m = item.durationMinutes, m > 0, planItemIds.contains(id) {
-                                    timed = true; duration = m
+                VStack(alignment: .leading, spacing: 16) {
+                    // テーブル・モード
+                    card {
+                        row("テーブル", en: "Table") { Text(table.name).font(.system(size: 17, weight: .heavy)).foregroundColor(NFColor.ink) }
+                        rowDivider
+                        Button { withAnimation(.easeOut(duration: 0.15)) { modeOpen.toggle() } } label: {
+                            row("モード", en: "Mode") {
+                                HStack(spacing: 6) {
+                                    Text(planNames).font(.system(size: 17, weight: .bold)).foregroundColor(NFColor.iris)
+                                    Image(systemName: modeOpen ? "chevron.down" : "chevron.right").font(.system(size: 14, weight: .bold)).foregroundColor(NFColor.ink3)
                                 }
                             }
                         }
-                    }
-                    // 人数
-                    NFSection("人数 / Guests　\(guests)名") {
-                        HStack(spacing: 18) {
-                            NFStepper(title: "男性 / Men", value: $male, max: 999)
-                            NFStepper(title: "女性 / Women", value: $female, max: 999)
+                        .buttonStyle(.plain)
+                        if modeOpen {
+                            VStack(alignment: .leading, spacing: 10) {
+                                NFChipGrid(items: (payload?.plans ?? []).map { ($0.id, $0.name, NFColor.iris, false) }, selected: plans, columns: 5) { id in togglePlan(id) }
+                                if !planItems.isEmpty {
+                                    Text("プラン / Plan（選ぶと伝票に入ります）").font(.system(size: 12)).foregroundColor(NFColor.ink3)
+                                    NFChipGrid(items: planItems.map { ($0.id, "\($0.name)  ¥\($0.price)", NFColor.iris, false) }, selected: planItemIds, columns: 3) { id in
+                                        if planItemIds.contains(id) { planItemIds.removeAll { $0 == id } } else { planItemIds.append(id) }
+                                        if let item = planItems.first(where: { $0.id == id }), item.kind == "course", let m = item.durationMinutes, m > 0, planItemIds.contains(id) {
+                                            timed = true; duration = m
+                                        }
+                                    }
+                                } else if plans.contains(where: { $0 != "normal" }) {
+                                    // プラン商品が無い店（2026-10-24 Ronnie「モードは出たがプランが出ない」→ 理由を出す）
+                                    Text("この店にはプラン商品（飲み放題・食べ放題・コースの商品）がまだありません。設定 > メニュー で商品の種別を「飲み放題」「食べ放題」「コース」にすると、ここに出ます。")
+                                        .font(.system(size: 12)).foregroundColor(NFColor.ink3)
+                                }
+                            }
+                            .padding(.horizontal, 16).padding(.bottom, 14)
                         }
                     }
+
+                    // タイマー設定
+                    heading("タイマー設定", en: "Timer")
+                    card {
+                        row("時間制", en: "Time limit") {
+                            HStack(spacing: 10) {
+                                Toggle("", isOn: $timed).labelsHidden().tint(NFColor.iris)
+                                Button { if timed { withAnimation(.easeOut(duration: 0.15)) { durationOpen.toggle() } } } label: {
+                                    HStack(spacing: 6) {
+                                        Text(timed ? nfDurationLabel(duration) : "設定なし").font(.system(size: 17, weight: timed ? .bold : .regular)).foregroundColor(timed ? NFColor.iris : NFColor.ink3)
+                                        Image(systemName: "chevron.right").font(.system(size: 14, weight: .bold)).foregroundColor(NFColor.ink3)
+                                    }
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        if timed && durationOpen {
+                            NFChipGrid(items: NF_DURATIONS.map { (String($0), nfDurationLabel($0), NFColor.iris, false) }, selected: [String(duration)], columns: 5) { v in duration = Int(v) ?? 120 }
+                                .padding(.horizontal, 16).padding(.bottom, 14)
+                        }
+                        rowDivider
+                        row("終了前注意", en: "Last call") {
+                            HStack(spacing: 10) {
+                                Toggle("", isOn: $warningEnabled).labelsHidden().tint(NFColor.iris).disabled(!timed)
+                                Button { if warningEnabled { withAnimation(.easeOut(duration: 0.15)) { warningOpen.toggle() } } } label: {
+                                    HStack(spacing: 6) {
+                                        Text(timed && warningEnabled ? "\(warningMinutes)分前" : "設定なし").font(.system(size: 17, weight: warningEnabled ? .bold : .regular)).foregroundColor(timed && warningEnabled ? NFColor.iris : NFColor.ink3)
+                                        Image(systemName: "chevron.right").font(.system(size: 14, weight: .bold)).foregroundColor(NFColor.ink3)
+                                    }
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        if timed && warningEnabled && warningOpen {
+                            NFChipGrid(items: [15, 30, 45, 60].map { (String($0), "\($0)分前", NFColor.iris, false) }, selected: [String(warningMinutes)], columns: 4) { v in warningMinutes = Int(v) ?? 30 }
+                                .padding(.horizontal, 16).padding(.bottom, 14)
+                        }
+                        rowDivider
+                        Button { withAnimation(.easeOut(duration: 0.15)) { startOpen.toggle() } } label: {
+                            row("開始時間", en: "Start time") {
+                                HStack(spacing: 6) {
+                                    Text("\(nfHm(startNow ? model.nowDate : startDate))〜").font(.system(size: 17, weight: .bold)).monospacedDigit().foregroundColor(NFColor.iris)
+                                    Image(systemName: "chevron.right").font(.system(size: 14, weight: .bold)).foregroundColor(NFColor.ink3)
+                                }
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        if startOpen {
+                            HStack(spacing: 10) {
+                                NFToggleChip("今 / Now", on: startNow) { startNow = true }
+                                NFToggleChip("時刻を選ぶ / Pick", on: !startNow) { startNow = false; startDate = Date() }
+                                if !startNow {
+                                    DatePicker("", selection: $startDate, in: Date().addingTimeInterval(-12 * 3600)...Date(), displayedComponents: .hourAndMinute)
+                                        .labelsHidden()
+                                        .environment(\.timeZone, TimeZone(identifier: "Asia/Tokyo")!)
+                                }
+                                Spacer()
+                            }
+                            .padding(.horizontal, 16).padding(.bottom, 14)
+                        }
+                    }
+
+                    // 人数
+                    HStack {
+                        heading("人数", en: "Guests", required: true)
+                        Spacer()
+                        Text("合計：\(guests)人").font(.system(size: 14)).foregroundColor(NFColor.ink2)
+                    }
+                    card {
+                        VStack(alignment: .leading, spacing: 14) {
+                            countRow("男性", en: "Male", value: $male)
+                            countRow("女性", en: "Female", value: $female)
+                        }
+                        .padding(16)
+                    }
+
                     // 来店経路
-                    NFSection("来店経路 / Booking source") {
+                    heading("来店経路", en: "Source", required: true)
+                    card {
                         let sources = (payload?.visitSources ?? []).map { s -> (String, String, Color, Bool) in
                             let v = NPVisitSource(id: s.id, label: s.label)
-                            return (s.label, v.english, v.color, v.darkText)
+                            return (s.label, s.label, v.color, v.darkText)
                         }
-                        NFChipGrid(items: sources, selected: [source], columns: 4) { label in source = (source == label) ? "" : label }
+                        NFChipGrid(items: sources, selected: [source], columns: 6) { label in source = (source == label) ? "" : label }
+                            .padding(16)
                     }
-                    // 時間制
-                    NFSection("時間制 / Time limit") {
-                        HStack(spacing: 8) {
-                            NFToggleChip("なし / None", on: !timed) { timed = false }
-                            NFToggleChip("あり / Timed", on: timed) { timed = true }
-                        }
-                        if timed {
-                            NFChipGrid(items: NF_DURATIONS.map { (String($0), nfDurationLabel($0), NFColor.iris, false) }, selected: [String(duration)], columns: 5) { v in duration = Int(v) ?? 120 }
-                            HStack(spacing: 10) {
-                                NFToggleChip(warningEnabled ? "終了前に声かけ ON" : "終了前に声かけ OFF", on: warningEnabled) { warningEnabled.toggle() }
-                                if warningEnabled {
-                                    NFChipGrid(items: [15, 30, 45, 60].map { (String($0), "\($0)分前", NFColor.iris, false) }, selected: [String(warningMinutes)], columns: 4) { v in warningMinutes = Int(v) ?? 30 }
-                                }
+
+                    VStack(spacing: 12) {
+                        Text(problem ?? (guests < 1 ? "合計人数を1〜999名で入力してください" : (source.isEmpty ? "来店経路を選択してください" : " ")))
+                            .font(.system(size: 14)).foregroundColor(problem == nil ? NFColor.ink3 : NFColor.danger)
+                        Button { Task { await confirm() } } label: {
+                            VStack(spacing: 1) {
+                                Text(saving ? "作成中…" : "確定").font(.system(size: 22, weight: .heavy))
+                                Text("Start order").font(.system(size: 12, weight: .bold)).opacity(0.8)
                             }
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity).frame(height: 72)
+                            .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(canConfirm ? NFColor.iris : NFColor.iris.opacity(0.35)))
                         }
+                        .buttonStyle(PressableStyle(scale: 0.98))
+                        .disabled(!canConfirm)
                     }
-                    // 開始時間
-                    NFSection("開始時間 / Start") {
-                        HStack(spacing: 10) {
-                            NFToggleChip("今 / Now", on: startNow) { startNow = true }
-                            NFToggleChip("時刻を選ぶ / Pick", on: !startNow) { startNow = false; startDate = Date() }
-                            if !startNow {
-                                DatePicker("", selection: $startDate, in: Date().addingTimeInterval(-12 * 3600)...Date(), displayedComponents: .hourAndMinute)
-                                    .labelsHidden()
-                                    .environment(\.timeZone, TimeZone(identifier: "Asia/Tokyo")!)
-                            }
-                        }
-                    }
-                    if let p = problem {
-                        Text(p).font(.system(size: 13, weight: .bold)).foregroundColor(NFColor.danger)
-                    }
+                    .padding(.top, 20)
                 }
-                .padding(20)
+                .padding(16)
+                .frame(maxWidth: 1100)
+                .frame(maxWidth: .infinity)
             }
             .background(NFColor.lilacSoft)
-            .navigationTitle("お客様情報 / Guest info　\(table.name)")
+            .navigationTitle("お客様情報")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("キャンセル", action: onClose) }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(saving ? "作成中…" : "注文へ / Start") { Task { await confirm() } }
-                        .font(.system(size: 16, weight: .heavy))
-                        .disabled(saving || guests < 1)
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(action: onClose) {
+                        HStack(spacing: 4) { Image(systemName: "chevron.left"); Text("卓へ戻る") }
+                    }
                 }
             }
         }
@@ -155,7 +241,7 @@ struct NativeSetupSheet: View {
             "source": source,
             "timed": timed,
             "duration": duration,
-            "warningEnabled": warningEnabled,
+            "warningEnabled": timed && warningEnabled,
             "warningMinutes": warningMinutes,
         ]
         draft["startTime"] = startNow ? NSNull() : nfHm(startDate)
@@ -164,6 +250,70 @@ struct NativeSetupSheet: View {
             onStarted(id)
         } else {
             problem = model.error
+        }
+    }
+
+    // MARK: 部品（Web のハンディの画面と同じ形）
+
+    private func card<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 0, content: content)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white))
+            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(NFColor.line, lineWidth: 1))
+    }
+
+    private var rowDivider: some View { Rectangle().fill(NFColor.line).frame(height: 1) }
+
+    private func heading(_ ja: String, en: String, required: Bool = false) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Text(ja).font(.system(size: 18, weight: .heavy)).foregroundColor(NFColor.ink)
+            Text(en).font(.system(size: 13)).foregroundColor(NFColor.ink3)
+            if required { Text("＊").font(.system(size: 16, weight: .bold)).foregroundColor(NFColor.danger) }
+        }
+    }
+
+    private func row<Right: View>(_ ja: String, en: String, @ViewBuilder right: () -> Right) -> some View {
+        HStack {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(ja).font(.system(size: 17)).foregroundColor(NFColor.ink2)
+                Text(en).font(.system(size: 13)).foregroundColor(NFColor.ink3)
+            }
+            Spacer()
+            right()
+        }
+        .padding(.horizontal, 16)
+        .frame(height: 64)
+    }
+
+    /// 1〜5 のボタンと ＋（Web と同じ）。5 より多いときは ＋ に数を出す
+    private func countRow(_ ja: String, en: String, value: Binding<Int>) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(ja).font(.system(size: 15)).foregroundColor(NFColor.ink2)
+                Text(en).font(.system(size: 12)).foregroundColor(NFColor.ink3)
+            }
+            HStack(spacing: 10) {
+                ForEach(1...5, id: \.self) { n in
+                    let on = value.wrappedValue == n
+                    Button { value.wrappedValue = on ? 0 : n } label: {
+                        Text("\(n)").font(.system(size: 26, weight: .bold))
+                            .foregroundColor(on ? .white : NFColor.iris)
+                            .frame(maxWidth: .infinity).frame(height: 64)
+                            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(on ? NFColor.iris : Color.white))
+                            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(NFColor.iris, lineWidth: 1.5))
+                    }
+                    .buttonStyle(PressableStyle())
+                }
+                let more = value.wrappedValue > 5
+                Button { value.wrappedValue = min(999, value.wrappedValue + 1) } label: {
+                    Text(more ? "\(value.wrappedValue)" : "＋").font(.system(size: 26, weight: .bold))
+                        .foregroundColor(more ? .white : NFColor.iris)
+                        .frame(maxWidth: .infinity).frame(height: 64)
+                        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(more ? NFColor.iris : Color.white))
+                        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(NFColor.iris, lineWidth: 1.5))
+                }
+                .buttonStyle(PressableStyle())
+            }
         }
     }
 }
