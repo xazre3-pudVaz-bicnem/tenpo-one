@@ -10,6 +10,10 @@ struct NativeTableSheet: View {
     let anchor: CGRect?
     let onClose: () -> Void
     let onOpenOrder: (_ orderId: String, _ checkout: Bool) -> Void
+    /// 空席の「注文」→ 来店登録（お客様情報）。ポップアップは閉じて、フロア側がカードを出す（2026-10-24 Ronnie「注文を押したら次が出て、これは消える」）
+    var onSetup: (_ table: NFTable) -> Void = { _ in }
+    /// 着席中の「お客様情報」→ 席の時間・人数・モードの直し。同じくポップアップは閉じる
+    var onGuestInfo: (_ order: NFOrder, _ slip: NFSlip) -> Void = { _, _ in }
 
     private enum Panel { case merge, print, guest, memo }
     @State private var panel: Panel?
@@ -18,11 +22,8 @@ struct NativeTableSheet: View {
     @State private var printPick: [String] = []
     @State private var guestEdit = 1
     @State private var memoText = ""
-    @State private var seatTimeOpen = false
-    @State private var setupOpen = false
     @State private var clearConfirm = false
     @State private var approverPick = false
-    @State private var size: CGSize = .zero
 
     private static let width: CGFloat = 340
 
@@ -41,29 +42,15 @@ struct NativeTableSheet: View {
     private var mergeCandidates: [NFTable] { model.tables.filter { $0.id != table.id && !($0.order?.slips.isEmpty ?? true) } }
 
     var body: some View {
-        GeometryReader { geo in
-            ZStack(alignment: .topLeading) {
-                // 外（暗い所）を押したときだけ閉じる
-                Color.black.opacity(0.18).ignoresSafeArea()
-                    .onTapGesture { onClose() }
+        ZStack(alignment: .topLeading) {
+            // 外（暗い所）を押したときだけ閉じる
+            Color.black.opacity(0.18).ignoresSafeArea()
+                .onTapGesture { onClose() }
+            // 中身の高さぴったり（長いときは中をスクロール）。押した卓の上に置く。
+            // 高さを preference で測る方式は実機で 0 のままになり、ポップアップが 60pt に潰れた（2026-10-24）→ Layout で測る
+            NFCardLayout(width: Self.width, maxHeight: 760, anchor: anchor) {
                 popup
-                    .frame(width: Self.width)
-                    .background(GeometryReader { g in Color.clear.preference(key: NFSizeKey.self, value: g.size) })
-                    .onPreferenceChange(NFSizeKey.self) { size = $0 }
-                    .offset(position(in: geo.size))
             }
-        }
-        .sheet(isPresented: $seatTimeOpen) {
-            if let o = table.order, let s = selected {
-                NativeGuestInfoSheet(model: model, order: o, slip: s, onClose: { seatTimeOpen = false })
-            }
-        }
-        .sheet(isPresented: $setupOpen) {
-            NativeSetupSheet(model: model, table: table, onClose: { setupOpen = false }, onStarted: { id in
-                setupOpen = false
-                onClose()
-                onOpenOrder(id, false)
-            })
         }
         .alert("テーブルをクリアしますか / Clear this table?", isPresented: $clearConfirm) {
             Button("テーブルをクリアする / Clear table", role: .destructive) {
@@ -81,24 +68,21 @@ struct NativeTableSheet: View {
         }
     }
 
-    /// 押した卓の「上」に出す。上に入らないときだけ、卓に重ねて下へ伸ばす（Web と同じ）
-    private func position(in screen: CGSize) -> CGSize {
-        let h = size.height > 0 ? size.height : 320
-        guard let a = anchor else {
-            return CGSize(width: max(8, (screen.width - Self.width) / 2), height: max(64, (screen.height - h) / 2))
-        }
-        let left = min(max(8, a.midX - Self.width / 2), max(8, screen.width - Self.width - 8))
-        let above = a.minY - h - 8
-        let top = above >= 64 ? above : min(max(64, a.minY), max(64, screen.height - h - 8))
-        return CGSize(width: left, height: top)
-    }
-
     // MARK: ポップアップの中身
 
-    @State private var contentHeight: CGFloat = 0
-
     private var popup: some View {
-        ScrollView {
+        // 入るならそのまま（中身の高さ）、入らなければスクロール（NFCardLayout が高さを決める）
+        ViewThatFits(in: .vertical) {
+            popupInner
+            ScrollView(showsIndicators: false) { popupInner }
+        }
+        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.white))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(NFColor.line, lineWidth: 1))
+        .shadow(color: Color(hex: 0x292725).opacity(0.28), radius: 22, y: 18)
+        .disabled(pending)
+    }
+
+    private var popupInner: some View {
             VStack(alignment: .leading, spacing: 8) {
                 Text(table.name)
                     .font(.system(size: 19, weight: .heavy)).foregroundColor(NFColor.navy)
@@ -135,15 +119,6 @@ struct NativeTableSheet: View {
                 }
             }
             .padding(12)
-            .background(GeometryReader { g in Color.clear.preference(key: NFContentHeightKey.self, value: g.size.height) })
-        }
-        .onPreferenceChange(NFContentHeightKey.self) { contentHeight = $0 }
-        // 中身の高さだけ（ScrollView は放っておくと画面いっぱいに伸びる）。長いときは 760 で止めて中をスクロール
-        .frame(height: min(max(contentHeight, 60), 760))
-        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.white))
-        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(NFColor.line, lineWidth: 1))
-        .shadow(color: Color(hex: 0x292725).opacity(0.28), radius: 22, y: 18)
-        .disabled(pending)
     }
 
     // お客様QRからの呼び出し
@@ -183,7 +158,7 @@ struct NativeTableSheet: View {
 
     // 空席
     @ViewBuilder private var emptyBody: some View {
-        bigButton("注文", en: "Order", fill: NFColor.iris, height: 52, size: 17) { setupOpen = true }
+        bigButton("注文", en: "Order", fill: NFColor.iris, height: 52, size: 17) { onClose(); onSetup(table) }
         divider
         section("テーブル", en: "Table")
         HStack(spacing: 8) {
@@ -253,7 +228,9 @@ struct NativeTableSheet: View {
             }
         }
         if let o = table.order {
-            popBtn("お客様情報　\(NFTime.hm(o.openedAtMs))〜\(NFTime.hm(o.endAtMs))", en: "Guest info / time", enabled: selected != nil) { seatTimeOpen = true }
+            popBtn("お客様情報　\(NFTime.hm(o.openedAtMs))〜\(NFTime.hm(o.endAtMs))", en: "Guest info / time", enabled: selected != nil) {
+                if let s = selected { onClose(); onGuestInfo(o, s) }
+            }
         }
         if panel == .merge { mergePanel }
 
@@ -564,12 +541,56 @@ struct NativeTableSheet: View {
     }
 }
 
-struct NFSizeKey: PreferenceKey {
-    static var defaultValue: CGSize = .zero
-    static func reduce(value: inout CGSize, nextValue: () -> CGSize) { value = nextValue() }
+/// ポップアップ／カードを 1 つ置く Layout。中身の高さに合わせ（入らないときは maxHeight で止めて中をスクロール）、
+/// anchor（押した卓）があればその「上」、上に入らなければ卓に重ねて下へ（Web の卓のポップアップと同じ）。anchor が無ければ画面の真ん中。
+/// 高さは subview の sizeThatFits で測る（preference で測る方式は実機で 0 のままになることがあった。2026-10-24）
+struct NFCardLayout: Layout {
+    var width: CGFloat
+    var maxHeight: CGFloat
+    var anchor: CGRect? = nil
+    var margin: CGFloat = 8
+    /// 上のバーの高さ（これより上には出さない）
+    var topInset: CGFloat = 64
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        proposal.replacingUnspecifiedDimensions()
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        guard let sub = subviews.first else { return }
+        let w = min(width, max(200, bounds.width - margin * 2))
+        let cap = min(maxHeight, max(120, bounds.height - margin * 2))
+        let h = min(sub.sizeThatFits(ProposedViewSize(width: w, height: cap)).height, cap)
+        let x: CGFloat
+        let y: CGFloat
+        if let a = anchor {
+            x = min(max(margin, a.midX - w / 2), max(margin, bounds.width - w - margin))
+            let above = a.minY - h - 8
+            y = above >= topInset ? above : min(max(topInset, a.minY), max(topInset, bounds.height - h - margin))
+        } else {
+            x = max(margin, (bounds.width - w) / 2)
+            y = max(margin, (bounds.height - h) / 2)
+        }
+        sub.place(at: CGPoint(x: bounds.minX + x, y: bounds.minY + y), anchor: .topLeading, proposal: ProposedViewSize(width: w, height: h))
+    }
 }
 
-struct NFContentHeightKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
+/// 画面の真ん中に出すカード（来店登録・お客様情報）。外（暗い所）を押しても閉じない（入力途中を守る）
+struct NativeModalCard<Content: View>: View {
+    var width: CGFloat = 760
+    var maxHeight: CGFloat = 1200
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.28).ignoresSafeArea()
+            NFCardLayout(width: width, maxHeight: maxHeight, anchor: nil, margin: 16) {
+                content()
+                    .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(NFColor.lilacSoft))
+                    .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(NFColor.line, lineWidth: 1))
+                    .shadow(color: Color(hex: 0x292725).opacity(0.3), radius: 30, y: 20)
+            }
+        }
+    }
 }

@@ -60,10 +60,52 @@ struct NativeSetupSheet: View {
     }
     private var canConfirm: Bool { guests >= 1 && !source.isEmpty && !saving }
 
+    /// カード＝上のバー（テーブル一覧へ戻る・お客様情報）／中身（入るならそのまま、入らなければスクロール）／下に固定の確定（Web と同じ）
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
+        VStack(spacing: 0) {
+            NFCardHeader(title: "お客様情報", en: "Guest info") {
+                Button(action: onClose) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "chevron.left").font(.system(size: 16, weight: .bold))
+                        VStack(alignment: .leading, spacing: 0) {
+                            Text("テーブル一覧").font(.system(size: 15, weight: .bold))
+                            Text("Tables").font(.system(size: 10)).opacity(0.75)
+                        }
+                    }
+                    .foregroundColor(NFColor.iris)
+                }
+                .buttonStyle(.plain)
+            } right: { EmptyView() }
+
+            ViewThatFits(in: .vertical) {
+                main
+                ScrollView(showsIndicators: true) { main }
+            }
+
+            // 下に固定（Web の HandyFooterButton と同じ）
+            VStack(spacing: 8) {
+                Text(problem ?? (guests < 1 ? "合計人数を1〜999名で入力してください" : (source.isEmpty ? "来店経路を選択してください" : " ")))
+                    .font(.system(size: 13)).foregroundColor(problem == nil ? NFColor.ink3 : NFColor.danger)
+                    .lineLimit(2)
+                Button { Task { await confirm() } } label: {
+                    VStack(spacing: 0) {
+                        Text(saving ? "作成中…" : "確定").font(.system(size: 21, weight: .heavy))
+                        Text("Start order").font(.system(size: 11, weight: .bold)).opacity(0.8)
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity).frame(height: 62)
+                    .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(canConfirm ? NFColor.iris : NFColor.iris.opacity(0.35)))
+                }
+                .buttonStyle(PressableStyle(scale: 0.98))
+                .disabled(!canConfirm)
+            }
+            .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 12)
+            .background(NFColor.lilacSoft)
+        }
+    }
+
+    private var main: some View {
+                VStack(alignment: .leading, spacing: 10) {
                     // テーブル・モード
                     card {
                         row("テーブル", en: "Table") { Text(table.name).font(.system(size: 17, weight: .heavy)).foregroundColor(NFColor.ink) }
@@ -166,11 +208,11 @@ struct NativeSetupSheet: View {
                         Text("合計：\(guests)人").font(.system(size: 14)).foregroundColor(NFColor.ink2)
                     }
                     card {
-                        VStack(alignment: .leading, spacing: 14) {
+                        VStack(alignment: .leading, spacing: 10) {
                             countRow("男性", en: "Male", value: $male)
                             countRow("女性", en: "Female", value: $female)
                         }
-                        .padding(16)
+                        .padding(14)
                     }
 
                     // 来店経路
@@ -180,43 +222,12 @@ struct NativeSetupSheet: View {
                             let v = NPVisitSource(id: s.id, label: s.label)
                             return (s.label, s.label, v.color, v.darkText)
                         }
-                        NFChipGrid(items: sources, selected: [source], columns: 6) { label in source = (source == label) ? "" : label }
-                            .padding(16)
+                        NFChipGrid(items: sources, selected: [source], columns: 6, height: 42) { label in source = (source == label) ? "" : label }
+                            .padding(14)
                     }
-
-                    VStack(spacing: 12) {
-                        Text(problem ?? (guests < 1 ? "合計人数を1〜999名で入力してください" : (source.isEmpty ? "来店経路を選択してください" : " ")))
-                            .font(.system(size: 14)).foregroundColor(problem == nil ? NFColor.ink3 : NFColor.danger)
-                        Button { Task { await confirm() } } label: {
-                            VStack(spacing: 1) {
-                                Text(saving ? "作成中…" : "確定").font(.system(size: 22, weight: .heavy))
-                                Text("Start order").font(.system(size: 12, weight: .bold)).opacity(0.8)
-                            }
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity).frame(height: 72)
-                            .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(canConfirm ? NFColor.iris : NFColor.iris.opacity(0.35)))
-                        }
-                        .buttonStyle(PressableStyle(scale: 0.98))
-                        .disabled(!canConfirm)
-                    }
-                    .padding(.top, 20)
                 }
-                .padding(16)
-                .frame(maxWidth: 1100)
+                .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 8)
                 .frame(maxWidth: .infinity)
-            }
-            .background(NFColor.lilacSoft)
-            .navigationTitle("お客様情報")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(action: onClose) {
-                        HStack(spacing: 4) { Image(systemName: "chevron.left"); Text("卓へ戻る") }
-                    }
-                }
-            }
-        }
-        .presentationDetents([.large])
     }
 
     private func togglePlan(_ id: String) {
@@ -266,9 +277,9 @@ struct NativeSetupSheet: View {
 
     private func heading(_ ja: String, en: String, required: Bool = false) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
-            Text(ja).font(.system(size: 18, weight: .heavy)).foregroundColor(NFColor.ink)
-            Text(en).font(.system(size: 13)).foregroundColor(NFColor.ink3)
-            if required { Text("＊").font(.system(size: 16, weight: .bold)).foregroundColor(NFColor.danger) }
+            Text(ja).font(.system(size: 17, weight: .heavy)).foregroundColor(NFColor.ink)
+            Text(en).font(.system(size: 12)).foregroundColor(NFColor.ink3)
+            if required { Text("＊").font(.system(size: 15, weight: .bold)).foregroundColor(NFColor.danger) }
         }
     }
 
@@ -282,12 +293,12 @@ struct NativeSetupSheet: View {
             right()
         }
         .padding(.horizontal, 16)
-        .frame(height: 64)
+        .frame(height: 54)
     }
 
     /// 1〜5 のボタンと ＋（Web と同じ）。5 より多いときは ＋ に数を出す
     private func countRow(_ ja: String, en: String, value: Binding<Int>) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(ja).font(.system(size: 15)).foregroundColor(NFColor.ink2)
                 Text(en).font(.system(size: 12)).foregroundColor(NFColor.ink3)
@@ -296,9 +307,9 @@ struct NativeSetupSheet: View {
                 ForEach(1...5, id: \.self) { n in
                     let on = value.wrappedValue == n
                     Button { value.wrappedValue = on ? 0 : n } label: {
-                        Text("\(n)").font(.system(size: 26, weight: .bold))
+                        Text("\(n)").font(.system(size: 24, weight: .bold))
                             .foregroundColor(on ? .white : NFColor.iris)
-                            .frame(maxWidth: .infinity).frame(height: 64)
+                            .frame(maxWidth: .infinity).frame(height: 50)
                             .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(on ? NFColor.iris : Color.white))
                             .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(NFColor.iris, lineWidth: 1.5))
                     }
@@ -306,9 +317,9 @@ struct NativeSetupSheet: View {
                 }
                 let more = value.wrappedValue > 5
                 Button { value.wrappedValue = min(999, value.wrappedValue + 1) } label: {
-                    Text(more ? "\(value.wrappedValue)" : "＋").font(.system(size: 26, weight: .bold))
+                    Text(more ? "\(value.wrappedValue)" : "＋").font(.system(size: 24, weight: .bold))
                         .foregroundColor(more ? .white : NFColor.iris)
-                        .frame(maxWidth: .infinity).frame(height: 64)
+                        .frame(maxWidth: .infinity).frame(height: 50)
                         .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(more ? NFColor.iris : Color.white))
                         .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(NFColor.iris, lineWidth: 1.5))
                 }
@@ -359,9 +370,38 @@ struct NativeGuestInfoSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
+        VStack(spacing: 0) {
+            NFCardHeader(title: "お客様情報", en: "Guest info") {
+                Button(action: onClose) {
+                    VStack(spacing: 0) {
+                        Text("キャンセル").font(.system(size: 15, weight: .bold))
+                        Text("Cancel").font(.system(size: 10)).opacity(0.75)
+                    }
+                    .foregroundColor(NFColor.ink2)
+                }
+                .buttonStyle(.plain)
+            } right: {
+                Button { Task { await save() } } label: {
+                    VStack(spacing: 0) {
+                        Text(saving ? "保存中…" : "保存する").font(.system(size: 16, weight: .heavy))
+                        Text("Save").font(.system(size: 10, weight: .bold)).opacity(0.8)
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 18).frame(height: 42)
+                    .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(NFColor.iris))
+                }
+                .buttonStyle(PressableStyle())
+                .disabled(saving)
+            }
+            ViewThatFits(in: .vertical) {
+                main
+                ScrollView(showsIndicators: true) { main }
+            }
+        }
+    }
+
+    private var main: some View {
+                VStack(alignment: .leading, spacing: 16) {
                     HStack(spacing: 24) {
                         NFSection("開始時間 / Start") {
                             DatePicker("", selection: Binding(get: { startDate }, set: { startDate = $0; startChanged = true }), in: Date().addingTimeInterval(-12 * 3600)...Date().addingTimeInterval(300), displayedComponents: .hourAndMinute)
@@ -418,21 +458,8 @@ struct NativeGuestInfoSheet: View {
                     }
                     if let p = problem { Text(p).font(.system(size: 13, weight: .bold)).foregroundColor(NFColor.danger) }
                 }
-                .padding(20)
-            }
-            .background(NFColor.lilacSoft)
-            .navigationTitle("お客様情報 / Guest info")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("キャンセル", action: onClose) }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(saving ? "保存中…" : "保存する / Save") { Task { await save() } }
-                        .font(.system(size: 16, weight: .heavy))
-                        .disabled(saving)
-                }
-            }
-        }
-        .presentationDetents([.large])
+                .padding(18)
+                .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func save() async {
@@ -459,6 +486,36 @@ struct NativeGuestInfoSheet: View {
 
 // MARK: - 部品
 
+/// カードの上のバー（左＝戻る／真ん中＝題（日本語大・英語小）／右＝保存など）
+struct NFCardHeader<Left: View, Right: View>: View {
+    let title: String
+    let en: String
+    @ViewBuilder let left: () -> Left
+    @ViewBuilder let right: () -> Right
+
+    init(title: String, en: String, @ViewBuilder left: @escaping () -> Left, @ViewBuilder right: @escaping () -> Right) {
+        self.title = title; self.en = en; self.left = left; self.right = right
+    }
+
+    var body: some View {
+        ZStack {
+            VStack(spacing: 0) {
+                Text(title).font(.system(size: 18, weight: .heavy)).foregroundColor(NFColor.ink)
+                Text(en).font(.system(size: 11)).foregroundColor(NFColor.ink3)
+            }
+            HStack {
+                left()
+                Spacer(minLength: 8)
+                right()
+            }
+        }
+        .padding(.horizontal, 16)
+        .frame(height: 58)
+        .background(Color.white)
+        .overlay(alignment: .bottom) { Rectangle().fill(NFColor.line).frame(height: 1) }
+    }
+}
+
 struct NFSection<Content: View>: View {
     let title: String
     @ViewBuilder let content: () -> Content
@@ -479,6 +536,7 @@ struct NFChipGrid: View {
     let items: [(String, String, Color, Bool)]
     let selected: [String]
     var columns: Int = 4
+    var height: CGFloat = 46
     let onTap: (String) -> Void
 
     var body: some View {
@@ -490,7 +548,7 @@ struct NFChipGrid: View {
                         .font(.system(size: 14, weight: .bold))
                         .lineLimit(1).minimumScaleFactor(0.7)
                         .foregroundColor(on ? (it.3 ? NFColor.ink : .white) : it.2)
-                        .frame(maxWidth: .infinity, minHeight: 46)
+                        .frame(maxWidth: .infinity, minHeight: height)
                         .padding(.horizontal, 6)
                         .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(on ? it.2 : it.2.opacity(0.1)))
                         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(it.2.opacity(on ? 0 : 0.35), lineWidth: 1))
