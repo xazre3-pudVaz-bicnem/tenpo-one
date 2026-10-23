@@ -363,3 +363,53 @@ export async function loadNativeLedgerWait(supabase: Supabase, store: { id: stri
     })),
   };
 }
+
+/** 月間カレンダー（GET ?part=ledgerMonth&month=YYYY-MM）。Web の /app/reservations/calendar と同じ集計 */
+export interface NativeLedgerMonthPayload {
+  today: string;
+  month: string;
+  weeks: { date: string; day: number; dow: number; inMonth: boolean; count: number; guests: number; holiday: string | null }[][];
+  monthCount: number;
+  monthGuests: number;
+  busiest: number;
+}
+
+export async function loadNativeLedgerMonth(supabase: Supabase, store: { id: string }, monthParam: string | null, today: string): Promise<NativeLedgerMonthPayload> {
+  const month = monthParam && /^\d{4}-\d{2}$/.test(monthParam) ? monthParam : today.slice(0, 7);
+  const [year, monthNum] = month.split('-').map(Number);
+  const first = new Date(Date.UTC(year, monthNum - 1, 1));
+  const last = new Date(Date.UTC(year, monthNum, 0));
+  const gridStart = new Date(first);
+  gridStart.setUTCDate(gridStart.getUTCDate() - gridStart.getUTCDay());
+  const gridEnd = new Date(last);
+  gridEnd.setUTCDate(gridEnd.getUTCDate() + (6 - gridEnd.getUTCDay()));
+  const ds = (d: Date) => `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+  const [{ data: reservations }, { data: holidays }] = await Promise.all([
+    supabase.from('reservations').select('reserved_date, party_size, status').eq('store_id', store.id).gte('reserved_date', ds(gridStart)).lte('reserved_date', ds(gridEnd)),
+    supabase.from('holidays').select('holiday_date, name').eq('store_id', store.id).gte('holiday_date', ds(gridStart)).lte('holiday_date', ds(gridEnd)),
+  ]);
+  const count = new Map<string, number>();
+  const guests = new Map<string, number>();
+  let monthCount = 0;
+  let monthGuests = 0;
+  for (const r of reservations ?? []) {
+    if (!ACTIVE_TIMELINE_STATUSES.includes(r.status as never)) continue;
+    const d = r.reserved_date as string;
+    count.set(d, (count.get(d) ?? 0) + 1);
+    guests.set(d, (guests.get(d) ?? 0) + Number(r.party_size));
+    if (d.startsWith(month)) {
+      monthCount++;
+      monthGuests += Number(r.party_size);
+    }
+  }
+  const holidayBy = new Map((holidays ?? []).map((h) => [h.holiday_date as string, (h.name as string | null) ?? '休業日']));
+  const days: NativeLedgerMonthPayload['weeks'][number] = [];
+  for (let d = new Date(gridStart); d <= gridEnd; d.setUTCDate(d.getUTCDate() + 1)) {
+    const key = ds(d);
+    days.push({ date: key, day: d.getUTCDate(), dow: d.getUTCDay(), inMonth: d.getUTCMonth() + 1 === monthNum, count: count.get(key) ?? 0, guests: guests.get(key) ?? 0, holiday: holidayBy.get(key) ?? null });
+  }
+  const weeks: NativeLedgerMonthPayload['weeks'] = [];
+  for (let i = 0; i < days.length; i += 7) weeks.push(days.slice(i, i + 7));
+  const busiest = Math.max(0, ...[...guests.entries()].filter(([d]) => d.startsWith(month)).map(([, g]) => g));
+  return { today, month, weeks, monthCount, monthGuests, busiest };
+}

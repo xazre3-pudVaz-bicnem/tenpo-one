@@ -170,6 +170,8 @@ final class NativeLedgerModel: ObservableObject {
     @Published var weekMode = false
     /// ウェイティング（Web の view=waitlist）
     @Published var waitMode = false
+    /// 月間カレンダー（Web の /app/reservations/calendar）
+    @Published var monthMode = false
     /// 予約リストを未連絡（仮予約）だけにする（Web の 予約リスト status=pending）
     @Published var pendingOnly = false
     private var clock: Timer?
@@ -288,11 +290,17 @@ struct NativeLedgerView: View {
             .disabled(exporting)
             if let p = model.payload {
                 summaryRow(p)
-                if model.waitMode {
+                if model.monthMode {
+                    NativeLedgerMonthView(date: model.date ?? p.date) { d in
+                        model.monthMode = false; model.weekMode = false; model.listMode = false; model.gourmetMode = false; model.waitMode = false
+                        model.date = d
+                        Task { await model.refresh(silent: false) }
+                    }
+                } else if model.waitMode {
                     NativeLedgerWaitView(model: model, onOpenOrder: onOpenOrder)
                 } else if model.weekMode {
                     NativeLedgerWeekView(date: model.date ?? p.date) { d in
-                        model.weekMode = false; model.listMode = false; model.gourmetMode = false; model.waitMode = false
+                        model.weekMode = false; model.monthMode = false; model.listMode = false; model.gourmetMode = false; model.waitMode = false
                         model.date = d
                         Task { await model.refresh(silent: false) }
                     }
@@ -409,10 +417,10 @@ struct NativeLedgerView: View {
             }
             // 表示の切り替え
             HStack(spacing: 0) {
-                modeBtn("スケジュール", on: !model.listMode && !model.gourmetMode && !model.weekMode && !model.waitMode) { model.listMode = false; model.gourmetMode = false; model.weekMode = false; model.waitMode = false }
-                modeBtn("予約リスト", on: model.listMode && !model.gourmetMode && !model.weekMode && !model.waitMode) { model.listMode = true; model.gourmetMode = false; model.weekMode = false; model.waitMode = false }
+                modeBtn("スケジュール", on: !model.listMode && !model.gourmetMode && !model.weekMode && !model.waitMode && !model.monthMode) { model.listMode = false; model.gourmetMode = false; model.weekMode = false; model.monthMode = false; model.waitMode = false }
+                modeBtn("予約リスト", on: model.listMode && !model.gourmetMode && !model.weekMode && !model.waitMode && !model.monthMode) { model.listMode = true; model.gourmetMode = false; model.weekMode = false; model.monthMode = false; model.waitMode = false }
                 // グルメ別・週間は 📅 のメニューから（上のバーが狭いので）
-                modeBtn("ウェイティング", on: model.waitMode) { model.waitMode = true }
+                modeBtn("ウェイティング", on: model.waitMode) { model.waitMode = true; model.monthMode = false }
             }
             .background(RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(0.12)))
         }
