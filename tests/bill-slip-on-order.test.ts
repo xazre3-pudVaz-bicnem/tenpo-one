@@ -62,9 +62,9 @@ function fakeAdmin(fx: Fixture) {
 
 const base = (): Fixture => ({
   order_items: [
-    { id: 'i1', order_id: 'o1', status: 'active', menu_item_id: 'drink', created_at: '2026-10-23T10:00:00Z' },
-    { id: 'i2', order_id: 'o1', status: 'active', menu_item_id: 'meat', created_at: '2026-10-23T10:00:00Z' },
-    { id: 'i3', order_id: 'o2', status: 'active', menu_item_id: 'drink', created_at: '2026-10-23T10:00:00Z' },
+    { id: 'i1', order_id: 'o1', status: 'active', kitchen_sent_at: '2026-10-23T10:00:00Z', menu_item_id: 'drink', created_at: '2026-10-23T10:00:00Z' },
+    { id: 'i2', order_id: 'o1', status: 'active', kitchen_sent_at: '2026-10-23T10:00:00Z', menu_item_id: 'meat', created_at: '2026-10-23T10:00:00Z' },
+    { id: 'i3', order_id: 'o2', status: 'active', kitchen_sent_at: '2026-10-23T10:00:00Z', menu_item_id: 'drink', created_at: '2026-10-23T10:00:00Z' },
     { id: 'i4', order_id: 'o3', status: 'cancelled', menu_item_id: 'meat', created_at: '2026-10-23T10:00:00Z' },
   ],
   menu_items: [
@@ -110,7 +110,7 @@ describe('お客様QRの二重印刷を防ぐ：hasItemsSinceLastOrderSlip', () 
   it('前の会計伝票のあとに追加で頼んだら true（1回の送信で1枚）', async () => {
     const fx = base();
     fx.print_jobs = [{ order_id: 'o1', job_type: 'order_slip', created_at: '2026-10-23T10:00:05Z' }];
-    fx.order_items.push({ id: 'i5', order_id: 'o1', status: 'active', menu_item_id: 'meat', created_at: '2026-10-23T10:30:00Z' });
+    fx.order_items.push({ id: 'i5', order_id: 'o1', status: 'active', kitchen_sent_at: '2026-10-23T10:00:00Z', menu_item_id: 'meat', created_at: '2026-10-23T10:30:00Z' });
     expect(await hasItemsSinceLastOrderSlip(fakeAdmin(fx), 'o1')).toBe(true);
   });
 });
@@ -119,7 +119,7 @@ describe('注文時の会計伝票：呼び出す場所と設定', () => {
   it('レジ・ハンディ：厨房へ送れた（送った明細が1つ以上）ときだけ判定して1回積む', () => {
     const pos = read('app/app/pos/actions.ts');
     expect(pos).toContain('if (!(await orderHasBillSlipCategory(createAdminClient(), orderId))) return;');
-    expect(pos).toContain('const res = await enqueueOrderSlipPrint(orderId);');
+    expect(pos).toContain('const res = await enqueueOrderSlipPrint(orderId, true);');
     // sendOrderToKitchen（レジ・iPad アプリ）
     expect(pos).toContain('  if (sent > 0) {\n    kickKitchenPrint(order.store_id);\n    await printBillSlipOnSend(orderId);\n  }');
     // sendItemsToKitchen（ハンディの「注文を送信」）
@@ -129,10 +129,10 @@ describe('注文時の会計伝票：呼び出す場所と設定', () => {
   it('お客様QR：厨房伝票を作ったあと、その卓の未会計の注文で判定し、前の会計伝票のあとの分があるときだけ積む', () => {
     const route = read('app/api/qr/kitchen-now/route.ts');
     const made = route.indexOf('await generateKitchenJobsForStore(admin, table.store_id as string);');
-    const bill = route.indexOf('(await orderHasBillSlipCategory(admin, open.id)) && (await hasItemsSinceLastOrderSlip(admin, open.id))');
+    const bill = route.indexOf('await orderHasBillSlipCategory(admin, open.id)');
     expect(made).toBeGreaterThan(0);
     expect(bill).toBeGreaterThan(made);
-    expect(route).toContain('await queueOrderSlipJob(admin, open.id, { createdBy: null });');
+    expect(route).toContain('await queueOrderSlipJob(admin, open.id, { createdBy: null, automatic: true });');
   });
   it('ボタンの会計伝票と同じ印字（queueOrderSlipJob）。ボタンは今まで通りログインと店舗の権限を確かめる', () => {
     const actions = read('app/app/pos/print-actions.ts');

@@ -191,10 +191,11 @@ export async function enqueueReceiptPrint(
  * 会計を確定せずに「いま何をいくつ頼んでいるか」と合計をお客様に見せるための印字。
  * 会計処理・売上には一切影響しない（print_jobs に job_type='order_slip' で積むだけ）。
  */
-export async function enqueueOrderSlipPrint(orderId: string): Promise<EnqueueResult> {
+export async function enqueueOrderSlipPrint(orderId: string, automatic = false): Promise<EnqueueResult> {
   const ctx = await requirePermission('pos.order');
   const supabase = await createClient();
   return queueOrderSlipJob(supabase, orderId, {
+    automatic,
     createdBy: ctx.userId,
     canAccessStore: (storeId) => assertStore(ctx, storeId),
   });

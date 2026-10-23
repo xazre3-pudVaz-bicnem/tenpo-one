@@ -60,7 +60,7 @@ function kickKitchenPrint(storeId: string) {
 async function printBillSlipOnSend(orderId: string): Promise<void> {
   try {
     if (!(await orderHasBillSlipCategory(createAdminClient(), orderId))) return;
-    const res = await enqueueOrderSlipPrint(orderId);
+    const res = await enqueueOrderSlipPrint(orderId, true);
     if (!res.ok) console.error('[pos] bill slip on order not queued', orderId, res.error);
   } catch (e) {
     console.error('[pos] bill slip on order failed', orderId, e instanceof Error ? e.message : e);

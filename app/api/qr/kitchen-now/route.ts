@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { generateKitchenJobsForStore } from '@/lib/print-queue';
-import { hasItemsSinceLastOrderSlip, orderHasBillSlipCategory } from '@/lib/bill-slip-on-order';
+import { orderHasBillSlipCategory } from '@/lib/bill-slip-on-order';
 import { queueOrderSlipJob } from '@/lib/order-slip-print';
 
 /**
@@ -52,10 +52,10 @@ export async function POST(request: Request) {
   const made = await generateKitchenJobsForStore(admin, table.store_id as string);
 
   // 注文時の会計伝票（2026-10-23。設定 > カテゴリ の「注文時に会計伝票を印刷」が ON のカテゴリの商品があるとき）。
-  // この知らせは同じ注文で何度も届きうるので、前の会計伝票のあとに頼んだ分があるときだけ1枚出す（1回の送信で1枚）
+  // この知らせは同じ注文で何度も届きうるので、送信済み明細のスナップショットから一意なジョブIDを作り、同時リクエストでも1枚にする
   try {
-    if ((await orderHasBillSlipCategory(admin, open.id)) && (await hasItemsSinceLastOrderSlip(admin, open.id))) {
-      const res = await queueOrderSlipJob(admin, open.id, { createdBy: null });
+    if (await orderHasBillSlipCategory(admin, open.id)) {
+      const res = await queueOrderSlipJob(admin, open.id, { createdBy: null, automatic: true });
       if (!res.ok) console.error('[qr] bill slip on order not queued', open.id, res.error);
     }
   } catch (e) {

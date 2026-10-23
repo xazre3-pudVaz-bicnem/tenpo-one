@@ -1,4 +1,5 @@
 import 'server-only';
+import { createHash } from 'node:crypto';
 import { orderSlipMarkup } from '@/lib/receipt-markup';
 import { orderSlipStarPrnt } from '@/lib/starprnt';
 import { orderSlipEposXml } from '@/lib/epos-print';
@@ -15,6 +16,10 @@ import { devicePrinterId } from '@/lib/device-printer-server';
 const RECEIPT_CONTENT_TYPE = 'text/vnd.star.markup';
 
 interface OrderSlipItemRow {
+  id: string;
+  kitchen_sent_at: string | null;
+  tax_rate: number;
+  tax_included: boolean;
   name: string;
   unit_price: number;
   quantity: number;
@@ -89,12 +94,12 @@ export async function queueOrderSlipJob(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   supabase: any,
   orderId: string,
-  opts: { createdBy: string | null; canAccessStore?: (storeId: string) => boolean }
+  opts: { automatic?: boolean; createdBy: string | null; canAccessStore?: (storeId: string) => boolean }
 ): Promise<OrderSlipResult> {
   const { data: order } = await supabase
     .from('orders')
     .select(
-      'id, organization_id, store_id, order_no, guest_count, clerk_name, subtotal, tax_total, service_charge, discount_total, total, stores(name), restaurant_tables(name, floor_id)'
+      'id, organization_id, store_id, order_no, guest_count, clerk_name, subtotal, tax_total, service_charge, discount_total, rounding_adjustment, total, stores(name), restaurant_tables(name, floor_id)'
     )
     .eq('id', orderId)
     .single();
@@ -110,12 +115,31 @@ export async function queueOrderSlipJob(
 
   const { data: items } = await supabase
     .from('order_items')
-    .select('name, unit_price, quantity, line_total, modifiers')
+    .select('id, kitchen_sent_at, tax_rate, tax_included, name, unit_price, quantity, line_total, modifiers')
     .eq('order_id', orderId)
     .eq('status', 'active')
     .order('created_at');
   if (!items || items.length === 0) return { ok: false, error: '印刷する注文明細がありません' };
 
+  const printedItems = opts.automatic ? (items as OrderSlipItemRow[]).filter((item) => item.kitchen_sent_at != null) : items as OrderSlipItemRow[];
+  if (!printedItems.length) return { ok: true, queued: 0 };
+  let amounts = { subtotal: order.subtotal, taxTotal: order.tax_total, serviceCharge: order.service_charge, discount: order.discount_total, total: order.total };
+  if (opts.automatic) {
+    const { data: settings, error: settingsError } = await supabase.from('store_settings').select('service_charge_rate').eq('store_id', order.store_id).maybeSingle();
+    if (settingsError) return { ok: false, error: settingsError.message };
+    let gross = 0;
+    let tax = 0;
+    for (const item of printedItems) {
+      const lineTax = item.tax_included ? item.line_total - Math.floor(item.line_total / (1 + item.tax_rate / 100)) : Math.floor(item.line_total * item.tax_rate / 100);
+      gross += item.line_total + (item.tax_included ? 0 : lineTax);
+      tax += lineTax;
+    }
+    const service = Math.floor(gross * Number(settings?.service_charge_rate ?? 0) / 100);
+    amounts = { subtotal: gross - tax, taxTotal: tax, serviceCharge: service, discount: order.discount_total, total: Math.max(0, gross + service - order.discount_total + (order.rounding_adjustment ?? 0)) };
+  }
+  // Same sent-item snapshot always has the same primary key: concurrent callbacks cannot insert twice.
+  const key = opts.automatic ? createHash('sha256').update(JSON.stringify([order.organization_id, order.store_id, orderId, printedItems.map((item) => [item.id, item.quantity, item.kitchen_sent_at]).sort((a, b) => String(a[0]).localeCompare(String(b[0])))])).digest('hex').slice(0, 32) : null;
+  const jobId = key ? `${key.slice(0, 8)}-${key.slice(8, 12)}-5${key.slice(13, 16)}-a${key.slice(17, 20)}-${key.slice(20)}` : null;
   const store = order.stores as unknown as { name: string } | null;
   const table = order.restaurant_tables as unknown as { name: string } | null;
   const slip = {
@@ -125,7 +149,7 @@ export async function queueOrderSlipJob(
     guestCount: order.guest_count ?? null,
     clerkName: order.clerk_name ?? null,
     issuedAt: new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo', dateStyle: 'short', timeStyle: 'short' }),
-    lines: (items as OrderSlipItemRow[]).map((it) => ({
+    lines: printedItems.map((it) => ({
       name: it.name as string,
       quantity: it.quantity as number,
       unitPrice: it.unit_price as number,
@@ -135,15 +159,12 @@ export async function queueOrderSlipJob(
         price: m.price ?? 0,
       })),
     })),
-    subtotal: order.subtotal as number,
-    taxTotal: order.tax_total as number,
-    serviceCharge: order.service_charge as number,
-    discount: order.discount_total as number,
-    total: order.total as number,
+    ...amounts,
   };
 
   const paper = printer.paper_width_mm === 58 ? 58 : 80;
   const { error } = await supabase.from('print_jobs').insert({
+    ...(jobId ? { id: jobId } : {}),
     organization_id: order.organization_id,
     store_id: order.store_id,
     printer_config_id: printer.id,
@@ -159,6 +180,7 @@ export async function queueOrderSlipJob(
     status: 'queued',
     created_by: opts.createdBy,
   });
+  if (jobId && error?.code === '23505') return { ok: true, queued: 0 };
   if (error) return { ok: false, error: `印刷ジョブの登録に失敗しました: ${error.message}` };
   return { ok: true, queued: 1 };
 }

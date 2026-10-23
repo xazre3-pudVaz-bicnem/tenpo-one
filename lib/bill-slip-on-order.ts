@@ -17,7 +17,8 @@ export async function orderHasBillSlipCategory(admin: Db, orderId: string): Prom
     .select('menu_item_id')
     .eq('order_id', orderId)
     .eq('status', 'active')
-    .not('menu_item_id', 'is', null);
+    .not('menu_item_id', 'is', null)
+    .not('kitchen_sent_at', 'is', null);
   const menuItemIds = [...new Set(((items ?? []) as { menu_item_id: string | null }[]).map((i) => i.menu_item_id).filter((v): v is string => !!v))];
   if (menuItemIds.length === 0) return false;
 
