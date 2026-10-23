@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { todayJst } from '@/lib/format';
 import { getSessionContext, type SessionContext } from '@/lib/auth';
 import { can, type PermissionAction } from '@/lib/permissions';
 import { createClient } from '@/lib/supabase/server';
@@ -16,7 +17,7 @@ import { isNativeFloorActionType, parseNativeFloorAction, type NativeFloorAction
 import { loadNativeFloor } from '@/lib/native-floor-server';
 import { loadNativeHome } from '@/lib/native-home-server';
 import { isNativeLedgerActionType, parseNativeLedgerAction, type NativeLedgerAction } from '@/lib/native-ledger';
-import { loadNativeLedger } from '@/lib/native-ledger-server';
+import { loadNativeLedger, loadNativeLedgerWeek } from '@/lib/native-ledger-server';
 import { isNativeCashActionType, parseNativeCashAction, sumNativeDenominations, type NativeCashAction } from '@/lib/native-cash';
 import { loadNativeCash, loadNativeCashIo } from '@/lib/native-cash-server';
 import { isNativeQuickActionType, parseNativeQuickAction, type NativeQuickAction } from '@/lib/native-quick';
@@ -262,6 +263,17 @@ export async function GET(request: Request) {
     if (ctx.disabledFeatures?.has('accounting')) return json({ ok: false, error: 'この機能は使えません', useWeb: true }, 403);
     const io = await loadNativeCashIo(ctx, await createClient(), { id: store.id, name: store.name });
     return json({ ok: true, ...io });
+  }
+
+  // 店舗台帳の週間（Web の view=week と同じ集計）
+  if (part === 'ledgerWeek') {
+    const store = ctx.currentStore ?? ctx.stores[0] ?? null;
+    if (!store) return json({ ok: false, error: '店舗がありません' }, 404);
+    if (ctx.disabledFeatures?.has('reservations')) return json({ ok: false, error: 'この機能は使えません', useWeb: true }, 403);
+    const dateParam = url.searchParams.get('date');
+    const date = dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) ? dateParam : null;
+    const week = await loadNativeLedgerWeek(await createClient(), store, date, todayJst());
+    return json({ ok: true, ...week });
   }
 
   // フロア（テーブル一覧）。Web のテーブル一覧と同じ組み立て（lib/floor-view-server.ts）

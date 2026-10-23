@@ -109,10 +109,10 @@ struct NLToolbar: View {
                 action("plus", "予約登録", en: "New", fill: NLColor.yellow, ink: NLColor.navy, action: onNew)
             }
             Menu {
-                Button { model.listMode = false; model.gourmetMode = false } label: { Label("スケジュール", systemImage: "calendar.day.timeline.left") }
-                Button { model.listMode = true; model.gourmetMode = false } label: { Label("予約リスト", systemImage: "list.bullet") }
-                Button { model.gourmetMode = true } label: { Label("グルメ別", systemImage: "fork.knife") }
-                Button { onWeb("/app/reservations?view=week&date=\(date)") } label: { Label("週間", systemImage: "calendar") }
+                Button { model.listMode = false; model.gourmetMode = false; model.weekMode = false } label: { Label("スケジュール", systemImage: "calendar.day.timeline.left") }
+                Button { model.listMode = true; model.gourmetMode = false; model.weekMode = false } label: { Label("予約リスト", systemImage: "list.bullet") }
+                Button { model.gourmetMode = true; model.weekMode = false } label: { Label("グルメ別", systemImage: "fork.knife") }
+                Button { model.weekMode = true } label: { Label("週間", systemImage: "calendar") }
                 Button { onWeb("/app/reservations/calendar?month=\(month)") } label: { Label("月間カレンダー", systemImage: "calendar.badge.clock") }
                 Button { onWeb("/app/reservations?view=waitlist") } label: { Label("ウェイティング", systemImage: "person.2.wave.2") }
                 Button { onWeb("/app/reservations/list?from=\(date)&to=\(date)&status=pending") } label: {

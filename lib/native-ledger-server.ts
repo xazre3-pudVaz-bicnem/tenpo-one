@@ -178,3 +178,105 @@ export async function loadNativeLedger(
     unconfirmed: chrome.summary.unconfirmed,
   };
 }
+
+/** 週間（GET ?part=ledgerWeek&date=…）。Web の店舗台帳 view=week と同じ集計（日ごと・1時間ごとの組数・名数、満席率、貸切） */
+export interface NativeLedgerWeekPayload {
+  today: string;
+  date: string;
+  weekDates: string[];
+  bandLabels: string[];
+  days: { date: string; count: number; guests: number; occupancy: number | null; hasPrivate: boolean }[];
+  /** `${date}|${bandIdx}` → 組数・名数 */
+  cells: { date: string; band: number; count: number; guests: number }[];
+  maxCell: number;
+  weekCount: number;
+  weekGuests: number;
+}
+
+function shiftDateStr(date: string, days: number): string {
+  const [y, m, d] = date.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() + days);
+  return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}-${String(dt.getUTCDate()).padStart(2, '0')}`;
+}
+
+function jstMinutesOfIso(iso: string): number {
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(new Date(iso));
+  const h = Number(parts.find((p) => p.type === 'hour')?.value ?? '0') % 24;
+  const m = Number(parts.find((p) => p.type === 'minute')?.value ?? '0');
+  return h * 60 + m;
+}
+
+export async function loadNativeLedgerWeek(supabase: Supabase, store: { id: string }, requestedDate: string | null, today: string): Promise<NativeLedgerWeekPayload> {
+  const date = requestedDate ?? today;
+  const weekStart = shiftDateStr(date, -dowOfDateStr(date));
+  const weekDates = Array.from({ length: 7 }, (_, i) => shiftDateStr(weekStart, i));
+  const [{ data: hours }, { data: tables }, { data: weekData }] = await Promise.all([
+    supabase.from('business_hours').select('day_of_week, is_closed, open_time, close_time').eq('store_id', store.id),
+    supabase.from('restaurant_tables').select('capacity_max').eq('store_id', store.id).eq('status', 'active'),
+    supabase
+      .from('reservations')
+      .select('reserved_date, start_at, party_size, is_private_hire')
+      .eq('store_id', store.id)
+      .in('reserved_date', weekDates)
+      .in('status', ACTIVE_TIMELINE_STATUSES),
+  ]);
+  let min = Infinity;
+  let max = -Infinity;
+  for (const r of hours ?? []) {
+    if (r.is_closed) continue;
+    const o = parseTimeToMinutes(r.open_time as string | null);
+    const c = parseTimeToMinutes(r.close_time as string | null);
+    if (o == null || c == null) continue;
+    min = Math.min(min, o);
+    max = Math.max(max, c > o ? c : c + 24 * 60);
+  }
+  const startMin = Number.isFinite(min) ? min : DEFAULT_START_MIN;
+  const endMin = Number.isFinite(max) ? max : DEFAULT_END_MIN;
+  const bandStart = Math.floor(startMin / 60) * 60;
+  const bandEnd = Math.max(bandStart + 60, Math.ceil(endMin / 60) * 60);
+  const bandCount = (bandEnd - bandStart) / 60;
+  const bandLabels = Array.from({ length: bandCount }, (_, i) => `${String(Math.floor((bandStart + i * 60) / 60) % 24).padStart(2, '0')}:00`);
+  const totalCapacity = (tables ?? []).reduce((s, t) => s + Number(t.capacity_max ?? 0), 0);
+
+  const dayAgg = new Map<string, { count: number; guests: number; hasPrivate: boolean }>();
+  for (const d of weekDates) dayAgg.set(d, { count: 0, guests: 0, hasPrivate: false });
+  const cellAgg = new Map<string, { count: number; guests: number }>();
+  let maxCell = 0;
+  for (const r of weekData ?? []) {
+    const agg = dayAgg.get(r.reserved_date as string);
+    if (agg) {
+      agg.count += 1;
+      agg.guests += Number(r.party_size);
+      if (r.is_private_hire) agg.hasPrivate = true;
+    }
+    const startM = jstMinutesOfIso(r.start_at as string);
+    const bandIdx = Math.floor((startM - bandStart) / 60);
+    if (bandIdx >= 0 && bandIdx < bandCount) {
+      const key = `${r.reserved_date}|${bandIdx}`;
+      const cur = cellAgg.get(key) ?? { count: 0, guests: 0 };
+      cur.count += 1;
+      cur.guests += Number(r.party_size);
+      cellAgg.set(key, cur);
+      maxCell = Math.max(maxCell, cur.guests);
+    }
+  }
+  const rows = weekData ?? [];
+  return {
+    today,
+    date,
+    weekDates,
+    bandLabels,
+    days: weekDates.map((d) => {
+      const a = dayAgg.get(d)!;
+      return { date: d, count: a.count, guests: a.guests, occupancy: totalCapacity > 0 ? Math.min(100, Math.round((a.guests / totalCapacity) * 100)) : null, hasPrivate: a.hasPrivate };
+    }),
+    cells: [...cellAgg.entries()].map(([k, v]) => {
+      const [d, b] = k.split('|');
+      return { date: d, band: Number(b), count: v.count, guests: v.guests };
+    }),
+    maxCell,
+    weekCount: rows.length,
+    weekGuests: rows.reduce((s, r) => s + Number(r.party_size), 0),
+  };
+}
