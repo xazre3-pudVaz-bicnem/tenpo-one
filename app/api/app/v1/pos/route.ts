@@ -189,6 +189,28 @@ export async function GET(request: Request) {
     return json({ ok: true, ...cash });
   }
 
+  // iPhoneハンディの QR（Web の /app/settings/handy-qr を見るだけ。作り直し・回線の設定は管理画面）
+  if (part === 'handyqr') {
+    const store = ctx.currentStore ?? ctx.stores[0] ?? null;
+    if (!store) return json({ ok: false, error: '店舗がありません' }, 404);
+    if (!can(ctx.role, 'store.settings')) return json({ ok: false, error: '権限がありません' }, 403);
+    const supabase = await createClient();
+    const [{ data: row }, { count: activeDevices }, origin] = await Promise.all([
+      supabase.from('store_settings').select('settings').eq('store_id', store.id).maybeSingle(),
+      supabase.from('handy_devices').select('id', { count: 'exact', head: true }).eq('store_id', store.id).eq('status', 'active'),
+      import('@/lib/site-origin').then((m) => m.resolveSiteOrigin()),
+    ]);
+    const { handyQrFrom, handyQrUrl } = await import('@/lib/handy-qr');
+    const qr = handyQrFrom(row?.settings ?? null);
+    return json({
+      ok: true,
+      store: { id: store.id, name: store.name },
+      url: qr.token ? handyQrUrl(origin, qr.token) : null,
+      wifiOnly: qr.wifiOnly,
+      activeDevices: activeDevices ?? 0,
+    });
+  }
+
   // 在庫設定（本日の残り数。Web の /app/inventory/menu-stock）
   if (part === 'stock') {
     const store = ctx.currentStore ?? ctx.stores[0] ?? null;

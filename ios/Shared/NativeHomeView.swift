@@ -113,6 +113,8 @@ struct NativeHomeView: View {
     /// Web の画面を開く（まだネイティブに無いもの）
     var onWeb: (String) -> Void = { _ in }
     var onFloor: () -> Void = {}
+    /// ハンディQR をネイティブで大きく出す（2026-10-24）
+    @State private var handyQrOpen = false
 
     private static let blue = Color(hex: 0x1A5AD6)
     private static let blueDeep = Color(hex: 0x0A3FA8)
@@ -185,6 +187,9 @@ struct NativeHomeView: View {
                 }
             }
         }
+        .sheet(isPresented: $handyQrOpen) {
+            NativeHandyQrSheet(onClose: { handyQrOpen = false }, onWeb: { path in handyQrOpen = false; onWeb(path) })
+        }
         .onAppear { model.start() }
         .onDisappear { model.stop() }
     }
@@ -218,7 +223,7 @@ struct NativeHomeView: View {
                     }
                 }
                 .buttonStyle(PressableStyle())
-                Button { onWeb("/app/settings/handy-qr") } label: {
+                Button { handyQrOpen = true } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "qrcode")
                         Text("ハンディQR")
