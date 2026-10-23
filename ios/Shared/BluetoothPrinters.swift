@@ -172,8 +172,12 @@ private final class StarPrinters: NSObject, StarDeviceDiscoveryManagerDelegate {
 private actor StarPrintSession {
     private var current: (id: String, usb: Bool, printer: StarPrinter)?
     private var tail: Task<String?, Never>?
+    private var queuedPrints = 0
+    private var preparing = false
 
     func printReusing(identifier: String, usb: Bool, data: Data) async -> String? {
+        queuedPrints += 1
+        defer { queuedPrints -= 1 }
         let previous = tail
         let task = Task { () -> String? in
             _ = await previous?.value
@@ -185,6 +189,10 @@ private actor StarPrintSession {
 
     /// Runs on the same task chain as print; preparing can never overlap a print.
     func prepare(identifier: String, usb: Bool) async -> String? {
+        // Status probes never queue behind a pending print or another probe.
+        guard queuedPrints == 0, !preparing else { return nil }
+        preparing = true
+        defer { preparing = false }
         let previous = tail
         let task = Task { () -> String? in
             _ = await previous?.value
@@ -195,12 +203,12 @@ private actor StarPrintSession {
     }
 
     private func openAhead(identifier: String, usb: Bool) async -> String? {
-        if let c = current, c.id == identifier, c.usb == usb { return nil }
+        let wasOpen = current.map { $0.id == identifier && $0.usb == usb } ?? false
         let start = Date()
         do {
             let printer = try await ensureOpen(identifier: identifier, usb: usb)
             _ = try await printer.getStatus()
-            NSLog("[TENPO Bluetooth] prepare_ms=%d ready=1", Int(Date().timeIntervalSince(start) * 1000))
+            NSLog("[TENPO Bluetooth] prepare_ms=%d reused=%d ready=1", Int(Date().timeIntervalSince(start) * 1000), wasOpen ? 1 : 0)
             return nil
         } catch {
             await drop()

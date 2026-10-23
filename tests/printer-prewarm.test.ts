@@ -11,6 +11,7 @@ function boot(links: unknown, path = '/app/dashboard', visible = 'visible') {
   const window: { __tenpoPreparePrinter?: () => void; addEventListener: (name: string, cb: () => void) => void } = {
     addEventListener: (name, cb) => { events[name] = cb; },
   };
+  Object.assign(window, { setInterval: (cb: () => void) => { events.idleStatus = cb; } });
   const document = { visibilityState: visible, addEventListener: window.addEventListener };
   runInNewContext(script, {
     window, document, location: { pathname: path },
@@ -34,6 +35,13 @@ describe('native app prepares the selected printer before a print click', () => 
     }
     expect(boot([star], '/register-login').calls).toHaveLength(0);
     expect(boot([star], '/app/dashboard', 'hidden').calls).toHaveLength(0);
+  });
+  it('never probes in background even when the idle timer fires', async () => {
+    const { calls, events, document } = boot([star]);
+    await Promise.resolve();
+    document.visibilityState = 'hidden';
+    events.idleStatus();
+    expect(calls).toHaveLength(1);
   });
   it('coalesces overlapping prepare requests and prepares again on foreground', async () => {
     const { calls, events } = boot([star]);

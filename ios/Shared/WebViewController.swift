@@ -213,6 +213,8 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
           window.addEventListener('tenpo-direct-print-changed', window.__tenpoPreparePrinter);
           window.addEventListener('storage', window.__tenpoPreparePrinter);
           document.addEventListener('visibilitychange', window.__tenpoPreparePrinter);
+          // Status only, foreground only. The native session skips probes while printing.
+          window.setInterval(window.__tenpoPreparePrinter, 2000);
           window.__tenpoPreparePrinter();
         })();
         """ : ""
