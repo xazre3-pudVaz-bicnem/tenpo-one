@@ -115,7 +115,7 @@ struct NLToolbar: View {
                 Button { model.weekMode = true; model.waitMode = false } label: { Label("週間", systemImage: "calendar") }
                 Button { onWeb("/app/reservations/calendar?month=\(month)") } label: { Label("月間カレンダー", systemImage: "calendar.badge.clock") }
                 Button { model.waitMode = true } label: { Label("ウェイティング", systemImage: "person.2.wave.2") }
-                Button { onWeb("/app/reservations/list?from=\(date)&to=\(date)&status=pending") } label: {
+                Button { model.listMode = true; model.gourmetMode = false; model.weekMode = false; model.waitMode = false; model.pendingOnly = true } label: {
                     let n = p?.unconfirmed ?? p?.summary.unconfirmed ?? 0
                     Label(n > 0 ? "未連絡の予約（\(n)）" : "未連絡の予約", systemImage: "phone.badge.waveform")
                 }
