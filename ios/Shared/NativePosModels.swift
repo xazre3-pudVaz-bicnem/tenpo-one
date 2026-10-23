@@ -140,6 +140,8 @@ final class NativeOrderModel: ObservableObject {
     @Published var busy = false
     /// 画面の上に出すお知らせ（エラー・注意）
     @Published var notice: String?
+    /// 短い知らせ（印刷しますなど。少ししたら消える）
+    @Published var toast: String?
     /// Web の画面で入れてもらう商品（古いサーバーで選択肢が分からないとき）
     @Published var webOnlyItem: NPMenuItem?
     /// 商品ごとの選択肢グループ
@@ -581,6 +583,19 @@ final class NativeOrderModel: ObservableObject {
         let methods = Array(Set(payments.map { $0.method.rawValue }))
         _ = try? await NativeAPI.shared.act(["type": "drawer", "orderId": orderId, "methods": methods], throwOnFail: false)
         return true
+    }
+
+    /// お会計伝票をその場で印刷する（レジのプリンターへ。Web の「会計伝票」と同じ）
+    func printBill() async {
+        guard let orderId else { return }
+        busy = true
+        defer { busy = false }
+        if let r = try? await NativeAPI.shared.floorAct(["type": "floorBill", "orderId": orderId]) {
+            notice = r.ok ? nil : (r.error ?? "お会計伝票の印刷に失敗しました")
+            if r.ok { toast = "お会計伝票を印刷します" }
+        } else {
+            notice = "お会計伝票の印刷に失敗しました"
+        }
     }
 
     /// Web の画面でこの伝票を開く（ネイティブを閉じる）

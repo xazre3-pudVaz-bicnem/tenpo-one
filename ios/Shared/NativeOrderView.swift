@@ -10,6 +10,8 @@ struct NativeOrderView: View {
     @State private var pickClerk = false
     /// 担当者を選んだあとにすること（注文確定・会計へ）
     @State private var afterClerk: (() -> Void)?
+    /// 伝票の操作のシート（新しい伝票・まとめる・卓を移動・取消）
+    @State private var slipOp: NativeSlipOp?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -22,7 +24,7 @@ struct NativeOrderView: View {
                 let slipW = max(320, geo.size.width * 0.30)
                 let catW = max(150, geo.size.width * 0.13)
                 HStack(alignment: .top, spacing: 12) {
-                    SlipPanel(model: model, onClerk: { pickClerk = true })
+                    SlipPanel(model: model, onClerk: { pickClerk = true }, onSplit: goCheckout, onSlipOp: { slipOp = $0 })
                         .frame(width: slipW)
                     CategoryColumn(model: model)
                         .frame(width: catW)
@@ -52,6 +54,21 @@ struct NativeOrderView: View {
                 .padding(.top, 74)
             }
         }
+        .overlay(alignment: .bottom) {
+            if let t = model.toast {
+                Text(t)
+                    .font(.system(size: 15, weight: .bold)).foregroundColor(.white)
+                    .padding(.horizontal, 18).padding(.vertical, 12)
+                    .background(Capsule().fill(NT.header.opacity(0.92)))
+                    .padding(.bottom, 100)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .task {
+                        try? await Task.sleep(nanoseconds: 2_500_000_000)
+                        if model.toast == t { model.toast = nil }
+                    }
+            }
+        }
+        .animation(.easeOut(duration: 0.2), value: model.toast)
         .overlay {
             if model.loading {
                 ZStack {
@@ -79,6 +96,15 @@ struct NativeOrderView: View {
             }
         }
         .animation(.easeOut(duration: 0.22), value: showCheckout)
+        .sheet(item: $slipOp) { op in
+            NativeSlipOpsSheet(
+                model: model,
+                op: op,
+                onClose: { slipOp = nil },
+                onOpenOrder: { id in AppState.shared.openNativeOrder(id, checkout: false) },
+                onCancelled: { AppState.shared.closeNativePos(openWebPath: nil) }
+            )
+        }
         .onReceive(model.$openCheckoutOnLoad) { on in
             if on {
                 model.openCheckoutOnLoad = false
@@ -210,6 +236,9 @@ struct NativeTopBar: View {
 private struct SlipPanel: View {
     @ObservedObject var model: NativeOrderModel
     var onClerk: () -> Void = {}
+    /// 伝票の操作（会計を分ける＝会計画面へ、ほかはネイティブのシート）
+    var onSplit: () -> Void = {}
+    var onSlipOp: (NativeSlipOp) -> Void = { _ in }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -300,14 +329,14 @@ private struct SlipPanel: View {
                         .contentTransition(.numericText())
                         .animation(.easeOut(duration: 0.15), value: model.total)
                 }
-                // 伝票の操作
-                FlowChips(onTap: { model.openInWeb() }, items: [
-                    ("arrow.triangle.branch", "会計を分ける", false),
-                    ("doc.badge.plus", "新しい伝票", false),
-                    ("square.on.square", "伝票をまとめる", false),
-                    ("arrow.left.arrow.right", "卓を移動", false),
-                    ("printer", "会計伝票", false),
-                    ("xmark.circle", "注文取消", true),
+                // 伝票の操作（全部ネイティブ。2026-10-24 Ronnie「Web に飛ばない」）
+                FlowChips(items: [
+                    ("arrow.triangle.branch", "会計を分ける", false, onSplit),
+                    ("doc.badge.plus", "新しい伝票", false, { onSlipOp(.newSlip) }),
+                    ("square.on.square", "伝票をまとめる", false, { onSlipOp(.merge) }),
+                    ("arrow.left.arrow.right", "卓を移動", false, { onSlipOp(.move) }),
+                    ("printer", "会計伝票", false, { Task { await model.printBill() } }),
+                    ("xmark.circle", "注文取消", true, { onSlipOp(.cancel) }),
                 ])
                 .padding(.top, 4)
             }
@@ -395,14 +424,13 @@ private struct LineRow: View {
 }
 
 private struct FlowChips: View {
-    var onTap: () -> Void = {}
-    let items: [(String, String, Bool)]
+    let items: [(String, String, Bool, () -> Void)]
 
     var body: some View {
         let cols = [GridItem(.adaptive(minimum: 128), spacing: 8, alignment: .leading)]
         LazyVGrid(columns: cols, alignment: .leading, spacing: 8) {
-            ForEach(items, id: \.1) { icon, text, danger in
-                Button(action: onTap) {
+            ForEach(items, id: \.1) { icon, text, danger, action in
+                Button(action: action) {
                     HStack(spacing: 5) {
                         Image(systemName: icon)
                         Text(text).lineLimit(1)

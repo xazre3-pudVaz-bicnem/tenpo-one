@@ -38,7 +38,14 @@ export type NativeFloorAction =
   | { type: 'floorClear'; orderId: string; reason: string; approvedByClerkId: string | null }
   | { type: 'floorCall'; callId: string }
   /** 清掃中のまま時間が過ぎた卓を空席に戻す（画面を開いている iPad が 1 分ごとに呼ぶ） */
-  | { type: 'floorRelease'; storeId: string };
+  | { type: 'floorRelease'; storeId: string }
+  // ここから、オーダー画面の「伝票の操作」（2026-10-24 Ronnie「会計のとき Web に飛ばない。全部ネイティブで」）
+  /** 同じ卓に空の伝票をもう1枚 */
+  | { type: 'floorNewSlip'; orderId: string }
+  /** 伝票を別の空席の卓へ */
+  | { type: 'floorMove'; orderId: string; tableId: string }
+  /** 品目のない伝票の取消（理由・店長の承認） */
+  | { type: 'floorCancelEmpty'; orderId: string; reason: string; approvedByClerkId: string | null };
 
 export type NativeFloorActionType = NativeFloorAction['type'];
 
@@ -59,6 +66,9 @@ export const NATIVE_FLOOR_ACTION_TYPES: readonly NativeFloorActionType[] = [
   'floorClear',
   'floorCall',
   'floorRelease',
+  'floorNewSlip',
+  'floorMove',
+  'floorCancelEmpty',
 ];
 
 export function isNativeFloorActionType(v: unknown): v is NativeFloorActionType {
@@ -192,6 +202,20 @@ export function parseNativeFloorAction(raw: unknown): Parsed {
     case 'floorRelease':
       if (!isUuid(b.storeId)) return bad();
       return { ok: true, action: { type: 'floorRelease', storeId: b.storeId } };
+    case 'floorNewSlip':
+      if (!isUuid(b.orderId)) return bad();
+      return { ok: true, action: { type: 'floorNewSlip', orderId: b.orderId } };
+    case 'floorMove':
+      if (!isUuid(b.orderId) || !isUuid(b.tableId)) return bad();
+      return { ok: true, action: { type: 'floorMove', orderId: b.orderId, tableId: b.tableId } };
+    case 'floorCancelEmpty': {
+      if (!isUuid(b.orderId)) return bad();
+      const reason = typeof b.reason === 'string' ? b.reason.trim().slice(0, 200) : '';
+      if (!reason) return bad('取消理由を入力してください');
+      const approver = b.approvedByClerkId == null ? null : b.approvedByClerkId;
+      if (approver !== null && !isUuid(approver)) return bad();
+      return { ok: true, action: { type: 'floorCancelEmpty', orderId: b.orderId, reason, approvedByClerkId: approver as string | null } };
+    }
     default:
       return bad();
   }

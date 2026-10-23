@@ -14,7 +14,7 @@ import { enqueueDrawerKick, enqueueExpoSlipPrint, enqueueOrderSlipPrint, enqueue
 import { shouldOpenDrawer } from '@/lib/printing/types';
 import { isNativeFloorActionType, parseNativeFloorAction, type NativeFloorAction } from '@/lib/native-floor';
 import { loadNativeFloor } from '@/lib/native-floor-server';
-import { clearTable, mergeOrders, setGuestCount, setPaymentMemo, setSeatTime } from '@/app/app/pos/actions';
+import { addSlipToTable, cancelEmptyOrder, clearTable, mergeOrders, moveTable, setGuestCount, setPaymentMemo, setSeatTime } from '@/app/app/pos/actions';
 import { completeCleaning, goToOrder, releaseFinishedCleaning, setTableAvailability } from '@/app/app/floor/actions';
 import { saveTableGroup } from '@/app/app/floor/group-actions';
 import { resolveServiceCall, startRegisterVisit } from '@/app/app/handy/actions';
@@ -86,6 +86,9 @@ const FLOOR_PERMISSION: Record<NativeFloorAction['type'], PermissionAction> = {
   floorClear: 'pos.checkout',
   floorCall: 'pos.order',
   floorRelease: 'tables.operate',
+  floorNewSlip: 'pos.order',
+  floorMove: 'pos.checkout',
+  floorCancelEmpty: 'pos.checkout',
 };
 
 const PERMISSION: Record<NativePosAction['type'], PermissionAction> = {
@@ -349,5 +352,16 @@ async function runFloorAction(action: NativeFloorAction): Promise<Record<string,
       const res = await releaseFinishedCleaning(action.storeId);
       return { ok: true, released: res.released };
     }
+    case 'floorNewSlip': {
+      const res = await addSlipToTable(action.orderId);
+      return { ok: true, orderId: res.newOrderId, orderNo: res.orderNo };
+    }
+    case 'floorMove': {
+      const res = await moveTable(action.orderId, action.tableId);
+      return { ok: true, tableName: res.tableName };
+    }
+    case 'floorCancelEmpty':
+      await cancelEmptyOrder(action.orderId, action.reason, action.approvedByClerkId);
+      return { ok: true };
   }
 }

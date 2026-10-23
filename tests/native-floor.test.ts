@@ -12,7 +12,7 @@ describe('ネイティブのフロア（テーブル一覧）の操作（2026-10
     expect(parseNativeFloorAction({ type: 'floorOrder', tableId: 'x' }).ok).toBe(false);
     expect(isNativeFloorActionType('floorOrder')).toBe(true);
     expect(isNativeFloorActionType('send')).toBe(false);
-    expect(NATIVE_FLOOR_ACTION_TYPES.length).toBe(16);
+    expect(NATIVE_FLOOR_ACTION_TYPES.length).toBe(19);
   });
 
   it('着席（お客様情報）：モード・人数・来店経路・時間制・開始時間', () => {
@@ -70,6 +70,10 @@ describe('ネイティブのフロア（テーブル一覧）の操作（2026-10
     expect(parseNativeFloorAction({ type: 'floorGroup', tableIds: [U1, U2, U1] }).ok).toBe(true);
     expect(parseNativeFloorAction({ type: 'floorBlock', tableId: U1, unavailable: 'yes' }).ok).toBe(false);
     expect(parseNativeFloorAction({ type: 'floorRelease', storeId: U1 }).ok).toBe(true);
+    expect(parseNativeFloorAction({ type: 'floorNewSlip', orderId: U1 }).ok).toBe(true);
+    expect(parseNativeFloorAction({ type: 'floorMove', orderId: U1, tableId: U2 }).ok).toBe(true);
+    expect(parseNativeFloorAction({ type: 'floorCancelEmpty', orderId: U1, reason: '', approvedByClerkId: null }).ok).toBe(false);
+    expect(parseNativeFloorAction({ type: 'floorCancelEmpty', orderId: U1, reason: '誤着席', approvedByClerkId: U2 }).ok).toBe(true);
   });
 
   it('API はフロアの操作を Web と同じ Server Action に渡し、part=floor は Web のテーブル一覧と同じ組み立てを返す', () => {
