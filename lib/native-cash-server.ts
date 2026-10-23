@@ -8,7 +8,8 @@ import { cleanRegisterName, pickMainRegister } from '@/lib/register-name';
 import { loadStoreClerks } from '@/lib/pos-clerks-server';
 import { loadRegisterBoard, loadTodayCashRows, receiptStateOf } from '@/app/app/cash/close/data';
 import { splitPurpose } from '@/components/cash/cash-history';
-import { METHOD_LABELS, METHOD_LABELS_EN } from '@/components/cash/labels';
+import { IN_KINDS, KIND_LABELS, METHOD_LABELS, METHOD_LABELS_EN, OUT_KINDS } from '@/components/cash/labels';
+import { sortShops } from '@/lib/cash-shops';
 
 type Supabase = Awaited<ReturnType<typeof createClient>>;
 
@@ -206,5 +207,86 @@ export async function loadNativeCash(ctx: SessionContext, supabase: Supabase, st
     canOperate: can(ctx.role, 'register.operate'),
     canScan: can(ctx.role, 'documents.write') && can(ctx.role, 'cash.write'),
     isRegisterDevice: ctx.isRegisterDevice === true,
+  };
+}
+
+/**
+ * 入出金（GET ?part=cashio）。Web の /app/cash のレジ入出金タブ（登録・本日の入出金履歴・現在の現金在高）と同じ組み立て
+ */
+export interface NativeCashIoPayload {
+  store: { id: string; name: string };
+  businessDate: string;
+  sessions: { id: string; registerName: string }[];
+  /** 現在の現金在高（理論値。開局中のレジの合計） */
+  theoretical: number;
+  shops: { id: string; name: string }[];
+  clerks: { id: string; name: string }[];
+  rows: {
+    id: string;
+    kind: string;
+    direction: 'in' | 'out' | 'adjust';
+    time: string;
+    main: string;
+    sub: string;
+    amount: number;
+    pending: boolean;
+    receipt: 'ok' | 'missing' | 'advanceOpen' | 'advanceDone' | 'none';
+    createdByName: string;
+  }[];
+  openAdvances: { id: string; createdByName: string; time: string; amount: number; main: string; sub: string | null }[];
+  canOperate: boolean;
+  canScan: boolean;
+  canPetty: boolean;
+  canExport: boolean;
+}
+
+export async function loadNativeCashIo(ctx: SessionContext, supabase: Supabase, store: { id: string; name: string }): Promise<NativeCashIoPayload> {
+  const storeDay = await loadStoreDay(supabase, store.id);
+  const today = storeDay.businessDate;
+  const [board, rows, { data: vendorRows }, clerkRows] = await Promise.all([
+    loadRegisterBoard(store.id, today),
+    loadTodayCashRows(store.id, today),
+    supabase.from('vendors').select('id, name, name_kana').eq('status', 'active').limit(300),
+    loadStoreClerks(supabase, store.id),
+  ]);
+  const shops = sortShops((vendorRows ?? []).map((v) => ({ id: v.id as string, name: v.name as string, kana: (v.name_kana as string | null) ?? null }))).map(({ id, name }) => ({ id, name }));
+  const { openSessions } = board;
+  return {
+    store,
+    businessDate: today,
+    sessions: openSessions.map((s) => ({ id: s.id, registerName: s.registerName })),
+    theoretical: openSessions.reduce((a, s) => a + s.theoreticalCash, 0),
+    shops,
+    clerks: clerkRows.map((c) => ({ id: c.id, name: c.name })),
+    rows: rows.map((r) => {
+      const isIn = IN_KINDS.includes(r.kind);
+      const isOut = OUT_KINDS.includes(r.kind) || r.kind === 'petty_advance';
+      const { main, sub } = splitPurpose(r.purpose, r.kind);
+      const kindNote = [KIND_LABELS[r.kind], r.registerName].filter(Boolean).join('・');
+      const receipt: NativeCashIoPayload['rows'][number]['receipt'] =
+        r.kind === 'petty_advance' ? (r.advanceOpen ? 'advanceOpen' : 'advanceDone') : r.kind === 'withdrawal' || r.kind === 'petty_out' ? (r.receiptDocumentId ? 'ok' : 'missing') : 'none';
+      return {
+        id: r.id,
+        kind: r.kind,
+        direction: isIn ? 'in' : isOut ? 'out' : 'adjust',
+        time: r.occurredAt,
+        main,
+        sub: sub ?? kindNote,
+        amount: r.amount,
+        pending: r.approvalStatus === 'pending',
+        receipt,
+        createdByName: r.createdByName,
+      };
+    }),
+    openAdvances: rows
+      .filter((r) => r.kind === 'petty_advance' && r.advanceOpen)
+      .map((a) => {
+        const { main, sub } = splitPurpose(a.purpose, a.kind);
+        return { id: a.id, createdByName: a.createdByName, time: a.occurredAt, amount: a.amount, main, sub };
+      }),
+    canOperate: can(ctx.role, 'register.operate'),
+    canScan: can(ctx.role, 'documents.write') && can(ctx.role, 'cash.write'),
+    canPetty: can(ctx.role, 'cash.write'),
+    canExport: can(ctx.role, 'csv.export'),
   };
 }

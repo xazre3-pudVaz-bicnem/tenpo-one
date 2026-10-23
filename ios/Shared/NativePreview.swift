@@ -94,6 +94,7 @@ struct NativeHomeScreen: View {
             onWeb: { path in
                 if path == "/app/reservations" { state.goNativeLedger() }
                 else if path == "/app/cash/close" || path == "/app/cash/open" { state.goNativeCash(path) }
+                else if path == "/app/cash" { state.goNativeCashIo() }
                 else { state.leaveNativeFloor(to: path) }
             },
             onFloor: { state.goNativeFloor() }
@@ -137,6 +138,21 @@ struct NativeCashScreen: View {
             onOpened: { state.goNativeFloor() },
             onWeb: { path in state.leaveNativeFloor(to: path) },
             onSignedOut: { state.leaveNativeFloor(to: "/register-login") }
+        )
+    }
+}
+
+/// ネイティブの入出金（2026-10-24）
+struct NativeCashIoScreen: View {
+    @StateObject private var model = NativeCashIoModel()
+    @EnvironmentObject var state: AppState
+
+    var body: some View {
+        NativeCashIoView(
+            model: model,
+            onHome: { state.goNativeHome() },
+            onWeb: { path in state.leaveNativeFloor(to: path) },
+            onClose: { state.goNativeCash("/app/cash/close") }
         )
     }
 }

@@ -18,8 +18,8 @@ import { loadNativeHome } from '@/lib/native-home-server';
 import { isNativeLedgerActionType, parseNativeLedgerAction, type NativeLedgerAction } from '@/lib/native-ledger';
 import { loadNativeLedger } from '@/lib/native-ledger-server';
 import { isNativeCashActionType, parseNativeCashAction, sumNativeDenominations, type NativeCashAction } from '@/lib/native-cash';
-import { loadNativeCash } from '@/lib/native-cash-server';
-import { closeRegister, openRegister, printSettlementReport, reprintRegisterReport } from '@/app/app/cash/actions';
+import { loadNativeCash, loadNativeCashIo } from '@/lib/native-cash-server';
+import { addCashTransaction, closeRegister, openRegister, printSettlementReport, reprintRegisterReport } from '@/app/app/cash/actions';
 import {
   assignTables,
   cancelReservation,
@@ -174,6 +174,15 @@ export async function GET(request: Request) {
     if (ctx.disabledFeatures?.has('accounting')) return json({ ok: false, error: 'この機能は使えません', useWeb: true }, 403);
     const cash = await loadNativeCash(ctx, await createClient(), { id: store.id, name: store.name });
     return json({ ok: true, ...cash });
+  }
+
+  // 入出金（Web の /app/cash のレジ入出金タブ）
+  if (part === 'cashio') {
+    const store = ctx.currentStore ?? ctx.stores[0] ?? null;
+    if (!store) return json({ ok: false, error: '店舗がありません' }, 404);
+    if (ctx.disabledFeatures?.has('accounting')) return json({ ok: false, error: 'この機能は使えません', useWeb: true }, 403);
+    const io = await loadNativeCashIo(ctx, await createClient(), { id: store.id, name: store.name });
+    return json({ ok: true, ...io });
   }
 
   // フロア（テーブル一覧）。Web のテーブル一覧と同じ組み立て（lib/floor-view-server.ts）
@@ -475,6 +484,12 @@ async function runCashAction(ctx: SessionContext, action: NativeCashAction): Pro
     case 'cashSettlement': {
       const r = await printSettlementReport(action.sessionId);
       return r.ok ? { ok: true } : { ok: false, error: r.error };
+    }
+    case 'cashEntry': {
+      const store = ctx.currentStore ?? ctx.stores[0];
+      if (!store) return { ok: false, error: '店舗がありません' };
+      await addCashTransaction({ storeId: store.id, registerSessionId: action.sessionId, kind: action.kind, amount: action.amount, purpose: action.purpose });
+      return { ok: true };
     }
     case 'cashSignOut': {
       // レジ端末はレジ締めのあとログアウト（Web の signOutRegister と同じ。Cookie はアプリの WebView にも戻る）

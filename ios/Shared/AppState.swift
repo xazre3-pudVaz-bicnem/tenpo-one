@@ -32,6 +32,8 @@ final class AppState: ObservableObject {
     @Published var nativeLedger = false
     /// ネイティブのレジ開局・レジクローズ（/app/cash/open・/app/cash/close の代わり。2026-10-24）
     @Published var nativeCash = false
+    /// ネイティブの入出金（/app/cash のレジ入出金タブ。2026-10-24）
+    @Published var nativeCashIo = false
     /// フロアを読み直してほしいとき（会計完了など）に増やす
     @Published var floorRefreshTick = 0
 
@@ -115,11 +117,13 @@ final class AppState: ObservableObject {
         if url.path == "/app/dashboard" || url.path == "/app" {
             nativeFloor = false
             nativeCash = false
+            nativeCashIo = false
             if !nativeHome { nativeHome = true }
             return
         }
         if url.path == "/app/floor" {
             nativeCash = false
+            nativeCashIo = false
             if !nativeFloor { nativeFloor = true }
             return
         }
@@ -129,11 +133,23 @@ final class AppState: ObservableObject {
             // 1日のスケジュールだけネイティブ（週間・グルメ別・キャンセル待ち・受付管理はまだ Web）
             if view == nil || view == "day" {
                 nativeFloor = false
+                nativeCash = false
+                nativeCashIo = false
                 if !nativeLedger { nativeLedger = true }
                 return
             }
         }
+        if url.path == "/app/cash" {
+            let q = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+            let tab = q.first { $0.name == "tab" }?.value
+            if tab == nil || tab == "register" {
+                nativeFloor = false; nativeHome = false; nativeLedger = false; nativeCash = false
+                if !nativeCashIo { nativeCashIo = true }
+                return
+            }
+        }
         if url.path == "/app/cash/open" || url.path == "/app/cash/close" {
+            nativeCashIo = false
             nativeFloor = false
             nativeHome = false
             nativeLedger = false
@@ -146,6 +162,7 @@ final class AppState: ObservableObject {
             nativeHome = false
             nativeLedger = false
             nativeCash = false
+            nativeCashIo = false
         }
         guard nativeOrder == nil, url.path == "/app/pos" else { return }
         let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
@@ -188,6 +205,7 @@ final class AppState: ObservableObject {
 
     /// ネイティブの画面を閉じて Web の画面へ（店舗台帳・設定など、まだネイティブに無い画面）
     func leaveNativeFloor(to path: String) {
+        nativeCashIo = false
         nativeFloor = false
         nativeHome = false
         nativeLedger = false
@@ -197,6 +215,7 @@ final class AppState: ObservableObject {
 
     /// ネイティブの店舗台帳へ（Web も /app/reservations にそろえる）
     func goNativeLedger() {
+        nativeCashIo = false
         nativeFloor = false
         nativeLedger = true
         WebViewController.current?.load(AppConfig.url("/app/reservations"))
@@ -204,6 +223,7 @@ final class AppState: ObservableObject {
 
     /// ネイティブのフロアからホームへ（ネイティブのホームを出す。Web も /app/dashboard にそろえる）
     func goNativeHome() {
+        nativeCashIo = false
         nativeFloor = false
         nativeLedger = false
         nativeCash = false
@@ -213,6 +233,7 @@ final class AppState: ObservableObject {
 
     /// ネイティブのホームからフロアへ（Web も /app/floor にそろえる＝レシート・ドロアの Web 側の仕組みはそのまま）
     func goNativeFloor() {
+        nativeCashIo = false
         nativeLedger = false
         nativeCash = false
         nativeFloor = true
@@ -221,11 +242,22 @@ final class AppState: ObservableObject {
 
     /// ネイティブのレジ開局・レジクローズへ（Web も同じ画面にそろえる）
     func goNativeCash(_ path: String) {
+        nativeCashIo = false
         nativeFloor = false
         nativeHome = false
         nativeLedger = false
         nativeCash = true
         WebViewController.current?.load(AppConfig.url(path))
+    }
+
+    /// ネイティブの入出金へ
+    func goNativeCashIo() {
+        nativeFloor = false
+        nativeHome = false
+        nativeLedger = false
+        nativeCash = false
+        nativeCashIo = true
+        WebViewController.current?.load(AppConfig.url("/app/cash"))
     }
 
     /// 会計完了は必ず最新のフロアを読み直す。

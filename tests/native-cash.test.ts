@@ -8,7 +8,7 @@ describe('ネイティブのレジ開局・レジクローズの操作（2026-10
     expect(parseNativeCashAction(null).ok).toBe(false);
     expect(parseNativeCashAction({ type: 'ledgerSeat' }).ok).toBe(false);
     expect(isNativeCashActionType('cashOpen')).toBe(true);
-    expect(NATIVE_CASH_ACTION_TYPES.length).toBe(5);
+    expect(NATIVE_CASH_ACTION_TYPES.length).toBe(6);
   });
 
   it('金種はレジのトレイの金種だけ・枚数は 0 以上の整数・1 つは入れる', () => {
@@ -32,5 +32,12 @@ describe('ネイティブのレジ開局・レジクローズの操作（2026-10
     expect(parseNativeCashAction({ type: 'cashClose', sessionId: U1, denominations: { '10000': 2 }, reason: '釣銭ミス' }).ok).toBe(true);
     expect(parseNativeCashAction({ type: 'cashReprint', sessionId: U1 }).ok).toBe(true);
     expect(parseNativeCashAction({ type: 'cashSignOut' }).ok).toBe(true);
+  });
+
+  it('入出金：金額は 1 円以上の整数・用途は必須', () => {
+    expect(parseNativeCashAction({ type: 'cashEntry', sessionId: U1, kind: 'deposit', amount: 1000, purpose: '釣銭補充' }).ok).toBe(true);
+    expect(parseNativeCashAction({ type: 'cashEntry', sessionId: U1, kind: 'deposit', amount: 0, purpose: '釣銭補充' }).ok).toBe(false);
+    expect(parseNativeCashAction({ type: 'cashEntry', sessionId: U1, kind: 'other', amount: 10, purpose: 'x' }).ok).toBe(false);
+    expect(parseNativeCashAction({ type: 'cashEntry', sessionId: U1, kind: 'withdrawal', amount: 10, purpose: ' ' }).ok).toBe(false);
   });
 });

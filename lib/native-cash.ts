@@ -20,11 +20,13 @@ export type NativeCashAction =
   /** 精算情報（釣銭準備金〜金種）だけの紙 */
   | { type: 'cashSettlement'; sessionId: string }
   /** レジ端末のログアウト（レジクローズのあと。Web の signOutRegister と同じ） */
-  | { type: 'cashSignOut' };
+  | { type: 'cashSignOut' }
+  /** 入出金の登録（Web の CashEntryForm と同じ。買い物は 用途の文をアプリで作る＝buildShoppingPurpose） */
+  | { type: 'cashEntry'; sessionId: string; kind: 'deposit' | 'withdrawal'; amount: number; purpose: string };
 
 export type NativeCashActionType = NativeCashAction['type'];
 
-export const NATIVE_CASH_ACTION_TYPES: readonly NativeCashActionType[] = ['cashOpen', 'cashClose', 'cashReprint', 'cashSettlement', 'cashSignOut'];
+export const NATIVE_CASH_ACTION_TYPES: readonly NativeCashActionType[] = ['cashOpen', 'cashClose', 'cashReprint', 'cashSettlement', 'cashSignOut', 'cashEntry'];
 
 export function isNativeCashActionType(v: unknown): v is NativeCashActionType {
   return typeof v === 'string' && (NATIVE_CASH_ACTION_TYPES as readonly string[]).includes(v);
@@ -79,6 +81,14 @@ export function parseNativeCashAction(raw: unknown): Parsed {
       return { ok: true, action: { type: b.type, sessionId: b.sessionId } };
     case 'cashSignOut':
       return { ok: true, action: { type: 'cashSignOut' } };
+    case 'cashEntry': {
+      if (!isUuid(b.sessionId)) return bad('開局中のレジがありません');
+      if (b.kind !== 'deposit' && b.kind !== 'withdrawal') return bad();
+      if (typeof b.amount !== 'number' || !Number.isInteger(b.amount) || b.amount <= 0 || b.amount > 100_000_000) return bad('金額は1円以上の整数で入力してください');
+      const purpose = str(b.purpose, 300);
+      if (!purpose) return bad('用途を入力してください');
+      return { ok: true, action: { type: 'cashEntry', sessionId: b.sessionId, kind: b.kind, amount: b.amount, purpose } };
+    }
     default:
       return bad();
   }
