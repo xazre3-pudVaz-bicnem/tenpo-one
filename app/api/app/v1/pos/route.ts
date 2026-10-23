@@ -342,6 +342,10 @@ export async function POST(request: Request) {
     if (!parsedStock.ok) return json({ ok: false, error: parsedStock.error }, 400);
     const store = ctx.currentStore ?? ctx.stores[0];
     if (!store) return json({ ok: false, error: '店舗がありません' }, 404);
+    if (!can(ctx.role, 'pos.order')) return json({ ok: false, error: '権限がありません' }, 403);
+    // Route Handler では requirePermission がお店の回線を見ないので、ここで見る（ほかの操作と同じ）
+    const stockProblem = await networkProblem(ctx);
+    if (stockProblem) return json({ ok: false, error: stockProblem }, 403);
     try {
       if (parsedStock.action.type === 'stockSave') {
         const r = await setMenuStockLimits(store.id, parsedStock.action.entries);
@@ -362,6 +366,8 @@ export async function POST(request: Request) {
     const need: PermissionAction =
       action.type === 'expenseApprove' || action.type === 'expenseReject' || action.type === 'expenseSeed' ? 'cash.approve' : action.type === 'expenseBill' ? 'documents.write' : 'cash.write';
     if (!can(ctx.role, need)) return json({ ok: false, error: '権限がありません' }, 403);
+    const expenseProblem = await networkProblem(ctx);
+    if (expenseProblem) return json({ ok: false, error: expenseProblem }, 403);
     try {
       return json(await runExpenseAction(ctx, action));
     } catch (e) {
@@ -703,6 +709,15 @@ async function runCashAction(ctx: SessionContext, action: NativeCashAction): Pro
     case 'cashOpen': {
       const store = ctx.currentStore ?? ctx.stores[0];
       if (!store) return { ok: false, error: '店舗がありません' };
+      // レジはこの店のもの（有効）だけ。別の店のレジ ID で開局させない
+      const { data: reg } = await (await createClient())
+        .from('registers')
+        .select('id')
+        .eq('id', action.registerId)
+        .eq('store_id', store.id)
+        .eq('status', 'active')
+        .maybeSingle();
+      if (!reg) return { ok: false, error: 'レジが見つかりません' };
       const openingFloat = sumNativeDenominations(action.denominations);
       const r = await openRegister(store.id, action.registerId, openingFloat, action.denominations, action.reason, action.clerkName);
       return r.ok ? { ok: true, openingFloat } : { ok: false, error: r.error };

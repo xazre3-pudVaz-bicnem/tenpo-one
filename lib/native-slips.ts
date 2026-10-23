@@ -63,7 +63,8 @@ export function parseNativeSlipAction(raw: unknown): Parsed {
           items.push({ orderItemId: it.orderItemId as string, quantity: it.quantity, amount: it.amount as number, restock: it.restock === true });
         }
       }
-      return { ok: true, action: { type: 'slipRefund', orderId, amount: b.amount as number, method: b.method as NativeRefundMethod, reason, kind, items } };
+      // 取消（VOID）は残額全額の金額指定だけ（Web の返金ダイアログと同じ）。品目は付けない
+      return { ok: true, action: { type: 'slipRefund', orderId, amount: b.amount as number, method: b.method as NativeRefundMethod, reason, kind, items: kind === 'void' ? null : items } };
     }
     case 'slipReopen': {
       const reason = str(b.reason, 200);

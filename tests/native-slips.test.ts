@@ -16,7 +16,7 @@ describe('ネイティブの伝票明細（2026-10-24）', () => {
     expect(parseNativeSlipAction({ type: 'slipRefund', orderId: U1, amount: 0, method: 'cash', reason: 'a' }).ok).toBe(false);
     expect(parseNativeSlipAction({ type: 'slipRefund', orderId: U1, amount: 500, method: 'bitcoin', reason: 'a' }).ok).toBe(false);
     const r = parseNativeSlipAction({ type: 'slipRefund', orderId: U1, amount: 500, method: 'credit', reason: 'a', kind: 'void', items: [{ orderItemId: U2, quantity: 1, amount: 500, restock: true }] });
-    expect(r.ok && r.action.type === 'slipRefund' && r.action.kind === 'void' && r.action.items?.length === 1).toBe(true);
+    expect(r.ok && r.action.type === 'slipRefund' && r.action.kind === 'void' && r.action.items === null).toBe(true);
   });
   it('領収書：宛名・但し書きは任意、分割は 2 枚以上', () => {
     const r = parseNativeSlipAction({ type: 'slipRyoshusho', orderId: U1, recipientName: ' 株式会社A ', purpose: '', splitAmounts: [1000] });
