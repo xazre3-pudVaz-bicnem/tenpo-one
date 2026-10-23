@@ -54,6 +54,9 @@ import { loadNativeAnnouncements, loadNativeNotices } from '@/lib/native-notices
 import { createAnnouncement, deleteAnnouncement, markAnnouncementRead } from '@/app/app/announcements/actions';
 import { markAllRead } from '@/app/app/notifications/actions';
 import { markNotificationRead } from '@/app/app/actions';
+import { isNativeScanActionType, nativeScanPath, parseNativeScanAction } from '@/lib/native-scan';
+import { loadNativeScan } from '@/lib/native-scan-server';
+import { attachReceiptToCashTransaction, createScanDocument } from '@/app/app/scan/actions';
 import { isNativeCustomerActionType, parseNativeCustomerAction } from '@/lib/native-customers';
 import { loadNativeCustomer, loadNativeCustomers } from '@/lib/native-customers-server';
 import { addCustomerNote, createCustomer, recalcCustomerStats, updateCustomerAttributes } from '@/app/app/customers/actions';
@@ -301,6 +304,15 @@ export async function GET(request: Request) {
     return json({ ok: true, ...io });
   }
 
+  // スキャン（レシート撮影。Web の /app/scan）
+  if (part === 'scan') {
+    if (ctx.disabledFeatures?.has('accounting')) return json({ ok: false, error: 'この機能は使えません', useWeb: true }, 403);
+    if (!can(ctx.role, 'documents.write')) return json({ ok: false, error: '書類をアップロードする権限がありません。店長・経理担当者に依頼してください。' }, 403);
+    const tx = url.searchParams.get('tx');
+    const scan = await loadNativeScan(ctx, await createClient(), todayJst(), { type: url.searchParams.get('type') ?? '', tx: isUuid(tx) ? tx : null });
+    return json({ ok: true, ...scan });
+  }
+
   // 顧客台帳（Web の /app/customers・/app/customers/[id]）
   if (part === 'customers' || part === 'customer') {
     if (ctx.disabledFeatures?.has('crm')) return json({ ok: false, error: 'この機能は使えません', useWeb: true }, 403);
@@ -495,6 +507,44 @@ export async function POST(request: Request) {
       return json(r.ok ? { ok: true } : { ok: false, error: r.error ?? '在庫の印刷に失敗しました' });
     } catch (e) {
       return json({ ok: false, error: errorText(e, 'うまくいきませんでした。もう一度お試しください') }, 400);
+    }
+  }
+
+  // スキャンの保存（写真を本文で受け取り、Web と同じ場所へ上げて同じ Server Action で登録。2026-10-24）
+  if (raw && typeof raw === 'object' && isNativeScanActionType((raw as { type?: unknown }).type)) {
+    const parsedScan = parseNativeScanAction(raw);
+    if (!parsedScan.ok) return json({ ok: false, error: parsedScan.error }, 400);
+    if (ctx.disabledFeatures?.has('accounting')) return json({ ok: false, error: 'この機能は使えません', useWeb: true }, 403);
+    if (!can(ctx.role, 'documents.write')) return json({ ok: false, error: '書類をアップロードする権限がありません' }, 403);
+    // Route Handler では requirePermission がお店の回線を見ないので、ここで見る（ほかの操作と同じ）
+    const scanProblem = await networkProblem(ctx);
+    if (scanProblem) return json({ ok: false, error: scanProblem }, 403);
+    const sa = parsedScan.action;
+    const supabase = await createClient();
+    // 紐付ける出金があればその店、無ければ今の店（Web の ScanCapture の storeId と同じ）
+    let storeId: string | null = ctx.currentStore?.id ?? null;
+    if (sa.txId) {
+      const { data: t } = await supabase.from('cash_transactions').select('store_id').eq('id', sa.txId).eq('organization_id', ctx.organizationId).maybeSingle();
+      if (t && ctx.stores.some((s) => s.id === t.store_id)) storeId = t.store_id as string;
+    }
+    const bytes = Buffer.from(sa.dataBase64, 'base64');
+    if (bytes.length === 0) return json({ ok: false, error: '写真が正しくありません' }, 400);
+    const path = nativeScanPath(ctx.organizationId, storeId, sa.mimeType, crypto.randomUUID());
+    const { error: upErr } = await supabase.storage.from('documents').upload(path, bytes, { contentType: sa.mimeType, upsert: false });
+    if (upErr) return json({ ok: false, error: 'ストレージへのアップロードに失敗しました' });
+    try {
+      const { id } = await createScanDocument({ filePath: path, fileName: sa.fileName, mimeType: sa.mimeType, sizeBytes: bytes.length, storeId });
+      if (sa.txId && can(ctx.role, 'cash.write')) {
+        try {
+          await attachReceiptToCashTransaction(sa.txId, id);
+          return json({ ok: true, orderId: id, queued: 1 });
+        } catch (e) {
+          return json({ ok: false, error: `書類は保存しましたが、出金への紐付けに失敗しました：${errorText(e, '不明なエラー')}` });
+        }
+      }
+      return json({ ok: true, orderId: id, queued: 0 });
+    } catch (e) {
+      return json({ ok: false, error: errorText(e, '登録に失敗しました') }, 400);
     }
   }
 
