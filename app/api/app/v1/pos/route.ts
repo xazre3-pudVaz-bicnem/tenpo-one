@@ -50,7 +50,8 @@ import {
   updatePettyOpeningBalance,
 } from '@/app/app/cash/actions';
 import { isNativeNoticeActionType, parseNativeNoticeAction } from '@/lib/native-notices';
-import { loadNativeNotices } from '@/lib/native-notices-server';
+import { loadNativeAnnouncements, loadNativeNotices } from '@/lib/native-notices-server';
+import { createAnnouncement, deleteAnnouncement, markAnnouncementRead } from '@/app/app/announcements/actions';
 import { markAllRead } from '@/app/app/notifications/actions';
 import { markNotificationRead } from '@/app/app/actions';
 import { isNativePettyActionType, nativePettyPermission, parseNativePettyAction } from '@/lib/native-petty';
@@ -294,6 +295,12 @@ export async function GET(request: Request) {
     return json({ ok: true, ...io });
   }
 
+  // お知らせ（Web の /app/announcements）
+  if (part === 'announcements') {
+    if (!can(ctx.role, 'dashboard.view')) return json({ ok: false, error: '権限がありません', useWeb: true }, 403);
+    return json({ ok: true, ...(await loadNativeAnnouncements(ctx, await createClient())) });
+  }
+
   // 通知（Web の /app/notifications）
   if (part === 'notices') {
     const type = (url.searchParams.get('type') ?? '').slice(0, 60);
@@ -450,9 +457,23 @@ export async function POST(request: Request) {
   if (raw && typeof raw === 'object' && isNativeNoticeActionType((raw as { type?: unknown }).type)) {
     const parsedNotice = parseNativeNoticeAction(raw);
     if (!parsedNotice.ok) return json({ ok: false, error: parsedNotice.error }, 400);
+    const na = parsedNotice.action;
+    if (na.type === 'annCreate' || na.type === 'annDelete') {
+      if (!can(ctx.role, 'store.settings')) return json({ ok: false, error: '権限がありません' }, 403);
+      // Route Handler では requirePermission がお店の回線を見ないので、ここで見る（ほかの操作と同じ）
+      const annProblem = await networkProblem(ctx);
+      if (annProblem) return json({ ok: false, error: annProblem }, 403);
+    }
     try {
-      if (parsedNotice.action.type === 'noticeRead') await markNotificationRead(parsedNotice.action.id);
-      else await markAllRead();
+      if (na.type === 'noticeRead') await markNotificationRead(na.id);
+      else if (na.type === 'noticeReadAll') await markAllRead();
+      else if (na.type === 'annRead') await markAnnouncementRead(na.id);
+      else if (na.type === 'annDelete') await deleteAnnouncement(na.id);
+      else {
+        const target = ctx.currentStore ?? ctx.stores[0];
+        if (!na.allStores && !target) return json({ ok: false, error: '店舗がありません' }, 404);
+        await createAnnouncement({ title: na.title, body: na.body, isImportant: na.isImportant, publishFrom: na.publishFrom, publishTo: na.publishTo, storeId: na.allStores ? null : target!.id });
+      }
       return json({ ok: true });
     } catch (e) {
       return json({ ok: false, error: errorText(e, 'うまくいきませんでした。もう一度お試しください') }, 400);
