@@ -22,11 +22,11 @@ it.each([28, 32, 42, 48])('keeps name/count/amount on one row without truncating
   const input = [{ name: fullName, quantity: 1234, unitPrice: 1000, lineTotal: 1234567, modifiers: [{ name: '有料選択肢', price: 100 }] }];
   for (const options of [{}, STAR_WIDTH_OPTIONS, { yenFullWidth: true }]) {
     const rows = receiptTableLines(input, width, options);
-    expect(rows).toHaveLength(3); // header, thin rule, one complete product row
-    expect(rows[2]).toContain('...');
-    expect(rows[2]).toContain('1234');
-    expect(rows[2]).toContain('¥1,234,567');
-    expect(rows[2].indexOf('1234')).toBeLessThan(rows[2].indexOf('¥1,234,567'));
+    expect(rows).toHaveLength(4); // two thin rules, header, one complete product row
+    expect(rows[3]).toContain('...');
+    expect(rows[3]).toContain('1234');
+    expect(rows[3]).toContain('¥1,234,567');
+    expect(rows[3].indexOf('1234')).toBeLessThan(rows[3].indexOf('¥1,234,567'));
     expect(rows.every(row => dispWidth(row, options) <= width)).toBe(true);
     expect(rows.join('\n')).not.toMatch(/[|+]/);
     expect(rows.join('\n')).not.toContain('有料選択肢');

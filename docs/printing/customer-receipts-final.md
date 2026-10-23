@@ -13,3 +13,6 @@ Approved by Ronnie, applies to every store using its existing data.
 - Classic horizontal 領収書 from PR #361 is unchanged.
 
 Verification covers 58/80mm, Star Japanese width allowance and EPSON yen width, one row per product, retained charged modifier totals, no modification of source names, hidden printer names, preserved settlement/refund values and guest metadata, and correct footer differences. Automated byte/layout tests do not prove physical font size or cutter behavior; confirm with the next genuine receipt.
+
+## Final separator refinement
+Approved after the side-by-side preview: no dotted header/metadata dividers; thin solid lines above/below the item headings and the total; dotted line before the subtotal and after the payment/points section. Tax breakdown is before the total, matching the approved preview. Native solid separators use continuous underscore rows, dotted separators use spaced hyphens, retaining the character-print path. No amounts, tax calculations, payment values or kitchen/invoice layouts are changed.

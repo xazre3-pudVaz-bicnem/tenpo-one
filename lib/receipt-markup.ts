@@ -27,7 +27,8 @@ export interface ReceiptMarkupOptions {
 
 export function receiptToStarMarkup(receipt: ReceiptData, options: ReceiptMarkupOptions = {}): string {
   const width = colsFor(options.paperWidth);
-  const rule = '-'.repeat(width);
+  const solid = '_'.repeat(width);
+  const dotted = '- '.repeat(Math.floor(width / 2)).trimEnd();
   const L: string[] = [];
   const line = (s = '') => { for (const w of wrapText(s, width)) L.push(esc(w)); };
   const raw = (s: string) => L.push(s); // Markup命令はエスケープしない
@@ -45,18 +46,16 @@ export function receiptToStarMarkup(receipt: ReceiptData, options: ReceiptMarkup
   if (receipt.storePhone) line(`TEL ${receipt.storePhone}`);
   raw('[align: left]');
   if (receipt.registrationNumber) line(`登録番号 ${receipt.registrationNumber}`);
-  line(rule);
   const table = receipt.tableName ?? 'テイクアウト';
   const tableRow = twoCol('卓番号', table, width);
   raw(esc(tableRow.slice(0, -table.length)) + '[magnify: width 1; height 2]' + esc(table) + '[magnify: width 1; height 1]');
   line(twoCol(receipt.staffName ? `担当 ${receipt.staffName}` : '', receipt.guestCount != null ? `人数 ${receipt.guestCount}名` : '', width));
   line(twoCol(receipt.issuedAt, `No.${receipt.orderNo}`, width));
-  line(rule);
 
   // 明細
   // 0円の明細（飲み放題・食べ放題・コースの中身）はレシートにも出さない（お会計伝票と同じ。2026-09-26 店舗要望）
   for (const row of receiptTableLines(receipt.lines, width, STAR_WIDTH_OPTIONS)) line(row);
-  line(rule);
+  line(dotted);
 
   // 金額
   line(twoCol('小計', yen(receipt.subtotal), width));
@@ -67,10 +66,11 @@ export function receiptToStarMarkup(receipt: ReceiptData, options: ReceiptMarkup
   if (receipt.discount > 0) {
     line(twoCol(`値引${receipt.couponCode ? ` (${receipt.couponCode})` : ''}`, `-${yen(receipt.discount)}`, width));
   }
+  line(solid);
   raw('[magnify: width 1; height 2]');
   line(twoCol('合計', yen(receipt.total), width));
   raw('[magnify: width 1; height 1]');
-  line(rule);
+  line(solid);
 
   // 支払
   for (const p of receipt.payments) line(twoCol(p.label, yen(p.amount), width));
@@ -81,12 +81,12 @@ export function receiptToStarMarkup(receipt: ReceiptData, options: ReceiptMarkup
     line(twoCol('差引', yen(receipt.netPaid), width));
   }
   if (receipt.pointsEarned != null || receipt.pointsUsed != null) {
-    line(rule);
+    line(dotted);
     if (receipt.pointsUsed) line(twoCol('利用ポイント', `${receipt.pointsUsed}P`, width));
     if (receipt.pointsEarned) line(twoCol('獲得ポイント', `${receipt.pointsEarned}P`, width));
     if (receipt.pointBalance != null) line(twoCol('ポイント残高', `${receipt.pointBalance}P`, width));
   }
-  line(rule);
+  line(dotted);
 
   raw('[align: middle]');
   line('ご来店ありがとうございました');
@@ -218,7 +218,8 @@ export function orderSlipMarkup(
   options: ReceiptMarkupOptions = {}
 ): string {
   const width = colsFor(options.paperWidth);
-  const rule = '-'.repeat(width);
+  const solid = '_'.repeat(width);
+  const dotted = '- '.repeat(Math.floor(width / 2)).trimEnd();
   const L: string[] = [];
   const line = (s = '') => { for (const w of wrapText(s, width)) L.push(esc(w)); };
   const raw = (s: string) => L.push(s);
@@ -230,24 +231,23 @@ export function orderSlipMarkup(
   raw('[magnify: width 1; height 1]');
   for (const heading of customerBillHeading(width, STAR_WIDTH_OPTIONS)) line(heading);
   raw('[align: left]');
-  line(rule);
   const table = slip.tableName ?? 'テイクアウト';
   const tableRow = twoCol('卓番号', table, width);
   raw(esc(tableRow.slice(0, -table.length)) + '[magnify: width 1; height 2]' + esc(table) + '[magnify: width 1; height 1]');
   line(twoCol(slip.clerkName ? `担当 ${slip.clerkName}` : '', slip.guestCount != null ? `人数 ${slip.guestCount}名` : '', width));
   line(twoCol(slip.issuedAt, `No.${slip.orderNo}`, width));
-  line(rule);
 
   for (const row of receiptTableLines(slip.lines, width, STAR_WIDTH_OPTIONS)) line(row);
-  line(rule);
+  line(dotted);
   line(twoCol('小計', yen(slip.subtotal), width));
   line(twoCol('消費税', yen(slip.taxTotal), width));
   if (slip.serviceCharge > 0) line(twoCol('サービス料', yen(slip.serviceCharge), width));
   if (slip.discount > 0) line(twoCol('値引', `-${yen(slip.discount)}`, width));
+  line(solid);
   raw('[magnify: width 1; height 2]');
   line(twoCol('合計', yen(slip.total), width));
   raw('[magnify: width 1; height 1]');
-  line(rule);
+  line(solid);
   raw('[align: middle]');
   raw('[feed]');
   raw('[cut: feed; partial]');
