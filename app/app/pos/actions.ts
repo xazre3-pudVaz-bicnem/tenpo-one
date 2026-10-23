@@ -923,7 +923,6 @@ async function receiptPrinterForAutoPrint(
     .select('id')
     .eq('store_id', storeId)
     .eq('status', 'active')
-    .eq('cloudprnt_enabled', true)
     .eq('auto_print', true)
     .eq('usage', 'receipt')
     .limit(1)
