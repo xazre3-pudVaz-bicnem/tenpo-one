@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { RYOSHUSHO_DEFAULT_PURPOSE } from '@/lib/ryoshusho-issue';
 import { useRouter } from 'next/navigation';
+import { splitCheckoutUrl } from '@/lib/split-checkout-return';
+import { readSplitCheckoutReturn } from '@/app/app/pos/split-return-action';
 import {
   ArrowLeft,
   Check,
@@ -129,6 +131,7 @@ interface PaymentRow extends CheckoutPayment {
 export function CheckoutDialog({
   onClose,
   order,
+  from,
   canDiscount,
   discountReason,
   setDiscountAction,
@@ -154,6 +157,7 @@ export function CheckoutDialog({
 }: {
   onClose: () => void;
   order: CheckoutOrder;
+  from?: string;
   canDiscount: boolean;
   discountReason: string | null;
   setDiscountAction: (orderId: string, discountTotal: number, reason: string) => Promise<void>;
@@ -222,6 +226,20 @@ export function CheckoutDialog({
   const [rightTab, setRightTab] = useState<'pay' | 'discount'>('pay');
   /** 会計が終わったあとに出す金額（お支払い・お預り・おつり） */
   const [done, setDone] = useState<{ total: number; tendered: number; change: number } | null>(null);
+  const [splitReturn, setSplitReturn] = useState<{ href: string; total: number } | null>(null);
+  const [splitReturnLoading, setSplitReturnLoading] = useState(Boolean(from));
+  useEffect(() => {
+    if (!done || !from) return;
+    let active = true;
+    void readSplitCheckoutReturn(order.id, from).then((result) => {
+      if (active) setSplitReturn(result);
+    }).catch(() => {
+      if (active) setSplitReturn(null);
+    }).finally(() => {
+      if (active) setSplitReturnLoading(false);
+    });
+    return () => { active = false; };
+  }, [done, from, order.id]);
   /** 支払メモ（レジ締めや取引履歴で読む。2026-09-25 店舗要望） */
   const [payMemo, setPayMemo] = useState('');
   /**
@@ -539,7 +557,7 @@ export function CheckoutDialog({
       try {
         const res = await splitOrderAction(order.id, moves);
         setSplitPick(null);
-        router.push(`/app/pos?order=${res.newOrderId}&checkout=1`);
+        router.push(splitCheckoutUrl(res.newOrderId, order.id));
       } catch (e) {
         toast(e instanceof Error ? e.message : '伝票を分けられませんでした', 'error');
       }
@@ -896,9 +914,8 @@ export function CheckoutDialog({
             >
               伝票明細
             </Button>
-            {/* 続けて会計はテーブル一覧へ（2026-10-02 FULL MOoN 御茶ノ水「この画面に戻ってほしい」）。注文を選ぶ一覧（/app/pos）には行かない */}
-            <Button size="pos" className="h-[56px] text-[17px]" onClick={() => router.push('/app/floor')}>
-              続けて会計
+            <Button size="pos" className="h-[56px] text-[17px]" disabled={splitReturnLoading} onClick={() => router.push(splitReturn?.href ?? '/app/floor')}>
+              {splitReturn ? `同じ卓の残りを会計（残り ${yen(splitReturn.total)}）` : '続けて会計'}
             </Button>
           </div>
 

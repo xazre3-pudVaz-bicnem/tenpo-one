@@ -250,6 +250,7 @@ export function PosScreen({
   checkoutAction,
   sendOrderAction,
   openCheckout = false,
+  from,
   openTableMove = false,
   moveTableAction,
   cancelEmptyOrderAction,
@@ -332,6 +333,7 @@ export function PosScreen({
   sendOrderAction?: (orderId: string) => Promise<SendOrderResult>;
   /** テーブル一覧のポップアップから「会計」「テーブル移動」を選んで来たときに、その画面を開く */
   openCheckout?: boolean;
+  from?: string;
   openTableMove?: boolean;
   moveTableAction: (orderId: string, newTableId: string) => Promise<{ tableName: string }>;
   /** 品目のない注文（会計前・¥0）を取消する。省略時はボタンを表示しない */
@@ -1430,6 +1432,7 @@ export function PosScreen({
       <CheckoutDialog
         onClose={() => setCheckoutOpen(false)}
         order={checkoutOrder}
+        from={from}
         canDiscount={canDiscount}
         discountReason={order.discountReason}
         setDiscountAction={setDiscountAction}
