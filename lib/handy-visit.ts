@@ -363,6 +363,42 @@ export function visitMemo(
   return `ハンディ: ${parts.join(' / ')}`;
 }
 
+const VISIT_MEMO_PREFIX = 'ハンディ: ';
+
+/**
+ * 伝票メモ「ハンディ: 飲み放題・アラカルト / 男2・女1 / …」からモードを読む（visitMemo の逆）。
+ * ハンディ・レジのお客様情報で入れた伝票でなければ null
+ */
+export function plansFromMemo(memo: string | null | undefined): HandyPlan[] | null {
+  if (!memo || !memo.startsWith(VISIT_MEMO_PREFIX)) return null;
+  const first = memo.slice(VISIT_MEMO_PREFIX.length).split(' / ')[0] ?? '';
+  const names = first.split('・').filter(Boolean);
+  const plans = names
+    .map((n) => HANDY_PLANS.find((p) => p.name === n)?.id)
+    .filter((p): p is HandyPlan => !!p);
+  return plans.length > 0 && plans.length === names.length ? plans : null;
+}
+
+/**
+ * 伝票メモのモードの部分だけを入れ替える（男女の人数・来店経路・時間制 はそのまま）。
+ * お客様情報（席の時間・コース）のダイアログでモードを変えるとき（2026-10-24 Ronnie「ここでモードも変えられるように」）
+ */
+export function memoWithPlans(memo: string | null | undefined, plans: readonly HandyPlan[]): string {
+  const names = planNames(plans);
+  if (!memo || !memo.startsWith(VISIT_MEMO_PREFIX)) {
+    return memo ? `${VISIT_MEMO_PREFIX}${names} / ${memo}` : `${VISIT_MEMO_PREFIX}${names}`;
+  }
+  const parts = memo.slice(VISIT_MEMO_PREFIX.length).split(' / ');
+  if (plansFromMemo(memo)) parts[0] = names;
+  else parts.unshift(names);
+  return `${VISIT_MEMO_PREFIX}${parts.join(' / ')}`;
+}
+
+/** モードの配列として正しいか（お客様情報の保存で受け付ける形） */
+export function isPlanList(v: unknown): v is HandyPlan[] {
+  return Array.isArray(v) && v.length > 0 && v.every((p) => HANDY_PLANS.some((h) => h.id === p));
+}
+
 /** 時間制の残り分（0 未満は 0）。終了予定が無ければ null */
 export function remainingMinutes(endAtMs: number | null, nowMs: number): number | null {
   if (endAtMs == null) return null;

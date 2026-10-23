@@ -15,6 +15,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useClerkGate } from '@/components/pos/clerk-gate';
 import { jstHm, type SeatCourseOption } from '@/lib/seat-time';
 import type { SeatTimeInput } from '@/app/app/pos/actions';
+import type { HandyPlanItem } from '@/lib/handy-visit';
 
 /** 着席（ファーストオーダー）のときに決めるコース・時間 */
 export interface WalkInSeatOptions {
@@ -92,6 +93,7 @@ export function TableSheet({
   printExpoSlipAction,
   printSelectedItemsAction,
   seatCourses = [],
+  planItems = [],
   setSeatTimeAction,
   clearTableAction,
 }: {
@@ -122,6 +124,8 @@ export function TableSheet({
   printSelectedItemsAction: (orderId: string, itemIds: string[]) => Promise<{ ok: boolean; error?: string }>;
   /** 席の時間・コース（卓のポップアップから直す。2026-09-25 店舗要望 FULL MOoN 御茶ノ水） */
   seatCourses?: SeatCourseOption[];
+  /** お客様情報のモードで選ぶプラン商品（2026-10-24） */
+  planItems?: HandyPlanItem[];
   setSeatTimeAction?: (orderId: string, input: SeatTimeInput) => Promise<void>;
   /** テーブルクリア（2026-09-25 店舗要望）。品目取消と同じ承認ルール */
   clearTableAction?: (orderId: string, reason: string, approvedByClerkId?: string | null) => Promise<{ cancelledItems: number }>;
@@ -822,9 +826,12 @@ export function TableSheet({
             endMs: table.order.endAtMs,
             courseId: table.order.courseId,
             guestCount: selected.guestCount ?? table.order.guestCount,
+            plans: table.order.plans,
           }}
           courses={seatCourses}
           setSeatTimeAction={setSeatTimeAction}
+          planItems={planItems}
+          orderMenuItemIds={selected.lines.map((l) => l.menuItemId).filter((id): id is string => !!id)}
         />
       )}
     </div>
