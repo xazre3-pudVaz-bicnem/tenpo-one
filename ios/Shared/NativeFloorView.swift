@@ -12,6 +12,10 @@ struct NativeFloorView: View {
     var onOpenOrder: (_ orderId: String, _ checkout: Bool) -> Void = { _, _ in }
 
     @State private var tileRect: CGRect?
+    /// 来店登録（空席の「注文」）のカード。ポップアップを閉じてから出す（2026-10-24 Ronnie「注文を押したら次が出て、ポップアップは消える」）
+    @State private var setupTable: NFTable?
+    /// 着席中の「お客様情報」のカード
+    @State private var guestInfo: NFGuestInfoTarget?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -88,12 +92,42 @@ struct NativeFloorView: View {
                     table: t,
                     anchor: tileRect,
                     onClose: { model.selectedTableId = nil; tileRect = nil },
-                    onOpenOrder: onOpenOrder
+                    onOpenOrder: onOpenOrder,
+                    onSetup: { table in setupTable = table },
+                    onGuestInfo: { order, slip in guestInfo = NFGuestInfoTarget(order: order, slip: slip) }
                 )
                 .transition(.opacity)
             }
         }
         .animation(.easeOut(duration: 0.15), value: model.selectedTableId)
+        // 来店登録（お客様情報）。Web の /app/floor/[tableId]/setup と同じ並び。大きめのカードで、中身が入る高さ
+        .overlay {
+            if let t = setupTable {
+                NativeModalCard(width: 780) {
+                    NativeSetupSheet(
+                        model: model,
+                        table: t,
+                        onClose: { setupTable = nil },
+                        onStarted: { id in
+                            setupTable = nil
+                            onOpenOrder(id, false)
+                        }
+                    )
+                }
+                .transition(.opacity)
+            }
+        }
+        .animation(.easeOut(duration: 0.15), value: setupTable?.id)
+        // 着席中の直し（開始・時間・人数・モード・コース）
+        .overlay {
+            if let g = guestInfo {
+                NativeModalCard(width: 720) {
+                    NativeGuestInfoSheet(model: model, order: g.order, slip: g.slip, onClose: { guestInfo = nil })
+                }
+                .transition(.opacity)
+            }
+        }
+        .animation(.easeOut(duration: 0.15), value: guestInfo?.slip.id)
         .onAppear { model.start() }
         .onDisappear { model.stop() }
         .coordinateSpace(name: "floor")
@@ -386,6 +420,12 @@ func stripSama(_ name: String) -> String {
     var s = name
     if s.hasSuffix(" 様") { s.removeLast(2) } else if s.hasSuffix("様") { s.removeLast() }
     return s
+}
+
+/// 「お客様情報」のカードに渡すもの（伝票と注文のスナップショット）
+struct NFGuestInfoTarget: Hashable {
+    let order: NFOrder
+    let slip: NFSlip
 }
 
 struct NFRectKey: PreferenceKey {
