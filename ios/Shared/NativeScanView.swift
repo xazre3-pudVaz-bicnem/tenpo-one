@@ -7,25 +7,25 @@ import UIKit
 //   レシート未添付の出金（本日）・レシートボックス（日ごとのフォルダ）・種別の絞込
 //   ScanSnap のまとめて取り込み（読み取り・自動仕分け）と保存ボックスの仕分けは Web
 
-struct NSTarget: Codable { let id: String; let main: String; let sub: String?; let date: String; let occurredAt: String; let kindLabel: String; let amount: Int; let hasReceipt: Bool }
-struct NSNeed: Codable, Identifiable { let id: String; let occurredAt: String; let main: String; let sub: String; let amount: Int; let isAdvance: Bool }
-struct NSMonth: Codable { let count: Int; let receipts: Int; let inbox: Int }
-struct NSDoc: Codable, Identifiable { let id: String; let createdAt: String; let fileName: String; let title: String?; let docType: String; let typeLabel: String; let status: String; let amount: Int?; let linked: Bool }
-struct NSFolder: Codable, Identifiable { var id: String { day }; let day: String; let docs: [NSDoc] }
-struct NSPayload: Codable {
+struct SCNTarget: Codable { let id: String; let main: String; let sub: String?; let date: String; let occurredAt: String; let kindLabel: String; let amount: Int; let hasReceipt: Bool }
+struct SCNNeed: Codable, Identifiable { let id: String; let occurredAt: String; let main: String; let sub: String; let amount: Int; let isAdvance: Bool }
+struct SCNMonth: Codable { let count: Int; let receipts: Int; let inbox: Int }
+struct SCNDoc: Codable, Identifiable { let id: String; let createdAt: String; let fileName: String; let title: String?; let docType: String; let typeLabel: String; let status: String; let amount: Int?; let linked: Bool }
+struct SCNFolder: Codable, Identifiable { var id: String { day }; let day: String; let docs: [SCNDoc] }
+struct SCNPayload: Codable {
     let canUpload: Bool; let canLink: Bool; let canClose: Bool; let today: String; let filter: String
-    let target: NSTarget?; let txMissing: Bool; let needsReceipt: [NSNeed]; let needsTotal: Int; let month: NSMonth; let folders: [NSFolder]
+    let target: SCNTarget?; let txMissing: Bool; let needsReceipt: [SCNNeed]; let needsTotal: Int; let month: SCNMonth; let folders: [SCNFolder]
 }
 
 /// アップロードの1件（Web の ScanCapture の Task と同じ状態）
-struct NSTask: Identifiable { let id = UUID(); let name: String; var status: String; var message: String? }
+struct SCNTask: Identifiable { let id = UUID(); let name: String; var status: String; var message: String? }
 
 @MainActor
 final class NativeScanModel: ObservableObject {
-    @Published var payload: NSPayload?
+    @Published var payload: SCNPayload?
     @Published var filter = ""
     @Published var tx: String?
-    @Published var tasks: [NSTask] = []
+    @Published var tasks: [SCNTask] = []
     @Published var error: String?
 
     func refresh() async {
@@ -33,7 +33,7 @@ final class NativeScanModel: ObservableObject {
             var comps = URLComponents(url: AppConfig.url("/api/app/v1/pos"), resolvingAgainstBaseURL: false)!
             comps.queryItems = [URLQueryItem(name: "part", value: "scan"), URLQueryItem(name: "type", value: filter), URLQueryItem(name: "tx", value: tx ?? "")]
             let data = try await NativeAPI.shared.send(URLRequest(url: comps.url!))
-            payload = try JSONDecoder().decode(NSPayload.self, from: data)
+            payload = try JSONDecoder().decode(SCNPayload.self, from: data)
             error = nil
         } catch {
             self.error = (error as? NativeAPIError)?.message ?? "通信できませんでした"
@@ -45,7 +45,7 @@ final class NativeScanModel: ObservableObject {
         let list = Array(images.prefix(tx != nil ? 1 : 20))
         for (i, img) in list.enumerated() {
             let name = "scan_\(Int(Date().timeIntervalSince1970))_\(i + 1).jpg"
-            var task = NSTask(name: name, status: "uploading")
+            var task = SCNTask(name: name, status: "uploading")
             tasks.insert(task, at: 0)
             guard let jpeg = Self.jpeg(img) else {
                 task.status = "failed"; task.message = "写真を読み込めませんでした"; replace(task); continue
@@ -72,7 +72,7 @@ final class NativeScanModel: ObservableObject {
         await refresh()
     }
 
-    private func replace(_ t: NSTask) { if let i = tasks.firstIndex(where: { $0.id == t.id }) { tasks[i] = t } }
+    private func replace(_ t: SCNTask) { if let i = tasks.firstIndex(where: { $0.id == t.id }) { tasks[i] = t } }
 
     static func jpeg(_ img: UIImage) -> Data? {
         let maxSide: CGFloat = 2400
@@ -160,7 +160,7 @@ struct NativeScanView: View {
         .onChange(of: model.filter) { _ in Task { await model.refresh() } }
         .onChange(of: model.tx) { _ in Task { await model.refresh() } }
         .fullScreenCover(isPresented: $showCamera) {
-            NSCameraPicker { img in
+            SCNCameraPicker { img in
                 showCamera = false
                 if let img { Task { await model.upload([img]) } }
             }
@@ -204,7 +204,7 @@ struct NativeScanView: View {
         .overlay(RoundedRectangle(cornerRadius: 16).stroke(NFColor.line, lineWidth: 1))
     }
 
-    private func targetCard(_ t: NSTarget, _ p: NSPayload) -> some View {
+    private func targetCard(_ t: SCNTarget, _ p: SCNPayload) -> some View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 4) { Text("この出金のレシートを撮影").font(.system(size: 12, weight: .bold)); Text("Receipt for this payout").font(.system(size: 10)) }.foregroundColor(NFColor.royal)
@@ -225,7 +225,7 @@ struct NativeScanView: View {
         .overlay(RoundedRectangle(cornerRadius: 16).stroke(NFColor.iris.opacity(0.4), lineWidth: 1.5))
     }
 
-    private func captureCard(_ p: NSPayload) -> some View {
+    private func captureCard(_ p: SCNPayload) -> some View {
         card("撮影・取り込み", en: "Capture", trailing: AnyView(Text("\(p.target != nil ? "1枚ずつ" : "複数枚OK") ・ 写真から選ぶことも").font(.system(size: 12)).foregroundColor(NFColor.ink3))) {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 10) {
@@ -265,7 +265,7 @@ struct NativeScanView: View {
         }
     }
 
-    private func needsCard(_ p: NSPayload) -> some View {
+    private func needsCard(_ p: SCNPayload) -> some View {
         card("レシート未添付の出金", en: "Needs receipt", trailing: AnyView(
             Text("本日 \(p.needsReceipt.count)件\(p.needsReceipt.isEmpty ? "" : "（\(NT.yen(p.needsTotal))）")").font(.system(size: 13, weight: .bold)).monospacedDigit()
                 .foregroundColor(p.needsReceipt.isEmpty ? Color(hex: 0x1E8F62) : NFColor.ink2))) {
@@ -310,7 +310,7 @@ struct NativeScanView: View {
         }.buttonStyle(PressableStyle())
     }
 
-    private func boxCard(_ p: NSPayload) -> some View {
+    private func boxCard(_ p: SCNPayload) -> some View {
         card("レシートボックス", en: "Receipt box") {
             VStack(alignment: .leading, spacing: 0) {
                 NCFlow(spacing: 6) {
@@ -345,7 +345,7 @@ struct NativeScanView: View {
         }
     }
 
-    private func folderHeader(_ f: NSFolder, _ p: NSPayload, open: Bool) -> some View {
+    private func folderHeader(_ f: SCNFolder, _ p: SCNPayload, open: Bool) -> some View {
         let inbox = f.docs.filter { $0.status == "inbox" }.count
         let total = f.docs.reduce(0) { $0 + ($1.amount ?? 0) }
         return Button {
@@ -368,7 +368,7 @@ struct NativeScanView: View {
         .overlay(alignment: .top) { Rectangle().fill(NFColor.line).frame(height: 1) }
     }
 
-    private func docRow(_ d: NSDoc) -> some View {
+    private func docRow(_ d: SCNDoc) -> some View {
         Button { onWeb("/app/invoices?tab=\(d.status == "inbox" ? "inbox" : "documents")") } label: {
             HStack(spacing: 10) {
                 Image(systemName: d.docType == "delivery_note" ? "shippingbox" : d.docType == "invoice" ? "doc.text" : "receipt")
@@ -417,7 +417,7 @@ struct NativeScanView: View {
 }
 
 /// カメラ（UIImagePickerController）
-struct NSCameraPicker: UIViewControllerRepresentable {
+struct SCNCameraPicker: UIViewControllerRepresentable {
     let onDone: (UIImage?) -> Void
     func makeCoordinator() -> Coordinator { Coordinator(onDone: onDone) }
     func makeUIViewController(context: Context) -> UIImagePickerController {
