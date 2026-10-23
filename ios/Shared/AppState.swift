@@ -45,6 +45,8 @@ final class AppState: ObservableObject {
     @Published var nativeExpenses = false
     /// ネイティブの在庫設定（本日の残り数。/app/inventory/menu-stock。2026-10-24）
     @Published var nativeStock = false
+    /// ネイティブの通知（/app/notifications。2026-10-24）
+    @Published var nativeNotices = false
     /// フロアを読み直してほしいとき（会計完了など）に増やす
     @Published var floorRefreshTick = 0
 
@@ -126,7 +128,7 @@ final class AppState: ObservableObject {
         }
         // ホーム・テーブル一覧はネイティブで（Web の画面の上に重ねる。Native ON の iPad は Web のホーム・テーブル一覧を見せない）
         if url.path == "/app/dashboard" || url.path == "/app" {
-            nativeFloor = false
+            nativeFloor = false; nativeNotices = false
             nativeLedger = false
             nativeCash = false
             nativeCashIo = false
@@ -145,7 +147,7 @@ final class AppState: ObservableObject {
         nativeSlips = false
         nativeExpenses = false
         nativeStock = false
-            if !nativeFloor { nativeFloor = true }
+            nativeNotices = false; if !nativeFloor { nativeFloor = true }
             return
         }
         if url.path == "/app/reservations" {
@@ -153,7 +155,7 @@ final class AppState: ObservableObject {
             let view = q.first { $0.name == "view" }?.value
             // 1日のスケジュールだけネイティブ（週間・グルメ別・キャンセル待ち・受付管理はまだ Web）
             if view == nil || view == "day" {
-                nativeFloor = false
+                nativeFloor = false; nativeNotices = false
                 nativeCash = false
                 nativeCashIo = false
         nativeQuick = false
@@ -164,23 +166,28 @@ final class AppState: ObservableObject {
                 return
             }
         }
+        if url.path == "/app/notifications" {
+            nativeFloor = false; nativeHome = false; nativeLedger = false; nativeCash = false; nativeCashIo = false; nativeQuick = false; nativeSlips = false; nativeExpenses = false; nativeStock = false
+            if !nativeNotices { nativeNotices = true }
+            return
+        }
         if url.path == "/app/inventory/menu-stock" {
-            nativeFloor = false; nativeHome = false; nativeLedger = false; nativeCash = false; nativeCashIo = false; nativeQuick = false; nativeSlips = false; nativeExpenses = false
+            nativeFloor = false; nativeNotices = false; nativeHome = false; nativeLedger = false; nativeCash = false; nativeCashIo = false; nativeQuick = false; nativeSlips = false; nativeExpenses = false
             if !nativeStock { nativeStock = true }
             return
         }
         if url.path == "/app/expenses" {
-            nativeFloor = false; nativeHome = false; nativeLedger = false; nativeCash = false; nativeCashIo = false; nativeQuick = false; nativeSlips = false; nativeStock = false
+            nativeFloor = false; nativeNotices = false; nativeHome = false; nativeLedger = false; nativeCash = false; nativeCashIo = false; nativeQuick = false; nativeSlips = false; nativeStock = false
             if !nativeExpenses { nativeExpenses = true }
             return
         }
         if url.path == "/app/orders" {
-            nativeFloor = false; nativeHome = false; nativeLedger = false; nativeCash = false; nativeCashIo = false; nativeQuick = false; nativeExpenses = false; nativeStock = false
+            nativeFloor = false; nativeNotices = false; nativeHome = false; nativeLedger = false; nativeCash = false; nativeCashIo = false; nativeQuick = false; nativeExpenses = false; nativeStock = false
             if !nativeSlips { nativeSlips = true }
             return
         }
         if url.path == "/app/quick-pay" {
-            nativeFloor = false; nativeHome = false; nativeLedger = false; nativeCash = false; nativeCashIo = false; nativeSlips = false; nativeExpenses = false; nativeStock = false
+            nativeFloor = false; nativeNotices = false; nativeHome = false; nativeLedger = false; nativeCash = false; nativeCashIo = false; nativeSlips = false; nativeExpenses = false; nativeStock = false
             if !nativeQuick { nativeQuick = true }
             return
         }
@@ -189,7 +196,7 @@ final class AppState: ObservableObject {
             let tab = q.first { $0.name == "tab" }?.value
             if tab == nil || tab == "register" || tab == "petty" || tab == "closings" {
                 cashTab = tab ?? "register"
-                nativeFloor = false; nativeHome = false; nativeLedger = false; nativeCash = false; nativeQuick = false; nativeSlips = false; nativeExpenses = false; nativeStock = false
+                nativeFloor = false; nativeNotices = false; nativeHome = false; nativeLedger = false; nativeCash = false; nativeQuick = false; nativeSlips = false; nativeExpenses = false; nativeStock = false
         nativeSlips = false
         nativeExpenses = false
         nativeStock = false
@@ -203,7 +210,7 @@ final class AppState: ObservableObject {
         nativeSlips = false
         nativeExpenses = false
         nativeStock = false
-            nativeFloor = false
+            nativeFloor = false; nativeNotices = false
             nativeHome = false
             nativeLedger = false
             if !nativeCash { nativeCash = true }
@@ -211,7 +218,7 @@ final class AppState: ObservableObject {
         }
         if url.path != "/app/pos" {
             // 設定など、まだ Web の画面へ行ったらネイティブを閉じる
-            nativeFloor = false
+            nativeFloor = false; nativeNotices = false
             nativeHome = false
             nativeLedger = false
             nativeCash = false
@@ -243,7 +250,7 @@ final class AppState: ObservableObject {
         guard let web = WebViewController.current else { return }
         if let path = openWebPath {
             if let id = current { webChosenOrders.insert(id) }
-            nativeFloor = false
+            nativeFloor = false; nativeNotices = false
             web.load(AppConfig.url(path))
         } else if nativeQuick {
             quickRefreshTick += 1
@@ -269,7 +276,7 @@ final class AppState: ObservableObject {
         nativeSlips = false
         nativeExpenses = false
         nativeStock = false
-        nativeFloor = false
+        nativeFloor = false; nativeNotices = false
         nativeHome = false
         nativeLedger = false
         nativeCash = false
@@ -284,7 +291,7 @@ final class AppState: ObservableObject {
         nativeSlips = false
         nativeExpenses = false
         nativeStock = false
-        nativeFloor = false
+        nativeFloor = false; nativeNotices = false
         nativeLedger = true
         WebViewController.current?.load(AppConfig.url("/app/reservations"))
     }
@@ -296,7 +303,7 @@ final class AppState: ObservableObject {
         nativeSlips = false
         nativeExpenses = false
         nativeStock = false
-        nativeFloor = false
+        nativeFloor = false; nativeNotices = false
         nativeLedger = false
         nativeCash = false
         nativeHome = true
@@ -312,6 +319,7 @@ final class AppState: ObservableObject {
         nativeStock = false
         nativeLedger = false
         nativeCash = false
+        nativeNotices = false
         nativeFloor = true
         WebViewController.current?.load(AppConfig.url("/app/floor"))
     }
@@ -323,7 +331,7 @@ final class AppState: ObservableObject {
         nativeSlips = false
         nativeExpenses = false
         nativeStock = false
-        nativeFloor = false
+        nativeFloor = false; nativeNotices = false
         nativeHome = false
         nativeLedger = false
         nativeCash = true
@@ -331,8 +339,22 @@ final class AppState: ObservableObject {
     }
 
     /// ネイティブの在庫設定へ
-    func goNativeStock() {
+    func goNativeNotices() {
         nativeFloor = false
+        nativeHome = false
+        nativeLedger = false
+        nativeCash = false
+        nativeCashIo = false
+        nativeQuick = false
+        nativeSlips = false
+        nativeExpenses = false
+        nativeStock = false
+        nativeNotices = true
+        WebViewController.current?.load(AppConfig.url("/app/notifications"))
+    }
+
+    func goNativeStock() {
+        nativeFloor = false; nativeNotices = false
         nativeHome = false
         nativeLedger = false
         nativeCash = false
@@ -347,7 +369,7 @@ final class AppState: ObservableObject {
     /// ネイティブの仕入・経費へ
     func goNativeExpenses() {
         nativeStock = false
-        nativeFloor = false
+        nativeFloor = false; nativeNotices = false
         nativeHome = false
         nativeLedger = false
         nativeCash = false
@@ -360,7 +382,7 @@ final class AppState: ObservableObject {
 
     /// ネイティブの伝票明細へ
     func goNativeSlips() {
-        nativeFloor = false
+        nativeFloor = false; nativeNotices = false
         nativeHome = false
         nativeLedger = false
         nativeCash = false
@@ -374,7 +396,7 @@ final class AppState: ObservableObject {
 
     /// ネイティブの即会計へ
     func goNativeQuick() {
-        nativeFloor = false
+        nativeFloor = false; nativeNotices = false
         nativeHome = false
         nativeLedger = false
         nativeCash = false
@@ -389,7 +411,7 @@ final class AppState: ObservableObject {
     /// ネイティブの入出金へ
     func goNativeCashIo(tab: String = "register") {
         cashTab = tab
-        nativeFloor = false
+        nativeFloor = false; nativeNotices = false
         nativeHome = false
         nativeLedger = false
         nativeCash = false

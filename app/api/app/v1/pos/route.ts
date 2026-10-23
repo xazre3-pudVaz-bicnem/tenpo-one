@@ -49,6 +49,10 @@ import {
   reprintRegisterReport,
   updatePettyOpeningBalance,
 } from '@/app/app/cash/actions';
+import { isNativeNoticeActionType, parseNativeNoticeAction } from '@/lib/native-notices';
+import { loadNativeNotices } from '@/lib/native-notices-server';
+import { markAllRead } from '@/app/app/notifications/actions';
+import { markNotificationRead } from '@/app/app/actions';
 import { isNativePettyActionType, nativePettyPermission, parseNativePettyAction } from '@/lib/native-petty';
 import { loadNativeClosings, loadNativePetty } from '@/lib/native-petty-server';
 import {
@@ -290,6 +294,15 @@ export async function GET(request: Request) {
     return json({ ok: true, ...io });
   }
 
+  // 通知（Web の /app/notifications）
+  if (part === 'notices') {
+    const type = (url.searchParams.get('type') ?? '').slice(0, 60);
+    const st = url.searchParams.get('store') ?? '';
+    const store = ctx.stores.some((s) => s.id === st) ? st : '';
+    const status = ['unread', 'read'].includes(url.searchParams.get('status') ?? '') ? (url.searchParams.get('status') as string) : '';
+    return json({ ok: true, ...(await loadNativeNotices(ctx, await createClient(), { type, store, status })) });
+  }
+
   // 小口現金・締め履歴タブ（Web の /app/cash?tab=petty / tab=closings）
   if (part === 'petty' || part === 'closings') {
     const store = ctx.currentStore ?? ctx.stores[0] ?? null;
@@ -428,6 +441,19 @@ export async function POST(request: Request) {
       }
       const r = await enqueueStockListPrint(store.id, parsedStock.action.lines);
       return json(r.ok ? { ok: true } : { ok: false, error: r.error ?? '在庫の印刷に失敗しました' });
+    } catch (e) {
+      return json({ ok: false, error: errorText(e, 'うまくいきませんでした。もう一度お試しください') }, 400);
+    }
+  }
+
+  // 通知の既読（自分宛だけ。回線は見ない＝Web と同じく requireSession だけ）
+  if (raw && typeof raw === 'object' && isNativeNoticeActionType((raw as { type?: unknown }).type)) {
+    const parsedNotice = parseNativeNoticeAction(raw);
+    if (!parsedNotice.ok) return json({ ok: false, error: parsedNotice.error }, 400);
+    try {
+      if (parsedNotice.action.type === 'noticeRead') await markNotificationRead(parsedNotice.action.id);
+      else await markAllRead();
+      return json({ ok: true });
     } catch (e) {
       return json({ ok: false, error: errorText(e, 'うまくいきませんでした。もう一度お試しください') }, 400);
     }

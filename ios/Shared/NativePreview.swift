@@ -98,6 +98,7 @@ struct NativeHomeScreen: View {
                 else if path == "/app/quick-pay" { state.goNativeQuick() }
                 else if path == "/app/orders" { state.goNativeSlips() }
                 else if path == "/app/expenses" { state.goNativeExpenses() }
+                else if path == "/app/notifications" { state.goNativeNotices() }
                 else if path == "/app/inventory" || path == "/app/inventory/menu-stock" { state.goNativeStock() }
                 else { state.leaveNativeFloor(to: path) }
             },
@@ -226,6 +227,20 @@ struct NativeStockScreen: View {
             model: model,
             onHome: { state.goNativeHome() },
             onWeb: { path in state.leaveNativeFloor(to: path) }
+        )
+    }
+}
+
+/// ネイティブの通知（2026-10-24）
+struct NativeNoticesScreen: View {
+    @StateObject private var model = NativeNoticesModel()
+    @EnvironmentObject var state: AppState
+
+    var body: some View {
+        NativeNoticesView(
+            model: model,
+            onHome: { state.goNativeHome() },
+            onLink: { path in state.leaveNativeFloor(to: path) }
         )
     }
 }
