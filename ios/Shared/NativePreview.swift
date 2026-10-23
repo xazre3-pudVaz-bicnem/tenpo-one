@@ -289,3 +289,17 @@ struct NativeScanScreen: View {
         .onChange(of: state.scanTx) { tx in model.tx = tx }
     }
 }
+
+/// ネイティブの店舗分析（2026-10-24）
+struct NativeReportsScreen: View {
+    @StateObject private var model = NativeReportsModel()
+    @EnvironmentObject var state: AppState
+
+    var body: some View {
+        NativeReportsView(model: model, onHome: { state.goNativeHome() }, onWeb: { path in state.leaveNativeFloor(to: path) })
+            .onAppear {
+                model.from = state.reportsFrom
+                model.to = state.reportsTo
+            }
+    }
+}
