@@ -261,3 +261,13 @@ struct NativeBudgetScreen: View {
         NativeBudgetDailyView(model: model, onHome: { state.goNativeHome() }, onWeb: { path in state.leaveNativeFloor(to: path) })
     }
 }
+
+/// ネイティブの顧客台帳（2026-10-24）
+struct NativeCustomersScreen: View {
+    @StateObject private var model = NativeCustomersModel()
+    @EnvironmentObject var state: AppState
+
+    var body: some View {
+        NativeCustomersView(model: model, onHome: { state.goNativeHome() }, onWeb: { path in state.leaveNativeFloor(to: path) })
+    }
+}
