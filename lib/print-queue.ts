@@ -1,3 +1,5 @@
+import { kitchenDesign } from '@/lib/ticket-design';
+import { renderTicketImage, ticketImagePayload } from '@/lib/ticket-design-server';
 /**
  * プリンタ側からのポーリングで動く印刷キューの共通処理。
  * Star CloudPRNT（app/api/cloudprnt/[token]）と EPSON Server Direct Print（app/api/epson/[token]）が共有する。
@@ -294,6 +296,15 @@ export async function generateKitchenJobs(admin: Admin, printer: PrinterRow, opt
   }
   const claimed = (data ?? []) as ClaimedKitchenItem[];
   if (claimed.length === 0) return;
+  // The claim RPC deliberately stays unchanged; enrich only cancelled rows with their saved reason.
+  const cancelIds = [...new Set(claimed.filter(r => r.delta < 0 && r.order_item_id).map(r => r.order_item_id!))];
+  if (cancelIds.length) {
+    const { data: cancelled, error: reasonError } = await admin.from('order_items')
+      .select('id, cancel_reason').in('id', cancelIds);
+    if (reasonError) console.error('[print-queue] cancellation reasons unavailable', reasonError.message);
+    const reasons = new Map((cancelled ?? []).map(r => [r.id, r.cancel_reason]));
+    for (const row of claimed) if (row.delta < 0) row.cancelReason = reasons.get(row.order_item_id!) ?? null;
+  }
   const { split, textSize, language, buzzer, courseSteps } = await kitchenTicketSettingsForStore(admin, printer.store_id);
   // コースの注文は、その店で決めた料理の順（1st, 2nd…）に置き換えて伝票にする
   // セットのドリンク（ランチドリンクなど）は料理と別の紙にする
@@ -314,7 +325,8 @@ export async function generateKitchenJobs(admin: Admin, printer: PrinterRow, opt
   });
   const paperWidth = printer.paper_width_mm === 58 ? 58 : 80;
 
-  const rows = tickets.map((t) => {
+  const rows = [];
+  for (const t of tickets) {
     const slips = ticketSlips(t, split);
     // Star 機向け: 全角がわずかに広い分を見込んで桁揃え（STAR_WIDTH_OPTIONS）
     const starSlips = slips.map((slip) => {
@@ -330,7 +342,22 @@ export async function generateKitchenJobs(admin: Admin, printer: PrinterRow, opt
       const lines = layoutKitchenTicket(slip, { ...head, printedAt, columns: cols, textSize, language });
       return printer.upside_down ? rotateLines180(lines, cols) : lines;
     });
-    return {
+    let payload = {
+      body: kitchenTicketsMarkup(starSlips, { buzzer }),
+      starprnt: kitchenTicketsStarPrnt(starSlips, { buzzer }).toString('base64'),
+      epos: kitchenTicketsEpos(eposSlips, { buzzer }),
+    };
+    try {
+      const images = [];
+      for (const slip of slips) images.push(await renderTicketImage(kitchenDesign(slip, {
+        title: slip.drinkSlip ? drinkTitle : title, printedAt, textSize, language,
+      }), paperWidth === 58 ? 384 : 576, !!printer.upside_down));
+      payload = await ticketImagePayload(images, buzzer);
+    } catch (error) {
+      // Claimed rows are already marked sent: keep a readable native-font ticket if rasterization fails.
+      console.error('[print-queue] ticket image failed, using text fallback', error);
+    }
+    rows.push({
       organization_id: printer.organization_id,
       store_id: printer.store_id,
       printer_config_id: printer.id,
@@ -338,14 +365,10 @@ export async function generateKitchenJobs(admin: Admin, printer: PrinterRow, opt
       order_id: t.orderId,
       target: 'cloudprnt',
       content_type: MARKUP,
-      payload: {
-        body: kitchenTicketsMarkup(starSlips, { buzzer }),
-        starprnt: kitchenTicketsStarPrnt(starSlips, { buzzer }).toString('base64'),
-        epos: kitchenTicketsEpos(eposSlips, { buzzer }),
-      },
+      payload,
       status: 'queued',
-    };
-  });
+    });
+  }
 
   const { error: insErr } = await admin.from('print_jobs').insert(rows);
   if (insErr) {

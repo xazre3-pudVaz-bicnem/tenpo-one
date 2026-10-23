@@ -708,7 +708,7 @@ export async function cancelItem(
         .map((m) => m?.name)
         .filter((n): n is string => !!n);
       await enqueueCancelSlipPrint(orderId, [
-        { name: line.name, quantity: line.quantity, modifiers, memo: line.memo ?? null },
+        { orderItemId, name: line.name, quantity: line.quantity, modifiers, memo: line.memo ?? null },
       ]);
     } catch (e) {
       console.error('[pos.cancelItem] cancel slip print failed:', e);
