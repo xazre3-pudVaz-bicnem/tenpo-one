@@ -104,13 +104,6 @@ private final class StarPrinters: NSObject, StarDeviceDiscoveryManagerDelegate {
     private var manager: StarDeviceDiscoveryManager?
     private var found: [BluetoothPrinters.Device] = []
     private var completion: (([BluetoothPrinters.Device]) -> Void)?
-    // Keep the selected printer open between receipts. Serialize the async SDK
-    // calls as well as the queue updates (actor isolation alone is reentrant).
-    private var printTail: Task<Void, Never>?
-    private var connectedPrinter: StarPrinter?
-    private var connectedIdentifier: String?
-    private var connectedUSB = false
-
     func discover(completion: @escaping ([BluetoothPrinters.Device]) -> Void) {
         found = []
         self.completion = completion
@@ -144,46 +137,73 @@ private final class StarPrinters: NSObject, StarDeviceDiscoveryManagerDelegate {
         c?(found)
     }
 
+    private let session = StarPrintSession()
     func print(identifier: String, usb: Bool, data: Data, completion: @escaping BluetoothPrinters.Done) {
-        DispatchQueue.main.async {
-            let previous = self.printTail
-            self.printTail = Task {
-                await previous?.value
-                await self.send(identifier: identifier, usb: usb, data: data, completion: completion)
-            }
-        }
-    }
-
-    private func send(identifier: String, usb: Bool, data: Data, completion: @escaping BluetoothPrinters.Done) async {
-        let start = Date()
-        var sending = false
-        do {
-            if connectedIdentifier != identifier || connectedUSB != usb {
-                if let old = connectedPrinter { await old.close() }
-                connectedPrinter = nil
-            }
-            if connectedPrinter == nil {
-                let printer = StarPrinter(StarConnectionSettings(interfaceType: usb ? .usb : .bluetooth, identifier: identifier))
-                do { try await printer.open() }
-                catch { await printer.close(); throw error }
-                connectedPrinter = printer
-                connectedIdentifier = identifier
-                connectedUSB = usb
-            }
-            let openMilliseconds = Int(Date().timeIntervalSince(start) * 1000)
-            sending = true
-            try await connectedPrinter!.print(raw: data)
-            NSLog("[TENPO Bluetooth] open_ms=%d total_ms=%d", openMilliseconds, Int(Date().timeIntervalSince(start) * 1000))
-            completion(true, nil)
-        } catch {
-            if let printer = connectedPrinter { await printer.close() }
-            connectedPrinter = nil
-            connectedIdentifier = nil
-            // Once transmission starts, never automatically resend an uncertain job.
-            completion(false, sending ? "print_uncertain" : "connect")
+        Task {
+            let code = await session.printReusing(identifier: identifier, usb: usb, data: data)
+            completion(code == nil, code)
         }
     }
 }
+
+/// Actors reenter at await; the task tail serializes whole SDK operations.
+private actor StarPrintSession {
+    private var current: (id: String, usb: Bool, printer: StarPrinter)?
+    private var tail: Task<String?, Never>?
+
+    func printReusing(identifier: String, usb: Bool, data: Data) async -> String? {
+        let previous = tail
+        let task = Task { () -> String? in
+            _ = await previous?.value
+            return await self.send(identifier: identifier, usb: usb, data: data)
+        }
+        tail = task
+        return await task.value
+    }
+
+    private func send(identifier: String, usb: Bool, data: Data) async -> String? {
+        let start = Date()
+        let printer: StarPrinter
+        do {
+            do { printer = try await ensureOpen(identifier: identifier, usb: usb) }
+            catch {
+                // Opening failed before any print data was sent: reconnect once.
+                await drop()
+                printer = try await ensureOpen(identifier: identifier, usb: usb)
+            }
+        } catch {
+            await drop()
+            return "connect"
+        }
+        let openMilliseconds = Int(Date().timeIntervalSince(start) * 1000)
+        do {
+            try await printer.print(raw: data)
+            NSLog("[TENPO Bluetooth] open_ms=%d total_ms=%d", openMilliseconds, Int(Date().timeIntervalSince(start) * 1000))
+            return nil
+        } catch {
+            // Paper may have printed even if its response was lost. Do not resend.
+            await drop()
+            return "print_uncertain"
+        }
+    }
+
+    private func ensureOpen(identifier: String, usb: Bool) async throws -> StarPrinter {
+        if let c = current, c.id == identifier, c.usb == usb { return c.printer }
+        await drop()
+        let printer = StarPrinter(StarConnectionSettings(interfaceType: usb ? .usb : .bluetooth, identifier: identifier))
+        do { try await printer.open() }
+        catch { await printer.close(); throw error }
+        current = (identifier, usb, printer)
+        return printer
+    }
+
+    private func drop() async {
+        let old = current
+        current = nil
+        if let c = old { await c.printer.close() }
+    }
+}
+
 #endif
 
 // MARK: - EPSON（ePOS SDK。ios/Vendor/libepos2.xcframework があるときだけ。ios/tools/gen_project.py が EPSON_SDK を付ける）
