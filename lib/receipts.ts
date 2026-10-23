@@ -30,6 +30,7 @@ export interface ReceiptData {
   staffName: string | null;
   /** 卓番号（テーブル名）。テイクアウト等で卓が無ければ null */
   tableName: string | null;
+  guestCount?: number | null;
   orderNo: string;
   issuedAt: string; // 表示用日時
   isReissue: boolean;
@@ -87,6 +88,7 @@ export interface BuildReceiptInput {
   staffName?: string | null;
   /** 卓番号（テーブル名） */
   tableName?: string | null;
+  guestCount?: number | null;
   isReissue?: boolean;
   methodLabels: Record<string, string>;
   points?: { earned?: number | null; used?: number | null; balance?: number | null };
@@ -126,6 +128,7 @@ export function buildReceipt(input: BuildReceiptInput): ReceiptData {
     registerName: input.registerName ?? null,
     staffName: input.staffName ?? null,
     tableName: input.tableName ?? null,
+    guestCount: input.guestCount ?? null,
     orderNo: String(input.order.orderNo),
     issuedAt: closedAt.toLocaleString('ja-JP', {
       timeZone: 'Asia/Tokyo', year: 'numeric', month: '2-digit', day: '2-digit',

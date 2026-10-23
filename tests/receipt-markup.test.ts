@@ -22,7 +22,8 @@ describe('receiptToStarMarkup', () => {
     expect(m).toContain('シュラスコ食べ放題');
     expect(m).toContain('合計');
     expect(m).toContain('¥11,300');
-    expect(m).toContain('照会番号 ORD-1001');
+    expect(m).not.toContain('TENPO ONE');
+    expect(m).toContain('またのご来店をお待ちしております');
     expect(m.trimEnd().endsWith('[cut: feed; partial]')).toBe(true);
   });
 
@@ -141,7 +142,7 @@ const slip = {
 describe('レシートの卓番号', () => {
   it('卓があれば No. の下に「卓 T-3」を出す', () => {
     const m = receiptToStarMarkup(base, { paperWidth: 80 });
-    expect(m).toContain('卓 T-3');
+    expect(m).toContain('T-3');
   });
   it('卓が無い（テイクアウト等）なら出さない', () => {
     const m = receiptToStarMarkup({ ...base, tableName: null }, { paperWidth: 80 });
@@ -158,9 +159,9 @@ describe('orderSlipMarkup（注文伝票）', () => {
     expect(m).toContain('担当 山田');
     expect(m).toContain('シュラスコ食べ放題');
     expect(m).toContain('生ビール');
-    expect(m).toContain('大');
+    expect(m).not.toContain('   + 大');
     expect(m).toContain('¥11,300');
-    expect(m).toContain('※ これは領収書ではありません');
+    expect(m).not.toContain('※ これは領収書ではありません');
     expect(m.trimEnd().endsWith('[cut: feed; partial]')).toBe(true);
   });
 

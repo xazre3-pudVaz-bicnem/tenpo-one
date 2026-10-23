@@ -8,7 +8,7 @@
  */
 import type { ReceiptData } from './receipts';
 import { RYOSHUSHO_DEFAULT_PURPOSE, RYOSHUSHO_INVOICE_NOTE, RYOSHUSHO_NO_STAMP_NOTE, ryoshushoRecipientLine } from '@/lib/ryoshusho-issue';
-import { billSlipLines, colsFor, twoCol as twoColBase, wrapText as wrapTextBase, yen, STAR_WIDTH_OPTIONS, type PaperWidth } from './receipt-layout';
+import { customerBillHeading, receiptTableLines, colsFor, twoCol as twoColBase, wrapText as wrapTextBase, yen, STAR_WIDTH_OPTIONS, type PaperWidth } from './receipt-layout';
 
 /** Star 機の全角幅（半角2桁よりわずかに広い）を見込んだ桁揃え・折り返し */
 const twoCol = (left: string, right: string, width: number) => twoColBase(left, right, width, STAR_WIDTH_OPTIONS);
@@ -44,22 +44,20 @@ export function receiptToStarMarkup(receipt: ReceiptData, options: ReceiptMarkup
   if (receipt.storePhone) line(`TEL ${receipt.storePhone}`);
   raw('[align: left]');
   if (receipt.registrationNumber) line(`登録番号 ${receipt.registrationNumber}`);
+  raw('[align: middle]');
+  line('会計レシート');
+  raw('[align: left]');
   line(rule);
-  line(`発行 ${receipt.issuedAt}`);
-  line(twoCol(`No.${receipt.orderNo}`, [receipt.registerName, receipt.staffName].filter(Boolean).join(' '), width));
-  if (receipt.tableName) line(`卓 ${receipt.tableName}`);
+  const table = receipt.tableName ?? 'テイクアウト';
+  const tableRow = twoCol('卓番号', table, width);
+  raw(esc(tableRow.slice(0, -table.length)) + '[magnify: width 1; height 2]' + esc(table) + '[magnify: width 1; height 1]');
+  line(twoCol(receipt.staffName ? `担当 ${receipt.staffName}` : '', receipt.guestCount != null ? `人数 ${receipt.guestCount}名` : '', width));
+  line(twoCol(receipt.issuedAt, `No.${receipt.orderNo}`, width));
   line(rule);
 
   // 明細
   // 0円の明細（飲み放題・食べ放題・コースの中身）はレシートにも出さない（お会計伝票と同じ。2026-09-26 店舗要望）
-  for (const it of billSlipLines(receipt.lines)) {
-    if (it.cancelled) continue;
-    line(it.name);
-    line(twoCol(`  ${it.quantity} x ${yen(it.unitPrice)}`, yen(it.lineTotal), width));
-    for (const m of it.modifiers) {
-      line(twoCol(`   + ${m.name}`, m.price ? yen(m.price) : '', width));
-    }
-  }
+  for (const row of receiptTableLines(receipt.lines, width, STAR_WIDTH_OPTIONS)) line(row);
   line(rule);
 
   // 金額
@@ -93,10 +91,8 @@ export function receiptToStarMarkup(receipt: ReceiptData, options: ReceiptMarkup
   line(rule);
 
   raw('[align: middle]');
-  if (receipt.footerMessage) {
-    for (const fl of receipt.footerMessage.split('\n')) line(fl);
-  }
-  line(`照会番号 ${receipt.qrContent}`);
+  line('ご来店ありがとうございました');
+  line('またのご来店をお待ちしております');
   raw('[feed]');
   raw('[cut: feed; partial]');
 
@@ -232,25 +228,19 @@ export function orderSlipMarkup(
   raw('[bold: on]');
   raw('[align: middle]');
   raw('[magnify: width 1; height 2]');
-  line('お会計伝票');
-  raw('[magnify: width 1; height 1]');
   line(slip.storeName);
-  line('（会計前のご確認用）');
+  raw('[magnify: width 1; height 1]');
+  for (const heading of customerBillHeading(width, STAR_WIDTH_OPTIONS)) line(heading);
   raw('[align: left]');
   line(rule);
-  line(twoCol(slip.tableName ?? 'テイクアウト', `No.${slip.orderNo}`, width));
-  const meta = [slip.guestCount ? `${slip.guestCount}名` : null, slip.clerkName ? `担当 ${slip.clerkName}` : null]
-    .filter(Boolean)
-    .join('  ');
-  if (meta) line(meta);
-  line(`発行 ${slip.issuedAt}`);
+  const table = slip.tableName ?? 'テイクアウト';
+  const tableRow = twoCol('卓番号', table, width);
+  raw(esc(tableRow.slice(0, -table.length)) + '[magnify: width 1; height 2]' + esc(table) + '[magnify: width 1; height 1]');
+  line(twoCol(slip.clerkName ? `担当 ${slip.clerkName}` : '', slip.guestCount != null ? `人数 ${slip.guestCount}名` : '', width));
+  line(twoCol(slip.issuedAt, `No.${slip.orderNo}`, width));
   line(rule);
 
-  for (const it of billSlipLines(slip.lines)) {
-    line(it.name);
-    line(twoCol(`  ${it.quantity} x ${yen(it.unitPrice)}`, yen(it.lineTotal), width));
-    for (const m of it.modifiers) line(twoCol(`   + ${m.name}`, m.price ? yen(m.price) : '', width));
-  }
+  for (const row of receiptTableLines(slip.lines, width, STAR_WIDTH_OPTIONS)) line(row);
   line(rule);
   line(twoCol('小計', yen(slip.subtotal), width));
   line(twoCol('消費税', yen(slip.taxTotal), width));
@@ -261,7 +251,6 @@ export function orderSlipMarkup(
   raw('[magnify: width 1; height 1]');
   line(rule);
   raw('[align: middle]');
-  line('※ これは領収書ではありません');
   raw('[feed]');
   raw('[cut: feed; partial]');
 
