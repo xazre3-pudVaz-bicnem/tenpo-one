@@ -97,6 +97,7 @@ struct NativeHomeScreen: View {
                 else if path == "/app/cash" { state.goNativeCashIo() }
                 else if path == "/app/quick-pay" { state.goNativeQuick() }
                 else if path == "/app/orders" { state.goNativeSlips() }
+                else if path == "/app/expenses" { state.goNativeExpenses() }
                 else { state.leaveNativeFloor(to: path) }
             },
             onFloor: { state.goNativeFloor() }
@@ -187,5 +188,19 @@ struct NativeSlipsScreen: View {
             onOpenOrder: { id in state.openNativeOrder(id, checkout: false) }
         )
         .onChange(of: state.nativeOrder) { new in if new == nil { Task { await model.refresh() } } }
+    }
+}
+
+/// ネイティブの仕入・経費（2026-10-24）
+struct NativeExpensesScreen: View {
+    @StateObject private var model = NativeExpensesModel()
+    @EnvironmentObject var state: AppState
+
+    var body: some View {
+        NativeExpensesView(
+            model: model,
+            onHome: { state.goNativeHome() },
+            onWeb: { path in state.leaveNativeFloor(to: path) }
+        )
     }
 }

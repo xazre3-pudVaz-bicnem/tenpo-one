@@ -24,6 +24,10 @@ import { loadNativeQuick } from '@/lib/native-quick-server';
 import { isNativeSlipActionType, parseNativeSlipAction, type NativeSlipAction } from '@/lib/native-slips';
 import { loadNativeSlipDetail, loadNativeSlips } from '@/lib/native-slips-server';
 import { refundOrder, reopenOrder } from '@/app/app/orders/actions';
+import { isNativeExpenseActionType, parseNativeExpenseAction, type NativeExpenseAction } from '@/lib/native-expenses';
+import { loadNativeExpenses } from '@/lib/native-expenses-server';
+import { addExpense, approveExpense, rejectExpense, seedExpenseAccounts } from '@/app/app/expenses/actions';
+import { createInvoice } from '@/app/app/invoices/actions';
 import { prepareQuickCheckout, startQuickOrder } from '@/app/app/quick-pay/actions';
 import { addCashTransaction, closeRegister, openRegister, printSettlementReport, reprintRegisterReport } from '@/app/app/cash/actions';
 import {
@@ -182,6 +186,16 @@ export async function GET(request: Request) {
     return json({ ok: true, ...cash });
   }
 
+  // 仕入・経費（Web の /app/expenses。上にお知らせ&アラート）
+  if (part === 'expenses') {
+    const store = ctx.currentStore ?? ctx.stores[0] ?? null;
+    if (!store) return json({ ok: false, error: '店舗がありません' }, 404);
+    if (ctx.disabledFeatures?.has('accounting')) return json({ ok: false, error: 'この機能は使えません', useWeb: true }, 403);
+    const p = url.searchParams;
+    const ex = await loadNativeExpenses(ctx, await createClient(), { id: store.id, name: store.name }, { from: p.get('from'), to: p.get('to'), account: p.get('account'), status: p.get('status') });
+    return json({ ok: true, ...ex });
+  }
+
   // 伝票明細（Web の /app/orders・/app/orders/[id]）
   if (part === 'slips') {
     const store = ctx.currentStore ?? ctx.stores[0] ?? null;
@@ -284,6 +298,21 @@ export async function POST(request: Request) {
     if (problem) return json({ ok: false, error: problem }, 403);
     try {
       return json(await runLedgerAction(ctx, action));
+    } catch (e) {
+      return json({ ok: false, error: errorText(e, 'うまくいきませんでした。もう一度お試しください') }, 400);
+    }
+  }
+
+  // 仕入・経費の操作（2026-10-24）
+  if (raw && typeof raw === 'object' && isNativeExpenseActionType((raw as { type?: unknown }).type)) {
+    const parsedEx = parseNativeExpenseAction(raw);
+    if (!parsedEx.ok) return json({ ok: false, error: parsedEx.error }, 400);
+    const action = parsedEx.action;
+    const need: PermissionAction =
+      action.type === 'expenseApprove' || action.type === 'expenseReject' || action.type === 'expenseSeed' ? 'cash.approve' : action.type === 'expenseBill' ? 'documents.write' : 'cash.write';
+    if (!can(ctx.role, need)) return json({ ok: false, error: '権限がありません' }, 403);
+    try {
+      return json(await runExpenseAction(ctx, action));
     } catch (e) {
       return json({ ok: false, error: errorText(e, 'うまくいきませんでした。もう一度お試しください') }, 400);
     }
@@ -525,6 +554,53 @@ async function runFloorAction(action: NativeFloorAction): Promise<Record<string,
 }
 
 /** 店舗台帳の操作。中身は Web の予約台帳と同じ Server Action */
+/** 仕入・経費。Web の ExpenseFormDialog / VendorBillDialog / ApprovalActions と同じ Server Action */
+async function runExpenseAction(ctx: SessionContext, action: NativeExpenseAction): Promise<Record<string, unknown>> {
+  const store = ctx.currentStore ?? ctx.stores[0];
+  switch (action.type) {
+    case 'expenseAdd':
+      if (!store) return { ok: false, error: '店舗がありません' };
+      await addExpense({
+        storeId: store.id,
+        expenseAccountId: action.expenseAccountId,
+        amount: action.amount,
+        taxAmount: action.taxAmount,
+        paidVia: action.paidVia,
+        vendorName: action.vendorName,
+        memo: action.memo,
+        businessDate: action.businessDate,
+      });
+      return { ok: true };
+    case 'expenseBill':
+      if (!store) return { ok: false, error: '店舗がありません' };
+      await createInvoice({
+        storeId: store.id,
+        vendorId: action.vendorId,
+        vendorName: action.vendorName,
+        invoiceNo: null,
+        issueDate: action.date,
+        dueDate: null,
+        amount: action.amount,
+        taxAmount: 0,
+        registrationNumber: null,
+        paymentMethod: null,
+        expenseAccountId: null,
+        note: action.memo,
+        file: null,
+      });
+      return { ok: true };
+    case 'expenseApprove':
+      await approveExpense(action.id);
+      return { ok: true };
+    case 'expenseReject':
+      await rejectExpense(action.id, action.reason);
+      return { ok: true };
+    case 'expenseSeed':
+      await seedExpenseAccounts();
+      return { ok: true };
+  }
+}
+
 /** 伝票明細。Web の RefundDialog / ReopenDialog / レシート・領収書と同じ Server Action */
 async function runSlipAction(action: NativeSlipAction): Promise<Record<string, unknown>> {
   switch (action.type) {

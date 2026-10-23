@@ -39,6 +39,8 @@ final class AppState: ObservableObject {
     @Published var quickRefreshTick = 0
     /// ネイティブの伝票明細（/app/orders。2026-10-24）
     @Published var nativeSlips = false
+    /// ネイティブの仕入・経費（/app/expenses。2026-10-24）
+    @Published var nativeExpenses = false
     /// フロアを読み直してほしいとき（会計完了など）に増やす
     @Published var floorRefreshTick = 0
 
@@ -125,6 +127,7 @@ final class AppState: ObservableObject {
             nativeCashIo = false
         nativeQuick = false
         nativeSlips = false
+        nativeExpenses = false
             if !nativeHome { nativeHome = true }
             return
         }
@@ -133,6 +136,7 @@ final class AppState: ObservableObject {
             nativeCashIo = false
         nativeQuick = false
         nativeSlips = false
+        nativeExpenses = false
             if !nativeFloor { nativeFloor = true }
             return
         }
@@ -146,17 +150,23 @@ final class AppState: ObservableObject {
                 nativeCashIo = false
         nativeQuick = false
         nativeSlips = false
+        nativeExpenses = false
                 if !nativeLedger { nativeLedger = true }
                 return
             }
         }
+        if url.path == "/app/expenses" {
+            nativeFloor = false; nativeHome = false; nativeLedger = false; nativeCash = false; nativeCashIo = false; nativeQuick = false; nativeSlips = false
+            if !nativeExpenses { nativeExpenses = true }
+            return
+        }
         if url.path == "/app/orders" {
-            nativeFloor = false; nativeHome = false; nativeLedger = false; nativeCash = false; nativeCashIo = false; nativeQuick = false
+            nativeFloor = false; nativeHome = false; nativeLedger = false; nativeCash = false; nativeCashIo = false; nativeQuick = false; nativeExpenses = false
             if !nativeSlips { nativeSlips = true }
             return
         }
         if url.path == "/app/quick-pay" {
-            nativeFloor = false; nativeHome = false; nativeLedger = false; nativeCash = false; nativeCashIo = false; nativeSlips = false
+            nativeFloor = false; nativeHome = false; nativeLedger = false; nativeCash = false; nativeCashIo = false; nativeSlips = false; nativeExpenses = false
             if !nativeQuick { nativeQuick = true }
             return
         }
@@ -164,8 +174,9 @@ final class AppState: ObservableObject {
             let q = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
             let tab = q.first { $0.name == "tab" }?.value
             if tab == nil || tab == "register" {
-                nativeFloor = false; nativeHome = false; nativeLedger = false; nativeCash = false; nativeQuick = false; nativeSlips = false
+                nativeFloor = false; nativeHome = false; nativeLedger = false; nativeCash = false; nativeQuick = false; nativeSlips = false; nativeExpenses = false
         nativeSlips = false
+        nativeExpenses = false
                 if !nativeCashIo { nativeCashIo = true }
                 return
             }
@@ -174,6 +185,7 @@ final class AppState: ObservableObject {
             nativeCashIo = false
         nativeQuick = false
         nativeSlips = false
+        nativeExpenses = false
             nativeFloor = false
             nativeHome = false
             nativeLedger = false
@@ -189,6 +201,7 @@ final class AppState: ObservableObject {
             nativeCashIo = false
         nativeQuick = false
         nativeSlips = false
+        nativeExpenses = false
         }
         guard nativeOrder == nil, url.path == "/app/pos" else { return }
         let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
@@ -236,6 +249,7 @@ final class AppState: ObservableObject {
         nativeCashIo = false
         nativeQuick = false
         nativeSlips = false
+        nativeExpenses = false
         nativeFloor = false
         nativeHome = false
         nativeLedger = false
@@ -248,6 +262,7 @@ final class AppState: ObservableObject {
         nativeCashIo = false
         nativeQuick = false
         nativeSlips = false
+        nativeExpenses = false
         nativeFloor = false
         nativeLedger = true
         WebViewController.current?.load(AppConfig.url("/app/reservations"))
@@ -258,6 +273,7 @@ final class AppState: ObservableObject {
         nativeCashIo = false
         nativeQuick = false
         nativeSlips = false
+        nativeExpenses = false
         nativeFloor = false
         nativeLedger = false
         nativeCash = false
@@ -270,6 +286,7 @@ final class AppState: ObservableObject {
         nativeCashIo = false
         nativeQuick = false
         nativeSlips = false
+        nativeExpenses = false
         nativeLedger = false
         nativeCash = false
         nativeFloor = true
@@ -281,11 +298,25 @@ final class AppState: ObservableObject {
         nativeCashIo = false
         nativeQuick = false
         nativeSlips = false
+        nativeExpenses = false
         nativeFloor = false
         nativeHome = false
         nativeLedger = false
         nativeCash = true
         WebViewController.current?.load(AppConfig.url(path))
+    }
+
+    /// ネイティブの仕入・経費へ
+    func goNativeExpenses() {
+        nativeFloor = false
+        nativeHome = false
+        nativeLedger = false
+        nativeCash = false
+        nativeCashIo = false
+        nativeQuick = false
+        nativeSlips = false
+        nativeExpenses = true
+        WebViewController.current?.load(AppConfig.url("/app/expenses"))
     }
 
     /// ネイティブの伝票明細へ
@@ -296,6 +327,7 @@ final class AppState: ObservableObject {
         nativeCash = false
         nativeCashIo = false
         nativeQuick = false
+        nativeExpenses = false
         nativeSlips = true
         WebViewController.current?.load(AppConfig.url("/app/orders"))
     }
@@ -308,6 +340,7 @@ final class AppState: ObservableObject {
         nativeCash = false
         nativeCashIo = false
         nativeSlips = false
+        nativeExpenses = false
         nativeQuick = true
         WebViewController.current?.load(AppConfig.url("/app/quick-pay"))
     }
@@ -320,6 +353,7 @@ final class AppState: ObservableObject {
         nativeCash = false
         nativeQuick = false
         nativeSlips = false
+        nativeExpenses = false
         nativeCashIo = true
         WebViewController.current?.load(AppConfig.url("/app/cash"))
     }
