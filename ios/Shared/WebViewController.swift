@@ -191,6 +191,31 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         let routeHook = AppConfig.isPad
             ? "(function(){ var notify = function(){ post({ type: 'route', url: location.href }); }; var wrap = function(n){ var o = history[n]; history[n] = function(){ var r = o.apply(this, arguments); try { notify(); } catch (e) {} return r; }; }; wrap('pushState'); wrap('replaceState'); window.addEventListener('popstate', notify); })();"
             : ""
+        // Prepare before the first click, using only this iPad's saved selection.
+        // Runs inside the app even while the hosted Web deployment is unchanged.
+        let printerWarmup = AppConfig.isPad ? """
+        (function(){
+          var inFlight = false;
+          window.__tenpoPreparePrinter = function(){
+            if (document.visibilityState === 'hidden' || location.pathname.indexOf('/app') !== 0 || inFlight) return;
+            try {
+              var cfg = JSON.parse(localStorage.getItem('tenpo-direct-print') || '{}');
+              var links = Array.isArray(cfg.bluetooth) ? cfg.bluetooth.filter(function(l){
+                return l && l.maker === 'star' && typeof l.deviceId === 'string' && l.deviceId.length > 0 &&
+                  l.deviceId.length < 256 && (l.via === undefined || l.via === 'bluetooth' || l.via === 'usb');
+              }) : [];
+              // Do not choose between several printers or scan for unselected devices.
+              if (links.length !== 1) return;
+              inFlight = true;
+              call('btPrepare', links[0]).then(function(){ inFlight = false; });
+            } catch(e) { inFlight = false; }
+          };
+          window.addEventListener('tenpo-direct-print-changed', window.__tenpoPreparePrinter);
+          window.addEventListener('storage', window.__tenpoPreparePrinter);
+          document.addEventListener('visibilitychange', window.__tenpoPreparePrinter);
+          window.__tenpoPreparePrinter();
+        })();
+        """ : ""
         return """
         (function(){
           if (window.TenpoNative) return;
@@ -214,6 +239,7 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
             \(lan)
             \(nativePos)
           };
+          \(printerWarmup)
           \(routeHook)
           \(viewport)
           try { document.documentElement.classList.add('tenpo-app'); } catch (e) {}
@@ -237,6 +263,24 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
             let reqId = body["reqId"] as? String ?? ""
             BluetoothPrinters.shared.discover(maker: body["maker"] as? String ?? "all") { [weak self] devices in
                 self?.reply(reqId, ["ok": true, "devices": devices])
+            }
+        case "btPrepare":
+            let reqId = body["reqId"] as? String ?? ""
+            guard AppConfig.isPad, message.frameInfo.isMainFrame, AppConfig.isOwnHost(message.frameInfo.request.url),
+                  let deviceId = body["deviceId"] as? String, !deviceId.isEmpty, deviceId.count < 256,
+                  body["maker"] as? String == "star" else {
+                reply(reqId, ["ok": false, "code": "bad_request"])
+                return
+            }
+            let via = body["via"] as? String ?? "bluetooth"
+            guard via == "bluetooth" || via == "usb" else {
+                reply(reqId, ["ok": false, "code": "bad_request"])
+                return
+            }
+            BluetoothPrinters.shared.prepare(deviceId: deviceId, maker: "star", via: via) { [weak self] ok, code in
+                var res: [String: Any] = ["ok": ok]
+                if let code { res["code"] = code }
+                self?.reply(reqId, res)
             }
         case "btPrint":
             let reqId = body["reqId"] as? String ?? ""
@@ -268,6 +312,9 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
             refreshBridgeScript()
             reply(reqId, ["ok": true, "enabled": AppState.shared.nativePosEnabled])
         case "route":
+            if AppConfig.isOwnHost(webView.url) {
+                webView.evaluateJavaScript("window.__tenpoPreparePrinter && window.__tenpoPreparePrinter();", completionHandler: nil)
+            }
             if let s = body["url"] as? String, let url = URL(string: s) {
                 AppState.shared.maybeOpenNativePos(for: url)
             }

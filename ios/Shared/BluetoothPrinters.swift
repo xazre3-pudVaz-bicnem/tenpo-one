@@ -70,6 +70,21 @@ final class BluetoothPrinters: NSObject {
         group.notify(queue: .main) { completion(all) }
     }
 
+    /// No print data, paper feed, or drawer command: connect the selected Star only.
+    func prepare(deviceId: String, maker: String, via: String, completion: @escaping Done) {
+        guard maker == "star", !deviceId.isEmpty, !deviceId.hasPrefix(AccessoryEscPosPrinters.idPrefix) else {
+            completion(false, "unsupported")
+            return
+        }
+        #if canImport(StarIO10)
+        star.prepare(identifier: deviceId, usb: via == "usb") { ok, code in
+            DispatchQueue.main.async { completion(ok, code) }
+        }
+        #else
+        completion(false, "no_sdk")
+        #endif
+    }
+
     /// バイト列を送る（Star＝StarPRNT、それ以外＝ESC/POS）
     func print(deviceId: String, maker: String, via: String, data: Data, completion: @escaping Done) {
         let done: Done = { ok, code in DispatchQueue.main.async { completion(ok, code) } }
@@ -137,6 +152,13 @@ private final class StarPrinters: NSObject, StarDeviceDiscoveryManagerDelegate {
         c?(found)
     }
 
+    func prepare(identifier: String, usb: Bool, completion: @escaping BluetoothPrinters.Done) {
+        Task {
+            let code = await session.prepare(identifier: identifier, usb: usb)
+            completion(code == nil, code)
+        }
+    }
+
     private let session = StarPrintSession()
     func print(identifier: String, usb: Bool, data: Data, completion: @escaping BluetoothPrinters.Done) {
         Task {
@@ -159,6 +181,32 @@ private actor StarPrintSession {
         }
         tail = task
         return await task.value
+    }
+
+    /// Runs on the same task chain as print; preparing can never overlap a print.
+    func prepare(identifier: String, usb: Bool) async -> String? {
+        let previous = tail
+        let task = Task { () -> String? in
+            _ = await previous?.value
+            return await self.openAhead(identifier: identifier, usb: usb)
+        }
+        tail = task
+        return await task.value
+    }
+
+    private func openAhead(identifier: String, usb: Bool) async -> String? {
+        if let c = current, c.id == identifier, c.usb == usb { return nil }
+        let start = Date()
+        do {
+            let printer = try await ensureOpen(identifier: identifier, usb: usb)
+            _ = try await printer.getStatus()
+            NSLog("[TENPO Bluetooth] prepare_ms=%d ready=1", Int(Date().timeIntervalSince(start) * 1000))
+            return nil
+        } catch {
+            await drop()
+            NSLog("[TENPO Bluetooth] prepare_failed=1")
+            return "connect"
+        }
     }
 
     private func send(identifier: String, usb: Bool, data: Data) async -> String? {
