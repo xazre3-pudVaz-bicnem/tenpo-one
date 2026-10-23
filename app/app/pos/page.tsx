@@ -65,9 +65,9 @@ async function loadOrderItems(supabase: Awaited<ReturnType<typeof createClient>>
 export default async function PosPage({
   searchParams,
 }: {
-  searchParams: Promise<{ order?: string; checkout?: string; move?: string; seat?: string }>;
+  searchParams: Promise<{ order?: string; checkout?: string; move?: string; seat?: string; from?: string }>;
 }) {
-  const { order: orderId, checkout: openCheckout, move: openMove, seat } = await searchParams;
+  const { order: orderId, checkout: openCheckout, move: openMove, seat, from } = await searchParams;
   // テーブルグループの別の卓から開いたとき、その卓（注文した卓として明細に残す。addItemAtSeat がグループを確かめる）
   const seatTableId = seat && /^[0-9a-f-]{36}$/i.test(seat) ? seat : null;
   const ctx = await requireFeature('pos');
@@ -472,6 +472,7 @@ export default async function PosPage({
         splitOrderAction={splitOrder}
         divideOrderItemAction={divideOrderItem}
         openCheckout={openCheckout === '1'}
+        from={from}
         openTableMove={openMove === '1'}
         setGuestCountAction={setGuestCount}
         seatTime={order.table_id ? seatTime : undefined}
