@@ -1,3 +1,4 @@
+import { formatReceiptAddress } from './receipt-layout';
 /**
  * ReceiptData → StarPRNT ラスタ制御コマンド（application/vnd.star.starprnt）変換。
  *
@@ -130,7 +131,7 @@ export function receiptToStarPrnt(receipt: ReceiptData, options: StarPrntOptions
 
   b.cmd(CMD.magnify(0, 1)).line(receipt.storeName).cmd(CMD.magnify(0, 0));
   b.line('会計レシート');
-  if (receipt.storeAddress) b.line(receipt.storeAddress);
+  if (receipt.storeAddress) b.line(formatReceiptAddress(receipt.storeAddress));
   if (receipt.storePhone) b.line(`TEL ${receipt.storePhone}`);
   b.cmd(CMD.alignLeft);
   if (receipt.registrationNumber) b.line(`登録番号 ${receipt.registrationNumber}`);
@@ -214,7 +215,7 @@ export function ryoshushoToStarPrnt(
   if (split && split.count > 1) b.line(`${splitLabel(split)} 分割発行`);
   // 発行元は上（2026-09-26 Ronnie「店名・住所は上に」）
   b.line(receipt.storeName).cmd(CMD.emphasizeOff);
-  if (receipt.storeAddress) b.line(receipt.storeAddress);
+  if (receipt.storeAddress) b.line(formatReceiptAddress(receipt.storeAddress));
   if (receipt.storePhone) b.line(`TEL ${receipt.storePhone}`);
   if (receipt.registrationNumber) b.line(`登録番号 ${receipt.registrationNumber}`);
   b.cmd(CMD.emphasizeOn).line();

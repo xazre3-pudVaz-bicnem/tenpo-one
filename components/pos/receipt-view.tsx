@@ -1,5 +1,7 @@
 'use client';
 
+import { formatReceiptAddress } from '@/lib/receipt-layout';
+
 import { useMemo, useState } from 'react';
 import { ClassicInvoice } from './classic-invoice';
 import { cn } from '@/lib/utils';
@@ -284,7 +286,7 @@ export function ReceiptView({
             <div className="text-center">
               <p className="text-[18px] font-bold leading-tight">{receipt.storeName}</p>
               <p className="my-1 font-bold">会計レシート</p>
-              {receipt.storeAddress && <p>{receipt.storeAddress}</p>}
+              {receipt.storeAddress && <p className="whitespace-pre-line">{formatReceiptAddress(receipt.storeAddress)}</p>}
               {receipt.storePhone && <p>TEL {receipt.storePhone}</p>}
               {receipt.registrationNumber && <p>登録番号 {receipt.registrationNumber}</p>}
             </div>
