@@ -62,7 +62,7 @@ describe('receiptToEposXml', () => {
     expect(x).toContain('シュラスコテーブル FOGO');
     expect(x).toContain('シュラスコ食べ放題');
     expect(x).toContain('¥11,300');
-    expect(x).toContain('照会番号 ORD-1001');
+    expect(x).toContain('TENPO ONE');
     expect(x.trimEnd().endsWith('<cut type="feed"/></epos-print>')).toBe(true);
   });
 

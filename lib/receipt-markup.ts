@@ -8,7 +8,7 @@
  */
 import type { ReceiptData } from './receipts';
 import { RYOSHUSHO_DEFAULT_PURPOSE, RYOSHUSHO_INVOICE_NOTE, RYOSHUSHO_NO_STAMP_NOTE, ryoshushoRecipientLine } from '@/lib/ryoshusho-issue';
-import { billSlipLines, colsFor, twoCol as twoColBase, wrapText as wrapTextBase, yen, STAR_WIDTH_OPTIONS, type PaperWidth } from './receipt-layout';
+import { billSlipLines, receiptTableLines, colsFor, twoCol as twoColBase, wrapText as wrapTextBase, yen, STAR_WIDTH_OPTIONS, type PaperWidth } from './receipt-layout';
 
 /** Star 機の全角幅（半角2桁よりわずかに広い）を見込んだ桁揃え・折り返し */
 const twoCol = (left: string, right: string, width: number) => twoColBase(left, right, width, STAR_WIDTH_OPTIONS);
@@ -52,14 +52,7 @@ export function receiptToStarMarkup(receipt: ReceiptData, options: ReceiptMarkup
 
   // 明細
   // 0円の明細（飲み放題・食べ放題・コースの中身）はレシートにも出さない（お会計伝票と同じ。2026-09-26 店舗要望）
-  for (const it of billSlipLines(receipt.lines)) {
-    if (it.cancelled) continue;
-    line(it.name);
-    line(twoCol(`  ${it.quantity} x ${yen(it.unitPrice)}`, yen(it.lineTotal), width));
-    for (const m of it.modifiers) {
-      line(twoCol(`   + ${m.name}`, m.price ? yen(m.price) : '', width));
-    }
-  }
+  for (const row of receiptTableLines(receipt.lines, width, STAR_WIDTH_OPTIONS)) line(row);
   line(rule);
 
   // 金額
@@ -93,10 +86,8 @@ export function receiptToStarMarkup(receipt: ReceiptData, options: ReceiptMarkup
   line(rule);
 
   raw('[align: middle]');
-  if (receipt.footerMessage) {
-    for (const fl of receipt.footerMessage.split('\n')) line(fl);
-  }
-  line(`照会番号 ${receipt.qrContent}`);
+  line('ご来店ありがとうございました');
+  line('TENPO ONE');
   raw('[feed]');
   raw('[cut: feed; partial]');
 

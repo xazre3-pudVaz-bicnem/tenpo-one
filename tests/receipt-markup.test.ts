@@ -22,7 +22,7 @@ describe('receiptToStarMarkup', () => {
     expect(m).toContain('シュラスコ食べ放題');
     expect(m).toContain('合計');
     expect(m).toContain('¥11,300');
-    expect(m).toContain('照会番号 ORD-1001');
+    expect(m).toContain('TENPO ONE');
     expect(m.trimEnd().endsWith('[cut: feed; partial]')).toBe(true);
   });
 

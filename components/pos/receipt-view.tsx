@@ -297,31 +297,11 @@ export function ReceiptView({
               </p>
             )}
             <div className="my-2 border-t border-dashed border-gray-300" />
-            <table className="w-full">
-              <tbody>
-                {visibleLines.map((it, i) => (
-                  <tr key={i}>
-                    <td className="py-0.5 align-top">
-                      {it.name}
-                      {it.modifiers.length > 0 && (
-                        <div className="pl-2 text-[10px] text-gray-500">
-                          {it.modifiers.map((m, mi) => (
-                            <div key={mi}>
-                              ＋{m.name}
-                              {m.price > 0 && <> {yen(m.price)}</>}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      <br />
-                      <span className="text-[10px] text-gray-500">
-                        {yen(it.unitPrice)} × {it.quantity}
-                      </span>
-                    </td>
-                    <td className="py-0.5 text-right align-top tabular-nums">{yen(it.lineTotal)}</td>
-                  </tr>
-                ))}
-              </tbody>
+            <table className="w-full border-collapse border border-gray-400">
+              <thead><tr><th className="border border-gray-400">QT</th><th className="border border-gray-400">MENU</th><th className="border border-gray-400">PRICE</th></tr></thead>
+              <tbody>{visibleLines.map((it, i) => (
+                <tr key={i}><td className="border border-gray-400 text-right align-top">{it.quantity}</td><td className="border border-gray-400 align-top">{it.name}</td><td className="border border-gray-400 text-right align-top tabular-nums">{yen(it.lineTotal)}</td></tr>
+              ))}</tbody>
             </table>
             <div className="my-2 border-t border-dashed border-gray-300" />
             <div className="space-y-0.5">
@@ -416,9 +396,7 @@ export function ReceiptView({
                 <p>登録番号 {receipt.registrationNumber}</p>
               </>
             )}
-            {receipt.footerMessage && (
-              <p className="mt-2 whitespace-pre-line text-center">{receipt.footerMessage}</p>
-            )}
+            <p className="mt-2 text-center">ご来店ありがとうございました<br />TENPO ONE</p>
             <div className="mt-3 flex justify-center">
               {/* eslint-disable-next-line @next/next/no-img-element -- レシート内埋め込みのdata URI画像。next/imageの最適化は不要かつ非対応 */}
               <img src={qrDataUrl} alt="取引照会用QRコード" width={80} height={80} />

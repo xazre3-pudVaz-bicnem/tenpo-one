@@ -10,7 +10,7 @@
 import iconv from 'iconv-lite';
 import { RYOSHUSHO_DEFAULT_PURPOSE, RYOSHUSHO_INVOICE_NOTE, RYOSHUSHO_NO_STAMP_NOTE, ryoshushoRecipientLine } from '@/lib/ryoshusho-issue';
 import type { ReceiptData } from './receipts';
-import { billSlipLines, colsFor, twoCol as twoColBase, wrapText as wrapTextBase, yen, STAR_WIDTH_OPTIONS, type PaperWidth } from './receipt-layout';
+import { billSlipLines, receiptTableLines, colsFor, twoCol as twoColBase, wrapText as wrapTextBase, yen, STAR_WIDTH_OPTIONS, type PaperWidth } from './receipt-layout';
 
 /** Star 機の全角幅（半角2桁よりわずかに広い）を見込んだ桁揃え・折り返し */
 const twoCol = (left: string, right: string, width: number) => twoColBase(left, right, width, STAR_WIDTH_OPTIONS);
@@ -134,14 +134,7 @@ export function receiptToStarPrnt(receipt: ReceiptData, options: StarPrntOptions
 
   // 明細
   // 0円の明細（飲み放題・食べ放題・コースの中身）はレシートにも出さない（お会計伝票と同じ。2026-09-26 店舗要望）
-  for (const it of billSlipLines(receipt.lines)) {
-    if (it.cancelled) continue;
-    b.line(it.name);
-    b.line(twoCol(`  ${it.quantity} x ${yen(it.unitPrice)}`, yen(it.lineTotal), width));
-    for (const m of it.modifiers) {
-      b.line(twoCol(`   + ${m.name}`, m.price ? yen(m.price) : '', width));
-    }
-  }
+  for (const row of receiptTableLines(receipt.lines, width, STAR_WIDTH_OPTIONS)) b.line(row);
   b.line(rule);
 
   // 金額
@@ -173,10 +166,8 @@ export function receiptToStarPrnt(receipt: ReceiptData, options: StarPrntOptions
   b.line(rule);
 
   b.cmd(CMD.alignCenter);
-  if (receipt.footerMessage) {
-    for (const fl of receipt.footerMessage.split('\n')) b.line(fl);
-  }
-  b.line(`照会番号 ${receipt.qrContent}`);
+  b.line('ご来店ありがとうございました');
+  b.line('TENPO ONE');
   b.line().line();
   b.cmd(CMD.cut);
 
