@@ -44,7 +44,7 @@ interface NextLanJob {
  * 注文・会計が入った直後に、いつもの1秒を待たずに見に行く時刻（2026-10-20 Ronnie「アプリは印刷も速く」）。
  * 印刷のジョブはサーバーで少しあと（注文の保存の直後）に作られるので、数回だけ早めに見る。
  */
-const KICK_DELAYS_MS = [150, 600, 1200, 2000];
+const KICK_DELAYS_MS = [0, 150, 600, 1200, 2000];
 
 /** LAN のプリンターにつながらなかったとき、そのプリンターを次に試すまで（ほかのプリンターは止めない） */
 const LAN_BACKOFF_MS = 5000;
@@ -72,6 +72,7 @@ export function DirectPrintAgent({ storeId }: { storeId?: string } = {}) {
   useEffect(() => {
     let stopped = false;
     let running = false;
+    let kickPending = false;
     let timer: number | undefined;
     let wifiBackoffUntil = 0;
     let btBackoffUntil = 0;
@@ -96,6 +97,8 @@ export function DirectPrintAgent({ storeId }: { storeId?: string } = {}) {
     let kickTimers: number[] = [];
     const kick = () => {
       if (stopped) return;
+      // A job-ready notification during an in-flight poll must not be lost.
+      kickPending = true;
       for (const t of kickTimers) window.clearTimeout(t);
       kickTimers = KICK_DELAYS_MS.map((ms) =>
         window.setTimeout(() => {
@@ -280,6 +283,7 @@ export function DirectPrintAgent({ storeId }: { storeId?: string } = {}) {
       if (document.visibilityState !== 'visible') return schedule(DIRECT_POLL_MS);
 
       running = true;
+      kickPending = false;
       try {
         const printedBt = await bluetoothOnce(links);
         const openedAgent = await agentOnce(agentLinks);
@@ -289,6 +293,7 @@ export function DirectPrintAgent({ storeId }: { storeId?: string } = {}) {
         return schedule(printedBt || printedWifi || printedLan ? 0 : DIRECT_POLL_MS); // 印刷したら続けて次の1件
       } finally {
         running = false;
+        if (kickPending) schedule(0);
       }
     }
 
@@ -315,6 +320,7 @@ export function DirectPrintAgent({ storeId }: { storeId?: string } = {}) {
     };
 
     window.addEventListener('tenpo-direct-print-changed', onChange);
+    window.addEventListener('tenpo-print-ready', kick);
     window.addEventListener('storage', onChange);
     document.addEventListener('visibilitychange', onVisible);
     schedule(800);
@@ -325,6 +331,7 @@ export function DirectPrintAgent({ storeId }: { storeId?: string } = {}) {
       for (const t of kickTimers) window.clearTimeout(t);
       if (channel && supabase) void supabase.removeChannel(channel);
       window.removeEventListener('tenpo-direct-print-changed', onChange);
+      window.removeEventListener('tenpo-print-ready', kick);
       window.removeEventListener('storage', onChange);
       document.removeEventListener('visibilitychange', onVisible);
     };
