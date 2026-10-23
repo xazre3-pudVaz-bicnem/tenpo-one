@@ -1,3 +1,4 @@
+import { formatReceiptAddress } from './receipt-layout';
 /**
  * ReceiptData → Star Document Markup（text/vnd.star.markup）変換（純関数・テスト対象）。
  * Star mC-Print3 等の CloudPRNT 対応機がこのMarkupを解釈して感熱レシートを印字する。
@@ -42,7 +43,7 @@ export function receiptToStarMarkup(receipt: ReceiptData, options: ReceiptMarkup
   line(receipt.storeName);
   raw('[magnify: width 1; height 1]');
   line('会計レシート');
-  if (receipt.storeAddress) line(receipt.storeAddress);
+  if (receipt.storeAddress) line(formatReceiptAddress(receipt.storeAddress));
   if (receipt.storePhone) line(`TEL ${receipt.storePhone}`);
   raw('[align: left]');
   if (receipt.registrationNumber) line(`登録番号 ${receipt.registrationNumber}`);
@@ -137,7 +138,7 @@ export function ryoshushoToStarMarkup(receipt: ReceiptData, options: RyoshushoOp
   // 発行元は上（2026-09-26 Ronnie「店名・住所は上に」）
   line(receipt.storeName);
   raw('[bold: off]');
-  if (receipt.storeAddress) line(receipt.storeAddress);
+  if (receipt.storeAddress) line(formatReceiptAddress(receipt.storeAddress));
   if (receipt.storePhone) line(`TEL ${receipt.storePhone}`);
   if (receipt.registrationNumber) line(`登録番号 ${receipt.registrationNumber}`);
   raw('[bold: on]');

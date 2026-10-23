@@ -204,3 +204,14 @@ export function customerBillHeading(width: number, options: WidthOptions = {}): 
   const heading = '（お会計伝票・会計前のご確認用）';
   return dispWidth(heading, options) <= width ? [heading] : ['お会計伝票', '（会計前のご確認用）'];
 }
+
+/** Keep the building/floor below the street number on every customer document.
+ * Explicit address lines are preserved; unknown formats are left untouched.
+ */
+export function formatReceiptAddress(address: string): string {
+  if (/[\r\n]/.test(address)) return address.replace(/\r\n?/g, '\n');
+  // Start after a Japanese locality so a postal code is not mistaken for the street number.
+  const match = /^(.*?[都道府県市区町村][^0-9０-９]*[0-9０-９]+(?:(?:[-－−‐ー]|丁目|番地?|号)[0-9０-９]+)*(?:番地?|号)?)[ \u3000]*(.+)$/.exec(address.trim());
+  if (!match || /^[0-9０-９-－−‐ー]/.test(match[2])) return address;
+  return `${match[1].trimEnd()}\n${match[2].trimStart()}`;
+}

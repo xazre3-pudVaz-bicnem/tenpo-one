@@ -1,3 +1,4 @@
+import { formatReceiptAddress } from './receipt-layout';
 import type { ReceiptData } from './receipts';
 import { wrapText, yen } from './receipt-layout';
 
@@ -74,7 +75,7 @@ export function classicInvoiceLayout(receipt: ReceiptData, options: ClassicInvoi
     text(570, issuerY, s, 25, 385, 'left', true); issuerY += 36;
   }
   issuerY += 9;
-  const details = [receipt.storeAddress, receipt.storePhone ? `TEL ${receipt.storePhone}` : null,
+  const details = [receipt.storeAddress ? formatReceiptAddress(receipt.storeAddress) : null, receipt.storePhone ? `TEL ${receipt.storePhone}` : null,
     receipt.registrationNumber ? `登録番号 ${receipt.registrationNumber}` : null].filter((s): s is string => !!s);
   for (const detail of details) for (const s of wrapText(detail, 42)) {
     text(570, issuerY, s, 17, 385); issuerY += 25;
