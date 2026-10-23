@@ -1,5 +1,7 @@
 'use server';
 
+import { cancelBillDesign } from '@/lib/ticket-design';
+import { renderTicketImage, ticketImagePayload } from '@/lib/ticket-design-server';
 import { renderClassicInvoice } from '@/lib/classic-invoice-server';
 
 import { requirePermission } from '@/lib/auth';
@@ -353,6 +355,7 @@ export async function enqueueDrawerKick(storeId: string): Promise<EnqueueResult>
 
 /** 取消の紙に載せる1品 */
 export interface CancelSlipLine {
+  orderItemId: string;
   name: string;
   nameEn?: string | null;
   /** 取り消した数（正の数で渡す） */
@@ -368,61 +371,49 @@ export interface CancelSlipLine {
  */
 export async function enqueueCancelSlipPrint(orderId: string, lines: CancelSlipLine[]): Promise<EnqueueResult> {
   const ctx = await requirePermission('pos.order');
-  if (lines.length === 0) return { ok: false, error: '取消した品がありません' };
+  if (!lines.length || lines.some(l => !l.orderItemId || !Number.isInteger(l.quantity) || l.quantity <= 0)) {
+    return { ok: false, error: '取消した品を確認してください' };
+  }
   const supabase = await createClient();
-
-  const { data: order } = await supabase
-    .from('orders')
-    .select('id, organization_id, store_id, order_no, guest_count, clerk_name, restaurant_tables(name)')
-    .eq('id', orderId)
-    .single();
+  const { data: order } = await supabase.from('orders')
+    .select('id, organization_id, store_id, order_no, guest_count, clerk_name, created_at, restaurant_tables(name), stores(name, address, phone)')
+    .eq('id', orderId).single();
   if (!order) return { ok: false, error: '注文が見つかりません' };
   if (!assertStore(ctx, order.store_id)) return { ok: false, error: 'この店舗へのアクセス権がありません' };
-
   const printer = await getCloudPrntPrinter(supabase, order.store_id);
   if (!printer) return { ok: false, error: 'レシート用のCloudPRNT対応プリンタが未設定です' };
-
+  // Prices, names, reasons and timestamps come from this order's persisted items, never caller prices.
+  const [{ data: items, error: itemError }, { data: settings }, { data: staff }] = await Promise.all([
+    supabase.from('order_items').select('id, name, unit_price, quantity, line_total, tax_rate, tax_included, modifiers, memo, cancel_reason, cancelled_at')
+      .eq('order_id', orderId).in('id', lines.map(l => l.orderItemId)),
+    supabase.from('store_settings').select('invoice_registration_number').eq('store_id', order.store_id).maybeSingle(),
+    supabase.from('profiles').select('display_name').eq('id', ctx.userId).maybeSingle(),
+  ]);
+  if (itemError || !items || items.length !== new Set(lines.map(l => l.orderItemId)).size) return { ok: false, error: '取消明細を取得できませんでした' };
+  const requested = new Map(lines.map(l => [l.orderItemId, l.quantity]));
   const table = order.restaurant_tables as unknown as { name: string } | null;
-  const ticket: KitchenTicket = {
-    orderId: order.id,
-    orderNo: String(order.order_no),
-    tableName: table?.name ?? null,
-    guestCount: order.guest_count ?? null,
-    clerkName: order.clerk_name ?? null,
-    lines: lines.map((l) => ({
-      name: l.name,
-      nameEn: l.nameEn ?? null,
-      modifiers: l.modifiers ?? [],
-      memo: l.memo ?? null,
-      // マイナス＝取消（厨房伝票と同じ書き方で「*** CANCEL / 取消 ***」が出る）
-      delta: -Math.abs(l.quantity),
-    })),
-  };
-
-  const printedAt = new Date().toLocaleTimeString('ja-JP', { timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit' });
-  const paperWidth = printer.paper_width_mm === 58 ? 58 : 80;
-  const common = { title: '取消 伝票', titleEn: 'CANCEL', printedAt, textSize: 'large' as const, language: 'both' as const };
-  const starLines = layoutKitchenTicket(ticket, { ...common, paperWidth, ...STAR_WIDTH_OPTIONS });
-  const eposLines = layoutKitchenTicket(ticket, { ...common, columns: eposCols(paperWidth) });
-  // プリンターを上下さかさまに付けている店舗は、印字を180度回して出す
-  const star = printer.upside_down ? rotateLines180(starLines, colsFor(paperWidth)) : starLines;
-  const epos = printer.upside_down ? rotateLines180(eposLines, eposCols(paperWidth)) : eposLines;
-
+  const store = order.stores as unknown as { name: string; address: string | null; phone: string | null } | null;
+  const formatDate = (value: string) => new Date(value).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+  const reasons = [...new Set(items.map(i => i.cancel_reason?.trim()).filter(Boolean))].join(' / ');
+  const image = await renderTicketImage(cancelBillDesign({
+    storeName: store?.name ?? '', address: store?.address ?? null, phone: store?.phone ?? null,
+    registration: settings?.invoice_registration_number ?? null, orderNo: String(order.order_no),
+    tableName: table?.name ?? null, guestCount: order.guest_count ?? null, staffName: order.clerk_name ?? null,
+    orderedAt: formatDate(order.created_at), cancelledAt: formatDate(items.find(i => i.cancelled_at)?.cancelled_at ?? new Date().toISOString()),
+    cancelledBy: staff?.display_name ?? null, reason: reasons || null,
+    items: items.map(i => {
+      const quantity = requested.get(i.id)!;
+      return { name: i.name, quantity,
+        amount: Math.round(Number(i.quantity) > 0 ? Number(i.line_total) / Number(i.quantity) * quantity : Number(i.unit_price) * quantity),
+        taxRate: Number(i.tax_rate), taxIncluded: i.tax_included,
+        modifiers: ((i.modifiers ?? []) as { name?: string }[]).map(m => m.name).filter((m): m is string => !!m), memo: i.memo };
+    }),
+  }), printer.paper_width_mm === 58 ? 384 : 576, !!printer.upside_down);
+  const payload = await ticketImagePayload([image]);
   const { error } = await supabase.from('print_jobs').insert({
-    organization_id: order.organization_id,
-    store_id: order.store_id,
-    printer_config_id: printer.id,
-    job_type: 'cancel_slip',
-    order_id: orderId,
-    target: 'cloudprnt',
-    content_type: MARKUP_CONTENT_TYPE,
-    payload: {
-      body: kitchenTicketsMarkup([star]),
-      starprnt: kitchenTicketsStarPrnt([star]).toString('base64'),
-      epos: kitchenTicketsEpos([epos]),
-    },
-    status: 'queued',
-    created_by: ctx.userId,
+    organization_id: order.organization_id, store_id: order.store_id, printer_config_id: printer.id,
+    job_type: 'cancel_slip', order_id: orderId, target: 'cloudprnt', content_type: MARKUP_CONTENT_TYPE,
+    payload, status: 'queued', created_by: ctx.userId,
   });
   if (error) return { ok: false, error: `印刷ジョブの登録に失敗しました: ${error.message}` };
   return { ok: true, queued: 1 };

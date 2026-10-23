@@ -206,6 +206,7 @@ export interface ClaimedKitchenItem {
   item_name_kana?: string | null;
   modifiers: { name: string; name_en?: string | null }[] | null;
   memo: string | null;
+  cancelReason?: string | null;
   station: string;
   delta: number;
   /** 'drink' = セットのドリンク（選択肢）を別の紙に出す行（lib/print-queue.ts の splitSetDrinks が作る） */
@@ -221,6 +222,7 @@ export interface KitchenTicketLine {
   /** 選択肢。英語名があれば英語、無ければ日本語 */
   modifiers: string[];
   memo: string | null;
+  cancelReason?: string | null;
   /** コースの料理（出す順）として出す行のとき、何番目か。普通の商品は無し */
   step?: CourseStepInfo | null;
   /** セットのドリンク（ランチドリンクなど）。料理とは別の紙に切って出す */
@@ -244,7 +246,7 @@ export interface KitchenTicket {
 function lineKey(l: KitchenTicketLine): string {
   // コースの料理は「どのコースの何番目か」まで同じものだけまとめる（単品の同じ商品とは混ぜない）
   const step = l.step ? `${l.step.course}\u0003${l.step.index}` : '';
-  return [l.delta > 0 ? '+' : '-', l.name, l.nameEn ?? '', l.modifiers.join('\u0001'), l.memo ?? '', step, l.drinkSlip ? 'D' : ''].join('\u0002');
+  return [l.delta > 0 ? '+' : '-', l.name, l.nameEn ?? '', l.modifiers.join('\u0001'), l.memo ?? '', l.cancelReason ?? '', step, l.drinkSlip ? 'D' : ''].join('\u0002');
 }
 
 /**
@@ -280,6 +282,7 @@ export function groupKitchenTickets(rows: ClaimedKitchenItem[]): KitchenTicket[]
       // 選択肢（セットのカレー・ナン/ご飯など）も英語優先。厨房が作るものそのものなので特に重要
       modifiers: (r.modifiers ?? []).map((m) => (m.name_en?.trim() || m.name)).filter(Boolean),
       memo: r.memo,
+      cancelReason: r.cancelReason ?? null,
       ...(r.course_step ? { step: r.course_step } : {}),
       ...(r.slip === 'drink' ? { drinkSlip: true } : {}),
     };
@@ -543,7 +546,10 @@ export function layoutKitchenTicket(ticket: KitchenTicket, opts: KitchenLayoutOp
     // コースの料理は「1st 前菜」のように出す順を頭に付ける（2026-10-03 御茶ノ水 Miyazaki「コースの料理を順番に」）
     const stepLabel = l.step ? `${ordinalEn(l.step.index)} ` : '';
     // 取消の印は商品名と別の行にする（同じ行だと大きい文字で商品名の途中から折り返して読みにくい）
-    if (l.delta < 0) push(enOnly ? '[CANCEL]' : '[CANCEL / 取消]', itemSize);
+    if (l.delta < 0) {
+      push(enOnly ? '[CANCEL]' : '[CANCEL / 取消]', itemSize);
+      if (l.cancelReason) push(`取消理由：${l.cancelReason}`);
+    }
     push(`${stepLabel}${head}  ${qty}`, itemSize);
     if (l.nameEn && !enOnly) push(`${indent}${l.name}`, nameJaSize);
     // どのコースの料理か（コースの名前）。1枚に他の商品も混ざるときだけ行ごとに添える（1枚が全部同じコースなら見出しに1回）

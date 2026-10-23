@@ -452,7 +452,7 @@ export async function cancelRecentHandyItem(
     const next = qty - 1;
     const { error } = await supabase
       .from('order_items')
-      .update({ quantity: next, line_total: Number(line.unit_price) * next, updated_by: ctx.userId })
+      .update({ quantity: next, line_total: Number(line.unit_price) * next, cancel_reason: 'ハンディで取消（5分以内）', cancelled_at: new Date().toISOString(), updated_by: ctx.userId })
       .eq('id', orderItemId)
       .eq('status', 'active');
     if (error) throw new Error(error.message);
@@ -489,7 +489,7 @@ export async function cancelRecentHandyItem(
         .map((m) => m?.name)
         .filter((n): n is string => !!n);
       await enqueueCancelSlipPrint(orderId, [
-        { name: line.name as string, quantity: 1, modifiers, memo: (line.memo as string | null) ?? null },
+        { orderItemId, name: line.name as string, quantity: 1, modifiers, memo: (line.memo as string | null) ?? null },
       ]);
     } catch (e) {
       console.error('[handy.cancelRecentHandyItem] cancel slip print failed:', e);

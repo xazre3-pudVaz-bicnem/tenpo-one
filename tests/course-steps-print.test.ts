@@ -2,6 +2,13 @@ import { describe, it, expect, vi } from 'vitest';
 
 vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: () => ({}) }));
 
+// Assert the semantic rows entering the rasterizer; pixel/protocol coverage lives in ticket-design.test.ts.
+vi.mock('@/lib/ticket-design-server', () => ({
+  renderTicketImage: vi.fn(async (design: { rows: { cells: { text: string }[] }[] }) =>
+    Buffer.from(design.rows.flatMap(r => r.cells.map(c => c.text)).join('\n'))),
+  ticketImagePayload: async (images: Buffer[]) => ({ body: images.map(b => b.toString()).join('\n'), starprnt: '', epos: '' }),
+}));
+
 import { generateKitchenJobs } from '@/lib/print-queue';
 
 type Row = Record<string, unknown>;
@@ -91,7 +98,7 @@ describe('generateKitchenJobs: コースの料理を順番に印字', () => {
     expect(at('1st Appetizer')).toBeGreaterThan(-1);
     expect(at('2nd Salad')).toBeGreaterThan(at('1st Appetizer'));
     expect(at('3rd Dessert')).toBeGreaterThan(at('2nd Salad'));
-    expect(body).toContain('x2');
+    expect(body.split('\n').filter(t => t === '2')).toHaveLength(3);
   });
 
   it('その店がコースの料理を決めていなければ、これまでどおりコース名だけ（余計な問い合わせもしない）', async () => {
@@ -130,4 +137,15 @@ describe('generateKitchenJobs: コースの料理を順番に印字', () => {
     expect(bodyOf(inserted)).toContain('Naan');
     expect(bodyOf(inserted)).not.toContain('1st');
   });
+  it('loads the saved reason for cancelled items without losing the cancelled quantity', async () => {
+    const { admin, inserted } = fakeAdmin({
+      claimed: [{ ...claimedCourse, delta: -2 }], settings: {},
+      orderItems: [{ id: 'oi1', cancel_reason: '注文間違い' }],
+    });
+    await generateKitchenJobs(admin, printer);
+    expect(bodyOf(inserted)).toContain('取消理由：注文間違い');
+    expect(bodyOf(inserted)).toContain('取消 / CANCEL');
+    expect(bodyOf(inserted).split('\n')).toContain('2');
+  });
+
 });
