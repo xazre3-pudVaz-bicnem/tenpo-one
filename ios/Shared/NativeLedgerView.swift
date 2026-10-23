@@ -87,7 +87,12 @@ struct NLPayload: Codable {
     let statusLabels: [String: String]
     let transitions: [String: [String]]
     let canWrite: Bool
+    /// 上のボタンの出し分け（古いサーバーは無い）
+    let links: NLLinks?
+    let unconfirmed: Int?
 }
+
+struct NLLinks: Codable { let tables: Bool; let customers: Bool; let analytics: Bool; let settings: Bool }
 
 /// Tableo 風の色
 enum NLColor {
@@ -244,11 +249,15 @@ final class NativeLedgerModel: ObservableObject {
 struct NativeLedgerView: View {
     @ObservedObject var model: NativeLedgerModel
     var onHome: () -> Void = {}
+    var onFloor: () -> Void = {}
     var onOpenOrder: (String) -> Void = { _ in }
     var onWeb: (String) -> Void = { _ in }
 
     @State private var selected: NLReservation?
     @State private var newOpen = false
+    @State private var findSeatsOpen = false
+    @State private var walkInOpen = false
+    @State private var exporting = false
 
     private let rowH: CGFloat = 64
     private let slotW: CGFloat = 96
@@ -257,6 +266,18 @@ struct NativeLedgerView: View {
     var body: some View {
         VStack(spacing: 0) {
             topBar
+            // Web と同じ上のボタン（退店管理・CSV出力・集計・PDF作成・＋予約登録・📅）
+            NLToolbar(
+                model: model,
+                onFloor: onFloor,
+                onWeb: onWeb,
+                onNew: { newOpen = true },
+                onFindSeats: { findSeatsOpen = true },
+                onWalkIn: { walkInOpen = true },
+                onPdf: { makePdf() },
+                onCsv: { exportCsv() }
+            )
+            .disabled(exporting)
             if let p = model.payload {
                 summaryRow(p)
                 if model.listMode { listBody(p) } else { board(p) }
@@ -300,6 +321,12 @@ struct NativeLedgerView: View {
         }
         .sheet(isPresented: $newOpen) {
             NativeNewReservationSheet(model: model, onClose: { newOpen = false })
+        }
+        .sheet(isPresented: $findSeatsOpen) {
+            NLFindSeatsSheet(model: model, onClose: { findSeatsOpen = false })
+        }
+        .sheet(isPresented: $walkInOpen) {
+            NLWalkInSheet(model: model, onClose: { walkInOpen = false })
         }
         .onAppear { model.start() }
         .onDisappear { model.stop() }
@@ -370,25 +397,43 @@ struct NativeLedgerView: View {
                 modeBtn("予約リスト", on: model.listMode) { model.listMode = true }
             }
             .background(RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(0.12)))
-            if model.payload?.canWrite ?? false {
-                Button { newOpen = true } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "plus").font(.system(size: 15, weight: .heavy))
-                        VStack(spacing: 0) {
-                            Text("予約登録").font(.system(size: 15, weight: .heavy))
-                            Text("New").font(.system(size: 10, weight: .bold)).opacity(0.7)
-                        }
-                    }
-                    .foregroundColor(NLColor.navy)
-                    .padding(.horizontal, 14).frame(height: 44)
-                    .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(NLColor.yellow))
-                }
-                .buttonStyle(PressableStyle())
-            }
         }
         .padding(.horizontal, 16)
         .frame(height: 64)
         .background(NLColor.navy.ignoresSafeArea(edges: .top))
+    }
+
+    // MARK: CSV出力・PDF作成（Web と同じ働き。CSV は Web の /app/reservations/list/export、PDF は画面をそのまま 1 枚に）
+
+    private func exportCsv() {
+        guard let d = model.date ?? model.payload?.date else { return }
+        exporting = true
+        Task {
+            defer { exporting = false }
+            do {
+                let data = try await NativeAPI.shared.download("/app/reservations/list/export?from=\(d)&to=\(d)")
+                if let url = NLShare.tempFile("予約リスト_\(d).csv", data: data) { NLShare.present(url: url) } else { model.error = "CSV を保存できませんでした" }
+            } catch {
+                model.error = (error as? NativeAPIError)?.message ?? "CSV を取り出せませんでした"
+            }
+        }
+    }
+
+    private func makePdf() {
+        guard let p = model.payload, let d = model.date ?? model.payload?.date else { return }
+        let slots = max(1, (p.viewEndMin - p.viewStartMin) / p.slotMinutes)
+        let width = nameW + CGFloat(slots) * slotW + 32
+        let page = VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                Text("店舗台帳").font(.system(size: 22, weight: .heavy)).foregroundColor(NLColor.navy)
+                Text("\(p.store.name)　\(dateLabel)").font(.system(size: 15, weight: .bold)).foregroundColor(NLColor.muted)
+            }
+            summaryRow(p)
+            if model.listMode { listRows(p) } else { boardRows(p, scrollable: false) }
+        }
+        .padding(16)
+        .background(Color.white)
+        if let url = NLShare.pdf(of: page, width: width, name: "店舗台帳_\(d).pdf") { NLShare.present(url: url) } else { model.error = "PDF を作れませんでした" }
     }
 
     private func navBtn(_ icon: String, action: @escaping () -> Void) -> some View {
@@ -451,46 +496,73 @@ struct NativeLedgerView: View {
     // MARK: スケジュール（卓 × 時間）
 
     private func board(_ p: NLPayload) -> some View {
+        boardRows(p, scrollable: true).background(NLColor.card)
+    }
+
+    /// 卓 × 時間の表。左の「テーブル」の列は固定で、時間の側だけ横にスクロール
+    /// （2026-10-24 Ronnie「テーブルの列は横にスライドしても消えないように」）。PDF のときはスクロールなしで全部
+    private func boardRows(_ p: NLPayload, scrollable: Bool) -> some View {
         let slots = max(1, (p.viewEndMin - p.viewStartMin) / p.slotMinutes)
         let totalW = CGFloat(slots) * slotW
         let unassigned = p.reservations.filter { $0.tableIds.isEmpty }
         let nowMin = p.isToday ? nlJstMinutes(ISO8601DateFormatter().string(from: model.now), dayStart: p.date) : nil
-        return ScrollView(.vertical) {
-            ScrollView(.horizontal) {
-                VStack(alignment: .leading, spacing: 0) {
-                    // 時間の見出し
-                    HStack(spacing: 0) {
-                        Text("テーブル").font(.system(size: 12, weight: .bold)).foregroundColor(NLColor.muted)
-                            .frame(width: nameW, height: 34, alignment: .leading).padding(.leading, 12)
-                        ForEach(0..<slots, id: \.self) { i in
-                            let m = p.viewStartMin + i * p.slotMinutes
-                            Text(nlHm(m)).font(.system(size: 12, weight: m % 60 == 0 ? .bold : .regular)).monospacedDigit()
-                                .foregroundColor(m % 60 == 0 ? NLColor.ink : NLColor.muted)
-                                .frame(width: slotW, height: 34, alignment: .leading)
-                        }
-                    }
-                    .background(NLColor.card)
-                    Rectangle().fill(NLColor.line).frame(height: 1)
-                    if !unassigned.isEmpty {
-                        tableRow(name: "席未定", status: "\(unassigned.count)組", reservations: unassigned, p: p, slots: slots, totalW: totalW, nowMin: nowMin)
-                    }
-                    ForEach(p.tables) { t in
-                        tableRow(name: t.name, status: t.statusLabel.isEmpty ? "\(t.capacityMax)名席" : t.statusLabel,
-                                 reservations: p.reservations.filter { $0.tableIds.contains(t.id) }, p: p, slots: slots, totalW: totalW, nowMin: nowMin)
-                    }
+        let rows: [(name: String, status: String, reservations: [NLReservation])] =
+            (unassigned.isEmpty ? [] : [("席未定", "\(unassigned.count)組", unassigned)])
+            + p.tables.map { t in (t.name, t.statusLabel.isEmpty ? "\(t.capacityMax)名席" : t.statusLabel, p.reservations.filter { $0.tableIds.contains(t.id) }) }
+
+        let names = VStack(spacing: 0) {
+            Text("テーブル").font(.system(size: 12, weight: .bold)).foregroundColor(NLColor.muted)
+                .frame(width: nameW, height: 34, alignment: .leading).padding(.leading, 12)
+            Rectangle().fill(NLColor.line).frame(height: 1)
+            ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(row.name).font(.system(size: 15, weight: .heavy)).foregroundColor(NLColor.ink).lineLimit(1)
+                    Text(row.status).font(.system(size: 11)).foregroundColor(NLColor.muted).lineLimit(1)
                 }
+                .padding(.leading, 12)
+                .frame(width: nameW, height: rowH, alignment: .leading)
+                .overlay(alignment: .bottom) { Rectangle().fill(NLColor.line).frame(height: 1) }
             }
         }
+        .frame(width: nameW)
         .background(NLColor.card)
+        .overlay(alignment: .trailing) { Rectangle().fill(NLColor.line).frame(width: 1) }
+        .shadow(color: Color.black.opacity(scrollable ? 0.06 : 0), radius: 6, x: 4, y: 0)
+        .zIndex(1)
+
+        let grid = VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 0) {
+                ForEach(0..<slots, id: \.self) { i in
+                    let m = p.viewStartMin + i * p.slotMinutes
+                    Text(nlHm(m)).font(.system(size: 12, weight: m % 60 == 0 ? .bold : .regular)).monospacedDigit()
+                        .foregroundColor(m % 60 == 0 ? NLColor.ink : NLColor.muted)
+                        .frame(width: slotW, height: 34, alignment: .leading)
+                }
+            }
+            .background(NLColor.card)
+            Rectangle().fill(NLColor.line).frame(height: 1)
+            ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
+                tableRow(reservations: row.reservations, p: p, slots: slots, totalW: totalW, nowMin: nowMin)
+            }
+        }
+        .frame(width: totalW)
+
+        return Group {
+            if scrollable {
+                ScrollView(.vertical) {
+                    HStack(alignment: .top, spacing: 0) {
+                        names
+                        ScrollView(.horizontal, showsIndicators: true) { grid }
+                    }
+                }
+            } else {
+                HStack(alignment: .top, spacing: 0) { names; grid }
+            }
+        }
     }
 
-    private func tableRow(name: String, status: String, reservations: [NLReservation], p: NLPayload, slots: Int, totalW: CGFloat, nowMin: Int?) -> some View {
+    private func tableRow(reservations: [NLReservation], p: NLPayload, slots: Int, totalW: CGFloat, nowMin: Int?) -> some View {
         HStack(spacing: 0) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(name).font(.system(size: 15, weight: .heavy)).foregroundColor(NLColor.ink).lineLimit(1)
-                Text(status).font(.system(size: 11)).foregroundColor(NLColor.muted).lineLimit(1)
-            }
-            .frame(width: nameW, alignment: .leading).padding(.leading, 12)
             ZStack(alignment: .topLeading) {
                 // マス目
                 HStack(spacing: 0) {
@@ -550,7 +622,10 @@ struct NativeLedgerView: View {
     // MARK: 予約リスト
 
     private func listBody(_ p: NLPayload) -> some View {
-        ScrollView {
+        ScrollView { listRows(p) }
+    }
+
+    private func listRows(_ p: NLPayload) -> some View {
             LazyVStack(spacing: 8) {
                 if p.reservations.isEmpty {
                     Text("この日の予約はありません").font(.system(size: 14)).foregroundColor(NLColor.muted).padding(.vertical, 40)
@@ -583,6 +658,5 @@ struct NativeLedgerView: View {
                 }
             }
             .padding(16)
-        }
     }
 }

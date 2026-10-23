@@ -41,6 +41,10 @@ export interface NativeLedgerPayload {
   statusLabels: Record<string, string>;
   transitions: Record<string, string[]>;
   canWrite: boolean;
+  /** 上のボタンの出し分け（Web の LedgerTop と同じ）：退店管理／集計／顧客台帳／台帳設定 */
+  links: { tables: boolean; customers: boolean; analytics: boolean; settings: boolean };
+  /** 未連絡（仮予約）の数 */
+  unconfirmed: number;
 }
 
 const DEFAULT_START_MIN = 11 * 60;
@@ -170,5 +174,7 @@ export async function loadNativeLedger(
     statusLabels,
     transitions: RESERVATION_TRANSITIONS as unknown as Record<string, string[]>,
     canWrite: can(ctx.role, 'reservations.write'),
+    links: chrome.links,
+    unconfirmed: chrome.summary.unconfirmed,
   };
 }

@@ -199,6 +199,7 @@ final class AppState: ObservableObject {
 
     /// ネイティブのホームからフロアへ（Web も /app/floor にそろえる＝レシート・ドロアの Web 側の仕組みはそのまま）
     func goNativeFloor() {
+        nativeLedger = false
         nativeFloor = true
         WebViewController.current?.load(AppConfig.url("/app/floor"))
     }
