@@ -63,6 +63,7 @@ export function HomeKpis({
   lowStock,
   guestsNote,
   ordersHref,
+  dayLabel = '本日',
 }: {
   groups: number;
   groupsYesterday: number;
@@ -73,11 +74,13 @@ export function HomeKpis({
   /** 客数の補足（店内飲食のみ集計の設定時など） */
   guestsNote?: string;
   ordersHref: string;
+  /** 売上を出す営業日（「本日」／「10/22（木）」。2026-10-22 Ronnie「レジの営業日で出す」） */
+  dayLabel?: string;
 }) {
   return (
     // 1つの箱。中の区切り線は gap-px の下地（bg-line）で描く（4つなので 2×2 か 4つ横並び）
     <section
-      aria-label="本日の状況"
+      aria-label={`${dayLabel}の状況`}
       className="ui-card grid grid-cols-2 gap-px overflow-hidden border border-line bg-line lg:grid-cols-4"
     >
       <KpiCell
@@ -103,7 +106,7 @@ export function HomeKpis({
       />
       <KpiCell
         href="/app/customers?sort=last_visit_desc"
-        label="本日のリピーター率"
+        label={`${dayLabel}のリピーター率`}
         en="Repeat rate"
         value={repeat.ratePct ?? '—'}
         unit="%"

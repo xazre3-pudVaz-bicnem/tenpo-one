@@ -4,7 +4,7 @@
  */
 
 import type { createClient } from './supabase/server';
-import { clockBusinessDate, nextFloatSettingFrom, openDayState, type OpenDayState } from './register-day';
+import { clockBusinessDate, nextFloatSettingFrom, openDayState, salesDisplayDate, type OpenDayState } from './register-day';
 
 type Supabase = Awaited<ReturnType<typeof createClient>>;
 
@@ -57,4 +57,25 @@ export async function loadExpectedOpening(
     closedAt: (data.closed_at as string | null) ?? null,
     businessDate: (data.business_date as string | null) ?? null,
   };
+}
+
+/**
+ * ホームの売上・達成率に出す営業日（lib/register-day.ts の salesDisplayDate）。
+ * 開いているレジの営業日 → 最後に閉めたレジの営業日 → 今日。閉めたあとなら closedAt（「時点」に出す）
+ */
+export async function loadSalesDisplayDay(
+  supabase: Supabase,
+  storeId: string,
+  today: string
+): Promise<{ date: string; closed: boolean; closedAt: string | null }> {
+  const [{ data: open }, last] = await Promise.all([
+    supabase.from('register_sessions').select('business_date').eq('store_id', storeId).eq('status', 'open'),
+    loadExpectedOpening(supabase, storeId),
+  ]);
+  const day = salesDisplayDate({
+    openDates: (open ?? []).map((r) => r.business_date as string).filter(Boolean),
+    lastClosedDate: last.businessDate,
+    today,
+  });
+  return { ...day, closedAt: day.closed ? last.closedAt : null };
 }

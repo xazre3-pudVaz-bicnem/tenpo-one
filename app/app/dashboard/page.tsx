@@ -38,12 +38,13 @@ import type { RegiTool } from '@/components/dashboard/regi-tools';
 import { RegiSales } from '@/components/dashboard/regi-sales';
 import { RegiClock } from '@/components/dashboard/regi-clock';
 import { RegiWeather } from '@/components/dashboard/weather-slot';
+import { loadSalesDisplayDay } from '@/lib/register-day-server';
+import { salesDayView, type SalesDayView } from '@/lib/register-day';
 
 export const metadata: Metadata = { title: 'ホーム' };
 
-/** 予算カードの「(YYYY/MM/DD HH:MM時点)」用。サーバー描画時の時刻（Asia/Tokyo） */
-function nowStampJst(): string {
-  const d = new Date();
+/** 予算カードの「(YYYY/MM/DD HH:MM時点)」用。サーバー描画時の時刻（Asia/Tokyo）。d を渡せばその時刻 */
+function nowStampJst(d: Date = new Date()): string {
   const date = d.toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' }).replaceAll('-', '/');
   const time = d.toLocaleTimeString('ja-JP', { timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit', hour12: false });
   return `${date} ${time}`;
@@ -123,13 +124,29 @@ export default async function DashboardPage() {
 
 type Ctx = Awaited<ReturnType<typeof requireMember>>;
 
+/**
+ * 店舗のホームの売上・達成率に出す営業日（2026-10-22 Ronnie「レジの営業日で出す」）。
+ * 開いているレジの営業日 → 最後に閉めたレジの営業日 → 今日。レジクローズ後なら「時点」は締めた時刻
+ */
+async function storeSalesDay(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  storeId: string,
+  today: string,
+  asOf: string
+): Promise<{ day: SalesDayView; asOf: string }> {
+  const d = await loadSalesDisplayDay(supabase, storeId, today);
+  const day = salesDayView({ date: d.date, today, closed: d.closed });
+  return { day, asOf: day.note && d.closedAt ? nowStampJst(new Date(d.closedAt)) : asOf };
+}
+
 function homeDataArgs(
   ctx: Ctx,
   supabase: Awaited<ReturnType<typeof createClient>>,
   stores: { id: string; name: string }[],
   isAllStores: boolean,
   today: string,
-  metricsOpts: SalesMetricsOptions
+  metricsOpts: SalesMetricsOptions,
+  salesDate: string = today
 ) {
   return {
     supabase,
@@ -140,6 +157,7 @@ function homeDataArgs(
     stores,
     isAllStores,
     today,
+    salesDate,
     metricsOpts,
   };
 }
@@ -175,7 +193,8 @@ async function RegiHomePage({
 }) {
   const supabase = await createClient();
   const store = ctx.currentStore!;
-  const data = await loadHomeData(homeDataArgs(ctx, supabase, [store], false, today, metricsOpts));
+  const sales = await storeSalesDay(supabase, store.id, today, asOf);
+  const data = await loadHomeData(homeDataArgs(ctx, supabase, [store], false, today, metricsOpts, sales.day.date));
 
   // 左メニューと同じ権限・機能の絞り込み（app/app/menu/data.ts の menuLayout）
   const layout = menuLayout(ctx.role, ctx.disabledFeatures, { keepActions: true });
@@ -210,7 +229,7 @@ async function RegiHomePage({
       bigTiles={bigTiles}
       tools={tools}
       storeId={store.id}
-      ordersHref={`/app/orders?from=${today}&to=${today}`}
+      ordersHref={`/app/orders?from=${sales.day.date}&to=${sales.day.date}`}
       sales={
         <RegiSales
           actual={data.actualSales}
@@ -218,7 +237,8 @@ async function RegiHomePage({
           budget={data.dailyBudget}
           pct={data.achievementPct}
           ringPct={data.ringPct}
-          asOf={asOf}
+          asOf={sales.asOf}
+          day={sales.day}
           canAnalytics={can(ctx.role, 'reports.view')}
         />
       }
@@ -981,8 +1001,9 @@ async function StoreDashboard({
   const supabase = await createClient();
   const store = ctx.currentStore!;
   const storeIds = [store.id];
+  const salesP = storeSalesDay(supabase, store.id, today, asOf);
 
-  const [todayReservationsRes, closingsRes, homeData] = await Promise.all([
+  const [todayReservationsRes, closingsRes, homeData, sales] = await Promise.all([
     supabase
       .from('reservations')
       .select('id, start_at, party_size, guest_name, status, reservation_tables(table_id)')
@@ -997,7 +1018,8 @@ async function StoreDashboard({
       .in('store_id', storeIds)
       .gte('business_date', daysAgoJst(30))
       .order('business_date'),
-    loadHomeData(homeDataArgs(ctx, supabase, [store], false, today, metricsOpts)),
+    salesP.then((sd) => loadHomeData(homeDataArgs(ctx, supabase, [store], false, today, metricsOpts, sd.day.date))),
+    salesP,
   ]);
 
   // 30日推移は daily_closings.net_sales を使用。旧データ（v0.4.1以前に締めた行）は net_sales=0 のまま
@@ -1035,8 +1057,9 @@ async function StoreDashboard({
     <div className="flex flex-col gap-4">
       <HomeTop
         data={homeData}
-        asOf={asOf}
-        ordersHref={`/app/orders?from=${today}&to=${today}`}
+        asOf={sales.asOf}
+        day={sales.day}
+        ordersHref={`/app/orders?from=${sales.day.date}&to=${sales.day.date}`}
         guestsNote={metricsOpts.includeTakeoutGuests === false ? '店内飲食のみ' : undefined}
       />
 

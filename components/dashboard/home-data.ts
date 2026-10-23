@@ -6,6 +6,7 @@
 import type { createClient } from '@/lib/supabase/server';
 import { dailyBudgetsFrom } from '@/lib/daily-budget';
 import { daysAgoJst } from '@/lib/format';
+import { shiftBusinessDate } from '@/lib/register-day';
 import { UNPAID_INVOICE_STATUSES } from '@/components/invoices/labels';
 import { stockWarningLevel } from '@/components/inventory/labels';
 import { ACCOUNTING_WRITE_ROLES } from '@/components/accounting/roles';
@@ -113,6 +114,7 @@ export async function loadHomeData({
   stores,
   isAllStores,
   today,
+  salesDate = today,
   metricsOpts,
 }: {
   supabase: SupabaseClient;
@@ -123,13 +125,20 @@ export async function loadHomeData({
   stores: StoreRef[];
   isAllStores: boolean;
   today: string;
+  /**
+   * 売上・客数・前日比・予算達成率を出す営業日（2026-10-22 Ronnie「レジの営業日で出す」。lib/register-day.ts の salesDisplayDate）。
+   * 省略時は today。お知らせ・やること・予約は today のまま
+   */
+  salesDate?: string;
   metricsOpts: SalesMetricsOptions;
 }): Promise<HomeData> {
   const storeIds = stores.map((s) => s.id);
   const storeIn = storeIds.join(',');
   const yesterday = daysAgoJst(1);
+  // 前日比は 売上を出す営業日の前日と比べる
+  const salesPrevDate = shiftBusinessDate(salesDate, -1);
   const recentFrom = daysAgoJst(3);
-  const monthFirst = `${today.slice(0, 7)}-01`;
+  const monthFirst = `${salesDate.slice(0, 7)}-01`;
   const canAccounting = accountingEnabled && !!role && ACCOUNTING_WRITE_ROLES.includes(role);
 
   const [
@@ -157,17 +166,17 @@ export async function loadHomeData({
       .from('orders')
       .select('total, guest_count, status, store_id, order_type, customer_id, reservation_id, reservations(created_via)')
       .in('store_id', storeIds)
-      .eq('business_date', today)
+      .eq('business_date', salesDate)
       .in('status', SETTLED_ORDER_STATUSES),
-    supabase.from('refunds').select('amount, kind, store_id, business_date').in('store_id', storeIds).eq('business_date', today),
+    supabase.from('refunds').select('amount, kind, store_id, business_date').in('store_id', storeIds).eq('business_date', salesDate),
     supabase
       .from('orders')
       .select('total, guest_count, status, store_id, order_type')
       .in('store_id', storeIds)
-      .eq('business_date', yesterday)
+      .eq('business_date', salesPrevDate)
       .in('status', SETTLED_ORDER_STATUSES),
-    supabase.from('refunds').select('amount, kind, store_id, business_date').in('store_id', storeIds).eq('business_date', yesterday),
-    supabase.from('orders').select('total').in('store_id', storeIds).eq('business_date', today).eq('status', 'open'),
+    supabase.from('refunds').select('amount, kind, store_id, business_date').in('store_id', storeIds).eq('business_date', salesPrevDate),
+    supabase.from('orders').select('total').in('store_id', storeIds).eq('business_date', salesDate).eq('status', 'open'),
     supabase
       .from('budgets')
       .select('store_id, sales_budget')
@@ -281,18 +290,18 @@ export async function loadHomeData({
   // （2026-09-30 Ronnie「金曜 100万・月曜 40万のように。1か月分をそのままホームに」）
   const orgMonthly = isAllStores ? (budgetRows.find((b) => b.store_id === null)?.sales_budget ?? null) : null;
   const dailyMaps = new Map(
-    (storeSettingsRes.data ?? []).map((r) => [r.store_id as string, dailyBudgetsFrom(r.settings, today.slice(0, 7))])
+    (storeSettingsRes.data ?? []).map((r) => [r.store_id as string, dailyBudgetsFrom(r.settings, salesDate.slice(0, 7))])
   );
-  const hasDaily = storeIds.some((id) => (dailyMaps.get(id)?.[today] ?? 0) > 0);
+  const hasDaily = storeIds.some((id) => (dailyMaps.get(id)?.[salesDate] ?? 0) > 0);
   const dailyBudget =
     hasDaily && orgMonthly == null
       ? storeIds.reduce((sum, id) => {
-          const d = dailyMaps.get(id)?.[today];
+          const d = dailyMaps.get(id)?.[salesDate];
           if (d != null && d > 0) return sum + d;
           const m = budgetRows.find((b) => b.store_id === id)?.sales_budget ?? 0;
-          return sum + (dailyBudgetFromMonthly(m, today) ?? 0);
+          return sum + (dailyBudgetFromMonthly(m, salesDate) ?? 0);
         }, 0) || null
-      : dailyBudgetFromMonthly(monthly, today);
+      : dailyBudgetFromMonthly(monthly, salesDate);
   const achievement = budgetAchievement(actualSales, dailyBudget);
 
   // ---- リピーター率 ----
@@ -308,7 +317,7 @@ export async function loadHomeData({
       visit_count: c.visit_count,
       first_visit_date: c.first_visit_at ? new Date(c.first_visit_at).toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' }) : null,
     })),
-    today
+    salesDate
   );
 
   // ---- お知らせ（本部・オーナー） ----

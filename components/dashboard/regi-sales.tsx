@@ -9,6 +9,7 @@ import { useEffect, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
+import type { SalesDayView } from '@/lib/register-day';
 
 const BLUE_FROM = '#2a6fe6';
 const BLUE_TO = '#0a3fa8';
@@ -60,6 +61,7 @@ export function RegiSales({
   ringPct,
   asOf,
   canAnalytics,
+  day,
 }: {
   actual: number;
   avgSpend: number;
@@ -70,7 +72,10 @@ export function RegiSales({
   asOf: string;
   /** 店舗分析・予算登録を出すか（reports.view） */
   canAnalytics: boolean;
+  /** 売上を出す営業日（2026-10-22 Ronnie「レジの営業日で出す」）。今日でなければ「10/22（木）の売上」。省略時は本日 */
+  day?: SalesDayView;
 }) {
+  const dayLabel = day?.dayLabel ?? '本日';
   const router = useRouter();
   const [pending, startTransition] = useTransition();
 
@@ -89,7 +94,7 @@ export function RegiSales({
   const ring = Math.max(0, Math.min(100, ringPct));
 
   return (
-    <section aria-label="本日の売上" className="flex flex-1 items-center gap-5 px-1 py-2 lg:gap-8 lg:px-3.5">
+    <section aria-label={`${dayLabel}の売上`} className="flex flex-1 items-center gap-5 px-1 py-2 lg:gap-8 lg:px-3.5">
       <div className="relative h-[136px] w-[136px] shrink-0 lg:h-[176px] lg:w-[176px]">
         <svg viewBox="0 0 150 150" aria-hidden="true" className="h-full w-full">
           <defs>
@@ -118,7 +123,7 @@ export function RegiSales({
             {pct != null ? pct : '—'}
             <small className="text-[17px]">%</small>
           </b>
-          <span className="mt-1 text-[11px] text-[#6e6e73]">本日の達成率</span>
+          <span className="mt-1 text-[11px] text-[#6e6e73]">{dayLabel}の達成率</span>
           <span className="text-[9px] text-[#8e8e93]" style={num}>
             Budget
           </span>
@@ -128,7 +133,8 @@ export function RegiSales({
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="flex items-end justify-between gap-5 pb-[18px]">
           <div className="min-w-0">
-            <Label ja="実績売上高" en="Sales" />
+            <Label ja={day?.heading ?? '実績売上高'} en="Sales" />
+            {day?.note && <span className="block text-[11px] text-[#8e8e93]">{day.note}</span>}
             <div className="text-[38px] leading-[1.1] font-extrabold tracking-[-0.01em] whitespace-nowrap tabular-nums lg:text-[52px]" style={blueText}>
               {yen(actual)}
             </div>
