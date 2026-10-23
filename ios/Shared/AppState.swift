@@ -26,6 +26,8 @@ final class AppState: ObservableObject {
     @Published var nativeOrder: NativeOrderRef?
     /// ネイティブのフロア（テーブル一覧）を出しているか（Web の /app/floor の代わり。2026-10-24）
     @Published var nativeFloor = false
+    /// ネイティブのホームを出しているか（Web の /app/dashboard の代わり。2026-10-24）
+    @Published var nativeHome = false
     /// フロアを読み直してほしいとき（会計完了など）に増やす
     @Published var floorRefreshTick = 0
 
@@ -105,14 +107,20 @@ final class AppState: ObservableObject {
         if url.path == "/app/dashboard" || url.path == "/app/floor" || url.path == "/app" {
             Task { @MainActor in NativeCatalogCache.shared.refresh() }
         }
-        // テーブル一覧はネイティブで（Web の画面の上に重ねる。Native ON の iPad は Web のテーブル一覧を見せない）
+        // ホーム・テーブル一覧はネイティブで（Web の画面の上に重ねる。Native ON の iPad は Web のホーム・テーブル一覧を見せない）
+        if url.path == "/app/dashboard" || url.path == "/app" {
+            nativeFloor = false
+            if !nativeHome { nativeHome = true }
+            return
+        }
         if url.path == "/app/floor" {
             if !nativeFloor { nativeFloor = true }
             return
         }
-        if url.path != "/app/pos" && nativeFloor {
-            // ホームや設定など、別の画面へ行ったらフロアを閉じる
+        if url.path != "/app/pos" {
+            // 設定・台帳など、まだ Web の画面へ行ったらネイティブを閉じる
             nativeFloor = false
+            nativeHome = false
         }
         guard nativeOrder == nil, url.path == "/app/pos" else { return }
         let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
@@ -153,10 +161,24 @@ final class AppState: ObservableObject {
         nativeOrder = NativeOrderRef(id: orderId, checkout: checkout)
     }
 
-    /// ネイティブのフロアを閉じて Web の画面へ（ホーム・店舗台帳など、まだネイティブに無い画面）
+    /// ネイティブの画面を閉じて Web の画面へ（店舗台帳・設定など、まだネイティブに無い画面）
     func leaveNativeFloor(to path: String) {
         nativeFloor = false
+        nativeHome = false
         WebViewController.current?.load(AppConfig.url(path))
+    }
+
+    /// ネイティブのフロアからホームへ（ネイティブのホームを出す。Web も /app/dashboard にそろえる）
+    func goNativeHome() {
+        nativeFloor = false
+        nativeHome = true
+        WebViewController.current?.load(AppConfig.url("/app/dashboard"))
+    }
+
+    /// ネイティブのホームからフロアへ（Web も /app/floor にそろえる＝レシート・ドロアの Web 側の仕組みはそのまま）
+    func goNativeFloor() {
+        nativeFloor = true
+        WebViewController.current?.load(AppConfig.url("/app/floor"))
     }
 
     /// 会計完了は必ず最新のフロアを読み直す。

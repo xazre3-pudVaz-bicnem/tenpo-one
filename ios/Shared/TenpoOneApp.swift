@@ -33,6 +33,12 @@ struct RootView: View {
                 if state.needsHandyLogin {
                     HandyLoginView()
                 }
+                // ネイティブのホーム。Web の /app/dashboard の上に重ねる（2026-10-24）
+                if state.nativeHome {
+                    NativeHomeScreen()
+                        .transition(.opacity)
+                        .zIndex(4)
+                }
                 // ネイティブのフロア（テーブル一覧）。Web の /app/floor の上に重ねる（2026-10-24）
                 if state.nativeFloor {
                     NativeFloorScreen()
@@ -52,6 +58,7 @@ struct RootView: View {
         }
         .animation(.easeOut(duration: 0.22), value: state.nativeOrder)
         .animation(.easeOut(duration: 0.18), value: state.nativeFloor)
+        .animation(.easeOut(duration: 0.18), value: state.nativeHome)
         // レジ（iPad）は画面いっぱいに使う
         .statusBarHidden(state.mode == .regi || state.nativeOrder != nil)
         .sheet(isPresented: $state.scanning) {

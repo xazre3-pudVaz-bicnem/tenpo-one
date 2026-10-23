@@ -45,7 +45,9 @@ export type NativeFloorAction =
   /** 伝票を別の空席の卓へ */
   | { type: 'floorMove'; orderId: string; tableId: string }
   /** 品目のない伝票の取消（理由・店長の承認） */
-  | { type: 'floorCancelEmpty'; orderId: string; reason: string; approvedByClerkId: string | null };
+  | { type: 'floorCancelEmpty'; orderId: string; reason: string; approvedByClerkId: string | null }
+  /** ホームの「ドロアオープン」 */
+  | { type: 'floorDrawer'; storeId: string };
 
 export type NativeFloorActionType = NativeFloorAction['type'];
 
@@ -69,6 +71,7 @@ export const NATIVE_FLOOR_ACTION_TYPES: readonly NativeFloorActionType[] = [
   'floorNewSlip',
   'floorMove',
   'floorCancelEmpty',
+  'floorDrawer',
 ];
 
 export function isNativeFloorActionType(v: unknown): v is NativeFloorActionType {
@@ -200,8 +203,9 @@ export function parseNativeFloorAction(raw: unknown): Parsed {
       if (!isUuid(b.callId)) return bad();
       return { ok: true, action: { type: 'floorCall', callId: b.callId } };
     case 'floorRelease':
+    case 'floorDrawer':
       if (!isUuid(b.storeId)) return bad();
-      return { ok: true, action: { type: 'floorRelease', storeId: b.storeId } };
+      return { ok: true, action: { type: b.type, storeId: b.storeId } };
     case 'floorNewSlip':
       if (!isUuid(b.orderId)) return bad();
       return { ok: true, action: { type: 'floorNewSlip', orderId: b.orderId } };

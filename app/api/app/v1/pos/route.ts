@@ -14,6 +14,7 @@ import { enqueueDrawerKick, enqueueExpoSlipPrint, enqueueOrderSlipPrint, enqueue
 import { shouldOpenDrawer } from '@/lib/printing/types';
 import { isNativeFloorActionType, parseNativeFloorAction, type NativeFloorAction } from '@/lib/native-floor';
 import { loadNativeFloor } from '@/lib/native-floor-server';
+import { loadNativeHome } from '@/lib/native-home-server';
 import { addSlipToTable, cancelEmptyOrder, clearTable, mergeOrders, moveTable, setGuestCount, setPaymentMemo, setSeatTime } from '@/app/app/pos/actions';
 import { completeCleaning, goToOrder, releaseFinishedCleaning, setTableAvailability } from '@/app/app/floor/actions';
 import { saveTableGroup } from '@/app/app/floor/group-actions';
@@ -89,6 +90,7 @@ const FLOOR_PERMISSION: Record<NativeFloorAction['type'], PermissionAction> = {
   floorNewSlip: 'pos.order',
   floorMove: 'pos.checkout',
   floorCancelEmpty: 'pos.checkout',
+  floorDrawer: 'pos.checkout',
 };
 
 const PERMISSION: Record<NativePosAction['type'], PermissionAction> = {
@@ -124,6 +126,14 @@ export async function GET(request: Request) {
     if (!ctx.isHq && !ctx.stores.some((s) => s.id === storeId)) return json({ ok: false, error: '店舗がありません' }, 404);
     const catalog = await loadNativeCatalog(ctx, await createClient(), storeId, ctx.organizationId);
     return json({ ok: true, catalog });
+  }
+
+  // ホーム（売上・達成率・来店組数・左の列のボタン）。Web のレジのホームと同じ組み立て（lib/native-home-server.ts）
+  if (part === 'home') {
+    const store = ctx.currentStore ?? ctx.stores[0] ?? null;
+    if (!store) return json({ ok: false, error: '店舗がありません' }, 404);
+    const home = await loadNativeHome(ctx, await createClient(), { id: store.id, name: store.name });
+    return json({ ok: true, ...home });
   }
 
   // フロア（テーブル一覧）。Web のテーブル一覧と同じ組み立て（lib/floor-view-server.ts）
@@ -363,5 +373,10 @@ async function runFloorAction(action: NativeFloorAction): Promise<Record<string,
     case 'floorCancelEmpty':
       await cancelEmptyOrder(action.orderId, action.reason, action.approvedByClerkId);
       return { ok: true };
+    case 'floorDrawer': {
+      // ホームの「ドロアオープン」（Web の DrawerRow と同じ）
+      const res = await enqueueDrawerKick(action.storeId);
+      return res.ok ? { ok: true } : { ok: false, error: res.error ?? 'ドロアを開けられませんでした' };
+    }
   }
 }

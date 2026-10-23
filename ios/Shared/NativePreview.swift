@@ -74,12 +74,32 @@ struct NativeFloorScreen: View {
     var body: some View {
         NativeFloorView(
             model: model,
-            onHome: { state.leaveNativeFloor(to: "/app/dashboard") },
+            onHome: { state.goNativeHome() },
             // 店舗台帳はまだ Web（次の段階でネイティブに）
             onLedger: { state.leaveNativeFloor(to: "/app/reservations") },
             onOpenOrder: { id, checkout in state.openNativeOrder(id, checkout: checkout) }
         )
         .onChange(of: state.floorRefreshTick) { _ in Task { await model.refresh(silent: true) } }
         .onChange(of: state.nativeOrder) { new in if new == nil { Task { await model.refresh(silent: true) } } }
+    }
+}
+
+/// ネイティブのホーム。Web の /app/dashboard の代わり（2026-10-24）
+struct NativeHomeScreen: View {
+    @StateObject private var model = NativeHomeModel()
+    @EnvironmentObject var state: AppState
+
+    var body: some View {
+        NativeHomeView(
+            model: model,
+            onWeb: { path in state.leaveNativeFloor(to: path) },
+            onFloor: { state.goNativeFloor() }
+        )
+        .onReceive(model.$payload) { p in
+            // まだ開局していなければ、Web の「レジの中の現金を数える」開局画面へ（Web のホームと同じ）
+            if let p, p.needsOpenRegister { state.leaveNativeFloor(to: "/app/cash/open") }
+        }
+        .onChange(of: state.nativeFloor) { on in if !on { Task { await model.refresh() } } }
+        .onChange(of: state.floorRefreshTick) { _ in Task { await model.refresh() } }
     }
 }
