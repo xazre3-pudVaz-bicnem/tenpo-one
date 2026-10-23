@@ -158,6 +158,9 @@ struct NativeSlipsView: View {
     @ObservedObject var model: NativeSlipsModel
     let onHome: () -> Void
     let onOpenOrder: (String) -> Void
+    /// ほかの画面から「この伝票の明細を開く」（/app/orders/<id>）
+    var openId: String? = nil
+    var onOpened: () -> Void = {}
 
     @State private var ryoshushoFor: NSOrderRow?
     @State private var showDetail = false
@@ -232,6 +235,12 @@ struct NativeSlipsView: View {
             }
         }
         .task { await model.refresh() }
+        .task(id: openId) {
+            guard let openId else { return }
+            await model.openDetail(openId)
+            if model.detail != nil { showDetail = true }
+            onOpened()
+        }
     }
 
     // MARK: 期間（今日・昨日・一昨日・今週・今月・過去7日・過去30日・日付）＋支払方法・伝票No

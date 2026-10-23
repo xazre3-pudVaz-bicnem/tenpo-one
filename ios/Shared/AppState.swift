@@ -61,6 +61,8 @@ final class AppState: ObservableObject {
     @Published var nativeReports = false
     @Published var reportsFrom: String?
     @Published var reportsTo: String?
+    /// 伝票明細で開く伝票（/app/orders/<id> から。2026-10-24）
+    @Published var slipsOpenId: String?
     /// フロアを読み直してほしいとき（会計完了など）に増やす
     @Published var floorRefreshTick = 0
 
@@ -222,6 +224,16 @@ final class AppState: ObservableObject {
             nativeFloor = false; nativeNotices = false; nativeBudget = false; nativeCustomers = false; nativeScan = false; nativeReports = false; nativeHome = false; nativeLedger = false; nativeCash = false; nativeCashIo = false; nativeQuick = false; nativeSlips = false; nativeStock = false
             if !nativeExpenses { nativeExpenses = true }
             return
+        }
+        // 伝票の詳細（/app/orders/<id>）は伝票明細のネイティブの詳細で開く（返金・再オープンは同じ画面にある）
+        if url.path.hasPrefix("/app/orders/") {
+            let id = String(url.path.dropFirst("/app/orders/".count))
+            if id.count == 36, id.allSatisfy({ $0.isHexDigit || $0 == "-" }) {
+                nativeFloor = false; nativeNotices = false; nativeBudget = false; nativeCustomers = false; nativeScan = false; nativeReports = false; nativeHome = false; nativeLedger = false; nativeCash = false; nativeCashIo = false; nativeQuick = false; nativeExpenses = false; nativeStock = false
+                slipsOpenId = id
+                if !nativeSlips { nativeSlips = true }
+                return
+            }
         }
         if url.path == "/app/orders" {
             nativeFloor = false; nativeNotices = false; nativeBudget = false; nativeCustomers = false; nativeScan = false; nativeReports = false; nativeHome = false; nativeLedger = false; nativeCash = false; nativeCashIo = false; nativeQuick = false; nativeExpenses = false; nativeStock = false
