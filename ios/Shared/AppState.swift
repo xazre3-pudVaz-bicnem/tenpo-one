@@ -121,8 +121,11 @@ final class AppState: ObservableObject {
         // テーブルグループの別の卓から（seat）・テーブル移動（move）は今までの画面で
         if items.contains(where: { $0.name == "seat" || $0.name == "move" }) { return }
 
-        if let r = recentlyClosed, r.id == orderId, Date().timeIntervalSince(r.at) < 4 { return }
-        nativeOrder = NativeOrderRef(id: orderId)
+        // 閉じた直後（戻るの途中）だけ開き直さない。長いと「戻る→もう一度レジ会計」が Web で開いてしまう（2026-10-24 Ronnie）
+        if let r = recentlyClosed, r.id == orderId, Date().timeIntervalSince(r.at) < 1.5 { return }
+        // Web の卓のポップアップ「レジ会計」（?checkout=1）はすぐ会計の画面に
+        let checkout = items.contains { $0.name == "checkout" && $0.value == "1" }
+        nativeOrder = NativeOrderRef(id: orderId, checkout: checkout)
     }
 
     /// ネイティブの画面を閉じる。openWebPath があれば Web でそこを開き（その伝票はもうネイティブで開かない）、無ければ前の画面へ戻る
