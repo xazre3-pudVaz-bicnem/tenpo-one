@@ -104,6 +104,12 @@ private final class StarPrinters: NSObject, StarDeviceDiscoveryManagerDelegate {
     private var manager: StarDeviceDiscoveryManager?
     private var found: [BluetoothPrinters.Device] = []
     private var completion: (([BluetoothPrinters.Device]) -> Void)?
+    // Keep the selected printer open between receipts. Serialize the async SDK
+    // calls as well as the queue updates (actor isolation alone is reentrant).
+    private var printTail: Task<Void, Never>?
+    private var connectedPrinter: StarPrinter?
+    private var connectedIdentifier: String?
+    private var connectedUSB = false
 
     func discover(completion: @escaping ([BluetoothPrinters.Device]) -> Void) {
         found = []
@@ -139,16 +145,42 @@ private final class StarPrinters: NSObject, StarDeviceDiscoveryManagerDelegate {
     }
 
     func print(identifier: String, usb: Bool, data: Data, completion: @escaping BluetoothPrinters.Done) {
-        let printer = StarPrinter(StarConnectionSettings(interfaceType: usb ? .usb : .bluetooth, identifier: identifier))
-        Task {
-            do {
-                try await printer.open()
-                defer { Task { await printer.close() } }
-                try await printer.print(raw: data)
-                completion(true, nil)
-            } catch {
-                completion(false, "connect")
+        DispatchQueue.main.async {
+            let previous = self.printTail
+            self.printTail = Task {
+                await previous?.value
+                await self.send(identifier: identifier, usb: usb, data: data, completion: completion)
             }
+        }
+    }
+
+    private func send(identifier: String, usb: Bool, data: Data, completion: @escaping BluetoothPrinters.Done) async {
+        let start = Date()
+        var sending = false
+        do {
+            if connectedIdentifier != identifier || connectedUSB != usb {
+                if let old = connectedPrinter { await old.close() }
+                connectedPrinter = nil
+            }
+            if connectedPrinter == nil {
+                let printer = StarPrinter(StarConnectionSettings(interfaceType: usb ? .usb : .bluetooth, identifier: identifier))
+                do { try await printer.open() }
+                catch { await printer.close(); throw error }
+                connectedPrinter = printer
+                connectedIdentifier = identifier
+                connectedUSB = usb
+            }
+            let openMilliseconds = Int(Date().timeIntervalSince(start) * 1000)
+            sending = true
+            try await connectedPrinter!.print(raw: data)
+            NSLog("[TENPO Bluetooth] open_ms=%d total_ms=%d", openMilliseconds, Int(Date().timeIntervalSince(start) * 1000))
+            completion(true, nil)
+        } catch {
+            if let printer = connectedPrinter { await printer.close() }
+            connectedPrinter = nil
+            connectedIdentifier = nil
+            // Once transmission starts, never automatically resend an uncertain job.
+            completion(false, sending ? "print_uncertain" : "connect")
         }
     }
 }

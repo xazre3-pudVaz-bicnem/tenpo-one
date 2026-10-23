@@ -9,7 +9,7 @@ describe('この端末の印刷：注文・会計が入ったらすぐ取りに�
   const agent = readFileSync(new URL('../components/printing/direct-print-agent.tsx', import.meta.url), 'utf8');
   const layout = readFileSync(new URL('../app/app/layout.tsx', import.meta.url), 'utf8');
   it('店の注文の品・伝票の変化（Realtime）で早めに見る。数回だけ（いつもは1秒ごとのまま）', () => {
-    expect(agent).toContain('const KICK_DELAYS_MS = [150, 600, 1200, 2000];');
+    expect(agent).toContain('const KICK_DELAYS_MS = [0, 150, 600, 1200, 2000];');
     expect(agent).toContain("table: 'order_items', filter: `store_id=eq.${storeId}` }, kick)");
     expect(agent).toContain("table: 'orders', filter: `store_id=eq.${storeId}` }, kick)");
   });

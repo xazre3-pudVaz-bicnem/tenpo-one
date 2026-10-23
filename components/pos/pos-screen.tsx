@@ -760,6 +760,7 @@ export function PosScreen({
 
   const handleCheckout = async (payments: CheckoutPayment[], paymentMemo?: string) => {
     const result = await checkoutAction(order.id, payments, paymentMemo);
+    if (!result.registerClosed && !result.alreadyPaid) window.dispatchEvent(new Event('tenpo-print-ready'));
     if (result.registerClosed) {
       // 会計は確定していない。ダイアログ側の catch でトーストに出す
       throw new Error(

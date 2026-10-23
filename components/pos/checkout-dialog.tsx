@@ -679,6 +679,7 @@ export function CheckoutDialog({
           ? { recipientName: recipientName.trim() || null, purpose: invoicePurpose.trim() || null }
           : {}),
       });
+      if (res.ok) window.dispatchEvent(new Event('tenpo-print-ready'));
       if (!res.ok) {
         toast(res.error ?? '送信に失敗しました', 'error');
         return;
