@@ -231,7 +231,6 @@ export function CheckoutDialog({
   useEffect(() => {
     if (!done || !from) return;
     let active = true;
-    setSplitReturnLoading(true);
     void readSplitCheckoutReturn(order.id, from).then((result) => {
       if (active) setSplitReturn(result);
     }).catch(() => {
