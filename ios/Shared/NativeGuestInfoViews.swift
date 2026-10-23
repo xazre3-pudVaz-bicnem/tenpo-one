@@ -260,7 +260,7 @@ struct NativeGuestInfoSheet: View {
                         }
                         .pickerStyle(.menu)
                         .tint(NFColor.navy)
-                        .onChange(of: courseId) { _, id in
+                        .onChange(of: courseId) { id in
                             if let c = courses.first(where: { $0.id == id }), let m = c.durationMinutes, m > 0 { minutes = m }
                         }
                         Text("コースを選ぶと時間がコースの所要時間になります。コースの料金は今まで通り商品から伝票に入れてください。")

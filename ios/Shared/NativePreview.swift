@@ -79,7 +79,7 @@ struct NativeFloorScreen: View {
             onLedger: { state.leaveNativeFloor(to: "/app/reservations") },
             onOpenOrder: { id, checkout in state.openNativeOrder(id, checkout: checkout) }
         )
-        .onChange(of: state.floorRefreshTick) { _, _ in Task { await model.refresh(silent: true) } }
-        .onChange(of: state.nativeOrder) { _, new in if new == nil { Task { await model.refresh(silent: true) } } }
+        .onChange(of: state.floorRefreshTick) { _ in Task { await model.refresh(silent: true) } }
+        .onChange(of: state.nativeOrder) { new in if new == nil { Task { await model.refresh(silent: true) } } }
     }
 }
