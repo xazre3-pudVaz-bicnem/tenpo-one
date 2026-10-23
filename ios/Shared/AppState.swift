@@ -34,7 +34,6 @@ final class AppState: ObservableObject {
     @Published var nativeCash = false
     /// ネイティブの入出金（/app/cash のレジ入出金タブ。2026-10-24）
     @Published var nativeCashIo = false
-        nativeQuick = false
     /// ネイティブの即会計（/app/quick-pay。2026-10-24）
     @Published var nativeQuick = false
     @Published var quickRefreshTick = 0
