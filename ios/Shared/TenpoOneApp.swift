@@ -46,6 +46,11 @@ struct RootView: View {
                         .zIndex(5)
                 }
                 // ネイティブのレジ開局・レジクローズ。Web の /app/cash/open・close の上に重ねる（2026-10-24）
+                if state.nativeBudget {
+                    NativeBudgetScreen()
+                        .transition(.opacity)
+                        .zIndex(5)
+                }
                 if state.nativeNotices {
                     NativeNoticesScreen()
                         .transition(.opacity)
@@ -109,6 +114,7 @@ struct RootView: View {
         .animation(.easeOut(duration: 0.18), value: state.nativeExpenses)
         .animation(.easeOut(duration: 0.18), value: state.nativeStock)
         .animation(.easeOut(duration: 0.18), value: state.nativeNotices)
+        .animation(.easeOut(duration: 0.18), value: state.nativeBudget)
         // レジ（iPad）は画面いっぱいに使う
         .statusBarHidden(state.mode == .regi || state.nativeOrder != nil)
         .sheet(isPresented: $state.scanning) {

@@ -99,6 +99,7 @@ struct NativeHomeScreen: View {
                 else if path == "/app/orders" { state.goNativeSlips() }
                 else if path == "/app/expenses" { state.goNativeExpenses() }
                 else if path == "/app/notifications" { state.goNativeNotices() }
+                else if path == "/app/budgets/daily" { state.goNativeBudget() }
                 else if path == "/app/announcements" { state.goNativeNotices(tab: "announcements") }
                 else if path == "/app/inventory" || path == "/app/inventory/menu-stock" { state.goNativeStock() }
                 else { state.leaveNativeFloor(to: path) }
@@ -248,5 +249,15 @@ struct NativeNoticesScreen: View {
                 onLink: { path in state.leaveNativeFloor(to: path) }
             )
         }
+    }
+}
+
+/// ネイティブの日別予算登録（2026-10-24）
+struct NativeBudgetScreen: View {
+    @StateObject private var model = NativeBudgetDailyModel()
+    @EnvironmentObject var state: AppState
+
+    var body: some View {
+        NativeBudgetDailyView(model: model, onHome: { state.goNativeHome() }, onWeb: { path in state.leaveNativeFloor(to: path) })
     }
 }

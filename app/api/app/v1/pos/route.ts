@@ -54,6 +54,9 @@ import { loadNativeAnnouncements, loadNativeNotices } from '@/lib/native-notices
 import { createAnnouncement, deleteAnnouncement, markAnnouncementRead } from '@/app/app/announcements/actions';
 import { markAllRead } from '@/app/app/notifications/actions';
 import { markNotificationRead } from '@/app/app/actions';
+import { isNativeBudgetActionType, parseNativeBudgetAction } from '@/lib/native-budget';
+import { dailyBudgetsFrom } from '@/lib/daily-budget';
+import { saveDailyBudgets } from '@/app/app/budgets/daily-actions';
 import { isNativePettyActionType, nativePettyPermission, parseNativePettyAction } from '@/lib/native-petty';
 import { loadNativeClosings, loadNativePetty } from '@/lib/native-petty-server';
 import {
@@ -295,6 +298,23 @@ export async function GET(request: Request) {
     return json({ ok: true, ...io });
   }
 
+  // 日別予算登録（Web の /app/budgets/daily）
+  if (part === 'budgetDaily') {
+    if (!can(ctx.role, 'reports.view')) return json({ ok: false, error: '権限がありません', useWeb: true }, 403);
+    const store = ctx.currentStore ?? ctx.stores[0] ?? null;
+    if (!store) return json({ ok: false, error: 'アクセス可能な店舗がありません' }, 404);
+    const m = url.searchParams.get('month') ?? '';
+    const month = /^\d{4}-\d{2}$/.test(m) ? m : todayJst().slice(0, 7);
+    const { data: row } = await (await createClient()).from('store_settings').select('settings').eq('store_id', store.id).maybeSingle();
+    return json({
+      ok: true,
+      store: { id: store.id, name: store.name },
+      month,
+      values: dailyBudgetsFrom(row?.settings, month),
+      canEdit: ['org_owner', 'hq_admin', 'area_manager', 'store_manager'].includes(ctx.role ?? ''),
+    });
+  }
+
   // お知らせ（Web の /app/announcements）
   if (part === 'announcements') {
     if (!can(ctx.role, 'dashboard.view')) return json({ ok: false, error: '権限がありません', useWeb: true }, 403);
@@ -448,6 +468,24 @@ export async function POST(request: Request) {
       }
       const r = await enqueueStockListPrint(store.id, parsedStock.action.lines);
       return json(r.ok ? { ok: true } : { ok: false, error: r.error ?? '在庫の印刷に失敗しました' });
+    } catch (e) {
+      return json({ ok: false, error: errorText(e, 'うまくいきませんでした。もう一度お試しください') }, 400);
+    }
+  }
+
+  // 日別予算の保存（2026-10-24）
+  if (raw && typeof raw === 'object' && isNativeBudgetActionType((raw as { type?: unknown }).type)) {
+    const parsedBudget = parseNativeBudgetAction(raw);
+    if (!parsedBudget.ok) return json({ ok: false, error: parsedBudget.error }, 400);
+    const store = ctx.currentStore ?? ctx.stores[0];
+    if (!store) return json({ ok: false, error: 'アクセス可能な店舗がありません' }, 404);
+    if (!can(ctx.role, 'store.settings')) return json({ ok: false, error: '権限がありません' }, 403);
+    // Route Handler では requirePermission がお店の回線を見ないので、ここで見る（ほかの操作と同じ）
+    const budgetProblem = await networkProblem(ctx);
+    if (budgetProblem) return json({ ok: false, error: budgetProblem }, 403);
+    try {
+      const r = await saveDailyBudgets(store.id, parsedBudget.action.month, parsedBudget.action.values);
+      return json(r.error ? { ok: false, error: r.error } : { ok: true, queued: r.total ?? 0 });
     } catch (e) {
       return json({ ok: false, error: errorText(e, 'うまくいきませんでした。もう一度お試しください') }, 400);
     }
