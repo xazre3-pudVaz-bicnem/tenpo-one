@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { todayJst } from '@/lib/format';
+import { daysAgoJst, todayJst } from '@/lib/format';
 import { getSessionContext, type SessionContext } from '@/lib/auth';
 import { can, type PermissionAction } from '@/lib/permissions';
 import { createClient } from '@/lib/supabase/server';
@@ -33,7 +33,24 @@ import { isNativeStockActionType, parseNativeStockAction } from '@/lib/native-st
 import { loadNativeStock } from '@/lib/native-stock-server';
 import { setMenuStockLimits } from '@/app/app/inventory/menu-stock-actions';
 import { prepareQuickCheckout, startQuickOrder } from '@/app/app/quick-pay/actions';
-import { addCashTransaction, closeRegister, openRegister, printSettlementReport, reprintRegisterReport } from '@/app/app/cash/actions';
+import {
+  addCashTransaction,
+  addPettyCash,
+  approveClosing,
+  approvePettyCash,
+  approvePettyCashCount,
+  closeRegister,
+  openRegister,
+  printSettlementReport,
+  recordPettyCashCount,
+  rejectPettyCash,
+  reopenClosing,
+  reopenStoreDay,
+  reprintRegisterReport,
+  updatePettyOpeningBalance,
+} from '@/app/app/cash/actions';
+import { isNativePettyActionType, nativePettyPermission, parseNativePettyAction } from '@/lib/native-petty';
+import { loadNativeClosings, loadNativePetty } from '@/lib/native-petty-server';
 import {
   assignTables,
   cancelReservation,
@@ -273,6 +290,26 @@ export async function GET(request: Request) {
     return json({ ok: true, ...io });
   }
 
+  // 小口現金・締め履歴タブ（Web の /app/cash?tab=petty / tab=closings）
+  if (part === 'petty' || part === 'closings') {
+    const store = ctx.currentStore ?? ctx.stores[0] ?? null;
+    if (!store) return json({ ok: false, error: '店舗がありません' }, 404);
+    if (ctx.disabledFeatures?.has('accounting')) return json({ ok: false, error: 'この機能は使えません', useWeb: true }, 403);
+    const dateParam = (k: string, d: string) => {
+      const v = url.searchParams.get(k);
+      return v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : d;
+    };
+    const from = dateParam('from', daysAgoJst(30));
+    const to = dateParam('to', todayJst());
+    const s = { id: store.id, name: store.name };
+    if (part === 'petty') {
+      const st = url.searchParams.get('status') ?? '';
+      const status = ['pending', 'approved', 'rejected'].includes(st) ? st : '';
+      return json({ ok: true, ...(await loadNativePetty(ctx, await createClient(), s, { from, to, status })) });
+    }
+    return json({ ok: true, ...(await loadNativeClosings(ctx, await createClient(), s, { from, to })) });
+  }
+
   // 店舗台帳のウェイティング（Web の view=waitlist）
   if (part === 'ledgerWait') {
     const store = ctx.currentStore ?? ctx.stores[0] ?? null;
@@ -391,6 +428,57 @@ export async function POST(request: Request) {
       }
       const r = await enqueueStockListPrint(store.id, parsedStock.action.lines);
       return json(r.ok ? { ok: true } : { ok: false, error: r.error ?? '在庫の印刷に失敗しました' });
+    } catch (e) {
+      return json({ ok: false, error: errorText(e, 'うまくいきませんでした。もう一度お試しください') }, 400);
+    }
+  }
+
+  // 小口現金・締め履歴の操作（2026-10-24）
+  if (raw && typeof raw === 'object' && isNativePettyActionType((raw as { type?: unknown }).type)) {
+    const parsedPetty = parseNativePettyAction(raw);
+    if (!parsedPetty.ok) return json({ ok: false, error: parsedPetty.error }, 400);
+    const a = parsedPetty.action;
+    const store = ctx.currentStore ?? ctx.stores[0];
+    if (!store) return json({ ok: false, error: '店舗がありません' }, 404);
+    if (ctx.disabledFeatures?.has('accounting')) return json({ ok: false, error: 'この機能は使えません', useWeb: true }, 403);
+    const perm = nativePettyPermission(a.type);
+    if (perm && !can(ctx.role, perm)) return json({ ok: false, error: '権限がありません' }, 403);
+    // Route Handler では requirePermission がお店の回線を見ないので、ここで見る（ほかの操作と同じ）
+    const pettyProblem = await networkProblem(ctx);
+    if (pettyProblem) return json({ ok: false, error: pettyProblem }, 403);
+    try {
+      switch (a.type) {
+        case 'pettyAdd':
+          await addPettyCash({ storeId: store.id, kind: a.kind, amount: a.amount, purpose: a.purpose, expenseAccountId: a.expenseAccountId });
+          break;
+        case 'pettyApprove':
+          await approvePettyCash(a.id);
+          break;
+        case 'pettyReject':
+          await rejectPettyCash(a.id, a.reason);
+          break;
+        case 'pettyOpening':
+          await updatePettyOpeningBalance(store.id, a.amount);
+          break;
+        case 'pettyCount':
+          await recordPettyCashCount({ storeId: store.id, countDate: a.countDate, expectedAmount: a.expectedAmount, countedAmount: a.countedAmount, note: a.note });
+          break;
+        case 'pettyCountApprove':
+          await approvePettyCashCount(a.id);
+          break;
+        case 'closingApprove':
+          await approveClosing(a.id);
+          break;
+        case 'closingReopen':
+          await reopenClosing(a.id, a.reason);
+          break;
+        case 'closingReopenStoreDay': {
+          const r = await reopenStoreDay(a.storeId, a.businessDate, a.reason);
+          if (!r.ok) return json({ ok: false, error: r.error });
+          break;
+        }
+      }
+      return json({ ok: true });
     } catch (e) {
       return json({ ok: false, error: errorText(e, 'うまくいきませんでした。もう一度お試しください') }, 400);
     }

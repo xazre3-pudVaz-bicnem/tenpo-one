@@ -34,6 +34,8 @@ final class AppState: ObservableObject {
     @Published var nativeCash = false
     /// ネイティブの入出金（/app/cash のレジ入出金タブ。2026-10-24）
     @Published var nativeCashIo = false
+    /// 入出金のタブ（register・petty・closings。Web の ?tab=）
+    @Published var cashTab = "register"
     /// ネイティブの即会計（/app/quick-pay。2026-10-24）
     @Published var nativeQuick = false
     @Published var quickRefreshTick = 0
@@ -185,7 +187,8 @@ final class AppState: ObservableObject {
         if url.path == "/app/cash" {
             let q = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
             let tab = q.first { $0.name == "tab" }?.value
-            if tab == nil || tab == "register" {
+            if tab == nil || tab == "register" || tab == "petty" || tab == "closings" {
+                cashTab = tab ?? "register"
                 nativeFloor = false; nativeHome = false; nativeLedger = false; nativeCash = false; nativeQuick = false; nativeSlips = false; nativeExpenses = false; nativeStock = false
         nativeSlips = false
         nativeExpenses = false
@@ -384,7 +387,8 @@ final class AppState: ObservableObject {
     }
 
     /// ネイティブの入出金へ
-    func goNativeCashIo() {
+    func goNativeCashIo(tab: String = "register") {
+        cashTab = tab
         nativeFloor = false
         nativeHome = false
         nativeLedger = false
@@ -394,7 +398,7 @@ final class AppState: ObservableObject {
         nativeExpenses = false
         nativeStock = false
         nativeCashIo = true
-        WebViewController.current?.load(AppConfig.url("/app/cash"))
+        WebViewController.current?.load(AppConfig.url(tab == "register" ? "/app/cash" : "/app/cash?tab=\(tab)"))
     }
 
     /// 会計完了は必ず最新のフロアを読み直す。
