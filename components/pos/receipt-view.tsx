@@ -293,7 +293,11 @@ export function ReceiptView({
             <div className="grid grid-cols-2 items-baseline gap-y-[1.5mm] leading-tight">
               <span>卓番号</span><strong className="text-right text-[20px]">{receipt.tableName ?? '—'}</strong>
               <span>{receipt.staffName ? `担当 ${receipt.staffName}` : ''}</span><span className="text-right">{receipt.guestCount != null ? `人数 ${receipt.guestCount}名` : ''}</span>
-              <span>{receipt.issuedAt}</span><span className="text-right">No.{receipt.orderNo}</span>
+              <span>伝票番号</span><span className="text-right">No.{receipt.orderNo}</span>
+              <span>開始日時</span><span className="text-right">{receipt.startedAt ?? '—'}</span>
+              {(receipt.completedAt === undefined ? receipt.issuedAt : receipt.completedAt) && <>
+                <span>会計日時</span><span className="text-right">{receipt.completedAt === undefined ? receipt.issuedAt : receipt.completedAt}</span>
+              </>}
             </div>
             <table className="w-full table-fixed border-collapse text-[12px] leading-[1.4]">
               <colgroup><col /><col className="w-[34px]" /><col className="w-[76px]" /></colgroup>

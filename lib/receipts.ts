@@ -33,6 +33,10 @@ export interface ReceiptData {
   guestCount?: number | null;
   orderNo: string;
   issuedAt: string; // 表示用日時
+  /** Actual table/order opening time; never the print/reprint time. */
+  startedAt?: string | null;
+  /** Persisted checkout time; null means this order has not checked out. */
+  completedAt?: string | null;
   isReissue: boolean;
   isRefundReceipt: boolean;
   lines: ReceiptLine[];
@@ -66,6 +70,7 @@ export interface BuildReceiptInput {
   order: {
     orderNo: number | string;
     closedAt: string | Date | null;
+    openedAt?: string | Date | null;
     subtotal: number;
     taxTotal: number;
     serviceCharge: number;
@@ -112,6 +117,17 @@ export function buildTaxRows(
     .map(([rate, v]) => ({ rate, taxable: v.taxable, tax: v.tax }));
 }
 
+/** Customer-facing timestamps always use Japan time, including overnight visits. */
+export function formatReceiptDateTime(value: string | Date | null | undefined): string | null {
+  if (!value) return null;
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return null;
+  return date.toLocaleString('ja-JP', {
+    timeZone: 'Asia/Tokyo', year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit',
+  });
+}
+
 export function buildReceipt(input: BuildReceiptInput): ReceiptData {
   const activeItems = input.items.filter((i) => !i.cancelled);
   const refundTotal = (input.refunds ?? []).reduce((a, r) => a + r.amount, 0);
@@ -130,6 +146,8 @@ export function buildReceipt(input: BuildReceiptInput): ReceiptData {
     tableName: input.tableName ?? null,
     guestCount: input.guestCount ?? null,
     orderNo: String(input.order.orderNo),
+    startedAt: formatReceiptDateTime(input.order.openedAt),
+    completedAt: formatReceiptDateTime(input.order.closedAt),
     issuedAt: closedAt.toLocaleString('ja-JP', {
       timeZone: 'Asia/Tokyo', year: 'numeric', month: '2-digit', day: '2-digit',
       hour: '2-digit', minute: '2-digit',
