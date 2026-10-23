@@ -134,7 +134,8 @@ final class NativeOrderModel: ObservableObject {
     @Published var lastAddedLineId: String?
 
     // ライブ（サーバーにつながっている）とき
-    let orderId: String?
+    var orderId: String?
+    @Published var splitParentOrderId: String?
     @Published var loading = false
     @Published var busy = false
     /// 画面の上に出すお知らせ（エラー・注意）
@@ -489,6 +490,33 @@ final class NativeOrderModel: ObservableObject {
             return
         }
         await act(["type": "discount", "orderId": orderId, "amount": amount, "reason": reason])
+    }
+
+    /// Web と同じ品目単位の伝票分割。サーバーが数量・権限・合計を検証する。
+    func splitForCheckout(_ quantities: [String: Int]) async -> Bool {
+        guard let orderId else { return false }
+        let moves = quantities.filter { $0.value > 0 }.map { ["orderItemId": $0.key, "quantity": $0.value] as [String: Any] }
+        guard !moves.isEmpty,
+              let result = await act(["type": "split", "orderId": orderId, "moves": moves]),
+              let newId = result.newOrderId else { return false }
+        splitParentOrderId = orderId
+        self.orderId = newId
+        return true
+    }
+
+    func resumeSplitParent() async -> Bool {
+        guard let parent = splitParentOrderId else { return false }
+        do {
+            let live = try await NativeAPI.shared.loadLive(orderId: parent)
+            guard !live.order.lines.isEmpty else { return false }
+            orderId = parent
+            splitParentOrderId = nil
+            apply(live: live)
+            return true
+        } catch {
+            notice = error.localizedDescription
+            return false
+        }
     }
 
     /// 会計を確定する。成功したら true

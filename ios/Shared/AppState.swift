@@ -108,7 +108,7 @@ final class AppState: ObservableObject {
               orderId.range(of: "^[0-9a-fA-F-]{36}$", options: .regularExpression) != nil else { return }
         // テーブルグループの別の卓から（seat）・テーブル移動（move）は今までの画面で
         if items.contains(where: { $0.name == "seat" || $0.name == "move" }) { return }
-        if webChosenOrders.contains(orderId) { return }
+
         if let r = recentlyClosed, r.id == orderId, Date().timeIntervalSince(r.at) < 4 { return }
         nativeOrder = NativeOrderRef(id: orderId)
     }
@@ -125,6 +125,14 @@ final class AppState: ObservableObject {
         } else {
             web.goBackOrHome()
         }
+    }
+
+    /// 会計完了は必ず最新のフロアを読み直す。
+    func finishNativeCheckout() {
+        nativeOrder = nil
+        webChosenOrders.removeAll()
+        recentlyClosed = nil
+        WebViewController.current?.load(AppConfig.url("/app/floor"))
     }
 
     /// QR を読んだ結果
