@@ -576,7 +576,7 @@ final class NativeOrderModel: ObservableObject {
                 notice = "会計は完了しましたがレシートを印刷できません。再発行してください。"
             }
         }
-        if r.alreadyPaid == true { notice = "This order has already been paid." }
+        if r.alreadyPaid == true { notice = "この伝票はすでに会計済みです" }
         // ドロア（店の設定で開くか決める）
         let methods = Array(Set(payments.map { $0.method.rawValue }))
         _ = try? await NativeAPI.shared.act(["type": "drawer", "orderId": orderId, "methods": methods], throwOnFail: false)

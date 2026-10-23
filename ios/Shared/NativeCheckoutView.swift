@@ -137,7 +137,7 @@ struct NativeCheckoutView: View {
             HStack {
                 Text("明細").font(.system(size: 16, weight: .heavy)).foregroundColor(NT.ink)
                 Spacer()
-                Text(verbatim: "\(model.itemCount) items").font(.system(size: 13, weight: .bold)).foregroundColor(NT.ink2)
+                Text(verbatim: "\(model.itemCount)品").font(.system(size: 13, weight: .bold)).foregroundColor(NT.ink2)
             }
             .padding(.horizontal, 16).padding(.vertical, 12)
             Divider().overlay(NT.line)
@@ -163,7 +163,7 @@ struct NativeCheckoutView: View {
                 }
             }
             if model.unsentCount > 0 {
-                Text("\(model.unsentCount) item(s) not sent to the kitchen yet. They will be sent when you complete checkout.")
+                Text("厨房へ未送信の品目が \(model.unsentCount) 品あります。会計を確定すると同時に厨房へ送信されます。")
                     .font(.system(size: 12, weight: .semibold)).foregroundColor(Color(hex: 0x8A5A00))
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(10)
@@ -194,11 +194,13 @@ struct NativeCheckoutView: View {
                         Task { await model.setVisitSource(on ? nil : s.id) }
                     } label: {
                         // 各社の色（ホットペッパー＝赤、食べログ＝黄…）。選ぶとその色で塗る
-                        Text(s.english)
-                            .font(.system(size: 13, weight: .bold))
+                        VStack(spacing: 0) {
+                            Text(s.label).font(.system(size: 13, weight: .bold))
+                            if s.english != s.label { Text(s.english).font(.system(size: 9, weight: .semibold)).opacity(0.8) }
+                        }
                             .lineLimit(1).minimumScaleFactor(0.7)
                             .foregroundColor(on ? (s.darkText ? NT.ink : .white) : s.color)
-                            .frame(maxWidth: .infinity, minHeight: 38)
+                            .frame(maxWidth: .infinity, minHeight: 42)
                             .background(RoundedRectangle(cornerRadius: 10).fill(on ? s.color : s.color.opacity(0.12)))
                             .overlay(RoundedRectangle(cornerRadius: 10).stroke(s.color.opacity(on ? 0 : 0.35), lineWidth: 1))
                     }
@@ -334,7 +336,10 @@ struct NativeCheckoutView: View {
                 Button { steraPick = true } label: {
                     HStack(spacing: 8) {
                         Image(systemName: "creditcard.and.123")
-                        Text("Pay with stera \(NT.yen(total))")
+                        VStack(spacing: 0) {
+                            Text("stera で決済 \(NT.yen(total))")
+                            Text("Pay with stera").font(.system(size: 11, weight: .bold)).opacity(0.8)
+                        }
                     }
                     .font(.system(size: 18, weight: .heavy)).foregroundColor(NT.purple)
                     .frame(maxWidth: .infinity, minHeight: 56)
@@ -342,9 +347,9 @@ struct NativeCheckoutView: View {
                     .overlay(RoundedRectangle(cornerRadius: 14).stroke(NT.purple, lineWidth: 1.5))
                 }
                 .buttonStyle(PressableStyle())
-                .confirmationDialog("stera: how will the guest pay?", isPresented: $steraPick, titleVisibility: .visible) {
+                .confirmationDialog("stera：お客様の支払方法は？", isPresented: $steraPick, titleVisibility: .visible) {
                     ForEach(steraTypes(for: m), id: \.code) { t in
-                        Button(t.en ?? t.label) { startStera(t) }
+                        Button(t.label) { startStera(t) }
                     }
                     Button("キャンセル", role: .cancel) {}
                 }
@@ -388,8 +393,8 @@ struct NativeCheckoutView: View {
                         // 支払方法ごとの色（現金＝緑、クレジット＝青…）。選ぶとその色で塗る
                         VStack(spacing: 4) {
                             Image(systemName: m.icon).font(.system(size: 20, weight: .semibold)).foregroundColor(on ? .white : m.color)
-                            Text(m.english).font(.system(size: 13, weight: .bold)).lineLimit(1).minimumScaleFactor(0.7)
-                            Text(m.label).font(.system(size: 9, weight: .semibold)).opacity(0.7).lineLimit(1)
+                            Text(m.label).font(.system(size: 13, weight: .bold)).lineLimit(1).minimumScaleFactor(0.7)
+                            Text(m.english).font(.system(size: 9, weight: .semibold)).opacity(0.7).lineLimit(1)
                         }
                         .foregroundColor(on ? .white : NT.ink)
                         .frame(maxWidth: .infinity, minHeight: 74)
@@ -403,14 +408,17 @@ struct NativeCheckoutView: View {
             // 内訳（クレジット→VISA…、QR→PayPay…、サイトポイント→ホットペッパー…）。各社の色で
             if let m = openMethod, m != .external, !brands(m).isEmpty {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(m == .sitePoints ? "Which site's points?" : "Choose \(m.english.lowercased()) type")
+                    Text(m == .sitePoints ? "どのサイトのポイント？ / Which site" : "\(m.label)の種類 / \(m.english) type")
                         .font(.system(size: 12, weight: .bold)).foregroundColor(NT.ink3)
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 96), spacing: 6)], spacing: 6) {
                         ForEach(brands(m)) { b in
                             let on = payments.contains { $0.method == m && $0.brand == b }
                             let c = b.color ?? m.color
                             Button { addRow(m, brand: b) } label: {
-                                Text(b.english).font(.system(size: 13, weight: .bold))
+                                VStack(spacing: 0) {
+                                    Text(b.name).font(.system(size: 13, weight: .bold))
+                                    if b.english != b.name { Text(b.english).font(.system(size: 9, weight: .semibold)).opacity(0.8) }
+                                }
                                     .lineLimit(1).minimumScaleFactor(0.7)
                                     .foregroundColor(on ? (b.id == "tabelog" ? NT.ink : .white) : c)
                                     .frame(maxWidth: .infinity, minHeight: 38)
@@ -453,7 +461,11 @@ struct NativeCheckoutView: View {
                                 discountInput = ""
                             }
                         } label: {
-                            Text(p.english).font(.system(size: 14, weight: .bold)).foregroundColor(NT.purple)
+                            VStack(spacing: 0) {
+                                Text(p.name).font(.system(size: 14, weight: .bold))
+                                if p.english != p.name { Text(p.english).font(.system(size: 9, weight: .semibold)).opacity(0.8) }
+                            }
+                            .foregroundColor(NT.purple)
                                 .frame(maxWidth: .infinity, minHeight: 42)
                                 .background(RoundedRectangle(cornerRadius: 10).fill(NT.lilac))
                         }
@@ -534,10 +546,10 @@ struct NativeCheckoutView: View {
         let terminals = model.steraTerminals
         let named = brands(.external)
         return VStack(alignment: .leading, spacing: 6) {
-            Text("Which terminal? / どの端末で")
+            Text("どの端末で / Which terminal")
                 .font(.system(size: 12, weight: .bold)).foregroundColor(NT.ink3)
             if terminals.isEmpty && named.isEmpty {
-                Text("端末が登録されていません / No terminal connected")
+                Text("端末が登録されていません / No terminal")
                     .font(.system(size: 13, weight: .semibold)).foregroundColor(NT.ink2)
                 Button { model.openInWeb(path: "/app/settings/payments") } label: {
                     HStack(spacing: 6) {
@@ -571,7 +583,7 @@ struct NativeCheckoutView: View {
                     ForEach(named) { b in
                         let on = payments.contains { $0.method == .external && $0.brand == b }
                         Button { addRow(.external, brand: b) } label: {
-                            Text(b.english).font(.system(size: 13, weight: .bold)).lineLimit(1).minimumScaleFactor(0.7)
+                            Text(b.name).font(.system(size: 13, weight: .bold)).lineLimit(1).minimumScaleFactor(0.7)
                                 .foregroundColor(on ? .white : c)
                                 .frame(maxWidth: .infinity, minHeight: 38)
                                 .background(RoundedRectangle(cornerRadius: 10).fill(on ? c : c.opacity(0.12)))
@@ -716,7 +728,7 @@ struct NativeCheckoutView: View {
         guard let orderId = model.orderId else { return }
         let terminal = model.steraTerminals.first(where: { $0.online }) ?? model.steraTerminals.first
         guard let terminal else { return }
-        stera = SteraState(requestId: nil, label: t.en ?? t.label, status: "starting", message: "stera に金額を送っています…")
+        stera = SteraState(requestId: nil, label: t.label, status: "starting", message: "stera に金額を送っています…")
         Task {
             do {
                 let r = try await NativeAPI.shared.act(["type": "steraStart", "orderId": orderId, "terminalId": terminal.id, "paymentType": t.code], throwOnFail: false)
@@ -728,7 +740,7 @@ struct NativeCheckoutView: View {
                 if r.finalized == true { steraDone(r); return }
                 stera?.requestId = r.requestId
                 stera?.status = r.status ?? "queued"
-                stera?.message = "Ask the guest to pay on \(terminal.name)"
+                stera?.message = "\(terminal.name) でお客様にお支払いいただいてください"
                 await pollStera()
             } catch {
                 stera?.status = "failed"
@@ -767,7 +779,7 @@ struct NativeCheckoutView: View {
         Task {
             let r = try? await NativeAPI.shared.act(["type": "steraCancel", "requestId": id], throwOnFail: false)
             if r?.ok == false {
-                stera?.message = r?.error ?? "Can't cancel while the terminal is paying. Finish or cancel it on the terminal."
+                stera?.message = r?.error ?? "端末で決済中は取り消せません。端末側で完了または取消してください"
             } else {
                 stera = nil
             }
@@ -810,7 +822,7 @@ struct NativeCheckoutView: View {
                 Text("おつり \(NT.yen(change))").font(.system(size: 44, weight: .heavy)).foregroundColor(NT.ok)
             }
             HStack(spacing: 14) {
-                doneButton("printer", "Reprint receipt", "レシート再発行")
+                doneButton("printer", "レシート再発行", "Reprint receipt")
                 Button {
                     if model.splitParentOrderId != nil {
                         Task {
@@ -822,8 +834,8 @@ struct NativeCheckoutView: View {
                 } label: {
                     // 英語を大きく・日本語を小さく下に（2026-10-24 Ronnie）
                     VStack(spacing: 2) {
-                        Text(model.splitParentOrderId == nil ? "Close" : "Pay the rest").font(.system(size: 19, weight: .heavy))
-                        Text(model.splitParentOrderId == nil ? "閉じる" : "同じ卓の残りを会計").font(.system(size: 11, weight: .bold)).opacity(0.85)
+                        Text(model.splitParentOrderId == nil ? "閉じる" : "同じ卓の残りを会計").font(.system(size: 19, weight: .heavy))
+                        Text(model.splitParentOrderId == nil ? "Close" : "Pay the rest").font(.system(size: 11, weight: .bold)).opacity(0.85)
                     }
                     .foregroundColor(.white)
                     .frame(width: 220, height: 64)
@@ -837,7 +849,7 @@ struct NativeCheckoutView: View {
         .frame(maxWidth: .infinity)
     }
 
-    private func doneButton(_ icon: String, _ en: String, _ ja: String) -> some View {
+    private func doneButton(_ icon: String, _ ja: String, _ en: String) -> some View {
         Button {
             // レシートの再発行はネイティブで（直前のレシートをもう一度プリンターへ。2026-10-24 Ronnie「Web に飛ばない」）
             Task {
@@ -850,8 +862,8 @@ struct NativeCheckoutView: View {
             HStack(spacing: 8) {
                 Image(systemName: icon)
                 VStack(spacing: 2) {
-                    Text(reprinting ? "Printing…" : en).font(.system(size: 18, weight: .bold))
-                    Text(ja).font(.system(size: 11, weight: .bold)).opacity(0.8)
+                    Text(reprinting ? "印刷中…" : ja).font(.system(size: 18, weight: .bold))
+                    Text(en).font(.system(size: 11, weight: .bold)).opacity(0.8)
                 }
             }
             .foregroundColor(NT.purple)
