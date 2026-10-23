@@ -382,7 +382,8 @@ export function HandyTableDetail({
                     type="button"
                     disabled={pending}
                     onClick={() => handlePrintBill(slip)}
-                    className="mt-2.5 flex min-h-[46px] w-full items-center justify-center gap-1.5 rounded-[9px] border border-[#b7791f] bg-[#fbf1d9] py-1 text-sm font-bold text-[#8a4a0b] active:bg-[#f6e0c4] disabled:opacity-40"
+                    // レジのポップアップと同じ色：会計伝票は黒（2026-10-24 Ronnie「色はハンディにも同じく」）
+                    className="mt-2.5 flex min-h-[46px] w-full items-center justify-center gap-1.5 rounded-[9px] bg-[#292725] py-1 text-sm font-bold text-white active:bg-[#45403b] disabled:opacity-40"
                   >
                     <Printer className="h-4 w-4" aria-hidden />
                     {pending && busy === `bill:${slip.id}` ? (
