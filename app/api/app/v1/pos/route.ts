@@ -54,6 +54,7 @@ import { loadNativeAnnouncements, loadNativeNotices } from '@/lib/native-notices
 import { createAnnouncement, deleteAnnouncement, markAnnouncementRead } from '@/app/app/announcements/actions';
 import { markAllRead } from '@/app/app/notifications/actions';
 import { markNotificationRead } from '@/app/app/actions';
+import { loadReportData } from '@/lib/reports-data-server';
 import { isNativeScanActionType, nativeScanPath, parseNativeScanAction } from '@/lib/native-scan';
 import { loadNativeScan } from '@/lib/native-scan-server';
 import { attachReceiptToCashTransaction, createScanDocument } from '@/app/app/scan/actions';
@@ -302,6 +303,20 @@ export async function GET(request: Request) {
     if (ctx.disabledFeatures?.has('accounting')) return json({ ok: false, error: 'この機能は使えません', useWeb: true }, 403);
     const io = await loadNativeCashIo(ctx, await createClient(), { id: store.id, name: store.name });
     return json({ ok: true, ...io });
+  }
+
+  // 店舗分析（Web の /app/reports と同じ集計＝lib/reports-data-server.ts）
+  if (part === 'reports') {
+    if (ctx.disabledFeatures?.has('reports')) return json({ ok: false, error: 'この機能は使えません', useWeb: true }, 403);
+    if (!can(ctx.role, 'reports.view')) return json({ ok: false, error: '権限がありません' }, 403);
+    const d = (k: string) => {
+      const v = url.searchParams.get(k);
+      return v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : undefined;
+    };
+    const store = url.searchParams.get('store');
+    const data = await loadReportData(ctx, { from: d('from'), to: d('to'), store: isUuid(store) ? store : undefined });
+    if (!data) return json({ ok: false, error: 'アクセス可能な店舗がありません。管理者に店舗の割り当てを依頼してください' }, 404);
+    return json({ ok: true, canExport: can(ctx.role, 'csv.export'), ...data });
   }
 
   // スキャン（レシート撮影。Web の /app/scan）
