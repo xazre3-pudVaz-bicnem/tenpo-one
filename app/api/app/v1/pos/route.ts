@@ -10,8 +10,14 @@ import { ACCESS_MESSAGE } from '@/lib/store-access';
 import { checkout, splitOrder, sendOrderToKitchen, setDiscount, updateQty, addItem } from '@/app/app/pos/actions';
 import { setOrderClerk } from '@/app/app/pos/clerk-actions';
 import { cancelSteraPayment, checkSteraPayment, startSteraPayment } from '@/app/app/pos/stera-actions';
-import { enqueueDrawerKick } from '@/app/app/pos/print-actions';
+import { enqueueDrawerKick, enqueueExpoSlipPrint, enqueueOrderSlipPrint, enqueueSelectedItemsPrint } from '@/app/app/pos/print-actions';
 import { shouldOpenDrawer } from '@/lib/printing/types';
+import { isNativeFloorActionType, parseNativeFloorAction, type NativeFloorAction } from '@/lib/native-floor';
+import { loadNativeFloor } from '@/lib/native-floor-server';
+import { clearTable, mergeOrders, setGuestCount, setPaymentMemo, setSeatTime } from '@/app/app/pos/actions';
+import { completeCleaning, goToOrder, releaseFinishedCleaning, setTableAvailability } from '@/app/app/floor/actions';
+import { saveTableGroup } from '@/app/app/floor/group-actions';
+import { resolveServiceCall, startRegisterVisit } from '@/app/app/handy/actions';
 
 /**
  * iPad アプリのネイティブ画面（オーダー・会計）用の入口（2026-10-13 Ronnie「Airレジのようにネイティブで」）。
@@ -19,7 +25,9 @@ import { shouldOpenDrawer } from '@/lib/printing/types';
  *   GET  ?order=<id>&part=order … 伝票だけ（読み直し）
  *   GET  ?order=<id>&part=live  … 伝票・レジの開局・stera（軽い。メニューは iPad の保存から）
  *   GET  ?part=catalog[&store=<id>] … 店のメニューまわり（iPad に保存する。version で変わったか分かる）
+ *   GET  ?part=floor[&store=<id>]   … フロア（テーブル一覧）の全部（卓・伝票・予約・呼び出し・お客様情報の選択肢。2026-10-24）
  *   POST { type, … }          … 注文確定（明細を入れて厨房へ）・数量・担当者・値引き・来店経路・会計・stera
+ *   POST { type: 'floor…' }   … フロアの操作（着席・伝票を開く・清掃完了・ブロック・会計伝票・合算・お客様情報…。lib/native-floor.ts）
  * 中身は Web のレジと同じサーバーの処理（app/app/pos/*-actions.ts）。Web の画面は変えない。
  * アプリは必ず `x-tenpo-app: 1` を付ける（他のサイトから勝手に呼べないように）。
  */
@@ -60,6 +68,25 @@ async function networkProblem(ctx: SessionContext): Promise<string | null> {
   return null;
 }
 
+/** フロアの操作ごとの権限（中の Server Action も同じ権限を見る） */
+const FLOOR_PERMISSION: Record<NativeFloorAction['type'], PermissionAction> = {
+  floorStart: 'tables.operate',
+  floorOrder: 'pos.order',
+  floorCleaned: 'tables.operate',
+  floorBlock: 'tables.operate',
+  floorGroup: 'tables.operate',
+  floorMerge: 'pos.checkout',
+  floorGuests: 'pos.order',
+  floorMemo: 'pos.order',
+  floorSeatTime: 'pos.order',
+  floorBill: 'pos.order',
+  floorExpo: 'pos.order',
+  floorPrintSelected: 'pos.order',
+  floorClear: 'pos.checkout',
+  floorCall: 'pos.order',
+  floorRelease: 'tables.operate',
+};
+
 const PERMISSION: Record<NativePosAction['type'], PermissionAction> = {
   split: 'pos.checkout',
   send: 'pos.order',
@@ -93,6 +120,22 @@ export async function GET(request: Request) {
     if (!ctx.isHq && !ctx.stores.some((s) => s.id === storeId)) return json({ ok: false, error: '店舗がありません' }, 404);
     const catalog = await loadNativeCatalog(ctx, await createClient(), storeId, ctx.organizationId);
     return json({ ok: true, catalog });
+  }
+
+  // フロア（テーブル一覧）。Web のテーブル一覧と同じ組み立て（lib/floor-view-server.ts）
+  if (part === 'floor') {
+    const storeParam = url.searchParams.get('store');
+    const store = isUuid(storeParam)
+      ? (ctx.stores.find((s) => s.id === storeParam) ?? (ctx.isHq ? ctx.currentStore : null))
+      : (ctx.currentStore ?? ctx.stores[0] ?? null);
+    if (!store) return json({ ok: false, error: '店舗がありません' }, 404);
+    const { loadStoreAccess, peekRegisterDevice } = await import('@/lib/store-access-server');
+    const { policy, onNetwork } = await loadStoreAccess(store.id);
+    if (!onNetwork) return json({ ok: false, error: ACCESS_MESSAGE.network, useWeb: true }, 403);
+    const { decision } = await peekRegisterDevice(store.id, policy);
+    if (decision.kind !== 'allowed') return json({ ok: false, error: 'このiPadをレジとして登録してください', useWeb: true }, 403);
+    const floor = await loadNativeFloor(ctx, await createClient(), { id: store.id, name: store.name });
+    return json({ ok: true, ...floor });
   }
 
   const orderId = url.searchParams.get('order');
@@ -135,6 +178,21 @@ export async function POST(request: Request) {
   } catch {
     return json({ ok: false, error: '内容が正しくありません' }, 400);
   }
+  // フロア（テーブル一覧）の操作（2026-10-24）
+  if (raw && typeof raw === 'object' && isNativeFloorActionType((raw as { type?: unknown }).type)) {
+    const parsedFloor = parseNativeFloorAction(raw);
+    if (!parsedFloor.ok) return json({ ok: false, error: parsedFloor.error }, 400);
+    const action = parsedFloor.action;
+    if (!can(ctx.role, FLOOR_PERMISSION[action.type])) return json({ ok: false, error: '権限がありません' }, 403);
+    const problem = await networkProblem(ctx);
+    if (problem) return json({ ok: false, error: problem }, 403);
+    try {
+      return json(await runFloorAction(action));
+    } catch (e) {
+      return json({ ok: false, error: errorText(e, 'うまくいきませんでした。もう一度お試しください') }, 400);
+    }
+  }
+
   const parsed = parseNativePosAction(raw);
   if (!parsed.ok) return json({ ok: false, error: parsed.error }, 400);
   const action = parsed.action;
@@ -222,5 +280,69 @@ export async function POST(request: Request) {
     }
   } catch (e) {
     return json({ ok: false, error: errorText(e, 'うまくいきませんでした。もう一度お試しください') }, 400);
+  }
+}
+
+/** フロアの操作。中身は Web のテーブル一覧のポップアップと同じ Server Action */
+async function runFloorAction(action: NativeFloorAction): Promise<Record<string, unknown>> {
+  switch (action.type) {
+    case 'floorStart': {
+      // プラン商品は「未送信」で伝票へ（レジのファーストオーダーと同じ。厨房へは注文画面の注文確定で）
+      const res = await startRegisterVisit(action.tableId, action.draft);
+      return { ok: true, orderId: res.orderId, planItemError: res.planItemError };
+    }
+    case 'floorOrder': {
+      const res = await goToOrder(action.tableId);
+      return { ok: true, orderId: res.orderId };
+    }
+    case 'floorCleaned':
+      await completeCleaning(action.tableId);
+      return { ok: true };
+    case 'floorBlock':
+      await setTableAvailability(action.tableId, action.unavailable);
+      return { ok: true };
+    case 'floorGroup': {
+      const res = await saveTableGroup(action.tableIds);
+      if (res.error) return { ok: false, error: res.error };
+      return { ok: true };
+    }
+    case 'floorMerge':
+      await mergeOrders(action.targetOrderId, action.sourceOrderId);
+      return { ok: true };
+    case 'floorGuests':
+      await setGuestCount(action.orderId, action.guestCount);
+      return { ok: true };
+    case 'floorMemo': {
+      const res = await setPaymentMemo(action.orderId, action.memo);
+      if (res.error) return { ok: false, error: res.error };
+      return { ok: true };
+    }
+    case 'floorSeatTime':
+      await setSeatTime(action.orderId, action.input);
+      return { ok: true };
+    case 'floorBill': {
+      const res = await enqueueOrderSlipPrint(action.orderId);
+      return res.ok ? { ok: true, queued: res.queued ?? 0 } : { ok: false, error: res.error ?? 'お会計伝票の印刷に失敗しました' };
+    }
+    case 'floorExpo': {
+      const res = await enqueueExpoSlipPrint(action.orderId);
+      return res.ok ? { ok: true, queued: res.queued ?? 0 } : { ok: false, error: res.error ?? 'デシャップ伝票の印刷に失敗しました' };
+    }
+    case 'floorPrintSelected': {
+      const res = await enqueueSelectedItemsPrint(action.orderId, action.itemIds);
+      return res.ok ? { ok: true, queued: res.queued ?? 0 } : { ok: false, error: res.error ?? '選択印刷に失敗しました' };
+    }
+    case 'floorClear': {
+      const res = await clearTable(action.orderId, action.reason, action.approvedByClerkId);
+      return { ok: true, cancelledItems: res.cancelledItems };
+    }
+    case 'floorCall': {
+      const res = await resolveServiceCall(action.callId);
+      return { ok: true, alreadyResolved: res.alreadyResolved };
+    }
+    case 'floorRelease': {
+      const res = await releaseFinishedCleaning(action.storeId);
+      return { ok: true, released: res.released };
+    }
   }
 }
