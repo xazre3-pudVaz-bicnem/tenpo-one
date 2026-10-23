@@ -164,6 +164,8 @@ final class NativeLedgerModel: ObservableObject {
     @Published var toast: String?
     @Published var now = Date()
     @Published var listMode = false
+    /// グルメ別（その日の予約を入り口ごとに。Web の GourmetPanel と同じ）
+    @Published var gourmetMode = false
     private var clock: Timer?
     private var refresher: Timer?
     private var offset: TimeInterval = 0
@@ -280,7 +282,7 @@ struct NativeLedgerView: View {
             .disabled(exporting)
             if let p = model.payload {
                 summaryRow(p)
-                if model.listMode { listBody(p) } else { board(p) }
+                if model.gourmetMode { ScrollView { gourmetRows(p) } } else if model.listMode { listBody(p) } else { board(p) }
             } else {
                 Spacer()
                 if let e = model.error {
@@ -393,8 +395,9 @@ struct NativeLedgerView: View {
             }
             // 表示の切り替え
             HStack(spacing: 0) {
-                modeBtn("スケジュール", on: !model.listMode) { model.listMode = false }
-                modeBtn("予約リスト", on: model.listMode) { model.listMode = true }
+                modeBtn("スケジュール", on: !model.listMode && !model.gourmetMode) { model.listMode = false; model.gourmetMode = false }
+                modeBtn("予約リスト", on: model.listMode && !model.gourmetMode) { model.listMode = true; model.gourmetMode = false }
+                modeBtn("グルメ別", on: model.gourmetMode) { model.gourmetMode = true }
             }
             .background(RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(0.12)))
         }
@@ -429,7 +432,7 @@ struct NativeLedgerView: View {
                 Text("\(p.store.name)　\(dateLabel)").font(.system(size: 15, weight: .bold)).foregroundColor(NLColor.muted)
             }
             summaryRow(p)
-            if model.listMode { listRows(p) } else { boardRows(p, scrollable: false) }
+            if model.gourmetMode { gourmetRows(p) } else if model.listMode { listRows(p) } else { boardRows(p, scrollable: false) }
         }
         .padding(16)
         .background(Color.white)
@@ -620,6 +623,87 @@ struct NativeLedgerView: View {
     }
 
     // MARK: 予約リスト
+
+    // MARK: グルメ別（入り口ごとの組数・名数と一覧）
+
+    private static let viaLabel: [String: String] = ["web": "WEB予約", "phone": "電話", "walk_in": "直接来店", "manual": "手動登録"]
+
+    private func gourmetRows(_ p: NLPayload) -> some View {
+        let live = p.reservations.filter { $0.status != "cancelled" && $0.status != "no_show" }
+        var groups: [String: [NLReservation]] = [:]
+        for r in live {
+            let key = (r.sourceName?.trimmingCharacters(in: .whitespaces)).flatMap { $0.isEmpty ? nil : $0 } ?? Self.viaLabel[r.createdVia] ?? "そのほか"
+            groups[key, default: []].append(r)
+        }
+        let ordered = groups.map { (name: $0.key, rows: $0.value, guests: $0.value.reduce(0) { $0 + $1.partySize }) }
+            .sorted { $0.rows.count != $1.rows.count ? $0.rows.count > $1.rows.count : $0.name < $1.name }
+        let totalGuests = live.reduce(0) { $0 + $1.partySize }
+        return VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("グルメ別").font(.system(size: 18, weight: .heavy)).foregroundColor(NLColor.navy)
+                Text("Gourmet").font(.system(size: 11)).foregroundColor(NLColor.muted)
+                Text(p.date.replacingOccurrences(of: "-", with: "/")).font(.system(size: 13)).foregroundColor(NLColor.muted)
+                Spacer()
+                Text("合計 \(live.count)組 \(totalGuests)名").font(.system(size: 13)).monospacedDigit().foregroundColor(NLColor.muted)
+            }
+            if ordered.isEmpty {
+                VStack(spacing: 4) {
+                    Text("この日の予約はありません").font(.system(size: 15, weight: .bold))
+                    Text("日付を変えるか、右上の「予約登録」から追加してください。").font(.system(size: 12)).foregroundColor(NLColor.muted)
+                }.frame(maxWidth: .infinity).padding(.vertical, 40)
+            } else {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 4), spacing: 10) {
+                    ForEach(ordered, id: \.name) { g in
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(g.name).font(.system(size: 12, weight: .medium)).foregroundColor(NLColor.muted).lineLimit(1)
+                            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                                Text("\(g.rows.count)").font(.system(size: 22, weight: .heavy)).foregroundColor(NLColor.blue)
+                                Text("組").font(.system(size: 12)).foregroundColor(NLColor.muted)
+                                Text("\(g.guests)").font(.system(size: 22, weight: .heavy)).foregroundColor(NLColor.ink)
+                                Text("名").font(.system(size: 12)).foregroundColor(NLColor.muted)
+                            }.monospacedDigit()
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading).padding(12)
+                        .background(RoundedRectangle(cornerRadius: 12).fill(NLColor.card))
+                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(NLColor.line, lineWidth: 1))
+                    }
+                }
+                ForEach(ordered, id: \.name) { g in
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            Text(g.name).font(.system(size: 15, weight: .bold)).foregroundColor(NLColor.navy)
+                            Text("\(g.rows.count)組 \(g.guests)名").font(.system(size: 12)).foregroundColor(NLColor.muted)
+                        }
+                        VStack(spacing: 0) {
+                            ForEach(g.rows) { r in
+                                let late = model.isLate(r)
+                                let tone = NLColor.tone(r.status, late: late)
+                                Button { selected = r } label: {
+                                    HStack(spacing: 12) {
+                                        Text("\(nlHm(nlJstMinutes(r.startAt, dayStart: p.date)))〜\(nlHm(nlJstMinutes(r.endAt, dayStart: p.date)))").font(.system(size: 13, weight: .bold)).monospacedDigit().foregroundColor(NLColor.blue)
+                                        Text("\(r.partySize)名").font(.system(size: 13, weight: .bold)).monospacedDigit()
+                                        Text("\(stripSama(r.guestName)) 様").font(.system(size: 13, weight: .medium)).lineLimit(1)
+                                        if let c = r.courseName { Text(c).font(.system(size: 12)).foregroundColor(NLColor.muted).lineLimit(1) }
+                                        Spacer()
+                                        Text(r.tableNames.isEmpty ? "席未定" : r.tableNames.joined(separator: "+")).font(.system(size: 12)).foregroundColor(NLColor.muted)
+                                        Text(p.statusLabels[r.status] ?? r.status).font(.system(size: 11, weight: .bold)).foregroundColor(tone.1)
+                                            .padding(.horizontal, 8).padding(.vertical, 3).background(Capsule().fill(tone.0))
+                                    }
+                                    .foregroundColor(NLColor.ink)
+                                    .padding(.horizontal, 12).padding(.vertical, 9)
+                                }.buttonStyle(.plain)
+                                .overlay(alignment: .bottom) { Rectangle().fill(NLColor.line).frame(height: 1) }
+                            }
+                        }
+                        .background(RoundedRectangle(cornerRadius: 12).fill(NLColor.card))
+                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(NLColor.line, lineWidth: 1))
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                    }
+                }
+            }
+        }
+        .padding(16)
+    }
 
     private func listBody(_ p: NLPayload) -> some View {
         ScrollView { listRows(p) }
