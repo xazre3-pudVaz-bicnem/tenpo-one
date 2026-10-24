@@ -32,9 +32,12 @@ struct NativeFloorView: View {
                     VStack(alignment: .leading, spacing: 12) {
                         if model.showFloorChips { floorChips }
                         GeometryReader { area in
+                            // 影が切れないよう、スクロールの枠だけ左右に 10 広げる（箱の位置は変わらない）
                             ScrollView {
-                                tableGrid(width: area.size.width - 4, height: area.size.height - 8)
+                                tableGrid(width: area.size.width, height: area.size.height - 8)
+                                    .padding(.horizontal, 10)
                             }
+                            .padding(.horizontal, -10)
                         }
                         legend
                     }
@@ -168,13 +171,11 @@ struct NativeFloorView: View {
     // MARK: 卓の箱
 
     private func tableGrid(width: CGFloat, height: CGFloat) -> some View {
-        // 表示の場所を 横4 × 縦3 ＝ 12 の正方形に分ける。箱と箱の間は縦も横も同じ（右だけ空けない。2026-10-24 Ronnie）
-        let gap: CGFloat = 20
-        let cols = width >= 700 ? 4 : 3
-        let rows: CGFloat = 3
-        let byWidth = (width - gap * CGFloat(cols - 1)) / CGFloat(cols)
-        let byHeight = (height - gap * (rows - 1)) / rows
-        let side = max(120, floor(min(byWidth, byHeight)))
+        // 箱は少し小さめ（だいたい 185pt）の正方形。箱と箱の間・外側の余白・右の予約の欄との間を全部 14 でそろえる
+        // （2026-10-24 20:36 Ronnie「箱が少し大きいので小さく、間をそろえて」）。幅いっぱいに割るので左右に余りが出ない
+        let gap: CGFloat = 14
+        let cols = max(3, Int((width + gap) / (185 + gap)))
+        let side = max(120, (width - gap * CGFloat(cols - 1)) / CGFloat(cols))
         let columns = Array(repeating: GridItem(.fixed(side), spacing: gap), count: cols)
         return Group {
             if model.visibleTables.isEmpty {
@@ -192,8 +193,8 @@ struct NativeFloorView: View {
                         }
                     }
                 }
-                .frame(maxWidth: .infinity, alignment: .center)
-                .padding(.horizontal, 2).padding(.vertical, 4)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.top, 2).padding(.bottom, 16)
             }
         }
     }
@@ -244,12 +245,17 @@ struct NativeTableCard: View {
             onTap(rect)
         } label: {
             VStack(alignment: .leading, spacing: 3) {
-                // 1行目: テーブル名・人数
+                // 1行目: テーブル名（状態の色の札）・人数。2行目: 席の印（席の数だけ。座っている人数ぶん色がつく）
+                // （2026-10-24 20:36 Ronnie「unique な形に」）
                 HStack(spacing: 6) {
                     Text(table.name)
-                        .font(.system(size: 16, weight: .heavy)).monospacedDigit()
-                        .foregroundColor(empty ? NFColor.ink3 : NFColor.ink)
-                        .lineLimit(1)
+                        .font(.system(size: 15, weight: .heavy)).monospacedDigit()
+                        .foregroundColor(empty ? NFColor.ink2 : .white)
+                        .lineLimit(1).minimumScaleFactor(0.7)
+                        .padding(.horizontal, 9).frame(height: 26)
+                        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(empty ? Color.white : NFColor.label(state)))
+                        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(empty ? Color.black.opacity(0.08) : Color.clear, lineWidth: 1))
+                        .shadow(color: empty ? .clear : NFColor.label(state).opacity(0.3), radius: 3, y: 2)
                     Spacer(minLength: 4)
                     HStack(spacing: 2) {
                         Image(systemName: "person.2").font(.system(size: 11, weight: .bold)).foregroundColor(NFColor.ink3)
@@ -257,6 +263,7 @@ struct NativeTableCard: View {
                     }
                     .font(.system(size: 12, weight: .bold)).monospacedDigit().foregroundColor(NFColor.ink2)
                 }
+                seatMarks(used: order?.guestCount ?? 0, state: state)
                 if let linked {
                     HStack(spacing: 4) {
                         Image(systemName: "link").font(.system(size: 10, weight: .bold))
@@ -302,7 +309,7 @@ struct NativeTableCard: View {
                     HStack(alignment: .center, spacing: 6) {
                         Text(state.label)
                             .font(.system(size: 10.5, weight: .heavy)).foregroundColor(NFColor.label(state))
-                            .lineLimit(1)
+                            .lineLimit(1).minimumScaleFactor(0.7)
                         Spacer(minLength: 2)
                         VStack(alignment: .trailing, spacing: 0) {
                             Text(NT.yen(o.total)).font(.system(size: 15, weight: .heavy)).monospacedDigit().foregroundColor(NFColor.ink)
@@ -401,6 +408,22 @@ struct NativeTableCard: View {
     }
 
     @State private var pulse = false
+
+    /// 席の印（席の数だけ小さな棒。座っている人数ぶん状態の色。席が多い卓は 12 まで＋数）
+    @ViewBuilder
+    private func seatMarks(used: Int, state: NFTileState) -> some View {
+        let cap = table.capacityMax
+        if cap >= 1 {
+            HStack(spacing: 3) {
+                ForEach(0..<min(cap, 12), id: \.self) { i in
+                    Capsule().fill(i < used ? NFColor.label(state) : NFColor.ink.opacity(0.12)).frame(width: 9, height: 4)
+                }
+                if cap > 12 { Text("+\(cap - 12)").font(.system(size: 9, weight: .heavy)).foregroundColor(NFColor.ink3) }
+                if used > cap { Text("+\(used - cap)").font(.system(size: 9, weight: .heavy)).foregroundColor(NFColor.label(state)) }
+            }
+            .padding(.top, 3).padding(.bottom, 2)
+        }
+    }
 
     private var dashedLine: some View {
         Rectangle().fill(Color.clear).frame(height: 1)
@@ -521,26 +544,27 @@ struct NativeReservationPanel: View {
                 Text("TODAY'S RESERVATION").font(.system(size: 10, weight: .bold)).tracking(1).foregroundColor(NFColor.ink3)
             }
             .padding(.top, 12)
+            // 色は店舗台帳と同じ（ネイビー・黄色・状態の色の帯。2026-10-24 20:35 Ronnie「ご予約台帳の色と合わせて」）
             Button(action: onLedger) {
-                HStack(spacing: 8) {
-                    Image(systemName: "calendar").font(.system(size: 18, weight: .bold))
-                    VStack(spacing: 0) {
-                        Text("店舗台帳").font(.system(size: 16, weight: .heavy))
-                        Text("Reservation").font(.system(size: 11, weight: .semibold)).opacity(0.85)
+                HStack(spacing: 10) {
+                    Image(systemName: "calendar").font(.system(size: 18, weight: .bold)).foregroundColor(NLColor.yellow)
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text("店舗台帳").font(.system(size: 16, weight: .heavy)).foregroundColor(.white)
+                        Text("Reservation").font(.system(size: 12, weight: .bold)).foregroundColor(NLColor.yellow)
                     }
+                    Image(systemName: "chevron.right").font(.system(size: 12, weight: .heavy)).foregroundColor(.white.opacity(0.6))
                 }
-                .foregroundColor(.white)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 10)
-                .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(LinearGradient(colors: [Color(hex: 0xC9654B), Color(hex: 0xA94E37)], startPoint: .top, endPoint: .bottom)))
+                .frame(height: 50)
+                .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(NLColor.navy))
             }
             .buttonStyle(PressableStyle())
             .padding(.horizontal, 12)
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
-                sum("本日のご予約", groups: total.count, people: people)
-                sum("当日ご予約", groups: today.count, people: todayPeople)
-                sum("来店済", groups: came, people: nil)
-                sum("未来店", groups: remaining, people: nil)
+                sum("本日のご予約", groups: total.count, people: people, color: NLColor.blue)
+                sum("当日ご予約", groups: today.count, people: todayPeople, color: NLColor.navy2)
+                sum("来店済", groups: came, people: nil, color: NLColor.green)
+                sum("未来店", groups: remaining, people: nil, color: NLColor.yellow)
             }
             .padding(.horizontal, 12)
             Divider().overlay(NFColor.line)
@@ -561,7 +585,7 @@ struct NativeReservationPanel: View {
                         .font(.system(size: 12, weight: .medium)).foregroundColor(NFColor.ink2)
                     Spacer()
                     Button(action: onLedger) {
-                        Text("すべて表示 ›").font(.system(size: 13, weight: .bold)).foregroundColor(Color(hex: 0xA94E37))
+                        Text("すべて表示 ›").font(.system(size: 13, weight: .bold)).foregroundColor(NLColor.blue)
                     }
                     .buttonStyle(.plain)
                 }
@@ -577,44 +601,49 @@ struct NativeReservationPanel: View {
         .overlay(RoundedRectangle(cornerRadius: NFColor.tileRadius, style: .continuous).stroke(Color.black.opacity(0.06), lineWidth: 1))
     }
 
-    private func sum(_ label: String, groups: Int, people: Int?) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(label).font(.system(size: 10.5, weight: .medium)).foregroundColor(NFColor.ink3).lineLimit(1)
-            HStack(alignment: .firstTextBaseline, spacing: 1) {
-                Text("\(groups)").font(.system(size: 17, weight: .heavy)).foregroundColor(Color(hex: 0xA94E37))
-                Text("組").font(.system(size: 11, weight: .medium)).foregroundColor(NFColor.ink3)
-                if let people {
-                    Text("\(people)").font(.system(size: 17, weight: .heavy)).foregroundColor(NFColor.ink).padding(.leading, 5)
-                    Text("名").font(.system(size: 11, weight: .medium)).foregroundColor(NFColor.ink3)
+    /// 店舗台帳の上のタイルと同じ形（左に状態の色の帯）
+    private func sum(_ label: String, groups: Int, people: Int?, color: Color) -> some View {
+        HStack(spacing: 8) {
+            Rectangle().fill(color).frame(width: 4, height: 30).clipShape(Capsule())
+            VStack(alignment: .leading, spacing: 1) {
+                Text(label).font(.system(size: 10.5, weight: .semibold)).foregroundColor(NLColor.muted).lineLimit(1)
+                HStack(alignment: .firstTextBaseline, spacing: 1) {
+                    Text("\(groups)").font(.system(size: 18, weight: .heavy)).foregroundColor(NLColor.ink)
+                    Text("組").font(.system(size: 11, weight: .medium)).foregroundColor(NLColor.muted)
+                    if let people {
+                        Text("\(people)").font(.system(size: 13, weight: .bold)).foregroundColor(NLColor.muted).padding(.leading, 5)
+                        Text("名").font(.system(size: 11, weight: .medium)).foregroundColor(NLColor.muted)
+                    }
                 }
+                .monospacedDigit().lineLimit(1).minimumScaleFactor(0.7)
             }
-            .monospacedDigit()
+            Spacer(minLength: 0)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 10).padding(.vertical, 8)
-        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(NFColor.lilacSoft))
-        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(NFColor.line.opacity(0.8), lineWidth: 1))
+        .padding(.horizontal, 10).frame(height: 52)
+        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(NLColor.line, lineWidth: 1))
     }
 
     private func chip(_ r: NFReservation) -> (String, Color, Color) {
+        // 店舗台帳の状態の色（来店待ち＝黄・来店済み＝緑・未連絡＝赤・退店＝グレー）
         if Self.notArrived.contains(r.status) {
             return model.now > r.startMs + Self.lateMs
-                ? ("未連絡", NFColor.danger, NFColor.dangerSoft)
-                : ("来店待ち", NFColor.ink2, NFColor.lilac)
+                ? ("未連絡", NLColor.red, NLColor.redSoft)
+                : ("来店待ち", NLColor.navy, NLColor.yellowSoft)
         }
         switch r.status {
-        case "arrived", "seated": return ("来店済み", NFColor.success, NFColor.successSoft)
-        case "billing": return ("会計待ち", NFColor.saffron, NFColor.saffronSoft)
-        case "completed": return ("退店", NFColor.ink3, NFColor.lilac)
-        case "no_show": return ("無断キャンセル", NFColor.ink3, NFColor.lilac)
-        default: return (r.status, NFColor.ink3, NFColor.lilac)
+        case "arrived", "seated": return ("来店済み", Color(hex: 0x036B4A), NLColor.greenSoft)
+        case "billing": return ("会計待ち", NLColor.blue, NLColor.blueSoft)
+        case "completed": return ("退店", NLColor.muted, NLColor.graySoft)
+        case "no_show": return ("無断キャンセル", NLColor.muted, NLColor.graySoft)
+        default: return (r.status, NLColor.muted, NLColor.graySoft)
         }
     }
 
     private func row(_ r: NFReservation) -> some View {
         let c = chip(r)
         return HStack(alignment: .center, spacing: 10) {
-            Text(r.time).font(.system(size: 15, weight: .heavy)).monospacedDigit().foregroundColor(Color(hex: 0xA94E37))
+            Text(r.time).font(.system(size: 15, weight: .heavy)).monospacedDigit().foregroundColor(NLColor.navy)
             VStack(alignment: .leading, spacing: 2) {
                 Text("\(stripSama(r.name)) 様").font(.system(size: 14, weight: .bold)).foregroundColor(NFColor.ink).lineLimit(1)
                 Text("\(r.partySize)名・\(r.tableLabel)").font(.system(size: 12)).foregroundColor(NFColor.ink3).lineLimit(1)
@@ -625,5 +654,6 @@ struct NativeReservationPanel: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 9)
+        .opacity(r.status == "completed" ? 0.5 : 1)
     }
 }

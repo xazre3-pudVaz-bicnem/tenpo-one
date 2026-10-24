@@ -122,6 +122,10 @@ enum NLColor {
     static let gray = Color(hex: 0x94A3B8)
     static let graySoft = Color(hex: 0xEDEFF3)
     static let yellowSoft = Color(hex: 0xFFF3CC)
+    /// ウォークイン（直接来店）の色（上のタイル・スケジュールの箱の左の帯。2026-10-24 20:33 Ronnie「walk-in も見えるように、色を使って」）
+    static let walkIn = Color(hex: 0x8B5CF6)
+    /// 今より前の時間のうすい影（2026-10-24 20:32 Ronnie「今の線より前は少し暗く」）
+    static let pastShade = Color(hex: 0x171333).opacity(0.055)
     /// スケジュールの予約の箱（全部同じ色＝上のバーのネイビーを少し明るく。2026-10-24 Ronnie「箱の色は全部同じ、見出しの色を少し明るく。入り口の印だけ各社の色で小さく」）
     static let box = navy2
 
@@ -686,16 +690,18 @@ struct NativeLedgerView: View {
 
     private func summaryRow(_ p: NLPayload) -> some View {
         let s = p.summary
-        return HStack(spacing: 10) {
+        // ウォークイン（直接来店。キャンセル・無断キャンセル・キャンセル待ちは除く）
+        let walkIns = p.reservations.filter { $0.createdVia == "walk_in" && !["cancelled", "no_show", "waitlisted"].contains($0.status) }
+        return HStack(spacing: 8) {
             sumTile("ご予約", "\(s.count)", unit: "組", sub: "\(s.guests)名", color: NLColor.blue)
             sumTile("当日予約", "\(s.sameDayCount)", unit: "組", sub: "\(s.sameDayGuests)名", color: NLColor.navy2)
+            sumTile("ウォークイン", "\(walkIns.count)", unit: "組", sub: "\(walkIns.reduce(0) { $0 + $1.partySize })名", color: NLColor.walkIn)
             sumTile("来店済み", "\(s.inCount)", unit: "組", sub: nil, color: NLColor.green)
             sumTile("退店", "\(s.outCount)", unit: "組", sub: nil, color: NLColor.gray)
             sumTile("来店待ち", "\(s.waitingCount)", unit: "組", sub: s.unconfirmed > 0 ? "未確定 \(s.unconfirmed)" : nil, color: NLColor.yellow)
             sumTile("キャンセル", "\(s.cancelled)", unit: "組", sub: nil, color: NLColor.red)
-            Spacer()
             if p.isClosedDay {
-                Text("定休日").font(.system(size: 13, weight: .bold)).foregroundColor(NLColor.muted)
+                Text("定休日").font(.system(size: 13, weight: .bold)).foregroundColor(NLColor.muted).fixedSize()
             }
         }
         .padding(.horizontal, 16).padding(.vertical, 10)
@@ -711,9 +717,11 @@ struct NativeLedgerView: View {
                     Text(unit).font(.system(size: 11)).foregroundColor(NLColor.muted)
                     if let sub { Text(sub).font(.system(size: 11, weight: .semibold)).foregroundColor(NLColor.muted).padding(.leading, 4) }
                 }
+                .lineLimit(1).minimumScaleFactor(0.7)
             }
+            Spacer(minLength: 0)
         }
-        .padding(.horizontal, 12).frame(height: 54)
+        .padding(.horizontal, 12).frame(maxWidth: .infinity).frame(height: 54)
         .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(NLColor.card))
         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(NLColor.line, lineWidth: 1))
     }
@@ -924,6 +932,14 @@ struct NativeLedgerView: View {
         .allowsHitTesting(false)
     }
 
+    /// 今より前の幅（今日は今の線まで、前の日は全部、先の日はなし）
+    private func pastWidth(_ p: NLPayload, nowMin: Int?, totalW: CGFloat) -> CGFloat? {
+        if p.date < p.today { return totalW }
+        guard p.isToday, let nowMin else { return nil }
+        let x = CGFloat(nowMin - p.viewStartMin) / CGFloat(p.slotMinutes) * slotW
+        return min(max(x, 0), totalW)
+    }
+
     /// 空いたマスを押した：その卓・押した時刻（5 分に切り下げ）。過去・ウェイティングの行・書けない人は何もしない
     private func slotTapped(_ row: NLBoardRow, x: CGFloat, p: NLPayload, nowMin: Int?) {
         guard p.canWrite, let tableId = row.tableId else { return }
@@ -952,6 +968,10 @@ struct NativeLedgerView: View {
                 }
                 .contentShape(Rectangle())
                 .gesture(SpatialTapGesture().onEnded { v in slotTapped(row, x: v.location.x, p: p, nowMin: nowMin) })
+                // 今より前の時間はうすく暗く（前の日は全部）
+                if let pastW = pastWidth(p, nowMin: nowMin, totalW: totalW), pastW > 0 {
+                    NLColor.pastShade.frame(width: pastW, height: h).allowsHitTesting(false)
+                }
                 // 押したマスの点線の枠（その場の受付を出しているあいだ）
                 if let q = quickSlot, q.tableId == row.tableId, q.date == p.date {
                     let qx = CGFloat(q.minute - p.viewStartMin) / CGFloat(p.slotMinutes) * slotW
@@ -989,10 +1009,12 @@ struct NativeLedgerView: View {
                     let x = CGFloat(s - p.viewStartMin) / CGFloat(p.slotMinutes) * slotW
                     let w = max(slotW * 0.9, CGFloat(e - s) / CGFloat(p.slotMinutes) * slotW - 4)
                     let late = model.isLate(r)
-                    // 箱は全部同じ色（見出しのネイビーを少し明るく）。入り口の印だけ各社の色で小さく
+                    // 退店したお客様はうすく（2026-10-24 20:32 Ronnie「退店した customers も dim」）
+                    let out = r.status == "completed"
+                    // 箱は全部同じ色（見出しのネイビーを少し明るく）。入り口の印だけ各社の色で小さく。ウォークインは左の帯が紫
                     Button { selected = r } label: {
                         HStack(spacing: 0) {
-                            Rectangle().fill(NLColor.navy).frame(width: 5)
+                            Rectangle().fill(r.createdVia == "walk_in" ? NLColor.walkIn : NLColor.navy).frame(width: 5)
                             VStack(alignment: .leading, spacing: 2) {
                                 HStack(spacing: 4) {
                                     Text("\(nlHm(s))").font(.system(size: 11, weight: .bold)).monospacedDigit()
@@ -1024,9 +1046,10 @@ struct NativeLedgerView: View {
                             Spacer(minLength: 0)
                         }
                         .frame(width: w, height: rowH - 10)
-                        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(NLColor.box))
-                        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(NLColor.navy.opacity(0.5), lineWidth: 1))
+                        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(out ? NLColor.gray : NLColor.box))
+                        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(out ? NLColor.gray : NLColor.navy.opacity(0.5), lineWidth: 1))
                         .clipped()
+                        .opacity(out ? 0.5 : 1)
                     }
                     .buttonStyle(PressableStyle(scale: 0.98))
                     .offset(x: max(0, x) + 2, y: 5 + CGFloat(row.lane[r.id] ?? 0) * laneStep)
