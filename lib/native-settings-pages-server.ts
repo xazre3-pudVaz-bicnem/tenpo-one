@@ -2,6 +2,7 @@ import 'server-only';
 import type { SessionContext } from '@/lib/auth';
 import type { createClient } from '@/lib/supabase/server';
 import { can } from '@/lib/permissions';
+import { parseMenuLines } from '@/lib/menu-ocr-parse';
 import { todayJst } from '@/lib/format';
 import { toBusinessDayTime } from '@/lib/business-hours';
 import { daypartSettingsFrom } from '@/lib/daypart';
@@ -1283,6 +1284,10 @@ export async function runNativeSettingsPageAction(
         },
       };
       return { ok: true, data: { preview } };
+    }
+    case 'menuScanParse': {
+      // 読み取った行を商品に分けるだけ（データは読まない・書かない）。登録は importRun（importRows が権限 org.settings を確かめる）
+      return { ok: true, data: { rows: parseMenuLines(action.lines) } };
     }
     case 'importRun': {
       if (!(action.importType in FIELD_DEFS)) return { ok: false, error: '取り込む種類が正しくありません' };
