@@ -61,6 +61,7 @@ export const ROUTE_FEATURES: [string, FeatureKey][] = [
   ['/app/accounting', 'accounting'],
   ['/app/reconciliation', 'accounting'],
   ['/app/reports', 'reports'],
+  ['/app/management', 'reports'],
 ];
 
 export function featureForRoute(href: string): FeatureKey | null {
