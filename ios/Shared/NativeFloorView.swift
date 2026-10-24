@@ -302,7 +302,9 @@ struct NativeTableCard: View {
             .padding(.horizontal, 12)
             .padding(.top, 10)
             .padding(.bottom, 6)
-            .frame(maxWidth: .infinity, minHeight: 170, alignment: .topLeading)
+            // 卓の箱は正方形（横幅と同じ高さ。2026-10-24 Ronnie）
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .aspectRatio(1, contentMode: .fit)
             .background(
                 RoundedRectangle(cornerRadius: 10, style: .continuous).fill(NFColor.surface(state))
             )
