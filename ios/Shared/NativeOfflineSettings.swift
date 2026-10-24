@@ -31,11 +31,19 @@ struct NativeOfflinePrintCard: View {
                 }
             }
             if let kit {
-                ForEach(kit.printers) { p in
+                // ネット無しで出せるプリンターだけ出す（LAN のアドレスも Bluetooth も無いものは出さない。
+                // 2026-10-25 00:11 Ronnie「使えないものは出さないで」）
+                let usable = kit.printers.filter { canPrintOffline($0) }
+                ForEach(usable) { p in
                     line(p.name, en: p.usage == "receipt" ? "レシート" : "厨房・\(p.stations.joined(separator: "/"))") {
                         let (text, color) = route(p)
                         Text(text).font(.system(size: 14, weight: .semibold)).foregroundColor(color)
                     }
+                }
+                if usable.isEmpty && !kit.printers.isEmpty {
+                    Text("ネット無しで出せるプリンターはまだありません（上の Bluetooth か LAN でつなぐと出せます）")
+                        .font(.system(size: 13, weight: .semibold)).foregroundColor(NFColor.ink3)
+                        .padding(.horizontal, 20).padding(.vertical, 10)
                 }
             }
             // まだサーバーへ送っていないオフラインの伝票
@@ -129,6 +137,11 @@ struct NativeOfflinePrintCard: View {
         } message: {
             Text("サーバーには入りません。Web の伝票で品・会計を直してから消してください。")
         }
+    }
+
+    /// ネットが無くても出せるか（Bluetooth でつないである／LAN のアドレスがある）
+    private func canPrintOffline(_ p: OfflineKit.Printer) -> Bool {
+        printConfig.config.appLinks.contains(where: { $0.printerId == p.id }) || p.lan != nil
     }
 
     /// ネットが無いとき、このプリンターへどう送るか
