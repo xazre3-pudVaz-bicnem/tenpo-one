@@ -376,21 +376,10 @@ struct NativeLedgerView: View {
         VStack(spacing: 0) {
             topBar
             if let p = model.payload {
-                // 集計と上のボタンを 1 行に（2026-10-24 Ronnie「同じ行に」）
+                // 集計と、表示の切り替え（スケジュール・予約リスト）を 1 行に。予約受付・その他は上のバーへ（2026-10-24 20:55 Ronnie）
                 HStack(spacing: 0) {
                     summaryRow(p)
-                    NLToolbar(
-                        model: model,
-                        inbox: inbox,
-                        onFloor: onFloor,
-                        onWeb: onWeb,
-                        onFindSeats: { findSeatsOpen = true },
-                        onWalkIn: { walkInOpen = true },
-                        onPdf: { makePdf() },
-                        onCsv: { exportCsv() }
-                    )
-                    .disabled(exporting)
-                    .fixedSize()
+                    viewSwitch.padding(.trailing, 16)
                 }
                 if model.monthMode {
                     NativeLedgerMonthView(date: model.date ?? p.date) { d in
@@ -523,14 +512,9 @@ struct NativeLedgerView: View {
                 .padding(.horizontal, 14).padding(.vertical, 8)
                 .background(Capsule().fill(Color.white.opacity(0.12)))
                 Spacer(minLength: 8)
-                // 表示の切り替え
-                HStack(spacing: 0) {
-                    modeBtn("スケジュール", on: !model.listMode && !model.gourmetMode && !model.weekMode && !model.waitMode && !model.monthMode) { model.listMode = false; model.gourmetMode = false; model.weekMode = false; model.monthMode = false; model.waitMode = false }
-                    modeBtn("予約リスト", on: model.listMode && !model.gourmetMode && !model.weekMode && !model.waitMode && !model.monthMode) { model.listMode = true; model.gourmetMode = false; model.weekMode = false; model.monthMode = false; model.waitMode = false }
-                    // グルメ別・週間・ウェイティングは「その他」のメニューから（上のバーが狭いので）
-                }
-                .background(RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(0.12)))
-                // メッセージ（新しい予約・変更・キャンセルのお知らせ）。予約登録の横（2026-10-24 19:56・20:18 Ronnie。予約受付管理は下の列に別に）
+                // 予約受付（仮予約・要連絡・新しいネット予約…）はメッセージの左（2026-10-24 20:55 Ronnie）
+                toolbar(.tasks)
+                // メッセージ（新しい予約・変更・キャンセルのお知らせ）。予約登録の横（2026-10-24 19:56・20:18 Ronnie）
                 Button { inboxOpen = true } label: {
                     ZStack(alignment: .topTrailing) {
                         Image(systemName: "envelope").font(.system(size: 18, weight: .semibold)).foregroundColor(.white)
@@ -564,6 +548,8 @@ struct NativeLedgerView: View {
                     .buttonStyle(PressableStyle())
                     .accessibilityLabel("予約登録")
                 }
+                // その他（CSV・集計・PDF・空席検索・ほかの台帳・設定）は ＋予約登録 の右（2026-10-24 20:55 Ronnie）
+                toolbar(.more)
             }
             // 日付は上のバーのまん中（2026-10-24 19:57・20:06 Ronnie「‹ 今日 10/24(土) ▾ ›、今日を押すと今日へ」）
             dateNav
@@ -675,12 +661,40 @@ struct NativeLedgerView: View {
         .buttonStyle(PressableStyle())
     }
 
+    private func toolbar(_ part: NLToolbar.Part) -> some View {
+        NLToolbar(
+            model: model,
+            inbox: inbox,
+            onFloor: onFloor,
+            onWeb: onWeb,
+            onFindSeats: { findSeatsOpen = true },
+            onWalkIn: { walkInOpen = true },
+            onPdf: { makePdf() },
+            onCsv: { exportCsv() },
+            onGourmet: { gourmetOpen = true },
+            part: part
+        )
+        .disabled(exporting)
+        .fixedSize()
+    }
+
+    /// 表示の切り替え（スケジュール・予約リスト）。グルメ別・週間・ウェイティングなどは「その他」から
+    private var viewSwitch: some View {
+        HStack(spacing: 0) {
+            modeBtn("スケジュール", on: !model.listMode && !model.gourmetMode && !model.weekMode && !model.waitMode && !model.monthMode) { model.listMode = false; model.gourmetMode = false; model.weekMode = false; model.monthMode = false; model.waitMode = false }
+            modeBtn("予約リスト", on: model.listMode && !model.gourmetMode && !model.weekMode && !model.waitMode && !model.monthMode) { model.listMode = true; model.gourmetMode = false; model.weekMode = false; model.monthMode = false; model.waitMode = false }
+        }
+        .background(RoundedRectangle(cornerRadius: 11).fill(NLColor.graySoft))
+        .overlay(RoundedRectangle(cornerRadius: 11).stroke(NLColor.line, lineWidth: 1))
+        .fixedSize()
+    }
+
     private func modeBtn(_ text: String, on: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Text(text).font(.system(size: 13, weight: .bold))
-                .foregroundColor(on ? NLColor.navy : .white)
-                .padding(.horizontal, 12).frame(height: 32)
-                .background(RoundedRectangle(cornerRadius: 8).fill(on ? Color.white : Color.clear))
+            Text(text).font(.system(size: 13, weight: .heavy))
+                .foregroundColor(on ? .white : NLColor.muted)
+                .padding(.horizontal, 14).frame(height: 40)
+                .background(RoundedRectangle(cornerRadius: 9).fill(on ? NLColor.navy : Color.clear))
                 .padding(3)
         }
         .buttonStyle(PressableStyle())

@@ -539,15 +539,16 @@ struct NativeReservationPanel: View {
             // 色は店舗台帳と同じ（ネイビー・黄色・状態の色の帯。2026-10-24 20:35 Ronnie「ご予約台帳の色と合わせて」）
             Button(action: onLedger) {
                 HStack(spacing: 10) {
-                    Image(systemName: "calendar").font(.system(size: 18, weight: .bold)).foregroundColor(NLColor.yellow)
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text("店舗台帳").font(.system(size: 16, weight: .heavy)).foregroundColor(.white)
+                    Image(systemName: "calendar").font(.system(size: 20, weight: .bold)).foregroundColor(NLColor.yellow)
+                    // 「ご予約台帳」の下に「Reservation」（2026-10-24 20:56 Ronnie「こう書いて」）
+                    VStack(spacing: 1) {
+                        Text("ご予約台帳").font(.system(size: 17, weight: .heavy)).foregroundColor(.white)
                         Text("Reservation").font(.system(size: 12, weight: .bold)).foregroundColor(NLColor.yellow)
                     }
                     Image(systemName: "chevron.right").font(.system(size: 12, weight: .heavy)).foregroundColor(.white.opacity(0.6))
                 }
                 .frame(maxWidth: .infinity)
-                .frame(height: 50)
+                .frame(height: 60)
                 .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(NLColor.navy))
             }
             .buttonStyle(PressableStyle())
