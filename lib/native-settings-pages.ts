@@ -101,7 +101,28 @@ export type NativeSettingsPageAction =
   | { type: 'remindersPrepare' }
   /** 企業情報（/app/settings/company。actions.ts） */
   | { type: 'companySave'; company: NativeCompanyFields }
-  | { type: 'kpiSave'; includeTakeoutGuests: boolean };
+  | { type: 'kpiSave'; includeTakeoutGuests: boolean }
+  /** テーブル・フロア（/app/settings/tables。actions.ts。管理画面だけ＝レジ端末からは Server Action 側が断る） */
+  | { type: 'floorAdd'; name: string }
+  | { type: 'floorRename'; id: string; name: string }
+  | { type: 'floorDelete'; id: string }
+  | { type: 'floorDefault'; id: string | null }
+  | { type: 'tableSave'; table: NativeTableFields }
+  | { type: 'tableDelete'; id: string }
+  | { type: 'tableAvailable'; id: string; available: boolean }
+  | { type: 'tablesReorderByName' };
+
+export interface NativeTableFields {
+  id: string | null;
+  floorId: string | null;
+  name: string;
+  capacityMin: number;
+  capacityMax: number;
+  isPrivateRoom: boolean;
+  isCounter: boolean;
+  smokingAllowed: boolean;
+  sortOrder: number;
+}
 
 export interface NativeCompanyFields {
   name: string;
@@ -238,6 +259,14 @@ export const NATIVE_SETTINGS_PAGE_ACTION_TYPES: readonly NativeSettingsPageActio
   'remindersPrepare',
   'companySave',
   'kpiSave',
+  'floorAdd',
+  'floorRename',
+  'floorDelete',
+  'floorDefault',
+  'tableSave',
+  'tableDelete',
+  'tableAvailable',
+  'tablesReorderByName',
 ];
 
 export function isNativeSettingsPageActionType(v: unknown): v is NativeSettingsPageActionType {
@@ -766,7 +795,74 @@ export function parseNativeSettingsPageAction(raw: unknown): Parsed {
     if (typeof b.includeTakeoutGuests !== 'boolean') return bad();
     return { ok: true, action: { type: 'kpiSave', includeTakeoutGuests: b.includeTakeoutGuests } };
   }
+  // テーブル・フロア
+  if (b.type === 'floorAdd' || b.type === 'floorRename') {
+    const n = typeof b.name === 'string' ? b.name.trim() : '';
+    if (!n || n.length > 40) return bad('フロア名を入力してください');
+    if (b.type === 'floorRename') {
+      if (!isUuid(b.id)) return bad('フロアが見つかりません');
+      return { ok: true, action: { type: 'floorRename', id: b.id, name: n } };
+    }
+    return { ok: true, action: { type: 'floorAdd', name: n } };
+  }
+  if (b.type === 'floorDelete' || b.type === 'tableDelete') {
+    if (!isUuid(b.id)) return bad('対象が見つかりません');
+    return { ok: true, action: { type: b.type, id: b.id } };
+  }
+  if (b.type === 'floorDefault') {
+    if (b.id != null && !isUuid(b.id)) return bad('フロアが見つかりません');
+    return { ok: true, action: { type: 'floorDefault', id: (b.id as string | null | undefined) ?? null } };
+  }
+  if (b.type === 'tableSave') {
+    const t = (b.table ?? {}) as Record<string, unknown>;
+    const int = (v: unknown, fallback: number) => (typeof v === 'number' && Number.isFinite(v) ? Math.floor(v) : fallback);
+    if (t.id != null && !isUuid(t.id)) return bad('テーブルが見つかりません');
+    if (t.floorId != null && !isUuid(t.floorId)) return bad('フロアが見つかりません');
+    const name = typeof t.name === 'string' ? t.name.trim() : '';
+    if (!name || name.length > 40) return bad('テーブル名を入力してください');
+    const table: NativeTableFields = {
+      id: (t.id as string | null | undefined) ?? null,
+      floorId: (t.floorId as string | null | undefined) ?? null,
+      name,
+      capacityMin: int(t.capacityMin, 1),
+      capacityMax: int(t.capacityMax, 4),
+      isPrivateRoom: t.isPrivateRoom === true,
+      isCounter: t.isCounter === true,
+      smokingAllowed: t.smokingAllowed === true,
+      sortOrder: int(t.sortOrder, 0),
+    };
+    if (table.capacityMin < 1 || table.capacityMax < table.capacityMin || table.capacityMax > 999) return bad('席数の指定が正しくありません');
+    return { ok: true, action: { type: 'tableSave', table } };
+  }
+  if (b.type === 'tableAvailable') {
+    if (!isUuid(b.id) || typeof b.available !== 'boolean') return bad('テーブルが見つかりません');
+    return { ok: true, action: { type: 'tableAvailable', id: b.id, available: b.available } };
+  }
+  if (b.type === 'tablesReorderByName') return { ok: true, action: { type: 'tablesReorderByName' } };
   return bad();
+}
+
+/** テーブル・フロアの画面の読み込み（GET ?part=tables） */
+export interface NativeTablesPayload {
+  store: { id: string; name: string };
+  /** 管理画面だけ（レジ端末では見るだけ） */
+  canEdit: boolean;
+  adminOnlyNote: string;
+  defaultFloorId: string | null;
+  floors: { id: string; name: string; tableCount: number }[];
+  tables: {
+    id: string;
+    name: string;
+    floorId: string | null;
+    floorName: string | null;
+    capacityMin: number;
+    capacityMax: number;
+    isPrivateRoom: boolean;
+    isCounter: boolean;
+    smokingAllowed: boolean;
+    sortOrder: number;
+    available: boolean;
+  }[];
 }
 
 /** 連携の画面の読み込み（GET ?part=integrations。見るだけ） */

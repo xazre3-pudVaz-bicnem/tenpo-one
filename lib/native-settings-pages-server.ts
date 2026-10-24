@@ -20,6 +20,9 @@ import { ALERT_RULE_DEFAULTS, ALERT_RULE_KEYS, ALERT_RULE_LABELS, ALERT_RULE_UNI
 import { deleteApprovalRule, saveApprovalRule } from '@/app/app/settings/approvals/actions';
 import { canAssignRole, HQ_ROLES, isHqRole, ROLE_LABELS, ROLES, roleOutranks, type Role } from '@/lib/permissions';
 import { updateCompanyInfo, updateKpiSettings } from '@/app/app/settings/company/actions';
+import { addFloor, deleteFloor, deleteTable, renameFloor, reorderTablesByName, saveDefaultFloor, saveTable, toggleTableAvailability } from '@/app/app/settings/tables/actions';
+import { floorBoardFrom } from '@/lib/floor-nav';
+import { ADMIN_ONLY_SETTINGS_NOTE } from '@/lib/admin-only-settings';
 import { formatDateTime } from '@/lib/format';
 import { changeMemberRole, changeMemberStores, inviteStaff, resetMemberPassword, setMemberPin, setMemberStatus } from '@/app/app/staff/actions';
 import { deleteAccount, installStandardAccounts, saveAccount } from '@/app/app/settings/accounts/actions';
@@ -60,6 +63,7 @@ import type {
   NativeIntegrationsPayload,
   NativeAuditPayload,
   NativeCompanyPayload,
+  NativeTablesPayload,
   NativeMenuItemsPayload,
   NativeOptionsPayload,
   NativeQrServicePayload,
@@ -79,7 +83,7 @@ type Supabase = Awaited<ReturnType<typeof createClient>>;
 type Store = { id: string; name: string };
 
 /** 設定の中の画面の名前（GET ?part=） */
-export const NATIVE_SETTINGS_PAGE_PARTS = ['soldout', 'clerks', 'hours', 'store', 'tax', 'loyalty', 'alerts', 'approvals', 'accounts', 'handy', 'categories', 'menuItems', 'options', 'qrService', 'menuBook', 'payments', 'staff', 'reservationBook', 'integrations', 'audit', 'company'] as const;
+export const NATIVE_SETTINGS_PAGE_PARTS = ['soldout', 'clerks', 'hours', 'store', 'tax', 'loyalty', 'alerts', 'approvals', 'accounts', 'handy', 'categories', 'menuItems', 'options', 'qrService', 'menuBook', 'payments', 'staff', 'reservationBook', 'integrations', 'audit', 'company', 'tables'] as const;
 export type NativeSettingsPagePart = (typeof NATIVE_SETTINGS_PAGE_PARTS)[number];
 export function isNativeSettingsPagePart(v: unknown): v is NativeSettingsPagePart {
   return typeof v === 'string' && (NATIVE_SETTINGS_PAGE_PARTS as readonly string[]).includes(v);
@@ -118,7 +122,8 @@ export async function loadNativeSettingsPage(
         | NativeReservationBookPayload
         | NativeIntegrationsPayload
         | NativeAuditPayload
-        | NativeCompanyPayload;
+        | NativeCompanyPayload
+        | NativeTablesPayload;
     }
   | { ok: false; error: string }
 > {
@@ -630,6 +635,43 @@ export async function loadNativeSettingsPage(
       },
     };
   }
+  if (part === 'tables') {
+    // Web の app/app/settings/tables/page.tsx と同じ。変更は管理画面だけ（2026-09-29 Ronnie）＝レジ端末では見るだけ
+    const [{ data: floors }, { data: storeSettings }, { data: tables }] = await Promise.all([
+      supabase.from('floors').select('id, name').eq('store_id', store.id).eq('status', 'active').order('sort_order').order('name'),
+      supabase.from('store_settings').select('settings').eq('store_id', store.id).maybeSingle(),
+      supabase
+        .from('restaurant_tables')
+        .select('id, name, floor_id, capacity_min, capacity_max, is_private_room, is_counter, smoking_allowed, sort_order, current_status, floors(name)')
+        .eq('store_id', store.id)
+        .eq('status', 'active')
+        .order('sort_order'),
+    ]);
+    const rows = tables ?? [];
+    return {
+      ok: true,
+      payload: {
+        store,
+        canEdit: can(ctx.role, 'store.settings') && ctx.isRegisterDevice !== true,
+        adminOnlyNote: ADMIN_ONLY_SETTINGS_NOTE,
+        defaultFloorId: floorBoardFrom(storeSettings?.settings).defaultFloorId ?? null,
+        floors: (floors ?? []).map((f) => ({ id: f.id as string, name: f.name as string, tableCount: rows.filter((t) => t.floor_id === f.id).length })),
+        tables: rows.map((t) => ({
+          id: t.id as string,
+          name: t.name as string,
+          floorId: (t.floor_id as string | null) ?? null,
+          floorName: (t.floors as unknown as { name: string } | null)?.name ?? null,
+          capacityMin: Number(t.capacity_min ?? 1),
+          capacityMax: Number(t.capacity_max ?? 1),
+          isPrivateRoom: t.is_private_room === true,
+          isCounter: t.is_counter === true,
+          smokingAllowed: t.smoking_allowed === true,
+          sortOrder: Number(t.sort_order ?? 0),
+          available: t.current_status !== 'unavailable',
+        })),
+      },
+    };
+  }
   if (part === 'reservationBook') {
     // Web の app/app/settings/reservation-book/page.tsx と同じ（4つのタブぶんを一度に）
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? '';
@@ -1066,6 +1108,24 @@ export async function runNativeSettingsPageAction(
       return done(await updateCompanyInfo(action.company));
     case 'kpiSave':
       return done(await updateKpiSettings(action.includeTakeoutGuests));
+    case 'floorAdd':
+      return done(await addFloor(store.id, action.name));
+    case 'floorRename':
+      return done(await renameFloor(action.id, store.id, action.name));
+    case 'floorDelete':
+      return done(await deleteFloor(action.id, store.id));
+    case 'floorDefault':
+      return done(await saveDefaultFloor(store.id, action.id));
+    case 'tableSave':
+      return done(await saveTable({ ...action.table, id: action.table.id ?? undefined, storeId: store.id }));
+    case 'tableDelete':
+      return done(await deleteTable(action.id, store.id));
+    case 'tableAvailable':
+      return done(await toggleTableAvailability(action.id, store.id, action.available));
+    case 'tablesReorderByName': {
+      const r = await reorderTablesByName(store.id);
+      return r.error ? { ok: false, error: r.error } : { ok: true, data: { updated: r.updated ?? 0 } };
+    }
     case 'remindersPrepare': {
       // この Server Action はエラーを throw する → 呼び出し側（route）が errorText で返す
       const r = await prepareReservationReminders(store.id);

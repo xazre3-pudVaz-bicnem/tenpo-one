@@ -34,6 +34,7 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
     case integrations = "integrations"
     case audit = "audit"
     case company = "company"
+    case tables = "tables"
     var id: String { rawValue }
 
     /// Web の道（クエリは見ない）
@@ -64,6 +65,7 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
         case .integrations: return "/app/settings/integrations"
         case .audit: return "/app/settings/audit"
         case .company: return "/app/settings/company"
+        case .tables: return "/app/settings/tables"
         }
     }
     var title: String {
@@ -93,6 +95,7 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
         case .integrations: return "連携"
         case .audit: return "監査ログ"
         case .company: return "企業情報"
+        case .tables: return "テーブル・フロア"
         }
     }
     var en: String {
@@ -122,6 +125,7 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
         case .integrations: return "Integrations"
         case .audit: return "Audit log"
         case .company: return "Company"
+        case .tables: return "Tables"
         }
     }
 
@@ -162,6 +166,7 @@ struct NativeSettingsPageScreen: View {
         case .integrations: NativeIntegrationsScreen()
         case .audit: NativeAuditScreen()
         case .company: NativeCompanyScreen()
+        case .tables: NativeTablesScreen()
         }
     }
 }
@@ -4302,5 +4307,263 @@ struct NativeCompanyScreen: View {
             }
         }
         .task { await model.refresh() }
+    }
+}
+
+// MARK: - テーブル・フロア（Web の /app/settings/tables と同じ。変更は管理画面だけ＝レジ端末では見るだけ）
+
+struct NTBFloor: Codable, Identifiable, Hashable { let id: String; let name: String; let tableCount: Int }
+struct NTBTable: Codable, Identifiable, Hashable {
+    let id: String; let name: String; let floorId: String?; let floorName: String?; let capacityMin: Int; let capacityMax: Int
+    let isPrivateRoom: Bool; let isCounter: Bool; let smokingAllowed: Bool; let sortOrder: Int; let available: Bool
+}
+struct NTBPayload: Codable { let store: NFNamed; let canEdit: Bool; let adminOnlyNote: String; let defaultFloorId: String?; let floors: [NTBFloor]; let tables: [NTBTable] }
+
+@MainActor
+final class NativeTablesModel: NSPModel<NTBPayload> {
+    enum Panel: Equatable { case none, addTable, editTable(String), renameFloor(String) }
+    @Published var panel: Panel = .none
+    @Published var floorFilter: String? = nil
+    @Published var newFloor = ""
+    @Published var floorName = ""
+    // テーブルの入力
+    @Published var tName = ""
+    @Published var tFloor: String? = nil
+    @Published var tMin = "2"
+    @Published var tMax = "4"
+    @Published var tPrivate = false
+    @Published var tCounter = false
+    @Published var tSmoking = false
+    @Published var tSort = "0"
+    init() { super.init(part: "tables") }
+
+    var tables: [NTBTable] { (payload?.tables ?? []).filter { floorFilter == nil || $0.floorId == floorFilter } }
+    func startAdd() {
+        tName = ""; tFloor = floorFilter ?? payload?.floors.first?.id; tMin = "2"; tMax = "4"; tPrivate = false; tCounter = false; tSmoking = false
+        tSort = String(((payload?.tables.map(\.sortOrder).max()) ?? 0) + 1)
+        panel = .addTable
+    }
+    func startEdit(_ t: NTBTable) {
+        tName = t.name; tFloor = t.floorId; tMin = String(t.capacityMin); tMax = String(t.capacityMax); tPrivate = t.isPrivateRoom; tCounter = t.isCounter; tSmoking = t.smokingAllowed; tSort = String(t.sortOrder)
+        panel = .editTable(t.id)
+    }
+    func saveTable(id: String?) async {
+        guard let mn = Int(tMin), let mx = Int(tMax), mn >= 1, mx >= mn else { toast = "席数の指定が正しくありません"; return }
+        var table: [String: Any] = ["name": tName, "capacityMin": mn, "capacityMax": mx, "isPrivateRoom": tPrivate, "isCounter": tCounter, "smokingAllowed": tSmoking, "sortOrder": Int(tSort) ?? 0]
+        if let id { table["id"] = id }
+        if let f = tFloor { table["floorId"] = f }
+        if await run("table", ["type": "tableSave", "table": table], done: id == nil ? "テーブルを追加しました" : "テーブルを保存しました") { panel = .none }
+    }
+}
+
+struct NativeTablesScreen: View {
+    @StateObject private var model = NativeTablesModel()
+    @EnvironmentObject var state: AppState
+    @State private var confirmDeleteTable: NTBTable?
+    @State private var confirmDeleteFloor: NTBFloor?
+
+    var body: some View {
+        NSPFrame(storeName: model.payload?.store.name ?? "", title: "テーブル・フロア", en: "Tables", loaded: model.payload != nil, error: model.error, toast: $model.toast, onBack: { state.goNativeSettings() }, retry: { await model.refresh() }) {
+            if let p = model.payload {
+                if !p.canEdit {
+                    HStack(spacing: 10) {
+                        Image(systemName: "lock").foregroundColor(NFColor.ink3)
+                        Text(p.adminOnlyNote).font(.system(size: 13)).foregroundColor(NFColor.ink2)
+                        Spacer()
+                    }
+                    .padding(14).background(RoundedRectangle(cornerRadius: 12).fill(NFColor.lilacSoft))
+                }
+                HStack(alignment: .top, spacing: 16) {
+                    floorsCard(p).frame(width: 320)
+                    tablesCard(p)
+                }
+                HStack(spacing: 10) {
+                    NSPButton(text: "テーブルQRコードをまとめて印刷", icon: "qrcode") { state.openSettingsPage(.tableQr, webPath: "/app/settings/tables/qr-print") }
+                    if p.canEdit { NSPButton(text: "配置エディタ（Web）", icon: "square.grid.3x3") { state.leaveNativeFloor(to: "/app/settings/tables") } }
+                    Spacer()
+                }
+            }
+        }
+        .task { await model.refresh() }
+        .alert("テーブルを削除", isPresented: Binding(get: { confirmDeleteTable != nil }, set: { if !$0 { confirmDeleteTable = nil } }), presenting: confirmDeleteTable) { t in
+            Button("削除する", role: .destructive) { Task { _ = await model.run("del" + t.id, ["type": "tableDelete", "id": t.id], done: "削除しました") }; confirmDeleteTable = nil }
+            Button("やめる", role: .cancel) { confirmDeleteTable = nil }
+        } message: { t in Text("「\(t.name)」を削除します。過去の伝票は残ります") }
+        .alert("フロアを削除", isPresented: Binding(get: { confirmDeleteFloor != nil }, set: { if !$0 { confirmDeleteFloor = nil } }), presenting: confirmDeleteFloor) { f in
+            Button("削除する", role: .destructive) { Task { _ = await model.run("delf" + f.id, ["type": "floorDelete", "id": f.id], done: "削除しました") }; confirmDeleteFloor = nil }
+            Button("やめる", role: .cancel) { confirmDeleteFloor = nil }
+        } message: { f in Text("「\(f.name)」を削除します。このフロアのテーブルはフロア未設定になります") }
+    }
+
+    private func chip(_ text: String, on: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(text).font(.system(size: 13, weight: .bold)).foregroundColor(on ? .white : NFColor.ink2)
+                .padding(.horizontal, 12).frame(height: 36)
+                .background(Capsule().fill(on ? NFColor.navy : Color.white)).overlay(Capsule().stroke(NFColor.line, lineWidth: 1))
+        }
+        .buttonStyle(PressableStyle())
+    }
+    private func tag(_ t: String, _ c: Color, fill: Color = .clear) -> some View {
+        Text(t).font(.system(size: 11, weight: .heavy)).foregroundColor(c).padding(.horizontal, 7).padding(.vertical, 2)
+            .background(Capsule().fill(fill)).overlay(Capsule().stroke(c.opacity(0.5), lineWidth: 1))
+    }
+    private func small(_ text: String, icon: String? = nil, danger: Bool = false, disabled: Bool = false, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 4) { if let icon { Image(systemName: icon).font(.system(size: 11, weight: .bold)) }; Text(text).font(.system(size: 12.5, weight: .bold)) }
+                .foregroundColor(danger ? NFColor.danger : NFColor.ink).padding(.horizontal, 10).frame(height: 34)
+                .background(RoundedRectangle(cornerRadius: 9).fill(Color.white)).overlay(RoundedRectangle(cornerRadius: 9).stroke(danger ? NFColor.dangerSoft : NFColor.line, lineWidth: 1))
+        }
+        .buttonStyle(PressableStyle()).disabled(disabled).opacity(disabled ? 0.5 : 1)
+    }
+
+    private func floorsCard(_ p: NTBPayload) -> some View {
+        NSPCard(title: "フロア", en: "\(p.floors.count)") {
+            VStack(spacing: 0) {
+                Button { model.floorFilter = nil } label: {
+                    HStack { Text("すべて").font(.system(size: 14, weight: .bold)).foregroundColor(NFColor.ink); Spacer(); Text("\(p.tables.count) 卓").font(.system(size: 12)).foregroundColor(NFColor.ink3) }
+                        .padding(.horizontal, 18).frame(height: 44).background(model.floorFilter == nil ? NFColor.lilacSoft : Color.white)
+                        .overlay(alignment: .bottom) { Rectangle().fill(NFColor.line).frame(height: 1) }
+                }
+                .buttonStyle(.plain)
+                ForEach(p.floors) { f in
+                    VStack(spacing: 0) {
+                        Button { model.floorFilter = f.id } label: {
+                            HStack(spacing: 8) {
+                                Text(f.name).font(.system(size: 14, weight: .bold)).foregroundColor(NFColor.ink)
+                                if p.defaultFloorId == f.id { tag("最初に出す", NFColor.iris, fill: NFColor.irisSoft) }
+                                Spacer()
+                                Text("\(f.tableCount) 卓").font(.system(size: 12)).foregroundColor(NFColor.ink3)
+                            }
+                            .padding(.horizontal, 18).frame(height: 44).background(model.floorFilter == f.id ? NFColor.lilacSoft : Color.white)
+                        }
+                        .buttonStyle(.plain)
+                        if p.canEdit && model.floorFilter == f.id {
+                            if model.panel == .renameFloor(f.id) {
+                                HStack(spacing: 6) {
+                                    NSPInput(text: $model.floorName, placeholder: "フロア名", width: 180)
+                                    small("保存", disabled: model.floorName.trimmingCharacters(in: .whitespaces).isEmpty) { Task { if await model.run("floor", ["type": "floorRename", "id": f.id, "name": model.floorName], done: "フロア名を変えました") { model.panel = .none } } }
+                                    small("やめる") { model.panel = .none }
+                                }
+                                .padding(.horizontal, 18).padding(.bottom, 10)
+                            } else {
+                                HStack(spacing: 6) {
+                                    small("名前", icon: "pencil") { model.floorName = f.name; model.panel = .renameFloor(f.id) }
+                                    small(p.defaultFloorId == f.id ? "最初に出すのを解除" : "最初に出す", icon: "star") { Task { _ = await model.run("deff", ["type": "floorDefault", "id": p.defaultFloorId == f.id ? NSNull() as Any : f.id as Any], done: "保存しました") } }
+                                    small("削除", icon: "trash", danger: true) { confirmDeleteFloor = f }
+                                }
+                                .padding(.horizontal, 18).padding(.bottom, 10)
+                            }
+                        }
+                    }
+                    .overlay(alignment: .bottom) { Rectangle().fill(NFColor.line).frame(height: 1) }
+                }
+                if p.canEdit {
+                    HStack(spacing: 6) {
+                        NSPInput(text: $model.newFloor, placeholder: "新しいフロア名", width: 190)
+                        NSPButton(text: "追加", icon: "plus", primary: true, busy: model.busy == "floorAdd", disabled: model.newFloor.trimmingCharacters(in: .whitespaces).isEmpty) { Task { if await model.run("floorAdd", ["type": "floorAdd", "name": model.newFloor], done: "フロアを追加しました") { model.newFloor = "" } } }
+                    }
+                    .padding(14)
+                }
+            }
+        }
+    }
+
+    private func tablesCard(_ p: NTBPayload) -> some View {
+        NSPCard(title: "テーブル", en: "\(model.tables.count) 卓") {
+            VStack(spacing: 0) {
+                if p.canEdit {
+                    HStack(spacing: 8) {
+                        if model.panel != .addTable { NSPButton(text: "テーブルを追加", icon: "plus", primary: true) { model.startAdd() } }
+                        NSPButton(text: "名前順に並べ直す", icon: "arrow.up.arrow.down", busy: model.busy == "reorder") { Task { _ = await model.run("reorder", ["type": "tablesReorderByName"], done: "名前順に並べ直しました") } }
+                        Spacer()
+                    }
+                    .padding(14)
+                    Rectangle().fill(NFColor.line).frame(height: 1)
+                }
+                if model.panel == .addTable { tableForm(p, id: nil) }
+                if model.tables.isEmpty { Text("テーブルがありません").font(.system(size: 14)).foregroundColor(NFColor.ink3).padding(18) }
+                ForEach(model.tables) { t in
+                    let open = model.panel == .editTable(t.id)
+                    Button { if p.canEdit { if open { model.panel = .none } else { model.startEdit(t) } } } label: {
+                        HStack(spacing: 12) {
+                            Text("\(t.sortOrder)").font(.system(size: 12)).foregroundColor(NFColor.ink3).monospacedDigit().frame(width: 28)
+                            Text(t.name).font(.system(size: 15, weight: .bold)).foregroundColor(NFColor.ink).frame(width: 120, alignment: .leading)
+                            Text(t.floorName ?? "フロア未設定").font(.system(size: 13)).foregroundColor(NFColor.ink2).frame(width: 110, alignment: .leading)
+                            Text("\(t.capacityMin)〜\(t.capacityMax) 名").font(.system(size: 13)).foregroundColor(NFColor.ink2).monospacedDigit().frame(width: 80, alignment: .leading)
+                            HStack(spacing: 4) {
+                                if t.isPrivateRoom { tag("個室", NFColor.ink2) }
+                                if t.isCounter { tag("カウンター", NFColor.ink2) }
+                                if t.smokingAllowed { tag("喫煙可", NFColor.ink2) }
+                            }
+                            Spacer()
+                            tag(t.available ? "利用可能" : "利用停止中", t.available ? NFColor.success : NFColor.ink3, fill: t.available ? NFColor.successSoft : .clear)
+                            if p.canEdit {
+                                small(t.available ? "停止" : "再開", icon: t.available ? "pause" : "play", disabled: model.busy != nil) { Task { _ = await model.run("av" + t.id, ["type": "tableAvailable", "id": t.id, "available": !t.available], done: t.available ? "利用停止にしました" : "再開しました") } }
+                                small("削除", icon: "trash", danger: true, disabled: model.busy != nil) { confirmDeleteTable = t }
+                                Image(systemName: open ? "chevron.up" : "chevron.down").font(.system(size: 12, weight: .bold)).foregroundColor(NFColor.ink3)
+                            }
+                        }
+                        .padding(.horizontal, 18).frame(minHeight: 52)
+                        .background(open ? NFColor.lilacSoft : Color.white)
+                        .overlay(alignment: .bottom) { Rectangle().fill(NFColor.line).frame(height: 1) }
+                    }
+                    .buttonStyle(.plain)
+                    if open { tableForm(p, id: t.id) }
+                }
+            }
+        }
+    }
+
+    private func tableForm(_ p: NTBPayload, id: String?) -> some View {
+        VStack(spacing: 0) {
+            NSPRow(label: "テーブル名", required: true) { NSPInput(text: $model.tName, placeholder: "A1", width: 220) }
+            NSPRow(label: "席数", en: "最小〜最大", required: true) {
+                HStack(spacing: 8) {
+                    NSPInput(text: $model.tMin, placeholder: "2", width: 90, keyboard: .numberPad)
+                    Text("〜").foregroundColor(NFColor.ink3)
+                    NSPInput(text: $model.tMax, placeholder: "4", width: 90, keyboard: .numberPad, trailing: "名")
+                }
+            }
+            NSPRow(label: "フロア") {
+                Menu {
+                    Button("フロア未設定") { model.tFloor = nil }
+                    ForEach(p.floors) { f in Button(f.name) { model.tFloor = f.id } }
+                } label: {
+                    HStack(spacing: 6) {
+                        Text(p.floors.first { $0.id == model.tFloor }?.name ?? "フロア未設定").font(.system(size: 14, weight: .bold)).foregroundColor(NFColor.ink)
+                        Image(systemName: "chevron.up.chevron.down").font(.system(size: 11, weight: .bold)).foregroundColor(NFColor.ink3)
+                    }
+                    .padding(.horizontal, 12).frame(height: 44)
+                    .background(RoundedRectangle(cornerRadius: 10).fill(Color.white)).overlay(RoundedRectangle(cornerRadius: 10).stroke(NFColor.line, lineWidth: 1))
+                }
+            }
+            NSPRow(label: "並び順") { NSPInput(text: $model.tSort, placeholder: "0", width: 90, keyboard: .numberPad) }
+            NSPRow(label: "種別") {
+                HStack(spacing: 8) {
+                    checkChip("個室", on: model.tPrivate) { model.tPrivate.toggle() }
+                    checkChip("カウンター", on: model.tCounter) { model.tCounter.toggle() }
+                    checkChip("喫煙可", on: model.tSmoking) { model.tSmoking.toggle() }
+                }
+            }
+            HStack(spacing: 10) {
+                NSPButton(text: id == nil ? "追加する" : "保存する", primary: true, busy: model.busy == "table", disabled: model.tName.trimmingCharacters(in: .whitespaces).isEmpty) { Task { await model.saveTable(id: id) } }
+                NSPButton(text: "やめる") { model.panel = .none }
+                Spacer()
+            }
+            .padding(18)
+        }
+        .background(NFColor.lilacSoft.opacity(0.5))
+        .overlay(alignment: .bottom) { Rectangle().fill(NFColor.line).frame(height: 1) }
+    }
+    private func checkChip(_ text: String, on: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: on ? "checkmark.square.fill" : "square").foregroundColor(on ? NFColor.iris : NFColor.ink3)
+                Text(text).font(.system(size: 13.5, weight: .bold)).foregroundColor(NFColor.ink)
+            }
+            .padding(.horizontal, 12).frame(height: 40)
+            .background(RoundedRectangle(cornerRadius: 10).fill(on ? NFColor.irisSoft : Color.white)).overlay(RoundedRectangle(cornerRadius: 10).stroke(on ? NFColor.iris : NFColor.line, lineWidth: 1))
+        }
+        .buttonStyle(PressableStyle())
     }
 }

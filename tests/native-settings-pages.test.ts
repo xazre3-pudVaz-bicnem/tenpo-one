@@ -129,4 +129,23 @@ describe('native settings pages (設定の中の画面) actions', () => {
     expect(parseNativeSettingsPageAction({ type: 'kpiSave', includeTakeoutGuests: false }).ok).toBe(true);
     expect(parseNativeSettingsPageAction({ type: 'kpiSave', includeTakeoutGuests: 'no' }).ok).toBe(false);
   });
+
+  it('テーブル・フロア: 席数の範囲、フロア null、名前必須', () => {
+    const ok = parseNativeSettingsPageAction({ type: 'tableSave', table: { name: ' A1 ', capacityMin: 2, capacityMax: 4.9, floorId: null, isCounter: true } });
+    expect(ok.ok).toBe(true);
+    if (ok.ok && ok.action.type === 'tableSave') {
+      expect(ok.action.table.name).toBe('A1');
+      expect(ok.action.table.capacityMax).toBe(4);
+      expect(ok.action.table.id).toBeNull();
+      expect(ok.action.table.isPrivateRoom).toBe(false);
+    }
+    expect(parseNativeSettingsPageAction({ type: 'tableSave', table: { name: 'A1', capacityMin: 4, capacityMax: 2 } }).ok).toBe(false);
+    expect(parseNativeSettingsPageAction({ type: 'tableSave', table: { name: '', capacityMin: 1, capacityMax: 2 } }).ok).toBe(false);
+    expect(parseNativeSettingsPageAction({ type: 'floorDefault', id: null })).toEqual({ ok: true, action: { type: 'floorDefault', id: null } });
+    expect(parseNativeSettingsPageAction({ type: 'floorDefault', id: ID }).ok).toBe(true);
+    expect(parseNativeSettingsPageAction({ type: 'floorAdd', name: '  ' }).ok).toBe(false);
+    expect(parseNativeSettingsPageAction({ type: 'floorRename', id: ID, name: '2F' }).ok).toBe(true);
+    expect(parseNativeSettingsPageAction({ type: 'tableAvailable', id: ID, available: false }).ok).toBe(true);
+    expect(parseNativeSettingsPageAction({ type: 'tablesReorderByName' }).ok).toBe(true);
+  });
 });
