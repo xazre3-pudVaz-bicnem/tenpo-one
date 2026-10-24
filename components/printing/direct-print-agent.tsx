@@ -3,7 +3,7 @@
 import { useEffect } from 'react';
 import { useToast } from '@/components/ui/toast';
 import { DIRECT_BACKOFF_MS, DIRECT_POLL_MS, eposErrorLabel, type BluetoothLink } from '@/lib/direct-print';
-import { nativeBluetooth, nativeLan } from '@/lib/native-app';
+import { nativeBluetooth, nativeLan, nativePrintAgent } from '@/lib/native-app';
 import { postDirect, readDirectPrintConfig, sendToEposPrinter } from './direct-print-client';
 import { createClient } from '@/lib/supabase/client';
 import { buildSiiAgentPrint, openSiiAgent } from './sii-agent-client';
@@ -272,6 +272,8 @@ export function DirectPrintAgent({ storeId }: { storeId?: string } = {}) {
     async function tick() {
       if (stopped) return;
       if (running) return schedule(DIRECT_POLL_MS);
+      // アプリ自身が印刷係をしているあいだは休む（ネイティブ ON の iPad。ios/Shared/NativePrintAgent.swift）。OFF に戻ったら再開
+      if (nativePrintAgent()) return schedule(DIRECT_POLL_MS * 5);
       const inApp = nativeBluetooth() !== null;
       const all = config.bluetooth ?? [];
       // アプリ：Bluetooth・USB。Safari：SII URL Print Agent だけ

@@ -71,6 +71,12 @@ struct RootView: View {
                         .transition(.opacity)
                         .zIndex(5)
                 }
+                // ネイティブの設定（このiPadのプリンター・レジの設定）。Web の /app/pos/settings・/app/settings の上に重ねる（2026-10-24）
+                if state.nativeSettings {
+                    NativeSettingsScreen()
+                        .transition(.opacity)
+                        .zIndex(5)
+                }
                 if state.nativeStock {
                     NativeStockScreen()
                         .transition(.opacity)
@@ -153,6 +159,7 @@ struct RootView: View {
         .animation(.easeOut(duration: 0.18), value: state.nativePurchases)
         .animation(.easeOut(duration: 0.18), value: state.nativeCoupons)
         .animation(.easeOut(duration: 0.18), value: state.nativeNotices)
+        .animation(.easeOut(duration: 0.18), value: state.nativeSettings)
         .animation(.easeOut(duration: 0.18), value: state.nativeBudget)
         .animation(.easeOut(duration: 0.18), value: state.nativeCustomers)
         .animation(.easeOut(duration: 0.18), value: state.nativeScan)

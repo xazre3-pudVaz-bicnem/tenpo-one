@@ -18,8 +18,17 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
     static weak var current: WebViewController?
 
     /// Device-local link only; the server validates printer ownership, auto-print and transport.
+    /// この iPad の印刷の設定（NativePrintConfig）と、レシートの出し先の cookie（tenpo_device_printer）から。
+    /// ネイティブに設定がまだ無いとき（古い保存）は Web の localStorage を読む
     func checkoutBluetoothLink() async -> [String: Any]? {
-        guard AppConfig.isPad, let url = webView?.url, AppConfig.isOwnHost(url) else { return nil }
+        guard AppConfig.isPad else { return nil }
+        let native = NativePrintConfig.shared.config
+        if !native.appLinks.isEmpty {
+            let selected = await NativeAPI.shared.cookies().first { $0.name == "tenpo_device_printer" }?.value
+            guard let link = NativePrintConfig.shared.checkoutLink(selectedPrinterId: selected.flatMap { $0.removingPercentEncoding } ?? selected) else { return nil }
+            return ["printerId": link.printerId, "deviceId": link.deviceId, "maker": link.maker, "via": link.via == "usb" ? "usb" : "bluetooth"]
+        }
+        guard let url = webView?.url, AppConfig.isOwnHost(url) else { return nil }
         let script = """
         (function(){
           try {
@@ -176,6 +185,15 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         webView.evaluateJavaScript("window.dispatchEvent(new Event('tenpo-print-ready'));", completionHandler: nil)
     }
 
+    /// いま開いている Web の URL
+    var currentURL: URL? { webView?.url }
+
+    /// 自分のサイトの画面を開いているときだけ JS を動かす（localStorage への書き込みなど）
+    func runOnOwnPage(_ js: String) {
+        guard let webView, AppConfig.isOwnHost(webView.url) else { return }
+        webView.evaluateJavaScript(js, completionHandler: nil)
+    }
+
     func load(_ url: URL) {
         errorView.isHidden = true
         webView.load(URLRequest(url: url))
@@ -211,6 +229,17 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         let nativePos = AppConfig.isPad
             ? "nativePos: { enabled: \(nativePosOn), set: function(on){ return call('setNativePos', { on: !!on }).then(function(r){ if (r && r.ok && window.TenpoNative && window.TenpoNative.nativePos) { window.TenpoNative.nativePos.enabled = !!r.enabled; } return r; }); } },"
             : ""
+        // iPad だけ：アプリ自身の印刷係（NativePrintAgent）。native が true のあいだ Web の DirectPrintAgent は休む。
+        // この iPad の印刷の設定（localStorage 'tenpo-direct-print'）は、開いたとき・Web で変えたときにアプリへ写す（NativePrintConfig）
+        let nativePrint = AppConfig.isPad ? "print: { native: \(AppState.shared.nativePrintAgentOn ? "true" : "false") }," : ""
+        let printSync = AppConfig.isPad ? """
+        (function(){
+          var send = function(reason){ try { post({ type: 'printConfig', reason: reason, raw: localStorage.getItem('tenpo-direct-print') }); } catch (e) {} };
+          window.addEventListener('tenpo-direct-print-changed', function(){ send('change'); });
+          window.addEventListener('storage', function(e){ if (!e || !e.key || e.key === 'tenpo-direct-print') send('change'); });
+          send('load');
+        })();
+        """ : ""
         // 画面を固定（2026-10-14 Ronnie「アプリはズームなど一切できない。画面にぴったり固定」）：拡大・縮小させない。
         // iPad は少し大きく（viewport の幅を狭くして画面いっぱいに拡大。applyPadViewport）。Next が書き直しても戻す
         // iPhone は viewport-fit=cover（時計のうしろ・ホームバーのうしろまで Web。env(safe-area-inset-*) が入る）
@@ -269,7 +298,9 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
             \(bluetooth)
             \(lan)
             \(nativePos)
+            \(nativePrint)
           };
+          \(printSync)
           \(printerWarmup)
           \(routeHook)
           \(viewport)
@@ -339,9 +370,13 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
             }
         case "setNativePos":
             let reqId = body["reqId"] as? String ?? ""
-            AppState.shared.nativePosEnabled = (body["on"] as? Bool) ?? false
+            AppState.shared.setNativePos((body["on"] as? Bool) ?? false)
             refreshBridgeScript()
             reply(reqId, ["ok": true, "enabled": AppState.shared.nativePosEnabled])
+        case "printConfig":
+            // Web の localStorage の印刷の設定をアプリに写す（自分のサイトの画面からだけ）
+            guard AppConfig.isPad, message.frameInfo.isMainFrame, AppConfig.isOwnHost(message.frameInfo.request.url) else { return }
+            NativePrintConfig.shared.importFromWeb(raw: body["raw"] as? String, reason: body["reason"] as? String ?? "change")
         case "route":
             if AppConfig.isOwnHost(webView.url) {
                 webView.evaluateJavaScript("window.__tenpoPreparePrinter && window.__tenpoPreparePrinter();", completionHandler: nil)
