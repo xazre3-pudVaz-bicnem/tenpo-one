@@ -25,6 +25,7 @@ import { loadNativeOwnerHome } from '@/lib/native-owner-home-server';
 import { loadNativeBudgetAuto, loadNativeBudgetDaily } from '@/lib/native-budget-server';
 import { isNativeLedgerActionType, parseNativeLedgerAction, type NativeLedgerAction } from '@/lib/native-ledger';
 import { loadNativeLedger, loadNativeLedgerMonth, loadNativeLedgerWait, loadNativeLedgerWeek } from '@/lib/native-ledger-server';
+import { loadReservationEntryData } from '@/lib/reservation-entry-server';
 import { isNativeGourmetActionType, parseNativeGourmetAction } from '@/lib/native-gourmet';
 import { loadNativeGourmet } from '@/lib/native-gourmet-server';
 import { markGourmetSiteRegistered, regenerateGourmetMailToken, resolveGourmetMailImport, setGourmetMailEnabled } from '@/app/app/settings/reservation-book/actions';
@@ -757,6 +758,19 @@ export async function GET(request: Request) {
     if (!can(ctx.role, 'store.settings')) return json({ ok: false, error: '権限がありません' }, 403);
     const g = await loadNativeGourmet(ctx, await createClient(), { id: store.id, name: store.name });
     return json({ ok: true, ...g });
+  }
+
+  // 予約登録に使うその日のデータ（卓・その日の予約の時間と卓・確保時間・キーワード・担当者・コースの所要時間）。
+  // Web の予約登録（getReservationEntryData）と同じ。iPad で「予約可能なテーブル」を出す（2026-10-24 19:28 Ronnie）
+  if (part === 'ledgerEntry') {
+    const store = ctx.currentStore ?? ctx.stores[0] ?? null;
+    if (!store) return json({ ok: false, error: '店舗がありません' }, 404);
+    if (ctx.disabledFeatures?.has('reservations')) return json({ ok: false, error: 'この機能は使えません', useWeb: true }, 403);
+    if (!can(ctx.role, 'reservations.write')) return json({ ok: false, error: '権限がありません' }, 403);
+    const date = url.searchParams.get('date') ?? '';
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return json({ ok: false, error: '日付が正しくありません' }, 400);
+    const entry = await loadReservationEntryData(await createClient(), store.id, date);
+    return json({ ok: true, date, ...entry });
   }
 
   // 店舗台帳のウェイティング（Web の view=waitlist）
@@ -1878,6 +1892,8 @@ async function runLedgerAction(ctx: SessionContext, action: NativeLedgerAction):
         stayMinutes: i.stayMinutes,
         status: i.status,
         clerkId: i.clerkId,
+        email: i.email || undefined,
+        tags: i.tags,
         waitlistEntryId: i.waitlistEntryId ?? undefined,
       })) as unknown as { reservationId?: string; id?: string } | void;
       return { ok: true, reservationId: res && typeof res === 'object' ? (res.reservationId ?? res.id ?? null) : null };

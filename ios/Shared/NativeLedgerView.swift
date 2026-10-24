@@ -422,8 +422,12 @@ struct NativeLedgerView: View {
         .sheet(item: $selected) { r in
             NativeReservationSheet(model: model, reservation: r, onClose: { selected = nil }, onOpenOrder: { id in selected = nil; onOpenOrder(id) })
         }
-        .sheet(isPresented: $newOpen) {
-            NativeNewReservationSheet(model: model, onClose: { newOpen = false })
+        // 予約登録は画面いっぱいの 1 枚（左＝日時・人数・おすすめのテーブル、右＝お客様・キーワード。2026-10-24 19:36 Ronnie）
+        .fullScreenCover(isPresented: $newOpen) {
+            NativeReservationEntry(model: model, onClose: { newOpen = false }, onWalkIn: {
+                newOpen = false
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { walkInOpen = true }
+            })
         }
         .sheet(isPresented: $findSeatsOpen) {
             NLFindSeatsSheet(model: model, onClose: { findSeatsOpen = false })
