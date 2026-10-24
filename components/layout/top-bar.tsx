@@ -18,11 +18,14 @@ import { HandyQrChip } from './handy-qr-chip';
 export function TopBar({
   ctx,
   unreadCount,
+  adminV2 = false,
 }: {
   ctx: SessionContext;
   unreadCount: number;
   /** 以前はレジ全画面でメニュー画面へのボタンを出していた（ホームと同じなので今は出さない） */
   showMenuLink?: boolean;
+  /** 新しい管理画面（パソコン）：右上のログアウトの左に企業名を出す（2026-10-24 Ronnie） */
+  adminV2?: boolean;
 }) {
   const roleLabel = ctx.role ? ROLE_LABELS[ctx.role] : ctx.isCypressAdmin ? '運営管理者' : '';
   // 1店舗だけの端末（レジのiPad）は、右上に契約の店名を出す
@@ -111,6 +114,12 @@ export function TopBar({
             </span>
           </span>
         </Link>
+        {/* 新しい管理画面：右上に企業名（2026-10-24 Ronnie「右上のログアウトのところに企業名を」） */}
+        {adminV2 && ctx.organizationName && (
+          <span className="hidden max-w-[260px] truncate pl-1 text-[13px] font-bold text-white sm:inline" title={ctx.organizationName}>
+            {ctx.organizationName}
+          </span>
+        )}
         <form action={signOut}>
           <TouchHint />
           <button
