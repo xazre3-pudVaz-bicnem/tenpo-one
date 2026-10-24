@@ -6,6 +6,8 @@ import { onboardingGet, onboardingPost } from '@/lib/native-modules/onboarding';
 import { businessCardsGet } from '@/lib/native-modules/business-cards';
 import * as payroll from '@/lib/native-modules/payroll';
 import { accountingGet, ACCOUNTING_POST } from '@/lib/native-modules/accounting';
+import * as attendance from '@/lib/native-modules/attendance';
+import * as leave from '@/lib/native-modules/leave';
 
 /**
  * まだ専用の台が無かった画面（勤怠・日報・タスク …）の iPad ネイティブ用の API をまとめる所
@@ -42,6 +44,8 @@ export const NATIVE_MODULE_GET: Record<string, NativeModuleGet> = {
   costingImpact: costingImpactGet,
   costingWaste: costingWasteGet,
   costingItem: costingItemGet,
+  attendance: attendance.attendanceGet,
+  leave: leave.leaveGet,
 };
 
 /** POST の type → handler。追加は 1 行ずつ */
@@ -67,4 +71,17 @@ export const NATIVE_MODULE_POST: Record<string, NativeModulePost> = {
   costingLineAdd: costingLinePost,
   costingLineUpdate: costingLinePost,
   costingLineDelete: costingLinePost,
+  attendancePunch: attendance.attendancePunchPost,
+  attendancePunchPin: attendance.attendancePunchPinPost,
+  attendanceCorrection: attendance.attendanceCorrectionPost,
+  attendanceApprove: attendance.attendanceApprovePost,
+  attendanceReject: attendance.attendanceRejectPost,
+  attendanceEntryType: attendance.attendanceEntryTypePost,
+  attendanceManualEntry: attendance.attendanceManualEntryPost,
+  leaveRequest: leave.leaveRequestPost,
+  leaveWithdraw: leave.leaveWithdrawPost,
+  leaveApprove: leave.leaveApprovePost,
+  leaveReject: leave.leaveRejectPost,
+  leaveGrant: leave.leaveGrantPost,
+  leavePolicy: leave.leavePolicyPost,
 };

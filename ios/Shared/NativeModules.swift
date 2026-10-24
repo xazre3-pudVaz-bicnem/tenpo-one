@@ -29,7 +29,9 @@ enum NativeModuleRegistry {
     private static let entries: [(String, String)] = [
         // ("/app/attendance", "attendance"),
         ("/app/costing", "costing"),
+        ("/app/attendance", "attendance"),
         ("/app/kitchen", "kitchen"),
+        ("/app/leave", "leave"),
         ("/app/onboarding", "onboarding"),
         ("/app/payroll", "payroll"),
         ("/app/accounting", "accounting"),
@@ -56,7 +58,9 @@ struct NativeModuleScreen: View {
         switch route.key {
         // case "attendance": NativeAttendanceScreen(route: route)
         case "costing": NativeCostingView(route: route, onHome: { state.goNativeHome() })
+        case "attendance": NativeAttendanceView(route: route, onHome: { state.goNativeHome() })
         case "kitchen": NativeKitchenView(onHome: { state.goNativeHome() })
+        case "leave": NativeLeaveView(route: route, onHome: { state.goNativeHome() })
         case "onboarding": NativeOnboardingView(onHome: { state.goNativeHome() })
         case "payroll": NativePayrollView(route: route, onHome: { state.goNativeHome() }, onWeb: { state.leaveNativeFloor(to: $0) })
         case "accounting": NativeAccountingView(route: route)
