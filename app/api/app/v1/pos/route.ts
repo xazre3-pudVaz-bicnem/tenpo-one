@@ -119,6 +119,9 @@ import { dailyBudgetsFrom } from '@/lib/daily-budget';
 import { saveDailyBudgets } from '@/app/app/budgets/daily-actions';
 import { saveMonthlySalesTarget, upsertBudget } from '@/app/app/budgets/actions';
 import { loadNativeBudgets } from '@/lib/native-budgets-server';
+import { isNativeBookingActionType, parseNativeBookingAction } from '@/lib/native-booking';
+import { importStorePhotoFromPage, updateBookingSettings } from '@/app/app/settings/booking/actions';
+import { ADMIN_ONLY_SETTINGS_NOTE } from '@/lib/admin-only-settings';
 import { isNativePettyActionType, nativePettyPermission, parseNativePettyAction } from '@/lib/native-petty';
 import { loadNativeClosings, loadNativePetty } from '@/lib/native-petty-server';
 import {
@@ -582,6 +585,46 @@ export async function GET(request: Request) {
       month,
       values: dailyBudgetsFrom(row?.settings, month),
       canEdit: ['org_owner', 'hq_admin', 'area_manager', 'store_manager'].includes(ctx.role ?? ''),
+    });
+  }
+
+  // 予約設定＝予約受付ルール（Web の /app/settings/booking。2026-10-24）
+  if (part === 'bookingSettings') {
+    if (!can(ctx.role, 'store.settings')) return json({ ok: false, error: '権限がありません', useWeb: true }, 403);
+    const store = ctx.currentStore ?? ctx.stores[0] ?? null;
+    if (!store) return json({ ok: false, error: '対象の店舗がありません' }, 404);
+    const supabase = await createClient();
+    const [{ data: storeRow }, { data: s }] = await Promise.all([
+      supabase.from('stores').select('slug, booking_enabled').eq('id', store.id).single(),
+      supabase
+        .from('store_settings')
+        .select('slot_minutes, default_stay_minutes, booking_cutoff_minutes, booking_window_days, max_party_size, cancel_deadline_hours, cleaning_buffer_minutes, booking_photo_url, booking_notes, cancellation_policy, reminder_enabled, reminder_hours_before')
+        .eq('store_id', store.id)
+        .maybeSingle(),
+    ]);
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || (await import('@/lib/site-origin').then((m) => m.resolveSiteOrigin()));
+    return json({
+      ok: true,
+      store: { id: store.id, name: store.name },
+      // レジ端末（iPad の「<店舗名>（レジ）」）は見るだけ。変更は管理画面（2026-09-29 Ronnie「管理画面」）
+      adminOnly: ctx.isRegisterDevice === true,
+      adminOnlyNote: ADMIN_ONLY_SETTINGS_NOTE,
+      bookingEnabled: storeRow?.booking_enabled ?? false,
+      bookingUrl: storeRow?.slug ? `${siteUrl}/book/${storeRow.slug}` : null,
+      settings: {
+        slotMinutes: s?.slot_minutes ?? 30,
+        defaultStayMinutes: s?.default_stay_minutes ?? 120,
+        bookingCutoffMinutes: s?.booking_cutoff_minutes ?? 120,
+        bookingWindowDays: s?.booking_window_days ?? 90,
+        maxPartySize: s?.max_party_size ?? 12,
+        cancelDeadlineHours: s?.cancel_deadline_hours ?? 24,
+        cleaningBufferMinutes: s?.cleaning_buffer_minutes ?? 0,
+        bookingPhotoUrl: s?.booking_photo_url ?? '',
+        bookingNotes: s?.booking_notes ?? '',
+        cancellationPolicy: s?.cancellation_policy ?? '',
+        reminderEnabled: s?.reminder_enabled ?? false,
+        reminderHoursBefore: s?.reminder_hours_before ?? 24,
+      },
     });
   }
 
@@ -1097,6 +1140,43 @@ export async function POST(request: Request) {
         drawerKick: sa.drawerKick,
       });
       return res.ok ? json({ ok: true, printer: res.printer }) : json({ ok: false, error: res.error }, 400);
+    } catch (e) {
+      return json({ ok: false, error: errorText(e, 'うまくいきませんでした。もう一度お試しください') }, 400);
+    }
+  }
+
+  // 予約設定の保存・店舗写真の取り込み（2026-10-24）。中身は Web と同じ Server Action（レジ端末は中で「管理画面で変更してください」）
+  if (raw && typeof raw === 'object' && isNativeBookingActionType((raw as { type?: unknown }).type)) {
+    const parsedBooking = parseNativeBookingAction(raw);
+    if (!parsedBooking.ok) return json({ ok: false, error: parsedBooking.error }, 400);
+    const store = ctx.currentStore ?? ctx.stores[0];
+    if (!store) return json({ ok: false, error: '対象の店舗がありません' }, 404);
+    if (!can(ctx.role, 'store.settings')) return json({ ok: false, error: '権限がありません' }, 403);
+    // Route Handler では requirePermission がお店の回線を見ないので、ここで見る（ほかの操作と同じ）
+    const bookingProblem = await networkProblem(ctx);
+    if (bookingProblem) return json({ ok: false, error: bookingProblem }, 403);
+    try {
+      const ba = parsedBooking.action;
+      if (ba.type === 'bookingPhotoImport') {
+        const r = await importStorePhotoFromPage({ storeId: store.id, pageUrl: ba.pageUrl });
+        return json(r.error ? { ok: false, error: r.error } : { ok: true, photoUrl: r.photoUrl ?? null });
+      }
+      const r = await updateBookingSettings({
+        storeId: store.id,
+        slotMinutes: ba.slotMinutes,
+        defaultStayMinutes: ba.defaultStayMinutes,
+        bookingCutoffMinutes: ba.bookingCutoffMinutes,
+        bookingWindowDays: ba.bookingWindowDays,
+        maxPartySize: ba.maxPartySize,
+        cancelDeadlineHours: ba.cancelDeadlineHours,
+        cleaningBufferMinutes: ba.cleaningBufferMinutes,
+        bookingPhotoUrl: ba.bookingPhotoUrl,
+        bookingNotes: ba.bookingNotes,
+        cancellationPolicy: ba.cancellationPolicy,
+        reminderEnabled: ba.reminderEnabled,
+        reminderHoursBefore: ba.reminderHoursBefore,
+      });
+      return json(r.error ? { ok: false, error: r.error } : { ok: true });
     } catch (e) {
       return json({ ok: false, error: errorText(e, 'うまくいきませんでした。もう一度お試しください') }, 400);
     }

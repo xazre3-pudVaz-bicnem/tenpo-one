@@ -131,6 +131,7 @@ struct NLToolbar: View {
                 if p?.links?.settings ?? false {
                     if !(p?.links?.customers ?? false) { Divider() }
                     Button(action: onGourmet) { Label("グルメ連携", systemImage: "envelope.badge") }
+                    // ネイティブの予約設定で開く（NativeLedgerScreen が goNativeBooking に振り分ける。2026-10-24）
                     Button { onWeb("/app/settings/booking") } label: { Label("台帳設定", systemImage: "gearshape") }
                 }
             } label: {

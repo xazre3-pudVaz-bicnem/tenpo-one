@@ -135,7 +135,10 @@ struct NativeLedgerScreen: View {
             onHome: { state.goNativeHome() },
             onFloor: { state.goNativeFloor() },
             onOpenOrder: { id in state.openNativeOrder(id, checkout: false) },
-            onWeb: { path in state.leaveNativeFloor(to: path) }
+            onWeb: { path in
+                // 📅「台帳設定」はネイティブの予約設定（Web の画面を見せない。2026-10-24）
+                if path == "/app/settings/booking" { state.goNativeBooking() } else { state.leaveNativeFloor(to: path) }
+            }
         )
         .onChange(of: state.nativeOrder) { new in if new == nil { Task { await model.refresh(silent: true) } } }
     }
@@ -347,6 +350,21 @@ struct NativeBudgetScreen: View {
     private func syncMonth() {
         guard let m = state.budgetMonth else { return }
         if state.budgetView == "monthly" { if monthly.month != m { monthly.month = m } } else if model.month != m { model.month = m }
+    }
+}
+
+/// ネイティブの予約設定＝予約受付ルール（2026-10-24）
+struct NativeBookingScreen: View {
+    @StateObject private var model = NativeBookingSettingsModel()
+    @EnvironmentObject var state: AppState
+
+    var body: some View {
+        NativeBookingSettingsView(
+            model: model,
+            onHome: { state.goNativeHome() },
+            onLedger: { state.goNativeLedger() },
+            onWeb: { path in state.leaveNativeFloor(to: path) }
+        )
     }
 }
 

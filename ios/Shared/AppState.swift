@@ -86,6 +86,8 @@ final class AppState: ObservableObject {
     @Published var nativeOwnerHome = false
     /// iPhone のネイティブの画面を読み直してほしいとき（Web が /handy に戻ってきたときなど）に増やす
     @Published var phoneRefreshTick = 0
+    /// ネイティブの予約設定＝予約受付ルール（/app/settings/booking。店舗台帳の 📅「台帳設定」から。2026-10-24）
+    @Published var nativeBooking = false
     /// フロアを読み直してほしいとき（会計完了など）に増やす
     @Published var floorRefreshTick = 0
 
@@ -208,6 +210,13 @@ final class AppState: ObservableObject {
         if url.path == "/app/dashboard" || url.path == "/app/floor" || url.path == "/app" {
             Task { @MainActor in NativeCatalogCache.shared.refresh() }
         }
+        // 予約設定（予約受付ルール）はネイティブ。ほかの行き先に行ったら予約設定は閉じる（2026-10-24）
+        if url.path == "/app/settings/booking" {
+            nativeFloor = false; nativeNotices = false; nativeBudget = false; nativeCustomers = false; nativeScan = false; nativeReports = false; nativeHome = false; nativeLedger = false; nativeCash = false; nativeCashIo = false; nativeQuick = false; nativeSlips = false; nativeExpenses = false; nativeStock = false; nativeInventory = false; nativeVendors = false; nativePurchases = false
+            if !nativeBooking { nativeBooking = true }
+            return
+        }
+        nativeBooking = false
         // ホーム・テーブル一覧はネイティブで（Web の画面の上に重ねる。Native ON の iPad は Web のホーム・テーブル一覧を見せない）
         if url.path == "/app/dashboard" || url.path == "/app" {
             nativeFloor = false; nativeNotices = false; nativeBudget = false; nativeCustomers = false; nativeScan = false; nativeReports = false
@@ -504,6 +513,7 @@ final class AppState: ObservableObject {
 
     /// ネイティブの画面を閉じて Web の画面へ（店舗台帳・設定など、まだネイティブに無い画面）
     func leaveNativeFloor(to path: String) {
+        nativeBooking = false
         nativeCashIo = false
         nativeQuick = false
         nativeSlips = false
@@ -525,6 +535,7 @@ final class AppState: ObservableObject {
 
     /// ネイティブの店舗台帳へ（Web も /app/reservations にそろえる）
     func goNativeLedger() {
+        nativeBooking = false
         nativeCash = false
         nativeCashIo = false
         nativeQuick = false
@@ -538,6 +549,7 @@ final class AppState: ObservableObject {
 
     /// ネイティブのフロアからホームへ（ネイティブのホームを出す。Web も /app/dashboard にそろえる）
     func goNativeHome() {
+        nativeBooking = false
         nativeCashIo = false
         nativeQuick = false
         nativeSlips = false
@@ -552,6 +564,7 @@ final class AppState: ObservableObject {
 
     /// ネイティブのホームからフロアへ（Web も /app/floor にそろえる＝レシート・ドロアの Web 側の仕組みはそのまま）
     func goNativeFloor() {
+        nativeBooking = false
         nativeCashIo = false
         nativeQuick = false
         nativeSlips = false
@@ -712,6 +725,14 @@ final class AppState: ObservableObject {
         nativeStock = false; nativeInventory = false; nativeVendors = false; nativePurchases = false; nativeCoupons = false; nativeSettings = false
         nativeCashIo = true
         WebViewController.current?.load(AppConfig.url(tab == "register" ? "/app/cash" : "/app/cash?tab=\(tab)"))
+    }
+
+    /// ネイティブの予約設定へ（店舗台帳の 📅「台帳設定」。Web も /app/settings/booking にそろえる）
+    func goNativeBooking() {
+        nativeFloor = false; nativeNotices = false; nativeBudget = false; nativeCustomers = false; nativeScan = false; nativeReports = false
+        nativeHome = false; nativeLedger = false; nativeCash = false; nativeCashIo = false; nativeQuick = false; nativeSlips = false; nativeExpenses = false; nativeStock = false; nativeInventory = false; nativeVendors = false; nativePurchases = false
+        nativeBooking = true
+        WebViewController.current?.load(AppConfig.url("/app/settings/booking"))
     }
 
     /// 会計完了は必ず最新のフロアを読み直す。
