@@ -190,7 +190,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             {/* レジがまだ閉まっていない（前の営業日のまま・朝10時すぎ／2日以上前から）ときの知らせ（2026-09-28 Ronnie） */}
             {ctx.currentStore && (
               <HideOnPos also={isRegi ? ['/app/dashboard'] : undefined}>
-                <RegisterDayBanner storeId={ctx.currentStore.id} />
+                <RegisterDayBanner storeId={ctx.currentStore.id} short={!isRegi} />
               </HideOnPos>
             )}
             {children}
