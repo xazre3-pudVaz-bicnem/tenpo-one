@@ -224,15 +224,44 @@ struct NativeOrderView: View {
 
 // MARK: - 上のバー
 
-/// 上のバーの「ホームへ」ボタンの中身＝ TENPO ONE のロゴ（2026-10-24 19:22 Ronnie）
+/// 上のバーの「ホームへ」ボタンの中身＝白い家の中に TENPO ONE のロゴの「1」（バーの色で抜く）
+/// （2026-10-24 19:22 Ronnie「ホームのボタンの中にロゴ」→ 19:24「ロゴの色が合わない・ホームに見えない」）
 struct NativeHomeLogo: View {
+    /// 上のバーの色（ロゴの「1」をこの色で抜いて見せる）
+    var ink: Color = NT.header
+
     var body: some View {
-        Image("BrandMark")
-            .resizable()
-            .scaledToFit()
-            .frame(width: 40, height: 40)
-            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(Color.white.opacity(0.25), lineWidth: 1))
+        ZStack {
+            NativeHouseShape().fill(Color.white)
+                .frame(width: 32, height: 29)
+            Image("BrandOne")
+                .renderingMode(.template)
+                .resizable()
+                .scaledToFit()
+                .foregroundColor(ink)
+                .frame(height: 15)
+                .offset(y: 6)
+        }
+        .frame(width: 46, height: 40)
+        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white.opacity(0.12)))
+    }
+}
+
+/// 家の形（三角の屋根＋四角）
+struct NativeHouseShape: Shape {
+    func path(in r: CGRect) -> Path {
+        let roof = r.height * 0.45
+        let inset = r.width * 0.13
+        var p = Path()
+        p.move(to: CGPoint(x: r.midX, y: r.minY))
+        p.addLine(to: CGPoint(x: r.maxX, y: r.minY + roof))
+        p.addLine(to: CGPoint(x: r.maxX - inset, y: r.minY + roof))
+        p.addLine(to: CGPoint(x: r.maxX - inset, y: r.maxY))
+        p.addLine(to: CGPoint(x: r.minX + inset, y: r.maxY))
+        p.addLine(to: CGPoint(x: r.minX + inset, y: r.minY + roof))
+        p.addLine(to: CGPoint(x: r.minX, y: r.minY + roof))
+        p.closeSubpath()
+        return p
     }
 }
 
