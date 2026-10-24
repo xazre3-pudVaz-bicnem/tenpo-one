@@ -107,7 +107,7 @@ struct NLLinks: Codable { let tables: Bool; let customers: Bool; let analytics: 
 enum NLColor {
     static let navy = Color(hex: 0x171333)
     static let navy2 = Color(hex: 0x353057)
-    static let page = Color(hex: 0xF7F6FC)
+    static let page = Color(hex: 0xF4F5F8)
     static let card = Color.white
     static let line = Color(hex: 0xE2E8F0)
     static let ink = Color(hex: 0x212121)
@@ -577,26 +577,28 @@ struct NativeLedgerView: View {
                 .accessibilityLabel("ホーム")
                 // 店名は出さない（ホームだけ）。その場所に画面の名前（2026-10-24 18:55・18:56 Ronnie）
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text("店舗台帳").font(.system(size: 17, weight: .heavy)).foregroundColor(.white)
-                    Text("Reservation").font(.system(size: 12, weight: .bold)).foregroundColor(NLColor.yellow)
+                    Text("店舗台帳").font(.system(size: 17, weight: .heavy)).foregroundColor(NLColor.ink)
+                    Text("Reservation").font(.system(size: 12, weight: .bold)).foregroundColor(NT.purple)
                 }
                 .fixedSize()
                 .padding(.horizontal, 14).padding(.vertical, 8)
-                .background(Capsule().fill(Color.white.opacity(0.12)))
+                .background(Capsule().fill(Color.white))
+                .overlay(Capsule().stroke(NLColor.line, lineWidth: 1))
                 Spacer(minLength: 8)
                 // 予約受付（仮予約・要連絡・新しいネット予約…）はメッセージの左（2026-10-24 20:55 Ronnie）
                 toolbar(.tasks)
                 // メッセージ（新しい予約・変更・キャンセルのお知らせ）。予約登録の横（2026-10-24 19:56・20:18 Ronnie）
                 Button { inboxOpen = true } label: {
                     ZStack(alignment: .topTrailing) {
-                        Image(systemName: "envelope").font(.system(size: 18, weight: .semibold)).foregroundColor(.white)
+                        Image(systemName: "envelope").font(.system(size: 18, weight: .semibold)).foregroundColor(NLColor.ink)
                             .frame(width: 46, height: 38)
-                            .background(RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(0.12)))
+                            .background(RoundedRectangle(cornerRadius: 10).fill(Color.white))
+                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(NLColor.line, lineWidth: 1))
                         if inbox.unreadNotices > 0 {
                             Text(inbox.unreadNotices > 99 ? "99+" : "\(inbox.unreadNotices)").font(.system(size: 11, weight: .heavy)).monospacedDigit().foregroundColor(.white)
                                 .padding(.horizontal, 5).frame(minWidth: 20, minHeight: 20)
                                 .background(Capsule().fill(NLColor.red))
-                                .overlay(Capsule().stroke(NLColor.navy, lineWidth: 2))
+                                .overlay(Capsule().stroke(NLColor.page, lineWidth: 2))
                                 .offset(x: 7, y: -7)
                         }
                     }
@@ -628,7 +630,8 @@ struct NativeLedgerView: View {
         }
         .padding(.horizontal, 16)
         .frame(height: 64)
-        .background(NLColor.navy)
+        // 上のバーは画面と同じうすい灰色（2026-10-24 22:28 Ronnie「全部同じ地の色に。広く見える」）
+        .background(NLColor.page.ignoresSafeArea(edges: .top))
     }
 
     private var dateNav: some View {
@@ -668,6 +671,7 @@ struct NativeLedgerView: View {
                 dateSeg("chevron.right", label: "次の日") { model.shiftDate(1) }
             }
             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(NLColor.line, lineWidth: 1))
             if let p = model.payload, p.isToday, isBoardMode, !followNow {
                 // 手で横に動かしたあと：カーソル（今の時刻）の場所へ戻す
                 Button { resumeFollow() } label: {
@@ -683,9 +687,9 @@ struct NativeLedgerView: View {
 
     private func dateSeg(_ icon: String, label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Image(systemName: icon).font(.system(size: 16, weight: .bold)).foregroundColor(.white)
+            Image(systemName: icon).font(.system(size: 16, weight: .bold)).foregroundColor(NLColor.ink)
                 .frame(width: 46, height: 44)
-                .background(Color.white.opacity(0.16))
+                .background(Color(hex: 0xEDEFF4))
         }
         .buttonStyle(PressableStyle())
         .accessibilityLabel(label)

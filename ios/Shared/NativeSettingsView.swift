@@ -27,30 +27,34 @@ struct NativeSettingsView: View {
 
     /// このiPad の設定の中の画面（2026-10-24 16:08 Ronnie「設定はできるだけ少なく。同じものが2〜3か所にあるなら1つに」→ 印刷は1枚に）
     enum Page: String, CaseIterable, Identifiable {
-        case printer, native
+        case printer, native, guide
         var id: String { rawValue }
         var title: String {
             switch self {
             case .printer: return "ハードウェア"
             case .native: return "アプリの画面"
+            case .guide: return "使い方"
             }
         }
         var en: String {
             switch self {
             case .printer: return "Hardware"
             case .native: return "Native screens"
+            case .guide: return "How to read"
             }
         }
         var icon: String {
             switch self {
             case .printer: return "printer"
             case .native: return "ipad"
+            case .guide: return "questionmark.circle"
             }
         }
         var description: String {
             switch self {
             case .printer: return "プリンター（Bluetooth・USB・LAN・Wi-Fi）・紙幅・自動印刷・キャッシュドロア・レシートの出し先・ネットが無いときの印刷"
             case .native: return "ホーム・テーブル・オーダー・会計をアプリの画面で開く（OFF で今までの Web）"
+            case .guide: return "テーブル一覧の色と印の見方"
             }
         }
         /// 見本の tenpoNativePreviewScroll（昔の名前 receipt／lan／wifi／offline も印刷の画面へ）
@@ -180,6 +184,8 @@ struct NativeSettingsView: View {
             out.append(.page(.printer))
             if let d = devices { out.append(.group(d.id)) }
         }
+        // 使い方（テーブル一覧の色と印の見方）はいちばん下（2026-10-24 22:35 Ronnie）
+        out.append(.page(.guide))
         return out
     }
 
@@ -234,6 +240,9 @@ struct NativeSettingsView: View {
         case .page(.native):
             pageTitle(Page.native.icon, Page.native.title, en: Page.native.en, status: pageStatus(.native))
             nativeCard
+        case .page(.guide):
+            pageTitle(Page.guide.icon, Page.guide.title, en: Page.guide.en, status: nil)
+            NativeFloorGuide()
         case .group(let id):
             if let g = groups.first(where: { $0.id == id }) {
                 pageTitle(g.icon, g.label, en: g.en, status: g.label == "デバイス管理" ? pageStatus(.native) : nil)
@@ -383,6 +392,8 @@ struct NativeSettingsView: View {
         case .native:
             let on = state.adminNativePos ?? nativeOn
             return (on ? "ON（アプリの画面）" : "OFF（今までの画面）", on ? NFColor.success : NFColor.ink3)
+        case .guide:
+            return nil
         }
     }
 

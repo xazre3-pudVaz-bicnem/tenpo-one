@@ -235,7 +235,7 @@ struct NativeHomeView: View {
                 Spacer()
                 Button { onWeb("/app/expenses") } label: {
                     ZStack(alignment: .topTrailing) {
-                        Image(systemName: "bell").font(.system(size: 20, weight: .semibold)).foregroundColor(.white).padding(8)
+                        Image(systemName: "bell").font(.system(size: 20, weight: .semibold)).foregroundColor(NT.ink).padding(8)
                         if let n = model.payload?.noticeCount, n > 0 {
                             Text("\(n)").font(.system(size: 11, weight: .heavy)).foregroundColor(.white)
                                 .padding(.horizontal, 5).padding(.vertical, 1)
@@ -250,9 +250,10 @@ struct NativeHomeView: View {
                         Image(systemName: "qrcode")
                         Text("ハンディQR")
                     }
-                    .font(.system(size: 15, weight: .bold)).foregroundColor(.white)
+                    .font(.system(size: 15, weight: .bold)).foregroundColor(NT.ink)
                     .padding(.horizontal, 14).padding(.vertical, 9)
-                    .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white.opacity(0.10)))
+                    .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white))
+                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(NT.line, lineWidth: 1))
                 }
                 .buttonStyle(PressableStyle())
                 // TENPO ONE のマークは上のバーに出さない（2026-10-24 19:04 Ronnie「ロゴは要らない」）
@@ -261,14 +262,16 @@ struct NativeHomeView: View {
                     Image(systemName: "storefront")
                     Text(model.payload?.store.name ?? "").lineLimit(1)
                 }
-                .font(.system(size: 15, weight: .semibold)).foregroundColor(.white)
+                .font(.system(size: 15, weight: .semibold)).foregroundColor(NT.ink2)
                 .padding(.horizontal, 12).padding(.vertical, 8)
-                .background(Capsule().fill(Color.white.opacity(0.10)))
+                .background(Capsule().fill(Color.white))
+                .overlay(Capsule().stroke(NT.line, lineWidth: 1))
                 // ログアウトは 設定 の一覧のいちばん下へ（2026-10-24 19:16 Ronnie「外にはいらない」）
             }
             .padding(.horizontal, 16)
             .frame(height: 64)
-            .background(NT.header)
+            // 上のバーは画面と同じうすい灰色（2026-10-24 22:28 Ronnie）
+            .background(NT.bar.ignoresSafeArea(edges: .top))
 
             HStack(spacing: 18) {
                 Spacer(minLength: 0)

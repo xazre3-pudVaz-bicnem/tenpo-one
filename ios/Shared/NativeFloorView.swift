@@ -40,7 +40,7 @@ struct NativeFloorView: View {
                             }
                             .padding(.horizontal, -10)
                         }
-                        legend
+                        // 色と印の見方はここに出さない（設定 › 使い方 へ。2026-10-24 22:35 Ronnie「ここはいらない」）
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                     NativeReservationPanel(model: model, onLedger: onLedger)
@@ -208,41 +208,6 @@ struct NativeFloorView: View {
 
     // MARK: 色の見方
 
-    private var legend: some View {
-        // 印と色の見方を 1 行に（2026-10-24 22:13 Ronnie「1 行で。書かなくても使ううちに分かる」）。入らないときは横にずらせる
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
-                legendIcon(NativeTableCard.walletSymbol, NativeTableCard.callGreen, "お会計希望")
-                legendIcon("bell.fill", NFColor.callDeep, "呼び出し")
-                legendIcon("bell.fill", NativeTableCard.callRed, "5分すぎ")
-                ForEach(["飲み放題", "食べ放題", "コース", "誕生日", "記念日"], id: \.self) { k in
-                    if let ic = NRWKeywordIcon.symbol(for: k) { legendIcon(ic, NativeTableCard.markColor(ic), k) }
-                }
-                Rectangle().fill(NFColor.line).frame(width: 1, height: 14)
-                ForEach([NFTileState.seated, .ordered, .lo, .over, .pay], id: \.self) { st in
-                    if let b = NativeTableCard.band(st) { legendDot(b.color, border: nil, b.jp) }
-                }
-            }
-        }
-        .padding(.top, 2)
-    }
-
-    private func legendIcon(_ symbol: String, _ color: Color, _ label: String) -> some View {
-        HStack(spacing: 5) {
-            Image(systemName: symbol).font(.system(size: 9, weight: .bold)).foregroundColor(.white)
-                .frame(width: 18, height: 18)
-                .background(RoundedRectangle(cornerRadius: 5, style: .continuous).fill(color))
-            Text(label).font(.system(size: 12, weight: .medium)).foregroundColor(NFColor.ink2)
-        }
-    }
-
-    private func legendDot(_ color: Color, border: Color?, _ label: String) -> some View {
-        HStack(spacing: 5) {
-            Circle().fill(color).frame(width: 9, height: 9)
-                .overlay(Circle().stroke(border ?? .clear, lineWidth: 1))
-            Text(label).font(.system(size: 12, weight: .medium)).foregroundColor(NFColor.ink2)
-        }
-    }
 }
 
 // MARK: - 卓の箱（Web の TableCard と同じ中身）
@@ -771,5 +736,75 @@ struct NativeReservationPanel: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 9)
         .opacity(r.status == "completed" ? 0.5 : 1)
+    }
+}
+
+
+// MARK: - 使い方（テーブル一覧の色と印の見方。設定 › 使い方 で見る。2026-10-24 22:35 Ronnie「設定の中の 使い方 に」）
+
+struct NativeFloorGuide: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            section("卓の下の帯の色") {
+                ForEach([NFTileState.seated, .ordered, .lo, .over, .pay], id: \.self) { st in
+                    if let b = NativeTableCard.band(st) {
+                        row(AnyView(RoundedRectangle(cornerRadius: 4).fill(b.color).frame(width: 34, height: 14)), b.jp, desc(st))
+                    }
+                }
+                row(AnyView(RoundedRectangle(cornerRadius: 4).fill(Color.white).overlay(RoundedRectangle(cornerRadius: 4).stroke(NFColor.line)).frame(width: 34, height: 14)), "空席", "帯なし。まん中にうすく「4名席 空」")
+            }
+            section("右上の印（お客様から）") {
+                row(icon(NativeTableCard.walletSymbol, NativeTableCard.callGreen), "お会計希望", "QR からお会計を頼まれた（回数・何分前）")
+                row(icon("bell.fill", NFColor.callDeep), "呼び出し", "ベルで呼ばれた（回数・何分前）")
+                row(icon("bell.fill", NativeTableCard.callRed), "5分すぎ", "5 分たっても行っていないと赤")
+            }
+            section("番号の横の印（プラン・予約）") {
+                ForEach(["飲み放題", "食べ放題", "コース", "誕生日", "記念日", "子連れ"], id: \.self) { k in
+                    if let ic = NRWKeywordIcon.symbol(for: k) { row(icon(ic, NativeTableCard.markColor(ic)), k, "伝票のモード・予約のタグから") }
+                }
+            }
+            section("そのほか") {
+                row(AnyView(Text("リピ 2回").font(.system(size: 11, weight: .heavy)).foregroundColor(.white).padding(.horizontal, 6).padding(.vertical, 2).background(RoundedRectangle(cornerRadius: 5).fill(NLColor.blue))), "初回・リピ・常連", "顧客台帳とつながっているお客様の来店回数")
+                row(AnyView(Text("最終注文から 45分").font(.system(size: 11, weight: .semibold)).foregroundColor(NativeTableCard.callRed)), "最終注文から", "最後の注文から何分。30 分で赤（卓へ行く目安）")
+                row(AnyView(Image(systemName: "hourglass").foregroundColor(NFColor.royal)), "残り時間", "→ 入店時刻、⏳ 残り時間（コース → 予約の終わり → 店の滞在時間）")
+            }
+        }
+    }
+
+    private func desc(_ st: NFTileState) -> String {
+        switch st {
+        case .seated: return "お客様が座って、まだ注文なし（店舗台帳の「来店済み」と同じ緑）"
+        case .ordered: return "注文が入った（オーダー・会計のボタンと同じ青）"
+        case .lo: return "ラストオーダーの時間"
+        case .over: return "時間を過ぎた"
+        case .pay: return "会計待ち"
+        default: return ""
+        }
+    }
+
+    private func icon(_ symbol: String, _ color: Color) -> AnyView {
+        AnyView(Image(systemName: symbol).font(.system(size: 12, weight: .bold)).foregroundColor(.white)
+            .frame(width: 26, height: 26).background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(color)))
+    }
+
+    private func row(_ mark: AnyView, _ title: String, _ text: String) -> some View {
+        HStack(spacing: 12) {
+            mark.frame(width: 90, alignment: .leading)
+            Text(title).font(.system(size: 15, weight: .heavy)).foregroundColor(NFColor.ink).frame(width: 120, alignment: .leading)
+            Text(text).font(.system(size: 13)).foregroundColor(NFColor.ink2)
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, 4)
+    }
+
+    private func section<Content: View>(_ title: String, @ViewBuilder _ content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title).font(.system(size: 16, weight: .heavy)).foregroundColor(NFColor.ink)
+            content()
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.white))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(NFColor.line, lineWidth: 1))
     }
 }

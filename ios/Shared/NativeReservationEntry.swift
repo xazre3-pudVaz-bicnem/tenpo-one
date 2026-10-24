@@ -332,9 +332,10 @@ struct NativeReservationEntry: View {
         ZStack {
             HStack(spacing: 14) {
                 Button(action: onClose) {
-                    Image(systemName: "xmark").font(.system(size: 18, weight: .bold)).foregroundColor(.white)
+                    Image(systemName: "xmark").font(.system(size: 18, weight: .bold)).foregroundColor(NLColor.ink)
                         .frame(width: 46, height: 40)
-                        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white.opacity(0.12)))
+                        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white))
+                        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(NLColor.line, lineWidth: 1))
                 }
                 .buttonStyle(PressableStyle())
                 .accessibilityLabel("閉じる")
@@ -345,14 +346,16 @@ struct NativeReservationEntry: View {
                     }
                 }
                 .padding(4)
-                .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white.opacity(0.12)))
+                .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white))
+                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(NLColor.line, lineWidth: 1))
                 Spacer()
             }
             stepIndicator
         }
         .padding(.horizontal, 16)
         .frame(height: 64)
-        .background(NLColor.navy)
+        // 上のバーは画面と同じうすい灰色（2026-10-24 22:28 Ronnie）
+        .background(NLColor.page.ignoresSafeArea(edges: .top))
     }
 
     /// ① 日時・人数 ─ ② お客様 ─ ③ 確認・担当（押すとそのページへ。先のページは入れ終わってから）
@@ -364,17 +367,17 @@ struct NativeReservationEntry: View {
                 Button { if canOpen(st) { withAnimation(.easeOut(duration: 0.18)) { step = st } } } label: {
                     HStack(spacing: 7) {
                         ZStack {
-                            Circle().fill(on ? NLColor.yellow : done ? Color.white.opacity(0.9) : Color.white.opacity(0.15)).frame(width: 26, height: 26)
-                            if done { Image(systemName: "checkmark").font(.system(size: 12, weight: .heavy)).foregroundColor(NLColor.navy) }
-                            else { Text("\(st.rawValue + 1)").font(.system(size: 13, weight: .heavy)).foregroundColor(on ? NLColor.navy : .white.opacity(0.7)) }
+                            Circle().fill(on ? NLColor.yellow : done ? NLColor.navy : Color(hex: 0xE3E6ED)).frame(width: 26, height: 26)
+                            if done { Image(systemName: "checkmark").font(.system(size: 12, weight: .heavy)).foregroundColor(.white) }
+                            else { Text("\(st.rawValue + 1)").font(.system(size: 13, weight: .heavy)).foregroundColor(on ? NLColor.navy : NLColor.muted) }
                         }
-                        Text(st.title).font(.system(size: 14, weight: .heavy)).foregroundColor(on ? .white : .white.opacity(done ? 0.85 : 0.5))
+                        Text(st.title).font(.system(size: 14, weight: .heavy)).foregroundColor(on ? NLColor.ink : done ? NLColor.ink.opacity(0.8) : NLColor.muted)
                     }
                 }
                 .buttonStyle(.plain)
                 .disabled(!canOpen(st))
                 if st != .confirm {
-                    Rectangle().fill(Color.white.opacity(0.25)).frame(width: 26, height: 2)
+                    Rectangle().fill(NLColor.line).frame(width: 26, height: 2)
                 }
             }
         }
@@ -384,7 +387,7 @@ struct NativeReservationEntry: View {
         Button(action: action) {
             HStack(spacing: 6) { Image(systemName: icon); Text(t) }
                 .font(.system(size: 15, weight: .heavy))
-                .foregroundColor(on ? NLColor.navy : .white)
+                .foregroundColor(on ? NLColor.navy : NLColor.ink)
                 .padding(.horizontal, 18).frame(height: 40)
                 .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(on ? NLColor.yellow : Color.clear))
         }
@@ -1122,18 +1125,19 @@ struct NativeReservationEntry: View {
     private var tablePicker: some View {
         VStack(spacing: 0) {
             HStack(spacing: 14) {
-                Text("テーブルを選ぶ").font(.system(size: 20, weight: .heavy)).foregroundColor(.white)
-                Text("\(dateLabel(date)) \(time)〜\(NRWMath.addMinutes(time, stay))・\(partyLabel)").font(.system(size: 14, weight: .bold)).monospacedDigit().foregroundColor(NLColor.yellow)
+                Text("テーブルを選ぶ").font(.system(size: 20, weight: .heavy)).foregroundColor(NLColor.ink)
+                Text("\(dateLabel(date)) \(time)〜\(NRWMath.addMinutes(time, stay))・\(partyLabel)").font(.system(size: 14, weight: .bold)).monospacedDigit().foregroundColor(NT.purple)
                 Spacer()
-                Text("時間をずらす").font(.system(size: 12, weight: .bold)).foregroundColor(.white.opacity(0.7))
+                Text("時間をずらす").font(.system(size: 12, weight: .bold)).foregroundColor(NLColor.muted)
                 ForEach([-30, -15, 15, 30], id: \.self) { d in
                     Button {
                         time = NRWMath.addMinutes(time, d)
                         tableIds = tableIds.filter { id in choices.first { $0.table.id == id }?.free ?? false }
                     } label: {
-                        Text(d > 0 ? "+\(d)分" : "\(d)分").font(.system(size: 13, weight: .heavy)).monospacedDigit().foregroundColor(.white)
+                        Text(d > 0 ? "+\(d)分" : "\(d)分").font(.system(size: 13, weight: .heavy)).monospacedDigit().foregroundColor(NLColor.ink)
                             .padding(.horizontal, 10).frame(height: 36)
-                            .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.white.opacity(0.14)))
+                            .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.white))
+                            .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(NLColor.line, lineWidth: 1))
                     }
                     .buttonStyle(PressableStyle())
                 }
@@ -1146,7 +1150,7 @@ struct NativeReservationEntry: View {
             }
             .padding(.horizontal, 16)
             .frame(height: 64)
-            .background(NLColor.navy)
+            .background(NLColor.page.ignoresSafeArea(edges: .top))
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 8) {
                     Image(systemName: tableIds.isEmpty ? "info.circle" : "checkmark.circle.fill").foregroundColor(tableIds.isEmpty ? NLColor.muted : NLColor.green)
