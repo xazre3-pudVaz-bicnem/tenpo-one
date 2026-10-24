@@ -11,7 +11,7 @@ describe('ネイティブの店舗台帳の操作（2026-10-24 Ronnie「店舗�
     expect(parseNativeLedgerAction({ type: 'floorBill' }).ok).toBe(false);
     expect(isNativeLedgerActionType('ledgerSeat')).toBe(true);
     expect(isNativeLedgerActionType('send')).toBe(false);
-    expect(NATIVE_LEDGER_ACTION_TYPES.length).toBe(21);
+    expect(NATIVE_LEDGER_ACTION_TYPES.length).toBe(24);
   });
 
   it('予約登録：日時・人数・名前・電話・経路・コース・卓・滞在・仮予約', () => {

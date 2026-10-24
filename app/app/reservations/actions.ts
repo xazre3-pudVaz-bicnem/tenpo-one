@@ -754,6 +754,11 @@ export interface ManualReservationInput {
   tags?: string[];
   /** 担当者（レジの担当名 pos_clerks.id） */
   clerkId?: string | null;
+  /**
+   * 人数を範囲で受けたときの最小人数（例 4〜6 名の 4。2026-10-24 Ronnie「来店人数が決まっていないお客様」）。
+   * party_size は最大人数（席の割り当てに使う）。reservations.party_size_min（migration 00102）。列がまだ無いときはメモに残す
+   */
+  partySizeMin?: number | null;
   /** キャンセル待ちからの変換の場合に指定。作成成功時に waitlist_entries.status を converted にする */
   waitlistEntryId?: string;
 }
@@ -827,6 +832,11 @@ export async function createManualReservation(input: ManualReservationInput) {
   const status = input.status === 'pending' ? 'pending' : 'confirmed';
   // キーワードの列（migration 00099）がまだ無いデータベースでも登録できるように、無ければメモに残して登録し直す
   let tagsColumn = tags.length > 0;
+  // 人数の範囲（最小〜最大）。最小が最大より小さいときだけ。列（migration 00102）が無ければメモに残す
+  const partyMin =
+    input.partySizeMin != null && Number.isInteger(input.partySizeMin) && input.partySizeMin >= 1 && input.partySizeMin < partySize ? input.partySizeMin : null;
+  if (input.partySizeMin != null && input.partySizeMin > partySize) throw new Error('人数の範囲を確認してください（最大人数が最小人数より小さい）');
+  let rangeColumn = partyMin !== null;
 
   let lastError: unknown = null;
   for (let attempt = 0; attempt < 6; attempt++) {
@@ -857,7 +867,14 @@ export async function createManualReservation(input: ManualReservationInput) {
         created_by: ctx.userId,
         ...(clerk ? { clerk_id: clerk.id, clerk_name: clerk.name } : {}),
         ...(tagsColumn ? { tags } : {}),
-        ...(!tagsColumn && tags.length > 0 ? { memo: `キーワード：${tags.join('・')}` } : {}),
+        ...(rangeColumn ? { party_size_min: partyMin } : {}),
+        ...(() => {
+          const notes = [
+            ...(!tagsColumn && tags.length > 0 ? [`キーワード：${tags.join('・')}`] : []),
+            ...(!rangeColumn && partyMin !== null ? [`人数：${partyMin}〜${partySize}名`] : []),
+          ];
+          return notes.length > 0 ? { memo: notes.join('\n') } : {};
+        })(),
       })
       .select('id')
       .single();
@@ -879,7 +896,13 @@ export async function createManualReservation(input: ManualReservationInput) {
     lastError = error;
     const errCode = (error as { code?: string; message?: string })?.code;
     // tags の列が無い（42703 / PGRST204）→ メモに残して登録し直す
-    if (tagsColumn && (errCode === '42703' || errCode === 'PGRST204' || /tags/.test((error as { message?: string })?.message ?? ''))) {
+    const errMsg = (error as { message?: string })?.message ?? '';
+    // party_size_min の列が無い → 人数の範囲はメモに残して登録し直す
+    if (rangeColumn && (errCode === '42703' || errCode === 'PGRST204') && /party_size_min/.test(errMsg)) {
+      rangeColumn = false;
+      continue;
+    }
+    if (tagsColumn && (errCode === '42703' || errCode === 'PGRST204' || /tags/.test(errMsg))) {
       tagsColumn = false;
       continue;
     }

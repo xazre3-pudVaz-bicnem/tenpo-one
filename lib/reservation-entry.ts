@@ -5,32 +5,65 @@
  * ここは画面を持たない計算だけ（テストしやすいように）。
  */
 
-/** キーワード（複数選択）。店舗の設定（store_settings.settings.reservation_keywords）が無ければこれ */
+/**
+ * キーワード（予約につけるラベル。複数選択）。店舗が自分で登録する（store_settings.settings.reservation_keywords）。
+ * 2026-10-24 Ronnie：1 店舗 10 個まで・1 つ 15 文字まで・空白だけや重複は登録しない・前後の空白は削る・削除と並べ替えができる。
+ * 誕生日・記念日・子ども連れ・アレルギーは「お客様・予約のタグ」（lib/reservation-tags.ts）の区分に移したので、
+ * 店舗がまだ登録していないときの初期値はそれ以外の 8 個。
+ */
+export const KEYWORD_MAX_COUNT = 10;
+export const KEYWORD_MAX_LENGTH = 15;
+
 export const DEFAULT_RESERVATION_KEYWORDS = [
   '当日予約',
   '当日変更',
   '予約確認済',
   'クーポン利用',
   'ポイント利用',
-  '誕生日',
-  '記念日',
   'デザートプレート',
   '幹事無料',
   '個室希望',
-  '子ども連れ',
-  'アレルギーあり',
 ] as const;
 
 /** 要連絡（予約ステータスで選ぶ。キーワードとして予約に残す） */
 export const NEEDS_CONTACT_TAG = '要連絡';
 
+/** 文字数（絵文字なども 1 文字として数える） */
+export function charCount(s: string): number {
+  return Array.from(s).length;
+}
+
+/** 店舗のキーワード（登録が無ければ初期値）。前に保存した分が多くても 10 個・15 文字までに収める */
 export function reservationKeywordsFrom(settings: unknown): string[] {
   const raw = (settings as { reservation_keywords?: unknown } | null)?.reservation_keywords;
   if (Array.isArray(raw)) {
-    const list = [...new Set(raw.filter((v): v is string => typeof v === 'string').map((v) => v.trim()).filter(Boolean))];
-    if (list.length > 0) return list.slice(0, 40);
+    const list = [...new Set(raw.filter((v): v is string => typeof v === 'string').map((v) => v.trim()).filter((v) => v && charCount(v) <= KEYWORD_MAX_LENGTH))];
+    return list.slice(0, KEYWORD_MAX_COUNT);
   }
   return [...DEFAULT_RESERVATION_KEYWORDS];
+}
+
+/** 店舗がキーワードを自分で登録したか（したなら、空の一覧も「無し」として扱う） */
+export function hasCustomKeywords(settings: unknown): boolean {
+  return Array.isArray((settings as { reservation_keywords?: unknown } | null)?.reservation_keywords);
+}
+
+/**
+ * 店舗のキーワードを保存できる形に確かめる（サーバーでも必ず通す）。
+ * 前後の空白を削り、空白だけ・重複は落とす。15 文字を超えるもの・11 個以上はエラー。
+ */
+export function sanitizeKeywords(raw: unknown): { ok: true; keywords: string[] } | { ok: false; error: string } {
+  if (!Array.isArray(raw)) return { ok: false, error: 'キーワードの形が正しくありません' };
+  const out: string[] = [];
+  for (const v of raw) {
+    if (typeof v !== 'string') return { ok: false, error: 'キーワードの形が正しくありません' };
+    const t = v.trim();
+    if (!t) continue;
+    if (charCount(t) > KEYWORD_MAX_LENGTH) return { ok: false, error: `キーワードは ${KEYWORD_MAX_LENGTH} 文字までです` };
+    if (!out.includes(t)) out.push(t);
+  }
+  if (out.length > KEYWORD_MAX_COUNT) return { ok: false, error: `キーワードは ${KEYWORD_MAX_COUNT} 個までです` };
+  return { ok: true, keywords: out };
 }
 
 /** キーワードを保存できる形に（空・重複・長すぎを除く。最大20個） */

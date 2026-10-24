@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { getReservationEntryData } from '@/app/app/reservations/actions';
 import type { ReservationEntryData } from '@/lib/reservation-entry-server';
 
-const EMPTY: ReservationEntryData = { tables: [], booked: [], defaultStay: 120, keywords: [], clerks: [], courseDurations: {} };
+const EMPTY: ReservationEntryData = { tables: [], booked: [], defaultStay: 120, keywords: [], keywordsCustom: false, tagGroups: [], clerks: [], courseDurations: {} };
 
 /**
  * 予約登録のデータ（その日の卓と予約・確保時間・キーワード・担当者）を読む。日付・店舗が変わると読み直す。

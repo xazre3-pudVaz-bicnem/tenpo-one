@@ -26,6 +26,8 @@ import { loadNativeBudgetAuto, loadNativeBudgetDaily } from '@/lib/native-budget
 import { isNativeLedgerActionType, parseNativeLedgerAction, type NativeLedgerAction } from '@/lib/native-ledger';
 import { loadNativeLedger, loadNativeLedgerMonth, loadNativeLedgerWait, loadNativeLedgerWeek } from '@/lib/native-ledger-server';
 import { loadReservationEntryData } from '@/lib/reservation-entry-server';
+import { loadReservationInbox } from '@/lib/reservation-inbox-server';
+import { saveReservationKeywords, saveReservationTagGroups } from '@/app/app/reservations/label-actions';
 import { isNativeGourmetActionType, parseNativeGourmetAction } from '@/lib/native-gourmet';
 import { loadNativeGourmet } from '@/lib/native-gourmet-server';
 import { markGourmetSiteRegistered, regenerateGourmetMailToken, resolveGourmetMailImport, setGourmetMailEnabled } from '@/app/app/settings/reservation-book/actions';
@@ -137,8 +139,12 @@ import { ADMIN_ONLY_SETTINGS_NOTE } from '@/lib/admin-only-settings';
 import { isNativePettyActionType, nativePettyPermission, parseNativePettyAction } from '@/lib/native-petty';
 import { loadNativeClosings, loadNativePetty } from '@/lib/native-petty-server';
 import {
+  acknowledgeReservation,
   assignTables,
   cancelReservation,
+  confirmPendingReservation,
+  markReservationContacted,
+  resolveInboxImport,
   createManualReservation,
   createOrderForReservation,
   createWalkInReservation,
@@ -773,6 +779,16 @@ export async function GET(request: Request) {
     return json({ ok: true, date, ...entry });
   }
 
+  // 予約受付管理とメッセージ（店舗台帳の右上のメッセージの箱。Web の予約の画面の「受付管理｜メッセージ」と同じ。2026-10-24 19:56 Ronnie）
+  if (part === 'ledgerInbox') {
+    const store = ctx.currentStore ?? ctx.stores[0] ?? null;
+    if (!store) return json({ ok: false, error: '店舗がありません' }, 404);
+    if (ctx.disabledFeatures?.has('reservations')) return json({ ok: false, error: 'この機能は使えません', useWeb: true }, 403);
+    if (!can(ctx.role, 'reservations.view')) return json({ ok: false, error: '権限がありません' }, 403);
+    const inbox = await loadReservationInbox(await createClient(), store.id, todayJst());
+    return json({ ok: true, storeId: store.id, canWrite: can(ctx.role, 'reservations.write'), ...inbox });
+  }
+
   // 店舗台帳のウェイティング（Web の view=waitlist）
   if (part === 'ledgerWait') {
     const store = ctx.currentStore ?? ctx.stores[0] ?? null;
@@ -899,7 +915,8 @@ export async function POST(request: Request) {
     const parsedLedger = parseNativeLedgerAction(raw);
     if (!parsedLedger.ok) return json({ ok: false, error: parsedLedger.error }, 400);
     const action = parsedLedger.action;
-    const ledgerPerm: PermissionAction = action.type === 'ledgerSeat' ? 'pos.order' : action.type === 'ledgerFindSeats' ? 'reservations.view' : 'reservations.write';
+    const ledgerPerm: PermissionAction =
+      action.type === 'ledgerSeat' ? 'pos.order' : action.type === 'ledgerFindSeats' ? 'reservations.view' : action.type === 'ledgerTagGroupsSave' ? 'store.settings' : 'reservations.write';
     if (!can(ctx.role, ledgerPerm)) return json({ ok: false, error: '権限がありません' }, 403);
     const problem = await networkProblem(ctx);
     if (problem) return json({ ok: false, error: problem }, 403);
@@ -1894,6 +1911,7 @@ async function runLedgerAction(ctx: SessionContext, action: NativeLedgerAction):
         clerkId: i.clerkId,
         email: i.email || undefined,
         tags: i.tags,
+        partySizeMin: i.partySizeMin,
         waitlistEntryId: i.waitlistEntryId ?? undefined,
       })) as unknown as { reservationId?: string; id?: string } | void;
       return { ok: true, reservationId: res && typeof res === 'object' ? (res.reservationId ?? res.id ?? null) : null };
@@ -1930,6 +1948,25 @@ async function runLedgerAction(ctx: SessionContext, action: NativeLedgerAction):
       return { ok: true, orderId };
     }
     // 空席検索（Web の FindSeatsDialog と同じ：その時間帯に割当のない卓。清掃バッファも考慮）
+    case 'ledgerInboxAct': {
+      if (action.act === 'confirm') await confirmPendingReservation(action.id);
+      else if (action.act === 'contacted') await markReservationContacted(action.id);
+      else if (action.act === 'ack') await acknowledgeReservation(action.id);
+      else await resolveInboxImport(action.id);
+      return { ok: true };
+    }
+    case 'ledgerKeywordsSave': {
+      const store = ctx.currentStore ?? ctx.stores[0];
+      if (!store) return { ok: false, error: '店舗がありません' };
+      const r = await saveReservationKeywords(store.id, action.keywords);
+      return r.error ? { ok: false, error: r.error } : { ok: true, keywords: r.keywords };
+    }
+    case 'ledgerTagGroupsSave': {
+      const store = ctx.currentStore ?? ctx.stores[0];
+      if (!store) return { ok: false, error: '店舗がありません' };
+      const r = await saveReservationTagGroups(store.id, action.groups);
+      return r.error ? { ok: false, error: r.error } : { ok: true, tagGroups: r.groups };
+    }
     case 'ledgerFindSeats': {
       const store = ctx.currentStore ?? ctx.stores[0];
       if (!store) return { ok: false, error: '店舗がありません' };

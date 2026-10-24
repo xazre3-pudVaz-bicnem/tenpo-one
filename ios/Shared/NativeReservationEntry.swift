@@ -31,9 +31,29 @@ struct NRWEntry: Decodable {
     let tables: [NRWTable]
     let booked: [NRWBooked]
     let defaultStay: Int
-    let keywords: [String]
+    var keywords: [String]
+    /// 店舗がキーワードを自分で登録したか（false＝初期値）
+    let keywordsCustom: Bool
+    /// お客様・予約のタグ（区分ごと）
+    var tagGroups: [NRWTagGroup]
     let clerks: [NFNamed]
     let courseDurations: [String: Int]
+
+    enum CodingKeys: String, CodingKey { case date, tables, booked, defaultStay, keywords, keywordsCustom, tagGroups, clerks, courseDurations }
+
+    // 古いサーバー（項目が足りない）でも読めるように、無い項目は空にする
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        date = try c.decode(String.self, forKey: .date)
+        tables = (try? c.decode([NRWTable].self, forKey: .tables)) ?? []
+        booked = (try? c.decode([NRWBooked].self, forKey: .booked)) ?? []
+        defaultStay = (try? c.decode(Int.self, forKey: .defaultStay)) ?? 120
+        keywords = (try? c.decode([String].self, forKey: .keywords)) ?? []
+        keywordsCustom = (try? c.decode(Bool.self, forKey: .keywordsCustom)) ?? false
+        tagGroups = (try? c.decode([NRWTagGroup].self, forKey: .tagGroups)) ?? []
+        clerks = (try? c.decode([NFNamed].self, forKey: .clerks)) ?? []
+        courseDurations = (try? c.decode([String: Int].self, forKey: .courseDurations)) ?? [:]
+    }
 }
 
 /// 予約ステータス（Web の ENTRY_STATUSES と同じ）
@@ -200,12 +220,21 @@ struct NativeReservationEntry: View {
     /// 上の「直接来店」（ウォークインの登録へ）
     var onWalkIn: (() -> Void)? = nil
 
-    enum Pop { case date, time, stay, adults, children }
+    enum Pop { case date, time, stay }
+    /// テンキーで入れているところ：人数（最小）・「〜」のあとの最大人数・「の内子供」
+    enum PartyField { case min, max, children }
 
     @State private var date = ""
     @State private var time = "18:00"
-    @State private var adults = 2
+    /// 人数（範囲のときは最小）。「〜」で最大人数（席の割り当ては最大）。子供は「の内子供」（合計に含む）
+    @State private var partyMin = 2
+    @State private var partyMax: Int? = nil
     @State private var children = 0
+    @State private var partyField: PartyField = .min
+    /// 次に押した数字で入れ直す（押した直後・欄を切り替えた直後）
+    @State private var partyFresh = true
+    /// 選んだお客様・予約のタグ（区分のタグ。キーワードは tags）
+    @State private var tagLabels: [String] = []
     @State private var tableIds: [String] = []
     @State private var name = ""
     @State private var kana = ""
@@ -233,7 +262,18 @@ struct NativeReservationEntry: View {
 
     private var p: NLPayload? { model.payload }
     private var today: String { Self.ymd(Date()) }
-    private var party: Int { adults + children }
+    /// 席の割り当て・人数に使う数（範囲のときは最大）
+    private var party: Int { max(partyMin, partyMax ?? partyMin) }
+    /// 最大人数が最小人数より小さい（確定できない）
+    private var partyRangeBad: Bool { if let mx = partyMax { return mx < partyMin } else { return false } }
+    /// 「〜」を押して最大人数を入れているところ（まだ数字を入れていない）
+    private var partyRangeOpen: Bool { partyField == .max && partyMax == nil }
+    private var partyLabel: String {
+        var t = partyMax.map { "\(partyMin)〜\($0)名" } ?? "\(partyMin)名"
+        if partyRangeOpen { t = "\(partyMin)〜 名" }
+        if children > 0 { t += "（うち子供 \(children)）" }
+        return t
+    }
     private var defaultStay: Int {
         if !courseId.isEmpty, let d = entry?.courseDurations[courseId], d > 0 { return d }
         return entry?.defaultStay ?? 120
@@ -245,7 +285,7 @@ struct NativeReservationEntry: View {
         return NRWMath.choices(e, date: date, time: t, stay: stay, party: party, today: today, now: now)
     }
     private var canSave: Bool {
-        !saving && !name.trimmingCharacters(in: .whitespaces).isEmpty && phone.filter(\.isNumber).count >= 10 && party >= 1 && !date.isEmpty
+        !saving && !name.trimmingCharacters(in: .whitespaces).isEmpty && phone.filter(\.isNumber).count >= 10 && partyMin >= 1 && !partyRangeBad && !partyRangeOpen && children <= partyMin && !date.isEmpty
     }
 
     var body: some View {
@@ -325,12 +365,7 @@ struct NativeReservationEntry: View {
                             .popover(isPresented: popBinding(.stay)) { stayPopover }
                     }
                 }
-                field("大人") {
-                    countRow(values: Array(1...6), value: adults, otherPop: .adults) { adults = $0; tableIds = [] }
-                }
-                field("子ども") {
-                    countRow(values: Array(0...3), value: children, otherPop: .children) { children = $0; tableIds = [] }
-                }
+                partyKeypad
                 tableSection
                 divider
                 field("要望メモ") { memo }
@@ -532,72 +567,117 @@ struct NativeReservationEntry: View {
         .frame(width: 360)
     }
 
-    // 人数：よく使う数を並べて、ほかはテンキー
-    private func countRow(values: [Int], value: Int, otherPop: Pop, set: @escaping (Int) -> Void) -> some View {
-        HStack(spacing: 8) {
-            ForEach(values, id: \.self) { v in
-                let on = v == value
-                Button { set(v) } label: {
-                    Text("\(v)").font(.system(size: 20, weight: .heavy)).monospacedDigit()
-                        .foregroundColor(on ? .white : NLColor.ink)
-                        .frame(maxWidth: .infinity).frame(height: 52)
-                        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(on ? NLColor.navy : NLColor.page))
-                }
-                .buttonStyle(PressableStyle())
-            }
-            let other = !values.contains(value)
-            Button { padText = ""; pop = otherPop } label: {
-                Text(other ? "\(value)名" : "ほか").font(.system(size: 17, weight: .heavy)).monospacedDigit()
-                    .foregroundColor(other ? .white : NLColor.ink)
-                    .frame(maxWidth: .infinity).frame(height: 52)
-                    .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(other ? NLColor.navy : NLColor.page))
-            }
-            .buttonStyle(PressableStyle())
-            .popover(isPresented: popBinding(otherPop)) { keypad(set: set) }
-        }
-    }
+    // 人数：テンキー（7 8 9 ／ 4 5 6 ／ 1 2 3 ／ 0 〜 ⌫）。「〜」で 4〜6 人のように範囲、「の内子供」で子供の人数
+    // （2026-10-24 Ronnie。席の割り当ては最大人数。子供は合計に含み、最小人数を超えない）
+    private let keyW: CGFloat = 96
+    private let keyH: CGFloat = 64
 
-    private func keypad(set: @escaping (Int) -> Void) -> some View {
-        VStack(spacing: 10) {
-            Text(padText.isEmpty ? "—" : "\(padText)名").font(.system(size: 30, weight: .heavy)).monospacedDigit().foregroundColor(NLColor.ink)
-                .frame(height: 44)
-            let keys: [[String]] = [["7", "8", "9"], ["4", "5", "6"], ["1", "2", "3"], ["C", "0", "⌫"]]
-            ForEach(keys, id: \.self) { row in
-                HStack(spacing: 10) {
-                    ForEach(row, id: \.self) { k in
-                        Button {
-                            switch k {
-                            case "C": padText = ""
-                            case "⌫": padText = String(padText.dropLast())
-                            default:
-                                var t = padText + k
-                                while t.count > 1 && t.hasPrefix("0") { t.removeFirst() }
-                                if t.count <= 3 { padText = t }
-                            }
-                        } label: {
-                            Group {
-                                if k == "⌫" { Image(systemName: "delete.left").font(.system(size: 22, weight: .semibold)) }
-                                else { Text(k).font(.system(size: 26, weight: .semibold)).monospacedDigit() }
-                            }
-                            .foregroundColor(k == "C" ? NLColor.red : NLColor.ink)
-                            .frame(width: 84, height: 60)
-                            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(NLColor.page))
+    private var partyKeypad: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("人数は何名様ですか？").font(.system(size: 15, weight: .heavy)).foregroundColor(NLColor.navy)
+            HStack(alignment: .center, spacing: 10) {
+                Button { partyField = .min; partyFresh = true } label: { partyDisplay }
+                    .buttonStyle(.plain)
+                    .frame(width: keyW * 2 + 10, alignment: .leading)
+                padKey(children > 0 && partyField != .children ? "の内子供 \(children)" : "の内子供", on: partyField == .children) {
+                    partyField = partyField == .children ? .min : .children
+                    partyFresh = true
+                }
+            }
+            VStack(spacing: 10) {
+                ForEach([["7", "8", "9"], ["4", "5", "6"], ["1", "2", "3"], ["0", "〜", "⌫"]], id: \.self) { row in
+                    HStack(spacing: 10) {
+                        ForEach(row, id: \.self) { k in
+                            padKey(k, on: k == "〜" && partyField == .max) { pressParty(k) }
                         }
-                        .buttonStyle(PressableStyle())
                     }
                 }
             }
-            Button {
-                set(min(999, Int(padText) ?? 0)); pop = nil
-            } label: {
-                Text("決める").font(.system(size: 17, weight: .heavy)).foregroundColor(NLColor.navy)
-                    .frame(maxWidth: .infinity).frame(height: 52)
-                    .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(NLColor.yellow))
+            if let warn = partyWarning {
+                Text(warn).font(.system(size: 13, weight: .bold)).foregroundColor(NLColor.red)
             }
-            .buttonStyle(PressableStyle())
         }
-        .padding(18)
-        .frame(width: 310)
+    }
+
+    private var partyDisplay: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(partyMax.map { "\(partyMin)〜\($0)" } ?? (partyRangeOpen ? "\(partyMin)〜" : "\(partyMin)"))
+                    .font(.system(size: 44, weight: .heavy)).monospacedDigit()
+                    .foregroundColor(partyField == .children ? NLColor.muted : NLColor.ink)
+                    .lineLimit(1).minimumScaleFactor(0.5)
+                if partyRangeOpen {
+                    Text("？").font(.system(size: 30, weight: .heavy)).foregroundColor(NLColor.gray)
+                }
+                Text("人").font(.system(size: 20, weight: .bold)).foregroundColor(NLColor.muted)
+            }
+            if children > 0 || partyField == .children {
+                Text("うち子供 \(children)").font(.system(size: 15, weight: .heavy)).monospacedDigit()
+                    .foregroundColor(partyField == .children ? NLColor.navy : NLColor.muted)
+                    .padding(.horizontal, partyField == .children ? 8 : 0).padding(.vertical, 2)
+                    .background(RoundedRectangle(cornerRadius: 6).fill(partyField == .children ? NLColor.yellow : Color.clear))
+            }
+        }
+        .padding(.horizontal, 14)
+        .frame(maxWidth: .infinity, minHeight: keyH, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(NLColor.page))
+    }
+
+    private var partyWarning: String? {
+        if partyMin < 1 { return "人数を入れてください" }
+        if partyRangeOpen { return "「〜」のあとに最大の人数を入れてください" }
+        if partyRangeBad { return "最大人数が最小人数より小さいので確定できません" }
+        if children > partyMin { return "子供の人数は合計（\(partyMin)人）を超えられません" }
+        return nil
+    }
+
+    /// テンキーの 1 つ（数字・「〜」・⌫・「の内子供」は同じ大きさ・同じ形）
+    private func padKey(_ k: String, on: Bool = false, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Group {
+                if k == "⌫" { Image(systemName: "delete.left").font(.system(size: 24, weight: .semibold)) }
+                else if k.count > 2 { Text(k).font(.system(size: 17, weight: .heavy)).lineLimit(1).minimumScaleFactor(0.7) }
+                else { Text(k).font(.system(size: 30, weight: .semibold)).monospacedDigit() }
+            }
+            .foregroundColor(on ? NLColor.navy : NLColor.ink)
+            .frame(width: keyW, height: keyH)
+            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(on ? NLColor.yellow : Color.white))
+            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(on ? NLColor.yellow : NLColor.line, lineWidth: 1.5))
+            .shadow(color: Color.black.opacity(0.05), radius: 1, y: 1)
+        }
+        .buttonStyle(PressableStyle())
+    }
+
+    private func pressParty(_ k: String) {
+        tableIds = []
+        switch k {
+        case "〜":
+            guard partyField != .max else { return }
+            partyField = .max
+            partyMax = nil
+            partyFresh = true
+        case "⌫":
+            switch partyField {
+            case .min: partyMin /= 10
+            case .children: children /= 10
+            case .max:
+                if let mx = partyMax {
+                    let v = mx / 10
+                    partyMax = v == 0 ? nil : v
+                } else {
+                    partyField = .min      // 「〜」を消す
+                }
+            }
+            partyFresh = false
+        default:
+            guard let d = Int(k) else { return }
+            switch partyField {
+            case .min: partyMin = partyFresh ? d : min(999, partyMin * 10 + d)
+            case .max: partyMax = (partyFresh || partyMax == nil) ? d : min(999, (partyMax ?? 0) * 10 + d)
+            case .children: children = partyFresh ? d : min(999, children * 10 + d)
+            }
+            partyFresh = false
+        }
     }
 
     // おすすめのテーブル（その時間に空いていて人数に合う卓。入らないときはつなげる卓。30 分後も）
@@ -821,7 +901,14 @@ struct NativeReservationEntry: View {
                     input("name@example.com", text: $email).keyboardType(.emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled()
                 }
                 divider
-                field("キーワード（いくつでも）") { keywordGrid }
+                NRWKeywordsEditor(keywords: Binding(get: { entry?.keywords ?? [] }, set: { entry?.keywords = $0 }), selected: $tags, save: NRWLabelsApi.saveKeywords)
+                if let groups = entry?.tagGroups, !groups.isEmpty {
+                    divider
+                    Text("お客様・予約のタグ").font(.system(size: 14, weight: .heavy)).foregroundColor(NLColor.navy)
+                    NRWTagGroupsPicker(groups: groups, selected: $tagLabels)
+                } else if entry == nil {
+                    Text(entryLoading ? "キーワード・タグを読み込んでいます…" : "キーワード・タグを読めませんでした").font(.system(size: 13, weight: .semibold)).foregroundColor(NLColor.muted)
+                }
             }
             .padding(22)
         }
@@ -865,32 +952,13 @@ struct NativeReservationEntry: View {
             .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(NLColor.line, lineWidth: 1.5))
     }
 
-    private var keywordGrid: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 128), spacing: 8)], alignment: .leading, spacing: 8) {
-            ForEach(entry?.keywords ?? [], id: \.self) { k in
-                let on = tags.contains(k)
-                Button { if on { tags.removeAll { $0 == k } } else { tags.append(k) } } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: on ? "checkmark" : "tag").font(.system(size: 11, weight: .heavy))
-                        Text(k).font(.system(size: 14, weight: .bold)).lineLimit(1).minimumScaleFactor(0.7)
-                    }
-                    .foregroundColor(on ? .white : NLColor.ink)
-                    .padding(.horizontal, 12).frame(maxWidth: .infinity).frame(height: 44)
-                    .background(Capsule().fill(on ? NLColor.navy : Color.white))
-                    .overlay(Capsule().stroke(on ? NLColor.navy : NLColor.line, lineWidth: 1.5))
-                }
-                .buttonStyle(PressableStyle())
-            }
-        }
-    }
-
     // MARK: 下（要約・キャンセル・登録）
 
     private var footer: some View {
         HStack(spacing: 14) {
             VStack(alignment: .leading, spacing: 3) {
                 Text(prefill == nil ? "予約の登録" : "予約へ変換").font(.system(size: 12, weight: .heavy)).foregroundColor(NLColor.muted)
-                Text("\(party)名・\(dateLabel(date))\(date == today ? "（今日）" : "")・\(time)〜\(NRWMath.addMinutes(time, stay))・\(tableSummary)")
+                Text("\(partyLabel)・\(dateLabel(date))\(date == today ? "（今日）" : "")・\(time)〜\(NRWMath.addMinutes(time, stay))・\(tableSummary)")
                     .font(.system(size: 16, weight: .heavy)).monospacedDigit().foregroundColor(NLColor.ink).lineLimit(1).minimumScaleFactor(0.7)
                 if let warn = staySelectionWarning ?? problem {
                     Text(warn).font(.system(size: 12, weight: .bold)).foregroundColor(NLColor.red).lineLimit(2)
@@ -943,7 +1011,7 @@ struct NativeReservationEntry: View {
         VStack(spacing: 0) {
             HStack(spacing: 14) {
                 Text("テーブルを選ぶ").font(.system(size: 20, weight: .heavy)).foregroundColor(.white)
-                Text("\(dateLabel(date)) \(time)〜\(NRWMath.addMinutes(time, stay))・\(party)名").font(.system(size: 14, weight: .bold)).monospacedDigit().foregroundColor(NLColor.yellow)
+                Text("\(dateLabel(date)) \(time)〜\(NRWMath.addMinutes(time, stay))・\(partyLabel)").font(.system(size: 14, weight: .bold)).monospacedDigit().foregroundColor(NLColor.yellow)
                 Spacer()
                 Text("時間をずらす").font(.system(size: 12, weight: .bold)).foregroundColor(.white.opacity(0.7))
                 ForEach([-30, -15, 15, 30], id: \.self) { d in
@@ -1151,7 +1219,7 @@ struct NativeReservationEntry: View {
     private func setUp() {
         now = Date()
         if let pf = prefill {
-            date = pf.date; time = pf.time; adults = max(1, pf.adults); name = pf.name; phone = pf.phone; note = pf.note
+            date = pf.date; time = pf.time; partyMin = max(1, pf.adults); name = pf.name; phone = pf.phone; note = pf.note
             return
         }
         let base = model.date ?? p?.date ?? today
@@ -1223,8 +1291,9 @@ struct NativeReservationEntry: View {
         var input: [String: Any] = [
             "date": date,
             "time": time,
-            "adults": adults,
-            "children": children,
+            "adults": party - min(children, party),
+            "children": min(children, party),
+            "partySizeMin": partyMax != nil && partyMin < party ? partyMin : NSNull(),
             "name": name,
             "kana": kana,
             "phone": phone,
@@ -1235,7 +1304,7 @@ struct NativeReservationEntry: View {
             "tableIds": tableIds,
             "stayMinutes": stay,
             "status": status.rawValue,
-            "tags": tags,
+            "tags": tags + tagLabels.filter { !tags.contains($0) },
             "clerkId": clerkId.isEmpty ? NSNull() : clerkId,
         ]
         if let pf = prefill { input["waitlistEntryId"] = pf.waitlistEntryId }

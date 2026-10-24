@@ -29,6 +29,8 @@ export type NativeLedgerAction =
         clerkId: string | null;
         /** メール（任意） */
         email: string;
+        /** 人数を範囲で受けたときの最小人数（例 4〜6 名の 4）。最大人数＝大人＋子ども（席の割り当てに使う） */
+        partySizeMin: number | null;
         /** キーワード（複数。予約ステータスの「要連絡」はここに入れる） */
         tags: string[];
         /** キャンセル待ちから「予約へ変換」するとき */
@@ -56,7 +58,13 @@ export type NativeLedgerAction =
   /** 空席検索（その時間帯に割当のない卓。Web の FindSeatsDialog と同じ） */
   | { type: 'ledgerFindSeats'; date: string; time: string; stayMinutes: number; partySize: number }
   /** 直接来店（ウォークイン登録。Web の WalkInDialog と同じ） */
-  | { type: 'ledgerWalkIn'; tableId: string; adults: number; children: number; name: string; phone: string };
+  | { type: 'ledgerWalkIn'; tableId: string; adults: number; children: number; name: string; phone: string }
+  /** 店舗のキーワード（10 個・15 文字。中身はサーバーの sanitizeKeywords で確かめる） */
+  | { type: 'ledgerKeywordsSave'; keywords: string[] }
+  /** お客様・予約のタグの区分（店舗の設定。null は既定に戻す） */
+  | { type: 'ledgerTagGroupsSave'; groups: unknown[] | null }
+  /** 予約受付管理の「確定する／連絡済み／確認済み／対応済み」（Web の reservation-inbox と同じ） */
+  | { type: 'ledgerInboxAct'; act: 'confirm' | 'contacted' | 'ack' | 'resolveImport'; id: string };
 
 export type NativeLedgerActionType = NativeLedgerAction['type'];
 
@@ -82,6 +90,9 @@ export const NATIVE_LEDGER_ACTION_TYPES: readonly NativeLedgerActionType[] = [
   'ledgerWaitGuide',
   'ledgerWaitTicket',
   'ledgerWaitlistAdd',
+  'ledgerKeywordsSave',
+  'ledgerTagGroupsSave',
+  'ledgerInboxAct',
 ];
 
 export function isNativeLedgerActionType(v: unknown): v is NativeLedgerActionType {
@@ -125,6 +136,9 @@ export function parseNativeLedgerAction(raw: unknown): Parsed {
       if (!Array.isArray(rawTags) || rawTags.length > 40 || !rawTags.every((t) => typeof t === 'string')) return bad();
       const tags = normalizeTags([...(tag ? [tag] : []), ...(rawTags as string[])]);
       const email = str(i.email, 254);
+      const partyMax = (i.adults as number) + (i.children as number);
+      const partySizeMin = i.partySizeMin == null ? null : i.partySizeMin;
+      if (partySizeMin !== null && (!isInt(partySizeMin, 1, 999) || (partySizeMin as number) > partyMax)) return bad('人数の範囲を確認してください（最大人数が最小人数より小さい）');
       if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return bad('メールアドレスを確認してください');
       return {
         ok: true,
@@ -147,6 +161,7 @@ export function parseNativeLedgerAction(raw: unknown): Parsed {
             clerkId,
             email,
             tags,
+            partySizeMin: partySizeMin !== null && (partySizeMin as number) < partyMax ? (partySizeMin as number) : null,
             waitlistEntryId: isUuid(i.waitlistEntryId) ? (i.waitlistEntryId as string) : null,
           },
         },
@@ -198,6 +213,18 @@ export function parseNativeLedgerAction(raw: unknown): Parsed {
       if (!isInt(b.stayMinutes, 15, 720)) return bad('滞在時間を確認してください');
       if (!isInt(b.partySize, 1, 999)) return bad('人数を確認してください');
       return { ok: true, action: { type: 'ledgerFindSeats', date: b.date, time: b.time, stayMinutes: b.stayMinutes, partySize: b.partySize } };
+    }
+    case 'ledgerKeywordsSave': {
+      if (!Array.isArray(b.keywords) || b.keywords.length > 40 || !b.keywords.every((k) => typeof k === 'string' && k.length <= 200)) return bad('キーワードの形が正しくありません');
+      return { ok: true, action: { type: 'ledgerKeywordsSave', keywords: b.keywords as string[] } };
+    }
+    case 'ledgerTagGroupsSave': {
+      if (b.groups !== null && (!Array.isArray(b.groups) || b.groups.length > 40)) return bad('タグの形が正しくありません');
+      return { ok: true, action: { type: 'ledgerTagGroupsSave', groups: b.groups as unknown[] | null } };
+    }
+    case 'ledgerInboxAct': {
+      if (!isUuid(b.id) || !['confirm', 'contacted', 'ack', 'resolveImport'].includes(b.act as string)) return bad();
+      return { ok: true, action: { type: 'ledgerInboxAct', act: b.act as 'confirm' | 'contacted' | 'ack' | 'resolveImport', id: b.id } };
     }
     case 'ledgerWalkIn': {
       if (!isUuid(b.tableId)) return bad('テーブルを選択してください');

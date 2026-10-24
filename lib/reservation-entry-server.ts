@@ -1,6 +1,7 @@
 import type { createClient } from '@/lib/supabase/server';
 import { OCCUPYING_STATUSES } from '@/components/reservations/constants';
-import { reservationKeywordsFrom, type BookedSpan, type EntryTable } from '@/lib/reservation-entry';
+import { hasCustomKeywords, reservationKeywordsFrom, type BookedSpan, type EntryTable } from '@/lib/reservation-entry';
+import { reservationTagGroupsFrom, type ReservationTagGroup } from '@/lib/reservation-tags';
 
 /**
  * 予約登録（ハンディ・レジ共通）に使うその日のデータ（2026-10-19 Ronnie「その時間に空いているテーブル・人数にピッタリ」）。
@@ -11,6 +12,10 @@ export interface ReservationEntryData {
   booked: BookedSpan[];
   defaultStay: number;
   keywords: string[];
+  /** 店舗がキーワードを自分で登録したか（false＝初期値を見せている） */
+  keywordsCustom: boolean;
+  /** お客様・予約のタグ（区分ごと） */
+  tagGroups: ReservationTagGroup[];
   clerks: { id: string; name: string }[];
   courseDurations: Record<string, number>;
 }
@@ -67,6 +72,8 @@ export async function loadReservationEntryData(supabase: Supabase, storeId: stri
     booked,
     defaultStay: (settings?.default_stay_minutes as number | null) ?? 120,
     keywords: reservationKeywordsFrom((settings as { settings?: unknown } | null)?.settings ?? null),
+    keywordsCustom: hasCustomKeywords((settings as { settings?: unknown } | null)?.settings ?? null),
+    tagGroups: reservationTagGroupsFrom((settings as { settings?: unknown } | null)?.settings ?? null),
     clerks: (clerkRows ?? []).map((c) => ({ id: c.id as string, name: c.name as string })),
     courseDurations,
   };
