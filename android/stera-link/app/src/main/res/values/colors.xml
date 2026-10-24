@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- TENPO ONE の配色（チャコール＋クリーム＋テラコッタ） -->
+    <color name="charcoal">#2B2B2B</color>
+    <color name="ink2">#555555</color>
+    <color name="ink3">#8A8A8A</color>
+    <color name="cream">#FAF6EF</color>
+    <color name="card">#FFFFFF</color>
+    <color name="line">#E6E0D6</color>
+    <color name="terracotta">#C8643C</color>
+    <color name="green">#1E8F62</color>
+    <color name="red">#C0392B</color>
+    <color name="amber">#B7791F</color>
+</resources>
