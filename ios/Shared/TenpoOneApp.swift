@@ -41,6 +41,12 @@ struct RootView: View {
                 if state.needsHandyLogin {
                     HandyLoginView()
                 }
+                // iPad：レジのネイティブのログイン（いちばん上。2026-10-25 02:29 Ronnie）
+                if state.needsRegiLogin && AppConfig.isPad {
+                    NativeRegiLoginView()
+                        .transition(.opacity)
+                        .zIndex(30)
+                }
                 if state.ownerLoginPage && !AppConfig.isPad {
                     OwnerLoginSwitchBar()
                         .transition(.opacity)
