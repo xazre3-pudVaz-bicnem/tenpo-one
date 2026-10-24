@@ -170,8 +170,9 @@ final class NativeAPI {
         }
     }
 
-    /// Cookie・x-tenpo-app を付けて送る（フロアなど別のファイルの拡張からも使う）
-    func send(_ request: URLRequest) async throws -> Data {
+    /// Cookie・x-tenpo-app を付けて送る（フロアなど別のファイルの拡張からも使う）。
+    /// kickPrint: 操作（POST）のあとに印刷係を起こすか（印刷係自身の通信は false）
+    func send(_ request: URLRequest, kickPrint: Bool = true) async throws -> Data {
         var req = request
         req.setValue("1", forHTTPHeaderField: "x-tenpo-app")
         req.setValue("application/json", forHTTPHeaderField: "accept")
@@ -187,10 +188,13 @@ final class NativeAPI {
                 throw NativeAPIError(message: r?.error ?? "通信できませんでした（\(http.statusCode)）", useWeb: r?.useWeb ?? false)
             }
         }
-        // 操作（POST）のあとは、裏の Web の印刷係（DirectPrintAgent）にすぐ見に行かせる。
+        // 操作（POST）のあとは、印刷係にすぐ見に行かせる（ネイティブ ON＝アプリ自身の NativePrintAgent、OFF＝裏の Web の DirectPrintAgent）。
         // 1 秒ごとの見回りや Realtime を待たずにレシート・伝票・ドロアが出る（2026-10-24 Ronnie「プリンターは超速く」）
-        if req.httpMethod == "POST" {
-            await MainActor.run { WebViewController.current?.kickPrint() }
+        if kickPrint, req.httpMethod == "POST" {
+            await MainActor.run {
+                NativePrintAgent.shared.kick()
+                WebViewController.current?.kickPrint()
+            }
         }
         return data
     }

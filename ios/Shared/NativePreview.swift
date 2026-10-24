@@ -1,9 +1,9 @@
 import SwiftUI
 
 /// ネイティブ画面を見本のデータで開く（シミュレーターで形を確かめる用）。
-/// 起動の引数 `-tenpoNativePreview order|checkout|options|price` のときだけ。お店で使うときは出ない。
+/// 起動の引数 `-tenpoNativePreview order|checkout|options|price|settings` のときだけ。お店で使うときは出ない。
 enum NativePreview: String {
-    case order, checkout, options, price
+    case order, checkout, options, price, settings
 
     static var current: NativePreview? {
         guard let raw = UserDefaults.standard.string(forKey: "tenpoNativePreview") else { return nil }
@@ -33,6 +33,8 @@ struct NativePreviewView: View {
         case .checkout:
             NativeCheckoutView(model: model, onClose: {})
                 .statusBarHidden(true)
+        case .settings:
+            NativeSettingsView(model: NativeSettingsModel.sample(), onHome: {}, onWeb: { _ in })
         case .options, .price:
             NativeOrderView(model: model)
                 .statusBarHidden(true)
@@ -57,7 +59,13 @@ struct NativeLiveOrderScreen: View {
     }
 
     var body: some View {
-        NativeOrderView(model: model, onHome: { AppState.shared.closeNativePos(openWebPath: nil) })
+        NativeOrderView(model: model, onHome: {
+            // 注文せずに戻ったら、先に伝票を消してから閉じる（フロアに ¥0 の卓が残らない）
+            Task {
+                await model.discardIfUntouched()
+                AppState.shared.closeNativePos(openWebPath: nil)
+            }
+        })
             .task {
                 await model.load()
                 // 卓のポップアップの「レジ会計」からは、開いてすぐ会計の画面に
@@ -102,6 +110,7 @@ struct NativeHomeScreen: View {
                 else if path == "/app/budgets/daily" { state.goNativeBudget() }
                 else if path == "/app/announcements" { state.goNativeNotices(tab: "announcements") }
                 else if path == "/app/inventory" || path == "/app/inventory/menu-stock" { state.goNativeStock() }
+                else if path == "/app/settings" || path == "/app/pos/settings" { state.goNativeSettings() }
                 else { state.leaveNativeFloor(to: path) }
             },
             onFloor: { state.goNativeFloor() }
@@ -301,6 +310,16 @@ struct NativeNoticesScreen: View {
                 onLink: { path in state.leaveNativeFloor(to: path) }
             )
         }
+    }
+}
+
+/// ネイティブの設定（このiPadのプリンター・レシートの出し先・LAN・Wi-Fi・Native ON/OFF・レジの設定・管理画面の設定。2026-10-24）
+struct NativeSettingsScreen: View {
+    @StateObject private var model = NativeSettingsModel()
+    @EnvironmentObject var state: AppState
+
+    var body: some View {
+        NativeSettingsView(model: model, onHome: { state.goNativeHome() }, onWeb: { path in state.leaveNativeFloor(to: path) })
     }
 }
 

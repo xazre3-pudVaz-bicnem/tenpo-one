@@ -91,6 +91,10 @@
 			isa = PBXBuildFile;
 			fileRef = "554979EFC1F8BF2FBB25CD53";
 		};
+		5B651511EA893D1014E6B111 = {
+			isa = PBXBuildFile;
+			fileRef = "91D2327AF11DFDCDD7238BBE";
+		};
 		5D7F42811DC03CBFB0FA4D12 = {
 			isa = PBXBuildFile;
 			fileRef = CCAE011319E602AB57697C9A;
@@ -163,6 +167,10 @@
 			isa = PBXBuildFile;
 			fileRef = "75990B74800A169EBFC3BCF1";
 		};
+		A47ECEC4E2DFFA17CC79E692 = {
+			isa = PBXBuildFile;
+			fileRef = F930047AA4467BA6E4F66C74;
+		};
 		A49AA80EFB77AAFCFB657ECB = {
 			isa = PBXBuildFile;
 			fileRef = "04D9FFDF2FAAB7F134E5C9AE";
@@ -182,6 +190,10 @@
 		BB6ED39285E6B7637BCD7528 = {
 			isa = PBXBuildFile;
 			fileRef = "9B05DD8E9302EC5C604AB18F";
+		};
+		BC728DE073275B24D2621356 = {
+			isa = PBXBuildFile;
+			fileRef = DDBFE0B1EC66AB0C0B164A88;
 		};
 		BF7798D6F9CE7CF387CBFCF6 = {
 			isa = PBXBuildFile;
@@ -226,6 +238,14 @@
 		E4121339AE09EB85C5F0ABBF = {
 			isa = PBXBuildFile;
 			fileRef = D50F3B6D3D6758DFA4C1AC6A;
+		};
+		E4C2D658C67CC597D191CEBA = {
+			isa = PBXBuildFile;
+			fileRef = "3BB8F5DC205B44A32208D2F3";
+		};
+		E610214C90E492055F40208A = {
+			isa = PBXBuildFile;
+			fileRef = F096351652925FA0CA802553;
 		};
 		EE512C1BF9D7143611AAC923 = {
 			isa = PBXBuildFile;
@@ -315,6 +335,12 @@
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
 			path = NativeHomeView.swift;
+			sourceTree = "<group>";
+		};
+		3BB8F5DC205B44A32208D2F3 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = NativePrintConfig.swift;
 			sourceTree = "<group>";
 		};
 		3CA94DAF8B1D8E07E57F5EE5 = {
@@ -435,6 +461,12 @@
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
 			path = BluetoothPrinters.swift;
+			sourceTree = "<group>";
+		};
+		91D2327AF11DFDCDD7238BBE = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = EposDirect.swift;
 			sourceTree = "<group>";
 		};
 		94A43F329BE3F886B7757761 = {
@@ -593,10 +625,22 @@
 			path = NativePurchasingView.swift;
 			sourceTree = "<group>";
 		};
+		DDBFE0B1EC66AB0C0B164A88 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = NativeSettingsView.swift;
+			sourceTree = "<group>";
+		};
 		DE07CEEA80B3368744CDAF07 = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
 			path = NativeInventoryView.swift;
+			sourceTree = "<group>";
+		};
+		F096351652925FA0CA802553 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = NativeSettingsModels.swift;
 			sourceTree = "<group>";
 		};
 		F276879EB380E7B06FBB4E80 = {
@@ -615,6 +659,12 @@
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
 			path = NativeExpensesView.swift;
+			sourceTree = "<group>";
+		};
+		F930047AA4467BA6E4F66C74 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = NativePrintAgent.swift;
 			sourceTree = "<group>";
 		};
 		FBCEDE79F3152C417EE0FD6C = {
@@ -677,6 +727,7 @@
 				C3D69C5471DBB48FE4065539,
 				"75DC12C17FB620987F5695C3",
 				"8349BD58E504E19E3C5631D9",
+				"91D2327AF11DFDCDD7238BBE",
 				"956DFE02BC7361B56EDD90D3",
 				"94A43F329BE3F886B7757761",
 				"3DF8150016611E0D18EC1708",
@@ -713,11 +764,15 @@
 				D17E14642C89FA9119F138A4,
 				"413CA5766E9AEECBFB339B62",
 				"9EDA6BEACA5C7735606C61EF",
+				F930047AA4467BA6E4F66C74,
+				"3BB8F5DC205B44A32208D2F3",
 				DCB0525609C5BFEF6D3A8A06,
 				"79DE46C72F1B53F4445AFD10",
 				"554979EFC1F8BF2FBB25CD53",
 				D9C6BA6D6F778644F0D1240E,
 				F40A537EF1A01FA00A0DAAB8,
+				F096351652925FA0CA802553,
+				DDBFE0B1EC66AB0C0B164A88,
 				"43943BBD5C27D2BC8E4E3E2A",
 				D6174919D6214D642E7512DD,
 				"3CA94DAF8B1D8E07E57F5EE5",
@@ -818,6 +873,7 @@
 				"2EF1E52EEE822F5DC67C3BF7",
 				"5EC034E111252F0B7CB2F1E1",
 				"9251238DBD5E9F2872052E3A",
+				"5B651511EA893D1014E6B111",
 				D324719F2D7AEE62FB625347,
 				BF7798D6F9CE7CF387CBFCF6,
 				"739B9B1A67DEC421F63B2156",
@@ -854,11 +910,15 @@
 				"3B0A34DFD54D4E894BE1C5A9",
 				"276B012ACAE09C98CCBFE760",
 				"3233D09A1479A79CB552DB14",
+				A47ECEC4E2DFFA17CC79E692,
+				E4C2D658C67CC597D191CEBA,
 				EE512C1BF9D7143611AAC923,
 				"08ED0B9F692A80D091B58BEB",
 				"58632252FB1F558DDC506E12",
 				A7EC3ADDEA91094ECAE66113,
 				"74B6124CC057D8542B91BD5F",
+				E610214C90E492055F40208A,
+				BC728DE073275B24D2621356,
 				EEB9FFC19A65C2AFCD610B0A,
 				"5D95C981500B7D83D1BFB07A",
 				A54C97A7E43DFC3557FAB80D,
