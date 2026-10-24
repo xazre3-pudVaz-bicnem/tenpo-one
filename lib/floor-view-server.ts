@@ -205,7 +205,7 @@ export async function loadFloorView(
     openOrderIds.length
       ? supabase
           .from('order_items')
-          .select('id, order_id, name, quantity, menu_item_id')
+          .select('id, order_id, name, quantity, menu_item_id, created_at')
           .in('order_id', openOrderIds)
           .eq('status', 'active')
           .order('created_at')
@@ -217,10 +217,14 @@ export async function loadFloorView(
     ]),
   ]);
   const linesByOrder = new Map<string, TableSlipLine[]>();
-  for (const it of (itemRows ?? []) as { id: string; order_id: string; name: string; quantity: number; menu_item_id: string | null }[]) {
+  // 伝票ごとの最後の注文の時刻（卓の箱に「最終注文から N 分」。2026-10-24 22:00 Ronnie「卓へ行く目安に」）
+  const lastOrderAtByOrder = new Map<string, number>();
+  for (const it of (itemRows ?? []) as { id: string; order_id: string; name: string; quantity: number; menu_item_id: string | null; created_at?: string | null }[]) {
     const list = linesByOrder.get(it.order_id) ?? [];
     list.push({ id: it.id, name: it.name, quantity: it.quantity, menuItemId: it.menu_item_id ?? null });
     linesByOrder.set(it.order_id, list);
+    const at = it.created_at ? new Date(it.created_at).getTime() : NaN;
+    if (Number.isFinite(at) && at > (lastOrderAtByOrder.get(it.order_id) ?? 0)) lastOrderAtByOrder.set(it.order_id, at);
   }
 
   const serverNow = Date.now();
@@ -277,6 +281,8 @@ export async function loadFloorView(
       endAtMs: prev ? Math.max(prev.endAtMs, endAtMs) : endAtMs,
       courseId: resv?.course_id ?? prev?.courseId ?? null,
       plans: plansFromMemo(o.memo) ?? prev?.plans ?? null,
+      // 最後の注文の時刻（この卓のすべての伝票で一番新しいもの）。注文がまだなら null
+      lastOrderAtMs: Math.max(prev?.lastOrderAtMs ?? 0, lastOrderAtByOrder.get(o.id) ?? 0) || null,
       // 予約のタグ（誕生日・記念日・飲み放題…）。卓の箱に小さな印で出す
       tags: [...new Set([...(prev?.tags ?? []), ...((resv?.id && panelTags.get(resv.id)) || [])])],
       // 会計できない伝票が卓に残らないよう、卓のポップアップからすべての伝票を開けるようにする

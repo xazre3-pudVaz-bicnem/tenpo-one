@@ -49,6 +49,8 @@ struct NFOrder: Codable, Hashable {
     let plans: [String]?
     /// 席に着いた予約のタグ（誕生日・記念日・飲み放題…）。卓の箱に小さな印で出す。古いサーバーは無し
     var tags: [String]? = nil
+    /// 最後の注文（品）の時刻 ms（「最終注文から N 分」）。古いサーバー・注文なしは nil
+    var lastOrderAtMs: Double? = nil
     let slips: [NFSlip]
 }
 

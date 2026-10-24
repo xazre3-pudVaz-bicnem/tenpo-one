@@ -209,15 +209,36 @@ struct NativeFloorView: View {
     // MARK: 色の見方
 
     private var legend: some View {
-        HStack(spacing: 12) {
-            ForEach([NFTileState.seated, .ordered, .lo, .over, .pay], id: \.self) { st in
-                if let b = NativeTableCard.band(st) { legendDot(b.color, border: nil, b.jp) }
+        VStack(alignment: .leading, spacing: 6) {
+            // 印の見方（お会計希望＝財布の緑・呼び出し＝ベル・5 分過ぎ＝赤・プラン＝光る印。2026-10-24 22:02 Ronnie）
+            HStack(spacing: 12) {
+                legendIcon(NativeTableCard.walletSymbol, NativeTableCard.callGreen, "お会計希望")
+                legendIcon("bell.fill", NFColor.callDeep, "呼び出し")
+                legendIcon("bell.fill", NativeTableCard.callRed, "5分すぎ")
+                ForEach(["飲み放題", "食べ放題", "コース", "誕生日", "記念日"], id: \.self) { k in
+                    if let ic = NRWKeywordIcon.symbol(for: k) { legendIcon(ic, NativeTableCard.markColor(ic), k) }
+                }
+                Spacer()
             }
-            legendDot(NFColor.tileSurface(.free), border: Color.black.opacity(0.15), "空席")
-            Text("下の帯の細い線＝残り時間").font(.system(size: 12)).foregroundColor(NFColor.ink3)
-            Spacer()
+            HStack(spacing: 12) {
+                ForEach([NFTileState.seated, .ordered, .lo, .over, .pay], id: \.self) { st in
+                    if let b = NativeTableCard.band(st) { legendDot(b.color, border: nil, b.jp) }
+                }
+                legendDot(NFColor.tileSurface(.free), border: Color.black.opacity(0.15), "空席")
+                Text("下の帯の細い線＝残り時間").font(.system(size: 12)).foregroundColor(NFColor.ink3)
+                Spacer()
+            }
         }
         .padding(.top, 2)
+    }
+
+    private func legendIcon(_ symbol: String, _ color: Color, _ label: String) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: symbol).font(.system(size: 9, weight: .bold)).foregroundColor(.white)
+                .frame(width: 18, height: 18)
+                .background(RoundedRectangle(cornerRadius: 5, style: .continuous).fill(color))
+            Text(label).font(.system(size: 12, weight: .medium)).foregroundColor(NFColor.ink2)
+        }
     }
 
     private func legendDot(_ color: Color, border: Color?, _ label: String) -> some View {
@@ -555,7 +576,8 @@ struct NativeTableCard: View {
             .foregroundColor(mins < 0 ? NFColor.danger : NFColor.royal)
             // 来店の区分：初回（グレー）・リピ（青）・常連（黄）。顧客台帳につながっているときだけ（見本のレジのよいところ）
             if let v = visits {
-                let chip: (String, Color, Color) = v >= 3 ? ("常連", NLColor.navy, NLColor.yellow) : v == 2 ? ("リピ", .white, NLColor.blue) : ("初回", NFColor.ink2, Color(hex: 0xE9E9EF))
+                // リピ・常連は何回目かも（2026-10-24 22:00 Ronnie「リピートなら何回も」）
+                let chip: (String, Color, Color) = v >= 3 ? ("常連 \(v)回", NLColor.navy, NLColor.yellow) : v == 2 ? ("リピ 2回", .white, NLColor.blue) : ("初回", NFColor.ink2, Color(hex: 0xE9E9EF))
                 Text(chip.0).font(.system(size: 11, weight: .heavy)).foregroundColor(chip.1)
                     .padding(.horizontal, 6).padding(.vertical, 2).background(RoundedRectangle(cornerRadius: 5, style: .continuous).fill(chip.2))
             }
@@ -568,6 +590,19 @@ struct NativeTableCard: View {
                 Text("\(c.label) \(c.minutes)分")
             }
             .font(.system(size: 12, weight: .semibold)).monospacedDigit().foregroundColor(NFColor.ink3)
+        }
+        // 最終注文から何分（卓へ行く目安。30 分を過ぎたら赤。2026-10-24 22:00 Ronnie）
+        if let last = o.lastOrderAtMs {
+            let since = max(0, Int((now - last) / 60_000))
+            let alert = since >= 30
+            HStack(alignment: .firstTextBaseline, spacing: 3) {
+                Text("最終注文から").font(.system(size: 11, weight: .semibold))
+                Text("\(since)").font(.system(size: 16, weight: .heavy)).monospacedDigit()
+                Text("分").font(.system(size: 11, weight: .bold))
+            }
+            .foregroundColor(alert ? Self.callRed : NFColor.ink2)
+            .padding(.horizontal, 8).frame(height: 24)
+            .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(alert ? Color(hex: 0xFDECEC) : Color(hex: 0xF1F1F5)))
         }
         if let next { nextLine(next, danger: true) }
     }
