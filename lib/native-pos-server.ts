@@ -11,7 +11,7 @@ import { isMenuSoldOut } from '@/lib/menu-stock';
 import { filterTakeoutItems, isTakeoutLikeOrder, takeoutMenuFrom } from '@/lib/takeout-menu';
 import { isQuickPayOrder, QUICK_PAY_ORDER_LABEL } from '@/lib/quick-pay';
 import { groupMenuPages, picksSlot } from '@/lib/menu-book';
-import { categoryEnglishName, englishName } from '@/lib/romaji';
+import { englishName } from '@/lib/romaji';
 import { BRANDED_METHODS, checkoutPresetsFrom, discountPresetsOf, methodBrandsOf, pointBrandsOf } from '@/lib/checkout-presets';
 import { VISIT_SOURCES, visitSourceByLabel, visitSourcesFrom } from '@/lib/handy-visit';
 import { isMissingColumnError } from '@/lib/schema-compat';
@@ -19,8 +19,7 @@ import {
   type NativePosCatalog,
   type NativePosLive,
   jstHm,
-  NATIVE_BESTSELLERS_TAB,
-  NATIVE_FAVORITES_TAB,
+  nativePosPages,
   optionGroupsFrom,
   type NativePosCategory,
   type NativePosItem,
@@ -231,17 +230,9 @@ export async function loadNativeCatalog(
     cats.map((c) => ({ ...c, allZeroPrice: zeroOnly.get(c.id) ?? false })),
     book
   ).filter((pg) => pg.categories.length > 0);
-  const pageCats: NativePosCategory[][] = grouped.map((pg) =>
-    pg.categories.map((c) => ({ id: c.id, name: c.name, sub: categoryEnglishName(c.name, c.name_en) }))
-  );
-  const picks: NativePosCategory[] = [
-    { id: NATIVE_FAVORITES_TAB, name: 'おすすめ', sub: 'Picks' },
-    { id: NATIVE_BESTSELLERS_TAB, name: '売れ筋', sub: 'Popular' },
-  ];
-  const at = picksSlot(book, grouped.map((pg) => pg.key));
-  const nativeCategories = takeout
-    ? [{ id: '__takeout__', name: 'テイクアウト', sub: 'Takeout' }]
-    : [...pageCats.slice(0, at).flat(), ...picks, ...pageCats.slice(at).flat()];
+  const fromPages = nativePosPages(grouped, picksSlot(book, grouped.map((pg) => pg.key)));
+  const nativeCategories: NativePosCategory[] = takeout ? [{ id: '__takeout__', name: 'テイクアウト', sub: 'Takeout' }] : fromPages.categories;
+  const nativePages = takeout ? [] : fromPages.pages;
 
   // 会計の選択肢（設定 > 決済・端末）
   const presets = checkoutPresetsFrom(settings);
@@ -251,6 +242,7 @@ export async function loadNativeCatalog(
   const body = {
     store: { id: storeId, name: store?.name ?? '' },
     categories: nativeCategories,
+    pages: nativePages,
     items,
     optionGroups: Object.fromEntries(Object.entries(optionGroups).filter(([id]) => withOptions.has(id) && items.some((i) => i.id === id))),
     clerks: clerkList,
