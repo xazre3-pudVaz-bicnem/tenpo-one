@@ -212,7 +212,7 @@ struct NativeTableSheet: View {
             }
         }
         // 会計伝票をその場で出す（レジ画面へ行かない）。注文・レジ会計のすぐ下に横いっぱい・黒
-        bigButton("会計伝票を出す", en: "Print bill", fill: NFColor.navy, height: 62, size: 19, enabled: selected != nil) {
+        bigButton("会計伝票", en: "Print bill", fill: NFColor.navy, height: 62, size: 19, enabled: selected != nil) {
             Task {
                 if let s = selected, let _ = await model.act(["type": "floorBill", "orderId": s.id], refreshAfter: false) {
                     model.show(toast: "お会計伝票を印刷します")
@@ -258,17 +258,13 @@ struct NativeTableSheet: View {
         if panel == .print { printPanel }
 
         divider
+        // 下の「お客様情報」は出さない（上の「お客様情報 10:21〜」と重なる。2026-10-24 Ronnie「ここに要らない」）
         HStack(spacing: 8) {
-            popBtn("お客様情報", en: "Guest info", on: panel == .guest, enabled: selected != nil) {
-                guestEdit = selected?.guestCount ?? 1
-                panel = panel == .guest ? nil : .guest
-            }
             popBtn("支払メモ", en: "Payment note", on: panel == .memo, enabled: selected != nil) {
                 memoText = ""
                 panel = panel == .memo ? nil : .memo
             }
         }
-        if panel == .guest { guestPanel }
         if panel == .memo { memoPanel }
 
         // テーブルクリア：¥0 の卓（まだ何も注文していない）にだけ出す。店長の承認も必要

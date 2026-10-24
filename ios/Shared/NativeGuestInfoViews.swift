@@ -206,8 +206,8 @@ struct NativeSetupSheet: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text(pp.title).font(.system(size: 17, weight: .bold)).foregroundColor(NFColor.ink)
-                    Text(pp.en).font(.system(size: 12, weight: .semibold)).foregroundColor(NFColor.ink3)
+                    Text(pp.title).font(.system(size: 20, weight: .bold)).foregroundColor(NFColor.ink)
+                    Text(pp.en).font(.system(size: 13, weight: .semibold)).foregroundColor(NFColor.ink3)
                 }
                 Spacer()
                 Button { popup = nil } label: {
@@ -216,7 +216,7 @@ struct NativeSetupSheet: View {
             }
             switch pp {
             case .mode:
-                NFChipGrid(items: (payload?.plans ?? []).map { ($0.id, $0.name, NFColor.iris, false) }, selected: plans, columns: 3, height: 42) { id in togglePlan(id) }
+                NFChipGrid(items: (payload?.plans ?? []).map { ($0.id, $0.name, NFColor.iris, false) }, selected: plans, columns: 3, height: 56) { id in togglePlan(id) }
                 Text("何個でも選べます（例：アラカルト＋飲み放題）／ Multiple OK").font(.system(size: 11)).foregroundColor(NFColor.ink3)
             case .plan:
                 if planItems.isEmpty {
@@ -224,7 +224,7 @@ struct NativeSetupSheet: View {
                         .font(.system(size: 14)).foregroundColor(NFColor.ink2).fixedSize(horizontal: false, vertical: true)
                 } else {
                     Text("\(planNames)のプラン（何個でも。選ぶと伝票に入ります）").font(.system(size: 12)).foregroundColor(NFColor.ink3)
-                    NFChipGrid(items: planItems.map { ($0.id, "\($0.name)  ¥\($0.price)", NFColor.iris, false) }, selected: planItemIds, columns: 2, height: 42) { id in
+                    NFChipGrid(items: planItems.map { ($0.id, "\($0.name)  ¥\($0.price)", NFColor.iris, false) }, selected: planItemIds, columns: 2, height: 56) { id in
                         if planItemIds.contains(id) { planItemIds.removeAll { $0 == id } } else { planItemIds.append(id) }
                         if let item = planItems.first(where: { $0.id == id }), item.kind == "course", let m = item.durationMinutes, m > 0, planItemIds.contains(id) {
                             timed = true; duration = m
@@ -277,7 +277,7 @@ struct NativeSetupSheet: View {
                                     else { Text(k).font(.system(size: 22, weight: .bold, design: .rounded)) }
                                 }
                                 .foregroundColor(k == "C" ? NFColor.danger : NFColor.ink)
-                                .frame(maxWidth: .infinity).frame(height: 48)
+                                .frame(maxWidth: .infinity).frame(height: 58)
                                 .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white.opacity(0.9)))
                                 .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(Color.black.opacity(0.06), lineWidth: 0.8))
                             }
@@ -304,12 +304,12 @@ struct NativeSetupSheet: View {
                         Picker("時", selection: Binding(get: { h }, set: { setStart(hour: $0, minute: m) })) {
                             ForEach(0..<24, id: \.self) { Text(String(format: "%02d", $0)).tag($0) }
                         }
-                        .pickerStyle(.wheel).frame(width: 96, height: 120).clipped()
+                        .pickerStyle(.wheel).frame(width: 120, height: 150).clipped()
                         Text(":").font(.system(size: 24, weight: .bold))
                         Picker("分", selection: Binding(get: { (m / 5) * 5 }, set: { setStart(hour: h, minute: $0) })) {
                             ForEach(Array(stride(from: 0, to: 60, by: 5)), id: \.self) { Text(String(format: "%02d", $0)).tag($0) }
                         }
-                        .pickerStyle(.wheel).frame(width: 96, height: 120).clipped()
+                        .pickerStyle(.wheel).frame(width: 120, height: 150).clipped()
                     }
                     .frame(maxWidth: .infinity)
                     .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.white.opacity(0.7)))
@@ -320,18 +320,18 @@ struct NativeSetupSheet: View {
             }
             Button { applyPopup(pp); popup = nil } label: {
                 HStack(spacing: 6) {
-                    Text("設定").font(.system(size: 16, weight: .heavy))
-                    Text("Set").font(.system(size: 11, weight: .bold)).opacity(0.8)
+                    Text("設定").font(.system(size: 18, weight: .heavy))
+                    Text("Set").font(.system(size: 12, weight: .bold)).opacity(0.8)
                 }
                 .foregroundColor(.white)
-                .frame(maxWidth: .infinity).frame(height: 44)
+                .frame(maxWidth: .infinity).frame(height: 54)
                     .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(NFColor.iris))
             }
             .buttonStyle(PressableStyle(scale: 0.98))
         }
-        .padding(14)
-        .frame(width: 360)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .padding(20)
+        .frame(width: 500)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
         .shadow(color: .black.opacity(0.18), radius: 28, y: 12)
     }
 
@@ -462,10 +462,10 @@ struct NativeSetupSheet: View {
 
     private func timeChip(_ t: String, on: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Text(t).font(.system(size: 14, weight: .bold)).monospacedDigit().lineLimit(1).minimumScaleFactor(0.7)
+            Text(t).font(.system(size: 17, weight: .bold)).monospacedDigit().lineLimit(1).minimumScaleFactor(0.7)
                 .foregroundColor(on ? .white : NFColor.iris)
-                .frame(maxWidth: .infinity).frame(height: 40)
-                .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(on ? NFColor.iris : Color.white.opacity(0.85)))
+                .frame(maxWidth: .infinity).frame(height: 52)
+                .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(on ? NFColor.iris : Color.white.opacity(0.85)))
                 .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(NFColor.iris.opacity(on ? 0 : 0.3), lineWidth: 1))
         }
         .buttonStyle(PressableStyle())
