@@ -83,8 +83,11 @@ final class NativeHomeModel: ObservableObject {
     private var offset: TimeInterval = 0
     private var clock: Timer?
     private var refresher: Timer?
+    /// 見本（-tenpoNativePreview home。App Store の画面写真用）：読み込まない・時計を止める。お店では false のまま
+    var isPreview = false
 
     func start() {
+        if isPreview { return }
         clock?.invalidate()
         clock = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             Task { @MainActor in
@@ -109,6 +112,7 @@ final class NativeHomeModel: ObservableObject {
     }
 
     func refresh() async {
+        if isPreview { return }
         do {
             var comps = URLComponents(url: AppConfig.url("/api/app/v1/pos"), resolvingAgainstBaseURL: false)!
             comps.queryItems = [URLQueryItem(name: "part", value: "home")]

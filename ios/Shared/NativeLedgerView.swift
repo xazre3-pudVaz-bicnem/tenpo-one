@@ -281,8 +281,13 @@ final class NativeLedgerModel: ObservableObject {
     private var clock: Timer?
     private var refresher: Timer?
     private var offset: TimeInterval = 0
+    /// 見本（-tenpoNativePreview ledger。App Store の画面写真用）：読み込まない・時計を止める。お店では false のまま
+    var isPreview = false
+    /// 見本のときの、オーダー・会計の卓（来店中の予約の箱をフロアと同じ色に）。お店では nil のまま
+    var previewFloor: NFPayload?
 
     func start() {
+        if isPreview { return }
         clock?.invalidate()
         clock = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.now = Date().addingTimeInterval(self?.offset ?? 0) }
@@ -300,6 +305,7 @@ final class NativeLedgerModel: ObservableObject {
     }
 
     func refresh(silent: Bool) async {
+        if isPreview { return }
         if !silent { loading = true }
         do {
             var comps = URLComponents(url: AppConfig.url("/api/app/v1/pos"), resolvingAgainstBaseURL: false)!
@@ -486,7 +492,7 @@ struct NativeLedgerView: View {
         .sheet(isPresented: $gourmetOpen) {
             NativeGourmetSheet(onClose: { gourmetOpen = false }, onOpenReservation: { id, date in openReservation(id: id, date: date) })
         }
-        .onAppear { model.start(); inbox.start() }
+        .onAppear { model.start(); if !model.isPreview { inbox.start() } }
         .task { await floorLoop() }
         // Web の ?open=<予約>：読めたら詳細を出す
         .onChange(of: model.openReservationId) { id in
@@ -505,6 +511,8 @@ struct NativeLedgerView: View {
 
     /// オーダー・会計の卓を 20 秒ごとに読む（読むだけ。清掃中→空席などの書き込みはフロアの画面がする）
     private func floorLoop() async {
+        // 見本（-tenpoNativePreview ledger）：見本の卓で色をつけて、読み込まない
+        if let p = model.previewFloor { applyFloor(p, fresh: false); return }
         if floorTables.isEmpty, let saved = NativeDiskCache.load(NFPayload.self, key: "floor") { applyFloor(saved, fresh: false) }
         while !Task.isCancelled {
             if let p = try? await NativeAPI.shared.loadFloor(storeId: nil) { applyFloor(p, fresh: true) }
