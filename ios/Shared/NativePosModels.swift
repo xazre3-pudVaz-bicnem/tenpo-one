@@ -865,6 +865,16 @@ final class NativeOrderModel: ObservableObject {
         guard let orderId else { return }
         busy = true
         defer { busy = false }
+        // レジ受付の設定が ON：どのフロアの卓でもこの iPad のレシートプリンターで（設定 › ハードウェア › 会計伝票）
+        if NativeRegisterBill.enabled {
+            if let err = await NativeRegisterBill.print(orderId: orderId, clerkName: clerkName) {
+                notice = "お会計伝票：\(err)"
+            } else {
+                notice = nil
+                toast = "お会計伝票を印刷します"
+            }
+            return
+        }
         if let r = try? await NativeAPI.shared.floorAct(["type": "floorBill", "orderId": orderId]) {
             notice = r.ok ? nil : (r.error ?? "お会計伝票の印刷に失敗しました")
             if r.ok { toast = "お会計伝票を印刷します" }

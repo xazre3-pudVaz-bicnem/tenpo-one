@@ -217,7 +217,17 @@ struct NativeTableSheet: View {
         // 会計伝票をその場で出す（レジ画面へ行かない）。注文・レジ会計のすぐ下に横いっぱい・黒
         bigButton("会計伝票", en: "Print bill", fill: NFColor.navy, height: 62, size: 19, enabled: selected != nil) {
             Task {
-                if let s = selected, let _ = await model.act(["type": "floorBill", "orderId": s.id], refreshAfter: false) {
+                guard let s = selected else { return }
+                // レジ受付の設定が ON（ネットあり）：どのフロアの卓でもこの iPad のレシートプリンターで
+                if NativeRegisterBill.enabled && NativeNet.shared.online {
+                    if let err = await NativeRegisterBill.print(orderId: s.id, clerkName: nil) {
+                        model.show(toast: "お会計伝票：\(err)")
+                    } else {
+                        model.show(toast: "お会計伝票を印刷します")
+                    }
+                    return
+                }
+                if let _ = await model.act(["type": "floorBill", "orderId": s.id], refreshAfter: false) {
                     model.show(toast: "お会計伝票を印刷します")
                 }
             }

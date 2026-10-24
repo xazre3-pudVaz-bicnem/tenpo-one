@@ -14,8 +14,12 @@ struct NativeSettingsView: View {
     let onWeb: (String) -> Void
 
     @State private var nativeOn = AppState.shared.nativePosEnabled
-    /// 左の一覧で選んでいるもの
-    @State private var sel: Sel = .page(.printer)
+    /// 左の一覧で選んでいるもの。中の画面から戻ったときは、前に開いていた項目に戻す
+    /// （2026-10-25 00:19 Ronnie「メニューから中に入って戻るとハードウェアに行く。メニューに戻るように」）
+    @State private var sel: Sel = NativeSettingsView.lastSel
+    private static var lastSel: Sel = .page(.printer)
+    /// どのフロアの卓の会計伝票もこの iPad で出す（レジ受付）
+    @State private var billAtRegister = NativeRegisterBill.enabled
     /// ログアウトの確認
     @State private var confirmLogout = false
 
@@ -190,6 +194,7 @@ struct NativeSettingsView: View {
     }
 
     private func select(_ s: Sel) {
+        Self.lastSel = s
         withAnimation(.easeOut(duration: 0.12)) { sel = s }
     }
 
@@ -234,6 +239,7 @@ struct NativeSettingsView: View {
             // 印刷はぜんぶここ：つなぐ → 出し先 → LAN → Wi-Fi → ネットが無いとき
             bluetoothCard
             receiptCard
+            billSlipCard
             if !model.lanPrinters.isEmpty { lanCard }
             if !model.wifiPrinters.isEmpty { wifiCard }
             NativeOfflinePrintCard()
@@ -658,6 +664,17 @@ struct NativeSettingsView: View {
                     }
                 }
                 .padding(18)
+            }
+        }
+    }
+
+    /// 会計伝票：どのフロアの卓もこのレジで（レジ受付）。端末ごとの設定
+    private var billSlipCard: some View {
+        card(icon: "doc.text", title: "会計伝票（フロアがある店）", en: "Bill slips",
+             description: "受付のレジで、どのフロアの卓の会計伝票もこの iPad のレシートプリンター（Bluetooth・LAN）で出します。OFF のときは今まで通り、その卓のフロアのプリンターから出ます") {
+            row("どのフロアの会計伝票もこのレジで出す", en: "Print every floor's bill here") {
+                Toggle("", isOn: Binding(get: { billAtRegister }, set: { v in billAtRegister = v; NativeRegisterBill.enabled = v }))
+                    .labelsHidden().tint(NFColor.iris)
             }
         }
     }
