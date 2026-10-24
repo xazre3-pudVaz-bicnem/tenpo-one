@@ -3450,7 +3450,7 @@ final class NativeStaffModel: NSPModel<NSFPayload> {
     func isHq(_ role: String) -> Bool { payload?.roles.first { $0.id == role }?.hq ?? false }
     func startInvite() {
         invEmail = ""; invName = ""; invKana = ""; invRole = "staff"
-        invStores = Set(payload?.store.id.map { [$0] } ?? [])
+        invStores = payload.map { Set([$0.store.id]) } ?? []
         panel = .invite
     }
     func startEdit(_ r: NSFRow) {
