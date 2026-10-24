@@ -24,9 +24,11 @@ import { ACCOUNT_CATEGORY_LABELS, ACCOUNT_CATEGORY_ORDER, SUB_TYPE_LABELS, type 
 import { TAX_TREATMENT_LABELS, type AccountCategory, type TaxTreatment } from '@/lib/accounting';
 import { canWriteAccounting } from '@/components/accounting/roles';
 import { issueHandyPairing, renameHandyDevice, revokeHandyDevice } from '@/app/app/settings/handy/actions';
+import { deleteCategory, saveCategory, updateCategoryStation } from '@/app/app/settings/menu/actions';
 import { resolveSiteOrigin } from '@/lib/site-origin';
 import type {
   NativeAccountsPayload,
+  NativeCategoriesPayload,
   NativeHandyDevicesPayload,
   NativeAlertsPayload,
   NativeApprovalsPayload,
@@ -43,7 +45,7 @@ type Supabase = Awaited<ReturnType<typeof createClient>>;
 type Store = { id: string; name: string };
 
 /** 設定の中の画面の名前（GET ?part=） */
-export const NATIVE_SETTINGS_PAGE_PARTS = ['soldout', 'clerks', 'hours', 'store', 'tax', 'loyalty', 'alerts', 'approvals', 'accounts', 'handy'] as const;
+export const NATIVE_SETTINGS_PAGE_PARTS = ['soldout', 'clerks', 'hours', 'store', 'tax', 'loyalty', 'alerts', 'approvals', 'accounts', 'handy', 'categories'] as const;
 export type NativeSettingsPagePart = (typeof NATIVE_SETTINGS_PAGE_PARTS)[number];
 export function isNativeSettingsPagePart(v: unknown): v is NativeSettingsPagePart {
   return typeof v === 'string' && (NATIVE_SETTINGS_PAGE_PARTS as readonly string[]).includes(v);
@@ -71,7 +73,8 @@ export async function loadNativeSettingsPage(
         | NativeAlertsPayload
         | NativeApprovalsPayload
         | NativeAccountsPayload
-        | NativeHandyDevicesPayload;
+        | NativeHandyDevicesPayload
+        | NativeCategoriesPayload;
     }
   | { ok: false; error: string }
 > {
@@ -340,6 +343,39 @@ export async function loadNativeSettingsPage(
       },
     };
   }
+  if (part === 'categories') {
+    const { data: categories } = await supabase
+      .from('menu_categories')
+      .select('id, name, name_en, color, sort_order, station, store_id')
+      .eq('organization_id', ctx.organizationId)
+      .eq('status', 'active')
+      .or(`store_id.is.null,store_id.eq.${store.id}`)
+      .order('sort_order');
+    return {
+      ok: true,
+      payload: {
+        store,
+        canEdit: can(ctx.role, 'menu.manage'),
+        // components/settings/category-panel.tsx の CATEGORY_COLORS と同じ（'use client' のファイルなのでここに写す）
+        colors: ['#bc5940', '#EA580C', '#15803D', '#DC2626', '#2563EB', '#CA8A04', '#DB2777', '#0891B2'],
+        stations: [
+          { id: 'kitchen', label: 'キッチン' },
+          { id: 'drink', label: 'ドリンク' },
+          { id: 'dessert', label: 'デザート' },
+          { id: 'grill', label: '焼き場' },
+        ],
+        rows: (categories ?? []).map((c) => ({
+          id: c.id as string,
+          name: c.name as string,
+          nameEn: (c.name_en as string | null) ?? '',
+          color: (c.color as string | null) ?? '#bc5940',
+          sortOrder: Number(c.sort_order ?? 0),
+          station: (c.station as string | null) ?? 'kitchen',
+          shared: c.store_id === null,
+        })),
+      },
+    };
+  }
   return { ok: false, error: '画面が見つかりません' };
 }
 
@@ -424,5 +460,11 @@ export async function runNativeSettingsPageAction(
       return done(await revokeHandyDevice(action.id));
     case 'handyRename':
       return done(await renameHandyDevice(action.id, action.name));
+    case 'categorySave':
+      return done(await saveCategory({ id: action.id ?? undefined, storeId: store.id, name: action.name, nameEn: action.nameEn, color: action.color, sortOrder: action.sortOrder }));
+    case 'categoryDelete':
+      return done(await deleteCategory(action.id));
+    case 'categoryStation':
+      return done(await updateCategoryStation(action.id, action.station));
   }
 }

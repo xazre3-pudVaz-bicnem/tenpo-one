@@ -29,13 +29,13 @@ struct NativeSettingsView: View {
         var id: String { rawValue }
         var title: String {
             switch self {
-            case .printer: return "プリンター"
+            case .printer: return "ハードウェア"
             case .native: return "アプリの画面"
             }
         }
         var en: String {
             switch self {
-            case .printer: return "Printers & printing"
+            case .printer: return "Hardware"
             case .native: return "Native screens"
             }
         }
@@ -47,7 +47,7 @@ struct NativeSettingsView: View {
         }
         var description: String {
             switch self {
-            case .printer: return "Bluetooth・USB でつなぐ・機種・紙幅・自動印刷・ドロア・レシートの出し先・LAN・Wi-Fi・ネットが無いときの印刷"
+            case .printer: return "プリンター（Bluetooth・USB・LAN・Wi-Fi）・紙幅・自動印刷・キャッシュドロア・レシートの出し先・ネットが無いときの印刷"
             case .native: return "ホーム・テーブル・オーダー・会計をアプリの画面で開く（OFF で今までの Web）"
             }
         }

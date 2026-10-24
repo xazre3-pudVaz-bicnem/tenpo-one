@@ -22,6 +22,7 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
     case handyQr = "handyqr"
     case accounts = "accounts"
     case handy = "handy"
+    case categories = "categories"
     var id: String { rawValue }
 
     /// Web の道（クエリは見ない）
@@ -40,6 +41,7 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
         case .handyQr: return "/app/settings/handy-qr"
         case .accounts: return "/app/settings/accounts"
         case .handy: return "/app/settings/handy"
+        case .categories: return "/app/settings/categories"
         }
     }
     var title: String {
@@ -57,6 +59,7 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
         case .handyQr: return "iPhoneハンディ"
         case .accounts: return "勘定科目"
         case .handy: return "ハンディ端末"
+        case .categories: return "カテゴリ"
         }
     }
     var en: String {
@@ -74,6 +77,7 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
         case .handyQr: return "Handy QR"
         case .accounts: return "Accounts"
         case .handy: return "Handy devices"
+        case .categories: return "Categories"
         }
     }
 
@@ -102,6 +106,7 @@ struct NativeSettingsPageScreen: View {
         case .handyQr: NativeHandyQrFromSettings()
         case .accounts: NativeAccountsScreen()
         case .handy: NativeHandyDevicesScreen()
+        case .categories: NativeCategoriesScreen()
         }
     }
 }
@@ -2047,5 +2052,122 @@ struct NativeHandyDevicesView: View {
         guard let d = f.date(from: iso) ?? ISO8601DateFormatter().date(from: iso) else { return iso }
         let o = DateFormatter(); o.dateFormat = "M/d HH:mm"; o.timeZone = TimeZone(identifier: "Asia/Tokyo")
         return o.string(from: d)
+    }
+}
+
+// MARK: - カテゴリ（Web の /app/settings/categories・components/settings/category-panel.tsx・station-panel.tsx と同じ）
+
+struct NCTRow: Codable, Identifiable, Hashable { let id: String; let name: String; let nameEn: String; let color: String; let sortOrder: Int; let station: String; let shared: Bool }
+struct NCTPayload: Codable { let store: NFNamed; let canEdit: Bool; let colors: [String]; let stations: [NSTLabeled]; let rows: [NCTRow] }
+
+@MainActor
+final class NativeCategoriesModel: NSPModel<NCTPayload> {
+    @Published var showForm = false
+    @Published var editing: NCTRow?
+    @Published var name = ""
+    @Published var nameEn = ""
+    @Published var color = "#bc5940"
+    @Published var sortOrder = "0"
+    init() { super.init(part: "categories") }
+
+    func startAdd() { editing = nil; name = ""; nameEn = ""; color = payload?.colors.first ?? "#bc5940"; sortOrder = String((payload?.rows.map(\.sortOrder).max() ?? 0) + 1); showForm = true }
+    func startEdit(_ r: NCTRow) { editing = r; name = r.name; nameEn = r.nameEn; color = r.color; sortOrder = String(r.sortOrder); showForm = true }
+    func save() async {
+        let body: [String: Any] = ["type": "categorySave", "id": editing?.id as Any? ?? NSNull(), "name": name, "nameEn": nameEn, "color": color, "sortOrder": Int(sortOrder) ?? 0]
+        if await run("save", body, done: editing == nil ? "カテゴリを追加しました" : "カテゴリを保存しました") { showForm = false }
+    }
+    func delete(_ r: NCTRow) async { _ = await run(r.id, ["type": "categoryDelete", "id": r.id], done: "「\(r.name)」を削除しました") }
+    func setStation(_ r: NCTRow, _ st: String) async { guard st != r.station else { return }; _ = await run(r.id, ["type": "categoryStation", "id": r.id, "station": st], done: "振り分けを変えました") }
+    func label(_ list: [NSTLabeled], _ id: String) -> String { list.first { $0.id == id }?.label ?? id }
+}
+
+struct NativeCategoriesScreen: View {
+    @StateObject private var model = NativeCategoriesModel()
+    @EnvironmentObject var state: AppState
+    var body: some View { NativeCategoriesView(model: model, onBack: { state.goNativeSettings() }) }
+}
+
+struct NativeCategoriesView: View {
+    @ObservedObject var model: NativeCategoriesModel
+    let onBack: () -> Void
+    @State private var confirmDelete: NCTRow?
+
+    var body: some View {
+        NSPFrame(storeName: model.payload?.store.name ?? "", title: "カテゴリ", en: "Categories", loaded: model.payload != nil, error: model.error, toast: $model.toast, onBack: onBack, retry: { await model.refresh() }) {
+            if let p = model.payload {
+                if p.canEdit && !model.showForm { HStack { NSPButton(text: "カテゴリを追加", icon: "plus", primary: true) { model.startAdd() }; Spacer() } }
+                if model.showForm { form(p) }
+                NSPCard(title: "カテゴリ", en: "Categories", note: "名前・色・並び順と、キッチン／ドリンク／デザート／焼き場への振り分け（厨房プリンター・KDS）。全店共通のカテゴリには印") {
+                    VStack(spacing: 0) {
+                        if p.rows.isEmpty { Text("カテゴリがまだありません").font(.system(size: 14)).foregroundColor(NFColor.ink3).padding(18) }
+                        ForEach(p.rows) { r in
+                            HStack(spacing: 12) {
+                                RoundedRectangle(cornerRadius: 8).fill(Color(hex: UInt32(r.color.dropFirst(), radix: 16) ?? 0xBC5940)).frame(width: 28, height: 28)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    HStack(spacing: 6) {
+                                        Text(r.name).font(.system(size: 16, weight: .bold)).foregroundColor(NFColor.ink)
+                                        if r.shared { Text("全店共通").font(.system(size: 11, weight: .bold)).foregroundColor(NFColor.ink3).padding(.horizontal, 7).padding(.vertical, 2).background(Capsule().fill(NFColor.lilac)) }
+                                    }
+                                    Text("\(r.nameEn.isEmpty ? "" : r.nameEn + "　")並び \(r.sortOrder)").font(.system(size: 12)).foregroundColor(NFColor.ink3)
+                                }
+                                .frame(width: 260, alignment: .leading)
+                                // 振り分け（ステーション）
+                                HStack(spacing: 6) {
+                                    ForEach(p.stations) { st in
+                                        Button { Task { await model.setStation(r, st.id) } } label: {
+                                            Text(st.label).font(.system(size: 13, weight: .bold)).foregroundColor(r.station == st.id ? .white : NFColor.ink2)
+                                                .padding(.horizontal, 12).frame(height: 36)
+                                                .background(RoundedRectangle(cornerRadius: 9).fill(r.station == st.id ? NFColor.navy : Color.white))
+                                                .overlay(RoundedRectangle(cornerRadius: 9).stroke(NFColor.line, lineWidth: 1))
+                                        }
+                                        .buttonStyle(PressableStyle()).disabled(!p.canEdit || model.busy != nil)
+                                    }
+                                }
+                                Spacer()
+                                if model.busy == r.id { ProgressView() }
+                                if p.canEdit {
+                                    NSPButton(text: "編集", icon: "pencil") { model.startEdit(r) }
+                                    NSPButton(text: "削除", icon: "trash") { confirmDelete = r }
+                                }
+                            }
+                            .padding(.horizontal, 18).frame(minHeight: 62)
+                            .overlay(alignment: .bottom) { Rectangle().fill(NFColor.line).frame(height: 1) }
+                        }
+                    }
+                }
+            }
+        }
+        .alert("カテゴリを削除", isPresented: Binding(get: { confirmDelete != nil }, set: { if !$0 { confirmDelete = nil } })) {
+            Button("削除する", role: .destructive) { if let r = confirmDelete { Task { await model.delete(r) } }; confirmDelete = nil }
+            Button("やめる", role: .cancel) { confirmDelete = nil }
+        } message: { Text("「\(confirmDelete?.name ?? "")」を削除します（中の商品はカテゴリなしになります）") }
+        .task { await model.refresh() }
+    }
+
+    private func form(_ p: NCTPayload) -> some View {
+        NSPCard(title: model.editing == nil ? "カテゴリを追加" : "カテゴリを編集", en: model.editing == nil ? "Add" : "Edit") {
+            VStack(spacing: 0) {
+                NSPRow(label: "カテゴリ名", required: true) { NSPInput(text: $model.name, placeholder: "例：ドリンク・前菜", width: 360) }
+                NSPRow(label: "英語名") { NSPInput(text: $model.nameEn, placeholder: "Drinks", width: 360) }
+                NSPRow(label: "色") {
+                    HStack(spacing: 8) {
+                        ForEach(p.colors, id: \.self) { c in
+                            Button { model.color = c } label: {
+                                RoundedRectangle(cornerRadius: 9).fill(Color(hex: UInt32(c.dropFirst(), radix: 16) ?? 0xBC5940)).frame(width: 36, height: 36)
+                                    .overlay(RoundedRectangle(cornerRadius: 9).stroke(model.color == c ? NFColor.navy : Color.clear, lineWidth: 3))
+                            }
+                            .buttonStyle(PressableStyle())
+                        }
+                    }
+                }
+                NSPRow(label: "並び順") { NSPInput(text: $model.sortOrder, placeholder: "0", width: 120, keyboard: .numberPad) }
+                HStack(spacing: 10) {
+                    Spacer()
+                    NSPButton(text: "やめる") { model.showForm = false }
+                    NSPButton(text: "保存する", primary: true, busy: model.busy == "save", disabled: model.name.trimmingCharacters(in: .whitespaces).isEmpty) { Task { await model.save() } }
+                }
+                .padding(18)
+            }
+        }
     }
 }

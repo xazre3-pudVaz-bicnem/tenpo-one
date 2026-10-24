@@ -49,7 +49,11 @@ export type NativeSettingsPageAction =
   /** ハンディ端末（/app/settings/handy。issueHandyPairing / revokeHandyDevice / renameHandyDevice） */
   | { type: 'handyIssue'; deviceName: string }
   | { type: 'handyRevoke'; id: string }
-  | { type: 'handyRename'; id: string; name: string };
+  | { type: 'handyRename'; id: string; name: string }
+  /** カテゴリ（/app/settings/categories。saveCategory / deleteCategory / updateCategoryStation） */
+  | { type: 'categorySave'; id: string | null; name: string; nameEn: string; color: string; sortOrder: number }
+  | { type: 'categoryDelete'; id: string }
+  | { type: 'categoryStation'; id: string; station: string };
 
 export interface NativeStoreFields {
   name: string;
@@ -104,6 +108,9 @@ export const NATIVE_SETTINGS_PAGE_ACTION_TYPES: readonly NativeSettingsPageActio
   'handyIssue',
   'handyRevoke',
   'handyRename',
+  'categorySave',
+  'categoryDelete',
+  'categoryStation',
 ];
 
 export function isNativeSettingsPageActionType(v: unknown): v is NativeSettingsPageActionType {
@@ -308,7 +315,33 @@ export function parseNativeSettingsPageAction(raw: unknown): Parsed {
     if (!n) return bad('端末の名前を入力してください');
     return { ok: true, action: { type: 'handyRename', id: b.id, name: n } };
   }
+  if (b.type === 'categorySave') {
+    const name = typeof b.name === 'string' ? b.name.trim().slice(0, 80) : '';
+    if (!name) return bad('カテゴリ名を入力してください');
+    const color = typeof b.color === 'string' && /^#[0-9a-fA-F]{6}$/.test(b.color) ? b.color : '#bc5940';
+    const id = b.id == null || b.id === '' ? null : isUuid(b.id) ? b.id : false;
+    if (id === false) return bad('カテゴリが見つかりません');
+    return { ok: true, action: { type: 'categorySave', id, name, nameEn: typeof b.nameEn === 'string' ? b.nameEn.slice(0, 80) : '', color, sortOrder: typeof b.sortOrder === 'number' && Number.isInteger(b.sortOrder) ? b.sortOrder : 0 } };
+  }
+  if (b.type === 'categoryDelete') {
+    if (!isUuid(b.id)) return bad('カテゴリが見つかりません');
+    return { ok: true, action: { type: 'categoryDelete', id: b.id } };
+  }
+  if (b.type === 'categoryStation') {
+    if (!isUuid(b.id)) return bad('カテゴリが見つかりません');
+    if (typeof b.station !== 'string' || !/^[a-z_]{1,20}$/.test(b.station)) return bad('ステーションの指定が不正です');
+    return { ok: true, action: { type: 'categoryStation', id: b.id, station: b.station } };
+  }
   return bad();
+}
+
+/** カテゴリの画面の読み込み（GET ?part=categories） */
+export interface NativeCategoriesPayload {
+  store: { id: string; name: string };
+  canEdit: boolean;
+  colors: string[];
+  stations: { id: string; label: string }[];
+  rows: { id: string; name: string; nameEn: string; color: string; sortOrder: number; station: string; shared: boolean }[];
 }
 
 /** ハンディ端末の画面の読み込み（GET ?part=handy） */
