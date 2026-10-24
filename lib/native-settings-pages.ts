@@ -82,7 +82,14 @@ export type NativeSettingsPageAction =
   | { type: 'steraAdd'; name: string; terminalNo: string }
   | { type: 'steraUpdate'; id: string; name?: string; terminalNo?: string; active?: boolean }
   | { type: 'steraRegen'; id: string }
-  | { type: 'steraDelete'; id: string };
+  | { type: 'steraDelete'; id: string }
+  /** スタッフ管理（/app/staff。app/app/staff/actions.ts） */
+  | { type: 'staffInvite'; email: string; displayName: string; displayNameKana: string; role: string; storeIds: string[] }
+  | { type: 'staffRole'; membershipId: string; profileId: string; role: string; storeIds: string[] }
+  | { type: 'staffStores'; membershipId: string; profileId: string; storeIds: string[] }
+  | { type: 'staffPin'; membershipId: string; profileId: string; pin: string }
+  | { type: 'staffStatus'; membershipId: string; profileId: string; status: 'active' | 'suspended' }
+  | { type: 'staffPasswordReset'; membershipId: string; profileId: string };
 
 export interface NativePointBrand {
   key: string;
@@ -192,6 +199,12 @@ export const NATIVE_SETTINGS_PAGE_ACTION_TYPES: readonly NativeSettingsPageActio
   'steraUpdate',
   'steraRegen',
   'steraDelete',
+  'staffInvite',
+  'staffRole',
+  'staffStores',
+  'staffPin',
+  'staffStatus',
+  'staffPasswordReset',
 ];
 
 export function isNativeSettingsPageActionType(v: unknown): v is NativeSettingsPageActionType {
@@ -635,7 +648,77 @@ export function parseNativeSettingsPageAction(raw: unknown): Parsed {
     if (!isUuid(b.id)) return bad('端末が見つかりません');
     return { ok: true, action: { type: b.type, id: b.id } };
   }
+  // スタッフ管理（細かい確認は Server Action 側と同じ。ここは形だけ）
+  const member = (): { membershipId: string; profileId: string } | null => (isUuid(b.membershipId) && isUuid(b.profileId) ? { membershipId: b.membershipId, profileId: b.profileId } : null);
+  if (b.type === 'staffInvite') {
+    const email = typeof b.email === 'string' ? b.email.trim() : '';
+    const dn = typeof b.displayName === 'string' ? b.displayName.trim() : '';
+    if (!email || email.length > 254) return bad('メールアドレスを入力してください');
+    if (!dn || dn.length > 80) return bad('氏名を入力してください');
+    if (typeof b.role !== 'string' || !b.role) return bad('不正なロールです');
+    const st = ids(b.storeIds ?? [], 200);
+    if (!st) return bad('店舗の指定が正しくありません');
+    return { ok: true, action: { type: 'staffInvite', email, displayName: dn, displayNameKana: typeof b.displayNameKana === 'string' ? b.displayNameKana.trim().slice(0, 80) : '', role: b.role, storeIds: st } };
+  }
+  if (b.type === 'staffRole') {
+    const m = member();
+    const st = ids(b.storeIds ?? [], 200);
+    if (!m) return bad('対象のスタッフが見つかりません');
+    if (typeof b.role !== 'string' || !b.role) return bad('不正なロールです');
+    if (!st) return bad('店舗の指定が正しくありません');
+    return { ok: true, action: { type: 'staffRole', ...m, role: b.role, storeIds: st } };
+  }
+  if (b.type === 'staffStores') {
+    const m = member();
+    const st = ids(b.storeIds, 200);
+    if (!m) return bad('対象のスタッフが見つかりません');
+    if (!st) return bad('店舗の指定が正しくありません');
+    return { ok: true, action: { type: 'staffStores', ...m, storeIds: st } };
+  }
+  if (b.type === 'staffPin') {
+    const m = member();
+    if (!m) return bad('対象のスタッフが見つかりません');
+    if (typeof b.pin !== 'string' || !/^\d{4,6}$/.test(b.pin)) return bad('PINは4〜6桁の数字で入力してください');
+    return { ok: true, action: { type: 'staffPin', ...m, pin: b.pin } };
+  }
+  if (b.type === 'staffStatus') {
+    const m = member();
+    if (!m) return bad('対象のスタッフが見つかりません');
+    if (b.status !== 'active' && b.status !== 'suspended') return bad('状態の指定が正しくありません');
+    return { ok: true, action: { type: 'staffStatus', ...m, status: b.status } };
+  }
+  if (b.type === 'staffPasswordReset') {
+    const m = member();
+    if (!m) return bad('対象のスタッフが見つかりません');
+    return { ok: true, action: { type: 'staffPasswordReset', ...m } };
+  }
   return bad();
+}
+
+/** スタッフ管理の画面の読み込み（GET ?part=staff） */
+export interface NativeStaffPayload {
+  store: { id: string; name: string };
+  organizationName: string;
+  /** 自分の membership の profile id（自分の行は変えられない） */
+  selfProfileId: string;
+  /** 自分が付けられるロール（lib/permissions.ts の canAssignRole） */
+  roles: { id: string; label: string; assignable: boolean; hq: boolean }[];
+  stores: { id: string; name: string }[];
+  statuses: { id: string; label: string }[];
+  rows: {
+    membershipId: string;
+    profileId: string;
+    displayName: string;
+    displayNameKana: string | null;
+    role: string;
+    roleLabel: string;
+    status: string;
+    storeIds: string[];
+    storeNames: string[];
+    hasPin: boolean;
+    /** 自分より上のロールは触れない（Web の row-menu と同じ） */
+    canEdit: boolean;
+  }[];
 }
 
 /** 決済・端末の画面の読み込み（GET ?part=payments） */

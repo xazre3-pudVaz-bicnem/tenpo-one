@@ -83,4 +83,23 @@ describe('native settings pages (設定の中の画面) actions', () => {
     expect(parseNativeSettingsPageAction({ type: 'steraRegen', id: ID }).ok).toBe(true);
     expect(parseNativeSettingsPageAction({ type: 'readerDelete', id: 'x' }).ok).toBe(false);
   });
+
+  it('スタッフ管理: 招待・ロール・PIN・状態', () => {
+    const inv = parseNativeSettingsPageAction({ type: 'staffInvite', email: ' A@Example.com ', displayName: ' 山田 ', role: 'staff', storeIds: [ID] });
+    expect(inv.ok).toBe(true);
+    if (inv.ok && inv.action.type === 'staffInvite') {
+      expect(inv.action.email).toBe('A@Example.com');
+      expect(inv.action.displayNameKana).toBe('');
+    }
+    expect(parseNativeSettingsPageAction({ type: 'staffInvite', email: '', displayName: 'x', role: 'staff', storeIds: [] }).ok).toBe(false);
+    expect(parseNativeSettingsPageAction({ type: 'staffInvite', email: 'a@b.c', displayName: 'x', role: 'staff', storeIds: ['nope'] }).ok).toBe(false);
+    expect(parseNativeSettingsPageAction({ type: 'staffRole', membershipId: ID, profileId: ID, role: 'store_manager', storeIds: [ID] }).ok).toBe(true);
+    expect(parseNativeSettingsPageAction({ type: 'staffRole', membershipId: 'x', profileId: ID, role: 'staff', storeIds: [] }).ok).toBe(false);
+    expect(parseNativeSettingsPageAction({ type: 'staffPin', membershipId: ID, profileId: ID, pin: '1234' }).ok).toBe(true);
+    expect(parseNativeSettingsPageAction({ type: 'staffPin', membershipId: ID, profileId: ID, pin: '12' }).ok).toBe(false);
+    expect(parseNativeSettingsPageAction({ type: 'staffPin', membershipId: ID, profileId: ID, pin: 'abcd' }).ok).toBe(false);
+    expect(parseNativeSettingsPageAction({ type: 'staffStatus', membershipId: ID, profileId: ID, status: 'suspended' }).ok).toBe(true);
+    expect(parseNativeSettingsPageAction({ type: 'staffStatus', membershipId: ID, profileId: ID, status: 'invited' }).ok).toBe(false);
+    expect(parseNativeSettingsPageAction({ type: 'staffPasswordReset', membershipId: ID, profileId: ID })).toEqual({ ok: true, action: { type: 'staffPasswordReset', membershipId: ID, profileId: ID } });
+  });
 });

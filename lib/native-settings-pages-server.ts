@@ -18,7 +18,8 @@ import { saveLoyaltySettings } from '@/app/app/settings/loyalty/actions';
 import { resetAlertRuleToDefault, upsertAlertRule } from '@/app/app/settings/alerts/actions';
 import { ALERT_RULE_DEFAULTS, ALERT_RULE_KEYS, ALERT_RULE_LABELS, ALERT_RULE_UNITS, type AlertRuleKey } from '@/components/dashboard/alert-rules';
 import { deleteApprovalRule, saveApprovalRule } from '@/app/app/settings/approvals/actions';
-import { ROLE_LABELS } from '@/lib/permissions';
+import { canAssignRole, HQ_ROLES, ROLE_LABELS, ROLES, roleOutranks, type Role } from '@/lib/permissions';
+import { changeMemberRole, changeMemberStores, inviteStaff, resetMemberPassword, setMemberPin, setMemberStatus } from '@/app/app/staff/actions';
 import { deleteAccount, installStandardAccounts, saveAccount } from '@/app/app/settings/accounts/actions';
 import { ACCOUNT_CATEGORY_LABELS, ACCOUNT_CATEGORY_ORDER, SUB_TYPE_LABELS, type SubType } from '@/components/accounting/labels';
 import { TAX_TREATMENT_LABELS, type AccountCategory, type TaxTreatment } from '@/lib/accounting';
@@ -47,6 +48,7 @@ import type {
   NativeCategoriesPayload,
   NativeMenuBookPayload,
   NativePaymentsPayload,
+  NativeStaffPayload,
   NativeMenuItemsPayload,
   NativeOptionsPayload,
   NativeQrServicePayload,
@@ -66,7 +68,7 @@ type Supabase = Awaited<ReturnType<typeof createClient>>;
 type Store = { id: string; name: string };
 
 /** 設定の中の画面の名前（GET ?part=） */
-export const NATIVE_SETTINGS_PAGE_PARTS = ['soldout', 'clerks', 'hours', 'store', 'tax', 'loyalty', 'alerts', 'approvals', 'accounts', 'handy', 'categories', 'menuItems', 'options', 'qrService', 'menuBook', 'payments'] as const;
+export const NATIVE_SETTINGS_PAGE_PARTS = ['soldout', 'clerks', 'hours', 'store', 'tax', 'loyalty', 'alerts', 'approvals', 'accounts', 'handy', 'categories', 'menuItems', 'options', 'qrService', 'menuBook', 'payments', 'staff'] as const;
 export type NativeSettingsPagePart = (typeof NATIVE_SETTINGS_PAGE_PARTS)[number];
 export function isNativeSettingsPagePart(v: unknown): v is NativeSettingsPagePart {
   return typeof v === 'string' && (NATIVE_SETTINGS_PAGE_PARTS as readonly string[]).includes(v);
@@ -100,7 +102,8 @@ export async function loadNativeSettingsPage(
         | NativeOptionsPayload
         | NativeQrServicePayload
         | NativeMenuBookPayload
-        | NativePaymentsPayload;
+        | NativePaymentsPayload
+        | NativeStaffPayload;
     }
   | { ok: false; error: string }
 > {
@@ -499,6 +502,54 @@ export async function loadNativeSettingsPage(
     const cur = qrServiceFrom((data as { settings?: unknown } | null)?.settings ?? null);
     return { ok: true, payload: { store, canEdit: can(ctx.role, 'menu.manage'), enabled: cur.enabled, items: cur.items, maxItems: QR_SERVICE_MAX_ITEMS } };
   }
+  if (part === 'staff') {
+    // Web の app/app/staff/page.tsx と同じ（requirePermission('staff.manage')）
+    if (!can(ctx.role, 'staff.manage')) return { ok: false, error: 'スタッフ管理の権限がありません（店長以上のアカウントでログインしてください）' };
+    if (!ctx.organizationId) return { ok: false, error: '企業が見つかりません' };
+    const { data } = await supabase
+      .from('memberships')
+      .select(
+        `id, role, status, profile_id,
+         profiles ( id, display_name, display_name_kana, has_pin ),
+         membership_stores ( store_id, stores ( id, name ) )`
+      )
+      .eq('organization_id', ctx.organizationId)
+      .order('created_at', { ascending: false });
+    type Row = {
+      id: string;
+      role: Role;
+      status: string;
+      profile_id: string;
+      profiles: { id: string; display_name: string; display_name_kana: string | null; has_pin: boolean | null } | null;
+      membership_stores: { store_id: string; stores: { id: string; name: string } | null }[];
+    };
+    const me = ctx.role as Role;
+    const statusLabel: Record<string, string> = { active: '有効', invited: '招待中', suspended: '停止中' };
+    return {
+      ok: true,
+      payload: {
+        store,
+        organizationName: ctx.organizationName ?? '',
+        selfProfileId: ctx.userId,
+        roles: ROLES.map((r) => ({ id: r, label: ROLE_LABELS[r], assignable: canAssignRole(me, r), hq: HQ_ROLES.includes(r) })),
+        stores: ctx.stores.map((s) => ({ id: s.id, name: s.name })),
+        statuses: Object.entries(statusLabel).map(([id, label]) => ({ id, label })),
+        rows: ((data ?? []) as unknown as Row[]).map((r) => ({
+          membershipId: r.id,
+          profileId: r.profile_id,
+          displayName: r.profiles?.display_name ?? '—',
+          displayNameKana: r.profiles?.display_name_kana ?? null,
+          role: r.role,
+          roleLabel: ROLE_LABELS[r.role] ?? r.role,
+          status: r.status,
+          storeIds: r.membership_stores.map((ms) => ms.store_id),
+          storeNames: r.membership_stores.map((ms) => ms.stores?.name).filter((n): n is string => !!n),
+          hasPin: r.profiles?.has_pin === true,
+          canEdit: r.profile_id !== ctx.userId && !roleOutranks(me, r.role),
+        })),
+      },
+    };
+  }
   if (part === 'payments') {
     // Web の app/app/settings/payments/page.tsx と同じ組み立て
     const [{ data: readers }, { data: settingsRow }, { data: steraRows }] = await Promise.all([
@@ -741,5 +792,22 @@ export async function runNativeSettingsPageAction(
       return done(await regenerateSteraLinkCode(action.id, store.id));
     case 'steraDelete':
       return done(await deleteSteraTerminal(action.id, store.id));
+    case 'staffInvite': {
+      // 初期パスワードは返事にだけ載せる（Web と同じ。ログ・監査ログには残さない）
+      const r = await inviteStaff({ email: action.email, displayName: action.displayName, displayNameKana: action.displayNameKana, role: action.role, storeIds: action.storeIds });
+      return r.error ? { ok: false, error: r.error } : { ok: true, data: { initialPassword: r.initialPassword ?? null } };
+    }
+    case 'staffRole':
+      return done(await changeMemberRole({ membershipId: action.membershipId, profileId: action.profileId, newRole: action.role, storeIds: action.storeIds }));
+    case 'staffStores':
+      return done(await changeMemberStores({ membershipId: action.membershipId, profileId: action.profileId, storeIds: action.storeIds }));
+    case 'staffPin':
+      return done(await setMemberPin({ membershipId: action.membershipId, profileId: action.profileId, pin: action.pin }));
+    case 'staffStatus':
+      return done(await setMemberStatus({ membershipId: action.membershipId, profileId: action.profileId, status: action.status }));
+    case 'staffPasswordReset': {
+      const r = await resetMemberPassword({ membershipId: action.membershipId, profileId: action.profileId });
+      return r.error ? { ok: false, error: r.error } : { ok: true, data: { newPassword: r.newPassword ?? null } };
+    }
   }
 }

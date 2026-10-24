@@ -29,6 +29,7 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
     case qrService = "qrService"
     case menuBook = "menuBook"
     case payments = "payments"
+    case staff = "staff"
     var id: String { rawValue }
 
     /// Web の道（クエリは見ない）
@@ -54,6 +55,7 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
         case .qrService: return "/app/settings/qr-service"
         case .menuBook: return "/app/settings/menu-book"
         case .payments: return "/app/settings/payments"
+        case .staff: return "/app/staff"
         }
     }
     var title: String {
@@ -78,6 +80,7 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
         case .qrService: return "QRのサービス"
         case .menuBook: return "メニューブック"
         case .payments: return "決済・端末"
+        case .staff: return "スタッフ管理"
         }
     }
     var en: String {
@@ -102,6 +105,7 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
         case .qrService: return "QR service"
         case .menuBook: return "Menu book"
         case .payments: return "Payments"
+        case .staff: return "Staff"
         }
     }
 
@@ -137,6 +141,7 @@ struct NativeSettingsPageScreen: View {
         case .qrService: NativeQrServiceScreen()
         case .menuBook: NativeMenuBookScreen()
         case .payments: NativePaymentsScreen()
+        case .staff: NativeStaffScreen()
         }
     }
 }
@@ -763,6 +768,11 @@ struct NSPTimeMenu: View {
 /// 操作して返事を返す（POST /api/app/v1/pos）
 enum NSPApi {
     static func post(_ body: [String: Any]) async -> (ok: Bool, error: String?) {
+        let r = await postJSON(body)
+        return (r.ok, r.error)
+    }
+    /// 返事の中身も欲しいとき（招待の初期パスワードなど、返事にだけ載るもの）
+    static func postJSON(_ body: [String: Any]) async -> (ok: Bool, error: String?, json: [String: Any]?) {
         var req = URLRequest(url: AppConfig.url("/api/app/v1/pos"))
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "content-type")
@@ -770,9 +780,9 @@ enum NSPApi {
         do {
             let data = try await NativeAPI.shared.send(req, kickPrint: false)
             let r = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
-            return (r?["ok"] as? Bool == true, r?["error"] as? String)
+            return (r?["ok"] as? Bool == true, r?["error"] as? String, r)
         } catch {
-            return (false, (error as? NativeAPIError)?.message ?? "通信できませんでした")
+            return (false, (error as? NativeAPIError)?.message ?? "通信できませんでした", nil)
         }
     }
     static func load<T: Decodable>(_ type: T.Type, part: String) async throws -> (T, URL?) {
@@ -3395,5 +3405,288 @@ struct NativePaymentsView: View {
             }
             .padding(18)
         }
+    }
+}
+
+// MARK: - スタッフ管理（Web の /app/staff・components/staff/* と同じ）
+
+struct NSFRole: Codable, Identifiable, Hashable { let id: String; let label: String; let assignable: Bool; let hq: Bool }
+struct NSFRow: Codable, Identifiable, Hashable {
+    let membershipId: String; let profileId: String; let displayName: String; let displayNameKana: String?
+    let role: String; let roleLabel: String; let status: String; let storeIds: [String]; let storeNames: [String]; let hasPin: Bool; let canEdit: Bool
+    var id: String { membershipId }
+}
+struct NSFPayload: Codable {
+    let store: NFNamed; let organizationName: String; let selfProfileId: String
+    let roles: [NSFRole]; let stores: [NFNamed]; let statuses: [NPYIdLabel]; let rows: [NSFRow]
+}
+
+@MainActor
+final class NativeStaffModel: NSPModel<NSFPayload> {
+    enum Panel: Equatable { case none, invite, edit(String) }
+    @Published var panel: Panel = .none
+    @Published var query = ""
+    @Published var statusFilter: String? = nil
+    // 招待
+    @Published var invEmail = ""
+    @Published var invName = ""
+    @Published var invKana = ""
+    @Published var invRole = "staff"
+    @Published var invStores: Set<String> = []
+    // 編集
+    @Published var edRole = ""
+    @Published var edStores: Set<String> = []
+    @Published var edPin = ""
+    /// 招待・再発行で一度だけ出るパスワード（画面を閉じたら消える。Web と同じ）
+    @Published var secret: (title: String, who: String, value: String)? = nil
+    init() { super.init(part: "staff") }
+
+    var filtered: [NSFRow] {
+        let q = NativeSoldOutModel.norm(query)
+        return (payload?.rows ?? []).filter { r in
+            (statusFilter == nil || r.status == statusFilter) && (q.isEmpty || NativeSoldOutModel.norm(r.displayName + (r.displayNameKana ?? "") + r.roleLabel + r.storeNames.joined()).contains(q))
+        }
+    }
+    func isHq(_ role: String) -> Bool { payload?.roles.first { $0.id == role }?.hq ?? false }
+    func startInvite() {
+        invEmail = ""; invName = ""; invKana = ""; invRole = "staff"
+        invStores = Set(payload?.store.id.map { [$0] } ?? [])
+        panel = .invite
+    }
+    func startEdit(_ r: NSFRow) {
+        edRole = r.role; edStores = Set(r.storeIds); edPin = ""
+        panel = .edit(r.membershipId)
+    }
+    func row(_ id: String) -> NSFRow? { payload?.rows.first { $0.membershipId == id } }
+
+    func invite() async {
+        let body: [String: Any] = ["type": "staffInvite", "email": invEmail, "displayName": invName, "displayNameKana": invKana, "role": invRole, "storeIds": isHq(invRole) ? [] : Array(invStores)]
+        guard busy == nil else { return }
+        busy = "invite"; defer { busy = nil }
+        let r = await NSPApi.postJSON(body)
+        guard r.ok else { toast = r.error ?? "招待できませんでした"; return }
+        await refresh()
+        panel = .none
+        if let pw = r.json?["initialPassword"] as? String, !pw.isEmpty { secret = ("招待が完了しました", invName, pw) } else { toast = "招待しました" }
+    }
+    func saveRole(_ r: NSFRow) async {
+        if await run("role", ["type": "staffRole", "membershipId": r.membershipId, "profileId": r.profileId, "role": edRole, "storeIds": isHq(edRole) ? [] : Array(edStores)], done: "ロールを変更しました") { panel = .none }
+    }
+    func saveStores(_ r: NSFRow) async {
+        if await run("stores", ["type": "staffStores", "membershipId": r.membershipId, "profileId": r.profileId, "storeIds": Array(edStores)], done: "所属店舗を変更しました") { panel = .none }
+    }
+    func savePin(_ r: NSFRow) async {
+        if await run("pin", ["type": "staffPin", "membershipId": r.membershipId, "profileId": r.profileId, "pin": edPin], done: "PINを設定しました") { edPin = "" }
+    }
+    func setStatus(_ r: NSFRow, _ status: String) async {
+        _ = await run("status", ["type": "staffStatus", "membershipId": r.membershipId, "profileId": r.profileId, "status": status], done: status == "active" ? "再開しました" : "利用を停止しました")
+    }
+    func resetPassword(_ r: NSFRow) async {
+        guard busy == nil else { return }
+        busy = "pw"; defer { busy = nil }
+        let res = await NSPApi.postJSON(["type": "staffPasswordReset", "membershipId": r.membershipId, "profileId": r.profileId])
+        guard res.ok else { toast = res.error ?? "再発行できませんでした"; return }
+        if let pw = res.json?["newPassword"] as? String, !pw.isEmpty { secret = ("パスワードを再発行しました", r.displayName, pw) } else { toast = "再発行しました" }
+    }
+}
+
+struct NativeStaffScreen: View {
+    @StateObject private var model = NativeStaffModel()
+    @EnvironmentObject var state: AppState
+    var body: some View { NativeStaffView(model: model, onBack: { state.goNativeSettings() }) }
+}
+
+struct NativeStaffView: View {
+    @ObservedObject var model: NativeStaffModel
+    let onBack: () -> Void
+    @State private var confirmSuspend: NSFRow?
+    @State private var confirmReset: NSFRow?
+
+    var body: some View {
+        NSPFrame(storeName: model.payload?.store.name ?? "", title: "スタッフ管理", en: "Staff", loaded: model.payload != nil, error: model.error, toast: $model.toast, onBack: onBack, retry: { await model.refresh() }) {
+            if let p = model.payload {
+                if let sec = model.secret { secretCard(sec) }
+                HStack(spacing: 10) {
+                    NSPInput(text: $model.query, placeholder: "名前・ロール・店舗で探す", width: 300)
+                    HStack(spacing: 6) {
+                        filterChip("すべて", on: model.statusFilter == nil) { model.statusFilter = nil }
+                        ForEach(p.statuses) { st in filterChip(st.label, on: model.statusFilter == st.id) { model.statusFilter = st.id } }
+                    }
+                    Spacer()
+                    if model.panel != .invite { NSPButton(text: "スタッフを招待", icon: "person.badge.plus", primary: true) { model.startInvite() } }
+                }
+                if model.panel == .invite { inviteCard(p) }
+                NSPCard(title: "登録スタッフ", en: "\(p.organizationName)・\(model.filtered.count) 人") {
+                    VStack(spacing: 0) {
+                        if model.filtered.isEmpty { Text("該当するスタッフがいません").font(.system(size: 14)).foregroundColor(NFColor.ink3).padding(18) }
+                        ForEach(model.filtered) { r in
+                            rowView(p, r)
+                            if model.panel == .edit(r.membershipId) { editCard(p, r) }
+                        }
+                    }
+                }
+            }
+        }
+        .task { await model.refresh() }
+        .alert("利用を停止", isPresented: Binding(get: { confirmSuspend != nil }, set: { if !$0 { confirmSuspend = nil } }), presenting: confirmSuspend) { r in
+            Button("停止する", role: .destructive) { Task { await model.setStatus(r, "suspended") }; confirmSuspend = nil }
+            Button("やめる", role: .cancel) { confirmSuspend = nil }
+        } message: { r in Text("「\(r.displayName)」はログインできなくなります。あとで再開できます") }
+        .alert("パスワードを再発行", isPresented: Binding(get: { confirmReset != nil }, set: { if !$0 { confirmReset = nil } }), presenting: confirmReset) { r in
+            Button("再発行する", role: .destructive) { Task { await model.resetPassword(r) }; confirmReset = nil }
+            Button("やめる", role: .cancel) { confirmReset = nil }
+        } message: { r in Text("「\(r.displayName)」の今のパスワードは使えなくなります。新しいパスワードは一度だけ表示されます") }
+    }
+
+    private func filterChip(_ text: String, on: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(text).font(.system(size: 13, weight: .bold)).foregroundColor(on ? .white : NFColor.ink2)
+                .padding(.horizontal, 12).frame(height: 36)
+                .background(Capsule().fill(on ? NFColor.navy : Color.white)).overlay(Capsule().stroke(NFColor.line, lineWidth: 1))
+        }
+        .buttonStyle(PressableStyle())
+    }
+
+    private func tag(_ t: String, _ c: Color, fill: Color = .clear) -> some View {
+        Text(t).font(.system(size: 11, weight: .heavy)).foregroundColor(c).padding(.horizontal, 7).padding(.vertical, 2)
+            .background(Capsule().fill(fill)).overlay(Capsule().stroke(c.opacity(0.5), lineWidth: 1))
+    }
+
+    private func rowView(_ p: NSFPayload, _ r: NSFRow) -> some View {
+        let open = model.panel == .edit(r.membershipId)
+        return Button {
+            if !r.canEdit { model.toast = r.profileId == p.selfProfileId ? "自分の設定はプロフィールから変えてください" : "自分より上のロールのスタッフは変えられません"; return }
+            if open { model.panel = .none } else { model.startEdit(r) }
+        } label: {
+            HStack(spacing: 14) {
+                ZStack {
+                    Circle().fill(r.status == "active" ? NFColor.irisSoft : NFColor.lilacSoft).frame(width: 40, height: 40)
+                    Text(String(r.displayName.prefix(1))).font(.system(size: 16, weight: .heavy)).foregroundColor(r.status == "active" ? NFColor.iris : NFColor.ink3)
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text(r.displayName).font(.system(size: 15, weight: .bold)).foregroundColor(NFColor.ink)
+                        if let k = r.displayNameKana, !k.isEmpty { Text(k).font(.system(size: 11.5)).foregroundColor(NFColor.ink3) }
+                        if r.profileId == p.selfProfileId { tag("自分", NFColor.ink3) }
+                    }
+                    Text(model.isHq(r.role) ? "全店舗" : (r.storeNames.isEmpty ? "店舗 未設定" : r.storeNames.joined(separator: "、"))).font(.system(size: 12)).foregroundColor(NFColor.ink3)
+                }
+                .frame(width: 280, alignment: .leading)
+                Text(r.roleLabel).font(.system(size: 13.5, weight: .bold)).foregroundColor(NFColor.ink2).frame(width: 170, alignment: .leading)
+                tag(p.statuses.first { $0.id == r.status }?.label ?? r.status, r.status == "active" ? NFColor.success : (r.status == "invited" ? NFColor.iris : NFColor.ink3), fill: r.status == "active" ? NFColor.successSoft : .clear)
+                tag(r.hasPin ? "PIN 設定済" : "PIN 未設定", r.hasPin ? NFColor.success : NFColor.ink3)
+                Spacer()
+                if r.canEdit { Image(systemName: open ? "chevron.up" : "chevron.down").font(.system(size: 13, weight: .bold)).foregroundColor(NFColor.ink3) }
+            }
+            .padding(.horizontal, 18).frame(minHeight: 60)
+            .background(open ? NFColor.lilacSoft : Color.white)
+            .overlay(alignment: .bottom) { Rectangle().fill(NFColor.line).frame(height: 1) }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func storePicker(_ p: NSFPayload, _ sel: Binding<Set<String>>) -> some View {
+        WrapLayout(spacing: 6) {
+            ForEach(p.stores) { st in
+                let on = sel.wrappedValue.contains(st.id)
+                Button { if on { sel.wrappedValue.remove(st.id) } else { sel.wrappedValue.insert(st.id) } } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: on ? "checkmark.square.fill" : "square").foregroundColor(on ? NFColor.iris : NFColor.ink3)
+                        Text(st.name).font(.system(size: 13.5, weight: .bold)).foregroundColor(NFColor.ink)
+                    }
+                    .padding(.horizontal, 12).frame(height: 40)
+                    .background(RoundedRectangle(cornerRadius: 10).fill(on ? NFColor.irisSoft : Color.white)).overlay(RoundedRectangle(cornerRadius: 10).stroke(on ? NFColor.iris : NFColor.line, lineWidth: 1))
+                }
+                .buttonStyle(PressableStyle())
+            }
+        }
+    }
+
+    private func rolePicker(_ p: NSFPayload, _ sel: Binding<String>) -> some View {
+        Menu {
+            ForEach(p.roles.filter(\.assignable)) { r in Button(r.label) { sel.wrappedValue = r.id } }
+        } label: {
+            HStack(spacing: 6) {
+                Text(p.roles.first { $0.id == sel.wrappedValue }?.label ?? "ロールを選ぶ").font(.system(size: 14, weight: .bold)).foregroundColor(NFColor.ink)
+                Image(systemName: "chevron.up.chevron.down").font(.system(size: 11, weight: .bold)).foregroundColor(NFColor.ink3)
+            }
+            .padding(.horizontal, 12).frame(height: 44)
+            .background(RoundedRectangle(cornerRadius: 10).fill(Color.white)).overlay(RoundedRectangle(cornerRadius: 10).stroke(NFColor.line, lineWidth: 1))
+        }
+    }
+
+    private func inviteCard(_ p: NSFPayload) -> some View {
+        NSPCard(title: "スタッフを招待", en: "初期パスワードは招待のあと一度だけ表示") {
+            VStack(spacing: 0) {
+                NSPRow(label: "メールアドレス", required: true) { NSPInput(text: $model.invEmail, placeholder: "staff@example.com", width: 360, keyboard: .emailAddress) }
+                NSPRow(label: "氏名", required: true) { NSPInput(text: $model.invName, placeholder: "山田 太郎", width: 300) }
+                NSPRow(label: "ふりがな") { NSPInput(text: $model.invKana, placeholder: "やまだ たろう", width: 300) }
+                NSPRow(label: "ロール", required: true) { rolePicker(p, $model.invRole) }
+                if !model.isHq(model.invRole) { NSPRow(label: "所属店舗", en: "1つ以上", required: true) { storePicker(p, $model.invStores) } }
+                HStack(spacing: 10) {
+                    NSPButton(text: "招待する", icon: "paperplane", primary: true, busy: model.busy == "invite", disabled: model.invEmail.trimmingCharacters(in: .whitespaces).isEmpty || model.invName.trimmingCharacters(in: .whitespaces).isEmpty || (!model.isHq(model.invRole) && model.invStores.isEmpty)) { Task { await model.invite() } }
+                    NSPButton(text: "やめる") { model.panel = .none }
+                    Spacer()
+                }
+                .padding(18)
+            }
+        }
+    }
+
+    private func editCard(_ p: NSFPayload, _ r: NSFRow) -> some View {
+        VStack(spacing: 0) {
+            NSPRow(label: "ロール") {
+                HStack(spacing: 10) {
+                    rolePicker(p, $model.edRole)
+                    NSPButton(text: "変更", primary: true, busy: model.busy == "role", disabled: model.edRole == r.role || (!model.isHq(model.edRole) && model.edStores.isEmpty)) { Task { await model.saveRole(r) } }
+                }
+            }
+            if !model.isHq(model.edRole) {
+                NSPRow(label: "所属店舗", en: "1つ以上") {
+                    HStack(alignment: .top, spacing: 10) {
+                        storePicker(p, $model.edStores)
+                        if model.edRole == r.role { NSPButton(text: "変更", primary: true, busy: model.busy == "stores", disabled: model.edStores == Set(r.storeIds) || model.edStores.isEmpty) { Task { await model.saveStores(r) } } }
+                    }
+                }
+            }
+            NSPRow(label: "PIN", en: "4〜6桁") {
+                HStack(spacing: 10) {
+                    NSPInput(text: $model.edPin, placeholder: "新しいPIN", width: 160, keyboard: .numberPad)
+                    NSPButton(text: r.hasPin ? "PINを変える" : "PINを設定", primary: true, busy: model.busy == "pin", disabled: !(4...6).contains(model.edPin.count) || !model.edPin.allSatisfy(\.isNumber)) { Task { await model.savePin(r) } }
+                }
+            }
+            HStack(spacing: 10) {
+                if r.status == "suspended" {
+                    NSPButton(text: "利用を再開", icon: "play.circle", busy: model.busy == "status") { Task { await model.setStatus(r, "active") } }
+                } else {
+                    NSPButton(text: "利用を停止", icon: "pause.circle", busy: model.busy == "status") { confirmSuspend = r }
+                }
+                NSPButton(text: "パスワードを再発行", icon: "key", busy: model.busy == "pw") { confirmReset = r }
+                Spacer()
+                NSPButton(text: "閉じる") { model.panel = .none }
+            }
+            .padding(18)
+        }
+        .background(NFColor.lilacSoft.opacity(0.5))
+        .overlay(alignment: .bottom) { Rectangle().fill(NFColor.line).frame(height: 1) }
+    }
+
+    /// 招待・再発行のパスワード（一度だけ）
+    private func secretCard(_ sec: (title: String, who: String, value: String)) -> some View {
+        HStack(spacing: 14) {
+            Image(systemName: "key.fill").font(.system(size: 20, weight: .bold)).foregroundColor(NFColor.iris)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(sec.title).font(.system(size: 15, weight: .heavy)).foregroundColor(NFColor.navy)
+                Text("\(sec.who) さんの初期パスワード。本人に安全な方法で伝えてください（この画面を閉じると見られません）").font(.system(size: 12.5)).foregroundColor(NFColor.ink2)
+            }
+            Spacer()
+            Text(sec.value).font(.system(size: 20, weight: .heavy, design: .monospaced)).foregroundColor(NFColor.ink).padding(.horizontal, 14).frame(height: 44)
+                .background(RoundedRectangle(cornerRadius: 10).fill(Color.white)).overlay(RoundedRectangle(cornerRadius: 10).stroke(NFColor.line, lineWidth: 1))
+            NSPButton(text: "コピー", icon: "doc.on.doc") { UIPasteboard.general.string = sec.value; model.toast = "パスワードをコピーしました" }
+            NSPButton(text: "閉じる") { model.secret = nil }
+        }
+        .padding(18)
+        .background(RoundedRectangle(cornerRadius: 16).fill(NFColor.irisSoft))
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(NFColor.iris.opacity(0.4), lineWidth: 1))
     }
 }
