@@ -80,7 +80,7 @@ describe('ネイティブのフロア（テーブル一覧）の操作（2026-10
     const route = readFileSync(new URL('../app/api/app/v1/pos/route.ts', import.meta.url), 'utf8');
     expect(route).toContain("if (part === 'floor') {");
     expect(route).toContain('loadNativeFloor(ctx, await createClient()');
-    expect(route).toContain('await startRegisterVisit(action.tableId, action.draft)');
+    expect(route).toContain('await startRegisterVisit(action.tableId, action.draft, { sourceOptional: true })');
     expect(route).toContain('await goToOrder(action.tableId)');
     expect(route).toContain('await enqueueOrderSlipPrint(action.orderId)');
     expect(route).toContain('await setSeatTime(action.orderId, action.input)');
