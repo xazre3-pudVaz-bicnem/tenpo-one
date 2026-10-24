@@ -5,6 +5,8 @@ import { can, type PermissionAction } from '@/lib/permissions';
 import { createClient } from '@/lib/supabase/server';
 import { isNativeCustomLine, isUuid, NATIVE_APP_HEADER, parseNativePosAction, type NativePosAction, type NativePrintJob } from '@/lib/native-pos';
 import { loadNativeOfflineKit } from '@/lib/native-offline-kit-server';
+import { parseOfflineSync } from '@/lib/native-offline-sync';
+import { syncOfflineOrder } from '@/lib/native-offline-sync-server';
 import { loadNativeCatalog, loadNativeLive, loadNativeOrder, loadNativePos, setOrderVisitSource } from '@/lib/native-pos-server';
 import { claimLanKitchenPrints, finishLanPrint } from '@/lib/native-print-server';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -778,6 +780,22 @@ export async function POST(request: Request) {
   } catch {
     return json({ ok: false, error: '内容が正しくありません' }, 400);
   }
+  // レジの iPad がネット無しで受けた伝票を、ネットが戻ったら入れる（lib/native-offline-sync-server.ts。2026-10-24 Ronnie
+  // 「net chalepaxi afai sync」）。1回＝1伝票。何度送っても二重にならない
+  // 返事はいつも 200（iPad が retry を読んで、もう一度送るか人が見るかを決める）。レジの権限（pos.checkout）が要る
+  if (raw && typeof raw === 'object' && (raw as { type?: unknown }).type === 'offlineSync') {
+    if (!can(ctx.role, 'pos.checkout')) return json({ ok: false, error: 'レジ（会計）の権限がありません', retry: false });
+    const parsedSync = parseOfflineSync(raw);
+    if (!parsedSync.ok) return json({ ok: false, error: parsedSync.error, retry: false });
+    const syncProblem = await networkProblem(ctx);
+    if (syncProblem) return json({ ok: false, error: syncProblem, retry: true });
+    try {
+      return json(await syncOfflineOrder(ctx, parsedSync.order));
+    } catch (e) {
+      return json({ ok: false, error: errorText(e, 'オフラインの伝票を入れられませんでした'), retry: true });
+    }
+  }
+
   // iPhone ハンディ・オーナーのホームの操作（担当者・卓ロック・まとめ・呼び出し対応・店舗の切り替え。2026-10-24）
   if (raw && typeof raw === 'object' && isNativeHandyActionType((raw as { type?: unknown }).type)) {
     const parsedHandy = parseNativeHandyAction(raw);

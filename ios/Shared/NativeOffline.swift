@@ -24,10 +24,22 @@ final class NativeNet: ObservableObject {
         monitor.start(queue: queue)
     }
 
+    /// 回線そのものがつながっているか
+    private var pathOK = true
+    /// 設定の「オフラインを試す」（回線を切らずにオフラインの動きを確かめる。アプリを閉じると戻る）
+    @Published private(set) var forcedOffline = false
+
+    func setForcedOffline(_ on: Bool) {
+        forcedOffline = on
+        set(pathOK)
+    }
+
     private func set(_ ok: Bool) {
-        guard ok != online else { return }
-        online = ok
-        if ok { cameBackAt = Date() }
+        pathOK = ok
+        let next = ok && !forcedOffline
+        guard next != online else { return }
+        online = next
+        if next { cameBackAt = Date() }
     }
 
     /// 通信の失敗がネット無しのせいか（URLError のつながらない系）
@@ -95,14 +107,31 @@ enum NativeDiskCache {
 /// 画面の上に出す「オフライン」の帯（ネットが戻ったら消える）
 struct NativeOfflineBanner: View {
     @ObservedObject private var net = NativeNet.shared
+    @ObservedObject private var store = NativeOfflineStore.shared
 
     var body: some View {
         Group {
-            if !net.online {
+            if net.online && (store.pendingCount > 0 || !store.notes.isEmpty) {
+                // ネットが戻った：オフラインの伝票を送っている／送れなかった／送れたけれど確かめてほしい
+                let problem = store.hasProblems || !store.notes.isEmpty
+                HStack(spacing: 8) {
+                    Image(systemName: problem ? "exclamationmark.triangle.fill" : "arrow.triangle.2.circlepath").font(.system(size: 14, weight: .bold))
+                    Text(store.hasProblems ? "送れなかったオフラインの伝票があります（設定 > プリンター・印刷 > ネットが無いときの印刷）"
+                         : !store.notes.isEmpty ? "オフラインの伝票を送りました。確かめてほしいことがあります（設定 > プリンター・印刷 > ネットが無いときの印刷）"
+                         : "オフラインの伝票 \(store.pendingCount)件をサーバーへ送っています…")
+                        .font(.system(size: 14, weight: .heavy)).lineLimit(1).minimumScaleFactor(0.7)
+                }
+                .foregroundColor(.white)
+                .padding(.horizontal, 16).padding(.vertical, 8)
+                .background(Capsule().fill(problem ? Color(hex: 0xB7791F) : Color(hex: 0x1A5AD6)))
+                .shadow(color: .black.opacity(0.2), radius: 8, y: 3)
+                .padding(.top, 6)
+                .allowsHitTesting(false)
+            } else if !net.online {
                 HStack(spacing: 8) {
                     Image(systemName: "wifi.slash").font(.system(size: 14, weight: .bold))
                     Text("オフライン（ネット無し）").font(.system(size: 14, weight: .heavy))
-                    Text("最後に読んだ内容を表示しています。ネットが戻ると自動で読み直します")
+                    Text(store.pendingCount > 0 ? "この iPad に \(store.pendingCount)件 保存中。ネットが戻ると自動で送ります" : "注文・現金会計・印刷はこの iPad でできます。ネットが戻ると自動で送ります")
                         .font(.system(size: 12, weight: .semibold)).opacity(0.9)
                         .lineLimit(1).minimumScaleFactor(0.7)
                 }
@@ -116,5 +145,6 @@ struct NativeOfflineBanner: View {
             }
         }
         .animation(.easeOut(duration: 0.2), value: net.online)
+        .animation(.easeOut(duration: 0.2), value: store.pendingCount)
     }
 }

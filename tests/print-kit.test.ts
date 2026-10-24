@@ -56,7 +56,7 @@ const receiptInput = {
 
 describe('オフライン印字キット（iPad の JavaScriptCore で動く1ファイル）', () => {
   it('Node の機能なしで読み込める', () => {
-    expect(kit.version).toBe(2);
+    expect(kit.version).toBe(3);
   });
 
   it('レシートはサーバーと同じバイト列（Star・ESC/POS）', () => {
@@ -146,6 +146,9 @@ describe('オフライン印字キット（iPad の JavaScriptCore で動く1フ
     expect(JSON.stringify(drink.designs)).not.toContain('Karaage');
     expect(drink.printer).toMatchObject({ dots: 576, lan: { host: '192.168.1.51', port: 9100 }, maker: 'escpos' });
 
+    // 自動印刷 OFF のレジ機：'auto' はドロアだけ
+    const drawerOnly = JSON.parse(kit.receiptJob(JSON.stringify({ receipt: { ...receiptInput, store: undefined }, drawer: true, print: 'auto' })));
+    expect(Buffer.from(drawerOnly.data, 'base64')).toEqual(Buffer.from([7]));
     const receipt = JSON.parse(kit.receiptJob(JSON.stringify({ receipt: { ...receiptInput, store: undefined }, drawer: true, print: true })));
     expect(receipt.printer.printerId).toBe('R');
     const built = buildReceipt({ ...receiptInput, methodLabels: METHOD_LABELS });

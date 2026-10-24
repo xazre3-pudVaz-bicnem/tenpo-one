@@ -130,7 +130,7 @@ struct NativeCheckoutView: View {
         HStack(spacing: 12) {
             Text("お会計").font(.system(size: 22, weight: .heavy)).foregroundColor(.white)
             Text(model.order.tableName).font(.system(size: 22, weight: .heavy)).foregroundColor(Color(hex: 0xC9B6F5))
-            Text(verbatim: "#\(model.order.orderNo)").font(.system(size: 14, weight: .semibold)).foregroundColor(.white.opacity(0.6))
+            Text(verbatim: model.order.noLabel).font(.system(size: 14, weight: .semibold)).foregroundColor(.white.opacity(0.6))
             Spacer()
             Button(action: onClose) {
                 Image(systemName: "xmark").font(.system(size: 18, weight: .bold)).foregroundColor(.white)
@@ -408,7 +408,14 @@ struct NativeCheckoutView: View {
 
     private var payPanel: some View {
         VStack(spacing: 10) {
-            let methods: [NPPayMethod] = [.cash, .credit, .qr, .emoney, .external, .other, .sitePoints, .points]
+            // オフラインは現金だけ（カード・QR・ポイントはネットが戻ってから。2026-10-24 Ronnie）
+            let methods: [NPPayMethod] = model.offline ? [.cash] : [.cash, .credit, .qr, .emoney, .external, .other, .sitePoints, .points]
+            if model.offline {
+                Text("オフラインです：現金の会計だけできます（レシートはこの iPad から。ネットが戻ると自動で送ります）")
+                    .font(.system(size: 13, weight: .bold)).foregroundColor(Color(hex: 0xC62828))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(10).background(RoundedRectangle(cornerRadius: 10).fill(Color(hex: 0xFDECEC)))
+            }
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 4), spacing: 8) {
                 ForEach(methods) { m in
                     let on = payments.contains { $0.method == m } || openMethod == m
@@ -742,7 +749,7 @@ struct NativeCheckoutView: View {
 
     private var steraMethods: Set<NPPayMethod> { [.credit, .qr, .emoney] }
     private var showSteraButton: Bool {
-        model.isLive && !model.steraTerminals.isEmpty && (openMethod.map { steraMethods.contains($0) } ?? false)
+        model.isLive && !model.offline && !model.steraTerminals.isEmpty && (openMethod.map { steraMethods.contains($0) } ?? false)
     }
 
     private func steraTypes(for m: NPPayMethod) -> [APISteraType] {
@@ -877,7 +884,7 @@ struct NativeCheckoutView: View {
                 }
                 Spacer()
                 Text(model.order.tableName).font(.system(size: 18, weight: .heavy)).foregroundColor(Color(hex: 0xC9B6F5))
-                Text(verbatim: "#\(model.order.orderNo)").font(.system(size: 14, weight: .semibold)).foregroundColor(.white.opacity(0.6))
+                Text(verbatim: model.order.noLabel).font(.system(size: 14, weight: .semibold)).foregroundColor(.white.opacity(0.6))
             }
             .padding(.horizontal, 20).frame(height: 64)
             .background(NT.header)
@@ -885,7 +892,7 @@ struct NativeCheckoutView: View {
             HStack(alignment: .top, spacing: 0) {
                 // 左：元の伝票に残る分
                 splitColumn(
-                    title: "伝票 #\(model.order.orderNo)", sub: "元の伝票 / Stays", total: model.total - splitTotal, totalColor: NT.ink, strong: false
+                    title: "伝票 \(model.order.noLabel)", sub: "元の伝票 / Stays", total: model.total - splitTotal, totalColor: NT.ink, strong: false
                 ) {
                     ForEach(splitLines) { l in
                         let left = l.quantity - (splitPick[l.id] ?? 0)

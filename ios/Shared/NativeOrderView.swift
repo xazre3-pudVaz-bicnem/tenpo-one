@@ -324,7 +324,7 @@ private struct SlipPanel: View {
                 .disabled(!canEditGuest)
                 .accessibilityLabel("お客様情報（人数・席の時間）を変更する")
                 Spacer()
-                Text(verbatim: "#\(model.order.orderNo)").font(.system(size: 14, weight: .semibold)).foregroundColor(NT.ink3)
+                Text(verbatim: model.order.noLabel).font(.system(size: 14, weight: .semibold)).foregroundColor(NT.ink3)
             }
             .padding(.horizontal, 16).padding(.vertical, 12)
             Divider().overlay(NT.line)
@@ -445,7 +445,7 @@ private struct SlipPanel: View {
     }
 
     /// 人数・時間を直せるか（卓のある伝票だけ。テイクアウト等は卓が無い）
-    private var canEditGuest: Bool { model.isLive && !model.order.takeoutLike }
+    private var canEditGuest: Bool { model.isLive && !model.offline && !model.order.takeoutLike }
 
     private func chip(icon: String, text: String) -> some View {
         HStack(spacing: 5) {

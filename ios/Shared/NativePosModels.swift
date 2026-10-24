@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import Combine
 
 // ネイティブのレジ（オーダー・会計）で使うデータ。
 // 金額の計算（税・割引・端数）・在庫・厨房伝票・会計はサーバー（Web と同じ処理）が正。
@@ -148,6 +149,11 @@ struct NPOrder: Hashable {
     var takeoutLike = false
     /// 会計の前に来店経路を選ぶ伝票か（卓の伝票。2026-10-24 Ronnie「walkin は会計で選ばないと会計できない」）
     var sourceRequired = false
+    /// オフラインで始めた伝票の番号（OFF-1。サーバーの番号はまだ無い）
+    var offlineNo: String? = nil
+
+    /// 画面に出す伝票番号（#123 / OFF-1）
+    var noLabel: String { offlineNo ?? "#\(orderNo)" }
 }
 
 /// オーダー画面の状態
@@ -202,9 +208,23 @@ final class NativeOrderModel: ObservableObject {
     /// 直前の会計のレシート（Bluetooth・USB のレシートプリンター用。再発行はこれをもう一度送る）
     var lastReceipt: APICheckoutReceipt?
 
+    // ネットが無いとき（NativeOrderOffline.swift。2026-10-24 Ronnie「net nachale pani sabai kam」）
+    /// この伝票をオフラインで扱っている（保存して、印刷はこの iPad から）
+    @Published var offline = false
+    /// オフラインになったときのサーバーの伝票
+    var offlineBase: APIOrder?
+    var offlineStoreId: String?
+    var offlineTableId: String?
+    /// オフラインの会計のレシート（再発行用）
+    var offlineReceipt: NativeOfflinePrint.ReceiptInput?
+    var offlineSinks = Set<AnyCancellable>()
+    /// 最後の通信の失敗（送る前に落ちたならオフラインで続ける）
+    var lastActError: Error?
+
     /// レシートを再発行する。Bluetooth・USB のレシートがあればそれをもう一度送る（ネイティブだけで完結）。
     /// 無ければ（CloudPRNT・LAN のとき）サーバーに再印刷を頼む。どちらもできなければ false
     func reprintReceipt() async -> Bool {
+        if offline { return await reprintOfflineReceipt() }
         if let receipt = lastReceipt, let bytes = Data(base64Encoded: receipt.data), !bytes.isEmpty,
            ["star", "epson", "sii", "escpos"].contains(receipt.maker), ["bluetooth", "usb"].contains(receipt.via) {
             return await withCheckedContinuation { cont in
@@ -240,6 +260,8 @@ final class NativeOrderModel: ObservableObject {
         self.registerOpen = true
         self.selectedCategory = ""
         self.loading = true
+        // オフラインで始めた伝票はサーバーに無い
+        if orderId.hasPrefix("off-") { self.offline = true }
     }
 
     // MARK: 表示
@@ -408,6 +430,10 @@ final class NativeOrderModel: ObservableObject {
     func canChange(_ line: NPOrderLine) -> Bool { !isLive || line.local || !busy }
 
     func change(_ line: NPOrderLine, by delta: Int) {
+        if offline && !line.local {
+            notice = "オフラインでは送った品の数を変えられません（取消して入れ直してください）"
+            return
+        }
         guard canChange(line), let i = order.lines.firstIndex(where: { $0.id == line.id }) else { return }
         let q = order.lines[i].quantity + delta
         if !isLive || line.local {
@@ -439,6 +465,10 @@ final class NativeOrderModel: ObservableObject {
             toast = "「\(line.displayName)」を取消しました"
             return true
         }
+        if offline || !NativeNet.shared.online {
+            enterOffline()
+            return await cancelOffline(line, approver: approver, reason: reason)
+        }
         guard let orderId else { return false }
         var body: [String: Any] = ["type": "cancelLine", "orderId": orderId, "lineId": line.id, "reason": reason]
         body["approvedByClerkId"] = approver.map { $0 as Any } ?? NSNull()
@@ -452,6 +482,7 @@ final class NativeOrderModel: ObservableObject {
     /// 別々会計の「分ける」：1つの品を何人かで分ける（「品名（1/n）」に。Web の divideOrderItem と同じ）
     @discardableResult
     func divide(_ line: NPOrderLine, parts: Int) async -> Bool {
+        if offline { notice = "オフラインでは分けられません（ネットが戻ってから）"; return false }
         guard let orderId, !line.local, line.unitPrice > 0, (2...10).contains(parts) else { return false }
         guard await act(["type": "divide", "orderId": orderId, "lineId": line.id, "parts": parts]) != nil else { return false }
         toast = "\(parts)人で分けました。1人分ずつ「›」で移してください"
@@ -469,6 +500,10 @@ final class NativeOrderModel: ObservableObject {
      */
     func load() async {
         guard let orderId else { return }
+        if shouldOpenOffline(orderId) {
+            loadOffline(orderId)
+            return
+        }
         if let cached = NativeCatalogCache.shared.load() {
             apply(catalog: cached)
             // 前に開いた伝票なら、保存してある内容を先に出す（押した瞬間に出る。2026-10-24 Ronnie「0.5 sec 取込み」）
@@ -490,9 +525,14 @@ final class NativeOrderModel: ObservableObject {
                 notice = e.message
                 if e.useWeb { openInWeb() }
             } catch {
-                notice = NativeNet.isOfflineError(error)
-                    ? "オフラインです。最後に読んだ内容を表示しています（ネットが戻ると読み直します）"
-                    : "読み込めませんでした。回線を確認してください"
+                if Self.notSent(error) || !NativeNet.shared.online {
+                    // ネットが無い（届く前に落ちた）：この iPad で続ける（注文・取消・現金会計）。遅いだけのときはオンラインのまま
+                    loadOffline(orderId)
+                } else if NativeNet.isOfflineError(error) {
+                    notice = "通信が遅いようです。最後に読んだ内容を表示しています（もう一度開くと読み直します）"
+                } else {
+                    notice = "読み込めませんでした。回線を確認してください"
+                }
             }
             return
         }
@@ -520,6 +560,11 @@ final class NativeOrderModel: ObservableObject {
             notice = "読み込めませんでした。回線を確認してください"
         }
     }
+
+    /// オフラインで開くとき：保存してあるメニュー（NativeOrderOffline.swift）
+    func applyCatalogForOffline(_ c: APICatalog) { apply(catalog: c) }
+    /// オフラインで開いた：読み終わった扱い（会計の「読み込み中」を出さない）
+    func markLoadedForOffline() { orderLoaded = true; hasOrderData = true }
 
     private func apply(catalog c: APICatalog) {
         storeId = c.store.id
@@ -620,8 +665,13 @@ final class NativeOrderModel: ObservableObject {
     /// 1つの操作をサーバーへ（失敗したらお知らせに出す）
     @discardableResult
     func act(_ body: [String: Any]) async -> APIResult? {
+        if offline {
+            notice = "オフラインではできません（ネットが戻ってから）"
+            return nil
+        }
         busy = true
         defer { busy = false }
+        lastActError = nil
         do {
             let r = try await NativeAPI.shared.act(body)
             if let o = r.order {
@@ -635,6 +685,7 @@ final class NativeOrderModel: ObservableObject {
             }
             return r
         } catch {
+            lastActError = error
             notice = error.localizedDescription
             return nil
         }
@@ -646,6 +697,11 @@ final class NativeOrderModel: ObservableObject {
         guard isLive, let orderId else {
             for i in order.lines.indices { order.lines[i].sent = true; order.lines[i].local = false }
             return true
+        }
+        // ネットが無い：この iPad に入れて、厨房伝票もこの iPad から
+        if offline || !NativeNet.shared.online {
+            enterOffline()
+            return await sendOffline()
         }
         // 同じ品・同じ選択・同じ金額はまとめる
         var merged: [NPOrderLine] = []
@@ -667,6 +723,12 @@ final class NativeOrderModel: ObservableObject {
         order.lines.removeAll { $0.local }
         guard let r = await act(["type": "send", "orderId": orderId, "lines": lines]) else {
             order.lines = backup
+            // サーバーに届く前に落ちた（ネットが切れた）：この iPad で続ける
+            if Self.notSent(lastActError) {
+                notice = nil
+                enterOffline()
+                return await sendOffline()
+            }
             return false
         }
         if let w = r.printWarning, !w.isEmpty { notice = w }
@@ -676,11 +738,13 @@ final class NativeOrderModel: ObservableObject {
     }
 
     func setClerk(_ id: String?) async {
+        if offline { setClerkOffline(id); return }
         guard let orderId else { order.clerkId = id; return }
         await act(["type": "clerk", "orderId": orderId, "clerkId": id.map { $0 as Any } ?? NSNull()])
     }
 
     func setVisitSource(_ id: String?) async {
+        if offline { setVisitSourceOffline(id); return }
         guard let orderId else { order.visitSourceId = id; return }
         let before = order.visitSourceId
         order.visitSourceId = id
@@ -690,6 +754,7 @@ final class NativeOrderModel: ObservableObject {
     }
 
     func setDiscount(amount: Int, reason: String) async {
+        if offline { notice = "オフラインでは値引きできません（ネットが戻ってから）"; return }
         guard let orderId else {
             order.discountTotal = amount
             order.discountReason = amount > 0 ? reason : nil
@@ -700,6 +765,7 @@ final class NativeOrderModel: ObservableObject {
 
     /// Web と同じ品目単位の伝票分割。サーバーが数量・権限・合計を検証する。
     func splitForCheckout(_ quantities: [String: Int]) async -> Bool {
+        if offline { notice = "オフラインでは伝票を分けられません（ネットが戻ってから）"; return false }
         guard let orderId else { return false }
         let moves = quantities.filter { $0.value > 0 }.map { ["orderItemId": $0.key, "quantity": $0.value] as [String: Any] }
         guard !moves.isEmpty,
@@ -728,6 +794,11 @@ final class NativeOrderModel: ObservableObject {
     /// 会計を確定する。成功したら true
     func checkout(payments: [NPPaymentRow], cashDue: Int, memo: String) async -> Bool {
         guard let orderId else { return true }
+        // ネットが無い：現金だけ、この iPad で会計してレシートを出す（ネットが戻ったら送る）
+        if offline || !NativeNet.shared.online {
+            enterOffline()
+            return await checkoutOffline(payments: payments, memo: memo)
+        }
         let body: [[String: Any]] = payments.map { p in
             var d: [String: Any] = ["method": p.method.rawValue]
             if p.method == .cash {
@@ -742,7 +813,15 @@ final class NativeOrderModel: ObservableObject {
         // Read the paired device before checkout; no extra request or polling after payment.
         var request: [String: Any] = ["type": "checkout", "orderId": orderId, "payments": body, "memo": memo]
         if let link = await WebViewController.current?.checkoutBluetoothLink() { request["bluetoothLink"] = link }
-        guard let r = await act(request) else { return false }
+        guard let r = await act(request) else {
+            // サーバーに届く前に落ちた：現金ならこの iPad で会計する
+            if Self.notSent(lastActError), payments.allSatisfy({ $0.method == .cash }) {
+                notice = nil
+                enterOffline()
+                return await checkoutOffline(payments: payments, memo: memo)
+            }
+            return false
+        }
         // 会計が通ったら、前の失敗の知らせは消す（失敗→成功のとき、完了画面に失敗の帯が残っていた。2026-10-24）
         notice = nil
         if let warning = r.warning, !warning.isEmpty { notice = warning }
@@ -772,11 +851,17 @@ final class NativeOrderModel: ObservableObject {
     /// お会計伝票をその場で印刷する（レジのプリンターへ。Web の「会計伝票」と同じ）
     /// 伝票だけ読み直す（お客様情報を変えたあと。カートの品はそのまま）
     func reloadOrder() async {
-        guard let orderId, isLive else { return }
+        if offline, let id = orderId, let o = NativeOfflineStore.shared.order(id) { applyOffline(o); return }
+        guard let orderId, isLive, !offline else { return }
         if let live = try? await NativeAPI.shared.loadLive(orderId: orderId) { apply(live: live) }
     }
 
     func printBill() async {
+        if offline || !NativeNet.shared.online {
+            enterOffline()
+            await printBillOffline()
+            return
+        }
         guard let orderId else { return }
         busy = true
         defer { busy = false }
@@ -792,6 +877,10 @@ final class NativeOrderModel: ObservableObject {
     /// 2026-10-24 Ronnie「注文していないのに卓が始まる。注文してから卓が始まるように」）。
     /// 消すのは品が1つも無い伝票だけ（カートに入れた品があれば残す。Web の「品を入れていない伝票」と同じ）
     func discardIfUntouched() async {
+        if offline {
+            if let orderId, order.lines.isEmpty { NativeOfflineStore.shared.discardIfEmpty(orderId) }
+            return
+        }
         guard let orderId, orderLoaded, order.lines.isEmpty else { return }
         var req = URLRequest(url: AppConfig.url("/api/pos/discard-untouched"))
         req.httpMethod = "POST"
@@ -802,7 +891,7 @@ final class NativeOrderModel: ObservableObject {
 
     /// Web の画面でこの伝票を開く（ネイティブを閉じる）
     func openInWeb(path: String? = nil) {
-        guard let orderId else { return }
+        guard let orderId, !offline else { return }
         AppState.shared.closeNativePos(openWebPath: path ?? "/app/pos?order=\(orderId)")
     }
 }

@@ -6,10 +6,12 @@ import SwiftUI
 struct NativeOfflinePrintCard: View {
     @ObservedObject private var printConfig = NativePrintConfig.shared
     @ObservedObject private var net = NativeNet.shared
+    @ObservedObject private var store = NativeOfflineStore.shared
     @State private var kit: OfflineKit? = NativePrintKit.shared.kit
     @State private var ready = NativePrintKit.shared.ready
     @State private var busy: String?
     @State private var results: [NativeOfflinePrint.Outcome] = []
+    @State private var discardTarget: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -44,6 +46,43 @@ struct NativeOfflinePrintCard: View {
                     }
                 }
             }
+            // まだサーバーへ送っていないオフラインの伝票
+            if store.pendingCount > 0 {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("サーバーへ送っていない伝票 \(store.pendingCount)件").font(.system(size: 14, weight: .heavy)).foregroundColor(NFColor.ink)
+                    ForEach(store.orders) { o in
+                        HStack(spacing: 6) {
+                            Image(systemName: o.syncError == nil ? "clock" : "exclamationmark.triangle.fill")
+                                .foregroundColor(o.syncError == nil ? NFColor.ink3 : NFColor.danger)
+                            Text("\(o.number)　\(o.tableName ?? "")\(o.checkout != nil ? "　会計済み ¥\(o.checkout!.total)" : "")\(o.syncError.map { "　— \($0)" } ?? "")")
+                                .font(.system(size: 13, weight: .semibold)).foregroundColor(o.syncError == nil ? NFColor.ink2 : NFColor.danger)
+                                .lineLimit(3)
+                            Spacer(minLength: 0)
+                            if o.blocked == true || o.syncTries >= 10 {
+                                // 人が確かめる伝票：Web で直したら、この iPad の分は消す
+                                Button("Web で直したので消す") { discardTarget = o.id }
+                                    .font(.system(size: 12, weight: .bold)).foregroundColor(NFColor.danger)
+                            }
+                        }
+                    }
+                    button("今すぐ送る", icon: "arrow.up.circle", busy: store.syncing, disabled: !net.online) {
+                        Task { await store.syncAll(force: true) }
+                    }
+                }
+                .padding(.horizontal, 18).padding(.vertical, 12)
+                .overlay(alignment: .bottom) { Rectangle().fill(NFColor.line).frame(height: 1) }
+            }
+            if !store.notes.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("送れたけれど確かめてほしいこと").font(.system(size: 14, weight: .heavy)).foregroundColor(NFColor.ink)
+                    ForEach(Array(store.notes.enumerated()), id: \.offset) { _, n in
+                        Text(n).font(.system(size: 13, weight: .semibold)).foregroundColor(NFColor.saffron).fixedSize(horizontal: false, vertical: true)
+                    }
+                    button("確かめたので消す", icon: "checkmark") { store.clearNotes() }
+                }
+                .padding(.horizontal, 18).padding(.vertical, 12)
+                .overlay(alignment: .bottom) { Rectangle().fill(NFColor.line).frame(height: 1) }
+            }
             if !results.isEmpty {
                 VStack(alignment: .leading, spacing: 6) {
                     ForEach(Array(results.enumerated()), id: \.offset) { _, r in
@@ -56,6 +95,14 @@ struct NativeOfflinePrintCard: View {
                 }
                 .padding(.horizontal, 18).padding(.vertical, 12)
                 .overlay(alignment: .bottom) { Rectangle().fill(NFColor.line).frame(height: 1) }
+            }
+            line("オフラインを試す", en: "Simulate offline") {
+                VStack(alignment: .leading, spacing: 4) {
+                    Toggle("", isOn: Binding(get: { net.forcedOffline }, set: { NativeNet.shared.setForcedOffline($0) }))
+                        .labelsHidden().tint(NFColor.iris)
+                    Text("ON のあいだは回線を切ったときと同じ動きです（注文・会計はこの iPad に保存され、OFF にすると送られて売上に入ります）")
+                        .font(.system(size: 12)).foregroundColor(NFColor.ink3).fixedSize(horizontal: false, vertical: true)
+                }
             }
             HStack(spacing: 10) {
                 button("テスト印刷（ネット無しの方式）", icon: "printer", primary: true, busy: busy == "test", disabled: !ready) {
@@ -85,6 +132,12 @@ struct NativeOfflinePrintCard: View {
         .onAppear {
             kit = NativePrintKit.shared.kit
             ready = NativePrintKit.shared.ready
+        }
+        .alert("この iPad のオフライン伝票を消しますか？", isPresented: Binding(get: { discardTarget != nil }, set: { if !$0 { discardTarget = nil } })) {
+            Button("消す", role: .destructive) { if let id = discardTarget { store.discard(id) }; discardTarget = nil }
+            Button("キャンセル", role: .cancel) { discardTarget = nil }
+        } message: {
+            Text("サーバーには入りません。Web の伝票で品・会計を直してから消してください。")
         }
     }
 
