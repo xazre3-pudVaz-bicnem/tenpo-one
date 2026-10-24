@@ -113,6 +113,8 @@ enum NLColor {
     static let gray = Color(hex: 0x94A3B8)
     static let graySoft = Color(hex: 0xEDEFF3)
     static let yellowSoft = Color(hex: 0xFFF3CC)
+    /// スケジュールの予約の箱（全部同じ色＝上のバーのネイビーを少し明るく。2026-10-24 Ronnie「箱の色は全部同じ、見出しの色を少し明るく。入り口の印だけ各社の色で小さく」）
+    static let box = navy2
 
     /// 予約の状態の色（箱の地・文字）
     static func tone(_ status: String, late: Bool) -> (Color, Color) {
@@ -153,6 +155,18 @@ func nlJstMinutes(_ iso: String, dayStart: String) -> Int {
 }
 
 func nlHm(_ min: Int) -> String { String(format: "%02d:%02d", (min / 60) % 24, min % 60) }
+
+/// スケジュールの横スクロールの位置（内容の左端。左へ動かすと負）
+struct NLScrollXKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
+}
+
+/// スケジュールの時間の側の、見えている幅
+struct NLBoardWidthKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
+}
 
 @MainActor
 final class NativeLedgerModel: ObservableObject {
@@ -269,9 +283,23 @@ struct NativeLedgerView: View {
     @State private var walkInOpen = false
     @State private var exporting = false
 
+    // 今の時刻の線（カーソル）は画面の決まった場所に止めて、時間の側を左へ動かす
+    // （2026-10-24 Ronnie「カーソルは止めて、スケジュールが時間どおり自分で左に動く」）。
+    // 手で横にスクロールしたら追いかけるのをやめ、上の「現在」で戻す。
+    @State private var followNow = true
+    @State private var autoScrolledOnce = false
+    @State private var autoScrollUntil = Date.distantPast
+    @State private var gridVisibleW: CGFloat = 0
+    @State private var boardProxy: ScrollViewProxy?
+
     private let rowH: CGFloat = 64
     private let slotW: CGFloat = 96
     private let nameW: CGFloat = 132
+    /// カーソルを止める場所（時間の側の左から 1/4。見えている 6 時間なら 1.5 時間ぶん過去が左に残る）
+    private let nowAnchor: CGFloat = 0.25
+    private static let nowMarkerId = "nl-now-marker"
+
+    private var isBoardMode: Bool { !model.listMode && !model.gourmetMode && !model.weekMode && !model.waitMode && !model.monthMode }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -399,7 +427,7 @@ struct NativeLedgerView: View {
             // 日付
             HStack(spacing: 4) {
                 navBtn("chevron.left") { model.shiftDate(-1) }
-                Button { model.goToday() } label: {
+                Button { goToday() } label: {
                     Text(dateLabel).font(.system(size: 16, weight: .bold)).monospacedDigit().foregroundColor(.white)
                         .padding(.horizontal, 12).frame(height: 38)
                         .background(RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(0.12)))
@@ -407,8 +435,17 @@ struct NativeLedgerView: View {
                 .buttonStyle(PressableStyle())
                 navBtn("chevron.right") { model.shiftDate(1) }
                 if let p = model.payload, !p.isToday {
-                    Button { model.goToday() } label: {
+                    Button { goToday() } label: {
                         Text("今日").font(.system(size: 14, weight: .bold)).foregroundColor(NLColor.navy)
+                            .padding(.horizontal, 12).frame(height: 38)
+                            .background(RoundedRectangle(cornerRadius: 10).fill(NLColor.yellow))
+                    }
+                    .buttonStyle(PressableStyle())
+                } else if let p = model.payload, p.isToday, isBoardMode, !followNow {
+                    // 手で横に動かしたあと：カーソル（今の時刻）の場所へ戻す
+                    Button { resumeFollow() } label: {
+                        HStack(spacing: 4) { Image(systemName: "clock"); Text("現在") }
+                            .font(.system(size: 14, weight: .bold)).foregroundColor(NLColor.navy)
                             .padding(.horizontal, 12).frame(height: 38)
                             .background(RoundedRectangle(cornerRadius: 10).fill(NLColor.yellow))
                     }
@@ -532,8 +569,13 @@ struct NativeLedgerView: View {
         let totalW = CGFloat(slots) * slotW
         let unassigned = p.reservations.filter { $0.tableIds.isEmpty }
         let nowMin = p.isToday ? nlJstMinutes(ISO8601DateFormatter().string(from: model.now), dayStart: p.date) : nil
+        let nowX: CGFloat? = nowMin.flatMap { m in
+            m >= p.viewStartMin && m <= p.viewEndMin ? CGFloat(m - p.viewStartMin) / CGFloat(p.slotMinutes) * slotW : nil
+        }
+        // 卓の上に「ウェイティング」の行（席がまだ決まっていない予約）。予約が無い日も行は出す
+        // （2026-10-24 Ronnie「ウェイティングはテーブルより上に。言葉もウェイティング」）
         let rows: [(name: String, status: String, reservations: [NLReservation])] =
-            (unassigned.isEmpty ? [] : [("席未定", "\(unassigned.count)組", unassigned)])
+            [("ウェイティング", "\(unassigned.count)組", unassigned)]
             + p.tables.map { t in (t.name, t.statusLabel.isEmpty ? "\(t.capacityMax)名席" : t.statusLabel, p.reservations.filter { $0.tableIds.contains(t.id) }) }
 
         let names = VStack(spacing: 0) {
@@ -557,12 +599,22 @@ struct NativeLedgerView: View {
         .zIndex(1)
 
         let grid = VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 0) {
-                ForEach(0..<slots, id: \.self) { i in
-                    let m = p.viewStartMin + i * p.slotMinutes
-                    Text(nlHm(m)).font(.system(size: 12, weight: m % 60 == 0 ? .bold : .regular)).monospacedDigit()
-                        .foregroundColor(m % 60 == 0 ? NLColor.ink : NLColor.muted)
-                        .frame(width: slotW, height: 34, alignment: .leading)
+            ZStack(alignment: .topLeading) {
+                HStack(spacing: 0) {
+                    ForEach(0..<slots, id: \.self) { i in
+                        let m = p.viewStartMin + i * p.slotMinutes
+                        Text(nlHm(m)).font(.system(size: 12, weight: m % 60 == 0 ? .bold : .regular)).monospacedDigit()
+                            .foregroundColor(m % 60 == 0 ? NLColor.ink : NLColor.muted)
+                            .frame(width: slotW, height: 34, alignment: .leading)
+                    }
+                }
+                // 今の時刻の目印（自動スクロールの行き先。見えない）
+                if let nowX {
+                    HStack(spacing: 0) {
+                        Color.clear.frame(width: nowX, height: 1)
+                        Color.clear.frame(width: 2, height: 34).id(Self.nowMarkerId)
+                        Spacer(minLength: 0)
+                    }
                 }
             }
             .background(NLColor.card)
@@ -578,7 +630,35 @@ struct NativeLedgerView: View {
                 ScrollView(.vertical) {
                     HStack(alignment: .top, spacing: 0) {
                         names
-                        ScrollView(.horizontal, showsIndicators: true) { grid }
+                        ScrollViewReader { proxy in
+                            ScrollView(.horizontal, showsIndicators: true) {
+                                grid.background(GeometryReader { g in
+                                    Color.clear.preference(key: NLScrollXKey.self, value: g.frame(in: .named("nlBoard")).minX)
+                                })
+                            }
+                            .coordinateSpace(name: "nlBoard")
+                            .background(GeometryReader { g in Color.clear.preference(key: NLBoardWidthKey.self, value: g.size.width) })
+                            .onPreferenceChange(NLScrollXKey.self) { x in
+                                Task { @MainActor in noteScroll(x, nowX: nowX, totalW: totalW) }
+                            }
+                            .onPreferenceChange(NLBoardWidthKey.self) { w in
+                                Task { @MainActor in
+                                    let changed = abs(w - gridVisibleW) > 1
+                                    gridVisibleW = w
+                                    if changed, p.isToday, followNow { scrollToNow(proxy, animated: false) }
+                                }
+                            }
+                            .onAppear {
+                                boardProxy = proxy
+                                if p.isToday, followNow { scrollToNowSoon(proxy) }
+                            }
+                            // 30 秒ごとに時刻が進む → 時間の側を左へ動かしてカーソルの場所へ
+                            .onChange(of: model.now) { _ in if p.isToday, followNow { scrollToNow(proxy, animated: true) } }
+                            .onChange(of: p.date) { _ in
+                                followNow = true
+                                if p.isToday { scrollToNowSoon(proxy) }
+                            }
+                        }
                     }
                 }
             } else {
@@ -586,6 +666,73 @@ struct NativeLedgerView: View {
             }
         }
     }
+
+    /// 今の時刻の目印を、見えている幅の左から 1/4 の場所へ（日の始め・終わりでは端で止まる）
+    private func scrollToNow(_ proxy: ScrollViewProxy, animated: Bool) {
+        autoScrollUntil = Date().addingTimeInterval(1.2)
+        autoScrolledOnce = true
+        let anchor = UnitPoint(x: nowAnchor, y: 0)
+        if animated {
+            withAnimation(.easeInOut(duration: 0.5)) { proxy.scrollTo(Self.nowMarkerId, anchor: anchor) }
+        } else {
+            proxy.scrollTo(Self.nowMarkerId, anchor: anchor)
+        }
+    }
+
+    /// 画面が組み上がってから（少し待って）カーソルの場所へ
+    private func scrollToNowSoon(_ proxy: ScrollViewProxy) {
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 60_000_000)
+            scrollToNow(proxy, animated: false)
+        }
+    }
+
+    /// 横スクロールの位置が変わった。自動で動かした場所から大きく離れていたら、手で動かしたとみて追いかけるのをやめる
+    private func noteScroll(_ x: CGFloat, nowX: CGFloat?, totalW: CGFloat) {
+        guard followNow, autoScrolledOnce, let nowX, gridVisibleW > 0, Date() > autoScrollUntil else { return }
+        let maxOffset = max(totalW - gridVisibleW, 0)
+        let expected = -min(max(nowX - nowAnchor * gridVisibleW, 0), maxOffset)
+        if abs(x - expected) > 48 { followNow = false }
+    }
+
+    /// 「今日」へ（カーソルを追いかけるのも再開）
+    private func goToday() {
+        followNow = true
+        model.goToday()
+    }
+
+    /// 「現在」：手で動かしたあと、カーソルの場所へ戻る
+    private func resumeFollow() {
+        followNow = true
+        if let proxy = boardProxy { scrollToNow(proxy, animated: true) }
+    }
+
+    /// 入り口の小さな印（Web の schedule-board の sourceBadge と同じ出し分け）。色は各社のブランド色（来店経路と同じ NPVisitSource の色）
+    /// ウォークインは名前が「ウォークイン 様」なので印は出さない
+    private func sourceChip(_ r: NLReservation, p: NLPayload) -> (text: String, color: Color, darkText: Bool)? {
+        if r.createdVia == "walk_in" { return nil }
+        if r.createdVia == "phone" { return ("TEL", NPVisitSource(id: "phone", label: "TEL").color, false) }
+        if r.createdVia == "manual" && (r.sourceName ?? "").isEmpty { return ("手動", NLColor.gray, false) }
+        if let name = r.sourceName, !name.isEmpty {
+            let code = r.sourceId.flatMap { id in p.sourceRows.first { $0.id == id }?.code } ?? ""
+            let short = name.count <= 4 ? name : String(name.prefix(3))
+            if let c = Self.ledgerSourceColors[code] { return (short, c, false) }
+            let v = NPVisitSource(id: code, label: name)
+            return (short, v.color, v.darkText)
+        }
+        if r.createdVia == "web" { return ("WEB", NLColor.blue, false) }
+        return nil
+    }
+
+    /// NPVisitSource に無い入り口の色（予約台帳だけの code）
+    private static let ledgerSourceColors: [String: Color] = [
+        "web": NLColor.blue,                 // 公式Web予約：青
+        "gourmet_site": Color(hex: 0xF28C28), // グルメサイト：橙
+        "table_one": Color(hex: 0x6C4AB6),    // TABLE ONE：紫
+        "facebook": Color(hex: 0x1877F2),     // Facebook：青
+        "yahoo_line": Color(hex: 0xFF0033),   // Yahoo!リザベーション：赤
+        "storefront": Color(hex: 0x45403B),   // 店頭：チャコール
+    ]
 
     private func tableRow(reservations: [NLReservation], p: NLPayload, slots: Int, totalW: CGFloat, nowMin: Int?) -> some View {
         HStack(spacing: 0) {
@@ -607,28 +754,34 @@ struct NativeLedgerView: View {
                     let x = CGFloat(s - p.viewStartMin) / CGFloat(p.slotMinutes) * slotW
                     let w = max(slotW * 0.9, CGFloat(e - s) / CGFloat(p.slotMinutes) * slotW - 4)
                     let late = model.isLate(r)
-                    let tone = NLColor.tone(r.status, late: late)
+                    // 箱は全部同じ色（見出しのネイビーを少し明るく）。入り口の印だけ各社の色で小さく
                     Button { selected = r } label: {
                         HStack(spacing: 0) {
-                            Rectangle().fill(NLColor.bar(r.status, late: late)).frame(width: 5)
-                            VStack(alignment: .leading, spacing: 1) {
+                            Rectangle().fill(NLColor.navy).frame(width: 5)
+                            VStack(alignment: .leading, spacing: 2) {
                                 HStack(spacing: 4) {
                                     Text("\(nlHm(s))").font(.system(size: 11, weight: .bold)).monospacedDigit()
                                     Text("\(stripSama(r.guestName)) 様").font(.system(size: 13, weight: .heavy)).lineLimit(1)
                                 }
-                                HStack(spacing: 4) {
+                                HStack(spacing: 5) {
                                     Text("\(r.partySize)名").font(.system(size: 11, weight: .bold))
-                                    if let src = r.sourceName { Text(src).font(.system(size: 10)).lineLimit(1) }
-                                    Text(p.statusLabels[r.status] ?? r.status).font(.system(size: 10, weight: .bold)).opacity(0.8)
+                                    if let chip = sourceChip(r, p: p) {
+                                        Text(chip.text).font(.system(size: 9, weight: .heavy)).lineLimit(1)
+                                            .foregroundColor(chip.darkText ? NLColor.ink : .white)
+                                            .padding(.horizontal, 6).padding(.vertical, 2)
+                                            .background(Capsule().fill(chip.color))
+                                    }
+                                    Text(late ? "未連絡" : (p.statusLabels[r.status] ?? r.status)).font(.system(size: 10, weight: .bold))
+                                        .foregroundColor(late ? NLColor.yellow : Color.white.opacity(0.8))
                                 }
                             }
-                            .foregroundColor(tone.1)
+                            .foregroundColor(.white)
                             .padding(.horizontal, 6)
                             Spacer(minLength: 0)
                         }
                         .frame(width: w, height: rowH - 10)
-                        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(tone.0))
-                        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(NLColor.bar(r.status, late: late).opacity(0.5), lineWidth: 1))
+                        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(NLColor.box))
+                        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(NLColor.navy.opacity(0.5), lineWidth: 1))
                         .clipped()
                     }
                     .buttonStyle(PressableStyle(scale: 0.98))
