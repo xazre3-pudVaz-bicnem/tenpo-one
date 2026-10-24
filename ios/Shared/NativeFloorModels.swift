@@ -49,6 +49,8 @@ struct NFOrder: Codable, Hashable {
     let plans: [String]?
     /// 席に着いた予約のタグ（誕生日・記念日・飲み放題…）。卓の箱に小さな印で出す。古いサーバーは無し
     var tags: [String]? = nil
+    /// 最後の注文（品）の時刻 ms（「最終注文から N 分」）。古いサーバー・注文なしは nil
+    var lastOrderAtMs: Double? = nil
     let slips: [NFSlip]
 }
 
@@ -263,9 +265,9 @@ enum NFColor {
     static let dangerSoft = Color(hex: 0xFDECEC)
     static let success = Color(hex: 0x1E8F62)
     static let successSoft = Color(hex: 0xDFF3EA)
-    static let lilac = Color(hex: 0xF3EFE8)
-    static let lilacSoft = Color(hex: 0xFBF9F5)
-    static let line = Color(hex: 0xE5DFD5)
+    static let lilac = Color(hex: 0xF1F3F8)
+    static let lilacSoft = Color(hex: 0xF8F9FC)
+    static let line = Color(hex: 0xE3E7EE)
     static let ink = Color(hex: 0x292725)
     static let ink2 = Color(hex: 0x5C5650)
     static let ink3 = Color(hex: 0x766B62)

@@ -75,6 +75,8 @@ export interface TableOrderInfo {
   plans: HandyPlan[] | null;
   /** 席に着いた予約のタグ（誕生日・記念日・飲み放題…）。卓の箱に小さな印で出す（2026-10-24）。無ければ空 */
   tags?: string[];
+  /** 最後の注文（品）の時刻 ms。卓の箱に「最終注文から N 分」（2026-10-24）。注文がまだなら null */
+  lastOrderAtMs?: number | null;
   /** この卓の未会計伝票すべて（古い順）。1枚だけのときも入る */
   slips: TableSlip[];
 }
