@@ -66,7 +66,14 @@ export type NativeSettingsPageAction =
   | { type: 'optionItemDelete'; id: string }
   | { type: 'optionGroupItems'; groupId: string; menuItemIds: string[] }
   /** QRのサービス（/app/settings/qr-service。saveQrService） */
-  | { type: 'qrServiceSave'; enabled: boolean; items: { name: string; nameEn: string | null }[] };
+  | { type: 'qrServiceSave'; enabled: boolean; items: { name: string; nameEn: string | null }[] }
+  /** メニューブック（/app/settings/menu-book。app/app/settings/menu-book/actions.ts） */
+  | { type: 'menuBookLayout'; rows: { id: string; show: string }[] }
+  | { type: 'menuBookItemOrder'; categoryId: string; itemIds: string[] }
+  | { type: 'menuBookPlans'; rows: { planItemId: string; categoryIds: string[] | null }[] }
+  | { type: 'menuBookPages'; pages: { key: string; name: string }[]; categoryPage: Record<string, string> }
+  | { type: 'menuBookLunch'; start: string; end: string }
+  | { type: 'menuBookTakeout'; itemIds: string[] };
 
 export interface NativeMenuItemFields {
   id: string | null;
@@ -153,6 +160,12 @@ export const NATIVE_SETTINGS_PAGE_ACTION_TYPES: readonly NativeSettingsPageActio
   'optionItemDelete',
   'optionGroupItems',
   'qrServiceSave',
+  'menuBookLayout',
+  'menuBookItemOrder',
+  'menuBookPlans',
+  'menuBookPages',
+  'menuBookLunch',
+  'menuBookTakeout',
 ];
 
 export function isNativeSettingsPageActionType(v: unknown): v is NativeSettingsPageActionType {
@@ -470,7 +483,74 @@ export function parseNativeSettingsPageAction(raw: unknown): Parsed {
     }));
     return { ok: true, action: { type: 'qrServiceSave', enabled: b.enabled !== false, items } };
   }
+  const ids = (v: unknown, max = 1000): string[] | null => (Array.isArray(v) && v.length <= max && v.every((x) => isUuid(x)) ? (v as string[]) : null);
+  if (b.type === 'menuBookLayout') {
+    if (!Array.isArray(b.rows) || b.rows.length > 500) return bad('カテゴリの指定が正しくありません');
+    const rows: { id: string; show: string }[] = [];
+    for (const r of b.rows as Record<string, unknown>[]) {
+      if (!isUuid(r?.id) || typeof r.show !== 'string' || !/^[a-z]{1,12}$/.test(r.show)) return bad('カテゴリの指定が正しくありません');
+      rows.push({ id: r.id as string, show: r.show });
+    }
+    return { ok: true, action: { type: 'menuBookLayout', rows } };
+  }
+  if (b.type === 'menuBookItemOrder') {
+    const list = ids(b.itemIds);
+    if (!isUuid(b.categoryId) || !list || list.length === 0) return bad('商品の指定が正しくありません');
+    return { ok: true, action: { type: 'menuBookItemOrder', categoryId: b.categoryId, itemIds: list } };
+  }
+  if (b.type === 'menuBookPlans') {
+    if (!Array.isArray(b.rows) || b.rows.length > 500) return bad('プランの指定が正しくありません');
+    const rows: { planItemId: string; categoryIds: string[] | null }[] = [];
+    for (const r of b.rows as Record<string, unknown>[]) {
+      if (!isUuid(r?.planItemId)) return bad('プランの指定が正しくありません');
+      const c = r.categoryIds == null ? null : ids(r.categoryIds, 500);
+      if (r.categoryIds != null && c === null) return bad('カテゴリの指定が正しくありません');
+      rows.push({ planItemId: r.planItemId as string, categoryIds: c });
+    }
+    return { ok: true, action: { type: 'menuBookPlans', rows } };
+  }
+  if (b.type === 'menuBookPages') {
+    if (!Array.isArray(b.pages) || b.pages.length > 30) return bad('ページの指定が正しくありません');
+    const pages: { key: string; name: string }[] = [];
+    for (const pg of b.pages as Record<string, unknown>[]) {
+      if (typeof pg?.key !== 'string' || !/^[a-z0-9_-]{1,32}$/.test(pg.key) || typeof pg.name !== 'string') return bad('ページの指定が正しくありません');
+      pages.push({ key: pg.key, name: pg.name.slice(0, 40) });
+    }
+    const categoryPage: Record<string, string> = {};
+    if (b.categoryPage && typeof b.categoryPage === 'object') {
+      for (const [k, v] of Object.entries(b.categoryPage as Record<string, unknown>)) {
+        if (isUuid(k) && typeof v === 'string' && /^[a-z0-9_-]{1,32}$/.test(v)) categoryPage[k] = v;
+      }
+    }
+    return { ok: true, action: { type: 'menuBookPages', pages, categoryPage } };
+  }
+  if (b.type === 'menuBookLunch') {
+    const hm = (v: unknown) => (typeof v === 'string' && /^\d{1,2}:\d{2}$/.test(v) ? v : null);
+    const st = hm(b.start);
+    const en = hm(b.end);
+    if (!st || !en) return bad('時刻は HH:MM で指定してください');
+    return { ok: true, action: { type: 'menuBookLunch', start: st, end: en } };
+  }
+  if (b.type === 'menuBookTakeout') {
+    const list = ids(b.itemIds, 2000);
+    if (!list) return bad('商品の指定が正しくありません');
+    return { ok: true, action: { type: 'menuBookTakeout', itemIds: list } };
+  }
   return bad();
+}
+
+/** メニューブックの画面の読み込み（GET ?part=menuBook） */
+export interface NativeMenuBookPayload {
+  store: { id: string; name: string };
+  canEdit: boolean;
+  shows: { id: string; label: string; note: string }[];
+  categories: { id: string; name: string; nameEn: string; color: string; sortOrder: number; shared: boolean; itemCount: number; group: string; show: string; autoShow: string }[];
+  items: { id: string; name: string; categoryId: string | null; price: number; sortOrder: number }[];
+  plans: { id: string; name: string; price: number; categoryIds: string[] | null; addOn: boolean }[];
+  lunch: { start: string; end: string };
+  pages: { key: string; name: string }[];
+  categoryPage: Record<string, string>;
+  takeoutItemIds: string[];
 }
 
 /** QRのサービスの画面の読み込み（GET ?part=qrService） */

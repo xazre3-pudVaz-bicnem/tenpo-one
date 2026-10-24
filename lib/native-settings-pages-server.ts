@@ -28,11 +28,16 @@ import { deleteCategory, deleteMenuItem, saveCategory, saveMenuItem, toggleSoldO
 import { isCustomPriceHelper } from '@/lib/custom-price';
 import { saveQrService } from '@/app/app/settings/qr-service/actions';
 import { QR_SERVICE_MAX_ITEMS, qrServiceFrom } from '@/lib/qr-service';
+import { saveCategoryLayout, saveItemOrder, saveMenuBookLunch, saveMenuBookPages, saveMenuBookPlans, saveTakeoutMenu } from '@/app/app/settings/menu-book/actions';
+import { menuBookCategoryRows } from '@/components/settings/menu-book-rows';
+import { isPlanAddOn, isPlanItem, MENU_BOOK_SHOW_LABELS, MENU_BOOK_SHOW_NOTES, MENU_BOOK_SHOWS, menuBookFrom, withPicksPage, type MenuBookShow } from '@/lib/menu-book';
+import { takeoutMenuFrom } from '@/lib/takeout-menu';
 import { addOptionItem, createOptionGroup, deleteOptionGroup, deleteOptionItem, moveOptionGroup, setGroupMenuItems, updateOptionGroup } from '@/app/app/settings/options/actions';
 import { resolveSiteOrigin } from '@/lib/site-origin';
 import type {
   NativeAccountsPayload,
   NativeCategoriesPayload,
+  NativeMenuBookPayload,
   NativeMenuItemsPayload,
   NativeOptionsPayload,
   NativeQrServicePayload,
@@ -52,7 +57,7 @@ type Supabase = Awaited<ReturnType<typeof createClient>>;
 type Store = { id: string; name: string };
 
 /** 設定の中の画面の名前（GET ?part=） */
-export const NATIVE_SETTINGS_PAGE_PARTS = ['soldout', 'clerks', 'hours', 'store', 'tax', 'loyalty', 'alerts', 'approvals', 'accounts', 'handy', 'categories', 'menuItems', 'options', 'qrService'] as const;
+export const NATIVE_SETTINGS_PAGE_PARTS = ['soldout', 'clerks', 'hours', 'store', 'tax', 'loyalty', 'alerts', 'approvals', 'accounts', 'handy', 'categories', 'menuItems', 'options', 'qrService', 'menuBook'] as const;
 export type NativeSettingsPagePart = (typeof NATIVE_SETTINGS_PAGE_PARTS)[number];
 export function isNativeSettingsPagePart(v: unknown): v is NativeSettingsPagePart {
   return typeof v === 'string' && (NATIVE_SETTINGS_PAGE_PARTS as readonly string[]).includes(v);
@@ -84,7 +89,8 @@ export async function loadNativeSettingsPage(
         | NativeCategoriesPayload
         | NativeMenuItemsPayload
         | NativeOptionsPayload
-        | NativeQrServicePayload;
+        | NativeQrServicePayload
+        | NativeMenuBookPayload;
     }
   | { ok: false; error: string }
 > {
@@ -483,6 +489,48 @@ export async function loadNativeSettingsPage(
     const cur = qrServiceFrom((data as { settings?: unknown } | null)?.settings ?? null);
     return { ok: true, payload: { store, canEdit: can(ctx.role, 'menu.manage'), enabled: cur.enabled, items: cur.items, maxItems: QR_SERVICE_MAX_ITEMS } };
   }
+  if (part === 'menuBook') {
+    const [{ data: categories }, { data: items }, { data: settingsRow }] = await Promise.all([
+      supabase
+        .from('menu_categories')
+        .select('id, name, name_en, color, sort_order, station, store_id')
+        .eq('organization_id', ctx.organizationId)
+        .eq('status', 'active')
+        .or(`store_id.is.null,store_id.eq.${store.id}`)
+        .order('sort_order')
+        .order('name'),
+      supabase
+        .from('menu_items')
+        .select('id, category_id, name, item_type, price, sort_order, status, description')
+        .eq('organization_id', ctx.organizationId)
+        .eq('status', 'active')
+        .or(`store_id.is.null,store_id.eq.${store.id}`)
+        .order('sort_order')
+        .order('name'),
+      supabase.from('store_settings').select('settings').eq('store_id', store.id).maybeSingle(),
+    ]);
+    const book = menuBookFrom(settingsRow?.settings ?? null);
+    const activeItems = (items ?? []).filter((i) => !isCustomPriceHelper(i));
+    const rows = menuBookCategoryRows(categories ?? [], activeItems, book);
+    return {
+      ok: true,
+      payload: {
+        store,
+        canEdit: can(ctx.role, 'menu.manage'),
+        shows: MENU_BOOK_SHOWS.map((k: MenuBookShow) => ({ id: k, label: MENU_BOOK_SHOW_LABELS[k], note: MENU_BOOK_SHOW_NOTES[k] })),
+        categories: rows.map((r) => ({ id: r.id, name: r.name, nameEn: r.nameEn, color: r.color, sortOrder: r.sortOrder, shared: r.shared, itemCount: r.itemCount, group: r.group, show: r.show, autoShow: r.autoShow })),
+        items: activeItems.map((i) => ({ id: i.id as string, name: i.name as string, categoryId: (i.category_id as string | null) ?? null, price: Number(i.price), sortOrder: Number(i.sort_order ?? 0) })),
+        plans: activeItems
+          .filter((i) => isPlanItem(i.item_type as string, i.name as string))
+          .map((i) => ({ id: i.id as string, name: i.name as string, price: Number(i.price), categoryIds: book.plans[i.id as string] ?? null, addOn: isPlanAddOn(i.name as string) }))
+          .sort((a, b) => Number(a.addOn) - Number(b.addOn)),
+        lunch: book.lunch,
+        pages: withPicksPage(book.pages).map((pg) => ({ key: pg.key, name: pg.name })),
+        categoryPage: book.categoryPage,
+        takeoutItemIds: takeoutMenuFrom(settingsRow?.settings ?? null).itemIds,
+      },
+    };
+  }
   return { ok: false, error: '画面が見つかりません' };
 }
 
@@ -597,5 +645,17 @@ export async function runNativeSettingsPageAction(
       return done(await setGroupMenuItems({ groupId: action.groupId, storeId: store.id, menuItemIds: action.menuItemIds }));
     case 'qrServiceSave':
       return done(await saveQrService(store.id, { enabled: action.enabled, items: action.items }));
+    case 'menuBookLayout':
+      return done(await saveCategoryLayout(store.id, action.rows.map((r) => ({ id: r.id, show: r.show as MenuBookShow | 'auto' }))));
+    case 'menuBookItemOrder':
+      return done(await saveItemOrder(store.id, action.categoryId, action.itemIds));
+    case 'menuBookPlans':
+      return done(await saveMenuBookPlans(store.id, action.rows));
+    case 'menuBookPages':
+      return done(await saveMenuBookPages(store.id, { pages: action.pages, categoryPage: action.categoryPage }));
+    case 'menuBookLunch':
+      return done(await saveMenuBookLunch(store.id, action.start, action.end));
+    case 'menuBookTakeout':
+      return done(await saveTakeoutMenu(store.id, action.itemIds));
   }
 }
