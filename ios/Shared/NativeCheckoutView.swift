@@ -382,7 +382,8 @@ struct NativeCheckoutView: View {
                     .font(.system(size: 20, weight: .heavy)).foregroundColor(.white)
                     .lineLimit(1).minimumScaleFactor(0.6)
                     .frame(maxWidth: .infinity, minHeight: 68)
-                    .background(RoundedRectangle(cornerRadius: 16).fill(canPay ? NT.purple : NT.purple.opacity(0.35)))
+                    // 「お会計を確定」はレジ会計の緑（2026-10-24 21:36・21:42 Ronnie）
+                    .background(RoundedRectangle(cornerRadius: 16).fill(canPay ? NT.pay : NT.pay.opacity(0.35)))
             }
             .buttonStyle(PressableStyle())
             .disabled(!canPay || paying)

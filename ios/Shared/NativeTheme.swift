@@ -3,16 +3,20 @@ import SwiftUI
 /// ネイティブのレジ画面の色（Web の TENPO ONE と同じ色。2026-10-13 Ronnie「Airレジのように、アプリは全部ネイティブで」）
 enum NT {
     static let header = Color(hex: 0x292725)        // 上のバー
-    static let page = Color(hex: 0xF3EFE8)          // 画面の地
+    // 2026-10-24 21:42 Ronnie「この色（テラコッタ）はもう使わない。こっちも色を合わせて」
+    // → 主の色はホームの「オーダー・会計」のボタンと同じ青、地と線はうすい灰色（店舗台帳・テーブル一覧と同じ系統）
+    static let page = Color(hex: 0xF4F5F8)          // 画面の地
     static let card = Color.white
-    static let purple = Color(hex: 0xBC5940)        // 主の色
-    static let purpleDeep = Color(hex: 0x9F4630)
-    static let lilac = Color(hex: 0xF6E4DA)         // 薄い紫（チップ・弱いボタン）
-    static let lilacLine = Color(hex: 0xE5DFD5)
+    static let purple = Color(hex: 0x2A6FE6)        // 主の色（オーダー・会計の青。名前は昔のまま）
+    static let purpleDeep = Color(hex: 0x0A3FA8)
+    static let lilac = Color(hex: 0xE7EFFD)         // うすい青（チップ・弱いボタン）
+    static let lilacLine = Color(hex: 0xDCE3EF)
     static let ink = Color(hex: 0x292725)
-    static let ink2 = Color(hex: 0x5C5650)
-    static let ink3 = Color(hex: 0x8F857B)
-    static let line = Color(hex: 0xE8E2DA)
+    static let ink2 = Color(hex: 0x50565F)
+    static let ink3 = Color(hex: 0x8A909A)
+    static let line = Color(hex: 0xE4E7EE)
+    /// レジ会計（お会計を確定する）の緑。テーブルのポップアップの「レジ会計」と同じ
+    static let pay = Color(hex: 0x1E8F62)
     static let danger = Color(hex: 0xC62828)
     static let dangerBg = Color(hex: 0xFDECEC)
     static let ok = Color(hex: 0x1E8E5A)
