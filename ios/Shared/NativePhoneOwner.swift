@@ -17,11 +17,21 @@ enum NativePhoneOwnerRegistry {
         ("/app/shifts", "shifts"),
         ("/app/leave", "leave"),
         ("/app/employees", "employees"),
+        ("/app/reports", "reports"),
+        ("/app/orders", "orders"),
+        ("/app/budgets", "budgets"),
+        ("/app/budgets/daily", "budgetDaily"),
+        ("/app/notifications", "notifications"),
+        ("/app/announcements", "announcements"),
+        ("/app/daily-reports", "dailyReports"),
+        ("/app/tasks", "tasks"),
     ]
     static let paths: [String: String] = Dictionary(entries, uniquingKeysWith: { a, _ in a })
 
     static func route(for url: URL) -> NativeModuleRoute? {
         guard AppConfig.isOwnHost(url) else { return nil }
+        // ?web=1 は Web の画面のまま（返金・取消など、iPhone のネイティブに無い操作）
+        if URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.contains(where: { $0.name == "web" }) == true { return nil }
         let path = url.path
         guard let b = paths.keys.filter({ path == $0 || path.hasPrefix($0 + "/") }).max(by: { $0.count < $1.count }), let key = paths[b] else { return nil }
         return NativeModuleRoute(key: key, url: url)
@@ -39,6 +49,14 @@ struct NativePhoneOwnerScreen: View {
         case "shifts": NativePhoneShiftsScreen(route: route, onBack: { state.closePhoneOwnerModule() }, onWeb: { NPWNav.openWeb(state, $0) })
         case "leave": NativePhoneLeaveScreen(route: route, onBack: { state.closePhoneOwnerModule() })
         case "employees": NativePhoneEmployeesScreen(route: route, onBack: { state.closePhoneOwnerModule() })
+        case "reports": NativePhoneOwnerReportsScreen(route: route)
+        case "orders": NativePhoneOwnerOrdersScreen(route: route)
+        case "budgets": NativePhoneOwnerBudgetsScreen(route: route)
+        case "budgetDaily": NativePhoneOwnerBudgetDailyScreen(route: route)
+        case "notifications": NativePhoneNotificationsScreen(route: route)
+        case "announcements": NativePhoneAnnouncementsScreen(route: route)
+        case "dailyReports": NativePhoneDailyReportsScreen(route: route)
+        case "tasks": NativePhoneTasksScreen(route: route)
         default:
             // 知らない key：Web のまま見せる
             Color.clear.onAppear { state.phoneOwnerModule = nil }
