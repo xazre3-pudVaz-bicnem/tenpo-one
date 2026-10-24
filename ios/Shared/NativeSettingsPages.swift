@@ -25,6 +25,7 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
     case categories = "categories"
     case menu = "menuItems"
     case plans = "plans"
+    case options = "options"
     var id: String { rawValue }
 
     /// Web の道（クエリは見ない）
@@ -46,6 +47,7 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
         case .categories: return "/app/settings/categories"
         case .menu: return "/app/settings/menu"
         case .plans: return "/app/settings/plans"
+        case .options: return "/app/settings/options"
         }
     }
     var title: String {
@@ -66,6 +68,7 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
         case .categories: return "カテゴリ"
         case .menu: return "メニュー"
         case .plans: return "プラン"
+        case .options: return "オプション"
         }
     }
     var en: String {
@@ -86,6 +89,7 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
         case .categories: return "Categories"
         case .menu: return "Menu"
         case .plans: return "Plans"
+        case .options: return "Options"
         }
     }
 
@@ -117,6 +121,7 @@ struct NativeSettingsPageScreen: View {
         case .categories: NativeCategoriesScreen()
         case .menu: NativeMenuItemsScreen(mode: .menu)
         case .plans: NativeMenuItemsScreen(mode: .plan)
+        case .options: NativeOptionsScreen()
         }
     }
 }
@@ -2433,6 +2438,177 @@ struct NativeMenuItemsView: View {
                 }
                 .buttonStyle(PressableStyle())
             }
+        }
+    }
+}
+
+// MARK: - オプション（Web の /app/settings/options・components/settings/option-groups-panel.tsx と同じ）
+
+struct NOGItem: Codable, Identifiable, Hashable { let id: String; let name: String; let nameEn: String?; let price: Double }
+struct NOGGroup: Codable, Identifiable, Hashable { let id: String; let name: String; let isRequired: Bool; let minSelect: Int; let maxSelect: Int; let items: [NOGItem]; let menuItemIds: [String] }
+struct NOGPayload: Codable { let store: NFNamed; let canEdit: Bool; let groups: [NOGGroup]; let menuItems: [NFNamed] }
+
+@MainActor
+final class NativeOptionsModel: NSPModel<NOGPayload> {
+    @Published var showForm = false
+    @Published var editing: NOGGroup?
+    @Published var gName = ""; @Published var gRequired = false; @Published var gMin = "0"; @Published var gMax = "1"
+    /// 選択肢の追加（グループごと）
+    @Published var newItemName: [String: String] = [:]
+    @Published var newItemEn: [String: String] = [:]
+    @Published var newItemPrice: [String: String] = [:]
+    /// 対象商品を選んでいるグループ
+    @Published var linking: NOGGroup?
+    @Published var linkIds: Set<String> = []
+    @Published var linkQuery = ""
+    init() { super.init(part: "options") }
+
+    func startAdd() { editing = nil; gName = ""; gRequired = false; gMin = "0"; gMax = "1"; showForm = true }
+    func startEdit(_ g: NOGGroup) { editing = g; gName = g.name; gRequired = g.isRequired; gMin = String(g.minSelect); gMax = String(g.maxSelect); showForm = true }
+    func saveGroup() async {
+        guard let mn = Int(gMin), let mx = Int(gMax), mn >= 0, mx >= 0 else { toast = "選ぶ数は数字で入れてください"; return }
+        if await run("save", ["type": "optionGroupSave", "id": editing?.id as Any? ?? NSNull(), "name": gName, "isRequired": gRequired, "minSelect": mn, "maxSelect": mx], done: editing == nil ? "グループを追加しました" : "グループを保存しました") { showForm = false }
+    }
+    func deleteGroup(_ g: NOGGroup) async { _ = await run(g.id, ["type": "optionGroupDelete", "id": g.id], done: "「\(g.name)」を削除しました") }
+    func move(_ g: NOGGroup, _ dir: String) async { _ = await run(g.id, ["type": "optionGroupMove", "id": g.id, "direction": dir]) }
+    func addItem(_ g: NOGGroup) async {
+        let name = (newItemName[g.id] ?? "").trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty else { toast = "選択肢の名前を入力してください"; return }
+        let price = Double((newItemPrice[g.id] ?? "0").trimmingCharacters(in: .whitespaces)) ?? 0
+        if await run("add:\(g.id)", ["type": "optionItemAdd", "groupId": g.id, "name": name, "nameEn": newItemEn[g.id] ?? "", "price": price], done: "選択肢を追加しました") {
+            newItemName[g.id] = ""; newItemEn[g.id] = ""; newItemPrice[g.id] = ""
+        }
+    }
+    func deleteItem(_ it: NOGItem) async { _ = await run(it.id, ["type": "optionItemDelete", "id": it.id], done: "選択肢を消しました") }
+    func startLink(_ g: NOGGroup) { linking = g; linkIds = Set(g.menuItemIds); linkQuery = "" }
+    func saveLink() async {
+        guard let g = linking else { return }
+        if await run("link", ["type": "optionGroupItems", "groupId": g.id, "menuItemIds": Array(linkIds)], done: "対象の商品を保存しました") { linking = nil }
+    }
+}
+
+struct NativeOptionsScreen: View {
+    @StateObject private var model = NativeOptionsModel()
+    @EnvironmentObject var state: AppState
+    var body: some View { NativeOptionsView(model: model, onBack: { state.goNativeSettings() }) }
+}
+
+struct NativeOptionsView: View {
+    @ObservedObject var model: NativeOptionsModel
+    let onBack: () -> Void
+    @State private var confirmDelete: NOGGroup?
+
+    var body: some View {
+        NSPFrame(storeName: model.payload?.store.name ?? "", title: "オプション", en: "Options", loaded: model.payload != nil, error: model.error, toast: $model.toast, onBack: onBack, retry: { await model.refresh() }) {
+            if let p = model.payload {
+                if p.canEdit && !model.showForm && model.linking == nil { HStack { NSPButton(text: "グループを追加", icon: "plus", primary: true) { model.startAdd() }; Spacer() } }
+                if model.showForm { groupForm }
+                if let g = model.linking { linkCard(g, p) }
+                if p.groups.isEmpty { Text("選択肢のグループがまだありません（例：サイズ・トッピング・辛さ）").font(.system(size: 14)).foregroundColor(NFColor.ink3) }
+                ForEach(Array(p.groups.enumerated()), id: \.element.id) { idx, g in
+                    NSPCard(title: g.name, en: g.isRequired ? "必須・\(g.minSelect)〜\(g.maxSelect)" : "任意・最大\(g.maxSelect)") {
+                        VStack(spacing: 0) {
+                            if g.items.isEmpty { Text("選択肢がまだありません").font(.system(size: 13)).foregroundColor(NFColor.ink3).padding(.horizontal, 18).padding(.vertical, 10) }
+                            ForEach(g.items) { it in
+                                HStack(spacing: 10) {
+                                    Text(it.name).font(.system(size: 15, weight: .bold)).foregroundColor(NFColor.ink)
+                                    if let en = it.nameEn, !en.isEmpty { Text(en).font(.system(size: 12)).foregroundColor(NFColor.ink3) }
+                                    Spacer()
+                                    Text(it.price == 0 ? "±0" : "+\(NT.yen(Int(it.price)))").font(.system(size: 14, weight: .bold)).foregroundColor(NFColor.navy).monospacedDigit()
+                                    if p.canEdit { NSPButton(text: "消す", icon: "xmark", busy: model.busy == it.id) { Task { await model.deleteItem(it) } } }
+                                }
+                                .padding(.horizontal, 18).frame(minHeight: 48)
+                                .overlay(alignment: .bottom) { Rectangle().fill(NFColor.line).frame(height: 1) }
+                            }
+                            if p.canEdit {
+                                HStack(spacing: 8) {
+                                    NSPInput(text: Binding(get: { model.newItemName[g.id] ?? "" }, set: { model.newItemName[g.id] = $0 }), placeholder: "選択肢（例：大盛り）", width: 220)
+                                    NSPInput(text: Binding(get: { model.newItemEn[g.id] ?? "" }, set: { model.newItemEn[g.id] = $0 }), placeholder: "English", width: 160)
+                                    NSPInput(text: Binding(get: { model.newItemPrice[g.id] ?? "" }, set: { model.newItemPrice[g.id] = $0 }), placeholder: "0", width: 120, keyboard: .numberPad, trailing: "円")
+                                    NSPButton(text: "追加", icon: "plus", busy: model.busy == "add:\(g.id)") { Task { await model.addItem(g) } }
+                                    Spacer()
+                                }
+                                .padding(.horizontal, 18).padding(.vertical, 10)
+                                .background(NFColor.lilacSoft)
+                                HStack(spacing: 8) {
+                                    NSPButton(text: "対象の商品（\(g.menuItemIds.count)）", icon: "link") { model.startLink(g) }
+                                    NSPButton(text: "編集", icon: "pencil") { model.startEdit(g) }
+                                    NSPButton(text: "↑", disabled: idx == 0) { Task { await model.move(g, "up") } }
+                                    NSPButton(text: "↓", disabled: idx == p.groups.count - 1) { Task { await model.move(g, "down") } }
+                                    Spacer()
+                                    NSPButton(text: "削除", icon: "trash") { confirmDelete = g }
+                                }
+                                .padding(.horizontal, 18).padding(.vertical, 10)
+                            } else {
+                                Text("対象の商品：\(g.menuItemIds.count)").font(.system(size: 13)).foregroundColor(NFColor.ink3).padding(.horizontal, 18).padding(.vertical, 10)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .alert("グループを削除", isPresented: Binding(get: { confirmDelete != nil }, set: { if !$0 { confirmDelete = nil } })) {
+            Button("削除する", role: .destructive) { if let g = confirmDelete { Task { await model.deleteGroup(g) } }; confirmDelete = nil }
+            Button("やめる", role: .cancel) { confirmDelete = nil }
+        } message: { Text("「\(confirmDelete?.name ?? "")」と中の選択肢を削除します") }
+        .task { await model.refresh() }
+    }
+
+    private var groupForm: some View {
+        NSPCard(title: model.editing == nil ? "グループを追加" : "グループを編集", en: "") {
+            VStack(spacing: 0) {
+                NSPRow(label: "グループ名", required: true) { NSPInput(text: $model.gName, placeholder: "例：サイズ・トッピング", width: 360) }
+                NSPRow(label: "必須") {
+                    HStack(spacing: 10) { NSPToggle(on: model.gRequired) { model.gRequired.toggle() }; Text(model.gRequired ? "必ず選ぶ" : "選ばなくてもよい").font(.system(size: 14)).foregroundColor(NFColor.ink2) }
+                }
+                NSPRow(label: "選ぶ数") {
+                    HStack(spacing: 8) {
+                        NSPInput(text: $model.gMin, placeholder: "0", width: 100, keyboard: .numberPad)
+                        Text("〜").foregroundColor(NFColor.ink3)
+                        NSPInput(text: $model.gMax, placeholder: "1", width: 100, keyboard: .numberPad)
+                    }
+                }
+                HStack(spacing: 10) {
+                    Spacer()
+                    NSPButton(text: "やめる") { model.showForm = false }
+                    NSPButton(text: "保存する", primary: true, busy: model.busy == "save", disabled: model.gName.trimmingCharacters(in: .whitespaces).isEmpty) { Task { await model.saveGroup() } }
+                }
+                .padding(18)
+            }
+        }
+    }
+
+    private func linkCard(_ g: NOGGroup, _ p: NOGPayload) -> some View {
+        let q = NativeSoldOutModel.norm(model.linkQuery)
+        let list = p.menuItems.filter { q.isEmpty || NativeSoldOutModel.norm($0.name).contains(q) }
+        return NSPCard(title: "「\(g.name)」の対象の商品", en: "\(model.linkIds.count) 件") {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 10) {
+                    NSPInput(text: $model.linkQuery, placeholder: "商品名で探す", width: 300)
+                    NSPButton(text: "すべて選ぶ") { model.linkIds = Set(list.map(\.id)) }
+                    NSPButton(text: "すべて外す") { model.linkIds = [] }
+                    Spacer()
+                    NSPButton(text: "やめる") { model.linking = nil }
+                    NSPButton(text: "保存する", primary: true, busy: model.busy == "link") { Task { await model.saveLink() } }
+                }
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 220), spacing: 8)], spacing: 8) {
+                    ForEach(list) { m in
+                        let on = model.linkIds.contains(m.id)
+                        Button { if on { model.linkIds.remove(m.id) } else { model.linkIds.insert(m.id) } } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: on ? "checkmark.square.fill" : "square").foregroundColor(on ? NFColor.iris : NFColor.ink3)
+                                Text(m.name).font(.system(size: 14, weight: .bold)).foregroundColor(NFColor.ink).lineLimit(1)
+                                Spacer(minLength: 0)
+                            }
+                            .padding(.horizontal, 12).frame(height: 44)
+                            .background(RoundedRectangle(cornerRadius: 10).fill(on ? NFColor.irisSoft : Color.white))
+                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(on ? NFColor.iris : NFColor.line, lineWidth: 1))
+                        }
+                        .buttonStyle(PressableStyle())
+                    }
+                }
+            }
+            .padding(18)
         }
     }
 }

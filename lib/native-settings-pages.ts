@@ -57,7 +57,14 @@ export type NativeSettingsPageAction =
   /** メニュー・プラン（/app/settings/menu・/app/settings/plans。saveMenuItem / deleteMenuItem / toggleSoldOut） */
   | { type: 'menuItemSave'; item: NativeMenuItemFields }
   | { type: 'menuItemDelete'; id: string }
-  | { type: 'menuItemSoldOut'; id: string; soldOut: boolean };
+  | { type: 'menuItemSoldOut'; id: string; soldOut: boolean }
+  /** オプション（/app/settings/options。app/app/settings/options/actions.ts） */
+  | { type: 'optionGroupSave'; id: string | null; name: string; isRequired: boolean; minSelect: number; maxSelect: number }
+  | { type: 'optionGroupDelete'; id: string }
+  | { type: 'optionGroupMove'; id: string; direction: 'up' | 'down' }
+  | { type: 'optionItemAdd'; groupId: string; name: string; nameEn: string; price: number }
+  | { type: 'optionItemDelete'; id: string }
+  | { type: 'optionGroupItems'; groupId: string; menuItemIds: string[] };
 
 export interface NativeMenuItemFields {
   id: string | null;
@@ -137,6 +144,12 @@ export const NATIVE_SETTINGS_PAGE_ACTION_TYPES: readonly NativeSettingsPageActio
   'menuItemSave',
   'menuItemDelete',
   'menuItemSoldOut',
+  'optionGroupSave',
+  'optionGroupDelete',
+  'optionGroupMove',
+  'optionItemAdd',
+  'optionItemDelete',
+  'optionGroupItems',
 ];
 
 export function isNativeSettingsPageActionType(v: unknown): v is NativeSettingsPageActionType {
@@ -411,7 +424,50 @@ export function parseNativeSettingsPageAction(raw: unknown): Parsed {
     if (!isUuid(b.id) || typeof b.soldOut !== 'boolean') return bad('商品が見つかりません');
     return { ok: true, action: { type: 'menuItemSoldOut', id: b.id, soldOut: b.soldOut } };
   }
+  if (b.type === 'optionGroupSave') {
+    const name = typeof b.name === 'string' ? b.name.trim().slice(0, 80) : '';
+    if (!name) return bad('グループ名を入力してください');
+    const n = (v: unknown) => (typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= 99 ? v : null);
+    const mn = n(b.minSelect);
+    const mx = n(b.maxSelect);
+    if (mn === null || mx === null) return bad('選ぶ数は 0〜99 で入れてください');
+    const id = b.id == null || b.id === '' ? null : isUuid(b.id) ? b.id : false;
+    if (id === false) return bad('グループが見つかりません');
+    return { ok: true, action: { type: 'optionGroupSave', id, name, isRequired: b.isRequired === true, minSelect: mn, maxSelect: mx } };
+  }
+  if (b.type === 'optionGroupDelete') {
+    if (!isUuid(b.id)) return bad('グループが見つかりません');
+    return { ok: true, action: { type: 'optionGroupDelete', id: b.id } };
+  }
+  if (b.type === 'optionGroupMove') {
+    if (!isUuid(b.id) || (b.direction !== 'up' && b.direction !== 'down')) return bad('グループが見つかりません');
+    return { ok: true, action: { type: 'optionGroupMove', id: b.id, direction: b.direction } };
+  }
+  if (b.type === 'optionItemAdd') {
+    const name = typeof b.name === 'string' ? b.name.trim().slice(0, 80) : '';
+    if (!isUuid(b.groupId)) return bad('グループが見つかりません');
+    if (!name) return bad('選択肢の名前を入力してください');
+    if (typeof b.price !== 'number' || !Number.isFinite(b.price)) return bad('追加料金は数字で入れてください');
+    return { ok: true, action: { type: 'optionItemAdd', groupId: b.groupId, name, nameEn: typeof b.nameEn === 'string' ? b.nameEn.slice(0, 80) : '', price: Math.round(b.price) } };
+  }
+  if (b.type === 'optionItemDelete') {
+    if (!isUuid(b.id)) return bad('選択肢が見つかりません');
+    return { ok: true, action: { type: 'optionItemDelete', id: b.id } };
+  }
+  if (b.type === 'optionGroupItems') {
+    if (!isUuid(b.groupId)) return bad('グループが見つかりません');
+    if (!Array.isArray(b.menuItemIds) || b.menuItemIds.length > 2000 || !b.menuItemIds.every((x) => isUuid(x))) return bad('商品の指定が正しくありません');
+    return { ok: true, action: { type: 'optionGroupItems', groupId: b.groupId, menuItemIds: b.menuItemIds as string[] } };
+  }
   return bad();
+}
+
+/** オプションの画面の読み込み（GET ?part=options） */
+export interface NativeOptionsPayload {
+  store: { id: string; name: string };
+  canEdit: boolean;
+  groups: { id: string; name: string; isRequired: boolean; minSelect: number; maxSelect: number; items: { id: string; name: string; nameEn: string | null; price: number }[]; menuItemIds: string[] }[];
+  menuItems: { id: string; name: string }[];
 }
 
 /** メニュー・プランの画面の読み込み（GET ?part=menuItems） */

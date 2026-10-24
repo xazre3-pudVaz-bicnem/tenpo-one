@@ -26,11 +26,13 @@ import { canWriteAccounting } from '@/components/accounting/roles';
 import { issueHandyPairing, renameHandyDevice, revokeHandyDevice } from '@/app/app/settings/handy/actions';
 import { deleteCategory, deleteMenuItem, saveCategory, saveMenuItem, toggleSoldOut, updateCategoryStation } from '@/app/app/settings/menu/actions';
 import { isCustomPriceHelper } from '@/lib/custom-price';
+import { addOptionItem, createOptionGroup, deleteOptionGroup, deleteOptionItem, moveOptionGroup, setGroupMenuItems, updateOptionGroup } from '@/app/app/settings/options/actions';
 import { resolveSiteOrigin } from '@/lib/site-origin';
 import type {
   NativeAccountsPayload,
   NativeCategoriesPayload,
   NativeMenuItemsPayload,
+  NativeOptionsPayload,
   NativeHandyDevicesPayload,
   NativeAlertsPayload,
   NativeApprovalsPayload,
@@ -47,7 +49,7 @@ type Supabase = Awaited<ReturnType<typeof createClient>>;
 type Store = { id: string; name: string };
 
 /** 設定の中の画面の名前（GET ?part=） */
-export const NATIVE_SETTINGS_PAGE_PARTS = ['soldout', 'clerks', 'hours', 'store', 'tax', 'loyalty', 'alerts', 'approvals', 'accounts', 'handy', 'categories', 'menuItems'] as const;
+export const NATIVE_SETTINGS_PAGE_PARTS = ['soldout', 'clerks', 'hours', 'store', 'tax', 'loyalty', 'alerts', 'approvals', 'accounts', 'handy', 'categories', 'menuItems', 'options'] as const;
 export type NativeSettingsPagePart = (typeof NATIVE_SETTINGS_PAGE_PARTS)[number];
 export function isNativeSettingsPagePart(v: unknown): v is NativeSettingsPagePart {
   return typeof v === 'string' && (NATIVE_SETTINGS_PAGE_PARTS as readonly string[]).includes(v);
@@ -77,7 +79,8 @@ export async function loadNativeSettingsPage(
         | NativeAccountsPayload
         | NativeHandyDevicesPayload
         | NativeCategoriesPayload
-        | NativeMenuItemsPayload;
+        | NativeMenuItemsPayload
+        | NativeOptionsPayload;
     }
   | { ok: false; error: string }
 > {
@@ -433,6 +436,44 @@ export async function loadNativeSettingsPage(
       },
     };
   }
+  if (part === 'options') {
+    const [{ data: groups }, { data: links }, { data: menuItems }] = await Promise.all([
+      supabase
+        .from('menu_option_groups')
+        .select('id, name, is_required, min_select, max_select, sort_order, menu_option_items(id, name, name_en, price, sort_order, status)')
+        .eq('store_id', store.id)
+        .eq('status', 'active')
+        .order('sort_order'),
+      supabase.from('menu_item_option_groups').select('group_id, menu_item_id').eq('store_id', store.id),
+      supabase.from('menu_items').select('id, name').eq('store_id', store.id).eq('status', 'active').neq('item_type', 'option').order('name'),
+    ]);
+    const itemsByGroup = new Map<string, string[]>();
+    for (const l of links ?? []) {
+      const arr = itemsByGroup.get(l.group_id as string) ?? [];
+      arr.push(l.menu_item_id as string);
+      itemsByGroup.set(l.group_id as string, arr);
+    }
+    return {
+      ok: true,
+      payload: {
+        store,
+        canEdit: can(ctx.role, 'store.settings'),
+        groups: (groups ?? []).map((g) => ({
+          id: g.id as string,
+          name: g.name as string,
+          isRequired: g.is_required === true,
+          minSelect: Number(g.min_select ?? 0),
+          maxSelect: Number(g.max_select ?? 1),
+          items: ((g.menu_option_items ?? []) as { id: string; name: string; name_en: string | null; price: number; sort_order: number; status: string }[])
+            .filter((o) => o.status === 'active')
+            .sort((a, b) => a.sort_order - b.sort_order)
+            .map((o) => ({ id: o.id, name: o.name, nameEn: o.name_en ?? null, price: Number(o.price) })),
+          menuItemIds: itemsByGroup.get(g.id as string) ?? [],
+        })),
+        menuItems: (menuItems ?? []).map((m) => ({ id: m.id as string, name: m.name as string })),
+      },
+    };
+  }
   return { ok: false, error: '画面が見つかりません' };
 }
 
@@ -529,5 +570,21 @@ export async function runNativeSettingsPageAction(
       return done(await deleteMenuItem(action.id));
     case 'menuItemSoldOut':
       return done(await toggleSoldOut(action.id, action.soldOut));
+    case 'optionGroupSave':
+      return done(
+        action.id
+          ? await updateOptionGroup({ id: action.id, storeId: store.id, name: action.name, isRequired: action.isRequired, minSelect: action.minSelect, maxSelect: action.maxSelect })
+          : await createOptionGroup({ storeId: store.id, name: action.name, isRequired: action.isRequired, minSelect: action.minSelect, maxSelect: action.maxSelect })
+      );
+    case 'optionGroupDelete':
+      return done(await deleteOptionGroup(action.id, store.id));
+    case 'optionGroupMove':
+      return done(await moveOptionGroup({ id: action.id, storeId: store.id, direction: action.direction }));
+    case 'optionItemAdd':
+      return done(await addOptionItem({ groupId: action.groupId, storeId: store.id, name: action.name, nameEn: action.nameEn, price: action.price }));
+    case 'optionItemDelete':
+      return done(await deleteOptionItem(action.id, store.id));
+    case 'optionGroupItems':
+      return done(await setGroupMenuItems({ groupId: action.groupId, storeId: store.id, menuItemIds: action.menuItemIds }));
   }
 }
