@@ -2899,7 +2899,8 @@ struct NativeMenuBookView: View {
                             if pl.addOn { Text("追加・延長").font(.system(size: 10.5, weight: .bold)).foregroundColor(NFColor.ink3).padding(.horizontal, 6).padding(.vertical, 1).background(Capsule().fill(NFColor.lilac)) }
                             Text(NT.yen(Int(pl.price))).font(.system(size: 13)).foregroundColor(NFColor.ink3)
                             Spacer()
-                            Button { model.planCats[pl.id] = sel == nil ? [] : nil } label: {
+                            // 値が Optional の辞書に nil を入れるとキーが消えるので updateValue で「指定なし」を残す
+                            Button { model.planCats.updateValue(sel == nil ? [] : nil, forKey: pl.id) } label: {
                                 Text(sel == nil ? "指定なし（プランのときだけのカテゴリを全部）" : "指定する").font(.system(size: 13, weight: .bold)).foregroundColor(sel == nil ? NFColor.ink2 : NFColor.iris)
                             }
                             .buttonStyle(.plain).disabled(!p.canEdit)
@@ -2908,7 +2909,7 @@ struct NativeMenuBookView: View {
                             WrapLayout(spacing: 6) {
                                 ForEach(p.categories) { c in
                                     let on = sel.contains(c.id)
-                                    Button { var next = sel; if on { next.removeAll { $0 == c.id } } else { next.append(c.id) }; model.planCats[pl.id] = next } label: {
+                                    Button { var next = sel; if on { next.removeAll { $0 == c.id } } else { next.append(c.id) }; model.planCats.updateValue(next, forKey: pl.id) } label: {
                                         Text(c.name).font(.system(size: 13, weight: .bold)).foregroundColor(on ? .white : NFColor.ink2)
                                             .padding(.horizontal, 12).frame(height: 34)
                                             .background(Capsule().fill(on ? NFColor.iris : Color.white)).overlay(Capsule().stroke(on ? NFColor.iris : NFColor.line, lineWidth: 1))
