@@ -348,10 +348,13 @@ struct NativeTableCard: View {
                 }
             }
             .opacity(state == .unavailable ? 0.7 : 1)
+            // 押した卓の位置（ポップアップを卓のところに出す）。preference は LazyVGrid の中だと更新されない卓があり、
+            // ポップアップが左上に出た（2026-10-24 Ronnie「T4 を押しても左上に出る」）→ GeometryReader で直接持つ
             .background(GeometryReader { g in
-                Color.clear.preference(key: NFRectKey.self, value: g.frame(in: .named("floor")))
+                Color.clear
+                    .onAppear { rect = g.frame(in: .named("floor")) }
+                    .onChange(of: g.frame(in: .named("floor"))) { rect = $0 }
             })
-            .onPreferenceChange(NFRectKey.self) { rect = $0 }
         }
         .buttonStyle(PressableStyle())
         .onAppear { if hasCall { withAnimation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true)) { pulse = true } } }
