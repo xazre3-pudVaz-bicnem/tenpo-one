@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// ネイティブのフロア（テーブル一覧）画面（iPad レジ）。Web の「オーダー・会計」のホームと同じ並び：
 ///   上＝バー（戻る・店・画面名・担当）／左＝フロアのチップ・卓の箱・色の見方／右＝本日のご予約
@@ -272,10 +273,14 @@ struct NativeTableCard: View {
                     let marks = Self.marks(order)
                     if !marks.isEmpty {
                         HStack(spacing: 4) {
+                            // 印は光るように（色つき・うすい光）。プランを使っているとき・予約のタグがあるときだけ出る
+                            // （2026-10-24 21:31 Ronnie「飲み放題の印は光るように。呼ばれたとき・プランを使うときだけ」）
                             ForEach(marks.prefix(4), id: \.self) { ic in
-                                Image(systemName: ic).font(.system(size: 12, weight: .semibold)).foregroundColor(NFColor.ink2)
-                                    .frame(width: 24, height: 24)
-                                    .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(Color(hex: 0xF1F1F5)))
+                                let c = Self.markColor(ic)
+                                Image(systemName: ic).font(.system(size: 13, weight: .bold)).foregroundColor(.white)
+                                    .frame(width: 26, height: 26)
+                                    .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(c))
+                                    .shadow(color: c.opacity(0.55), radius: 5, y: 1)
                             }
                         }
                     }
@@ -291,7 +296,7 @@ struct NativeTableCard: View {
                 if hasCall {
                     let info = Self.callInfo(table.calls, now: now)
                     HStack(spacing: 4) {
-                        Image(systemName: info.checkout ? "yensign.circle.fill" : "bell.fill").font(.system(size: 11, weight: .bold))
+                        Image(systemName: info.checkout ? Self.walletSymbol : "bell.fill").font(.system(size: 11, weight: .bold))
                         Text(info.label).lineLimit(1)
                     }
                     .font(.system(size: 12, weight: .heavy))
@@ -424,7 +429,7 @@ struct NativeTableCard: View {
                 if hasCall {
                     let info = Self.callInfo(table.calls, now: now)
                     HStack(spacing: 4) {
-                        Image(systemName: info.checkout ? "yensign.circle.fill" : "bell.fill").font(.system(size: 12, weight: .bold))
+                        Image(systemName: info.checkout ? Self.walletSymbol : "bell.fill").font(.system(size: 12, weight: .bold))
                         Text("\(info.count)回").font(.system(size: 12, weight: .heavy)).monospacedDigit()
                         Text("\(info.minutes)分").font(.system(size: 11, weight: .bold)).monospacedDigit().opacity(0.9)
                     }
@@ -432,7 +437,8 @@ struct NativeTableCard: View {
                     .padding(.horizontal, 9).frame(height: 26)
                     .background(Capsule().fill(Self.callColor(info, border: false)))
                     .overlay(Capsule().stroke(Color.white, lineWidth: 2))
-                    .shadow(color: .black.opacity(0.2), radius: 4, y: 2)
+                    // 光る（点滅に合わせて光の強さが変わる）
+                    .shadow(color: Self.callColor(info, border: false).opacity(pulse ? 0.8 : 0.3), radius: pulse ? 10 : 4, y: 1)
                     .offset(x: 8, y: -12)
                 }
             }
@@ -457,8 +463,22 @@ struct NativeTableCard: View {
 
     static let bandH: CGFloat = 36
     static let callRed = Color(hex: 0xE53935)
-    /// QR からのお会計の依頼は緑の ¥（お金＝緑。2026-10-24 21:23 Ronnie「財布か緑の ¥、おすすめで」）
+    /// QR からのお会計の依頼は緑の財布（お金＝緑。2026-10-24 21:23 Ronnie「財布か緑の ¥」→21:31「財布」）
     static let callGreen = Color(hex: 0x12A150)
+    static let walletSymbol: String = ["wallet.bifold.fill", "wallet.pass.fill", "yensign.circle.fill"].first { UIImage(systemName: $0) != nil } ?? "yensign.circle.fill"
+
+    /// 印の色（飲み放題＝琥珀・食べ放題＝橙・コース＝藍・誕生日＝ピンク・記念日＝赤・子連れ＝青緑…）
+    static func markColor(_ symbol: String) -> Color {
+        if symbol.hasPrefix("mug") { return Color(hex: 0xF59E0B) }
+        if symbol.hasPrefix("fork") { return Color(hex: 0xEA580C) }
+        if symbol.hasPrefix("menucard") || symbol.hasPrefix("list.bullet") { return Color(hex: 0x4F46E5) }
+        if symbol.hasPrefix("birthday") || symbol.hasPrefix("gift") || symbol.hasPrefix("party") { return Color(hex: 0xEC4899) }
+        if symbol.hasPrefix("heart") { return Color(hex: 0xE11D48) }
+        if symbol.hasPrefix("figure") || symbol.hasPrefix("person") || symbol.hasPrefix("stroller") { return Color(hex: 0x0D9488) }
+        if symbol.hasPrefix("crown") || symbol.hasPrefix("star") { return Color(hex: 0xCA8A04) }
+        if symbol.hasPrefix("exclamationmark") { return Color(hex: 0xDC2626) }
+        return Color(hex: 0x6B7280)
+    }
 
     /// 呼び出しの色：5 分過ぎ＝赤、お会計の依頼＝緑、スタッフ呼び出し＝橙
     static func callColor(_ info: (count: Int, minutes: Int, late: Bool, checkout: Bool, label: String), border: Bool) -> Color {
