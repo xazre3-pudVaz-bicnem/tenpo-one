@@ -5,6 +5,7 @@ import { requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { courseStepsFrom, MAX_COURSE_STEPS, normalizeStepIds, type CourseSteps } from '@/lib/course-steps';
 import { findOrphanMenuItemIds } from '@/lib/orphan-menu-items';
+import { isMissingColumnError } from '@/lib/schema-compat';
 
 export interface ActionResult {
   error?: string;
@@ -193,6 +194,38 @@ export async function saveMenuItem(input: MenuItemInput): Promise<ActionResult> 
 }
 
 const STATIONS = ['kitchen', 'drink', 'dessert', 'grill'] as const;
+
+/**
+ * カテゴリの「注文時に会計伝票を印刷」（menu_categories.print_bill_on_order・migration 00101。2026-10-23）。
+ * ON のカテゴリの商品が入った注文を厨房へ送ると、レジのプリンターに会計伝票も1枚出る（QR・ハンディ・レジ）
+ */
+export async function updateCategoryBillOnOrder(id: string, on: boolean): Promise<ActionResult> {
+  const ctx = await requirePermission('menu.manage');
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from('menu_categories')
+    .update({ print_bill_on_order: on === true, updated_by: ctx.userId })
+    .eq('id', id)
+    .eq('organization_id', ctx.organizationId);
+  if (error) {
+    if (isMissingColumnError(error.message, 'print_bill_on_order')) return { error: 'この設定はまだ使えません（DB更新待ち）' };
+    return { error: `会計伝票の設定の更新に失敗しました: ${error.message}` };
+  }
+
+  await supabase.rpc('log_audit', {
+    p_org: ctx.organizationId,
+    p_store: null,
+    p_action: 'settings.menu.category_bill_on_order',
+    p_target_table: 'menu_categories',
+    p_target_id: id,
+    p_before: null,
+    p_after: { print_bill_on_order: on === true },
+    p_note: null,
+  });
+
+  revalidatePath('/app/settings/categories');
+  return {};
+}
 
 /** カテゴリのKDS振り分け先（station）を変更する。ここで設定した値が /app/kitchen のタブ振り分けに使われる */
 export async function updateCategoryStation(id: string, station: string): Promise<ActionResult> {

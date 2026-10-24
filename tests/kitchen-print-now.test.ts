@@ -16,8 +16,9 @@ describe('厨房伝票は送った瞬間に作る', () => {
   });
 
   it('レジの Order・ハンディの送信のあとに作る（返事は待たない after）', () => {
-    expect(pos).toContain('if (sent > 0) kickKitchenPrint(order.store_id);');
-    expect(pos).toContain('if ((data ?? []).length > 0) kickKitchenPrint(order.store_id);');
+    // 2026-10-23：同じ所で注文時の会計伝票も判定するので { } で囲んだ（tests/bill-slip-on-order.test.ts）
+    expect(pos).toContain('if (sent > 0) {\n    kickKitchenPrint(order.store_id);');
+    expect(pos).toContain('if ((data ?? []).length > 0) {\n    kickKitchenPrint(order.store_id);');
     expect(pos).toMatch(/function kickKitchenPrint[\s\S]*?after\(async/);
   });
 
