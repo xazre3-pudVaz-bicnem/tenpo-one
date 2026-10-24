@@ -396,15 +396,21 @@ struct NativeHomeView: View {
                     Text(NT.yen(s?.avgSpend ?? 0)).font(.system(size: 15, weight: .heavy)).foregroundColor(Self.blueDeep)
                 }
                 Rectangle().fill(Color(hex: 0xE5E5EA)).frame(height: 1).padding(.vertical, 6)
-                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                // 「予算売上高／Target」の 2 行と金額の高さをそろえる（上と下の線を合わせる）・金額は太字にしない
+                // （2026-10-25 00:26 Ronnie「2 行と金額の高さを同じに。金額は太字でなく」）
+                let lineTop: CGFloat = 17, lineBottom: CGFloat = 13
+                HStack(alignment: .center, spacing: 10) {
                     VStack(alignment: .leading, spacing: 0) {
-                        Text("予算売上高").font(.system(size: 14, weight: .semibold)).foregroundColor(NFColor.ink2)
-                        Text("Target").font(.system(size: 11)).foregroundColor(NFColor.ink3)
+                        Text("予算売上高").font(.system(size: 14, weight: .semibold)).foregroundColor(NFColor.ink2).frame(height: lineTop)
+                        Text("Target").font(.system(size: 11)).foregroundColor(NFColor.ink3).frame(height: lineBottom)
                     }
-                    // 未設定のときはここに何も置かない（空の 28pt の字を置くと下の隙間が広がる。2026-10-24 14:24 Ronnie「上下の隙間を同じに」）。
+                    // 未設定のときはここに何も置かない（空の字を置くと下の隙間が広がる。2026-10-24 14:24 Ronnie「上下の隙間を同じに」）。
                     // 右の「予算登録」ボタンに赤い丸の「!」だけ（13:47 Ronnie）
                     if let b = s?.budget {
-                        Text(NT.yen(b)).font(.system(size: 28, weight: .heavy)).monospacedDigit().foregroundColor(NFColor.ink)
+                        // 数字の高さ（キャップハイト ≒ 0.71×字の大きさ）を 2 行ぶん（30pt）に合わせる
+                        Text(NT.yen(b)).font(.system(size: 42, weight: .regular)).monospacedDigit().foregroundColor(NFColor.ink)
+                            .lineLimit(1).minimumScaleFactor(0.6)
+                            .frame(height: lineTop + lineBottom)
                     }
                 }
                 HStack(spacing: 4) {
