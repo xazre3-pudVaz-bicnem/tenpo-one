@@ -3,7 +3,8 @@ import { computeSalesMetrics, SETTLED_ORDER_STATUSES, type RefundLike, type Sale
 import { dateSequence } from '@/components/reports/period';
 import { dailyBudgetFromMonthly } from '@/lib/home-todos';
 import { hourlyFromOrders, type HourlyCompare } from '@/lib/home-v2';
-import { achievementPct, budgetForRange, type DateRange } from '@/lib/home-period';
+import { METHOD_LABELS } from '@/components/cash/labels';
+import { achievementPct, budgetForRange, repeatWithin, turnoverPerDay, type DateRange, type HomeCard } from '@/lib/home-period';
 
 type SupabaseClient = Awaited<ReturnType<typeof createClient>>;
 
@@ -38,7 +39,41 @@ interface OrderRow {
   status: string;
   order_type: string | null;
   opened_at: string | null;
+  customer_id?: string | null;
 }
+
+export interface PaymentShare {
+  method: string;
+  label: string;
+  amount: number;
+  /** 金額の割合（%・整数） */
+  pct: number;
+}
+
+export interface BestSeller {
+  name: string;
+  quantity: number;
+  sales: number;
+}
+
+export interface HomeExtras {
+  /** 席数（有効な卓の capacity_max の合計） */
+  seats: number;
+  days: number;
+  /** 客席回転率（1日平均）。席が無ければ null */
+  turnover: number | null;
+  /** 期間の中で 2 回以上会計した顧客の割合（本日は HomeV2 側で「初回来店が前」の見方に差し替える） */
+  repeat: { repeaters: number; newcomers: number; ratePct: number | null };
+  /** 支払い方法（card=pay のときだけ） */
+  payments: PaymentShare[] | null;
+  /** ベストセラー（card=best のときだけ。数量の多い順 10 品） */
+  best: BestSeller[] | null;
+  /** 明細が多すぎて最初の分だけで数えたとき true */
+  bestTruncated: boolean;
+}
+
+const BEST_PAGE = 1000;
+const BEST_MAX_PAGES = 20;
 
 interface RefundRow {
   store_id: string;
@@ -78,20 +113,26 @@ export async function loadHomePeriod(input: {
   compare: DateRange;
   today: string;
   metricsOpts: SalesMetricsOptions;
-}): Promise<{ current: PeriodKpi; previous: PeriodKpi; rows: PeriodStoreRow[]; hourly: HourlyCompare }> {
+  /** 下のカードのタブ。支払い方法・ベストセラーはそのタブのときだけ読む */
+  card?: HomeCard;
+}): Promise<{ current: PeriodKpi; previous: PeriodKpi; rows: PeriodStoreRow[]; hourly: HourlyCompare; extras: HomeExtras }> {
   const { supabase, stores, range, compare, today, metricsOpts } = input;
+  const card: HomeCard = input.card ?? 'hourly';
   const ids = stores.map((s) => s.id);
   const empty: PeriodKpi = { sales: 0, settled: 0, open: 0, guests: 0, groups: 0, avgSpend: 0, budget: null, achievementPct: null };
-  if (ids.length === 0) return { current: empty, previous: empty, rows: [], hourly: hourlyFromOrders([], []) };
+  const days = dateSequence(range.from, range.to).length;
+  const emptyExtras: HomeExtras = { seats: 0, days, turnover: null, repeat: { repeaters: 0, newcomers: 0, ratePct: null }, payments: null, best: null, bestTruncated: false };
+  if (ids.length === 0) return { current: empty, previous: empty, rows: [], hourly: hourlyFromOrders([], []), extras: emptyExtras };
 
   const includesToday = range.from <= today && today <= range.to;
   const months = [...new Set([...monthsOf(range), ...monthsOf(compare)])];
-  const SELECT = 'store_id, total, guest_count, status, order_type, opened_at';
+  const SELECT = 'store_id, total, guest_count, status, order_type, opened_at, customer_id';
+  const PREV_SELECT = 'store_id, total, guest_count, status, order_type, opened_at';
 
-  const [curOrders, curRefunds, prevOrders, prevRefunds, openOrders, budgets, settings] = await Promise.all([
+  const [curOrders, curRefunds, prevOrders, prevRefunds, openOrders, budgets, settings, tables, payments, bestRaw] = await Promise.all([
     supabase.from('orders').select(SELECT).in('store_id', ids).gte('business_date', range.from).lte('business_date', range.to).in('status', SETTLED_ORDER_STATUSES),
     supabase.from('refunds').select('store_id, amount, kind').in('store_id', ids).gte('business_date', range.from).lte('business_date', range.to),
-    supabase.from('orders').select(SELECT).in('store_id', ids).gte('business_date', compare.from).lte('business_date', compare.to).in('status', SETTLED_ORDER_STATUSES),
+    supabase.from('orders').select(PREV_SELECT).in('store_id', ids).gte('business_date', compare.from).lte('business_date', compare.to).in('status', SETTLED_ORDER_STATUSES),
     supabase.from('refunds').select('store_id, amount, kind').in('store_id', ids).gte('business_date', compare.from).lte('business_date', compare.to),
     includesToday
       ? supabase.from('orders').select('store_id, total, opened_at').in('store_id', ids).eq('status', 'open')
@@ -103,6 +144,17 @@ export async function loadHomePeriod(input: {
       .in('month', months.map((m) => `${m}-01`))
       .or(`store_id.is.null,store_id.in.(${ids.join(',')})`),
     supabase.from('store_settings').select('store_id, settings').in('store_id', ids),
+    supabase.from('restaurant_tables').select('capacity_max').in('store_id', ids).eq('status', 'active'),
+    card === 'pay'
+      ? supabase
+          .from('payments')
+          .select('method, amount')
+          .in('store_id', ids)
+          .gte('business_date', range.from)
+          .lte('business_date', range.to)
+          .eq('status', 'completed')
+      : Promise.resolve({ data: null as { method: string; amount: number | null }[] | null }),
+    card === 'best' ? loadBestSellerRows(supabase, ids, range) : Promise.resolve(null),
   ]);
 
   const cur = (curOrders.data ?? []) as OrderRow[];
@@ -160,10 +212,70 @@ export async function loadHomePeriod(input: {
     prev.filter((o) => o.opened_at).map((o) => ({ total: Number(o.total ?? 0), openedAt: o.opened_at as string }))
   );
 
+  // ---- 回転率・リピート・支払い方法・ベストセラー ----
+  const seats = (tables.data ?? []).reduce((a, t) => a + Number((t as { capacity_max: number | null }).capacity_max ?? 0), 0);
+  const repeat = repeatWithin(cur.map((o) => o.customer_id));
+  let paymentShares: PaymentShare[] | null = null;
+  if (payments.data) {
+    const byMethod = new Map<string, number>();
+    for (const p of payments.data) byMethod.set(p.method, (byMethod.get(p.method) ?? 0) + Number(p.amount ?? 0));
+    const total = [...byMethod.values()].reduce((a, v) => a + v, 0);
+    paymentShares = [...byMethod.entries()]
+      .map(([method, amount]) => ({ method, label: METHOD_LABELS[method] ?? method, amount, pct: total > 0 ? Math.round((amount / total) * 100) : 0 }))
+      .sort((a, b) => b.amount - a.amount);
+  }
+  let best: BestSeller[] | null = null;
+  let bestTruncated = false;
+  if (bestRaw) {
+    const byName = new Map<string, BestSeller>();
+    for (const r of bestRaw.rows) {
+      const cur0 = byName.get(r.name) ?? { name: r.name, quantity: 0, sales: 0 };
+      cur0.quantity += r.quantity;
+      cur0.sales += r.sales;
+      byName.set(r.name, cur0);
+    }
+    best = [...byName.values()].sort((a, b) => b.quantity - a.quantity || b.sales - a.sales).slice(0, 10);
+    bestTruncated = bestRaw.truncated;
+  }
+  const extras: HomeExtras = { seats, days, turnover: turnoverPerDay(curKpi.guests, seats, days), repeat, payments: paymentShares, best, bestTruncated };
+
   return {
     current: { ...curKpi, budget: curBudget, achievementPct: achievementPct(curKpi.sales, curBudget) },
     previous: { ...prevKpi, budget: prevBudget, achievementPct: achievementPct(prevKpi.sales, prevBudget) },
     rows,
     hourly,
+    extras,
   };
+}
+
+/** ベストセラー用の明細（会計済み paid の注文の明細）。1,000 行ずつ、最大 20 ページ */
+async function loadBestSellerRows(
+  supabase: SupabaseClient,
+  ids: string[],
+  range: DateRange
+): Promise<{ rows: { name: string; quantity: number; sales: number }[]; truncated: boolean }> {
+  const rows: { name: string; quantity: number; sales: number }[] = [];
+  let truncated = false;
+  for (let page = 0; page < BEST_MAX_PAGES; page++) {
+    const from = page * BEST_PAGE;
+    const { data } = await supabase
+      .from('order_items')
+      .select('name, quantity, line_total, menu_items(name), orders!inner(status, business_date)')
+      .in('store_id', ids)
+      .eq('status', 'active')
+      .eq('orders.status', 'paid')
+      .gte('orders.business_date', range.from)
+      .lte('orders.business_date', range.to)
+      .order('id')
+      .range(from, from + BEST_PAGE - 1);
+    const list = (data ?? []) as unknown as { name: string | null; quantity: number | null; line_total: number | null; menu_items: { name: string | null } | null }[];
+    for (const r of list) {
+      const name = (r.menu_items?.name ?? r.name ?? '').trim();
+      if (!name) continue;
+      rows.push({ name, quantity: Number(r.quantity ?? 0), sales: Number(r.line_total ?? 0) });
+    }
+    if (list.length < BEST_PAGE) return { rows, truncated };
+    if (page === BEST_MAX_PAGES - 1) truncated = true;
+  }
+  return { rows, truncated };
 }

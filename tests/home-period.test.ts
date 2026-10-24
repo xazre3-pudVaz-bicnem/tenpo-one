@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   achievementPct,
+  parseHomeCard,
+  repeatWithin,
+  turnoverPerDay,
   budgetForRange,
   compareRange,
   delta,
@@ -88,5 +91,23 @@ describe('home-period: 増減と予算', () => {
     expect(achievementPct(55_000, 50_000)).toBe(110);
     expect(achievementPct(0, 50_000)).toBe(0);
     expect(achievementPct(1000, null)).toBeNull();
+  });
+});
+
+describe('home-period: カード・回転率・リピート', () => {
+  it('カードのタブ', () => {
+    expect(parseHomeCard('pay')).toBe('pay');
+    expect(parseHomeCard('best')).toBe('best');
+    expect(parseHomeCard(undefined)).toBe('hourly');
+    expect(parseHomeCard('x')).toBe('hourly');
+  });
+  it('客席回転率は 客数 ÷ 席数 ÷ 日数', () => {
+    expect(turnoverPerDay(120, 40, 1)).toBe(3);
+    expect(turnoverPerDay(120, 40, 7)).toBe(0.4);
+    expect(turnoverPerDay(10, 0, 1)).toBeNull();
+  });
+  it('期間内のリピート（2 回以上会計した顧客の割合）', () => {
+    expect(repeatWithin(['a', 'a', 'b', null, undefined, 'c', 'c', 'c'])).toEqual({ repeaters: 2, newcomers: 1, ratePct: 67 });
+    expect(repeatWithin([null])).toEqual({ repeaters: 0, newcomers: 0, ratePct: null });
   });
 });

@@ -26,6 +26,36 @@ export const HOME_COMPARES: { key: HomeCompare; label: string }[] = [
   { key: 'month', label: '前月同日比' },
 ];
 
+/** 下のカードのタブ：時間帯別 / 支払い方法 / ベストセラー（funfo のダッシュボードと同じ並び） */
+export type HomeCard = 'hourly' | 'pay' | 'best';
+
+export const HOME_CARDS: { key: HomeCard; label: string }[] = [
+  { key: 'hourly', label: '時間帯別' },
+  { key: 'pay', label: '支払い方法' },
+  { key: 'best', label: 'ベストセラー' },
+];
+
+export function parseHomeCard(v: string | string[] | undefined): HomeCard {
+  const s = Array.isArray(v) ? v[0] : v;
+  return HOME_CARDS.some((c) => c.key === s) ? (s as HomeCard) : 'hourly';
+}
+
+/** 客席回転率（1日平均）＝ 客数 ÷ 席数 ÷ 日数。席が無ければ null。小数 1 桁 */
+export function turnoverPerDay(guests: number, seats: number, days: number): number | null {
+  if (seats <= 0 || days <= 0) return null;
+  return Math.round((guests / seats / days) * 10) / 10;
+}
+
+/** 期間の中で 2 回以上会計した顧客の割合（顧客を紐づけた会計だけ）。対象が無ければ null */
+export function repeatWithin(customerIds: (string | null | undefined)[]): { repeaters: number; newcomers: number; ratePct: number | null } {
+  const counts = new Map<string, number>();
+  for (const id of customerIds) if (id) counts.set(id, (counts.get(id) ?? 0) + 1);
+  let repeaters = 0;
+  for (const n of counts.values()) if (n >= 2) repeaters += 1;
+  const total = counts.size;
+  return { repeaters, newcomers: total - repeaters, ratePct: total > 0 ? Math.round((repeaters / total) * 100) : null };
+}
+
 export interface DateRange {
   from: string;
   to: string;
@@ -103,6 +133,20 @@ export function compareRange(range: DateRange, compare: HomeCompare): DateRange 
   }
   if (compare === 'week') return { from: addDaysStr(range.from, -7), to: addDaysStr(range.to, -7) };
   return { from: sameDayPrevMonth(range.from), to: sameDayPrevMonth(range.to) };
+}
+
+/** ホームの URL（?range=&compare=&from=&to=&card=。既定の値は付けない） */
+export function homeHref(p: { range: HomeRange; compare: HomeCompare; custom?: DateRange; card?: HomeCard }): string {
+  const q = new URLSearchParams();
+  if (p.range !== 'today') q.set('range', p.range);
+  if (p.compare !== 'week') q.set('compare', p.compare);
+  if (p.range === 'custom' && p.custom) {
+    q.set('from', p.custom.from);
+    q.set('to', p.custom.to);
+  }
+  if (p.card && p.card !== 'hourly') q.set('card', p.card);
+  const s = q.toString();
+  return s ? `/app/dashboard?${s}` : '/app/dashboard';
 }
 
 /** 'M/D' */

@@ -1,18 +1,6 @@
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
-import { HOME_COMPARES, HOME_RANGES, rangeLabel, type DateRange, type HomeCompare, type HomeRange } from '@/lib/home-period';
-
-function href(range: HomeRange, compare: HomeCompare, custom?: DateRange): string {
-  const q = new URLSearchParams();
-  if (range !== 'today') q.set('range', range);
-  if (compare !== 'week') q.set('compare', compare);
-  if (range === 'custom' && custom) {
-    q.set('from', custom.from);
-    q.set('to', custom.to);
-  }
-  const s = q.toString();
-  return s ? `/app/dashboard?${s}` : '/app/dashboard';
-}
+import { HOME_COMPARES, HOME_RANGES, homeHref, rangeLabel, type DateRange, type HomeCard, type HomeCompare, type HomeRange } from '@/lib/home-period';
 
 const tab = 'inline-flex h-9 items-center rounded-lg px-3.5 text-[13px] font-bold transition-colors';
 const tabOff = 'border border-line bg-white text-ink-2 hover:border-wisteria hover:text-royal';
@@ -30,12 +18,15 @@ export function HomePeriodBar({
   compare,
   current,
   previous,
+  card,
 }: {
   range: HomeRange;
   compare: HomeCompare;
   current: DateRange;
   previous: DateRange;
+  card: HomeCard;
 }) {
+  const href = (r: HomeRange, c: HomeCompare, custom?: DateRange) => homeHref({ range: r, compare: c, custom, card });
   return (
     <div className="flex flex-col gap-3 rounded-xl border border-line bg-white px-4 py-3">
       <div className="flex flex-wrap items-center gap-2">
@@ -73,6 +64,7 @@ export function HomePeriodBar({
           <form action="/app/dashboard" method="get" className="ml-auto flex flex-wrap items-center gap-2 text-[13px]">
             <input type="hidden" name="range" value="custom" />
             <input type="hidden" name="compare" value={compare} />
+            {card !== 'hourly' && <input type="hidden" name="card" value={card} />}
             <label className="flex items-center gap-1.5">
               <span className="text-ink-3">開始</span>
               <input type="date" name="from" defaultValue={current.from} required className="h-8 rounded-md border border-line px-2 text-ink" />
