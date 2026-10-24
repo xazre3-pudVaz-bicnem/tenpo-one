@@ -173,4 +173,13 @@ describe('native settings pages (設定の中の画面) actions', () => {
     }
     expect(parseNativeSettingsPageAction({ type: 'importRun', importType: 'customers', rows: [{ values: {} }] }).ok).toBe(false);
   });
+
+  it('写真・PDFからメニュー（iPad）：読み取った行だけを受け取る', () => {
+    const ok = parseNativeSettingsPageAction({ type: 'menuScanParse', lines: ['ドリンク', '生ビール 580円', 3, null] });
+    expect(ok.ok).toBe(true);
+    if (ok.ok && ok.action.type === 'menuScanParse') expect(ok.action.lines).toEqual(['ドリンク', '生ビール 580円']);
+    expect(parseNativeSettingsPageAction({ type: 'menuScanParse', lines: 'x' }).ok).toBe(false);
+    expect(parseNativeSettingsPageAction({ type: 'menuScanParse', lines: Array(5001).fill('a') }).ok).toBe(false);
+    expect(isNativeSettingsPageActionType('menuScanParse')).toBe(true);
+  });
 });

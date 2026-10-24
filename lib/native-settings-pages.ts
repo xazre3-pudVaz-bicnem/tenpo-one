@@ -117,7 +117,9 @@ export type NativeSettingsPageAction =
   | { type: 'menuBulkSave'; patches: NativeBulkPatch[] }
   /** データ取込（/app/settings/import。CSV の中身はサーバーで読む） */
   | { type: 'importPreview'; importType: string; csv: string }
-  | { type: 'importRun'; importType: string; rows: { rowNumber: number; values: Record<string, string> }[] };
+  | { type: 'importRun'; importType: string; rows: { rowNumber: number; values: Record<string, string> }[] }
+  /** 写真・PDFからメニュー（/app/settings/menu/scan）。iPad が読み取った行を Web と同じ parseMenuLines で商品に分ける */
+  | { type: 'menuScanParse'; lines: string[] };
 
 export interface NativeBulkPatch {
   id: string;
@@ -290,6 +292,7 @@ export const NATIVE_SETTINGS_PAGE_ACTION_TYPES: readonly NativeSettingsPageActio
   'menuBulkSave',
   'importPreview',
   'importRun',
+  'menuScanParse',
 ];
 
 export function isNativeSettingsPageActionType(v: unknown): v is NativeSettingsPageActionType {
@@ -904,6 +907,11 @@ export function parseNativeSettingsPageAction(raw: unknown): Parsed {
       rows.push({ rowNumber: Math.floor(r.rowNumber), values });
     }
     return { ok: true, action: { type: 'importRun', importType: t, rows } };
+  }
+  if (b.type === 'menuScanParse') {
+    if (!Array.isArray(b.lines) || b.lines.length > 5000) return bad('読み取った行が多すぎます（5000行まで）');
+    const lines = (b.lines as unknown[]).filter((l): l is string => typeof l === 'string').map((l) => l.slice(0, 500));
+    return { ok: true, action: { type: 'menuScanParse', lines } };
   }
   return bad();
 }

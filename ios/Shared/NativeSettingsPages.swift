@@ -42,6 +42,8 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
     case dataImport = "import"
     /// 店舗名刺（A4 に横名刺10枚）。GET は lib/native-modules/business-cards.ts（NATIVE_MODULE_GET）
     case businessCards = "businessCards"
+    /// 写真・PDFからメニューを登録（読み込みは無し。POST menuScanParse・importRun だけ）
+    case menuScan = "menuScan"
     var id: String { rawValue }
 
     /// Web の道（クエリは見ない）
@@ -78,6 +80,7 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
         case .menuBulk: return "/app/settings/menu-bulk"
         case .dataImport: return "/app/settings/import"
         case .businessCards: return "/app/settings/store/business-cards"
+        case .menuScan: return "/app/settings/menu/scan"
         }
     }
     var title: String {
@@ -113,6 +116,7 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
         case .menuBulk: return "メニュー一括編集"
         case .dataImport: return "データ取込"
         case .businessCards: return "店舗名刺"
+        case .menuScan: return "写真・PDFからメニュー"
         }
     }
     var en: String {
@@ -148,6 +152,7 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
         case .menuBulk: return "Bulk edit"
         case .dataImport: return "Import"
         case .businessCards: return "Business cards"
+        case .menuScan: return "Scan menu"
         }
     }
 
@@ -197,6 +202,7 @@ struct NativeSettingsPageScreen: View {
         case .menuBulk: NativeMenuBulkScreen()
         case .dataImport: NativeImportScreen()
         case .businessCards: NativeBusinessCardsScreen()
+        case .menuScan: NativeMenuScanScreen()
         }
     }
 }
@@ -2436,6 +2442,10 @@ struct NativeMenuItemsView: View {
                         }
                     }
                     if p.canEdit && !model.showForm { NSPButton(text: isPlan ? "プランを追加" : "商品を追加", icon: "plus", primary: true) { model.startAdd() } }
+                    // 写真・PDF からまとめて登録（Web のメニューの画面と同じ入口。登録の権限はサーバーで確かめる）
+                    if !isPlan && p.canEdit && !model.showForm {
+                        NSPButton(text: "写真・PDFから登録", icon: "doc.viewfinder") { AppState.shared.openSettingsPage(.menuScan, webPath: NativeSettingsPageKey.menuScan.path) }
+                    }
                     Spacer()
                 }
                 if model.showForm { form(p) }
