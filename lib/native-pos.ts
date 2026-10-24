@@ -172,6 +172,8 @@ export interface NativePosCatalog {
   steraPaymentTypes: { code: string; method: string; label: string; en: string }[];
   canCheckout: boolean;
   canDiscount: boolean;
+  /** 上のタブを編集できるか（店長以上＝menu.manage。Web のレジの「編集 Edit tabs」） */
+  canEditPages: boolean;
   /** 中身のハッシュ（変わったら version も変わる） */
   version: string;
 }
@@ -218,6 +220,7 @@ export interface NativePosPayload {
   registerOpen: boolean;
   canCheckout: boolean;
   canDiscount: boolean;
+  canEditPages: boolean;
 }
 
 /** 会計の支払い（app/app/pos/actions.ts の CheckoutPayment と同じ） */

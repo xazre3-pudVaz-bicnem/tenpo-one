@@ -42,6 +42,9 @@ import { setMenuStockLimits } from '@/app/app/inventory/menu-stock-actions';
 import { isNativeInventoryActionType, nativeInventoryPermission, parseNativeInventoryAction } from '@/lib/native-inventory';
 import { isNativePurchasingActionType, parseNativePurchasingAction } from '@/lib/native-purchasing';
 import { isNativeCouponActionType, parseNativeCouponAction } from '@/lib/native-coupons';
+import { isNativeMenuPagesActionType, parseNativeMenuPagesAction } from '@/lib/native-menu-pages';
+import { loadNativeMenuPages } from '@/lib/native-menu-pages-server';
+import { saveMenuBookPages } from '@/app/app/settings/menu-book/actions';
 import { loadCouponsData } from '@/lib/coupons-data-server';
 import { generateCouponCode, getCouponRedemptions, saveCoupon, setCouponStatus } from '@/app/app/coupons/actions';
 import { loadNativePoNew } from '@/lib/native-purchasing-server';
@@ -378,6 +381,15 @@ export async function GET(request: Request) {
       item: isUuid(url.searchParams.get('item')) ? (url.searchParams.get('item') as string) : '',
     });
     return json({ ok: true, ...inv });
+  }
+
+  // オーダー画面の「編集 Edit tabs」（Web のレジの MenuPagesDialog と同じ中身。menu.manage）
+  if (part === 'menuPages') {
+    if (!can(ctx.role, 'menu.manage')) return json({ ok: false, error: '権限がありません' }, 403);
+    const storeId = url.searchParams.get('storeId');
+    if (!isUuid(storeId)) return json({ ok: false, error: '店舗が見つかりません' }, 404);
+    const r = await loadNativeMenuPages(storeId);
+    return json(r, r.ok ? 200 : 403);
   }
 
   // クーポン管理（Web の /app/coupons）
@@ -863,6 +875,22 @@ export async function POST(request: Request) {
           await cancelStockTransfer(ia.id, ia.reason);
           return json({ ok: true });
       }
+    } catch (e) {
+      return json({ ok: false, error: errorText(e, 'うまくいきませんでした。もう一度お試しください') }, 400);
+    }
+  }
+
+  // 上のタブ（ページ）の保存（中身は Web と同じ saveMenuBookPages。menu.manage → 店の回線）
+  if (raw && typeof raw === 'object' && isNativeMenuPagesActionType((raw as { type?: unknown }).type)) {
+    const parsedPages = parseNativeMenuPagesAction(raw);
+    if (!parsedPages.ok) return json({ ok: false, error: parsedPages.error }, 400);
+    if (!can(ctx.role, 'menu.manage')) return json({ ok: false, error: '権限がありません' }, 403);
+    const pagesProblem = await networkProblem(ctx);
+    if (pagesProblem) return json({ ok: false, error: pagesProblem }, 403);
+    const pa = parsedPages.action;
+    try {
+      const r = await saveMenuBookPages(pa.storeId, { pages: pa.pages, categoryPage: pa.categoryPage });
+      return json(r.error ? { ok: false, error: r.error } : { ok: true });
     } catch (e) {
       return json({ ok: false, error: errorText(e, 'うまくいきませんでした。もう一度お試しください') }, 400);
     }

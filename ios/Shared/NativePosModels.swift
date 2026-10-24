@@ -154,6 +154,10 @@ final class NativeOrderModel: ObservableObject {
     @Published var categories: [NPCategory]
     /// 上のタブ（ページ）。空ならタブを出さず、カテゴリを全部左に出す（テイクアウト・古いサーバー）
     @Published var pages: [NPPage] = []
+    /// 上のタブを編集できるか（店長以上。Web のレジの「編集 Edit tabs」）
+    @Published var canEditPages = false
+    /// この伝票の店（タブの編集・メニューの読み直しに使う）
+    private(set) var storeId: String?
     @Published var items: [NPMenuItem]
     @Published var order: NPOrder
     @Published var selectedCategory: String
@@ -275,6 +279,12 @@ final class NativeOrderModel: ObservableObject {
         )
         order.lines.append(line)
         lastAddedLineId = line.id
+    }
+
+    /// タブを保存したあと：メニュー（ページ）を読み直して画面を入れ替える
+    func reloadCatalog() {
+        NativeCatalogCache.shared.onUpdate = { [weak self] c in self?.apply(catalog: c) }
+        NativeCatalogCache.shared.refresh(storeId: storeId)
     }
 
     /// 上のタブを押したら、そのページの最初のカテゴリを開く
@@ -449,7 +459,7 @@ final class NativeOrderModel: ObservableObject {
                     store: p.store, categories: p.categories, pages: p.pages, items: p.items, optionGroups: p.optionGroups, clerks: p.clerks,
                     clerkRequired: p.clerkRequired, visitSources: p.visitSources, methodBrands: p.methodBrands, pointBrands: p.pointBrands,
                     discountPresets: p.discountPresets, steraPaymentTypes: p.steraPaymentTypes, canCheckout: p.canCheckout,
-                    canDiscount: p.canDiscount, version: v))
+                    canDiscount: p.canDiscount, canEditPages: p.canEditPages, version: v))
             }
         } catch let e as NativeAPIError {
             notice = e.message
@@ -460,6 +470,8 @@ final class NativeOrderModel: ObservableObject {
     }
 
     private func apply(catalog c: APICatalog) {
+        storeId = c.store.id
+        canEditPages = c.canEditPages ?? false
         applyCatalog(storeName: c.store.name, categories: c.categories, pages: c.pages, items: c.items, optionGroups: c.optionGroups, clerks: c.clerks,
                      clerkRequired: c.clerkRequired, visitSources: c.visitSources, methodBrands: c.methodBrands, pointBrands: c.pointBrands,
                      discountPresets: c.discountPresets, steraTypes: c.steraPaymentTypes, canCheckout: c.canCheckout, canDiscount: c.canDiscount)
@@ -477,6 +489,8 @@ final class NativeOrderModel: ObservableObject {
 
     private func apply(payload p: APIPayload) {
         orderLoaded = true
+        storeId = p.store.id
+        canEditPages = p.canEditPages ?? false
         applyCatalog(storeName: p.store.name, categories: p.categories, pages: p.pages, items: p.items, optionGroups: p.optionGroups, clerks: p.clerks,
                      clerkRequired: p.clerkRequired, visitSources: p.visitSources, methodBrands: p.methodBrands, pointBrands: p.pointBrands,
                      discountPresets: p.discountPresets, steraTypes: p.steraPaymentTypes, canCheckout: p.canCheckout, canDiscount: p.canDiscount)
