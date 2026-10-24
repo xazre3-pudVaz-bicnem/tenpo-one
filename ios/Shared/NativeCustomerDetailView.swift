@@ -431,6 +431,7 @@ struct NativeCustomerDetailView: View {
         do {
             var comps = URLComponents(url: AppConfig.url("/api/app/v1/pos"), resolvingAgainstBaseURL: false)!
             comps.queryItems = [URLQueryItem(name: "part", value: "customer"), URLQueryItem(name: "id", value: id)]
+            if payload == nil, let saved = NativeAPI.cached(NCDPayload.self, comps.url) { payload = saved }
             let data = try await NativeAPI.shared.send(URLRequest(url: comps.url!))
             payload = try JSONDecoder().decode(NCDPayload.self, from: data)
             loadError = nil

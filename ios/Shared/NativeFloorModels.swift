@@ -389,8 +389,14 @@ final class NativeFloorModel: ObservableObject {
     @Published var now: Double = Date().timeIntervalSince1970 * 1000
     /// 選んでいるフロア（"all" ＝ すべて、"_none" ＝ 未分類）
     @Published var floorFilter: String = "all"
-    /// 押した卓（ポップアップを出す）
-    @Published var selectedTableId: String?
+    /// 押した卓（ポップアップを出す）。押したら、その卓の伝票を裏で読んでおく（レジ会計・注文を押した瞬間に出る）
+    @Published var selectedTableId: String? {
+        didSet {
+            if let t = selectedTable { prefetch((t.order?.slips ?? []).map(\.id), within: 3) }
+        }
+    }
+    /// 裏で読んだ時刻（伝票ごと。読みすぎない）
+    private var prefetchedAt: [String: Date] = [:]
 
     private var offsetMs: Double = 0
     private var clock: Timer?
@@ -460,6 +466,11 @@ final class NativeFloorModel: ObservableObject {
             now = p.serverNow
             let first = payload == nil
             payload = p
+            // 金額が変わった伝票・まだ読んでいない伝票を裏で読んでおく（会計・注文を押した瞬間に出る。2026-10-24 Ronnie「会計 ma jada pani 取込み navai」）
+            let stale = p.tables.flatMap { $0.order?.slips ?? [] }.filter { s in
+                NativeDiskCache.load(APILive.self, key: "live-\(s.id)")?.order.total != s.total
+            }
+            prefetch(Array(stale.prefix(15)).map(\.id), within: 20)
             if first {
                 // 最初に出すフロア（設定 > テーブル・フロア）。無ければ「すべて」
                 if let d = p.defaultFloorId, p.floors.contains(where: { $0.id == d }) { floorFilter = d }
@@ -470,6 +481,19 @@ final class NativeFloorModel: ObservableObject {
             if !silent || payload == nil { self.error = (error as? NativeAPIError)?.message ?? "通信できませんでした" }
         }
         loading = false
+    }
+
+    /// 伝票を裏で読んで iPad に保存する（NativeOrderModel が開くときに先に出す）。within 秒以内に読んだものは読まない
+    func prefetch(_ ids: [String], within: TimeInterval) {
+        let now = Date()
+        let todo = ids.filter { id in prefetchedAt[id].map { now.timeIntervalSince($0) > within } ?? true }
+        guard !todo.isEmpty else { return }
+        for id in todo { prefetchedAt[id] = now }
+        Task {
+            for id in todo {
+                if let live = try? await NativeAPI.shared.loadLive(orderId: id) { NativeDiskCache.save(live, key: "live-\(id)") }
+            }
+        }
     }
 
     private func sweepCleaning() async {
