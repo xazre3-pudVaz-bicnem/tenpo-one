@@ -408,8 +408,9 @@ struct NativeHomeView: View {
                     // 右の「予算登録」ボタンに赤い丸の「!」だけ（13:47 Ronnie）
                     if let b = s?.budget {
                         // 数字の高さ（キャップハイト ≒ 0.71×字の大きさ）を 2 行ぶん（30pt）に合わせる
-                        Text(NT.yen(b)).font(.system(size: 42, weight: .regular)).monospacedDigit().foregroundColor(NFColor.ink)
-                            .lineLimit(1).minimumScaleFactor(0.6)
+                        // 小さくしない（縮むと 2 行より低くなる。00:29 Ronnie「まだ合わない」）。見える字の高さ ≒ 2 行の見える高さ（約 29pt）
+                        Text(NT.yen(b)).font(.system(size: 41, weight: .regular)).monospacedDigit().foregroundColor(NFColor.ink)
+                            .lineLimit(1).fixedSize()
                             .frame(height: lineTop + lineBottom)
                     }
                 }
