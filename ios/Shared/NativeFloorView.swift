@@ -375,14 +375,7 @@ struct NativeTableCard: View {
                             Text(o.sourceLabel).font(.system(size: 12, weight: .regular)).foregroundColor(NFColor.ink3)
                         }
                         .lineLimit(1)
-                        Rectangle().fill(Color.black.opacity(0.07)).frame(height: 1)
-                        HStack(alignment: .firstTextBaseline, spacing: 6) {
-                            Spacer(minLength: 4)
-                            Text(o.guestCount > 0 ? "\(NT.yen(Int((Double(o.total) / Double(o.guestCount)).rounded())))/人" : "—/人")
-                                .font(.system(size: 12, weight: .medium)).monospacedDigit().foregroundColor(NFColor.ink3)
-                            Text(NT.yen(o.total)).font(.system(size: 18, weight: .heavy)).monospacedDigit().foregroundColor(NFColor.ink)
-                        }
-                        .lineLimit(1).minimumScaleFactor(0.8)
+                        // お金は下の色の帯の上に書く（2026-10-24 22:23 Ronnie「帯をお金の上の線まで。お金は色の上に」）
                     }
                 } else if state == .cleaning || state == .unavailable {
                     Text(state.label)
@@ -417,9 +410,21 @@ struct NativeTableCard: View {
                 if let b = band {
                     VStack(spacing: 0) {
                         Spacer(minLength: 0)
-                        // 帯は色だけ（字は出さない。色の意味は下の「色の見方」に。2026-10-24 21:46 Ronnie）
+                        // 帯はお金の線から下いっぱい。状態の字は出さず（色の見方は下に。21:46 Ronnie）、お金をこの上に（22:23 Ronnie）
                         ZStack(alignment: .top) {
                             b.color
+                            if let o = order {
+                                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                                    Spacer(minLength: 4)
+                                    Text(o.guestCount > 0 ? "\(NT.yen(Int((Double(o.total) / Double(o.guestCount)).rounded())))/人" : "—/人")
+                                        .font(.system(size: 13, weight: .semibold)).monospacedDigit().opacity(0.85)
+                                    Text(NT.yen(o.total)).font(.system(size: 22, weight: .heavy)).monospacedDigit()
+                                }
+                                .lineLimit(1).minimumScaleFactor(0.7)
+                                .foregroundColor(b.ink)
+                                .padding(.horizontal, 14)
+                                .frame(maxHeight: .infinity)
+                            }
                             if let o = order {
                                 GeometryReader { g in
                                     ZStack(alignment: .leading) {
@@ -494,7 +499,7 @@ struct NativeTableCard: View {
 
     @State private var pulse = false
 
-    static let bandH: CGFloat = 16
+    static let bandH: CGFloat = 50
     static let callRed = Color(hex: 0xE53935)
     /// QR からのお会計の依頼は緑の財布（お金＝緑。2026-10-24 21:23 Ronnie「財布か緑の ¥」→21:31「財布」）
     /// 色はポップアップの「レジ会計」のボタンと同じ緑（NFColor.success。2026-10-24 21:36 Ronnie）
