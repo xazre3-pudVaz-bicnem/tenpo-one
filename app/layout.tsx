@@ -1,21 +1,16 @@
 import type { Metadata } from 'next';
-import { Manrope, Noto_Sans_JP } from 'next/font/google';
+import localFont from 'next/font/local';
 import { brand } from '@/lib/brand';
 import { ToastProvider } from '@/components/ui/toast';
 import { ServiceWorkerRegister } from '@/components/pwa/service-worker-register';
 import './globals.css';
 
-const notoSansJp = Noto_Sans_JP({
-  subsets: ['latin'],
-  weight: ['400', '500', '700'],
-  variable: '--font-noto-sans-jp',
-  display: 'swap',
-});
-
-// 数字・英字ラベル用（金額や時刻を見やすく）
-const manrope = Manrope({
-  subsets: ['latin'],
-  weight: ['500', '600', '700', '800'],
+// 数字・英字ラベル用（金額や時刻を見やすく）。レジのホームなどが var(--font-manrope) で使う。
+// 字のファイルはリポジトリの中（app/fonts）。build のときに Google から取りに行かない（2026-10-24 CI が Google の字の取得で落ちるため）。
+// 500〜800 の太さは前と同じ（細い指定は 500、太い指定は 800 に寄る）。
+const manrope = localFont({
+  src: './fonts/manrope-latin-wght.woff2',
+  weight: '500 800',
   variable: '--font-manrope',
   display: 'swap',
 });
@@ -56,7 +51,7 @@ export const viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ja">
-      <body className={`${notoSansJp.variable} ${manrope.variable} font-sans antialiased`}>
+      <body className={`${manrope.variable} font-sans antialiased`}>
         <ToastProvider>{children}</ToastProvider>
         <ServiceWorkerRegister />
       </body>
