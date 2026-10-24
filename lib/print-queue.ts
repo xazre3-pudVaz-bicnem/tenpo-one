@@ -347,12 +347,14 @@ export async function generateKitchenJobs(admin: Admin, printer: PrinterRow, opt
       starprnt: kitchenTicketsStarPrnt(starSlips, { buzzer }).toString('base64'),
       epos: kitchenTicketsEpos(eposSlips, { buzzer }),
     };
+    let renderedAsImage = false;
     try {
       const images = [];
       for (const slip of slips) images.push(await renderTicketImage(kitchenDesign(slip, {
         title: slip.drinkSlip ? drinkTitle : title, printedAt, textSize, language,
       }), paperWidth === 58 ? 384 : 576, !!printer.upside_down));
       payload = await ticketImagePayload(images, buzzer);
+      renderedAsImage = true;
     } catch (error) {
       // Claimed rows are already marked sent: keep a readable native-font ticket if rasterization fails.
       console.error('[print-queue] ticket image failed, using text fallback', error);
@@ -365,7 +367,15 @@ export async function generateKitchenJobs(admin: Admin, printer: PrinterRow, opt
       order_id: t.orderId,
       target: 'cloudprnt',
       content_type: MARKUP,
-      payload,
+      payload: {
+        ...payload,
+        renderer: {
+          version: "kitchen-heading-v2",
+          commit: process.env.VERCEL_GIT_COMMIT_SHA ?? null,
+          deployment: process.env.VERCEL_URL ?? null,
+          mode: renderedAsImage ? "raster" : "native-fallback",
+        },
+      },
       status: 'queued',
     });
   }
