@@ -30,6 +30,8 @@ struct APILive: Decodable {
     let registerOpen: Bool
     let steraTerminals: [APISteraTerminal]
     let storeId: String
+    /// 取消（1品・伝票）を承認できる担当者（店長以上）。古いサーバーは無い
+    let approvers: [APIClerk]?
 }
 
 /// 注文確定の返事に付いてくる、iPad から LAN で直接出す厨房伝票

@@ -15,6 +15,8 @@ import { englishName } from '@/lib/romaji';
 import { BRANDED_METHODS, checkoutPresetsFrom, discountPresetsOf, methodBrandsOf, pointBrandsOf } from '@/lib/checkout-presets';
 import { VISIT_SOURCES, visitSourceByLabel, visitSourcesFrom } from '@/lib/handy-visit';
 import { isMissingColumnError } from '@/lib/schema-compat';
+import { loadStoreClerks } from '@/lib/pos-clerks-server';
+import { cancelApprovers } from '@/lib/clerk-roles';
 import {
   type NativePosCatalog,
   type NativePosLive,
@@ -271,6 +273,8 @@ export async function loadNativeLive(ctx: SessionContext, supabase: Client, orde
   const canCheckout = can(ctx.role, 'pos.checkout');
   let registerOpen = true;
   let steraTerminals: { id: string; name: string; online: boolean }[] = [];
+  // 取消（1品・伝票）を承認する担当者（店長以上）。フロア（lib/native-floor-server.ts）と同じ出し方
+  const clerksPromise = loadStoreClerks(supabase, storeId).catch(() => []);
   if (canCheckout) {
     const [{ data: openSession }, { data: steraRows }] = await Promise.all([
       supabase.from('register_sessions').select('id').eq('store_id', storeId).eq('status', 'open').limit(1).maybeSingle(),
@@ -284,7 +288,8 @@ export async function loadNativeLive(ctx: SessionContext, supabase: Client, orde
       online: isSteraOnline(t.last_seen_at as string | null, now),
     }));
   }
-  return { order, registerOpen, steraTerminals, storeId };
+  const approvers = cancelApprovers(await clerksPromise).map((c) => ({ id: c.id, name: c.name }));
+  return { order, registerOpen, steraTerminals, storeId, approvers };
 }
 
 /** オーダー画面を開くときの全部（メニュー・担当者・会計の選択肢・stera）。アプリに保存が無いとき・テイクアウトのとき */
@@ -311,6 +316,7 @@ export async function loadNativePos(ctx: SessionContext, orderId: string): Promi
     catalogVersion: takeout ? undefined : version,
     steraTerminals: live.steraTerminals,
     registerOpen: live.registerOpen,
+    approvers: live.approvers,
   };
 }
 

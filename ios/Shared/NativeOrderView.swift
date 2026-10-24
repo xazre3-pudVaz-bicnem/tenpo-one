@@ -279,6 +279,8 @@ private struct SlipPanel: View {
     var onClerk: () -> Void = {}
     /// 人数・時間を押したとき（お客様情報の直し。卓のある伝票だけ）
     var onGuestInfo: () -> Void = {}
+    /// 取消しようとしている品（送った品。店長以上の担当者を選んでから取消。Web のレジと同じ）
+    @State private var cancelTarget: NPOrderLine?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -351,7 +353,8 @@ private struct SlipPanel: View {
                                 LineRow(line: line, highlighted: line.id == model.lastAddedLineId,
                                         editable: model.canChange(line),
                                         onMinus: { model.change(line, by: -1) },
-                                        onPlus: { model.change(line, by: 1) })
+                                        onPlus: { model.change(line, by: 1) },
+                                        onCancel: { cancel(line) })
                                     .id(line.id)
                                 Divider().overlay(NT.line).padding(.leading, 16)
                             }
@@ -384,6 +387,34 @@ private struct SlipPanel: View {
         }
         .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(NT.card))
         .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(NT.lilacLine, lineWidth: 1))
+        // 1品の取消：理由は要らない・店長以上の担当者を選ぶだけ（2026-10-17 Ronnie）。担当者が未登録の店はそのまま取消
+        .confirmationDialog(
+            "「\(cancelTarget?.displayName ?? "")」を取消しますか？",
+            isPresented: Binding(get: { cancelTarget != nil }, set: { if !$0 { cancelTarget = nil } }),
+            titleVisibility: .visible
+        ) {
+            if let line = cancelTarget {
+                if model.approvers.isEmpty {
+                    Button("取消する", role: .destructive) { Task { await model.cancelLine(line, approver: nil) } }
+                } else {
+                    ForEach(model.approvers, id: \.id) { a in
+                        Button("承認: \(a.name)") { Task { await model.cancelLine(line, approver: a.id) } }
+                    }
+                }
+            }
+            Button("キャンセル", role: .cancel) { cancelTarget = nil }
+        } message: {
+            Text(model.approvers.isEmpty ? "厨房へ送った品は「取消」の紙がレジに出ます" : "承認する担当者（店長以上）を選んでください")
+        }
+    }
+
+    /// 左へスライドの「取消」：カートの品はそのまま消す。送った品は担当者（店長以上）を選んでから（ダイアログ）
+    private func cancel(_ line: NPOrderLine) {
+        if !model.isLive || line.local {
+            Task { await model.cancelLine(line, approver: nil) }
+        } else {
+            cancelTarget = line
+        }
     }
 
     /// 人数・時間を直せるか（卓のある伝票だけ。テイクアウト等は卓が無い）
@@ -415,8 +446,73 @@ private struct LineRow: View {
     var editable: Bool = true
     let onMinus: () -> Void
     let onPlus: () -> Void
+    /// 左へスライド →「取消」（1品の取消。送った品は担当者を選んでから。2026-10-24 Ronnie「slide left garepaxi cancel、担当選択」）
+    var onCancel: () -> Void = {}
+
+    /// 左へずらした量（0〜−revealW。指を離すと「取消」を出したまま／戻す）
+    @State private var offset: CGFloat = 0
+    @State private var dragging = false
+    @State private var startOffset: CGFloat = 0
+    private let revealW: CGFloat = 104
 
     var body: some View {
+        ZStack(alignment: .trailing) {
+            // 後ろの赤い「取消」（左へずらすと見える）
+            Button {
+                withAnimation(.spring(response: 0.28, dampingFraction: 0.85)) { offset = 0 }
+                onCancel()
+            } label: {
+                VStack(spacing: 3) {
+                    Image(systemName: "trash").font(.system(size: 17, weight: .bold))
+                    Text("取消").font(.system(size: 14, weight: .heavy))
+                }
+                .foregroundColor(.white)
+                .frame(width: max(revealW, -offset))
+                .frame(maxHeight: .infinity)
+                .background(NT.danger)
+            }
+            .buttonStyle(.plain)
+            .opacity(offset < 0 ? 1 : 0)
+            .accessibilityHidden(offset == 0)
+
+            row
+                .background(NT.card)
+                .contentShape(Rectangle())
+                // 「取消」を出しているときに行を押したら戻す
+                .onTapGesture { if offset != 0 { withAnimation(.spring(response: 0.28, dampingFraction: 0.85)) { offset = 0 } } }
+                .offset(x: offset)
+        }
+        .clipped()
+        // 横に動かしたときだけ（縦のスクロールは邪魔しない）
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 14)
+                .onChanged { v in
+                    guard editable else { return }
+                    let dx = v.translation.width, dy = v.translation.height
+                    guard dragging || abs(dx) > abs(dy) * 1.4 else { return }
+                    if !dragging { dragging = true; startOffset = offset }
+                    offset = min(0, max(-revealW * 2.2, startOffset + dx))
+                }
+                .onEnded { v in
+                    guard dragging else { return }
+                    dragging = false
+                    withAnimation(.spring(response: 0.28, dampingFraction: 0.85)) {
+                        if offset < -revealW * 1.6 {
+                            // 大きくスライド → そのまま取消（送った品は担当者を選ぶ）
+                            offset = 0
+                            onCancel()
+                        } else if offset < -revealW * 0.45 {
+                            offset = -revealW
+                        } else {
+                            offset = 0
+                        }
+                    }
+                }
+        )
+        .accessibilityAction(named: "取消") { if editable { onCancel() } }
+    }
+
+    private var row: some View {
         HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(line.displayName).font(.system(size: 16, weight: .semibold)).foregroundColor(NT.ink).lineLimit(2)
@@ -440,7 +536,10 @@ private struct LineRow: View {
             Spacer(minLength: 6)
             if editable {
                 HStack(spacing: 0) {
+                    // 送った品は 1 より下にしない（0 にするのは左へスライドの「取消」）
                     stepButton("minus", action: onMinus)
+                        .disabled(!line.local && line.quantity <= 1)
+                        .opacity(!line.local && line.quantity <= 1 ? 0.35 : 1)
                     Text("\(line.quantity)").font(.system(size: 17, weight: .bold)).foregroundColor(NT.ink).frame(minWidth: 30)
                     stepButton("plus", action: onPlus)
                 }

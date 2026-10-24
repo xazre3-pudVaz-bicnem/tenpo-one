@@ -8,7 +8,7 @@ import { loadNativeCatalog, loadNativeLive, loadNativeOrder, loadNativePos, setO
 import { claimLanKitchenPrints, finishLanPrint } from '@/lib/native-print-server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { ACCESS_MESSAGE } from '@/lib/store-access';
-import { checkout, splitOrder, sendOrderToKitchen, setDiscount, updateQty, addItem, addCustomPriceItem, startTakeout } from '@/app/app/pos/actions';
+import { checkout, splitOrder, divideOrderItem, cancelItem, sendOrderToKitchen, setDiscount, updateQty, addItem, addCustomPriceItem, startTakeout } from '@/app/app/pos/actions';
 import { setOrderClerk } from '@/app/app/pos/clerk-actions';
 import { cancelSteraPayment, checkSteraPayment, startSteraPayment } from '@/app/app/pos/stera-actions';
 import { enqueueDrawerKick, enqueueExpoSlipPrint, enqueueOrderSlipPrint, enqueueReceiptPrint, enqueueSelectedItemsPrint, enqueueStockListPrint } from '@/app/app/pos/print-actions';
@@ -229,6 +229,8 @@ const FLOOR_PERMISSION: Record<NativeFloorAction['type'], PermissionAction> = {
 
 const PERMISSION: Record<NativePosAction['type'], PermissionAction> = {
   split: 'pos.checkout',
+  divide: 'pos.checkout',
+  cancelLine: 'pos.order',
   send: 'pos.order',
   qty: 'pos.order',
   clerk: 'pos.order',
@@ -1340,6 +1342,14 @@ export async function POST(request: Request) {
       }
       case 'qty':
         await updateQty(action.orderId, action.lineId, action.delta);
+        return json({ ok: true, order: await freshOrder(action.orderId) });
+      case 'divide':
+        // 別々会計の「分ける」：1つの品を n 人分の「品名（1/n）」に（Web の伝票分割と同じ Server Action）
+        await divideOrderItem(action.orderId, action.lineId, action.parts);
+        return json({ ok: true, order: await freshOrder(action.orderId) });
+      case 'cancelLine':
+        // 1品の取消。レジは店長以上の担当者の承認（approvedByClerkId）をサーバーで確かめる（Web のレジと同じ）
+        await cancelItem(action.orderId, action.lineId, action.reason, action.approvedByClerkId);
         return json({ ok: true, order: await freshOrder(action.orderId) });
       case 'clerk': {
         const res = await setOrderClerk(action.orderId, action.clerkId);

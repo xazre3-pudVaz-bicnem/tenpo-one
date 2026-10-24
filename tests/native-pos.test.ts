@@ -26,6 +26,20 @@ describe('iPad アプリのネイティブ画面の操作（/api/app/v1/pos）',
     expect(parseNativePosAction({ type: 'qty', orderId: ID, lineId: ID2, delta: 5 }).ok).toBe(false);
   });
 
+  it('別々会計の「分ける」は 2〜10 人・1品の取消は承認する担当者が id か null', () => {
+    expect(parseNativePosAction({ type: 'divide', orderId: ID, lineId: ID2, parts: 3 }).ok).toBe(true);
+    expect(parseNativePosAction({ type: 'divide', orderId: ID, lineId: ID2, parts: 1 }).ok).toBe(false);
+    expect(parseNativePosAction({ type: 'divide', orderId: ID, lineId: ID2, parts: 11 }).ok).toBe(false);
+    expect(parseNativePosAction({ type: 'divide', orderId: ID, lineId: ID2, parts: 2.5 }).ok).toBe(false);
+    expect(parseNativePosAction({ type: 'cancelLine', orderId: ID, lineId: ID2, approvedByClerkId: ID })).toEqual({
+      ok: true,
+      action: { type: 'cancelLine', orderId: ID, lineId: ID2, reason: '', approvedByClerkId: ID },
+    });
+    expect(parseNativePosAction({ type: 'cancelLine', orderId: ID, lineId: ID2, reason: ' 間違い ', approvedByClerkId: null }).ok).toBe(true);
+    expect(parseNativePosAction({ type: 'cancelLine', orderId: ID, lineId: ID2, approvedByClerkId: 'bob' }).ok).toBe(false);
+    expect(parseNativePosAction({ type: 'cancelLine', orderId: ID, lineId: 'x', approvedByClerkId: null }).ok).toBe(false);
+  });
+
   it('native split validates item IDs and positive whole quantities', () => {
     expect(parseNativePosAction({ type: 'split', orderId: ID, moves: [{ orderItemId: ID2, quantity: 1 }] }).ok).toBe(true);
     for (const moves of [[], [{ orderItemId: 'bad', quantity: 1 }], [{ orderItemId: ID2, quantity: 0 }], [{ orderItemId: ID2, quantity: 1.5 }]]) {
