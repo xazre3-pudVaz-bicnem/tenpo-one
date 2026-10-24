@@ -10,7 +10,8 @@ import { TableWrap, Table, THead, TBody, Tr, Th, Td } from '@/components/ui/tabl
 import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/ui/state';
 import { yen, formatDate } from '@/lib/format';
-import { PO_STATUS_LABELS, PO_STATUS_TONES, PO_STATUS_OPTIONS, type PoStatus } from '@/components/inventory/labels';
+import { PO_STATUS_LABELS, PO_STATUS_TONES, PO_STATUS_OPTIONS } from '@/components/inventory/labels';
+import { loadPurchaseOrderRows } from '@/lib/purchasing-data-server';
 
 export const metadata: Metadata = { title: '発注' };
 
@@ -24,32 +25,8 @@ export default async function PurchasesPage({
   const sp = await searchParams;
   const storeIds = ctx.currentStore ? [ctx.currentStore.id] : ctx.stores.map((s) => s.id);
 
-  const { data: vendorsData } = await supabase
-    .from('vendors')
-    .select('id, name')
-    .eq('organization_id', ctx.organizationId)
-    .neq('status', 'deleted')
-    .order('name');
-  const vendors = vendorsData ?? [];
-
-  let query = supabase
-    .from('purchase_orders')
-    .select('id, po_no, status, total, expected_at, requested_by, created_at, vendors(name), stores(name)')
-    .eq('organization_id', ctx.organizationId)
-    .in('store_id', storeIds.length > 0 ? storeIds : ['00000000-0000-0000-0000-000000000000']);
-  if (sp.status) query = query.eq('status', sp.status);
-  if (sp.vendor) query = query.eq('vendor_id', sp.vendor);
-  if (sp.from) query = query.gte('created_at', `${sp.from}T00:00:00+09:00`);
-  if (sp.to) query = query.lte('created_at', `${sp.to}T23:59:59+09:00`);
-  const { data } = await query.order('created_at', { ascending: false }).limit(300);
-  const rows = data ?? [];
-
-  const requesterIds = [...new Set(rows.map((r) => r.requested_by).filter((v): v is string => !!v))];
-  let requesterNames = new Map<string, string>();
-  if (requesterIds.length > 0) {
-    const { data: profiles } = await supabase.from('profiles').select('id, display_name').in('id', requesterIds);
-    requesterNames = new Map((profiles ?? []).map((p) => [p.id as string, p.display_name as string]));
-  }
+  // 読み込みは lib/purchasing-data-server.ts（iPad アプリのネイティブ画面と共用）
+  const { rows, vendors } = await loadPurchaseOrderRows(supabase, ctx.organizationId ?? '', storeIds, sp);
 
   const exportQuery = new URLSearchParams();
   if (sp.status) exportQuery.set('status', sp.status);
@@ -133,16 +110,16 @@ export default async function PurchasesPage({
                 <Tr key={r.id}>
                   <Td>
                     <Link href={`/app/purchases/${r.id}`} className="font-medium text-primary hover:underline">
-                      #{r.po_no}
+                      #{r.poNo}
                     </Link>
                   </Td>
                   <Td>
-                    <Badge tone={PO_STATUS_TONES[r.status as PoStatus]}>{PO_STATUS_LABELS[r.status as PoStatus]}</Badge>
+                    <Badge tone={PO_STATUS_TONES[r.status]}>{PO_STATUS_LABELS[r.status]}</Badge>
                   </Td>
-                  <Td>{(r.vendors as unknown as { name: string } | null)?.name ?? '—'}</Td>
-                  <Td>{(r.stores as unknown as { name: string } | null)?.name ?? '—'}</Td>
-                  <Td>{formatDate(r.expected_at)}</Td>
-                  <Td>{r.requested_by ? (requesterNames.get(r.requested_by) ?? '—') : '—'}</Td>
+                  <Td>{r.vendorName ?? '—'}</Td>
+                  <Td>{r.storeName ?? '—'}</Td>
+                  <Td>{formatDate(r.expectedAt)}</Td>
+                  <Td>{r.requesterName ?? '—'}</Td>
                   <Td className="text-right tabular-nums">{yen(r.total)}</Td>
                 </Tr>
               ))}

@@ -33,6 +33,11 @@ import { isNativeStockActionType, parseNativeStockAction } from '@/lib/native-st
 import { loadNativeStock } from '@/lib/native-stock-server';
 import { setMenuStockLimits } from '@/app/app/inventory/menu-stock-actions';
 import { isNativeInventoryActionType, nativeInventoryPermission, parseNativeInventoryAction } from '@/lib/native-inventory';
+import { isNativePurchasingActionType, parseNativePurchasingAction } from '@/lib/native-purchasing';
+import { loadNativePoNew } from '@/lib/native-purchasing-server';
+import { loadPurchaseOrderDetail, loadPurchaseOrderRows, loadVendorRows } from '@/lib/purchasing-data-server';
+import { createVendor, deleteVendor, getVendorRecentOrders, updateVendor } from '@/app/app/vendors/actions';
+import { cancelPurchaseOrder, changePurchaseOrderStatus, createPurchaseOrder, receiveItems } from '@/app/app/purchases/actions';
 import { loadNativeInventory, loadNativeInventoryCount, NATIVE_INVENTORY_TABS, type NativeInventoryTab } from '@/lib/native-inventory-server';
 import {
   addMovement,
@@ -307,6 +312,53 @@ export async function GET(request: Request) {
       item: isUuid(url.searchParams.get('item')) ? (url.searchParams.get('item') as string) : '',
     });
     return json({ ok: true, ...inv });
+  }
+
+  // 仕入先・発注（Web の /app/vendors・/app/purchases）
+  if (part === 'vendors' || part === 'vendorOrders' || part === 'purchases' || part === 'poNew' || part === 'po') {
+    if (ctx.disabledFeatures?.has('inventory')) return json({ ok: false, error: 'この機能は使えません', useWeb: true }, 403);
+    const supabase = await createClient();
+    const org = ctx.organizationId ?? '';
+    const canManage = can(ctx.role, 'vendors.manage');
+    if (part === 'vendors') {
+      const st = url.searchParams.get('status') ?? '';
+      const rows = await loadVendorRows(supabase, org, {
+        q: (url.searchParams.get('q') ?? '').slice(0, 100) || undefined,
+        status: ['active', 'inactive', 'deleted'].includes(st) ? st : undefined,
+      });
+      return json({ ok: true, rows, canManage });
+    }
+    if (part === 'vendorOrders') {
+      const id = url.searchParams.get('id');
+      if (!isUuid(id)) return json({ ok: false, error: '仕入先が見つかりません' }, 404);
+      return json({ ok: true, rows: await getVendorRecentOrders(id) });
+    }
+    if (part === 'po') {
+      const id = url.searchParams.get('id');
+      if (!isUuid(id)) return json({ ok: false, error: '発注書が見つかりません' }, 404);
+      const po = await loadPurchaseOrderDetail(supabase, org, id);
+      if (!po) return json({ ok: false, error: '発注書が見つかりません' }, 404);
+      return json({ ok: true, po, canManage });
+    }
+    if (part === 'poNew') {
+      const store = ctx.currentStore;
+      if (!store) return json({ ok: false, error: '店舗を選択してください', useWeb: true }, 404);
+      return json({ ok: true, store: { id: store.id, name: store.name }, ...(await loadNativePoNew(supabase, org, store.id)) });
+    }
+    const storeIds = ctx.currentStore ? [ctx.currentStore.id] : ctx.stores.map((s) => s.id);
+    const date = (k: string) => {
+      const v = url.searchParams.get(k);
+      return v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : undefined;
+    };
+    const status = url.searchParams.get('status') ?? '';
+    const vendor = url.searchParams.get('vendor');
+    const list = await loadPurchaseOrderRows(supabase, org, storeIds, {
+      status: ['draft', 'requested', 'approved', 'ordered', 'partially_received', 'received', 'cancelled'].includes(status) ? status : undefined,
+      vendor: isUuid(vendor) ? (vendor as string) : undefined,
+      from: date('from'),
+      to: date('to'),
+    });
+    return json({ ok: true, ...list, canManage, canCsv: can(ctx.role, 'csv.export'), storeId: ctx.currentStore?.id ?? null });
   }
 
   // 仕入・経費（Web の /app/expenses。上にお知らせ&アラート）
@@ -635,6 +687,46 @@ export async function POST(request: Request) {
           return json({ ok: true });
         case 'invTransferCancel':
           await cancelStockTransfer(ia.id, ia.reason);
+          return json({ ok: true });
+      }
+    } catch (e) {
+      return json({ ok: false, error: errorText(e, 'うまくいきませんでした。もう一度お試しください') }, 400);
+    }
+  }
+
+  // 仕入先・発注の操作（中身は Web と同じ Server Action。どれも vendors.manage。2026-10-24）
+  if (raw && typeof raw === 'object' && isNativePurchasingActionType((raw as { type?: unknown }).type)) {
+    const parsedPur = parseNativePurchasingAction(raw);
+    if (!parsedPur.ok) return json({ ok: false, error: parsedPur.error }, 400);
+    if (ctx.disabledFeatures?.has('inventory')) return json({ ok: false, error: 'この機能は使えません', useWeb: true }, 403);
+    if (!can(ctx.role, 'vendors.manage')) return json({ ok: false, error: 'この操作を行う権限がありません' }, 403);
+    // Route Handler では requirePermission がお店の回線を見ないので、ここで見る（ほかの操作と同じ）
+    const purProblem = await networkProblem(ctx);
+    if (purProblem) return json({ ok: false, error: purProblem }, 403);
+    const pa = parsedPur.action;
+    try {
+      switch (pa.type) {
+        case 'vendorSave':
+          if (pa.id) await updateVendor(pa.id, pa.input);
+          else await createVendor(pa.input);
+          return json({ ok: true });
+        case 'vendorDelete':
+          await deleteVendor(pa.id, pa.reason);
+          return json({ ok: true });
+        case 'poCreate': {
+          const store = ctx.currentStore;
+          if (!store) return json({ ok: false, error: '店舗を選択してください' }, 400);
+          const id = await createPurchaseOrder({ storeId: store.id, vendorId: pa.vendorId, expectedAt: pa.expectedAt, note: pa.note, lines: pa.lines });
+          return json({ ok: true, id });
+        }
+        case 'poStatus':
+          await changePurchaseOrderStatus(pa.id, pa.action);
+          return json({ ok: true });
+        case 'poCancel':
+          await cancelPurchaseOrder(pa.id, pa.reason);
+          return json({ ok: true });
+        case 'poReceive':
+          await receiveItems(pa.id, pa.receipts);
           return json({ ok: true });
       }
     } catch (e) {
