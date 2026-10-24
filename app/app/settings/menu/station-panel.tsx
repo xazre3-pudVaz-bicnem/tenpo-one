@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react';
 import { Select } from '@/components/ui/input';
 import { useToast } from '@/components/ui/toast';
-import { updateCategoryStation } from './actions';
+import { updateCategoryStation, updateCategoryOrderSlip } from './actions';
 
 const STATION_OPTIONS = [
   { value: 'kitchen', label: 'キッチン' },
@@ -16,6 +16,7 @@ export interface StationCategoryRow {
   id: string;
   name: string;
   station: string;
+  printOrderSlip?: boolean;
 }
 
 /**
@@ -42,6 +43,15 @@ export function StationPanel({ categories }: { categories: StationCategoryRow[] 
     });
   };
 
+  const toggleOrderSlip = (id: string, enabled: boolean) => {
+    startTransition(async () => {
+      const result = await updateCategoryOrderSlip(id, enabled);
+      if (result.error) { toast(result.error, 'error'); return; }
+      setRows((current) => current.map((c) => c.id === id ? { ...c, printOrderSlip: enabled } : c));
+      toast('会計伝票の自動印刷設定を保存しました');
+    });
+  };
+
   if (rows.length === 0) {
     return <p className="text-sm text-gray-500">カテゴリが登録されていません</p>;
   }
@@ -56,6 +66,11 @@ export function StationPanel({ categories }: { categories: StationCategoryRow[] 
         {rows.map((c) => (
           <li key={c.id} className="flex items-center justify-between gap-3 rounded-lg border border-gray-200 px-3 py-2">
             <span className="min-w-0 truncate text-sm text-gray-700">{c.name}</span>
+            <label className="flex items-center gap-2 text-xs text-gray-600">
+              <input type="checkbox" checked={c.printOrderSlip === true} disabled={pending}
+                onChange={(e) => toggleOrderSlip(c.id, e.target.checked)} />
+              注文時に会計伝票を印刷
+            </label>
             <Select
               className="w-32 shrink-0"
               value={c.station}

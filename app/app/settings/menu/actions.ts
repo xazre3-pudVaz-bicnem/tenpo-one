@@ -224,6 +224,27 @@ export async function updateCategoryStation(id: string, station: string): Promis
   return {};
 }
 
+/** 注文時の会計伝票（カテゴリごとに明示的に有効化）。 */
+export async function updateCategoryOrderSlip(id: string, enabled: boolean): Promise<ActionResult> {
+  const ctx = await requirePermission('menu.manage');
+  if (typeof enabled !== 'boolean') return { error: '設定値が不正です' };
+  const supabase = await createClient();
+  const { data: category } = await supabase.from('menu_categories').select('id, store_id')
+    .eq('id', id).eq('organization_id', ctx.organizationId).eq('status', 'active').maybeSingle();
+  if (!category || (category.store_id && !ctx.isHq && !ctx.stores.some((s) => s.id === category.store_id))) {
+    return { error: '対象カテゴリにアクセス権がありません' };
+  }
+  const { error } = await supabase.from('menu_categories').update({ print_order_slip: enabled, updated_by: ctx.userId })
+    .eq('id', id).eq('organization_id', ctx.organizationId);
+  if (error) return { error: `会計伝票の設定を保存できませんでした: ${error.message}` };
+  await supabase.rpc('log_audit', { p_org: ctx.organizationId, p_store: category.store_id,
+    p_action: 'settings.menu.category_order_slip', p_target_table: 'menu_categories', p_target_id: id,
+    p_before: null, p_after: { print_order_slip: enabled }, p_note: null });
+  revalidatePath('/app/settings/categories');
+  revalidatePath('/app/settings/menu');
+  return {};
+}
+
 /** 商品の削除（論理削除） */
 export async function deleteMenuItem(id: string): Promise<ActionResult> {
   const ctx = await requirePermission('menu.manage');
