@@ -549,7 +549,6 @@ struct NativeLedgerView: View {
             if p.isClosedDay {
                 Text("定休日").font(.system(size: 13, weight: .bold)).foregroundColor(NLColor.muted)
             }
-            Text("営業 \(nlHm(p.openMin))〜\(nlHm(p.closeMin))").font(.system(size: 13)).monospacedDigit().foregroundColor(NLColor.muted)
         }
         .padding(.horizontal, 16).padding(.vertical, 10)
     }
