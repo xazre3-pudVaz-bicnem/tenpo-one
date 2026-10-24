@@ -6,6 +6,8 @@ enum GIColor {
     static let navy = Color(hex: 0x171333)
     static let blue = Color(hex: 0x2A6FE6)
     static let line = Color(hex: 0xDCE3EF)
+    /// うすいネイビー（選んだ顧客の行・＋−のボタンの地）
+    static let navySoft = Color(hex: 0xECEEF6)
 }
 
 // お客様情報（ネイティブ）。2026-10-24 Ronnie「レジは全部ネイティブに」
