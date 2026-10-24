@@ -323,7 +323,6 @@ final class AppState: ObservableObject {
         nativeOwnerHome = false
         phoneHandy = nil
         phoneReservations = nil
-        phoneReservations = nil
         mode = newMode
         webSession = UUID()
     }
