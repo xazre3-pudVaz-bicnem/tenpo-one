@@ -115,6 +115,8 @@ struct NativeHomeView: View {
     var onFloor: () -> Void = {}
     /// ハンディQR をネイティブで大きく出す（2026-10-24）
     @State private var handyQrOpen = false
+    /// テーブルのお客様QR（印刷・再発行）をネイティブで（2026-10-24 Ronnie「QR印刷・再発行をネイティブに」）。ホームの上に重ねる
+    @State private var tableQrOpen = false
 
     private static let blue = Color(hex: 0x1A5AD6)
     private static let blueDeep = Color(hex: 0x0A3FA8)
@@ -190,6 +192,13 @@ struct NativeHomeView: View {
         .sheet(isPresented: $handyQrOpen) {
             NativeHandyQrSheet(onClose: { handyQrOpen = false }, onWeb: { path in handyQrOpen = false; onWeb(path) })
         }
+        .overlay {
+            if tableQrOpen {
+                NativeTableQrScreen(onClose: { tableQrOpen = false })
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeOut(duration: 0.18), value: tableQrOpen)
         .onAppear { model.start() }
         .onDisappear { model.stop() }
     }
@@ -221,6 +230,16 @@ struct NativeHomeView: View {
                                 .background(Capsule().fill(Color(hex: 0xE53935)))
                         }
                     }
+                }
+                .buttonStyle(PressableStyle())
+                Button { tableQrOpen = true } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "qrcode.viewfinder")
+                        Text("テーブルQR")
+                    }
+                    .font(.system(size: 15, weight: .bold)).foregroundColor(.white)
+                    .padding(.horizontal, 14).padding(.vertical, 9)
+                    .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white.opacity(0.10)))
                 }
                 .buttonStyle(PressableStyle())
                 Button { handyQrOpen = true } label: {
