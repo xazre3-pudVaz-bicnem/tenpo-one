@@ -275,10 +275,10 @@ struct NativeTableCard: View {
                         HStack(spacing: 4) {
                             // 印は光るように（色つき・うすい光）。プランを使っているとき・予約のタグがあるときだけ出る
                             // （2026-10-24 21:31 Ronnie「飲み放題の印は光るように。呼ばれたとき・プランを使うときだけ」）
-                            ForEach(marks.prefix(4), id: \.self) { ic in
+                            ForEach(marks.prefix(3), id: \.self) { ic in
                                 let c = Self.markColor(ic)
-                                Image(systemName: ic).font(.system(size: 13, weight: .bold)).foregroundColor(.white)
-                                    .frame(width: 26, height: 26)
+                                Image(systemName: ic).font(.system(size: 12, weight: .bold)).foregroundColor(.white)
+                                    .frame(width: 24, height: 24)
                                     .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(c))
                                     .shadow(color: c.opacity(0.55), radius: 5, y: 1)
                             }
@@ -290,6 +290,7 @@ struct NativeTableCard: View {
                         Text(order.map { "\($0.guestCount)名" } ?? "\(table.capacityMax)名席")
                     }
                     .font(.system(size: 13, weight: .semibold)).monospacedDigit().foregroundColor(NFColor.ink2)
+                    .lineLimit(1).fixedSize()
                 }
                 // 席の印（○○○○）は出さない（2026-10-24 21:36 Ronnie「番号の下の ○○○○ はいらない」）
                 // 呼び出しの中身（お会計希望・お水×2…）

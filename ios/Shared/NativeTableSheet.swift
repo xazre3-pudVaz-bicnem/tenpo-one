@@ -52,7 +52,8 @@ struct NativeTableSheet: View {
             // 押した卓のところに、矢印つきで出す（下 → 上 → 横の順に入る所。iPad のポップオーバーと同じ。2026-10-24 Ronnie）
             // 高さは Layout で測る（preference で測る方式は実機で 0 のままになり潰れた）
             // どの卓を押しても画面の真ん中に出す（上下左右の真ん中。2026-10-24 Ronnie）→ 矢印は出さない
-            NFPopoverLayout(width: Self.width, maxHeight: 760, anchor: nil) {
+            // 上の端はいつも同じ高さ（中身の高さで出る場所が変わらないように。2026-10-24 21:44 Ronnie「いつも同じ場所に」）
+            NFPopoverLayout(width: Self.width, maxHeight: 760, anchor: nil, fixedTop: 150) {
                 popup
                 NFPopoverArrow().fill(.regularMaterial).frame(width: 26, height: 12)
                 NFPopoverArrow().fill(.regularMaterial).frame(width: 26, height: 12).rotationEffect(.degrees(180))
@@ -650,6 +651,8 @@ struct NFPopoverLayout: Layout {
     var anchor: CGRect?
     var margin: CGFloat = 10
     var topInset: CGFloat = 64
+    /// anchor が無いとき、上の端をこの高さにそろえる（nil なら上下の真ん中）
+    var fixedTop: CGFloat? = nil
     private let gap: CGFloat = 12
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
@@ -684,6 +687,8 @@ struct NFPopoverLayout: Layout {
             } else {
                 x = clamp(a.midX - w / 2, margin, W - w - margin); y = clamp(a.minY, topInset, H - h - margin)
             }
+        } else if let top = fixedTop {
+            x = max(margin, (W - w) / 2); y = max(topInset, min(top, H - h - margin))
         } else {
             x = max(margin, (W - w) / 2); y = max(margin, (H - h) / 2)
         }
