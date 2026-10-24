@@ -27,7 +27,21 @@ export type NativeSettingsPageAction =
   | { type: 'taxSave'; id: string | null; name: string; rate: number; isReduced: boolean; isInclusive: boolean; isDefault: boolean }
   | { type: 'taxDelete'; id: string }
   /** 会員・ポイント（/app/settings/loyalty。saveLoyaltySettings） */
-  | { type: 'loyaltySave'; enabled: boolean; yenPerPoint: number; pointValue: number; expiryMonths: number | null };
+  | { type: 'loyaltySave'; enabled: boolean; yenPerPoint: number; pointValue: number; expiryMonths: number | null }
+  /** 異常検知の閾値（/app/settings/alerts。upsertAlertRule / resetAlertRuleToDefault。scope: store＝この店／org＝企業既定） */
+  | { type: 'alertSave'; scope: 'store' | 'org'; ruleKey: string; threshold: number; enabled: boolean }
+  | { type: 'alertReset'; ruleKey: string }
+  /** 承認ルール（/app/settings/approvals。saveApprovalRule / deleteApprovalRule） */
+  | {
+      type: 'approvalSave';
+      id: string | null;
+      target: 'invoice' | 'expense' | 'petty_cash' | 'purchase_order';
+      minAmount: number;
+      maxAmount: number | null;
+      approverRole: 'store_manager' | 'area_manager' | 'hq_accounting' | 'hq_admin' | 'org_owner';
+      allowSelfApprove: boolean;
+    }
+  | { type: 'approvalDelete'; id: string };
 
 export interface NativeStoreFields {
   name: string;
@@ -72,6 +86,10 @@ export const NATIVE_SETTINGS_PAGE_ACTION_TYPES: readonly NativeSettingsPageActio
   'taxSave',
   'taxDelete',
   'loyaltySave',
+  'alertSave',
+  'alertReset',
+  'approvalSave',
+  'approvalDelete',
 ];
 
 export function isNativeSettingsPageActionType(v: unknown): v is NativeSettingsPageActionType {
@@ -210,7 +228,64 @@ export function parseNativeSettingsPageAction(raw: unknown): Parsed {
       action: { type: 'loyaltySave', enabled: b.enabled === true, yenPerPoint: b.yenPerPoint as number, pointValue: b.pointValue as number, expiryMonths: (b.expiryMonths as number | null | undefined) ?? null },
     };
   }
+  if (b.type === 'alertSave') {
+    if (typeof b.ruleKey !== 'string' || !/^[a-z_]{1,60}$/.test(b.ruleKey)) return bad('不正な項目です');
+    if (typeof b.threshold !== 'number' || !Number.isFinite(b.threshold) || b.threshold < 0) return bad('閾値を正しく入力してください');
+    return { ok: true, action: { type: 'alertSave', scope: b.scope === 'org' ? 'org' : 'store', ruleKey: b.ruleKey, threshold: b.threshold, enabled: b.enabled !== false } };
+  }
+  if (b.type === 'alertReset') {
+    if (typeof b.ruleKey !== 'string' || !/^[a-z_]{1,60}$/.test(b.ruleKey)) return bad('不正な項目です');
+    return { ok: true, action: { type: 'alertReset', ruleKey: b.ruleKey } };
+  }
+  if (b.type === 'approvalSave') {
+    const targets = ['invoice', 'expense', 'petty_cash', 'purchase_order'] as const;
+    const roles = ['store_manager', 'area_manager', 'hq_accounting', 'hq_admin', 'org_owner'] as const;
+    const target = targets.find((t) => t === b.target);
+    const role = roles.find((r) => r === b.approverRole);
+    if (!target) return bad('対象が正しくありません');
+    if (!role) return bad('承認ロールが正しくありません');
+    if (typeof b.minAmount !== 'number' || !Number.isInteger(b.minAmount) || b.minAmount < 0) return bad('下限金額は0以上の整数で入力してください');
+    if (!(b.maxAmount === null || b.maxAmount === undefined || (typeof b.maxAmount === 'number' && Number.isInteger(b.maxAmount)))) return bad('上限金額は整数で入力してください（空欄=上限なし）');
+    const id = b.id == null || b.id === '' ? null : isUuid(b.id) ? b.id : false;
+    if (id === false) return bad('ルールが見つかりません');
+    return {
+      ok: true,
+      action: { type: 'approvalSave', id, target, minAmount: b.minAmount, maxAmount: (b.maxAmount as number | null | undefined) ?? null, approverRole: role, allowSelfApprove: b.allowSelfApprove === true },
+    };
+  }
+  if (b.type === 'approvalDelete') {
+    if (!isUuid(b.id)) return bad('ルールが見つかりません');
+    return { ok: true, action: { type: 'approvalDelete', id: b.id } };
+  }
   return bad();
+}
+
+/** 異常検知の閾値の画面の読み込み（GET ?part=alerts） */
+export interface NativeAlertsPayload {
+  store: { id: string; name: string };
+  canEditStore: boolean;
+  canEditOrg: boolean;
+  items: {
+    ruleKey: string;
+    label: string;
+    unit: string;
+    defaultValue: number;
+    orgValue: number | null;
+    orgEnabled: boolean;
+    storeValue: number | null;
+    storeEnabled: boolean;
+    effectiveValue: number;
+    effectiveSource: 'store' | 'org' | 'default';
+  }[];
+}
+
+/** 承認ルールの画面の読み込み（GET ?part=approvals） */
+export interface NativeApprovalsPayload {
+  store: { id: string; name: string };
+  canEdit: boolean;
+  targets: { id: string; label: string }[];
+  roles: { id: string; label: string }[];
+  rows: { id: string; target: string; minAmount: number; maxAmount: number | null; approverRole: string; allowSelfApprove: boolean }[];
 }
 
 /** 税率の画面の読み込み（GET ?part=tax） */

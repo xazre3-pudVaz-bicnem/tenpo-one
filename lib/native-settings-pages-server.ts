@@ -15,8 +15,14 @@ import { addHoliday, deleteHoliday, saveBusinessHours, saveLunchUntil, saveNextF
 import { updateStoreInfo } from '@/app/app/settings/store/actions';
 import { deleteTaxRate, saveTaxRate } from '@/app/app/settings/tax/actions';
 import { saveLoyaltySettings } from '@/app/app/settings/loyalty/actions';
+import { resetAlertRuleToDefault, upsertAlertRule } from '@/app/app/settings/alerts/actions';
+import { ALERT_RULE_DEFAULTS, ALERT_RULE_KEYS, ALERT_RULE_LABELS, ALERT_RULE_UNITS, type AlertRuleKey } from '@/components/dashboard/alert-rules';
+import { deleteApprovalRule, saveApprovalRule } from '@/app/app/settings/approvals/actions';
+import { ROLE_LABELS } from '@/lib/permissions';
 import { resolveSiteOrigin } from '@/lib/site-origin';
 import type {
+  NativeAlertsPayload,
+  NativeApprovalsPayload,
   NativeClerksPayload,
   NativeHoursPayload,
   NativeLoyaltyPayload,
@@ -30,7 +36,7 @@ type Supabase = Awaited<ReturnType<typeof createClient>>;
 type Store = { id: string; name: string };
 
 /** 設定の中の画面の名前（GET ?part=） */
-export const NATIVE_SETTINGS_PAGE_PARTS = ['soldout', 'clerks', 'hours', 'store', 'tax', 'loyalty'] as const;
+export const NATIVE_SETTINGS_PAGE_PARTS = ['soldout', 'clerks', 'hours', 'store', 'tax', 'loyalty', 'alerts', 'approvals'] as const;
 export type NativeSettingsPagePart = (typeof NATIVE_SETTINGS_PAGE_PARTS)[number];
 export function isNativeSettingsPagePart(v: unknown): v is NativeSettingsPagePart {
   return typeof v === 'string' && (NATIVE_SETTINGS_PAGE_PARTS as readonly string[]).includes(v);
@@ -46,7 +52,18 @@ export async function loadNativeSettingsPage(
   supabase: Supabase,
   store: Store
 ): Promise<
-  | { ok: true; payload: NativeSoldOutPayload | NativeClerksPayload | NativeHoursPayload | NativeStorePayload | NativeTaxPayload | NativeLoyaltyPayload }
+  | {
+      ok: true;
+      payload:
+        | NativeSoldOutPayload
+        | NativeClerksPayload
+        | NativeHoursPayload
+        | NativeStorePayload
+        | NativeTaxPayload
+        | NativeLoyaltyPayload
+        | NativeAlertsPayload
+        | NativeApprovalsPayload;
+    }
   | { ok: false; error: string }
 > {
   if (part === 'soldout') {
@@ -196,6 +213,69 @@ export async function loadNativeSettingsPage(
       },
     };
   }
+  if (part === 'alerts') {
+    const { data: rows } = await supabase
+      .from('alert_rules')
+      .select('store_id, rule_key, threshold, enabled')
+      .eq('organization_id', ctx.organizationId)
+      .or(`store_id.is.null,store_id.eq.${store.id}`);
+    const orgByKey = new Map((rows ?? []).filter((r) => r.store_id === null).map((r) => [r.rule_key as string, r]));
+    const storeByKey = new Map((rows ?? []).filter((r) => r.store_id === store.id).map((r) => [r.rule_key as string, r]));
+    return {
+      ok: true,
+      payload: {
+        store,
+        canEditStore: can(ctx.role, 'store.settings'),
+        canEditOrg: ctx.role === 'org_owner' || ctx.role === 'hq_admin',
+        items: ALERT_RULE_KEYS.map((key: AlertRuleKey) => {
+          const o = orgByKey.get(key);
+          const st = storeByKey.get(key);
+          return {
+            ruleKey: key,
+            label: ALERT_RULE_LABELS[key],
+            unit: ALERT_RULE_UNITS[key],
+            defaultValue: ALERT_RULE_DEFAULTS[key],
+            orgValue: o ? Number(o.threshold) : null,
+            orgEnabled: o ? o.enabled !== false : true,
+            storeValue: st ? Number(st.threshold) : null,
+            storeEnabled: st ? st.enabled !== false : true,
+            effectiveValue: st ? Number(st.threshold) : o ? Number(o.threshold) : ALERT_RULE_DEFAULTS[key],
+            effectiveSource: (st ? 'store' : o ? 'org' : 'default') as 'store' | 'org' | 'default',
+          };
+        }),
+      },
+    };
+  }
+  if (part === 'approvals') {
+    const { data } = await supabase
+      .from('approval_rules')
+      .select('id, target, min_amount, max_amount, approver_role, allow_self_approve')
+      .eq('organization_id', ctx.organizationId)
+      .order('target')
+      .order('min_amount');
+    return {
+      ok: true,
+      payload: {
+        store,
+        canEdit: can(ctx.role, 'org.settings'),
+        targets: [
+          { id: 'invoice', label: '請求書' },
+          { id: 'expense', label: '経費' },
+          { id: 'petty_cash', label: '小口現金' },
+          { id: 'purchase_order', label: '発注' },
+        ],
+        roles: (['store_manager', 'area_manager', 'hq_accounting', 'hq_admin', 'org_owner'] as const).map((r) => ({ id: r, label: ROLE_LABELS[r] })),
+        rows: (data ?? []).map((r) => ({
+          id: r.id as string,
+          target: r.target as string,
+          minAmount: Number(r.min_amount),
+          maxAmount: r.max_amount == null ? null : Number(r.max_amount),
+          approverRole: r.approver_role as string,
+          allowSelfApprove: r.allow_self_approve === true,
+        })),
+      },
+    };
+  }
   return { ok: false, error: '画面が見つかりません' };
 }
 
@@ -236,5 +316,22 @@ export async function runNativeSettingsPageAction(
       return done(await deleteTaxRate(action.id));
     case 'loyaltySave':
       return done(await saveLoyaltySettings({ enabled: action.enabled, yenPerPoint: action.yenPerPoint, pointValue: action.pointValue, expiryMonths: action.expiryMonths }));
+    case 'alertSave': {
+      if (!(ALERT_RULE_KEYS as readonly string[]).includes(action.ruleKey)) return { ok: false, error: '不正な項目です' };
+      // この Server Action はエラーを throw する → 呼び出し側（route）が errorText で返す
+      await upsertAlertRule({ storeId: action.scope === 'org' ? null : store.id, ruleKey: action.ruleKey as AlertRuleKey, threshold: action.threshold, enabled: action.enabled });
+      return { ok: true };
+    }
+    case 'alertReset': {
+      if (!(ALERT_RULE_KEYS as readonly string[]).includes(action.ruleKey)) return { ok: false, error: '不正な項目です' };
+      await resetAlertRuleToDefault(store.id, action.ruleKey as AlertRuleKey);
+      return { ok: true };
+    }
+    case 'approvalSave':
+      return done(
+        await saveApprovalRule({ id: action.id ?? undefined, target: action.target, minAmount: action.minAmount, maxAmount: action.maxAmount, approverRole: action.approverRole, allowSelfApprove: action.allowSelfApprove })
+      );
+    case 'approvalDelete':
+      return done(await deleteApprovalRule(action.id));
   }
 }

@@ -13,6 +13,8 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
     case store = "store"
     case tax = "tax"
     case loyalty = "loyalty"
+    case alerts = "alerts"
+    case approvals = "approvals"
     var id: String { rawValue }
 
     /// Web の道（クエリは見ない）
@@ -24,6 +26,8 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
         case .store: return "/app/settings/store"
         case .tax: return "/app/settings/tax"
         case .loyalty: return "/app/settings/loyalty"
+        case .alerts: return "/app/settings/alerts"
+        case .approvals: return "/app/settings/approvals"
         }
     }
     var title: String {
@@ -34,6 +38,8 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
         case .store: return "店舗情報"
         case .tax: return "税率"
         case .loyalty: return "会員・ポイント"
+        case .alerts: return "異常検知の閾値"
+        case .approvals: return "承認ルール"
         }
     }
     var en: String {
@@ -44,6 +50,8 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
         case .store: return "Store"
         case .tax: return "Tax"
         case .loyalty: return "Loyalty"
+        case .alerts: return "Alerts"
+        case .approvals: return "Approvals"
         }
     }
 
@@ -65,6 +73,8 @@ struct NativeSettingsPageScreen: View {
         case .store: NativeStoreScreen()
         case .tax: NativeTaxScreen()
         case .loyalty: NativeLoyaltyScreen()
+        case .alerts: NativeAlertsScreen()
+        case .approvals: NativeApprovalsScreen()
         }
     }
 }
@@ -1477,5 +1487,238 @@ struct NativeLoyaltyView: View {
             }
         }
         .task { await model.refresh() }
+    }
+}
+
+// MARK: - 共通：読み込みと操作をまとめた土台（設定の中の画面のモデル）
+
+@MainActor
+class NSPModel<P: Decodable>: ObservableObject {
+    @Published var payload: P?
+    @Published var error: String?
+    @Published var toast: String?
+    @Published var busy: String?
+    let part: String
+    init(part: String) { self.part = part }
+
+    func refresh() async {
+        do {
+            if payload == nil, let saved = NativeAPI.cached(P.self, NSPApi.cachedURL(part: part)) { payload = saved; loaded(saved) }
+            let (p, _) = try await NSPApi.load(P.self, part: part)
+            payload = p
+            loaded(p)
+            error = nil
+        } catch {
+            if payload == nil { self.error = (error as? NativeAPIError)?.message ?? "通信できませんでした" }
+        }
+    }
+    /// 読み込めたときに入力欄へ写す（子で上書き）
+    func loaded(_ p: P) {}
+
+    /// 操作して読み直す。失敗したら toast。成功したら true
+    func run(_ key: String, _ body: [String: Any], done: String? = nil) async -> Bool {
+        guard busy == nil else { return false }
+        busy = key
+        defer { busy = nil }
+        let r = await NSPApi.post(body)
+        guard r.ok else { toast = r.error ?? "うまくいきませんでした"; return false }
+        await refresh()
+        if let done { toast = done }
+        return true
+    }
+}
+
+// MARK: - 異常検知の閾値（Web の /app/settings/alerts と同じ）
+
+struct NALItem: Codable, Identifiable, Hashable {
+    let ruleKey: String; let label: String; let unit: String; let defaultValue: Double
+    let orgValue: Double?; let orgEnabled: Bool; let storeValue: Double?; let storeEnabled: Bool
+    let effectiveValue: Double; let effectiveSource: String
+    var id: String { ruleKey }
+}
+struct NALPayload: Codable { let store: NFNamed; let canEditStore: Bool; let canEditOrg: Bool; let items: [NALItem] }
+
+@MainActor
+final class NativeAlertsModel: NSPModel<NALPayload> {
+    /// 入力中の値（ruleKey → 文字）
+    @Published var text: [String: String] = [:]
+    init() { super.init(part: "alerts") }
+    override func loaded(_ p: NALPayload) {
+        for it in p.items where text[it.ruleKey] == nil { text[it.ruleKey] = Self.num(it.storeValue ?? it.effectiveValue) }
+    }
+    static func num(_ v: Double) -> String { v == v.rounded() ? String(Int(v)) : String(v) }
+    func save(_ it: NALItem, scope: String) async {
+        guard let v = Double((text[it.ruleKey] ?? "").trimmingCharacters(in: .whitespaces)), v >= 0 else { toast = "閾値を正しく入力してください"; return }
+        let enabled = scope == "org" ? it.orgEnabled : it.storeEnabled
+        _ = await run(it.ruleKey, ["type": "alertSave", "scope": scope, "ruleKey": it.ruleKey, "threshold": v, "enabled": enabled], done: scope == "org" ? "企業既定を保存しました" : "この店の値を保存しました")
+    }
+    func toggle(_ it: NALItem, scope: String) async {
+        let enabled = scope == "org" ? !it.orgEnabled : !it.storeEnabled
+        let v = scope == "org" ? (it.orgValue ?? it.defaultValue) : (it.storeValue ?? it.effectiveValue)
+        _ = await run(it.ruleKey, ["type": "alertSave", "scope": scope, "ruleKey": it.ruleKey, "threshold": v, "enabled": enabled], done: enabled ? "有効にしました" : "無効にしました")
+    }
+    func reset(_ it: NALItem) async {
+        if await run(it.ruleKey, ["type": "alertReset", "ruleKey": it.ruleKey], done: "企業既定に戻しました") { text[it.ruleKey] = nil; if let p = payload { loaded(p) } }
+    }
+}
+
+struct NativeAlertsScreen: View {
+    @StateObject private var model = NativeAlertsModel()
+    @EnvironmentObject var state: AppState
+    var body: some View { NativeAlertsView(model: model, onBack: { state.goNativeSettings() }) }
+}
+
+struct NativeAlertsView: View {
+    @ObservedObject var model: NativeAlertsModel
+    let onBack: () -> Void
+    var body: some View {
+        NSPFrame(storeName: model.payload?.store.name ?? "", title: "異常検知の閾値", en: "Alerts", loaded: model.payload != nil, error: model.error, toast: $model.toast, onBack: onBack, retry: { await model.refresh() }) {
+            if let p = model.payload {
+                NSPCard(title: "閾値", en: "Thresholds", note: "この店の値 › 企業既定 › 標準 の順に使います。ホームの「お知らせ・アラート」に出ます") {
+                    VStack(spacing: 0) {
+                        ForEach(p.items) { it in
+                            let busy = model.busy == it.ruleKey
+                            HStack(alignment: .center, spacing: 14) {
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(it.label).font(.system(size: 15, weight: .bold)).foregroundColor(NFColor.ink)
+                                    HStack(spacing: 6) {
+                                        Text("いま：\(NativeAlertsModel.num(it.effectiveValue))\(it.unit)").font(.system(size: 12.5, weight: .bold)).foregroundColor(NFColor.iris)
+                                        Text(it.effectiveSource == "store" ? "（この店）" : it.effectiveSource == "org" ? "（企業既定）" : "（標準）").font(.system(size: 12)).foregroundColor(NFColor.ink3)
+                                        if it.effectiveSource == "store" && !it.storeEnabled || it.effectiveSource == "org" && !it.orgEnabled { Text("無効").font(.system(size: 11, weight: .heavy)).foregroundColor(.white).padding(.horizontal, 6).padding(.vertical, 1).background(Capsule().fill(NFColor.ink3)) }
+                                    }
+                                }
+                                .frame(width: 300, alignment: .leading)
+                                Spacer(minLength: 0)
+                                if p.canEditStore {
+                                    NSPInput(text: Binding(get: { model.text[it.ruleKey] ?? "" }, set: { model.text[it.ruleKey] = $0 }), placeholder: NativeAlertsModel.num(it.defaultValue), width: 150, keyboard: .decimalPad, trailing: it.unit)
+                                    NSPButton(text: "この店で保存", primary: true, busy: busy) { Task { await model.save(it, scope: "store") } }
+                                    if p.canEditOrg { NSPButton(text: "企業既定に", busy: busy) { Task { await model.save(it, scope: "org") } } }
+                                    if it.storeValue != nil {
+                                        NSPButton(text: "有効/無効", icon: it.storeEnabled ? "bell.fill" : "bell.slash", busy: busy) { Task { await model.toggle(it, scope: "store") } }
+                                        NSPButton(text: "既定に戻す", icon: "arrow.uturn.backward", busy: busy) { Task { await model.reset(it) } }
+                                    }
+                                }
+                            }
+                            .padding(.horizontal, 18).padding(.vertical, 10)
+                            .overlay(alignment: .bottom) { Rectangle().fill(NFColor.line).frame(height: 1) }
+                        }
+                    }
+                }
+            }
+        }
+        .task { await model.refresh() }
+    }
+}
+
+// MARK: - 承認ルール（Web の /app/settings/approvals と同じ）
+
+struct NAPRow: Codable, Identifiable, Hashable { let id: String; let target: String; let minAmount: Int; let maxAmount: Int?; let approverRole: String; let allowSelfApprove: Bool }
+struct NAPPayload: Codable { let store: NFNamed; let canEdit: Bool; let targets: [NSTLabeled]; let roles: [NSTLabeled]; let rows: [NAPRow] }
+
+@MainActor
+final class NativeApprovalsModel: NSPModel<NAPPayload> {
+    @Published var showForm = false
+    @Published var editingId: String?
+    @Published var target = "invoice"
+    @Published var minAmount = "0"
+    @Published var maxAmount = ""
+    @Published var role = "store_manager"
+    @Published var allowSelf = false
+    init() { super.init(part: "approvals") }
+
+    func startAdd() { editingId = nil; target = "invoice"; minAmount = "0"; maxAmount = ""; role = "store_manager"; allowSelf = false; showForm = true }
+    func startEdit(_ r: NAPRow) { editingId = r.id; target = r.target; minAmount = String(r.minAmount); maxAmount = r.maxAmount.map { String($0) } ?? ""; role = r.approverRole; allowSelf = r.allowSelfApprove; showForm = true }
+    func save() async {
+        guard let lo = Int(minAmount.trimmingCharacters(in: .whitespaces)), lo >= 0 else { toast = "下限金額は0以上の整数で入力してください"; return }
+        let hiText = maxAmount.trimmingCharacters(in: .whitespaces)
+        let hi: Any = hiText.isEmpty ? NSNull() : (Int(hiText) ?? -1)
+        if let h = hi as? Int, h <= lo { toast = "上限金額は下限金額より大きい整数で入力してください（空欄=上限なし）"; return }
+        let body: [String: Any] = ["type": "approvalSave", "id": editingId as Any? ?? NSNull(), "target": target, "minAmount": lo, "maxAmount": hi, "approverRole": role, "allowSelfApprove": allowSelf]
+        if await run("save", body, done: editingId == nil ? "ルールを追加しました" : "ルールを保存しました") { showForm = false }
+    }
+    func delete(_ r: NAPRow) async { _ = await run(r.id, ["type": "approvalDelete", "id": r.id], done: "ルールを削除しました") }
+    func label(_ list: [NSTLabeled], _ id: String) -> String { list.first { $0.id == id }?.label ?? id }
+}
+
+struct NativeApprovalsScreen: View {
+    @StateObject private var model = NativeApprovalsModel()
+    @EnvironmentObject var state: AppState
+    var body: some View { NativeApprovalsView(model: model, onBack: { state.goNativeSettings() }) }
+}
+
+struct NativeApprovalsView: View {
+    @ObservedObject var model: NativeApprovalsModel
+    let onBack: () -> Void
+    @State private var confirmDelete: NAPRow?
+
+    var body: some View {
+        NSPFrame(storeName: model.payload?.store.name ?? "", title: "承認ルール", en: "Approvals", loaded: model.payload != nil, error: model.error, toast: $model.toast, onBack: onBack, retry: { await model.refresh() }) {
+            if let p = model.payload {
+                if p.canEdit && !model.showForm { HStack { NSPButton(text: "ルールを追加", icon: "plus", primary: true) { model.startAdd() }; Spacer() } }
+                if model.showForm { form(p) }
+                NSPCard(title: "金額帯ごとの必要承認ロール", en: "Rules", note: "請求書・経費・小口現金・発注の金額帯ごとに、だれの承認が要るか。上位のロールは下位の承認も満たします") {
+                    VStack(spacing: 0) {
+                        if p.rows.isEmpty { Text("ルールがまだありません（承認なしで通ります）").font(.system(size: 14)).foregroundColor(NFColor.ink3).padding(18) }
+                        ForEach(p.rows) { r in
+                            HStack(spacing: 12) {
+                                Text(model.label(p.targets, r.target)).font(.system(size: 13, weight: .heavy)).foregroundColor(NFColor.ink2).padding(.horizontal, 8).padding(.vertical, 3).background(Capsule().fill(NFColor.lilac)).frame(width: 110, alignment: .leading)
+                                Text("\(NT.yen(r.minAmount)) 〜 \(r.maxAmount.map { NT.yen($0) } ?? "上限なし")").font(.system(size: 15, weight: .bold)).foregroundColor(NFColor.ink).monospacedDigit().frame(width: 230, alignment: .leading)
+                                Text(model.label(p.roles, r.approverRole)).font(.system(size: 15, weight: .bold)).foregroundColor(NFColor.iris)
+                                if r.allowSelfApprove { Text("自己承認可").font(.system(size: 11, weight: .heavy)).foregroundColor(NFColor.saffron).padding(.horizontal, 7).padding(.vertical, 2).overlay(Capsule().stroke(NFColor.saffron.opacity(0.5), lineWidth: 1)) }
+                                Spacer()
+                                if p.canEdit {
+                                    NSPButton(text: "編集", icon: "pencil") { model.startEdit(r) }
+                                    NSPButton(text: "削除", icon: "trash", busy: model.busy == r.id) { confirmDelete = r }
+                                }
+                            }
+                            .padding(.horizontal, 18).frame(minHeight: 60)
+                            .overlay(alignment: .bottom) { Rectangle().fill(NFColor.line).frame(height: 1) }
+                        }
+                    }
+                }
+            }
+        }
+        .alert("ルールを削除", isPresented: Binding(get: { confirmDelete != nil }, set: { if !$0 { confirmDelete = nil } })) {
+            Button("削除する", role: .destructive) { if let r = confirmDelete { Task { await model.delete(r) } }; confirmDelete = nil }
+            Button("やめる", role: .cancel) { confirmDelete = nil }
+        } message: { Text("この承認ルールを削除します") }
+        .task { await model.refresh() }
+    }
+
+    private func form(_ p: NAPPayload) -> some View {
+        NSPCard(title: model.editingId == nil ? "ルールを追加" : "ルールを編集", en: model.editingId == nil ? "Add" : "Edit") {
+            VStack(spacing: 0) {
+                NSPRow(label: "対象") { picker(p.targets, $model.target) }
+                NSPRow(label: "下限金額") { NSPInput(text: $model.minAmount, placeholder: "0", width: 180, keyboard: .numberPad, trailing: "円") }
+                NSPRow(label: "上限金額") { NSPInput(text: $model.maxAmount, placeholder: "上限なし", width: 180, keyboard: .numberPad, trailing: "円") }
+                NSPRow(label: "必要承認ロール") { picker(p.roles, $model.role) }
+                NSPRow(label: "自己承認") {
+                    HStack(spacing: 10) {
+                        NSPToggle(on: model.allowSelf) { model.allowSelf.toggle() }
+                        Text(model.allowSelf ? "申請した本人も承認できる" : "本人は承認できない").font(.system(size: 14)).foregroundColor(NFColor.ink2)
+                    }
+                }
+                HStack(spacing: 10) {
+                    Spacer()
+                    NSPButton(text: "やめる") { model.showForm = false }
+                    NSPButton(text: "保存する", primary: true, busy: model.busy == "save") { Task { await model.save() } }
+                }
+                .padding(18)
+            }
+        }
+    }
+
+    private func picker(_ list: [NSTLabeled], _ sel: Binding<String>) -> some View {
+        HStack(spacing: 8) {
+            ForEach(list) { o in
+                Button { sel.wrappedValue = o.id } label: {
+                    Text(o.label).font(.system(size: 14, weight: .bold)).foregroundColor(sel.wrappedValue == o.id ? .white : NFColor.ink2)
+                        .padding(.horizontal, 14).frame(height: 40)
+                        .background(RoundedRectangle(cornerRadius: 10).fill(sel.wrappedValue == o.id ? NFColor.navy : Color.white))
+                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(NFColor.line, lineWidth: 1))
+                }
+                .buttonStyle(PressableStyle())
+            }
+        }
     }
 }
