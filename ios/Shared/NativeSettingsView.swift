@@ -29,7 +29,7 @@ struct NativeSettingsView: View {
         var id: String { rawValue }
         var title: String {
             switch self {
-            case .printer: return "プリンター・印刷"
+            case .printer: return "プリンター"
             case .native: return "アプリの画面"
             }
         }
@@ -453,7 +453,7 @@ struct NativeSettingsView: View {
         let locked = !model.canAdd
         let busy = model.busy
         return card(icon: "dot.radiowaves.left.and.right", title: "このiPadのプリンター（Bluetooth・USB）", en: "Receipt printer",
-                    description: "レシートプリンターとドロアは iPad と Bluetooth・USB でつなぎます（厨房・ドリンクのプリンターは LAN・Wi-Fi）") {
+                    description: "レシートプリンターとドロア（iPad と Bluetooth・USB）") {
             VStack(spacing: 0) {
                 row("プリンター利用", en: "Use printer") {
                     toggle(model.usePrinter, disabled: busy != nil || locked) { Task { await model.toggleUse() } }
@@ -591,7 +591,7 @@ struct NativeSettingsView: View {
 
     private var receiptCard: some View {
         card(icon: "printer", title: "レシートの出し先", en: "Receipt printer for this iPad",
-             description: "レシート・領収書・会計伝票・ドロア・レジ精算をどのプリンターに出すか、このiPadだけで選びます（店の設定は変わりません）。「プリンター（Bluetooth・USB）」でつないだプリンターがあれば、それになります") {
+             description: "レシート・領収書・会計伝票・ドロアを出すプリンター（このiPadだけ。店の設定は変わりません）") {
             let list = model.receiptPrinters
             if list.isEmpty {
                 Text(model.canAdd
@@ -636,7 +636,7 @@ struct NativeSettingsView: View {
 
     private var lanCard: some View {
         card(icon: "cable.connector", title: "LAN のプリンター（EPSON・SII RP-F10 など）", en: "LAN printers",
-             description: "この iPad から、お店の LAN（有線・Wi-Fi）でプリンターへ送ります。レシートも厨房・ドリンクの伝票も出ます。SII RP-F10 は自分から印刷を取りに来られないので、この方法で出します（レジの iPad は TENPO ONE アプリを開いたままに）") {
+             description: "この iPad からお店の LAN でプリンターへ送ります（レシート・厨房・ドリンク）") {
             VStack(spacing: 0) {
                 ForEach(model.lanPrinters) { p in
                     let on = model.lanOn(p.id)
@@ -675,7 +675,7 @@ struct NativeSettingsView: View {
 
     private var wifiCard: some View {
         card(icon: "wifi", title: "Wi-Fi で直接印刷（EPSON・速い）", en: "Direct Wi-Fi printing",
-             description: "ON にすると、このiPadからお店の Wi-Fi でプリンターへ直接送ります（約1秒）。つながらないときは、今まで通りプリンター自身が印刷します。アプリでは証明書の許可は要りません（iPad とプリンターを同じ Wi-Fi に）") {
+             description: "この iPad からお店の Wi-Fi でプリンターへ直接送ります（約1秒）") {
             VStack(spacing: 0) {
                 ForEach(model.wifiPrinters) { p in
                     let on = model.wifiOn(p.id)
@@ -707,7 +707,7 @@ struct NativeSettingsView: View {
 
     private var nativeCard: some View {
         card(icon: "ipad", title: "アプリのオーダー・会計画面", en: "Native screens",
-             description: "ON（既定）：この iPad では、ホーム・テーブル一覧・オーダー・会計・店舗台帳・設定などがアプリの画面（同じ並び・速い）で開き、印刷もアプリ自身が出します。OFF にすると今まで通りの Web の画面です") {
+             description: "ON：ホーム・テーブル・オーダー・会計をアプリの画面で開く（速い）。OFF：今までの Web の画面") {
             // 管理画面が決めているときはその値を見せる（端末の切り替えは効かない）
             let shown = state.adminNativePos ?? nativeOn
             VStack(alignment: .leading, spacing: 8) {
