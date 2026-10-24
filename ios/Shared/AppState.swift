@@ -4,9 +4,10 @@ import SwiftUI
 ///
 /// アプリは1つ。iPad か iPhone かで決まる（AppConfig.isPad）
 /// - レジ（iPad）：いつもレジ。ログインしていなければ /register-login
-/// - iPhone：最初に「ハンディ（スタッフ）」か「オーナー・店長」を選ぶ（あとで変えられる）
-///   - ハンディ：/handy。ログインはお店の QR を読む（/handy-join）
-///   - オーナー：/app（メール＋パスワード）。スマホでも本体の画面を開ける
+/// - iPhone：**はじめからハンディ**（2026-10-24 Ronnie「アプリを入れて QR でログインしたら、すぐハンディ。ほかは出さない」）
+///   - ハンディ：/handy。ログインはお店の QR を読む（カメラがすぐ開く → 読めたら /handy-join → ハンディ）
+///   - オーナー：/app（メール＋パスワード）。スマホでも本体の画面を開ける。
+///     ハンディの Web メニュー「アプリの使い方を変える」か、QR 画面の下の小さな文字から選ぶ（最初は出さない）
 final class AppState: ObservableObject {
     static let shared = AppState()
 
@@ -15,10 +16,12 @@ final class AppState: ObservableObject {
     }
 
     private let modeKey = "tenpo.app.mode"
+    /// ハンディが一度開けた（ログインできている）印。false なら起動してすぐカメラ（QR）を出す（2026-10-24）
+    private let handyLoggedInKey = "tenpo.handy.loggedIn"
 
     @Published var mode: Mode?
     @Published var scanning = false
-    /// ハンディでまだログインしていない（QR を読む画面を出す）
+    /// ハンディでまだログインしていない（QR を読むカメラの画面を出す）
     @Published var needsHandyLogin = false
     /// Web の画面を作り直す（モードを変えたとき）
     @Published var webSession = UUID()
@@ -96,8 +99,20 @@ final class AppState: ObservableObject {
         } else if let raw = UserDefaults.standard.string(forKey: modeKey), let saved = Mode(rawValue: raw), saved != .regi {
             mode = saved
         } else {
-            mode = nil
+            // iPhone は選ばせずにハンディ（2026-10-24）。オーナーにしたい人だけ「アプリの使い方を変える」から
+            mode = .handy
         }
+        // まだログインしたことのないハンディは、Web の返事を待たずにすぐカメラを出す（開けていればすぐ消える）
+        if mode == .handy, !UserDefaults.standard.bool(forKey: handyLoggedInKey) {
+            needsHandyLogin = true
+        }
+    }
+
+    /// ハンディの画面（/handy）が開けた＝ログインできている。カメラを消し、次の起動ではすぐハンディへ
+    func handyOpened() {
+        guard mode == .handy else { return }
+        if needsHandyLogin { needsHandyLogin = false }
+        UserDefaults.standard.set(true, forKey: handyLoggedInKey)
     }
 
     /// User-Agent に付ける印（サーバーが「アプリのどのモードか」を見分ける）
@@ -113,7 +128,8 @@ final class AppState: ObservableObject {
 
     func choose(_ newMode: Mode) {
         UserDefaults.standard.set(newMode.rawValue, forKey: modeKey)
-        needsHandyLogin = false
+        // ハンディに戻るとき、まだログインしていなければすぐカメラ
+        needsHandyLogin = newMode == .handy && !UserDefaults.standard.bool(forKey: handyLoggedInKey)
         mode = newMode
         webSession = UUID()
     }
@@ -135,8 +151,9 @@ final class AppState: ObservableObject {
             // レジはレジ用のログイン（企業番号＋店舗ユーザー名＋レジ用パスワード）
             if path == "/login" { return AppConfig.url("/register-login") }
         case .handy:
-            // ハンディのログインはお店の QR。メールのログイン画面は出さない
+            // ハンディのログインはお店の QR。メールのログイン画面は出さず、カメラを出す
             if path == "/login" || path == "/register-login" {
+                UserDefaults.standard.set(false, forKey: handyLoggedInKey)
                 DispatchQueue.main.async { self.needsHandyLogin = true }
                 return URL(string: "about:blank")
             }
@@ -607,14 +624,17 @@ final class AppState: ObservableObject {
     }
 
     /// QR を読んだ結果
-    func handleScanned(_ text: String) {
+    /// QR を読んだ結果。TENPO ONE の QR なら Web に行かせて true。違う QR なら知らせて false（読む画面はもう一度読めるようにする）
+    @discardableResult
+    func handleScanned(_ text: String) -> Bool {
         scanning = false
         guard let url = URL(string: text.trimmingCharacters(in: .whitespacesAndNewlines)), AppConfig.isOwnHost(url) else {
             WebViewController.current?.showAlert(title: "TENPO ONE の QR ではありません", message: "お店の「ハンディ QR」を読んでください。")
-            return
+            return false
         }
         needsHandyLogin = false
         WebViewController.current?.load(url)
+        return true
     }
 }
 
