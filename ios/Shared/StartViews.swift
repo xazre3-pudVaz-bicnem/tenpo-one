@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// iPhone：はじめに使い方を選ぶ（あとで ≡ の「アプリの使い方を変える」から変えられる）。
-/// 2026-10-24 Ronnie「iOS ホーム画面」：日本語を大きく・英語を小さく、ハンディ／オーナーの違いが一目で分かる2枚のカード
+/// iPhone：使い方を選ぶ。**はじめには出さない**（iPhone はいつもハンディから。2026-10-24）。
+/// ハンディの Web メニュー「アプリの使い方を変える」か、QR 画面の下の小さな文字を押したときだけ出る
 struct ModeChooserView: View {
     @EnvironmentObject var state: AppState
 
@@ -106,47 +106,94 @@ private struct ChoiceButton: View {
     }
 }
 
-/// ハンディ：まだログインしていないとき。お店の「ハンディ QR」を読む
+/// ハンディ：まだログインしていないとき。**カメラがすぐ開く**ので、お店の「ハンディ QR」を枠に入れるだけでログイン
+/// （2026-10-24 Ronnie「アプリを入れて QR でログインしたら、すぐハンディ。ほかは出さない」。
+/// 前の「QR を読む」ボタンの画面と「ハンディ／オーナー」を選ぶ画面は、はじめには出さない）
 struct HandyLoginView: View {
     @EnvironmentObject var state: AppState
 
     var body: some View {
         ZStack {
-            Brand.background.ignoresSafeArea()
-            VStack(spacing: 20) {
-                Spacer()
-                Image(systemName: "qrcode.viewfinder")
-                    .font(.system(size: 72, weight: .regular))
-                    .foregroundColor(Brand.purple)
-                Text("お店の QR コードを読んでください")
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundColor(Brand.ink)
-                    .multilineTextAlignment(.center)
-                Text("レジの上の「ハンディ QR」を読むと、この iPhone がハンディとしてログインします。\nScan the store's Handy QR to sign in.")
-                    .font(.system(size: 13))
-                    .foregroundColor(Brand.ink2)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 28)
-                Button {
-                    state.scanning = true
-                } label: {
-                    Label("QR を読む / Scan", systemImage: "camera.fill")
-                        .font(.system(size: 18, weight: .bold))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
+            Color.black.ignoresSafeArea()
+            QRScannerView(embedded: true, onCode: { code in state.handleScanned(code) })
+                .ignoresSafeArea()
+            VStack(spacing: 0) {
+                // 上：何をするかだけ（日本語を大きく・英語を小さく）
+                VStack(spacing: 6) {
+                    HStack(spacing: 8) {
+                        Image("BrandMark")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 26, height: 26)
+                            .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+                        Text("TENPO ONE ハンディ")
+                            .font(.system(size: 15, weight: .heavy))
+                            .foregroundColor(.white)
+                    }
+                    Text("お店の「ハンディ QR」を読んでください")
+                        .font(.system(size: 20, weight: .bold))
                         .foregroundColor(.white)
-                        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Brand.purple))
+                        .multilineTextAlignment(.center)
+                    Text("レジ（iPad）の「iPhone ハンディ」の QR。読めたらそのままハンディが開きます\nScan the store's Handy QR to sign in.")
+                        .font(.system(size: 12))
+                        .foregroundColor(.white.opacity(0.8))
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 24)
+                }
+                .padding(.top, 18)
+                .padding(.bottom, 14)
+                .frame(maxWidth: .infinity)
+                .background(
+                    LinearGradient(colors: [.black.opacity(0.75), .black.opacity(0)], startPoint: .top, endPoint: .bottom)
+                        .ignoresSafeArea(edges: .top)
+                )
+                Spacer()
+                // 下：オーナー・店長だけが使う小さな文字（スタッフは触らない）
+                // 下：店長・オーナーは自分の ID（メール）・パスワードで（2026-10-25 Ronnie）。見る画面は役割で決まる
+                Button { state.chooseOwnerLogin() } label: {
+                    VStack(spacing: 2) {
+                        Text("店長・オーナーの方").font(.system(size: 15, weight: .bold))
+                        Text("ID・パスワードでログイン").font(.system(size: 12))
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity).padding(.vertical, 12)
+                    .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.white.opacity(0.16)))
+                    .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Color.white.opacity(0.3), lineWidth: 1))
                 }
                 .buttonStyle(.plain)
-                .padding(.horizontal, 32)
-                .padding(.top, 6)
-                Spacer()
-                Button("使い方を変える（オーナー・店長）") { state.resetMode() }
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(Brand.purple)
-                    .padding(.bottom, 18)
+                .padding(.horizontal, 24)
+                .padding(.bottom, 18)
             }
             .frame(maxWidth: 520)
+        }
+        .preferredColorScheme(.dark)
+    }
+}
+
+/// 店長・オーナーのログイン画面（Web の /login）の下に重ねる、スタッフ用の「お店の QR でログイン」（2026-10-25 Ronnie）
+struct OwnerLoginSwitchBar: View {
+    @EnvironmentObject var state: AppState
+
+    var body: some View {
+        VStack {
+            Spacer()
+            Button { state.chooseHandyLogin() } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "qrcode.viewfinder").font(.system(size: 18, weight: .bold))
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("スタッフの方").font(.system(size: 14, weight: .bold))
+                        Text("お店の QR でログイン（ハンディ）").font(.system(size: 11))
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right").font(.system(size: 13, weight: .bold))
+                }
+                .foregroundColor(.white)
+                .padding(.horizontal, 16).frame(height: 56)
+                .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color(hex: 0x171333)))
+                .shadow(color: .black.opacity(0.2), radius: 8, y: 3)
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, 20).padding(.bottom, 12)
         }
     }
 }

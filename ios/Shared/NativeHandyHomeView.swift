@@ -540,7 +540,7 @@ struct NativeHandyHomeView: View {
             }
             sheetLink("お客様の呼び出し", icon: "person", trailing: "\(p?.calls.count ?? 0)件") { drawerOpen = false; callsOpen = true }
             // iPhone アプリの中だけ：ハンディ／オーナーの切り替え
-            sheetLink("アプリの使い方を変える（ハンディ／オーナー）", icon: "iphone") { drawerOpen = false; onChangeMode() }
+            sheetLink("店長・オーナーとしてログイン（ID・パスワード）", icon: "person.badge.key") { drawerOpen = false; onChangeMode() }
             sheetLink("ログアウト", icon: "rectangle.portrait.and.arrow.right", color: Color(hex: 0xC62828)) {
                 Task { if await model.act(["type": "signOut"]) { drawerOpen = false; onSignedOut() } }
             }
