@@ -6,7 +6,8 @@ import { loadLedgerChrome, type LedgerSummary } from '@/components/reservations/
 import { ACTIVE_TIMELINE_STATUSES, BOARD_SLOT } from '@/components/reservations/constants';
 import { RESERVATION_ROW_SELECT, mapReservationRow, type RawReservationRow } from '@/components/reservations/row-mapper';
 import type { ReservationListRow } from '@/components/reservations/list-types';
-import { loadReservationTags } from '@/lib/reservation-tags-server';
+import { loadReservationPartyMins, loadReservationTags } from '@/lib/reservation-tags-server';
+import { reservationTagGroupsFrom, tagIconMap, type TagIcon } from '@/lib/reservation-tags';
 import { reservationClerkOptions } from '@/lib/reservation-clerks-server';
 import { RESERVATION_STATUS, RESERVATION_TRANSITIONS, type ReservationStatus } from '@/lib/reservations';
 
@@ -45,6 +46,8 @@ export interface NativeLedgerPayload {
   links: { tables: boolean; customers: boolean; analytics: boolean; settings: boolean };
   /** 未連絡（仮予約）の数 */
   unconfirmed: number;
+  /** 予約のタグ（区分のタグ）の名前 → アイコン（予約カード・詳細に小さく出す。キーワードは無し） */
+  tagIcons: Record<string, TagIcon>;
 }
 
 const DEFAULT_START_MIN = 11 * 60;
@@ -92,7 +95,7 @@ export async function loadNativeLedger(
       .order('sort_order'),
     supabase.from('business_hours').select('day_of_week, is_closed, open_time, close_time').eq('store_id', store.id),
     reservationClerkOptions(supabase, [store.id]),
-    supabase.from('store_settings').select('cleaning_buffer_minutes').eq('store_id', store.id).maybeSingle(),
+    supabase.from('store_settings').select('cleaning_buffer_minutes, settings').eq('store_id', store.id).maybeSingle(),
     supabase
       .from('reservation_sources')
       .select('id, code, name')
@@ -131,8 +134,11 @@ export async function loadNativeLedger(
     .in('status', ACTIVE_TIMELINE_STATUSES)
     .order('start_at');
   const raw = (reservationsData ?? []) as unknown as RawReservationRow[];
-  const tagsById = await loadReservationTags(supabase, raw.map((r) => r.id));
-  const reservations = raw.map((r) => ({ ...mapReservationRow(r, null), tags: tagsById.get(r.id) ?? [] }));
+  const [tagsById, partyMinById] = await Promise.all([
+    loadReservationTags(supabase, raw.map((r) => r.id)),
+    loadReservationPartyMins(supabase, raw.map((r) => r.id)),
+  ]);
+  const reservations = raw.map((r) => ({ ...mapReservationRow(r, null), tags: tagsById.get(r.id) ?? [], partySizeMin: partyMinById.get(r.id) ?? null }));
   const isToday = date === today;
 
   const tables = (tablesData ?? []).map((t) => {
@@ -162,6 +168,7 @@ export async function loadNativeLedger(
     openMin,
     closeMin,
     isClosedDay,
+    tagIcons: tagIconMap(reservationTagGroupsFrom((bookingSettings as { settings?: unknown } | null)?.settings ?? null)),
     bufferMinutes: bookingSettings?.cleaning_buffer_minutes ?? 0,
     slotMinutes: BOARD_SLOT,
     tables,
