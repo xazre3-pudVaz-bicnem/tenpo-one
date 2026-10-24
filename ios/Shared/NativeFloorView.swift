@@ -259,7 +259,8 @@ struct NativeTableCard: View {
         Button {
             onTap(rect)
         } label: {
-            VStack(alignment: .leading, spacing: 3) {
+            // 字の大きさは 3 つだけ（見出し 15・本文 15/12・小さい字 11）、行の間は 6 でそろえる（2026-10-24 21:13 Ronnie「字の間と大きさがそろっていない」）
+            VStack(alignment: .leading, spacing: 6) {
                 // 1行目: テーブル名（状態の色の札）・人数。2行目: 席の印（席の数だけ。座っている人数ぶん色がつく）
                 // （2026-10-24 20:36 Ronnie「unique な形に」）
                 HStack(spacing: 6) {
@@ -276,7 +277,7 @@ struct NativeTableCard: View {
                         Image(systemName: "person.2").font(.system(size: 11, weight: .bold)).foregroundColor(NFColor.ink3)
                         Text(order.map { "\($0.guestCount)名" } ?? "\(table.capacityMax)名席")
                     }
-                    .font(.system(size: 12, weight: .bold)).monospacedDigit().foregroundColor(NFColor.ink2)
+                    .font(.system(size: 13, weight: .semibold)).monospacedDigit().foregroundColor(NFColor.ink2)
                 }
                 seatMarks(used: order?.guestCount ?? 0, color: NFColor.ink2)
                 if let linked {
@@ -310,19 +311,18 @@ struct NativeTableCard: View {
                     if let next { nextLine(next, danger: false) }
                 }
                 Spacer(minLength: 0)
-                // 下段: 金額（状態は下の帯に）
+                // 下段: 1 人あたり（左）・合計（右）を 1 行に（状態は下の帯に）
                 if let o = order {
-                    HStack(alignment: .center, spacing: 6) {
-                        Spacer(minLength: 2)
-                        VStack(alignment: .trailing, spacing: 0) {
-                            Text(NT.yen(o.total)).font(.system(size: 15, weight: .heavy)).monospacedDigit().foregroundColor(NFColor.ink)
+                    VStack(spacing: 8) {
+                        Rectangle().fill(Color.black.opacity(0.07)).frame(height: 1)
+                        HStack(alignment: .firstTextBaseline, spacing: 6) {
                             Text(o.guestCount > 0 ? "\(NT.yen(Int((Double(o.total) / Double(o.guestCount)).rounded())))/人" : "—/人")
-                                .font(.system(size: 10, weight: .semibold)).monospacedDigit().foregroundColor(NFColor.ink3)
+                                .font(.system(size: 12, weight: .medium)).monospacedDigit().foregroundColor(NFColor.ink3)
+                            Spacer(minLength: 4)
+                            Text(NT.yen(o.total)).font(.system(size: 18, weight: .heavy)).monospacedDigit().foregroundColor(NFColor.ink)
                         }
+                        .lineLimit(1).minimumScaleFactor(0.8)
                     }
-                    .padding(.top, 6)
-                    .overlay(alignment: .top) { dashedLine }
-                    .frame(minHeight: 30)
                 } else if state == .cleaning || state == .unavailable {
                     Text(state.label)
                         .font(.system(size: 10.5, weight: .heavy)).foregroundColor(NFColor.label(state))
@@ -360,7 +360,7 @@ struct NativeTableCard: View {
                             b.color
                             HStack(alignment: .firstTextBaseline, spacing: 6) {
                                 Text(b.jp).font(.system(size: 15, weight: .heavy))
-                                Text(b.en).font(.system(size: 11, weight: .bold)).opacity(0.85)
+                                Text(b.en).font(.system(size: 11, weight: .semibold)).opacity(0.85)
                             }
                             .lineLimit(1).minimumScaleFactor(0.7)
                             .foregroundColor(b.ink)
@@ -473,27 +473,29 @@ struct NativeTableCard: View {
         let hasLimit = o.course != nil
         let mins = hasLimit ? tt.left : tt.elapsed
         let clock = String(format: "%@%d:%02d", mins < 0 ? "−" : "", abs(mins) / 60, abs(mins) % 60)
-        HStack(spacing: 8) {
-            HStack(spacing: 3) {
-                Image(systemName: "arrow.right.to.line").font(.system(size: 11, weight: .bold))
-                Text(NFTime.hm(o.openedAtMs)).font(.system(size: 13, weight: .bold)).monospacedDigit()
+        // 入店時刻と時間は同じ大きさ（15）。印も同じ大きさ（12）
+        HStack(spacing: 12) {
+            HStack(spacing: 4) {
+                Image(systemName: "arrow.right.to.line").font(.system(size: 12, weight: .semibold))
+                Text(NFTime.hm(o.openedAtMs)).font(.system(size: 15, weight: .semibold)).monospacedDigit()
             }
             .foregroundColor(NFColor.ink2)
-            HStack(spacing: 3) {
-                Image(systemName: hasLimit ? "hourglass" : "clock").font(.system(size: 11, weight: .bold))
+            HStack(spacing: 4) {
+                Image(systemName: hasLimit ? "hourglass" : "clock").font(.system(size: 12, weight: .semibold))
                 Text(clock).font(.system(size: 15, weight: .heavy)).monospacedDigit()
             }
             .foregroundColor(hasLimit && mins < 0 ? NFColor.danger : NFColor.royal)
             if let v = visits, v >= 2 {
-                Text("\(v)回").font(.system(size: 10, weight: .heavy)).foregroundColor(NFColor.royal)
+                Text("\(v)回").font(.system(size: 11, weight: .bold)).foregroundColor(NFColor.royal)
                     .padding(.horizontal, 6).padding(.vertical, 1).background(Capsule().fill(NFColor.irisSoft))
             }
             if isNew {
-                Text("新規").font(.system(size: 10, weight: .heavy)).foregroundColor(NFColor.success)
+                Text("新規").font(.system(size: 11, weight: .bold)).foregroundColor(NFColor.success)
                     .padding(.horizontal, 6).padding(.vertical, 1).background(Capsule().fill(NFColor.successSoft))
             }
             Spacer(minLength: 0)
         }
+        .lineLimit(1).minimumScaleFactor(0.8)
         if let c = o.course {
             HStack {
                 Text("\(c.label) \(c.minutes)分")
@@ -502,12 +504,12 @@ struct NativeTableCard: View {
                     .fontWeight(.heavy)
                     .foregroundColor(state == .over ? NFColor.danger : (state == .lo ? NFColor.loInk : NFColor.royal))
             }
-            .font(.system(size: 10.5, weight: .semibold)).monospacedDigit().foregroundColor(NFColor.ink3)
+            .font(.system(size: 12, weight: .semibold)).monospacedDigit().foregroundColor(NFColor.ink3)
         }
         HStack(spacing: 6) {
             Text(name.map { "\(stripSama($0)) 様" } ?? (isNew ? "新規のお客様" : "顧客 未登録"))
-                .font(.system(size: 11, weight: .bold)).foregroundColor(NFColor.ink2).lineLimit(1)
-            Text(o.sourceLabel).font(.system(size: 10.5, weight: .medium)).foregroundColor(NFColor.ink3).lineLimit(1)
+                .font(.system(size: 12, weight: .semibold)).foregroundColor(NFColor.ink2).lineLimit(1)
+            Text(o.sourceLabel).font(.system(size: 12, weight: .regular)).foregroundColor(NFColor.ink3).lineLimit(1)
         }
         if let next { nextLine(next, danger: true) }
     }
@@ -517,7 +519,7 @@ struct NativeTableCard: View {
             Text("次 \(r.time) \(stripSama(r.name)) \(r.partySize)名")
             Text(r.sourceLabel).fontWeight(.medium).opacity(0.75)
         }
-        .font(.system(size: 11, weight: .bold)).monospacedDigit()
+        .font(.system(size: 12, weight: .semibold)).monospacedDigit()
         .foregroundColor(danger ? NFColor.danger : NFColor.royal)
         .lineLimit(1)
     }
