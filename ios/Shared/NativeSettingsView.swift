@@ -20,50 +20,55 @@ struct NativeSettingsView: View {
     /// 開いている中の画面（nil＝メニュー）
     @State private var page: Page?
 
-    /// このiPad の設定の中の画面
+    /// このiPad の設定の中の画面（2026-10-24 16:08 Ronnie「設定はできるだけ少なく。同じものが2〜3か所にあるなら1つに」→ 印刷は1枚に）
     enum Page: String, CaseIterable, Identifiable {
-        case printer, receipt, lan, wifi, offline, native
+        case printer, native
         var id: String { rawValue }
         var title: String {
             switch self {
-            case .printer: return "プリンター（Bluetooth・USB）"
-            case .receipt: return "レシートの出し先"
-            case .lan: return "LAN のプリンター"
-            case .wifi: return "Wi-Fi で直接印刷"
-            case .offline: return "ネットが無いときの印刷"
+            case .printer: return "プリンター・印刷"
             case .native: return "アプリの画面"
             }
         }
         var en: String {
             switch self {
-            case .printer: return "Receipt printer"
-            case .receipt: return "Receipt output"
-            case .lan: return "LAN printers"
-            case .wifi: return "Direct Wi-Fi"
-            case .offline: return "Offline printing"
+            case .printer: return "Printers & printing"
             case .native: return "Native screens"
             }
         }
         var icon: String {
             switch self {
-            case .printer: return "dot.radiowaves.left.and.right"
-            case .receipt: return "printer"
-            case .lan: return "cable.connector"
-            case .wifi: return "wifi"
-            case .offline: return "wifi.slash"
+            case .printer: return "printer"
             case .native: return "ipad"
             }
         }
         var description: String {
             switch self {
-            case .printer: return "機種・つなぐ・紙幅・会計レシートの自動印刷・キャッシュドロア・試し印刷"
-            case .receipt: return "レシート・領収書・会計伝票・ドロアをどのプリンターに出すか（このiPadだけ）"
-            case .lan: return "お店の LAN のプリンター（EPSON・SII RP-F10 など）へこの iPad から送る"
-            case .wifi: return "EPSON へお店の Wi-Fi で直接送る（約1秒）。つながらなければプリンター自身が印刷"
-            case .offline: return "ネットが止まっても、この iPad から厨房伝票・会計伝票・レシートを直接出す"
+            case .printer: return "Bluetooth・USB でつなぐ・機種・紙幅・自動印刷・ドロア・レシートの出し先・LAN・Wi-Fi・ネットが無いときの印刷"
             case .native: return "ホーム・テーブル・オーダー・会計をアプリの画面で開く（OFF で今までの Web）"
             }
         }
+        /// 見本の tenpoNativePreviewScroll（昔の名前 receipt／lan／wifi／offline も印刷の画面へ）
+        static func from(_ s: String) -> Page? {
+            if let p = Page(rawValue: s) { return p }
+            return ["receipt", "lan", "wifi", "offline"].contains(s) ? .printer : nil
+        }
+    }
+
+    /// メニューの1枚（Web の設定のまとめ＋レジの設定を1つにして、同じ画面は1回だけ）
+    private struct Item: Identifiable {
+        let id: String
+        let title: String
+        let description: String
+        let url: String
+        let allowed: Bool
+    }
+    private struct ItemGroup: Identifiable {
+        let id: String
+        let label: String
+        let en: String
+        let icon: String
+        var items: [Item]
     }
 
     var body: some View {
@@ -94,7 +99,7 @@ struct NativeSettingsView: View {
                 .onAppear {
                     // 見本（-tenpoNativePreview settings）で中の画面・下の方を確かめる用（lan／offline／native…は中の画面を開く）
                     if let to = UserDefaults.standard.string(forKey: "tenpoNativePreviewScroll"), !to.isEmpty {
-                        if let p = Page(rawValue: to) { page = p }
+                        if let p = Page.from(to) { page = p }
                         else { DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { proxy.scrollTo(to, anchor: to == "bottom" ? .bottom : .top) } }
                     }
                 }
@@ -130,46 +135,72 @@ struct NativeSettingsView: View {
     private var menu: some View {
         VStack(alignment: .leading, spacing: 26) {
             group("このiPad", en: "This iPad", note: "この iPad だけの設定（店の設定は変わりません）") {
-                ForEach(pages) { p in
+                ForEach(Page.allCases) { p in
                     tile(icon: p.icon, title: p.title, en: p.en, description: p.description, status: pageStatus(p)) {
                         withAnimation(.easeOut(duration: 0.15)) { page = p }
                     }
                 }
             }
-            // レジでよく変える設定（Web の /app/pos/settings と同じ並び。押すとその画面が Web で開き、上の「レジの設定に戻る」でここへ）
-            if !(model.payload?.sections ?? []).isEmpty {
-                divider("レジでよく変える設定", en: "Register settings", note: "押すとその画面が開きます（画面の上の「レジの設定に戻る」でここに戻れます）")
-            }
-            ForEach(model.payload?.sections ?? []) { s in
-                group(s.title, en: s.en, note: nil) {
-                    ForEach(s.links) { l in
-                        tile(icon: Self.sectionIcon(s.id), title: l.title, en: nil,
-                             description: l.allowed ? l.description : (l.hint ?? "権限がありません"),
-                             status: nil, locked: !l.allowed) { onWeb(l.url) }
+            // お店の設定：パソコンの管理画面と同じ区分（店舗・メニュー・デバイス管理・予約・顧客・会計・運用・管理・集計）に、
+            // レジの設定にしか無い項目（品切れなど）を足して1つの一覧に。同じ画面は1回だけ（2026-10-24 Ronnie「同じものが2〜3か所にあるなら1つに」）
+            if !groups.isEmpty {
+                divider("お店の設定", en: "Store settings", note: "押すとその画面が開きます（パソコンの管理画面と同じ。管理画面からも同じものを変えられます）")
+                ForEach(groups) { g in
+                    group(g.label, en: g.en, note: nil) {
+                        ForEach(g.items) { it in
+                            tile(icon: g.icon, title: it.title, en: nil, description: it.description, status: nil, locked: !it.allowed) { onWeb(it.url) }
+                        }
                     }
-                }
-                .id(s.id == (model.payload?.sections.first?.id ?? "") ? "sections" : s.id)
-            }
-            // すべての設定（パソコンの管理画面と同じまとめ）
-            if let hubs = model.payload?.hubs, !hubs.isEmpty {
-                group("すべての設定", en: "All settings", note: "パソコンの管理画面と同じ画面が開きます（管理画面からも同じものを変えられます）") {
-                    ForEach(hubs) { h in
-                        tile(icon: Self.hubIcon(h.label), title: h.label, en: h.en,
-                             description: h.children.map(\.label).joined(separator: "・"), status: nil) { onWeb(h.href) }
-                    }
+                    .id(g.id == groups.first?.id ? "sections" : g.id)
                 }
             }
         }
     }
 
-    /// 出す中の画面（LAN・Wi-Fi はそのプリンターがあるときだけ）
-    private var pages: [Page] {
-        Page.allCases.filter { p in
-            switch p {
-            case .lan: return !model.lanPrinters.isEmpty
-            case .wifi: return !model.wifiPrinters.isEmpty
-            default: return true
+    /// Web の設定のまとめ（hubs）を土台に、レジの設定（sections）の項目で同じ画面が無いものだけ足す。
+    /// 「レジの設定」（自分自身）は出さない。レジの設定の項目は ?from=register 付き（開いた画面の上の「レジの設定に戻る」で戻れる）
+    private var groups: [ItemGroup] {
+        guard let payload = model.payload else { return [] }
+        var out: [ItemGroup] = payload.hubs.map { h in
+            ItemGroup(id: h.href, label: h.label, en: h.en, icon: Self.hubIcon(h.label),
+                      items: h.children
+                        .filter { Self.path($0.href) != "/app/pos/settings" }
+                        .map { Item(id: $0.href, title: $0.label, description: $0.description, url: Self.withFromRegister($0.href), allowed: true) })
+        }
+        var seen = Set(out.flatMap { $0.items.map { Self.path($0.url) } })
+        for s in payload.sections {
+            for l in s.links where !seen.contains(Self.path(l.url)) && Self.path(l.url) != "/app/pos/settings" {
+                seen.insert(Self.path(l.url))
+                let item = Item(id: l.url, title: l.title, description: l.allowed ? l.description : (l.hint ?? "権限がありません"), url: l.url, allowed: l.allowed)
+                let label = Self.hubLabel(forSection: s.id)
+                if let i = out.firstIndex(where: { $0.label == label }) {
+                    // 品切れはメニューのいちばん上に（レジでいちばん使う）
+                    if l.id == "sold-out" { out[i].items.insert(item, at: 0) } else { out[i].items.append(item) }
+                } else {
+                    out.append(ItemGroup(id: "section:\(s.id)", label: s.title, en: s.en, icon: Self.sectionIcon(s.id), items: [item]))
+                }
             }
+        }
+        return out.filter { !$0.items.isEmpty }
+    }
+
+    /// クエリを除いた道（同じ画面かどうかの判定用）
+    private static func path(_ url: String) -> String { String(url.split(separator: "?", maxSplits: 1).first ?? Substring(url)) }
+
+    /// 開いた画面の上に「レジの設定に戻る」を出す印（lib/register-settings.ts の FROM_REGISTER と同じ）
+    private static func withFromRegister(_ href: String) -> String {
+        if href.contains("from=register") { return href }
+        return href + (href.contains("?") ? "&" : "?") + "from=register"
+    }
+
+    /// レジの設定の区分 → 管理画面のまとめ
+    private static func hubLabel(forSection id: String) -> String {
+        switch id {
+        case "menu", "kitchen": return "メニュー"
+        case "tables": return "店舗"
+        case "handy": return "デバイス管理"
+        case "booking": return "予約・顧客"
+        default: return ""
         }
     }
 
@@ -177,21 +208,12 @@ struct NativeSettingsView: View {
     private func pageStatus(_ p: Page) -> (String, Color)? {
         switch p {
         case .printer:
-            if !model.usePrinter { return ("使わない", NFColor.ink3) }
+            if !model.usePrinter {
+                if let id = model.selectedPrinterId, let pr = model.receiptPrinters.first(where: { $0.id == id }) { return ("出し先：\(pr.name)", NFColor.ink2) }
+                return ("Bluetooth・USB のプリンターは使わない", NFColor.ink3)
+            }
             if let l = model.link { return ("\(l.deviceName.isEmpty ? l.deviceId : l.deviceName)・つないでいます", NFColor.success) }
             return (model.model == nil ? "機種が未選択" : "まだつないでいません", NFColor.saffron)
-        case .receipt:
-            if let id = model.selectedPrinterId, let p = model.receiptPrinters.first(where: { $0.id == id }) { return (p.name, NFColor.ink2) }
-            if let l = model.link, model.usePrinter { return ("\(l.deviceName.isEmpty ? "Bluetooth" : l.deviceName)（このiPadのプリンター）", NFColor.ink2) }
-            return ("おまかせ（店の既定）", NFColor.ink2)
-        case .lan:
-            let on = model.lanPrinters.filter { model.lanOn($0.id) }.count
-            return on > 0 ? ("\(on)台をこの iPad から送る", NFColor.success) : ("この iPad からは送らない", NFColor.ink3)
-        case .wifi:
-            let on = model.wifiPrinters.filter { model.wifiOn($0.id) }.count
-            return on > 0 ? ("\(on)台を直接印刷", NFColor.success) : ("使っていない", NFColor.ink3)
-        case .offline:
-            return NativePrintKit.shared.ready ? ("準備できています", NFColor.success) : ("まだ準備できていません", NFColor.saffron)
         case .native:
             let on = state.adminNativePos ?? nativeOn
             return (on ? "ON（アプリの画面）" : "OFF（今までの画面）", on ? NFColor.success : NFColor.ink3)
@@ -315,11 +337,13 @@ struct NativeSettingsView: View {
     @ViewBuilder
     private func pageBody(_ p: Page) -> some View {
         switch p {
-        case .printer: bluetoothCard
-        case .receipt: receiptCard
-        case .lan: lanCard
-        case .wifi: wifiCard
-        case .offline: NativeOfflinePrintCard()
+        case .printer:
+            // 印刷はぜんぶここ：つなぐ → 出し先 → LAN → Wi-Fi → ネットが無いとき
+            bluetoothCard
+            receiptCard
+            if !model.lanPrinters.isEmpty { lanCard }
+            if !model.wifiPrinters.isEmpty { wifiCard }
+            NativeOfflinePrintCard()
         case .native: nativeCard
         }
     }
