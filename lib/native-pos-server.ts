@@ -17,6 +17,7 @@ import { VISIT_SOURCES, visitSourceByLabel, visitSourcesFrom } from '@/lib/handy
 import { isMissingColumnError } from '@/lib/schema-compat';
 import { loadStoreClerks } from '@/lib/pos-clerks-server';
 import { cancelApprovers } from '@/lib/clerk-roles';
+import { isHiddenCourseDishCategory } from '@/lib/course-builder';
 import {
   type NativePosCatalog,
   type NativePosLive,
@@ -244,12 +245,15 @@ export async function loadNativeCatalog(
 
   // 中央のカテゴリの並び（Web のレジの buildPosPages と同じ：メニューブックのページ順、おすすめ・売れ筋は店の決めた位置）
   type Cat = { id: string; name: string; name_en: string | null; station: string | null };
-  const cats = (categories ?? []) as Cat[];
   const zeroOnly = new Map<string, boolean>();
+  const itemCount = new Map<string, number>();
   for (const m of rows) {
     if (!m.category_id) continue;
     zeroOnly.set(m.category_id, (zeroOnly.get(m.category_id) ?? true) && Number(m.price) === 0);
+    itemCount.set(m.category_id, (itemCount.get(m.category_id) ?? 0) + 1);
   }
+  // コースの料理（¥0・非表示。設定 › プラン で作る）だけのカテゴリは出さない（単品では打たない。空のタブになるので）
+  const cats = ((categories ?? []) as Cat[]).filter((c) => !isHiddenCourseDishCategory(c, itemCount.get(c.id) ?? 0));
   const book = { pages: menuBook.pages ?? [], categoryPage: menuBook.categoryPage ?? {} };
   const grouped = groupMenuPages(
     cats.map((c) => ({ ...c, allZeroPrice: zeroOnly.get(c.id) ?? false })),

@@ -120,10 +120,16 @@ export interface MenuItemInput {
   sellEndTime: string | null;
   sortOrder: number;
   status: 'active' | 'hidden' | 'deleted';
+  /**
+   * コース・プランの中身の印（menu_items.course_includes_drinks / course_includes_ayce。フロアの「飲放／食放」、
+   * ハンディのモード選択に使う）。undefined は変えない（Web の商品の画面からは送らない）
+   */
+  courseIncludesDrinks?: boolean | null;
+  courseIncludesAyce?: boolean | null;
 }
 
-/** メニュー商品の追加・更新 */
-export async function saveMenuItem(input: MenuItemInput): Promise<ActionResult> {
+/** メニュー商品の追加・更新。id は保存した商品（追加したときは新しい id。iPad のコースの作成で使う） */
+export async function saveMenuItem(input: MenuItemInput): Promise<ActionResult & { id?: string }> {
   const ctx = await requirePermission('menu.manage');
   const name = input.name.trim();
   if (!name) return { error: '商品名を入力してください' };
@@ -152,8 +158,11 @@ export async function saveMenuItem(input: MenuItemInput): Promise<ActionResult> 
     // 価格を入力（>0）したら「価格未設定」フラグを解除。0以下は未設定のまま（公開不可）。
     price_pending: input.price <= 0,
     updated_by: ctx.userId,
+    ...(input.courseIncludesDrinks !== undefined ? { course_includes_drinks: input.courseIncludesDrinks } : {}),
+    ...(input.courseIncludesAyce !== undefined ? { course_includes_ayce: input.courseIncludesAyce } : {}),
   };
 
+  let savedId = input.id;
   if (input.id) {
     const { error } = await supabase
       .from('menu_items')
@@ -165,10 +174,13 @@ export async function saveMenuItem(input: MenuItemInput): Promise<ActionResult> 
     if (!ctx.stores.some((s) => s.id === input.storeId)) {
       return { error: '対象店舗にアクセス権がありません' };
     }
-    const { error } = await supabase
+    const { data: created, error } = await supabase
       .from('menu_items')
-      .insert({ ...basePayload, store_id: input.storeId, created_by: ctx.userId });
+      .insert({ ...basePayload, store_id: input.storeId, created_by: ctx.userId })
+      .select('id')
+      .single();
     if (error) return { error: `商品の追加に失敗しました: ${error.message}` };
+    savedId = (created?.id as string | undefined) ?? undefined;
   }
 
   await supabase.rpc('log_audit', {
@@ -189,7 +201,7 @@ export async function saveMenuItem(input: MenuItemInput): Promise<ActionResult> 
   // 値段などの変更をレジ・ハンディのメニューにも出す（これから入れる注文から。注文済みの明細は変えない）
   revalidatePath('/app/pos');
   revalidatePath('/handy', 'layout');
-  return {};
+  return savedId ? { id: savedId } : {};
 }
 
 const STATIONS = ['kitchen', 'drink', 'dessert', 'grill'] as const;

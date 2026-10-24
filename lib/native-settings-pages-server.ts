@@ -65,6 +65,7 @@ import { isPaymentConfigured, isPaymentTestMode } from '@/lib/payments';
 import { isSteraOnline } from '@/lib/stera';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { formatTime } from '@/lib/format';
+import { loadCourseBuilderExtras, runCourseBuilderSave } from '@/lib/course-builder-server';
 import type {
   NativeAccountsPayload,
   NativeCategoriesPayload,
@@ -460,7 +461,7 @@ export async function loadNativeSettingsPage(
       supabase
         .from('menu_items')
         .select(
-          'id, store_id, category_id, name, name_en, name_kana, description, item_type, price, takeout_price, cost, tax_rate_id, duration_minutes, sell_start_time, sell_end_time, sort_order, is_sold_out, status, price_pending'
+          'id, store_id, category_id, name, name_en, name_kana, description, item_type, price, takeout_price, cost, tax_rate_id, duration_minutes, sell_start_time, sell_end_time, sort_order, is_sold_out, status, price_pending, course_includes_drinks, course_includes_ayce'
         )
         .eq('organization_id', ctx.organizationId)
         .neq('status', 'deleted')
@@ -468,6 +469,20 @@ export async function loadNativeSettingsPage(
         .order('sort_order'),
       supabase.from('tax_rates').select('id, name').eq('organization_id', ctx.organizationId).eq('status', 'active').order('is_default', { ascending: false }),
     ]);
+    // 「その他（価格入力）」用の非表示の商品は出さない（Web の loadMenuSettingsData と同じ）
+    const listed = (items ?? []).filter((i) => !isCustomPriceHelper(i));
+    // プランの画面（コース／放題プランの作成）で使う：料理（出す順）・選べるメイン・プランで出すカテゴリ
+    const extras = await loadCourseBuilderExtras(ctx, supabase, store.id, {
+      categories: (categories ?? []).map((c) => ({ id: c.id as string, name: c.name as string })),
+      items: listed.map((i) => ({
+        id: i.id as string,
+        name: i.name as string,
+        categoryId: (i.category_id as string | null) ?? null,
+        price: Number(i.price),
+        itemType: i.item_type as string,
+        status: i.status as string,
+      })),
+    });
     return {
       ok: true,
       payload: {
@@ -475,9 +490,8 @@ export async function loadNativeSettingsPage(
         canEdit: can(ctx.role, 'menu.manage'),
         categories: (categories ?? []).map((c) => ({ id: c.id as string, name: c.name as string, sortOrder: Number(c.sort_order ?? 0) })),
         taxRates: (taxRates ?? []).map((t) => ({ id: t.id as string, name: t.name as string })),
-        // 「その他（価格入力）」用の非表示の商品は出さない（Web の loadMenuSettingsData と同じ）
-        items: (items ?? [])
-          .filter((i) => !isCustomPriceHelper(i))
+        ...extras,
+        items: listed
           .map((i) => ({
             id: i.id as string,
             categoryId: (i.category_id as string | null) ?? null,
@@ -498,6 +512,8 @@ export async function loadNativeSettingsPage(
             isSoldOut: i.is_sold_out === true,
             pricePending: i.price_pending === true,
             shared: i.store_id === null,
+            includesDrinks: (i.course_includes_drinks as boolean | null) ?? null,
+            includesAyce: (i.course_includes_ayce as boolean | null) ?? null,
           })),
       },
     };
@@ -1137,6 +1153,11 @@ export async function runNativeSettingsPageAction(
       return done(await deleteMenuItem(action.id));
     case 'menuItemSoldOut':
       return done(await toggleSoldOut(action.id, action.soldOut));
+    case 'courseBuilderSave': {
+      // コース本体を保存できたあとの失敗は warning（返事の data に courseId と一緒に載る）
+      const r = await runCourseBuilderSave(store.id, action.input);
+      return r.ok ? { ok: true, data: r.data } : { ok: false, error: r.error };
+    }
     case 'optionGroupSave':
       return done(
         action.id

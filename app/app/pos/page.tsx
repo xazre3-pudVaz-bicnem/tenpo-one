@@ -46,6 +46,7 @@ import {
   setOrderCustomer,
 } from './actions';
 import { startTerminalPayment, checkTerminalPayment, cancelTerminalPayment, getPaymentAvailability } from './payment-actions';
+import { isHiddenCourseDishCategory } from '@/lib/course-builder';
 
 export const metadata: Metadata = { title: 'POSレジ' };
 
@@ -430,6 +431,12 @@ export default async function PosPage({
   const seatCourses = (menuItems ?? [])
     .filter((m) => isSeatCourseItem(m.item_type as string | null, m.name as string))
     .map((m) => ({ id: m.id as string, name: m.name as string, durationMinutes: (m.duration_minutes as number | null) ?? null }));
+  // コースの料理（¥0・非表示。iPad の 設定 › プラン で作る）だけのカテゴリは出さない（空のタブになるので。iPad のレジと同じ）
+  const activeCountByCategory = new Map<string, number>();
+  for (const m of menuItems ?? []) {
+    if (m.category_id) activeCountByCategory.set(m.category_id as string, (activeCountByCategory.get(m.category_id as string) ?? 0) + 1);
+  }
+  const posCategories = (categories ?? []).filter((c) => !isHiddenCourseDishCategory(c, activeCountByCategory.get(c.id as string) ?? 0));
 
   return (
     <div className="-m-4 lg:-m-6">
@@ -453,7 +460,7 @@ export default async function PosPage({
           tableId: order.table_id,
         }}
         items={items ?? []}
-        categories={categories ?? []}
+        categories={posCategories}
         menuPages={menuBook}
         discountPresets={discountPresetsOf(checkoutPresets)}
         pointBrands={pointBrandsOf(checkoutPresets)}

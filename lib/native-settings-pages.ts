@@ -1,5 +1,6 @@
 import { isUuid } from '@/lib/native-pos';
 import { CLERK_ROLES, type ClerkRole } from '@/lib/clerk-roles';
+import { parseCourseBuilderInput, type CourseBuilderInput } from '@/lib/course-builder';
 
 /**
  * iPad アプリのネイティブの「設定の中の画面」（2026-10-24 Ronnie「設定の中も全部ネイティブ。テーブルQRなど何でも」）。
@@ -58,6 +59,11 @@ export type NativeSettingsPageAction =
   | { type: 'menuItemSave'; item: NativeMenuItemFields }
   | { type: 'menuItemDelete'; id: string }
   | { type: 'menuItemSoldOut'; id: string; soldOut: boolean }
+  /**
+   * コース／放題プランを1回で保存（設定 › プラン の作成画面。lib/course-builder.ts・lib/course-builder-server.ts）。
+   * コース本体・料理（出す順。名前だけの料理は ¥0・非表示で作る）・選べるメイン・プランで出すカテゴリ
+   */
+  | { type: 'courseBuilderSave'; input: CourseBuilderInput }
   /** オプション（/app/settings/options。app/app/settings/options/actions.ts） */
   | { type: 'optionGroupSave'; id: string | null; name: string; isRequired: boolean; minSelect: number; maxSelect: number }
   | { type: 'optionGroupDelete'; id: string }
@@ -243,6 +249,7 @@ export const NATIVE_SETTINGS_PAGE_ACTION_TYPES: readonly NativeSettingsPageActio
   'menuItemSave',
   'menuItemDelete',
   'menuItemSoldOut',
+  'courseBuilderSave',
   'optionGroupSave',
   'optionGroupDelete',
   'optionGroupMove',
@@ -566,6 +573,11 @@ export function parseNativeSettingsPageAction(raw: unknown): Parsed {
   if (b.type === 'menuItemSoldOut') {
     if (!isUuid(b.id) || typeof b.soldOut !== 'boolean') return bad('商品が見つかりません');
     return { ok: true, action: { type: 'menuItemSoldOut', id: b.id, soldOut: b.soldOut } };
+  }
+  if (b.type === 'courseBuilderSave') {
+    const r = parseCourseBuilderInput(b);
+    if (!r.ok) return bad(r.error);
+    return { ok: true, action: { type: 'courseBuilderSave', input: r.input } };
   }
   if (b.type === 'optionGroupSave') {
     const name = typeof b.name === 'string' ? b.name.trim().slice(0, 80) : '';
@@ -1164,7 +1176,23 @@ export interface NativeMenuItemsPayload {
   canEdit: boolean;
   categories: { id: string; name: string; sortOrder: number }[];
   taxRates: { id: string; name: string }[];
-  items: (NativeMenuItemFields & { id: string; isSoldOut: boolean; pricePending: boolean; shared: boolean })[];
+  items: (NativeMenuItemFields & {
+    id: string;
+    isSoldOut: boolean;
+    pricePending: boolean;
+    shared: boolean;
+    /** コース・プランの中身の印（飲み放題つき・食べ放題） */
+    includesDrinks: boolean | null;
+    includesAyce: boolean | null;
+  })[];
+  /** 以下はプランの画面（コース／放題プランの作成）で使う。lib/course-builder-server.ts の loadCourseBuilderExtras */
+  courseSteps: Record<string, { id: string; name: string; hidden: boolean }[]>;
+  courseMains: Record<string, { groupId: string; name: string; choices: { id: string; name: string; price: number }[] }>;
+  planCategories: Record<string, string[]>;
+  planOnlyCategoryIds: string[];
+  maxCourseSteps: number;
+  maxMainChoices: number;
+  canEditOptions: boolean;
 }
 
 /** カテゴリの画面の読み込み（GET ?part=categories） */
