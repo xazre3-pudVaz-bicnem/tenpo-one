@@ -4,6 +4,7 @@ import { kitchenGet, kdsItemStatusPost, kdsOrderServedPost, kdsSettingsPost } fr
 import { onboardingGet, onboardingPost } from '@/lib/native-modules/onboarding';
 import { businessCardsGet } from '@/lib/native-modules/business-cards';
 import * as payroll from '@/lib/native-modules/payroll';
+import { accountingGet, ACCOUNTING_POST } from '@/lib/native-modules/accounting';
 
 /**
  * まだ専用の台が無かった画面（勤怠・日報・タスク …）の iPad ネイティブ用の API をまとめる所
@@ -35,6 +36,7 @@ export const NATIVE_MODULE_GET: Record<string, NativeModuleGet> = {
   onboarding: onboardingGet,
   businessCards: businessCardsGet,
   payroll: payroll.payrollGet,
+  accounting: accountingGet,
 };
 
 /** POST の type → handler。追加は 1 行ずつ */
@@ -56,4 +58,5 @@ export const NATIVE_MODULE_POST: Record<string, NativeModulePost> = {
   nenchoReviewing: payroll.nenchoReviewingPost,
   nenchoConfirm: payroll.nenchoConfirmPost,
   nenchoReject: payroll.nenchoRejectPost,
+  ...ACCOUNTING_POST, // 会計（accJournalSave・accBankCsvPreview … lib/native-modules/accounting.ts）
 };

@@ -6,17 +6,16 @@ import { requireFeature, requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { PageHeader } from '@/components/ui/page-header';
 import { Badge } from '@/components/ui/badge';
-import { BankAccountForm, type BankAccountOption } from '@/components/accounting/bank-account-form';
+import { BankAccountForm } from '@/components/accounting/bank-account-form';
 import { BankAccountDelete } from '@/components/accounting/bank-account-delete';
 import { BankManualTxForm } from '@/components/accounting/bank-manual-tx-form';
 import { BankCsvImport } from '@/components/accounting/bank-csv-import';
-import { BankTxTable, type BankTxRow, type AccountOption } from '@/components/accounting/bank-tx-table';
-import { loadReceivablePayableBalances } from '../balances';
+import { BankTxTable } from '@/components/accounting/bank-tx-table';
 import { yen } from '@/lib/format';
+import { BANK_ACCOUNT_TYPE_LABELS as ACCOUNT_TYPE_LABELS } from '@/lib/accounting-pages';
+import { loadBankAccountDetail } from '@/lib/accounting-pages-server';
 
 export const metadata: Metadata = { title: '銀行口座 明細' };
-
-const ACCOUNT_TYPE_LABELS: Record<string, string> = { ordinary: '普通', checking: '当座', savings: '貯蓄' };
 
 export default async function BankAccountDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -24,69 +23,12 @@ export default async function BankAccountDetailPage({ params }: { params: Promis
   const ctx = await requirePermission('csv.export');
   const supabase = await createClient();
 
-  const { data: bankAccount } = await supabase
-    .from('bank_accounts')
-    .select('id, bank_name, branch_name, account_type, account_last4, holder_name, store_id, account_id, stores(name), accounts(code, name)')
-    .eq('id', id)
-    .eq('organization_id', ctx.organizationId)
-    .eq('status', 'active')
-    .maybeSingle();
-  if (!bankAccount) notFound();
-
-  const store = bankAccount.stores as unknown as { name: string } | null;
-  const linkedAccount = bankAccount.accounts as unknown as { code: string; name: string } | null;
-
-  const { data: txData } = await supabase
-    .from('bank_transactions')
-    .select('id, transacted_on, description, deposit, withdrawal, journal_entry_id')
-    .eq('bank_account_id', id)
-    .order('transacted_on', { ascending: true })
-    .order('created_at', { ascending: true })
-    .limit(2000);
-
-  const rows: BankTxRow[] = (txData ?? []).reduce<BankTxRow[]>((acc, t) => {
-    const prevBalance = acc.length > 0 ? acc[acc.length - 1].runningBalance : 0;
-    acc.push({
-      id: t.id as string,
-      date: t.transacted_on as string,
-      description: t.description as string,
-      deposit: t.deposit as number,
-      withdrawal: t.withdrawal as number,
-      runningBalance: prevBalance + (t.deposit as number) - (t.withdrawal as number),
-      journalEntryId: t.journal_entry_id as string | null,
-    });
-    return acc;
-  }, []);
-  const balance = rows.length > 0 ? rows[rows.length - 1].runningBalance : 0;
-  const displayRows = [...rows].reverse(); // 新しい取引が上に来るように表示（残高は登録順で計算済み）
-
-  const { data: accountsData } = await supabase
-    .from('accounts')
-    .select('id, code, name, sub_type')
-    .eq('organization_id', ctx.organizationId)
-    .eq('status', 'active')
-    .order('code');
-  const accountOptions: AccountOption[] = (accountsData ?? []).map((a) => ({
-    id: a.id as string,
-    code: a.code as string,
-    name: a.name as string,
-    subType: a.sub_type as string | null,
-  }));
-  const bankAccountOptions: BankAccountOption[] = accountOptions.filter((a) => a.code === '110');
-
-  const { data: subTypeBankAccounts } = await supabase
-    .from('accounts')
-    .select('id, code, name')
-    .eq('organization_id', ctx.organizationId)
-    .eq('status', 'active')
-    .eq('sub_type', 'bank')
-    .order('code');
-  const editAccountOptions: BankAccountOption[] =
-    (subTypeBankAccounts ?? []).length > 0
-      ? (subTypeBankAccounts ?? []).map((a) => ({ id: a.id as string, code: a.code as string, name: a.name as string }))
-      : bankAccountOptions;
-
-  const { receivableTotal, payableTotal } = await loadReceivablePayableBalances(supabase, ctx.organizationId);
+  // 読み込みは lib/accounting-pages-server.ts（iPad ネイティブの会計と同じ）
+  const detail = await loadBankAccountDetail(supabase, ctx, id);
+  if (!detail) notFound();
+  const { bankAccount, rows, displayRows, balance, accountOptions, editAccountOptions, receivableTotal, payableTotal } = detail;
+  const store = bankAccount.storeName != null ? { name: bankAccount.storeName } : null;
+  const linkedAccount = bankAccount.linkedAccount;
 
   return (
     <div className="space-y-5">
@@ -95,26 +37,26 @@ export default async function BankAccountDetailPage({ params }: { params: Promis
       </Link>
 
       <PageHeader
-        title={bankAccount.bank_name as string}
-        description={`${bankAccount.branch_name ? bankAccount.branch_name + ' ・ ' : ''}${ACCOUNT_TYPE_LABELS[bankAccount.account_type as string] ?? bankAccount.account_type}${bankAccount.account_last4 ? ' ・ 下4桁 ' + bankAccount.account_last4 : ''}${bankAccount.holder_name ? ' ・ ' + bankAccount.holder_name : ''}`}
+        title={bankAccount.bankName}
+        description={`${bankAccount.branchName ? bankAccount.branchName + ' ・ ' : ''}${ACCOUNT_TYPE_LABELS[bankAccount.accountType] ?? bankAccount.accountType}${bankAccount.accountLast4 ? ' ・ 下4桁 ' + bankAccount.accountLast4 : ''}${bankAccount.holderName ? ' ・ ' + bankAccount.holderName : ''}`}
         actions={
           <div className="flex items-center gap-2">
             <BankAccountForm
               mode="edit"
-              bankAccountId={bankAccount.id as string}
+              bankAccountId={bankAccount.id}
               initial={{
-                storeId: bankAccount.store_id as string | null,
-                bankName: bankAccount.bank_name as string,
-                branchName: bankAccount.branch_name as string | null,
-                accountType: bankAccount.account_type as 'ordinary' | 'checking' | 'savings',
-                accountLast4: bankAccount.account_last4 as string | null,
-                holderName: bankAccount.holder_name as string | null,
-                accountId: bankAccount.account_id as string | null,
+                storeId: bankAccount.storeId,
+                bankName: bankAccount.bankName,
+                branchName: bankAccount.branchName,
+                accountType: bankAccount.accountType,
+                accountLast4: bankAccount.accountLast4,
+                holderName: bankAccount.holderName,
+                accountId: bankAccount.accountId,
               }}
               stores={ctx.isHq ? ctx.stores : []}
               accountOptions={editAccountOptions}
             />
-            <BankAccountDelete bankAccountId={bankAccount.id as string} />
+            <BankAccountDelete bankAccountId={bankAccount.id} />
           </div>
         }
       />
@@ -149,13 +91,13 @@ export default async function BankAccountDetailPage({ params }: { params: Promis
         </div>
       </div>
 
-      <BankCsvImport bankAccountId={bankAccount.id as string} />
+      <BankCsvImport bankAccountId={bankAccount.id} />
 
       <div className="flex justify-end">
-        <BankManualTxForm bankAccountId={bankAccount.id as string} />
+        <BankManualTxForm bankAccountId={bankAccount.id} />
       </div>
 
-      <BankTxTable bankAccountId={bankAccount.id as string} rows={displayRows} accountOptions={accountOptions} />
+      <BankTxTable bankAccountId={bankAccount.id} rows={displayRows} accountOptions={accountOptions} />
     </div>
   );
 }
