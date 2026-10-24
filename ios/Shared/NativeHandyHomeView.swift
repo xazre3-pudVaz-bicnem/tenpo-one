@@ -236,6 +236,8 @@ struct NativeHandyHomeView: View {
     var onChangeMode: () -> Void = {}
     /// ログアウトしたあと（Web の /handy を読み直す → お店の QR を読む画面）
     var onSignedOut: () -> Void = {}
+    /// 店長・オーナーがハンディを開いたとき：オーナー・店長のホームへ戻る（スタッフのハンディは nil）
+    var onHome: (() -> Void)? = nil
 
     @State private var floor: String = "all"
     @State private var sheetTableId: String?
@@ -249,7 +251,7 @@ struct NativeHandyHomeView: View {
             NHDColor.bg.ignoresSafeArea()
             if let p = model.payload {
                 if p.clerk == nil {
-                    NativeHandyLoginView(model: model, payload: p)
+                    NativeHandyLoginView(model: model, payload: p, onHome: onHome)
                 } else {
                     VStack(spacing: 0) {
                         topBar(p)
@@ -303,11 +305,26 @@ struct NativeHandyHomeView: View {
     private func topBar(_ p: NHDPayload?) -> some View {
         VStack(spacing: 0) {
             HStack(spacing: 0) {
-                Button { drawerOpen = true } label: {
-                    Image(systemName: "line.3.horizontal").font(.system(size: 22, weight: .bold)).foregroundColor(.white)
-                        .frame(width: 44, height: 44)
+                HStack(spacing: 2) {
+                    Button { drawerOpen = true } label: {
+                        Image(systemName: "line.3.horizontal").font(.system(size: 22, weight: .bold)).foregroundColor(.white)
+                            .frame(width: 44, height: 44)
+                    }
+                    .buttonStyle(.plain)
+                    // 店長・オーナー：ホームへ戻る
+                    if let onHome {
+                        Button(action: onHome) {
+                            HStack(spacing: 2) {
+                                Image(systemName: "chevron.left").font(.system(size: 11, weight: .bold))
+                                Text("ホーム").font(.system(size: 12, weight: .bold))
+                            }
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 9).frame(height: 30)
+                            .background(Capsule().fill(Color.white.opacity(0.14)))
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
-                .buttonStyle(.plain)
                 .frame(width: 110, alignment: .leading)
                 .padding(.leading, 7)
                 VStack(spacing: 0) {
@@ -565,8 +582,13 @@ struct NativeHandyHomeView: View {
                 sheetLink("ご予約リンクを紹介", icon: "calendar.badge.plus", trailing: "Share") { drawerOpen = false; shareOpen = true }
             }
             sheetLink("お客様の呼び出し", icon: "person", trailing: "\(p?.calls.count ?? 0)件") { drawerOpen = false; callsOpen = true }
-            // iPhone アプリの中だけ：ハンディ／オーナーの切り替え
-            sheetLink("店長・オーナーとしてログイン（ID・パスワード）", icon: "person.badge.key") { drawerOpen = false; onChangeMode() }
+            if let onHome {
+                // 店長・オーナーがハンディを開いたとき：ホームへ戻る
+                sheetLink("オーナー・店長のホームへ", icon: "house") { drawerOpen = false; onHome() }
+            } else {
+                // iPhone アプリの中だけ：ハンディ／オーナーの切り替え
+                sheetLink("店長・オーナーとしてログイン（ID・パスワード）", icon: "person.badge.key") { drawerOpen = false; onChangeMode() }
+            }
             sheetLink("ログアウト", icon: "rectangle.portrait.and.arrow.right", color: Color(hex: 0xC62828)) {
                 Task { if await model.act(["type": "signOut"]) { drawerOpen = false; onSignedOut() } }
             }
@@ -955,6 +977,8 @@ struct NativeHandyTableSheet: View {
 struct NativeHandyLoginView: View {
     @ObservedObject var model: NativeHandyModel
     let payload: NHDPayload
+    /// 店長・オーナーがハンディを開いたとき：ホームへ戻る（スタッフのハンディは nil）
+    var onHome: (() -> Void)? = nil
     @State private var clerkId: String = ""
     @State private var infoOpen = false
 
@@ -980,6 +1004,18 @@ struct NativeHandyLoginView: View {
                     }
                     .buttonStyle(.plain)
                     Spacer()
+                    if let onHome {
+                        Button(action: onHome) {
+                            HStack(spacing: 3) {
+                                Image(systemName: "chevron.left").font(.system(size: 11, weight: .bold))
+                                Text("ホーム").font(.system(size: 12, weight: .bold))
+                            }
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 12).frame(minHeight: 35)
+                            .background(Capsule().fill(Color.white.opacity(0.12)))
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
                 .padding(.top, 16)
 

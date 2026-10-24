@@ -686,7 +686,17 @@ final class AppState: ObservableObject {
             // Web がハンディの予約・予約登録の画面へ行ったらネイティブで重ねる（2026-10-25）
             if let r = Self.phoneReservationsRoute(for: url) { phoneReservations = r }
         case .owner:
-            nativeHandyHome = false
+            // 店長・オーナーの「ハンディ」（/app/handy → /handy）もネイティブのテーブル一覧で（2026-10-25）
+            let onHandy = path == "/handy" || path == "/handy/"
+            if onHandy { phoneRefreshTick += 1; if phoneHandy != nil { phoneHandy = nil }; if phoneReservations != nil { phoneReservations = nil } }
+            if nativeHandyHome != onHandy { nativeHandyHome = onHandy }
+            if path.hasPrefix("/handy/") {
+                if let r = Self.phoneHandyRoute(for: url) { phoneHandy = r }
+                if let r = Self.phoneReservationsRoute(for: url) { phoneReservations = r }
+            } else if !onHandy {
+                if phoneHandy != nil { phoneHandy = nil }
+                if phoneReservations != nil { phoneReservations = nil }
+            }
             let on = path == "/app/dashboard" || path == "/app" || path == "/app/"
             if on { phoneRefreshTick += 1; if phoneOwnerModule != nil { phoneOwnerModule = nil } }
             if nativeOwnerHome != on { nativeOwnerHome = on }
@@ -787,8 +797,8 @@ final class AppState: ObservableObject {
         }
         // ネイティブの無い道へ行くときは、店長・オーナーの画面を閉じる（Web の上に残らないように）
         if phoneOwnerModule != nil { phoneOwnerModule = nil }
-        // 卓・注文の画面、予約・予約登録の画面はネイティブで（2026-10-25）
-        if mode == .handy, nativePhoneEnabled, let url = URL(string: path, relativeTo: AppConfig.url("/")) {
+        // 卓・注文の画面、予約・予約登録の画面はネイティブで（2026-10-25。店長・オーナーのハンディも同じ）
+        if mode == .handy || mode == .owner, nativePhoneEnabled, let url = URL(string: path, relativeTo: AppConfig.url("/")) {
             if let r = Self.phoneReservationsRoute(for: url.absoluteURL) {
                 phoneReservations = r
                 return
