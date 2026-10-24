@@ -15,7 +15,7 @@ struct NativeTableSheet: View {
     /// 着席中の「お客様情報」→ 席の時間・人数・モードの直し。同じくポップアップは閉じる
     var onGuestInfo: (_ order: NFOrder, _ slip: NFSlip) -> Void = { _, _ in }
 
-    private enum Panel { case merge, print, guest, memo }
+    private enum Panel { case merge, move, print, guest, memo }
     @State private var panel: Panel?
     @State private var groupOpen = false
     @State private var groupPick: [String] = []
@@ -41,6 +41,8 @@ struct NativeTableSheet: View {
     private var state: NFTileState { table.state(now: now) }
     /// テーブル合算で選べる卓＝この卓以外で、未会計の伝票がある卓
     private var mergeCandidates: [NFTable] { model.tables.filter { $0.id != table.id && !($0.order?.slips.isEmpty ?? true) } }
+    /// 移動先＝空席（伝票が無くて空いている卓。オーダー画面の「卓を移動」と同じ）
+    private var moveCandidates: [NFTable] { model.tables.filter { $0.id != table.id && $0.order == nil && $0.currentStatus == "available" } }
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -223,10 +225,8 @@ struct NativeTableSheet: View {
         divider
         section("テーブル", en: "Table")
         HStack(spacing: 8) {
-            popBtn("テーブル移動", en: "Move", enabled: selected != nil) {
-                // 卓の移動はオーダー画面の「卓を移動」で（次の段階でネイティブに）
-                if let s = selected { onClose(); onOpenOrder(s.id, false) }
-            }
+            // 卓の移動はこのポップアップで（オーダー画面には伝票の操作を出さない。2026-10-24 Ronnie「order vitra yo pardaina」）
+            popBtn("テーブル移動", en: "Move", on: panel == .move, enabled: selected != nil) { panel = panel == .move ? nil : .move }
             popBtn("テーブル合算", en: "Merge", on: panel == .merge, enabled: selected != nil) { panel = panel == .merge ? nil : .merge }
             popBtn("グループ設定", en: "Group", on: groupOpen, enabled: canOperate) {
                 groupPick = table.groupTableIds.isEmpty ? [table.id] : table.groupTableIds
@@ -239,6 +239,7 @@ struct NativeTableSheet: View {
             }
         }
         if panel == .merge { mergePanel }
+        if panel == .move { movePanel }
 
         // 会計伝票は上の黒いボタンへ移した。ここは品を選んで出す印刷だけ
         section("印刷", en: "Print")
@@ -316,6 +317,37 @@ struct NativeTableSheet: View {
                                 .overlay(RoundedRectangle(cornerRadius: 8).stroke(NFColor.line, lineWidth: 1))
                         }
                         .buttonStyle(PressableStyle())
+                    }
+                }
+            }
+        }
+    }
+
+    private var movePanel: some View {
+        panelBox {
+            Text("移動先の空席を選ぶ / Choose an empty table").font(.system(size: 11, weight: .bold)).foregroundColor(NFColor.ink2)
+            if moveCandidates.isEmpty {
+                Text("空席がありません").font(.system(size: 11)).foregroundColor(NFColor.ink3)
+            } else {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 3), spacing: 4) {
+                    ForEach(moveCandidates) { t in
+                        Button {
+                            Task {
+                                guard let s = selected else { return }
+                                if let _ = await model.act(["type": "floorMove", "orderId": s.id, "tableId": t.id]) {
+                                    panel = nil
+                                    model.show(toast: "\(table.name) の伝票を \(t.name) に移動しました")
+                                    onClose()
+                                }
+                            }
+                        } label: {
+                            Text(t.name).font(.system(size: 12, weight: .bold)).foregroundColor(NFColor.navy)
+                                .frame(maxWidth: .infinity).frame(height: 40)
+                                .background(RoundedRectangle(cornerRadius: 8).fill(Color.white))
+                                .overlay(RoundedRectangle(cornerRadius: 8).stroke(NFColor.line, lineWidth: 1))
+                        }
+                        .buttonStyle(PressableStyle())
+                        .disabled(model.busy)
                     }
                 }
             }
