@@ -110,7 +110,8 @@ struct NativeSettingsView: View {
                 Spacer()
             }
         }
-        .background(NFColor.lilac.ignoresSafeArea())
+        // 背景は白（2026-10-24 Ronnie「背景は全部白」）。カードは枠線＋うすい影で浮かせる
+        .background(Color.white.ignoresSafeArea())
         .overlay(alignment: .bottom) {
             if let t = model.toast {
                 Text(t).font(.system(size: 15, weight: .bold)).foregroundColor(.white).multilineTextAlignment(.center)
@@ -287,6 +288,7 @@ struct NativeSettingsView: View {
             .frame(maxWidth: .infinity, minHeight: status != nil || en != nil ? 104 : 76, alignment: .topLeading)
             .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.white))
             .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(NFColor.line, lineWidth: 1))
+            .shadow(color: Color.black.opacity(0.05), radius: 6, y: 2)
         }
         .buttonStyle(PressableStyle(scale: 0.98))
         .disabled(locked)
@@ -343,6 +345,7 @@ struct NativeSettingsView: View {
         }
         .background(RoundedRectangle(cornerRadius: 16).fill(Color.white))
         .overlay(RoundedRectangle(cornerRadius: 16).stroke(NFColor.line, lineWidth: 1))
+        .shadow(color: Color.black.opacity(0.05), radius: 6, y: 2)
     }
 
     private func row<Content: View>(_ label: String, en: String, dim: Bool = false, @ViewBuilder content: () -> Content) -> some View {

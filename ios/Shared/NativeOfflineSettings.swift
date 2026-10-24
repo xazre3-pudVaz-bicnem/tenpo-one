@@ -80,6 +80,8 @@ struct NativeOfflinePrintCard: View {
         }
         .background(RoundedRectangle(cornerRadius: 16).fill(Color.white))
         .overlay(RoundedRectangle(cornerRadius: 16).stroke(NFColor.line, lineWidth: 1))
+        // 設定の背景が白なので、うすい影で浮かせる（設定のカードと同じ）
+        .shadow(color: Color.black.opacity(0.05), radius: 6, y: 2)
         .onAppear {
             kit = NativePrintKit.shared.kit
             ready = NativePrintKit.shared.ready
