@@ -29,15 +29,15 @@ jobs:
           build-mode: none
           queries: security-extended
       - uses: github/codeql-action/analyze@793b778da9c9275a0f276522b27cb5fc14bba279 # v4
-  dependency-review:
-    if: github.event_name == 'pull_request'
+  dependency-audit:
     runs-on: ubuntu-22.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
-      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          fail-on-severity: high
-          fail-on-scopes: runtime,development,unknown
+          node-version: 22
+      # Registry audit uses the lockfile; it does not install or execute package scripts.
+      - run: npm audit --package-lock-only --audit-level=high
