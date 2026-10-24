@@ -245,7 +245,11 @@ struct NativeSettingsView: View {
     private func itemList(_ g: ItemGroup) -> some View {
         VStack(spacing: 0) {
             ForEach(Array(g.items.enumerated()), id: \.element.id) { i, it in
-                Button { onWeb(it.url) } label: {
+                // ネイティブの画面があるものはアプリの画面で（押した瞬間に）。まだのものは Web（「Web」の印）
+                let native = NativeSettingsPageKey.from(path: Self.path(it.url))
+                Button {
+                    if let native { state.openSettingsPage(native, webPath: it.url) } else { onWeb(it.url) }
+                } label: {
                     HStack(spacing: 12) {
                         Image(systemName: it.allowed ? g.icon : "lock")
                             .font(.system(size: 15, weight: .semibold)).foregroundColor(it.allowed ? NFColor.iris : NFColor.ink3)
@@ -258,6 +262,11 @@ struct NativeSettingsView: View {
                             }
                         }
                         Spacer(minLength: 8)
+                        if native == nil && it.allowed {
+                            Text("Web").font(.system(size: 10.5, weight: .heavy)).foregroundColor(NFColor.ink3)
+                                .padding(.horizontal, 7).padding(.vertical, 3)
+                                .overlay(Capsule().stroke(NFColor.line, lineWidth: 1))
+                        }
                         Image(systemName: "chevron.right").font(.system(size: 13, weight: .bold)).foregroundColor(NFColor.ink3)
                     }
                     .padding(.horizontal, 14).frame(height: 60)

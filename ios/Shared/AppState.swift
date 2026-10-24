@@ -77,6 +77,8 @@ final class AppState: ObservableObject {
     @Published var nativeReports = false
     /// ネイティブの設定（このiPadのプリンター・レジの設定・管理画面への入口。2026-10-24）
     @Published var nativeSettings = false
+    /// 設定の中のネイティブの画面（品切れ …。2026-10-24 Ronnie「設定の中も全部ネイティブ」）。nil なら無し
+    @Published var nativeSettingsPage: NativeSettingsPageKey?
     @Published var reportsFrom: String?
     @Published var reportsTo: String?
     /// 伝票明細で開く伝票（/app/orders/<id> から。2026-10-24）
@@ -168,6 +170,14 @@ final class AppState: ObservableObject {
         nativeFloor = false; nativeNotices = false; nativeBudget = false; nativeCustomers = false; nativeScan = false; nativeReports = false
         nativeHome = false; nativeLedger = false; nativeCash = false; nativeCashIo = false; nativeQuick = false; nativeSlips = false
         nativeExpenses = false; nativeStock = false; nativeInventory = false; nativeVendors = false; nativePurchases = false; nativeCoupons = false; nativeSettings = false
+        nativeSettingsPage = nil
+    }
+
+    /// 設定の中のネイティブの画面を開く（押した瞬間に出す。Web も同じ道にそろえる）
+    func openSettingsPage(_ key: NativeSettingsPageKey, webPath: String) {
+        closeAllNative()
+        nativeSettingsPage = key
+        WebViewController.current?.load(AppConfig.url(webPath))
     }
     /// 「今までの画面で開く」を選んだ伝票（もう一度ネイティブで開かない）
     private var webChosenOrders = Set<String>()
@@ -250,6 +260,13 @@ final class AppState: ObservableObject {
         if url.path == "/app/dashboard" || url.path == "/app/floor" || url.path == "/app" {
             Task { @MainActor in NativeCatalogCache.shared.refresh() }
         }
+        // 設定の中のネイティブの画面（品切れ …）。その道でなければ閉じる（ほかの画面に移ったとき）
+        if let key = NativeSettingsPageKey.from(path: url.path) {
+            closeAllNative()
+            nativeSettingsPage = key
+            return
+        }
+        if nativeSettingsPage != nil { nativeSettingsPage = nil }
         // ホーム・テーブル一覧はネイティブで（Web の画面の上に重ねる。Native ON の iPad は Web のホーム・テーブル一覧を見せない）
         if url.path == "/app/dashboard" || url.path == "/app" {
             nativeFloor = false; nativeNotices = false; nativeBudget = false; nativeCustomers = false; nativeScan = false; nativeReports = false

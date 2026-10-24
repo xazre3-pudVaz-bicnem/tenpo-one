@@ -89,6 +89,9 @@ import {
 } from '@/app/app/cash/actions';
 import { isNativeNoticeActionType, parseNativeNoticeAction } from '@/lib/native-notices';
 import { isNativeSettingsActionType, parseNativeSettingsAction } from '@/lib/native-settings';
+import { isNativeSettingsPageActionType, parseNativeSettingsPageAction, type NativeSoldOutPayload } from '@/lib/native-settings-pages';
+import { loadSoldOutBoard } from '@/lib/sold-out-loader';
+import { setItemSoldOut } from '@/app/app/pos/sold-out-actions';
 import { loadNativeSettings } from '@/lib/native-settings-server';
 import { currentDeviceSetting } from '@/lib/register-device-server';
 import { addDeviceReceiptPrinter, saveDeviceReceiptPrinterSettings, setDevicePrinter } from '@/app/app/pos/device-printer-actions';
@@ -330,6 +333,21 @@ export async function GET(request: Request) {
     if (ctx.disabledFeatures?.has('accounting')) return json({ ok: false, error: 'この機能は使えません', useWeb: true }, 403);
     const cash = await loadNativeCash(ctx, await createClient(), { id: store.id, name: store.name });
     return json({ ok: true, ...cash });
+  }
+
+  // 設定の中の画面：品切れ（Web の /app/pos/sold-out と同じ読み込み。2026-10-24 Ronnie「設定の中も全部ネイティブ」）
+  if (part === 'soldout') {
+    const store = ctx.currentStore ?? ctx.stores[0] ?? null;
+    if (!store) return json({ ok: false, error: '店舗がありません' }, 404);
+    const board = await loadSoldOutBoard(await createClient(), ctx.organizationId, store.id);
+    if (board.error) return json({ ok: false, error: '商品を読み込めませんでした' }, 500);
+    const payload: NativeSoldOutPayload = {
+      store: { id: store.id, name: store.name },
+      canManageShared: can(ctx.role, 'menu.manage'),
+      categories: board.categories,
+      items: board.items,
+    };
+    return json({ ok: true, ...payload });
   }
 
   // 設定（このiPadのプリンター・レシートの出し先・LAN・Wi-Fi・設定の一覧）。Web の /app/pos/settings と同じ組み立て（lib/native-settings-server.ts）
@@ -1154,6 +1172,24 @@ export async function POST(request: Request) {
       }
       const r = await saveDailyBudgets(store.id, ba.month, ba.values);
       return json(r.error ? { ok: false, error: r.error } : { ok: true, queued: r.total ?? 0 });
+    } catch (e) {
+      return json({ ok: false, error: errorText(e, 'うまくいきませんでした。もう一度お試しください') }, 400);
+    }
+  }
+
+  // 設定の中の画面の操作（品切れ …。中身は Web と同じ Server Action。2026-10-24）
+  if (raw && typeof raw === 'object' && isNativeSettingsPageActionType((raw as { type?: unknown }).type)) {
+    const parsedPage = parseNativeSettingsPageAction(raw);
+    if (!parsedPage.ok) return json({ ok: false, error: parsedPage.error }, 400);
+    // Route Handler では requirePermission がお店の回線を見ないので、ここで見る（ほかの操作と同じ）
+    const pageProblem = await networkProblem(ctx);
+    if (pageProblem) return json({ ok: false, error: pageProblem }, 403);
+    try {
+      const pa = parsedPage.action;
+      if (pa.type === 'soldOutSet') {
+        const r = await setItemSoldOut(pa.itemId, pa.soldOut);
+        return json(r.error ? { ok: false, error: r.error } : { ok: true });
+      }
     } catch (e) {
       return json({ ok: false, error: errorText(e, 'うまくいきませんでした。もう一度お試しください') }, 400);
     }

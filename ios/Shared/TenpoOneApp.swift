@@ -95,6 +95,13 @@ struct RootView: View {
                         .transition(.opacity)
                         .zIndex(5)
                 }
+                // 設定の中のネイティブの画面（品切れ …。2026-10-24）
+                if let key = state.nativeSettingsPage {
+                    NativeSettingsPageScreen(key: key)
+                        .id(key)
+                        .transition(.opacity)
+                        .zIndex(6)
+                }
                 if state.nativeStock {
                     NativeStockScreen()
                         .transition(.opacity)
@@ -180,6 +187,7 @@ struct RootView: View {
         .animation(.easeOut(duration: 0.18), value: state.nativeCoupons)
         .animation(.easeOut(duration: 0.18), value: state.nativeNotices)
         .animation(.easeOut(duration: 0.18), value: state.nativeSettings)
+        .animation(.easeOut(duration: 0.18), value: state.nativeSettingsPage)
         .animation(.easeOut(duration: 0.18), value: state.nativeBudget)
         .animation(.easeOut(duration: 0.18), value: state.nativeCustomers)
         .animation(.easeOut(duration: 0.18), value: state.nativeScan)
