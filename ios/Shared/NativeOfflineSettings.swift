@@ -16,13 +16,10 @@ struct NativeOfflinePrintCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .center, spacing: 12) {
-                Image(systemName: "wifi.slash").font(.system(size: 17, weight: .semibold)).foregroundColor(NFColor.iris)
-                    .frame(width: 36, height: 36)
-                    .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(NFColor.irisSoft))
                 Text("ネットが無いときの印刷").font(.system(size: 18, weight: .heavy)).foregroundColor(NFColor.navy)
                 Spacer(minLength: 0)
             }
-            .padding(.horizontal, 18).padding(.vertical, 15)
+            .padding(.horizontal, 20).padding(.vertical, 16)
             Rectangle().fill(NFColor.line).frame(height: 1)
 
             line("準備", en: "") {
@@ -118,12 +115,10 @@ struct NativeOfflinePrintCard: View {
                 }
                 Spacer(minLength: 0)
             }
-            .padding(.horizontal, 18).padding(.vertical, 14)
+            .padding(.horizontal, 20).padding(.vertical, 14)
         }
         .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Color.white))
         .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(NFColor.line, lineWidth: 1))
-        // 設定の背景が白なので、うすい影で浮かせる（設定のカードと同じ）
-        .shadow(color: Color.black.opacity(0.05), radius: 8, y: 3)
         .onAppear {
             kit = NativePrintKit.shared.kit
             ready = NativePrintKit.shared.ready
@@ -146,17 +141,17 @@ struct NativeOfflinePrintCard: View {
     }
 
     private func line<Content: View>(_ label: String, en: String, @ViewBuilder content: () -> Content) -> some View {
+        // 名前は左・状態は右（設定の他の行と同じ）
         HStack(alignment: .center, spacing: 16) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(label).font(.system(size: 16, weight: .bold)).foregroundColor(NFColor.ink)
+                Text(label).font(.system(size: 17, weight: .bold)).foregroundColor(NFColor.ink)
                 if !en.isEmpty { Text(en).font(.system(size: 12, weight: .medium)).foregroundColor(NFColor.ink3) }
             }
-            .frame(width: 220, alignment: .leading)
+            Spacer(minLength: 16)
             content()
-            Spacer(minLength: 0)
         }
-        .padding(.horizontal, 18).padding(.vertical, 14)
-        .overlay(alignment: .bottom) { Rectangle().fill(NFColor.line).frame(height: 1).padding(.leading, 18) }
+        .padding(.horizontal, 20).padding(.vertical, 12).frame(minHeight: 66)
+        .overlay(alignment: .bottom) { Rectangle().fill(NFColor.line).frame(height: 1).padding(.horizontal, 20) }
     }
 
     private func button(_ text: String, icon: String? = nil, primary: Bool = false, busy: Bool = false, disabled: Bool = false, action: @escaping () -> Void) -> some View {

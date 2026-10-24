@@ -714,7 +714,7 @@ struct NSPFrame<Content: View>: View {
             if loaded {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) { content() }
-                        .padding(20).frame(maxWidth: 960).frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(20).frame(maxWidth: 1100).frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.bottom, 24)
                 }
             } else {
@@ -757,7 +757,7 @@ struct NSPCard<Content: View>: View {
                 }
                 if let note { Text(note).font(.system(size: 13)).foregroundColor(NFColor.ink3).fixedSize(horizontal: false, vertical: true) }
             }
-            .padding(.horizontal, 18).padding(.vertical, 15)
+            .padding(.horizontal, 20).padding(.vertical, 16)
             Rectangle().fill(NFColor.line).frame(height: 1)
             content()
         }
@@ -1358,20 +1358,21 @@ struct NSPRow<Content: View>: View {
     var required = false
     @ViewBuilder let content: () -> Content
     var body: some View {
+        // 名前は左・入力は右（見本の Funfo と同じ並び。2026-10-24 18:44 Ronnie「スタイルはこれ」）
         HStack(alignment: .center, spacing: 16) {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 5) {
-                    Text(label).font(.system(size: 16, weight: .bold)).foregroundColor(NFColor.ink)
+                    Text(label).font(.system(size: 17, weight: .bold)).foregroundColor(NFColor.ink)
                     if required { Text("必須").font(.system(size: 10, weight: .heavy)).foregroundColor(.white).padding(.horizontal, 5).padding(.vertical, 1).background(Capsule().fill(NFColor.danger)) }
                 }
                 if !en.isEmpty && !NSPText.isAsciiOnly(en) { Text(en).font(.system(size: 12, weight: .medium)).foregroundColor(NFColor.ink3) }
             }
-            .frame(width: 200, alignment: .leading)
+            .frame(minWidth: 160, alignment: .leading)
+            Spacer(minLength: 16)
             content()
-            Spacer(minLength: 0)
         }
-        .padding(.horizontal, 18).padding(.vertical, 12)
-        .overlay(alignment: .bottom) { Rectangle().fill(NFColor.line).frame(height: 1).padding(.leading, 18) }
+        .padding(.horizontal, 20).padding(.vertical, 12).frame(minHeight: 64)
+        .overlay(alignment: .bottom) { Rectangle().fill(NFColor.line).frame(height: 1).padding(.horizontal, 20) }
     }
 }
 
