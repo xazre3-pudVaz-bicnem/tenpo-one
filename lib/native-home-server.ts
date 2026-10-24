@@ -7,7 +7,7 @@ import { menuLayout } from '@/app/app/menu/data';
 import { loadSalesDisplayDay } from '@/lib/register-day-server';
 import { salesDayView } from '@/lib/register-day';
 import { shouldGoToOpenRegister } from '@/lib/register-open-gate';
-import { getStoreWeather, placeJaFromAddress } from '@/lib/weather';
+import { getStoreWeather, placeJaFromAddress, type WeatherIcon } from '@/lib/weather';
 import type { SalesMetricsOptions } from '@/lib/metrics';
 
 type Supabase = Awaited<ReturnType<typeof createClient>>;
@@ -47,7 +47,8 @@ export interface NativeHomePayload {
     repeaters: number | null;
     walkIns: number;
   };
-  weather: { temperature: number | null; place: string | null };
+  /** 気温・地名・天気のアイコン（sun / partly / cloud / fog / drizzle / rain / snow / thunder）・昼か夜か（晴れの夜は月） */
+  weather: { temperature: number | null; place: string | null; icon: WeatherIcon | null; isDay: boolean | null };
   noticeCount: number;
 }
 
@@ -60,7 +61,7 @@ function nowStampJst(d: Date = new Date()): string {
   return `${date} ${time}`;
 }
 
-async function loadWeatherQuick(address: string | null): Promise<{ temperature: number | null; place: string | null }> {
+async function loadWeatherQuick(address: string | null): Promise<NativeHomePayload['weather']> {
   const place = placeJaFromAddress(address);
   let timer: ReturnType<typeof setTimeout> | undefined;
   const deadline = new Promise<null>((resolve) => {
@@ -68,9 +69,10 @@ async function loadWeatherQuick(address: string | null): Promise<{ temperature: 
   });
   try {
     const w = await Promise.race([getStoreWeather(address), deadline]);
-    return { temperature: w?.temperature ?? null, place };
+    // 天気のアイコンも返す（2026-10-24 Ronnie「15° と天気のアイコンを出して」）
+    return { temperature: w?.temperature ?? null, place, icon: w?.weather?.icon ?? null, isDay: w?.isDay ?? null };
   } catch {
-    return { temperature: null, place };
+    return { temperature: null, place, icon: null, isDay: null };
   } finally {
     clearTimeout(timer);
   }
