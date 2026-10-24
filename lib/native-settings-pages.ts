@@ -110,7 +110,9 @@ export type NativeSettingsPageAction =
   | { type: 'tableSave'; table: NativeTableFields }
   | { type: 'tableDelete'; id: string }
   | { type: 'tableAvailable'; id: string; available: boolean }
-  | { type: 'tablesReorderByName' };
+  | { type: 'tablesReorderByName' }
+  /** ダイナミックプライシング（/app/settings/dynamic-pricing。saveDynamicPricing。中身の確認は lib/dynamic-pricing.ts） */
+  | { type: 'dynamicPricingSave'; rules: unknown[] };
 
 export interface NativeTableFields {
   id: string | null;
@@ -267,6 +269,7 @@ export const NATIVE_SETTINGS_PAGE_ACTION_TYPES: readonly NativeSettingsPageActio
   'tableDelete',
   'tableAvailable',
   'tablesReorderByName',
+  'dynamicPricingSave',
 ];
 
 export function isNativeSettingsPageActionType(v: unknown): v is NativeSettingsPageActionType {
@@ -839,7 +842,39 @@ export function parseNativeSettingsPageAction(raw: unknown): Parsed {
     return { ok: true, action: { type: 'tableAvailable', id: b.id, available: b.available } };
   }
   if (b.type === 'tablesReorderByName') return { ok: true, action: { type: 'tablesReorderByName' } };
+  if (b.type === 'dynamicPricingSave') {
+    if (!Array.isArray(b.rules) || b.rules.length > 50) return bad('ルールは50件までです');
+    return { ok: true, action: { type: 'dynamicPricingSave', rules: b.rules } };
+  }
   return bad();
+}
+
+/** ダイナミックプライシングの画面の読み込み（GET ?part=dynamicPricing） */
+export interface NativeDynamicPricingPayload {
+  store: { id: string; name: string };
+  canEdit: boolean;
+  rules: {
+    id: string;
+    name: string;
+    enabled: boolean;
+    days: number[];
+    start: string;
+    end: string;
+    target: 'all' | 'categories' | 'items';
+    categoryIds: string[];
+    itemIds: string[];
+    kind: 'percent' | 'amount' | 'fixed';
+    value: number;
+    roundTo10: boolean;
+  }[];
+  categories: { id: string; name: string }[];
+  items: { id: string; name: string; categoryId: string | null; price: number }[];
+}
+
+/** 集計（/app/settings/summary。レジの一覧から外した 店舗運営・仕入・在庫・経理・労務・経営・店舗内共有・管理 の画面） */
+export interface NativeSummaryPayload {
+  store: { id: string; name: string };
+  groups: { label: string; en: string; items: { href: string; label: string; en: string; icon: string }[] }[];
 }
 
 /** テーブル・フロアの画面の読み込み（GET ?part=tables） */

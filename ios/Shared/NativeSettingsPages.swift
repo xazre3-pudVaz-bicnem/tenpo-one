@@ -35,6 +35,8 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
     case audit = "audit"
     case company = "company"
     case tables = "tables"
+    case dynamicPricing = "dynamicPricing"
+    case summary = "summary"
     var id: String { rawValue }
 
     /// Web の道（クエリは見ない）
@@ -66,6 +68,8 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
         case .audit: return "/app/settings/audit"
         case .company: return "/app/settings/company"
         case .tables: return "/app/settings/tables"
+        case .dynamicPricing: return "/app/settings/dynamic-pricing"
+        case .summary: return "/app/settings/summary"
         }
     }
     var title: String {
@@ -96,6 +100,8 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
         case .audit: return "監査ログ"
         case .company: return "企業情報"
         case .tables: return "テーブル・フロア"
+        case .dynamicPricing: return "ダイナミックプライシング"
+        case .summary: return "集計"
         }
     }
     var en: String {
@@ -126,6 +132,8 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
         case .audit: return "Audit log"
         case .company: return "Company"
         case .tables: return "Tables"
+        case .dynamicPricing: return "Dynamic pricing"
+        case .summary: return "Reports & admin"
         }
     }
 
@@ -167,6 +175,8 @@ struct NativeSettingsPageScreen: View {
         case .audit: NativeAuditScreen()
         case .company: NativeCompanyScreen()
         case .tables: NativeTablesScreen()
+        case .dynamicPricing: NativeDynamicPricingScreen()
+        case .summary: NativeSummaryScreen()
         }
     }
 }
@@ -4565,5 +4575,245 @@ struct NativeTablesScreen: View {
             .background(RoundedRectangle(cornerRadius: 10).fill(on ? NFColor.irisSoft : Color.white)).overlay(RoundedRectangle(cornerRadius: 10).stroke(on ? NFColor.iris : NFColor.line, lineWidth: 1))
         }
         .buttonStyle(PressableStyle())
+    }
+}
+
+// MARK: - ダイナミックプライシング（Web の /app/settings/dynamic-pricing・components/settings/dynamic-pricing-editor.tsx と同じ）
+
+struct NDPRule: Codable, Identifiable, Hashable {
+    var id: String; var name: String; var enabled: Bool; var days: [Int]; var start: String; var end: String
+    var target: String; var categoryIds: [String]; var itemIds: [String]; var kind: String; var value: Int; var roundTo10: Bool
+    static func fresh() -> NDPRule {
+        NDPRule(id: UUID().uuidString.lowercased(), name: "ハッピーアワー", enabled: true, days: [1, 2, 3, 4, 5], start: "17:00", end: "19:00", target: "categories", categoryIds: [], itemIds: [], kind: "percent", value: -20, roundTo10: true)
+    }
+    /// lib/dynamic-pricing.ts の describeRule と同じ
+    var describe: String {
+        let w = ["日", "月", "火", "水", "木", "金", "土"]
+        let d = days.isEmpty || days.count == 7 ? "毎日" : days.sorted().map { w[$0] }.joined(separator: "・")
+        let t = start == end ? "終日" : "\(start)〜\(end)"
+        let how: String
+        switch kind {
+        case "fixed": how = "\(NT.yen(value))にする"
+        case "amount": how = value >= 0 ? "+\(NT.yen(value))" : "-\(NT.yen(-value))"
+        default: how = value < 0 ? "\(-value)%引き" : "+\(value)%"
+        }
+        return "\(d) \(t)・\(how)\(roundTo10 ? "（10円単位）" : "")"
+    }
+    var json: [String: Any] {
+        ["id": id, "name": name, "enabled": enabled, "days": days, "start": start, "end": end, "target": target, "categoryIds": categoryIds, "itemIds": itemIds, "kind": kind, "value": value, "roundTo10": roundTo10]
+    }
+}
+struct NDPItem: Codable, Identifiable, Hashable { let id: String; let name: String; let categoryId: String?; let price: Double }
+struct NDPPayload: Codable { let store: NFNamed; let canEdit: Bool; let rules: [NDPRule]; let categories: [NFNamed]; let items: [NDPItem] }
+
+@MainActor
+final class NativeDynamicPricingModel: NSPModel<NDPPayload> {
+    @Published var rules: [NDPRule] = []
+    @Published var open: String?
+    @Published var itemQuery = ""
+    init() { super.init(part: "dynamicPricing") }
+    override func loaded(_ p: NDPPayload) { rules = p.rules }
+    var dirty: Bool { payload.map { $0.rules != rules } ?? false }
+    func idx(_ id: String) -> Int? { rules.firstIndex { $0.id == id } }
+    func save() async {
+        for r in rules {
+            if r.name.trimmingCharacters(in: .whitespaces).isEmpty { toast = "ルール名を入力してください"; return }
+            if r.target == "categories" && r.categoryIds.isEmpty { toast = "「\(r.name)」: カテゴリを1つ以上選んでください"; return }
+            if r.target == "items" && r.itemIds.isEmpty { toast = "「\(r.name)」: 商品を1つ以上選んでください"; return }
+        }
+        _ = await run("save", ["type": "dynamicPricingSave", "rules": rules.map(\.json)], done: "ダイナミックプライシングを保存しました（レジ・ハンディ・QRにすぐ反映）")
+    }
+}
+
+struct NativeDynamicPricingScreen: View {
+    @StateObject private var model = NativeDynamicPricingModel()
+    @EnvironmentObject var state: AppState
+    private let kinds: [(String, String)] = [("percent", "± ％"), ("amount", "± 円"), ("fixed", "この金額にする")]
+    private let targets: [(String, String)] = [("categories", "カテゴリを選ぶ"), ("items", "商品を選ぶ"), ("all", "フード・ドリンク全部")]
+
+    var body: some View {
+        NSPFrame(storeName: model.payload?.store.name ?? "", title: "ダイナミックプライシング", en: "Dynamic pricing", loaded: model.payload != nil, error: model.error, toast: $model.toast, onBack: { state.goNativeSettings() }, retry: { await model.refresh() }) {
+            if let p = model.payload {
+                HStack(spacing: 10) {
+                    Text("上から順に優先。曜日と時間帯で値段を自動で変える（ハッピーアワー・深夜料金など）").font(.system(size: 13)).foregroundColor(NFColor.ink3)
+                    Spacer()
+                    NSPButton(text: "ルールを足す", icon: "plus", disabled: model.rules.count >= 50) { let r = NDPRule.fresh(); model.rules.append(r); model.open = r.id }
+                    NSPButton(text: "保存する", primary: true, busy: model.busy == "save", disabled: !model.dirty) { Task { await model.save() } }
+                }
+                NSPCard(title: "ルール", en: "\(model.rules.count) 件") {
+                    VStack(spacing: 0) {
+                        if model.rules.isEmpty { Text("ルールがありません。「ルールを足す」から").font(.system(size: 14)).foregroundColor(NFColor.ink3).padding(18) }
+                        ForEach(Array(model.rules.enumerated()), id: \.element.id) { i, r in
+                            let open = model.open == r.id
+                            HStack(spacing: 10) {
+                                NSPToggle(on: r.enabled) { model.rules[i].enabled.toggle() }
+                                Button { model.open = open ? nil : r.id } label: {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(r.name.isEmpty ? "（名前なし）" : r.name).font(.system(size: 15, weight: .bold)).foregroundColor(r.enabled ? NFColor.ink : NFColor.ink3)
+                                        Text(r.describe + "・" + targetText(p, r)).font(.system(size: 12)).foregroundColor(NFColor.ink3).lineLimit(1)
+                                    }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                                .buttonStyle(.plain)
+                                NSPButton(text: "↑", disabled: i == 0) { model.rules.swapAt(i, i - 1) }
+                                NSPButton(text: "↓", disabled: i == model.rules.count - 1) { model.rules.swapAt(i, i + 1) }
+                                NSPButton(text: "削除", icon: "trash") { model.rules.remove(at: i); if model.open == r.id { model.open = nil } }
+                                Image(systemName: open ? "chevron.up" : "chevron.down").font(.system(size: 12, weight: .bold)).foregroundColor(NFColor.ink3)
+                            }
+                            .padding(.horizontal, 18).frame(minHeight: 58)
+                            .background(open ? NFColor.lilacSoft : Color.white)
+                            .overlay(alignment: .bottom) { Rectangle().fill(NFColor.line).frame(height: 1) }
+                            if open { editor(p, i) }
+                        }
+                    }
+                }
+            }
+        }
+        .task { await model.refresh() }
+    }
+
+    private func targetText(_ p: NDPPayload, _ r: NDPRule) -> String {
+        switch r.target {
+        case "all": return "フード・ドリンク全部"
+        case "items": return "商品 \(r.itemIds.count) 品"
+        default: return r.categoryIds.isEmpty ? "カテゴリ未選択" : r.categoryIds.compactMap { id in p.categories.first { $0.id == id }?.name }.joined(separator: "・")
+        }
+    }
+
+    private func menuBox(_ text: String, enabled: Bool = true) -> some View {
+        HStack(spacing: 6) {
+            Text(text).font(.system(size: 14, weight: .bold)).foregroundColor(NFColor.ink)
+            Image(systemName: "chevron.up.chevron.down").font(.system(size: 11, weight: .bold)).foregroundColor(NFColor.ink3)
+        }
+        .padding(.horizontal, 12).frame(height: 44)
+        .background(RoundedRectangle(cornerRadius: 10).fill(Color.white)).overlay(RoundedRectangle(cornerRadius: 10).stroke(NFColor.line, lineWidth: 1))
+    }
+    private func chip(_ text: String, on: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(text).font(.system(size: 13.5, weight: .bold)).foregroundColor(on ? .white : NFColor.ink2)
+                .padding(.horizontal, 12).frame(height: 38)
+                .background(Capsule().fill(on ? NFColor.iris : Color.white)).overlay(Capsule().stroke(on ? NFColor.iris : NFColor.line, lineWidth: 1))
+        }
+        .buttonStyle(PressableStyle())
+    }
+
+    private func editor(_ p: NDPPayload, _ i: Int) -> some View {
+        let r = model.rules[i]
+        let w = ["日", "月", "火", "水", "木", "金", "土"]
+        return VStack(spacing: 0) {
+            NSPRow(label: "ルール名", required: true) { NSPInput(text: Binding(get: { model.rules[i].name }, set: { model.rules[i].name = $0 }), placeholder: "ハッピーアワー", width: 300) }
+            NSPRow(label: "曜日", en: "何も選ばなければ毎日") {
+                HStack(spacing: 6) {
+                    ForEach(0..<7, id: \.self) { d in
+                        chip(w[d], on: r.days.contains(d)) { if let k = model.rules[i].days.firstIndex(of: d) { model.rules[i].days.remove(at: k) } else { model.rules[i].days.append(d); model.rules[i].days.sort() } }
+                    }
+                }
+            }
+            NSPRow(label: "時間", en: "同じなら終日・終了が前なら日をまたぐ") {
+                HStack(spacing: 8) {
+                    NSPTimeMenu(value: r.start, options: NSPApi.timeOptions(toMin: 23 * 60 + 45)) { if let v = $0 { model.rules[i].start = v } }
+                    Text("〜").foregroundColor(NFColor.ink3)
+                    NSPTimeMenu(value: r.end, options: NSPApi.timeOptions(toMin: 23 * 60 + 45)) { if let v = $0 { model.rules[i].end = v } }
+                }
+            }
+            NSPRow(label: "対象") {
+                Menu { ForEach(targets, id: \.0) { t in Button(t.1) { model.rules[i].target = t.0 } } } label: { menuBox(targets.first { $0.0 == r.target }?.1 ?? r.target) }
+            }
+            if r.target == "categories" {
+                NSPRow(label: "カテゴリ", required: true) {
+                    WrapLayout(spacing: 6) {
+                        ForEach(p.categories) { c in
+                            chip(c.name, on: r.categoryIds.contains(c.id)) { if let k = model.rules[i].categoryIds.firstIndex(of: c.id) { model.rules[i].categoryIds.remove(at: k) } else { model.rules[i].categoryIds.append(c.id) } }
+                        }
+                    }
+                }
+            }
+            if r.target == "items" {
+                NSPRow(label: "商品", en: "\(r.itemIds.count) 品", required: true) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        WrapLayout(spacing: 6) {
+                            ForEach(r.itemIds, id: \.self) { id in
+                                chip((p.items.first { $0.id == id }?.name ?? "？") + " ×", on: true) { model.rules[i].itemIds.removeAll { $0 == id } }
+                            }
+                        }
+                        NSPInput(text: $model.itemQuery, placeholder: "商品名で検索して追加", width: 300)
+                        if !model.itemQuery.isEmpty {
+                            let q = NativeSoldOutModel.norm(model.itemQuery)
+                            WrapLayout(spacing: 6) {
+                                ForEach(p.items.filter { !r.itemIds.contains($0.id) && NativeSoldOutModel.norm($0.name).contains(q) }.prefix(30)) { it in
+                                    chip("+ \(it.name)（\(NT.yen(Int(it.price)))）", on: false) { model.rules[i].itemIds.append(it.id) }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            NSPRow(label: "値段の変え方", required: true) {
+                HStack(spacing: 8) {
+                    Menu { ForEach(kinds, id: \.0) { k in Button(k.1) { model.rules[i].kind = k.0 } } } label: { menuBox(kinds.first { $0.0 == r.kind }?.1 ?? r.kind) }
+                    NSPInput(text: Binding(get: { String(model.rules[i].value) }, set: { model.rules[i].value = Int($0.replacingOccurrences(of: "−", with: "-").filter { $0.isNumber || $0 == "-" }) ?? 0 }), placeholder: "-20", width: 120, keyboard: .numbersAndPunctuation, trailing: r.kind == "percent" ? "%" : "円")
+                    Text(r.kind == "percent" ? "-20 で2割引き、10 で1割増し" : (r.kind == "amount" ? "-100 で100円引き、50 で50円増し" : "例: 300 で全部300円")).font(.system(size: 12)).foregroundColor(NFColor.ink3)
+                }
+            }
+            NSPRow(label: "端数") { chip("10円単位に四捨五入", on: r.roundTo10) { model.rules[i].roundTo10.toggle() } }
+        }
+        .background(NFColor.lilacSoft.opacity(0.5))
+        .overlay(alignment: .bottom) { Rectangle().fill(NFColor.line).frame(height: 1) }
+    }
+}
+
+// MARK: - 集計（Web の /app/settings/summary と同じ。店舗運営・仕入・在庫・経理・労務・経営・店舗内共有・管理 の画面への入口）
+
+struct NSMItem: Codable, Identifiable, Hashable { let href: String; let label: String; let en: String; let icon: String; var id: String { href } }
+struct NSMGroup: Codable, Identifiable, Hashable { let label: String; let en: String; let items: [NSMItem]; var id: String { label } }
+struct NSMPayload: Codable { let store: NFNamed; let groups: [NSMGroup] }
+
+@MainActor final class NativeSummaryModel: NSPModel<NSMPayload> { init() { super.init(part: "summary") } }
+
+struct NativeSummaryScreen: View {
+    @StateObject private var model = NativeSummaryModel()
+    @EnvironmentObject var state: AppState
+    /// lucide の名前 → SF Symbols（components/layout/nav-icons.tsx の対応と同じ意味のもの）
+    private static let icons: [String: String] = [
+        "yen": "yensign.circle", "calendar": "calendar", "pos": "cart", "home": "house", "clock": "clock", "clipboard": "list.clipboard", "chart": "chart.bar",
+        "more": "ellipsis.circle", "list": "list.bullet", "file": "doc.text", "book": "book", "wallet": "wallet.pass", "users": "person.2", "truck": "shippingbox",
+        "ticket": "ticket", "settings": "gearshape", "receipt": "receipt", "package": "cube.box", "monitor": "desktopcomputer", "mail": "envelope", "lock": "lock",
+        "gear": "gearshape", "drawer": "tray", "camera": "camera", "calculator": "plus.forwardslash.minus", "bell": "bell", "bank": "building.columns", "bag": "bag",
+    ]
+    var body: some View {
+        NSPFrame(storeName: model.payload?.store.name ?? "", title: "集計", en: "Reports & admin", loaded: model.payload != nil, error: model.error, toast: $model.toast, onBack: { state.goNativeSettings() }, retry: { await model.refresh() }) {
+            if let p = model.payload {
+                if p.groups.isEmpty { Text("権限の範囲では開ける画面がありません").font(.system(size: 14)).foregroundColor(NFColor.ink3) }
+                ForEach(p.groups) { g in
+                    NSPCard(title: g.label, en: g.en) {
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 230), spacing: 10)], spacing: 10) {
+                            ForEach(g.items) { it in
+                                Button {
+                                    if let key = NativeSettingsPageKey.from(path: it.href) { state.openSettingsPage(key, webPath: it.href) } else { state.leaveNativeFloor(to: it.href) }
+                                } label: {
+                                    HStack(spacing: 12) {
+                                        ZStack {
+                                            RoundedRectangle(cornerRadius: 10).fill(NFColor.navy).frame(width: 40, height: 40)
+                                            Image(systemName: NativeSummaryScreen.icons[it.icon] ?? "square.grid.2x2").font(.system(size: 17, weight: .semibold)).foregroundColor(.white)
+                                        }
+                                        VStack(alignment: .leading, spacing: 1) {
+                                            Text(it.label).font(.system(size: 15, weight: .bold)).foregroundColor(NFColor.ink).lineLimit(1)
+                                            Text(it.en).font(.system(size: 11)).foregroundColor(NFColor.ink3).lineLimit(1)
+                                        }
+                                        Spacer(minLength: 0)
+                                        Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundColor(NFColor.ink3)
+                                    }
+                                    .padding(.horizontal, 12).frame(height: 60)
+                                    .background(RoundedRectangle(cornerRadius: 12).fill(Color.white)).overlay(RoundedRectangle(cornerRadius: 12).stroke(NFColor.line, lineWidth: 1))
+                                }
+                                .buttonStyle(PressableStyle())
+                            }
+                        }
+                        .padding(14)
+                    }
+                }
+            }
+        }
+        .task { await model.refresh() }
     }
 }

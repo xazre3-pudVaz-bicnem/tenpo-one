@@ -22,6 +22,9 @@ import { canAssignRole, HQ_ROLES, isHqRole, ROLE_LABELS, ROLES, roleOutranks, ty
 import { updateCompanyInfo, updateKpiSettings } from '@/app/app/settings/company/actions';
 import { addFloor, deleteFloor, deleteTable, renameFloor, reorderTablesByName, saveDefaultFloor, saveTable, toggleTableAvailability } from '@/app/app/settings/tables/actions';
 import { floorBoardFrom } from '@/lib/floor-nav';
+import { saveDynamicPricing } from '@/app/app/settings/dynamic-pricing/actions';
+import { dynamicPricingFrom, type DynamicPriceRule } from '@/lib/dynamic-pricing';
+import { menuLayout } from '@/app/app/menu/data';
 import { ADMIN_ONLY_SETTINGS_NOTE } from '@/lib/admin-only-settings';
 import { formatDateTime } from '@/lib/format';
 import { changeMemberRole, changeMemberStores, inviteStaff, resetMemberPassword, setMemberPin, setMemberStatus } from '@/app/app/staff/actions';
@@ -64,6 +67,8 @@ import type {
   NativeAuditPayload,
   NativeCompanyPayload,
   NativeTablesPayload,
+  NativeDynamicPricingPayload,
+  NativeSummaryPayload,
   NativeMenuItemsPayload,
   NativeOptionsPayload,
   NativeQrServicePayload,
@@ -83,7 +88,7 @@ type Supabase = Awaited<ReturnType<typeof createClient>>;
 type Store = { id: string; name: string };
 
 /** 設定の中の画面の名前（GET ?part=） */
-export const NATIVE_SETTINGS_PAGE_PARTS = ['soldout', 'clerks', 'hours', 'store', 'tax', 'loyalty', 'alerts', 'approvals', 'accounts', 'handy', 'categories', 'menuItems', 'options', 'qrService', 'menuBook', 'payments', 'staff', 'reservationBook', 'integrations', 'audit', 'company', 'tables'] as const;
+export const NATIVE_SETTINGS_PAGE_PARTS = ['soldout', 'clerks', 'hours', 'store', 'tax', 'loyalty', 'alerts', 'approvals', 'accounts', 'handy', 'categories', 'menuItems', 'options', 'qrService', 'menuBook', 'payments', 'staff', 'reservationBook', 'integrations', 'audit', 'company', 'tables', 'dynamicPricing', 'summary'] as const;
 export type NativeSettingsPagePart = (typeof NATIVE_SETTINGS_PAGE_PARTS)[number];
 export function isNativeSettingsPagePart(v: unknown): v is NativeSettingsPagePart {
   return typeof v === 'string' && (NATIVE_SETTINGS_PAGE_PARTS as readonly string[]).includes(v);
@@ -123,7 +128,9 @@ export async function loadNativeSettingsPage(
         | NativeIntegrationsPayload
         | NativeAuditPayload
         | NativeCompanyPayload
-        | NativeTablesPayload;
+        | NativeTablesPayload
+        | NativeDynamicPricingPayload
+        | NativeSummaryPayload;
     }
   | { ok: false; error: string }
 > {
@@ -635,6 +642,45 @@ export async function loadNativeSettingsPage(
       },
     };
   }
+  if (part === 'dynamicPricing') {
+    // Web の app/app/settings/dynamic-pricing/page.tsx と同じ（requirePermission('menu.manage')）
+    if (!can(ctx.role, 'menu.manage')) return { ok: false, error: 'メニューを変える権限がありません' };
+    if (!ctx.organizationId) return { ok: false, error: '企業が見つかりません' };
+    // 全店共通（store_id が無い）のカテゴリ・商品も対象（Web の loadMenuSettingsData と同じ）
+    const [{ data: categories }, { data: items }, { data: settingsRow }] = await Promise.all([
+      supabase.from('menu_categories').select('id, name').eq('organization_id', ctx.organizationId).eq('status', 'active').or(`store_id.is.null,store_id.eq.${store.id}`).order('sort_order'),
+      supabase
+        .from('menu_items')
+        .select('id, name, category_id, item_type, price, status')
+        .eq('organization_id', ctx.organizationId)
+        .eq('status', 'active')
+        .or(`store_id.is.null,store_id.eq.${store.id}`)
+        .in('item_type', ['food', 'drink'])
+        .order('sort_order'),
+      supabase.from('store_settings').select('settings').eq('store_id', store.id).maybeSingle(),
+    ]);
+    return {
+      ok: true,
+      payload: {
+        store,
+        canEdit: true,
+        rules: dynamicPricingFrom(settingsRow?.settings ?? null).rules,
+        categories: (categories ?? []).map((c) => ({ id: c.id as string, name: c.name as string })),
+        items: (items ?? []).map((i) => ({ id: i.id as string, name: i.name as string, categoryId: (i.category_id as string | null) ?? null, price: Number(i.price ?? 0) })),
+      },
+    };
+  }
+  if (part === 'summary') {
+    // Web の app/app/settings/summary/page.tsx と同じ（menuLayout の summaryGroups）
+    const { summaryGroups } = menuLayout(ctx.role, ctx.disabledFeatures);
+    return {
+      ok: true,
+      payload: {
+        store,
+        groups: summaryGroups.map((g) => ({ label: g.label ?? '', en: g.en ?? '', items: g.items.map((i) => ({ href: i.href, label: i.label, en: i.en, icon: i.icon })) })),
+      },
+    };
+  }
   if (part === 'tables') {
     // Web の app/app/settings/tables/page.tsx と同じ。変更は管理画面だけ（2026-09-29 Ronnie）＝レジ端末では見るだけ
     const [{ data: floors }, { data: storeSettings }, { data: tables }] = await Promise.all([
@@ -1126,6 +1172,8 @@ export async function runNativeSettingsPageAction(
       const r = await reorderTablesByName(store.id);
       return r.error ? { ok: false, error: r.error } : { ok: true, data: { updated: r.updated ?? 0 } };
     }
+    case 'dynamicPricingSave':
+      return done(await saveDynamicPricing(store.id, action.rules as DynamicPriceRule[]));
     case 'remindersPrepare': {
       // この Server Action はエラーを throw する → 呼び出し側（route）が errorText で返す
       const r = await prepareReservationReminders(store.id);

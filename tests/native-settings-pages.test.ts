@@ -148,4 +148,10 @@ describe('native settings pages (設定の中の画面) actions', () => {
     expect(parseNativeSettingsPageAction({ type: 'tableAvailable', id: ID, available: false }).ok).toBe(true);
     expect(parseNativeSettingsPageAction({ type: 'tablesReorderByName' }).ok).toBe(true);
   });
+
+  it('ダイナミックプライシング: 配列をそのまま渡す（中身は saveDynamicPricing が確認）', () => {
+    expect(parseNativeSettingsPageAction({ type: 'dynamicPricingSave', rules: [] }).ok).toBe(true);
+    expect(parseNativeSettingsPageAction({ type: 'dynamicPricingSave', rules: 'x' }).ok).toBe(false);
+    expect(parseNativeSettingsPageAction({ type: 'dynamicPricingSave', rules: new Array(51).fill({}) }).ok).toBe(false);
+  });
 });
