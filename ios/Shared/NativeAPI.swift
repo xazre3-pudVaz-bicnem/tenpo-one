@@ -94,6 +94,8 @@ struct APIPayload: Codable {
     let registerOpen: Bool
     let canCheckout: Bool
     let canDiscount: Bool
+    /// 取消（1品・伝票）を承認できる担当者（店長以上）。古いサーバーは無い
+    let approvers: [APIClerk]?
 }
 
 /// 操作の返事（order があれば画面をサーバーの値にそろえる）

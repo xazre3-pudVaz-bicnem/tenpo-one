@@ -77,9 +77,10 @@ struct NPOptionGroup: Identifiable, Hashable {
     /// 最低いくつ選ぶか（必須なら1つ以上）
     var minimum: Int { isRequired ? max(1, minSelect) : minSelect }
     var title: String { english ?? name }
+    /// 何個選ぶか（Web の選択ダイアログと同じ言い方）
     var rule: String {
-        if maxSelect == 1 { return minimum >= 1 ? "Choose 1" : "Up to 1" }
-        return minimum == maxSelect ? "Choose \(maxSelect)" : "Choose \(minimum)–\(maxSelect)"
+        if maxSelect == 1 { return minimum >= 1 ? "1つ選ぶ" : "1つまで" }
+        return minimum == maxSelect ? "\(maxSelect)つ選ぶ" : "\(minimum)〜\(maxSelect)つ選ぶ"
     }
 }
 
@@ -150,6 +151,8 @@ final class NativeOrderModel: ObservableObject {
     @Published var pending: NPPendingItem?
     @Published var clerks: [APIClerk] = []
     @Published var clerkRequired = false
+    /// 取消（1品・伝票）を承認できる担当者（店長以上）。空なら承認なしで取消できる店（Web の clerkGate と同じ）
+    @Published var approvers: [APIClerk] = []
     @Published var methodBrands: [String: [NPBrand]] = [:]
     @Published var pointBrands: [NPBrand] = NPBrands.sitePoints
     @Published var discountPresets: [NPDiscountPreset] = NPDiscountPreset.defaults
@@ -308,17 +311,53 @@ final class NativeOrderModel: ObservableObject {
         }
     }
 
-    /// 数量の +/-。カートの品は手元で、送った品は（最初の版では）変えない
-    func canChange(_ line: NPOrderLine) -> Bool { !isLive || line.local }
+    /// 数量の +/-。カートの品は手元で変える。送った品もサーバーで変える（Web のレジの −／＋ と同じ。2026-10-24）
+    func canChange(_ line: NPOrderLine) -> Bool { !isLive || line.local || !busy }
 
     func change(_ line: NPOrderLine, by delta: Int) {
         guard canChange(line), let i = order.lines.firstIndex(where: { $0.id == line.id }) else { return }
         let q = order.lines[i].quantity + delta
-        if q <= 0 {
-            order.lines.remove(at: i)
-        } else {
-            order.lines[i].quantity = q
+        if !isLive || line.local {
+            if q <= 0 {
+                order.lines.remove(at: i)
+            } else {
+                order.lines[i].quantity = q
+            }
+            return
         }
+        // 送った品：1 より下にはしない（0 にするのは「取消」。Web の updateQty と同じ）。先に画面を変えて、失敗したら戻す
+        guard q >= 1, let orderId, delta == 1 || delta == -1 else { return }
+        let backup = order.lines
+        order.lines[i].quantity = q
+        Task {
+            if await act(["type": "qty", "orderId": orderId, "lineId": line.id, "delta": delta]) == nil {
+                order.lines = backup
+            }
+        }
+    }
+
+    /// 1品の取消。カートの品は手元から消すだけ。送った品はサーバーで取消（レジは店長以上の承認＝approver。Web の cancelItem と同じ）
+    @discardableResult
+    func cancelLine(_ line: NPOrderLine, approver: String?) async -> Bool {
+        if !isLive || line.local {
+            order.lines.removeAll { $0.id == line.id }
+            return true
+        }
+        guard let orderId else { return false }
+        var body: [String: Any] = ["type": "cancelLine", "orderId": orderId, "lineId": line.id, "reason": ""]
+        body["approvedByClerkId"] = approver.map { $0 as Any } ?? NSNull()
+        guard await act(body) != nil else { return false }
+        toast = "「\(line.displayName)」を取消しました"
+        return true
+    }
+
+    /// 別々会計の「分ける」：1つの品を何人かで分ける（「品名（1/n）」に。Web の divideOrderItem と同じ）
+    @discardableResult
+    func divide(_ line: NPOrderLine, parts: Int) async -> Bool {
+        guard let orderId, !line.local, line.unitPrice > 0, (2...10).contains(parts) else { return false }
+        guard await act(["type": "divide", "orderId": orderId, "lineId": line.id, "parts": parts]) != nil else { return false }
+        toast = "\(parts)人で分けました。1人分ずつ「›」で移してください"
+        return true
     }
 
     // MARK: サーバー
@@ -349,7 +388,7 @@ final class NativeOrderModel: ObservableObject {
                 notice = e.message
                 if e.useWeb { openInWeb() }
             } catch {
-                notice = "Couldn't load. Check the connection."
+                notice = "読み込めませんでした。回線を確認してください"
             }
             return
         }
@@ -374,7 +413,7 @@ final class NativeOrderModel: ObservableObject {
             notice = e.message
             if e.useWeb { openInWeb() }
         } catch {
-            notice = "Couldn't load. Check the connection."
+            notice = "読み込めませんでした。回線を確認してください"
         }
     }
 
@@ -387,6 +426,7 @@ final class NativeOrderModel: ObservableObject {
     private func apply(live l: APILive) {
         steraTerminals = l.steraTerminals
         registerOpen = l.registerOpen
+        approvers = l.approvers ?? []
         apply(order: l.order)
     }
 
@@ -396,6 +436,7 @@ final class NativeOrderModel: ObservableObject {
                      discountPresets: p.discountPresets, steraTypes: p.steraPaymentTypes, canCheckout: p.canCheckout, canDiscount: p.canDiscount)
         steraTerminals = p.steraTerminals
         registerOpen = p.registerOpen
+        approvers = p.approvers ?? []
         apply(order: p.order)
     }
 

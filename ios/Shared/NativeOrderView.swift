@@ -239,6 +239,8 @@ private struct SlipPanel: View {
     /// 伝票の操作（会計を分ける＝会計画面へ、ほかはネイティブのシート）
     var onSplit: () -> Void = {}
     var onSlipOp: (NativeSlipOp) -> Void = { _ in }
+    /// 「×」で取消しようとしている品（送った品。店長以上の承認を選んでから取消。Web のレジと同じ）
+    @State private var cancelTarget: NPOrderLine?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -303,7 +305,8 @@ private struct SlipPanel: View {
                                 LineRow(line: line, highlighted: line.id == model.lastAddedLineId,
                                         editable: model.canChange(line),
                                         onMinus: { model.change(line, by: -1) },
-                                        onPlus: { model.change(line, by: 1) })
+                                        onPlus: { model.change(line, by: 1) },
+                                        onCancel: { cancel(line) })
                                     .id(line.id)
                                 Divider().overlay(NT.line).padding(.leading, 16)
                             }
@@ -344,6 +347,34 @@ private struct SlipPanel: View {
         }
         .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(NT.card))
         .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(NT.lilacLine, lineWidth: 1))
+        // 1品の取消：理由は要らない・店長以上の担当者を選ぶだけ（2026-10-17 Ronnie）。担当者が未登録の店はそのまま取消
+        .confirmationDialog(
+            "「\(cancelTarget?.displayName ?? "")」を取消しますか？",
+            isPresented: Binding(get: { cancelTarget != nil }, set: { if !$0 { cancelTarget = nil } }),
+            titleVisibility: .visible
+        ) {
+            if let line = cancelTarget {
+                if model.approvers.isEmpty {
+                    Button("取消する", role: .destructive) { Task { await model.cancelLine(line, approver: nil) } }
+                } else {
+                    ForEach(model.approvers, id: \.id) { a in
+                        Button("承認: \(a.name)") { Task { await model.cancelLine(line, approver: a.id) } }
+                    }
+                }
+            }
+            Button("キャンセル", role: .cancel) { cancelTarget = nil }
+        } message: {
+            Text(model.approvers.isEmpty ? "厨房へ送った品は「取消」の紙がレジに出ます" : "承認する担当者（店長以上）を選んでください")
+        }
+    }
+
+    /// 「×」：カートの品はそのまま消す。送った品は承認してから（ダイアログ）
+    private func cancel(_ line: NPOrderLine) {
+        if !model.isLive || line.local {
+            Task { await model.cancelLine(line, approver: nil) }
+        } else {
+            cancelTarget = line
+        }
     }
 
     private func chip(icon: String, text: String) -> some View {
@@ -372,6 +403,8 @@ private struct LineRow: View {
     var editable: Bool = true
     let onMinus: () -> Void
     let onPlus: () -> Void
+    /// 「×」（1品の取消。Web のレジの明細と同じ）
+    var onCancel: () -> Void = {}
 
     var body: some View {
         HStack(spacing: 10) {
@@ -397,7 +430,10 @@ private struct LineRow: View {
             Spacer(minLength: 6)
             if editable {
                 HStack(spacing: 0) {
+                    // 送った品は 1 より下にしない（0 にするのは「×」の取消）
                     stepButton("minus", action: onMinus)
+                        .disabled(!line.local && line.quantity <= 1)
+                        .opacity(!line.local && line.quantity <= 1 ? 0.35 : 1)
                     Text("\(line.quantity)").font(.system(size: 17, weight: .bold)).foregroundColor(NT.ink).frame(minWidth: 30)
                     stepButton("plus", action: onPlus)
                 }
@@ -408,6 +444,13 @@ private struct LineRow: View {
             Text(NT.yen(line.lineTotal))
                 .font(.system(size: 16, weight: .bold)).foregroundColor(NT.ink)
                 .frame(minWidth: 74, alignment: .trailing)
+            Button(action: onCancel) {
+                Image(systemName: "xmark").font(.system(size: 13, weight: .heavy)).foregroundColor(NT.ink3)
+                    .frame(width: 30, height: 34)
+            }
+            .buttonStyle(PressableStyle(scale: 0.9))
+            .disabled(!editable)
+            .accessibilityLabel("取消")
         }
         .padding(.horizontal, 16).padding(.vertical, 10)
         .background(highlighted ? NT.lilac.opacity(0.7) : Color.clear)

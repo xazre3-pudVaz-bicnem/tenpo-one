@@ -124,6 +124,8 @@ export interface NativePosLive {
   registerOpen: boolean;
   steraTerminals: { id: string; name: string; online: boolean }[];
   storeId: string;
+  /** 取消（1品・伝票）を承認できる担当者（店長以上）。空なら承認なしで取消できる店（Web の clerkGate と同じ） */
+  approvers: { id: string; name: string }[];
 }
 
 /** 注文確定のあと、iPad から LAN で直接出す厨房伝票（サーバーで claimed にしてから渡す。印刷したら printDone） */
@@ -159,6 +161,8 @@ export interface NativePosPayload {
   registerOpen: boolean;
   canCheckout: boolean;
   canDiscount: boolean;
+  /** 取消を承認できる担当者（店長以上）。NativePosLive と同じ */
+  approvers: { id: string; name: string }[];
 }
 
 /** 会計の支払い（app/app/pos/actions.ts の CheckoutPayment と同じ） */
@@ -176,6 +180,10 @@ export interface NativeSendLine {
 
 export type NativePosAction =
   | { type: 'split'; orderId: string; moves: { orderItemId: string; quantity: number }[] }
+  /** 1つの品を何人かで分ける（別々会計の「分ける」。Web の divideOrderItem と同じ） */
+  | { type: 'divide'; orderId: string; lineId: string; parts: number }
+  /** 1品の取消（レジは店長以上の担当者の承認が要る。理由は無くてよい。Web の cancelItem と同じ） */
+  | { type: 'cancelLine'; orderId: string; lineId: string; reason: string; approvedByClerkId: string | null }
   | { type: 'send'; orderId: string; lines: NativeSendLine[] }
   | { type: 'qty'; orderId: string; lineId: string; delta: 1 | -1 }
   | { type: 'clerk'; orderId: string; clerkId: string | null }
@@ -292,6 +300,18 @@ export function parseNativePosAction(raw: unknown): Parsed {
     case 'qty':
       if (!isUuid(b.orderId) || !isUuid(b.lineId) || (b.delta !== 1 && b.delta !== -1)) return bad();
       return { ok: true, action: { type: 'qty', orderId: b.orderId, lineId: b.lineId, delta: b.delta } };
+    case 'divide': {
+      // 何人で分けるか（Web の伝票分割は 2〜6 人のボタン。上限は 10）
+      const parts = b.parts;
+      if (!isUuid(b.orderId) || !isUuid(b.lineId) || typeof parts !== 'number' || !Number.isInteger(parts) || parts < 2 || parts > 10) return bad();
+      return { ok: true, action: { type: 'divide', orderId: b.orderId, lineId: b.lineId, parts } };
+    }
+    case 'cancelLine': {
+      const reason = typeof b.reason === 'string' ? b.reason.trim().slice(0, 100) : '';
+      const approver = b.approvedByClerkId ?? null;
+      if (!isUuid(b.orderId) || !isUuid(b.lineId) || !(approver === null || isUuid(approver))) return bad();
+      return { ok: true, action: { type: 'cancelLine', orderId: b.orderId, lineId: b.lineId, reason, approvedByClerkId: approver as string | null } };
+    }
     case 'clerk':
       if (!isUuid(b.orderId) || !(b.clerkId === null || isUuid(b.clerkId))) return bad();
       return { ok: true, action: { type: 'clerk', orderId: b.orderId, clerkId: b.clerkId as string | null } };
