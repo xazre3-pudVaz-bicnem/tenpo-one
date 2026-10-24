@@ -41,7 +41,11 @@ export type NativeSettingsPageAction =
       approverRole: 'store_manager' | 'area_manager' | 'hq_accounting' | 'hq_admin' | 'org_owner';
       allowSelfApprove: boolean;
     }
-  | { type: 'approvalDelete'; id: string };
+  | { type: 'approvalDelete'; id: string }
+  /** 勘定科目（/app/settings/accounts。saveAccount / deleteAccount / installStandardAccounts） */
+  | { type: 'accountSave'; id: string | null; code: string; name: string; category: string; subType: string | null; defaultTaxTreatment: string; sortOrder: number }
+  | { type: 'accountDelete'; id: string }
+  | { type: 'accountInstallStandard' };
 
 export interface NativeStoreFields {
   name: string;
@@ -90,6 +94,9 @@ export const NATIVE_SETTINGS_PAGE_ACTION_TYPES: readonly NativeSettingsPageActio
   'alertReset',
   'approvalSave',
   'approvalDelete',
+  'accountSave',
+  'accountDelete',
+  'accountInstallStandard',
 ];
 
 export function isNativeSettingsPageActionType(v: unknown): v is NativeSettingsPageActionType {
@@ -257,7 +264,39 @@ export function parseNativeSettingsPageAction(raw: unknown): Parsed {
     if (!isUuid(b.id)) return bad('ルールが見つかりません');
     return { ok: true, action: { type: 'approvalDelete', id: b.id } };
   }
+  if (b.type === 'accountSave') {
+    const cats = ['asset', 'liability', 'equity', 'revenue', 'expense'];
+    const taxes = ['taxable_standard', 'taxable_reduced', 'non_taxable', 'tax_exempt', 'out_of_scope'];
+    const subs = ['cash', 'bank', 'receivable', 'payable', 'inventory'];
+    const code = typeof b.code === 'string' ? b.code.trim().slice(0, 20) : '';
+    const name = typeof b.name === 'string' ? b.name.trim().slice(0, 80) : '';
+    if (!code) return bad('科目コードを入力してください');
+    if (!name) return bad('科目名を入力してください');
+    if (typeof b.category !== 'string' || !cats.includes(b.category)) return bad('区分が正しくありません');
+    if (typeof b.defaultTaxTreatment !== 'string' || !taxes.includes(b.defaultTaxTreatment)) return bad('税区分が正しくありません');
+    const subType = b.subType == null || b.subType === '' ? null : typeof b.subType === 'string' && subs.includes(b.subType) ? b.subType : false;
+    if (subType === false) return bad('補助区分が正しくありません');
+    const id = b.id == null || b.id === '' ? null : isUuid(b.id) ? b.id : false;
+    if (id === false) return bad('科目が見つかりません');
+    const sortOrder = typeof b.sortOrder === 'number' && Number.isInteger(b.sortOrder) ? b.sortOrder : 0;
+    return { ok: true, action: { type: 'accountSave', id, code, name, category: b.category, subType, defaultTaxTreatment: b.defaultTaxTreatment, sortOrder } };
+  }
+  if (b.type === 'accountDelete') {
+    if (!isUuid(b.id)) return bad('科目が見つかりません');
+    return { ok: true, action: { type: 'accountDelete', id: b.id } };
+  }
+  if (b.type === 'accountInstallStandard') return { ok: true, action: { type: 'accountInstallStandard' } };
   return bad();
+}
+
+/** 勘定科目の画面の読み込み（GET ?part=accounts） */
+export interface NativeAccountsPayload {
+  store: { id: string; name: string };
+  canEdit: boolean;
+  categories: { id: string; label: string }[];
+  subTypes: { id: string; label: string }[];
+  taxTreatments: { id: string; label: string }[];
+  rows: { id: string; code: string; name: string; category: string; subType: string | null; defaultTaxTreatment: string; isSystem: boolean; sortOrder: number }[];
 }
 
 /** 異常検知の閾値の画面の読み込み（GET ?part=alerts） */

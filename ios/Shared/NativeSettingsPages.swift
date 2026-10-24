@@ -19,6 +19,7 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
     case tableQr = "tableQr"
     case booking = "bookingSettings"
     case handyQr = "handyqr"
+    case accounts = "accounts"
     var id: String { rawValue }
 
     /// Web の道（クエリは見ない）
@@ -35,6 +36,7 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
         case .tableQr: return "/app/settings/tables/qr-print"
         case .booking: return "/app/settings/booking"
         case .handyQr: return "/app/settings/handy-qr"
+        case .accounts: return "/app/settings/accounts"
         }
     }
     var title: String {
@@ -50,6 +52,7 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
         case .tableQr: return "テーブルQRコード"
         case .booking: return "予約受付ルール"
         case .handyQr: return "iPhoneハンディ"
+        case .accounts: return "勘定科目"
         }
     }
     var en: String {
@@ -65,6 +68,7 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
         case .tableQr: return "Table QR"
         case .booking: return "Booking rules"
         case .handyQr: return "Handy QR"
+        case .accounts: return "Accounts"
         }
     }
 
@@ -91,6 +95,7 @@ struct NativeSettingsPageScreen: View {
         case .tableQr: NativeTableQrFromSettings()
         case .booking: NativeBookingFromSettings()
         case .handyQr: NativeHandyQrFromSettings()
+        case .accounts: NativeAccountsScreen()
         }
     }
 }
@@ -1762,5 +1767,129 @@ struct NativeHandyQrFromSettings: View {
             NativeHandyQrSheet(onClose: { state.goNativeSettings() }, onWeb: { path in state.leaveNativeFloor(to: path) })
         }
         .background(Color.white.ignoresSafeArea())
+    }
+}
+
+// MARK: - 勘定科目（Web の /app/settings/accounts と同じ）
+
+struct NACRow: Codable, Identifiable, Hashable { let id: String; let code: String; let name: String; let category: String; let subType: String?; let defaultTaxTreatment: String; let isSystem: Bool; let sortOrder: Int }
+struct NACPayload: Codable { let store: NFNamed; let canEdit: Bool; let categories: [NSTLabeled]; let subTypes: [NSTLabeled]; let taxTreatments: [NSTLabeled]; let rows: [NACRow] }
+
+@MainActor
+final class NativeAccountsModel: NSPModel<NACPayload> {
+    @Published var showForm = false
+    @Published var editing: NACRow?
+    @Published var code = ""
+    @Published var name = ""
+    @Published var category = "expense"
+    @Published var subType = ""
+    @Published var tax = "taxable_standard"
+    @Published var sortOrder = "0"
+    @Published var filter = ""
+    init() { super.init(part: "accounts") }
+
+    func startAdd() { editing = nil; code = ""; name = ""; category = "expense"; subType = ""; tax = "taxable_standard"; sortOrder = "0"; showForm = true }
+    func startEdit(_ r: NACRow) { editing = r; code = r.code; name = r.name; category = r.category; subType = r.subType ?? ""; tax = r.defaultTaxTreatment; sortOrder = String(r.sortOrder); showForm = true }
+    func save() async {
+        let body: [String: Any] = ["type": "accountSave", "id": editing?.id as Any? ?? NSNull(), "code": code, "name": name, "category": category,
+                                   "subType": subType.isEmpty ? NSNull() : subType, "defaultTaxTreatment": tax, "sortOrder": Int(sortOrder) ?? 0]
+        if await run("save", body, done: editing == nil ? "科目を追加しました" : "科目を保存しました") { showForm = false }
+    }
+    func delete(_ r: NACRow) async { _ = await run(r.id, ["type": "accountDelete", "id": r.id], done: "「\(r.name)」を削除しました") }
+    func installStandard() async { _ = await run("install", ["type": "accountInstallStandard"], done: "標準の科目を入れました") }
+    func label(_ list: [NSTLabeled], _ id: String?) -> String { id.flatMap { i in list.first { $0.id == i }?.label } ?? "—" }
+    var groups: [(NSTLabeled, [NACRow])] {
+        guard let p = payload else { return [] }
+        let q = filter.trimmingCharacters(in: .whitespaces).lowercased()
+        return p.categories.map { c in (c, p.rows.filter { $0.category == c.id && (q.isEmpty || $0.name.lowercased().contains(q) || $0.code.lowercased().contains(q)) }) }.filter { !$0.1.isEmpty }
+    }
+}
+
+struct NativeAccountsScreen: View {
+    @StateObject private var model = NativeAccountsModel()
+    @EnvironmentObject var state: AppState
+    var body: some View { NativeAccountsView(model: model, onBack: { state.goNativeSettings() }) }
+}
+
+struct NativeAccountsView: View {
+    @ObservedObject var model: NativeAccountsModel
+    let onBack: () -> Void
+    @State private var confirmDelete: NACRow?
+
+    var body: some View {
+        NSPFrame(storeName: model.payload?.store.name ?? "", title: "勘定科目", en: "Accounts", loaded: model.payload != nil, error: model.error, toast: $model.toast, onBack: onBack, retry: { await model.refresh() }) {
+            if let p = model.payload {
+                HStack(spacing: 10) {
+                    NSPInput(text: $model.filter, placeholder: "コード・科目名で探す", width: 320)
+                    if p.canEdit && !model.showForm { NSPButton(text: "科目を追加", icon: "plus", primary: true) { model.startAdd() } }
+                    if p.canEdit && p.rows.isEmpty { NSPButton(text: "標準の科目を入れる", icon: "square.and.arrow.down", busy: model.busy == "install") { Task { await model.installStandard() } } }
+                    Spacer()
+                }
+                if model.showForm { form(p) }
+                ForEach(model.groups, id: \.0.id) { c, rows in
+                    NSPCard(title: c.label, en: c.id) {
+                        VStack(spacing: 0) {
+                            ForEach(rows) { r in
+                                HStack(spacing: 12) {
+                                    Text(r.code).font(.system(size: 14, weight: .heavy, design: .monospaced)).foregroundColor(NFColor.ink3).frame(width: 70, alignment: .leading)
+                                    Text(r.name).font(.system(size: 15, weight: .bold)).foregroundColor(NFColor.ink).frame(minWidth: 180, alignment: .leading)
+                                    if let st = r.subType { Text(model.label(p.subTypes, st)).font(.system(size: 12, weight: .bold)).foregroundColor(NFColor.ink2).padding(.horizontal, 7).padding(.vertical, 2).background(Capsule().fill(NFColor.lilac)) }
+                                    Text(model.label(p.taxTreatments, r.defaultTaxTreatment)).font(.system(size: 12.5)).foregroundColor(NFColor.ink3)
+                                    if r.isSystem { Text("標準").font(.system(size: 11, weight: .heavy)).foregroundColor(NFColor.iris).padding(.horizontal, 7).padding(.vertical, 2).overlay(Capsule().stroke(NFColor.iris.opacity(0.5), lineWidth: 1)) }
+                                    Spacer()
+                                    if p.canEdit {
+                                        NSPButton(text: "編集", icon: "pencil") { model.startEdit(r) }
+                                        NSPButton(text: "削除", icon: "trash", busy: model.busy == r.id, disabled: r.isSystem) { confirmDelete = r }
+                                    }
+                                }
+                                .padding(.horizontal, 18).frame(minHeight: 56)
+                                .overlay(alignment: .bottom) { Rectangle().fill(NFColor.line).frame(height: 1) }
+                            }
+                        }
+                    }
+                }
+                if model.groups.isEmpty { Text(p.rows.isEmpty ? "科目がまだありません。「標準の科目を入れる」で始められます" : "見つかりません").font(.system(size: 14)).foregroundColor(NFColor.ink3) }
+            }
+        }
+        .alert("科目を削除", isPresented: Binding(get: { confirmDelete != nil }, set: { if !$0 { confirmDelete = nil } })) {
+            Button("削除する", role: .destructive) { if let r = confirmDelete { Task { await model.delete(r) } }; confirmDelete = nil }
+            Button("やめる", role: .cancel) { confirmDelete = nil }
+        } message: { Text("「\(confirmDelete?.name ?? "")」を削除します") }
+        .task { await model.refresh() }
+    }
+
+    private func form(_ p: NACPayload) -> some View {
+        let sys = model.editing?.isSystem ?? false
+        return NSPCard(title: model.editing == nil ? "科目を追加" : "科目を編集", en: model.editing == nil ? "Add" : "Edit", note: sys ? "標準科目はコード・区分を変えられません（名称は変えられます）" : nil) {
+            VStack(spacing: 0) {
+                NSPRow(label: "コード", required: true) { NSPInput(text: $model.code, placeholder: "例：5110", enabled: !sys, width: 180) }
+                NSPRow(label: "科目名", required: true) { NSPInput(text: $model.name, placeholder: "例：仕入高", width: 360) }
+                NSPRow(label: "区分") { chips(p.categories, $model.category, disabled: sys) }
+                NSPRow(label: "補助区分") { chips([NSTLabeled(id: "", label: "なし")] + p.subTypes, $model.subType, disabled: false) }
+                NSPRow(label: "既定の税区分") { chips(p.taxTreatments, $model.tax, disabled: false) }
+                NSPRow(label: "表示順") { NSPInput(text: $model.sortOrder, placeholder: "0", width: 120, keyboard: .numberPad) }
+                HStack(spacing: 10) {
+                    Spacer()
+                    NSPButton(text: "やめる") { model.showForm = false }
+                    NSPButton(text: "保存する", primary: true, busy: model.busy == "save", disabled: model.code.trimmingCharacters(in: .whitespaces).isEmpty || model.name.trimmingCharacters(in: .whitespaces).isEmpty) { Task { await model.save() } }
+                }
+                .padding(18)
+            }
+        }
+    }
+
+    private func chips(_ list: [NSTLabeled], _ sel: Binding<String>, disabled: Bool) -> some View {
+        WrapLayout(spacing: 8) {
+            ForEach(list) { o in
+                Button { sel.wrappedValue = o.id } label: {
+                    Text(o.label).font(.system(size: 14, weight: .bold)).foregroundColor(sel.wrappedValue == o.id ? .white : NFColor.ink2)
+                        .padding(.horizontal, 14).frame(height: 40)
+                        .background(RoundedRectangle(cornerRadius: 10).fill(sel.wrappedValue == o.id ? NFColor.navy : Color.white))
+                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(NFColor.line, lineWidth: 1))
+                }
+                .buttonStyle(PressableStyle()).disabled(disabled)
+            }
+        }
+        .opacity(disabled ? 0.6 : 1)
     }
 }

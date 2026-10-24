@@ -19,8 +19,13 @@ import { resetAlertRuleToDefault, upsertAlertRule } from '@/app/app/settings/ale
 import { ALERT_RULE_DEFAULTS, ALERT_RULE_KEYS, ALERT_RULE_LABELS, ALERT_RULE_UNITS, type AlertRuleKey } from '@/components/dashboard/alert-rules';
 import { deleteApprovalRule, saveApprovalRule } from '@/app/app/settings/approvals/actions';
 import { ROLE_LABELS } from '@/lib/permissions';
+import { deleteAccount, installStandardAccounts, saveAccount } from '@/app/app/settings/accounts/actions';
+import { ACCOUNT_CATEGORY_LABELS, ACCOUNT_CATEGORY_ORDER, SUB_TYPE_LABELS, type SubType } from '@/components/accounting/labels';
+import { TAX_TREATMENT_LABELS, type AccountCategory, type TaxTreatment } from '@/lib/accounting';
+import { canWriteAccounting } from '@/components/accounting/roles';
 import { resolveSiteOrigin } from '@/lib/site-origin';
 import type {
+  NativeAccountsPayload,
   NativeAlertsPayload,
   NativeApprovalsPayload,
   NativeClerksPayload,
@@ -36,7 +41,7 @@ type Supabase = Awaited<ReturnType<typeof createClient>>;
 type Store = { id: string; name: string };
 
 /** 設定の中の画面の名前（GET ?part=） */
-export const NATIVE_SETTINGS_PAGE_PARTS = ['soldout', 'clerks', 'hours', 'store', 'tax', 'loyalty', 'alerts', 'approvals'] as const;
+export const NATIVE_SETTINGS_PAGE_PARTS = ['soldout', 'clerks', 'hours', 'store', 'tax', 'loyalty', 'alerts', 'approvals', 'accounts'] as const;
 export type NativeSettingsPagePart = (typeof NATIVE_SETTINGS_PAGE_PARTS)[number];
 export function isNativeSettingsPagePart(v: unknown): v is NativeSettingsPagePart {
   return typeof v === 'string' && (NATIVE_SETTINGS_PAGE_PARTS as readonly string[]).includes(v);
@@ -62,7 +67,8 @@ export async function loadNativeSettingsPage(
         | NativeTaxPayload
         | NativeLoyaltyPayload
         | NativeAlertsPayload
-        | NativeApprovalsPayload;
+        | NativeApprovalsPayload
+        | NativeAccountsPayload;
     }
   | { ok: false; error: string }
 > {
@@ -276,6 +282,36 @@ export async function loadNativeSettingsPage(
       },
     };
   }
+  if (part === 'accounts') {
+    if (ctx.disabledFeatures?.has('accounting')) return { ok: false, error: '会計の機能は使えません' };
+    const { data } = await supabase
+      .from('accounts')
+      .select('id, code, name, category, sub_type, default_tax_treatment, is_system, sort_order')
+      .eq('organization_id', ctx.organizationId)
+      .eq('status', 'active')
+      .order('sort_order')
+      .order('code');
+    return {
+      ok: true,
+      payload: {
+        store,
+        canEdit: canWriteAccounting(ctx.role),
+        categories: ACCOUNT_CATEGORY_ORDER.map((c) => ({ id: c, label: ACCOUNT_CATEGORY_LABELS[c] })),
+        subTypes: (['cash', 'bank', 'receivable', 'payable', 'inventory'] as SubType[]).map((t) => ({ id: t, label: SUB_TYPE_LABELS[t] })),
+        taxTreatments: (Object.keys(TAX_TREATMENT_LABELS) as TaxTreatment[]).map((t) => ({ id: t, label: TAX_TREATMENT_LABELS[t] })),
+        rows: (data ?? []).map((r) => ({
+          id: r.id as string,
+          code: r.code as string,
+          name: r.name as string,
+          category: r.category as string,
+          subType: (r.sub_type as string | null) ?? null,
+          defaultTaxTreatment: r.default_tax_treatment as string,
+          isSystem: r.is_system === true,
+          sortOrder: Number(r.sort_order ?? 0),
+        })),
+      },
+    };
+  }
   return { ok: false, error: '画面が見つかりません' };
 }
 
@@ -333,5 +369,23 @@ export async function runNativeSettingsPageAction(
       );
     case 'approvalDelete':
       return done(await deleteApprovalRule(action.id));
+    case 'accountSave':
+      return done(
+        await saveAccount({
+          id: action.id ?? undefined,
+          code: action.code,
+          name: action.name,
+          category: action.category as AccountCategory,
+          subType: action.subType,
+          defaultTaxTreatment: action.defaultTaxTreatment as TaxTreatment,
+          sortOrder: action.sortOrder,
+        })
+      );
+    case 'accountDelete':
+      return done(await deleteAccount(action.id));
+    case 'accountInstallStandard': {
+      const r = await installStandardAccounts();
+      return r.error ? { ok: false, error: r.error } : { ok: true };
+    }
   }
 }
