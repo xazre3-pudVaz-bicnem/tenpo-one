@@ -282,16 +282,7 @@ struct NativeTableCard: View {
                     occupied(o, state: state, next: next)
                 } else {
                     VStack(spacing: 6) {
-                        if state == .free {
-                            Image(systemName: "plus")
-                                .font(.system(size: 18, weight: .semibold))
-                                .foregroundColor(NFColor.tileIcon)
-                                .frame(width: 44, height: 44)
-                                .background(Circle().fill(LinearGradient(colors: [Color.white, Color(hex: 0xF0F0F4)], startPoint: .top, endPoint: .bottom)))
-                                .overlay(Circle().strokeBorder(Color.black.opacity(0.08), lineWidth: 0.75))
-                                .shadow(color: .black.opacity(0.14), radius: 4, x: 0, y: 3)
-                        }
-                        // 空席は ＋ だけで分かるので「空席」は書かない（2026-10-24 Ronnie）
+                        // 空席は「＋」も「空席」の字も出さない（グレーの箱と白い札で分かる。2026-10-24 20:44 Ronnie「卓の ＋ はいらない」）
                         if state != .free {
                             HStack(spacing: 4) {
                                 if state == .unavailable { Image(systemName: "lock.fill").font(.system(size: 11)) }
@@ -423,8 +414,6 @@ struct NativeTableCard: View {
                 ForEach(0..<min(cap, 12), id: \.self) { i in
                     Circle().fill(i < used ? NFColor.label(state) : NFColor.ink.opacity(0.12)).frame(width: 7, height: 7)
                 }
-                if cap > 12 { Text("+\(cap - 12)").font(.system(size: 9, weight: .heavy)).foregroundColor(NFColor.ink3) }
-                if used > cap { Text("+\(used - cap)").font(.system(size: 9, weight: .heavy)).foregroundColor(NFColor.label(state)) }
             }
             .padding(.top, 3).padding(.bottom, 2)
         }
