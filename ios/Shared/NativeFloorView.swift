@@ -304,9 +304,10 @@ struct NativeTableCard: View {
                     }
                     Spacer(minLength: 4)
                     HStack(spacing: 2) {
-                        // 人の印と人数は卓の番号と同じ大きさ。「名」は書かず数字だけ（座っていれば人数、空いていれば席の数）
+                        // 人の印と人数は卓の番号と同じ大きさ。「名」は書かず数字だけ。お客様がいないときは数字を出さない
+                        // （席の数が人数に見えるので。2026-10-24 22:19 Ronnie「お客様が来てから書く」）
                         Image(systemName: "person.2.fill").font(.system(size: 20, weight: .semibold)).foregroundColor(NFColor.ink3)
-                        Text("\(order?.guestCount ?? table.capacityMax)")
+                        if let o = order { Text("\(o.guestCount)") }
                     }
                     .font(.system(size: 23, weight: .heavy)).monospacedDigit().foregroundColor(empty ? NFColor.ink3 : NFColor.ink)
                     .lineLimit(1).fixedSize()
@@ -335,8 +336,10 @@ struct NativeTableCard: View {
                     occupied(o, state: state, next: next)
                 } else {
                     VStack(spacing: 6) {
-                        // 空席は「＋」も「空席」の字も出さない（グレーの箱と白い札で分かる。2026-10-24 20:44 Ronnie「卓の ＋ はいらない」）
-                        if state != .free {
+                        // 空席は「＋」を出さない（2026-10-24 20:44 Ronnie）。まん中にうすく小さく「4名席 空」（座ると消える。22:19 Ronnie）
+                        if state == .free {
+                            Text("\(table.capacityMax)名席 空").font(.system(size: 14, weight: .semibold)).foregroundColor(NFColor.ink3.opacity(0.7))
+                        } else {
                             HStack(spacing: 4) {
                                 if state == .unavailable { Image(systemName: "lock.fill").font(.system(size: 11)) }
                                 if state == .cleaning { Image(systemName: "sparkles").font(.system(size: 11)) }
@@ -501,8 +504,8 @@ struct NativeTableCard: View {
     /// 印の色（飲み放題＝琥珀・食べ放題＝橙・コース＝藍・誕生日＝ピンク・記念日＝赤・子連れ＝青緑…）
     static func markColor(_ symbol: String) -> Color {
         if symbol.hasPrefix("mug") { return Color(hex: 0xF59E0B) }
-        if symbol.hasPrefix("fork") { return Color(hex: 0xEA580C) }
-        if symbol.hasPrefix("menucard") || symbol.hasPrefix("list.bullet") { return Color(hex: 0x4F46E5) }
+        if symbol.hasPrefix("frying") || symbol.hasPrefix("flame") { return Color(hex: 0xEA580C) }
+        if symbol.hasPrefix("fork.knife") || symbol.hasPrefix("menucard") || symbol.hasPrefix("list.bullet") { return Color(hex: 0x4F46E5) }
         if symbol.hasPrefix("birthday") || symbol.hasPrefix("gift") || symbol.hasPrefix("party") { return Color(hex: 0xEC4899) }
         if symbol.hasPrefix("heart") { return Color(hex: 0xE11D48) }
         if symbol.hasPrefix("figure") || symbol.hasPrefix("person") || symbol.hasPrefix("stroller") { return Color(hex: 0x0D9488) }
