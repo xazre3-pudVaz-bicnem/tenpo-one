@@ -252,7 +252,6 @@ struct NativeTableCard: View {
         let hasCall = !table.calls.isEmpty
         // 箱は白いまま、下の帯だけ状態の色（2026-10-24 21:05 Ronnie「箱全部を赤にしない、下だけ」）
         let band = Self.band(state)
-        let accent = band?.color ?? NFColor.label(state)
         let faceTop = band != nil ? Color.white : NFColor.tileFaceTop(state)
         let surface = band != nil ? Color(hex: 0xF8F8FB) : NFColor.tileSurface(state)
         let edge = band != nil ? Color(hex: 0xDCDCE3) : NFColor.tileEdge(state)
@@ -266,12 +265,12 @@ struct NativeTableCard: View {
                 HStack(spacing: 6) {
                     Text(table.name)
                         .font(.system(size: 15, weight: .heavy)).monospacedDigit()
-                        .foregroundColor(empty ? NFColor.ink2 : .white)
+                        // 札と席の印は色をつけない（色は下の帯だけ。2026-10-24 21:09 Ronnie「ここは色いらない」）
+                        .foregroundColor(empty ? NFColor.ink2 : NFColor.ink)
                         .lineLimit(1).minimumScaleFactor(0.7)
                         .padding(.horizontal, 9).frame(height: 26)
-                        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(empty ? Color.white : accent))
-                        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(empty ? Color.black.opacity(0.08) : Color.clear, lineWidth: 1))
-                        .shadow(color: empty ? .clear : accent.opacity(0.3), radius: 3, y: 2)
+                        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.white))
+                        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(Color.black.opacity(0.10), lineWidth: 1))
                     Spacer(minLength: 4)
                     HStack(spacing: 2) {
                         Image(systemName: "person.2").font(.system(size: 11, weight: .bold)).foregroundColor(NFColor.ink3)
@@ -279,7 +278,7 @@ struct NativeTableCard: View {
                     }
                     .font(.system(size: 12, weight: .bold)).monospacedDigit().foregroundColor(NFColor.ink2)
                 }
-                seatMarks(used: order?.guestCount ?? 0, color: accent)
+                seatMarks(used: order?.guestCount ?? 0, color: NFColor.ink2)
                 if let linked {
                     HStack(spacing: 4) {
                         Image(systemName: "link").font(.system(size: 10, weight: .bold))

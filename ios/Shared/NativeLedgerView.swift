@@ -351,6 +351,10 @@ struct NativeLedgerView: View {
     @State private var walkInOpen = false
     @State private var gourmetOpen = false
     @State private var exporting = false
+    /// オーダー・会計の卓の状態（読むだけ）。来店中の予約の箱をフロアの卓と同じ色・同じ時間に
+    /// （2026-10-24 21:08 Ronnie「ご予約台帳のスケジュールも同じ色に、連携して時間も全部」）
+    @State private var floorTables: [String: NFTable] = [:]
+    @State private var floorOffsetMs: Double = 0
 
     // 今の時刻の線（カーソル）は画面の決まった場所に止めて、時間の側を左へ動かす
     // （2026-10-24 Ronnie「カーソルは止めて、スケジュールが時間どおり自分で左に動く」）。
@@ -452,9 +456,36 @@ struct NativeLedgerView: View {
             NativeGourmetSheet(onClose: { gourmetOpen = false }, onOpenReservation: { id, date in openReservation(id: id, date: date) })
         }
         .onAppear { model.start(); inbox.start() }
+        .task { await floorLoop() }
         .onDisappear { model.stop(); inbox.stop() }
         // 予約を登録・変更したら、お知らせの数も読み直す
         .onChange(of: model.payload?.summary.count ?? -1) { _ in Task { await inbox.load() } }
+    }
+
+    /// オーダー・会計の卓を 20 秒ごとに読む（読むだけ。清掃中→空席などの書き込みはフロアの画面がする）
+    private func floorLoop() async {
+        if floorTables.isEmpty, let saved = NativeDiskCache.load(NFPayload.self, key: "floor") { applyFloor(saved, fresh: false) }
+        while !Task.isCancelled {
+            if let p = try? await NativeAPI.shared.loadFloor(storeId: nil) { applyFloor(p, fresh: true) }
+            try? await Task.sleep(nanoseconds: 20_000_000_000)
+        }
+    }
+
+    private func applyFloor(_ p: NFPayload, fresh: Bool) {
+        let tables = NativeFloorOffline.overlay(p.tables, storeId: p.store.id, stayMinutes: p.stayMinutes)
+        floorTables = Dictionary(tables.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        if fresh { floorOffsetMs = p.serverNow - Date().timeIntervalSince1970 * 1000 }
+    }
+
+    /// 来店中（来店・着席・会計待ち）の予約が座っている卓の、オーダー・会計と同じ状態と残り時間
+    private func floorState(_ r: NLReservation, p: NLPayload) -> (band: (jp: String, en: String, color: Color, ink: Color), left: Int?)? {
+        guard p.isToday, ["arrived", "seated", "billing"].contains(r.status) else { return nil }
+        let nowMs = model.now.timeIntervalSince1970 * 1000 + floorOffsetMs
+        for id in r.tableIds {
+            guard let t = floorTables[id], let b = NativeTableCard.band(t.state(now: nowMs)) else { continue }
+            return (b, t.order.map { $0.tileTime(now: nowMs).left })
+        }
+        return nil
     }
 
     /// グルメ連携の「台帳で見る」：その日の台帳を開いて予約の詳細を出す
@@ -1027,6 +1058,9 @@ struct NativeLedgerView: View {
                     let late = model.isLate(r)
                     // 退店したお客様はうすく（2026-10-24 20:32 Ronnie「退店した customers も dim」）
                     let out = r.status == "completed"
+                    // 来店中はオーダー・会計の卓と同じ色（着席＝緑・注文済＝青・L.O.＝黄・時間超過＝赤・会計待ち＝橙）
+                    let fs = out ? nil : floorState(r, p: p)
+                    let ink: Color = fs?.band.ink ?? .white
                     // 箱は全部同じ色（見出しのネイビーを少し明るく）。入り口の印だけ各社の色で小さく。ウォークインは左の帯が紫
                     Button { selected = r } label: {
                         HStack(spacing: 0) {
@@ -1044,8 +1078,15 @@ struct NativeLedgerView: View {
                                             .padding(.horizontal, 6).padding(.vertical, 2)
                                             .background(Capsule().fill(chip.color))
                                     }
-                                    Text(late ? "未連絡" : (p.statusLabels[r.status] ?? r.status)).font(.system(size: 10, weight: .bold))
-                                        .foregroundColor(late ? NLColor.yellow : Color.white.opacity(0.8))
+                                    if let fs {
+                                        // フロアと同じ状態と残り時間
+                                        Text(fs.band.jp + (fs.left.map { $0 > 0 ? "・残\($0)分" : "・超過\(-$0)分" } ?? ""))
+                                            .font(.system(size: 10, weight: .heavy)).monospacedDigit()
+                                            .foregroundColor(ink.opacity(0.9))
+                                    } else {
+                                        Text(late ? "未連絡" : (p.statusLabels[r.status] ?? r.status)).font(.system(size: 10, weight: .bold))
+                                            .foregroundColor(late ? NLColor.yellow : Color.white.opacity(0.8))
+                                    }
                                     // 予約のタグ（区分のタグは小さいアイコンつき。2026-10-24 Ronnie「台帳の予約カードに小さく」）
                                     ForEach(Array((r.tags ?? []).filter { $0 != "要連絡" }.prefix(3)), id: \.self) { t in
                                         HStack(spacing: 2) {
@@ -1053,17 +1094,17 @@ struct NativeLedgerView: View {
                                             Text(t).font(.system(size: 9, weight: .bold)).lineLimit(1)
                                         }
                                         .padding(.horizontal, 5).padding(.vertical, 1)
-                                        .background(Capsule().fill(Color.white.opacity(0.18)))
+                                        .background(Capsule().fill(ink.opacity(0.18)))
                                     }
                                 }
                             }
-                            .foregroundColor(.white)
+                            .foregroundColor(ink)
                             .padding(.horizontal, 6)
                             Spacer(minLength: 0)
                         }
                         .frame(width: w, height: rowH - 10)
-                        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(out ? NLColor.gray : NLColor.box))
-                        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(out ? NLColor.gray : NLColor.navy.opacity(0.5), lineWidth: 1))
+                        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(out ? NLColor.gray : (fs?.band.color ?? NLColor.box)))
+                        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(out ? NLColor.gray : (fs.map { $0.band.color.opacity(0.9) } ?? NLColor.navy.opacity(0.5)), lineWidth: 1))
                         .clipped()
                         .opacity(out ? 0.5 : 1)
                     }
