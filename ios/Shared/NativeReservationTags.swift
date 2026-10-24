@@ -52,6 +52,98 @@ enum NRWTagIcon {
     }
 }
 
+// MARK: - 言葉から印（キーワード・タグ・プランに出す小さなアイコン）
+// 2026-10-24 21:18 Ronnie「プランの印を卓の箱に（飲み放題ならビールのグラス、誕生日なら誕生日の印）。
+// 予約はキーボードで選ぶので、当たり前のものはキーボードに印つきで」
+
+enum NRWKeywordIcon {
+    /// 言葉に含まれる語 → SF Symbols の候補（上から、iPad にあるものを使う）
+    private static let rules: [(String, [String])] = [
+        ("食べ飲み放題", ["mug.fill"]),
+        ("飲み放題", ["mug.fill"]),
+        ("食べ放題", ["fork.knife"]),
+        ("コース", ["menucard.fill", "list.bullet.rectangle.portrait.fill", "list.bullet.rectangle"]),
+        ("誕生日", ["birthday.cake.fill", "gift.fill"]),
+        ("記念日", ["heart.fill"]),
+        ("お祝い", ["party.popper.fill", "sparkles"]),
+        ("デート", ["heart.circle.fill", "heart.fill"]),
+        ("接待", ["briefcase.fill"]),
+        ("会食", ["briefcase.fill"]),
+        ("子連れ", ["figure.2.and.child.holdinghands", "person.3.fill"]),
+        ("子供", ["figure.2.and.child.holdinghands", "person.3.fill"]),
+        ("車いす", ["figure.roll", "figure.walk"]),
+        ("ベビーカー", ["stroller.fill", "stroller"]),
+        ("ペット", ["pawprint.fill"]),
+        ("VIP", ["crown.fill", "star.fill"]),
+        ("個室", ["door.left.hand.closed"]),
+        ("デザート", ["cup.and.saucer.fill"]),
+        ("クーポン", ["ticket.fill"]),
+        ("ポイント", ["p.circle.fill"]),
+        ("アレルギー", ["exclamationmark.triangle.fill"]),
+        ("喫煙", ["smoke.fill", "cloud.fill"]),
+        ("禁煙", ["nosign"]),
+    ]
+    private static var cache: [String: String?] = [:]
+
+    /// 言葉に合う印（無ければ nil）
+    static func symbol(for text: String) -> String? {
+        if let hit = cache[text] { return hit }
+        var found: String? = nil
+        for (word, names) in rules where text.contains(word) {
+            found = names.first { UIImage(systemName: $0) != nil }
+            if found != nil { break }
+        }
+        cache[text] = found
+        return found
+    }
+
+    /// 卓のモード（伝票メモ：drink 飲み放題・buffet 食べ放題・food 食べ飲み放題・course コース）の印
+    static func planSymbols(_ plans: [String]) -> [String] {
+        var out: [String] = []
+        for p in plans {
+            switch p {
+            case "drink": out.append(symbol(for: "飲み放題") ?? "mug.fill")
+            case "buffet": out.append(symbol(for: "食べ放題") ?? "fork.knife")
+            case "food": out += [symbol(for: "飲み放題") ?? "mug.fill", symbol(for: "食べ放題") ?? "fork.knife"]
+            case "course": out.append(symbol(for: "コース") ?? "list.bullet.rectangle")
+            default: break
+            }
+        }
+        return out
+    }
+}
+
+/// どの店でも使う「当たり前」のもの（予約のキーボードのいちばん上に印つきで。店のキーワード 10 個とは別）
+enum NRWStandardKeys {
+    static let list = ["飲み放題", "食べ放題", "コース", "誕生日", "記念日", "子連れ"]
+}
+
+/// 「当たり前」のもののボタン（印つき。押すと選ぶ／外す）
+struct NRWStandardKeysPicker: View {
+    @Binding var selected: [String]
+    var columns: Int = 3
+    var height: CGFloat = 52
+
+    var body: some View {
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: columns), spacing: 8) {
+            ForEach(NRWStandardKeys.list, id: \.self) { k in
+                let on = selected.contains(k)
+                Button { if on { selected.removeAll { $0 == k } } else { selected.append(k) } } label: {
+                    HStack(spacing: 6) {
+                        if let ic = NRWKeywordIcon.symbol(for: k) { Image(systemName: ic).font(.system(size: 15, weight: .semibold)) }
+                        Text(k).font(.system(size: 14, weight: .heavy)).lineLimit(1).minimumScaleFactor(0.7)
+                    }
+                    .foregroundColor(on ? NLColor.navy : NLColor.ink)
+                    .frame(maxWidth: .infinity).frame(height: height)
+                    .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(on ? NLColor.yellow : Color.white))
+                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(on ? NLColor.yellow : NLColor.line, lineWidth: 1.5))
+                }
+                .buttonStyle(PressableStyle())
+            }
+        }
+    }
+}
+
 // MARK: - 折り返して並べる（チップ用）
 
 struct NRWFlow: Layout {

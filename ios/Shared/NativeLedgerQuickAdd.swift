@@ -44,7 +44,10 @@ struct NLQuickAddPanel: View {
         HStack(spacing: 0) {
             // 左：キーワード
             VStack(alignment: .leading, spacing: 12) {
-                Text("キーワード").font(.system(size: 15, weight: .heavy)).foregroundColor(NLColor.navy)
+                // 当たり前のもの（飲み放題・誕生日…）は印つきでいちばん上に（2026-10-24 21:18 Ronnie）
+                Text("よく使うもの").font(.system(size: 15, weight: .heavy)).foregroundColor(NLColor.navy)
+                NRWStandardKeysPicker(selected: $tags, columns: 2, height: 44)
+                Text("キーワード").font(.system(size: 15, weight: .heavy)).foregroundColor(NLColor.navy).padding(.top, 4)
                 if !loaded {
                     ProgressView().frame(maxWidth: .infinity)
                 } else if keywords.isEmpty {
@@ -52,10 +55,13 @@ struct NLQuickAddPanel: View {
                 } else {
                     ScrollView {
                         LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
-                            ForEach(keywords, id: \.self) { k in
+                            ForEach(keywords.filter { !NRWStandardKeys.list.contains($0) }, id: \.self) { k in
                                 let on = tags.contains(k)
                                 Button { if on { tags.removeAll { $0 == k } } else { tags.append(k) } } label: {
-                                    Text(k).font(.system(size: 13, weight: .bold)).lineLimit(2).minimumScaleFactor(0.7).multilineTextAlignment(.center)
+                                    HStack(spacing: 4) {
+                                        if let ic = NRWKeywordIcon.symbol(for: k) { Image(systemName: ic).font(.system(size: 12, weight: .semibold)) }
+                                        Text(k).font(.system(size: 13, weight: .bold)).lineLimit(2).minimumScaleFactor(0.7).multilineTextAlignment(.center)
+                                    }
                                         .foregroundColor(on ? .white : NLColor.ink)
                                         .frame(maxWidth: .infinity).frame(height: 52)
                                         .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(on ? NLColor.navy : Color.white))
