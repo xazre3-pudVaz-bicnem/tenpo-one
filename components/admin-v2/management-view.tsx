@@ -28,9 +28,9 @@ function rateTone(v: number | null, target: number | null, lowerIsBetter = true)
   return good ? 'text-success' : 'text-danger';
 }
 
-/** 万円（カレンダー用。千円未満は切り捨て） */
+/** カレンダー用の金額：1 万円未満はそのまま（¥1,000）、1 万円以上は万円（¥12.3万・¥120万） */
 function man(v: number): string {
-  if (v === 0) return '¥0';
+  if (Math.abs(v) < 10_000) return yen(v);
   const m = v / 10_000;
   return `¥${m.toLocaleString('ja-JP', { maximumFractionDigits: Math.abs(m) >= 100 ? 0 : 1 })}万`;
 }
@@ -202,7 +202,7 @@ export function ManagementView({
           <span className="text-xs text-ink-3">未来の日は予算だけ。今日は枠つき</span>
         </div>
         <div className="overflow-x-auto">
-          <div className="min-w-[840px]">
+          <div className="min-w-[600px]">
             <div className="grid grid-cols-7 gap-1 pb-1 text-center text-xs font-bold">
               {WEEKDAYS.map((w, i) => (
                 <div key={w} className={cn(i === 5 ? 'text-iris' : i === 6 ? 'text-danger' : 'text-ink-3')}>
