@@ -142,7 +142,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       {/* 新しい管理画面（パソコン）は theme-admin で管理画面だけの配色（app/globals.css）。レジ・ハンディは theme-regi のまま */}
       <div className={isRegi ? 'theme-regi regi-shell min-h-svh bg-lilac' : adminV2 ? 'theme-regi theme-admin min-h-svh bg-lilac' : 'theme-regi min-h-svh bg-lilac'}>
         {/* 上部バー（全幅）→ その下に左メニュー（固定）と本文 */}
-        <TopBar ctx={ctx} unreadCount={unreadCount ?? 0} showMenuLink={posFullscreen} />
+        <TopBar ctx={ctx} unreadCount={unreadCount ?? 0} showMenuLink={posFullscreen} adminV2={adminV2} />
         {/* 新しいネット予約のチャイム＋バナー（レジ・パソコンどの画面でも） */}
         {ctx.currentStore && <ReservationAlert storeId={ctx.currentStore.id} ledgerHref="/app/reservations" />}
         {/* ログインした端末は予約の通知を自動でオンにする（2026-09-27 Ronnie） */}

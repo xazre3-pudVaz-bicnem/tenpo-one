@@ -9,7 +9,6 @@ import { PageHeader } from '@/components/ui/page-header';
 import { EmptyState } from '@/components/ui/state';
 import { StoreRealtimeRefresh } from '@/components/realtime/store-realtime-refresh';
 import { StoreNowBoard } from '@/components/admin-v2/store-now-board';
-import { StoreSelect } from '@/components/admin-v2/store-select';
 
 export const metadata: Metadata = { title: '店舗ナウ' };
 
@@ -62,13 +61,7 @@ export default async function StoreNowPage({ searchParams }: { searchParams: Pro
           </>
         }
       />
-      {stores.length > 1 && (
-        <div className="-mt-2 flex items-center gap-2">
-          {/* 店舗はプルダウンで選ぶ（2026-10-24 Ronnie「全部ボタンで並べない」） */}
-          <StoreSelect stores={stores} currentId={store.id} hrefTemplate="/app/now?store={id}" />
-          <span className="text-xs text-ink-3">{stores.length} 店舗</span>
-        </div>
-      )}
+      {/* 店舗の切り替えは上のバーの店舗ピルだけ（2026-10-24 Ronnie「店舗を選ぶところは上のメニューバーだけでいい」） */}
       <StoreNowBoard data={data} serverNow={serverNow} />
     </div>
   );
