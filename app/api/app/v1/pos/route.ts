@@ -89,12 +89,8 @@ import {
 } from '@/app/app/cash/actions';
 import { isNativeNoticeActionType, parseNativeNoticeAction } from '@/lib/native-notices';
 import { isNativeSettingsActionType, parseNativeSettingsAction } from '@/lib/native-settings';
-import { isNativeSettingsPageActionType, parseNativeSettingsPageAction, type NativeClerksPayload, type NativeSoldOutPayload } from '@/lib/native-settings-pages';
-import { loadSoldOutBoard } from '@/lib/sold-out-loader';
-import { setItemSoldOut } from '@/app/app/pos/sold-out-actions';
-import { loadStoreClerks } from '@/lib/pos-clerks-server';
-import { CLERK_ROLES, CLERK_ROLE_EN, CLERK_ROLE_LABELS } from '@/lib/clerk-roles';
-import { addPosClerk, deletePosClerk, renamePosClerk, setPosClerkRole, setPosClerkStatus } from '@/app/app/settings/clerks/actions';
+import { isNativeSettingsPageActionType, parseNativeSettingsPageAction } from '@/lib/native-settings-pages';
+import { isNativeSettingsPagePart, loadNativeSettingsPage, runNativeSettingsPageAction } from '@/lib/native-settings-pages-server';
 import { loadNativeSettings } from '@/lib/native-settings-server';
 import { currentDeviceSetting } from '@/lib/register-device-server';
 import { addDeviceReceiptPrinter, saveDeviceReceiptPrinterSettings, setDevicePrinter } from '@/app/app/pos/device-printer-actions';
@@ -338,34 +334,12 @@ export async function GET(request: Request) {
     return json({ ok: true, ...cash });
   }
 
-  // 設定の中の画面：品切れ（Web の /app/pos/sold-out と同じ読み込み。2026-10-24 Ronnie「設定の中も全部ネイティブ」）
-  if (part === 'soldout') {
+  // 設定の中の画面（品切れ・POS担当者・営業時間 …。Web の各ページと同じ読み込み。2026-10-24 Ronnie「設定の中も全部ネイティブ」）
+  if (isNativeSettingsPagePart(part)) {
     const store = ctx.currentStore ?? ctx.stores[0] ?? null;
     if (!store) return json({ ok: false, error: '店舗がありません' }, 404);
-    const board = await loadSoldOutBoard(await createClient(), ctx.organizationId, store.id);
-    if (board.error) return json({ ok: false, error: '商品を読み込めませんでした' }, 500);
-    const payload: NativeSoldOutPayload = {
-      store: { id: store.id, name: store.name },
-      canManageShared: can(ctx.role, 'menu.manage'),
-      categories: board.categories,
-      items: board.items,
-    };
-    return json({ ok: true, ...payload });
-  }
-
-  // 設定の中の画面：POS担当者（Web の /app/settings/clerks と同じ読み込み）
-  if (part === 'clerks') {
-    const store = ctx.currentStore ?? ctx.stores[0] ?? null;
-    if (!store) return json({ ok: false, error: '店舗がありません' }, 404);
-    const rows = await loadStoreClerks(await createClient(), store.id, { includeHidden: true });
-    const payload: NativeClerksPayload = {
-      store: { id: store.id, name: store.name },
-      lockOwner: ctx.isRegisterDevice === true,
-      canEdit: can(ctx.role, 'store.settings'),
-      roles: CLERK_ROLES.map((r) => ({ id: r, label: CLERK_ROLE_LABELS[r], en: CLERK_ROLE_EN[r] })),
-      rows: rows.map((c) => ({ id: c.id, name: c.name, status: c.status, role: c.role })),
-    };
-    return json({ ok: true, ...payload });
+    const page = await loadNativeSettingsPage(part, ctx, await createClient(), { id: store.id, name: store.name });
+    return page.ok ? json({ ok: true, ...page.payload }) : json({ ok: false, error: page.error }, 500);
   }
 
   // 設定（このiPadのプリンター・レシートの出し先・LAN・Wi-Fi・設定の一覧）。Web の /app/pos/settings と同じ組み立て（lib/native-settings-server.ts）
@@ -1195,28 +1169,18 @@ export async function POST(request: Request) {
     }
   }
 
-  // 設定の中の画面の操作（品切れ …。中身は Web と同じ Server Action。2026-10-24）
+  // 設定の中の画面の操作（品切れ・POS担当者・営業時間 …。中身は Web と同じ Server Action。権限はその中で見る。2026-10-24）
   if (raw && typeof raw === 'object' && isNativeSettingsPageActionType((raw as { type?: unknown }).type)) {
     const parsedPage = parseNativeSettingsPageAction(raw);
     if (!parsedPage.ok) return json({ ok: false, error: parsedPage.error }, 400);
+    const pageStore = ctx.currentStore ?? ctx.stores[0];
+    if (!pageStore) return json({ ok: false, error: '店舗がありません' }, 404);
     // Route Handler では requirePermission がお店の回線を見ないので、ここで見る（ほかの操作と同じ）
     const pageProblem = await networkProblem(ctx);
     if (pageProblem) return json({ ok: false, error: pageProblem }, 403);
     try {
-      const pa = parsedPage.action;
-      if (pa.type === 'soldOutSet') {
-        const r = await setItemSoldOut(pa.itemId, pa.soldOut);
-        return json(r.error ? { ok: false, error: r.error } : { ok: true });
-      }
-      // POS担当者（権限 store.settings は Server Action の中で見る）
-      const pageStore = ctx.currentStore ?? ctx.stores[0];
-      if (!pageStore) return json({ ok: false, error: '店舗がありません' }, 404);
-      const done = (r: { error?: string }) => json(r.error ? { ok: false, error: r.error } : { ok: true });
-      if (pa.type === 'clerkAdd') return done(await addPosClerk(pageStore.id, pa.name, pa.role));
-      if (pa.type === 'clerkRename') return done(await renamePosClerk(pa.id, pageStore.id, pa.name));
-      if (pa.type === 'clerkStatus') return done(await setPosClerkStatus(pa.id, pageStore.id, pa.status));
-      if (pa.type === 'clerkRole') return done(await setPosClerkRole(pa.id, pageStore.id, pa.role));
-      if (pa.type === 'clerkDelete') return done(await deletePosClerk(pa.id, pageStore.id));
+      const r = await runNativeSettingsPageAction(parsedPage.action, { id: pageStore.id, name: pageStore.name });
+      return r.ok ? json({ ok: true }) : json({ ok: false, error: r.error }, 400);
     } catch (e) {
       return json({ ok: false, error: errorText(e, 'うまくいきませんでした。もう一度お試しください') }, 400);
     }

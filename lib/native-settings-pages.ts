@@ -14,7 +14,21 @@ export type NativeSettingsPageAction =
   | { type: 'clerkRename'; id: string; name: string }
   | { type: 'clerkStatus'; id: string; status: 'active' | 'hidden' }
   | { type: 'clerkRole'; id: string; role: ClerkRole }
-  | { type: 'clerkDelete'; id: string };
+  | { type: 'clerkDelete'; id: string }
+  /** 営業時間・休業日（/app/settings/hours。app/app/settings/hours/actions.ts） */
+  | { type: 'hoursSave'; hours: NativeBusinessHour[] }
+  | { type: 'lunchUntilSave'; lunchUntil: string }
+  | { type: 'nextFloatSave'; nextFloat: number | null }
+  | { type: 'holidayAdd'; date: string; name: string; isTemporary: boolean }
+  | { type: 'holidayDelete'; id: string };
+
+export interface NativeBusinessHour {
+  dayOfWeek: number;
+  isClosed: boolean;
+  openTime: string | null;
+  closeTime: string | null;
+  lastEntryTime: string | null;
+}
 
 export type NativeSettingsPageActionType = NativeSettingsPageAction['type'];
 export const NATIVE_SETTINGS_PAGE_ACTION_TYPES: readonly NativeSettingsPageActionType[] = [
@@ -24,6 +38,11 @@ export const NATIVE_SETTINGS_PAGE_ACTION_TYPES: readonly NativeSettingsPageActio
   'clerkStatus',
   'clerkRole',
   'clerkDelete',
+  'hoursSave',
+  'lunchUntilSave',
+  'nextFloatSave',
+  'holidayAdd',
+  'holidayDelete',
 ];
 
 export function isNativeSettingsPageActionType(v: unknown): v is NativeSettingsPageActionType {
@@ -69,7 +88,56 @@ export function parseNativeSettingsPageAction(raw: unknown): Parsed {
     if (!isUuid(b.id)) return bad('担当者が見つかりません');
     return { ok: true, action: { type: 'clerkDelete', id: b.id } };
   }
+  // 営業時間・休業日
+  const hhmm = (v: unknown): string | null => (typeof v === 'string' && /^\d{1,2}:\d{2}$/.test(v) ? v : null);
+  if (b.type === 'hoursSave') {
+    if (!Array.isArray(b.hours) || b.hours.length !== 7) return bad('曜日が足りません');
+    const hours: NativeBusinessHour[] = [];
+    for (const h of b.hours as Record<string, unknown>[]) {
+      const day = h?.dayOfWeek;
+      if (typeof day !== 'number' || day < 0 || day > 6 || typeof h.isClosed !== 'boolean') return bad('営業時間の内容が正しくありません');
+      hours.push({
+        dayOfWeek: day,
+        isClosed: h.isClosed,
+        openTime: h.openTime == null ? null : hhmm(h.openTime),
+        closeTime: h.closeTime == null ? null : hhmm(h.closeTime),
+        lastEntryTime: h.lastEntryTime == null ? null : hhmm(h.lastEntryTime),
+      });
+    }
+    return { ok: true, action: { type: 'hoursSave', hours } };
+  }
+  if (b.type === 'lunchUntilSave') {
+    const t = hhmm(b.lunchUntil);
+    if (!t) return bad('時刻は 15:00 のように入れてください');
+    return { ok: true, action: { type: 'lunchUntilSave', lunchUntil: t } };
+  }
+  if (b.type === 'nextFloatSave') {
+    if (!(b.nextFloat === null || (typeof b.nextFloat === 'number' && Number.isInteger(b.nextFloat) && b.nextFloat >= 0 && b.nextFloat <= 10_000_000))) {
+      return bad('金額は 0〜10,000,000 円の整数で入れてください');
+    }
+    return { ok: true, action: { type: 'nextFloatSave', nextFloat: b.nextFloat as number | null } };
+  }
+  if (b.type === 'holidayAdd') {
+    if (typeof b.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(b.date)) return bad('日付を選択してください');
+    return { ok: true, action: { type: 'holidayAdd', date: b.date, name: typeof b.name === 'string' ? b.name.slice(0, 80) : '', isTemporary: b.isTemporary === true } };
+  }
+  if (b.type === 'holidayDelete') {
+    if (!isUuid(b.id)) return bad('休業日が見つかりません');
+    return { ok: true, action: { type: 'holidayDelete', id: b.id } };
+  }
   return bad();
+}
+
+/** 営業時間・休業日の画面の読み込み（GET ?part=hours） */
+export interface NativeHoursPayload {
+  store: { id: string; name: string };
+  canEdit: boolean;
+  hours: NativeBusinessHour[];
+  /** レジ精算レシートのランチ／ディナーの区切り（HH:MM） */
+  lunchUntil: string;
+  /** 翌準備金（毎日レジに残す金額。null＝未設定） */
+  nextFloat: number | null;
+  holidays: { id: string; holidayDate: string; name: string | null; isTemporary: boolean }[];
 }
 
 /** POS担当者の画面の読み込み（GET ?part=clerks） */

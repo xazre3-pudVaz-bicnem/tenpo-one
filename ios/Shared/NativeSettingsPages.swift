@@ -9,6 +9,7 @@ import SwiftUI
 enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
     case soldOut = "soldout"
     case clerks = "clerks"
+    case hours = "hours"
     var id: String { rawValue }
 
     /// Web の道（クエリは見ない）
@@ -16,18 +17,21 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
         switch self {
         case .soldOut: return "/app/pos/sold-out"
         case .clerks: return "/app/settings/clerks"
+        case .hours: return "/app/settings/hours"
         }
     }
     var title: String {
         switch self {
         case .soldOut: return "品切れ"
         case .clerks: return "POS担当者"
+        case .hours: return "営業時間・休業日"
         }
     }
     var en: String {
         switch self {
         case .soldOut: return "Sold out"
         case .clerks: return "Clerks"
+        case .hours: return "Hours"
         }
     }
 
@@ -45,6 +49,7 @@ struct NativeSettingsPageScreen: View {
         switch key {
         case .soldOut: NativeSoldOutScreen()
         case .clerks: NativeClerksScreen()
+        case .hours: NativeHoursScreen()
         }
     }
 }
@@ -545,5 +550,402 @@ struct NativeClerksView: View {
             }
         }
         .padding(.horizontal, 16).frame(minHeight: 64)
+    }
+}
+
+// MARK: - 共通の部品（設定の中の画面）
+
+/// 設定の中の画面の枠：上のバー・読み込み中／エラー・toast
+struct NSPFrame<Content: View>: View {
+    let storeName: String
+    let title: String
+    let en: String
+    let loaded: Bool
+    let error: String?
+    @Binding var toast: String?
+    let onBack: () -> Void
+    let retry: () async -> Void
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        VStack(spacing: 0) {
+            NativeTopBar(storeName: storeName, title: title, subtitle: en, userName: "", onHome: onBack)
+            if loaded {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 18) { content() }
+                        .padding(20).frame(maxWidth: 960).frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.bottom, 24)
+                }
+            } else {
+                Spacer()
+                if let error {
+                    VStack(spacing: 10) {
+                        Text(error).font(.system(size: 15, weight: .bold)).foregroundColor(NFColor.danger)
+                        Button("もう一度") { Task { await retry() } }
+                    }
+                } else { ProgressView("読み込み中…").tint(NFColor.iris) }
+                Spacer()
+            }
+        }
+        .background(Color.white.ignoresSafeArea())
+        .overlay(alignment: .bottom) {
+            if let t = toast {
+                Text(t).font(.system(size: 15, weight: .bold)).foregroundColor(.white).multilineTextAlignment(.center)
+                    .padding(.horizontal, 18).padding(.vertical, 12)
+                    .background(RoundedRectangle(cornerRadius: 22).fill(NFColor.navy.opacity(0.92)))
+                    .padding(.horizontal, 40).padding(.bottom, 24)
+                    .task { try? await Task.sleep(nanoseconds: 2_500_000_000); if toast == t { toast = nil } }
+            }
+        }
+    }
+}
+
+/// 白いカード（見出し＋中身）
+struct NSPCard<Content: View>: View {
+    let title: String
+    var en: String = ""
+    var note: String? = nil
+    @ViewBuilder let content: () -> Content
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(title).font(.system(size: 17, weight: .heavy)).foregroundColor(NFColor.navy)
+                    if !en.isEmpty { Text(en).font(.system(size: 12)).foregroundColor(NFColor.ink3) }
+                }
+                if let note { Text(note).font(.system(size: 12.5)).foregroundColor(NFColor.ink3).fixedSize(horizontal: false, vertical: true) }
+            }
+            .padding(.horizontal, 18).padding(.vertical, 14)
+            Rectangle().fill(NFColor.line).frame(height: 1)
+            content()
+        }
+        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.white))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(NFColor.line, lineWidth: 1))
+        .shadow(color: Color.black.opacity(0.05), radius: 6, y: 2)
+    }
+}
+
+/// 青いボタン／白いボタン
+struct NSPButton: View {
+    let text: String
+    var icon: String? = nil
+    var primary = false
+    var busy = false
+    var disabled = false
+    let action: () -> Void
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 7) {
+                if busy { ProgressView().tint(primary ? .white : NFColor.iris).scaleEffect(0.8) }
+                else if let icon { Image(systemName: icon) }
+                Text(text)
+            }
+            .font(.system(size: 15, weight: .bold))
+            .foregroundColor(primary ? .white : NFColor.ink)
+            .padding(.horizontal, 18).frame(height: 46)
+            .background(RoundedRectangle(cornerRadius: 12).fill(primary ? NFColor.iris : Color.white))
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(primary ? Color.clear : NFColor.line, lineWidth: 1))
+        }
+        .buttonStyle(PressableStyle())
+        .disabled(disabled || busy)
+        .opacity(disabled ? 0.5 : 1)
+    }
+}
+
+/// 時刻を選ぶ（00:00〜、15分刻み。閉店は 30:00＝翌朝6時まで）
+struct NSPTimeMenu: View {
+    let value: String?
+    let options: [String]
+    var disabled = false
+    let pick: (String?) -> Void
+    var body: some View {
+        Menu {
+            Button("未設定") { pick(nil) }
+            ForEach(options, id: \.self) { o in Button(o) { pick(o) } }
+        } label: {
+            HStack(spacing: 6) {
+                Text(value ?? "--:--").font(.system(size: 16, weight: .bold)).foregroundColor(value == nil ? NFColor.ink3 : NFColor.ink).monospacedDigit()
+                Image(systemName: "chevron.up.chevron.down").font(.system(size: 11, weight: .bold)).foregroundColor(NFColor.ink3)
+            }
+            .padding(.horizontal, 12).frame(width: 112, height: 44)
+            .background(RoundedRectangle(cornerRadius: 10).fill(disabled ? NFColor.lilacSoft : Color.white))
+            .overlay(RoundedRectangle(cornerRadius: 10).stroke(NFColor.line, lineWidth: 1))
+        }
+        .disabled(disabled)
+        .opacity(disabled ? 0.5 : 1)
+    }
+}
+
+/// 操作して返事を返す（POST /api/app/v1/pos）
+enum NSPApi {
+    static func post(_ body: [String: Any]) async -> (ok: Bool, error: String?) {
+        var req = URLRequest(url: AppConfig.url("/api/app/v1/pos"))
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "content-type")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        do {
+            let data = try await NativeAPI.shared.send(req, kickPrint: false)
+            let r = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+            return (r?["ok"] as? Bool == true, r?["error"] as? String)
+        } catch {
+            return (false, (error as? NativeAPIError)?.message ?? "通信できませんでした")
+        }
+    }
+    static func load<T: Decodable>(_ type: T.Type, part: String) async throws -> (T, URL?) {
+        var comps = URLComponents(url: AppConfig.url("/api/app/v1/pos"), resolvingAgainstBaseURL: false)!
+        comps.queryItems = [URLQueryItem(name: "part", value: part)]
+        let data = try await NativeAPI.shared.send(URLRequest(url: comps.url!))
+        return (try JSONDecoder().decode(T.self, from: data), comps.url)
+    }
+    static func cachedURL(part: String) -> URL? {
+        var comps = URLComponents(url: AppConfig.url("/api/app/v1/pos"), resolvingAgainstBaseURL: false)!
+        comps.queryItems = [URLQueryItem(name: "part", value: part)]
+        return comps.url
+    }
+    /// 00:00 から toMin 分まで 15 分刻み（lib/business-hours.ts の businessHourOptions と同じ）
+    static func timeOptions(toMin: Int) -> [String] {
+        stride(from: 0, through: toMin, by: 15).map { String(format: "%02d:%02d", $0 / 60, $0 % 60) }
+    }
+}
+
+// MARK: - 営業時間・休業日（Web の /app/settings/hours と同じ）
+
+struct NHRHour: Codable, Hashable {
+    let dayOfWeek: Int
+    var isClosed: Bool
+    var openTime: String?
+    var closeTime: String?
+    var lastEntryTime: String?
+}
+struct NHRHoliday: Codable, Identifiable, Hashable { let id: String; let holidayDate: String; let name: String?; let isTemporary: Bool }
+struct NHRPayload: Codable {
+    let store: NFNamed
+    let canEdit: Bool
+    var hours: [NHRHour]
+    var lunchUntil: String
+    var nextFloat: Int?
+    var holidays: [NHRHoliday]
+}
+
+@MainActor
+final class NativeHoursModel: ObservableObject {
+    @Published var payload: NHRPayload?
+    @Published var error: String?
+    @Published var toast: String?
+    @Published var busy: String?
+    /// 編集中の営業時間（保存で送る）
+    @Published var hours: [NHRHour] = []
+    @Published var lunchUntil = "15:00"
+    @Published var nextFloatText = ""
+    @Published var newHolidayDate = Date()
+    @Published var newHolidayName = ""
+    @Published var newHolidayTemporary = true
+
+    static let openOptions = NSPApi.timeOptions(toMin: 23 * 60 + 45)
+    static let closeOptions = NSPApi.timeOptions(toMin: 30 * 60)
+    static let dayLabels = ["日", "月", "火", "水", "木", "金", "土"]
+
+    func refresh() async {
+        do {
+            if payload == nil, let saved = NativeAPI.cached(NHRPayload.self, NSPApi.cachedURL(part: "hours")) { apply(saved) }
+            let (p, _) = try await NSPApi.load(NHRPayload.self, part: "hours")
+            apply(p)
+            error = nil
+        } catch {
+            if payload == nil { self.error = (error as? NativeAPIError)?.message ?? "通信できませんでした" }
+        }
+    }
+    private func apply(_ p: NHRPayload) {
+        payload = p
+        hours = p.hours
+        lunchUntil = p.lunchUntil
+        nextFloatText = p.nextFloat.map { String($0) } ?? ""
+    }
+    var hoursChanged: Bool { payload.map { $0.hours != hours } ?? false }
+
+    func update(_ day: Int, _ change: (inout NHRHour) -> Void) {
+        guard let i = hours.firstIndex(where: { $0.dayOfWeek == day }) else { return }
+        change(&hours[i])
+    }
+    /// まとめて変更：全曜日に同じ時間（定休日の曜日は定休日のまま）
+    func applyToAll(open: String?, close: String?, last: String?) {
+        for i in hours.indices { hours[i].openTime = open; hours[i].closeTime = close; hours[i].lastEntryTime = last }
+    }
+
+    func saveHours() async {
+        let body: [String: Any] = ["type": "hoursSave", "hours": hours.map { h -> [String: Any] in
+            ["dayOfWeek": h.dayOfWeek, "isClosed": h.isClosed, "openTime": h.openTime as Any? ?? NSNull(), "closeTime": h.closeTime as Any? ?? NSNull(), "lastEntryTime": h.lastEntryTime as Any? ?? NSNull()]
+        }]
+        if await run("hours", body) { toast = "営業時間を保存しました" }
+    }
+    func saveLunch() async { if await run("lunch", ["type": "lunchUntilSave", "lunchUntil": lunchUntil]) { toast = "ランチの終わりを保存しました" } }
+    func saveNextFloat() async {
+        let t = nextFloatText.trimmingCharacters(in: .whitespaces)
+        let v: Any = t.isEmpty ? NSNull() : (Int(t) ?? -1)
+        if let n = v as? Int, n < 0 { toast = "金額は数字で入れてください"; return }
+        if await run("float", ["type": "nextFloatSave", "nextFloat": v]) { toast = "翌準備金を保存しました" }
+    }
+    func addHoliday() async {
+        let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; f.timeZone = TimeZone(identifier: "Asia/Tokyo")
+        let date = f.string(from: newHolidayDate)
+        if await run("holiday", ["type": "holidayAdd", "date": date, "name": newHolidayName, "isTemporary": newHolidayTemporary]) {
+            newHolidayName = ""
+            toast = "休業日を追加しました"
+        }
+    }
+    func deleteHoliday(_ h: NHRHoliday) async { if await run(h.id, ["type": "holidayDelete", "id": h.id]) { toast = "休業日を取り消しました" } }
+
+    private func run(_ key: String, _ body: [String: Any]) async -> Bool {
+        guard busy == nil else { return false }
+        busy = key
+        defer { busy = nil }
+        let r = await NSPApi.post(body)
+        guard r.ok else { toast = r.error ?? "うまくいきませんでした"; return false }
+        await refresh()
+        return true
+    }
+}
+
+struct NativeHoursScreen: View {
+    @StateObject private var model = NativeHoursModel()
+    @EnvironmentObject var state: AppState
+    var body: some View { NativeHoursView(model: model, onBack: { state.goNativeSettings() }) }
+}
+
+struct NativeHoursView: View {
+    @ObservedObject var model: NativeHoursModel
+    let onBack: () -> Void
+    @State private var bulkOpen: String? = nil
+    @State private var bulkClose: String? = nil
+    @State private var bulkLast: String? = nil
+
+    var body: some View {
+        NSPFrame(storeName: model.payload?.store.name ?? "", title: "営業時間・休業日", en: "Hours", loaded: model.payload != nil, error: model.error, toast: $model.toast, onBack: onBack, retry: { await model.refresh() }) {
+            if let p = model.payload {
+                let edit = p.canEdit
+                NSPCard(title: "営業時間", en: "Business hours", note: "閉店・最終入店は 24:00〜30:00（翌朝6時）まで選べます") {
+                    VStack(spacing: 0) {
+                        if edit {
+                            // まとめて変更（2026-09-27 Ronnie「一緒に変更する場合のも」）
+                            HStack(spacing: 10) {
+                                Text("まとめて変更").font(.system(size: 14, weight: .heavy)).foregroundColor(NFColor.navy).frame(width: 100, alignment: .leading)
+                                timeField("開店", value: bulkOpen, options: NativeHoursModel.openOptions) { bulkOpen = $0 }
+                                timeField("閉店", value: bulkClose, options: NativeHoursModel.closeOptions) { bulkClose = $0 }
+                                timeField("最終入店", value: bulkLast, options: NativeHoursModel.closeOptions) { bulkLast = $0 }
+                                NSPButton(text: "全曜日に入れる", icon: "arrow.down.to.line", disabled: bulkOpen == nil && bulkClose == nil && bulkLast == nil) { model.applyToAll(open: bulkOpen, close: bulkClose, last: bulkLast) }
+                                Spacer()
+                            }
+                            .padding(.horizontal, 18).padding(.vertical, 12)
+                            .background(NFColor.lilacSoft)
+                            Rectangle().fill(NFColor.line).frame(height: 1)
+                        }
+                        ForEach(model.hours, id: \.dayOfWeek) { h in
+                            HStack(spacing: 10) {
+                                Text("\(NativeHoursModel.dayLabels[h.dayOfWeek])曜日").font(.system(size: 16, weight: .heavy)).foregroundColor(h.isClosed ? NFColor.ink3 : NFColor.navy).frame(width: 70, alignment: .leading)
+                                Button { model.update(h.dayOfWeek) { $0.isClosed.toggle() } } label: {
+                                    Text(h.isClosed ? "定休日" : "営業").font(.system(size: 13, weight: .heavy)).foregroundColor(h.isClosed ? .white : NFColor.success)
+                                        .frame(width: 72, height: 34)
+                                        .background(Capsule().fill(h.isClosed ? NFColor.ink3 : NFColor.successSoft))
+                                }
+                                .buttonStyle(PressableStyle()).disabled(!edit)
+                                timeField("開店", value: h.openTime, options: NativeHoursModel.openOptions, disabled: h.isClosed || !edit) { v in model.update(h.dayOfWeek) { $0.openTime = v } }
+                                timeField("閉店", value: h.closeTime, options: NativeHoursModel.closeOptions, disabled: h.isClosed || !edit) { v in model.update(h.dayOfWeek) { $0.closeTime = v } }
+                                timeField("最終入店", value: h.lastEntryTime, options: NativeHoursModel.closeOptions, disabled: h.isClosed || !edit) { v in model.update(h.dayOfWeek) { $0.lastEntryTime = v } }
+                                Spacer()
+                            }
+                            .padding(.horizontal, 18).padding(.vertical, 8)
+                            .overlay(alignment: .bottom) { Rectangle().fill(NFColor.line).frame(height: 1) }
+                        }
+                        if edit {
+                            HStack {
+                                Spacer()
+                                NSPButton(text: "営業時間を保存", primary: true, busy: model.busy == "hours", disabled: !model.hoursChanged) { Task { await model.saveHours() } }
+                            }
+                            .padding(.horizontal, 18).padding(.vertical, 12)
+                        }
+                    }
+                }
+                HStack(alignment: .top, spacing: 18) {
+                    NSPCard(title: "ランチの終わり", en: "Lunch until", note: "レジ精算レシートのランチ／ディナーの区切り") {
+                        HStack(spacing: 10) {
+                            NSPTimeMenu(value: model.lunchUntil, options: NSPApi.timeOptions(toMin: 23 * 60 + 45), disabled: !edit) { if let v = $0 { model.lunchUntil = v } }
+                            NSPButton(text: "保存", primary: true, busy: model.busy == "lunch", disabled: !edit || model.lunchUntil == p.lunchUntil) { Task { await model.saveLunch() } }
+                            Spacer()
+                        }
+                        .padding(18)
+                    }
+                    NSPCard(title: "翌準備金", en: "Next float", note: "毎日レジに残す金額（空なら開局の金額と同じ）") {
+                        HStack(spacing: 10) {
+                            HStack(spacing: 4) {
+                                Text("¥").font(.system(size: 15, weight: .bold)).foregroundColor(NFColor.ink3)
+                                TextField("開局の金額と同じ", text: $model.nextFloatText).keyboardType(.numberPad).font(.system(size: 16, weight: .bold)).multilineTextAlignment(.trailing).disabled(!edit)
+                            }
+                            .padding(.horizontal, 12).frame(width: 190, height: 44)
+                            .background(RoundedRectangle(cornerRadius: 10).fill(Color.white))
+                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(NFColor.line, lineWidth: 1))
+                            NSPButton(text: "保存", primary: true, busy: model.busy == "float", disabled: !edit || model.nextFloatText == (p.nextFloat.map { String($0) } ?? "")) { Task { await model.saveNextFloat() } }
+                            Spacer()
+                        }
+                        .padding(18)
+                    }
+                }
+                NSPCard(title: "休業日", en: "Holidays", note: "今日以降の休業日。臨時休業は予約の受付も止まります") {
+                    VStack(spacing: 0) {
+                        if edit {
+                            HStack(spacing: 10) {
+                                DatePicker("", selection: $model.newHolidayDate, displayedComponents: .date).labelsHidden().environment(\.locale, Locale(identifier: "ja_JP"))
+                                TextField("名前（例：年末年始・棚卸）", text: $model.newHolidayName).font(.system(size: 15)).padding(.horizontal, 12).frame(height: 44).frame(maxWidth: 320)
+                                    .background(RoundedRectangle(cornerRadius: 10).fill(Color.white))
+                                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(NFColor.line, lineWidth: 1))
+                                Button { model.newHolidayTemporary.toggle() } label: {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: model.newHolidayTemporary ? "checkmark.square.fill" : "square").foregroundColor(model.newHolidayTemporary ? NFColor.iris : NFColor.ink3)
+                                        Text("臨時休業").font(.system(size: 14, weight: .bold)).foregroundColor(NFColor.ink2)
+                                    }
+                                }
+                                .buttonStyle(.plain)
+                                NSPButton(text: "追加する", icon: "plus", primary: true, busy: model.busy == "holiday") { Task { await model.addHoliday() } }
+                                Spacer()
+                            }
+                            .padding(.horizontal, 18).padding(.vertical, 12)
+                            .background(NFColor.lilacSoft)
+                            Rectangle().fill(NFColor.line).frame(height: 1)
+                        }
+                        if p.holidays.isEmpty {
+                            Text("今日以降の休業日はありません").font(.system(size: 14)).foregroundColor(NFColor.ink3).padding(18)
+                        }
+                        ForEach(p.holidays) { h in
+                            HStack(spacing: 12) {
+                                Text(Self.pretty(h.holidayDate)).font(.system(size: 16, weight: .bold)).foregroundColor(NFColor.ink).monospacedDigit()
+                                if h.isTemporary { Text("臨時").font(.system(size: 11, weight: .heavy)).foregroundColor(.white).padding(.horizontal, 7).padding(.vertical, 2).background(Capsule().fill(NFColor.saffron)) }
+                                Text(h.name ?? "").font(.system(size: 14)).foregroundColor(NFColor.ink2)
+                                Spacer()
+                                if edit {
+                                    NSPButton(text: "取り消す", icon: "trash", busy: model.busy == h.id) { Task { await model.deleteHoliday(h) } }
+                                }
+                            }
+                            .padding(.horizontal, 18).frame(minHeight: 56)
+                            .overlay(alignment: .bottom) { Rectangle().fill(NFColor.line).frame(height: 1) }
+                        }
+                    }
+                }
+            }
+        }
+        .task { await model.refresh() }
+    }
+
+    private func timeField(_ label: String, value: String?, options: [String], disabled: Bool = false, pick: @escaping (String?) -> Void) -> some View {
+        HStack(spacing: 6) {
+            Text(label).font(.system(size: 12, weight: .bold)).foregroundColor(NFColor.ink3)
+            NSPTimeMenu(value: value, options: options, disabled: disabled, pick: pick)
+        }
+    }
+
+    /// 2026-10-24 → 10/24（土）
+    private static func pretty(_ ymd: String) -> String {
+        let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; f.timeZone = TimeZone(identifier: "Asia/Tokyo")
+        guard let d = f.date(from: ymd) else { return ymd }
+        let o = DateFormatter(); o.dateFormat = "M/d（E）"; o.locale = Locale(identifier: "ja_JP"); o.timeZone = TimeZone(identifier: "Asia/Tokyo")
+        return o.string(from: d)
     }
 }
