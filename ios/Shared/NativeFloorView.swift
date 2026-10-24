@@ -291,7 +291,7 @@ struct NativeTableCard: View {
                     }
                     .font(.system(size: 13, weight: .semibold)).monospacedDigit().foregroundColor(NFColor.ink2)
                 }
-                seatMarks(used: order?.guestCount ?? 0, color: NFColor.ink2)
+                // 席の印（○○○○）は出さない（2026-10-24 21:36 Ronnie「番号の下の ○○○○ はいらない」）
                 // 呼び出しの中身（お会計希望・お水×2…）
                 if hasCall {
                     let info = Self.callInfo(table.calls, now: now)
@@ -516,20 +516,6 @@ struct NativeTableCard: View {
         case .over: return ("時間超過", "Over time", Color(hex: 0xE53935), .white)
         case .pay: return ("会計待ち", "Checkout", NFColor.saffron, .white)
         default: return nil
-        }
-    }
-
-    /// 席の印（席の数だけ小さな丸。座っている人数ぶん状態の色。席が多い卓は 12 まで）
-    @ViewBuilder
-    private func seatMarks(used: Int, color: Color) -> some View {
-        let cap = table.capacityMax
-        if cap >= 1 {
-            HStack(spacing: 4) {
-                ForEach(0..<min(cap, 12), id: \.self) { i in
-                    Circle().fill(i < used ? color : NFColor.ink.opacity(0.12)).frame(width: 7, height: 7)
-                }
-            }
-            .padding(.top, 3).padding(.bottom, 2)
         }
     }
 
