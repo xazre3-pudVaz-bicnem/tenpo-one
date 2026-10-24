@@ -19,6 +19,7 @@ import { loadSetupPlanItems } from '@/app/app/handy/setup-data';
 import { HANDY_PLANS, visitSourcesFrom } from '@/lib/handy-visit';
 import { tableState } from '@/components/handy/logic';
 import { enqueueOrderSlipPrint } from '@/app/app/pos/print-actions';
+import { loadNativeFloor } from '@/lib/native-floor-server';
 import type { NativeModuleArgs, NativeModuleGet, NativeModulePost, NativeModuleResult } from '@/lib/native-modules/registry';
 
 /**
@@ -36,6 +37,17 @@ async function handyGuard(ctx: NativeModuleArgs['ctx']): Promise<{ clerk: { id: 
   if (!clerk?.id) return { status: 409, body: { ok: false, error: '担当者を選んでください', needClerk: true } };
   return { clerk: { id: clerk.id, name: clerk.name } };
 }
+
+/**
+ * テーブル一覧の卓の箱（iPad のネイティブのテーブル一覧と同じ中身＝loadNativeFloor。2026-10-25 02:22 Ronnie
+ * 「iPhone のハンディの卓は iPad のネイティブのように」）。iPad の part=floor（レジ端末の登録が要る）は変えずに、ハンディ用に別にする
+ */
+export const handyFloorGet: NativeModuleGet = async ({ ctx, store }) => {
+  if (ctx.disabledFeatures?.has('pos')) return nativeBad('この機能は使えません', 403);
+  if (!can(ctx.role, 'pos.order')) return nativeBad('注文の権限がありません', 403);
+  const floor = await loadNativeFloor(ctx, await createClient(), store);
+  return { body: { ok: true, serverNow: floor.serverNow, tables: floor.tables } };
+};
 
 /** 卓の画面（Web の /handy/[tableId] と同じ中身） */
 export const handyTableGet: NativeModuleGet = async ({ ctx, store, url }) => {

@@ -148,6 +148,8 @@ final class NativeHandyModel: ObservableObject {
     @Published var now = Date()
     @Published var busy = false
     @Published var toast: String?
+    /// 卓の箱（iPad のネイティブのテーブル一覧と同じ中身。GET part=handyFloor。2026-10-25 02:22 Ronnie）。読めない卓は今までの箱
+    @Published var floorTables: [String: NFTable] = [:]
     private var offset: TimeInterval = 0
     private var clock: Timer?
     private var refresher: Timer?
@@ -179,8 +181,10 @@ final class NativeHandyModel: ObservableObject {
         do {
             var comps = URLComponents(url: AppConfig.url("/api/app/v1/pos"), resolvingAgainstBaseURL: false)!
             comps.queryItems = [URLQueryItem(name: "part", value: "handy")]
+            async let floorTask: Void = refreshFloor()
             let data = try await NativeAPI.shared.send(URLRequest(url: comps.url!))
             let p = try JSONDecoder().decode(NHDPayload.self, from: data)
+            _ = await floorTask
             offset = p.serverNow / 1000 - Date().timeIntervalSince1970
             now = Date().addingTimeInterval(offset)
             payload = p
@@ -194,6 +198,16 @@ final class NativeHandyModel: ObservableObject {
                 self.error = (error as? NativeAPIError)?.message ?? "通信できませんでした"
             }
         }
+    }
+
+    /// 卓の箱の中身（iPad と同じ）。読めなければ今までの箱のまま
+    private struct FloorTables: Decodable { let tables: [NFTable] }
+    private func refreshFloor() async {
+        var comps = URLComponents(url: AppConfig.url("/api/app/v1/pos"), resolvingAgainstBaseURL: false)!
+        comps.queryItems = [URLQueryItem(name: "part", value: "handyFloor")]
+        guard let url = comps.url, let data = try? await NativeAPI.shared.send(URLRequest(url: url)),
+              let f = try? JSONDecoder().decode(FloorTables.self, from: data) else { return }
+        floorTables = Dictionary(f.tables.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
     }
 
     /// 操作（担当者・卓ロック・まとめ・呼び出し対応・店舗の切り替え・ログアウト）。終わったら読み直す
@@ -360,7 +374,11 @@ struct NativeHandyHomeView: View {
         let tabs = floorTabs(p)
         let shown = shownTables(p, tabs: tabs)
         let kinds = callKinds(p)
-        let columns = [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)]
+        // iPad のネイティブと同じ卓の箱が読めたら 2 列（2026-10-25 02:22 Ronnie「iPhone の卓も iPad のように」）。読めなければ今までの 3 列
+        let cards = !model.floorTables.isEmpty
+        let columns = cards
+            ? [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)]
+            : [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)]
         return ScrollView {
             VStack(spacing: 0) {
                 if !tabs.isEmpty {
@@ -390,10 +408,10 @@ struct NativeHandyHomeView: View {
                         .font(.system(size: 13)).foregroundColor(NHDColor.ink3)
                         .padding(.horizontal, 24).padding(.vertical, 36)
                 }
-                LazyVGrid(columns: columns, spacing: 8) {
+                LazyVGrid(columns: columns, spacing: cards ? 18 : 8) {
                     ForEach(shown) { t in
                         let state = NHDState.of(t)
-                        Button {
+                        let tap = {
                             if state.usesSheet && p.canLock {
                                 sheetTableId = t.id
                             } else if state.usesSheet && state.canStartOrder {
@@ -402,15 +420,21 @@ struct NativeHandyHomeView: View {
                                 // まとめた卓で伝票がほかの卓にあるときは、その伝票の卓を開く（2つ目の伝票を立てない）
                                 onWeb("/handy/\(t.orderTableId ?? t.id)")
                             }
-                        } label: {
-                            NativeHandyTile(table: t, state: state, now: model.now, callKind: kinds[t.id],
-                                            groupLabel: Self.groupLabel(t, p.tables),
-                                            mainTableName: t.orderTableId.flatMap { id in p.tables.first { $0.id == id }?.name })
                         }
-                        .buttonStyle(PressableStyle(scale: 0.96))
+                        if cards, let ft = model.floorTables[t.id] {
+                            // iPad のネイティブと同じ箱（3D・下の色の帯・残り時間・最終注文から・呼び出し）。押したときの動きはハンディのまま
+                            NativeTableCard(table: ft, now: model.now.timeIntervalSince1970 * 1000, height: 186) { _ in tap() }
+                        } else {
+                            Button(action: tap) {
+                                NativeHandyTile(table: t, state: state, now: model.now, callKind: kinds[t.id],
+                                                groupLabel: Self.groupLabel(t, p.tables),
+                                                mainTableName: t.orderTableId.flatMap { id in p.tables.first { $0.id == id }?.name })
+                            }
+                            .buttonStyle(PressableStyle(scale: 0.96))
+                        }
                     }
                 }
-                .padding(.horizontal, 8).padding(.top, 6).padding(.bottom, 10)
+                .padding(.horizontal, cards ? 12 : 8).padding(.top, cards ? 14 : 6).padding(.bottom, 10)
             }
         }
         .refreshable { await model.refresh() }
