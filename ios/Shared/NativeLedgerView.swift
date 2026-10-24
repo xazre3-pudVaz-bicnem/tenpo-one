@@ -484,13 +484,7 @@ struct NativeLedgerView: View {
                     .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white.opacity(0.12)))
             }
             .buttonStyle(PressableStyle())
-            HStack(spacing: 6) {
-                Image(systemName: "storefront")
-                Text(model.payload?.store.name ?? "").lineLimit(1)
-            }
-            .font(.system(size: 15, weight: .semibold)).foregroundColor(.white)
-            .padding(.horizontal, 12).padding(.vertical, 8)
-            .background(Capsule().fill(Color.white.opacity(0.12)))
+            // 店名は出さない（ホームだけ。2026-10-24 18:55 Ronnie）
             Spacer(minLength: 8)
             VStack(spacing: 0) {
                 Text("店舗台帳").font(.system(size: 22, weight: .heavy)).foregroundColor(.white)

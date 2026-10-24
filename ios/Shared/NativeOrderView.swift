@@ -225,6 +225,7 @@ struct NativeOrderView: View {
 // MARK: - 上のバー
 
 struct NativeTopBar: View {
+    /// 店名は上のバーには出さない（ホームだけ。2026-10-24 18:55 Ronnie「店舗名は home 画面だけ、ほかはいらない」）。呼び出し側の形はそのまま
     let storeName: String
     let title: String
     let subtitle: String
@@ -241,15 +242,6 @@ struct NativeTopBar: View {
                 .scaledToFit()
                 .frame(width: 38, height: 38)
                 .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-            HStack(spacing: 6) {
-                Image(systemName: "storefront")
-                Text(storeName).lineLimit(1)
-            }
-            .font(.system(size: 15, weight: .semibold))
-            .foregroundColor(.white)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(Capsule().fill(Color.white.opacity(0.10)))
             Spacer(minLength: 8)
             ViewThatFits(in: .horizontal) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
