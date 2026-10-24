@@ -697,9 +697,9 @@ export async function POST(request: Request) {
     if (!parsedHandy.ok) return json({ ok: false, error: parsedHandy.error }, 400);
     const ha = parsedHandy.action;
     const handyPerm: PermissionAction | null =
-      ha.type === 'handyLock' || ha.type === 'handyGroup' ? 'tables.operate' : ha.type === 'switchStore' || ha.type === 'handyLogout' ? null : 'pos.order';
+      ha.type === 'handyLock' || ha.type === 'handyGroup' ? 'tables.operate' : ha.type === 'switchStore' || ha.type === 'handyLogout' || ha.type === 'signOut' ? null : 'pos.order';
     if (handyPerm && !can(ctx.role, handyPerm)) return json({ ok: false, error: '権限がありません' }, 403);
-    if (ha.type !== 'switchStore' && ha.type !== 'handyLogout') {
+    if (ha.type !== 'switchStore' && ha.type !== 'handyLogout' && ha.type !== 'signOut') {
       // Route Handler では requirePermission がお店の回線を見ないので、ここで見る（ほかの操作と同じ）
       const handyProblem = await networkProblem(ctx);
       if (handyProblem) return json({ ok: false, error: handyProblem }, 403);

@@ -9,6 +9,7 @@ describe('iPhone ネイティブ：ハンディ・オーナーのホームの操
     expect(parseNativeHandyAction({ type: 'handyLogin', clerkId: U1 })).toEqual({ ok: true, action: { type: 'handyLogin', clerkId: U1 } });
     expect(parseNativeHandyAction({ type: 'handyLogin', clerkId: null }).ok).toBe(false);
     expect(parseNativeHandyAction({ type: 'handyLogout' }).ok).toBe(true);
+    expect(parseNativeHandyAction({ type: 'signOut' }).ok).toBe(true);
   });
   it('卓ロック：tableId と unavailable', () => {
     expect(parseNativeHandyAction({ type: 'handyLock', tableId: U1, unavailable: true }).ok).toBe(true);

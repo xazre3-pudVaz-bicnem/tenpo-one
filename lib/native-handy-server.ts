@@ -11,6 +11,7 @@ import { loginHandyClerk, resolveServiceCall } from '@/app/app/handy/actions';
 import { setTableAvailability } from '@/app/app/floor/actions';
 import { saveTableGroup } from '@/app/app/floor/group-actions';
 import { switchStore } from '@/app/app/actions';
+import { createClient } from '@/lib/supabase/server';
 import type { NativeHandyAction } from '@/lib/native-handy';
 
 /**
@@ -97,5 +98,11 @@ export async function runNativeHandyAction(action: NativeHandyAction): Promise<{
     case 'switchStore':
       await switchStore(action.storeId ?? 'all');
       return { ok: true };
+    case 'signOut': {
+      // この端末のセッションだけ（Web の signOut と同じ。全店の iPad を落とさない）
+      const supabase = await createClient();
+      await supabase.auth.signOut({ scope: 'local' });
+      return { ok: true };
+    }
   }
 }

@@ -4,7 +4,7 @@ import { isUuid } from '@/lib/native-pos';
  * iPhone アプリのネイティブのハンディ（テーブル一覧）とオーナーのホーム（2026-10-24 Ronnie「iPhone のホームもネイティブに」）。
  *   GET ?part=handy      … 担当者・担当者の一覧・卓・呼び出し・フロア・ご予約リンク（Web の /handy と同じ組み立て）
  *   GET ?part=ownerHome  … 売上・達成率・来店・本日の予約・30日推移・店舗別（Web の /app/dashboard と同じ組み立て）
- *   POST { type: 'handyLogin' | 'handyLogout' | 'handyLock' | 'handyGroup' | 'handyCallDone' | 'switchStore' }
+ *   POST { type: 'handyLogin' | 'handyLogout' | 'handyLock' | 'handyGroup' | 'handyCallDone' | 'switchStore' | 'signOut' }
  * ここは入力の確認だけ（DB・Next 非依存・テスト対象）。
  */
 export type NativeHandyAction =
@@ -14,9 +14,11 @@ export type NativeHandyAction =
   | { type: 'handyGroup'; tableIds: string[] }
   | { type: 'handyCallDone'; callId: string }
   /** 店舗を切り替える（null＝全店舗。本社のアカウントだけ） */
-  | { type: 'switchStore'; storeId: string | null };
+  | { type: 'switchStore'; storeId: string | null }
+  /** ログアウト（この端末だけ。Web の ≡ のログアウトと同じ scope:'local'） */
+  | { type: 'signOut' };
 
-export const NATIVE_HANDY_ACTION_TYPES = ['handyLogin', 'handyLogout', 'handyLock', 'handyGroup', 'handyCallDone', 'switchStore'] as const;
+export const NATIVE_HANDY_ACTION_TYPES = ['handyLogin', 'handyLogout', 'handyLock', 'handyGroup', 'handyCallDone', 'switchStore', 'signOut'] as const;
 export function isNativeHandyActionType(v: unknown): v is NativeHandyAction['type'] {
   return typeof v === 'string' && (NATIVE_HANDY_ACTION_TYPES as readonly string[]).includes(v);
 }
@@ -33,6 +35,8 @@ export function parseNativeHandyAction(raw: unknown): Parsed {
       return { ok: true, action: { type: 'handyLogin', clerkId: b.clerkId } };
     case 'handyLogout':
       return { ok: true, action: { type: 'handyLogout' } };
+    case 'signOut':
+      return { ok: true, action: { type: 'signOut' } };
     case 'handyLock':
       if (!isUuid(b.tableId) || typeof b.unavailable !== 'boolean') return bad('卓の指定が正しくありません');
       return { ok: true, action: { type: 'handyLock', tableId: b.tableId, unavailable: b.unavailable } };
