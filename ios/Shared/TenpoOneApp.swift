@@ -33,6 +33,17 @@ struct RootView: View {
                 if state.needsHandyLogin {
                     HandyLoginView()
                 }
+                // iPhone：ハンディのテーブル一覧（/handy）とオーナー・店長のホーム（/app/dashboard）をネイティブで重ねる（2026-10-24）
+                if state.nativeHandyHome && !state.needsHandyLogin {
+                    NativeHandyHomeScreen()
+                        .transition(.opacity)
+                        .zIndex(3)
+                }
+                if state.nativeOwnerHome {
+                    NativeOwnerHomeScreen()
+                        .transition(.opacity)
+                        .zIndex(3)
+                }
                 // ネイティブのホーム。Web の /app/dashboard の上に重ねる（2026-10-24）
                 if state.nativeHome {
                     NativeHomeScreen()
@@ -140,6 +151,8 @@ struct RootView: View {
         }
         .animation(.easeOut(duration: 0.22), value: state.nativeOrder)
         .animation(.easeOut(duration: 0.18), value: state.nativeFloor)
+        .animation(.easeOut(duration: 0.18), value: state.nativeHandyHome)
+        .animation(.easeOut(duration: 0.18), value: state.nativeOwnerHome)
         .animation(.easeOut(duration: 0.18), value: state.nativeHome)
         .animation(.easeOut(duration: 0.18), value: state.nativeLedger)
         .animation(.easeOut(duration: 0.18), value: state.nativeCash)

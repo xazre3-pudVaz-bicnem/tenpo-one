@@ -372,3 +372,37 @@ struct NativeReportsScreen: View {
             }
     }
 }
+
+/// iPhone ハンディのテーブル一覧（Web の /handy の代わり。2026-10-24）
+struct NativeHandyHomeScreen: View {
+    @StateObject private var model = NativeHandyModel()
+    @EnvironmentObject var state: AppState
+
+    var body: some View {
+        NativeHandyHomeView(
+            model: model,
+            onWeb: { path in state.leaveNativePhone(to: path) },
+            onChangeMode: { state.resetMode() },
+            onSignedOut: { state.leaveNativePhone(to: "/handy") }
+        )
+        .onChange(of: state.phoneRefreshTick) { _ in Task { await model.refresh() } }
+        .onChange(of: model.useWeb) { on in if on { state.fallbackPhoneToWeb() } }
+    }
+}
+
+/// iPhone オーナー・店長のホーム（Web の /app/dashboard の代わり。2026-10-24）
+struct NativeOwnerHomeScreen: View {
+    @StateObject private var model = NativeOwnerHomeModel()
+    @EnvironmentObject var state: AppState
+
+    var body: some View {
+        NativeOwnerHomeView(
+            model: model,
+            onWeb: { path in state.leaveNativePhone(to: path) },
+            // 店を変えたら裏の Web も同じ店で読み直す（Cookie はもう変わっている）
+            onStoreSwitched: { WebViewController.current?.load(AppConfig.url("/app/dashboard")) }
+        )
+        .onChange(of: state.phoneRefreshTick) { _ in Task { await model.refresh() } }
+        .onChange(of: model.useWeb) { on in if on { state.fallbackPhoneToWeb() } }
+    }
+}

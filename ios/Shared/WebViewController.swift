@@ -211,6 +211,11 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         let nativePos = AppConfig.isPad
             ? "nativePos: { enabled: \(nativePosOn), set: function(on){ return call('setNativePos', { on: !!on }).then(function(r){ if (r && r.ok && window.TenpoNative && window.TenpoNative.nativePos) { window.TenpoNative.nativePos.enabled = !!r.enabled; } return r; }); } },"
             : ""
+        // iPhone だけ：ハンディのテーブル一覧・オーナーのホームをネイティブで出すか（2026-10-24。OFF にすると今までの Web の画面）
+        let nativePhoneOn = AppState.shared.nativePhoneEnabled ? "true" : "false"
+        let nativePhone = AppConfig.isPad
+            ? ""
+            : "nativePhone: { enabled: \(nativePhoneOn), set: function(on){ return call('setNativePhone', { on: !!on }).then(function(r){ if (r && r.ok && window.TenpoNative && window.TenpoNative.nativePhone) { window.TenpoNative.nativePhone.enabled = !!r.enabled; } return r; }); } },"
         // 画面を固定（2026-10-14 Ronnie「アプリはズームなど一切できない。画面にぴったり固定」）：拡大・縮小させない。
         // iPad は少し大きく（viewport の幅を狭くして画面いっぱいに拡大。applyPadViewport）。Next が書き直しても戻す
         // iPhone は viewport-fit=cover（時計のうしろ・ホームバーのうしろまで Web。env(safe-area-inset-*) が入る）
@@ -269,6 +274,7 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
             \(bluetooth)
             \(lan)
             \(nativePos)
+            \(nativePhone)
           };
           \(printerWarmup)
           \(routeHook)
@@ -342,6 +348,12 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
             AppState.shared.nativePosEnabled = (body["on"] as? Bool) ?? false
             refreshBridgeScript()
             reply(reqId, ["ok": true, "enabled": AppState.shared.nativePosEnabled])
+        case "setNativePhone":
+            let reqId = body["reqId"] as? String ?? ""
+            AppState.shared.nativePhoneEnabled = (body["on"] as? Bool) ?? false
+            if !AppState.shared.nativePhoneEnabled { AppState.shared.fallbackPhoneToWeb() }
+            refreshBridgeScript()
+            reply(reqId, ["ok": true, "enabled": AppState.shared.nativePhoneEnabled])
         case "route":
             if AppConfig.isOwnHost(webView.url) {
                 webView.evaluateJavaScript("window.__tenpoPreparePrinter && window.__tenpoPreparePrinter();", completionHandler: nil)

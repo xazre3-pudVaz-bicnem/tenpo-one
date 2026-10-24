@@ -79,10 +79,21 @@ final class AppState: ObservableObject {
     @Published var reportsTo: String?
     /// 伝票明細で開く伝票（/app/orders/<id> から。2026-10-24）
     @Published var slipsOpenId: String?
+    /// iPhone：ハンディのテーブル一覧（/handy の代わり）とオーナー・店長のホーム（/app/dashboard の代わり）をネイティブで出しているか（2026-10-24）
+    @Published var nativeHandyHome = false
+    @Published var nativeOwnerHome = false
+    /// iPhone のネイティブの画面を読み直してほしいとき（Web が /handy に戻ってきたときなど）に増やす
+    @Published var phoneRefreshTick = 0
     /// フロアを読み直してほしいとき（会計完了など）に増やす
     @Published var floorRefreshTick = 0
 
     private let nativePosKey = "tenpo.nativePos"
+    private let nativePhoneKey = "tenpo.nativePhone"
+    /// iPhone のホーム（ハンディのテーブル一覧・オーナーのホーム）をネイティブで出すか。既定は ON（2026-10-24 Ronnie「iOS ホーム画面」）
+    var nativePhoneEnabled: Bool {
+        get { !AppConfig.isPad && (UserDefaults.standard.object(forKey: nativePhoneKey) as? Bool ?? true) }
+        set { UserDefaults.standard.set(newValue, forKey: nativePhoneKey) }
+    }
     /// ネイティブのオーダー・会計画面を使うか。この iPad だけ。
     /// 既定は ON（2026-10-13 Ronnie「Native ON」）。レジの設定で OFF にできる。画面の並び（レイアウト）は Web と同じ
     var nativePosEnabled: Bool {
@@ -119,6 +130,8 @@ final class AppState: ObservableObject {
     func choose(_ newMode: Mode) {
         UserDefaults.standard.set(newMode.rawValue, forKey: modeKey)
         needsHandyLogin = false
+        nativeHandyHome = false
+        nativeOwnerHome = false
         mode = newMode
         webSession = UUID()
     }
@@ -128,6 +141,8 @@ final class AppState: ObservableObject {
         guard !AppConfig.isPad else { return } // iPad はレジのまま
         UserDefaults.standard.removeObject(forKey: modeKey)
         needsHandyLogin = false
+        nativeHandyHome = false
+        nativeOwnerHome = false
         mode = nil
     }
 
@@ -142,7 +157,7 @@ final class AppState: ObservableObject {
         case .handy:
             // ハンディのログインはお店の QR。メールのログイン画面は出さない
             if path == "/login" || path == "/register-login" {
-                DispatchQueue.main.async { self.needsHandyLogin = true }
+                DispatchQueue.main.async { self.needsHandyLogin = true; self.nativeHandyHome = false }
                 return URL(string: "about:blank")
             }
         default:
@@ -154,7 +169,12 @@ final class AppState: ObservableObject {
     /// Web の画面の行き先を見て、オーダー・会計（/app/pos?order=…）ならネイティブの画面で開く。
     /// ホーム・テーブル一覧のときは、裏でメニューを読んでおく（最初の伝票もすぐ開く。2026-10-21）
     func maybeOpenNativePos(for url: URL) {
-        guard mode == .regi, nativePosEnabled, AppConfig.isOwnHost(url) else { return }
+        guard AppConfig.isOwnHost(url) else { return }
+        if !AppConfig.isPad {
+            maybeOpenNativePhone(for: url)
+            return
+        }
+        guard mode == .regi, nativePosEnabled else { return }
         if url.path == "/app/dashboard" || url.path == "/app/floor" || url.path == "/app" {
             Task { @MainActor in NativeCatalogCache.shared.refresh() }
         }
@@ -380,6 +400,41 @@ final class AppState: ObservableObject {
         // Web の卓のポップアップ「レジ会計」（?checkout=1）はすぐ会計の画面に
         let checkout = items.contains { $0.name == "checkout" && $0.value == "1" }
         nativeOrder = NativeOrderRef(id: orderId, checkout: checkout)
+    }
+
+    /// iPhone：ハンディのテーブル一覧（/handy）とオーナー・店長のホーム（/app/dashboard）だけネイティブ。
+    /// Web の画面の上に重ねる（裏の Web はそのまま動く＝予約・呼び出しのチャイム・通知は Web が出す）。ほかの画面へ行ったら閉じる
+    func maybeOpenNativePhone(for url: URL) {
+        guard nativePhoneEnabled else { return }
+        let path = url.path
+        switch mode {
+        case .handy:
+            nativeOwnerHome = false
+            let on = path == "/handy" || path == "/handy/"
+            if on { phoneRefreshTick += 1 }
+            if nativeHandyHome != on { nativeHandyHome = on }
+        case .owner:
+            nativeHandyHome = false
+            let on = path == "/app/dashboard" || path == "/app" || path == "/app/"
+            if on { phoneRefreshTick += 1 }
+            if nativeOwnerHome != on { nativeOwnerHome = on }
+        default:
+            nativeHandyHome = false
+            nativeOwnerHome = false
+        }
+    }
+
+    /// iPhone のネイティブの画面を閉じて Web の画面へ（卓の画面・店舗台帳・設定など）
+    func leaveNativePhone(to path: String) {
+        nativeHandyHome = false
+        nativeOwnerHome = false
+        WebViewController.current?.load(AppConfig.url(path))
+    }
+
+    /// iPhone：読めなかったときは Web の画面をそのまま見せる（ログイン・回線の案内は Web が出す）
+    func fallbackPhoneToWeb() {
+        nativeHandyHome = false
+        nativeOwnerHome = false
     }
 
     /// ネイティブの画面を閉じる。openWebPath があれば Web でそこを開き（その伝票はもうネイティブで開かない）、無ければ前の画面へ戻る
