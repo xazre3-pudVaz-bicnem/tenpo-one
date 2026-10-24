@@ -21,6 +21,8 @@ struct NativeCheckoutView: View {
     @State private var done = false
     @State private var splitting = false
     @State private var splitPick: [String: Int] = [:]
+    /// 伝票分割で「分ける」（何人で分けるか）を開いている品
+    @State private var divideFor: String?
     @State private var showMoreSources = false
     @State private var discountMode: DiscountMode = .amount
     @State private var discountInput = ""
@@ -67,7 +69,13 @@ struct NativeCheckoutView: View {
             }
         }
         .background(NT.page.ignoresSafeArea())
-        .sheet(isPresented: $splitting) { splitSheet }
+        // 伝票分割は同じ画面の上に重ねる（Web の伝票分割と同じ2列。シートだと狭い）
+        .overlay {
+            if splitting {
+                splitScreen.transition(.move(edge: .trailing))
+            }
+        }
+        .animation(.easeOut(duration: 0.22), value: splitting)
         .overlay { if let st = stera { steraOverlay(st) } }
         .overlay(alignment: .top) {
             if let n = model.notice {
@@ -225,21 +233,26 @@ struct NativeCheckoutView: View {
                 VStack(spacing: 8) {
                     Button {
                         splitPick = [:]
+                        divideFor = nil
                         splitting = true
                     } label: {
                         VStack(spacing: 1) {
                             Text("別々会計").font(.system(size: 15, weight: .bold))
+                            Text("Separate payment").font(.system(size: 10, weight: .semibold)).opacity(0.7)
                         }
                         .foregroundColor(NT.ink)
                         .frame(maxWidth: .infinity, minHeight: 48)
                         .background(RoundedRectangle(cornerRadius: 12).stroke(NT.lilacLine, lineWidth: 1.5))
                     }
                     .buttonStyle(PressableStyle())
+                    // 品が2つ以上、または分けられる品（¥0 でない）があるときだけ（Web の canSplit と同じ）
+                    .disabled(!model.isLive || !canSplit || stera != nil)
+                    .opacity(!model.isLive || !canSplit ? 0.4 : 1)
                     .padding(.bottom, 4)
 
                     sumRow("小計", NT.yen(model.subtotal))
                     if model.order.serviceCharge > 0 { sumRow("サービス料", NT.yen(model.order.serviceCharge), small: true) }
-                    sumRow(model.order.discountReason.map { "Discount / coupon (\($0))" } ?? "値引き・クーポン",
+                    sumRow(model.order.discountReason.map { "値引き・クーポン（\($0)）" } ?? "値引き・クーポン",
                            model.order.discountTotal > 0 ? "-\(NT.yen(model.order.discountTotal))" : NT.yen(0),
                            color: model.order.discountTotal > 0 ? NT.warn : NT.ink2)
                     dashed
@@ -292,7 +305,7 @@ struct NativeCheckoutView: View {
             Divider().overlay(NT.line)
             VStack(alignment: .leading, spacing: 4) {
                 Text("会計メモ（任意）").font(.system(size: 11, weight: .bold)).foregroundColor(NT.ink3)
-                TextField("e.g. meant to pay by card, received cash", text: $memo)
+                TextField("例）カード払いのつもりで現金で受け取った", text: $memo)
                     .font(.system(size: 14))
                     .padding(.horizontal, 10).frame(height: 40)
                     .background(RoundedRectangle(cornerRadius: 10).stroke(NT.lilacLine, lineWidth: 1))
@@ -474,8 +487,8 @@ struct NativeCheckoutView: View {
                 }
             }
             HStack(spacing: 8) {
-                modeButton("¥ off", .amount)
-                modeButton("% off", .percent)
+                modeButton("金額（¥）", .amount)
+                modeButton("割合（%）", .percent)
             }
             HStack {
                 Text(discountMode == .amount ? "値引き額" : "値引き率").font(.system(size: 15, weight: .bold)).foregroundColor(NT.ink2)
@@ -786,29 +799,251 @@ struct NativeCheckoutView: View {
         }
     }
 
-    private var splitSheet: some View {
-        VStack(spacing: 16) {
-            Text("別々会計する品目を選択").font(.title2.bold())
-            List(model.order.lines.filter { !$0.local }) { line in
-                Stepper(value: Binding(get: { splitPick[line.id] ?? 0 }, set: { splitPick[line.id] = $0 }), in: 0...line.quantity) {
-                    Text("\(line.displayName)  \(splitPick[line.id] ?? 0) / \(line.quantity)")
-                }
+    // MARK: - 伝票分割（別々会計。Web の checkout-dialog の splitScreen と同じ：左＝元の伝票、右＝分ける伝票）
+
+    /// 分けられる品（サーバーの明細。カートは会計へ来る前に注文確定している）
+    private var splitLines: [NPOrderLine] { model.order.lines.filter { !$0.local } }
+    private var splitTotal: Int { splitLines.reduce(0) { $0 + (splitPick[$1.id] ?? 0) * $1.unitPrice } }
+    private var splitCount: Int { splitPick.values.reduce(0, +) }
+    /// 全部を選んだら分割にならない（元の伝票が空になる）
+    private var splitIsAll: Bool { splitLines.allSatisfy { (splitPick[$0.id] ?? 0) >= $0.quantity } }
+    /// 品が2つ以上ある、または分けられる品がある（1つの品を何人かで食べた）ときだけ別々会計できる
+    private var canSplit: Bool {
+        splitLines.reduce(0) { $0 + $1.quantity } >= 2 || splitLines.contains { $0.unitPrice > 0 }
+    }
+
+    private func pickSplit(_ line: NPOrderLine, _ delta: Int) {
+        let next = min(line.quantity, max(0, (splitPick[line.id] ?? 0) + delta))
+        if next == 0 { splitPick.removeValue(forKey: line.id) } else { splitPick[line.id] = next }
+    }
+
+    private func confirmSplit() {
+        guard splitCount > 0, !splitIsAll, !model.busy else { return }
+        let picks = splitPick
+        Task {
+            if await model.splitForCheckout(picks) {
+                payments = []; activeId = nil; openMethod = nil; memo = ""
+                splitPick = [:]
+                divideFor = nil
+                withAnimation(.easeOut(duration: 0.22)) { splitting = false }
             }
-            HStack {
-                Button("キャンセル") { splitting = false }
+        }
+    }
+
+    private func divide(_ line: NPOrderLine, parts: Int) {
+        Task {
+            if await model.divide(line, parts: parts) {
+                // 分けた品は数量が変わるので、選んでいた分は戻す（Web と同じ）
+                splitPick.removeValue(forKey: line.id)
+                divideFor = nil
+            }
+        }
+    }
+
+    private var splitScreen: some View {
+        VStack(spacing: 0) {
+            // 上のバー
+            HStack(spacing: 12) {
+                Button {
+                    divideFor = nil
+                    withAnimation(.easeOut(duration: 0.22)) { splitting = false }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "chevron.left")
+                        Text("レジ会計")
+                    }
+                    .font(.system(size: 15, weight: .bold)).foregroundColor(.white)
+                    .padding(.horizontal, 12).padding(.vertical, 9)
+                    .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white.opacity(0.10)))
+                }
+                .buttonStyle(PressableStyle())
+                .disabled(model.busy)
                 Spacer()
-                Button("選んだ品目を会計") {
-                    Task {
-                        if await model.splitForCheckout(splitPick) {
-                            payments = []; activeId = nil; openMethod = nil; memo = ""
-                            splitting = false
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text("伝票分割").font(.system(size: 20, weight: .heavy)).foregroundColor(.white)
+                    Text("Split by item").font(.system(size: 12, weight: .bold)).foregroundColor(Color(hex: 0xC9B6F5))
+                }
+                Spacer()
+                Text(model.order.tableName).font(.system(size: 18, weight: .heavy)).foregroundColor(Color(hex: 0xC9B6F5))
+                Text(verbatim: "#\(model.order.orderNo)").font(.system(size: 14, weight: .semibold)).foregroundColor(.white.opacity(0.6))
+            }
+            .padding(.horizontal, 20).frame(height: 64)
+            .background(NT.header)
+
+            HStack(alignment: .top, spacing: 0) {
+                // 左：元の伝票に残る分
+                splitColumn(
+                    title: "伝票 #\(model.order.orderNo)", sub: "元の伝票 / Stays", total: model.total - splitTotal, totalColor: NT.ink, strong: false
+                ) {
+                    ForEach(splitLines) { l in
+                        let left = l.quantity - (splitPick[l.id] ?? 0)
+                        if left > 0 {
+                            VStack(alignment: .leading, spacing: 8) {
+                                HStack(spacing: 8) {
+                                    VStack(alignment: .leading, spacing: 1) {
+                                        Text(l.displayName).font(.system(size: 15, weight: .bold)).foregroundColor(NT.ink).lineLimit(1)
+                                        if let opts = l.optionLabel { Text(opts).font(.system(size: 11)).foregroundColor(NT.ink3).lineLimit(1) }
+                                    }
+                                    Spacer(minLength: 4)
+                                    Text(verbatim: "×\(left)").font(.system(size: 13, weight: .semibold)).foregroundColor(NT.ink3)
+                                    Text(NT.yen(l.unitPrice * left)).font(.system(size: 15, weight: .bold)).foregroundColor(NT.ink)
+                                        .frame(width: 84, alignment: .trailing)
+                                    if l.unitPrice > 0 {
+                                        // 1つの品を何人かで食べた → 人数分に分けて1人分ずつ移せるように
+                                        Button { withAnimation(.easeOut(duration: 0.15)) { divideFor = divideFor == l.id ? nil : l.id } } label: {
+                                            HStack(spacing: 3) {
+                                                Image(systemName: "divide")
+                                                Text("分ける")
+                                            }
+                                            .font(.system(size: 12, weight: .bold))
+                                            .foregroundColor(divideFor == l.id ? .white : NT.purple)
+                                            .padding(.horizontal, 8).frame(height: 36)
+                                            .background(RoundedRectangle(cornerRadius: 9).fill(divideFor == l.id ? NT.purple : Color.white))
+                                            .overlay(RoundedRectangle(cornerRadius: 9).stroke(divideFor == l.id ? NT.purple : NT.lilacLine, lineWidth: 1))
+                                        }
+                                        .buttonStyle(PressableStyle())
+                                        .disabled(model.busy)
+                                    }
+                                    moveButton("chevron.right") { pickSplit(l, 1) }
+                                }
+                                if divideFor == l.id {
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        HStack(spacing: 4) {
+                                            Text(l.quantity > 1 ? "1つ（\(NT.yen(l.unitPrice))）を何人で分けますか？" : "何人で分けますか？")
+                                                .font(.system(size: 12, weight: .bold)).foregroundColor(NT.ink2)
+                                            Text("How many people shared it?").font(.system(size: 11, weight: .semibold)).foregroundColor(NT.ink3)
+                                        }
+                                        HStack(spacing: 6) {
+                                            ForEach([2, 3, 4, 5, 6], id: \.self) { n in
+                                                Button { divide(l, parts: n) } label: {
+                                                    VStack(spacing: 0) {
+                                                        Text("\(n)人").font(.system(size: 15, weight: .heavy)).foregroundColor(NT.ink)
+                                                        Text("\(NT.yen((l.unitPrice + n - 1) / n))〜").font(.system(size: 10)).foregroundColor(NT.ink3)
+                                                    }
+                                                    .frame(minWidth: 64, minHeight: 44)
+                                                    .background(RoundedRectangle(cornerRadius: 9).fill(Color.white))
+                                                    .overlay(RoundedRectangle(cornerRadius: 9).stroke(NT.lilacLine, lineWidth: 1))
+                                                }
+                                                .buttonStyle(PressableStyle())
+                                                .disabled(model.busy)
+                                            }
+                                            if model.busy { ProgressView().tint(NT.purple) }
+                                        }
+                                    }
+                                    .padding(10)
+                                    .background(RoundedRectangle(cornerRadius: 12).fill(NT.lilac))
+                                }
+                            }
+                            .padding(.horizontal, 16).padding(.vertical, 10)
+                            Divider().overlay(NT.line).padding(.leading, 16)
                         }
                     }
                 }
-                .disabled(model.busy || splitPick.values.reduce(0, +) == 0 || splitPick.values.reduce(0, +) >= model.order.lines.reduce(0) { $0 + $1.quantity })
+
+                // 真ん中の矢印
+                VStack(spacing: 16) {
+                    Image(systemName: "chevron.right")
+                    Image(systemName: "chevron.left")
+                }
+                .font(.system(size: 30, weight: .bold)).foregroundColor(NT.ink3)
+                .frame(width: 72).frame(maxHeight: .infinity)
+
+                // 右：分けて先に会計する分
+                splitColumn(title: "分ける伝票", sub: "この分を先に会計 / Pay now", total: splitTotal, totalColor: NT.purple, strong: true) {
+                    ForEach(splitLines) { l in
+                        let picked = splitPick[l.id] ?? 0
+                        if picked > 0 {
+                            HStack(spacing: 8) {
+                                moveButton("chevron.left") { pickSplit(l, -1) }
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(l.displayName).font(.system(size: 15, weight: .bold)).foregroundColor(NT.ink).lineLimit(1)
+                                    if let opts = l.optionLabel { Text(opts).font(.system(size: 11)).foregroundColor(NT.ink3).lineLimit(1) }
+                                }
+                                Spacer(minLength: 4)
+                                Text(verbatim: "×\(picked)").font(.system(size: 13, weight: .semibold)).foregroundColor(NT.ink3)
+                                Text(NT.yen(l.unitPrice * picked)).font(.system(size: 15, weight: .bold)).foregroundColor(NT.ink)
+                                    .frame(width: 84, alignment: .trailing)
+                            }
+                            .padding(.horizontal, 16).padding(.vertical, 10)
+                            Divider().overlay(NT.line).padding(.leading, 16)
+                        }
+                    }
+                    if splitCount == 0 {
+                        VStack(spacing: 6) {
+                            Text("左の伝票から「›」で品を移してください")
+                            Text("1つの品を何人かで食べたときは「分ける」で人数分に分けられます").font(.system(size: 12))
+                        }
+                        .font(.system(size: 13)).foregroundColor(NT.ink3)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity)
+                        .padding(.horizontal, 16).padding(.vertical, 40)
+                    }
+                }
             }
-        }.padding(24)
-        .interactiveDismissDisabled(model.busy)
+            .padding(12)
+
+            // 下：この分を会計
+            HStack(spacing: 12) {
+                Spacer()
+                if splitIsAll && splitCount > 0 {
+                    Text("全部を移すと分かれません。1つは元の伝票に残してください")
+                        .font(.system(size: 13, weight: .bold)).foregroundColor(NT.warn)
+                }
+                Button(action: confirmSplit) {
+                    VStack(spacing: 1) {
+                        Text(model.busy ? "処理中…" : "この分を会計").font(.system(size: 18, weight: .heavy))
+                        Text("Pay this part").font(.system(size: 11, weight: .bold)).opacity(0.85)
+                    }
+                    .foregroundColor(.white)
+                    .frame(width: 240, height: 60)
+                    .background(RoundedRectangle(cornerRadius: 14).fill(NT.purple))
+                }
+                .buttonStyle(PressableStyle())
+                .disabled(model.busy || splitCount == 0 || splitIsAll)
+                .opacity(model.busy || splitCount == 0 || splitIsAll ? 0.4 : 1)
+            }
+            .padding(.horizontal, 16).padding(.bottom, 16)
+        }
+        .background(NT.page.ignoresSafeArea())
+    }
+
+    private func splitColumn<Content: View>(title: String, sub: String, total: Int, totalColor: Color, strong: Bool, @ViewBuilder rows: () -> Content) -> some View {
+        VStack(spacing: 0) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(title).font(.system(size: 15, weight: .heavy)).foregroundColor(NT.purple)
+                Text(sub).font(.system(size: 11, weight: .semibold)).foregroundColor(NT.ink3)
+                Spacer()
+            }
+            .padding(.horizontal, 16).padding(.vertical, 11)
+            Divider().overlay(NT.line)
+            ScrollView {
+                LazyVStack(spacing: 0) { rows() }
+            }
+            Divider().overlay(NT.line)
+            HStack(alignment: .lastTextBaseline) {
+                Text("合計金額").font(.system(size: 15, weight: .bold)).foregroundColor(NT.ink2)
+                Spacer()
+                Text(NT.yen(total)).font(.system(size: 22, weight: .heavy)).foregroundColor(totalColor)
+                    .contentTransition(.numericText())
+                    .animation(.easeOut(duration: 0.15), value: total)
+            }
+            .padding(.horizontal, 16).padding(.vertical, 12)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(NT.card))
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(strong ? NT.purple : NT.lilacLine, lineWidth: strong ? 2 : 1))
+    }
+
+    private func moveButton(_ icon: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon).font(.system(size: 16, weight: .bold)).foregroundColor(NT.purple)
+                .frame(width: 40, height: 36)
+                .background(RoundedRectangle(cornerRadius: 9).fill(Color.white))
+                .overlay(RoundedRectangle(cornerRadius: 9).stroke(NT.lilacLine, lineWidth: 1))
+        }
+        .buttonStyle(PressableStyle(scale: 0.92))
+        .disabled(model.busy)
     }
 
     // MARK: - 完了
