@@ -224,7 +224,10 @@ struct NativeReservationSheet: View {
                 HStack(spacing: 8) {
                     Text("\(r.partySize)名").font(.system(size: 15, weight: .bold)).foregroundColor(NLColor.ink)
                     Text("\(nlHm(nlJstMinutes(r.startAt, dayStart: r.reservedDate)))〜\(nlHm(nlJstMinutes(r.endAt, dayStart: r.reservedDate)))").font(.system(size: 15, weight: .bold)).monospacedDigit().foregroundColor(NLColor.ink)
-                    if let s = r.sourceName { Text(s).font(.system(size: 13)).foregroundColor(NLColor.muted) }
+                    if let p, let st = NLSource.style(for: r, in: p) {
+                        NLSourceChip(style: st, auto: r.createdVia == "gourmet_mail", size: 11)
+                    } else if let s = r.sourceName { Text(s).font(.system(size: 13)).foregroundColor(NLColor.muted) }
+                    if r.createdVia == "gourmet_mail" { Text("自動取込").font(.system(size: 12)).foregroundColor(NLColor.muted) }
                     if let c = r.courseName { Text(c).font(.system(size: 13)).foregroundColor(NLColor.muted) }
                     Text("#\(r.code)").font(.system(size: 12)).foregroundColor(NLColor.muted)
                 }
