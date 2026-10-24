@@ -49,8 +49,8 @@ struct NativeSetupSheet: View {
     @State private var problem: String?
     /// 小さなポップアップ（モード・プラン・時間制・終了前注意・開始時間）
     @State private var popup: NFSetupPopup?
-    /// テンキー（人数の ＋・時間のカスタム）
-    @State private var pad: NFPadTarget?
+    /// テンキーの数（ポップアップの中で入れる）
+    @State private var padText = ""
 
     private var payload: NFPayload? { model.payload }
     private var planItems: [NFPlanItem] { (payload?.planItems ?? []).filter { plans.contains($0.kind) } }
@@ -127,23 +127,6 @@ struct NativeSetupSheet: View {
             }
         }
         .animation(.easeOut(duration: 0.15), value: popup)
-        .overlay {
-            if let t = pad {
-                NFNumberPad(title: t.title, unit: t.unit, initial: padInitial(t)) { v in
-                    if let v {
-                        switch t {
-                        case .male: male = min(999, v)
-                        case .female: female = min(999, v)
-                        case .duration: duration = min(600, max(15, v))
-                        case .warning: warningMinutes = min(180, max(5, v))
-                        }
-                    }
-                    pad = nil
-                }
-                .transition(.opacity)
-            }
-        }
-        .animation(.easeOut(duration: 0.15), value: pad)
     }
 
     // MARK: 左の列
@@ -221,7 +204,10 @@ struct NativeSetupSheet: View {
     @ViewBuilder private func popupCard(_ pp: NFSetupPopup) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text(pp.title).font(.system(size: 18, weight: .bold)).foregroundColor(NFColor.ink)
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(pp.title).font(.system(size: 17, weight: .bold)).foregroundColor(NFColor.ink)
+                    Text(pp.en).font(.system(size: 12, weight: .semibold)).foregroundColor(NFColor.ink3)
+                }
                 Spacer()
                 Button { popup = nil } label: {
                     Image(systemName: "xmark.circle.fill").symbolRenderingMode(.hierarchical).font(.system(size: 26)).foregroundColor(.secondary)
@@ -229,15 +215,15 @@ struct NativeSetupSheet: View {
             }
             switch pp {
             case .mode:
-                NFChipGrid(items: (payload?.plans ?? []).map { ($0.id, $0.name, NFColor.iris, false) }, selected: plans, columns: 3, height: 50) { id in togglePlan(id) }
-                Text("何個でも選べます（例：アラカルト＋飲み放題）").font(.system(size: 12)).foregroundColor(NFColor.ink3)
+                NFChipGrid(items: (payload?.plans ?? []).map { ($0.id, $0.name, NFColor.iris, false) }, selected: plans, columns: 3, height: 42) { id in togglePlan(id) }
+                Text("何個でも選べます（例：アラカルト＋飲み放題）／ Multiple OK").font(.system(size: 11)).foregroundColor(NFColor.ink3)
             case .plan:
                 if planItems.isEmpty {
                     Text("メニューにコース・飲み放題・食べ放題の商品がありません（設定 → メニュー で商品の種別を「コース」「飲み放題」「食べ放題」にすると、ここに出ます）。プラン無しで続けられます。")
                         .font(.system(size: 14)).foregroundColor(NFColor.ink2).fixedSize(horizontal: false, vertical: true)
                 } else {
                     Text("\(planNames)のプラン（何個でも。選ぶと伝票に入ります）").font(.system(size: 12)).foregroundColor(NFColor.ink3)
-                    NFChipGrid(items: planItems.map { ($0.id, "\($0.name)  ¥\($0.price)", NFColor.iris, false) }, selected: planItemIds, columns: 2, height: 50) { id in
+                    NFChipGrid(items: planItems.map { ($0.id, "\($0.name)  ¥\($0.price)", NFColor.iris, false) }, selected: planItemIds, columns: 2, height: 42) { id in
                         if planItemIds.contains(id) { planItemIds.removeAll { $0 == id } } else { planItemIds.append(id) }
                         if let item = planItems.first(where: { $0.id == id }), item.kind == "course", let m = item.durationMinutes, m > 0, planItemIds.contains(id) {
                             timed = true; duration = m
@@ -248,7 +234,7 @@ struct NativeSetupSheet: View {
                     }
                 }
             case .duration:
-                Text(nfDurationLabel(duration)).font(.system(size: 28, weight: .heavy, design: .rounded)).monospacedDigit().foregroundColor(NFColor.iris)
+                Text(nfDurationLabel(duration)).font(.system(size: 24, weight: .heavy, design: .rounded)).monospacedDigit().foregroundColor(NFColor.iris)
                     .frame(maxWidth: .infinity)
                 pickerLabel("時間 / Hours")
                 HStack(spacing: 8) {
@@ -261,17 +247,42 @@ struct NativeSetupSheet: View {
                 HStack(spacing: 8) {
                     timeChip("−30分", on: false) { duration = max(15, duration - 30) }
                     timeChip("＋30分", on: false) { duration = min(600, duration + 30) }
-                    timeChip("カスタム", on: false) { pad = .duration }
+                    timeChip("カスタム / Custom", on: false) { openPad(.duration) }
                 }
             case .warning:
-                Text("\(warningMinutes)分前").font(.system(size: 28, weight: .heavy, design: .rounded)).monospacedDigit().foregroundColor(NFColor.iris)
+                Text("\(warningMinutes)分前").font(.system(size: 24, weight: .heavy, design: .rounded)).monospacedDigit().foregroundColor(NFColor.iris)
                     .frame(maxWidth: .infinity)
                 HStack(spacing: 8) {
                     ForEach([10, 15, 30], id: \.self) { mm in timeChip("\(mm)分前", on: warningMinutes == mm) { warningMinutes = mm } }
                 }
                 HStack(spacing: 8) {
                     ForEach([45, 60], id: \.self) { mm in timeChip("\(mm)分前", on: warningMinutes == mm) { warningMinutes = mm } }
-                    timeChip("カスタム", on: false) { pad = .warning }
+                    timeChip("カスタム / Custom", on: false) { openPad(.warning) }
+                }
+            case .pad(let t):
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    Spacer()
+                    Text(padText.isEmpty ? "0" : padText).font(.system(size: 34, weight: .heavy, design: .rounded)).monospacedDigit().foregroundColor(NFColor.navy)
+                    Text(t.unit).font(.system(size: 15, weight: .bold)).foregroundColor(NFColor.ink3)
+                }
+                .padding(.horizontal, 14).frame(height: 56)
+                .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white.opacity(0.85)))
+                ForEach([["7", "8", "9"], ["4", "5", "6"], ["1", "2", "3"], ["C", "0", "⌫"]], id: \.self) { keys in
+                    HStack(spacing: 8) {
+                        ForEach(keys, id: \.self) { k in
+                            Button { padKey(k) } label: {
+                                Group {
+                                    if k == "⌫" { Image(systemName: "delete.left").font(.system(size: 20, weight: .semibold)) }
+                                    else { Text(k).font(.system(size: 22, weight: .bold, design: .rounded)) }
+                                }
+                                .foregroundColor(k == "C" ? NFColor.danger : NFColor.ink)
+                                .frame(maxWidth: .infinity).frame(height: 48)
+                                .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white.opacity(0.9)))
+                                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(Color.black.opacity(0.06), lineWidth: 0.8))
+                            }
+                            .buttonStyle(PressableStyle())
+                        }
+                    }
                 }
             case .start:
                 HStack(spacing: 8) {
@@ -292,12 +303,12 @@ struct NativeSetupSheet: View {
                         Picker("時", selection: Binding(get: { h }, set: { setStart(hour: $0, minute: m) })) {
                             ForEach(0..<24, id: \.self) { Text(String(format: "%02d", $0)).tag($0) }
                         }
-                        .pickerStyle(.wheel).frame(width: 110, height: 140).clipped()
+                        .pickerStyle(.wheel).frame(width: 96, height: 120).clipped()
                         Text(":").font(.system(size: 24, weight: .bold))
                         Picker("分", selection: Binding(get: { (m / 5) * 5 }, set: { setStart(hour: h, minute: $0) })) {
                             ForEach(Array(stride(from: 0, to: 60, by: 5)), id: \.self) { Text(String(format: "%02d", $0)).tag($0) }
                         }
-                        .pickerStyle(.wheel).frame(width: 110, height: 140).clipped()
+                        .pickerStyle(.wheel).frame(width: 96, height: 120).clipped()
                     }
                     .frame(maxWidth: .infinity)
                     .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.white.opacity(0.7)))
@@ -306,16 +317,20 @@ struct NativeSetupSheet: View {
                     }
                 }
             }
-            Button { popup = nil } label: {
-                Text("設定").font(.system(size: 18, weight: .heavy)).foregroundColor(.white)
-                    .frame(maxWidth: .infinity).frame(height: 52)
+            Button { applyPopup(pp); popup = nil } label: {
+                HStack(spacing: 6) {
+                    Text("設定").font(.system(size: 16, weight: .heavy))
+                    Text("Set").font(.system(size: 11, weight: .bold)).opacity(0.8)
+                }
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity).frame(height: 44)
                     .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(NFColor.iris))
             }
             .buttonStyle(PressableStyle(scale: 0.98))
         }
-        .padding(18)
-        .frame(width: 440)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .padding(14)
+        .frame(width: 360)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .shadow(color: .black.opacity(0.18), radius: 28, y: 12)
     }
 
@@ -402,6 +417,35 @@ struct NativeSetupSheet: View {
         .opacity(enabled ? 1 : 0.35)
     }
 
+    private func openPad(_ t: NFPadTarget) {
+        let v = padInitial(t)
+        padText = v > 0 ? String(v) : ""
+        popup = .pad(t)
+    }
+
+    private func padKey(_ k: String) {
+        switch k {
+        case "C": padText = ""
+        case "⌫": padText = String(padText.dropLast())
+        default:
+            var t = padText + k
+            while t.count > 1 && t.hasPrefix("0") { t.removeFirst() }
+            if t.count <= 3 { padText = t }
+        }
+    }
+
+    /// 「設定」を押したとき（テンキーの数を入れる）
+    private func applyPopup(_ pp: NFSetupPopup) {
+        guard case .pad(let t) = pp else { return }
+        let v = Int(padText) ?? 0
+        switch t {
+        case .male: male = min(999, v)
+        case .female: female = min(999, v)
+        case .duration: duration = min(600, max(15, v))
+        case .warning: warningMinutes = min(180, max(5, v))
+        }
+    }
+
     private func padInitial(_ t: NFPadTarget) -> Int {
         switch t {
         case .male: return male
@@ -417,9 +461,9 @@ struct NativeSetupSheet: View {
 
     private func timeChip(_ t: String, on: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Text(t).font(.system(size: 16, weight: .bold)).monospacedDigit().lineLimit(1).minimumScaleFactor(0.8)
+            Text(t).font(.system(size: 14, weight: .bold)).monospacedDigit().lineLimit(1).minimumScaleFactor(0.7)
                 .foregroundColor(on ? .white : NFColor.iris)
-                .frame(maxWidth: .infinity).frame(height: 46)
+                .frame(maxWidth: .infinity).frame(height: 40)
                 .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(on ? NFColor.iris : Color.white.opacity(0.85)))
                 .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(NFColor.iris.opacity(on ? 0 : 0.3), lineWidth: 1))
         }
@@ -456,7 +500,7 @@ struct NativeSetupSheet: View {
                 .buttonStyle(PressableStyle())
             }
             let more = value.wrappedValue > 5
-            Button { pad = target } label: {
+            Button { openPad(target) } label: {
                 Text(more ? "\(value.wrappedValue)" : "＋").font(.system(size: 22, weight: .bold))
                     .foregroundColor(more ? .white : NFColor.iris)
                     .frame(maxWidth: .infinity).frame(height: 48)
@@ -464,6 +508,16 @@ struct NativeSetupSheet: View {
                     .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(NFColor.iris, lineWidth: 1.4))
             }
             .buttonStyle(PressableStyle())
+            // クリア（文字でなくアイコン。2026-10-24 Ronnie）
+            Button { value.wrappedValue = 0 } label: {
+                Image(systemName: "delete.left").font(.system(size: 20, weight: .semibold))
+                    .foregroundColor(value.wrappedValue > 0 ? NFColor.ink : NFColor.ink3)
+                    .frame(width: 56, height: 48)
+                    .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white))
+                    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(NFColor.line, lineWidth: 1.2))
+            }
+            .buttonStyle(PressableStyle())
+            .disabled(value.wrappedValue == 0)
         }
     }
 }
@@ -471,6 +525,7 @@ struct NativeSetupSheet: View {
 /// 来店登録の小さなポップアップ
 enum NFSetupPopup: Equatable {
     case mode, plan, duration, warning, start
+    case pad(NFPadTarget)
     var title: String {
         switch self {
         case .mode: return "モード"
@@ -478,6 +533,17 @@ enum NFSetupPopup: Equatable {
         case .duration: return "時間制"
         case .warning: return "終了前注意"
         case .start: return "開始時間"
+        case .pad(let t): return t.title
+        }
+    }
+    var en: String {
+        switch self {
+        case .mode: return "Mode"
+        case .plan: return "Plan"
+        case .duration: return "Time limit"
+        case .warning: return "Last call"
+        case .start: return "Start time"
+        case .pad(let t): return t.en
         }
     }
 }
@@ -787,6 +853,14 @@ enum NFPadTarget: Equatable {
         }
     }
     var unit: String { self == .male || self == .female ? "名" : "分" }
+    var en: String {
+        switch self {
+        case .male: return "Male"
+        case .female: return "Female"
+        case .duration: return "Minutes"
+        case .warning: return "Minutes before"
+        }
+    }
 }
 
 /// 数を入れるテンキーのカード（C・7〜0・00・←・OK）。外を押すと閉じる
