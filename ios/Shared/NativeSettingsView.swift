@@ -20,6 +20,12 @@ struct NativeSettingsView: View {
     private static var lastSel: Sel = .page(.printer)
     /// どのフロアの卓の会計伝票もこの iPad で出す（レジ受付）
     @State private var billAtRegister = NativeRegisterBill.enabled
+    /// ハードウェアの中のタブ（プリンター／LAN・Wi-Fi／ネットが無いとき）。1 画面に入るように分ける（2026-10-25 00:31 Ronnie）
+    @State private var hwTab: HWTab = .printer
+    enum HWTab: String, CaseIterable { case printer, network, offline
+        var label: String { switch self { case .printer: return "プリンター"; case .network: return "LAN・Wi-Fi"; case .offline: return "ネットが無いとき" } }
+        var icon: String { switch self { case .printer: return "printer"; case .network: return "wifi"; case .offline: return "wifi.slash" } }
+    }
     /// ログアウトの確認
     @State private var confirmLogout = false
 
@@ -238,17 +244,33 @@ struct NativeSettingsView: View {
             pageTitle(Page.printer.icon, Page.printer.title, en: Page.printer.en, status: pageStatus(.printer))
             // 印刷はぜんぶここ。横に 2 列（左：つなぐ／右：出し先・会計伝票・LAN・Wi-Fi・ネットが無いとき）で、スクロールせずに 1 画面に
             // （2026-10-25 00:31 Ronnie「設定の右側はスクロールしなくても同じ画面でできるように」）
-            HStack(alignment: .top, spacing: 16) {
-                VStack(spacing: 16) { bluetoothCard }
+            // 縦にも 1 画面に入るように、3 つのタブに分ける（横 2 列＋タブ）
+            hwTabs
+            switch hwTab {
+            case .printer:
+                HStack(alignment: .top, spacing: 16) {
+                    VStack(spacing: 16) { bluetoothCard }
+                        .frame(maxWidth: .infinity, alignment: .top)
+                    VStack(spacing: 16) {
+                        receiptCard
+                        billSlipCard
+                    }
                     .frame(maxWidth: .infinity, alignment: .top)
-                VStack(spacing: 16) {
-                    receiptCard
-                    billSlipCard
-                    if !model.lanPrinters.isEmpty { lanCard }
-                    if !model.wifiPrinters.isEmpty { wifiCard }
-                    NativeOfflinePrintCard()
                 }
-                .frame(maxWidth: .infinity, alignment: .top)
+            case .network:
+                if model.lanPrinters.isEmpty && model.wifiPrinters.isEmpty {
+                    Text("LAN・Wi-Fi のプリンターはありません（パソコンの 設定 › ハードウェア で追加できます）")
+                        .font(.system(size: 14)).foregroundColor(NFColor.ink3).padding(.vertical, 12)
+                } else {
+                    HStack(alignment: .top, spacing: 16) {
+                        VStack(spacing: 16) { if !model.lanPrinters.isEmpty { lanCard } }
+                            .frame(maxWidth: .infinity, alignment: .top)
+                        VStack(spacing: 16) { if !model.wifiPrinters.isEmpty { wifiCard } }
+                            .frame(maxWidth: .infinity, alignment: .top)
+                    }
+                }
+            case .offline:
+                NativeOfflinePrintCard().frame(maxWidth: 900, alignment: .leading)
             }
         case .page(.native):
             pageTitle(Page.native.icon, Page.native.title, en: Page.native.en, status: pageStatus(.native))
@@ -590,7 +612,7 @@ struct NativeSettingsView: View {
                             Text("\(model.paper)mm").font(.system(size: 16, weight: .bold)).foregroundColor(NFColor.ink)
                             Image(systemName: "chevron.up.chevron.down").font(.system(size: 12, weight: .bold)).foregroundColor(NFColor.ink3)
                         }
-                        .padding(.horizontal, 14).frame(height: 46).frame(minWidth: 200, alignment: .trailing)
+                        .padding(.horizontal, 14).frame(height: 46).frame(minWidth: 140, alignment: .trailing)
                         .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(off ? NFColor.lilacSoft : Color.white))
                         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(NFColor.line, lineWidth: 1))
                     }
@@ -681,6 +703,26 @@ struct NativeSettingsView: View {
                 }
                 .padding(18)
             }
+        }
+    }
+
+    /// ハードウェアの中のタブ
+    private var hwTabs: some View {
+        HStack(spacing: 8) {
+            ForEach(HWTab.allCases, id: \.self) { t in
+                Button { withAnimation(.easeOut(duration: 0.12)) { hwTab = t } } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: t.icon).font(.system(size: 14, weight: .bold))
+                        Text(t.label).font(.system(size: 15, weight: .bold))
+                    }
+                    .foregroundColor(hwTab == t ? .white : NFColor.ink2)
+                    .padding(.horizontal, 16).frame(height: 42)
+                    .background(RoundedRectangle(cornerRadius: 11, style: .continuous).fill(hwTab == t ? Color(hex: 0x171333) : Color.white))
+                    .overlay(RoundedRectangle(cornerRadius: 11, style: .continuous).stroke(hwTab == t ? Color.clear : NFColor.line, lineWidth: 1))
+                }
+                .buttonStyle(PressableStyle())
+            }
+            Spacer(minLength: 0)
         }
     }
 
