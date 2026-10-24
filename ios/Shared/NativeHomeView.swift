@@ -373,7 +373,20 @@ struct NativeHomeView: View {
                         Text("予算売上高").font(.system(size: 14, weight: .semibold)).foregroundColor(NFColor.ink2)
                         Text("Target").font(.system(size: 11)).foregroundColor(NFColor.ink3)
                     }
-                    Text(s?.budget.map { NT.yen($0) } ?? "未設定").font(.system(size: 28, weight: .heavy)).monospacedDigit().foregroundColor(NFColor.ink)
+                    if let b = s?.budget {
+                        Text(NT.yen(b)).font(.system(size: 28, weight: .heavy)).monospacedDigit().foregroundColor(NFColor.ink)
+                    } else {
+                        // 未設定のときは大きく出さず、赤く小さく「予算を設定」（押すと日別予算登録へ。2026-10-24 Ronnie）
+                        Button { onWeb("/app/budgets/daily") } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "exclamationmark.circle.fill").font(.system(size: 12, weight: .bold))
+                                Text("予算を設定").font(.system(size: 14, weight: .bold))
+                                Text("Set budget").font(.system(size: 10, weight: .semibold)).opacity(0.8)
+                            }
+                            .foregroundColor(NFColor.danger)
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
                 HStack(spacing: 4) {
                     Image(systemName: "arrow.clockwise").font(.system(size: 11))
