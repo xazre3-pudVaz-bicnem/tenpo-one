@@ -30,6 +30,19 @@ enum NativePreview: String {
     case phoneOwnerCustomer
     /// iPhone 店長・オーナー：入出金・小口現金・締め履歴・レジオープン／クローズ・仕入経費・スキャン（2026-10-25。NativePhoneOwnerMoneyPreview.swift）
     case ownerCash, ownerPetty, ownerClosings, ownerCashOpen, ownerCashClose, ownerExpenses, ownerScan
+    /// iPhone 店長・オーナー：在庫・棚卸・発注提案・品切れ・仕入先・発注・原価管理（2026-10-25。NativePhoneOwnerStockPreview.swift）
+    case phoneOwnerInventory
+    case phoneOwnerInventoryItem
+    case phoneOwnerInventoryCount
+    case phoneOwnerInventoryReorder
+    case phoneOwnerStock
+    case phoneOwnerVendors
+    case phoneOwnerVendor
+    case phoneOwnerPurchases
+    case phoneOwnerPurchase
+    case phoneOwnerPurchaseNew
+    case phoneOwnerCosting
+    case phoneOwnerCostingItem
 
     static var current: NativePreview? {
         guard let raw = UserDefaults.standard.string(forKey: "tenpoNativePreview") else { return nil }
@@ -82,6 +95,18 @@ struct NativePreviewView: View {
         case .phoneOwnerCustomers: NPOCustomersPreview(kind: "list")
         case .phoneOwnerCustomer: NPOCustomersPreview(kind: "detail")
         case .ownerCash, .ownerPetty, .ownerClosings, .ownerCashOpen, .ownerCashClose, .ownerExpenses, .ownerScan: NativePhoneOwnerMoneyPreview(kind: kind.rawValue)
+        case .phoneOwnerInventory: NPZStockPreview(kind: "inventory")
+        case .phoneOwnerInventoryItem: NPZStockPreview(kind: "inventoryItem")
+        case .phoneOwnerInventoryCount: NPZStockPreview(kind: "inventoryCount")
+        case .phoneOwnerInventoryReorder: NPZStockPreview(kind: "inventoryReorder")
+        case .phoneOwnerStock: NPZStockPreview(kind: "stock")
+        case .phoneOwnerVendors: NPZStockPreview(kind: "vendors")
+        case .phoneOwnerVendor: NPZStockPreview(kind: "vendor")
+        case .phoneOwnerPurchases: NPZStockPreview(kind: "purchases")
+        case .phoneOwnerPurchase: NPZStockPreview(kind: "purchase")
+        case .phoneOwnerPurchaseNew: NPZStockPreview(kind: "purchaseNew")
+        case .phoneOwnerCosting: NPZStockPreview(kind: "costing")
+        case .phoneOwnerCostingItem: NPZStockPreview(kind: "costingItem")
         case .options, .price:
             NativeOrderView(model: model)
                 .statusBarHidden(true)
