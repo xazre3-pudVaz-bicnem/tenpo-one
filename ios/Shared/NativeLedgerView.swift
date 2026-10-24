@@ -140,6 +140,38 @@ enum NLColor {
 }
 
 /// timestamptz → JST の分（0〜）。翌日にまたがる閉店（25:00 など）は 24*60 を足す
+/// スケジュールの1行（卓、またはウェイティング）。lane = 予約ごとの段（0 が一番上）
+struct NLBoardRow {
+    let name: String
+    let status: String
+    let reservations: [NLReservation]
+    let lane: [String: Int]
+    let height: CGFloat
+}
+
+/// 時間が重なる予約を別の段に分ける（早い順に、空いている一番上の段へ）。段の数は 1 以上
+/// 箱は短くても 1 マスの幅があるので、終わりは「始まり＋1マス」より前にしない
+func nlLanes(_ rs: [NLReservation], dayStart: String, minMinutes: Int) -> (lane: [String: Int], count: Int) {
+    let items = rs.map { r -> (id: String, s: Int, e: Int) in
+        let s = nlJstMinutes(r.startAt, dayStart: dayStart)
+        let e = max(nlJstMinutes(r.endAt, dayStart: dayStart), s + max(minMinutes, 1))
+        return (r.id, s, e)
+    }
+    .sorted { $0.s != $1.s ? $0.s < $1.s : $0.id < $1.id }
+    var ends: [Int] = []
+    var lane: [String: Int] = [:]
+    for it in items {
+        if let i = ends.firstIndex(where: { $0 <= it.s }) {
+            ends[i] = it.e
+            lane[it.id] = i
+        } else {
+            ends.append(it.e)
+            lane[it.id] = ends.count - 1
+        }
+    }
+    return (lane, max(1, ends.count))
+}
+
 func nlJstMinutes(_ iso: String, dayStart: String) -> Int {
     let p = ISO8601DateFormatter()
     p.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -308,6 +340,8 @@ struct NativeLedgerView: View {
     @State private var boardProxy: ScrollViewProxy?
 
     private let rowH: CGFloat = 64
+    /// 時間が重なる予約を下の段に置くときの1段の高さ（箱 54 ＋ すき間）
+    private let laneStep: CGFloat = 58
     private let slotW: CGFloat = 96
     private let nameW: CGFloat = 132
     /// カーソルを止める場所（時間の側の左から 1/4。見えている 6 時間なら 1.5 時間ぶん過去が左に残る）
@@ -327,7 +361,6 @@ struct NativeLedgerView: View {
                         model: model,
                         onFloor: onFloor,
                         onWeb: onWeb,
-                        onNew: { newOpen = true },
                         onFindSeats: { findSeatsOpen = true },
                         onWalkIn: { walkInOpen = true },
                         onPdf: { makePdf() },
@@ -496,10 +529,23 @@ struct NativeLedgerView: View {
             HStack(spacing: 0) {
                 modeBtn("スケジュール", on: !model.listMode && !model.gourmetMode && !model.weekMode && !model.waitMode && !model.monthMode) { model.listMode = false; model.gourmetMode = false; model.weekMode = false; model.monthMode = false; model.waitMode = false }
                 modeBtn("予約リスト", on: model.listMode && !model.gourmetMode && !model.weekMode && !model.waitMode && !model.monthMode) { model.listMode = true; model.gourmetMode = false; model.weekMode = false; model.monthMode = false; model.waitMode = false }
-                // グルメ別・週間は 📅 のメニューから（上のバーが狭いので）
-                modeBtn("ウェイティング", on: model.waitMode) { model.waitMode = true; model.monthMode = false }
+                // グルメ別・週間・ウェイティングは「その他」のメニューから（上のバーが狭いので）
             }
             .background(RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(0.12)))
+            // 予約登録は右上に、Reservation と同じ黄色で（2026-10-24 18:49 Ronnie「右上のウェイティングはいらない、そこに予約登録を黄色で」）
+            if model.payload?.canWrite ?? false {
+                Button { newOpen = true } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "plus").font(.system(size: 14, weight: .heavy))
+                        Text("予約登録").font(.system(size: 15, weight: .heavy))
+                    }
+                    .foregroundColor(NLColor.navy)
+                    .padding(.horizontal, 14).frame(height: 38)
+                    .background(RoundedRectangle(cornerRadius: 10).fill(NLColor.yellow))
+                }
+                .buttonStyle(PressableStyle())
+                .accessibilityLabel("予約登録")
+            }
         }
         .padding(.horizontal, 16)
         .frame(height: 64)
@@ -606,16 +652,24 @@ struct NativeLedgerView: View {
     private func boardRows(_ p: NLPayload, scrollable: Bool) -> some View {
         let slots = max(1, (p.viewEndMin - p.viewStartMin) / p.slotMinutes)
         let totalW = CGFloat(slots) * slotW
-        let unassigned = p.reservations.filter { $0.tableIds.isEmpty }
+        // 席がまだ決まっていない予約（会計の済んだものは除く。Web の「席未定」と同じ）
+        let unassigned = p.reservations.filter { $0.tableIds.isEmpty && $0.status != "completed" }
         let nowMin = p.isToday ? nlJstMinutes(ISO8601DateFormatter().string(from: model.now), dayStart: p.date) : nil
         let nowX: CGFloat? = nowMin.flatMap { m in
             m >= p.viewStartMin && m <= p.viewEndMin ? CGFloat(m - p.viewStartMin) / CGFloat(p.slotMinutes) * slotW : nil
         }
-        // 卓の上に「ウェイティング」の行（席がまだ決まっていない予約）。予約が無い日も行は出す
-        // （2026-10-24 Ronnie「ウェイティングはテーブルより上に。言葉もウェイティング」）
-        let rows: [(name: String, status: String, reservations: [NLReservation])] =
-            [("ウェイティング", "\(unassigned.count)組", unassigned)]
-            + p.tables.map { t in (t.name, t.statusLabel.isEmpty ? "\(t.capacityMax)名席" : t.statusLabel, p.reservations.filter { $0.tableIds.contains(t.id) }) }
+        // 卓の上に「ウェイティング」の行（席がまだ決まっていない予約）。待っている予約があるときだけ出す
+        // （2026-10-24 Ronnie「ウェイティングはテーブルより上に。言葉もウェイティング」、18:48「waiting ma manxe vaye matra dekhauxa」）
+        // 時間が重なる予約は下の段に並べ、行の高さが広がる（18:48「booking dherai vayo vane thau farakilo hudai janxa」）
+        let waiting: [(name: String, status: String, reservations: [NLReservation])] =
+            unassigned.isEmpty ? [] : [("ウェイティング", "\(unassigned.count)組", unassigned)]
+        let tableData: [(name: String, status: String, reservations: [NLReservation])] =
+            p.tables.map { t in (t.name, t.statusLabel.isEmpty ? "\(t.capacityMax)名席" : t.statusLabel, p.reservations.filter { $0.tableIds.contains(t.id) }) }
+        let rows: [NLBoardRow] = (waiting + tableData)
+            .map { row in
+                let lanes = nlLanes(row.reservations, dayStart: p.date, minMinutes: p.slotMinutes)
+                return NLBoardRow(name: row.name, status: row.status, reservations: row.reservations, lane: lanes.lane, height: rowH + CGFloat(lanes.count - 1) * laneStep)
+            }
 
         let names = VStack(spacing: 0) {
             Text("テーブル").font(.system(size: 12, weight: .bold)).foregroundColor(NLColor.muted)
@@ -627,7 +681,7 @@ struct NativeLedgerView: View {
                     Text(row.status).font(.system(size: 11)).foregroundColor(NLColor.muted).lineLimit(1)
                 }
                 .padding(.leading, 12)
-                .frame(width: nameW, height: rowH, alignment: .leading)
+                .frame(width: nameW, height: row.height, alignment: .leading)
                 .overlay(alignment: .bottom) { Rectangle().fill(NLColor.line).frame(height: 1) }
             }
         }
@@ -659,7 +713,7 @@ struct NativeLedgerView: View {
             .background(NLColor.card)
             Rectangle().fill(NLColor.line).frame(height: 1)
             ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
-                tableRow(reservations: row.reservations, p: p, slots: slots, totalW: totalW, nowMin: nowMin)
+                tableRow(row, p: p, slots: slots, totalW: totalW, nowMin: nowMin)
             }
         }
         .frame(width: totalW)
@@ -775,8 +829,9 @@ struct NativeLedgerView: View {
         "storefront": Color(hex: 0x45403B),   // 店頭：チャコール
     ]
 
-    private func tableRow(reservations: [NLReservation], p: NLPayload, slots: Int, totalW: CGFloat, nowMin: Int?) -> some View {
-        HStack(spacing: 0) {
+    private func tableRow(_ row: NLBoardRow, p: NLPayload, slots: Int, totalW: CGFloat, nowMin: Int?) -> some View {
+        let h = row.height
+        return HStack(spacing: 0) {
             ZStack(alignment: .topLeading) {
                 // マス目
                 HStack(spacing: 0) {
@@ -784,12 +839,12 @@ struct NativeLedgerView: View {
                         let m = p.viewStartMin + i * p.slotMinutes
                         let closed = m < p.openMin || m >= p.closeMin
                         Rectangle().fill(closed ? NLColor.graySoft.opacity(0.6) : Color.clear)
-                            .frame(width: slotW, height: rowH)
+                            .frame(width: slotW, height: h)
                             .overlay(alignment: .leading) { Rectangle().fill(NLColor.line.opacity(m % 60 == 0 ? 1 : 0.5)).frame(width: 1) }
                     }
                 }
                 // 予約の箱
-                ForEach(reservations) { r in
+                ForEach(row.reservations) { r in
                     let s = nlJstMinutes(r.startAt, dayStart: p.date)
                     let e = nlJstMinutes(r.endAt, dayStart: p.date)
                     let x = CGFloat(s - p.viewStartMin) / CGFloat(p.slotMinutes) * slotW
@@ -826,15 +881,15 @@ struct NativeLedgerView: View {
                         .clipped()
                     }
                     .buttonStyle(PressableStyle(scale: 0.98))
-                    .offset(x: max(0, x) + 2, y: 5)
+                    .offset(x: max(0, x) + 2, y: 5 + CGFloat(row.lane[r.id] ?? 0) * laneStep)
                 }
                 // 今の時刻の線
                 if let nowMin, nowMin >= p.viewStartMin, nowMin <= p.viewEndMin {
-                    Rectangle().fill(NLColor.red).frame(width: 2, height: rowH)
+                    Rectangle().fill(NLColor.red).frame(width: 2, height: h)
                         .offset(x: CGFloat(nowMin - p.viewStartMin) / CGFloat(p.slotMinutes) * slotW)
                 }
             }
-            .frame(width: totalW, height: rowH)
+            .frame(width: totalW, height: h)
         }
         .overlay(alignment: .bottom) { Rectangle().fill(NLColor.line).frame(height: 1) }
     }

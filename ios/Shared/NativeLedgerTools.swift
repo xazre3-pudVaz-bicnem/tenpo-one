@@ -3,6 +3,7 @@ import UIKit
 
 // 店舗台帳の上のボタン（Web の components/reservations/ledger-header.tsx の LedgerTop と同じ働き）
 //   2026-10-24 Ronnie「ボタンはアイコンの下に文字。外に出すのは 会計・オーダー・その他（…）・｜・予約登録 だけ。あとは その他 の中に」（退店管理 → 会計・オーダー に名前を変更。行き先は同じフロア画面）
+//   2026-10-24 18:49 Ronnie：予約登録は右上（ウェイティングのボタンの場所）に黄色で → ここは 会計・オーダー と その他 だけ
 //   その他 = CSV出力・集計・PDF作成・空席検索・直接来店・スケジュール・予約リスト・グルメ別・週間・月間カレンダー・ウェイティング・未連絡の予約・顧客台帳・台帳設定
 
 /// 空席検索の結果（サーバー ledgerFindSeats）
@@ -89,7 +90,6 @@ struct NLToolbar: View {
     @ObservedObject var model: NativeLedgerModel
     let onFloor: () -> Void
     let onWeb: (String) -> Void
-    let onNew: () -> Void
     let onFindSeats: () -> Void
     let onWalkIn: () -> Void
     let onPdf: () -> Void
@@ -137,14 +137,7 @@ struct NLToolbar: View {
                 itemLabel("ellipsis", "その他")
             }
             .accessibilityLabel("その他（CSV・集計・PDF・空席検索・ほかの台帳・設定）")
-            if p?.canWrite ?? false {
-                // 点線の仕切り → 予約登録
-                Path { path in path.move(to: .zero); path.addLine(to: CGPoint(x: 0, y: 44)) }
-                    .stroke(NLColor.gray, style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
-                    .frame(width: 1, height: 44)
-                    .padding(.horizontal, 6)
-                item("plus", "予約登録", action: onNew)
-            }
+            // 予約登録は右上（黄色）へ移した（2026-10-24 18:49 Ronnie）
         }
         .padding(.trailing, 16)
     }
