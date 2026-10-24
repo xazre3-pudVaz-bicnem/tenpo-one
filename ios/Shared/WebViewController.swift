@@ -216,10 +216,9 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         // iPhone は viewport-fit=cover（時計のうしろ・ホームバーのうしろまで Web。env(safe-area-inset-*) が入る）
         let fit = AppConfig.isPad ? "" : ", viewport-fit=cover"
         let viewport = "(function(){ var W = \(padViewportWidth); var m = null; var want = function(){ if (W > 0) { var k = W > 0 && window.__tenpoScale ? window.__tenpoScale : 1; return 'width=' + W + ', initial-scale=' + k + ', minimum-scale=' + k + ', maximum-scale=' + k + ', user-scalable=no\(fit)'; } return 'width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no\(fit)'; }; var apply = function(){ if (!m) return; var v = want(); if (m.getAttribute('content') !== v) m.setAttribute('content', v); }; var watch = function(){ var n = document.querySelector('meta[name=viewport]'); if (!n || n === m) return !!n; m = n; apply(); new MutationObserver(apply).observe(m, { attributes: true, attributeFilter: ['content'] }); return true; }; window.__tenpoSetViewport = function(w, k){ W = w | 0; window.__tenpoScale = k || 1; watch(); apply(); }; window.__tenpoScale = \(padViewportScale); try { document.documentElement.style.touchAction = 'manipulation'; } catch (e) {} if (!watch()) { var mo = new MutationObserver(function(){ if (watch()) { mo.disconnect(); if (document.head) new MutationObserver(watch).observe(document.head, { childList: true }); } }); mo.observe(document, { childList: true, subtree: true }); } else if (document.head) { new MutationObserver(watch).observe(document.head, { childList: true }); } })();"
-        // iPad だけ：画面の行き先を知らせる（オーダー・会計をネイティブで開くため。Next の画面の切り替えは pushState）
-        let routeHook = AppConfig.isPad
-            ? "(function(){ var notify = function(){ post({ type: 'route', url: location.href }); }; var wrap = function(n){ var o = history[n]; history[n] = function(){ var r = o.apply(this, arguments); try { notify(); } catch (e) {} return r; }; }; wrap('pushState'); wrap('replaceState'); window.addEventListener('popstate', notify); })();"
-            : ""
+        // 画面の行き先を知らせる（Next の画面の切り替えは pushState）。iPad はオーダー・会計をネイティブで開くため、
+        // iPhone は QR のあと /handy-join → /handy に移った（ログインできた）ことを知るため（2026-10-24）
+        let routeHook = "(function(){ var notify = function(){ post({ type: 'route', url: location.href }); }; var wrap = function(n){ var o = history[n]; history[n] = function(){ var r = o.apply(this, arguments); try { notify(); } catch (e) {} return r; }; }; wrap('pushState'); wrap('replaceState'); window.addEventListener('popstate', notify); })();"
         // Prepare before the first click, using only this iPad's saved selection.
         // Runs inside the app even while the hosted Web deployment is unchanged.
         let printerWarmup = AppConfig.isPad ? """
@@ -348,6 +347,7 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
             }
             if let s = body["url"] as? String, let url = URL(string: s) {
                 AppState.shared.maybeOpenNativePos(for: url)
+                noteHandyOpened(url)
             }
             // レジ端末として登録した直後（画面の切り替えだけで読み直さないとき）も目印を残す
             if AppState.shared.mode == .regi {
@@ -442,7 +442,10 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
             RegisterDeviceKeychain.capture(from: webView.configuration.websiteDataStore.httpCookieStore)
         }
         errorView.isHidden = true
-        if let url = webView.url { AppState.shared.maybeOpenNativePos(for: url) }
+        if let url = webView.url {
+            AppState.shared.maybeOpenNativePos(for: url)
+            noteHandyOpened(url)
+        }
         if let url = webView.url, AppConfig.isOwnHost(url) {
             let path = url.path
             if path.hasPrefix("/app") || path.hasPrefix("/handy") {
@@ -451,6 +454,15 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
                 sendPushTokenIfNeeded()
             }
         }
+    }
+
+    /// ハンディの画面（/handy・/handy/…）が開けたら知らせる（QR のカメラを消す・次からすぐハンディ）。
+    /// /handy-join・/handy-pair はログインの途中なので数えない
+    private func noteHandyOpened(_ url: URL) {
+        guard AppConfig.isOwnHost(url) else { return }
+        let path = url.path
+        guard path == "/handy" || path.hasPrefix("/handy/") else { return }
+        AppState.shared.handyOpened()
     }
 
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {

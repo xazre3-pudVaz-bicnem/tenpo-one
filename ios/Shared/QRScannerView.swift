@@ -2,13 +2,17 @@ import AVFoundation
 import SwiftUI
 import UIKit
 
-/// QR コードを読む画面（ハンディのログインの QR など）
+/// QR コードを読む画面（ハンディのログインの QR など）。
+/// - 普通はシート（「閉じる」あり）。`embedded: true` のときは画面に埋め込む（iPhone のハンディのログイン。閉じるは出さない）
+/// - `onCode` が false を返したら（TENPO ONE の QR ではない）、少し待ってもう一度読めるようにする
 struct QRScannerView: UIViewControllerRepresentable {
-    let onCode: (String) -> Void
-    let onCancel: () -> Void
+    var embedded = false
+    let onCode: (String) -> Bool
+    var onCancel: () -> Void = {}
 
     func makeUIViewController(context: Context) -> QRScannerViewController {
         let controller = QRScannerViewController()
+        controller.embedded = embedded
         controller.onCode = onCode
         controller.onCancel = onCancel
         return controller
@@ -18,13 +22,24 @@ struct QRScannerView: UIViewControllerRepresentable {
 }
 
 final class QRScannerViewController: UIViewController, AVCaptureMetadataOutputObjectsDelegate {
-    var onCode: ((String) -> Void)?
+    var embedded = false
+    var onCode: ((String) -> Bool)?
     var onCancel: (() -> Void)?
 
     private let session = AVCaptureSession()
     private var previewLayer: AVCaptureVideoPreviewLayer?
     private var done = false
     private let messageLabel = UILabel()
+    private let settingsButton: UIButton = {
+        var config = UIButton.Configuration.filled()
+        config.title = "設定を開く"
+        config.baseBackgroundColor = UIColor.white.withAlphaComponent(0.2)
+        config.cornerStyle = .capsule
+        let button = UIButton(configuration: config)
+        button.translatesAutoresizingMaskIntoConstraints = false
+        button.isHidden = true
+        return button
+    }()
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -37,14 +52,6 @@ final class QRScannerViewController: UIViewController, AVCaptureMetadataOutputOb
         messageLabel.numberOfLines = 0
         messageLabel.translatesAutoresizingMaskIntoConstraints = false
 
-        var closeConfig = UIButton.Configuration.filled()
-        closeConfig.title = "閉じる"
-        closeConfig.baseBackgroundColor = UIColor.white.withAlphaComponent(0.2)
-        closeConfig.cornerStyle = .capsule
-        let close = UIButton(configuration: closeConfig)
-        close.translatesAutoresizingMaskIntoConstraints = false
-        close.addAction(UIAction { [weak self] _ in self?.cancel() }, for: .touchUpInside)
-
         let frame = UIView()
         frame.layer.borderColor = UIColor.white.cgColor
         frame.layer.borderWidth = 3
@@ -52,9 +59,13 @@ final class QRScannerViewController: UIViewController, AVCaptureMetadataOutputOb
         frame.translatesAutoresizingMaskIntoConstraints = false
         frame.isUserInteractionEnabled = false
 
+        settingsButton.addAction(UIAction { _ in
+            if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
+        }, for: .touchUpInside)
+
         view.addSubview(frame)
         view.addSubview(messageLabel)
-        view.addSubview(close)
+        view.addSubview(settingsButton)
         NSLayoutConstraint.activate([
             frame.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             frame.centerYAnchor.constraint(equalTo: view.centerYAnchor),
@@ -63,9 +74,24 @@ final class QRScannerViewController: UIViewController, AVCaptureMetadataOutputOb
             messageLabel.topAnchor.constraint(equalTo: frame.bottomAnchor, constant: 24),
             messageLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 24),
             messageLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
-            close.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 16),
-            close.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
+            settingsButton.topAnchor.constraint(equalTo: messageLabel.bottomAnchor, constant: 16),
+            settingsButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
         ])
+
+        if !embedded {
+            var closeConfig = UIButton.Configuration.filled()
+            closeConfig.title = "閉じる"
+            closeConfig.baseBackgroundColor = UIColor.white.withAlphaComponent(0.2)
+            closeConfig.cornerStyle = .capsule
+            let close = UIButton(configuration: closeConfig)
+            close.translatesAutoresizingMaskIntoConstraints = false
+            close.addAction(UIAction { [weak self] _ in self?.cancel() }, for: .touchUpInside)
+            view.addSubview(close)
+            NSLayoutConstraint.activate([
+                close.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 16),
+                close.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
+            ])
+        }
 
         switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .authorized:
@@ -82,6 +108,15 @@ final class QRScannerViewController: UIViewController, AVCaptureMetadataOutputOb
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         previewLayer?.frame = view.bounds
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        // 埋め込みのときは、戻ってきたら（設定から戻る・ログアウトでまた出る）もう一度読める
+        done = false
+        if previewLayer != nil, !session.isRunning {
+            DispatchQueue.global(qos: .userInitiated).async { [session] in session.startRunning() }
+        }
     }
 
     override func viewWillDisappear(_ animated: Bool) {
@@ -115,6 +150,7 @@ final class QRScannerViewController: UIViewController, AVCaptureMetadataOutputOb
 
     private func showDenied() {
         messageLabel.text = "カメラが許可されていません。\n設定 > TENPO ONE > カメラ をオンにしてください。"
+        settingsButton.isHidden = false
     }
 
     private func cancel() {
@@ -132,7 +168,12 @@ final class QRScannerViewController: UIViewController, AVCaptureMetadataOutputOb
               let object = metadataObjects.first as? AVMetadataMachineReadableCodeObject,
               let value = object.stringValue else { return }
         done = true
-        UINotificationFeedbackGenerator().notificationOccurred(.success)
-        onCode?(value)
+        if onCode?(value) ?? true {
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+        } else {
+            // TENPO ONE の QR ではなかった。少し待って、もう一度読めるようにする
+            UINotificationFeedbackGenerator().notificationOccurred(.error)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in self?.done = false }
+        }
     }
 }
