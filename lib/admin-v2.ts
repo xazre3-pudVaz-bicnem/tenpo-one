@@ -159,6 +159,7 @@ export const V2_SECTIONS: V2Section[] = [
         label: '経営',
         icon: 'trend',
         links: [
+          { href: '/app/management', label: '経営ダッシュボード', permission: 'reports.view' },
           { href: '/app/settlement', label: '月次清算', permission: 'reports.view' },
           { href: '/app/budgets', label: '予算管理', permission: 'reports.view' },
         ],
