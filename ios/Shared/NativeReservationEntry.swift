@@ -478,7 +478,11 @@ struct NativeReservationEntry: View {
             card("キーワード・タグ", icon: "tag.fill") {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {
-                        NRWKeywordsEditor(keywords: Binding(get: { entry?.keywords ?? [] }, set: { entry?.keywords = $0 }), selected: $tags, save: NRWLabelsApi.saveKeywords)
+                        // 当たり前のもの（飲み放題・食べ放題・コース・誕生日・記念日・子連れ）は印つきでいちばん上に（2026-10-24 21:18 Ronnie）
+                        Text("よく使うもの").font(.system(size: 14, weight: .heavy)).foregroundColor(NLColor.navy)
+                        NRWStandardKeysPicker(selected: $tags)
+                        divider
+                        NRWKeywordsEditor(keywords: Binding(get: { (entry?.keywords ?? []).filter { !NRWStandardKeys.list.contains($0) } }, set: { entry?.keywords = $0 }), selected: $tags, save: NRWLabelsApi.saveKeywords)
                         if let groups = entry?.tagGroups, !groups.isEmpty {
                             divider
                             Text("お客様・予約のタグ").font(.system(size: 14, weight: .heavy)).foregroundColor(NLColor.navy)

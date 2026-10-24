@@ -1091,6 +1091,7 @@ struct NativeLedgerView: View {
                                     ForEach(Array((r.tags ?? []).filter { $0 != "要連絡" }.prefix(3)), id: \.self) { t in
                                         HStack(spacing: 2) {
                                             if let ic = p.tagIcons?[t] { Image(systemName: NRWTagIcon.symbol(ic)).font(.system(size: 8, weight: .bold)) }
+                                            else if let ic = NRWKeywordIcon.symbol(for: t) { Image(systemName: ic).font(.system(size: 8, weight: .bold)) }
                                             Text(t).font(.system(size: 9, weight: .bold)).lineLimit(1)
                                         }
                                         .padding(.horizontal, 5).padding(.vertical, 1)

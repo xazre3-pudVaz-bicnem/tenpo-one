@@ -73,6 +73,8 @@ export interface TableOrderInfo {
   courseId: string | null;
   /** モード（伝票メモ「ハンディ: 飲み放題・アラカルト / …」から）。お客様情報のダイアログで直せる（2026-10-24）。未設定は null */
   plans: HandyPlan[] | null;
+  /** 席に着いた予約のタグ（誕生日・記念日・飲み放題…）。卓の箱に小さな印で出す（2026-10-24）。無ければ空 */
+  tags?: string[];
   /** この卓の未会計伝票すべて（古い順）。1枚だけのときも入る */
   slips: TableSlip[];
 }

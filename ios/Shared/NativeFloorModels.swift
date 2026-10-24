@@ -47,6 +47,8 @@ struct NFOrder: Codable, Hashable {
     let courseId: String?
     /// モード（アラカルト・飲み放題…。伝票メモから）。無ければ nil
     let plans: [String]?
+    /// 席に着いた予約のタグ（誕生日・記念日・飲み放題…）。卓の箱に小さな印で出す。古いサーバーは無し
+    var tags: [String]? = nil
     let slips: [NFSlip]
 }
 
@@ -366,6 +368,14 @@ enum NFTime {
     }()
 
     static func hm(_ ms: Double) -> String { hm.string(from: Date(timeIntervalSince1970: ms / 1000)) }
+
+    /// ISO の時刻 → ミリ秒（小数の秒はけた数に関係なく切り捨て）
+    static func ms(iso: String) -> Double? {
+        let p = ISO8601DateFormatter()
+        p.formatOptions = [.withInternetDateTime]
+        let plain = iso.replacingOccurrences(of: "\\.[0-9]+", with: "", options: .regularExpression)
+        return p.date(from: plain).map { $0.timeIntervalSince1970 * 1000 }
+    }
 
     static func hm(iso: String) -> String {
         let p = ISO8601DateFormatter()

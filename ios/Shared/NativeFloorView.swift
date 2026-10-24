@@ -171,20 +171,16 @@ struct NativeFloorView: View {
     // MARK: 卓の箱
 
     private func tableGrid(width: CGFloat, height: CGFloat) -> some View {
-        // 間は 28 で固定（左の端・箱と箱の間・右の予約の欄との間が全部同じ）。箱は残りの幅を等分した正方形
-        // （2026-10-24 Ronnie 20:36「少し小さく・間をそろえて」→20:42「右の空きを箱で分けて」→20:45「0.5cm 小さく」
-        //  →20:47「小さすぎ」→20:57「間がまだ広い、箱を少し大きく」）。箱は 180〜240pt、列は 180pt 以上になる数まで
+        // 1 行に 5 卓。箱は正方形にせず、縦長（高さ 220）。間は 28 で、左の端・箱と箱の間・右の予約の欄との間が全部同じ
+        // （2026-10-24 21:20 Ronnie「1 行に 5 つ、正方形でなくていい」。それまでの間・大きさの話は 20:36〜20:57）
         let gapS: CGFloat = 28
         let outer: CGFloat = 14
         let total = width + outer * 2
-        func sideFor(_ n: Int) -> CGFloat { (total - gapS * CGFloat(n + 1)) / CGFloat(n) }
-        var fit = 1
-        while sideFor(fit + 1) >= 180 { fit += 1 }
-        let cols = max(1, min(fit, max(model.visibleTables.count, min(fit, 3))))
-        let side = max(120, min(240, sideFor(cols)))
-        let space = max(gapS, (total - side * CGFloat(cols)) / CGFloat(cols + 1))
+        let cols = 5
+        let side = max(120, (total - gapS * CGFloat(cols + 1)) / CGFloat(cols))
+        let space = gapS
         let inset = max(0, space - outer)
-        let tileH = side
+        let tileH: CGFloat = 220
         let columns = Array(repeating: GridItem(.fixed(side), spacing: space), count: cols)
         return Group {
             if model.visibleTables.isEmpty {
@@ -204,7 +200,7 @@ struct NativeFloorView: View {
                 }
                 .padding(.horizontal, inset)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.top, 2).padding(.bottom, 16)
+                .padding(.top, 14).padding(.bottom, 16)
             }
         }
     }
@@ -272,6 +268,17 @@ struct NativeTableCard: View {
                         .padding(.horizontal, 9).frame(height: 26)
                         .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.white))
                         .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(Color.black.opacity(0.10), lineWidth: 1))
+                    // プランと予約の印（飲み放題＝ビールのグラス・誕生日＝ケーキ…。2026-10-24 21:18 Ronnie）
+                    let marks = Self.marks(order)
+                    if !marks.isEmpty {
+                        HStack(spacing: 4) {
+                            ForEach(marks.prefix(4), id: \.self) { ic in
+                                Image(systemName: ic).font(.system(size: 12, weight: .semibold)).foregroundColor(NFColor.ink2)
+                                    .frame(width: 24, height: 24)
+                                    .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(Color(hex: 0xF1F1F5)))
+                            }
+                        }
+                    }
                     Spacer(minLength: 4)
                     HStack(spacing: 2) {
                         Image(systemName: "person.2").font(.system(size: 11, weight: .bold)).foregroundColor(NFColor.ink3)
@@ -280,6 +287,16 @@ struct NativeTableCard: View {
                     .font(.system(size: 13, weight: .semibold)).monospacedDigit().foregroundColor(NFColor.ink2)
                 }
                 seatMarks(used: order?.guestCount ?? 0, color: NFColor.ink2)
+                // 呼び出しの中身（お会計希望・お水×2…）
+                if hasCall {
+                    let info = Self.callInfo(table.calls, now: now)
+                    HStack(spacing: 4) {
+                        Image(systemName: info.checkout ? "yensign.circle.fill" : "bell.fill").font(.system(size: 11, weight: .bold))
+                        Text(info.label).lineLimit(1)
+                    }
+                    .font(.system(size: 12, weight: .heavy))
+                    .foregroundColor(Self.callColor(info, border: false))
+                }
                 if let linked {
                     HStack(spacing: 4) {
                         Image(systemName: "link").font(.system(size: 10, weight: .bold))
@@ -390,28 +407,33 @@ struct NativeTableCard: View {
                         lineWidth: 2
                     )
             )
+            // 縁はオーダー・会計の印と同じ青の、ごく細い線（2026-10-24 21:21 Ronnie）。連携・予約は濃い青の太い線
             .overlay(
                 RoundedRectangle(cornerRadius: NFColor.tileRadius, style: .continuous)
-                    .strokeBorder(linked != nil ? NFColor.royal : (state == .reserved ? NFColor.royal.opacity(0.6) : Color.black.opacity(0.10)), lineWidth: linked != nil || state == .reserved ? 2 : 0.75)
+                    .strokeBorder(linked != nil ? NFColor.royal : (state == .reserved ? NFColor.royal.opacity(0.6) : Color(hex: 0x2A6FE6).opacity(0.55)), lineWidth: linked != nil || state == .reserved ? 2 : 1)
             )
+            // お客様の呼び出し：右上にベルと回数・何分前か。5 分過ぎたら赤（2026-10-24 21:22 Ronnie「ベル・何回・5 分過ぎの印」）
             .overlay {
                 if hasCall {
-                    RoundedRectangle(cornerRadius: NFColor.tileRadius, style: .continuous).strokeBorder(NFColor.callOrange, lineWidth: 4)
+                    RoundedRectangle(cornerRadius: NFColor.tileRadius, style: .continuous)
+                        .strokeBorder(Self.callColor(Self.callInfo(table.calls, now: now), border: true), lineWidth: 4)
                         .opacity(pulse ? 1 : 0.35)
                 }
             }
             .overlay(alignment: .topTrailing) {
                 if hasCall {
+                    let info = Self.callInfo(table.calls, now: now)
                     HStack(spacing: 4) {
-                        Image(systemName: "bell.fill").font(.system(size: 11))
-                        Text(table.calls.contains { $0.kind == "checkout" } ? "お会計希望" : (table.calls.first { $0.note != nil }?.note ?? "スタッフ呼び出し"))
-                            .lineLimit(1)
+                        Image(systemName: info.checkout ? "yensign.circle.fill" : "bell.fill").font(.system(size: 12, weight: .bold))
+                        Text("\(info.count)回").font(.system(size: 12, weight: .heavy)).monospacedDigit()
+                        Text("\(info.minutes)分").font(.system(size: 11, weight: .bold)).monospacedDigit().opacity(0.9)
                     }
-                    .font(.system(size: 11, weight: .bold)).foregroundColor(.white)
-                    .padding(.horizontal, 8).padding(.vertical, 4)
-                    .background(Capsule().fill(NFColor.callDeep))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 9).frame(height: 26)
+                    .background(Capsule().fill(Self.callColor(info, border: false)))
+                    .overlay(Capsule().stroke(Color.white, lineWidth: 2))
                     .shadow(color: .black.opacity(0.2), radius: 4, y: 2)
-                    .padding(6)
+                    .offset(x: 8, y: -12)
                 }
             }
             .opacity(state == .unavailable ? 0.7 : 1)
@@ -425,11 +447,43 @@ struct NativeTableCard: View {
         }
         .buttonStyle(PressableStyle())
         .onAppear { if hasCall { withAnimation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true)) { pulse = true } } }
+        // あとから呼ばれたときも点滅させる
+        .onChange(of: table.calls.count) { n in
+            if n > 0 && !pulse { withAnimation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true)) { pulse = true } }
+        }
     }
 
     @State private var pulse = false
 
     static let bandH: CGFloat = 36
+    static let callRed = Color(hex: 0xE53935)
+    /// QR からのお会計の依頼は緑の ¥（お金＝緑。2026-10-24 21:23 Ronnie「財布か緑の ¥、おすすめで」）
+    static let callGreen = Color(hex: 0x12A150)
+
+    /// 呼び出しの色：5 分過ぎ＝赤、お会計の依頼＝緑、スタッフ呼び出し＝橙
+    static func callColor(_ info: (count: Int, minutes: Int, late: Bool, checkout: Bool, label: String), border: Bool) -> Color {
+        if info.late { return callRed }
+        if info.checkout { return callGreen }
+        return border ? NFColor.callOrange : NFColor.callDeep
+    }
+
+    /// 呼び出しの回数・最初の呼び出しから何分・お会計か・中身。5 分過ぎたら late
+    static func callInfo(_ calls: [NFCall], now: Double) -> (count: Int, minutes: Int, late: Bool, checkout: Bool, label: String) {
+        let first = calls.compactMap { NFTime.ms(iso: $0.createdAt) }.min() ?? now
+        let minutes = max(0, Int((now - first) / 60_000))
+        let checkout = calls.contains { $0.kind == "checkout" }
+        let label = checkout ? "お会計希望" : (calls.last { ($0.note ?? "").isEmpty == false }?.note ?? "スタッフ呼び出し")
+        return (calls.count, minutes, minutes >= 5, checkout, label)
+    }
+
+    /// 卓の箱の上に出す印：プラン（伝票のモード）＋予約のタグ（誕生日・記念日…）。同じ印は 1 つ
+    static func marks(_ order: NFOrder?) -> [String] {
+        guard let o = order else { return [] }
+        var out = NRWKeywordIcon.planSymbols(o.plans ?? [])
+        for t in o.tags ?? [] { if let ic = NRWKeywordIcon.symbol(for: t) { out.append(ic) } }
+        var seen = Set<String>()
+        return out.filter { seen.insert($0).inserted }
+    }
 
     /// 下の帯の字と色（2026-10-24 21:05 Ronnie：注文前＝台帳の「来店済み」と同じ緑、注文を始めた＝オーダー会計のボタンと同じ青、
     /// ラストオーダーの時間＝黄、時間切れ＝赤）。空席・予約・清掃・使用不可は帯なし
@@ -485,13 +539,11 @@ struct NativeTableCard: View {
                 Text(clock).font(.system(size: 15, weight: .heavy)).monospacedDigit()
             }
             .foregroundColor(hasLimit && mins < 0 ? NFColor.danger : NFColor.royal)
-            if let v = visits, v >= 2 {
-                Text("\(v)回").font(.system(size: 11, weight: .bold)).foregroundColor(NFColor.royal)
-                    .padding(.horizontal, 6).padding(.vertical, 1).background(Capsule().fill(NFColor.irisSoft))
-            }
-            if isNew {
-                Text("新規").font(.system(size: 11, weight: .bold)).foregroundColor(NFColor.success)
-                    .padding(.horizontal, 6).padding(.vertical, 1).background(Capsule().fill(NFColor.successSoft))
+            // 来店の区分：初回（グレー）・リピ（青）・常連（黄）。顧客台帳につながっているときだけ（見本のレジのよいところ）
+            if let v = visits {
+                let chip: (String, Color, Color) = v >= 3 ? ("常連", NLColor.navy, NLColor.yellow) : v == 2 ? ("リピ", .white, NLColor.blue) : ("初回", NFColor.ink2, Color(hex: 0xE9E9EF))
+                Text(chip.0).font(.system(size: 11, weight: .heavy)).foregroundColor(chip.1)
+                    .padding(.horizontal, 6).padding(.vertical, 2).background(RoundedRectangle(cornerRadius: 5, style: .continuous).fill(chip.2))
             }
             Spacer(minLength: 0)
         }

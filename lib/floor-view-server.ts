@@ -77,6 +77,7 @@ interface OrderRow {
   customers: One<{ name: string; visit_count: number }>;
   reservations: One<
     ReservationSource & {
+      id?: string;
       guest_name: string;
       start_at: string | null;
       end_at: string;
@@ -157,7 +158,7 @@ export async function loadFloorView(
       .select(
         `id, order_no, table_id, opened_at, guest_count, total, clerk_name, memo,
          customers(name, visit_count),
-         reservations(guest_name, created_via, start_at, end_at, course_id, reservation_sources(name),
+         reservations(id, guest_name, created_via, start_at, end_at, course_id, reservation_sources(name),
            menu_items(duration_minutes, course_includes_drinks, course_includes_ayce))`
       )
       .eq('store_id', store.id)
@@ -209,7 +210,11 @@ export async function loadFloorView(
           .eq('status', 'active')
           .order('created_at')
       : Promise.resolve({ data: [] }),
-    loadReservationTags(supabase, panelSource.map((r) => r.id)),
+    // 席に着いた予約のタグ（誕生日・飲み放題…。卓の箱に印で出す。2026-10-24 21:18 Ronnie）も同じ読み込みで
+    loadReservationTags(supabase, [
+      ...panelSource.map((r) => r.id),
+      ...((orderRows ?? []) as unknown as OrderRow[]).map((o) => one(o.reservations)?.id ?? '').filter(Boolean),
+    ]),
   ]);
   const linesByOrder = new Map<string, TableSlipLine[]>();
   for (const it of (itemRows ?? []) as { id: string; order_id: string; name: string; quantity: number; menu_item_id: string | null }[]) {
@@ -272,6 +277,8 @@ export async function loadFloorView(
       endAtMs: prev ? Math.max(prev.endAtMs, endAtMs) : endAtMs,
       courseId: resv?.course_id ?? prev?.courseId ?? null,
       plans: plansFromMemo(o.memo) ?? prev?.plans ?? null,
+      // 予約のタグ（誕生日・記念日・飲み放題…）。卓の箱に小さな印で出す
+      tags: [...new Set([...(prev?.tags ?? []), ...((resv?.id && panelTags.get(resv.id)) || [])])],
       // 会計できない伝票が卓に残らないよう、卓のポップアップからすべての伝票を開けるようにする
       slips: [...(prev?.slips ?? []), slip],
     });
