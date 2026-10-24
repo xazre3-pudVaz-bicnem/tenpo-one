@@ -271,6 +271,23 @@ enum NFColor {
     static let callSoft = Color(hex: 0xFFF1E6)
     static let callInk = Color(hex: 0x842F0B)
 
+    /// フロアの地（Apple 風の白。2026-10-24 Ronnie「背景を白に」）
+    static let floorBg = Color.white
+    /// 卓の箱の角
+    static let tileRadius: CGFloat = 18
+    /// 空席の「＋」
+    static let tileIcon = Color(hex: 0x8E8E93)
+
+    /// 卓の箱の地（白い背景の上で見分けがつく色。空席・予約は薄いグレー、使用中は白＋影、L.O.・超過・会計待ちは薄い色）
+    static func tileSurface(_ s: NFTileState) -> Color {
+        switch s {
+        case .free, .waiting: return Color(hex: 0xF2F2F7)
+        case .reserved: return irisSoft
+        case .cleaning, .unavailable: return Color(hex: 0xEDEDF0)
+        default: return surface(s)
+        }
+    }
+
     /// 卓の箱の地の色（Web の SURFACE）
     static func surface(_ s: NFTileState) -> Color {
         switch s {
