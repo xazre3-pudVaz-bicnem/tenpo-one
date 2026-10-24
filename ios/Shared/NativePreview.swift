@@ -276,6 +276,15 @@ struct NativePurchasesScreen: View {
     }
 }
 
+/// ネイティブのクーポン管理（2026-10-24）
+struct NativeCouponsScreen: View {
+    @StateObject private var model = NativePurchasingModel()
+    @EnvironmentObject var state: AppState
+    var body: some View {
+        NativeCouponsView(model: model, onHome: { state.goNativeHome() }, onWeb: { path in state.leaveNativeFloor(to: path) })
+    }
+}
+
 /// ネイティブの通知（2026-10-24）
 struct NativeNoticesScreen: View {
     @StateObject private var model = NativeNoticesModel()
