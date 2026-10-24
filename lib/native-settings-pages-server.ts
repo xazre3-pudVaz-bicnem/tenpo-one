@@ -12,13 +12,15 @@ import { CLERK_ROLES, CLERK_ROLE_EN, CLERK_ROLE_LABELS } from '@/lib/clerk-roles
 import { setItemSoldOut } from '@/app/app/pos/sold-out-actions';
 import { addPosClerk, deletePosClerk, renamePosClerk, setPosClerkRole, setPosClerkStatus } from '@/app/app/settings/clerks/actions';
 import { addHoliday, deleteHoliday, saveBusinessHours, saveLunchUntil, saveNextFloat } from '@/app/app/settings/hours/actions';
-import type { NativeClerksPayload, NativeHoursPayload, NativeSettingsPageAction, NativeSoldOutPayload } from '@/lib/native-settings-pages';
+import { updateStoreInfo } from '@/app/app/settings/store/actions';
+import { resolveSiteOrigin } from '@/lib/site-origin';
+import type { NativeClerksPayload, NativeHoursPayload, NativeSettingsPageAction, NativeSoldOutPayload, NativeStorePayload } from '@/lib/native-settings-pages';
 
 type Supabase = Awaited<ReturnType<typeof createClient>>;
 type Store = { id: string; name: string };
 
 /** 設定の中の画面の名前（GET ?part=） */
-export const NATIVE_SETTINGS_PAGE_PARTS = ['soldout', 'clerks', 'hours'] as const;
+export const NATIVE_SETTINGS_PAGE_PARTS = ['soldout', 'clerks', 'hours', 'store'] as const;
 export type NativeSettingsPagePart = (typeof NATIVE_SETTINGS_PAGE_PARTS)[number];
 export function isNativeSettingsPagePart(v: unknown): v is NativeSettingsPagePart {
   return typeof v === 'string' && (NATIVE_SETTINGS_PAGE_PARTS as readonly string[]).includes(v);
@@ -33,7 +35,7 @@ export async function loadNativeSettingsPage(
   ctx: SessionContext,
   supabase: Supabase,
   store: Store
-): Promise<{ ok: true; payload: NativeSoldOutPayload | NativeClerksPayload | NativeHoursPayload } | { ok: false; error: string }> {
+): Promise<{ ok: true; payload: NativeSoldOutPayload | NativeClerksPayload | NativeHoursPayload | NativeStorePayload } | { ok: false; error: string }> {
   if (part === 'soldout') {
     if (!ctx.organizationId) return { ok: false, error: '企業が見つかりません' };
     const board = await loadSoldOutBoard(supabase, ctx.organizationId, store.id);
@@ -94,6 +96,55 @@ export async function loadNativeSettingsPage(
       },
     };
   }
+  if (part === 'store') {
+    const [{ data: row }, { data: settings }, origin] = await Promise.all([
+      supabase
+        .from('stores')
+        .select('id, slug, name, name_kana, postal_code, address, phone, email, description, seat_count, booking_enabled')
+        .eq('id', store.id)
+        .maybeSingle(),
+      supabase
+        .from('store_settings')
+        .select('receipt_header, receipt_footer, invoice_registration_number, service_charge_rate, rounding, allow_negative_stock')
+        .eq('store_id', store.id)
+        .maybeSingle(),
+      resolveSiteOrigin(),
+    ]);
+    if (!row) return { ok: false, error: '店舗情報を取得できませんでした' };
+    const slug = (row.slug as string | null) ?? null;
+    return {
+      ok: true,
+      payload: {
+        store,
+        canEdit: can(ctx.role, 'store.settings'),
+        receiptLocked: ctx.isRegisterDevice === true,
+        bookingUrl: slug ? `${origin}/book/${slug}` : null,
+        slug,
+        fields: {
+          name: row.name as string,
+          nameKana: (row.name_kana as string | null) ?? '',
+          postalCode: (row.postal_code as string | null) ?? '',
+          address: (row.address as string | null) ?? '',
+          phone: (row.phone as string | null) ?? '',
+          email: (row.email as string | null) ?? '',
+          description: (row.description as string | null) ?? '',
+          seatCount: (row.seat_count as number | null) ?? null,
+          bookingEnabled: row.booking_enabled === true,
+          receiptHeader: (settings?.receipt_header as string | null) ?? '',
+          receiptFooter: (settings?.receipt_footer as string | null) ?? '',
+          invoiceRegistrationNumber: (settings?.invoice_registration_number as string | null) ?? '',
+          serviceChargeRate: Number(settings?.service_charge_rate ?? 0),
+          rounding: (settings?.rounding as string | null) ?? 'floor',
+          allowNegativeStock: settings?.allow_negative_stock !== false,
+        },
+        roundings: [
+          { id: 'floor', label: '切り捨て' },
+          { id: 'ceil', label: '切り上げ' },
+          { id: 'round', label: '四捨五入' },
+        ],
+      },
+    };
+  }
   return { ok: false, error: '画面が見つかりません' };
 }
 
@@ -126,5 +177,7 @@ export async function runNativeSettingsPageAction(
       return done(await addHoliday({ storeId: store.id, holidayDate: action.date, name: action.name, isTemporary: action.isTemporary }));
     case 'holidayDelete':
       return done(await deleteHoliday(action.id, store.id));
+    case 'storeSave':
+      return done(await updateStoreInfo({ storeId: store.id, ...action.store }));
   }
 }

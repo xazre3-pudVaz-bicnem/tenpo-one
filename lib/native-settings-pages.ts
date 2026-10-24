@@ -20,7 +20,27 @@ export type NativeSettingsPageAction =
   | { type: 'lunchUntilSave'; lunchUntil: string }
   | { type: 'nextFloatSave'; nextFloat: number | null }
   | { type: 'holidayAdd'; date: string; name: string; isTemporary: boolean }
-  | { type: 'holidayDelete'; id: string };
+  | { type: 'holidayDelete'; id: string }
+  /** 店舗情報（/app/settings/store。app/app/settings/store/actions.ts の updateStoreInfo） */
+  | { type: 'storeSave'; store: NativeStoreFields };
+
+export interface NativeStoreFields {
+  name: string;
+  nameKana: string;
+  postalCode: string;
+  address: string;
+  phone: string;
+  email: string;
+  description: string;
+  seatCount: number | null;
+  bookingEnabled: boolean;
+  receiptHeader: string;
+  receiptFooter: string;
+  invoiceRegistrationNumber: string;
+  serviceChargeRate: number;
+  rounding: string;
+  allowNegativeStock: boolean;
+}
 
 export interface NativeBusinessHour {
   dayOfWeek: number;
@@ -43,6 +63,7 @@ export const NATIVE_SETTINGS_PAGE_ACTION_TYPES: readonly NativeSettingsPageActio
   'nextFloatSave',
   'holidayAdd',
   'holidayDelete',
+  'storeSave',
 ];
 
 export function isNativeSettingsPageActionType(v: unknown): v is NativeSettingsPageActionType {
@@ -125,7 +146,52 @@ export function parseNativeSettingsPageAction(raw: unknown): Parsed {
     if (!isUuid(b.id)) return bad('休業日が見つかりません');
     return { ok: true, action: { type: 'holidayDelete', id: b.id } };
   }
+  if (b.type === 'storeSave') {
+    const f = b.store as Record<string, unknown> | undefined;
+    if (!f || typeof f !== 'object') return bad();
+    const str = (v: unknown, max = 500): string => (typeof v === 'string' ? v.slice(0, max) : '');
+    const seat = f.seatCount;
+    const rate = f.serviceChargeRate;
+    if (!(seat === null || seat === undefined || (typeof seat === 'number' && Number.isInteger(seat) && seat >= 0 && seat <= 9999))) return bad('座席数は 0〜9999 で入れてください');
+    if (typeof rate !== 'number' || rate < 0 || rate > 100) return bad('サービス料率は0〜100の範囲で入力してください');
+    return {
+      ok: true,
+      action: {
+        type: 'storeSave',
+        store: {
+          name: str(f.name, 100),
+          nameKana: str(f.nameKana, 100),
+          postalCode: str(f.postalCode, 20),
+          address: str(f.address, 300),
+          phone: str(f.phone, 40),
+          email: str(f.email, 200),
+          description: str(f.description, 2000),
+          seatCount: seat == null ? null : (seat as number),
+          bookingEnabled: f.bookingEnabled === true,
+          receiptHeader: str(f.receiptHeader, 500),
+          receiptFooter: str(f.receiptFooter, 500),
+          invoiceRegistrationNumber: str(f.invoiceRegistrationNumber, 40),
+          serviceChargeRate: rate,
+          rounding: str(f.rounding, 10) || 'floor',
+          allowNegativeStock: f.allowNegativeStock !== false,
+        },
+      },
+    };
+  }
   return bad();
+}
+
+/** 店舗情報の画面の読み込み（GET ?part=store） */
+export interface NativeStorePayload {
+  store: { id: string; name: string };
+  canEdit: boolean;
+  /** レジ端末：レシート・インボイス設定は管理画面だけ */
+  receiptLocked: boolean;
+  /** お客様がネットで予約するページ */
+  bookingUrl: string | null;
+  slug: string | null;
+  fields: NativeStoreFields;
+  roundings: { id: string; label: string }[];
 }
 
 /** 営業時間・休業日の画面の読み込み（GET ?part=hours） */

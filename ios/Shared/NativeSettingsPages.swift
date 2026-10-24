@@ -10,6 +10,7 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
     case soldOut = "soldout"
     case clerks = "clerks"
     case hours = "hours"
+    case store = "store"
     var id: String { rawValue }
 
     /// Web の道（クエリは見ない）
@@ -18,6 +19,7 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
         case .soldOut: return "/app/pos/sold-out"
         case .clerks: return "/app/settings/clerks"
         case .hours: return "/app/settings/hours"
+        case .store: return "/app/settings/store"
         }
     }
     var title: String {
@@ -25,6 +27,7 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
         case .soldOut: return "品切れ"
         case .clerks: return "POS担当者"
         case .hours: return "営業時間・休業日"
+        case .store: return "店舗情報"
         }
     }
     var en: String {
@@ -32,6 +35,7 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
         case .soldOut: return "Sold out"
         case .clerks: return "Clerks"
         case .hours: return "Hours"
+        case .store: return "Store"
         }
     }
 
@@ -50,6 +54,7 @@ struct NativeSettingsPageScreen: View {
         case .soldOut: NativeSoldOutScreen()
         case .clerks: NativeClerksScreen()
         case .hours: NativeHoursScreen()
+        case .store: NativeStoreScreen()
         }
     }
 }
@@ -947,5 +952,223 @@ struct NativeHoursView: View {
         guard let d = f.date(from: ymd) else { return ymd }
         let o = DateFormatter(); o.dateFormat = "M/d（E）"; o.locale = Locale(identifier: "ja_JP"); o.timeZone = TimeZone(identifier: "Asia/Tokyo")
         return o.string(from: d)
+    }
+}
+
+// MARK: - 店舗情報（Web の /app/settings/store・components/settings/store-form.tsx と同じ）
+
+struct NSTFields: Codable, Equatable {
+    var name: String
+    var nameKana: String
+    var postalCode: String
+    var address: String
+    var phone: String
+    var email: String
+    var description: String
+    var seatCount: Int?
+    var bookingEnabled: Bool
+    var receiptHeader: String
+    var receiptFooter: String
+    var invoiceRegistrationNumber: String
+    var serviceChargeRate: Double
+    var rounding: String
+    var allowNegativeStock: Bool
+}
+struct NSTStorePayload: Codable {
+    let store: NFNamed
+    let canEdit: Bool
+    let receiptLocked: Bool
+    let bookingUrl: String?
+    let slug: String?
+    var fields: NSTFields
+    let roundings: [NSTLabeled]
+}
+struct NSTLabeled: Codable, Identifiable, Hashable { let id: String; let label: String }
+
+@MainActor
+final class NativeStoreModel: ObservableObject {
+    @Published var payload: NSTStorePayload?
+    @Published var error: String?
+    @Published var toast: String?
+    @Published var busy = false
+    @Published var f = NSTFields(name: "", nameKana: "", postalCode: "", address: "", phone: "", email: "", description: "", seatCount: nil, bookingEnabled: false, receiptHeader: "", receiptFooter: "", invoiceRegistrationNumber: "", serviceChargeRate: 0, rounding: "floor", allowNegativeStock: true)
+    @Published var seatText = ""
+    @Published var rateText = "0"
+
+    func refresh() async {
+        do {
+            if payload == nil, let saved = NativeAPI.cached(NSTStorePayload.self, NSPApi.cachedURL(part: "store")) { apply(saved) }
+            let (p, _) = try await NSPApi.load(NSTStorePayload.self, part: "store")
+            apply(p)
+            error = nil
+        } catch {
+            if payload == nil { self.error = (error as? NativeAPIError)?.message ?? "通信できませんでした" }
+        }
+    }
+    private func apply(_ p: NSTStorePayload) {
+        payload = p
+        f = p.fields
+        seatText = p.fields.seatCount.map { String($0) } ?? ""
+        rateText = p.fields.serviceChargeRate == p.fields.serviceChargeRate.rounded() ? String(Int(p.fields.serviceChargeRate)) : String(p.fields.serviceChargeRate)
+    }
+    var changed: Bool {
+        guard let p = payload else { return false }
+        var cur = f
+        cur.seatCount = Int(seatText.trimmingCharacters(in: .whitespaces))
+        cur.serviceChargeRate = Double(rateText.trimmingCharacters(in: .whitespaces)) ?? p.fields.serviceChargeRate
+        return cur != p.fields
+    }
+
+    func save() async {
+        guard !busy else { return }
+        if f.name.trimmingCharacters(in: .whitespaces).isEmpty { toast = "店舗名は必須です"; return }
+        let seat = seatText.trimmingCharacters(in: .whitespaces)
+        if !seat.isEmpty && Int(seat) == nil { toast = "座席数は数字で入れてください"; return }
+        guard let rate = Double(rateText.trimmingCharacters(in: .whitespaces)), rate >= 0, rate <= 100 else { toast = "サービス料率は0〜100の範囲で入力してください"; return }
+        busy = true
+        defer { busy = false }
+        let body: [String: Any] = ["type": "storeSave", "store": [
+            "name": f.name, "nameKana": f.nameKana, "postalCode": f.postalCode, "address": f.address, "phone": f.phone, "email": f.email,
+            "description": f.description, "seatCount": seat.isEmpty ? NSNull() : Int(seat)!, "bookingEnabled": f.bookingEnabled,
+            "receiptHeader": f.receiptHeader, "receiptFooter": f.receiptFooter, "invoiceRegistrationNumber": f.invoiceRegistrationNumber,
+            "serviceChargeRate": rate, "rounding": f.rounding, "allowNegativeStock": f.allowNegativeStock,
+        ]]
+        let r = await NSPApi.post(body)
+        guard r.ok else { toast = r.error ?? "保存できませんでした"; return }
+        await refresh()
+        toast = "店舗情報を保存しました"
+    }
+}
+
+struct NativeStoreScreen: View {
+    @StateObject private var model = NativeStoreModel()
+    @EnvironmentObject var state: AppState
+    var body: some View { NativeStoreView(model: model, onBack: { state.goNativeSettings() }) }
+}
+
+struct NativeStoreView: View {
+    @ObservedObject var model: NativeStoreModel
+    let onBack: () -> Void
+
+    var body: some View {
+        NSPFrame(storeName: model.payload?.store.name ?? "", title: "店舗情報", en: "Store", loaded: model.payload != nil, error: model.error, toast: $model.toast, onBack: onBack, retry: { await model.refresh() }) {
+            if let p = model.payload {
+                let edit = p.canEdit
+                if let url = p.bookingUrl {
+                    NSPCard(title: "店舗ご予約リンク", en: "Reservation link", note: "お客様がネットで予約するページ（URL は CYPRESS からだけ変えられます）") {
+                        HStack(spacing: 12) {
+                            Text(url).font(.system(size: 14, weight: .semibold, design: .monospaced)).foregroundColor(NFColor.iris).lineLimit(1).truncationMode(.middle)
+                            Spacer()
+                            NSPButton(text: "コピー", icon: "doc.on.doc") { UIPasteboard.general.string = url; model.toast = "リンクをコピーしました" }
+                        }
+                        .padding(18)
+                    }
+                }
+                NSPCard(title: "基本情報", en: "Basic") {
+                    VStack(spacing: 0) {
+                        field("店舗名", required: true) { input($model.f.name, "店舗名", edit) }
+                        field("フリガナ") { input($model.f.nameKana, "テンポメイ", edit) }
+                        field("郵便番号") { input($model.f.postalCode, "160-0022", edit, width: 200).keyboardType(.numbersAndPunctuation) }
+                        field("住所") { input($model.f.address, "東京都新宿区…", edit) }
+                        field("電話番号") { input($model.f.phone, "03-0000-0000", edit, width: 260).keyboardType(.phonePad) }
+                        field("メールアドレス") { input($model.f.email, "info@example.com", edit).keyboardType(.emailAddress).textInputAutocapitalization(.never) }
+                        field("紹介文") { textArea($model.f.description, "お店の紹介（予約ページに出ます）", edit) }
+                        field("座席数") {
+                            HStack(spacing: 6) {
+                                input($model.seatText, "0", edit, width: 120).keyboardType(.numberPad)
+                                Text("席").font(.system(size: 14)).foregroundColor(NFColor.ink3)
+                            }
+                        }
+                        field("オンライン予約") {
+                            HStack(spacing: 10) {
+                                toggle(model.f.bookingEnabled, disabled: !edit) { model.f.bookingEnabled.toggle() }
+                                Text(model.f.bookingEnabled ? "受付中" : "停止中").font(.system(size: 14, weight: .bold)).foregroundColor(model.f.bookingEnabled ? NFColor.success : NFColor.ink3)
+                            }
+                        }
+                    }
+                }
+                NSPCard(title: "レシート・インボイス", en: "Receipt & invoice", note: p.receiptLocked ? "管理画面（パソコン・店長以上のアカウント）で変更します。レジ（iPad）からは変更できません" : nil) {
+                    let lock = !edit || p.receiptLocked
+                    VStack(spacing: 0) {
+                        field("ヘッダー") { textArea($model.f.receiptHeader, "レシートの上に印字する文", lock ? false : true) }
+                        field("フッター") { textArea($model.f.receiptFooter, "レシートの下に印字する文", lock ? false : true) }
+                        field("登録番号") { input($model.f.invoiceRegistrationNumber, "T1234567890123", !lock, width: 320).textInputAutocapitalization(.characters) }
+                        field("サービス料率") {
+                            HStack(spacing: 6) {
+                                input($model.rateText, "0", !lock, width: 120).keyboardType(.decimalPad)
+                                Text("%").font(.system(size: 14)).foregroundColor(NFColor.ink3)
+                            }
+                        }
+                        field("端数処理") {
+                            HStack(spacing: 8) {
+                                ForEach(p.roundings) { r in
+                                    Button { model.f.rounding = r.id } label: {
+                                        Text(r.label).font(.system(size: 14, weight: .bold)).foregroundColor(model.f.rounding == r.id ? .white : NFColor.ink2)
+                                            .padding(.horizontal, 14).frame(height: 40)
+                                            .background(RoundedRectangle(cornerRadius: 10).fill(model.f.rounding == r.id ? NFColor.navy : Color.white))
+                                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(NFColor.line, lineWidth: 1))
+                                    }
+                                    .buttonStyle(PressableStyle()).disabled(lock)
+                                }
+                            }
+                            .opacity(lock ? 0.6 : 1)
+                        }
+                    }
+                }
+                NSPCard(title: "在庫", en: "Stock") {
+                    field("在庫がマイナスでも注文を受ける") {
+                        toggle(model.f.allowNegativeStock, disabled: !edit) { model.f.allowNegativeStock.toggle() }
+                    }
+                }
+                if edit {
+                    HStack {
+                        Spacer()
+                        NSPButton(text: "保存する", primary: true, busy: model.busy, disabled: !model.changed) { Task { await model.save() } }
+                    }
+                }
+            }
+        }
+        .task { await model.refresh() }
+    }
+
+    private func field<C: View>(_ label: String, required: Bool = false, @ViewBuilder content: () -> C) -> some View {
+        HStack(alignment: .center, spacing: 16) {
+            HStack(spacing: 4) {
+                Text(label).font(.system(size: 15, weight: .bold)).foregroundColor(NFColor.ink)
+                if required { Text("必須").font(.system(size: 10, weight: .heavy)).foregroundColor(.white).padding(.horizontal, 5).padding(.vertical, 1).background(Capsule().fill(NFColor.danger)) }
+            }
+            .frame(width: 180, alignment: .leading)
+            content()
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 18).padding(.vertical, 10)
+        .overlay(alignment: .bottom) { Rectangle().fill(NFColor.line).frame(height: 1) }
+    }
+
+    private func input(_ b: Binding<String>, _ ph: String, _ enabled: Bool, width: CGFloat? = nil) -> some View {
+        TextField(ph, text: b).font(.system(size: 16)).padding(.horizontal, 12).frame(height: 44)
+            .frame(maxWidth: width ?? 520)
+            .background(RoundedRectangle(cornerRadius: 10).fill(enabled ? Color.white : NFColor.lilacSoft))
+            .overlay(RoundedRectangle(cornerRadius: 10).stroke(NFColor.line, lineWidth: 1))
+            .disabled(!enabled)
+    }
+
+    private func textArea(_ b: Binding<String>, _ ph: String, _ enabled: Bool) -> some View {
+        TextField(ph, text: b, axis: .vertical).lineLimit(2...5).font(.system(size: 15)).padding(12)
+            .frame(maxWidth: 520, alignment: .topLeading)
+            .background(RoundedRectangle(cornerRadius: 10).fill(enabled ? Color.white : NFColor.lilacSoft))
+            .overlay(RoundedRectangle(cornerRadius: 10).stroke(NFColor.line, lineWidth: 1))
+            .disabled(!enabled)
+    }
+
+    private func toggle(_ on: Bool, disabled: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            ZStack(alignment: on ? .trailing : .leading) {
+                Capsule().fill(on ? NFColor.iris : Color(hex: 0xCFC9C0)).frame(width: 56, height: 32)
+                Circle().fill(Color.white).frame(width: 26, height: 26).shadow(color: .black.opacity(0.15), radius: 2, y: 1).padding(3)
+            }
+        }
+        .buttonStyle(PressableStyle()).disabled(disabled).opacity(disabled ? 0.5 : 1)
+        .animation(.easeOut(duration: 0.15), value: on)
     }
 }
