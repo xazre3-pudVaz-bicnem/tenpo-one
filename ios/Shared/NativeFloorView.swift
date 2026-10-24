@@ -307,14 +307,16 @@ struct NativeTableCard: View {
                         }
                     }
                     Spacer(minLength: 4)
-                    HStack(spacing: 2) {
-                        // 人の印と人数は卓の番号と同じ大きさ。「名」は書かず数字だけ。お客様がいないときは数字を出さない
-                        // （席の数が人数に見えるので。2026-10-24 22:19 Ronnie「お客様が来てから書く」）
-                        Image(systemName: "person.2.fill").font(.system(size: 20, weight: .semibold)).foregroundColor(NFColor.ink3)
-                        if let o = order { Text("\(o.guestCount)") }
+                    // 人の印と人数は卓の番号と同じ大きさ。「名」は書かず数字だけ。
+                    // お客様が来店（着席）してから印も数字も出す（2026-10-24 22:19「お客様が来てから書く」・2026-10-25 00:10 Ronnie「人の印も来店してから」）
+                    if let o = order {
+                        HStack(spacing: 2) {
+                            Image(systemName: "person.2.fill").font(.system(size: 20, weight: .semibold)).foregroundColor(NFColor.ink3)
+                            Text("\(o.guestCount)")
+                        }
+                        .font(.system(size: 23, weight: .heavy)).monospacedDigit().foregroundColor(NFColor.ink)
+                        .lineLimit(1).fixedSize()
                     }
-                    .font(.system(size: 23, weight: .heavy)).monospacedDigit().foregroundColor(empty ? NFColor.ink3 : NFColor.ink)
-                    .lineLimit(1).fixedSize()
                 }
                 // 席の印（○○○○）は出さない（2026-10-24 21:36 Ronnie「番号の下の ○○○○ はいらない」）
                 // 呼び出しの中身（お会計希望・お水×2…）
