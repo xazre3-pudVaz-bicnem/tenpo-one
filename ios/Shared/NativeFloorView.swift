@@ -31,9 +31,10 @@ struct NativeFloorView: View {
                 HStack(alignment: .top, spacing: 14) {
                     VStack(alignment: .leading, spacing: 12) {
                         if model.showFloorChips { floorChips }
-                        ScrollView {
-                            tableGrid(width: geo.size.width - panelW - 14 - 28)
-                                .padding(.bottom, 8)
+                        GeometryReader { area in
+                            ScrollView {
+                                tableGrid(width: area.size.width - 4, height: area.size.height - 8)
+                            }
                         }
                         legend
                     }
@@ -164,12 +165,14 @@ struct NativeFloorView: View {
 
     // MARK: 卓の箱
 
-    private func tableGrid(width: CGFloat) -> some View {
-        // 箱は少し小さめの正方形、箱と箱の間は広め（2026-10-24 Ronnie）
+    private func tableGrid(width: CGFloat, height: CGFloat) -> some View {
+        // 表示の場所を 横4 × 縦3 ＝ 12 の正方形に分ける。箱と箱の間は縦も横も同じ（右だけ空けない。2026-10-24 Ronnie）
         let gap: CGFloat = 20
-        let target: CGFloat = 215
-        let cols = max(2, min(6, Int((width + gap) / (target + gap))))
-        let side = min(target, floor((width - gap * CGFloat(cols - 1)) / CGFloat(cols)))
+        let cols = width >= 700 ? 4 : 3
+        let rows: CGFloat = 3
+        let byWidth = (width - gap * CGFloat(cols - 1)) / CGFloat(cols)
+        let byHeight = (height - gap * (rows - 1)) / rows
+        let side = max(120, floor(min(byWidth, byHeight)))
         let columns = Array(repeating: GridItem(.fixed(side), spacing: gap), count: cols)
         return Group {
             if model.visibleTables.isEmpty {
@@ -179,7 +182,7 @@ struct NativeFloorView: View {
                     .background(RoundedRectangle(cornerRadius: 10).fill(Color.white))
                     .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [5])).foregroundColor(NFColor.wisteria))
             } else {
-                LazyVGrid(columns: columns, alignment: .leading, spacing: gap) {
+                LazyVGrid(columns: columns, alignment: .center, spacing: gap) {
                     ForEach(model.visibleTables) { t in
                         NativeTableCard(table: t, now: model.now) { rect in
                             tileRect = rect
@@ -187,7 +190,7 @@ struct NativeFloorView: View {
                         }
                     }
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .center)
                 .padding(.horizontal, 2).padding(.vertical, 4)
             }
         }
@@ -274,12 +277,15 @@ struct NativeTableCard: View {
                                 .background(Circle().fill(Color.white))
                                 .shadow(color: .black.opacity(0.06), radius: 3, y: 1)
                         }
-                        HStack(spacing: 4) {
-                            if state == .unavailable { Image(systemName: "lock.fill").font(.system(size: 11)) }
-                            if state == .cleaning { Image(systemName: "sparkles").font(.system(size: 11)) }
-                            Text(state == .seated || state == .pay ? "注文なし / No order" : state.label)
+                        // 空席は ＋ だけで分かるので「空席」は書かない（2026-10-24 Ronnie）
+                        if state != .free {
+                            HStack(spacing: 4) {
+                                if state == .unavailable { Image(systemName: "lock.fill").font(.system(size: 11)) }
+                                if state == .cleaning { Image(systemName: "sparkles").font(.system(size: 11)) }
+                                Text(state == .seated || state == .pay ? "注文なし / No order" : state.label)
+                            }
+                            .font(.system(size: 12, weight: .semibold)).foregroundColor(NFColor.ink3)
                         }
-                        .font(.system(size: 12, weight: .semibold)).foregroundColor(NFColor.ink3)
                         if table.isPrivateRoom || table.isCounter {
                             Text(table.isPrivateRoom ? "個室" : "カウンター").font(.system(size: 10.5)).foregroundColor(NFColor.ink3)
                         }
