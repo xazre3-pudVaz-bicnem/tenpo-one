@@ -21,6 +21,35 @@ final class BluetoothPrinters: NSObject {
     typealias Device = [String: String] // deviceId, name, maker, via
     typealias Done = (_ ok: Bool, _ code: String?) -> Void
 
+    // MARK: プリンターかどうか（2026-10-24 Ronnie「印刷できる機械にだけつなぐ。何にでもつながるのはダメ」）
+
+    /// プリンターらしい名前（lib/direct-print.ts の PRINTER_NAME_PATTERN と同じ）
+    static let printerNamePattern = #"(print|prt|pos\b|pos[-_ ]|receipt|thermal|label|\btm[-_ ]?[a-z0-9]|mc[-_ ]?print|\brp[-_ ]?[a-z]?\d|\bmpt|\bpt[-_ ]?\d|\bxp[-_ ]?[a-z]?\d|\bgp[-_ ]?[a-z]?\d|\btsp\d|\bsm[-_ ]?[a-z]\d|\bspp[-_ ]?r|\bcmp[-_ ]?\d|\bmtp|\brpp|\bztp|epson|\bstar\b|\bsii\b|seiko|citizen|bixolon|sunmi|hprt|xprinter|munbyn|rongta|gainscha|zebra|brother|58mm|80mm)"#
+    private static let printerNameRegex = try? NSRegularExpression(pattern: printerNamePattern, options: [.caseInsensitive])
+
+    static func looksLikePrinter(_ name: String) -> Bool {
+        guard let re = printerNameRegex else { return false }
+        return re.firstMatch(in: name, range: NSRange(name.startIndex..., in: name)) != nil
+    }
+
+    /// 探したときにプリンターのサービス（18F0 など）を出していた機械（名前に印が無くてもプリンター）。この iPad だけで覚える
+    private static let verifiedKey = "tenpo.btVerifiedPrinters"
+    static func noteVerifiedPrinter(_ deviceId: String) {
+        var set = Set(UserDefaults.standard.stringArray(forKey: verifiedKey) ?? [])
+        guard set.insert(deviceId).inserted else { return }
+        UserDefaults.standard.set(Array(set).suffix(32).map { $0 }, forKey: verifiedKey)
+    }
+    static func isVerifiedPrinter(_ deviceId: String) -> Bool {
+        (UserDefaults.standard.stringArray(forKey: verifiedKey) ?? []).contains(deviceId)
+    }
+
+    /// つないでよい機械か：Star・EPSON（SDK・MFi で見つけたもの）と USB はプリンター。
+    /// そのほか（Bluetooth LE の ESC/POS・SII）は、名前がプリンターらしいか、プリンターのサービスを出していたものだけ
+    static func isPrinterDevice(maker: String, via: String, deviceId: String, name: String) -> Bool {
+        if via == "usb" || maker == "star" || maker == "epson" { return true }
+        return looksLikePrinter(name) || isVerifiedPrinter(deviceId)
+    }
+
     private let ble = BLEEscPosPrinter()
     private let accessory = AccessoryEscPosPrinters()
     #if canImport(StarIO10)
@@ -406,7 +435,9 @@ private final class AccessoryEscPosPrinters: NSObject, StreamDelegate {
             let list = Self.devices(makers: makers)
             guard list.isEmpty, pairIfNone else { return completion(list) }
             // まだペアリングしていない：iOS の一覧を出す（選ぶとペアリング）。終わったらもう一度見る
-            EAAccessoryManager.shared().showBluetoothAccessoryPicker(withNameFilter: nil) { _ in
+            // iOS の一覧にもプリンターらしい名前の機械だけ出す（テレビ・スピーカーにペアリングしない。2026-10-24 Ronnie）
+            let filter = NSPredicate(format: "SELF MATCHES[c] %@", ".*" + BluetoothPrinters.printerNamePattern + ".*")
+            EAAccessoryManager.shared().showBluetoothAccessoryPicker(withNameFilter: filter) { _ in
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { completion(Self.devices(makers: makers)) }
             }
         }
@@ -542,6 +573,8 @@ private final class BLEEscPosPrinter: NSObject, CBCentralManagerDelegate, CBPeri
     /// 見つけた機械がプリンターのサービスを出していたか（広告に入っている UUID）
     private var printerish: Set<UUID> = []
     private var apple: Set<UUID> = []
+    /// 音・テレビ・イヤホン・体温計など、プリンターではないサービスを出していた機械
+    private var notPrinter: Set<UUID> = []
     private var scanning: (maker: String, done: ([BluetoothPrinters.Device]) -> Void)?
 
     private var target: CBPeripheral?
@@ -575,15 +608,18 @@ private final class BLEEscPosPrinter: NSObject, CBCentralManagerDelegate, CBPeri
             self.seen = [:]
             self.printerish = []
             self.apple = []
+            self.notPrinter = []
             self.scanning = (maker, completion)
             self.central.scanForPeripherals(withServices: nil, options: [CBCentralManagerScanOptionAllowDuplicatesKey: false])
             DispatchQueue.main.asyncAfter(deadline: .now() + 6) {
                 self.central.stopScan()
                 // プリンターと使える機械だけ（2026-10-13 Ronnie「プリンターと使えるものだけ」。テレビ・イヤホン・Mac などは出さない）
                 let list: [BluetoothPrinters.Device] = self.seen.values.compactMap { p in
-                    guard let name = p.name, !name.isEmpty, !self.apple.contains(p.identifier) else { return nil }
+                    guard let name = p.name, !name.isEmpty, !self.apple.contains(p.identifier), !self.notPrinter.contains(p.identifier) else { return nil }
                     let byService = self.printerish.contains(p.identifier)
-                    guard byService || Self.looksLikePrinter(name) else { return nil }
+                    guard byService || BluetoothPrinters.looksLikePrinter(name) else { return nil }
+                    // サービスで分かったプリンターは覚えておく（名前に印が無くても、あとで「プリンターか」の判定に通る）
+                    if byService { BluetoothPrinters.noteVerifiedPrinter(p.identifier.uuidString) }
                     return ["deviceId": p.identifier.uuidString, "name": name, "maker": maker, "via": "bluetooth", "printer": "1"]
                 }
                 let done = self.scanning?.done
@@ -604,7 +640,17 @@ private final class BLEEscPosPrinter: NSObject, CBCentralManagerDelegate, CBPeri
         if uuids.contains(where: { Self.printerServices.contains($0) }) {
             printerish.insert(peripheral.identifier)
         }
+        if uuids.contains(where: { Self.notPrinterServices.contains($0) }) {
+            notPrinter.insert(peripheral.identifier)
+        }
     }
+
+    /// プリンターではない機械が出すサービス（LE Audio・メディア・キーボード・体温計・心拍・血圧・Fast Pair・ビーコン）
+    private static let notPrinterServices: Set<CBUUID> = [
+        CBUUID(string: "1843"), CBUUID(string: "1844"), CBUUID(string: "1845"), CBUUID(string: "1846"), CBUUID(string: "1848"),
+        CBUUID(string: "184E"), CBUUID(string: "184F"), CBUUID(string: "1850"), CBUUID(string: "1812"), CBUUID(string: "180D"),
+        CBUUID(string: "1810"), CBUUID(string: "1809"), CBUUID(string: "FE2C"), CBUUID(string: "FEAA"), CBUUID(string: "FD6F"),
+    ]
 
     /// Bluetooth LE のレシート・ラベルプリンターだけが出すサービス
     /// （FF00・FFE0・49535343… はプリンター以外の機械（血圧計・スピーカーなど）も使うので入れない）
@@ -612,17 +658,6 @@ private final class BLEEscPosPrinter: NSObject, CBCentralManagerDelegate, CBPeri
         CBUUID(string: "18F0"),
         CBUUID(string: "E7810A71-73AE-499D-8C15-FAA9AEF0C3F2"),
     ]
-
-    /// プリンターらしい名前（lib/direct-print.ts の PRINTER_NAME_PATTERN と同じ）
-    private static let printerNamePattern = try? NSRegularExpression(
-        pattern: #"(print|prt|pos\b|pos[-_ ]|receipt|thermal|label|\btm[-_ ]?[a-z0-9]|mc[-_ ]?print|\brp[-_ ]?[a-z]?\d|\bmpt|\bpt[-_ ]?\d|\bxp[-_ ]?[a-z]?\d|\bgp[-_ ]?[a-z]?\d|\btsp\d|\bsm[-_ ]?[a-z]\d|\bspp[-_ ]?r|\bcmp[-_ ]?\d|\bmtp|\brpp|\bztp|epson|\bstar\b|\bsii\b|seiko|citizen|bixolon|sunmi|hprt|xprinter|munbyn|rongta|gainscha|zebra|brother|58mm|80mm)"#,
-        options: [.caseInsensitive]
-    )
-
-    static func looksLikePrinter(_ name: String) -> Bool {
-        guard let re = printerNamePattern else { return false }
-        return re.firstMatch(in: name, range: NSRange(name.startIndex..., in: name)) != nil
-    }
 
     // 送る
     func print(identifier: String, data: Data, completion: @escaping BluetoothPrinters.Done) {
