@@ -80,7 +80,6 @@ struct NativeSettingsView: View {
             if model.payload != nil {
                 HStack(spacing: 0) {
                     sidebar
-                    Rectangle().fill(NFColor.line).frame(width: 1)
                     ScrollView {
                         VStack(alignment: .leading, spacing: 16) {
                             if let n = agent.notice, let at = agent.noticeAt, Date().timeIntervalSince(at) < 600 {
@@ -126,29 +125,29 @@ struct NativeSettingsView: View {
         .onReceive(printConfig.$config) { _ in model.syncForm() }
     }
 
-    // MARK: - 左：一覧（印＋名前。選んでいるものは濃く）
+    // MARK: - 左：一覧（黒い帯。印＋名前は大きく。選んでいるものは青。2026-10-24 Ronnie「タブはもっと大きく・きれいに。全部黒でもいい」）
 
-    private static let sideWidth: CGFloat = 236
+    private static let sideWidth: CGFloat = 268
 
     private var sidebar: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 6) {
                 sideHeader("このiPad", en: "This iPad")
                 ForEach(Page.allCases) { p in
                     sideRow(icon: p.icon, title: p.title, en: p.en, dot: pageStatus(p)?.1, on: sel == .page(p)) { select(.page(p)) }
                 }
                 if !groups.isEmpty {
-                    sideHeader("お店の設定", en: "Store").padding(.top, 14)
+                    sideHeader("お店の設定", en: "Store").padding(.top, 18)
                     ForEach(groups) { g in
                         sideRow(icon: g.icon, title: g.label, en: g.en, dot: nil, on: sel == .group(g.id)) { select(.group(g.id)) }
                     }
                 }
-                Text("TENPO ONE \(AppConfig.version)").font(.system(size: 11)).foregroundColor(NFColor.ink3).padding(.top, 18).padding(.horizontal, 10)
+                Text("TENPO ONE \(AppConfig.version)").font(.system(size: 11, weight: .semibold)).foregroundColor(Color.white.opacity(0.35)).padding(.top, 22).padding(.horizontal, 12)
             }
-            .padding(.horizontal, 10).padding(.vertical, 14)
+            .padding(.horizontal, 12).padding(.vertical, 16)
         }
         .frame(width: Self.sideWidth)
-        .background(NFColor.lilacSoft)
+        .background(NFColor.navy)
     }
 
     private func select(_ s: Sel) {
@@ -157,32 +156,37 @@ struct NativeSettingsView: View {
 
     private func sideHeader(_ title: String, en: String) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
-            Text(title).font(.system(size: 12, weight: .heavy)).foregroundColor(NFColor.ink3)
-            Text(en).font(.system(size: 10, weight: .semibold)).foregroundColor(NFColor.ink3.opacity(0.7))
+            Text(title).font(.system(size: 12.5, weight: .heavy)).foregroundColor(Color.white.opacity(0.55))
+            Text(en).font(.system(size: 10.5, weight: .semibold)).foregroundColor(Color.white.opacity(0.35))
         }
-        .padding(.horizontal, 10).padding(.bottom, 4)
+        .padding(.horizontal, 12).padding(.bottom, 6)
     }
 
-    /// 一覧の1行：印（選ぶと青地に白）＋名前（下に英語）＋いまの状態の点
+    /// 一覧の1行（大きめ）：印（選ぶと青地に白）＋名前（下に英語）＋いまの状態の点
     private func sideRow(icon: String, title: String, en: String, dot: Color?, on: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            HStack(spacing: 11) {
+            HStack(spacing: 13) {
                 Image(systemName: icon)
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundColor(on ? .white : NFColor.iris)
-                    .frame(width: 38, height: 38)
-                    .background(RoundedRectangle(cornerRadius: 11, style: .continuous).fill(on ? NFColor.iris : NFColor.irisSoft))
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(title).font(.system(size: 15, weight: on ? .heavy : .bold)).foregroundColor(on ? NFColor.iris : NFColor.ink).lineLimit(1)
-                    Text(en).font(.system(size: 10.5, weight: .medium)).foregroundColor(on ? NFColor.iris.opacity(0.75) : NFColor.ink3).lineLimit(1)
+                    .font(.system(size: 21, weight: .semibold))
+                    .foregroundColor(.white)
+                    .frame(width: 48, height: 48)
+                    .background(RoundedRectangle(cornerRadius: 13, style: .continuous).fill(on ? NFColor.iris : Color.white.opacity(0.10)))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title).font(.system(size: 18, weight: .heavy)).foregroundColor(.white).lineLimit(1)
+                    Text(en).font(.system(size: 11.5, weight: .medium)).foregroundColor(Color.white.opacity(on ? 0.85 : 0.55)).lineLimit(1)
                 }
                 Spacer(minLength: 4)
-                if let dot { Circle().fill(dot).frame(width: 8, height: 8) }
-                Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold)).foregroundColor(on ? NFColor.iris : NFColor.line)
+                if let dot {
+                    Circle().fill(dot).frame(width: 10, height: 10)
+                        .overlay(Circle().stroke(Color.white.opacity(0.25), lineWidth: 1))
+                }
+                Image(systemName: "chevron.right").font(.system(size: 13, weight: .bold)).foregroundColor(Color.white.opacity(on ? 0.9 : 0.3))
             }
-            .padding(.horizontal, 8).padding(.vertical, 7)
-            .background(RoundedRectangle(cornerRadius: 13, style: .continuous).fill(on ? Color.white : Color.clear))
-            .overlay(RoundedRectangle(cornerRadius: 13, style: .continuous).stroke(on ? NFColor.iris.opacity(0.35) : Color.clear, lineWidth: 1))
+            .padding(.horizontal, 10).frame(height: 68)
+            .background(RoundedRectangle(cornerRadius: 15, style: .continuous).fill(on ? Color.white.opacity(0.14) : Color.clear))
+            .overlay(alignment: .leading) {
+                if on { RoundedRectangle(cornerRadius: 2).fill(NFColor.iris).frame(width: 4, height: 36).padding(.leading, -2) }
+            }
         }
         .buttonStyle(PressableStyle(scale: 0.98))
     }
