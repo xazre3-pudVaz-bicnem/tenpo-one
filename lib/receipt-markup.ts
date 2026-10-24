@@ -1,4 +1,4 @@
-import { formatReceiptAddress } from './receipt-layout';
+import { formatReceiptAddress, tableLabelLayout } from './receipt-layout';
 /**
  * ReceiptData → Star Document Markup（text/vnd.star.markup）変換（純関数・テスト対象）。
  * Star mC-Print3 等の CloudPRNT 対応機がこのMarkupを解釈して感熱レシートを印字する。
@@ -237,8 +237,8 @@ export function orderSlipMarkup(
   for (const heading of customerBillHeading(width, STAR_WIDTH_OPTIONS)) line(heading);
   raw('[align: left]');
   const table = slip.tableName ?? 'テイクアウト';
-  const tableRow = twoCol('卓番号', table, width);
-  raw(esc(tableRow.slice(0, -table.length)) + '[magnify: width 1; height 2]' + esc(table) + '[magnify: width 1; height 1]');
+  const { prefix, scale } = tableLabelLayout(table, width, STAR_WIDTH_OPTIONS);
+  raw(esc(prefix) + `[magnify: width ${scale}; height ${scale}]` + esc(table) + '[magnify: width 1; height 1]');
   line(twoCol(slip.clerkName ? `担当 ${slip.clerkName}` : '', slip.guestCount != null ? `人数 ${slip.guestCount}名` : '', width));
   line(twoCol('伝票番号', `No.${slip.orderNo}`, width));
   line(twoCol('開始日時', slip.startedAt ?? '—', width));

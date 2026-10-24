@@ -1,4 +1,4 @@
-import { formatReceiptAddress } from './receipt-layout';
+import { formatReceiptAddress, tableLabelLayout } from './receipt-layout';
 /**
  * ReceiptData → StarPRNT ラスタ制御コマンド（application/vnd.star.starprnt）変換。
  *
@@ -286,8 +286,8 @@ export function orderSlipStarPrnt(slip: OrderSlipData, options: StarPrntOptions 
   for (const heading of customerBillHeading(width, STAR_WIDTH_OPTIONS)) b.line(heading);
   b.cmd(CMD.alignLeft);
   const table = slip.tableName ?? 'テイクアウト';
-  const tableRow = twoCol('卓番号', table, width);
-  b.text(tableRow.slice(0, -table.length)).cmd(CMD.magnify(0, 1)).line(table).cmd(CMD.magnify(0, 0));
+  const { prefix, scale } = tableLabelLayout(table, width, STAR_WIDTH_OPTIONS);
+  b.text(prefix).cmd(CMD.magnify(scale - 1, scale - 1)).line(table).cmd(CMD.magnify(0, 0));
   b.line(twoCol(slip.clerkName ? `担当 ${slip.clerkName}` : '', slip.guestCount != null ? `人数 ${slip.guestCount}名` : '', width));
   b.line(twoCol('伝票番号', `No.${slip.orderNo}`, width));
   b.line(twoCol('開始日時', slip.startedAt ?? '—', width));

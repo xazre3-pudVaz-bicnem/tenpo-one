@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { dispWidth, twoCol, wrapText, STAR_WIDTH_OPTIONS,
+import { tableLabelLayout, dispWidth, twoCol, wrapText, STAR_WIDTH_OPTIONS,
   billSlipLines,
   mergeSameLines,
 } from '@/lib/receipt-layout';
@@ -177,5 +177,17 @@ describe('同じものを1行にまとめる（2026-10-02 御茶ノ水「レシ�
     const lines = [L('A', 1, 480), L('B', 2, 300), L('A', 3, 480), L('B', 1, 300)];
     const sum = (ls: { lineTotal: number }[]) => ls.reduce((a, l) => a + l.lineTotal, 0);
     expect(sum(mergeSameLines(lines))).toBe(sum(lines));
+  });
+});
+
+describe('bill table name proportions', () => {
+  it.each([28, 32, 42, 48])('reserves both doubled dimensions within %s columns', width => {
+    const { prefix, scale } = tableLabelLayout('T1', width, STAR_WIDTH_OPTIONS);
+    expect(scale).toBe(2);
+    expect(dispWidth(prefix, STAR_WIDTH_OPTIONS) + dispWidth('T1') * scale).toBeLessThanOrEqual(width);
+    expect(prefix).toContain('卓番号');
+  });
+  it('uses natural proportions for a long table name on narrow paper', () => {
+    expect(tableLabelLayout('テラスエリア１２', 28, STAR_WIDTH_OPTIONS).scale).toBe(1);
   });
 });

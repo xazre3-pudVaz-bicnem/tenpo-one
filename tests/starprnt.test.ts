@@ -165,6 +165,10 @@ const slip = {
 };
 
 describe('orderSlipStarPrnt（注文伝票）', () => {
+  it('prints table names at double width and height', () => {
+    const b = orderSlipStarPrnt({ ...slip, tableName: 'T1' });
+    expect(b.includes(Buffer.concat([Buffer.from([27, 105, 1, 1]), Buffer.from('T1')]))).toBe(true);
+  });
   it('注文内容・合計を含み、領収書ではないと明記してカットする', () => {
     const b = orderSlipStarPrnt(slip, { paperWidth: 80 });
     expect(b.subarray(0, 2)).toEqual(Buffer.from([ESC, 0x40]));
@@ -177,11 +181,11 @@ describe('orderSlipStarPrnt（注文伝票）', () => {
     expect(t).not.toContain('※ これは領収書ではありません');
   });
 
-  it('拡大は縦のみで、見出しのあとは等倍に戻す（以降が大きいまま印字されない）', () => {
+  it('卓名は縦横倍で、本文は等倍に戻す', () => {
     const b = orderSlipStarPrnt(slip, { paperWidth: 80 });
     expect(hasBytes(b, [ESC, 0x69, 0x01, 0x00])).toBe(true);
     expect(hasBytes(b, [ESC, 0x69, 0x00, 0x00])).toBe(true);
     expect(hasBytes(b, [ESC, 0x69, 0x02, 0x02])).toBe(false);
-    expect(hasBytes(b, [ESC, 0x69, 0x01, 0x01])).toBe(false);
+    expect(hasBytes(b, [ESC, 0x69, 0x01, 0x01])).toBe(true);
   });
 });
