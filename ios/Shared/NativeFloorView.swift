@@ -171,10 +171,10 @@ struct NativeFloorView: View {
     // MARK: 卓の箱
 
     private func tableGrid(width: CGFloat, height: CGFloat) -> some View {
-        // 箱は 176pt の正方形（前の約 202pt から 0.5cm 小さく。2026-10-24 20:45 Ronnie「0.5cm 小さい正方形・間を少し広く」）。
+        // 箱は 190pt の正方形（約 202pt は少し大きい、176pt は小さすぎ。2026-10-24 20:45／20:47 Ronnie「0.5cm 小さく」→「小さすぎ、少し大きく」）。
         // 余った幅は、左の端・箱と箱の間・右の予約の欄との間に同じだけ分ける（20:36「間をそろえて」、20:42「右の空きを残さない」）。
         // 外側の余白 14（画面の左・予約の欄との間）も含めて同じ間にするので、内側で s − 14 を足す
-        let side: CGFloat = 176
+        let side: CGFloat = 190
         let minGap: CGFloat = 20
         let outer: CGFloat = 14
         let total = width + outer * 2
