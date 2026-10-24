@@ -83,9 +83,27 @@ import { loadReportData } from '@/lib/reports-data-server';
 import { isNativeScanActionType, nativeScanPath, parseNativeScanAction } from '@/lib/native-scan';
 import { loadNativeScan } from '@/lib/native-scan-server';
 import { attachReceiptToCashTransaction, createScanDocument } from '@/app/app/scan/actions';
-import { isNativeCustomerActionType, parseNativeCustomerAction } from '@/lib/native-customers';
+import { isNativeCustomerActionType, nativeCustomerPermission, parseNativeCustomerAction } from '@/lib/native-customers';
 import { loadNativeCustomer, loadNativeCustomers } from '@/lib/native-customers-server';
-import { addCustomerNote, createCustomer, recalcCustomerStats, updateCustomerAttributes } from '@/app/app/customers/actions';
+import { loadDuplicateGroups, loadRfmCustomers } from '@/lib/customers-analysis-server';
+import {
+  addCustomerNote,
+  adjustCustomerPoints,
+  anonymizeCustomer,
+  attachCustomerTag,
+  createCustomer,
+  createCustomerTag,
+  deleteCustomer,
+  detachCustomerTag,
+  mergeCustomers,
+  recalcCustomerStats,
+  searchCustomersForMerge,
+  updateCustomerAttributes,
+  updateCustomerBasic,
+  updateCustomerConsent,
+  updateCustomerMemberNo,
+  updateCustomerMemberRank,
+} from '@/app/app/customers/actions';
 import { searchCustomerByPhone, setOrderCustomer } from '@/app/app/pos/actions';
 import { isNativeBudgetActionType, parseNativeBudgetAction } from '@/lib/native-budget';
 import { dailyBudgetsFrom } from '@/lib/daily-budget';
@@ -454,6 +472,29 @@ export async function GET(request: Request) {
   }
 
   // 顧客台帳（Web の /app/customers・/app/customers/[id]）
+  // 顧客台帳の RFM分析・重複候補（Web の /app/customers?view=rfm|duplicates）
+  if (part === 'customerRfm' || part === 'customerDuplicates') {
+    if (ctx.disabledFeatures?.has('crm')) return json({ ok: false, error: 'この機能は使えません', useWeb: true }, 403);
+    if (!can(ctx.role, 'customers.view')) return json({ ok: false, error: '顧客情報の閲覧には権限が必要です。管理者にお問い合わせください。' }, 403);
+    const supabase = await createClient();
+    if (part === 'customerRfm') return json({ ok: true, customers: await loadRfmCustomers(supabase, ctx.organizationId ?? '') });
+    return json({ ok: true, groups: await loadDuplicateGroups(supabase, ctx.organizationId ?? ''), canMerge: can(ctx.role, 'customers.delete') });
+  }
+
+  // 重複顧客と統合：電話番号で探す（Web の searchCustomersForMerge。customers.delete）
+  if (part === 'customerMergeSearch') {
+    if (ctx.disabledFeatures?.has('crm')) return json({ ok: false, error: 'この機能は使えません', useWeb: true }, 403);
+    if (!can(ctx.role, 'customers.delete')) return json({ ok: false, error: '権限がありません' }, 403);
+    const exclude = url.searchParams.get('exclude');
+    const phone = (url.searchParams.get('phone') ?? '').slice(0, 30);
+    if (!isUuid(exclude) || !phone.trim()) return json({ ok: true, results: [] });
+    try {
+      return json({ ok: true, results: await searchCustomersForMerge(phone, exclude) });
+    } catch (e) {
+      return json({ ok: false, error: errorText(e, '検索に失敗しました') }, 400);
+    }
+  }
+
   if (part === 'customers' || part === 'customer') {
     if (ctx.disabledFeatures?.has('crm')) return json({ ok: false, error: 'この機能は使えません', useWeb: true }, 403);
     if (!can(ctx.role, 'customers.view')) return json({ ok: false, error: '顧客情報の閲覧には権限が必要です。管理者にお問い合わせください。' }, 403);
@@ -822,7 +863,7 @@ export async function POST(request: Request) {
     if (!parsedCustomer.ok) return json({ ok: false, error: parsedCustomer.error }, 400);
     const forOrder = parsedCustomer.action.type === 'orderCustomer';
     if (!forOrder && ctx.disabledFeatures?.has('crm')) return json({ ok: false, error: 'この機能は使えません', useWeb: true }, 403);
-    if (!can(ctx.role, forOrder ? 'pos.order' : 'customers.write')) return json({ ok: false, error: '権限がありません' }, 403);
+    if (!can(ctx.role, nativeCustomerPermission(parsedCustomer.action.type))) return json({ ok: false, error: '権限がありません' }, 403);
     // Route Handler では requirePermission がお店の回線を見ないので、ここで見る（ほかの操作と同じ）
     const customerProblem = await networkProblem(ctx);
     if (customerProblem) return json({ ok: false, error: customerProblem }, 403);
@@ -838,12 +879,58 @@ export async function POST(request: Request) {
         await setOrderCustomer(ca.orderId, ca.customerId);
         return json({ ok: true });
       }
-      if (ca.type === 'customerAttributes') {
-        const { type: _t, id, ...input } = ca;
-        void _t;
-        await updateCustomerAttributes(id, input);
-      } else if (ca.type === 'customerNote') await addCustomerNote(ca.id, ca.body);
-      else await recalcCustomerStats(ca.id);
+      switch (ca.type) {
+        case 'customerAttributes': {
+          const { type: _t, id, ...input } = ca;
+          void _t;
+          await updateCustomerAttributes(id, input);
+          break;
+        }
+        case 'customerNote':
+          await addCustomerNote(ca.id, ca.body);
+          break;
+        case 'customerRecalc':
+          await recalcCustomerStats(ca.id);
+          break;
+        case 'customerBasic': {
+          const { type: _t, id, ...input } = ca;
+          void _t;
+          await updateCustomerBasic(id, input);
+          break;
+        }
+        case 'customerConsent':
+          await updateCustomerConsent(ca.id, ca.consentType, ca.granted);
+          break;
+        case 'customerTagAttach':
+          await attachCustomerTag(ca.id, ca.tagId);
+          break;
+        case 'customerTagDetach':
+          await detachCustomerTag(ca.id, ca.tagId);
+          break;
+        case 'customerTagCreate': {
+          const { id: tagId } = await createCustomerTag(ca.name, ca.color);
+          await attachCustomerTag(ca.id, tagId);
+          break;
+        }
+        case 'customerMemberNo':
+          await updateCustomerMemberNo(ca.id, ca.memberNo);
+          break;
+        case 'customerMemberRank':
+          await updateCustomerMemberRank(ca.id, ca.rank);
+          break;
+        case 'customerPoints':
+          await adjustCustomerPoints(ca.id, ca.delta, ca.reason);
+          break;
+        case 'customerMerge':
+          await mergeCustomers(ca.id, ca.mergeIds);
+          break;
+        case 'customerAnonymize':
+          await anonymizeCustomer(ca.id, ca.reason);
+          break;
+        case 'customerDelete':
+          await deleteCustomer(ca.id, ca.reason);
+          break;
+      }
       return json({ ok: true });
     } catch (e) {
       return json({ ok: false, error: errorText(e, 'うまくいきませんでした。もう一度お試しください') }, 400);

@@ -337,7 +337,7 @@ struct NativeCustomersScreen: View {
     @EnvironmentObject var state: AppState
 
     var body: some View {
-        NativeCustomersView(model: model, onHome: { state.goNativeHome() }, onWeb: { path in state.leaveNativeFloor(to: path) })
+        NativeCustomersView(model: model, onHome: { state.goNativeHome() }, onWeb: { path in state.leaveNativeFloor(to: path) }, view: $state.customersView, openRequest: $state.customersOpenId)
     }
 }
 

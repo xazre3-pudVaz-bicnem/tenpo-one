@@ -26,7 +26,8 @@ import { SegmentBadges, RfmBadge } from '@/components/customers/segment-badges';
 import { SegmentSummaryBar } from '@/components/customers/segment-summary-bar';
 import { RfmView, type RfmCustomerRow } from '@/components/customers/rfm-view';
 import { AudienceBuilder, type AudienceCustomerRow } from '@/components/customers/audience-builder';
-import { DuplicatesView, type DuplicateGroup, type DuplicateCandidate } from '@/components/customers/duplicates-view';
+import { DuplicatesView, type DuplicateGroup } from '@/components/customers/duplicates-view';
+import { loadDuplicateGroups, loadRfmCustomers } from '@/lib/customers-analysis-server';
 
 export const metadata: Metadata = { title: '顧客管理' };
 
@@ -120,34 +121,8 @@ export default async function CustomersPage({
   );
 
   if (view === 'rfm') {
-    // RFM分析は組織内の全active顧客を対象とする（来店実績のない顧客は R1F1M1・Dランクに集計される）
-    const { data: rfmRows } = await supabase
-      .from('customers')
-      .select('id, name, phone, visit_count, total_spent, last_visit_at')
-      .eq('organization_id', ctx.organizationId)
-      .eq('status', 'active')
-      .limit(10000);
-
-    const now = new Date();
-    const rfmCustomers: RfmCustomerRow[] = (rfmRows ?? []).map((c) => {
-      const metrics: CustomerMetrics = {
-        visitCount: c.visit_count,
-        totalSpent: c.total_spent,
-        cancelCount: 0,
-        noShowCount: 0,
-        firstVisitAt: null,
-        lastVisitAt: c.last_visit_at ? new Date(c.last_visit_at) : null,
-      };
-      return {
-        id: c.id,
-        name: c.name,
-        phone: c.phone,
-        visitCount: c.visit_count,
-        totalSpent: c.total_spent,
-        lastVisitAt: c.last_visit_at,
-        rfm: calcRfm(metrics, now),
-      };
-    });
+    // 読み込みは lib/customers-analysis-server.ts（iPad アプリのネイティブ画面と共用）
+    const rfmCustomers: RfmCustomerRow[] = await loadRfmCustomers(supabase, ctx.organizationId ?? '');
 
     const r = Number(sp.r ?? '');
     const f = Number(sp.f ?? '');
@@ -167,43 +142,8 @@ export default async function CustomersPage({
   }
 
   if (view === 'duplicates') {
-    // 重複候補: 電話番号（:merged: を除く）またはメールアドレスが一致するactive顧客をグルーピングする
-    const { data: dupRows } = await supabase
-      .from('customers')
-      .select('id, name, phone, email, visit_count, total_spent, last_visit_at')
-      .eq('organization_id', ctx.organizationId)
-      .eq('status', 'active')
-      .limit(5000);
-
-    const phoneMap = new Map<string, DuplicateCandidate[]>();
-    const emailMap = new Map<string, DuplicateCandidate[]>();
-    for (const c of dupRows ?? []) {
-      const cand: DuplicateCandidate = {
-        id: c.id,
-        name: c.name,
-        phone: c.phone,
-        email: c.email,
-        visitCount: c.visit_count,
-        totalSpent: c.total_spent,
-        lastVisitAt: c.last_visit_at,
-      };
-      if (c.phone && c.phone.trim() && !c.phone.includes(':merged:')) {
-        const key = c.phone.trim();
-        phoneMap.set(key, [...(phoneMap.get(key) ?? []), cand]);
-      }
-      if (c.email && c.email.trim()) {
-        const key = c.email.trim().toLowerCase();
-        emailMap.set(key, [...(emailMap.get(key) ?? []), cand]);
-      }
-    }
-    const groups: DuplicateGroup[] = [
-      ...[...phoneMap.entries()]
-        .filter(([, v]) => v.length > 1)
-        .map(([key, dupCustomers]) => ({ key, matchType: 'phone' as const, customers: dupCustomers })),
-      ...[...emailMap.entries()]
-        .filter(([, v]) => v.length > 1)
-        .map(([key, dupCustomers]) => ({ key, matchType: 'email' as const, customers: dupCustomers })),
-    ];
+    // 読み込みは lib/customers-analysis-server.ts（iPad アプリのネイティブ画面と共用）
+    const groups: DuplicateGroup[] = await loadDuplicateGroups(supabase, ctx.organizationId ?? '');
 
     return (
       <div>
