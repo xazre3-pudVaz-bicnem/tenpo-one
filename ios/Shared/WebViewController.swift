@@ -375,6 +375,11 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
             }
         case "setNativePos":
             let reqId = body["reqId"] as? String ?? ""
+            // 管理画面（設定 › レジ端末）が決めているときは端末から変えない（2026-10-24）
+            if let admin = AppState.shared.adminNativePos {
+                reply(reqId, ["ok": false, "enabled": admin, "error": "管理画面（設定 › レジ端末）で決めています"])
+                return
+            }
             // ブリッジのスクリプトの作り直しは setNativePos の中で（ネイティブの設定画面から変えたときと同じ道）
             AppState.shared.setNativePos((body["on"] as? Bool) ?? false)
             reply(reqId, ["ok": true, "enabled": AppState.shared.nativePosEnabled])

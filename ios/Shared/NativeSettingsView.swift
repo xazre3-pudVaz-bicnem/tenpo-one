@@ -421,13 +421,23 @@ struct NativeSettingsView: View {
     private var nativeCard: some View {
         card(icon: "ipad", title: "アプリのオーダー・会計画面", en: "Native screens",
              description: "ON（既定）：この iPad では、ホーム・テーブル一覧・オーダー・会計・店舗台帳・設定などがアプリの画面（同じ並び・速い）で開き、印刷もアプリ自身が出します。OFF にすると今まで通りの Web の画面です") {
-            HStack(spacing: 14) {
-                Text(nativeOn ? "ON（アプリの画面）" : "OFF（今までの画面）").font(.system(size: 15, weight: .bold)).foregroundColor(nativeOn ? NFColor.iris : NFColor.ink2)
-                Spacer()
-                toggle(nativeOn) {
-                    nativeOn.toggle()
-                    // OFF：Web の「レジの設定」を読み直す（Web 側のトグルも OFF で出る・印刷係は Web に戻る）
-                    state.setNativePos(nativeOn, reloadWeb: true)
+            // 管理画面が決めているときはその値を見せる（端末の切り替えは効かない）
+            let shown = state.adminNativePos ?? nativeOn
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 14) {
+                    Text(shown ? "ON（アプリの画面）" : "OFF（今までの画面）").font(.system(size: 15, weight: .bold)).foregroundColor(shown ? NFColor.iris : NFColor.ink2)
+                    Spacer()
+                    // 管理画面（設定 › レジ端末）が決めているときは端末から変えない（2026-10-24）
+                    toggle(shown, disabled: state.adminNativePos != nil) {
+                        if state.adminNativePos != nil { return }
+                        nativeOn.toggle()
+                        // OFF：Web の「レジの設定」を読み直す（Web 側のトグルも OFF で出る・印刷係は Web に戻る）
+                        state.setNativePos(nativeOn, reloadWeb: true)
+                    }
+                }
+                if state.adminNativePos != nil {
+                    Text("管理画面の「設定 › レジ端末」で決めています（この iPad では変えられません）")
+                        .font(.system(size: 12.5)).foregroundColor(NFColor.ink3)
                 }
             }
             .padding(.horizontal, 18).padding(.vertical, 14)
