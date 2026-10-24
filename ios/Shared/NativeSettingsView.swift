@@ -455,8 +455,10 @@ struct NativeSettingsView: View {
     private func row<Content: View>(_ label: String, en: String, dim: Bool = false, @ViewBuilder content: () -> Content) -> some View {
         // 名前は左・操作は右（見本の Funfo と同じ並び）
         HStack(alignment: .center, spacing: 16) {
+            // 名前は縮めない（右のメニューに押されて消えないように）
             Text(label).font(.system(size: 17, weight: .bold)).foregroundColor(dim ? NFColor.ink3 : NFColor.ink)
-            Spacer(minLength: 16)
+                .fixedSize().layoutPriority(1)
+            Spacer(minLength: 12)
             content()
         }
         // 行は少し低く（1 画面に入るように）
@@ -548,7 +550,7 @@ struct NativeSettingsView: View {
                                     .foregroundColor(model.model == nil ? NFColor.saffron : NFColor.ink)
                                 Image(systemName: "chevron.up.chevron.down").font(.system(size: 12, weight: .bold)).foregroundColor(NFColor.ink3)
                             }
-                            .padding(.horizontal, 14).frame(height: 46).frame(minWidth: 260, alignment: .trailing)
+                            .padding(.horizontal, 14).frame(height: 46).frame(minWidth: 200, alignment: .trailing)
                             .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(off ? NFColor.lilacSoft : Color.white))
                             .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(NFColor.line, lineWidth: 1))
                         }
@@ -587,7 +589,7 @@ struct NativeSettingsView: View {
                             Text("\(model.paper)mm").font(.system(size: 16, weight: .bold)).foregroundColor(NFColor.ink)
                             Image(systemName: "chevron.up.chevron.down").font(.system(size: 12, weight: .bold)).foregroundColor(NFColor.ink3)
                         }
-                        .padding(.horizontal, 14).frame(height: 46).frame(minWidth: 260, alignment: .trailing)
+                        .padding(.horizontal, 14).frame(height: 46).frame(minWidth: 200, alignment: .trailing)
                         .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(off ? NFColor.lilacSoft : Color.white))
                         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(NFColor.line, lineWidth: 1))
                     }
@@ -723,29 +725,30 @@ struct NativeSettingsView: View {
                     let on = model.lanOn(p.id)
                     let needsIpad = p.delivery == "ipad-lan"
                     let st = status(p, on: on)
-                    HStack(alignment: .center, spacing: 12) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                                Text(p.name).font(.system(size: 15, weight: .bold)).foregroundColor(NFColor.ink)
-                                if let m = p.model { Text(m).font(.system(size: 12)).foregroundColor(NFColor.ink3) }
-                            }
-                            Text("\(p.maker ?? "メーカー未設定")・\(p.usageLabel)・\(p.lanHost ?? "")\((p.lanPort ?? 9100) != 9100 ? ":\(p.lanPort ?? 9100)" : "")")
-                                .font(.system(size: 12)).foregroundColor(NFColor.ink3)
-                            Text(needsIpad ? "どれか1台の iPad で「このiPadから送る」を ON にしてください" : "プリンター自身（Server Direct Print）でも出ます")
-                                .font(.system(size: 12, weight: needsIpad ? .bold : .regular)).foregroundColor(needsIpad ? NFColor.iris : NFColor.ink3)
-                            Text(st.0).font(.system(size: 12)).foregroundColor(st.1)
-                        }
-                        Spacer(minLength: 0)
-                        button("試し印刷", busy: model.busy == "\(p.id):receipt", disabled: model.busy != nil) { Task { await model.testLan(p, "receipt") } }
-                        if p.usage == "receipt" {
-                            button("ドロア", busy: model.busy == "\(p.id):drawer", disabled: model.busy != nil) { Task { await model.testLan(p, "drawer") } }
-                        }
-                        HStack(spacing: 8) {
-                            Text("このiPadから送る").font(.system(size: 13, weight: .bold)).foregroundColor(on ? NFColor.iris : NFColor.ink2)
+                    // 半分の幅（設定を横 2 列にした）でも入るように縦に：名前＋スイッチ → 説明 → 状態＋試し印刷
+                    VStack(alignment: .leading, spacing: 5) {
+                        HStack(alignment: .center, spacing: 8) {
+                            Text(p.name).font(.system(size: 15, weight: .bold)).foregroundColor(NFColor.ink).lineLimit(1)
+                            if let m = p.model { Text(m).font(.system(size: 12)).foregroundColor(NFColor.ink3).lineLimit(1) }
+                            Spacer(minLength: 8)
+                            Text("このiPadから送る").font(.system(size: 13, weight: .bold)).foregroundColor(on ? NFColor.iris : NFColor.ink2).fixedSize()
                             toggle(on) { model.toggleLan(p.id) }
                         }
+                        Text("\(p.maker ?? "メーカー未設定")・\(p.usageLabel)・\(p.lanHost ?? "")\((p.lanPort ?? 9100) != 9100 ? ":\(p.lanPort ?? 9100)" : "")")
+                            .font(.system(size: 12)).foregroundColor(NFColor.ink3)
+                        Text(needsIpad ? "どれか1台の iPad で「このiPadから送る」を ON にしてください" : "プリンター自身（Server Direct Print）でも出ます")
+                            .font(.system(size: 12, weight: needsIpad ? .bold : .regular)).foregroundColor(needsIpad ? NFColor.iris : NFColor.ink3)
+                            .fixedSize(horizontal: false, vertical: true)
+                        HStack(spacing: 8) {
+                            Text(st.0).font(.system(size: 12)).foregroundColor(st.1).fixedSize(horizontal: false, vertical: true)
+                            Spacer(minLength: 8)
+                            button("試し印刷", busy: model.busy == "\(p.id):receipt", disabled: model.busy != nil) { Task { await model.testLan(p, "receipt") } }
+                            if p.usage == "receipt" {
+                                button("ドロア", busy: model.busy == "\(p.id):drawer", disabled: model.busy != nil) { Task { await model.testLan(p, "drawer") } }
+                            }
+                        }
                     }
-                    .padding(.horizontal, 18).padding(.vertical, 12)
+                    .padding(.horizontal, 18).padding(.vertical, 10)
                     .overlay(alignment: .bottom) { Rectangle().fill(NFColor.line).frame(height: 1) }
                 }
             }
@@ -761,23 +764,26 @@ struct NativeSettingsView: View {
                 ForEach(model.wifiPrinters) { p in
                     let on = model.wifiOn(p.id)
                     let st = status(p, on: on)
-                    HStack(alignment: .center, spacing: 12) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(p.name).font(.system(size: 15, weight: .bold)).foregroundColor(NFColor.ink)
-                            Text("\(p.usageLabel)・\(p.ip ?? "")").font(.system(size: 12)).foregroundColor(NFColor.ink3)
-                            Text(st.0).font(.system(size: 12)).foregroundColor(st.1)
-                        }
-                        Spacer(minLength: 0)
-                        button("試し印刷", busy: model.busy == "\(p.id):receipt", disabled: model.busy != nil) { Task { await model.testWifi(p, "receipt") } }
-                        if p.usage == "receipt" {
-                            button("ドロア", busy: model.busy == "\(p.id):drawer", disabled: model.busy != nil) { Task { await model.testWifi(p, "drawer") } }
-                        }
-                        HStack(spacing: 8) {
-                            Text("このiPadから直接印刷").font(.system(size: 13, weight: .bold)).foregroundColor(on ? NFColor.iris : NFColor.ink2)
+                    VStack(alignment: .leading, spacing: 5) {
+                        HStack(alignment: .center, spacing: 8) {
+                            Text(p.name).font(.system(size: 15, weight: .bold)).foregroundColor(NFColor.ink).lineLimit(1)
+                            Spacer(minLength: 8)
+                            Text("このiPadから直接印刷").font(.system(size: 13, weight: .bold)).foregroundColor(on ? NFColor.iris : NFColor.ink2).fixedSize()
                             toggle(on) { model.toggleWifi(p.id) }
                         }
+                        HStack(spacing: 8) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("\(p.usageLabel)・\(p.ip ?? "")").font(.system(size: 12)).foregroundColor(NFColor.ink3)
+                                Text(st.0).font(.system(size: 12)).foregroundColor(st.1).fixedSize(horizontal: false, vertical: true)
+                            }
+                            Spacer(minLength: 8)
+                            button("試し印刷", busy: model.busy == "\(p.id):receipt", disabled: model.busy != nil) { Task { await model.testWifi(p, "receipt") } }
+                            if p.usage == "receipt" {
+                                button("ドロア", busy: model.busy == "\(p.id):drawer", disabled: model.busy != nil) { Task { await model.testWifi(p, "drawer") } }
+                            }
+                        }
                     }
-                    .padding(.horizontal, 18).padding(.vertical, 12)
+                    .padding(.horizontal, 18).padding(.vertical, 10)
                     .overlay(alignment: .bottom) { Rectangle().fill(NFColor.line).frame(height: 1) }
                 }
             }
