@@ -133,13 +133,14 @@ struct NativeSettingsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 8) {
                 sideHeader("このiPad", en: "This iPad")
-                ForEach(Page.allCases) { p in
+                // 「アプリの画面」は デバイス管理 の中に置く（2026-10-24 19:09 Ronnie）
+                ForEach(Page.allCases.filter { $0 != .native }) { p in
                     sideRow(icon: p.icon, title: p.title, en: p.en, dot: pageStatus(p)?.1, on: sel == .page(p)) { select(.page(p)) }
                 }
                 if !groups.isEmpty {
                     sideHeader("お店の設定", en: "Store").padding(.top, 18)
                     ForEach(groups) { g in
-                        sideRow(icon: g.icon, title: g.label, en: g.en, dot: nil, on: sel == .group(g.id)) { select(.group(g.id)) }
+                        sideRow(icon: g.icon, title: g.label, en: g.en, dot: g.label == "デバイス管理" ? pageStatus(.native)?.1 : nil, on: sel == .group(g.id)) { select(.group(g.id)) }
                     }
                 }
                 Text("TENPO ONE \(AppConfig.version)").font(.system(size: 11, weight: .semibold)).foregroundColor(NFColor.ink3).padding(.top, 22).padding(.horizontal, 12)
@@ -204,7 +205,9 @@ struct NativeSettingsView: View {
             nativeCard
         case .group(let id):
             if let g = groups.first(where: { $0.id == id }) {
-                pageTitle(g.icon, g.label, en: g.en, status: nil)
+                pageTitle(g.icon, g.label, en: g.en, status: g.label == "デバイス管理" ? pageStatus(.native) : nil)
+                // アプリの画面（Native ON/OFF）は デバイス管理 の中のいちばん上（2026-10-24 19:09 Ronnie）
+                if g.label == "デバイス管理" { nativeCard }
                 itemList(g)
             } else {
                 Text("左から選んでください").font(.system(size: 14)).foregroundColor(NFColor.ink3)
@@ -712,14 +715,13 @@ struct NativeSettingsView: View {
     // MARK: - Native ON/OFF
 
     private var nativeCard: some View {
-        card(icon: "ipad", title: "アプリのオーダー・会計画面", en: "Native screens",
+        card(icon: "ipad", title: "アプリの画面", en: "Native screens",
              description: "") {
             // 管理画面が決めているときはその値を見せる（端末の切り替えは効かない）
             let shown = state.adminNativePos ?? nativeOn
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 14) {
-                    Text(shown ? "ON（アプリの画面）" : "OFF（今までの画面）").font(.system(size: 15, weight: .bold)).foregroundColor(shown ? NFColor.iris : NFColor.ink2)
-                    Spacer()
+            VStack(spacing: 0) {
+                row("アプリのオーダー・会計画面を使う", en: "Native screens") {
+                    Text(shown ? "ON" : "OFF（今までの画面）").font(.system(size: 15, weight: .bold)).foregroundColor(shown ? NFColor.success : NFColor.ink3)
                     // 管理画面（設定 › レジ端末）が決めているときは端末から変えない（2026-10-24）
                     toggle(shown, disabled: state.adminNativePos != nil) {
                         if state.adminNativePos != nil { return }
@@ -730,10 +732,9 @@ struct NativeSettingsView: View {
                 }
                 if state.adminNativePos != nil {
                     Text("管理画面の「設定 › レジ端末」で決めています（この iPad では変えられません）")
-                        .font(.system(size: 12.5)).foregroundColor(NFColor.ink3)
+                        .font(.system(size: 12.5)).foregroundColor(NFColor.ink3).padding(.horizontal, 20).padding(.vertical, 12)
                 }
             }
-            .padding(.horizontal, 18).padding(.vertical, 14)
         }
     }
 }
