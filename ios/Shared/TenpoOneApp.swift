@@ -133,8 +133,9 @@ struct RootView: View {
         .animation(.easeOut(duration: 0.18), value: state.nativeCustomers)
         .animation(.easeOut(duration: 0.18), value: state.nativeScan)
         .animation(.easeOut(duration: 0.18), value: state.nativeReports)
-        // レジ（iPad）は画面いっぱいに使う
-        .statusBarHidden(state.mode == .regi || state.nativeOrder != nil)
+        // 上の時刻・電波・電池（iOS のステータスバー）はいつも出す（2026-10-24 Ronnie「時間・電波・電池が見えない」）。
+        // 上の黒いバーはステータスバーの下に入れない＝ステータスバーの所は明るい地で、黒い字が見える
+        .statusBarHidden(false)
         .sheet(isPresented: $state.scanning) {
             QRScannerView(
                 onCode: { code in state.handleScanned(code) },

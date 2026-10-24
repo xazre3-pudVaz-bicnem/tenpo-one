@@ -212,7 +212,7 @@ struct NativeTopBar: View {
         }
         .padding(.horizontal, 16)
         .frame(height: 64)
-        .background(NT.header.ignoresSafeArea(edges: .top))
+        .background(NT.header)
     }
 
     private func barButton(icon: String, text: String, action: @escaping () -> Void = {}) -> some View {

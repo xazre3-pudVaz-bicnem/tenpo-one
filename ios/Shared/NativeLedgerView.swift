@@ -426,7 +426,7 @@ struct NativeLedgerView: View {
         }
         .padding(.horizontal, 16)
         .frame(height: 64)
-        .background(NLColor.navy.ignoresSafeArea(edges: .top))
+        .background(NLColor.navy)
     }
 
     // MARK: CSV出力・PDF作成（Web と同じ働き。CSV は Web の /app/reservations/list/export、PDF は画面をそのまま 1 枚に）
