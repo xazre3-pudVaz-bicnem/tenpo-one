@@ -785,6 +785,8 @@ final class AppState: ObservableObject {
             WebViewController.current?.load(url.absoluteURL)
             return
         }
+        // ネイティブの無い道へ行くときは、店長・オーナーの画面を閉じる（Web の上に残らないように）
+        if phoneOwnerModule != nil { phoneOwnerModule = nil }
         // 卓・注文の画面、予約・予約登録の画面はネイティブで（2026-10-25）
         if mode == .handy, nativePhoneEnabled, let url = URL(string: path, relativeTo: AppConfig.url("/")) {
             if let r = Self.phoneReservationsRoute(for: url.absoluteURL) {
