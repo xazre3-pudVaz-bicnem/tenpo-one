@@ -585,22 +585,14 @@ struct NativeLedgerView: View {
                         }
                     }
                     .buttonStyle(PressableStyle())
-                    .popover(isPresented: $dateCalendarOpen) {
-                        DatePicker("", selection: Binding(get: {
-                            let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; f.timeZone = TimeZone(identifier: "Asia/Tokyo")
-                            return f.date(from: model.date ?? model.payload?.date ?? "") ?? Date()
-                        }, set: { d in
-                            let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; f.timeZone = TimeZone(identifier: "Asia/Tokyo")
-                            model.date = f.string(from: d)
+                    // 月の表（日ごとの組数・人数、仮予約・要連絡の赤い点）。2026-10-24 20:20 Ronnie
+                    .popover(isPresented: $dateCalendarOpen, arrowEdge: .top) {
+                        NLDatePickerPanel(selected: model.date ?? model.payload?.date ?? "", today: model.payload?.today ?? "") { d in
+                            model.date = d
                             followNow = true
                             dateCalendarOpen = false
                             Task { await model.refresh(silent: false) }
-                        }), displayedComponents: [.date])
-                        .datePickerStyle(.graphical)
-                        .environment(\.timeZone, TimeZone(identifier: "Asia/Tokyo")!)
-                        .environment(\.locale, Locale(identifier: "ja_JP"))
-                        .frame(width: 360)
-                        .padding()
+                        }
                     }
                 }
                 .padding(.horizontal, 14).frame(height: 44)
