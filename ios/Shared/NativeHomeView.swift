@@ -279,7 +279,8 @@ struct NativeHomeView: View {
                 Spacer(minLength: 0)
                 ForEach(model.payload?.bigTiles ?? [NHNamed(href: "/app/floor", label: "オーダー・会計", en: "Order & Pay"), NHNamed(href: "/app/reservations", label: "店舗台帳", en: "Reservation")], id: \.href) { t in
                     let isFloor = t.href == "/app/floor"
-                    // 店舗台帳の箱は 店舗台帳の画面と同じ Tableo 風の色（紺の地・白い字・黄色い英語。2026-10-24 16:42 Ronnie「この色で final」）
+                    // 店舗台帳の箱：オーダー・会計と同じ作り（薄い灰色の地・黒い字）で、アイコンの角丸だけ 店舗台帳の画面と同じ Tableo 風（紺に黄色のカレンダー）
+                    // （2026-10-24 16:45 Ronnie「箱全体に色を塗るのではなく、隣のオーダー・会計と同じ感じに」）
                     Button { isFloor ? onFloor() : onWeb(t.href) } label: {
                         HStack(spacing: 22) {
                             Spacer()
@@ -287,15 +288,15 @@ struct NativeHomeView: View {
                                 .font(.system(size: 44, weight: .bold)).foregroundColor(isFloor ? .white : NLColor.yellow)
                                 .frame(width: 92, height: 92)
                                 .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(
-                                    LinearGradient(colors: isFloor ? [Color(hex: 0x2A6FE6), Self.blueDeep] : [NLColor.navy2, Color(hex: 0x262042)], startPoint: .top, endPoint: .bottom)))
+                                    LinearGradient(colors: isFloor ? [Color(hex: 0x2A6FE6), Self.blueDeep] : [NLColor.navy2, NLColor.navy], startPoint: .top, endPoint: .bottom)))
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(t.label).font(.system(size: 30, weight: .heavy)).foregroundColor(isFloor ? NFColor.ink : .white)
-                                Text(t.en).font(.system(size: 16, weight: isFloor ? .medium : .bold)).foregroundColor(isFloor ? NFColor.ink3 : NLColor.yellow)
+                                Text(t.label).font(.system(size: 30, weight: .heavy)).foregroundColor(NFColor.ink)
+                                Text(t.en).font(.system(size: 16, weight: .medium)).foregroundColor(NFColor.ink3)
                             }
                             Spacer()
                         }
                         .frame(maxWidth: 640).frame(height: 150)
-                        .background(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(isFloor ? Self.tileBg : NLColor.navy))
+                        .background(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(Self.tileBg))
                     }
                     .buttonStyle(PressableStyle(scale: 0.98))
                 }
