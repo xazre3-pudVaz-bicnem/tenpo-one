@@ -97,7 +97,7 @@ struct NativeSettingsView: View {
                             }
                             content
                         }
-                        .padding(20).frame(maxWidth: 1100).frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(20).frame(maxWidth: 1400).frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.bottom, 24)
                     }
                     .frame(maxWidth: .infinity)
@@ -236,13 +236,20 @@ struct NativeSettingsView: View {
         switch sel {
         case .page(.printer):
             pageTitle(Page.printer.icon, Page.printer.title, en: Page.printer.en, status: pageStatus(.printer))
-            // 印刷はぜんぶここ：つなぐ → 出し先 → LAN → Wi-Fi → ネットが無いとき
-            bluetoothCard
-            receiptCard
-            billSlipCard
-            if !model.lanPrinters.isEmpty { lanCard }
-            if !model.wifiPrinters.isEmpty { wifiCard }
-            NativeOfflinePrintCard()
+            // 印刷はぜんぶここ。横に 2 列（左：つなぐ／右：出し先・会計伝票・LAN・Wi-Fi・ネットが無いとき）で、スクロールせずに 1 画面に
+            // （2026-10-25 00:31 Ronnie「設定の右側はスクロールしなくても同じ画面でできるように」）
+            HStack(alignment: .top, spacing: 16) {
+                VStack(spacing: 16) { bluetoothCard }
+                    .frame(maxWidth: .infinity, alignment: .top)
+                VStack(spacing: 16) {
+                    receiptCard
+                    billSlipCard
+                    if !model.lanPrinters.isEmpty { lanCard }
+                    if !model.wifiPrinters.isEmpty { wifiCard }
+                    NativeOfflinePrintCard()
+                }
+                .frame(maxWidth: .infinity, alignment: .top)
+            }
         case .page(.native):
             pageTitle(Page.native.icon, Page.native.title, en: Page.native.en, status: pageStatus(.native))
             nativeCard
@@ -437,7 +444,7 @@ struct NativeSettingsView: View {
                 if !description.isEmpty { Text(description).font(.system(size: 13)).foregroundColor(NFColor.ink3).fixedSize(horizontal: false, vertical: true) }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 20).padding(.vertical, 16)
+            .padding(.horizontal, 20).padding(.vertical, 12)
             Rectangle().fill(NFColor.line).frame(height: 1)
             content()
         }
@@ -452,8 +459,9 @@ struct NativeSettingsView: View {
             Spacer(minLength: 16)
             content()
         }
-        .padding(.horizontal, 20).padding(.vertical, 12).frame(minHeight: 66)
-        .overlay(alignment: .bottom) { Rectangle().fill(NFColor.line).frame(height: 1).padding(.horizontal, 20) }
+        // 行は少し低く（1 画面に入るように）
+        .padding(.horizontal, 18).padding(.vertical, 7).frame(minHeight: 54)
+        .overlay(alignment: .bottom) { Rectangle().fill(NFColor.line).frame(height: 1).padding(.horizontal, 18) }
     }
 
     private func toggle(_ on: Bool, disabled: Bool = false, action: @escaping () -> Void) -> some View {

@@ -19,7 +19,7 @@ struct NativeOfflinePrintCard: View {
                 Text("ネットが無いときの印刷").font(.system(size: 18, weight: .heavy)).foregroundColor(NFColor.navy)
                 Spacer(minLength: 0)
             }
-            .padding(.horizontal, 20).padding(.vertical, 16)
+            .padding(.horizontal, 20).padding(.vertical, 12)
             Rectangle().fill(NFColor.line).frame(height: 1)
 
             line("準備", en: "") {
@@ -163,7 +163,7 @@ struct NativeOfflinePrintCard: View {
             Spacer(minLength: 16)
             content()
         }
-        .padding(.horizontal, 20).padding(.vertical, 12).frame(minHeight: 66)
+        .padding(.horizontal, 18).padding(.vertical, 7).frame(minHeight: 54)
         .overlay(alignment: .bottom) { Rectangle().fill(NFColor.line).frame(height: 1).padding(.horizontal, 20) }
     }
 
