@@ -12,8 +12,12 @@ import {
   extendHandyStay,
   openHandyOrder,
   setHandyGuestCount,
+  startHandyVisit,
   submitHandyOrder,
 } from '@/app/app/handy/actions';
+import { loadSetupPlanItems } from '@/app/app/handy/setup-data';
+import { HANDY_PLANS, visitSourcesFrom } from '@/lib/handy-visit';
+import { tableState } from '@/components/handy/logic';
 import { enqueueOrderSlipPrint } from '@/app/app/pos/print-actions';
 import type { NativeModuleArgs, NativeModuleGet, NativeModulePost, NativeModuleResult } from '@/lib/native-modules/registry';
 
@@ -160,6 +164,45 @@ export const handyMenuGet: NativeModuleGet = async ({ ctx, store, url }) => {
   };
 };
 
+/** お客様情報（空席の卓の来店登録。Web の /handy/[tableId]/setup と同じ中身） */
+export const handySetupGet: NativeModuleGet = async ({ ctx, store, url }) => {
+  const g = await handyGuard(ctx);
+  if (!('clerk' in g)) return g;
+  const tableId = url.searchParams.get('tableId') ?? '';
+  if (!UUID.test(tableId)) return nativeBad('卓の指定が正しくありません');
+  const supabase = await createClient();
+  const { data: table } = await supabase
+    .from('restaurant_tables')
+    .select('id, name, current_status, store_id, capacity_max')
+    .eq('id', tableId)
+    .eq('status', 'active')
+    .maybeSingle();
+  if (!table || table.store_id !== store.id) return nativeBad('このテーブルは存在しないか、現在の店舗からアクセスできません', 404);
+  const { count: openCount } = await supabase.from('orders').select('id', { count: 'exact', head: true }).eq('table_id', tableId).eq('status', 'open');
+  const state = tableState(table.current_status as string | null, (openCount ?? 0) > 0);
+  // もう伝票がある卓・まとめた卓のほかの卓で始まっているときは、その卓を開く（Web と同じ）
+  if (state === 'occupied') return { body: { ok: true, hostTableId: tableId } };
+  const host = await groupHostTableId(supabase, store.id, tableId);
+  if (host) return { body: { ok: true, hostTableId: host } };
+  if (state !== 'available' && state !== 'cleaning') {
+    return nativeBad(`この卓は現在「${state === 'blocked' ? '使用不可' : '予約あり'}」のため、ハンディからは着席できません。フロア画面で状態を変更してください`, 409);
+  }
+  const [planItems, { data: settingsRow }] = await Promise.all([
+    loadSetupPlanItems(ctx.organizationId as string, store.id),
+    supabase.from('store_settings').select('settings').eq('store_id', store.id).maybeSingle(),
+  ]);
+  return {
+    body: {
+      ok: true,
+      table: { id: table.id, name: table.name, capacityMax: table.capacity_max ?? null },
+      clerk: g.clerk,
+      planItems,
+      plans: HANDY_PLANS,
+      sources: visitSourcesFrom(settingsRow?.settings ?? null).map((s) => s.label),
+    },
+  };
+};
+
 /** 卓・注文の操作（中身は Web のハンディと同じ Server Action） */
 export const handyOrderPost: NativeModulePost = async ({ ctx, raw }) => {
   const g = await handyGuard(ctx);
@@ -182,6 +225,8 @@ export const handyOrderPost: NativeModulePost = async ({ ctx, raw }) => {
         return { body: { ok: true, ...(await extendHandyStay(a.orderId, a.minutes)) } };
       case 'handyCancelItem':
         return { body: { ok: true, ...(await cancelRecentHandyItem(a.orderId, a.orderItemId)) } };
+      case 'handyStartVisit':
+        return { body: { ok: true, ...(await startHandyVisit(a.tableId, a.draft, { sourceOptional: true })) } };
       case 'handyPrintBill': {
         const r = await enqueueOrderSlipPrint(a.orderId);
         if (!r.ok) return nativeBad(r.error ?? '会計伝票を印刷できませんでした');

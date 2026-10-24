@@ -399,6 +399,7 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
             }
             if let s = body["url"] as? String, let url = URL(string: s) {
                 AppState.shared.maybeOpenNativePos(for: url)
+                noteHandyOpened(url)
             }
             // レジ端末として登録した直後（画面の切り替えだけで読み直さないとき）も目印を残す
             if AppState.shared.mode == .regi {
@@ -493,7 +494,10 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
             RegisterDeviceKeychain.capture(from: webView.configuration.websiteDataStore.httpCookieStore)
         }
         errorView.isHidden = true
-        if let url = webView.url { AppState.shared.maybeOpenNativePos(for: url) }
+        if let url = webView.url {
+            AppState.shared.maybeOpenNativePos(for: url)
+            noteHandyOpened(url)
+        }
         if let url = webView.url, AppConfig.isOwnHost(url) {
             let path = url.path
             if path.hasPrefix("/app") || path.hasPrefix("/handy") {
@@ -502,6 +506,15 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
                 sendPushTokenIfNeeded()
             }
         }
+    }
+
+    /// ハンディの画面（/handy・/handy/…）が開けたら知らせる（QR のカメラを消す・次からすぐハンディ）。
+    /// /handy-join・/handy-pair はログインの途中なので数えない
+    private func noteHandyOpened(_ url: URL) {
+        guard AppConfig.isOwnHost(url) else { return }
+        let path = url.path
+        guard path == "/handy" || path.hasPrefix("/handy/") else { return }
+        AppState.shared.handyOpened()
     }
 
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {

@@ -16,7 +16,7 @@ import { manualsGet, manualFileGet, manualCreatePost, manualDeletePost } from '@
 import * as invoices from '@/lib/native-modules/invoices';
 import { reconciliationGet } from '@/lib/native-modules/reconciliation';
 import { settlementGet, settlementCostsSavePost } from '@/lib/native-modules/settlement';
-import { handyMenuGet, handyOrderPost, handyTableGet } from '@/lib/native-modules/handy-order';
+import { handyMenuGet, handyOrderPost, handySetupGet, handyTableGet } from '@/lib/native-modules/handy-order';
 import { NATIVE_HANDY_ORDER_TYPES } from '@/lib/native-handy-order';
 
 /**
@@ -68,6 +68,7 @@ export const NATIVE_MODULE_GET: Record<string, NativeModuleGet> = {
   // iPhone のネイティブのハンディ（卓・注文。2026-10-25 Ronnie）
   handyTable: handyTableGet,
   handyMenu: handyMenuGet,
+  handySetup: handySetupGet,
 };
 
 /** POST の type → handler。追加は 1 行ずつ */

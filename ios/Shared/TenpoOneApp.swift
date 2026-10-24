@@ -41,6 +41,11 @@ struct RootView: View {
                 if state.needsHandyLogin {
                     HandyLoginView()
                 }
+                if state.ownerLoginPage && !AppConfig.isPad {
+                    OwnerLoginSwitchBar()
+                        .transition(.opacity)
+                        .zIndex(2)
+                }
                 // iPhone：ハンディのテーブル一覧（/handy）とオーナー・店長のホーム（/app/dashboard）をネイティブで重ねる（2026-10-24）
                 if state.nativeHandyHome && !state.needsHandyLogin {
                     NativeHandyHomeScreen()

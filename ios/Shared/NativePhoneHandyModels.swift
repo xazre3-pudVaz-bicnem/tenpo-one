@@ -219,6 +219,8 @@ final class NativePhoneTableModel: ObservableObject {
     }
 
     func refresh() async {
+        // 見本（シミュレーターで形を確かめる・App Store の写真）では読みに行かない
+        if NativePreview.current != nil { return }
         do {
             let p = try await NPHApi.get(NPHTablePayload.self, part: "handyTable", ["tableId": tableId])
             if let host = p.hostTableId { redirectTableId = host; return }
@@ -284,6 +286,8 @@ final class NativePhoneOrderModel: ObservableObject {
     }
 
     func load() async {
+        // 見本（シミュレーターで形を確かめる・App Store の写真）では読みに行かない
+        if NativePreview.current != nil { return }
         do {
             let p = try await NPHApi.get(NPHMenuPayload.self, part: "handyMenu", ["orderId": orderId])
             payload = p

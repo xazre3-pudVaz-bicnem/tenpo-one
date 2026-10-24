@@ -750,17 +750,19 @@ struct NPHConfirmSheet: View {
 
 // MARK: - 画面の切り替え（卓 ↔ 注文）
 
-/// iPhone ハンディの卓・注文（Web の /handy/<卓> ・ /handy/<卓>/order の代わり）
+/// iPhone ハンディの卓・お客様情報・注文（Web の /handy/<卓>・/setup・/order の代わり）
 struct NativePhoneHandyScreen: View {
     @EnvironmentObject var state: AppState
     let route: AppState.PhoneHandyRoute
     @StateObject private var table: NativePhoneTableModel
     @State private var order: NativePhoneOrderModel?
+    @State private var setup: NativePhoneSetupModel?
 
     init(route: AppState.PhoneHandyRoute) {
         self.route = route
         _table = StateObject(wrappedValue: NativePhoneTableModel(tableId: route.tableId))
         _order = State(initialValue: route.orderId.map { NativePhoneOrderModel(orderId: $0) })
+        _setup = State(initialValue: route.setup && route.orderId == nil ? NativePhoneSetupModel(tableId: route.tableId) : nil)
     }
 
     var body: some View {
@@ -768,7 +770,18 @@ struct NativePhoneHandyScreen: View {
             NativePhoneTableView(model: table,
                                  onBack: { state.closePhoneHandy() },
                                  onOrder: { id in withAnimation(.easeOut(duration: 0.18)) { order = NativePhoneOrderModel(orderId: id) } },
-                                 onSetup: { state.leaveNativePhone(to: "/handy/\(route.tableId)/setup") })
+                                 onSetup: { withAnimation(.easeOut(duration: 0.18)) { setup = NativePhoneSetupModel(tableId: route.tableId) } })
+            if let s = setup {
+                NativePhoneSetupView(model: s, onBack: {
+                    // テーブル一覧から来たときは一覧へ、卓の画面から来たときは卓へ
+                    if route.setup { state.closePhoneHandy() } else { withAnimation(.easeOut(duration: 0.18)) { setup = nil } }
+                }, onStarted: { id in
+                    withAnimation(.easeOut(duration: 0.18)) { setup = nil; order = NativePhoneOrderModel(orderId: id) }
+                    Task { await table.refresh() }
+                }, onRedirect: { id in state.openPhoneHandy(tableId: id) })
+                .transition(.move(edge: .trailing))
+                .zIndex(1)
+            }
             if let o = order {
                 NativePhoneOrderView(model: o, onBack: { sent in
                     withAnimation(.easeOut(duration: 0.18)) { order = nil }
@@ -776,7 +789,7 @@ struct NativePhoneHandyScreen: View {
                     Task { await table.refresh() }
                 })
                 .transition(.move(edge: .trailing))
-                .zIndex(1)
+                .zIndex(2)
             }
         }
         .onChange(of: table.redirectTableId) { id in
