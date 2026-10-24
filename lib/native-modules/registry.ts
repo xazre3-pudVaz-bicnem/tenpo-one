@@ -3,6 +3,7 @@ import type { SessionContext } from '@/lib/auth';
 import { kitchenGet, kdsItemStatusPost, kdsOrderServedPost, kdsSettingsPost } from '@/lib/native-modules/kitchen';
 import { onboardingGet, onboardingPost } from '@/lib/native-modules/onboarding';
 import { businessCardsGet } from '@/lib/native-modules/business-cards';
+import * as payroll from '@/lib/native-modules/payroll';
 
 /**
  * まだ専用の台が無かった画面（勤怠・日報・タスク …）の iPad ネイティブ用の API をまとめる所
@@ -33,6 +34,7 @@ export const NATIVE_MODULE_GET: Record<string, NativeModuleGet> = {
   kitchen: kitchenGet,
   onboarding: onboardingGet,
   businessCards: businessCardsGet,
+  payroll: payroll.payrollGet,
 };
 
 /** POST の type → handler。追加は 1 行ずつ */
@@ -41,4 +43,17 @@ export const NATIVE_MODULE_POST: Record<string, NativeModulePost> = {
   kdsOrderServed: kdsOrderServedPost,
   kdsSettings: kdsSettingsPost,
   onboarding: onboardingPost,
+  payrollRuleSave: payroll.payrollRuleSavePost,
+  payrollCommissionSave: payroll.payrollCommissionSavePost,
+  payrollRunCreate: payroll.payrollRunCreatePost,
+  payrollBonusCreate: payroll.payrollBonusCreatePost,
+  payrollRunRecalc: payroll.payrollRunRecalcPost,
+  payrollRunConfirm: payroll.payrollRunConfirmPost,
+  payrollRunApprove: payroll.payrollRunApprovePost,
+  payrollRunRevert: payroll.payrollRunRevertPost,
+  nenchoSave: payroll.nenchoSavePost,
+  nenchoSubmit: payroll.nenchoSubmitPost,
+  nenchoReviewing: payroll.nenchoReviewingPost,
+  nenchoConfirm: payroll.nenchoConfirmPost,
+  nenchoReject: payroll.nenchoRejectPost,
 };

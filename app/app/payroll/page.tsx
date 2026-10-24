@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { requireFeature } from '@/lib/auth';
 import { can } from '@/lib/permissions';
 import { createClient } from '@/lib/supabase/server';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { loadMyPayslips, loadPayrollRuleLists, loadPayrollRuns, loadPayrollStaffOptions } from '@/lib/payroll-server';
 import { yen, formatDate } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { PageHeader } from '@/components/ui/page-header';
@@ -44,18 +44,7 @@ export default async function PayrollPage({
 
   const tab = sp.tab === 'runs' ? 'runs' : 'rules';
 
-  const { data: memberRows } = await supabase
-    .from('memberships')
-    .select('profile_id, profiles(id, display_name)')
-    .eq('organization_id', ctx.organizationId)
-    .eq('status', 'active');
-  const staffOptions = (memberRows ?? [])
-    .map((m) => {
-      const p = m.profiles as unknown as { id: string; display_name: string } | null;
-      return p ? { id: p.id, name: p.display_name } : null;
-    })
-    .filter((s): s is { id: string; name: string } => !!s)
-    .sort((a, b) => a.name.localeCompare(b.name, 'ja'));
+  const staffOptions = await loadPayrollStaffOptions(supabase, ctx.organizationId);
   const nameByProfile = new Map(staffOptions.map((s) => [s.id, s.name]));
   const storeOptions = ctx.stores.map((s) => ({ id: s.id, name: s.name }));
   const storeNameById = new Map(storeOptions.map((s) => [s.id, s.name]));
@@ -122,21 +111,8 @@ async function RulesTab({
   storeNameById: Map<string, string>;
 }) {
   const supabase = await createClient();
-  // 給与ルール(rules)と歩合ルール(commissionRules)は独立のため並列取得する。
-  const [{ data: rules }, { data: commissionRules }] = await Promise.all([
-    supabase
-      .from('payroll_rules')
-      .select('*')
-      .eq('organization_id', organizationId)
-      .eq('status', 'active')
-      .order('created_at', { ascending: false }),
-    supabase
-      .from('commission_rules')
-      .select('*')
-      .eq('organization_id', organizationId)
-      .eq('status', 'active')
-      .order('created_at', { ascending: false }),
-  ]);
+  // 読み込みは lib/payroll-server.ts（iPad ネイティブと同じ）
+  const { rules, commissionRules } = await loadPayrollRuleLists(supabase, organizationId);
 
   const PAY_TYPE_LABEL: Record<string, string> = { monthly: '月給', hourly: '時給', daily: '日給' };
   const METHOD_LABEL: Record<string, string> = { fixed: '固定額', rate: '料率', tiered: '段階料率' };
@@ -152,7 +128,7 @@ async function RulesTab({
             storeOptions={storeOptions}
           />
         </div>
-        {(rules ?? []).length === 0 ? (
+        {rules.length === 0 ? (
           <EmptyState title="給与ルールが登録されていません" />
         ) : (
           <TableWrap>
@@ -168,7 +144,7 @@ async function RulesTab({
                 </Tr>
               </THead>
               <TBody>
-                {(rules ?? []).map((r) => (
+                {rules.map((r) => (
                   <Tr key={r.id}>
                     <Td className="font-medium text-navy">{nameByProfile.get(r.profile_id) ?? '—'}</Td>
                     <Td>{r.store_id ? storeNameById.get(r.store_id) ?? '—' : '全店舗共通'}</Td>
@@ -204,7 +180,7 @@ async function RulesTab({
             storeOptions={storeOptions}
           />
         </div>
-        {(commissionRules ?? []).length === 0 ? (
+        {commissionRules.length === 0 ? (
           <EmptyState title="歩合ルールが登録されていません" />
         ) : (
           <TableWrap>
@@ -221,7 +197,7 @@ async function RulesTab({
                 </Tr>
               </THead>
               <TBody>
-                {(commissionRules ?? []).map((r) => (
+                {commissionRules.map((r) => (
                   <Tr key={r.id}>
                     <Td className="font-medium text-navy">{r.name}</Td>
                     <Td>{r.profile_id ? nameByProfile.get(r.profile_id) ?? '—' : '全スタッフ'}</Td>
@@ -260,13 +236,9 @@ async function RunsTab({
   storeNameById: Map<string, string>;
 }) {
   const supabase = await createClient();
-  const { data: runs } = await supabase
-    .from('payroll_runs')
-    .select('*')
-    .eq('organization_id', organizationId)
-    .order('period_start', { ascending: false });
+  const runs = await loadPayrollRuns(supabase, organizationId);
 
-  if ((runs ?? []).length === 0) {
+  if (runs.length === 0) {
     return <EmptyState title="給与計算はまだ作成されていません" description="「新規作成」から期間を指定して作成してください" />;
   }
 
@@ -285,7 +257,7 @@ async function RunsTab({
           </Tr>
         </THead>
         <TBody>
-          {(runs ?? []).map((r) => {
+          {runs.map((r) => {
             const runType = (r.run_type ?? 'salary') as string;
             return (
               <Tr key={r.id}>
@@ -325,30 +297,7 @@ async function RunsTab({
  */
 async function MyPayslipsTab({ ctx }: { ctx: { userId: string; organizationId: string } }) {
   const supabase = await createClient();
-  const { data: items } = await supabase
-    .from('payroll_items')
-    .select('id, payroll_run_id, gross_total, breakdown')
-    .eq('organization_id', ctx.organizationId)
-    .eq('profile_id', ctx.userId)
-    .order('created_at', { ascending: false });
-
-  const myItems = items ?? [];
-  const runIds = [...new Set(myItems.map((i) => i.payroll_run_id as string))];
-
-  let runs: { id: string; title: string; run_type: string; period_start: string; period_end: string; payment_date: string | null; status: string }[] = [];
-  if (runIds.length > 0) {
-    const admin = createAdminClient();
-    const { data } = await admin
-      .from('payroll_runs')
-      .select('id, title, run_type, period_start, period_end, payment_date, status')
-      .eq('organization_id', ctx.organizationId)
-      .in('id', runIds)
-      .in('status', ['confirmed', 'approved'])
-      .order('period_start', { ascending: false });
-    runs = data ?? [];
-  }
-
-  const itemByRunId = new Map(myItems.map((i) => [i.payroll_run_id as string, i]));
+  const { runs, itemByRunId } = await loadMyPayslips(supabase, ctx);
 
   return (
     <div>
