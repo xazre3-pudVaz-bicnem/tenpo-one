@@ -4,6 +4,8 @@ import UIKit
 // 店舗台帳の上のボタン（Web の components/reservations/ledger-header.tsx の LedgerTop と同じ働き）
 //   2026-10-24 Ronnie「ボタンはアイコンの下に文字。外に出すのは 会計・オーダー・その他（…）・｜・予約登録 だけ。あとは その他 の中に」（退店管理 → 会計・オーダー に名前を変更。行き先は同じフロア画面）
 //   2026-10-24 18:49 Ronnie：予約登録は右上（ウェイティングのボタンの場所）に黄色で → ここは 会計・オーダー と その他 だけ
+//   2026-10-24 20:53 Ronnie：会計・オーダー もいらない → 予約受付管理 と その他 だけ
+//   2026-10-24 20:55 Ronnie：上のバーへ。予約受付 はメッセージの左、その他 は ＋予約登録 の右（part で出し分け）
 //   その他 = CSV出力・集計・PDF作成・空席検索・直接来店・スケジュール・予約リスト・グルメ別・週間・月間カレンダー・ウェイティング・未連絡の予約・顧客台帳・台帳設定
 
 /// 空席検索の結果（サーバー ledgerFindSeats）
@@ -98,6 +100,9 @@ struct NLToolbar: View {
     let onCsv: () -> Void
     /// グルメ連携（ネイティブの設定画面。2026-10-24）
     var onGourmet: () -> Void = {}
+    /// 上のバーのどのボタンか（予約受付＝メッセージの左、その他＝予約登録の右）
+    enum Part { case tasks, more }
+    var part: Part = .tasks
 
     private var p: NLPayload? { model.payload }
     private var date: String { model.date ?? p?.date ?? "" }
@@ -105,26 +110,37 @@ struct NLToolbar: View {
     private var month: String { String(date.prefix(7)) }
 
     var body: some View {
-        HStack(spacing: 2) {
-            // 予約受付管理（やることの数つき）
-            Button { tasksOpen = true } label: {
-                ZStack(alignment: .topTrailing) {
-                    itemLabel("checklist", "予約受付管理")
-                    let n = inbox.payload?.tasks.count ?? 0
-                    if n > 0 {
-                        Text(n > 99 ? "99+" : "\(n)").font(.system(size: 11, weight: .heavy)).monospacedDigit().foregroundColor(.white)
-                            .padding(.horizontal, 5).frame(minWidth: 20, minHeight: 20)
-                            .background(Capsule().fill(NLColor.red))
-                            .offset(x: -14, y: 2)
-                    }
+        switch part {
+        case .tasks: tasksButton
+        case .more: moreMenu
+        }
+    }
+
+    /// 予約受付管理（やることの数つき）。上のバーのメッセージの左
+    private var tasksButton: some View {
+        Button { tasksOpen = true } label: {
+            ZStack(alignment: .topTrailing) {
+                barLabel("checklist", "予約受付")
+                let n = inbox.payload?.tasks.count ?? 0
+                if n > 0 {
+                    Text(n > 99 ? "99+" : "\(n)").font(.system(size: 11, weight: .heavy)).monospacedDigit().foregroundColor(.white)
+                        .padding(.horizontal, 5).frame(minWidth: 20, minHeight: 20)
+                        .background(Capsule().fill(NLColor.red))
+                        .overlay(Capsule().stroke(NLColor.navy, lineWidth: 2))
+                        .offset(x: 7, y: -7)
                 }
             }
-            .buttonStyle(PressableStyle())
-            .popover(isPresented: $tasksOpen, arrowEdge: .top) {
-                NLInboxSheet(inbox: inbox, model: model, onClose: { tasksOpen = false }, tab: .tasks)
-            }
-            // 右上は「会計・オーダー」（ネイティブのオーダー・会計＝フロア画面へ。2026-10-24 Ronnie「退店管理はいらない、会計・オーダーにして」）
-            item("desktopcomputer", "会計・オーダー", action: onFloor)
+        }
+        .buttonStyle(PressableStyle())
+        .accessibilityLabel("予約受付管理")
+        .popover(isPresented: $tasksOpen, arrowEdge: .top) {
+            NLInboxSheet(inbox: inbox, model: model, onClose: { tasksOpen = false }, tab: .tasks)
+        }
+    }
+
+    /// その他（CSV・集計・PDF・空席検索・ほかの台帳・設定）。上のバーの ＋予約登録 の右
+    // 「会計・オーダー」のボタンは出さない（2026-10-24 20:53 Ronnie「ご予約台帳に会計オーダーのボタンはやっぱりいらない」。ホームから行く）
+    private var moreMenu: some View {
             Menu {
                 Button(action: onCsv) { Label("CSV出力", systemImage: "tablecells") }
                 if p?.links?.analytics ?? false { Button { onWeb("/app/reports?from=\(month)-01&to=\(date)") } label: { Label("集計", systemImage: "chart.bar") } }
@@ -154,27 +170,20 @@ struct NLToolbar: View {
                     Button { onWeb("/app/settings/booking") } label: { Label("台帳設定", systemImage: "gearshape") }
                 }
             } label: {
-                itemLabel("ellipsis", "その他")
+                barLabel("ellipsis.circle", "その他")
             }
             .accessibilityLabel("その他（CSV・集計・PDF・空席検索・ほかの台帳・設定）")
-            // 予約登録は右上（黄色）へ移した（2026-10-24 18:49 Ronnie）
-        }
-        .padding(.trailing, 16)
     }
 
-    /// アイコンの下に文字のボタン（塗りなし）
-    private func item(_ icon: String, _ ja: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) { itemLabel(icon, ja) }
-            .buttonStyle(PressableStyle())
-    }
-
-    private func itemLabel(_ icon: String, _ ja: String) -> some View {
-        VStack(spacing: 5) {
-            Image(systemName: icon).font(.system(size: 24, weight: .regular)).frame(height: 28)
-            Text(ja).font(.system(size: 12, weight: .semibold))
+    /// 上のバー（ネイビー）のボタン：アイコン＋文字、うすい白の地（メッセージのボタンと同じ高さ）
+    private func barLabel(_ icon: String, _ ja: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon).font(.system(size: 16, weight: .semibold))
+            Text(ja).font(.system(size: 14, weight: .heavy))
         }
-        .foregroundColor(NLColor.navy)
-        .frame(width: 88, height: 60)
+        .foregroundColor(.white)
+        .padding(.horizontal, 12).frame(height: 38)
+        .background(RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(0.12)))
         .contentShape(Rectangle())
     }
 }

@@ -253,6 +253,7 @@ struct NativeReservationEntry: View {
     @State private var pop: Pop?
     @State private var padText = ""
     @State private var tablesOpen = false
+    @State private var step: EntryStep = .when
     @State private var hits: [NFCustomerHit] = []
     @State private var saving = false
     @State private var problem: String?
@@ -288,15 +289,35 @@ struct NativeReservationEntry: View {
         !saving && !name.trimmingCharacters(in: .whitespaces).isEmpty && phone.filter(\.isNumber).count >= 10 && partyMin >= 1 && !partyRangeBad && !partyRangeOpen && children <= partyMin && !date.isEmpty
     }
 
+    /// 3 つのページ：① 日時・人数・テーブル ② お客様・キーワード・タグ ③ 確認・担当（2026-10-24 20:29 Ronnie
+    /// 「1 枚目にスクロールしていたもの、次のページにお客様、担当は最後の決定のときに。綺麗でプレミアムに」）
+    enum EntryStep: Int, CaseIterable { case when = 0, guest, confirm
+        var title: String { self == .when ? "日時・人数" : self == .guest ? "お客様" : "確認・担当" }
+    }
+    private var whenReady: Bool { partyMin >= 1 && !partyRangeBad && !partyRangeOpen && children <= partyMin && !date.isEmpty && staySelectionWarning == nil }
+    private var guestReady: Bool { !name.trimmingCharacters(in: .whitespaces).isEmpty && phone.filter(\.isNumber).count >= 10 }
+    private func canOpen(_ st: EntryStep) -> Bool {
+        switch st {
+        case .when: return true
+        case .guest: return whenReady
+        case .confirm: return whenReady && guestReady
+        }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             header
-            HStack(alignment: .top, spacing: 16) {
-                leftCard
-                rightCard.frame(width: 470)
+            Group {
+                switch step {
+                case .when: whenPage
+                case .guest: guestPage
+                case .confirm: confirmPage
+                }
             }
-            .padding(16)
-            .frame(maxHeight: .infinity)
+            .padding(18)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .id(step)
+            .transition(.opacity)
             footer
         }
         .background(NLColor.page.ignoresSafeArea())
@@ -308,30 +329,55 @@ struct NativeReservationEntry: View {
     // MARK: 上（閉じる・予約／直接来店）
 
     private var header: some View {
-        HStack(spacing: 14) {
-            Button(action: onClose) {
-                Image(systemName: "xmark").font(.system(size: 18, weight: .bold)).foregroundColor(.white)
-                    .frame(width: 46, height: 40)
-                    .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white.opacity(0.12)))
-            }
-            .buttonStyle(PressableStyle())
-            .accessibilityLabel("閉じる")
-            HStack(spacing: 4) {
-                modeTab(isConvert ? "予約へ変換" : "予約", icon: "calendar.badge.plus", on: true) {}
-                if let onWalkIn, !isConvert {
-                    modeTab("直接来店", icon: "figure.walk", on: false, action: onWalkIn)
+        ZStack {
+            HStack(spacing: 14) {
+                Button(action: onClose) {
+                    Image(systemName: "xmark").font(.system(size: 18, weight: .bold)).foregroundColor(.white)
+                        .frame(width: 46, height: 40)
+                        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white.opacity(0.12)))
                 }
+                .buttonStyle(PressableStyle())
+                .accessibilityLabel("閉じる")
+                HStack(spacing: 4) {
+                    modeTab(isConvert ? "予約へ変換" : "予約", icon: "calendar.badge.plus", on: true) {}
+                    if let onWalkIn, !isConvert {
+                        modeTab("直接来店", icon: "figure.walk", on: false, action: onWalkIn)
+                    }
+                }
+                .padding(4)
+                .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white.opacity(0.12)))
+                Spacer()
             }
-            .padding(4)
-            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white.opacity(0.12)))
-            Spacer()
-            if let s = p?.store.name {
-                Text(s).font(.system(size: 14, weight: .semibold)).foregroundColor(.white.opacity(0.8)).lineLimit(1)
-            }
+            stepIndicator
         }
         .padding(.horizontal, 16)
         .frame(height: 64)
         .background(NLColor.navy)
+    }
+
+    /// ① 日時・人数 ─ ② お客様 ─ ③ 確認・担当（押すとそのページへ。先のページは入れ終わってから）
+    private var stepIndicator: some View {
+        HStack(spacing: 8) {
+            ForEach(EntryStep.allCases, id: \.self) { st in
+                let on = step == st
+                let done = st.rawValue < step.rawValue
+                Button { if canOpen(st) { withAnimation(.easeOut(duration: 0.18)) { step = st } } } label: {
+                    HStack(spacing: 7) {
+                        ZStack {
+                            Circle().fill(on ? NLColor.yellow : done ? Color.white.opacity(0.9) : Color.white.opacity(0.15)).frame(width: 26, height: 26)
+                            if done { Image(systemName: "checkmark").font(.system(size: 12, weight: .heavy)).foregroundColor(NLColor.navy) }
+                            else { Text("\(st.rawValue + 1)").font(.system(size: 13, weight: .heavy)).foregroundColor(on ? NLColor.navy : .white.opacity(0.7)) }
+                        }
+                        Text(st.title).font(.system(size: 14, weight: .heavy)).foregroundColor(on ? .white : .white.opacity(done ? 0.85 : 0.5))
+                    }
+                }
+                .buttonStyle(.plain)
+                .disabled(!canOpen(st))
+                if st != .confirm {
+                    Rectangle().fill(Color.white.opacity(0.25)).frame(width: 26, height: 2)
+                }
+            }
+        }
     }
 
     private func modeTab(_ t: String, icon: String, on: Bool, action: @escaping () -> Void) -> some View {
@@ -345,12 +391,35 @@ struct NativeReservationEntry: View {
         .buttonStyle(PressableStyle())
     }
 
-    // MARK: 左
+    // MARK: ページ
 
-    private var leftCard: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 22) {
-                HStack(alignment: .top, spacing: 12) {
+    /// きれいなカード（白・角丸・うすい影・見出しに小さい印）
+    private func card<Content: View>(_ title: String? = nil, icon: String? = nil, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            if let title {
+                HStack(spacing: 10) {
+                    if let icon {
+                        Image(systemName: icon).font(.system(size: 13, weight: .heavy)).foregroundColor(NLColor.navy)
+                            .frame(width: 28, height: 28).background(Circle().fill(NLColor.yellow))
+                    }
+                    Text(title).font(.system(size: 17, weight: .heavy)).foregroundColor(NLColor.navy)
+                    Spacer(minLength: 0)
+                }
+            }
+            content()
+        }
+        .padding(22)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(Color.white))
+        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).stroke(NLColor.line.opacity(0.8), lineWidth: 1))
+        .shadow(color: NLColor.navy.opacity(0.06), radius: 14, y: 6)
+    }
+
+    // ① 日時・人数・テーブル
+    private var whenPage: some View {
+        VStack(spacing: 18) {
+            card("ご来店の日時", icon: "calendar") {
+                HStack(alignment: .top, spacing: 14) {
                     field("日付") {
                         dropButton(icon: "calendar", dateLabel(date, long: true)) { pop = .date }
                             .popover(isPresented: popBinding(.date)) { datePopover }
@@ -364,22 +433,153 @@ struct NativeReservationEntry: View {
                             .popover(isPresented: popBinding(.stay)) { stayPopover }
                     }
                 }
-                partyKeypad
-                tableSection
-                divider
-                field("要望メモ") { memo }
-                field("予約ステータス") { statusPicker }
-                HStack(alignment: .top, spacing: 12) {
-                    field("コース（任意）") { courseMenu }
-                    if !(entry?.clerks ?? []).isEmpty { field("担当者") { clerkMenu } }
-                }
-                field("予約経路") { sourceGrid }
             }
-            .padding(22)
+            HStack(alignment: .top, spacing: 18) {
+                card { partyKeypad }
+                    .frame(width: keyW * 3 + 20 + 44)
+                card("テーブル", icon: "rectangle.split.3x3") {
+                    ScrollView { tableSection.frame(maxWidth: .infinity, alignment: .leading) }
+                }
+                .frame(maxHeight: .infinity, alignment: .top)
+            }
         }
-        .frame(maxWidth: .infinity)
-        .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Color.white))
-        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(NLColor.line, lineWidth: 1))
+    }
+
+    // ② お客様・キーワード・タグ
+    private var guestPage: some View {
+        HStack(alignment: .top, spacing: 18) {
+            card("お客様", icon: "person.fill") {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 18) {
+                        field("電話番号", required: true) {
+                            VStack(alignment: .leading, spacing: 8) {
+                                HStack(spacing: 10) {
+                                    Image(systemName: "magnifyingglass").foregroundColor(NLColor.muted)
+                                    TextField("09012345678（入れると前のお客様を探します）", text: $phone)
+                                        .font(.system(size: 18)).keyboardType(.phonePad)
+                                }
+                                .padding(.horizontal, 14).frame(height: 56)
+                                .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(NLColor.page))
+                                if !hits.isEmpty { hitList }
+                            }
+                        }
+                        .task(id: phone) { await searchCustomer() }
+                        HStack(alignment: .top, spacing: 14) {
+                            field("お名前", required: true) { input("山田 太郎", text: $name) }
+                            field("フリガナ") { input("ヤマダ タロウ", text: $kana) }
+                        }
+                        field("メール（任意）") {
+                            input("name@example.com", text: $email).keyboardType(.emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled()
+                        }
+                        field("予約経路") { sourceGrid }
+                    }
+                }
+            }
+            card("キーワード・タグ", icon: "tag.fill") {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 18) {
+                        NRWKeywordsEditor(keywords: Binding(get: { entry?.keywords ?? [] }, set: { entry?.keywords = $0 }), selected: $tags, save: NRWLabelsApi.saveKeywords)
+                        if let groups = entry?.tagGroups, !groups.isEmpty {
+                            divider
+                            Text("お客様・予約のタグ").font(.system(size: 14, weight: .heavy)).foregroundColor(NLColor.navy)
+                            NRWTagGroupsPicker(groups: groups, selected: $tagLabels)
+                        } else if entry == nil {
+                            Text(entryLoading ? "キーワード・タグを読み込んでいます…" : "キーワード・タグを読めませんでした").font(.system(size: 13, weight: .semibold)).foregroundColor(NLColor.muted)
+                        }
+                    }
+                }
+            }
+            .frame(width: 520)
+        }
+    }
+
+    // ③ 確認・担当（決定のときに担当者を選ぶ）
+    private var confirmPage: some View {
+        HStack(alignment: .top, spacing: 18) {
+            card("予約の内容", icon: "checkmark.seal.fill") {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        summaryRow("日時", "\(dateLabel(date, long: true))\(date == today ? "（今日）" : "")　\(time)〜\(NRWMath.addMinutes(time, stay))（\(NRWMath.stayLabel(stay))）", go: .when)
+                        summaryRow("人数", partyLabel, go: .when)
+                        summaryRow("テーブル", tableSummary, go: .when)
+                        summaryRow("お名前", name.isEmpty ? "—" : "\(name) 様\(kana.isEmpty ? "" : "（\(kana)）")", go: .guest)
+                        summaryRow("電話", phone.isEmpty ? "—" : phone, go: .guest)
+                        if !email.isEmpty { summaryRow("メール", email, go: .guest) }
+                        summaryRow("予約経路", (p?.sources ?? []).first { $0.code == sourceCode }?.name ?? sourceCode, go: .guest)
+                        let all = tags + tagLabels.filter { !tags.contains($0) }
+                        if !all.isEmpty {
+                            HStack(alignment: .top, spacing: 14) {
+                                Text("タグ").font(.system(size: 13, weight: .bold)).foregroundColor(NLColor.muted).frame(width: 84, alignment: .leading).padding(.top, 6)
+                                NRWFlow(spacing: 6, lineSpacing: 6) {
+                                    ForEach(all, id: \.self) { t in
+                                        Text(t).font(.system(size: 13, weight: .bold)).foregroundColor(NLColor.navy)
+                                            .padding(.horizontal, 10).frame(height: 28)
+                                            .background(Capsule().fill(NLColor.yellowSoft))
+                                    }
+                                }
+                            }
+                            .padding(.vertical, 12)
+                        }
+                    }
+                }
+            }
+            card("担当・仕上げ", icon: "person.badge.shield.checkmark.fill") {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 20) {
+                        field("担当者（この予約を受けた人）") { clerkGrid }
+                        field("予約ステータス") { statusPicker }
+                        field("コース（任意）") { courseMenu }
+                        field("要望メモ") { memo }
+                    }
+                }
+            }
+            .frame(width: 520)
+        }
+    }
+
+    private func summaryRow(_ label: String, _ value: String, go: EntryStep) -> some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 14) {
+                Text(label).font(.system(size: 13, weight: .bold)).foregroundColor(NLColor.muted).frame(width: 84, alignment: .leading)
+                Text(value).font(.system(size: 17, weight: .heavy)).monospacedDigit().foregroundColor(NLColor.ink).lineLimit(2)
+                Spacer(minLength: 8)
+                Button { withAnimation(.easeOut(duration: 0.18)) { step = go } } label: {
+                    Text("変更").font(.system(size: 13, weight: .bold)).foregroundColor(NLColor.blue)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.vertical, 14)
+            Rectangle().fill(NLColor.line).frame(height: 1)
+        }
+    }
+
+    /// 担当者を大きなボタンで（選ばないもできる）
+    private var clerkGrid: some View {
+        let clerks = entry?.clerks ?? []
+        return Group {
+            if clerks.isEmpty {
+                Text("担当者が登録されていません（設定 › POS担当者）").font(.system(size: 13, weight: .semibold)).foregroundColor(NLColor.muted)
+            } else {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 130), spacing: 10)], spacing: 10) {
+                    clerkChip("選ばない", on: clerkId.isEmpty) { clerkId = "" }
+                    ForEach(clerks) { c in clerkChip(c.name, on: clerkId == c.id) { clerkId = c.id } }
+                }
+            }
+        }
+    }
+
+    private func clerkChip(_ t: String, on: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Image(systemName: on ? "checkmark.circle.fill" : "person.crop.circle").font(.system(size: 16, weight: .semibold))
+                Text(t).font(.system(size: 15, weight: .heavy)).lineLimit(1).minimumScaleFactor(0.7)
+            }
+            .foregroundColor(on ? .white : NLColor.ink)
+            .frame(maxWidth: .infinity).frame(height: 52)
+            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(on ? NLColor.navy : NLColor.page))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(on ? NLColor.navy : NLColor.line, lineWidth: 1))
+        }
+        .buttonStyle(PressableStyle())
     }
 
     private var divider: some View { Rectangle().fill(NLColor.line).frame(height: 1) }
@@ -397,8 +597,8 @@ struct NativeReservationEntry: View {
                 Image(systemName: "chevron.down").font(.system(size: 13, weight: .bold)).foregroundColor(NLColor.muted)
             }
             .padding(.horizontal, 14).frame(height: 54)
-            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white))
-            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(NLColor.line, lineWidth: 1.5))
+            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(NLColor.page))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(NLColor.line, lineWidth: 1))
         }
         .buttonStyle(PressableStyle())
     }
@@ -738,8 +938,9 @@ struct NativeReservationEntry: View {
             .font(.system(size: 16))
             .frame(minHeight: 96)
             .padding(8)
-            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white))
-            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(NLColor.line, lineWidth: 1.5))
+            .scrollContentBackground(.hidden)
+            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(NLColor.page))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(NLColor.line, lineWidth: 1))
             .overlay(alignment: .topLeading) {
                 if note.isEmpty {
                     Text("ご要望・アレルギー・お店の中のメモ").font(.system(size: 15)).foregroundColor(NLColor.gray).padding(.horizontal, 14).padding(.vertical, 16).allowsHitTesting(false)
@@ -773,8 +974,8 @@ struct NativeReservationEntry: View {
             Image(systemName: "chevron.up.chevron.down").font(.system(size: 12, weight: .bold)).foregroundColor(NLColor.muted)
         }
         .padding(.horizontal, 14).frame(height: 52)
-        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white))
-        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(NLColor.line, lineWidth: 1.5))
+        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(NLColor.page))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(NLColor.line, lineWidth: 1))
     }
 
     private var courseMenu: some View {
@@ -784,16 +985,6 @@ struct NativeReservationEntry: View {
         } label: {
             let n = (p?.courses ?? []).first { $0.id == courseId }?.name
             menuLabel(n ?? "選ばない（アラカルト）", placeholder: n == nil)
-        }
-    }
-
-    private var clerkMenu: some View {
-        Menu {
-            Button("選ばない") { clerkId = "" }
-            ForEach(entry?.clerks ?? []) { c in Button(c.name) { clerkId = c.id } }
-        } label: {
-            let n = (entry?.clerks ?? []).first { $0.id == clerkId }?.name
-            menuLabel(n ?? "選ばない", placeholder: n == nil)
         }
     }
 
@@ -814,45 +1005,7 @@ struct NativeReservationEntry: View {
         }
     }
 
-    // MARK: 右（お客様・キーワード）
-
-    private var rightCard: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                field("電話番号", required: true) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack(spacing: 10) {
-                            Image(systemName: "magnifyingglass").foregroundColor(NLColor.muted)
-                            TextField("09012345678（入れると前のお客様を探します）", text: $phone)
-                                .font(.system(size: 17)).keyboardType(.phonePad)
-                        }
-                        .padding(.horizontal, 14).frame(height: 54)
-                        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white))
-                        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(NLColor.line, lineWidth: 1.5))
-                        if !hits.isEmpty { hitList }
-                    }
-                }
-                .task(id: phone) { await searchCustomer() }
-                field("お名前", required: true) { input("山田 太郎", text: $name) }
-                field("フリガナ") { input("ヤマダ タロウ", text: $kana) }
-                field("メール（任意）") {
-                    input("name@example.com", text: $email).keyboardType(.emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled()
-                }
-                divider
-                NRWKeywordsEditor(keywords: Binding(get: { entry?.keywords ?? [] }, set: { entry?.keywords = $0 }), selected: $tags, save: NRWLabelsApi.saveKeywords)
-                if let groups = entry?.tagGroups, !groups.isEmpty {
-                    divider
-                    Text("お客様・予約のタグ").font(.system(size: 14, weight: .heavy)).foregroundColor(NLColor.navy)
-                    NRWTagGroupsPicker(groups: groups, selected: $tagLabels)
-                } else if entry == nil {
-                    Text(entryLoading ? "キーワード・タグを読み込んでいます…" : "キーワード・タグを読めませんでした").font(.system(size: 13, weight: .semibold)).foregroundColor(NLColor.muted)
-                }
-            }
-            .padding(22)
-        }
-        .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Color.white))
-        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(NLColor.line, lineWidth: 1))
-    }
+    // MARK: お客様（前のお客様の候補・入力欄）
 
     private var hitList: some View {
         VStack(spacing: 0) {
@@ -886,8 +1039,8 @@ struct NativeReservationEntry: View {
         TextField(placeholder, text: text)
             .font(.system(size: 17)).foregroundColor(NLColor.ink)
             .padding(.horizontal, 14).frame(height: 54)
-            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white))
-            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(NLColor.line, lineWidth: 1.5))
+            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(NLColor.page))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(NLColor.line, lineWidth: 1))
     }
 
     // MARK: 下（要約・キャンセル・登録）
@@ -896,33 +1049,50 @@ struct NativeReservationEntry: View {
         HStack(spacing: 14) {
             VStack(alignment: .leading, spacing: 3) {
                 Text(isConvert ? "予約へ変換" : "予約の登録").font(.system(size: 12, weight: .heavy)).foregroundColor(NLColor.muted)
-                Text("\(partyLabel)・\(dateLabel(date))\(date == today ? "（今日）" : "")・\(time)〜\(NRWMath.addMinutes(time, stay))・\(tableSummary)")
+                Text("\(partyLabel)・\(dateLabel(date))\(date == today ? "（今日）" : "")・\(time)〜\(NRWMath.addMinutes(time, stay))・\(tableSummary)\(name.isEmpty ? "" : "・\(name) 様")")
                     .font(.system(size: 16, weight: .heavy)).monospacedDigit().foregroundColor(NLColor.ink).lineLimit(1).minimumScaleFactor(0.7)
                 if let warn = staySelectionWarning ?? problem {
                     Text(warn).font(.system(size: 12, weight: .bold)).foregroundColor(NLColor.red).lineLimit(2)
+                } else if step == .guest && !guestReady {
+                    Text("お名前と電話番号（10 けた以上）を入れてください").font(.system(size: 12, weight: .bold)).foregroundColor(NLColor.muted)
                 }
             }
             Spacer(minLength: 8)
-            Button(action: onClose) {
-                HStack(spacing: 6) { Image(systemName: "arrow.left"); Text("キャンセル") }
-                    .font(.system(size: 17, weight: .heavy)).foregroundColor(NLColor.navy)
-                    .padding(.horizontal, 30).frame(height: 58)
-                    .background(RoundedRectangle(cornerRadius: 29, style: .continuous).fill(Color.white))
-                    .overlay(RoundedRectangle(cornerRadius: 29, style: .continuous).stroke(NLColor.navy, lineWidth: 1.5))
+            switch step {
+            case .when:
+                footerButton("キャンセル", icon: "xmark", primary: false, action: onClose)
+                footerButton("お客様の情報へ", icon: "arrow.right", primary: true, enabled: whenReady) { go(.guest) }
+            case .guest:
+                footerButton("日時・人数", icon: "arrow.left", primary: false) { go(.when) }
+                footerButton("確認へ", icon: "arrow.right", primary: true, enabled: whenReady && guestReady) { go(.confirm) }
+            case .confirm:
+                footerButton("お客様", icon: "arrow.left", primary: false) { go(.guest) }
+                footerButton(saving ? "登録中…" : "この内容で予約を登録", icon: "checkmark", primary: true, enabled: canSave) { Task { await save() } }
             }
-            .buttonStyle(PressableStyle())
-            Button { Task { await save() } } label: {
-                HStack(spacing: 8) { Text(saving ? "登録中…" : "予約を登録"); Image(systemName: "arrow.right") }
-                    .font(.system(size: 18, weight: .heavy)).foregroundColor(NLColor.navy)
-                    .frame(width: 320, height: 58)
-                    .background(RoundedRectangle(cornerRadius: 29, style: .continuous).fill(NLColor.yellow.opacity(canSave ? 1 : 0.45)))
-            }
-            .buttonStyle(PressableStyle())
-            .disabled(!canSave)
         }
         .padding(.horizontal, 22)
         .frame(height: 88)
         .background(Color.white.shadow(color: Color.black.opacity(0.06), radius: 8, y: -2))
+    }
+
+    private func go(_ st: EntryStep) {
+        withAnimation(.easeOut(duration: 0.18)) { step = st }
+    }
+
+    private func footerButton(_ t: String, icon: String, primary: Bool, enabled: Bool = true, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                if !primary { Image(systemName: icon) }
+                Text(t)
+                if primary { Image(systemName: icon) }
+            }
+            .font(.system(size: 17, weight: .heavy)).foregroundColor(NLColor.navy)
+            .padding(.horizontal, primary ? 34 : 26).frame(minWidth: primary ? 280 : 0).frame(height: 58)
+            .background(RoundedRectangle(cornerRadius: 29, style: .continuous).fill(primary ? NLColor.yellow.opacity(enabled ? 1 : 0.4) : Color.white))
+            .overlay(RoundedRectangle(cornerRadius: 29, style: .continuous).stroke(primary ? Color.clear : NLColor.navy.opacity(0.8), lineWidth: 1.5))
+        }
+        .buttonStyle(PressableStyle())
+        .disabled(!enabled)
     }
 
     /// 確保時間を延ばして、選んだ卓がほかの予約と重なるとき
@@ -1160,6 +1330,8 @@ struct NativeReservationEntry: View {
             date = pf.date; time = pf.time; partyMin = max(1, pf.adults); name = pf.name; phone = pf.phone; note = pf.note
             partyMax = pf.partyMax; children = pf.children; tableIds = pf.tableIds; tags = pf.tags
             partyFresh = true
+            // スケジュールの空いたマスから（卓・時間・人数が決まっている）はお客様のページから
+            if pf.waitlistEntryId == nil && !pf.tableIds.isEmpty && pf.adults > 0 { step = .guest }
             return
         }
         let base = model.date ?? p?.date ?? today
