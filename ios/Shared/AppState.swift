@@ -243,7 +243,7 @@ final class AppState: ObservableObject {
             return
         }
         // 管理画面（設定 › レジ端末）の ON/OFF に従う（ホーム・テーブル一覧を開くたび。OFF の端末も管理画面で ON にできる）
-        if url.path == "/app/dashboard" || url.path == "/app/floor" || url.path == "/app" { refreshDeviceSettings() }
+        if url.path == "/app/dashboard" || url.path == "/app/floor" || url.path == "/app" { Task { @MainActor in self.refreshDeviceSettings() } }
         guard mode == .regi, nativePosEnabled else { return }
         if url.path == "/app/dashboard" || url.path == "/app/floor" || url.path == "/app" {
             Task { @MainActor in NativeCatalogCache.shared.refresh() }
