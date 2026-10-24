@@ -99,7 +99,7 @@ type Supabase = Awaited<ReturnType<typeof createClient>>;
 type Store = { id: string; name: string };
 
 /** 設定の中の画面の名前（GET ?part=） */
-export const NATIVE_SETTINGS_PAGE_PARTS = ['soldout', 'clerks', 'hours', 'store', 'tax', 'loyalty', 'alerts', 'approvals', 'accounts', 'handy', 'categories', 'menuItems', 'options', 'qrService', 'menuBook', 'payments', 'staff', 'reservationBook', 'integrations', 'audit', 'company', 'tables', 'dynamicPricing', 'summary', 'menuBulk', 'import'] as const;
+export const NATIVE_SETTINGS_PAGE_PARTS = ['soldout', 'clerks', 'hours', 'store', 'tax', 'loyalty', 'alerts', 'approvals', 'accounts', 'handyDevices', 'categories', 'menuItems', 'options', 'qrService', 'menuBook', 'payments', 'staff', 'reservationBook', 'integrations', 'audit', 'company', 'tables', 'dynamicPricing', 'summary', 'menuBulk', 'import'] as const;
 export type NativeSettingsPagePart = (typeof NATIVE_SETTINGS_PAGE_PARTS)[number];
 export function isNativeSettingsPagePart(v: unknown): v is NativeSettingsPagePart {
   return typeof v === 'string' && (NATIVE_SETTINGS_PAGE_PARTS as readonly string[]).includes(v);
@@ -387,7 +387,9 @@ export async function loadNativeSettingsPage(
       },
     };
   }
-  if (part === 'handy') {
+  // part の名前は handyDevices（'handy' は iPhone ハンディのテーブル一覧が先に使っていて、route.ts で先に当たる。
+  // 2026-10-24 23:45 Ronnie「設定のハンディ端末が 通信できませんでした」の原因）
+  if (part === 'handyDevices') {
     const { data: devices } = await supabase
       .from('handy_devices')
       .select('id, name, status, paired_at, last_seen_at, paired_ip, user_agent')
