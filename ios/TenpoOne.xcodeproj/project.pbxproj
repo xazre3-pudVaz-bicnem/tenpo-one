@@ -7,13 +7,29 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		00907740C90527AE7C30FCF5 = {
+			isa = PBXBuildFile;
+			fileRef = "3319AF0DEFF1821025058199";
+		};
 		02831771C1B71EF0AF471A4D = {
 			isa = PBXBuildFile;
 			fileRef = BEE174B4C52DC439864EC2D6;
 		};
+		08ED0B9F692A80D091B58BEB = {
+			isa = PBXBuildFile;
+			fileRef = "79DE46C72F1B53F4445AFD10";
+		};
+		0A8BDFBA77D1AA71F1F1D25C = {
+			isa = PBXBuildFile;
+			fileRef = A9AB380C167F16A60D91C0E4;
+		};
 		0AB79921FD37A2DA45964225 = {
 			isa = PBXBuildFile;
 			fileRef = "185243219C4F64AB0CF32073";
+		};
+		1829A851B9BD5D56CDF7A19E = {
+			isa = PBXBuildFile;
+			fileRef = "7A6D9377363A418EED704C65";
 		};
 		18591ACF20960A8015F5594B = {
 			isa = PBXBuildFile;
@@ -22,6 +38,10 @@
 		20DB3B82F70A4F4CF478402E = {
 			isa = PBXBuildFile;
 			fileRef = "45CF6BB4A7256001043A912F";
+		};
+		26DEF1C908F91DA7FDABEFCB = {
+			isa = PBXBuildFile;
+			fileRef = "96D557A692BF25FBDE502C1C";
 		};
 		276B012ACAE09C98CCBFE760 = {
 			isa = PBXBuildFile;
@@ -34,6 +54,10 @@
 		2B1BC75905078A324F6A1D0C = {
 			isa = PBXBuildFile;
 			fileRef = "2D1A77851F68D1C4BB0501F0";
+		};
+		2CCAA1FD17FC08F03D8282E1 = {
+			isa = PBXBuildFile;
+			fileRef = F6C6F1F5CF0EFBCECCF37D0B;
 		};
 		2EF1E52EEE822F5DC67C3BF7 = {
 			isa = PBXBuildFile;
@@ -51,25 +75,77 @@
 			isa = PBXBuildFile;
 			fileRef = BB48351715E281C639C3DE03;
 		};
+		3B0A34DFD54D4E894BE1C5A9 = {
+			isa = PBXBuildFile;
+			fileRef = D17E14642C89FA9119F138A4;
+		};
+		3BCDAB884785DA9D717F9261 = {
+			isa = PBXBuildFile;
+			fileRef = FEA15291AD341F30A11A10ED;
+		};
 		41591F83302C9E4E593775B3 = {
 			isa = PBXBuildFile;
 			fileRef = "33C927B4E1A57E7910D6FA91";
+		};
+		58632252FB1F558DDC506E12 = {
+			isa = PBXBuildFile;
+			fileRef = "554979EFC1F8BF2FBB25CD53";
 		};
 		5D7F42811DC03CBFB0FA4D12 = {
 			isa = PBXBuildFile;
 			fileRef = CCAE011319E602AB57697C9A;
 		};
+		5D95C981500B7D83D1BFB07A = {
+			isa = PBXBuildFile;
+			fileRef = D6174919D6214D642E7512DD;
+		};
 		5EC034E111252F0B7CB2F1E1 = {
 			isa = PBXBuildFile;
 			fileRef = "75DC12C17FB620987F5695C3";
+		};
+		620658F019C3C47AB2269BBA = {
+			isa = PBXBuildFile;
+			fileRef = "420FDB2D0E4565C3EBD5CBF4";
 		};
 		739B9B1A67DEC421F63B2156 = {
 			isa = PBXBuildFile;
 			fileRef = "3DF8150016611E0D18EC1708";
 		};
+		74B6124CC057D8542B91BD5F = {
+			isa = PBXBuildFile;
+			fileRef = F40A537EF1A01FA00A0DAAB8;
+		};
+		7DC1E7EAB2131B3DB8696CEA = {
+			isa = PBXBuildFile;
+			fileRef = ABED43E20B9E90D02712C225;
+		};
+		807D1B2C693524A4FB878619 = {
+			isa = PBXBuildFile;
+			fileRef = "5DE46B225E3F5540C00BDE43";
+		};
+		82B351BDD3436F32FFA3ED8E = {
+			isa = PBXBuildFile;
+			fileRef = "6B277D8C0877FD8F5117945E";
+		};
+		83D5B0CDEF2CB172B6C19CE7 = {
+			isa = PBXBuildFile;
+			fileRef = DE07CEEA80B3368744CDAF07;
+		};
+		841F331741D5E30FF1338E80 = {
+			isa = PBXBuildFile;
+			fileRef = D7E1B475D2548F83A6B72645;
+		};
 		89F0FC5D043FBBBF84AF8ECB = {
 			isa = PBXBuildFile;
 			fileRef = "627F40489429FE536C5776CA";
+		};
+		8B4547782AD59F3193D51369 = {
+			isa = PBXBuildFile;
+			fileRef = "464C9AC166DF10895C21AB6E";
+		};
+		8C35BB054F14AB592F58A989 = {
+			isa = PBXBuildFile;
+			fileRef = BCC19FCE22E7AB632A72C433;
 		};
 		9251238DBD5E9F2872052E3A = {
 			isa = PBXBuildFile;
@@ -91,6 +167,10 @@
 			isa = PBXBuildFile;
 			fileRef = "04D9FFDF2FAAB7F134E5C9AE";
 		};
+		A54C97A7E43DFC3557FAB80D = {
+			isa = PBXBuildFile;
+			fileRef = "3CA94DAF8B1D8E07E57F5EE5";
+		};
 		A7EC3ADDEA91094ECAE66113 = {
 			isa = PBXBuildFile;
 			fileRef = D9C6BA6D6F778644F0D1240E;
@@ -111,6 +191,10 @@
 			isa = PBXBuildFile;
 			productRef = "2053C38958E1D14B838BDF00";
 		};
+		C9C440653D063E82B024840B = {
+			isa = PBXBuildFile;
+			fileRef = DB6A9A7E8F64139C6AA58E07;
+		};
 		CC6CD7A7747C5E99BE0DBFEA = {
 			isa = PBXBuildFile;
 			fileRef = "223B9590AB719F60032516CF";
@@ -127,9 +211,25 @@
 			isa = PBXBuildFile;
 			fileRef = "956DFE02BC7361B56EDD90D3";
 		};
+		D54D1D797A99DB016931DA17 = {
+			isa = PBXBuildFile;
+			fileRef = "2F0680C9529D39E74132EE8C";
+		};
+		E1192CCD9653F6BE12A68188 = {
+			isa = PBXBuildFile;
+			fileRef = "62E9CF88273EAC1F3CE4EB9B";
+		};
+		E22FC2331067F2A98480CB21 = {
+			isa = PBXBuildFile;
+			fileRef = FBCEDE79F3152C417EE0FD6C;
+		};
 		E4121339AE09EB85C5F0ABBF = {
 			isa = PBXBuildFile;
 			fileRef = D50F3B6D3D6758DFA4C1AC6A;
+		};
+		EE512C1BF9D7143611AAC923 = {
+			isa = PBXBuildFile;
+			fileRef = DCB0525609C5BFEF6D3A8A06;
 		};
 		EEB9FFC19A65C2AFCD610B0A = {
 			isa = PBXBuildFile;
@@ -142,6 +242,10 @@
 		F6DDBC9BB31D52CD9B366A6C = {
 			isa = PBXBuildFile;
 			fileRef = "6334F785D6C268592006A9D1";
+		};
+		FF29FC86C32BFE217ACCF147 = {
+			isa = PBXBuildFile;
+			fileRef = D615A04C974333F55DE923D6;
 		};
 /* End PBXBuildFile section */
 
@@ -195,10 +299,28 @@
 			path = NativeLanPrint.swift;
 			sourceTree = "<group>";
 		};
+		2F0680C9529D39E74132EE8C = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = NativeCouponsView.swift;
+			sourceTree = "<group>";
+		};
+		3319AF0DEFF1821025058199 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = NativeBudgetsView.swift;
+			sourceTree = "<group>";
+		};
 		33C927B4E1A57E7910D6FA91 = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
 			path = NativeHomeView.swift;
+			sourceTree = "<group>";
+		};
+		3CA94DAF8B1D8E07E57F5EE5 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = NativeStockView.swift;
 			sourceTree = "<group>";
 		};
 		3D3077E5E7F51ABDF8FD96C5 = {
@@ -219,6 +341,12 @@
 			path = NativePosModels.swift;
 			sourceTree = "<group>";
 		};
+		420FDB2D0E4565C3EBD5CBF4 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = NativeCashIoView.swift;
+			sourceTree = "<group>";
+		};
 		43943BBD5C27D2BC8E4E3E2A = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
@@ -231,16 +359,46 @@
 			path = WebViewController.swift;
 			sourceTree = "<group>";
 		};
+		464C9AC166DF10895C21AB6E = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = NativeHandyHomeView.swift;
+			sourceTree = "<group>";
+		};
+		554979EFC1F8BF2FBB25CD53 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = NativeReportsView.swift;
+			sourceTree = "<group>";
+		};
+		5DE46B225E3F5540C00BDE43 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = NativeLedgerMonth.swift;
+			sourceTree = "<group>";
+		};
 		627F40489429FE536C5776CA = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
 			path = StartViews.swift;
 			sourceTree = "<group>";
 		};
+		62E9CF88273EAC1F3CE4EB9B = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = NativeOwnerHomeView.swift;
+			sourceTree = "<group>";
+		};
 		6334F785D6C268592006A9D1 = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
 			path = NativeFloorView.swift;
+			sourceTree = "<group>";
+		};
+		6B277D8C0877FD8F5117945E = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = NativeCashView.swift;
 			sourceTree = "<group>";
 		};
 		75990B74800A169EBFC3BCF1 = {
@@ -253,6 +411,18 @@
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
 			path = AppState.swift;
+			sourceTree = "<group>";
+		};
+		79DE46C72F1B53F4445AFD10 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = NativeQuickPayView.swift;
+			sourceTree = "<group>";
+		};
+		7A6D9377363A418EED704C65 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = NativeLedgerWait.swift;
 			sourceTree = "<group>";
 		};
 		7BCDF55397833DFC4E8C5157 = {
@@ -279,6 +449,12 @@
 			path = Haptics.swift;
 			sourceTree = "<group>";
 		};
+		96D557A692BF25FBDE502C1C = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = NativeCustomersView.swift;
+			sourceTree = "<group>";
+		};
 		9B05DD8E9302EC5C604AB18F = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
@@ -303,10 +479,28 @@
 			path = NativeCheckoutView.swift;
 			sourceTree = "<group>";
 		};
+		A9AB380C167F16A60D91C0E4 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = NativeCustomerAnalysisView.swift;
+			sourceTree = "<group>";
+		};
+		ABED43E20B9E90D02712C225 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = NativeLedgerWeek.swift;
+			sourceTree = "<group>";
+		};
 		BB48351715E281C639C3DE03 = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
 			path = NativeTableSheet.swift;
+			sourceTree = "<group>";
+		};
+		BCC19FCE22E7AB632A72C433 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = NativeAnnouncementsView.swift;
 			sourceTree = "<group>";
 		};
 		BEE174B4C52DC439864EC2D6 = {
@@ -333,10 +527,34 @@
 			path = RegisterDeviceKeychain.swift;
 			sourceTree = "<group>";
 		};
+		D17E14642C89FA9119F138A4 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = NativePettyView.swift;
+			sourceTree = "<group>";
+		};
 		D50F3B6D3D6758DFA4C1AC6A = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
 			path = QRScannerView.swift;
+			sourceTree = "<group>";
+		};
+		D615A04C974333F55DE923D6 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = NativeHandyQrView.swift;
+			sourceTree = "<group>";
+		};
+		D6174919D6214D642E7512DD = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = NativeSlipsView.swift;
+			sourceTree = "<group>";
+		};
+		D7E1B475D2548F83A6B72645 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = NativeBudgetDailyView.swift;
 			sourceTree = "<group>";
 		};
 		D9C6BA6D6F778644F0D1240E = {
@@ -363,10 +581,52 @@
 			path = NativeCheckoutData.swift;
 			sourceTree = "<group>";
 		};
+		DB6A9A7E8F64139C6AA58E07 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = NativeLedgerTools.swift;
+			sourceTree = "<group>";
+		};
+		DCB0525609C5BFEF6D3A8A06 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = NativePurchasingView.swift;
+			sourceTree = "<group>";
+		};
+		DE07CEEA80B3368744CDAF07 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = NativeInventoryView.swift;
+			sourceTree = "<group>";
+		};
 		F276879EB380E7B06FBB4E80 = {
 			isa = PBXFileReference;
 			lastKnownFileType = text.xml;
 			path = PrivacyInfo.xcprivacy;
+			sourceTree = "<group>";
+		};
+		F40A537EF1A01FA00A0DAAB8 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = NativeScanView.swift;
+			sourceTree = "<group>";
+		};
+		F6C6F1F5CF0EFBCECCF37D0B = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = NativeExpensesView.swift;
+			sourceTree = "<group>";
+		};
+		FBCEDE79F3152C417EE0FD6C = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = NativeCustomerDetailView.swift;
+			sourceTree = "<group>";
+		};
+		FEA15291AD341F30A11A10ED = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = NativeNoticesView.swift;
 			sourceTree = "<group>";
 		};
 /* End PBXFileReference section */
@@ -420,21 +680,47 @@
 				"956DFE02BC7361B56EDD90D3",
 				"94A43F329BE3F886B7757761",
 				"3DF8150016611E0D18EC1708",
+				BCC19FCE22E7AB632A72C433,
+				D7E1B475D2548F83A6B72645,
+				"3319AF0DEFF1821025058199",
+				"420FDB2D0E4565C3EBD5CBF4",
+				"6B277D8C0877FD8F5117945E",
 				CB3B0791925E748896E1FE3D,
 				DAFCD483AB1A2AE75EF85DD2,
 				A1FEC2419F1052C49E973173,
+				"2F0680C9529D39E74132EE8C",
+				A9AB380C167F16A60D91C0E4,
+				FBCEDE79F3152C417EE0FD6C,
+				"96D557A692BF25FBDE502C1C",
+				F6C6F1F5CF0EFBCECCF37D0B,
 				"185243219C4F64AB0CF32073",
 				"6334F785D6C268592006A9D1",
 				"75990B74800A169EBFC3BCF1",
+				"464C9AC166DF10895C21AB6E",
+				D615A04C974333F55DE923D6,
 				"33C927B4E1A57E7910D6FA91",
+				DE07CEEA80B3368744CDAF07,
 				"2EFCD2BF0338380BA1BF2034",
+				"5DE46B225E3F5540C00BDE43",
+				DB6A9A7E8F64139C6AA58E07,
 				"223B9590AB719F60032516CF",
+				"7A6D9377363A418EED704C65",
+				ABED43E20B9E90D02712C225,
+				FEA15291AD341F30A11A10ED,
 				"3D3077E5E7F51ABDF8FD96C5",
 				BEE174B4C52DC439864EC2D6,
+				"62E9CF88273EAC1F3CE4EB9B",
+				D17E14642C89FA9119F138A4,
 				"413CA5766E9AEECBFB339B62",
 				"9EDA6BEACA5C7735606C61EF",
+				DCB0525609C5BFEF6D3A8A06,
+				"79DE46C72F1B53F4445AFD10",
+				"554979EFC1F8BF2FBB25CD53",
 				D9C6BA6D6F778644F0D1240E,
+				F40A537EF1A01FA00A0DAAB8,
 				"43943BBD5C27D2BC8E4E3E2A",
+				D6174919D6214D642E7512DD,
+				"3CA94DAF8B1D8E07E57F5EE5",
 				BB48351715E281C639C3DE03,
 				"9B05DD8E9302EC5C604AB18F",
 				"9D530487492B80382188A125",
@@ -535,21 +821,47 @@
 				D324719F2D7AEE62FB625347,
 				BF7798D6F9CE7CF387CBFCF6,
 				"739B9B1A67DEC421F63B2156",
+				"8C35BB054F14AB592F58A989",
+				"841F331741D5E30FF1338E80",
+				"00907740C90527AE7C30FCF5",
+				"620658F019C3C47AB2269BBA",
+				"82B351BDD3436F32FFA3ED8E",
 				"330F2D4C461D8365CEC64FF9",
 				D2D8D62E926C484E717902E9,
 				CE94213B0C8B6AFEA7536D85,
+				D54D1D797A99DB016931DA17,
+				"0A8BDFBA77D1AA71F1F1D25C",
+				E22FC2331067F2A98480CB21,
+				"26DEF1C908F91DA7FDABEFCB",
+				"2CCAA1FD17FC08F03D8282E1",
 				"0AB79921FD37A2DA45964225",
 				F6DDBC9BB31D52CD9B366A6C,
 				A3B97E3BB1A970D16CA8DF72,
+				"8B4547782AD59F3193D51369",
+				FF29FC86C32BFE217ACCF147,
 				"41591F83302C9E4E593775B3",
+				"83D5B0CDEF2CB172B6C19CE7",
 				"9AF96773BD166902440F5FAF",
+				"807D1B2C693524A4FB878619",
+				C9C440653D063E82B024840B,
 				CC6CD7A7747C5E99BE0DBFEA,
+				"1829A851B9BD5D56CDF7A19E",
+				"7DC1E7EAB2131B3DB8696CEA",
+				"3BCDAB884785DA9D717F9261",
 				"2968238F8E50CAF64D7A5B9B",
 				"02831771C1B71EF0AF471A4D",
+				E1192CCD9653F6BE12A68188,
+				"3B0A34DFD54D4E894BE1C5A9",
 				"276B012ACAE09C98CCBFE760",
 				"3233D09A1479A79CB552DB14",
+				EE512C1BF9D7143611AAC923,
+				"08ED0B9F692A80D091B58BEB",
+				"58632252FB1F558DDC506E12",
 				A7EC3ADDEA91094ECAE66113,
+				"74B6124CC057D8542B91BD5F",
 				EEB9FFC19A65C2AFCD610B0A,
+				"5D95C981500B7D83D1BFB07A",
+				A54C97A7E43DFC3557FAB80D,
 				"347A59D29095CC8BA32337FE",
 				BB6ED39285E6B7637BCD7528,
 				AAF070926BA005D488001765,
