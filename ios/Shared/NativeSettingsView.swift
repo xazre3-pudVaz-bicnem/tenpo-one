@@ -283,7 +283,8 @@ struct NativeSettingsView: View {
                 }
             }
             .padding(14)
-            .frame(maxWidth: .infinity, minHeight: 108, alignment: .topLeading)
+            // 状態・英語名のあるカード（このiPad・すべての設定）は少し高く、リンクだけのカードは低く（空きが目立たないように）
+            .frame(maxWidth: .infinity, minHeight: status != nil || en != nil ? 104 : 76, alignment: .topLeading)
             .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.white))
             .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(NFColor.line, lineWidth: 1))
         }
