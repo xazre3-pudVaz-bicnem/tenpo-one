@@ -30,6 +30,7 @@ enum NativeModuleRegistry {
         // ("/app/attendance", "attendance"),
         ("/app/kitchen", "kitchen"),
         ("/app/onboarding", "onboarding"),
+        ("/app/payroll", "payroll"),
     ]
     static let paths: [String: String] = Dictionary(entries, uniquingKeysWith: { a, _ in a })
 
@@ -54,6 +55,7 @@ struct NativeModuleScreen: View {
         // case "attendance": NativeAttendanceScreen(route: route)
         case "kitchen": NativeKitchenView(onHome: { state.goNativeHome() })
         case "onboarding": NativeOnboardingView(onHome: { state.goNativeHome() })
+        case "payroll": NativePayrollView(route: route, onHome: { state.goNativeHome() }, onWeb: { state.leaveNativeFloor(to: $0) })
         default:
             // 知らない key（古いアプリ）：Web のまま見せる
             Color.clear.onAppear { state.nativeModule = nil }
