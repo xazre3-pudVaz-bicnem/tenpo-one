@@ -261,6 +261,39 @@ export async function loadHomePeriod(input: {
   };
 }
 
+/**
+ * 比較する期間の数字だけ（売上・客数・会計件数・客単価。未会計は足さない）。数字の下に比較を全部並べるため（2026-10-24）。
+ * 予算は要らないので読まない。
+ */
+export async function loadCompareKpis(input: {
+  supabase: SupabaseClient;
+  storeIds: string[];
+  ranges: DateRange[];
+  metricsOpts: SalesMetricsOptions;
+}): Promise<PeriodKpi[]> {
+  const { supabase, storeIds: ids, metricsOpts } = input;
+  if (ids.length === 0) return input.ranges.map(() => ({ sales: 0, settled: 0, open: 0, guests: 0, groups: 0, avgSpend: 0, budget: null, achievementPct: null }));
+  return Promise.all(
+    input.ranges.map(async (r) => {
+      const [orders, refunds] = await Promise.all([
+        fetchAll<OrderRow>((a, b) =>
+          supabase
+            .from('orders')
+            .select('store_id, total, guest_count, status, order_type, opened_at')
+            .in('store_id', ids)
+            .gte('business_date', r.from)
+            .lte('business_date', r.to)
+            .in('status', SETTLED_ORDER_STATUSES)
+            .order('id')
+            .range(a, b)
+        ),
+        fetchAll<RefundRow>((a, b) => supabase.from('refunds').select('store_id, amount, kind').in('store_id', ids).gte('business_date', r.from).lte('business_date', r.to).order('id').range(a, b)),
+      ]);
+      return { ...kpiOf(orders.rows, refunds.rows, 0, metricsOpts), budget: null, achievementPct: null };
+    })
+  );
+}
+
 /** ベストセラー用の明細（会計済み paid の注文の明細）。1,000 行ずつ、最大 20 ページ（2 万明細） */
 async function loadBestSellerRows(
   supabase: SupabaseClient,

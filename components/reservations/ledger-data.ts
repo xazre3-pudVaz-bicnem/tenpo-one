@@ -7,26 +7,14 @@ import { createClient } from '@/lib/supabase/server';
 import { can } from '@/lib/permissions';
 import type { SessionContext, StoreRef } from '@/lib/auth';
 import type { Role } from '@/lib/permissions';
-import type { ReservationStatus } from '@/lib/reservations';
+import { summarizeLedgerDay, type LedgerSummary } from '@/lib/ledger-summary';
 import type { TableOption } from './walk-in-dialog';
 import type { ReservationSourceOption, ReservationCourseOption, ReservationTableOption } from './manual-reservation-dialog';
 import type { FindSeatsTable } from './find-seats-dialog';
 
 type LedgerCtx = SessionContext & { organizationId: string; role: Role };
 
-export interface LedgerSummary {
-  /** 有効な予約（キャンセル・無断・キャンセル待ちを除く） */
-  count: number;
-  guests: number;
-  cancelled: number;
-  sameDayCount: number;
-  sameDayGuests: number;
-  inCount: number;
-  outCount: number;
-  waitingCount: number;
-  unconfirmed: number;
-  unseated: number;
-}
+export type { LedgerSummary } from '@/lib/ledger-summary';
 
 export interface LedgerChrome {
   stores: StoreRef[];
@@ -48,10 +36,6 @@ export interface LedgerChrome {
   links: { tables: boolean; customers: boolean; analytics: boolean; settings: boolean };
 }
 
-const IN_STATUSES: ReservationStatus[] = ['arrived', 'seated', 'billing'];
-const WAIT_STATUSES: ReservationStatus[] = ['pending', 'confirmed', 'waiting'];
-const CANCEL_STATUSES: ReservationStatus[] = ['cancelled', 'no_show'];
-
 /** 現在時刻（サーバー）。描画関数の外で読むためのヘルパー */
 export function serverNow(): { ms: number; today: string; hm: string } {
   const d = new Date();
@@ -60,10 +44,6 @@ export function serverNow(): { ms: number; today: string; hm: string } {
     today: d.toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' }),
     hm: d.toLocaleTimeString('ja-JP', { timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit' }),
   };
-}
-
-function jstDateOf(iso: string): string {
-  return new Date(iso).toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' });
 }
 
 export async function loadLedgerChrome(ctx: LedgerCtx, store: StoreRef, summaryDate?: string): Promise<LedgerChrome> {
@@ -110,39 +90,7 @@ export async function loadLedgerChrome(ctx: LedgerCtx, store: StoreRef, summaryD
 
   const dialogStoreId = ctx.currentStore?.id ?? ctx.stores[0]?.id ?? '';
 
-  const summary: LedgerSummary = {
-    count: 0,
-    guests: 0,
-    cancelled: 0,
-    sameDayCount: 0,
-    sameDayGuests: 0,
-    inCount: 0,
-    outCount: 0,
-    waitingCount: 0,
-    unconfirmed: 0,
-    unseated: 0,
-  };
-  for (const r of dayRows ?? []) {
-    const status = r.status as ReservationStatus;
-    if (CANCEL_STATUSES.includes(status)) {
-      summary.cancelled++;
-      continue;
-    }
-    if (status === 'waitlisted') continue;
-    summary.count++;
-    summary.guests += r.party_size;
-    if (r.created_via !== 'walk_in' && jstDateOf(r.created_at) === date) {
-      summary.sameDayCount++;
-      summary.sameDayGuests += r.party_size;
-    }
-    if (IN_STATUSES.includes(status)) summary.inCount++;
-    else if (status === 'completed') summary.outCount++;
-    else if (WAIT_STATUSES.includes(status)) {
-      summary.waitingCount++;
-      if (status === 'pending') summary.unconfirmed++;
-      if (((r.reservation_tables ?? []) as { table_id: string }[]).length === 0) summary.unseated++;
-    }
-  }
+  const summary: LedgerSummary = summarizeLedgerDay(dayRows ?? [], date);
 
   return {
     stores: ctx.stores,

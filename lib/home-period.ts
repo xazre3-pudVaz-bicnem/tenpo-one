@@ -34,6 +34,18 @@ export function defaultCompareFor(range: HomeRange, compare: HomeCompare): HomeC
   return compare;
 }
 
+/**
+ * 数字の下に並べる比較（2026-10-24 Ronnie「数字の下に全部自動で出す。プラスは緑・マイナスは赤」）。
+ * 期間に合わない比較は出さない（7日間に「前日比」、今月に「前週同曜日比」、今年は前年同期比だけ）。
+ */
+export function comparesFor(range: HomeRange): HomeCompare[] {
+  if (range === 'today' || range === 'yesterday') return ['day', 'week', 'month', 'year'];
+  if (range === '7d') return ['week', 'month', 'year'];
+  if (range === 'month') return ['month', 'year'];
+  if (range === 'year') return ['year'];
+  return ['month', 'year'];
+}
+
 /** 下のカードのタブ：時間帯別 / 支払い方法 / ベストセラー（funfo のダッシュボードと同じ並び） */
 export type HomeCard = 'hourly' | 'pay' | 'best';
 

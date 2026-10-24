@@ -23,6 +23,8 @@ export interface HomeV2Props {
   asOf: string;
   period: { range: HomeRange; compare: HomeCompare; current: DateRange; previous: DateRange; card: HomeCard };
   kpi: { current: PeriodKpi; previous: PeriodKpi };
+  /** 数字の下に並べる比較（期間に合うものを全部。lib/home-period.ts comparesFor） */
+  compareKpis: { key: HomeCompare; range: DateRange; kpi: PeriodKpi }[];
   /** 客席回転率・リピート率・支払い方法・ベストセラー（2026-10-24 funfo のダッシュボードから） */
   extras: HomeExtras;
   /** リピート率の見出しの下の説明（本日は「初回来店が前の人」、期間は「期間内に 2 回以上」） */
@@ -42,7 +44,15 @@ const ROW_GRID =
 const PERIOD_ROW_GRID =
   'grid grid-cols-[minmax(180px,1.7fr)_minmax(110px,1fr)_minmax(90px,0.8fr)_minmax(90px,0.8fr)_minmax(100px,0.9fr)_minmax(120px,1fr)_20px] items-center gap-3';
 
-const COMPARE_LABEL: Record<HomeCompare, string> = { day: '前日', week: '前週同曜日', month: '前月同日', year: '前年同期' };
+const COMPARE_LABEL: Record<HomeCompare, string> = { day: '前日比', week: '前週同曜日比', month: '前月同日比', year: '前年同期比' };
+
+interface CompareLine {
+  label: string;
+  /** 比べる期間（マウスを乗せたとき） */
+  title: string;
+  d: ReturnType<typeof delta>;
+  prevText: string;
+}
 
 /** 数字のアイコンの色（2026-10-24 Ronnie「iPad の機能と同じ色で」：iPad のホームの 来店組数・客数・リピーター・ウォークイン と同じ） */
 const TONE = {
@@ -59,22 +69,26 @@ const TONE = {
  * 新しい管理画面のホーム（2026-10-10 Ronnie「シンプルに、管理画面のスタイルで」）。
  * 上：期間タブと比較（2026-10-24 funfo・dinii のおすすめ）／数字 4 つ（増減つき）／店舗の一覧／やること・時間帯別の売上。
  */
-export function HomeV2View({ scopeLabel, asOf, period, kpi, extras, repeatNote, rows, periodRows, todos, hourly, nowHour }: HomeV2Props) {
+export function HomeV2View({ scopeLabel, asOf, period, kpi, compareKpis, extras, repeatNote, rows, periodRows, todos, hourly, nowHour }: HomeV2Props) {
   const cur = kpi.current;
-  const prev = kpi.previous;
   const isToday = period.range === 'today';
   const periodTitle = isToday ? '本日' : rangeLabel(period.current, period.current.to);
   const reportHref = `/app/reports?from=${period.current.from}&to=${period.current.to}`;
+  const cmpOf = (pick: (k: PeriodKpi) => number, fmt: (v: number) => string): CompareLine[] =>
+    compareKpis.map((c) => ({
+      label: COMPARE_LABEL[c.key],
+      title: rangeLabel(c.range, period.current.to),
+      d: delta(pick(cur), pick(c.kpi)),
+      prevText: fmt(pick(c.kpi)),
+    }));
 
   return (
     <div className="flex flex-col gap-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <div className="flex flex-col gap-1">
-          <h1 className="text-2xl font-black text-ink">ホーム</h1>
-          <p className="text-[13px] text-ink-2">
-            {asOf} 時点・{scopeLabel}
-          </p>
-        </div>
+        {/* 「ホーム」は上のバーに出ているので見出しは出さない（2026-10-24 Ronnie） */}
+        <p className="text-[13px] text-ink-2">
+          {asOf} 時点・{scopeLabel}
+        </p>
         <Link
           href={reportHref}
           className="inline-flex h-10 items-center rounded-lg border border-line bg-white px-4 text-sm font-bold text-royal hover:border-wisteria"
@@ -92,7 +106,7 @@ export function HomeV2View({ scopeLabel, asOf, period, kpi, extras, repeatNote, 
         <div className="flex flex-wrap items-baseline justify-between gap-2 border-t border-line bg-lilac-soft px-5 py-2 text-[12.5px]">
           <span className="font-bold text-ink">{isToday ? `本日（${rangeLabel(period.current, period.current.to)}）` : rangeLabel(period.current, period.current.to)}</span>
           <span className="text-ink-3">
-            ▲▼ は {COMPARE_LABEL[period.compare]}（{rangeLabel(period.previous, period.current.to)}）との比べ
+            <span className="font-bold text-success">▲ 増えた</span>・<span className="font-bold text-danger">▼ 減った</span>
           </span>
         </div>
 
@@ -103,8 +117,7 @@ export function HomeV2View({ scopeLabel, asOf, period, kpi, extras, repeatNote, 
             bg={TONE.sales}
             blue
             value={yen(cur.sales)}
-            d={delta(cur.sales, prev.sales)}
-            prevText={yen(prev.sales)}
+            cmp={cmpOf((k) => k.sales, yen)}
             rows={[
               ['会計済', yen(cur.settled)],
               ['未会計', cur.open > 0 || isToday ? yen(cur.open) : '—'],
@@ -117,8 +130,7 @@ export function HomeV2View({ scopeLabel, asOf, period, kpi, extras, repeatNote, 
             bg={TONE.groups}
             blue
             value={yen(cur.avgSpend)}
-            d={delta(cur.avgSpend, prev.avgSpend)}
-            prevText={yen(prev.avgSpend)}
+            cmp={cmpOf((k) => k.avgSpend, yen)}
             rows={[['売上 ÷ 客数', '会計済み']]}
             href={reportHref}
           />
@@ -128,8 +140,7 @@ export function HomeV2View({ scopeLabel, asOf, period, kpi, extras, repeatNote, 
             bg={TONE.guests}
             value={`${cur.guests.toLocaleString('ja-JP')}`}
             unit="人"
-            d={delta(cur.guests, prev.guests)}
-            prevText={`${prev.guests.toLocaleString('ja-JP')}人`}
+            cmp={cmpOf((k) => k.guests, (v) => `${v.toLocaleString('ja-JP')}人`)}
             rows={[['会計済み', `${cur.guests.toLocaleString('ja-JP')}人`]]}
             href={isToday ? '/app/orders' : reportHref}
           />
@@ -139,8 +150,7 @@ export function HomeV2View({ scopeLabel, asOf, period, kpi, extras, repeatNote, 
             bg={TONE.groups}
             value={`${cur.groups.toLocaleString('ja-JP')}`}
             unit="件"
-            d={delta(cur.groups, prev.groups)}
-            prevText={`${prev.groups.toLocaleString('ja-JP')}件`}
+            cmp={cmpOf((k) => k.groups, (v) => `${v.toLocaleString('ja-JP')}件`)}
             rows={[['1 会計あたり', cur.groups > 0 ? yen(Math.floor(cur.settled / cur.groups)) : '—']]}
             href={isToday ? '/app/orders' : reportHref}
           />
@@ -391,8 +401,7 @@ function Kpi({
   blue = false,
   value,
   unit,
-  d,
-  prevText,
+  cmp,
   rows,
   href,
 }: {
@@ -404,9 +413,8 @@ function Kpi({
   blue?: boolean;
   value: string;
   unit?: string;
-  d: ReturnType<typeof delta>;
-  /** 比べる先の値（小さく） */
-  prevText: string;
+  /** 数字の下の比較（前日比・前週同曜日比…を全部） */
+  cmp: CompareLine[];
   /** 下の 1〜2 行（名前・値） */
   rows: [string, string][];
   href: string;
@@ -419,15 +427,18 @@ function Kpi({
         </span>
         {label}
       </span>
-      <span className="flex flex-wrap items-baseline gap-x-2">
-        <span className={cn('text-[26px] leading-tight font-extrabold tabular-nums', blue ? 'text-royal' : 'text-ink')}>
-          {value}
-          {unit && <span className="ml-0.5 text-[13px]">{unit}</span>}
-        </span>
-        <span className="flex items-baseline gap-1 text-xs">
-          <DeltaMark d={d} />
-          <span className="text-ink-3 tabular-nums">{prevText}</span>
-        </span>
+      <span className={cn('text-[26px] leading-tight font-extrabold tabular-nums', blue ? 'text-royal' : 'text-ink')}>
+        {value}
+        {unit && <span className="ml-0.5 text-[13px]">{unit}</span>}
+      </span>
+      <span className="flex flex-col gap-0.5 text-xs">
+        {cmp.map((c) => (
+          <span key={c.label} className="grid grid-cols-[auto_1fr_auto] items-baseline gap-2" title={c.title}>
+            <span className="text-ink-2">{c.label}</span>
+            <DeltaMark d={c.d} />
+            <span className="text-right text-ink-3 tabular-nums">{c.prevText}</span>
+          </span>
+        ))}
       </span>
       <span className="mt-1 flex flex-col gap-0.5 text-xs text-ink-3">
         {rows.map(([k, v]) => (
