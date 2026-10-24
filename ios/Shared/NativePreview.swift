@@ -8,6 +8,8 @@ enum NativePreview: String {
     case phoneTable, phoneOrder, phoneConfirm, phoneSetup, phoneHome
     /// App Store の画面写真用：iPad のホーム・テーブル一覧・店舗台帳（2026-10-25。NativeStorePreview.swift）
     case home, floor, ledger
+    /// iPad のレジのログイン・担当選択（2026-10-25）
+    case regiLogin, regiClerks
 
     static var current: NativePreview? {
         guard let raw = UserDefaults.standard.string(forKey: "tenpoNativePreview") else { return nil }
@@ -43,6 +45,8 @@ struct NativePreviewView: View {
             NativePhoneHandyPreview(kind: kind.rawValue)
         case .home, .floor, .ledger:
             NativeStorePreview(kind: kind.rawValue)
+        case .regiLogin, .regiClerks:
+            NativeRegiLoginView(preview: kind.rawValue)
         case .options, .price:
             NativeOrderView(model: model)
                 .statusBarHidden(true)
