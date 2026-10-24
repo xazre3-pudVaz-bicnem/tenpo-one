@@ -16,6 +16,10 @@ struct NativeCheckoutView: View {
     @State private var tab: Tab = .pay
     @State private var payments: [NPPaymentRow] = []
     @State private var activeId: UUID?
+    /// 「ちょうど」を押したか（押す前は他のボタンと同じ色。押して残りが 0 のときだけ緑。2026-10-24 23:08 Ronnie「押した時だけ色を。間違える」）
+    @State private var exactOn = false
+    /// 支払方法を選ばずに数字・ちょうどを押した（勝手に現金にしない。現金も押した時だけ緑。2026-10-24 23:08 Ronnie）
+    @State private var needMethodHint = false
     @State private var openMethod: NPPayMethod?
     @State private var memo = ""
     @State private var done = false
@@ -437,7 +441,19 @@ struct NativeCheckoutView: View {
                     .buttonStyle(PressableStyle())
                 }
             }
+            .padding(needMethodHint ? 4 : 0)
+            .overlay(RoundedRectangle(cornerRadius: 15).stroke(Color(hex: 0xE53935), lineWidth: needMethodHint ? 2.5 : 0))
 
+            if needMethodHint {
+                HStack(spacing: 6) {
+                    Image(systemName: "hand.point.up.left.fill")
+                    Text("先に支払方法（現金・クレジット・QR…）を押してください")
+                }
+                .font(.system(size: 14, weight: .heavy)).foregroundColor(Color(hex: 0xC62828))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(10).background(RoundedRectangle(cornerRadius: 10).fill(Color(hex: 0xFDECEC)))
+                .transition(.opacity)
+            }
             // 内訳（クレジット→VISA…、QR→PayPay…、サイトポイント→ホットペッパー…）。各社の色で
             if let m = openMethod, m != .external, !brands(m).isEmpty {
                 VStack(alignment: .leading, spacing: 6) {
@@ -530,7 +546,7 @@ struct NativeCheckoutView: View {
             HStack(spacing: 8) {
                 // 大きめのボタン・大きめの字、「ちょうど」は緑（2026-10-24 Ronnie「alli thulo、exact lai green」）
                 ForEach(Array(quick.enumerated()), id: \.offset) { _, q in
-                    let exact = q.1 == "Exact"
+                    let exact = q.1 == "Exact" && exactOn && remaining == 0 && !payments.isEmpty
                     Button(action: q.2) {
                         VStack(spacing: 1) {
                             Text(q.0).font(.system(size: 20, weight: .heavy))
@@ -654,20 +670,31 @@ struct NativeCheckoutView: View {
     }
 
     private func remove(_ p: NPPaymentRow) {
+        exactOn = false
         payments.removeAll { $0.id == p.id }
         if activeId == p.id { activeId = payments.last?.id }
     }
 
-    private func updateActive(_ f: (inout NPPaymentRow) -> Void) {
+    @discardableResult
+    private func updateActive(_ f: (inout NPPaymentRow) -> Void) -> Bool {
         if activeId == nil || !payments.contains(where: { $0.id == activeId }) {
-            // 何も選んでいなければ現金にする
-            addRow(.cash, brand: nil)
+            // 何も選んでいなければ勝手に現金にしない（間違いのもと）。先に支払方法を押してもらう
+            showMethodHint()
+            return false
         }
-        guard let i = payments.firstIndex(where: { $0.id == activeId }) else { return }
+        guard let i = payments.firstIndex(where: { $0.id == activeId }) else { return false }
         f(&payments[i])
+        return true
+    }
+
+    private func showMethodHint() {
+        withAnimation(.easeOut(duration: 0.15)) { needMethodHint = true }
+        UINotificationFeedbackGenerator().notificationOccurred(.warning)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { withAnimation { needMethodHint = false } }
     }
 
     private func keyForPayment(_ k: String) {
+        exactOn = false
         updateActive { row in
             var digits = String(row.method == .cash ? row.tendered : row.amount)
             if digits == "0" { digits = "" }
@@ -680,12 +707,13 @@ struct NativeCheckoutView: View {
     private func setActive(exact: Bool) {
         let due = cashDue
         let rest = remaining
-        updateActive { row in
+        exactOn = updateActive { row in
             if row.method == .cash { row.tendered = due } else { row.amount += rest }
         }
     }
 
     private func bump(_ yen: Int) {
+        exactOn = false
         updateActive { row in
             if row.method == .cash { row.tendered += yen } else { row.amount += yen }
         }
