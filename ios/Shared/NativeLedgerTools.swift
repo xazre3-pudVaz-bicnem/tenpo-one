@@ -4,6 +4,7 @@ import UIKit
 // 店舗台帳の上のボタン（Web の components/reservations/ledger-header.tsx の LedgerTop と同じ働き）
 //   2026-10-24 Ronnie「ボタンはアイコンの下に文字。外に出すのは 会計・オーダー・その他（…）・｜・予約登録 だけ。あとは その他 の中に」（退店管理 → 会計・オーダー に名前を変更。行き先は同じフロア画面）
 //   2026-10-24 18:49 Ronnie：予約登録は右上（ウェイティングのボタンの場所）に黄色で → ここは 会計・オーダー と その他 だけ
+//   2026-10-24 20:53 Ronnie：会計・オーダー もいらない → 予約受付管理 と その他 だけ
 //   その他 = CSV出力・集計・PDF作成・空席検索・直接来店・スケジュール・予約リスト・グルメ別・週間・月間カレンダー・ウェイティング・未連絡の予約・顧客台帳・台帳設定
 
 /// 空席検索の結果（サーバー ledgerFindSeats）
@@ -123,8 +124,7 @@ struct NLToolbar: View {
             .popover(isPresented: $tasksOpen, arrowEdge: .top) {
                 NLInboxSheet(inbox: inbox, model: model, onClose: { tasksOpen = false }, tab: .tasks)
             }
-            // 右上は「会計・オーダー」（ネイティブのオーダー・会計＝フロア画面へ。2026-10-24 Ronnie「退店管理はいらない、会計・オーダーにして」）
-            item("desktopcomputer", "会計・オーダー", action: onFloor)
+            // 「会計・オーダー」のボタンは出さない（2026-10-24 20:53 Ronnie「ご予約台帳に会計オーダーのボタンはやっぱりいらない」。ホームから行く）
             Menu {
                 Button(action: onCsv) { Label("CSV出力", systemImage: "tablecells") }
                 if p?.links?.analytics ?? false { Button { onWeb("/app/reports?from=\(month)-01&to=\(date)") } label: { Label("集計", systemImage: "chart.bar") } }
