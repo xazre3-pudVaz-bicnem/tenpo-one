@@ -47,6 +47,8 @@ final class NativePhoneSetupModel: ObservableObject {
     }
 
     func load() async {
+        // 見本（シミュレーターで形を確かめる・App Store の写真）では読みに行かない
+        if NativePreview.current != nil { return }
         do {
             let p = try await NPHApi.get(NPHSetupPayload.self, part: "handySetup", ["tableId": tableId])
             if let host = p.hostTableId { redirectTableId = host; return }

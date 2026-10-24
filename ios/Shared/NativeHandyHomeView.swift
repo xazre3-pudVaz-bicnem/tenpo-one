@@ -174,6 +174,8 @@ final class NativeHandyModel: ObservableObject {
     }
 
     func refresh() async {
+        // 見本（シミュレーター・App Store の写真）では読みに行かない
+        if NativePreview.current != nil { return }
         do {
             var comps = URLComponents(url: AppConfig.url("/api/app/v1/pos"), resolvingAgainstBaseURL: false)!
             comps.queryItems = [URLQueryItem(name: "part", value: "handy")]
