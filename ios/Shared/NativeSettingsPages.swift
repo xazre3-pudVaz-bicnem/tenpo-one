@@ -61,7 +61,7 @@ struct NSOPayload: Codable {
     let store: NFNamed
     let canManageShared: Bool
     let categories: [NSOCategory]
-    let items: [NSOItem]
+    var items: [NSOItem]
 }
 struct NSOSection: Identifiable { let id: String; let name: String; let items: [NSOItem] }
 
