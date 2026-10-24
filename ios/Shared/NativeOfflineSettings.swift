@@ -20,8 +20,6 @@ struct NativeOfflinePrintCard: View {
                         Text("ネットが無いときの印刷").font(.system(size: 17, weight: .heavy)).foregroundColor(NFColor.navy)
                         Text("Offline printing").font(.system(size: 12)).foregroundColor(NFColor.ink3)
                     }
-                    Text("ネットが止まっても、この iPad から厨房伝票・会計伝票・レシート・取消伝票を直接プリンターへ出します（Bluetooth でつないだ機械か、LAN のアドレスがある機械）。印刷の形はいつもと同じです")
-                        .font(.system(size: 13)).foregroundColor(NFColor.ink3).fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 0)
             }

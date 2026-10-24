@@ -23,6 +23,8 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
     case accounts = "accounts"
     case handy = "handy"
     case categories = "categories"
+    case menu = "menuItems"
+    case plans = "plans"
     var id: String { rawValue }
 
     /// Web の道（クエリは見ない）
@@ -42,6 +44,8 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
         case .accounts: return "/app/settings/accounts"
         case .handy: return "/app/settings/handy"
         case .categories: return "/app/settings/categories"
+        case .menu: return "/app/settings/menu"
+        case .plans: return "/app/settings/plans"
         }
     }
     var title: String {
@@ -60,6 +64,8 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
         case .accounts: return "勘定科目"
         case .handy: return "ハンディ端末"
         case .categories: return "カテゴリ"
+        case .menu: return "メニュー"
+        case .plans: return "プラン"
         }
     }
     var en: String {
@@ -78,6 +84,8 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
         case .accounts: return "Accounts"
         case .handy: return "Handy devices"
         case .categories: return "Categories"
+        case .menu: return "Menu"
+        case .plans: return "Plans"
         }
     }
 
@@ -107,6 +115,8 @@ struct NativeSettingsPageScreen: View {
         case .accounts: NativeAccountsScreen()
         case .handy: NativeHandyDevicesScreen()
         case .categories: NativeCategoriesScreen()
+        case .menu: NativeMenuItemsScreen(mode: .menu)
+        case .plans: NativeMenuItemsScreen(mode: .plan)
         }
     }
 }
@@ -303,7 +313,6 @@ struct NativeSoldOutView: View {
             .background(RoundedRectangle(cornerRadius: 12).fill(NFColor.lilacSoft))
             .overlay(RoundedRectangle(cornerRadius: 12).stroke(NFColor.line, lineWidth: 1))
             Spacer()
-            Text("売切にした商品は、レジ・ハンディ・お客様QRで注文できなくなります").font(.system(size: 12)).foregroundColor(NFColor.ink3).lineLimit(1)
         }
         .padding(.horizontal, 16).padding(.vertical, 12)
         .overlay(alignment: .bottom) { Rectangle().fill(NFColor.line).frame(height: 1) }
@@ -457,8 +466,6 @@ struct NativeClerksView: View {
             if let p = model.payload {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {
-                        Text("会計のときに選ぶ担当者の名前です（アカウントは要りません）。退職した人は「非表示」に（過去の伝票の名前は残ります）")
-                            .font(.system(size: 13)).foregroundColor(NFColor.ink3)
                         if p.canEdit { addCard(p) }
                         VStack(spacing: 0) {
                             if p.rows.isEmpty {
@@ -880,7 +887,7 @@ struct NativeHoursView: View {
         NSPFrame(storeName: model.payload?.store.name ?? "", title: "営業時間・休業日", en: "Hours", loaded: model.payload != nil, error: model.error, toast: $model.toast, onBack: onBack, retry: { await model.refresh() }) {
             if let p = model.payload {
                 let edit = p.canEdit
-                NSPCard(title: "営業時間", en: "Business hours", note: "閉店・最終入店は 24:00〜30:00（翌朝6時）まで選べます") {
+                NSPCard(title: "営業時間", en: "Business hours") {
                     VStack(spacing: 0) {
                         if edit {
                             // まとめて変更（2026-09-27 Ronnie「一緒に変更する場合のも」）
@@ -923,7 +930,7 @@ struct NativeHoursView: View {
                     }
                 }
                 HStack(alignment: .top, spacing: 18) {
-                    NSPCard(title: "ランチの終わり", en: "Lunch until", note: "レジ精算レシートのランチ／ディナーの区切り") {
+                    NSPCard(title: "ランチの終わり", en: "Lunch until") {
                         HStack(spacing: 10) {
                             NSPTimeMenu(value: model.lunchUntil, options: NSPApi.timeOptions(toMin: 23 * 60 + 45), disabled: !edit) { if let v = $0 { model.lunchUntil = v } }
                             NSPButton(text: "保存", primary: true, busy: model.busy == "lunch", disabled: !edit || model.lunchUntil == p.lunchUntil) { Task { await model.saveLunch() } }
@@ -931,7 +938,7 @@ struct NativeHoursView: View {
                         }
                         .padding(18)
                     }
-                    NSPCard(title: "翌準備金", en: "Next float", note: "毎日レジに残す金額（空なら開局の金額と同じ）") {
+                    NSPCard(title: "翌準備金", en: "Next float") {
                         HStack(spacing: 10) {
                             HStack(spacing: 4) {
                                 Text("¥").font(.system(size: 15, weight: .bold)).foregroundColor(NFColor.ink3)
@@ -946,7 +953,7 @@ struct NativeHoursView: View {
                         .padding(18)
                     }
                 }
-                NSPCard(title: "休業日", en: "Holidays", note: "今日以降の休業日。臨時休業は予約の受付も止まります") {
+                NSPCard(title: "休業日", en: "Holidays") {
                     VStack(spacing: 0) {
                         if edit {
                             HStack(spacing: 10) {
@@ -1107,7 +1114,7 @@ struct NativeStoreView: View {
             if let p = model.payload {
                 let edit = p.canEdit
                 if let url = p.bookingUrl {
-                    NSPCard(title: "店舗ご予約リンク", en: "Reservation link", note: "お客様がネットで予約するページ（URL は CYPRESS からだけ変えられます）") {
+                    NSPCard(title: "店舗ご予約リンク", en: "Reservation link") {
                         HStack(spacing: 12) {
                             Text(url).font(.system(size: 14, weight: .semibold, design: .monospaced)).foregroundColor(NFColor.iris).lineLimit(1).truncationMode(.middle)
                             Spacer()
@@ -1355,7 +1362,7 @@ struct NativeTaxView: View {
                     HStack { NSPButton(text: "税率を追加", icon: "plus", primary: true) { model.startAdd() }; Spacer() }
                 }
                 if model.showForm { form }
-                NSPCard(title: "税率マスタ", en: "Tax rates", note: "既定の税率が商品に使われます。軽減税率（8%）はテイクアウトなどに") {
+                NSPCard(title: "税率マスタ", en: "Tax rates") {
                     VStack(spacing: 0) {
                         if p.rows.isEmpty { Text("税率がまだ登録されていません").font(.system(size: 14)).foregroundColor(NFColor.ink3).padding(18) }
                         ForEach(p.rows) { r in
@@ -1483,7 +1490,7 @@ struct NativeLoyaltyView: View {
         NSPFrame(storeName: model.payload?.store.name ?? "", title: "会員・ポイント", en: "Loyalty", loaded: model.payload != nil, error: model.error, toast: $model.toast, onBack: onBack, retry: { await model.refresh() }) {
             if let p = model.payload {
                 let edit = p.canEdit
-                NSPCard(title: "ポイント機能", en: "Points", note: "会計時に自動付与・返金時に自動取消されます。無効にすると新しい付与・利用は止まります（残高は残ります）") {
+                NSPCard(title: "ポイント機能", en: "Points") {
                     VStack(spacing: 0) {
                         NSPRow(label: "ポイント機能") {
                             HStack(spacing: 10) {
@@ -1606,7 +1613,7 @@ struct NativeAlertsView: View {
     var body: some View {
         NSPFrame(storeName: model.payload?.store.name ?? "", title: "異常検知の閾値", en: "Alerts", loaded: model.payload != nil, error: model.error, toast: $model.toast, onBack: onBack, retry: { await model.refresh() }) {
             if let p = model.payload {
-                NSPCard(title: "閾値", en: "Thresholds", note: "この店の値 › 企業既定 › 標準 の順に使います。ホームの「お知らせ・アラート」に出ます") {
+                NSPCard(title: "閾値", en: "Thresholds") {
                     VStack(spacing: 0) {
                         ForEach(p.items) { it in
                             let busy = model.busy == it.ruleKey
@@ -1688,7 +1695,7 @@ struct NativeApprovalsView: View {
             if let p = model.payload {
                 if p.canEdit && !model.showForm { HStack { NSPButton(text: "ルールを追加", icon: "plus", primary: true) { model.startAdd() }; Spacer() } }
                 if model.showForm { form(p) }
-                NSPCard(title: "金額帯ごとの必要承認ロール", en: "Rules", note: "請求書・経費・小口現金・発注の金額帯ごとに、だれの承認が要るか。上位のロールは下位の承認も満たします") {
+                NSPCard(title: "金額帯ごとの必要承認ロール", en: "Rules") {
                     VStack(spacing: 0) {
                         if p.rows.isEmpty { Text("ルールがまだありません（承認なしで通ります）").font(.system(size: 14)).foregroundColor(NFColor.ink3).padding(18) }
                         ForEach(p.rows) { r in
@@ -1968,7 +1975,7 @@ struct NativeHandyDevicesView: View {
         NSPFrame(storeName: model.payload?.store.name ?? "", title: "ハンディ端末", en: "Handy devices", loaded: model.payload != nil, error: model.error, toast: $model.toast, onBack: onBack, retry: { await model.refresh() }) {
             if let p = model.payload {
                 if p.canEdit {
-                    NSPCard(title: "スマホをハンディとして登録", en: "Pair a phone", note: "スマホで QR を読むと、その端末が \(p.store.name) のハンディになります（パスワード不要）。QR は5分・1回限り。店の Wi-Fi から操作してください") {
+                    NSPCard(title: "スマホをハンディとして登録", en: "Pair a phone") {
                         VStack(alignment: .leading, spacing: 14) {
                             HStack(spacing: 10) {
                                 NSPInput(text: $model.deviceName, placeholder: "端末の名前（例：ホール1・田中のiPhone）", width: 360)
@@ -1985,7 +1992,6 @@ struct NativeHandyDevicesView: View {
                                         VStack(alignment: .leading, spacing: 8) {
                                             Text("スマホのカメラでこの QR を読んでください").font(.system(size: 15, weight: .bold)).foregroundColor(NFColor.ink)
                                             Text("あと \(left / 60):\(String(format: "%02d", left % 60))").font(.system(size: 22, weight: .heavy)).foregroundColor(NFColor.iris).monospacedDigit()
-                                            Text("読み取った端末は下の一覧に出ます（画面を読み直してください）").font(.system(size: 12.5)).foregroundColor(NFColor.ink3)
                                             NSPButton(text: "読み直す", icon: "arrow.clockwise") { Task { await model.refresh() } }
                                         }
                                     }
@@ -1998,7 +2004,7 @@ struct NativeHandyDevicesView: View {
                         .padding(18)
                     }
                 }
-                NSPCard(title: "登録済みの端末", en: "Devices", note: "退職や紛失のときは「解除」。解除した端末はハンディとして使えなくなります") {
+                NSPCard(title: "登録済みの端末", en: "Devices") {
                     VStack(spacing: 0) {
                         if p.devices.isEmpty { Text("まだ端末がありません").font(.system(size: 14)).foregroundColor(NFColor.ink3).padding(18) }
                         ForEach(p.devices) { d in
@@ -2097,7 +2103,7 @@ struct NativeCategoriesView: View {
             if let p = model.payload {
                 if p.canEdit && !model.showForm { HStack { NSPButton(text: "カテゴリを追加", icon: "plus", primary: true) { model.startAdd() }; Spacer() } }
                 if model.showForm { form(p) }
-                NSPCard(title: "カテゴリ", en: "Categories", note: "名前・色・並び順と、キッチン／ドリンク／デザート／焼き場への振り分け（厨房プリンター・KDS）。全店共通のカテゴリには印") {
+                NSPCard(title: "カテゴリ", en: "Categories") {
                     VStack(spacing: 0) {
                         if p.rows.isEmpty { Text("カテゴリがまだありません").font(.system(size: 14)).foregroundColor(NFColor.ink3).padding(18) }
                         ForEach(p.rows) { r in
@@ -2167,6 +2173,265 @@ struct NativeCategoriesView: View {
                     NSPButton(text: "保存する", primary: true, busy: model.busy == "save", disabled: model.name.trimmingCharacters(in: .whitespaces).isEmpty) { Task { await model.save() } }
                 }
                 .padding(18)
+            }
+        }
+    }
+}
+
+// MARK: - メニュー・プラン（Web の /app/settings/menu・/app/settings/plans・components/settings/menu-items-panel.tsx・menu-item-dialog.tsx と同じ）
+
+struct NMIItem: Codable, Identifiable, Hashable {
+    let id: String
+    var categoryId: String?
+    var name: String
+    var nameEn: String
+    var nameKana: String
+    var description: String
+    var itemType: String
+    var price: Double
+    var takeoutPrice: Double?
+    var cost: Double?
+    var taxRateId: String?
+    var durationMinutes: Double?
+    var sellStartTime: String?
+    var sellEndTime: String?
+    var sortOrder: Int
+    var status: String
+    var isSoldOut: Bool
+    var pricePending: Bool
+    var shared: Bool
+}
+struct NMICategory: Codable, Identifiable, Hashable { let id: String; let name: String; let sortOrder: Int }
+struct NMIPayload: Codable { let store: NFNamed; let canEdit: Bool; let categories: [NMICategory]; let taxRates: [NFNamed]; var items: [NMIItem] }
+
+/// 画面：メニュー（コース以外）／プラン（コース＝コース・飲み放題・食べ放題）
+enum NMIMode { case menu, plan }
+
+@MainActor
+final class NativeMenuItemsModel: NSPModel<NMIPayload> {
+    let mode: NMIMode
+    @Published var query = ""
+    @Published var categoryFilter: String? = nil
+    // 編集中
+    @Published var showForm = false
+    @Published var editing: NMIItem?
+    @Published var fName = ""; @Published var fNameEn = ""; @Published var fKana = ""; @Published var fDesc = ""
+    @Published var fType = "food"; @Published var fCategory: String? = nil
+    @Published var fPrice = ""; @Published var fTakeout = ""; @Published var fCost = ""; @Published var fTax: String? = nil
+    @Published var fDuration = ""; @Published var fStart: String? = nil; @Published var fEnd: String? = nil
+    @Published var fSort = "0"; @Published var fHidden = false
+
+    init(mode: NMIMode) { self.mode = mode; super.init(part: "menuItems") }
+
+    static let types: [NSTLabeled] = [NSTLabeled(id: "food", label: "フード"), NSTLabeled(id: "drink", label: "ドリンク"), NSTLabeled(id: "course", label: "コース"), NSTLabeled(id: "option", label: "オプション")]
+    var typesForMode: [NSTLabeled] { mode == .plan ? Self.types.filter { $0.id == "course" } : Self.types.filter { $0.id != "course" } }
+    func inMode(_ i: NMIItem) -> Bool { mode == .plan ? i.itemType == "course" : i.itemType != "course" }
+
+    /// カテゴリごと（検索・カテゴリ絞り込み）
+    var sections: [(NMICategory?, [NMIItem])] {
+        guard let p = payload else { return [] }
+        let q = NativeSoldOutModel.norm(query)
+        func ok(_ i: NMIItem) -> Bool {
+            inMode(i) && (categoryFilter == nil || i.categoryId == categoryFilter) && (q.isEmpty || NativeSoldOutModel.norm(i.name).contains(q) || NativeSoldOutModel.norm(i.nameKana).contains(q) || NativeSoldOutModel.norm(i.nameEn).contains(q))
+        }
+        let byOrder: (NMIItem, NMIItem) -> Bool = { a, b in a.sortOrder != b.sortOrder ? a.sortOrder < b.sortOrder : a.name < b.name }
+        var out: [(NMICategory?, [NMIItem])] = p.categories.sorted { $0.sortOrder < $1.sortOrder }.map { c in (c, p.items.filter { $0.categoryId == c.id && ok($0) }.sorted(by: byOrder)) }.filter { !$0.1.isEmpty }
+        let known = Set(p.categories.map(\.id))
+        let orphans = p.items.filter { ($0.categoryId == nil || !known.contains($0.categoryId!)) && ok($0) }.sorted(by: byOrder)
+        if !orphans.isEmpty { out.append((nil, orphans)) }
+        return out
+    }
+    func categoryName(_ id: String?) -> String { id.flatMap { i in payload?.categories.first { $0.id == i }?.name } ?? "カテゴリなし" }
+    func taxName(_ id: String?) -> String { id.flatMap { i in payload?.taxRates.first { $0.id == i }?.name } ?? "既定" }
+    static func num(_ v: Double?) -> String { guard let v else { return "" }; return v == v.rounded() ? String(Int(v)) : String(v) }
+
+    func startAdd() {
+        editing = nil; fName = ""; fNameEn = ""; fKana = ""; fDesc = ""; fType = mode == .plan ? "course" : "food"; fCategory = categoryFilter
+        fPrice = ""; fTakeout = ""; fCost = ""; fTax = nil; fDuration = mode == .plan ? "120" : ""; fStart = nil; fEnd = nil
+        fSort = String((payload?.items.filter { inMode($0) }.map(\.sortOrder).max() ?? 0) + 1); fHidden = false; showForm = true
+    }
+    func startEdit(_ i: NMIItem) {
+        editing = i; fName = i.name; fNameEn = i.nameEn; fKana = i.nameKana; fDesc = i.description; fType = i.itemType; fCategory = i.categoryId
+        fPrice = Self.num(i.price); fTakeout = Self.num(i.takeoutPrice); fCost = Self.num(i.cost); fTax = i.taxRateId
+        fDuration = Self.num(i.durationMinutes); fStart = i.sellStartTime; fEnd = i.sellEndTime; fSort = String(i.sortOrder); fHidden = i.status == "hidden"; showForm = true
+    }
+    func save() async {
+        guard let price = Double(fPrice.trimmingCharacters(in: .whitespaces)), price >= 0 else { toast = "価格は0以上で入力してください"; return }
+        func opt(_ t: String) -> Any { let x = t.trimmingCharacters(in: .whitespaces); return x.isEmpty ? NSNull() : (Double(x) ?? NSNull()) }
+        let item: [String: Any] = [
+            "id": editing?.id as Any? ?? NSNull(), "categoryId": fCategory as Any? ?? NSNull(), "name": fName, "nameEn": fNameEn, "nameKana": fKana, "description": fDesc,
+            "itemType": fType, "price": price, "takeoutPrice": opt(fTakeout), "cost": opt(fCost), "taxRateId": fTax as Any? ?? NSNull(),
+            "durationMinutes": fType == "course" ? opt(fDuration) : NSNull(), "sellStartTime": fStart as Any? ?? NSNull(), "sellEndTime": fEnd as Any? ?? NSNull(),
+            "sortOrder": Int(fSort) ?? 0, "status": fHidden ? "hidden" : "active",
+        ]
+        if await run("save", ["type": "menuItemSave", "item": item], done: editing == nil ? "商品を追加しました" : "商品を保存しました") { showForm = false }
+    }
+    func delete(_ i: NMIItem) async { if await run(i.id, ["type": "menuItemDelete", "id": i.id], done: "「\(i.name)」を削除しました") { showForm = false } }
+    func toggleSoldOut(_ i: NMIItem) async { _ = await run(i.id, ["type": "menuItemSoldOut", "id": i.id, "soldOut": !i.isSoldOut], done: i.isSoldOut ? "販売を再開しました" : "売切にしました") }
+}
+
+struct NativeMenuItemsScreen: View {
+    let mode: NMIMode
+    @StateObject private var model: NativeMenuItemsModel
+    @EnvironmentObject var state: AppState
+    init(mode: NMIMode) { self.mode = mode; _model = StateObject(wrappedValue: NativeMenuItemsModel(mode: mode)) }
+    var body: some View { NativeMenuItemsView(model: model, onBack: { state.goNativeSettings() }) }
+}
+
+struct NativeMenuItemsView: View {
+    @ObservedObject var model: NativeMenuItemsModel
+    let onBack: () -> Void
+    @State private var confirmDelete: NMIItem?
+    private var isPlan: Bool { model.mode == .plan }
+
+    var body: some View {
+        NSPFrame(storeName: model.payload?.store.name ?? "", title: isPlan ? "プラン" : "メニュー", en: isPlan ? "Plans" : "Menu", loaded: model.payload != nil, error: model.error, toast: $model.toast, onBack: onBack, retry: { await model.refresh() }) {
+            if let p = model.payload {
+                HStack(spacing: 10) {
+                    NSPInput(text: $model.query, placeholder: "商品名・フリガナで探す", width: 300)
+                    if !isPlan {
+                        Menu {
+                            Button("すべてのカテゴリ") { model.categoryFilter = nil }
+                            ForEach(p.categories.sorted { $0.sortOrder < $1.sortOrder }) { c in Button(c.name) { model.categoryFilter = c.id } }
+                        } label: {
+                            HStack(spacing: 6) {
+                                Text(model.categoryFilter.map { model.categoryName($0) } ?? "すべてのカテゴリ").font(.system(size: 15, weight: .bold)).foregroundColor(NFColor.ink)
+                                Image(systemName: "chevron.up.chevron.down").font(.system(size: 11, weight: .bold)).foregroundColor(NFColor.ink3)
+                            }
+                            .padding(.horizontal, 14).frame(height: 44)
+                            .background(RoundedRectangle(cornerRadius: 10).fill(Color.white)).overlay(RoundedRectangle(cornerRadius: 10).stroke(NFColor.line, lineWidth: 1))
+                        }
+                    }
+                    if p.canEdit && !model.showForm { NSPButton(text: isPlan ? "プランを追加" : "商品を追加", icon: "plus", primary: true) { model.startAdd() } }
+                    Spacer()
+                }
+                if model.showForm { form(p) }
+                let secs = model.sections
+                if secs.isEmpty { Text(isPlan ? "プランがまだありません" : "商品が見つかりません").font(.system(size: 14)).foregroundColor(NFColor.ink3) }
+                ForEach(Array(secs.enumerated()), id: \.offset) { _, sec in
+                    NSPCard(title: sec.0?.name ?? "カテゴリなし", en: "") {
+                        VStack(spacing: 0) {
+                            ForEach(sec.1) { it in row(it, p: p) }
+                        }
+                    }
+                }
+            }
+        }
+        .alert("商品を削除", isPresented: Binding(get: { confirmDelete != nil }, set: { if !$0 { confirmDelete = nil } })) {
+            Button("削除する", role: .destructive) { if let i = confirmDelete { Task { await model.delete(i) } }; confirmDelete = nil }
+            Button("やめる", role: .cancel) { confirmDelete = nil }
+        } message: { Text("「\(confirmDelete?.name ?? "")」を削除します") }
+        .task { await model.refresh() }
+    }
+
+    private func row(_ it: NMIItem, p: NMIPayload) -> some View {
+        let hidden = it.status == "hidden"
+        return HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text(it.name).font(.system(size: 16, weight: .bold)).foregroundColor(hidden ? NFColor.ink3 : NFColor.ink).lineLimit(1).strikethrough(hidden, color: NFColor.ink3)
+                    if it.shared { tag("全店共通", NFColor.ink3) }
+                    if hidden { tag("非表示", NFColor.ink3) }
+                    if it.pricePending { tag("価格未設定", NFColor.danger) }
+                    if it.itemType == "course", let m = it.durationMinutes { tag("\(Int(m))分", NFColor.iris) }
+                }
+                HStack(spacing: 8) {
+                    if !it.nameEn.isEmpty { Text(it.nameEn).font(.system(size: 12)).foregroundColor(NFColor.ink3) }
+                    if let s = it.sellStartTime, let e = it.sellEndTime { Text("\(s)〜\(e)").font(.system(size: 12)).foregroundColor(NFColor.ink3) }
+                    if !isPlan { Text(NativeMenuItemsModel.types.first { $0.id == it.itemType }?.label ?? it.itemType).font(.system(size: 12)).foregroundColor(NFColor.ink3) }
+                }
+            }
+            Spacer()
+            Text(NT.yen(Int(it.price))).font(.system(size: 17, weight: .heavy)).foregroundColor(NFColor.navy).monospacedDigit()
+            if let t = it.takeoutPrice { Text("TO \(NT.yen(Int(t)))").font(.system(size: 12)).foregroundColor(NFColor.ink3).monospacedDigit() }
+            Button { Task { await model.toggleSoldOut(it) } } label: {
+                Text(it.isSoldOut ? "売切" : "販売中").font(.system(size: 12, weight: .heavy)).foregroundColor(it.isSoldOut ? .white : NFColor.success)
+                    .frame(width: 60, height: 30).background(Capsule().fill(it.isSoldOut ? NFColor.danger : NFColor.successSoft))
+            }
+            .buttonStyle(PressableStyle()).disabled(!p.canEdit || model.busy != nil)
+            if model.busy == it.id { ProgressView() }
+            if p.canEdit { NSPButton(text: "編集", icon: "pencil") { model.startEdit(it) } }
+        }
+        .padding(.horizontal, 18).frame(minHeight: 58)
+        .overlay(alignment: .bottom) { Rectangle().fill(NFColor.line).frame(height: 1) }
+    }
+
+    private func tag(_ t: String, _ c: Color) -> some View {
+        Text(t).font(.system(size: 10.5, weight: .heavy)).foregroundColor(c).padding(.horizontal, 6).padding(.vertical, 2).overlay(Capsule().stroke(c.opacity(0.5), lineWidth: 1))
+    }
+
+    private func form(_ p: NMIPayload) -> some View {
+        NSPCard(title: model.editing == nil ? (isPlan ? "プランを追加" : "商品を追加") : (isPlan ? "プランを編集" : "商品を編集"), en: model.editing == nil ? "Add" : "Edit") {
+            VStack(spacing: 0) {
+                NSPRow(label: "商品名", required: true) { NSPInput(text: $model.fName, placeholder: "例：生ビール", width: 400) }
+                NSPRow(label: "英語名") { NSPInput(text: $model.fNameEn, placeholder: "Draft beer", width: 400) }
+                NSPRow(label: "フリガナ") { NSPInput(text: $model.fKana, placeholder: "ナマビール", width: 400) }
+                if !isPlan { NSPRow(label: "種別") { chips(model.typesForMode, Binding(get: { model.fType }, set: { model.fType = $0 })) } }
+                NSPRow(label: "カテゴリ") {
+                    Menu {
+                        Button("カテゴリなし") { model.fCategory = nil }
+                        ForEach(p.categories.sorted { $0.sortOrder < $1.sortOrder }) { c in Button(c.name) { model.fCategory = c.id } }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Text(model.categoryName(model.fCategory)).font(.system(size: 15, weight: .bold)).foregroundColor(NFColor.ink)
+                            Image(systemName: "chevron.up.chevron.down").font(.system(size: 11, weight: .bold)).foregroundColor(NFColor.ink3)
+                        }
+                        .padding(.horizontal, 14).frame(height: 44)
+                        .background(RoundedRectangle(cornerRadius: 10).fill(Color.white)).overlay(RoundedRectangle(cornerRadius: 10).stroke(NFColor.line, lineWidth: 1))
+                    }
+                }
+                NSPRow(label: "価格", required: true) {
+                    HStack(spacing: 10) {
+                        NSPInput(text: $model.fPrice, placeholder: "0", width: 160, keyboard: .numberPad, trailing: "円")
+                        Text("テイクアウト").font(.system(size: 13)).foregroundColor(NFColor.ink3)
+                        NSPInput(text: $model.fTakeout, placeholder: "同じ", width: 150, keyboard: .numberPad, trailing: "円")
+                        Text("原価").font(.system(size: 13)).foregroundColor(NFColor.ink3)
+                        NSPInput(text: $model.fCost, placeholder: "—", width: 140, keyboard: .numberPad, trailing: "円")
+                    }
+                }
+                NSPRow(label: "税率") {
+                    chips([NSTLabeled(id: "", label: "既定")] + p.taxRates.map { NSTLabeled(id: $0.id, label: $0.name) }, Binding(get: { model.fTax ?? "" }, set: { model.fTax = $0.isEmpty ? nil : $0 }))
+                }
+                if model.fType == "course" {
+                    NSPRow(label: "時間") { NSPInput(text: $model.fDuration, placeholder: "120", width: 140, keyboard: .numberPad, trailing: "分") }
+                }
+                NSPRow(label: "販売時間") {
+                    HStack(spacing: 8) {
+                        NSPTimeMenu(value: model.fStart, options: NSPApi.timeOptions(toMin: 23 * 60 + 45)) { model.fStart = $0 }
+                        Text("〜").foregroundColor(NFColor.ink3)
+                        NSPTimeMenu(value: model.fEnd, options: NSPApi.timeOptions(toMin: 23 * 60 + 45)) { model.fEnd = $0 }
+                        Text("空なら終日").font(.system(size: 12)).foregroundColor(NFColor.ink3)
+                    }
+                }
+                NSPRow(label: "説明") { NSPInput(text: $model.fDesc, placeholder: "", width: 520) }
+                NSPRow(label: "並び順") {
+                    HStack(spacing: 14) {
+                        NSPInput(text: $model.fSort, placeholder: "0", width: 120, keyboard: .numberPad)
+                        NSPToggle(on: model.fHidden) { model.fHidden.toggle() }
+                        Text(model.fHidden ? "非表示（レジ・ハンディに出さない）" : "表示").font(.system(size: 14)).foregroundColor(NFColor.ink2)
+                    }
+                }
+                HStack(spacing: 10) {
+                    if let e = model.editing { NSPButton(text: "削除", icon: "trash") { confirmDelete = e } }
+                    Spacer()
+                    NSPButton(text: "やめる") { model.showForm = false }
+                    NSPButton(text: "保存する", primary: true, busy: model.busy == "save", disabled: model.fName.trimmingCharacters(in: .whitespaces).isEmpty) { Task { await model.save() } }
+                }
+                .padding(18)
+            }
+        }
+    }
+
+    private func chips(_ list: [NSTLabeled], _ sel: Binding<String>) -> some View {
+        WrapLayout(spacing: 8) {
+            ForEach(list) { o in
+                Button { sel.wrappedValue = o.id } label: {
+                    Text(o.label).font(.system(size: 14, weight: .bold)).foregroundColor(sel.wrappedValue == o.id ? .white : NFColor.ink2)
+                        .padding(.horizontal, 14).frame(height: 40)
+                        .background(RoundedRectangle(cornerRadius: 10).fill(sel.wrappedValue == o.id ? NFColor.navy : Color.white))
+                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(NFColor.line, lineWidth: 1))
+                }
+                .buttonStyle(PressableStyle())
             }
         }
     }

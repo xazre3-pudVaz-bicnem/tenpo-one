@@ -211,8 +211,6 @@ struct NativeSettingsView: View {
             if let g = groups.first(where: { $0.id == id }) {
                 pageTitle(g.icon, g.label, en: g.en, status: nil)
                 itemList(g)
-                Text("押すとその画面が開きます（パソコンの管理画面と同じ。管理画面からも同じものを変えられます）")
-                    .font(.system(size: 12)).foregroundColor(NFColor.ink3)
             } else {
                 Text("左から選んでください").font(.system(size: 14)).foregroundColor(NFColor.ink3)
             }
@@ -256,9 +254,10 @@ struct NativeSettingsView: View {
                             .font(.system(size: 15, weight: .semibold)).foregroundColor(it.allowed ? NFColor.iris : NFColor.ink3)
                             .frame(width: 34, height: 34)
                             .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(it.allowed ? NFColor.irisSoft : NFColor.lilacSoft))
+                        // 説明は出さない（2026-10-24 17:09 Ronnie「設定の中に説明を長く書かない」）。権限が無いときの理由だけ
                         VStack(alignment: .leading, spacing: 1) {
                             Text(it.title).font(.system(size: 16, weight: .bold)).foregroundColor(it.allowed ? NFColor.ink : NFColor.ink3).lineLimit(1)
-                            if !it.description.isEmpty {
+                            if !it.allowed && !it.description.isEmpty {
                                 Text(it.description).font(.system(size: 12)).foregroundColor(NFColor.ink3).lineLimit(1)
                             }
                         }
@@ -381,7 +380,7 @@ struct NativeSettingsView: View {
                         Text(title).font(.system(size: 17, weight: .heavy)).foregroundColor(NFColor.navy)
                         Text(en).font(.system(size: 12)).foregroundColor(NFColor.ink3)
                     }
-                    Text(description).font(.system(size: 13)).foregroundColor(NFColor.ink3).fixedSize(horizontal: false, vertical: true)
+                    if !description.isEmpty { Text(description).font(.system(size: 13)).foregroundColor(NFColor.ink3).fixedSize(horizontal: false, vertical: true) }
                 }
                 Spacer(minLength: 0)
             }
@@ -466,7 +465,7 @@ struct NativeSettingsView: View {
         let locked = !model.canAdd
         let busy = model.busy
         return card(icon: "dot.radiowaves.left.and.right", title: "このiPadのプリンター（Bluetooth・USB）", en: "Receipt printer",
-                    description: "レシートプリンターとドロア（iPad と Bluetooth・USB）") {
+                    description: "") {
             VStack(spacing: 0) {
                 row("プリンター利用", en: "Use printer") {
                     toggle(model.usePrinter, disabled: busy != nil || locked) { Task { await model.toggleUse() } }
@@ -498,8 +497,6 @@ struct NativeSettingsView: View {
                             .overlay(RoundedRectangle(cornerRadius: 12).stroke(NFColor.line, lineWidth: 1))
                         }
                         .disabled(off || locked || busy != nil)
-                        Text("使えるのは Star・EPSON（Bluetooth・USB）とそのほかの ESC/POS（Bluetooth LE）。SII・Citizen・Brother は準備中です")
-                            .font(.system(size: 12)).foregroundColor(NFColor.ink3)
                     }
                 }
                 row("接続", en: "Connection", dim: off) {
@@ -604,7 +601,7 @@ struct NativeSettingsView: View {
 
     private var receiptCard: some View {
         card(icon: "printer", title: "レシートの出し先", en: "Receipt printer for this iPad",
-             description: "レシート・領収書・会計伝票・ドロアを出すプリンター（このiPadだけ。店の設定は変わりません）") {
+             description: "") {
             let list = model.receiptPrinters
             if list.isEmpty {
                 Text(model.canAdd
@@ -649,7 +646,7 @@ struct NativeSettingsView: View {
 
     private var lanCard: some View {
         card(icon: "cable.connector", title: "LAN のプリンター（EPSON・SII RP-F10 など）", en: "LAN printers",
-             description: "この iPad からお店の LAN でプリンターへ送ります（レシート・厨房・ドリンク）") {
+             description: "") {
             VStack(spacing: 0) {
                 ForEach(model.lanPrinters) { p in
                     let on = model.lanOn(p.id)
@@ -688,7 +685,7 @@ struct NativeSettingsView: View {
 
     private var wifiCard: some View {
         card(icon: "wifi", title: "Wi-Fi で直接印刷（EPSON・速い）", en: "Direct Wi-Fi printing",
-             description: "この iPad からお店の Wi-Fi でプリンターへ直接送ります（約1秒）") {
+             description: "") {
             VStack(spacing: 0) {
                 ForEach(model.wifiPrinters) { p in
                     let on = model.wifiOn(p.id)
@@ -720,7 +717,7 @@ struct NativeSettingsView: View {
 
     private var nativeCard: some View {
         card(icon: "ipad", title: "アプリのオーダー・会計画面", en: "Native screens",
-             description: "ON：ホーム・テーブル・オーダー・会計をアプリの画面で開く（速い）。OFF：今までの Web の画面") {
+             description: "") {
             // 管理画面が決めているときはその値を見せる（端末の切り替えは効かない）
             let shown = state.adminNativePos ?? nativeOn
             VStack(alignment: .leading, spacing: 8) {

@@ -24,11 +24,13 @@ import { ACCOUNT_CATEGORY_LABELS, ACCOUNT_CATEGORY_ORDER, SUB_TYPE_LABELS, type 
 import { TAX_TREATMENT_LABELS, type AccountCategory, type TaxTreatment } from '@/lib/accounting';
 import { canWriteAccounting } from '@/components/accounting/roles';
 import { issueHandyPairing, renameHandyDevice, revokeHandyDevice } from '@/app/app/settings/handy/actions';
-import { deleteCategory, saveCategory, updateCategoryStation } from '@/app/app/settings/menu/actions';
+import { deleteCategory, deleteMenuItem, saveCategory, saveMenuItem, toggleSoldOut, updateCategoryStation } from '@/app/app/settings/menu/actions';
+import { isCustomPriceHelper } from '@/lib/custom-price';
 import { resolveSiteOrigin } from '@/lib/site-origin';
 import type {
   NativeAccountsPayload,
   NativeCategoriesPayload,
+  NativeMenuItemsPayload,
   NativeHandyDevicesPayload,
   NativeAlertsPayload,
   NativeApprovalsPayload,
@@ -45,7 +47,7 @@ type Supabase = Awaited<ReturnType<typeof createClient>>;
 type Store = { id: string; name: string };
 
 /** 設定の中の画面の名前（GET ?part=） */
-export const NATIVE_SETTINGS_PAGE_PARTS = ['soldout', 'clerks', 'hours', 'store', 'tax', 'loyalty', 'alerts', 'approvals', 'accounts', 'handy', 'categories'] as const;
+export const NATIVE_SETTINGS_PAGE_PARTS = ['soldout', 'clerks', 'hours', 'store', 'tax', 'loyalty', 'alerts', 'approvals', 'accounts', 'handy', 'categories', 'menuItems'] as const;
 export type NativeSettingsPagePart = (typeof NATIVE_SETTINGS_PAGE_PARTS)[number];
 export function isNativeSettingsPagePart(v: unknown): v is NativeSettingsPagePart {
   return typeof v === 'string' && (NATIVE_SETTINGS_PAGE_PARTS as readonly string[]).includes(v);
@@ -74,7 +76,8 @@ export async function loadNativeSettingsPage(
         | NativeApprovalsPayload
         | NativeAccountsPayload
         | NativeHandyDevicesPayload
-        | NativeCategoriesPayload;
+        | NativeCategoriesPayload
+        | NativeMenuItemsPayload;
     }
   | { ok: false; error: string }
 > {
@@ -376,6 +379,60 @@ export async function loadNativeSettingsPage(
       },
     };
   }
+  if (part === 'menuItems') {
+    const [{ data: categories }, { data: items }, { data: taxRates }] = await Promise.all([
+      supabase
+        .from('menu_categories')
+        .select('id, name, sort_order')
+        .eq('organization_id', ctx.organizationId)
+        .eq('status', 'active')
+        .or(`store_id.is.null,store_id.eq.${store.id}`)
+        .order('sort_order'),
+      supabase
+        .from('menu_items')
+        .select(
+          'id, store_id, category_id, name, name_en, name_kana, description, item_type, price, takeout_price, cost, tax_rate_id, duration_minutes, sell_start_time, sell_end_time, sort_order, is_sold_out, status, price_pending'
+        )
+        .eq('organization_id', ctx.organizationId)
+        .neq('status', 'deleted')
+        .or(`store_id.is.null,store_id.eq.${store.id}`)
+        .order('sort_order'),
+      supabase.from('tax_rates').select('id, name').eq('organization_id', ctx.organizationId).eq('status', 'active').order('is_default', { ascending: false }),
+    ]);
+    return {
+      ok: true,
+      payload: {
+        store,
+        canEdit: can(ctx.role, 'menu.manage'),
+        categories: (categories ?? []).map((c) => ({ id: c.id as string, name: c.name as string, sortOrder: Number(c.sort_order ?? 0) })),
+        taxRates: (taxRates ?? []).map((t) => ({ id: t.id as string, name: t.name as string })),
+        // 「その他（価格入力）」用の非表示の商品は出さない（Web の loadMenuSettingsData と同じ）
+        items: (items ?? [])
+          .filter((i) => !isCustomPriceHelper(i))
+          .map((i) => ({
+            id: i.id as string,
+            categoryId: (i.category_id as string | null) ?? null,
+            name: i.name as string,
+            nameEn: (i.name_en as string | null) ?? '',
+            nameKana: (i.name_kana as string | null) ?? '',
+            description: (i.description as string | null) ?? '',
+            itemType: i.item_type as 'food' | 'drink' | 'course' | 'option',
+            price: Number(i.price),
+            takeoutPrice: i.takeout_price == null ? null : Number(i.takeout_price),
+            cost: i.cost == null ? null : Number(i.cost),
+            taxRateId: (i.tax_rate_id as string | null) ?? null,
+            durationMinutes: i.duration_minutes == null ? null : Number(i.duration_minutes),
+            sellStartTime: (i.sell_start_time as string | null)?.slice(0, 5) ?? null,
+            sellEndTime: (i.sell_end_time as string | null)?.slice(0, 5) ?? null,
+            sortOrder: Number(i.sort_order ?? 0),
+            status: (i.status === 'hidden' ? 'hidden' : 'active') as 'active' | 'hidden',
+            isSoldOut: i.is_sold_out === true,
+            pricePending: i.price_pending === true,
+            shared: i.store_id === null,
+          })),
+      },
+    };
+  }
   return { ok: false, error: '画面が見つかりません' };
 }
 
@@ -466,5 +523,11 @@ export async function runNativeSettingsPageAction(
       return done(await deleteCategory(action.id));
     case 'categoryStation':
       return done(await updateCategoryStation(action.id, action.station));
+    case 'menuItemSave':
+      return done(await saveMenuItem({ ...action.item, id: action.item.id ?? undefined, storeId: store.id }));
+    case 'menuItemDelete':
+      return done(await deleteMenuItem(action.id));
+    case 'menuItemSoldOut':
+      return done(await toggleSoldOut(action.id, action.soldOut));
   }
 }

@@ -53,7 +53,30 @@ export type NativeSettingsPageAction =
   /** カテゴリ（/app/settings/categories。saveCategory / deleteCategory / updateCategoryStation） */
   | { type: 'categorySave'; id: string | null; name: string; nameEn: string; color: string; sortOrder: number }
   | { type: 'categoryDelete'; id: string }
-  | { type: 'categoryStation'; id: string; station: string };
+  | { type: 'categoryStation'; id: string; station: string }
+  /** メニュー・プラン（/app/settings/menu・/app/settings/plans。saveMenuItem / deleteMenuItem / toggleSoldOut） */
+  | { type: 'menuItemSave'; item: NativeMenuItemFields }
+  | { type: 'menuItemDelete'; id: string }
+  | { type: 'menuItemSoldOut'; id: string; soldOut: boolean };
+
+export interface NativeMenuItemFields {
+  id: string | null;
+  categoryId: string | null;
+  name: string;
+  nameEn: string;
+  nameKana: string;
+  description: string;
+  itemType: 'food' | 'drink' | 'course' | 'option';
+  price: number;
+  takeoutPrice: number | null;
+  cost: number | null;
+  taxRateId: string | null;
+  durationMinutes: number | null;
+  sellStartTime: string | null;
+  sellEndTime: string | null;
+  sortOrder: number;
+  status: 'active' | 'hidden';
+}
 
 export interface NativeStoreFields {
   name: string;
@@ -111,6 +134,9 @@ export const NATIVE_SETTINGS_PAGE_ACTION_TYPES: readonly NativeSettingsPageActio
   'categorySave',
   'categoryDelete',
   'categoryStation',
+  'menuItemSave',
+  'menuItemDelete',
+  'menuItemSoldOut',
 ];
 
 export function isNativeSettingsPageActionType(v: unknown): v is NativeSettingsPageActionType {
@@ -332,7 +358,69 @@ export function parseNativeSettingsPageAction(raw: unknown): Parsed {
     if (typeof b.station !== 'string' || !/^[a-z_]{1,20}$/.test(b.station)) return bad('ステーションの指定が不正です');
     return { ok: true, action: { type: 'categoryStation', id: b.id, station: b.station } };
   }
+  if (b.type === 'menuItemSave') {
+    const f = b.item as Record<string, unknown> | undefined;
+    if (!f || typeof f !== 'object') return bad();
+    const str = (v: unknown, max = 200) => (typeof v === 'string' ? v.slice(0, max) : '');
+    const numOrNull = (v: unknown): number | null | false => (v == null || v === '' ? null : typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : false);
+    const types = ['food', 'drink', 'course', 'option'] as const;
+    const itemType = types.find((t) => t === f.itemType);
+    if (!itemType) return bad('種別の指定が不正です');
+    if (!str(f.name).trim()) return bad('商品名を入力してください');
+    if (typeof f.price !== 'number' || !Number.isFinite(f.price) || f.price < 0) return bad('価格は0以上で入力してください');
+    const takeout = numOrNull(f.takeoutPrice);
+    const cost = numOrNull(f.cost);
+    const duration = numOrNull(f.durationMinutes);
+    if (takeout === false || cost === false || duration === false) return bad('金額・時間は0以上で入力してください');
+    const uuidOrNull = (v: unknown): string | null | false => (v == null || v === '' ? null : isUuid(v) ? v : false);
+    const id = uuidOrNull(f.id);
+    const categoryId = uuidOrNull(f.categoryId);
+    const taxRateId = uuidOrNull(f.taxRateId);
+    if (id === false || categoryId === false || taxRateId === false) return bad('指定が正しくありません');
+    const hhmm = (v: unknown): string | null => (typeof v === 'string' && /^\d{1,2}:\d{2}$/.test(v) ? v : null);
+    return {
+      ok: true,
+      action: {
+        type: 'menuItemSave',
+        item: {
+          id,
+          categoryId,
+          name: str(f.name, 120),
+          nameEn: str(f.nameEn, 120),
+          nameKana: str(f.nameKana, 120),
+          description: str(f.description, 1000),
+          itemType,
+          price: Math.round(f.price),
+          takeoutPrice: takeout == null ? null : Math.round(takeout),
+          cost: cost == null ? null : Math.round(cost),
+          taxRateId,
+          durationMinutes: duration == null ? null : Math.round(duration),
+          sellStartTime: hhmm(f.sellStartTime),
+          sellEndTime: hhmm(f.sellEndTime),
+          sortOrder: typeof f.sortOrder === 'number' && Number.isInteger(f.sortOrder) ? f.sortOrder : 0,
+          status: f.status === 'hidden' ? 'hidden' : 'active',
+        },
+      },
+    };
+  }
+  if (b.type === 'menuItemDelete') {
+    if (!isUuid(b.id)) return bad('商品が見つかりません');
+    return { ok: true, action: { type: 'menuItemDelete', id: b.id } };
+  }
+  if (b.type === 'menuItemSoldOut') {
+    if (!isUuid(b.id) || typeof b.soldOut !== 'boolean') return bad('商品が見つかりません');
+    return { ok: true, action: { type: 'menuItemSoldOut', id: b.id, soldOut: b.soldOut } };
+  }
   return bad();
+}
+
+/** メニュー・プランの画面の読み込み（GET ?part=menuItems） */
+export interface NativeMenuItemsPayload {
+  store: { id: string; name: string };
+  canEdit: boolean;
+  categories: { id: string; name: string; sortOrder: number }[];
+  taxRates: { id: string; name: string }[];
+  items: (NativeMenuItemFields & { id: string; isSoldOut: boolean; pricePending: boolean; shared: boolean })[];
 }
 
 /** カテゴリの画面の読み込み（GET ?part=categories） */
