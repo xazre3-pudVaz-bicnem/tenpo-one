@@ -181,6 +181,11 @@ export async function saveCheckoutPresets(storeId: string, input: CheckoutPreset
   const current = (existing?.settings as Record<string, unknown> | null) ?? {};
   // 保存する形は checkoutPresetsFrom に通して揃える（壊れた値をそのまま書かない）
   const presets = checkoutPresetsFrom({ checkout: checkoutPresetsToJson(input) });
+  // 送られてこなかった支払方法の内訳（Web の画面に無い「外部端末」など）は今のまま残す
+  const before = checkoutPresetsFrom(current);
+  for (const [method, list] of Object.entries(before.methodBrands)) {
+    if (!(method in presets.methodBrands)) presets.methodBrands[method] = list;
+  }
   const nextSettings = { ...current, checkout: checkoutPresetsToJson(presets) };
   const { error } = await supabase
     .from('store_settings')

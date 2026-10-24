@@ -443,22 +443,12 @@ struct NativeCheckoutView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(m == .sitePoints ? "どのサイトのポイント？ / Which site" : "\(m.label)の種類 / \(m.english) type")
                         .font(.system(size: 12, weight: .bold)).foregroundColor(NT.ink3)
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 96), spacing: 6)], spacing: 6) {
+                    // 各社の名前を白いカードに並べる（ロゴのように。店が設定で選んだものだけ。2026-10-24 22:35 Ronnie）
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 4), spacing: 8) {
                         ForEach(brands(m)) { b in
                             let on = payments.contains { $0.method == m && $0.brand == b }
-                            let c = b.color ?? m.color
-                            Button { addRow(m, brand: b) } label: {
-                                VStack(spacing: 0) {
-                                    Text(b.name).font(.system(size: 13, weight: .bold))
-                                    if b.english != b.name { Text(b.english).font(.system(size: 9, weight: .semibold)).opacity(0.8) }
-                                }
-                                    .lineLimit(1).minimumScaleFactor(0.7)
-                                    .foregroundColor(on ? (b.id == "tabelog" ? NT.ink : .white) : c)
-                                    .frame(maxWidth: .infinity, minHeight: 38)
-                                    .background(RoundedRectangle(cornerRadius: 10).fill(on ? c : c.opacity(0.12)))
-                                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(c.opacity(on ? 0 : 0.35), lineWidth: 1))
-                            }
-                            .buttonStyle(PressableStyle())
+                            Button { addRow(m, brand: b) } label: { NPBrandTile(brand: b, fallback: m.color, on: on) }
+                                .buttonStyle(PressableStyle())
                         }
                     }
                 }
@@ -597,34 +587,28 @@ struct NativeCheckoutView: View {
                 }
                 .buttonStyle(PressableStyle())
             } else {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: 6)], spacing: 6) {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 4), spacing: 8) {
                     ForEach(terminals, id: \.id) { t in
                         // provider（支払の内訳）には端末の名前を残す（40字まで。Web の「外部端末」の内訳と同じ）
                         let b = NPBrand(id: String(t.name.prefix(40)), name: t.name)
                         let on = payments.contains { $0.method == .external && $0.brand == b }
                         Button { addRow(.external, brand: b) } label: {
-                            HStack(spacing: 6) {
-                                Circle().fill(t.online ? Color(hex: 0x1E8F62) : NT.ink3).frame(width: 8, height: 8)
-                                Text(t.name).lineLimit(1).minimumScaleFactor(0.7)
-                            }
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundColor(on ? .white : c)
-                            .frame(maxWidth: .infinity, minHeight: 38)
-                            .background(RoundedRectangle(cornerRadius: 10).fill(on ? c : c.opacity(0.12)))
-                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(c.opacity(on ? 0 : 0.35), lineWidth: 1))
+                            // stera はつながっていると自動で出る（緑の点＝いま使える）
+                            NPBrandTile(brand: NPBrand(id: "stera", name: t.name), fallback: Color(hex: 0x0B6E6E), on: on)
+                                .overlay(alignment: .topLeading) {
+                                    HStack(spacing: 4) {
+                                        Circle().fill(t.online ? Color(hex: 0x1E8F62) : NT.ink3).frame(width: 8, height: 8)
+                                        Text(t.online ? "接続中" : "未接続").font(.system(size: 9, weight: .bold))
+                                    }
+                                    .foregroundColor(on ? .white : NT.ink3).padding(6)
+                                }
                         }
                         .buttonStyle(PressableStyle())
                     }
                     ForEach(named) { b in
                         let on = payments.contains { $0.method == .external && $0.brand == b }
-                        Button { addRow(.external, brand: b) } label: {
-                            Text(b.name).font(.system(size: 13, weight: .bold)).lineLimit(1).minimumScaleFactor(0.7)
-                                .foregroundColor(on ? .white : c)
-                                .frame(maxWidth: .infinity, minHeight: 38)
-                                .background(RoundedRectangle(cornerRadius: 10).fill(on ? c : c.opacity(0.12)))
-                                .overlay(RoundedRectangle(cornerRadius: 10).stroke(c.opacity(on ? 0 : 0.35), lineWidth: 1))
-                        }
-                        .buttonStyle(PressableStyle())
+                        Button { addRow(.external, brand: b) } label: { NPBrandTile(brand: b, fallback: c, on: on) }
+                            .buttonStyle(PressableStyle())
                     }
                     Button { model.openInWeb(path: "/app/settings/payments") } label: {
                         HStack(spacing: 4) {
@@ -632,8 +616,8 @@ struct NativeCheckoutView: View {
                             Text("追加 / Add")
                         }
                         .font(.system(size: 13, weight: .bold)).foregroundColor(NT.ink2)
-                        .frame(maxWidth: .infinity, minHeight: 38)
-                        .background(RoundedRectangle(cornerRadius: 10).stroke(NT.lilacLine, style: StrokeStyle(lineWidth: 1, dash: [4])))
+                        .frame(maxWidth: .infinity, minHeight: 62)
+                        .background(RoundedRectangle(cornerRadius: 12).stroke(NT.lilacLine, style: StrokeStyle(lineWidth: 1, dash: [4])))
                     }
                     .buttonStyle(PressableStyle())
                 }

@@ -3140,6 +3140,10 @@ final class NativePaymentsModel: NSPModel<NPYPayload> {
         if kind == "manual" { discounts[i].value = 0 } else if discounts[i].value <= 0 { discounts[i].value = kind == "percent" ? 10 : 500 }
     }
     func savePresets() async {
+        // クレジット・QR・電子マネーは 1 つ以上（全部外すと既定の一覧に戻るため）。外部端末は 0 でもよい
+        if let empty = ["credit", "qr", "emoney"].first(where: { (methods[$0] ?? []).isEmpty && methods[$0] != nil }) {
+            toast = "\(["credit": "クレジット", "qr": "QR", "emoney": "電子マネー"][empty] ?? empty)は 1 つ以上選んでください"; return
+        }
         let all = brands + methods.values.flatMap { $0 }
         if discounts.contains(where: { $0.name.trimmingCharacters(in: .whitespaces).isEmpty }) || all.contains(where: { $0.name.trimmingCharacters(in: .whitespaces).isEmpty }) {
             toast = "名前を入れてください"; return
@@ -3302,14 +3306,47 @@ struct NativePaymentsView: View {
             NSPCard(title: "ポイントの選択肢", en: "ホットペッパー・ぐるなび・食べログ など") {
                 brandList(Binding(get: { model.brands }, set: { model.brands = $0 }), prefix: "pt", placeholder: "例: ホットペッパー", canEdit: p.canEdit)
             }
+            // 支払方法の種類は「使うもの」をタップで選ぶ（選んだものだけ会計画面に出る。2026-10-24 22:35 Ronnie）
             ForEach(p.methods) { m in
-                NSPCard(title: "\(m.label)の種類", en: m.id) {
-                    brandList(Binding(get: { model.methods[m.id] ?? [] }, set: { model.methods[m.id] = $0 }), prefix: m.id, placeholder: "例: VISA", canEdit: p.canEdit)
+                NSPCard(title: m.id == "external" ? "外部端末（決済端末）" : "\(m.label)の種類",
+                        en: m.id == "external" ? "stera はつなぐと自動で出ます。ほかの端末はここで選ぶ" : "使うものをタップ（選んだものだけ会計画面に出ます）") {
+                    brandPicker(m.id, canEdit: p.canEdit)
                 }
             }
             if p.canEdit {
                 HStack { Spacer(); NSPButton(text: "保存する", primary: true, busy: model.busy == "presets", disabled: !model.presetsDirty) { Task { await model.savePresets() } } }
             }
+        }
+    }
+
+    /// 一覧から「使うもの」を選ぶ（順番は一覧の順、自分で足したものは後ろ）
+    private func brandPicker(_ methodId: String, canEdit: Bool) -> some View {
+        let catalog = NPBrands.catalog(methodId)
+        let keys = Set(catalog.map(\.id))
+        let current = model.methods[methodId] ?? []
+        let chosen = Set(current.map(\.key))
+        let fallback = NPPayMethod(rawValue: methodId)?.color ?? NFColor.navy
+        return VStack(alignment: .leading, spacing: 4) {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 5), spacing: 10) {
+                ForEach(catalog) { b in
+                    Button {
+                        var picked = chosen
+                        if picked.contains(b.id) { picked.remove(b.id) } else { picked.insert(b.id) }
+                        let custom = current.filter { !keys.contains($0.key) }
+                        // 名前は店で変えたものを残す
+                        let named = Dictionary(current.map { ($0.key, $0.name) }, uniquingKeysWith: { a, _ in a })
+                        model.methods[methodId] = catalog.filter { picked.contains($0.id) }.map { NPYBrand(key: $0.id, name: named[$0.id] ?? $0.name) } + custom
+                    } label: {
+                        NPBrandTile(brand: NPBrand(id: b.id, name: current.first { $0.key == b.id }?.name ?? b.name), fallback: fallback, on: chosen.contains(b.id), height: 58)
+                    }
+                    .buttonStyle(PressableStyle()).disabled(!canEdit)
+                }
+            }
+            .padding(.horizontal, 18).padding(.top, 16)
+            Text("一覧に無いものは下で足せます").font(.system(size: 12.5)).foregroundColor(NFColor.ink3).padding(.horizontal, 18).padding(.top, 8)
+            brandList(Binding(get: { (model.methods[methodId] ?? []).filter { !keys.contains($0.key) } },
+                              set: { custom in model.methods[methodId] = (model.methods[methodId] ?? []).filter { keys.contains($0.key) } + custom }),
+                      prefix: methodId, placeholder: methodId == "external" ? "例: 楽天ペイ端末" : "例: \(catalog.first?.name ?? "")", canEdit: canEdit)
         }
     }
 
