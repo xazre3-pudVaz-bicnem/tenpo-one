@@ -270,12 +270,7 @@ final class AppState: ObservableObject {
             return
         }
         if nativeSettingsPage != nil { nativeSettingsPage = nil }
-        // 予約設定（予約受付ルール）はネイティブ。ほかの行き先に行ったら予約設定は閉じる（2026-10-24）
-        if url.path == "/app/settings/booking" {
-            closeAllNative()
-            if !nativeBooking { nativeBooking = true }
-            return
-        }
+        // 予約設定（/app/settings/booking）は上の NativeSettingsPageKey（.booking）で開く。店舗台帳の 📅 から開いた nativeBooking は閉じる
         nativeBooking = false
         // ホーム・テーブル一覧はネイティブで（Web の画面の上に重ねる。Native ON の iPad は Web のホーム・テーブル一覧を見せない）
         if url.path == "/app/dashboard" || url.path == "/app" {

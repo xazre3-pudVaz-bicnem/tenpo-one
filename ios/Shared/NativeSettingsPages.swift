@@ -15,6 +15,10 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
     case loyalty = "loyalty"
     case alerts = "alerts"
     case approvals = "approvals"
+    /// ほかの session が作った画面（テーブルQR・予約設定・iPhoneハンディ）も設定からネイティブで
+    case tableQr = "tableQr"
+    case booking = "bookingSettings"
+    case handyQr = "handyqr"
     var id: String { rawValue }
 
     /// Web の道（クエリは見ない）
@@ -28,6 +32,9 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
         case .loyalty: return "/app/settings/loyalty"
         case .alerts: return "/app/settings/alerts"
         case .approvals: return "/app/settings/approvals"
+        case .tableQr: return "/app/settings/tables/qr-print"
+        case .booking: return "/app/settings/booking"
+        case .handyQr: return "/app/settings/handy-qr"
         }
     }
     var title: String {
@@ -40,6 +47,9 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
         case .loyalty: return "会員・ポイント"
         case .alerts: return "異常検知の閾値"
         case .approvals: return "承認ルール"
+        case .tableQr: return "テーブルQRコード"
+        case .booking: return "予約受付ルール"
+        case .handyQr: return "iPhoneハンディ"
         }
     }
     var en: String {
@@ -52,6 +62,9 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
         case .loyalty: return "Loyalty"
         case .alerts: return "Alerts"
         case .approvals: return "Approvals"
+        case .tableQr: return "Table QR"
+        case .booking: return "Booking rules"
+        case .handyQr: return "Handy QR"
         }
     }
 
@@ -75,6 +88,9 @@ struct NativeSettingsPageScreen: View {
         case .loyalty: NativeLoyaltyScreen()
         case .alerts: NativeAlertsScreen()
         case .approvals: NativeApprovalsScreen()
+        case .tableQr: NativeTableQrFromSettings()
+        case .booking: NativeBookingFromSettings()
+        case .handyQr: NativeHandyQrFromSettings()
         }
     }
 }
@@ -1720,5 +1736,31 @@ struct NativeApprovalsView: View {
                 .buttonStyle(PressableStyle())
             }
         }
+    }
+}
+
+// MARK: - ほかの session が作った画面を「設定の中」として出す（戻るは設定へ）
+
+struct NativeTableQrFromSettings: View {
+    @EnvironmentObject var state: AppState
+    var body: some View { NativeTableQrScreen(onClose: { state.goNativeSettings() }) }
+}
+
+struct NativeBookingFromSettings: View {
+    @StateObject private var model = NativeBookingSettingsModel()
+    @EnvironmentObject var state: AppState
+    var body: some View {
+        NativeBookingSettingsView(model: model, onHome: { state.goNativeSettings() }, onLedger: { state.goNativeLedger() }, onWeb: { path in state.leaveNativeFloor(to: path) })
+    }
+}
+
+struct NativeHandyQrFromSettings: View {
+    @EnvironmentObject var state: AppState
+    var body: some View {
+        VStack(spacing: 0) {
+            NativeTopBar(storeName: "", title: "iPhoneハンディ", subtitle: "Handy QR", userName: "", onHome: { state.goNativeSettings() })
+            NativeHandyQrSheet(onClose: { state.goNativeSettings() }, onWeb: { path in state.leaveNativeFloor(to: path) })
+        }
+        .background(Color.white.ignoresSafeArea())
     }
 }
