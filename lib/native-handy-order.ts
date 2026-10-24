@@ -1,5 +1,7 @@
 import { isUuid } from '@/lib/native-pos';
 import { HANDY_EXTEND_OPTIONS } from '@/lib/handy-cancel';
+import { parseDraft } from '@/lib/native-floor';
+import type { VisitDraft } from '@/lib/handy-visit';
 
 /**
  * iPhone アプリのネイティブのハンディ：卓の画面と注文の画面（2026-10-25 01:38 Ronnie「iPhone も native に」）。
@@ -30,9 +32,19 @@ export type NativeHandyOrderAction =
   | { type: 'handyGuests'; orderId: string; guestCount: number }
   | { type: 'handyExtend'; orderId: string; minutes: number }
   | { type: 'handyCancelItem'; orderId: string; orderItemId: string }
-  | { type: 'handyPrintBill'; orderId: string };
+  | { type: 'handyPrintBill'; orderId: string }
+  /** お客様情報（空席の卓の来店登録 → 伝票を作る。Web の /handy/[tableId]/setup と同じ startHandyVisit） */
+  | { type: 'handyStartVisit'; tableId: string; draft: VisitDraft };
 
-export const NATIVE_HANDY_ORDER_TYPES = ['handyOpenOrder', 'handySubmit', 'handyGuests', 'handyExtend', 'handyCancelItem', 'handyPrintBill'] as const;
+export const NATIVE_HANDY_ORDER_TYPES = [
+  'handyOpenOrder',
+  'handySubmit',
+  'handyGuests',
+  'handyExtend',
+  'handyCancelItem',
+  'handyPrintBill',
+  'handyStartVisit',
+] as const;
 
 type Parsed = { ok: true; action: NativeHandyOrderAction } | { ok: false; error: string };
 const bad = (error = '内容が正しくありません'): Parsed => ({ ok: false, error });
@@ -108,6 +120,12 @@ export function parseNativeHandyOrderAction(raw: unknown): Parsed {
     case 'handyPrintBill':
       if (!isUuid(b.orderId)) return bad('伝票の指定が正しくありません');
       return { ok: true, action: { type: 'handyPrintBill', orderId: b.orderId } };
+    case 'handyStartVisit': {
+      if (!isUuid(b.tableId)) return bad('卓の指定が正しくありません');
+      const draft = parseDraft(b.draft);
+      if (!draft) return bad('お客様情報の内容が正しくありません');
+      return { ok: true, action: { type: 'handyStartVisit', tableId: b.tableId, draft } };
+    }
     default:
       return bad();
   }

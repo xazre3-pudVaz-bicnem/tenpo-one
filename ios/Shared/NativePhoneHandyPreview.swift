@@ -58,15 +58,36 @@ extension NativePhoneOrderModel {
     }
 }
 
+extension NativePhoneSetupModel {
+    static func sample() -> NativePhoneSetupModel {
+        let m = NativePhoneSetupModel(tableId: "00000000-0000-4000-8000-000000000002")
+        m.payload = NPHSetupPayload(ok: true, hostTableId: nil, table: NPHTableInfo(id: m.tableId, name: "T-3", capacityMax: 4, status: nil),
+                                    clerk: NHDNamed(id: "k", name: "佐藤"),
+                                    planItems: [NPHPlanItem(id: "p1", name: "飲み放題 120分", price: 1800, durationMinutes: 120, kind: "drink"),
+                                                NPHPlanItem(id: "p2", name: "プレミアム飲み放題", price: 2500, durationMinutes: 120, kind: "drink"),
+                                                NPHPlanItem(id: "p3", name: "おまかせコース", price: 5000, durationMinutes: 150, kind: "course")],
+                                    plans: [NPHPlanMode(id: "normal", name: "アラカルト"), NPHPlanMode(id: "drink", name: "飲み放題"),
+                                            NPHPlanMode(id: "buffet", name: "食べ放題"), NPHPlanMode(id: "food", name: "食べ飲み放題"), NPHPlanMode(id: "course", name: "コース")],
+                                    sources: ["フリー", "電話", "食べログ", "ホットペッパー", "ぐるなび", "Google"])
+        m.male = 2; m.female = 1
+        m.toggleMode("drink")
+        if let p = m.payload?.planItems?.first { m.togglePlanItem(p) }
+        return m
+    }
+}
+
 struct NativePhoneHandyPreview: View {
     let kind: String
     @StateObject private var table = NativePhoneTableModel.sample()
     @StateObject private var order = NativePhoneOrderModel.sample()
+    @StateObject private var setup = NativePhoneSetupModel.sample()
 
     var body: some View {
         switch kind {
         case "phoneTable":
             NativePhoneTableView(model: table, onBack: {}, onOrder: { _ in }, onSetup: {})
+        case "phoneSetup":
+            NativePhoneSetupView(model: setup, onBack: {}, onStarted: { _ in })
         case "phoneConfirm":
             NPHConfirmSheet(model: order, onSent: { _ in }).environment(\.colorScheme, .light).background(Color.white)
         default:

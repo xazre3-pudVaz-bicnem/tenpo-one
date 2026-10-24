@@ -95,7 +95,12 @@ final class AppState: ObservableObject {
     @Published var nativeHandyHome = false
     @Published var nativeOwnerHome = false
     /// iPhone ハンディの卓・注文をネイティブで出しているとき（/handy/<卓>・/handy/<卓>/order の代わり。2026-10-25 Ronnie「iPhone も native に」）
-    struct PhoneHandyRoute: Equatable, Hashable { let tableId: String; var orderId: String? }
+    struct PhoneHandyRoute: Equatable, Hashable {
+        let tableId: String
+        var orderId: String?
+        /// お客様情報（来店登録）から（/handy/<卓>/setup）
+        var setup = false
+    }
     @Published var phoneHandy: PhoneHandyRoute?
     /// iPhone：店長・オーナーのログイン画面（/login）を出しているとき（スタッフ用の QR ログインのボタンを重ねる）
     @Published var ownerLoginPage = false
@@ -639,6 +644,7 @@ final class AppState: ObservableObject {
         let id = parts[1]
         guard id.count == 36, id.allSatisfy({ $0.isHexDigit || $0 == "-" }) else { return nil }
         if parts.count == 2 { return PhoneHandyRoute(tableId: id, orderId: nil) }
+        if parts.count == 3, parts[2] == "setup" { return PhoneHandyRoute(tableId: id, orderId: nil, setup: true) }
         if parts.count == 3, parts[2] == "order" {
             let order = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "order" }?.value
             guard let order, order.count == 36 else { return PhoneHandyRoute(tableId: id, orderId: nil) }

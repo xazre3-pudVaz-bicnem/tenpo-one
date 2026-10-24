@@ -104,9 +104,11 @@ async function firstCoursePlanItem(planItemIds: string[]): Promise<string | null
  */
 export async function startHandyVisit(
   tableId: string,
-  draft: VisitDraft
+  draft: VisitDraft,
+  /** iPhone アプリのネイティブのハンディは来店経路を選ばなくてよい（iPad と同じく会計で選ぶ。2026-10-25）。Web のハンディは今まで通り必須 */
+  opts: { sourceOptional?: boolean } = {}
 ): Promise<{ orderId: string; planItemError: string | null }> {
-  return startVisit(tableId, draft, { sendPlanNow: true });
+  return startVisit(tableId, draft, { sendPlanNow: true, sourceOptional: opts.sourceOptional === true });
 }
 
 /**
