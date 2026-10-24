@@ -12,7 +12,6 @@ import SwiftUI
 enum NativePhoneOwnerRegistry {
     /// Web の道 → key（その下の道 /…/<id> も同じ key）。追加は 1 行ずつ
     private static let entries: [(String, String)] = [
-        // ("/app/reports", "reports"),
         ("/app/attendance", "attendance"),
         ("/app/shifts", "shifts"),
         ("/app/leave", "leave"),
