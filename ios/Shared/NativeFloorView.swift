@@ -541,11 +541,17 @@ struct NativeReservationPanel: View {
             // 色は店舗台帳と同じ（ネイビー・黄色・状態の色の帯。2026-10-24 20:35 Ronnie「ご予約台帳の色と合わせて」）
             Button(action: onLedger) {
                 HStack(spacing: 10) {
-                    Image(systemName: "calendar").font(.system(size: 20, weight: .bold)).foregroundColor(NLColor.yellow)
-                    // 「ご予約台帳」の下に「Reservation」（2026-10-24 20:56 Ronnie「こう書いて」）
-                    VStack(spacing: 1) {
-                        Text("ご予約台帳").font(.system(size: 17, weight: .heavy)).foregroundColor(.white)
-                        Text("Reservation").font(.system(size: 12, weight: .bold)).foregroundColor(NLColor.yellow)
+                    // 「ご予約台帳」の下に「Reservation」（2026-10-24 20:56 Ronnie「こう書いて」）。
+                    // 印の高さは 2 行の字の上から下までと同じ（20:59「印を字の上と下の線に合わせて」）
+                    let lineTop: CGFloat = 20, lineBottom: CGFloat = 14
+                    Image(systemName: "calendar")
+                        .resizable().scaledToFit()
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundColor(NLColor.yellow)
+                        .frame(height: lineTop + lineBottom)
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text("ご予約台帳").font(.system(size: 17, weight: .heavy)).foregroundColor(.white).frame(height: lineTop)
+                        Text("Reservation").font(.system(size: 12, weight: .bold)).foregroundColor(NLColor.yellow).frame(height: lineBottom)
                     }
                     Image(systemName: "chevron.right").font(.system(size: 12, weight: .heavy)).foregroundColor(.white.opacity(0.6))
                 }
