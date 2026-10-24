@@ -20,6 +20,8 @@ struct NPBluetoothLink: Codable, Equatable, Identifiable {
 
     static let makers: Set<String> = ["star", "epson", "sii", "escpos"]
     var isAppLink: Bool { via == "bluetooth" || via == "usb" }
+    /// プリンターとして使ってよい機械か（Bluetooth LE はプリンターらしい名前かプリンターのサービスを出したものだけ。2026-10-24 Ronnie）
+    var isPrinter: Bool { BluetoothPrinters.isPrinterDevice(maker: maker, via: via, deviceId: deviceId, name: deviceName) }
 }
 
 struct NPDirectPrintConfig: Equatable {
@@ -31,8 +33,9 @@ struct NPDirectPrintConfig: Equatable {
 
     var isEmpty: Bool { printerIds.isEmpty && bluetooth.isEmpty && lan.isEmpty }
     /// この iPad で印刷係が要るか（Bluetooth・LAN・Wi-Fi のどれかを使っている）
-    var usesDevicePrinting: Bool { !printerIds.isEmpty || bluetooth.contains { $0.isAppLink } || !lan.isEmpty }
-    var appLinks: [NPBluetoothLink] { bluetooth.filter { $0.isAppLink } }
+    var usesDevicePrinting: Bool { !printerIds.isEmpty || bluetooth.contains { $0.isAppLink && $0.isPrinter } || !lan.isEmpty }
+    /// アプリが送る機械（プリンターでないもの＝テレビなどにつないだ古い設定は使わない）
+    var appLinks: [NPBluetoothLink] { bluetooth.filter { $0.isAppLink && $0.isPrinter } }
 
     /// 中身が同じか（updatedAt は見ない）
     func sameContent(as other: NPDirectPrintConfig) -> Bool {
@@ -97,6 +100,15 @@ final class NativePrintConfig: ObservableObject {
         next.updatedAt = Date().timeIntervalSince1970 * 1000
         store(next, notify: true)
         mirrorToWeb()
+    }
+
+    /// プリンターではない機械へのつなぎ（テレビ・スピーカーなど。昔の設定）を外す。外したものを返す
+    @discardableResult
+    func dropNonPrinterLinks() -> [NPBluetoothLink] {
+        let bad = config.bluetooth.filter { $0.isAppLink && !$0.isPrinter }
+        guard !bad.isEmpty else { return [] }
+        update { c in c.bluetooth.removeAll { l in bad.contains { $0.printerId == l.printerId && $0.deviceId == l.deviceId } } }
+        return bad
     }
 
     /// Web（ブリッジの printConfig）から。reason: load（画面を開いたとき）/ change（Web の設定で変えたとき）
