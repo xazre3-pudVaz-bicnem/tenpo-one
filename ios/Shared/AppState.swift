@@ -83,6 +83,11 @@ final class AppState: ObservableObject {
     @Published var reportsTo: String?
     /// 伝票明細で開く伝票（/app/orders/<id> から。2026-10-24）
     @Published var slipsOpenId: String?
+    /// まだ専用の台が無かった画面（勤怠・日報…）をネイティブで開いているとき（NativeModules.swift の仕組み）
+    @Published var nativeModule: NativeModuleRoute?
+    /// ネイティブの店舗台帳で開く表示（list / week / gourmet / wait / month / inbox / messages）と、開く予約。Web の ?view= ?open= から
+    @Published var ledgerView: String?
+    @Published var ledgerOpenId: String?
     /// iPhone：ハンディのテーブル一覧（/handy の代わり）とオーナー・店長のホーム（/app/dashboard の代わり）をネイティブで出しているか（2026-10-24）
     @Published var nativeHandyHome = false
     @Published var nativeOwnerHome = false
@@ -174,6 +179,7 @@ final class AppState: ObservableObject {
         nativeExpenses = false; nativeStock = false; nativeInventory = false; nativeVendors = false; nativePurchases = false; nativeCoupons = false; nativeSettings = false
         nativeSettingsPage = nil
         nativeBooking = false
+        nativeModule = nil
     }
 
     /// 設定の中のネイティブの画面を開く（押した瞬間に出す。Web も同じ道にそろえる）
@@ -270,6 +276,17 @@ final class AppState: ObservableObject {
             return
         }
         if nativeSettingsPage != nil { nativeSettingsPage = nil }
+        // まだ専用の台が無かった画面（勤怠・日報…）をネイティブで（NativeModuleRegistry に道があるもの。2026-10-24 22:05 Ronnie「全部ネイティブ」）
+        if let route = NativeModuleRegistry.route(for: url) {
+            closeAllNative()
+            nativeModule = route
+            return
+        }
+        if nativeModule != nil { nativeModule = nil }
+        // 店舗ナウ（/app/now）はテーブル一覧（オーダー・会計）と同じ中身なので、iPad ではネイティブのテーブル一覧で。
+        // メニュー一覧（/app/menu）・管理（/app/management）はネイティブのホームで
+        if url.path == "/app/now" { closeAllNative(); nativeFloor = true; return }
+        if url.path == "/app/menu" || url.path == "/app/management" { closeAllNative(); nativeHome = true; return }
         // 予約設定（/app/settings/booking）は上の NativeSettingsPageKey（.booking）で開く。店舗台帳の 📅 から開いた nativeBooking は閉じる
         nativeBooking = false
         // ホーム・テーブル一覧はネイティブで（Web の画面の上に重ねる。Native ON の iPad は Web のホーム・テーブル一覧を見せない）
@@ -296,19 +313,24 @@ final class AppState: ObservableObject {
             nativeNotices = false; nativeBudget = false; nativeCustomers = false; nativeScan = false; nativeReports = false; if !nativeFloor { nativeFloor = true }
             return
         }
-        // 設定（レジの設定 /app/pos/settings と、設定の入口 /app/settings）はネイティブで。中の各画面（/app/settings/…）は Web のまま
-        if url.path == "/app/pos/settings" || url.path == "/app/settings" {
+        // 設定（レジの設定 /app/pos/settings・設定の入口 /app/settings・設定の一覧 /app/settings-all・プリンター・レジ端末）はネイティブで。
+        // プリンター・レジ端末はネイティブの設定の「ハードウェア」（最初に開くページ）
+        if url.path == "/app/pos/settings" || url.path == "/app/settings" || url.path == "/app/settings-all"
+            || url.path == "/app/settings/printers" || url.path.hasPrefix("/app/settings/printers/") || url.path == "/app/settings/devices" {
             nativeFloor = false; nativeNotices = false; nativeBudget = false; nativeCustomers = false; nativeScan = false; nativeReports = false
             nativeHome = false; nativeLedger = false; nativeCash = false; nativeCashIo = false; nativeQuick = false; nativeSlips = false
             nativeExpenses = false; nativeStock = false; nativeInventory = false; nativeVendors = false; nativePurchases = false; nativeCoupons = false
             if !nativeSettings { nativeSettings = true }
             return
         }
-        if url.path == "/app/reservations" {
+        // 店舗台帳は全部の表示をネイティブで（1日・予約リスト・週間・グルメ別・キャンセル待ち・月間・受付管理・メッセージ。
+        // 2026-10-24 22:05 Ronnie「iPad のオプションは全部ネイティブ」）。?open=<予約> はその予約の詳細を開く
+        if url.path == "/app/reservations" || url.path == "/app/reservations/list" || url.path == "/app/reservations/calendar" {
             let q = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
-            let view = q.first { $0.name == "view" }?.value
-            // 1日のスケジュールだけネイティブ（週間・グルメ別・キャンセル待ち・受付管理はまだ Web）
-            if view == nil || view == "day" {
+            let view = url.path == "/app/reservations/list" ? "list" : url.path == "/app/reservations/calendar" ? "month" : q.first { $0.name == "view" }?.value
+            ledgerView = view
+            ledgerOpenId = q.first { $0.name == "open" }?.value
+            do {
                 nativeFloor = false; nativeNotices = false; nativeBudget = false; nativeCustomers = false; nativeScan = false; nativeReports = false
                 nativeCash = false
                 nativeCashIo = false
@@ -561,6 +583,7 @@ final class AppState: ObservableObject {
 
     /// ネイティブのフロアから伝票を開く（注文・レジ会計）
     func openNativeOrder(_ orderId: String, checkout: Bool) {
+        nativeModule = nil
         recentlyClosed = nil
         webChosenOrders.remove(orderId)
         nativeOrder = NativeOrderRef(id: orderId, checkout: checkout)
@@ -568,6 +591,7 @@ final class AppState: ObservableObject {
 
     /// ネイティブの画面を閉じて Web の画面へ（店舗台帳・設定など、まだネイティブに無い画面）
     func leaveNativeFloor(to path: String) {
+        nativeModule = nil
         nativeBooking = false
         nativeCashIo = false
         nativeQuick = false
@@ -583,6 +607,7 @@ final class AppState: ObservableObject {
 
     /// ネイティブの設定へ（Web も /app/pos/settings にそろえる）
     func goNativeSettings() {
+        nativeModule = nil
         closeAllNative()
         nativeSettings = true
         WebViewController.current?.load(AppConfig.url("/app/pos/settings"))
@@ -590,6 +615,7 @@ final class AppState: ObservableObject {
 
     /// ネイティブの店舗台帳へ（Web も /app/reservations にそろえる）
     func goNativeLedger() {
+        nativeModule = nil
         nativeBooking = false
         nativeCash = false
         nativeCashIo = false
@@ -604,6 +630,7 @@ final class AppState: ObservableObject {
 
     /// ネイティブのフロアからホームへ（ネイティブのホームを出す。Web も /app/dashboard にそろえる）
     func goNativeHome() {
+        nativeModule = nil
         nativeBooking = false
         nativeCashIo = false
         nativeQuick = false
@@ -619,6 +646,7 @@ final class AppState: ObservableObject {
 
     /// ネイティブのホームからフロアへ（Web も /app/floor にそろえる＝レシート・ドロアの Web 側の仕組みはそのまま）
     func goNativeFloor() {
+        nativeModule = nil
         nativeBooking = false
         nativeCashIo = false
         nativeQuick = false
@@ -634,6 +662,7 @@ final class AppState: ObservableObject {
 
     /// ネイティブのレジ開局・レジクローズへ（Web も同じ画面にそろえる）
     func goNativeCash(_ path: String) {
+        nativeModule = nil
         nativeCashIo = false
         nativeQuick = false
         nativeSlips = false
@@ -648,6 +677,7 @@ final class AppState: ObservableObject {
 
     /// ネイティブの在庫設定へ
     func goNativeNotices(tab: String = "notifications") {
+        nativeModule = nil
         noticesTab = tab
         nativeFloor = false
         nativeHome = false
@@ -663,12 +693,14 @@ final class AppState: ObservableObject {
     }
 
     func goNativeCustomers() {
+        nativeModule = nil
         nativeFloor = false; nativeNotices = false; nativeBudget = false; nativeHome = false; nativeLedger = false; nativeCash = false; nativeCashIo = false; nativeQuick = false; nativeSlips = false; nativeExpenses = false; nativeStock = false; nativeInventory = false; nativeVendors = false; nativePurchases = false; nativeCoupons = false; nativeSettings = false
         nativeCustomers = true
         WebViewController.current?.load(AppConfig.url("/app/customers"))
     }
 
     func goNativeBudget() {
+        nativeModule = nil
         nativeFloor = false; nativeNotices = false; nativeHome = false; nativeLedger = false; nativeCash = false; nativeCashIo = false; nativeQuick = false; nativeSlips = false; nativeExpenses = false; nativeStock = false; nativeInventory = false; nativeVendors = false; nativePurchases = false; nativeCoupons = false; nativeSettings = false
         budgetView = "daily"
         budgetMonth = nil
@@ -685,6 +717,7 @@ final class AppState: ObservableObject {
     }
 
     func goNativeStock() {
+        nativeModule = nil
         nativeFloor = false; nativeNotices = false; nativeBudget = false; nativeCustomers = false; nativeScan = false; nativeReports = false
         nativeHome = false
         nativeLedger = false
@@ -700,6 +733,7 @@ final class AppState: ObservableObject {
 
     /// ネイティブの発注へ（Web も同じ場所にそろえる）
     func goNativePurchases(_ route: NUPurchasesRoute = .list) {
+        nativeModule = nil
         nativeFloor = false; nativeNotices = false; nativeBudget = false; nativeCustomers = false; nativeScan = false; nativeReports = false
         nativeHome = false; nativeLedger = false; nativeCash = false; nativeCashIo = false; nativeQuick = false; nativeSlips = false; nativeExpenses = false; nativeStock = false; nativeInventory = false; nativeVendors = false
         purchasesRoute = route
@@ -716,6 +750,7 @@ final class AppState: ObservableObject {
 
     /// ネイティブの在庫へ（Web も /app/inventory にそろえる）
     func goNativeInventory(tab: String = "items") {
+        nativeModule = nil
         nativeFloor = false; nativeNotices = false; nativeBudget = false; nativeCustomers = false; nativeScan = false; nativeReports = false
         nativeHome = false; nativeLedger = false; nativeCash = false; nativeCashIo = false; nativeQuick = false; nativeSlips = false; nativeExpenses = false; nativeStock = false
         inventoryTab = tab
@@ -727,6 +762,7 @@ final class AppState: ObservableObject {
 
     /// ネイティブの仕入・経費へ
     func goNativeExpenses() {
+        nativeModule = nil
         nativeStock = false; nativeInventory = false; nativeVendors = false; nativePurchases = false; nativeCoupons = false; nativeSettings = false
         nativeFloor = false; nativeNotices = false; nativeBudget = false; nativeCustomers = false; nativeScan = false; nativeReports = false
         nativeHome = false
@@ -741,6 +777,7 @@ final class AppState: ObservableObject {
 
     /// ネイティブの伝票明細へ
     func goNativeSlips() {
+        nativeModule = nil
         nativeFloor = false; nativeNotices = false; nativeBudget = false; nativeCustomers = false; nativeScan = false; nativeReports = false
         nativeHome = false
         nativeLedger = false
@@ -755,6 +792,7 @@ final class AppState: ObservableObject {
 
     /// ネイティブの即会計へ
     func goNativeQuick() {
+        nativeModule = nil
         nativeFloor = false; nativeNotices = false; nativeBudget = false; nativeCustomers = false; nativeScan = false; nativeReports = false
         nativeHome = false
         nativeLedger = false
@@ -769,6 +807,7 @@ final class AppState: ObservableObject {
 
     /// ネイティブの入出金へ
     func goNativeCashIo(tab: String = "register") {
+        nativeModule = nil
         cashTab = tab
         nativeFloor = false; nativeNotices = false; nativeBudget = false; nativeCustomers = false; nativeScan = false; nativeReports = false
         nativeHome = false
@@ -784,6 +823,7 @@ final class AppState: ObservableObject {
 
     /// ネイティブの予約設定へ（店舗台帳の 📅「台帳設定」。Web も /app/settings/booking にそろえる）
     func goNativeBooking() {
+        nativeModule = nil
         nativeFloor = false; nativeNotices = false; nativeBudget = false; nativeCustomers = false; nativeScan = false; nativeReports = false
         nativeHome = false; nativeLedger = false; nativeCash = false; nativeCashIo = false; nativeQuick = false; nativeSlips = false; nativeExpenses = false; nativeStock = false; nativeInventory = false; nativeVendors = false; nativePurchases = false
         nativeBooking = true

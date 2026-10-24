@@ -247,6 +247,37 @@ final class NativeLedgerModel: ObservableObject {
     @Published var monthMode = false
     /// 予約リストを未連絡（仮予約）だけにする（Web の 予約リスト status=pending）
     @Published var pendingOnly = false
+    /// 開く予約（Web の ?open=。台帳を読み直したら詳細を出す）
+    @Published var openReservationId: String?
+    /// 開く受付管理・メッセージ（Web の ?view=inbox / messages）
+    @Published var inboxRequest: String?
+
+    /// Web の ?view= に合わせて表示を切り替える（list / week / gourmet / waitlist / month / inbox / messages）
+    func applyView(_ v: String) {
+        listMode = false; gourmetMode = false; weekMode = false; waitMode = false; monthMode = false; pendingOnly = false
+        switch v {
+        case "list": listMode = true
+        case "week": weekMode = true
+        case "gourmet": gourmetMode = true
+        case "waitlist", "wait": waitMode = true
+        case "month", "calendar": monthMode = true
+        case "inbox", "messages": inboxRequest = v
+        default: break
+        }
+    }
+
+    /// その予約の日の台帳を読んで、詳細を開く
+    func open(reservationId id: String) async {
+        if payload?.reservations.contains(where: { $0.id == id }) == true { openReservationId = id; return }
+        var comps = URLComponents(url: AppConfig.url("/api/app/v1/pos"), resolvingAgainstBaseURL: false)!
+        comps.queryItems = [URLQueryItem(name: "part", value: "ledger"), URLQueryItem(name: "open", value: id)]
+        if let data = try? await NativeAPI.shared.send(URLRequest(url: comps.url!)),
+           let p = try? JSONDecoder().decode(NLPayload.self, from: data) {
+            payload = p
+            date = p.date
+        }
+        openReservationId = id
+    }
     private var clock: Timer?
     private var refresher: Timer?
     private var offset: TimeInterval = 0
@@ -457,6 +488,16 @@ struct NativeLedgerView: View {
         }
         .onAppear { model.start(); inbox.start() }
         .task { await floorLoop() }
+        // Web の ?open=<予約>：読めたら詳細を出す
+        .onChange(of: model.openReservationId) { id in
+            guard let id else { return }
+            if let r = model.payload?.reservations.first(where: { $0.id == id }) { selected = r } else { model.show(toast: "この予約は台帳の表示対象外です（キャンセル済みなど）") }
+            model.openReservationId = nil
+        }
+        // Web の ?view=messages：メッセージを開く（受付管理 inbox は上の 予約受付 が開く）
+        .onChange(of: model.inboxRequest) { v in
+            if v == "messages" { inboxOpen = true; model.inboxRequest = nil }
+        }
         .onDisappear { model.stop(); inbox.stop() }
         // 予約を登録・変更したら、お知らせの数も読み直す
         .onChange(of: model.payload?.summary.count ?? -1) { _ in Task { await inbox.load() } }

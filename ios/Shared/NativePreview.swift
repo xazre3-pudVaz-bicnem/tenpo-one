@@ -141,6 +141,18 @@ struct NativeLedgerScreen: View {
             }
         )
         .onChange(of: state.nativeOrder) { new in if new == nil { Task { await model.refresh(silent: true) } } }
+        // Web の ?view= ?open= から来たら、その表示・その予約（2026-10-24 22:05 Ronnie「全部ネイティブ」）
+        .onAppear(perform: applyRoute)
+        .onChange(of: state.ledgerView) { _ in applyRoute() }
+        .onChange(of: state.ledgerOpenId) { _ in applyRoute() }
+    }
+
+    private func applyRoute() {
+        if let v = state.ledgerView { model.applyView(v); state.ledgerView = nil }
+        if let id = state.ledgerOpenId {
+            state.ledgerOpenId = nil
+            Task { await model.open(reservationId: id) }
+        }
     }
 }
 

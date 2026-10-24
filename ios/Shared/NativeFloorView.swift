@@ -209,24 +209,19 @@ struct NativeFloorView: View {
     // MARK: 色の見方
 
     private var legend: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            // 印の見方（お会計希望＝財布の緑・呼び出し＝ベル・5 分過ぎ＝赤・プラン＝光る印。2026-10-24 22:02 Ronnie）
-            HStack(spacing: 12) {
+        // 印と色の見方を 1 行に（2026-10-24 22:13 Ronnie「1 行で。書かなくても使ううちに分かる」）。入らないときは横にずらせる
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) {
                 legendIcon(NativeTableCard.walletSymbol, NativeTableCard.callGreen, "お会計希望")
                 legendIcon("bell.fill", NFColor.callDeep, "呼び出し")
                 legendIcon("bell.fill", NativeTableCard.callRed, "5分すぎ")
                 ForEach(["飲み放題", "食べ放題", "コース", "誕生日", "記念日"], id: \.self) { k in
                     if let ic = NRWKeywordIcon.symbol(for: k) { legendIcon(ic, NativeTableCard.markColor(ic), k) }
                 }
-                Spacer()
-            }
-            HStack(spacing: 12) {
+                Rectangle().fill(NFColor.line).frame(width: 1, height: 14)
                 ForEach([NFTileState.seated, .ordered, .lo, .over, .pay], id: \.self) { st in
                     if let b = NativeTableCard.band(st) { legendDot(b.color, border: nil, b.jp) }
                 }
-                legendDot(NFColor.tileSurface(.free), border: Color.black.opacity(0.15), "空席")
-                Text("下の帯の細い線＝残り時間").font(.system(size: 12)).foregroundColor(NFColor.ink3)
-                Spacer()
             }
         }
         .padding(.top, 2)

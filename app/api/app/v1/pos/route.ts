@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { daysAgoJst, todayJst } from '@/lib/format';
 import { getSessionContext, type SessionContext } from '@/lib/auth';
+import { NATIVE_MODULE_GET, NATIVE_MODULE_POST } from '@/lib/native-modules/registry';
 import { can, type PermissionAction } from '@/lib/permissions';
 import { createClient } from '@/lib/supabase/server';
 import { isNativeCustomLine, isUuid, NATIVE_APP_HEADER, parseNativePosAction, type NativePosAction, type NativePrintJob } from '@/lib/native-pos';
@@ -275,6 +276,15 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const part = url.searchParams.get('part');
 
+  // まだ専用の台が無かった画面（勤怠・日報…）の API（lib/native-modules/registry.ts。2026-10-24 22:05 Ronnie「全部ネイティブ」）
+  const moduleGet = part ? NATIVE_MODULE_GET[part] : undefined;
+  if (moduleGet) {
+    const store = ctx.currentStore ?? ctx.stores[0] ?? null;
+    if (!store) return json({ ok: false, error: '店舗がありません' }, 404);
+    const r = await moduleGet({ ctx, url, store: { id: store.id, name: store.name } });
+    return json(r.body, r.status ?? 200);
+  }
+
   // 店のメニューまわり（伝票に寄らない。iPad に保存して次から先に出す。2026-10-21「メニューは超速く」）
   if (part === 'catalog') {
     const storeParam = url.searchParams.get('store');
@@ -335,8 +345,15 @@ export async function GET(request: Request) {
     if (!store) return json({ ok: false, error: '店舗がありません' }, 404);
     if (ctx.disabledFeatures?.has('reservations')) return json({ ok: false, error: 'この機能は使えません', useWeb: true }, 403);
     const dateParam = url.searchParams.get('date');
-    const date = dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) ? dateParam : null;
-    const ledger = await loadNativeLedger(ctx, await createClient(), store, date);
+    let date = dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) ? dateParam : null;
+    const supabase = await createClient();
+    // ?open=<予約> だけ来たら（設定・グルメ連携の「台帳で開く」）、その予約の日の台帳を返す
+    const openId = url.searchParams.get('open');
+    if (!date && openId && /^[0-9a-f-]{36}$/i.test(openId)) {
+      const { data: hit } = await supabase.from('reservations').select('reserved_date').eq('id', openId).eq('store_id', store.id).maybeSingle();
+      if (hit?.reserved_date) date = String(hit.reserved_date);
+    }
+    const ledger = await loadNativeLedger(ctx, supabase, store, date);
     return json({ ok: true, ...ledger });
   }
 
@@ -874,6 +891,22 @@ export async function POST(request: Request) {
   } catch {
     return json({ ok: false, error: '内容が正しくありません' }, 400);
   }
+  // まだ専用の台が無かった画面（勤怠・日報…）の操作（lib/native-modules/registry.ts）。店の回線の確認もここで
+  const moduleType = raw && typeof raw === 'object' ? (raw as { type?: unknown }).type : null;
+  const modulePost = typeof moduleType === 'string' ? NATIVE_MODULE_POST[moduleType] : undefined;
+  if (modulePost) {
+    const store = ctx.currentStore ?? ctx.stores[0] ?? null;
+    if (!store) return json({ ok: false, error: '店舗がありません' }, 404);
+    const problem = await networkProblem(ctx);
+    if (problem) return json({ ok: false, error: problem }, 403);
+    try {
+      const r = await modulePost({ ctx, raw: raw as Record<string, unknown>, store: { id: store.id, name: store.name } });
+      return json(r.body, r.status ?? 200);
+    } catch (e) {
+      return json({ ok: false, error: errorText(e, '保存できませんでした') }, 500);
+    }
+  }
+
   // レジの iPad がネット無しで受けた伝票を、ネットが戻ったら入れる（lib/native-offline-sync-server.ts。2026-10-24 Ronnie
   // 「net chalepaxi afai sync」）。1回＝1伝票。何度送っても二重にならない
   // 返事はいつも 200（iPad が retry を読んで、もう一度送るか人が見るかを決める）。レジの権限（pos.checkout）が要る
