@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
-import { daysAgoJst, todayJst } from '@/lib/format';
+import { loadDailyReportsPage } from '@/lib/daily-reports-server';
 import { PageHeader } from '@/components/ui/page-header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge, type BadgeTone } from '@/components/ui/badge';
@@ -16,8 +16,6 @@ export const metadata: Metadata = { title: '日報' };
 
 const STATUS_LABEL: Record<string, string> = { draft: '下書き', submitted: '提出済み', approved: '承認済み' };
 const STATUS_TONE: Record<string, BadgeTone> = { draft: 'gray', submitted: 'warning', approved: 'success' };
-const WRITE_ROLES = ['org_owner', 'hq_admin', 'area_manager', 'store_manager', 'assistant_manager'];
-const APPROVE_ROLES = ['org_owner', 'hq_admin', 'area_manager'];
 
 export default async function DailyReportsPage({
   searchParams,
@@ -27,46 +25,8 @@ export default async function DailyReportsPage({
   const ctx = await requirePermission('dashboard.view');
   const supabase = await createClient();
   const sp = await searchParams;
-  const today = todayJst();
-  const date = sp.date && /^\d{4}-\d{2}-\d{2}$/.test(sp.date) ? sp.date : daysAgoJst(1);
-
-  const targetStores = ctx.currentStore ? [ctx.currentStore] : ctx.stores;
-  const storeIds = targetStores.map((s) => s.id);
-  const canWrite = WRITE_ROLES.includes(ctx.role);
-  const canApprove = APPROVE_ROLES.includes(ctx.role);
-
-  const [reportsRes, closingsRes] = await Promise.all([
-    storeIds.length > 0
-      ? supabase.from('daily_reports').select('id, store_id, status').in('store_id', storeIds).eq('business_date', date)
-      : Promise.resolve({ data: [] }),
-    storeIds.length > 0
-      ? supabase.from('daily_closings').select('store_id').in('store_id', storeIds).eq('business_date', date)
-      : Promise.resolve({ data: [] }),
-  ]);
-  const reportByStore = new Map((reportsRes.data ?? []).map((r) => [r.store_id, r]));
-  const closedStores = new Set((closingsRes.data ?? []).map((c) => c.store_id));
-
-  // ---- 過去日報の検索 ----
-  const histFrom = sp.from || daysAgoJst(29);
-  const histTo = sp.to || today;
-  let histQuery = supabase
-    .from('daily_reports')
-    .select('id, store_id, business_date, status, stores(name)')
-    .in('store_id', storeIds.length > 0 ? storeIds : ['00000000-0000-0000-0000-000000000000'])
-    .gte('business_date', histFrom)
-    .lte('business_date', histTo)
-    .order('business_date', { ascending: false })
-    .limit(200);
-  if (sp.store) histQuery = histQuery.eq('store_id', sp.store);
-  if (sp.status) histQuery = histQuery.eq('status', sp.status);
-  const { data: historyData } = await histQuery;
-  const history = (historyData ?? []).map((r) => ({
-    id: r.id as string,
-    storeId: r.store_id as string,
-    storeName: (r.stores as unknown as { name: string } | null)?.name ?? '不明',
-    businessDate: r.business_date as string,
-    status: r.status as string,
-  }));
+  // 読み込みは lib/daily-reports-server.ts（iPad ネイティブと同じ。2026-10-24 Ronnie「iPad のオプション・サブオプションは全部ネイティブ」）
+  const { today, date, targetStores, canWrite, canApprove, rows, histFrom, histTo, history } = await loadDailyReportsPage(ctx, supabase, sp);
 
   return (
     <div>
@@ -93,9 +53,7 @@ export default async function DailyReportsPage({
             </div>
           ) : (
             <ul className="divide-y divide-gray-100">
-              {targetStores.map((s) => {
-                const report = reportByStore.get(s.id);
-                const closed = closedStores.has(s.id);
+              {rows.map(({ store: s, report, closed }) => {
                 return (
                   <li key={s.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3">
                     <div className="min-w-0">
