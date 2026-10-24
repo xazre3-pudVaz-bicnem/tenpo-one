@@ -49,7 +49,7 @@ const ICONS: Record<string, LucideIcon> = {
   shield: ShieldCheck,
 };
 
-export function NavIcon({ name, className }: { name: string; className?: string }) {
+export function NavIcon({ name, className, style }: { name: string; className?: string; style?: React.CSSProperties }) {
   const Icon = ICONS[name] ?? Home;
-  return <Icon className={className} aria-hidden="true" />;
+  return <Icon className={className} style={style} aria-hidden="true" />;
 }

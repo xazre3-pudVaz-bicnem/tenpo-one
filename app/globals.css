@@ -581,51 +581,71 @@ body.theme-regi:has(.regi-shell) {
 }
 
 /*
- * 新しい管理画面（パソコン）の配色（2026-10-24 Ronnie「管理画面はアプリ（レジ）とは別のスタイルに」）。
- * Design「TENPO ONE 管理画面 レイアウト案」の色：上部バーは黒に近い紫、アクセントは紫、背景は薄い藤色。
+ * 新しい管理画面（パソコン）の配色。2026-10-24 Ronnie「管理画面はアプリ（レジ）とは別のスタイルに」→ 同日「iPad の機能と同じ色で見てみたい」：
+ * iPad のホーム（ios/Shared/NativeHomeView.swift・components/dashboard/regi-home.tsx）と同じ、チャコールの上のバー・白と薄い灰色の地・
+ * 青のアクセント（オーダー・会計／売上の数字 #1a5ad6・#0a3fa8）。文字と線は iOS の灰色（#1c1c1e / #8e8e93 / #e5e5ea）。
+ * 画面ごとの色（即会計・入出金＝緑、仕入・経費＝青、伝票・設定＝灰、レジクローズ＝黒、在庫＝茶）は上の [data-regi-accent] がそのまま効く
+ * （components/layout/content-area.tsx が管理画面でも data-regi-accent を付ける。lib/regi-accent.ts の adminAccentFor）。
+ * 店舗台帳だけは iPad の台帳（NLColor）のネイビー＋黄色（下の ledger）。
  * app/app/layout.tsx が新しい管理画面のときだけ shell と body に付ける。レジ（iPad）・ハンディは theme-regi のまま。
  */
 .theme-admin {
-  --color-primary: #7b3fe4;
-  --color-primary-deep: #5b2c8f;
-  --color-primary-soft: #efe7fb;
-  --color-navy: #15121a;
-  --color-navy-soft: #2a2138;
-  --color-surface: #f7f5fa;
-  --color-plum: #15121a;
-  --color-plum-2: #2a2138;
-  --color-royal: #5b2c8f;
-  --color-iris: #7b3fe4;
-  --color-iris-deep: #5b2c8f;
-  --color-iris-soft: #efe7fb;
-  --color-wisteria: #d3c1ee;
-  --color-lilac: #f7f5fa;
-  --color-lilac-soft: #faf8fd;
-  --color-line: #e6e0ef;
-  --color-ink: #2a2138;
-  --color-ink-2: #5a5070;
-  --color-ink-3: #7c7391;
-  --color-gray-50: #faf8fd;
-  --color-gray-100: #f3f0f8;
-  --color-gray-200: #e6e0ef;
-  --color-gray-300: #d3cbe2;
-  --color-gray-400: #a69cbb;
-  --color-gray-500: #7c7391;
-  --color-gray-600: #5a5070;
-  --color-gray-700: #463d5a;
-  --color-gray-800: #2a2138;
-  --color-gray-900: #1d1628;
-  --color-gray-950: #15121a;
-  --background-image-brand: linear-gradient(180deg, #8d57ea, #5b2c8f);
-  --ui-btn2-bg: #efe7fb;
-  --ui-btn2-fg: #5b2c8f;
-  --ui-btn2-hover: #d3c1ee;
+  --color-primary: #1a5ad6;
+  --color-primary-deep: #0a3fa8;
+  --color-primary-soft: #e7effd;
+  --color-navy: #292725;
+  --color-navy-soft: #45403b;
+  --color-surface: #f2f2f7;
+  --color-plum: #292725;
+  --color-plum-2: #45403b;
+  --color-royal: #0a3fa8;
+  --color-iris: #1a5ad6;
+  --color-iris-deep: #0a3fa8;
+  --color-iris-soft: #e7effd;
+  --color-wisteria: #bcd0f5;
+  --color-lilac: #f2f2f7;
+  --color-lilac-soft: #f7f7fa;
+  --color-line: #e5e5ea;
+  --color-ink: #1c1c1e;
+  --color-ink-2: #3a3a3c;
+  --color-ink-3: #8e8e93;
+  --color-gray-50: #f9f9fb;
+  --color-gray-100: #f2f2f7;
+  --color-gray-200: #e5e5ea;
+  --color-gray-300: #d1d1d6;
+  --color-gray-400: #aeaeb2;
+  --color-gray-500: #8e8e93;
+  --color-gray-600: #636366;
+  --color-gray-700: #48484a;
+  --color-gray-800: #3a3a3c;
+  --color-gray-900: #2c2c2e;
+  --color-gray-950: #1c1c1e;
+  --background-image-brand: linear-gradient(180deg, #2a6fe6, #0a3fa8);
+  --ui-btn2-bg: #e7effd;
+  --ui-btn2-fg: #0a3fa8;
+  --ui-btn2-hover: #bcd0f5;
   color: var(--color-ink);
 }
 body.theme-admin {
-  background-color: #f7f5fa;
+  background-color: #f2f2f7;
   /* パソコンの管理画面はページ全体をふつうにスクロールさせる（レジの揺れ止めは不要） */
   touch-action: auto;
+}
+/* 管理画面の店舗台帳（予約台帳・カレンダー・予約一覧）：iPad の台帳と同じネイビー＋黄色。
+   .theme-admin にだけ付けるので、iPad のウェブのレジの台帳（テラコッタ）は変わらない */
+body:has([data-regi-accent='ledger']) .theme-admin {
+  --color-iris: #353057;
+  --color-iris-deep: #171333;
+  --color-iris-soft: #ecebf5;
+  --color-royal: #171333;
+  --color-wisteria: #c9c6e0;
+  --color-primary: #353057;
+  --color-primary-deep: #171333;
+  --color-primary-soft: #ecebf5;
+  --background-image-brand: linear-gradient(180deg, #353057, #171333);
+  --ui-btn2-bg: #fff3cc;
+  --ui-btn2-fg: #171333;
+  --ui-btn2-hover: #ffc634;
 }
 
 /*
