@@ -522,20 +522,17 @@ struct NativeReservationPanel: View {
     var onLedger: () -> Void
 
     private static let notArrived: Set<String> = ["pending", "confirmed", "waiting"]
-    private static let arrived: Set<String> = ["arrived", "seated", "billing", "completed"]
     /// 開始時刻からこの時間を過ぎても来店がなければ「未連絡」
     private static let lateMs: Double = 15 * 60_000
 
     private var rows: [NFReservation] { model.payload?.reservations ?? [] }
 
     var body: some View {
-        let total = rows.filter { $0.status != "no_show" }
-        let people = total.reduce(0) { $0 + $1.partySize }
-        let today = total.filter { $0.createdToday }
-        let todayPeople = today.reduce(0) { $0 + $1.partySize }
-        let came = total.filter { Self.arrived.contains($0.status) }.count
-        let waiting = total.filter { Self.notArrived.contains($0.status) }
+        // 来店待ちのお客様だけを出す。集計のタイルは出さず、黄色の「来店待ち」だけ
+        // （2026-10-24 20:50 Ronnie「来店待ちのお客様だけ出るので、ほかは書かなくていい。黄色に 来店待ち だけ」）
+        let waiting = rows.filter { Self.notArrived.contains($0.status) }
         let remaining = waiting.count
+        let waitingPeople = waiting.reduce(0) { $0 + $1.partySize }
 
         VStack(spacing: 10) {
             VStack(spacing: 2) {
@@ -559,20 +556,25 @@ struct NativeReservationPanel: View {
             }
             .buttonStyle(PressableStyle())
             .padding(.horizontal, 12)
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
-                sum("本日のご予約", groups: total.count, people: people, color: NLColor.blue)
-                sum("当日ご予約", groups: today.count, people: todayPeople, color: NLColor.navy2)
-                sum("来店済", groups: came, people: nil, color: NLColor.green)
-                sum("未来店", groups: remaining, people: nil, color: NLColor.yellow)
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text("来店待ち").font(.system(size: 16, weight: .heavy)).foregroundColor(NLColor.navy)
+                Spacer(minLength: 4)
+                Text("\(remaining)").font(.system(size: 20, weight: .heavy)).monospacedDigit().foregroundColor(NLColor.navy)
+                Text("組").font(.system(size: 11, weight: .bold)).foregroundColor(NLColor.navy.opacity(0.7))
+                if waitingPeople > 0 {
+                    Text("\(waitingPeople)").font(.system(size: 15, weight: .heavy)).monospacedDigit().foregroundColor(NLColor.navy).padding(.leading, 4)
+                    Text("名").font(.system(size: 11, weight: .bold)).foregroundColor(NLColor.navy.opacity(0.7))
+                }
             }
+            .padding(.horizontal, 14).frame(height: 48)
+            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(NLColor.yellow))
             .padding(.horizontal, 12)
-            Divider().overlay(NFColor.line)
             ScrollView {
                 LazyVStack(spacing: 0) {
-                    if total.isEmpty {
-                        Text("本日のご予約はありません").font(.system(size: 13)).foregroundColor(NFColor.ink3).padding(.vertical, 24)
+                    if waiting.isEmpty {
+                        Text("来店待ちのお客様はいません").font(.system(size: 13)).foregroundColor(NFColor.ink3).padding(.vertical, 24)
                     }
-                    ForEach(total) { r in
+                    ForEach(waiting) { r in
                         row(r)
                         Divider().overlay(NFColor.line.opacity(0.7))
                     }
@@ -600,29 +602,6 @@ struct NativeReservationPanel: View {
         .overlay(RoundedRectangle(cornerRadius: NFColor.tileRadius, style: .continuous).stroke(Color.black.opacity(0.06), lineWidth: 1))
     }
 
-    /// 店舗台帳の上のタイルと同じ形（左に状態の色の帯）
-    private func sum(_ label: String, groups: Int, people: Int?, color: Color) -> some View {
-        HStack(spacing: 8) {
-            Rectangle().fill(color).frame(width: 4, height: 30).clipShape(Capsule())
-            VStack(alignment: .leading, spacing: 1) {
-                Text(label).font(.system(size: 10.5, weight: .semibold)).foregroundColor(NLColor.muted).lineLimit(1)
-                HStack(alignment: .firstTextBaseline, spacing: 1) {
-                    Text("\(groups)").font(.system(size: 18, weight: .heavy)).foregroundColor(NLColor.ink)
-                    Text("組").font(.system(size: 11, weight: .medium)).foregroundColor(NLColor.muted)
-                    if let people {
-                        Text("\(people)").font(.system(size: 13, weight: .bold)).foregroundColor(NLColor.muted).padding(.leading, 5)
-                        Text("名").font(.system(size: 11, weight: .medium)).foregroundColor(NLColor.muted)
-                    }
-                }
-                .monospacedDigit().lineLimit(1).minimumScaleFactor(0.7)
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 10).frame(height: 52)
-        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white))
-        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(NLColor.line, lineWidth: 1))
-    }
-
     private func chip(_ r: NFReservation) -> (String, Color, Color) {
         // 店舗台帳の状態の色（来店待ち＝黄・来店済み＝緑・未連絡＝赤・退店＝グレー）
         if Self.notArrived.contains(r.status) {
@@ -648,8 +627,11 @@ struct NativeReservationPanel: View {
                 Text("\(r.partySize)名・\(r.tableLabel)").font(.system(size: 12)).foregroundColor(NFColor.ink3).lineLimit(1)
             }
             Spacer(minLength: 4)
-            Text(c.0).font(.system(size: 11, weight: .bold)).foregroundColor(c.1)
-                .padding(.horizontal, 8).padding(.vertical, 4).background(Capsule().fill(c.2))
+            // 全部 来店待ち なので、印は「未連絡」（時間を過ぎた）のときだけ
+            if c.0 != "来店待ち" {
+                Text(c.0).font(.system(size: 11, weight: .bold)).foregroundColor(c.1)
+                    .padding(.horizontal, 8).padding(.vertical, 4).background(Capsule().fill(c.2))
+            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 9)
