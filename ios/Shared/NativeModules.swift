@@ -27,7 +27,6 @@ struct NativeModuleRoute: Hashable, Identifiable {
 enum NativeModuleRegistry {
     /// Web の道 → key（その下の道 /…/<id> も同じ key で開く）。追加は 1 行ずつ
     private static let entries: [(String, String)] = [
-        // ("/app/attendance", "attendance"),
         ("/app/costing", "costing"),
         ("/app/attendance", "attendance"),
         ("/app/kitchen", "kitchen"),
