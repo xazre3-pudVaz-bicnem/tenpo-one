@@ -20,6 +20,13 @@ enum NativePreview: String {
     case ownerReports, ownerOrders, ownerSlip, ownerBudgets, ownerBudgetDaily
     /// iPhone 店長・オーナー：通知・お知らせ・日報・タスク（一覧・詳細。2026-10-25。NativePhoneOwnerCommsPreview.swift）
     case phoneOwnerNotifications, phoneOwnerAnnouncements, phoneOwnerAnnouncement, phoneOwnerDailyReports, phoneOwnerDailyReport, phoneOwnerTasks, phoneOwnerTask
+    /// iPhone 店長・オーナーの店舗台帳（一覧・受付管理・予約の詳細・予約登録）と顧客（一覧・詳細）。2026-10-25（NativePhoneOwnerPreview.swift）
+    case phoneOwnerLedger
+    case phoneOwnerLedgerInbox
+    case phoneOwnerLedgerDetail
+    case phoneOwnerLedgerNew
+    case phoneOwnerCustomers
+    case phoneOwnerCustomer
 
     static var current: NativePreview? {
         guard let raw = UserDefaults.standard.string(forKey: "tenpoNativePreview") else { return nil }
@@ -65,6 +72,12 @@ struct NativePreviewView: View {
             NativePhoneStaffPreview(kind: kind.rawValue)
         case .ownerReports, .ownerOrders, .ownerSlip, .ownerBudgets, .ownerBudgetDaily: NativePhoneOwnerSalesPreview(kind: kind.rawValue)
         case .phoneOwnerNotifications, .phoneOwnerAnnouncements, .phoneOwnerAnnouncement, .phoneOwnerDailyReports, .phoneOwnerDailyReport, .phoneOwnerTasks, .phoneOwnerTask: NativePhoneOwnerCommsPreview(kind: kind.rawValue)
+        case .phoneOwnerLedger: NPOLedgerPreview(kind: "list")
+        case .phoneOwnerLedgerInbox: NPOLedgerPreview(kind: "inbox")
+        case .phoneOwnerLedgerDetail: NPOLedgerPreview(kind: "detail")
+        case .phoneOwnerLedgerNew: NPOLedgerPreview(kind: "new")
+        case .phoneOwnerCustomers: NPOCustomersPreview(kind: "list")
+        case .phoneOwnerCustomer: NPOCustomersPreview(kind: "detail")
         case .options, .price:
             NativeOrderView(model: model)
                 .statusBarHidden(true)
