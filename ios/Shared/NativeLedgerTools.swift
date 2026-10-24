@@ -2,7 +2,7 @@ import SwiftUI
 import UIKit
 
 // 店舗台帳の上のボタン（Web の components/reservations/ledger-header.tsx の LedgerTop と同じ働き）
-//   2026-10-24 Ronnie「ボタンはアイコンの下に文字。外に出すのは 退店管理・その他（…）・｜・予約登録 だけ。あとは その他 の中に」
+//   2026-10-24 Ronnie「ボタンはアイコンの下に文字。外に出すのは 会計・オーダー・その他（…）・｜・予約登録 だけ。あとは その他 の中に」（退店管理 → 会計・オーダー に名前を変更。行き先は同じフロア画面）
 //   その他 = CSV出力・集計・PDF作成・空席検索・直接来店・スケジュール・予約リスト・グルメ別・週間・月間カレンダー・ウェイティング・未連絡の予約・顧客台帳・台帳設定
 
 /// 空席検索の結果（サーバー ledgerFindSeats）
@@ -102,7 +102,8 @@ struct NLToolbar: View {
     var body: some View {
         HStack(spacing: 2) {
             Spacer(minLength: 0)
-            if p?.links?.tables ?? true { item("door.left.hand.open", "退店管理", action: onFloor) }
+            // 右上は「会計・オーダー」（ネイティブのオーダー・会計＝フロア画面へ。2026-10-24 Ronnie「退店管理はいらない、会計・オーダーにして」）
+            item("desktopcomputer", "会計・オーダー", action: onFloor)
             Menu {
                 Button(action: onCsv) { Label("CSV出力", systemImage: "tablecells") }
                 if p?.links?.analytics ?? false { Button { onWeb("/app/reports?from=\(month)-01&to=\(date)") } label: { Label("集計", systemImage: "chart.bar") } }
