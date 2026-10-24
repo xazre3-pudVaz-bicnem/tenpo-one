@@ -59,6 +59,8 @@ struct APIOrder: Codable {
     let seatFrom: String?
     let seatTo: String?
     let visitSourceId: String?
+    /// 会計の前に来店経路を選ぶ伝票か（卓の伝票。古いサーバーは無い）
+    let sourceRequired: Bool?
     let subtotal: Int
     let taxTotal: Int
     let serviceCharge: Int

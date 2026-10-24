@@ -146,6 +146,8 @@ struct NPOrder: Hashable {
     var serverTotal: Int? = nil
     /// 卓の無い伝票（テイクアウト・デリバリー・事前注文）。オーダー画面から会計へ行けるのはこれだけ（Web と同じ）
     var takeoutLike = false
+    /// 会計の前に来店経路を選ぶ伝票か（卓の伝票。2026-10-24 Ronnie「walkin は会計で選ばないと会計できない」）
+    var sourceRequired = false
 }
 
 /// オーダー画面の状態
@@ -592,7 +594,8 @@ final class NativeOrderModel: ObservableObject {
             visitSourceId: o.visitSourceId, serviceCharge: o.serviceCharge, discountTotal: o.discountTotal,
             discountReason: o.discountReason, clerkId: o.clerkId,
             serverSubtotal: o.subtotal, serverTax: o.taxTotal, serverTotal: o.total,
-            takeoutLike: ["takeout", "delivery", "pre_order"].contains(o.orderType)
+            takeoutLike: ["takeout", "delivery", "pre_order"].contains(o.orderType),
+            sourceRequired: o.sourceRequired ?? false
         )
     }
 

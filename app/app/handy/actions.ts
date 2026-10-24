@@ -116,18 +116,20 @@ export async function startHandyVisit(
  */
 export async function startRegisterVisit(
   tableId: string,
-  draft: VisitDraft
+  draft: VisitDraft,
+  opts: { sourceOptional?: boolean } = {}
 ): Promise<{ orderId: string; planItemError: string | null }> {
-  return startVisit(tableId, draft, { sendPlanNow: false });
+  return startVisit(tableId, draft, { sendPlanNow: false, sourceOptional: opts.sourceOptional === true });
 }
 
 async function startVisit(
   tableId: string,
   draft: VisitDraft,
-  { sendPlanNow }: { sendPlanNow: boolean }
+  { sendPlanNow, sourceOptional = false }: { sendPlanNow: boolean; sourceOptional?: boolean }
 ): Promise<{ orderId: string; planItemError: string | null }> {
   await requirePermission('pos.order');
-  const problem = validateVisitDraft(draft);
+  // iPad アプリの来店登録は来店経路を選ばなくてよい（会計で選ぶ）。Web のハンディ・レジは今まで通り
+  const problem = validateVisitDraft(draft, { requireSource: !sourceOptional });
   if (problem) throw new Error(problem);
 
   const guests = draft.male + draft.female;

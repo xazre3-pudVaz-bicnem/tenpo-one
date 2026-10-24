@@ -19,6 +19,17 @@ export const NATIVE_APP_HEADER = 'x-tenpo-app';
 export const NATIVE_FAVORITES_TAB = '__favorites__';
 export const NATIVE_BESTSELLERS_TAB = '__bestsellers__';
 
+/**
+ * 来店経路のボタンの並び：この店でよく使う順（多い順。同じ数なら設定の並び）。
+ * 2026-10-24 Ronnie「店舗毎 jun badi use hune gareko chha tyo first 順番」
+ */
+export function sortSourcesByUsage<T extends { id: string }>(sources: readonly T[], counts: ReadonlyMap<string, number>): T[] {
+  return sources
+    .map((s, i) => ({ s, i, n: counts.get(s.id) ?? 0 }))
+    .sort((a, b) => b.n - a.n || a.i - b.i)
+    .map((x) => x.s);
+}
+
 export interface NativePosCategory {
   id: string;
   name: string;
@@ -138,6 +149,8 @@ export interface NativePosOrder {
   seatTo: string | null;
   /** 来店経路（lib/handy-visit.ts の VISIT_SOURCES の id） */
   visitSourceId: string | null;
+  /** 会計の前に来店経路を選ぶ伝票か（卓の伝票＝予約がある。テイクアウト・即会計は選べない） */
+  sourceRequired: boolean;
   subtotal: number;
   taxTotal: number;
   serviceCharge: number;

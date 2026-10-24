@@ -104,7 +104,7 @@ struct NativeFloorView: View {
         // 来店登録（お客様情報）。Web の /app/floor/[tableId]/setup と同じ並び。大きめのカードで、中身が入る高さ
         .overlay {
             if let t = setupTable {
-                NativeModalCard(width: 1080) {
+                NativeModalCard(width: 760) {
                     NativeSetupSheet(
                         model: model,
                         table: t,
@@ -123,7 +123,7 @@ struct NativeFloorView: View {
         // 着席中の「お客様情報」は来店登録と同じ画面で直す（2026-10-24 Ronnie「same popup」）
         .overlay {
             if let g = guestInfo, let t = model.tables.first(where: { $0.order?.slips.contains(where: { $0.id == g.slip.id }) == true }) {
-                NativeModalCard(width: 1080) {
+                NativeModalCard(width: 760) {
                     NativeSetupSheet(model: model, table: t, edit: NFVisitEdit(order: g.order, slip: g.slip),
                                      onClose: { guestInfo = nil }, onStarted: { _ in guestInfo = nil })
                 }
