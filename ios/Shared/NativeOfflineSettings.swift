@@ -15,20 +15,14 @@ struct NativeOfflinePrintCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .top, spacing: 10) {
-                Image(systemName: "wifi.slash").font(.system(size: 20, weight: .semibold)).foregroundColor(NFColor.iris).frame(width: 28).padding(.top, 2)
-                VStack(alignment: .leading, spacing: 3) {
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text("ネットが無いときの印刷").font(.system(size: 17, weight: .heavy)).foregroundColor(NFColor.navy)
-                        Text("Offline printing").font(.system(size: 12)).foregroundColor(NFColor.ink3)
-                    }
-                }
+            HStack(alignment: .center, spacing: 12) {
+                Text("ネットが無いときの印刷").font(.system(size: 18, weight: .heavy)).foregroundColor(NFColor.navy)
                 Spacer(minLength: 0)
             }
-            .padding(.horizontal, 18).padding(.vertical, 14)
+            .padding(.horizontal, 20).padding(.vertical, 16)
             Rectangle().fill(NFColor.line).frame(height: 1)
 
-            line("準備", en: "Ready") {
+            line("準備", en: "") {
                 HStack(spacing: 6) {
                     Image(systemName: ready ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
                         .foregroundColor(ready ? NFColor.success : NFColor.danger)
@@ -38,7 +32,7 @@ struct NativeOfflinePrintCard: View {
             }
             if let kit {
                 ForEach(kit.printers) { p in
-                    line(p.name, en: p.usage == "receipt" ? "Receipt" : "Kitchen · \(p.stations.joined(separator: "/"))") {
+                    line(p.name, en: p.usage == "receipt" ? "レシート" : "厨房・\(p.stations.joined(separator: "/"))") {
                         let (text, color) = route(p)
                         Text(text).font(.system(size: 14, weight: .semibold)).foregroundColor(color)
                     }
@@ -121,12 +115,10 @@ struct NativeOfflinePrintCard: View {
                 }
                 Spacer(minLength: 0)
             }
-            .padding(.horizontal, 18).padding(.vertical, 14)
+            .padding(.horizontal, 20).padding(.vertical, 14)
         }
-        .background(RoundedRectangle(cornerRadius: 16).fill(Color.white))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(NFColor.line, lineWidth: 1))
-        // 設定の背景が白なので、うすい影で浮かせる（設定のカードと同じ）
-        .shadow(color: Color.black.opacity(0.05), radius: 6, y: 2)
+        .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Color.white))
+        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(NFColor.line, lineWidth: 1))
         .onAppear {
             kit = NativePrintKit.shared.kit
             ready = NativePrintKit.shared.ready
@@ -149,17 +141,17 @@ struct NativeOfflinePrintCard: View {
     }
 
     private func line<Content: View>(_ label: String, en: String, @ViewBuilder content: () -> Content) -> some View {
+        // 名前は左・状態は右（設定の他の行と同じ）
         HStack(alignment: .center, spacing: 16) {
-            VStack(alignment: .leading, spacing: 1) {
-                Text(label).font(.system(size: 15, weight: .bold)).foregroundColor(NFColor.ink)
-                Text(en).font(.system(size: 11)).foregroundColor(NFColor.ink3)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(label).font(.system(size: 17, weight: .bold)).foregroundColor(NFColor.ink)
+                if !en.isEmpty { Text(en).font(.system(size: 12, weight: .medium)).foregroundColor(NFColor.ink3) }
             }
-            .frame(width: 200, alignment: .leading)
+            Spacer(minLength: 16)
             content()
-            Spacer(minLength: 0)
         }
-        .padding(.horizontal, 18).padding(.vertical, 12)
-        .overlay(alignment: .bottom) { Rectangle().fill(NFColor.line).frame(height: 1) }
+        .padding(.horizontal, 20).padding(.vertical, 12).frame(minHeight: 66)
+        .overlay(alignment: .bottom) { Rectangle().fill(NFColor.line).frame(height: 1).padding(.horizontal, 20) }
     }
 
     private func button(_ text: String, icon: String? = nil, primary: Bool = false, busy: Bool = false, disabled: Bool = false, action: @escaping () -> Void) -> some View {
@@ -169,11 +161,11 @@ struct NativeOfflinePrintCard: View {
                 else if let icon { Image(systemName: icon) }
                 Text(text)
             }
-            .font(.system(size: 15, weight: .bold))
+            .font(.system(size: 15.5, weight: .bold))
             .foregroundColor(primary ? .white : NFColor.ink)
-            .padding(.horizontal, 18).frame(height: 48)
-            .background(RoundedRectangle(cornerRadius: 12).fill(primary ? NFColor.iris : Color.white))
-            .overlay(RoundedRectangle(cornerRadius: 12).stroke(primary ? Color.clear : NFColor.line, lineWidth: 1))
+            .padding(.horizontal, 18).frame(height: 46)
+            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(primary ? NFColor.iris : Color.white))
+            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(primary ? Color.clear : NFColor.line, lineWidth: 1))
         }
         .buttonStyle(PressableStyle())
         .disabled(disabled || busy)

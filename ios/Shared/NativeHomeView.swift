@@ -226,7 +226,7 @@ struct NativeHomeView: View {
         .onDisappear { model.stop() }
     }
 
-    // MARK: 上のバー（店・お知らせ・ハンディQR・ログアウト）＋大きい2つ
+    // MARK: 上のバー（お知らせ・ハンディQR・店名）＋大きい2つ
 
     private var topBar: some View {
         VStack(spacing: 14) {
@@ -255,8 +255,7 @@ struct NativeHomeView: View {
                     .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white.opacity(0.10)))
                 }
                 .buttonStyle(PressableStyle())
-                Image("BrandMark").resizable().scaledToFit().frame(width: 38, height: 38)
-                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                // TENPO ONE のマークは上のバーに出さない（2026-10-24 19:04 Ronnie「ロゴは要らない」）
                 // 店名はログアウトの横（2026-10-24 19:03 Ronnie）
                 HStack(spacing: 6) {
                     Image(systemName: "storefront")
@@ -265,10 +264,7 @@ struct NativeHomeView: View {
                 .font(.system(size: 15, weight: .semibold)).foregroundColor(.white)
                 .padding(.horizontal, 12).padding(.vertical, 8)
                 .background(Capsule().fill(Color.white.opacity(0.10)))
-                Button { onWeb("/logout") } label: {
-                    Image(systemName: "rectangle.portrait.and.arrow.right").font(.system(size: 18, weight: .semibold)).foregroundColor(.white).padding(8)
-                }
-                .buttonStyle(PressableStyle())
+                // ログアウトは 設定 の一覧のいちばん下へ（2026-10-24 19:16 Ronnie「外にはいらない」）
             }
             .padding(.horizontal, 16)
             .frame(height: 64)

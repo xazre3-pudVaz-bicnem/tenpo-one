@@ -690,6 +690,11 @@ struct NativeClerksView: View {
 
 // MARK: - 共通の部品（設定の中の画面）
 
+enum NSPText {
+    /// 英語だけ（ASCII だけ）の文字列か。日本語の補足（件数など）は出し、英語の副題は出さない
+    static func isAsciiOnly(_ s: String) -> Bool { s.unicodeScalars.allSatisfy { $0.isASCII } }
+}
+
 /// 設定の中の画面の枠：上のバー・読み込み中／エラー・toast
 struct NSPFrame<Content: View>: View {
     let storeName: String
@@ -704,11 +709,12 @@ struct NSPFrame<Content: View>: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            NativeTopBar(storeName: storeName, title: title, subtitle: en, userName: "", onHome: onBack, backIcon: "chevron.left")
+            // 英語の副題は出さない（2026-10-24 18:40 Ronnie「いまは日本語だけでいい」）
+            NativeTopBar(storeName: storeName, title: title, subtitle: "", userName: "", onHome: onBack, backIcon: "chevron.left")
             if loaded {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) { content() }
-                        .padding(20).frame(maxWidth: 960).frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(20).frame(maxWidth: 1100).frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.bottom, 24)
                 }
             } else {
@@ -745,17 +751,18 @@ struct NSPCard<Content: View>: View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(title).font(.system(size: 17, weight: .heavy)).foregroundColor(NFColor.navy)
-                    if !en.isEmpty { Text(en).font(.system(size: 12)).foregroundColor(NFColor.ink3) }
+                    Text(title).font(.system(size: 18, weight: .heavy)).foregroundColor(NFColor.navy)
+                    // 英語だけの副題は出さない（日本語の補足＝件数などは出す）
+                    if !en.isEmpty && !NSPText.isAsciiOnly(en) { Text(en).font(.system(size: 12.5, weight: .medium)).foregroundColor(NFColor.ink3) }
                 }
-                if let note { Text(note).font(.system(size: 12.5)).foregroundColor(NFColor.ink3).fixedSize(horizontal: false, vertical: true) }
+                if let note { Text(note).font(.system(size: 13)).foregroundColor(NFColor.ink3).fixedSize(horizontal: false, vertical: true) }
             }
-            .padding(.horizontal, 18).padding(.vertical, 14)
+            .padding(.horizontal, 20).padding(.vertical, 16)
             Rectangle().fill(NFColor.line).frame(height: 1)
             content()
         }
-        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.white))
-        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(NFColor.line, lineWidth: 1))
+        .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Color.white))
+        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(NFColor.line, lineWidth: 1))
         .shadow(color: Color.black.opacity(0.05), radius: 6, y: 2)
     }
 }
@@ -778,8 +785,8 @@ struct NSPButton: View {
             .font(.system(size: 15, weight: .bold))
             .foregroundColor(primary ? .white : NFColor.ink)
             .padding(.horizontal, 18).frame(height: 46)
-            .background(RoundedRectangle(cornerRadius: 12).fill(primary ? NFColor.iris : Color.white))
-            .overlay(RoundedRectangle(cornerRadius: 12).stroke(primary ? Color.clear : NFColor.line, lineWidth: 1))
+            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(primary ? NFColor.iris : Color.white))
+            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(primary ? Color.clear : NFColor.line, lineWidth: 1))
         }
         .buttonStyle(PressableStyle())
         .disabled(disabled || busy)
@@ -1320,11 +1327,11 @@ struct NSPInput: View {
     var body: some View {
         HStack(spacing: 6) {
             TextField(placeholder, text: $text).font(.system(size: 16)).keyboardType(keyboard).disabled(!enabled)
-            if let trailing { Text(trailing).font(.system(size: 14)).foregroundColor(NFColor.ink3) }
+            if let trailing { Text(trailing).font(.system(size: 14, weight: .medium)).foregroundColor(NFColor.ink3) }
         }
-        .padding(.horizontal, 12).frame(height: 44).frame(maxWidth: width ?? 520)
-        .background(RoundedRectangle(cornerRadius: 10).fill(enabled ? Color.white : NFColor.lilacSoft))
-        .overlay(RoundedRectangle(cornerRadius: 10).stroke(NFColor.line, lineWidth: 1))
+        .padding(.horizontal, 13).frame(height: 46).frame(maxWidth: width ?? 520)
+        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(enabled ? Color.white : NFColor.lilacSoft))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(NFColor.line, lineWidth: 1))
     }
 }
 
@@ -1351,20 +1358,21 @@ struct NSPRow<Content: View>: View {
     var required = false
     @ViewBuilder let content: () -> Content
     var body: some View {
+        // 名前は左・入力は右（見本の Funfo と同じ並び。2026-10-24 18:44 Ronnie「スタイルはこれ」）
         HStack(alignment: .center, spacing: 16) {
-            VStack(alignment: .leading, spacing: 1) {
-                HStack(spacing: 4) {
-                    Text(label).font(.system(size: 15, weight: .bold)).foregroundColor(NFColor.ink)
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 5) {
+                    Text(label).font(.system(size: 17, weight: .bold)).foregroundColor(NFColor.ink)
                     if required { Text("必須").font(.system(size: 10, weight: .heavy)).foregroundColor(.white).padding(.horizontal, 5).padding(.vertical, 1).background(Capsule().fill(NFColor.danger)) }
                 }
-                if !en.isEmpty { Text(en).font(.system(size: 11)).foregroundColor(NFColor.ink3) }
+                if !en.isEmpty && !NSPText.isAsciiOnly(en) { Text(en).font(.system(size: 12, weight: .medium)).foregroundColor(NFColor.ink3) }
             }
-            .frame(width: 180, alignment: .leading)
+            .frame(minWidth: 160, alignment: .leading)
+            Spacer(minLength: 16)
             content()
-            Spacer(minLength: 0)
         }
-        .padding(.horizontal, 18).padding(.vertical, 10)
-        .overlay(alignment: .bottom) { Rectangle().fill(NFColor.line).frame(height: 1) }
+        .padding(.horizontal, 20).padding(.vertical, 12).frame(minHeight: 64)
+        .overlay(alignment: .bottom) { Rectangle().fill(NFColor.line).frame(height: 1).padding(.horizontal, 20) }
     }
 }
 
@@ -4438,7 +4446,7 @@ struct NativeTablesScreen: View {
     }
 
     private func floorsCard(_ p: NTBPayload) -> some View {
-        NSPCard(title: "フロア", en: "\(p.floors.count)") {
+        NSPCard(title: "フロア", en: "\(p.floors.count) フロア") {
             VStack(spacing: 0) {
                 Button { model.floorFilter = nil } label: {
                     HStack { Text("すべて").font(.system(size: 14, weight: .bold)).foregroundColor(NFColor.ink); Spacer(); Text("\(p.tables.count) 卓").font(.system(size: 12)).foregroundColor(NFColor.ink3) }
