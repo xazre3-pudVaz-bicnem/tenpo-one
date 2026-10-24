@@ -30,6 +30,11 @@ export interface TenpoNativeBridge {
    * （2026-10-13 Ronnie「Airレジのように全部ネイティブ」。ios/Shared/NativeOrderView.swift）
    */
   nativePos?: NativeNativePos;
+  /**
+   * アプリ自身の印刷係（ios/Shared/NativePrintAgent.swift）。native が true のあいだは、アプリが印刷待ちを取りに行って
+   * Bluetooth・LAN・Wi-Fi で出すので、Web の DirectPrintAgent は何もしない（2026-10-24 Ronnie「iOS プリンター＋設定」）
+   */
+  print?: { native: boolean };
 }
 
 export interface NativeNativePos {
@@ -84,6 +89,11 @@ export function nativeBridge(): TenpoNativeBridge | null {
 /** ネイティブのオーダー・会計画面が使えるアプリか */
 export function nativePos(): NativeNativePos | null {
   return nativeBridge()?.nativePos ?? null;
+}
+
+/** アプリ自身が印刷係をしているか（そのあいだ Web の DirectPrintAgent は休む） */
+export function nativePrintAgent(): boolean {
+  return nativeBridge()?.print?.native === true;
 }
 
 /** Bluetooth のレシートプリンターが使えるアプリか */

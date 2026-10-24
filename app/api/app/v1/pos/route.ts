@@ -75,6 +75,9 @@ import {
   updatePettyOpeningBalance,
 } from '@/app/app/cash/actions';
 import { isNativeNoticeActionType, parseNativeNoticeAction } from '@/lib/native-notices';
+import { isNativeSettingsActionType, parseNativeSettingsAction } from '@/lib/native-settings';
+import { loadNativeSettings } from '@/lib/native-settings-server';
+import { addDeviceReceiptPrinter, saveDeviceReceiptPrinterSettings, setDevicePrinter } from '@/app/app/pos/device-printer-actions';
 import { loadNativeAnnouncements, loadNativeNotices } from '@/lib/native-notices-server';
 import { createAnnouncement, deleteAnnouncement, markAnnouncementRead } from '@/app/app/announcements/actions';
 import { markAllRead } from '@/app/app/notifications/actions';
@@ -274,6 +277,14 @@ export async function GET(request: Request) {
     if (ctx.disabledFeatures?.has('accounting')) return json({ ok: false, error: 'この機能は使えません', useWeb: true }, 403);
     const cash = await loadNativeCash(ctx, await createClient(), { id: store.id, name: store.name });
     return json({ ok: true, ...cash });
+  }
+
+  // 設定（このiPadのプリンター・レシートの出し先・LAN・Wi-Fi・設定の一覧）。Web の /app/pos/settings と同じ組み立て（lib/native-settings-server.ts）
+  if (part === 'settings') {
+    const store = ctx.currentStore ?? ctx.stores[0] ?? null;
+    if (!store) return json({ ok: false, error: '店舗がありません' }, 404);
+    const settings = await loadNativeSettings(ctx, await createClient(), { id: store.id, name: store.name });
+    return json({ ok: true, ...settings });
   }
 
   // iPhoneハンディの QR（Web の /app/settings/handy-qr を見るだけ。作り直し・回線の設定は管理画面）
@@ -961,6 +972,42 @@ export async function POST(request: Request) {
       }
       const r = await saveDailyBudgets(store.id, ba.month, ba.values);
       return json(r.error ? { ok: false, error: r.error } : { ok: true, queued: r.total ?? 0 });
+    } catch (e) {
+      return json({ ok: false, error: errorText(e, 'うまくいきませんでした。もう一度お試しください') }, 400);
+    }
+  }
+
+  // 設定：このiPadのプリンター（Web の app/app/pos/device-printer-actions.ts と同じ Server Action。権限はその中で見る。2026-10-24）
+  if (raw && typeof raw === 'object' && isNativeSettingsActionType((raw as { type?: unknown }).type)) {
+    const parsedSettings = parseNativeSettingsAction(raw);
+    if (!parsedSettings.ok) return json({ ok: false, error: parsedSettings.error }, 400);
+    const sa = parsedSettings.action;
+    try {
+      if (sa.type === 'settingsPrinterSelect') {
+        const res = await setDevicePrinter(sa.printerId);
+        return res.ok ? json({ ok: true, selectedPrinterId: sa.printerId }) : json({ ok: false, error: res.error }, 400);
+      }
+      if (sa.type === 'settingsPrinterAdd') {
+        const res = await addDeviceReceiptPrinter({
+          printerId: sa.printerId,
+          name: sa.name,
+          maker: sa.maker,
+          via: sa.via,
+          modelId: sa.modelId,
+          paperWidthMm: sa.paperWidthMm,
+          autoPrint: sa.autoPrint,
+          drawerKick: sa.drawerKick,
+        });
+        return res.ok ? json({ ok: true, printer: res.printer }) : json({ ok: false, error: res.error }, 400);
+      }
+      const res = await saveDeviceReceiptPrinterSettings({
+        printerId: sa.printerId,
+        modelId: sa.modelId,
+        paperWidthMm: sa.paperWidthMm,
+        autoPrint: sa.autoPrint,
+        drawerKick: sa.drawerKick,
+      });
+      return res.ok ? json({ ok: true, printer: res.printer }) : json({ ok: false, error: res.error }, 400);
     } catch (e) {
       return json({ ok: false, error: errorText(e, 'うまくいきませんでした。もう一度お試しください') }, 400);
     }
