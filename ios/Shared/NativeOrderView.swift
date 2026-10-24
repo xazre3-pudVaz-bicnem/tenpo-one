@@ -8,7 +8,7 @@ import SwiftUI
 struct NativeOrderView: View {
     @ObservedObject var model: NativeOrderModel
     var onHome: () -> Void = {}
-    @State private var showCheckout = false
+    @State private var showCheckout: Bool
     @State private var pickClerk = false
     /// 担当者を選んだあとにすること（注文確定・会計へ）
     @State private var afterClerk: (() -> Void)?
@@ -16,6 +16,14 @@ struct NativeOrderView: View {
     @State private var editingPages = false
     /// お客様情報（人数・席の時間・モード・コース）の直し
     @State private var guestInfoOpen = false
+
+    /// startInCheckout：テーブルの「レジ会計」から開いたとき。オーダー画面を一瞬も見せず、最初から会計の画面
+    /// （2026-10-24 Ronnie「1 sec lai order gamen aaucha、sidai 会計 ma jane banau」）
+    init(model: NativeOrderModel, onHome: @escaping () -> Void = {}, startInCheckout: Bool = false) {
+        self.model = model
+        self.onHome = onHome
+        _showCheckout = State(initialValue: startInCheckout)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -143,6 +151,15 @@ struct NativeOrderView: View {
                     showCheckout = false
                     if model.isLive { AppState.shared.finishNativeCheckout() }
                 })
+                // 伝票を読み終わるまで（最初から会計で開いたとき）は「読み込み中」をかぶせる（¥0 を一瞬見せない）
+                .overlay {
+                    if model.isLive && !model.orderLoaded {
+                        ZStack {
+                            NT.page.opacity(0.92).ignoresSafeArea()
+                            ProgressView("読み込み中…").font(.system(size: 16, weight: .bold)).tint(NT.purple)
+                        }
+                    }
+                }
                 .transition(.move(edge: .trailing))
             }
         }
