@@ -34,6 +34,9 @@ import { loadNativeStock } from '@/lib/native-stock-server';
 import { setMenuStockLimits } from '@/app/app/inventory/menu-stock-actions';
 import { isNativeInventoryActionType, nativeInventoryPermission, parseNativeInventoryAction } from '@/lib/native-inventory';
 import { isNativePurchasingActionType, parseNativePurchasingAction } from '@/lib/native-purchasing';
+import { isNativeCouponActionType, parseNativeCouponAction } from '@/lib/native-coupons';
+import { loadCouponsData } from '@/lib/coupons-data-server';
+import { generateCouponCode, getCouponRedemptions, saveCoupon, setCouponStatus } from '@/app/app/coupons/actions';
 import { loadNativePoNew } from '@/lib/native-purchasing-server';
 import { loadPurchaseOrderDetail, loadPurchaseOrderRows, loadVendorRows } from '@/lib/purchasing-data-server';
 import { createVendor, deleteVendor, getVendorRecentOrders, updateVendor } from '@/app/app/vendors/actions';
@@ -314,6 +317,18 @@ export async function GET(request: Request) {
       item: isUuid(url.searchParams.get('item')) ? (url.searchParams.get('item') as string) : '',
     });
     return json({ ok: true, ...inv });
+  }
+
+  // クーポン管理（Web の /app/coupons）
+  if (part === 'coupons' || part === 'couponUses') {
+    if (ctx.disabledFeatures?.has('crm')) return json({ ok: false, error: 'この機能は使えません', useWeb: true }, 403);
+    if (!can(ctx.role, 'menu.manage')) return json({ ok: false, error: 'クーポン管理には権限が必要です。管理者にお問い合わせください。' }, 403);
+    if (part === 'couponUses') {
+      const id = url.searchParams.get('id');
+      if (!isUuid(id)) return json({ ok: false, error: 'クーポンが見つかりません' }, 404);
+      return json({ ok: true, rows: await getCouponRedemptions(id) });
+    }
+    return json({ ok: true, ...(await loadCouponsData(await createClient(), ctx.organizationId ?? '')) });
   }
 
   // 仕入先・発注（Web の /app/vendors・/app/purchases）
@@ -700,6 +715,24 @@ export async function POST(request: Request) {
           await cancelStockTransfer(ia.id, ia.reason);
           return json({ ok: true });
       }
+    } catch (e) {
+      return json({ ok: false, error: errorText(e, 'うまくいきませんでした。もう一度お試しください') }, 400);
+    }
+  }
+
+  // クーポンの操作（中身は Web と同じ Server Action。menu.manage → 店の回線。2026-10-24）
+  if (raw && typeof raw === 'object' && isNativeCouponActionType((raw as { type?: unknown }).type)) {
+    const parsedCoupon = parseNativeCouponAction(raw);
+    if (!parsedCoupon.ok) return json({ ok: false, error: parsedCoupon.error }, 400);
+    if (ctx.disabledFeatures?.has('crm')) return json({ ok: false, error: 'この機能は使えません', useWeb: true }, 403);
+    if (!can(ctx.role, 'menu.manage')) return json({ ok: false, error: '権限がありません' }, 403);
+    const couponProblem = await networkProblem(ctx);
+    if (couponProblem) return json({ ok: false, error: couponProblem }, 403);
+    const ca = parsedCoupon.action;
+    try {
+      if (ca.type === 'couponCode') return json({ ok: true, id: await generateCouponCode() });
+      const r = ca.type === 'couponSave' ? await saveCoupon(ca.input) : await setCouponStatus(ca.id, ca.status);
+      return json(r.error ? { ok: false, error: r.error } : { ok: true });
     } catch (e) {
       return json({ ok: false, error: errorText(e, 'うまくいきませんでした。もう一度お試しください') }, 400);
     }
