@@ -375,7 +375,8 @@ export async function loadNativeLedgerWait(supabase: Supabase, store: { id: stri
 export interface NativeLedgerMonthPayload {
   today: string;
   month: string;
-  weeks: { date: string; day: number; dow: number; inMonth: boolean; count: number; guests: number; holiday: string | null }[][];
+  /** attention … 仮予約・要連絡（status pending）がある日（日付選択のカレンダーの赤い点） */
+  weeks: { date: string; day: number; dow: number; inMonth: boolean; count: number; guests: number; holiday: string | null; attention: boolean }[][];
   monthCount: number;
   monthGuests: number;
   busiest: number;
@@ -397,11 +398,13 @@ export async function loadNativeLedgerMonth(supabase: Supabase, store: { id: str
   ]);
   const count = new Map<string, number>();
   const guests = new Map<string, number>();
+  const attention = new Set<string>();
   let monthCount = 0;
   let monthGuests = 0;
   for (const r of reservations ?? []) {
     if (!ACTIVE_TIMELINE_STATUSES.includes(r.status as never)) continue;
     const d = r.reserved_date as string;
+    if (r.status === 'pending') attention.add(d);
     count.set(d, (count.get(d) ?? 0) + 1);
     guests.set(d, (guests.get(d) ?? 0) + Number(r.party_size));
     if (d.startsWith(month)) {
@@ -413,7 +416,7 @@ export async function loadNativeLedgerMonth(supabase: Supabase, store: { id: str
   const days: NativeLedgerMonthPayload['weeks'][number] = [];
   for (let d = new Date(gridStart); d <= gridEnd; d.setUTCDate(d.getUTCDate() + 1)) {
     const key = ds(d);
-    days.push({ date: key, day: d.getUTCDate(), dow: d.getUTCDay(), inMonth: d.getUTCMonth() + 1 === monthNum, count: count.get(key) ?? 0, guests: guests.get(key) ?? 0, holiday: holidayBy.get(key) ?? null });
+    days.push({ date: key, day: d.getUTCDate(), dow: d.getUTCDay(), inMonth: d.getUTCMonth() + 1 === monthNum, count: count.get(key) ?? 0, guests: guests.get(key) ?? 0, holiday: holidayBy.get(key) ?? null, attention: attention.has(key) });
   }
   const weeks: NativeLedgerMonthPayload['weeks'] = [];
   for (let i = 0; i < days.length; i += 7) weeks.push(days.slice(i, i + 7));

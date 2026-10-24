@@ -250,10 +250,8 @@ struct NativeReservationEntry: View {
 
     @State private var entry: NRWEntry?
     @State private var entryLoading = false
-    @State private var months: [String: NLMonthPayload] = [:]
     @State private var pop: Pop?
     @State private var padText = ""
-    @State private var showCalendar = false
     @State private var tablesOpen = false
     @State private var hits: [NFCustomerHit] = []
     @State private var saving = false
@@ -261,6 +259,8 @@ struct NativeReservationEntry: View {
     @State private var now = Date()
 
     private var p: NLPayload? { model.payload }
+    /// キャンセル待ちから予約へ変換
+    private var isConvert: Bool { prefill?.waitlistEntryId != nil }
     private var today: String { Self.ymd(Date()) }
     /// 席の割り当て・人数に使う数（範囲のときは最大）
     private var party: Int { max(partyMin, partyMax ?? partyMin) }
@@ -302,7 +302,6 @@ struct NativeReservationEntry: View {
         .background(NLColor.page.ignoresSafeArea())
         .onAppear(perform: setUp)
         .task(id: date) { await loadEntry() }
-        .task(id: String(date.prefix(7))) { await loadMonths() }
         .fullScreenCover(isPresented: $tablesOpen) { tablePicker }
     }
 
@@ -318,8 +317,8 @@ struct NativeReservationEntry: View {
             .buttonStyle(PressableStyle())
             .accessibilityLabel("閉じる")
             HStack(spacing: 4) {
-                modeTab(prefill == nil ? "予約" : "予約へ変換", icon: "calendar.badge.plus", on: true) {}
-                if let onWalkIn, prefill == nil {
+                modeTab(isConvert ? "予約へ変換" : "予約", icon: "calendar.badge.plus", on: true) {}
+                if let onWalkIn, !isConvert {
                     modeTab("直接来店", icon: "figure.walk", on: false, action: onWalkIn)
                 }
             }
@@ -419,73 +418,12 @@ struct NativeReservationEntry: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    // 日付：今日から 14 日（組数・人数つき）＋ カレンダー
+    // 日付：月の表（日ごとの組数・人数・仮予約／要連絡の赤い点。台帳の日付と同じ。2026-10-24 20:23 Ronnie「全部の日が出るように、上のカレンダーと同じに」）
     private var datePopover: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text(showCalendar ? "カレンダー" : "ご来店日").font(.system(size: 15, weight: .heavy)).foregroundColor(NLColor.navy)
-                Spacer()
-                Button(showCalendar ? "日の一覧" : "カレンダー") { showCalendar.toggle() }.font(.system(size: 14, weight: .bold))
-            }
-            if showCalendar {
-                DatePicker("", selection: Binding(get: { Self.dateFrom(date) ?? Date() }, set: { setDate(Self.ymd($0)); pop = nil }), displayedComponents: [.date])
-                    .datePickerStyle(.graphical)
-                    .environment(\.timeZone, TimeZone(identifier: "Asia/Tokyo")!)
-                    .environment(\.locale, Locale(identifier: "ja_JP"))
-            } else {
-                ScrollView {
-                    VStack(spacing: 0) {
-                        ForEach(dayList, id: \.self) { d in
-                            dayRow(d)
-                            Rectangle().fill(NLColor.line).frame(height: 1)
-                        }
-                    }
-                }
-                .frame(height: 460)
-            }
+        NLDatePickerPanel(selected: date, today: today) { d in
+            setDate(d)
+            pop = nil
         }
-        .padding(16)
-        .frame(width: 380)
-    }
-
-    private var dayList: [String] {
-        var out = (0..<14).map { Self.shift(today, $0) }
-        if !date.isEmpty && !out.contains(date) { out.insert(date, at: 0) }
-        return out
-    }
-
-    private func dayRow(_ d: String) -> some View {
-        let on = d == date
-        let dow = Self.weekday(d)
-        let info = dayInfo(d)
-        let badge = d == today ? "今日" : d == Self.shift(today, 1) ? "明日" : d == Self.shift(today, 2) ? "明後日" : nil
-        return Button { setDate(d); pop = nil } label: {
-            HStack(spacing: 8) {
-                Text(dateLabel(d)).font(.system(size: 18, weight: on ? .heavy : .semibold)).monospacedDigit()
-                    .foregroundColor(dow == 0 ? NLColor.red : dow == 6 ? NLColor.blue : NLColor.ink)
-                if let badge {
-                    Text(badge).font(.system(size: 11, weight: .bold)).foregroundColor(NLColor.navy)
-                        .padding(.horizontal, 6).padding(.vertical, 2)
-                        .background(RoundedRectangle(cornerRadius: 5).fill(NLColor.yellowSoft))
-                }
-                Spacer(minLength: 4)
-                if let info, info.count > 0 {
-                    Text("\(info.count)組 \(info.guests)名").font(.system(size: 13, weight: .semibold)).monospacedDigit().foregroundColor(NLColor.muted)
-                }
-                if on { Image(systemName: "checkmark").font(.system(size: 13, weight: .heavy)).foregroundColor(NLColor.navy) }
-            }
-            .padding(.horizontal, 12).frame(height: 52)
-            .background(on ? NLColor.yellowSoft : Color.white)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func dayInfo(_ d: String) -> NLMonthDay? {
-        for m in months.values {
-            for w in m.weeks { if let x = w.first(where: { $0.date == d && $0.inMonth }) { return x } }
-        }
-        return nil
     }
 
     // 時間：時と 5 分ごとの分
@@ -957,7 +895,7 @@ struct NativeReservationEntry: View {
     private var footer: some View {
         HStack(spacing: 14) {
             VStack(alignment: .leading, spacing: 3) {
-                Text(prefill == nil ? "予約の登録" : "予約へ変換").font(.system(size: 12, weight: .heavy)).foregroundColor(NLColor.muted)
+                Text(isConvert ? "予約へ変換" : "予約の登録").font(.system(size: 12, weight: .heavy)).foregroundColor(NLColor.muted)
                 Text("\(partyLabel)・\(dateLabel(date))\(date == today ? "（今日）" : "")・\(time)〜\(NRWMath.addMinutes(time, stay))・\(tableSummary)")
                     .font(.system(size: 16, weight: .heavy)).monospacedDigit().foregroundColor(NLColor.ink).lineLimit(1).minimumScaleFactor(0.7)
                 if let warn = staySelectionWarning ?? problem {
@@ -1220,6 +1158,8 @@ struct NativeReservationEntry: View {
         now = Date()
         if let pf = prefill {
             date = pf.date; time = pf.time; partyMin = max(1, pf.adults); name = pf.name; phone = pf.phone; note = pf.note
+            partyMax = pf.partyMax; children = pf.children; tableIds = pf.tableIds; tags = pf.tags
+            partyFresh = true
             return
         }
         let base = model.date ?? p?.date ?? today
@@ -1252,20 +1192,6 @@ struct NativeReservationEntry: View {
             if e.date == date { entry = e; now = Date(); problem = nil }
         } catch {
             problem = (error as? NativeAPIError)?.message ?? "卓の空きを読めませんでした（テーブルなしで登録できます）"
-        }
-    }
-
-    /// 日の一覧の組数・人数（今月と、14 日が来月にかかるときは来月も）
-    private func loadMonths() async {
-        var need = Set([String(today.prefix(7)), String(Self.shift(today, 13).prefix(7))])
-        if !date.isEmpty { need.insert(String(date.prefix(7))) }
-        for m in need where months[m] == nil {
-            var comps = URLComponents(url: AppConfig.url("/api/app/v1/pos"), resolvingAgainstBaseURL: false)!
-            comps.queryItems = [URLQueryItem(name: "part", value: "ledgerMonth"), URLQueryItem(name: "month", value: m)]
-            if let data = try? await NativeAPI.shared.send(URLRequest(url: comps.url!)),
-               let mp = try? JSONDecoder().decode(NLMonthPayload.self, from: data) {
-                months[m] = mp
-            }
         }
     }
 
@@ -1307,11 +1233,11 @@ struct NativeReservationEntry: View {
             "tags": tags + tagLabels.filter { !tags.contains($0) },
             "clerkId": clerkId.isEmpty ? NSNull() : clerkId,
         ]
-        if let pf = prefill { input["waitlistEntryId"] = pf.waitlistEntryId }
+        if let w = prefill?.waitlistEntryId { input["waitlistEntryId"] = w }
         if await model.act(["type": "ledgerCreate", "input": input]) != nil {
             model.date = date
             await model.refresh(silent: true)
-            model.show(toast: prefill == nil ? "予約を登録しました" : "予約へ変換しました")
+            model.show(toast: isConvert ? "予約へ変換しました" : "予約を登録しました")
             onClose()
         } else {
             problem = model.error ?? "登録できませんでした"

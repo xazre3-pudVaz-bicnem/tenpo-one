@@ -3,7 +3,7 @@ import SwiftUI
 // 店舗台帳の「月間カレンダー」（ネイティブ）。Web の /app/reservations/calendar と同じ：
 // 日曜始まりの月グリッド、日ごとの組数（名数）、休業日、今日、多い日ほど濃い ／ 日をタップ＝その日のスケジュール（2026-10-24）
 
-struct NLMonthDay: Codable, Hashable { let date: String; let day: Int; let dow: Int; let inMonth: Bool; let count: Int; let guests: Int; let holiday: String? }
+struct NLMonthDay: Codable, Hashable { let date: String; let day: Int; let dow: Int; let inMonth: Bool; let count: Int; let guests: Int; let holiday: String?; var attention: Bool? = nil }
 struct NLMonthPayload: Codable {
     let today: String
     let month: String

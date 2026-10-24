@@ -347,12 +347,18 @@ struct NativeReservationSheet: View {
 
 /// キャンセル待ちから「予約へ変換」するときの初期値（予約登録は NativeReservationEntry.swift）
 struct NLReservationPrefill {
-    let waitlistEntryId: String
+    /// キャンセル待ちから「予約へ変換」するとき（スケジュールの空いたマスから開くときは nil）
+    var waitlistEntryId: String? = nil
     let date: String
     let time: String
     let adults: Int
-    let name: String
-    let phone: String
-    let note: String
+    var name: String = ""
+    var phone: String = ""
+    var note: String = ""
+    /// スケジュールの空いたマスを押したとき：その卓・人数の範囲（最大）・キーワード
+    var tableIds: [String] = []
+    var partyMax: Int? = nil
+    var children: Int = 0
+    var tags: [String] = []
 }
 
