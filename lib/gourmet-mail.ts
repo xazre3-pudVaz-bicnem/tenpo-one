@@ -137,6 +137,34 @@ export function gourmetImportAddress(token: string, domain: string): string {
   return `rsv-${token}@${domain}`;
 }
 
+/**
+ * 取り込み専用アドレスのドメイン（メールの受け口）。
+ * 2026-10-24 Ronnie「取込みが動くように、こちらから」：
+ *   in.tenpo-one.com は運営（CYPRESS）の Vercel DNS にあり MX が無く、こちらからは足せない。
+ *   そこで Ronnie の tableone-gourmet.com（Vercel DNS・Ronnie のチーム）の in. に MX（Forward Email）と
+ *   TXT（forward-email= この受け口の URL）を置き、こちらをアドレスに使う。受け口（/api/inbound/gourmet-mail）は
+ *   宛先の rsv-<token>@ だけを見るのでドメインは何でもよい。
+ * 運営が in.tenpo-one.com に MX を足したら、LEGACY_INBOUND_MAIL_DOMAIN の特別扱いを外せば env で戻せる。
+ */
+export const INBOUND_MAIL_DOMAIN = 'in.tableone-gourmet.com';
+/** MX が無いまま env に残っている可能性がある古いドメイン（これが指定されていても使わない） */
+export const LEGACY_INBOUND_MAIL_DOMAIN = 'in.tenpo-one.com';
+
+export function inboundMailDomain(): string {
+  const env = (process.env.NEXT_PUBLIC_INBOUND_MAIL_DOMAIN ?? '').trim();
+  if (env && env !== LEGACY_INBOUND_MAIL_DOMAIN) return env;
+  return INBOUND_MAIL_DOMAIN;
+}
+
+/**
+ * 受け口が使える状態か（画面の「まだ運営側で設定中」の出し分け）。
+ * Forward Email 経由（INBOUND_MAIL_DOMAIN）は合言葉が要らない（送り元 IP で確かめる）ので、こちらで MX を置いた時点で使える。
+ * ほかのドメイン（Postmark・SendGrid などの受信サービス）は INBOUND_MAIL_SECRET が要る。
+ */
+export function inboundMailReady(): boolean {
+  return inboundMailDomain() === INBOUND_MAIL_DOMAIN || !!process.env.INBOUND_MAIL_SECRET;
+}
+
 /** 宛先（To/Cc/Delivered-To など）から token を取り出す */
 export function tokenFromRecipient(recipients: string | string[] | null | undefined): string | null {
   const list = Array.isArray(recipients) ? recipients : [recipients ?? ''];

@@ -1,7 +1,7 @@
 import type { createClient } from '@/lib/supabase/server';
 import type { SessionContext } from '@/lib/auth';
 import { can } from '@/lib/permissions';
-import { GOURMET_SITES, GOURMET_SITE_BY_KEY, MAIL_KIND_LABEL, gourmetImportAddress, gourmetMailSettingsFrom, type GourmetSiteKey, type MailKind } from '@/lib/gourmet-mail';
+import { GOURMET_SITES, GOURMET_SITE_BY_KEY, MAIL_KIND_LABEL, gourmetImportAddress, gourmetMailSettingsFrom, inboundMailDomain, inboundMailReady, type GourmetSiteKey, type MailKind } from '@/lib/gourmet-mail';
 import { GOURMET_IMPORT_STATUS_LABEL, type NativeGourmetImport, type NativeGourmetPayload, type NativeGourmetSite } from '@/lib/native-gourmet';
 
 type Supabase = Awaited<ReturnType<typeof createClient>>;
@@ -22,7 +22,7 @@ export async function loadNativeGourmet(ctx: SessionContext, supabase: Supabase,
   ]);
 
   const gm = gourmetMailSettingsFrom((settingsRow?.settings as Record<string, unknown> | null) ?? {});
-  const domain = process.env.NEXT_PUBLIC_INBOUND_MAIL_DOMAIN ?? 'in.tenpo-one.com';
+  const domain = inboundMailDomain();
 
   const sites: NativeGourmetSite[] = GOURMET_SITES.map((s) => {
     const st = gm.sites[s.key] ?? {};
@@ -73,7 +73,7 @@ export async function loadNativeGourmet(ctx: SessionContext, supabase: Supabase,
     enabled: gm.enabled,
     address: gm.enabled && gm.token ? gourmetImportAddress(gm.token, domain) : null,
     domain,
-    inboundReady: !!process.env.INBOUND_MAIL_SECRET,
+    inboundReady: inboundMailReady(),
     canRegenerate: ctx.isCypressAdmin,
     canWrite: !!ctx.role && can(ctx.role, 'store.settings'),
     verifiedCount: sites.filter((s) => s.status === 'verified').length,

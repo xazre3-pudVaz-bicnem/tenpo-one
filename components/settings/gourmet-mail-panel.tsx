@@ -134,7 +134,7 @@ export function GourmetMailPanel({
 
         {!inboundReady && (
           <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-800">
-            メールの受け口（<code className="font-mono">{domain}</code> の MX と INBOUND_MAIL_SECRET）はまだ運営側で設定中です。
+            メールの受け口（<code className="font-mono">{domain}</code> の MX と受信サービス）はまだ運営側で設定中です。
             設定が終わるまでは、アドレスを登録してもメールは取り込まれません。
           </p>
         )}

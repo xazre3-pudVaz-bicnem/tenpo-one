@@ -1,5 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import {
+  INBOUND_MAIL_DOMAIN,
+  LEGACY_INBOUND_MAIL_DOMAIN,
+  inboundMailDomain,
+  inboundMailReady,
   detectKind,
   detectSite,
   extractDateTime,
@@ -138,5 +142,30 @@ describe('グルメサイト メール取り込み（2026-09-27 Ronnie）', () =
   it('日本時間 → ISO', () => {
     expect(jstToIso('2026-10-03', '19:00')).toBe('2026-10-03T10:00:00.000Z');
     expect(jstToIso('2026-10-03', '25:00')).toBe('2026-10-03T16:00:00.000Z');
+  });
+});
+
+describe('取り込み専用アドレスのドメイン（2026-10-24 Ronnie「取込みが動くように、こちらから」）', () => {
+  const prev = { d: process.env.NEXT_PUBLIC_INBOUND_MAIL_DOMAIN, s: process.env.INBOUND_MAIL_SECRET };
+  afterEach(() => {
+    if (prev.d === undefined) delete process.env.NEXT_PUBLIC_INBOUND_MAIL_DOMAIN; else process.env.NEXT_PUBLIC_INBOUND_MAIL_DOMAIN = prev.d;
+    if (prev.s === undefined) delete process.env.INBOUND_MAIL_SECRET; else process.env.INBOUND_MAIL_SECRET = prev.s;
+  });
+  it('env が無ければ Ronnie の tableone-gourmet.com（MX あり）。古い in.tenpo-one.com（MX なし）が env にあっても使わない', () => {
+    delete process.env.NEXT_PUBLIC_INBOUND_MAIL_DOMAIN;
+    delete process.env.INBOUND_MAIL_SECRET;
+    expect(inboundMailDomain()).toBe(INBOUND_MAIL_DOMAIN);
+    expect(INBOUND_MAIL_DOMAIN).toBe('in.tableone-gourmet.com');
+    expect(inboundMailReady()).toBe(true);
+    process.env.NEXT_PUBLIC_INBOUND_MAIL_DOMAIN = LEGACY_INBOUND_MAIL_DOMAIN;
+    expect(inboundMailDomain()).toBe(INBOUND_MAIL_DOMAIN);
+  });
+  it('別の受信サービスのドメインを env で指定したときは、それを使い、合言葉（INBOUND_MAIL_SECRET）が無いと「設定中」', () => {
+    process.env.NEXT_PUBLIC_INBOUND_MAIL_DOMAIN = 'inbound.example.com';
+    delete process.env.INBOUND_MAIL_SECRET;
+    expect(inboundMailDomain()).toBe('inbound.example.com');
+    expect(inboundMailReady()).toBe(false);
+    process.env.INBOUND_MAIL_SECRET = 'x';
+    expect(inboundMailReady()).toBe(true);
   });
 });
