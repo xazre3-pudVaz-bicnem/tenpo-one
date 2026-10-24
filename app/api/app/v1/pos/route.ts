@@ -61,6 +61,7 @@ import { attachReceiptToCashTransaction, createScanDocument } from '@/app/app/sc
 import { isNativeCustomerActionType, parseNativeCustomerAction } from '@/lib/native-customers';
 import { loadNativeCustomer, loadNativeCustomers } from '@/lib/native-customers-server';
 import { addCustomerNote, createCustomer, recalcCustomerStats, updateCustomerAttributes } from '@/app/app/customers/actions';
+import { searchCustomerByPhone, setOrderCustomer } from '@/app/app/pos/actions';
 import { isNativeBudgetActionType, parseNativeBudgetAction } from '@/lib/native-budget';
 import { dailyBudgetsFrom } from '@/lib/daily-budget';
 import { saveDailyBudgets } from '@/app/app/budgets/daily-actions';
@@ -328,6 +329,13 @@ export async function GET(request: Request) {
     return json({ ok: true, ...scan });
   }
 
+  // 来店登録の「顧客名 設定」：電話番号で探す（Web の searchCustomerByPhone と同じ。2文字以上・10件まで）
+  if (part === 'customerSearch') {
+    if (!can(ctx.role, 'pos.order')) return json({ ok: false, error: '権限がありません' }, 403);
+    const phone = (url.searchParams.get('phone') ?? '').replace(/[^0-9-]/g, '').slice(0, 20);
+    return json({ ok: true, results: await searchCustomerByPhone(phone) });
+  }
+
   // 顧客台帳（Web の /app/customers・/app/customers/[id]）
   if (part === 'customers' || part === 'customer') {
     if (ctx.disabledFeatures?.has('crm')) return json({ ok: false, error: 'この機能は使えません', useWeb: true }, 403);
@@ -567,8 +575,9 @@ export async function POST(request: Request) {
   if (raw && typeof raw === 'object' && isNativeCustomerActionType((raw as { type?: unknown }).type)) {
     const parsedCustomer = parseNativeCustomerAction(raw);
     if (!parsedCustomer.ok) return json({ ok: false, error: parsedCustomer.error }, 400);
-    if (ctx.disabledFeatures?.has('crm')) return json({ ok: false, error: 'この機能は使えません', useWeb: true }, 403);
-    if (!can(ctx.role, 'customers.write')) return json({ ok: false, error: '権限がありません' }, 403);
+    const forOrder = parsedCustomer.action.type === 'orderCustomer';
+    if (!forOrder && ctx.disabledFeatures?.has('crm')) return json({ ok: false, error: 'この機能は使えません', useWeb: true }, 403);
+    if (!can(ctx.role, forOrder ? 'pos.order' : 'customers.write')) return json({ ok: false, error: '権限がありません' }, 403);
     // Route Handler では requirePermission がお店の回線を見ないので、ここで見る（ほかの操作と同じ）
     const customerProblem = await networkProblem(ctx);
     if (customerProblem) return json({ ok: false, error: customerProblem }, 403);
@@ -579,6 +588,10 @@ export async function POST(request: Request) {
         void _t;
         const r = await createCustomer(input);
         return json({ ok: true, orderId: r.id });
+      }
+      if (ca.type === 'orderCustomer') {
+        await setOrderCustomer(ca.orderId, ca.customerId);
+        return json({ ok: true });
       }
       if (ca.type === 'customerAttributes') {
         const { type: _t, id, ...input } = ca;

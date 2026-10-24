@@ -51,6 +51,11 @@ struct NativeSetupSheet: View {
     @State private var popup: NFSetupPopup?
     /// テンキーの数（ポップアップの中で入れる）
     @State private var padText = ""
+    /// 顧客（電話番号で探して伝票に付ける。USEN の「顧客名 設定」）
+    @State private var customer: NFCustomerHit?
+    @State private var custPhone = ""
+    @State private var custHits: [NFCustomerHit] = []
+    @State private var custSearching = false
 
     private var payload: NFPayload? { model.payload }
     private var planItems: [NFPlanItem] { (payload?.planItems ?? []).filter { plans.contains($0.kind) } }
@@ -82,11 +87,11 @@ struct NativeSetupSheet: View {
                 .buttonStyle(.plain)
             } right: { EmptyView() }
 
-            HStack(alignment: .top, spacing: 16) {
-                AnyView(leftColumn).frame(maxWidth: .infinity)
-                AnyView(rightColumn).frame(width: 380)
+            // 入るならそのまま、入らない画面（縦向きなど）だけスクロール
+            ViewThatFits(in: .vertical) {
+                AnyView(columns)
+                ScrollView(showsIndicators: false) { AnyView(columns) }
             }
-            .padding(.horizontal, 18).padding(.top, 12).padding(.bottom, 8)
 
             // 下：キャンセル・確定（USEN と同じく横並び）
             VStack(spacing: 6) {
@@ -130,6 +135,14 @@ struct NativeSetupSheet: View {
         .animation(.easeOut(duration: 0.15), value: popup)
     }
 
+    private var columns: some View {
+        HStack(alignment: .top, spacing: 16) {
+            AnyView(leftColumn).frame(maxWidth: .infinity)
+            AnyView(rightColumn).frame(width: 380)
+        }
+        .padding(.horizontal, 18).padding(.top, 12).padding(.bottom, 8)
+    }
+
     // MARK: 左の列
 
     private var leftColumn: some View {
@@ -148,6 +161,16 @@ struct NativeSetupSheet: View {
                         valueText(pickedPlanNames.isEmpty ? "未設定" : pickedPlanNames, on: !pickedPlanNames.isEmpty)
                         setButton { popup = .plan }
                     }
+                }
+                rowDivider
+                row("顧客名", en: "Name") {
+                    valueText(customer.map { "\($0.name) 様" } ?? "未登録", on: customer != nil)
+                    if customer != nil {
+                        Button { customer = nil } label: {
+                            Image(systemName: "xmark.circle.fill").font(.system(size: 20)).foregroundColor(NFColor.ink3)
+                        }.buttonStyle(.plain)
+                    }
+                    setButton { custPhone = ""; custHits = []; popup = .customer }
                 }
             }
             heading("タイマー設定", en: "Timer")
@@ -260,6 +283,46 @@ struct NativeSetupSheet: View {
                     ForEach([45, 60], id: \.self) { mm in timeChip("\(mm)分前", on: warningMinutes == mm) { warningMinutes = mm } }
                     timeChip("カスタム / Custom", on: false) { openPad(.warning) }
                 }
+            case .customer:
+                Text("電話番号で探す / Search by phone").font(.system(size: 12, weight: .bold)).foregroundColor(NFColor.ink3)
+                HStack {
+                    Text(custPhone.isEmpty ? "090…" : custPhone).font(.system(size: 26, weight: .heavy, design: .rounded)).monospacedDigit()
+                        .foregroundColor(custPhone.isEmpty ? NFColor.ink3 : NFColor.navy)
+                    Spacer()
+                    if custSearching { ProgressView() }
+                }
+                .padding(.horizontal, 14).frame(height: 52)
+                .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white.opacity(0.85)))
+                ForEach([["1", "2", "3", "4", "5"], ["6", "7", "8", "9", "0"]], id: \.self) { keys in
+                    HStack(spacing: 6) {
+                        ForEach(keys, id: \.self) { k in
+                            timeChip(k, on: false) { if custPhone.count < 13 { custPhone += k; Task { await searchCustomer() } } }
+                        }
+                    }
+                }
+                HStack(spacing: 6) {
+                    timeChip("C", on: false) { custPhone = ""; custHits = [] }
+                    timeChip("⌫", on: false) { custPhone = String(custPhone.dropLast()); Task { await searchCustomer() } }
+                }
+                if custHits.isEmpty {
+                    Text(custPhone.count < 2 ? "2桁以上入れると候補が出ます / Type 2+ digits" : (custSearching ? " " : "見つかりません / No match"))
+                        .font(.system(size: 12)).foregroundColor(NFColor.ink3)
+                } else {
+                    VStack(spacing: 6) {
+                        ForEach(custHits) { c in
+                            Button { customer = c; popup = nil } label: {
+                                HStack {
+                                    Text("\(c.name) 様").font(.system(size: 16, weight: .bold)).foregroundColor(NFColor.ink)
+                                    Spacer()
+                                    Text(c.phone ?? "").font(.system(size: 14)).monospacedDigit().foregroundColor(NFColor.ink3)
+                                }
+                                .padding(.horizontal, 14).frame(height: 46)
+                                .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(customer?.id == c.id ? NFColor.irisSoft : Color.white.opacity(0.9)))
+                            }
+                            .buttonStyle(PressableStyle())
+                        }
+                    }
+                }
             case .pad(let t):
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
                     Spacer()
@@ -363,6 +426,7 @@ struct NativeSetupSheet: View {
         draft["startTime"] = startNow ? NSNull() : nfHm(startDate)
         if let r = await model.act(["type": "floorStart", "tableId": table.id, "draft": draft]), let id = r.orderId {
             if let e = r.planItemError, !e.isEmpty { model.show(toast: e) }
+            if let c = customer { _ = await model.act(["type": "orderCustomer", "orderId": id, "customerId": c.id]) }
             onStarted(id)
         } else {
             problem = model.error
@@ -416,6 +480,18 @@ struct NativeSetupSheet: View {
         .buttonStyle(PressableStyle())
         .disabled(!enabled)
         .opacity(enabled ? 1 : 0.35)
+    }
+
+    private func searchCustomer() async {
+        let q = custPhone
+        guard q.count >= 2 else { custHits = []; return }
+        custSearching = true
+        defer { custSearching = false }
+        var comps = URLComponents(url: AppConfig.url("/api/app/v1/pos"), resolvingAgainstBaseURL: false)!
+        comps.queryItems = [URLQueryItem(name: "part", value: "customerSearch"), URLQueryItem(name: "phone", value: q)]
+        guard let data = try? await NativeAPI.shared.send(URLRequest(url: comps.url!)),
+              let r = try? JSONDecoder().decode(NFCustomerSearch.self, from: data), q == custPhone else { return }
+        custHits = r.results
     }
 
     private func openPad(_ t: NFPadTarget) {
@@ -525,7 +601,7 @@ struct NativeSetupSheet: View {
 
 /// 来店登録の小さなポップアップ
 enum NFSetupPopup: Equatable {
-    case mode, plan, duration, warning, start
+    case mode, plan, duration, warning, start, customer
     case pad(NFPadTarget)
     var title: String {
         switch self {
@@ -534,6 +610,7 @@ enum NFSetupPopup: Equatable {
         case .duration: return "時間制"
         case .warning: return "終了前注意"
         case .start: return "開始時間"
+        case .customer: return "顧客名"
         case .pad(let t): return t.title
         }
     }
@@ -544,6 +621,7 @@ enum NFSetupPopup: Equatable {
         case .duration: return "Time limit"
         case .warning: return "Last call"
         case .start: return "Start time"
+        case .customer: return "Customer"
         case .pad(let t): return t.en
         }
     }
@@ -927,3 +1005,8 @@ struct NFNumberPad: View {
         .buttonStyle(PressableStyle())
     }
 }
+
+
+/// 顧客の検索結果（Web の PosCustomerSearchResult）
+struct NFCustomerHit: Codable, Identifiable, Hashable { let id: String; let name: String; let phone: String?; let pointBalance: Int }
+struct NFCustomerSearch: Codable { let results: [NFCustomerHit] }
