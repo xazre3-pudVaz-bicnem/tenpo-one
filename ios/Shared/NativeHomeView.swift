@@ -158,6 +158,8 @@ struct NativeHomeView: View {
                         }
                         .frame(width: max(240, geo.size.width * 0.20))
                         VStack(spacing: 18) {
+                            // 売上の箱は、上（大きいボタン）と下（時計の行）から同じ距離に（2026-10-24 14:24 Ronnie「下の隙間が大きい。上下を同じに」）
+                            Spacer(minLength: 0)
                             salesCard(narrow: false)
                             Spacer(minLength: 0)
                             clockRow
