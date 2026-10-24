@@ -346,9 +346,11 @@ struct NativeOnboardingView: View {
     // MARK: 共通
 
     private func stepCard<C: View>(_ title: String, @ViewBuilder content: () -> C) -> some View {
-        NSPCard(title: title) {
+        // NSPCard は中身を後で作る（escaping）ので、先に作っておく
+        let inner = content()
+        return NSPCard(title: title) {
             VStack(alignment: .leading, spacing: 0) {
-                content()
+                inner
                 if let e = model.error {
                     Text(e).font(.system(size: 14, weight: .bold)).foregroundColor(NFColor.danger)
                         .fixedSize(horizontal: false, vertical: true)
