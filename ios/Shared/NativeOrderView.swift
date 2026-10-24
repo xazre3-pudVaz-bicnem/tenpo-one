@@ -14,6 +14,8 @@ struct NativeOrderView: View {
     @State private var afterClerk: (() -> Void)?
     /// 上のタブの編集（店長以上）
     @State private var editingPages = false
+    /// お客様情報（人数・席の時間・モード・コース）の直し
+    @State private var guestInfoOpen = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -26,7 +28,7 @@ struct NativeOrderView: View {
                 let slipW = max(320, geo.size.width * 0.30)
                 let catW = max(150, geo.size.width * 0.13)
                 HStack(alignment: .top, spacing: 12) {
-                    SlipPanel(model: model, onClerk: { pickClerk = true })
+                    SlipPanel(model: model, onClerk: { pickClerk = true }, onGuestInfo: { guestInfoOpen = true })
                         .frame(width: slipW)
                     VStack(spacing: 12) {
                         // 上のタブ（ページ）。Web と同じく2つ以上あるときだけ（テイクアウトは出さない）
@@ -125,6 +127,14 @@ struct NativeOrderView: View {
             }
         }
         .animation(.easeOut(duration: 0.15), value: editingPages)
+        // 人数・時間を押したら、テーブルで開くのと同じ「お客様情報」（開始時間・時間・人数・モード・コース）
+        .overlay {
+            if guestInfoOpen {
+                NativeOrderGuestInfo(model: model, onClose: { guestInfoOpen = false })
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeOut(duration: 0.15), value: guestInfoOpen)
         // 会計は同じ画面の上に重ねる（fullScreenCover にすると、下の Web が止まって Bluetooth の印刷・ドロアが出ない）
         .overlay {
             if showCheckout {
@@ -267,6 +277,8 @@ struct NativeTopBar: View {
 private struct SlipPanel: View {
     @ObservedObject var model: NativeOrderModel
     var onClerk: () -> Void = {}
+    /// 人数・時間を押したとき（お客様情報の直し。卓のある伝票だけ）
+    var onGuestInfo: () -> Void = {}
 
     var body: some View {
         VStack(spacing: 0) {
@@ -274,16 +286,22 @@ private struct SlipPanel: View {
             HStack(spacing: 10) {
                 Image(systemName: "arrow.left").font(.system(size: 18, weight: .bold)).foregroundColor(NT.ink2)
                 Text(model.order.tableName).font(.system(size: 32, weight: .heavy)).foregroundColor(NT.purple)
-                HStack(spacing: 4) {
-                    Image(systemName: "person.2")
-                    Text(verbatim: "\(model.order.guestCount)名")
+                Button(action: onGuestInfo) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "person.2")
+                        Text(verbatim: "\(model.order.guestCount)名")
+                        if canEditGuest { Image(systemName: "chevron.down").font(.system(size: 10, weight: .bold)) }
+                    }
+                    .lineLimit(1)
+                    .fixedSize()
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundColor(NT.ink2)
+                    .padding(.horizontal, 10).padding(.vertical, 6)
+                    .background(Capsule().fill(NT.lilac))
                 }
-                .lineLimit(1)
-                .fixedSize()
-                .font(.system(size: 15, weight: .bold))
-                .foregroundColor(NT.ink2)
-                .padding(.horizontal, 10).padding(.vertical, 6)
-                .background(Capsule().fill(NT.lilac))
+                .buttonStyle(PressableStyle())
+                .disabled(!canEditGuest)
+                .accessibilityLabel("お客様情報（人数・席の時間）を変更する")
                 Spacer()
                 Text(verbatim: "#\(model.order.orderNo)").font(.system(size: 14, weight: .semibold)).foregroundColor(NT.ink3)
             }
@@ -295,7 +313,9 @@ private struct SlipPanel: View {
                 WrapLayout(spacing: 8) {
                     chip(icon: "person", text: model.order.customerName ?? "顧客未設定")
                     if let from = model.order.seatFrom, let to = model.order.seatTo {
-                        chip(icon: "clock", text: "\(from)〜\(to)")
+                        Button(action: onGuestInfo) { chip(icon: "clock", text: "\(from)〜\(to)") }
+                            .buttonStyle(PressableStyle())
+                            .disabled(!canEditGuest)
                     }
                     // 来店経路（booking source）
                     let source = (NPVisitSource.defaults + NPVisitSource.extras).first { $0.id == model.order.visitSourceId }
@@ -365,6 +385,9 @@ private struct SlipPanel: View {
         .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(NT.card))
         .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(NT.lilacLine, lineWidth: 1))
     }
+
+    /// 人数・時間を直せるか（卓のある伝票だけ。テイクアウト等は卓が無い）
+    private var canEditGuest: Bool { model.isLive && !model.order.takeoutLike }
 
     private func chip(icon: String, text: String) -> some View {
         HStack(spacing: 5) {

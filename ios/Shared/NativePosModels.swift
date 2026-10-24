@@ -695,6 +695,12 @@ final class NativeOrderModel: ObservableObject {
     }
 
     /// お会計伝票をその場で印刷する（レジのプリンターへ。Web の「会計伝票」と同じ）
+    /// 伝票だけ読み直す（お客様情報を変えたあと。カートの品はそのまま）
+    func reloadOrder() async {
+        guard let orderId, isLive else { return }
+        if let live = try? await NativeAPI.shared.loadLive(orderId: orderId) { apply(live: live) }
+    }
+
     func printBill() async {
         guard let orderId else { return }
         busy = true
