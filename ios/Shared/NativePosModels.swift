@@ -943,7 +943,7 @@ extension NativeOrderModel {
         ]
         let order = NPOrder(
             id: "o1", orderNo: 5998, tableName: "T3", guestCount: 2, customerName: nil,
-            seatFrom: "18:30", seatTo: "20:30", clerkName: "Bimal",
+            seatFrom: "18:30", seatTo: "20:30", clerkName: "佐藤",
             lines: [
                 NPOrderLine(id: "l1", menuItemId: "i11", name: "生ビール", quantity: 2, unitPrice: 590, sent: true, english: "Draft beer"),
                 NPOrderLine(id: "l2", menuItemId: "i4", name: "枝豆", quantity: 1, unitPrice: 390, sent: true, english: "Edamame"),
