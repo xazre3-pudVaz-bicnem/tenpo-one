@@ -228,24 +228,22 @@ struct NativeOrderView: View {
 /// （2026-10-24 19:22 Ronnie「ホームのボタンの中にロゴ」→ 19:24「ロゴの色が合わない・ホームに見えない」）
 struct NativeHomeLogo: View {
     /// 上のバーの色（ロゴの「1」をこの色で抜いて見せる）
-    var ink: Color = NT.header
+    var ink: Color = NT.topBar
 
     var body: some View {
-        // 上のバーがうすい灰色になったので、家は紺・「1」は白（2026-10-24 22:28）
         ZStack {
-            NativeHouseShape().fill(Color(hex: 0x171333))
+            NativeHouseShape().fill(Color.white)
                 .frame(width: 32, height: 29)
             Image("BrandOne")
                 .renderingMode(.template)
                 .resizable()
                 .scaledToFit()
-                .foregroundColor(.white)
+                .foregroundColor(ink)
                 .frame(height: 15)
                 .offset(y: 6)
         }
         .frame(width: 46, height: 40)
-        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white))
-        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(NT.line, lineWidth: 1))
+        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white.opacity(0.12)))
     }
 }
 
@@ -288,34 +286,31 @@ struct NativeTopBar: View {
             // 画面の名前（店名のあった場所に、同じ丸い枠で）
             ViewThatFits(in: .horizontal) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(title).font(.system(size: 17, weight: .heavy)).foregroundColor(NT.ink)
+                    Text(title).font(.system(size: 17, weight: .heavy)).foregroundColor(.white)
                     if !subtitle.isEmpty {
-                        Text(subtitle).font(.system(size: 12, weight: .bold)).foregroundColor(NT.purple)
+                        Text(subtitle).font(.system(size: 12, weight: .bold)).foregroundColor(Color(hex: 0xC9B6F5))
                     }
                 }
                 .fixedSize()
-                Text(title).font(.system(size: 17, weight: .heavy)).foregroundColor(NT.ink).lineLimit(1)
+                Text(title).font(.system(size: 17, weight: .heavy)).foregroundColor(.white).lineLimit(1)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
-            .background(Capsule().fill(Color.white))
-            .overlay(Capsule().stroke(NT.line, lineWidth: 1))
+            .background(Capsule().fill(Color.white.opacity(0.10)))
             Spacer(minLength: 8)
             HStack(spacing: 6) {
                 Image(systemName: "person")
                 Text(userName).lineLimit(1)
             }
             .font(.system(size: 15, weight: .semibold))
-            .foregroundColor(NT.ink2)
+            .foregroundColor(.white)
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(Capsule().fill(Color.white))
-            .overlay(Capsule().stroke(NT.line, lineWidth: 1))
+            .background(Capsule().fill(Color.white.opacity(0.10)))
         }
         .padding(.horizontal, 16)
         .frame(height: 64)
-        // 上のバーは画面と同じうすい灰色（2026-10-24 22:28 Ronnie「全部同じ地の色に。広く見える」）
-        .background(NT.bar.ignoresSafeArea(edges: .top))
+        .background(NT.topBar)
     }
 
     private func iconButton(_ icon: String, label: String, action: @escaping () -> Void) -> some View {
@@ -326,10 +321,9 @@ struct NativeTopBar: View {
             } else {
                 Image(systemName: icon)
                     .font(.system(size: 18, weight: .bold))
-                    .foregroundColor(NT.ink)
+                    .foregroundColor(.white)
                     .frame(width: 46, height: 40)
-                    .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white))
-                    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(NT.line, lineWidth: 1))
+                    .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white.opacity(0.10)))
             }
         }
         .buttonStyle(PressableStyle())

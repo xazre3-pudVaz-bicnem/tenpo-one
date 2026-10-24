@@ -126,7 +126,7 @@ struct NLToolbar: View {
                     Text(n > 99 ? "99+" : "\(n)").font(.system(size: 11, weight: .heavy)).monospacedDigit().foregroundColor(.white)
                         .padding(.horizontal, 5).frame(minWidth: 20, minHeight: 20)
                         .background(Capsule().fill(NLColor.red))
-                        .overlay(Capsule().stroke(NLColor.page, lineWidth: 2))
+                        .overlay(Capsule().stroke(NLColor.navy, lineWidth: 2))
                         .offset(x: 7, y: -7)
                 }
             }
@@ -184,10 +184,9 @@ struct NLToolbar: View {
             Image(systemName: icon).font(.system(size: 16, weight: .semibold))
             Text(ja).font(.system(size: 14, weight: .heavy))
         }
-        .foregroundColor(NLColor.ink)
+        .foregroundColor(.white)
         .padding(.horizontal, 12).frame(height: 38)
-        .background(RoundedRectangle(cornerRadius: 10).fill(Color.white))
-        .overlay(RoundedRectangle(cornerRadius: 10).stroke(NLColor.line, lineWidth: 1))
+        .background(RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(0.12)))
         .contentShape(Rectangle())
     }
 }
