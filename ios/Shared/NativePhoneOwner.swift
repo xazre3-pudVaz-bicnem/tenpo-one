@@ -36,6 +36,9 @@ enum NativePhoneOwnerRegistry {
         ("/app/vendors", "vendors"), // 仕入先（NativePhoneOwnerVendors.swift）
         ("/app/purchases", "purchases"), // 発注（一覧・作成・詳細・入荷。NativePhoneOwnerPurchases.swift）
         ("/app/costing", "costing"), // 原価管理（NativePhoneOwnerCosting.swift）
+        ("/app/payroll", "payroll"),
+        ("/app/manuals", "manuals"),
+        ("/app/coupons", "coupons"),
     ]
     static let paths: [String: String] = Dictionary(entries, uniquingKeysWith: { a, _ in a })
 
@@ -81,6 +84,9 @@ struct NativePhoneOwnerScreen: View {
         case "vendors": NativePhoneVendorsScreen(route: route)
         case "purchases": NativePhonePurchasesScreen(route: route)
         case "costing": NativePhoneCostingScreen(route: route)
+        case "payroll": NativePhonePayrollScreen(route: route)
+        case "manuals": NativePhoneManualsScreen(route: route)
+        case "coupons": NativePhoneCouponsScreen(route: route)
         default:
             // 知らない key：Web のまま見せる
             Color.clear.onAppear { state.phoneOwnerModule = nil }
