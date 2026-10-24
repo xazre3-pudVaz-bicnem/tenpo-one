@@ -47,10 +47,11 @@ struct RootView: View {
                         .transition(.opacity)
                         .zIndex(30)
                 }
+                // iPhone：店長・オーナーのネイティブのログイン（Web の /login の代わり。2026-10-25 Ronnie）
                 if state.ownerLoginPage && !AppConfig.isPad {
-                    OwnerLoginSwitchBar()
+                    NativeOwnerLoginView()
                         .transition(.opacity)
-                        .zIndex(2)
+                        .zIndex(10)
                 }
                 // iPhone：ハンディのテーブル一覧（/handy）とオーナー・店長のホーム（/app/dashboard）をネイティブで重ねる（2026-10-24）
                 if state.nativeHandyHome && !state.needsHandyLogin {

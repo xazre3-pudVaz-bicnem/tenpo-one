@@ -341,6 +341,12 @@ final class AppState: ObservableObject {
         choose(.owner)
     }
 
+    /// 店長・オーナーのネイティブのログインができたら、オーナー・店長の画面へ
+    @MainActor func finishOwnerLogin() {
+        ownerLoginPage = false
+        WebViewController.current?.load(AppConfig.url("/app/dashboard"))
+    }
+
     /// スタッフ：お店の QR でログイン（店長・オーナーのログイン画面の下のボタン）
     func chooseHandyLogin() {
         guard !AppConfig.isPad else { return }
