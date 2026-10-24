@@ -117,16 +117,27 @@ struct NLInboxSheet: View {
     enum Tab { case tasks, messages }
     @State private var tab: Tab = .tasks
 
+    // 箱のボタンのすぐ下に開く（ポップオーバー。2026-10-24 20:17 Ronnie「メッセージの箱の下に開く、ネイティブの形で」）
     var body: some View {
-        NavigationStack {
             VStack(spacing: 0) {
+                HStack(spacing: 8) {
+                    Image(systemName: "tray.full").font(.system(size: 16, weight: .semibold)).foregroundColor(NLColor.navy)
+                    Text("予約のお知らせ").font(.system(size: 17, weight: .heavy)).foregroundColor(NLColor.navy)
+                    Spacer()
+                    Button { Task { await inbox.load() } } label: {
+                        Image(systemName: "arrow.clockwise").font(.system(size: 14, weight: .bold)).foregroundColor(NLColor.navy)
+                            .frame(width: 34, height: 34)
+                            .background(Circle().fill(NLColor.page))
+                    }
+                    .buttonStyle(PressableStyle())
+                }
+                .padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 10)
                 HStack(spacing: 6) {
                     tabButton("予約受付管理", count: inbox.payload?.tasks.count ?? 0, on: tab == .tasks) { tab = .tasks }
                     tabButton("メッセージ", count: inbox.unreadNotices, on: tab == .messages) { tab = .messages; inbox.openMessages() }
                     Spacer()
-                    Button { Task { await inbox.load() } } label: { Image(systemName: "arrow.clockwise").font(.system(size: 15, weight: .bold)) }
                 }
-                .padding(.horizontal, 16).padding(.vertical, 12)
+                .padding(.horizontal, 16).padding(.bottom, 12)
                 Rectangle().fill(NLColor.line).frame(height: 1)
                 ScrollView {
                     VStack(spacing: 10) {
@@ -148,10 +159,8 @@ struct NLInboxSheet: View {
                 }
                 .background(NLColor.page)
             }
-            .navigationTitle("予約のお知らせ")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("閉じる", action: onClose) } }
-        }
+            .frame(width: 520, height: 640)
+            .background(Color.white)
         .task { await inbox.load() }
     }
 

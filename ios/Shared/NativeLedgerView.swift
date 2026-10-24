@@ -444,9 +444,7 @@ struct NativeLedgerView: View {
         .sheet(isPresented: $findSeatsOpen) {
             NLFindSeatsSheet(model: model, onClose: { findSeatsOpen = false })
         }
-        .sheet(isPresented: $inboxOpen) {
-            NLInboxSheet(inbox: inbox, model: model, onClose: { inboxOpen = false })
-        }
+
         .sheet(isPresented: $walkInOpen) {
             NLWalkInSheet(model: model, onClose: { walkInOpen = false })
         }
@@ -538,6 +536,9 @@ struct NativeLedgerView: View {
                 }
                 .buttonStyle(PressableStyle())
                 .accessibilityLabel("予約のお知らせ")
+                .popover(isPresented: $inboxOpen, arrowEdge: .top) {
+                    NLInboxSheet(inbox: inbox, model: model, onClose: { inboxOpen = false })
+                }
                 // 予約登録は右上に、Reservation と同じ黄色で（2026-10-24 18:49 Ronnie「右上のウェイティングはいらない、そこに予約登録を黄色で」）
                 if model.payload?.canWrite ?? false {
                     Button { newOpen = true } label: {
