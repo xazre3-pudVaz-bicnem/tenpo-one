@@ -151,9 +151,10 @@ struct NativeOrderView: View {
                     showCheckout = false
                     if model.isLive { AppState.shared.finishNativeCheckout() }
                 })
-                // 伝票を読み終わるまで（最初から会計で開いたとき）は「読み込み中」をかぶせる（¥0 を一瞬見せない）
+                // 伝票の中身がまだ1つも無いときだけ「読み込み中」をかぶせる（¥0 を一瞬見せない）。
+                // 前に読んだ中身があればすぐ出す（2026-10-24 Ronnie「会計 ma jada pani 取込み navai」）。確定ボタンは最新の金額を待つ
                 .overlay {
-                    if model.isLive && !model.orderLoaded {
+                    if model.isLive && !model.hasOrderData {
                         ZStack {
                             NT.page.opacity(0.92).ignoresSafeArea()
                             ProgressView("読み込み中…").font(.system(size: 16, weight: .bold)).tint(NT.purple)

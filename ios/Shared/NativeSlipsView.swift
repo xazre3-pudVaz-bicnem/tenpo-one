@@ -135,6 +135,7 @@ final class NativeSlipsModel: ObservableObject {
         do {
             var comps = URLComponents(url: AppConfig.url("/api/app/v1/pos"), resolvingAgainstBaseURL: false)!
             comps.queryItems = [URLQueryItem(name: "part", value: "slip"), URLQueryItem(name: "id", value: id)]
+            if let saved = NativeAPI.cached(NSDetail.self, comps.url) { detail = saved }
             let data = try await NativeAPI.shared.send(URLRequest(url: comps.url!))
             detail = try JSONDecoder().decode(NSDetail.self, from: data)
         } catch {

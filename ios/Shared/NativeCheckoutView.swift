@@ -50,7 +50,9 @@ struct NativeCheckoutView: View {
     private var tenderedTotal: Int { nonCashPaid + (cashRow?.tendered ?? 0) }
     private var remaining: Int { max(0, total - nonCashPaid - cashApplied) }
     private var change: Int { max(0, (cashRow?.tendered ?? 0) - cashDue) }
-    private var canPay: Bool { !needsSource && (total == 0 || (remaining == 0 && !payments.isEmpty)) }
+    /// 最新の金額を読み終わったか（保存してあった中身を先に出しているあいだは確定しない）
+    private var fresh: Bool { !model.isLive || model.orderLoaded }
+    private var canPay: Bool { fresh && !needsSource && (total == 0 || (remaining == 0 && !payments.isEmpty)) }
     /// 来店経路がまだ（予約の無い卓の伝票）。選ばないと会計できない（2026-10-24 Ronnie）
     private var needsSource: Bool { model.isLive && model.order.sourceRequired && model.order.visitSourceId == nil }
 
@@ -376,7 +378,7 @@ struct NativeCheckoutView: View {
                 }
             }
             Button(action: pay) {
-                Text(paying ? "処理中…" : needsSource ? "来店経路を選択してください" : canPay ? "お会計を確定 \(NT.yen(total))" : "残額 \(NT.yen(remaining)) の支払方法を選択")
+                Text(paying ? "処理中…" : !fresh ? "最新の金額を確認中…" : needsSource ? "来店経路を選択してください" : canPay ? "お会計を確定 \(NT.yen(total))" : "残額 \(NT.yen(remaining)) の支払方法を選択")
                     .font(.system(size: 20, weight: .heavy)).foregroundColor(.white)
                     .lineLimit(1).minimumScaleFactor(0.6)
                     .frame(maxWidth: .infinity, minHeight: 68)

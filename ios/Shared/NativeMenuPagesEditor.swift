@@ -251,6 +251,12 @@ struct NativeMenuPagesEditor: View {
         guard loaded == nil else { return }
         var comps = URLComponents(url: AppConfig.url("/api/app/v1/pos"), resolvingAgainstBaseURL: false)!
         comps.queryItems = [URLQueryItem(name: "part", value: "menuPages"), URLQueryItem(name: "storeId", value: storeId)]
+        // 前に開いたときの中身を先に出す（押した瞬間に出る）。編集を始める前に最新に入れ替える
+        if let saved = NativeAPI.cached(NMPPayload.self, comps.url) {
+            pages = saved.pages
+            map = saved.categoryPage
+            loaded = saved
+        }
         do {
             let data = try await NativeAPI.shared.send(URLRequest(url: comps.url!))
             let p = try JSONDecoder().decode(NMPPayload.self, from: data)

@@ -35,10 +35,23 @@ struct NativeOrderGuestInfo: View {
 
     private func load() async {
         guard let orderId = model.orderId else { problem = "この伝票は変更できません"; return }
+        // 保存してあるテーブル一覧で先に出す（押した瞬間に出る。裏で読み直す。2026-10-24 Ronnie「every option 取込み nagari」）
+        if let saved = NativeDiskCache.load(NFPayload.self, key: "floor") {
+            for t in saved.tables {
+                if let o = t.order, let s = o.slips.first(where: { $0.id == orderId }) {
+                    floor.payload = saved
+                    floor.now = Date().timeIntervalSince1970 * 1000
+                    target = (t, o, s)
+                    break
+                }
+            }
+        }
         do {
             let p = try await NativeAPI.shared.loadFloor(storeId: model.storeId)
+            NativeDiskCache.save(p, key: "floor")
             floor.payload = p
             floor.now = p.serverNow
+            if target != nil { return }
             for t in p.tables {
                 if let o = t.order, let s = o.slips.first(where: { $0.id == orderId }) {
                     target = (t, o, s)

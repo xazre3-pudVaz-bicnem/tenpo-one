@@ -529,8 +529,10 @@ final class NativeOrderModel: ObservableObject {
                      discountPresets: c.discountPresets, steraTypes: c.steraPaymentTypes, canCheckout: c.canCheckout, canDiscount: c.canDiscount)
     }
 
-    /// サーバーから伝票を読めたか（読めていないのに「品なし」と思って消さないように）
-    private(set) var orderLoaded = false
+    /// サーバーから伝票を読めたか（読めていないのに「品なし」と思って消さないように。会計の確定もこれを待つ）
+    @Published private(set) var orderLoaded = false
+    /// 伝票の中身を出せるか（保存してあった中身でもよい。画面の「読み込み中」はこれが無いときだけ）
+    @Published private(set) var hasOrderData = false
 
     /// 最後に読んだ伝票（iPad に保存して、次に開くとき先に出す。ネットが無いときもこれで出る）
     private var lastLive: APILive?
@@ -546,6 +548,7 @@ final class NativeOrderModel: ObservableObject {
         registerOpen = l.registerOpen
         approvers = l.approvers ?? []
         apply(order: l.order)
+        hasOrderData = true
     }
 
     private func apply(payload p: APIPayload) {
@@ -559,6 +562,7 @@ final class NativeOrderModel: ObservableObject {
         registerOpen = p.registerOpen
         approvers = p.approvers ?? []
         apply(order: p.order)
+        hasOrderData = true
     }
 
     private func applyCatalog(storeName name: String, categories cats: [APICategory], pages pg: [APIPage]?, items list: [APIItem], optionGroups groups: [String: [APIOptionGroup]]?,
