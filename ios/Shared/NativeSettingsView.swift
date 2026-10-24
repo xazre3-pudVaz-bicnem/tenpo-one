@@ -134,15 +134,15 @@ struct NativeSettingsView: View {
     private var sidebar: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 8) {
-                sideHeader("このiPad", en: "This iPad")
-                // 「アプリの画面」は デバイス管理 の中に置く（2026-10-24 19:09 Ronnie）
-                ForEach(Page.allCases.filter { $0 != .native }) { p in
-                    sideRow(icon: p.icon, title: p.title, en: p.en, dot: pageStatus(p)?.1, on: sel == .page(p)) { select(.page(p)) }
-                }
-                if !groups.isEmpty {
-                    sideHeader("お店の設定", en: "Store").padding(.top, 18)
-                    ForEach(groups) { g in
-                        sideRow(icon: g.icon, title: g.label, en: g.en, dot: g.label == "デバイス管理" ? pageStatus(.native)?.1 : nil, on: sel == .group(g.id)) { select(.group(g.id)) }
+                // 見出し（このiPad／お店の設定）は出さない・ハードウェアとデバイス管理は 会計 の下（2026-10-24 19:14 Ronnie）
+                ForEach(sideEntries, id: \.self) { e in
+                    switch e {
+                    case .page(let p):
+                        sideRow(icon: p.icon, title: p.title, en: p.en, dot: pageStatus(p)?.1, on: sel == e) { select(e) }
+                    case .group(let id):
+                        if let g = groups.first(where: { $0.id == id }) {
+                            sideRow(icon: g.icon, title: g.label, en: g.en, dot: g.label == "デバイス管理" ? pageStatus(.native)?.1 : nil, on: sel == e) { select(e) }
+                        }
                     }
                 }
                 // ログアウトは一覧のいちばん下（ホームの上のバーからは外した。2026-10-24 19:16 Ronnie）
@@ -159,6 +159,28 @@ struct NativeSettingsView: View {
         .frame(width: Self.sideWidth)
         .background(Color.white)
         .overlay(alignment: .trailing) { Rectangle().fill(NFColor.line).frame(width: 1) }
+    }
+
+    /// 左の並び：店舗・メニュー・予約・顧客・会計 → ハードウェア・デバイス管理 → 運用・管理・集計（2026-10-24 19:14 Ronnie「ハードウェアとデバイス管理は会計の下」）
+    private var sideEntries: [Sel] {
+        let gs = groups
+        let devices = gs.first { $0.label == "デバイス管理" }
+        var out: [Sel] = []
+        var placed = false
+        for g in gs where g.label != "デバイス管理" {
+            out.append(.group(g.id))
+            if g.label == "会計" {
+                out.append(.page(.printer))
+                if let d = devices { out.append(.group(d.id)) }
+                placed = true
+            }
+        }
+        if !placed {
+            // 会計 が無い（権限で出ない）ときは末尾に
+            out.append(.page(.printer))
+            if let d = devices { out.append(.group(d.id)) }
+        }
+        return out
     }
 
     private func select(_ s: Sel) {
