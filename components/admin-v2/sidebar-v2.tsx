@@ -13,12 +13,13 @@ import { V2_STAFF_LINK, V2_TOP_LINKS, linkPath, v2OpenKeysForPath, type V2Link, 
 
 const STORAGE_KEY = 'tenpo-nav-v2-open';
 
+// 2026-10-24 Ronnie「コンパクトに」：行を少し低く・サブの行を詰める
 const topRow =
-  'flex h-10 items-center gap-2.5 rounded-lg px-2.5 text-[14px] font-medium text-ink-2 hover:bg-lilac-soft hover:text-royal aria-[current=page]:bg-iris-soft aria-[current=page]:font-bold aria-[current=page]:text-royal';
+  'flex h-9 items-center gap-2.5 rounded-lg px-2.5 text-[13.5px] font-medium text-ink-2 hover:bg-lilac-soft hover:text-royal aria-[current=page]:bg-iris-soft aria-[current=page]:font-bold aria-[current=page]:text-royal';
 const groupRow =
-  'flex h-10 w-full items-center gap-2.5 rounded-lg px-2.5 text-left text-[14px] font-medium text-ink-2 hover:bg-lilac-soft hover:text-royal';
+  'flex h-9 w-full items-center gap-2.5 rounded-lg px-2.5 text-left text-[13.5px] font-medium text-ink-2 hover:bg-lilac-soft hover:text-royal';
 const subRow =
-  'block w-full rounded-md px-2 py-1.5 text-left text-[13px] text-ink-2 hover:bg-lilac-soft hover:text-royal aria-[current=page]:bg-iris-soft aria-[current=page]:font-bold aria-[current=page]:text-royal';
+  'block w-full rounded-md px-2 py-1 text-left text-[12.5px] text-ink-2 hover:bg-lilac-soft hover:text-royal aria-[current=page]:bg-iris-soft aria-[current=page]:font-bold aria-[current=page]:text-royal';
 
 /** 左メニュー：リンクの場所が今の画面か（? や # が付くリンクは選択表示しない） */
 function isCurrent(pathname: string, href: string): boolean {
@@ -99,12 +100,24 @@ export function SidebarV2({
         {sections.map((section, si) => (
           <div key={section.label ?? `s${si}`}>
             {section.label && (
-              <div className="px-2.5 pt-4 pb-1 text-[11px] font-bold tracking-[0.08em] text-ink-3">{section.label}</div>
+              <div className="px-2.5 pt-3 pb-0.5 text-[11px] font-bold tracking-[0.08em] text-ink-3">{section.label}</div>
             )}
             <ul className="space-y-0.5">
               {section.groups.map((g) => {
                 const open = isOpen(g.key);
                 const hasActive = activeKeys.includes(g.key);
+                // リンクが 1 つだけのグループ（設定）は開かずにそのまま行く（2026-10-24「コンパクトに」）
+                if (g.links.length === 1 && !g.nested && !g.links[0].href.startsWith('#')) {
+                  const only = g.links[0];
+                  return (
+                    <li key={g.key}>
+                      <Link href={only.href} aria-current={isCurrent(pathname, only.href) || hasActive ? 'page' : undefined} className={topRow}>
+                        <NavIcon name={g.icon} className="h-[18px] w-[18px] shrink-0" />
+                        {only.label}
+                      </Link>
+                    </li>
+                  );
+                }
                 return (
                   <li key={g.key}>
                     <button
