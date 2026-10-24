@@ -125,7 +125,7 @@ struct NativeSettingsView: View {
         .onReceive(printConfig.$config) { _ in model.syncForm() }
     }
 
-    // MARK: - 左：一覧（白い地に黒いタブ。印＋名前は大きく。選んでいるものは青。2026-10-24 Ronnie「背景ではなくタブを黒に」）
+    // MARK: - 左：一覧（白いタブに黒い印。印＋名前は大きく。選んでいるものは青。2026-10-24 Ronnie「タブの背景は白、印を黒に」）
 
     private static let sideWidth: CGFloat = 300
 
@@ -163,7 +163,7 @@ struct NativeSettingsView: View {
         .padding(.horizontal, 4).padding(.bottom, 4)
     }
 
-    /// 一覧の1行＝黒いタブ（選ぶと青）：印＋名前（下に英語）＋いまの状態の点
+    /// 一覧の1行＝白いタブに黒い印（選ぶと青）：印＋名前（下に英語）＋いまの状態の点（2026-10-24 17:03 Ronnie「タブの背景は白、印を黒に」）
     private func sideRow(icon: String, title: String, en: String, dot: Color?, on: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 13) {
@@ -171,21 +171,22 @@ struct NativeSettingsView: View {
                     .font(.system(size: 21, weight: .semibold))
                     .foregroundColor(.white)
                     .frame(width: 48, height: 48)
-                    .background(RoundedRectangle(cornerRadius: 13, style: .continuous).fill(Color.white.opacity(on ? 0.22 : 0.12)))
+                    .background(RoundedRectangle(cornerRadius: 13, style: .continuous).fill(on ? NFColor.iris : NFColor.navy))
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(title).font(.system(size: 18, weight: .heavy)).foregroundColor(.white).lineLimit(1)
-                    Text(en).font(.system(size: 11.5, weight: .medium)).foregroundColor(Color.white.opacity(on ? 0.85 : 0.6)).lineLimit(1)
+                    Text(title).font(.system(size: 18, weight: .heavy)).foregroundColor(on ? NFColor.iris : NFColor.ink).lineLimit(1)
+                    Text(en).font(.system(size: 11.5, weight: .medium)).foregroundColor(on ? NFColor.iris.opacity(0.8) : NFColor.ink3).lineLimit(1)
                 }
                 Spacer(minLength: 4)
                 if let dot {
                     Circle().fill(dot).frame(width: 10, height: 10)
-                        .overlay(Circle().stroke(Color.white.opacity(0.6), lineWidth: 1))
+                        .overlay(Circle().stroke(Color.white, lineWidth: 1))
                 }
-                Image(systemName: "chevron.right").font(.system(size: 13, weight: .bold)).foregroundColor(Color.white.opacity(on ? 0.95 : 0.45))
+                Image(systemName: "chevron.right").font(.system(size: 13, weight: .bold)).foregroundColor(on ? NFColor.iris : NFColor.ink3)
             }
             .padding(.horizontal, 10).frame(height: 68)
-            .background(RoundedRectangle(cornerRadius: 15, style: .continuous).fill(on ? NFColor.iris : NFColor.navy))
-            .shadow(color: Color.black.opacity(on ? 0.18 : 0.10), radius: 6, y: 3)
+            .background(RoundedRectangle(cornerRadius: 15, style: .continuous).fill(on ? NFColor.irisSoft : Color.white))
+            .overlay(RoundedRectangle(cornerRadius: 15, style: .continuous).stroke(on ? NFColor.iris : NFColor.line, lineWidth: on ? 1.5 : 1))
+            .shadow(color: Color.black.opacity(0.06), radius: 6, y: 3)
         }
         .buttonStyle(PressableStyle(scale: 0.98))
     }
