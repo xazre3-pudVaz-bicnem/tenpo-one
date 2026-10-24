@@ -103,7 +103,7 @@ struct NativeFloorView: View {
         // 来店登録（お客様情報）。Web の /app/floor/[tableId]/setup と同じ並び。大きめのカードで、中身が入る高さ
         .overlay {
             if let t = setupTable {
-                NativeModalCard(width: 780) {
+                NativeModalCard(width: 1080) {
                     NativeSetupSheet(
                         model: model,
                         table: t,
@@ -373,13 +373,21 @@ struct NativeTableCard: View {
         let visits = o.visitCount
         let isNew = visits != nil && (visits ?? 0) <= 1
         let name = o.customerName ?? o.guestName
-        HStack(spacing: 6) {
+        // 入店時刻と、時間制なら残り（無ければ経過）を「H:MM」で（USEN の卓と同じ情報を、うちの形で。2026-10-24 Ronnie）
+        let hasLimit = o.course != nil
+        let mins = hasLimit ? tt.left : tt.elapsed
+        let clock = String(format: "%@%d:%02d", mins < 0 ? "−" : "", abs(mins) / 60, abs(mins) % 60)
+        HStack(spacing: 8) {
             HStack(spacing: 3) {
-                Image(systemName: "clock").font(.system(size: 12, weight: .bold))
-                Text("\(tt.elapsed)").font(.system(size: 16, weight: .heavy)).monospacedDigit()
-                Text("分").font(.system(size: 10.5, weight: .semibold)).foregroundColor(NFColor.ink3)
+                Image(systemName: "arrow.right.to.line").font(.system(size: 11, weight: .bold))
+                Text(NFTime.hm(o.openedAtMs)).font(.system(size: 13, weight: .bold)).monospacedDigit()
             }
-            .foregroundColor(NFColor.royal)
+            .foregroundColor(NFColor.ink2)
+            HStack(spacing: 3) {
+                Image(systemName: hasLimit ? "hourglass" : "clock").font(.system(size: 11, weight: .bold))
+                Text(clock).font(.system(size: 15, weight: .heavy)).monospacedDigit()
+            }
+            .foregroundColor(hasLimit && mins < 0 ? NFColor.danger : NFColor.royal)
             if let v = visits, v >= 2 {
                 Text("\(v)回").font(.system(size: 10, weight: .heavy)).foregroundColor(NFColor.royal)
                     .padding(.horizontal, 6).padding(.vertical, 1).background(Capsule().fill(NFColor.irisSoft))
