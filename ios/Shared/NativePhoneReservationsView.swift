@@ -2174,7 +2174,7 @@ extension NativePhoneReservationsModel {
             row("00000000-0000-4000-8000-000000000102", "18:00", "20:00", "山田 太郎", 4, "T-1", status: "seated", label: "着席", course: "おまかせコース", source: "ホットペッパー",
                 request: "誕生日のプレートをお願いします", tags: ["誕生日"], tableId: "00000000-0000-4000-8000-000000000001"),
             row("00000000-0000-4000-8000-000000000103", "19:00", "21:00", "佐々木 花子", 6, "席未定", status: "pending", label: "仮予約", memo: "折り返し連絡", tags: ["要連絡", "個室希望"]),
-            row("00000000-0000-4000-8000-000000000104", "19:30", "21:30", "Ronnie Sharma", 3, "T-5+T-6", status: "confirmed", label: "予約確定", source: "TABLE ONE"),
+            row("00000000-0000-4000-8000-000000000104", "19:30", "21:30", "中村 優子", 3, "T-5+T-6", status: "confirmed", label: "予約確定", source: "TABLE ONE"),
             row("00000000-0000-4000-8000-000000000105", "20:00", "22:00", "高橋 健", 2, "C-1", status: "cancelled", label: "キャンセル"),
         ]
         let now = ISO8601DateFormatter().string(from: Date().addingTimeInterval(-3600))
@@ -2182,17 +2182,17 @@ extension NativePhoneReservationsModel {
             tasks: [
                 NLInboxTask(key: "p:1", kind: "pending", reservationId: "00000000-0000-4000-8000-000000000103", importId: nil, title: "佐々木 花子 様",
                             detail: "\(NPHRDate.dayLabel(today)) 19:00〜 6名", note: "電話", at: now, date: today),
-                NLInboxTask(key: "n:2", kind: "new", reservationId: "00000000-0000-4000-8000-000000000104", importId: nil, title: "Ronnie Sharma 様",
+                NLInboxTask(key: "n:2", kind: "new", reservationId: "00000000-0000-4000-8000-000000000104", importId: nil, title: "中村 優子 様",
                             detail: "\(NPHRDate.dayLabel(today)) 19:30〜 3名", note: "TABLE ONE", at: now, date: today),
             ],
             notices: [
-                NLInboxNotice(key: "n:2", kind: "new", title: "新しい予約　Ronnie Sharma 様", detail: "\(NPHRDate.dayLabel(today)) 19:30〜 3名", note: "TABLE ONE",
+                NLInboxNotice(key: "n:2", kind: "new", title: "新しい予約　中村 優子 様", detail: "\(NPHRDate.dayLabel(today)) 19:30〜 3名", note: "TABLE ONE",
                               at: now, reservationId: nil, date: today),
                 NLInboxNotice(key: "x:5", kind: "cancel", title: "お客様キャンセル　高橋 健 様", detail: "\(NPHRDate.dayLabel(today)) 20:00〜 2名",
                               note: "お客様キャンセル（連絡あり）", at: now, reservationId: nil, date: today),
             ],
             canAcknowledge: true)
-        m.payload = NPHRPayload(ok: true, store: NHDNamed(id: "s", name: "ORIENTAL ELEPHANT 高田馬場"), clerk: NHDNamed(id: "k", name: "佐藤"),
+        m.payload = NPHRPayload(ok: true, store: NHDNamed(id: "s", name: "TENPO ONE 新宿店"), clerk: NHDNamed(id: "k", name: "佐藤"),
                                today: today, date: today, tab: "list", title: "今日の予約", dayLabel: NPHRDate.dayLabel(today),
                                emptyText: "今日の予約はありません。", prevDate: NPHRDate.shift(today, -1), nextDate: NPHRDate.shift(today, 1),
                                canWrite: true, canCancel: true, staff: [NHDNamed(id: "a", name: "佐藤"), NHDNamed(id: "b", name: "Sankar"), NHDNamed(id: "c", name: "田中")],
