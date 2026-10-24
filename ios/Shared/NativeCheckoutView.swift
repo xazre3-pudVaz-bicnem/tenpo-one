@@ -132,20 +132,18 @@ struct NativeCheckoutView: View {
 
     private var header: some View {
         HStack(spacing: 12) {
-            Text("お会計").font(.system(size: 22, weight: .heavy)).foregroundColor(NT.ink)
-            Text(model.order.tableName).font(.system(size: 22, weight: .heavy)).foregroundColor(NT.purple)
-            Text(verbatim: model.order.noLabel).font(.system(size: 14, weight: .semibold)).foregroundColor(NT.ink3)
+            Text("お会計").font(.system(size: 22, weight: .heavy)).foregroundColor(.white)
+            Text(model.order.tableName).font(.system(size: 22, weight: .heavy)).foregroundColor(Color(hex: 0xC9B6F5))
+            Text(verbatim: model.order.noLabel).font(.system(size: 14, weight: .semibold)).foregroundColor(.white.opacity(0.6))
             Spacer()
             Button(action: onClose) {
-                Image(systemName: "xmark").font(.system(size: 18, weight: .bold)).foregroundColor(NT.ink)
+                Image(systemName: "xmark").font(.system(size: 18, weight: .bold)).foregroundColor(.white)
                     .frame(width: 40, height: 40)
-                    .background(Circle().fill(Color.white))
-                    .overlay(Circle().stroke(NT.line, lineWidth: 1))
+                    .background(Circle().fill(Color.white.opacity(0.12)))
             }
         }
         .padding(.horizontal, 20).frame(height: 64)
-        // 上のバーは画面と同じうすい灰色（2026-10-24 22:28 Ronnie）
-        .background(NT.bar.ignoresSafeArea(edges: .top))
+        .background(NT.topBar)
     }
 
     // MARK: - 左：品目一覧・来店経路
@@ -891,24 +889,23 @@ struct NativeCheckoutView: View {
                         Image(systemName: "chevron.left")
                         Text("レジ会計")
                     }
-                    .font(.system(size: 15, weight: .bold)).foregroundColor(NT.ink)
+                    .font(.system(size: 15, weight: .bold)).foregroundColor(.white)
                     .padding(.horizontal, 12).padding(.vertical, 9)
-                    .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white))
-                    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(NT.line, lineWidth: 1))
+                    .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white.opacity(0.10)))
                 }
                 .buttonStyle(PressableStyle())
                 .disabled(model.busy)
                 Spacer()
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text("伝票分割").font(.system(size: 20, weight: .heavy)).foregroundColor(NT.ink)
-                    Text("Split by item").font(.system(size: 12, weight: .bold)).foregroundColor(NT.purple)
+                    Text("伝票分割").font(.system(size: 20, weight: .heavy)).foregroundColor(.white)
+                    Text("Split by item").font(.system(size: 12, weight: .bold)).foregroundColor(Color(hex: 0xC9B6F5))
                 }
                 Spacer()
-                Text(model.order.tableName).font(.system(size: 18, weight: .heavy)).foregroundColor(NT.purple)
-                Text(verbatim: model.order.noLabel).font(.system(size: 14, weight: .semibold)).foregroundColor(NT.ink3)
+                Text(model.order.tableName).font(.system(size: 18, weight: .heavy)).foregroundColor(Color(hex: 0xC9B6F5))
+                Text(verbatim: model.order.noLabel).font(.system(size: 14, weight: .semibold)).foregroundColor(.white.opacity(0.6))
             }
             .padding(.horizontal, 20).frame(height: 64)
-            .background(NT.bar.ignoresSafeArea(edges: .top))
+            .background(NT.topBar)
 
             HStack(alignment: .top, spacing: 0) {
                 // 左：元の伝票に残る分
