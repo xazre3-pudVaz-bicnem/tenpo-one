@@ -159,6 +159,8 @@ struct NFActionResult: Decodable {
     let released: Int?
     let queued: Int?
     let useWeb: Bool?
+    /// テーブルクリアのあと、iPad から LAN で直接出す厨房の取消伝票
+    let prints: [APIPrintJob]?
 }
 
 // MARK: - 卓の状態（Web の tileState と同じ）
@@ -481,6 +483,7 @@ final class NativeFloorModel: ObservableObject {
                 show(error: r.error ?? "うまくいきませんでした")
                 return nil
             }
+            if let prints = r.prints, !prints.isEmpty { NativeLanPrint.shared.send(prints) }
             if refreshAfter { await refresh(silent: true) }
             return r
         } catch {

@@ -429,15 +429,20 @@ final class NativeOrderModel: ObservableObject {
 
     /// 1品の取消。カートの品は手元から消すだけ。送った品はサーバーで取消（レジは店長以上の承認＝approver。Web の cancelItem と同じ）
     @discardableResult
-    func cancelLine(_ line: NPOrderLine, approver: String?) async -> Bool {
+    /// 1品の取消。approver＝店長以上の担当者（店に店長以上がいるとき。サーバーで確かめる）、
+    /// reason＝店長以上がいない店で選んだ担当者（「担当: 〇〇」を取消の理由に残す）
+    func cancelLine(_ line: NPOrderLine, approver: String?, reason: String = "") async -> Bool {
         if !isLive || line.local {
             order.lines.removeAll { $0.id == line.id }
+            toast = "「\(line.displayName)」を取消しました"
             return true
         }
         guard let orderId else { return false }
-        var body: [String: Any] = ["type": "cancelLine", "orderId": orderId, "lineId": line.id, "reason": ""]
+        var body: [String: Any] = ["type": "cancelLine", "orderId": orderId, "lineId": line.id, "reason": reason]
         body["approvedByClerkId"] = approver.map { $0 as Any } ?? NSNull()
-        guard await act(body) != nil else { return false }
+        guard let r = await act(body) else { return false }
+        // 厨房の取消伝票を iPad から LAN で直接出す（注文確定と同じ。レジの「取消」の紙はサーバーの印刷係）
+        if let prints = r.prints, !prints.isEmpty { NativeLanPrint.shared.send(prints) }
         toast = "「\(line.displayName)」を取消しました"
         return true
     }

@@ -3,7 +3,7 @@ import { daysAgoJst, todayJst } from '@/lib/format';
 import { getSessionContext, type SessionContext } from '@/lib/auth';
 import { can, type PermissionAction } from '@/lib/permissions';
 import { createClient } from '@/lib/supabase/server';
-import { isNativeCustomLine, isUuid, NATIVE_APP_HEADER, parseNativePosAction, type NativePosAction } from '@/lib/native-pos';
+import { isNativeCustomLine, isUuid, NATIVE_APP_HEADER, parseNativePosAction, type NativePosAction, type NativePrintJob } from '@/lib/native-pos';
 import { loadNativeCatalog, loadNativeLive, loadNativeOrder, loadNativePos, setOrderVisitSource } from '@/lib/native-pos-server';
 import { claimLanKitchenPrints, finishLanPrint } from '@/lib/native-print-server';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -1372,10 +1372,13 @@ export async function POST(request: Request) {
         // 別々会計の「分ける」：1つの品を n 人分の「品名（1/n）」に（Web の伝票分割と同じ Server Action）
         await divideOrderItem(action.orderId, action.lineId, action.parts);
         return json({ ok: true, order: await freshOrder(action.orderId) });
-      case 'cancelLine':
-        // 1品の取消。レジは店長以上の担当者の承認（approvedByClerkId）をサーバーで確かめる（Web のレジと同じ）
+      case 'cancelLine': {
+        // 1品の取消。レジは店長以上の担当者の承認（approvedByClerkId）をサーバーで確かめる（Web のレジと同じ）。
+        // 送った品ならレジに「取消」の紙（cancelItem の中）、厨房の取消伝票は iPad から LAN で直接出す分をここで渡す
         await cancelItem(action.orderId, action.lineId, action.reason, action.approvedByClerkId);
-        return json({ ok: true, order: await freshOrder(action.orderId) });
+        const prints = await lanKitchenPrintsForOrder(action.orderId);
+        return json({ ok: true, order: await freshOrder(action.orderId), prints });
+      }
       case 'clerk': {
         const res = await setOrderClerk(action.orderId, action.clerkId);
         if (!res.ok) return json({ ok: false, error: res.error ?? '担当者を変えられませんでした' }, 400);
@@ -1424,6 +1427,21 @@ export async function POST(request: Request) {
 }
 
 /** フロアの操作。中身は Web のテーブル一覧のポップアップと同じ Server Action */
+/**
+ * 伝票の店の厨房伝票のうち、iPad から LAN で直接出す分（取消のマイナス差分も入る。claim_kitchen_items）。
+ * 注文確定と同じしくみ。読めなくても取消は成り立たせる（空の配列）
+ */
+async function lanKitchenPrintsForOrder(orderId: string): Promise<NativePrintJob[]> {
+  try {
+    const admin = createAdminClient();
+    const { data: row } = await admin.from('orders').select('store_id').eq('id', orderId).maybeSingle();
+    return row?.store_id ? await claimLanKitchenPrints(admin, row.store_id as string) : [];
+  } catch (e) {
+    console.error('[native.cancel] kitchen LAN prints failed:', e);
+    return [];
+  }
+}
+
 async function runFloorAction(action: NativeFloorAction): Promise<Record<string, unknown>> {
   switch (action.type) {
     case 'floorStart': {
@@ -1477,8 +1495,10 @@ async function runFloorAction(action: NativeFloorAction): Promise<Record<string,
       return res.ok ? { ok: true, queued: res.queued ?? 0 } : { ok: false, error: res.error ?? '選択印刷に失敗しました' };
     }
     case 'floorClear': {
+      // テーブルクリア：1品ずつ取消（レジの「取消」の紙は cancelItem の中）。厨房の取消伝票は iPad から LAN で直接出す分を渡す
       const res = await clearTable(action.orderId, action.reason, action.approvedByClerkId);
-      return { ok: true, cancelledItems: res.cancelledItems };
+      const prints = await lanKitchenPrintsForOrder(action.orderId);
+      return { ok: true, cancelledItems: res.cancelledItems, prints };
     }
     case 'floorCall': {
       const res = await resolveServiceCall(action.callId);

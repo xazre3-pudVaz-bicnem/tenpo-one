@@ -138,7 +138,8 @@ struct NativeOrderView: View {
         // 会計は同じ画面の上に重ねる（fullScreenCover にすると、下の Web が止まって Bluetooth の印刷・ドロアが出ない）
         .overlay {
             if showCheckout {
-                NativeCheckoutView(model: model, onClose: { showCheckout = false }, onFinished: {
+                // 会計の「×」はオーダー画面に戻らず、テーブル一覧（ホーム）へ（2026-10-24 Ronnie「x click garyo vane home ma aaune」）
+                NativeCheckoutView(model: model, onClose: { showCheckout = false; onHome() }, onFinished: {
                     showCheckout = false
                     if model.isLive { AppState.shared.finishNativeCheckout() }
                 })
@@ -387,34 +388,42 @@ private struct SlipPanel: View {
         }
         .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(NT.card))
         .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(NT.lilacLine, lineWidth: 1))
-        // 1品の取消：理由は要らない・店長以上の担当者を選ぶだけ（2026-10-17 Ronnie）。担当者が未登録の店はそのまま取消
+        // 1品の取消：理由は要らない・担当者を選ぶだけ。毎回選ぶ（2026-10-24 Ronnie「every time 取消 garda 担当選択」）。
+        // 店に店長以上がいれば店長以上から（サーバーで承認を確かめる）、いなければ担当者から（「担当: 〇〇」を理由に残す）
         .confirmationDialog(
             "「\(cancelTarget?.displayName ?? "")」を取消しますか？",
             isPresented: Binding(get: { cancelTarget != nil }, set: { if !$0 { cancelTarget = nil } }),
             titleVisibility: .visible
         ) {
             if let line = cancelTarget {
-                if model.approvers.isEmpty {
-                    Button("取消する", role: .destructive) { Task { await model.cancelLine(line, approver: nil) } }
-                } else {
+                if !model.approvers.isEmpty {
                     ForEach(model.approvers, id: \.id) { a in
-                        Button("承認: \(a.name)") { Task { await model.cancelLine(line, approver: a.id) } }
+                        Button("担当: \(a.name)", role: .destructive) { Task { await model.cancelLine(line, approver: a.id) } }
                     }
+                } else if !model.clerks.isEmpty {
+                    ForEach(model.clerks, id: \.id) { c in
+                        Button("担当: \(c.name)", role: .destructive) { Task { await model.cancelLine(line, approver: nil, reason: "担当: \(c.name)") } }
+                    }
+                } else {
+                    Button("取消する", role: .destructive) { Task { await model.cancelLine(line, approver: nil) } }
                 }
             }
             Button("キャンセル", role: .cancel) { cancelTarget = nil }
         } message: {
-            Text(model.approvers.isEmpty ? "厨房へ送った品は「取消」の紙がレジに出ます" : "承認する担当者（店長以上）を選んでください")
+            Text(cancelMessage)
         }
     }
 
-    /// 左へスライドの「取消」：カートの品はそのまま消す。送った品は担当者（店長以上）を選んでから（ダイアログ）
+    private var cancelMessage: String {
+        let who = !model.approvers.isEmpty ? "取消する担当者（店長以上）を選んでください" : (!model.clerks.isEmpty ? "取消する担当者を選んでください" : "")
+        let sent = cancelTarget?.sent ?? false
+        let paper = sent ? "厨房へ送った品は、レジと厨房に「取消」の伝票が出ます" : ""
+        return [who, paper].filter { !$0.isEmpty }.joined(separator: "\n")
+    }
+
+    /// 左へスライドの「取消」：毎回、担当者を選んでから（カートの品も）
     private func cancel(_ line: NPOrderLine) {
-        if !model.isLive || line.local {
-            Task { await model.cancelLine(line, approver: nil) }
-        } else {
-            cancelTarget = line
-        }
+        cancelTarget = line
     }
 
     /// 人数・時間を直せるか（卓のある伝票だけ。テイクアウト等は卓が無い）
