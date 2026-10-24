@@ -84,7 +84,10 @@ struct NativeFloorScreen: View {
             model: model,
             onHome: { state.goNativeHome() },
             onLedger: { state.goNativeLedger() },
-            onOpenOrder: { id, checkout in state.openNativeOrder(id, checkout: checkout) }
+            onOpenOrder: { id, checkout in state.openNativeOrder(id, checkout: checkout) },
+            // Web の /app/floor/<卓>/setup から来たら、その卓の来店登録（AppState.floorSetupTableId）
+            setupRequest: state.floorSetupTableId,
+            onSetupRequestHandled: { state.floorSetupTableId = nil }
         )
         .onChange(of: state.floorRefreshTick) { _ in Task { await model.refresh(silent: true) } }
         .onChange(of: state.nativeOrder) { new in if new == nil { Task { await model.refresh(silent: true) } } }

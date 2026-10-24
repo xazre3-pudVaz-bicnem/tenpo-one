@@ -1,6 +1,8 @@
 import 'server-only';
 import type { SessionContext } from '@/lib/auth';
 import { kitchenGet, kdsItemStatusPost, kdsOrderServedPost, kdsSettingsPost } from '@/lib/native-modules/kitchen';
+import { onboardingGet, onboardingPost } from '@/lib/native-modules/onboarding';
+import { businessCardsGet } from '@/lib/native-modules/business-cards';
 
 /**
  * まだ専用の台が無かった画面（勤怠・日報・タスク …）の iPad ネイティブ用の API をまとめる所
@@ -29,6 +31,8 @@ export type NativeModulePost = (args: NativeModuleArgs & { raw: Record<string, u
 /** GET の part → handler。追加は 1 行ずつ */
 export const NATIVE_MODULE_GET: Record<string, NativeModuleGet> = {
   kitchen: kitchenGet,
+  onboarding: onboardingGet,
+  businessCards: businessCardsGet,
 };
 
 /** POST の type → handler。追加は 1 行ずつ */
@@ -36,4 +40,5 @@ export const NATIVE_MODULE_POST: Record<string, NativeModulePost> = {
   kdsItemStatus: kdsItemStatusPost,
   kdsOrderServed: kdsOrderServedPost,
   kdsSettings: kdsSettingsPost,
+  onboarding: onboardingPost,
 };
