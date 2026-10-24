@@ -105,6 +105,34 @@ final class AppState: ObservableObject {
     /// アプリ自身の印刷係（NativePrintAgent）を動かすか＝ネイティブ ON の iPad（レジ）。OFF のときは今まで通り Web の DirectPrintAgent
     var nativePrintAgentOn: Bool { AppConfig.isPad && mode == .regi && nativePosEnabled }
 
+    /// 管理画面（設定 › レジ端末）がこの端末のネイティブ ON/OFF を決めているか（nil＝端末まかせ）。
+    /// 2026-10-24 Ronnie「管理画面から全部の設定を。アプリのも」。GET /api/app/v1/pos?part=device（lib/register-device-server.ts）
+    @Published var adminNativePos: Bool? = nil
+    private var deviceSettingsFetchedAt: Date?
+
+    private struct APIDeviceSetting: Decodable {
+        struct Device: Decodable { let id: String; let name: String?; let printerConfigId: String?; let nativePos: Bool? }
+        let ok: Bool
+        let device: Device?
+    }
+
+    /// 管理画面で決めた端末の設定を読んで従う（ホーム・テーブル一覧を開いたとき。1 分に 1 回まで）。
+    /// nativePos が true/false なら、端末の ON/OFF をそれに合わせる（端末の切り替えは出さない）。nil なら今までどおり端末まかせ
+    @MainActor func refreshDeviceSettings(force: Bool = false) {
+        guard AppConfig.isPad, mode == .regi else { return }
+        if !force, let at = deviceSettingsFetchedAt, Date().timeIntervalSince(at) < 60 { return }
+        deviceSettingsFetchedAt = Date()
+        Task { @MainActor in
+            var comps = URLComponents(url: AppConfig.url("/api/app/v1/pos"), resolvingAgainstBaseURL: false)!
+            comps.queryItems = [URLQueryItem(name: "part", value: "device")]
+            guard let url = comps.url, let data = try? await NativeAPI.shared.send(URLRequest(url: url), kickPrint: false),
+                  let res = try? JSONDecoder().decode(APIDeviceSetting.self, from: data), res.ok else { return }
+            let admin = res.device?.nativePos
+            adminNativePos = admin
+            if let admin, admin != nativePosEnabled { setNativePos(admin) }
+        }
+    }
+
     /// ネイティブ ON/OFF（レジの設定）。OFF にしたらネイティブの画面を全部閉じて Web の画面をそのまま見せる。
     /// reloadWeb：ネイティブの設定画面から変えたとき true。OFF のあと Web の「レジの設定」を読み直し、Web 側のトグル表示を合わせる
     @MainActor func setNativePos(_ on: Bool, reloadWeb: Bool = false) {
@@ -214,6 +242,8 @@ final class AppState: ObservableObject {
             maybeOpenNativePhone(for: url)
             return
         }
+        // 管理画面（設定 › レジ端末）の ON/OFF に従う（ホーム・テーブル一覧を開くたび。OFF の端末も管理画面で ON にできる）
+        if url.path == "/app/dashboard" || url.path == "/app/floor" || url.path == "/app" { Task { @MainActor in self.refreshDeviceSettings() } }
         guard mode == .regi, nativePosEnabled else { return }
         if url.path == "/app/dashboard" || url.path == "/app/floor" || url.path == "/app" {
             Task { @MainActor in NativeCatalogCache.shared.refresh() }

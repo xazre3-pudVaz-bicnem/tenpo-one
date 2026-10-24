@@ -403,6 +403,7 @@ export const V2_SETTINGS: V2SettingSection[] = [
     label: '機器・印刷',
     items: [
       { href: '/app/settings/printers', label: 'ハードウェア', description: 'レジ端末・レシート/厨房プリンター・キャッシュドロア', adminOnly: true, permission: 'store.settings' },
+      { href: '/app/settings/devices', label: 'レジ端末（iPad）', description: 'iPad ごとのレシートの出し先・アプリ画面の ON/OFF・表示名', adminOnly: true, permission: 'store.settings' },
       { href: '/app/pos/settings', label: '厨房伝票', description: '伝票の分け方・商品名の言語・文字の大きさ', adminOnly: true, permission: 'pos.order' },
       { href: '/app/settings/handy-qr', label: 'iPhoneハンディ', description: 'お店の固定QRでハンディにログイン', adminOnly: false, permission: 'store.settings' },
       { href: '/app/settings/handy', label: 'ハンディ端末', description: 'スマホをハンディとして登録・解除', adminOnly: false, permission: 'store.settings' },

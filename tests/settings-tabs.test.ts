@@ -14,9 +14,11 @@ describe('設定の上のタブ', () => {
     expect(hub?.label).toBe('デバイス管理');
     expect(hub?.children?.map((c) => c.label)).toEqual(['レジの設定', 'iPhoneハンディ', 'ハンディ端末']);
     const admin = settingsHubs({ role: 'org_owner', disabledFeatures: new Set(), isRegisterDevice: false });
+    // 2026-10-24 レジ端末（iPad）を管理画面だけに追加
     expect(settingsHubOf(admin, '/app/pos/settings')?.children?.map((c) => c.label)).toEqual([
       'レジの設定',
       'ハードウェア',
+      'レジ端末（iPad）',
       'iPhoneハンディ',
       'ハンディ端末',
     ]);

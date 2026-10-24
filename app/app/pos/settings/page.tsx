@@ -17,6 +17,7 @@ import { settingsHubOf, settingsHubs } from '@/lib/settings-hubs';
 import { DevicePrinterPanel, type DevicePrinterOption } from '@/components/pos/device-printer-panel';
 import { NativePosToggle } from '@/components/pos/native-pos-toggle';
 import { devicePrinterId } from '@/lib/device-printer-server';
+import { currentDeviceSetting } from '@/lib/register-device-server';
 
 export const metadata: Metadata = { title: 'レジの設定' };
 
@@ -89,6 +90,9 @@ export default async function RegisterSettingsPage({
     drawerKick: p.drawer_kick === true,
   }));
   const selectedPrinterId = await devicePrinterId();
+  // 管理画面（設定 › レジ端末）でこの iPad のプリンターを決めてあれば、それが先（2026-10-24 Ronnie「管理画面から全部の設定を」）
+  const adminDevice = await currentDeviceSetting();
+  const adminPrinterName = adminDevice?.setting.printerConfigId ? (devicePrinters.find((p) => p.id === adminDevice.setting.printerConfigId)?.name ?? null) : null;
 
   // 設定の中と同じ上のタブ（レジの設定／ハードウェア／iPhoneハンディ…）。2026-09-29 Ronnie「設定の中は全部このタブを」
   const hub = settingsHubOf(settingsHubs(ctx), SELF_HREF);
@@ -151,6 +155,11 @@ export default async function RegisterSettingsPage({
           このiPadのプリンター
           <span className="ml-1.5 text-xs font-normal text-gray-400">This iPad&apos;s printer</span>
         </h2>
+        {adminPrinterName && (
+          <p className="mb-2 rounded-xl border border-iris-soft bg-iris-soft px-4 py-2 text-[13px] text-royal">
+            管理画面の「設定 › レジ端末」で、この iPad のレシートは <b>{adminPrinterName}</b> に決めてあります（ここで選んでもそちらが優先）
+          </p>
+        )}
         <DevicePrinterPanel
           printers={devicePrinters}
           selectedId={devicePrinters.some((p) => p.id === selectedPrinterId) ? selectedPrinterId : null}

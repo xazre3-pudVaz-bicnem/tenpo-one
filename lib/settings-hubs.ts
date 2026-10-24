@@ -64,6 +64,8 @@ export function settingsHubs(ctx: {
         { href: '/app/pos/settings', label: 'レジの設定', en: 'Register settings', icon: 'printers', description: '厨房伝票・品切れ・メニュー・QR・ハンディなど、レジで変える設定', visible: can(role, 'pos.order'), matchActive: false },
         // ハードウェアは管理画面だけ。レジ（iPad）には出さない（2026-09-29 Ronnie「スタッフが触って壊す」）
         { href: '/app/settings/printers', label: 'ハードウェア', en: 'Hardware', icon: 'printers', description: 'レジ端末とレシート・厨房プリンター、キャッシュドロアの設定', visible: ctx.isRegisterDevice !== true },
+        // レジ端末（iPad）ごとの設定を管理画面から（2026-10-24 Ronnie「管理画面から全部の設定を。アプリのも、プリンターも」）
+        { href: '/app/settings/devices', label: 'レジ端末（iPad）', en: 'Register iPads', icon: 'printers', description: 'iPad ごとのレシートの出し先・アプリ画面の ON/OFF・表示名（iPad を触らずに管理画面から）', visible: ctx.isRegisterDevice !== true },
         { href: '/app/settings/handy-qr', label: 'iPhoneハンディ', en: 'Handy QR', icon: 'qr', description: 'お店に1つの固定QRでハンディにログイン（読むだけで開く。お店のWi-Fi限定にもできる）', visible: true },
         { href: '/app/settings/handy', label: 'ハンディ端末', en: 'Handy devices', icon: 'handy', description: 'スマホをQRコードでハンディとして登録・解除する', visible: true },
       ],
