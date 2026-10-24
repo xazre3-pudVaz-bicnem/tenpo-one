@@ -171,15 +171,19 @@ struct NativeFloorView: View {
     // MARK: 卓の箱
 
     private func tableGrid(width: CGFloat, height: CGFloat) -> some View {
-        // 箱の間・外側の余白・右の予約の欄との間を全部 14 でそろえる（2026-10-24 20:36 Ronnie「間をそろえて」）。
-        // 卓が少ない日も右に余りを残さず、余った幅を全部の箱で分ける（20:42「右の空きを全部の箱で分けて」）。
-        // 高さは低め（200 まで）にして、箱が大きくなりすぎないように（20:36「少し大きいので小さく」）
-        let gap: CGFloat = 14
-        let fit = max(3, Int((width + gap) / (185 + gap)))
-        let cols = max(1, min(fit, max(model.visibleTables.count, 3)))
-        let side = max(120, (width - gap * CGFloat(cols - 1)) / CGFloat(cols))
-        let tileH = min(side, 200)
-        let columns = Array(repeating: GridItem(.fixed(side), spacing: gap), count: cols)
+        // 箱は 176pt の正方形（前の約 202pt から 0.5cm 小さく。2026-10-24 20:45 Ronnie「0.5cm 小さい正方形・間を少し広く」）。
+        // 余った幅は、左の端・箱と箱の間・右の予約の欄との間に同じだけ分ける（20:36「間をそろえて」、20:42「右の空きを残さない」）。
+        // 外側の余白 14（画面の左・予約の欄との間）も含めて同じ間にするので、内側で s − 14 を足す
+        let side: CGFloat = 176
+        let minGap: CGFloat = 20
+        let outer: CGFloat = 14
+        let total = width + outer * 2
+        let fit = max(1, Int((total - minGap) / (side + minGap)))
+        let cols = max(1, min(fit, max(model.visibleTables.count, min(fit, 3))))
+        let space = max(minGap, (total - side * CGFloat(cols)) / CGFloat(cols + 1))
+        let inset = max(0, space - outer)
+        let tileH = side
+        let columns = Array(repeating: GridItem(.fixed(side), spacing: space), count: cols)
         return Group {
             if model.visibleTables.isEmpty {
                 Text("このフロアにテーブルはありません")
@@ -188,7 +192,7 @@ struct NativeFloorView: View {
                     .background(RoundedRectangle(cornerRadius: 10).fill(Color.white))
                     .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [5])).foregroundColor(NFColor.wisteria))
             } else {
-                LazyVGrid(columns: columns, alignment: .center, spacing: gap) {
+                LazyVGrid(columns: columns, alignment: .center, spacing: space) {
                     ForEach(model.visibleTables) { t in
                         NativeTableCard(table: t, now: model.now, height: tileH) { rect in
                             tileRect = rect
@@ -196,6 +200,7 @@ struct NativeFloorView: View {
                         }
                     }
                 }
+                .padding(.horizontal, inset)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.top, 2).padding(.bottom, 16)
             }
