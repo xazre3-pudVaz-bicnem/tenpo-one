@@ -9,6 +9,8 @@ import { PageHeader } from '@/components/ui/page-header';
 import { EmptyState } from '@/components/ui/state';
 import { StoreRealtimeRefresh } from '@/components/realtime/store-realtime-refresh';
 import { StoreNowBoard } from '@/components/admin-v2/store-now-board';
+import { StoreNowSummary } from '@/components/admin-v2/store-now-summary';
+import { summarizeLedgerDay, type LedgerDayRow } from '@/lib/ledger-summary';
 
 export const metadata: Metadata = { title: '店舗ナウ' };
 
@@ -37,7 +39,13 @@ export default async function StoreNowPage({ searchParams }: { searchParams: Pro
   const store = stores.find((s) => s.id === sp.store) ?? ctx.currentStore ?? stores[0];
   const supabase = await createClient();
   const serverNow = requestTime();
-  const data = await loadStoreNow(supabase, { id: store.id, name: store.name }, serverNow);
+  const today = new Date(serverNow).toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' });
+  // 上の帯（本日の予約・来店・退店…）は店舗台帳の上のタイルと同じ数え方
+  const [data, { data: dayRows }] = await Promise.all([
+    loadStoreNow(supabase, { id: store.id, name: store.name }, serverNow),
+    supabase.from('reservations').select('status, party_size, created_at, created_via, reservation_tables(table_id)').eq('store_id', store.id).eq('reserved_date', today),
+  ]);
+  const daySummary = summarizeLedgerDay((dayRows ?? []) as LedgerDayRow[], today);
   const time = new Date(serverNow).toLocaleTimeString('ja-JP', { timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit' });
 
   return (
@@ -62,6 +70,7 @@ export default async function StoreNowPage({ searchParams }: { searchParams: Pro
         }
       />
       {/* 店舗の切り替えは上のバーの店舗ピルだけ（2026-10-24 Ronnie「店舗を選ぶところは上のメニューバーだけでいい」） */}
+      <StoreNowSummary s={daySummary} />
       <StoreNowBoard data={data} serverNow={serverNow} />
     </div>
   );

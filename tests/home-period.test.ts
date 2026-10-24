@@ -127,3 +127,13 @@ describe('home-period: カード・回転率・リピート', () => {
     expect(repeatWithin([null])).toEqual({ repeaters: 0, newcomers: 0, ratePct: null });
   });
 });
+
+describe('comparesFor（数字の下に並べる比較）', () => {
+  it('期間に合う比較だけ', async () => {
+    const { comparesFor } = await import('@/lib/home-period');
+    expect(comparesFor('today')).toEqual(['day', 'week', 'month', 'year']);
+    expect(comparesFor('7d')).toEqual(['week', 'month', 'year']);
+    expect(comparesFor('month')).toEqual(['month', 'year']);
+    expect(comparesFor('year')).toEqual(['year']);
+  });
+});

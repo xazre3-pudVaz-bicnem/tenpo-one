@@ -1,8 +1,8 @@
 import { createClient } from '@/lib/supabase/server';
 import { loadHomeData } from '@/components/dashboard/home-data';
 import { loadHomeV2 } from '@/lib/home-v2-server';
-import { loadHomePeriod } from '@/lib/home-period-server';
-import { compareRange, defaultCompareFor, parseHomeCard, parseHomeCompare, parseHomeRange, resolveHomeRange } from '@/lib/home-period';
+import { loadCompareKpis, loadHomePeriod } from '@/lib/home-period-server';
+import { compareRange, comparesFor, defaultCompareFor, parseHomeCard, parseHomeCompare, parseHomeRange, resolveHomeRange } from '@/lib/home-period';
 import type { SalesMetricsOptions } from '@/lib/metrics';
 import type { Role } from '@/lib/permissions';
 import { HomeV2View, type HomeV2Todo } from './home-v2-view';
@@ -48,8 +48,11 @@ export async function HomeV2({
   const current = resolveHomeRange(range, today, sp);
   const previous = compareRange(current, compare);
   const isToday = range === 'today';
+  // 数字の下に並べる比較（選んでいる比較はもう読んであるので、それ以外だけ読む）
+  const compareKeys = comparesFor(range);
+  const otherKeys = compareKeys.filter((k) => k !== compare);
 
-  const [home, live, period] = await Promise.all([
+  const [home, live, period, others] = await Promise.all([
     loadHomeData({
       supabase,
       organizationId: ctx.organizationId,
@@ -73,7 +76,13 @@ export async function HomeV2({
       metricsOpts,
       card,
     }),
+    loadCompareKpis({ supabase, storeIds: stores.map((s) => s.id), ranges: otherKeys.map((k) => compareRange(current, k)), metricsOpts }),
   ]);
+  const compareKpis = compareKeys.map((k) => {
+    const r = compareRange(current, k);
+    const kpi = k === compare ? period.previous : others[otherKeys.indexOf(k)];
+    return { key: k, range: r, kpi };
+  });
 
   // リピート率：本日は今のホームと同じ「初回来店が今日より前の人」（loadHomeData）。期間は「期間内に 2 回以上会計した人」
   const extras = isToday ? { ...period.extras, repeat: home.repeat } : period.extras;
@@ -111,6 +120,7 @@ export async function HomeV2({
       asOf={asOf}
       period={{ range, compare, current, previous, card }}
       kpi={{ current: period.current, previous: period.previous }}
+      compareKpis={compareKpis}
       extras={extras}
       repeatNote={repeatNote}
       rows={live ? live.rows : null}
