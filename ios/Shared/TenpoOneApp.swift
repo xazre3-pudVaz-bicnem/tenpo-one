@@ -133,6 +133,13 @@ struct RootView: View {
                         .transition(.opacity)
                         .zIndex(5)
                 }
+                // まだ専用の台が無かった画面（勤怠・日報…）のネイティブ（NativeModules.swift）
+                if let route = state.nativeModule {
+                    NativeModuleScreen(route: route)
+                        .id(route.key)
+                        .transition(.opacity)
+                        .zIndex(5)
+                }
                 if state.nativeExpenses {
                     NativeExpensesScreen()
                         .transition(.opacity)

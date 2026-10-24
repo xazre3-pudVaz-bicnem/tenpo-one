@@ -1,0 +1,32 @@
+import 'server-only';
+import type { SessionContext } from '@/lib/auth';
+
+/**
+ * まだ専用の台が無かった画面（勤怠・日報・タスク …）の iPad ネイティブ用の API をまとめる所
+ * （2026-10-24 22:05 Ronnie「iPad のオプション・サブオプションは全部ネイティブ」）。
+ *
+ * GET /api/app/v1/pos?part=<part> → NATIVE_MODULE_GET[part]
+ * POST /api/app/v1/pos { type: <type>, ... } → NATIVE_MODULE_POST[type]
+ * 画面ごとに lib/native-modules/<name>.ts を作り、ここに 1 行ずつ足す。権限は各 handler の中で can() で確かめる
+ * （route.ts は「アプリから・ログイン済み・pos.order」までしか見ない）。
+ */
+
+export interface NativeModuleArgs {
+  ctx: SessionContext;
+  /** 今の店舗（ctx.currentStore か最初の店舗） */
+  store: { id: string; name: string };
+}
+
+export interface NativeModuleResult {
+  status?: number;
+  body: Record<string, unknown>;
+}
+
+export type NativeModuleGet = (args: NativeModuleArgs & { url: URL }) => Promise<NativeModuleResult>;
+export type NativeModulePost = (args: NativeModuleArgs & { raw: Record<string, unknown> }) => Promise<NativeModuleResult>;
+
+/** GET の part → handler。追加は 1 行ずつ */
+export const NATIVE_MODULE_GET: Record<string, NativeModuleGet> = {};
+
+/** POST の type → handler。追加は 1 行ずつ */
+export const NATIVE_MODULE_POST: Record<string, NativeModulePost> = {};
