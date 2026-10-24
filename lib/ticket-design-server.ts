@@ -52,7 +52,8 @@ export async function renderTicketImage(design: TicketDesign, width: 384 | 576 =
     for (const img of images) layers.push({ input: img.image, left: img.x, top: y + pad + Math.floor((h - img.height) / 2) });
     y += h + pad * 2;
     if (row.rule) {
-      const svg = `<svg width="${available}" height="2"><path d="M0 1H${available}" stroke="#777" ${row.rule === 'dotted' ? 'stroke-dasharray="1 3"' : ''}/></svg>`;
+      // Integer-aligned black pixels survive monochrome thresholding on thermal printers.
+      const svg = `<svg width="${available}" height="2"><path d="M0 1H${available}" stroke="#000" stroke-width="2" ${row.rule === 'dotted' ? 'stroke-dasharray="2 4"' : ''}/></svg>`;
       layers.push({ input: Buffer.from(svg), left: margin, top: y }); y += 6;
     }
   }
