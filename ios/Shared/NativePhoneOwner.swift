@@ -13,6 +13,8 @@ enum NativePhoneOwnerRegistry {
     /// Web の道 → key（その下の道 /…/<id> も同じ key）。追加は 1 行ずつ
     private static let entries: [(String, String)] = [
         // ("/app/reports", "reports"),
+        ("/app/reservations", "reservations"), // 店舗台帳（NativePhoneOwnerLedger.swift）
+        ("/app/customers", "customers"), // 顧客（NativePhoneOwnerCustomers.swift）
     ]
     static let paths: [String: String] = Dictionary(entries, uniquingKeysWith: { a, _ in a })
 
@@ -31,6 +33,8 @@ struct NativePhoneOwnerScreen: View {
 
     var body: some View {
         switch route.key {
+        case "reservations": NPOLedgerScreen(route: route)
+        case "customers": NPOCustomersScreen(route: route)
         default:
             // 知らない key：Web のまま見せる
             Color.clear.onAppear { state.phoneOwnerModule = nil }

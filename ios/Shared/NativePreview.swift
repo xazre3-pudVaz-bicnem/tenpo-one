@@ -12,6 +12,13 @@ enum NativePreview: String {
     case regiLogin, regiClerks
     /// iPhone ハンディの予約（一覧・受付管理・メッセージ。2026-10-25）
     case phoneReservations
+    /// iPhone 店長・オーナーの店舗台帳（一覧・受付管理・予約の詳細・予約登録）と顧客（一覧・詳細）。2026-10-25（NativePhoneOwnerPreview.swift）
+    case phoneOwnerLedger
+    case phoneOwnerLedgerInbox
+    case phoneOwnerLedgerDetail
+    case phoneOwnerLedgerNew
+    case phoneOwnerCustomers
+    case phoneOwnerCustomer
 
     static var current: NativePreview? {
         guard let raw = UserDefaults.standard.string(forKey: "tenpoNativePreview") else { return nil }
@@ -51,6 +58,12 @@ struct NativePreviewView: View {
             NativeRegiLoginView(preview: kind.rawValue)
         case .phoneReservations:
             NativePhoneReservationsPreview()
+        case .phoneOwnerLedger: NPOLedgerPreview(kind: "list")
+        case .phoneOwnerLedgerInbox: NPOLedgerPreview(kind: "inbox")
+        case .phoneOwnerLedgerDetail: NPOLedgerPreview(kind: "detail")
+        case .phoneOwnerLedgerNew: NPOLedgerPreview(kind: "new")
+        case .phoneOwnerCustomers: NPOCustomersPreview(kind: "list")
+        case .phoneOwnerCustomer: NPOCustomersPreview(kind: "detail")
         case .options, .price:
             NativeOrderView(model: model)
                 .statusBarHidden(true)
