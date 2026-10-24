@@ -17,6 +17,10 @@ enum NativePhoneOwnerRegistry {
         ("/app/shifts", "shifts"),
         ("/app/leave", "leave"),
         ("/app/employees", "employees"),
+        ("/app/reports", "reports"),
+        ("/app/orders", "orders"),
+        ("/app/budgets", "budgets"),
+        ("/app/budgets/daily", "budgetDaily"),
     ]
     static let paths: [String: String] = Dictionary(entries, uniquingKeysWith: { a, _ in a })
 
@@ -39,6 +43,10 @@ struct NativePhoneOwnerScreen: View {
         case "shifts": NativePhoneShiftsScreen(route: route, onBack: { state.closePhoneOwnerModule() }, onWeb: { NPWNav.openWeb(state, $0) })
         case "leave": NativePhoneLeaveScreen(route: route, onBack: { state.closePhoneOwnerModule() })
         case "employees": NativePhoneEmployeesScreen(route: route, onBack: { state.closePhoneOwnerModule() })
+        case "reports": NativePhoneOwnerReportsScreen(route: route)
+        case "orders": NativePhoneOwnerOrdersScreen(route: route)
+        case "budgets": NativePhoneOwnerBudgetsScreen(route: route)
+        case "budgetDaily": NativePhoneOwnerBudgetDailyScreen(route: route)
         default:
             // 知らない key：Web のまま見せる
             Color.clear.onAppear { state.phoneOwnerModule = nil }
