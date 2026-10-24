@@ -1,5 +1,6 @@
 import { isUuid } from '@/lib/native-pos';
 import { RESERVATION_STATUS, type ReservationStatus } from '@/lib/reservations';
+import { entryStatusToDb, normalizeTags, type EntryStatus } from '@/lib/reservation-entry';
 
 /**
  * iPad アプリのネイティブの店舗台帳（予約）とサーバーの決まりごと（2026-10-24 Ronnie「店舗台帳もネイティブ。色は Tableo 風」）。
@@ -26,6 +27,10 @@ export type NativeLedgerAction =
         stayMinutes: number | null;
         status: 'confirmed' | 'pending';
         clerkId: string | null;
+        /** メール（任意） */
+        email: string;
+        /** キーワード（複数。予約ステータスの「要連絡」はここに入れる） */
+        tags: string[];
         /** キャンセル待ちから「予約へ変換」するとき */
         waitlistEntryId?: string | null;
       };
@@ -111,9 +116,16 @@ export function parseNativeLedgerAction(raw: unknown): Parsed {
       if (!Array.isArray(tableIds) || tableIds.length > 20 || !tableIds.every(isUuid)) return bad();
       const stay = i.stayMinutes == null ? null : i.stayMinutes;
       if (stay !== null && !isInt(stay, 15, 720)) return bad('滞在時間を確認してください');
-      const status = i.status === 'pending' ? 'pending' : 'confirmed';
+      // 予約ステータス：来店待ち（confirmed）・仮予約（pending）・要連絡（仮予約＋キーワード「要連絡」）。Web の予約登録と同じ
+      const entryStatus: EntryStatus = i.status === 'pending' ? 'pending' : i.status === 'needs_contact' ? 'needs_contact' : 'confirmed';
+      const { status, tag } = entryStatusToDb(entryStatus);
       const clerkId = optUuid(i.clerkId);
       if (clerkId === undefined) return bad();
+      const rawTags = i.tags ?? [];
+      if (!Array.isArray(rawTags) || rawTags.length > 40 || !rawTags.every((t) => typeof t === 'string')) return bad();
+      const tags = normalizeTags([...(tag ? [tag] : []), ...(rawTags as string[])]);
+      const email = str(i.email, 254);
+      if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return bad('メールアドレスを確認してください');
       return {
         ok: true,
         action: {
@@ -133,6 +145,8 @@ export function parseNativeLedgerAction(raw: unknown): Parsed {
             stayMinutes: stay as number | null,
             status,
             clerkId,
+            email,
+            tags,
             waitlistEntryId: isUuid(i.waitlistEntryId) ? (i.waitlistEntryId as string) : null,
           },
         },

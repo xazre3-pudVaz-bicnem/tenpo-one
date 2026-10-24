@@ -63,8 +63,8 @@ struct NativeLedgerWaitView: View {
         }
         .sheet(isPresented: $ticketOpen) { NLWaitTicketSheet(model: model) { ticketOpen = false; Task { await load() } } }
         .sheet(isPresented: $waitlistOpen) { NLWaitlistSheet(model: model, today: payload?.today ?? "") { waitlistOpen = false; Task { await load() } } }
-        .sheet(item: $convertFor) { w in
-            NativeNewReservationSheet(
+        .fullScreenCover(item: $convertFor) { w in
+            NativeReservationEntry(
                 model: model,
                 prefill: NLReservationPrefill(waitlistEntryId: w.id, date: w.desiredDate, time: w.desiredTimeFrom.map { String($0.prefix(5)) } ?? "18:00", adults: w.partySize, name: w.guestName, phone: w.guestPhone, note: w.note ?? ""),
                 onClose: { convertFor = nil; Task { await load() } }

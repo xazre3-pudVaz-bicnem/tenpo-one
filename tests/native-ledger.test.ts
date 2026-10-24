@@ -34,6 +34,23 @@ describe('ネイティブの店舗台帳の操作（2026-10-24 Ronnie「店舗�
     expect(d.ok && d.action.type === 'ledgerCreate' && d.action.input.sourceCode).toBe('phone');
   });
 
+  it('予約登録：メール・キーワード・要連絡（Web の予約登録と同じ。2026-10-24 iPad の予約登録）', () => {
+    const base = { date: '2026-10-24', time: '18:30', adults: 2, children: 0, name: '山田 太郎', phone: '09012345678' };
+    const r = parseNativeLedgerAction({ type: 'ledgerCreate', input: { ...base, email: 'yamada@example.com', tags: ['誕生日', ' 誕生日 ', '個室希望', ''], status: 'needs_contact' } });
+    expect(r.ok).toBe(true);
+    if (r.ok && r.action.type === 'ledgerCreate') {
+      // 要連絡＝仮予約＋キーワード「要連絡」
+      expect(r.action.input.status).toBe('pending');
+      expect(r.action.input.tags).toEqual(['要連絡', '誕生日', '個室希望']);
+      expect(r.action.input.email).toBe('yamada@example.com');
+    }
+    const plain = parseNativeLedgerAction({ type: 'ledgerCreate', input: base });
+    expect(plain.ok && plain.action.type === 'ledgerCreate' && plain.action.input.tags).toEqual([]);
+    expect(plain.ok && plain.action.type === 'ledgerCreate' && plain.action.input.status).toBe('confirmed');
+    expect(parseNativeLedgerAction({ type: 'ledgerCreate', input: { ...base, email: 'not-mail' } }).ok).toBe(false);
+    expect(parseNativeLedgerAction({ type: 'ledgerCreate', input: { ...base, tags: 'x' } }).ok).toBe(false);
+  });
+
   it('状態・取消・卓・日時・メモ・担当・経路・コース・着席', () => {
     expect(parseNativeLedgerAction({ type: 'ledgerStatus', reservationId: U1, toStatus: 'arrived' }).ok).toBe(true);
     expect(parseNativeLedgerAction({ type: 'ledgerStatus', reservationId: U1, toStatus: 'nope' }).ok).toBe(false);
