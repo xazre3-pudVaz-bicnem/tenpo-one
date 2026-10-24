@@ -384,13 +384,18 @@ final class NativeOrderModel: ObservableObject {
                      discountPresets: c.discountPresets, steraTypes: c.steraPaymentTypes, canCheckout: c.canCheckout, canDiscount: c.canDiscount)
     }
 
+    /// サーバーから伝票を読めたか（読めていないのに「品なし」と思って消さないように）
+    private(set) var orderLoaded = false
+
     private func apply(live l: APILive) {
+        orderLoaded = true
         steraTerminals = l.steraTerminals
         registerOpen = l.registerOpen
         apply(order: l.order)
     }
 
     private func apply(payload p: APIPayload) {
+        orderLoaded = true
         applyCatalog(storeName: p.store.name, categories: p.categories, items: p.items, optionGroups: p.optionGroups, clerks: p.clerks,
                      clerkRequired: p.clerkRequired, visitSources: p.visitSources, methodBrands: p.methodBrands, pointBrands: p.pointBrands,
                      discountPresets: p.discountPresets, steraTypes: p.steraPaymentTypes, canCheckout: p.canCheckout, canDiscount: p.canDiscount)
@@ -596,6 +601,18 @@ final class NativeOrderModel: ObservableObject {
         } else {
             notice = "お会計伝票の印刷に失敗しました"
         }
+    }
+
+    /// 品を1つも注文せずに戻ったら、伝票を消して卓を空席に戻す（Web の discardUntouchedOrderAction と同じ。
+    /// 2026-10-24 Ronnie「注文していないのに卓が始まる。注文してから卓が始まるように」）。
+    /// 消すのは品が1つも無い伝票だけ（カートに入れた品があれば残す。Web の「品を入れていない伝票」と同じ）
+    func discardIfUntouched() async {
+        guard let orderId, orderLoaded, order.lines.isEmpty else { return }
+        var req = URLRequest(url: AppConfig.url("/api/pos/discard-untouched"))
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "content-type")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: ["orderId": orderId])
+        _ = try? await NativeAPI.shared.send(req)
     }
 
     /// Web の画面でこの伝票を開く（ネイティブを閉じる）

@@ -57,7 +57,13 @@ struct NativeLiveOrderScreen: View {
     }
 
     var body: some View {
-        NativeOrderView(model: model, onHome: { AppState.shared.closeNativePos(openWebPath: nil) })
+        NativeOrderView(model: model, onHome: {
+            // 注文せずに戻ったら、先に伝票を消してから閉じる（フロアに ¥0 の卓が残らない）
+            Task {
+                await model.discardIfUntouched()
+                AppState.shared.closeNativePos(openWebPath: nil)
+            }
+        })
             .task {
                 await model.load()
                 // 卓のポップアップの「レジ会計」からは、開いてすぐ会計の画面に
