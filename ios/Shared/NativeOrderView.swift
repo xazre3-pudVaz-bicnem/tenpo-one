@@ -224,6 +224,18 @@ struct NativeOrderView: View {
 
 // MARK: - 上のバー
 
+/// 上のバーの「ホームへ」ボタンの中身＝ TENPO ONE のロゴ（2026-10-24 19:22 Ronnie）
+struct NativeHomeLogo: View {
+    var body: some View {
+        Image("BrandMark")
+            .resizable()
+            .scaledToFit()
+            .frame(width: 40, height: 40)
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(Color.white.opacity(0.25), lineWidth: 1))
+    }
+}
+
 struct NativeTopBar: View {
     /// 店名は上のバーには出さない（ホームだけ。2026-10-24 18:55 Ronnie「店舗名は home 画面だけ、ほかはいらない」）。呼び出し側の形はそのまま
     /// 店名のあった場所（左）に画面の名前（店舗台帳・オーダー・会計・設定 …）を出す（18:56 Ronnie）
@@ -274,11 +286,16 @@ struct NativeTopBar: View {
 
     private func iconButton(_ icon: String, label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Image(systemName: icon)
-                .font(.system(size: 18, weight: .bold))
-                .foregroundColor(.white)
-                .frame(width: 46, height: 40)
-                .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white.opacity(0.10)))
+            if icon == "house.fill" {
+                // ホームへ戻るボタンは TENPO ONE のロゴ（2026-10-24 19:22 Ronnie「ホームのボタンの中にロゴ」）
+                NativeHomeLogo()
+            } else {
+                Image(systemName: icon)
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundColor(.white)
+                    .frame(width: 46, height: 40)
+                    .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white.opacity(0.10)))
+            }
         }
         .buttonStyle(PressableStyle())
         .accessibilityLabel(label)
