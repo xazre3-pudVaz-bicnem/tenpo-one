@@ -526,7 +526,7 @@ struct NativeClerksView: View {
             Spacer(minLength: 8)
             if busy { ProgressView() }
             if p.canEdit {
-                roleMenu(selected: r.role, disabled: locked || busy) { Task { await model.setRole(r, $0) } }
+                roleMenu(selected: r.role, disabled: locked || busy) { role in Task { await model.setRole(r, role) } }
                 Button { Task { await model.toggleHidden(r) } } label: {
                     HStack(spacing: 5) {
                         Image(systemName: hidden ? "eye" : "eye.slash")
