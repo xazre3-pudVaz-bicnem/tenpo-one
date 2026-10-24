@@ -43,9 +43,9 @@ struct NativeFloorView: View {
                 }
                 .padding(14)
             }
-            .background(NFColor.lilac)
+            .background(NFColor.floorBg)
         }
-        .background(NFColor.lilac.ignoresSafeArea())
+        .background(NFColor.floorBg.ignoresSafeArea())
         .overlay(alignment: .top) {
             if let e = model.error {
                 Button { model.error = nil } label: {
@@ -165,8 +165,12 @@ struct NativeFloorView: View {
     // MARK: 卓の箱
 
     private func tableGrid(width: CGFloat) -> some View {
-        let cols = max(2, min(4, Int(width / 230)))
-        let columns = Array(repeating: GridItem(.flexible(), spacing: 12), count: cols)
+        // 箱は少し小さめの正方形、箱と箱の間は広め（2026-10-24 Ronnie）
+        let gap: CGFloat = 20
+        let target: CGFloat = 215
+        let cols = max(2, min(6, Int((width + gap) / (target + gap))))
+        let side = min(target, floor((width - gap * CGFloat(cols - 1)) / CGFloat(cols)))
+        let columns = Array(repeating: GridItem(.fixed(side), spacing: gap), count: cols)
         return Group {
             if model.visibleTables.isEmpty {
                 Text("このフロアにテーブルはありません")
@@ -175,7 +179,7 @@ struct NativeFloorView: View {
                     .background(RoundedRectangle(cornerRadius: 10).fill(Color.white))
                     .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [5])).foregroundColor(NFColor.wisteria))
             } else {
-                LazyVGrid(columns: columns, spacing: 12) {
+                LazyVGrid(columns: columns, alignment: .leading, spacing: gap) {
                     ForEach(model.visibleTables) { t in
                         NativeTableCard(table: t, now: model.now) { rect in
                             tileRect = rect
@@ -183,6 +187,8 @@ struct NativeFloorView: View {
                         }
                     }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 2).padding(.vertical, 4)
             }
         }
     }
@@ -196,7 +202,7 @@ struct NativeFloorView: View {
             legendDot(NFColor.lo, border: nil, "L.O.済")
             legendDot(NFColor.danger, border: nil, "時間超過")
             legendDot(NFColor.saffron, border: nil, "会計待ち")
-            legendDot(NFColor.wisteria, border: nil, "空席")
+            legendDot(NFColor.tileSurface(.free), border: Color.black.opacity(0.15), "空席")
             Text("下の線＝残り時間").font(.system(size: 12)).foregroundColor(NFColor.ink3)
             Spacer()
         }
@@ -259,7 +265,15 @@ struct NativeTableCard: View {
                 if let o = order {
                     occupied(o, state: state, next: next)
                 } else {
-                    VStack(spacing: 4) {
+                    VStack(spacing: 6) {
+                        if state == .free {
+                            Image(systemName: "plus")
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundColor(NFColor.tileIcon)
+                                .frame(width: 40, height: 40)
+                                .background(Circle().fill(Color.white))
+                                .shadow(color: .black.opacity(0.06), radius: 3, y: 1)
+                        }
                         HStack(spacing: 4) {
                             if state == .unavailable { Image(systemName: "lock.fill").font(.system(size: 11)) }
                             if state == .cleaning { Image(systemName: "sparkles").font(.system(size: 11)) }
@@ -299,39 +313,44 @@ struct NativeTableCard: View {
                         .frame(minHeight: 26, alignment: .leading)
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.top, 10)
-            .padding(.bottom, 6)
+            .padding(.horizontal, 14)
+            .padding(.top, 12)
+            .padding(.bottom, order != nil ? 20 : 12)
             // 卓の箱は正方形（横幅と同じ高さ。2026-10-24 Ronnie）
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .aspectRatio(1, contentMode: .fit)
+            // Apple 風：白い地の上に、角の丸いカードを浮かせる（空席は薄いグレー、使用中は白＋影）
             .background(
-                RoundedRectangle(cornerRadius: 10, style: .continuous).fill(NFColor.surface(state))
+                RoundedRectangle(cornerRadius: NFColor.tileRadius, style: .continuous)
+                    .fill(NFColor.tileSurface(state))
+                    .shadow(color: .black.opacity(dashed ? 0 : 0.10), radius: 12, x: 0, y: 5)
+                    .shadow(color: .black.opacity(dashed ? 0 : 0.04), radius: 1, x: 0, y: 1)
             )
             .overlay(alignment: .bottom) {
-                // 残り時間の線
-                GeometryReader { g in
-                    ZStack(alignment: .leading) {
-                        Rectangle().fill(order != nil ? NFColor.ink.opacity(0.08) : Color.clear)
-                        if let o = order {
-                            Rectangle().fill(NFColor.bar(state))
-                                .frame(width: g.size.width * o.tileTime(now: now).frac)
+                // 残り時間の線（カードの中の細いバー）
+                if let o = order {
+                    GeometryReader { g in
+                        ZStack(alignment: .leading) {
+                            Capsule().fill(NFColor.ink.opacity(0.08))
+                            Capsule().fill(NFColor.bar(state))
+                                .frame(width: max(5, g.size.width * o.tileTime(now: now).frac))
                         }
                     }
+                    .frame(height: 5)
+                    .padding(.horizontal, 14)
+                    .padding(.bottom, 9)
                 }
-                .frame(height: 6)
-                .clipShape(UnevenRoundedRectangle(bottomLeadingRadius: 10, bottomTrailingRadius: 10))
             }
             .overlay(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                RoundedRectangle(cornerRadius: NFColor.tileRadius, style: .continuous)
                     .strokeBorder(
-                        style: StrokeStyle(lineWidth: linked != nil ? 2 : 1, dash: dashed && linked == nil ? [5, 4] : [])
+                        style: StrokeStyle(lineWidth: linked != nil || state == .reserved ? 2 : 1)
                     )
-                    .foregroundColor(linked != nil ? NFColor.royal : (dashed ? NFColor.wisteria : (state == .reserved ? NFColor.royal : NFColor.line)))
+                    .foregroundColor(linked != nil ? NFColor.royal : (state == .reserved ? NFColor.royal.opacity(0.55) : (dashed ? Color.black.opacity(0.05) : Color.black.opacity(0.06))))
             )
             .overlay {
                 if hasCall {
-                    RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(NFColor.callOrange, lineWidth: 4)
+                    RoundedRectangle(cornerRadius: NFColor.tileRadius, style: .continuous).strokeBorder(NFColor.callOrange, lineWidth: 4)
                         .opacity(pulse ? 1 : 0.35)
                 }
             }
@@ -366,7 +385,7 @@ struct NativeTableCard: View {
 
     private var dashedLine: some View {
         Rectangle().fill(Color.clear).frame(height: 1)
-            .overlay(Line().stroke(style: StrokeStyle(lineWidth: 1, dash: [3, 3])).foregroundColor(NFColor.line))
+            .overlay(Rectangle().fill(Color.black.opacity(0.07)).frame(height: 1))
     }
 
     @ViewBuilder
@@ -532,8 +551,11 @@ struct NativeReservationPanel: View {
             }
         }
         .frame(maxHeight: .infinity, alignment: .top)
-        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.white))
-        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(NFColor.line, lineWidth: 1))
+        .background(
+            RoundedRectangle(cornerRadius: NFColor.tileRadius, style: .continuous).fill(Color.white)
+                .shadow(color: .black.opacity(0.08), radius: 12, x: 0, y: 4)
+        )
+        .overlay(RoundedRectangle(cornerRadius: NFColor.tileRadius, style: .continuous).stroke(Color.black.opacity(0.06), lineWidth: 1))
     }
 
     private func sum(_ label: String, groups: Int, people: Int?) -> some View {
