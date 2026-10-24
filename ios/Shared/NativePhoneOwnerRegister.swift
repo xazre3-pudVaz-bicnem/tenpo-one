@@ -234,6 +234,8 @@ struct NativePhoneOwnerRegisterView: View {
     @State private var problems: [String] = []
     @State private var problemOpen = false
     @State private var summaryOpen = false
+    /// クローズの最後の確認（iPhone はお店の外から押せるので、必ず聞く）
+    @State private var confirmCloseSession: NOMRegister.Session?
 
     private var p: NOMRegister? { model.payload }
     /// 開局の画面か（開局中のレジが無い。/app/cash/close で開いたときは「開局中のレジはありません」を先に出す）
@@ -288,6 +290,21 @@ struct NativePhoneOwnerRegisterView: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text(problems.joined(separator: "\n\n"))
+        }
+        .confirmationDialog("このレジをクローズしますか？", isPresented: Binding(get: { confirmCloseSession != nil }, set: { if !$0 { confirmCloseSession = nil } }), titleVisibility: .visible) {
+            Button("クローズする", role: .destructive) {
+                guard let s = confirmCloseSession else { return }
+                confirmCloseSession = nil
+                Task {
+                    if let e = await model.close(s) {
+                        problems = [e]
+                        problemOpen = true
+                    }
+                }
+            }
+            Button("やめる", role: .cancel) { confirmCloseSession = nil }
+        } message: {
+            Text("クローズすると、このレジでは会計できなくなり、レジ精算レシートがお店のプリンターへ送られます。")
         }
     }
 
@@ -492,10 +509,7 @@ struct NativePhoneOwnerRegisterView: View {
         if model.clerk == nil && !p.clerks.isEmpty { list.append("レジクローズの担当者を選んでください。") }
         if !list.isEmpty { problems = list; problemOpen = true; return }
         model.focus = nil
-        if let e = await model.close(s) {
-            problems = [e]
-            problemOpen = true
-        }
+        confirmCloseSession = s
     }
 
     private func emptySection(_ p: NOMRegister) -> some View {
