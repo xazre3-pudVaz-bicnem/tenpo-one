@@ -76,6 +76,10 @@ struct NativeLiveOrderScreen: View {
         }, startInCheckout: checkout)
             .task {
                 await model.load()
+                // ログインのときに選んだ担当者を、担当者が空の伝票に入れる（2026-10-25 02:29 Ronnie「パスワード → 担当選択 → レジ」）
+                if let c = AppState.shared.regiClerk, model.order.clerkId == nil, model.clerks.contains(where: { $0.id == c.id }) {
+                    await model.setClerk(c.id)
+                }
                 // 卓のポップアップの「レジ会計」からは、開いてすぐ会計の画面に
                 if checkout { model.openCheckoutOnLoad = true }
             }

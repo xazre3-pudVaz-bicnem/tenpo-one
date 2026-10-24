@@ -94,6 +94,40 @@ final class AppState: ObservableObject {
     /// iPhone：ハンディのテーブル一覧（/handy の代わり）とオーナー・店長のホーム（/app/dashboard の代わり）をネイティブで出しているか（2026-10-24）
     @Published var nativeHandyHome = false
     @Published var nativeOwnerHome = false
+    /// iPad：レジのネイティブのログイン画面を出す（企業番号・店舗コード・パスワード → 担当選択。2026-10-25 02:29 Ronnie）
+    @Published var needsRegiLogin = false
+    /// iPad：ログインのときに選んだ担当者（オーダー・会計で担当者が空の伝票に入れる）
+    @Published var regiClerk: RegiClerk?
+
+    /// レジのログインのあと：担当者を Web の担当者（sessionStorage）にも入れて、レジ（ホーム）を開く
+    @MainActor func finishRegiLogin(clerk: RegiClerk?) {
+        regiClerk = clerk
+        if let c = clerk {
+            let at = Int(Date().timeIntervalSince1970 * 1000)
+            let obj: [String: Any] = ["id": c.id, "name": c.name, "role": c.role, "at": at]
+            if let data = try? JSONSerialization.data(withJSONObject: obj), let json = String(data: data, encoding: .utf8) {
+                let lit = json.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "'", with: "\\'")
+                WebViewController.current?.runOnOwnPage("try { sessionStorage.setItem('tenpo_regi_clerk', '\(lit)'); } catch (e) {}")
+            }
+        }
+        needsRegiLogin = false
+        // sessionStorage を入れてからホームを読む（Web の担当者のポップアップがもう一度出ないように）
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            WebViewController.current?.load(AppConfig.url("/app/dashboard"))
+        }
+    }
+
+    /// iPad：この端末だけログアウトして、ネイティブのログインへ（企業番号・店舗コードは覚えたまま）
+    @MainActor func regiLogout() async {
+        _ = await NSPApi.post(["type": "signOut"])
+        regiClerk = nil
+        closeAllNative()
+        nativeOrder = nil
+        needsRegiLogin = true
+        WebViewController.current?.runOnOwnPage("try { sessionStorage.removeItem('tenpo_regi_clerk'); } catch (e) {}")
+        WebViewController.current?.load(AppConfig.url("/register-login"))
+    }
+
     /// iPhone ハンディの卓・注文をネイティブで出しているとき（/handy/<卓>・/handy/<卓>/order の代わり。2026-10-25 Ronnie「iPhone も native に」）
     struct PhoneHandyRoute: Equatable, Hashable {
         let tableId: String
@@ -315,8 +349,12 @@ final class AppState: ObservableObject {
         let path = url.path
         switch mode {
         case .regi:
-            // レジはレジ用のログイン（企業番号＋店舗ユーザー名＋レジ用パスワード）
-            if path == "/login" { return AppConfig.url("/register-login") }
+            // レジはレジ用のログイン（企業番号＋店舗ユーザー名＋レジ用パスワード）。
+            // iPad のアプリはネイティブのログイン画面を上に出す（2026-10-25 02:29 Ronnie。裏の Web は今まで通り /register-login）
+            if path == "/login" || path == "/register-login" {
+                if AppConfig.isPad { DispatchQueue.main.async { self.needsRegiLogin = true } }
+                if path == "/login" { return AppConfig.url("/register-login") }
+            }
         case .handy:
             // ハンディのログインはお店の QR。メールのログイン画面は出さず、カメラを出す
             if path == "/login" || path == "/register-login" {
@@ -336,6 +374,11 @@ final class AppState: ObservableObject {
         guard AppConfig.isOwnHost(url) else { return }
         if !AppConfig.isPad {
             maybeOpenNativePhone(for: url)
+            return
+        }
+        // レジのログイン画面（ログアウトのあとなど）：ネイティブのログインを上に出す（2026-10-25）
+        if mode == .regi, url.path == "/register-login" || url.path == "/login" {
+            if !needsRegiLogin { needsRegiLogin = true }
             return
         }
         // 管理画面（設定 › レジ端末）の ON/OFF に従う（ホーム・テーブル一覧を開くたび。OFF の端末も管理画面で ON にできる）

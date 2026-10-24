@@ -170,7 +170,9 @@ struct NativeSettingsView: View {
             .padding(.horizontal, 14).padding(.vertical, 16)
         }
         .confirmationDialog("ログアウトしますか？", isPresented: $confirmLogout, titleVisibility: .visible) {
-            Button("ログアウト", role: .destructive) { onWeb("/logout") }
+            // この iPad だけログアウト → ネイティブのログイン（企業番号・店舗コードはそのまま。2026-10-25 Ronnie）。
+            // 前は Web の /logout を開いていたが、その道は無かった（404）
+            Button("ログアウト", role: .destructive) { Task { await state.regiLogout() } }
             Button("やめる", role: .cancel) {}
         }
         .frame(width: Self.sideWidth)
