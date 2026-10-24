@@ -517,17 +517,19 @@ struct NativeCheckoutView: View {
 
     private func keypad(onKey: @escaping (String) -> Void, quick: [(String, String?, () -> Void)]) -> some View {
         VStack(spacing: 8) {
-            HStack(spacing: 6) {
+            HStack(spacing: 8) {
+                // 大きめのボタン・大きめの字、「ちょうど」は緑（2026-10-24 Ronnie「alli thulo、exact lai green」）
                 ForEach(Array(quick.enumerated()), id: \.offset) { _, q in
+                    let exact = q.1 == "Exact"
                     Button(action: q.2) {
-                        VStack(spacing: 0) {
-                            Text(q.0).font(.system(size: 13, weight: .heavy))
-                            if let en = q.1 { Text(en).font(.system(size: 9, weight: .bold)).opacity(0.7) }
+                        VStack(spacing: 1) {
+                            Text(q.0).font(.system(size: 20, weight: .heavy))
+                            if let en = q.1 { Text(en).font(.system(size: 12, weight: .bold)).opacity(0.8) }
                         }
-                        .foregroundColor(NT.purple)
+                        .foregroundColor(exact ? .white : NT.purple)
                         .lineLimit(1).minimumScaleFactor(0.7)
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                        .background(RoundedRectangle(cornerRadius: 10).fill(NT.lilac))
+                        .frame(maxWidth: .infinity, minHeight: 64)
+                        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(exact ? NT.ok : NT.lilac))
                     }
                     .buttonStyle(PressableStyle())
                 }
