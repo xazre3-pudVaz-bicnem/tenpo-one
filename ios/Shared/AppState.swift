@@ -59,6 +59,9 @@ final class AppState: ObservableObject {
     @Published var noticesTab = "notifications"
     /// ネイティブの日別予算登録（/app/budgets/daily。2026-10-24）
     @Published var nativeBudget = false
+    /// 予算の画面のどちらを出すか（monthly＝予算管理 /app/budgets、daily＝日別予算登録）と開く月
+    @Published var budgetView = "daily"
+    @Published var budgetMonth: String?
     /// ネイティブの顧客台帳（/app/customers の一覧。2026-10-24）
     @Published var nativeCustomers = false
     /// ネイティブのスキャン（レシート撮影。/app/scan。2026-10-24）
@@ -212,7 +215,10 @@ final class AppState: ObservableObject {
             if !nativeCustomers { nativeCustomers = true }
             return
         }
-        if url.path == "/app/budgets/daily" {
+        if url.path == "/app/budgets/daily" || url.path == "/app/budgets" {
+            budgetView = url.path == "/app/budgets" ? "monthly" : "daily"
+            let m = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "month" }?.value
+            budgetMonth = (m?.count == 7) ? m : nil
             nativeFloor = false; nativeNotices = false; nativeHome = false; nativeLedger = false; nativeCash = false; nativeCashIo = false; nativeQuick = false; nativeSlips = false; nativeExpenses = false; nativeStock = false; nativeInventory = false; nativeVendors = false; nativePurchases = false
             if !nativeBudget { nativeBudget = true }
             return
@@ -473,8 +479,18 @@ final class AppState: ObservableObject {
 
     func goNativeBudget() {
         nativeFloor = false; nativeNotices = false; nativeHome = false; nativeLedger = false; nativeCash = false; nativeCashIo = false; nativeQuick = false; nativeSlips = false; nativeExpenses = false; nativeStock = false; nativeInventory = false; nativeVendors = false; nativePurchases = false
+        budgetView = "daily"
+        budgetMonth = nil
         nativeBudget = true
         WebViewController.current?.load(AppConfig.url("/app/budgets/daily"))
+    }
+
+    /// 予算の画面の中で、予算管理と日別予算登録を切り替える（Web も同じ場所にそろえる）
+    func switchBudgetView(_ view: String, month: String?) {
+        budgetView = view
+        budgetMonth = month
+        let path = view == "monthly" ? "/app/budgets" : "/app/budgets/daily"
+        WebViewController.current?.load(AppConfig.url(month.map { "\(path)?month=\($0)" } ?? path))
     }
 
     func goNativeStock() {

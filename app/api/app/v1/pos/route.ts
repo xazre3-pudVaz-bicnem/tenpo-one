@@ -87,6 +87,8 @@ import { searchCustomerByPhone, setOrderCustomer } from '@/app/app/pos/actions';
 import { isNativeBudgetActionType, parseNativeBudgetAction } from '@/lib/native-budget';
 import { dailyBudgetsFrom } from '@/lib/daily-budget';
 import { saveDailyBudgets } from '@/app/app/budgets/daily-actions';
+import { saveMonthlySalesTarget, upsertBudget } from '@/app/app/budgets/actions';
+import { loadNativeBudgets } from '@/lib/native-budgets-server';
 import { isNativePettyActionType, nativePettyPermission, parseNativePettyAction } from '@/lib/native-petty';
 import { loadNativeClosings, loadNativePetty } from '@/lib/native-petty-server';
 import {
@@ -458,6 +460,15 @@ export async function GET(request: Request) {
     return json({ ok: true, ...list });
   }
 
+  // 予算管理（Web の /app/budgets。月の売上目標・ご予約から見込む売上・店舗別の予算と実績）
+  if (part === 'budgets') {
+    if (!can(ctx.role, 'reports.view')) return json({ ok: false, error: '権限がありません', useWeb: true }, 403);
+    const m = url.searchParams.get('month') ?? '';
+    const b = await loadNativeBudgets(ctx, await createClient(), /^\d{4}-\d{2}$/.test(m) ? m : undefined);
+    if (!b) return json({ ok: false, error: 'アクセス可能な店舗がありません' }, 404);
+    return json({ ok: true, ...b });
+  }
+
   // 日別予算登録（Web の /app/budgets/daily）
   if (part === 'budgetDaily') {
     if (!can(ctx.role, 'reports.view')) return json({ ok: false, error: '権限がありません', useWeb: true }, 403);
@@ -817,7 +828,18 @@ export async function POST(request: Request) {
     const budgetProblem = await networkProblem(ctx);
     if (budgetProblem) return json({ ok: false, error: budgetProblem }, 403);
     try {
-      const r = await saveDailyBudgets(store.id, parsedBudget.action.month, parsedBudget.action.values);
+      const ba = parsedBudget.action;
+      if (ba.type === 'budgetTargetSave') {
+        const r = await saveMonthlySalesTarget({ storeId: ba.storeId, month: ba.month, amount: ba.amount });
+        return json(r.error ? { ok: false, error: r.error } : { ok: true, queued: r.dailyDistributed ? 1 : 0 });
+      }
+      if (ba.type === 'budgetUpsert') {
+        const { type: _t, ...input } = ba;
+        void _t;
+        await upsertBudget(input);
+        return json({ ok: true });
+      }
+      const r = await saveDailyBudgets(store.id, ba.month, ba.values);
       return json(r.error ? { ok: false, error: r.error } : { ok: true, queued: r.total ?? 0 });
     } catch (e) {
       return json({ ok: false, error: errorText(e, 'うまくいきませんでした。もう一度お試しください') }, 400);
