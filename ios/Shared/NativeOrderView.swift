@@ -236,11 +236,7 @@ struct NativeTopBar: View {
     var body: some View {
         HStack(spacing: 10) {
             barButton(icon: "chevron.left", text: "戻る", action: onHome)
-            Image("BrandMark")
-                .resizable()
-                .scaledToFit()
-                .frame(width: 38, height: 38)
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            // TENPO ONE のマークは上のバーに出さない（2026-10-24 19:04 Ronnie「ロゴは要らない」）
             HStack(spacing: 6) {
                 Image(systemName: "storefront")
                 Text(storeName).lineLimit(1)
