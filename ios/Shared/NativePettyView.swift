@@ -190,6 +190,8 @@ final class NativePettyModel: ObservableObject {
         do {
             var comps = URLComponents(url: AppConfig.url("/api/app/v1/pos"), resolvingAgainstBaseURL: false)!
             comps.queryItems = [URLQueryItem(name: "part", value: "petty"), URLQueryItem(name: "from", value: from), URLQueryItem(name: "to", value: to), URLQueryItem(name: "status", value: status)]
+            // 前に開いたときの中身を先に出す（押した瞬間に出る。裏で読み直す。2026-10-24 Ronnie「取込み」）
+            if payload == nil, let saved = NativeAPI.cached(NPPettyPayload.self, comps.url) { payload = saved }
             let data = try await NativeAPI.shared.send(URLRequest(url: comps.url!))
             payload = try JSONDecoder().decode(NPPettyPayload.self, from: data)
             error = nil
@@ -627,6 +629,8 @@ final class NativeClosingsModel: ObservableObject {
         do {
             var comps = URLComponents(url: AppConfig.url("/api/app/v1/pos"), resolvingAgainstBaseURL: false)!
             comps.queryItems = [URLQueryItem(name: "part", value: "closings"), URLQueryItem(name: "from", value: from), URLQueryItem(name: "to", value: to)]
+            // 前に開いたときの中身を先に出す（押した瞬間に出る。裏で読み直す。2026-10-24 Ronnie「取込み」）
+            if payload == nil, let saved = NativeAPI.cached(NPClosingsPayload.self, comps.url) { payload = saved }
             let data = try await NativeAPI.shared.send(URLRequest(url: comps.url!))
             payload = try JSONDecoder().decode(NPClosingsPayload.self, from: data)
             error = nil

@@ -68,6 +68,8 @@ final class NativeExpensesModel: ObservableObject {
             var q = [URLQueryItem(name: "part", value: "expenses")]
             for (k, v) in [("from", from), ("to", to), ("account", account), ("status", status)] where !v.isEmpty { q.append(URLQueryItem(name: k, value: v)) }
             comps.queryItems = q
+            // 前に開いたときの中身を先に出す（押した瞬間に出る。裏で読み直す。2026-10-24 Ronnie「取込み」）
+            if payload == nil, let saved = NativeAPI.cached(NEPayload.self, comps.url) { payload = saved }
             let data = try await NativeAPI.shared.send(URLRequest(url: comps.url!))
             let p = try JSONDecoder().decode(NEPayload.self, from: data)
             payload = p

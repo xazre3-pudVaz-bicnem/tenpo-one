@@ -92,6 +92,13 @@ final class NativePurchasingModel: ObservableObject {
     @Published var toast: String?
     @Published var busy = false
 
+    /// 前に開いたときの中身（押した瞬間に出す。2026-10-24 Ronnie「取込み」）
+    func peek<T: Decodable>(_ items: [URLQueryItem]) -> T? {
+        var comps = URLComponents(url: AppConfig.url("/api/app/v1/pos"), resolvingAgainstBaseURL: false)!
+        comps.queryItems = items
+        return NativeAPI.cached(T.self, comps.url)
+    }
+
     func get<T: Decodable>(_ items: [URLQueryItem]) async -> T? {
         var comps = URLComponents(url: AppConfig.url("/api/app/v1/pos"), resolvingAgainstBaseURL: false)!
         comps.queryItems = items
@@ -222,6 +229,7 @@ struct NativeVendorsView: View {
         var items = [URLQueryItem(name: "part", value: "vendors")]
         if !q.isEmpty { items.append(URLQueryItem(name: "q", value: q)) }
         if !status.isEmpty { items.append(URLQueryItem(name: "status", value: status)) }
+        if payload == nil, let saved: NUVendorsPayload = model.peek(items) { payload = saved }
         if let p: NUVendorsPayload = await model.get(items) { payload = p }
     }
 
@@ -499,7 +507,9 @@ struct NativePurchasesView: View {
     }
 
     private func refresh() async {
-        if let p: NUPurchasesPayload = await model.get([URLQueryItem(name: "part", value: "purchases")] + query()) { payload = p }
+        let items = [URLQueryItem(name: "part", value: "purchases")] + query()
+        if payload == nil, let saved: NUPurchasesPayload = model.peek(items) { payload = saved }
+        if let p: NUPurchasesPayload = await model.get(items) { payload = p }
     }
 
     private func exportCsv() {

@@ -20,7 +20,7 @@ struct RootView: View {
         rootStack
             // ネットが無いときは上に「オフライン」（2026-10-24 Ronnie「net nachale pani …」）
             .overlay(alignment: .top) { NativeOfflineBanner().zIndex(100) }
-            .onAppear { NativeDiskCache.sweep(prefix: "live-") }
+            .onAppear { NativeDiskCache.sweep(prefix: "live-"); NativeDiskCache.sweep(prefix: "get-") }
     }
 
     private var rootStack: some View {

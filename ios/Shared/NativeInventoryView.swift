@@ -184,6 +184,10 @@ final class NativeInventoryModel: ObservableObject {
             items += [URLQueryItem(name: "kind", value: kind), URLQueryItem(name: "q", value: q), URLQueryItem(name: "sort", value: sort)]
         }
         if tab == "forecast", !forecastItem.isEmpty { items.append(URLQueryItem(name: "item", value: forecastItem)) }
+        // 前に開いたときの中身を先に出す（押した瞬間に出る。裏で読み直す。2026-10-24 Ronnie「取込み」）
+        var comps = URLComponents(url: AppConfig.url("/api/app/v1/pos"), resolvingAgainstBaseURL: false)!
+        comps.queryItems = items
+        if payload?.tab != tab, let saved = NativeAPI.cached(NIPayload.self, comps.url), saved.tab == tab { payload = saved }
         do {
             let p: NIPayload = try await get(items)
             if p.tab == tab { payload = p }

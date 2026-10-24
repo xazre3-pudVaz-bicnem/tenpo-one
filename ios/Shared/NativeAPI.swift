@@ -1,5 +1,6 @@
 import Foundation
 import WebKit
+import CryptoKit
 
 // サーバー（/api/app/v1/pos。Web の lib/native-pos.ts）とのやりとり。
 // ログインは Web と同じ Cookie（WKWebView の Cookie をそのまま使い、返ってきた Cookie も WKWebView に戻す）。
@@ -197,6 +198,8 @@ final class NativeAPI {
                 let r = try? JSONDecoder().decode(APIResult.self, from: data)
                 throw NativeAPIError(message: r?.error ?? "通信できませんでした（\(http.statusCode)）", useWeb: r?.useWeb ?? false)
             }
+            // 画面の読み込み（GET ?part=…）は iPad に保存して、次に開く瞬間に先に出す（Self.cached）
+            if (req.httpMethod ?? "GET") == "GET", url.path == path { NativeDiskCache.save(data, key: Self.cacheKey(url)) }
         }
         // 操作（POST）のあとは、印刷係にすぐ見に行かせる（ネイティブ ON＝アプリ自身の NativePrintAgent、OFF＝裏の Web の DirectPrintAgent）。
         // 1 秒ごとの見回りや Realtime を待たずにレシート・伝票・ドロアが出る（2026-10-24 Ronnie「プリンターは超速く」）
@@ -207,6 +210,23 @@ final class NativeAPI {
             }
         }
         return data
+    }
+
+    /// 前に読んだ画面の中身（同じ URL）。画面を開いた瞬間に先に出して、裏で読み直す
+    /// （2026-10-24 Ronnie「Quick pay・入出金を押すと 取込み が出る。オーダー会計・店舗台帳のようにすぐ」）
+    nonisolated static func cached<T: Decodable>(_ type: T.Type, _ url: URL?) -> T? {
+        guard let url, let data = NativeDiskCache.load(cacheKey(url)) else { return nil }
+        return try? JSONDecoder().decode(T.self, from: data)
+    }
+
+    nonisolated static func cacheKey(_ url: URL) -> String {
+        // 並び順の違いで別物にしない（クエリを名前順に）
+        let comps = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        let items = comps?.queryItems ?? []
+        let q = items.sorted { $0.name < $1.name }.map { "\($0.name)=\($0.value ?? "")" }.joined(separator: "&")
+        let part = items.first { $0.name == "part" }?.value ?? "pos"
+        let hash = SHA256.hash(data: Data(q.utf8)).prefix(8).map { String(format: "%02x", $0) }.joined()
+        return "get-\(part)-\(hash)"
     }
 
     /// 画面を開くときの全部

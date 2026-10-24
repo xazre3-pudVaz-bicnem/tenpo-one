@@ -68,6 +68,8 @@ final class NativeBudgetsModel: ObservableObject {
         do {
             var comps = URLComponents(url: AppConfig.url("/api/app/v1/pos"), resolvingAgainstBaseURL: false)!
             comps.queryItems = [URLQueryItem(name: "part", value: "budgets"), URLQueryItem(name: "month", value: month)]
+            // 前に開いたときの中身を先に出す（押した瞬間に出る。裏で読み直す。2026-10-24 Ronnie「取込み」）
+            if payload == nil, let saved = NativeAPI.cached(NBMPayload.self, comps.url) { payload = saved }
             let data = try await NativeAPI.shared.send(URLRequest(url: comps.url!))
             payload = try JSONDecoder().decode(NBMPayload.self, from: data)
             error = nil
