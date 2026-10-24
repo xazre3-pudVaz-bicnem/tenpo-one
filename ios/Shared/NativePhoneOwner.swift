@@ -22,6 +22,8 @@ enum NativePhoneOwnerRegistry {
 
     static func route(for url: URL) -> NativeModuleRoute? {
         guard AppConfig.isOwnHost(url) else { return nil }
+        // ?web=1 は Web の画面のまま（返金・取消など、iPhone のネイティブに無い操作）
+        if URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.contains(where: { $0.name == "web" }) == true { return nil }
         let path = url.path
         guard let b = paths.keys.filter({ path == $0 || path.hasPrefix($0 + "/") }).max(by: { $0.count < $1.count }), let key = paths[b] else { return nil }
         return NativeModuleRoute(key: key, url: url)
