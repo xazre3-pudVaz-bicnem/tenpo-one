@@ -231,13 +231,6 @@ struct NativeHomeView: View {
     private var topBar: some View {
         VStack(spacing: 14) {
             HStack(spacing: 10) {
-                HStack(spacing: 6) {
-                    Image(systemName: "storefront")
-                    Text(model.payload?.store.name ?? "").lineLimit(1)
-                }
-                .font(.system(size: 15, weight: .semibold)).foregroundColor(.white)
-                .padding(.horizontal, 12).padding(.vertical, 8)
-                .background(Capsule().fill(Color.white.opacity(0.10)))
                 // 「ホーム」の字は出さない（ここがホーム。2026-10-24 19:01 Ronnie）
                 Spacer()
                 Button { onWeb("/app/expenses") } label: {
@@ -264,6 +257,14 @@ struct NativeHomeView: View {
                 .buttonStyle(PressableStyle())
                 Image("BrandMark").resizable().scaledToFit().frame(width: 38, height: 38)
                     .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                // 店名はログアウトの横（2026-10-24 19:03 Ronnie）
+                HStack(spacing: 6) {
+                    Image(systemName: "storefront")
+                    Text(model.payload?.store.name ?? "").lineLimit(1)
+                }
+                .font(.system(size: 15, weight: .semibold)).foregroundColor(.white)
+                .padding(.horizontal, 12).padding(.vertical, 8)
+                .background(Capsule().fill(Color.white.opacity(0.10)))
                 Button { onWeb("/logout") } label: {
                     Image(systemName: "rectangle.portrait.and.arrow.right").font(.system(size: 18, weight: .semibold)).foregroundColor(.white).padding(8)
                 }
