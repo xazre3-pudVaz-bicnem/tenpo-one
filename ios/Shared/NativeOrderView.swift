@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// ネイティブのオーダー画面（iPad レジ）。Web の「オーダー・会計」と同じ並び：
-///   左＝伝票（卓・人数・明細・合計・伝票の操作）／右の上＝ページのタブ（1 おすすめ・2 ドリンク…）／
+///   左＝伝票（卓・人数・明細・合計）／右の上＝ページのタブ（1 おすすめ・2 ドリンク…）／
 ///   右の下＝そのページのカテゴリ（左の列）と検索・商品・Order（スライド）。
 /// 会計はここからは行かない（テーブルの「会計」から。2026-10-24 Ronnie）。卓の無いテイクアウトだけ「会計へ」を残す（Web と同じ）。
 /// タップしたらすぐ画面に出す（Web より速い）。
@@ -12,8 +12,6 @@ struct NativeOrderView: View {
     @State private var pickClerk = false
     /// 担当者を選んだあとにすること（注文確定・会計へ）
     @State private var afterClerk: (() -> Void)?
-    /// 伝票の操作のシート（新しい伝票・まとめる・卓を移動・取消）
-    @State private var slipOp: NativeSlipOp?
     /// 上のタブの編集（店長以上）
     @State private var editingPages = false
 
@@ -28,7 +26,7 @@ struct NativeOrderView: View {
                 let slipW = max(320, geo.size.width * 0.30)
                 let catW = max(150, geo.size.width * 0.13)
                 HStack(alignment: .top, spacing: 12) {
-                    SlipPanel(model: model, onClerk: { pickClerk = true }, onSlipOp: { slipOp = $0 })
+                    SlipPanel(model: model, onClerk: { pickClerk = true })
                         .frame(width: slipW)
                     VStack(spacing: 12) {
                         // 上のタブ（ページ）。Web と同じく2つ以上あるときだけ（テイクアウトは出さない）
@@ -138,15 +136,6 @@ struct NativeOrderView: View {
             }
         }
         .animation(.easeOut(duration: 0.22), value: showCheckout)
-        .sheet(item: $slipOp) { op in
-            NativeSlipOpsSheet(
-                model: model,
-                op: op,
-                onClose: { slipOp = nil },
-                onOpenOrder: { id in AppState.shared.openNativeOrder(id, checkout: false) },
-                onCancelled: { AppState.shared.closeNativePos(openWebPath: nil) }
-            )
-        }
         .onReceive(model.$openCheckoutOnLoad) { on in
             if on {
                 model.openCheckoutOnLoad = false
@@ -278,8 +267,6 @@ struct NativeTopBar: View {
 private struct SlipPanel: View {
     @ObservedObject var model: NativeOrderModel
     var onClerk: () -> Void = {}
-    /// 伝票の操作（ネイティブのシート）。会計を分けるのは会計の画面の中で
-    var onSlipOp: (NativeSlipOp) -> Void = { _ in }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -370,15 +357,8 @@ private struct SlipPanel: View {
                         .contentTransition(.numericText())
                         .animation(.easeOut(duration: 0.15), value: model.total)
                 }
-                // 伝票の操作（全部ネイティブ。2026-10-24 Ronnie「Web に飛ばない」）
-                FlowChips(items: [
-                    ("doc.badge.plus", "新しい伝票", false, { onSlipOp(.newSlip) }),
-                    ("square.on.square", "伝票をまとめる", false, { onSlipOp(.merge) }),
-                    ("arrow.left.arrow.right", "卓を移動", false, { onSlipOp(.move) }),
-                    ("printer", "会計伝票", false, { Task { await model.printBill() } }),
-                    ("xmark.circle", "注文取消", true, { onSlipOp(.cancel) }),
-                ])
-                .padding(.top, 4)
+                // 伝票の操作（新しい伝票・まとめる・卓を移動・会計伝票・注文取消）はオーダー画面に出さない。
+                // テーブルのポップアップから（2026-10-24 Ronnie「order vitra yo pardaina」）
             }
             .padding(.horizontal, 16).padding(.bottom, 14)
         }
@@ -460,30 +440,6 @@ private struct LineRow: View {
                 .frame(width: 36, height: 34)
         }
         .buttonStyle(PressableStyle(scale: 0.9))
-    }
-}
-
-private struct FlowChips: View {
-    let items: [(String, String, Bool, () -> Void)]
-
-    var body: some View {
-        let cols = [GridItem(.adaptive(minimum: 128), spacing: 8, alignment: .leading)]
-        LazyVGrid(columns: cols, alignment: .leading, spacing: 8) {
-            ForEach(items, id: \.1) { icon, text, danger, action in
-                Button(action: action) {
-                    HStack(spacing: 5) {
-                        Image(systemName: icon)
-                        Text(text).lineLimit(1)
-                    }
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundColor(danger ? NT.danger : NT.ink2)
-                    .padding(.horizontal, 10).padding(.vertical, 8)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Capsule().fill(danger ? NT.dangerBg : NT.lilac))
-                }
-                .buttonStyle(PressableStyle())
-            }
-        }
     }
 }
 
