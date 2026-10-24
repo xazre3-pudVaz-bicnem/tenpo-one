@@ -3,8 +3,8 @@ import { ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { yen } from '@/lib/format';
 import type { HomeStoreRow, HourlyCompare } from '@/lib/home-v2';
-import { delta, rangeLabel, type DateRange, type HomeCompare, type HomeRange } from '@/lib/home-period';
-import type { PeriodKpi, PeriodStoreRow } from '@/lib/home-period-server';
+import { HOME_CARDS, delta, homeHref, rangeLabel, type DateRange, type HomeCard, type HomeCompare, type HomeRange } from '@/lib/home-period';
+import type { HomeExtras, PeriodKpi, PeriodStoreRow } from '@/lib/home-period-server';
 import { HourlyCompareChart } from './hourly-compare-chart';
 import { HomePeriodBar } from './home-period-bar';
 import { StoreSwitchLink } from './store-switch-link';
@@ -21,8 +21,12 @@ export interface HomeV2Todo {
 export interface HomeV2Props {
   scopeLabel: string;
   asOf: string;
-  period: { range: HomeRange; compare: HomeCompare; current: DateRange; previous: DateRange };
+  period: { range: HomeRange; compare: HomeCompare; current: DateRange; previous: DateRange; card: HomeCard };
   kpi: { current: PeriodKpi; previous: PeriodKpi };
+  /** 客席回転率・リピート率・支払い方法・ベストセラー（2026-10-24 funfo のダッシュボードから） */
+  extras: HomeExtras;
+  /** リピート率の見出しの下の説明（本日は「初回来店が前の人」、期間は「期間内に 2 回以上」） */
+  repeatNote: string;
   /** 本日：いまの席・未会計・本日の予約つきの店舗一覧 */
   rows: HomeStoreRow[] | null;
   /** 本日以外：期間の売上・客数・客単価・予算の店舗一覧 */
@@ -44,7 +48,7 @@ const COMPARE_LABEL: Record<HomeCompare, string> = { day: '前日', week: '前�
  * 新しい管理画面のホーム（2026-10-10 Ronnie「シンプルに、管理画面のスタイルで」）。
  * 上：期間タブと比較（2026-10-24 funfo・dinii のおすすめ）／数字 4 つ（増減つき）／店舗の一覧／やること・時間帯別の売上。
  */
-export function HomeV2View({ scopeLabel, asOf, period, kpi, rows, periodRows, todos, hourly, nowHour }: HomeV2Props) {
+export function HomeV2View({ scopeLabel, asOf, period, kpi, extras, repeatNote, rows, periodRows, todos, hourly, nowHour }: HomeV2Props) {
   const cur = kpi.current;
   const prev = kpi.previous;
   const isToday = period.range === 'today';
@@ -69,7 +73,7 @@ export function HomeV2View({ scopeLabel, asOf, period, kpi, rows, periodRows, to
         </Link>
       </div>
 
-      <HomePeriodBar range={period.range} compare={period.compare} current={period.current} previous={period.previous} />
+      <HomePeriodBar range={period.range} compare={period.compare} current={period.current} previous={period.previous} card={period.card} />
 
       <section aria-label={`${periodTitle}の数字`} className="grid grid-cols-1 gap-px overflow-hidden rounded-xl border border-line bg-line sm:grid-cols-2 xl:grid-cols-4">
         <Kpi
@@ -127,6 +131,29 @@ export function HomeV2View({ scopeLabel, asOf, period, kpi, rows, periodRows, to
               </Link>
             </>
           )}
+        </div>
+      </section>
+
+      <section aria-label="回転率とリピート" className="grid grid-cols-1 gap-px overflow-hidden rounded-xl border border-line bg-line sm:grid-cols-2">
+        <div className="flex flex-col gap-1 bg-white px-5 py-3.5">
+          <span className="text-[12.5px] text-ink-2">客席回転率（1日平均）</span>
+          <span className="text-[22px] leading-tight font-extrabold text-ink tabular-nums">
+            {extras.turnover == null ? '—' : extras.turnover.toLocaleString('ja-JP', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
+            <span className="ml-1 text-[13px]">回</span>
+          </span>
+          <span className="text-xs text-ink-3">
+            {extras.seats > 0 ? `客数 ${cur.guests}人 ÷ 席数 ${extras.seats}席${extras.days > 1 ? ` ÷ ${extras.days}日` : ''}` : '席数が未設定です（設定 › テーブル）'}
+          </span>
+        </div>
+        <div className="flex flex-col gap-1 bg-white px-5 py-3.5">
+          <span className="text-[12.5px] text-ink-2">リピート率</span>
+          <span className="text-[22px] leading-tight font-extrabold text-ink tabular-nums">
+            {extras.repeat.ratePct == null ? '—' : extras.repeat.ratePct}
+            <span className="ml-0.5 text-[13px]">%</span>
+          </span>
+          <span className="text-xs text-ink-3">
+            {extras.repeat.ratePct == null ? '顧客を紐づけた会計がありません' : `リピーター ${extras.repeat.repeaters}名・新規 ${extras.repeat.newcomers}名（${repeatNote}）`}
+          </span>
         </div>
       </section>
 
@@ -265,23 +292,41 @@ export function HomeV2View({ scopeLabel, asOf, period, kpi, rows, periodRows, to
             ))
           )}
         </section>
-        <section aria-label="売上の動き" className="flex min-w-0 flex-[2_1_520px] flex-col gap-2 rounded-xl border border-line bg-white px-5 py-4">
-          <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <h2 className="text-base font-extrabold text-ink">
-              売上の動き<span className="ml-2 text-[12.5px] font-normal text-ink-3">時間帯別{isToday ? '' : '（期間の合計）'}</span>
-            </h2>
-            <div className="flex gap-3.5 text-xs text-ink-2">
-              <span className="inline-flex items-center gap-1.5">
-                <i className="inline-block h-[11px] w-[11px] rounded-[3px] bg-iris" aria-hidden />
-                {isToday ? '本日' : rangeLabel(period.current)}
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <i className="inline-block w-4 border-t-[2.5px] border-dashed border-[#d4891c]" aria-hidden />
-                {COMPARE_LABEL[period.compare]}（{rangeLabel(period.previous)}）
-              </span>
+        <section aria-label="売上の中身" className="flex min-w-0 flex-[2_1_520px] flex-col gap-3 rounded-xl border border-line bg-white px-5 py-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-1" role="tablist" aria-label="売上の中身">
+              {HOME_CARDS.map((c) => (
+                <Link
+                  key={c.key}
+                  href={homeHref({ range: period.range, compare: period.compare, custom: period.range === 'custom' ? period.current : undefined, card: c.key })}
+                  role="tab"
+                  aria-selected={c.key === period.card}
+                  className={cn(
+                    'inline-flex h-8 items-center rounded-full px-3 text-[13px] font-bold',
+                    c.key === period.card ? 'bg-ink text-white' : 'text-ink-2 hover:bg-lilac-soft hover:text-royal'
+                  )}
+                >
+                  {c.label}
+                </Link>
+              ))}
             </div>
+            {period.card === 'hourly' && (
+              <div className="flex gap-3.5 text-xs text-ink-2">
+                <span className="inline-flex items-center gap-1.5">
+                  <i className="inline-block h-[11px] w-[11px] rounded-[3px] bg-iris" aria-hidden />
+                  {isToday ? '本日' : rangeLabel(period.current)}
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <i className="inline-block w-4 border-t-[2.5px] border-dashed border-[#d4891c]" aria-hidden />
+                  {COMPARE_LABEL[period.compare]}（{rangeLabel(period.previous)}）
+                </span>
+              </div>
+            )}
+            {period.card !== 'hourly' && <span className="text-xs text-ink-3">{periodTitle}・会計済み</span>}
           </div>
-          <HourlyCompareChart data={hourly} nowHour={nowHour ?? -1} />
+          {period.card === 'hourly' && <HourlyCompareChart data={hourly} nowHour={nowHour ?? -1} />}
+          {period.card === 'pay' && <PaymentShares items={extras.payments ?? []} />}
+          {period.card === 'best' && <BestSellers items={extras.best ?? []} truncated={extras.bestTruncated} />}
         </section>
       </div>
     </div>
@@ -335,5 +380,45 @@ function DeltaMark({ d }: { d: ReturnType<typeof delta> }) {
       {mark}
       {Math.abs(d.pct).toLocaleString('ja-JP', { maximumFractionDigits: 1 })}%
     </span>
+  );
+}
+
+/** 支払い方法の内訳（金額の多い順・横棒） */
+function PaymentShares({ items }: { items: HomeExtras['payments'] & object }) {
+  if (items.length === 0) return <p className="border-t border-line py-6 text-center text-sm text-ink-3">この期間の支払いはありません</p>;
+  const max = Math.max(...items.map((i) => i.amount), 1);
+  return (
+    <ul className="flex flex-col gap-2.5 pt-1">
+      {items.map((i) => (
+        <li key={i.method} className="grid grid-cols-[minmax(120px,1fr)_minmax(0,2.4fr)_90px_44px] items-center gap-3 text-[13px]">
+          <span className="truncate text-ink">{i.label}</span>
+          <span className="h-2.5 overflow-hidden rounded-full bg-lilac">
+            <span className="block h-full rounded-full bg-iris" style={{ width: `${Math.max(2, Math.round((i.amount / max) * 100))}%` }} />
+          </span>
+          <span className="text-right font-bold text-ink tabular-nums">{yen(i.amount)}</span>
+          <span className="text-right text-ink-3 tabular-nums">{i.pct}%</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** ベストセラー（数量の多い順 10 品） */
+function BestSellers({ items, truncated }: { items: HomeExtras['best'] & object; truncated: boolean }) {
+  if (items.length === 0) return <p className="border-t border-line py-6 text-center text-sm text-ink-3">この期間の会計済みの明細がありません</p>;
+  return (
+    <div className="flex flex-col gap-1">
+      <ol className="flex flex-col">
+        {items.map((i, idx) => (
+          <li key={i.name} className="grid grid-cols-[28px_minmax(0,1fr)_72px_100px] items-center gap-3 border-t border-line/70 py-2 text-[13.5px] first:border-t-0">
+            <span className={cn('text-center font-extrabold tabular-nums', idx < 3 ? 'text-iris' : 'text-ink-3')}>{idx + 1}</span>
+            <span className="truncate text-ink">{i.name}</span>
+            <span className="text-right font-bold text-ink tabular-nums">{i.quantity.toLocaleString('ja-JP')}個</span>
+            <span className="text-right text-ink-2 tabular-nums">{yen(i.sales)}</span>
+          </li>
+        ))}
+      </ol>
+      {truncated && <span className="text-xs text-ink-3">明細が多いので、最初の 20,000 件で数えています</span>}
+    </div>
   );
 }

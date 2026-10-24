@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server';
 import { loadHomeData } from '@/components/dashboard/home-data';
 import { loadHomeV2 } from '@/lib/home-v2-server';
 import { loadHomePeriod } from '@/lib/home-period-server';
-import { compareRange, parseHomeCompare, parseHomeRange, resolveHomeRange } from '@/lib/home-period';
+import { compareRange, parseHomeCard, parseHomeCompare, parseHomeRange, resolveHomeRange } from '@/lib/home-period';
 import type { SalesMetricsOptions } from '@/lib/metrics';
 import type { Role } from '@/lib/permissions';
 import { HomeV2View, type HomeV2Todo } from './home-v2-view';
@@ -44,6 +44,7 @@ export async function HomeV2({
 
   const range = parseHomeRange(sp.range);
   const compare = parseHomeCompare(sp.compare);
+  const card = parseHomeCard(sp.card);
   const current = resolveHomeRange(range, today, sp);
   const previous = compareRange(current, compare);
   const isToday = range === 'today';
@@ -70,8 +71,13 @@ export async function HomeV2({
       compare: previous,
       today,
       metricsOpts,
+      card,
     }),
   ]);
+
+  // リピート率：本日は今のホームと同じ「初回来店が今日より前の人」（loadHomeData）。期間は「期間内に 2 回以上会計した人」
+  const extras = isToday ? { ...period.extras, repeat: home.repeat } : period.extras;
+  const repeatNote = isToday ? '顧客を紐づけた会計・初回来店が今日より前ならリピーター' : '顧客を紐づけた会計・期間内に 2 回以上';
 
   const todos: HomeV2Todo[] = [
     ...home.autoNotices.map((n) => ({
@@ -103,8 +109,10 @@ export async function HomeV2({
     <HomeV2View
       scopeLabel={ctx.currentStore ? ctx.currentStore.name : `全店舗（${stores.length}店舗）`}
       asOf={asOf}
-      period={{ range, compare, current, previous }}
+      period={{ range, compare, current, previous, card }}
       kpi={{ current: period.current, previous: period.previous }}
+      extras={extras}
+      repeatNote={repeatNote}
       rows={live ? live.rows : null}
       periodRows={live ? null : period.rows}
       todos={todos}
