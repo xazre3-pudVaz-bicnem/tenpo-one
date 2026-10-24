@@ -20,11 +20,12 @@ struct NativeSettingsView: View {
     private static var lastSel: Sel = .page(.printer)
     /// どのフロアの卓の会計伝票もこの iPad で出す（レジ受付）
     @State private var billAtRegister = NativeRegisterBill.enabled
-    /// ハードウェアの中のタブ（プリンター／LAN・Wi-Fi／ネットが無いとき）。1 画面に入るように分ける（2026-10-25 00:31 Ronnie）
+    /// ハードウェアの中のタブ（プリンター／ネットが無いとき）。1 画面に入るように分ける（2026-10-25 00:31 Ronnie）
+    /// LAN・Wi-Fi のプリンターは iPad ではつながない＝管理画面で決める（2026-10-25 01:00 Ronnie「iPad は Bluetooth だけ」）
     @State private var hwTab: HWTab = .printer
-    enum HWTab: String, CaseIterable { case printer, network, offline
-        var label: String { switch self { case .printer: return "プリンター"; case .network: return "LAN・Wi-Fi"; case .offline: return "ネットが無いとき" } }
-        var icon: String { switch self { case .printer: return "printer"; case .network: return "wifi"; case .offline: return "wifi.slash" } }
+    enum HWTab: String, CaseIterable { case printer, offline
+        var label: String { switch self { case .printer: return "プリンター"; case .offline: return "ネットが無いとき" } }
+        var icon: String { switch self { case .printer: return "printer"; case .offline: return "wifi.slash" } }
     }
     /// ログアウトの確認
     @State private var confirmLogout = false
@@ -109,6 +110,8 @@ struct NativeSettingsView: View {
                     .frame(maxWidth: .infinity)
                 }
                 .onAppear {
+                    // 管理画面（設定 › レジ端末）で決めた LAN・Wi-Fi・アプリの画面を読み直す
+                    state.refreshDeviceSettings(force: true)
                     // 見本（-tenpoNativePreview settings）：tenpoNativePreviewScroll=printer|native|<まとめの名前> で右を切り替える
                     if let to = UserDefaults.standard.string(forKey: "tenpoNativePreviewScroll"), !to.isEmpty {
                         if let p = Page.from(to) { sel = .page(p) }
@@ -242,9 +245,10 @@ struct NativeSettingsView: View {
         switch sel {
         case .page(.printer):
             pageTitle(Page.printer.icon, Page.printer.title, en: Page.printer.en, status: pageStatus(.printer))
-            // 印刷はぜんぶここ。横に 2 列（左：つなぐ／右：出し先・会計伝票・LAN・Wi-Fi・ネットが無いとき）で、スクロールせずに 1 画面に
+            // 印刷はぜんぶここ。横に 2 列（左：Bluetooth でつなぐ／右：会計伝票・LAN・Wi-Fi（管理画面で決めたもの））で、スクロールせずに 1 画面に
             // （2026-10-25 00:31 Ronnie「設定の右側はスクロールしなくても同じ画面でできるように」）
-            // 縦にも 1 画面に入るように、3 つのタブに分ける（横 2 列＋タブ）
+            // LAN・Wi-Fi のプリンター・レシートの出し先は管理画面（設定 › レジ端末）で決める。iPad でつなぐのは Bluetooth だけ
+            // （2026-10-25 01:00 Ronnie「LAN / Wi-Fi は app からつながない、control centre から。iPad は Bluetooth だけ」）
             hwTabs
             switch hwTab {
             case .printer:
@@ -252,22 +256,10 @@ struct NativeSettingsView: View {
                     VStack(spacing: 16) { bluetoothCard }
                         .frame(maxWidth: .infinity, alignment: .top)
                     VStack(spacing: 16) {
-                        receiptCard
                         billSlipCard
+                        networkCard
                     }
                     .frame(maxWidth: .infinity, alignment: .top)
-                }
-            case .network:
-                if model.lanPrinters.isEmpty && model.wifiPrinters.isEmpty {
-                    Text("LAN・Wi-Fi のプリンターはありません（パソコンの 設定 › ハードウェア で追加できます）")
-                        .font(.system(size: 14)).foregroundColor(NFColor.ink3).padding(.vertical, 12)
-                } else {
-                    HStack(alignment: .top, spacing: 16) {
-                        VStack(spacing: 16) { if !model.lanPrinters.isEmpty { lanCard } }
-                            .frame(maxWidth: .infinity, alignment: .top)
-                        VStack(spacing: 16) { if !model.wifiPrinters.isEmpty { wifiCard } }
-                            .frame(maxWidth: .infinity, alignment: .top)
-                    }
                 }
             case .offline:
                 NativeOfflinePrintCard().frame(maxWidth: 900, alignment: .leading)
@@ -419,7 +411,7 @@ struct NativeSettingsView: View {
         switch p {
         case .printer:
             if !model.usePrinter {
-                if let id = model.selectedPrinterId, let pr = model.receiptPrinters.first(where: { $0.id == id }) { return ("出し先：\(pr.name)", NFColor.ink2) }
+                if let id = model.selectedPrinterId, let pr = model.receiptPrinters.first(where: { $0.id == id }) { return ("出し先：\(pr.name)（管理画面で設定）", NFColor.ink2) }
                 return ("レシートプリンター（Bluetooth・USB）は使わない", NFColor.ink3)
             }
             if let l = model.link { return ("\(l.deviceName.isEmpty ? l.deviceId : l.deviceName)・つないでいます", NFColor.success) }
@@ -682,30 +674,6 @@ struct NativeSettingsView: View {
         switch m { case "star": return "Star"; case "epson": return "EPSON"; case "sii": return "SII（セイコー）"; default: return "ESC/POS" }
     }
 
-    // MARK: - レシートの出し先
-
-    private var receiptCard: some View {
-        card(icon: "printer", title: "レシートの出し先（Wi-Fi・LAN）", en: "Receipt printer for this iPad",
-             description: "") {
-            let list = model.receiptPrinters
-            if list.isEmpty {
-                Text(model.canAdd
-                     ? "Wi-Fi・LAN のレシートプリンターはありません。上の「レシートプリンター（Bluetooth・USB）」でつなぐか、パソコンの 設定 > ハードウェア で追加できます"
-                     : "レシート用のプリンターがありません。管理画面（パソコン）の 設定 > ハードウェア で追加してください")
-                    .font(.system(size: 14)).foregroundColor(NFColor.ink3).padding(18)
-            } else {
-                let cols = [GridItem(.adaptive(minimum: 300), spacing: 10)]
-                LazyVGrid(columns: cols, spacing: 10) {
-                    choice("おまかせ（店の既定）", sub: "今まで通り", on: model.selectedPrinterId == nil) { Task { await model.choose(nil) } }
-                    ForEach(list) { p in
-                        choice(p.name, sub: "\(p.maker ?? "メーカー未設定")・\(p.usageLabel)\(p.ip.map { "・\($0)" } ?? "")", on: model.selectedPrinterId == p.id) { Task { await model.choose(p.id) } }
-                    }
-                }
-                .padding(18)
-            }
-        }
-    }
-
     /// ハードウェアの中のタブ
     private var hwTabs: some View {
         HStack(spacing: 8) {
@@ -758,77 +726,42 @@ struct NativeSettingsView: View {
         .disabled(model.busy == "choose")
     }
 
-    // MARK: - LAN
+    // MARK: - LAN・Wi-Fi（管理画面で決める。iPad では見るだけ）
 
-    private var lanCard: some View {
-        card(icon: "cable.connector", title: "LAN のプリンター（EPSON・SII RP-F10 など）", en: "LAN printers",
+    /// この iPad から送る LAN・Wi-Fi のプリンター（管理画面の 設定 › レジ端末 で決めたもの）と、その状態
+    private var networkCard: some View {
+        card(icon: "network", title: "LAN・Wi-Fi のプリンター", en: "LAN / Wi-Fi printers",
              description: "") {
-            VStack(spacing: 0) {
-                ForEach(model.lanPrinters) { p in
-                    let on = model.lanOn(p.id)
-                    let needsIpad = p.delivery == "ipad-lan"
-                    let st = status(p, on: on)
-                    // 半分の幅（設定を横 2 列にした）でも入るように縦に：名前＋スイッチ → 説明 → 状態＋試し印刷
-                    VStack(alignment: .leading, spacing: 5) {
-                        HStack(alignment: .center, spacing: 8) {
-                            Text(p.name).font(.system(size: 15, weight: .bold)).foregroundColor(NFColor.ink).lineLimit(1)
-                            if let m = p.model { Text(m).font(.system(size: 12)).foregroundColor(NFColor.ink3).lineLimit(1) }
-                            Spacer(minLength: 8)
-                            Text("このiPadから送る").font(.system(size: 13, weight: .bold)).foregroundColor(on ? NFColor.iris : NFColor.ink2).fixedSize()
-                            toggle(on) { model.toggleLan(p.id) }
-                        }
-                        Text("\(p.maker ?? "メーカー未設定")・\(p.usageLabel)・\(p.lanHost ?? "")\((p.lanPort ?? 9100) != 9100 ? ":\(p.lanPort ?? 9100)" : "")")
-                            .font(.system(size: 12)).foregroundColor(NFColor.ink3)
-                        Text(needsIpad ? "どれか1台の iPad で「このiPadから送る」を ON にしてください" : "プリンター自身（Server Direct Print）でも出ます")
-                            .font(.system(size: 12, weight: needsIpad ? .bold : .regular)).foregroundColor(needsIpad ? NFColor.iris : NFColor.ink3)
-                            .fixedSize(horizontal: false, vertical: true)
-                        HStack(spacing: 8) {
-                            Text(st.0).font(.system(size: 12)).foregroundColor(st.1).fixedSize(horizontal: false, vertical: true)
-                            Spacer(minLength: 8)
-                            button("試し印刷", busy: model.busy == "\(p.id):receipt", disabled: model.busy != nil) { Task { await model.testLan(p, "receipt") } }
-                            if p.usage == "receipt" {
-                                button("ドロア", busy: model.busy == "\(p.id):drawer", disabled: model.busy != nil) { Task { await model.testLan(p, "drawer") } }
-                            }
-                        }
-                    }
-                    .padding(.horizontal, 18).padding(.vertical, 10)
-                    .overlay(alignment: .bottom) { Rectangle().fill(NFColor.line).frame(height: 1) }
-                }
-            }
-        }
-    }
-
-    // MARK: - Wi-Fi で直接印刷（EPSON）
-
-    private var wifiCard: some View {
-        card(icon: "wifi", title: "Wi-Fi で直接印刷（EPSON・速い）", en: "Direct Wi-Fi printing",
-             description: "") {
-            VStack(spacing: 0) {
-                ForEach(model.wifiPrinters) { p in
-                    let on = model.wifiOn(p.id)
-                    let st = status(p, on: on)
-                    VStack(alignment: .leading, spacing: 5) {
-                        HStack(alignment: .center, spacing: 8) {
-                            Text(p.name).font(.system(size: 15, weight: .bold)).foregroundColor(NFColor.ink).lineLimit(1)
-                            Spacer(minLength: 8)
-                            Text("このiPadから直接印刷").font(.system(size: 13, weight: .bold)).foregroundColor(on ? NFColor.iris : NFColor.ink2).fixedSize()
-                            toggle(on) { model.toggleWifi(p.id) }
-                        }
-                        HStack(spacing: 8) {
+            let lan = model.lanPrinters.filter { model.lanOn($0.id) }
+            let wifi = model.wifiPrinters.filter { model.wifiOn($0.id) && !model.lanOn($0.id) }
+            VStack(alignment: .leading, spacing: 0) {
+                if lan.isEmpty && wifi.isEmpty {
+                    Text("この iPad から LAN・Wi-Fi のプリンターへは送りません")
+                        .font(.system(size: 14, weight: .semibold)).foregroundColor(NFColor.ink2)
+                        .padding(.horizontal, 18).padding(.vertical, 12)
+                } else {
+                    ForEach(lan + wifi) { p in
+                        let st = status(p, on: true)
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            Image(systemName: model.lanOn(p.id) ? "cable.connector" : "wifi")
+                                .font(.system(size: 13, weight: .bold)).foregroundColor(NFColor.ink3)
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("\(p.usageLabel)・\(p.ip ?? "")").font(.system(size: 12)).foregroundColor(NFColor.ink3)
+                                Text(p.name).font(.system(size: 15, weight: .bold)).foregroundColor(NFColor.ink).lineLimit(1)
+                                Text("\(p.usageLabel)・\(p.lanHost ?? p.ip ?? "")").font(.system(size: 12)).foregroundColor(NFColor.ink3).lineLimit(1)
                                 Text(st.0).font(.system(size: 12)).foregroundColor(st.1).fixedSize(horizontal: false, vertical: true)
                             }
-                            Spacer(minLength: 8)
-                            button("試し印刷", busy: model.busy == "\(p.id):receipt", disabled: model.busy != nil) { Task { await model.testWifi(p, "receipt") } }
-                            if p.usage == "receipt" {
-                                button("ドロア", busy: model.busy == "\(p.id):drawer", disabled: model.busy != nil) { Task { await model.testWifi(p, "drawer") } }
-                            }
+                            Spacer(minLength: 0)
                         }
+                        .padding(.horizontal, 18).padding(.vertical, 9)
+                        .overlay(alignment: .bottom) { Rectangle().fill(NFColor.line).frame(height: 1) }
                     }
-                    .padding(.horizontal, 18).padding(.vertical, 10)
-                    .overlay(alignment: .bottom) { Rectangle().fill(NFColor.line).frame(height: 1) }
                 }
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "desktopcomputer").font(.system(size: 13, weight: .bold)).foregroundColor(NFColor.iris)
+                    Text("LAN・Wi-Fi のプリンターとレシートの出し先は、管理画面（パソコン）の「設定 › レジ端末」で決めます。iPad でつなぐのは Bluetooth のプリンターだけです")
+                        .font(.system(size: 12.5)).foregroundColor(NFColor.ink2).fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.horizontal, 18).padding(.vertical, 12)
             }
         }
     }

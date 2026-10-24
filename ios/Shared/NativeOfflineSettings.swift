@@ -41,7 +41,7 @@ struct NativeOfflinePrintCard: View {
                     }
                 }
                 if usable.isEmpty && !kit.printers.isEmpty {
-                    Text("ネット無しで出せるプリンターはまだありません（上の Bluetooth か LAN でつなぐと出せます）")
+                    Text("ネット無しで出せるプリンターはまだありません（Bluetooth でつなぐか、管理画面の「設定 › レジ端末」で LAN を決めると出せます）")
                         .font(.system(size: 13, weight: .semibold)).foregroundColor(NFColor.ink3)
                         .padding(.horizontal, 20).padding(.vertical, 10)
                 }
