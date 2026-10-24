@@ -50,7 +50,8 @@ describe('即会計', () => {
   it('金額の明細は厨房に出さない（送信済み・印刷済みで入れる／KDS・厨房伝票はメニューの商品だけ）', () => {
     const src = read('app/app/quick-pay/actions.ts');
     expect(src).toContain("kitchen_status: 'served'");
-    expect(read('app/app/kitchen/page.tsx')).toContain('.filter((r) => r.menu_item_id != null)');
+    // KDS の読み込みは lib/kds-server.ts（Web の /app/kitchen とネイティブのキッチンで同じ。2026-10-24）
+    expect(read('lib/kds-server.ts')).toContain('.filter((r) => r.menu_item_id != null)');
     expect(read('supabase/migrations/00093_quick_pay_no_kitchen.sql')).toContain('and oi.menu_item_id is not null');
   });
 
