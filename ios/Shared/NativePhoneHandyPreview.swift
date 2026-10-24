@@ -161,6 +161,8 @@ struct NativePhoneHandyPreview: View {
             NativePhoneTableView(model: table, onBack: {}, onOrder: { _ in }, onSetup: {})
         case "phoneHome":
             NativeHandyHomeView(model: home)
+        case "phoneHomeOwner":
+            NativeHandyHomeView(model: home, onHome: {})
         case "phoneSetup":
             NativePhoneSetupView(model: setup, onBack: {}, onStarted: { _ in })
         case "phoneConfirm":

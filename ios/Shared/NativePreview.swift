@@ -6,6 +6,7 @@ enum NativePreview: String {
     case order, checkout, options, price, settings
     /// iPhone ハンディの卓・注文・注文の確認（2026-10-25）
     case phoneTable, phoneOrder, phoneConfirm, phoneSetup, phoneHome
+    case phoneHomeOwner
     /// App Store の画面写真用：iPad のホーム・テーブル一覧・店舗台帳（2026-10-25。NativeStorePreview.swift）
     case home, floor, ledger
     /// iPad のレジのログイン・担当選択（2026-10-25）
@@ -58,7 +59,7 @@ struct NativePreviewView: View {
                 .statusBarHidden(true)
         case .settings:
             NativeSettingsView(model: NativeSettingsModel.sample(), onHome: {}, onWeb: { _ in })
-        case .phoneTable, .phoneOrder, .phoneConfirm, .phoneSetup, .phoneHome:
+        case .phoneTable, .phoneOrder, .phoneConfirm, .phoneSetup, .phoneHome, .phoneHomeOwner:
             NativePhoneHandyPreview(kind: kind.rawValue)
         case .home, .floor, .ledger:
             NativeStorePreview(kind: kind.rawValue)
@@ -482,7 +483,8 @@ struct NativeHandyHomeScreen: View {
             model: model,
             onWeb: { path in state.leaveNativePhone(to: path) },
             onChangeMode: { state.resetMode() },
-            onSignedOut: { state.leaveNativePhone(to: "/handy") }
+            onSignedOut: { state.leaveNativePhone(to: "/handy") },
+            onHome: state.mode == .owner ? { state.leaveNativePhone(to: "/app/dashboard") } : nil
         )
         .onChange(of: state.phoneRefreshTick) { _ in Task { await model.refresh() } }
         .onChange(of: model.useWeb) { on in if on { state.fallbackPhoneToWeb() } }
