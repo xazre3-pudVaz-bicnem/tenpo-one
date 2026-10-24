@@ -52,7 +52,6 @@ export function HomeV2View({ scopeLabel, asOf, period, kpi, extras, repeatNote, 
   const cur = kpi.current;
   const prev = kpi.previous;
   const isToday = period.range === 'today';
-  const compareNote = `${COMPARE_LABEL[period.compare]}（${rangeLabel(period.previous, period.current.to)}）比`;
   const periodTitle = isToday ? '本日' : rangeLabel(period.current, period.current.to);
   const reportHref = `/app/reports?from=${period.current.from}&to=${period.current.to}`;
 
@@ -73,91 +72,122 @@ export function HomeV2View({ scopeLabel, asOf, period, kpi, extras, repeatNote, 
         </Link>
       </div>
 
-      <HomePeriodBar range={period.range} compare={period.compare} current={period.current} previous={period.previous} card={period.card} />
+      {/* 1 枚のカード：期間と比較 → 数字 4 つ → 予算・回転率・リピート（・いまの席）。シンプルに（2026-10-24 Ronnie「funfo くらい簡単に。でも同じにはしない」） */}
+      <section aria-label={`${periodTitle}の数字`} className="overflow-hidden rounded-xl border border-line bg-white">
+        <div className="px-5 pt-4 pb-3">
+          <HomePeriodBar range={period.range} compare={period.compare} current={period.current} previous={period.previous} card={period.card} embedded />
+        </div>
 
-      <section aria-label={`${periodTitle}の数字`} className="grid grid-cols-1 gap-px overflow-hidden rounded-xl border border-line bg-line sm:grid-cols-2 xl:grid-cols-4">
-        <Kpi
-          label={`${periodTitle}の売上（税込）`}
-          value={yen(cur.sales)}
-          d={delta(cur.sales, prev.sales)}
-          compareNote={compareNote}
-          prevText={yen(prev.sales)}
-          sub={isToday ? `会計済 ${yen(cur.settled)}・未会計 ${yen(cur.open)}` : `会計済 ${yen(cur.settled)}${cur.open > 0 ? `・未会計 ${yen(cur.open)}` : ''}`}
-          href={isToday ? '/app/orders' : reportHref}
-        />
-        <Kpi
-          label="客数（会計済み）"
-          value={`${cur.guests}`}
-          unit="人"
-          d={delta(cur.guests, prev.guests)}
-          compareNote={compareNote}
-          prevText={`${prev.guests}人`}
-          sub={`会計 ${cur.groups}件（${COMPARE_LABEL[period.compare]} ${prev.groups}件）`}
-          href={isToday ? '/app/orders' : reportHref}
-        />
-        <Kpi
-          label="客単価"
-          value={yen(cur.avgSpend)}
-          d={delta(cur.avgSpend, prev.avgSpend)}
-          compareNote={compareNote}
-          prevText={yen(prev.avgSpend)}
-          sub="売上 ÷ 客数（会計済み）"
-          href={reportHref}
-        />
-        <div className="flex flex-col gap-1.5 bg-white px-5 py-4">
-          <span className="text-[12.5px] text-ink-2">予算の達成</span>
-          {cur.achievementPct != null && cur.budget ? (
-            <>
-              <span className="text-[28px] leading-tight font-extrabold text-ink tabular-nums">
-                {cur.achievementPct}
-                <span className="ml-0.5 text-[15px]">%</span>
-              </span>
-              <div className="h-1.5 overflow-hidden rounded-full bg-lilac">
-                <div
-                  className={cn('h-full rounded-full', cur.achievementPct >= 100 ? 'bg-success' : cur.achievementPct >= 90 ? 'bg-saffron' : 'bg-iris')}
-                  style={{ width: `${Math.min(100, cur.achievementPct)}%` }}
-                />
-              </div>
-              <span className="text-xs text-ink-3">
-                {periodTitle}の予算 {yen(cur.budget)}
-                {prev.achievementPct != null ? `・${COMPARE_LABEL[period.compare]} ${prev.achievementPct}%` : ''}
-              </span>
-            </>
-          ) : (
-            <>
-              <span className="text-[22px] leading-tight font-extrabold text-ink-3">予算未設定</span>
-              <Link href="/app/budgets" className="text-xs font-bold text-royal hover:underline">
-                予算を登録する ›
+        <div className="flex flex-wrap items-baseline justify-between gap-2 border-t border-line bg-lilac-soft px-5 py-2 text-[12.5px]">
+          <span className="font-bold text-ink">{isToday ? `本日（${rangeLabel(period.current, period.current.to)}）` : rangeLabel(period.current, period.current.to)}</span>
+          <span className="text-ink-3">
+            ▲▼ は {COMPARE_LABEL[period.compare]}（{rangeLabel(period.previous, period.current.to)}）との比べ
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 gap-px bg-line sm:grid-cols-2 xl:grid-cols-4">
+          <Kpi
+            label="売上（税込）"
+            value={yen(cur.sales)}
+            d={delta(cur.sales, prev.sales)}
+            prevText={yen(prev.sales)}
+            rows={[
+              ['会計済', yen(cur.settled)],
+              ['未会計', cur.open > 0 || isToday ? yen(cur.open) : '—'],
+            ]}
+            href={isToday ? '/app/orders' : reportHref}
+          />
+          <Kpi
+            label="客単価（税込）"
+            value={yen(cur.avgSpend)}
+            d={delta(cur.avgSpend, prev.avgSpend)}
+            prevText={yen(prev.avgSpend)}
+            rows={[['売上 ÷ 客数', '会計済み']]}
+            href={reportHref}
+          />
+          <Kpi
+            label="客数"
+            value={`${cur.guests.toLocaleString('ja-JP')}`}
+            unit="人"
+            d={delta(cur.guests, prev.guests)}
+            prevText={`${prev.guests.toLocaleString('ja-JP')}人`}
+            rows={[['会計済み', `${cur.guests.toLocaleString('ja-JP')}人`]]}
+            href={isToday ? '/app/orders' : reportHref}
+          />
+          <Kpi
+            label="会計数"
+            value={`${cur.groups.toLocaleString('ja-JP')}`}
+            unit="件"
+            d={delta(cur.groups, prev.groups)}
+            prevText={`${prev.groups.toLocaleString('ja-JP')}件`}
+            rows={[['1 会計あたり', cur.groups > 0 ? yen(Math.floor(cur.settled / cur.groups)) : '—']]}
+            href={isToday ? '/app/orders' : reportHref}
+          />
+        </div>
+
+        <div className="grid grid-cols-1 gap-px border-t border-line bg-line sm:grid-cols-2 xl:grid-cols-4">
+          <Mini label="予算の達成">
+            {cur.achievementPct != null && cur.budget ? (
+              <>
+                <span className="text-[20px] leading-tight font-extrabold text-ink tabular-nums">
+                  {cur.achievementPct}
+                  <span className="ml-0.5 text-[12px]">%</span>
+                </span>
+                <span className="h-1.5 w-full overflow-hidden rounded-full bg-lilac">
+                  <span
+                    className={cn('block h-full rounded-full', cur.achievementPct >= 100 ? 'bg-success' : cur.achievementPct >= 90 ? 'bg-saffron' : 'bg-iris')}
+                    style={{ width: `${Math.min(100, cur.achievementPct)}%` }}
+                  />
+                </span>
+                <span className="text-xs text-ink-3">予算 {yen(cur.budget)}</span>
+              </>
+            ) : (
+              <Link href="/app/budgets" className="text-[13px] font-bold text-royal hover:underline">
+                予算未設定 — 登録する ›
               </Link>
-            </>
+            )}
+          </Mini>
+          <Mini label="客席回転率（1日平均）">
+            <span className="text-[20px] leading-tight font-extrabold text-ink tabular-nums">
+              {extras.turnover == null ? '—' : extras.turnover.toLocaleString('ja-JP', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
+              <span className="ml-1 text-[12px]">回</span>
+            </span>
+            <span className="text-xs text-ink-3">{extras.seats > 0 ? `席数 ${extras.seats}席${extras.days > 1 ? `・${extras.days}日` : ''}` : '席数が未設定（設定 › テーブル）'}</span>
+          </Mini>
+          <Mini label="リピート率" title={repeatNote}>
+            <span className="text-[20px] leading-tight font-extrabold text-ink tabular-nums">
+              {extras.repeat.ratePct == null ? '—' : extras.repeat.ratePct}
+              <span className="ml-0.5 text-[12px]">%</span>
+            </span>
+            <span className="text-xs text-ink-3">
+              {extras.repeat.ratePct == null ? '顧客を紐づけた会計なし' : `リピーター ${extras.repeat.repeaters}・新規 ${extras.repeat.newcomers}`}
+            </span>
+          </Mini>
+          {rows ? (
+            <Mini label="いまの店内">
+              <span className="text-[20px] leading-tight font-extrabold text-ink tabular-nums">
+                {rows.reduce((a, r) => a + r.tablesUsed, 0)}
+                <span className="mx-0.5 text-[12px] font-bold text-ink-3">/</span>
+                {rows.reduce((a, r) => a + r.tablesTotal, 0)}
+                <span className="ml-1 text-[12px]">卓</span>
+              </span>
+              <span className="text-xs text-ink-3">
+                未会計 {rows.reduce((a, r) => a + r.openCount, 0)}組 {yen(rows.reduce((a, r) => a + r.openTotal, 0))}・本日の予約 {rows.reduce((a, r) => a + r.resvGroups, 0)}組
+              </span>
+            </Mini>
+          ) : (
+            <Mini label="期間">
+              <span className="text-[20px] leading-tight font-extrabold text-ink tabular-nums">
+                {extras.days}
+                <span className="ml-1 text-[12px]">日間</span>
+              </span>
+              <span className="text-xs text-ink-3">1 日平均 {yen(extras.days > 0 ? Math.floor(cur.sales / extras.days) : 0)}</span>
+            </Mini>
           )}
         </div>
       </section>
 
-      <section aria-label="回転率とリピート" className="grid grid-cols-1 gap-px overflow-hidden rounded-xl border border-line bg-line sm:grid-cols-2">
-        <div className="flex flex-col gap-1 bg-white px-5 py-3.5">
-          <span className="text-[12.5px] text-ink-2">客席回転率（1日平均）</span>
-          <span className="text-[22px] leading-tight font-extrabold text-ink tabular-nums">
-            {extras.turnover == null ? '—' : extras.turnover.toLocaleString('ja-JP', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
-            <span className="ml-1 text-[13px]">回</span>
-          </span>
-          <span className="text-xs text-ink-3">
-            {extras.seats > 0 ? `客数 ${cur.guests}人 ÷ 席数 ${extras.seats}席${extras.days > 1 ? ` ÷ ${extras.days}日` : ''}` : '席数が未設定です（設定 › テーブル）'}
-          </span>
-        </div>
-        <div className="flex flex-col gap-1 bg-white px-5 py-3.5">
-          <span className="text-[12.5px] text-ink-2">リピート率</span>
-          <span className="text-[22px] leading-tight font-extrabold text-ink tabular-nums">
-            {extras.repeat.ratePct == null ? '—' : extras.repeat.ratePct}
-            <span className="ml-0.5 text-[13px]">%</span>
-          </span>
-          <span className="text-xs text-ink-3">
-            {extras.repeat.ratePct == null ? '顧客を紐づけた会計がありません' : `リピーター ${extras.repeat.repeaters}名・新規 ${extras.repeat.newcomers}名（${repeatNote}）`}
-          </span>
-        </div>
-      </section>
-
-      {rows && (
+      {rows && rows.length > 1 && (
         <section aria-label="店舗" className="rounded-xl border border-line bg-white">
           <div className="flex flex-wrap items-baseline justify-between gap-2 px-5 pt-4 pb-3">
             <h2 className="text-base font-extrabold text-ink">店舗</h2>
@@ -217,7 +247,7 @@ export function HomeV2View({ scopeLabel, asOf, period, kpi, extras, repeatNote, 
         </section>
       )}
 
-      {periodRows && (
+      {periodRows && periodRows.length > 1 && (
         <section aria-label="店舗" className="rounded-xl border border-line bg-white">
           <div className="flex flex-wrap items-baseline justify-between gap-2 px-5 pt-4 pb-3">
             <h2 className="text-base font-extrabold text-ink">
@@ -338,35 +368,52 @@ function Kpi({
   value,
   unit,
   d,
-  compareNote,
   prevText,
-  sub,
+  rows,
   href,
 }: {
   label: string;
   value: string;
   unit?: string;
   d: ReturnType<typeof delta>;
-  compareNote: string;
+  /** 比べる先の値（小さく） */
   prevText: string;
-  sub: string;
+  /** 下の 1〜2 行（名前・値） */
+  rows: [string, string][];
   href: string;
 }) {
   return (
-    <Link href={href} className="flex flex-col gap-1.5 bg-white px-5 py-4 hover:bg-lilac-soft">
-      <span className="text-[12.5px] text-ink-2">{label}</span>
-      <span className="text-[28px] leading-tight font-extrabold text-ink tabular-nums">
-        {value}
-        {unit && <span className="ml-1 text-[15px]">{unit}</span>}
-      </span>
-      <span className="flex flex-wrap items-center gap-x-1.5 text-xs">
-        <DeltaMark d={d} />
-        <span className="text-ink-3">
-          {compareNote} {prevText}
+    <Link href={href} className="flex flex-col gap-1 bg-white px-5 py-4 hover:bg-lilac-soft">
+      <span className="text-[12.5px] font-bold text-ink-2">{label}</span>
+      <span className="flex flex-wrap items-baseline gap-x-2">
+        <span className="text-[26px] leading-tight font-extrabold text-ink tabular-nums">
+          {value}
+          {unit && <span className="ml-0.5 text-[13px]">{unit}</span>}
+        </span>
+        <span className="flex items-baseline gap-1 text-xs">
+          <DeltaMark d={d} />
+          <span className="text-ink-3 tabular-nums">{prevText}</span>
         </span>
       </span>
-      <span className="text-xs text-ink-3">{sub}</span>
+      <span className="mt-1 flex flex-col gap-0.5 text-xs text-ink-3">
+        {rows.map(([k, v]) => (
+          <span key={k} className="flex justify-between gap-2">
+            <span>{k}</span>
+            <span className="tabular-nums text-ink-2">{v}</span>
+          </span>
+        ))}
+      </span>
     </Link>
+  );
+}
+
+/** 下の段の小さい数字（予算の達成・回転率・リピート率・いまの店内） */
+function Mini({ label, title, children }: { label: string; title?: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-1 bg-white px-5 py-3" title={title}>
+      <span className="text-[12px] text-ink-2">{label}</span>
+      {children}
+    </div>
   );
 }
 
