@@ -65,7 +65,8 @@ describe('ネイティブのグルメ連携（2026-10-24 Ronnie「iOS でもグ�
     expect(tools).toContain('Button(action: onGourmet) { Label("グルメ連携", systemImage: "envelope.badge") }');
     const ledger = readFileSync(new URL('../ios/Shared/NativeLedgerView.swift', import.meta.url), 'utf8');
     expect(ledger).toContain('NativeGourmetSheet(onClose: { gourmetOpen = false }');
-    expect(ledger.match(/NLSource\.style\(for: r, in: p\)/g)?.length ?? 0).toBeGreaterThanOrEqual(2);
+    // 箱（予約のまとまりの先頭 first）と一覧（1件ずつ r）の両方に入り口の印
+    expect(ledger.match(/NLSource\.style\(for: (r|first), in: p\)/g)?.length ?? 0).toBeGreaterThanOrEqual(2);
     const sheet = readFileSync(new URL('../ios/Shared/NativeReservationSheets.swift', import.meta.url), 'utf8');
     expect(sheet).toContain('NLSourceChip(style: st, auto: r.createdVia == "gourmet_mail"');
     const view = readFileSync(new URL('../ios/Shared/NativeGourmetView.swift', import.meta.url), 'utf8');
