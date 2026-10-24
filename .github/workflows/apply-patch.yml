@@ -1,5 +1,5 @@
 # patch-inbox/** ブランチに *.patch（git format-patch --base=<sha> の出力）を置くと、
-# その base-commit の上に git am で当てて、対象ブランチへ force push する。
+# その base-commit の上に git am で当てて、作業ブランチへ fast-forward push する（履歴の上書きは禁止）。
 # Claude の作業環境から GitHub へ直接 push できないときの搬入口。
 # 出来たブランチから main への Pull Request は GitHub の画面で作って merge する。
 #
@@ -20,7 +20,7 @@ jobs:
   apply:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
       - name: Apply patches onto their base-commit and push the target branch
@@ -41,6 +41,12 @@ jobs:
           else
             BRANCH="feat/inbox-${GITHUB_REF_NAME#patch-inbox/}"
           fi
+          # Only dedicated work branches may receive patches. Never main, tags or arbitrary refs.
+          case "$BRANCH" in
+            feat/*|fix/*|codex/*|chore/*) ;;
+            *) echo "::error::Target must be a feat/, fix/, codex/ or chore/ work branch"; exit 1 ;;
+          esac
+          git check-ref-format --branch "$BRANCH" >/dev/null
           BASE=$(grep -h -m1 '^base-commit:' "${patches[@]}" | head -1 | awk '{print $2}')
           if [ -z "$BASE" ]; then
             echo "::error::patch に base-commit 行がありません（git format-patch --base=<sha> で作ってください）"
@@ -50,6 +56,6 @@ jobs:
           git config user.email "noreply@anthropic.com"
           git checkout -B "$BRANCH" "$BASE"
           git am --3way --ignore-whitespace "${patches[@]}"
-          git push --force origin "$BRANCH"
+          git push origin "HEAD:refs/heads/$BRANCH"
           echo "pushed $BRANCH at $(git rev-parse --short HEAD) (base $BASE)"
           git log --oneline "$BASE..HEAD"
