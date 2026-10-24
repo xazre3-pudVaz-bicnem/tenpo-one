@@ -535,11 +535,7 @@ struct NativeReservationPanel: View {
         let waitingPeople = waiting.reduce(0) { $0 + $1.partySize }
 
         VStack(spacing: 10) {
-            VStack(spacing: 2) {
-                Text("本日のご予約一覧").font(.system(size: 17, weight: .heavy)).foregroundColor(NFColor.ink)
-                Text("TODAY'S RESERVATION").font(.system(size: 10, weight: .bold)).tracking(1).foregroundColor(NFColor.ink3)
-            }
-            .padding(.top, 12)
+            // 上の「本日のご予約一覧」の見出しは出さない（2026-10-24 20:51 Ronnie）
             // 色は店舗台帳と同じ（ネイビー・黄色・状態の色の帯。2026-10-24 20:35 Ronnie「ご予約台帳の色と合わせて」）
             Button(action: onLedger) {
                 HStack(spacing: 10) {
@@ -556,6 +552,7 @@ struct NativeReservationPanel: View {
             }
             .buttonStyle(PressableStyle())
             .padding(.horizontal, 12)
+            .padding(.top, 12)
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text("来店待ち").font(.system(size: 16, weight: .heavy)).foregroundColor(NLColor.navy)
                 Spacer(minLength: 4)
