@@ -127,7 +127,7 @@ struct NativeSettingsView: View {
 
     // MARK: - 左：一覧（黒い帯。印＋名前は大きく。選んでいるものは青。2026-10-24 Ronnie「タブはもっと大きく・きれいに。全部黒でもいい」）
 
-    private static let sideWidth: CGFloat = 268
+    private static let sideWidth: CGFloat = 300
 
     private var sidebar: some View {
         ScrollView {
