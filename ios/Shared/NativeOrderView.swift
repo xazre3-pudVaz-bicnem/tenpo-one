@@ -232,12 +232,15 @@ struct NativeTopBar: View {
     let subtitle: String
     var userName: String = ""
     var onHome: () -> Void = {}
+    /// 左上のボタンは字なしのアイコンだけ（2026-10-24 18:57 Ronnie「ブラウザの戻るに見える、ホームの印だけ」）。
+    /// ホームへ戻る画面は家の印、設定の中の画面・詳細など1つ前へ戻る画面は ‹
+    var backIcon: String = "house.fill"
     /// 今までの（Web の）画面で開く。ライブのときだけ
     var onWeb: (() -> Void)? = nil
 
     var body: some View {
         HStack(spacing: 10) {
-            barButton(icon: "chevron.left", text: "戻る", action: onHome)
+            iconButton(backIcon, label: backIcon == "house.fill" ? "ホーム" : "戻る", action: onHome)
             Image("BrandMark")
                 .resizable()
                 .scaledToFit()
@@ -271,20 +274,18 @@ struct NativeTopBar: View {
         .background(NT.header)
     }
 
-    private func barButton(icon: String, text: String, action: @escaping () -> Void = {}) -> some View {
+    private func iconButton(_ icon: String, label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            HStack(spacing: 6) {
-                Image(systemName: icon)
-                Text(text)
-            }
-            .font(.system(size: 15, weight: .bold))
-            .foregroundColor(.white)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 9)
-            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white.opacity(0.10)))
+            Image(systemName: icon)
+                .font(.system(size: 18, weight: .bold))
+                .foregroundColor(.white)
+                .frame(width: 46, height: 40)
+                .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white.opacity(0.10)))
         }
         .buttonStyle(PressableStyle())
+        .accessibilityLabel(label)
     }
+
 }
 
 // MARK: - 左：伝票

@@ -632,7 +632,7 @@ struct NativeTableQrScreen: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            NativeTopBar(storeName: model.storeName, title: "テーブルQRコード", subtitle: "Table QR codes", onHome: onClose)
+            NativeTopBar(storeName: model.storeName, title: "テーブルQRコード", subtitle: "Table QR codes", onHome: onClose, backIcon: "chevron.left")
             if let p = model.payload {
                 content(p)
             } else if let e = model.error {

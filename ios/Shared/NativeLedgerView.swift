@@ -477,13 +477,15 @@ struct NativeLedgerView: View {
 
     private var topBar: some View {
         HStack(spacing: 10) {
+            // 左上はホームの印だけ（字なし。2026-10-24 18:57 Ronnie「ブラウザの戻るに見える」）
             Button(action: onHome) {
-                HStack(spacing: 6) { Image(systemName: "chevron.left"); Text("ホーム") }
-                    .font(.system(size: 15, weight: .bold)).foregroundColor(.white)
-                    .padding(.horizontal, 12).padding(.vertical, 9)
+                Image(systemName: "house.fill")
+                    .font(.system(size: 18, weight: .bold)).foregroundColor(.white)
+                    .frame(width: 46, height: 40)
                     .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white.opacity(0.12)))
             }
             .buttonStyle(PressableStyle())
+            .accessibilityLabel("ホーム")
             // 店名は出さない（ホームだけ）。その場所に画面の名前（2026-10-24 18:55・18:56 Ronnie）
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text("店舗台帳").font(.system(size: 17, weight: .heavy)).foregroundColor(.white)

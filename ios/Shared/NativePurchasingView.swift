@@ -627,7 +627,7 @@ struct NUPoNewView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            NativeTopBar(storeName: data?.store.name ?? "", title: "発注書を作成", subtitle: "New purchase order", onHome: onClose)
+            NativeTopBar(storeName: data?.store.name ?? "", title: "発注書を作成", subtitle: "New purchase order", onHome: onClose, backIcon: "chevron.left")
             if let d = data {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
@@ -799,7 +799,7 @@ struct NUPoDetailView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            NativeTopBar(storeName: payload?.po.storeName ?? "", title: payload.map { "発注書 #\($0.po.poNo)" } ?? "発注書", subtitle: "Purchase order", onHome: onClose)
+            NativeTopBar(storeName: payload?.po.storeName ?? "", title: payload.map { "発注書 #\($0.po.poNo)" } ?? "発注書", subtitle: "Purchase order", onHome: onClose, backIcon: "chevron.left")
             if let p = payload {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 14) {
