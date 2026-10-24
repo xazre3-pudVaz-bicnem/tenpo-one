@@ -5,6 +5,9 @@ import { onboardingGet, onboardingPost } from '@/lib/native-modules/onboarding';
 import { businessCardsGet } from '@/lib/native-modules/business-cards';
 import * as payroll from '@/lib/native-modules/payroll';
 import { accountingGet, ACCOUNTING_POST } from '@/lib/native-modules/accounting';
+import { dailyReportsGet, dailyReportGet, dailyReportGeneratePost, dailyReportSubmitPost, dailyReportApprovePost } from '@/lib/native-modules/daily-reports';
+import { tasksGet, taskSavePost, taskStatusPost, taskCommentPost } from '@/lib/native-modules/tasks';
+import { manualsGet, manualFileGet, manualCreatePost, manualDeletePost } from '@/lib/native-modules/manuals';
 
 /**
  * まだ専用の台が無かった画面（勤怠・日報・タスク …）の iPad ネイティブ用の API をまとめる所
@@ -37,6 +40,11 @@ export const NATIVE_MODULE_GET: Record<string, NativeModuleGet> = {
   businessCards: businessCardsGet,
   payroll: payroll.payrollGet,
   accounting: accountingGet,
+  dailyReports: dailyReportsGet,
+  dailyReport: dailyReportGet,
+  tasks: tasksGet,
+  manuals: manualsGet,
+  manualFile: manualFileGet,
 };
 
 /** POST の type → handler。追加は 1 行ずつ */
@@ -59,4 +67,12 @@ export const NATIVE_MODULE_POST: Record<string, NativeModulePost> = {
   nenchoConfirm: payroll.nenchoConfirmPost,
   nenchoReject: payroll.nenchoRejectPost,
   ...ACCOUNTING_POST, // 会計（accJournalSave・accBankCsvPreview … lib/native-modules/accounting.ts）
+  dailyReportGenerate: dailyReportGeneratePost,
+  dailyReportSubmit: dailyReportSubmitPost,
+  dailyReportApprove: dailyReportApprovePost,
+  taskSave: taskSavePost,
+  taskStatus: taskStatusPost,
+  taskComment: taskCommentPost,
+  manualCreate: manualCreatePost,
+  manualDelete: manualDeletePost,
 };
