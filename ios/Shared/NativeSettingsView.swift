@@ -1,9 +1,11 @@
 import SwiftUI
 
-// ネイティブの設定画面（iPad レジ。2026-10-24 Ronnie「iOS プリンター＋設定」）。Web の /app/pos/settings「レジの設定」と同じ並び：
-//   このiPadのプリンター（Bluetooth・USB。Airレジの「レジ・プリンター」と同じ：プリンター利用・機種・接続・紙幅・自動印刷・ドロア・試し印刷・保存）
-//   → レシートの出し先 → LAN のプリンター → Wi-Fi で直接印刷（EPSON） → アプリのオーダー・会計画面（Native ON/OFF）
-//   → レジから変えられる設定（Web の各画面へ） → 管理画面の設定（Web の設定のまとめへ）
+// ネイティブの設定画面（iPad レジ。2026-10-24 Ronnie「iOS プリンター＋設定」→ 15:55「設定をわかりやすく」）。
+// 最初は**メニュー**（見出しごとにカードを並べる。1枚＝1つの設定。押すと中の画面へ）：
+//   このiPad：プリンター（Bluetooth・USB）／レシートの出し先／LAN／Wi-Fi 直接／ネットが無いときの印刷／アプリの画面（Native ON/OFF）
+//   レジでよく変える設定（Web の /app/pos/settings と同じ並び・各画面は Web）
+//   すべての設定（パソコンの管理画面と同じまとめ。店舗・メニュー・デバイス管理・予約・顧客・会計・運用・管理・集計）
+// 中の画面（プリンターの機種・接続・紙幅・自動印刷・ドロア・試し印刷…）は今までのカードをそのまま出す。
 // 印刷そのものはアプリ自身の印刷係（NativePrintAgent）が出す。ここはその状態（接続中・つながらない）も見せる。
 
 struct NativeSettingsView: View {
@@ -15,26 +17,79 @@ struct NativeSettingsView: View {
     let onWeb: (String) -> Void
 
     @State private var nativeOn = AppState.shared.nativePosEnabled
+    /// 開いている中の画面（nil＝メニュー）
+    @State private var page: Page?
+
+    /// このiPad の設定の中の画面（2026-10-24 16:08 Ronnie「設定はできるだけ少なく。同じものが2〜3か所にあるなら1つに」→ 印刷は1枚に）
+    enum Page: String, CaseIterable, Identifiable {
+        case printer, native
+        var id: String { rawValue }
+        var title: String {
+            switch self {
+            case .printer: return "プリンター・印刷"
+            case .native: return "アプリの画面"
+            }
+        }
+        var en: String {
+            switch self {
+            case .printer: return "Printers & printing"
+            case .native: return "Native screens"
+            }
+        }
+        var icon: String {
+            switch self {
+            case .printer: return "printer"
+            case .native: return "ipad"
+            }
+        }
+        var description: String {
+            switch self {
+            case .printer: return "Bluetooth・USB でつなぐ・機種・紙幅・自動印刷・ドロア・レシートの出し先・LAN・Wi-Fi・ネットが無いときの印刷"
+            case .native: return "ホーム・テーブル・オーダー・会計をアプリの画面で開く（OFF で今までの Web）"
+            }
+        }
+        /// 見本の tenpoNativePreviewScroll（昔の名前 receipt／lan／wifi／offline も印刷の画面へ）
+        static func from(_ s: String) -> Page? {
+            if let p = Page(rawValue: s) { return p }
+            return ["receipt", "lan", "wifi", "offline"].contains(s) ? .printer : nil
+        }
+    }
+
+    /// メニューの1枚（Web の設定のまとめ＋レジの設定を1つにして、同じ画面は1回だけ）
+    private struct Item: Identifiable {
+        let id: String
+        let title: String
+        let description: String
+        let url: String
+        let allowed: Bool
+    }
+    private struct ItemGroup: Identifiable {
+        let id: String
+        let label: String
+        let en: String
+        let icon: String
+        var items: [Item]
+    }
 
     var body: some View {
         VStack(spacing: 0) {
-            NativeTopBar(storeName: model.payload?.store.name ?? "", title: "設定", subtitle: "Settings", userName: model.payload?.userName ?? "", onHome: onHome)
+            NativeTopBar(storeName: model.payload?.store.name ?? "",
+                         title: page?.title ?? "設定", subtitle: page?.en ?? "Settings",
+                         userName: model.payload?.userName ?? "",
+                         onHome: { if page != nil { withAnimation(.easeOut(duration: 0.15)) { page = nil } } else { onHome() } })
             if model.payload != nil {
                 ScrollViewReader { proxy in
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 18) {
+                    VStack(alignment: .leading, spacing: 22) {
                         if let n = agent.notice, let at = agent.noticeAt, Date().timeIntervalSince(at) < 600 {
                             noticeBar(n)
                         }
-                        bluetoothCard
-                        receiptCard
-                        if !model.lanPrinters.isEmpty { lanCard.id("lan") }
-                        if !model.wifiPrinters.isEmpty { wifiCard }
-                        // ネットが無いときの印刷（この iPad から直接。2026-10-24）
-                        NativeOfflinePrintCard().id("offline")
-                        nativeCard.id("native")
-                        sectionsCard.id("sections")
-                        hubsCard
+                        if let page {
+                            crumb(page)
+                            pageBody(page)
+                        } else {
+                            menu
+                        }
                         Text("TENPO ONE \(AppConfig.version)").font(.system(size: 12)).foregroundColor(NFColor.ink3).frame(maxWidth: .infinity, alignment: .center).padding(.top, 6)
                             .id("bottom")
                     }
@@ -42,9 +97,10 @@ struct NativeSettingsView: View {
                     .padding(.bottom, 24)
                 }
                 .onAppear {
-                    // 見本（-tenpoNativePreview settings）で下の方を確かめる用
+                    // 見本（-tenpoNativePreview settings）で中の画面・下の方を確かめる用（lan／offline／native…は中の画面を開く）
                     if let to = UserDefaults.standard.string(forKey: "tenpoNativePreviewScroll"), !to.isEmpty {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { proxy.scrollTo(to, anchor: to == "bottom" ? .bottom : .top) }
+                        if let p = Page.from(to) { page = p }
+                        else { DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { proxy.scrollTo(to, anchor: to == "bottom" ? .bottom : .top) } }
                     }
                 }
                 }
@@ -59,7 +115,8 @@ struct NativeSettingsView: View {
                 Spacer()
             }
         }
-        .background(NFColor.lilac.ignoresSafeArea())
+        // 背景は白（2026-10-24 Ronnie「背景は全部白」）。カードは枠線＋うすい影で浮かせる
+        .background(Color.white.ignoresSafeArea())
         .overlay(alignment: .bottom) {
             if let t = model.toast {
                 Text(t).font(.system(size: 15, weight: .bold)).foregroundColor(.white).multilineTextAlignment(.center)
@@ -71,6 +128,224 @@ struct NativeSettingsView: View {
         }
         .task { await model.refresh() }
         .onReceive(printConfig.$config) { _ in model.syncForm() }
+    }
+
+    // MARK: - メニュー（見出し＋カードの並び。1枚＝1つの設定）
+
+    private var menu: some View {
+        VStack(alignment: .leading, spacing: 26) {
+            group("このiPad", en: "This iPad", note: "この iPad だけの設定（店の設定は変わりません）") {
+                ForEach(Page.allCases) { p in
+                    tile(icon: p.icon, title: p.title, en: p.en, description: p.description, status: pageStatus(p)) {
+                        withAnimation(.easeOut(duration: 0.15)) { page = p }
+                    }
+                }
+            }
+            // お店の設定：パソコンの管理画面と同じ区分（店舗・メニュー・デバイス管理・予約・顧客・会計・運用・管理・集計）に、
+            // レジの設定にしか無い項目（品切れなど）を足して1つの一覧に。同じ画面は1回だけ（2026-10-24 Ronnie「同じものが2〜3か所にあるなら1つに」）
+            if !groups.isEmpty {
+                divider("お店の設定", en: "Store settings", note: "押すとその画面が開きます（パソコンの管理画面と同じ。管理画面からも同じものを変えられます）")
+                ForEach(groups) { g in
+                    group(g.label, en: g.en, note: nil) {
+                        ForEach(g.items) { it in
+                            tile(icon: g.icon, title: it.title, en: nil, description: it.description, status: nil, locked: !it.allowed) { onWeb(it.url) }
+                        }
+                    }
+                    .id(g.id == groups.first?.id ? "sections" : g.id)
+                }
+            }
+        }
+    }
+
+    /// Web の設定のまとめ（hubs）を土台に、レジの設定（sections）の項目で同じ画面が無いものだけ足す。
+    /// 「レジの設定」（自分自身）は出さない。レジの設定の項目は ?from=register 付き（開いた画面の上の「レジの設定に戻る」で戻れる）
+    private var groups: [ItemGroup] {
+        guard let payload = model.payload else { return [] }
+        var out: [ItemGroup] = payload.hubs.map { h in
+            ItemGroup(id: h.href, label: h.label, en: h.en, icon: Self.hubIcon(h.label),
+                      items: h.children
+                        .filter { Self.path($0.href) != "/app/pos/settings" }
+                        .map { Item(id: $0.href, title: $0.label, description: $0.description, url: Self.withFromRegister($0.href), allowed: true) })
+        }
+        var seen = Set(out.flatMap { $0.items.map { Self.path($0.url) } })
+        for s in payload.sections {
+            for l in s.links where !seen.contains(Self.path(l.url)) && Self.path(l.url) != "/app/pos/settings" {
+                seen.insert(Self.path(l.url))
+                let item = Item(id: l.url, title: l.title, description: l.allowed ? l.description : (l.hint ?? "権限がありません"), url: l.url, allowed: l.allowed)
+                let label = Self.hubLabel(forSection: s.id)
+                if let i = out.firstIndex(where: { $0.label == label }) {
+                    // 品切れはメニューのいちばん上に（レジでいちばん使う）
+                    if l.id == "sold-out" { out[i].items.insert(item, at: 0) } else { out[i].items.append(item) }
+                } else {
+                    out.append(ItemGroup(id: "section:\(s.id)", label: s.title, en: s.en, icon: Self.sectionIcon(s.id), items: [item]))
+                }
+            }
+        }
+        return out.filter { !$0.items.isEmpty }
+    }
+
+    /// クエリを除いた道（同じ画面かどうかの判定用）
+    private static func path(_ url: String) -> String { String(url.split(separator: "?", maxSplits: 1).first ?? Substring(url)) }
+
+    /// 開いた画面の上に「レジの設定に戻る」を出す印（lib/register-settings.ts の FROM_REGISTER と同じ）
+    private static func withFromRegister(_ href: String) -> String {
+        if href.contains("from=register") { return href }
+        return href + (href.contains("?") ? "&" : "?") + "from=register"
+    }
+
+    /// レジの設定の区分 → 管理画面のまとめ
+    private static func hubLabel(forSection id: String) -> String {
+        switch id {
+        case "menu", "kitchen": return "メニュー"
+        case "tables": return "店舗"
+        case "handy": return "デバイス管理"
+        case "booking": return "予約・顧客"
+        default: return ""
+        }
+    }
+
+    /// カードの下に出す「いまの状態」
+    private func pageStatus(_ p: Page) -> (String, Color)? {
+        switch p {
+        case .printer:
+            if !model.usePrinter {
+                if let id = model.selectedPrinterId, let pr = model.receiptPrinters.first(where: { $0.id == id }) { return ("出し先：\(pr.name)", NFColor.ink2) }
+                return ("Bluetooth・USB のプリンターは使わない", NFColor.ink3)
+            }
+            if let l = model.link { return ("\(l.deviceName.isEmpty ? l.deviceId : l.deviceName)・つないでいます", NFColor.success) }
+            return (model.model == nil ? "機種が未選択" : "まだつないでいません", NFColor.saffron)
+        case .native:
+            let on = state.adminNativePos ?? nativeOn
+            return (on ? "ON（アプリの画面）" : "OFF（今までの画面）", on ? NFColor.success : NFColor.ink3)
+        }
+    }
+
+    private static func sectionIcon(_ id: String) -> String {
+        switch id {
+        case "menu": return "fork.knife"
+        case "kitchen": return "flame"
+        case "tables": return "qrcode"
+        case "handy": return "iphone"
+        case "booking": return "calendar"
+        default: return "slider.horizontal.3"
+        }
+    }
+
+    private static func hubIcon(_ label: String) -> String {
+        switch label {
+        case "店舗": return "storefront"
+        case "メニュー": return "fork.knife"
+        case "デバイス管理": return "printer"
+        case "予約・顧客": return "calendar"
+        case "会計": return "creditcard"
+        case "運用・管理": return "gearshape"
+        case "集計": return "chart.bar"
+        default: return "square.grid.2x2"
+        }
+    }
+
+    /// 大きな区切り（レジでよく変える設定／…）：線＋見出し
+    private func divider(_ title: String, en: String, note: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Rectangle().fill(NFColor.line).frame(height: 1)
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(title).font(.system(size: 18, weight: .heavy)).foregroundColor(NFColor.navy)
+                Text(en).font(.system(size: 12, weight: .semibold)).foregroundColor(NFColor.ink3)
+            }
+            .padding(.top, 10)
+            Text(note).font(.system(size: 12.5)).foregroundColor(NFColor.ink3)
+        }
+        .padding(.horizontal, 2)
+        .padding(.bottom, -8)
+    }
+
+    /// 見出し（日本語＋英語＋ひとこと）と、その下のカードの並び（横幅に合わせて 2〜3列）
+    private func group<Content: View>(_ title: String, en: String, note: String?, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(title).font(.system(size: 16, weight: .heavy)).foregroundColor(NFColor.navy)
+                Text(en).font(.system(size: 12, weight: .semibold)).foregroundColor(NFColor.ink3)
+                if let note {
+                    Text("｜").font(.system(size: 12)).foregroundColor(NFColor.line)
+                    Text(note).font(.system(size: 12)).foregroundColor(NFColor.ink3).lineLimit(1)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 2)
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 290), spacing: 12)], spacing: 12) { content() }
+        }
+    }
+
+    /// カード：アイコン・名前・ひとこと・（いまの状態）・›
+    private func tile(icon: String, title: String, en: String?, description: String, status: (String, Color)?, locked: Bool = false, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: locked ? "lock" : icon)
+                    .font(.system(size: 19, weight: .semibold)).foregroundColor(locked ? NFColor.ink3 : NFColor.iris)
+                    .frame(width: 44, height: 44)
+                    .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(locked ? NFColor.lilacSoft : NFColor.irisSoft))
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(alignment: .top, spacing: 6) {
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(title).font(.system(size: 15.5, weight: .heavy)).foregroundColor(locked ? NFColor.ink3 : NFColor.ink)
+                                .multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
+                            if let en { Text(en).font(.system(size: 11, weight: .medium)).foregroundColor(NFColor.ink3) }
+                        }
+                        Spacer(minLength: 0)
+                        Image(systemName: "chevron.right").font(.system(size: 13, weight: .bold)).foregroundColor(NFColor.ink3).padding(.top, 3)
+                    }
+                    Text(description).font(.system(size: 12.5)).foregroundColor(NFColor.ink3)
+                        .lineLimit(2).multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
+                    if let status {
+                        HStack(spacing: 5) {
+                            Circle().fill(status.1).frame(width: 7, height: 7)
+                            Text(status.0).font(.system(size: 12, weight: .bold)).foregroundColor(status.1).lineLimit(1)
+                        }
+                        .padding(.top, 2)
+                    }
+                }
+            }
+            .padding(14)
+            // 状態・英語名のあるカード（このiPad・すべての設定）は少し高く、リンクだけのカードは低く（空きが目立たないように）
+            .frame(maxWidth: .infinity, minHeight: status != nil || en != nil ? 104 : 76, alignment: .topLeading)
+            .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.white))
+            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(NFColor.line, lineWidth: 1))
+            .shadow(color: Color.black.opacity(0.05), radius: 6, y: 2)
+        }
+        .buttonStyle(PressableStyle(scale: 0.98))
+        .disabled(locked)
+    }
+
+    /// 中の画面の上：設定 › ◯◯（押すとメニューへ）
+    private func crumb(_ p: Page) -> some View {
+        HStack(spacing: 6) {
+            Button { withAnimation(.easeOut(duration: 0.15)) { page = nil } } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "chevron.left").font(.system(size: 12, weight: .bold))
+                    Text("設定").font(.system(size: 14, weight: .bold))
+                }
+                .foregroundColor(NFColor.iris)
+            }
+            .buttonStyle(PressableStyle())
+            Text("›").font(.system(size: 14)).foregroundColor(NFColor.ink3)
+            Text(p.title).font(.system(size: 14, weight: .bold)).foregroundColor(NFColor.ink2)
+            Spacer()
+        }
+        .padding(.horizontal, 2)
+    }
+
+    @ViewBuilder
+    private func pageBody(_ p: Page) -> some View {
+        switch p {
+        case .printer:
+            // 印刷はぜんぶここ：つなぐ → 出し先 → LAN → Wi-Fi → ネットが無いとき
+            bluetoothCard
+            receiptCard
+            if !model.lanPrinters.isEmpty { lanCard }
+            if !model.wifiPrinters.isEmpty { wifiCard }
+            NativeOfflinePrintCard()
+        case .native: nativeCard
+        }
     }
 
     // MARK: - 部品
@@ -94,6 +369,7 @@ struct NativeSettingsView: View {
         }
         .background(RoundedRectangle(cornerRadius: 16).fill(Color.white))
         .overlay(RoundedRectangle(cornerRadius: 16).stroke(NFColor.line, lineWidth: 1))
+        .shadow(color: Color.black.opacity(0.05), radius: 6, y: 2)
     }
 
     private func row<Content: View>(_ label: String, en: String, dim: Bool = false, @ViewBuilder content: () -> Content) -> some View {
@@ -306,11 +582,11 @@ struct NativeSettingsView: View {
 
     private var receiptCard: some View {
         card(icon: "printer", title: "レシートの出し先", en: "Receipt printer for this iPad",
-             description: "レシート・領収書・会計伝票・ドロア・レジ精算をどのプリンターに出すか、このiPadだけで選びます（店の設定は変わりません）。上の Bluetooth のプリンターをつなぐと、そのプリンターになります") {
+             description: "レシート・領収書・会計伝票・ドロア・レジ精算をどのプリンターに出すか、このiPadだけで選びます（店の設定は変わりません）。「プリンター（Bluetooth・USB）」でつないだプリンターがあれば、それになります") {
             let list = model.receiptPrinters
             if list.isEmpty {
                 Text(model.canAdd
-                     ? "Wi-Fi・LAN のレシートプリンターはありません。上の「このiPadのプリンター」（Bluetooth・USB）でつなぐか、パソコンの 設定 > ハードウェア で追加できます"
+                     ? "Wi-Fi・LAN のレシートプリンターはありません。「プリンター（Bluetooth・USB）」でつなぐか、パソコンの 設定 > ハードウェア で追加できます"
                      : "レシート用のプリンターがありません。管理画面（パソコン）の 設定 > ハードウェア で追加してください")
                     .font(.system(size: 14)).foregroundColor(NFColor.ink3).padding(18)
             } else {
@@ -443,82 +719,6 @@ struct NativeSettingsView: View {
                 }
             }
             .padding(.horizontal, 18).padding(.vertical, 14)
-        }
-    }
-
-    // MARK: - レジから変えられる設定（Web の各画面へ）
-
-    private var sectionsCard: some View {
-        card(icon: "slider.horizontal.3", title: "レジから変えられる設定", en: "Register settings",
-             description: "品切れ・メニュー・キッチンの振り分け・テーブルQR・ハンディ・担当者・予約・営業時間。押すとその画面が開きます（上の「レジの設定に戻る」でここに戻ります）") {
-            VStack(alignment: .leading, spacing: 0) {
-                ForEach(model.payload?.sections ?? []) { s in
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack(alignment: .firstTextBaseline, spacing: 8) {
-                            Text(s.title).font(.system(size: 14, weight: .heavy)).foregroundColor(NFColor.navy)
-                            Text(s.en).font(.system(size: 11)).foregroundColor(NFColor.ink3)
-                        }
-                        let cols = [GridItem(.adaptive(minimum: 300), spacing: 10)]
-                        LazyVGrid(columns: cols, spacing: 10) {
-                            ForEach(s.links) { l in linkTile(l) }
-                        }
-                    }
-                    .padding(.horizontal, 18).padding(.vertical, 12)
-                    .overlay(alignment: .bottom) { Rectangle().fill(NFColor.line).frame(height: 1) }
-                }
-            }
-        }
-    }
-
-    private func linkTile(_ l: NSTLink) -> some View {
-        Button { onWeb(l.url) } label: {
-            HStack(alignment: .center, spacing: 10) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(l.title).font(.system(size: 14, weight: .bold)).foregroundColor(l.allowed ? NFColor.ink : NFColor.ink3).multilineTextAlignment(.leading)
-                    Text(l.allowed ? l.description : (l.hint ?? "権限がありません")).font(.system(size: 12)).foregroundColor(NFColor.ink3).lineLimit(2).multilineTextAlignment(.leading)
-                }
-                Spacer(minLength: 0)
-                Image(systemName: l.allowed ? "chevron.right" : "lock").font(.system(size: 12, weight: .bold)).foregroundColor(NFColor.ink3)
-            }
-            .padding(.horizontal, 14).padding(.vertical, 10).frame(minHeight: 64)
-            .background(RoundedRectangle(cornerRadius: 12).fill(l.allowed ? NFColor.lilacSoft : Color.white))
-            .overlay(RoundedRectangle(cornerRadius: 12).stroke(NFColor.line, lineWidth: 1))
-        }
-        .buttonStyle(PressableStyle())
-        .disabled(!l.allowed)
-    }
-
-    // MARK: - 管理画面の設定（まとめ）
-
-    private var hubsCard: some View {
-        card(icon: "gearshape.2", title: "管理画面の設定", en: "All settings",
-             description: "店舗・メニュー・デバイス管理・予約・顧客・会計・運用・管理。パソコンの管理画面と同じ画面が開きます") {
-            VStack(alignment: .leading, spacing: 0) {
-                ForEach(model.payload?.hubs ?? []) { h in
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack(alignment: .firstTextBaseline, spacing: 8) {
-                            Text(h.label).font(.system(size: 14, weight: .heavy)).foregroundColor(NFColor.navy)
-                            Text(h.en).font(.system(size: 11)).foregroundColor(NFColor.ink3)
-                        }
-                        WrapLayout(spacing: 8) {
-                            ForEach(h.children, id: \.href) { c in
-                                Button { onWeb(c.href) } label: {
-                                    HStack(spacing: 6) {
-                                        Text(c.label).font(.system(size: 14, weight: .bold)).foregroundColor(NFColor.ink)
-                                        Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold)).foregroundColor(NFColor.ink3)
-                                    }
-                                    .padding(.horizontal, 14).frame(height: 42)
-                                    .background(Capsule().fill(Color.white))
-                                    .overlay(Capsule().stroke(NFColor.line, lineWidth: 1))
-                                }
-                                .buttonStyle(PressableStyle())
-                            }
-                        }
-                    }
-                    .padding(.horizontal, 18).padding(.vertical, 12)
-                    .overlay(alignment: .bottom) { Rectangle().fill(NFColor.line).frame(height: 1) }
-                }
-            }
         }
     }
 }
