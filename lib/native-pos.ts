@@ -225,12 +225,28 @@ export const NATIVE_PAY_METHODS = ['cash', 'credit', 'qr', 'emoney', 'points', '
 export type NativePayMethod = (typeof NATIVE_PAY_METHODS)[number];
 
 /** 注文確定で送る1行（選択肢・レジで打った金額つき） */
-export interface NativeSendLine {
+export interface NativeSendMenuLine {
   menuItemId: string;
   quantity: number;
   optionItemIds: string[];
   /** ¥0 の商品にレジで打った金額（無ければ null） */
   openPrice: number | null;
+}
+
+/**
+ * 「その他（金額入力）」の行（Web のレジの Other ボタン。2026-10-07 Ronnie「お客様が何か追加したとき金額を打てる Other を全カテゴリの最後に」）。
+ * サーバーは Web と同じ addCustomPriceItem に渡す（金額・数量・内容の長さはそこでもう一度確かめる）
+ */
+export interface NativeSendCustomLine {
+  custom: { categoryId: string | null; price: number; memo: string | null };
+  quantity: number;
+}
+
+export type NativeSendLine = NativeSendMenuLine | NativeSendCustomLine;
+
+/** 「その他」の行か */
+export function isNativeCustomLine(l: NativeSendLine): l is NativeSendCustomLine {
+  return 'custom' in l;
 }
 
 export type NativePosAction =
@@ -328,9 +344,21 @@ export function parseNativePosAction(raw: unknown): Parsed {
         if (!l || typeof l !== 'object') return bad();
         const r = l as Record<string, unknown>;
         const q = r.quantity;
+        if (typeof q !== 'number' || !Number.isInteger(q) || q < 1 || q > 99) return bad();
+        if (r.custom !== undefined) {
+          const c = r.custom as Record<string, unknown> | null;
+          if (!c || typeof c !== 'object' || Array.isArray(c)) return bad();
+          const categoryId = c.categoryId ?? null;
+          const memo = c.memo ?? null;
+          if (categoryId !== null && !isUuid(categoryId)) return bad();
+          if (!isYen(c.price)) return bad('金額が正しくありません');
+          if (memo !== null && (typeof memo !== 'string' || memo.length > 200)) return bad();
+          lines.push({ custom: { categoryId, price: c.price as number, memo: memo as string | null }, quantity: q });
+          continue;
+        }
         const opts = r.optionItemIds ?? [];
         const open = r.openPrice ?? null;
-        if (!isUuid(r.menuItemId) || typeof q !== 'number' || !Number.isInteger(q) || q < 1 || q > 99) return bad();
+        if (!isUuid(r.menuItemId)) return bad();
         if (!Array.isArray(opts) || opts.length > 30 || !opts.every(isUuid)) return bad();
         if (open !== null && !isYen(open)) return bad('金額が正しくありません');
         lines.push({ menuItemId: r.menuItemId, quantity: q, optionItemIds: [...new Set(opts as string[])], openPrice: open });

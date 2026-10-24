@@ -95,6 +95,24 @@ struct NativeOrderView: View {
             }
         }
         .animation(.easeOut(duration: 0.15), value: model.pending)
+        // 「その他（金額入力）」のパネル
+        .overlay {
+            if let t = model.customTarget {
+                ZStack {
+                    Color.black.opacity(0.38).ignoresSafeArea()
+                        .onTapGesture { model.customTarget = nil }
+                    NativeCustomPricePad(
+                        title: "その他 / Other（\(t.label)）",
+                        onCancel: { model.customTarget = nil },
+                        onDone: { price, memo in model.addCustom(price: price, memo: memo) }
+                    )
+                    .frame(maxWidth: 480)
+                    .padding(28)
+                }
+                .transition(.opacity)
+            }
+        }
+        .animation(.easeOut(duration: 0.15), value: model.customTarget)
         // 会計は同じ画面の上に重ねる（fullScreenCover にすると、下の Web が止まって Bluetooth の印刷・ドロアが出ない）
         .overlay {
             if showCheckout {
@@ -564,6 +582,23 @@ private struct ItemsPanel: View {
                 LazyVGrid(columns: cols, spacing: 12) {
                     ForEach(model.visibleItems) { item in
                         ItemTile(item: item, qty: model.qtyInOrder(item)) { model.add(item) }
+                    }
+                    // 最後に「その他（金額入力）」。お客様が何か追加したとき金額と内容を打って入れる（Web と同じ。2026-10-07 Ronnie）
+                    if let t = model.customTile {
+                        Button { model.customTarget = t } label: {
+                            VStack(spacing: 5) {
+                                Image(systemName: "square.and.pencil").font(.system(size: 20, weight: .bold))
+                                Text("Other").font(.system(size: 17, weight: .heavy))
+                                Text("その他・金額入力").font(.system(size: 11, weight: .semibold)).foregroundColor(NT.ink3)
+                            }
+                            .foregroundColor(NT.purple)
+                            .frame(maxWidth: .infinity, minHeight: 112)
+                            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(NT.lilac.opacity(0.55)))
+                            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(NT.purple.opacity(0.45), style: StrokeStyle(lineWidth: 2, dash: [6, 4])))
+                        }
+                        .buttonStyle(PressableStyle(scale: 0.95))
+                        .disabled(model.busy)
+                        .accessibilityLabel("\(t.label)：その他（金額を入力）")
                     }
                 }
                 .padding(14)

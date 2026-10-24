@@ -52,6 +52,8 @@ struct NPOrderLine: Identifiable, Hashable {
     var optionItemIds: [String] = []
     /// ¥0 の商品にレジで打った金額（カートだけ）
     var openPrice: Int? = nil
+    /// 「その他（金額入力）」の行（カートだけ。menuItemId は無い）
+    var custom: NPCustom? = nil
 
     var lineTotal: Int { unitPrice * quantity }
     var displayName: String { english ?? name }
@@ -62,7 +64,24 @@ struct NPOrderLine: Identifiable, Hashable {
         return list.isEmpty ? nil : list.joined(separator: ", ")
     }
     /// 同じ品・同じ選択・同じ金額ならカートで1行にまとめる
-    var cartKey: String { [menuItemId ?? "", optionItemIds.sorted().joined(separator: ","), openPrice.map(String.init) ?? ""].joined(separator: "|") }
+    var cartKey: String {
+        if custom != nil { return id }  // 「その他」は1行ずつ（内容が違う）
+        return [menuItemId ?? "", optionItemIds.sorted().joined(separator: ","), openPrice.map(String.init) ?? ""].joined(separator: "|")
+    }
+}
+
+/// 「その他（金額入力）」の行の中身（Web のレジの Other ボタン。サーバーは addCustomPriceItem）
+struct NPCustom: Hashable {
+    let categoryId: String?
+    let price: Int
+    let memo: String?
+}
+
+/// 「その他」を入れる先（そのカテゴリの最後のボタン。テイクアウトは一覧の最後）
+struct NPCustomTarget: Identifiable, Equatable {
+    let categoryId: String?
+    let label: String
+    var id: String { categoryId ?? "none" }
 }
 
 /// 商品の選択肢グループ（Web のレジの選択ダイアログと同じ：必須・最小/最大・追加料金）
@@ -226,6 +245,36 @@ final class NativeOrderModel: ObservableObject {
         guard let page = currentPage else { return categories }
         let byId = Dictionary(categories.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         return page.categoryIds.compactMap { byId[$0] }
+    }
+
+    /// 「その他（金額入力）」を打っている先（パネルを出す）
+    @Published var customTarget: NPCustomTarget?
+
+    /// 商品の最後に出す「Other その他・金額入力」（Web と同じ：カテゴリを開いているときだけ。おすすめ・売れ筋・検索には出さない）
+    var customTile: NPCustomTarget? {
+        guard search.trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
+        switch selectedCategory {
+        case "__takeout__": return NPCustomTarget(categoryId: nil, label: "テイクアウト")
+        case "__favorites__", "__bestsellers__", "": return nil
+        default:
+            guard let c = categories.first(where: { $0.id == selectedCategory }) else { return NPCustomTarget(categoryId: nil, label: "その他") }
+            return NPCustomTarget(categoryId: c.id, label: c.sub ?? c.name)
+        }
+    }
+
+    /// 「その他」をカートへ（内容は空白をまとめて40文字まで。無ければ「その他」。Web の normalizeCustomMemo と同じ）
+    func addCustom(price: Int, memo: String) {
+        guard let t = customTarget else { return }
+        customTarget = nil
+        let text = String(memo.split(whereSeparator: { $0.isWhitespace }).joined(separator: " ").prefix(40))
+        let line = NPOrderLine(
+            id: "cart-" + UUID().uuidString, menuItemId: nil, name: text.isEmpty ? "その他" : text, quantity: 1,
+            unitPrice: price, sent: false, local: true,
+            optionNames: [t.label], optionNamesEn: [t.label], english: text.isEmpty ? "Other" : nil,
+            custom: NPCustom(categoryId: t.categoryId, price: price, memo: text.isEmpty ? nil : text)
+        )
+        order.lines.append(line)
+        lastAddedLineId = line.id
     }
 
     /// 上のタブを押したら、そのページの最初のカテゴリを開く
@@ -511,12 +560,18 @@ final class NativeOrderModel: ObservableObject {
         }
         // 同じ品・同じ選択・同じ金額はまとめる
         var merged: [NPOrderLine] = []
-        for l in cartLines where l.menuItemId != nil {
+        for l in cartLines where l.menuItemId != nil || l.custom != nil {
             if let i = merged.firstIndex(where: { $0.cartKey == l.cartKey }) { merged[i].quantity += l.quantity } else { merged.append(l) }
         }
         let lines: [[String: Any]] = merged.map { l in
-            ["menuItemId": l.menuItemId ?? "", "quantity": l.quantity, "optionItemIds": l.optionItemIds,
-             "openPrice": l.openPrice.map { $0 as Any } ?? NSNull()]
+            if let c = l.custom {
+                // 「その他（金額入力）」（サーバーは Web と同じ addCustomPriceItem）
+                return ["custom": ["categoryId": c.categoryId.map { $0 as Any } ?? NSNull(), "price": c.price,
+                                   "memo": c.memo.map { $0 as Any } ?? NSNull()] as [String: Any],
+                        "quantity": l.quantity]
+            }
+            return ["menuItemId": l.menuItemId ?? "", "quantity": l.quantity, "optionItemIds": l.optionItemIds,
+                    "openPrice": l.openPrice.map { $0 as Any } ?? NSNull()]
         }
         // 送ったカートは手元から消す（サーバーの明細に入る）。失敗したら戻す
         let backup = order.lines

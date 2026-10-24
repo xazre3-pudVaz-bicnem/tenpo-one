@@ -3,12 +3,12 @@ import { daysAgoJst, todayJst } from '@/lib/format';
 import { getSessionContext, type SessionContext } from '@/lib/auth';
 import { can, type PermissionAction } from '@/lib/permissions';
 import { createClient } from '@/lib/supabase/server';
-import { isUuid, NATIVE_APP_HEADER, parseNativePosAction, type NativePosAction } from '@/lib/native-pos';
+import { isNativeCustomLine, isUuid, NATIVE_APP_HEADER, parseNativePosAction, type NativePosAction } from '@/lib/native-pos';
 import { loadNativeCatalog, loadNativeLive, loadNativeOrder, loadNativePos, setOrderVisitSource } from '@/lib/native-pos-server';
 import { claimLanKitchenPrints, finishLanPrint } from '@/lib/native-print-server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { ACCESS_MESSAGE } from '@/lib/store-access';
-import { checkout, splitOrder, sendOrderToKitchen, setDiscount, updateQty, addItem, startTakeout } from '@/app/app/pos/actions';
+import { checkout, splitOrder, sendOrderToKitchen, setDiscount, updateQty, addItem, addCustomPriceItem, startTakeout } from '@/app/app/pos/actions';
 import { setOrderClerk } from '@/app/app/pos/clerk-actions';
 import { cancelSteraPayment, checkSteraPayment, startSteraPayment } from '@/app/app/pos/stera-actions';
 import { enqueueDrawerKick, enqueueExpoSlipPrint, enqueueOrderSlipPrint, enqueueReceiptPrint, enqueueSelectedItemsPrint, enqueueStockListPrint } from '@/app/app/pos/print-actions';
@@ -1273,6 +1273,11 @@ export async function POST(request: Request) {
       case 'send': {
         // Web のレジの「注文確定」と同じ：カートの品を伝票に入れてから、まとめて厨房へ
         for (const l of action.lines) {
+          if (isNativeCustomLine(l)) {
+            // 「その他（金額入力）」は Web の Other ボタンと同じ addCustomPriceItem
+            await addCustomPriceItem(action.orderId, { ...l.custom, quantity: l.quantity });
+            continue;
+          }
           await addItem(action.orderId, l.menuItemId, l.optionItemIds, l.quantity, l.openPrice);
         }
         const res = await sendOrderToKitchen(action.orderId);

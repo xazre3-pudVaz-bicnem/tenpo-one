@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { NATIVE_BESTSELLERS_TAB, NATIVE_FAVORITES_TAB, nativePosPages } from '@/lib/native-pos';
+import { isNativeCustomLine, NATIVE_BESTSELLERS_TAB, NATIVE_FAVORITES_TAB, nativePosPages, parseNativePosAction } from '@/lib/native-pos';
 import { PICKS_PAGE_KEY } from '@/lib/menu-book';
 
 const drink = { key: 'drink', name: 'DRINK', categories: [{ id: 'c-beer', name: 'ビール', name_en: 'Beer' }, { id: 'c-sour', name: 'サワー', name_en: null }] };
@@ -29,5 +29,36 @@ describe('nativePosPages（ネイティブの上のタブ＝Web のレジと同�
 
   it('カテゴリが無くてもおすすめのタブは出す', () => {
     expect(nativePosPages([], 0).pages.map((p) => p.key)).toEqual([PICKS_PAGE_KEY]);
+  });
+});
+
+describe('「その他（金額入力）」をアプリから送る（Web の Other ボタンと同じ）', () => {
+  const ID = '11111111-1111-4111-8111-111111111111';
+  const CAT = '22222222-2222-4222-8222-222222222222';
+  it('カテゴリ・金額・内容・数量を受け付ける', () => {
+    const ok = parseNativePosAction({
+      type: 'send',
+      orderId: ID,
+      lines: [{ custom: { categoryId: CAT, price: 500, memo: '大盛り' }, quantity: 2 }, { custom: { categoryId: null, price: 0 }, quantity: 1 }],
+    });
+    expect(ok).toEqual({
+      ok: true,
+      action: {
+        type: 'send',
+        orderId: ID,
+        lines: [
+          { custom: { categoryId: CAT, price: 500, memo: '大盛り' }, quantity: 2 },
+          { custom: { categoryId: null, price: 0, memo: null }, quantity: 1 },
+        ],
+      },
+    });
+    if (ok.ok && ok.action.type === 'send') expect(ok.action.lines.map(isNativeCustomLine)).toEqual([true, true]);
+  });
+
+  it('変な金額・カテゴリ・数量は受け付けない', () => {
+    for (const custom of [{ categoryId: 'x', price: 1 }, { categoryId: null, price: -1 }, { categoryId: null, price: 1.5 }, { categoryId: null, price: '1' }, null]) {
+      expect(parseNativePosAction({ type: 'send', orderId: ID, lines: [{ custom, quantity: 1 }] }).ok).toBe(false);
+    }
+    expect(parseNativePosAction({ type: 'send', orderId: ID, lines: [{ custom: { categoryId: null, price: 1 }, quantity: 0 }] }).ok).toBe(false);
   });
 });
