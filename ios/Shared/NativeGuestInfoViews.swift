@@ -27,11 +27,37 @@ private func nfDurationLabel(_ m: Int) -> String {
 //   テーブル／モード → タイマー設定（時間制・終了前注意・開始時間）→ 人数（男性・女性 1〜5・＋）→ 来店経路 → 確定
 // 色はオーダー・会計の青と、来店経路の各社の色（2026-10-24 Ronnie「レイアウトは今の画面のまま、色を合わせて」）
 
+/// 着席中の伝票を、来店登録と同じ画面で直すとき（2026-10-24 Ronnie「manxe ko tauko ma click garda start ko jastai sabai 変更、same popup」）
+struct NFVisitEdit: Hashable {
+    let order: NFOrder
+    let slip: NFSlip
+}
+
+/// GET part=visitEdit の返事（伝票メモから読めたもの）
+struct NFVisitFromMemo: Decodable {
+    let plans: [String]?
+    let male: Int?
+    let female: Int?
+    let source: String?
+    let timed: Bool
+    let duration: Int?
+    let warningEnabled: Bool
+    let warningMinutes: Int?
+}
+private struct NFVisitEditPayload: Decodable { let ok: Bool; let visit: NFVisitFromMemo? }
+
 struct NativeSetupSheet: View {
     @ObservedObject var model: NativeFloorModel
     let table: NFTable
+    /// 着席中の直し（nil＝空席の来店登録）
+    var edit: NFVisitEdit? = nil
     let onClose: () -> Void
     let onStarted: (String) -> Void
+
+    /// 直しのとき：最初の値を入れ終えたか・開始時間を変えたか・席のコース
+    @State private var prefilled = false
+    @State private var startChanged = false
+    @State private var courseId: String?
 
     @State private var plans: [String] = ["normal"]
     @State private var planItemIds: [String] = []
@@ -67,7 +93,14 @@ struct NativeSetupSheet: View {
     private var pickedPlanNames: String {
         (payload?.planItems ?? []).filter { planItemIds.contains($0.id) }.map(\.name).joined(separator: "・")
     }
-    private var canConfirm: Bool { guests >= 1 && !source.isEmpty && !saving }
+    private var canConfirm: Bool { guests >= 1 && !source.isEmpty && !saving && (edit == nil || prefilled) }
+    /// 直しのとき、伝票にもう入っているプラン商品（もう一度は入れない）
+    private var slipMenuItemIds: [String] { edit?.slip.lines.compactMap { $0.menuItemId } ?? [] }
+    /// 顧客名（直しのときは伝票の顧客 → 予約のお名前）
+    private var shownName: String? {
+        if let n = edit?.order.customerName?.trimmingCharacters(in: .whitespaces), !n.isEmpty { return n }
+        return bookedName
+    }
     /// この卓の今の予約（前後60分以内）のお名前
     private var bookedName: String? {
         let r = table.upcoming.first { abs($0.startMs - model.now) <= 60 * 60 * 1000 }
@@ -84,8 +117,8 @@ struct NativeSetupSheet: View {
                     HStack(spacing: 4) {
                         Image(systemName: "chevron.left").font(.system(size: 16, weight: .bold))
                         VStack(alignment: .leading, spacing: 0) {
-                            Text("テーブル一覧").font(.system(size: 15, weight: .bold))
-                            Text("Tables").font(.system(size: 10)).opacity(0.75)
+                            Text(edit == nil ? "テーブル一覧" : "戻る").font(.system(size: 15, weight: .bold))
+                            Text(edit == nil ? "Tables" : "Back").font(.system(size: 10)).opacity(0.75)
                         }
                     }
                     .foregroundColor(NFColor.iris)
@@ -115,8 +148,8 @@ struct NativeSetupSheet: View {
                     .buttonStyle(PressableStyle(scale: 0.98))
                     Button { Task { await confirm() } } label: {
                         VStack(spacing: 0) {
-                            Text(saving ? "作成中…" : "確定").font(.system(size: 20, weight: .heavy))
-                            Text("Start order").font(.system(size: 11, weight: .bold)).opacity(0.8)
+                            Text(saving ? (edit == nil ? "作成中…" : "保存中…") : (edit == nil ? "確定" : "保存する")).font(.system(size: 20, weight: .heavy))
+                            Text(edit == nil ? "Start order" : "Save").font(.system(size: 11, weight: .bold)).opacity(0.8)
                         }
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity).frame(height: 56)
@@ -139,6 +172,7 @@ struct NativeSetupSheet: View {
             }
         }
         .animation(.easeOut(duration: 0.15), value: popup)
+        .task { await prefill() }
     }
 
     private var columns: some View {
@@ -171,7 +205,7 @@ struct NativeSetupSheet: View {
                 rowDivider
                 // 顧客名は予約（店舗台帳）から自動で出す。探すボタンは置かない（2026-10-24 Ronnie「予約にあれば自動で出る」）
                 row("顧客名", en: "Name") {
-                    valueText(bookedName.map { "\($0) 様" } ?? "未登録", on: bookedName != nil)
+                    valueText(shownName.map { "\($0) 様" } ?? "未登録", on: shownName != nil)
                 }
             }
             heading("タイマー設定", en: "Timer")
@@ -189,7 +223,7 @@ struct NativeSetupSheet: View {
                 }
                 rowDivider
                 row("開始時間", en: "Start time") {
-                    valueText("\(nfHm(startNow ? model.nowDate : startDate))〜", on: true)
+                    valueText("\(nfHm(startNow && (edit == nil || startChanged) ? model.nowDate : startDate))〜", on: true)
                     setButton { popup = .start }
                 }
             }
@@ -248,7 +282,8 @@ struct NativeSetupSheet: View {
                         .font(.system(size: 14)).foregroundColor(NFColor.ink2).fixedSize(horizontal: false, vertical: true)
                 } else {
                     Text("\(planNames)のプラン（何個でも。選ぶと伝票に入ります）").font(.system(size: 12)).foregroundColor(NFColor.ink3)
-                    NFChipGrid(items: planItems.map { ($0.id, "\($0.name)  ¥\($0.price)", NFColor.iris, false) }, selected: planItemIds, columns: 2, height: 56) { id in
+                    NFChipGrid(items: planItems.map { ($0.id, slipMenuItemIds.contains($0.id) ? "\($0.name)（伝票にあり）" : "\($0.name)  ¥\($0.price)", NFColor.iris, false) }, selected: planItemIds + slipMenuItemIds, columns: 2, height: 56) { id in
+                        guard !slipMenuItemIds.contains(id) else { return }
                         if planItemIds.contains(id) { planItemIds.removeAll { $0 == id } } else { planItemIds.append(id) }
                         if let item = planItems.first(where: { $0.id == id }), item.kind == "course", let m = item.durationMinutes, m > 0, planItemIds.contains(id) {
                             timed = true; duration = m
@@ -351,7 +386,7 @@ struct NativeSetupSheet: View {
                 }
             case .start:
                 HStack(spacing: 8) {
-                    timeChip("今 / Now", on: startNow) { startNow = true }
+                    timeChip("今 / Now", on: startNow) { startNow = true; startChanged = true }
                     timeChip("時刻を選ぶ / Pick", on: !startNow) {
                         if startNow {
                             startNow = false
@@ -424,6 +459,21 @@ struct NativeSetupSheet: View {
             "warningEnabled": timed && warningEnabled,
             "warningMinutes": warningMinutes,
         ]
+        if let e = edit {
+            // 直し：開始時間は変えたときだけ（今 → いまの時刻）。コースのプランを選んだら席のコースもそれに
+            draft["startTime"] = startChanged ? nfHm(startNow ? Date() : startDate) : NSNull()
+            let seatCourses = payload?.seatCourses ?? []
+            let pickedCourse = planItemIds.first { id in seatCourses.contains { $0.id == id } }
+            let cid = pickedCourse ?? courseId
+            if let _ = await model.act(["type": "visitEdit", "orderId": e.slip.id, "draft": draft, "courseId": cid.map { $0 as Any } ?? NSNull()]) {
+                if let c = customer { _ = await model.act(["type": "orderCustomer", "orderId": e.slip.id, "customerId": c.id]) }
+                model.show(toast: planItemIds.isEmpty ? "お客様情報を変更しました" : "お客様情報を変更し、\(planItemIds.count)品を伝票に入れました")
+                onClose()
+            } else {
+                problem = model.error
+            }
+            return
+        }
         draft["startTime"] = startNow ? NSNull() : nfHm(startDate)
         if let r = await model.act(["type": "floorStart", "tableId": table.id, "draft": draft]), let id = r.orderId {
             if let e = r.planItemError, !e.isEmpty { model.show(toast: e) }
@@ -432,6 +482,36 @@ struct NativeSetupSheet: View {
         } else {
             problem = model.error
         }
+    }
+
+    /// 直しのとき：今の伝票の値を入れる（モード・人数・来店経路・時間制・終了前注意・開始時間・コース）
+    private func prefill() async {
+        guard let e = edit, !prefilled else { return }
+        let o = e.order
+        plans = o.plansOrDefault
+        courseId = o.courseId
+        startNow = false
+        startDate = Date(timeIntervalSince1970: o.openedAtMs / 1000)
+        let dur = Int(((o.endAtMs - o.openedAtMs) / 60_000).rounded())
+        timed = dur > 0
+        if dur > 0 { duration = dur }
+        male = e.slip.guestCount
+        female = 0
+        let labels = (payload?.visitSources ?? []).map(\.label)
+        if labels.contains(o.sourceLabel) { source = o.sourceLabel }
+        // 伝票メモ（来店登録で入れたもの）から男女・時間制・終了前注意
+        var comps = URLComponents(url: AppConfig.url("/api/app/v1/pos"), resolvingAgainstBaseURL: false)!
+        comps.queryItems = [URLQueryItem(name: "part", value: "visitEdit"), URLQueryItem(name: "orderId", value: e.slip.id)]
+        if let data = try? await NativeAPI.shared.send(URLRequest(url: comps.url!)),
+           let r = try? JSONDecoder().decode(NFVisitEditPayload.self, from: data), let v = r.visit {
+            if let m = v.male, let f = v.female, m + f == e.slip.guestCount { male = m; female = f }
+            if let s = v.source, source.isEmpty, labels.contains(s) { source = s }
+            timed = v.timed
+            if v.timed, let d = v.duration, dur <= 0 { duration = d }
+            warningEnabled = v.warningEnabled
+            if let w = v.warningMinutes { warningMinutes = w }
+        }
+        prefilled = true
     }
 
     // MARK: 部品
@@ -556,6 +636,7 @@ struct NativeSetupSheet: View {
         var d = cal.date(from: c) ?? Date()
         if d > Date().addingTimeInterval(60) { d = cal.date(byAdding: .day, value: -1, to: d) ?? d }
         startDate = d
+        startChanged = true
     }
 
     /// 1〜5 と ＋（＋はテンキー）。6 名以上は ＋ に数を出す

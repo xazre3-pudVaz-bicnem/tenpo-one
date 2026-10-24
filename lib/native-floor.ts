@@ -85,7 +85,7 @@ const isInt = (v: unknown, min: number, max: number): v is number =>
   typeof v === 'number' && Number.isInteger(v) && v >= min && v <= max;
 
 /** お客様情報（来店登録）の中身。形だけ見る（範囲・組み合わせはサーバーの validateVisitDraft が見る） */
-function parseDraft(raw: unknown): VisitDraft | null {
+export function parseDraft(raw: unknown): VisitDraft | null {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
   const d = raw as Record<string, unknown>;
   const plans = d.plans ?? DEFAULT_VISIT_DRAFT.plans;

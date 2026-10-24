@@ -1,21 +1,22 @@
 import SwiftUI
 
 /// オーダー画面で人数・時間を押したときの「お客様情報」（2026-10-24 Ronnie「manxe ko sign ma click garepaxi start ko gamen ma gayera
-/// time etc 変更 garna milne banau」）。テーブル一覧のポップアップ →「お客様情報」と同じ画面（NativeGuestInfoSheet）を出す：
-/// 開始時間・終了予定・人数・モード・プラン・時間・コース。保存は同じ floorSeatTime（Web の setSeatTime）。
+/// time etc 変更 garna milne banau」「start ko jastai sabai 変更、same popup」）。来店登録（お客様情報の確定）と同じ画面
+/// （NativeSetupSheet の直し）：モード・プラン・時間制・終了前注意・開始時間・人数（男女）・来店経路。保存は visitEdit。
 /// この伝票の卓・伝票の中身はフロアの読み込み（part=floor）から探す。
 struct NativeOrderGuestInfo: View {
     @ObservedObject var model: NativeOrderModel
     let onClose: () -> Void
 
     @StateObject private var floor = NativeFloorModel()
-    @State private var target: (order: NFOrder, slip: NFSlip)?
+    @State private var target: (table: NFTable, order: NFOrder, slip: NFSlip)?
     @State private var problem: String?
 
     var body: some View {
-        NativeModalCard(width: 720) {
+        NativeModalCard(width: target == nil ? 720 : 1080) {
             if let t = target {
-                NativeGuestInfoSheet(model: floor, order: t.order, slip: t.slip, onClose: finish)
+                NativeSetupSheet(model: floor, table: t.table, edit: NFVisitEdit(order: t.order, slip: t.slip),
+                                 onClose: finish, onStarted: { _ in finish() })
             } else {
                 VStack(spacing: 14) {
                     if let p = problem {
@@ -40,7 +41,7 @@ struct NativeOrderGuestInfo: View {
             floor.now = p.serverNow
             for t in p.tables {
                 if let o = t.order, let s = o.slips.first(where: { $0.id == orderId }) {
-                    target = (o, s)
+                    target = (t, o, s)
                     return
                 }
             }
