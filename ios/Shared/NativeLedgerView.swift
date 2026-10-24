@@ -316,20 +316,23 @@ struct NativeLedgerView: View {
     var body: some View {
         VStack(spacing: 0) {
             topBar
-            // Web と同じ上のボタン（退店管理・CSV出力・集計・PDF作成・＋予約登録・📅）
-            NLToolbar(
-                model: model,
-                onFloor: onFloor,
-                onWeb: onWeb,
-                onNew: { newOpen = true },
-                onFindSeats: { findSeatsOpen = true },
-                onWalkIn: { walkInOpen = true },
-                onPdf: { makePdf() },
-                onCsv: { exportCsv() }
-            )
-            .disabled(exporting)
             if let p = model.payload {
-                summaryRow(p)
+                // 集計と上のボタンを 1 行に（2026-10-24 Ronnie「同じ行に」）
+                HStack(spacing: 0) {
+                    summaryRow(p)
+                    NLToolbar(
+                        model: model,
+                        onFloor: onFloor,
+                        onWeb: onWeb,
+                        onNew: { newOpen = true },
+                        onFindSeats: { findSeatsOpen = true },
+                        onWalkIn: { walkInOpen = true },
+                        onPdf: { makePdf() },
+                        onCsv: { exportCsv() }
+                    )
+                    .disabled(exporting)
+                    .fixedSize()
+                }
                 if model.monthMode {
                     NativeLedgerMonthView(date: model.date ?? p.date) { d in
                         model.monthMode = false; model.weekMode = false; model.listMode = false; model.gourmetMode = false; model.waitMode = false

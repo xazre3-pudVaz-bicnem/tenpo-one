@@ -101,7 +101,6 @@ struct NLToolbar: View {
 
     var body: some View {
         HStack(spacing: 2) {
-            Spacer(minLength: 0)
             // 右上は「会計・オーダー」（ネイティブのオーダー・会計＝フロア画面へ。2026-10-24 Ronnie「退店管理はいらない、会計・オーダーにして」）
             item("desktopcomputer", "会計・オーダー", action: onFloor)
             Menu {
@@ -142,7 +141,7 @@ struct NLToolbar: View {
                 item("plus", "予約登録", action: onNew)
             }
         }
-        .padding(.horizontal, 16).padding(.top, 6)
+        .padding(.trailing, 16)
     }
 
     /// アイコンの下に文字のボタン（塗りなし）
