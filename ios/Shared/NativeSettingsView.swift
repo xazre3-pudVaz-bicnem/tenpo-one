@@ -16,6 +16,8 @@ struct NativeSettingsView: View {
     @State private var nativeOn = AppState.shared.nativePosEnabled
     /// 左の一覧で選んでいるもの
     @State private var sel: Sel = .page(.printer)
+    /// ログアウトの確認
+    @State private var confirmLogout = false
 
     enum Sel: Hashable {
         case page(Page)
@@ -143,9 +145,16 @@ struct NativeSettingsView: View {
                         sideRow(icon: g.icon, title: g.label, en: g.en, dot: g.label == "デバイス管理" ? pageStatus(.native)?.1 : nil, on: sel == .group(g.id)) { select(.group(g.id)) }
                     }
                 }
+                // ログアウトは一覧のいちばん下（ホームの上のバーからは外した。2026-10-24 19:16 Ronnie）
+                sideRow(icon: "rectangle.portrait.and.arrow.right", title: "ログアウト", en: "Log out", dot: nil, on: false) { confirmLogout = true }
+                    .padding(.top, 18)
                 Text("TENPO ONE \(AppConfig.version)").font(.system(size: 11, weight: .semibold)).foregroundColor(NFColor.ink3).padding(.top, 22).padding(.horizontal, 12)
             }
             .padding(.horizontal, 14).padding(.vertical, 16)
+        }
+        .confirmationDialog("ログアウトしますか？", isPresented: $confirmLogout, titleVisibility: .visible) {
+            Button("ログアウト", role: .destructive) { onWeb("/logout") }
+            Button("やめる", role: .cancel) {}
         }
         .frame(width: Self.sideWidth)
         .background(Color.white)
