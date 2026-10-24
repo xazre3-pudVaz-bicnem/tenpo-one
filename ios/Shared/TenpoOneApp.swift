@@ -52,6 +52,13 @@ struct RootView: View {
                         .transition(.opacity)
                         .zIndex(3)
                 }
+                // iPhone ハンディの卓・注文（/handy/<卓>・/handy/<卓>/order の代わり。2026-10-25 Ronnie「iPhone も native に」）
+                if let r = state.phoneHandy, !state.needsHandyLogin {
+                    NativePhoneHandyScreen(route: r)
+                        .id(r)
+                        .transition(.move(edge: .trailing))
+                        .zIndex(3.5)
+                }
                 // ネイティブのホーム。Web の /app/dashboard の上に重ねる（2026-10-24）
                 if state.nativeHome {
                     NativeHomeScreen()
@@ -187,6 +194,7 @@ struct RootView: View {
         .animation(.easeOut(duration: 0.18), value: state.nativeFloor)
         .animation(.easeOut(duration: 0.18), value: state.nativeHandyHome)
         .animation(.easeOut(duration: 0.18), value: state.nativeOwnerHome)
+        .animation(.easeOut(duration: 0.2), value: state.phoneHandy)
         .animation(.easeOut(duration: 0.18), value: state.nativeHome)
         .animation(.easeOut(duration: 0.18), value: state.nativeLedger)
         .animation(.easeOut(duration: 0.18), value: state.nativeCash)

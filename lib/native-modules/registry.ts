@@ -16,6 +16,8 @@ import { manualsGet, manualFileGet, manualCreatePost, manualDeletePost } from '@
 import * as invoices from '@/lib/native-modules/invoices';
 import { reconciliationGet } from '@/lib/native-modules/reconciliation';
 import { settlementGet, settlementCostsSavePost } from '@/lib/native-modules/settlement';
+import { handyMenuGet, handyOrderPost, handyTableGet } from '@/lib/native-modules/handy-order';
+import { NATIVE_HANDY_ORDER_TYPES } from '@/lib/native-handy-order';
 
 /**
  * まだ専用の台が無かった画面（勤怠・日報・タスク …）の iPad ネイティブ用の API をまとめる所
@@ -63,6 +65,9 @@ export const NATIVE_MODULE_GET: Record<string, NativeModuleGet> = {
   invoices: invoices.invoicesGet,
   reconciliation: reconciliationGet,
   settlement: settlementGet,
+  // iPhone のネイティブのハンディ（卓・注文。2026-10-25 Ronnie）
+  handyTable: handyTableGet,
+  handyMenu: handyMenuGet,
 };
 
 /** POST の type → handler。追加は 1 行ずつ */
@@ -122,4 +127,6 @@ export const NATIVE_MODULE_POST: Record<string, NativeModulePost> = {
   invoiceUpload: invoices.invUploadPost,
   invoiceInboxCreate: invoices.invInboxCreatePost,
   settlementCostsSave: settlementCostsSavePost,
+  // iPhone のネイティブのハンディ（卓・注文。2026-10-25 Ronnie）
+  ...Object.fromEntries(NATIVE_HANDY_ORDER_TYPES.map((t) => [t, handyOrderPost])),
 };
