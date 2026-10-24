@@ -235,6 +235,29 @@ struct NativeStockScreen: View {
     }
 }
 
+/// ネイティブの在庫（品目・棚卸・移動・発注提案・予測。2026-10-24）
+struct NativeInventoryScreen: View {
+    @StateObject private var model = NativeInventoryModel()
+    @EnvironmentObject var state: AppState
+
+    var body: some View {
+        NativeInventoryView(
+            model: model,
+            onHome: { state.goNativeHome() },
+            onWeb: { path in state.leaveNativeFloor(to: path) },
+            onStock: { state.goNativeStock() }
+        )
+        .onAppear { sync() }
+        .onChange(of: state.inventoryTab) { _ in sync() }
+        .onChange(of: state.inventoryCountId) { _ in sync() }
+    }
+
+    private func sync() {
+        if model.tab != state.inventoryTab { model.tab = state.inventoryTab }
+        if let id = state.inventoryCountId { model.countId = id }
+    }
+}
+
 /// ネイティブの通知（2026-10-24）
 struct NativeNoticesScreen: View {
     @StateObject private var model = NativeNoticesModel()

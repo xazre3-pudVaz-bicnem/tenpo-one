@@ -32,6 +32,23 @@ import { createInvoice } from '@/app/app/invoices/actions';
 import { isNativeStockActionType, parseNativeStockAction } from '@/lib/native-stock';
 import { loadNativeStock } from '@/lib/native-stock-server';
 import { setMenuStockLimits } from '@/app/app/inventory/menu-stock-actions';
+import { isNativeInventoryActionType, nativeInventoryPermission, parseNativeInventoryAction } from '@/lib/native-inventory';
+import { loadNativeInventory, loadNativeInventoryCount, NATIVE_INVENTORY_TABS, type NativeInventoryTab } from '@/lib/native-inventory-server';
+import {
+  addMovement,
+  cancelStockTransfer,
+  createItem,
+  finalizeCount,
+  getMovementHistory,
+  getPurchaseHistory,
+  receiveStockTransfer,
+  requestStockTransfer,
+  saveCounts,
+  shipStockTransfer,
+  startCount,
+  transferStock,
+  updateItem,
+} from '@/app/app/inventory/actions';
 import { prepareQuickCheckout, startQuickOrder } from '@/app/app/quick-pay/actions';
 import {
   addCashTransaction,
@@ -259,6 +276,37 @@ export async function GET(request: Request) {
     if (!store) return json({ ok: false, error: '店舗がありません' }, 404);
     const stock = await loadNativeStock(ctx, await createClient(), { id: store.id, name: store.name });
     return json({ ok: true, ...stock });
+  }
+
+  // 在庫（Web の /app/inventory。品目・棚卸・移動・発注提案・予測。メニュー売切は part=stock）
+  if (part === 'inventory' || part === 'inventoryCount' || part === 'inventoryHistory' || part === 'inventoryPurchases') {
+    if (ctx.disabledFeatures?.has('inventory')) return json({ ok: false, error: 'この機能は使えません', useWeb: true }, 403);
+    const supabase = await createClient();
+    if (part === 'inventoryCount') {
+      const id = url.searchParams.get('id');
+      if (!isUuid(id)) return json({ ok: false, error: '棚卸が見つかりません' }, 404);
+      const c = await loadNativeInventoryCount(ctx, supabase, id);
+      if (!c) return json({ ok: false, error: '棚卸が見つかりません' }, 404);
+      return json({ ok: true, ...c });
+    }
+    if (part === 'inventoryHistory' || part === 'inventoryPurchases') {
+      const id = url.searchParams.get('id');
+      if (!isUuid(id)) return json({ ok: false, error: '品目が見つかりません' }, 404);
+      if (part === 'inventoryHistory') return json({ ok: true, rows: await getMovementHistory(id) });
+      return json({ ok: true, ...(await getPurchaseHistory(id)) });
+    }
+    const store = ctx.currentStore;
+    if (!store) return json({ ok: false, error: '店舗を選択してください', useWeb: true }, 404);
+    const t = url.searchParams.get('tab') ?? 'items';
+    const tab: NativeInventoryTab = NATIVE_INVENTORY_TABS.includes(t as NativeInventoryTab) ? (t as NativeInventoryTab) : 'items';
+    const inv = await loadNativeInventory(ctx, supabase, { id: store.id, name: store.name }, {
+      tab,
+      kind: (url.searchParams.get('kind') ?? '').slice(0, 20),
+      q: (url.searchParams.get('q') ?? '').slice(0, 100),
+      sort: url.searchParams.get('sort') ?? '',
+      item: isUuid(url.searchParams.get('item')) ? (url.searchParams.get('item') as string) : '',
+    });
+    return json({ ok: true, ...inv });
   }
 
   // 仕入・経費（Web の /app/expenses。上にお知らせ&アラート）
@@ -528,6 +576,67 @@ export async function POST(request: Request) {
       }
       const r = await enqueueStockListPrint(store.id, parsedStock.action.lines);
       return json(r.ok ? { ok: true } : { ok: false, error: r.error ?? '在庫の印刷に失敗しました' });
+    } catch (e) {
+      return json({ ok: false, error: errorText(e, 'うまくいきませんでした。もう一度お試しください') }, 400);
+    }
+  }
+
+  // 在庫の操作（品目・入出庫・棚卸・店舗間移動。中身は Web と同じ Server Action。2026-10-24）
+  if (raw && typeof raw === 'object' && isNativeInventoryActionType((raw as { type?: unknown }).type)) {
+    const parsedInv = parseNativeInventoryAction(raw);
+    if (!parsedInv.ok) return json({ ok: false, error: parsedInv.error }, 400);
+    if (ctx.disabledFeatures?.has('inventory')) return json({ ok: false, error: 'この機能は使えません', useWeb: true }, 403);
+    const ia = parsedInv.action;
+    if (!can(ctx.role, nativeInventoryPermission(ia.type))) return json({ ok: false, error: 'この操作を行う権限がありません' }, 403);
+    // Route Handler では requirePermission がお店の回線を見ないので、ここで見る（ほかの操作と同じ）
+    const invProblem = await networkProblem(ctx);
+    if (invProblem) return json({ ok: false, error: invProblem }, 403);
+    const store = ctx.currentStore;
+    try {
+      switch (ia.type) {
+        case 'invItemCreate': {
+          if (!store) return json({ ok: false, error: '店舗を選択してください' }, 400);
+          const { type: _t, ...input } = ia;
+          void _t;
+          await createItem({ storeId: store.id, ...input });
+          return json({ ok: true });
+        }
+        case 'invItemUpdate': {
+          const { type: _t, id, ...input } = ia;
+          void _t;
+          await updateItem(id, input);
+          return json({ ok: true });
+        }
+        case 'invMovement':
+          await addMovement({ itemId: ia.itemId, movementType: ia.movementType, quantity: ia.quantity, reason: ia.reason, unitCost: ia.unitCost });
+          return json({ ok: true });
+        case 'invCountStart': {
+          if (!store) return json({ ok: false, error: '店舗を選択してください' }, 400);
+          const id = await startCount(store.id);
+          return json({ ok: true, id });
+        }
+        case 'invCountSave':
+          await saveCounts(ia.countId, ia.entries);
+          if (ia.finalize) await finalizeCount(ia.countId);
+          return json({ ok: true });
+        case 'invTransferDirect':
+          await transferStock({ fromItemId: ia.fromItemId, toStoreId: ia.toStoreId, quantity: ia.quantity, reason: ia.reason });
+          return json({ ok: true });
+        case 'invTransferRequest': {
+          if (!store) return json({ ok: false, error: '店舗を選択してください' }, 400);
+          const id = await requestStockTransfer({ fromStoreId: store.id, toStoreId: ia.toStoreId, note: ia.note, lines: ia.lines });
+          return json({ ok: true, id });
+        }
+        case 'invTransferShip':
+          await shipStockTransfer(ia.id);
+          return json({ ok: true });
+        case 'invTransferReceive':
+          await receiveStockTransfer(ia.id);
+          return json({ ok: true });
+        case 'invTransferCancel':
+          await cancelStockTransfer(ia.id, ia.reason);
+          return json({ ok: true });
+      }
     } catch (e) {
       return json({ ok: false, error: errorText(e, 'うまくいきませんでした。もう一度お試しください') }, 400);
     }

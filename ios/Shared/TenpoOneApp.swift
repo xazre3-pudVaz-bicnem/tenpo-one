@@ -76,6 +76,11 @@ struct RootView: View {
                         .transition(.opacity)
                         .zIndex(5)
                 }
+                if state.nativeInventory {
+                    NativeInventoryScreen()
+                        .transition(.opacity)
+                        .zIndex(5)
+                }
                 if state.nativeExpenses {
                     NativeExpensesScreen()
                         .transition(.opacity)
@@ -128,6 +133,7 @@ struct RootView: View {
         .animation(.easeOut(duration: 0.18), value: state.nativeSlips)
         .animation(.easeOut(duration: 0.18), value: state.nativeExpenses)
         .animation(.easeOut(duration: 0.18), value: state.nativeStock)
+        .animation(.easeOut(duration: 0.18), value: state.nativeInventory)
         .animation(.easeOut(duration: 0.18), value: state.nativeNotices)
         .animation(.easeOut(duration: 0.18), value: state.nativeBudget)
         .animation(.easeOut(duration: 0.18), value: state.nativeCustomers)

@@ -11,10 +11,15 @@ import { EmptyState } from '@/components/ui/state';
 import { TableWrap, Table, THead, TBody, Tr, Th, Td } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import { yen, formatDate, daysAgoJst, todayJst } from '@/lib/format';
-import { suggestReorder } from '@/lib/reorder';
-import { forecastUsage, type DailyQty } from '@/lib/forecast';
-import { isPriceIncreaseSignificant } from '@/lib/metrics';
+import { yen, formatDate } from '@/lib/format';
+import {
+  loadInventoryItems,
+  loadInventoryCounts,
+  loadInventoryTransfers,
+  loadInventoryReorder,
+  loadInventoryForecast,
+  type InventoryForecastData,
+} from '@/lib/inventory-data-server';
 import { ItemForm } from '@/components/inventory/item-form';
 import { ItemTable, type ItemRow } from '@/components/inventory/item-table';
 import { StartCountButton } from '@/components/inventory/start-count-button';
@@ -31,10 +36,7 @@ import {
   ITEM_KIND_OPTIONS,
   COUNT_STATUS_LABELS,
   COUNT_STATUS_TONES,
-  stockWarningLevel,
-  type ItemKind,
   type CountStatus,
-  type TransferStatus,
 } from '@/components/inventory/labels';
 
 export const metadata: Metadata = { title: '在庫' };
@@ -48,7 +50,6 @@ const TABS: { key: Tab; label: string }[] = [
   { key: 'reorder', label: '発注提案' },
   { key: 'forecast', label: '予測' },
 ];
-const WEEKDAY_LABELS = ['日', '月', '火', '水', '木', '金', '土'];
 
 export default async function InventoryPage({
   searchParams,
@@ -76,7 +77,7 @@ export default async function InventoryPage({
   const supabase = await createClient();
   let itemRows: ItemRow[] = [];
   /** isPriceIncreaseSignificant（前回比10%以上値上がり）に該当する品目ID（v0.4.3 仕入価格履歴） */
-  const priceIncreaseItemIds = new Set<string>();
+  let priceIncreaseItemIds = new Set<string>();
   let countsData: { id: string; countDate: string; status: CountStatus }[] = [];
   let transferRows: TransferRow[] = [];
   let transferItemOptions: { id: string; name: string; unit: string; currentQuantity: number }[] = [];
@@ -84,222 +85,29 @@ export default async function InventoryPage({
   let forecastItemOptions: { id: string; name: string }[] = [];
   /** メニュー売切タブ（本日の食数）の行 */
   let menuStockRows: MenuStockRow[] = [];
-  let forecastResult: ReturnType<typeof forecastUsage> | null = null;
+  let forecastResult: InventoryForecastData['result'] = null;
   let forecastWeekdayChart: WeekdayAvgPoint[] = [];
   let forecastUnit = '';
   let forecastSelectedName = '';
-  let topForecast: { id: string; name: string; unit: string; tomorrow: number }[] = [];
+  let topForecast: InventoryForecastData['top'] = [];
 
+  // 各タブの読み込みは lib/inventory-data-server.ts（iPad アプリのネイティブ画面と共用）
   if (tab === 'items') {
-    let q = supabase
-      .from('inventory_items')
-      .select('*')
-      .eq('organization_id', ctx.organizationId)
-      .eq('store_id', currentStore.id)
-      .eq('status', 'active');
-    if (sp.kind) q = q.eq('item_kind', sp.kind);
-    if (sp.q) q = q.ilike('name', `%${sp.q}%`);
-    const { data } = await q.order('name');
-    itemRows = (data ?? []).map((i) => ({
-      id: i.id,
-      name: i.name,
-      itemKind: i.item_kind as ItemKind,
-      category: i.category,
-      unit: i.unit,
-      currentQuantity: Number(i.current_quantity),
-      reorderPoint: i.reorder_point != null ? Number(i.reorder_point) : null,
-      minQuantity: i.min_quantity != null ? Number(i.min_quantity) : null,
-      optimalQuantity: i.optimal_quantity != null ? Number(i.optimal_quantity) : null,
-      avgCost: i.avg_cost,
-      lastPurchaseCost: i.last_purchase_cost,
-      purchaseUnit: i.purchase_unit,
-      purchaseToStockFactor: Number(i.purchase_to_stock_factor ?? 1),
-    }));
-    if (sortWarning) {
-      const rank = (r: ItemRow) => {
-        const w = stockWarningLevel(r);
-        return w === 'danger' ? 0 : w === 'warning' ? 1 : 2;
-      };
-      itemRows = [...itemRows].sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name, 'ja'));
-    }
-
-    // 値上がり品目の判定: 品目ごと直近2件の入荷単価（'in'）を isPriceIncreaseSignificant で比較する
-    const itemIds = itemRows.map((r) => r.id);
-    if (itemIds.length > 0) {
-      const { data: recentReceipts } = await supabase
-        .from('stock_movements')
-        .select('inventory_item_id, unit_cost, occurred_at')
-        .eq('store_id', currentStore.id)
-        .eq('movement_type', 'in')
-        .in('inventory_item_id', itemIds)
-        .order('occurred_at', { ascending: false })
-        .limit(2000);
-      const lastTwoByItem = new Map<string, number[]>();
-      for (const m of recentReceipts ?? []) {
-        if (m.unit_cost == null) continue;
-        const key = m.inventory_item_id as string;
-        const list = lastTwoByItem.get(key) ?? [];
-        if (list.length < 2) {
-          list.push(m.unit_cost as number);
-          lastTwoByItem.set(key, list);
-        }
-      }
-      for (const [itemId, costs] of lastTwoByItem) {
-        if (costs.length === 2 && isPriceIncreaseSignificant(costs[0], costs[1])) {
-          priceIncreaseItemIds.add(itemId);
-        }
-      }
-    }
-  } else if (tab === 'counts') {
-    const { data } = await supabase
-      .from('stock_counts')
-      .select('id, count_date, status')
-      .eq('organization_id', ctx.organizationId)
-      .eq('store_id', currentStore.id)
-      .order('count_date', { ascending: false })
-      .limit(100);
-    countsData = (data ?? []).map((c) => ({ id: c.id, countDate: c.count_date, status: c.status as CountStatus }));
-  } else if (tab === 'transfers') {
-    const { data: transfersData } = await supabase
-      .from('stock_transfers')
-      .select(
-        'id, transfer_no, from_store_id, to_store_id, status, note, requested_by, shipped_by, received_by, created_at, stock_transfer_items(id, name, quantity, unit)'
-      )
-      .eq('organization_id', ctx.organizationId)
-      .or(`from_store_id.eq.${currentStore.id},to_store_id.eq.${currentStore.id}`)
-      .order('created_at', { ascending: false })
-      .limit(100);
-    const rows = transfersData ?? [];
-
-    const storeIds = [...new Set(rows.flatMap((r) => [r.from_store_id as string, r.to_store_id as string]))];
-    const profileIds = [
-      ...new Set(
-        rows
-          .flatMap((r) => [r.requested_by, r.shipped_by, r.received_by])
-          .filter((v): v is string => !!v)
-      ),
-    ];
-    const [{ data: storesData }, { data: profilesData }] = await Promise.all([
-      storeIds.length > 0
-        ? supabase.from('stores').select('id, name').in('id', storeIds)
-        : Promise.resolve({ data: [] as { id: string; name: string }[] }),
-      profileIds.length > 0
-        ? supabase.from('profiles').select('id, display_name').in('id', profileIds)
-        : Promise.resolve({ data: [] as { id: string; display_name: string }[] }),
-    ]);
-    const storeNames = new Map((storesData ?? []).map((s) => [s.id as string, s.name as string]));
-    const profileNames = new Map((profilesData ?? []).map((p) => [p.id as string, p.display_name as string]));
-
-    transferRows = rows.map((r) => ({
-      id: r.id as string,
-      transferNo: Number(r.transfer_no),
-      fromStoreId: r.from_store_id as string,
-      fromStoreName: storeNames.get(r.from_store_id as string) ?? '—',
-      toStoreId: r.to_store_id as string,
-      toStoreName: storeNames.get(r.to_store_id as string) ?? '—',
-      status: r.status as TransferStatus,
-      note: r.note as string | null,
-      requestedByName: r.requested_by ? (profileNames.get(r.requested_by as string) ?? null) : null,
-      shippedByName: r.shipped_by ? (profileNames.get(r.shipped_by as string) ?? null) : null,
-      receivedByName: r.received_by ? (profileNames.get(r.received_by as string) ?? null) : null,
-      createdAt: r.created_at as string,
-      items: ((r.stock_transfer_items ?? []) as { id: string; name: string; quantity: number; unit: string }[]).map(
-        (it) => ({ id: it.id, name: it.name, quantity: Number(it.quantity), unit: it.unit })
-      ),
-    }));
-
-    const { data: ownItems } = await supabase
-      .from('inventory_items')
-      .select('id, name, unit, current_quantity')
-      .eq('organization_id', ctx.organizationId)
-      .eq('store_id', currentStore.id)
-      .eq('status', 'active')
-      .order('name');
-    transferItemOptions = (ownItems ?? []).map((i) => ({
-      id: i.id,
-      name: i.name,
-      unit: i.unit,
-      currentQuantity: Number(i.current_quantity),
-    }));
-  } else if (tab === 'reorder') {
-    // 在庫品目(activeItems)と発注中PO(openPos)は独立のため並列取得する。
-    const [{ data: activeItems }, { data: openPos }] = await Promise.all([
-      supabase
-        .from('inventory_items')
-        .select('id, name, unit, current_quantity, reorder_point, min_quantity, optimal_quantity')
-        .eq('organization_id', ctx.organizationId)
-        .eq('store_id', currentStore.id)
-        .eq('status', 'active')
-        .order('name'),
-      supabase
-        .from('purchase_orders')
-        .select('id')
-        .eq('organization_id', ctx.organizationId)
-        .eq('store_id', currentStore.id)
-        .in('status', ['approved', 'ordered', 'partially_received']),
-    ]);
-    const items = activeItems ?? [];
-    const itemIds = items.map((i) => i.id as string);
-    const openPoIds = (openPos ?? []).map((p) => p.id as string);
-
-    // 販売実績(sales)とPO明細(poItems)も相互に独立のため並列取得する。
-    const [{ data: sales }, { data: poItems }] = await Promise.all([
-      itemIds.length > 0
-        ? supabase
-            .from('stock_movements')
-            .select('inventory_item_id, quantity')
-            .eq('store_id', currentStore.id)
-            .eq('movement_type', 'sale')
-            .gte('business_date', daysAgoJst(30))
-            .in('inventory_item_id', itemIds)
-        : Promise.resolve({ data: [] as { inventory_item_id: string | null; quantity: number }[] }),
-      openPoIds.length > 0
-        ? supabase
-            .from('purchase_order_items')
-            .select('inventory_item_id, quantity, received_quantity')
-            .in('purchase_order_id', openPoIds)
-            .not('inventory_item_id', 'is', null)
-        : Promise.resolve({ data: [] as { inventory_item_id: string | null; quantity: number; received_quantity: number }[] }),
-    ]);
-
-    const salesByItem = new Map<string, number>();
-    for (const s of sales ?? []) {
-      const key = s.inventory_item_id as string;
-      salesByItem.set(key, (salesByItem.get(key) ?? 0) - Number(s.quantity));
-    }
-    const incomingByItem = new Map<string, number>();
-    for (const pi of poItems ?? []) {
-      const key = pi.inventory_item_id as string;
-      const remaining = Math.max(0, Number(pi.quantity) - Number(pi.received_quantity));
-      incomingByItem.set(key, (incomingByItem.get(key) ?? 0) + remaining);
-    }
-
-    reorderRows = items.map((i) => {
-      const avgDailySales = Math.round(((salesByItem.get(i.id as string) ?? 0) / 30) * 100) / 100;
-      const incomingQuantity = Math.round((incomingByItem.get(i.id as string) ?? 0) * 100) / 100;
-      const suggestion = suggestReorder(
-        {
-          currentQuantity: Number(i.current_quantity),
-          optimalQuantity: i.optimal_quantity != null ? Number(i.optimal_quantity) : null,
-          minQuantity: i.min_quantity != null ? Number(i.min_quantity) : null,
-          reorderPoint: i.reorder_point != null ? Number(i.reorder_point) : null,
-          avgDailySales,
-          leadTimeDays: 3,
-        },
-        incomingQuantity
-      );
-      return {
-        id: i.id as string,
-        name: i.name as string,
-        unit: i.unit as string,
-        currentQuantity: Number(i.current_quantity),
-        avgDailySales,
-        incomingQuantity,
-        needed: suggestion.needed,
-        suggestedQuantity: suggestion.suggestedQuantity,
-        basis: suggestion.basis,
-      };
+    const r = await loadInventoryItems(supabase, ctx.organizationId, currentStore.id, {
+      kind: sp.kind,
+      q: sp.q,
+      sortWarning,
     });
+    itemRows = r.rows;
+    priceIncreaseItemIds = r.priceIncreaseItemIds;
+  } else if (tab === 'counts') {
+    countsData = await loadInventoryCounts(supabase, ctx.organizationId, currentStore.id);
+  } else if (tab === 'transfers') {
+    const r = await loadInventoryTransfers(supabase, ctx.organizationId, currentStore.id);
+    transferRows = r.rows;
+    transferItemOptions = r.itemOptions;
+  } else if (tab === 'reorder') {
+    reorderRows = await loadInventoryReorder(supabase, ctx.organizationId, currentStore.id);
   } else if (tab === 'menu') {
     // メニューの売り切り（本日の食数）。設定は店舗設定、売れた数はその日の伝票から数える
     const [{ data: items }, { data: cats }, stock] = await Promise.all([
@@ -333,60 +141,13 @@ export default async function InventoryPage({
       };
     });
   } else if (tab === 'forecast') {
-    // 在庫品目(activeItems)と販売実績(movements)は独立のため並列取得する。
-    const [{ data: activeItems }, { data: movements }] = await Promise.all([
-      supabase
-        .from('inventory_items')
-        .select('id, name, unit')
-        .eq('organization_id', ctx.organizationId)
-        .eq('store_id', currentStore.id)
-        .eq('status', 'active')
-        .order('name'),
-      supabase
-        .from('stock_movements')
-        .select('inventory_item_id, quantity, business_date')
-        .eq('store_id', currentStore.id)
-        .eq('movement_type', 'sale')
-        .gte('business_date', daysAgoJst(56)),
-    ]);
-    const items = activeItems ?? [];
-    forecastItemOptions = items.map((i) => ({ id: i.id, name: i.name }));
-    const itemMap = new Map(items.map((i) => [i.id as string, i]));
-
-    const byItemDate = new Map<string, Map<string, number>>();
-    const totalByItem = new Map<string, number>();
-    for (const m of movements ?? []) {
-      const itemId = m.inventory_item_id as string;
-      const date = m.business_date as string;
-      const qty = -Number(m.quantity);
-      const dateMap = byItemDate.get(itemId) ?? new Map<string, number>();
-      dateMap.set(date, (dateMap.get(date) ?? 0) + qty);
-      byItemDate.set(itemId, dateMap);
-      totalByItem.set(itemId, (totalByItem.get(itemId) ?? 0) + qty);
-    }
-
-    const today = todayJst();
-    const selectedItemId = sp.item && itemMap.has(sp.item) ? sp.item : null;
-    if (selectedItemId) {
-      const dateMap = byItemDate.get(selectedItemId) ?? new Map<string, number>();
-      const history: DailyQty[] = [...dateMap.entries()].map(([date, quantity]) => ({ date, quantity }));
-      forecastResult = forecastUsage(history, today);
-      forecastUnit = itemMap.get(selectedItemId)?.unit ?? '';
-      forecastSelectedName = itemMap.get(selectedItemId)?.name ?? '';
-      forecastWeekdayChart = WEEKDAY_LABELS.map((label, idx) => ({
-        weekday: label,
-        avg: forecastResult!.weekdayAverages[idx],
-      }));
-    }
-
-    const topIds = [...totalByItem.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10).map(([id]) => id);
-    topForecast = topIds.map((id) => {
-      const item = itemMap.get(id);
-      const dateMap = byItemDate.get(id) ?? new Map<string, number>();
-      const history: DailyQty[] = [...dateMap.entries()].map(([date, quantity]) => ({ date, quantity }));
-      const fc = forecastUsage(history, today);
-      return { id, name: item?.name ?? '—', unit: item?.unit ?? '', tomorrow: fc.tomorrow };
-    });
+    const f = await loadInventoryForecast(supabase, ctx.organizationId, currentStore.id, sp.item);
+    forecastItemOptions = f.itemOptions;
+    forecastResult = f.result;
+    forecastWeekdayChart = f.weekdayChart;
+    forecastUnit = f.unit;
+    forecastSelectedName = f.selectedName;
+    topForecast = f.top;
   }
 
   const otherStores = ctx.stores.filter((s) => s.id !== currentStore.id).map((s) => ({ id: s.id, name: s.name }));
