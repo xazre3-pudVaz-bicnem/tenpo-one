@@ -86,12 +86,6 @@ final class NativeSettingsModel: ObservableObject {
 
     private var formKey = ""
 
-    /// プリンターらしい名前（lib/direct-print.ts の PRINTER_NAME_PATTERN と同じ）
-    private static let printerName = try? NSRegularExpression(
-        pattern: #"(print|prt|pos\b|pos[-_ ]|receipt|thermal|label|\btm[-_ ]?[a-z0-9]|mc[-_ ]?print|\brp[-_ ]?[a-z]?\d|\bmpt|\bpt[-_ ]?\d|\bxp[-_ ]?[a-z]?\d|\bgp[-_ ]?[a-z]?\d|\btsp\d|\bsm[-_ ]?[a-z]\d|\bspp[-_ ]?r|\bcmp[-_ ]?\d|\bmtp|\brpp|\bztp|epson|\bstar\b|\bsii\b|seiko|citizen|bixolon|sunmi|hprt|xprinter|munbyn|rongta|gainscha|zebra|brother|58mm|80mm)"#,
-        options: [.caseInsensitive]
-    )
-
     // MARK: - 読み込み
 
     func refresh() async {
@@ -105,6 +99,11 @@ final class NativeSettingsModel: ObservableObject {
             payload = p
             selectedPrinterId = p.selectedPrinterId
             error = nil
+            // テレビ・スピーカーなど、プリンターではない機械につないだ古い設定は外す（2026-10-24 Ronnie「印刷できる機械にだけ」）
+            let dropped = NativePrintConfig.shared.dropNonPrinterLinks()
+            if !dropped.isEmpty {
+                toast = "「\(dropped.map { $0.deviceName.isEmpty ? $0.deviceId : $0.deviceName }.joined(separator: "」「"))」はプリンターではないので外しました"
+            }
             syncForm()
         } catch {
             if payload == nil { self.error = (error as? NativeAPIError)?.message ?? "通信できませんでした" }
@@ -230,9 +229,7 @@ final class NativeSettingsModel: ObservableObject {
         if d["via"] == "usb" { return true }
         if d["maker"] == "epson" || d["maker"] == "star" { return true }
         if ["1", "yes", "true"].contains(d["printer"] ?? "") { return true }
-        let name = d["name"] ?? ""
-        guard let re = Self.printerName else { return false }
-        return re.firstMatch(in: name, range: NSRange(name.startIndex..., in: name)) != nil
+        return BluetoothPrinters.looksLikePrinter(d["name"] ?? "")
     }
 
     func search() async {
@@ -258,6 +255,11 @@ final class NativeSettingsModel: ObservableObject {
 
     func connect(_ d: NSTFound) async {
         guard let m = model else { return }
+        // プリンターにだけつなぐ（テレビ・スピーカーにはつながない。2026-10-24 Ronnie）
+        guard BluetoothPrinters.isPrinterDevice(maker: d.maker, via: d.via, deviceId: d.deviceId, name: d.name) else {
+            toast = "「\(d.name)」はプリンターではないのでつなげません"
+            return
+        }
         busy = "connect:\(d.deviceId)"
         defer { busy = nil }
         var body: [String: Any] = [

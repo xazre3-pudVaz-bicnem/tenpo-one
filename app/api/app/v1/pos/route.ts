@@ -91,6 +91,8 @@ import {
 } from '@/app/app/cash/actions';
 import { isNativeNoticeActionType, parseNativeNoticeAction } from '@/lib/native-notices';
 import { isNativeSettingsActionType, parseNativeSettingsAction } from '@/lib/native-settings';
+import { isNativeSettingsPageActionType, parseNativeSettingsPageAction } from '@/lib/native-settings-pages';
+import { isNativeSettingsPagePart, loadNativeSettingsPage, runNativeSettingsPageAction } from '@/lib/native-settings-pages-server';
 import { loadNativeSettings } from '@/lib/native-settings-server';
 import { currentDeviceSetting } from '@/lib/register-device-server';
 import { addDeviceReceiptPrinter, saveDeviceReceiptPrinterSettings, setDevicePrinter } from '@/app/app/pos/device-printer-actions';
@@ -128,6 +130,9 @@ import { isNativeBudgetActionType, parseNativeBudgetAction } from '@/lib/native-
 import { saveDailyBudgets } from '@/app/app/budgets/daily-actions';
 import { saveMonthlySalesTarget, upsertBudget } from '@/app/app/budgets/actions';
 import { loadNativeBudgets } from '@/lib/native-budgets-server';
+import { isNativeBookingActionType, parseNativeBookingAction } from '@/lib/native-booking';
+import { importStorePhotoFromPage, updateBookingSettings } from '@/app/app/settings/booking/actions';
+import { ADMIN_ONLY_SETTINGS_NOTE } from '@/lib/admin-only-settings';
 import { isNativePettyActionType, nativePettyPermission, parseNativePettyAction } from '@/lib/native-petty';
 import { loadNativeClosings, loadNativePetty } from '@/lib/native-petty-server';
 import {
@@ -157,6 +162,9 @@ import { addSlipToTable, cancelEmptyOrder, clearTable, mergeOrders, moveTable, s
 import { completeCleaning, goToOrder, releaseFinishedCleaning, setTableAvailability } from '@/app/app/floor/actions';
 import { saveTableGroup } from '@/app/app/floor/group-actions';
 import { resolveServiceCall, startRegisterVisit } from '@/app/app/handy/actions';
+import { isNativeTableQrActionType, parseNativeTableQrAction } from '@/lib/native-table-qr';
+import { loadNativeTableQr } from '@/lib/native-table-qr-server';
+import { invalidateTableQrToken, regenerateTableQrToken } from '@/app/app/settings/tables/actions';
 
 /**
  * iPad アプリのネイティブ画面（オーダー・会計）用の入口（2026-10-13 Ronnie「Airレジのようにネイティブで」）。
@@ -334,6 +342,14 @@ export async function GET(request: Request) {
     return json({ ok: true, ...cash });
   }
 
+  // 設定の中の画面（品切れ・POS担当者・営業時間 …。Web の各ページと同じ読み込み。2026-10-24 Ronnie「設定の中も全部ネイティブ」）
+  if (isNativeSettingsPagePart(part)) {
+    const store = ctx.currentStore ?? ctx.stores[0] ?? null;
+    if (!store) return json({ ok: false, error: '店舗がありません' }, 404);
+    const page = await loadNativeSettingsPage(part, ctx, await createClient(), { id: store.id, name: store.name });
+    return page.ok ? json({ ok: true, ...page.payload }) : json({ ok: false, error: page.error }, 500);
+  }
+
   // 設定（このiPadのプリンター・レシートの出し先・LAN・Wi-Fi・設定の一覧）。Web の /app/pos/settings と同じ組み立て（lib/native-settings-server.ts）
   if (part === 'settings') {
     const store = ctx.currentStore ?? ctx.stores[0] ?? null;
@@ -379,6 +395,14 @@ export async function GET(request: Request) {
       wifiOnly: qr.wifiOnly,
       activeDevices: activeDevices ?? 0,
     });
+  }
+
+  // テーブルQRコード（Web の 設定 > テーブル > QR印刷。印刷物は iPad の中で描く。2026-10-24 Ronnie「QR印刷・再発行をネイティブに」）
+  if (part === 'tableQr') {
+    const store = ctx.currentStore ?? ctx.stores[0] ?? null;
+    if (!store) return json({ ok: false, error: '店舗がありません' }, 404);
+    if (!can(ctx.role, 'store.settings')) return json({ ok: false, error: '権限がありません' }, 403);
+    return json({ ok: true, ...(await loadNativeTableQr(ctx, await createClient(), { id: store.id, name: store.name })) });
   }
 
   // 在庫設定（本日の残り数。Web の /app/inventory/menu-stock）
@@ -648,6 +672,46 @@ export async function GET(request: Request) {
       ['org_owner', 'hq_admin', 'area_manager', 'store_manager'].includes(ctx.role ?? '')
     );
     return json({ ok: true, ...daily });
+  }
+
+  // 予約設定＝予約受付ルール（Web の /app/settings/booking。2026-10-24）
+  if (part === 'bookingSettings') {
+    if (!can(ctx.role, 'store.settings')) return json({ ok: false, error: '権限がありません', useWeb: true }, 403);
+    const store = ctx.currentStore ?? ctx.stores[0] ?? null;
+    if (!store) return json({ ok: false, error: '対象の店舗がありません' }, 404);
+    const supabase = await createClient();
+    const [{ data: storeRow }, { data: s }] = await Promise.all([
+      supabase.from('stores').select('slug, booking_enabled').eq('id', store.id).single(),
+      supabase
+        .from('store_settings')
+        .select('slot_minutes, default_stay_minutes, booking_cutoff_minutes, booking_window_days, max_party_size, cancel_deadline_hours, cleaning_buffer_minutes, booking_photo_url, booking_notes, cancellation_policy, reminder_enabled, reminder_hours_before')
+        .eq('store_id', store.id)
+        .maybeSingle(),
+    ]);
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || (await import('@/lib/site-origin').then((m) => m.resolveSiteOrigin()));
+    return json({
+      ok: true,
+      store: { id: store.id, name: store.name },
+      // レジ端末（iPad の「<店舗名>（レジ）」）は見るだけ。変更は管理画面（2026-09-29 Ronnie「管理画面」）
+      adminOnly: ctx.isRegisterDevice === true,
+      adminOnlyNote: ADMIN_ONLY_SETTINGS_NOTE,
+      bookingEnabled: storeRow?.booking_enabled ?? false,
+      bookingUrl: storeRow?.slug ? `${siteUrl}/book/${storeRow.slug}` : null,
+      settings: {
+        slotMinutes: s?.slot_minutes ?? 30,
+        defaultStayMinutes: s?.default_stay_minutes ?? 120,
+        bookingCutoffMinutes: s?.booking_cutoff_minutes ?? 120,
+        bookingWindowDays: s?.booking_window_days ?? 90,
+        maxPartySize: s?.max_party_size ?? 12,
+        cancelDeadlineHours: s?.cancel_deadline_hours ?? 24,
+        cleaningBufferMinutes: s?.cleaning_buffer_minutes ?? 0,
+        bookingPhotoUrl: s?.booking_photo_url ?? '',
+        bookingNotes: s?.booking_notes ?? '',
+        cancellationPolicy: s?.cancellation_policy ?? '',
+        reminderEnabled: s?.reminder_enabled ?? false,
+        reminderHoursBefore: s?.reminder_hours_before ?? 24,
+      },
+    });
   }
 
   // お知らせ（Web の /app/announcements）
@@ -1177,6 +1241,23 @@ export async function POST(request: Request) {
     }
   }
 
+  // 設定の中の画面の操作（品切れ・POS担当者・営業時間 …。中身は Web と同じ Server Action。権限はその中で見る。2026-10-24）
+  if (raw && typeof raw === 'object' && isNativeSettingsPageActionType((raw as { type?: unknown }).type)) {
+    const parsedPage = parseNativeSettingsPageAction(raw);
+    if (!parsedPage.ok) return json({ ok: false, error: parsedPage.error }, 400);
+    const pageStore = ctx.currentStore ?? ctx.stores[0];
+    if (!pageStore) return json({ ok: false, error: '店舗がありません' }, 404);
+    // Route Handler では requirePermission がお店の回線を見ないので、ここで見る（ほかの操作と同じ）
+    const pageProblem = await networkProblem(ctx);
+    if (pageProblem) return json({ ok: false, error: pageProblem }, 403);
+    try {
+      const r = await runNativeSettingsPageAction(parsedPage.action, { id: pageStore.id, name: pageStore.name });
+      return r.ok ? json({ ok: true, ...(r.data ?? {}) }) : json({ ok: false, error: r.error }, 400);
+    } catch (e) {
+      return json({ ok: false, error: errorText(e, 'うまくいきませんでした。もう一度お試しください') }, 400);
+    }
+  }
+
   // 設定：このiPadのプリンター（Web の app/app/pos/device-printer-actions.ts と同じ Server Action。権限はその中で見る。2026-10-24）
   if (raw && typeof raw === 'object' && isNativeSettingsActionType((raw as { type?: unknown }).type)) {
     const parsedSettings = parseNativeSettingsAction(raw);
@@ -1213,6 +1294,43 @@ export async function POST(request: Request) {
     }
   }
 
+  // 予約設定の保存・店舗写真の取り込み（2026-10-24）。中身は Web と同じ Server Action（レジ端末は中で「管理画面で変更してください」）
+  if (raw && typeof raw === 'object' && isNativeBookingActionType((raw as { type?: unknown }).type)) {
+    const parsedBooking = parseNativeBookingAction(raw);
+    if (!parsedBooking.ok) return json({ ok: false, error: parsedBooking.error }, 400);
+    const store = ctx.currentStore ?? ctx.stores[0];
+    if (!store) return json({ ok: false, error: '対象の店舗がありません' }, 404);
+    if (!can(ctx.role, 'store.settings')) return json({ ok: false, error: '権限がありません' }, 403);
+    // Route Handler では requirePermission がお店の回線を見ないので、ここで見る（ほかの操作と同じ）
+    const bookingProblem = await networkProblem(ctx);
+    if (bookingProblem) return json({ ok: false, error: bookingProblem }, 403);
+    try {
+      const ba = parsedBooking.action;
+      if (ba.type === 'bookingPhotoImport') {
+        const r = await importStorePhotoFromPage({ storeId: store.id, pageUrl: ba.pageUrl });
+        return json(r.error ? { ok: false, error: r.error } : { ok: true, photoUrl: r.photoUrl ?? null });
+      }
+      const r = await updateBookingSettings({
+        storeId: store.id,
+        slotMinutes: ba.slotMinutes,
+        defaultStayMinutes: ba.defaultStayMinutes,
+        bookingCutoffMinutes: ba.bookingCutoffMinutes,
+        bookingWindowDays: ba.bookingWindowDays,
+        maxPartySize: ba.maxPartySize,
+        cancelDeadlineHours: ba.cancelDeadlineHours,
+        cleaningBufferMinutes: ba.cleaningBufferMinutes,
+        bookingPhotoUrl: ba.bookingPhotoUrl,
+        bookingNotes: ba.bookingNotes,
+        cancellationPolicy: ba.cancellationPolicy,
+        reminderEnabled: ba.reminderEnabled,
+        reminderHoursBefore: ba.reminderHoursBefore,
+      });
+      return json(r.error ? { ok: false, error: r.error } : { ok: true });
+    } catch (e) {
+      return json({ ok: false, error: errorText(e, 'うまくいきませんでした。もう一度お試しください') }, 400);
+    }
+  }
+
   // 通知の既読（自分宛だけ。回線は見ない＝Web と同じく requireSession だけ）
   if (raw && typeof raw === 'object' && isNativeNoticeActionType((raw as { type?: unknown }).type)) {
     const parsedNotice = parseNativeNoticeAction(raw);
@@ -1235,6 +1353,27 @@ export async function POST(request: Request) {
         await createAnnouncement({ title: na.title, body: na.body, isImportant: na.isImportant, publishFrom: na.publishFrom, publishTo: na.publishTo, storeId: na.allStores ? null : target!.id });
       }
       return json({ ok: true });
+    } catch (e) {
+      return json({ ok: false, error: errorText(e, 'うまくいきませんでした。もう一度お試しください') }, 400);
+    }
+  }
+
+  // テーブルQRの再発行・停止（中身は Web の 設定 > テーブル の「QRコード」と同じ Server Action。2026-10-24）
+  if (raw && typeof raw === 'object' && isNativeTableQrActionType((raw as { type?: unknown }).type)) {
+    const parsedQr = parseNativeTableQrAction(raw);
+    if (!parsedQr.ok) return json({ ok: false, error: parsedQr.error }, 400);
+    if (!can(ctx.role, 'store.settings')) return json({ ok: false, error: '権限がありません' }, 403);
+    // Route Handler では requirePermission がお店の回線を見ないので、ここで見る（ほかの操作と同じ）
+    const qrProblem = await networkProblem(ctx);
+    if (qrProblem) return json({ ok: false, error: qrProblem }, 403);
+    try {
+      // レジ端末のアカウントからは Web と同じく不可（ADMIN_ONLY_SETTINGS_NOTE が error で返る）
+      const r =
+        parsedQr.action.type === 'tableQrRegenerate'
+          ? await regenerateTableQrToken(parsedQr.action.tableId)
+          : await invalidateTableQrToken(parsedQr.action.tableId);
+      if (r.error) return json({ ok: false, error: r.error }, 400);
+      return json({ ok: true, url: r.url ?? null, invalidated: r.invalidated === true });
     } catch (e) {
       return json({ ok: false, error: errorText(e, 'うまくいきませんでした。もう一度お試しください') }, 400);
     }
