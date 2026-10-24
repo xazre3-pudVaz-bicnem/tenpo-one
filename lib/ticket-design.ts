@@ -14,7 +14,8 @@ export function kitchenDesign(ticket: KitchenTicket, opts: KitchenLayoutOptions)
   const allCancel = ticket.lines.every(l => l.delta < 0);
   const part = ticket.part && ticket.part.total > 1 ? ` (${ticket.part.index}/${ticket.part.total})` : '';
   const rows: TicketRow[] = [
-    { cells: [cell(opts.title.replace(/\s*伝票$/, '')), { ...cell(ticket.tableName ?? 'テイクアウト', 'center', 1.3), size: 44, bold: true }, cell(ticket.guestCount == null ? '' : `人数：${ticket.guestCount}名`, 'right')], size: 28, gap: 12 },
+    { ...text(opts.title.replace(/\s*伝票$/, ''), 28, 'center'), gap: 12 },
+    { cells: [cell(''), { ...cell(ticket.tableName ?? 'テイクアウト', 'center', 1.3), size: 44, bold: true }, cell(ticket.guestCount == null ? '' : `人数：${ticket.guestCount}名`, 'right')], size: 28 },
     { cells: [cell(`伝票No.${ticket.orderNo}${part}`), cell(opts.printedAt, 'center', .6), cell(ticket.clerkName ? `担当 ${ticket.clerkName}` : '', 'right')], size: 22, rule: 'solid', gap: 10 },
   ];
   if (allCancel) rows.push({ ...text('取消 / CANCEL', 28, 'center'), bold: true, black: true });
@@ -28,11 +29,11 @@ export function kitchenDesign(ticket: KitchenTicket, opts: KitchenLayoutOptions)
     if (!allCancel && l.delta < 0) rows.push({ ...text('取消 / CANCEL', 24, 'center'), black: true, bold: true });
     if (l.delta < 0 && l.cancelReason && (!allCancel || reasons.length > 1)) rows.push(text(`取消理由：${l.cancelReason}`, 15));
     const label = `${l.step ? ordinalEn(l.step.index) + ' ' : ''}${l.nameEn || l.name}`;
-    rows.push({ cells: [cell(label, 'left', 8), cell(String(Math.abs(l.delta)), 'right', 2)], size, bold: true, rule: 'solid' });
-    if (opts.language !== 'en' && l.nameEn && l.nameEn !== l.name) rows.push({ ...text(l.name, size - 3), indent: 14, rule: 'solid' });
+    rows.push({ cells: [cell(label, 'left', 8), cell(String(Math.abs(l.delta)), 'right', 2)], size, bold: true });
+    if (opts.language !== 'en' && l.nameEn && l.nameEn !== l.name) rows.push({ ...text(l.name, size - 3), indent: 14 });
     if (l.step && !course) rows.push({ ...text(l.step.course, size - 3), indent: 14 });
-    for (const m of l.modifiers) rows.push({ cells: [cell(m, 'left', 9), cell(String(Math.abs(l.delta)), 'right', 2)], size: size - 2, indent: 14, rule: 'solid' });
-    if (l.memo) rows.push({ ...text(l.memo, size - 2), indent: 14, rule: 'solid' });
+    for (const m of l.modifiers) rows.push({ cells: [cell(m, 'left', 9), cell(String(Math.abs(l.delta)), 'right', 2)], size: size - 2, indent: 14 });
+    if (l.memo) rows.push({ ...text(l.memo, size - 2), indent: 14 });
   }
   return { serif: true, rows };
 }
