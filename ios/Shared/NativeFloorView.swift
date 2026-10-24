@@ -464,7 +464,8 @@ struct NativeTableCard: View {
     static let bandH: CGFloat = 36
     static let callRed = Color(hex: 0xE53935)
     /// QR からのお会計の依頼は緑の財布（お金＝緑。2026-10-24 21:23 Ronnie「財布か緑の ¥」→21:31「財布」）
-    static let callGreen = Color(hex: 0x12A150)
+    /// 色はポップアップの「レジ会計」のボタンと同じ緑（NFColor.success。2026-10-24 21:36 Ronnie）
+    static let callGreen = NFColor.success
     static let walletSymbol: String = ["wallet.bifold.fill", "wallet.pass.fill", "yensign.circle.fill"].first { UIImage(systemName: $0) != nil } ?? "yensign.circle.fill"
 
     /// 印の色（飲み放題＝琥珀・食べ放題＝橙・コース＝藍・誕生日＝ピンク・記念日＝赤・子連れ＝青緑…）
