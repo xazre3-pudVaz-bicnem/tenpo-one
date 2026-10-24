@@ -171,11 +171,14 @@ struct NativeFloorView: View {
     // MARK: 卓の箱
 
     private func tableGrid(width: CGFloat, height: CGFloat) -> some View {
-        // 箱は少し小さめ（だいたい 185pt）の正方形。箱と箱の間・外側の余白・右の予約の欄との間を全部 14 でそろえる
-        // （2026-10-24 20:36 Ronnie「箱が少し大きいので小さく、間をそろえて」）。幅いっぱいに割るので左右に余りが出ない
+        // 箱の間・外側の余白・右の予約の欄との間を全部 14 でそろえる（2026-10-24 20:36 Ronnie「間をそろえて」）。
+        // 卓が少ない日も右に余りを残さず、余った幅を全部の箱で分ける（20:42「右の空きを全部の箱で分けて」）。
+        // 高さは低め（200 まで）にして、箱が大きくなりすぎないように（20:36「少し大きいので小さく」）
         let gap: CGFloat = 14
-        let cols = max(3, Int((width + gap) / (185 + gap)))
+        let fit = max(3, Int((width + gap) / (185 + gap)))
+        let cols = max(1, min(fit, max(model.visibleTables.count, 3)))
         let side = max(120, (width - gap * CGFloat(cols - 1)) / CGFloat(cols))
+        let tileH = min(side, 200)
         let columns = Array(repeating: GridItem(.fixed(side), spacing: gap), count: cols)
         return Group {
             if model.visibleTables.isEmpty {
@@ -187,7 +190,7 @@ struct NativeFloorView: View {
             } else {
                 LazyVGrid(columns: columns, alignment: .center, spacing: gap) {
                     ForEach(model.visibleTables) { t in
-                        NativeTableCard(table: t, now: model.now) { rect in
+                        NativeTableCard(table: t, now: model.now, height: tileH) { rect in
                             tileRect = rect
                             model.selectedTableId = t.id
                         }
@@ -229,6 +232,8 @@ struct NativeFloorView: View {
 struct NativeTableCard: View {
     let table: NFTable
     let now: Double
+    /// 箱の高さ（幅は列の幅いっぱい）
+    var height: CGFloat = 200
     let onTap: (CGRect) -> Void
 
     @State private var rect: CGRect = .zero
@@ -331,9 +336,9 @@ struct NativeTableCard: View {
             .padding(.horizontal, 14)
             .padding(.top, 12)
             .padding(.bottom, order != nil ? 20 : 12)
-            // 卓の箱は正方形（横幅と同じ高さ。2026-10-24 Ronnie）
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .aspectRatio(1, contentMode: .fit)
+            // 横は列の幅いっぱい、高さはそろえる（2026-10-24 20:42 Ronnie「右の空きを全部の箱で分けて」）
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+            .frame(height: height, alignment: .topLeading)
             // Apple 風：白い地の上に、角の丸いカードを浮かせる（空席は薄いグレー、使用中は白＋影）
             // 3D：下に一段濃い「台」を敷き、その上に上が明るいカードを乗せる（キーのような立体。2026-10-24 Ronnie「3D・見えやすく」）
             .background(
@@ -414,9 +419,9 @@ struct NativeTableCard: View {
     private func seatMarks(used: Int, state: NFTileState) -> some View {
         let cap = table.capacityMax
         if cap >= 1 {
-            HStack(spacing: 3) {
+            HStack(spacing: 4) {
                 ForEach(0..<min(cap, 12), id: \.self) { i in
-                    Capsule().fill(i < used ? NFColor.label(state) : NFColor.ink.opacity(0.12)).frame(width: 9, height: 4)
+                    Circle().fill(i < used ? NFColor.label(state) : NFColor.ink.opacity(0.12)).frame(width: 7, height: 7)
                 }
                 if cap > 12 { Text("+\(cap - 12)").font(.system(size: 9, weight: .heavy)).foregroundColor(NFColor.ink3) }
                 if used > cap { Text("+\(used - cap)").font(.system(size: 9, weight: .heavy)).foregroundColor(NFColor.label(state)) }
