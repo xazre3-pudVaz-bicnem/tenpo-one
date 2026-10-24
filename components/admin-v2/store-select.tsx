@@ -9,17 +9,19 @@ import { cn } from '@/lib/utils';
 
 /**
  * 店舗を選ぶプルダウン（2026-10-24 Ronnie「店舗を全部ボタンで並べない。選べるように」）。
- * 選ぶと上の店舗の切り替えと同じく、その店舗を覚えて hrefFor(店舗) へ行く。店舗ナウなどで使う。
+ * 選ぶと上の店舗の切り替えと同じく、その店舗を覚えて hrefTemplate の {id} をその店舗にした場所へ行く。店舗ナウなどで使う。
+ * （サーバー部品からは関数を渡せないので、行き先は文字列のテンプレートで受け取る）
  */
 export function StoreSelect({
   stores,
   currentId,
-  hrefFor,
+  hrefTemplate,
   className,
 }: {
   stores: { id: string; name: string }[];
   currentId: string;
-  hrefFor: (storeId: string) => string;
+  /** 例 '/app/now?store={id}' */
+  hrefTemplate: string;
   className?: string;
 }) {
   const router = useRouter();
@@ -38,7 +40,7 @@ export function StoreSelect({
           startTransition(async () => {
             try {
               await switchStore(id);
-              router.push(hrefFor(id));
+              router.push(hrefTemplate.replace('{id}', encodeURIComponent(id)));
             } catch (err) {
               toast(err instanceof Error ? err.message : '店舗を切り替えられませんでした', 'error');
             }
