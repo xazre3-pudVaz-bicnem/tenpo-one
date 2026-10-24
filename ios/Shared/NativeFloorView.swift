@@ -171,16 +171,18 @@ struct NativeFloorView: View {
     // MARK: 卓の箱
 
     private func tableGrid(width: CGFloat, height: CGFloat) -> some View {
-        // 箱は 190pt の正方形（約 202pt は少し大きい、176pt は小さすぎ。2026-10-24 20:45／20:47 Ronnie「0.5cm 小さく」→「小さすぎ、少し大きく」）。
-        // 余った幅は、左の端・箱と箱の間・右の予約の欄との間に同じだけ分ける（20:36「間をそろえて」、20:42「右の空きを残さない」）。
-        // 外側の余白 14（画面の左・予約の欄との間）も含めて同じ間にするので、内側で s − 14 を足す
-        let side: CGFloat = 190
-        let minGap: CGFloat = 20
+        // 間は 28 で固定（左の端・箱と箱の間・右の予約の欄との間が全部同じ）。箱は残りの幅を等分した正方形
+        // （2026-10-24 Ronnie 20:36「少し小さく・間をそろえて」→20:42「右の空きを箱で分けて」→20:45「0.5cm 小さく」
+        //  →20:47「小さすぎ」→20:57「間がまだ広い、箱を少し大きく」）。箱は 180〜240pt、列は 180pt 以上になる数まで
+        let gapS: CGFloat = 28
         let outer: CGFloat = 14
         let total = width + outer * 2
-        let fit = max(1, Int((total - minGap) / (side + minGap)))
+        func sideFor(_ n: Int) -> CGFloat { (total - gapS * CGFloat(n + 1)) / CGFloat(n) }
+        var fit = 1
+        while sideFor(fit + 1) >= 180 { fit += 1 }
         let cols = max(1, min(fit, max(model.visibleTables.count, min(fit, 3))))
-        let space = max(minGap, (total - side * CGFloat(cols)) / CGFloat(cols + 1))
+        let side = max(120, min(240, sideFor(cols)))
+        let space = max(gapS, (total - side * CGFloat(cols)) / CGFloat(cols + 1))
         let inset = max(0, space - outer)
         let tileH = side
         let columns = Array(repeating: GridItem(.fixed(side), spacing: space), count: cols)
