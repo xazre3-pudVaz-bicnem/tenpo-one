@@ -6,7 +6,8 @@ CLAUDE.mdの「正直表示」方針（未実装の外部連携を「対応済�
 | 連携 | 状態 | 抽象化ポイント / 実装箇所 |
 |---|---|---|
 | **決済（Stripe）** | **基盤実装済み・本番接続未実施** | `lib/payments/`（`PaymentProviderAdapter`インターフェース）、`lib/payments/stripe.ts`（Stripe実装）、`app/api/webhooks/stripe/route.ts`。テストモードキー・シミュレーテッドリーダーで検証済み（`scripts/verify-stripe.mjs`）。実店舗のカードリーダー登録・本番キー切替は未実施 |
-| 決済（Square/Airpay/Stera/Paygate） | 未実装・抽象化ポイントあり | `lib/payments/types.ts`の`PaymentProviderName`型に列挙のみ。`lib/payments/index.ts`の`ADAPTERS`に未登録。`PaymentProviderAdapter`を実装するアダプタファイルを追加し登録すれば接続可能 |
+| **決済（stera terminal・金額連動）** | **サーバー・レジ側実装済み／端末側アプリは未配信** | クラウド中継（LAN 不使用）: `lib/stera.ts`・`lib/stera-server.ts`・`app/api/stera/[code]/route.ts`（端末アプリ用 API）・`app/app/pos/stera-actions.ts`・`components/pos/stera-pay-panel.tsx`・`ios/Shared/NativeCheckoutView.swift`・設定 ＞ 決済・端末（`stera-terminals-panel.tsx`、migration `00092_stera_link.sql`）。端末側の Android アプリ「TENPO ONE 連携」は `android/stera-link/`（決済アプリを Intent で呼ぶ公開仕様）。**stera market への掲載（新規参画申請 → 検証用端末 → 審査）が済むまで、店舗の端末には入れられない**。それまでは「外部端末（stera等）」の手動会計。仕様書による POS連動（直接連動）は別ルートで GMO フィナンシャルゲート（pos_stera@gmo-fg.com）に申請中（2026-10） |
+| 決済（Square/Airpay/Paygate） | 未実装・抽象化ポイントあり | `lib/payments/types.ts`の`PaymentProviderName`型に列挙のみ。`lib/payments/index.ts`の`ADAPTERS`に未登録。`PaymentProviderAdapter`を実装するアダプタファイルを追加し登録すれば接続可能 |
 | SaaS課金（サブスクリプション） | 設計のみ・未接続 | `saas_subscriptions`テーブル（`00007_payments_stripe.sql`）。Stripe Billing想定のカラム（`provider_subscription_id`等）はあるが決済連携なし。書込はCYPRESS運営限定 |
 | レシート・キッチンプリンター | 未実装・抽象化ポイントあり | `printer_configs`（機種・接続方式・IPアドレス等の設定）、`print_jobs`（印刷キュー、`status: queued→printed`）。現状`target='browser'`のブラウザ印刷のみ実装（`app/app/settings/printers/actions.ts`の`createTestPrint`）。実機SDK（Epson/Star等）への接続は未実装 |
 | LINE公式アカウント連携 | 未実装・マスタのみ | `reservation_sources`にLINE（`line`）がグローバルマスタとして登録済み（予約経路の記録用選択肢）。LINE Messaging API等での自動通知・予約連携は未実装 |
