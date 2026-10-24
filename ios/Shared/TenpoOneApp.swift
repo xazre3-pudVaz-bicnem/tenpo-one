@@ -63,6 +63,13 @@ struct RootView: View {
                         .transition(.opacity)
                         .zIndex(3)
                 }
+                // iPhone の店長・オーナーの画面（NativePhoneOwner.swift。2026-10-25）
+                if let r = state.phoneOwnerModule, !AppConfig.isPad {
+                    NativePhoneOwnerScreen(route: r)
+                        .id(r.id)
+                        .transition(.move(edge: .trailing))
+                        .zIndex(3.6)
+                }
                 // iPhone ハンディの予約（/handy/reservations・/handy/reservations/new の代わり。2026-10-25 Ronnie「iPhone も native に」）
                 if let r = state.phoneReservations, !state.needsHandyLogin {
                     NativePhoneReservationsScreen(route: r)
