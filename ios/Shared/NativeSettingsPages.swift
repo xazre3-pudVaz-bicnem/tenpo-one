@@ -2027,7 +2027,8 @@ final class NativeHandyDevicesModel: NSPModel<NHVPayload> {
     @Published var qr: (url: String, expiresAt: Date)?
     @Published var editing: String?
     @Published var editName = ""
-    init() { super.init(part: "handy") }
+    // "handy" は iPhone ハンディのテーブル一覧の part（route.ts で先に当たる）。設定の一覧は "handyDevices"
+    init() { super.init(part: "handyDevices") }
 
     func issue() async {
         let n = deviceName.trimmingCharacters(in: .whitespaces)
@@ -2125,7 +2126,16 @@ struct NativeHandyDevicesView: View {
                                             Text(d.name).font(.system(size: 16, weight: .bold)).foregroundColor(revoked ? NFColor.ink3 : NFColor.ink).strikethrough(revoked, color: NFColor.ink3)
                                             if revoked { Text("解除済み").font(.system(size: 11, weight: .bold)).foregroundColor(NFColor.ink3).padding(.horizontal, 7).padding(.vertical, 2).background(Capsule().fill(NFColor.lilac)) }
                                         }
-                                        Text("登録 \(Self.pretty(d.pairedAt))　最後に使った \(d.lastSeenAt.map(Self.pretty) ?? "—")\(d.pairedIp.map { "　\($0)" } ?? "")").font(.system(size: 12)).foregroundColor(NFColor.ink3).lineLimit(1)
+                                        // どの端末か（機種・OS）と、いま使っているか（3分以内に通信）
+                                        HStack(spacing: 6) {
+                                            if !revoked {
+                                                let on = Self.isOnline(d.lastSeenAt, now: now)
+                                                Circle().fill(on ? NFColor.success : NFColor.ink3.opacity(0.5)).frame(width: 8, height: 8)
+                                                Text(on ? "使用中" : "未使用").font(.system(size: 12, weight: .bold)).foregroundColor(on ? NFColor.success : NFColor.ink3)
+                                            }
+                                            Text(Self.deviceLabel(d.userAgent)).font(.system(size: 12, weight: .semibold)).foregroundColor(NFColor.ink2)
+                                        }
+                                        Text("登録 \(Self.pretty(d.pairedAt))　最後に使った \(d.lastSeenAt.map(Self.pretty) ?? "—")\(d.pairedIp.map { "　IP \($0)" } ?? "")").font(.system(size: 12)).foregroundColor(NFColor.ink3).lineLimit(1)
                                     }
                                 }
                                 Spacer()
@@ -2155,6 +2165,26 @@ struct NativeHandyDevicesView: View {
         f.correctionLevel = "M"
         guard let out = f.outputImage?.transformed(by: CGAffineTransform(scaleX: 12, y: 12)), let cg = CIContext().createCGImage(out, from: out.extent) else { return nil }
         return UIImage(cgImage: cg)
+    }
+    /// 3分以内に通信していれば「使用中」
+    private static func isOnline(_ iso: String?, now: Date) -> Bool {
+        guard let iso else { return false }
+        let f = ISO8601DateFormatter(); f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        guard let d = f.date(from: iso) ?? ISO8601DateFormatter().date(from: iso) else { return false }
+        return now.timeIntervalSince(d) < 180
+    }
+    /// User-Agent から「iPhone · iOS 18.1」「Android 14」など（分からなければ「端末の種類 不明」）
+    private static func deviceLabel(_ ua: String?) -> String {
+        guard let ua, !ua.isEmpty else { return "端末の種類 不明" }
+        func ver(_ pattern: String) -> String? {
+            guard let r = ua.range(of: pattern, options: .regularExpression) else { return nil }
+            return String(ua[r]).replacingOccurrences(of: "_", with: ".").components(separatedBy: CharacterSet.decimalDigits.union(CharacterSet(charactersIn: ".")).inverted).filter { !$0.isEmpty }.first
+        }
+        if ua.contains("iPhone") { return "iPhone" + (ver("OS [0-9_]+").map { " · iOS \($0)" } ?? "") }
+        if ua.contains("iPad") { return "iPad" + (ver("OS [0-9_]+").map { " · iPadOS \($0)" } ?? "") }
+        if ua.contains("Android") { return "Android" + (ver("Android [0-9.]+").map { " \($0)" } ?? "") }
+        if ua.contains("TENPO") || ua.contains("TenpoOne") { return "TENPO ONE アプリ" }
+        return "ブラウザ"
     }
     private static func pretty(_ iso: String) -> String {
         let f = ISO8601DateFormatter(); f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
