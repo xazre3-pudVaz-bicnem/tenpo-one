@@ -105,7 +105,7 @@ struct NativeReservationSheet: View {
                             .padding(.horizontal, 16).padding(.bottom, 12)
                         }
                         divider
-                        infoRow("人数", "\(r.partySize)名（大人 \(r.adults)・子供 \(r.children)）") { EmptyView() }
+                        infoRow("人数", r.partySizeMin != nil ? "\(r.partyLabel)（席は \(r.partySize)名・うち子供 \(r.children)）" : "\(r.partySize)名（大人 \(r.adults)・子供 \(r.children)）") { EmptyView() }
                         divider
                         infoRow("テーブル", r.tableNames.isEmpty ? "席未定" : r.tableNames.joined(separator: " + ")) {
                             if canWrite { smallButton(tableOpen ? "閉じる" : "変更") { withAnimation { tableOpen.toggle() } } }
@@ -146,7 +146,26 @@ struct NativeReservationSheet: View {
                         pickerRow("担当", current: r.staffId ?? "", options: (p?.staffOptions ?? []).map { ($0.id, $0.name) }, none: "担当なし") { id in
                             Task { if let _ = await model.act(["type": "ledgerClerk", "reservationId": r.id, "clerkId": id ?? NSNull()]) { model.show(toast: "担当を変更しました") } }
                         }
-                        if let t = r.tags, !t.isEmpty { divider; infoRow("キーワード", t.joined(separator: "、")) { EmptyView() } }
+                        if let t = r.tags, !t.isEmpty {
+                            divider
+                            // キーワード・お客様／予約のタグ（区分のタグは小さいアイコンつき）
+                            HStack(alignment: .top, spacing: 12) {
+                                Text("タグ").font(.system(size: 13, weight: .bold)).foregroundColor(NLColor.muted).frame(width: 76, alignment: .leading).padding(.top, 6)
+                                NRWFlow(spacing: 6, lineSpacing: 6) {
+                                    ForEach(t, id: \.self) { tag in
+                                        HStack(spacing: 4) {
+                                            Image(systemName: NRWTagIcon.symbol(p?.tagIcons?[tag] ?? "tag")).font(.system(size: 10, weight: .semibold))
+                                            Text(tag).font(.system(size: 13, weight: .bold))
+                                        }
+                                        .foregroundColor(tag == "要連絡" ? NLColor.red : NLColor.navy)
+                                        .padding(.horizontal, 10).frame(height: 28)
+                                        .background(Capsule().fill(tag == "要連絡" ? NLColor.redSoft : NLColor.page))
+                                        .overlay(Capsule().stroke(NLColor.line, lineWidth: 1))
+                                    }
+                                }
+                            }
+                            .padding(.horizontal, 16).padding(.vertical, 10)
+                        }
                         if let n = r.requestNote, !n.isEmpty { divider; infoRow("ご要望", n) { EmptyView() } }
                         if let a = r.allergyNote, !a.isEmpty { divider; infoRow("アレルギー", a) { EmptyView() } }
                         if let pu = r.purpose, !pu.isEmpty { divider; infoRow("目的", pu) { EmptyView() } }
@@ -222,7 +241,7 @@ struct NativeReservationSheet: View {
                     }
                 }
                 HStack(spacing: 8) {
-                    Text("\(r.partySize)名").font(.system(size: 15, weight: .bold)).foregroundColor(NLColor.ink)
+                    Text(r.partyLabel).font(.system(size: 15, weight: .bold)).foregroundColor(NLColor.ink)
                     Text("\(nlHm(nlJstMinutes(r.startAt, dayStart: r.reservedDate)))〜\(nlHm(nlJstMinutes(r.endAt, dayStart: r.reservedDate)))").font(.system(size: 15, weight: .bold)).monospacedDigit().foregroundColor(NLColor.ink)
                     if let p, let st = NLSource.style(for: r, in: p) {
                         NLSourceChip(style: st, auto: r.createdVia == "gourmet_mail", size: 11)

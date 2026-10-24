@@ -46,6 +46,13 @@ struct NLReservation: Codable, Identifiable, Hashable {
     let leftAt: String?
     let visitCount: Int?
     let tags: [String]?
+    /// 人数を範囲で受けたときの最小人数（4〜6 名の 4。最大は partySize）
+    var partySizeMin: Int? = nil
+}
+
+extension NLReservation {
+    /// 「4〜6名」「4名」
+    var partyLabel: String { partySizeMin.map { "\($0)〜\(partySize)名" } ?? "\(partySize)名" }
 }
 
 struct NLSummary: Codable {
@@ -86,6 +93,8 @@ struct NLPayload: Codable {
     let staffOptions: [NFNamed]
     let statusLabels: [String: String]
     let transitions: [String: [String]]
+    /// タグの名前 → アイコン名（予約カード・詳細に小さく出す）
+    var tagIcons: [String: String]? = nil
     let canWrite: Bool
     /// 上のボタンの出し分け（古いサーバーは無い）
     let links: NLLinks?
@@ -325,6 +334,9 @@ struct NativeLedgerView: View {
 
     @State private var selected: NLReservation?
     @State private var newOpen = false
+    @State private var inboxOpen = false
+    @State private var dateCalendarOpen = false
+    @StateObject private var inbox = NLInboxModel()
     @State private var findSeatsOpen = false
     @State private var walkInOpen = false
     @State private var gourmetOpen = false
@@ -432,14 +444,19 @@ struct NativeLedgerView: View {
         .sheet(isPresented: $findSeatsOpen) {
             NLFindSeatsSheet(model: model, onClose: { findSeatsOpen = false })
         }
+        .sheet(isPresented: $inboxOpen) {
+            NLInboxSheet(inbox: inbox, model: model, onClose: { inboxOpen = false })
+        }
         .sheet(isPresented: $walkInOpen) {
             NLWalkInSheet(model: model, onClose: { walkInOpen = false })
         }
         .sheet(isPresented: $gourmetOpen) {
             NativeGourmetSheet(onClose: { gourmetOpen = false }, onOpenReservation: { id, date in openReservation(id: id, date: date) })
         }
-        .onAppear { model.start() }
-        .onDisappear { model.stop() }
+        .onAppear { model.start(); inbox.start() }
+        .onDisappear { model.stop(); inbox.stop() }
+        // 予約を登録・変更したら、お知らせの数も読み直す
+        .onChange(of: model.payload?.summary.count ?? -1) { _ in Task { await inbox.load() } }
     }
 
     /// グルメ連携の「台帳で見る」：その日の台帳を開いて予約の詳細を出す
@@ -480,75 +497,136 @@ struct NativeLedgerView: View {
     }
 
     private var topBar: some View {
-        HStack(spacing: 10) {
-            // 左上はホームへのボタン＝ TENPO ONE のロゴ（字なし。2026-10-24 18:57・19:22 Ronnie）
-            Button(action: onHome) {
-                NativeHomeLogo(ink: NLColor.navy)
-            }
-            .buttonStyle(PressableStyle())
-            .accessibilityLabel("ホーム")
-            // 店名は出さない（ホームだけ）。その場所に画面の名前（2026-10-24 18:55・18:56 Ronnie）
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text("店舗台帳").font(.system(size: 17, weight: .heavy)).foregroundColor(.white)
-                Text("Reservation").font(.system(size: 12, weight: .bold)).foregroundColor(NLColor.yellow)
-            }
-            .fixedSize()
-            .padding(.horizontal, 14).padding(.vertical, 8)
-            .background(Capsule().fill(Color.white.opacity(0.12)))
-            Spacer(minLength: 8)
-            // 日付
-            HStack(spacing: 4) {
-                navBtn("chevron.left") { model.shiftDate(-1) }
-                Button { goToday() } label: {
-                    Text(dateLabel).font(.system(size: 16, weight: .bold)).monospacedDigit().foregroundColor(.white)
-                        .padding(.horizontal, 12).frame(height: 38)
-                        .background(RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(0.12)))
+        ZStack {
+            HStack(spacing: 10) {
+                // 左上はホームへのボタン＝ TENPO ONE のロゴ（字なし。2026-10-24 18:57・19:22 Ronnie）
+                Button(action: onHome) {
+                    NativeHomeLogo(ink: NLColor.navy)
                 }
                 .buttonStyle(PressableStyle())
-                navBtn("chevron.right") { model.shiftDate(1) }
-                if let p = model.payload, !p.isToday {
-                    Button { goToday() } label: {
-                        Text("今日").font(.system(size: 14, weight: .bold)).foregroundColor(NLColor.navy)
-                            .padding(.horizontal, 12).frame(height: 38)
-                            .background(RoundedRectangle(cornerRadius: 10).fill(NLColor.yellow))
-                    }
-                    .buttonStyle(PressableStyle())
-                } else if let p = model.payload, p.isToday, isBoardMode, !followNow {
-                    // 手で横に動かしたあと：カーソル（今の時刻）の場所へ戻す
-                    Button { resumeFollow() } label: {
-                        HStack(spacing: 4) { Image(systemName: "clock"); Text("現在") }
-                            .font(.system(size: 14, weight: .bold)).foregroundColor(NLColor.navy)
-                            .padding(.horizontal, 12).frame(height: 38)
-                            .background(RoundedRectangle(cornerRadius: 10).fill(NLColor.yellow))
-                    }
-                    .buttonStyle(PressableStyle())
+                .accessibilityLabel("ホーム")
+                // 店名は出さない（ホームだけ）。その場所に画面の名前（2026-10-24 18:55・18:56 Ronnie）
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text("店舗台帳").font(.system(size: 17, weight: .heavy)).foregroundColor(.white)
+                    Text("Reservation").font(.system(size: 12, weight: .bold)).foregroundColor(NLColor.yellow)
                 }
-            }
-            // 表示の切り替え
-            HStack(spacing: 0) {
-                modeBtn("スケジュール", on: !model.listMode && !model.gourmetMode && !model.weekMode && !model.waitMode && !model.monthMode) { model.listMode = false; model.gourmetMode = false; model.weekMode = false; model.monthMode = false; model.waitMode = false }
-                modeBtn("予約リスト", on: model.listMode && !model.gourmetMode && !model.weekMode && !model.waitMode && !model.monthMode) { model.listMode = true; model.gourmetMode = false; model.weekMode = false; model.monthMode = false; model.waitMode = false }
-                // グルメ別・週間・ウェイティングは「その他」のメニューから（上のバーが狭いので）
-            }
-            .background(RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(0.12)))
-            // 予約登録は右上に、Reservation と同じ黄色で（2026-10-24 18:49 Ronnie「右上のウェイティングはいらない、そこに予約登録を黄色で」）
-            if model.payload?.canWrite ?? false {
-                Button { newOpen = true } label: {
-                    HStack(spacing: 5) {
-                        Image(systemName: "plus").font(.system(size: 14, weight: .heavy))
-                        Text("予約登録").font(.system(size: 15, weight: .heavy))
+                .fixedSize()
+                .padding(.horizontal, 14).padding(.vertical, 8)
+                .background(Capsule().fill(Color.white.opacity(0.12)))
+                Spacer(minLength: 8)
+                // 表示の切り替え
+                HStack(spacing: 0) {
+                    modeBtn("スケジュール", on: !model.listMode && !model.gourmetMode && !model.weekMode && !model.waitMode && !model.monthMode) { model.listMode = false; model.gourmetMode = false; model.weekMode = false; model.monthMode = false; model.waitMode = false }
+                    modeBtn("予約リスト", on: model.listMode && !model.gourmetMode && !model.weekMode && !model.waitMode && !model.monthMode) { model.listMode = true; model.gourmetMode = false; model.weekMode = false; model.monthMode = false; model.waitMode = false }
+                    // グルメ別・週間・ウェイティングは「その他」のメニューから（上のバーが狭いので）
+                }
+                .background(RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(0.12)))
+                // 予約のお知らせ（受付管理・メッセージ）の箱。予約登録の横（2026-10-24 19:56 Ronnie）
+                Button { inboxOpen = true } label: {
+                    ZStack(alignment: .topTrailing) {
+                        Image(systemName: "tray.full").font(.system(size: 18, weight: .semibold)).foregroundColor(.white)
+                            .frame(width: 46, height: 38)
+                            .background(RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(0.12)))
+                        if inbox.badge > 0 {
+                            Text(inbox.badge > 99 ? "99+" : "\(inbox.badge)").font(.system(size: 11, weight: .heavy)).monospacedDigit().foregroundColor(.white)
+                                .padding(.horizontal, 5).frame(minWidth: 20, minHeight: 20)
+                                .background(Capsule().fill(NLColor.red))
+                                .overlay(Capsule().stroke(NLColor.navy, lineWidth: 2))
+                                .offset(x: 7, y: -7)
+                        }
                     }
-                    .foregroundColor(NLColor.navy)
-                    .padding(.horizontal, 14).frame(height: 38)
-                    .background(RoundedRectangle(cornerRadius: 10).fill(NLColor.yellow))
                 }
                 .buttonStyle(PressableStyle())
-                .accessibilityLabel("予約登録")
+                .accessibilityLabel("予約のお知らせ")
+                // 予約登録は右上に、Reservation と同じ黄色で（2026-10-24 18:49 Ronnie「右上のウェイティングはいらない、そこに予約登録を黄色で」）
+                if model.payload?.canWrite ?? false {
+                    Button { newOpen = true } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: "plus").font(.system(size: 14, weight: .heavy))
+                            Text("予約登録").font(.system(size: 15, weight: .heavy))
+                        }
+                        .foregroundColor(NLColor.navy)
+                        .padding(.horizontal, 14).frame(height: 38)
+                        .background(RoundedRectangle(cornerRadius: 10).fill(NLColor.yellow))
+                    }
+                    .buttonStyle(PressableStyle())
+                    .accessibilityLabel("予約登録")
+                }
             }
+            // 日付は上のバーのまん中（2026-10-24 19:57・20:06 Ronnie「‹ 今日 10/24(土) ▾ ›、今日を押すと今日へ」）
+            dateNav
         }
         .padding(.horizontal, 16)
         .frame(height: 64)
         .background(NLColor.navy)
+    }
+
+    private var dateNav: some View {
+        let isToday = model.payload?.isToday ?? true
+        return HStack(spacing: 8) {
+            HStack(spacing: 0) {
+                dateSeg("chevron.left", label: "前の日") { model.shiftDate(-1) }
+                HStack(spacing: 10) {
+                    Button { goToday() } label: {
+                        Text("今日").font(.system(size: 13, weight: .heavy))
+                            .foregroundColor(isToday ? NLColor.muted : NLColor.navy)
+                            .padding(.horizontal, 8).frame(height: 26)
+                            .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(isToday ? Color.clear : NLColor.yellow))
+                            .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).stroke(isToday ? NLColor.gray : NLColor.yellow, lineWidth: 1.2))
+                    }
+                    .buttonStyle(PressableStyle())
+                    .accessibilityLabel("今日へ")
+                    Button { dateCalendarOpen = true } label: {
+                        HStack(spacing: 8) {
+                            Text(dateLabel).font(.system(size: 18, weight: .heavy)).monospacedDigit().foregroundColor(NLColor.ink)
+                            Image(systemName: "chevron.down").font(.system(size: 12, weight: .heavy)).foregroundColor(NLColor.muted)
+                        }
+                    }
+                    .buttonStyle(PressableStyle())
+                    .popover(isPresented: $dateCalendarOpen) {
+                        DatePicker("", selection: Binding(get: {
+                            let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; f.timeZone = TimeZone(identifier: "Asia/Tokyo")
+                            return f.date(from: model.date ?? model.payload?.date ?? "") ?? Date()
+                        }, set: { d in
+                            let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; f.timeZone = TimeZone(identifier: "Asia/Tokyo")
+                            model.date = f.string(from: d)
+                            followNow = true
+                            dateCalendarOpen = false
+                            Task { await model.refresh(silent: false) }
+                        }), displayedComponents: [.date])
+                        .datePickerStyle(.graphical)
+                        .environment(\.timeZone, TimeZone(identifier: "Asia/Tokyo")!)
+                        .environment(\.locale, Locale(identifier: "ja_JP"))
+                        .frame(width: 360)
+                        .padding()
+                    }
+                }
+                .padding(.horizontal, 14).frame(height: 44)
+                .background(Color.white)
+                dateSeg("chevron.right", label: "次の日") { model.shiftDate(1) }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            if let p = model.payload, p.isToday, isBoardMode, !followNow {
+                // 手で横に動かしたあと：カーソル（今の時刻）の場所へ戻す
+                Button { resumeFollow() } label: {
+                    HStack(spacing: 4) { Image(systemName: "clock"); Text("現在") }
+                        .font(.system(size: 14, weight: .bold)).foregroundColor(NLColor.navy)
+                        .padding(.horizontal, 12).frame(height: 38)
+                        .background(RoundedRectangle(cornerRadius: 10).fill(NLColor.yellow))
+                }
+                .buttonStyle(PressableStyle())
+            }
+        }
+    }
+
+    private func dateSeg(_ icon: String, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon).font(.system(size: 16, weight: .bold)).foregroundColor(.white)
+                .frame(width: 46, height: 44)
+                .background(Color.white.opacity(0.16))
+        }
+        .buttonStyle(PressableStyle())
+        .accessibilityLabel(label)
     }
 
     // MARK: CSV出力・PDF作成（Web と同じ働き。CSV は Web の /app/reservations/list/export、PDF は画面をそのまま 1 枚に）
@@ -877,7 +955,7 @@ struct NativeLedgerView: View {
                                     Text("\(stripSama(r.guestName)) 様").font(.system(size: 13, weight: .heavy)).lineLimit(1)
                                 }
                                 HStack(spacing: 5) {
-                                    Text("\(r.partySize)名").font(.system(size: 11, weight: .bold))
+                                    Text(r.partyLabel).font(.system(size: 11, weight: .bold))
                                     if let chip = sourceChip(r, p: p) {
                                         Text(chip.text).font(.system(size: 9, weight: .heavy)).lineLimit(1)
                                             .foregroundColor(chip.darkText ? NLColor.ink : .white)
@@ -886,6 +964,15 @@ struct NativeLedgerView: View {
                                     }
                                     Text(late ? "未連絡" : (p.statusLabels[r.status] ?? r.status)).font(.system(size: 10, weight: .bold))
                                         .foregroundColor(late ? NLColor.yellow : Color.white.opacity(0.8))
+                                    // 予約のタグ（区分のタグは小さいアイコンつき。2026-10-24 Ronnie「台帳の予約カードに小さく」）
+                                    ForEach(Array((r.tags ?? []).filter { $0 != "要連絡" }.prefix(3)), id: \.self) { t in
+                                        HStack(spacing: 2) {
+                                            if let ic = p.tagIcons?[t] { Image(systemName: NRWTagIcon.symbol(ic)).font(.system(size: 8, weight: .bold)) }
+                                            Text(t).font(.system(size: 9, weight: .bold)).lineLimit(1)
+                                        }
+                                        .padding(.horizontal, 5).padding(.vertical, 1)
+                                        .background(Capsule().fill(Color.white.opacity(0.18)))
+                                    }
                                 }
                             }
                             .foregroundColor(.white)
@@ -974,7 +1061,7 @@ struct NativeLedgerView: View {
                                 Button { selected = r } label: {
                                     HStack(spacing: 12) {
                                         Text("\(nlHm(nlJstMinutes(r.startAt, dayStart: p.date)))〜\(nlHm(nlJstMinutes(r.endAt, dayStart: p.date)))").font(.system(size: 13, weight: .bold)).monospacedDigit().foregroundColor(NLColor.blue)
-                                        Text("\(r.partySize)名").font(.system(size: 13, weight: .bold)).monospacedDigit()
+                                        Text(r.partyLabel).font(.system(size: 13, weight: .bold)).monospacedDigit()
                                         Text("\(stripSama(r.guestName)) 様").font(.system(size: 13, weight: .medium)).lineLimit(1)
                                         if let c = r.courseName { Text(c).font(.system(size: 12)).foregroundColor(NLColor.muted).lineLimit(1) }
                                         Spacer()
@@ -1038,7 +1125,7 @@ struct NativeLedgerView: View {
                                     .font(.system(size: 12)).foregroundColor(NLColor.muted).lineLimit(1)
                             }
                             Spacer()
-                            Text("\(r.partySize)名").font(.system(size: 15, weight: .bold)).foregroundColor(NLColor.ink)
+                            Text(r.partyLabel).font(.system(size: 15, weight: .bold)).foregroundColor(NLColor.ink)
                             Text(r.tableNames.isEmpty ? "席未定" : r.tableNames.joined(separator: " + ")).font(.system(size: 13)).foregroundColor(NLColor.muted).frame(width: 110, alignment: .leading)
                             Text(late ? "未連絡" : (p.statusLabels[r.status] ?? r.status))
                                 .font(.system(size: 12, weight: .bold)).foregroundColor(tone.1)
