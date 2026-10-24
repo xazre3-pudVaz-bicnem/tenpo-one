@@ -4,7 +4,9 @@ import { requireFeature } from '@/lib/auth';
 import { can } from '@/lib/permissions';
 import { createClient } from '@/lib/supabase/server';
 import { summarizeEntry } from '@/lib/payroll';
-import { todayJst, daysAgoJst, formatTime, formatMinutes, weekdayJa } from '@/lib/format';
+import { todayJst, formatTime, formatMinutes, weekdayJa } from '@/lib/format';
+import { loadAttendanceList, loadCorrectionRequests, loadPunchState } from '@/lib/attendance-server';
+import { attendanceTab, toJstHHmm } from '@/lib/native-attendance';
 import { cn } from '@/lib/utils';
 import { PageHeader } from '@/components/ui/page-header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -15,26 +17,13 @@ import { ClockSection } from '@/components/attendance/clock-section';
 import { PeriodFilters } from '@/components/attendance/period-filters';
 import { RequestReview } from '@/components/attendance/request-review';
 import { ManualEntryDialog } from '@/components/attendance/manual-entry-dialog';
-import { AttendanceRow, type TimeEntryEventView } from '@/components/attendance/attendance-row';
+import { AttendanceRow } from '@/components/attendance/attendance-row';
 import { canReviewRequests } from './shared';
 import type { EntryType } from './actions';
 
 export const metadata: Metadata = { title: '勤怠' };
 
 type Tab = 'punch' | 'list' | 'requests';
-
-function monthRange(month: string) {
-  const [y, m] = month.split('-').map(Number);
-  const start = `${month}-01`;
-  const lastDay = new Date(y, m, 0).getDate();
-  const end = `${month}-${String(lastDay).padStart(2, '0')}`;
-  return { start, end };
-}
-
-function toJstHHmm(iso: string | null): string {
-  if (!iso) return '';
-  return new Date(iso).toLocaleTimeString('sv-SE', { timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit' });
-}
 
 export default async function AttendancePage({
   searchParams,
@@ -45,7 +34,7 @@ export default async function AttendancePage({
   const ctx = await requireFeature('attendance');
   const store = ctx.currentStore ?? ctx.stores[0];
   const isApprover = can(ctx.role, 'attendance.approve');
-  const tab: Tab = sp.tab === 'list' ? 'list' : sp.tab === 'requests' && isApprover ? 'requests' : sp.tab === 'punch' || !sp.tab ? 'punch' : 'list';
+  const tab: Tab = attendanceTab(sp.tab, isApprover);
 
   if (!store) {
     return (
@@ -101,53 +90,9 @@ export default async function AttendancePage({
 }
 
 async function PunchTab({ storeId, profileId, displayName }: { storeId: string; profileId: string; displayName: string }) {
+  // 読み込みは lib/attendance-server.ts（iPad ネイティブと同じ）
   const supabase = await createClient();
-  const today = todayJst();
-
-  // 日跨ぎ勤務中の可能性があるため apply_punch と同様に当日＋前日の open エントリも対象にする
-  const yesterday = daysAgoJst(1);
-  // 3クエリは相互に独立のため並列取得（往復レイテンシを短縮）
-  const [{ data: entry }, { data: todayShift }, { data: elsewhereEntry }] = await Promise.all([
-    supabase
-      .from('time_entries')
-      .select('id, clock_in_at, clock_out_at, on_break, work_date')
-      .eq('profile_id', profileId)
-      .eq('store_id', storeId)
-      .in('work_date', [today, yesterday])
-      .eq('status', 'open')
-      .order('work_date', { ascending: false })
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle(),
-    // シフトとの突合表示: 当日の確定・公開済みシフトがあれば表示する
-    supabase
-      .from('shifts')
-      .select('start_time, end_time')
-      .eq('store_id', storeId)
-      .eq('profile_id', profileId)
-      .eq('shift_date', today)
-      .eq('kind', 'confirmed')
-      .eq('status', 'published')
-      .order('start_time')
-      .limit(1)
-      .maybeSingle(),
-    // 他店舗で開いたままの出勤（ALREADY_CLOCKED_IN_ELSEWHERE の事前警告表示用）
-    supabase
-      .from('time_entries')
-      .select('id, stores(name)')
-      .eq('profile_id', profileId)
-      .neq('store_id', storeId)
-      .eq('status', 'open')
-      .in('work_date', [today, yesterday])
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle(),
-  ]);
-  const elsewhereStoreName =
-    (elsewhereEntry?.stores as unknown as { name: string } | null)?.name ?? null;
-
-  const open = !!entry && !!entry.clock_in_at && !entry.clock_out_at;
-  const onBreak = open && !!entry?.on_break;
+  const { todayShift, elsewhere, open, onBreak } = await loadPunchState(supabase, { storeId, profileId });
 
   return (
     <div>
@@ -156,9 +101,9 @@ async function PunchTab({ storeId, profileId, displayName }: { storeId: string; 
           本日のシフト: {todayShift.start_time.slice(0, 5)}〜{todayShift.end_time.slice(0, 5)}
         </div>
       )}
-      {!open && elsewhereEntry && (
+      {!open && elsewhere && (
         <div className="mx-auto mb-4 max-w-md rounded-xl border border-danger/30 bg-danger-soft px-4 py-3 text-center text-sm font-medium text-danger">
-          {elsewhereStoreName ?? '他店舗'}で出勤打刻が残っています。先にそちらで退勤してください。
+          {elsewhere.storeName ?? '他店舗'}で出勤打刻が残っています。先にそちらで退勤してください。
         </div>
       )}
       <ClockSection
@@ -193,80 +138,21 @@ async function ListTab({
   staffId: string;
   today: string;
 }) {
+  // 読み込みは lib/attendance-server.ts（iPad ネイティブと同じ）
   const supabase = await createClient();
-  const { start, end } = monthRange(month);
-
-  let staffOptions: { id: string; name: string }[] = [];
-  let targetProfileIds: string[] = [selfId];
-
-  if (isApprover) {
-    const { data: msRows } = await supabase.from('membership_stores').select('membership_id').eq('store_id', storeId);
-    const membershipIds = (msRows ?? []).map((r) => r.membership_id);
-    const { data: memberRows } = membershipIds.length
-      ? await supabase
-          .from('memberships')
-          .select('profile_id, profiles(id, display_name)')
-          .in('id', membershipIds)
-          .eq('organization_id', organizationId)
-          .eq('status', 'active')
-      : { data: [] };
-    staffOptions = (memberRows ?? [])
-      .map((m) => {
-        const p = m.profiles as unknown as { id: string; display_name: string } | null;
-        return p ? { id: p.id, name: p.display_name } : null;
-      })
-      .filter((s): s is { id: string; name: string } => !!s)
-      .sort((a, b) => a.name.localeCompare(b.name, 'ja'));
-    targetProfileIds = staffId ? [staffId] : staffOptions.map((s) => s.id);
-    if (targetProfileIds.length === 0) targetProfileIds = [selfId];
-  }
+  const { staffOptions, targetProfileIds, rows, eventsByEntry, lockedRanges } = await loadAttendanceList(supabase, {
+    storeId,
+    organizationId,
+    selfId,
+    isApprover,
+    month,
+    staffId,
+  });
 
   const nameById = new Map(staffOptions.map((s) => [s.id, s.name]));
 
-  // entries と lockedRunRows（給与run締めロック）は相互に独立のため並列取得する。
-  // eventRows は entries.id に依存するため後段で取得する。
-  const [{ data: entries }, { data: lockedRunRows }] = await Promise.all([
-    supabase
-      .from('time_entries')
-      .select('*')
-      .eq('store_id', storeId)
-      .in('profile_id', targetProfileIds)
-      .gte('work_date', start)
-      .lte('work_date', end)
-      .order('work_date', { ascending: false }),
-    supabase
-      .from('payroll_runs')
-      .select('store_id, period_start, period_end')
-      .eq('organization_id', organizationId)
-      .in('status', ['confirmed', 'approved'])
-      .lte('period_start', end)
-      .gte('period_end', start)
-      .or(`store_id.is.null,store_id.eq.${storeId}`),
-  ]);
-
-  const rows = entries ?? [];
-
-  // 打刻履歴（行展開用）: 対象期間の time_entries に紐づく生イベントを一括取得
-  const entryIds = rows.map((r) => r.id);
-  const { data: eventRows } = entryIds.length
-    ? await supabase
-        .from('time_entry_events')
-        .select('id, time_entry_id, event_type, occurred_at, source, via_pin')
-        .in('time_entry_id', entryIds)
-        .order('occurred_at')
-    : { data: [] };
-  const eventsByEntry = new Map<string, TimeEntryEventView[]>();
-  for (const e of eventRows ?? []) {
-    if (!e.time_entry_id) continue;
-    const list = eventsByEntry.get(e.time_entry_id) ?? [];
-    list.push({ id: e.id, eventType: e.event_type, occurredAt: e.occurred_at, source: e.source, viaPin: e.via_pin });
-    eventsByEntry.set(e.time_entry_id, list);
-  }
-
-  // 締め後ロック（給与run確定済み）: 表示期間と重なる confirmed/approved の run 期間で
-  // 各行の work_date がロック対象かを判定しバッジ表示・操作ボタン非表示に反映する
-  // （実際の書込拒否は各サーバーアクション側の isPayrollLocked で行う）。lockedRunRows は上で並列取得済み。
-  const lockedRanges = lockedRunRows ?? [];
+  // 締め後ロック（給与run確定済み）: 各行の work_date がロック対象かを判定しバッジ表示・操作ボタン非表示に反映する
+  // （実際の書込拒否は各サーバーアクション側の isPayrollLocked で行う）
   const isLocked = (workDate: string) =>
     lockedRanges.some((r) => r.period_start <= workDate && r.period_end >= workDate);
 
@@ -346,15 +232,8 @@ async function ListTab({
 }
 
 async function RequestsTab({ storeId, canReview }: { storeId: string; canReview: boolean }) {
-  const supabase = await createClient();
-  const { data: requests } = await supabase
-    .from('attendance_correction_requests')
-    .select('*, profiles(display_name), time_entries(clock_in_at, clock_out_at, break_minutes)')
-    .eq('store_id', storeId)
-    .eq('status', 'pending')
-    .order('created_at');
-
-  const rows = requests ?? [];
+  // 読み込みは lib/attendance-server.ts（iPad ネイティブと同じ）
+  const rows = await loadCorrectionRequests(await createClient(), storeId);
 
   if (rows.length === 0) {
     return <EmptyState title="承認待ちの申請はありません" />;

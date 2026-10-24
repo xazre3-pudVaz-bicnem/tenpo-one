@@ -27,8 +27,9 @@ struct NativeModuleRoute: Hashable, Identifiable {
 enum NativeModuleRegistry {
     /// Web の道 → key（その下の道 /…/<id> も同じ key で開く）。追加は 1 行ずつ
     private static let entries: [(String, String)] = [
-        // ("/app/attendance", "attendance"),
+        ("/app/attendance", "attendance"),
         ("/app/kitchen", "kitchen"),
+        ("/app/leave", "leave"),
         ("/app/onboarding", "onboarding"),
         ("/app/payroll", "payroll"),
         ("/app/accounting", "accounting"),
@@ -53,8 +54,9 @@ struct NativeModuleScreen: View {
 
     var body: some View {
         switch route.key {
-        // case "attendance": NativeAttendanceScreen(route: route)
+        case "attendance": NativeAttendanceView(route: route, onHome: { state.goNativeHome() })
         case "kitchen": NativeKitchenView(onHome: { state.goNativeHome() })
+        case "leave": NativeLeaveView(route: route, onHome: { state.goNativeHome() })
         case "onboarding": NativeOnboardingView(onHome: { state.goNativeHome() })
         case "payroll": NativePayrollView(route: route, onHome: { state.goNativeHome() }, onWeb: { state.leaveNativeFloor(to: $0) })
         case "accounting": NativeAccountingView(route: route)

@@ -4,6 +4,8 @@ import { requireFeature, type SessionContext } from '@/lib/auth';
 import { can, type Role } from '@/lib/permissions';
 import { createClient } from '@/lib/supabase/server';
 import { todayJst, formatDate } from '@/lib/format';
+import { loadLeaveAdmin, loadMyLeave } from '@/lib/leave-server';
+import { leaveTab } from '@/lib/native-leave';
 import { cn } from '@/lib/utils';
 import { PageHeader } from '@/components/ui/page-header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -29,15 +31,6 @@ function addDays(dateStr: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-function mapMembers(rows: unknown[] | null): { id: string; name: string }[] {
-  return ((rows ?? []) as { profile_id: string; profiles: unknown }[])
-    .map((m) => {
-      const p = m.profiles as unknown as { id: string; display_name: string } | null;
-      return p ? { id: p.id, name: p.display_name } : null;
-    })
-    .filter((s): s is { id: string; name: string } => !!s);
-}
-
 export default async function LeavePage({
   searchParams,
 }: {
@@ -47,7 +40,7 @@ export default async function LeavePage({
   const ctx = await requireFeature('attendance');
   const isApprover = can(ctx.role, 'attendance.approve');
   const canSetPolicy = can(ctx.role, 'org.settings');
-  const tab: Tab = sp.tab === 'admin' && isApprover ? 'admin' : 'mine';
+  const tab: Tab = leaveTab(sp.tab, isApprover);
 
   const tabs: { key: Tab; label: string }[] = [
     { key: 'mine', label: '自分の有給' },
@@ -85,40 +78,8 @@ async function MineTab({ ctx }: { ctx: Ctx }) {
   const supabase = await createClient();
   const today = todayJst();
 
-  // 付与(grants)・取得実績(takenEntries)・申請(myRequests)はすべて自分キーで独立のため並列取得する。
-  const [{ data: grants }, { data: takenEntries }, { data: myRequests }] = await Promise.all([
-    supabase
-      .from('leave_grants')
-      .select('*')
-      .eq('organization_id', ctx.organizationId)
-      .eq('profile_id', ctx.userId)
-      .order('granted_on', { ascending: false }),
-    supabase
-      .from('time_entries')
-      .select('id, work_date, leave_fraction, note')
-      .eq('organization_id', ctx.organizationId)
-      .eq('profile_id', ctx.userId)
-      .eq('entry_type', 'paid_leave')
-      .in('status', ['approved', 'closed'])
-      .order('work_date', { ascending: false }),
-    supabase
-      .from('leave_requests')
-      .select('*')
-      .eq('organization_id', ctx.organizationId)
-      .eq('profile_id', ctx.userId)
-      .order('leave_date', { ascending: false }),
-  ]);
-
-  const grantRows = (grants ?? []) as { id: string; granted_on: string; days: number; expires_on: string; reason: string }[];
-  const takenRows = (takenEntries ?? []) as { id: string; work_date: string; leave_fraction: number | null; note: string | null }[];
-  const requestRows = (myRequests ?? []) as {
-    id: string;
-    leave_date: string;
-    fraction: number;
-    reason: string | null;
-    status: string;
-    review_note: string | null;
-  }[];
+  // 読み込みは lib/leave-server.ts（iPad ネイティブと同じ）
+  const { grantRows, takenRows, requestRows } = await loadMyLeave(supabase, { organizationId: ctx.organizationId, profileId: ctx.userId });
 
   const activeGranted = grantRows.filter((g) => g.expires_on >= today).reduce((a, g) => a + Number(g.days), 0);
   const expiredTotal = grantRows.filter((g) => g.expires_on < today).reduce((a, g) => a + Number(g.days), 0);
@@ -272,70 +233,8 @@ async function AdminTab({ ctx, canSetPolicy, canReview }: { ctx: Ctx; canSetPoli
   const today = todayJst();
   const soonThreshold = addDays(today, 60);
 
-  let staffOptions: { id: string; name: string }[];
-  if (ctx.isHq) {
-    const { data: memberRows } = await supabase
-      .from('memberships')
-      .select('profile_id, profiles(id, display_name)')
-      .eq('organization_id', ctx.organizationId)
-      .eq('status', 'active');
-    staffOptions = mapMembers(memberRows);
-  } else {
-    const storeIds = ctx.stores.map((s) => s.id);
-    const { data: msRows } = storeIds.length
-      ? await supabase.from('membership_stores').select('membership_id').in('store_id', storeIds)
-      : { data: [] };
-    const membershipIds = [...new Set((msRows ?? []).map((r) => r.membership_id as string))];
-    const { data: memberRows } = membershipIds.length
-      ? await supabase
-          .from('memberships')
-          .select('profile_id, profiles(id, display_name)')
-          .in('id', membershipIds)
-          .eq('organization_id', ctx.organizationId)
-          .eq('status', 'active')
-      : { data: [] };
-    staffOptions = mapMembers(memberRows);
-  }
-  staffOptions.sort((a, b) => a.name.localeCompare(b.name, 'ja'));
-
-  const profileIds = staffOptions.map((s) => s.id);
-  // 付与・取得・組織ポリシー・承認待ち申請は相互に独立のため並列取得する。
-  const [{ data: allGrants }, { data: allTaken }, { data: orgRow }, { data: pendingRequestRows }] = await Promise.all([
-    profileIds.length
-      ? supabase.from('leave_grants').select('*').eq('organization_id', ctx.organizationId).in('profile_id', profileIds)
-      : Promise.resolve({ data: [] as unknown[] }),
-    profileIds.length
-      ? supabase
-          .from('time_entries')
-          .select('profile_id, leave_fraction')
-          .eq('organization_id', ctx.organizationId)
-          .eq('entry_type', 'paid_leave')
-          .in('status', ['approved', 'closed'])
-          .in('profile_id', profileIds)
-      : Promise.resolve({ data: [] as unknown[] }),
-    canSetPolicy
-      ? supabase.from('organizations').select('leave_policy').eq('id', ctx.organizationId).maybeSingle()
-      : Promise.resolve({ data: null }),
-    profileIds.length
-      ? supabase
-          .from('leave_requests')
-          .select('*')
-          .eq('organization_id', ctx.organizationId)
-          .in('profile_id', profileIds)
-          .eq('status', 'pending')
-          .order('leave_date')
-      : Promise.resolve({ data: [] as unknown[] }),
-  ]);
-
-  const grantRows = (allGrants ?? []) as { id: string; profile_id: string; days: number; expires_on: string }[];
-  const takenRows = (allTaken ?? []) as { profile_id: string; leave_fraction: number | null }[];
-  const pendingRequests = (pendingRequestRows ?? []) as {
-    id: string;
-    profile_id: string;
-    leave_date: string;
-    fraction: number;
-    reason: string | null;
-  }[];
+  // 読み込みは lib/leave-server.ts（iPad ネイティブと同じ）
+  const { staffOptions, grantRows, takenRows, orgPolicy, pendingRequests } = await loadLeaveAdmin(supabase, ctx, { canSetPolicy });
 
   const grantsByProfile = new Map<string, { granted: number; expired: number }>();
   for (const g of grantRows) {
@@ -353,8 +252,6 @@ async function AdminTab({ ctx, canSetPolicy, canReview }: { ctx: Ctx; canSetPoli
     .filter((g) => g.expires_on >= today && g.expires_on <= soonThreshold)
     .sort((a, b) => a.expires_on.localeCompare(b.expires_on));
   const nameByProfile = new Map(staffOptions.map((s) => [s.id, s.name]));
-
-  const orgPolicy = (orgRow?.leave_policy ?? {}) as { expiry_years?: number; memo?: string };
 
   return (
     <div className="space-y-5">
