@@ -809,7 +809,11 @@ struct NOSSlipDetailSheet: View {
             if d.status == "open" {
                 Text("未会計の伝票です。注文・会計はハンディかレジ（iPad）で。").font(.system(size: 12)).foregroundColor(NT.ink3).frame(maxWidth: .infinity, alignment: .leading)
             } else {
-                Text("返金・取消（VOID）・再会計は iPad のレジの「伝票明細」から行えます。").font(.system(size: 11.5)).foregroundColor(NT.ink3).frame(maxWidth: .infinity, alignment: .leading)
+                // 返金・取消・再会計は Web の伝票の画面で（?web=1 でネイティブにしない）
+                Button { AppState.shared.leaveNativePhone(to: "/app/orders/\(d.id)?web=1") } label: {
+                    actionLabel("返金・取消・再会計（Web の画面）", icon: "arrow.uturn.backward.circle", filled: false)
+                }
+                .buttonStyle(PressableStyle())
             }
         }
         .padding(.top, 4)
