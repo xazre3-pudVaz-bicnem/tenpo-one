@@ -115,7 +115,8 @@ describe('設定の一覧：「管理画面だけ」の印', () => {
   it('コードで iPad から変えられない設定（lib/admin-only-settings.ts）は全部「管理画面だけ」', () => {
     const items = V2_SETTINGS.flatMap((s) => s.items);
     for (const i of items) if (isAdminOnlySetting(i.href)) expect(i.adminOnly, i.label).toBe(true);
-    expect(items.filter((i) => i.adminOnly).length).toBe(14);
+    // 2026-10-24 レジ端末（iPad）を追加して 15
+    expect(items.filter((i) => i.adminOnly).length).toBe(15);
   });
 
   it('店長には企業情報・承認ルールなどは出さない', () => {

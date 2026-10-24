@@ -4,6 +4,8 @@
  */
 export const ADMIN_ONLY_SETTING_HREFS: readonly string[] = [
   '/app/settings/printers',
+  // レジ端末（iPad）ごとの設定（2026-10-24 Ronnie「管理画面から」）
+  '/app/settings/devices',
   // メニューの一括編集（2026-09-29 Ronnie「管理画面からだけ」）
   '/app/settings/menu-bulk',
   // 予約受付ルール（予約枠・受付期間・公開予約ページの表示内容・リマインダー）（2026-09-29 Ronnie「管理画面」）

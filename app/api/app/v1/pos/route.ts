@@ -89,6 +89,7 @@ import {
 import { isNativeNoticeActionType, parseNativeNoticeAction } from '@/lib/native-notices';
 import { isNativeSettingsActionType, parseNativeSettingsAction } from '@/lib/native-settings';
 import { loadNativeSettings } from '@/lib/native-settings-server';
+import { currentDeviceSetting } from '@/lib/register-device-server';
 import { addDeviceReceiptPrinter, saveDeviceReceiptPrinterSettings, setDevicePrinter } from '@/app/app/pos/device-printer-actions';
 import { loadNativeAnnouncements, loadNativeNotices } from '@/lib/native-notices-server';
 import { createAnnouncement, deleteAnnouncement, markAnnouncementRead } from '@/app/app/announcements/actions';
@@ -324,6 +325,23 @@ export async function GET(request: Request) {
     if (!store) return json({ ok: false, error: '店舗がありません' }, 404);
     const settings = await loadNativeSettings(ctx, await createClient(), { id: store.id, name: store.name });
     return json({ ok: true, ...settings });
+  }
+
+  // この端末に管理画面で付けた設定（設定 › レジ端末。2026-10-24 Ronnie「管理画面から全部の設定を」）。
+  // nativePos が true/false なら管理画面が決めている（アプリはそれに従い、端末の切り替えは出さない）。null は端末まかせ
+  if (part === 'device') {
+    const found = await currentDeviceSetting();
+    if (!found) return json({ ok: true, device: null });
+    return json({
+      ok: true,
+      device: {
+        id: found.device.id,
+        storeId: found.device.storeId,
+        name: found.setting.label ?? found.device.name,
+        printerConfigId: found.setting.printerConfigId,
+        nativePos: found.setting.nativePos,
+      },
+    });
   }
 
   // iPhoneハンディの QR（Web の /app/settings/handy-qr を見るだけ。作り直し・回線の設定は管理画面）
