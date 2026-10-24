@@ -31,6 +31,13 @@ import {
   resetStoreRegisterPassword,
   setupStoreContract,
 } from '@/lib/tenant-provisioning';
+import type { GourmetSiteKey } from '@/lib/gourmet-mail';
+import {
+  markGourmetSiteRegisteredFor,
+  regenerateGourmetMailTokenFor,
+  resolveGourmetMailImportFor,
+  setGourmetMailEnabledFor,
+} from '@/lib/gourmet-mail-settings-server';
 
 function randomPassword() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!#$%';
@@ -656,5 +663,67 @@ export async function updateTenantStoreSlug(input: { storeId: string; slug: stri
   revalidatePath('/admin/stores');
   revalidatePath('/app/settings/booking');
   revalidatePath('/app/settings/store');
+  return {};
+}
+
+// ---------------------------------------------------------------
+// グルメサイト連携（メール取り込み）— 運営の管理画面からも扱えるように（2026-10-24 Ronnie「管理画面からも」）。
+// 中身は店舗の設定画面（app/app/settings/reservation-book/actions.ts）と同じ lib/gourmet-mail-settings-server.ts
+// ---------------------------------------------------------------
+
+async function gourmetStore(storeId: string): Promise<{ organizationId: string } | { error: string }> {
+  const admin = createAdminClient();
+  const { data: store } = await admin.from('stores').select('id, organization_id').eq('id', storeId).maybeSingle();
+  if (!store) return { error: '店舗が見つかりません' };
+  return { organizationId: store.organization_id as string };
+}
+
+function gourmetRevalidate(storeId: string) {
+  revalidatePath(`/admin/tenants/${storeId}`);
+  revalidatePath('/app/settings/reservation-book');
+}
+
+/** メール取り込みのオン・オフ（運営） */
+export async function adminSetGourmetMailEnabled(storeId: string, enabled: boolean): Promise<{ error?: string }> {
+  const ctx = await requireCypressAdmin();
+  const s = await gourmetStore(storeId);
+  if ('error' in s) return s;
+  const r = await setGourmetMailEnabledFor(storeId, s.organizationId, ctx.userId, enabled);
+  if (r.error) return r;
+  await audit(s.organizationId, storeId, 'admin.gourmet_mail.enabled', 'store_settings', storeId, { enabled }, enabled ? 'グルメサイトメール取り込みをオン' : 'グルメサイトメール取り込みをオフ');
+  gourmetRevalidate(storeId);
+  return {};
+}
+
+/** 取り込み専用アドレスを作り直す（運営）。古いアドレスに届いたメールは入らなくなる */
+export async function adminRegenerateGourmetMailToken(storeId: string): Promise<{ error?: string }> {
+  const ctx = await requireCypressAdmin();
+  const s = await gourmetStore(storeId);
+  if ('error' in s) return s;
+  const r = await regenerateGourmetMailTokenFor(storeId, s.organizationId, ctx.userId);
+  if (r.error) return { error: r.error };
+  await audit(s.organizationId, storeId, 'settings.gourmet_mail.regenerate', 'store_settings', storeId, { token: r.token }, 'グルメサイト取り込み用アドレスを作り直し（運営）');
+  gourmetRevalidate(storeId);
+  return {};
+}
+
+/** 「このサイトの管理画面に登録した」の印（運営） */
+export async function adminMarkGourmetSiteRegistered(storeId: string, site: GourmetSiteKey, registered: boolean): Promise<{ error?: string }> {
+  const ctx = await requireCypressAdmin();
+  const s = await gourmetStore(storeId);
+  if ('error' in s) return s;
+  const r = await markGourmetSiteRegisteredFor(storeId, s.organizationId, ctx.userId, site, registered);
+  if (r.error) return r;
+  gourmetRevalidate(storeId);
+  return {};
+}
+
+/** 「要確認」のメールを対応済みにする（運営） */
+export async function adminResolveGourmetMailImport(storeId: string, importId: string): Promise<{ error?: string }> {
+  const ctx = await requireCypressAdmin();
+  const r = await resolveGourmetMailImportFor(createAdminClient(), storeId, importId, ctx.userId);
+  if (r.error) return r;
+  gourmetRevalidate(storeId);
+  revalidatePath('/app/reservations');
   return {};
 }

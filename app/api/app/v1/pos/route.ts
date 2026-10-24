@@ -18,6 +18,9 @@ import { loadNativeFloor } from '@/lib/native-floor-server';
 import { loadNativeHome } from '@/lib/native-home-server';
 import { isNativeLedgerActionType, parseNativeLedgerAction, type NativeLedgerAction } from '@/lib/native-ledger';
 import { loadNativeLedger, loadNativeLedgerMonth, loadNativeLedgerWait, loadNativeLedgerWeek } from '@/lib/native-ledger-server';
+import { isNativeGourmetActionType, parseNativeGourmetAction } from '@/lib/native-gourmet';
+import { loadNativeGourmet } from '@/lib/native-gourmet-server';
+import { markGourmetSiteRegistered, regenerateGourmetMailToken, resolveGourmetMailImport, setGourmetMailEnabled } from '@/app/app/settings/reservation-book/actions';
 import { isNativeCashActionType, parseNativeCashAction, sumNativeDenominations, type NativeCashAction } from '@/lib/native-cash';
 import { loadNativeCash, loadNativeCashIo } from '@/lib/native-cash-server';
 import { isNativeQuickActionType, parseNativeQuickAction, type NativeQuickAction } from '@/lib/native-quick';
@@ -588,6 +591,16 @@ export async function GET(request: Request) {
     return json({ ok: true, ...(await loadNativeClosings(ctx, await createClient(), s, { from, to })) });
   }
 
+  // 店舗台帳のグルメ連携（Web の 予約台帳設定 › グルメ連携。取り込み専用アドレス・サイトごとの状態・取り込み履歴。2026-10-24）
+  if (part === 'gourmet') {
+    const store = ctx.currentStore ?? ctx.stores[0] ?? null;
+    if (!store) return json({ ok: false, error: '店舗がありません' }, 404);
+    if (ctx.disabledFeatures?.has('reservations')) return json({ ok: false, error: 'この機能は使えません', useWeb: true }, 403);
+    if (!can(ctx.role, 'store.settings')) return json({ ok: false, error: '権限がありません' }, 403);
+    const g = await loadNativeGourmet(ctx, await createClient(), { id: store.id, name: store.name });
+    return json({ ok: true, ...g });
+  }
+
   // 店舗台帳のウェイティング（Web の view=waitlist）
   if (part === 'ledgerWait') {
     const store = ctx.currentStore ?? ctx.stores[0] ?? null;
@@ -684,6 +697,33 @@ export async function POST(request: Request) {
     if (problem) return json({ ok: false, error: problem }, 403);
     try {
       return json(await runLedgerAction(ctx, action));
+    } catch (e) {
+      return json({ ok: false, error: errorText(e, 'うまくいきませんでした。もう一度お試しください') }, 400);
+    }
+  }
+
+  // 店舗台帳のグルメ連携の操作（オン・オフ／サイトの登録印／要確認を対応済み／アドレス作り直し。中身は Web と同じ Server Action。2026-10-24）
+  if (raw && typeof raw === 'object' && isNativeGourmetActionType((raw as { type?: unknown }).type)) {
+    const parsedGourmet = parseNativeGourmetAction(raw);
+    if (!parsedGourmet.ok) return json({ ok: false, error: parsedGourmet.error }, 400);
+    const store = ctx.currentStore ?? ctx.stores[0];
+    if (!store) return json({ ok: false, error: '店舗がありません' }, 404);
+    if (ctx.disabledFeatures?.has('reservations')) return json({ ok: false, error: 'この機能は使えません', useWeb: true }, 403);
+    if (!can(ctx.role, 'store.settings')) return json({ ok: false, error: '権限がありません' }, 403);
+    // Route Handler では requirePermission がお店の回線を見ないので、ここで見る（ほかの操作と同じ）
+    const gourmetProblem = await networkProblem(ctx);
+    if (gourmetProblem) return json({ ok: false, error: gourmetProblem }, 403);
+    const ga = parsedGourmet.action;
+    try {
+      const r =
+        ga.type === 'gourmetEnable'
+          ? await setGourmetMailEnabled(store.id, ga.enabled)
+          : ga.type === 'gourmetMarkSite'
+            ? await markGourmetSiteRegistered(store.id, ga.site, ga.registered)
+            : ga.type === 'gourmetResolve'
+              ? await resolveGourmetMailImport(store.id, ga.importId)
+              : await regenerateGourmetMailToken(store.id);
+      return json(r.error ? { ok: false, error: r.error } : { ok: true });
     } catch (e) {
       return json({ ok: false, error: errorText(e, 'うまくいきませんでした。もう一度お試しください') }, 400);
     }

@@ -19,6 +19,15 @@ import {
 } from '@/lib/gourmet-mail';
 import { markGourmetSiteRegistered, regenerateGourmetMailToken, setGourmetMailEnabled } from '@/app/app/settings/reservation-book/actions';
 
+type Result = { error?: string };
+/** 保存のしかた。店舗の設定画面は既定（店舗の Server Action）、運営の管理画面は運営用の Server Action を渡す（2026-10-24） */
+export interface GourmetMailPanelActions {
+  setEnabled: (storeId: string, enabled: boolean) => Promise<Result>;
+  regenerate: (storeId: string) => Promise<Result>;
+  markSite: (storeId: string, site: GourmetSiteKey, registered: boolean) => Promise<Result>;
+}
+const TENANT_ACTIONS: GourmetMailPanelActions = { setEnabled: setGourmetMailEnabled, regenerate: regenerateGourmetMailToken, markSite: markGourmetSiteRegistered };
+
 function jst(iso: string | null | undefined): string {
   if (!iso) return '----/--/-- --:--';
   const d = new Date(iso);
@@ -46,6 +55,7 @@ export function GourmetMailPanel({
   domain,
   inboundReady,
   canRegenerate = false,
+  actions = TENANT_ACTIONS,
 }: {
   storeId: string;
   storeName: string;
@@ -56,6 +66,8 @@ export function GourmetMailPanel({
   inboundReady: boolean;
   /** アドレスを作り直せるか（運営 CYPRESS だけ。2026-09-28 Ronnie「店舗からは変えられないように」） */
   canRegenerate?: boolean;
+  /** 運営の管理画面から使うとき（既定は店舗の Server Action） */
+  actions?: GourmetMailPanelActions;
 }) {
   const router = useRouter();
   const { toast } = useToast();
@@ -79,7 +91,7 @@ export function GourmetMailPanel({
 
   const toggle = (enabled: boolean) =>
     startTransition(async () => {
-      const r = await setGourmetMailEnabled(storeId, enabled);
+      const r = await actions.setEnabled(storeId, enabled);
       if (r.error) return toast(r.error, 'error');
       toast(enabled ? 'メール取り込みをオンにしました' : 'メール取り込みをオフにしました');
       router.refresh();
@@ -88,7 +100,7 @@ export function GourmetMailPanel({
   const regenerate = () =>
     startTransition(async () => {
       if (!confirm('取り込み専用アドレスを作り直します。各サイトに登録した古いアドレスには届かなくなるので、登録し直しが必要です。よろしいですか？')) return;
-      const r = await regenerateGourmetMailToken(storeId);
+      const r = await actions.regenerate(storeId);
       if (r.error) return toast(r.error, 'error');
       toast('新しいアドレスを作りました');
       router.refresh();
@@ -96,7 +108,7 @@ export function GourmetMailPanel({
 
   const mark = (site: GourmetSiteKey, registered: boolean) =>
     startTransition(async () => {
-      const r = await markGourmetSiteRegistered(storeId, site, registered);
+      const r = await actions.markSite(storeId, site, registered);
       if (r.error) return toast(r.error, 'error');
       toast(registered ? '登録した印を付けました。最初のメールが届くと「設定済」になります' : '印を外しました');
       router.refresh();

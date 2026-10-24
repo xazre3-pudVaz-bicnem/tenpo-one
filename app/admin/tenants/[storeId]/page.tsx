@@ -17,6 +17,7 @@ import { TenantAccounts } from '@/components/admin/tenant-accounts';
 import { TenantHardware } from '@/components/admin/tenant-hardware';
 import { TenantSupportNotes } from '@/components/admin/tenant-support-notes';
 import { TenantAccessPolicy } from '@/components/admin/tenant-access-policy';
+import { TenantGourmet } from '@/components/admin/tenant-gourmet';
 import { policyFrom } from '@/lib/store-access';
 import { readStoreRegisterPassword } from '@/lib/tenant-provisioning';
 import { saveStoreAccessPolicy, revokeRegisterDevice, reissueRegisterPassword, revealRegisterPassword, saveStoreRegisterUsername, updateTenantStoreSlug } from '../actions';
@@ -219,6 +220,9 @@ export default async function TenantDetailPage({ params }: { params: Promise<{ s
           />
         </CardContent>
       </Card>
+
+      {/* グルメサイト連携（メール取り込み）。店舗の設定画面と同じものを運営からも（2026-10-24） */}
+      <TenantGourmet storeId={storeId} storeName={store.name as string} />
 
       {/* 機能フラグ（org単位・default ON）表示 */}
       <Card>

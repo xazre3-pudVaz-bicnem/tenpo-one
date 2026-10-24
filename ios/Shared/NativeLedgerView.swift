@@ -267,6 +267,7 @@ struct NativeLedgerView: View {
     @State private var newOpen = false
     @State private var findSeatsOpen = false
     @State private var walkInOpen = false
+    @State private var gourmetOpen = false
     @State private var exporting = false
 
     private let rowH: CGFloat = 64
@@ -285,7 +286,8 @@ struct NativeLedgerView: View {
                 onFindSeats: { findSeatsOpen = true },
                 onWalkIn: { walkInOpen = true },
                 onPdf: { makePdf() },
-                onCsv: { exportCsv() }
+                onCsv: { exportCsv() },
+                onGourmet: { gourmetOpen = true }
             )
             .disabled(exporting)
             if let p = model.payload {
@@ -352,8 +354,30 @@ struct NativeLedgerView: View {
         .sheet(isPresented: $walkInOpen) {
             NLWalkInSheet(model: model, onClose: { walkInOpen = false })
         }
+        .sheet(isPresented: $gourmetOpen) {
+            NativeGourmetSheet(onClose: { gourmetOpen = false }, onOpenReservation: { id, date in openReservation(id: id, date: date) })
+        }
         .onAppear { model.start() }
         .onDisappear { model.stop() }
+    }
+
+    /// グルメ連携の「台帳で見る」：その日の台帳を開いて予約の詳細を出す
+    private func openReservation(id: String, date: String?) {
+        gourmetOpen = false
+        Task {
+            if let date, date != (model.date ?? model.payload?.date) {
+                model.date = date
+                model.listMode = false; model.gourmetMode = false; model.weekMode = false; model.monthMode = false; model.waitMode = false
+                await model.refresh(silent: false)
+            } else if model.payload?.reservations.first(where: { $0.id == id }) == nil {
+                await model.refresh(silent: true)
+            }
+            if let r = model.payload?.reservations.first(where: { $0.id == id }) {
+                selected = r
+            } else {
+                model.show(toast: "この予約は台帳の表示対象外です（キャンセル済みなど）")
+            }
+        }
     }
 
     // MARK: 上のバー（Tableo 風のネイビー）
@@ -618,8 +642,8 @@ struct NativeLedgerView: View {
                                 }
                                 HStack(spacing: 4) {
                                     Text("\(r.partySize)名").font(.system(size: 11, weight: .bold))
-                                    if let src = r.sourceName { Text(src).font(.system(size: 10)).lineLimit(1) }
-                                    Text(p.statusLabels[r.status] ?? r.status).font(.system(size: 10, weight: .bold)).opacity(0.8)
+                                    if let st = NLSource.style(for: r, in: p) { NLSourceChip(style: st, auto: r.createdVia == "gourmet_mail", size: 9) }
+                                    Text(late ? "未連絡" : (p.statusLabels[r.status] ?? r.status)).font(.system(size: 10, weight: .bold)).opacity(0.8)
                                 }
                             }
                             .foregroundColor(tone.1)
@@ -678,7 +702,10 @@ struct NativeLedgerView: View {
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 4), spacing: 10) {
                     ForEach(ordered, id: \.name) { g in
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(g.name).font(.system(size: 12, weight: .medium)).foregroundColor(NLColor.muted).lineLimit(1)
+                            HStack(spacing: 5) {
+                                if let first = g.rows.first, let st = NLSource.style(for: first, in: p) { Circle().fill(st.color).frame(width: 8, height: 8) }
+                                Text(g.name).font(.system(size: 12, weight: .medium)).foregroundColor(NLColor.muted).lineLimit(1)
+                            }
                             HStack(alignment: .firstTextBaseline, spacing: 4) {
                                 Text("\(g.rows.count)").font(.system(size: 22, weight: .heavy)).foregroundColor(NLColor.blue)
                                 Text("組").font(.system(size: 12)).foregroundColor(NLColor.muted)
@@ -694,6 +721,7 @@ struct NativeLedgerView: View {
                 ForEach(ordered, id: \.name) { g in
                     VStack(alignment: .leading, spacing: 6) {
                         HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            if let first = g.rows.first, let st = NLSource.style(for: first, in: p) { Circle().fill(st.color).frame(width: 10, height: 10) }
                             Text(g.name).font(.system(size: 15, weight: .bold)).foregroundColor(NLColor.navy)
                             Text("\(g.rows.count)組 \(g.guests)名").font(.system(size: 12)).foregroundColor(NLColor.muted)
                         }
@@ -709,7 +737,8 @@ struct NativeLedgerView: View {
                                         if let c = r.courseName { Text(c).font(.system(size: 12)).foregroundColor(NLColor.muted).lineLimit(1) }
                                         Spacer()
                                         Text(r.tableNames.isEmpty ? "席未定" : r.tableNames.joined(separator: "+")).font(.system(size: 12)).foregroundColor(NLColor.muted)
-                                        Text(p.statusLabels[r.status] ?? r.status).font(.system(size: 11, weight: .bold)).foregroundColor(tone.1)
+                                        if r.createdVia == "gourmet_mail" { Image(systemName: "envelope.fill").font(.system(size: 11)).foregroundColor(NLColor.muted) }
+                                        Text(late ? "未連絡" : (p.statusLabels[r.status] ?? r.status)).font(.system(size: 11, weight: .bold)).foregroundColor(tone.1)
                                             .padding(.horizontal, 8).padding(.vertical, 3).background(Capsule().fill(tone.0))
                                     }
                                     .foregroundColor(NLColor.ink)
@@ -759,7 +788,10 @@ struct NativeLedgerView: View {
                             Text("\(nlHm(nlJstMinutes(r.startAt, dayStart: p.date)))〜\(nlHm(nlJstMinutes(r.endAt, dayStart: p.date)))")
                                 .font(.system(size: 15, weight: .bold)).monospacedDigit().foregroundColor(NLColor.ink).frame(width: 130, alignment: .leading)
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("\(stripSama(r.guestName)) 様").font(.system(size: 16, weight: .heavy)).foregroundColor(NLColor.ink)
+                                HStack(spacing: 6) {
+                                    Text("\(stripSama(r.guestName)) 様").font(.system(size: 16, weight: .heavy)).foregroundColor(NLColor.ink)
+                                    if let st = NLSource.style(for: r, in: p) { NLSourceChip(style: st, auto: r.createdVia == "gourmet_mail", size: 10) }
+                                }
                                 Text([r.sourceName, r.courseName, r.tags?.joined(separator: " ")].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " ・ "))
                                     .font(.system(size: 12)).foregroundColor(NLColor.muted).lineLimit(1)
                             }

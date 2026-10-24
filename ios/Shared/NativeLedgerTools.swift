@@ -2,7 +2,7 @@ import SwiftUI
 import UIKit
 
 // 店舗台帳の上のボタン（Web の components/reservations/ledger-header.tsx の LedgerTop と同じ並び・同じ働き。2026-10-24 Ronnie「色だけ変えて、機能は全部そのまま」）
-//   退店管理 ／ CSV出力 ／ 集計 ／ PDF作成 ／ ＋予約登録 ／ 📅（スケジュール・予約リスト・グルメ別・週間・月間カレンダー・ウェイティング・未連絡の予約・空席検索・直接来店・顧客台帳・台帳設定）
+//   退店管理 ／ CSV出力 ／ 集計 ／ PDF作成 ／ ＋予約登録 ／ 📅（スケジュール・予約リスト・グルメ別・週間・月間カレンダー・ウェイティング・未連絡の予約・空席検索・直接来店・顧客台帳・グルメ連携・台帳設定）
 
 /// 空席検索の結果（サーバー ledgerFindSeats）
 struct NLFindSeatsResult: Decodable {
@@ -93,6 +93,8 @@ struct NLToolbar: View {
     let onWalkIn: () -> Void
     let onPdf: () -> Void
     let onCsv: () -> Void
+    /// グルメ連携（ネイティブの設定画面。2026-10-24）
+    var onGourmet: () -> Void = {}
 
     private var p: NLPayload? { model.payload }
     private var date: String { model.date ?? p?.date ?? "" }
@@ -127,6 +129,8 @@ struct NLToolbar: View {
                     Button { onWeb("/app/customers") } label: { Label("顧客台帳", systemImage: "person.text.rectangle") }
                 }
                 if p?.links?.settings ?? false {
+                    if !(p?.links?.customers ?? false) { Divider() }
+                    Button(action: onGourmet) { Label("グルメ連携", systemImage: "envelope.badge") }
                     Button { onWeb("/app/settings/booking") } label: { Label("台帳設定", systemImage: "gearshape") }
                 }
             } label: {
