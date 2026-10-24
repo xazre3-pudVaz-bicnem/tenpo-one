@@ -298,10 +298,27 @@ struct NativeNoticesScreen: View {
 /// ネイティブの日別予算登録（2026-10-24）
 struct NativeBudgetScreen: View {
     @StateObject private var model = NativeBudgetDailyModel()
+    @StateObject private var monthly = NativeBudgetsModel()
     @EnvironmentObject var state: AppState
 
     var body: some View {
-        NativeBudgetDailyView(model: model, onHome: { state.goNativeHome() }, onWeb: { path in state.leaveNativeFloor(to: path) })
+        Group {
+            if state.budgetView == "monthly" {
+                NativeBudgetsView(model: monthly, onHome: { state.goNativeHome() }, onDaily: { m in state.switchBudgetView("daily", month: m) })
+            } else {
+                NativeBudgetDailyView(model: model, onHome: { state.goNativeHome() }, onWeb: { path in
+                    if path == "/app/budgets" { state.switchBudgetView("monthly", month: model.month) } else { state.leaveNativeFloor(to: path) }
+                })
+            }
+        }
+        .onAppear { syncMonth() }
+        .onChange(of: state.budgetMonth) { _ in syncMonth() }
+        .onChange(of: state.budgetView) { _ in syncMonth() }
+    }
+
+    private func syncMonth() {
+        guard let m = state.budgetMonth else { return }
+        if state.budgetView == "monthly" { if monthly.month != m { monthly.month = m } } else if model.month != m { model.month = m }
     }
 }
 
