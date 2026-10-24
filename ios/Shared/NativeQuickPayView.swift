@@ -29,6 +29,8 @@ final class NativeQuickModel: ObservableObject {
             var q = [URLQueryItem(name: "part", value: "quick")]
             if let orderId { q.append(URLQueryItem(name: "order", value: orderId)) }
             comps.queryItems = q
+            // 前に開いたときの中身を先に出す（押した瞬間に出る。裏で読み直す。2026-10-24 Ronnie「取込み」）
+            if payload == nil, let saved = NativeAPI.cached(NQPayload.self, comps.url) { payload = saved }
             let data = try await NativeAPI.shared.send(URLRequest(url: comps.url!))
             let p = try JSONDecoder().decode(NQPayload.self, from: data)
             payload = p

@@ -98,6 +98,7 @@ struct NativeCouponsView: View {
     }
 
     private func refresh() async {
+        if payload == nil, let saved: NCPPayload = model.peek([URLQueryItem(name: "part", value: "coupons")]) { payload = saved }
         if let p: NCPPayload = await model.get([URLQueryItem(name: "part", value: "coupons")]) { payload = p }
     }
 
