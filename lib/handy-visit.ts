@@ -249,14 +249,17 @@ export const DEFAULT_VISIT_DRAFT: VisitDraft = {
   startTime: null,
 };
 
-/** 確定できない理由（現場向けの日本語）。確定できれば null */
-export function validateVisitDraft(d: VisitDraft): string | null {
+/**
+ * 確定できない理由（現場向けの日本語）。確定できれば null。
+ * requireSource: false のときは来店経路を選ばなくてよい（iPad アプリの来店登録。経路は会計で選ぶ。2026-10-24 Ronnie）
+ */
+export function validateVisitDraft(d: VisitDraft, opts: { requireSource?: boolean } = {}): string | null {
   if (!Number.isInteger(d.male) || !Number.isInteger(d.female) || d.male < 0 || d.female < 0) {
     return '人数を確認してください';
   }
   const guests = d.male + d.female;
   if (guests < 1 || guests > MAX_GUESTS) return `合計人数を1〜${MAX_GUESTS}名で入力してください`;
-  if (!d.source || !VISIT_SOURCE_LABELS.includes(d.source)) {
+  if (opts.requireSource === false ? !!d.source && !VISIT_SOURCE_LABELS.includes(d.source) : !d.source || !VISIT_SOURCE_LABELS.includes(d.source)) {
     return '来店経路を選択してください';
   }
   if (d.timed) {

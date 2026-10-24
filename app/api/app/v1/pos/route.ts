@@ -1446,7 +1446,8 @@ async function runFloorAction(action: NativeFloorAction): Promise<Record<string,
   switch (action.type) {
     case 'floorStart': {
       // プラン商品は「未送信」で伝票へ（レジのファーストオーダーと同じ。厨房へは注文画面の注文確定で）
-      const res = await startRegisterVisit(action.tableId, action.draft);
+      // 来店経路はここでは選ばなくてよい（予約の卓は予約の経路、ほかは会計で選ぶ。2026-10-24 Ronnie）
+      const res = await startRegisterVisit(action.tableId, action.draft, { sourceOptional: true });
       return { ok: true, orderId: res.orderId, planItemError: res.planItemError };
     }
     case 'floorOrder': {

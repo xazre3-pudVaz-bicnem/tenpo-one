@@ -50,7 +50,9 @@ struct NativeCheckoutView: View {
     private var tenderedTotal: Int { nonCashPaid + (cashRow?.tendered ?? 0) }
     private var remaining: Int { max(0, total - nonCashPaid - cashApplied) }
     private var change: Int { max(0, (cashRow?.tendered ?? 0) - cashDue) }
-    private var canPay: Bool { total == 0 || (remaining == 0 && !payments.isEmpty) }
+    private var canPay: Bool { !needsSource && (total == 0 || (remaining == 0 && !payments.isEmpty)) }
+    /// 来店経路がまだ（予約の無い卓の伝票）。選ばないと会計できない（2026-10-24 Ronnie）
+    private var needsSource: Bool { model.isLive && model.order.sourceRequired && model.order.visitSourceId == nil }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -189,7 +191,12 @@ struct NativeCheckoutView: View {
     private var sourcesBlock: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("来店経路").font(.system(size: 14, weight: .heavy)).foregroundColor(NT.ink)
+                Text("来店経路").font(.system(size: 14, weight: .heavy)).foregroundColor(needsSource ? NT.danger : NT.ink)
+                if needsSource {
+                    Text("必須・選んでください").font(.system(size: 11, weight: .heavy)).foregroundColor(.white)
+                        .padding(.horizontal, 7).padding(.vertical, 2)
+                        .background(Capsule().fill(NT.danger))
+                }
                 Spacer()
                 Button(showMoreSources ? "閉じる" : "もっと見る ＋") { withAnimation(.easeOut(duration: 0.15)) { showMoreSources.toggle() } }
                     .font(.system(size: 12, weight: .bold)).foregroundColor(NT.purple)
@@ -217,6 +224,7 @@ struct NativeCheckoutView: View {
             }
         }
         .padding(14)
+        .background(needsSource ? NT.dangerBg.opacity(0.6) : Color.clear)
     }
 
     // MARK: - 中：金額
@@ -368,7 +376,7 @@ struct NativeCheckoutView: View {
                 }
             }
             Button(action: pay) {
-                Text(paying ? "処理中…" : canPay ? "お会計を確定 \(NT.yen(total))" : "残額 \(NT.yen(remaining)) の支払方法を選択")
+                Text(paying ? "処理中…" : needsSource ? "来店経路を選択してください" : canPay ? "お会計を確定 \(NT.yen(total))" : "残額 \(NT.yen(remaining)) の支払方法を選択")
                     .font(.system(size: 20, weight: .heavy)).foregroundColor(.white)
                     .lineLimit(1).minimumScaleFactor(0.6)
                     .frame(maxWidth: .infinity, minHeight: 68)

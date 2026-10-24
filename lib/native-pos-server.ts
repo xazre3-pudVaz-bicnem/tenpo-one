@@ -23,6 +23,7 @@ import {
   jstHm,
   nativePosPages,
   optionGroupsFrom,
+  sortSourcesByUsage,
   type NativePosCategory,
   type NativePosItem,
   type NativePosLine,
@@ -88,6 +89,25 @@ function visitSourceIdOf(resv: { purpose: string | null; reservation_sources: { 
   return null;
 }
 
+/** この店の直近90日の予約の来店経路の数（VISIT_SOURCES の id → 件数）。読めなくても空で続ける */
+async function loadSourceCounts(supabase: Client, storeId: string): Promise<Map<string, number>> {
+  const counts = new Map<string, number>();
+  const since = new Date(Date.now() - 90 * 24 * 3600 * 1000).toISOString();
+  const { data, error } = await supabase
+    .from('reservations')
+    .select('purpose, reservation_sources(code)')
+    .eq('store_id', storeId)
+    .gte('start_at', since)
+    .not('status', 'in', '(cancelled,no_show)')
+    .limit(5000);
+  if (error) return counts;
+  for (const r of (data ?? []) as { purpose: string | null; reservation_sources: { code: string } | { code: string }[] | null }[]) {
+    const id = visitSourceIdOf(r);
+    if (id) counts.set(id, (counts.get(id) ?? 0) + 1);
+  }
+  return counts;
+}
+
 /** 伝票の部分だけ（操作のあとアプリに返す） */
 export async function loadNativeOrder(supabase: Client, ctx: SessionContext, orderId: string): Promise<NativePosOrder | null> {
   const { data: order } = await supabase.from('orders').select(ORDER_COLUMNS).eq('id', orderId).maybeSingle();
@@ -118,6 +138,7 @@ export async function loadNativeOrder(supabase: Client, ctx: SessionContext, ord
     seatFrom: order.table_id ? jstHm(order.opened_at as string) : null,
     seatTo: order.table_id ? jstHm(resv?.end_at) : null,
     visitSourceId: visitSourceIdOf(resv),
+    sourceRequired: !!order.table_id && !!resv,
     subtotal: Number(order.subtotal),
     taxTotal: Number(order.tax_total),
     serviceCharge: Number(order.service_charge),
@@ -156,7 +177,7 @@ export async function loadNativeCatalog(
 ): Promise<NativePosCatalog> {
   const store = ctx.stores.find((s) => s.id === storeId) ?? null;
   const takeout = !!opts.takeout;
-  const [menuBook, { data: settingsRow }, { data: categories }, { data: menuItems }, { data: recentSales }, { data: clerks }, { data: optionLinks }, stock] =
+  const [menuBook, { data: settingsRow }, { data: categories }, { data: menuItems }, { data: recentSales }, { data: clerks }, { data: optionLinks }, stock, sourceCounts] =
     await Promise.all([
       loadMenuBook(supabase, storeId),
       supabase.from('store_settings').select('settings').eq('store_id', storeId).maybeSingle(),
@@ -188,6 +209,8 @@ export async function loadNativeCatalog(
         .order('sort_order'),
       // 売り切れ（本日の食数が0になったものも）
       loadMenuStock(supabase, storeId),
+      // 来店経路をこの店でよく使う順に並べるための数（直近90日の予約）
+      loadSourceCounts(supabase, storeId),
     ]);
   const settings = (settingsRow as { settings?: unknown } | null)?.settings ?? null;
 
@@ -249,7 +272,7 @@ export async function loadNativeCatalog(
     optionGroups: Object.fromEntries(Object.entries(optionGroups).filter(([id]) => withOptions.has(id) && items.some((i) => i.id === id))),
     clerks: clerkList,
     clerkRequired: clerkList.length > 0,
-    visitSources: visitSourcesFrom(settings).map((s) => ({ id: s.id, label: s.label })),
+    visitSources: sortSourcesByUsage(visitSourcesFrom(settings), sourceCounts).map((s) => ({ id: s.id, label: s.label })),
     methodBrands,
     pointBrands: pointBrandsOf(presets).map((b) => ({ id: b.key, name: b.name })),
     discountPresets: discountPresetsOf(presets).map((d) => ({ id: d.key, name: d.name, kind: d.kind, value: d.value })),

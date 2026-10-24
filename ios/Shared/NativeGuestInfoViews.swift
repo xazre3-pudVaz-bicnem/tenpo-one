@@ -93,7 +93,14 @@ struct NativeSetupSheet: View {
     private var pickedPlanNames: String {
         (payload?.planItems ?? []).filter { planItemIds.contains($0.id) }.map(\.name).joined(separator: "・")
     }
-    private var canConfirm: Bool { guests >= 1 && !source.isEmpty && !saving && (edit == nil || prefilled) }
+    /// 来店経路はここでは選ばない（予約の卓は予約の経路、ほかは会計で選ぶ。2026-10-24 Ronnie「FIRST MA TABLE 入力 GARDA GARNU PARDAINA」）
+    private var canConfirm: Bool { guests >= 1 && !saving && (edit == nil || prefilled) }
+    /// この卓の今の予約（前後60分以内）の経路。決まった名前なら来店登録にそのまま入れる
+    private var bookedSource: String? {
+        let r = table.upcoming.first { abs($0.startMs - model.now) <= 60 * 60 * 1000 }
+        guard let label = r?.sourceLabel, (payload?.visitSources ?? []).contains(where: { $0.label == label }) else { return nil }
+        return label
+    }
     /// 直しのとき、伝票にもう入っているプラン商品（もう一度は入れない）
     private var slipMenuItemIds: [String] { edit?.slip.lines.compactMap { $0.menuItemId } ?? [] }
     /// 顧客名（直しのときは伝票の顧客 → 予約のお名前）
@@ -175,12 +182,10 @@ struct NativeSetupSheet: View {
         .task { await prefill() }
     }
 
+    /// 来店経路の列は出さない（会計で選ぶ）
     private var columns: some View {
-        HStack(alignment: .top, spacing: 16) {
-            AnyView(leftColumn).frame(maxWidth: .infinity)
-            AnyView(rightColumn).frame(width: 380)
-        }
-        .padding(.horizontal, 18).padding(.top, 12).padding(.bottom, 8)
+        AnyView(leftColumn).frame(maxWidth: .infinity)
+            .padding(.horizontal, 18).padding(.top, 12).padding(.bottom, 8)
     }
 
     // MARK: 左の列
@@ -238,22 +243,6 @@ struct NativeSetupSheet: View {
                     countRow("女性", en: "Female", value: $female, target: .female)
                 }
                 .padding(12)
-            }
-        }
-    }
-
-    // MARK: 右の列（来店経路）
-
-    private var rightColumn: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            heading("来店経路", en: "Source", required: true)
-            card {
-                let sources = (payload?.visitSources ?? []).map { s -> (String, String, Color, Bool) in
-                    let v = NPVisitSource(id: s.id, label: s.label)
-                    return (s.label, s.label, v.color, v.darkText)
-                }
-                NFChipGrid(items: sources, selected: [source], columns: 3, height: 46) { label in source = (source == label) ? "" : label }
-                    .padding(12)
             }
         }
     }
@@ -445,7 +434,8 @@ struct NativeSetupSheet: View {
 
     private func confirm() async {
         guard guests >= 1 else { problem = "人数を入れてください"; return }
-        guard !source.isEmpty else { problem = "来店経路を選択してください"; return }
+        // 来店経路：直しのときは今のまま（空なら変えない）、来店登録は予約の経路（無ければ空＝会計で選ぶ）
+        if edit == nil { source = bookedSource ?? "" }
         saving = true
         defer { saving = false }
         var draft: [String: Any] = [

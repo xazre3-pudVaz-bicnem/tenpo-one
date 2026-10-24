@@ -37,9 +37,12 @@ export async function saveVisitEdit(ctx: SessionContext, a: NativeVisitEdit): Pr
     plans: d.plans,
     planItemIds: d.planItemIds,
   });
+  // 来店経路はこの画面では出さない（会計で選ぶ）。経路が渡されたときだけ変える（空なら今のまま）
   const src = d.source ? visitSourceByLabel(d.source) : null;
-  const visit = await setOrderVisitSource(ctx, a.orderId, src?.id ?? null);
-  if (!visit.ok) return { ok: false, error: visit.error ?? '来店経路を保存できませんでした' };
+  if (src) {
+    const visit = await setOrderVisitSource(ctx, a.orderId, src.id);
+    if (!visit.ok) return { ok: false, error: visit.error ?? '来店経路を保存できませんでした' };
+  }
 
   const row = await loadOrderMemo(ctx, a.orderId);
   if (row && row.status === 'open' && (!row.memo || row.memo.startsWith(VISIT_MEMO_PREFIX))) {
