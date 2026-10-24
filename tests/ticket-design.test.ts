@@ -24,6 +24,25 @@ describe('approved kitchen and cancellation print designs', () => {
     expect(texts(d)).not.toMatch(/[○★]|1102|1110|1111/);
     expect(texts(d)).toContain('No coriander');
   });
+  it.each([384, 576] as const)('keeps item separators black in the actual %s-dot printer payload', async width => {
+    const d = kitchenDesign({ ...ticket, lines: [{ ...ticket.lines[0], delta: 12 }] }, { ...opts, textSize: 'normal' });
+    const item = d.rows.find(r => r.cells[0].text === 'Mutton Curry')!;
+    expect(item.size).toBeGreaterThanOrEqual(32);
+    expect(item.cells[1]).toMatchObject({ text: '12', align: 'right', share: 2 });
+    expect(item.rule).toBe('solid');
+    const png = await renderTicketImage({ serif: d.serif, rows: [item] }, width);
+    const payload = await ticketImagePayload([png]);
+    const blocks = [...payload.epos.matchAll(/<image[^>]*>([^<]+)<\/image>/g)];
+    const raster = Buffer.concat(blocks.map(m => Buffer.from(m[1], 'base64')));
+    const rowBytes = width / 8;
+    let solidRows = 0;
+    for (let y = 0; y < raster.length / rowBytes; y++) {
+      let black = 0;
+      for (let x = 12; x < width - 12; x++) if (raster[y * rowBytes + (x >> 3)] & (0x80 >> (x & 7))) black++;
+      if (black === width - 24) solidRows++;
+    }
+    expect(solidRows).toBeGreaterThanOrEqual(2);
+  });
   it('does not mix cancellation reasons when grouping identical products', () => {
     const base = { order_id: 'a', order_no: 1, table_name: 'T-1', guest_count: 2, clerk_name: null, item_name: 'Curry', modifiers: [], memo: null, station: 'kitchen', delta: -1 };
     const grouped = groupKitchenTickets([{ ...base, cancelReason: 'Wrong item' }, { ...base, cancelReason: 'Guest left' }]);
