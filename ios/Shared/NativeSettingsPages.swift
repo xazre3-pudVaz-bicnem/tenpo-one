@@ -1914,11 +1914,11 @@ struct NativeAccountsView: View {
 
 // MARK: - ハンディ端末（Web の /app/settings/handy・components/settings/handy-devices-panel.tsx と同じ）
 
-struct NHDDevice: Codable, Identifiable, Hashable { let id: String; let name: String; let status: String; let pairedAt: String; let lastSeenAt: String?; let pairedIp: String?; let userAgent: String? }
-struct NHDPayload: Codable { let store: NFNamed; let canEdit: Bool; let pairBase: String?; let devices: [NHDDevice] }
+struct NHVDevice: Codable, Identifiable, Hashable { let id: String; let name: String; let status: String; let pairedAt: String; let lastSeenAt: String?; let pairedIp: String?; let userAgent: String? }
+struct NHVPayload: Codable { let store: NFNamed; let canEdit: Bool; let pairBase: String?; let devices: [NHVDevice] }
 
 @MainActor
-final class NativeHandyDevicesModel: NSPModel<NHDPayload> {
+final class NativeHandyDevicesModel: NSPModel<NHVPayload> {
     @Published var deviceName = ""
     /// 発行した QR（5分で消える）
     @Published var qr: (url: String, expiresAt: Date)?
@@ -1949,8 +1949,8 @@ final class NativeHandyDevicesModel: NSPModel<NHDPayload> {
             toast = (error as? NativeAPIError)?.message ?? "通信できませんでした"
         }
     }
-    func revoke(_ d: NHDDevice) async { _ = await run(d.id, ["type": "handyRevoke", "id": d.id], done: "「\(d.name)」のつながりを解除しました") }
-    func rename(_ d: NHDDevice) async {
+    func revoke(_ d: NHVDevice) async { _ = await run(d.id, ["type": "handyRevoke", "id": d.id], done: "「\(d.name)」のつながりを解除しました") }
+    func rename(_ d: NHVDevice) async {
         let n = editName.trimmingCharacters(in: .whitespaces)
         editing = nil
         guard !n.isEmpty, n != d.name else { return }
@@ -1968,7 +1968,7 @@ struct NativeHandyDevicesView: View {
     @ObservedObject var model: NativeHandyDevicesModel
     let onBack: () -> Void
     @State private var now = Date()
-    @State private var confirmRevoke: NHDDevice?
+    @State private var confirmRevoke: NHVDevice?
     private let tick = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
