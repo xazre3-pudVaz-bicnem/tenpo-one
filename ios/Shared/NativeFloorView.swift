@@ -261,12 +261,13 @@ struct NativeTableCard: View {
                 // 1行目: テーブル名（状態の色の札）・人数。2行目: 席の印（席の数だけ。座っている人数ぶん色がつく）
                 // （2026-10-24 20:36 Ronnie「unique な形に」）
                 HStack(spacing: 6) {
+                    // 卓の番号は少し大きく（人数も同じ大きさ。2026-10-24 21:48 Ronnie）
                     Text(table.name)
-                        .font(.system(size: 15, weight: .heavy)).monospacedDigit()
+                        .font(.system(size: 19, weight: .heavy)).monospacedDigit()
                         // 札と席の印は色をつけない（色は下の帯だけ。2026-10-24 21:09 Ronnie「ここは色いらない」）
                         .foregroundColor(empty ? NFColor.ink2 : NFColor.ink)
                         .lineLimit(1).minimumScaleFactor(0.7)
-                        .padding(.horizontal, 9).frame(height: 26)
+                        .padding(.horizontal, 10).frame(height: 32)
                         .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.white))
                         .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(Color.black.opacity(0.10), lineWidth: 1))
                     // プランと予約の印（飲み放題＝ビールのグラス・誕生日＝ケーキ…。2026-10-24 21:18 Ronnie）
@@ -286,10 +287,11 @@ struct NativeTableCard: View {
                     }
                     Spacer(minLength: 4)
                     HStack(spacing: 2) {
-                        Image(systemName: "person.2").font(.system(size: 11, weight: .bold)).foregroundColor(NFColor.ink3)
-                        Text(order.map { "\($0.guestCount)名" } ?? "\(table.capacityMax)名席")
+                        // 人の印と人数は卓の番号と同じ大きさ。「名」は書かず数字だけ（座っていれば人数、空いていれば席の数）
+                        Image(systemName: "person.2.fill").font(.system(size: 17, weight: .semibold)).foregroundColor(NFColor.ink3)
+                        Text("\(order?.guestCount ?? table.capacityMax)")
                     }
-                    .font(.system(size: 13, weight: .semibold)).monospacedDigit().foregroundColor(NFColor.ink2)
+                    .font(.system(size: 19, weight: .heavy)).monospacedDigit().foregroundColor(empty ? NFColor.ink3 : NFColor.ink)
                     .lineLimit(1).fixedSize()
                 }
                 // 席の印（○○○○）は出さない（2026-10-24 21:36 Ronnie「番号の下の ○○○○ はいらない」）
