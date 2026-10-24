@@ -2339,9 +2339,22 @@ struct NMIItem: Codable, Identifiable, Hashable {
     var isSoldOut: Bool
     var pricePending: Bool
     var shared: Bool
+    /// コース・プランの中身の印（飲み放題つき・食べ放題。古いサーバーは送らない）
+    var includesDrinks: Bool?
+    var includesAyce: Bool?
 }
 struct NMICategory: Codable, Identifiable, Hashable { let id: String; let name: String; let sortOrder: Int }
-struct NMIPayload: Codable { let store: NFNamed; let canEdit: Bool; let categories: [NMICategory]; let taxRates: [NFNamed]; var items: [NMIItem] }
+struct NMIPayload: Codable {
+    let store: NFNamed; let canEdit: Bool; let categories: [NMICategory]; let taxRates: [NFNamed]; var items: [NMIItem]
+    // プランの画面（コース／放題プランの作成。NativeCourseBuilder.swift）で使う。古いサーバーは送らない
+    let courseSteps: [String: [NMIDish]]?
+    let courseMains: [String: NMIMain]?
+    let planCategories: [String: [String]]?
+    let planOnlyCategoryIds: [String]?
+    let maxCourseSteps: Int?
+    let maxMainChoices: Int?
+    let canEditOptions: Bool?
+}
 
 /// 画面：メニュー（コース以外）／プラン（コース＝コース・飲み放題・食べ放題）
 enum NMIMode { case menu, plan }
@@ -2359,8 +2372,31 @@ final class NativeMenuItemsModel: NSPModel<NMIPayload> {
     @Published var fPrice = ""; @Published var fTakeout = ""; @Published var fCost = ""; @Published var fTax: String? = nil
     @Published var fDuration = ""; @Published var fStart: String? = nil; @Published var fEnd: String? = nil
     @Published var fSort = "0"; @Published var fHidden = false
+    /// プランの画面：コース／放題プランの作成・編集（NativeCourseBuilder.swift）
+    @Published var builder: NativeCourseBuilderModel?
 
     init(mode: NMIMode) { self.mode = mode; super.init(part: "menuItems") }
+
+    func openBuilder(_ kind: NativeCourseBuilderModel.Kind, item: NMIItem?) {
+        guard let p = payload else { return }
+        showForm = false
+        builder = NativeCourseBuilderModel(kind: kind, item: item, payload: p)
+    }
+    func builderSaved(_ message: String) async {
+        builder = nil
+        await refresh()
+        toast = message
+        // 注文の画面（iPad に保存したメニュー）も読み直す。足したコース・プランがすぐ出るように
+        NativeCatalogCache.shared.refresh()
+    }
+    func deleteFromBuilder(_ i: NMIItem) async {
+        await delete(i)
+        builder = nil
+    }
+    func detailFromBuilder(_ i: NMIItem) {
+        builder = nil
+        startEdit(i)
+    }
 
     static let types: [NSTLabeled] = [NSTLabeled(id: "food", label: "フード"), NSTLabeled(id: "drink", label: "ドリンク"), NSTLabeled(id: "course", label: "コース"), NSTLabeled(id: "option", label: "オプション")]
     var typesForMode: [NSTLabeled] { mode == .plan ? Self.types.filter { $0.id == "course" } : Self.types.filter { $0.id != "course" } }
@@ -2425,7 +2461,16 @@ struct NativeMenuItemsView: View {
 
     var body: some View {
         NSPFrame(storeName: model.payload?.store.name ?? "", title: isPlan ? "プラン" : "メニュー", en: isPlan ? "Plans" : "Menu", loaded: model.payload != nil, error: model.error, toast: $model.toast, onBack: onBack, retry: { await model.refresh() }) {
-            if let p = model.payload {
+            if isPlan, let bm = model.builder {
+                // コース／放題プランの作成・編集（料理・選べるメイン・出すカテゴリまで1つの画面で）
+                NativeCourseBuilderView(
+                    b: bm,
+                    onClose: { model.builder = nil },
+                    onSaved: { msg in Task { await model.builderSaved(msg) } },
+                    onDelete: { item in Task { await model.deleteFromBuilder(item) } },
+                    onDetail: { item in model.detailFromBuilder(item) }
+                )
+            } else if let p = model.payload {
                 HStack(spacing: 10) {
                     NSPInput(text: $model.query, placeholder: "商品名・フリガナで探す", width: 300)
                     if !isPlan {
@@ -2441,7 +2486,15 @@ struct NativeMenuItemsView: View {
                             .background(RoundedRectangle(cornerRadius: 10).fill(Color.white)).overlay(RoundedRectangle(cornerRadius: 10).stroke(NFColor.line, lineWidth: 1))
                         }
                     }
-                    if p.canEdit && !model.showForm { NSPButton(text: isPlan ? "プランを追加" : "商品を追加", icon: "plus", primary: true) { model.startAdd() } }
+                    if p.canEdit && !model.showForm {
+                        if isPlan {
+                            // コース（料理・選べるメイン）と 放題プラン（飲み放題・食べ放題）を分けて作る（2026-10-25 Ronnie）
+                            NSPButton(text: "コースを追加", icon: "plus", primary: true) { model.openBuilder(.course, item: nil) }
+                            NSPButton(text: "放題プランを追加", icon: "plus") { model.openBuilder(.plan, item: nil) }
+                        } else {
+                            NSPButton(text: "商品を追加", icon: "plus", primary: true) { model.startAdd() }
+                        }
+                    }
                     // 写真・PDF からまとめて登録（Web のメニューの画面と同じ入口。登録の権限はサーバーで確かめる）
                     if !isPlan && p.canEdit && !model.showForm {
                         NSPButton(text: "写真・PDFから登録", icon: "doc.viewfinder") { AppState.shared.openSettingsPage(.menuScan, webPath: NativeSettingsPageKey.menuScan.path) }
@@ -2450,7 +2503,7 @@ struct NativeMenuItemsView: View {
                 }
                 if model.showForm { form(p) }
                 let secs = model.sections
-                if secs.isEmpty { Text(isPlan ? "プランがまだありません" : "商品が見つかりません").font(.system(size: 14)).foregroundColor(NFColor.ink3) }
+                if secs.isEmpty { Text(isPlan ? "コース・放題プランがまだありません（上の「コースを追加」「放題プランを追加」から）" : "商品が見つかりません").font(.system(size: 14)).foregroundColor(NFColor.ink3) }
                 ForEach(Array(secs.enumerated()), id: \.offset) { _, sec in
                     NSPCard(title: sec.0?.name ?? "カテゴリなし", en: "") {
                         VStack(spacing: 0) {
@@ -2477,6 +2530,7 @@ struct NativeMenuItemsView: View {
                     if hidden { tag("非表示", NFColor.ink3) }
                     if it.pricePending { tag("価格未設定", NFColor.danger) }
                     if it.itemType == "course", let m = it.durationMinutes { tag("\(Int(m))分", NFColor.iris) }
+                    if isPlan { planTags(it, p) }
                 }
                 HStack(spacing: 8) {
                     if !it.nameEn.isEmpty { Text(it.nameEn).font(.system(size: 12)).foregroundColor(NFColor.ink3) }
@@ -2493,7 +2547,11 @@ struct NativeMenuItemsView: View {
             }
             .buttonStyle(PressableStyle()).disabled(!p.canEdit || model.busy != nil)
             if model.busy == it.id { ProgressView() }
-            if p.canEdit { NSPButton(text: "編集", icon: "pencil") { model.startEdit(it) } }
+            if p.canEdit {
+                NSPButton(text: "編集", icon: "pencil") {
+                    if isPlan { model.openBuilder(NativeCourseBuilderModel.kindOf(it, p), item: it) } else { model.startEdit(it) }
+                }
+            }
         }
         .padding(.horizontal, 18).frame(minHeight: 58)
         .overlay(alignment: .bottom) { Rectangle().fill(NFColor.line).frame(height: 1) }
@@ -2501,6 +2559,15 @@ struct NativeMenuItemsView: View {
 
     private func tag(_ t: String, _ c: Color) -> some View {
         Text(t).font(.system(size: 10.5, weight: .heavy)).foregroundColor(c).padding(.horizontal, 6).padding(.vertical, 2).overlay(Capsule().stroke(c.opacity(0.5), lineWidth: 1))
+    }
+
+    /// プランの一覧の印：コース／飲み放題…・料理の数・選べるメインの数
+    @ViewBuilder private func planTags(_ it: NMIItem, _ p: NMIPayload) -> some View {
+        let kind = NativeCourseBuilderModel.kindOf(it, p)
+        let steps = p.courseSteps?[it.id]?.count ?? 0
+        tag(kind == .course ? "コース" : NativeCourseBuilderModel.planLabel(NativeCourseBuilderModel.planKindOf(it) ?? "drink"), NT.purple)
+        if steps > 0 { tag("料理\(steps)品", NFColor.ink3) }
+        if let m = p.courseMains?[it.id] { tag("メイン\(m.choices.count)種", NFColor.ink3) }
     }
 
     private func form(_ p: NMIPayload) -> some View {

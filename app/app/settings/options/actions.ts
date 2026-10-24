@@ -12,14 +12,14 @@ function assertStoreAccess(storeIds: string[], storeId: string): string | null {
   return storeIds.includes(storeId) ? null : '対象店舗にアクセス権がありません';
 }
 
-/** 選択肢グループを作成する（例: サイズ / トッピング） */
+/** 選択肢グループを作成する（例: サイズ / トッピング）。id は作ったグループ（iPad のコースの「選べるメイン」で使う） */
 export async function createOptionGroup(input: {
   storeId: string;
   name: string;
   isRequired: boolean;
   minSelect: number;
   maxSelect: number;
-}): Promise<ActionResult> {
+}): Promise<ActionResult & { id?: string }> {
   const ctx = await requirePermission('store.settings');
   const err = assertStoreAccess(ctx.stores.map((s) => s.id), input.storeId);
   if (err) return { error: err };
@@ -36,21 +36,25 @@ export async function createOptionGroup(input: {
     .select('id', { count: 'exact', head: true })
     .eq('store_id', input.storeId);
 
-  const { error } = await supabase.from('menu_option_groups').insert({
-    organization_id: ctx.organizationId,
-    store_id: input.storeId,
-    name,
-    is_required: input.isRequired,
-    min_select: min,
-    max_select: max,
-    sort_order: count ?? 0,
-    created_by: ctx.userId,
-    updated_by: ctx.userId,
-  });
+  const { data: created, error } = await supabase
+    .from('menu_option_groups')
+    .insert({
+      organization_id: ctx.organizationId,
+      store_id: input.storeId,
+      name,
+      is_required: input.isRequired,
+      min_select: min,
+      max_select: max,
+      sort_order: count ?? 0,
+      created_by: ctx.userId,
+      updated_by: ctx.userId,
+    })
+    .select('id')
+    .single();
   if (error) return { error: `グループの作成に失敗しました: ${error.message}` };
 
   revalidatePath('/app/settings/options');
-  return {};
+  return created?.id ? { id: created.id as string } : {};
 }
 
 /** グループの設定を更新する */
