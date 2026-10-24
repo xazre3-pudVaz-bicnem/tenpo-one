@@ -17,6 +17,7 @@ describe('設定の上のタブ', () => {
     expect(settingsHubOf(admin, '/app/pos/settings')?.children?.map((c) => c.label)).toEqual([
       'レジの設定',
       'ハードウェア',
+      'レジ端末（iPad）',
       'iPhoneハンディ',
       'ハンディ端末',
     ]);
