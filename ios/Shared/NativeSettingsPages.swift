@@ -3763,9 +3763,9 @@ struct NRBPayload: Codable {
 
 @MainActor
 final class NativeReservationBookModel: NSPModel<NRBPayload> {
-    enum Tab: String, CaseIterable { case book, gourmet, sns, google
-        var label: String { switch self { case .book: return "予約台帳設定"; case .gourmet: return "グルメ連携"; case .sns: return "SNS連携"; case .google: return "Google連携" } }
-        var icon: String { switch self { case .book: return "calendar.badge.clock"; case .gourmet: return "envelope"; case .sns: return "square.and.arrow.up"; case .google: return "globe" } }
+    enum Tab: String, CaseIterable { case book, labels, gourmet, sns, google
+        var label: String { switch self { case .book: return "予約台帳設定"; case .labels: return "タグ・キーワード"; case .gourmet: return "グルメ連携"; case .sns: return "SNS連携"; case .google: return "Google連携" } }
+        var icon: String { switch self { case .book: return "calendar.badge.clock"; case .labels: return "tag"; case .gourmet: return "envelope"; case .sns: return "square.and.arrow.up"; case .google: return "globe" } }
     }
     @Published var tab: Tab = .book
     @Published var openSite: NRBSite?
@@ -3822,6 +3822,8 @@ struct NativeReservationBookView: View {
                 }
                 switch model.tab {
                 case .book: bookTab(p)
+                // 予約のキーワード（10 個・15 文字）とお客様・予約のタグ（区分ごと）。2026-10-24 Ronnie「タグは店舗の設定で追加・編集」
+                case .labels: NRWLabelsSettings()
                 case .gourmet: gourmetTab(p)
                 case .sns: snsTab(p)
                 case .google: googleTab(p)
