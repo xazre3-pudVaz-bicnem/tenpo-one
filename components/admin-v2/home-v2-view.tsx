@@ -3,7 +3,10 @@ import { ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { yen } from '@/lib/format';
 import type { HomeStoreRow, HourlyCompare } from '@/lib/home-v2';
+import { delta, rangeLabel, type DateRange, type HomeCompare, type HomeRange } from '@/lib/home-period';
+import type { PeriodKpi, PeriodStoreRow } from '@/lib/home-period-server';
 import { HourlyCompareChart } from './hourly-compare-chart';
+import { HomePeriodBar } from './home-period-bar';
 import { StoreSwitchLink } from './store-switch-link';
 
 export interface HomeV2Todo {
@@ -18,30 +21,37 @@ export interface HomeV2Todo {
 export interface HomeV2Props {
   scopeLabel: string;
   asOf: string;
-  kpi: {
-    sales: number;
-    settled: number;
-    open: number;
-    guests: number;
-    groups: number;
-    avgSpend: number;
-    dailyBudget: number | null;
-    achievementPct: number | null;
-  };
-  rows: HomeStoreRow[];
+  period: { range: HomeRange; compare: HomeCompare; current: DateRange; previous: DateRange };
+  kpi: { current: PeriodKpi; previous: PeriodKpi };
+  /** 本日：いまの席・未会計・本日の予約つきの店舗一覧 */
+  rows: HomeStoreRow[] | null;
+  /** 本日以外：期間の売上・客数・客単価・予算の店舗一覧 */
+  periodRows: PeriodStoreRow[] | null;
   todos: HomeV2Todo[];
   hourly: HourlyCompare;
-  nowHour: number;
+  /** いまの時（期間に今日が入るときだけ。棒を薄く・縦線） */
+  nowHour: number | null;
 }
 
 const ROW_GRID =
   'grid grid-cols-[minmax(180px,1.7fr)_minmax(120px,1.1fr)_minmax(110px,1fr)_minmax(130px,1fr)_minmax(100px,0.9fr)_minmax(64px,0.6fr)_20px] items-center gap-3';
+const PERIOD_ROW_GRID =
+  'grid grid-cols-[minmax(180px,1.7fr)_minmax(110px,1fr)_minmax(90px,0.8fr)_minmax(90px,0.8fr)_minmax(100px,0.9fr)_minmax(120px,1fr)_20px] items-center gap-3';
+
+const COMPARE_LABEL: Record<HomeCompare, string> = { day: '前日', week: '前週同曜日', month: '前月同日' };
 
 /**
  * 新しい管理画面のホーム（2026-10-10 Ronnie「シンプルに、管理画面のスタイルで」）。
- * 上：本日の4つの数字／真ん中：店舗の一覧（押すと店舗ナウ）／下：やること・時間帯別の売上。
+ * 上：期間タブと比較（2026-10-24 funfo・dinii のおすすめ）／数字 4 つ（増減つき）／店舗の一覧／やること・時間帯別の売上。
  */
-export function HomeV2View({ scopeLabel, asOf, kpi, rows, todos, hourly, nowHour }: HomeV2Props) {
+export function HomeV2View({ scopeLabel, asOf, period, kpi, rows, periodRows, todos, hourly, nowHour }: HomeV2Props) {
+  const cur = kpi.current;
+  const prev = kpi.previous;
+  const isToday = period.range === 'today';
+  const compareNote = `${COMPARE_LABEL[period.compare]}（${rangeLabel(period.previous)}）比`;
+  const periodTitle = isToday ? '本日' : rangeLabel(period.current);
+  const reportHref = `/app/reports?from=${period.current.from}&to=${period.current.to}`;
+
   return (
     <div className="flex flex-col gap-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -52,29 +62,62 @@ export function HomeV2View({ scopeLabel, asOf, kpi, rows, todos, hourly, nowHour
           </p>
         </div>
         <Link
-          href="/app/reports"
+          href={reportHref}
           className="inline-flex h-10 items-center rounded-lg border border-line bg-white px-4 text-sm font-bold text-royal hover:border-wisteria"
         >
-          期間を選んで見る（レポート）
+          この期間のレポートを見る
         </Link>
       </div>
 
-      <section aria-label="本日の数字" className="grid grid-cols-1 gap-px overflow-hidden rounded-xl border border-line bg-line sm:grid-cols-2 xl:grid-cols-4">
-        <Kpi label="本日の売上（税込）" value={yen(kpi.sales)} sub={`会計済 ${yen(kpi.settled)}・未会計 ${yen(kpi.open)}`} href="/app/orders" />
-        <Kpi label="客数（会計済み）" value={`${kpi.guests}`} unit="人" sub={`会計 ${kpi.groups}件`} href="/app/orders" />
-        <Kpi label="客単価" value={yen(kpi.avgSpend)} sub="本日の売上 ÷ 客数" href="/app/reports" />
-        <div className="flex flex-col gap-2 bg-white px-5 py-4">
+      <HomePeriodBar range={period.range} compare={period.compare} current={period.current} previous={period.previous} />
+
+      <section aria-label={`${periodTitle}の数字`} className="grid grid-cols-1 gap-px overflow-hidden rounded-xl border border-line bg-line sm:grid-cols-2 xl:grid-cols-4">
+        <Kpi
+          label={`${periodTitle}の売上（税込）`}
+          value={yen(cur.sales)}
+          d={delta(cur.sales, prev.sales)}
+          compareNote={compareNote}
+          prevText={yen(prev.sales)}
+          sub={isToday ? `会計済 ${yen(cur.settled)}・未会計 ${yen(cur.open)}` : `会計済 ${yen(cur.settled)}${cur.open > 0 ? `・未会計 ${yen(cur.open)}` : ''}`}
+          href={isToday ? '/app/orders' : reportHref}
+        />
+        <Kpi
+          label="客数（会計済み）"
+          value={`${cur.guests}`}
+          unit="人"
+          d={delta(cur.guests, prev.guests)}
+          compareNote={compareNote}
+          prevText={`${prev.guests}人`}
+          sub={`会計 ${cur.groups}件（${COMPARE_LABEL[period.compare]} ${prev.groups}件）`}
+          href={isToday ? '/app/orders' : reportHref}
+        />
+        <Kpi
+          label="客単価"
+          value={yen(cur.avgSpend)}
+          d={delta(cur.avgSpend, prev.avgSpend)}
+          compareNote={compareNote}
+          prevText={yen(prev.avgSpend)}
+          sub="売上 ÷ 客数（会計済み）"
+          href={reportHref}
+        />
+        <div className="flex flex-col gap-1.5 bg-white px-5 py-4">
           <span className="text-[12.5px] text-ink-2">予算の達成</span>
-          {kpi.achievementPct != null && kpi.dailyBudget ? (
+          {cur.achievementPct != null && cur.budget ? (
             <>
               <span className="text-[28px] leading-tight font-extrabold text-ink tabular-nums">
-                {kpi.achievementPct}
+                {cur.achievementPct}
                 <span className="ml-0.5 text-[15px]">%</span>
               </span>
               <div className="h-1.5 overflow-hidden rounded-full bg-lilac">
-                <div className="h-full rounded-full bg-iris" style={{ width: `${Math.min(100, kpi.achievementPct)}%` }} />
+                <div
+                  className={cn('h-full rounded-full', cur.achievementPct >= 100 ? 'bg-success' : cur.achievementPct >= 90 ? 'bg-saffron' : 'bg-iris')}
+                  style={{ width: `${Math.min(100, cur.achievementPct)}%` }}
+                />
               </div>
-              <span className="text-xs text-ink-3">本日の予算 {yen(kpi.dailyBudget)}</span>
+              <span className="text-xs text-ink-3">
+                {periodTitle}の予算 {yen(cur.budget)}
+                {prev.achievementPct != null ? `・${COMPARE_LABEL[period.compare]} ${prev.achievementPct}%` : ''}
+              </span>
             </>
           ) : (
             <>
@@ -87,63 +130,118 @@ export function HomeV2View({ scopeLabel, asOf, kpi, rows, todos, hourly, nowHour
         </div>
       </section>
 
-      <section aria-label="店舗" className="rounded-xl border border-line bg-white">
-        <div className="flex flex-wrap items-baseline justify-between gap-2 px-5 pt-4 pb-3">
-          <h2 className="text-base font-extrabold text-ink">店舗</h2>
-          <span className="text-[12.5px] text-ink-3">店舗を押すと、どの卓に誰がいるか・予約まで見られます（店舗ナウ）</span>
-        </div>
-        <div className="overflow-x-auto">
-          <div className="flex min-w-[780px] flex-col">
-            <div className={cn(ROW_GRID, 'border-y border-line bg-lilac-soft px-5 py-2 text-xs text-ink-3')}>
-              <span>店舗</span>
-              <span>いまの席</span>
-              <span>未会計</span>
-              <span>本日の予約</span>
-              <span className="text-right">本日の売上</span>
-              <span className="text-right">予算</span>
-              <span />
-            </div>
-            {rows.map((r) => (
-              <StoreSwitchLink
-                key={r.id}
-                storeId={r.id}
-                href={`/app/now?store=${r.id}`}
-                className={cn(ROW_GRID, 'w-full border-b border-line/70 px-5 py-3.5 text-left text-[13.5px] text-ink last:border-b-0 hover:bg-lilac-soft disabled:opacity-60')}
-              >
-                <b className="truncate">{r.name}</b>
-                <span className="flex flex-col gap-1">
-                  <span className="font-bold tabular-nums">
-                    {r.tablesUsed} / {r.tablesTotal} 卓
-                  </span>
-                  <span className="h-1 overflow-hidden rounded-full bg-lilac">
-                    <span
-                      className="block h-full bg-iris"
-                      style={{ width: `${r.tablesTotal > 0 ? Math.round((r.tablesUsed / r.tablesTotal) * 100) : 0}%` }}
-                    />
-                  </span>
-                </span>
-                <span className="flex flex-col">
-                  <span className="font-bold">{r.openCount}組</span>
-                  <span className="text-xs text-ink-2 tabular-nums">{yen(r.openTotal)}</span>
-                </span>
-                <span className="flex flex-col">
-                  <span className="font-bold">
-                    {r.resvGroups}組 {r.resvGuests}名
-                  </span>
-                  <span className={cn('text-xs', r.nextTime ? 'font-bold text-royal' : 'text-ink-3')}>
-                    {r.nextTime ? `次 ${r.nextTime}・あと${r.resvUpcoming}組` : r.resvGroups > 0 ? 'このあとの予約なし' : '—'}
-                  </span>
-                </span>
-                <span className="text-right font-extrabold tabular-nums">{yen(r.sales)}</span>
-                <span className={cn('text-right font-bold tabular-nums', r.budgetPct != null && r.budgetPct < 70 && 'text-danger')}>
-                  {r.budgetPct != null ? `${r.budgetPct}%` : '—'}
-                </span>
-                <ChevronRight className="h-4 w-4 text-ink-3" aria-hidden />
-              </StoreSwitchLink>
-            ))}
+      {rows && (
+        <section aria-label="店舗" className="rounded-xl border border-line bg-white">
+          <div className="flex flex-wrap items-baseline justify-between gap-2 px-5 pt-4 pb-3">
+            <h2 className="text-base font-extrabold text-ink">店舗</h2>
+            <span className="text-[12.5px] text-ink-3">店舗を押すと、どの卓に誰がいるか・予約まで見られます（店舗ナウ）</span>
           </div>
-        </div>
-      </section>
+          <div className="overflow-x-auto">
+            <div className="flex min-w-[780px] flex-col">
+              <div className={cn(ROW_GRID, 'border-y border-line bg-lilac-soft px-5 py-2 text-xs text-ink-3')}>
+                <span>店舗</span>
+                <span>いまの席</span>
+                <span>未会計</span>
+                <span>本日の予約</span>
+                <span className="text-right">本日の売上</span>
+                <span className="text-right">予算</span>
+                <span />
+              </div>
+              {rows.map((r) => (
+                <StoreSwitchLink
+                  key={r.id}
+                  storeId={r.id}
+                  href={`/app/now?store=${r.id}`}
+                  className={cn(ROW_GRID, 'w-full border-b border-line/70 px-5 py-3.5 text-left text-[13.5px] text-ink last:border-b-0 hover:bg-lilac-soft disabled:opacity-60')}
+                >
+                  <b className="truncate">{r.name}</b>
+                  <span className="flex flex-col gap-1">
+                    <span className="font-bold tabular-nums">
+                      {r.tablesUsed} / {r.tablesTotal} 卓
+                    </span>
+                    <span className="h-1 overflow-hidden rounded-full bg-lilac">
+                      <span
+                        className="block h-full bg-iris"
+                        style={{ width: `${r.tablesTotal > 0 ? Math.round((r.tablesUsed / r.tablesTotal) * 100) : 0}%` }}
+                      />
+                    </span>
+                  </span>
+                  <span className="flex flex-col">
+                    <span className="font-bold">{r.openCount}組</span>
+                    <span className="text-xs text-ink-2 tabular-nums">{yen(r.openTotal)}</span>
+                  </span>
+                  <span className="flex flex-col">
+                    <span className="font-bold">
+                      {r.resvGroups}組 {r.resvGuests}名
+                    </span>
+                    <span className={cn('text-xs', r.nextTime ? 'font-bold text-royal' : 'text-ink-3')}>
+                      {r.nextTime ? `次 ${r.nextTime}・あと${r.resvUpcoming}組` : r.resvGroups > 0 ? 'このあとの予約なし' : '—'}
+                    </span>
+                  </span>
+                  <span className="text-right font-extrabold tabular-nums">{yen(r.sales)}</span>
+                  <span className={cn('text-right font-bold tabular-nums', r.budgetPct != null && r.budgetPct < 70 && 'text-danger')}>
+                    {r.budgetPct != null ? `${r.budgetPct}%` : '—'}
+                  </span>
+                  <ChevronRight className="h-4 w-4 text-ink-3" aria-hidden />
+                </StoreSwitchLink>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {periodRows && (
+        <section aria-label="店舗" className="rounded-xl border border-line bg-white">
+          <div className="flex flex-wrap items-baseline justify-between gap-2 px-5 pt-4 pb-3">
+            <h2 className="text-base font-extrabold text-ink">
+              店舗<span className="ml-2 text-[12.5px] font-normal text-ink-3">{rangeLabel(period.current)}</span>
+            </h2>
+            <span className="text-[12.5px] text-ink-3">店舗を押すと、その期間のレポートが開きます</span>
+          </div>
+          <div className="overflow-x-auto">
+            <div className="flex min-w-[780px] flex-col">
+              <div className={cn(PERIOD_ROW_GRID, 'border-y border-line bg-lilac-soft px-5 py-2 text-xs text-ink-3')}>
+                <span>店舗</span>
+                <span className="text-right">売上（税込）</span>
+                <span className="text-right">客数</span>
+                <span className="text-right">会計</span>
+                <span className="text-right">客単価</span>
+                <span>予算の達成</span>
+                <span />
+              </div>
+              {periodRows.map((r) => (
+                <StoreSwitchLink
+                  key={r.id}
+                  storeId={r.id}
+                  href={`${reportHref}&store=${r.id}`}
+                  className={cn(PERIOD_ROW_GRID, 'w-full border-b border-line/70 px-5 py-3.5 text-left text-[13.5px] text-ink last:border-b-0 hover:bg-lilac-soft disabled:opacity-60')}
+                >
+                  <b className="truncate">{r.name}</b>
+                  <span className="text-right font-extrabold tabular-nums">{yen(r.sales)}</span>
+                  <span className="text-right tabular-nums">{r.guests}人</span>
+                  <span className="text-right tabular-nums">{r.groups}件</span>
+                  <span className="text-right tabular-nums">{yen(r.avgSpend)}</span>
+                  <span className="flex flex-col gap-1">
+                    {r.budgetPct != null ? (
+                      <>
+                        <span className={cn('font-bold tabular-nums', r.budgetPct < 70 && 'text-danger')}>
+                          {r.budgetPct}%<span className="ml-1 text-xs font-normal text-ink-3">/ {yen(r.budget)}</span>
+                        </span>
+                        <span className="h-1 overflow-hidden rounded-full bg-lilac">
+                          <span className={cn('block h-full', r.budgetPct >= 100 ? 'bg-success' : 'bg-iris')} style={{ width: `${Math.min(100, r.budgetPct)}%` }} />
+                        </span>
+                      </>
+                    ) : (
+                      <span className="text-ink-3">—</span>
+                    )}
+                  </span>
+                  <ChevronRight className="h-4 w-4 text-ink-3" aria-hidden />
+                </StoreSwitchLink>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       <div className="flex flex-wrap items-stretch gap-5">
         <section aria-label="やること" className="flex min-w-0 flex-[1_1_340px] flex-col rounded-xl border border-line bg-white px-5 py-4">
@@ -170,27 +268,45 @@ export function HomeV2View({ scopeLabel, asOf, kpi, rows, todos, hourly, nowHour
         <section aria-label="売上の動き" className="flex min-w-0 flex-[2_1_520px] flex-col gap-2 rounded-xl border border-line bg-white px-5 py-4">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <h2 className="text-base font-extrabold text-ink">
-              売上の動き<span className="ml-2 text-[12.5px] font-normal text-ink-3">時間帯別</span>
+              売上の動き<span className="ml-2 text-[12.5px] font-normal text-ink-3">時間帯別{isToday ? '' : '（期間の合計）'}</span>
             </h2>
             <div className="flex gap-3.5 text-xs text-ink-2">
               <span className="inline-flex items-center gap-1.5">
                 <i className="inline-block h-[11px] w-[11px] rounded-[3px] bg-iris" aria-hidden />
-                本日
+                {isToday ? '本日' : rangeLabel(period.current)}
               </span>
               <span className="inline-flex items-center gap-1.5">
                 <i className="inline-block w-4 border-t-[2.5px] border-dashed border-[#d4891c]" aria-hidden />
-                前週の同じ曜日
+                {COMPARE_LABEL[period.compare]}（{rangeLabel(period.previous)}）
               </span>
             </div>
           </div>
-          <HourlyCompareChart data={hourly} nowHour={nowHour} />
+          <HourlyCompareChart data={hourly} nowHour={nowHour ?? -1} />
         </section>
       </div>
     </div>
   );
 }
 
-function Kpi({ label, value, unit, sub, href }: { label: string; value: string; unit?: string; sub: string; href: string }) {
+function Kpi({
+  label,
+  value,
+  unit,
+  d,
+  compareNote,
+  prevText,
+  sub,
+  href,
+}: {
+  label: string;
+  value: string;
+  unit?: string;
+  d: ReturnType<typeof delta>;
+  compareNote: string;
+  prevText: string;
+  sub: string;
+  href: string;
+}) {
   return (
     <Link href={href} className="flex flex-col gap-1.5 bg-white px-5 py-4 hover:bg-lilac-soft">
       <span className="text-[12.5px] text-ink-2">{label}</span>
@@ -198,7 +314,26 @@ function Kpi({ label, value, unit, sub, href }: { label: string; value: string; 
         {value}
         {unit && <span className="ml-1 text-[15px]">{unit}</span>}
       </span>
+      <span className="flex flex-wrap items-center gap-x-1.5 text-xs">
+        <DeltaMark d={d} />
+        <span className="text-ink-3">
+          {compareNote} {prevText}
+        </span>
+      </span>
       <span className="text-xs text-ink-3">{sub}</span>
     </Link>
+  );
+}
+
+/** ▲6.4% / ▼2.1% / ±0%（前が 0 のときは「—」） */
+function DeltaMark({ d }: { d: ReturnType<typeof delta> }) {
+  if (d.pct == null) return <span className="font-bold text-ink-3">—</span>;
+  const tone = d.direction === 'up' ? 'text-success' : d.direction === 'down' ? 'text-danger' : 'text-ink-3';
+  const mark = d.direction === 'up' ? '▲' : d.direction === 'down' ? '▼' : '±';
+  return (
+    <span className={cn('font-bold tabular-nums', tone)}>
+      {mark}
+      {Math.abs(d.pct).toLocaleString('ja-JP', { maximumFractionDigits: 1 })}%
+    </span>
   );
 }

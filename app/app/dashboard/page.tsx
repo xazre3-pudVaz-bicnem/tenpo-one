@@ -82,7 +82,11 @@ async function getSalesMetricsOptions(organizationId: string): Promise<SalesMetr
   return { includeTakeoutGuests: kpiSettings.includeTakeoutGuests ?? true };
 }
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const ctx = await requireMember();
   const today = todayJst();
 
@@ -108,7 +112,8 @@ export default async function DashboardPage() {
   const metricsOpts = await getSalesMetricsOptions(ctx.organizationId);
   // 新しい管理画面（会社のオーナーがパソコンで ON にしたときだけ。レジ・ハンディは今のまま。lib/admin-v2.ts）
   if (await isAdminV2Request(ctx)) {
-    return <HomeV2 ctx={ctx} today={today} metricsOpts={metricsOpts} />;
+    // 期間（?range=）と比較（?compare=）は新しい管理画面のホームだけが読む（lib/home-period.ts）
+    return <HomeV2 ctx={ctx} today={today} metricsOpts={metricsOpts} sp={(await searchParams) ?? {}} />;
   }
   const asOf = nowStampJst();
 

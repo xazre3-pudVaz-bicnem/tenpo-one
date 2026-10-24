@@ -132,8 +132,8 @@ export async function RegiWeather({ address }: { address: string | null }) {
 /** 表示だけ（気温 → 天気アイコン → 地名。全部 下にそろえて1行） */
 export function RegiWeatherView({
   temperature,
-  icon: _icon,
-  night: _night,
+  icon,
+  night,
   place,
 }: {
   temperature: number | null;
@@ -149,7 +149,12 @@ export function RegiWeatherView({
           {temperature}°
         </span>
       )}
-      {/* 天気のアイコン（昼は太陽・夜は月）は出さない（2026-10-24 Ronnie「月と太陽は要らない」）。気温と地名だけ */}
+      {/* 天気のアイコン（晴れ・くもり・雨・雪・雷。晴れの夜は月）。2026-10-24 13:17 Ronnie「15° と天気のアイコンを出して」（00:55 の「月と太陽は要らない」から変更） */}
+      {temperature != null && icon && (
+        <span className="self-end pb-2">
+          <RegiWeatherGlyph icon={icon} night={night} />
+        </span>
+      )}
       {place && (
         <span className="ml-1.5 inline-flex items-center gap-1 text-[13px] font-medium whitespace-nowrap opacity-85 lg:text-[15px]">
           <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">

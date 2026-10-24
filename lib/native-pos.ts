@@ -1,5 +1,6 @@
 import { parseCheckoutBluetoothLink, type CheckoutBluetoothLink } from '@/lib/checkout-bluetooth';
-import { englishName } from '@/lib/romaji';
+import { categoryEnglishName, englishName } from '@/lib/romaji';
+import { menuPageLabel, menuPageSubName, PICKS_PAGE_KEY, type MenuBookPage } from '@/lib/menu-book';
 import { sortOptionGroupLinks } from './option-group-order';
 /**
  * iPad アプリのネイティブ画面（オーダー・会計）とサーバーの決まりごと（2026-10-13 Ronnie「Airレジのように全部ネイティブ。
@@ -22,6 +23,61 @@ export interface NativePosCategory {
   id: string;
   name: string;
   sub: string | null;
+}
+
+/**
+ * 上のタブ（ページ）。Web のレジ（components/pos/pos-screen.tsx の buildPosPages）と同じページ・同じ並び。
+ * name＝日本語を大きく、sub＝英語を小さく（ネイティブの決まり。2026-10-24 Ronnie）。
+ * categoryIds＝左の列に出すカテゴリ（このページの中身）。
+ */
+export interface NativePosPage {
+  key: string;
+  name: string;
+  sub: string | null;
+  categoryIds: string[];
+}
+
+type PageCategory = { id: string; name: string; name_en: string | null };
+
+/**
+ * メニューブックのページ（groupMenuPages の結果）から、ネイティブの「上のタブ」と「カテゴリの並び」を作る。
+ * おすすめ・売れ筋のページは店の決めた位置（picksAt）に入れる。テイクアウトはここを使わない。
+ */
+export function nativePosPages(
+  grouped: readonly MenuBookPage<PageCategory>[],
+  picksAt: number
+): { pages: NativePosPage[]; categories: NativePosCategory[] } {
+  const pages: NativePosPage[] = [];
+  const categories: NativePosCategory[] = [];
+  const at = Math.max(0, Math.min(picksAt, grouped.length));
+  const addPicks = () => {
+    pages.push({ key: PICKS_PAGE_KEY, name: 'おすすめ', sub: 'Picks', categoryIds: [NATIVE_FAVORITES_TAB, NATIVE_BESTSELLERS_TAB] });
+    categories.push(
+      { id: NATIVE_FAVORITES_TAB, name: 'おすすめ', sub: 'Picks' },
+      { id: NATIVE_BESTSELLERS_TAB, name: '売れ筋', sub: 'Popular' }
+    );
+  };
+  grouped.forEach((pg, i) => {
+    if (i === at) addPicks();
+    const label = menuPageLabel(pg, (c) => c.name);
+    // 標準のページ（DRINK など）は日本語（ドリンク）を大きく、英語の名前を小さく。Web は同じ2つを逆の大きさで出す
+    const ja = menuPageSubName(pg.key, pg.name);
+    const first = pg.categories[0];
+    const en = ja
+      ? label
+      : pg.categories.length === 1
+        ? englishName(first.name, null, first.name_en)
+        : englishName(label, null, null);
+    pages.push({
+      key: pg.key,
+      name: ja ?? label,
+      sub: en && en !== (ja ?? label) ? en : null,
+      categoryIds: pg.categories.map((c) => c.id),
+    });
+    for (const c of pg.categories) categories.push({ id: c.id, name: c.name, sub: categoryEnglishName(c.name, c.name_en) });
+  });
+  if (at >= grouped.length) addPicks();
+  return { pages, categories };
 }
 
 export interface NativePosItem {
@@ -103,6 +159,8 @@ export interface NativePosBrand {
 export interface NativePosCatalog {
   store: { id: string; name: string };
   categories: NativePosCategory[];
+  /** 上のタブ（ページ）。テイクアウトは空（タブを出さない） */
+  pages: NativePosPage[];
   items: NativePosItem[];
   optionGroups: Record<string, NativePosOptionGroup[]>;
   clerks: { id: string; name: string }[];
@@ -144,6 +202,7 @@ export interface NativePosPayload {
   /** 店のメニューまわりのハッシュ（アプリの保存と比べる） */
   catalogVersion?: string;
   categories: NativePosCategory[];
+  pages: NativePosPage[];
   items: NativePosItem[];
   /** 商品ごとの選択肢グループ（menuItemId → グループ。選択肢のある商品だけ） */
   optionGroups: Record<string, NativePosOptionGroup[]>;
@@ -166,12 +225,28 @@ export const NATIVE_PAY_METHODS = ['cash', 'credit', 'qr', 'emoney', 'points', '
 export type NativePayMethod = (typeof NATIVE_PAY_METHODS)[number];
 
 /** 注文確定で送る1行（選択肢・レジで打った金額つき） */
-export interface NativeSendLine {
+export interface NativeSendMenuLine {
   menuItemId: string;
   quantity: number;
   optionItemIds: string[];
   /** ¥0 の商品にレジで打った金額（無ければ null） */
   openPrice: number | null;
+}
+
+/**
+ * 「その他（金額入力）」の行（Web のレジの Other ボタン。2026-10-07 Ronnie「お客様が何か追加したとき金額を打てる Other を全カテゴリの最後に」）。
+ * サーバーは Web と同じ addCustomPriceItem に渡す（金額・数量・内容の長さはそこでもう一度確かめる）
+ */
+export interface NativeSendCustomLine {
+  custom: { categoryId: string | null; price: number; memo: string | null };
+  quantity: number;
+}
+
+export type NativeSendLine = NativeSendMenuLine | NativeSendCustomLine;
+
+/** 「その他」の行か */
+export function isNativeCustomLine(l: NativeSendLine): l is NativeSendCustomLine {
+  return 'custom' in l;
 }
 
 export type NativePosAction =
@@ -269,9 +344,21 @@ export function parseNativePosAction(raw: unknown): Parsed {
         if (!l || typeof l !== 'object') return bad();
         const r = l as Record<string, unknown>;
         const q = r.quantity;
+        if (typeof q !== 'number' || !Number.isInteger(q) || q < 1 || q > 99) return bad();
+        if (r.custom !== undefined) {
+          const c = r.custom as Record<string, unknown> | null;
+          if (!c || typeof c !== 'object' || Array.isArray(c)) return bad();
+          const categoryId = c.categoryId ?? null;
+          const memo = c.memo ?? null;
+          if (categoryId !== null && !isUuid(categoryId)) return bad();
+          if (!isYen(c.price)) return bad('金額が正しくありません');
+          if (memo !== null && (typeof memo !== 'string' || memo.length > 200)) return bad();
+          lines.push({ custom: { categoryId, price: c.price as number, memo: memo as string | null }, quantity: q });
+          continue;
+        }
         const opts = r.optionItemIds ?? [];
         const open = r.openPrice ?? null;
-        if (!isUuid(r.menuItemId) || typeof q !== 'number' || !Number.isInteger(q) || q < 1 || q > 99) return bad();
+        if (!isUuid(r.menuItemId)) return bad();
         if (!Array.isArray(opts) || opts.length > 30 || !opts.every(isUuid)) return bad();
         if (open !== null && !isYen(open)) return bad('金額が正しくありません');
         lines.push({ menuItemId: r.menuItemId, quantity: q, optionItemIds: [...new Set(opts as string[])], openPrice: open });

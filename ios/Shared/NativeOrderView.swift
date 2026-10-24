@@ -1,7 +1,9 @@
 import SwiftUI
 
 /// ネイティブのオーダー画面（iPad レジ）。Web の「オーダー・会計」と同じ並び：
-///   左＝伝票（卓・人数・明細・合計・伝票の操作）／中＝カテゴリ／右＝検索・商品・注文確定・会計へ
+///   左＝伝票（卓・人数・明細・合計・伝票の操作）／右の上＝ページのタブ（1 おすすめ・2 ドリンク…）／
+///   右の下＝そのページのカテゴリ（左の列）と検索・商品・Order（スライド）。
+/// 会計はここからは行かない（テーブルの「会計」から。2026-10-24 Ronnie）。卓の無いテイクアウトだけ「会計へ」を残す（Web と同じ）。
 /// タップしたらすぐ画面に出す（Web より速い）。
 struct NativeOrderView: View {
     @ObservedObject var model: NativeOrderModel
@@ -24,11 +26,19 @@ struct NativeOrderView: View {
                 let slipW = max(320, geo.size.width * 0.30)
                 let catW = max(150, geo.size.width * 0.13)
                 HStack(alignment: .top, spacing: 12) {
-                    SlipPanel(model: model, onClerk: { pickClerk = true }, onSplit: goCheckout, onSlipOp: { slipOp = $0 })
+                    SlipPanel(model: model, onClerk: { pickClerk = true }, onSlipOp: { slipOp = $0 })
                         .frame(width: slipW)
-                    CategoryColumn(model: model)
-                        .frame(width: catW)
-                    ItemsPanel(model: model, onSend: send, onCheckout: goCheckout)
+                    VStack(spacing: 12) {
+                        // 上のタブ（ページ）。Web と同じく2つ以上あるときだけ（テイクアウトは出さない）
+                        if model.pages.count > 1 {
+                            PageTabsBar(model: model)
+                        }
+                        HStack(alignment: .top, spacing: 12) {
+                            CategoryColumn(model: model)
+                                .frame(width: catW)
+                            ItemsPanel(model: model, onSend: send, onCheckout: goCheckout)
+                        }
+                    }
                 }
                 .padding(12)
             }
@@ -85,6 +95,24 @@ struct NativeOrderView: View {
             }
         }
         .animation(.easeOut(duration: 0.15), value: model.pending)
+        // 「その他（金額入力）」のパネル
+        .overlay {
+            if let t = model.customTarget {
+                ZStack {
+                    Color.black.opacity(0.38).ignoresSafeArea()
+                        .onTapGesture { model.customTarget = nil }
+                    NativeCustomPricePad(
+                        title: "その他 / Other（\(t.label)）",
+                        onCancel: { model.customTarget = nil },
+                        onDone: { price, memo in model.addCustom(price: price, memo: memo) }
+                    )
+                    .frame(maxWidth: 480)
+                    .padding(28)
+                }
+                .transition(.opacity)
+            }
+        }
+        .animation(.easeOut(duration: 0.15), value: model.customTarget)
         // 会計は同じ画面の上に重ねる（fullScreenCover にすると、下の Web が止まって Bluetooth の印刷・ドロアが出ない）
         .overlay {
             if showCheckout {
@@ -236,8 +264,7 @@ struct NativeTopBar: View {
 private struct SlipPanel: View {
     @ObservedObject var model: NativeOrderModel
     var onClerk: () -> Void = {}
-    /// 伝票の操作（会計を分ける＝会計画面へ、ほかはネイティブのシート）
-    var onSplit: () -> Void = {}
+    /// 伝票の操作（ネイティブのシート）。会計を分けるのは会計の画面の中で
     var onSlipOp: (NativeSlipOp) -> Void = { _ in }
 
     var body: some View {
@@ -331,7 +358,6 @@ private struct SlipPanel: View {
                 }
                 // 伝票の操作（全部ネイティブ。2026-10-24 Ronnie「Web に飛ばない」）
                 FlowChips(items: [
-                    ("arrow.triangle.branch", "会計を分ける", false, onSplit),
                     ("doc.badge.plus", "新しい伝票", false, { onSlipOp(.newSlip) }),
                     ("square.on.square", "伝票をまとめる", false, { onSlipOp(.merge) }),
                     ("arrow.left.arrow.right", "卓を移動", false, { onSlipOp(.move) }),
@@ -447,7 +473,48 @@ private struct FlowChips: View {
     }
 }
 
-// MARK: - 中：カテゴリ
+// MARK: - 右の上：ページのタブ
+
+/// 上のタブ（ページ）。番号・日本語を大きく・英語を小さく（Web のレジのタブと同じ並び）。押すとそのページの最初のカテゴリ
+private struct PageTabsBar: View {
+    @ObservedObject var model: NativeOrderModel
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(Array(model.pages.enumerated()), id: \.element.id) { i, pg in
+                    let on = pg.id == model.currentPage?.id && model.search.isEmpty
+                    Button { model.openPage(pg) } label: {
+                        HStack(spacing: 10) {
+                            Text(verbatim: "\(i + 1)")
+                                .font(.system(size: 14, weight: .heavy)).monospacedDigit()
+                                .foregroundColor(on ? .white : NT.ink3)
+                                .frame(width: 28, height: 28)
+                                .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(on ? Color.white.opacity(0.22) : NT.lilac))
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(pg.name).font(.system(size: 18, weight: .heavy)).lineLimit(1)
+                                if let sub = pg.sub {
+                                    Text(sub).font(.system(size: 11, weight: .semibold)).opacity(0.75).lineLimit(1)
+                                }
+                            }
+                            .foregroundColor(on ? .white : NT.ink)
+                        }
+                        .padding(.horizontal, 16)
+                        .frame(minHeight: 58)
+                        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(on ? NT.purple : Color.clear))
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(PressableStyle())
+                }
+            }
+            .padding(7)
+        }
+        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(NT.card))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(NT.lilacLine, lineWidth: 1))
+    }
+}
+
+// MARK: - 中：カテゴリ（いま開いているページの中身だけ）
 
 private struct CategoryColumn: View {
     @ObservedObject var model: NativeOrderModel
@@ -455,7 +522,7 @@ private struct CategoryColumn: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
-                ForEach(model.categories) { cat in
+                ForEach(model.pageCategories) { cat in
                     let selected = cat.id == model.selectedCategory && model.search.isEmpty
                     Button {
                         model.search = ""
@@ -516,6 +583,23 @@ private struct ItemsPanel: View {
                     ForEach(model.visibleItems) { item in
                         ItemTile(item: item, qty: model.qtyInOrder(item)) { model.add(item) }
                     }
+                    // 最後に「その他（金額入力）」。お客様が何か追加したとき金額と内容を打って入れる（Web と同じ。2026-10-07 Ronnie）
+                    if let t = model.customTile {
+                        Button { model.customTarget = t } label: {
+                            VStack(spacing: 5) {
+                                Image(systemName: "square.and.pencil").font(.system(size: 20, weight: .bold))
+                                Text("Other").font(.system(size: 17, weight: .heavy))
+                                Text("その他・金額入力").font(.system(size: 11, weight: .semibold)).foregroundColor(NT.ink3)
+                            }
+                            .foregroundColor(NT.purple)
+                            .frame(maxWidth: .infinity, minHeight: 112)
+                            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(NT.lilac.opacity(0.55)))
+                            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(NT.purple.opacity(0.45), style: StrokeStyle(lineWidth: 2, dash: [6, 4])))
+                        }
+                        .buttonStyle(PressableStyle(scale: 0.95))
+                        .disabled(model.busy)
+                        .accessibilityLabel("\(t.label)：その他（金額を入力）")
+                    }
                 }
                 .padding(14)
             }
@@ -531,37 +615,30 @@ private struct ItemsPanel: View {
 
             Divider().overlay(NT.line)
             HStack(spacing: 14) {
-                Button(action: onSend) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "bell")
+                // 決定はスライドで（押し間違いで注文が飛ばない。Web と同じ）
+                NativeSlideToConfirm(
+                    label: model.unsentCount > 0 ? "Order（\(model.unsentCount)品）" : "Order（未確定なし）",
+                    hint: "スライドして注文 / Slide to order",
+                    disabled: model.unsentCount == 0 || model.busy,
+                    busy: model.busy,
+                    onConfirm: onSend
+                )
+                // テーブルのある伝票は テーブルの「会計」から。卓の無いテイクアウト等はここからしか会計できないので残す（Web と同じ）
+                if model.order.takeoutLike {
+                    Button(action: onCheckout) {
                         VStack(spacing: 1) {
-                            Text(model.unsentCount > 0 ? "注文確定（\(model.unsentCount)）" : "注文確定（新しい品なし）")
-                                .font(.system(size: 19, weight: .heavy))
-                            Text("Send order").font(.system(size: 11, weight: .bold)).opacity(0.75)
+                            Text("会計へ（\(NT.yen(model.total))）").font(.system(size: 20, weight: .heavy))
+                            Text("Checkout").font(.system(size: 11, weight: .bold)).opacity(0.8)
                         }
                         .lineLimit(1)
                         .minimumScaleFactor(0.6)
+                        .foregroundColor(NT.purple)
+                        .frame(maxWidth: .infinity, minHeight: 70)
+                        .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(NT.lilac))
                     }
-                    .foregroundColor(model.unsentCount > 0 ? NT.purple : NT.ink3)
-                    .frame(maxWidth: .infinity, minHeight: 66)
-                    .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(NT.lilac))
+                    .buttonStyle(PressableStyle())
+                    .disabled(model.total == 0 || model.busy || !model.canCheckout)
                 }
-                .buttonStyle(PressableStyle())
-                .disabled(model.unsentCount == 0 || model.busy)
-
-                Button(action: onCheckout) {
-                    VStack(spacing: 1) {
-                        Text("お会計 \(NT.yen(model.total))").font(.system(size: 21, weight: .heavy))
-                        Text("Checkout").font(.system(size: 11, weight: .bold)).opacity(0.8)
-                    }
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.6)
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity, minHeight: 66)
-                        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(model.total > 0 ? NT.purple : NT.purple.opacity(0.4)))
-                }
-                .buttonStyle(PressableStyle())
-                .disabled(model.total == 0 || model.busy || !model.canCheckout)
             }
             .padding(14)
         }

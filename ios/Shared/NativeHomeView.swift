@@ -35,7 +35,30 @@ struct NHKpis: Codable {
     let repeaters: Int?
     let walkIns: Int
 }
-struct NHWeather: Codable { let temperature: Double?; let place: String? }
+struct NHWeather: Codable {
+    let temperature: Double?
+    let place: String?
+    /// sun / partly / cloud / fog / drizzle / rain / snow / thunder（古いサーバーは無い）
+    let icon: String?
+    /// 昼か夜か（晴れの夜は月）
+    let isDay: Bool?
+
+    /// 天気のアイコン（SF Symbols。Web の RegiWeatherGlyph と同じ種類。2026-10-24 Ronnie「15° と天気のアイコンを出して」）
+    var symbol: String? {
+        let night = isDay == false
+        switch icon {
+        case "sun": return night ? "moon.fill" : "sun.max.fill"
+        case "partly": return night ? "cloud.moon.fill" : "cloud.sun.fill"
+        case "cloud": return "cloud.fill"
+        case "fog": return "cloud.fog.fill"
+        case "drizzle": return "cloud.drizzle.fill"
+        case "rain": return "cloud.rain.fill"
+        case "snow": return "cloud.snow.fill"
+        case "thunder": return "cloud.bolt.rain.fill"
+        default: return nil
+        }
+    }
+}
 
 struct NHPayload: Codable {
     let store: NFNamed
@@ -453,6 +476,11 @@ struct NativeHomeView: View {
             Rectangle().fill(Color(hex: 0xC9CDD6)).frame(width: 1, height: 70)
             if let t = model.payload?.weather.temperature {
                 Text("\(Int(t.rounded()))°").font(.system(size: 64, weight: .thin, design: .rounded)).foregroundColor(Self.blue)
+            }
+            // 天気のアイコン（気温の右。晴れ・くもり・雨・雪・雷、晴れの夜は月。1色の濃い青）
+            if model.payload?.weather.temperature != nil, let sym = model.payload?.weather.symbol {
+                Image(systemName: sym).font(.system(size: 40, weight: .regular)).foregroundColor(Self.blue)
+                    .padding(.bottom, 8)
             }
             if let p = model.payload?.weather.place {
                 HStack(spacing: 4) {

@@ -42,7 +42,19 @@ function jst(iso: string): string {
 }
 
 /** 取り込んだメールの一覧。「要確認」は店舗が中身を見て台帳に手で入れ、対応済みにする */
-export function GourmetMailImports({ storeId, rows }: { storeId: string; rows: GourmetMailImportRow[] }) {
+export function GourmetMailImports({
+  storeId,
+  rows,
+  resolveAction = resolveGourmetMailImport,
+  ledgerLinks = true,
+}: {
+  storeId: string;
+  rows: GourmetMailImportRow[];
+  /** 運営の管理画面から使うとき（既定は店舗の Server Action。2026-10-24） */
+  resolveAction?: (storeId: string, importId: string) => Promise<{ error?: string }>;
+  /** 店舗台帳へのリンク（/app/reservations）。運営の画面では出さない */
+  ledgerLinks?: boolean;
+}) {
   const router = useRouter();
   const { toast } = useToast();
   const [pending, startTransition] = useTransition();
@@ -50,7 +62,7 @@ export function GourmetMailImports({ storeId, rows }: { storeId: string; rows: G
 
   const resolve = (id: string) =>
     startTransition(async () => {
-      const r = await resolveGourmetMailImport(storeId, id);
+      const r = await resolveAction(storeId, id);
       if (r.error) return toast(r.error, 'error');
       toast('対応済みにしました');
       router.refresh();
@@ -115,16 +127,18 @@ export function GourmetMailImports({ storeId, rows }: { storeId: string; rows: G
                         </div>
                       )}
                       <div className="mt-2 flex flex-wrap gap-2">
-                        {r.reservationId && (
+                        {ledgerLinks && r.reservationId && (
                           <a href={`/app/reservations?open=${r.reservationId}`} className="inline-flex h-9 items-center rounded-lg border border-line bg-white px-3 text-[13px] font-bold text-royal">
                             台帳で見る
                           </a>
                         )}
                         {review && (
                           <>
-                            <a href="/app/reservations" className="inline-flex h-9 items-center rounded-lg bg-royal px-3 text-[13px] font-bold text-white">
-                              台帳に手で入れる
-                            </a>
+                            {ledgerLinks && (
+                              <a href="/app/reservations" className="inline-flex h-9 items-center rounded-lg bg-royal px-3 text-[13px] font-bold text-white">
+                                台帳に手で入れる
+                              </a>
+                            )}
                             <Button size="sm" variant="secondary" onClick={() => resolve(r.id)} disabled={pending}>
                               <Check className="h-4 w-4" />
                               対応済みにする
