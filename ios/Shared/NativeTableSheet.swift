@@ -25,7 +25,8 @@ struct NativeTableSheet: View {
     @State private var clearConfirm = false
     @State private var approverPick = false
 
-    private static let width: CGFloat = 340
+    // 少し広く・ボタンを大きく（2026-10-24 Ronnie「横と縦をちょっと広く、ボタンを見やすく押しやすく」）
+    private static let width: CGFloat = 420
 
     private var now: Double { model.now }
     private var slips: [NFSlip] { table.order?.slips ?? [] }
@@ -43,13 +44,17 @@ struct NativeTableSheet: View {
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            // 外（暗い所）を押したときだけ閉じる
-            Color.black.opacity(0.18).ignoresSafeArea()
+            // 外を押したときだけ閉じる（iPad のポップオーバーと同じく、外は少しだけ暗く）
+            Color.black.opacity(0.08).ignoresSafeArea()
                 .onTapGesture { onClose() }
-            // 中身の高さぴったり（長いときは中をスクロール）。押した卓の上に置く。
-            // 高さを preference で測る方式は実機で 0 のままになり、ポップアップが 60pt に潰れた（2026-10-24）→ Layout で測る
-            NFCardLayout(width: Self.width, maxHeight: 760, anchor: anchor) {
+            // 押した卓のところに、矢印つきで出す（下 → 上 → 横の順に入る所。iPad のポップオーバーと同じ。2026-10-24 Ronnie）
+            // 高さは Layout で測る（preference で測る方式は実機で 0 のままになり潰れた）
+            NFPopoverLayout(width: Self.width, maxHeight: 760, anchor: anchor) {
                 popup
+                NFPopoverArrow().fill(.regularMaterial).frame(width: 26, height: 12)
+                NFPopoverArrow().fill(.regularMaterial).frame(width: 26, height: 12).rotationEffect(.degrees(180))
+                NFPopoverArrow().fill(.regularMaterial).frame(width: 26, height: 12).rotationEffect(.degrees(-90)).frame(width: 12, height: 26)
+                NFPopoverArrow().fill(.regularMaterial).frame(width: 26, height: 12).rotationEffect(.degrees(90)).frame(width: 12, height: 26)
             }
         }
         .alert("テーブルをクリアしますか / Clear this table?", isPresented: $clearConfirm) {
@@ -78,18 +83,31 @@ struct NativeTableSheet: View {
             AnyView(popupInner)
             ScrollView(showsIndicators: false) { AnyView(popupInner) }
         }
-        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.white))
-        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(NFColor.line, lineWidth: 1))
-        .shadow(color: Color(hex: 0x292725).opacity(0.28), radius: 22, y: 18)
+        // iPad のポップオーバーと同じ質感（すりガラス・大きめの角丸・やわらかい影）
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).stroke(Color.white.opacity(0.6), lineWidth: 0.8))
+        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .shadow(color: .black.opacity(0.16), radius: 28, y: 12)
         .disabled(pending)
     }
 
     private var popupInner: some View {
-            VStack(alignment: .leading, spacing: 8) {
-                Text(table.name)
-                    .font(.system(size: 19, weight: .heavy)).foregroundColor(NFColor.navy)
-                    .frame(maxWidth: .infinity)
-                    .padding(.bottom, 2)
+            VStack(alignment: .leading, spacing: 10) {
+                ZStack {
+                    Text(table.name)
+                        .font(.system(size: 20, weight: .bold, design: .rounded)).foregroundColor(.primary)
+                        .frame(maxWidth: .infinity)
+                    HStack {
+                        Spacer()
+                        Button(action: onClose) {
+                            Image(systemName: "xmark.circle.fill")
+                                .symbolRenderingMode(.hierarchical)
+                                .font(.system(size: 26)).foregroundColor(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.bottom, 4)
 
                 if !table.calls.isEmpty { callsBox }
 
@@ -120,7 +138,7 @@ struct NativeTableSheet: View {
                     }
                 }
             }
-            .padding(12)
+            .padding(16)
     }
 
     // お客様QRからの呼び出し
@@ -160,7 +178,7 @@ struct NativeTableSheet: View {
 
     // 空席
     @ViewBuilder private var emptyBody: some View {
-        bigButton("注文", en: "Order", fill: NFColor.iris, height: 52, size: 17) { onClose(); onSetup(table) }
+        bigButton("注文", en: "Order", fill: NFColor.iris, height: 64, size: 20) { onClose(); onSetup(table) }
         divider
         section("テーブル", en: "Table")
         HStack(spacing: 8) {
@@ -193,7 +211,7 @@ struct NativeTableSheet: View {
         .background(RoundedRectangle(cornerRadius: 12).fill(NFColor.lilacSoft))
 
         HStack(spacing: 8) {
-            bigButton("注文", en: "Order", fill: NFColor.iris, height: 52, size: 16) {
+            bigButton("注文", en: "Order", fill: NFColor.iris, height: 64, size: 20) {
                 Task {
                     if let s = selected {
                         onClose(); onOpenOrder(s.id, false)
@@ -203,12 +221,12 @@ struct NativeTableSheet: View {
                 }
             }
             // レジ会計は緑（2026-10-24 Ronnie「緑はレジ会計、会計伝票は黒」）
-            bigButton("レジ会計", en: "Checkout", fill: NFColor.success, height: 52, size: 16, enabled: selected != nil) {
+            bigButton("レジ会計", en: "Checkout", fill: NFColor.success, height: 64, size: 20, enabled: selected != nil) {
                 if let s = selected { onClose(); onOpenOrder(s.id, true) }
             }
         }
         // 会計伝票をその場で出す（レジ画面へ行かない）。注文・レジ会計のすぐ下に横いっぱい・黒
-        bigButton("会計伝票を出す", en: "Print bill", fill: NFColor.navy, height: 54, size: 17, enabled: selected != nil) {
+        bigButton("会計伝票を出す", en: "Print bill", fill: NFColor.navy, height: 62, size: 19, enabled: selected != nil) {
             Task {
                 if let s = selected, let _ = await model.act(["type": "floorBill", "orderId": s.id], refreshAfter: false) {
                     model.show(toast: "お会計伝票を印刷します")
@@ -348,7 +366,7 @@ struct NativeTableSheet: View {
                 }
             }
             .frame(maxHeight: 160)
-            bigButton("この\(printPick.count)品を印刷 / Print", en: nil, fill: NFColor.iris, height: 36, size: 12, enabled: !printPick.isEmpty) {
+            bigButton("この\(printPick.count)品を印刷 / Print", en: nil, fill: NFColor.iris, height: 46, size: 15, enabled: !printPick.isEmpty) {
                 Task {
                     guard let s = selected else { return }
                     if let _ = await model.act(["type": "floorPrintSelected", "orderId": s.id, "itemIds": printPick], refreshAfter: false) {
@@ -373,7 +391,7 @@ struct NativeTableSheet: View {
                 .overlay(RoundedRectangle(cornerRadius: 12).stroke(NFColor.line, lineWidth: 1))
                 stepButton("＋", enabled: guestEdit < 99) { guestEdit = min(99, guestEdit + 1) }
             }
-            bigButton("保存 / Save", en: nil, fill: NFColor.iris, height: 36, size: 12, enabled: selected != nil) {
+            bigButton("保存 / Save", en: nil, fill: NFColor.iris, height: 46, size: 15, enabled: selected != nil) {
                 Task {
                     guard let s = selected else { return }
                     if let _ = await model.act(["type": "floorGuests", "orderId": s.id, "guestCount": guestEdit]) {
@@ -393,7 +411,7 @@ struct NativeTableSheet: View {
                 .padding(.horizontal, 12).frame(height: 40)
                 .background(RoundedRectangle(cornerRadius: 12).fill(Color.white))
                 .overlay(RoundedRectangle(cornerRadius: 12).stroke(NFColor.line, lineWidth: 1))
-            bigButton("保存 / Save", en: nil, fill: NFColor.iris, height: 36, size: 12, enabled: selected != nil) {
+            bigButton("保存 / Save", en: nil, fill: NFColor.iris, height: 46, size: 15, enabled: selected != nil) {
                 Task {
                     guard let s = selected else { return }
                     if let _ = await model.act(["type": "floorMemo", "orderId": s.id, "memo": memoText]) {
@@ -430,7 +448,7 @@ struct NativeTableSheet: View {
             }
             .frame(maxHeight: 180)
             HStack(spacing: 8) {
-                bigButton("解除 / Clear", en: nil, fill: NFColor.irisSoft, textColor: NFColor.royal, height: 36, size: 12) {
+                bigButton("解除 / Clear", en: nil, fill: NFColor.irisSoft, textColor: NFColor.royal, height: 46, size: 15) {
                     Task {
                         // 1卓だけ渡す＝その卓が入っているグループをまるごと解除
                         if let _ = await model.act(["type": "floorGroup", "tableIds": [table.id]]) {
@@ -439,7 +457,7 @@ struct NativeTableSheet: View {
                         }
                     }
                 }
-                bigButton("保存 / Save", en: nil, fill: NFColor.iris, height: 36, size: 12) {
+                bigButton("保存 / Save", en: nil, fill: NFColor.iris, height: 46, size: 15) {
                     Task {
                         if let _ = await model.act(["type": "floorGroup", "tableIds": groupPick.isEmpty ? [table.id] : groupPick]) {
                             groupOpen = false
@@ -457,8 +475,8 @@ struct NativeTableSheet: View {
 
     private func section(_ ja: String, en: String) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 4) {
-            Text(ja).font(.system(size: 12, weight: .bold))
-            Text(en).font(.system(size: 10, weight: .semibold)).opacity(0.7)
+            Text(ja).font(.system(size: 14, weight: .bold))
+            Text(en).font(.system(size: 11, weight: .semibold)).opacity(0.7)
         }
         .foregroundColor(NFColor.ink3)
         .padding(.horizontal, 2)
@@ -478,11 +496,11 @@ struct NativeTableSheet: View {
             .overlay(RoundedRectangle(cornerRadius: 12).stroke(NFColor.line, lineWidth: 1))
     }
 
-    private func bigButton(_ ja: String, en: String?, fill: Color, textColor: Color = .white, height: CGFloat = 50, size: CGFloat = 15, enabled: Bool = true, action: @escaping () -> Void) -> some View {
+    private func bigButton(_ ja: String, en: String?, fill: Color, textColor: Color = .white, height: CGFloat = 60, size: CGFloat = 18, enabled: Bool = true, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             VStack(spacing: 0) {
                 Text(ja).font(.system(size: size, weight: .heavy))
-                if let en { Text(en).font(.system(size: 11, weight: .semibold)).opacity(0.8) }
+                if let en { Text(en).font(.system(size: 12, weight: .semibold)).opacity(0.8) }
             }
             .foregroundColor(textColor)
             .frame(maxWidth: .infinity).frame(height: height)
@@ -497,14 +515,14 @@ struct NativeTableSheet: View {
         Button(action: action) {
             VStack(spacing: 0) {
                 HStack(spacing: 4) {
-                    if let icon { Image(systemName: icon).font(.system(size: 12, weight: .bold)) }
+                    if let icon { Image(systemName: icon).font(.system(size: 14, weight: .bold)) }
                     Text(ja)
                 }
-                .font(.system(size: 13, weight: .bold))
-                Text(en).font(.system(size: 10, weight: .semibold)).opacity(0.8)
+                .font(.system(size: 16, weight: .bold))
+                Text(en).font(.system(size: 11, weight: .semibold)).opacity(0.8)
             }
             .foregroundColor(on ? .white : NFColor.royal)
-            .frame(maxWidth: .infinity).frame(height: 50)
+            .frame(maxWidth: .infinity).frame(height: 58)
             .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(on ? NFColor.iris : NFColor.irisSoft))
         }
         .buttonStyle(PressableStyle())
@@ -516,14 +534,14 @@ struct NativeTableSheet: View {
     private func popBtn(_ ja: String, en: String, on: Bool = false, danger: Bool = false, enabled: Bool = true, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             VStack(spacing: 0) {
-                Text(ja).font(.system(size: 13, weight: .bold)).lineLimit(1).minimumScaleFactor(0.8)
-                Text(en).font(.system(size: 10, weight: .semibold)).foregroundColor(on ? .white.opacity(0.8) : NFColor.ink3)
+                Text(ja).font(.system(size: 16, weight: .bold)).lineLimit(1).minimumScaleFactor(0.8)
+                Text(en).font(.system(size: 11, weight: .semibold)).foregroundColor(on ? .white.opacity(0.8) : NFColor.ink3)
             }
             .foregroundColor(on ? .white : (danger ? NFColor.danger : NFColor.navy))
-            .frame(maxWidth: .infinity).frame(height: 50)
+            .frame(maxWidth: .infinity).frame(height: 58)
             .padding(.horizontal, 4)
-            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(on ? NFColor.iris : Color.white))
-            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(on ? Color.clear : (danger ? NFColor.danger.opacity(0.4) : NFColor.line), lineWidth: 1))
+            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(on ? NFColor.iris : (danger ? NFColor.danger.opacity(0.08) : Color.white.opacity(0.75))))
+            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(on ? Color.clear : (danger ? NFColor.danger.opacity(0.25) : Color.black.opacity(0.06)), lineWidth: 0.8))
         }
         .buttonStyle(PressableStyle())
         .disabled(!enabled)
@@ -592,6 +610,76 @@ struct NativeModalCard<Content: View>: View {
                     .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
                     .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(NFColor.line, lineWidth: 1))
                     .shadow(color: Color(hex: 0x292725).opacity(0.3), radius: 30, y: 20)
+            }
+        }
+    }
+}
+
+
+/// ポップオーバーの矢印（上向きの三角。向きは rotationEffect で変える）
+struct NFPopoverArrow: Shape {
+    func path(in r: CGRect) -> Path {
+        var p = Path()
+        p.move(to: CGPoint(x: r.minX, y: r.maxY))
+        p.addQuadCurve(to: CGPoint(x: r.midX, y: r.minY), control: CGPoint(x: r.midX - r.width * 0.12, y: r.minY))
+        p.addQuadCurve(to: CGPoint(x: r.maxX, y: r.maxY), control: CGPoint(x: r.midX + r.width * 0.12, y: r.minY))
+        p.closeSubpath()
+        return p
+    }
+}
+
+/// 卓のポップアップを、押した卓のところに矢印つきで置く Layout（subviews = 中身・上矢印・下矢印・左矢印・右矢印）。
+/// 卓の下に入ればその下（矢印は上）、だめなら上（矢印は下）、だめなら右か左（矢印は横）。どこにも入らなければ卓に重ねる（矢印なし）。
+struct NFPopoverLayout: Layout {
+    var width: CGFloat
+    var maxHeight: CGFloat
+    var anchor: CGRect?
+    var margin: CGFloat = 10
+    var topInset: CGFloat = 64
+    private let gap: CGFloat = 12
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        proposal.replacingUnspecifiedDimensions()
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        guard let card = subviews.first else { return }
+        let W = bounds.width, H = bounds.height
+        let w = min(width, max(200, W - margin * 2))
+        let cap = min(maxHeight, max(120, H - topInset - margin))
+        let h = min(card.sizeThatFits(ProposedViewSize(width: w, height: cap)).height, cap)
+        let hide = CGPoint(x: bounds.minX - 5000, y: bounds.minY - 5000)
+        func clamp(_ v: CGFloat, _ lo: CGFloat, _ hi: CGFloat) -> CGFloat { min(max(v, lo), max(lo, hi)) }
+
+        var x: CGFloat, y: CGFloat
+        var arrow = -1 // 1=上 2=下 3=左 4=右
+        var arrowPt = CGPoint.zero
+        if let a = anchor, a != .zero {
+            if a.maxY + gap + h <= H - margin {
+                x = clamp(a.midX - w / 2, margin, W - w - margin); y = a.maxY + gap
+                arrow = 1; arrowPt = CGPoint(x: clamp(a.midX, x + 28, x + w - 28) - 13, y: y - 12)
+            } else if a.minY - gap - h >= topInset {
+                x = clamp(a.midX - w / 2, margin, W - w - margin); y = a.minY - gap - h
+                arrow = 2; arrowPt = CGPoint(x: clamp(a.midX, x + 28, x + w - 28) - 13, y: y + h)
+            } else if a.maxX + gap + w <= W - margin {
+                x = a.maxX + gap; y = clamp(a.midY - h / 2, topInset, H - h - margin)
+                arrow = 3; arrowPt = CGPoint(x: x - 12, y: clamp(a.midY, y + 28, y + h - 28) - 13)
+            } else if a.minX - gap - w >= margin {
+                x = a.minX - gap - w; y = clamp(a.midY - h / 2, topInset, H - h - margin)
+                arrow = 4; arrowPt = CGPoint(x: x + w, y: clamp(a.midY, y + 28, y + h - 28) - 13)
+            } else {
+                x = clamp(a.midX - w / 2, margin, W - w - margin); y = clamp(a.minY, topInset, H - h - margin)
+            }
+        } else {
+            x = max(margin, (W - w) / 2); y = max(topInset, (H - h) / 2)
+        }
+        card.place(at: CGPoint(x: bounds.minX + x, y: bounds.minY + y), anchor: .topLeading, proposal: ProposedViewSize(width: w, height: h))
+        for i in 1..<subviews.count {
+            let size = i <= 2 ? ProposedViewSize(width: 26, height: 12) : ProposedViewSize(width: 12, height: 26)
+            if i == arrow {
+                subviews[i].place(at: CGPoint(x: bounds.minX + arrowPt.x, y: bounds.minY + arrowPt.y), anchor: .topLeading, proposal: size)
+            } else {
+                subviews[i].place(at: hide, anchor: .topLeading, proposal: size)
             }
         }
     }
