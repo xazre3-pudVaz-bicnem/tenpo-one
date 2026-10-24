@@ -228,7 +228,16 @@ struct NativeSlipsView: View {
             }
         }
         .sheet(item: $ryoshushoFor) { o in
-            NSRyoshushoSheet(model: model, orderId: o.id, orderNo: o.orderNo, amount: o.total - o.refundTotal) { ryoshushoFor = nil }
+            NSRyoshushoSheet(orderId: o.id, orderNo: o.orderNo, amount: o.total - o.refundTotal, onClose: { ryoshushoFor = nil }, send: { body in
+                if await model.act(body) != nil {
+                    model.toast = "領収書を印刷します"
+                    await model.refresh()
+                    return nil
+                }
+                let e = model.error
+                model.error = nil
+                return e ?? "領収書を印刷できませんでした"
+            })
         }
         .sheet(isPresented: $showDetail, onDismiss: { model.detail = nil; Task { await model.refresh() } }) {
             if let d = model.detail {
@@ -464,13 +473,16 @@ struct NativeSlipsView: View {
 
 // MARK: - 領収書（宛名・但し書き・分割。一度きり）
 
+/// 領収書（宛名・但し書き・分けて発行）。伝票明細とお会計の完了画面の両方から使う（2026-10-25 00:08 Ronnie「会計の完了画面にも領収書を」）
 struct NSRyoshushoSheet: View {
-    @ObservedObject var model: NativeSlipsModel
     let orderId: String
     let orderNo: Int
     let amount: Int
     let onClose: () -> Void
+    /// 送る（POST slipRyoshusho）。nil＝印刷を受け付けた、文字＝エラー
+    let send: @MainActor ([String: Any]) async -> String?
 
+    @State private var busy = false
     @State private var recipient = ""
     @State private var purpose = ""
     @State private var split = false
@@ -502,8 +514,8 @@ struct NSRyoshushoSheet: View {
                 if let problem { Section { Text(problem).foregroundColor(NFColor.danger) } }
                 Section(footer: Text("領収書は一度しか発行できません。")) {
                     Button { Task { await issue() } } label: {
-                        Text(model.busy ? "印刷中…" : "領収書を印刷する").font(.system(size: 17, weight: .heavy)).frame(maxWidth: .infinity)
-                    }.disabled(model.busy)
+                        Text(busy ? "印刷中…" : "領収書を印刷する").font(.system(size: 17, weight: .heavy)).frame(maxWidth: .infinity)
+                    }.disabled(busy)
                 }
             }
             .navigationTitle("領収書 / Receipt for expenses")
@@ -518,13 +530,10 @@ struct NSRyoshushoSheet: View {
             guard splitAmounts.count >= 2, splitAmounts.reduce(0, +) == amount else { problem = "分ける金額の合計を \(NT.yen(amount)) にしてください"; return }
             body["splitAmounts"] = splitAmounts
         }
-        if await model.act(body) != nil {
-            model.toast = "領収書を印刷します"
-            onClose()
-            await model.refresh()
-        } else {
-            problem = model.error; model.error = nil
-        }
+        busy = true
+        let err = await send(body)
+        busy = false
+        if let err { problem = err } else { onClose() }
     }
 }
 

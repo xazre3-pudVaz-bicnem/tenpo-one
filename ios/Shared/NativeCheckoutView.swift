@@ -23,6 +23,9 @@ struct NativeCheckoutView: View {
     @State private var openMethod: NPPayMethod?
     @State private var memo = ""
     @State private var done = false
+    /// 完了画面の「領収書」（宛名・但し書き。伝票明細と同じ画面。2026-10-25 00:08 Ronnie）
+    @State private var showRyoshusho = false
+    @State private var ryoshushoDone = false
     @State private var splitting = false
     @State private var splitPick: [String: Int] = [:]
     /// 伝票分割で「分ける」（何人で分けるか）を開いている品
@@ -1095,11 +1098,28 @@ struct NativeCheckoutView: View {
             }
             HStack(spacing: 14) {
                 doneButton("printer", "レシート再発行", "Reprint receipt")
+                // 領収書（宛名・但し書き・分けて発行）。オフラインの伝票はネットが戻ってから伝票明細で
+                if model.isLive && !model.offline && model.orderId != nil {
+                    Button { showRyoshusho = true } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: ryoshushoDone ? "checkmark.seal.fill" : "doc.text")
+                            VStack(spacing: 2) {
+                                Text(ryoshushoDone ? "領収書 発行済み" : "領収書").font(.system(size: 18, weight: .bold))
+                                Text("Receipt for expenses").font(.system(size: 11, weight: .bold)).opacity(0.8)
+                            }
+                        }
+                        .foregroundColor(ryoshushoDone ? NT.ink3 : NT.purple)
+                        .frame(width: 220, height: 64)
+                        .background(RoundedRectangle(cornerRadius: 14).fill(NT.lilac))
+                    }
+                    .buttonStyle(PressableStyle())
+                    .disabled(ryoshushoDone)
+                }
                 Button {
                     if model.splitParentOrderId != nil {
                         Task {
                             if await model.resumeSplitParent() {
-                                payments = []; activeId = nil; openMethod = nil; memo = ""; done = false
+                                payments = []; activeId = nil; openMethod = nil; memo = ""; done = false; ryoshushoDone = false
                             } else if model.notice == nil { onFinished() }
                         }
                     } else { (model.isLive ? onFinished : onClose)() }
@@ -1119,6 +1139,19 @@ struct NativeCheckoutView: View {
             Spacer()
         }
         .frame(maxWidth: .infinity)
+        .sheet(isPresented: $showRyoshusho) {
+            if let oid = model.orderId {
+                NSRyoshushoSheet(orderId: oid, orderNo: model.order.orderNo, amount: total, onClose: { showRyoshusho = false }, send: { body in
+                    do {
+                        let r = try await NativeAPI.shared.act(body, throwOnFail: false)
+                        if r.ok { ryoshushoDone = true; return nil }
+                        return r.error ?? "領収書を印刷できませんでした"
+                    } catch {
+                        return (error as? NativeAPIError)?.message ?? "通信できませんでした"
+                    }
+                })
+            }
+        }
     }
 
     private func doneButton(_ icon: String, _ ja: String, _ en: String) -> some View {
