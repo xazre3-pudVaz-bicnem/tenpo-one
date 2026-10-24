@@ -396,11 +396,10 @@ struct NativeHomeView: View {
                         Text("予算売上高").font(.system(size: 14, weight: .semibold)).foregroundColor(NFColor.ink2)
                         Text("Target").font(.system(size: 11)).foregroundColor(NFColor.ink3)
                     }
+                    // 未設定のときはここに何も置かない（空の 28pt の字を置くと下の隙間が広がる。2026-10-24 14:24 Ronnie「上下の隙間を同じに」）。
+                    // 右の「予算登録」ボタンに赤い丸の「!」だけ（13:47 Ronnie）
                     if let b = s?.budget {
                         Text(NT.yen(b)).font(.system(size: 28, weight: .heavy)).monospacedDigit().foregroundColor(NFColor.ink)
-                    } else {
-                        // 未設定のときはここに何も書かない。右の「予算登録」ボタンに赤い丸の「!」だけ（2026-10-24 13:47 Ronnie）
-                        Text(" ").font(.system(size: 28, weight: .heavy))
                     }
                 }
                 HStack(spacing: 4) {
