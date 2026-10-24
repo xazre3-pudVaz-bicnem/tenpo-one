@@ -156,6 +156,18 @@ func nlJstMinutes(_ iso: String, dayStart: String) -> Int {
 
 func nlHm(_ min: Int) -> String { String(format: "%02d:%02d", (min / 60) % 24, min % 60) }
 
+extension View {
+    /// 内容が画面に収まるときは上下にバウンドしない（iOS 16.4〜。それより前はそのまま）
+    /// 2026-10-24 Ronnie「画面が上下に揺れないように」
+    @ViewBuilder func nlNoVerticalBounce() -> some View {
+        if #available(iOS 16.4, *) {
+            self.scrollBounceBehavior(.basedOnSize, axes: .vertical)
+        } else {
+            self
+        }
+    }
+}
+
 /// スケジュールの横スクロールの位置（内容の左端。左へ動かすと負）
 struct NLScrollXKey: PreferenceKey {
     static var defaultValue: CGFloat = 0
@@ -332,7 +344,7 @@ struct NativeLedgerView: View {
                         model.date = d
                         Task { await model.refresh(silent: false) }
                     }
-                } else if model.gourmetMode { ScrollView { gourmetRows(p) } } else if model.listMode { listBody(p) } else { board(p) }
+                } else if model.gourmetMode { ScrollView { gourmetRows(p) }.nlNoVerticalBounce() } else if model.listMode { listBody(p) } else { board(p) }
             } else {
                 Spacer()
                 if let e = model.error {
@@ -627,6 +639,7 @@ struct NativeLedgerView: View {
 
         return Group {
             if scrollable {
+                // 卓が少なくて画面に収まるときは上下に動かない（2026-10-24 Ronnie「画面が上下に揺れないように」）
                 ScrollView(.vertical) {
                     HStack(alignment: .top, spacing: 0) {
                         names
@@ -661,6 +674,7 @@ struct NativeLedgerView: View {
                         }
                     }
                 }
+                .nlNoVerticalBounce()
             } else {
                 HStack(alignment: .top, spacing: 0) { names; grid }
             }
@@ -889,7 +903,7 @@ struct NativeLedgerView: View {
     }
 
     private func listBody(_ p: NLPayload) -> some View {
-        ScrollView { listRows(p) }
+        ScrollView { listRows(p) }.nlNoVerticalBounce()
     }
 
     private func listRows(_ p: NLPayload) -> some View {
