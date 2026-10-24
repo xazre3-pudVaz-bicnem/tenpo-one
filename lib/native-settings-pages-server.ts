@@ -13,14 +13,24 @@ import { setItemSoldOut } from '@/app/app/pos/sold-out-actions';
 import { addPosClerk, deletePosClerk, renamePosClerk, setPosClerkRole, setPosClerkStatus } from '@/app/app/settings/clerks/actions';
 import { addHoliday, deleteHoliday, saveBusinessHours, saveLunchUntil, saveNextFloat } from '@/app/app/settings/hours/actions';
 import { updateStoreInfo } from '@/app/app/settings/store/actions';
+import { deleteTaxRate, saveTaxRate } from '@/app/app/settings/tax/actions';
+import { saveLoyaltySettings } from '@/app/app/settings/loyalty/actions';
 import { resolveSiteOrigin } from '@/lib/site-origin';
-import type { NativeClerksPayload, NativeHoursPayload, NativeSettingsPageAction, NativeSoldOutPayload, NativeStorePayload } from '@/lib/native-settings-pages';
+import type {
+  NativeClerksPayload,
+  NativeHoursPayload,
+  NativeLoyaltyPayload,
+  NativeSettingsPageAction,
+  NativeSoldOutPayload,
+  NativeStorePayload,
+  NativeTaxPayload,
+} from '@/lib/native-settings-pages';
 
 type Supabase = Awaited<ReturnType<typeof createClient>>;
 type Store = { id: string; name: string };
 
 /** 設定の中の画面の名前（GET ?part=） */
-export const NATIVE_SETTINGS_PAGE_PARTS = ['soldout', 'clerks', 'hours', 'store'] as const;
+export const NATIVE_SETTINGS_PAGE_PARTS = ['soldout', 'clerks', 'hours', 'store', 'tax', 'loyalty'] as const;
 export type NativeSettingsPagePart = (typeof NATIVE_SETTINGS_PAGE_PARTS)[number];
 export function isNativeSettingsPagePart(v: unknown): v is NativeSettingsPagePart {
   return typeof v === 'string' && (NATIVE_SETTINGS_PAGE_PARTS as readonly string[]).includes(v);
@@ -35,7 +45,10 @@ export async function loadNativeSettingsPage(
   ctx: SessionContext,
   supabase: Supabase,
   store: Store
-): Promise<{ ok: true; payload: NativeSoldOutPayload | NativeClerksPayload | NativeHoursPayload | NativeStorePayload } | { ok: false; error: string }> {
+): Promise<
+  | { ok: true; payload: NativeSoldOutPayload | NativeClerksPayload | NativeHoursPayload | NativeStorePayload | NativeTaxPayload | NativeLoyaltyPayload }
+  | { ok: false; error: string }
+> {
   if (part === 'soldout') {
     if (!ctx.organizationId) return { ok: false, error: '企業が見つかりません' };
     const board = await loadSoldOutBoard(supabase, ctx.organizationId, store.id);
@@ -145,6 +158,44 @@ export async function loadNativeSettingsPage(
       },
     };
   }
+  if (part === 'tax') {
+    const { data } = await supabase
+      .from('tax_rates')
+      .select('id, name, rate, is_reduced, is_inclusive, is_default')
+      .eq('organization_id', ctx.organizationId)
+      .eq('status', 'active')
+      .order('is_default', { ascending: false })
+      .order('name');
+    return {
+      ok: true,
+      payload: {
+        store,
+        canEdit: can(ctx.role, 'store.settings'),
+        rows: (data ?? []).map((r) => ({
+          id: r.id as string,
+          name: r.name as string,
+          rate: Number(r.rate),
+          isReduced: r.is_reduced === true,
+          isInclusive: r.is_inclusive === true,
+          isDefault: r.is_default === true,
+        })),
+      },
+    };
+  }
+  if (part === 'loyalty') {
+    const { data } = await supabase.from('loyalty_settings').select('enabled, yen_per_point, point_value, expiry_months').eq('organization_id', ctx.organizationId).maybeSingle();
+    return {
+      ok: true,
+      payload: {
+        store,
+        canEdit: can(ctx.role, 'org.settings'),
+        enabled: data?.enabled === true,
+        yenPerPoint: Number(data?.yen_per_point ?? 100),
+        pointValue: Number(data?.point_value ?? 1),
+        expiryMonths: (data?.expiry_months as number | null | undefined) ?? null,
+      },
+    };
+  }
   return { ok: false, error: '画面が見つかりません' };
 }
 
@@ -179,5 +230,11 @@ export async function runNativeSettingsPageAction(
       return done(await deleteHoliday(action.id, store.id));
     case 'storeSave':
       return done(await updateStoreInfo({ storeId: store.id, ...action.store }));
+    case 'taxSave':
+      return done(await saveTaxRate({ id: action.id ?? undefined, name: action.name, rate: action.rate, isReduced: action.isReduced, isInclusive: action.isInclusive, isDefault: action.isDefault }));
+    case 'taxDelete':
+      return done(await deleteTaxRate(action.id));
+    case 'loyaltySave':
+      return done(await saveLoyaltySettings({ enabled: action.enabled, yenPerPoint: action.yenPerPoint, pointValue: action.pointValue, expiryMonths: action.expiryMonths }));
   }
 }

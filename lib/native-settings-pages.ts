@@ -22,7 +22,12 @@ export type NativeSettingsPageAction =
   | { type: 'holidayAdd'; date: string; name: string; isTemporary: boolean }
   | { type: 'holidayDelete'; id: string }
   /** 店舗情報（/app/settings/store。app/app/settings/store/actions.ts の updateStoreInfo） */
-  | { type: 'storeSave'; store: NativeStoreFields };
+  | { type: 'storeSave'; store: NativeStoreFields }
+  /** 税率（/app/settings/tax。saveTaxRate / deleteTaxRate） */
+  | { type: 'taxSave'; id: string | null; name: string; rate: number; isReduced: boolean; isInclusive: boolean; isDefault: boolean }
+  | { type: 'taxDelete'; id: string }
+  /** 会員・ポイント（/app/settings/loyalty。saveLoyaltySettings） */
+  | { type: 'loyaltySave'; enabled: boolean; yenPerPoint: number; pointValue: number; expiryMonths: number | null };
 
 export interface NativeStoreFields {
   name: string;
@@ -64,6 +69,9 @@ export const NATIVE_SETTINGS_PAGE_ACTION_TYPES: readonly NativeSettingsPageActio
   'holidayAdd',
   'holidayDelete',
   'storeSave',
+  'taxSave',
+  'taxDelete',
+  'loyaltySave',
 ];
 
 export function isNativeSettingsPageActionType(v: unknown): v is NativeSettingsPageActionType {
@@ -178,7 +186,48 @@ export function parseNativeSettingsPageAction(raw: unknown): Parsed {
       },
     };
   }
+  if (b.type === 'taxSave') {
+    const n = typeof b.name === 'string' ? b.name.trim().slice(0, 50) : '';
+    if (!n) return bad('税率名を入力してください');
+    if (typeof b.rate !== 'number' || b.rate < 0 || b.rate > 100) return bad('税率は0〜100の範囲で入力してください');
+    const id = b.id == null || b.id === '' ? null : isUuid(b.id) ? b.id : false;
+    if (id === false) return bad('税率が見つかりません');
+    return { ok: true, action: { type: 'taxSave', id, name: n, rate: b.rate, isReduced: b.isReduced === true, isInclusive: b.isInclusive === true, isDefault: b.isDefault === true } };
+  }
+  if (b.type === 'taxDelete') {
+    if (!isUuid(b.id)) return bad('税率が見つかりません');
+    return { ok: true, action: { type: 'taxDelete', id: b.id } };
+  }
+  if (b.type === 'loyaltySave') {
+    const pos = (v: unknown) => typeof v === 'number' && Number.isFinite(v) && v > 0;
+    if (!pos(b.yenPerPoint)) return bad('円/pt は1以上で入力してください');
+    if (!pos(b.pointValue)) return bad('pt単価は1以上で入力してください');
+    if (!(b.expiryMonths === null || b.expiryMonths === undefined || (typeof b.expiryMonths === 'number' && Number.isInteger(b.expiryMonths) && b.expiryMonths > 0))) {
+      return bad('失効月数は1以上で入力してください（無期限の場合は空欄）');
+    }
+    return {
+      ok: true,
+      action: { type: 'loyaltySave', enabled: b.enabled === true, yenPerPoint: b.yenPerPoint as number, pointValue: b.pointValue as number, expiryMonths: (b.expiryMonths as number | null | undefined) ?? null },
+    };
+  }
   return bad();
+}
+
+/** 税率の画面の読み込み（GET ?part=tax） */
+export interface NativeTaxPayload {
+  store: { id: string; name: string };
+  canEdit: boolean;
+  rows: { id: string; name: string; rate: number; isReduced: boolean; isInclusive: boolean; isDefault: boolean }[];
+}
+
+/** 会員・ポイントの画面の読み込み（GET ?part=loyalty） */
+export interface NativeLoyaltyPayload {
+  store: { id: string; name: string };
+  canEdit: boolean;
+  enabled: boolean;
+  yenPerPoint: number;
+  pointValue: number;
+  expiryMonths: number | null;
 }
 
 /** 店舗情報の画面の読み込み（GET ?part=store） */

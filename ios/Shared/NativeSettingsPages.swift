@@ -11,6 +11,8 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
     case clerks = "clerks"
     case hours = "hours"
     case store = "store"
+    case tax = "tax"
+    case loyalty = "loyalty"
     var id: String { rawValue }
 
     /// Web の道（クエリは見ない）
@@ -20,6 +22,8 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
         case .clerks: return "/app/settings/clerks"
         case .hours: return "/app/settings/hours"
         case .store: return "/app/settings/store"
+        case .tax: return "/app/settings/tax"
+        case .loyalty: return "/app/settings/loyalty"
         }
     }
     var title: String {
@@ -28,6 +32,8 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
         case .clerks: return "POS担当者"
         case .hours: return "営業時間・休業日"
         case .store: return "店舗情報"
+        case .tax: return "税率"
+        case .loyalty: return "会員・ポイント"
         }
     }
     var en: String {
@@ -36,6 +42,8 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
         case .clerks: return "Clerks"
         case .hours: return "Hours"
         case .store: return "Store"
+        case .tax: return "Tax"
+        case .loyalty: return "Loyalty"
         }
     }
 
@@ -55,6 +63,8 @@ struct NativeSettingsPageScreen: View {
         case .clerks: NativeClerksScreen()
         case .hours: NativeHoursScreen()
         case .store: NativeStoreScreen()
+        case .tax: NativeTaxScreen()
+        case .loyalty: NativeLoyaltyScreen()
         }
     }
 }
@@ -1170,5 +1180,302 @@ struct NativeStoreView: View {
         }
         .buttonStyle(PressableStyle()).disabled(disabled).opacity(disabled ? 0.5 : 1)
         .animation(.easeOut(duration: 0.15), value: on)
+    }
+}
+
+// MARK: - 共通：行の入力欄・スイッチ（設定の中の画面）
+
+struct NSPInput: View {
+    @Binding var text: String
+    var placeholder = ""
+    var enabled = true
+    var width: CGFloat? = nil
+    var keyboard: UIKeyboardType = .default
+    var trailing: String? = nil
+    var body: some View {
+        HStack(spacing: 6) {
+            TextField(placeholder, text: $text).font(.system(size: 16)).keyboardType(keyboard).disabled(!enabled)
+            if let trailing { Text(trailing).font(.system(size: 14)).foregroundColor(NFColor.ink3) }
+        }
+        .padding(.horizontal, 12).frame(height: 44).frame(maxWidth: width ?? 520)
+        .background(RoundedRectangle(cornerRadius: 10).fill(enabled ? Color.white : NFColor.lilacSoft))
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(NFColor.line, lineWidth: 1))
+    }
+}
+
+struct NSPToggle: View {
+    let on: Bool
+    var disabled = false
+    let action: () -> Void
+    var body: some View {
+        Button(action: action) {
+            ZStack(alignment: on ? .trailing : .leading) {
+                Capsule().fill(on ? NFColor.iris : Color(hex: 0xCFC9C0)).frame(width: 56, height: 32)
+                Circle().fill(Color.white).frame(width: 26, height: 26).shadow(color: .black.opacity(0.15), radius: 2, y: 1).padding(3)
+            }
+        }
+        .buttonStyle(PressableStyle()).disabled(disabled).opacity(disabled ? 0.5 : 1)
+        .animation(.easeOut(duration: 0.15), value: on)
+    }
+}
+
+/// 見出し（左 180pt）＋中身の1行
+struct NSPRow<Content: View>: View {
+    let label: String
+    var en: String = ""
+    var required = false
+    @ViewBuilder let content: () -> Content
+    var body: some View {
+        HStack(alignment: .center, spacing: 16) {
+            VStack(alignment: .leading, spacing: 1) {
+                HStack(spacing: 4) {
+                    Text(label).font(.system(size: 15, weight: .bold)).foregroundColor(NFColor.ink)
+                    if required { Text("必須").font(.system(size: 10, weight: .heavy)).foregroundColor(.white).padding(.horizontal, 5).padding(.vertical, 1).background(Capsule().fill(NFColor.danger)) }
+                }
+                if !en.isEmpty { Text(en).font(.system(size: 11)).foregroundColor(NFColor.ink3) }
+            }
+            .frame(width: 180, alignment: .leading)
+            content()
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 18).padding(.vertical, 10)
+        .overlay(alignment: .bottom) { Rectangle().fill(NFColor.line).frame(height: 1) }
+    }
+}
+
+// MARK: - 税率（Web の /app/settings/tax・components/settings/tax-rates-panel.tsx と同じ）
+
+struct NTXRow: Codable, Identifiable, Hashable { let id: String; let name: String; let rate: Double; let isReduced: Bool; let isInclusive: Bool; let isDefault: Bool }
+struct NTXPayload: Codable { let store: NFNamed; let canEdit: Bool; var rows: [NTXRow] }
+
+@MainActor
+final class NativeTaxModel: ObservableObject {
+    @Published var payload: NTXPayload?
+    @Published var error: String?
+    @Published var toast: String?
+    @Published var busy: String?
+    /// 追加・編集の入力
+    @Published var editingId: String? = nil
+    @Published var name = ""
+    @Published var rate = "10"
+    @Published var isReduced = false
+    @Published var isInclusive = true
+    @Published var isDefault = false
+    @Published var showForm = false
+
+    func refresh() async {
+        do {
+            if payload == nil, let saved = NativeAPI.cached(NTXPayload.self, NSPApi.cachedURL(part: "tax")) { payload = saved }
+            let (p, _) = try await NSPApi.load(NTXPayload.self, part: "tax")
+            payload = p
+            error = nil
+        } catch {
+            if payload == nil { self.error = (error as? NativeAPIError)?.message ?? "通信できませんでした" }
+        }
+    }
+    func startAdd() { editingId = nil; name = ""; rate = "10"; isReduced = false; isInclusive = true; isDefault = false; showForm = true }
+    func startEdit(_ r: NTXRow) {
+        editingId = r.id; name = r.name; rate = r.rate == r.rate.rounded() ? String(Int(r.rate)) : String(r.rate)
+        isReduced = r.isReduced; isInclusive = r.isInclusive; isDefault = r.isDefault; showForm = true
+    }
+    func save() async {
+        guard let v = Double(rate.trimmingCharacters(in: .whitespaces)), v >= 0, v <= 100 else { toast = "税率は0〜100の範囲で入力してください"; return }
+        let body: [String: Any] = ["type": "taxSave", "id": editingId as Any? ?? NSNull(), "name": name, "rate": v, "isReduced": isReduced, "isInclusive": isInclusive, "isDefault": isDefault]
+        if await run("save", body) { showForm = false; toast = editingId == nil ? "税率を追加しました" : "税率を保存しました" }
+    }
+    func delete(_ r: NTXRow) async { if await run(r.id, ["type": "taxDelete", "id": r.id]) { toast = "「\(r.name)」を削除しました" } }
+    private func run(_ key: String, _ body: [String: Any]) async -> Bool {
+        guard busy == nil else { return false }
+        busy = key
+        defer { busy = nil }
+        let r = await NSPApi.post(body)
+        guard r.ok else { toast = r.error ?? "うまくいきませんでした"; return false }
+        await refresh()
+        return true
+    }
+}
+
+struct NativeTaxScreen: View {
+    @StateObject private var model = NativeTaxModel()
+    @EnvironmentObject var state: AppState
+    var body: some View { NativeTaxView(model: model, onBack: { state.goNativeSettings() }) }
+}
+
+struct NativeTaxView: View {
+    @ObservedObject var model: NativeTaxModel
+    let onBack: () -> Void
+    @State private var confirmDelete: NTXRow?
+
+    var body: some View {
+        NSPFrame(storeName: model.payload?.store.name ?? "", title: "税率", en: "Tax", loaded: model.payload != nil, error: model.error, toast: $model.toast, onBack: onBack, retry: { await model.refresh() }) {
+            if let p = model.payload {
+                if p.canEdit && !model.showForm {
+                    HStack { NSPButton(text: "税率を追加", icon: "plus", primary: true) { model.startAdd() }; Spacer() }
+                }
+                if model.showForm { form }
+                NSPCard(title: "税率マスタ", en: "Tax rates", note: "既定の税率が商品に使われます。軽減税率（8%）はテイクアウトなどに") {
+                    VStack(spacing: 0) {
+                        if p.rows.isEmpty { Text("税率がまだ登録されていません").font(.system(size: 14)).foregroundColor(NFColor.ink3).padding(18) }
+                        ForEach(p.rows) { r in
+                            HStack(spacing: 12) {
+                                Text(r.rate == r.rate.rounded() ? "\(Int(r.rate))%" : "\(r.rate)%").font(.system(size: 20, weight: .heavy)).foregroundColor(NFColor.navy).monospacedDigit().frame(width: 72, alignment: .leading)
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(r.name).font(.system(size: 16, weight: .bold)).foregroundColor(NFColor.ink)
+                                    HStack(spacing: 6) {
+                                        if r.isDefault { tag("既定", NFColor.iris) }
+                                        if r.isReduced { tag("軽減税率", NFColor.saffron) }
+                                        tag(r.isInclusive ? "内税" : "外税", NFColor.ink3)
+                                    }
+                                }
+                                Spacer()
+                                if p.canEdit {
+                                    NSPButton(text: "編集", icon: "pencil") { model.startEdit(r) }
+                                    NSPButton(text: "削除", icon: "trash", busy: model.busy == r.id, disabled: r.isDefault) { confirmDelete = r }
+                                }
+                            }
+                            .padding(.horizontal, 18).frame(minHeight: 64)
+                            .overlay(alignment: .bottom) { Rectangle().fill(NFColor.line).frame(height: 1) }
+                        }
+                    }
+                }
+            }
+        }
+        .alert("税率を削除", isPresented: Binding(get: { confirmDelete != nil }, set: { if !$0 { confirmDelete = nil } })) {
+            Button("削除する", role: .destructive) { if let r = confirmDelete { Task { await model.delete(r) } }; confirmDelete = nil }
+            Button("やめる", role: .cancel) { confirmDelete = nil }
+        } message: { Text("「\(confirmDelete?.name ?? "")」を削除します") }
+        .task { await model.refresh() }
+    }
+
+    private func tag(_ t: String, _ c: Color) -> some View {
+        Text(t).font(.system(size: 11, weight: .heavy)).foregroundColor(c).padding(.horizontal, 7).padding(.vertical, 2).overlay(Capsule().stroke(c.opacity(0.5), lineWidth: 1))
+    }
+
+    private var form: some View {
+        NSPCard(title: model.editingId == nil ? "税率を追加" : "税率を編集", en: model.editingId == nil ? "Add" : "Edit") {
+            VStack(spacing: 0) {
+                NSPRow(label: "税率名", required: true) { NSPInput(text: $model.name, placeholder: "標準税率・軽減税率 など", width: 360) }
+                NSPRow(label: "税率") { NSPInput(text: $model.rate, placeholder: "10", width: 140, keyboard: .decimalPad, trailing: "%") }
+                NSPRow(label: "軽減税率") { NSPToggle(on: model.isReduced) { model.isReduced.toggle() } }
+                NSPRow(label: "内税") {
+                    HStack(spacing: 10) {
+                        NSPToggle(on: model.isInclusive) { model.isInclusive.toggle() }
+                        Text(model.isInclusive ? "内税（価格に含む）" : "外税（価格に足す）").font(.system(size: 14)).foregroundColor(NFColor.ink2)
+                    }
+                }
+                NSPRow(label: "既定にする") { NSPToggle(on: model.isDefault) { model.isDefault.toggle() } }
+                HStack(spacing: 10) {
+                    Spacer()
+                    NSPButton(text: "やめる") { model.showForm = false }
+                    NSPButton(text: "保存する", primary: true, busy: model.busy == "save", disabled: model.name.trimmingCharacters(in: .whitespaces).isEmpty) { Task { await model.save() } }
+                }
+                .padding(18)
+            }
+        }
+    }
+}
+
+// MARK: - 会員・ポイント（Web の /app/settings/loyalty と同じ）
+
+struct NLYPayload: Codable { let store: NFNamed; let canEdit: Bool; let enabled: Bool; let yenPerPoint: Double; let pointValue: Double; let expiryMonths: Int? }
+
+@MainActor
+final class NativeLoyaltyModel: ObservableObject {
+    @Published var payload: NLYPayload?
+    @Published var error: String?
+    @Published var toast: String?
+    @Published var busy = false
+    @Published var enabled = false
+    @Published var yenPerPoint = "100"
+    @Published var pointValue = "1"
+    @Published var expiry = ""
+
+    func refresh() async {
+        do {
+            if payload == nil, let saved = NativeAPI.cached(NLYPayload.self, NSPApi.cachedURL(part: "loyalty")) { apply(saved) }
+            let (p, _) = try await NSPApi.load(NLYPayload.self, part: "loyalty")
+            apply(p)
+            error = nil
+        } catch {
+            if payload == nil { self.error = (error as? NativeAPIError)?.message ?? "通信できませんでした" }
+        }
+    }
+    private func apply(_ p: NLYPayload) {
+        payload = p
+        enabled = p.enabled
+        yenPerPoint = Self.num(p.yenPerPoint)
+        pointValue = Self.num(p.pointValue)
+        expiry = p.expiryMonths.map { String($0) } ?? ""
+    }
+    static func num(_ v: Double) -> String { v == v.rounded() ? String(Int(v)) : String(v) }
+    var changed: Bool {
+        guard let p = payload else { return false }
+        return enabled != p.enabled || yenPerPoint != Self.num(p.yenPerPoint) || pointValue != Self.num(p.pointValue) || expiry != (p.expiryMonths.map { String($0) } ?? "")
+    }
+    func save() async {
+        guard !busy else { return }
+        guard let y = Double(yenPerPoint), y > 0 else { toast = "円/pt は1以上で入力してください"; return }
+        guard let v = Double(pointValue), v > 0 else { toast = "pt単価は1以上で入力してください"; return }
+        let e = expiry.trimmingCharacters(in: .whitespaces)
+        let months: Any = e.isEmpty ? NSNull() : (Int(e) ?? 0)
+        if let m = months as? Int, m <= 0 { toast = "失効月数は1以上で入力してください（無期限の場合は空欄）"; return }
+        busy = true
+        defer { busy = false }
+        let r = await NSPApi.post(["type": "loyaltySave", "enabled": enabled, "yenPerPoint": y, "pointValue": v, "expiryMonths": months])
+        guard r.ok else { toast = r.error ?? "保存できませんでした"; return }
+        await refresh()
+        toast = "ポイント設定を保存しました"
+    }
+}
+
+struct NativeLoyaltyScreen: View {
+    @StateObject private var model = NativeLoyaltyModel()
+    @EnvironmentObject var state: AppState
+    var body: some View { NativeLoyaltyView(model: model, onBack: { state.goNativeSettings() }) }
+}
+
+struct NativeLoyaltyView: View {
+    @ObservedObject var model: NativeLoyaltyModel
+    let onBack: () -> Void
+    var body: some View {
+        NSPFrame(storeName: model.payload?.store.name ?? "", title: "会員・ポイント", en: "Loyalty", loaded: model.payload != nil, error: model.error, toast: $model.toast, onBack: onBack, retry: { await model.refresh() }) {
+            if let p = model.payload {
+                let edit = p.canEdit
+                NSPCard(title: "ポイント機能", en: "Points", note: "会計時に自動付与・返金時に自動取消されます。無効にすると新しい付与・利用は止まります（残高は残ります）") {
+                    VStack(spacing: 0) {
+                        NSPRow(label: "ポイント機能") {
+                            HStack(spacing: 10) {
+                                NSPToggle(on: model.enabled, disabled: !edit) { model.enabled.toggle() }
+                                Text(model.enabled ? "有効" : "無効").font(.system(size: 14, weight: .bold)).foregroundColor(model.enabled ? NFColor.success : NFColor.ink3)
+                            }
+                        }
+                        NSPRow(label: "付与レート", en: "円 / 1pt") {
+                            HStack(spacing: 8) {
+                                NSPInput(text: $model.yenPerPoint, placeholder: "100", enabled: edit, width: 160, keyboard: .numberPad, trailing: "円で 1pt")
+                                Text("会計金額をこの円数で割った数（切り捨て）を付与").font(.system(size: 12)).foregroundColor(NFColor.ink3)
+                            }
+                        }
+                        NSPRow(label: "利用レート", en: "円 / 1pt") {
+                            HStack(spacing: 8) {
+                                NSPInput(text: $model.pointValue, placeholder: "1", enabled: edit, width: 160, keyboard: .numberPad, trailing: "円 / 1pt")
+                                Text("ポイント払いのときの 1pt の円換算").font(.system(size: 12)).foregroundColor(NFColor.ink3)
+                            }
+                        }
+                        NSPRow(label: "失効", en: "Expiry") {
+                            HStack(spacing: 8) {
+                                NSPInput(text: $model.expiry, placeholder: "無期限", enabled: edit, width: 160, keyboard: .numberPad, trailing: "か月")
+                                Text("空欄なら無期限").font(.system(size: 12)).foregroundColor(NFColor.ink3)
+                            }
+                        }
+                        if edit {
+                            HStack { Spacer(); NSPButton(text: "保存する", primary: true, busy: model.busy, disabled: !model.changed) { Task { await model.save() } } }.padding(18)
+                        } else {
+                            Text("ポイント設定は本部（org.settings）のアカウントで変えられます").font(.system(size: 12.5)).foregroundColor(NFColor.ink3).padding(18)
+                        }
+                    }
+                }
+            }
+        }
+        .task { await model.refresh() }
     }
 }
