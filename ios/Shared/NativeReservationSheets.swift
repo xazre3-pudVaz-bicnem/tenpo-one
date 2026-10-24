@@ -2,7 +2,7 @@ import SwiftUI
 
 // 店舗台帳の予約の詳細・新規登録（ネイティブ）。Web の reservation-sheet / manual-reservation-dialog と同じ機能
 
-/// 予約の詳細：来店・着席（注文へ）・退店・キャンセル・無断キャンセル・卓・時間・担当・経路・コース・メモ
+/// 予約の詳細：来店・オーダー・会計（着席して伝票へ）・キャンセル・無断キャンセル・卓・時間・担当・経路・コース・メモ（退店は会計で自動）
 struct NativeReservationSheet: View {
     @ObservedObject var model: NativeLedgerModel
     let reservation: NLReservation
@@ -51,8 +51,9 @@ struct NativeReservationSheet: View {
                         if allowed.contains("arrived") {
                             bigButton("来店済み", en: "Arrived", fill: NLColor.green) { Task { await status("arrived") } }
                         }
+                        // 「オーダー・会計」（着席して伝票を開く。色はオーダー・会計のボタンと同じ青）。2026-10-24 21:30 Ronnie「Seat & order ではなく オーダー・会計」
                         if allowed.contains("seated") || r.status == "arrived" || r.status == "seated" {
-                            bigButton(r.status == "seated" ? "伝票を開く" : "着席して注文へ", en: "Seat & order", fill: NLColor.blue) {
+                            bigButton("オーダー・会計", en: "Order & Pay", fill: Color(hex: 0x2A6FE6)) {
                                 Task {
                                     if let res = await model.act(["type": "ledgerSeat", "reservationId": r.id]), let id = res.orderId {
                                         onOpenOrder(id)
@@ -60,9 +61,7 @@ struct NativeReservationSheet: View {
                                 }
                             }
                         }
-                        if allowed.contains("completed") {
-                            bigButton("退店", en: "Left", fill: NLColor.navy2) { Task { await status("completed") } }
-                        }
+                        // 「退店」のボタンは出さない。会計が済むと自動で退店になる（DB の会計の処理が予約を completed にする。2026-10-24 21:30 Ronnie）
                         if allowed.contains("confirmed") && r.status == "pending" {
                             bigButton("予約確定", en: "Confirm", fill: NLColor.blue) { Task { await status("confirmed") } }
                         }
