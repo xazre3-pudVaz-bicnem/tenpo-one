@@ -566,19 +566,24 @@ struct NativeSettingsView: View {
                 }
                 if let found = model.found { foundList(found).padding(.horizontal, 20).padding(.vertical, 12) }
                 row("レシート紙幅", en: "Paper width", dim: off) {
-                    // 見本と同じ：枠だけのボタン。選んでいるものは青い枠＋青い字
-                    HStack(spacing: 10) {
+                    // 押して中から選ぶ（機種と同じ形）。外にボタンを並べると、分からない人が触って変えてしまうので
+                    // （2026-10-25 00:22 Ronnie「中に入って選ぶように。外だと知らない人が壊すこともある」）
+                    Menu {
                         ForEach([58, 80], id: \.self) { w in
                             Button { model.paper = w } label: {
-                                Text("\(w)mm").font(.system(size: 16, weight: .bold))
-                                    .foregroundColor(model.paper == w ? NFColor.iris : NFColor.ink3)
-                                    .frame(width: 120, height: 46)
-                                    .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(model.paper == w ? NFColor.irisSoft : Color.white))
-                                    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(model.paper == w ? NFColor.iris : NFColor.line, lineWidth: model.paper == w ? 1.5 : 1))
+                                if model.paper == w { Label("\(w)mm", systemImage: "checkmark") } else { Text("\(w)mm") }
                             }
-                            .buttonStyle(PressableStyle()).disabled(off || locked)
                         }
+                    } label: {
+                        HStack(spacing: 10) {
+                            Text("\(model.paper)mm").font(.system(size: 16, weight: .bold)).foregroundColor(NFColor.ink)
+                            Image(systemName: "chevron.up.chevron.down").font(.system(size: 12, weight: .bold)).foregroundColor(NFColor.ink3)
+                        }
+                        .padding(.horizontal, 14).frame(height: 46).frame(minWidth: 260, alignment: .trailing)
+                        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(off ? NFColor.lilacSoft : Color.white))
+                        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(NFColor.line, lineWidth: 1))
                     }
+                    .disabled(off || locked)
                 }
                 row("会計レシート自動印刷", en: "Print receipt after checkout", dim: off) {
                     toggle(model.autoPrint, disabled: off || locked) { model.autoPrint.toggle() }
