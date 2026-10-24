@@ -537,8 +537,8 @@ struct NativeTableCard: View {
         let tt = o.tileTime(now: now)
         let visits = o.visitCount
         // 入店時刻と、時間制なら残り（無ければ経過）を「H:MM」で（USEN の卓と同じ情報を、うちの形で。2026-10-24 Ronnie）
-        let hasLimit = o.course != nil
-        let mins = hasLimit ? tt.left : tt.elapsed
+        // 入店時刻と「残り時間」だけ（経過時間は出さない。2026-10-24 21:57 Ronnie）。残りはコース → 予約の終わり → 店の滞在時間まで
+        let mins = tt.left
         let clock = String(format: "%@%d:%02d", mins < 0 ? "−" : "", abs(mins) / 60, abs(mins) % 60)
         // 入店時刻と時間は同じ大きさ（15）。印も同じ大きさ（12）。右にそろえる
         HStack(spacing: 12) {
@@ -549,10 +549,10 @@ struct NativeTableCard: View {
             }
             .foregroundColor(NFColor.ink2)
             HStack(spacing: 4) {
-                Image(systemName: hasLimit ? "hourglass" : "clock").font(.system(size: 12, weight: .semibold))
+                Image(systemName: "hourglass").font(.system(size: 12, weight: .semibold))
                 Text(clock).font(.system(size: 15, weight: .heavy)).monospacedDigit()
             }
-            .foregroundColor(hasLimit && mins < 0 ? NFColor.danger : NFColor.royal)
+            .foregroundColor(mins < 0 ? NFColor.danger : NFColor.royal)
             // 来店の区分：初回（グレー）・リピ（青）・常連（黄）。顧客台帳につながっているときだけ（見本のレジのよいところ）
             if let v = visits {
                 let chip: (String, Color, Color) = v >= 3 ? ("常連", NLColor.navy, NLColor.yellow) : v == 2 ? ("リピ", .white, NLColor.blue) : ("初回", NFColor.ink2, Color(hex: 0xE9E9EF))
@@ -562,12 +562,10 @@ struct NativeTableCard: View {
         }
         .lineLimit(1).minimumScaleFactor(0.8)
         if let c = o.course {
+            // コースの名前と時間だけ（残りは上の行に）
             HStack(spacing: 8) {
                 Spacer(minLength: 0)
                 Text("\(c.label) \(c.minutes)分")
-                Text(tt.left > 0 ? "残 \(tt.left)分" : "超過 \(-tt.left)分")
-                    .fontWeight(.heavy)
-                    .foregroundColor(state == .over ? NFColor.danger : (state == .lo ? NFColor.loInk : NFColor.royal))
             }
             .font(.system(size: 12, weight: .semibold)).monospacedDigit().foregroundColor(NFColor.ink3)
         }
