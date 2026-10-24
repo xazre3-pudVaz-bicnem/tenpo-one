@@ -138,6 +138,10 @@ final class AppState: ObservableObject {
     @Published var phoneHandy: PhoneHandyRoute?
     /// iPhone：店長・オーナーのログイン画面（/login）を出しているとき（スタッフ用の QR ログインのボタンを重ねる）
     @Published var ownerLoginPage = false
+    /// iPhone ハンディの予約をネイティブで出しているとき（/handy/reservations・/handy/reservations/new の代わり。2026-10-25 Ronnie「iPhone も native に」）。
+    /// date＝?date=（nil は今日）、tab＝?tab=（inbox・messages）、new＝予約登録を開く
+    struct PhoneReservationsRoute: Equatable, Hashable { var date: String?; var tab: String?; var new: Bool = false }
+    @Published var phoneReservations: PhoneReservationsRoute?
     /// iPhone のネイティブの画面を読み直してほしいとき（Web が /handy に戻ってきたときなど）に増やす
     @Published var phoneRefreshTick = 0
     /// ネイティブの予約設定＝予約受付ルール（/app/settings/booking。店舗台帳の 📅「台帳設定」から。2026-10-24）
@@ -318,6 +322,8 @@ final class AppState: ObservableObject {
         nativeHandyHome = false
         nativeOwnerHome = false
         phoneHandy = nil
+        phoneReservations = nil
+        phoneReservations = nil
         mode = newMode
         webSession = UUID()
     }
@@ -359,7 +365,7 @@ final class AppState: ObservableObject {
             // ハンディのログインはお店の QR。メールのログイン画面は出さず、カメラを出す
             if path == "/login" || path == "/register-login" {
                 UserDefaults.standard.set(false, forKey: handyLoggedInKey)
-                DispatchQueue.main.async { self.needsHandyLogin = true; self.nativeHandyHome = false; self.phoneHandy = nil }
+                DispatchQueue.main.async { self.needsHandyLogin = true; self.nativeHandyHome = false; self.phoneHandy = nil; self.phoneReservations = nil }
                 return URL(string: "about:blank")
             }
         default:
@@ -665,10 +671,12 @@ final class AppState: ObservableObject {
         case .handy:
             nativeOwnerHome = false
             let on = path == "/handy" || path == "/handy/"
-            if on { phoneRefreshTick += 1; if phoneHandy != nil { phoneHandy = nil } }
+            if on { phoneRefreshTick += 1; if phoneHandy != nil { phoneHandy = nil }; if phoneReservations != nil { phoneReservations = nil } }
             if nativeHandyHome != on { nativeHandyHome = on }
             // Web がハンディの卓・注文の画面へ行ったら（お客様情報のあとなど）ネイティブで重ねる
             if let r = Self.phoneHandyRoute(for: url) { phoneHandy = r }
+            // Web がハンディの予約・予約登録の画面へ行ったらネイティブで重ねる（2026-10-25）
+            if let r = Self.phoneReservationsRoute(for: url) { phoneReservations = r }
         case .owner:
             nativeHandyHome = false
             let on = path == "/app/dashboard" || path == "/app" || path == "/app/"
@@ -696,6 +704,39 @@ final class AppState: ObservableObject {
         return nil
     }
 
+    /// /handy/reservations（?date= ?tab=）→ 予約、/handy/reservations/new（?date=）→ 予約登録（ネイティブで出す道）。それ以外は nil
+    static func phoneReservationsRoute(for url: URL) -> PhoneReservationsRoute? {
+        let path = url.path
+        guard path == "/handy/reservations" || path == "/handy/reservations/new" else { return nil }
+        let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+        // 'YYYY-MM-DD' だけ（壊れていれば今日。Web の parseHandyDate と同じ）
+        let rawDate = items.first { $0.name == "date" }?.value ?? ""
+        let parts = rawDate.split(separator: "-")
+        let date: String? = rawDate.count == 10 && parts.count == 3 && parts.allSatisfy({ $0.allSatisfy(\.isNumber) }) ? rawDate : nil
+        let tab = items.first { $0.name == "tab" }?.value
+        return PhoneReservationsRoute(date: date, tab: tab, new: path == "/handy/reservations/new")
+    }
+
+    /// iPhone ハンディの予約を閉じてテーブル一覧へ（closePhoneHandy と同じ。裏の Web が予約の画面なら /handy に戻す）
+    func closePhoneReservations() {
+        phoneReservations = nil
+        let path = WebViewController.current?.currentURL?.path ?? ""
+        if path == "/handy" || path == "/handy/" {
+            nativeHandyHome = true
+            phoneRefreshTick += 1
+        } else {
+            nativeHandyHome = true
+            WebViewController.current?.load(AppConfig.url("/handy"))
+        }
+    }
+
+    /// 予約の詳細の「HANDYで注文」：予約の画面を閉じて、その卓をネイティブの卓の画面で開く
+    /// （卓の画面の「テーブル」はテーブル一覧へ戻る。Web の予約 → /handy/<卓> と同じ）
+    func openPhoneHandyFromReservations(tableId: String) {
+        phoneReservations = nil
+        openPhoneHandy(tableId: tableId)
+    }
+
     /// iPhone ハンディの卓をネイティブで開く
     func openPhoneHandy(tableId: String, orderId: String? = nil) {
         guard nativePhoneEnabled else {
@@ -720,12 +761,19 @@ final class AppState: ObservableObject {
 
     /// iPhone のネイティブの画面を閉じて Web の画面へ（卓の画面・店舗台帳・設定など）
     func leaveNativePhone(to path: String) {
-        // 卓・注文の画面はネイティブで（2026-10-25）
-        if mode == .handy, nativePhoneEnabled, let url = URL(string: path, relativeTo: AppConfig.url("/")), let r = Self.phoneHandyRoute(for: url.absoluteURL) {
-            phoneHandy = r
-            return
+        // 卓・注文の画面、予約・予約登録の画面はネイティブで（2026-10-25）
+        if mode == .handy, nativePhoneEnabled, let url = URL(string: path, relativeTo: AppConfig.url("/")) {
+            if let r = Self.phoneReservationsRoute(for: url.absoluteURL) {
+                phoneReservations = r
+                return
+            }
+            if let r = Self.phoneHandyRoute(for: url.absoluteURL) {
+                phoneHandy = r
+                return
+            }
         }
         phoneHandy = nil
+        phoneReservations = nil
         nativeHandyHome = false
         nativeOwnerHome = false
         WebViewController.current?.load(AppConfig.url(path))
