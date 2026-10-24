@@ -255,8 +255,7 @@ struct NativeHomeView: View {
                     .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white.opacity(0.10)))
                 }
                 .buttonStyle(PressableStyle())
-                Image("BrandMark").resizable().scaledToFit().frame(width: 38, height: 38)
-                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                // TENPO ONE のマークは上のバーに出さない（2026-10-24 19:04 Ronnie「ロゴは要らない」）
                 // 店名はログアウトの横（2026-10-24 19:03 Ronnie）
                 HStack(spacing: 6) {
                     Image(systemName: "storefront")

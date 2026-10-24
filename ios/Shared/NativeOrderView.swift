@@ -241,16 +241,14 @@ struct NativeTopBar: View {
     var body: some View {
         HStack(spacing: 10) {
             iconButton(backIcon, label: backIcon == "house.fill" ? "ホーム" : "戻る", action: onHome)
-            Image("BrandMark")
-                .resizable()
-                .scaledToFit()
-                .frame(width: 38, height: 38)
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            // TENPO ONE のマークは上のバーに出さない（2026-10-24 19:04 Ronnie「ロゴは要らない」）
             // 画面の名前（店名のあった場所に、同じ丸い枠で）
             ViewThatFits(in: .horizontal) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(title).font(.system(size: 17, weight: .heavy)).foregroundColor(.white)
-                    Text(subtitle).font(.system(size: 12, weight: .bold)).foregroundColor(Color(hex: 0xC9B6F5))
+                    if !subtitle.isEmpty {
+                        Text(subtitle).font(.system(size: 12, weight: .bold)).foregroundColor(Color(hex: 0xC9B6F5))
+                    }
                 }
                 .fixedSize()
                 Text(title).font(.system(size: 17, weight: .heavy)).foregroundColor(.white).lineLimit(1)

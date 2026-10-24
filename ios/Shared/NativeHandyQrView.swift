@@ -25,7 +25,7 @@ struct NativeHandyQrSheet: View {
                             .overlay(RoundedRectangle(cornerRadius: 20).stroke(NFColor.line, lineWidth: 1))
                         VStack(spacing: 4) {
                             Text("iPhone のカメラで読むとハンディが開きます").font(.system(size: 17, weight: .bold))
-                            Text("Scan with the iPhone camera to open the handy").font(.system(size: 12)).foregroundColor(NFColor.ink3)
+                            Text("iPhone のカメラで読むとハンディが開きます").font(.system(size: 12)).foregroundColor(NFColor.ink3)
                         }
                         HStack(spacing: 16) {
                             Label("使用中 \(p.activeDevices)台", systemImage: "iphone").font(.system(size: 14))

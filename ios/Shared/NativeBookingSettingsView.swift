@@ -114,7 +114,7 @@ struct NativeBookingSettingsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            NativeTopBar(storeName: model.payload?.store.name ?? "", title: "予約設定", subtitle: "Booking rules", onHome: onHome)
+            NativeTopBar(storeName: model.payload?.store.name ?? "", title: "予約受付ルール", subtitle: "", onHome: onHome)
             if let p = model.payload {
                 if p.adminOnly {
                     adminOnlyView(p)
@@ -170,7 +170,7 @@ struct NativeBookingSettingsView: View {
                 Spacer()
                 if let u = p.bookingUrl, let url = URL(string: u) {
                     Button { UIApplication.shared.open(url) } label: {
-                        HStack(spacing: 6) { Image(systemName: "arrow.up.right.square"); Text("公開予約ページを確認"); Text("Open booking page").font(.system(size: 10, weight: .semibold)).opacity(0.7) }
+                        HStack(spacing: 6) { Image(systemName: "arrow.up.right.square"); Text("公開予約ページを確認") }
                             .font(.system(size: 13, weight: .bold)).foregroundColor(NFColor.royal)
                             .padding(.horizontal, 14).frame(height: 40)
                             .background(RoundedRectangle(cornerRadius: 12).fill(Color.white))
