@@ -45,7 +45,11 @@ export type NativeSettingsPageAction =
   /** 勘定科目（/app/settings/accounts。saveAccount / deleteAccount / installStandardAccounts） */
   | { type: 'accountSave'; id: string | null; code: string; name: string; category: string; subType: string | null; defaultTaxTreatment: string; sortOrder: number }
   | { type: 'accountDelete'; id: string }
-  | { type: 'accountInstallStandard' };
+  | { type: 'accountInstallStandard' }
+  /** ハンディ端末（/app/settings/handy。issueHandyPairing / revokeHandyDevice / renameHandyDevice） */
+  | { type: 'handyIssue'; deviceName: string }
+  | { type: 'handyRevoke'; id: string }
+  | { type: 'handyRename'; id: string; name: string };
 
 export interface NativeStoreFields {
   name: string;
@@ -97,6 +101,9 @@ export const NATIVE_SETTINGS_PAGE_ACTION_TYPES: readonly NativeSettingsPageActio
   'accountSave',
   'accountDelete',
   'accountInstallStandard',
+  'handyIssue',
+  'handyRevoke',
+  'handyRename',
 ];
 
 export function isNativeSettingsPageActionType(v: unknown): v is NativeSettingsPageActionType {
@@ -286,7 +293,31 @@ export function parseNativeSettingsPageAction(raw: unknown): Parsed {
     return { ok: true, action: { type: 'accountDelete', id: b.id } };
   }
   if (b.type === 'accountInstallStandard') return { ok: true, action: { type: 'accountInstallStandard' } };
+  if (b.type === 'handyIssue') {
+    const n = typeof b.deviceName === 'string' ? b.deviceName.trim().slice(0, 40) : '';
+    if (!n) return bad('端末の名前を入力してください');
+    return { ok: true, action: { type: 'handyIssue', deviceName: n } };
+  }
+  if (b.type === 'handyRevoke') {
+    if (!isUuid(b.id)) return bad('端末が見つかりません');
+    return { ok: true, action: { type: 'handyRevoke', id: b.id } };
+  }
+  if (b.type === 'handyRename') {
+    const n = typeof b.name === 'string' ? b.name.trim().slice(0, 40) : '';
+    if (!isUuid(b.id)) return bad('端末が見つかりません');
+    if (!n) return bad('端末の名前を入力してください');
+    return { ok: true, action: { type: 'handyRename', id: b.id, name: n } };
+  }
   return bad();
+}
+
+/** ハンディ端末の画面の読み込み（GET ?part=handy） */
+export interface NativeHandyDevicesPayload {
+  store: { id: string; name: string };
+  canEdit: boolean;
+  /** QR に入れる登録ページ（siteUrl + /handy-pair#code）。無ければ QR を作れない */
+  pairBase: string | null;
+  devices: { id: string; name: string; status: 'active' | 'revoked'; pairedAt: string; lastSeenAt: string | null; pairedIp: string | null; userAgent: string | null }[];
 }
 
 /** 勘定科目の画面の読み込み（GET ?part=accounts） */

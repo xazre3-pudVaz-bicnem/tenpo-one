@@ -1,4 +1,5 @@
 import SwiftUI
+import CoreImage.CIFilterBuiltins
 
 // 設定の中の画面（ネイティブ。2026-10-24 Ronnie「設定の中も全部ネイティブ。テーブルQRなど何でも」）。
 // Web の設定の各画面を1つずつネイティブにしていく。どの画面がネイティブかは NativeSettingsPageKey（道 → 画面）で決まり、
@@ -20,6 +21,7 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
     case booking = "bookingSettings"
     case handyQr = "handyqr"
     case accounts = "accounts"
+    case handy = "handy"
     var id: String { rawValue }
 
     /// Web の道（クエリは見ない）
@@ -37,6 +39,7 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
         case .booking: return "/app/settings/booking"
         case .handyQr: return "/app/settings/handy-qr"
         case .accounts: return "/app/settings/accounts"
+        case .handy: return "/app/settings/handy"
         }
     }
     var title: String {
@@ -53,6 +56,7 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
         case .booking: return "予約受付ルール"
         case .handyQr: return "iPhoneハンディ"
         case .accounts: return "勘定科目"
+        case .handy: return "ハンディ端末"
         }
     }
     var en: String {
@@ -69,6 +73,7 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
         case .booking: return "Booking rules"
         case .handyQr: return "Handy QR"
         case .accounts: return "Accounts"
+        case .handy: return "Handy devices"
         }
     }
 
@@ -96,6 +101,7 @@ struct NativeSettingsPageScreen: View {
         case .booking: NativeBookingFromSettings()
         case .handyQr: NativeHandyQrFromSettings()
         case .accounts: NativeAccountsScreen()
+        case .handy: NativeHandyDevicesScreen()
         }
     }
 }
@@ -1891,5 +1897,155 @@ struct NativeAccountsView: View {
             }
         }
         .opacity(disabled ? 0.6 : 1)
+    }
+}
+
+// MARK: - ハンディ端末（Web の /app/settings/handy・components/settings/handy-devices-panel.tsx と同じ）
+
+struct NHDDevice: Codable, Identifiable, Hashable { let id: String; let name: String; let status: String; let pairedAt: String; let lastSeenAt: String?; let pairedIp: String?; let userAgent: String? }
+struct NHDPayload: Codable { let store: NFNamed; let canEdit: Bool; let pairBase: String?; let devices: [NHDDevice] }
+
+@MainActor
+final class NativeHandyDevicesModel: NSPModel<NHDPayload> {
+    @Published var deviceName = ""
+    /// 発行した QR（5分で消える）
+    @Published var qr: (url: String, expiresAt: Date)?
+    @Published var editing: String?
+    @Published var editName = ""
+    init() { super.init(part: "handy") }
+
+    func issue() async {
+        let n = deviceName.trimmingCharacters(in: .whitespaces)
+        guard !n.isEmpty else { toast = "端末の名前を入力してください"; return }
+        guard let base = payload?.pairBase else { toast = "公開URL（NEXT_PUBLIC_SITE_URL）が未設定のため、QRコードを作れません"; return }
+        guard busy == nil else { return }
+        busy = "issue"
+        defer { busy = nil }
+        var req = URLRequest(url: AppConfig.url("/api/app/v1/pos"))
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "content-type")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: ["type": "handyIssue", "deviceName": n])
+        do {
+            let data = try await NativeAPI.shared.send(req, kickPrint: false)
+            let r = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+            guard r?["ok"] as? Bool == true, let code = r?["code"] as? String else { toast = (r?["error"] as? String) ?? "QRコードを発行できませんでした"; return }
+            let f = ISO8601DateFormatter(); f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            let exp = (r?["expiresAt"] as? String).flatMap { f.date(from: $0) ?? ISO8601DateFormatter().date(from: $0) } ?? Date().addingTimeInterval(300)
+            // 登録画面は認証の外。コードは # 以降（サーバーへ送らない。Web と同じ）
+            qr = (base + code, exp)
+        } catch {
+            toast = (error as? NativeAPIError)?.message ?? "通信できませんでした"
+        }
+    }
+    func revoke(_ d: NHDDevice) async { _ = await run(d.id, ["type": "handyRevoke", "id": d.id], done: "「\(d.name)」のつながりを解除しました") }
+    func rename(_ d: NHDDevice) async {
+        let n = editName.trimmingCharacters(in: .whitespaces)
+        editing = nil
+        guard !n.isEmpty, n != d.name else { return }
+        _ = await run(d.id, ["type": "handyRename", "id": d.id, "name": n], done: "名前を変えました")
+    }
+}
+
+struct NativeHandyDevicesScreen: View {
+    @StateObject private var model = NativeHandyDevicesModel()
+    @EnvironmentObject var state: AppState
+    var body: some View { NativeHandyDevicesView(model: model, onBack: { state.goNativeSettings() }) }
+}
+
+struct NativeHandyDevicesView: View {
+    @ObservedObject var model: NativeHandyDevicesModel
+    let onBack: () -> Void
+    @State private var now = Date()
+    @State private var confirmRevoke: NHDDevice?
+    private let tick = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+
+    var body: some View {
+        NSPFrame(storeName: model.payload?.store.name ?? "", title: "ハンディ端末", en: "Handy devices", loaded: model.payload != nil, error: model.error, toast: $model.toast, onBack: onBack, retry: { await model.refresh() }) {
+            if let p = model.payload {
+                if p.canEdit {
+                    NSPCard(title: "スマホをハンディとして登録", en: "Pair a phone", note: "スマホで QR を読むと、その端末が \(p.store.name) のハンディになります（パスワード不要）。QR は5分・1回限り。店の Wi-Fi から操作してください") {
+                        VStack(alignment: .leading, spacing: 14) {
+                            HStack(spacing: 10) {
+                                NSPInput(text: $model.deviceName, placeholder: "端末の名前（例：ホール1・田中のiPhone）", width: 360)
+                                NSPButton(text: "QRコードを表示", icon: "qrcode", primary: true, busy: model.busy == "issue", disabled: p.pairBase == nil) { Task { await model.issue() } }
+                            }
+                            if let q = model.qr {
+                                let left = max(0, Int(q.expiresAt.timeIntervalSince(now)))
+                                if left > 0 {
+                                    HStack(alignment: .top, spacing: 20) {
+                                        if let img = Self.qrImage(q.url) {
+                                            Image(uiImage: img).interpolation(.none).resizable().scaledToFit().frame(width: 220, height: 220)
+                                                .padding(10).background(RoundedRectangle(cornerRadius: 12).fill(Color.white)).overlay(RoundedRectangle(cornerRadius: 12).stroke(NFColor.line, lineWidth: 1))
+                                        }
+                                        VStack(alignment: .leading, spacing: 8) {
+                                            Text("スマホのカメラでこの QR を読んでください").font(.system(size: 15, weight: .bold)).foregroundColor(NFColor.ink)
+                                            Text("あと \(left / 60):\(String(format: "%02d", left % 60))").font(.system(size: 22, weight: .heavy)).foregroundColor(NFColor.iris).monospacedDigit()
+                                            Text("読み取った端末は下の一覧に出ます（画面を読み直してください）").font(.system(size: 12.5)).foregroundColor(NFColor.ink3)
+                                            NSPButton(text: "読み直す", icon: "arrow.clockwise") { Task { await model.refresh() } }
+                                        }
+                                    }
+                                } else {
+                                    Text("QR の有効期限が切れました。もう一度「QRコードを表示」を押してください").font(.system(size: 13)).foregroundColor(NFColor.ink3)
+                                }
+                            }
+                            if p.pairBase == nil { Text("公開URL（NEXT_PUBLIC_SITE_URL）が未設定のため、QRコードを作れません").font(.system(size: 13)).foregroundColor(NFColor.danger) }
+                        }
+                        .padding(18)
+                    }
+                }
+                NSPCard(title: "登録済みの端末", en: "Devices", note: "退職や紛失のときは「解除」。解除した端末はハンディとして使えなくなります") {
+                    VStack(spacing: 0) {
+                        if p.devices.isEmpty { Text("まだ端末がありません").font(.system(size: 14)).foregroundColor(NFColor.ink3).padding(18) }
+                        ForEach(p.devices) { d in
+                            let revoked = d.status == "revoked"
+                            HStack(spacing: 12) {
+                                Image(systemName: "iphone").font(.system(size: 16, weight: .semibold)).foregroundColor(revoked ? NFColor.ink3 : NFColor.iris)
+                                    .frame(width: 36, height: 36).background(RoundedRectangle(cornerRadius: 10).fill(revoked ? NFColor.lilacSoft : NFColor.irisSoft))
+                                if model.editing == d.id {
+                                    NSPInput(text: $model.editName, placeholder: "端末の名前", width: 280)
+                                    NSPButton(text: "決定", primary: true) { Task { await model.rename(d) } }
+                                    NSPButton(text: "やめる") { model.editing = nil }
+                                } else {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        HStack(spacing: 6) {
+                                            Text(d.name).font(.system(size: 16, weight: .bold)).foregroundColor(revoked ? NFColor.ink3 : NFColor.ink).strikethrough(revoked, color: NFColor.ink3)
+                                            if revoked { Text("解除済み").font(.system(size: 11, weight: .bold)).foregroundColor(NFColor.ink3).padding(.horizontal, 7).padding(.vertical, 2).background(Capsule().fill(NFColor.lilac)) }
+                                        }
+                                        Text("登録 \(Self.pretty(d.pairedAt))　最後に使った \(d.lastSeenAt.map(Self.pretty) ?? "—")\(d.pairedIp.map { "　\($0)" } ?? "")").font(.system(size: 12)).foregroundColor(NFColor.ink3).lineLimit(1)
+                                    }
+                                }
+                                Spacer()
+                                if p.canEdit && !revoked && model.editing != d.id {
+                                    NSPButton(text: "名前", icon: "pencil") { model.editing = d.id; model.editName = d.name }
+                                    NSPButton(text: "解除", icon: "xmark.circle", busy: model.busy == d.id) { confirmRevoke = d }
+                                }
+                            }
+                            .padding(.horizontal, 18).frame(minHeight: 62)
+                            .overlay(alignment: .bottom) { Rectangle().fill(NFColor.line).frame(height: 1) }
+                        }
+                    }
+                }
+            }
+        }
+        .onReceive(tick) { now = $0 }
+        .alert("ハンディを解除", isPresented: Binding(get: { confirmRevoke != nil }, set: { if !$0 { confirmRevoke = nil } })) {
+            Button("解除する", role: .destructive) { if let d = confirmRevoke { Task { await model.revoke(d) } }; confirmRevoke = nil }
+            Button("やめる", role: .cancel) { confirmRevoke = nil }
+        } message: { Text("「\(confirmRevoke?.name ?? "")」はハンディとして使えなくなります") }
+        .task { await model.refresh() }
+    }
+
+    private static func qrImage(_ s: String) -> UIImage? {
+        let f = CIFilter.qrCodeGenerator()
+        f.message = Data(s.utf8)
+        f.correctionLevel = "M"
+        guard let out = f.outputImage?.transformed(by: CGAffineTransform(scaleX: 12, y: 12)), let cg = CIContext().createCGImage(out, from: out.extent) else { return nil }
+        return UIImage(cgImage: cg)
+    }
+    private static func pretty(_ iso: String) -> String {
+        let f = ISO8601DateFormatter(); f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        guard let d = f.date(from: iso) ?? ISO8601DateFormatter().date(from: iso) else { return iso }
+        let o = DateFormatter(); o.dateFormat = "M/d HH:mm"; o.timeZone = TimeZone(identifier: "Asia/Tokyo")
+        return o.string(from: d)
     }
 }

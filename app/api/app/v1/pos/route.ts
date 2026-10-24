@@ -1234,7 +1234,7 @@ export async function POST(request: Request) {
     if (pageProblem) return json({ ok: false, error: pageProblem }, 403);
     try {
       const r = await runNativeSettingsPageAction(parsedPage.action, { id: pageStore.id, name: pageStore.name });
-      return r.ok ? json({ ok: true }) : json({ ok: false, error: r.error }, 400);
+      return r.ok ? json({ ok: true, ...(r.data ?? {}) }) : json({ ok: false, error: r.error }, 400);
     } catch (e) {
       return json({ ok: false, error: errorText(e, 'うまくいきませんでした。もう一度お試しください') }, 400);
     }

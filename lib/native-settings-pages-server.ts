@@ -23,9 +23,11 @@ import { deleteAccount, installStandardAccounts, saveAccount } from '@/app/app/s
 import { ACCOUNT_CATEGORY_LABELS, ACCOUNT_CATEGORY_ORDER, SUB_TYPE_LABELS, type SubType } from '@/components/accounting/labels';
 import { TAX_TREATMENT_LABELS, type AccountCategory, type TaxTreatment } from '@/lib/accounting';
 import { canWriteAccounting } from '@/components/accounting/roles';
+import { issueHandyPairing, renameHandyDevice, revokeHandyDevice } from '@/app/app/settings/handy/actions';
 import { resolveSiteOrigin } from '@/lib/site-origin';
 import type {
   NativeAccountsPayload,
+  NativeHandyDevicesPayload,
   NativeAlertsPayload,
   NativeApprovalsPayload,
   NativeClerksPayload,
@@ -41,7 +43,7 @@ type Supabase = Awaited<ReturnType<typeof createClient>>;
 type Store = { id: string; name: string };
 
 /** 設定の中の画面の名前（GET ?part=） */
-export const NATIVE_SETTINGS_PAGE_PARTS = ['soldout', 'clerks', 'hours', 'store', 'tax', 'loyalty', 'alerts', 'approvals', 'accounts'] as const;
+export const NATIVE_SETTINGS_PAGE_PARTS = ['soldout', 'clerks', 'hours', 'store', 'tax', 'loyalty', 'alerts', 'approvals', 'accounts', 'handy'] as const;
 export type NativeSettingsPagePart = (typeof NATIVE_SETTINGS_PAGE_PARTS)[number];
 export function isNativeSettingsPagePart(v: unknown): v is NativeSettingsPagePart {
   return typeof v === 'string' && (NATIVE_SETTINGS_PAGE_PARTS as readonly string[]).includes(v);
@@ -68,7 +70,8 @@ export async function loadNativeSettingsPage(
         | NativeLoyaltyPayload
         | NativeAlertsPayload
         | NativeApprovalsPayload
-        | NativeAccountsPayload;
+        | NativeAccountsPayload
+        | NativeHandyDevicesPayload;
     }
   | { ok: false; error: string }
 > {
@@ -312,6 +315,31 @@ export async function loadNativeSettingsPage(
       },
     };
   }
+  if (part === 'handy') {
+    const { data: devices } = await supabase
+      .from('handy_devices')
+      .select('id, name, status, paired_at, last_seen_at, paired_ip, user_agent')
+      .eq('store_id', store.id)
+      .order('paired_at', { ascending: false });
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? '';
+    return {
+      ok: true,
+      payload: {
+        store,
+        canEdit: can(ctx.role, 'store.settings'),
+        pairBase: siteUrl ? `${siteUrl}/handy-pair#` : null,
+        devices: (devices ?? []).map((d) => ({
+          id: d.id as string,
+          name: d.name as string,
+          status: d.status === 'revoked' ? 'revoked' : 'active',
+          pairedAt: d.paired_at as string,
+          lastSeenAt: (d.last_seen_at as string | null) ?? null,
+          pairedIp: (d.paired_ip as string | null) ?? null,
+          userAgent: (d.user_agent as string | null) ?? null,
+        })),
+      },
+    };
+  }
   return { ok: false, error: '画面が見つかりません' };
 }
 
@@ -319,7 +347,7 @@ export async function loadNativeSettingsPage(
 export async function runNativeSettingsPageAction(
   action: NativeSettingsPageAction,
   store: Store
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): Promise<{ ok: true; data?: Record<string, unknown> } | { ok: false; error: string }> {
   const done = (r: { error?: string }): { ok: true } | { ok: false; error: string } => (r.error ? { ok: false, error: r.error } : { ok: true });
   switch (action.type) {
     case 'soldOutSet':
@@ -387,5 +415,14 @@ export async function runNativeSettingsPageAction(
       const r = await installStandardAccounts();
       return r.error ? { ok: false, error: r.error } : { ok: true };
     }
+    case 'handyIssue': {
+      // QR の中身（code）は返事にだけ載せる（DB には入れない。Web と同じ）
+      const r = await issueHandyPairing(store.id, action.deviceName);
+      return r.error || !r.code ? { ok: false, error: r.error ?? 'QRコードを発行できませんでした' } : { ok: true, data: { code: r.code, expiresAt: r.expiresAt } };
+    }
+    case 'handyRevoke':
+      return done(await revokeHandyDevice(action.id));
+    case 'handyRename':
+      return done(await renameHandyDevice(action.id, action.name));
   }
 }
