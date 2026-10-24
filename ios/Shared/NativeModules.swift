@@ -27,11 +27,21 @@ struct NativeModuleRoute: Hashable, Identifiable {
 enum NativeModuleRegistry {
     /// Web の道 → key（その下の道 /…/<id> も同じ key で開く）。追加は 1 行ずつ
     private static let entries: [(String, String)] = [
-        // ("/app/attendance", "attendance"),
+        ("/app/costing", "costing"),
+        ("/app/attendance", "attendance"),
         ("/app/kitchen", "kitchen"),
+        ("/app/leave", "leave"),
         ("/app/onboarding", "onboarding"),
         ("/app/payroll", "payroll"),
         ("/app/accounting", "accounting"),
+        ("/app/shifts", "shifts"),
+        ("/app/employees", "employees"),
+        ("/app/daily-reports", "dailyReports"),
+        ("/app/tasks", "tasks"),
+        ("/app/manuals", "manuals"),
+        ("/app/invoices", "invoices"),
+        ("/app/reconciliation", "reconciliation"),
+        ("/app/settlement", "settlement"),
     ]
     static let paths: [String: String] = Dictionary(entries, uniquingKeysWith: { a, _ in a })
 
@@ -54,10 +64,22 @@ struct NativeModuleScreen: View {
     var body: some View {
         switch route.key {
         // case "attendance": NativeAttendanceScreen(route: route)
+        case "costing": NativeCostingView(route: route, onHome: { state.goNativeHome() })
+        case "attendance": NativeAttendanceView(route: route, onHome: { state.goNativeHome() })
         case "kitchen": NativeKitchenView(onHome: { state.goNativeHome() })
+        case "leave": NativeLeaveView(route: route, onHome: { state.goNativeHome() })
         case "onboarding": NativeOnboardingView(onHome: { state.goNativeHome() })
         case "payroll": NativePayrollView(route: route, onHome: { state.goNativeHome() }, onWeb: { state.leaveNativeFloor(to: $0) })
         case "accounting": NativeAccountingView(route: route)
+        case "shifts": NativeShiftsView(route: route, onHome: { state.goNativeHome() }, onWeb: { state.leaveNativeFloor(to: $0) })
+        case "employees": NativeEmployeesView(route: route, onHome: { state.goNativeHome() })
+        // 日報・タスク・マニュアル（道の ?date= ?status= などで開き直したら作り直す）
+        case "dailyReports": NativeDailyReportsView(route: route, onHome: { state.goNativeHome() }).id(route.id)
+        case "tasks": NativeTasksView(route: route, onHome: { state.goNativeHome() }).id(route.id)
+        case "manuals": NativeManualsView(onHome: { state.goNativeHome() })
+        case "invoices": NativeInvoicesView(route: route, onHome: { state.goNativeHome() }, onWeb: { state.leaveNativeFloor(to: $0) })
+        case "reconciliation": NativeReconciliationView(route: route, onHome: { state.goNativeHome() }, onWeb: { state.leaveNativeFloor(to: $0) })
+        case "settlement": NativeSettlementView(route: route, onHome: { state.goNativeHome() }, onWeb: { state.leaveNativeFloor(to: $0) })
         default:
             // 知らない key（古いアプリ）：Web のまま見せる
             Color.clear.onAppear { state.nativeModule = nil }

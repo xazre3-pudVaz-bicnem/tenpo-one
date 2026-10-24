@@ -2,66 +2,33 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { ChevronLeft } from 'lucide-react';
 import { requireFeature } from '@/lib/auth';
-import { can } from '@/lib/permissions';
 import { createClient } from '@/lib/supabase/server';
 import { formatDate } from '@/lib/format';
+import { loadEmployeeDetail } from '@/lib/employees-server';
 import { PageHeader } from '@/components/ui/page-header';
 import { EmptyState } from '@/components/ui/state';
-import { BasicInfoForm, type EmployeeBasicData } from '@/components/employees/basic-info-form';
-import { ConfidentialForm, type ConfidentialData } from '@/components/employees/confidential-form';
-import { InsuranceForm, type InsuranceData } from '@/components/employees/insurance-form';
+import { BasicInfoForm } from '@/components/employees/basic-info-form';
+import { ConfidentialForm } from '@/components/employees/confidential-form';
+import { InsuranceForm } from '@/components/employees/insurance-form';
 import { EMPLOYMENT_TYPE_LABELS } from '../constants';
 
 export const metadata: Metadata = { title: '従業員詳細' };
-
-interface EmployeeDetailRow {
-  id: string;
-  profile_id: string;
-  employee_no: string | null;
-  legal_name: string | null;
-  legal_name_kana: string | null;
-  postal_code: string | null;
-  address: string | null;
-  birth_date: string | null;
-  hired_on: string | null;
-  terminated_on: string | null;
-  employment_type: string;
-  position: string | null;
-  primary_store_id: string | null;
-  status: string;
-  profiles: { display_name: string } | null;
-  stores: { name: string } | null;
-}
-
-interface ConfidentialRow {
-  bank_transfer_info: { bank?: string; branch?: string; type?: string; last4?: string; holder?: string } | null;
-  emergency_contact: { name?: string; relation?: string; phone?: string } | null;
-}
 
 export default async function EmployeeDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const ctx = await requireFeature('payroll');
   const supabase = await createClient();
 
-  const canViewList = can(ctx.role, 'staff.manage');
-  // employees_write / employee_insurance_write RLS（org_owner/hq_admin/hq_accounting）と揃える
-  const canEdit = can(ctx.role, 'payroll.manage');
-  const canViewConfidential = can(ctx.role, 'payroll.view_all');
+  // 読み込み・見られる人の分け方は lib/employees-server.ts（iPad のネイティブと同じ）
+  const detail = await loadEmployeeDetail(ctx, supabase, id);
 
-  const baseColumns =
-    'id, profile_id, employee_no, legal_name, legal_name_kana, postal_code, address, birth_date, hired_on, terminated_on, employment_type, position, primary_store_id, status, profiles(display_name), stores(name)';
-  const columns = canViewConfidential ? `${baseColumns}, bank_transfer_info, emergency_contact` : baseColumns;
-
-  const { data } = await supabase.from('employees').select(columns).eq('id', id).eq('organization_id', ctx.organizationId).maybeSingle();
-  const employee = data as unknown as EmployeeDetailRow | null;
-
-  if (!employee) {
+  if (detail.kind === 'notFound') {
     return (
       <div>
         <EmptyState
           title="従業員情報が見つかりません"
           action={
-            canViewList && (
+            detail.canViewList && (
               <Link href="/app/employees" className="text-sm font-medium text-primary hover:underline">
                 従業員台帳へ戻る
               </Link>
@@ -72,8 +39,7 @@ export default async function EmployeeDetailPage({ params }: { params: Promise<{
     );
   }
 
-  const isSelf = employee.profile_id === ctx.userId;
-  if (!canViewList && !isSelf) {
+  if (detail.kind === 'forbidden') {
     return (
       <div>
         <PageHeader title="従業員詳細" />
@@ -82,69 +48,10 @@ export default async function EmployeeDetailPage({ params }: { params: Promise<{
     );
   }
 
-  const displayName = employee.legal_name || employee.profiles?.display_name || '—';
-
-  const basicInitial: EmployeeBasicData = {
-    id: employee.id,
-    employeeNo: employee.employee_no ?? '',
-    legalName: employee.legal_name ?? '',
-    legalNameKana: employee.legal_name_kana ?? '',
-    postalCode: employee.postal_code ?? '',
-    address: employee.address ?? '',
-    birthDate: employee.birth_date ?? '',
-    hiredOn: employee.hired_on ?? '',
-    terminatedOn: employee.terminated_on ?? '',
-    employmentType: employee.employment_type,
-    position: employee.position ?? '',
-    primaryStoreId: employee.primary_store_id ?? '',
-    status: employee.status === 'retired' ? 'retired' : 'active',
-  };
-
-  let confidentialInitial: ConfidentialData | null = null;
-  let insuranceInitial: InsuranceData | null = null;
-  if (canViewConfidential) {
-    // 機密情報は専用テーブル（RLSで給与ロール＋本人に限定）から取得
-    const { data: confRaw } = await supabase
-      .from('employee_confidential')
-      .select('bank_transfer_info, emergency_contact')
-      .eq('employee_id', employee.id)
-      .maybeSingle();
-    const conf = confRaw as ConfidentialRow | null;
-    confidentialInitial = {
-      employeeId: employee.id,
-      bank: {
-        bank: conf?.bank_transfer_info?.bank ?? '',
-        branch: conf?.bank_transfer_info?.branch ?? '',
-        type: conf?.bank_transfer_info?.type ?? '',
-        last4: conf?.bank_transfer_info?.last4 ?? '',
-        holder: conf?.bank_transfer_info?.holder ?? '',
-      },
-      emergency: {
-        name: conf?.emergency_contact?.name ?? '',
-        relation: conf?.emergency_contact?.relation ?? '',
-        phone: conf?.emergency_contact?.phone ?? '',
-      },
-    };
-
-    const { data: insurance } = await supabase
-      .from('employee_insurance')
-      .select('health_insurance, pension, employment_insurance, care_insurance, standard_monthly_remuneration, acquired_on, lost_on, region, note')
-      .eq('employee_id', employee.id)
-      .maybeSingle();
-
-    insuranceInitial = {
-      employeeId: employee.id,
-      healthInsurance: insurance?.health_insurance ?? false,
-      pension: insurance?.pension ?? false,
-      employmentInsurance: insurance?.employment_insurance ?? false,
-      careInsurance: insurance?.care_insurance ?? false,
-      standardMonthlyRemuneration: insurance?.standard_monthly_remuneration != null ? String(insurance.standard_monthly_remuneration) : '',
-      acquiredOn: insurance?.acquired_on ?? '',
-      lostOn: insurance?.lost_on ?? '',
-      region: insurance?.region ?? '',
-      note: insurance?.note ?? '',
-    };
-  }
+  const { canViewList, canEdit, displayName } = detail;
+  const basicInitial = detail.basic;
+  const confidentialInitial = detail.confidential;
+  const insuranceInitial = detail.insurance;
 
   return (
     <div>
@@ -156,7 +63,7 @@ export default async function EmployeeDetailPage({ params }: { params: Promise<{
       )}
       <PageHeader
         title={displayName}
-        description={`${EMPLOYMENT_TYPE_LABELS[employee.employment_type] ?? employee.employment_type}｜所属店舗: ${employee.stores?.name ?? '未設定'}｜入社日: ${formatDate(employee.hired_on)}`}
+        description={`${EMPLOYMENT_TYPE_LABELS[detail.employmentType] ?? detail.employmentType}｜所属店舗: ${detail.storeName ?? '未設定'}｜入社日: ${formatDate(detail.hiredOn)}`}
       />
 
       <div className="space-y-5">

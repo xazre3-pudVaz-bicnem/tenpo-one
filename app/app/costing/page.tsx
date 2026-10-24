@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { requireFeature, requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
-import { calcRecipeCost, calcPriceChangeImpact, calcWasteAmount, type PriceImpactInput } from '@/lib/costing';
-import { yen, todayJst, daysAgoJst } from '@/lib/format';
+import { loadCostingImpact, loadCostingItems, loadCostingWaste } from '@/lib/costing-server';
+import { yen } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { PageHeader } from '@/components/ui/page-header';
 import { StatCard } from '@/components/ui/stat-card';
@@ -14,13 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { TableWrap, Table, THead, TBody, Tr, Th, Td } from '@/components/ui/table';
 import { ItemsTable } from '@/components/costing/items-table';
-import { fetchMenuItemCostRows, fetchIngredientLinesByMenuItems } from '@/components/costing/data';
-import {
-  COSTABLE_ITEM_TYPES,
-  COST_RATE_WARNING_THRESHOLD,
-  PRICE_DEVIATION_THRESHOLD,
-  WASTE_DEFAULT_DAYS,
-} from '@/components/costing/labels';
+import { PRICE_DEVIATION_THRESHOLD } from '@/components/costing/labels';
 
 export const metadata: Metadata = { title: '原価管理' };
 
@@ -115,18 +109,12 @@ async function ItemsTabContent({
   category?: string;
   q?: string;
 }) {
-  const { rows, categories } = await fetchMenuItemCostRows(supabase, organizationId, storeId, {
-    categoryId: category || null,
-    q: q || null,
-  });
-
-  const ratedRows = rows.filter((r) => r.costRate != null);
-  const avgCostRate =
-    ratedRows.length > 0
-      ? Math.round((ratedRows.reduce((sum, r) => sum + (r.costRate ?? 0), 0) / ratedRows.length) * 10) / 10
-      : null;
-  const recipeSetCount = rows.filter((r) => r.ingredientCount > 0).length;
-  const warningCount = ratedRows.filter((r) => (r.costRate ?? 0) > COST_RATE_WARNING_THRESHOLD).length;
+  // 読み込みは lib/costing-server.ts（iPad ネイティブと共用）
+  const {
+    rows,
+    categories,
+    summary: { avgCostRate, recipeSetCount, warningCount },
+  } = await loadCostingItems(supabase, organizationId, storeId, { category, q });
 
   return (
     <div className="space-y-4">
@@ -185,65 +173,13 @@ async function ImpactTabContent({
   storeId: string;
   selectedIngredientId: string | null;
 }) {
-  const { data: invItemsData } = await supabase
-    .from('inventory_items')
-    .select('id, name, unit, avg_cost, last_purchase_cost')
-    .eq('organization_id', organizationId)
-    .eq('store_id', storeId)
-    .eq('status', 'active')
-    .not('avg_cost', 'is', null)
-    .not('last_purchase_cost', 'is', null)
-    .order('name');
-
-  const ingredients = (invItemsData ?? []).map((i) => ({
-    id: i.id as string,
-    name: i.name as string,
-    unit: i.unit as string,
-    avgCost: i.avg_cost as number,
-    lastCost: i.last_purchase_cost as number,
-  }));
-
-  const deviations = ingredients
-    .map((i) => ({
-      ...i,
-      deviationRate: i.avgCost > 0 ? Math.round((Math.abs(i.lastCost - i.avgCost) / i.avgCost) * 1000) / 10 : null,
-    }))
-    .filter((i) => i.deviationRate != null && i.deviationRate >= PRICE_DEVIATION_THRESHOLD)
-    .sort((a, b) => (b.deviationRate ?? 0) - (a.deviationRate ?? 0))
-    .slice(0, 10);
-
-  const selected = selectedIngredientId ? (ingredients.find((i) => i.id === selectedIngredientId) ?? null) : null;
-
-  let impactRows: ReturnType<typeof calcPriceChangeImpact> = [];
-  if (selected) {
-    const { data: recipeUse } = await supabase
-      .from('menu_item_ingredients')
-      .select('menu_item_id, quantity, menu_items(name, price, status, item_type)')
-      .eq('inventory_item_id', selected.id);
-
-    const usedItems = (recipeUse ?? [])
-      .map((r) => ({
-        menuItemId: r.menu_item_id as string,
-        quantity: Number(r.quantity),
-        menuItem: r.menu_items as unknown as { name: string; price: number; status: string; item_type: string } | null,
-      }))
-      .filter(
-        (r): r is { menuItemId: string; quantity: number; menuItem: { name: string; price: number; status: string; item_type: string } } =>
-          !!r.menuItem && r.menuItem.status === 'active' && (COSTABLE_ITEM_TYPES as string[]).includes(r.menuItem.item_type)
-      );
-
-    const menuItemIds = [...new Set(usedItems.map((u) => u.menuItemId))];
-    const linesByItem = await fetchIngredientLinesByMenuItems(supabase, menuItemIds);
-
-    const inputs: PriceImpactInput[] = usedItems.map((u) => ({
-      menuItemName: u.menuItem.name,
-      quantity: u.quantity,
-      currentRecipeCost: calcRecipeCost(linesByItem.get(u.menuItemId) ?? []).totalCost,
-      price: u.menuItem.price,
-    }));
-
-    impactRows = calcPriceChangeImpact(inputs, selected.avgCost, selected.lastCost);
-  }
+  // 読み込みは lib/costing-server.ts（iPad ネイティブと共用）
+  const { ingredients, deviations, selected, impactRows } = await loadCostingImpact(
+    supabase,
+    organizationId,
+    storeId,
+    selectedIngredientId
+  );
 
   return (
     <div className="space-y-5">
@@ -394,94 +330,14 @@ async function WasteTabContent({
   from?: string;
   to?: string;
 }) {
-  const today = todayJst();
-  const rangeFrom = from || daysAgoJst(WASTE_DEFAULT_DAYS - 1);
-  const rangeTo = to || today;
-
-  const { data: wasteMovements } = await supabase
-    .from('stock_movements')
-    .select('inventory_item_id, quantity, unit_cost, reason, inventory_items(name, unit)')
-    .eq('organization_id', organizationId)
-    .eq('store_id', storeId)
-    .eq('movement_type', 'waste')
-    .gte('business_date', rangeFrom)
-    .lte('business_date', rangeTo);
-
-  interface WasteGroup {
-    id: string;
-    name: string;
-    unit: string;
-    quantity: number;
-    movements: { quantity: number; unitCost: number | null }[];
-    reasons: Map<string, number>;
-  }
-  const groups = new Map<string, WasteGroup>();
-  for (const m of wasteMovements ?? []) {
-    const inv = m.inventory_items as unknown as { name: string; unit: string } | null;
-    const id = m.inventory_item_id as string;
-    let g = groups.get(id);
-    if (!g) {
-      g = { id, name: inv?.name ?? '（不明な食材）', unit: inv?.unit ?? '', quantity: 0, movements: [], reasons: new Map() };
-      groups.set(id, g);
-    }
-    g.quantity += Math.abs(Number(m.quantity));
-    g.movements.push({ quantity: Number(m.quantity), unitCost: m.unit_cost as number | null });
-    const reason = (m.reason && (m.reason as string).trim()) || '理由未記入';
-    g.reasons.set(reason, (g.reasons.get(reason) ?? 0) + 1);
-  }
-  const wasteRows = [...groups.values()]
-    .map((g) => ({
-      id: g.id,
-      name: g.name,
-      unit: g.unit,
-      quantity: g.quantity,
-      amount: calcWasteAmount(g.movements),
-      reasonSummary: [...g.reasons.entries()].map(([r, c]) => `${r}×${c}`).join('、'),
-    }))
-    .sort((a, b) => b.amount - a.amount);
-
-  const totalWasteAmount = calcWasteAmount(
-    (wasteMovements ?? []).map((m) => ({ quantity: Number(m.quantity), unitCost: m.unit_cost as number | null }))
+  // 読み込みは lib/costing-server.ts（iPad ネイティブと共用）
+  const { rangeFrom, rangeTo, wasteRows, totalWasteAmount, latestCount, diffRows, periods } = await loadCostingWaste(
+    supabase,
+    organizationId,
+    storeId,
+    from,
+    to
   );
-
-  const { data: latestCount } = await supabase
-    .from('stock_counts')
-    .select('id, count_date')
-    .eq('organization_id', organizationId)
-    .eq('store_id', storeId)
-    .eq('status', 'completed')
-    .order('count_date', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  let diffRows: { id: string; name: string; unit: string; expected: number; counted: number; diff: number; diffAmount: number | null }[] = [];
-  if (latestCount) {
-    const { data: countItems } = await supabase
-      .from('stock_count_items')
-      .select('id, expected_quantity, counted_quantity, difference, inventory_items(name, unit, avg_cost)')
-      .eq('stock_count_id', latestCount.id);
-    diffRows = (countItems ?? [])
-      .filter((ci) => ci.difference != null && Number(ci.difference) !== 0)
-      .map((ci) => {
-        const inv = ci.inventory_items as unknown as { name: string; unit: string; avg_cost: number | null } | null;
-        const diff = Number(ci.difference);
-        return {
-          id: ci.id as string,
-          name: inv?.name ?? '（不明な食材）',
-          unit: inv?.unit ?? '',
-          expected: Number(ci.expected_quantity),
-          counted: Number(ci.counted_quantity),
-          diff,
-          diffAmount: inv?.avg_cost != null ? Math.round(diff * inv.avg_cost) : null,
-        };
-      });
-  }
-
-  const periods = [
-    { label: '7日', from: daysAgoJst(6), to: today },
-    { label: '30日', from: daysAgoJst(29), to: today },
-    { label: '90日', from: daysAgoJst(89), to: today },
-  ];
 
   return (
     <div className="space-y-5">
@@ -516,7 +372,7 @@ async function WasteTabContent({
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <StatCard label="合計廃棄額" value={yen(totalWasteAmount)} tone="danger" sub={`${rangeFrom} 〜 ${rangeTo}`} />
         <StatCard label="廃棄品目数" value={`${wasteRows.length}件`} />
-        <StatCard label="直近の棚卸" value={latestCount ? String(latestCount.count_date) : '未実施'} />
+        <StatCard label="直近の棚卸" value={latestCount ? latestCount.countDate : '未実施'} />
       </div>
 
       <Card>

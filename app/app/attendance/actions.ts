@@ -1,4 +1,5 @@
 'use server';
+import { EVENT_LABELS } from '@/app/app/attendance/labels';
 
 import { scryptSync, timingSafeEqual } from 'node:crypto';
 import { headers } from 'next/headers';
@@ -27,12 +28,6 @@ export type EntryType = 'normal' | 'late' | 'early_leave' | 'absent' | 'paid_lea
 /** warning=true の場合、呼び出し側は toast を warning 色で表示する（例: 休憩中退勤の自動確定） */
 type ActionResult = { ok: boolean; message: string; warning?: boolean };
 
-export const EVENT_LABELS: Record<PunchEventType, string> = {
-  clock_in: '出勤',
-  clock_out: '退勤',
-  break_start: '休憩開始',
-  break_end: '休憩終了',
-};
 
 /** IPベースのレート制限キー取得用（x-forwarded-for優先、無ければx-real-ip） */
 async function requestIp(): Promise<string> {

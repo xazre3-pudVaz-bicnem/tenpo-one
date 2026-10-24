@@ -1,10 +1,21 @@
 import 'server-only';
 import type { SessionContext } from '@/lib/auth';
+import { costingGet, costingImpactGet, costingWasteGet, costingItemGet, costingLinePost } from '@/lib/native-modules/costing';
 import { kitchenGet, kdsItemStatusPost, kdsOrderServedPost, kdsSettingsPost } from '@/lib/native-modules/kitchen';
 import { onboardingGet, onboardingPost } from '@/lib/native-modules/onboarding';
 import { businessCardsGet } from '@/lib/native-modules/business-cards';
 import * as payroll from '@/lib/native-modules/payroll';
 import { accountingGet, ACCOUNTING_POST } from '@/lib/native-modules/accounting';
+import * as attendance from '@/lib/native-modules/attendance';
+import * as leave from '@/lib/native-modules/leave';
+import { shiftsGet, SHIFT_POSTS } from '@/lib/native-modules/shifts';
+import { EMPLOYEE_POSTS } from '@/lib/native-modules/employees';
+import { dailyReportsGet, dailyReportGet, dailyReportGeneratePost, dailyReportSubmitPost, dailyReportApprovePost } from '@/lib/native-modules/daily-reports';
+import { tasksGet, taskSavePost, taskStatusPost, taskCommentPost } from '@/lib/native-modules/tasks';
+import { manualsGet, manualFileGet, manualCreatePost, manualDeletePost } from '@/lib/native-modules/manuals';
+import * as invoices from '@/lib/native-modules/invoices';
+import { reconciliationGet } from '@/lib/native-modules/reconciliation';
+import { settlementGet, settlementCostsSavePost } from '@/lib/native-modules/settlement';
 
 /**
  * まだ専用の台が無かった画面（勤怠・日報・タスク …）の iPad ネイティブ用の API をまとめる所
@@ -37,6 +48,21 @@ export const NATIVE_MODULE_GET: Record<string, NativeModuleGet> = {
   businessCards: businessCardsGet,
   payroll: payroll.payrollGet,
   accounting: accountingGet,
+  costing: costingGet,
+  costingImpact: costingImpactGet,
+  costingWaste: costingWasteGet,
+  costingItem: costingItemGet,
+  attendance: attendance.attendanceGet,
+  leave: leave.leaveGet,
+  shifts: shiftsGet,
+  dailyReports: dailyReportsGet,
+  dailyReport: dailyReportGet,
+  tasks: tasksGet,
+  manuals: manualsGet,
+  manualFile: manualFileGet,
+  invoices: invoices.invoicesGet,
+  reconciliation: reconciliationGet,
+  settlement: settlementGet,
 };
 
 /** POST の type → handler。追加は 1 行ずつ */
@@ -59,4 +85,41 @@ export const NATIVE_MODULE_POST: Record<string, NativeModulePost> = {
   nenchoConfirm: payroll.nenchoConfirmPost,
   nenchoReject: payroll.nenchoRejectPost,
   ...ACCOUNTING_POST, // 会計（accJournalSave・accBankCsvPreview … lib/native-modules/accounting.ts）
+  costingLineAdd: costingLinePost,
+  costingLineUpdate: costingLinePost,
+  costingLineDelete: costingLinePost,
+  attendancePunch: attendance.attendancePunchPost,
+  attendancePunchPin: attendance.attendancePunchPinPost,
+  attendanceCorrection: attendance.attendanceCorrectionPost,
+  attendanceApprove: attendance.attendanceApprovePost,
+  attendanceReject: attendance.attendanceRejectPost,
+  attendanceEntryType: attendance.attendanceEntryTypePost,
+  attendanceManualEntry: attendance.attendanceManualEntryPost,
+  leaveRequest: leave.leaveRequestPost,
+  leaveWithdraw: leave.leaveWithdrawPost,
+  leaveApprove: leave.leaveApprovePost,
+  leaveReject: leave.leaveRejectPost,
+  leaveGrant: leave.leaveGrantPost,
+  leavePolicy: leave.leavePolicyPost,
+  ...SHIFT_POSTS,
+  ...EMPLOYEE_POSTS,
+  dailyReportGenerate: dailyReportGeneratePost,
+  dailyReportSubmit: dailyReportSubmitPost,
+  dailyReportApprove: dailyReportApprovePost,
+  taskSave: taskSavePost,
+  taskStatus: taskStatusPost,
+  taskComment: taskCommentPost,
+  manualCreate: manualCreatePost,
+  manualDelete: manualDeletePost,
+  invoiceCreate: invoices.invCreatePost,
+  invoiceUpdate: invoices.invUpdatePost,
+  invoiceStatus: invoices.invStatusPost,
+  invoiceComment: invoices.invCommentPost,
+  invoiceOcr: invoices.invOcrPost,
+  invoiceTriage: invoices.invTriagePost,
+  invoiceDocDelete: invoices.invDocDeletePost,
+  invoiceDupCheck: invoices.invDupCheckPost,
+  invoiceUpload: invoices.invUploadPost,
+  invoiceInboxCreate: invoices.invInboxCreatePost,
+  settlementCostsSave: settlementCostsSavePost,
 };

@@ -7,7 +7,8 @@ import { Tr, Td } from '@/components/ui/table';
 import { formatDateTime } from '@/lib/format';
 import { CorrectionDialog } from './correction-dialog';
 import { EntryTypeDialog } from './entry-type-dialog';
-import { EVENT_LABELS, type EntryType, type PunchEventType } from '@/app/app/attendance/actions';
+import { type EntryType, type PunchEventType } from '@/app/app/attendance/actions';
+import { EVENT_LABELS } from '@/app/app/attendance/labels';
 
 const SOURCE_LABEL: Record<string, string> = {
   personal: '個人端末',

@@ -1,9 +1,9 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { requirePermission } from '@/lib/auth';
-import { can } from '@/lib/permissions';
 import { createClient } from '@/lib/supabase/server';
 import { formatDate } from '@/lib/format';
+import { loadEmployeeList } from '@/lib/employees-server';
 import { PageHeader } from '@/components/ui/page-header';
 import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/ui/state';
@@ -14,20 +14,6 @@ import { EMPLOYMENT_TYPE_LABELS, EMPLOYEE_STATUS_LABEL, EMPLOYEE_STATUS_TONE } f
 
 export const metadata: Metadata = { title: '従業員台帳' };
 
-interface EmployeeRow {
-  id: string;
-  employee_no: string | null;
-  legal_name: string | null;
-  employment_type: string;
-  position: string | null;
-  hired_on: string | null;
-  status: string;
-  primary_store_id: string | null;
-  profile_id: string;
-  profiles: { display_name: string } | null;
-  stores: { name: string } | null;
-}
-
 export default async function EmployeesPage({
   searchParams,
 }: {
@@ -36,51 +22,9 @@ export default async function EmployeesPage({
   const sp = await searchParams;
   // 一覧の閲覧は staff.manage（employees_select RLS: 給与閲覧ロール or 自店の店長系ロール）
   const ctx = await requirePermission('staff.manage');
-  // 登録・編集は employees_write RLS（org_owner/hq_admin/hq_accounting）と揃えるため payroll.manage で判定する
-  const canWrite = can(ctx.role, 'payroll.manage');
   const supabase = await createClient();
-
-  const { data } = await supabase
-    .from('employees')
-    .select(
-      'id, employee_no, legal_name, employment_type, position, hired_on, status, primary_store_id, profile_id, profiles(display_name), stores(name)'
-    )
-    .eq('organization_id', ctx.organizationId)
-    .neq('status', 'deleted')
-    .order('created_at', { ascending: false });
-
-  let rows = ((data ?? []) as unknown as EmployeeRow[]) ?? [];
-
-  const q = (sp.q ?? '').trim();
-  if (q) {
-    rows = rows.filter(
-      (r) =>
-        (r.legal_name ?? '').includes(q) ||
-        (r.profiles?.display_name ?? '').includes(q) ||
-        (r.employee_no ?? '').includes(q)
-    );
-  }
-  if (sp.type) rows = rows.filter((r) => r.employment_type === sp.type);
-
-  let staffOptions: { id: string; name: string }[] = [];
-  if (canWrite) {
-    const [{ data: memberRows }, { data: existing }] = await Promise.all([
-      supabase
-        .from('memberships')
-        .select('profile_id, profiles(id, display_name)')
-        .eq('organization_id', ctx.organizationId)
-        .eq('status', 'active'),
-      supabase.from('employees').select('profile_id').eq('organization_id', ctx.organizationId),
-    ]);
-    const usedIds = new Set((existing ?? []).map((e) => e.profile_id as string));
-    staffOptions = (memberRows ?? [])
-      .map((m) => {
-        const p = m.profiles as unknown as { id: string; display_name: string } | null;
-        return p ? { id: p.id, name: p.display_name } : null;
-      })
-      .filter((s): s is { id: string; name: string } => !!s && !usedIds.has(s.id))
-      .sort((a, b) => a.name.localeCompare(b.name, 'ja'));
-  }
+  // 一覧・絞り込み・登録できるスタッフは lib/employees-server.ts（iPad のネイティブと同じ読み込み）
+  const { rows, canWrite, staffOptions } = await loadEmployeeList(ctx, supabase, { q: sp.q, type: sp.type });
 
   return (
     <div>
