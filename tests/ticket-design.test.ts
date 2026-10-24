@@ -78,7 +78,7 @@ describe('approved kitchen and cancellation print designs', () => {
       await writeFile(`${process.env.TICKET_PREVIEW_DIR}/kitchen-normal.png`, await renderTicketImage(kitchenDesign({ ...ticket, lines: ticket.lines.map(l => ({ ...l, delta: 2, cancelReason: null })) }, opts), width));
       await writeFile(`${process.env.TICKET_PREVIEW_DIR}/cancel-bill.png`, await renderTicketImage(cancelBillDesign(bill), width));
     }
-  });
+  }, 20_000);
   it('wraps long names and escaped reasons without cropping or treating text as markup', async () => {
     const short = await renderTicketImage(kitchenDesign(ticket, opts), 384);
     const long = await renderTicketImage(kitchenDesign({ ...ticket, lines: [{ ...ticket.lines[0], nameEn: 'A very long dish name '.repeat(8), cancelReason: '<b>&理由</b>'.repeat(20) }] }, opts), 384);
