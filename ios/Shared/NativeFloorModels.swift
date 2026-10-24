@@ -418,6 +418,8 @@ final class NativeFloorModel: ObservableObject {
     private var refresher: Timer?
     private var sweeper: Timer?
     private var toastTimer: Timer?
+    /// 見本（-tenpoNativePreview floor。App Store の画面写真用）：読み込まない・時計を止める。お店では false のまま
+    var isPreview = false
 
     var store: NFNamed? { payload?.store }
     /// 画面の時計（Date）
@@ -443,6 +445,7 @@ final class NativeFloorModel: ObservableObject {
     var showFloorChips: Bool { floors.count > 1 || (floors.count > 0 && !unassigned.isEmpty) }
 
     func start() {
+        if isPreview { return }
         if offlineSinks.isEmpty {
             NativeOfflineStore.shared.objectWillChange.receive(on: RunLoop.main).sink { [weak self] _ in self?.objectWillChange.send() }.store(in: &offlineSinks)
             NativeOfflineStore.shared.synced.receive(on: RunLoop.main).sink { [weak self] _ in
@@ -481,6 +484,7 @@ final class NativeFloorModel: ObservableObject {
     }
 
     func refresh(silent: Bool) async {
+        if isPreview { return }
         if !silent { loading = payload == nil }
         do {
             let p = try await NativeAPI.shared.loadFloor(storeId: payload?.store.id)

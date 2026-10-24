@@ -1,11 +1,13 @@
 import SwiftUI
 
 /// ネイティブ画面を見本のデータで開く（シミュレーターで形を確かめる用）。
-/// 起動の引数 `-tenpoNativePreview order|checkout|options|price|settings` のときだけ。お店で使うときは出ない。
+/// 起動の引数 `-tenpoNativePreview order|checkout|options|price|settings|home|floor|ledger` のときだけ。お店で使うときは出ない。
 enum NativePreview: String {
     case order, checkout, options, price, settings
     /// iPhone ハンディの卓・注文・注文の確認（2026-10-25）
     case phoneTable, phoneOrder, phoneConfirm, phoneSetup, phoneHome
+    /// App Store の画面写真用：iPad のホーム・テーブル一覧・店舗台帳（2026-10-25。NativeStorePreview.swift）
+    case home, floor, ledger
 
     static var current: NativePreview? {
         guard let raw = UserDefaults.standard.string(forKey: "tenpoNativePreview") else { return nil }
@@ -39,6 +41,8 @@ struct NativePreviewView: View {
             NativeSettingsView(model: NativeSettingsModel.sample(), onHome: {}, onWeb: { _ in })
         case .phoneTable, .phoneOrder, .phoneConfirm, .phoneSetup, .phoneHome:
             NativePhoneHandyPreview(kind: kind.rawValue)
+        case .home, .floor, .ledger:
+            NativeStorePreview(kind: kind.rawValue)
         case .options, .price:
             NativeOrderView(model: model)
                 .statusBarHidden(true)
