@@ -89,7 +89,16 @@ export type NativeSettingsPageAction =
   | { type: 'staffStores'; membershipId: string; profileId: string; storeIds: string[] }
   | { type: 'staffPin'; membershipId: string; profileId: string; pin: string }
   | { type: 'staffStatus'; membershipId: string; profileId: string; status: 'active' | 'suspended' }
-  | { type: 'staffPasswordReset'; membershipId: string; profileId: string };
+  | { type: 'staffPasswordReset'; membershipId: string; profileId: string }
+  /** 予約台帳設定（/app/settings/reservation-book。actions.ts・reminder-actions.ts） */
+  | { type: 'gourmetMailEnabled'; enabled: boolean }
+  | { type: 'gourmetMailRegenerate' }
+  | { type: 'gourmetSiteRegistered'; site: string; registered: boolean }
+  | { type: 'gourmetImportResolve'; importId: string }
+  | { type: 'snsLinksSave'; instagram: string; line: string; facebook: string; x: string }
+  | { type: 'icalRegenerate' }
+  | { type: 'icalRevoke' }
+  | { type: 'remindersPrepare' };
 
 export interface NativePointBrand {
   key: string;
@@ -205,6 +214,14 @@ export const NATIVE_SETTINGS_PAGE_ACTION_TYPES: readonly NativeSettingsPageActio
   'staffPin',
   'staffStatus',
   'staffPasswordReset',
+  'gourmetMailEnabled',
+  'gourmetMailRegenerate',
+  'gourmetSiteRegistered',
+  'gourmetImportResolve',
+  'snsLinksSave',
+  'icalRegenerate',
+  'icalRevoke',
+  'remindersPrepare',
 ];
 
 export function isNativeSettingsPageActionType(v: unknown): v is NativeSettingsPageActionType {
@@ -692,7 +709,70 @@ export function parseNativeSettingsPageAction(raw: unknown): Parsed {
     if (!m) return bad('対象のスタッフが見つかりません');
     return { ok: true, action: { type: 'staffPasswordReset', ...m } };
   }
+  // 予約台帳設定
+  if (b.type === 'gourmetMailEnabled') {
+    if (typeof b.enabled !== 'boolean') return bad();
+    return { ok: true, action: { type: 'gourmetMailEnabled', enabled: b.enabled } };
+  }
+  if (b.type === 'gourmetMailRegenerate' || b.type === 'icalRegenerate' || b.type === 'icalRevoke' || b.type === 'remindersPrepare') {
+    return { ok: true, action: { type: b.type } };
+  }
+  if (b.type === 'gourmetSiteRegistered') {
+    if (typeof b.site !== 'string' || !/^[a-z_]{1,20}$/.test(b.site) || typeof b.registered !== 'boolean') return bad('対象のサイトがありません');
+    return { ok: true, action: { type: 'gourmetSiteRegistered', site: b.site, registered: b.registered } };
+  }
+  if (b.type === 'gourmetImportResolve') {
+    if (!isUuid(b.importId)) return bad('メールが見つかりません');
+    return { ok: true, action: { type: 'gourmetImportResolve', importId: b.importId } };
+  }
+  if (b.type === 'snsLinksSave') {
+    const url = (v: unknown) => (typeof v === 'string' ? v.trim().slice(0, 300) : '');
+    return { ok: true, action: { type: 'snsLinksSave', instagram: url(b.instagram), line: url(b.line), facebook: url(b.facebook), x: url(b.x) } };
+  }
   return bad();
+}
+
+/** 予約台帳設定の画面の読み込み（GET ?part=reservationBook） */
+export interface NativeReservationBookPayload {
+  store: { id: string; name: string };
+  canEdit: boolean;
+  book: { pushDevices: string[]; reminderEnabled: boolean };
+  gourmet: {
+    enabled: boolean;
+    /** 取り込み専用アドレス（オンにすると作られる） */
+    address: string | null;
+    inboundReady: boolean;
+    /** アドレスの作り直しは運営（CYPRESS）だけ */
+    canRegenerate: boolean;
+    verifiedCount: number;
+    sites: { key: string; name: string; en: string; howTo: string; adminUrl: string | null; status: 'verified' | 'registered' | 'off'; lastImportLabel: string | null; setupLabel: string | null; lastKindLabel: string | null }[];
+    imports: {
+      id: string;
+      siteName: string;
+      kind: string;
+      kindLabel: string;
+      status: string;
+      statusLabel: string;
+      summary: string;
+      subject: string | null;
+      fromAddress: string | null;
+      externalId: string | null;
+      receivedLabel: string;
+      reservationId: string | null;
+      error: string | null;
+      resolved: boolean;
+      bodyText: string | null;
+      links: string[];
+    }[];
+  };
+  links: {
+    /** 公開予約URL（NEXT_PUBLIC_SITE_URL と店舗のスラッグが無いと null） */
+    bookingUrl: string | null;
+    channels: { key: string; label: string; en: string; howTo: string; adminUrl: string | null; link: string; count30d: number; google: boolean }[];
+    sns: { instagram: string; line: string; facebook: string; x: string };
+    /** Google カレンダー購読URL（未発行なら null） */
+    icalFeedUrl: string | null;
+  };
 }
 
 /** スタッフ管理の画面の読み込み（GET ?part=staff） */

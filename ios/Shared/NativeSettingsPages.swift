@@ -30,6 +30,7 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
     case menuBook = "menuBook"
     case payments = "payments"
     case staff = "staff"
+    case reservationBook = "reservationBook"
     var id: String { rawValue }
 
     /// Web の道（クエリは見ない）
@@ -56,6 +57,7 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
         case .menuBook: return "/app/settings/menu-book"
         case .payments: return "/app/settings/payments"
         case .staff: return "/app/staff"
+        case .reservationBook: return "/app/settings/reservation-book"
         }
     }
     var title: String {
@@ -81,6 +83,7 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
         case .menuBook: return "メニューブック"
         case .payments: return "決済・端末"
         case .staff: return "スタッフ管理"
+        case .reservationBook: return "予約台帳設定"
         }
     }
     var en: String {
@@ -106,6 +109,7 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
         case .menuBook: return "Menu book"
         case .payments: return "Payments"
         case .staff: return "Staff"
+        case .reservationBook: return "Reservation book"
         }
     }
 
@@ -142,6 +146,7 @@ struct NativeSettingsPageScreen: View {
         case .menuBook: NativeMenuBookScreen()
         case .payments: NativePaymentsScreen()
         case .staff: NativeStaffScreen()
+        case .reservationBook: NativeReservationBookScreen()
         }
     }
 }
@@ -3688,5 +3693,388 @@ struct NativeStaffView: View {
         .padding(18)
         .background(RoundedRectangle(cornerRadius: 16).fill(NFColor.irisSoft))
         .overlay(RoundedRectangle(cornerRadius: 16).stroke(NFColor.iris.opacity(0.4), lineWidth: 1))
+    }
+}
+
+// MARK: - 予約台帳設定（Web の /app/settings/reservation-book と同じ：予約台帳設定・グルメ連携・SNS連携・Google連携）
+
+struct NRBSite: Codable, Identifiable, Hashable { let key: String; let name: String; let en: String; let howTo: String; let adminUrl: String?; let status: String; let lastImportLabel: String?; let setupLabel: String?; let lastKindLabel: String?; var id: String { key } }
+struct NRBImport: Codable, Identifiable, Hashable {
+    let id: String; let siteName: String; let kind: String; let kindLabel: String; let status: String; let statusLabel: String; let summary: String
+    let subject: String?; let fromAddress: String?; let externalId: String?; let receivedLabel: String; let reservationId: String?; let error: String?; let resolved: Bool; let bodyText: String?; let links: [String]
+}
+struct NRBChannel: Codable, Identifiable, Hashable { let key: String; let label: String; let en: String; let howTo: String; let adminUrl: String?; let link: String; let count30d: Int; let google: Bool; var id: String { key } }
+struct NRBPayload: Codable {
+    struct Book: Codable { let pushDevices: [String]; let reminderEnabled: Bool }
+    struct Gourmet: Codable { let enabled: Bool; let address: String?; let inboundReady: Bool; let canRegenerate: Bool; let verifiedCount: Int; let sites: [NRBSite]; let imports: [NRBImport] }
+    struct Sns: Codable { var instagram: String; var line: String; var facebook: String; var x: String }
+    struct Links: Codable { let bookingUrl: String?; let channels: [NRBChannel]; let sns: Sns; let icalFeedUrl: String? }
+    let store: NFNamed; let canEdit: Bool; let book: Book; let gourmet: Gourmet; let links: Links
+}
+
+@MainActor
+final class NativeReservationBookModel: NSPModel<NRBPayload> {
+    enum Tab: String, CaseIterable { case book, gourmet, sns, google
+        var label: String { switch self { case .book: return "予約台帳設定"; case .gourmet: return "グルメ連携"; case .sns: return "SNS連携"; case .google: return "Google連携" } }
+        var icon: String { switch self { case .book: return "calendar.badge.clock"; case .gourmet: return "envelope"; case .sns: return "square.and.arrow.up"; case .google: return "globe" } }
+    }
+    @Published var tab: Tab = .book
+    @Published var openSite: NRBSite?
+    @Published var openImport: String?
+    @Published var sns = NRBPayload.Sns(instagram: "", line: "", facebook: "", x: "")
+    @Published var reminderResult: String?
+    init() { super.init(part: "reservationBook") }
+    override func loaded(_ p: NRBPayload) {
+        sns = p.links.sns
+        if let o = openSite { openSite = p.gourmet.sites.first { $0.key == o.key } }
+    }
+    var snsDirty: Bool { guard let p = payload else { return false }; return sns.instagram != p.links.sns.instagram || sns.line != p.links.sns.line || sns.facebook != p.links.sns.facebook || sns.x != p.links.sns.x }
+    func saveSns() async { _ = await run("sns", ["type": "snsLinksSave", "instagram": sns.instagram, "line": sns.line, "facebook": sns.facebook, "x": sns.x], done: "SNS のアカウントを保存しました") }
+    func prepareReminders() async {
+        guard busy == nil else { return }
+        busy = "reminder"; defer { busy = nil }
+        let r = await NSPApi.postJSON(["type": "remindersPrepare"])
+        guard r.ok else { toast = r.error ?? "準備に失敗しました"; return }
+        reminderResult = r.json?["message"] as? String
+        toast = "リマインダーを準備しました"
+    }
+}
+
+struct NativeReservationBookScreen: View {
+    @StateObject private var model = NativeReservationBookModel()
+    @EnvironmentObject var state: AppState
+    var body: some View { NativeReservationBookView(model: model, onBack: { state.goNativeSettings() }, onWeb: { path in state.leaveNativeFloor(to: path) }) }
+}
+
+struct NativeReservationBookView: View {
+    @ObservedObject var model: NativeReservationBookModel
+    let onBack: () -> Void
+    let onWeb: (String) -> Void
+    @State private var confirmRegen = false
+    @State private var confirmIcal: String?   // "regen" | "revoke"
+
+    var body: some View {
+        NSPFrame(storeName: model.payload?.store.name ?? "", title: "予約台帳設定", en: "Reservation book", loaded: model.payload != nil, error: model.error, toast: $model.toast, onBack: onBack, retry: { await model.refresh() }) {
+            if let p = model.payload {
+                HStack(spacing: 6) {
+                    ForEach(NativeReservationBookModel.Tab.allCases, id: \.self) { t in
+                        Button { model.tab = t } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: t.icon).font(.system(size: 15, weight: .bold)).foregroundColor(model.tab == t ? .white : NFColor.saffron)
+                                Text(t.label).font(.system(size: 15, weight: .bold)).foregroundColor(model.tab == t ? .white : NFColor.ink2)
+                            }
+                            .padding(.horizontal, 16).frame(height: 44)
+                            .background(RoundedRectangle(cornerRadius: 11).fill(model.tab == t ? NFColor.navy : Color.white))
+                            .overlay(RoundedRectangle(cornerRadius: 11).stroke(NFColor.line, lineWidth: 1))
+                        }
+                        .buttonStyle(PressableStyle())
+                    }
+                    Spacer()
+                }
+                switch model.tab {
+                case .book: bookTab(p)
+                case .gourmet: gourmetTab(p)
+                case .sns: snsTab(p)
+                case .google: googleTab(p)
+                }
+            }
+        }
+        .task { await model.refresh() }
+        .alert("取り込み用アドレスを作り直す", isPresented: $confirmRegen) {
+            Button("作り直す", role: .destructive) { Task { _ = await model.run("regen", ["type": "gourmetMailRegenerate"], done: "アドレスを作り直しました。各サイトに登録し直してください") } }
+            Button("やめる", role: .cancel) {}
+        } message: { Text("古いアドレスに届いたメールは入らなくなります。各サイトの「設定済」の印も消えます") }
+        .alert(confirmIcal == "revoke" ? "Google カレンダーへの配信を止める" : "購読URLを作り直す", isPresented: Binding(get: { confirmIcal != nil }, set: { if !$0 { confirmIcal = nil } }), presenting: confirmIcal) { kind in
+            Button(kind == "revoke" ? "止める" : "作り直す", role: .destructive) {
+                Task { _ = await model.run("ical", ["type": kind == "revoke" ? "icalRevoke" : "icalRegenerate"], done: kind == "revoke" ? "配信を止めました" : "購読URLを作り直しました") }
+                confirmIcal = nil
+            }
+            Button("やめる", role: .cancel) { confirmIcal = nil }
+        } message: { kind in
+            Text(kind == "revoke" ? "URLが無効になります" : "Google カレンダーに登録した古いURLは止まるので、登録し直しが必要です")
+        }
+    }
+
+    private func tag(_ t: String, _ c: Color, fill: Color = .clear) -> some View {
+        Text(t).font(.system(size: 11, weight: .heavy)).foregroundColor(c).padding(.horizontal, 7).padding(.vertical, 2)
+            .background(Capsule().fill(fill)).overlay(Capsule().stroke(c.opacity(0.5), lineWidth: 1))
+    }
+    private func copyBox(_ text: String, label: String) -> some View {
+        HStack(spacing: 8) {
+            Text(text).font(.system(size: 12.5, design: .monospaced)).foregroundColor(NFColor.navy).lineLimit(1).truncationMode(.middle)
+                .padding(.horizontal, 10).frame(height: 40).frame(maxWidth: 520, alignment: .leading)
+                .background(RoundedRectangle(cornerRadius: 10).fill(NFColor.lilac))
+            NSPButton(text: "コピー", icon: "doc.on.doc") { UIPasteboard.general.string = text; model.toast = "\(label)をコピーしました" }
+        }
+    }
+    private func qrView(_ text: String) -> some View {
+        Group {
+            if let img = NativeReservationBookView.qrImage(text) {
+                Image(uiImage: img).interpolation(.none).resizable().frame(width: 96, height: 96)
+                    .padding(6).background(RoundedRectangle(cornerRadius: 10).fill(Color.white)).overlay(RoundedRectangle(cornerRadius: 10).stroke(NFColor.line, lineWidth: 1))
+            }
+        }
+    }
+    private static func qrImage(_ s: String) -> UIImage? {
+        let f = CIFilter.qrCodeGenerator()
+        f.message = Data(s.utf8)
+        f.correctionLevel = "M"
+        guard let out = f.outputImage?.transformed(by: CGAffineTransform(scaleX: 10, y: 10)), let cg = CIContext().createCGImage(out, from: out.extent) else { return nil }
+        return UIImage(cgImage: cg)
+    }
+
+    // 予約台帳設定：通知を受け取る端末・リマインダー
+    private func bookTab(_ p: NRBPayload) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            NSPCard(title: "通知を受け取る端末", en: "Push") {
+                HStack(spacing: 10) {
+                    Image(systemName: "bell.badge").font(.system(size: 18, weight: .semibold)).foregroundColor(NFColor.iris)
+                    Text(p.book.pushDevices.isEmpty ? "まだありません。パソコン・iPad でログインすると自動でオンになります（通知の許可が出たら「許可」）" : "\(p.book.pushDevices.count)台：\(p.book.pushDevices.joined(separator: "・"))")
+                        .font(.system(size: 14, weight: .semibold)).foregroundColor(NFColor.ink)
+                    Spacer()
+                }
+                .padding(18)
+            }
+            if p.book.reminderEnabled {
+                NSPCard(title: "予約リマインダーの準備", en: "Reminder", note: "設定した「送信タイミング」に入る予約を送信キューへ積みます（1予約1回）") {
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack {
+                            NSPButton(text: "リマインダーを準備する", icon: "bell.and.waves.left.and.right", primary: true, busy: model.busy == "reminder") { Task { await model.prepareReminders() } }
+                            Spacer()
+                        }
+                        if let r = model.reminderResult { Text(r).font(.system(size: 13)).foregroundColor(NFColor.ink2).padding(10).frame(maxWidth: .infinity, alignment: .leading).background(RoundedRectangle(cornerRadius: 10).fill(NFColor.lilacSoft)) }
+                        Text("※ 外部メール/SMSプロバイダは未接続です。実送信は接続後に有効になります").font(.system(size: 12)).foregroundColor(NFColor.saffron)
+                    }
+                    .padding(18)
+                }
+            } else {
+                HStack(spacing: 6) {
+                    Text("お客様へのリマインダー（前日メール等）は").font(.system(size: 13)).foregroundColor(NFColor.ink3)
+                    Button("予約受付ルール") { onWeb("/app/settings/booking") }.font(.system(size: 13, weight: .bold)).foregroundColor(NFColor.iris)
+                    Text("でオンにできます").font(.system(size: 13)).foregroundColor(NFColor.ink3)
+                }
+            }
+        }
+    }
+
+    // グルメ連携
+    private func gourmetTab(_ p: NRBPayload) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            NSPCard(title: "グルメサイトメール取り込み", en: p.gourmet.enabled ? "利用中（\(p.gourmet.verifiedCount) サイト設定済）" : "停止中") {
+                VStack(alignment: .leading, spacing: 12) {
+                    if !p.gourmet.inboundReady {
+                        Text("サーバーのメール受信（INBOUND_MAIL_SECRET）がまだ設定されていません。運営に連絡してください").font(.system(size: 12.5)).foregroundColor(NFColor.saffron)
+                    }
+                    HStack(spacing: 12) {
+                        NSPToggle(on: p.gourmet.enabled, disabled: !p.canEdit || model.busy != nil) { Task { _ = await model.run("enabled", ["type": "gourmetMailEnabled", "enabled": !p.gourmet.enabled], done: p.gourmet.enabled ? "取り込みを止めました" : "取り込みを始めました") } }
+                        Text(p.gourmet.enabled ? "食べログ・ホットペッパー等の予約メールを自動で台帳へ" : "オンにすると取り込み専用アドレスが出ます").font(.system(size: 14, weight: .semibold)).foregroundColor(NFColor.ink)
+                        Spacer()
+                    }
+                    if p.gourmet.enabled, let addr = p.gourmet.address {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("取り込み専用メールアドレス").font(.system(size: 12, weight: .bold)).foregroundColor(NFColor.ink3)
+                            HStack(spacing: 8) {
+                                copyBox(addr, label: "アドレス")
+                                if p.gourmet.canRegenerate { NSPButton(text: "作り直す", icon: "arrow.clockwise", busy: model.busy == "regen") { confirmRegen = true } }
+                            }
+                            Text("各グルメサイトの管理画面で、予約通知メールの送り先にこのアドレスを登録します").font(.system(size: 12)).foregroundColor(NFColor.ink3)
+                        }
+                    }
+                }
+                .padding(18)
+                if p.gourmet.enabled {
+                    Rectangle().fill(NFColor.line).frame(height: 1)
+                    VStack(spacing: 0) {
+                        ForEach(p.gourmet.sites) { site in
+                            Button { model.openSite = model.openSite?.key == site.key ? nil : site } label: {
+                                HStack(spacing: 12) {
+                                    VStack(alignment: .leading, spacing: 1) {
+                                        Text(site.name).font(.system(size: 15, weight: .bold)).foregroundColor(NFColor.ink)
+                                        Text(site.en).font(.system(size: 11)).foregroundColor(NFColor.ink3)
+                                    }
+                                    .frame(width: 220, alignment: .leading)
+                                    if site.status == "verified" { tag("設定済", NFColor.success, fill: NFColor.successSoft) }
+                                    else if site.status == "registered" { tag("メール待ち", NFColor.saffron) }
+                                    else { tag("未設定", NFColor.ink3) }
+                                    Text("最新メール取り込み：\(site.lastImportLabel ?? "----/--/-- --:--")\(site.lastKindLabel.map { "（\($0)）" } ?? "")").font(.system(size: 11.5)).foregroundColor(NFColor.ink3)
+                                    Spacer()
+                                    Image(systemName: model.openSite?.key == site.key ? "chevron.up" : "chevron.down").font(.system(size: 13, weight: .bold)).foregroundColor(NFColor.ink3)
+                                }
+                                .padding(.horizontal, 18).frame(minHeight: 54)
+                                .background(model.openSite?.key == site.key ? NFColor.lilacSoft : Color.white)
+                                .overlay(alignment: .bottom) { Rectangle().fill(NFColor.line).frame(height: 1) }
+                            }
+                            .buttonStyle(.plain)
+                            if model.openSite?.key == site.key { siteSetup(p, site) }
+                        }
+                    }
+                }
+            }
+            NSPCard(title: "取り込んだメール", en: "最近 50 件") {
+                VStack(spacing: 0) {
+                    if p.gourmet.imports.isEmpty { Text("まだ取り込んだメールはありません").font(.system(size: 14)).foregroundColor(NFColor.ink3).padding(18) }
+                    ForEach(p.gourmet.imports) { r in
+                        let review = r.status == "needs_review" && !r.resolved
+                        let open = model.openImport == r.id
+                        Button { model.openImport = open ? nil : r.id } label: {
+                            HStack(spacing: 10) {
+                                Text(r.receivedLabel).font(.system(size: 12)).foregroundColor(NFColor.ink3).monospacedDigit().frame(width: 84, alignment: .leading)
+                                Text(r.siteName).font(.system(size: 13.5, weight: .bold)).foregroundColor(NFColor.ink).frame(width: 110, alignment: .leading).lineLimit(1)
+                                Text(r.kindLabel).font(.system(size: 12.5)).foregroundColor(NFColor.ink2).frame(width: 80, alignment: .leading)
+                                Text(r.summary).font(.system(size: 13)).foregroundColor(NFColor.ink2).lineLimit(1)
+                                Spacer()
+                                tag(r.resolved ? "対応済み" : r.statusLabel, review ? NFColor.danger : (r.resolved ? NFColor.ink3 : (r.status == "imported" || r.status == "updated" ? NFColor.success : NFColor.ink2)))
+                                if r.kind == "verify" && !r.links.isEmpty && !r.resolved { tag("要クリック", NFColor.saffron) }
+                                Image(systemName: open ? "chevron.up" : "chevron.down").font(.system(size: 12, weight: .bold)).foregroundColor(NFColor.ink3)
+                            }
+                            .padding(.horizontal, 18).frame(minHeight: 46)
+                            .overlay(alignment: .bottom) { Rectangle().fill(NFColor.line).frame(height: 1) }
+                        }
+                        .buttonStyle(.plain)
+                        if open { importDetail(p, r) }
+                    }
+                }
+            }
+        }
+    }
+
+    private func siteSetup(_ p: NRBPayload, _ site: NRBSite) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if let addr = p.gourmet.address {
+                Text("1. 取り込み専用アドレスをコピー").font(.system(size: 14, weight: .bold)).foregroundColor(NFColor.navy)
+                copyBox(addr, label: "アドレス")
+            }
+            Text("2. \(site.name) の店舗管理画面で、予約通知メールの送り先に登録").font(.system(size: 14, weight: .bold)).foregroundColor(NFColor.navy)
+            Text(site.howTo).font(.system(size: 13)).foregroundColor(NFColor.ink2)
+            if let u = site.adminUrl, let url = URL(string: u) {
+                Link(destination: url) {
+                    HStack(spacing: 6) { Image(systemName: "arrow.up.right.square"); Text("\(site.name) の管理画面を開く") }.font(.system(size: 13, weight: .bold)).foregroundColor(NFColor.iris)
+                }
+            }
+            Text("3. 登録できたら印を付ける（最初のメールが届いた時点で「設定済」に変わります）").font(.system(size: 14, weight: .bold)).foregroundColor(NFColor.navy)
+            HStack(spacing: 10) {
+                if site.status == "off" {
+                    NSPButton(text: "登録した", icon: "checkmark", primary: true, busy: model.busy == "site" + site.key, disabled: !p.canEdit) { Task { _ = await model.run("site" + site.key, ["type": "gourmetSiteRegistered", "site": site.key, "registered": true], done: "印を付けました") } }
+                } else {
+                    NSPButton(text: "印を外す", busy: model.busy == "site" + site.key, disabled: !p.canEdit) { Task { _ = await model.run("site" + site.key, ["type": "gourmetSiteRegistered", "site": site.key, "registered": false], done: "印を外しました") } }
+                }
+                if let s = site.setupLabel { Text("設定：\(s)").font(.system(size: 12)).foregroundColor(NFColor.ink3) }
+                Spacer()
+                NSPButton(text: "閉じる") { model.openSite = nil }
+            }
+        }
+        .padding(18)
+        .background(NFColor.lilacSoft.opacity(0.5))
+        .overlay(alignment: .bottom) { Rectangle().fill(NFColor.line).frame(height: 1) }
+    }
+
+    private func importDetail(_ p: NRBPayload, _ r: NRBImport) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("件名：\(r.subject ?? "—")").font(.system(size: 13)).foregroundColor(NFColor.ink2)
+            Text("差出人：\(r.fromAddress ?? "—")").font(.system(size: 13)).foregroundColor(NFColor.ink2)
+            if let e = r.externalId { Text("予約番号：\(e)").font(.system(size: 13)).foregroundColor(NFColor.ink2) }
+            if let err = r.error { Text("理由：\(err)").font(.system(size: 13, weight: .bold)).foregroundColor(NFColor.danger) }
+            if let body = r.bodyText, !body.isEmpty {
+                ScrollView { Text(body).font(.system(size: 12)).foregroundColor(NFColor.navy).frame(maxWidth: .infinity, alignment: .leading).padding(10) }
+                    .frame(maxHeight: 220).background(RoundedRectangle(cornerRadius: 10).fill(Color.white)).overlay(RoundedRectangle(cornerRadius: 10).stroke(NFColor.line, lineWidth: 1))
+            }
+            if r.kind == "verify" && !r.links.isEmpty {
+                Text("認証メールのリンク（開くとサイト側の登録が完了します）").font(.system(size: 12, weight: .bold)).foregroundColor(NFColor.ink2)
+                WrapLayout(spacing: 8) {
+                    ForEach(r.links, id: \.self) { u in
+                        if let url = URL(string: u) {
+                            Link(destination: url) { Text("認証リンクを開く").font(.system(size: 13, weight: .bold)).foregroundColor(.white).padding(.horizontal, 14).frame(height: 40).background(RoundedRectangle(cornerRadius: 10).fill(NFColor.iris)) }
+                        }
+                    }
+                }
+            }
+            HStack(spacing: 10) {
+                if let rid = r.reservationId { NSPButton(text: "台帳で開く", icon: "calendar") { onWeb("/app/reservations?open=\(rid)") } }
+                if r.status == "needs_review" && !r.resolved && p.canEdit { NSPButton(text: "対応済みにする", icon: "checkmark", primary: true, busy: model.busy == "imp" + r.id) { Task { _ = await model.run("imp" + r.id, ["type": "gourmetImportResolve", "importId": r.id], done: "対応済みにしました") } } }
+                Spacer()
+            }
+        }
+        .padding(18)
+        .background(NFColor.lilacSoft.opacity(0.5))
+        .overlay(alignment: .bottom) { Rectangle().fill(NFColor.line).frame(height: 1) }
+    }
+
+    private func channelRow(_ c: NRBChannel) -> some View {
+        HStack(alignment: .top, spacing: 14) {
+            qrView(c.link)
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 8) {
+                    Text(c.label).font(.system(size: 15, weight: .bold)).foregroundColor(NFColor.ink)
+                    Text(c.en).font(.system(size: 11)).foregroundColor(NFColor.ink3)
+                    Spacer()
+                    Text("過去30日の予約 \(c.count30d) 件").font(.system(size: 12)).foregroundColor(NFColor.ink3).monospacedDigit()
+                }
+                Text(c.howTo).font(.system(size: 12.5)).foregroundColor(NFColor.ink2).fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: 8) {
+                    copyBox(c.link, label: "\(c.label) の予約リンク")
+                    if let u = c.adminUrl, let url = URL(string: u) {
+                        Link(destination: url) { HStack(spacing: 5) { Image(systemName: "arrow.up.right.square"); Text("開く") }.font(.system(size: 13, weight: .bold)).foregroundColor(NFColor.iris).padding(.horizontal, 12).frame(height: 40).overlay(RoundedRectangle(cornerRadius: 10).stroke(NFColor.line, lineWidth: 1)) }
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, 18).padding(.vertical, 12)
+        .overlay(alignment: .bottom) { Rectangle().fill(NFColor.line).frame(height: 1) }
+    }
+
+    private func missingSiteUrl() -> some View {
+        Text("公開予約URLを出すには、環境変数 NEXT_PUBLIC_SITE_URL と店舗のスラッグが必要です").font(.system(size: 13)).foregroundColor(NFColor.ink2).padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading).background(RoundedRectangle(cornerRadius: 12).fill(NFColor.lilacSoft))
+    }
+
+    // SNS連携
+    private func snsTab(_ p: NRBPayload) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            if p.links.bookingUrl == nil { missingSiteUrl() } else {
+                NSPCard(title: "SNS に貼る予約リンク", en: "リンクから入った予約は経路にそのSNSが付く") {
+                    VStack(spacing: 0) { ForEach(p.links.channels.filter { !$0.google }) { c in channelRow(c) } }
+                }
+            }
+            NSPCard(title: "お店の SNS アカウント", en: "控え") {
+                VStack(spacing: 0) {
+                    NSPRow(label: "Instagram") { NSPInput(text: $model.sns.instagram, placeholder: "https://www.instagram.com/…", enabled: p.canEdit, keyboard: .URL) }
+                    NSPRow(label: "LINE公式") { NSPInput(text: $model.sns.line, placeholder: "https://lin.ee/…", enabled: p.canEdit, keyboard: .URL) }
+                    NSPRow(label: "Facebook") { NSPInput(text: $model.sns.facebook, placeholder: "https://www.facebook.com/…", enabled: p.canEdit, keyboard: .URL) }
+                    NSPRow(label: "X（Twitter）") { NSPInput(text: $model.sns.x, placeholder: "https://x.com/…", enabled: p.canEdit, keyboard: .URL) }
+                    if p.canEdit { HStack { Spacer(); NSPButton(text: "保存する", primary: true, busy: model.busy == "sns", disabled: !model.snsDirty) { Task { await model.saveSns() } } }.padding(18) }
+                }
+            }
+        }
+    }
+
+    // Google連携
+    private func googleTab(_ p: NRBPayload) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            if p.links.bookingUrl == nil { missingSiteUrl() } else {
+                NSPCard(title: "Google の「予約」ボタン", en: "Google ビジネスプロフィール") {
+                    VStack(spacing: 0) { ForEach(p.links.channels.filter(\.google)) { c in channelRow(c) } }
+                }
+            }
+            NSPCard(title: "Google カレンダーに予約を出す", en: "iCal 購読", note: "Google カレンダー →「他のカレンダー」→「URL で追加」に購読URLを入れると、台帳の予約が自動で出ます（15分ごとに更新）") {
+                VStack(alignment: .leading, spacing: 10) {
+                    if let feed = p.links.icalFeedUrl {
+                        HStack(spacing: 8) {
+                            copyBox(feed, label: "購読URL")
+                            if p.canEdit {
+                                NSPButton(text: "作り直す", icon: "arrow.clockwise", busy: model.busy == "ical") { confirmIcal = "regen" }
+                                NSPButton(text: "配信を止める", icon: "xmark.circle", busy: model.busy == "ical") { confirmIcal = "revoke" }
+                            }
+                        }
+                        Text("※ このURLを知っている人は予約が見られます。外に出さないでください。漏れたら「作り直す」で無効にできます").font(.system(size: 12)).foregroundColor(NFColor.ink3)
+                    } else {
+                        HStack {
+                            NSPButton(text: "購読URLを作る", icon: "calendar.badge.plus", primary: true, busy: model.busy == "ical", disabled: !p.canEdit) { Task { _ = await model.run("ical", ["type": "icalRegenerate"], done: "購読URLを作りました") } }
+                            Spacer()
+                        }
+                    }
+                }
+                .padding(18)
+            }
+        }
     }
 }

@@ -35,6 +35,11 @@ import { isPlanAddOn, isPlanItem, MENU_BOOK_SHOW_LABELS, MENU_BOOK_SHOW_NOTES, M
 import { takeoutMenuFrom } from '@/lib/takeout-menu';
 import { addOptionItem, createOptionGroup, deleteOptionGroup, deleteOptionItem, moveOptionGroup, setGroupMenuItems, updateOptionGroup } from '@/app/app/settings/options/actions';
 import { resolveSiteOrigin } from '@/lib/site-origin';
+import { markGourmetSiteRegistered, regenerateGourmetMailToken, regenerateIcalToken, resolveGourmetMailImport, revokeIcalToken, saveSnsLinks, setGourmetMailEnabled } from '@/app/app/settings/reservation-book/actions';
+import { prepareReservationReminders } from '@/app/app/reservations/reminder-actions';
+import { GOURMET_SITE_BY_KEY, GOURMET_SITES, gourmetImportAddress, gourmetMailSettingsFrom, MAIL_KIND_LABEL, type GourmetSiteKey, type MailKind } from '@/lib/gourmet-mail';
+import { bookingLinkWithSrc, GOOGLE_CHANNEL, icalFeedUrl, reservationBookSettingsFrom, SNS_CHANNELS } from '@/lib/reservation-book';
+import { pushSubscriptionsFrom } from '@/lib/push-subscriptions';
 import { deleteTerminalReader, registerSimulatedReader, saveCheckoutPresets, updateBookingPaymentSettings, type BookingPaymentMode } from '@/app/app/settings/payments/actions';
 import { addSteraTerminal, deleteSteraTerminal, regenerateSteraLinkCode, updateSteraTerminal } from '@/app/app/settings/payments/stera-actions';
 import { BRANDED_METHODS, checkoutPresetsFrom, DISCOUNT_KIND_LABELS, discountPresetsOf, methodBrandsOf, pointBrandsOf } from '@/lib/checkout-presets';
@@ -49,6 +54,7 @@ import type {
   NativeMenuBookPayload,
   NativePaymentsPayload,
   NativeStaffPayload,
+  NativeReservationBookPayload,
   NativeMenuItemsPayload,
   NativeOptionsPayload,
   NativeQrServicePayload,
@@ -68,7 +74,7 @@ type Supabase = Awaited<ReturnType<typeof createClient>>;
 type Store = { id: string; name: string };
 
 /** 設定の中の画面の名前（GET ?part=） */
-export const NATIVE_SETTINGS_PAGE_PARTS = ['soldout', 'clerks', 'hours', 'store', 'tax', 'loyalty', 'alerts', 'approvals', 'accounts', 'handy', 'categories', 'menuItems', 'options', 'qrService', 'menuBook', 'payments', 'staff'] as const;
+export const NATIVE_SETTINGS_PAGE_PARTS = ['soldout', 'clerks', 'hours', 'store', 'tax', 'loyalty', 'alerts', 'approvals', 'accounts', 'handy', 'categories', 'menuItems', 'options', 'qrService', 'menuBook', 'payments', 'staff', 'reservationBook'] as const;
 export type NativeSettingsPagePart = (typeof NATIVE_SETTINGS_PAGE_PARTS)[number];
 export function isNativeSettingsPagePart(v: unknown): v is NativeSettingsPagePart {
   return typeof v === 'string' && (NATIVE_SETTINGS_PAGE_PARTS as readonly string[]).includes(v);
@@ -103,7 +109,8 @@ export async function loadNativeSettingsPage(
         | NativeQrServicePayload
         | NativeMenuBookPayload
         | NativePaymentsPayload
-        | NativeStaffPayload;
+        | NativeStaffPayload
+        | NativeReservationBookPayload;
     }
   | { ok: false; error: string }
 > {
@@ -502,6 +509,116 @@ export async function loadNativeSettingsPage(
     const cur = qrServiceFrom((data as { settings?: unknown } | null)?.settings ?? null);
     return { ok: true, payload: { store, canEdit: can(ctx.role, 'menu.manage'), enabled: cur.enabled, items: cur.items, maxItems: QR_SERVICE_MAX_ITEMS } };
   }
+  if (part === 'reservationBook') {
+    // Web の app/app/settings/reservation-book/page.tsx と同じ（4つのタブぶんを一度に）
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? '';
+    const since30 = new Date(Date.now() - 30 * 86400000).toISOString();
+    const [{ data: settingsRow }, { data: storeRow }, { data: imports }, { data: recent }] = await Promise.all([
+      supabase.from('store_settings').select('settings, reminder_enabled').eq('store_id', store.id).maybeSingle(),
+      supabase.from('stores').select('slug').eq('id', store.id).maybeSingle(),
+      supabase
+        .from('gourmet_mail_imports')
+        .select('id, site, kind, status, subject, from_address, external_id, received_at, reservation_id, error, resolved_at, parsed, body_text')
+        .eq('store_id', store.id)
+        .order('received_at', { ascending: false })
+        .limit(50),
+      supabase.from('reservations').select('id, reservation_sources(code)').eq('store_id', store.id).gte('created_at', since30).neq('status', 'cancelled').limit(5000),
+    ]);
+    const settings = (settingsRow?.settings as Record<string, unknown> | null) ?? {};
+    const gm = gourmetMailSettingsFrom(settings);
+    const rb = reservationBookSettingsFrom(settings);
+    const bookingUrl = siteUrl && storeRow?.slug ? `${siteUrl}/book/${storeRow.slug}` : null;
+    const counts30d: Record<string, number> = {};
+    for (const r of recent ?? []) {
+      const src = r.reservation_sources as { code: string } | { code: string }[] | null;
+      const code = Array.isArray(src) ? src[0]?.code : src?.code;
+      if (code) counts30d[code] = (counts30d[code] ?? 0) + 1;
+    }
+    const jst = (iso: string | null | undefined, withYear: boolean): string | null => {
+      if (!iso) return null;
+      const d = new Date(iso);
+      if (Number.isNaN(d.getTime())) return null;
+      return new Intl.DateTimeFormat('ja-JP', { timeZone: 'Asia/Tokyo', ...(withYear ? { year: 'numeric' as const } : {}), month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).format(d);
+    };
+    const importStatus: Record<string, string> = {
+      imported: '台帳に登録',
+      updated: '変更を反映',
+      cancelled: 'キャンセル反映',
+      verified: 'メール認証',
+      duplicate: '重複（登録済）',
+      ignored: '対象外',
+      needs_review: '要確認',
+    };
+    const domain = process.env.NEXT_PUBLIC_INBOUND_MAIL_DOMAIN ?? 'in.tenpo-one.com';
+    const sites = GOURMET_SITES.map((site) => {
+      const st = gm.sites[site.key];
+      return {
+        key: site.key,
+        name: site.name,
+        en: site.en,
+        howTo: site.howTo,
+        adminUrl: site.adminUrl,
+        status: (st?.verifiedAt ? 'verified' : st?.enabledAt ? 'registered' : 'off') as 'verified' | 'registered' | 'off',
+        lastImportLabel: jst(st?.lastImportAt, true),
+        setupLabel: jst(st?.enabledAt ?? st?.verifiedAt, true),
+        lastKindLabel: st?.lastKind ? MAIL_KIND_LABEL[st.lastKind] ?? null : null,
+      };
+    });
+    const channels = [...SNS_CHANNELS, GOOGLE_CHANNEL].map((c) => ({
+      key: c.key,
+      label: c.label,
+      en: c.en,
+      howTo: c.howTo,
+      adminUrl: c.adminUrl,
+      link: bookingUrl ? bookingLinkWithSrc(bookingUrl, c.key) : '',
+      count30d: counts30d[c.sourceCode] ?? 0,
+      google: c.key === 'google',
+    }));
+    return {
+      ok: true,
+      payload: {
+        store,
+        canEdit: can(ctx.role, 'store.settings'),
+        book: { pushDevices: pushSubscriptionsFrom(settings).map((d) => d.label ?? '端末'), reminderEnabled: settingsRow?.reminder_enabled === true },
+        gourmet: {
+          enabled: gm.enabled,
+          address: gm.token ? gourmetImportAddress(gm.token, domain) : null,
+          inboundReady: !!process.env.INBOUND_MAIL_SECRET,
+          canRegenerate: ctx.isCypressAdmin === true,
+          verifiedCount: sites.filter((s) => s.status === 'verified').length,
+          sites,
+          imports: (imports ?? []).map((r) => {
+            const p = (r.parsed as { date?: string | null; time?: string | null; partySize?: number | null; guestName?: string | null; links?: string[] } | null) ?? {};
+            const kind = r.kind as MailKind;
+            return {
+              id: r.id as string,
+              siteName: GOURMET_SITE_BY_KEY[r.site as GourmetSiteKey]?.name ?? String(r.site),
+              kind,
+              kindLabel: MAIL_KIND_LABEL[kind] ?? String(r.kind),
+              status: String(r.status),
+              statusLabel: importStatus[String(r.status)] ?? String(r.status),
+              summary: p.date ? `${p.date} ${p.time ?? ''} ${p.partySize ?? '?'}名 ${p.guestName ?? ''}`.trim() : ((r.subject as string | null) ?? ''),
+              subject: (r.subject as string | null) ?? null,
+              fromAddress: (r.from_address as string | null) ?? null,
+              externalId: (r.external_id as string | null) ?? null,
+              receivedLabel: jst(r.received_at as string, false) ?? '',
+              reservationId: (r.reservation_id as string | null) ?? null,
+              error: (r.error as string | null) ?? null,
+              resolved: !!r.resolved_at,
+              bodyText: typeof r.body_text === 'string' ? r.body_text.slice(0, 3000) : null,
+              links: Array.isArray(p.links) ? p.links.filter((u): u is string => typeof u === 'string').slice(0, 5) : [],
+            };
+          }),
+        },
+        links: {
+          bookingUrl,
+          channels,
+          sns: { instagram: rb.sns.instagram ?? '', line: rb.sns.line ?? '', facebook: rb.sns.facebook ?? '', x: rb.sns.x ?? '' },
+          icalFeedUrl: rb.icalToken && siteUrl ? icalFeedUrl(siteUrl, rb.icalToken) : null,
+        },
+      },
+    };
+  }
   if (part === 'staff') {
     // Web の app/app/staff/page.tsx と同じ（requirePermission('staff.manage')）
     if (!can(ctx.role, 'staff.manage')) return { ok: false, error: 'スタッフ管理の権限がありません（店長以上のアカウントでログインしてください）' };
@@ -808,6 +925,26 @@ export async function runNativeSettingsPageAction(
     case 'staffPasswordReset': {
       const r = await resetMemberPassword({ membershipId: action.membershipId, profileId: action.profileId });
       return r.error ? { ok: false, error: r.error } : { ok: true, data: { newPassword: r.newPassword ?? null } };
+    }
+    case 'gourmetMailEnabled':
+      return done(await setGourmetMailEnabled(store.id, action.enabled));
+    case 'gourmetMailRegenerate':
+      return done(await regenerateGourmetMailToken(store.id));
+    case 'gourmetSiteRegistered':
+      if (!GOURMET_SITE_BY_KEY[action.site as GourmetSiteKey]) return { ok: false, error: '対象のサイトがありません' };
+      return done(await markGourmetSiteRegistered(store.id, action.site as GourmetSiteKey, action.registered));
+    case 'gourmetImportResolve':
+      return done(await resolveGourmetMailImport(store.id, action.importId));
+    case 'snsLinksSave':
+      return done(await saveSnsLinks(store.id, { instagram: action.instagram, line: action.line, facebook: action.facebook, x: action.x }));
+    case 'icalRegenerate':
+      return done(await regenerateIcalToken(store.id));
+    case 'icalRevoke':
+      return done(await revokeIcalToken(store.id));
+    case 'remindersPrepare': {
+      // この Server Action はエラーを throw する → 呼び出し側（route）が errorText で返す
+      const r = await prepareReservationReminders(store.id);
+      return { ok: true, data: { message: r.message, enqueued: r.enqueued } };
     }
   }
 }

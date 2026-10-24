@@ -102,4 +102,19 @@ describe('native settings pages (設定の中の画面) actions', () => {
     expect(parseNativeSettingsPageAction({ type: 'staffStatus', membershipId: ID, profileId: ID, status: 'invited' }).ok).toBe(false);
     expect(parseNativeSettingsPageAction({ type: 'staffPasswordReset', membershipId: ID, profileId: ID })).toEqual({ ok: true, action: { type: 'staffPasswordReset', membershipId: ID, profileId: ID } });
   });
+
+  it('予約台帳設定: グルメ連携・SNS・Google', () => {
+    expect(parseNativeSettingsPageAction({ type: 'gourmetMailEnabled', enabled: true }).ok).toBe(true);
+    expect(parseNativeSettingsPageAction({ type: 'gourmetMailEnabled', enabled: 'on' }).ok).toBe(false);
+    expect(parseNativeSettingsPageAction({ type: 'gourmetSiteRegistered', site: 'tabelog', registered: true }).ok).toBe(true);
+    expect(parseNativeSettingsPageAction({ type: 'gourmetSiteRegistered', site: 'Tabe log', registered: true }).ok).toBe(false);
+    expect(parseNativeSettingsPageAction({ type: 'gourmetImportResolve', importId: ID }).ok).toBe(true);
+    expect(parseNativeSettingsPageAction({ type: 'gourmetImportResolve', importId: '1' }).ok).toBe(false);
+    expect(parseNativeSettingsPageAction({ type: 'snsLinksSave', instagram: ' https://www.instagram.com/x ', line: '' })).toEqual({
+      ok: true,
+      action: { type: 'snsLinksSave', instagram: 'https://www.instagram.com/x', line: '', facebook: '', x: '' },
+    });
+    expect(parseNativeSettingsPageAction({ type: 'icalRegenerate' })).toEqual({ ok: true, action: { type: 'icalRegenerate' } });
+    expect(parseNativeSettingsPageAction({ type: 'remindersPrepare' }).ok).toBe(true);
+  });
 });
