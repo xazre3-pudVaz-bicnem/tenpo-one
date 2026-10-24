@@ -367,7 +367,7 @@ struct NativeSettingsView: View {
         switch label {
         case "店舗": return "storefront"
         case "メニュー": return "fork.knife"
-        case "デバイス管理": return "printer"
+        case "デバイス管理": return "iphone"   // 2026-10-24 19:08 Ronnie「デバイスの印はプリンターではなく iPhone」
         case "予約・顧客": return "calendar"
         case "会計": return "creditcard"
         case "運用・管理": return "gearshape"
