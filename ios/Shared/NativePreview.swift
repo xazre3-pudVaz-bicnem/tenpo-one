@@ -43,6 +43,8 @@ enum NativePreview: String {
     case phoneOwnerPurchaseNew
     case phoneOwnerCosting
     case phoneOwnerCostingItem
+    /// iPhone 店長・オーナー：給与・歩合（一覧・詳細・給与明細・年末調整）・マニュアル・クーポン（2026-10-25。NativePhoneOwnerPeoplePreview.swift）
+    case phoneOwnerPayroll, phoneOwnerPayrollRun, phoneOwnerPayslips, phoneOwnerPayslip, phoneOwnerNencho, phoneOwnerManuals, phoneOwnerCoupons, phoneOwnerCoupon
 
     static var current: NativePreview? {
         guard let raw = UserDefaults.standard.string(forKey: "tenpoNativePreview") else { return nil }
@@ -107,6 +109,7 @@ struct NativePreviewView: View {
         case .phoneOwnerPurchaseNew: NPZStockPreview(kind: "purchaseNew")
         case .phoneOwnerCosting: NPZStockPreview(kind: "costing")
         case .phoneOwnerCostingItem: NPZStockPreview(kind: "costingItem")
+        case .phoneOwnerPayroll, .phoneOwnerPayrollRun, .phoneOwnerPayslips, .phoneOwnerPayslip, .phoneOwnerNencho, .phoneOwnerManuals, .phoneOwnerCoupons, .phoneOwnerCoupon: NativePhoneOwnerPeoplePreview(kind: kind.rawValue)
         case .options, .price:
             NativeOrderView(model: model)
                 .statusBarHidden(true)
