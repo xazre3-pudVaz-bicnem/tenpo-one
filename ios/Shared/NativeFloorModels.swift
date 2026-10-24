@@ -279,7 +279,7 @@ enum NFColor {
     static let callInk = Color(hex: 0x842F0B)
 
     /// フロアの地（Apple 風の白。2026-10-24 Ronnie「背景を白に」）
-    static let floorBg = Color.white
+    static let floorBg = Color(hex: 0xF4F5F8)
     /// 卓の箱の角
     static let tileRadius: CGFloat = 18
     /// 空席の「＋」

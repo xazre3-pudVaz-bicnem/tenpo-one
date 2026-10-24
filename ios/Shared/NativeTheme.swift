@@ -2,7 +2,9 @@ import SwiftUI
 
 /// ネイティブのレジ画面の色（Web の TENPO ONE と同じ色。2026-10-13 Ronnie「Airレジのように、アプリは全部ネイティブで」）
 enum NT {
-    static let header = Color(hex: 0x292725)        // 上のバー
+    static let header = Color(hex: 0x292725)        // 濃い字・濃いボタン（上のバーはもう濃くない）
+    /// 上のバーの地＝画面の地と同じうすい灰色（2026-10-24 22:28 Ronnie「上のバーも全部同じ地の色に。広く見える」）
+    static let bar = Color(hex: 0xF4F5F8)
     // 2026-10-24 21:42 Ronnie「この色（テラコッタ）はもう使わない。こっちも色を合わせて」
     // → 主の色はホームの「オーダー・会計」のボタンと同じ青、地と線はうすい灰色（店舗台帳・テーブル一覧と同じ系統）
     static let page = Color(hex: 0xF4F5F8)          // 画面の地

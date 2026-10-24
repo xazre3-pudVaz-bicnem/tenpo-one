@@ -231,19 +231,21 @@ struct NativeHomeLogo: View {
     var ink: Color = NT.header
 
     var body: some View {
+        // 上のバーがうすい灰色になったので、家は紺・「1」は白（2026-10-24 22:28）
         ZStack {
-            NativeHouseShape().fill(Color.white)
+            NativeHouseShape().fill(Color(hex: 0x171333))
                 .frame(width: 32, height: 29)
             Image("BrandOne")
                 .renderingMode(.template)
                 .resizable()
                 .scaledToFit()
-                .foregroundColor(ink)
+                .foregroundColor(.white)
                 .frame(height: 15)
                 .offset(y: 6)
         }
         .frame(width: 46, height: 40)
-        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white.opacity(0.12)))
+        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white))
+        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(NT.line, lineWidth: 1))
     }
 }
 
@@ -286,31 +288,34 @@ struct NativeTopBar: View {
             // 画面の名前（店名のあった場所に、同じ丸い枠で）
             ViewThatFits(in: .horizontal) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(title).font(.system(size: 17, weight: .heavy)).foregroundColor(.white)
+                    Text(title).font(.system(size: 17, weight: .heavy)).foregroundColor(NT.ink)
                     if !subtitle.isEmpty {
-                        Text(subtitle).font(.system(size: 12, weight: .bold)).foregroundColor(Color(hex: 0xC9B6F5))
+                        Text(subtitle).font(.system(size: 12, weight: .bold)).foregroundColor(NT.purple)
                     }
                 }
                 .fixedSize()
-                Text(title).font(.system(size: 17, weight: .heavy)).foregroundColor(.white).lineLimit(1)
+                Text(title).font(.system(size: 17, weight: .heavy)).foregroundColor(NT.ink).lineLimit(1)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
-            .background(Capsule().fill(Color.white.opacity(0.10)))
+            .background(Capsule().fill(Color.white))
+            .overlay(Capsule().stroke(NT.line, lineWidth: 1))
             Spacer(minLength: 8)
             HStack(spacing: 6) {
                 Image(systemName: "person")
                 Text(userName).lineLimit(1)
             }
             .font(.system(size: 15, weight: .semibold))
-            .foregroundColor(.white)
+            .foregroundColor(NT.ink2)
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(Capsule().fill(Color.white.opacity(0.10)))
+            .background(Capsule().fill(Color.white))
+            .overlay(Capsule().stroke(NT.line, lineWidth: 1))
         }
         .padding(.horizontal, 16)
         .frame(height: 64)
-        .background(NT.header)
+        // 上のバーは画面と同じうすい灰色（2026-10-24 22:28 Ronnie「全部同じ地の色に。広く見える」）
+        .background(NT.bar.ignoresSafeArea(edges: .top))
     }
 
     private func iconButton(_ icon: String, label: String, action: @escaping () -> Void) -> some View {
@@ -321,9 +326,10 @@ struct NativeTopBar: View {
             } else {
                 Image(systemName: icon)
                     .font(.system(size: 18, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundColor(NT.ink)
                     .frame(width: 46, height: 40)
-                    .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white.opacity(0.10)))
+                    .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white))
+                    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(NT.line, lineWidth: 1))
             }
         }
         .buttonStyle(PressableStyle())
