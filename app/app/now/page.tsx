@@ -65,7 +65,7 @@ export default async function StoreNowPage({ searchParams }: { searchParams: Pro
       {stores.length > 1 && (
         <div className="-mt-2 flex items-center gap-2">
           {/* 店舗はプルダウンで選ぶ（2026-10-24 Ronnie「全部ボタンで並べない」） */}
-          <StoreSelect stores={stores} currentId={store.id} hrefFor={(id) => `/app/now?store=${id}`} />
+          <StoreSelect stores={stores} currentId={store.id} hrefTemplate="/app/now?store={id}" />
           <span className="text-xs text-ink-3">{stores.length} 店舗</span>
         </div>
       )}
