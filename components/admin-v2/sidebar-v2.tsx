@@ -29,6 +29,7 @@ function isCurrent(pathname: string, href: string): boolean {
 /**
  * 新しい管理画面（パソコン）の左メニュー（2026-10-10 Ronnie）。
  * ▼ を押すとグループが開く・閉じる。開いた状態はこのブラウザに覚えておく。今の画面のグループは最初から開く。
+ * どの幅でも出す（下のメニューバーにはしない。2026-10-24 Ronnie「アプリのようにしない。メニューは全部左に」）。
  * レジ（iPad）・ハンディでは使わない（app/app/layout.tsx・lib/admin-v2.ts）。
  */
 export function SidebarV2({
@@ -77,7 +78,7 @@ export function SidebarV2({
 
   return (
     <aside
-      className="fixed top-[58px] bottom-0 left-0 z-30 hidden w-[250px] flex-col border-r border-line bg-white lg:flex"
+      className="fixed top-[58px] bottom-0 left-0 z-30 flex w-[230px] flex-col border-r border-line bg-white lg:w-[250px]"
       aria-label="管理メニュー"
     >
       <nav className="flex-1 overflow-y-auto px-3 pt-4 pb-6">

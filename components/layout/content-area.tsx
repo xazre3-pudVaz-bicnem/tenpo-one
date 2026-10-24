@@ -9,10 +9,13 @@ import { regiAccentFor } from '@/lib/regi-accent';
  */
 export function ContentArea({
   homeOnly,
+  alwaysSidebar = false,
   children,
 }: {
   /** レジ端末：左メニューはホーム画面だけ */
   homeOnly: boolean;
+  /** 新しい管理画面（パソコン）：どの幅でも左メニューがあるので、いつも左を空ける（狭い幅は 230px・広い幅は 250px） */
+  alwaysSidebar?: boolean;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -21,7 +24,7 @@ export function ContentArea({
   // レジ（iPad）だけ、画面ごとの色（ホームのボタンと同じ色。lib/regi-accent.ts・app/globals.css）
   const accent = homeOnly ? regiAccentFor(pathname) : null;
   return (
-    <div className={fullWidth ? undefined : 'lg:pl-[250px]'} data-regi-accent={accent ?? undefined}>
+    <div className={fullWidth ? undefined : alwaysSidebar ? 'pl-[230px] lg:pl-[250px]' : 'lg:pl-[250px]'} data-regi-accent={accent ?? undefined}>
       {children}
     </div>
   );
