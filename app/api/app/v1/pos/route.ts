@@ -16,6 +16,9 @@ import { shouldOpenDrawer } from '@/lib/printing/types';
 import { isNativeFloorActionType, parseNativeFloorAction, type NativeFloorAction } from '@/lib/native-floor';
 import { loadNativeFloor } from '@/lib/native-floor-server';
 import { loadNativeHome } from '@/lib/native-home-server';
+import { isNativeHandyActionType, parseNativeHandyAction } from '@/lib/native-handy';
+import { loadNativeHandy, runNativeHandyAction } from '@/lib/native-handy-server';
+import { loadNativeOwnerHome } from '@/lib/native-owner-home-server';
 import { isNativeLedgerActionType, parseNativeLedgerAction, type NativeLedgerAction } from '@/lib/native-ledger';
 import { loadNativeLedger, loadNativeLedgerMonth, loadNativeLedgerWait, loadNativeLedgerWeek } from '@/lib/native-ledger-server';
 import { isNativeCashActionType, parseNativeCashAction, sumNativeDenominations, type NativeCashAction } from '@/lib/native-cash';
@@ -147,6 +150,8 @@ import { resolveServiceCall, startRegisterVisit } from '@/app/app/handy/actions'
  *   GET  ?order=<id>&part=live  … 伝票・レジの開局・stera（軽い。メニューは iPad の保存から）
  *   GET  ?part=catalog[&store=<id>] … 店のメニューまわり（iPad に保存する。version で変わったか分かる）
  *   GET  ?part=floor[&store=<id>]   … フロア（テーブル一覧）の全部（卓・伝票・予約・呼び出し・お客様情報の選択肢。2026-10-24）
+ *   GET  ?part=handy                … iPhone ハンディのテーブル一覧（担当者・卓・呼び出し・フロア。Web の /handy と同じ。2026-10-24）
+ *   GET  ?part=ownerHome            … iPhone オーナー・店長のホーム（売上・来店・本日の予約・30日推移。Web の /app/dashboard と同じ。2026-10-24）
  *   POST { type, … }          … 注文確定（明細を入れて厨房へ）・数量・担当者・値引き・来店経路・会計・stera
  *   POST { type: 'floor…' }   … フロアの操作（着席・伝票を開く・清掃完了・ブロック・会計伝票・合算・お客様情報…。lib/native-floor.ts）
  * 中身は Web のレジと同じサーバーの処理（app/app/pos/*-actions.ts）。Web の画面は変えない。
@@ -253,6 +258,30 @@ export async function GET(request: Request) {
     const store = ctx.currentStore ?? ctx.stores[0] ?? null;
     if (!store) return json({ ok: false, error: '店舗がありません' }, 404);
     const home = await loadNativeHome(ctx, await createClient(), { id: store.id, name: store.name });
+    return json({ ok: true, ...home });
+  }
+
+  // iPhone ハンディのテーブル一覧。Web の /handy と同じ組み立て（lib/native-handy-server.ts。2026-10-24）
+  if (part === 'handy') {
+    const store = ctx.currentStore ?? ctx.stores[0] ?? null;
+    if (!store) return json({ ok: false, error: 'アクセス可能な店舗がありません', useWeb: true }, 404);
+    // iPhone のハンディ端末：お店の Wi-Fi の外に3分いたらログアウト画面へ（Web の /handy の layout と同じ。Web が /handy-join に送る）
+    if (ctx.isHandyDevice) {
+      const { checkHandyNetwork } = await import('@/lib/handy-device-server');
+      const guard = await checkHandyNetwork();
+      if (guard.isDevice && guard.decision.kind === 'logout') return json({ ok: false, error: 'お店の回線の外にいます', useWeb: true }, 403);
+    }
+    // 契約のアクセス制限（お店の回線）。引っかかったら Web の画面（案内が出る）
+    const { isRequestFromStoreNetwork } = await import('@/lib/store-access-server');
+    if (!(await isRequestFromStoreNetwork(store.id))) return json({ ok: false, error: ACCESS_MESSAGE.network, useWeb: true }, 403);
+    const handy = await loadNativeHandy(ctx, await createClient(), { id: store.id, name: store.name });
+    return json({ ok: true, ...handy });
+  }
+
+  // iPhone オーナー・店長のホーム。Web の /app/dashboard と同じ組み立て（lib/native-owner-home-server.ts。2026-10-24）
+  if (part === 'ownerHome') {
+    if (!can(ctx.role, 'dashboard.view')) return json({ ok: false, error: '権限がありません', useWeb: true }, 403);
+    const home = await loadNativeOwnerHome(ctx, await createClient());
     return json({ ok: true, ...home });
   }
 
@@ -662,6 +691,26 @@ export async function POST(request: Request) {
   } catch {
     return json({ ok: false, error: '内容が正しくありません' }, 400);
   }
+  // iPhone ハンディ・オーナーのホームの操作（担当者・卓ロック・まとめ・呼び出し対応・店舗の切り替え。2026-10-24）
+  if (raw && typeof raw === 'object' && isNativeHandyActionType((raw as { type?: unknown }).type)) {
+    const parsedHandy = parseNativeHandyAction(raw);
+    if (!parsedHandy.ok) return json({ ok: false, error: parsedHandy.error }, 400);
+    const ha = parsedHandy.action;
+    const handyPerm: PermissionAction | null =
+      ha.type === 'handyLock' || ha.type === 'handyGroup' ? 'tables.operate' : ha.type === 'switchStore' || ha.type === 'handyLogout' ? null : 'pos.order';
+    if (handyPerm && !can(ctx.role, handyPerm)) return json({ ok: false, error: '権限がありません' }, 403);
+    if (ha.type !== 'switchStore' && ha.type !== 'handyLogout') {
+      // Route Handler では requirePermission がお店の回線を見ないので、ここで見る（ほかの操作と同じ）
+      const handyProblem = await networkProblem(ctx);
+      if (handyProblem) return json({ ok: false, error: handyProblem }, 403);
+    }
+    try {
+      return json(await runNativeHandyAction(ha));
+    } catch (e) {
+      return json({ ok: false, error: errorText(e, 'うまくいきませんでした。もう一度お試しください') }, 400);
+    }
+  }
+
   // 店舗台帳（予約）の操作（2026-10-24）
   if (raw && typeof raw === 'object' && isNativeLedgerActionType((raw as { type?: unknown }).type)) {
     const parsedLedger = parseNativeLedgerAction(raw);
