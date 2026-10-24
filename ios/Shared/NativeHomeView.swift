@@ -399,16 +399,8 @@ struct NativeHomeView: View {
                     if let b = s?.budget {
                         Text(NT.yen(b)).font(.system(size: 28, weight: .heavy)).monospacedDigit().foregroundColor(NFColor.ink)
                     } else {
-                        // 未設定のときは大きく出さず、赤く小さく「予算を設定」（押すと日別予算登録へ。2026-10-24 Ronnie）
-                        Button { onWeb("/app/budgets/daily") } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: "exclamationmark.circle.fill").font(.system(size: 12, weight: .bold))
-                                Text("予算を設定").font(.system(size: 14, weight: .bold))
-                                Text("Set budget").font(.system(size: 10, weight: .semibold)).opacity(0.8)
-                            }
-                            .foregroundColor(NFColor.danger)
-                        }
-                        .buttonStyle(.plain)
+                        // 未設定のときはここに何も書かない。右の「予算登録」ボタンに赤い丸の「!」だけ（2026-10-24 13:47 Ronnie）
+                        Text(" ").font(.system(size: 28, weight: .heavy))
                     }
                 }
                 HStack(spacing: 4) {
@@ -425,10 +417,11 @@ struct NativeHomeView: View {
         if s?.canAnalytics ?? false {
             outlineButton("店舗分析", en: "Analytics") { onWeb("/app/reports") }
         }
-        outlineButton("予算登録", en: "Set budget") { onWeb("/app/budgets/daily") }
+        // 予算が未設定のときは右上に赤い丸の「!」（文字は書かない。2026-10-24 Ronnie）
+        outlineButton("予算登録", en: "Set budget", alert: s != nil && s?.budget == nil) { onWeb("/app/budgets/daily") }
     }
 
-    private func outlineButton(_ ja: String, en: String, action: @escaping () -> Void) -> some View {
+    private func outlineButton(_ ja: String, en: String, alert: Bool = false, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             VStack(spacing: 2) {
                 Text(ja).font(.system(size: 18, weight: .heavy)).foregroundColor(NFColor.ink)
@@ -437,6 +430,15 @@ struct NativeHomeView: View {
             .frame(maxWidth: .infinity).frame(height: 76)
             .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.white))
             .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Color(hex: 0xC9CDD6), lineWidth: 1.5))
+            .overlay(alignment: .topTrailing) {
+                if alert {
+                    Text("!").font(.system(size: 14, weight: .heavy)).foregroundColor(.white)
+                        .frame(width: 24, height: 24)
+                        .background(Circle().fill(NFColor.danger))
+                        .overlay(Circle().stroke(Color.white, lineWidth: 2))
+                        .offset(x: 8, y: -8)
+                }
+            }
         }
         .buttonStyle(PressableStyle(scale: 0.98))
     }
