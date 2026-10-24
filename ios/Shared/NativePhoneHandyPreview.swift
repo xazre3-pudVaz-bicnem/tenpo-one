@@ -1,0 +1,76 @@
+import SwiftUI
+
+// iPhone ハンディの卓・注文の見本（シミュレーターで形を確かめる用。-tenpoNativePreview phoneTable|phoneOrder|phoneConfirm）
+
+extension NativePhoneTableModel {
+    static func sample() -> NativePhoneTableModel {
+        let m = NativePhoneTableModel(tableId: "00000000-0000-4000-8000-000000000001")
+        let now = Date().timeIntervalSince1970 * 1000
+        let items = [
+            NPHItem(id: "a", name: "生ビール（中）", quantity: 3, unitPrice: 600, lineTotal: 1800, optionLabel: nil, sentAt: now - 60_000 * 42, orderedAt: now - 60_000 * 42),
+            NPHItem(id: "b", name: "本日の刺身盛り合わせ", quantity: 1, unitPrice: 1680, lineTotal: 1680, optionLabel: "3点盛り", sentAt: now - 60_000 * 30, orderedAt: now - 60_000 * 30),
+            NPHItem(id: "c", name: "鶏の唐揚げ", quantity: 2, unitPrice: 680, lineTotal: 1360, optionLabel: "レモン別添え", sentAt: now - 60_000 * 2, orderedAt: now - 60_000 * 2),
+            NPHItem(id: "d", name: "ハイボール", quantity: 2, unitPrice: 500, lineTotal: 1000, optionLabel: nil, sentAt: now - 60_000, orderedAt: now - 60_000),
+        ]
+        let slip = NPHSlip(id: "00000000-0000-4000-8000-0000000000aa", orderNo: 101, guestCount: 4, openedAt: now - 60_000 * 48,
+                           subtotal: 5840, discountTotal: 0, total: 6424, endsAt: now + 60_000 * 25, items: items)
+        m.payload = NPHTablePayload(ok: true, hostTableId: nil, table: NPHTableInfo(id: m.tableId, name: "T-1", capacityMax: 4, status: "seated"),
+                                    clerk: NHDNamed(id: "k", name: "佐藤"), slips: [slip],
+                                    calls: [NPHCall(id: "call1", kind: "staff", note: "お水ください", createdAt: now - 60_000 * 3)],
+                                    serverNow: now, cancelWindowMs: 300_000, extendOptions: [30, 60, 90, 120])
+        return m
+    }
+}
+
+extension NativePhoneOrderModel {
+    static func sample() -> NativePhoneOrderModel {
+        let m = NativePhoneOrderModel(orderId: "00000000-0000-4000-8000-0000000000aa")
+        func item(_ id: String, _ name: String, _ price: Double, options: Bool = false, soldOut: Bool = false) -> NPHMenuItem {
+            NPHMenuItem(id: id, categoryId: nil, name: name, nameEn: nil, price: price, itemType: "food", isSoldOut: soldOut, offHours: false, hasOptions: options, revealedBy: nil)
+        }
+        let rec = NPHCategory(id: "c1", name: "おすすめ", nameEn: nil, tabId: "alacarte", items: [
+            item("i1", "本日の刺身盛り合わせ", 1680, options: true), item("i2", "自家製ポテトサラダ", 480), item("i3", "和牛の炙り", 1280),
+            item("i4", "だし巻き玉子", 580), item("i5", "鶏の唐揚げ", 680), item("i6", "枝豆", 380), item("i7", "冷やしトマト", 420, soldOut: true),
+            item("i8", "〆の焼きおにぎり", 380),
+        ])
+        let yaki = NPHCategory(id: "c2", name: "焼き鳥", nameEn: nil, tabId: "alacarte", items: [item("y1", "もも", 180), item("y2", "ねぎま", 180), item("y3", "つくね", 220)])
+        let age = NPHCategory(id: "c3", name: "揚げ物", nameEn: nil, tabId: "alacarte", items: [item("a1", "ポテトフライ", 450)])
+        let salad = NPHCategory(id: "c4", name: "サラダ", nameEn: nil, tabId: "alacarte", items: [item("s1", "シーザーサラダ", 680)])
+        let drink = NPHCategory(id: "d1", name: "ビール", nameEn: nil, tabId: "alacarte", items: [item("b1", "生ビール（中）", 600), item("b2", "瓶ビール", 650)])
+        let course = NPHCategory(id: "k1", name: "コース", nameEn: nil, tabId: "plan", items: [item("k1i", "おまかせコース", 5000, options: true)])
+        let p = NPHMenuPayload(ok: true, order: NPHOrderInfo(id: m.orderId, orderNo: 101, tableId: nil, tableName: "T-1", guestCount: 4, total: 6424),
+                               clerk: NHDNamed(id: "k", name: "佐藤"),
+                               pages: [NPHPage(key: "d1", name: "DRINK", label: "ドリンク", categories: [drink], hasPlanContent: false),
+                                       NPHPage(key: "c1", name: "FOOD", label: "フード", categories: [rec, yaki, age, salad], hasPlanContent: false),
+                                       NPHPage(key: "k1", name: "COURSE", label: "コース", categories: [course], hasPlanContent: true)],
+                               initialPageKey: "c1",
+                               optionGroupsByItem: [
+                                "i1": [NPHOptionGroup(id: "g1", name: "盛り", isRequired: true, minSelect: 1, maxSelect: 1,
+                                                      items: [NPHOptionItem(id: "o1", name: "3点盛り", nameEn: nil, price: 0), NPHOptionItem(id: "o2", name: "5点盛り", nameEn: nil, price: 600)])],
+                                "k1i": [NPHOptionGroup(id: "g2", name: "メイン選択", isRequired: true, minSelect: 1, maxSelect: 1,
+                                                       items: [NPHOptionItem(id: "m1", name: "和牛ステーキ", nameEn: nil, price: 0), NPHOptionItem(id: "m2", name: "鯛の塩釜", nameEn: nil, price: 500)])],
+                               ])
+        m.payload = p
+        m.pageKey = "c1"
+        if let i1 = rec.items.first { m.add(i1, options: ["o1"]) }
+        m.add(rec.items[4]); m.add(rec.items[4]); m.add(rec.items[5])
+        return m
+    }
+}
+
+struct NativePhoneHandyPreview: View {
+    let kind: String
+    @StateObject private var table = NativePhoneTableModel.sample()
+    @StateObject private var order = NativePhoneOrderModel.sample()
+
+    var body: some View {
+        switch kind {
+        case "phoneTable":
+            NativePhoneTableView(model: table, onBack: {}, onOrder: { _ in }, onSetup: {})
+        case "phoneConfirm":
+            NPHConfirmSheet(model: order, onSent: { _ in }).environment(\.colorScheme, .light).background(Color.white)
+        default:
+            NativePhoneOrderView(model: order, onBack: { _ in })
+        }
+    }
+}

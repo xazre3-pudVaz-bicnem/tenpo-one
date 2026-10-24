@@ -91,6 +91,9 @@ final class AppState: ObservableObject {
     /// iPhone：ハンディのテーブル一覧（/handy の代わり）とオーナー・店長のホーム（/app/dashboard の代わり）をネイティブで出しているか（2026-10-24）
     @Published var nativeHandyHome = false
     @Published var nativeOwnerHome = false
+    /// iPhone ハンディの卓・注文をネイティブで出しているとき（/handy/<卓>・/handy/<卓>/order の代わり。2026-10-25 Ronnie「iPhone も native に」）
+    struct PhoneHandyRoute: Equatable, Hashable { let tableId: String; var orderId: String? }
+    @Published var phoneHandy: PhoneHandyRoute?
     /// iPhone のネイティブの画面を読み直してほしいとき（Web が /handy に戻ってきたときなど）に増やす
     @Published var phoneRefreshTick = 0
     /// ネイティブの予約設定＝予約受付ルール（/app/settings/booking。店舗台帳の 📅「台帳設定」から。2026-10-24）
@@ -257,6 +260,7 @@ final class AppState: ObservableObject {
         needsHandyLogin = false
         nativeHandyHome = false
         nativeOwnerHome = false
+        phoneHandy = nil
         mode = newMode
         webSession = UUID()
     }
@@ -268,6 +272,7 @@ final class AppState: ObservableObject {
         needsHandyLogin = false
         nativeHandyHome = false
         nativeOwnerHome = false
+        phoneHandy = nil
         mode = nil
     }
 
@@ -282,7 +287,7 @@ final class AppState: ObservableObject {
         case .handy:
             // ハンディのログインはお店の QR。メールのログイン画面は出さない
             if path == "/login" || path == "/register-login" {
-                DispatchQueue.main.async { self.needsHandyLogin = true; self.nativeHandyHome = false }
+                DispatchQueue.main.async { self.needsHandyLogin = true; self.nativeHandyHome = false; self.phoneHandy = nil }
                 return URL(string: "about:blank")
             }
         default:
@@ -580,8 +585,10 @@ final class AppState: ObservableObject {
         case .handy:
             nativeOwnerHome = false
             let on = path == "/handy" || path == "/handy/"
-            if on { phoneRefreshTick += 1 }
+            if on { phoneRefreshTick += 1; if phoneHandy != nil { phoneHandy = nil } }
             if nativeHandyHome != on { nativeHandyHome = on }
+            // Web がハンディの卓・注文の画面へ行ったら（お客様情報のあとなど）ネイティブで重ねる
+            if let r = Self.phoneHandyRoute(for: url) { phoneHandy = r }
         case .owner:
             nativeHandyHome = false
             let on = path == "/app/dashboard" || path == "/app" || path == "/app/"
@@ -593,8 +600,51 @@ final class AppState: ObservableObject {
         }
     }
 
+    /// /handy/<卓> → 卓、/handy/<卓>/order?order=<伝票> → 注文（ネイティブで出す道）。それ以外は nil
+    static func phoneHandyRoute(for url: URL) -> PhoneHandyRoute? {
+        let parts = url.path.split(separator: "/").map(String.init)
+        guard parts.count >= 2, parts[0] == "handy" else { return nil }
+        let id = parts[1]
+        guard id.count == 36, id.allSatisfy({ $0.isHexDigit || $0 == "-" }) else { return nil }
+        if parts.count == 2 { return PhoneHandyRoute(tableId: id, orderId: nil) }
+        if parts.count == 3, parts[2] == "order" {
+            let order = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "order" }?.value
+            guard let order, order.count == 36 else { return PhoneHandyRoute(tableId: id, orderId: nil) }
+            return PhoneHandyRoute(tableId: id, orderId: order)
+        }
+        return nil
+    }
+
+    /// iPhone ハンディの卓をネイティブで開く
+    func openPhoneHandy(tableId: String, orderId: String? = nil) {
+        guard nativePhoneEnabled else {
+            WebViewController.current?.load(AppConfig.url("/handy/\(tableId)"))
+            return
+        }
+        phoneHandy = PhoneHandyRoute(tableId: tableId, orderId: orderId)
+    }
+
+    /// iPhone ハンディの卓・注文を閉じてテーブル一覧へ（裏の Web が卓・注文の画面なら /handy に戻す）
+    func closePhoneHandy() {
+        phoneHandy = nil
+        let path = WebViewController.current?.currentURL?.path ?? ""
+        if path == "/handy" || path == "/handy/" {
+            nativeHandyHome = true
+            phoneRefreshTick += 1
+        } else {
+            nativeHandyHome = true
+            WebViewController.current?.load(AppConfig.url("/handy"))
+        }
+    }
+
     /// iPhone のネイティブの画面を閉じて Web の画面へ（卓の画面・店舗台帳・設定など）
     func leaveNativePhone(to path: String) {
+        // 卓・注文の画面はネイティブで（2026-10-25）
+        if mode == .handy, nativePhoneEnabled, let url = URL(string: path, relativeTo: AppConfig.url("/")), let r = Self.phoneHandyRoute(for: url.absoluteURL) {
+            phoneHandy = r
+            return
+        }
+        phoneHandy = nil
         nativeHandyHome = false
         nativeOwnerHome = false
         WebViewController.current?.load(AppConfig.url(path))

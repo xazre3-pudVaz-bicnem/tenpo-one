@@ -95,32 +95,33 @@ enum NHDState {
 }
 
 enum NHDColor {
-    static let bg = Color(hex: 0xFBF9F5)
-    static let header = Color(hex: 0x292725)
-    static let headerLine = Color(hex: 0x45403B)
-    static let accent = Color(hex: 0xBC5940)
-    static let accentDeep = Color(hex: 0x9F4630)
-    static let accentSoft = Color(hex: 0xF6E4DA)
-    static let line = Color(hex: 0xE5DFD5)
+    // 2026-10-25 01:40 Ronnie「iPhone も iPad のネイティブと同じデザイン」→ テラコッタをやめて iPad と同じネイビー・青・うすい灰色に
+    static let bg = Color(hex: 0xF4F5F8)
+    static let header = Color(hex: 0x171333)
+    static let headerLine = Color(hex: 0x2B2650)
+    static let accent = Color(hex: 0x2A6FE6)
+    static let accentDeep = Color(hex: 0x0A3FA8)
+    static let accentSoft = Color(hex: 0xE7EFFD)
+    static let line = Color(hex: 0xE4E7EE)
     static let ink = Color(hex: 0x292725)
-    static let ink2 = Color(hex: 0x5C5650)
-    static let ink3 = Color(hex: 0x766B62)
-    static let inkMid = Color(hex: 0x45403B)
-    static let occupied = Color(hex: 0xF3EFE8)
-    static let occupiedLine = Color(hex: 0xEAC0AD)
-    static let blocked = Color(hex: 0xE5DFD5)
-    static let blockedLine = Color(hex: 0xD3CCC2)
+    static let ink2 = Color(hex: 0x50565F)
+    static let ink3 = Color(hex: 0x8A909A)
+    static let inkMid = Color(hex: 0x3A3F48)
+    static let occupied = Color(hex: 0xEEF3FD)
+    static let occupiedLine = Color(hex: 0xAFC6F3)
+    static let blocked = Color(hex: 0xE4E7EE)
+    static let blockedLine = Color(hex: 0xD3D8E2)
     static let gold = Color(hex: 0xB7791F)
     static let goldSoft = Color(hex: 0xFBF1D9)
     static let callBg = Color(hex: 0xFFF1E6)
     static let callLine = Color(hex: 0xEE853E)
     static let callInk = Color(hex: 0x842F0B)
     static let callBadge = Color(hex: 0xB44814)
-    static let navMuted = Color(hex: 0xC9BFB3)
-    static let navLabel = Color(hex: 0xA89E92)
-    static let weakBtn = Color(hex: 0xF9F3ED)
-    static let weakBtn2 = Color(hex: 0xF3EFE8)
-    static let divider = Color(hex: 0xF1ECE4)
+    static let navMuted = Color(hex: 0xB9BDD6)
+    static let navLabel = Color(hex: 0x9EA3C4)
+    static let weakBtn = Color(hex: 0xF1F4FA)
+    static let weakBtn2 = Color(hex: 0xEEF1F7)
+    static let divider = Color(hex: 0xEDF0F5)
 }
 
 /** 経過時間（45分 / 1時間05分）。Web の elapsedLabel と同じ */
@@ -294,7 +295,7 @@ struct NativeHandyHomeView: View {
                 .frame(width: 110, alignment: .leading)
                 .padding(.leading, 7)
                 VStack(spacing: 0) {
-                    Text(p?.store.name ?? " ").font(.system(size: 10)).foregroundColor(Color(hex: 0xE9DFD3)).lineLimit(1).frame(height: 26)
+                    Text(p?.store.name ?? " ").font(.system(size: 10)).foregroundColor(Color.white.opacity(0.72)).lineLimit(1).frame(height: 26)
                     Text("テーブル一覧").font(.system(size: 15, weight: .bold)).foregroundColor(.white).lineLimit(1)
                 }
                 .frame(maxWidth: .infinity)
@@ -551,9 +552,9 @@ struct NativeHandyHomeView: View {
             HStack(spacing: 8) {
                 Image(systemName: icon).font(.system(size: 16, weight: .semibold)).frame(width: 20)
                 Text(title).font(.system(size: 14)).lineLimit(1)
-                if let trailing { Text(trailing).font(.system(size: 10, weight: .semibold)).foregroundColor(Color(hex: 0xA8958A)) }
+                if let trailing { Text(trailing).font(.system(size: 10, weight: .semibold)).foregroundColor(NHDColor.ink3) }
                 Spacer()
-                Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundColor(Color(hex: 0xE8C4B4))
+                Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundColor(Color(hex: 0xB9C6E4))
             }
             .foregroundColor(color)
             .frame(minHeight: 49)
@@ -960,12 +961,12 @@ struct NativeHandyLoginView: View {
                     HStack(spacing: 9) {
                         Image("BrandMark").resizable().scaledToFit().frame(width: 45, height: 48)
                             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                        Text("TENPO").font(.system(size: 30, weight: .heavy)).foregroundColor(Color(hex: 0xF0A080))
+                        Text("TENPO").font(.system(size: 30, weight: .heavy)).foregroundColor(Color(hex: 0x8FB4FF))
                         Text("ONE").font(.system(size: 30, weight: .heavy)).foregroundColor(.white)
                     }
                     Text("HANDY · TENPO ONE").font(.system(size: 11, weight: .semibold)).tracking(1.2).foregroundColor(.white).padding(.top, 28)
                     HStack(spacing: 6) {
-                        Image(systemName: "calendar").font(.system(size: 14)).foregroundColor(Color(hex: 0xEBD2C4))
+                        Image(systemName: "calendar").font(.system(size: 14)).foregroundColor(Color(hex: 0xC9D6F5))
                         Text(payload.today).font(.system(size: 16)).foregroundColor(.white)
                     }
                     .padding(.top, 22)
@@ -1025,7 +1026,7 @@ struct NativeHandyLoginView: View {
                 Text(payload.clerks.isEmpty
                      ? "担当者が登録されていません。レジの 設定 → POS担当者 で登録してからログインしてください。"
                      : "担当者を選ばないと Login できません。ハンディで作った伝票の担当者になります。")
-                    .font(.system(size: 9)).foregroundColor(Color(hex: 0xEBD2C4)).multilineTextAlignment(.center).lineSpacing(3)
+                    .font(.system(size: 9)).foregroundColor(Color(hex: 0xC9D6F5)).multilineTextAlignment(.center).lineSpacing(3)
                     .padding(.top, 10)
             }
             .padding(.horizontal, 28)

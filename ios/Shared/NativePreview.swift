@@ -4,6 +4,8 @@ import SwiftUI
 /// 起動の引数 `-tenpoNativePreview order|checkout|options|price|settings` のときだけ。お店で使うときは出ない。
 enum NativePreview: String {
     case order, checkout, options, price, settings
+    /// iPhone ハンディの卓・注文・注文の確認（2026-10-25）
+    case phoneTable, phoneOrder, phoneConfirm
 
     static var current: NativePreview? {
         guard let raw = UserDefaults.standard.string(forKey: "tenpoNativePreview") else { return nil }
@@ -35,6 +37,8 @@ struct NativePreviewView: View {
                 .statusBarHidden(true)
         case .settings:
             NativeSettingsView(model: NativeSettingsModel.sample(), onHome: {}, onWeb: { _ in })
+        case .phoneTable, .phoneOrder, .phoneConfirm:
+            NativePhoneHandyPreview(kind: kind.rawValue)
         case .options, .price:
             NativeOrderView(model: model)
                 .statusBarHidden(true)
