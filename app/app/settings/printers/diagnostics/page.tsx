@@ -30,10 +30,13 @@ export default async function KitchenPrintDiagnostics() {
     <h2>この店舗で作成された直近の厨房伝票</h2>
     {error && <p>印刷履歴を取得できませんでした。</p>}
     {(data ?? []).map(job => {
-      const payload = job.payload as { body?: string } | null;
+      const payload = job.payload as { body?: string; renderer?: { version?: string; commit?: string; deployment?: string; mode?: string } } | null;
       const images = [...(payload?.body ?? '').matchAll(/data:image\/png;base64,([A-Za-z0-9+/=]+)/g)].map(m => m[0]);
       return <section key={job.id}>
         <p>{new Date(job.created_at).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })} / {job.status} / {job.id}</p>
+        <p>{payload?.renderer
+          ? `生成元: ${payload.renderer.version} / ${payload.renderer.mode} / ${payload.renderer.commit?.slice(0, 12) ?? 'unknown'} / ${payload.renderer.deployment ?? 'unknown'}`
+          : '生成元: バージョン記録なし（生成サーバー未確認）'}</p>
         {images.length ? images.map((src, i) =>
           // eslint-disable-next-line @next/next/no-img-element
           <img key={i} src={src} width={576} alt={`保存済み厨房伝票 ${i + 1}`} />
