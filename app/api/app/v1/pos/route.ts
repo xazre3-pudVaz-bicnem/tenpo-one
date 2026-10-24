@@ -89,9 +89,12 @@ import {
 } from '@/app/app/cash/actions';
 import { isNativeNoticeActionType, parseNativeNoticeAction } from '@/lib/native-notices';
 import { isNativeSettingsActionType, parseNativeSettingsAction } from '@/lib/native-settings';
-import { isNativeSettingsPageActionType, parseNativeSettingsPageAction, type NativeSoldOutPayload } from '@/lib/native-settings-pages';
+import { isNativeSettingsPageActionType, parseNativeSettingsPageAction, type NativeClerksPayload, type NativeSoldOutPayload } from '@/lib/native-settings-pages';
 import { loadSoldOutBoard } from '@/lib/sold-out-loader';
 import { setItemSoldOut } from '@/app/app/pos/sold-out-actions';
+import { loadStoreClerks } from '@/lib/pos-clerks-server';
+import { CLERK_ROLES, CLERK_ROLE_EN, CLERK_ROLE_LABELS } from '@/lib/clerk-roles';
+import { addPosClerk, deletePosClerk, renamePosClerk, setPosClerkRole, setPosClerkStatus } from '@/app/app/settings/clerks/actions';
 import { loadNativeSettings } from '@/lib/native-settings-server';
 import { currentDeviceSetting } from '@/lib/register-device-server';
 import { addDeviceReceiptPrinter, saveDeviceReceiptPrinterSettings, setDevicePrinter } from '@/app/app/pos/device-printer-actions';
@@ -346,6 +349,21 @@ export async function GET(request: Request) {
       canManageShared: can(ctx.role, 'menu.manage'),
       categories: board.categories,
       items: board.items,
+    };
+    return json({ ok: true, ...payload });
+  }
+
+  // 設定の中の画面：POS担当者（Web の /app/settings/clerks と同じ読み込み）
+  if (part === 'clerks') {
+    const store = ctx.currentStore ?? ctx.stores[0] ?? null;
+    if (!store) return json({ ok: false, error: '店舗がありません' }, 404);
+    const rows = await loadStoreClerks(await createClient(), store.id, { includeHidden: true });
+    const payload: NativeClerksPayload = {
+      store: { id: store.id, name: store.name },
+      lockOwner: ctx.isRegisterDevice === true,
+      canEdit: can(ctx.role, 'store.settings'),
+      roles: CLERK_ROLES.map((r) => ({ id: r, label: CLERK_ROLE_LABELS[r], en: CLERK_ROLE_EN[r] })),
+      rows: rows.map((c) => ({ id: c.id, name: c.name, status: c.status, role: c.role })),
     };
     return json({ ok: true, ...payload });
   }
@@ -1190,6 +1208,15 @@ export async function POST(request: Request) {
         const r = await setItemSoldOut(pa.itemId, pa.soldOut);
         return json(r.error ? { ok: false, error: r.error } : { ok: true });
       }
+      // POS担当者（権限 store.settings は Server Action の中で見る）
+      const pageStore = ctx.currentStore ?? ctx.stores[0];
+      if (!pageStore) return json({ ok: false, error: '店舗がありません' }, 404);
+      const done = (r: { error?: string }) => json(r.error ? { ok: false, error: r.error } : { ok: true });
+      if (pa.type === 'clerkAdd') return done(await addPosClerk(pageStore.id, pa.name, pa.role));
+      if (pa.type === 'clerkRename') return done(await renamePosClerk(pa.id, pageStore.id, pa.name));
+      if (pa.type === 'clerkStatus') return done(await setPosClerkStatus(pa.id, pageStore.id, pa.status));
+      if (pa.type === 'clerkRole') return done(await setPosClerkRole(pa.id, pageStore.id, pa.role));
+      if (pa.type === 'clerkDelete') return done(await deletePosClerk(pa.id, pageStore.id));
     } catch (e) {
       return json({ ok: false, error: errorText(e, 'うまくいきませんでした。もう一度お試しください') }, 400);
     }
