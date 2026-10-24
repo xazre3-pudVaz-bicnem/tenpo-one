@@ -456,8 +456,9 @@ struct NativeSettingsView: View {
         // 名前は左・操作は右（見本の Funfo と同じ並び）
         HStack(alignment: .center, spacing: 16) {
             // 名前は縮めない（右のメニューに押されて消えないように）
+            // 長い名前は折り返す（1 行に固定すると列の幅を押し広げて画面からはみ出す）
             Text(label).font(.system(size: 17, weight: .bold)).foregroundColor(dim ? NFColor.ink3 : NFColor.ink)
-                .fixedSize().layoutPriority(1)
+                .fixedSize(horizontal: false, vertical: true).layoutPriority(1)
             Spacer(minLength: 12)
             content()
         }
