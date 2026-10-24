@@ -829,6 +829,24 @@ struct NativeLedgerView: View {
         "storefront": Color(hex: 0x45403B),   // 店頭：チャコール
     ]
 
+    /// マス目の縦の線：00 分は普通の線、30 分は少し細く、15・45 分はもっと細く
+    /// （2026-10-24 18:53 Ronnie「00 ma normal line, 30 ma thorai masino, 15 ma ajai masino」）
+    private func gridLines(from m: Int, minutes: Int, height: CGFloat) -> some View {
+        let step = 15
+        let marks = stride(from: 0, to: max(minutes, step), by: step).map { m + $0 }
+        return ZStack(alignment: .topLeading) {
+            ForEach(marks, id: \.self) { t in
+                // 00 分 = 1pt（今までの線）、30 分 = 0.5pt、15・45 分 = 0.5pt でうすく
+                let style: (w: CGFloat, a: Double) = t % 60 == 0 ? (1, 1) : t % 30 == 0 ? (0.5, 1) : (0.5, 0.5)
+                Rectangle().fill(NLColor.line.opacity(style.a))
+                    .frame(width: style.w, height: height)
+                    .offset(x: CGFloat(t - m) / CGFloat(max(minutes, 1)) * slotW)
+            }
+        }
+        .frame(width: slotW, height: height, alignment: .topLeading)
+        .allowsHitTesting(false)
+    }
+
     private func tableRow(_ row: NLBoardRow, p: NLPayload, slots: Int, totalW: CGFloat, nowMin: Int?) -> some View {
         let h = row.height
         return HStack(spacing: 0) {
@@ -840,7 +858,7 @@ struct NativeLedgerView: View {
                         let closed = m < p.openMin || m >= p.closeMin
                         Rectangle().fill(closed ? NLColor.graySoft.opacity(0.6) : Color.clear)
                             .frame(width: slotW, height: h)
-                            .overlay(alignment: .leading) { Rectangle().fill(NLColor.line.opacity(m % 60 == 0 ? 1 : 0.5)).frame(width: 1) }
+                            .overlay(alignment: .topLeading) { gridLines(from: m, minutes: p.slotMinutes, height: h) }
                     }
                 }
                 // 予約の箱
