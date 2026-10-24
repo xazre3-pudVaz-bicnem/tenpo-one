@@ -125,13 +125,13 @@ struct NativeSettingsView: View {
         .onReceive(printConfig.$config) { _ in model.syncForm() }
     }
 
-    // MARK: - 左：一覧（黒い帯。印＋名前は大きく。選んでいるものは青。2026-10-24 Ronnie「タブはもっと大きく・きれいに。全部黒でもいい」）
+    // MARK: - 左：一覧（白い地に黒いタブ。印＋名前は大きく。選んでいるものは青。2026-10-24 Ronnie「背景ではなくタブを黒に」）
 
     private static let sideWidth: CGFloat = 300
 
     private var sidebar: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 8) {
                 sideHeader("このiPad", en: "This iPad")
                 ForEach(Page.allCases) { p in
                     sideRow(icon: p.icon, title: p.title, en: p.en, dot: pageStatus(p)?.1, on: sel == .page(p)) { select(.page(p)) }
@@ -142,12 +142,13 @@ struct NativeSettingsView: View {
                         sideRow(icon: g.icon, title: g.label, en: g.en, dot: nil, on: sel == .group(g.id)) { select(.group(g.id)) }
                     }
                 }
-                Text("TENPO ONE \(AppConfig.version)").font(.system(size: 11, weight: .semibold)).foregroundColor(Color.white.opacity(0.35)).padding(.top, 22).padding(.horizontal, 12)
+                Text("TENPO ONE \(AppConfig.version)").font(.system(size: 11, weight: .semibold)).foregroundColor(NFColor.ink3).padding(.top, 22).padding(.horizontal, 12)
             }
-            .padding(.horizontal, 12).padding(.vertical, 16)
+            .padding(.horizontal, 14).padding(.vertical, 16)
         }
         .frame(width: Self.sideWidth)
-        .background(NFColor.navy)
+        .background(Color.white)
+        .overlay(alignment: .trailing) { Rectangle().fill(NFColor.line).frame(width: 1) }
     }
 
     private func select(_ s: Sel) {
@@ -156,13 +157,13 @@ struct NativeSettingsView: View {
 
     private func sideHeader(_ title: String, en: String) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
-            Text(title).font(.system(size: 12.5, weight: .heavy)).foregroundColor(Color.white.opacity(0.55))
-            Text(en).font(.system(size: 10.5, weight: .semibold)).foregroundColor(Color.white.opacity(0.35))
+            Text(title).font(.system(size: 12.5, weight: .heavy)).foregroundColor(NFColor.ink3)
+            Text(en).font(.system(size: 10.5, weight: .semibold)).foregroundColor(NFColor.ink3.opacity(0.7))
         }
-        .padding(.horizontal, 12).padding(.bottom, 6)
+        .padding(.horizontal, 4).padding(.bottom, 4)
     }
 
-    /// 一覧の1行（大きめ）：印（選ぶと青地に白）＋名前（下に英語）＋いまの状態の点
+    /// 一覧の1行＝黒いタブ（選ぶと青）：印＋名前（下に英語）＋いまの状態の点
     private func sideRow(icon: String, title: String, en: String, dot: Color?, on: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 13) {
@@ -170,23 +171,21 @@ struct NativeSettingsView: View {
                     .font(.system(size: 21, weight: .semibold))
                     .foregroundColor(.white)
                     .frame(width: 48, height: 48)
-                    .background(RoundedRectangle(cornerRadius: 13, style: .continuous).fill(on ? NFColor.iris : Color.white.opacity(0.10)))
+                    .background(RoundedRectangle(cornerRadius: 13, style: .continuous).fill(Color.white.opacity(on ? 0.22 : 0.12)))
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title).font(.system(size: 18, weight: .heavy)).foregroundColor(.white).lineLimit(1)
-                    Text(en).font(.system(size: 11.5, weight: .medium)).foregroundColor(Color.white.opacity(on ? 0.85 : 0.55)).lineLimit(1)
+                    Text(en).font(.system(size: 11.5, weight: .medium)).foregroundColor(Color.white.opacity(on ? 0.85 : 0.6)).lineLimit(1)
                 }
                 Spacer(minLength: 4)
                 if let dot {
                     Circle().fill(dot).frame(width: 10, height: 10)
-                        .overlay(Circle().stroke(Color.white.opacity(0.25), lineWidth: 1))
+                        .overlay(Circle().stroke(Color.white.opacity(0.6), lineWidth: 1))
                 }
-                Image(systemName: "chevron.right").font(.system(size: 13, weight: .bold)).foregroundColor(Color.white.opacity(on ? 0.9 : 0.3))
+                Image(systemName: "chevron.right").font(.system(size: 13, weight: .bold)).foregroundColor(Color.white.opacity(on ? 0.95 : 0.45))
             }
             .padding(.horizontal, 10).frame(height: 68)
-            .background(RoundedRectangle(cornerRadius: 15, style: .continuous).fill(on ? Color.white.opacity(0.14) : Color.clear))
-            .overlay(alignment: .leading) {
-                if on { RoundedRectangle(cornerRadius: 2).fill(NFColor.iris).frame(width: 4, height: 36).padding(.leading, -2) }
-            }
+            .background(RoundedRectangle(cornerRadius: 15, style: .continuous).fill(on ? NFColor.iris : NFColor.navy))
+            .shadow(color: Color.black.opacity(on ? 0.18 : 0.10), radius: 6, y: 3)
         }
         .buttonStyle(PressableStyle(scale: 0.98))
     }
