@@ -254,6 +254,7 @@ export async function loadNativeCatalog(
     steraPaymentTypes: STERA_PAYMENT_TYPES.map((t) => ({ code: t.code, method: t.method, label: t.label, en: t.en })),
     canCheckout: can(ctx.role, 'pos.checkout'),
     canDiscount: can(ctx.role, 'pos.discount'),
+    canEditPages: can(ctx.role, 'menu.manage'),
   };
   return { ...body, version: versionOf(body) };
 }

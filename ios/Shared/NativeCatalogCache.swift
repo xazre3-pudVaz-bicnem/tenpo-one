@@ -19,6 +19,8 @@ struct APICatalog: Codable {
     let steraPaymentTypes: [APISteraType]
     let canCheckout: Bool
     let canDiscount: Bool
+    /// 上のタブを編集できるか（前のアプリで保存したものには無い）
+    let canEditPages: Bool?
     let version: String
 }
 

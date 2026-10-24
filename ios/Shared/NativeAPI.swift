@@ -98,6 +98,8 @@ struct APIPayload: Codable {
     let registerOpen: Bool
     let canCheckout: Bool
     let canDiscount: Bool
+    /// 上のタブを編集できるか（店長以上。古いサーバーは無い）
+    let canEditPages: Bool?
 }
 
 /// 操作の返事（order があれば画面をサーバーの値にそろえる）

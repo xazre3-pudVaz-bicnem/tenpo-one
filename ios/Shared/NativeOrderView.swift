@@ -14,6 +14,8 @@ struct NativeOrderView: View {
     @State private var afterClerk: (() -> Void)?
     /// 伝票の操作のシート（新しい伝票・まとめる・卓を移動・取消）
     @State private var slipOp: NativeSlipOp?
+    /// 上のタブの編集（店長以上）
+    @State private var editingPages = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -31,7 +33,7 @@ struct NativeOrderView: View {
                     VStack(spacing: 12) {
                         // 上のタブ（ページ）。Web と同じく2つ以上あるときだけ（テイクアウトは出さない）
                         if model.pages.count > 1 {
-                            PageTabsBar(model: model)
+                            PageTabsBar(model: model, onEdit: { editingPages = true })
                         }
                         HStack(alignment: .top, spacing: 12) {
                             CategoryColumn(model: model)
@@ -113,6 +115,18 @@ struct NativeOrderView: View {
             }
         }
         .animation(.easeOut(duration: 0.15), value: model.customTarget)
+        // 上のタブの編集（Web のレジの「編集 Edit tabs」と同じ中身）
+        .overlay {
+            if editingPages, let sid = model.storeId {
+                NativeMenuPagesEditor(storeId: sid, onClose: { editingPages = false }, onSaved: {
+                    editingPages = false
+                    model.toast = "ページを保存しました（レジ・ハンディ・お客様QRに反映）"
+                    model.reloadCatalog()
+                })
+                .transition(.opacity)
+            }
+        }
+        .animation(.easeOut(duration: 0.15), value: editingPages)
         // 会計は同じ画面の上に重ねる（fullScreenCover にすると、下の Web が止まって Bluetooth の印刷・ドロアが出ない）
         .overlay {
             if showCheckout {
@@ -478,36 +492,57 @@ private struct FlowChips: View {
 /// 上のタブ（ページ）。番号・日本語を大きく・英語を小さく（Web のレジのタブと同じ並び）。押すとそのページの最初のカテゴリ
 private struct PageTabsBar: View {
     @ObservedObject var model: NativeOrderModel
+    var onEdit: () -> Void = {}
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(Array(model.pages.enumerated()), id: \.element.id) { i, pg in
-                    let on = pg.id == model.currentPage?.id && model.search.isEmpty
-                    Button { model.openPage(pg) } label: {
-                        HStack(spacing: 10) {
-                            Text(verbatim: "\(i + 1)")
-                                .font(.system(size: 14, weight: .heavy)).monospacedDigit()
-                                .foregroundColor(on ? .white : NT.ink3)
-                                .frame(width: 28, height: 28)
-                                .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(on ? Color.white.opacity(0.22) : NT.lilac))
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text(pg.name).font(.system(size: 18, weight: .heavy)).lineLimit(1)
-                                if let sub = pg.sub {
-                                    Text(sub).font(.system(size: 11, weight: .semibold)).opacity(0.75).lineLimit(1)
+        HStack(spacing: 6) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(Array(model.pages.enumerated()), id: \.element.id) { i, pg in
+                        let on = pg.id == model.currentPage?.id && model.search.isEmpty
+                        Button { model.openPage(pg) } label: {
+                            HStack(spacing: 10) {
+                                Text(verbatim: "\(i + 1)")
+                                    .font(.system(size: 14, weight: .heavy)).monospacedDigit()
+                                    .foregroundColor(on ? .white : NT.ink3)
+                                    .frame(width: 28, height: 28)
+                                    .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(on ? Color.white.opacity(0.22) : NT.lilac))
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(pg.name).font(.system(size: 18, weight: .heavy)).lineLimit(1)
+                                    if let sub = pg.sub {
+                                        Text(sub).font(.system(size: 11, weight: .semibold)).opacity(0.75).lineLimit(1)
+                                    }
                                 }
+                                .foregroundColor(on ? .white : NT.ink)
                             }
-                            .foregroundColor(on ? .white : NT.ink)
+                            .padding(.horizontal, 16)
+                            .frame(minHeight: 58)
+                            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(on ? NT.purple : Color.clear))
+                            .contentShape(Rectangle())
                         }
-                        .padding(.horizontal, 16)
-                        .frame(minHeight: 58)
-                        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(on ? NT.purple : Color.clear))
-                        .contentShape(Rectangle())
+                        .buttonStyle(PressableStyle())
                     }
-                    .buttonStyle(PressableStyle())
                 }
+                .padding(7)
             }
-            .padding(7)
+            // タブの順番・名前・中身を店で変える（2026-10-02 FULL MOoN 御茶ノ水。店長以上）
+            if model.canEditPages {
+                Button(action: onEdit) {
+                    VStack(spacing: 2) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "pencil").font(.system(size: 13, weight: .bold))
+                            Text("編集").font(.system(size: 14, weight: .bold))
+                        }
+                        Text("Edit tabs").font(.system(size: 10, weight: .semibold)).opacity(0.75)
+                    }
+                    .foregroundColor(NT.ink3)
+                    .padding(.horizontal, 14)
+                    .frame(minHeight: 58)
+                    .background(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(NT.lilacLine, lineWidth: 1))
+                }
+                .buttonStyle(PressableStyle())
+                .padding(.trailing, 7)
+            }
         }
         .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(NT.card))
         .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(NT.lilacLine, lineWidth: 1))
