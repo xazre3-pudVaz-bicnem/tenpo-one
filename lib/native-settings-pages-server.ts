@@ -26,6 +26,8 @@ import { canWriteAccounting } from '@/components/accounting/roles';
 import { issueHandyPairing, renameHandyDevice, revokeHandyDevice } from '@/app/app/settings/handy/actions';
 import { deleteCategory, deleteMenuItem, saveCategory, saveMenuItem, toggleSoldOut, updateCategoryStation } from '@/app/app/settings/menu/actions';
 import { isCustomPriceHelper } from '@/lib/custom-price';
+import { saveQrService } from '@/app/app/settings/qr-service/actions';
+import { QR_SERVICE_MAX_ITEMS, qrServiceFrom } from '@/lib/qr-service';
 import { addOptionItem, createOptionGroup, deleteOptionGroup, deleteOptionItem, moveOptionGroup, setGroupMenuItems, updateOptionGroup } from '@/app/app/settings/options/actions';
 import { resolveSiteOrigin } from '@/lib/site-origin';
 import type {
@@ -33,6 +35,7 @@ import type {
   NativeCategoriesPayload,
   NativeMenuItemsPayload,
   NativeOptionsPayload,
+  NativeQrServicePayload,
   NativeHandyDevicesPayload,
   NativeAlertsPayload,
   NativeApprovalsPayload,
@@ -49,7 +52,7 @@ type Supabase = Awaited<ReturnType<typeof createClient>>;
 type Store = { id: string; name: string };
 
 /** 設定の中の画面の名前（GET ?part=） */
-export const NATIVE_SETTINGS_PAGE_PARTS = ['soldout', 'clerks', 'hours', 'store', 'tax', 'loyalty', 'alerts', 'approvals', 'accounts', 'handy', 'categories', 'menuItems', 'options'] as const;
+export const NATIVE_SETTINGS_PAGE_PARTS = ['soldout', 'clerks', 'hours', 'store', 'tax', 'loyalty', 'alerts', 'approvals', 'accounts', 'handy', 'categories', 'menuItems', 'options', 'qrService'] as const;
 export type NativeSettingsPagePart = (typeof NATIVE_SETTINGS_PAGE_PARTS)[number];
 export function isNativeSettingsPagePart(v: unknown): v is NativeSettingsPagePart {
   return typeof v === 'string' && (NATIVE_SETTINGS_PAGE_PARTS as readonly string[]).includes(v);
@@ -80,7 +83,8 @@ export async function loadNativeSettingsPage(
         | NativeHandyDevicesPayload
         | NativeCategoriesPayload
         | NativeMenuItemsPayload
-        | NativeOptionsPayload;
+        | NativeOptionsPayload
+        | NativeQrServicePayload;
     }
   | { ok: false; error: string }
 > {
@@ -474,6 +478,11 @@ export async function loadNativeSettingsPage(
       },
     };
   }
+  if (part === 'qrService') {
+    const { data } = await supabase.from('store_settings').select('settings').eq('store_id', store.id).maybeSingle();
+    const cur = qrServiceFrom((data as { settings?: unknown } | null)?.settings ?? null);
+    return { ok: true, payload: { store, canEdit: can(ctx.role, 'menu.manage'), enabled: cur.enabled, items: cur.items, maxItems: QR_SERVICE_MAX_ITEMS } };
+  }
   return { ok: false, error: '画面が見つかりません' };
 }
 
@@ -586,5 +595,7 @@ export async function runNativeSettingsPageAction(
       return done(await deleteOptionItem(action.id, store.id));
     case 'optionGroupItems':
       return done(await setGroupMenuItems({ groupId: action.groupId, storeId: store.id, menuItemIds: action.menuItemIds }));
+    case 'qrServiceSave':
+      return done(await saveQrService(store.id, { enabled: action.enabled, items: action.items }));
   }
 }

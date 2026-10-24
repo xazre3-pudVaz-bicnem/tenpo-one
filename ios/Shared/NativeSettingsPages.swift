@@ -26,6 +26,7 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
     case menu = "menuItems"
     case plans = "plans"
     case options = "options"
+    case qrService = "qrService"
     var id: String { rawValue }
 
     /// Web の道（クエリは見ない）
@@ -48,6 +49,7 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
         case .menu: return "/app/settings/menu"
         case .plans: return "/app/settings/plans"
         case .options: return "/app/settings/options"
+        case .qrService: return "/app/settings/qr-service"
         }
     }
     var title: String {
@@ -69,6 +71,7 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
         case .menu: return "メニュー"
         case .plans: return "プラン"
         case .options: return "オプション"
+        case .qrService: return "QRのサービス"
         }
     }
     var en: String {
@@ -90,6 +93,7 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
         case .menu: return "Menu"
         case .plans: return "Plans"
         case .options: return "Options"
+        case .qrService: return "QR service"
         }
     }
 
@@ -122,6 +126,7 @@ struct NativeSettingsPageScreen: View {
         case .menu: NativeMenuItemsScreen(mode: .menu)
         case .plans: NativeMenuItemsScreen(mode: .plan)
         case .options: NativeOptionsScreen()
+        case .qrService: NativeQrServiceScreen()
         }
     }
 }
@@ -2610,5 +2615,75 @@ struct NativeOptionsView: View {
             }
             .padding(18)
         }
+    }
+}
+
+// MARK: - QRのサービス（Web の /app/settings/qr-service・components/settings/qr-service-editor.tsx と同じ）
+
+struct NQSItem: Codable, Identifiable, Hashable { var name: String; var nameEn: String?; var id: String { name + "|" + (nameEn ?? "") } }
+struct NQSPayload: Codable { let store: NFNamed; let canEdit: Bool; let enabled: Bool; let items: [NQSItem]; let maxItems: Int }
+
+@MainActor
+final class NativeQrServiceModel: NSPModel<NQSPayload> {
+    @Published var enabled = true
+    @Published var rows: [(name: String, en: String)] = []
+    init() { super.init(part: "qrService") }
+    override func loaded(_ p: NQSPayload) { enabled = p.enabled; rows = p.items.map { ($0.name, $0.nameEn ?? "") } }
+    var changed: Bool {
+        guard let p = payload else { return false }
+        return enabled != p.enabled || rows.map { $0.name } != p.items.map { $0.name } || rows.map { $0.en } != p.items.map { $0.nameEn ?? "" }
+    }
+    func save() async {
+        let items = rows.map { ["name": $0.name, "nameEn": $0.en.trimmingCharacters(in: .whitespaces).isEmpty ? NSNull() : $0.en] as [String: Any] }
+        _ = await run("save", ["type": "qrServiceSave", "enabled": enabled, "items": items], done: "保存しました")
+    }
+}
+
+struct NativeQrServiceScreen: View {
+    @StateObject private var model = NativeQrServiceModel()
+    @EnvironmentObject var state: AppState
+    var body: some View { NativeQrServiceView(model: model, onBack: { state.goNativeSettings() }) }
+}
+
+struct NativeQrServiceView: View {
+    @ObservedObject var model: NativeQrServiceModel
+    let onBack: () -> Void
+    var body: some View {
+        NSPFrame(storeName: model.payload?.store.name ?? "", title: "QRのサービス", en: "QR service", loaded: model.payload != nil, error: model.error, toast: $model.toast, onBack: onBack, retry: { await model.refresh() }) {
+            if let p = model.payload {
+                let edit = p.canEdit
+                NSPCard(title: "お客様QRの「サービス」", en: "お水・お箸など、無料で頼めるもの") {
+                    VStack(spacing: 0) {
+                        NSPRow(label: "お客様QRに出す") {
+                            HStack(spacing: 10) { NSPToggle(on: model.enabled, disabled: !edit) { model.enabled.toggle() }; Text(model.enabled ? "出す" : "出さない").font(.system(size: 14, weight: .bold)).foregroundColor(model.enabled ? NFColor.success : NFColor.ink3) }
+                        }
+                        ForEach(model.rows.indices, id: \.self) { i in
+                            HStack(spacing: 10) {
+                                Text("\(i + 1)").font(.system(size: 13, weight: .bold)).foregroundColor(NFColor.ink3).frame(width: 24)
+                                NSPInput(text: Binding(get: { model.rows[i].name }, set: { model.rows[i].name = $0 }), placeholder: "お水", enabled: edit, width: 260)
+                                NSPInput(text: Binding(get: { model.rows[i].en }, set: { model.rows[i].en = $0 }), placeholder: "Water", enabled: edit, width: 220)
+                                if edit {
+                                    NSPButton(text: "↑", disabled: i == 0) { model.rows.swapAt(i, i - 1) }
+                                    NSPButton(text: "↓", disabled: i == model.rows.count - 1) { model.rows.swapAt(i, i + 1) }
+                                    NSPButton(text: "消す", icon: "xmark") { model.rows.remove(at: i) }
+                                }
+                                Spacer()
+                            }
+                            .padding(.horizontal, 18).padding(.vertical, 6)
+                            .overlay(alignment: .bottom) { Rectangle().fill(NFColor.line).frame(height: 1) }
+                        }
+                        if edit {
+                            HStack(spacing: 10) {
+                                NSPButton(text: "追加", icon: "plus", disabled: model.rows.count >= p.maxItems) { model.rows.append(("", "")) }
+                                Spacer()
+                                NSPButton(text: "保存する", primary: true, busy: model.busy == "save", disabled: !model.changed) { Task { await model.save() } }
+                            }
+                            .padding(18)
+                        }
+                    }
+                }
+            }
+        }
+        .task { await model.refresh() }
     }
 }

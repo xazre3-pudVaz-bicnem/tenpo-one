@@ -64,7 +64,9 @@ export type NativeSettingsPageAction =
   | { type: 'optionGroupMove'; id: string; direction: 'up' | 'down' }
   | { type: 'optionItemAdd'; groupId: string; name: string; nameEn: string; price: number }
   | { type: 'optionItemDelete'; id: string }
-  | { type: 'optionGroupItems'; groupId: string; menuItemIds: string[] };
+  | { type: 'optionGroupItems'; groupId: string; menuItemIds: string[] }
+  /** QRのサービス（/app/settings/qr-service。saveQrService） */
+  | { type: 'qrServiceSave'; enabled: boolean; items: { name: string; nameEn: string | null }[] };
 
 export interface NativeMenuItemFields {
   id: string | null;
@@ -150,6 +152,7 @@ export const NATIVE_SETTINGS_PAGE_ACTION_TYPES: readonly NativeSettingsPageActio
   'optionItemAdd',
   'optionItemDelete',
   'optionGroupItems',
+  'qrServiceSave',
 ];
 
 export function isNativeSettingsPageActionType(v: unknown): v is NativeSettingsPageActionType {
@@ -459,7 +462,24 @@ export function parseNativeSettingsPageAction(raw: unknown): Parsed {
     if (!Array.isArray(b.menuItemIds) || b.menuItemIds.length > 2000 || !b.menuItemIds.every((x) => isUuid(x))) return bad('商品の指定が正しくありません');
     return { ok: true, action: { type: 'optionGroupItems', groupId: b.groupId, menuItemIds: b.menuItemIds as string[] } };
   }
+  if (b.type === 'qrServiceSave') {
+    if (!Array.isArray(b.items) || b.items.length > 50) return bad('サービスの数が多すぎます');
+    const items = (b.items as Record<string, unknown>[]).map((i) => ({
+      name: typeof i?.name === 'string' ? i.name.slice(0, 40) : '',
+      nameEn: typeof i?.nameEn === 'string' && i.nameEn.trim() ? i.nameEn.slice(0, 40) : null,
+    }));
+    return { ok: true, action: { type: 'qrServiceSave', enabled: b.enabled !== false, items } };
+  }
   return bad();
+}
+
+/** QRのサービスの画面の読み込み（GET ?part=qrService） */
+export interface NativeQrServicePayload {
+  store: { id: string; name: string };
+  canEdit: boolean;
+  enabled: boolean;
+  items: { name: string; nameEn: string | null }[];
+  maxItems: number;
 }
 
 /** オプションの画面の読み込み（GET ?part=options） */
