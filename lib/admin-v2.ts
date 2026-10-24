@@ -109,6 +109,11 @@ export const V2_STAFF_LINK = { href: '/app/staff', label: 'スタッフ・権限
 /**
  * いまの管理画面（lib/nav.ts）の画面をひとつも抜かさず並べ直したもの。
  * アラートは左に出さず、上のベルから（2026-10-10 Ronnie）。
+ * 2026-10-24 Ronnie「同じものが何か所にもあるなら全部まとめて、コンパクトに。でもデータは全部見られるように」：
+ *   - 顧客は 1 か所（店舗台帳の中と お客様 の両方にあった）
+ *   - 店舗台帳の中の「設定」（7 つ）は 設定の一覧 にだけ
+ *   - レジ入出金・小口現金・締め履歴 は 1 つの画面のタブなので 1 つのリンク。請求書・書類ボックス も同じ
+ *   - 売上 と 経営 は 1 つのグループに。設定 は「設定の一覧」の 1 リンクだけ（中の区分はその画面で）
  * tests/admin-v2.test.ts が「今の左メニューの画面がどれかに入っているか」を確かめる。
  */
 export const V2_SECTIONS: V2Section[] = [
@@ -123,21 +128,16 @@ export const V2_SECTIONS: V2Section[] = [
           { href: '/app/reservations', label: '予約台帳（タイムライン）', permission: 'reservations.view' },
           { href: '/app/reservations/calendar', label: 'カレンダー', permission: 'reservations.view' },
           { href: '/app/reservations/list', label: '予約一覧', permission: 'reservations.view' },
-          { href: '/app/customers', label: '顧客台帳', permission: 'customers.view' },
         ],
-        nested: {
-          key: 'daichoSettings',
-          label: '設定',
-          links: [
-            { href: '/app/settings/store', label: '基本設定（店舗情報）', permission: 'store.settings' },
-            { href: '/app/settings/hours', label: '営業時間・休業日', permission: 'store.settings' },
-            { href: '/app/settings/plans', label: 'コース', permission: 'menu.manage' },
-            { href: '/app/settings/tables', label: 'テーブル・レイアウト', permission: 'store.settings' },
-            { href: '/app/settings/booking', label: '予約受付（ネット予約）', permission: 'store.settings' },
-            { href: '/app/settings/reservation-book', label: '予約経路・グルメサイト連携', permission: 'store.settings' },
-            { href: '/app/settings/payments', label: 'オンライン決済', permission: 'store.settings' },
-          ],
-        },
+      },
+      {
+        key: 'customers',
+        label: '顧客',
+        icon: 'heart',
+        links: [
+          { href: '/app/customers', label: '顧客台帳', permission: 'customers.view' },
+          { href: '/app/coupons', label: 'クーポン', permission: 'menu.manage' },
+        ],
       },
     ],
   },
@@ -146,20 +146,13 @@ export const V2_SECTIONS: V2Section[] = [
     groups: [
       {
         key: 'sales',
-        label: '売上',
-        icon: 'receipt',
-        links: [
-          { href: '/app/orders', label: '伝票明細', permission: 'pos.order' },
-          { href: '/app/reports', label: 'レポート', permission: 'reports.view' },
-          { href: '/app/daily-reports', label: '日報', permission: 'dashboard.view' },
-        ],
-      },
-      {
-        key: 'management',
-        label: '経営',
+        label: '売上・経営',
         icon: 'trend',
         links: [
           { href: '/app/management', label: '経営ダッシュボード', permission: 'reports.view' },
+          { href: '/app/reports', label: 'レポート', permission: 'reports.view' },
+          { href: '/app/orders', label: '伝票明細', permission: 'pos.order' },
+          { href: '/app/daily-reports', label: '日報', permission: 'dashboard.view' },
           { href: '/app/settlement', label: '月次清算', permission: 'reports.view' },
           { href: '/app/budgets', label: '予算管理', permission: 'reports.view' },
         ],
@@ -171,24 +164,21 @@ export const V2_SECTIONS: V2Section[] = [
     groups: [
       {
         key: 'cash',
-        label: '現金・小口',
+        label: '現金',
         icon: 'wallet',
         links: [
-          { href: '/app/cash', label: 'レジ入出金', permission: 'register.operate' },
-          { href: '/app/cash?tab=petty', label: '小口現金', permission: 'register.operate' },
+          { href: '/app/cash', label: 'レジ入出金（小口現金・締め履歴）', permission: 'register.operate' },
           { href: '/app/cash/close', label: 'レジクローズ', permission: 'register.operate' },
-          { href: '/app/cash?tab=closings', label: '締め履歴', permission: 'register.operate' },
         ],
       },
       {
         key: 'docs',
-        label: '経費・請求書・領収書',
+        label: '経費・書類',
         icon: 'file',
         links: [
           { href: '/app/expenses', label: '仕入・経費', permission: 'cash.write' },
-          { href: '/app/invoices', label: '請求書', permission: 'documents.write' },
+          { href: '/app/invoices', label: '請求書・書類ボックス', permission: 'documents.write' },
           { href: '/app/scan', label: '領収書・レシート', permission: 'documents.write' },
-          { href: '/app/invoices?tab=documents', label: '書類ボックス', permission: 'documents.write' },
         ],
       },
       {
@@ -236,16 +226,6 @@ export const V2_SECTIONS: V2Section[] = [
         ],
       },
       {
-        key: 'customers',
-        label: 'お客様',
-        icon: 'heart',
-        links: [
-          { href: '/app/customers', label: '顧客', permission: 'customers.view' },
-          { href: '/app/coupons', label: 'クーポン', permission: 'menu.manage' },
-          { href: '/app/settings/loyalty', label: '会員・ポイント', permission: 'org.settings' },
-        ],
-      },
-      {
         key: 'labor',
         label: '労務',
         icon: 'users',
@@ -277,15 +257,8 @@ export const V2_SECTIONS: V2Section[] = [
         key: 'settings',
         label: '設定',
         icon: 'gear',
-        links: [
-          { href: '/app/settings-all', label: '設定の一覧', permission: 'dashboard.view' },
-          { href: '/app/settings-all#store', label: '店舗', permission: 'dashboard.view' },
-          { href: '/app/settings-all#menu', label: 'メニュー', permission: 'dashboard.view' },
-          { href: '/app/settings-all#devices', label: '機器・印刷', permission: 'dashboard.view' },
-          { href: '/app/settings-all#seats', label: '予約・席', permission: 'dashboard.view' },
-          { href: '/app/settings-all#money', label: 'お金・税', permission: 'dashboard.view' },
-          { href: '/app/settings-all#company', label: '会社・データ', permission: 'dashboard.view' },
-        ],
+        // 1 リンクだけ（左メニューでは開かずにそのまま行く。中の区分 店舗／メニュー／機器・印刷／予約・席／お金・税／会社・データ はその画面で）
+        links: [{ href: '/app/settings-all', label: '設定', permission: 'dashboard.view' }],
       },
     ],
   },

@@ -103,11 +103,23 @@ describe('左メニュー：今の管理画面の画面がひとつも抜けて�
     expect(visibleV2Sections('org_owner').flatMap((s) => s.groups.map((g) => g.key))).toContain('accounting');
   });
 
-  it('いまの画面のグループ（と店舗台帳の設定）を最初から開く', () => {
+  it('いまの画面のグループを最初から開く（設定の中は左メニューに無いので開かない。2026-10-24 まとめ直し）', () => {
     expect(v2OpenKeysForPath('/app/cash/close')).toEqual(['cash']);
-    expect(v2OpenKeysForPath('/app/settings/plans')).toEqual(['daicho', 'daichoSettings']);
+    expect(v2OpenKeysForPath('/app/settings/plans')).toEqual([]);
     expect(v2OpenKeysForPath('/app/reservations/list')).toEqual(['daicho']);
+    expect(v2OpenKeysForPath('/app/management')).toEqual(['sales']);
     expect(v2OpenKeysForPath('/app/dashboard')).toEqual([]);
+  });
+
+  it('同じ画面は 1 か所だけ（2026-10-24 Ronnie「同じものはまとめて」）', () => {
+    // '#takeout' '#drawer' はその場で動くもの（画面ではない）
+    const paths = V2_SECTIONS.flatMap((s) => s.groups.flatMap((g) => [...g.links, ...(g.nested?.links ?? [])].map((l) => (l.href.startsWith('#') ? l.href : linkPath(l.href)))));
+    const dup = paths.filter((p, i) => paths.indexOf(p) !== i);
+    expect(dup).toEqual([]);
+    // 顧客台帳・設定の中の画面は 1 か所
+    expect(paths.filter((p) => p === '/app/customers')).toHaveLength(1);
+    expect(paths.filter((p) => p.startsWith('/app/settings/'))).toEqual([]);
+    expect(V2_SECTIONS.reduce((a, s) => a + s.groups.length, 0)).toBeLessThanOrEqual(12);
   });
 });
 
