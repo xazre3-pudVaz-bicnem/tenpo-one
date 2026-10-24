@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
-import { HOME_COMPARES, HOME_RANGES, homeHref, rangeLabel, type DateRange, type HomeCard, type HomeCompare, type HomeRange } from '@/lib/home-period';
+import { HOME_COMPARES, HOME_RANGES, defaultCompareFor, homeHref, rangeLabel, type DateRange, type HomeCard, type HomeCompare, type HomeRange } from '@/lib/home-period';
 
 const tab = 'inline-flex h-9 items-center rounded-lg px-3.5 text-[13px] font-bold transition-colors';
 const tabOff = 'border border-line bg-white text-ink-2 hover:border-wisteria hover:text-royal';
@@ -26,7 +26,7 @@ export function HomePeriodBar({
   previous: DateRange;
   card: HomeCard;
 }) {
-  const href = (r: HomeRange, c: HomeCompare, custom?: DateRange) => homeHref({ range: r, compare: c, custom, card });
+  const href = (r: HomeRange, c: HomeCompare, custom?: DateRange) => homeHref({ range: r, compare: defaultCompareFor(r, c), custom, card });
   return (
     <div className="flex flex-col gap-3 rounded-xl border border-line bg-white px-4 py-3">
       <div className="flex flex-wrap items-center gap-2">
@@ -41,9 +41,9 @@ export function HomePeriodBar({
           </Link>
         ))}
         <span className="ml-auto text-[13px] text-ink-2">
-          <b className="text-ink">{rangeLabel(current)}</b>
+          <b className="text-ink">{rangeLabel(current, current.to)}</b>
           <span className="mx-1.5 text-ink-3">vs</span>
-          {rangeLabel(previous)}
+          {rangeLabel(previous, current.to)}
         </span>
       </div>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-line pt-3">

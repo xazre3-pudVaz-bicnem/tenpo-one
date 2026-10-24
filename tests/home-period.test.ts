@@ -6,7 +6,9 @@ import {
   turnoverPerDay,
   budgetForRange,
   compareRange,
+  defaultCompareFor,
   delta,
+  sameDayPrevYear,
   parseHomeCompare,
   parseHomeRange,
   rangeLabel,
@@ -17,11 +19,19 @@ import {
 describe('home-period: 期間タブ', () => {
   const today = '2026-10-24';
 
-  it('本日・昨日・過去7日間・今月', () => {
+  it('本日・昨日・過去7日間・今月・今年', () => {
     expect(resolveHomeRange('today', today)).toEqual({ from: '2026-10-24', to: '2026-10-24' });
     expect(resolveHomeRange('yesterday', today)).toEqual({ from: '2026-10-23', to: '2026-10-23' });
     expect(resolveHomeRange('7d', today)).toEqual({ from: '2026-10-18', to: '2026-10-24' });
     expect(resolveHomeRange('month', today)).toEqual({ from: '2026-10-01', to: '2026-10-24' });
+    expect(resolveHomeRange('year', today)).toEqual({ from: '2026-01-01', to: '2026-10-24' });
+  });
+
+  it('今年のタブは 前年同期比 を既定に（前月同日・前年同期を選んでいればそのまま）', () => {
+    expect(defaultCompareFor('year', 'week')).toBe('year');
+    expect(defaultCompareFor('year', 'day')).toBe('year');
+    expect(defaultCompareFor('year', 'month')).toBe('month');
+    expect(defaultCompareFor('month', 'week')).toBe('week');
   });
 
   it('期間指定：from/to を使う。壊れていれば今月、逆なら入れ替え、片方だけならその日', () => {
@@ -60,9 +70,15 @@ describe('home-period: 比較の期間', () => {
     expect(sameDayPrevMonth('2026-01-15')).toBe('2025-12-15');
     expect(compareRange({ from: '2026-10-01', to: '2026-10-24' }, 'month')).toEqual({ from: '2026-09-01', to: '2026-09-24' });
   });
-  it('見出し', () => {
+  it('前年同期比は 1 年前の同じ日（2/29 は 2/28）', () => {
+    expect(sameDayPrevYear('2026-10-24')).toBe('2025-10-24');
+    expect(sameDayPrevYear('2028-02-29')).toBe('2027-02-28');
+    expect(compareRange({ from: '2026-01-01', to: '2026-10-24' }, 'year')).toEqual({ from: '2025-01-01', to: '2025-10-24' });
+  });
+  it('見出し（年がちがえば年つき）', () => {
     expect(rangeLabel({ from: '2026-10-24', to: '2026-10-24' })).toBe('10/24');
     expect(rangeLabel({ from: '2026-10-01', to: '2026-10-24' })).toBe('10/1〜10/24');
+    expect(rangeLabel({ from: '2025-01-01', to: '2025-10-24' }, '2026-10-24')).toBe('2025/1/1〜2025/10/24');
   });
 });
 

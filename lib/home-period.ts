@@ -9,14 +9,15 @@ import { addDaysStr, diffDaysStr, monthBounds, dateSequence } from '@/components
 import { dailyBudgetsFrom } from '@/lib/daily-budget';
 import { dailyBudgetFromMonthly } from '@/lib/home-todos';
 
-export type HomeRange = 'today' | 'yesterday' | '7d' | 'month' | 'custom';
-export type HomeCompare = 'day' | 'week' | 'month';
+export type HomeRange = 'today' | 'yesterday' | '7d' | 'month' | 'year' | 'custom';
+export type HomeCompare = 'day' | 'week' | 'month' | 'year';
 
 export const HOME_RANGES: { key: HomeRange; label: string }[] = [
   { key: 'today', label: '本日' },
   { key: 'yesterday', label: '昨日' },
   { key: '7d', label: '過去7日間' },
   { key: 'month', label: '今月' },
+  { key: 'year', label: '今年' },
   { key: 'custom', label: '期間指定' },
 ];
 
@@ -24,7 +25,14 @@ export const HOME_COMPARES: { key: HomeCompare; label: string }[] = [
   { key: 'day', label: '前日比' },
   { key: 'week', label: '前週同曜日比' },
   { key: 'month', label: '前月同日比' },
+  { key: 'year', label: '前年同期比' },
 ];
+
+/** 今年（1/1〜今日）のタブは、日の比較だと意味が薄いので 前年同期比 を既定にする（2026-10-24 Ronnie「1月1日から今日までも」） */
+export function defaultCompareFor(range: HomeRange, compare: HomeCompare): HomeCompare {
+  if (range === 'year' && (compare === 'day' || compare === 'week')) return 'year';
+  return compare;
+}
 
 /** 下のカードのタブ：時間帯別 / 支払い方法 / ベストセラー（funfo のダッシュボードと同じ並び） */
 export type HomeCard = 'hourly' | 'pay' | 'best';
@@ -100,6 +108,8 @@ export function resolveHomeRange(
       const { first } = monthBounds(0, today);
       return { from: first, to: today };
     }
+    case 'year':
+      return { from: `${today.slice(0, 4)}-01-01`, to: today };
     case 'custom': {
       let from = validDate(sp?.from);
       let to = validDate(sp?.to);
@@ -124,7 +134,14 @@ export function sameDayPrevMonth(date: string): string {
   return new Date(Date.UTC(prevLast.getUTCFullYear(), prevLast.getUTCMonth(), day)).toISOString().slice(0, 10);
 }
 
-/** 比較する期間。day=同じ長さの直前、week=7日前、month=1か月前の同じ日付 */
+/** 1 年前の同じ日（2/29 → 2/28） */
+export function sameDayPrevYear(date: string): string {
+  const [y, m, d] = date.split('-').map(Number);
+  const last = new Date(Date.UTC(y - 1, m, 0)).getUTCDate();
+  return `${y - 1}-${String(m).padStart(2, '0')}-${String(Math.min(d, last)).padStart(2, '0')}`;
+}
+
+/** 比較する期間。day=同じ長さの直前、week=7日前、month=1か月前の同じ日付、year=1年前の同じ日付 */
 export function compareRange(range: DateRange, compare: HomeCompare): DateRange {
   const days = diffDaysStr(range.from, range.to) + 1;
   if (compare === 'day') {
@@ -132,6 +149,7 @@ export function compareRange(range: DateRange, compare: HomeCompare): DateRange 
     return { from: addDaysStr(to, -(days - 1)), to };
   }
   if (compare === 'week') return { from: addDaysStr(range.from, -7), to: addDaysStr(range.to, -7) };
+  if (compare === 'year') return { from: sameDayPrevYear(range.from), to: sameDayPrevYear(range.to) };
   return { from: sameDayPrevMonth(range.from), to: sameDayPrevMonth(range.to) };
 }
 
@@ -154,9 +172,11 @@ export function md(date: string): string {
   return `${Number(date.slice(5, 7))}/${Number(date.slice(8, 10))}`;
 }
 
-/** 期間の見出し（'10/24' / '10/18〜10/24'） */
-export function rangeLabel(range: DateRange): string {
-  return range.from === range.to ? md(range.from) : `${md(range.from)}〜${md(range.to)}`;
+/** 期間の見出し（'10/24' / '10/18〜10/24'。年がちがえば '2025/1/1〜2025/10/24'） */
+export function rangeLabel(range: DateRange, today?: string): string {
+  const y = today ? today.slice(0, 4) : range.to.slice(0, 4);
+  const f = (d: string) => (d.slice(0, 4) === y ? md(d) : `${Number(d.slice(0, 4))}/${md(d)}`);
+  return range.from === range.to ? f(range.from) : `${f(range.from)}〜${f(range.to)}`;
 }
 
 export interface Delta {

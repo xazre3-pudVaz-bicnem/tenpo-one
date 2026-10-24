@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server';
 import { loadHomeData } from '@/components/dashboard/home-data';
 import { loadHomeV2 } from '@/lib/home-v2-server';
 import { loadHomePeriod } from '@/lib/home-period-server';
-import { compareRange, parseHomeCard, parseHomeCompare, parseHomeRange, resolveHomeRange } from '@/lib/home-period';
+import { compareRange, defaultCompareFor, parseHomeCard, parseHomeCompare, parseHomeRange, resolveHomeRange } from '@/lib/home-period';
 import type { SalesMetricsOptions } from '@/lib/metrics';
 import type { Role } from '@/lib/permissions';
 import { HomeV2View, type HomeV2Todo } from './home-v2-view';
@@ -43,7 +43,7 @@ export async function HomeV2({
   const now = requestTime();
 
   const range = parseHomeRange(sp.range);
-  const compare = parseHomeCompare(sp.compare);
+  const compare = defaultCompareFor(range, parseHomeCompare(sp.compare));
   const card = parseHomeCard(sp.card);
   const current = resolveHomeRange(range, today, sp);
   const previous = compareRange(current, compare);

@@ -9,22 +9,9 @@ import { dailyBudgetFromMonthly } from '@/lib/home-todos';
 import { fixedCostTotal, monthlyCostsFrom, perDayCost } from '@/lib/monthly-settlement';
 import { isGuestCountedOrder, SETTLED_ORDER_STATUSES, type SalesMetricsOptions } from '@/lib/metrics';
 import { summarizeManagement, type BudgetRow, type DayFact, type ManagementSummary } from '@/lib/management-dashboard';
+import { fetchAll } from '@/lib/supabase/fetch-all';
 
 type SupabaseClient = Awaited<ReturnType<typeof createClient>>;
-
-const PAGE = 1000;
-
-/** 1,000 行ずつ全部読む（明細は月で 1,000 行を超える） */
-async function fetchAllPages(make: (from: number, to: number) => PromiseLike<{ data: unknown[] | null; error: unknown }>): Promise<unknown[]> {
-  const out: unknown[] = [];
-  for (let from = 0; from < 200_000; from += PAGE) {
-    const { data } = await make(from, from + PAGE - 1);
-    const rows = data ?? [];
-    out.push(...rows);
-    if (rows.length < PAGE) break;
-  }
-  return out;
-}
 
 interface OrderItemRow {
   store_id: string;
@@ -62,36 +49,55 @@ export async function loadManagementDashboard(
   const { first, last } = monthBounds(0, `${input.month}-01`);
   const monthFirst = first;
 
-  const [{ data: orgRow }, { data: orders }, { data: refunds }, { data: timeEntries }, { data: payrollRules }, { data: expenses }, { data: settings }, { data: budgets }, orderItemsRaw] =
+  type OrderRow = { store_id: string; business_date: string; total: number | null; guest_count: number | null; order_type: string | null };
+  type RefundRow = { store_id: string; business_date: string; amount: number | null };
+  type ExpenseRow = { store_id: string; business_date: string; amount: number | null };
+
+  // 1 か月 × 複数店舗は 1,000 行を超えるので、売上・返金・勤怠・経費・明細は 1,000 行ずつ全部読む（lib/supabase/fetch-all.ts）
+  const [{ data: orgRow }, ordersAll, refundsAll, timeEntriesAll, { data: payrollRules }, expensesAll, { data: settings }, { data: budgets }, orderItemsAll] =
     await Promise.all([
       supabase.from('organizations').select('kpi_settings').eq('id', ctx.organizationId).maybeSingle(),
-      supabase
-        .from('orders')
-        .select('store_id, business_date, total, guest_count, status, order_type')
-        .in('store_id', ids)
-        .gte('business_date', first)
-        .lte('business_date', last)
-        .in('status', SETTLED_ORDER_STATUSES),
-      supabase.from('refunds').select('store_id, business_date, amount').in('store_id', ids).gte('business_date', first).lte('business_date', last),
-      supabase
-        .from('time_entries')
-        .select('profile_id, store_id, work_date, clock_in_at, clock_out_at, break_minutes, entry_type')
-        .in('store_id', ids)
-        .gte('work_date', first)
-        .lte('work_date', last),
+      fetchAll<OrderRow>((a, b) =>
+        supabase
+          .from('orders')
+          .select('store_id, business_date, total, guest_count, order_type')
+          .in('store_id', ids)
+          .gte('business_date', first)
+          .lte('business_date', last)
+          .in('status', SETTLED_ORDER_STATUSES)
+          .order('id')
+          .range(a, b)
+      ),
+      fetchAll<RefundRow>((a, b) =>
+        supabase.from('refunds').select('store_id, business_date, amount').in('store_id', ids).gte('business_date', first).lte('business_date', last).order('id').range(a, b)
+      ),
+      fetchAll<TimeEntryForLabor>((a, b) =>
+        supabase
+          .from('time_entries')
+          .select('profile_id, store_id, work_date, clock_in_at, clock_out_at, break_minutes, entry_type')
+          .in('store_id', ids)
+          .gte('work_date', first)
+          .lte('work_date', last)
+          .order('id')
+          .range(a, b)
+      ),
       supabase
         .from('payroll_rules')
         .select('profile_id, store_id, pay_type, base_amount, effective_from, effective_to')
         .eq('organization_id', ctx.organizationId)
         .eq('status', 'active'),
-      supabase
-        .from('expenses')
-        .select('store_id, business_date, amount')
-        .in('store_id', ids)
-        .eq('status', 'active')
-        .eq('approval_status', 'approved')
-        .gte('business_date', first)
-        .lte('business_date', last),
+      fetchAll<ExpenseRow>((a, b) =>
+        supabase
+          .from('expenses')
+          .select('store_id, business_date, amount')
+          .in('store_id', ids)
+          .eq('status', 'active')
+          .eq('approval_status', 'approved')
+          .gte('business_date', first)
+          .lte('business_date', last)
+          .order('id')
+          .range(a, b)
+      ),
       supabase.from('store_settings').select('store_id, settings').in('store_id', ids),
       supabase
         .from('budgets')
@@ -99,7 +105,8 @@ export async function loadManagementDashboard(
         .eq('organization_id', ctx.organizationId)
         .eq('month', monthFirst)
         .or(`store_id.is.null,store_id.in.(${ids.join(',')})`),
-      fetchAllPages((a, b) =>
+      // 結合（menu_items / orders）は 1 件だが、型は配列で推論されるので読み替える（レポートと同じ扱い）
+      fetchAll<OrderItemRow>((a, b) =>
         supabase
           .from('order_items')
           .select('store_id, menu_item_id, quantity, line_total, menu_items(cost), orders!inner(status, business_date)')
@@ -112,9 +119,11 @@ export async function loadManagementDashboard(
           .range(a, b)
       ),
     ]);
-
-  // 結合（menu_items / orders）は 1 件だが、型は配列で推論されるので読み替える（レポートと同じ扱い）
-  const orderItems = orderItemsRaw as unknown as OrderItemRow[];
+  const orders = ordersAll.rows;
+  const refunds = refundsAll.rows;
+  const timeEntries = timeEntriesAll.rows;
+  const expenses = expensesAll.rows;
+  const orderItems = orderItemsAll.rows;
   const metricsOpts: SalesMetricsOptions = {
     includeTakeoutGuests: (orgRow?.kpi_settings as { includeTakeoutGuests?: boolean } | null)?.includeTakeoutGuests ?? true,
   };
@@ -130,14 +139,14 @@ export async function loadManagementDashboard(
     }
     return f;
   };
-  for (const o of orders ?? []) {
-    const f = at(o.store_id as string, o.business_date as string);
+  for (const o of orders) {
+    const f = at(o.store_id, o.business_date);
     f.sales += Number(o.total ?? 0);
     f.groups += 1;
-    if (isGuestCountedOrder({ total: 0, order_type: (o.order_type as string | null) ?? undefined }, metricsOpts)) f.guests += Number(o.guest_count ?? 0);
+    if (isGuestCountedOrder({ total: 0, order_type: o.order_type ?? undefined }, metricsOpts)) f.guests += Number(o.guest_count ?? 0);
   }
-  for (const r of refunds ?? []) at(r.store_id as string, r.business_date as string).sales -= Number(r.amount ?? 0);
-  for (const e of expenses ?? []) at(e.store_id as string, e.business_date as string).expenses += Number(e.amount ?? 0);
+  for (const r of refunds) at(r.store_id, r.business_date).sales -= Number(r.amount ?? 0);
+  for (const e of expenses) at(e.store_id, e.business_date).expenses += Number(e.amount ?? 0);
 
   // 原価（レシピ原価 → 商品の原価。どちらも無い明細は数えない）
   const menuItemIds = [...new Set(orderItems.map((i) => i.menu_item_id).filter((v): v is string => !!v))];
@@ -157,7 +166,7 @@ export async function loadManagementDashboard(
   // 人件費（店舗 × 日 ごとに概算）
   const rules = (payrollRules ?? []) as PayrollRuleForLabor[];
   const entriesByKey = new Map<string, TimeEntryForLabor[]>();
-  for (const e of (timeEntries ?? []) as TimeEntryForLabor[]) {
+  for (const e of timeEntries) {
     const k = `${e.store_id}|${e.work_date}`;
     const list = entriesByKey.get(k);
     if (list) list.push(e);

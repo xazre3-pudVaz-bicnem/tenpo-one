@@ -42,7 +42,7 @@ const ROW_GRID =
 const PERIOD_ROW_GRID =
   'grid grid-cols-[minmax(180px,1.7fr)_minmax(110px,1fr)_minmax(90px,0.8fr)_minmax(90px,0.8fr)_minmax(100px,0.9fr)_minmax(120px,1fr)_20px] items-center gap-3';
 
-const COMPARE_LABEL: Record<HomeCompare, string> = { day: '前日', week: '前週同曜日', month: '前月同日' };
+const COMPARE_LABEL: Record<HomeCompare, string> = { day: '前日', week: '前週同曜日', month: '前月同日', year: '前年同期' };
 
 /**
  * 新しい管理画面のホーム（2026-10-10 Ronnie「シンプルに、管理画面のスタイルで」）。
@@ -52,8 +52,8 @@ export function HomeV2View({ scopeLabel, asOf, period, kpi, extras, repeatNote, 
   const cur = kpi.current;
   const prev = kpi.previous;
   const isToday = period.range === 'today';
-  const compareNote = `${COMPARE_LABEL[period.compare]}（${rangeLabel(period.previous)}）比`;
-  const periodTitle = isToday ? '本日' : rangeLabel(period.current);
+  const compareNote = `${COMPARE_LABEL[period.compare]}（${rangeLabel(period.previous, period.current.to)}）比`;
+  const periodTitle = isToday ? '本日' : rangeLabel(period.current, period.current.to);
   const reportHref = `/app/reports?from=${period.current.from}&to=${period.current.to}`;
 
   return (
@@ -221,7 +221,7 @@ export function HomeV2View({ scopeLabel, asOf, period, kpi, extras, repeatNote, 
         <section aria-label="店舗" className="rounded-xl border border-line bg-white">
           <div className="flex flex-wrap items-baseline justify-between gap-2 px-5 pt-4 pb-3">
             <h2 className="text-base font-extrabold text-ink">
-              店舗<span className="ml-2 text-[12.5px] font-normal text-ink-3">{rangeLabel(period.current)}</span>
+              店舗<span className="ml-2 text-[12.5px] font-normal text-ink-3">{rangeLabel(period.current, period.current.to)}</span>
             </h2>
             <span className="text-[12.5px] text-ink-3">店舗を押すと、その期間のレポートが開きます</span>
           </div>
@@ -314,11 +314,11 @@ export function HomeV2View({ scopeLabel, asOf, period, kpi, extras, repeatNote, 
               <div className="flex gap-3.5 text-xs text-ink-2">
                 <span className="inline-flex items-center gap-1.5">
                   <i className="inline-block h-[11px] w-[11px] rounded-[3px] bg-iris" aria-hidden />
-                  {isToday ? '本日' : rangeLabel(period.current)}
+                  {isToday ? '本日' : rangeLabel(period.current, period.current.to)}
                 </span>
                 <span className="inline-flex items-center gap-1.5">
                   <i className="inline-block w-4 border-t-[2.5px] border-dashed border-[#d4891c]" aria-hidden />
-                  {COMPARE_LABEL[period.compare]}（{rangeLabel(period.previous)}）
+                  {COMPARE_LABEL[period.compare]}（{rangeLabel(period.previous, period.current.to)}）
                 </span>
               </div>
             )}
