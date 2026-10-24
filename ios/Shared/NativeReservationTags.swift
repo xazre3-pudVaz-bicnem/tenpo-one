@@ -61,8 +61,9 @@ enum NRWKeywordIcon {
     private static let rules: [(String, [String])] = [
         ("食べ飲み放題", ["mug.fill"]),
         ("飲み放題", ["mug.fill"]),
-        ("食べ放題", ["fork.knife"]),
-        ("コース", ["menucard.fill", "list.bullet.rectangle.portrait.fill", "list.bullet.rectangle"]),
+        // 食べ放題は鍋（フライパン）、コースはお皿とナイフ・フォーク（2026-10-24 22:20 Ronnie「コース・食べ放題の印を変えて。鍋のように。今のはホットペッパーの予約みたい」）
+        ("食べ放題", ["frying.pan.fill", "flame.fill"]),
+        ("コース", ["fork.knife.circle.fill", "fork.knife"]),
         ("誕生日", ["birthday.cake.fill", "gift.fill"]),
         ("記念日", ["heart.fill"]),
         ("お祝い", ["party.popper.fill", "sparkles"]),
@@ -103,9 +104,9 @@ enum NRWKeywordIcon {
         for p in plans {
             switch p {
             case "drink": out.append(symbol(for: "飲み放題") ?? "mug.fill")
-            case "buffet": out.append(symbol(for: "食べ放題") ?? "fork.knife")
-            case "food": out += [symbol(for: "飲み放題") ?? "mug.fill", symbol(for: "食べ放題") ?? "fork.knife"]
-            case "course": out.append(symbol(for: "コース") ?? "list.bullet.rectangle")
+            case "buffet": out.append(symbol(for: "食べ放題") ?? "flame.fill")
+            case "food": out += [symbol(for: "飲み放題") ?? "mug.fill", symbol(for: "食べ放題") ?? "flame.fill"]
+            case "course": out.append(symbol(for: "コース") ?? "fork.knife")
             default: break
             }
         }

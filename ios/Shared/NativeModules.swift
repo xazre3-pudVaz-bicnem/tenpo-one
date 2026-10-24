@@ -28,6 +28,7 @@ enum NativeModuleRegistry {
     /// Web の道 → key（その下の道 /…/<id> も同じ key で開く）。追加は 1 行ずつ
     private static let entries: [(String, String)] = [
         // ("/app/attendance", "attendance"),
+        ("/app/kitchen", "kitchen"),
     ]
     static let paths: [String: String] = Dictionary(entries, uniquingKeysWith: { a, _ in a })
 
@@ -50,9 +51,51 @@ struct NativeModuleScreen: View {
     var body: some View {
         switch route.key {
         // case "attendance": NativeAttendanceScreen(route: route)
+        case "kitchen": NativeKitchenView(onHome: { state.goNativeHome() })
         default:
             // 知らない key（古いアプリ）：Web のまま見せる
             Color.clear.onAppear { state.nativeModule = nil }
         }
     }
+}
+
+// MARK: - 読み込み・操作の共通（GET part ／ POST type）
+
+struct NativeModuleOK: Decodable {
+    let ok: Bool
+    let error: String?
+    let id: String?
+}
+
+enum NativeModuleAPI {
+    /// GET /api/app/v1/pos?part=<part>&… を読む。前に読んだ中身があれば cached に入る（画面を開いた瞬間に出す用）
+    static func url(_ part: String, _ query: [String: String] = [:]) -> URL {
+        var comps = URLComponents(url: AppConfig.url("/api/app/v1/pos"), resolvingAgainstBaseURL: false)!
+        comps.queryItems = [URLQueryItem(name: "part", value: part)] + query.sorted { $0.key < $1.key }.map { URLQueryItem(name: $0.key, value: $0.value) }
+        return comps.url!
+    }
+
+    static func get<T: Decodable>(_ type: T.Type, part: String, query: [String: String] = [:]) async throws -> T {
+        let data = try await NativeAPI.shared.send(URLRequest(url: url(part, query)))
+        return try JSONDecoder().decode(T.self, from: data)
+    }
+
+    static func cached<T: Decodable>(_ type: T.Type, part: String, query: [String: String] = [:]) -> T? {
+        NativeAPI.cached(T.self, url(part, query))
+    }
+
+    /// POST（{ type: …, … }）。失敗はサーバーのことばを投げる
+    @discardableResult
+    static func post(_ body: [String: Any]) async throws -> NativeModuleOK {
+        var req = URLRequest(url: AppConfig.url("/api/app/v1/pos"))
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "content-type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        let data = try await NativeAPI.shared.send(req, kickPrint: false)
+        let r = try JSONDecoder().decode(NativeModuleOK.self, from: data)
+        if !r.ok { throw NativeAPIError(message: r.error ?? "保存できませんでした", useWeb: false) }
+        return r
+    }
+
+    static func message(_ error: Error) -> String { (error as? NativeAPIError)?.message ?? "通信できませんでした" }
 }

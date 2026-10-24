@@ -304,9 +304,10 @@ struct NativeTableCard: View {
                     }
                     Spacer(minLength: 4)
                     HStack(spacing: 2) {
-                        // 人の印と人数は卓の番号と同じ大きさ。「名」は書かず数字だけ（座っていれば人数、空いていれば席の数）
+                        // 人の印と人数は卓の番号と同じ大きさ。「名」は書かず数字だけ。お客様がいないときは数字を出さない
+                        // （席の数が人数に見えるので。2026-10-24 22:19 Ronnie「お客様が来てから書く」）
                         Image(systemName: "person.2.fill").font(.system(size: 20, weight: .semibold)).foregroundColor(NFColor.ink3)
-                        Text("\(order?.guestCount ?? table.capacityMax)")
+                        if let o = order { Text("\(o.guestCount)") }
                     }
                     .font(.system(size: 23, weight: .heavy)).monospacedDigit().foregroundColor(empty ? NFColor.ink3 : NFColor.ink)
                     .lineLimit(1).fixedSize()
@@ -335,8 +336,10 @@ struct NativeTableCard: View {
                     occupied(o, state: state, next: next)
                 } else {
                     VStack(spacing: 6) {
-                        // 空席は「＋」も「空席」の字も出さない（グレーの箱と白い札で分かる。2026-10-24 20:44 Ronnie「卓の ＋ はいらない」）
-                        if state != .free {
+                        // 空席は「＋」を出さない（2026-10-24 20:44 Ronnie）。まん中にうすく小さく「4名席 空」（座ると消える。22:19 Ronnie）
+                        if state == .free {
+                            Text("\(table.capacityMax)名席 空").font(.system(size: 14, weight: .semibold)).foregroundColor(NFColor.ink3.opacity(0.7))
+                        } else {
                             HStack(spacing: 4) {
                                 if state == .unavailable { Image(systemName: "lock.fill").font(.system(size: 11)) }
                                 if state == .cleaning { Image(systemName: "sparkles").font(.system(size: 11)) }
@@ -372,14 +375,7 @@ struct NativeTableCard: View {
                             Text(o.sourceLabel).font(.system(size: 12, weight: .regular)).foregroundColor(NFColor.ink3)
                         }
                         .lineLimit(1)
-                        Rectangle().fill(Color.black.opacity(0.07)).frame(height: 1)
-                        HStack(alignment: .firstTextBaseline, spacing: 6) {
-                            Spacer(minLength: 4)
-                            Text(o.guestCount > 0 ? "\(NT.yen(Int((Double(o.total) / Double(o.guestCount)).rounded())))/人" : "—/人")
-                                .font(.system(size: 12, weight: .medium)).monospacedDigit().foregroundColor(NFColor.ink3)
-                            Text(NT.yen(o.total)).font(.system(size: 18, weight: .heavy)).monospacedDigit().foregroundColor(NFColor.ink)
-                        }
-                        .lineLimit(1).minimumScaleFactor(0.8)
+                        // お金は下の色の帯の上に書く（2026-10-24 22:23 Ronnie「帯をお金の上の線まで。お金は色の上に」）
                     }
                 } else if state == .cleaning || state == .unavailable {
                     Text(state.label)
@@ -414,9 +410,21 @@ struct NativeTableCard: View {
                 if let b = band {
                     VStack(spacing: 0) {
                         Spacer(minLength: 0)
-                        // 帯は色だけ（字は出さない。色の意味は下の「色の見方」に。2026-10-24 21:46 Ronnie）
+                        // 帯はお金の線から下いっぱい。状態の字は出さず（色の見方は下に。21:46 Ronnie）、お金をこの上に（22:23 Ronnie）
                         ZStack(alignment: .top) {
                             b.color
+                            if let o = order {
+                                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                                    Spacer(minLength: 4)
+                                    Text(o.guestCount > 0 ? "\(NT.yen(Int((Double(o.total) / Double(o.guestCount)).rounded())))/人" : "—/人")
+                                        .font(.system(size: 13, weight: .semibold)).monospacedDigit().opacity(0.85)
+                                    Text(NT.yen(o.total)).font(.system(size: 22, weight: .heavy)).monospacedDigit()
+                                }
+                                .lineLimit(1).minimumScaleFactor(0.7)
+                                .foregroundColor(b.ink)
+                                .padding(.horizontal, 14)
+                                .frame(maxHeight: .infinity)
+                            }
                             if let o = order {
                                 GeometryReader { g in
                                     ZStack(alignment: .leading) {
@@ -491,7 +499,7 @@ struct NativeTableCard: View {
 
     @State private var pulse = false
 
-    static let bandH: CGFloat = 16
+    static let bandH: CGFloat = 50
     static let callRed = Color(hex: 0xE53935)
     /// QR からのお会計の依頼は緑の財布（お金＝緑。2026-10-24 21:23 Ronnie「財布か緑の ¥」→21:31「財布」）
     /// 色はポップアップの「レジ会計」のボタンと同じ緑（NFColor.success。2026-10-24 21:36 Ronnie）
@@ -501,8 +509,8 @@ struct NativeTableCard: View {
     /// 印の色（飲み放題＝琥珀・食べ放題＝橙・コース＝藍・誕生日＝ピンク・記念日＝赤・子連れ＝青緑…）
     static func markColor(_ symbol: String) -> Color {
         if symbol.hasPrefix("mug") { return Color(hex: 0xF59E0B) }
-        if symbol.hasPrefix("fork") { return Color(hex: 0xEA580C) }
-        if symbol.hasPrefix("menucard") || symbol.hasPrefix("list.bullet") { return Color(hex: 0x4F46E5) }
+        if symbol.hasPrefix("frying") || symbol.hasPrefix("flame") { return Color(hex: 0xEA580C) }
+        if symbol.hasPrefix("fork.knife") || symbol.hasPrefix("menucard") || symbol.hasPrefix("list.bullet") { return Color(hex: 0x4F46E5) }
         if symbol.hasPrefix("birthday") || symbol.hasPrefix("gift") || symbol.hasPrefix("party") { return Color(hex: 0xEC4899) }
         if symbol.hasPrefix("heart") { return Color(hex: 0xE11D48) }
         if symbol.hasPrefix("figure") || symbol.hasPrefix("person") || symbol.hasPrefix("stroller") { return Color(hex: 0x0D9488) }
