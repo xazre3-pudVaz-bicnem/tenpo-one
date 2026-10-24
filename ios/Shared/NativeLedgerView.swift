@@ -151,6 +151,8 @@ enum NLColor {
 /// timestamptz → JST の分（0〜）。翌日にまたがる閉店（25:00 など）は 24*60 を足す
 /// スケジュールの1行（卓、またはウェイティング）。lane = 予約ごとの段（0 が一番上）
 struct NLBoardRow {
+    /// 卓の id（ウェイティングの行は nil）
+    var tableId: String? = nil
     let name: String
     let status: String
     let reservations: [NLReservation]
@@ -335,6 +337,10 @@ struct NativeLedgerView: View {
     @State private var selected: NLReservation?
     @State private var newOpen = false
     @State private var inboxOpen = false
+    /// スケジュールの空いたマスを押した（その場の受付）
+    @State private var quickSlot: NLQuickSlot?
+    /// その場の受付から予約登録の画面へ渡すもの
+    @State private var slotPrefill: NLReservationPrefill?
     @State private var dateCalendarOpen = false
     @StateObject private var inbox = NLInboxModel()
     @State private var findSeatsOpen = false
@@ -437,7 +443,7 @@ struct NativeLedgerView: View {
         }
         // 予約登録は画面いっぱいの 1 枚（左＝日時・人数・おすすめのテーブル、右＝お客様・キーワード。2026-10-24 19:36 Ronnie）
         .fullScreenCover(isPresented: $newOpen) {
-            NativeReservationEntry(model: model, onClose: { newOpen = false }, onWalkIn: {
+            NativeReservationEntry(model: model, prefill: slotPrefill, onClose: { newOpen = false; slotPrefill = nil }, onWalkIn: {
                 newOpen = false
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { walkInOpen = true }
             })
@@ -732,14 +738,14 @@ struct NativeLedgerView: View {
         // 卓の上に「ウェイティング」の行（席がまだ決まっていない予約）。待っている予約があるときだけ出す
         // （2026-10-24 Ronnie「ウェイティングはテーブルより上に。言葉もウェイティング」、18:48「waiting ma manxe vaye matra dekhauxa」）
         // 時間が重なる予約は下の段に並べ、行の高さが広がる（18:48「booking dherai vayo vane thau farakilo hudai janxa」）
-        let waiting: [(name: String, status: String, reservations: [NLReservation])] =
-            unassigned.isEmpty ? [] : [("ウェイティング", "\(unassigned.count)組", unassigned)]
-        let tableData: [(name: String, status: String, reservations: [NLReservation])] =
-            p.tables.map { t in (t.name, t.statusLabel.isEmpty ? "\(t.capacityMax)名席" : t.statusLabel, p.reservations.filter { $0.tableIds.contains(t.id) }) }
+        let waiting: [(id: String?, name: String, status: String, reservations: [NLReservation])] =
+            unassigned.isEmpty ? [] : [(nil, "ウェイティング", "\(unassigned.count)組", unassigned)]
+        let tableData: [(id: String?, name: String, status: String, reservations: [NLReservation])] =
+            p.tables.map { t in (t.id, t.name, t.statusLabel.isEmpty ? "\(t.capacityMax)名席" : t.statusLabel, p.reservations.filter { $0.tableIds.contains(t.id) }) }
         let rows: [NLBoardRow] = (waiting + tableData)
             .map { row in
                 let lanes = nlLanes(row.reservations, dayStart: p.date, minMinutes: p.slotMinutes)
-                return NLBoardRow(name: row.name, status: row.status, reservations: row.reservations, lane: lanes.lane, height: rowH + CGFloat(lanes.count - 1) * laneStep)
+                return NLBoardRow(tableId: row.id, name: row.name, status: row.status, reservations: row.reservations, lane: lanes.lane, height: rowH + CGFloat(lanes.count - 1) * laneStep)
             }
 
         let names = VStack(spacing: 0) {
@@ -918,11 +924,23 @@ struct NativeLedgerView: View {
         .allowsHitTesting(false)
     }
 
+    /// 空いたマスを押した：その卓・押した時刻（5 分に切り下げ）。過去・ウェイティングの行・書けない人は何もしない
+    private func slotTapped(_ row: NLBoardRow, x: CGFloat, p: NLPayload, nowMin: Int?) {
+        guard p.canWrite, let tableId = row.tableId else { return }
+        let raw = p.viewStartMin + Int(x / slotW * CGFloat(p.slotMinutes))
+        let minute = (raw / 5) * 5
+        guard minute < 24 * 60 else { return }
+        if p.date < p.today { return }
+        if p.isToday, let now = nowMin, minute < (now / 5) * 5 { return }
+        let nearNow = p.isToday && (nowMin.map { minute <= $0 + 30 } ?? false)
+        quickSlot = NLQuickSlot(tableId: tableId, tableName: row.name, date: p.date, minute: minute, nearNow: nearNow)
+    }
+
     private func tableRow(_ row: NLBoardRow, p: NLPayload, slots: Int, totalW: CGFloat, nowMin: Int?) -> some View {
         let h = row.height
         return HStack(spacing: 0) {
             ZStack(alignment: .topLeading) {
-                // マス目
+                // マス目（空いたところを押すと、その卓・その時間で受付。赤い今の線より先だけ。2026-10-24 20:21 Ronnie）
                 HStack(spacing: 0) {
                     ForEach(0..<slots, id: \.self) { i in
                         let m = p.viewStartMin + i * p.slotMinutes
@@ -931,6 +949,38 @@ struct NativeLedgerView: View {
                             .frame(width: slotW, height: h)
                             .overlay(alignment: .topLeading) { gridLines(from: m, minutes: p.slotMinutes, height: h) }
                     }
+                }
+                .contentShape(Rectangle())
+                .gesture(SpatialTapGesture().onEnded { v in slotTapped(row, x: v.location.x, p: p, nowMin: nowMin) })
+                // 押したマスの点線の枠（その場の受付を出しているあいだ）
+                if let q = quickSlot, q.tableId == row.tableId, q.date == p.date {
+                    let qx = CGFloat(q.minute - p.viewStartMin) / CGFloat(p.slotMinutes) * slotW
+                    HStack(spacing: 6) {
+                        Image(systemName: "plus.circle.fill")
+                        Text("\(nlHm(q.minute))〜").monospacedDigit()
+                        Spacer(minLength: 0)
+                    }
+                    .font(.system(size: 13, weight: .heavy)).foregroundColor(Color(hex: 0x05603A))
+                    .padding(.horizontal, 10)
+                    .frame(width: slotW * 3, height: rowH - 12)
+                    .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(NLColor.greenSoft.opacity(0.85)))
+                    .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(NLColor.green, style: StrokeStyle(lineWidth: 1.5, dash: [5, 4])))
+                    .popover(isPresented: Binding(get: { quickSlot != nil }, set: { if !$0 { quickSlot = nil } }), arrowEdge: .leading) {
+                        NLQuickAddPanel(slot: q, onClose: { quickSlot = nil }, onReserve: { party, partyMax, tags in
+                            slotPrefill = NLReservationPrefill(date: q.date, time: nlHm(q.minute), adults: party, tableIds: [q.tableId], partyMax: partyMax, tags: tags)
+                            quickSlot = nil
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { newOpen = true }
+                        }, onWalkIn: { party in
+                            quickSlot = nil
+                            Task {
+                                if await model.act(["type": "ledgerWalkIn", "tableId": q.tableId, "adults": party, "children": 0, "name": "", "phone": ""]) != nil {
+                                    await model.refresh(silent: true)
+                                    model.show(toast: "\(q.tableName) に \(party)名 を案内しました")
+                                }
+                            }
+                        })
+                    }
+                    .offset(x: max(0, qx) + 2, y: 6)
                 }
                 // 予約の箱
                 ForEach(row.reservations) { r in
