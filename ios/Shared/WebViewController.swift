@@ -375,8 +375,8 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
             }
         case "setNativePos":
             let reqId = body["reqId"] as? String ?? ""
+            // ブリッジのスクリプトの作り直しは setNativePos の中で（ネイティブの設定画面から変えたときと同じ道）
             AppState.shared.setNativePos((body["on"] as? Bool) ?? false)
-            refreshBridgeScript()
             reply(reqId, ["ok": true, "enabled": AppState.shared.nativePosEnabled])
         case "setNativePhone":
             let reqId = body["reqId"] as? String ?? ""
@@ -404,8 +404,8 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         }
     }
 
-    /// ネイティブの設定を変えたとき、次に読み込む画面のブリッジを作り直す
-    private func refreshBridgeScript() {
+    /// ネイティブの設定を変えたとき、次に読み込む画面のブリッジを作り直す（AppState.setNativePos からも呼ぶ）
+    func refreshBridgeScript() {
         let cc = webView.configuration.userContentController
         cc.removeAllUserScripts()
         cc.addUserScript(WKUserScript(source: Self.bridgeScript(), injectionTime: .atDocumentStart, forMainFrameOnly: true))

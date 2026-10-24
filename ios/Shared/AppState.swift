@@ -105,16 +105,26 @@ final class AppState: ObservableObject {
     /// アプリ自身の印刷係（NativePrintAgent）を動かすか＝ネイティブ ON の iPad（レジ）。OFF のときは今まで通り Web の DirectPrintAgent
     var nativePrintAgentOn: Bool { AppConfig.isPad && mode == .regi && nativePosEnabled }
 
-    /// ネイティブ ON/OFF（レジの設定）。OFF にしたらネイティブの画面を全部閉じて Web の画面をそのまま見せる
-    @MainActor func setNativePos(_ on: Bool) {
+    /// ネイティブ ON/OFF（レジの設定）。OFF にしたらネイティブの画面を全部閉じて Web の画面をそのまま見せる。
+    /// reloadWeb：ネイティブの設定画面から変えたとき true。OFF のあと Web の「レジの設定」を読み直し、Web 側のトグル表示を合わせる
+    @MainActor func setNativePos(_ on: Bool, reloadWeb: Bool = false) {
         nativePosEnabled = on
         syncPrintAgent()
-        WebViewController.current?.runOnOwnPage("if (window.TenpoNative && window.TenpoNative.print) { window.TenpoNative.print.native = \(nativePrintAgentOn ? "true" : "false"); }")
+        // 次に読み込む Web の画面に渡す ON/OFF・印刷係の有無（ブリッジのスクリプト）も作り直す。
+        // これが無いと、ネイティブの設定で OFF にしたあと Web を読み直すと古い print.native=true が入り、
+        // Web の DirectPrintAgent が休んだまま（アプリの印刷係も止まっている）＝印刷されなくなる（2026-10-24 レビュー）
+        WebViewController.current?.refreshBridgeScript()
+        let onJs = on ? "true" : "false"
+        let agentJs = nativePrintAgentOn ? "true" : "false"
+        WebViewController.current?.runOnOwnPage(
+            "if (window.TenpoNative) { if (window.TenpoNative.print) { window.TenpoNative.print.native = \(agentJs); } if (window.TenpoNative.nativePos) { window.TenpoNative.nativePos.enabled = \(onJs); } }"
+        )
         if on {
             if let url = WebViewController.current?.currentURL { maybeOpenNativePos(for: url) }
         } else {
             nativeOrder = nil
             closeAllNative()
+            if reloadWeb { WebViewController.current?.load(AppConfig.url("/app/pos/settings")) }
         }
     }
 
