@@ -4,7 +4,8 @@ import { CheckCircle2, AlertTriangle, MinusCircle } from 'lucide-react';
 import { requirePermission, requireFeature } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { yen, todayJst, daysAgoJst, formatDate } from '@/lib/format';
-import { computeSalesMetrics, SETTLED_ORDER_STATUSES, type RefundLike, type SettledOrderLike } from '@/lib/metrics';
+import { RECON_STATUS_LABEL, reconciliationScope, type ReconStatus } from '@/lib/reconciliation';
+import { loadReconciliationData } from '@/lib/reconciliation-server';
 import { PageHeader } from '@/components/ui/page-header';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge, type BadgeTone } from '@/components/ui/badge';
@@ -16,21 +17,13 @@ import { cn } from '@/lib/utils';
 
 export const metadata: Metadata = { title: '売上・現金・在庫の照合' };
 
-type ReconStatus = 'ok' | 'mismatch' | 'no_data';
-
-const STATUS_LABEL: Record<ReconStatus, string> = { ok: '一致', mismatch: '不一致', no_data: 'データなし' };
+const STATUS_LABEL = RECON_STATUS_LABEL;
 const STATUS_TONE: Record<ReconStatus, BadgeTone> = { ok: 'success', mismatch: 'danger', no_data: 'gray' };
 
 function StatusIcon({ status }: { status: ReconStatus }) {
   if (status === 'ok') return <CheckCircle2 className="h-5 w-5 text-success" />;
   if (status === 'mismatch') return <AlertTriangle className="h-5 w-5 text-danger" />;
   return <MinusCircle className="h-5 w-5 text-gray-400" />;
-}
-
-/** 'YYYY-MM-DD:storeId' 形式の source_id から日付部分を取り出す */
-function dateOfKey(key: string): string {
-  const sep = key.indexOf(':');
-  return sep >= 0 ? key.slice(sep + 1) : key;
 }
 
 export default async function ReconciliationPage({
@@ -43,14 +36,8 @@ export default async function ReconciliationPage({
   const sp = await searchParams;
   const supabase = await createClient();
 
-  const today = todayJst();
-  let from = sp.from || daysAgoJst(6);
-  let to = sp.to || today;
-  if (from > to) [from, to] = [to, from];
-
-  const storeId = sp.store || (ctx.isHq ? '' : (ctx.currentStore?.id ?? ''));
-  const storeName = storeId ? (ctx.stores.find((s) => s.id === storeId)?.name ?? null) : null;
-  const storeIds = storeId ? [storeId] : ctx.stores.map((s) => s.id);
+  // 期間・店舗と中身の読み込みは lib/reconciliation.ts・lib/reconciliation-server.ts（iPad ネイティブと同じ。2026-10-24）
+  const { from, to, storeId, storeName, storeIds } = reconciliationScope(ctx, sp, todayJst(), daysAgoJst(6));
 
   if (storeIds.length === 0) {
     return (
@@ -61,160 +48,26 @@ export default async function ReconciliationPage({
     );
   }
 
-  // ---- 基礎データ取得 ----
-  const [
-    { data: ordersData },
-    { data: refundsData },
-    { data: paymentsData },
-    { data: closingsData },
-    { data: accountsData },
-    { data: stockCountsData },
-  ] = await Promise.all([
-    supabase
-      .from('orders')
-      .select('id, total, discount_total, guest_count, status, store_id, business_date')
-      .in('store_id', storeIds)
-      .gte('business_date', from)
-      .lte('business_date', to)
-      .in('status', SETTLED_ORDER_STATUSES),
-    supabase
-      .from('refunds')
-      .select('amount, kind, store_id, business_date')
-      .in('store_id', storeIds)
-      .gte('business_date', from)
-      .lte('business_date', to),
-    supabase
-      .from('payments')
-      .select('amount, store_id, business_date')
-      .in('store_id', storeIds)
-      .eq('status', 'completed')
-      .gte('business_date', from)
-      .lte('business_date', to),
-    supabase
-      .from('daily_closings')
-      .select('id, business_date, store_id, expected_cash, counted_cash, cash_difference, status, stores(name)')
-      .in('store_id', storeIds)
-      .gte('business_date', from)
-      .lte('business_date', to)
-      .order('business_date', { ascending: false }),
-    supabase.from('accounts').select('id, code').eq('organization_id', ctx.organizationId).in('code', ['400', '401']),
-    supabase
-      .from('stock_counts')
-      .select('id, store_id, count_date')
-      .in('store_id', storeIds)
-      .eq('status', 'completed')
-      .order('count_date', { ascending: false })
-      .limit(200),
-  ]);
-
-  const settledOrders = ordersData ?? [];
-  const refunds = refundsData ?? [];
-  const payments = paymentsData ?? [];
-  const closings = closingsData ?? [];
-
-  // -------------------------------------------------------------
-  // 1) 売上照合: (a) POS純売上 vs (b) 決済合計 vs (c) 仕訳売上（posted・400/401net）
-  // -------------------------------------------------------------
-  const salesMetrics = computeSalesMetrics(settledOrders as SettledOrderLike[], refunds as RefundLike[]);
-  const posNetSales = salesMetrics.netSales;
-  const paymentsTotal = payments.reduce((a, p) => a + (p.amount as number), 0);
-  const paymentsNet = paymentsTotal - salesMetrics.refunds;
-
-  const salesAccountIds = (accountsData ?? []).map((a) => a.id as string);
-  let journalLinesQuery = supabase
-    .from('journal_entry_lines')
-    .select('side, amount, journal_entries!inner(source_type, status, entry_date, store_id)')
-    .eq('organization_id', ctx.organizationId)
-    .in('journal_entries.source_type', ['pos_sales', 'pos_refund'])
-    .eq('journal_entries.status', 'posted')
-    .gte('journal_entries.entry_date', from)
-    .lte('journal_entries.entry_date', to);
-  journalLinesQuery =
-    storeIds.length === 1
-      ? journalLinesQuery.eq('journal_entries.store_id', storeIds[0])
-      : journalLinesQuery.in('journal_entries.store_id', storeIds);
-  const { data: journalLinesData } =
-    salesAccountIds.length > 0 ? await journalLinesQuery.in('account_id', salesAccountIds).limit(20000) : { data: [] };
-  const journalNetSales = (journalLinesData ?? []).reduce(
-    (a, l) => a + (l.side === 'credit' ? (l.amount as number) : -(l.amount as number)),
-    0
-  );
-
-  // 仕訳未確定日: settled注文がある店舗×営業日のうち、posted な pos_sales 仕訳が存在しない日
-  const requiredKeys = [...new Set(settledOrders.map((o) => `${o.store_id}:${o.business_date}`))];
-  const postedKeySet = new Set<string>();
-  {
-    const CHUNK = 300;
-    for (let i = 0; i < requiredKeys.length; i += CHUNK) {
-      const chunk = requiredKeys.slice(i, i + CHUNK);
-      const { data } = await supabase
-        .from('journal_entries')
-        .select('source_id')
-        .eq('organization_id', ctx.organizationId)
-        .eq('source_type', 'pos_sales')
-        .eq('status', 'posted')
-        .in('source_id', chunk);
-      for (const r of data ?? []) postedKeySet.add(r.source_id as string);
-    }
-  }
-  const unconfirmedDates = new Set(requiredKeys.filter((k) => !postedKeySet.has(k)).map(dateOfKey));
-
-  const diffPayments = paymentsNet - posNetSales;
-  const diffJournal = journalNetSales - posNetSales;
-  const hasSalesData = settledOrders.length > 0 || payments.length > 0;
-  const salesStatus: ReconStatus = !hasSalesData ? 'no_data' : diffPayments === 0 && diffJournal === 0 ? 'ok' : 'mismatch';
-
-  // -------------------------------------------------------------
-  // 2) 現金照合: daily_closings の理論現金 vs 実現金 vs 差異
-  // -------------------------------------------------------------
-  const cashRows = closings.map((c) => ({
-    id: c.id as string,
-    businessDate: c.business_date as string,
-    storeName: (c.stores as unknown as { name: string } | null)?.name ?? '',
-    expectedCash: c.expected_cash as number | null,
-    countedCash: c.counted_cash as number | null,
-    cashDifference: c.cash_difference as number,
-  }));
-  const expectedCashTotal = cashRows.filter((r) => r.expectedCash != null).reduce((a, r) => a + (r.expectedCash as number), 0);
-  const countedCashTotal = cashRows.filter((r) => r.countedCash != null).reduce((a, r) => a + (r.countedCash as number), 0);
-  const cashDifferenceTotal = cashRows.reduce((a, r) => a + r.cashDifference, 0);
-  const cashDiffDays = cashRows.filter((r) => r.cashDifference !== 0).sort((a, b) => b.businessDate.localeCompare(a.businessDate));
-  const cashStatus: ReconStatus = cashRows.length === 0 ? 'no_data' : cashDiffDays.length === 0 ? 'ok' : 'mismatch';
-
-  // -------------------------------------------------------------
-  // 3) 在庫照合: 直近の棚卸（店舗ごと最新の確定分）の差異品目・差異金額
-  // -------------------------------------------------------------
-  const latestCountByStore = new Map<string, { id: string; countDate: string }>();
-  for (const c of stockCountsData ?? []) {
-    const sid = c.store_id as string;
-    if (!latestCountByStore.has(sid)) latestCountByStore.set(sid, { id: c.id as string, countDate: c.count_date as string });
-  }
-  const latestCountIds = [...latestCountByStore.values()].map((v) => v.id);
-  const { data: countItemsData } =
-    latestCountIds.length > 0
-      ? await supabase
-          .from('stock_count_items')
-          .select('id, stock_count_id, difference, counted_quantity, inventory_items(name, unit, avg_cost)')
-          .in('stock_count_id', latestCountIds)
-      : { data: [] };
-  const inventoryDiffRows = (countItemsData ?? [])
-    .filter((i) => i.counted_quantity != null && Number(i.difference) !== 0)
-    .map((i) => {
-      const inv = i.inventory_items as unknown as { name: string; unit: string; avg_cost: number | null } | null;
-      const diffQty = Number(i.difference);
-      const unitCost = inv?.avg_cost ?? null;
-      const diffAmount = unitCost != null ? Math.round(-diffQty * unitCost) : null;
-      return { id: i.id as string, name: inv?.name ?? '不明な品目', unit: inv?.unit ?? '', diffQty, unitCost, diffAmount };
-    })
-    .sort((a, b) => Math.abs(b.diffAmount ?? 0) - Math.abs(a.diffAmount ?? 0));
-  const inventoryDiffAmountTotal = inventoryDiffRows.reduce((a, r) => a + (r.diffAmount ?? 0), 0);
-  const inventoryStatus: ReconStatus = latestCountIds.length === 0 ? 'no_data' : inventoryDiffRows.length === 0 ? 'ok' : 'mismatch';
-
-  const overallStatus: ReconStatus = [salesStatus, cashStatus, inventoryStatus].some((s) => s === 'mismatch')
-    ? 'mismatch'
-    : [salesStatus, cashStatus, inventoryStatus].every((s) => s === 'ok')
-      ? 'ok'
-      : 'no_data';
+  const {
+    posNetSales,
+    paymentsNet,
+    journalNetSales,
+    diffPayments,
+    diffJournal,
+    unconfirmedDayCount,
+    salesStatus,
+    cashRows,
+    cashDiffDays,
+    expectedCashTotal,
+    countedCashTotal,
+    cashDifferenceTotal,
+    cashStatus,
+    hasStockCounts,
+    inventoryDiffRows,
+    inventoryDiffAmountTotal,
+    inventoryStatus,
+    overallStatus,
+  } = await loadReconciliationData(supabase, ctx, { from, to, storeId, storeName, storeIds });
 
   const periodQuery = new URLSearchParams({ from, to });
   if (storeId) periodQuery.set('store', storeId);
@@ -336,9 +189,9 @@ export default async function ReconciliationPage({
             </Table>
           </TableWrap>
 
-          {unconfirmedDates.size > 0 && (
+          {unconfirmedDayCount > 0 && (
             <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-warning/30 bg-warning-soft px-4 py-3 text-sm text-warning">
-              <span>自動仕訳が未確定の日が{unconfirmedDates.size}日あります（仕訳売上に反映されていません）</span>
+              <span>自動仕訳が未確定の日が{unconfirmedDayCount}日あります（仕訳売上に反映されていません）</span>
               <Link href="/app/accounting/auto" className={cn(buttonVariants({ variant: 'secondary', size: 'sm' }))}>
                 自動仕訳ページへ
               </Link>
@@ -434,7 +287,7 @@ export default async function ReconciliationPage({
           <Badge tone={STATUS_TONE[inventoryStatus]}>{STATUS_LABEL[inventoryStatus]}</Badge>
         </CardHeader>
         <CardContent>
-          {latestCountIds.length === 0 ? (
+          {!hasStockCounts ? (
             <EmptyState
               title="棚卸データがありません"
               description="対象店舗で確定済みの棚卸がありません。「在庫」から棚卸を実施してください"
