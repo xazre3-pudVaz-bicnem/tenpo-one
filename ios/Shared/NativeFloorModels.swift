@@ -284,7 +284,34 @@ enum NFColor {
         case .free, .waiting: return Color(hex: 0xF2F2F7)
         case .reserved: return irisSoft
         case .cleaning, .unavailable: return Color(hex: 0xEDEDF0)
+        case .seated, .ordered: return Color(hex: 0xF5F5F8)
         default: return surface(s)
+        }
+    }
+
+    /// 3D の台（カードの下に見える一段濃い色）
+    static func tileEdge(_ s: NFTileState) -> Color {
+        switch s {
+        case .free, .waiting: return Color(hex: 0xD3D3DA)
+        case .reserved: return Color(hex: 0xBFD0F2)
+        case .lo: return Color(hex: 0xEBD58A)
+        case .over: return Color(hex: 0xEDB9B9)
+        case .pay: return Color(hex: 0xE3C88F)
+        case .cleaning, .unavailable: return Color(hex: 0xD0D0D6)
+        default: return Color(hex: 0xDCDCE3)
+        }
+    }
+
+    /// 3D のカードの上側（下へ向かって tileSurface に変わる）
+    static func tileFaceTop(_ s: NFTileState) -> Color {
+        switch s {
+        case .free, .waiting: return Color(hex: 0xFBFBFD)
+        case .reserved: return Color(hex: 0xF4F8FF)
+        case .lo: return Color(hex: 0xFFFEF6)
+        case .over: return Color(hex: 0xFFF7F7)
+        case .pay: return Color(hex: 0xFFFBF1)
+        case .cleaning, .unavailable: return Color(hex: 0xF6F6F8)
+        default: return .white
         }
     }
 

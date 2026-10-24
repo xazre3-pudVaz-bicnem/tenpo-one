@@ -242,7 +242,7 @@ struct NativeHomeView: View {
             }
             .padding(.horizontal, 16)
             .frame(height: 64)
-            .background(NT.header.ignoresSafeArea(edges: .top))
+            .background(NT.header)
 
             HStack(spacing: 18) {
                 Spacer(minLength: 0)

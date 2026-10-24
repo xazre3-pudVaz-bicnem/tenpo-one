@@ -235,7 +235,6 @@ struct NativeTableCard: View {
         let next = table.nextReservation(now: now)
         let order = table.order
         let empty = order == nil && state != .seated && state != .pay
-        let dashed = state == .free || state == .reserved || state == .waiting
         let linked = table.linkedNames
         let hasCall = !table.calls.isEmpty
 
@@ -273,9 +272,10 @@ struct NativeTableCard: View {
                             Image(systemName: "plus")
                                 .font(.system(size: 18, weight: .semibold))
                                 .foregroundColor(NFColor.tileIcon)
-                                .frame(width: 40, height: 40)
-                                .background(Circle().fill(Color.white))
-                                .shadow(color: .black.opacity(0.06), radius: 3, y: 1)
+                                .frame(width: 44, height: 44)
+                                .background(Circle().fill(LinearGradient(colors: [Color.white, Color(hex: 0xF0F0F4)], startPoint: .top, endPoint: .bottom)))
+                                .overlay(Circle().strokeBorder(Color.black.opacity(0.08), lineWidth: 0.75))
+                                .shadow(color: .black.opacity(0.14), radius: 4, x: 0, y: 3)
                         }
                         // 空席は ＋ だけで分かるので「空席」は書かない（2026-10-24 Ronnie）
                         if state != .free {
@@ -326,11 +326,17 @@ struct NativeTableCard: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .aspectRatio(1, contentMode: .fit)
             // Apple 風：白い地の上に、角の丸いカードを浮かせる（空席は薄いグレー、使用中は白＋影）
+            // 3D：下に一段濃い「台」を敷き、その上に上が明るいカードを乗せる（キーのような立体。2026-10-24 Ronnie「3D・見えやすく」）
             .background(
-                RoundedRectangle(cornerRadius: NFColor.tileRadius, style: .continuous)
-                    .fill(NFColor.tileSurface(state))
-                    .shadow(color: .black.opacity(dashed ? 0 : 0.10), radius: 12, x: 0, y: 5)
-                    .shadow(color: .black.opacity(dashed ? 0 : 0.04), radius: 1, x: 0, y: 1)
+                ZStack {
+                    RoundedRectangle(cornerRadius: NFColor.tileRadius, style: .continuous)
+                        .fill(NFColor.tileEdge(state))
+                        .offset(y: 5)
+                        .shadow(color: .black.opacity(0.18), radius: 10, x: 0, y: 9)
+                        .shadow(color: .black.opacity(0.10), radius: 2, x: 0, y: 6)
+                    RoundedRectangle(cornerRadius: NFColor.tileRadius, style: .continuous)
+                        .fill(LinearGradient(colors: [NFColor.tileFaceTop(state), NFColor.tileSurface(state)], startPoint: .top, endPoint: .bottom))
+                }
             )
             .overlay(alignment: .bottom) {
                 // 残り時間の線（カードの中の細いバー）
@@ -347,12 +353,17 @@ struct NativeTableCard: View {
                     .padding(.bottom, 9)
                 }
             }
+            // 縁：上は白く光り、下は濃い（面取りの見え方）。連携・予約は色の縁
             .overlay(
                 RoundedRectangle(cornerRadius: NFColor.tileRadius, style: .continuous)
                     .strokeBorder(
-                        style: StrokeStyle(lineWidth: linked != nil || state == .reserved ? 2 : 1)
+                        LinearGradient(colors: [Color.white.opacity(0.95), NFColor.tileEdge(state).opacity(0.9)], startPoint: .top, endPoint: .bottom),
+                        lineWidth: 2
                     )
-                    .foregroundColor(linked != nil ? NFColor.royal : (state == .reserved ? NFColor.royal.opacity(0.55) : (dashed ? Color.black.opacity(0.05) : Color.black.opacity(0.06))))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: NFColor.tileRadius, style: .continuous)
+                    .strokeBorder(linked != nil ? NFColor.royal : (state == .reserved ? NFColor.royal.opacity(0.6) : Color.black.opacity(0.10)), lineWidth: linked != nil || state == .reserved ? 2 : 0.75)
             )
             .overlay {
                 if hasCall {
