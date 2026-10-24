@@ -258,6 +258,24 @@ struct NativeInventoryScreen: View {
     }
 }
 
+/// ネイティブの仕入先（2026-10-24）
+struct NativeVendorsScreen: View {
+    @StateObject private var model = NativePurchasingModel()
+    @EnvironmentObject var state: AppState
+    var body: some View {
+        NativeVendorsView(model: model, onHome: { state.goNativeHome() }, onWeb: { path in state.leaveNativeFloor(to: path) }, onOpenPo: { id in state.goNativePurchases(.detail(id)) })
+    }
+}
+
+/// ネイティブの発注（一覧・作成・詳細。2026-10-24）
+struct NativePurchasesScreen: View {
+    @StateObject private var model = NativePurchasingModel()
+    @EnvironmentObject var state: AppState
+    var body: some View {
+        NativePurchasesView(model: model, route: $state.purchasesRoute, onHome: { state.goNativeHome() }, onWeb: { path in state.leaveNativeFloor(to: path) })
+    }
+}
+
 /// ネイティブの通知（2026-10-24）
 struct NativeNoticesScreen: View {
     @StateObject private var model = NativeNoticesModel()
