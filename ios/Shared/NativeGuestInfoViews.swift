@@ -68,6 +68,12 @@ struct NativeSetupSheet: View {
         (payload?.planItems ?? []).filter { planItemIds.contains($0.id) }.map(\.name).joined(separator: "・")
     }
     private var canConfirm: Bool { guests >= 1 && !source.isEmpty && !saving }
+    /// この卓の今の予約（前後60分以内）のお名前
+    private var bookedName: String? {
+        let r = table.upcoming.first { abs($0.startMs - model.now) <= 60 * 60 * 1000 }
+        guard let n = r?.name.trimmingCharacters(in: .whitespaces), !n.isEmpty else { return nil }
+        return n
+    }
 
     /// 横に広く・1画面に収まる（スクロールしない）2列（2026-10-24 Ronnie「USEN のようにコンパクトに、機能を多く。横は広げてよい」）
     ///   左：テーブル・モード・プラン／タイマー設定（時間制・終了前注意・開始時間）／人数　右：来店経路
@@ -163,14 +169,9 @@ struct NativeSetupSheet: View {
                     }
                 }
                 rowDivider
+                // 顧客名は予約（店舗台帳）から自動で出す。探すボタンは置かない（2026-10-24 Ronnie「予約にあれば自動で出る」）
                 row("顧客名", en: "Name") {
-                    valueText(customer.map { "\($0.name) 様" } ?? "未登録", on: customer != nil)
-                    if customer != nil {
-                        Button { customer = nil } label: {
-                            Image(systemName: "xmark.circle.fill").font(.system(size: 20)).foregroundColor(NFColor.ink3)
-                        }.buttonStyle(.plain)
-                    }
-                    setButton { custPhone = ""; custHits = []; popup = .customer }
+                    valueText(bookedName.map { "\($0) 様" } ?? "未登録", on: bookedName != nil)
                 }
             }
             heading("タイマー設定", en: "Timer")
