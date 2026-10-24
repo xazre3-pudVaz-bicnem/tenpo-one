@@ -12,6 +12,8 @@ enum NativePreview: String {
     case regiLogin, regiClerks
     /// iPhone ハンディの予約（一覧・受付管理・メッセージ。2026-10-25）
     case phoneReservations
+    /// iPhone 店長・オーナー：通知・お知らせ・日報・タスク（一覧・詳細。2026-10-25。NativePhoneOwnerCommsPreview.swift）
+    case phoneOwnerNotifications, phoneOwnerAnnouncements, phoneOwnerAnnouncement, phoneOwnerDailyReports, phoneOwnerDailyReport, phoneOwnerTasks, phoneOwnerTask
 
     static var current: NativePreview? {
         guard let raw = UserDefaults.standard.string(forKey: "tenpoNativePreview") else { return nil }
@@ -51,6 +53,7 @@ struct NativePreviewView: View {
             NativeRegiLoginView(preview: kind.rawValue)
         case .phoneReservations:
             NativePhoneReservationsPreview()
+        case .phoneOwnerNotifications, .phoneOwnerAnnouncements, .phoneOwnerAnnouncement, .phoneOwnerDailyReports, .phoneOwnerDailyReport, .phoneOwnerTasks, .phoneOwnerTask: NativePhoneOwnerCommsPreview(kind: kind.rawValue)
         case .options, .price:
             NativeOrderView(model: model)
                 .statusBarHidden(true)
