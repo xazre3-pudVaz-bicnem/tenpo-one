@@ -252,3 +252,90 @@ struct NativeOpenPricePad: View {
         .shadow(color: .black.opacity(0.18), radius: 24, y: 10)
     }
 }
+
+// MARK: - 「その他（金額入力）」（Web のレジの Other ボタンと同じ：内容（任意）＋金額。打った内容が伝票・レシート・厨房伝票の商品名）
+
+struct NativeCustomPricePad: View {
+    let title: String
+    let onCancel: () -> Void
+    let onDone: (Int, String) -> Void
+    @State private var digits = ""
+    @State private var memo = ""
+
+    /// サーバーの上限（lib/custom-price.ts の CUSTOM_PRICE_MAX・CUSTOM_PRICE_MEMO_MAX）
+    private static let maxYen = 9_999_999
+    private static let memoMax = 40
+    private var yen: Int { Int(digits) ?? 0 }
+
+    private func key(_ k: String) {
+        switch k {
+        case "⌫": digits = String(digits.dropLast())
+        case "C": digits = ""
+        default:
+            let next = (digits + k).replacingOccurrences(of: "^0+(?=\\d)", with: "", options: .regularExpression)
+            if let v = Int(next), v <= Self.maxYen { digits = next }
+        }
+    }
+
+    var body: some View {
+        VStack(spacing: 14) {
+            VStack(spacing: 4) {
+                Text("金額を入力 / Enter amount").font(.system(size: 13, weight: .bold)).foregroundColor(NT.ink3)
+                Text(title).font(.system(size: 20, weight: .heavy)).foregroundColor(NT.ink).lineLimit(2).multilineTextAlignment(.center)
+                Text("金額（1つあたり・税込）を入れます。").font(.system(size: 12, weight: .semibold)).foregroundColor(NT.ink3)
+            }
+            VStack(alignment: .leading, spacing: 4) {
+                Text("内容（任意） / Item").font(.system(size: 12, weight: .bold)).foregroundColor(NT.ink3)
+                TextField("例：大盛り・チーズ追加・持込料", text: $memo)
+                    .font(.system(size: 17))
+                    .padding(.horizontal, 14).frame(height: 48)
+                    .background(RoundedRectangle(cornerRadius: 12).stroke(NT.lilacLine, lineWidth: 1.5))
+                    .onChange(of: memo) { v in if v.count > Self.memoMax { memo = String(v.prefix(Self.memoMax)) } }
+            }
+            HStack(alignment: .firstTextBaseline) {
+                Text("金額 / Amount").font(.system(size: 14, weight: .bold)).foregroundColor(NT.ink2)
+                Spacer()
+                Text(NT.yen(yen)).font(.system(size: 36, weight: .heavy)).foregroundColor(yen > 0 ? NT.ink : NT.ink3)
+                    .lineLimit(1).minimumScaleFactor(0.6)
+            }
+            .padding(.horizontal, 16).padding(.vertical, 12)
+            .background(RoundedRectangle(cornerRadius: 14).fill(NT.lilac))
+            let keys = ["7", "8", "9", "4", "5", "6", "1", "2", "3", "0", "00", "000"]
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) {
+                ForEach(keys, id: \.self) { k in
+                    padKey(Text(k)) { key(k) }
+                }
+                padKey(Image(systemName: "delete.left")) { key("⌫") }
+                padKey(Text("クリア / Clear").font(.system(size: 16, weight: .bold))) { key("C") }
+            }
+            HStack(spacing: 10) {
+                Button(action: onCancel) {
+                    Text("キャンセル").font(.system(size: 17, weight: .bold)).foregroundColor(NT.ink2)
+                        .frame(maxWidth: .infinity, minHeight: 56)
+                        .background(RoundedRectangle(cornerRadius: 14).fill(NT.lilac))
+                }
+                .buttonStyle(PressableStyle())
+                Button { onDone(yen, memo) } label: {
+                    Text("決定 / OK").font(.system(size: 18, weight: .heavy)).foregroundColor(.white)
+                        .frame(maxWidth: .infinity, minHeight: 56)
+                        .background(RoundedRectangle(cornerRadius: 14).fill(NT.purple))
+                }
+                .buttonStyle(PressableStyle())
+            }
+        }
+        .padding(22)
+        .background(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(NT.card))
+        .shadow(color: .black.opacity(0.18), radius: 24, y: 10)
+    }
+
+    private func padKey<L: View>(_ label: L, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            label
+                .font(.system(size: 24, weight: .bold)).foregroundColor(NT.ink)
+                .frame(maxWidth: .infinity, minHeight: 56)
+                .background(RoundedRectangle(cornerRadius: 12).fill(Color(hex: 0xFBF9F5)))
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(NT.lilacLine, lineWidth: 1))
+        }
+        .buttonStyle(PressableStyle(scale: 0.93))
+    }
+}
