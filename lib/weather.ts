@@ -295,3 +295,23 @@ export async function getStoreWeather(address: string | null | undefined): Promi
     isDay: typeof forecast?.current?.is_day === 'number' ? forecast.current.is_day === 1 : null,
   };
 }
+
+/**
+ * 店舗住所から、今日からの日ごとの天気予報（最長16日。Open-Meteo の daily weather_code）。
+ * 日別予算の自動作成（lib/budget-auto.ts）で使う。どこで失敗しても例外は投げない（空を返す）
+ */
+export async function getStoreForecast(address: string | null | undefined, days = 16): Promise<Record<string, WeatherIcon>> {
+  const place = await geocode(address);
+  const n = Math.max(1, Math.min(16, days));
+  const forecast = await getJson<{ daily?: { time?: string[]; weather_code?: (number | null)[] } }>(
+    `https://api.open-meteo.com/v1/forecast?latitude=${place.latitude}&longitude=${place.longitude}&daily=weather_code&forecast_days=${n}&timezone=Asia%2FTokyo`
+  );
+  const out: Record<string, WeatherIcon> = {};
+  const times = forecast?.daily?.time ?? [];
+  const codes = forecast?.daily?.weather_code ?? [];
+  times.forEach((t, i) => {
+    const w = describeWeatherCode(codes[i]);
+    if (w && /^\d{4}-\d{2}-\d{2}$/.test(t)) out[t] = w.icon;
+  });
+  return out;
+}

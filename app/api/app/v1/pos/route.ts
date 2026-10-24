@@ -19,6 +19,7 @@ import { loadNativeHome } from '@/lib/native-home-server';
 import { isNativeHandyActionType, parseNativeHandyAction } from '@/lib/native-handy';
 import { loadNativeHandy, runNativeHandyAction } from '@/lib/native-handy-server';
 import { loadNativeOwnerHome } from '@/lib/native-owner-home-server';
+import { loadNativeBudgetAuto, loadNativeBudgetDaily } from '@/lib/native-budget-server';
 import { isNativeLedgerActionType, parseNativeLedgerAction, type NativeLedgerAction } from '@/lib/native-ledger';
 import { loadNativeLedger, loadNativeLedgerMonth, loadNativeLedgerWait, loadNativeLedgerWeek } from '@/lib/native-ledger-server';
 import { isNativeGourmetActionType, parseNativeGourmetAction } from '@/lib/native-gourmet';
@@ -115,7 +116,6 @@ import {
 } from '@/app/app/customers/actions';
 import { searchCustomerByPhone, setOrderCustomer } from '@/app/app/pos/actions';
 import { isNativeBudgetActionType, parseNativeBudgetAction } from '@/lib/native-budget';
-import { dailyBudgetsFrom } from '@/lib/daily-budget';
 import { saveDailyBudgets } from '@/app/app/budgets/daily-actions';
 import { saveMonthlySalesTarget, upsertBudget } from '@/app/app/budgets/actions';
 import { loadNativeBudgets } from '@/lib/native-budgets-server';
@@ -569,20 +569,27 @@ export async function GET(request: Request) {
   }
 
   // 日別予算登録（Web の /app/budgets/daily）
-  if (part === 'budgetDaily') {
+  if (part === 'budgetDaily' || part === 'budgetAuto') {
     if (!can(ctx.role, 'reports.view')) return json({ ok: false, error: '権限がありません', useWeb: true }, 403);
     const store = ctx.currentStore ?? ctx.stores[0] ?? null;
     if (!store) return json({ ok: false, error: 'アクセス可能な店舗がありません' }, 404);
     const m = url.searchParams.get('month') ?? '';
     const month = /^\d{4}-\d{2}$/.test(m) ? m : todayJst().slice(0, 7);
-    const { data: row } = await (await createClient()).from('store_settings').select('settings').eq('store_id', store.id).maybeSingle();
-    return json({
-      ok: true,
-      store: { id: store.id, name: store.name },
+    const supabase = await createClient();
+    // 履歴（曜日・去年の同じ月・天気予報）から日別予算の案（lib/native-budget-server.ts。2026-10-24 Ronnie「自動予算」）
+    if (part === 'budgetAuto') {
+      const { data: s } = await supabase.from('stores').select('address').eq('id', store.id).maybeSingle();
+      const auto = await loadNativeBudgetAuto(supabase, { id: store.id, address: (s?.address as string | null) ?? null }, month);
+      return json({ ok: true, ...auto });
+    }
+    const daily = await loadNativeBudgetDaily(
+      supabase,
+      ctx.organizationId,
+      { id: store.id, name: store.name },
       month,
-      values: dailyBudgetsFrom(row?.settings, month),
-      canEdit: ['org_owner', 'hq_admin', 'area_manager', 'store_manager'].includes(ctx.role ?? ''),
-    });
+      ['org_owner', 'hq_admin', 'area_manager', 'store_manager'].includes(ctx.role ?? '')
+    );
+    return json({ ok: true, ...daily });
   }
 
   // お知らせ（Web の /app/announcements）
