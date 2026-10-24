@@ -148,13 +148,22 @@ struct NPBrand: Identifiable, Hashable, Codable {
         "transit": Color(hex: 0x1A9A55), "id": Color(hex: 0xE60012), "quicpay": Color(hex: 0x0068B7), "edy": Color(hex: 0xBF0000),
         "nanaco": Color(hex: 0xF39800), "waon": Color(hex: 0x7F3F98),
         "hotpepper": Color(hex: 0xE8362D), "gurunavi": Color(hex: 0xD7000F), "tabelog": Color(hex: 0xFFC400),
+        "discover": Color(hex: 0xE86A10), "aeonpay": Color(hex: 0xB6007A), "famipay": Color(hex: 0x0A7CC4), "jcoinpay": Color(hex: 0x1D3C8F),
+        "bankpay": Color(hex: 0x0098D8), "yuchopay": Color(hex: 0x00843D), "alipayplus": Color(hex: 0x1677FF),
+        "square": Color(hex: 0x1A1A1A), "airpay": Color(hex: 0x1AA1DC), "usenpay": Color(hex: 0xD6001C), "paygate": Color(hex: 0x1E3A8A),
+        "stera-manual": Color(hex: 0x0B6E6E),
     ]
+
+    /// 白い地に置くと字が読みにくい明るい色（字は濃い色にして、下の線だけ色を付ける）
+    var isBright: Bool { Self.bright.contains(id) }
+    private static let bright: Set<String> = ["tabelog", "merpay", "nanaco"]
 
     /// iPad は英語で出す。知らないもの（店で足した名前）はそのまま
     var english: String { Self.englishNames[id] ?? name }
     private static let englishNames: [String: String] = [
         "unionpay": "UnionPay", "rakutenpay": "Rakuten Pay", "dbarai": "d Barai", "merpay": "Merpay",
         "transit": "Transit IC", "edy": "Rakuten Edy", "hotpepper": "Hot Pepper", "gurunavi": "Gurunavi", "tabelog": "Tabelog",
+        "airpay": "AirPAY", "stera-manual": "stera (manual)",
     ]
 }
 
@@ -186,6 +195,65 @@ enum NPBrands {
         case .sitePoints: return sitePoints
         default: return []
         }
+    }
+
+    /// 設定で「使うもの」を選ぶための一覧（店はここから選ぶ。無いものは自分で足す）
+    /// 2026-10-24 22:35 Ronnie「店が使うものを選んで、会計画面に出す」
+    static func catalog(_ methodId: String) -> [NPBrand] {
+        switch methodId {
+        case "credit": return credit + [.init(id: "discover", name: "Discover")]
+        case "qr":
+            return [
+                .init(id: "paypay", name: "PayPay"), .init(id: "rakutenpay", name: "楽天ペイ"), .init(id: "dbarai", name: "d払い"),
+                .init(id: "aupay", name: "au PAY"), .init(id: "merpay", name: "メルペイ"), .init(id: "aeonpay", name: "AEON Pay"),
+                .init(id: "famipay", name: "FamiPay"), .init(id: "jcoinpay", name: "J-Coin Pay"), .init(id: "bankpay", name: "Bank Pay"),
+                .init(id: "yuchopay", name: "ゆうちょPay"), .init(id: "alipay", name: "Alipay"), .init(id: "alipayplus", name: "Alipay+"),
+                .init(id: "wechatpay", name: "WeChat Pay"), .init(id: "linepay", name: "LINE Pay"),
+            ]
+        case "emoney": return emoney
+        // 外部端末：店にある決済端末（stera はつなぐと自動で出る。つないでいない端末はここで名前を選ぶ）
+        case "external":
+            return [
+                .init(id: "square", name: "Square"), .init(id: "airpay", name: "Airペイ"), .init(id: "usenpay", name: "USEN PAY"),
+                .init(id: "paygate", name: "PAYGATE"), .init(id: "stera-manual", name: "stera（手動）"),
+            ]
+        default: return []
+        }
+    }
+}
+
+/// 支払の種類のタイル（会計画面・設定で同じ形）。白いカードに各社の色の名前と下の線（ロゴの絵は使わない）
+/// 2026-10-24 22:35 Ronnie「会計の支払いにロゴのように並べて」
+struct NPBrandTile: View {
+    let brand: NPBrand
+    let fallback: Color
+    let on: Bool
+    var height: CGFloat = 62
+
+    var body: some View {
+        let c = brand.color ?? fallback
+        let ink: Color = on ? (brand.isBright ? Color(hex: 0x292725) : .white) : (brand.isBright ? Color(hex: 0x292725) : c)
+        VStack(spacing: 1) {
+            Text(brand.name).font(.system(size: 17, weight: .heavy)).foregroundColor(ink)
+            if brand.english != brand.name {
+                Text(brand.english).font(.system(size: 10, weight: .semibold)).foregroundColor(ink.opacity(on ? 0.85 : 0.6))
+            }
+        }
+        .lineLimit(1).minimumScaleFactor(0.55)
+        .padding(.horizontal, 8)
+        .frame(maxWidth: .infinity, minHeight: height)
+        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(on ? c : Color.white))
+        .overlay(alignment: .bottom) {
+            if !on { Rectangle().fill(c).frame(height: 4).padding(.horizontal, 14).clipShape(Capsule()).padding(.bottom, 5) }
+        }
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(on ? c : Color(hex: 0xDCE3EF), lineWidth: on ? 2 : 1))
+        .overlay(alignment: .topTrailing) {
+            if on {
+                Image(systemName: "checkmark.circle.fill").font(.system(size: 15, weight: .bold))
+                    .foregroundColor(brand.isBright ? Color(hex: 0x292725) : .white).padding(5)
+            }
+        }
+        .shadow(color: Color.black.opacity(on ? 0.12 : 0.05), radius: on ? 5 : 3, y: on ? 2 : 1)
     }
 }
 

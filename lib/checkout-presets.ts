@@ -54,6 +54,17 @@ export function isBrandedMethod(value: string): value is BrandedMethod {
   return (BRANDED_METHODS as readonly string[]).includes(value);
 }
 
+/**
+ * 内訳を保存できる支払方法。外部端末（external）は店で登録した端末の名前（Square・Airペイ など）で、既定は空。
+ * （2026-10-24 Ronnie「つないだ端末が会計画面に出るように」。iPad の設定で選ぶ）
+ */
+export const PRESET_METHODS = [...BRANDED_METHODS, 'external'] as const;
+export type PresetMethod = (typeof PRESET_METHODS)[number];
+
+export function isPresetMethod(value: string): value is PresetMethod {
+  return (PRESET_METHODS as readonly string[]).includes(value);
+}
+
 /** 設定していない店舗に出す内訳（店舗要望で挙がったもの） */
 export const DEFAULT_METHOD_BRANDS: Record<BrandedMethod, readonly PointBrand[]> = {
   credit: [
@@ -175,7 +186,7 @@ export function checkoutPresetsFrom(settings: unknown): CheckoutPresets {
 
   if (isRecord(root.methodBrands)) {
     for (const [method, list] of Object.entries(root.methodBrands)) {
-      if (!isBrandedMethod(method) || !Array.isArray(list)) continue;
+      if (!isPresetMethod(method) || !Array.isArray(list)) continue;
       const seen = new Set<string>();
       const brands: PointBrand[] = [];
       for (const b of list) {

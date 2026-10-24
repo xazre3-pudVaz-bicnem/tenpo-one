@@ -58,7 +58,7 @@ import { bookingLinkWithSrc, GOOGLE_CHANNEL, icalFeedUrl, reservationBookSetting
 import { pushSubscriptionsFrom } from '@/lib/push-subscriptions';
 import { deleteTerminalReader, registerSimulatedReader, saveCheckoutPresets, updateBookingPaymentSettings, type BookingPaymentMode } from '@/app/app/settings/payments/actions';
 import { addSteraTerminal, deleteSteraTerminal, regenerateSteraLinkCode, updateSteraTerminal } from '@/app/app/settings/payments/stera-actions';
-import { BRANDED_METHODS, checkoutPresetsFrom, DISCOUNT_KIND_LABELS, discountPresetsOf, methodBrandsOf, pointBrandsOf } from '@/lib/checkout-presets';
+import { checkoutPresetsFrom, PRESET_METHODS, DISCOUNT_KIND_LABELS, discountPresetsOf, methodBrandsOf, pointBrandsOf } from '@/lib/checkout-presets';
 import { METHOD_LABELS } from '@/components/cash/labels';
 import { isPaymentConfigured, isPaymentTestMode } from '@/lib/payments';
 import { isSteraOnline } from '@/lib/stera';
@@ -958,11 +958,11 @@ export async function loadNativeSettingsPage(
         canEditStera: can(ctx.role, 'store.settings') && ctx.isRegisterDevice !== true,
         stripe: { configured: isPaymentConfigured(), testMode: isPaymentTestMode() },
         discountKinds: (['percent', 'amount', 'manual'] as const).map((id) => ({ id, label: DISCOUNT_KIND_LABELS[id] })),
-        methods: BRANDED_METHODS.map((m) => ({ id: m, label: METHOD_LABELS[m] ?? m })),
+        methods: PRESET_METHODS.map((m) => ({ id: m, label: METHOD_LABELS[m] ?? m })),
         presets: {
           discounts: discountPresetsOf(presets),
           pointBrands: pointBrandsOf(presets),
-          methodBrands: Object.fromEntries(BRANDED_METHODS.map((m) => [m, methodBrandsOf(presets, m)])),
+          methodBrands: Object.fromEntries(PRESET_METHODS.map((m) => [m, methodBrandsOf(presets, m)])),
         },
         stera: {
           serverUrl: await resolveSiteOrigin(),

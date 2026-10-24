@@ -12,7 +12,7 @@ import { filterTakeoutItems, isTakeoutLikeOrder, takeoutMenuFrom } from '@/lib/t
 import { isQuickPayOrder, QUICK_PAY_ORDER_LABEL } from '@/lib/quick-pay';
 import { groupMenuPages, picksSlot } from '@/lib/menu-book';
 import { englishName } from '@/lib/romaji';
-import { BRANDED_METHODS, checkoutPresetsFrom, discountPresetsOf, methodBrandsOf, pointBrandsOf } from '@/lib/checkout-presets';
+import { checkoutPresetsFrom, PRESET_METHODS, discountPresetsOf, methodBrandsOf, pointBrandsOf } from '@/lib/checkout-presets';
 import { VISIT_SOURCES, visitSourceByLabel, visitSourcesFrom } from '@/lib/handy-visit';
 import { isMissingColumnError } from '@/lib/schema-compat';
 import { loadStoreClerks } from '@/lib/pos-clerks-server';
@@ -261,7 +261,7 @@ export async function loadNativeCatalog(
 
   // 会計の選択肢（設定 > 決済・端末）
   const presets = checkoutPresetsFrom(settings);
-  const methodBrands = Object.fromEntries(BRANDED_METHODS.map((m) => [m, methodBrandsOf(presets, m).map((b) => ({ id: b.key, name: b.name }))]));
+  const methodBrands = Object.fromEntries(PRESET_METHODS.map((m) => [m, methodBrandsOf(presets, m).map((b) => ({ id: b.key, name: b.name }))]));
   const clerkList = (clerks ?? []).map((c) => ({ id: c.id as string, name: c.name as string }));
 
   const body = {

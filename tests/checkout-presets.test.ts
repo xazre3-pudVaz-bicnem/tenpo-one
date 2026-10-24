@@ -14,6 +14,7 @@ import {
   normalizePresetValue,
   percentDiscountAmount,
   pointBrandsOf,
+  PRESET_METHODS,
   PRESET_NAME_MAX,
 } from '@/lib/checkout-presets';
 
@@ -106,6 +107,15 @@ describe('会計の「値引き」「ポイント」の選択肢', () => {
     expect(methodBrandsOf(presets, 'credit').map((b) => b.name)).toEqual(['VISA']);
     // 決めていない支払方法は既定のまま
     expect(methodBrandsOf(presets, 'qr').length).toBeGreaterThan(0);
+  });
+
+  it('外部端末（Square・Airペイ など）の名前も保存できる。既定は空', () => {
+    expect(methodBrandsOf(emptyCheckoutPresets(), 'external')).toEqual([]);
+    const presets = checkoutPresetsFrom({
+      checkout: { methodBrands: { external: [{ key: 'square', name: 'Square' }, { key: 'airpay', name: 'Airペイ' }] } },
+    });
+    expect(methodBrandsOf(presets, 'external').map((b) => b.name)).toEqual(['Square', 'Airペイ']);
+    expect(PRESET_METHODS).toContain('external');
   });
 
   it('追加するときの記号は使っていないものを選ぶ', () => {
