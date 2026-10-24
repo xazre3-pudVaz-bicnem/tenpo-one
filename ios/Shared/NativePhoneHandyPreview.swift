@@ -105,6 +105,45 @@ extension NativeHandyModel {
                                calls: [NHDCall(id: "c1", tableId: tables[0].id, tableName: "T-1", kind: "staff", createdAtMs: now - 180_000, note: "お水ください"),
                                        NHDCall(id: "c2", tableId: tables[3].id, tableName: "T-4", kind: "checkout", createdAtMs: now - 60_000, note: nil)],
                                floors: [NHDNamed(id: f1, name: "1F"), NHDNamed(id: f2, name: "2F")], defaultFloorId: nil)
+        // iPad と同じ卓の箱の中身（part=handyFloor の見本）
+        func order(_ min: Double, guests: Int, total: Int, stay: Double = 120, last: Double? = nil, plans: [String]? = nil, name: String? = nil,
+                   visit: Int? = nil, source: String = "フリー", course: (String, Int)? = nil) -> [String: Any] {
+            var o: [String: Any] = ["id": UUID().uuidString, "openedAtMs": now - min * 60_000, "guestCount": guests, "total": total,
+                                    "sourceLabel": source, "endAtMs": now - min * 60_000 + stay * 60_000, "slips": [Any]()]
+            if let last { o["lastOrderAtMs"] = now - last * 60_000 }
+            if let plans { o["plans"] = plans }
+            if let name { o["customerName"] = name }
+            if let visit { o["visitCount"] = visit }
+            if let c = course { o["course"] = ["label": c.0, "minutes": c.1] }
+            return o
+        }
+        func ft(_ t: NHDTable, status: String, order o: [String: Any]? = nil, calls: [[String: Any]] = [], upcoming: [[String: Any]] = []) -> [String: Any] {
+            var d: [String: Any] = ["id": t.id, "floor_id": t.floorId ?? NSNull(), "name": t.name, "capacity_min": 1, "capacity_max": t.capacityMax,
+                                    "is_private_room": t.name.hasPrefix("R"), "is_counter": t.name.hasPrefix("C"), "current_status": status,
+                                    "shape": "rect", "upcoming": upcoming, "groupTableIds": [String](), "groupTableNames": [String](), "calls": calls]
+            if let o { d["order"] = o }
+            return d
+        }
+        let iso = ISO8601DateFormatter()
+        let rows: [[String: Any]] = [
+            ft(tables[0], status: "seated", order: order(48, guests: 4, total: 6424, last: 6, plans: ["drink"], name: "山田 太郎", visit: 3, source: "食べログ"),
+               calls: [["id": "c1", "kind": "staff", "createdAt": iso.string(from: Date(timeIntervalSince1970: (now - 180_000) / 1000)), "note": "お水ください"]]),
+            ft(tables[1], status: "available"),
+            ft(tables[2], status: "seated", order: order(12, guests: 2, total: 0, plans: ["normal"])),
+            ft(tables[3], status: "billing", order: order(95, guests: 5, total: 18700, last: 38, plans: ["course"], name: "佐藤 花子", visit: 2, source: "ホットペッパー", course: ("おまかせコース", 120)),
+               calls: [["id": "c2", "kind": "checkout", "createdAt": iso.string(from: Date(timeIntervalSince1970: (now - 60_000) / 1000)), "note": NSNull()]]),
+            ft(tables[4], status: "reserved", upcoming: [["id": "u1", "startMs": now + 25 * 60_000, "time": "19:00", "name": "鈴木 一郎 様", "partySize": 4, "sourceLabel": "電話"]]),
+            ft(tables[5], status: "seated", order: order(100, guests: 3, total: 7260, last: 12, plans: ["drink"], source: "Google")),
+            ft(tables[6], status: "available"),
+            ft(tables[7], status: "seated", order: order(21, guests: 1, total: 2340, last: 4)),
+            ft(tables[8], status: "cleaning"),
+            ft(tables[9], status: "seated", order: order(64, guests: 8, total: 32800, stay: 150, last: 9, plans: ["food"], name: "高橋 健", visit: 1, source: "TABLE ONE")),
+            ft(tables[10], status: "available"),
+            ft(tables[11], status: "reserved", upcoming: [["id": "u2", "startMs": now + 50 * 60_000, "time": "19:30", "name": "田中 美咲 様", "partySize": 6, "sourceLabel": "食べログ"]]),
+        ]
+        if let data = try? JSONSerialization.data(withJSONObject: rows), let list = try? JSONDecoder().decode([NFTable].self, from: data) {
+            m.floorTables = Dictionary(list.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        }
         return m
     }
 }
