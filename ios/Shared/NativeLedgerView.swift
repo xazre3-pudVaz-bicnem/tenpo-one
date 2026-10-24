@@ -717,6 +717,7 @@ struct NativeLedgerView: View {
             if p.isClosedDay {
                 Text("定休日").font(.system(size: 13, weight: .bold)).foregroundColor(NLColor.muted).fixedSize()
             }
+            Spacer(minLength: 0)
         }
         .padding(.horizontal, 16).padding(.vertical, 10)
     }
@@ -731,11 +732,12 @@ struct NativeLedgerView: View {
                     Text(unit).font(.system(size: 11)).foregroundColor(NLColor.muted)
                     if let sub { Text(sub).font(.system(size: 11, weight: .semibold)).foregroundColor(NLColor.muted).padding(.leading, 4) }
                 }
-                .lineLimit(1).minimumScaleFactor(0.7)
+                .lineLimit(1)
             }
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 12).frame(maxWidth: .infinity).frame(height: 54)
+        // 横は字に合わせて少し小さく（124 から）。右の切り替えまで切れずに並ぶ（2026-10-24 21:00 Ronnie「箱の横を少し小さく」）
+        .padding(.horizontal, 12).frame(minWidth: 124).fixedSize(horizontal: true, vertical: false).frame(height: 54)
         .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(NLColor.card))
         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(NLColor.line, lineWidth: 1))
     }
