@@ -66,6 +66,9 @@ final class AppState: ObservableObject {
     @Published var budgetMonth: String?
     /// ネイティブの顧客台帳（/app/customers の一覧。2026-10-24）
     @Published var nativeCustomers = false
+    /// 顧客台帳のどれを出すか（list・rfm・duplicates。Web の ?view=）
+    @Published var customersView = "list"
+    @Published var customersOpenId: String?
     /// ネイティブのスキャン（レシート撮影。/app/scan。2026-10-24）
     @Published var nativeScan = false
     /// スキャンで紐付ける出金（/app/scan?tx=）
@@ -211,8 +214,21 @@ final class AppState: ObservableObject {
             if !nativeScan { nativeScan = true }
             return
         }
-        // 顧客台帳の一覧だけ（RFM分析・重複候補 ?view=… と 顧客の Web の詳細 /app/customers/<id> は Web のまま）
-        if url.path == "/app/customers" && !(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []).contains(where: { $0.name == "view" }) {
+        // 顧客の詳細（/app/customers/<id>。データ書き出し …/export は Web のまま）
+        if url.path.hasPrefix("/app/customers/") {
+            let id = String(url.path.dropFirst("/app/customers/".count))
+            if id.count == 36, id.allSatisfy({ $0.isHexDigit || $0 == "-" }) {
+                nativeFloor = false; nativeNotices = false; nativeBudget = false; nativeHome = false; nativeLedger = false; nativeCash = false; nativeCashIo = false; nativeQuick = false; nativeSlips = false; nativeExpenses = false; nativeStock = false; nativeInventory = false; nativeVendors = false; nativePurchases = false; nativeCoupons = false
+                customersView = "list"
+                customersOpenId = id
+                if !nativeCustomers { nativeCustomers = true }
+                return
+            }
+        }
+        // 顧客台帳（一覧・RFM分析・重複候補 ?view=…）
+        if url.path == "/app/customers" {
+            let v = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "view" }?.value
+            customersView = (v == "rfm" || v == "duplicates") ? v! : "list"
             nativeFloor = false; nativeNotices = false; nativeBudget = false; nativeHome = false; nativeLedger = false; nativeCash = false; nativeCashIo = false; nativeQuick = false; nativeSlips = false; nativeExpenses = false; nativeStock = false; nativeInventory = false; nativeVendors = false; nativePurchases = false; nativeCoupons = false
             if !nativeCustomers { nativeCustomers = true }
             return

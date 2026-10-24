@@ -86,6 +86,10 @@ struct NativeCustomersView: View {
     @State private var openId: String?
     @State private var showCreate = false
     @State private var search = ""
+    /// 顧客一覧・RFM分析・重複候補（Web の ?view=）
+    @Binding var view: String
+    /// 開いてほしい顧客（/app/customers/<id> から）
+    @Binding var openRequest: String?
 
     private var p: NCListPayload? { model.payload }
 
@@ -101,6 +105,15 @@ struct NativeCustomersView: View {
                             Text("顧客情報の閲覧には権限が必要です。管理者にお問い合わせください。").font(.system(size: 13)).foregroundColor(NFColor.ink3)
                         }
                         Spacer()
+                    } else if view == "rfm" || view == "duplicates" {
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text(view == "rfm" ? "企業内全店舗で共有される顧客台帳です" : "電話番号・メールアドレスが一致する重複候補です").font(.system(size: 13)).foregroundColor(NFColor.ink3)
+                                NCTabs(view: $view)
+                                if view == "rfm" { NCRfmView(list: model, onOpen: { openId = $0 }) } else { NCDuplicatesView(list: model) }
+                            }
+                            .padding(16)
+                        }
                     } else {
                         listBody(p)
                     }
@@ -122,6 +135,8 @@ struct NativeCustomersView: View {
         .animation(.easeOut(duration: 0.2), value: openId)
         .modifier(NPToastError(error: $model.error, toast: $model.toast, hasPayload: model.payload != nil))
         .task { search = model.q; await model.refresh() }
+        .onAppear { if let r = openRequest { openId = r; openRequest = nil } }
+        .onChange(of: openRequest) { r in if let r { openId = r; openRequest = nil } }
         .onChange(of: model.tag) { _ in model.page = 1; Task { await model.refresh() } }
         .onChange(of: model.segment) { _ in model.page = 1; Task { await model.refresh() } }
         .onChange(of: model.sort) { _ in model.page = 1; Task { await model.refresh() } }
@@ -139,8 +154,6 @@ struct NativeCustomersView: View {
                 HStack(spacing: 8) {
                     Text("全\(p.total)件｜企業内全店舗で共有される顧客台帳です").font(.system(size: 13)).foregroundColor(NFColor.ink3)
                     Spacer()
-                    webBtn("RFM分析") { onWeb("/app/customers?view=rfm") }
-                    webBtn("重複候補") { onWeb("/app/customers?view=duplicates") }
                     if p.canCoupons { webBtn("クーポン管理") { onWeb("/app/coupons") } }
                     if p.canExport { webBtn("CSV出力") { exportCsv() } }
                     if p.canWrite {
@@ -151,6 +164,7 @@ struct NativeCustomersView: View {
                         }.buttonStyle(PressableStyle())
                     }
                 }
+                NCTabs(view: $view)
                 NCFlow(spacing: 8) {
                     ForEach(p.segments, id: \.key) { s in
                         let on = model.segment == s.key

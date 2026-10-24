@@ -85,6 +85,7 @@ import { loadNativeScan } from '@/lib/native-scan-server';
 import { attachReceiptToCashTransaction, createScanDocument } from '@/app/app/scan/actions';
 import { isNativeCustomerActionType, nativeCustomerPermission, parseNativeCustomerAction } from '@/lib/native-customers';
 import { loadNativeCustomer, loadNativeCustomers } from '@/lib/native-customers-server';
+import { loadDuplicateGroups, loadRfmCustomers } from '@/lib/customers-analysis-server';
 import {
   addCustomerNote,
   adjustCustomerPoints,
@@ -471,6 +472,15 @@ export async function GET(request: Request) {
   }
 
   // 顧客台帳（Web の /app/customers・/app/customers/[id]）
+  // 顧客台帳の RFM分析・重複候補（Web の /app/customers?view=rfm|duplicates）
+  if (part === 'customerRfm' || part === 'customerDuplicates') {
+    if (ctx.disabledFeatures?.has('crm')) return json({ ok: false, error: 'この機能は使えません', useWeb: true }, 403);
+    if (!can(ctx.role, 'customers.view')) return json({ ok: false, error: '顧客情報の閲覧には権限が必要です。管理者にお問い合わせください。' }, 403);
+    const supabase = await createClient();
+    if (part === 'customerRfm') return json({ ok: true, customers: await loadRfmCustomers(supabase, ctx.organizationId ?? '') });
+    return json({ ok: true, groups: await loadDuplicateGroups(supabase, ctx.organizationId ?? ''), canMerge: can(ctx.role, 'customers.delete') });
+  }
+
   // 重複顧客と統合：電話番号で探す（Web の searchCustomersForMerge。customers.delete）
   if (part === 'customerMergeSearch') {
     if (ctx.disabledFeatures?.has('crm')) return json({ ok: false, error: 'この機能は使えません', useWeb: true }, 403);
