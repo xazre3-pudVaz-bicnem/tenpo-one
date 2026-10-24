@@ -12,23 +12,8 @@ import { EmptyState } from '@/components/ui/state';
 import { TableWrap, Table, THead, TBody, Tr, Th, Td } from '@/components/ui/table';
 import { MonthlyCostsForm } from '@/components/settlement/monthly-costs-form';
 import { OpenStoreButton } from '@/components/settlement/open-store-button';
-import {
-  buildDailyTable,
-  canEditMonthlyCosts,
-  fixedCostTotal,
-  isMonthKey,
-  monthWindow,
-  nextMonth,
-  prevMonth,
-  profitLoss,
-  proratedCosts,
-  rangeLabel,
-  shortDate,
-  sumInRange,
-  thisWeekWindow,
-  type ProfitLoss,
-} from '@/lib/monthly-settlement';
-import { costsReader, loadScannedFixedBills, loadSettlementSource, purchaseLines } from './data';
+import { isMonthKey, nextMonth, prevMonth, rangeLabel, shortDate, type ProfitLoss } from '@/lib/monthly-settlement';
+import { loadSettlementView } from '@/lib/settlement-server';
 
 export const metadata: Metadata = { title: '月次清算' };
 
@@ -43,7 +28,10 @@ export default async function SettlementPage({ searchParams }: { searchParams: P
   const today = todayJst();
   const month = isMonthKey(sp.month) ? sp.month : today.slice(0, 7);
 
-  if (ctx.isRegisterDevice) {
+  // 中身の読み込みは lib/settlement-server.ts（iPad ネイティブと同じ。2026-10-24）
+  const view = await loadSettlementView(ctx, month, today);
+
+  if (view.kind === 'register') {
     return (
       <div>
         <PageHeader title="月次清算" en="Monthly P&L" />
@@ -55,8 +43,7 @@ export default async function SettlementPage({ searchParams }: { searchParams: P
     );
   }
 
-  const targetStores = ctx.currentStore ? [ctx.currentStore] : ctx.stores;
-  if (targetStores.length === 0) {
+  if (view.kind === 'noStores') {
     return (
       <div>
         <PageHeader title="月次清算" en="Monthly P&L" />
@@ -65,47 +52,7 @@ export default async function SettlementPage({ searchParams }: { searchParams: P
     );
   }
 
-  const mw = monthWindow(month, today);
-  const ww = thisWeekWindow(today);
-  const rangeFirst = mw.first < ww.first ? mw.first : ww.first;
-  const rangeLast = mw.last > ww.last ? mw.last : ww.last;
-  const src = await loadSettlementSource(
-    targetStores.map((s) => s.id),
-    rangeFirst,
-    rangeLast
-  );
-
-  const canEdit = canEditMonthlyCosts(ctx);
-  const monthLabel = `${month.slice(0, 4)}年${Number(month.slice(5, 7))}月`;
-  const monthInProgress = mw.inProgress;
-
-  /** 店ごとの 今月・今週 の損益 */
-  const perStore = targetStores.map((store) => {
-    const sales = src.salesByStore.get(store.id) ?? new Map<string, number>();
-    const invoices = src.invoicesByStore.get(store.id) ?? [];
-    const expenses = src.expensesByStore.get(store.id) ?? new Map<string, number>();
-    const costs = costsReader(src.settingsByStore.get(store.id) ?? null);
-    const inRange = (first: string, last: string) => invoices.filter((i) => i.date >= first && i.date <= last);
-    const sum = (rows: { amount: number }[]) => rows.reduce((s, r) => s + r.amount, 0);
-
-    const mc = costs(month);
-    const monthPl: ProfitLoss = profitLoss({
-      sales: sumInRange(sales, mw.first, mw.last),
-      purchases: sum(inRange(mw.first, mw.last)),
-      expenses: sumInRange(expenses, mw.first, mw.last),
-      fixed: fixedCostTotal(mc),
-      salary: mc.salary,
-    });
-    const weekCosts = proratedCosts(ww.dates, costs);
-    const weekPl: ProfitLoss = profitLoss({
-      sales: sumInRange(sales, ww.first, ww.last),
-      purchases: sum(inRange(ww.first, ww.last)),
-      expenses: sumInRange(expenses, ww.first, ww.last),
-      fixed: weekCosts.fixed,
-      salary: weekCosts.salary,
-    });
-    return { store, sales, invoices, expenses, costs: mc, monthPl, weekPl };
-  });
+  const { mw, ww, canEdit, monthLabel, monthInProgress } = view;
 
   const nav = (
     <div className="flex items-center gap-1">
@@ -133,7 +80,8 @@ export default async function SettlementPage({ searchParams }: { searchParams: P
   );
 
   // ---------------------------------------------------------------- 全店（本部で「全店舗」を選んでいるとき）
-  if (!ctx.currentStore) {
+  if (view.kind === 'all') {
+    const perStore = view.perStore;
     const total = (pick: (p: (typeof perStore)[number]) => number) => perStore.reduce((s, p) => s + pick(p), 0);
     return (
       <div className="space-y-5">
@@ -217,10 +165,7 @@ export default async function SettlementPage({ searchParams }: { searchParams: P
   }
 
   // ---------------------------------------------------------------- 1店舗（日ごとの表・固定費と給料の入力・請求書）
-  const p = perStore[0];
-  const table = buildDailyTable(mw.dates, p.sales, purchaseLines(p.invoices), p.expenses);
-  const monthInvoices = p.invoices.filter((i) => i.date >= mw.first && i.date <= mw.last).sort((a, b) => a.date.localeCompare(b.date));
-  const scannedBills = await loadScannedFixedBills(p.store.id, month);
+  const { p, table, monthInvoices, scannedBills } = view;
 
   return (
     <div className="space-y-5">

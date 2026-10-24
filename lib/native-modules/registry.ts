@@ -5,6 +5,9 @@ import { onboardingGet, onboardingPost } from '@/lib/native-modules/onboarding';
 import { businessCardsGet } from '@/lib/native-modules/business-cards';
 import * as payroll from '@/lib/native-modules/payroll';
 import { accountingGet, ACCOUNTING_POST } from '@/lib/native-modules/accounting';
+import * as invoices from '@/lib/native-modules/invoices';
+import { reconciliationGet } from '@/lib/native-modules/reconciliation';
+import { settlementGet, settlementCostsSavePost } from '@/lib/native-modules/settlement';
 
 /**
  * まだ専用の台が無かった画面（勤怠・日報・タスク …）の iPad ネイティブ用の API をまとめる所
@@ -37,6 +40,9 @@ export const NATIVE_MODULE_GET: Record<string, NativeModuleGet> = {
   businessCards: businessCardsGet,
   payroll: payroll.payrollGet,
   accounting: accountingGet,
+  invoices: invoices.invoicesGet,
+  reconciliation: reconciliationGet,
+  settlement: settlementGet,
 };
 
 /** POST の type → handler。追加は 1 行ずつ */
@@ -59,4 +65,15 @@ export const NATIVE_MODULE_POST: Record<string, NativeModulePost> = {
   nenchoConfirm: payroll.nenchoConfirmPost,
   nenchoReject: payroll.nenchoRejectPost,
   ...ACCOUNTING_POST, // 会計（accJournalSave・accBankCsvPreview … lib/native-modules/accounting.ts）
+  invoiceCreate: invoices.invCreatePost,
+  invoiceUpdate: invoices.invUpdatePost,
+  invoiceStatus: invoices.invStatusPost,
+  invoiceComment: invoices.invCommentPost,
+  invoiceOcr: invoices.invOcrPost,
+  invoiceTriage: invoices.invTriagePost,
+  invoiceDocDelete: invoices.invDocDeletePost,
+  invoiceDupCheck: invoices.invDupCheckPost,
+  invoiceUpload: invoices.invUploadPost,
+  invoiceInboxCreate: invoices.invInboxCreatePost,
+  settlementCostsSave: settlementCostsSavePost,
 };
