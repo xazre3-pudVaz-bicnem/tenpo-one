@@ -112,7 +112,24 @@ export type NativeSettingsPageAction =
   | { type: 'tableAvailable'; id: string; available: boolean }
   | { type: 'tablesReorderByName' }
   /** ダイナミックプライシング（/app/settings/dynamic-pricing。saveDynamicPricing。中身の確認は lib/dynamic-pricing.ts） */
-  | { type: 'dynamicPricingSave'; rules: unknown[] };
+  | { type: 'dynamicPricingSave'; rules: unknown[] }
+  /** メニュー一括編集（/app/settings/menu-bulk。saveMenuBulk。中身の確認は lib/menu-bulk.ts） */
+  | { type: 'menuBulkSave'; patches: NativeBulkPatch[] }
+  /** データ取込（/app/settings/import。CSV の中身はサーバーで読む） */
+  | { type: 'importPreview'; importType: string; csv: string }
+  | { type: 'importRun'; importType: string; rows: { rowNumber: number; values: Record<string, string> }[] };
+
+export interface NativeBulkPatch {
+  id: string;
+  name?: string;
+  nameEn?: string;
+  categoryId?: string | null;
+  itemType?: string;
+  price?: number;
+  takeoutPrice?: number | null;
+  status?: 'active' | 'hidden';
+  isSoldOut?: boolean;
+}
 
 export interface NativeTableFields {
   id: string | null;
@@ -270,6 +287,9 @@ export const NATIVE_SETTINGS_PAGE_ACTION_TYPES: readonly NativeSettingsPageActio
   'tableAvailable',
   'tablesReorderByName',
   'dynamicPricingSave',
+  'menuBulkSave',
+  'importPreview',
+  'importRun',
 ];
 
 export function isNativeSettingsPageActionType(v: unknown): v is NativeSettingsPageActionType {
@@ -846,7 +866,85 @@ export function parseNativeSettingsPageAction(raw: unknown): Parsed {
     if (!Array.isArray(b.rules) || b.rules.length > 50) return bad('ルールは50件までです');
     return { ok: true, action: { type: 'dynamicPricingSave', rules: b.rules } };
   }
+  if (b.type === 'menuBulkSave') {
+    if (!Array.isArray(b.patches) || b.patches.length === 0 || b.patches.length > 2000) return bad('変更がありません');
+    const patches: NativeBulkPatch[] = [];
+    for (const raw of b.patches as Record<string, unknown>[]) {
+      if (!isUuid(raw?.id)) return bad('商品の指定が正しくありません');
+      const p: NativeBulkPatch = { id: raw.id as string };
+      if (typeof raw.name === 'string') p.name = raw.name;
+      if (typeof raw.nameEn === 'string') p.nameEn = raw.nameEn;
+      if (raw.categoryId === null || typeof raw.categoryId === 'string') p.categoryId = raw.categoryId as string | null;
+      if (typeof raw.itemType === 'string') p.itemType = raw.itemType;
+      if (typeof raw.price === 'number') p.price = raw.price;
+      if (raw.takeoutPrice === null || typeof raw.takeoutPrice === 'number') p.takeoutPrice = raw.takeoutPrice as number | null;
+      if (raw.status === 'active' || raw.status === 'hidden') p.status = raw.status;
+      if (typeof raw.isSoldOut === 'boolean') p.isSoldOut = raw.isSoldOut;
+      patches.push(p);
+    }
+    return { ok: true, action: { type: 'menuBulkSave', patches } };
+  }
+  const importType = (v: unknown): string | null => (typeof v === 'string' && /^[a-z_]{1,32}$/.test(v) ? v : null);
+  if (b.type === 'importPreview') {
+    const t = importType(b.importType);
+    if (!t) return bad('取り込む種類が正しくありません');
+    if (typeof b.csv !== 'string' || !b.csv.trim()) return bad('CSV が空です');
+    if (b.csv.length > 4_000_000) return bad('CSV が大きすぎます（4MB まで）');
+    return { ok: true, action: { type: 'importPreview', importType: t, csv: b.csv } };
+  }
+  if (b.type === 'importRun') {
+    const t = importType(b.importType);
+    if (!t) return bad('取り込む種類が正しくありません');
+    if (!Array.isArray(b.rows) || b.rows.length > 1000) return bad('一度にインポートできるのは1000行までです');
+    const rows: { rowNumber: number; values: Record<string, string> }[] = [];
+    for (const r of b.rows as Record<string, unknown>[]) {
+      if (typeof r?.rowNumber !== 'number' || !r.values || typeof r.values !== 'object' || Array.isArray(r.values)) return bad('行の指定が正しくありません');
+      const values: Record<string, string> = {};
+      for (const [k, v] of Object.entries(r.values as Record<string, unknown>)) if (typeof v === 'string' && /^[a-zA-Z_]{1,40}$/.test(k)) values[k] = v;
+      rows.push({ rowNumber: Math.floor(r.rowNumber), values });
+    }
+    return { ok: true, action: { type: 'importRun', importType: t, rows } };
+  }
   return bad();
+}
+
+/** メニュー一括編集の画面の読み込み（GET ?part=menuBulk） */
+export interface NativeMenuBulkPayload {
+  store: { id: string; name: string };
+  /** 管理画面だけ（レジ端末では見るだけ） */
+  canEdit: boolean;
+  adminOnlyNote: string;
+  categories: { id: string; name: string }[];
+  itemTypes: { id: string; label: string }[];
+  rows: {
+    id: string;
+    name: string;
+    nameEn: string;
+    categoryId: string | null;
+    itemType: string;
+    price: number;
+    takeoutPrice: number | null;
+    status: 'active' | 'hidden';
+    isSoldOut: boolean;
+  }[];
+}
+
+/** データ取込の画面の読み込み（GET ?part=import） */
+export interface NativeImportPayload {
+  store: { id: string; name: string };
+  hasStore: boolean;
+  types: { id: string; label: string; listPath: string; fields: { key: string; label: string; required: boolean; hint: string | null }[] }[];
+  maxRows: number;
+}
+
+/** importPreview の返事（data） */
+export interface NativeImportPreview {
+  headers: string[];
+  /** フィールドキー → 対応した列名（対応できなければ null） */
+  mapping: Record<string, string | null>;
+  missingRequired: string[];
+  rows: { rowNumber: number; status: 'ok' | 'error' | 'duplicate'; reason: string | null; values: Record<string, string> }[];
+  counts: { ok: number; error: number; duplicate: number };
 }
 
 /** ダイナミックプライシングの画面の読み込み（GET ?part=dynamicPricing） */

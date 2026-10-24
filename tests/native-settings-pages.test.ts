@@ -154,4 +154,23 @@ describe('native settings pages (設定の中の画面) actions', () => {
     expect(parseNativeSettingsPageAction({ type: 'dynamicPricingSave', rules: 'x' }).ok).toBe(false);
     expect(parseNativeSettingsPageAction({ type: 'dynamicPricingSave', rules: new Array(51).fill({}) }).ok).toBe(false);
   });
+
+  it('一括編集・データ取込: 差分の形と CSV の受け取り', () => {
+    const ok = parseNativeSettingsPageAction({ type: 'menuBulkSave', patches: [{ id: ID, price: 500, categoryId: null, bogus: 1 }] });
+    expect(ok.ok).toBe(true);
+    if (ok.ok && ok.action.type === 'menuBulkSave') {
+      expect(ok.action.patches[0]).toEqual({ id: ID, price: 500, categoryId: null });
+    }
+    expect(parseNativeSettingsPageAction({ type: 'menuBulkSave', patches: [] }).ok).toBe(false);
+    expect(parseNativeSettingsPageAction({ type: 'menuBulkSave', patches: [{ id: 'x' }] }).ok).toBe(false);
+    expect(parseNativeSettingsPageAction({ type: 'importPreview', importType: 'menu_items', csv: '商品名,価格\nビール,500' }).ok).toBe(true);
+    expect(parseNativeSettingsPageAction({ type: 'importPreview', importType: 'menu items', csv: 'x' }).ok).toBe(false);
+    expect(parseNativeSettingsPageAction({ type: 'importPreview', importType: 'menu_items', csv: '  ' }).ok).toBe(false);
+    const run = parseNativeSettingsPageAction({ type: 'importRun', importType: 'customers', rows: [{ rowNumber: 2, values: { name: '山田', phone: '090', 'bad key': 'x' } }] });
+    expect(run.ok).toBe(true);
+    if (run.ok && run.action.type === 'importRun') {
+      expect(run.action.rows[0].values).toEqual({ name: '山田', phone: '090' });
+    }
+    expect(parseNativeSettingsPageAction({ type: 'importRun', importType: 'customers', rows: [{ values: {} }] }).ok).toBe(false);
+  });
 });

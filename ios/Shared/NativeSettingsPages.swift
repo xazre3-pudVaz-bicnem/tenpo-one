@@ -1,5 +1,6 @@
 import SwiftUI
 import CoreImage.CIFilterBuiltins
+import UniformTypeIdentifiers
 
 // 設定の中の画面（ネイティブ。2026-10-24 Ronnie「設定の中も全部ネイティブ。テーブルQRなど何でも」）。
 // Web の設定の各画面を1つずつネイティブにしていく。どの画面がネイティブかは NativeSettingsPageKey（道 → 画面）で決まり、
@@ -37,6 +38,8 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
     case tables = "tables"
     case dynamicPricing = "dynamicPricing"
     case summary = "summary"
+    case menuBulk = "menuBulk"
+    case dataImport = "import"
     var id: String { rawValue }
 
     /// Web の道（クエリは見ない）
@@ -70,6 +73,8 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
         case .tables: return "/app/settings/tables"
         case .dynamicPricing: return "/app/settings/dynamic-pricing"
         case .summary: return "/app/settings/summary"
+        case .menuBulk: return "/app/settings/menu-bulk"
+        case .dataImport: return "/app/settings/import"
         }
     }
     var title: String {
@@ -102,6 +107,8 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
         case .tables: return "テーブル・フロア"
         case .dynamicPricing: return "ダイナミックプライシング"
         case .summary: return "集計"
+        case .menuBulk: return "メニュー一括編集"
+        case .dataImport: return "データ取込"
         }
     }
     var en: String {
@@ -134,6 +141,8 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
         case .tables: return "Tables"
         case .dynamicPricing: return "Dynamic pricing"
         case .summary: return "Reports & admin"
+        case .menuBulk: return "Bulk edit"
+        case .dataImport: return "Import"
         }
     }
 
@@ -177,6 +186,8 @@ struct NativeSettingsPageScreen: View {
         case .tables: NativeTablesScreen()
         case .dynamicPricing: NativeDynamicPricingScreen()
         case .summary: NativeSummaryScreen()
+        case .menuBulk: NativeMenuBulkScreen()
+        case .dataImport: NativeImportScreen()
         }
     }
 }
@@ -4815,5 +4826,408 @@ struct NativeSummaryScreen: View {
             }
         }
         .task { await model.refresh() }
+    }
+}
+
+// MARK: - メニュー一括編集（Web の /app/settings/menu-bulk・components/settings/menu-bulk-editor.tsx と同じ。変更は管理画面だけ）
+
+struct NMBRow: Codable, Identifiable, Hashable {
+    let id: String; var name: String; var nameEn: String; var categoryId: String?; var itemType: String; var price: Int; var takeoutPrice: Int?; var status: String; var isSoldOut: Bool
+}
+struct NMBKPayload: Codable { let store: NFNamed; let canEdit: Bool; let adminOnlyNote: String; let categories: [NFNamed]; let itemTypes: [NPYIdLabel]; let rows: [NMBRow] }
+
+@MainActor
+final class NativeMenuBulkModel: NSPModel<NMBKPayload> {
+    @Published var rows: [NMBRow] = []
+    @Published var query = ""
+    @Published var catFilter: String? = nil
+    @Published var selected: Set<String> = []
+    @Published var open: String?
+    @Published var opYen = ""
+    @Published var opPercent = ""
+    init() { super.init(part: "menuBulk") }
+    override func loaded(_ p: NMBKPayload) { rows = p.rows; selected = []; open = nil }
+    var initial: [String: NMBRow] { Dictionary(uniqueKeysWithValues: (payload?.rows ?? []).map { ($0.id, $0) }) }
+    /// lib/menu-bulk.ts の diffBulkRows と同じ（変わった行・項目だけ）
+    var patches: [[String: Any]] {
+        let before = initial
+        var out: [[String: Any]] = []
+        for r in rows {
+            guard let b = before[r.id] else { continue }
+            var p: [String: Any] = ["id": r.id]
+            if r.name.trimmingCharacters(in: .whitespaces) != b.name.trimmingCharacters(in: .whitespaces) { p["name"] = r.name.trimmingCharacters(in: .whitespaces) }
+            if r.nameEn.trimmingCharacters(in: .whitespaces) != b.nameEn.trimmingCharacters(in: .whitespaces) { p["nameEn"] = r.nameEn.trimmingCharacters(in: .whitespaces) }
+            if r.categoryId != b.categoryId { p["categoryId"] = r.categoryId.map { $0 as Any } ?? NSNull() }
+            if r.itemType != b.itemType { p["itemType"] = r.itemType }
+            if r.price != b.price { p["price"] = r.price }
+            if r.takeoutPrice != b.takeoutPrice { p["takeoutPrice"] = r.takeoutPrice.map { $0 as Any } ?? NSNull() }
+            if r.status != b.status { p["status"] = r.status }
+            if r.isSoldOut != b.isSoldOut { p["isSoldOut"] = r.isSoldOut }
+            if p.count > 1 { out.append(p) }
+        }
+        return out
+    }
+    var changedCount: Int { patches.count }
+    var filtered: [NMBRow] {
+        let q = NativeSoldOutModel.norm(query)
+        return rows.filter { r in (catFilter == nil || r.categoryId == catFilter) && (q.isEmpty || NativeSoldOutModel.norm(r.name + r.nameEn).contains(q)) }
+    }
+    func idx(_ id: String) -> Int? { rows.firstIndex { $0.id == id } }
+    /// 選んだ行にまとめて（lib/menu-bulk.ts の applyBulkOp と同じ）
+    func applyAll(_ f: (inout NMBRow) -> Void) { for i in rows.indices where selected.contains(rows[i].id) { f(&rows[i]) } }
+    func save() async {
+        let ps = patches
+        guard !ps.isEmpty else { toast = "変更がありません"; return }
+        if rows.contains(where: { $0.name.trimmingCharacters(in: .whitespaces).isEmpty }) { toast = "商品名が空の行があります"; return }
+        guard busy == nil else { return }
+        busy = "save"; defer { busy = nil }
+        let r = await NSPApi.postJSON(["type": "menuBulkSave", "patches": ps])
+        guard r.ok else { toast = r.error ?? "保存できませんでした"; return }
+        await refresh()
+        toast = "\((r.json?["updated"] as? Int) ?? ps.count)件を保存しました"
+    }
+}
+
+struct NativeMenuBulkScreen: View {
+    @StateObject private var model = NativeMenuBulkModel()
+    @EnvironmentObject var state: AppState
+
+    var body: some View {
+        NSPFrame(storeName: model.payload?.store.name ?? "", title: "メニュー一括編集", en: "Bulk edit", loaded: model.payload != nil, error: model.error, toast: $model.toast, onBack: { state.goNativeSettings() }, retry: { await model.refresh() }) {
+            if let p = model.payload {
+                if !p.canEdit {
+                    HStack(spacing: 10) { Image(systemName: "lock").foregroundColor(NFColor.ink3); Text(p.adminOnlyNote).font(.system(size: 13)).foregroundColor(NFColor.ink2); Spacer() }
+                        .padding(14).background(RoundedRectangle(cornerRadius: 12).fill(NFColor.lilacSoft))
+                }
+                HStack(spacing: 10) {
+                    NSPInput(text: $model.query, placeholder: "商品名で探す", width: 260)
+                    Menu {
+                        Button("すべてのカテゴリ") { model.catFilter = nil }
+                        ForEach(p.categories) { c in Button(c.name) { model.catFilter = c.id } }
+                    } label: { menuBox(p.categories.first { $0.id == model.catFilter }?.name ?? "すべてのカテゴリ") }
+                    Spacer()
+                    if p.canEdit {
+                        Text(model.changedCount > 0 ? "\(model.changedCount) 件変更" : "変更なし").font(.system(size: 13, weight: .bold)).foregroundColor(model.changedCount > 0 ? NFColor.iris : NFColor.ink3)
+                        NSPButton(text: "元に戻す", disabled: model.changedCount == 0) { model.rows = p.rows }
+                        NSPButton(text: "保存する", primary: true, busy: model.busy == "save", disabled: model.changedCount == 0) { Task { await model.save() } }
+                    }
+                }
+                if p.canEdit && !model.selected.isEmpty { bulkBar(p) }
+                NSPCard(title: "商品", en: "\(model.filtered.count) 品") {
+                    VStack(spacing: 0) {
+                        if p.canEdit {
+                            HStack(spacing: 10) {
+                                check(model.filtered.allSatisfy { model.selected.contains($0.id) } && !model.filtered.isEmpty) {
+                                    let ids = model.filtered.map(\.id)
+                                    if ids.allSatisfy({ model.selected.contains($0) }) { ids.forEach { model.selected.remove($0) } } else { ids.forEach { model.selected.insert($0) } }
+                                }
+                                Text("表示中を全部選ぶ").font(.system(size: 12.5, weight: .bold)).foregroundColor(NFColor.ink2)
+                                Spacer()
+                            }
+                            .padding(.horizontal, 18).frame(height: 40)
+                            .overlay(alignment: .bottom) { Rectangle().fill(NFColor.line).frame(height: 1) }
+                        }
+                        ForEach(model.filtered) { r in
+                            let changed = model.initial[r.id] != r
+                            let open = model.open == r.id
+                            HStack(spacing: 10) {
+                                if p.canEdit { check(model.selected.contains(r.id)) { if model.selected.contains(r.id) { model.selected.remove(r.id) } else { model.selected.insert(r.id) } } }
+                                Button { if p.canEdit { model.open = open ? nil : r.id } } label: {
+                                    HStack(spacing: 10) {
+                                        VStack(alignment: .leading, spacing: 1) {
+                                            Text(r.name.isEmpty ? "（名前なし）" : r.name).font(.system(size: 14.5, weight: .bold)).foregroundColor(r.status == "hidden" ? NFColor.ink3 : NFColor.ink).lineLimit(1)
+                                            if !r.nameEn.isEmpty { Text(r.nameEn).font(.system(size: 11)).foregroundColor(NFColor.ink3).lineLimit(1) }
+                                        }
+                                        .frame(width: 240, alignment: .leading)
+                                        Text(p.categories.first { $0.id == r.categoryId }?.name ?? "カテゴリ未設定").font(.system(size: 13)).foregroundColor(NFColor.ink2).frame(width: 130, alignment: .leading).lineLimit(1)
+                                        Text(p.itemTypes.first { $0.id == r.itemType }?.label ?? r.itemType).font(.system(size: 12.5)).foregroundColor(NFColor.ink2).frame(width: 80, alignment: .leading)
+                                        Text(NT.yen(r.price)).font(.system(size: 14, weight: .bold)).foregroundColor(NFColor.ink).monospacedDigit().frame(width: 90, alignment: .trailing)
+                                        Text(r.takeoutPrice.map { NT.yen($0) } ?? "—").font(.system(size: 12.5)).foregroundColor(NFColor.ink3).monospacedDigit().frame(width: 90, alignment: .trailing)
+                                        Spacer()
+                                        if r.isSoldOut { tag("売切", NFColor.danger) }
+                                        tag(r.status == "hidden" ? "非表示" : "表示", r.status == "hidden" ? NFColor.ink3 : NFColor.success)
+                                        if changed { tag("変更", NFColor.iris, fill: NFColor.irisSoft) }
+                                        if p.canEdit { Image(systemName: open ? "chevron.up" : "chevron.down").font(.system(size: 12, weight: .bold)).foregroundColor(NFColor.ink3) }
+                                    }
+                                }
+                                .buttonStyle(.plain)
+                            }
+                            .padding(.horizontal, 18).frame(minHeight: 50)
+                            .background(open ? NFColor.lilacSoft : (changed ? NFColor.irisSoft.opacity(0.35) : Color.white))
+                            .overlay(alignment: .bottom) { Rectangle().fill(NFColor.line).frame(height: 1) }
+                            if open, let i = model.idx(r.id) { rowEditor(p, i) }
+                        }
+                    }
+                }
+            }
+        }
+        .task { await model.refresh() }
+    }
+
+    private func tag(_ t: String, _ c: Color, fill: Color = .clear) -> some View {
+        Text(t).font(.system(size: 11, weight: .heavy)).foregroundColor(c).padding(.horizontal, 7).padding(.vertical, 2)
+            .background(Capsule().fill(fill)).overlay(Capsule().stroke(c.opacity(0.5), lineWidth: 1))
+    }
+    private func check(_ on: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) { Image(systemName: on ? "checkmark.square.fill" : "square").font(.system(size: 20)).foregroundColor(on ? NFColor.iris : NFColor.ink3).frame(width: 28, height: 28) }.buttonStyle(.plain)
+    }
+    private func menuBox(_ text: String) -> some View {
+        HStack(spacing: 6) {
+            Text(text).font(.system(size: 14, weight: .bold)).foregroundColor(NFColor.ink)
+            Image(systemName: "chevron.up.chevron.down").font(.system(size: 11, weight: .bold)).foregroundColor(NFColor.ink3)
+        }
+        .padding(.horizontal, 12).frame(height: 44)
+        .background(RoundedRectangle(cornerRadius: 10).fill(Color.white)).overlay(RoundedRectangle(cornerRadius: 10).stroke(NFColor.line, lineWidth: 1))
+    }
+    private func chip(_ text: String, on: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(text).font(.system(size: 13, weight: .bold)).foregroundColor(on ? .white : NFColor.ink2).padding(.horizontal, 12).frame(height: 38)
+                .background(Capsule().fill(on ? NFColor.iris : Color.white)).overlay(Capsule().stroke(on ? NFColor.iris : NFColor.line, lineWidth: 1))
+        }
+        .buttonStyle(PressableStyle())
+    }
+
+    /// 選んだ行にまとめてかける操作（lib/menu-bulk.ts の BulkOp）
+    private func bulkBar(_ p: NMBKPayload) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                Text("\(model.selected.count) 品を選択中").font(.system(size: 14, weight: .heavy)).foregroundColor(NFColor.navy)
+                Menu { Button("カテゴリ未設定") { model.applyAll { $0.categoryId = nil } }; ForEach(p.categories) { c in Button(c.name) { model.applyAll { $0.categoryId = c.id } } } } label: { menuBox("カテゴリを変える") }
+                Menu { ForEach(p.itemTypes) { t in Button(t.label) { model.applyAll { $0.itemType = t.id } } } } label: { menuBox("種別を変える") }
+                Menu {
+                    Button("表示にする") { model.applyAll { $0.status = "active" } }
+                    Button("非表示にする") { model.applyAll { $0.status = "hidden" } }
+                    Button("売切にする") { model.applyAll { $0.isSoldOut = true } }
+                    Button("売切を解除") { model.applyAll { $0.isSoldOut = false } }
+                } label: { menuBox("表示・売切") }
+                Spacer()
+                NSPButton(text: "選択を解除") { model.selected = [] }
+            }
+            HStack(spacing: 10) {
+                NSPInput(text: $model.opYen, placeholder: "±円 / 金額", width: 130, keyboard: .numbersAndPunctuation)
+                NSPButton(text: "円を足す/引く", disabled: Int(model.opYen) == nil) { let y = Int(model.opYen) ?? 0; model.applyAll { $0.price = max(0, min(10_000_000, $0.price + y)) } }
+                NSPButton(text: "この金額にする", disabled: Int(model.opYen) == nil) { let y = Int(model.opYen) ?? 0; model.applyAll { $0.price = max(0, min(10_000_000, y)) } }
+                NSPInput(text: $model.opPercent, placeholder: "±％", width: 100, keyboard: .numbersAndPunctuation)
+                NSPButton(text: "％で変える（10円単位）", disabled: Int(model.opPercent) == nil) {
+                    let pc = Double(Int(model.opPercent) ?? 0)
+                    model.applyAll { let raw = Double($0.price) * (100 + pc) / 100; $0.price = max(0, min(10_000_000, Int((raw / 10).rounded()) * 10)) }
+                }
+                Spacer()
+            }
+        }
+        .padding(14)
+        .background(RoundedRectangle(cornerRadius: 14).fill(NFColor.irisSoft))
+        .overlay(RoundedRectangle(cornerRadius: 14).stroke(NFColor.iris.opacity(0.35), lineWidth: 1))
+    }
+
+    private func rowEditor(_ p: NMBKPayload, _ i: Int) -> some View {
+        let r = model.rows[i]
+        return VStack(spacing: 0) {
+            NSPRow(label: "商品名", required: true) {
+                HStack(spacing: 8) {
+                    NSPInput(text: Binding(get: { model.rows[i].name }, set: { model.rows[i].name = $0 }), placeholder: "商品名", width: 300)
+                    NSPInput(text: Binding(get: { model.rows[i].nameEn }, set: { model.rows[i].nameEn = $0 }), placeholder: "English name", width: 260)
+                }
+            }
+            NSPRow(label: "カテゴリ・種別") {
+                HStack(spacing: 8) {
+                    Menu { Button("カテゴリ未設定") { model.rows[i].categoryId = nil }; ForEach(p.categories) { c in Button(c.name) { model.rows[i].categoryId = c.id } } } label: { menuBox(p.categories.first { $0.id == r.categoryId }?.name ?? "カテゴリ未設定") }
+                    Menu { ForEach(p.itemTypes) { t in Button(t.label) { model.rows[i].itemType = t.id } } } label: { menuBox(p.itemTypes.first { $0.id == r.itemType }?.label ?? r.itemType) }
+                }
+            }
+            NSPRow(label: "価格", en: "店内 / テイクアウト") {
+                HStack(spacing: 8) {
+                    NSPInput(text: Binding(get: { String(model.rows[i].price) }, set: { model.rows[i].price = Int($0.filter(\.isNumber)) ?? 0 }), placeholder: "0", width: 130, keyboard: .numberPad, trailing: "円")
+                    NSPInput(text: Binding(get: { model.rows[i].takeoutPrice.map(String.init) ?? "" }, set: { let d = $0.filter(\.isNumber); model.rows[i].takeoutPrice = d.isEmpty ? nil : Int(d) }), placeholder: "店内と同じ", width: 150, keyboard: .numberPad, trailing: "円")
+                }
+            }
+            NSPRow(label: "表示・売切") {
+                HStack(spacing: 8) {
+                    chip("表示", on: r.status == "active") { model.rows[i].status = "active" }
+                    chip("非表示", on: r.status == "hidden") { model.rows[i].status = "hidden" }
+                    chip("売切", on: r.isSoldOut) { model.rows[i].isSoldOut.toggle() }
+                }
+            }
+        }
+        .background(NFColor.lilacSoft.opacity(0.5))
+        .overlay(alignment: .bottom) { Rectangle().fill(NFColor.line).frame(height: 1) }
+    }
+}
+
+// MARK: - データ取込（Web の /app/settings/import・components/import/import-wizard.tsx と同じ。CSV はこの iPad で選んでサーバーで読む）
+
+struct NIMField: Codable, Identifiable, Hashable { let key: String; let label: String; let required: Bool; let hint: String?; var id: String { key } }
+struct NIMType: Codable, Identifiable, Hashable { let id: String; let label: String; let listPath: String; let fields: [NIMField] }
+struct NIMPayload: Codable { let store: NFNamed; let hasStore: Bool; let types: [NIMType]; let maxRows: Int }
+struct NIMPreviewRow: Codable, Identifiable, Hashable { let rowNumber: Int; let status: String; let reason: String?; let values: [String: String]; var id: Int { rowNumber } }
+struct NIMPreview: Codable, Hashable {
+    struct Counts: Codable, Hashable { let ok: Int; let error: Int; let duplicate: Int }
+    let headers: [String]; let mapping: [String: String?]; let missingRequired: [String]; let rows: [NIMPreviewRow]; let counts: Counts
+}
+struct NIMResult: Codable, Hashable {
+    struct Failed: Codable, Hashable, Identifiable { let rowNumber: Int; let reason: String; var id: Int { rowNumber } }
+    let inserted: Int; let skipped: Int; let updated: Int?; let failed: [Failed]
+}
+
+@MainActor
+final class NativeImportModel: NSPModel<NIMPayload> {
+    @Published var type: String = "menu_items"
+    @Published var fileName: String?
+    @Published var preview: NIMPreview?
+    @Published var result: NIMResult?
+    @Published var fileError: String?
+    init() { super.init(part: "import") }
+
+    func pick(_ url: URL) async {
+        preview = nil; result = nil; fileError = nil
+        let ok = url.startAccessingSecurityScopedResource()
+        defer { if ok { url.stopAccessingSecurityScopedResource() } }
+        guard let data = try? Data(contentsOf: url) else { fileError = "ファイルを読めませんでした"; return }
+        // Web の decodeCsvFile と同じく UTF-8。Excel の Shift_JIS も読めるようにする（iPad から送るときはこちらで直す）
+        guard var text = String(data: data, encoding: .utf8) ?? String(data: data, encoding: .shiftJIS) else { fileError = "文字コードが読めません。Excel は「CSV UTF-8」で保存し直してください"; return }
+        if text.hasPrefix("\u{FEFF}") { text.removeFirst() }
+        fileName = url.lastPathComponent
+        guard busy == nil else { return }
+        busy = "preview"; defer { busy = nil }
+        let r = await NSPApi.postJSON(["type": "importPreview", "importType": type, "csv": text])
+        guard r.ok, let pv = r.json?["preview"] else { fileError = r.error ?? "読み込めませんでした"; return }
+        if let d = try? JSONSerialization.data(withJSONObject: pv), let decoded = try? JSONDecoder().decode(NIMPreview.self, from: d) { preview = decoded } else { fileError = "プレビューを作れませんでした" }
+    }
+    func run() async {
+        guard let pv = preview else { return }
+        let rows = pv.rows.filter { $0.status == "ok" }.map { ["rowNumber": $0.rowNumber, "values": $0.values] as [String: Any] }
+        guard !rows.isEmpty else { toast = "取り込める行がありません"; return }
+        guard busy == nil else { return }
+        busy = "run"; defer { busy = nil }
+        let r = await NSPApi.postJSON(["type": "importRun", "importType": type, "rows": rows])
+        guard r.ok, let res = r.json?["result"] else { toast = r.error ?? "取り込めませんでした"; return }
+        if let d = try? JSONSerialization.data(withJSONObject: res), let decoded = try? JSONDecoder().decode(NIMResult.self, from: d) { result = decoded; preview = nil; toast = "\(decoded.inserted) 件を登録しました" } else { toast = "結果を読めませんでした" }
+    }
+}
+
+struct NativeImportScreen: View {
+    @StateObject private var model = NativeImportModel()
+    @EnvironmentObject var state: AppState
+    @State private var showPicker = false
+
+    var body: some View {
+        NSPFrame(storeName: model.payload?.store.name ?? "", title: "データ取込", en: "Import", loaded: model.payload != nil, error: model.error, toast: $model.toast, onBack: { state.goNativeSettings() }, retry: { await model.refresh() }) {
+            if let p = model.payload {
+                NSPCard(title: "1. 何を取り込むか", en: "CSV（1行目は列名）") {
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack(spacing: 8) {
+                            ForEach(p.types) { t in
+                                Button { model.type = t.id; model.preview = nil; model.result = nil; model.fileError = nil } label: {
+                                    Text(t.label).font(.system(size: 14, weight: .bold)).foregroundColor(model.type == t.id ? .white : NFColor.ink2)
+                                        .padding(.horizontal, 16).frame(height: 44)
+                                        .background(RoundedRectangle(cornerRadius: 10).fill(model.type == t.id ? NFColor.iris : Color.white))
+                                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(model.type == t.id ? NFColor.iris : NFColor.line, lineWidth: 1))
+                                }
+                                .buttonStyle(PressableStyle())
+                            }
+                        }
+                        if let t = p.types.first(where: { $0.id == model.type }) {
+                            WrapLayout(spacing: 6) {
+                                ForEach(t.fields) { f in
+                                    HStack(spacing: 4) {
+                                        Text(f.label).font(.system(size: 12.5, weight: .bold)).foregroundColor(NFColor.ink2)
+                                        if f.required { Text("必須").font(.system(size: 10, weight: .heavy)).foregroundColor(.white).padding(.horizontal, 5).padding(.vertical, 1).background(Capsule().fill(NFColor.danger)) }
+                                    }
+                                    .padding(.horizontal, 10).frame(height: 32).background(Capsule().fill(NFColor.lilacSoft))
+                                }
+                            }
+                        }
+                        HStack(spacing: 10) {
+                            NSPButton(text: "CSV ファイルを選ぶ", icon: "doc.badge.plus", primary: true, busy: model.busy == "preview", disabled: !p.hasStore) { showPicker = true }
+                            if let f = model.fileName { Text(f).font(.system(size: 13)).foregroundColor(NFColor.ink2) }
+                            Spacer()
+                            Text("最大 \(p.maxRows) 行").font(.system(size: 12)).foregroundColor(NFColor.ink3)
+                        }
+                        if let e = model.fileError { Text(e).font(.system(size: 13, weight: .bold)).foregroundColor(NFColor.danger) }
+                    }
+                    .padding(18)
+                }
+                if let pv = model.preview, let t = p.types.first(where: { $0.id == model.type }) { previewCard(pv, t) }
+                if let res = model.result, let t = p.types.first(where: { $0.id == model.type }) { resultCard(res, t) }
+            }
+        }
+        .task { await model.refresh() }
+        .fileImporter(isPresented: $showPicker, allowedContentTypes: [.commaSeparatedText, .plainText, .text, .data], allowsMultipleSelection: false) { res in
+            if case .success(let urls) = res, let url = urls.first { Task { await model.pick(url) } }
+        }
+    }
+
+    private func tag(_ t: String, _ c: Color, fill: Color = .clear) -> some View {
+        Text(t).font(.system(size: 11, weight: .heavy)).foregroundColor(c).padding(.horizontal, 7).padding(.vertical, 2)
+            .background(Capsule().fill(fill)).overlay(Capsule().stroke(c.opacity(0.5), lineWidth: 1))
+    }
+
+    private func previewCard(_ pv: NIMPreview, _ t: NIMType) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            NSPCard(title: "2. 列の対応", en: "列名から自動で対応付け") {
+                VStack(spacing: 0) {
+                    ForEach(t.fields) { f in
+                        let col = pv.mapping[f.key] ?? nil
+                        HStack(spacing: 10) {
+                            Text(f.label).font(.system(size: 14, weight: .bold)).foregroundColor(NFColor.ink).frame(width: 180, alignment: .leading)
+                            if f.required { tag("必須", NFColor.danger) }
+                            Image(systemName: "arrow.right").font(.system(size: 11, weight: .bold)).foregroundColor(NFColor.ink3)
+                            Text(col ?? "（対応する列なし）").font(.system(size: 13.5, weight: col == nil ? .regular : .bold)).foregroundColor(col == nil ? (f.required ? NFColor.danger : NFColor.ink3) : NFColor.ink2)
+                            if let h = f.hint { Text(h).font(.system(size: 11.5)).foregroundColor(NFColor.ink3).lineLimit(1) }
+                            Spacer()
+                        }
+                        .padding(.horizontal, 18).frame(minHeight: 40)
+                        .overlay(alignment: .bottom) { Rectangle().fill(NFColor.line).frame(height: 1) }
+                    }
+                    if !pv.missingRequired.isEmpty {
+                        Text("必須の列が足りません：\(pv.missingRequired.joined(separator: "・"))。CSV の1行目の列名を見直してください").font(.system(size: 13, weight: .bold)).foregroundColor(NFColor.danger).padding(18)
+                    }
+                }
+            }
+            NSPCard(title: "3. 確認して取り込む", en: "登録 \(pv.counts.ok)・エラー \(pv.counts.error)・スキップ \(pv.counts.duplicate)") {
+                VStack(spacing: 0) {
+                    ForEach(pv.rows.prefix(200)) { r in
+                        HStack(alignment: .top, spacing: 10) {
+                            Text("\(r.rowNumber)").font(.system(size: 12)).foregroundColor(NFColor.ink3).monospacedDigit().frame(width: 40, alignment: .trailing)
+                            tag(r.status == "ok" ? "登録" : (r.status == "error" ? "エラー" : "スキップ"), r.status == "ok" ? NFColor.success : (r.status == "error" ? NFColor.danger : NFColor.ink3), fill: r.status == "ok" ? NFColor.successSoft : .clear).frame(width: 64)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(t.fields.compactMap { f in (r.values[f.key] ?? "").isEmpty ? nil : "\(f.label)：\(r.values[f.key] ?? "")" }.joined(separator: "　")).font(.system(size: 12.5)).foregroundColor(NFColor.ink2).lineLimit(2)
+                                if let why = r.reason { Text(why).font(.system(size: 12)).foregroundColor(r.status == "error" ? NFColor.danger : NFColor.ink3) }
+                            }
+                            Spacer()
+                        }
+                        .padding(.horizontal, 18).padding(.vertical, 6)
+                        .overlay(alignment: .bottom) { Rectangle().fill(NFColor.line).frame(height: 1) }
+                    }
+                    if pv.rows.count > 200 { Text("…他 \(pv.rows.count - 200) 行").font(.system(size: 12)).foregroundColor(NFColor.ink3).padding(12) }
+                    HStack(spacing: 10) {
+                        NSPButton(text: "\(pv.counts.ok) 件を取り込む", icon: "square.and.arrow.down", primary: true, busy: model.busy == "run", disabled: pv.counts.ok == 0 || !pv.missingRequired.isEmpty) { Task { await model.run() } }
+                        Text("エラー・スキップの行は取り込みません").font(.system(size: 12.5)).foregroundColor(NFColor.ink3)
+                        Spacer()
+                        NSPButton(text: "やめる") { model.preview = nil; model.fileName = nil }
+                    }
+                    .padding(18)
+                }
+            }
+        }
+    }
+
+    private func resultCard(_ res: NIMResult, _ t: NIMType) -> some View {
+        NSPCard(title: "取り込みました", en: t.label) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 14) {
+                    Text("登録 \(res.inserted) 件").font(.system(size: 16, weight: .heavy)).foregroundColor(NFColor.success)
+                    if let u = res.updated, u > 0 { Text("更新 \(u) 件").font(.system(size: 14, weight: .bold)).foregroundColor(NFColor.ink2) }
+                    Text("スキップ \(res.skipped) 件").font(.system(size: 14, weight: .bold)).foregroundColor(NFColor.ink3)
+                    if !res.failed.isEmpty { Text("失敗 \(res.failed.count) 件").font(.system(size: 14, weight: .bold)).foregroundColor(NFColor.danger) }
+                    Spacer()
+                    NSPButton(text: "一覧を見る", icon: "arrow.right") {
+                        if let key = NativeSettingsPageKey.from(path: t.listPath) { state.openSettingsPage(key, webPath: t.listPath) } else { state.leaveNativeFloor(to: t.listPath) }
+                    }
+                }
+                ForEach(res.failed.prefix(50)) { f in Text("\(f.rowNumber) 行目：\(f.reason)").font(.system(size: 12.5)).foregroundColor(NFColor.danger) }
+            }
+            .padding(18)
+        }
     }
 }

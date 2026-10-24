@@ -25,6 +25,14 @@ import { floorBoardFrom } from '@/lib/floor-nav';
 import { saveDynamicPricing } from '@/app/app/settings/dynamic-pricing/actions';
 import { dynamicPricingFrom, type DynamicPriceRule } from '@/lib/dynamic-pricing';
 import { menuLayout } from '@/app/app/menu/data';
+import { saveMenuBulk } from '@/app/app/settings/menu-bulk/actions';
+import { BULK_ITEM_TYPES } from '@/lib/menu-bulk';
+import { checkExistingDuplicates, importRows } from '@/app/app/settings/import/actions';
+import { MAX_IMPORT_ROWS, parseCsv } from '@/components/import/csv-parser';
+import { FIELD_DEFS, IMPORT_TYPE_LABELS, IMPORT_TYPE_LIST_PATH } from '@/components/import/field-defs';
+import { autoDetectMapping } from '@/components/import/mapping';
+import { applyExistingDuplicates, buildParsedRows, validateRowsLocally } from '@/components/import/preview';
+import type { ImportType } from '@/components/import/types';
 import { ADMIN_ONLY_SETTINGS_NOTE } from '@/lib/admin-only-settings';
 import { formatDateTime } from '@/lib/format';
 import { changeMemberRole, changeMemberStores, inviteStaff, resetMemberPassword, setMemberPin, setMemberStatus } from '@/app/app/staff/actions';
@@ -69,6 +77,9 @@ import type {
   NativeTablesPayload,
   NativeDynamicPricingPayload,
   NativeSummaryPayload,
+  NativeMenuBulkPayload,
+  NativeImportPayload,
+  NativeImportPreview,
   NativeMenuItemsPayload,
   NativeOptionsPayload,
   NativeQrServicePayload,
@@ -88,7 +99,7 @@ type Supabase = Awaited<ReturnType<typeof createClient>>;
 type Store = { id: string; name: string };
 
 /** 設定の中の画面の名前（GET ?part=） */
-export const NATIVE_SETTINGS_PAGE_PARTS = ['soldout', 'clerks', 'hours', 'store', 'tax', 'loyalty', 'alerts', 'approvals', 'accounts', 'handy', 'categories', 'menuItems', 'options', 'qrService', 'menuBook', 'payments', 'staff', 'reservationBook', 'integrations', 'audit', 'company', 'tables', 'dynamicPricing', 'summary'] as const;
+export const NATIVE_SETTINGS_PAGE_PARTS = ['soldout', 'clerks', 'hours', 'store', 'tax', 'loyalty', 'alerts', 'approvals', 'accounts', 'handy', 'categories', 'menuItems', 'options', 'qrService', 'menuBook', 'payments', 'staff', 'reservationBook', 'integrations', 'audit', 'company', 'tables', 'dynamicPricing', 'summary', 'menuBulk', 'import'] as const;
 export type NativeSettingsPagePart = (typeof NATIVE_SETTINGS_PAGE_PARTS)[number];
 export function isNativeSettingsPagePart(v: unknown): v is NativeSettingsPagePart {
   return typeof v === 'string' && (NATIVE_SETTINGS_PAGE_PARTS as readonly string[]).includes(v);
@@ -130,7 +141,9 @@ export async function loadNativeSettingsPage(
         | NativeCompanyPayload
         | NativeTablesPayload
         | NativeDynamicPricingPayload
-        | NativeSummaryPayload;
+        | NativeSummaryPayload
+        | NativeMenuBulkPayload
+        | NativeImportPayload;
     }
   | { ok: false; error: string }
 > {
@@ -681,6 +694,54 @@ export async function loadNativeSettingsPage(
       },
     };
   }
+  if (part === 'menuBulk') {
+    // Web の app/app/settings/menu-bulk/page.tsx と同じ。変更は管理画面だけ（2026-09-29 Ronnie）＝レジ端末では見るだけ
+    if (!can(ctx.role, 'menu.manage')) return { ok: false, error: 'メニューを変える権限がありません' };
+    if (!ctx.organizationId) return { ok: false, error: '企業が見つかりません' };
+    const typeLabels: Record<string, string> = { food: 'フード', drink: 'ドリンク', course: 'コース', option: 'オプション' };
+    const [{ data: categories }, { data: items }] = await Promise.all([
+      supabase.from('menu_categories').select('id, name').eq('organization_id', ctx.organizationId).eq('status', 'active').or(`store_id.is.null,store_id.eq.${store.id}`).order('sort_order'),
+      supabase
+        .from('menu_items')
+        .select('id, name, name_en, category_id, item_type, price, takeout_price, status, is_sold_out')
+        .eq('organization_id', ctx.organizationId)
+        .neq('status', 'deleted')
+        .or(`store_id.is.null,store_id.eq.${store.id}`)
+        .order('sort_order'),
+    ]);
+    return {
+      ok: true,
+      payload: {
+        store,
+        canEdit: ctx.isRegisterDevice !== true,
+        adminOnlyNote: ADMIN_ONLY_SETTINGS_NOTE,
+        categories: (categories ?? []).map((c) => ({ id: c.id as string, name: c.name as string })),
+        itemTypes: BULK_ITEM_TYPES.map((id) => ({ id, label: typeLabels[id] ?? id })),
+        rows: (items ?? []).map((i) => ({
+          id: i.id as string,
+          name: (i.name as string) ?? '',
+          nameEn: (i.name_en as string | null) ?? '',
+          categoryId: (i.category_id as string | null) ?? null,
+          itemType: String(i.item_type ?? 'food'),
+          price: Number(i.price ?? 0),
+          takeoutPrice: i.takeout_price == null ? null : Number(i.takeout_price),
+          status: i.status === 'hidden' ? 'hidden' : 'active',
+          isSoldOut: i.is_sold_out === true,
+        })),
+      },
+    };
+  }
+  if (part === 'import') {
+    // Web の app/app/settings/import/page.tsx と同じ（requirePermission('org.settings')）
+    if (!can(ctx.role, 'org.settings')) return { ok: false, error: 'データ取込の権限がありません（本社のアカウントでログインしてください）' };
+    const types = (Object.keys(FIELD_DEFS) as ImportType[]).map((id) => ({
+      id,
+      label: IMPORT_TYPE_LABELS[id],
+      listPath: IMPORT_TYPE_LIST_PATH[id],
+      fields: FIELD_DEFS[id].map((f) => ({ key: f.key, label: f.label, required: f.required, hint: f.hint ?? null })),
+    }));
+    return { ok: true, payload: { store, hasStore: ctx.stores.length > 0, types, maxRows: MAX_IMPORT_ROWS } };
+  }
   if (part === 'tables') {
     // Web の app/app/settings/tables/page.tsx と同じ。変更は管理画面だけ（2026-09-29 Ronnie）＝レジ端末では見るだけ
     const [{ data: floors }, { data: storeSettings }, { data: tables }] = await Promise.all([
@@ -1174,6 +1235,58 @@ export async function runNativeSettingsPageAction(
     }
     case 'dynamicPricingSave':
       return done(await saveDynamicPricing(store.id, action.rules as DynamicPriceRule[]));
+    case 'menuBulkSave': {
+      const r = await saveMenuBulk(store.id, action.patches);
+      return r.error ? { ok: false, error: r.error } : { ok: true, data: { updated: r.updated ?? 0 } };
+    }
+    case 'importPreview': {
+      // Web の components/import/import-wizard.tsx の「アップロード → 対応付け → プレビュー」をサーバーで一度に
+      if (!(action.importType in FIELD_DEFS)) return { ok: false, error: '取り込む種類が正しくありません' };
+      const type = action.importType as ImportType;
+      const fields = FIELD_DEFS[type];
+      const text = action.csv.charCodeAt(0) === 0xfeff ? action.csv.slice(1) : action.csv;
+      const table = parseCsv(text).filter((r) => r.some((c) => c.trim() !== ''));
+      if (table.length < 2) return { ok: false, error: 'データ行がありません（1行目は列名、2行目から内容）' };
+      const headers = table[0].map((h) => h.trim());
+      const dataRows = table.slice(1);
+      if (dataRows.length > MAX_IMPORT_ROWS) return { ok: false, error: `一度にインポートできるのは${MAX_IMPORT_ROWS}行までです（${dataRows.length}行あります）` };
+      const mapping = autoDetectMapping(headers, fields);
+      const missingRequired = fields.filter((f) => f.required && mapping[f.key] == null).map((f) => f.label);
+      const parsed = buildParsedRows(dataRows, mapping, fields);
+      const local = validateRowsLocally(type, parsed);
+      let existing = new Set<string>();
+      if (local.dupKeysToCheck.length > 0) {
+        try {
+          existing = new Set(await checkExistingDuplicates(type, local.dupKeysToCheck));
+        } catch (e) {
+          return { ok: false, error: e instanceof Error ? e.message : '登録済みの確認に失敗しました' };
+        }
+      }
+      const issues = applyExistingDuplicates(local.issues, existing, type);
+      const byRow = new Map(issues.map((i) => [i.rowNumber, i]));
+      const rows: NativeImportPreview['rows'] = parsed.map((r) => {
+        const i = byRow.get(r.rowNumber);
+        return { rowNumber: r.rowNumber, status: i?.status ?? 'ok', reason: i?.reason ?? null, values: r.values };
+      });
+      const preview: NativeImportPreview = {
+        headers,
+        mapping: Object.fromEntries(fields.map((f) => [f.key, mapping[f.key] == null ? null : headers[mapping[f.key] as number] ?? null])),
+        missingRequired,
+        rows,
+        counts: {
+          ok: rows.filter((r) => r.status === 'ok').length,
+          error: rows.filter((r) => r.status === 'error').length,
+          duplicate: rows.filter((r) => r.status === 'duplicate').length,
+        },
+      };
+      return { ok: true, data: { preview } };
+    }
+    case 'importRun': {
+      if (!(action.importType in FIELD_DEFS)) return { ok: false, error: '取り込む種類が正しくありません' };
+      // この Server Action はエラーを throw する → 呼び出し側（route）が errorText で返す
+      const r = await importRows(action.importType, action.rows);
+      return { ok: true, data: { result: r } };
+    }
     case 'remindersPrepare': {
       // この Server Action はエラーを throw する → 呼び出し側（route）が errorText で返す
       const r = await prepareReservationReminders(store.id);
