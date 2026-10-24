@@ -6,6 +6,8 @@ import Foundation
 struct APICatalog: Codable {
     let store: APIStore
     let categories: [APICategory]
+    /// 上のタブ（前のアプリで保存したものには無い）
+    let pages: [APIPage]?
     let items: [APIItem]
     let optionGroups: [String: [APIOptionGroup]]?
     let clerks: [APIClerk]

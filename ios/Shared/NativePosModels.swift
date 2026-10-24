@@ -11,6 +11,14 @@ struct NPCategory: Identifiable, Hashable {
     let sub: String?
 }
 
+/// 上のタブ（ページ）。押すとそのページのカテゴリが左の列に出る（Web のレジと同じ）
+struct NPPage: Identifiable, Hashable {
+    let id: String
+    let name: String
+    let sub: String?
+    let categoryIds: [String]
+}
+
 struct NPMenuItem: Identifiable, Hashable {
     let id: String
     let categoryId: String?
@@ -116,6 +124,8 @@ struct NPOrder: Hashable {
     var serverSubtotal: Int? = nil
     var serverTax: Int? = nil
     var serverTotal: Int? = nil
+    /// 卓の無い伝票（テイクアウト・デリバリー・事前注文）。オーダー画面から会計へ行けるのはこれだけ（Web と同じ）
+    var takeoutLike = false
 }
 
 /// オーダー画面の状態
@@ -123,6 +133,8 @@ struct NPOrder: Hashable {
 final class NativeOrderModel: ObservableObject {
     @Published var storeName: String
     @Published var categories: [NPCategory]
+    /// 上のタブ（ページ）。空ならタブを出さず、カテゴリを全部左に出す（テイクアウト・古いサーバー）
+    @Published var pages: [NPPage] = []
     @Published var items: [NPMenuItem]
     @Published var order: NPOrder
     @Published var selectedCategory: String
@@ -203,6 +215,26 @@ final class NativeOrderModel: ObservableObject {
     }
 
     // MARK: 表示
+
+    /// いま開いているページ（選んでいるカテゴリが入っているページ）
+    var currentPage: NPPage? {
+        pages.first(where: { $0.categoryIds.contains(selectedCategory) }) ?? pages.first
+    }
+
+    /// 左の列に出すカテゴリ（いま開いているページの中身だけ。ページが無ければ全部）
+    var pageCategories: [NPCategory] {
+        guard let page = currentPage else { return categories }
+        let byId = Dictionary(categories.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        return page.categoryIds.compactMap { byId[$0] }
+    }
+
+    /// 上のタブを押したら、そのページの最初のカテゴリを開く
+    func openPage(_ page: NPPage) {
+        search = ""
+        if let first = page.categoryIds.first(where: { id in categories.contains(where: { $0.id == id }) }) {
+            selectedCategory = first
+        }
+    }
 
     var visibleItems: [NPMenuItem] {
         let q = search.trimmingCharacters(in: .whitespaces).lowercased()
@@ -365,7 +397,7 @@ final class NativeOrderModel: ObservableObject {
             // 次から速く開けるように保存（テイクアウトのメニューは保存しない）
             if let v = p.catalogVersion {
                 NativeCatalogCache.shared.save(APICatalog(
-                    store: p.store, categories: p.categories, items: p.items, optionGroups: p.optionGroups, clerks: p.clerks,
+                    store: p.store, categories: p.categories, pages: p.pages, items: p.items, optionGroups: p.optionGroups, clerks: p.clerks,
                     clerkRequired: p.clerkRequired, visitSources: p.visitSources, methodBrands: p.methodBrands, pointBrands: p.pointBrands,
                     discountPresets: p.discountPresets, steraPaymentTypes: p.steraPaymentTypes, canCheckout: p.canCheckout,
                     canDiscount: p.canDiscount, version: v))
@@ -379,7 +411,7 @@ final class NativeOrderModel: ObservableObject {
     }
 
     private func apply(catalog c: APICatalog) {
-        applyCatalog(storeName: c.store.name, categories: c.categories, items: c.items, optionGroups: c.optionGroups, clerks: c.clerks,
+        applyCatalog(storeName: c.store.name, categories: c.categories, pages: c.pages, items: c.items, optionGroups: c.optionGroups, clerks: c.clerks,
                      clerkRequired: c.clerkRequired, visitSources: c.visitSources, methodBrands: c.methodBrands, pointBrands: c.pointBrands,
                      discountPresets: c.discountPresets, steraTypes: c.steraPaymentTypes, canCheckout: c.canCheckout, canDiscount: c.canDiscount)
     }
@@ -396,7 +428,7 @@ final class NativeOrderModel: ObservableObject {
 
     private func apply(payload p: APIPayload) {
         orderLoaded = true
-        applyCatalog(storeName: p.store.name, categories: p.categories, items: p.items, optionGroups: p.optionGroups, clerks: p.clerks,
+        applyCatalog(storeName: p.store.name, categories: p.categories, pages: p.pages, items: p.items, optionGroups: p.optionGroups, clerks: p.clerks,
                      clerkRequired: p.clerkRequired, visitSources: p.visitSources, methodBrands: p.methodBrands, pointBrands: p.pointBrands,
                      discountPresets: p.discountPresets, steraTypes: p.steraPaymentTypes, canCheckout: p.canCheckout, canDiscount: p.canDiscount)
         steraTerminals = p.steraTerminals
@@ -404,19 +436,21 @@ final class NativeOrderModel: ObservableObject {
         apply(order: p.order)
     }
 
-    private func applyCatalog(storeName name: String, categories cats: [APICategory], items list: [APIItem], optionGroups groups: [String: [APIOptionGroup]]?,
+    private func applyCatalog(storeName name: String, categories cats: [APICategory], pages pg: [APIPage]?, items list: [APIItem], optionGroups groups: [String: [APIOptionGroup]]?,
                               clerks cl: [APIClerk], clerkRequired req: Bool, visitSources vs: [APISource], methodBrands mb: [String: [APIBrand]],
                               pointBrands pb: [APIBrand], discountPresets dp: [APIDiscountPreset], steraTypes st: [APISteraType],
                               canCheckout cc: Bool, canDiscount cd: Bool) {
         storeName = name
         categories = cats.map { NPCategory(id: $0.id, name: $0.name, sub: $0.sub) }
+        pages = (pg ?? []).map { NPPage(id: $0.key, name: $0.name, sub: $0.sub, categoryIds: $0.categoryIds) }
         items = list.map {
             NPMenuItem(id: $0.id, categoryId: $0.categoryId, name: $0.name, kana: $0.kana, english: $0.english, price: $0.price,
                        soldOut: $0.soldOut, hasOptions: $0.hasOptions, recommended: $0.recommended, bestRank: $0.bestRank, openPrice: $0.openPrice)
         }
         if selectedCategory.isEmpty || !categories.contains(where: { $0.id == selectedCategory }) {
-            // おすすめ・売れ筋より、最初の普通のカテゴリを先に開く（Web のレジと同じ）
-            selectedCategory = categories.first(where: { !$0.id.hasPrefix("__") })?.id ?? categories.first?.id ?? ""
+            // いちばん左のタブの最初のカテゴリ（Web のレジと同じ。店が並べた1番、決めていなければ おすすめ）
+            let firstOfPage = pages.first?.categoryIds.first(where: { id in categories.contains(where: { $0.id == id }) })
+            selectedCategory = firstOfPage ?? categories.first(where: { !$0.id.hasPrefix("__") })?.id ?? categories.first?.id ?? ""
         }
         optionGroups = (groups ?? [:]).mapValues { list in
             list.map { g in
@@ -448,7 +482,8 @@ final class NativeOrderModel: ObservableObject {
             } + cart,
             visitSourceId: o.visitSourceId, serviceCharge: o.serviceCharge, discountTotal: o.discountTotal,
             discountReason: o.discountReason, clerkId: o.clerkId,
-            serverSubtotal: o.subtotal, serverTax: o.taxTotal, serverTotal: o.total
+            serverSubtotal: o.subtotal, serverTax: o.taxTotal, serverTotal: o.total,
+            takeoutLike: ["takeout", "delivery", "pre_order"].contains(o.orderType)
         )
     }
 

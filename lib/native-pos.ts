@@ -1,5 +1,6 @@
 import { parseCheckoutBluetoothLink, type CheckoutBluetoothLink } from '@/lib/checkout-bluetooth';
-import { englishName } from '@/lib/romaji';
+import { categoryEnglishName, englishName } from '@/lib/romaji';
+import { menuPageLabel, menuPageSubName, PICKS_PAGE_KEY, type MenuBookPage } from '@/lib/menu-book';
 import { sortOptionGroupLinks } from './option-group-order';
 /**
  * iPad アプリのネイティブ画面（オーダー・会計）とサーバーの決まりごと（2026-10-13 Ronnie「Airレジのように全部ネイティブ。
@@ -22,6 +23,61 @@ export interface NativePosCategory {
   id: string;
   name: string;
   sub: string | null;
+}
+
+/**
+ * 上のタブ（ページ）。Web のレジ（components/pos/pos-screen.tsx の buildPosPages）と同じページ・同じ並び。
+ * name＝日本語を大きく、sub＝英語を小さく（ネイティブの決まり。2026-10-24 Ronnie）。
+ * categoryIds＝左の列に出すカテゴリ（このページの中身）。
+ */
+export interface NativePosPage {
+  key: string;
+  name: string;
+  sub: string | null;
+  categoryIds: string[];
+}
+
+type PageCategory = { id: string; name: string; name_en: string | null };
+
+/**
+ * メニューブックのページ（groupMenuPages の結果）から、ネイティブの「上のタブ」と「カテゴリの並び」を作る。
+ * おすすめ・売れ筋のページは店の決めた位置（picksAt）に入れる。テイクアウトはここを使わない。
+ */
+export function nativePosPages(
+  grouped: readonly MenuBookPage<PageCategory>[],
+  picksAt: number
+): { pages: NativePosPage[]; categories: NativePosCategory[] } {
+  const pages: NativePosPage[] = [];
+  const categories: NativePosCategory[] = [];
+  const at = Math.max(0, Math.min(picksAt, grouped.length));
+  const addPicks = () => {
+    pages.push({ key: PICKS_PAGE_KEY, name: 'おすすめ', sub: 'Picks', categoryIds: [NATIVE_FAVORITES_TAB, NATIVE_BESTSELLERS_TAB] });
+    categories.push(
+      { id: NATIVE_FAVORITES_TAB, name: 'おすすめ', sub: 'Picks' },
+      { id: NATIVE_BESTSELLERS_TAB, name: '売れ筋', sub: 'Popular' }
+    );
+  };
+  grouped.forEach((pg, i) => {
+    if (i === at) addPicks();
+    const label = menuPageLabel(pg, (c) => c.name);
+    // 標準のページ（DRINK など）は日本語（ドリンク）を大きく、英語の名前を小さく。Web は同じ2つを逆の大きさで出す
+    const ja = menuPageSubName(pg.key, pg.name);
+    const first = pg.categories[0];
+    const en = ja
+      ? label
+      : pg.categories.length === 1
+        ? englishName(first.name, null, first.name_en)
+        : englishName(label, null, null);
+    pages.push({
+      key: pg.key,
+      name: ja ?? label,
+      sub: en && en !== (ja ?? label) ? en : null,
+      categoryIds: pg.categories.map((c) => c.id),
+    });
+    for (const c of pg.categories) categories.push({ id: c.id, name: c.name, sub: categoryEnglishName(c.name, c.name_en) });
+  });
+  if (at >= grouped.length) addPicks();
+  return { pages, categories };
 }
 
 export interface NativePosItem {
@@ -103,6 +159,8 @@ export interface NativePosBrand {
 export interface NativePosCatalog {
   store: { id: string; name: string };
   categories: NativePosCategory[];
+  /** 上のタブ（ページ）。テイクアウトは空（タブを出さない） */
+  pages: NativePosPage[];
   items: NativePosItem[];
   optionGroups: Record<string, NativePosOptionGroup[]>;
   clerks: { id: string; name: string }[];
@@ -144,6 +202,7 @@ export interface NativePosPayload {
   /** 店のメニューまわりのハッシュ（アプリの保存と比べる） */
   catalogVersion?: string;
   categories: NativePosCategory[];
+  pages: NativePosPage[];
   items: NativePosItem[];
   /** 商品ごとの選択肢グループ（menuItemId → グループ。選択肢のある商品だけ） */
   optionGroups: Record<string, NativePosOptionGroup[]>;

@@ -6,6 +6,8 @@ import WebKit
 // 他のサイトから呼べないよう、必ず x-tenpo-app: 1 を付ける。
 
 struct APICategory: Codable { let id: String; let name: String; let sub: String? }
+/// 上のタブ（ページ）。Web のレジと同じページ・並び。categoryIds＝左の列に出すカテゴリ
+struct APIPage: Codable { let key: String; let name: String; let sub: String?; let categoryIds: [String] }
 
 struct APIItem: Codable {
     let id: String
@@ -80,6 +82,8 @@ struct APIPayload: Codable {
     /// 店のメニューまわりのハッシュ（iPad の保存と比べる。テイクアウトは無い）
     let catalogVersion: String?
     let categories: [APICategory]
+    /// 上のタブ（古いサーバーは無い → タブを出さずにカテゴリを全部左に）
+    let pages: [APIPage]?
     let items: [APIItem]
     /// 商品ごとの選択肢グループ（古いサーバーは無い → 選択肢の商品は今までの画面で）
     let optionGroups: [String: [APIOptionGroup]]?
