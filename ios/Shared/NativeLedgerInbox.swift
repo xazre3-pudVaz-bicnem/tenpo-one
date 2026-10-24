@@ -114,15 +114,18 @@ struct NLInboxSheet: View {
     @ObservedObject var model: NativeLedgerModel
     let onClose: () -> Void
 
+    /// メッセージと予約受付管理は別々の場所から開く（2026-10-24 20:18 Ronnie「2 つは別の機能。受付管理は別の場所に」）
     enum Tab { case tasks, messages }
-    @State private var tab: Tab = .tasks
+    let tab: Tab
 
     // 箱のボタンのすぐ下に開く（ポップオーバー。2026-10-24 20:17 Ronnie「メッセージの箱の下に開く、ネイティブの形で」）
     var body: some View {
             VStack(spacing: 0) {
                 HStack(spacing: 8) {
-                    Image(systemName: "tray.full").font(.system(size: 16, weight: .semibold)).foregroundColor(NLColor.navy)
-                    Text("予約のお知らせ").font(.system(size: 17, weight: .heavy)).foregroundColor(NLColor.navy)
+                    Image(systemName: tab == .messages ? "envelope" : "checklist").font(.system(size: 16, weight: .semibold)).foregroundColor(NLColor.navy)
+                    Text(tab == .messages ? "メッセージ" : "予約受付管理").font(.system(size: 17, weight: .heavy)).foregroundColor(NLColor.navy)
+                    Text(tab == .messages ? "新しい予約・変更・キャンセルのお知らせ（14 日分）" : "済ませると消えます")
+                        .font(.system(size: 12, weight: .semibold)).foregroundColor(NLColor.muted).lineLimit(1)
                     Spacer()
                     Button { Task { await inbox.load() } } label: {
                         Image(systemName: "arrow.clockwise").font(.system(size: 14, weight: .bold)).foregroundColor(NLColor.navy)
@@ -131,13 +134,7 @@ struct NLInboxSheet: View {
                     }
                     .buttonStyle(PressableStyle())
                 }
-                .padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 10)
-                HStack(spacing: 6) {
-                    tabButton("予約受付管理", count: inbox.payload?.tasks.count ?? 0, on: tab == .tasks) { tab = .tasks }
-                    tabButton("メッセージ", count: inbox.unreadNotices, on: tab == .messages) { tab = .messages; inbox.openMessages() }
-                    Spacer()
-                }
-                .padding(.horizontal, 16).padding(.bottom, 12)
+                .padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 12)
                 Rectangle().fill(NLColor.line).frame(height: 1)
                 ScrollView {
                     VStack(spacing: 10) {
@@ -161,23 +158,10 @@ struct NLInboxSheet: View {
             }
             .frame(width: 520, height: 640)
             .background(Color.white)
-        .task { await inbox.load() }
-    }
-
-    private func tabButton(_ title: String, count: Int, on: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 6) {
-                Text(title).font(.system(size: 15, weight: .heavy))
-                if count > 0 {
-                    Text("\(count)").font(.system(size: 12, weight: .heavy)).monospacedDigit().foregroundColor(.white)
-                        .padding(.horizontal, 7).padding(.vertical, 2).background(Capsule().fill(NLColor.red))
-                }
-            }
-            .foregroundColor(on ? NLColor.navy : NLColor.muted)
-            .padding(.horizontal, 16).frame(height: 40)
-            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(on ? NLColor.yellow : NLColor.page))
+        .task {
+            if tab == .messages { inbox.openMessages() }
+            await inbox.load()
         }
-        .buttonStyle(PressableStyle())
     }
 
     private func empty(_ text: String, icon: String) -> some View {

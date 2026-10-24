@@ -371,6 +371,7 @@ struct NativeLedgerView: View {
                     summaryRow(p)
                     NLToolbar(
                         model: model,
+                        inbox: inbox,
                         onFloor: onFloor,
                         onWeb: onWeb,
                         onFindSeats: { findSeatsOpen = true },
@@ -519,14 +520,14 @@ struct NativeLedgerView: View {
                     // グルメ別・週間・ウェイティングは「その他」のメニューから（上のバーが狭いので）
                 }
                 .background(RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(0.12)))
-                // 予約のお知らせ（受付管理・メッセージ）の箱。予約登録の横（2026-10-24 19:56 Ronnie）
+                // メッセージ（新しい予約・変更・キャンセルのお知らせ）。予約登録の横（2026-10-24 19:56・20:18 Ronnie。予約受付管理は下の列に別に）
                 Button { inboxOpen = true } label: {
                     ZStack(alignment: .topTrailing) {
-                        Image(systemName: "tray.full").font(.system(size: 18, weight: .semibold)).foregroundColor(.white)
+                        Image(systemName: "envelope").font(.system(size: 18, weight: .semibold)).foregroundColor(.white)
                             .frame(width: 46, height: 38)
                             .background(RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(0.12)))
-                        if inbox.badge > 0 {
-                            Text(inbox.badge > 99 ? "99+" : "\(inbox.badge)").font(.system(size: 11, weight: .heavy)).monospacedDigit().foregroundColor(.white)
+                        if inbox.unreadNotices > 0 {
+                            Text(inbox.unreadNotices > 99 ? "99+" : "\(inbox.unreadNotices)").font(.system(size: 11, weight: .heavy)).monospacedDigit().foregroundColor(.white)
                                 .padding(.horizontal, 5).frame(minWidth: 20, minHeight: 20)
                                 .background(Capsule().fill(NLColor.red))
                                 .overlay(Capsule().stroke(NLColor.navy, lineWidth: 2))
@@ -535,9 +536,9 @@ struct NativeLedgerView: View {
                     }
                 }
                 .buttonStyle(PressableStyle())
-                .accessibilityLabel("予約のお知らせ")
+                .accessibilityLabel("メッセージ")
                 .popover(isPresented: $inboxOpen, arrowEdge: .top) {
-                    NLInboxSheet(inbox: inbox, model: model, onClose: { inboxOpen = false })
+                    NLInboxSheet(inbox: inbox, model: model, onClose: { inboxOpen = false }, tab: .messages)
                 }
                 // 予約登録は右上に、Reservation と同じ黄色で（2026-10-24 18:49 Ronnie「右上のウェイティングはいらない、そこに予約登録を黄色で」）
                 if model.payload?.canWrite ?? false {

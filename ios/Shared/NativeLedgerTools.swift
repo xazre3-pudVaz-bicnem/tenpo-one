@@ -88,6 +88,8 @@ enum NLShare {
 
 struct NLToolbar: View {
     @ObservedObject var model: NativeLedgerModel
+    /// 予約受付管理（仮予約・要連絡・新しいネット予約・変更／キャンセル）。メッセージとは別の場所（2026-10-24 20:18 Ronnie）
+    @ObservedObject var inbox: NLInboxModel
     let onFloor: () -> Void
     let onWeb: (String) -> Void
     let onFindSeats: () -> Void
@@ -99,10 +101,28 @@ struct NLToolbar: View {
 
     private var p: NLPayload? { model.payload }
     private var date: String { model.date ?? p?.date ?? "" }
+    @State private var tasksOpen = false
     private var month: String { String(date.prefix(7)) }
 
     var body: some View {
         HStack(spacing: 2) {
+            // 予約受付管理（やることの数つき）
+            Button { tasksOpen = true } label: {
+                ZStack(alignment: .topTrailing) {
+                    itemLabel("checklist", "予約受付管理")
+                    let n = inbox.payload?.tasks.count ?? 0
+                    if n > 0 {
+                        Text(n > 99 ? "99+" : "\(n)").font(.system(size: 11, weight: .heavy)).monospacedDigit().foregroundColor(.white)
+                            .padding(.horizontal, 5).frame(minWidth: 20, minHeight: 20)
+                            .background(Capsule().fill(NLColor.red))
+                            .offset(x: -14, y: 2)
+                    }
+                }
+            }
+            .buttonStyle(PressableStyle())
+            .popover(isPresented: $tasksOpen, arrowEdge: .top) {
+                NLInboxSheet(inbox: inbox, model: model, onClose: { tasksOpen = false }, tab: .tasks)
+            }
             // 右上は「会計・オーダー」（ネイティブのオーダー・会計＝フロア画面へ。2026-10-24 Ronnie「退店管理はいらない、会計・オーダーにして」）
             item("desktopcomputer", "会計・オーダー", action: onFloor)
             Menu {
