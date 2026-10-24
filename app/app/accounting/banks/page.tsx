@@ -9,40 +9,18 @@ import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/ui/state';
 import { BankAccountForm } from '@/components/accounting/bank-account-form';
 import { InstallAccountsBanner } from '@/components/accounting/auto-install-accounts';
-import { loadAccounts } from '../auto/engine';
+import { BANK_ACCOUNT_TYPE_LABELS as ACCOUNT_TYPE_LABELS } from '@/lib/accounting-pages';
+import { loadBankAccountsPage } from '@/lib/accounting-pages-server';
 
 export const metadata: Metadata = { title: '銀行口座' };
-
-const ACCOUNT_TYPE_LABELS: Record<string, string> = { ordinary: '普通', checking: '当座', savings: '貯蓄' };
 
 export default async function BankAccountsPage() {
   await requireFeature('accounting');
   const ctx = await requirePermission('csv.export');
   const supabase = await createClient();
 
-  const accounts = await loadAccounts(supabase, ctx.organizationId);
-  const bankAccountOptions = [...accounts.byCode.values()]
-    .filter((a) => a.code === '110')
-    .map((a) => ({ id: a.id, code: a.code, name: a.name }));
-  // sub_type='bank'の全科目（複数口座で別科目を使う運用にも対応）
-  const { data: subTypeBankAccounts } = await supabase
-    .from('accounts')
-    .select('id, code, name')
-    .eq('organization_id', ctx.organizationId)
-    .eq('status', 'active')
-    .eq('sub_type', 'bank')
-    .order('code');
-  const accountOptions =
-    (subTypeBankAccounts ?? []).length > 0
-      ? (subTypeBankAccounts ?? []).map((a) => ({ id: a.id as string, code: a.code as string, name: a.name as string }))
-      : bankAccountOptions;
-
-  const { data: bankAccounts } = await supabase
-    .from('bank_accounts')
-    .select('id, bank_name, branch_name, account_type, account_last4, holder_name, store_id, stores(name), accounts(code, name)')
-    .eq('organization_id', ctx.organizationId)
-    .eq('status', 'active')
-    .order('created_at', { ascending: false });
+  // 読み込みは lib/accounting-pages-server.ts（iPad ネイティブの会計と同じ）
+  const { accountsInstalled, accountOptions, bankAccounts } = await loadBankAccountsPage(supabase, ctx);
 
   return (
     <div className="space-y-5">
@@ -52,32 +30,32 @@ export default async function BankAccountsPage() {
         actions={<BankAccountForm mode="create" stores={ctx.isHq ? ctx.stores : []} accountOptions={accountOptions} />}
       />
 
-      {accounts.byCode.size === 0 && <InstallAccountsBanner />}
+      {!accountsInstalled && <InstallAccountsBanner />}
 
-      {(bankAccounts ?? []).length === 0 ? (
+      {bankAccounts.length === 0 ? (
         <EmptyState
           title="銀行口座が登録されていません"
           description="「口座を追加」から銀行口座を登録すると、取引の記帳・仕訳作成ができるようになります。"
         />
       ) : (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {(bankAccounts ?? []).map((b) => {
-            const store = b.stores as unknown as { name: string } | null;
-            const account = b.accounts as unknown as { code: string; name: string } | null;
+          {bankAccounts.map((b) => {
+            const store = b.storeName != null ? { name: b.storeName } : null;
+            const account = b.account;
             return (
               <Link key={b.id} href={`/app/accounting/banks/${b.id}`}>
                 <Card className="flex h-full flex-col justify-between p-4 transition-shadow hover:shadow-md">
                   <div>
                     <div className="mb-2 flex items-center gap-2">
                       <Landmark className="h-4 w-4 text-primary-deep" />
-                      <p className="font-semibold text-navy">{b.bank_name as string}</p>
+                      <p className="font-semibold text-navy">{b.bankName}</p>
                     </div>
                     <p className="text-sm text-gray-600">
-                      {b.branch_name ? `${b.branch_name} ・ ` : ''}
-                      {ACCOUNT_TYPE_LABELS[b.account_type as string] ?? b.account_type}
-                      {b.account_last4 ? ` ・ 下4桁 ${b.account_last4}` : ''}
+                      {b.branchName ? `${b.branchName} ・ ` : ''}
+                      {ACCOUNT_TYPE_LABELS[b.accountType] ?? b.accountType}
+                      {b.accountLast4 ? ` ・ 下4桁 ${b.accountLast4}` : ''}
                     </p>
-                    {b.holder_name && <p className="mt-0.5 text-xs text-gray-500">名義: {b.holder_name as string}</p>}
+                    {b.holderName && <p className="mt-0.5 text-xs text-gray-500">名義: {b.holderName}</p>}
                     <div className="mt-2 flex flex-wrap gap-1.5">
                       {store && <Badge tone="gray">{store.name}</Badge>}
                       {account ? (

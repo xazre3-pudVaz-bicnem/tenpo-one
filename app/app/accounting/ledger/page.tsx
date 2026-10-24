@@ -11,44 +11,14 @@ import { Input, Label, Select } from '@/components/ui/input';
 import { TableWrap, Table, THead, TBody, Tr, Th, Td } from '@/components/ui/table';
 import { EmptyState } from '@/components/ui/state';
 import { cn } from '@/lib/utils';
-import { yen, formatDate, todayJst } from '@/lib/format';
-import { TAX_TREATMENT_LABELS, type AccountCategory, type TaxTreatment } from '@/lib/accounting';
-import { SUB_TYPE_LABELS, type SubType, type SourceType } from '@/components/accounting/labels';
-import { computeOpeningBalance, buildLedgerRows, resolveCounterLabel, type LedgerEntryLine } from '@/components/accounting/ledger';
+import { yen, formatDate } from '@/lib/format';
+import { TAX_TREATMENT_LABELS } from '@/lib/accounting';
+import { SUB_TYPE_LABELS } from '@/components/accounting/labels';
 import { ORIGIN_LINK_LABELS, resolveSourceOriginHref } from '@/components/accounting/journal-source-link';
+import { LEDGER_TABS as TABS } from '@/lib/accounting-pages';
+import { loadLedgerPage } from '@/lib/accounting-pages-server';
 
 export const metadata: Metadata = { title: '帳簿 | 会計' };
-
-type Tab = 'journal' | 'general' | 'cash' | 'bank' | 'receivable' | 'payable';
-const TABS: { key: Tab; label: string }[] = [
-  { key: 'journal', label: '仕訳帳' },
-  { key: 'general', label: '総勘定元帳' },
-  { key: 'cash', label: '現金出納帳' },
-  { key: 'bank', label: '預金出納帳' },
-  { key: 'receivable', label: '売掛帳' },
-  { key: 'payable', label: '買掛帳' },
-];
-const TAB_SUBTYPE: Partial<Record<Tab, SubType>> = { cash: 'cash', bank: 'bank', receivable: 'receivable', payable: 'payable' };
-
-function firstDayOfMonth(dateJst: string): string {
-  return `${dateJst.slice(0, 7)}-01`;
-}
-
-interface AccountOpt {
-  id: string;
-  code: string;
-  name: string;
-  category: AccountCategory;
-  subType: string | null;
-}
-
-interface JournalEntryDisplay {
-  id: string;
-  entryNo: number;
-  entryDate: string;
-  description: string;
-  lines: { accountCode: string; accountName: string; side: 'debit' | 'credit'; amount: number; taxTreatment: TaxTreatment; memo: string | null }[];
-}
 
 export default async function LedgerPage({
   searchParams,
@@ -60,78 +30,14 @@ export default async function LedgerPage({
   const sp = await searchParams;
   const supabase = await createClient();
 
-  const tab: Tab = TABS.some((t) => t.key === sp.tab) ? (sp.tab as Tab) : 'journal';
-  const today = todayJst();
-  const from = sp.from || firstDayOfMonth(today);
-  const to = sp.to || today;
-  const storeId = sp.store || (ctx.isHq ? '' : (ctx.currentStore?.id ?? ''));
-
-  const { data: accountsData } = await supabase
-    .from('accounts')
-    .select('id, code, name, category, sub_type')
-    .eq('organization_id', ctx.organizationId)
-    .eq('status', 'active')
-    .order('sort_order')
-    .order('code');
-  const accounts: AccountOpt[] = (accountsData ?? []).map((a) => ({
-    id: a.id as string,
-    code: a.code as string,
-    name: a.name as string,
-    category: a.category as AccountCategory,
-    subType: a.sub_type as string | null,
-  }));
-  const accountById = new Map(accounts.map((a) => [a.id, a]));
-
-  const exportParams = new URLSearchParams({ type: tab, from, to });
-  if (storeId) exportParams.set('store', storeId);
+  // 読み込みは lib/accounting-pages-server.ts（iPad ネイティブの会計と同じ）
+  const data = await loadLedgerPage(supabase, ctx, sp);
+  const { tab, from, to, storeId, candidateAccounts, selectedAccountId } = data;
 
   let body: React.ReactNode = null;
-  let selectedAccountId: string | null = null;
-  let candidateAccounts: AccountOpt[] = [];
 
-  if (tab === 'journal') {
-    let query = supabase
-      .from('journal_entries')
-      .select('id, entry_no, entry_date, description')
-      .eq('organization_id', ctx.organizationId)
-      .eq('status', 'posted')
-      .gte('entry_date', from)
-      .lte('entry_date', to);
-    if (storeId) query = query.eq('store_id', storeId);
-    const { data: entries } = await query.order('entry_date', { ascending: false }).order('entry_no', { ascending: false }).limit(1000);
-    const list = entries ?? [];
-    const entryIds = list.map((e) => e.id as string);
-
-    let linesByEntry = new Map<string, JournalEntryDisplay['lines']>();
-    if (entryIds.length > 0) {
-      const { data: linesData } = await supabase
-        .from('journal_entry_lines')
-        .select('entry_id, account_id, side, amount, tax_treatment, memo')
-        .in('entry_id', entryIds)
-        .order('line_no');
-      linesByEntry = new Map();
-      for (const l of linesData ?? []) {
-        const acc = accountById.get(l.account_id as string);
-        const arr = linesByEntry.get(l.entry_id as string) ?? [];
-        arr.push({
-          accountCode: acc?.code ?? '',
-          accountName: acc?.name ?? '(削除済み科目)',
-          side: l.side as 'debit' | 'credit',
-          amount: l.amount as number,
-          taxTreatment: l.tax_treatment as TaxTreatment,
-          memo: l.memo as string | null,
-        });
-        linesByEntry.set(l.entry_id as string, arr);
-      }
-    }
-
-    const displayEntries: JournalEntryDisplay[] = list.map((e) => ({
-      id: e.id as string,
-      entryNo: e.entry_no as number,
-      entryDate: e.entry_date as string,
-      description: e.description as string,
-      lines: linesByEntry.get(e.id as string) ?? [],
-    }));
+  if (data.journalEntries) {
+    const displayEntries = data.journalEntries;
 
     body =
       displayEntries.length === 0 ? (
@@ -178,9 +84,7 @@ export default async function LedgerPage({
         </div>
       );
   } else {
-    const subType = TAB_SUBTYPE[tab];
-    candidateAccounts = subType ? accounts.filter((a) => a.subType === subType) : accounts;
-    selectedAccountId = sp.account && candidateAccounts.some((a) => a.id === sp.account) ? sp.account : (candidateAccounts[0]?.id ?? null);
+    const subType = data.subType;
 
     if (!selectedAccountId) {
       body = (
@@ -190,75 +94,7 @@ export default async function LedgerPage({
         />
       );
     } else {
-      exportParams.set('account', selectedAccountId);
-      const account = accountById.get(selectedAccountId)!;
-
-      const buildLineQuery = () => {
-        let q = supabase
-          .from('journal_entry_lines')
-          .select(
-            'id, entry_id, line_no, side, amount, memo, journal_entries!inner(entry_date, description, status, store_id, source_type, source_id, stores(name))'
-          )
-          .eq('account_id', selectedAccountId)
-          .eq('organization_id', ctx.organizationId)
-          .eq('journal_entries.status', 'posted');
-        if (storeId) q = q.eq('journal_entries.store_id', storeId);
-        return q;
-      };
-
-      const [{ data: beforeLines }, { data: periodLinesRaw }] = await Promise.all([
-        buildLineQuery().lt('journal_entries.entry_date', from),
-        buildLineQuery()
-          .gte('journal_entries.entry_date', from)
-          .lte('journal_entries.entry_date', to)
-          .order('entry_date', { foreignTable: 'journal_entries', ascending: true })
-          .order('line_no', { ascending: true }),
-      ]);
-
-      const opening = computeOpeningBalance((beforeLines ?? []).map((l) => ({ side: l.side as 'debit' | 'credit', amount: l.amount as number })), account.category);
-
-      const periodEntryIds = [...new Set((periodLinesRaw ?? []).map((l) => l.entry_id as string))];
-      let counterNamesByEntry = new Map<string, string[]>();
-      if (periodEntryIds.length > 0) {
-        const { data: allLines } = await supabase
-          .from('journal_entry_lines')
-          .select('entry_id, account_id')
-          .in('entry_id', periodEntryIds);
-        const byEntry = new Map<string, string[]>();
-        for (const l of allLines ?? []) {
-          if ((l.account_id as string) === selectedAccountId) continue;
-          const acc = accountById.get(l.account_id as string);
-          const arr = byEntry.get(l.entry_id as string) ?? [];
-          if (acc) arr.push(acc.name);
-          byEntry.set(l.entry_id as string, arr);
-        }
-        counterNamesByEntry = byEntry;
-      }
-
-      const periodLines: LedgerEntryLine[] = (periodLinesRaw ?? []).map((l) => {
-        const je = l.journal_entries as unknown as {
-          entry_date: string;
-          description: string;
-          source_type: SourceType;
-          source_id: string | null;
-          stores: { name: string } | null;
-        };
-        return {
-          entryId: l.entry_id as string,
-          entryDate: je.entry_date,
-          description: je.description,
-          side: l.side as 'debit' | 'credit',
-          amount: l.amount as number,
-          memo: l.memo as string | null,
-          storeName: je.stores?.name ?? null,
-          sourceType: je.source_type,
-          sourceId: je.source_id,
-        };
-      });
-
-      const rows = buildLedgerRows(periodLines, account.category, opening, (entryId) =>
-        resolveCounterLabel(counterNamesByEntry.get(entryId) ?? [])
-      );
+      const { opening, rows } = data.ledger!;
 
       body = (
         <TableWrap>
@@ -329,7 +165,7 @@ export default async function LedgerPage({
         description="仕訳帳・総勘定元帳・現金出納帳などの補助簿を確認します"
         actions={
           can(ctx.role, 'csv.export') ? (
-            <a href={`/app/accounting/ledger/export?${exportParams.toString()}`} className={cn(buttonVariants({ variant: 'secondary' }))}>
+            <a href={`/app/accounting/ledger/export?${data.exportQuery}`} className={cn(buttonVariants({ variant: 'secondary' }))}>
               <Download className="h-4 w-4" />
               CSV出力
             </a>

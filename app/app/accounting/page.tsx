@@ -8,23 +8,13 @@ import { Card } from '@/components/ui/card';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Input, Label, Select } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
-import { todayJst } from '@/lib/format';
 import Link from 'next/link';
-import {
-  JOURNAL_STATUS_LABELS, JOURNAL_STATUS_OPTIONS, SOURCE_TYPE_LABELS, SOURCE_TYPE_OPTIONS,
-  type JournalStatus, type SourceType,
-} from '@/components/accounting/labels';
-import { JournalPanel, type JournalEntryRow, type JournalLineRow } from '@/components/accounting/journal-panel';
+import { JOURNAL_STATUS_LABELS, JOURNAL_STATUS_OPTIONS, SOURCE_TYPE_LABELS, SOURCE_TYPE_OPTIONS } from '@/components/accounting/labels';
+import { JournalPanel } from '@/components/accounting/journal-panel';
 import { PeriodClosePanel } from '@/components/accounting/period-close-panel';
-import type { TaxTreatment } from '@/lib/accounting';
+import { loadJournalPage, JOURNAL_PAGE_SIZE as PAGE_SIZE } from '@/lib/accounting-pages-server';
 
 export const metadata: Metadata = { title: '仕訳 | 会計' };
-
-const PAGE_SIZE = 50;
-
-function firstDayOfMonth(dateJst: string): string {
-  return `${dateJst.slice(0, 7)}-01`;
-}
 
 export default async function AccountingJournalPage({
   searchParams,
@@ -44,90 +34,9 @@ export default async function AccountingJournalPage({
   const sp = await searchParams;
   const supabase = await createClient();
 
-  const today = todayJst();
-  const from = sp.from || firstDayOfMonth(today);
-  const to = sp.to || today;
-  const status = JOURNAL_STATUS_OPTIONS.includes(sp.status as JournalStatus) ? (sp.status as JournalStatus) : '';
-  const sourceType = SOURCE_TYPE_OPTIONS.includes(sp.source_type as SourceType) ? (sp.source_type as SourceType) : '';
-  const sourceId = sp.source_id || '';
-  const storeId = sp.store || (ctx.isHq ? '' : (ctx.currentStore?.id ?? ''));
-  const page = Math.max(1, Number(sp.page) || 1);
-
-  const { data: accountsData } = await supabase
-    .from('accounts')
-    .select('id, code, name, default_tax_treatment')
-    .eq('organization_id', ctx.organizationId)
-    .eq('status', 'active')
-    .order('sort_order')
-    .order('code');
-  const accounts = (accountsData ?? []).map((a) => ({
-    id: a.id as string,
-    code: a.code as string,
-    name: a.name as string,
-    defaultTaxTreatment: a.default_tax_treatment as TaxTreatment,
-  }));
-  const accountById = new Map(accounts.map((a) => [a.id, a]));
-
-  let query = supabase
-    .from('journal_entries')
-    .select('id, entry_no, entry_date, description, status, source_type, source_id, void_reason, store_id, stores(name)', { count: 'exact' })
-    .eq('organization_id', ctx.organizationId)
-    .gte('entry_date', from)
-    .lte('entry_date', to);
-  if (status) query = query.eq('status', status);
-  if (sourceType) query = query.eq('source_type', sourceType);
-  if (sourceId) query = query.eq('source_id', sourceId);
-  if (storeId) query = query.eq('store_id', storeId);
-  query = query.order('entry_date', { ascending: false }).order('entry_no', { ascending: false });
-
-  const rangeFrom = (page - 1) * PAGE_SIZE;
-  const { data: entriesData, count } = await query.range(rangeFrom, rangeFrom + PAGE_SIZE - 1);
-  const entries = entriesData ?? [];
-  const entryIds = entries.map((e) => e.id as string);
-
-  let linesByEntry: Record<string, JournalLineRow[]> = {};
-  if (entryIds.length > 0) {
-    const { data: linesData } = await supabase
-      .from('journal_entry_lines')
-      .select('entry_id, account_id, side, amount, tax_treatment, memo')
-      .in('entry_id', entryIds)
-      .order('line_no');
-    linesByEntry = {};
-    for (const l of linesData ?? []) {
-      const acc = accountById.get(l.account_id as string);
-      const list = linesByEntry[l.entry_id as string] ?? [];
-      list.push({
-        accountId: l.account_id as string,
-        accountCode: acc?.code ?? '',
-        accountName: acc?.name ?? '(削除済み科目)',
-        side: l.side as 'debit' | 'credit',
-        amount: l.amount as number,
-        taxTreatment: l.tax_treatment as TaxTreatment,
-        memo: l.memo as string | null,
-      });
-      linesByEntry[l.entry_id as string] = list;
-    }
-  }
-
-  const rows: JournalEntryRow[] = entries.map((e) => {
-    const lines = linesByEntry[e.id as string] ?? [];
-    const debitTotal = lines.filter((l) => l.side === 'debit').reduce((sum, l) => sum + l.amount, 0);
-    return {
-      id: e.id as string,
-      entryNo: e.entry_no as number,
-      entryDate: e.entry_date as string,
-      description: e.description as string,
-      status: e.status as JournalStatus,
-      sourceType: e.source_type as SourceType,
-      sourceId: e.source_id as string | null,
-      storeId: e.store_id as string | null,
-      storeName: (e.stores as unknown as { name: string } | null)?.name ?? null,
-      voidReason: e.void_reason as string | null,
-      debitTotal,
-    };
-  });
-
-  const totalPages = Math.max(1, Math.ceil((count ?? 0) / PAGE_SIZE));
+  // 読み込みは lib/accounting-pages-server.ts（iPad ネイティブの会計と同じ）
+  const { today, from, to, status, sourceType, sourceId, storeId, page, accounts, rows, linesByEntry, count, rangeFrom, totalPages } =
+    await loadJournalPage(supabase, ctx, sp);
   const buildHref = (p: number) => {
     const params = new URLSearchParams({ from, to, status, source_type: sourceType, source_id: sourceId, store: storeId, page: String(p) });
     return `/app/accounting?${params.toString()}`;

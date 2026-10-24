@@ -12,68 +12,12 @@ import { Input, Label, Select } from '@/components/ui/input';
 import { TableWrap, Table, THead, TBody, Tr, Th, Td } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import { yen, todayJst } from '@/lib/format';
-import {
-  aggregateTrialBalance,
-  aggregateTrialBalanceWithOpening,
-  buildOperatingStatement,
-  buildBalanceSheet,
-  type AccountInfo,
-  type PostedLine,
-  type TrialBalanceRow,
-  type OperatingStatement,
-} from '@/lib/accounting';
-import { ACCOUNT_CATEGORY_LABELS, ACCOUNT_CATEGORY_ORDER } from '@/components/accounting/labels';
+import { yen } from '@/lib/format';
+import { ACCOUNT_CATEGORY_LABELS } from '@/components/accounting/labels';
+import { addDays, STATEMENT_STAGE_ROWS as STAGE_ROWS } from '@/lib/accounting-pages';
+import { loadStatementsPage } from '@/lib/accounting-pages-server';
 
 export const metadata: Metadata = { title: '財務レポート | 会計' };
-
-function firstDayOfMonth(dateJst: string): string {
-  return `${dateJst.slice(0, 7)}-01`;
-}
-
-/** 'YYYY-MM-DD' の delta 日後（UTCカレンダー演算・TZ非依存） */
-function addDays(dateStr: string, delta: number): string {
-  const d = new Date(`${dateStr}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + delta);
-  return d.toISOString().slice(0, 10);
-}
-
-/** 'YYYY-MM' を delta ヶ月ずらす */
-function shiftMonth(ym: string, delta: number): string {
-  const [y, m] = ym.split('-').map(Number);
-  const d = new Date(Date.UTC(y, m - 1 + delta, 1));
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
-}
-
-function monthRange(ym: string): { from: string; to: string } {
-  return { from: `${ym}-01`, to: addDays(`${shiftMonth(ym, 1)}-01`, -1) };
-}
-
-/** from〜to に含まれる暦月の一覧（'YYYY-MM'）。最大12ヶ月まで */
-function monthsInRange(from: string, to: string): string[] {
-  const startYm = from.slice(0, 7);
-  const endYm = to.slice(0, 7);
-  const result: string[] = [];
-  let cur = startYm;
-  let guard = 0;
-  while (cur <= endYm && guard < 13) {
-    result.push(cur);
-    cur = shiftMonth(cur, 1);
-    guard += 1;
-  }
-  return result;
-}
-
-const BS_CATEGORIES = new Set(['asset', 'liability', 'equity']);
-
-const STAGE_ROWS: { label: string; get: (s: OperatingStatement) => number; emphasize?: boolean }[] = [
-  { label: '売上高', get: (s) => s.revenueTotal },
-  { label: '売上原価', get: (s) => s.cogsTotal },
-  { label: '売上総利益', get: (s) => s.grossProfit, emphasize: true },
-  { label: '人件費', get: (s) => s.laborTotal },
-  { label: '経費', get: (s) => s.opexTotal },
-  { label: '営業利益', get: (s) => s.operatingIncome, emphasize: true },
-];
 
 export default async function StatementsPage({
   searchParams,
@@ -85,96 +29,30 @@ export default async function StatementsPage({
   const sp = await searchParams;
   const supabase = await createClient();
 
-  const today = todayJst();
-  const from = sp.from || firstDayOfMonth(today);
-  const to = sp.to || today;
-  const storeId = sp.store || (ctx.isHq ? '' : (ctx.currentStore?.id ?? ''));
-  const storeName = storeId ? (ctx.stores.find((s) => s.id === storeId)?.name ?? null) : null;
-
-  const { data: accountsData } = await supabase
-    .from('accounts')
-    .select('id, code, name, category, sub_type')
-    .eq('organization_id', ctx.organizationId)
-    .eq('status', 'active')
-    .order('sort_order')
-    .order('code');
-  const accountInfos: AccountInfo[] = (accountsData ?? []).map((a) => ({
-    id: a.id as string,
-    code: a.code as string,
-    name: a.name as string,
-    category: a.category as AccountInfo['category'],
-  }));
-  const subTypeById = new Map((accountsData ?? []).map((a) => [a.id as string, a.sub_type as string | null]));
-
-  /** posted・店舗絞込・期間指定で仕訳明細を取得する（このページ全体で使い回す） */
-  const fetchPostedLines = async (rangeFrom: string, rangeTo: string): Promise<PostedLine[]> => {
-    let q = supabase
-      .from('journal_entry_lines')
-      .select('account_id, side, amount, journal_entries!inner(entry_date, status, store_id)')
-      .eq('organization_id', ctx.organizationId)
-      .eq('journal_entries.status', 'posted')
-      .gte('journal_entries.entry_date', rangeFrom)
-      .lte('journal_entries.entry_date', rangeTo);
-    if (storeId) q = q.eq('journal_entries.store_id', storeId);
-    const { data } = await q.limit(20000);
-    return (data ?? []).map((l) => ({
-      accountId: l.account_id as string,
-      side: l.side as 'debit' | 'credit',
-      amount: l.amount as number,
-    }));
-  };
-  const fetchOperatingStatement = async (rangeFrom: string, rangeTo: string): Promise<OperatingStatement> =>
-    buildOperatingStatement(aggregateTrialBalance(await fetchPostedLines(rangeFrom, rangeTo), accountInfos));
-
-  // 期首残高付き試算表: 期間開始前の全確定仕訳（期首）と期間内の確定仕訳（当期）を別々に集計する
-  const baseMonth = from.slice(0, 7);
-  const prevMonthYm = shiftMonth(baseMonth, -1);
-  const lastYearYm = shiftMonth(baseMonth, -12);
-  const prevMonthRange = monthRange(prevMonthYm);
-  const lastYearRange = monthRange(lastYearYm);
-  const months = monthsInRange(from, to);
-  const showMonthlyBreakdown = months.length >= 2 && months.length <= 12;
-
-  const [openingPostedLines, periodPostedLines, opStatementPrevMonth, opStatementLastYear, monthlyStatements] = await Promise.all([
-    fetchPostedLines('1900-01-01', addDays(from, -1)),
-    fetchPostedLines(from, to),
-    fetchOperatingStatement(prevMonthRange.from, prevMonthRange.to),
-    fetchOperatingStatement(lastYearRange.from, lastYearRange.to),
-    showMonthlyBreakdown
-      ? Promise.all(months.map((ym) => fetchOperatingStatement(monthRange(ym).from, monthRange(ym).to)))
-      : Promise.resolve([] as OperatingStatement[]),
-  ]);
-
-  const tbOpening = aggregateTrialBalanceWithOpening(openingPostedLines, periodPostedLines, accountInfos);
-
-  // P/L（段階損益）は当期の期中増減（期首残高を含まない）で計算する
-  const tbForPL: TrialBalanceRow[] = tbOpening.map((r) => ({ account: r.account, debitTotal: r.debitTotal, creditTotal: r.creditTotal, balance: r.balance }));
-  const opStatement = buildOperatingStatement(tbForPL);
-
-  // B/S は資産・負債・純資産のみ期末（期首＋期中）の累計残高を使い、当期純利益の算出に使う収益・費用は期中のみで計算する
-  const tbForBS: TrialBalanceRow[] = tbOpening.map((r) => ({
-    account: r.account,
-    debitTotal: r.debitTotal,
-    creditTotal: r.creditTotal,
-    balance: BS_CATEGORIES.has(r.account.category) ? r.closingBalance : r.balance,
-  }));
-  const bs = buildBalanceSheet(tbForBS);
-
-  const debitGrandTotal = tbOpening.reduce((sum, r) => sum + r.debitTotal, 0);
-  const creditGrandTotal = tbOpening.reduce((sum, r) => sum + r.creditTotal, 0);
-  const trialBalanced = debitGrandTotal === creditGrandTotal;
-
-  const cashBankBalance = tbOpening.filter((r) => ['cash', 'bank'].includes(subTypeById.get(r.account.id) ?? '')).reduce((s, r) => s + r.closingBalance, 0);
-  const receivableBalance = tbOpening.filter((r) => subTypeById.get(r.account.id) === 'receivable').reduce((s, r) => s + r.closingBalance, 0);
-  const payableBalance = tbOpening.filter((r) => subTypeById.get(r.account.id) === 'payable').reduce((s, r) => s + r.closingBalance, 0);
-
-  const groupedTb = ACCOUNT_CATEGORY_ORDER.map((category) => ({
-    category,
-    rows: tbOpening.filter((r) => r.account.category === category),
-  })).filter((g) => g.rows.length > 0);
-
-  const exportParams = new URLSearchParams({ from, to });
-  if (storeId) exportParams.set('store', storeId);
+  // 読み込み・集計は lib/accounting-pages-server.ts（iPad ネイティブの会計と同じ）
+  const {
+    from,
+    to,
+    storeId,
+    storeName,
+    groupedTb,
+    opStatement,
+    opStatementPrevMonth,
+    opStatementLastYear,
+    months,
+    showMonthlyBreakdown,
+    monthlyStatements,
+    prevMonthYm,
+    lastYearYm,
+    bs,
+    debitGrandTotal,
+    creditGrandTotal,
+    trialBalanced,
+    cashBankBalance,
+    receivableBalance,
+    payableBalance,
+    exportQuery,
+  } = await loadStatementsPage(supabase, ctx, sp);
 
   /** 試算表の各数値セルから該当科目の元帳（総勘定元帳）へのドリルダウンURL */
   const ledgerHref = (accountId: string, rangeFrom: string, rangeTo: string) => {
@@ -192,7 +70,7 @@ export default async function StatementsPage({
         description="確定済み仕訳から試算表・損益計算書・貸借対照表を自動集計します"
         actions={
           can(ctx.role, 'csv.export') ? (
-            <a href={`/app/accounting/statements/export?${exportParams.toString()}`} className={cn(buttonVariants({ variant: 'secondary' }))}>
+            <a href={`/app/accounting/statements/export?${exportQuery}`} className={cn(buttonVariants({ variant: 'secondary' }))}>
               <Download className="h-4 w-4" />
               試算表CSV出力
             </a>

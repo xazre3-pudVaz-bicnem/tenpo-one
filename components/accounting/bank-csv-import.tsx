@@ -11,6 +11,7 @@ import { Table, TableWrap, THead, TBody, Tr, Th, Td } from '@/components/ui/tabl
 import { useToast } from '@/components/ui/toast';
 import { yen, formatDate } from '@/lib/format';
 import { CsvEncodingError, MAX_IMPORT_ROWS, decodeCsvFile, parseCsv } from '@/components/import/csv-parser';
+import { guessBankCsvMapping, isBankCsvMappingComplete, parseBankCsvRow, type BankCsvColumnMapping } from '@/lib/bank-csv';
 import {
   checkBankCsvDuplicates,
   importBankTransactionsCsv,
@@ -20,12 +21,7 @@ import {
 
 type Step = 'upload' | 'mapping' | 'preview' | 'result';
 
-interface ColumnMapping {
-  date: number | null;
-  description: number | null;
-  deposit: number | null;
-  withdrawal: number | null;
-}
+type ColumnMapping = BankCsvColumnMapping;
 
 interface PreviewRow {
   rowNumber: number;
@@ -41,27 +37,7 @@ interface PreviewRow {
   include: boolean;
 }
 
-/** 日付表記のゆらぎ（区切り文字違い）を吸収して 'YYYY-MM-DD' へ正規化する */
-function normalizeDate(raw: string): string | null {
-  const s = raw.trim().replace(/[／．]/g, '/').replace(/[.]/g, '-').replace(/\//g, '-');
-  const m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
-  if (!m) return null;
-  const y = m[1];
-  const mo = m[2].padStart(2, '0');
-  const d = m[3].padStart(2, '0');
-  const iso = `${y}-${mo}-${d}`;
-  const date = new Date(`${iso}T00:00:00Z`);
-  if (Number.isNaN(date.getTime())) return null;
-  return iso;
-}
-
-/** 金額表記（カンマ・円記号）を除去して整数化する */
-function normalizeAmount(raw: string): number {
-  const cleaned = raw.replace(/[¥,円\s]/g, '').trim();
-  if (!cleaned) return 0;
-  const n = Number(cleaned);
-  return Number.isFinite(n) ? Math.round(Math.abs(n)) : NaN;
-}
+// 日付・金額の読み取り・列の推定は lib/bank-csv.ts（iPad ネイティブの取込と同じ）
 
 export function BankCsvImport({ bankAccountId }: { bankAccountId: string }) {
   const router = useRouter();
@@ -114,50 +90,27 @@ export function BankCsvImport({ bankAccountId }: { bankAccountId: string }) {
       setHeaders(headerRow);
       setDataRows(nonEmpty);
       // 列名からの簡易自動推定
-      const findCol = (keywords: string[]) => headerRow.findIndex((h) => keywords.some((k) => h.includes(k)));
-      setMapping({
-        date: ((): number | null => { const i = findCol(['日付', '年月日', 'date']); return i >= 0 ? i : null; })(),
-        description: ((): number | null => { const i = findCol(['摘要', '内容', '取引内容', 'description']); return i >= 0 ? i : null; })(),
-        deposit: ((): number | null => { const i = findCol(['入金', 'お預け入れ', 'deposit']); return i >= 0 ? i : null; })(),
-        withdrawal: ((): number | null => { const i = findCol(['出金', 'お引き出し', 'withdrawal']); return i >= 0 ? i : null; })(),
-      });
+      setMapping(guessBankCsvMapping(headerRow));
       setStep('mapping');
     } catch (err) {
       setUploadError(err instanceof CsvEncodingError ? err.message : 'ファイルの読み込みに失敗しました');
     }
   }
 
-  const mappingComplete = mapping.date != null && mapping.description != null && (mapping.deposit != null || mapping.withdrawal != null);
+  const mappingComplete = isBankCsvMappingComplete(mapping);
 
   async function handleProceedToPreview() {
     const rows: PreviewRow[] = dataRows.map((cells, i): PreviewRow => {
-      const rowNumber = i + 1;
-      const dateRaw = mapping.date != null ? cells[mapping.date] ?? '' : '';
-      const descRaw = mapping.description != null ? cells[mapping.description] ?? '' : '';
-      const depositRaw = mapping.deposit != null ? cells[mapping.deposit] ?? '' : '';
-      const withdrawalRaw = mapping.withdrawal != null ? cells[mapping.withdrawal] ?? '' : '';
-
-      const date = normalizeDate(dateRaw);
-      const deposit = normalizeAmount(depositRaw);
-      const withdrawal = normalizeAmount(withdrawalRaw);
-
       const base = {
-        rowNumber,
+        rowNumber: i + 1,
         raw: cells,
         exactDuplicate: false,
         suspiciousDuplicate: false,
         suspiciousDescriptions: [] as string[],
         include: true,
       };
-      if (!date) return { ...base, parsed: null, error: `日付を解釈できません（${dateRaw}）` };
-      if (!descRaw.trim()) return { ...base, parsed: null, error: '摘要が空です' };
-      if (Number.isNaN(deposit) || Number.isNaN(withdrawal)) {
-        return { ...base, parsed: null, error: '金額を解釈できません' };
-      }
-      if (deposit === 0 && withdrawal === 0) return { ...base, parsed: null, error: '入金・出金がいずれも0円です' };
-      if (deposit > 0 && withdrawal > 0) return { ...base, parsed: null, error: '入金・出金が両方入力されています' };
-
-      return { ...base, parsed: { date, description: descRaw.trim(), deposit, withdrawal }, error: null };
+      const { parsed, error } = parseBankCsvRow(cells, mapping);
+      return { ...base, parsed, error };
     });
     setPreviewRows(rows);
     setStep('preview');
