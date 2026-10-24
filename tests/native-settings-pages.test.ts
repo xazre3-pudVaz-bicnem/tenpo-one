@@ -117,4 +117,16 @@ describe('native settings pages (設定の中の画面) actions', () => {
     expect(parseNativeSettingsPageAction({ type: 'icalRegenerate' })).toEqual({ ok: true, action: { type: 'icalRegenerate' } });
     expect(parseNativeSettingsPageAction({ type: 'remindersPrepare' }).ok).toBe(true);
   });
+
+  it('企業情報: 会社名は必須、KPI は boolean', () => {
+    const ok = parseNativeSettingsPageAction({ type: 'companySave', company: { name: 'D&DREAM', billingEmail: 'a@b.co' } });
+    expect(ok.ok).toBe(true);
+    if (ok.ok && ok.action.type === 'companySave') {
+      expect(ok.action.company.nameKana).toBe('');
+      expect(ok.action.company.billingEmail).toBe('a@b.co');
+    }
+    expect(parseNativeSettingsPageAction({ type: 'companySave', company: { name: '  ' } }).ok).toBe(false);
+    expect(parseNativeSettingsPageAction({ type: 'kpiSave', includeTakeoutGuests: false }).ok).toBe(true);
+    expect(parseNativeSettingsPageAction({ type: 'kpiSave', includeTakeoutGuests: 'no' }).ok).toBe(false);
+  });
 });

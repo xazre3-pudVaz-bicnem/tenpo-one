@@ -31,6 +31,9 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
     case payments = "payments"
     case staff = "staff"
     case reservationBook = "reservationBook"
+    case integrations = "integrations"
+    case audit = "audit"
+    case company = "company"
     var id: String { rawValue }
 
     /// Web の道（クエリは見ない）
@@ -58,6 +61,9 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
         case .payments: return "/app/settings/payments"
         case .staff: return "/app/staff"
         case .reservationBook: return "/app/settings/reservation-book"
+        case .integrations: return "/app/settings/integrations"
+        case .audit: return "/app/settings/audit"
+        case .company: return "/app/settings/company"
         }
     }
     var title: String {
@@ -84,6 +90,9 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
         case .payments: return "決済・端末"
         case .staff: return "スタッフ管理"
         case .reservationBook: return "予約台帳設定"
+        case .integrations: return "連携"
+        case .audit: return "監査ログ"
+        case .company: return "企業情報"
         }
     }
     var en: String {
@@ -110,6 +119,9 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
         case .payments: return "Payments"
         case .staff: return "Staff"
         case .reservationBook: return "Reservation book"
+        case .integrations: return "Integrations"
+        case .audit: return "Audit log"
+        case .company: return "Company"
         }
     }
 
@@ -147,6 +159,9 @@ struct NativeSettingsPageScreen: View {
         case .payments: NativePaymentsScreen()
         case .staff: NativeStaffScreen()
         case .reservationBook: NativeReservationBookScreen()
+        case .integrations: NativeIntegrationsScreen()
+        case .audit: NativeAuditScreen()
+        case .company: NativeCompanyScreen()
         }
     }
 }
@@ -4076,5 +4091,216 @@ struct NativeReservationBookView: View {
                 .padding(18)
             }
         }
+    }
+}
+
+// MARK: - 連携（Web の /app/settings/integrations と同じ。見るだけ）
+
+struct NIGRow: Codable, Identifiable, Hashable { let key: String; let name: String; let status: String; let tone: String; let note: String; let href: String?; let hrefLabel: String?; var id: String { key } }
+struct NIGMigration: Codable, Identifiable, Hashable { let key: String; let name: String; let note: String; var id: String { key } }
+struct NIGPayload: Codable { let store: NFNamed; let rows: [NIGRow]; let migration: [NIGMigration] }
+
+@MainActor final class NativeIntegrationsModel: NSPModel<NIGPayload> { init() { super.init(part: "integrations") } }
+
+struct NativeIntegrationsScreen: View {
+    @StateObject private var model = NativeIntegrationsModel()
+    @EnvironmentObject var state: AppState
+    var body: some View {
+        NSPFrame(storeName: model.payload?.store.name ?? "", title: "連携", en: "Integrations", loaded: model.payload != nil, error: model.error, toast: $model.toast, onBack: { state.goNativeSettings() }, retry: { await model.refresh() }) {
+            if let p = model.payload {
+                NSPCard(title: "連携の状態", en: "虚偽の「接続済み」表示は行いません") {
+                    VStack(spacing: 0) {
+                        ForEach(p.rows) { r in
+                            HStack(alignment: .center, spacing: 14) {
+                                Circle().fill(toneColor(r.tone)).frame(width: 10, height: 10)
+                                VStack(alignment: .leading, spacing: 3) {
+                                    HStack(spacing: 8) {
+                                        Text(r.name).font(.system(size: 15, weight: .bold)).foregroundColor(NFColor.ink)
+                                        Text(r.status).font(.system(size: 11, weight: .heavy)).foregroundColor(toneColor(r.tone)).padding(.horizontal, 7).padding(.vertical, 2).overlay(Capsule().stroke(toneColor(r.tone).opacity(0.5), lineWidth: 1))
+                                    }
+                                    Text(r.note).font(.system(size: 12.5)).foregroundColor(NFColor.ink3).fixedSize(horizontal: false, vertical: true)
+                                }
+                                Spacer()
+                                if let href = r.href, let label = r.hrefLabel {
+                                    NSPButton(text: label, icon: "arrow.right") {
+                                        if let key = NativeSettingsPageKey.from(path: href) { state.openSettingsPage(key, webPath: href) }
+                                        else if href == "/app/pos/settings" { state.goNativeSettings() }
+                                        else { state.leaveNativeFloor(to: href) }
+                                    }
+                                }
+                            }
+                            .padding(.horizontal, 18).padding(.vertical, 12)
+                            .overlay(alignment: .bottom) { Rectangle().fill(NFColor.line).frame(height: 1) }
+                        }
+                    }
+                }
+                NSPCard(title: "会計・勤怠ソフトからの移行・互換", en: "オプション", note: "TENPO ONE 単独で会計・勤怠・給与が完結します。既に使っている店舗が乗り換える・併用するときのデータ移行の現状だけを示します") {
+                    VStack(spacing: 0) {
+                        ForEach(p.migration) { m in
+                            HStack(spacing: 14) {
+                                Text(m.name).font(.system(size: 15, weight: .bold)).foregroundColor(NFColor.ink).frame(width: 240, alignment: .leading)
+                                Text(m.note).font(.system(size: 12.5)).foregroundColor(NFColor.ink3)
+                                Spacer()
+                            }
+                            .padding(.horizontal, 18).frame(minHeight: 48)
+                            .overlay(alignment: .bottom) { Rectangle().fill(NFColor.line).frame(height: 1) }
+                        }
+                        Text("CSV の出力：仕訳は「会計」、勤怠は「勤怠」、給与明細は「給与」、請求書・経費は「請求書」の各画面から").font(.system(size: 12.5)).foregroundColor(NFColor.ink2).padding(18)
+                    }
+                }
+            }
+        }
+        .task { await model.refresh() }
+    }
+    private func toneColor(_ t: String) -> Color {
+        switch t { case "success": return NFColor.success; case "warning": return NFColor.saffron; case "danger": return NFColor.danger; case "primary": return NFColor.iris; default: return NFColor.ink3 }
+    }
+}
+
+// MARK: - 監査ログ（Web の /app/settings/audit と同じ。新しい順・最大200件、絞り込みはこの iPad で）
+
+struct NAULog: Codable, Identifiable, Hashable {
+    let id: String; let createdAt: String; let createdLabel: String; let actorName: String; let actorRole: String?
+    let action: String; let targetTable: String?; let targetId: String?; let before: String?; let after: String?; let note: String?
+    var hasDetail: Bool { before != nil || after != nil || !(note ?? "").isEmpty }
+}
+struct NAUPayload: Codable { let store: NFNamed; let rows: [NAULog] }
+
+@MainActor
+final class NativeAuditModel: NSPModel<NAUPayload> {
+    @Published var query = ""
+    @Published var table = ""
+    @Published var open: String?
+    init() { super.init(part: "audit") }
+    var filtered: [NAULog] {
+        let q = query.trimmingCharacters(in: .whitespaces).lowercased()
+        let t = table.trimmingCharacters(in: .whitespaces).lowercased()
+        return (payload?.rows ?? []).filter { r in
+            (q.isEmpty || r.action.lowercased().contains(q) || r.actorName.lowercased().contains(q) || (r.note ?? "").lowercased().contains(q)) && (t.isEmpty || (r.targetTable ?? "").lowercased().contains(t))
+        }
+    }
+}
+
+struct NativeAuditScreen: View {
+    @StateObject private var model = NativeAuditModel()
+    @EnvironmentObject var state: AppState
+    var body: some View {
+        NSPFrame(storeName: model.payload?.store.name ?? "", title: "監査ログ", en: "Audit log", loaded: model.payload != nil, error: model.error, toast: $model.toast, onBack: { state.goNativeSettings() }, retry: { await model.refresh() }) {
+            if model.payload != nil {
+                HStack(spacing: 10) {
+                    NSPInput(text: $model.query, placeholder: "アクション・操作者で探す（staff.role_change 等）", width: 360)
+                    NSPInput(text: $model.table, placeholder: "対象テーブル（memberships 等）", width: 260)
+                    Spacer()
+                    NSPButton(text: "読み直す", icon: "arrow.clockwise") { Task { await model.refresh() } }
+                }
+                NSPCard(title: "操作履歴", en: "\(model.filtered.count) 件（新しい順・最大200件）") {
+                    VStack(spacing: 0) {
+                        if model.filtered.isEmpty { Text("該当する操作履歴がありません").font(.system(size: 14)).foregroundColor(NFColor.ink3).padding(18) }
+                        ForEach(model.filtered) { r in
+                            let open = model.open == r.id
+                            Button { if r.hasDetail { model.open = open ? nil : r.id } } label: {
+                                HStack(spacing: 10) {
+                                    Image(systemName: open ? "chevron.down" : "chevron.right").font(.system(size: 11, weight: .bold)).foregroundColor(r.hasDetail ? NFColor.ink3 : .clear).frame(width: 14)
+                                    Text(r.createdLabel).font(.system(size: 12.5)).foregroundColor(NFColor.ink2).monospacedDigit().frame(width: 150, alignment: .leading)
+                                    VStack(alignment: .leading, spacing: 0) {
+                                        Text(r.actorName).font(.system(size: 13.5, weight: .bold)).foregroundColor(NFColor.ink).lineLimit(1)
+                                        if let role = r.actorRole { Text(role).font(.system(size: 11)).foregroundColor(NFColor.ink3) }
+                                    }
+                                    .frame(width: 150, alignment: .leading)
+                                    Text(r.action).font(.system(size: 12, weight: .bold, design: .monospaced)).foregroundColor(NFColor.iris).padding(.horizontal, 8).padding(.vertical, 3).background(Capsule().fill(NFColor.irisSoft)).lineLimit(1)
+                                    Text(r.targetTable ?? "—").font(.system(size: 12.5)).foregroundColor(NFColor.ink2).frame(width: 140, alignment: .leading).lineLimit(1)
+                                    Text(r.targetId ?? "—").font(.system(size: 11, design: .monospaced)).foregroundColor(NFColor.ink3).lineLimit(1).truncationMode(.middle)
+                                    Spacer()
+                                }
+                                .padding(.horizontal, 18).frame(minHeight: 46)
+                                .background(open ? NFColor.lilacSoft : Color.white)
+                                .overlay(alignment: .bottom) { Rectangle().fill(NFColor.line).frame(height: 1) }
+                            }
+                            .buttonStyle(.plain)
+                            if open {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    if let n = r.note, !n.isEmpty { Text("メモ: \(n)").font(.system(size: 13)).foregroundColor(NFColor.ink2) }
+                                    HStack(alignment: .top, spacing: 12) {
+                                        jsonBox("変更前", r.before)
+                                        jsonBox("変更後", r.after)
+                                    }
+                                }
+                                .padding(18)
+                                .background(NFColor.lilacSoft.opacity(0.5))
+                                .overlay(alignment: .bottom) { Rectangle().fill(NFColor.line).frame(height: 1) }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .task { await model.refresh() }
+    }
+    private func jsonBox(_ title: String, _ body: String?) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title).font(.system(size: 12, weight: .bold)).foregroundColor(NFColor.ink3)
+            ScrollView { Text(body ?? "—").font(.system(size: 11.5, design: .monospaced)).foregroundColor(NFColor.ink2).frame(maxWidth: .infinity, alignment: .leading).padding(10) }
+                .frame(maxHeight: 220).background(RoundedRectangle(cornerRadius: 10).fill(Color.white)).overlay(RoundedRectangle(cornerRadius: 10).stroke(NFColor.line, lineWidth: 1))
+        }
+        .frame(maxWidth: .infinity)
+    }
+}
+
+// MARK: - 企業情報（Web の /app/settings/company と同じ）
+
+struct NCOFields: Codable, Hashable { var name: String; var nameKana: String; var postalCode: String; var address: String; var phone: String; var billingName: String; var billingEmail: String; var billingNote: String }
+struct NCOPayload: Codable { let store: NFNamed; let canEdit: Bool; let company: NCOFields; let includeTakeoutGuests: Bool }
+
+@MainActor
+final class NativeCompanyModel: NSPModel<NCOPayload> {
+    @Published var f = NCOFields(name: "", nameKana: "", postalCode: "", address: "", phone: "", billingName: "", billingEmail: "", billingNote: "")
+    init() { super.init(part: "company") }
+    override func loaded(_ p: NCOPayload) { f = p.company }
+    var dirty: Bool { payload.map { $0.company != f } ?? false }
+    func save() async {
+        let body: [String: Any] = ["type": "companySave", "company": ["name": f.name, "nameKana": f.nameKana, "postalCode": f.postalCode, "address": f.address, "phone": f.phone, "billingName": f.billingName, "billingEmail": f.billingEmail, "billingNote": f.billingNote]]
+        _ = await run("save", body, done: "企業情報を保存しました")
+    }
+    func setKpi(_ on: Bool) async { _ = await run("kpi", ["type": "kpiSave", "includeTakeoutGuests": on], done: "KPI設定を保存しました") }
+}
+
+struct NativeCompanyScreen: View {
+    @StateObject private var model = NativeCompanyModel()
+    @EnvironmentObject var state: AppState
+    var body: some View {
+        NSPFrame(storeName: model.payload?.store.name ?? "", title: "企業情報", en: "Company", loaded: model.payload != nil, error: model.error, toast: $model.toast, onBack: { state.goNativeSettings() }, retry: { await model.refresh() }) {
+            if let p = model.payload {
+                NSPCard(title: "基本情報", en: "Company") {
+                    VStack(spacing: 0) {
+                        NSPRow(label: "会社名", required: true) { NSPInput(text: $model.f.name, placeholder: "株式会社○○", enabled: p.canEdit, width: 420) }
+                        NSPRow(label: "会社名（カナ）") { NSPInput(text: $model.f.nameKana, placeholder: "カブシキガイシャ○○", enabled: p.canEdit, width: 420) }
+                        NSPRow(label: "郵便番号") { NSPInput(text: $model.f.postalCode, placeholder: "123-4567", enabled: p.canEdit, width: 180, keyboard: .numbersAndPunctuation) }
+                        NSPRow(label: "住所") { NSPInput(text: $model.f.address, placeholder: "東京都…", enabled: p.canEdit) }
+                        NSPRow(label: "電話番号") { NSPInput(text: $model.f.phone, placeholder: "03-1234-5678", enabled: p.canEdit, width: 240, keyboard: .phonePad) }
+                    }
+                }
+                NSPCard(title: "請求情報", en: "Billing") {
+                    VStack(spacing: 0) {
+                        NSPRow(label: "請求先名") { NSPInput(text: $model.f.billingName, placeholder: "経理部 御中 など", enabled: p.canEdit, width: 420) }
+                        NSPRow(label: "請求先メール") { NSPInput(text: $model.f.billingEmail, placeholder: "billing@example.com", enabled: p.canEdit, width: 420, keyboard: .emailAddress) }
+                        NSPRow(label: "備考") { NSPInput(text: $model.f.billingNote, placeholder: "請求書送付先や支払条件など", enabled: p.canEdit) }
+                        if p.canEdit { HStack { Spacer(); NSPButton(text: "保存する", primary: true, busy: model.busy == "save", disabled: !model.dirty || model.f.name.trimmingCharacters(in: .whitespaces).isEmpty) { Task { await model.save() } } }.padding(18) }
+                    }
+                }
+                NSPCard(title: "KPI設定", en: "客数の数え方") {
+                    HStack(spacing: 14) {
+                        NSPToggle(on: p.includeTakeoutGuests, disabled: !p.canEdit || model.busy != nil) { Task { await model.setKpi(!p.includeTakeoutGuests) } }
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("テイクアウト・デリバリーの客数を客数KPIに含める").font(.system(size: 14, weight: .bold)).foregroundColor(NFColor.ink)
+                            Text("オフにすると、ダッシュボード・レポート・予算・日報の客数・客単価は店内飲食だけで算出").font(.system(size: 12)).foregroundColor(NFColor.ink3)
+                        }
+                        Spacer()
+                    }
+                    .padding(18)
+                }
+                Text("ロゴのアップロードは今後のアップデートで対応予定").font(.system(size: 12)).foregroundColor(NFColor.ink3)
+            }
+        }
+        .task { await model.refresh() }
     }
 }

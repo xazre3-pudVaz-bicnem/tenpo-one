@@ -98,7 +98,21 @@ export type NativeSettingsPageAction =
   | { type: 'snsLinksSave'; instagram: string; line: string; facebook: string; x: string }
   | { type: 'icalRegenerate' }
   | { type: 'icalRevoke' }
-  | { type: 'remindersPrepare' };
+  | { type: 'remindersPrepare' }
+  /** 企業情報（/app/settings/company。actions.ts） */
+  | { type: 'companySave'; company: NativeCompanyFields }
+  | { type: 'kpiSave'; includeTakeoutGuests: boolean };
+
+export interface NativeCompanyFields {
+  name: string;
+  nameKana: string;
+  postalCode: string;
+  address: string;
+  phone: string;
+  billingName: string;
+  billingEmail: string;
+  billingNote: string;
+}
 
 export interface NativePointBrand {
   key: string;
@@ -222,6 +236,8 @@ export const NATIVE_SETTINGS_PAGE_ACTION_TYPES: readonly NativeSettingsPageActio
   'icalRegenerate',
   'icalRevoke',
   'remindersPrepare',
+  'companySave',
+  'kpiSave',
 ];
 
 export function isNativeSettingsPageActionType(v: unknown): v is NativeSettingsPageActionType {
@@ -729,7 +745,61 @@ export function parseNativeSettingsPageAction(raw: unknown): Parsed {
     const url = (v: unknown) => (typeof v === 'string' ? v.trim().slice(0, 300) : '');
     return { ok: true, action: { type: 'snsLinksSave', instagram: url(b.instagram), line: url(b.line), facebook: url(b.facebook), x: url(b.x) } };
   }
+  // 企業情報
+  if (b.type === 'companySave') {
+    const c = (b.company ?? {}) as Record<string, unknown>;
+    const str = (v: unknown, max = 200) => (typeof v === 'string' ? v.slice(0, max) : '');
+    const company: NativeCompanyFields = {
+      name: str(c.name, 100),
+      nameKana: str(c.nameKana, 100),
+      postalCode: str(c.postalCode, 20),
+      address: str(c.address, 300),
+      phone: str(c.phone, 40),
+      billingName: str(c.billingName, 100),
+      billingEmail: str(c.billingEmail, 254),
+      billingNote: str(c.billingNote, 1000),
+    };
+    if (!company.name.trim()) return bad('会社名を入力してください');
+    return { ok: true, action: { type: 'companySave', company } };
+  }
+  if (b.type === 'kpiSave') {
+    if (typeof b.includeTakeoutGuests !== 'boolean') return bad();
+    return { ok: true, action: { type: 'kpiSave', includeTakeoutGuests: b.includeTakeoutGuests } };
+  }
   return bad();
+}
+
+/** 連携の画面の読み込み（GET ?part=integrations。見るだけ） */
+export interface NativeIntegrationsPayload {
+  store: { id: string; name: string };
+  rows: { key: string; name: string; status: string; tone: 'gray' | 'primary' | 'danger' | 'warning' | 'success'; note: string; href: string | null; hrefLabel: string | null }[];
+  migration: { key: string; name: string; note: string }[];
+}
+
+/** 監査ログの画面の読み込み（GET ?part=audit。新しい順・最大200件。絞り込みはアプリ側） */
+export interface NativeAuditPayload {
+  store: { id: string; name: string };
+  rows: {
+    id: string;
+    createdAt: string;
+    createdLabel: string;
+    actorName: string;
+    actorRole: string | null;
+    action: string;
+    targetTable: string | null;
+    targetId: string | null;
+    before: string | null;
+    after: string | null;
+    note: string | null;
+  }[];
+}
+
+/** 企業情報の画面の読み込み（GET ?part=company） */
+export interface NativeCompanyPayload {
+  store: { id: string; name: string };
+  canEdit: boolean;
+  company: NativeCompanyFields;
+  includeTakeoutGuests: boolean;
 }
 
 /** 予約台帳設定の画面の読み込み（GET ?part=reservationBook） */

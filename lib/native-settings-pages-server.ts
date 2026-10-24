@@ -18,7 +18,9 @@ import { saveLoyaltySettings } from '@/app/app/settings/loyalty/actions';
 import { resetAlertRuleToDefault, upsertAlertRule } from '@/app/app/settings/alerts/actions';
 import { ALERT_RULE_DEFAULTS, ALERT_RULE_KEYS, ALERT_RULE_LABELS, ALERT_RULE_UNITS, type AlertRuleKey } from '@/components/dashboard/alert-rules';
 import { deleteApprovalRule, saveApprovalRule } from '@/app/app/settings/approvals/actions';
-import { canAssignRole, HQ_ROLES, ROLE_LABELS, ROLES, roleOutranks, type Role } from '@/lib/permissions';
+import { canAssignRole, HQ_ROLES, isHqRole, ROLE_LABELS, ROLES, roleOutranks, type Role } from '@/lib/permissions';
+import { updateCompanyInfo, updateKpiSettings } from '@/app/app/settings/company/actions';
+import { formatDateTime } from '@/lib/format';
 import { changeMemberRole, changeMemberStores, inviteStaff, resetMemberPassword, setMemberPin, setMemberStatus } from '@/app/app/staff/actions';
 import { deleteAccount, installStandardAccounts, saveAccount } from '@/app/app/settings/accounts/actions';
 import { ACCOUNT_CATEGORY_LABELS, ACCOUNT_CATEGORY_ORDER, SUB_TYPE_LABELS, type SubType } from '@/components/accounting/labels';
@@ -55,6 +57,9 @@ import type {
   NativePaymentsPayload,
   NativeStaffPayload,
   NativeReservationBookPayload,
+  NativeIntegrationsPayload,
+  NativeAuditPayload,
+  NativeCompanyPayload,
   NativeMenuItemsPayload,
   NativeOptionsPayload,
   NativeQrServicePayload,
@@ -74,7 +79,7 @@ type Supabase = Awaited<ReturnType<typeof createClient>>;
 type Store = { id: string; name: string };
 
 /** 設定の中の画面の名前（GET ?part=） */
-export const NATIVE_SETTINGS_PAGE_PARTS = ['soldout', 'clerks', 'hours', 'store', 'tax', 'loyalty', 'alerts', 'approvals', 'accounts', 'handy', 'categories', 'menuItems', 'options', 'qrService', 'menuBook', 'payments', 'staff', 'reservationBook'] as const;
+export const NATIVE_SETTINGS_PAGE_PARTS = ['soldout', 'clerks', 'hours', 'store', 'tax', 'loyalty', 'alerts', 'approvals', 'accounts', 'handy', 'categories', 'menuItems', 'options', 'qrService', 'menuBook', 'payments', 'staff', 'reservationBook', 'integrations', 'audit', 'company'] as const;
 export type NativeSettingsPagePart = (typeof NATIVE_SETTINGS_PAGE_PARTS)[number];
 export function isNativeSettingsPagePart(v: unknown): v is NativeSettingsPagePart {
   return typeof v === 'string' && (NATIVE_SETTINGS_PAGE_PARTS as readonly string[]).includes(v);
@@ -110,7 +115,10 @@ export async function loadNativeSettingsPage(
         | NativeMenuBookPayload
         | NativePaymentsPayload
         | NativeStaffPayload
-        | NativeReservationBookPayload;
+        | NativeReservationBookPayload
+        | NativeIntegrationsPayload
+        | NativeAuditPayload
+        | NativeCompanyPayload;
     }
   | { ok: false; error: string }
 > {
@@ -508,6 +516,119 @@ export async function loadNativeSettingsPage(
     const { data } = await supabase.from('store_settings').select('settings').eq('store_id', store.id).maybeSingle();
     const cur = qrServiceFrom((data as { settings?: unknown } | null)?.settings ?? null);
     return { ok: true, payload: { store, canEdit: can(ctx.role, 'menu.manage'), enabled: cur.enabled, items: cur.items, maxItems: QR_SERVICE_MAX_ITEMS } };
+  }
+  if (part === 'integrations') {
+    // Web の app/app/settings/integrations/page.tsx と同じ（虚偽の「接続済み」表示は行わない）
+    const { count: printerCount } = await supabase.from('printer_configs').select('id', { count: 'exact', head: true }).eq('store_id', store.id).eq('status', 'active');
+    const configured = isPaymentConfigured();
+    const testMode = isPaymentTestMode();
+    const n = printerCount ?? 0;
+    return {
+      ok: true,
+      payload: {
+        store,
+        rows: [
+          {
+            key: 'stripe',
+            name: 'Stripe（決済）',
+            status: !configured ? '未接続' : testMode ? 'テストモード' : '接続済み',
+            tone: !configured ? 'danger' : testMode ? 'warning' : 'success',
+            note: configured
+              ? testMode
+                ? 'テストキーで接続されています。実際の課金・入金は発生しません'
+                : '本番キー（sk_live_）が設定されています。実機Terminalでの検証が完了するまで本番決済の利用は推奨していません'
+              : '環境変数（STRIPE_SECRET_KEY 等）を設定すると利用できます。秘密鍵はDBに保存しません',
+            href: '/app/settings/payments',
+            hrefLabel: '決済・端末',
+          },
+          {
+            key: 'printers',
+            name: 'プリンター',
+            status: n > 0 ? '設定可能' : '未接続',
+            tone: n > 0 ? 'primary' : 'danger',
+            note: n > 0 ? `${n}台のプリンター設定があります` : 'プリンターが未登録です',
+            href: '/app/pos/settings',
+            hrefLabel: 'ハードウェア',
+          },
+          { key: 'line', name: 'LINE', status: '未対応', tone: 'gray', note: '予約通知・顧客連携（LINE公式アカウント）は開発予定です', href: null, hrefLabel: null },
+          { key: 'gourmet_sites', name: 'グルメサイト予約（ぐるなび・食べログ等）', status: '未対応', tone: 'gray', note: '外部予約サイトとの在庫・予約連携は開発予定です（メール取り込みは「予約台帳設定 → グルメ連携」）', href: '/app/settings/reservation-book', hrefLabel: '予約台帳設定' },
+        ],
+        migration: [
+          { key: 'freee', name: 'freee会計', note: 'API連携は未実装。データのやり取りはCSV' },
+          { key: 'moneyforward', name: 'MoneyForward クラウド', note: 'API連携は未実装。データのやり取りはCSV' },
+          { key: 'king_of_time', name: 'KING OF TIME（勤怠）', note: 'API連携は未実装。データのやり取りはCSV' },
+        ],
+      },
+    };
+  }
+  if (part === 'audit') {
+    // Web の app/app/settings/audit/page.tsx と同じ（requirePermission('audit.view')）
+    if (!can(ctx.role, 'audit.view')) return { ok: false, error: '監査ログを見る権限がありません' };
+    if (!ctx.organizationId) return { ok: false, error: '企業が見つかりません' };
+    let query = supabase
+      .from('audit_logs')
+      .select('id, actor_id, actor_role, action, target_table, target_id, before_data, after_data, note, created_at, store_id')
+      .eq('organization_id', ctx.organizationId)
+      .order('created_at', { ascending: false })
+      .limit(200);
+    if (!isHqRole(ctx.role)) {
+      const storeIds = ctx.stores.map((s) => s.id);
+      query = storeIds.length > 0 ? query.in('store_id', storeIds) : query.eq('store_id', '00000000-0000-0000-0000-000000000000');
+    }
+    const { data: logs } = await query;
+    const rows = logs ?? [];
+    const actorIds = Array.from(new Set(rows.map((r) => r.actor_id).filter((id): id is string => !!id)));
+    let actorNames = new Map<string, string>();
+    if (actorIds.length > 0) {
+      const { data: actors } = await supabase.from('profiles').select('id, display_name').in('id', actorIds);
+      actorNames = new Map((actors ?? []).map((a) => [a.id as string, a.display_name as string]));
+    }
+    const pretty = (v: unknown): string | null => (v == null ? null : JSON.stringify(v, null, 2).slice(0, 4000));
+    return {
+      ok: true,
+      payload: {
+        store,
+        rows: rows.map((r) => ({
+          id: r.id as string,
+          createdAt: r.created_at as string,
+          createdLabel: formatDateTime(r.created_at as string),
+          actorName: r.actor_id ? (actorNames.get(r.actor_id as string) ?? '不明なユーザー') : 'システム',
+          actorRole: r.actor_role ? (ROLE_LABELS[r.actor_role as Role] ?? (r.actor_role as string)) : null,
+          action: r.action as string,
+          targetTable: (r.target_table as string | null) ?? null,
+          targetId: (r.target_id as string | null) ?? null,
+          before: pretty(r.before_data),
+          after: pretty(r.after_data),
+          note: (r.note as string | null) ?? null,
+        })),
+      },
+    };
+  }
+  if (part === 'company') {
+    // Web の app/app/settings/company/page.tsx と同じ（requirePermission('org.settings')）
+    if (!can(ctx.role, 'org.settings')) return { ok: false, error: '企業情報を見る権限がありません（本社のアカウントでログインしてください）' };
+    if (!ctx.organizationId) return { ok: false, error: '企業が見つかりません' };
+    const { data: org } = await supabase.from('organizations').select('name, name_kana, postal_code, address, phone, billing_info, kpi_settings').eq('id', ctx.organizationId).maybeSingle();
+    const billing = ((org?.billing_info ?? {}) as { name?: string; email?: string; note?: string }) ?? {};
+    const kpi = ((org?.kpi_settings ?? {}) as { includeTakeoutGuests?: boolean }) ?? {};
+    return {
+      ok: true,
+      payload: {
+        store,
+        canEdit: true,
+        company: {
+          name: (org?.name as string | null) ?? '',
+          nameKana: (org?.name_kana as string | null) ?? '',
+          postalCode: (org?.postal_code as string | null) ?? '',
+          address: (org?.address as string | null) ?? '',
+          phone: (org?.phone as string | null) ?? '',
+          billingName: billing.name ?? '',
+          billingEmail: billing.email ?? '',
+          billingNote: billing.note ?? '',
+        },
+        includeTakeoutGuests: kpi.includeTakeoutGuests ?? true,
+      },
+    };
   }
   if (part === 'reservationBook') {
     // Web の app/app/settings/reservation-book/page.tsx と同じ（4つのタブぶんを一度に）
@@ -941,6 +1062,10 @@ export async function runNativeSettingsPageAction(
       return done(await regenerateIcalToken(store.id));
     case 'icalRevoke':
       return done(await revokeIcalToken(store.id));
+    case 'companySave':
+      return done(await updateCompanyInfo(action.company));
+    case 'kpiSave':
+      return done(await updateKpiSettings(action.includeTakeoutGuests));
     case 'remindersPrepare': {
       // この Server Action はエラーを throw する → 呼び出し側（route）が errorText で返す
       const r = await prepareReservationReminders(store.id);
