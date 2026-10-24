@@ -15,7 +15,7 @@ import {
 } from '@/lib/crm';
 import { RESERVATION_STATUS, type ReservationStatus } from '@/lib/reservations';
 import { METHOD_LABELS } from '@/components/cash/labels';
-import { POINT_KIND_LABELS, type PointTransactionKind } from '@/components/customers/labels';
+import { CONSENT_LABELS, CONSENT_TYPES, MEMBER_RANK_LABELS, MEMBER_RANKS, POINT_KIND_LABELS, type MemberRank, type PointTransactionKind } from '@/components/customers/labels';
 
 type Supabase = Awaited<ReturnType<typeof createClient>>;
 
@@ -205,7 +205,19 @@ export async function loadNativeCustomers(
 /** 顧客詳細（GET ?part=customer&id=）。Web の /app/customers/[id] と同じ集計 */
 export interface NativeCustomerPayload {
   canWrite: boolean;
+  /** 統合・削除（customers.delete）・ポイント手動調整（cash.approve）・データ書き出し（csv.export）・匿名化（org.settings）。Web の詳細と同じ */
+  canDelete: boolean;
+  canAdjustPoints: boolean;
+  canExport: boolean;
+  canAnonymize: boolean;
   loyaltyEnabled: boolean;
+  /** 会員ランクの選択肢と表示名 */
+  memberRanks: { key: string; label: string }[];
+  memberRankLabel: string | null;
+  /** 同意状態（Web の ConsentPanel と同じ3種類） */
+  consents: { type: string; label: string; granted: boolean; grantedAt: string | null }[];
+  /** 付与できるタグ（組織のタグ全部） */
+  allTags: { id: string; name: string; color: string }[];
   customer: {
     id: string; name: string; nameKana: string | null; phone: string | null; email: string | null; birthday: string | null; gender: string | null;
     postalCode: string | null; address: string | null; memberNo: string | null; memberRank: string | null; pointBalance: number;
@@ -258,6 +270,8 @@ export async function loadNativeCustomer(ctx: SessionContext, supabase: Supabase
     { data: paymentRows },
     { data: loyaltyRow },
     { data: pointRows },
+    { data: consentRows },
+    { data: allTagRows },
   ] = await Promise.all([
     supabase.from('customer_tag_links').select('customer_tags(id, name, color)').eq('customer_id', id),
     supabase.from('customer_notes').select('id, body, created_at, created_by').eq('customer_id', id).order('created_at', { ascending: false }),
@@ -267,6 +281,8 @@ export async function loadNativeCustomer(ctx: SessionContext, supabase: Supabase
     supabase.from('payments').select('id, method, amount, paid_at, stores(name), orders!inner(customer_id)').eq('orders.customer_id', id).order('paid_at', { ascending: false }).limit(20),
     supabase.from('loyalty_settings').select('enabled').eq('organization_id', ctx.organizationId).maybeSingle(),
     supabase.from('point_transactions').select('id, created_at, kind, points, balance_after, note, order_id').eq('customer_id', id).order('created_at', { ascending: false }).limit(20),
+    supabase.from('customer_consents').select('consent_type, granted, granted_at').eq('customer_id', id),
+    supabase.from('customer_tags').select('id, name, color').eq('organization_id', ctx.organizationId).order('name'),
   ]);
 
   const creatorIds = [...new Set((noteRows ?? []).map((n) => n.created_by as string | null).filter((v): v is string => !!v))];
@@ -312,9 +328,21 @@ export async function loadNativeCustomer(ctx: SessionContext, supabase: Supabase
     productMap.set(oi.name, cur);
   }
 
+  const consentMap = new Map((consentRows ?? []).map((r) => [r.consent_type as string, r]));
   return {
     canWrite: can(ctx.role, 'customers.write'),
+    canDelete: can(ctx.role, 'customers.delete'),
+    canAdjustPoints: can(ctx.role, 'cash.approve'),
+    canExport: can(ctx.role, 'csv.export'),
+    canAnonymize: can(ctx.role, 'org.settings'),
     loyaltyEnabled: loyaltyRow?.enabled ?? false,
+    memberRanks: MEMBER_RANKS.map((r) => ({ key: r, label: MEMBER_RANK_LABELS[r] })),
+    memberRankLabel: c.member_rank ? (MEMBER_RANK_LABELS[c.member_rank as MemberRank] ?? c.member_rank) : null,
+    consents: CONSENT_TYPES.map((t) => {
+      const r = consentMap.get(t);
+      return { type: t, label: CONSENT_LABELS[t], granted: !!r?.granted, grantedAt: (r?.granted_at as string | null) ?? null };
+    }),
+    allTags: (allTagRows ?? []).map((t) => ({ id: t.id as string, name: t.name as string, color: t.color as string })),
     customer: {
       id: c.id, name: c.name, nameKana: c.name_kana, phone: c.phone, email: c.email, birthday: c.birthday, gender: c.gender,
       postalCode: c.postal_code, address: c.address, memberNo: c.member_no, memberRank: c.member_rank, pointBalance: c.point_balance,
