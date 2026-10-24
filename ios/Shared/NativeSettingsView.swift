@@ -426,7 +426,8 @@ struct NativeSettingsView: View {
                 Spacer()
                 toggle(nativeOn) {
                     nativeOn.toggle()
-                    state.setNativePos(nativeOn)
+                    // OFF：Web の「レジの設定」を読み直す（Web 側のトグルも OFF で出る・印刷係は Web に戻る）
+                    state.setNativePos(nativeOn, reloadWeb: true)
                 }
             }
             .padding(.horizontal, 18).padding(.vertical, 14)
