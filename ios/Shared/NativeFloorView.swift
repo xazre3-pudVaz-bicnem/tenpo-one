@@ -339,6 +339,16 @@ struct NativeTableCard: View {
                 // 下段: 1 人あたり（左）・合計（右）を 1 行に（状態は下の帯に）
                 if let o = order {
                     VStack(spacing: 8) {
+                        // お客様の名前と来店経路はお金の線のすぐ上（2026-10-24 21:54 Ronnie）。
+                        // 名前が出れば顧客台帳とつながっている、出なければつながっていない（「顧客 未登録」は書かない）
+                        HStack(spacing: 6) {
+                            if let n = o.customerName ?? o.guestName {
+                                Text("\(stripSama(n)) 様").font(.system(size: 12, weight: .semibold)).foregroundColor(NFColor.ink2)
+                            }
+                            Text(o.sourceLabel).font(.system(size: 12, weight: .regular)).foregroundColor(NFColor.ink3)
+                            Spacer(minLength: 0)
+                        }
+                        .lineLimit(1)
                         Rectangle().fill(Color.black.opacity(0.07)).frame(height: 1)
                         HStack(alignment: .firstTextBaseline, spacing: 6) {
                             Text(o.guestCount > 0 ? "\(NT.yen(Int((Double(o.total) / Double(o.guestCount)).rounded())))/人" : "—/人")
@@ -525,8 +535,6 @@ struct NativeTableCard: View {
     private func occupied(_ o: NFOrder, state: NFTileState, next: NFUpcoming?) -> some View {
         let tt = o.tileTime(now: now)
         let visits = o.visitCount
-        let isNew = visits != nil && (visits ?? 0) <= 1
-        let name = o.customerName ?? o.guestName
         // 入店時刻と、時間制なら残り（無ければ経過）を「H:MM」で（USEN の卓と同じ情報を、うちの形で。2026-10-24 Ronnie）
         let hasLimit = o.course != nil
         let mins = hasLimit ? tt.left : tt.elapsed
@@ -561,11 +569,6 @@ struct NativeTableCard: View {
                     .foregroundColor(state == .over ? NFColor.danger : (state == .lo ? NFColor.loInk : NFColor.royal))
             }
             .font(.system(size: 12, weight: .semibold)).monospacedDigit().foregroundColor(NFColor.ink3)
-        }
-        HStack(spacing: 6) {
-            Text(name.map { "\(stripSama($0)) 様" } ?? (isNew ? "新規のお客様" : "顧客 未登録"))
-                .font(.system(size: 12, weight: .semibold)).foregroundColor(NFColor.ink2).lineLimit(1)
-            Text(o.sourceLabel).font(.system(size: 12, weight: .regular)).foregroundColor(NFColor.ink3).lineLimit(1)
         }
         if let next { nextLine(next, danger: true) }
     }
