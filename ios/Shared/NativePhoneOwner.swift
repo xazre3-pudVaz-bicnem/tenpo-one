@@ -26,6 +26,11 @@ enum NativePhoneOwnerRegistry {
         ("/app/tasks", "tasks"),
         ("/app/reservations", "reservations"), // 店舗台帳（NativePhoneOwnerLedger.swift）
         ("/app/customers", "customers"), // 顧客（NativePhoneOwnerCustomers.swift）
+        ("/app/cash", "cash"),
+        ("/app/cash/open", "cashClose"),
+        ("/app/cash/close", "cashClose"),
+        ("/app/expenses", "expenses"),
+        ("/app/scan", "scan"),
     ]
     static let paths: [String: String] = Dictionary(entries, uniquingKeysWith: { a, _ in a })
 
@@ -33,6 +38,8 @@ enum NativePhoneOwnerRegistry {
         guard AppConfig.isOwnHost(url) else { return nil }
         // ?web=1 は Web の画面のまま（返金・取消など、iPhone のネイティブに無い操作）
         if URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.contains(where: { $0.name == "web" }) == true { return nil }
+        // ScanSnap のまとめて取り込み（/app/scan#scan-bulk）と CSV の取り出し（/app/cash/export など）は Web のまま
+        if url.fragment == "scan-bulk" || url.path.hasSuffix("/export") { return nil }
         let path = url.path
         guard let b = paths.keys.filter({ path == $0 || path.hasPrefix($0 + "/") }).max(by: { $0.count < $1.count }), let key = paths[b] else { return nil }
         return NativeModuleRoute(key: key, url: url)
@@ -60,6 +67,10 @@ struct NativePhoneOwnerScreen: View {
         case "tasks": NativePhoneTasksScreen(route: route)
         case "reservations": NPOLedgerScreen(route: route)
         case "customers": NPOCustomersScreen(route: route)
+        case "cash": NativePhoneOwnerCashScreen(route: route)
+        case "cashClose": NativePhoneOwnerRegisterScreen(route: route)
+        case "expenses": NativePhoneOwnerExpensesScreen(route: route)
+        case "scan": NativePhoneOwnerScanScreen(route: route)
         default:
             // 知らない key：Web のまま見せる
             Color.clear.onAppear { state.phoneOwnerModule = nil }
