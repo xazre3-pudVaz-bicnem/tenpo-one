@@ -13,6 +13,28 @@ import { V2_STAFF_LINK, V2_TOP_LINKS, linkPath, v2OpenKeysForPath, type V2Link, 
 
 const STORAGE_KEY = 'tenpo-nav-v2-open';
 
+/**
+ * 左メニューのアイコンの色（2026-10-24 Ronnie「iPad の機能と同じ色で」）：iPad のホームのボタンのアイコンと同じ色
+ * （ios/Shared/NativeHomeView.swift の iconFor）。iPad に無いものは近い機能の色。文字は黒のまま（iPad と同じ）。
+ */
+const ICON_TONE: Record<string, string> = {
+  '/app/dashboard': '#1a5ad6',
+  '/app/now': '#1a5ad6',
+  '/app/staff': '#5c5650',
+  daicho: '#353057', // 店舗台帳（iPad の台帳のネイビー）
+  customers: '#6e63b8', // 客数のアイコンの紫
+  sales: '#0a3fa8', // 売上の数字の青
+  cash: '#1e8f62', // 即会計・入出金の緑
+  docs: '#1a5ad6', // 仕入・経費の青
+  accounting: '#5c5650',
+  register: '#1a5ad6', // オーダー・会計の青
+  purchasing: '#8a6100', // 在庫の茶
+  labor: '#f2a000', // ウォークインの橙
+  team: '#0f8a8a', // ドロアの青緑
+  settings: '#5c5650', // 設定の灰
+};
+const tone = (key: string) => ({ color: ICON_TONE[key] });
+
 // 2026-10-24 Ronnie「コンパクトに」：行を少し低く・サブの行を詰める
 const topRow =
   'flex h-9 items-center gap-2.5 rounded-lg px-2.5 text-[13.5px] font-medium text-ink-2 hover:bg-lilac-soft hover:text-royal aria-[current=page]:bg-iris-soft aria-[current=page]:font-bold aria-[current=page]:text-royal';
@@ -89,7 +111,7 @@ export function SidebarV2({
             return (
               <li key={l.href}>
                 <Link href={l.href} aria-current={current ? 'page' : undefined} className={topRow}>
-                  <NavIcon name={l.icon} className="h-[18px] w-[18px] shrink-0" />
+                  <NavIcon name={l.icon} className="h-[18px] w-[18px] shrink-0" style={tone(l.href)} />
                   {l.label}
                 </Link>
               </li>
@@ -112,7 +134,7 @@ export function SidebarV2({
                   return (
                     <li key={g.key}>
                       <Link href={only.href} aria-current={isCurrent(pathname, only.href) || hasActive ? 'page' : undefined} className={topRow}>
-                        <NavIcon name={g.icon} className="h-[18px] w-[18px] shrink-0" />
+                        <NavIcon name={g.icon} className="h-[18px] w-[18px] shrink-0" style={tone(g.key)} />
                         {only.label}
                       </Link>
                     </li>
@@ -126,7 +148,7 @@ export function SidebarV2({
                       aria-expanded={open}
                       className={cn(groupRow, hasActive && 'font-bold text-royal')}
                     >
-                      <NavIcon name={g.icon} className="h-[18px] w-[18px] shrink-0" />
+                      <NavIcon name={g.icon} className="h-[18px] w-[18px] shrink-0" style={tone(g.key)} />
                       <span className="min-w-0 flex-1 truncate">{g.label}</span>
                       <ChevronDown className={cn('h-4 w-4 shrink-0 text-ink-3 transition-transform', !open && '-rotate-90')} />
                     </button>
@@ -173,7 +195,7 @@ export function SidebarV2({
                     aria-current={pathname.startsWith(V2_STAFF_LINK.href) ? 'page' : undefined}
                     className={topRow}
                   >
-                    <NavIcon name={V2_STAFF_LINK.icon} className="h-[18px] w-[18px] shrink-0" />
+                    <NavIcon name={V2_STAFF_LINK.icon} className="h-[18px] w-[18px] shrink-0" style={tone(V2_STAFF_LINK.href)} />
                     {V2_STAFF_LINK.label}
                   </Link>
                 </li>

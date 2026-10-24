@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { ChevronRight } from 'lucide-react';
+import { CalendarDays, ChevronRight, JapaneseYen, LayoutGrid, Receipt, Repeat, RotateCw, Target, User, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { yen } from '@/lib/format';
 import type { HomeStoreRow, HourlyCompare } from '@/lib/home-v2';
@@ -43,6 +43,17 @@ const PERIOD_ROW_GRID =
   'grid grid-cols-[minmax(180px,1.7fr)_minmax(110px,1fr)_minmax(90px,0.8fr)_minmax(90px,0.8fr)_minmax(100px,0.9fr)_minmax(120px,1fr)_20px] items-center gap-3';
 
 const COMPARE_LABEL: Record<HomeCompare, string> = { day: '前日', week: '前週同曜日', month: '前月同日', year: '前年同期' };
+
+/** 数字のアイコンの色（2026-10-24 Ronnie「iPad の機能と同じ色で」：iPad のホームの 来店組数・客数・リピーター・ウォークイン と同じ） */
+const TONE = {
+  sales: 'linear-gradient(180deg,#2a6fe6,#0a3fa8)',
+  groups: 'linear-gradient(180deg,#4a9bff,#1f6fe0)',
+  guests: 'linear-gradient(180deg,#7b74f0,#5147d6)',
+  repeat: 'linear-gradient(180deg,#ff8a7a,#e5584a)',
+  walkIn: 'linear-gradient(180deg,#ffa53a,#f08a10)',
+  cash: 'linear-gradient(180deg,#3fbf63,#1a8a3e)',
+  gray: 'linear-gradient(180deg,#7c7c80,#48484a)',
+} as const;
 
 /**
  * 新しい管理画面のホーム（2026-10-10 Ronnie「シンプルに、管理画面のスタイルで」）。
@@ -88,6 +99,9 @@ export function HomeV2View({ scopeLabel, asOf, period, kpi, extras, repeatNote, 
         <div className="grid grid-cols-1 gap-px bg-line sm:grid-cols-2 xl:grid-cols-4">
           <Kpi
             label="売上（税込）"
+            icon={<JapaneseYen className="h-4 w-4" />}
+            bg={TONE.sales}
+            blue
             value={yen(cur.sales)}
             d={delta(cur.sales, prev.sales)}
             prevText={yen(prev.sales)}
@@ -99,6 +113,9 @@ export function HomeV2View({ scopeLabel, asOf, period, kpi, extras, repeatNote, 
           />
           <Kpi
             label="客単価（税込）"
+            icon={<Receipt className="h-4 w-4" />}
+            bg={TONE.groups}
+            blue
             value={yen(cur.avgSpend)}
             d={delta(cur.avgSpend, prev.avgSpend)}
             prevText={yen(prev.avgSpend)}
@@ -107,6 +124,8 @@ export function HomeV2View({ scopeLabel, asOf, period, kpi, extras, repeatNote, 
           />
           <Kpi
             label="客数"
+            icon={<User className="h-4 w-4" />}
+            bg={TONE.guests}
             value={`${cur.guests.toLocaleString('ja-JP')}`}
             unit="人"
             d={delta(cur.guests, prev.guests)}
@@ -116,6 +135,8 @@ export function HomeV2View({ scopeLabel, asOf, period, kpi, extras, repeatNote, 
           />
           <Kpi
             label="会計数"
+            icon={<Users className="h-4 w-4" />}
+            bg={TONE.groups}
             value={`${cur.groups.toLocaleString('ja-JP')}`}
             unit="件"
             d={delta(cur.groups, prev.groups)}
@@ -126,7 +147,7 @@ export function HomeV2View({ scopeLabel, asOf, period, kpi, extras, repeatNote, 
         </div>
 
         <div className="grid grid-cols-1 gap-px border-t border-line bg-line sm:grid-cols-2 xl:grid-cols-4">
-          <Mini label="予算の達成">
+          <Mini label="予算の達成" icon={<Target className="h-3.5 w-3.5" />} bg={TONE.sales}>
             {cur.achievementPct != null && cur.budget ? (
               <>
                 <span className="text-[20px] leading-tight font-extrabold text-ink tabular-nums">
@@ -147,14 +168,14 @@ export function HomeV2View({ scopeLabel, asOf, period, kpi, extras, repeatNote, 
               </Link>
             )}
           </Mini>
-          <Mini label="客席回転率（1日平均）">
+          <Mini label="客席回転率（1日平均）" icon={<RotateCw className="h-3.5 w-3.5" />} bg={TONE.walkIn}>
             <span className="text-[20px] leading-tight font-extrabold text-ink tabular-nums">
               {extras.turnover == null ? '—' : extras.turnover.toLocaleString('ja-JP', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
               <span className="ml-1 text-[12px]">回</span>
             </span>
             <span className="text-xs text-ink-3">{extras.seats > 0 ? `席数 ${extras.seats}席${extras.days > 1 ? `・${extras.days}日` : ''}` : '席数が未設定（設定 › テーブル）'}</span>
           </Mini>
-          <Mini label="リピート率" title={repeatNote}>
+          <Mini label="リピート率" title={repeatNote} icon={<Repeat className="h-3.5 w-3.5" />} bg={TONE.repeat}>
             <span className="text-[20px] leading-tight font-extrabold text-ink tabular-nums">
               {extras.repeat.ratePct == null ? '—' : extras.repeat.ratePct}
               <span className="ml-0.5 text-[12px]">%</span>
@@ -164,7 +185,7 @@ export function HomeV2View({ scopeLabel, asOf, period, kpi, extras, repeatNote, 
             </span>
           </Mini>
           {rows ? (
-            <Mini label="いまの店内">
+            <Mini label="いまの店内" icon={<LayoutGrid className="h-3.5 w-3.5" />} bg={TONE.cash}>
               <span className="text-[20px] leading-tight font-extrabold text-ink tabular-nums">
                 {rows.reduce((a, r) => a + r.tablesUsed, 0)}
                 <span className="mx-0.5 text-[12px] font-bold text-ink-3">/</span>
@@ -176,7 +197,7 @@ export function HomeV2View({ scopeLabel, asOf, period, kpi, extras, repeatNote, 
               </span>
             </Mini>
           ) : (
-            <Mini label="期間">
+            <Mini label="期間" icon={<CalendarDays className="h-3.5 w-3.5" />} bg={TONE.gray}>
               <span className="text-[20px] leading-tight font-extrabold text-ink tabular-nums">
                 {extras.days}
                 <span className="ml-1 text-[12px]">日間</span>
@@ -365,6 +386,9 @@ export function HomeV2View({ scopeLabel, asOf, period, kpi, extras, repeatNote, 
 
 function Kpi({
   label,
+  icon,
+  bg,
+  blue = false,
   value,
   unit,
   d,
@@ -373,6 +397,11 @@ function Kpi({
   href,
 }: {
   label: string;
+  /** 左の小さいアイコン（iPad のホームと同じ色の丸） */
+  icon: React.ReactNode;
+  bg: string;
+  /** 数字を青に（iPad の 本日の売上・客単価 と同じ） */
+  blue?: boolean;
   value: string;
   unit?: string;
   d: ReturnType<typeof delta>;
@@ -384,9 +413,14 @@ function Kpi({
 }) {
   return (
     <Link href={href} className="flex flex-col gap-1 bg-white px-5 py-4 hover:bg-lilac-soft">
-      <span className="text-[12.5px] font-bold text-ink-2">{label}</span>
+      <span className="flex items-center gap-2 text-[12.5px] font-bold text-ink-2">
+        <span className="grid h-6 w-6 shrink-0 place-items-center rounded-[7px] text-white" style={{ backgroundImage: bg }}>
+          {icon}
+        </span>
+        {label}
+      </span>
       <span className="flex flex-wrap items-baseline gap-x-2">
-        <span className="text-[26px] leading-tight font-extrabold text-ink tabular-nums">
+        <span className={cn('text-[26px] leading-tight font-extrabold tabular-nums', blue ? 'text-royal' : 'text-ink')}>
           {value}
           {unit && <span className="ml-0.5 text-[13px]">{unit}</span>}
         </span>
@@ -408,10 +442,15 @@ function Kpi({
 }
 
 /** 下の段の小さい数字（予算の達成・回転率・リピート率・いまの店内） */
-function Mini({ label, title, children }: { label: string; title?: string; children: React.ReactNode }) {
+function Mini({ label, title, icon, bg, children }: { label: string; title?: string; icon: React.ReactNode; bg: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-1 bg-white px-5 py-3" title={title}>
-      <span className="text-[12px] text-ink-2">{label}</span>
+      <span className="flex items-center gap-1.5 text-[12px] text-ink-2">
+        <span className="grid h-5 w-5 shrink-0 place-items-center rounded-[6px] text-white" style={{ backgroundImage: bg }}>
+          {icon}
+        </span>
+        {label}
+      </span>
       {children}
     </div>
   );

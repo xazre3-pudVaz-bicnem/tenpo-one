@@ -29,3 +29,28 @@ export function regiAccentFor(pathname: string): RegiAccent | null {
   }
   return null;
 }
+
+/**
+ * 新しい管理画面（パソコン）の画面ごとの色（2026-10-24 Ronnie「iPad の機能と同じ色で見てみたい」）。
+ * iPad にある画面は上の ROUTES と同じ色。iPad に無い画面は近い機能の色（仕入先・発注・原価＝在庫の茶、ハンディ・キッチン・店舗ナウ＝オーダーの青、
+ * 設定の一覧・スタッフ＝設定の灰）。どれでもなければ null（管理画面の既定の青。app/globals.css の .theme-admin）。
+ */
+const ADMIN_ROUTES: [string, RegiAccent][] = [
+  ['/app/settings-all', 'settings'],
+  ['/app/staff', 'settings'],
+  ['/app/vendors', 'stock'],
+  ['/app/purchases', 'stock'],
+  ['/app/costing', 'stock'],
+  ['/app/handy', 'order'],
+  ['/app/kitchen', 'order'],
+  ['/app/now', 'order'],
+];
+
+export function adminAccentFor(pathname: string): RegiAccent | null {
+  const regi = regiAccentFor(pathname);
+  if (regi) return regi;
+  for (const [prefix, accent] of ADMIN_ROUTES) {
+    if (pathname === prefix || pathname.startsWith(prefix + '/')) return accent;
+  }
+  return null;
+}
