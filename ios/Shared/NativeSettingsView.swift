@@ -499,7 +499,7 @@ struct NativeSettingsView: View {
             HStack(spacing: 8) {
                 if busy { ProgressView().tint(primary ? .white : NFColor.iris).scaleEffect(0.8) }
                 else if let icon { Image(systemName: icon) }
-                Text(text)
+                Text(text).lineLimit(1).fixedSize(horizontal: !fill, vertical: false)
             }
             .font(.system(size: fill ? 17 : 15.5, weight: .bold))
             .foregroundColor(primary ? .white : NFColor.ink)
@@ -579,9 +579,11 @@ struct NativeSettingsView: View {
                                 (Text(l.deviceName.isEmpty ? l.deviceId : l.deviceName).font(.system(size: 16, weight: .bold)).foregroundColor(NFColor.success)
                                  + Text("（\(l.via == "usb" ? "USB" : "Bluetooth")・つないでいます）").font(.system(size: 13)).foregroundColor(NFColor.ink3))
                             } else {
-                                Text("まだつないでいません").font(.system(size: 16, weight: .semibold)).foregroundColor(off ? NFColor.ink3 : NFColor.saffron)
+                                // 半分の幅（縦向き）でも 1 行に（2 行に折れてボタンの字が「プリンタ…」に切れていた）
+                                Text("まだつないでいません").font(.system(size: 15, weight: .semibold)).foregroundColor(off ? NFColor.ink3 : NFColor.saffron)
+                                    .lineLimit(1).minimumScaleFactor(0.8)
                             }
-                            button(model.link == nil ? "プリンターを探す" : "つなぎ直す", icon: "magnifyingglass", busy: busy == "search",
+                            button(model.link == nil ? "探す" : "つなぎ直す", icon: "magnifyingglass", busy: busy == "search",
                                    disabled: off || locked || model.model == nil || busy != nil) { Task { await model.search() } }
                         }
                         if model.model == nil && model.usePrinter {
