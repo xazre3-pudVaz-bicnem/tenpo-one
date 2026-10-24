@@ -119,10 +119,17 @@ final class AppState: ObservableObject {
     /// 管理画面（設定 › レジ端末）がこの端末のネイティブ ON/OFF を決めているか（nil＝端末まかせ）。
     /// 2026-10-24 Ronnie「管理画面から全部の設定を。アプリのも」。GET /api/app/v1/pos?part=device（lib/register-device-server.ts）
     @Published var adminNativePos: Bool? = nil
+    /// 管理画面が LAN（この iPad から送る）・Wi-Fi 直接印刷のプリンターを決めているか
+    @Published var adminLanManaged = false
+    @Published var adminWifiManaged = false
     private var deviceSettingsFetchedAt: Date?
 
     private struct APIDeviceSetting: Decodable {
-        struct Device: Decodable { let id: String; let name: String?; let printerConfigId: String?; let nativePos: Bool? }
+        struct Device: Decodable {
+            let id: String; let name: String?; let printerConfigId: String?; let nativePos: Bool?
+            /// LAN / Wi-Fi のプリンター（管理画面で決める。2026-10-25 Ronnie「LAN / Wi-Fi は app からつながない、control centre から」）。nil は端末まかせ
+            let lanPrinterIds: [String]?; let wifiPrinterIds: [String]?
+        }
         let ok: Bool
         let device: Device?
     }
@@ -141,7 +148,25 @@ final class AppState: ObservableObject {
             let admin = res.device?.nativePos
             adminNativePos = admin
             if let admin, admin != nativePosEnabled { setNativePos(admin) }
+            applyAdminNetworkPrinters(lan: res.device?.lanPrinterIds, wifi: res.device?.wifiPrinterIds)
         }
+    }
+
+    /// 管理画面（設定 › レジ端末）で決めた LAN・Wi-Fi のプリンターを、この iPad の印刷の設定に入れる（nil の方は触らない）
+    @MainActor private func applyAdminNetworkPrinters(lan: [String]?, wifi: [String]?) {
+        adminLanManaged = lan != nil
+        adminWifiManaged = wifi != nil
+        let cur = NativePrintConfig.shared.config
+        let nextLan = lan.map { Array($0.prefix(8)) }
+        let nextWifi = wifi.map { Array($0.prefix(8)) }
+        let lanChanged = nextLan.map { $0 != cur.lan } ?? false
+        let wifiChanged = nextWifi.map { $0 != cur.printerIds } ?? false
+        guard lanChanged || wifiChanged else { return }
+        NativePrintConfig.shared.update { c in
+            if let nextLan { c.lan = nextLan }
+            if let nextWifi { c.printerIds = nextWifi }
+        }
+        syncPrintAgent()
     }
 
     /// ネイティブ ON/OFF（レジの設定）。OFF にしたらネイティブの画面を全部閉じて Web の画面をそのまま見せる。

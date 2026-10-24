@@ -395,6 +395,9 @@ export async function GET(request: Request) {
         name: found.setting.label ?? found.device.name,
         printerConfigId: found.setting.printerConfigId,
         nativePos: found.setting.nativePos,
+        // LAN / Wi-Fi のプリンターは管理画面で決める（2026-10-25 Ronnie）。null は端末まかせ（今までどおり）
+        lanPrinterIds: found.setting.lanPrinterIds,
+        wifiPrinterIds: found.setting.wifiPrinterIds,
       },
     });
   }

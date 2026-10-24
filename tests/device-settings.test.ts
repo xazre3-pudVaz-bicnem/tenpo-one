@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { choiceToNativePos, deviceDisplayName, deviceKind, deviceSettingsFrom, nativePosToChoice, withDeviceSetting } from '@/lib/device-settings';
+import {
+  EMPTY_DEVICE_SETTING,
+  choiceToNativePos,
+  deviceDisplayName,
+  deviceKind,
+  deviceSettingsFrom,
+  nativePosToChoice,
+  normalizePrinterIds,
+  withDeviceSetting,
+} from '@/lib/device-settings';
 
 const A = '11111111-1111-4111-8111-111111111111';
 const B = '22222222-2222-4222-8222-222222222222';
@@ -14,8 +23,8 @@ describe('device-settings: 読み書き', () => {
         'not-a-uuid': { label: 'x' },
       },
     });
-    expect(m[A]).toEqual({ label: 'レジ1', printerConfigId: P, nativePos: true });
-    expect(m[B]).toEqual({ label: null, printerConfigId: null, nativePos: null });
+    expect(m[A]).toEqual({ ...EMPTY_DEVICE_SETTING, label: 'レジ1', printerConfigId: P, nativePos: true });
+    expect(m[B]).toEqual(EMPTY_DEVICE_SETTING);
     expect(Object.keys(m)).toHaveLength(2);
     expect(deviceSettingsFrom(null)).toEqual({});
     expect(deviceSettingsFrom({ devices: [] })).toEqual({});
@@ -25,12 +34,23 @@ describe('device-settings: 読み書き', () => {
     const base = { registerReport: { lunchUntil: '15:00' }, devices: { [A]: { label: 'レジ1', printerConfigId: null, nativePos: null } } };
     const next = withDeviceSetting(base, B, { label: null, printerConfigId: P, nativePos: false });
     expect(next.registerReport).toEqual({ lunchUntil: '15:00' });
-    expect((next.devices as Record<string, unknown>)[B]).toEqual({ label: null, printerConfigId: P, nativePos: false });
-    expect((next.devices as Record<string, unknown>)[A]).toEqual({ label: 'レジ1', printerConfigId: null, nativePos: null });
+    expect((next.devices as Record<string, unknown>)[B]).toEqual({ ...EMPTY_DEVICE_SETTING, printerConfigId: P, nativePos: false });
+    expect((next.devices as Record<string, unknown>)[A]).toEqual({ ...EMPTY_DEVICE_SETTING, label: 'レジ1' });
     const cleared = withDeviceSetting(next, A, { label: '', printerConfigId: null, nativePos: null });
     expect(Object.keys(cleared.devices as object)).toEqual([B]);
     const none = withDeviceSetting(cleared, B, { label: null, printerConfigId: null, nativePos: null });
     expect(none).toEqual({ registerReport: { lunchUntil: '15:00' } });
+  });
+
+  it('LAN / Wi-Fi のプリンター：null は端末まかせ、[] は送らない', () => {
+    expect(normalizePrinterIds(undefined)).toBeNull();
+    expect(normalizePrinterIds('x')).toBeNull();
+    expect(normalizePrinterIds([])).toEqual([]);
+    expect(normalizePrinterIds([P, 'x', P, 3, B])).toEqual([P, B]);
+    const next = withDeviceSetting({}, A, { lanPrinterIds: [P], wifiPrinterIds: [] });
+    expect((next.devices as Record<string, unknown>)[A]).toEqual({ ...EMPTY_DEVICE_SETTING, lanPrinterIds: [P], wifiPrinterIds: [] });
+    const back = withDeviceSetting(next, A, { lanPrinterIds: null, wifiPrinterIds: null });
+    expect(back).toEqual({});
   });
 
   it('名前は 40 文字まで', () => {
@@ -45,7 +65,7 @@ describe('device-settings: 表示', () => {
     expect(deviceKind('Mozilla/5.0 (iPad; CPU OS 18_5) Safari')).toBe('iPad');
     expect(deviceKind('Mozilla/5.0 (Macintosh; Intel Mac OS X) Safari')).toBe('iPad / Mac（Safari）');
     expect(deviceKind(null)).toBe('端末');
-    expect(deviceDisplayName({ name: 'レジ端末' }, { label: '入口レジ', printerConfigId: null, nativePos: null })).toBe('入口レジ');
+    expect(deviceDisplayName({ name: 'レジ端末' }, { ...EMPTY_DEVICE_SETTING, label: '入口レジ' })).toBe('入口レジ');
     expect(deviceDisplayName({ name: 'レジ端末' }, undefined)).toBe('レジ端末');
     expect(deviceDisplayName({ name: '' }, undefined)).toBe('レジ端末');
   });
