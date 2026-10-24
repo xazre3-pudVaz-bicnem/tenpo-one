@@ -43,6 +43,8 @@ import { isNativeInventoryActionType, nativeInventoryPermission, parseNativeInve
 import { isNativePurchasingActionType, parseNativePurchasingAction } from '@/lib/native-purchasing';
 import { isNativeCouponActionType, parseNativeCouponAction } from '@/lib/native-coupons';
 import { isNativeMenuPagesActionType, parseNativeMenuPagesAction } from '@/lib/native-menu-pages';
+import { isNativeVisitEditType, parseNativeVisitEdit } from '@/lib/native-visit-edit';
+import { loadVisitEdit, saveVisitEdit } from '@/lib/native-visit-edit-server';
 import { loadNativeMenuPages } from '@/lib/native-menu-pages-server';
 import { saveMenuBookPages } from '@/app/app/settings/menu-book/actions';
 import { loadCouponsData } from '@/lib/coupons-data-server';
@@ -383,6 +385,15 @@ export async function GET(request: Request) {
       item: isUuid(url.searchParams.get('item')) ? (url.searchParams.get('item') as string) : '',
     });
     return json({ ok: true, ...inv });
+  }
+
+  // 着席中のお客様情報を来店登録と同じ画面で直すときの最初の値（伝票メモから。pos.order）
+  if (part === 'visitEdit') {
+    if (!can(ctx.role, 'pos.order')) return json({ ok: false, error: '権限がありません' }, 403);
+    const orderId = url.searchParams.get('orderId');
+    if (!isUuid(orderId)) return json({ ok: false, error: '注文が見つかりません' }, 404);
+    const r = await loadVisitEdit(ctx, orderId);
+    return json(r, r.ok ? 200 : 404);
   }
 
   // オーダー画面の「編集 Edit tabs」（Web のレジの MenuPagesDialog と同じ中身。menu.manage）
@@ -877,6 +888,20 @@ export async function POST(request: Request) {
           await cancelStockTransfer(ia.id, ia.reason);
           return json({ ok: true });
       }
+    } catch (e) {
+      return json({ ok: false, error: errorText(e, 'うまくいきませんでした。もう一度お試しください') }, 400);
+    }
+  }
+
+  // 着席中のお客様情報の保存（来店登録と同じ画面。中身は Web と同じ setSeatTime ほか。pos.order → 店の回線）
+  if (raw && typeof raw === 'object' && isNativeVisitEditType((raw as { type?: unknown }).type)) {
+    const parsedVisit = parseNativeVisitEdit(raw);
+    if (!parsedVisit.ok) return json({ ok: false, error: parsedVisit.error }, 400);
+    if (!can(ctx.role, 'pos.order')) return json({ ok: false, error: '権限がありません' }, 403);
+    const visitProblem = await networkProblem(ctx);
+    if (visitProblem) return json({ ok: false, error: visitProblem }, 403);
+    try {
+      return json(await saveVisitEdit(ctx, parsedVisit.action));
     } catch (e) {
       return json({ ok: false, error: errorText(e, 'うまくいきませんでした。もう一度お試しください') }, 400);
     }

@@ -120,10 +120,12 @@ struct NativeFloorView: View {
         }
         .animation(.easeOut(duration: 0.15), value: setupTable?.id)
         // 着席中の直し（開始・時間・人数・モード・コース）
+        // 着席中の「お客様情報」は来店登録と同じ画面で直す（2026-10-24 Ronnie「same popup」）
         .overlay {
-            if let g = guestInfo {
-                NativeModalCard(width: 720) {
-                    NativeGuestInfoSheet(model: model, order: g.order, slip: g.slip, onClose: { guestInfo = nil })
+            if let g = guestInfo, let t = model.tables.first(where: { $0.order?.slips.contains(where: { $0.id == g.slip.id }) == true }) {
+                NativeModalCard(width: 1080) {
+                    NativeSetupSheet(model: model, table: t, edit: NFVisitEdit(order: g.order, slip: g.slip),
+                                     onClose: { guestInfo = nil }, onStarted: { _ in guestInfo = nil })
                 }
                 .transition(.opacity)
             }
