@@ -46,3 +46,7 @@ ios/App/Info-noMFI.plist
 
 # メニューの写真・PDF取り込みの読み取りファイル（build のときに node_modules からコピー。scripts/copy-ocr-assets.mjs）
 /public/ocr/
+
+# iPad のオフライン印字キット（build のときに lib/print-kit.ts から作る。scripts/build-print-kit.mjs）
+/public/print-kit.js
+/public/print-kit.json

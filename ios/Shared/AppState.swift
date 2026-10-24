@@ -131,6 +131,8 @@ final class AppState: ObservableObject {
     /// 印刷係を設定に合わせて動かす・止める
     @MainActor func syncPrintAgent() {
         if nativePrintAgentOn { NativePrintAgent.shared.start() } else { NativePrintAgent.shared.stop() }
+        // ネットが無いときに印刷するための印字キット・お店のプリンターの情報を、ネットのあるうちに保存しておく（レジの iPad だけ）
+        if nativePrintAgentOn { NativePrintKit.shared.start() } else { NativePrintKit.shared.stop() }
     }
 
     /// ネイティブの画面を全部閉じる（Web の画面がそのまま見える）

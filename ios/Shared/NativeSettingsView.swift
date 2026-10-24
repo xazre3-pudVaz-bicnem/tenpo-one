@@ -30,6 +30,8 @@ struct NativeSettingsView: View {
                         receiptCard
                         if !model.lanPrinters.isEmpty { lanCard.id("lan") }
                         if !model.wifiPrinters.isEmpty { wifiCard }
+                        // ネットが無いときの印刷（この iPad から直接。2026-10-24）
+                        NativeOfflinePrintCard().id("offline")
                         nativeCard.id("native")
                         sectionsCard.id("sections")
                         hubsCard

@@ -4,6 +4,7 @@ import { getSessionContext, type SessionContext } from '@/lib/auth';
 import { can, type PermissionAction } from '@/lib/permissions';
 import { createClient } from '@/lib/supabase/server';
 import { isNativeCustomLine, isUuid, NATIVE_APP_HEADER, parseNativePosAction, type NativePosAction, type NativePrintJob } from '@/lib/native-pos';
+import { loadNativeOfflineKit } from '@/lib/native-offline-kit-server';
 import { loadNativeCatalog, loadNativeLive, loadNativeOrder, loadNativePos, setOrderVisitSource } from '@/lib/native-pos-server';
 import { claimLanKitchenPrints, finishLanPrint } from '@/lib/native-print-server';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -264,6 +265,18 @@ export async function GET(request: Request) {
     if (!ctx.isHq && !ctx.stores.some((s) => s.id === storeId)) return json({ ok: false, error: '店舗がありません' }, 404);
     const catalog = await loadNativeCatalog(ctx, await createClient(), storeId, ctx.organizationId);
     return json({ ok: true, catalog });
+  }
+
+  // オフラインの道具箱（レジの iPad がネット無しで印字・合計するため。lib/native-offline-kit.ts。2026-10-24 Ronnie
+  // 「net nachale pani print haru sabai kam」）。iPad は version が変わったときだけ入れ替えて保存する
+  if (part === 'offlineKit') {
+    const storeParam = url.searchParams.get('store');
+    const storeId = isUuid(storeParam) ? storeParam : (ctx.currentStore?.id ?? ctx.stores[0]?.id ?? null);
+    if (!storeId) return json({ ok: false, error: '店舗がありません' }, 404);
+    if (!ctx.isHq && !ctx.stores.some((s) => s.id === storeId)) return json({ ok: false, error: '店舗がありません' }, 404);
+    const kit = await loadNativeOfflineKit(await createClient(), storeId, ctx.organizationId);
+    if (url.searchParams.get('have') === kit.version) return json({ ok: true, same: true, version: kit.version });
+    return json({ ok: true, kit });
   }
 
   // ホーム（売上・達成率・来店組数・左の列のボタン）。Web のレジのホームと同じ組み立て（lib/native-home-server.ts）
