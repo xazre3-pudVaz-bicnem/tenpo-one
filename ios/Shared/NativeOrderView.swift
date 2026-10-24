@@ -226,6 +226,7 @@ struct NativeOrderView: View {
 
 struct NativeTopBar: View {
     /// 店名は上のバーには出さない（ホームだけ。2026-10-24 18:55 Ronnie「店舗名は home 画面だけ、ほかはいらない」）。呼び出し側の形はそのまま
+    /// 店名のあった場所（左）に画面の名前（店舗台帳・オーダー・会計・設定 …）を出す（18:56 Ronnie）
     let storeName: String
     let title: String
     let subtitle: String
@@ -242,15 +243,18 @@ struct NativeTopBar: View {
                 .scaledToFit()
                 .frame(width: 38, height: 38)
                 .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-            Spacer(minLength: 8)
+            // 画面の名前（店名のあった場所に、同じ丸い枠で）
             ViewThatFits(in: .horizontal) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(title).font(.system(size: 22, weight: .heavy)).foregroundColor(.white)
-                    Text(subtitle).font(.system(size: 13, weight: .bold)).foregroundColor(Color(hex: 0xC9B6F5))
+                    Text(title).font(.system(size: 17, weight: .heavy)).foregroundColor(.white)
+                    Text(subtitle).font(.system(size: 12, weight: .bold)).foregroundColor(Color(hex: 0xC9B6F5))
                 }
                 .fixedSize()
-                Text(title).font(.system(size: 20, weight: .heavy)).foregroundColor(.white).fixedSize()
+                Text(title).font(.system(size: 17, weight: .heavy)).foregroundColor(.white).lineLimit(1)
             }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .background(Capsule().fill(Color.white.opacity(0.10)))
             Spacer(minLength: 8)
             HStack(spacing: 6) {
                 Image(systemName: "person")

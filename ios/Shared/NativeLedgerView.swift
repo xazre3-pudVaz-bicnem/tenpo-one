@@ -484,12 +484,14 @@ struct NativeLedgerView: View {
                     .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white.opacity(0.12)))
             }
             .buttonStyle(PressableStyle())
-            // 店名は出さない（ホームだけ。2026-10-24 18:55 Ronnie）
-            Spacer(minLength: 8)
-            VStack(spacing: 0) {
-                Text("店舗台帳").font(.system(size: 22, weight: .heavy)).foregroundColor(.white)
+            // 店名は出さない（ホームだけ）。その場所に画面の名前（2026-10-24 18:55・18:56 Ronnie）
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text("店舗台帳").font(.system(size: 17, weight: .heavy)).foregroundColor(.white)
                 Text("Reservation").font(.system(size: 12, weight: .bold)).foregroundColor(NLColor.yellow)
             }
+            .fixedSize()
+            .padding(.horizontal, 14).padding(.vertical, 8)
+            .background(Capsule().fill(Color.white.opacity(0.12)))
             Spacer(minLength: 8)
             // 日付
             HStack(spacing: 4) {
