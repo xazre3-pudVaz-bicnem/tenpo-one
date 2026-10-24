@@ -224,7 +224,13 @@ struct NativeCheckoutView: View {
                             .lineLimit(1).minimumScaleFactor(0.7)
                             .foregroundColor(on ? (s.darkText ? NT.ink : .white) : s.color)
                             .frame(maxWidth: .infinity, minHeight: 42)
-                            .background(RoundedRectangle(cornerRadius: 10).fill(on ? s.color : s.color.opacity(0.12)))
+                            // 下の地の色が変わってもボタンの色は同じ（白の上にうすく各社の色）
+                            .background(
+                                ZStack {
+                                    RoundedRectangle(cornerRadius: 10).fill(Color.white)
+                                    RoundedRectangle(cornerRadius: 10).fill(on ? s.color : s.color.opacity(0.12))
+                                }
+                            )
                             .overlay(RoundedRectangle(cornerRadius: 10).stroke(s.color.opacity(on ? 0 : 0.35), lineWidth: 1))
                     }
                     .buttonStyle(PressableStyle())
@@ -232,7 +238,9 @@ struct NativeCheckoutView: View {
             }
         }
         .padding(14)
-        .background(needsSource ? NT.dangerBg.opacity(0.6) : Color.clear)
+        // 地はごくうすいネイビー（赤っぽいピンクはやめる。2026-10-24 23:14 Ronnie「うすいネイビー、すごく明るく」）。必須は赤いチップで分かる
+        .background(Color(hex: 0xEEF2F9))
+        .overlay(alignment: .top) { Rectangle().fill(Color(hex: 0xDCE3EF)).frame(height: 1) }
     }
 
     // MARK: - 中：金額
