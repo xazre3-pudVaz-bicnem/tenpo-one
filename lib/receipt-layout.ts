@@ -215,3 +215,12 @@ export function formatReceiptAddress(address: string): string {
   if (!match || /^[0-9０-９-－−‐ー]/.test(match[2])) return address;
   return `${match[1].trimEnd()}\n${match[2].trimStart()}`;
 }
+
+/** Reserve physical columns for a proportionally enlarged table name. */
+export function tableLabelLayout(table: string, width: number, options: WidthOptions = {}) {
+  const label = '卓番号';
+  const tableWidth = dispWidth(table, options);
+  const scale = dispWidth(label, options) + 1 + tableWidth * 2 <= width ? 2 : 1;
+  const prefix = label + ' '.repeat(Math.max(1, Math.floor(width - dispWidth(label, options) - tableWidth * scale)));
+  return { prefix, scale };
+}
