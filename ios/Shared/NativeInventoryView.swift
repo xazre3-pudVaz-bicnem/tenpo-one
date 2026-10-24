@@ -1076,7 +1076,7 @@ struct NICountView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            NativeTopBar(storeName: detail?.storeName ?? model.payload?.store.name ?? "", title: "棚卸", subtitle: "Stocktake", onHome: onClose)
+            NativeTopBar(storeName: detail?.storeName ?? model.payload?.store.name ?? "", title: "棚卸", subtitle: "Stocktake", onHome: onClose, backIcon: "chevron.left")
             if let d = detail {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack(spacing: 10) {

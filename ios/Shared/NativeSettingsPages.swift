@@ -312,7 +312,7 @@ struct NativeSoldOutView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            NativeTopBar(storeName: model.payload?.store.name ?? "", title: "品切れ", subtitle: "Sold out", userName: "", onHome: onBack)
+            NativeTopBar(storeName: model.payload?.store.name ?? "", title: "品切れ", subtitle: "Sold out", userName: "", onHome: onBack, backIcon: "chevron.left")
             if model.payload != nil {
                 VStack(spacing: 0) {
                     toolbar
@@ -533,7 +533,7 @@ struct NativeClerksView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            NativeTopBar(storeName: model.payload?.store.name ?? "", title: "POS担当者", subtitle: "Clerks", userName: "", onHome: onBack)
+            NativeTopBar(storeName: model.payload?.store.name ?? "", title: "POS担当者", subtitle: "Clerks", userName: "", onHome: onBack, backIcon: "chevron.left")
             if let p = model.payload {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {
@@ -704,7 +704,7 @@ struct NSPFrame<Content: View>: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            NativeTopBar(storeName: storeName, title: title, subtitle: en, userName: "", onHome: onBack)
+            NativeTopBar(storeName: storeName, title: title, subtitle: en, userName: "", onHome: onBack, backIcon: "chevron.left")
             if loaded {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) { content() }
@@ -1857,7 +1857,7 @@ struct NativeHandyQrFromSettings: View {
     @EnvironmentObject var state: AppState
     var body: some View {
         VStack(spacing: 0) {
-            NativeTopBar(storeName: "", title: "iPhoneハンディ", subtitle: "Handy QR", userName: "", onHome: { state.goNativeSettings() })
+            NativeTopBar(storeName: "", title: "iPhoneハンディ", subtitle: "Handy QR", userName: "", onHome: { state.goNativeSettings() }, backIcon: "chevron.left")
             NativeHandyQrSheet(onClose: { state.goNativeSettings() }, onWeb: { path in state.leaveNativeFloor(to: path) })
         }
         .background(Color.white.ignoresSafeArea())

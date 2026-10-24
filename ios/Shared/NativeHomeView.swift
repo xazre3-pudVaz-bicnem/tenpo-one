@@ -144,8 +144,7 @@ struct NativeHomeView: View {
     var onFloor: () -> Void = {}
     /// ハンディQR をネイティブで大きく出す（2026-10-24）
     @State private var handyQrOpen = false
-    /// テーブルのお客様QR（印刷・再発行）をネイティブで（2026-10-24 Ronnie「QR印刷・再発行をネイティブに」）。ホームの上に重ねる
-    @State private var tableQrOpen = false
+    // テーブルのお客様QR（印刷・再発行）は 設定 の中から（2026-10-24 19:01 Ronnie。前はホームの上のボタン）
 
     private static let blue = Color(hex: 0x1A5AD6)
     private static let blueDeep = Color(hex: 0x0A3FA8)
@@ -223,34 +222,16 @@ struct NativeHomeView: View {
         .sheet(isPresented: $handyQrOpen) {
             NativeHandyQrSheet(onClose: { handyQrOpen = false }, onWeb: { path in handyQrOpen = false; onWeb(path) })
         }
-        .overlay {
-            if tableQrOpen {
-                NativeTableQrScreen(onClose: { tableQrOpen = false })
-                    .transition(.opacity)
-            }
-        }
-        .animation(.easeOut(duration: 0.18), value: tableQrOpen)
         .onAppear { model.start() }
         .onDisappear { model.stop() }
     }
 
-    // MARK: 上のバー（店・ホーム・お知らせ・ハンディQR・ログアウト）＋大きい2つ
+    // MARK: 上のバー（店・お知らせ・ハンディQR・ログアウト）＋大きい2つ
 
     private var topBar: some View {
         VStack(spacing: 14) {
             HStack(spacing: 10) {
-                HStack(spacing: 6) {
-                    Image(systemName: "storefront")
-                    Text(model.payload?.store.name ?? "").lineLimit(1)
-                }
-                .font(.system(size: 15, weight: .semibold)).foregroundColor(.white)
-                .padding(.horizontal, 12).padding(.vertical, 8)
-                .background(Capsule().fill(Color.white.opacity(0.10)))
-                Spacer()
-                VStack(spacing: 0) {
-                    Text("ホーム").font(.system(size: 22, weight: .heavy)).foregroundColor(.white)
-                    Text("Home").font(.system(size: 12, weight: .bold)).foregroundColor(Color(hex: 0xC9B6F5))
-                }
+                // 「ホーム」の字は出さない（ここがホーム。2026-10-24 19:01 Ronnie）
                 Spacer()
                 Button { onWeb("/app/expenses") } label: {
                     ZStack(alignment: .topTrailing) {
@@ -263,16 +244,7 @@ struct NativeHomeView: View {
                     }
                 }
                 .buttonStyle(PressableStyle())
-                Button { tableQrOpen = true } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "qrcode.viewfinder")
-                        Text("テーブルQR")
-                    }
-                    .font(.system(size: 15, weight: .bold)).foregroundColor(.white)
-                    .padding(.horizontal, 14).padding(.vertical, 9)
-                    .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white.opacity(0.10)))
-                }
-                .buttonStyle(PressableStyle())
+                // テーブルQR は 設定 の中だけ（2026-10-24 19:01 Ronnie「ホームの上にはいらない」）
                 Button { handyQrOpen = true } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "qrcode")
@@ -285,6 +257,14 @@ struct NativeHomeView: View {
                 .buttonStyle(PressableStyle())
                 Image("BrandMark").resizable().scaledToFit().frame(width: 38, height: 38)
                     .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                // 店名はログアウトの横（2026-10-24 19:03 Ronnie）
+                HStack(spacing: 6) {
+                    Image(systemName: "storefront")
+                    Text(model.payload?.store.name ?? "").lineLimit(1)
+                }
+                .font(.system(size: 15, weight: .semibold)).foregroundColor(.white)
+                .padding(.horizontal, 12).padding(.vertical, 8)
+                .background(Capsule().fill(Color.white.opacity(0.10)))
                 Button { onWeb("/logout") } label: {
                     Image(systemName: "rectangle.portrait.and.arrow.right").font(.system(size: 18, weight: .semibold)).foregroundColor(.white).padding(8)
                 }
