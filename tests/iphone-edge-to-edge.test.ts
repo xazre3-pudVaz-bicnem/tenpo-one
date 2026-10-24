@@ -15,7 +15,8 @@ describe('iPhone アプリの上下のすき間', () => {
     expect(web).toContain('AppConfig.isPad ? view.safeAreaLayoutGuide.topAnchor : view.topAnchor');
     expect(web).toContain('AppConfig.isPad ? view.safeAreaLayoutGuide.bottomAnchor : view.bottomAnchor');
     expect(web).toContain('let fit = AppConfig.isPad ? "" : ", viewport-fit=cover"');
-    expect(app).toContain('.preferredColorScheme(AppConfig.isPad ? nil : .dark)');
+    // iPhone は暗い表示のまま（時計の字は白）。iPad は上のバーを明るくしたので明るい表示（2026-10-24 22:28 Ronnie）
+    expect(app).toContain('.preferredColorScheme(AppConfig.isPad ? .light : .dark)');
   });
   it('Web：上のバーは時計のうしろまで同じ色、下のバーはホームバーのうしろまで黒', () => {
     expect(chrome).toContain('bg-[#292725] pt-[env(safe-area-inset-top)] text-white');
