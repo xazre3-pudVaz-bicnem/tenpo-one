@@ -138,7 +138,8 @@ struct NativeOrderView: View {
         // 会計は同じ画面の上に重ねる（fullScreenCover にすると、下の Web が止まって Bluetooth の印刷・ドロアが出ない）
         .overlay {
             if showCheckout {
-                NativeCheckoutView(model: model, onClose: { showCheckout = false }, onFinished: {
+                // 会計の「×」はオーダー画面に戻らず、テーブル一覧（ホーム）へ（2026-10-24 Ronnie「x click garyo vane home ma aaune」）
+                NativeCheckoutView(model: model, onClose: { showCheckout = false; onHome() }, onFinished: {
                     showCheckout = false
                     if model.isLive { AppState.shared.finishNativeCheckout() }
                 })
