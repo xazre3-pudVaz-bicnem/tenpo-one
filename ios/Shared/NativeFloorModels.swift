@@ -397,6 +397,27 @@ final class NativeFloorModel: ObservableObject {
     private var refresher: Timer?
     private var sweeper: Timer?
     private var toastTimer: Timer?
+    /// 前に読んだ中身から始めたか（最初の読み直しは今の店で。店を切り替えたあとでも前の店を読まない）
+    private var fromCache = false
+    private var sweptOnce = false
+
+    static let cacheKey = "floor"
+
+    /// 前に読んだフロアをすぐ出す（裏で読み直す）
+    init() {
+        if let p: NFPayload = NativeScreenCache.shared.get(Self.cacheKey) {
+            payload = p
+            fromCache = true
+            now = Date().timeIntervalSince1970 * 1000
+            if let d = p.defaultFloorId, p.floors.contains(where: { $0.id == d }) { floorFilter = d }
+        }
+    }
+
+    /// ホームを開いたときに先に読んでおく（最初にオーダー・会計を押したときも待たない）
+    static func prefetch(maxAge: TimeInterval = 20) async {
+        if let a = NativeScreenCache.shared.age(cacheKey), a < maxAge { return }
+        if let p = try? await NativeAPI.shared.loadFloor(storeId: nil) { NativeScreenCache.shared.set(cacheKey, p) }
+    }
 
     var store: NFNamed? { payload?.store }
     /// 画面の時計（Date）
@@ -448,14 +469,19 @@ final class NativeFloorModel: ObservableObject {
     func refresh(silent: Bool) async {
         if !silent { loading = payload == nil }
         do {
-            let p = try await NativeAPI.shared.loadFloor(storeId: payload?.store.id)
+            let p = try await NativeAPI.shared.loadFloor(storeId: fromCache ? nil : payload?.store.id)
+            fromCache = false
             offsetMs = p.serverNow - Date().timeIntervalSince1970 * 1000
             now = p.serverNow
             let first = payload == nil
             payload = p
+            NativeScreenCache.shared.set(Self.cacheKey, p)
             if first {
                 // 最初に出すフロア（設定 > テーブル・フロア）。無ければ「すべて」
                 if let d = p.defaultFloorId, p.floors.contains(where: { $0.id == d }) { floorFilter = d }
+            }
+            if !sweptOnce {
+                sweptOnce = true
                 await sweepCleaning()
             }
             error = nil

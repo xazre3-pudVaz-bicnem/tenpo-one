@@ -84,6 +84,13 @@ final class NativeHomeModel: ObservableObject {
     private var clock: Timer?
     private var refresher: Timer?
 
+    static let cacheKey = "home"
+
+    /// 前に読んだホームをすぐ出す（裏で読み直す）
+    init() {
+        if let p: NHPayload = NativeScreenCache.shared.get(Self.cacheKey) { payload = p }
+    }
+
     func start() {
         clock?.invalidate()
         clock = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
@@ -113,7 +120,11 @@ final class NativeHomeModel: ObservableObject {
             offset = p.serverNow / 1000 - Date().timeIntervalSince1970
             now = Date().addingTimeInterval(offset)
             payload = p
+            NativeScreenCache.shared.set(Self.cacheKey, p)
             error = nil
+            // よく押す画面（オーダー・会計＝フロア、店舗台帳）を先に読んでおく
+            Task { await NativeFloorModel.prefetch() }
+            Task { await NativeLedgerModel.prefetch() }
         } catch {
             if payload == nil { self.error = (error as? NativeAPIError)?.message ?? "通信できませんでした" }
         }

@@ -178,6 +178,26 @@ final class NativeLedgerModel: ObservableObject {
     private var refresher: Timer?
     private var offset: TimeInterval = 0
 
+    static let cacheKey = "ledger"
+
+    /// 前に読んだ今日の台帳をすぐ出す（裏で読み直す）
+    init() {
+        if let p: NLPayload = NativeScreenCache.shared.get(Self.cacheKey), p.isToday {
+            payload = p
+        }
+    }
+
+    /// ホームを開いたときに先に読んでおく（今日の台帳）
+    static func prefetch(maxAge: TimeInterval = 20) async {
+        if let a = NativeScreenCache.shared.age(cacheKey), a < maxAge { return }
+        var comps = URLComponents(url: AppConfig.url("/api/app/v1/pos"), resolvingAgainstBaseURL: false)!
+        comps.queryItems = [URLQueryItem(name: "part", value: "ledger")]
+        if let data = try? await NativeAPI.shared.send(URLRequest(url: comps.url!)),
+           let p = try? JSONDecoder().decode(NLPayload.self, from: data) {
+            NativeScreenCache.shared.set(cacheKey, p)
+        }
+    }
+
     func start() {
         clock?.invalidate()
         clock = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
@@ -196,7 +216,8 @@ final class NativeLedgerModel: ObservableObject {
     }
 
     func refresh(silent: Bool) async {
-        if !silent { loading = true }
+        // 前の中身を出しているときは「読み込み中」を出さない（裏で入れ替える）
+        if !silent && payload == nil { loading = true }
         do {
             var comps = URLComponents(url: AppConfig.url("/api/app/v1/pos"), resolvingAgainstBaseURL: false)!
             var items = [URLQueryItem(name: "part", value: "ledger")]
@@ -208,6 +229,7 @@ final class NativeLedgerModel: ObservableObject {
             now = Date().addingTimeInterval(offset)
             payload = p
             date = p.date
+            if p.isToday { NativeScreenCache.shared.set(Self.cacheKey, p) }
             error = nil
         } catch {
             if !silent || payload == nil { self.error = (error as? NativeAPIError)?.message ?? "通信できませんでした" }
