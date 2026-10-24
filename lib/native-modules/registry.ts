@@ -1,5 +1,6 @@
 import 'server-only';
 import type { SessionContext } from '@/lib/auth';
+import { costingGet, costingImpactGet, costingWasteGet, costingItemGet, costingLinePost } from '@/lib/native-modules/costing';
 import { kitchenGet, kdsItemStatusPost, kdsOrderServedPost, kdsSettingsPost } from '@/lib/native-modules/kitchen';
 import { onboardingGet, onboardingPost } from '@/lib/native-modules/onboarding';
 import { businessCardsGet } from '@/lib/native-modules/business-cards';
@@ -37,6 +38,10 @@ export const NATIVE_MODULE_GET: Record<string, NativeModuleGet> = {
   businessCards: businessCardsGet,
   payroll: payroll.payrollGet,
   accounting: accountingGet,
+  costing: costingGet,
+  costingImpact: costingImpactGet,
+  costingWaste: costingWasteGet,
+  costingItem: costingItemGet,
 };
 
 /** POST の type → handler。追加は 1 行ずつ */
@@ -59,4 +64,7 @@ export const NATIVE_MODULE_POST: Record<string, NativeModulePost> = {
   nenchoConfirm: payroll.nenchoConfirmPost,
   nenchoReject: payroll.nenchoRejectPost,
   ...ACCOUNTING_POST, // 会計（accJournalSave・accBankCsvPreview … lib/native-modules/accounting.ts）
+  costingLineAdd: costingLinePost,
+  costingLineUpdate: costingLinePost,
+  costingLineDelete: costingLinePost,
 };
