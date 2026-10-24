@@ -90,9 +90,10 @@ struct NativeSetupSheet: View {
 
             // 下：キャンセル・確定（USEN と同じく横並び）
             VStack(spacing: 6) {
-                Text(problem ?? (guests < 1 ? "合計人数を1〜999名で入力してください" : (source.isEmpty ? "来店経路を選択してください" : " ")))
-                    .font(.system(size: 13)).foregroundColor(problem == nil ? NFColor.ink3 : NFColor.danger)
-                    .lineLimit(1)
+                // 案内の文は出さない（2026-10-24 Ronnie「合計人数を…の説明はいらない」）。うまくいかなかったときだけ赤で出す
+                if let problem {
+                    Text(problem).font(.system(size: 13)).foregroundColor(NFColor.danger).lineLimit(2)
+                }
                 HStack(spacing: 12) {
                     Button(action: onClose) {
                         Text("キャンセル").font(.system(size: 18, weight: .bold)).foregroundColor(NFColor.iris)
