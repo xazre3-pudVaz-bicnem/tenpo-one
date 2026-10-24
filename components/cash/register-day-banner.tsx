@@ -9,8 +9,9 @@ import { dayBannerKind, jstHour, mdLabel } from '@/lib/register-day';
  * 「レジがまだ閉まっていません」（2026-09-28 Ronnie：レジ精算をするまでは前の営業日のまま続ける。
  * 朝10時を過ぎても閉まっていなければ知らせる。2日以上前から開きっぱなしなら、売上は今日の日付に入るので強く知らせる）
  *
- * short：パソコンの管理画面向け（2026-10-24 Ronnie「管理画面にはこの長い赤い帯は要らない。レジクローズがまだ、とだけ」）。
- *   「M/D のレジがまだクローズされていません」＋レジクローズへ、だけを控えめに出す。レジ（iPad）はこれまでどおり。
+ * short：パソコンの管理画面向け（2026-10-24 Ronnie「管理画面にはこの長い赤い帯は要らない。レジクローズがまだ、とだけ」
+ *   「レジクローズは iPad のレジアプリでしかできないので、ここは知らせるだけ。リンクは要らない」）。
+ *   「M/D のレジがまだクローズされていません」を控えめに出すだけ（ボタン無し）。レジ（iPad）はこれまでどおり。
  */
 export async function RegisterDayBanner({ storeId, compact, short }: { storeId: string; compact?: boolean; short?: boolean }) {
   const supabase = await createClient();
@@ -27,9 +28,7 @@ export async function RegisterDayBanner({ storeId, compact, short }: { storeId: 
       >
         <AlertTriangle className="h-4 w-4 shrink-0 text-saffron" aria-hidden />
         <span className="min-w-0 flex-1">{mdLabel(openDate)} のレジがまだクローズされていません</span>
-        <Link href="/app/cash/close" className="shrink-0 rounded-lg bg-white px-3 py-1 text-[12.5px] text-royal underline-offset-2 hover:underline">
-          レジクローズへ
-        </Link>
+        <span className="shrink-0 text-[12px] font-medium text-ink-3">レジクローズは iPad のレジで</span>
       </div>
     );
   }
