@@ -379,15 +379,9 @@ struct NativeTableCard: View {
                 if let b = band {
                     VStack(spacing: 0) {
                         Spacer(minLength: 0)
+                        // 帯は色だけ（字は出さない。色の意味は下の「色の見方」に。2026-10-24 21:46 Ronnie）
                         ZStack(alignment: .top) {
                             b.color
-                            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                                Text(b.jp).font(.system(size: 15, weight: .heavy))
-                                Text(b.en).font(.system(size: 11, weight: .semibold)).opacity(0.85)
-                            }
-                            .lineLimit(1).minimumScaleFactor(0.7)
-                            .foregroundColor(b.ink)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
                             if let o = order {
                                 GeometryReader { g in
                                     ZStack(alignment: .leading) {
@@ -462,7 +456,7 @@ struct NativeTableCard: View {
 
     @State private var pulse = false
 
-    static let bandH: CGFloat = 36
+    static let bandH: CGFloat = 16
     static let callRed = Color(hex: 0xE53935)
     /// QR からのお会計の依頼は緑の財布（お金＝緑。2026-10-24 21:23 Ronnie「財布か緑の ¥」→21:31「財布」）
     /// 色はポップアップの「レジ会計」のボタンと同じ緑（NFColor.success。2026-10-24 21:36 Ronnie）
