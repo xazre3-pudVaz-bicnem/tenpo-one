@@ -83,6 +83,9 @@ final class AppState: ObservableObject {
     @Published var reportsTo: String?
     /// 伝票明細で開く伝票（/app/orders/<id> から。2026-10-24）
     @Published var slipsOpenId: String?
+    /// ネイティブの店舗台帳で開く表示（list / week / gourmet / wait / month / inbox / messages）と、開く予約。Web の ?view= ?open= から
+    @Published var ledgerView: String?
+    @Published var ledgerOpenId: String?
     /// iPhone：ハンディのテーブル一覧（/handy の代わり）とオーナー・店長のホーム（/app/dashboard の代わり）をネイティブで出しているか（2026-10-24）
     @Published var nativeHandyHome = false
     @Published var nativeOwnerHome = false
@@ -296,19 +299,24 @@ final class AppState: ObservableObject {
             nativeNotices = false; nativeBudget = false; nativeCustomers = false; nativeScan = false; nativeReports = false; if !nativeFloor { nativeFloor = true }
             return
         }
-        // 設定（レジの設定 /app/pos/settings と、設定の入口 /app/settings）はネイティブで。中の各画面（/app/settings/…）は Web のまま
-        if url.path == "/app/pos/settings" || url.path == "/app/settings" {
+        // 設定（レジの設定 /app/pos/settings・設定の入口 /app/settings・設定の一覧 /app/settings-all・プリンター・レジ端末）はネイティブで。
+        // プリンター・レジ端末はネイティブの設定の「ハードウェア」（最初に開くページ）
+        if url.path == "/app/pos/settings" || url.path == "/app/settings" || url.path == "/app/settings-all"
+            || url.path == "/app/settings/printers" || url.path.hasPrefix("/app/settings/printers/") || url.path == "/app/settings/devices" {
             nativeFloor = false; nativeNotices = false; nativeBudget = false; nativeCustomers = false; nativeScan = false; nativeReports = false
             nativeHome = false; nativeLedger = false; nativeCash = false; nativeCashIo = false; nativeQuick = false; nativeSlips = false
             nativeExpenses = false; nativeStock = false; nativeInventory = false; nativeVendors = false; nativePurchases = false; nativeCoupons = false
             if !nativeSettings { nativeSettings = true }
             return
         }
-        if url.path == "/app/reservations" {
+        // 店舗台帳は全部の表示をネイティブで（1日・予約リスト・週間・グルメ別・キャンセル待ち・月間・受付管理・メッセージ。
+        // 2026-10-24 22:05 Ronnie「iPad のオプションは全部ネイティブ」）。?open=<予約> はその予約の詳細を開く
+        if url.path == "/app/reservations" || url.path == "/app/reservations/list" || url.path == "/app/reservations/calendar" {
             let q = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
-            let view = q.first { $0.name == "view" }?.value
-            // 1日のスケジュールだけネイティブ（週間・グルメ別・キャンセル待ち・受付管理はまだ Web）
-            if view == nil || view == "day" {
+            let view = url.path == "/app/reservations/list" ? "list" : url.path == "/app/reservations/calendar" ? "month" : q.first { $0.name == "view" }?.value
+            ledgerView = view
+            ledgerOpenId = q.first { $0.name == "open" }?.value
+            do {
                 nativeFloor = false; nativeNotices = false; nativeBudget = false; nativeCustomers = false; nativeScan = false; nativeReports = false
                 nativeCash = false
                 nativeCashIo = false

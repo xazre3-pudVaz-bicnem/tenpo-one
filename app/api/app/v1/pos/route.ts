@@ -335,8 +335,15 @@ export async function GET(request: Request) {
     if (!store) return json({ ok: false, error: '店舗がありません' }, 404);
     if (ctx.disabledFeatures?.has('reservations')) return json({ ok: false, error: 'この機能は使えません', useWeb: true }, 403);
     const dateParam = url.searchParams.get('date');
-    const date = dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) ? dateParam : null;
-    const ledger = await loadNativeLedger(ctx, await createClient(), store, date);
+    let date = dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) ? dateParam : null;
+    const supabase = await createClient();
+    // ?open=<予約> だけ来たら（設定・グルメ連携の「台帳で開く」）、その予約の日の台帳を返す
+    const openId = url.searchParams.get('open');
+    if (!date && openId && /^[0-9a-f-]{36}$/i.test(openId)) {
+      const { data: hit } = await supabase.from('reservations').select('reserved_date').eq('id', openId).eq('store_id', store.id).maybeSingle();
+      if (hit?.reserved_date) date = String(hit.reserved_date);
+    }
+    const ledger = await loadNativeLedger(ctx, supabase, store, date);
     return json({ ok: true, ...ledger });
   }
 

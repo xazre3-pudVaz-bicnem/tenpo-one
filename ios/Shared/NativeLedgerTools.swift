@@ -133,6 +133,9 @@ struct NLToolbar: View {
         }
         .buttonStyle(PressableStyle())
         .accessibilityLabel("予約受付管理")
+        // Web の ?view=inbox から来たら受付管理を開く
+        .onChange(of: model.inboxRequest) { v in if v == "inbox" { tasksOpen = true; model.inboxRequest = nil } }
+        .onAppear { if model.inboxRequest == "inbox" { tasksOpen = true; model.inboxRequest = nil } }
         .popover(isPresented: $tasksOpen, arrowEdge: .top) {
             NLInboxSheet(inbox: inbox, model: model, onClose: { tasksOpen = false }, tab: .tasks)
         }
