@@ -172,12 +172,12 @@ struct NativeFloorView: View {
     // MARK: 卓の箱
 
     private func tableGrid(width: CGFloat, height: CGFloat) -> some View {
-        // 1 行に 5 卓。箱は正方形にせず、縦長（高さ 220）。間は 28 で、左の端・箱と箱の間・右の予約の欄との間が全部同じ
-        // （2026-10-24 21:20 Ronnie「1 行に 5 つ、正方形でなくていい」。それまでの間・大きさの話は 20:36〜20:57）
+        // 1 行に 4 卓（5 だと印が入りきらない。2026-10-24 21:50 Ronnie「4 つで良い」）。高さ 220。間は 28 で、
+        // 左の端・箱と箱の間・右の予約の欄との間が全部同じ（21:20「正方形でなくていい」。間・大きさの話は 20:36〜20:57）
         let gapS: CGFloat = 28
         let outer: CGFloat = 14
         let total = width + outer * 2
-        let cols = 5
+        let cols = 4
         let side = max(120, (total - gapS * CGFloat(cols + 1)) / CGFloat(cols))
         let space = gapS
         let inset = max(0, space - outer)
