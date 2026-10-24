@@ -118,6 +118,9 @@ import { addSlipToTable, cancelEmptyOrder, clearTable, mergeOrders, moveTable, s
 import { completeCleaning, goToOrder, releaseFinishedCleaning, setTableAvailability } from '@/app/app/floor/actions';
 import { saveTableGroup } from '@/app/app/floor/group-actions';
 import { resolveServiceCall, startRegisterVisit } from '@/app/app/handy/actions';
+import { isNativeTableQrActionType, parseNativeTableQrAction } from '@/lib/native-table-qr';
+import { loadNativeTableQr } from '@/lib/native-table-qr-server';
+import { invalidateTableQrToken, regenerateTableQrToken } from '@/app/app/settings/tables/actions';
 
 /**
  * iPad アプリのネイティブ画面（オーダー・会計）用の入口（2026-10-13 Ronnie「Airレジのようにネイティブで」）。
@@ -275,6 +278,14 @@ export async function GET(request: Request) {
       wifiOnly: qr.wifiOnly,
       activeDevices: activeDevices ?? 0,
     });
+  }
+
+  // テーブルQRコード（Web の 設定 > テーブル > QR印刷。印刷物は iPad の中で描く。2026-10-24 Ronnie「QR印刷・再発行をネイティブに」）
+  if (part === 'tableQr') {
+    const store = ctx.currentStore ?? ctx.stores[0] ?? null;
+    if (!store) return json({ ok: false, error: '店舗がありません' }, 404);
+    if (!can(ctx.role, 'store.settings')) return json({ ok: false, error: '権限がありません' }, 403);
+    return json({ ok: true, ...(await loadNativeTableQr(ctx, await createClient(), { id: store.id, name: store.name })) });
   }
 
   // 在庫設定（本日の残り数。Web の /app/inventory/menu-stock）
@@ -868,6 +879,27 @@ export async function POST(request: Request) {
         await createAnnouncement({ title: na.title, body: na.body, isImportant: na.isImportant, publishFrom: na.publishFrom, publishTo: na.publishTo, storeId: na.allStores ? null : target!.id });
       }
       return json({ ok: true });
+    } catch (e) {
+      return json({ ok: false, error: errorText(e, 'うまくいきませんでした。もう一度お試しください') }, 400);
+    }
+  }
+
+  // テーブルQRの再発行・停止（中身は Web の 設定 > テーブル の「QRコード」と同じ Server Action。2026-10-24）
+  if (raw && typeof raw === 'object' && isNativeTableQrActionType((raw as { type?: unknown }).type)) {
+    const parsedQr = parseNativeTableQrAction(raw);
+    if (!parsedQr.ok) return json({ ok: false, error: parsedQr.error }, 400);
+    if (!can(ctx.role, 'store.settings')) return json({ ok: false, error: '権限がありません' }, 403);
+    // Route Handler では requirePermission がお店の回線を見ないので、ここで見る（ほかの操作と同じ）
+    const qrProblem = await networkProblem(ctx);
+    if (qrProblem) return json({ ok: false, error: qrProblem }, 403);
+    try {
+      // レジ端末のアカウントからは Web と同じく不可（ADMIN_ONLY_SETTINGS_NOTE が error で返る）
+      const r =
+        parsedQr.action.type === 'tableQrRegenerate'
+          ? await regenerateTableQrToken(parsedQr.action.tableId)
+          : await invalidateTableQrToken(parsedQr.action.tableId);
+      if (r.error) return json({ ok: false, error: r.error }, 400);
+      return json({ ok: true, url: r.url ?? null, invalidated: r.invalidated === true });
     } catch (e) {
       return json({ ok: false, error: errorText(e, 'うまくいきませんでした。もう一度お試しください') }, 400);
     }
