@@ -277,12 +277,15 @@ struct NativeTableCard: View {
                                 .background(Circle().fill(Color.white))
                                 .shadow(color: .black.opacity(0.06), radius: 3, y: 1)
                         }
-                        HStack(spacing: 4) {
-                            if state == .unavailable { Image(systemName: "lock.fill").font(.system(size: 11)) }
-                            if state == .cleaning { Image(systemName: "sparkles").font(.system(size: 11)) }
-                            Text(state == .seated || state == .pay ? "注文なし / No order" : state.label)
+                        // 空席は ＋ だけで分かるので「空席」は書かない（2026-10-24 Ronnie）
+                        if state != .free {
+                            HStack(spacing: 4) {
+                                if state == .unavailable { Image(systemName: "lock.fill").font(.system(size: 11)) }
+                                if state == .cleaning { Image(systemName: "sparkles").font(.system(size: 11)) }
+                                Text(state == .seated || state == .pay ? "注文なし / No order" : state.label)
+                            }
+                            .font(.system(size: 12, weight: .semibold)).foregroundColor(NFColor.ink3)
                         }
-                        .font(.system(size: 12, weight: .semibold)).foregroundColor(NFColor.ink3)
                         if table.isPrivateRoom || table.isCounter {
                             Text(table.isPrivateRoom ? "個室" : "カウンター").font(.system(size: 10.5)).foregroundColor(NFColor.ink3)
                         }
