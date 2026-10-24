@@ -25,7 +25,7 @@ struct APICatalog: Codable {
 }
 
 /// 伝票を開く・読み直すときの軽い部分（`?part=live`）
-struct APILive: Decodable {
+struct APILive: Codable {
     let order: APIOrder
     let registerOpen: Bool
     let steraTerminals: [APISteraTerminal]

@@ -471,6 +471,10 @@ final class NativeOrderModel: ObservableObject {
         guard let orderId else { return }
         if let cached = NativeCatalogCache.shared.load() {
             apply(catalog: cached)
+            // 前に開いた伝票なら、保存してある内容を先に出す（押した瞬間に出る。2026-10-24 Ronnie「0.5 sec 取込み」）
+            if let saved = NativeDiskCache.load(APILive.self, key: "live-\(orderId)"), saved.order.id == orderId {
+                apply(live: saved, fromCache: true)
+            }
             loading = false
             do {
                 let live = try await NativeAPI.shared.loadLive(orderId: orderId)
@@ -486,7 +490,9 @@ final class NativeOrderModel: ObservableObject {
                 notice = e.message
                 if e.useWeb { openInWeb() }
             } catch {
-                notice = "読み込めませんでした。回線を確認してください"
+                notice = NativeNet.isOfflineError(error)
+                    ? "オフラインです。最後に読んだ内容を表示しています（ネットが戻ると読み直します）"
+                    : "読み込めませんでした。回線を確認してください"
             }
             return
         }
@@ -526,8 +532,16 @@ final class NativeOrderModel: ObservableObject {
     /// サーバーから伝票を読めたか（読めていないのに「品なし」と思って消さないように）
     private(set) var orderLoaded = false
 
-    private func apply(live l: APILive) {
-        orderLoaded = true
+    /// 最後に読んだ伝票（iPad に保存して、次に開くとき先に出す。ネットが無いときもこれで出る）
+    private var lastLive: APILive?
+
+    private func apply(live l: APILive, fromCache: Bool = false) {
+        // 保存から出したときは「読み終わった」にしない（会計・空の伝票の取消は新しい内容を読んでから）
+        if !fromCache {
+            orderLoaded = true
+            lastLive = l
+            if let id = orderId { NativeDiskCache.save(l, key: "live-\(id)") }
+        }
         steraTerminals = l.steraTerminals
         registerOpen = l.registerOpen
         approvers = l.approvers ?? []
@@ -606,7 +620,15 @@ final class NativeOrderModel: ObservableObject {
         defer { busy = false }
         do {
             let r = try await NativeAPI.shared.act(body)
-            if let o = r.order { apply(order: o) }
+            if let o = r.order {
+                apply(order: o)
+                // 保存している伝票も新しくする（次に開くときに古い内容を出さない）
+                if let l = lastLive, let id = orderId {
+                    let next = APILive(order: o, registerOpen: l.registerOpen, steraTerminals: l.steraTerminals, storeId: l.storeId, approvers: l.approvers)
+                    lastLive = next
+                    NativeDiskCache.save(next, key: "live-\(id)")
+                }
+            }
             return r
         } catch {
             notice = error.localizedDescription

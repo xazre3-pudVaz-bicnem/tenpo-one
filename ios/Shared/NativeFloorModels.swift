@@ -436,7 +436,12 @@ final class NativeFloorModel: ObservableObject {
         sweeper = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
             Task { @MainActor in await self?.sweepCleaning() }
         }
-        Task { await refresh(silent: false) }
+        // 保存してあるテーブル一覧を先に出す（押した瞬間に出る。裏で読み直す）
+        if payload == nil, let saved = NativeDiskCache.load(NFPayload.self, key: "floor") {
+            payload = saved
+            if let d = saved.defaultFloorId, saved.floors.contains(where: { $0.id == d }) { floorFilter = d }
+        }
+        Task { await refresh(silent: payload != nil) }
     }
 
     func stop() {
@@ -449,6 +454,8 @@ final class NativeFloorModel: ObservableObject {
         if !silent { loading = payload == nil }
         do {
             let p = try await NativeAPI.shared.loadFloor(storeId: payload?.store.id)
+            // 次に開くとき先に出す・ネットが無いときもこれで出す
+            NativeDiskCache.save(p, key: "floor")
             offsetMs = p.serverNow - Date().timeIntervalSince1970 * 1000
             now = p.serverNow
             let first = payload == nil

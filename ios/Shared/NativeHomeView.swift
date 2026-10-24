@@ -96,6 +96,10 @@ final class NativeHomeModel: ObservableObject {
         refresher = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
             Task { @MainActor in await self?.refresh() }
         }
+        // 保存してあるホームを先に出す（押した瞬間に出る。裏で読み直す）
+        if payload == nil, let data = NativeDiskCache.load("home"), let saved = try? JSONDecoder().decode(NHPayload.self, from: data) {
+            payload = saved
+        }
         Task { await refresh() }
     }
 
@@ -110,6 +114,8 @@ final class NativeHomeModel: ObservableObject {
             comps.queryItems = [URLQueryItem(name: "part", value: "home")]
             let data = try await NativeAPI.shared.send(URLRequest(url: comps.url!))
             let p = try JSONDecoder().decode(NHPayload.self, from: data)
+            // 次に開くとき先に出す・ネットが無いときもこれで出す
+            NativeDiskCache.save(data, key: "home")
             offset = p.serverNow / 1000 - Date().timeIntervalSince1970
             now = Date().addingTimeInterval(offset)
             payload = p

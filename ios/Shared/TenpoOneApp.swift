@@ -17,6 +17,13 @@ struct RootView: View {
     @EnvironmentObject var state: AppState
 
     var body: some View {
+        rootStack
+            // ネットが無いときは上に「オフライン」（2026-10-24 Ronnie「net nachale pani …」）
+            .overlay(alignment: .top) { NativeOfflineBanner().zIndex(100) }
+            .onAppear { NativeDiskCache.sweep(prefix: "live-") }
+    }
+
+    private var rootStack: some View {
         ZStack {
             Brand.background.ignoresSafeArea()
             if let preview = NativePreview.current {
