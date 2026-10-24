@@ -65,7 +65,7 @@ struct NativeLiveOrderScreen: View {
                 await model.discardIfUntouched()
                 AppState.shared.closeNativePos(openWebPath: nil)
             }
-        })
+        }, startInCheckout: checkout)
             .task {
                 await model.load()
                 // 卓のポップアップの「レジ会計」からは、開いてすぐ会計の画面に
