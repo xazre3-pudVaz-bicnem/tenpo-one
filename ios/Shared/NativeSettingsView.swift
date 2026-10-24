@@ -14,8 +14,12 @@ struct NativeSettingsView: View {
     let onWeb: (String) -> Void
 
     @State private var nativeOn = AppState.shared.nativePosEnabled
-    /// 左の一覧で選んでいるもの
-    @State private var sel: Sel = .page(.printer)
+    /// 左の一覧で選んでいるもの。中の画面から戻ったときは、前に開いていた項目に戻す
+    /// （2026-10-25 00:19 Ronnie「メニューから中に入って戻るとハードウェアに行く。メニューに戻るように」）
+    @State private var sel: Sel = NativeSettingsView.lastSel
+    private static var lastSel: Sel = .page(.printer)
+    /// どのフロアの卓の会計伝票もこの iPad で出す（レジ受付）
+    @State private var billAtRegister = NativeRegisterBill.enabled
     /// ログアウトの確認
     @State private var confirmLogout = false
 
@@ -190,6 +194,7 @@ struct NativeSettingsView: View {
     }
 
     private func select(_ s: Sel) {
+        Self.lastSel = s
         withAnimation(.easeOut(duration: 0.12)) { sel = s }
     }
 
@@ -234,6 +239,7 @@ struct NativeSettingsView: View {
             // 印刷はぜんぶここ：つなぐ → 出し先 → LAN → Wi-Fi → ネットが無いとき
             bluetoothCard
             receiptCard
+            billSlipCard
             if !model.lanPrinters.isEmpty { lanCard }
             if !model.wifiPrinters.isEmpty { wifiCard }
             NativeOfflinePrintCard()
@@ -560,19 +566,24 @@ struct NativeSettingsView: View {
                 }
                 if let found = model.found { foundList(found).padding(.horizontal, 20).padding(.vertical, 12) }
                 row("レシート紙幅", en: "Paper width", dim: off) {
-                    // 見本と同じ：枠だけのボタン。選んでいるものは青い枠＋青い字
-                    HStack(spacing: 10) {
+                    // 押して中から選ぶ（機種と同じ形）。外にボタンを並べると、分からない人が触って変えてしまうので
+                    // （2026-10-25 00:22 Ronnie「中に入って選ぶように。外だと知らない人が壊すこともある」）
+                    Menu {
                         ForEach([58, 80], id: \.self) { w in
                             Button { model.paper = w } label: {
-                                Text("\(w)mm").font(.system(size: 16, weight: .bold))
-                                    .foregroundColor(model.paper == w ? NFColor.iris : NFColor.ink3)
-                                    .frame(width: 120, height: 46)
-                                    .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(model.paper == w ? NFColor.irisSoft : Color.white))
-                                    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(model.paper == w ? NFColor.iris : NFColor.line, lineWidth: model.paper == w ? 1.5 : 1))
+                                if model.paper == w { Label("\(w)mm", systemImage: "checkmark") } else { Text("\(w)mm") }
                             }
-                            .buttonStyle(PressableStyle()).disabled(off || locked)
                         }
+                    } label: {
+                        HStack(spacing: 10) {
+                            Text("\(model.paper)mm").font(.system(size: 16, weight: .bold)).foregroundColor(NFColor.ink)
+                            Image(systemName: "chevron.up.chevron.down").font(.system(size: 12, weight: .bold)).foregroundColor(NFColor.ink3)
+                        }
+                        .padding(.horizontal, 14).frame(height: 46).frame(minWidth: 260, alignment: .trailing)
+                        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(off ? NFColor.lilacSoft : Color.white))
+                        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(NFColor.line, lineWidth: 1))
                     }
+                    .disabled(off || locked)
                 }
                 row("会計レシート自動印刷", en: "Print receipt after checkout", dim: off) {
                     toggle(model.autoPrint, disabled: off || locked) { model.autoPrint.toggle() }
@@ -658,6 +669,17 @@ struct NativeSettingsView: View {
                     }
                 }
                 .padding(18)
+            }
+        }
+    }
+
+    /// 会計伝票：どのフロアの卓もこのレジで（レジ受付）。端末ごとの設定
+    private var billSlipCard: some View {
+        card(icon: "doc.text", title: "会計伝票（フロアがある店）", en: "Bill slips",
+             description: "受付のレジで、どのフロアの卓の会計伝票もこの iPad のレシートプリンター（Bluetooth・LAN）で出します。OFF のときは今まで通り、その卓のフロアのプリンターから出ます") {
+            row("どのフロアの会計伝票もこのレジで出す", en: "Print every floor's bill here") {
+                Toggle("", isOn: Binding(get: { billAtRegister }, set: { v in billAtRegister = v; NativeRegisterBill.enabled = v }))
+                    .labelsHidden().tint(NFColor.iris)
             }
         }
     }
