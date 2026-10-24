@@ -40,7 +40,7 @@ import {
   type OfflineTotalsLine,
 } from './native-offline-kit';
 
-export const PRINT_KIT_VERSION = 2;
+export const PRINT_KIT_VERSION = 3;
 
 export type PrintKitMaker = OfflineMaker;
 
@@ -264,16 +264,19 @@ export function slipJob(kit: NativeOfflineKit, input: { slip: Omit<OrderSlipData
   };
 }
 
-/** レシート（レジ機へ）。drawer＝現金ならドロアも開ける（プリンターのドロア設定が ON のとき） */
+/**
+ * レシート（レジ機へ）。drawer＝現金ならドロアも開ける（プリンターのドロア設定が ON のとき）。
+ * print: 'auto'＝レジ機の「自動印刷」が ON のときだけ（会計のあと。サーバーの checkout と同じ）、true＝いつも（再発行）
+ */
 export function receiptJob(
   kit: NativeOfflineKit,
-  input: { receipt: Omit<BuildReceiptInput, 'methodLabels' | 'store'>; drawer: boolean; print: boolean }
+  input: { receipt: Omit<BuildReceiptInput, 'methodLabels' | 'store'>; drawer: boolean; print: boolean | 'auto' }
 ): { printer: KitPrinter; data: string } | null {
   const printer = receiptPrinterFor(kit.printers, kit.preferredReceiptPrinterId);
   if (!printer) return null;
   const parts: Buffer[] = [];
   if (input.drawer && printer.drawerKick) parts.push(Buffer.from(drawerBytes({ maker: printer.maker, command: printer.drawerCommand }), 'base64'));
-  if (input.print) {
+  if (input.print === true || (input.print === 'auto' && printer.autoPrint)) {
     parts.push(
       Buffer.from(receiptBytes({ receipt: { ...input.receipt, store: kit.store }, maker: printer.maker, paperWidth: printer.paperWidth }), 'base64')
     );

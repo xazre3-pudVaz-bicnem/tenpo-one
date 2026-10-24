@@ -8,7 +8,7 @@ import Combine
 /// プリンターの LAN アドレス・レシートの文言・厨房伝票の設定・商品の持ち場と税）を、ネットのあるときに iPad に保存しておき、
 /// ネットが無いときは JavaScriptCore で呼んで、伝票・レシートのバイト列（と厨房伝票の TicketDesign）を作る。
 /// デザインはサーバーと同じ（二重に作らない）。描くのは NativeTicketRaster、送るのは NativeOfflinePrint。
-final class NativePrintKit {
+final class NativePrintKit: @unchecked Sendable {
     static let shared = NativePrintKit()
 
     /// 保存の名前（Application Support/tenpo-cache）
@@ -97,6 +97,8 @@ final class NativePrintKit {
             if obj["same"] as? Bool == true { return }
             guard let kit = obj["kit"], let kitData = try? JSONSerialization.data(withJSONObject: kit) else { return }
             NativeDiskCache.save(kitData, key: Self.kitKey)
+            cachedKit = nil
+            kitVersionOnDisk = (kit as? [String: Any])?["version"] as? String
             queue.async { self.loadedKitVersion = nil }
         } catch {
             NSLog("[print-kit] kit refresh failed: \(error.localizedDescription)")
@@ -112,8 +114,16 @@ final class NativePrintKit {
         return obj["version"] as? String
     }
 
-    /// 保存してある道具箱（画面の表示用。プリンターの一覧など）
-    var kit: OfflineKit? { NativeDiskCache.load(OfflineKit.self, key: Self.kitKey) }
+    /// 保存してある道具箱（画面の表示・オフラインの合計。読み直したら入れ替える）
+    var kit: OfflineKit? {
+        if let k = cachedKit, k.version == kitVersionOnDisk { return k }
+        let k = NativeDiskCache.load(OfflineKit.self, key: Self.kitKey)
+        cachedKit = k
+        kitVersionOnDisk = k?.version
+        return k
+    }
+    private var cachedKit: OfflineKit?
+    private var kitVersionOnDisk: String?
 
     /// キットが使える（スクリプトと道具箱の両方が保存してある）
     var ready: Bool { NativeDiskCache.load(Self.scriptFile) != nil && NativeDiskCache.load(Self.kitKey) != nil }
@@ -203,8 +213,24 @@ struct OfflineKit: Decodable {
         let lan: Lan?
     }
     struct Store: Decodable { let name: String }
+    /// 商品の税（オフラインの合計に使う）
+    struct Item: Decodable {
+        let categoryId: String?
+        let nameEn: String?
+        let taxRate: Double
+        let taxIncluded: Bool
+    }
+    struct Drawer: Decodable { let autoOpenOnCash: Bool; let openOnCashless: Bool }
     let version: String
     let storeId: String
     let store: Store
     let printers: [Printer]
+    let items: [String: Item]
+    let serviceChargeRate: Double
+    let drawer: Drawer
+}
+
+extension OfflineKit.Printer {
+    /// 会計のあとレシートを自動で出す（レジ機の「自動印刷」）
+    var isReceipt: Bool { usage == "receipt" }
 }

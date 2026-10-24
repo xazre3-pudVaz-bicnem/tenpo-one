@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import Combine
 
 // ネイティブのフロア（テーブル一覧）画面のデータ（2026-10-24 Ronnie「レジは全部ネイティブに。Native ON ならネイティブだけ」）。
 // サーバー（/api/app/v1/pos?part=floor。lib/native-floor-server.ts）の形をそのまま受ける。
@@ -399,6 +400,8 @@ final class NativeFloorModel: ObservableObject {
     private var prefetchedAt: [String: Date] = [:]
 
     private var offsetMs: Double = 0
+    /// オフラインの伝票が変わった・同期した → 画面を出し直す・読み直す
+    private var offlineSinks = Set<AnyCancellable>()
     private var clock: Timer?
     private var refresher: Timer?
     private var sweeper: Timer?
@@ -407,7 +410,10 @@ final class NativeFloorModel: ObservableObject {
     var store: NFNamed? { payload?.store }
     /// 画面の時計（Date）
     var nowDate: Date { Date(timeIntervalSince1970: now / 1000) }
-    var tables: [NFTable] { payload?.tables ?? [] }
+    /// 卓（この iPad がオフラインで受けた伝票を重ねる。NativeFloorOffline.swift）
+    var tables: [NFTable] {
+        NativeFloorOffline.overlay(payload?.tables ?? [], storeId: payload?.store.id, stayMinutes: payload?.stayMinutes ?? 120)
+    }
     var floors: [NFFloor] { payload?.floors ?? [] }
     var selectedTable: NFTable? { tables.first { $0.id == selectedTableId } }
 
@@ -425,6 +431,12 @@ final class NativeFloorModel: ObservableObject {
     var showFloorChips: Bool { floors.count > 1 || (floors.count > 0 && !unassigned.isEmpty) }
 
     func start() {
+        if offlineSinks.isEmpty {
+            NativeOfflineStore.shared.objectWillChange.receive(on: RunLoop.main).sink { [weak self] _ in self?.objectWillChange.send() }.store(in: &offlineSinks)
+            NativeOfflineStore.shared.synced.receive(on: RunLoop.main).sink { [weak self] _ in
+                Task { @MainActor in await self?.refresh(silent: true) }
+            }.store(in: &offlineSinks)
+        }
         clock?.invalidate()
         clock = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             Task { @MainActor in
@@ -485,8 +497,10 @@ final class NativeFloorModel: ObservableObject {
 
     /// 伝票を裏で読んで iPad に保存する（NativeOrderModel が開くときに先に出す）。within 秒以内に読んだものは読まない
     func prefetch(_ ids: [String], within: TimeInterval) {
+        // オフライン・オフラインで始めた伝票（off-…）はサーバーに無い
+        guard NativeNet.shared.online else { return }
         let now = Date()
-        let todo = ids.filter { id in prefetchedAt[id].map { now.timeIntervalSince($0) > within } ?? true }
+        let todo = ids.filter { id in !id.hasPrefix("off-") && (prefetchedAt[id].map { now.timeIntervalSince($0) > within } ?? true) }
         guard !todo.isEmpty else { return }
         for id in todo { prefetchedAt[id] = now }
         Task {
@@ -508,6 +522,12 @@ final class NativeFloorModel: ObservableObject {
     func act(_ body: [String: Any], refreshAfter: Bool = true) async -> NFActionResult? {
         busy = true
         defer { busy = false }
+        // ネットが無い：この iPad でできる操作（卓の開始・会計伝票・テーブルクリア）はここで
+        if !NativeNet.shared.online {
+            let r = await offlineAct(body)
+            if !r.ok { show(error: r.error ?? "オフラインではできません") }
+            return r.ok ? r : nil
+        }
         do {
             let r = try await NativeAPI.shared.floorAct(body)
             if !r.ok {
@@ -518,6 +538,11 @@ final class NativeFloorModel: ObservableObject {
             if refreshAfter { await refresh(silent: true) }
             return r
         } catch {
+            // サーバーに届く前に落ちた（ネットが切れた）：この iPad でできる操作なら続ける
+            if NativeOrderModel.notSent(error) {
+                let r = await offlineAct(body)
+                if r.ok { return r }
+            }
             show(error: (error as? NativeAPIError)?.message ?? "通信できませんでした")
             return nil
         }

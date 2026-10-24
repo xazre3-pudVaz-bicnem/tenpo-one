@@ -660,7 +660,13 @@ export async function cancelItem(
   orderId: string,
   orderItemId: string,
   reason: string,
-  approvedByClerkId?: string | null
+  approvedByClerkId?: string | null,
+  /**
+   * レジの iPad がネット無しで取り消した品をあとから入れるとき（2026-10-24 オフライン）。
+   * 取消の時刻はそのとき、厨房の取消伝票・レジの取消の紙は iPad がもう出したので、ここでは出さない
+   * （印刷済み数を 0 にして claim_kitchen_items のマイナス差分を作らない）
+   */
+  opts: { offlineAt?: string } = {}
 ) {
   const ctx = await requirePermission('pos.order');
   const why = (reason ?? '').trim();
@@ -681,8 +687,9 @@ export async function cancelItem(
     .update({
       status: 'cancelled',
       cancel_reason: why || (approver ? `担当: ${approver}` : null),
-      cancelled_at: new Date().toISOString(),
+      cancelled_at: opts.offlineAt ?? new Date().toISOString(),
       updated_by: ctx.userId,
+      ...(opts.offlineAt ? { kitchen_printed_qty: 0 } : {}),
     })
     .eq('id', orderItemId);
   if (error) throw new Error(error.message);
@@ -702,7 +709,7 @@ export async function cancelItem(
 
   // 一度キッチンへ出した品を取り消したときは、レジにも「取消」の紙を出す（2026-09-24 店舗要望）。
   // 厨房ぶんは claim_kitchen_items のマイナス差分で自動的に出る。印刷に失敗しても取消は成立させる。
-  if (line.kitchen_sent_at) {
+  if (line.kitchen_sent_at && !opts.offlineAt) {
     try {
       const modifiers = ((line.modifiers ?? []) as { name?: string }[])
         .map((m) => m?.name)
@@ -789,7 +796,9 @@ export async function checkout(
   payments: CheckoutPayment[],
   /** 支払メモ（2026-09-25 店舗要望「カードで取ったつもりが現金になった時などの理由を残したい」） */
   paymentMemo?: string,
-  bluetoothLink?: CheckoutBluetoothLink
+  bluetoothLink?: CheckoutBluetoothLink,
+  /** skipReceipt: レジの iPad がネット無しで会計してレシートをもう出した伝票をあとから入れるとき（2026-10-24 オフライン） */
+  opts: { skipReceipt?: boolean } = {}
 ): Promise<CheckoutOutcome> {
   const ctx = await requirePermission('pos.checkout');
   const supabase = await createClient();
@@ -909,9 +918,11 @@ export async function checkout(
   let receipt: CheckoutReceipt | undefined;
   let warning: string | null = null;
   try {
-    receipt = (await checkoutBluetoothReceipt(supabase, order.store_id, orderId, bluetoothLink)) ?? undefined;
-    const printer = receipt ? null : await receiptPrinterForAutoPrint(supabase, order.store_id);
-    if (printer) await enqueueReceiptPrint(orderId);
+    if (!opts.skipReceipt) {
+      receipt = (await checkoutBluetoothReceipt(supabase, order.store_id, orderId, bluetoothLink)) ?? undefined;
+      const printer = receipt ? null : await receiptPrinterForAutoPrint(supabase, order.store_id);
+      if (printer) await enqueueReceiptPrint(orderId);
+    }
   } catch (e) {
     console.error('[pos.checkout] receipt auto print failed:', e);
     warning = '会計は完了しましたが、レシートを自動印刷できませんでした。レシートを再発行してください。';
@@ -1461,7 +1472,9 @@ export async function cancelEmptyOrder(
 export async function clearTable(
   orderId: string,
   reason: string,
-  approvedByClerkId?: string | null
+  approvedByClerkId?: string | null,
+  /** オフラインでクリアした卓をあとから入れるとき（cancelItem と同じ。紙は iPad がもう出した） */
+  opts: { offlineAt?: string } = {}
 ): Promise<{ cancelledItems: number }> {
   const ctx = await requirePermission('pos.checkout');
   const why = (reason ?? '').trim();
@@ -1489,7 +1502,7 @@ export async function clearTable(
 
   // 1品ずつ取消（承認・監査・取消伝票は cancelItem の中）
   for (const id of ids) {
-    await cancelItem(orderId, id, note, approvedByClerkId);
+    await cancelItem(orderId, id, note, approvedByClerkId, opts);
   }
   // 品目が無くなった伝票を取消して卓を空席に戻す（cancelEmptyOrder の中で卓・予約も戻す）
   await cancelEmptyOrder(orderId, note, approvedByClerkId);

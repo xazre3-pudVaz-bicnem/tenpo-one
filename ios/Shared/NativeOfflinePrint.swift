@@ -157,9 +157,18 @@ final class NativeOfflinePrint {
         let tableName: String?
     }
 
-    /// レシート（レジ機へ）。drawer＝現金でドロアも開ける
-    func receipt(_ receipt: ReceiptInput, drawer: Bool, print: Bool) async -> Outcome? {
-        struct In: Encodable { let receipt: ReceiptInput; let drawer: Bool; let print: Bool }
+    /// レシート（レジ機へ）。drawer＝現金でドロアも開ける。print: nil＝レジ機の「自動印刷」に従う（会計のあと）、true＝必ず（再発行）
+    func receipt(_ receipt: ReceiptInput, drawer: Bool, print: Bool?) async -> Outcome? {
+        struct In: Encodable {
+            let receipt: ReceiptInput; let drawer: Bool; let print: Bool?
+            enum K: String, CodingKey { case receipt, drawer, print }
+            func encode(to e: Encoder) throws {
+                var c = e.container(keyedBy: K.self)
+                try c.encode(receipt, forKey: .receipt)
+                try c.encode(drawer, forKey: .drawer)
+                if let print { try c.encode(print, forKey: .print) } else { try c.encode("auto", forKey: .print) }
+            }
+        }
         do {
             guard let job = try await NativePrintKit.shared.call("receiptJob", In(receipt: receipt, drawer: drawer, print: print), as: BytesJob?.self) else { return nil }
             return await sendBytes(job)
