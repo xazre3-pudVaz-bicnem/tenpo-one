@@ -1,8 +1,9 @@
 import SwiftUI
 import UIKit
 
-// 店舗台帳の上のボタン（Web の components/reservations/ledger-header.tsx の LedgerTop と同じ並び・同じ働き。2026-10-24 Ronnie「色だけ変えて、機能は全部そのまま」）
-//   退店管理 ／ CSV出力 ／ 集計 ／ PDF作成 ／ ＋予約登録 ／ 📅（スケジュール・予約リスト・グルメ別・週間・月間カレンダー・ウェイティング・未連絡の予約・空席検索・直接来店・顧客台帳・グルメ連携・台帳設定）
+// 店舗台帳の上のボタン（Web の components/reservations/ledger-header.tsx の LedgerTop と同じ働き）
+//   2026-10-24 Ronnie「ボタンはアイコンの下に文字。外に出すのは 会計・オーダー・その他（…）・｜・予約登録 だけ。あとは その他 の中に」（退店管理 → 会計・オーダー に名前を変更。行き先は同じフロア画面）
+//   その他 = CSV出力・集計・PDF作成・空席検索・直接来店・スケジュール・予約リスト・グルメ別・週間・月間カレンダー・ウェイティング・未連絡の予約・顧客台帳・台帳設定
 
 /// 空席検索の結果（サーバー ledgerFindSeats）
 struct NLFindSeatsResult: Decodable {
@@ -101,16 +102,17 @@ struct NLToolbar: View {
     private var month: String { String(date.prefix(7)) }
 
     var body: some View {
-        HStack(spacing: 8) {
-            Spacer(minLength: 0)
-            if p?.links?.tables ?? true { action("door.left.hand.open", "退店管理", en: "Tables", action: onFloor) }
-            action("tablecells", "CSV出力", en: "CSV", action: onCsv)
-            if p?.links?.analytics ?? false { action("chart.bar", "集計", en: "Reports") { onWeb("/app/reports?from=\(month)-01&to=\(date)") } }
-            action("arrow.down.doc", "PDF作成", en: "PDF", action: onPdf)
-            if p?.canWrite ?? false {
-                action("plus", "予約登録", en: "New", fill: NLColor.yellow, ink: NLColor.navy, action: onNew)
-            }
+        HStack(spacing: 2) {
+            // 右上は「会計・オーダー」（ネイティブのオーダー・会計＝フロア画面へ。2026-10-24 Ronnie「退店管理はいらない、会計・オーダーにして」）
+            item("desktopcomputer", "会計・オーダー", action: onFloor)
             Menu {
+                Button(action: onCsv) { Label("CSV出力", systemImage: "tablecells") }
+                if p?.links?.analytics ?? false { Button { onWeb("/app/reports?from=\(month)-01&to=\(date)") } label: { Label("集計", systemImage: "chart.bar") } }
+                Button(action: onPdf) { Label("PDF作成", systemImage: "arrow.down.doc") }
+                Divider()
+                Button(action: onFindSeats) { Label("空席検索", systemImage: "magnifyingglass") }
+                if p?.canWrite ?? false { Button(action: onWalkIn) { Label("直接来店", systemImage: "figure.walk") } }
+                Divider()
                 Button { model.listMode = false; model.gourmetMode = false; model.weekMode = false; model.monthMode = false; model.waitMode = false } label: { Label("スケジュール", systemImage: "calendar.day.timeline.left") }
                 Button { model.listMode = true; model.gourmetMode = false; model.weekMode = false; model.monthMode = false; model.waitMode = false } label: { Label("予約リスト", systemImage: "list.bullet") }
                 Button { model.gourmetMode = true; model.weekMode = false; model.monthMode = false; model.waitMode = false } label: { Label("グルメ別", systemImage: "fork.knife") }
@@ -121,11 +123,8 @@ struct NLToolbar: View {
                     let n = p?.unconfirmed ?? p?.summary.unconfirmed ?? 0
                     Label(n > 0 ? "未連絡の予約（\(n)）" : "未連絡の予約", systemImage: "phone.badge.waveform")
                 }
-                Divider()
-                Button(action: onFindSeats) { Label("空席検索", systemImage: "magnifyingglass") }
-                if p?.canWrite ?? false { Button(action: onWalkIn) { Label("直接来店", systemImage: "figure.walk") } }
+                if (p?.links?.customers ?? false) || (p?.links?.settings ?? false) { Divider() }
                 if p?.links?.customers ?? false {
-                    Divider()
                     Button { onWeb("/app/customers") } label: { Label("顧客台帳", systemImage: "person.text.rectangle") }
                 }
                 if p?.links?.settings ?? false {
@@ -134,30 +133,35 @@ struct NLToolbar: View {
                     Button { onWeb("/app/settings/booking") } label: { Label("台帳設定", systemImage: "gearshape") }
                 }
             } label: {
-                Image(systemName: "calendar")
-                    .font(.system(size: 18, weight: .bold)).foregroundColor(.white)
-                    .frame(width: 44, height: 44)
-                    .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(NLColor.blue))
+                itemLabel("ellipsis", "その他")
             }
-            .accessibilityLabel("ほかの台帳・設定")
+            .accessibilityLabel("その他（CSV・集計・PDF・空席検索・ほかの台帳・設定）")
+            if p?.canWrite ?? false {
+                // 点線の仕切り → 予約登録
+                Path { path in path.move(to: .zero); path.addLine(to: CGPoint(x: 0, y: 44)) }
+                    .stroke(NLColor.gray, style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
+                    .frame(width: 1, height: 44)
+                    .padding(.horizontal, 6)
+                item("plus", "予約登録", action: onNew)
+            }
         }
-        .padding(.horizontal, 16).padding(.top, 10)
+        .padding(.trailing, 16)
     }
 
-    private func action(_ icon: String, _ ja: String, en: String, fill: Color = NLColor.navy, ink: Color = .white, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 7) {
-                Image(systemName: icon).font(.system(size: 15, weight: .bold))
-                VStack(alignment: .leading, spacing: 0) {
-                    Text(ja).font(.system(size: 15, weight: .heavy))
-                    Text(en).font(.system(size: 9, weight: .bold)).opacity(0.7)
-                }
-            }
-            .foregroundColor(ink)
-            .padding(.horizontal, 14).frame(height: 44)
-            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(fill))
+    /// アイコンの下に文字のボタン（塗りなし）
+    private func item(_ icon: String, _ ja: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) { itemLabel(icon, ja) }
+            .buttonStyle(PressableStyle())
+    }
+
+    private func itemLabel(_ icon: String, _ ja: String) -> some View {
+        VStack(spacing: 5) {
+            Image(systemName: icon).font(.system(size: 24, weight: .regular)).frame(height: 28)
+            Text(ja).font(.system(size: 12, weight: .semibold))
         }
-        .buttonStyle(PressableStyle())
+        .foregroundColor(NLColor.navy)
+        .frame(width: 88, height: 60)
+        .contentShape(Rectangle())
     }
 }
 
