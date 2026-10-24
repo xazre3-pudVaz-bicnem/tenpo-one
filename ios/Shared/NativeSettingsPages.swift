@@ -40,6 +40,8 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
     case summary = "summary"
     case menuBulk = "menuBulk"
     case dataImport = "import"
+    /// 店舗名刺（A4 に横名刺10枚）。GET は lib/native-modules/business-cards.ts（NATIVE_MODULE_GET）
+    case businessCards = "businessCards"
     var id: String { rawValue }
 
     /// Web の道（クエリは見ない）
@@ -75,6 +77,7 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
         case .summary: return "/app/settings/summary"
         case .menuBulk: return "/app/settings/menu-bulk"
         case .dataImport: return "/app/settings/import"
+        case .businessCards: return "/app/settings/store/business-cards"
         }
     }
     var title: String {
@@ -109,6 +112,7 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
         case .summary: return "集計"
         case .menuBulk: return "メニュー一括編集"
         case .dataImport: return "データ取込"
+        case .businessCards: return "店舗名刺"
         }
     }
     var en: String {
@@ -143,13 +147,17 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
         case .summary: return "Reports & admin"
         case .menuBulk: return "Bulk edit"
         case .dataImport: return "Import"
+        case .businessCards: return "Business cards"
         }
     }
+
+    /// 別の道で同じ画面を開くもの（Web が redirect している古い道）。メニュー集計は 設定 › 集計 へ移した（Web の app/app/menu/summary/page.tsx）
+    private static let aliases: [String: NativeSettingsPageKey] = ["/app/menu/summary": .summary]
 
     /// 道からネイティブの画面へ（無ければ nil＝Web のまま）
     static func from(path: String) -> NativeSettingsPageKey? {
         let p = path.hasSuffix("/") && path.count > 1 ? String(path.dropLast()) : path
-        return allCases.first { $0.path == p }
+        return allCases.first { $0.path == p } ?? aliases[p]
     }
 }
 
@@ -188,6 +196,7 @@ struct NativeSettingsPageScreen: View {
         case .summary: NativeSummaryScreen()
         case .menuBulk: NativeMenuBulkScreen()
         case .dataImport: NativeImportScreen()
+        case .businessCards: NativeBusinessCardsScreen()
         }
     }
 }
@@ -1185,12 +1194,18 @@ final class NativeStoreModel: ObservableObject {
 struct NativeStoreScreen: View {
     @StateObject private var model = NativeStoreModel()
     @EnvironmentObject var state: AppState
-    var body: some View { NativeStoreView(model: model, onBack: { state.goNativeSettings() }) }
+    var body: some View {
+        NativeStoreView(model: model, onBack: { state.goNativeSettings() }, onBusinessCards: {
+            state.openSettingsPage(.businessCards, webPath: NativeSettingsPageKey.businessCards.path)
+        })
+    }
 }
 
 struct NativeStoreView: View {
     @ObservedObject var model: NativeStoreModel
     let onBack: () -> Void
+    /// 店舗名刺（A4 に横名刺10枚）を開く。Web の「店舗名刺としてプリントする」と同じ
+    var onBusinessCards: (() -> Void)? = nil
 
     var body: some View {
         NSPFrame(storeName: model.payload?.store.name ?? "", title: "店舗情報", en: "Store", loaded: model.payload != nil, error: model.error, toast: $model.toast, onBack: onBack, retry: { await model.refresh() }) {
@@ -1202,6 +1217,10 @@ struct NativeStoreView: View {
                             Text(url).font(.system(size: 14, weight: .semibold, design: .monospaced)).foregroundColor(NFColor.iris).lineLimit(1).truncationMode(.middle)
                             Spacer()
                             NSPButton(text: "コピー", icon: "doc.on.doc") { UIPasteboard.general.string = url; model.toast = "リンクをコピーしました" }
+                            // 店舗名刺は store.settings（Web の店舗情報の画面と同じ権限）
+                            if edit, let onBusinessCards {
+                                NSPButton(text: "店舗名刺を印刷", icon: "person.text.rectangle", action: onBusinessCards)
+                            }
                         }
                         .padding(18)
                     }

@@ -11,6 +11,10 @@ struct NativeFloorView: View {
     var onLedger: () -> Void = {}
     /// 伝票を開く（既存のネイティブのオーダー・会計画面）
     var onOpenOrder: (_ orderId: String, _ checkout: Bool) -> Void = { _, _ in }
+    /// この卓の来店登録を開いてほしい（Web の /app/floor/<卓>/setup から。AppState.floorSetupTableId）
+    var setupRequest: String? = nil
+    /// setupRequest を受け取ったら呼ぶ（AppState の値を消す）
+    var onSetupRequestHandled: () -> Void = {}
 
     @State private var tileRect: CGRect?
     /// 来店登録（空席の「注文」）のカード。ポップアップを閉じてから出す（2026-10-24 Ronnie「注文を押したら次が出て、ポップアップは消える」）
@@ -138,6 +142,41 @@ struct NativeFloorView: View {
         .onAppear { model.start() }
         .onDisappear { model.stop() }
         .coordinateSpace(name: "floor")
+        // Web の /app/floor/<卓>/setup から来たとき（テーブルを読み込めたら開く）
+        .onAppear { applySetupRequest() }
+        .onChange(of: setupRequest) { _ in applySetupRequest() }
+        .onChange(of: model.payload?.serverNow) { _ in applySetupRequest() }
+    }
+
+    /// Web の app/app/floor/[tableId]/setup/page.tsx と同じ決め方：着席中ならその伝票（いちばん新しい）、空席・清掃中なら来店登録、
+    /// 予約あり・使用不可・別の店の卓はエラー
+    private func applySetupRequest() {
+        guard let id = setupRequest, let p = model.payload else { return }
+        // 読み込んだばかりの一覧で決める（iPad に保存してあった古い一覧では決めない。Web はその場で DB を見る）。古ければ次の読み込みで
+        guard model.now - p.serverNow < 45_000 else { return }
+        onSetupRequestHandled()
+        model.selectedTableId = nil
+        guard p.canOperate else {
+            model.error = "この画面は利用できません。店舗の割り当てと注文権限を確認してください。"
+            return
+        }
+        guard let t = model.tables.first(where: { $0.id == id }) else {
+            model.error = "このテーブルは存在しないか、現在の店舗からアクセスできません。"
+            return
+        }
+        if let slip = t.order?.slips.max(by: { $0.openedAtMs < $1.openedAtMs }) {
+            onOpenOrder(slip.id, false)
+            return
+        }
+        switch t.currentStatus {
+        case "unavailable":
+            model.error = "この卓は現在「使用不可」のため着席できません。テーブル一覧で状態を変更してください。"
+        case "reserved", "seated", "ordering", "billing":
+            model.error = "この卓は現在「予約あり」のため着席できません。テーブル一覧で状態を変更してください。"
+        default:
+            // 空席・キャンセル待ち・清掃中（会計が終わった卓へすぐ次のお客様を通す。2026-09-24 店舗要望）
+            setupTable = t
+        }
     }
 
     // MARK: フロアのチップ（ALL ／ フロア名 ／ 未分類）

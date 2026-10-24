@@ -2,15 +2,14 @@ import type { Metadata } from 'next';
 import { Printer } from 'lucide-react';
 import { requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
-import { resolveSiteOrigin } from '@/lib/site-origin';
 import { tableQrDataUrl } from '@/lib/table-qr';
+import { loadStoreBusinessCard } from '@/lib/store-business-cards-server';
 import { PageHeader } from '@/components/ui/page-header';
 import { EmptyState } from '@/components/ui/state';
 import { SettingsBackLink } from '@/components/settings/back-link';
 import { PrintButton } from '@/components/reservations/print-button';
 import { TableQrPdfButton } from '@/components/settings/table-qr-pdf-button';
 import { BookingMeishiSheet } from '@/components/settings/booking-meishi';
-import { bookingCouponsFrom, couponLabel } from '@/lib/booking-coupons';
 
 export const metadata: Metadata = { title: '店舗名刺 | 設定' };
 
@@ -32,13 +31,9 @@ export default async function StoreBusinessCardsPage() {
     );
   }
 
-  const supabase = await createClient();
-  const [{ data: store }, { data: storeSettings }] = await Promise.all([
-    supabase.from('stores').select('name, slug, postal_code, address, phone').eq('id', target.id).maybeSingle(),
-    supabase.from('store_settings').select('settings').eq('store_id', target.id).maybeSingle(),
-  ]);
-  const coupons = bookingCouponsFrom(storeSettings?.settings ?? null).map(couponLabel);
-  const bookingUrl = store?.slug ? `${await resolveSiteOrigin()}/book/${store.slug}` : null;
+  // 読み込みは lib/store-business-cards-server.ts（iPad ネイティブと同じ）
+  const store = await loadStoreBusinessCard(await createClient(), target.id);
+  const bookingUrl = store?.bookingUrl ?? null;
   const qrDataUrl = bookingUrl ? await tableQrDataUrl(bookingUrl, 480).catch(() => null) : null;
 
   if (!store || !qrDataUrl) {
@@ -50,20 +45,18 @@ export default async function StoreBusinessCardsPage() {
       </div>
     );
   }
-  const address = store.address ? `${store.postal_code ? `〒${store.postal_code} ` : ''}${store.address}` : null;
-
   return (
     <div>
       <SettingsBackLink />
       <PageHeader
         title="店舗名刺"
         en="Business cards"
-        description={`${store.name}｜A4 に横名刺（91×55mm）10枚。印刷して線に沿って切り、レジに置いてください`}
+        description={`${store.storeName}｜A4 に横名刺（91×55mm）10枚。印刷して線に沿って切り、レジに置いてください`}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <TableQrPdfButton
               page="a4"
-              fileName={`${store.name}_店舗名刺_A4.pdf`}
+              fileName={`${store.storeName}_店舗名刺_A4.pdf`}
               label="PDFでダウンロード（A4）"
               className="on-brand inline-flex h-10 items-center gap-1.5 rounded-lg px-4 text-sm font-semibold text-white disabled:opacity-70"
             />
@@ -83,7 +76,7 @@ export default async function StoreBusinessCardsPage() {
       <div className="print-area overflow-x-auto">
         <style>{'@page { size: A4 portrait; margin: 0; }'}</style>
         <div className="inline-block shadow-[0_1px_6px_rgba(41,39,37,0.15)] print:shadow-none">
-          <BookingMeishiSheet storeName={store.name} address={address} phone={store.phone} qrDataUrl={qrDataUrl} qrValue={bookingUrl ?? undefined} coupons={coupons} />
+          <BookingMeishiSheet storeName={store.storeName} address={store.address} phone={store.phone} qrDataUrl={qrDataUrl} qrValue={bookingUrl ?? undefined} coupons={store.coupons} />
         </div>
       </div>
     </div>

@@ -97,6 +97,8 @@ final class AppState: ObservableObject {
     @Published var nativeBooking = false
     /// フロアを読み直してほしいとき（会計完了など）に増やす
     @Published var floorRefreshTick = 0
+    /// Web の /app/floor/<卓>/setup（テーブルの準備＝来店登録）から来たとき、ネイティブのテーブル一覧で来店登録を開く卓（開いたら nil に戻す）
+    @Published var floorSetupTableId: String?
 
     private let nativePosKey = "tenpo.nativePos"
     private let nativePhoneKey = "tenpo.nativePhone"
@@ -170,6 +172,15 @@ final class AppState: ObservableObject {
         if nativePrintAgentOn { NativePrintAgent.shared.start() } else { NativePrintAgent.shared.stop() }
         // ネットが無いときに印刷するための印字キット・お店のプリンターの情報を、ネットのあるうちに保存しておく（レジの iPad だけ）
         if nativePrintAgentOn { NativePrintKit.shared.start() } else { NativePrintKit.shared.stop() }
+    }
+
+    /// /app/floor/<卓の id>/setup の卓の id（それ以外の道は nil）
+    static func setupTableId(fromPath path: String) -> String? {
+        let parts = path.split(separator: "/").map(String.init)
+        guard parts.count == 4, parts[0] == "app", parts[1] == "floor", parts[3] == "setup" else { return nil }
+        let id = parts[2]
+        guard id.count == 36, id.allSatisfy({ $0.isHexDigit || $0 == "-" }) else { return nil }
+        return id
     }
 
     /// ネイティブの画面を全部閉じる（Web の画面がそのまま見える）
@@ -283,6 +294,15 @@ final class AppState: ObservableObject {
             return
         }
         if nativeModule != nil { nativeModule = nil }
+        // テーブルの準備（来店登録。/app/floor/<卓>/setup）は、ネイティブのテーブル一覧の来店登録（NativeSetupSheet・Web と同じ並び）で開く。
+        // Web は /app/floor にそろえる（goNativeFloor と同じ。レシート・ドロアの Web 側の仕組みはそのまま）
+        if let tableId = Self.setupTableId(fromPath: url.path) {
+            closeAllNative()
+            floorSetupTableId = tableId
+            nativeFloor = true
+            DispatchQueue.main.async { WebViewController.current?.load(AppConfig.url("/app/floor")) }
+            return
+        }
         // 店舗ナウ（/app/now）はテーブル一覧（オーダー・会計）と同じ中身なので、iPad ではネイティブのテーブル一覧で。
         // メニュー一覧（/app/menu）・管理（/app/management）はネイティブのホームで
         if url.path == "/app/now" { closeAllNative(); nativeFloor = true; return }
