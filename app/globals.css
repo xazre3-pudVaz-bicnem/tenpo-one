@@ -580,6 +580,54 @@ body.theme-regi:has(.regi-shell) {
 }
 
 /*
+ * 新しい管理画面（パソコン）の配色（2026-10-24 Ronnie「管理画面はアプリ（レジ）とは別のスタイルに」）。
+ * Design「TENPO ONE 管理画面 レイアウト案」の色：上部バーは黒に近い紫、アクセントは紫、背景は薄い藤色。
+ * app/app/layout.tsx が新しい管理画面のときだけ shell と body に付ける。レジ（iPad）・ハンディは theme-regi のまま。
+ */
+.theme-admin {
+  --color-primary: #7b3fe4;
+  --color-primary-deep: #5b2c8f;
+  --color-primary-soft: #efe7fb;
+  --color-navy: #15121a;
+  --color-navy-soft: #2a2138;
+  --color-surface: #f7f5fa;
+  --color-plum: #15121a;
+  --color-plum-2: #2a2138;
+  --color-royal: #5b2c8f;
+  --color-iris: #7b3fe4;
+  --color-iris-deep: #5b2c8f;
+  --color-iris-soft: #efe7fb;
+  --color-wisteria: #d3c1ee;
+  --color-lilac: #f7f5fa;
+  --color-lilac-soft: #faf8fd;
+  --color-line: #e6e0ef;
+  --color-ink: #2a2138;
+  --color-ink-2: #5a5070;
+  --color-ink-3: #7c7391;
+  --color-gray-50: #faf8fd;
+  --color-gray-100: #f3f0f8;
+  --color-gray-200: #e6e0ef;
+  --color-gray-300: #d3cbe2;
+  --color-gray-400: #a69cbb;
+  --color-gray-500: #7c7391;
+  --color-gray-600: #5a5070;
+  --color-gray-700: #463d5a;
+  --color-gray-800: #2a2138;
+  --color-gray-900: #1d1628;
+  --color-gray-950: #15121a;
+  --background-image-brand: linear-gradient(180deg, #8d57ea, #5b2c8f);
+  --ui-btn2-bg: #efe7fb;
+  --ui-btn2-fg: #5b2c8f;
+  --ui-btn2-hover: #d3c1ee;
+  color: var(--color-ink);
+}
+body.theme-admin {
+  background-color: #f7f5fa;
+  /* パソコンの管理画面はページ全体をふつうにスクロールさせる（レジの揺れ止めは不要） */
+  touch-action: auto;
+}
+
+/*
  * 店舗台帳の機能（オーダー・会計の右の「本日のご予約一覧」など）は、どの画面の中でもホームの「店舗台帳」と同じテラコッタ
  * （2026-10-20 Ronnie「オーダー会計の右のご予約台帳は台帳の機能なので、箱と色を店舗台帳に合わせる」）
  */

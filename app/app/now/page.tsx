@@ -4,13 +4,12 @@ import { redirect } from 'next/navigation';
 import { requireMember } from '@/lib/auth';
 import { can } from '@/lib/permissions';
 import { createClient } from '@/lib/supabase/server';
-import { cn } from '@/lib/utils';
 import { loadStoreNow } from '@/lib/store-now-server';
 import { PageHeader } from '@/components/ui/page-header';
 import { EmptyState } from '@/components/ui/state';
 import { StoreRealtimeRefresh } from '@/components/realtime/store-realtime-refresh';
 import { StoreNowBoard } from '@/components/admin-v2/store-now-board';
-import { StoreSwitchLink } from '@/components/admin-v2/store-switch-link';
+import { StoreSelect } from '@/components/admin-v2/store-select';
 
 export const metadata: Metadata = { title: '店舗ナウ' };
 
@@ -64,22 +63,11 @@ export default async function StoreNowPage({ searchParams }: { searchParams: Pro
         }
       />
       {stores.length > 1 && (
-        <nav aria-label="店舗を切り替える" className="-mt-2 flex flex-wrap gap-1.5">
-          {stores.map((s) => (
-            <StoreSwitchLink
-              key={s.id}
-              storeId={s.id}
-              href={`/app/now?store=${s.id}`}
-              current={s.id === store.id}
-              className={cn(
-                'h-8 rounded-full border px-3.5 text-[12.5px] disabled:opacity-60',
-                s.id === store.id ? 'border-plum bg-plum font-bold text-white' : 'border-line bg-white text-ink-2 hover:border-wisteria'
-              )}
-            >
-              {s.name}
-            </StoreSwitchLink>
-          ))}
-        </nav>
+        <div className="-mt-2 flex items-center gap-2">
+          {/* 店舗はプルダウンで選ぶ（2026-10-24 Ronnie「全部ボタンで並べない」） */}
+          <StoreSelect stores={stores} currentId={store.id} hrefFor={(id) => `/app/now?store=${id}`} />
+          <span className="text-xs text-ink-3">{stores.length} 店舗</span>
+        </div>
       )}
       <StoreNowBoard data={data} serverNow={serverNow} />
     </div>

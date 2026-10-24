@@ -136,10 +136,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   const shell = (
     <CommandPaletteProvider role={ctx.role}>
-      <ThemeBody />
+      <ThemeBody admin={adminV2} />
       <OfflineBanner />
       {/* レジ（iPad）はページ全体を動かさず、この箱の中だけスクロール（Chrome から入れたアプリで上下にゴムのように揺れる・左右にずれるのを止める。app/globals.css の .regi-shell） */}
-      <div className={isRegi ? 'theme-regi regi-shell min-h-svh bg-lilac' : 'theme-regi min-h-svh bg-lilac'}>
+      {/* 新しい管理画面（パソコン）は theme-admin で管理画面だけの配色（app/globals.css）。レジ・ハンディは theme-regi のまま */}
+      <div className={isRegi ? 'theme-regi regi-shell min-h-svh bg-lilac' : adminV2 ? 'theme-regi theme-admin min-h-svh bg-lilac' : 'theme-regi min-h-svh bg-lilac'}>
         {/* 上部バー（全幅）→ その下に左メニュー（固定）と本文 */}
         <TopBar ctx={ctx} unreadCount={unreadCount ?? 0} showMenuLink={posFullscreen} />
         {/* 新しいネット予約のチャイム＋バナー（レジ・パソコンどの画面でも） */}
@@ -176,7 +177,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             footer={adminV2Eligible ? <AdminV2Switch on={false} /> : undefined}
           />
         )}
-        <ContentArea homeOnly={isRegi}>
+        {/* 新しい管理画面は、どの幅でも左メニューを出す（2026-10-24 Ronnie「メニューは下ではなく全部左に。アプリのようにしない」） */}
+        <ContentArea homeOnly={isRegi} alwaysSidebar={adminV2}>
           <InstallPrompt />
           {/* スマホは店舗切替を上部バーの下に表示 */}
           <div className="border-b border-line bg-white px-4 py-2 sm:hidden">
@@ -186,7 +188,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               allowAll={ctx.isHq}
             />
           </div>
-          <main className="px-4 pt-4 pb-24 lg:px-[22px] lg:pt-[18px] lg:pb-8">
+          <main className={adminV2 ? 'px-4 pt-4 pb-8 lg:px-[22px] lg:pt-[18px]' : 'px-4 pt-4 pb-24 lg:px-[22px] lg:pt-[18px] lg:pb-8'}>
             {/* レジがまだ閉まっていない（前の営業日のまま・朝10時すぎ／2日以上前から）ときの知らせ（2026-09-28 Ronnie） */}
             {ctx.currentStore && (
               <HideOnPos also={isRegi ? ['/app/dashboard'] : undefined}>
@@ -196,7 +198,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             {children}
           </main>
         </ContentArea>
-        <MobileNav items={mobileItems} />
+        {!adminV2 && <MobileNav items={mobileItems} />}
       </div>
     </CommandPaletteProvider>
   );
