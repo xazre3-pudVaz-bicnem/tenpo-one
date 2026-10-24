@@ -222,17 +222,22 @@ struct NativeCheckoutView: View {
                             if s.english != s.label { Text(s.english).font(.system(size: 9, weight: .semibold)).opacity(0.8) }
                         }
                             .lineLimit(1).minimumScaleFactor(0.7)
-                            .foregroundColor(on ? (s.darkText ? NT.ink : .white) : s.color)
+                            // 白の上で黄色（食べログ）は読みにくいので濃い黄土色に
+                            .foregroundColor(on ? (s.darkText ? NT.ink : .white) : (s.darkText ? Color(hex: 0xA67C00) : s.color))
                             .frame(maxWidth: .infinity, minHeight: 42)
-                            .background(RoundedRectangle(cornerRadius: 10).fill(on ? s.color : s.color.opacity(0.12)))
-                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(s.color.opacity(on ? 0 : 0.35), lineWidth: 1))
+                            // 選ぶ前は白（ピンクなどのうすい色はやめる。2026-10-24 23:16 Ronnie）。選ぶと各社の色で塗る
+                            .background(RoundedRectangle(cornerRadius: 10).fill(on ? s.color : Color.white))
+                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(on ? Color.clear : Color(hex: 0xDCE3EF), lineWidth: 1))
+                            .shadow(color: Color.black.opacity(on ? 0.12 : 0.04), radius: on ? 4 : 2, y: 1)
                     }
                     .buttonStyle(PressableStyle())
                 }
             }
         }
         .padding(14)
-        .background(needsSource ? NT.dangerBg.opacity(0.6) : Color.clear)
+        // 地はごくうすいネイビー（赤っぽいピンクはやめる。2026-10-24 23:14 Ronnie「うすいネイビー、すごく明るく」）。必須は赤いチップで分かる
+        .background(Color(hex: 0xEEF2F9))
+        .overlay(alignment: .top) { Rectangle().fill(Color(hex: 0xDCE3EF)).frame(height: 1) }
     }
 
     // MARK: - 中：金額
