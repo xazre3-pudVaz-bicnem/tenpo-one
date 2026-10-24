@@ -4,7 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { Badge } from '@/components/ui/badge';
 import { GourmetMailPanel } from '@/components/settings/gourmet-mail-panel';
 import { GourmetMailImports, type GourmetMailImportRow } from '@/components/settings/gourmet-mail-imports';
-import { GOURMET_SITES, gourmetMailSettingsFrom, type GourmetSiteKey, type MailKind } from '@/lib/gourmet-mail';
+import { GOURMET_SITES, gourmetMailSettingsFrom, inboundMailDomain, inboundMailReady, type GourmetSiteKey, type MailKind } from '@/lib/gourmet-mail';
 import {
   adminMarkGourmetSiteRegistered,
   adminRegenerateGourmetMailToken,
@@ -64,8 +64,8 @@ export async function TenantGourmet({ storeId, storeName }: { storeId: string; s
         storeId={storeId}
         storeName={storeName}
         settings={gm}
-        domain={process.env.NEXT_PUBLIC_INBOUND_MAIL_DOMAIN ?? 'in.tenpo-one.com'}
-        inboundReady={!!process.env.INBOUND_MAIL_SECRET}
+        domain={inboundMailDomain()}
+        inboundReady={inboundMailReady()}
         canRegenerate
         actions={{ setEnabled: adminSetGourmetMailEnabled, regenerate: adminRegenerateGourmetMailToken, markSite: adminMarkGourmetSiteRegistered }}
       />

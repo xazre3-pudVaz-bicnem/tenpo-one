@@ -15,7 +15,7 @@ import { GoogleLinksPanel, SnsLinksPanel } from '@/components/settings/reservati
 import { PushSubscribeButton } from '@/components/notifications/push-subscribe-button';
 import { ReminderPanel } from '@/components/settings/reminder-panel';
 import { pushSubscriptionsFrom } from '@/lib/push-subscriptions';
-import { gourmetMailSettingsFrom, type GourmetSiteKey, type MailKind } from '@/lib/gourmet-mail';
+import { gourmetMailSettingsFrom, inboundMailDomain, inboundMailReady, type GourmetSiteKey, type MailKind } from '@/lib/gourmet-mail';
 import { bookingLinkWithSrc, GOOGLE_CHANNEL, reservationBookSettingsFrom, SNS_CHANNELS } from '@/lib/reservation-book';
 
 export const metadata: Metadata = { title: '予約台帳設定 | 設定' };
@@ -182,8 +182,8 @@ export default async function ReservationBookSettingsPage({ searchParams }: { se
             storeId={store.id}
             storeName={store.name}
             settings={gm}
-            domain={process.env.NEXT_PUBLIC_INBOUND_MAIL_DOMAIN ?? 'in.tenpo-one.com'}
-            inboundReady={!!process.env.INBOUND_MAIL_SECRET}
+            domain={inboundMailDomain()}
+            inboundReady={inboundMailReady()}
             canRegenerate={ctx.isCypressAdmin}
           />
           <GourmetMailImports storeId={store.id} rows={rows} />
