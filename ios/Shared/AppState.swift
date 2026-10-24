@@ -136,6 +136,8 @@ final class AppState: ObservableObject {
         var setup = false
     }
     @Published var phoneHandy: PhoneHandyRoute?
+    /// iPhone の店長・オーナーの画面をネイティブで出しているとき（NativePhoneOwner.swift の仕組み。2026-10-25）
+    @Published var phoneOwnerModule: NativeModuleRoute?
     /// iPhone：店長・オーナーのログイン画面（/login）を出しているとき（スタッフ用の QR ログインのボタンを重ねる）
     @Published var ownerLoginPage = false
     /// iPhone ハンディの予約をネイティブで出しているとき（/handy/reservations・/handy/reservations/new の代わり。2026-10-25 Ronnie「iPhone も native に」）。
@@ -323,6 +325,7 @@ final class AppState: ObservableObject {
         nativeOwnerHome = false
         phoneHandy = nil
         phoneReservations = nil
+        phoneOwnerModule = nil
         mode = newMode
         webSession = UUID()
     }
@@ -685,8 +688,10 @@ final class AppState: ObservableObject {
         case .owner:
             nativeHandyHome = false
             let on = path == "/app/dashboard" || path == "/app" || path == "/app/"
-            if on { phoneRefreshTick += 1 }
+            if on { phoneRefreshTick += 1; if phoneOwnerModule != nil { phoneOwnerModule = nil } }
             if nativeOwnerHome != on { nativeOwnerHome = on }
+            // 店長・オーナーの画面でネイティブがあるもの（NativePhoneOwnerRegistry）
+            if let r = NativePhoneOwnerRegistry.route(for: url) { phoneOwnerModule = r }
         default:
             nativeHandyHome = false
             nativeOwnerHome = false
@@ -764,8 +769,22 @@ final class AppState: ObservableObject {
         }
     }
 
+    /// iPhone の店長・オーナーの画面を閉じてホームへ
+    func closePhoneOwnerModule() {
+        phoneOwnerModule = nil
+        nativeOwnerHome = true
+        let path = WebViewController.current?.currentURL?.path ?? ""
+        if path == "/app/dashboard" { phoneRefreshTick += 1 } else { WebViewController.current?.load(AppConfig.url("/app/dashboard")) }
+    }
+
     /// iPhone のネイティブの画面を閉じて Web の画面へ（卓の画面・店舗台帳・設定など）
     func leaveNativePhone(to path: String) {
+        // 店長・オーナーの画面でネイティブがあるもの（2026-10-25）
+        if mode == .owner, nativePhoneEnabled, let url = URL(string: path, relativeTo: AppConfig.url("/")), let r = NativePhoneOwnerRegistry.route(for: url.absoluteURL) {
+            phoneOwnerModule = r
+            WebViewController.current?.load(url.absoluteURL)
+            return
+        }
         // 卓・注文の画面、予約・予約登録の画面はネイティブで（2026-10-25）
         if mode == .handy, nativePhoneEnabled, let url = URL(string: path, relativeTo: AppConfig.url("/")) {
             if let r = Self.phoneReservationsRoute(for: url.absoluteURL) {
