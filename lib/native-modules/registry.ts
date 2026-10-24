@@ -18,6 +18,8 @@ import { reconciliationGet } from '@/lib/native-modules/reconciliation';
 import { settlementGet, settlementCostsSavePost } from '@/lib/native-modules/settlement';
 import { handyFloorGet, handyMenuGet, handyOrderPost, handySetupGet, handyTableGet } from '@/lib/native-modules/handy-order';
 import { NATIVE_HANDY_ORDER_TYPES } from '@/lib/native-handy-order';
+import { handyReservationEntryGet, handyReservationMonthGet, handyReservationPost, handyReservationsGet } from '@/lib/native-modules/handy-reservations';
+import { NATIVE_HANDY_RSV_TYPES } from '@/lib/native-handy-reservations';
 
 /**
  * まだ専用の台が無かった画面（勤怠・日報・タスク …）の iPad ネイティブ用の API をまとめる所
@@ -70,6 +72,10 @@ export const NATIVE_MODULE_GET: Record<string, NativeModuleGet> = {
   handyMenu: handyMenuGet,
   handySetup: handySetupGet,
   handyFloor: handyFloorGet,
+  // iPhone のネイティブのハンディ：予約（一覧・受付管理・メッセージ・登録。2026-10-25 Ronnie）
+  handyReservations: handyReservationsGet,
+  handyReservationEntry: handyReservationEntryGet,
+  handyReservationMonth: handyReservationMonthGet,
 };
 
 /** POST の type → handler。追加は 1 行ずつ */
@@ -131,4 +137,6 @@ export const NATIVE_MODULE_POST: Record<string, NativeModulePost> = {
   settlementCostsSave: settlementCostsSavePost,
   // iPhone のネイティブのハンディ（卓・注文。2026-10-25 Ronnie）
   ...Object.fromEntries(NATIVE_HANDY_ORDER_TYPES.map((t) => [t, handyOrderPost])),
+  // iPhone のネイティブのハンディ：予約（来店・キャンセル・テーブル変更・受付管理・登録。2026-10-25 Ronnie）
+  ...Object.fromEntries(NATIVE_HANDY_RSV_TYPES.map((t) => [t, handyReservationPost])),
 };
