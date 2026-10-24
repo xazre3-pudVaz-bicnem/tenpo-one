@@ -49,7 +49,8 @@ struct NativeTableSheet: View {
                 .onTapGesture { onClose() }
             // 押した卓のところに、矢印つきで出す（下 → 上 → 横の順に入る所。iPad のポップオーバーと同じ。2026-10-24 Ronnie）
             // 高さは Layout で測る（preference で測る方式は実機で 0 のままになり潰れた）
-            NFPopoverLayout(width: Self.width, maxHeight: 760, anchor: anchor) {
+            // どの卓を押しても画面の真ん中に出す（上下左右の真ん中。2026-10-24 Ronnie）→ 矢印は出さない
+            NFPopoverLayout(width: Self.width, maxHeight: 760, anchor: nil) {
                 popup
                 NFPopoverArrow().fill(.regularMaterial).frame(width: 26, height: 12)
                 NFPopoverArrow().fill(.regularMaterial).frame(width: 26, height: 12).rotationEffect(.degrees(180))
@@ -194,22 +195,7 @@ struct NativeTableSheet: View {
 
     // 着席中
     @ViewBuilder private var seatedBody: some View {
-        // まとめ：人数・顧客・来店経路と、いまの金額（かっこ内は客単価）
-        HStack(alignment: .center, spacing: 8) {
-            VStack(alignment: .leading, spacing: 3) {
-                summaryRow("人数", "\(guests)名")
-                summaryRow("顧客", table.order?.customerName ?? "未登録")
-                summaryRow("来店", (table.order?.sourceLabel.isEmpty == false) ? table.order!.sourceLabel : "—")
-            }
-            Spacer(minLength: 4)
-            VStack(alignment: .trailing, spacing: 0) {
-                Text(NT.yen(total)).font(.system(size: 21, weight: .heavy)).monospacedDigit().foregroundColor(NFColor.navy)
-                Text("（\(NT.yen(perGuest))）").font(.system(size: 11)).monospacedDigit().foregroundColor(NFColor.ink3)
-            }
-        }
-        .padding(.horizontal, 12).padding(.vertical, 10)
-        .background(RoundedRectangle(cornerRadius: 12).fill(NFColor.lilacSoft))
-
+        // 人数・顧客・来店・金額のまとめは出さない（卓の箱に出ている。2026-10-24 Ronnie「ポップアップに金額などの詳細は要らない」）
         HStack(spacing: 8) {
             bigButton("注文", en: "Order", fill: NFColor.iris, height: 64, size: 20) {
                 Task {
@@ -646,7 +632,7 @@ struct NFPopoverLayout: Layout {
         guard let card = subviews.first else { return }
         let W = bounds.width, H = bounds.height
         let w = min(width, max(200, W - margin * 2))
-        let cap = min(maxHeight, max(120, H - topInset - margin))
+        let cap = min(maxHeight, max(120, H - margin * 2))
         let h = min(card.sizeThatFits(ProposedViewSize(width: w, height: cap)).height, cap)
         let hide = CGPoint(x: bounds.minX - 5000, y: bounds.minY - 5000)
         func clamp(_ v: CGFloat, _ lo: CGFloat, _ hi: CGFloat) -> CGFloat { min(max(v, lo), max(lo, hi)) }
@@ -671,7 +657,7 @@ struct NFPopoverLayout: Layout {
                 x = clamp(a.midX - w / 2, margin, W - w - margin); y = clamp(a.minY, topInset, H - h - margin)
             }
         } else {
-            x = max(margin, (W - w) / 2); y = max(topInset, (H - h) / 2)
+            x = max(margin, (W - w) / 2); y = max(margin, (H - h) / 2)
         }
         card.place(at: CGPoint(x: bounds.minX + x, y: bounds.minY + y), anchor: .topLeading, proposal: ProposedViewSize(width: w, height: h))
         for i in 1..<subviews.count {
