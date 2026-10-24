@@ -34,10 +34,19 @@ import { isPlanAddOn, isPlanItem, MENU_BOOK_SHOW_LABELS, MENU_BOOK_SHOW_NOTES, M
 import { takeoutMenuFrom } from '@/lib/takeout-menu';
 import { addOptionItem, createOptionGroup, deleteOptionGroup, deleteOptionItem, moveOptionGroup, setGroupMenuItems, updateOptionGroup } from '@/app/app/settings/options/actions';
 import { resolveSiteOrigin } from '@/lib/site-origin';
+import { deleteTerminalReader, registerSimulatedReader, saveCheckoutPresets, updateBookingPaymentSettings, type BookingPaymentMode } from '@/app/app/settings/payments/actions';
+import { addSteraTerminal, deleteSteraTerminal, regenerateSteraLinkCode, updateSteraTerminal } from '@/app/app/settings/payments/stera-actions';
+import { BRANDED_METHODS, checkoutPresetsFrom, DISCOUNT_KIND_LABELS, discountPresetsOf, methodBrandsOf, pointBrandsOf } from '@/lib/checkout-presets';
+import { METHOD_LABELS } from '@/components/cash/labels';
+import { isPaymentConfigured, isPaymentTestMode } from '@/lib/payments';
+import { isSteraOnline } from '@/lib/stera';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { formatTime } from '@/lib/format';
 import type {
   NativeAccountsPayload,
   NativeCategoriesPayload,
   NativeMenuBookPayload,
+  NativePaymentsPayload,
   NativeMenuItemsPayload,
   NativeOptionsPayload,
   NativeQrServicePayload,
@@ -57,7 +66,7 @@ type Supabase = Awaited<ReturnType<typeof createClient>>;
 type Store = { id: string; name: string };
 
 /** 設定の中の画面の名前（GET ?part=） */
-export const NATIVE_SETTINGS_PAGE_PARTS = ['soldout', 'clerks', 'hours', 'store', 'tax', 'loyalty', 'alerts', 'approvals', 'accounts', 'handy', 'categories', 'menuItems', 'options', 'qrService', 'menuBook'] as const;
+export const NATIVE_SETTINGS_PAGE_PARTS = ['soldout', 'clerks', 'hours', 'store', 'tax', 'loyalty', 'alerts', 'approvals', 'accounts', 'handy', 'categories', 'menuItems', 'options', 'qrService', 'menuBook', 'payments'] as const;
 export type NativeSettingsPagePart = (typeof NATIVE_SETTINGS_PAGE_PARTS)[number];
 export function isNativeSettingsPagePart(v: unknown): v is NativeSettingsPagePart {
   return typeof v === 'string' && (NATIVE_SETTINGS_PAGE_PARTS as readonly string[]).includes(v);
@@ -90,7 +99,8 @@ export async function loadNativeSettingsPage(
         | NativeMenuItemsPayload
         | NativeOptionsPayload
         | NativeQrServicePayload
-        | NativeMenuBookPayload;
+        | NativeMenuBookPayload
+        | NativePaymentsPayload;
     }
   | { ok: false; error: string }
 > {
@@ -489,6 +499,64 @@ export async function loadNativeSettingsPage(
     const cur = qrServiceFrom((data as { settings?: unknown } | null)?.settings ?? null);
     return { ok: true, payload: { store, canEdit: can(ctx.role, 'menu.manage'), enabled: cur.enabled, items: cur.items, maxItems: QR_SERVICE_MAX_ITEMS } };
   }
+  if (part === 'payments') {
+    // Web の app/app/settings/payments/page.tsx と同じ組み立て
+    const [{ data: readers }, { data: settingsRow }, { data: steraRows }] = await Promise.all([
+      supabase.from('terminal_readers').select('id, label, device_type, is_simulated, status, last_seen_at').eq('store_id', store.id).order('created_at'),
+      supabase.from('store_settings').select('booking_payment_mode, booking_deposit_amount, settings').eq('store_id', store.id).maybeSingle(),
+      createAdminClient().from('stera_terminals').select('id, name, terminal_no, link_code, status, last_seen_at, app_version').eq('store_id', store.id).neq('status', 'deleted').order('created_at'),
+    ]);
+    const now = Date.now();
+    const presets = checkoutPresetsFrom(settingsRow?.settings);
+    const statusLabel: Record<string, string> = { online: 'オンライン', offline: 'オフライン', unknown: '不明' };
+    const modeLabels: Record<BookingPaymentMode, string> = { onsite: '現地払いのみ', prepay_full: '予約時全額決済', deposit: '予約金' };
+    const mode = (settingsRow?.booking_payment_mode as BookingPaymentMode | null) ?? 'onsite';
+    return {
+      ok: true,
+      payload: {
+        store,
+        canEdit: can(ctx.role, 'store.settings'),
+        canEditStera: can(ctx.role, 'store.settings') && ctx.isRegisterDevice !== true,
+        stripe: { configured: isPaymentConfigured(), testMode: isPaymentTestMode() },
+        discountKinds: (['percent', 'amount', 'manual'] as const).map((id) => ({ id, label: DISCOUNT_KIND_LABELS[id] })),
+        methods: BRANDED_METHODS.map((m) => ({ id: m, label: METHOD_LABELS[m] ?? m })),
+        presets: {
+          discounts: discountPresetsOf(presets),
+          pointBrands: pointBrandsOf(presets),
+          methodBrands: Object.fromEntries(BRANDED_METHODS.map((m) => [m, methodBrandsOf(presets, m)])),
+        },
+        stera: {
+          serverUrl: await resolveSiteOrigin(),
+          terminals: (steraRows ?? []).map((t) => ({
+            id: t.id as string,
+            name: t.name as string,
+            terminalNo: (t.terminal_no as string | null) ?? null,
+            linkCode: t.link_code as string,
+            active: t.status === 'active',
+            online: t.status === 'active' && isSteraOnline(t.last_seen_at as string | null, now),
+            lastSeenLabel: t.last_seen_at
+              ? new Date(t.last_seen_at as string).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo', month: 'numeric', day: 'numeric' }) + ' ' + formatTime(t.last_seen_at as string)
+              : null,
+            appVersion: (t.app_version as string | null) ?? null,
+          })),
+        },
+        readers: (readers ?? []).map((r) => ({
+          id: r.id as string,
+          label: r.label as string,
+          deviceType: (r.device_type as string | null) ?? null,
+          isSimulated: r.is_simulated === true,
+          status: String(r.status ?? 'unknown'),
+          statusLabel: statusLabel[String(r.status ?? 'unknown')] ?? '不明',
+          lastSeenAt: (r.last_seen_at as string | null) ?? null,
+        })),
+        booking: {
+          mode,
+          depositAmount: Number(settingsRow?.booking_deposit_amount ?? 0),
+          modes: (Object.keys(modeLabels) as BookingPaymentMode[]).map((id) => ({ id, label: modeLabels[id] })),
+        },
+      },
+    };
+  }
   if (part === 'menuBook') {
     const [{ data: categories }, { data: items }, { data: settingsRow }] = await Promise.all([
       supabase
@@ -657,5 +725,21 @@ export async function runNativeSettingsPageAction(
       return done(await saveMenuBookLunch(store.id, action.start, action.end));
     case 'menuBookTakeout':
       return done(await saveTakeoutMenu(store.id, action.itemIds));
+    case 'checkoutPresetsSave':
+      return done(await saveCheckoutPresets(store.id, { discounts: action.discounts, pointBrands: action.pointBrands, methodBrands: action.methodBrands }));
+    case 'readerAdd':
+      return done(await registerSimulatedReader(store.id, action.label));
+    case 'readerDelete':
+      return done(await deleteTerminalReader(action.id, store.id));
+    case 'bookingPaymentSave':
+      return done(await updateBookingPaymentSettings({ storeId: store.id, bookingPaymentMode: action.mode, bookingDepositAmount: action.depositAmount }));
+    case 'steraAdd':
+      return done(await addSteraTerminal(store.id, action.name, action.terminalNo));
+    case 'steraUpdate':
+      return done(await updateSteraTerminal(action.id, store.id, { name: action.name, terminalNo: action.terminalNo, active: action.active }));
+    case 'steraRegen':
+      return done(await regenerateSteraLinkCode(action.id, store.id));
+    case 'steraDelete':
+      return done(await deleteSteraTerminal(action.id, store.id));
   }
 }

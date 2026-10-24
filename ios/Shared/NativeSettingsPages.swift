@@ -28,6 +28,7 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
     case options = "options"
     case qrService = "qrService"
     case menuBook = "menuBook"
+    case payments = "payments"
     var id: String { rawValue }
 
     /// Web の道（クエリは見ない）
@@ -52,6 +53,7 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
         case .options: return "/app/settings/options"
         case .qrService: return "/app/settings/qr-service"
         case .menuBook: return "/app/settings/menu-book"
+        case .payments: return "/app/settings/payments"
         }
     }
     var title: String {
@@ -75,6 +77,7 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
         case .options: return "オプション"
         case .qrService: return "QRのサービス"
         case .menuBook: return "メニューブック"
+        case .payments: return "決済・端末"
         }
     }
     var en: String {
@@ -98,6 +101,7 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
         case .options: return "Options"
         case .qrService: return "QR service"
         case .menuBook: return "Menu book"
+        case .payments: return "Payments"
         }
     }
 
@@ -132,6 +136,7 @@ struct NativeSettingsPageScreen: View {
         case .options: NativeOptionsScreen()
         case .qrService: NativeQrServiceScreen()
         case .menuBook: NativeMenuBookScreen()
+        case .payments: NativePaymentsScreen()
         }
     }
 }
@@ -3009,6 +3014,383 @@ struct NativeMenuBookView: View {
                         }
                         .buttonStyle(PressableStyle()).disabled(!p.canEdit)
                     }
+                }
+            }
+            .padding(18)
+        }
+    }
+}
+
+// MARK: - 決済・端末（Web の /app/settings/payments と同じ）
+
+struct NPYBrand: Codable, Identifiable, Hashable { var key: String; var name: String; var id: String { key } }
+struct NPYDiscount: Codable, Identifiable, Hashable { var key: String; var name: String; var kind: String; var value: Double; var id: String { key } }
+struct NPYIdLabel: Codable, Identifiable, Hashable { let id: String; let label: String }
+struct NPYStera: Codable, Identifiable, Hashable { let id: String; let name: String; let terminalNo: String?; let linkCode: String; let active: Bool; let online: Bool; let lastSeenLabel: String?; let appVersion: String? }
+struct NPYReader: Codable, Identifiable, Hashable { let id: String; let label: String; let deviceType: String?; let isSimulated: Bool; let status: String; let statusLabel: String; let lastSeenAt: String? }
+struct NPYPayload: Codable {
+    struct Stripe: Codable { let configured: Bool; let testMode: Bool }
+    struct Presets: Codable { let discounts: [NPYDiscount]; let pointBrands: [NPYBrand]; let methodBrands: [String: [NPYBrand]] }
+    struct SteraBox: Codable { let serverUrl: String; let terminals: [NPYStera] }
+    struct Booking: Codable { let mode: String; let depositAmount: Int; let modes: [NPYIdLabel] }
+    let store: NFNamed; let canEdit: Bool; let canEditStera: Bool; let stripe: Stripe
+    let discountKinds: [NPYIdLabel]; let methods: [NPYIdLabel]; let presets: Presets
+    let stera: SteraBox; let readers: [NPYReader]; let booking: Booking
+}
+
+@MainActor
+final class NativePaymentsModel: NSPModel<NPYPayload> {
+    enum Tab: String, CaseIterable { case presets, stera, readers, booking
+        var label: String { switch self { case .presets: return "会計の選択肢"; case .stera: return "stera 連携"; case .readers: return "決済端末"; case .booking: return "予約の決済" } }
+    }
+    @Published var tab: Tab = .presets
+    @Published var discounts: [NPYDiscount] = []
+    @Published var brands: [NPYBrand] = []
+    @Published var methods: [String: [NPYBrand]] = [:]
+    @Published var steraName = ""
+    @Published var steraNo = ""
+    @Published var readerLabel = ""
+    @Published var bookingMode = "onsite"
+    @Published var depositText = "0"
+    init() { super.init(part: "payments") }
+
+    override func loaded(_ p: NPYPayload) {
+        discounts = p.presets.discounts
+        brands = p.presets.pointBrands
+        methods = p.presets.methodBrands
+        bookingMode = p.booking.mode
+        depositText = String(p.booking.depositAmount)
+    }
+    var presetsDirty: Bool {
+        guard let p = payload else { return false }
+        return discounts != p.presets.discounts || brands != p.presets.pointBrands || methods != p.presets.methodBrands
+    }
+    /// lib/checkout-presets.ts の nextPresetKey と同じ
+    static func nextKey(_ used: [String], prefix: String) -> String {
+        for i in 1...99 where !used.contains("\(prefix)\(i)") { return "\(prefix)\(i)" }
+        return prefix + String(Int(Date().timeIntervalSince1970), radix: 36)
+    }
+    func setDiscountKind(_ i: Int, _ kind: String) {
+        guard i < discounts.count else { return }
+        discounts[i].kind = kind
+        if kind == "manual" { discounts[i].value = 0 } else if discounts[i].value <= 0 { discounts[i].value = kind == "percent" ? 10 : 500 }
+    }
+    func savePresets() async {
+        let all = brands + methods.values.flatMap { $0 }
+        if discounts.contains(where: { $0.name.trimmingCharacters(in: .whitespaces).isEmpty }) || all.contains(where: { $0.name.trimmingCharacters(in: .whitespaces).isEmpty }) {
+            toast = "名前を入れてください"; return
+        }
+        let body: [String: Any] = [
+            "type": "checkoutPresetsSave",
+            "discounts": discounts.map { d -> [String: Any] in ["key": d.key, "name": d.name, "kind": d.kind, "value": d.kind == "manual" ? 0 : Int(d.value)] },
+            "pointBrands": brands.map { ["key": $0.key, "name": $0.name] },
+            "methodBrands": methods.mapValues { list in list.map { ["key": $0.key, "name": $0.name] } },
+        ]
+        _ = await run("presets", body, done: "会計の選択肢を保存しました（レジにすぐ反映）")
+    }
+    func addStera() async {
+        if await run("steraAdd", ["type": "steraAdd", "name": steraName, "terminalNo": steraNo], done: "追加しました。リンクコードを端末のアプリに入れてください") { steraName = ""; steraNo = "" }
+    }
+    func addReader() async {
+        if await run("readerAdd", ["type": "readerAdd", "label": readerLabel], done: "決済端末を登録しました") { readerLabel = "" }
+    }
+    func saveBooking() async {
+        guard let n = Int(depositText.trimmingCharacters(in: .whitespaces)), n >= 0 else { toast = "予約金額の指定が正しくありません"; return }
+        _ = await run("booking", ["type": "bookingPaymentSave", "mode": bookingMode, "depositAmount": bookingMode == "deposit" ? n : 0], done: "予約決済設定を保存しました")
+    }
+}
+
+struct NativePaymentsScreen: View {
+    @StateObject private var model = NativePaymentsModel()
+    @EnvironmentObject var state: AppState
+    var body: some View { NativePaymentsView(model: model, onBack: { state.goNativeSettings() }) }
+}
+
+struct NativePaymentsView: View {
+    @ObservedObject var model: NativePaymentsModel
+    let onBack: () -> Void
+    private enum Confirm: Identifiable {
+        case steraRegen(NPYStera), steraDelete(NPYStera), readerDelete(NPYReader)
+        var id: String { switch self { case .steraRegen(let t): return "r" + t.id; case .steraDelete(let t): return "d" + t.id; case .readerDelete(let r): return "x" + r.id } }
+        var title: String { switch self { case .steraRegen: return "リンクコードを作り直す"; case .steraDelete: return "stera 端末を削除"; case .readerDelete: return "決済端末を削除" } }
+        var message: String {
+            switch self {
+            case .steraRegen(let t): return "「\(t.name)」の今のコードは使えなくなります。端末のアプリにもう一度新しいコードを入れてください"
+            case .steraDelete(let t): return "「\(t.name)」を一覧から消します。決済の記録は残ります"
+            case .readerDelete(let r): return "「\(r.label)」を削除します。この操作は取り消せません"
+            }
+        }
+        var ok: String { switch self { case .steraRegen: return "作り直す"; default: return "削除する" } }
+        var done: String { switch self { case .steraRegen: return "作り直しました"; default: return "削除しました" } }
+        var body: [String: Any] {
+            switch self {
+            case .steraRegen(let t): return ["type": "steraRegen", "id": t.id]
+            case .steraDelete(let t): return ["type": "steraDelete", "id": t.id]
+            case .readerDelete(let r): return ["type": "readerDelete", "id": r.id]
+            }
+        }
+    }
+    @State private var confirm: Confirm?
+
+    var body: some View {
+        NSPFrame(storeName: model.payload?.store.name ?? "", title: "決済・端末", en: "Payments", loaded: model.payload != nil, error: model.error, toast: $model.toast, onBack: onBack, retry: { await model.refresh() }) {
+            if let p = model.payload {
+                HStack(spacing: 6) {
+                    ForEach(NativePaymentsModel.Tab.allCases, id: \.self) { t in
+                        Button { model.tab = t } label: {
+                            Text(t.label).font(.system(size: 15, weight: .bold)).foregroundColor(model.tab == t ? .white : NFColor.ink2)
+                                .padding(.horizontal, 16).frame(height: 42)
+                                .background(RoundedRectangle(cornerRadius: 11).fill(model.tab == t ? NFColor.navy : Color.white))
+                                .overlay(RoundedRectangle(cornerRadius: 11).stroke(NFColor.line, lineWidth: 1))
+                        }
+                        .buttonStyle(PressableStyle())
+                    }
+                    Spacer()
+                    statusChip(p)
+                }
+                switch model.tab {
+                case .presets: presetsTab(p)
+                case .stera: steraTab(p)
+                case .readers: readersTab(p)
+                case .booking: bookingTab(p)
+                }
+            }
+        }
+        .task { await model.refresh() }
+        .alert(confirm?.title ?? "", isPresented: Binding(get: { confirm != nil }, set: { if !$0 { confirm = nil } }), presenting: confirm) { c in
+            Button(c.ok, role: .destructive) { Task { _ = await model.run(c.id, c.body, done: c.done) }; confirm = nil }
+            Button("やめる", role: .cancel) { confirm = nil }
+        } message: { c in
+            Text(c.message)
+        }
+    }
+
+    /// 右上：Stripe と stera のつながり
+    private func statusChip(_ p: NPYPayload) -> some View {
+        HStack(spacing: 6) {
+            chip("Stripe", p.stripe.configured ? (p.stripe.testMode ? "テストモード" : "本番") : "未接続", p.stripe.configured ? (p.stripe.testMode ? NFColor.saffron : NFColor.danger) : NFColor.ink3)
+            chip("stera", p.stera.terminals.contains { $0.online } ? "接続済み" : (p.stera.terminals.isEmpty ? "手動運用" : "未接続"), p.stera.terminals.contains { $0.online } ? NFColor.success : NFColor.ink3)
+        }
+    }
+    private func chip(_ name: String, _ status: String, _ color: Color) -> some View {
+        HStack(spacing: 6) {
+            Circle().fill(color).frame(width: 8, height: 8)
+            Text(name).font(.system(size: 13, weight: .heavy)).foregroundColor(NFColor.ink)
+            Text(status).font(.system(size: 12.5, weight: .bold)).foregroundColor(NFColor.ink2)
+        }
+        .padding(.horizontal, 12).frame(height: 36)
+        .background(Capsule().fill(Color.white)).overlay(Capsule().stroke(NFColor.line, lineWidth: 1))
+    }
+
+    private func chipButton(_ text: String, icon: String? = nil, danger: Bool = false, disabled: Bool = false, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 5) {
+                if let icon { Image(systemName: icon).font(.system(size: 12, weight: .bold)) }
+                Text(text).font(.system(size: 13, weight: .bold))
+            }
+            .foregroundColor(danger ? NFColor.danger : NFColor.ink)
+            .padding(.horizontal, 12).frame(height: 36)
+            .background(RoundedRectangle(cornerRadius: 9).fill(Color.white)).overlay(RoundedRectangle(cornerRadius: 9).stroke(danger ? NFColor.dangerSoft : NFColor.line, lineWidth: 1))
+        }
+        .buttonStyle(PressableStyle()).disabled(disabled).opacity(disabled ? 0.5 : 1)
+    }
+
+    // 会計の「値引き」「ポイント」「支払方法の種類」
+    private func presetsTab(_ p: NPYPayload) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            NSPCard(title: "値引きの選択肢", en: "会計画面のボタン") {
+                VStack(spacing: 0) {
+                    ForEach(Array(model.discounts.enumerated()), id: \.element.key) { i, d in
+                        HStack(spacing: 10) {
+                            NSPInput(text: Binding(get: { i < model.discounts.count ? model.discounts[i].name : "" }, set: { if i < model.discounts.count { model.discounts[i].name = $0 } }), placeholder: "例: 幹事様無料", enabled: p.canEdit, width: 260)
+                            Menu {
+                                ForEach(p.discountKinds) { k in Button(k.label) { model.setDiscountKind(i, k.id) } }
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Text(p.discountKinds.first { $0.id == d.kind }?.label ?? d.kind).font(.system(size: 14, weight: .bold)).foregroundColor(NFColor.ink)
+                                    Image(systemName: "chevron.up.chevron.down").font(.system(size: 11, weight: .bold)).foregroundColor(NFColor.ink3)
+                                }
+                                .padding(.horizontal, 12).frame(height: 44)
+                                .background(RoundedRectangle(cornerRadius: 10).fill(Color.white)).overlay(RoundedRectangle(cornerRadius: 10).stroke(NFColor.line, lineWidth: 1))
+                            }
+                            .disabled(!p.canEdit)
+                            if d.kind != "manual" {
+                                NSPInput(text: Binding(get: { d.value > 0 ? String(Int(d.value)) : "" }, set: { v in if i < model.discounts.count { model.discounts[i].value = Double(Int(v.filter(\.isNumber)) ?? 0) } }),
+                                         placeholder: d.kind == "percent" ? "10" : "500", enabled: p.canEdit, width: 120, keyboard: .numberPad, trailing: d.kind == "percent" ? "%" : "円")
+                            }
+                            Spacer()
+                            if p.canEdit { chipButton("消す", icon: "trash", danger: true) { model.discounts.remove(at: i) } }
+                        }
+                        .padding(.horizontal, 18).padding(.vertical, 8)
+                        .overlay(alignment: .bottom) { Rectangle().fill(NFColor.line).frame(height: 1) }
+                    }
+                    if p.canEdit {
+                        HStack {
+                            NSPButton(text: "値引きを足す", icon: "plus", disabled: model.discounts.count >= 20) {
+                                model.discounts.append(NPYDiscount(key: NativePaymentsModel.nextKey(model.discounts.map(\.key), prefix: "disc"), name: "", kind: "manual", value: 0))
+                            }
+                            Spacer()
+                        }
+                        .padding(18)
+                    }
+                }
+            }
+            NSPCard(title: "ポイントの選択肢", en: "ホットペッパー・ぐるなび・食べログ など") {
+                brandList(Binding(get: { model.brands }, set: { model.brands = $0 }), prefix: "pt", placeholder: "例: ホットペッパー", canEdit: p.canEdit)
+            }
+            ForEach(p.methods) { m in
+                NSPCard(title: "\(m.label)の種類", en: m.id) {
+                    brandList(Binding(get: { model.methods[m.id] ?? [] }, set: { model.methods[m.id] = $0 }), prefix: m.id, placeholder: "例: VISA", canEdit: p.canEdit)
+                }
+            }
+            if p.canEdit {
+                HStack { Spacer(); NSPButton(text: "保存する", primary: true, busy: model.busy == "presets", disabled: !model.presetsDirty) { Task { await model.savePresets() } } }
+            }
+        }
+    }
+
+    private func brandList(_ list: Binding<[NPYBrand]>, prefix: String, placeholder: String, canEdit: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            WrapLayout(spacing: 8) {
+                ForEach(Array(list.wrappedValue.enumerated()), id: \.element.key) { i, _ in
+                    HStack(spacing: 4) {
+                        NSPInput(text: Binding(get: { i < list.wrappedValue.count ? list.wrappedValue[i].name : "" }, set: { if i < list.wrappedValue.count { list.wrappedValue[i].name = $0 } }), placeholder: placeholder, enabled: canEdit, width: 200)
+                        if canEdit {
+                            Button { var l = list.wrappedValue; l.remove(at: i); list.wrappedValue = l } label: {
+                                Image(systemName: "xmark").font(.system(size: 12, weight: .bold)).foregroundColor(NFColor.ink3).frame(width: 32, height: 44)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
+            if canEdit {
+                NSPButton(text: "足す", icon: "plus", disabled: list.wrappedValue.count >= 20) {
+                    var l = list.wrappedValue
+                    l.append(NPYBrand(key: NativePaymentsModel.nextKey(l.map(\.key), prefix: prefix), name: ""))
+                    list.wrappedValue = l
+                }
+            }
+        }
+        .padding(18)
+    }
+
+    // stera 連携
+    private func steraTab(_ p: NPYPayload) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            NSPCard(title: "stera 連携", en: "金額を端末へ自動で送る", note: p.canEditStera ? nil : "stera 端末の追加・変更は管理画面（パソコン・店長以上のアカウント）で行ってください") {
+                VStack(spacing: 0) {
+                    if p.stera.terminals.isEmpty {
+                        Text("まだ stera 端末がありません").font(.system(size: 14)).foregroundColor(NFColor.ink3).padding(18)
+                    }
+                    ForEach(p.stera.terminals) { t in
+                        HStack(alignment: .center, spacing: 14) {
+                            Image(systemName: t.online ? "wifi" : "wifi.slash").font(.system(size: 18, weight: .semibold)).foregroundColor(t.online ? NFColor.success : NFColor.ink3).frame(width: 26)
+                            VStack(alignment: .leading, spacing: 3) {
+                                HStack(spacing: 6) {
+                                    Text(t.name).font(.system(size: 15, weight: .bold)).foregroundColor(NFColor.ink)
+                                    if !t.active { Text("停止中").font(.system(size: 10.5, weight: .bold)).foregroundColor(NFColor.ink3).padding(.horizontal, 6).padding(.vertical, 1).background(Capsule().fill(NFColor.lilac)) }
+                                }
+                                Text([t.terminalNo.map { "端末番号 \($0)" }, t.online ? "つながっています" : (t.lastSeenLabel.map { "最後の接続 \($0)" } ?? "まだ接続がありません"), t.appVersion.map { "アプリ \($0)" }].compactMap { $0 }.joined(separator: "・"))
+                                    .font(.system(size: 12)).foregroundColor(NFColor.ink3)
+                                HStack(spacing: 6) {
+                                    Image(systemName: "key").font(.system(size: 13, weight: .bold))
+                                    Text(formatLinkCode(t.linkCode)).font(.system(size: 16, weight: .heavy, design: .monospaced)).tracking(1.5)
+                                }
+                                .foregroundColor(NFColor.iris)
+                                .padding(.horizontal, 10).padding(.vertical, 4).background(RoundedRectangle(cornerRadius: 8).fill(NFColor.lilac))
+                            }
+                            Spacer()
+                            if p.canEditStera {
+                                HStack(spacing: 6) {
+                                    chipButton(t.active ? "停止" : "再開", disabled: model.busy != nil) { Task { _ = await model.run("stera" + t.id, ["type": "steraUpdate", "id": t.id, "active": !t.active], done: t.active ? "停止しました" : "再開しました") } }
+                                    chipButton("コードを作り直す", icon: "arrow.clockwise", disabled: model.busy != nil) { confirm = .steraRegen(t) }
+                                    chipButton("削除", icon: "trash", danger: true, disabled: model.busy != nil) { confirm = .steraDelete(t) }
+                                }
+                            }
+                        }
+                        .padding(.horizontal, 18).padding(.vertical, 12)
+                        .overlay(alignment: .bottom) { Rectangle().fill(NFColor.line).frame(height: 1) }
+                    }
+                    if p.canEditStera {
+                        HStack(spacing: 10) {
+                            NSPInput(text: $model.steraName, placeholder: "例：レジ横 stera", width: 260)
+                            NSPInput(text: $model.steraNo, placeholder: "端末番号（任意）", width: 200)
+                            NSPButton(text: "追加する", icon: "plus", primary: true, busy: model.busy == "steraAdd", disabled: model.steraName.trimmingCharacters(in: .whitespaces).isEmpty) { Task { await model.addStera() } }
+                            Spacer()
+                        }
+                        .padding(18)
+                    }
+                }
+            }
+            // つなぎ方（短く）
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: "info.circle").foregroundColor(NFColor.ink3)
+                Text("端末の「TENPO ONE 連携」アプリにリンクコードを入れる（サーバー：\(p.stera.serverUrl)）").font(.system(size: 13)).foregroundColor(NFColor.ink3)
+            }
+        }
+    }
+    private func formatLinkCode(_ code: String) -> String {
+        stride(from: 0, to: code.count, by: 4).map { i in String(code.dropFirst(i).prefix(4)) }.joined(separator: "-")
+    }
+
+    // Stripe の決済端末
+    private func readersTab(_ p: NPYPayload) -> some View {
+        NSPCard(title: "決済端末", en: "Stripe Terminal", note: p.stripe.testMode ? nil : (p.stripe.configured ? "本番キーのため、シミュレーション端末は登録できません" : "Stripe が未接続です（STRIPE_SECRET_KEY）")) {
+            VStack(spacing: 0) {
+                if p.readers.isEmpty { Text("決済端末がありません").font(.system(size: 14)).foregroundColor(NFColor.ink3).padding(18) }
+                ForEach(p.readers) { r in
+                    HStack(spacing: 12) {
+                        Circle().fill(r.status == "online" ? NFColor.success : (r.status == "offline" ? NFColor.ink3 : NFColor.saffron)).frame(width: 10, height: 10)
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack(spacing: 6) {
+                                Text(r.label).font(.system(size: 15, weight: .bold)).foregroundColor(NFColor.ink)
+                                if r.isSimulated { Text("シミュレーション").font(.system(size: 10.5, weight: .bold)).foregroundColor(NFColor.ink3).padding(.horizontal, 6).padding(.vertical, 1).background(Capsule().fill(NFColor.lilac)) }
+                                Text(r.statusLabel).font(.system(size: 12, weight: .bold)).foregroundColor(NFColor.ink2)
+                            }
+                            Text("\(r.deviceType ?? "種別不明")・最終接続 \(r.lastSeenAt.map { String($0.prefix(16)).replacingOccurrences(of: "T", with: " ") } ?? "—")").font(.system(size: 12)).foregroundColor(NFColor.ink3)
+                        }
+                        Spacer()
+                        if p.canEdit { chipButton("削除", icon: "trash", danger: true, disabled: model.busy != nil) { confirm = .readerDelete(r) } }
+                    }
+                    .padding(.horizontal, 18).frame(minHeight: 56)
+                    .overlay(alignment: .bottom) { Rectangle().fill(NFColor.line).frame(height: 1) }
+                }
+                if p.canEdit && p.stripe.testMode {
+                    HStack(spacing: 10) {
+                        NSPInput(text: $model.readerLabel, placeholder: "端末名（例: レジ1台目）", width: 300)
+                        NSPButton(text: "シミュレーション端末を登録", icon: "plus", primary: true, busy: model.busy == "readerAdd", disabled: model.readerLabel.trimmingCharacters(in: .whitespaces).isEmpty) { Task { await model.addReader() } }
+                        Spacer()
+                    }
+                    .padding(18)
+                }
+            }
+        }
+    }
+
+    // 予約の決済
+    private func bookingTab(_ p: NPYPayload) -> some View {
+        NSPCard(title: "予約の決済", en: "現地払い・全額決済・予約金") {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(spacing: 8) {
+                    ForEach(p.booking.modes) { m in
+                        let on = model.bookingMode == m.id
+                        Button { model.bookingMode = m.id } label: {
+                            Text(m.label).font(.system(size: 14, weight: .bold)).foregroundColor(on ? .white : NFColor.ink2)
+                                .padding(.horizontal, 16).frame(height: 44)
+                                .background(RoundedRectangle(cornerRadius: 10).fill(on ? NFColor.iris : Color.white))
+                                .overlay(RoundedRectangle(cornerRadius: 10).stroke(on ? NFColor.iris : NFColor.line, lineWidth: 1))
+                        }
+                        .buttonStyle(PressableStyle()).disabled(!p.canEdit)
+                    }
+                }
+                if model.bookingMode == "deposit" {
+                    NSPRow(label: "予約金", en: "1名あたり") {
+                        NSPInput(text: $model.depositText, placeholder: "0", enabled: p.canEdit, width: 160, keyboard: .numberPad, trailing: "円")
+                    }
+                }
+                if p.canEdit {
+                    HStack { Spacer(); NSPButton(text: "保存する", primary: true, busy: model.busy == "booking", disabled: model.bookingMode == p.booking.mode && Int(model.depositText) == p.booking.depositAmount) { Task { await model.saveBooking() } } }
                 }
             }
             .padding(18)

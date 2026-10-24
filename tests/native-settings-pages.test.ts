@@ -58,4 +58,29 @@ describe('native settings pages (設定の中の画面) actions', () => {
     expect(parseNativeSettingsPageAction({ type: 'storeSave', store: { name: 'x', seatCount: -1, serviceChargeRate: 0 } }).ok).toBe(false);
     expect(parseNativeSettingsPageAction({ type: 'storeSave', store: { name: 'x', serviceChargeRate: 101 } }).ok).toBe(false);
   });
+
+  it('決済・端末: 会計の選択肢・予約決済・stera', () => {
+    const ok = parseNativeSettingsPageAction({
+      type: 'checkoutPresetsSave',
+      discounts: [{ key: 'kanji-free', name: '幹事様無料', kind: 'manual', value: 0 }, { key: 'disc1', name: '10%', kind: 'percent', value: 10.7 }],
+      pointBrands: [{ key: 'hotpepper', name: 'ホットペッパー' }],
+      methodBrands: { credit: [{ key: 'visa', name: 'VISA' }] },
+    });
+    expect(ok.ok).toBe(true);
+    if (ok.ok && ok.action.type === 'checkoutPresetsSave') {
+      expect(ok.action.discounts[1].value).toBe(10);
+      expect(ok.action.methodBrands.credit[0].name).toBe('VISA');
+    }
+    expect(parseNativeSettingsPageAction({ type: 'checkoutPresetsSave', discounts: [{ key: 'Bad Key', name: 'x', kind: 'manual', value: 0 }], pointBrands: [], methodBrands: {} }).ok).toBe(false);
+    expect(parseNativeSettingsPageAction({ type: 'checkoutPresetsSave', discounts: [{ key: 'a', name: 'x', kind: 'free', value: 0 }], pointBrands: [], methodBrands: {} }).ok).toBe(false);
+    expect(parseNativeSettingsPageAction({ type: 'bookingPaymentSave', mode: 'deposit', depositAmount: 1000 }).ok).toBe(true);
+    expect(parseNativeSettingsPageAction({ type: 'bookingPaymentSave', mode: 'later', depositAmount: 0 }).ok).toBe(false);
+    expect(parseNativeSettingsPageAction({ type: 'bookingPaymentSave', mode: 'deposit', depositAmount: 10.5 }).ok).toBe(false);
+    expect(parseNativeSettingsPageAction({ type: 'steraAdd', name: ' レジ横 ', terminalNo: '' })).toEqual({ ok: true, action: { type: 'steraAdd', name: 'レジ横', terminalNo: '' } });
+    expect(parseNativeSettingsPageAction({ type: 'steraAdd', name: '   ' }).ok).toBe(false);
+    expect(parseNativeSettingsPageAction({ type: 'steraUpdate', id: ID, active: false })).toEqual({ ok: true, action: { type: 'steraUpdate', id: ID, active: false } });
+    expect(parseNativeSettingsPageAction({ type: 'steraUpdate', id: ID, active: 'no' }).ok).toBe(false);
+    expect(parseNativeSettingsPageAction({ type: 'steraRegen', id: ID }).ok).toBe(true);
+    expect(parseNativeSettingsPageAction({ type: 'readerDelete', id: 'x' }).ok).toBe(false);
+  });
 });

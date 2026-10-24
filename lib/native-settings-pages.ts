@@ -73,7 +73,25 @@ export type NativeSettingsPageAction =
   | { type: 'menuBookPlans'; rows: { planItemId: string; categoryIds: string[] | null }[] }
   | { type: 'menuBookPages'; pages: { key: string; name: string }[]; categoryPage: Record<string, string> }
   | { type: 'menuBookLunch'; start: string; end: string }
-  | { type: 'menuBookTakeout'; itemIds: string[] };
+  | { type: 'menuBookTakeout'; itemIds: string[] }
+  /** 決済・端末（/app/settings/payments。actions.ts・stera-actions.ts） */
+  | { type: 'checkoutPresetsSave'; discounts: NativeDiscountPreset[]; pointBrands: NativePointBrand[]; methodBrands: Record<string, NativePointBrand[]> }
+  | { type: 'readerAdd'; label: string }
+  | { type: 'readerDelete'; id: string }
+  | { type: 'bookingPaymentSave'; mode: 'onsite' | 'prepay_full' | 'deposit'; depositAmount: number }
+  | { type: 'steraAdd'; name: string; terminalNo: string }
+  | { type: 'steraUpdate'; id: string; name?: string; terminalNo?: string; active?: boolean }
+  | { type: 'steraRegen'; id: string }
+  | { type: 'steraDelete'; id: string };
+
+export interface NativePointBrand {
+  key: string;
+  name: string;
+}
+export interface NativeDiscountPreset extends NativePointBrand {
+  kind: 'percent' | 'amount' | 'manual';
+  value: number;
+}
 
 export interface NativeMenuItemFields {
   id: string | null;
@@ -166,6 +184,14 @@ export const NATIVE_SETTINGS_PAGE_ACTION_TYPES: readonly NativeSettingsPageActio
   'menuBookPages',
   'menuBookLunch',
   'menuBookTakeout',
+  'checkoutPresetsSave',
+  'readerAdd',
+  'readerDelete',
+  'bookingPaymentSave',
+  'steraAdd',
+  'steraUpdate',
+  'steraRegen',
+  'steraDelete',
 ];
 
 export function isNativeSettingsPageActionType(v: unknown): v is NativeSettingsPageActionType {
@@ -536,7 +562,99 @@ export function parseNativeSettingsPageAction(raw: unknown): Parsed {
     if (!list) return bad('商品の指定が正しくありません');
     return { ok: true, action: { type: 'menuBookTakeout', itemIds: list } };
   }
+  // 決済・端末
+  const brandList = (v: unknown): NativePointBrand[] | null => {
+    if (!Array.isArray(v) || v.length > 20) return null;
+    const out: NativePointBrand[] = [];
+    for (const b of v as Record<string, unknown>[]) {
+      if (typeof b?.key !== 'string' || !/^[a-z0-9][a-z0-9-]{0,23}$/.test(b.key) || typeof b.name !== 'string') return null;
+      out.push({ key: b.key, name: b.name.slice(0, 20) });
+    }
+    return out;
+  };
+  if (b.type === 'checkoutPresetsSave') {
+    const brands = brandList(b.pointBrands);
+    if (!Array.isArray(b.discounts) || b.discounts.length > 20 || !brands) return bad('選択肢の指定が正しくありません');
+    const discounts: NativeDiscountPreset[] = [];
+    for (const d of b.discounts as Record<string, unknown>[]) {
+      const kind = d?.kind === 'percent' || d?.kind === 'amount' || d?.kind === 'manual' ? d.kind : null;
+      if (typeof d?.key !== 'string' || !/^[a-z0-9][a-z0-9-]{0,23}$/.test(d.key) || typeof d.name !== 'string' || !kind) return bad('値引きの指定が正しくありません');
+      const value = typeof d.value === 'number' && Number.isFinite(d.value) ? Math.floor(d.value) : 0;
+      discounts.push({ key: d.key, name: d.name.slice(0, 20), kind, value });
+    }
+    const methodBrands: Record<string, NativePointBrand[]> = {};
+    if (b.methodBrands && typeof b.methodBrands === 'object' && !Array.isArray(b.methodBrands)) {
+      for (const [m, list] of Object.entries(b.methodBrands as Record<string, unknown>)) {
+        if (!/^[a-z_]{1,20}$/.test(m)) continue;
+        const l = brandList(list);
+        if (!l) return bad('支払方法の種類の指定が正しくありません');
+        methodBrands[m] = l;
+      }
+    }
+    return { ok: true, action: { type: 'checkoutPresetsSave', discounts, pointBrands: brands, methodBrands } };
+  }
+  if (b.type === 'readerAdd') {
+    if (typeof b.label !== 'string' || !b.label.trim() || b.label.length > 60) return bad('端末名を入力してください');
+    return { ok: true, action: { type: 'readerAdd', label: b.label.trim() } };
+  }
+  if (b.type === 'readerDelete') {
+    if (!isUuid(b.id)) return bad('端末が見つかりません');
+    return { ok: true, action: { type: 'readerDelete', id: b.id } };
+  }
+  if (b.type === 'bookingPaymentSave') {
+    if (b.mode !== 'onsite' && b.mode !== 'prepay_full' && b.mode !== 'deposit') return bad('予約決済方法の指定が不正です');
+    if (typeof b.depositAmount !== 'number' || !Number.isInteger(b.depositAmount) || b.depositAmount < 0 || b.depositAmount > 10_000_000) return bad('予約金額の指定が正しくありません');
+    return { ok: true, action: { type: 'bookingPaymentSave', mode: b.mode, depositAmount: b.depositAmount } };
+  }
+  const short = (v: unknown, max = 40): string | null => (typeof v === 'string' && v.length <= max ? v : null);
+  if (b.type === 'steraAdd') {
+    const n = short(b.name);
+    if (!n || !n.trim()) return bad('端末の名前を入れてください');
+    return { ok: true, action: { type: 'steraAdd', name: n.trim(), terminalNo: short(b.terminalNo) ?? '' } };
+  }
+  if (b.type === 'steraUpdate') {
+    if (!isUuid(b.id)) return bad('端末が見つかりません');
+    const a: Extract<NativeSettingsPageAction, { type: 'steraUpdate' }> = { type: 'steraUpdate', id: b.id };
+    if (b.name !== undefined) {
+      const n = short(b.name);
+      if (!n || !n.trim()) return bad('端末の名前を入れてください');
+      a.name = n.trim();
+    }
+    if (b.terminalNo !== undefined) {
+      const t = short(b.terminalNo);
+      if (t === null) return bad('端末番号が長すぎます');
+      a.terminalNo = t;
+    }
+    if (b.active !== undefined) {
+      if (typeof b.active !== 'boolean') return bad();
+      a.active = b.active;
+    }
+    return { ok: true, action: a };
+  }
+  if (b.type === 'steraRegen' || b.type === 'steraDelete') {
+    if (!isUuid(b.id)) return bad('端末が見つかりません');
+    return { ok: true, action: { type: b.type, id: b.id } };
+  }
   return bad();
+}
+
+/** 決済・端末の画面の読み込み（GET ?part=payments） */
+export interface NativePaymentsPayload {
+  store: { id: string; name: string };
+  canEdit: boolean;
+  /** stera 端末の追加・変更は管理画面だけ（レジの iPad からは見るだけ） */
+  canEditStera: boolean;
+  stripe: { configured: boolean; testMode: boolean };
+  discountKinds: { id: 'percent' | 'amount' | 'manual'; label: string }[];
+  /** 内訳を選ばせる支払方法（クレジット・QR・電子マネー） */
+  methods: { id: string; label: string }[];
+  presets: { discounts: NativeDiscountPreset[]; pointBrands: NativePointBrand[]; methodBrands: Record<string, NativePointBrand[]> };
+  stera: {
+    serverUrl: string;
+    terminals: { id: string; name: string; terminalNo: string | null; linkCode: string; active: boolean; online: boolean; lastSeenLabel: string | null; appVersion: string | null }[];
+  };
+  readers: { id: string; label: string; deviceType: string | null; isSimulated: boolean; status: string; statusLabel: string; lastSeenAt: string | null }[];
+  booking: { mode: 'onsite' | 'prepay_full' | 'deposit'; depositAmount: number; modes: { id: string; label: string }[] };
 }
 
 /** メニューブックの画面の読み込み（GET ?part=menuBook） */
