@@ -35,7 +35,8 @@ struct RootView: View {
                 WebContainer()
                     .id(state.webSession)
                     .accessibilityHidden(state.nativeOrder != nil)
-                    // iPhone：上のバーが黒なので時計・電波の字を白に。iPad は上のバーがうすい灰色になったので明るい表示（時計の字を黒に。2026-10-24 22:28）
+                    // iPhone：暗い表示。iPad：明るい表示（シート・アラートを白に）。
+                    // 時計・電波の字はどちらも白（上のバーがネイビー/黒）＝ Info.plist の UIStatusBarStyle（2026-10-25 00:12）
                     .preferredColorScheme(AppConfig.isPad ? .light : .dark)
                 if state.needsHandyLogin {
                     HandyLoginView()
