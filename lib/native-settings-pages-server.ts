@@ -723,8 +723,9 @@ export async function loadNativeSettingsPage(
           nameEn: (i.name_en as string | null) ?? '',
           categoryId: (i.category_id as string | null) ?? null,
           itemType: String(i.item_type ?? 'food'),
-          price: Number(i.price ?? 0),
-          takeoutPrice: i.takeout_price == null ? null : Number(i.takeout_price),
+          // iPad 側は Int で受けるので整数にそろえる（円）
+          price: Math.round(Number(i.price ?? 0)),
+          takeoutPrice: i.takeout_price == null ? null : Math.round(Number(i.takeout_price)),
           status: i.status === 'hidden' ? 'hidden' : 'active',
           isSoldOut: i.is_sold_out === true,
         })),
@@ -989,7 +990,7 @@ export async function loadNativeSettingsPage(
         })),
         booking: {
           mode,
-          depositAmount: Number(settingsRow?.booking_deposit_amount ?? 0),
+          depositAmount: Math.round(Number(settingsRow?.booking_deposit_amount ?? 0)),
           modes: (Object.keys(modeLabels) as BookingPaymentMode[]).map((id) => ({ id, label: modeLabels[id] })),
         },
       },
