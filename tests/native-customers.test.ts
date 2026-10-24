@@ -12,5 +12,7 @@ describe('native customer actions', () => {
     expect(parseNativeCustomerAction({ type: 'customerNote', id, body: '' }).ok).toBe(false);
     expect(parseNativeCustomerAction({ type: 'customerAttributes', id, allergyNote: 'えび' }).ok).toBe(true);
     expect(parseNativeCustomerAction({ type: 'customerRecalc', id: 'x' }).ok).toBe(false);
+    expect(parseNativeCustomerAction({ type: 'orderCustomer', orderId: id, customerId: null }).ok).toBe(true);
+    expect(parseNativeCustomerAction({ type: 'orderCustomer', orderId: id, customerId: 'x' }).ok).toBe(false);
   });
 });
