@@ -229,6 +229,11 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         let nativePos = AppConfig.isPad
             ? "nativePos: { enabled: \(nativePosOn), set: function(on){ return call('setNativePos', { on: !!on }).then(function(r){ if (r && r.ok && window.TenpoNative && window.TenpoNative.nativePos) { window.TenpoNative.nativePos.enabled = !!r.enabled; } return r; }); } },"
             : ""
+        // iPhone だけ：ハンディのテーブル一覧・オーナーのホームをネイティブで出すか（2026-10-24。OFF にすると今までの Web の画面）
+        let nativePhoneOn = AppState.shared.nativePhoneEnabled ? "true" : "false"
+        let nativePhone = AppConfig.isPad
+            ? ""
+            : "nativePhone: { enabled: \(nativePhoneOn), set: function(on){ return call('setNativePhone', { on: !!on }).then(function(r){ if (r && r.ok && window.TenpoNative && window.TenpoNative.nativePhone) { window.TenpoNative.nativePhone.enabled = !!r.enabled; } return r; }); } },"
         // iPad だけ：アプリ自身の印刷係（NativePrintAgent）。native が true のあいだ Web の DirectPrintAgent は休む。
         // この iPad の印刷の設定（localStorage 'tenpo-direct-print'）は、開いたとき・Web で変えたときにアプリへ写す（NativePrintConfig）
         let nativePrint = AppConfig.isPad ? "print: { native: \(AppState.shared.nativePrintAgentOn ? "true" : "false") }," : ""
@@ -245,10 +250,9 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         // iPhone は viewport-fit=cover（時計のうしろ・ホームバーのうしろまで Web。env(safe-area-inset-*) が入る）
         let fit = AppConfig.isPad ? "" : ", viewport-fit=cover"
         let viewport = "(function(){ var W = \(padViewportWidth); var m = null; var want = function(){ if (W > 0) { var k = W > 0 && window.__tenpoScale ? window.__tenpoScale : 1; return 'width=' + W + ', initial-scale=' + k + ', minimum-scale=' + k + ', maximum-scale=' + k + ', user-scalable=no\(fit)'; } return 'width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no\(fit)'; }; var apply = function(){ if (!m) return; var v = want(); if (m.getAttribute('content') !== v) m.setAttribute('content', v); }; var watch = function(){ var n = document.querySelector('meta[name=viewport]'); if (!n || n === m) return !!n; m = n; apply(); new MutationObserver(apply).observe(m, { attributes: true, attributeFilter: ['content'] }); return true; }; window.__tenpoSetViewport = function(w, k){ W = w | 0; window.__tenpoScale = k || 1; watch(); apply(); }; window.__tenpoScale = \(padViewportScale); try { document.documentElement.style.touchAction = 'manipulation'; } catch (e) {} if (!watch()) { var mo = new MutationObserver(function(){ if (watch()) { mo.disconnect(); if (document.head) new MutationObserver(watch).observe(document.head, { childList: true }); } }); mo.observe(document, { childList: true, subtree: true }); } else if (document.head) { new MutationObserver(watch).observe(document.head, { childList: true }); } })();"
-        // iPad だけ：画面の行き先を知らせる（オーダー・会計をネイティブで開くため。Next の画面の切り替えは pushState）
-        let routeHook = AppConfig.isPad
-            ? "(function(){ var notify = function(){ post({ type: 'route', url: location.href }); }; var wrap = function(n){ var o = history[n]; history[n] = function(){ var r = o.apply(this, arguments); try { notify(); } catch (e) {} return r; }; }; wrap('pushState'); wrap('replaceState'); window.addEventListener('popstate', notify); })();"
-            : ""
+        // 画面の行き先を知らせる（iPad：オーダー・会計をネイティブで開くため。iPhone：/handy・/app/dashboard のネイティブのホームを出し入れするため。
+        // Next の画面の切り替えは pushState なので didFinish では分からない。2026-10-24 iPhone も）
+        let routeHook = "(function(){ var notify = function(){ post({ type: 'route', url: location.href }); }; var wrap = function(n){ var o = history[n]; history[n] = function(){ var r = o.apply(this, arguments); try { notify(); } catch (e) {} return r; }; }; wrap('pushState'); wrap('replaceState'); window.addEventListener('popstate', notify); })();"
         // Prepare before the first click, using only this iPad's saved selection.
         // Runs inside the app even while the hosted Web deployment is unchanged.
         let printerWarmup = AppConfig.isPad ? """
@@ -298,6 +302,7 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
             \(bluetooth)
             \(lan)
             \(nativePos)
+            \(nativePhone)
             \(nativePrint)
           };
           \(printSync)
@@ -373,6 +378,12 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
             AppState.shared.setNativePos((body["on"] as? Bool) ?? false)
             refreshBridgeScript()
             reply(reqId, ["ok": true, "enabled": AppState.shared.nativePosEnabled])
+        case "setNativePhone":
+            let reqId = body["reqId"] as? String ?? ""
+            AppState.shared.nativePhoneEnabled = (body["on"] as? Bool) ?? false
+            if !AppState.shared.nativePhoneEnabled { AppState.shared.fallbackPhoneToWeb() }
+            refreshBridgeScript()
+            reply(reqId, ["ok": true, "enabled": AppState.shared.nativePhoneEnabled])
         case "printConfig":
             // Web の localStorage の印刷の設定をアプリに写す（自分のサイトの画面からだけ）
             guard AppConfig.isPad, message.frameInfo.isMainFrame, AppConfig.isOwnHost(message.frameInfo.request.url) else { return }
