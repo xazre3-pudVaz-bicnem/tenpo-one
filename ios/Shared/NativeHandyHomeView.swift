@@ -423,7 +423,7 @@ struct NativeHandyHomeView: View {
                         }
                         if cards, let ft = model.floorTables[t.id] {
                             // iPad のネイティブと同じ箱（3D・下の色の帯・残り時間・最終注文から・呼び出し）。押したときの動きはハンディのまま
-                            NativeTableCard(table: ft, now: model.now.timeIntervalSince1970 * 1000, height: 214) { _ in tap() }
+                            NativeTableCard(table: ft, now: model.now.timeIntervalSince1970 * 1000, height: 240) { _ in tap() }
                         } else {
                             Button(action: tap) {
                                 NativeHandyTile(table: t, state: state, now: model.now, callKind: kinds[t.id],
