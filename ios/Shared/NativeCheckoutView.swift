@@ -399,7 +399,10 @@ struct NativeCheckoutView: View {
             }
             .buttonStyle(PressableStyle())
             .disabled(!canPay || paying)
+            // いつも見せる（上のテンキーのほうを縮める）
+            .layoutPriority(1)
         }
+        .frame(maxHeight: .infinity, alignment: .top)
         .padding(12)
         .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(NT.card))
         .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(NT.lilacLine, lineWidth: 1))
@@ -469,7 +472,7 @@ struct NativeCheckoutView: View {
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 4), spacing: 8) {
                         ForEach(brands(m)) { b in
                             let on = payments.contains { $0.method == m && $0.brand == b }
-                            Button { addRow(m, brand: b) } label: { NPBrandTile(brand: b, fallback: m.color, on: on) }
+                            Button { addRow(m, brand: b) } label: { NPBrandTile(brand: b, fallback: m.color, on: on, height: 50) }
                                 .buttonStyle(PressableStyle())
                         }
                     }
@@ -560,25 +563,32 @@ struct NativeCheckoutView: View {
                         }
                         .foregroundColor(exact ? .white : NT.purple)
                         .lineLimit(1).minimumScaleFactor(0.7)
-                        .frame(maxWidth: .infinity, minHeight: 64)
+                        // 狭いときは低くして、下の「お会計を確定」をいつも見せる（2026-10-25 20:21 Ronnie「credit ma click garepaxi … 会計 button lukxa」）
+                        .frame(maxWidth: .infinity, minHeight: 46, maxHeight: 64)
                         .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(exact ? NT.ok : NT.lilac))
                     }
                     .buttonStyle(PressableStyle())
                 }
             }
-            let keys = ["7", "8", "9", "4", "5", "6", "1", "2", "3", "00", "0", "⌫"]
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) {
-                ForEach(keys, id: \.self) { k in
-                    Button { onKey(k) } label: {
-                        Group {
-                            if k == "⌫" { Image(systemName: "delete.left") } else { Text(k) }
+            // テンキーは高さが縮む（54 → 最小 38pt）。クレジットの種類などが出て狭くなっても、
+            // 下の「お会計を確定」ボタンが画面の外に押し出されない（2026-10-25 20:21 Ronnie「会計 button lukxa … 問題です」）
+            let rows = [["7", "8", "9"], ["4", "5", "6"], ["1", "2", "3"], ["00", "0", "⌫"]]
+            VStack(spacing: 8) {
+                ForEach(rows, id: \.self) { row in
+                    HStack(spacing: 8) {
+                        ForEach(row, id: \.self) { k in
+                            Button { onKey(k) } label: {
+                                Group {
+                                    if k == "⌫" { Image(systemName: "delete.left") } else { Text(k) }
+                                }
+                                .font(.system(size: 24, weight: .bold)).foregroundColor(NT.ink)
+                                .frame(maxWidth: .infinity, minHeight: 38, maxHeight: 54)
+                                .background(RoundedRectangle(cornerRadius: 12).fill(Color(hex: 0xFBF9F5)))
+                                .overlay(RoundedRectangle(cornerRadius: 12).stroke(NT.lilacLine, lineWidth: 1))
+                            }
+                            .buttonStyle(PressableStyle(scale: 0.93))
                         }
-                        .font(.system(size: 24, weight: .bold)).foregroundColor(NT.ink)
-                        .frame(maxWidth: .infinity, minHeight: 54)
-                        .background(RoundedRectangle(cornerRadius: 12).fill(Color(hex: 0xFBF9F5)))
-                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(NT.lilacLine, lineWidth: 1))
                     }
-                    .buttonStyle(PressableStyle(scale: 0.93))
                 }
             }
         }
