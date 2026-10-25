@@ -185,13 +185,14 @@ struct NativeOrderView: View {
             Button("キャンセル", role: .cancel) { afterClerk = nil }
         }
         .alert(
-            "今までの画面で",
+            "選択肢を読み直します",
             isPresented: Binding(get: { model.webOnlyItem != nil }, set: { if !$0 { model.webOnlyItem = nil } })
         ) {
-            Button("今までの画面を開く") { model.openInWeb() }
+            // Web の画面は開かない：メニュー（選択肢）を読み直して、もう一度押してもらう（2026-10-25「101% native」）
+            Button("メニューを読み直す") { NativeCatalogCache.shared.refresh(storeId: model.storeId) }
             Button("閉じる", role: .cancel) {}
         } message: {
-            Text("「\(model.webOnlyItem.map { $0.name } ?? "")」は選択肢があります。今までの画面で追加してください。")
+            Text("「\(model.webOnlyItem.map { $0.name } ?? "")」の選択肢がまだ読めていません。メニューを読み直してから、もう一度押してください。")
         }
     }
 
