@@ -17,6 +17,11 @@ export interface NativeVisitEdit {
   draft: VisitDraft;
   /** 席のコース（今のまま渡す。コースのプランを選んだらそれ）。null はコースなし */
   courseId: string | null;
+  /**
+   * 時間制（draft.duration）が L.O. までの時間か（2026-10-25 #569 からの iPad は true）。
+   * 付いていない古いアプリは「終わり − 開始」を送るので、サーバーで直す（lib/table-time-limit.ts の legacyEditDuration）
+   */
+  durationIsLastOrder: boolean;
 }
 
 export function isNativeVisitEditType(v: unknown): v is NativeVisitEdit['type'] {
@@ -32,7 +37,16 @@ export function parseNativeVisitEdit(raw: unknown): { ok: true; action: NativeVi
   if (draft.male + draft.female < 1) return { ok: false, error: '人数を入れてください' };
   const courseId = b.courseId == null || b.courseId === '' ? null : b.courseId;
   if (courseId !== null && !isUuid(courseId)) return { ok: false, error: '内容が正しくありません' };
-  return { ok: true, action: { type: 'visitEdit', orderId: b.orderId as string, draft, courseId: courseId as string | null } };
+  return {
+    ok: true,
+    action: {
+      type: 'visitEdit',
+      orderId: b.orderId as string,
+      draft,
+      courseId: courseId as string | null,
+      durationIsLastOrder: b.durationIsLastOrder === true,
+    },
+  };
 }
 
 /** 伝票メモから読めたお客様情報（読めないものは null） */

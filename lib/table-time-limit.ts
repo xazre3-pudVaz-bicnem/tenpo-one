@@ -48,3 +48,15 @@ export function tableEndAtMs(input: TableEndInput): number {
   if (Number.isFinite(resvEndMs) && resvEndMs > openedAtMs) return resvEndMs;
   return openedAtMs + stayMinutes * MIN;
 }
+
+/**
+ * 古いアプリ（2026-10-25 #568 より前の iPad。SHUNKA・御茶ノ水のケーブルの build など）は、お客様情報の直しで
+ * 時間制を「終わり − 開始」（＝L.O.＋30 分）のまま送ってくる。触っていなければ、知っている L.O. までの時間に戻す
+ * （開くたび・保存するたびに 30 分ずつ延びないように）。新しいアプリは durationIsLastOrder を付けて送るので、そのまま。
+ */
+export function legacyEditDuration(sent: number, knownLastOrderMinutes: (number | null | undefined)[]): number {
+  for (const lo of knownLastOrderMinutes) {
+    if (typeof lo === 'number' && lo > 0 && sent === lo + LAST_ORDER_TO_END_MINUTES) return lo;
+  }
+  return sent;
+}

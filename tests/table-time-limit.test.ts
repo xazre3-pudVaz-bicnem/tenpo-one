@@ -40,3 +40,24 @@ describe('卓の時間制（決めた時間＝L.O.、終わりはその 30 分�
     expect(src).toContain('courseTotalMinutes(course.duration_minutes)');
   });
 });
+
+describe('古いアプリの直し（時間制を L.O.＋30 分で送ってくる）', () => {
+  it('触っていなければ L.O. までの時間に戻す', async () => {
+    const { legacyEditDuration } = await import('@/lib/table-time-limit');
+    expect(legacyEditDuration(150, [120])).toBe(120);
+    expect(legacyEditDuration(150, [null, 120])).toBe(120);
+    expect(legacyEditDuration(120, [90, 120])).toBe(90);
+  });
+  it('違う値（選び直した時間）はそのまま', async () => {
+    const { legacyEditDuration } = await import('@/lib/table-time-limit');
+    expect(legacyEditDuration(180, [120])).toBe(180);
+    expect(legacyEditDuration(120, [120])).toBe(120);
+    expect(legacyEditDuration(150, [])).toBe(150);
+  });
+  it('新しいアプリは durationIsLastOrder を付ける・サーバーは付いていないときだけ直す', () => {
+    const swift = readFileSync(new URL('../ios/Shared/NativeGuestInfoViews.swift', import.meta.url), 'utf8');
+    expect(swift).toContain('"durationIsLastOrder": true');
+    const server = readFileSync(new URL('../lib/native-visit-edit-server.ts', import.meta.url), 'utf8');
+    expect(server).toContain('!a.durationIsLastOrder');
+  });
+});
