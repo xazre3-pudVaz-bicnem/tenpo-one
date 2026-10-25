@@ -26,19 +26,25 @@ struct PadCanvas<Content: View>: View {
     var body: some View {
         if AppConfig.isPad {
             GeometryReader { geo in
-                let size = geo.size
-                let s = Self.scale(for: size)
+                // 画面全体の大きさ（上の時計・電波の帯を含む）と、その帯の高さ
+                let ins = geo.safeAreaInsets
+                let full = CGSize(width: geo.size.width + ins.leading + ins.trailing,
+                                  height: geo.size.height + ins.top + ins.bottom)
+                let s = Self.scale(for: full)
                 if s < 1 {
+                    // 縮めた中では時計・電波の帯が無いことになるので、帯の高さ（縮める前の値）を上下に足して、
+                    // 上のバーのボタンが時計・電波に重ならないようにする（背景の色は今まで通り帯の下まで伸びる）
                     content
-                        .frame(width: size.width / s, height: size.height / s)
+                        .safeAreaInset(edge: .top, spacing: 0) { Color.clear.frame(height: ins.top / s) }
+                        .safeAreaInset(edge: .bottom, spacing: 0) { Color.clear.frame(height: ins.bottom / s) }
+                        .frame(width: full.width / s, height: full.height / s)
                         .scaleEffect(s, anchor: .topLeading)
-                        .frame(width: size.width, height: size.height, alignment: .topLeading)
+                        .frame(width: full.width, height: full.height, alignment: .topLeading)
+                        .ignoresSafeArea()
                 } else {
                     content
-                        .frame(width: size.width, height: size.height)
                 }
             }
-            .ignoresSafeArea()
         } else {
             content
         }
