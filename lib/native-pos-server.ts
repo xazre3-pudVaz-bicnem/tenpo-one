@@ -347,17 +347,84 @@ export async function loadNativePos(ctx: SessionContext, orderId: string): Promi
   };
 }
 
+/** 予約の無い卓の伝票に付けるウォークインの予約（開始＝伝票の開始、終わり＝店の滞在時間）。作れなければ null */
+async function createWalkInReservation(
+  ctx: SessionContext,
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  o: { organizationId: string; storeId: string; tableId: string; openedAt: string; guestCount: number }
+): Promise<string | null> {
+  const { data: settings } = await supabase.from('store_settings').select('default_stay_minutes').eq('store_id', o.storeId).maybeSingle();
+  const stay = (settings?.default_stay_minutes as number | null | undefined) ?? 120;
+  const startAt = new Date(o.openedAt);
+  const endAt = new Date(startAt.getTime() + stay * 60_000);
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const { data, error } = await supabase
+      .from('reservations')
+      .insert({
+        organization_id: o.organizationId,
+        store_id: o.storeId,
+        code: `WI-${Math.floor(100000 + Math.random() * 900000)}`,
+        reserved_date: startAt.toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' }),
+        start_at: startAt.toISOString(),
+        end_at: endAt.toISOString(),
+        party_size: o.guestCount,
+        adults: o.guestCount,
+        children: 0,
+        guest_name: 'ウォークイン',
+        guest_phone: '-',
+        status: 'seated',
+        created_via: 'walk_in',
+        consent_accepted: true,
+        created_by: ctx.userId,
+      })
+      .select('id')
+      .single();
+    if (error) {
+      if (error.code === '23505') continue;
+      return null;
+    }
+    const id = data.id as string;
+    await supabase.from('reservation_tables').insert({ reservation_id: id, table_id: o.tableId });
+    return id;
+  }
+  return null;
+}
+
 /**
  * 伝票の来店経路を変える（会計の画面の「来店経路」）。予約の経路（source_id）に入れ、経路の行が無い店は予約の目的に名前を残す
  * （ハンディの「お客様情報」と同じ残し方。app/app/floor/actions.ts の startWalkIn）。予約の無い伝票（即会計など）は何もしない。
  */
 export async function setOrderVisitSource(ctx: SessionContext, orderId: string, sourceId: string | null): Promise<{ ok: boolean; error?: string }> {
   const supabase = await createClient();
-  const { data: order } = await supabase.from('orders').select('id, store_id, organization_id, reservation_id, status').eq('id', orderId).maybeSingle();
+  const { data: order } = await supabase
+    .from('orders')
+    .select('id, store_id, organization_id, reservation_id, status, table_id, opened_at, guest_count')
+    .eq('id', orderId)
+    .maybeSingle();
   if (!order || !(ctx.isHq || ctx.stores.some((s) => s.id === order.store_id))) return { ok: false, error: '注文が見つかりません' };
-  if (!order.reservation_id) return { ok: false, error: 'この伝票には来店経路を残せません（テーブルの伝票だけ）' };
   const source = sourceId ? VISIT_SOURCES.find((s) => s.id === sourceId) : null;
   if (sourceId && !source) return { ok: false, error: '来店経路が正しくありません' };
+  // 予約の無い卓の伝票（来店登録をせずに注文を始めた卓など）は、ここでウォークインの予約を作って経路を残す
+  // （2026-10-25 20:20 御茶ノ水「この伝票には来店経路を残せません」。席の時間の保存 setSeatTime と同じ作り方）
+  if (!order.reservation_id) {
+    if (!order.table_id) return { ok: false, error: 'この伝票には来店経路を残せません（テーブルの伝票だけ）' };
+    if (!sourceId) return { ok: true };
+    const made = await createWalkInReservation(ctx, supabase, {
+      organizationId: order.organization_id as string,
+      storeId: order.store_id as string,
+      tableId: order.table_id as string,
+      openedAt: order.opened_at as string,
+      guestCount: Number(order.guest_count) || 1,
+    });
+    if (!made) return { ok: false, error: '来店経路を保存できませんでした' };
+    const { error: linkError } = await supabase
+      .from('orders')
+      .update({ reservation_id: made, updated_by: ctx.userId })
+      .eq('id', orderId)
+      .eq('status', 'open');
+    if (linkError) return { ok: false, error: '来店経路を保存できませんでした' };
+    order.reservation_id = made;
+  }
 
   let sourceRowId: string | null = null;
   if (source) {
