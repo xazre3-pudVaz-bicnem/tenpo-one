@@ -18,14 +18,14 @@ describe('approved kitchen and cancellation print designs', () => {
   it('centers the table, left-aligns time and right-aligns actual quantities, with small saved cancellation reasons', () => {
     const d = kitchenDesign(ticket, opts);
     expect(d.rows[1].cells[1]).toMatchObject({ text: 'T-1', align: 'center' });
-    expect(d.rows[2].cells[0]).toMatchObject({ text: opts.printedAt, align: 'left', size: 36 });
+    expect(d.rows[1].cells[0]).toMatchObject({ text: opts.printedAt, align: 'left', size: 36 });
     expect(d.rows.find(r => r.black)?.cells[0].text).toBe('取消 / CANCEL');
     expect(d.rows.find(r => r.cells[0].text.startsWith('取消理由'))?.size).toBe(15);
     expect(d.rows.find(r => r.cells[0].text === 'Mutton Curry')?.cells[1]).toMatchObject({ text: '2', align: 'right' });
     expect(texts(d)).not.toMatch(/[○★]|1102|1110|1111/);
     expect(texts(d)).toContain('No coriander');
   });
-  it.each([384, 576] as const)('keeps only the time-row separator black in the actual %s-dot printer payload', async width => {
+  it.each([384, 576] as const)('keeps only the header separator black in the actual %s-dot printer payload', async width => {
     const d = kitchenDesign({ ...ticket, lines: [{ ...ticket.lines[0], delta: 12 }] }, { ...opts, textSize: 'normal' });
     const item = d.rows.find(r => r.cells[0].text === 'Mutton Curry')!;
     expect(item.size).toBeGreaterThanOrEqual(40);
@@ -34,7 +34,7 @@ describe('approved kitchen and cancellation print designs', () => {
     expect(d.rows[0].cells).toEqual([{ text: 'キッチン', align: 'center', share: 1 }]);
     const rules = d.rows.filter(r => r.rule);
     expect(rules).toHaveLength(1);
-    expect(rules[0].cells.some(c => c.text === opts.printedAt)).toBe(true);
+    expect(rules[0].cells[0]).toMatchObject({ text: '伝票No.8550', align: 'left' });
     const png = await renderTicketImage({ serif: d.serif, rows: rules }, width);
     const payload = await ticketImagePayload([png]);
     const blocks = [...payload.epos.matchAll(/<image[^>]*>([^<]+)<\/image>/g)];
