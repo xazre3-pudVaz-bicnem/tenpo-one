@@ -23,6 +23,7 @@ import type {
 } from '@/components/floor/types';
 import { loadSetupPlanItems } from '@/app/app/handy/setup-data';
 import { plansFromMemo, type HandyPlanItem } from '@/lib/handy-visit';
+import { courseTotalMinutes, tableEndAtMs } from '@/lib/table-time-limit';
 
 /**
  * フロア（テーブル一覧）画面のデータを組み立てる。
@@ -240,23 +241,22 @@ export async function loadFloorView(
     const resv = one(o.reservations);
     const course = resv ? one(resv.menu_items) : null;
     const openedAtMs = new Date(o.opened_at).getTime();
+    // 卓の箱の「時間制 N分」は席の時間の合計（コースの時間＝L.O.＋30 分。lib/table-time-limit.ts。2026-10-25 Ronnie）
     const courseInfo =
       course?.duration_minutes && course.duration_minutes > 0
-        ? { label: courseLabel(course), minutes: course.duration_minutes }
+        ? { label: courseLabel(course), minutes: courseTotalMinutes(course.duration_minutes) }
         : null;
-    // 予約の開始が伝票の開始と同じ（ウォークイン・レジの「席の時間」で直した伝票）なら、予約の終了予定をそのまま使う。
-    // それ以外（予約客が遅れて来た等）は今まで通り: コースの所要時間 → 予約の終了予定 → 店舗の既定滞在時間。
+    // 席の終わり：時間制（来店登録・レジの「席の時間」・コース）は決めた時間（＝L.O.）＋30 分。
+    // それ以外（予約客が遅れて来た等）は今まで通り：予約の終了予定 → 店舗の既定滞在時間（lib/table-time-limit.ts）
     const resvStartMs = resv?.start_at ? new Date(resv.start_at).getTime() : NaN;
     const resvEndMs = resv ? new Date(resv.end_at).getTime() : NaN;
-    const seatTimeSet =
-      Number.isFinite(resvStartMs) && Math.abs(resvStartMs - openedAtMs) < 60_000 && resvEndMs > openedAtMs;
-    const endAtMs = seatTimeSet
-      ? resvEndMs
-      : courseInfo
-        ? openedAtMs + courseInfo.minutes * 60_000
-        : resv && resvEndMs > openedAtMs
-          ? resvEndMs
-          : openedAtMs + stayMinutes * 60_000;
+    const endAtMs = tableEndAtMs({
+      openedAtMs,
+      courseMinutes: course?.duration_minutes ?? null,
+      resvStartMs,
+      resvEndMs,
+      stayMinutes,
+    });
     const prev = orderByTable.get(o.table_id);
     const slip = {
       id: o.id,
