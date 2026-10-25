@@ -15,9 +15,9 @@ const bill: CancelBillData = { storeName: 'MEAT CROWN 新横浜', address: '神�
 ] };
 const texts = (d: ReturnType<typeof kitchenDesign>) => d.rows.flatMap(r => r.cells.map(c => c.text)).join('\n');
 describe('approved kitchen and cancellation print designs', () => {
-  it('centers the table and right-aligns actual quantities, with small saved cancellation reasons', () => {
+  it('left-aligns the table and right-aligns actual quantities, with small saved cancellation reasons', () => {
     const d = kitchenDesign(ticket, opts);
-    expect(d.rows[1].cells[1]).toMatchObject({ text: 'T-1', align: 'center' });
+    expect(d.rows[1].cells[0]).toMatchObject({ text: 'T-1', align: 'left' });
     expect(d.rows.find(r => r.black)?.cells[0].text).toBe('取消 / CANCEL');
     expect(d.rows.find(r => r.cells[0].text.startsWith('取消理由'))?.size).toBe(15);
     expect(d.rows.find(r => r.cells[0].text === 'Mutton Curry')?.cells[1]).toMatchObject({ text: '2', align: 'right' });
