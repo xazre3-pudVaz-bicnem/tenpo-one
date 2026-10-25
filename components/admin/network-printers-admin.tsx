@@ -152,7 +152,7 @@ function StoreNetworkPrinters({ organizationId, store }: { organizationId: strin
           </TableWrap>
         )}
         <p className="text-[11px] text-gray-400">
-          Star・EPSON の「接続用URL」（CloudPRNT / Server Direct Print）とテスト印刷は、お店の管理画面の「レジ・プリンター › プリンター接続」に出ます。
+          Star・EPSON の「接続用URL」（CloudPRNT / Server Direct Print）・問い合わせ間隔・テスト印刷は、下の「プリンター接続」で設定します。
         </p>
       </section>
 

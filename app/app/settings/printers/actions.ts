@@ -14,6 +14,9 @@ import { normalizeVisitSourceIds } from '@/lib/handy-visit';
 import { ADMIN_ONLY_MESSAGE, ADMIN_ONLY_SETTINGS_NOTE } from '@/lib/admin-only-settings';
 // LAN・Wi-Fi のプリンターは運営（コントロールセンター）だけ（2026-10-25 Ronnie）。入力チェックと列は運営と同じ（lib/network-printers.ts）
 import { isNetworkConnection, NETWORK_PRINTER_ADMIN_NOTE, printerConfigColumns, printerConfigError } from '@/lib/network-printers';
+// プリンター接続（CloudPRNT・Server Direct Print・iPad）の設定は運営（コントロールセンター）だけ（2026-10-25 Ronnie）。テスト印刷はお店でも
+import { canEditPrinterConnection, cloudPrntConfigPatch, PRINTER_CONNECTION_ADMIN_NOTE } from '@/lib/printer-connection';
+import { CLOUDPRNT_TEST_JOB, cloudPrntTestError, cloudPrntTestPayload, newCloudPrntToken } from '@/lib/cloudprnt-test-job';
 
 export interface ActionResult {
   error?: string;
@@ -439,9 +442,11 @@ export async function saveKitchenTicketSettings(storeId: string, next: KitchenTi
 // CloudPRNT（Star mC-Print3 等）連携
 // -------------------------------------------------------------
 
-/** CloudPRNTの有効化・ドロア命令・ポーリング間隔を更新する。 */
-const KITCHEN_STATIONS = ['kitchen', 'drink', 'dessert', 'grill'] as const;
-
+/**
+ * CloudPRNTの有効化・ドロア命令・ポーリング間隔を更新する。
+ * 接続の設定は運営（コントロールセンター）で行う（2026-10-25 Ronnie）。お店の管理画面からは運営のアカウントだけ
+ * （運営コンソール側は app/admin/organizations/printer-connection-actions.ts）。中身の組み立ては運営と同じ（lib/printer-connection.ts）。
+ */
 export async function setCloudPrntConfig(input: {
   id: string;
   storeId: string;
@@ -453,23 +458,13 @@ export async function setCloudPrntConfig(input: {
 }): Promise<ActionResult> {
   const ctx = await requirePermission('store.settings');
   if (ctx.isRegisterDevice) return { error: ADMIN_ONLY_MESSAGE };
+  if (!canEditPrinterConnection(ctx)) return { error: PRINTER_CONNECTION_ADMIN_NOTE };
   const err = assertStoreAccess(ctx.stores.map((s) => s.id), input.storeId);
   if (err) return { error: err };
 
-  const patch: Record<string, unknown> = { cloudprnt_enabled: input.enabled, updated_by: ctx.userId };
-  if (typeof input.drawerCommand === 'string' && input.drawerCommand.trim()) {
-    patch.drawer_command = input.drawerCommand.trim();
-  }
-  if (typeof input.pollIntervalSeconds === 'number' && input.pollIntervalSeconds > 0) {
-    patch.poll_interval_seconds = Math.min(60, Math.max(1, Math.round(input.pollIntervalSeconds)));
-  }
-  if (input.kitchenStations) {
-    const stations = Array.from(new Set(input.kitchenStations)).filter((s): s is (typeof KITCHEN_STATIONS)[number] =>
-      (KITCHEN_STATIONS as readonly string[]).includes(s)
-    );
-    if (stations.length === 0) return { error: '担当する厨房（キッチン／焼き場／ドリンク／デザート）を1つ以上選んでください' };
-    patch.kitchen_stations = stations;
-  }
+  const built = cloudPrntConfigPatch(input);
+  if (!built.ok) return { error: built.error };
+  const patch: Record<string, unknown> = { ...built.value, updated_by: ctx.userId };
 
   const supabase = await createClient();
   const { error } = await supabase
@@ -495,16 +490,16 @@ export async function setCloudPrntConfig(input: {
   return {};
 }
 
-/** CloudPRNTトークンを再発行する（漏洩時など。既存URLは無効になる）。 */
+/** CloudPRNTトークンを再発行する（漏洩時など。既存URLは無効になる）。運営のアカウントだけ（ふだんは運営コンソールで） */
 export async function regenerateCloudPrntToken(id: string, storeId: string): Promise<ActionResult> {
   const ctx = await requirePermission('store.settings');
   if (ctx.isRegisterDevice) return { error: ADMIN_ONLY_MESSAGE };
+  if (!canEditPrinterConnection(ctx)) return { error: PRINTER_CONNECTION_ADMIN_NOTE };
   const err = assertStoreAccess(ctx.stores.map((s) => s.id), storeId);
   if (err) return { error: err };
 
   // 推測不能なトークンをサーバ側で生成（node:crypto）。
-  const { randomBytes } = await import('node:crypto');
-  const token = randomBytes(24).toString('hex');
+  const token = await newCloudPrntToken();
 
   const supabase = await createClient();
   const { error } = await supabase
@@ -519,7 +514,10 @@ export async function regenerateCloudPrntToken(id: string, storeId: string): Pro
   return {};
 }
 
-/** CloudPRNTのテスト印字（またはドロア開放）をキューに積む。プリンタが次のポーリングで取得・実行する。 */
+/**
+ * CloudPRNTのテスト印字（またはドロア開放）をキューに積む。プリンタが次のポーリングで取得・実行する。
+ * お店のスタッフの動作確認なので、運営でなくても使える（中身は運営コンソールと同じ。lib/cloudprnt-test-job.ts）。
+ */
 export async function enqueueCloudPrntTest(
   id: string,
   storeId: string,
@@ -536,46 +534,18 @@ export async function enqueueCloudPrntTest(
     .eq('id', id)
     .eq('store_id', storeId)
     .maybeSingle();
-  if (!printer) return { error: 'プリンタ設定が見つかりません' };
-  if (!printer.cloudprnt_enabled) return { error: '先にCloudPRNTを有効化してください' };
-  // ドロアはレシート機につながる前提（キッチン機へ開放命令を送っても意味がない）
-  if (kind === 'drawer' && (printer.usage !== 'receipt' || !printer.drawer_kick)) {
-    return { error: 'ドロア開放はドロア連動が有効なレシート用プリンタでのみ使えます' };
-  }
+  const testError = cloudPrntTestError(printer, kind);
+  if (testError || !printer) return { error: testError ?? 'プリンタ設定が見つかりません' };
 
-  const { testPrintMarkup, drawerKickMarkup } = await import('@/lib/receipt-markup');
-  const { testPrintStarPrnt, drawerKickStarPrnt } = await import('@/lib/starprnt');
-  const { testPrintEpos, drawerKickEpos } = await import('@/lib/epos-print');
   const { data: store } = await supabase.from('stores').select('name').eq('id', storeId).single();
-
-  const paper = printer.paper_width_mm === 58 ? 58 : 80;
-  const drawerCommand = printer.drawer_command ?? '[drawer: 1]';
-  const storeName = store?.name ?? 'TENPO ONE';
-  const issuedAt = new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
-
-  // Markup / StarPRNT / ePOS-Print XML の表現を積み、対応形式はプリンタに選ばせる
-  // （Markup非対応ファーム対策 兼 EPSON機対応）。
-  const body =
-    kind === 'drawer'
-      ? drawerKickMarkup(drawerCommand)
-      : testPrintMarkup({ storeName, paperWidth: paper, issuedAt });
-  const starprnt = (
-    kind === 'drawer'
-      ? drawerKickStarPrnt(drawerCommand)
-      : testPrintStarPrnt({ storeName, paperWidth: paper, issuedAt })
-  ).toString('base64');
-  const epos =
-    kind === 'drawer' ? drawerKickEpos(drawerCommand) : testPrintEpos({ storeName, paperWidth: paper, issuedAt });
+  const payload = await cloudPrntTestPayload(printer, kind, store?.name ?? 'TENPO ONE');
 
   const { error } = await supabase.from('print_jobs').insert({
     organization_id: ctx.organizationId,
     store_id: storeId,
     printer_config_id: printer.id,
-    job_type: 'test',
-    target: 'cloudprnt',
-    content_type: 'text/vnd.star.markup',
-    payload: { body, starprnt, epos, drawer: kind === 'drawer' },
-    status: 'queued',
+    ...CLOUDPRNT_TEST_JOB,
+    payload,
     created_by: ctx.userId,
   });
   if (error) return { error: `テストジョブの登録に失敗しました: ${error.message}` };
