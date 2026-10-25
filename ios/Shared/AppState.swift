@@ -168,11 +168,12 @@ final class AppState: ObservableObject {
         get { !AppConfig.isPad && (UserDefaults.standard.object(forKey: nativePhoneKey) as? Bool ?? true) }
         set { UserDefaults.standard.set(newValue, forKey: nativePhoneKey) }
     }
-    /// ネイティブのオーダー・会計画面を使うか。この iPad だけ。
-    /// 既定は ON（2026-10-13 Ronnie「Native ON」）。レジの設定で OFF にできる。画面の並び（レイアウト）は Web と同じ
+    /// ネイティブのオーダー・会計画面。iPad は常に ON。
+    /// 2026-10-25 12:50 Ronnie「Web wala ipad version aba hamilai chaidaina」→ ON/OFF（iPad の設定・管理画面 › レジ端末）は全部なくした。
+    /// 前に OFF にしていた iPad（UserDefaults の tenpo.nativePos=false）も ON になる
     var nativePosEnabled: Bool {
-        get { AppConfig.isPad && (UserDefaults.standard.object(forKey: nativePosKey) as? Bool ?? true) }
-        set { UserDefaults.standard.set(newValue, forKey: nativePosKey) }
+        get { AppConfig.isPad }
+        set { }
     }
     /// アプリ自身の印刷係（NativePrintAgent）を動かすか＝ネイティブ ON の iPad（レジ）。OFF のときは今まで通り Web の DirectPrintAgent
     var nativePrintAgentOn: Bool { AppConfig.isPad && mode == .regi && nativePosEnabled }
@@ -206,9 +207,8 @@ final class AppState: ObservableObject {
             comps.queryItems = [URLQueryItem(name: "part", value: "device")]
             guard let url = comps.url, let data = try? await NativeAPI.shared.send(URLRequest(url: url), kickPrint: false),
                   let res = try? JSONDecoder().decode(APIDeviceSetting.self, from: data), res.ok else { return }
-            let admin = res.device?.nativePos
-            adminNativePos = admin
-            if let admin, admin != nativePosEnabled { setNativePos(admin) }
+            // ネイティブの ON/OFF は無くなった（iPad は常に ON。2026-10-25）。管理画面の nativePos は見ない
+            adminNativePos = nil
             applyAdminNetworkPrinters(lan: res.device?.lanPrinterIds, wifi: res.device?.wifiPrinterIds)
         }
     }
@@ -233,6 +233,8 @@ final class AppState: ObservableObject {
     /// ネイティブ ON/OFF（レジの設定）。OFF にしたらネイティブの画面を全部閉じて Web の画面をそのまま見せる。
     /// reloadWeb：ネイティブの設定画面から変えたとき true。OFF のあと Web の「レジの設定」を読み直し、Web 側のトグル表示を合わせる
     @MainActor func setNativePos(_ on: Bool, reloadWeb: Bool = false) {
+        // OFF（Web の iPad）は無くなった（2026-10-25 Ronnie）。古い Web のページから OFF が来ても何もしない
+        guard on else { return }
         nativePosEnabled = on
         syncPrintAgent()
         // 次に読み込む Web の画面に渡す ON/OFF・印刷係の有無（ブリッジのスクリプト）も作り直す。

@@ -394,7 +394,9 @@ export async function GET(request: Request) {
         storeId: found.device.storeId,
         name: found.setting.label ?? found.device.name,
         printerConfigId: found.setting.printerConfigId,
-        nativePos: found.setting.nativePos,
+        // iPad のネイティブの ON/OFF は無くなった（2026-10-25 Ronnie「Web の iPad 版はもう要らない」）。
+        // 古いアプリ（1.0・1.1）は true を見て ON に固定する（端末の切り替えも出さない）
+        nativePos: true,
         // LAN / Wi-Fi のプリンターは管理画面で決める（2026-10-25 Ronnie）。null は端末まかせ（今までどおり）
         lanPrinterIds: found.setting.lanPrinterIds,
         wifiPrinterIds: found.setting.wifiPrinterIds,

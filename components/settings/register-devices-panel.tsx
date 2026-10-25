@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input, Select } from '@/components/ui/input';
 import { useToast } from '@/components/ui/toast';
 import { cn } from '@/lib/utils';
-import { nativePosToChoice, type DeviceSetting, type NativePosChoice } from '@/lib/device-settings';
+import { type DeviceSetting } from '@/lib/device-settings';
 import { saveRegisterDeviceSetting } from '@/app/app/settings/devices/actions';
 
 export interface RegisterDeviceRow {
@@ -85,14 +85,12 @@ function DeviceCard({
   const [pending, startTransition] = useTransition();
   const [label, setLabel] = useState(device.setting.label ?? '');
   const [printerId, setPrinterId] = useState(device.setting.printerConfigId ?? '');
-  const [native, setNative] = useState<NativePosChoice>(nativePosToChoice(device.setting.nativePos));
   const [lanIds, setLanIds] = useState<string[] | null>(device.setting.lanPrinterIds);
   const [wifiIds, setWifiIds] = useState<string[] | null>(device.setting.wifiPrinterIds);
   const [saved, setSaved] = useState(device.setting);
   const dirty =
     (saved.label ?? '') !== label.trim() ||
     (saved.printerConfigId ?? '') !== printerId ||
-    nativePosToChoice(saved.nativePos) !== native ||
     !sameIds(saved.lanPrinterIds, lanIds) ||
     !sameIds(saved.wifiPrinterIds, wifiIds);
   const revoked = device.status === 'revoked';
@@ -104,7 +102,8 @@ function DeviceCard({
         deviceId: device.id,
         label,
         printerConfigId: printerId,
-        nativePos: native,
+        // ネイティブの ON/OFF は無くなった（iPad は常にアプリの画面。2026-10-25 Ronnie「Web の iPad 版はもう要らない」）
+        nativePos: 'device',
         lanPrinterIds: lanIds,
         wifiPrinterIds: wifiIds,
       });
@@ -150,15 +149,6 @@ function DeviceCard({
             ))}
           </Select>
           <span className="text-xs text-ink-3">ここで選ぶと、iPad 側の「このiPadのプリンター」より優先</span>
-        </label>
-        <label className="flex flex-col gap-1 text-[13px]">
-          <span className="font-bold text-ink-2">アプリのオーダー・会計画面（ネイティブ）</span>
-          <Select value={native} onChange={(e) => setNative(e.target.value as NativePosChoice)} disabled={revoked}>
-            <option value="device">端末まかせ（iPad の設定）</option>
-            <option value="on">ON（アプリの画面）</option>
-            <option value="off">OFF（今までの画面）</option>
-          </Select>
-          <span className="text-xs text-ink-3">アプリが対応した版から効きます（Web のレジは対象外）</span>
         </label>
       </div>
       <div className="grid grid-cols-1 gap-4 border-t border-line px-5 py-4 md:grid-cols-2">

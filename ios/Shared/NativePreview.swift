@@ -55,6 +55,8 @@ enum NativePreview: String {
     case receiptPad, phoneOwnerReceipt
     /// iPhone 店長・オーナー：会計・請求書・照合・月次清算（2026-10-25。NativePhoneOwnerAccountingPreview.swift）
     case phoneOwnerAccounting, phoneOwnerInvoices, phoneOwnerReconciliation, phoneOwnerSettlement
+    /// iPhone 店長・オーナー：設定・スタッフ管理・キッチン・店舗日次締め・返金（2026-10-25。NativePhoneOwnerSettingsPreview.swift）
+    case phoneOwnerSettings, phoneOwnerSettingsMenu, phoneOwnerSettingsHours, phoneOwnerSettingsPayments, phoneOwnerStaff, phoneOwnerKitchen, phoneOwnerStoreDay, phoneOwnerRefund
 
     static var current: NativePreview? {
         guard let raw = UserDefaults.standard.string(forKey: "tenpoNativePreview") else { return nil }
@@ -126,6 +128,7 @@ struct NativePreviewView: View {
         case .scanBulk, .phoneOwnerScanBulk: NativeScanBulkPreview(kind: kind.rawValue)
         case .receiptPad, .phoneOwnerReceipt: NativeReceiptPreview(kind: kind.rawValue)
         case .phoneOwnerAccounting, .phoneOwnerInvoices, .phoneOwnerReconciliation, .phoneOwnerSettlement: NativePhoneOwnerAccountingPreview(kind: kind.rawValue)
+        case .phoneOwnerSettings, .phoneOwnerSettingsMenu, .phoneOwnerSettingsHours, .phoneOwnerSettingsPayments, .phoneOwnerStaff, .phoneOwnerKitchen, .phoneOwnerStoreDay, .phoneOwnerRefund: NativePhoneOwnerSettingsPreview(kind: kind.rawValue)
         case .options, .price:
             NativeOrderView(model: model)
                 .statusBarHidden(true)

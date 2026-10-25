@@ -4,7 +4,7 @@ import SwiftUI
 // サーバーは iPad と同じ（返事の形は変えない）：GET ?part=expenses&from&to&account&status ／
 //   POST expenseAdd（経費を登録）・expenseBill（仕入の請求書）・expenseApprove・expenseReject・expenseSeed（初期科目）
 // お知らせ&アラート／レシートを撮って保存（→ スキャンの画面）／科目別の当月合計／期間・勘定科目・承認状態／一覧（承認・差戻し）
-// 経費 CSV は Web（パソコン）の管理画面のまま。
+// 経費 CSV はアプリの中で取り出して共有（NPOCsvButton。Web の画面には行かない）。
 
 /// GET ?part=expenses の中身（使うところだけ）
 struct NOMExpenses: Decodable {
@@ -247,7 +247,9 @@ struct NativePhoneOwnerExpensesView: View {
                     ForEach(p.rows) { r in row(r, p) }
                 }
                 if p.canExport == true {
-                    NOMWebLink(title: "経費 CSV", sub: "CSV の取り出しは Web の画面で") { onOpen("/app/expenses?web=1") }
+                    // CSV もアプリの中で取り出して共有（NativePhoneOwnerCsv.swift。Web の画面には行かない）
+                    NPOCsvButton(title: "経費 CSV", path: "/app/expenses/export", query: ["from": p.from, "to": p.to], fileName: "expenses.csv",
+                                 onError: { model.error = $0 })
                 }
             }
             .padding(.horizontal, 12).padding(.top, 10).padding(.bottom, 40)

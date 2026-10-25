@@ -4,8 +4,8 @@ import SwiftUI
 // サーバーは iPad と同じ GET ?part=slips（一覧）／ ?part=slip&id=（詳細）。返事の形は変えない。
 //   期間（今日・昨日・今週・今月・過去7日・過去30日・日付を選ぶ）／売上・会計件数・客数・客単価・未会計／
 //   状態（未会計・会計済・返金済・取消・無効）・支払方法・伝票No で絞り込み／伝票を押すと詳細（品目・支払・返金履歴・担当・卓）
-//   操作は安全なものだけ：レシートの再印刷・領収書（一度きり。iPad と同じ POST slipReceipt ／ slipRyoshusho）
-// 返金・取消（VOID）・再会計・CSV は iPad のレジの「伝票明細」で（iPhone では見るだけ）。
+//   操作：レシートの再印刷・領収書（一度きり。iPad と同じ POST slipReceipt ／ slipRyoshusho）
+//   返金・取消（VOID）・再会計は NativePhoneOwnerRefund.swift（iPad と同じ POST slipRefund ／ slipReopen。確認あり）
 
 /// GET ?part=slips の中身（使うところだけ）
 struct NOSSlips: Decodable {
@@ -814,11 +814,11 @@ struct NOSSlipDetailSheet: View {
             if d.status == "open" {
                 Text("未会計の伝票です。注文・会計はハンディかレジ（iPad）で。").font(.system(size: 12)).foregroundColor(NT.ink3).frame(maxWidth: .infinity, alignment: .leading)
             } else {
-                // 返金・取消・再会計は Web の伝票の画面で（?web=1 でネイティブにしない）
-                Button { AppState.shared.leaveNativePhone(to: "/app/orders/\(d.id)?web=1") } label: {
-                    actionLabel("返金・取消・再会計（Web の画面）", icon: "arrow.uturn.backward.circle", filled: false)
+                // 返金・取消（VOID）・再会計もネイティブで（NativePhoneOwnerRefund.swift。2026-10-25「101% native」）
+                NPOSlipMoneyActions(orderId: d.id) { msg in
+                    model.toast = msg
+                    Task { await model.loadDetail(d.id); await model.refresh() }
                 }
-                .buttonStyle(PressableStyle())
             }
         }
         .padding(.top, 4)
