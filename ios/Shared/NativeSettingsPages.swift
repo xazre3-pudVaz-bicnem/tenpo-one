@@ -1894,13 +1894,8 @@ struct NativeBookingFromSettings: View {
 
 struct NativeHandyQrFromSettings: View {
     @EnvironmentObject var state: AppState
-    var body: some View {
-        VStack(spacing: 0) {
-            NativeTopBar(storeName: "", title: "iPhoneハンディ", subtitle: "Handy QR", userName: "", onHome: { state.goNativeSettings() }, backIcon: "chevron.left")
-            NativeHandyQrSheet(onClose: { state.goNativeSettings() }, onWeb: { path in state.leaveNativeFloor(to: path) })
-        }
-        .background(Color.white.ignoresSafeArea())
-    }
+    // QR の作成・作り直し・お店の Wi-Fi・印刷もネイティブで（NativeHandyQrAdmin.swift。2026-10-25 Ronnie「101% native」）
+    var body: some View { NativeHandyQrAdminView(onBack: { state.goNativeSettings() }) }
 }
 
 // MARK: - 勘定科目（Web の /app/settings/accounts と同じ）
@@ -4579,7 +4574,6 @@ struct NativeTablesScreen: View {
                 }
                 HStack(spacing: 10) {
                     NSPButton(text: "テーブルQRコードをまとめて印刷", icon: "qrcode") { state.openSettingsPage(.tableQr, webPath: "/app/settings/tables/qr-print") }
-                    if p.canEdit { NSPButton(text: "配置エディタ（Web）", icon: "square.grid.3x3") { state.leaveNativeFloor(to: "/app/settings/tables") } }
                     Spacer()
                 }
             }

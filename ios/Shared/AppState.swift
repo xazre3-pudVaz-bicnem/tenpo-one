@@ -640,8 +640,9 @@ final class AppState: ObservableObject {
         if url.path == "/app/cash" {
             let q = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
             let tab = q.first { $0.name == "tab" }?.value
-            if tab == nil || tab == "register" || tab == "petty" || tab == "closings" {
-                cashTab = tab ?? "register"
+            // 知らない ?tab= もネイティブの入出金（レジ入出金のタブ。Web の /app/cash も register 扱い。2026-10-25）
+            do {
+                cashTab = tab == "petty" || tab == "closings" ? tab! : "register"
                 nativeFloor = false; nativeNotices = false; nativeBudget = false; nativeCustomers = false; nativeScan = false; nativeReports = false; nativeHome = false; nativeLedger = false; nativeCash = false; nativeQuick = false; nativeSlips = false; nativeExpenses = false; nativeStock = false; nativeInventory = false; nativeVendors = false; nativePurchases = false; nativeCoupons = false; nativeSettings = false
         nativeSlips = false
         nativeExpenses = false
@@ -862,6 +863,7 @@ final class AppState: ObservableObject {
         if let path = openWebPath {
             if let id = current { webChosenOrders.insert(id) }
             nativeFloor = false; nativeNotices = false; nativeBudget = false; nativeCustomers = false; nativeScan = false; nativeReports = false
+            maybeOpenNativePos(for: AppConfig.url(path)) // 行き先がネイティブ（決済・端末の設定など）なら Web を読む前に出す（2026-10-25）
             web.load(AppConfig.url(path))
         } else if nativeQuick {
             quickRefreshTick += 1
@@ -894,6 +896,8 @@ final class AppState: ObservableObject {
         nativeHome = false
         nativeLedger = false
         nativeCash = false
+        // 行き先にネイティブの画面があれば Web を読む前に出す（読み終わるまで Web の画面が見えないように。2026-10-25「101% native」）
+        maybeOpenNativePos(for: AppConfig.url(path))
         WebViewController.current?.load(AppConfig.url(path))
     }
 

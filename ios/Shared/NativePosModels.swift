@@ -522,8 +522,8 @@ final class NativeOrderModel: ObservableObject {
                 NativeCatalogCache.shared.onUpdate = { [weak self] c in self?.apply(catalog: c) }
                 NativeCatalogCache.shared.refresh(storeId: live.storeId)
             } catch let e as NativeAPIError {
+                // useWeb（権限・お店の回線・レジ端末の登録）でも Web の伝票は開かない。ネイティブのまま知らせる（2026-10-25「101% native」）
                 notice = e.message
-                if e.useWeb { openInWeb() }
             } catch {
                 if Self.notSent(error) || !NativeNet.shared.online {
                     // ネットが無い（届く前に落ちた）：この iPad で続ける（注文・取消・現金会計）。遅いだけのときはオンラインのまま
@@ -554,8 +554,8 @@ final class NativeOrderModel: ObservableObject {
                     canDiscount: p.canDiscount, canEditPages: p.canEditPages, version: v))
             }
         } catch let e as NativeAPIError {
+            // useWeb でも Web の伝票は開かない（ネイティブのまま知らせる。2026-10-25）
             notice = e.message
-            if e.useWeb { openInWeb() }
         } catch {
             notice = "読み込めませんでした。回線を確認してください"
         }
