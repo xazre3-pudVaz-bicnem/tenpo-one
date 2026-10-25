@@ -465,7 +465,8 @@ struct NativeSetupSheet: View {
             let seatCourses = payload?.seatCourses ?? []
             let pickedCourse = planItemIds.first { id in seatCourses.contains { $0.id == id } }
             let cid = pickedCourse ?? courseId
-            if let _ = await model.act(["type": "visitEdit", "orderId": e.slip.id, "draft": draft, "courseId": cid.map { $0 as Any } ?? NSNull()]) {
+            // durationIsLastOrder：時間制は L.O. までの時間（古いアプリと見分ける。サーバーの legacyEditDuration）
+            if let _ = await model.act(["type": "visitEdit", "orderId": e.slip.id, "draft": draft, "courseId": cid.map { $0 as Any } ?? NSNull(), "durationIsLastOrder": true]) {
                 if let c = customer { _ = await model.act(["type": "orderCustomer", "orderId": e.slip.id, "customerId": c.id]) }
                 model.show(toast: planItemIds.isEmpty ? "お客様情報を変更しました" : "お客様情報を変更し、\(planItemIds.count)品を伝票に入れました")
                 onClose()
