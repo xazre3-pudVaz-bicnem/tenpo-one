@@ -15,8 +15,8 @@ export function kitchenDesign(ticket: KitchenTicket, opts: KitchenLayoutOptions)
   const part = ticket.part && ticket.part.total > 1 ? ` (${ticket.part.index}/${ticket.part.total})` : '';
   const rows: TicketRow[] = [
     { ...text(opts.title.replace(/\s*伝票$/, ''), 32, 'center'), gap: 12 },
-    { cells: [{ ...cell(ticket.tableName ?? 'テイクアウト', 'left', 1.3), size: 52, bold: true }, cell(ticket.guestCount == null ? '' : `人数：${ticket.guestCount}名`, 'right')], size: 32 },
-    { cells: [cell(`伝票No.${ticket.orderNo}${part}`), { ...cell(opts.printedAt, 'center', 1), size: 36, bold: true }, cell(ticket.clerkName ? `担当 ${ticket.clerkName}` : '', 'right')], size: 26, rule: 'solid', gap: 10 },
+    { cells: [cell(''), { ...cell(ticket.tableName ?? 'テイクアウト', 'center', 1.3), size: 52, bold: true }, cell(ticket.guestCount == null ? '' : `人数：${ticket.guestCount}名`, 'right')], size: 32 },
+    { cells: [{ ...cell(opts.printedAt, 'left', 1), size: 36, bold: true }, cell(`伝票No.${ticket.orderNo}${part}`, 'center'), cell(ticket.clerkName ? `担当 ${ticket.clerkName}` : '', 'right')], size: 26, rule: 'solid', gap: 10 },
   ];
   if (allCancel) rows.push({ ...text('取消 / CANCEL', 28, 'center'), bold: true, black: true });
   else if (ticket.lines.every(l => l.delta > 0)) rows.push(text('[ NEW ORDER ]', 22));
