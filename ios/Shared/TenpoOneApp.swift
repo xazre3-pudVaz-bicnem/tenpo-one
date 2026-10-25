@@ -17,10 +17,13 @@ struct RootView: View {
     @EnvironmentObject var state: AppState
 
     var body: some View {
-        rootStack
-            // ネットが無いときは上に「オフライン」（2026-10-24 Ronnie「net nachale pani …」）
-            .overlay(alignment: .top) { NativeOfflineBanner().zIndex(100) }
-            .onAppear { NativeDiskCache.sweep(prefix: "live-"); NativeDiskCache.sweep(prefix: "get-") }
+        // iPad：どの大きさの iPad でも iPad Pro 11 インチと同じ並びで画面に収める（PadCanvas.swift。2026-10-25 Ronnie「fit to page any ipad size」）
+        PadCanvas {
+            rootStack
+                // ネットが無いときは上に「オフライン」（2026-10-24 Ronnie「net nachale pani …」）
+                .overlay(alignment: .top) { NativeOfflineBanner().zIndex(100) }
+        }
+        .onAppear { NativeDiskCache.sweep(prefix: "live-"); NativeDiskCache.sweep(prefix: "get-") }
     }
 
     private var rootStack: some View {

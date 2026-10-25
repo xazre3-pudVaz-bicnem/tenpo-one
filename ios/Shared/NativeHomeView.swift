@@ -154,11 +154,6 @@ struct NativeHomeView: View {
     private static let blueDeep = Color(hex: 0x0A3FA8)
     private static let terracotta = Color(hex: 0xBC5940)
     private static let tileBg = Color(hex: 0xF2F2F5)
-    /// 背の低い iPad（横にしたときの高さ 830pt 未満：10.2インチ 810pt・10.9/11インチ Air 820pt・mini）。iPad Pro 11（834pt）以上は今まで通り
-    private static var shortPad: Bool {
-        let b = UIScreen.main.bounds
-        return min(b.width, b.height) < 830
-    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -168,37 +163,20 @@ struct NativeHomeView: View {
                 // （2026-10-24 Ronnie「縦にするとオーダー・会計とボタンがくっつく」）
                 if geo.size.width >= 1000 {
                     HStack(alignment: .top, spacing: 18) {
-                        // 左の操作の列はスクロールできるように（10.2インチなど背の低い iPad で レジクローズ より下・設定 が切れていた。
-                        // 2026-10-25 16:04 Ronnie「App fit to screen navaye jasto chha」SHUNKA 新宿本店の iPad）
-                        ScrollView(showsIndicators: false) {
-                            VStack(spacing: 10) {
-                                ForEach(model.payload?.tools ?? []) { t in toolRow(t) }
-                            }
-                            .padding(.bottom, 8)
+                        VStack(spacing: 10) {
+                            ForEach(model.payload?.tools ?? []) { t in toolRow(t) }
+                            Spacer(minLength: 0)
                         }
                         .frame(width: max(240, geo.size.width * 0.20))
-                        if Self.shortPad {
-                            // 背の低い iPad（画面の高さ 830pt 未満＝10.2インチ・10.9インチ・mini）：右もスクロール・すき間を詰める
-                            ScrollView(showsIndicators: false) {
-                                VStack(spacing: 12) {
-                                    salesCard(narrow: false)
-                                    clockRow
-                                    kpiRow(columns: 4)
-                                }
-                                .padding(.bottom, 8)
-                            }
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        } else {
-                            VStack(spacing: 18) {
-                                // 売上の箱は、上（大きいボタン）と下（時計の行）から同じ距離に（2026-10-24 14:24 Ronnie「下の隙間が大きい。上下を同じに」）
-                                Spacer(minLength: 0)
-                                salesCard(narrow: false)
-                                Spacer(minLength: 0)
-                                clockRow
-                                kpiRow(columns: 4)
-                            }
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        VStack(spacing: 18) {
+                            // 売上の箱は、上（大きいボタン）と下（時計の行）から同じ距離に（2026-10-24 14:24 Ronnie「下の隙間が大きい。上下を同じに」）
+                            Spacer(minLength: 0)
+                            salesCard(narrow: false)
+                            Spacer(minLength: 0)
+                            clockRow
+                            kpiRow(columns: 4)
                         }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
                     .padding(.horizontal, 18)
                     .padding(.top, 18)
