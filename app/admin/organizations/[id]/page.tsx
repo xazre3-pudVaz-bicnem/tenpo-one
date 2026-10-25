@@ -18,6 +18,8 @@ import { readOrgRegisterPasswords } from '@/lib/tenant-provisioning';
 import { revealRegisterPassword, reissueRegisterPassword, saveStoreRegisterUsername } from '@/app/admin/tenants/actions';
 import { AddOrgMemberDialog } from '@/components/admin/add-org-member-dialog';
 import { FeatureFlagMatrix } from '@/components/admin/feature-flag-matrix';
+import { DisplayMonitorFlags } from '@/components/admin/display-monitor-flags';
+import { loadOrgDisplayMonitorFlags } from '@/lib/display-monitor-server';
 import { OrgPlanForm } from '@/components/admin/org-plan-form';
 import { OrganizationRowActions } from '@/components/admin/organization-row-actions';
 import { SubscriptionMockForm } from '@/components/admin/subscription-mock-form';
@@ -136,6 +138,13 @@ export default async function OrganizationDetailPage({ params }: { params: Promi
   ]);
 
   const totalStorageBytes = (documentSizeRows ?? []).reduce((sum, d) => sum + (d.size_bytes ?? 0), 0);
+  // ディスプレイ端末（企業 × 店舗の ON/OFF。既定 OFF）。読めなくても画面は出す
+  const displayFlags = await loadOrgDisplayMonitorFlags(id).catch(() => ({
+    orgEnabled: false,
+    storeEnabled: new Map<string, boolean>(),
+    storeTableMissing: true,
+    activeDevices: new Map<string, number>(),
+  }));
 
   const planNameByCode = new Map((plans ?? []).map((p) => [p.code, p.name]));
   const statusMeta = STATUS_LABEL[org.status] ?? { label: org.status, tone: 'gray' as BadgeTone };
@@ -453,6 +462,25 @@ export default async function OrganizationDetailPage({ params }: { params: Promi
             </CardHeader>
             <CardContent>
               <FeatureFlagMatrix organizationId={org.id} disabledKeys={disabledFeatureKeys} />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>ディスプレイ端末</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <DisplayMonitorFlags
+                organizationId={org.id}
+                orgEnabled={displayFlags.orgEnabled}
+                storeTableMissing={displayFlags.storeTableMissing}
+                stores={(stores ?? []).map((s) => ({
+                  id: s.id as string,
+                  name: s.name as string,
+                  enabled: displayFlags.storeEnabled.get(s.id as string) === true,
+                  activeDevices: displayFlags.activeDevices.get(s.id as string) ?? 0,
+                }))}
+              />
             </CardContent>
           </Card>
         </div>

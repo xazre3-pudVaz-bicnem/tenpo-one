@@ -220,6 +220,8 @@ struct RootView: View {
                         .transition(.move(edge: .bottom))
                         .zIndex(10)
                 }
+                // ディスプレイ端末（KDS・呼び出しモニター）にした iPad・QR で登録する画面（いちばん上。NativeDisplayMode.swift）
+                NativeDisplayLayer().zIndex(80)
             }
         }
         .animation(.easeOut(duration: 0.22), value: state.nativeOrder)

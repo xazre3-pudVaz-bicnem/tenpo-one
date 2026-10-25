@@ -63,6 +63,10 @@
 			isa = PBXBuildFile;
 			fileRef = "0F627DB07FC795D18395D777";
 		};
+		13A2690BCF9C6AF80A9F3E46 = {
+			isa = PBXBuildFile;
+			fileRef = "63C533A37E7CD0AD77E62757";
+		};
 		149C8A01CD4AD3072732C132 = {
 			isa = PBXBuildFile;
 			fileRef = "2B63A8A2008AD1CF89F16AF0";
@@ -218,6 +222,10 @@
 		4CA22C2551CDCC77AFD6A5D6 = {
 			isa = PBXBuildFile;
 			fileRef = "2F192FCE2E8B7095C0DD419F";
+		};
+		4D7A52EB1A83599F66805674 = {
+			isa = PBXBuildFile;
+			fileRef = "6D7190AA80374DF9971486DE";
 		};
 		4E42074691D5DFC27D5A1ECF = {
 			isa = PBXBuildFile;
@@ -390,6 +398,10 @@
 		85003094F9103CB29794CF72 = {
 			isa = PBXBuildFile;
 			fileRef = "2FB5F6F553E0027A45BB6EE2";
+		};
+		8586F6D6E2CE6FA428C99A7C = {
+			isa = PBXBuildFile;
+			fileRef = "7A66279678404B96E5F6217D";
 		};
 		85A6C11E090080AA605A0E3C = {
 			isa = PBXBuildFile;
@@ -1085,6 +1097,12 @@
 			path = NativeFloorView.swift;
 			sourceTree = "<group>";
 		};
+		63C533A37E7CD0AD77E62757 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = NativeDisplayDevicesView.swift;
+			sourceTree = "<group>";
+		};
 		66A7358914E0DE3F652CDC10 = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
@@ -1119,6 +1137,12 @@
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
 			path = NativeCashView.swift;
+			sourceTree = "<group>";
+		};
+		6D7190AA80374DF9971486DE = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = NativeDisplayPreview.swift;
 			sourceTree = "<group>";
 		};
 		6F8ECBEF2605B4466C61EA05 = {
@@ -1191,6 +1215,12 @@
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
 			path = NativeQuickPayView.swift;
+			sourceTree = "<group>";
+		};
+		7A66279678404B96E5F6217D = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = NativeDisplayMode.swift;
 			sourceTree = "<group>";
 		};
 		7A6D9377363A418EED704C65 = {
@@ -1844,6 +1874,9 @@
 				FBCEDE79F3152C417EE0FD6C,
 				"96D557A692BF25FBDE502C1C",
 				"6F8ECBEF2605B4466C61EA05",
+				"63C533A37E7CD0AD77E62757",
+				"7A66279678404B96E5F6217D",
+				"6D7190AA80374DF9971486DE",
 				"94D90012D4223205AFD2965D",
 				F6C6F1F5CF0EFBCECCF37D0B,
 				"185243219C4F64AB0CF32073",
@@ -2099,6 +2132,9 @@
 				E22FC2331067F2A98480CB21,
 				"26DEF1C908F91DA7FDABEFCB",
 				"5846B65A0855587AC0941D8D",
+				"13A2690BCF9C6AF80A9F3E46",
+				"8586F6D6E2CE6FA428C99A7C",
+				"4D7A52EB1A83599F66805674",
 				A38947213F6EA753D08F7CEA,
 				"2CCAA1FD17FC08F03D8282E1",
 				"0AB79921FD37A2DA45964225",

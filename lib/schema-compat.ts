@@ -21,3 +21,16 @@ export function isCheckViolation(message: string | null | undefined, constraint?
   if (constraint && !message.includes(constraint)) return false;
   return /check constraint|violates check/i.test(message);
 }
+
+/**
+ * 表がまだ無い（migration 未適用）ことによるエラーか。
+ *   relation "public.display_devices" does not exist（42P01）
+ *   Could not find the table 'public.display_devices' in the schema cache（PGRST205）
+ */
+export function isMissingTableError(error: { message?: string | null; code?: string | null } | null | undefined, table: string): boolean {
+  if (!error) return false;
+  const message = error.message ?? '';
+  // コードが「表が無い」でも、文に別の表の名前が出ているときはその表のこと（例: 埋め込みの相手の表）
+  if ((error.code === '42P01' || error.code === 'PGRST205') && (!message || message.includes(table))) return true;
+  return message.includes(table) && /does not exist|schema cache|could not find the table/i.test(message);
+}

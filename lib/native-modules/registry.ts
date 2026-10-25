@@ -22,6 +22,7 @@ import { handyReservationEntryGet, handyReservationMonthGet, handyReservationPos
 import { NATIVE_HANDY_RSV_TYPES } from '@/lib/native-handy-reservations';
 import { scanBulkGet, SCAN_BULK_POST } from '@/lib/native-modules/scan-bulk';
 import { receiptGet } from '@/lib/native-modules/receipt';
+import { displayDevicesGet, DISPLAY_DEVICE_POSTS } from '@/lib/native-modules/display-devices';
 
 /**
  * まだ専用の台が無かった画面（勤怠・日報・タスク …）の iPad ネイティブ用の API をまとめる所
@@ -80,6 +81,7 @@ export const NATIVE_MODULE_GET: Record<string, NativeModuleGet> = {
   handyReservationMonth: handyReservationMonthGet,
   scanBulk: scanBulkGet,
   receipt: receiptGet, // レシートのプレビュー（iPad・iPhone。2026-10-25 Ronnie）
+  displayDevices: displayDevicesGet, // 設定 › ディスプレイ端末（KDS・呼び出しモニター。2026-10-25）
 };
 
 /** POST の type → handler。追加は 1 行ずつ */
@@ -144,4 +146,5 @@ export const NATIVE_MODULE_POST: Record<string, NativeModulePost> = {
   // iPhone のネイティブのハンディ：予約（来店・キャンセル・テーブル変更・受付管理・登録。2026-10-25 Ronnie）
   ...Object.fromEntries(NATIVE_HANDY_RSV_TYPES.map((t) => [t, handyReservationPost])),
   ...SCAN_BULK_POST, // ScanSnap のまとめて取り込み（scanBulkCheck・scanBulkPlan・scanBulkFile … lib/native-modules/scan-bulk.ts）
+  ...DISPLAY_DEVICE_POSTS, // 設定 › ディスプレイ端末（displayIssue・displayRevoke・displayRename・displayUpdate）
 };

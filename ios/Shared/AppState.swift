@@ -175,7 +175,7 @@ final class AppState: ObservableObject {
         set { UserDefaults.standard.set(newValue, forKey: nativePosKey) }
     }
     /// アプリ自身の印刷係（NativePrintAgent）を動かすか＝ネイティブ ON の iPad（レジ）。OFF のときは今まで通り Web の DirectPrintAgent
-    var nativePrintAgentOn: Bool { AppConfig.isPad && mode == .regi && nativePosEnabled }
+    var nativePrintAgentOn: Bool { AppConfig.isPad && mode == .regi && nativePosEnabled && !NativeDisplayStore.storedActive }
 
     /// 管理画面（設定 › レジ端末）がこの端末のネイティブ ON/OFF を決めているか（nil＝端末まかせ）。
     /// 2026-10-24 Ronnie「管理画面から全部の設定を。アプリのも」。GET /api/app/v1/pos?part=device（lib/register-device-server.ts）
@@ -322,6 +322,7 @@ final class AppState: ObservableObject {
 
     /// 最初に開く画面
     var startURL: URL {
+        if NativeDisplayStore.storedActive { return URL(string: "about:blank")! } // ディスプレイの iPad は Web を開かない（NativeDisplayMode.swift）
         switch mode {
         case .handy: return AppConfig.url("/handy")
         case .owner, .regi, .none: return AppConfig.url("/app/dashboard")
@@ -371,6 +372,7 @@ final class AppState: ObservableObject {
     /// Web の画面に行く前に差し替える行き先（ログイン画面をモードに合わせる）。nil ならそのまま
     func redirect(for url: URL) -> URL? {
         guard AppConfig.isOwnHost(url) else { return nil }
+        if let display = NativeDisplayStore.shared.redirect(for: url) { return display } // /display・/display-pair はネイティブ（NativeDisplayMode.swift）
         let path = url.path
         switch mode {
         case .regi:
@@ -397,6 +399,7 @@ final class AppState: ObservableObject {
     /// ホーム・テーブル一覧のときは、裏でメニューを読んでおく（最初の伝票もすぐ開く。2026-10-21）
     func maybeOpenNativePos(for url: URL) {
         guard AppConfig.isOwnHost(url) else { return }
+        if NativeDisplayStore.shared.handleRoute(url) { return } // /display・/display-pair はネイティブ（NativeDisplayMode.swift）
         if !AppConfig.isPad {
             maybeOpenNativePhone(for: url)
             return
@@ -1161,6 +1164,7 @@ final class AppState: ObservableObject {
             WebViewController.current?.showAlert(title: "TENPO ONE の QR ではありません", message: "お店の「ハンディ QR」を読んでください。")
             return false
         }
+        if NativeDisplayStore.shared.handleScanned(url) { return true } // ディスプレイ端末の QR（/display-pair#…）はネイティブで登録
         // お店の「ハンディ QR」（/handy-join#<値>）：Web の画面を開かずにネイティブでログイン（2026-10-25 09:39 Ronnie「ブラウザに行かない」）
         if url.path == "/handy-join" || url.path == "/handy-join/", let token = url.fragment, !token.isEmpty {
             Task { @MainActor in await self.joinHandyNative(token: token) }

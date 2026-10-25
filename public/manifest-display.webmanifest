@@ -1,0 +1,21 @@
+{
+  "id": "/display",
+  "name": "TENPO ONE ディスプレイ",
+  "short_name": "ディスプレイ",
+  "description": "お店のモニターに出す TENPO ONE のキッチンディスプレイ・呼び出しモニター",
+  "start_url": "/display",
+  "scope": "/",
+  "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone"],
+  "orientation": "any",
+  "background_color": "#292725",
+  "theme_color": "#292725",
+  "lang": "ja",
+  "dir": "ltr",
+  "categories": ["business", "productivity", "food"],
+  "icons": [
+    { "src": "/favicon-32.png", "sizes": "32x32", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
