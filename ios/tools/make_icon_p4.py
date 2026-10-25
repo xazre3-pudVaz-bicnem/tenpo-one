@@ -1,6 +1,7 @@
 """TENPO ONE アイコン（2026-10-25 Ronnie「P4 でいい」）：アプリのホームの 2 つのボタン＝青い「オーダー・会計」（レジの画面 ¥）と
 黄色い「店舗台帳」（予約のカレンダー ✓）を重ねた形。地はネイビー→青（広告の写真と同じ）。
-使い方：python3 ios/tools/make_icon_p4.py <out.png>（Noto Sans CJK の Black が要る。1024 の App アイコンと BrandMark はこれで作った）"""
+使い方：python3 ios/tools/make_icon_p4.py <out.png> [--name]（Noto Sans CJK の Black が要る。BrandMark は名前なし、
+1024 の App アイコンは --name＝下に「TENPO ONE」。2026-10-26 Ronnie「App sign ma name pani lekhna paryo」「App ahile kai・Name appsign ko bottom ma」）"""
 import math, sys
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
@@ -75,18 +76,57 @@ def register(d, cx, cy, size):
     d.rectangle([cx - s * 0.13, mb - 2, cx + s * 0.13, mb + s * 0.32], fill=WHITE)
     d.rounded_rectangle([cx - s * 0.52, mb + s * 0.28, cx + s * 0.52, mb + s * 0.44], radius=s * 0.08, fill=WHITE)
 
-def make():
+def name_band(im):
+    """下に「TENPO ONE」（白・太字・字の間を少しあける）。角の丸みで切れない幅に"""
+    d = ImageDraw.Draw(im)
+    text = 'TENPO ONE'
+    f = font(int(S * NAME_SIZE))
+    track = S * 0.007
+    widths = [d.textbbox((0, 0), ch, font=f)[2] - d.textbbox((0, 0), ch, font=f)[0] if ch != " " else S * 0.038 for ch in text]
+    total = sum(widths) + track * (len(text) - 1)
+    bb = d.textbbox((0, 0), 'TENPO', font=f)
+    h = bb[3] - bb[1]
+    x = (S - total) / 2
+    y = S * NAME_CENTER_Y - h / 2 - bb[1]
+    # うすい影（青い地の上で字が沈まないように）
+    sh = Image.new('L', (S, S), 0); ds = ImageDraw.Draw(sh)
+    xx = x
+    for ch, w in zip(text, widths):
+        if ch != ' ':
+            b = ds.textbbox((0, 0), ch, font=f)
+            ds.text((xx - b[0], y + S * 0.006), ch, font=f, fill=110)
+        xx += w + track
+    sh = sh.filter(ImageFilter.GaussianBlur(S * 0.008))
+    im.paste(Image.new('RGB', (S, S), (6, 6, 24)), (0, 0), sh)
+    xx = x
+    for ch, w in zip(text, widths):
+        if ch != ' ':
+            b = d.textbbox((0, 0), ch, font=f)
+            d.text((xx - b[0], y), ch, font=f, fill=WHITE)
+        xx += w + track
+
+# 名前ありのとき：2 つのタイルを少し小さく・上に寄せて、下に名前の場所をあける
+NAME_SCALE = 0.82
+NAME_SHIFT_Y = -0.07
+NAME_SIZE = 0.108
+NAME_CENTER_Y = 0.853
+
+def make(with_name=False):
     im = grad(NAVY, BLUE, 115)
     glow(im, (S * 0.30, S * 0.80), S * 0.55, BLUE, 140)
     glow(im, (S * 0.78, S * 0.18), S * 0.30, (0x4A, 0x5A, 0xB8), 90)
+    k, dy = (NAME_SCALE, NAME_SHIFT_Y) if with_name else (1.0, 0.0)
+    pos = lambda v, shift=0.0: S * (0.5 + (v - 0.5) * k + shift)
     # 奥：黄色の店舗台帳（予約）
-    place_tile(im, S * 0.625, S * 0.385, S * 0.215, -10, YEL, YEL_D, calendar)
+    place_tile(im, pos(0.625), pos(0.385, dy), S * 0.215 * k, -10, YEL, YEL_D, calendar)
     # 手前：青のオーダー・会計（レジ）
-    place_tile(im, S * 0.385, S * 0.615, S * 0.235, 7, (0x37, 0x7C, 0xF0), BLUE_D, register)
+    place_tile(im, pos(0.385), pos(0.615, dy), S * 0.235 * k, 7, (0x37, 0x7C, 0xF0), BLUE_D, register)
+    if with_name:
+        name_band(im)
     return im
 
 if __name__ == "__main__":
-    im = make()
+    im = make(with_name='--name' in sys.argv[2:])
     out = sys.argv[1] if len(sys.argv) > 1 else 'P4-final.png'
     im.resize((1024, 1024), Image.LANCZOS).save(out)
     print(out)
