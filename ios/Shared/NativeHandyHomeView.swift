@@ -391,11 +391,11 @@ struct NativeHandyHomeView: View {
         let tabs = floorTabs(p)
         let shown = shownTables(p, tabs: tabs)
         let kinds = callKinds(p)
-        // iPad のネイティブと同じ卓の箱が読めたら 2 列（2026-10-25 02:22 Ronnie「iPhone の卓も iPad のように」）。読めなければ今までの 3 列
+        // 1 行に 3 卓・正方形（どの大きさの iPhone でも 3 列。箱は列の幅に合わせて大きく・小さく）
+        // （2026-10-25 22:23 Ronnie「Handy ma one row 3 table rakha square in any size of mobile」）
+        // iPad のネイティブと同じ卓の情報が読めたら NativePhoneTableTile（残り時間・金額の帯）、読めなければ今までの NativeHandyTile
         let cards = !model.floorTables.isEmpty
-        let columns = cards
-            ? [GridItem(.flexible(), spacing: 10, alignment: .top), GridItem(.flexible(), spacing: 10, alignment: .top)]
-            : [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)]
+        let columns = [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)]
         return ScrollView {
             VStack(spacing: 0) {
                 if !tabs.isEmpty {
@@ -425,7 +425,7 @@ struct NativeHandyHomeView: View {
                         .font(.system(size: 13)).foregroundColor(NHDColor.ink3)
                         .padding(.horizontal, 24).padding(.vertical, 36)
                 }
-                LazyVGrid(columns: columns, spacing: cards ? 12 : 8) {
+                LazyVGrid(columns: columns, spacing: 8) {
                     ForEach(shown) { t in
                         let state = NHDState.of(t)
                         let tap = {
@@ -439,10 +439,9 @@ struct NativeHandyHomeView: View {
                             }
                         }
                         if cards, let ft = model.floorTables[t.id] {
-                            // iPad のネイティブと同じ箱（3D・下の色の帯・残り時間・最終注文から・呼び出し）。押したときの動きはハンディのまま
-                            // 箱は小さめに：空いている卓は低く（番号と「4名席 空」だけ）、お客様のいる卓は時間・金額が入る高さ
-                            // （2026-10-25 21:24 Ronnie「Handy ko button dherai big」。前は全部 240pt）
-                            NativeTableCard(table: ft, now: model.now.timeIntervalSince1970 * 1000, height: Self.phoneCardHeight(ft)) { _ in tap() }
+                            // 平らな正方形の箱（3D・影なし。2026-10-25 22:23 Ronnie「button haru normal banau 3d banauna pardaina」）。
+                            // 中身は iPad の箱と同じ情報を小さく（残り時間・最終注文から・呼び出し・下の色の帯に金額）。押したときの動きはハンディのまま
+                            NativePhoneTableTile(table: ft, now: model.now.timeIntervalSince1970 * 1000, onTap: tap)
                         } else {
                             Button(action: tap) {
                                 NativeHandyTile(table: t, state: state, now: model.now, callKind: kinds[t.id],
@@ -453,16 +452,10 @@ struct NativeHandyHomeView: View {
                         }
                     }
                 }
-                .padding(.horizontal, cards ? 12 : 8).padding(.top, cards ? 14 : 6).padding(.bottom, 10)
+                .padding(.horizontal, 10).padding(.top, cards ? 10 : 6).padding(.bottom, 10)
             }
         }
         .refreshable { await model.refresh() }
-    }
-
-    /// iPhone の卓の箱の高さ：空いた卓 118pt、お客様のいる卓 196pt（呼び出し・連携の行があればその分だけ高く）
-    static func phoneCardHeight(_ t: NFTable) -> CGFloat {
-        guard t.order != nil else { return 118 }
-        return 196 + (t.calls.isEmpty ? 0 : 20) + (t.linkedNames == nil ? 0 : 20)
     }
 
     /// まとめた卓の名前（T-1+T-2）。組んでいなければ空（Web の groupTableLabel と同じ）
@@ -834,6 +827,173 @@ struct NativeHandyTile: View {
             Spacer(minLength: 0)
             Text(value).font(.system(size: size, weight: .bold)).foregroundColor(color).monospacedDigit().lineLimit(1).minimumScaleFactor(0.7)
         }
+    }
+}
+
+/// iPhone ハンディの卓の箱：1 行に 3 つ・正方形・平ら（3D の台・影・光る縁なし）
+/// （2026-10-25 22:23 Ronnie「one row 3 table rakha square in any size of mobile」「button haru normal banau 3d banauna pardaina」）
+/// 中身は iPad の卓の箱（NativeTableCard）と同じ決まりを小さく：番号・人数、残り時間、最終注文から（呼ばれていれば呼び出し）、
+/// 下の色の帯（着席＝緑・注文済＝青・L.O.＝黄・時間超過＝赤・会計待ち＝橙）に合計金額。空席は「4名席 空」だけ
+struct NativePhoneTableTile: View {
+    let table: NFTable
+    let now: Double
+    let onTap: () -> Void
+    @State private var pulse = false
+
+    var body: some View {
+        Button(action: onTap) {
+            // 正方形は Color.clear で決める（中身の量で高さが変わらない）。字は箱の幅に合わせて少しだけ大きく・小さく
+            Color.clear
+                .aspectRatio(1, contentMode: .fit)
+                .overlay { GeometryReader { g in face(scale: min(1.25, max(0.85, g.size.width / 112))) } }
+                .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white))
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .strokeBorder(table.linkedNames != nil ? NFColor.royal : Color(hex: 0x2A6FE6).opacity(table.order == nil ? 0.35 : 0.55),
+                                      lineWidth: table.linkedNames != nil ? 2 : 1)
+                )
+                .overlay {
+                    // 呼び出し中は縁が点滅（5 分過ぎ＝赤・お会計＝緑・スタッフ＝橙。iPad と同じ色）
+                    if let info = callInfo {
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .strokeBorder(NativeTableCard.callColor(info, border: true), lineWidth: 3)
+                            .opacity(pulse ? 1 : 0.3)
+                    }
+                }
+                .opacity(table.state(now: now) == .unavailable ? 0.6 : 1)
+        }
+        .buttonStyle(PressableStyle(scale: 0.95))
+        .onAppear { if !table.calls.isEmpty { startPulse() } }
+        .onChange(of: table.calls.count) { n in if n > 0 && !pulse { startPulse() } }
+    }
+
+    private var callInfo: (count: Int, minutes: Int, late: Bool, checkout: Bool, label: String)? {
+        table.calls.isEmpty ? nil : NativeTableCard.callInfo(table.calls, now: now)
+    }
+
+    private func startPulse() {
+        withAnimation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true)) { pulse = true }
+    }
+
+    @ViewBuilder
+    private func face(scale s: CGFloat) -> some View {
+        let state = table.state(now: now)
+        let order = table.order
+        let band = NativeTableCard.band(state)
+        VStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: 3 * s) {
+                // 1 行目：番号（左）・プランの印 1 つ・人数（右。お客様が来てから）
+                HStack(alignment: .center, spacing: 3 * s) {
+                    Text(table.name)
+                        .font(.system(size: 17 * s, weight: .heavy)).monospacedDigit()
+                        .foregroundColor(order == nil ? NFColor.ink2 : NFColor.ink)
+                        .lineLimit(1).minimumScaleFactor(0.6)
+                    if table.linkedNames != nil {
+                        Image(systemName: "link").font(.system(size: 10 * s, weight: .bold)).foregroundColor(NFColor.royal)
+                    }
+                    if let mark = NativeTableCard.marks(order).first {
+                        Image(systemName: mark).font(.system(size: 9 * s, weight: .bold)).foregroundColor(.white)
+                            .frame(width: 16 * s, height: 16 * s)
+                            .background(RoundedRectangle(cornerRadius: 5 * s, style: .continuous).fill(NativeTableCard.markColor(mark)))
+                    }
+                    Spacer(minLength: 0)
+                    if let o = order {
+                        HStack(spacing: 1) {
+                            Image(systemName: "person.fill").font(.system(size: 10 * s, weight: .semibold)).foregroundColor(NFColor.ink3)
+                            Text("\(o.guestCount)")
+                        }
+                        .font(.system(size: 15 * s, weight: .heavy)).monospacedDigit().foregroundColor(NFColor.ink)
+                        .fixedSize()
+                    }
+                }
+                if let o = order {
+                    occupied(o, scale: s)
+                } else {
+                    empty(state, scale: s)
+                }
+            }
+            .padding(.horizontal, 7 * s).padding(.top, 6 * s).padding(.bottom, 4 * s)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            if let b = band {
+                // 下の色の帯：合計金額（注文が無ければ状態の字）。帯の上の細い線＝残り時間
+                ZStack(alignment: .top) {
+                    b.color
+                    Text(order.map { NT.yen($0.total) } ?? b.jp)
+                        .font(.system(size: 14 * s, weight: .heavy)).monospacedDigit()
+                        .foregroundColor(b.ink).lineLimit(1).minimumScaleFactor(0.6)
+                        .padding(.horizontal, 6 * s)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
+                    if let o = order {
+                        GeometryReader { g in
+                            ZStack(alignment: .leading) {
+                                Rectangle().fill(b.ink.opacity(0.18))
+                                Rectangle().fill(b.ink.opacity(0.75)).frame(width: max(3, g.size.width * o.tileTime(now: now).frac))
+                            }
+                        }
+                        .frame(height: 2)
+                    }
+                }
+                .frame(height: 26 * s)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func occupied(_ o: NFOrder, scale s: CGFloat) -> some View {
+        let mins = o.tileTime(now: now).left
+        // 残り時間（L.O. までではなく席の終わりまで。iPad の箱と同じ）
+        HStack(spacing: 2 * s) {
+            Image(systemName: "hourglass").font(.system(size: 11 * s, weight: .semibold))
+            Text(String(format: "%@%d:%02d", mins < 0 ? "−" : "", abs(mins) / 60, abs(mins) % 60))
+                .font(.system(size: 18 * s, weight: .heavy)).monospacedDigit()
+        }
+        .foregroundColor(mins < 0 ? NFColor.danger : NFColor.royal)
+        .lineLimit(1).minimumScaleFactor(0.6)
+        .frame(maxWidth: .infinity, alignment: .trailing)
+        if let info = callInfo {
+            // 呼び出し：ベル（お会計は財布）・回数・何分前
+            HStack(spacing: 2 * s) {
+                Image(systemName: info.checkout ? NativeTableCard.walletSymbol : "bell.fill").font(.system(size: 9 * s, weight: .bold))
+                Text("\(info.count)回 \(info.minutes)分").font(.system(size: 11 * s, weight: .heavy)).monospacedDigit()
+            }
+            .foregroundColor(NativeTableCard.callColor(info, border: false))
+            .lineLimit(1).minimumScaleFactor(0.6)
+            .frame(maxWidth: .infinity, alignment: .trailing)
+        } else if let last = o.lastOrderAtMs {
+            // 最終注文から何分（30 分を過ぎたら赤）
+            let since = max(0, Int((now - last) / 60_000))
+            Text("最終 \(since)分")
+                .font(.system(size: 11 * s, weight: .bold)).monospacedDigit()
+                .foregroundColor(since >= 30 ? NativeTableCard.callRed : NFColor.ink3)
+                .lineLimit(1).minimumScaleFactor(0.6)
+                .frame(maxWidth: .infinity, alignment: .trailing)
+        }
+    }
+
+    @ViewBuilder
+    private func empty(_ state: NFTileState, scale s: CGFloat) -> some View {
+        Spacer(minLength: 0)
+        VStack(spacing: 2 * s) {
+            if state == .free {
+                Text("\(table.capacityMax)名席 空").font(.system(size: 12 * s, weight: .semibold)).foregroundColor(NFColor.ink3.opacity(0.75))
+            } else {
+                HStack(spacing: 3) {
+                    if state == .unavailable { Image(systemName: "lock.fill") }
+                    if state == .cleaning { Image(systemName: "sparkles") }
+                    // 状態は日本語だけ（「清掃中 / Cleaning」→「清掃中」）
+                    Text(state.label.components(separatedBy: " / ").first ?? state.label)
+                }
+                .font(.system(size: 11 * s, weight: .semibold)).foregroundColor(NFColor.ink3)
+            }
+            if let next = table.nextReservation(now: now) {
+                Text("次 \(next.time) \(next.partySize)名").font(.system(size: 10 * s, weight: .bold)).monospacedDigit()
+                    .foregroundColor(NFColor.royal)
+            }
+        }
+        .lineLimit(1).minimumScaleFactor(0.6)
+        .frame(maxWidth: .infinity)
+        Spacer(minLength: 0)
     }
 }
 
