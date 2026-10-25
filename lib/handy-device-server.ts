@@ -37,6 +37,43 @@ export async function createHandyDeviceSession(
   admin: Admin,
   input: { organizationId: string; storeId: string; deviceName: string; ip: string | null; userAgent: string | null; createdBy: string | null }
 ): Promise<{ deviceId?: string; error?: string }> {
+  const created = await createHandyDeviceAccount(admin, input);
+  if (created.error || !created.deviceId || !created.email) return { error: created.error ?? '端末の登録に失敗しました' };
+  const signed = await signInHandyDeviceEmail(created.email);
+  if (signed.error) return { error: signed.error };
+  return { deviceId: created.deviceId };
+}
+
+/** 端末のアカウントでこの端末にログイン状態（cookie）を渡す。パスワードは端末に残さない */
+export async function signInHandyDeviceEmail(email: string): Promise<{ error?: string }> {
+  const admin = createAdminClient();
+  const { data: link, error: linkErr } = await admin.auth.admin.generateLink({ type: 'magiclink', email });
+  const tokenHash = link?.properties?.hashed_token;
+  if (linkErr || !tokenHash) return { error: `ログインの準備に失敗しました: ${linkErr?.message ?? '不明なエラー'}` };
+  const supabase = await createClient();
+  const { error: verifyErr } = await supabase.auth.verifyOtp({ type: 'magiclink', token_hash: tokenHash });
+  if (verifyErr) return { error: `ログインに失敗しました: ${verifyErr.message}` };
+  return {};
+}
+
+/**
+ * ハンディ端末の専用アカウントと handy_devices の行を作る（ログイン状態はまだ渡さない）。
+ * pending = コントロールセンターの承認待ちで作る（migration 00104 の後だけ渡す）。承認待ちの間は所属を止めておき、
+ * 運営が承認したときに戻す。tokenHash = 端末の鍵（Cookie）のハッシュ（次に QR を読んだときに同じ端末と分かるように）。
+ */
+export async function createHandyDeviceAccount(
+  admin: Admin,
+  input: {
+    organizationId: string;
+    storeId: string;
+    deviceName: string;
+    ip: string | null;
+    userAgent: string | null;
+    createdBy: string | null;
+    pending?: boolean;
+    tokenHash?: string | null;
+  }
+): Promise<{ deviceId?: string; profileId?: string; email?: string; error?: string }> {
   const deviceKey = crypto.randomUUID();
   const email = handyDeviceEmail(deviceKey);
   const { data: created, error: createErr } = await admin.auth.admin.createUser({
@@ -54,7 +91,14 @@ export async function createHandyDeviceSession(
 
   const { data: membership, error: memErr } = await admin
     .from('memberships')
-    .insert({ organization_id: input.organizationId, profile_id: userId, role: 'part_time', status: 'active', created_by: input.createdBy })
+    .insert({
+      organization_id: input.organizationId,
+      profile_id: userId,
+      role: 'part_time',
+      // 承認待ちの端末は、運営が承認するまで所属を止めておく（万一ログインできても何も開けない）
+      status: input.pending ? 'suspended' : 'active',
+      created_by: input.createdBy,
+    })
     .select('id')
     .single();
   if (memErr || !membership) return fail(memErr?.message ?? '不明なエラー');
@@ -64,31 +108,25 @@ export async function createHandyDeviceSession(
     .insert({ membership_id: membership.id as string, store_id: input.storeId, is_primary: true });
   if (storeErr) return fail(storeErr.message);
 
-  const { data: device, error: deviceErr } = await admin
-    .from('handy_devices')
-    .insert({
-      organization_id: input.organizationId,
-      store_id: input.storeId,
-      name: input.deviceName,
-      profile_id: userId,
-      membership_id: membership.id as string,
-      paired_ip: input.ip,
-      user_agent: input.userAgent,
-      last_seen_at: new Date().toISOString(),
-      created_by: input.createdBy,
-    })
-    .select('id')
-    .single();
+  const now = new Date().toISOString();
+  const row: Record<string, unknown> = {
+    organization_id: input.organizationId,
+    store_id: input.storeId,
+    name: input.deviceName,
+    profile_id: userId,
+    membership_id: membership.id as string,
+    paired_ip: input.ip,
+    user_agent: input.userAgent,
+    last_seen_at: now,
+    created_by: input.createdBy,
+  };
+  // migration 00104 の列（呼び出し側が適用済みを確かめてから渡す）
+  if (input.pending) Object.assign(row, { approval_status: 'pending', approval_requested_at: now });
+  if (input.tokenHash) row.device_token_hash = input.tokenHash;
+  const { data: device, error: deviceErr } = await admin.from('handy_devices').insert(row).select('id').single();
   if (deviceErr || !device) return fail(deviceErr?.message ?? '不明なエラー');
 
-  const { data: link, error: linkErr } = await admin.auth.admin.generateLink({ type: 'magiclink', email });
-  const tokenHash = link?.properties?.hashed_token;
-  if (linkErr || !tokenHash) return { error: `ログインの準備に失敗しました: ${linkErr?.message ?? '不明なエラー'}` };
-  const supabase = await createClient();
-  const { error: verifyErr } = await supabase.auth.verifyOtp({ type: 'magiclink', token_hash: tokenHash });
-  if (verifyErr) return { error: `ログインに失敗しました: ${verifyErr.message}` };
-
-  return { deviceId: device.id as string };
+  return { deviceId: device.id as string, profileId: userId, email };
 }
 
 /** 端末を解除（ログイン状態を切り、アカウントを止める） */
@@ -175,5 +213,14 @@ export async function assertHandyOnShopNetwork(): Promise<void> {
   const result = await checkHandyNetwork();
   if (result.isDevice && result.decision.kind !== 'ok') {
     throw new Error(HANDY_OUTSIDE_ORDER_MESSAGE);
+  }
+  // コントロールセンター（2026-10-25）: ハンディの契約が OFF の店舗では、ハンディ端末からの操作を止める
+  // （ログアウト・解除はしない。契約を ON に戻せばそのまま使える。migration 00104 の前は何もしない）
+  if (result.isDevice && result.device) {
+    const { handyContractOff } = await import('@/lib/handy-device-approval-server');
+    if (await handyContractOff(result.device.storeId)) {
+      const { DEVICE_MESSAGE } = await import('@/lib/device-control');
+      throw new Error(DEVICE_MESSAGE.contractOff.handy);
+    }
   }
 }

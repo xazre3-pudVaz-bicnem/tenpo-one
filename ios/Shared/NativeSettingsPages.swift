@@ -2024,8 +2024,10 @@ struct NativeAccountsView: View {
 
 // MARK: - ハンディ端末（Web の /app/settings/handy・components/settings/handy-devices-panel.tsx と同じ）
 
-struct NHVDevice: Codable, Identifiable, Hashable { let id: String; let name: String; let status: String; let pairedAt: String; let lastSeenAt: String?; let pairedIp: String?; let userAgent: String? }
-struct NHVPayload: Codable { let store: NFNamed; let canEdit: Bool; let pairBase: String?; let devices: [NHVDevice] }
+// approval: TENPO ONE 運営の承認（pending / approved / rejected / revoked。古いサーバーは無し＝承認済み）
+// 2026-10-25 Ronnie「端末のことは全部コントロールセンター」: 解除・承認・台数は運営コンソール。ここは見るだけ（名前・QR の表示はできる）
+struct NHVDevice: Codable, Identifiable, Hashable { let id: String; let name: String; let status: String; let pairedAt: String; let lastSeenAt: String?; let pairedIp: String?; let userAgent: String?; let approval: String? }
+struct NHVPayload: Codable { let store: NFNamed; let canEdit: Bool; let pairBase: String?; let readOnlyNote: String?; let devices: [NHVDevice] }
 
 @MainActor
 final class NativeHandyDevicesModel: NSPModel<NHVPayload> {
@@ -2060,7 +2062,6 @@ final class NativeHandyDevicesModel: NSPModel<NHVPayload> {
             toast = (error as? NativeAPIError)?.message ?? "通信できませんでした"
         }
     }
-    func revoke(_ d: NHVDevice) async { _ = await run(d.id, ["type": "handyRevoke", "id": d.id], done: "「\(d.name)」のつながりを解除しました") }
     func rename(_ d: NHVDevice) async {
         let n = editName.trimmingCharacters(in: .whitespaces)
         editing = nil
@@ -2079,7 +2080,6 @@ struct NativeHandyDevicesView: View {
     @ObservedObject var model: NativeHandyDevicesModel
     let onBack: () -> Void
     @State private var now = Date()
-    @State private var confirmRevoke: NHVDevice?
     private let tick = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
@@ -2120,6 +2120,7 @@ struct NativeHandyDevicesView: View {
                         if p.devices.isEmpty { Text("まだ端末がありません").font(.system(size: 14)).foregroundColor(NFColor.ink3).padding(18) }
                         ForEach(p.devices) { d in
                             let revoked = d.status == "revoked"
+                            let waiting = !revoked && d.approval == "pending"
                             HStack(spacing: 12) {
                                 Image(systemName: "iphone").font(.system(size: 16, weight: .semibold)).foregroundColor(revoked ? NFColor.ink3 : NFColor.iris)
                                     .frame(width: 36, height: 36).background(RoundedRectangle(cornerRadius: 10).fill(revoked ? NFColor.lilacSoft : NFColor.irisSoft))
@@ -2131,11 +2132,12 @@ struct NativeHandyDevicesView: View {
                                     VStack(alignment: .leading, spacing: 2) {
                                         HStack(spacing: 6) {
                                             Text(d.name).font(.system(size: 16, weight: .bold)).foregroundColor(revoked ? NFColor.ink3 : NFColor.ink).strikethrough(revoked, color: NFColor.ink3)
-                                            if revoked { Text("解除済み").font(.system(size: 11, weight: .bold)).foregroundColor(NFColor.ink3).padding(.horizontal, 7).padding(.vertical, 2).background(Capsule().fill(NFColor.lilac)) }
+                                            if revoked { Text(d.approval == "rejected" ? "却下（運営）" : d.approval == "revoked" ? "解除（運営）" : "解除済み").font(.system(size: 11, weight: .bold)).foregroundColor(NFColor.ink3).padding(.horizontal, 7).padding(.vertical, 2).background(Capsule().fill(NFColor.lilac)) }
+                                            if waiting { Text("承認待ち").font(.system(size: 11, weight: .bold)).foregroundColor(NFColor.danger).padding(.horizontal, 7).padding(.vertical, 2).background(Capsule().fill(NFColor.lilac)) }
                                         }
                                         // どの端末か（機種・OS）と、いま使っているか（3分以内に通信）
                                         HStack(spacing: 6) {
-                                            if !revoked {
+                                            if !revoked && !waiting {
                                                 let on = Self.isOnline(d.lastSeenAt, now: now)
                                                 Circle().fill(on ? NFColor.success : NFColor.ink3.opacity(0.5)).frame(width: 8, height: 8)
                                                 Text(on ? "使用中" : "未使用").font(.system(size: 12, weight: .bold)).foregroundColor(on ? NFColor.success : NFColor.ink3)
@@ -2148,21 +2150,20 @@ struct NativeHandyDevicesView: View {
                                 Spacer()
                                 if p.canEdit && !revoked && model.editing != d.id {
                                     NSPButton(text: "名前", icon: "pencil") { model.editing = d.id; model.editName = d.name }
-                                    NSPButton(text: "解除", icon: "xmark.circle", busy: model.busy == d.id) { confirmRevoke = d }
                                 }
                             }
                             .padding(.horizontal, 18).frame(minHeight: 62)
                             .overlay(alignment: .bottom) { Rectangle().fill(NFColor.line).frame(height: 1) }
                         }
+                        // 端末の承認・解除・台数は TENPO ONE 運営（コントロールセンター）。新しい端末は承認されると使える
+                        Text(p.readOnlyNote ?? "端末の追加の承認・解除・台数は TENPO ONE 運営（コントロールセンター）で行います")
+                            .font(.system(size: 12)).foregroundColor(NFColor.ink3)
+                            .frame(maxWidth: .infinity, alignment: .leading).padding(18)
                     }
                 }
             }
         }
         .onReceive(tick) { now = $0 }
-        .alert("ハンディを解除", isPresented: Binding(get: { confirmRevoke != nil }, set: { if !$0 { confirmRevoke = nil } })) {
-            Button("解除する", role: .destructive) { if let d = confirmRevoke { Task { await model.revoke(d) } }; confirmRevoke = nil }
-            Button("やめる", role: .cancel) { confirmRevoke = nil }
-        } message: { Text("「\(confirmRevoke?.name ?? "")」はハンディとして使えなくなります") }
         .task { await model.refresh() }
     }
 

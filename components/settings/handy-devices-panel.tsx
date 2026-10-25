@@ -11,6 +11,7 @@ import { Input, Label } from '@/components/ui/input';
 import { EmptyState } from '@/components/ui/state';
 import { useToast } from '@/components/ui/toast';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { DEVICE_MESSAGE } from '@/lib/device-control';
 
 export interface HandyDeviceRow {
   id: string;
@@ -20,6 +21,8 @@ export interface HandyDeviceRow {
   lastSeenAt: string | null;
   pairedIp: string | null;
   userAgent: string | null;
+  /** TENPO ONE 運営の承認（コントロールセンター。migration 00104 の前は approved） */
+  approval?: 'pending' | 'approved' | 'rejected' | 'revoked';
 }
 
 const dateTime = (iso: string) =>
@@ -47,7 +50,8 @@ export function HandyDevicesPanel({
   siteUrl: string;
   devices: HandyDeviceRow[];
   issueAction: (storeId: string, name: string) => Promise<{ error?: string; code?: string; expiresAt?: string }>;
-  revokeAction: (deviceId: string) => Promise<{ error?: string }>;
+  /** 渡さないと「接続を解除」を出さない（解除は TENPO ONE 運営のコントロールセンターで。2026-10-25） */
+  revokeAction?: (deviceId: string) => Promise<{ error?: string }>;
   renameAction: (deviceId: string, name: string) => Promise<{ error?: string }>;
 }) {
   const router = useRouter();
@@ -80,6 +84,7 @@ export function HandyDevicesPanel({
   };
 
   const handleRevoke = (device: HandyDeviceRow) => {
+    if (!revokeAction) return;
     startTransition(async () => {
       const result = await revokeAction(device.id);
       if (result.error) {
@@ -104,7 +109,8 @@ export function HandyDevicesPanel({
     });
   };
 
-  const active = devices.filter((d) => d.status === 'active');
+  const waiting = devices.filter((d) => d.status === 'active' && d.approval === 'pending');
+  const active = devices.filter((d) => d.status === 'active' && d.approval !== 'pending');
   const revoked = devices.filter((d) => d.status === 'revoked');
 
   return (
@@ -186,9 +192,11 @@ export function HandyDevicesPanel({
                       />
                       <Badge tone="success">接続中</Badge>
                     </div>
-                    <Button variant="danger" size="sm" disabled={pending} onClick={() => setRevoking(d)}>
-                      接続を解除
-                    </Button>
+                    {revokeAction && (
+                      <Button variant="danger" size="sm" disabled={pending} onClick={() => setRevoking(d)}>
+                        接続を解除
+                      </Button>
+                    )}
                   </div>
                   <p className="mt-2 text-xs text-gray-500">
                     {deviceLabel(d.userAgent)}・登録 {dateTime(d.pairedAt)}
@@ -198,8 +206,33 @@ export function HandyDevicesPanel({
               ))}
             </ul>
           )}
+          {!revokeAction && <p className="mt-3 text-xs text-gray-500">{DEVICE_MESSAGE.storeReadOnly}</p>}
         </CardContent>
       </Card>
+
+      {waiting.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle en="Waiting for approval">承認待ちの端末</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="mb-2 text-xs text-gray-500">TENPO ONE 運営が承認すると使えます。承認されたら、その端末でもう一度QRコードを読み取ってください。</p>
+            <ul className="space-y-2 text-sm text-gray-600">
+              {waiting.map((d) => (
+                <li key={d.id} className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="flex items-center gap-2">
+                    {d.name}
+                    <Badge tone="warning">承認待ち</Badge>
+                  </span>
+                  <span className="text-xs text-gray-400">
+                    {deviceLabel(d.userAgent)}・申請 {dateTime(d.pairedAt)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
 
       {revoked.length > 0 && (
         <Card>
@@ -210,7 +243,11 @@ export function HandyDevicesPanel({
             <ul className="space-y-2 text-sm text-gray-600">
               {revoked.map((d) => (
                 <li key={d.id} className="flex flex-wrap items-center justify-between gap-2">
-                  <span>{d.name}</span>
+                  <span className="flex items-center gap-2">
+                    {d.name}
+                    {d.approval === 'rejected' && <Badge tone="danger">却下（運営）</Badge>}
+                    {d.approval === 'revoked' && <Badge tone="gray">解除（運営）</Badge>}
+                  </span>
                   <span className="text-xs text-gray-400">登録 {dateTime(d.pairedAt)}</span>
                 </li>
               ))}

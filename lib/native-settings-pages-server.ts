@@ -42,6 +42,8 @@ import { ACCOUNT_CATEGORY_LABELS, ACCOUNT_CATEGORY_ORDER, SUB_TYPE_LABELS, type 
 import { TAX_TREATMENT_LABELS, type AccountCategory, type TaxTreatment } from '@/lib/accounting';
 import { canWriteAccounting } from '@/components/accounting/roles';
 import { issueHandyPairing, renameHandyDevice, revokeHandyDevice } from '@/app/app/settings/handy/actions';
+import { selectDevicesWithApproval } from '@/lib/device-control-server';
+import { DEVICE_MESSAGE } from '@/lib/device-control';
 import { deleteCategory, deleteMenuItem, saveCategory, saveMenuItem, toggleSoldOut, updateCategoryStation } from '@/app/app/settings/menu/actions';
 import { isCustomPriceHelper } from '@/lib/custom-price';
 import { saveQrService } from '@/app/app/settings/qr-service/actions';
@@ -392,11 +394,11 @@ export async function loadNativeSettingsPage(
   // part の名前は handyDevices（'handy' は iPhone ハンディのテーブル一覧が先に使っていて、route.ts で先に当たる。
   // 2026-10-24 23:45 Ronnie「設定のハンディ端末が 通信できませんでした」の原因）
   if (part === 'handyDevices') {
-    const { data: devices } = await supabase
-      .from('handy_devices')
-      .select('id, name, status, paired_at, last_seen_at, paired_ip, user_agent')
-      .eq('store_id', store.id)
-      .order('paired_at', { ascending: false });
+    // 承認の列（コントロールセンター・migration 00104）があれば一緒に読む
+    const { rows: devices } = await selectDevicesWithApproval<Record<string, unknown>>(
+      (columns) => supabase.from('handy_devices').select(columns).eq('store_id', store.id).order('paired_at', { ascending: false }),
+      'id, name, status, paired_at, last_seen_at, paired_ip, user_agent'
+    );
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? '';
     return {
       ok: true,
@@ -404,7 +406,9 @@ export async function loadNativeSettingsPage(
         store,
         canEdit: can(ctx.role, 'store.settings'),
         pairBase: siteUrl ? `${siteUrl}/handy-pair#` : null,
-        devices: (devices ?? []).map((d) => ({
+        // 解除・承認・台数は TENPO ONE 運営（コントロールセンター）。アプリの古い版の「解除」は理由の文が返る
+        readOnlyNote: DEVICE_MESSAGE.storeReadOnly,
+        devices: devices.map((d) => ({
           id: d.id as string,
           name: d.name as string,
           status: d.status === 'revoked' ? 'revoked' : 'active',
@@ -412,6 +416,7 @@ export async function loadNativeSettingsPage(
           lastSeenAt: (d.last_seen_at as string | null) ?? null,
           pairedIp: (d.paired_ip as string | null) ?? null,
           userAgent: (d.user_agent as string | null) ?? null,
+          approval: d.approval,
         })),
       },
     };

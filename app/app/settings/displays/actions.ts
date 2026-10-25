@@ -9,7 +9,7 @@ import { currentRequestIp } from '@/lib/handy-device-server';
 import { generatePairingCode, hashPairingCode, PAIRING_TTL_MS } from '@/lib/display-pairing';
 import { DISPLAY_FLAG_MESSAGE, isDisplayKind, normalizeStations, type DisplayKind } from '@/lib/display-monitor';
 import { loadDisplayMonitorFlag } from '@/lib/display-monitor-server';
-import { suspendDisplayAccount } from '@/lib/display-ops-server';
+import { DEVICE_MESSAGE } from '@/lib/device-control';
 
 const PATH = '/app/settings/displays';
 
@@ -105,39 +105,14 @@ async function findDevice(deviceId: string) {
 }
 
 /**
- * 端末を解除する。以降その端末では画面が出なくなる（「この端末は解除されました」）。
- * 端末用アカウントの所属を止め、ログインの更新もできなくする（端末の鍵でのつなぎ直しもできなくなる）。
- * 機能が OFF のときでも解除はできる。
+ * 端末の解除（店舗の管理画面から）。
+ * 2026-10-25 Ronnie「端末のことは全部コントロールセンター」: 店舗の管理画面からの解除は受け付けず、理由の文だけ返す
+ * （iPad アプリの設定 › ディスプレイ端末 の古い版の「解除」もここに来る）。端末自身の「レジに戻す」は今まで通り
+ * （lib/display-ops-server.ts の leaveDisplayDevice）。運営の解除は app/admin/tenants/device-actions.ts の revokeStoreDevice。
  */
-export async function revokeDisplayDevice(deviceId: string): Promise<{ error?: string }> {
-  const found = await findDevice(deviceId);
-  if ('error' in found) return { error: found.error };
-  const { ctx, supabase, admin, device } = found;
-  if (device.status === 'revoked') return {};
-
-  const at = new Date().toISOString();
-  const { error } = await admin
-    .from('display_devices')
-    .update({ status: 'revoked', revoked_at: at, revoked_by: ctx.userId, device_token_hash: null, updated_at: at })
-    .eq('id', deviceId)
-    .eq('status', 'active');
-  if (error) return { error: `解除に失敗しました: ${error.message}` };
-
-  await suspendDisplayAccount(admin, device.profile_id as string);
-
-  await supabase.rpc('log_audit', {
-    p_org: ctx.organizationId,
-    p_store: device.store_id,
-    p_action: 'display.device_revoke',
-    p_target_table: 'display_devices',
-    p_target_id: deviceId,
-    p_before: { status: 'active' },
-    p_after: { status: 'revoked', name: device.name },
-    p_note: null,
-  });
-
-  revalidatePath(PATH);
-  return {};
+export async function revokeDisplayDevice(_deviceId: string): Promise<{ error?: string }> {
+  await requirePermission('store.settings');
+  return { error: DEVICE_MESSAGE.storeRevokeRefused };
 }
 
 /** 端末の名前を変える（現場で見分けるため） */

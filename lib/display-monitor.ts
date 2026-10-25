@@ -249,6 +249,8 @@ export interface DisplayDeviceListRow {
   userAgent: string | null;
   /** User-Agent から（iPad · iPadOS 17.1 など） */
   deviceModel: string;
+  /** TENPO ONE 運営の承認（コントロールセンター。migration 00104 の前は approved） */
+  approval?: 'pending' | 'approved' | 'rejected' | 'revoked';
 }
 
 export interface DisplayDevicesPayload {
@@ -391,6 +393,8 @@ export type DisplayRequestState =
   /** セッションが切れている → 端末の鍵でつなぎ直す */
   | { kind: 'resume' }
   | { kind: 'revoked'; name: string | null }
+  /** つないだが TENPO ONE 運営の承認待ち（コントロールセンター。migration 00104 の後）。承認されると自動で画面が出る */
+  | { kind: 'pending'; name: string; storeName: string }
   /** 通信が不安定（認証サーバーに届かない等）。少し待って読み直す */
   | { kind: 'transient' }
   | {
@@ -450,10 +454,19 @@ export function displayScreenOf(state: DisplayRequestState): DisplayScreen {
       return notice({
         icon: 'revoked',
         title: 'この端末は解除されました',
-        body: `${state.name ? `「${state.name}」は` : ''}お店の設定で解除されました。もう一度使うには、${SETTINGS_PATH_LABEL}でQRコードを表示して読み取ってください。`,
+        body: `${state.name ? `「${state.name}」は` : ''}解除されました。もう一度使うには、${SETTINGS_PATH_LABEL}でQRコードを表示して読み取ってください。`,
         footer: null,
         refreshMs: null,
         heartbeat: false,
+      });
+    case 'pending':
+      return notice({
+        icon: 'loading',
+        title: 'TENPO ONE 運営の承認待ちです',
+        body: 'この端末は TENPO ONE 運営の承認待ちです。承認されると使えます（承認されたら自動で画面が切り替わります）',
+        footer: `${state.storeName ? `${state.storeName}・` : ''}${state.name}`,
+        refreshMs: 30_000,
+        heartbeat: true,
       });
     case 'transient':
       return notice({

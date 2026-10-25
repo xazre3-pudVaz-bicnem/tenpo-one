@@ -5,6 +5,7 @@ import { sendPushToStore, vapidConfigured } from '@/lib/push-server';
 import { apnsConfigured, sendNativePushToStore } from '@/lib/apns-server';
 import { serviceCallPushPayload } from '@/lib/service-call-alert';
 import { formatQrServiceRequest, mergeQrServiceNote, qrServiceFrom, visibleQrServiceItems } from '@/lib/qr-service';
+import { loadQrOrderFlag } from '@/lib/qr-order-flag-server';
 
 /**
  * お客様QRの「サービス」（お水・お箸・取り皿交換など、無料で頼めるもの）を受ける
@@ -44,12 +45,19 @@ export async function POST(request: Request) {
 
   const { data: table } = await admin
     .from('restaurant_tables')
-    .select('id, name, store_id, stores!inner(slug)')
+    .select('id, name, store_id, stores!inner(slug, organization_id)')
     .eq('qr_token', token)
     .eq('stores.slug', slug)
     .eq('status', 'active')
     .maybeSingle();
   if (!table) return fail(404, 'TABLE_NOT_FOUND');
+
+  // テーブルQR を店舗ごとに止めている（コントロールセンター）店舗は受け付けない
+  const orgId = (table.stores as unknown as { organization_id?: string } | null)?.organization_id;
+  if (orgId) {
+    const flag = await loadQrOrderFlag(orgId, table.store_id as string, admin);
+    if (flag.reason === 'store_off') return fail(403, 'QR_DISABLED');
+  }
 
   const { data: settingsRow } = await admin
     .from('store_settings')

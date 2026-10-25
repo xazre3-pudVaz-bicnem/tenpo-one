@@ -6,7 +6,7 @@ import { EmptyState } from '@/components/ui/state';
 import { SettingsBackLink } from '@/components/settings/back-link';
 import { DisplayDevicesPanel } from '@/components/settings/display-devices-panel';
 import { loadDisplayDevicesPayload } from '@/lib/display-monitor-server';
-import { issueDisplayPairing, renameDisplayDevice, revokeDisplayDevice, updateDisplayDevice } from './actions';
+import { issueDisplayPairing, renameDisplayDevice, updateDisplayDevice } from './actions';
 
 export const metadata: Metadata = { title: 'ディスプレイ端末 | 設定' };
 
@@ -18,7 +18,7 @@ function requestTime() {
 /**
  * 設定 › デバイス管理 › ディスプレイ端末（キッチンディスプレイ・呼び出しモニター。2026-10-24 Ronnie）。
  * 一覧（デバイス管理）に出るのは、運営がこの企業・店舗で ON にしたときだけ（lib/settings-hubs.ts）。
- * 直接開いたときは OFF の案内を出す（つないである端末の解除はできる）。
+ * 直接開いたときは OFF の案内を出す。端末の解除・承認は TENPO ONE 運営（コントロールセンター）で行う（2026-10-25）。
  */
 export default async function DisplayDevicesSettingsPage() {
   const ctx = await requirePermission('store.settings');
@@ -45,7 +45,7 @@ export default async function DisplayDevicesSettingsPage() {
         payload={payload}
         now={requestTime()}
         issueAction={issueDisplayPairing}
-        revokeAction={revokeDisplayDevice}
+        // 端末の解除・承認・台数は TENPO ONE 運営（コントロールセンター）で行う（2026-10-25）。QR の表示・名前・種類・持ち場はここで
         renameAction={renameDisplayDevice}
         updateAction={updateDisplayDevice}
       />

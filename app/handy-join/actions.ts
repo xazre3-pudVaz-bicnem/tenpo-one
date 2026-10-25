@@ -13,6 +13,8 @@ import { networkKey } from '@/lib/handy-pairing';
 import { loadStorePolicy } from '@/lib/store-access-server';
 import { ACCESS_MESSAGE, canAddHandyDevice, isAllowedNetwork, isRestricted } from '@/lib/store-access';
 import { HANDY_OUTSIDE_COOKIE, handyQrFrom, isHandyQrToken, isShopNetwork, isWifiGuarded } from '@/lib/handy-qr';
+import { ensureHandyDeviceToken, gateHandyJoin, handyContractOff } from '@/lib/handy-device-approval-server';
+import { DEVICE_MESSAGE } from '@/lib/device-control';
 
 export type JoinResult = { ok: true; storeName: string } | { ok: false; error: string };
 
@@ -66,6 +68,9 @@ export async function joinHandyByQr(token: string): Promise<JoinResult> {
     };
   }
 
+  // コントロールセンター（2026-10-25）: ハンディの契約が OFF の店舗では入れない（migration 00104 の前は何もしない）
+  if (await handyContractOff(store.id as string, policy)) return { ok: false, error: DEVICE_MESSAGE.contractOff.handy };
+
   // すでにこの店のハンディとしてログインしている端末は、そのまま開く
   const supabase = await createClient();
   const {
@@ -79,11 +84,45 @@ export async function joinHandyByQr(token: string): Promise<JoinResult> {
       .maybeSingle();
     if (mine && mine.status === 'active' && mine.store_id === store.id) {
       (await cookies()).delete(HANDY_OUTSIDE_COOKIE);
+      // 端末の鍵（自動ログアウトのあと、承認し直しにならないように）
+      await ensureHandyDeviceToken(mine.id as string);
       return { ok: true, storeName: store.name as string };
     }
     await supabase.auth.signOut();
   }
 
+  const h = await headers();
+  const ua = h.get('user-agent')?.slice(0, 200) ?? null;
+  const now = new Date(Date.now() + 9 * 60 * 60_000);
+  const name = `${/iPhone/i.test(ua ?? '') ? 'iPhone' : 'スマホ'}（QR ${now.getUTCMonth() + 1}/${now.getUTCDate()} ${String(now.getUTCHours()).padStart(2, '0')}:${String(now.getUTCMinutes()).padStart(2, '0')}）`;
+
+  // コントロールセンターの承認（migration 00104 の後）。新しい端末は承認待ち、承認済みの端末はそのままログイン
+  const gate = await gateHandyJoin(admin, {
+    organizationId: store.organization_id as string,
+    storeId: store.id as string,
+    policy,
+    deviceName: name,
+    ip,
+    userAgent: ua,
+    createdBy: null,
+  });
+  if (gate.kind === 'blocked') return { ok: false, error: gate.message };
+  if (gate.kind === 'pending' || gate.kind === 'signed_in') {
+    if (gate.kind === 'signed_in') (await cookies()).delete(HANDY_OUTSIDE_COOKIE);
+    await admin.rpc('log_audit', {
+      p_org: store.organization_id as string,
+      p_store: store.id as string,
+      p_action: gate.kind === 'pending' ? 'device.handy_request' : 'handy.device_rejoin_qr',
+      p_target_table: 'handy_devices',
+      p_target_id: gate.deviceId,
+      p_before: null,
+      p_after: gate.kind === 'pending' ? { name, ip, approval_status: 'pending' } : { ip, reactivated: gate.reactivated },
+      p_note: gate.kind === 'pending' ? '新しいハンディ端末（QR）。TENPO ONE 運営の承認待ち' : null,
+    });
+    return gate.kind === 'pending' ? { ok: false, error: gate.message } : { ok: true, storeName: store.name as string };
+  }
+
+  // ここから下は migration 00104 の前（今まで通り）
   // 契約したハンディの台数まで（回線を登録していない店舗は数えない）
   const { count: handyCount } = await admin
     .from('handy_devices')
@@ -91,11 +130,6 @@ export async function joinHandyByQr(token: string): Promise<JoinResult> {
     .eq('store_id', store.id as string)
     .eq('status', 'active');
   if (!canAddHandyDevice(policy, handyCount ?? 0)) return { ok: false, error: ACCESS_MESSAGE.handyLimit };
-
-  const h = await headers();
-  const ua = h.get('user-agent')?.slice(0, 200) ?? null;
-  const now = new Date(Date.now() + 9 * 60 * 60_000);
-  const name = `${/iPhone/i.test(ua ?? '') ? 'iPhone' : 'スマホ'}（QR ${now.getUTCMonth() + 1}/${now.getUTCDate()} ${String(now.getUTCHours()).padStart(2, '0')}:${String(now.getUTCMinutes()).padStart(2, '0')}）`;
 
   const created = await createHandyDeviceSession(admin, {
     organizationId: store.organization_id as string,
@@ -135,6 +169,8 @@ export async function handyHeartbeat(): Promise<HeartbeatResult> {
   const { decision, device } = result;
   if (decision.kind === 'ok') {
     if (jar.get(HANDY_OUTSIDE_COOKIE)) jar.delete(HANDY_OUTSIDE_COOKIE);
+    // 端末の鍵（コントロールセンター。migration 00104 の後だけ・無いときだけ入れる）
+    if (device) await ensureHandyDeviceToken(device.id);
     return { kind: 'ok' };
   }
   if (decision.kind === 'outside') {

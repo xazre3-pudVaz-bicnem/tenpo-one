@@ -14,6 +14,7 @@ import { TableQrPdfButton } from '@/components/settings/table-qr-pdf-button';
 import { TableQrBusinessCard } from '@/components/settings/table-qr-business-card';
 import { A4CutSheets } from '@/components/settings/a4-cut-sheets';
 import { cn } from '@/lib/utils';
+import { QrOrderOffNotice } from '@/components/settings/qr-order-off-notice';
 
 export const metadata: Metadata = { title: 'テーブルQRコードをまとめて印刷 | 設定' };
 
@@ -105,6 +106,9 @@ export default async function TableQrPrintPage({ searchParams }: { searchParams:
           </div>
         }
       />
+
+      {/* テーブルQR を TENPO ONE 運営が止めているとき（コントロールセンター。2026-10-25） */}
+      <QrOrderOffNotice organizationId={ctx.organizationId} storeId={store.id} />
 
       {/* 大きさの切り替え */}
       <nav aria-label="QRの大きさ" className="mb-3 flex flex-wrap gap-2">

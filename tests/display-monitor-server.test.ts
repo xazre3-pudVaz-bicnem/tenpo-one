@@ -14,6 +14,8 @@ interface Call {
   op: Op;
   filters: Row;
   payload: Row | null;
+  /** select に渡した列（コントロールセンターの列が migration 前に無いことを再現するため） */
+  columns?: string;
 }
 interface Res {
   data: unknown;
@@ -34,17 +36,28 @@ const h = vi.hoisted(() => {
     authUsers: new Map<string, { id: string; email: string; app_metadata: Row; user_metadata: Row }>(),
     banned: [] as string[],
     seq: 0,
+    /** migration 00104（端末の承認の列）が適用済みか。false のときは新しい列を読むと「列が無い」エラー */
+    deviceControlReady: false,
+    /** 契約（store_access_policies の行）があるか */
+    policyExists: false,
   };
   const makeBuilder = (table: string) => {
     const call: Call = { table, op: 'select', filters: {}, payload: null };
     const done = (): Res => {
       state.calls.push(call);
+      const newColumn = /approval_status|register_enabled|handy_enabled|display_limit|device_token_hash/.exec(call.columns ?? '');
+      if (!state.deviceControlReady && newColumn) {
+        return { data: null, error: { code: '42703', message: `column ${table}.${newColumn[0]} does not exist` } };
+      }
       return state.respond(call);
     };
     const q: Record<string, unknown> = {};
     const self = () => q;
     Object.assign(q, {
-      select: self,
+      select: (cols?: unknown) => {
+        if (typeof cols === 'string' && !call.columns) call.columns = cols;
+        return q;
+      },
       neq: self,
       not: self,
       or: self,
@@ -116,7 +129,7 @@ vi.mock('@/lib/handy-device-server', () => ({
   loadHandyQr: async () => ({ qr: h.state.qr, settings: {} }),
 }));
 vi.mock('@/lib/store-access-server', () => ({
-  loadStorePolicy: async () => ({ exists: false, networks: [], networkEnforced: false, registerLimit: 0, handyLimit: 0, note: '' }),
+  loadStorePolicy: async () => ({ exists: h.state.policyExists, networks: [], networkEnforced: false, registerLimit: 0, handyLimit: 0, note: '' }),
 }));
 vi.mock('@/lib/kds-server', () => ({
   loadKdsBoard: async () => ({ groups: [], now: Date.now(), unservedCount: 0, avgElapsedMinutes: 0, kdsSettings: { warn1: 10, warn2: 15, warn3: 25, aggregate: false, sound: false } }),
@@ -141,6 +154,7 @@ import { DISPLAY_DEVICE_COOKIE, hashDisplayDeviceToken, hashPairingCode } from '
 import { networkKey } from '@/lib/handy-network';
 import { displayDevicesGet, DISPLAY_DEVICE_POSTS } from '@/lib/native-modules/display-devices';
 import { getSessionContext } from '@/lib/auth';
+import { resetDeviceControlSchemaCache } from '@/lib/device-control-server';
 import type { SessionContext } from '@/lib/auth';
 
 const ORG = '00000000-0000-4000-8000-0000000000a1';
@@ -194,6 +208,9 @@ beforeEach(() => {
   h.state.calls = [];
   h.state.authUsers = new Map();
   h.state.banned = [];
+  h.state.deviceControlReady = false;
+  h.state.policyExists = false;
+  resetDeviceControlSchemaCache();
   world();
 });
 
@@ -525,5 +542,79 @@ describe('lib/auth.ts：ディスプレイ端末のアカウントは役割な�
     const ctx = await getSessionContext();
     expect(ctx?.role).toBe('part_time');
     expect(ctx?.isDisplayDevice).toBe(false);
+  });
+});
+
+describe('コントロールセンター（migration 00104 の後）：運営が承認するまで画面を出さない', () => {
+  const pairingRow = () => ({
+    id: 'pair-1',
+    organization_id: ORG,
+    store_id: STORE,
+    issued_ip: '203.0.113.10',
+    device_name: '受け渡し口',
+    kind: 'call',
+    stations: [],
+    expires_at: new Date(Date.now() + 60_000).toISOString(),
+    used_at: null,
+    created_by: 'manager',
+  });
+
+  it('QR でつないだ端末は承認待ちで作る（所属は止めておく・ログインと鍵は渡す＝承認されると自動で画面が出る）', async () => {
+    h.state.deviceControlReady = true;
+    const inserts: Call[] = [];
+    world({
+      display_pairings: (c) => (c.op === 'select' ? { data: pairingRow(), error: null } : { data: [{ id: 'pair-1' }], error: null }),
+      memberships: (c) => (inserts.push(c), { data: { id: 'mem-1' }, error: null }),
+      membership_stores: () => ({ data: null, error: null }),
+      display_devices: (c) => (c.op === 'insert' ? (inserts.push(c), { data: { id: DEVICE }, error: null }) : { data: null, error: null }),
+    });
+    const r = await pairDisplayDeviceWithCode(CODE);
+    expect(r).toEqual({ storeName: 'TENPO ONE 新宿店', kindLabel: '呼び出しモニター', pending: true });
+    expect(inserts.find((c) => c.table === 'memberships')?.payload).toMatchObject({ status: 'suspended' });
+    expect(inserts.find((c) => c.table === 'display_devices')?.payload).toMatchObject({ approval_status: 'pending' });
+    expect(h.state.setCookies.some((c) => c.name === DISPLAY_DEVICE_COOKIE)).toBe(true);
+  });
+
+  it('契約台数（契約の行がある店舗）に達していたら、承認待ちにもせず断る', async () => {
+    h.state.deviceControlReady = true;
+    h.state.policyExists = true;
+    world({
+      display_pairings: () => ({ data: pairingRow(), error: null }),
+      store_access_policies: () => ({ data: { register_enabled: true, handy_enabled: true, display_limit: 1 }, error: null }),
+      display_devices: (c) => (c.filters.approval_status === 'approved' ? { data: null, error: null, count: 1 } as Res : { data: null, error: null }),
+    });
+    const r = await pairDisplayDeviceWithCode(CODE);
+    expect(r.error).toContain('ディスプレイ端末の台数の上限');
+    expect(h.state.authUsers.size).toBe(0);
+  });
+
+  it('承認待ちの端末の /display：案内（pending）。操作は断る', async () => {
+    h.state.deviceControlReady = true;
+    h.state.user = displayUser();
+    world({
+      display_devices: (c) =>
+        c.op !== 'select'
+          ? { data: null, error: null }
+          : c.columns === 'approval_status'
+            ? { data: { approval_status: 'pending' }, error: null }
+            : { data: deviceRow(), error: null },
+    });
+    const s = await resolveDisplayRequest();
+    expect(s).toEqual({ kind: 'pending', name: '受け渡し口', storeName: 'TENPO ONE 新宿店' });
+    await expect(requireActiveDisplayDevice()).rejects.toThrow('承認待ち');
+  });
+
+  it('承認済み（既存の端末）はそのまま', async () => {
+    h.state.deviceControlReady = true;
+    h.state.user = displayUser();
+    world({
+      display_devices: (c) =>
+        c.op !== 'select'
+          ? { data: null, error: null }
+          : c.columns === 'approval_status'
+            ? { data: { approval_status: 'approved' }, error: null }
+            : { data: deviceRow(), error: null },
+    });
+    expect((await resolveDisplayRequest()).kind).toBe('ready');
   });
 });

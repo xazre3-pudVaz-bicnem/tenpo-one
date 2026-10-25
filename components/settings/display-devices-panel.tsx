@@ -12,6 +12,7 @@ import { EmptyState } from '@/components/ui/state';
 import { useToast } from '@/components/ui/toast';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { cn } from '@/lib/utils';
+import { DEVICE_MESSAGE } from '@/lib/device-control';
 import {
   isDisplayOnline,
   type DisplayDeviceListRow,
@@ -31,7 +32,9 @@ type IssueAction = (
 /**
  * 設定 › デバイス管理 › ディスプレイ端末（2026-10-24 Ronnie）。
  * 店のモニター・タブレットをQRでつなぎ、キッチンディスプレイ（持ち場を絞れる）か呼び出しモニターを出す。
- * つないだ端末はログアウトしない（お店の回線の外では画面に案内を出して待つ）。解除はここから。
+ * つないだ端末はログアウトしない（お店の回線の外では画面に案内を出して待つ）。
+ * 2026-10-25 Ronnie「端末のことは全部コントロールセンター」: 新しい端末は TENPO ONE 運営の承認待ちになり、
+ * 承認・解除・台数は運営コンソールで行う（revokeAction を渡さないと「解除」を出さない）。
  */
 export function DisplayDevicesPanel({
   payload,
@@ -45,7 +48,7 @@ export function DisplayDevicesPanel({
   /** サーバーで描いた時刻（「使用中」の判定の初期値） */
   now: number;
   issueAction: IssueAction;
-  revokeAction: (deviceId: string) => Promise<{ error?: string }>;
+  revokeAction?: (deviceId: string) => Promise<{ error?: string }>;
   renameAction: (deviceId: string, name: string) => Promise<{ error?: string }>;
   updateAction: (deviceId: string, input: { kind: DisplayKind; stations: string[] }) => Promise<{ error?: string }>;
 }) {
@@ -91,6 +94,7 @@ export function DisplayDevicesPanel({
   };
 
   const handleRevoke = (device: DisplayDeviceListRow) => {
+    if (!revokeAction) return;
     startTransition(async () => {
       const result = await revokeAction(device.id);
       if (result.error) {
@@ -140,7 +144,7 @@ export function DisplayDevicesPanel({
           <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
           <span>
             {payload.flagMessage ?? 'この機能は使えません（運営にお問い合わせください）'}
-            {payload.devices.length > 0 && '（つないである端末の解除はできます）'}
+            {payload.devices.length > 0 && revokeAction && '（つないである端末の解除はできます）'}
           </span>
         </div>
       )}
@@ -249,7 +253,11 @@ export function DisplayDevicesPanel({
                           <span className="font-semibold text-navy">{d.name}</span>
                         )}
                         <Badge tone="navy">{d.kindLabel}</Badge>
-                        <Badge tone={online ? 'success' : 'gray'}>{online ? '使用中' : '未使用'}</Badge>
+                        {d.approval === 'pending' ? (
+                          <Badge tone="warning">承認待ち</Badge>
+                        ) : (
+                          <Badge tone={online ? 'success' : 'gray'}>{online ? '使用中' : '未使用'}</Badge>
+                        )}
                       </div>
                       {payload.canEdit && (
                         <div className="flex gap-2">
@@ -263,9 +271,11 @@ export function DisplayDevicesPanel({
                               種類・持ち場
                             </Button>
                           )}
-                          <Button variant="danger" size="sm" disabled={pending} onClick={() => setRevoking(d)}>
-                            解除
-                          </Button>
+                          {revokeAction && (
+                            <Button variant="danger" size="sm" disabled={pending} onClick={() => setRevoking(d)}>
+                              解除
+                            </Button>
+                          )}
                         </div>
                       )}
                     </div>
@@ -273,6 +283,7 @@ export function DisplayDevicesPanel({
                       持ち場 {d.stationsLabel}・{d.deviceModel}・登録 {dateTime(d.pairedAt)}
                       {d.lastSeenAt && `・最終通信 ${dateTime(d.lastSeenAt)}`}
                       {(d.lastIp ?? d.pairedIp) && `・IP ${d.lastIp ?? d.pairedIp}`}
+                      {d.approval === 'pending' && '・TENPO ONE 運営が承認すると、この端末に画面が出ます'}
                     </p>
                     {isEditing && editing && (
                       <div className="mt-3 space-y-3 rounded-lg bg-gray-50 p-3">
@@ -302,6 +313,7 @@ export function DisplayDevicesPanel({
               })}
             </ul>
           )}
+          {!revokeAction && <p className="mt-3 text-xs text-gray-500">{DEVICE_MESSAGE.storeReadOnly}</p>}
         </CardContent>
       </Card>
 
@@ -317,6 +329,8 @@ export function DisplayDevicesPanel({
                   <span>
                     {d.name}
                     <span className="ml-2 text-xs text-gray-400">{d.kindLabel}</span>
+                    {d.approval === 'rejected' && <span className="ml-2 text-xs text-gray-400">却下（運営）</span>}
+                    {d.approval === 'revoked' && <span className="ml-2 text-xs text-gray-400">解除（運営）</span>}
                   </span>
                   <span className="text-xs text-gray-400">登録 {dateTime(d.pairedAt)}</span>
                 </li>

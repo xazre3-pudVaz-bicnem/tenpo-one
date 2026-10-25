@@ -14,6 +14,8 @@ import { isPlanTimeOver } from "@/lib/plan-time";
 import { resolveQrGroupToken } from "@/lib/table-group-server";
 import { qrStartRequired } from "@/lib/qr-visit-server";
 import { visibleQrServiceItems } from "@/lib/qr-service";
+import { loadQrOrderFlagBySlug } from "@/lib/qr-order-flag-server";
+import { QrOrderClosed } from "@/components/qr-order/qr-order-closed";
 
 interface PageParams {
   params: Promise<{ storeSlug: string; tableToken: string }>;
@@ -55,6 +57,7 @@ export default async function QrOrderPage({ params }: PageParams) {
     { data: reservedCourse },
     { book, plan, dynamicRules, stationById, menuStock, planEndsAtMs, service },
     noOpenOrder,
+    qrFlag,
   ] = await Promise.all([
     supabase.rpc("get_qr_menu", { p_slug: storeSlug, p_token: tableToken }),
     supabase.rpc("get_qr_reserved_course", {
@@ -64,8 +67,13 @@ export default async function QrOrderPage({ params }: PageParams) {
     loadQrMenuBook(storeSlug, tableToken),
     // グループの別の卓（伝票の卓へ振り向けた）は伝票があるので調べない
     resolved.redirected ? Promise.resolve(false) : qrStartRequired(storeSlug, tableToken),
+    // テーブルQR の ON/OFF（コントロールセンターで店舗ごと。2026-10-25 Ronnie）
+    loadQrOrderFlagBySlug(storeSlug),
   ]);
   if (!menu) notFound();
+  // 店舗ごとの OFF（コントロールセンターで止めた店舗）だけ案内の画面にする。企業ぜんぶの OFF（機能フラグ qr_order）は
+  // 今まで通り（メニューは見えて、注文の作成だけ DB で止まる）
+  if (qrFlag && qrFlag.reason === 'store_off') return <QrOrderClosed storeName={qrFlag.storeName} />;
 
   const course = (reservedCourse as ReservedCourse | null) ?? null;
   // 卓名はお客様が座っている卓（QR を開いた卓）のまま見せる

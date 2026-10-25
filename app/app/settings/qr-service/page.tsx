@@ -6,6 +6,7 @@ import { EmptyState } from '@/components/ui/state';
 import { SettingsBackLink } from '@/components/settings/back-link';
 import { QrServiceEditor } from '@/components/settings/qr-service-editor';
 import { qrServiceFrom } from '@/lib/qr-service';
+import { QrOrderOffNotice } from '@/components/settings/qr-order-off-notice';
 
 export const metadata: Metadata = { title: 'お客様QRのサービス | 設定' };
 
@@ -37,6 +38,8 @@ export default async function QrServiceSettingsPage() {
         en="QR service"
         description={`${store.name}｜お水・お箸・取り皿交換など、お客様がQRから無料で頼めるもの。頼まれるとスタッフ呼び出しとしてハンディ・レジに届きます（注文・お会計には入りません）`}
       />
+      {/* テーブルQR を TENPO ONE 運営が止めているとき（コントロールセンター。2026-10-25） */}
+      <QrOrderOffNotice organizationId={ctx.organizationId} storeId={store.id} />
       <QrServiceEditor key={store.id} storeId={store.id} initial={initial} />
     </div>
   );
