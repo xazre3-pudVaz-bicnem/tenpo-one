@@ -69,7 +69,20 @@ final class BluetoothPrinters: NSObject {
         #if canImport(StarIO10)
         if maker == "star" || maker == "all" {
             group.enter()
-            star.discover { add($0); group.leave() }
+            star.discover { devices in
+                // The SDK scan can miss an already paired MFi printer. Keep USB
+                // results and consult iOS's connected accessories before reporting
+                // "not found". Do not launch pairing or duplicate SDK Bluetooth rows.
+                if devices.contains(where: { $0["via"] == "bluetooth" }) {
+                    add(devices)
+                    group.leave()
+                } else {
+                    self.accessory.discover(makers: ["star"], pairIfNone: false) { paired in
+                        add(devices + paired)
+                        group.leave()
+                    }
+                }
+            }
         }
         #endif
         #if EPSON_SDK
