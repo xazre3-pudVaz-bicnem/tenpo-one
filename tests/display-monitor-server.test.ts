@@ -45,7 +45,7 @@ const h = vi.hoisted(() => {
     const call: Call = { table, op: 'select', filters: {}, payload: null };
     const done = (): Res => {
       state.calls.push(call);
-      const newColumn = /approval_status|register_enabled|handy_enabled|display_limit|device_token_hash/.exec(call.columns ?? '');
+      const newColumn = /approval_status|approved_at|approved_by|approval_requested_at|register_enabled|handy_enabled|display_limit|approval_since|device_token_hash/.exec(call.columns ?? '');
       if (!state.deviceControlReady && newColumn) {
         return { data: null, error: { code: '42703', message: `column ${table}.${newColumn[0]} does not exist` } };
       }
@@ -68,6 +68,7 @@ const h = vi.hoisted(() => {
       upsert: (p: Row) => ((call.op = 'upsert'), (call.payload = p), q),
       delete: () => ((call.op = 'delete'), q),
       eq: (k: string, v: unknown) => ((call.filters[k] = v), q),
+      gt: (k: string, v: unknown) => ((call.filters[`gt:${k}`] = v), q),
       in: (k: string, v: unknown) => ((call.filters[`in:${k}`] = v), q),
       is: (k: string, v: unknown) => ((call.filters[`is:${k}`] = v), q),
       maybeSingle: async () => done(),
@@ -559,11 +560,27 @@ describe('コントロールセンター（migration 00104 の後）：運営が
     created_by: 'manager',
   });
 
-  it('QR でつないだ端末は承認待ちで作る（所属は止めておく・ログインと鍵は渡す＝承認されると自動で画面が出る）', async () => {
+  it('承認制 OFF（既定）：migration の後も今まで通り、つないだ端末はすぐ使える（承認の列は書かない）', async () => {
     h.state.deviceControlReady = true;
     const inserts: Call[] = [];
     world({
       display_pairings: (c) => (c.op === 'select' ? { data: pairingRow(), error: null } : { data: [{ id: 'pair-1' }], error: null }),
+      memberships: (c) => (inserts.push(c), { data: { id: 'mem-1' }, error: null }),
+      membership_stores: () => ({ data: null, error: null }),
+      display_devices: (c) => (c.op === 'insert' ? (inserts.push(c), { data: { id: DEVICE }, error: null }) : { data: null, error: null }),
+    });
+    expect(await pairDisplayDeviceWithCode(CODE)).toEqual({ storeName: 'TENPO ONE 新宿店', kindLabel: '呼び出しモニター' });
+    expect(inserts.find((c) => c.table === 'memberships')?.payload).toMatchObject({ status: 'active' });
+    expect(inserts.find((c) => c.table === 'display_devices')?.payload).not.toHaveProperty('approval_status');
+  });
+
+  it('承認制 ON：QR でつないだ端末は承認待ちで作る（所属は止めておく・ログインと鍵は渡す＝承認されると自動で画面が出る）', async () => {
+    h.state.deviceControlReady = true;
+    h.state.policyExists = true;
+    const inserts: Call[] = [];
+    world({
+      display_pairings: (c) => (c.op === 'select' ? { data: pairingRow(), error: null } : { data: [{ id: 'pair-1' }], error: null }),
+      store_access_policies: () => ({ data: { register_enabled: true, handy_enabled: true, display_limit: null, display_approval_since: '2026-01-01T00:00:00Z' }, error: null }),
       memberships: (c) => (inserts.push(c), { data: { id: 'mem-1' }, error: null }),
       membership_stores: () => ({ data: null, error: null }),
       display_devices: (c) => (c.op === 'insert' ? (inserts.push(c), { data: { id: DEVICE }, error: null }) : { data: null, error: null }),
@@ -575,7 +592,7 @@ describe('コントロールセンター（migration 00104 の後）：運営が
     expect(h.state.setCookies.some((c) => c.name === DISPLAY_DEVICE_COOKIE)).toBe(true);
   });
 
-  it('契約台数（契約の行がある店舗）に達していたら、承認待ちにもせず断る', async () => {
+  it('運営が決めた台数に達していたら作らない（台数が未設定＝数えない）', async () => {
     h.state.deviceControlReady = true;
     h.state.policyExists = true;
     world({

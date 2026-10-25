@@ -20,9 +20,10 @@ const APPROVAL_TONE: Record<ApprovalStatus, BadgeTone> = { pending: 'warning', a
 const TYPE_ICON: Record<DeviceType, typeof Smartphone> = { register: MonitorSmartphone, handy: Smartphone, display: Tv };
 
 /**
- * コントロールセンター（運営コンソール）：店舗の端末の契約（ON/OFF・台数）・テーブルQR・端末の承認（2026-10-25 Ronnie）。
- * 新しい端末（iPad のレジのログイン・ハンディの QR・ディスプレイの QR）は承認待ちで登録され、ここで承認するまで使えない。
- * 店舗の管理画面は一覧を見るだけ（承認・解除・台数はここだけ）。
+ * コントロールセンター（運営コンソール）：店舗の端末の契約（ON/OFF・台数・承認制）・テーブルQR・端末の承認（2026-10-25 Ronnie）。
+ * 承認制は種類ごとに運営が ON にしたときだけ（既定 OFF＝今まで通り）。ON から 7 日間は移行期間（新しい端末も自動承認）、
+ * そのあとは新しい端末（iPad のレジの画面での登録・ハンディの QR・ディスプレイの QR）は承認待ちで登録され、ここで承認するまで使えない。
+ * 店舗の管理画面では一覧を見る・なくした端末を解除するだけ（承認・台数はここだけ）。
  */
 export function StoreDeviceControlPanel({ data }: { data: StoreDeviceControlData }) {
   const router = useRouter();
@@ -34,10 +35,12 @@ export function StoreDeviceControlPanel({ data }: { data: StoreDeviceControlData
     handyEnabled: data.handy.enabled,
     handyLimit: String(data.handy.limit),
     displayEnabled: data.display.enabled,
-    displayLimit: String(data.display.limit),
+    // 空＝数えない
+    displayLimit: data.display.limit === null ? '' : String(data.display.limit),
+    approval: { register: data.approval.register.on, handy: data.approval.handy.on, display: data.approval.display.on } as Record<DeviceType, boolean>,
   });
 
-  const save = () =>
+  const save = (endTransition: DeviceType[] = []) =>
     startTransition(async () => {
       const r = await saveStoreDeviceContract({
         storeId: data.storeId,
@@ -46,7 +49,9 @@ export function StoreDeviceControlPanel({ data }: { data: StoreDeviceControlData
         handyEnabled: form.handyEnabled,
         handyLimit: Number(form.handyLimit) || 0,
         displayEnabled: form.displayEnabled,
-        displayLimit: Number(form.displayLimit) || 0,
+        displayLimit: form.displayLimit === '' ? null : Number(form.displayLimit) || null,
+        approval: form.approval,
+        endTransition,
       });
       if (r.error) toast(r.error, 'error');
       else {
@@ -78,9 +83,9 @@ export function StoreDeviceControlPanel({ data }: { data: StoreDeviceControlData
       type: 'register',
       enabledKey: 'registerEnabled',
       limitKey: 'registerLimit',
-      note: data.register.counted ? '' : '台数・承認を数えていません（契約を保存すると数えます）',
+      note: data.register.counted ? '' : '台数を数えていません（承認制は台数を決めた店舗だけ効きます）',
     },
-    { type: 'handy', enabledKey: 'handyEnabled', limitKey: 'handyLimit', note: data.handy.counted ? '' : '台数は数えていません（承認は必要）' },
+    { type: 'handy', enabledKey: 'handyEnabled', limitKey: 'handyLimit', note: data.handy.counted ? '' : '台数は数えていません' },
     {
       type: 'display',
       enabledKey: 'displayEnabled',
@@ -92,8 +97,9 @@ export function StoreDeviceControlPanel({ data }: { data: StoreDeviceControlData
   return (
     <div className="space-y-5">
       <p className="text-xs leading-relaxed text-gray-500">
-        レジ（iPad）・ハンディ・ディスプレイ端末の契約（ON/OFF・台数）と、新しい端末の承認はここで行います。新しい端末は
-        <strong>承認待ち</strong>で登録され、承認するまで使えません。今使っている端末は承認済みのまま使えます。店舗の管理画面では一覧を見るだけです。
+        レジ（iPad）・ハンディ・ディスプレイ端末の契約（ON/OFF・台数）と承認はここで行います。<strong>承認制</strong>を ON にした種類は、7日間の
+        移行期間（新しい端末もすぐ使え、「自動承認」と出ます）のあと、新しい端末が<strong>承認待ち</strong>になり承認するまで使えません。
+        今使っている端末は承認済みのまま使えます。承認制 OFF（既定）の種類は今まで通りです。
       </p>
 
       {!data.ready && (
@@ -109,8 +115,8 @@ export function StoreDeviceControlPanel({ data }: { data: StoreDeviceControlData
         <div className="flex items-start gap-2 rounded-lg bg-primary-soft px-3 py-2.5 text-xs text-primary-deep">
           <AlertTriangle className="h-4 w-4 shrink-0" />
           <span>
-            この店舗はまだ契約（台数）を保存していません。いまはレジ（iPad）の台数・承認を数えていません（今まで通り）。保存すると、この店舗の iPad は
-            次にレジを開いたとき「登録 → 承認待ち」になります。営業時間外に保存し、下の「承認待ち」から承認してください。
+            この店舗はまだ契約（台数）を保存していません。いまはレジ（iPad）・ハンディの台数を数えていません（今まで通り）。台数を 1 以上にして保存すると
+            数え始めます（レジの iPad は次にレジを開いたとき「この端末をレジとして登録」になります）。台数を変えずにほかの項目だけ保存しても数え方は変わりません。
           </span>
         </div>
       )}
@@ -133,6 +139,7 @@ export function StoreDeviceControlPanel({ data }: { data: StoreDeviceControlData
                     )}
                     {r.note && <span className="ml-1.5 text-gray-400">{r.note}</span>}
                   </p>
+                  <ApprovalStatusLine state={data.approval[r.type]} ready={data.ready} />
                 </div>
               </div>
               <div className="flex items-center gap-2 text-xs text-gray-600">
@@ -145,6 +152,20 @@ export function StoreDeviceControlPanel({ data }: { data: StoreDeviceControlData
                 />
                 <span className={cn('w-7 font-semibold', on ? 'text-primary' : 'text-gray-400')}>{on ? 'ON' : 'OFF'}</span>
               </div>
+              <div className="flex items-center gap-2 text-xs text-gray-600">
+                承認制
+                <Switch
+                  on={form.approval[r.type]}
+                  label={`${DEVICE_TYPE_LABELS[r.type]}の承認制`}
+                  disabled={pending || !data.ready}
+                  onClick={() => setForm((f) => ({ ...f, approval: { ...f.approval, [r.type]: !f.approval[r.type] } }))}
+                />
+                {data.approval[r.type].mode === 'transition' && form.approval[r.type] && (
+                  <Button size="sm" variant="outline" disabled={pending} onClick={() => save([r.type])}>
+                    移行期間を終える
+                  </Button>
+                )}
+              </div>
               <label className="flex items-center gap-2 text-xs text-gray-600">
                 台数
                 <Input
@@ -152,6 +173,7 @@ export function StoreDeviceControlPanel({ data }: { data: StoreDeviceControlData
                   onChange={(e) => setForm((f) => ({ ...f, [r.limitKey]: e.target.value.replace(/[^0-9]/g, '').slice(0, 2) }))}
                   className="h-8 w-16 text-right"
                   inputMode="numeric"
+                  placeholder={r.type === 'display' ? '数えない' : undefined}
                   aria-label={`${DEVICE_TYPE_LABELS[r.type]}の台数`}
                 />
                 台
@@ -161,8 +183,10 @@ export function StoreDeviceControlPanel({ data }: { data: StoreDeviceControlData
         })}
       </div>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-[11px] text-gray-500">台数を 0 にすると数えません（レジは台数・承認とも数えない＝今まで通り）。OFF にした種類の端末はログイン・接続・操作ができなくなります。</p>
-        <Button onClick={save} disabled={pending}>
+        <p className="text-[11px] text-gray-500">
+          台数を 0（ディスプレイは空）にすると数えません。契約を OFF にした種類の端末はログイン・接続・操作ができなくなります。変えた項目だけ保存します。
+        </p>
+        <Button onClick={() => save()} disabled={pending}>
           {pending ? '保存中…' : '契約を保存する'}
         </Button>
       </div>
@@ -267,6 +291,7 @@ export function DeviceItem({
             <span className="text-xs text-gray-500">{DEVICE_TYPE_LABELS[d.type]}</span>
             <span className="font-medium text-navy">{d.name}</span>
             <Badge tone={tone}>{stateLabel}</Badge>
+            {d.autoApproved && d.status === 'active' && <Badge tone="primary">自動承認（移行期間）</Badge>}
           </span>
           <span className="block text-[11px] text-gray-500">
             {extra}
@@ -287,6 +312,16 @@ export function DeviceItem({
       />
     </li>
   );
+}
+
+function ApprovalStatusLine({ state, ready }: { state: StoreDeviceControlData['approval'][DeviceType]; ready: boolean }) {
+  if (!ready) return null;
+  if (state.mode === 'transition') {
+    return <p className="text-[11px] font-semibold text-primary-deep">承認制：移行期間（{formatDateTime(state.transitionEndsAt)} まで新しい端末も自動承認）</p>;
+  }
+  if (state.mode === 'on') return <p className="text-[11px] font-semibold text-warning">承認制：ON（新しい端末は承認待ち）</p>;
+  if (state.on) return <p className="text-[11px] text-gray-400">承認制：ON（台数を決めると効きます）</p>;
+  return <p className="text-[11px] text-gray-400">承認制：OFF（今まで通り）</p>;
 }
 
 function Switch({ on, label, disabled, onClick }: { on: boolean; label: string; disabled: boolean; onClick: () => void }) {

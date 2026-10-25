@@ -9,7 +9,8 @@ import { QR_ORDER_OFF_STORE_NOTE } from '@/lib/qr-order-flag';
 export async function QrOrderOffNotice({ organizationId, storeId }: { organizationId: string | null; storeId: string }) {
   if (!organizationId) return null;
   const flag = await loadQrOrderFlag(organizationId, storeId);
-  if (flag.on || flag.reason === 'on') return null;
+  // 店舗ごとの OFF（コントロールセンターで止めた店舗）だけ。企業ぜんぶの OFF（機能フラグ）は今まで通り何も出さない
+  if (flag.reason !== 'store_off') return null;
   return (
     <div className="mb-4 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
       <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />

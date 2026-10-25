@@ -1,18 +1,25 @@
 import { describe, expect, it } from 'vitest';
 import {
   APPROVAL_LABELS,
+  APPROVAL_TRANSITION_MS,
+  DEFAULT_CONTRACT_COLUMNS,
   DEVICE_MESSAGE,
   MAX_PENDING_PER_TYPE,
-  approvalApplies,
   approvalFrom,
+  approvalModeFor,
+  approvalModeOf,
   contractColumnsFrom,
   decideApprove,
   decideDeviceJoin,
+  decideRegisterLogin,
   deviceLimitFrom,
   deviceStateLabel,
+  displayLimitFrom,
+  isAutoApproved,
   isDeviceToken,
   isDeviceType,
   joinBlockMessage,
+  transitionEndsAt,
 } from '@/lib/device-control';
 import { ACCESS_MESSAGE, registerBlockMessage, registerDecisionFrom } from '@/lib/store-access';
 import { QR_ORDER_OFF_MESSAGE, resolveQrOrderFlag } from '@/lib/qr-order-flag';
@@ -47,30 +54,56 @@ describe('承認の状態の読み方（今使っている端末を止めない�
     expect(APPROVAL_LABELS.pending).toBe('承認待ち');
   });
 
-  it('契約の列：行が無い・壊れた値は ON・既定の台数。明示的に false のときだけ OFF', () => {
-    expect(contractColumnsFrom(null)).toEqual({ registerEnabled: true, handyEnabled: true, displayLimit: 2 });
-    expect(contractColumnsFrom({ register_enabled: null, handy_enabled: 'no', display_limit: -1 })).toEqual({
+  it('契約の列：行が無い・壊れた値は ON・ディスプレイは数えない・承認制 OFF。明示的に false のときだけ OFF', () => {
+    expect(contractColumnsFrom(null)).toEqual(DEFAULT_CONTRACT_COLUMNS);
+    expect(DEFAULT_CONTRACT_COLUMNS).toEqual({
       registerEnabled: true,
       handyEnabled: true,
-      displayLimit: 2,
+      displayLimit: null,
+      approvalSince: { register: null, handy: null, display: null },
     });
-    expect(contractColumnsFrom({ register_enabled: false, handy_enabled: false, display_limit: 99 })).toEqual({
+    expect(contractColumnsFrom({ register_enabled: null, handy_enabled: 'no', display_limit: -1, handy_approval_since: 'nope' })).toEqual(DEFAULT_CONTRACT_COLUMNS);
+    expect(
+      contractColumnsFrom({ register_enabled: false, handy_enabled: false, display_limit: 99, handy_approval_since: '2026-10-25T00:00:00Z' })
+    ).toEqual({
       registerEnabled: false,
       handyEnabled: false,
       displayLimit: 20,
+      approvalSince: { register: null, handy: '2026-10-25T00:00:00Z', display: null },
     });
+    // ディスプレイの台数：NULL・0 は数えない（今つないでいる台数を止めない）
+    expect(displayLimitFrom(null)).toBeNull();
+    expect(displayLimitFrom(0)).toBeNull();
+    expect(displayLimitFrom(3)).toBe(3);
     expect(deviceLimitFrom(0, 2)).toBe(0);
     expect(deviceLimitFrom(3.5, 2)).toBe(2);
   });
 
-  it('承認制をかける店舗：migration の前はどこもかけない。レジは台数を数えている店舗だけ。ハンディ・ディスプレイは全店舗', () => {
-    expect(approvalApplies('register', { ready: false, countsRegister: true })).toBe(false);
-    expect(approvalApplies('handy', { ready: false, countsRegister: true })).toBe(false);
-    expect(approvalApplies('display', { ready: false, countsRegister: false })).toBe(false);
-    expect(approvalApplies('register', { ready: true, countsRegister: false })).toBe(false);
-    expect(approvalApplies('register', { ready: true, countsRegister: true })).toBe(true);
-    expect(approvalApplies('handy', { ready: true, countsRegister: false })).toBe(true);
-    expect(approvalApplies('display', { ready: true, countsRegister: false })).toBe(true);
+  it('承認制：既定 OFF。ON にしてから 7 日間は移行期間、そのあと ON', () => {
+    const t0 = Date.parse('2026-10-25T00:00:00Z');
+    expect(approvalModeOf(null, t0)).toBe('off');
+    expect(approvalModeOf('broken', t0)).toBe('off');
+    expect(approvalModeOf('2026-10-25T00:00:00Z', t0 + 1000)).toBe('transition');
+    expect(transitionEndsAt('2026-10-25T00:00:00Z', t0 + 1000)).toBe(new Date(t0 + APPROVAL_TRANSITION_MS).toISOString());
+    expect(approvalModeOf('2026-10-25T00:00:00Z', t0 + APPROVAL_TRANSITION_MS)).toBe('on');
+    expect(transitionEndsAt('2026-10-25T00:00:00Z', t0 + APPROVAL_TRANSITION_MS)).toBeNull();
+  });
+
+  it('承認制の状態：migration の前・運営が ON にしていない店舗は OFF。レジは台数を数えている店舗だけ', () => {
+    const on = { ...DEFAULT_CONTRACT_COLUMNS, approvalSince: { register: '2026-01-01T00:00:00Z', handy: '2026-01-01T00:00:00Z', display: null } };
+    const now = Date.parse('2026-10-25T00:00:00Z');
+    expect(approvalModeFor('handy', { ready: false, countsRegister: true, contract: on, now })).toBe('off');
+    expect(approvalModeFor('handy', { ready: true, countsRegister: false, contract: DEFAULT_CONTRACT_COLUMNS, now })).toBe('off');
+    expect(approvalModeFor('handy', { ready: true, countsRegister: false, contract: on, now })).toBe('on');
+    expect(approvalModeFor('display', { ready: true, countsRegister: false, contract: on, now })).toBe('off');
+    expect(approvalModeFor('register', { ready: true, countsRegister: false, contract: on, now })).toBe('off');
+    expect(approvalModeFor('register', { ready: true, countsRegister: true, contract: on, now })).toBe('on');
+  });
+
+  it('移行期間の自動承認の印（承認の時刻があって、承認した運営がいない）', () => {
+    expect(isAutoApproved({ approval: 'approved', approvedAt: '2026-10-25T00:00:00Z', approvedBy: null })).toBe(true);
+    expect(isAutoApproved({ approval: 'approved', approvedAt: '2026-10-25T00:00:00Z', approvedBy: 'op' })).toBe(false);
+    expect(isAutoApproved({ approval: 'approved', approvedAt: null, approvedBy: null })).toBe(false);
   });
 
   it('小さな道具', () => {
@@ -109,13 +142,13 @@ describe('端末がつなごうとしたとき（decideDeviceJoin）', () => {
   it('分かっている端末は承認の状態どおり', () => {
     expect(join({ known: { approval: 'pending', active: true } })).toEqual({ kind: 'pending' });
     expect(join({ known: { approval: 'rejected', active: false } })).toEqual({ kind: 'rejected' });
-    expect(join({ known: { approval: 'revoked', active: false } })).toEqual({ kind: 'revoked' });
+    expect(join({ known: { approval: 'revoked', active: false } })).toEqual({ kind: 'revoked', by: 'operator' });
     // 承認済みで使用中：台数いっぱいでも使える（自分も数に入っている）
     expect(join({ known: { approval: 'approved', active: true }, approvedActive: 2 })).toEqual({ kind: 'allow', reactivate: false });
   });
 
   it('承認済みで止まっている端末：レジ（使い直せない種類）は解除のまま、ハンディは空きがあれば使い直す（承認し直し不要）', () => {
-    expect(join({ known: { approval: 'approved', active: false } })).toEqual({ kind: 'revoked' });
+    expect(join({ known: { approval: 'approved', active: false } })).toEqual({ kind: 'revoked', by: 'store' });
     expect(join({ known: { approval: 'approved', active: false }, reactivatable: true })).toEqual({ kind: 'allow', reactivate: true });
     expect(join({ known: { approval: 'approved', active: false }, reactivatable: true, approvedActive: 2 })).toEqual({ kind: 'limit', limit: 2 });
   });
@@ -130,6 +163,19 @@ describe('端末がつなごうとしたとき（decideDeviceJoin）', () => {
     expect(joinBlockMessage('handy', { kind: 'request' })).toBeNull();
     expect(joinBlockMessage('handy', { kind: 'allow', reactivate: false })).toBeNull();
     expect(DEVICE_MESSAGE.pending).toBe('この端末は TENPO ONE 運営の承認待ちです。承認されると使えます');
+  });
+});
+
+describe('レジのログイン（decideRegisterLogin）：今まで通り端末の登録・台数は見ない', () => {
+  it('知らない端末・承認済み・店舗が解除した（今までの）端末はログインできる', () => {
+    expect(decideRegisterLogin({ contractEnabled: true, known: null })).toEqual({ kind: 'ok' });
+    expect(decideRegisterLogin({ contractEnabled: true, known: { approval: 'approved' } })).toEqual({ kind: 'ok' });
+  });
+  it('止めるのは 契約 OFF・承認待ち・運営の却下／解除 だけ', () => {
+    expect(decideRegisterLogin({ contractEnabled: false, known: { approval: 'approved' } })).toEqual({ kind: 'contract_off' });
+    expect(decideRegisterLogin({ contractEnabled: true, known: { approval: 'pending' } })).toEqual({ kind: 'pending' });
+    expect(decideRegisterLogin({ contractEnabled: true, known: { approval: 'rejected' } })).toEqual({ kind: 'rejected' });
+    expect(decideRegisterLogin({ contractEnabled: true, known: { approval: 'revoked' } })).toEqual({ kind: 'revoked' });
   });
 });
 
@@ -162,17 +208,20 @@ describe('レジの判定（lib/store-access.ts）', () => {
   it('端末の判定 → レジの判定', () => {
     expect(registerDecisionFrom({ kind: 'allow', reactivate: false })).toEqual({ kind: 'allowed' });
     expect(registerDecisionFrom({ kind: 'request' })).toEqual({ kind: 'register' });
+    expect(registerDecisionFrom({ kind: 'revoked', by: 'store' })).toEqual({ kind: 'revoked', by: 'store' });
     expect(registerDecisionFrom({ kind: 'create' })).toEqual({ kind: 'register' });
     expect(registerDecisionFrom({ kind: 'limit', limit: 3 })).toEqual({ kind: 'limit', limit: 3 });
     expect(registerDecisionFrom({ kind: 'pending' })).toEqual({ kind: 'pending' });
     expect(registerDecisionFrom({ kind: 'contract_off' })).toEqual({ kind: 'contract_off' });
   });
-  it('承認制の前は今までの文のまま。承認制では運営あての文', () => {
+  it('承認制の前は今までの文のまま。運営が解除した端末だけ運営あての文', () => {
     expect(registerBlockMessage({ kind: 'allowed' }, true)).toBeNull();
     expect(registerBlockMessage({ kind: 'register' }, true)).toBeNull();
     expect(registerBlockMessage({ kind: 'limit', limit: 2 }, false)).toBe(ACCESS_MESSAGE.limit);
     expect(registerBlockMessage({ kind: 'revoked' }, false)).toBe(ACCESS_MESSAGE.revoked);
-    expect(registerBlockMessage({ kind: 'revoked' }, true)).toBe(DEVICE_MESSAGE.revoked);
+    // 店舗が解除した（今までの）iPad は承認制でも今までの文
+    expect(registerBlockMessage({ kind: 'revoked', by: 'store' }, true)).toBe(ACCESS_MESSAGE.revoked);
+    expect(registerBlockMessage({ kind: 'revoked', by: 'operator' }, true)).toBe(DEVICE_MESSAGE.revoked);
     expect(registerBlockMessage({ kind: 'pending' }, true)).toBe(DEVICE_MESSAGE.pendingRegister);
     expect(registerBlockMessage({ kind: 'contract_off' }, true)).toBe(DEVICE_MESSAGE.contractOff.register);
     expect(registerBlockMessage({ kind: 'rejected' }, true)).toBe(DEVICE_MESSAGE.rejected);

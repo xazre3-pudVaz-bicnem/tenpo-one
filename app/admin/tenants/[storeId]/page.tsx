@@ -201,8 +201,9 @@ export default async function TenantDetailPage({ params }: { params: Promise<{ s
             registerPassword={registerPassword}
             networks={accessPolicy.networks}
             networkEnforced={accessPolicy.networkEnforced}
-            registerLimit={accessPolicy.registerLimit}
-            handyLimit={accessPolicy.handyLimit}
+            // 台数はコントロールセンターの欄で変える。ここで保存しても今の数え方のまま（行が無い店舗は 0＝数えない。既定の2台を書かない）
+            registerLimit={accessPolicy.exists ? accessPolicy.registerLimit : 0}
+            handyLimit={accessPolicy.exists ? accessPolicy.handyLimit : 0}
             handyCount={handyCount ?? 0}
             note={accessPolicy.note}
             devices={(deviceRows ?? []).map((d) => ({

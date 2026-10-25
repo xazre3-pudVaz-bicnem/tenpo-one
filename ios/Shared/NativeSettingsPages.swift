@@ -2025,7 +2025,7 @@ struct NativeAccountsView: View {
 // MARK: - ハンディ端末（Web の /app/settings/handy・components/settings/handy-devices-panel.tsx と同じ）
 
 // approval: TENPO ONE 運営の承認（pending / approved / rejected / revoked。古いサーバーは無し＝承認済み）
-// 2026-10-25 Ronnie「端末のことは全部コントロールセンター」: 解除・承認・台数は運営コンソール。ここは見るだけ（名前・QR の表示はできる）
+// 2026-10-25 Ronnie「端末のことは全部コントロールセンター」: 新しい端末の承認・台数は運営コンソール（なくした端末の解除・名前・QR はここでも）
 struct NHVDevice: Codable, Identifiable, Hashable { let id: String; let name: String; let status: String; let pairedAt: String; let lastSeenAt: String?; let pairedIp: String?; let userAgent: String?; let approval: String? }
 struct NHVPayload: Codable { let store: NFNamed; let canEdit: Bool; let pairBase: String?; let readOnlyNote: String?; let devices: [NHVDevice] }
 
@@ -2062,6 +2062,7 @@ final class NativeHandyDevicesModel: NSPModel<NHVPayload> {
             toast = (error as? NativeAPIError)?.message ?? "通信できませんでした"
         }
     }
+    func revoke(_ d: NHVDevice) async { _ = await run(d.id, ["type": "handyRevoke", "id": d.id], done: "「\(d.name)」のつながりを解除しました") }
     func rename(_ d: NHVDevice) async {
         let n = editName.trimmingCharacters(in: .whitespaces)
         editing = nil
@@ -2080,6 +2081,7 @@ struct NativeHandyDevicesView: View {
     @ObservedObject var model: NativeHandyDevicesModel
     let onBack: () -> Void
     @State private var now = Date()
+    @State private var confirmRevoke: NHVDevice?
     private let tick = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
@@ -2150,13 +2152,14 @@ struct NativeHandyDevicesView: View {
                                 Spacer()
                                 if p.canEdit && !revoked && model.editing != d.id {
                                     NSPButton(text: "名前", icon: "pencil") { model.editing = d.id; model.editName = d.name }
+                                    NSPButton(text: "解除", icon: "xmark.circle", busy: model.busy == d.id) { confirmRevoke = d }
                                 }
                             }
                             .padding(.horizontal, 18).frame(minHeight: 62)
                             .overlay(alignment: .bottom) { Rectangle().fill(NFColor.line).frame(height: 1) }
                         }
-                        // 端末の承認・解除・台数は TENPO ONE 運営（コントロールセンター）。新しい端末は承認されると使える
-                        Text(p.readOnlyNote ?? "端末の追加の承認・解除・台数は TENPO ONE 運営（コントロールセンター）で行います")
+                        // 新しい端末の承認・台数は TENPO ONE 運営（コントロールセンター）。なくした端末の解除はここでも
+                        Text(p.readOnlyNote ?? "新しい端末の承認・契約・台数は TENPO ONE 運営（コントロールセンター）で行います（なくした端末の解除はここでもできます）")
                             .font(.system(size: 12)).foregroundColor(NFColor.ink3)
                             .frame(maxWidth: .infinity, alignment: .leading).padding(18)
                     }
@@ -2164,6 +2167,10 @@ struct NativeHandyDevicesView: View {
             }
         }
         .onReceive(tick) { now = $0 }
+        .alert("ハンディを解除", isPresented: Binding(get: { confirmRevoke != nil }, set: { if !$0 { confirmRevoke = nil } })) {
+            Button("解除する", role: .destructive) { if let d = confirmRevoke { Task { await model.revoke(d) } }; confirmRevoke = nil }
+            Button("やめる", role: .cancel) { confirmRevoke = nil }
+        } message: { Text("「\(confirmRevoke?.name ?? "")」はハンディとして使えなくなります") }
         .task { await model.refresh() }
     }
 

@@ -13,7 +13,7 @@ import { networkKey } from '@/lib/handy-pairing';
 import { loadStorePolicy } from '@/lib/store-access-server';
 import { ACCESS_MESSAGE, canAddHandyDevice, isAllowedNetwork, isRestricted } from '@/lib/store-access';
 import { HANDY_OUTSIDE_COOKIE, handyQrFrom, isHandyQrToken, isShopNetwork, isWifiGuarded } from '@/lib/handy-qr';
-import { ensureHandyDeviceToken, gateHandyJoin, handyContractOff } from '@/lib/handy-device-approval-server';
+import { ensureHandyDeviceToken, gateHandyJoin, handyContractOff, signInApprovedHandy } from '@/lib/handy-device-approval-server';
 import { DEVICE_MESSAGE } from '@/lib/device-control';
 
 export type JoinResult = { ok: true; storeName: string } | { ok: false; error: string };
@@ -96,7 +96,8 @@ export async function joinHandyByQr(token: string): Promise<JoinResult> {
   const now = new Date(Date.now() + 9 * 60 * 60_000);
   const name = `${/iPhone/i.test(ua ?? '') ? 'iPhone' : 'スマホ'}（QR ${now.getUTCMonth() + 1}/${now.getUTCDate()} ${String(now.getUTCHours()).padStart(2, '0')}:${String(now.getUTCMinutes()).padStart(2, '0')}）`;
 
-  // コントロールセンターの承認（migration 00104 の後）。新しい端末は承認待ち、承認済みの端末はそのままログイン
+  // コントロールセンター（migration 00104 の後）。承認制を ON にした店舗（移行期間のあと）の新しい端末は承認待ち、
+  // 承認済みの端末（自動ログアウトで止まった端末も）はそのままログイン。承認制 OFF の店舗は今まで通り作る（端末の鍵つき）
   const gate = await gateHandyJoin(admin, {
     organizationId: store.organization_id as string,
     storeId: store.id as string,
@@ -105,18 +106,23 @@ export async function joinHandyByQr(token: string): Promise<JoinResult> {
     ip,
     userAgent: ua,
     createdBy: null,
+    legacyLimit: true,
   });
   if (gate.kind === 'blocked') return { ok: false, error: gate.message };
-  if (gate.kind === 'pending' || gate.kind === 'signed_in') {
-    if (gate.kind === 'signed_in') (await cookies()).delete(HANDY_OUTSIDE_COOKIE);
+  if (gate.kind === 'pending' || gate.kind === 'approved') {
+    if (gate.kind === 'approved') {
+      const signed = await signInApprovedHandy(admin, gate);
+      if (signed.error) return { ok: false, error: signed.error };
+      (await cookies()).delete(HANDY_OUTSIDE_COOKIE);
+    }
     await admin.rpc('log_audit', {
       p_org: store.organization_id as string,
       p_store: store.id as string,
-      p_action: gate.kind === 'pending' ? 'device.handy_request' : 'handy.device_rejoin_qr',
+      p_action: gate.kind === 'pending' ? 'device.handy_request' : gate.created ? 'handy.device_join_qr' : 'handy.device_rejoin_qr',
       p_target_table: 'handy_devices',
       p_target_id: gate.deviceId,
       p_before: null,
-      p_after: gate.kind === 'pending' ? { name, ip, approval_status: 'pending' } : { ip, reactivated: gate.reactivated },
+      p_after: gate.kind === 'pending' ? { name, ip, approval_status: 'pending' } : gate.created ? { name, ip } : { ip, reactivated: gate.reactivate },
       p_note: gate.kind === 'pending' ? '新しいハンディ端末（QR）。TENPO ONE 運営の承認待ち' : null,
     });
     return gate.kind === 'pending' ? { ok: false, error: gate.message } : { ok: true, storeName: store.name as string };

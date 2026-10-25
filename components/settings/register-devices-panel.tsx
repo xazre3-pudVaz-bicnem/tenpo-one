@@ -49,7 +49,7 @@ export function RegisterDevicesPanel({ storeId, devices, printers, lanPrinters =
   if (devices.length === 0) {
     return (
       <div className="rounded-xl border border-dashed border-line bg-white px-5 py-8 text-center text-sm text-ink-3">
-        この店舗で登録されたレジ端末（iPad）はまだありません。iPad の TENPO ONE でこの店舗にログインすると、ここに出ます（台数を決めている店舗では、TENPO ONE 運営の承認のあとで使えます）
+        この店舗で登録されたレジ端末（iPad）はまだありません。iPad の TENPO ONE でこの店舗にログインすると、ここに出ます（運営が承認制にした店舗では、TENPO ONE 運営の承認のあとで使えます）
       </div>
     );
   }

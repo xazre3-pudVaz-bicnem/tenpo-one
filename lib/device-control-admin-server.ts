@@ -6,8 +6,16 @@ import { loadStorePolicy } from '@/lib/store-access-server';
 import { deviceModelFromUserAgent, DISPLAY_KIND_LABELS, isDisplayKind } from '@/lib/display-monitor';
 import { loadDisplayMonitorFlag } from '@/lib/display-monitor-server';
 import { loadQrOrderFlag } from '@/lib/qr-order-flag-server';
-import { DEVICE_TYPES, type ApprovalStatus, type DeviceType } from '@/lib/device-control';
-import { deviceControlReady, loadContractColumns, selectDevicesWithApproval } from '@/lib/device-control-server';
+import {
+  DEVICE_TYPES,
+  approvalModeFor,
+  isAutoApproved,
+  transitionEndsAt,
+  type ApprovalMode,
+  type ApprovalStatus,
+  type DeviceType,
+} from '@/lib/device-control';
+import { deviceControlReady, loadContractColumns, selectDevicesWithApproval, type ApprovalFields } from '@/lib/device-control-server';
 import type { QrOrderFlagReason } from '@/lib/qr-order-flag';
 import type { DisplayMonitorFlagReason } from '@/lib/display-monitor';
 
@@ -27,6 +35,8 @@ export interface AdminDeviceRow {
   name: string;
   status: 'active' | 'revoked';
   approval: ApprovalStatus;
+  /** 移行期間に自動で承認した端末（運営が見て、要らなければ解除する） */
+  autoApproved: boolean;
   /** 機種・種類・IP など */
   detail: string;
   createdAt: string | null;
@@ -41,14 +51,18 @@ export interface StoreDeviceControlData {
   ready: boolean;
   /** 契約（store_access_policies の行）があるか。無い店舗はレジの台数・承認を数えない */
   contractExists: boolean;
+  /** limit は今の数え方（契約の行が無い店舗は 0＝数えない） */
   register: { enabled: boolean; limit: number; counted: boolean };
   handy: { enabled: boolean; limit: number; counted: boolean };
-  display: { enabled: boolean; reason: DisplayMonitorFlagReason; limit: number; counted: boolean };
+  /** limit null＝数えない */
+  display: { enabled: boolean; reason: DisplayMonitorFlagReason; limit: number | null; counted: boolean };
+  /** 承認制（種類ごと。運営が ON にしたときだけ。ON から7日間は移行期間） */
+  approval: Record<DeviceType, { on: boolean; mode: ApprovalMode; transitionEndsAt: string | null }>;
   qr: { on: boolean; reason: QrOrderFlagReason; storeEnabled: boolean | null; tableReady: boolean };
   devices: AdminDeviceRow[];
 }
 
-type Rows = { rows: (Record<string, unknown> & { approval: ApprovalStatus })[]; error: unknown };
+type Rows = { rows: (Record<string, unknown> & ApprovalFields)[]; error: unknown };
 
 function registerRows(storeIdOrNull: string | null, admin: Admin, pendingOnly: boolean): Promise<Rows> {
   return selectDevicesWithApproval((columns) => {
@@ -90,6 +104,7 @@ function toRows(type: DeviceType, res: Rows): AdminDeviceRow[] {
       name: ((r.name as string | null) ?? '').trim() || (type === 'register' ? 'レジ端末' : '端末'),
       status: r.status === 'active' ? 'active' : 'revoked',
       approval: r.approval,
+      autoApproved: isAutoApproved(r),
       detail: [kind, deviceModelFromUserAgent(ua), ip].filter(Boolean).join('・'),
       createdAt: ((type === 'register' ? r.created_at : r.paired_at) as string | null) ?? null,
       lastSeenAt: (r.last_seen_at as string | null) ?? null,
@@ -121,14 +136,28 @@ export async function loadStoreDeviceControl(storeId: string): Promise<StoreDevi
     organizationId,
     ready,
     contractExists: policy.exists,
-    register: { enabled: contract.registerEnabled, limit: policy.registerLimit, counted: countsRegisterDevices(policy) },
-    handy: { enabled: contract.handyEnabled, limit: policy.handyLimit, counted: policy.exists && policy.handyLimit > 0 },
+    register: { enabled: contract.registerEnabled, limit: policy.exists ? policy.registerLimit : 0, counted: countsRegisterDevices(policy) },
+    handy: { enabled: contract.handyEnabled, limit: policy.exists ? policy.handyLimit : 0, counted: policy.exists && policy.handyLimit > 0 },
     display: {
       enabled: displayFlag.on,
       reason: displayFlag.reason,
       limit: contract.displayLimit,
-      counted: ready && policy.exists && contract.displayLimit > 0,
+      counted: ready && contract.displayLimit !== null,
     },
+    approval: Object.fromEntries(
+      DEVICE_TYPES.map((t) => {
+        const since = contract.approvalSince[t];
+        const now = Date.now();
+        return [
+          t,
+          {
+            on: !!since,
+            mode: approvalModeFor(t, { ready, countsRegister: countsRegisterDevices(policy), contract, now }),
+            transitionEndsAt: transitionEndsAt(since, now),
+          },
+        ];
+      })
+    ) as StoreDeviceControlData['approval'],
     qr: {
       on: qrFlag.on,
       reason: qrFlag.reason,

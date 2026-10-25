@@ -213,6 +213,8 @@ export async function createDisplayDeviceSession(
     createdBy: string | null;
     /** コントロールセンターの承認待ちで作る（migration 00104 の後だけ渡す） */
     pending?: boolean;
+    /** 承認制の移行期間に作った端末（すぐ使えるが、運営の一覧で「自動承認」と分かるように承認の時刻だけ入れる） */
+    autoApproved?: boolean;
   }
 ): Promise<{ deviceId?: string; profileId?: string; token?: string; error?: string }> {
   const email = displayDeviceEmail(crypto.randomUUID());
@@ -262,6 +264,7 @@ export async function createDisplayDeviceSession(
     created_by: input.createdBy,
   };
   if (input.pending) Object.assign(row, { approval_status: 'pending', approval_requested_at: now });
+  else if (input.autoApproved) Object.assign(row, { approval_status: 'approved', approved_at: now });
   const { data: device, error: deviceErr } = await admin.from('display_devices').insert(row).select('id').single();
   if (deviceErr || !device) return fail(deviceErr?.message ?? '不明なエラー');
 

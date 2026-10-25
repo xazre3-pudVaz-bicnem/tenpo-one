@@ -12,7 +12,8 @@ export const metadata: Metadata = { title: '端末の承認' };
 
 /**
  * コントロールセンター：全店舗の「承認待ち」の端末（2026-10-25 Ronnie「ipad monitor sabai control centre le ok garepaxi balla chalxa」）。
- * 新しいレジ（iPad）・ハンディ・ディスプレイ端末は承認待ちで登録され、ここ（または店舗の詳細）で承認するまで使えない。
+ * 承認制を ON にした店舗（移行期間のあと）の新しいレジ（iPad）・ハンディ・ディスプレイ端末は承認待ちで登録され、
+ * ここ（または店舗の詳細）で承認するまで使えない。承認制は店舗の詳細で種類ごとに ON にする（既定 OFF）。
  * 契約（ON/OFF・台数）は店舗の詳細の「端末の契約と承認」で変える。
  */
 export default async function AdminDevicesPage() {
@@ -23,7 +24,7 @@ export default async function AdminDevicesPage() {
     <div className="space-y-5">
       <PageHeader
         title="端末の承認"
-        description="新しいレジ（iPad）・ハンディ・ディスプレイ端末は「承認待ち」で登録され、承認するまで使えません。契約（ON/OFF・台数）は各店舗の詳細で変えます。"
+        description="承認制を ON にした店舗（7日間の移行期間のあと）の新しいレジ（iPad）・ハンディ・ディスプレイ端末は「承認待ち」で登録され、承認するまで使えません。承認制・契約（ON/OFF・台数）は各店舗の詳細で変えます（既定は承認制 OFF＝今まで通り）。"
       />
       {!ready ? (
         <Card>
@@ -36,7 +37,7 @@ export default async function AdminDevicesPage() {
           </CardContent>
         </Card>
       ) : rows.length === 0 ? (
-        <EmptyState title="承認待ちの端末はありません" description="新しい端末がつなごうとすると、ここに出ます" />
+        <EmptyState title="承認待ちの端末はありません" description="承認制を ON にした店舗で新しい端末がつなごうとすると、ここに出ます" />
       ) : (
         <PendingDeviceList rows={rows} />
       )}

@@ -4,8 +4,8 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { isMissingTableError } from '@/lib/schema-compat';
 import { loadStorePolicy } from '@/lib/store-access-server';
-import { approvalApplies, decideDeviceJoin, joinBlockMessage } from '@/lib/device-control';
-import { countStoreDevices, deviceControlReady, loadContractColumns } from '@/lib/device-control-server';
+import { DEVICE_MESSAGE, approvalModeFor, decideDeviceJoin, joinBlockMessage } from '@/lib/device-control';
+import { countStoreDevices, deviceControlStatus, loadContractColumns } from '@/lib/device-control-server';
 import { loadKdsBoard } from '@/lib/kds-server';
 import { filterKdsByStations } from '@/lib/display-kds';
 import type { KdsOrderGroup, KdsSettings, StationFilter } from '@/components/kitchen/types';
@@ -131,6 +131,7 @@ export async function pairDisplayDeviceWithCode(code: string): Promise<PairDispl
     userAgent,
     createdBy: (pairing.created_by as string | null) ?? null,
     pending: gate.pending,
+    autoApproved: gate.autoApproved,
   });
   if (created.error || !created.deviceId || !created.profileId || !created.token) {
     return { error: created.error ?? '端末の登録に失敗しました' };
@@ -172,25 +173,33 @@ export async function pairDisplayDeviceWithCode(code: string): Promise<PairDispl
 
 /**
  * 新しいディスプレイ端末を作ってよいか（コントロールセンター）。
- * migration 00104 の前は今まで通り（承認なし・台数なし）。後は 契約台数（契約の行がある店舗で 1 以上）まで、承認待ちで作る。
+ * migration 00104 の前は今まで通り（承認なし・台数なし）。後は 運営が決めた台数（未設定＝数えない）まで作り、
+ * 承認制を ON にした店舗（移行期間のあと）だけ承認待ちで作る。移行期間は自動承認の印（approved_at）を付ける。
  */
-async function displayPairGate(admin: ReturnType<typeof createAdminClient>, storeId: string): Promise<{ pending: boolean } | { error: string }> {
-  if (!(await deviceControlReady(admin))) return { pending: false };
+async function displayPairGate(
+  admin: ReturnType<typeof createAdminClient>,
+  storeId: string
+): Promise<{ pending: boolean; autoApproved: boolean } | { error: string }> {
+  const status = await deviceControlStatus(admin);
+  if (status === 'missing') return { pending: false, autoApproved: false };
+  // 列があるのに確かめられない（通信など）：承認なしで端末を作らない
+  if (status === 'error') return { error: DEVICE_MESSAGE.retry };
   const policy = await loadStorePolicy(storeId);
   const contract = await loadContractColumns(admin, storeId, policy.exists);
+  const mode = approvalModeFor('display', { ready: true, countsRegister: false, contract, now: Date.now() });
   const counts = await countStoreDevices(admin, 'display', storeId, true);
   const decision = decideDeviceJoin({
     // 契約の ON/OFF は display_monitor の機能フラグ（上で確かめ済み）
     contractEnabled: true,
-    approvalRequired: approvalApplies('display', { ready: true, countsRegister: false }),
+    approvalRequired: mode === 'on',
     known: null,
     approvedActive: counts.approvedActive,
     pending: counts.pending,
-    limit: policy.exists && contract.displayLimit > 0 ? contract.displayLimit : null,
+    limit: contract.displayLimit,
     reactivatable: false,
   });
-  if (decision.kind === 'request') return { pending: true };
-  if (decision.kind === 'create') return { pending: false };
+  if (decision.kind === 'request') return { pending: true, autoApproved: false };
+  if (decision.kind === 'create') return { pending: false, autoApproved: mode === 'transition' };
   return { error: joinBlockMessage('display', decision) ?? '端末の登録に失敗しました' };
 }
 

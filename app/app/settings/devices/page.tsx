@@ -99,7 +99,7 @@ export default async function RegisterDevicesSettingsPage() {
       />
       <RegisterDevicesPanel storeId={targetStore.id} devices={devices} printers={printers} lanPrinters={lanPrinters} wifiPrinters={wifiPrinters} />
       <p className="mt-4 text-xs text-ink-3">
-        {DEVICE_MESSAGE.storeReadOnly}（台数を決めている店舗では、新しい iPad はレジにログインすると承認待ちになり、承認されると使えます）。LAN・Wi-Fi のプリンターも運営の設定です。Bluetooth・USB のプリンターの追加・接続は「ハードウェア」から。
+        {DEVICE_MESSAGE.storeReadOnly}（運営が承認制にした店舗では、新しい iPad はレジの画面で登録すると承認待ちになり、承認されると使えます）。LAN・Wi-Fi のプリンターも運営の設定です。Bluetooth・USB のプリンターの追加・接続は「ハードウェア」から。
       </p>
     </div>
   );

@@ -71,6 +71,8 @@ export async function createHandyDeviceAccount(
     userAgent: string | null;
     createdBy: string | null;
     pending?: boolean;
+    /** 承認制の移行期間に作った端末（すぐ使えるが、運営の一覧で「自動承認」と分かるように承認の時刻だけ入れる） */
+    autoApproved?: boolean;
     tokenHash?: string | null;
   }
 ): Promise<{ deviceId?: string; profileId?: string; email?: string; error?: string }> {
@@ -122,6 +124,7 @@ export async function createHandyDeviceAccount(
   };
   // migration 00104 の列（呼び出し側が適用済みを確かめてから渡す）
   if (input.pending) Object.assign(row, { approval_status: 'pending', approval_requested_at: now });
+  else if (input.autoApproved) Object.assign(row, { approval_status: 'approved', approved_at: now });
   if (input.tokenHash) row.device_token_hash = input.tokenHash;
   const { data: device, error: deviceErr } = await admin.from('handy_devices').insert(row).select('id').single();
   if (deviceErr || !device) return fail(deviceErr?.message ?? '不明なエラー');

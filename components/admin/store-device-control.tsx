@@ -11,7 +11,7 @@ export async function StoreDeviceControl({ storeId }: { storeId: string }) {
   const data = await loadStoreDeviceControl(storeId);
   if (!data) return null;
   // 保存のあと（router.refresh）に新しい値で入力欄を作り直す
-  const key = JSON.stringify([data.register, data.handy, data.display.enabled, data.display.limit]);
+  const key = JSON.stringify([data.register, data.handy, data.display.enabled, data.display.limit, data.approval]);
   return (
     <Card id="device-control">
       <CardHeader className="flex items-center justify-between">

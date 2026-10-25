@@ -33,7 +33,7 @@ const h = vi.hoisted(() => {
     suspended: [] as string[],
     displayCalls: [] as unknown[][],
   };
-  const NEW_COLUMNS = /approval_status|register_enabled|handy_enabled|display_limit|device_token_hash/;
+  const NEW_COLUMNS = /approval_status|approved_at|approved_by|approval_requested_at|register_enabled|handy_enabled|display_limit|approval_since|device_token_hash/;
   const makeBuilder = (table: string) => {
     const call: Call = { table, op: 'select', filters: {}, payload: null };
     const done = (): Res => {
@@ -55,6 +55,7 @@ const h = vi.hoisted(() => {
       update: (p: Row) => ((call.op = 'update'), (call.payload = p), q),
       upsert: (p: Row) => ((call.op = 'upsert'), (call.payload = p), q),
       eq: (k: string, v: unknown) => ((call.filters[k] = v), q),
+      gt: (k: string, v: unknown) => ((call.filters[`gt:${k}`] = v), q),
       maybeSingle: async () => done(),
       single: async () => done(),
       then: (resolve: (r: Res) => unknown, reject?: (e: unknown) => unknown) => Promise.resolve().then(done).then(resolve, reject),
@@ -205,31 +206,58 @@ describe('却下・解除', () => {
 });
 
 describe('契約の保存・テーブルQR', () => {
-  it('migration の後：ON/OFF・台数を保存し、ディスプレイの機能フラグも合わせる。監査ログ', async () => {
+  const OFF = { register: false, handy: false, display: false };
+  const base = { storeId: STORE, registerEnabled: true, registerLimit: 2, handyEnabled: true, handyLimit: 2, displayEnabled: true, displayLimit: null, approval: OFF };
+
+  it('migration の後：変えた列だけ書く（行がある店舗は update）。ディスプレイの機能フラグも合わせる。監査ログ', async () => {
     h.state.displayOn = false;
     world(null);
-    const r = await saveStoreDeviceContract({
-      storeId: STORE,
-      registerEnabled: false,
-      registerLimit: 3,
-      handyEnabled: true,
-      handyLimit: 99,
-      displayEnabled: true,
-      displayLimit: 1,
-    });
+    const r = await saveStoreDeviceContract({ ...base, registerEnabled: false, registerLimit: 3, handyLimit: 99, displayLimit: 1 });
     expect(r).toEqual({});
-    const up = h.state.calls.find((c) => c.table === 'store_access_policies' && c.op === 'upsert')!;
-    expect(up.payload).toMatchObject({ store_id: STORE, register_enabled: false, register_limit: 3, handy_enabled: true, handy_limit: 20, display_limit: 1 });
+    const up = h.state.calls.find((c) => c.table === 'store_access_policies' && c.op === 'update')!;
+    expect(up.filters).toEqual({ store_id: STORE });
+    expect(up.payload).toMatchObject({ register_enabled: false, register_limit: 3, handy_limit: 20, display_limit: 1 });
+    expect(up.payload).not.toHaveProperty('handy_enabled');
     expect(h.state.displayCalls).toEqual([['store', ORG, STORE, true]]);
     expect(h.state.rpc.at(-1)).toMatchObject({ p_action: 'admin.device_contract' });
   });
 
-  it('migration の前：台数だけ保存（ON/OFF の列は書かない）。OFF にしようとしたら知らせる', async () => {
+  it('契約の行が無い店舗でディスプレイだけ ON：レジ・ハンディの数え方は作らない（行も作らない）', async () => {
+    h.state.policy = { exists: false, networks: [], networkEnforced: false, registerLimit: 2, handyLimit: 2, note: '' };
+    h.state.displayOn = false;
+    world(null);
+    // パネルは行が無い店舗の台数を 0（数えない）で出す
+    expect(await saveStoreDeviceContract({ ...base, registerLimit: 0, handyLimit: 0 })).toEqual({});
+    expect(h.state.calls.filter((c) => c.table === 'store_access_policies' && c.op !== 'select')).toHaveLength(0);
+    expect(h.state.displayCalls).toEqual([['store', ORG, STORE, true]]);
+  });
+
+  it('契約の行が無い店舗で承認制・ディスプレイの台数だけ変える：台数 0（数えない）で行を作る', async () => {
+    h.state.policy = { exists: false, networks: [], networkEnforced: false, registerLimit: 2, handyLimit: 2, note: '' };
+    world(null);
+    expect(await saveStoreDeviceContract({ ...base, registerLimit: 0, handyLimit: 0, displayLimit: 3, approval: { ...OFF, handy: true } })).toEqual({});
+    const ins = h.state.calls.find((c) => c.table === 'store_access_policies' && c.op === 'insert')!;
+    expect(ins.payload).toMatchObject({ store_id: STORE, organization_id: ORG, register_limit: 0, handy_limit: 0, display_limit: 3 });
+    expect(ins.payload?.handy_approval_since).toBeTruthy();
+  });
+
+  it('承認制の ON・移行期間を終える・OFF', async () => {
+    world(null, { contract: { register_enabled: true, handy_enabled: true, display_limit: null, handy_approval_since: new Date(Date.now() - 3600_000).toISOString() } });
+    expect(await saveStoreDeviceContract({ ...base, approval: { ...OFF, handy: true }, endTransition: ['handy'] })).toEqual({});
+    const ended = h.state.calls.find((c) => c.table === 'store_access_policies' && c.op === 'update')!;
+    expect(Date.now() - Date.parse(ended.payload?.handy_approval_since as string)).toBeGreaterThan(7 * 24 * 3600_000);
+    h.state.calls = [];
+    expect(await saveStoreDeviceContract({ ...base, approval: OFF })).toEqual({});
+    expect(h.state.calls.find((c) => c.table === 'store_access_policies' && c.op === 'update')?.payload).toMatchObject({ handy_approval_since: null });
+  });
+
+  it('migration の前：台数だけ保存（ON/OFF・承認制の列は書かない）。変えようとしたら知らせる', async () => {
     h.state.ready = false;
     world(null);
-    const r = await saveStoreDeviceContract({ storeId: STORE, registerEnabled: false, registerLimit: 2, handyEnabled: true, handyLimit: 2, displayEnabled: true, displayLimit: 2 });
+    const r = await saveStoreDeviceContract({ ...base, registerEnabled: false, registerLimit: 3 });
     expect(r.warning).toContain('migration 00104');
-    const up = h.state.calls.find((c) => c.table === 'store_access_policies' && c.op === 'upsert')!;
+    const up = h.state.calls.find((c) => c.table === 'store_access_policies' && c.op === 'update')!;
+    expect(up.payload).toMatchObject({ register_limit: 3 });
     expect(up.payload).not.toHaveProperty('register_enabled');
   });
 

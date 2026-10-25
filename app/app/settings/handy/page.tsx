@@ -5,7 +5,7 @@ import { PageHeader } from '@/components/ui/page-header';
 import { EmptyState } from '@/components/ui/state';
 import { SettingsBackLink } from '@/components/settings/back-link';
 import { HandyDevicesPanel, type HandyDeviceRow } from '@/components/settings/handy-devices-panel';
-import { issueHandyPairing, renameHandyDevice } from './actions';
+import { issueHandyPairing, revokeHandyDevice, renameHandyDevice } from './actions';
 import { selectDevicesWithApproval } from '@/lib/device-control-server';
 
 export const metadata: Metadata = { title: 'ハンディ端末 | 設定' };
@@ -54,7 +54,8 @@ export default async function HandyDevicesSettingsPage() {
         siteUrl={siteUrl}
         devices={rows}
         issueAction={issueHandyPairing}
-        // 端末の解除・承認・台数は TENPO ONE 運営（コントロールセンター）で行う（2026-10-25）。名前の変更・QR の表示はここで
+        // 新しい端末の承認・台数は TENPO ONE 運営（コントロールセンター）。なくした端末の解除・名前・QR の表示はここでも（2026-10-25）
+        revokeAction={revokeHandyDevice}
         renameAction={renameHandyDevice}
       />
     </div>

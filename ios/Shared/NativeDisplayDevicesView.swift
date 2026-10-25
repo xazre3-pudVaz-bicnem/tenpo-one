@@ -5,10 +5,10 @@ import CoreImage.CIFilterBuiltins
 // 店のモニター・タブレットを QR でつなぎ、キッチンディスプレイ（持ち場を絞れる）か呼び出しモニターにする（2026-10-24 Ronnie）。
 // つないだ端末はログアウトしない（お店の回線の外では端末の画面に「お店の回線につないでください」と出るだけ）。
 // 設定の一覧に出るのは、運営が企業・店舗の両方で ON にしたときだけ（lib/settings-hubs.ts）。
-// 読み込み GET ?part=displayDevices ／ 操作 POST displayIssue・displayRename・displayUpdate
+// 読み込み GET ?part=displayDevices ／ 操作 POST displayIssue・displayRevoke・displayRename・displayUpdate
 // （lib/native-modules/display-devices.ts。中身は Web と同じ app/app/settings/displays/actions.ts）
-// 2026-10-25 Ronnie「端末のことは全部コントロールセンター」: 解除・承認・台数は TENPO ONE 運営（運営コンソール）。
-// 新しくつないだ端末は承認待ち（approval = pending）。ここは見るだけ（QR の表示・名前・種類・持ち場は変えられる）
+// 2026-10-25 Ronnie「端末のことは全部コントロールセンター」: 新しい端末の承認・台数は TENPO ONE 運営（運営コンソール）。
+// 承認制を ON にした店舗では、新しくつないだ端末は承認待ち（approval = pending）。解除・QR・名前・種類・持ち場はここでも
 
 struct NDVDevice: Codable, Identifiable, Hashable {
     let id: String
@@ -80,6 +80,9 @@ final class NativeDisplayDevicesModel: NSPModel<NDVPayload> {
         // 登録画面は認証の外。コードは # 以降（サーバーへ送らない。Web と同じ）
         qr = NDVIssuedQr(url: base + code, expiresAt: exp)
     }
+    func revoke(_ d: NDVDevice) async {
+        _ = await run(d.id, ["type": "displayRevoke", "id": d.id], done: "「\(d.name)」を解除しました")
+    }
     func rename(_ d: NDVDevice) async {
         let n = editName.trimmingCharacters(in: .whitespaces)
         editingName = nil
@@ -113,6 +116,7 @@ struct NativeDisplayDevicesView: View {
     @ObservedObject var model: NativeDisplayDevicesModel
     let onBack: () -> Void
     @State private var now = Date()
+    @State private var confirmRevoke: NDVDevice?
     private let tick = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
@@ -124,15 +128,25 @@ struct NativeDisplayDevicesView: View {
             }
         }
         .onReceive(tick) { now = $0 }
+        .alert("ディスプレイを解除", isPresented: Binding(get: { confirmRevoke != nil }, set: { if !$0 { confirmRevoke = nil } })) {
+            Button("解除する", role: .destructive) {
+                if let d = confirmRevoke { Task { await model.revoke(d) } }
+                confirmRevoke = nil
+            }
+            Button("やめる", role: .cancel) { confirmRevoke = nil }
+        } message: {
+            Text("「\(confirmRevoke?.name ?? "")」は画面が出なくなります（もう一度使うには QR でつなぎ直し）")
+        }
         .task { if NativePreview.current == nil { await model.refresh() } }
     }
 
-    /// 運営が OFF にしているとき・migration 未適用のとき
+    /// 運営が OFF にしているとき・migration 未適用のとき（つないである端末の解除だけはできる）
     private func offNotice(_ p: NDVPayload) -> some View {
         let base = p.flagMessage ?? "この機能は使えません（運営にお問い合わせください）"
+        let extra = p.devices.contains { $0.status == "active" } ? "（つないである端末の解除はできます）" : ""
         return HStack(alignment: .top, spacing: 10) {
             Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 16, weight: .semibold)).foregroundColor(NFColor.saffron)
-            Text(base).font(.system(size: 14, weight: .semibold)).foregroundColor(NFColor.ink).fixedSize(horizontal: false, vertical: true)
+            Text(base + extra).font(.system(size: 14, weight: .semibold)).foregroundColor(NFColor.ink).fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
         }
         .padding(14)
@@ -197,7 +211,7 @@ struct NativeDisplayDevicesView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 ForEach(p.devices) { d in deviceRow(p, d) }
-                Text("端末の追加の承認・解除・台数は TENPO ONE 運営（コントロールセンター）で行います。新しくつないだ端末は、承認されると画面が出ます")
+                Text("新しい端末の承認・契約・台数は TENPO ONE 運営（コントロールセンター）で行います（解除はここでもできます）。承認待ちの端末は、承認されると画面が出ます")
                     .font(.system(size: 12)).foregroundColor(NFColor.ink3)
                     .frame(maxWidth: .infinity, alignment: .leading).padding(18)
             }
@@ -253,6 +267,7 @@ struct NativeDisplayDevicesView: View {
                 if p.canEdit && !revoked && model.editingName != d.id {
                     if p.flagOn { NSPButton(text: "種類・持ち場", icon: "slider.horizontal.3") { model.startEditKind(d) } }
                     NSPButton(text: "名前", icon: "pencil") { model.editingName = d.id; model.editName = d.name }
+                    NSPButton(text: "解除", icon: "xmark.circle", busy: model.busy == d.id) { confirmRevoke = d }
                 }
             }
             if model.editingKind == d.id && !revoked {

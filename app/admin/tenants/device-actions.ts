@@ -5,15 +5,17 @@ import { requireCypressAdmin } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
 import { isMissingTableError } from '@/lib/schema-compat';
-import { DEFAULT_HANDY_LIMIT, DEFAULT_REGISTER_LIMIT, countsHandyDevices, countsRegisterDevices, limitFrom } from '@/lib/store-access';
+import { countsHandyDevices, countsRegisterDevices, limitFrom } from '@/lib/store-access';
 import { loadStorePolicy } from '@/lib/store-access-server';
 import {
-  DEFAULT_DISPLAY_LIMIT,
+  APPROVAL_TRANSITION_MS,
   DEVICE_TABLES,
+  DEVICE_TYPES,
   DEVICE_TYPE_LABELS,
   approvalFrom,
+  approvalModeOf,
   decideApprove,
-  deviceLimitFrom,
+  displayLimitFrom,
   isDeviceType,
   type DeviceType,
 } from '@/lib/device-control';
@@ -63,23 +65,37 @@ function revalidateStore(storeId: string, organizationId: string) {
 }
 
 // -------------------------------------------------------------
-// 契約（ON/OFF・台数）
+// 契約（ON/OFF・台数・承認制）
 // -------------------------------------------------------------
 
 export interface SaveDeviceContractInput {
   storeId: string;
   registerEnabled: boolean;
+  /** 0＝数えない */
   registerLimit: number;
   handyEnabled: boolean;
+  /** 0＝数えない */
   handyLimit: number;
   displayEnabled: boolean;
-  displayLimit: number;
+  /** null・0＝数えない */
+  displayLimit: number | null;
+  /** 承認制（運営が ON にした種類だけ。既定 OFF） */
+  approval: Record<DeviceType, boolean>;
+  /** 移行期間を今すぐ終える種類（新しい端末はすぐ承認待ちになる） */
+  endTransition?: DeviceType[];
+}
+
+/** 今の台数（契約の行が無い店舗は数えていない＝0 として扱う。行が無い店舗に既定の 2台を書かないため） */
+function effectiveLimits(policy: { exists: boolean; registerLimit: number; handyLimit: number }) {
+  return { register: policy.exists ? policy.registerLimit : 0, handy: policy.exists ? policy.handyLimit : 0 };
 }
 
 /**
- * 店舗の端末の契約を保存する。
- *   レジ・ハンディ: store_access_policies（台数・ON/OFF）。ON/OFF とディスプレイの台数は migration 00104 の後だけ保存できる
- *   ディスプレイ: ON/OFF は display_monitor の機能フラグ（店舗。ON にするとき企業が OFF なら企業も ON にする）
+ * 店舗の端末の契約を保存する（変えた項目だけ書く）。
+ *   レジ・ハンディ: store_access_policies（台数・ON/OFF・承認制）。台数を変えていなければ数え方は変えない
+ *     （契約の行が無い店舗で ディスプレイ・承認制だけ変えたときは、レジ・ハンディの台数 0＝数えないで行を作る）
+ *   ディスプレイ: ON/OFF は display_monitor の機能フラグ（変えたときだけ。ON にするとき企業が OFF なら企業も ON にする）
+ *   ON/OFF・ディスプレイの台数・承認制は migration 00104 の後だけ保存できる
  */
 export async function saveStoreDeviceContract(input: SaveDeviceContractInput): Promise<Result> {
   const ctx = await requireCypressAdmin();
@@ -88,34 +104,66 @@ export async function saveStoreDeviceContract(input: SaveDeviceContractInput): P
   if (!store) return { error: '店舗が見つかりません' };
   const ready = await deviceControlReady(admin);
 
-  const registerLimit = limitFrom(input.registerLimit, DEFAULT_REGISTER_LIMIT);
-  const handyLimit = limitFrom(input.handyLimit, DEFAULT_HANDY_LIMIT);
-  const displayLimit = deviceLimitFrom(input.displayLimit, DEFAULT_DISPLAY_LIMIT);
-
   const policyBefore = await loadStorePolicy(store.id);
   const contractBefore = await loadContractColumns(admin, store.id, ready && policyBefore.exists);
   const displayBefore = await loadDisplayMonitorFlag(store.organizationId, store.id, admin);
+  const cur = effectiveLimits(policyBefore);
 
-  const row: Record<string, unknown> = {
-    store_id: store.id,
-    organization_id: store.organizationId,
-    register_limit: registerLimit,
-    handy_limit: handyLimit,
-    updated_at: new Date().toISOString(),
-    updated_by: ctx.userId,
-  };
-  if (ready) {
-    Object.assign(row, { register_enabled: input.registerEnabled === true, handy_enabled: input.handyEnabled === true, display_limit: displayLimit });
-  }
-  // 行がある店舗は書いた列だけ変わる（回線・メモ・レジ用パスワードの設定はそのまま）
-  const { error } = await admin.from('store_access_policies').upsert(row, { onConflict: 'store_id' });
-  if (error) return { error: `保存に失敗しました: ${error.message}` };
+  const registerLimit = limitFrom(input.registerLimit, cur.register);
+  const handyLimit = limitFrom(input.handyLimit, cur.handy);
+  const displayLimit = displayLimitFrom(input.displayLimit);
+  const now = Date.now();
 
+  // 変えた列だけ
+  const changed: Record<string, unknown> = {};
+  if (registerLimit !== cur.register) changed.register_limit = registerLimit;
+  if (handyLimit !== cur.handy) changed.handy_limit = handyLimit;
   const warnings: string[] = [];
-  if (!ready && (input.registerEnabled === false || input.handyEnabled === false)) {
-    warnings.push('migration 00104 が未適用のため、レジ・ハンディの契約 OFF はまだ保存できません（台数は保存しました）');
+  const wantsNewColumns =
+    input.registerEnabled !== contractBefore.registerEnabled ||
+    input.handyEnabled !== contractBefore.handyEnabled ||
+    displayLimit !== contractBefore.displayLimit ||
+    DEVICE_TYPES.some((t) => input.approval?.[t] === true) ||
+    (input.endTransition ?? []).length > 0;
+  if (ready) {
+    if (input.registerEnabled !== contractBefore.registerEnabled) changed.register_enabled = input.registerEnabled === true;
+    if (input.handyEnabled !== contractBefore.handyEnabled) changed.handy_enabled = input.handyEnabled === true;
+    if (displayLimit !== contractBefore.displayLimit) changed.display_limit = displayLimit;
+    for (const t of DEVICE_TYPES) {
+      const since = contractBefore.approvalSince[t];
+      const want = input.approval?.[t] === true;
+      if (want && !since) changed[`${t}_approval_since`] = new Date(now).toISOString();
+      else if (!want && since) changed[`${t}_approval_since`] = null;
+      else if (want && since && (input.endTransition ?? []).includes(t) && approvalModeOf(since, now) === 'transition') {
+        changed[`${t}_approval_since`] = new Date(now - APPROVAL_TRANSITION_MS - 60_000).toISOString();
+      }
+    }
+  } else if (wantsNewColumns) {
+    warnings.push('migration 00104 が未適用のため、契約 ON/OFF・ディスプレイの台数・承認制はまだ保存できません（台数とディスプレイの ON/OFF は保存しました）');
   }
-  // ディスプレイ端末の ON/OFF（既存の機能フラグ。企業 × 店舗）
+
+  if (Object.keys(changed).length > 0) {
+    const stamp = { updated_at: new Date(now).toISOString(), updated_by: ctx.userId };
+    if (policyBefore.exists) {
+      // 行がある店舗は書いた列だけ変わる（回線・メモ・ほかの台数はそのまま）
+      const { error } = await admin.from('store_access_policies').update({ ...changed, ...stamp }).eq('store_id', store.id);
+      if (error) return { error: `保存に失敗しました: ${error.message}` };
+    } else {
+      // 行が無い店舗：台数を変えていない種類は 0（＝数えない＝今まで通り）で作る（列の既定の 2台にしない）
+      const { error } = await admin.from('store_access_policies').insert({
+        store_id: store.id,
+        organization_id: store.organizationId,
+        register_limit: cur.register,
+        handy_limit: cur.handy,
+        ...changed,
+        ...stamp,
+      });
+      if (error) return { error: `保存に失敗しました: ${error.message}` };
+    }
+  }
+
+  // ディスプレイ端末の ON/OFF（既存の機能フラグ。企業 × 店舗。変えたときだけ）
+  let displayChanged = false;
   try {
     if (input.displayEnabled && !displayBefore.on) {
       if (displayBefore.reason === 'not_ready') {
@@ -123,39 +171,37 @@ export async function saveStoreDeviceContract(input: SaveDeviceContractInput): P
       } else {
         if (displayBefore.reason === 'company_off') await setOrgDisplayMonitor(store.organizationId, true);
         await setStoreDisplayMonitor(store.organizationId, store.id, true);
+        displayChanged = true;
       }
     } else if (!input.displayEnabled && displayBefore.on) {
       await setStoreDisplayMonitor(store.organizationId, store.id, false);
+      displayChanged = true;
     }
   } catch (e) {
     warnings.push(e instanceof Error ? e.message : 'ディスプレイ端末の ON/OFF を保存できませんでした');
   }
 
-  await audit(
-    store.organizationId,
-    store.id,
-    'admin.device_contract',
-    'store_access_policies',
-    store.id,
-    {
-      exists: policyBefore.exists,
-      register_enabled: contractBefore.registerEnabled,
-      register_limit: policyBefore.registerLimit,
-      handy_enabled: contractBefore.handyEnabled,
-      handy_limit: policyBefore.handyLimit,
-      display_enabled: displayBefore.on,
-      display_limit: contractBefore.displayLimit,
-    },
-    {
-      register_enabled: ready ? input.registerEnabled === true : true,
-      register_limit: registerLimit,
-      handy_enabled: ready ? input.handyEnabled === true : true,
-      handy_limit: handyLimit,
-      display_enabled: input.displayEnabled === true,
-      display_limit: ready ? displayLimit : contractBefore.displayLimit,
-    },
-    'コントロールセンター：端末の契約'
-  );
+  if (Object.keys(changed).length > 0 || displayChanged) {
+    await audit(
+      store.organizationId,
+      store.id,
+      'admin.device_contract',
+      'store_access_policies',
+      store.id,
+      {
+        exists: policyBefore.exists,
+        register_enabled: contractBefore.registerEnabled,
+        register_limit: cur.register,
+        handy_enabled: contractBefore.handyEnabled,
+        handy_limit: cur.handy,
+        display_enabled: displayBefore.on,
+        display_limit: contractBefore.displayLimit,
+        approval_since: contractBefore.approvalSince,
+      },
+      { ...changed, ...(displayChanged ? { display_enabled: input.displayEnabled === true } : {}) },
+      'コントロールセンター：端末の契約'
+    );
+  }
   revalidateStore(store.id, store.organizationId);
   return warnings.length > 0 ? { warning: warnings.join('。') } : {};
 }
@@ -242,7 +288,7 @@ export async function approveStoreDevice(input: DeviceTarget): Promise<Result> {
     limit = countsHandyDevices(policy) ? policy.handyLimit : null;
   } else {
     contractEnabled = (await loadDisplayMonitorFlag(store.organizationId, store.id, admin)).on;
-    limit = policy.exists && contract.displayLimit > 0 ? contract.displayLimit : null;
+    limit = contract.displayLimit;
   }
   const counts = await countStoreDevices(admin, input.type, store.id, true);
   const decision = decideApprove({ type: input.type, contractEnabled, current: device.approval, active, approvedActive: counts.approvedActive, limit });

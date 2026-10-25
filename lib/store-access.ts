@@ -123,7 +123,8 @@ export type RegisterDeviceDecision =
   | { kind: 'allowed' }
   | { kind: 'register' }
   | { kind: 'limit'; limit: number }
-  | { kind: 'revoked' }
+  /** by = operator（運営が解除。コントロールセンター）/ store・無し（今までの解除） */
+  | { kind: 'revoked'; by?: 'operator' | 'store' }
   // ここから下はコントロールセンターの承認制（migration 00104 の後だけ。lib/device-control.ts）
   | { kind: 'pending' }
   | { kind: 'rejected' }
@@ -140,6 +141,8 @@ export function registerDecisionFrom(d: DeviceJoinDecision): RegisterDeviceDecis
       return { kind: 'register' };
     case 'limit':
       return { kind: 'limit', limit: d.limit };
+    case 'revoked':
+      return { kind: 'revoked', by: d.by };
     default:
       return { kind: d.kind };
   }
@@ -147,8 +150,8 @@ export function registerDecisionFrom(d: DeviceJoinDecision): RegisterDeviceDecis
 
 /**
  * レジとして使えないときに出す文（使えるとき・登録の画面を出すときは null）。
- * approval = コントロールセンターの承認制（migration 00104 の後）。解除・上限の文は運営あての文に変わる
- * （承認制の前は今までの文のまま）。
+ * approval = コントロールセンターの承認制が ON（移行期間のあと）。上限の文は運営あての文に変わる。
+ * 解除は「運営が解除した」ときだけ運営あての文（店舗の解除・今までの解除は今までの文のまま）。
  */
 export function registerBlockMessage(d: RegisterDeviceDecision, approval: boolean): string | null {
   switch (d.kind) {
@@ -158,7 +161,7 @@ export function registerBlockMessage(d: RegisterDeviceDecision, approval: boolea
     case 'limit':
       return approval ? DEVICE_MESSAGE.limit.register : ACCESS_MESSAGE.limit;
     case 'revoked':
-      return approval ? DEVICE_MESSAGE.revoked : ACCESS_MESSAGE.revoked;
+      return d.by === 'operator' ? DEVICE_MESSAGE.revoked : ACCESS_MESSAGE.revoked;
     case 'pending':
       return DEVICE_MESSAGE.pendingRegister;
     case 'rejected':

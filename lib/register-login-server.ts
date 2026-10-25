@@ -83,9 +83,9 @@ export async function loginRegisterDevice(input: {
   if (decision.kind === 'bad_password') return { error: REGISTER_LOGIN_MESSAGE.badPassword };
 
   const ua = (await headers()).get('user-agent')?.slice(0, 200) ?? null;
-  // コントロールセンター（2026-10-25）：レジの契約 OFF・承認されていない端末はログインさせない
-  // （migration 00104 の前・台数を数えない店舗は何もしない＝今まで通り）
-  const gate = await gateRegisterLogin({ organizationId: org.id as string, storeId, userAgent: ua, policy });
+  // コントロールセンター（2026-10-25）：レジの契約 OFF・運営が却下／解除した端末・承認待ちの端末だけログインさせない
+  // （知らない端末・台数はログインでは見ない＝今まで通り。レジの画面で確かめる。migration 00104 の前は何もしない）
+  const gate = await gateRegisterLogin({ storeId, policy });
   if (gate.error) return { error: gate.error };
   const session = await startRegisterSession(admin, {
     organizationId: org.id as string,

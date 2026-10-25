@@ -206,7 +206,7 @@ export function HandyDevicesPanel({
               ))}
             </ul>
           )}
-          {!revokeAction && <p className="mt-3 text-xs text-gray-500">{DEVICE_MESSAGE.storeReadOnly}</p>}
+          <p className="mt-3 text-xs text-gray-500">{DEVICE_MESSAGE.storeReadOnly}</p>
         </CardContent>
       </Card>
 

@@ -4,13 +4,13 @@ import { headers } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 import { assertStoreAccess, requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import {
   clientIpFrom,
   generatePairingCode,
   hashPairingCode,
   PAIRING_TTL_MS,
 } from '@/lib/handy-pairing';
-import { DEVICE_MESSAGE } from '@/lib/device-control';
 
 /** 接続元IP（x-forwarded-for の先頭）。取れなければ null */
 async function requestIp(): Promise<string | null> {
@@ -75,14 +75,51 @@ export async function issueHandyPairing(storeId: string, deviceName: string): Pr
 }
 
 /**
- * 端末の接続の解除（店舗の管理画面から）。
- * 2026-10-25 Ronnie「端末のことは全部コントロールセンター」: 店舗の管理画面からの解除は受け付けず、理由の文だけ返す
- * （iPad アプリの設定 › ハンディ端末 の古い版の「解除」もここに来る）。
- * 運営の解除は app/admin/tenants/device-actions.ts の revokeStoreDevice（ログイン状態を切り、所属を止める）。
+ * 端末の接続を解除する。以降その端末からは開けなくなる
+ * （端末用アカウントのセッションを切り、ログインも止める）。
  */
-export async function revokeHandyDevice(_deviceId: string): Promise<{ error?: string }> {
-  await requirePermission('store.settings');
-  return { error: DEVICE_MESSAGE.storeRevokeRefused };
+export async function revokeHandyDevice(deviceId: string): Promise<{ error?: string }> {
+  const ctx = await requirePermission('store.settings');
+  const supabase = await createClient();
+
+  const { data: device } = await supabase
+    .from('handy_devices')
+    .select('id, organization_id, store_id, name, profile_id, status')
+    .eq('id', deviceId)
+    .maybeSingle();
+  if (!device) return { error: '端末が見つかりません' };
+  if (device.organization_id !== ctx.organizationId) return { error: 'この端末は操作できません' };
+  assertStoreAccess(ctx, device.store_id);
+  if (device.status === 'revoked') return {};
+
+  const { error } = await supabase
+    .from('handy_devices')
+    .update({ status: 'revoked', revoked_at: new Date().toISOString(), revoked_by: ctx.userId })
+    .eq('id', deviceId)
+    .eq('status', 'active');
+  if (error) return { error: `解除に失敗しました: ${error.message}` };
+
+  // 端末に残っているログイン状態を無効化する（解除したのに使えてしまう状態を作らない）
+  const admin = createAdminClient();
+  await admin.auth.admin.signOut(device.profile_id as string, 'global').catch(() => undefined);
+  await admin
+    .from('memberships')
+    .update({ status: 'suspended' })
+    .eq('profile_id', device.profile_id as string);
+
+  await supabase.rpc('log_audit', {
+    p_org: ctx.organizationId,
+    p_store: device.store_id,
+    p_action: 'handy.device_revoke',
+    p_target_table: 'handy_devices',
+    p_target_id: deviceId,
+    p_before: { status: 'active' },
+    p_after: { status: 'revoked', name: device.name },
+    p_note: null,
+  });
+
+  revalidatePath('/app/settings/handy');
+  return {};
 }
 
 /** 端末の名前を変える（現場で見分けるため） */
