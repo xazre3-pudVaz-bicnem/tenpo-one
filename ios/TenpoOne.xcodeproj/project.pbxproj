@@ -23,6 +23,10 @@
 			isa = PBXBuildFile;
 			fileRef = B192B271291163D78C14A710;
 		};
+		04BF5209DA37EDBDDB579111 = {
+			isa = PBXBuildFile;
+			fileRef = D04487015F9455A552F9C9A8;
+		};
 		04DECA9EF7473F64E3521CEB = {
 			isa = PBXBuildFile;
 			fileRef = "06C7800D02B224F537BF1765";
@@ -58,6 +62,10 @@
 		0AB79921FD37A2DA45964225 = {
 			isa = PBXBuildFile;
 			fileRef = "185243219C4F64AB0CF32073";
+		};
+		0E0358295A3EEDED33FD80BF = {
+			isa = PBXBuildFile;
+			fileRef = E54168AB33CD068FDC8B63A2;
 		};
 		1080F822DC76FA54BC4E29FA = {
 			isa = PBXBuildFile;
@@ -267,6 +275,10 @@
 			isa = PBXBuildFile;
 			fileRef = B930ACD796384E865B8B96EF;
 		};
+		50724A9FFDE0ECDE9E4DA2BD = {
+			isa = PBXBuildFile;
+			fileRef = B040DF1CF9E987F5D8BD2943;
+		};
 		5188774DEC4B52681FE8BBCE = {
 			isa = PBXBuildFile;
 			fileRef = B5B1327A317265B5AC90133D;
@@ -282,6 +294,10 @@
 		55A779229D4C4EE69EFCD47C = {
 			isa = PBXBuildFile;
 			fileRef = B9EF53DAFBFCBB4575825DE7;
+		};
+		57F7D1E6D456798CE57051DE = {
+			isa = PBXBuildFile;
+			fileRef = CF7965755BA99CF0CFBCF658;
 		};
 		5846B65A0855587AC0941D8D = {
 			isa = PBXBuildFile;
@@ -326,6 +342,10 @@
 		655C0208FEDF1A63DED03E09 = {
 			isa = PBXBuildFile;
 			fileRef = D1ACF3ECA5D447DAB6D6DAF0;
+		};
+		6619A66705E9184FA91BBBF6 = {
+			isa = PBXBuildFile;
+			fileRef = DC606EFB35CDB15C5D7DA128;
 		};
 		6657E7022D74028EFF5ED6AB = {
 			isa = PBXBuildFile;
@@ -450,6 +470,14 @@
 		8DED1B576B99ACF2D03A8358 = {
 			isa = PBXBuildFile;
 			fileRef = "5CD09FAB42001A76BB7E869F";
+		};
+		8F367B86C515BFA1C1DBAF50 = {
+			isa = PBXBuildFile;
+			fileRef = A9B75BCBB9CCD63A70F3E946;
+		};
+		91F63121D4CD6BD2ADCCDE07 = {
+			isa = PBXBuildFile;
+			fileRef = "0550E9675CE6B8C5B6BAFFED";
 		};
 		9251238DBD5E9F2872052E3A = {
 			isa = PBXBuildFile;
@@ -619,6 +647,10 @@
 			isa = PBXBuildFile;
 			fileRef = "8A8BA962DB156C65501F9092";
 		};
+		C62040538EAE736DFBDC087D = {
+			isa = PBXBuildFile;
+			fileRef = "12B37B3B3A983944663124ED";
+		};
 		C69163302B337AE19DF3A57B = {
 			isa = PBXBuildFile;
 			fileRef = "9D10EE799A37940E55BCF5C9";
@@ -650,6 +682,10 @@
 		CEA39ECFAEA3EE441A4B08EF = {
 			isa = PBXBuildFile;
 			fileRef = CA087772C4DA3E7C9064B315;
+		};
+		CFD34F5F8FF2830D8F1112C9 = {
+			isa = PBXBuildFile;
+			fileRef = "968AF10EBDCC66D22A5971B5";
 		};
 		CFFC29FD2F0872947049A6EC = {
 			isa = PBXBuildFile;
@@ -747,6 +783,10 @@
 			isa = PBXBuildFile;
 			fileRef = F276879EB380E7B06FBB4E80;
 		};
+		F4EA36C8FE682362793BDD36 = {
+			isa = PBXBuildFile;
+			fileRef = D4B0771A54D5A769DA897FBA;
+		};
 		F5702682CF0C6F6CD6180499 = {
 			isa = PBXBuildFile;
 			fileRef = "9A3C44BFADBE051B3506AE2D";
@@ -762,6 +802,10 @@
 		F7A02BAE0F627DB01F2F170F = {
 			isa = PBXBuildFile;
 			fileRef = "53FA8324110672BFAF5C5E59";
+		};
+		F99EC5EDFC8871FE0CF785D5 = {
+			isa = PBXBuildFile;
+			fileRef = C8B27EBECDFE3FE326431157;
 		};
 		FDA58524A451E475C7C48ABD = {
 			isa = PBXBuildFile;
@@ -796,6 +840,12 @@
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
 			path = TenpoOneApp.swift;
+			sourceTree = "<group>";
+		};
+		0550E9675CE6B8C5B6BAFFED = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = NativePhoneOwnerAccounting.swift;
 			sourceTree = "<group>";
 		};
 		05DEEAB82A56996B8B263558 = {
@@ -833,6 +883,12 @@
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
 			path = NativePhoneOwnerVendors.swift;
+			sourceTree = "<group>";
+		};
+		12B37B3B3A983944663124ED = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = NativePhoneOwnerAccountingBanks.swift;
 			sourceTree = "<group>";
 		};
 		13868CE63A2A65B873653339 = {
@@ -1435,6 +1491,12 @@
 			path = Haptics.swift;
 			sourceTree = "<group>";
 		};
+		968AF10EBDCC66D22A5971B5 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = NativePhoneOwnerSettlement.swift;
+			sourceTree = "<group>";
+		};
 		96D557A692BF25FBDE502C1C = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
@@ -1543,6 +1605,12 @@
 			path = NativeCustomerAnalysisView.swift;
 			sourceTree = "<group>";
 		};
+		A9B75BCBB9CCD63A70F3E946 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = NativePhoneOwnerAccountingAuto.swift;
+			sourceTree = "<group>";
+		};
 		ABED43E20B9E90D02712C225 = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
@@ -1565,6 +1633,12 @@
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
 			path = NativeAccountingView.swift;
+			sourceTree = "<group>";
+		};
+		B040DF1CF9E987F5D8BD2943 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = NativePhoneOwnerAccountingBooks.swift;
 			sourceTree = "<group>";
 		};
 		B154CE8F2B099465DD22FBC2 = {
@@ -1663,6 +1737,12 @@
 			path = NativePhoneOwnerStoreDay.swift;
 			sourceTree = "<group>";
 		};
+		C8B27EBECDFE3FE326431157 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = NativePhoneOwnerAccountingPreview.swift;
+			sourceTree = "<group>";
+		};
 		CA087772C4DA3E7C9064B315 = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
@@ -1699,10 +1779,22 @@
 			path = NativeManualsView.swift;
 			sourceTree = "<group>";
 		};
+		CF7965755BA99CF0CFBCF658 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = NativePhoneOwnerAccountingForms.swift;
+			sourceTree = "<group>";
+		};
 		D034082961CD3389534BD788 = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
 			path = NativePayrollView.swift;
+			sourceTree = "<group>";
+		};
+		D04487015F9455A552F9C9A8 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = NativePhoneOwnerInvoices.swift;
 			sourceTree = "<group>";
 		};
 		D17E14642C89FA9119F138A4 = {
@@ -1715,6 +1807,12 @@
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
 			path = NativeTicketRaster.swift;
+			sourceTree = "<group>";
+		};
+		D4B0771A54D5A769DA897FBA = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = NativePhoneOwnerAccountingJournal.swift;
 			sourceTree = "<group>";
 		};
 		D4F91A62E32EC2117D3AA840 = {
@@ -1783,6 +1881,12 @@
 			path = NativeLedgerTools.swift;
 			sourceTree = "<group>";
 		};
+		DC606EFB35CDB15C5D7DA128 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = NativePhoneOwnerReconciliation.swift;
+			sourceTree = "<group>";
+		};
 		DCB0525609C5BFEF6D3A8A06 = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
@@ -1847,6 +1951,12 @@
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
 			path = NativePhoneEmployeesView.swift;
+			sourceTree = "<group>";
+		};
+		E54168AB33CD068FDC8B63A2 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = NativePhoneOwnerInvoicesSheets.swift;
 			sourceTree = "<group>";
 		};
 		E6578938B51E6492A41FBD9E = {
@@ -2072,6 +2182,13 @@
 				"9D673A5344B0BC908D6C2CF2",
 				"9A3C44BFADBE051B3506AE2D",
 				"981B5E4FA575D2E2F3824BE1",
+				"0550E9675CE6B8C5B6BAFFED",
+				A9B75BCBB9CCD63A70F3E946,
+				"12B37B3B3A983944663124ED",
+				B040DF1CF9E987F5D8BD2943,
+				CF7965755BA99CF0CFBCF658,
+				D4B0771A54D5A769DA897FBA,
+				C8B27EBECDFE3FE326431157,
 				"6AA2061336D569F1887EA5C0",
 				"1DA297176C89045DD982AF2B",
 				"78C449C9F961A4166C348E77",
@@ -2085,6 +2202,8 @@
 				"1D243D1B41E4326C497442B6",
 				"19F05EF4A9E2EC2BC8BE14D1",
 				"24A358F005B2283C8C05E297",
+				D04487015F9455A552F9C9A8,
+				E54168AB33CD068FDC8B63A2,
 				"13868CE63A2A65B873653339",
 				"2B63A8A2008AD1CF89F16AF0",
 				"7763EABA361271DEB8F10E7A",
@@ -2102,6 +2221,7 @@
 				"2801F06BF6575B227DD04CC4",
 				DEADC9D5562D8BD3800CC21B,
 				"7B440EEE269F7D4E36E3017F",
+				DC606EFB35CDB15C5D7DA128,
 				A33B001E9138B86048047F4F,
 				B1669334E75DB8E89C9D40AB,
 				ACCA09978584C43FD7029F74,
@@ -2116,6 +2236,7 @@
 				"460D2251C6CED25676A55F7B",
 				DCF5058AE17B90B776DA4906,
 				"39B856C7A10A9930BA2624DB",
+				"968AF10EBDCC66D22A5971B5",
 				"18264DF945F47492573279DF",
 				E7ACD7029007C96C32E98179,
 				"05DEEAB82A56996B8B263558",
@@ -2344,6 +2465,13 @@
 				"0973A93ACE2968A60C900592",
 				F5702682CF0C6F6CD6180499,
 				"275C04BC96C8C908CF93979B",
+				"91F63121D4CD6BD2ADCCDE07",
+				"8F367B86C515BFA1C1DBAF50",
+				C62040538EAE736DFBDC087D,
+				"50724A9FFDE0ECDE9E4DA2BD",
+				"57F7D1E6D456798CE57051DE",
+				F4EA36C8FE682362793BDD36,
+				F99EC5EDFC8871FE0CF785D5,
 				B2A1C089D866F2E590C39517,
 				AFD3F8EAC447B5E839A11007,
 				"7538E267863AFD12C29A11F5",
@@ -2357,6 +2485,8 @@
 				D493B434598F034F9C33E43A,
 				C73007A0E90BFBADCA552342,
 				"9E002957185A557652A26FBC",
+				"04BF5209DA37EDBDDB579111",
+				"0E0358295A3EEDED33FD80BF",
 				E0FFD10A8C34B86BE597D409,
 				"149C8A01CD4AD3072732C132",
 				BB78A635D879857FDC5A304B,
@@ -2374,6 +2504,7 @@
 				"83768B6D66B6E14633FDD754",
 				"63B3142C7B7322818567A8B0",
 				"4E9AFD68F97366F004FFBDB4",
+				"6619A66705E9184FA91BBBF6",
 				"9E55510C2617B1396864A18A",
 				"4690BBBE228E3F716CB1B048",
 				C881E33DBA0B14AEA2CF5DC6,
@@ -2388,6 +2519,7 @@
 				"989C9F3B51AE5784F284AED7",
 				"00E9031FE043FF65E38182B0",
 				D78B92898D89C741F64A78B3,
+				CFD34F5F8FF2830D8F1112C9,
 				AF020F5F5973F53F0D6985E1,
 				"6B04702DF682641E4D9E1172",
 				"9A0C833BF6E635325E822AC1",
