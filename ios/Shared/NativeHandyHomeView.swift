@@ -394,7 +394,7 @@ struct NativeHandyHomeView: View {
         // iPad のネイティブと同じ卓の箱が読めたら 2 列（2026-10-25 02:22 Ronnie「iPhone の卓も iPad のように」）。読めなければ今までの 3 列
         let cards = !model.floorTables.isEmpty
         let columns = cards
-            ? [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)]
+            ? [GridItem(.flexible(), spacing: 10, alignment: .top), GridItem(.flexible(), spacing: 10, alignment: .top)]
             : [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)]
         return ScrollView {
             VStack(spacing: 0) {
@@ -425,7 +425,7 @@ struct NativeHandyHomeView: View {
                         .font(.system(size: 13)).foregroundColor(NHDColor.ink3)
                         .padding(.horizontal, 24).padding(.vertical, 36)
                 }
-                LazyVGrid(columns: columns, spacing: cards ? 18 : 8) {
+                LazyVGrid(columns: columns, spacing: cards ? 12 : 8) {
                     ForEach(shown) { t in
                         let state = NHDState.of(t)
                         let tap = {
@@ -440,7 +440,9 @@ struct NativeHandyHomeView: View {
                         }
                         if cards, let ft = model.floorTables[t.id] {
                             // iPad のネイティブと同じ箱（3D・下の色の帯・残り時間・最終注文から・呼び出し）。押したときの動きはハンディのまま
-                            NativeTableCard(table: ft, now: model.now.timeIntervalSince1970 * 1000, height: 240) { _ in tap() }
+                            // 箱は小さめに：空いている卓は低く（番号と「4名席 空」だけ）、お客様のいる卓は時間・金額が入る高さ
+                            // （2026-10-25 21:24 Ronnie「Handy ko button dherai big」。前は全部 240pt）
+                            NativeTableCard(table: ft, now: model.now.timeIntervalSince1970 * 1000, height: Self.phoneCardHeight(ft)) { _ in tap() }
                         } else {
                             Button(action: tap) {
                                 NativeHandyTile(table: t, state: state, now: model.now, callKind: kinds[t.id],
@@ -455,6 +457,12 @@ struct NativeHandyHomeView: View {
             }
         }
         .refreshable { await model.refresh() }
+    }
+
+    /// iPhone の卓の箱の高さ：空いた卓 118pt、お客様のいる卓 196pt（呼び出し・連携の行があればその分だけ高く）
+    static func phoneCardHeight(_ t: NFTable) -> CGFloat {
+        guard t.order != nil else { return 118 }
+        return 196 + (t.calls.isEmpty ? 0 : 20) + (t.linkedNames == nil ? 0 : 20)
     }
 
     /// まとめた卓の名前（T-1+T-2）。組んでいなければ空（Web の groupTableLabel と同じ）
