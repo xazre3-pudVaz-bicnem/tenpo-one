@@ -13,7 +13,6 @@ struct NativeSettingsView: View {
     let onHome: () -> Void
     let onWeb: (String) -> Void
 
-    @State private var nativeOn = AppState.shared.nativePosEnabled
     /// 左の一覧で選んでいるもの。中の画面から戻ったときは、前に開いていた項目に戻す
     /// （2026-10-25 00:19 Ronnie「メニューから中に入って戻るとハードウェアに行く。メニューに戻るように」）
     @State private var sel: Sel = NativeSettingsView.lastSel
@@ -158,7 +157,7 @@ struct NativeSettingsView: View {
                         sideRow(icon: p.icon, title: p.title, en: p.en, dot: pageStatus(p)?.1, on: sel == e) { select(e) }
                     case .group(let id):
                         if let g = groups.first(where: { $0.id == id }) {
-                            sideRow(icon: g.icon, title: g.label, en: g.en, dot: g.label == "デバイス管理" ? pageStatus(.native)?.1 : nil, on: sel == e) { select(e) }
+                            sideRow(icon: g.icon, title: g.label, en: g.en, dot: nil, on: sel == e) { select(e) }
                         }
                     }
                 }
@@ -267,16 +266,15 @@ struct NativeSettingsView: View {
                 NativeOfflinePrintCard().frame(maxWidth: 900, alignment: .leading)
             }
         case .page(.native):
-            pageTitle(Page.native.icon, Page.native.title, en: Page.native.en, status: pageStatus(.native))
-            nativeCard
+            // Native ON/OFF は無くなった（2026-10-25）。一覧にも出さない
+            EmptyView()
         case .page(.guide):
             pageTitle(Page.guide.icon, Page.guide.title, en: Page.guide.en, status: nil)
             NativeFloorGuide()
         case .group(let id):
             if let g = groups.first(where: { $0.id == id }) {
-                pageTitle(g.icon, g.label, en: g.en, status: g.label == "デバイス管理" ? pageStatus(.native) : nil)
-                // アプリの画面（Native ON/OFF）は デバイス管理 の中のいちばん上（2026-10-24 19:09 Ronnie）
-                if g.label == "デバイス管理" { nativeCard }
+                pageTitle(g.icon, g.label, en: g.en, status: nil)
+                // アプリの画面（Native ON/OFF）は無くなった（iPad は常にアプリの画面。2026-10-25 Ronnie「Web の iPad 版はもう要らない」）
                 itemList(g)
             } else {
                 Text("左から選んでください").font(.system(size: 14)).foregroundColor(NFColor.ink3)
@@ -419,8 +417,7 @@ struct NativeSettingsView: View {
             if let l = model.link { return ("\(l.deviceName.isEmpty ? l.deviceId : l.deviceName)・つないでいます", NFColor.success) }
             return (model.model == nil ? "機種が未選択" : "まだつないでいません", NFColor.saffron)
         case .native:
-            let on = state.adminNativePos ?? nativeOn
-            return (on ? "ON（アプリの画面）" : "OFF（今までの画面）", on ? NFColor.success : NFColor.ink3)
+            return nil
         case .guide:
             return nil
         }
@@ -770,29 +767,4 @@ struct NativeSettingsView: View {
         }
     }
 
-    // MARK: - Native ON/OFF
-
-    private var nativeCard: some View {
-        card(icon: "ipad", title: "アプリの画面", en: "Native screens",
-             description: "") {
-            // 管理画面が決めているときはその値を見せる（端末の切り替えは効かない）
-            let shown = state.adminNativePos ?? nativeOn
-            VStack(spacing: 0) {
-                row("アプリのオーダー・会計画面を使う", en: "Native screens") {
-                    Text(shown ? "ON" : "OFF（今までの画面）").font(.system(size: 15, weight: .bold)).foregroundColor(shown ? NFColor.success : NFColor.ink3)
-                    // 管理画面（設定 › レジ端末）が決めているときは端末から変えない（2026-10-24）
-                    toggle(shown, disabled: state.adminNativePos != nil) {
-                        if state.adminNativePos != nil { return }
-                        nativeOn.toggle()
-                        // OFF：Web の「レジの設定」を読み直す（Web 側のトグルも OFF で出る・印刷係は Web に戻る）
-                        state.setNativePos(nativeOn, reloadWeb: true)
-                    }
-                }
-                if state.adminNativePos != nil {
-                    Text("管理画面の「設定 › レジ端末」で決めています（この iPad では変えられません）")
-                        .font(.system(size: 12.5)).foregroundColor(NFColor.ink3).padding(.horizontal, 20).padding(.vertical, 12)
-                }
-            }
-        }
-    }
 }
