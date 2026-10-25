@@ -39,6 +39,7 @@ enum NativePhoneOwnerRegistry {
         ("/app/payroll", "payroll"),
         ("/app/manuals", "manuals"),
         ("/app/coupons", "coupons"),
+        ("/app/pos/receipt", "receipt"), // レシートのプレビュー（NativePhoneOwnerReceipt.swift）
     ]
     static let paths: [String: String] = Dictionary(entries, uniquingKeysWith: { a, _ in a })
 
@@ -89,6 +90,7 @@ struct NativePhoneOwnerScreen: View {
         case "payroll": NativePhonePayrollScreen(route: route)
         case "manuals": NativePhoneManualsScreen(route: route)
         case "coupons": NativePhoneCouponsScreen(route: route)
+        case "receipt": NativePhoneOwnerReceiptScreen(route: route)
         default:
             // 知らない key：Web のまま見せる
             Color.clear.onAppear { state.phoneOwnerModule = nil }

@@ -42,6 +42,7 @@ enum NativeModuleRegistry {
         ("/app/invoices", "invoices"),
         ("/app/reconciliation", "reconciliation"),
         ("/app/settlement", "settlement"),
+        ("/app/pos/receipt", "receipt"), // レシートのプレビュー（NativeReceiptView.swift。2026-10-25 Ronnie）
     ]
     static let paths: [String: String] = Dictionary(entries, uniquingKeysWith: { a, _ in a })
 
@@ -82,6 +83,7 @@ struct NativeModuleScreen: View {
         case "settlement": NativeSettlementView(route: route, onHome: { state.goNativeHome() }, onWeb: { state.leaveNativeFloor(to: $0) })
         // ScanSnap のまとめて取り込み（/app/scan#scan-bulk。道は AppState の #scan-bulk の分かれ道で開く。entries には入れない）
         case "scanBulk": NativeScanBulkView(onBack: { state.goNativeScan() })
+        case "receipt": NativeReceiptScreen(route: route).id(route.id)
         default:
             // 知らない key（古いアプリ）：Web のまま見せる
             Color.clear.onAppear { state.nativeModule = nil }

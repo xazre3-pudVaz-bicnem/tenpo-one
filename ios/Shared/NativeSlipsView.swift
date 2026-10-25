@@ -566,6 +566,8 @@ struct NSDetailSheet: View {
                             Button("注文・会計") { onOpenOrder(detail.id) }.buttonStyle(.borderedProminent)
                         } else {
                             Button { Task { if await model.act(["type": "slipReceipt", "orderId": detail.id]) != nil { model.toast = "レシートを印刷します" } } } label: { Label("レシートを印刷", systemImage: "printer") }.buttonStyle(.bordered)
+                            // レシート・領収書のプレビュー（ネイティブ。NativeReceiptView.swift。2026-10-25 Ronnie）
+                            Button { AppState.shared.leaveNativeFloor(to: "/app/pos/receipt/\(detail.id)?from=orders") } label: { Label("レシート・領収書を見る", systemImage: "doc.text.magnifyingglass") }.buttonStyle(.bordered)
                         }
                     }
                 }
