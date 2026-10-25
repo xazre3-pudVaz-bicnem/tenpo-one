@@ -502,8 +502,15 @@ final class AppState: ObservableObject {
             if !nativeReports { nativeReports = true }
             return
         }
-        // スキャン（ScanSnap のまとめて取り込み #scan-bulk は Web のまま）
-        if url.path == "/app/scan" && url.fragment != "scan-bulk" {
+        // ScanSnap のまとめて取り込み（/app/scan#scan-bulk）もネイティブで（NativeScanBulkView。2026-10-25 Ronnie「サブメニューのサブメニューまで全部ネイティブ」）。
+        // NativeModuleRegistry は道（path）しか見ないので、#scan-bulk はここで見て NativeModuleScreen の "scanBulk" で開く
+        if url.path == "/app/scan" && url.fragment == "scan-bulk" {
+            closeAllNative()
+            nativeModule = NativeModuleRoute(key: "scanBulk", url: url)
+            return
+        }
+        // スキャン（レシート撮影）
+        if url.path == "/app/scan" {
             let tx = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "tx" }?.value
             nativeFloor = false; nativeNotices = false; nativeBudget = false; nativeCustomers = false; nativeHome = false; nativeLedger = false; nativeCash = false; nativeCashIo = false; nativeQuick = false; nativeSlips = false; nativeExpenses = false; nativeStock = false; nativeInventory = false; nativeVendors = false; nativePurchases = false; nativeCoupons = false; nativeSettings = false
             scanTx = tx
@@ -889,6 +896,23 @@ final class AppState: ObservableObject {
         // 行き先にネイティブの画面があれば Web を読む前に出す（読み終わるまで Web の画面が見えないように。2026-10-25「101% native」）
         maybeOpenNativePos(for: AppConfig.url(path))
         WebViewController.current?.load(AppConfig.url(path))
+    }
+
+    /// ScanSnap のまとめて取り込み（/app/scan#scan-bulk）をネイティブで開く（押した瞬間に出す。Web も同じ道にそろえる）。
+    /// スキャンの画面の下の Web はもう /app/scan なので、#scan-bulk だけの移動では didFinish が来ないことがある → ここで先に開く
+    func openNativeScanBulk() {
+        closeAllNative()
+        let url = AppConfig.url("/app/scan#scan-bulk")
+        nativeModule = NativeModuleRoute(key: "scanBulk", url: url)
+        WebViewController.current?.load(url)
+    }
+
+    /// ネイティブのスキャン（レシート撮影）へ（まとめて取り込みの「戻る」。Web も /app/scan にそろえる）
+    func goNativeScan() {
+        closeAllNative()
+        scanTx = nil
+        nativeScan = true
+        WebViewController.current?.load(AppConfig.url("/app/scan"))
     }
 
     /// ネイティブの設定へ（Web も /app/pos/settings にそろえる）

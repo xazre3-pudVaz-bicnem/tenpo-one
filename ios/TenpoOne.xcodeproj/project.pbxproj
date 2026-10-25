@@ -23,6 +23,10 @@
 			isa = PBXBuildFile;
 			fileRef = "06C7800D02B224F537BF1765";
 		};
+		052E02D88F904BDF18389A56 = {
+			isa = PBXBuildFile;
+			fileRef = "385800E868F84FDB6F7A7C43";
+		};
 		08DE98603E79B02ACD6A31C6 = {
 			isa = PBXBuildFile;
 			fileRef = CDB7B7D3CABC919B6ABF19A8;
@@ -174,6 +178,10 @@
 		35E51FD6D60679AE25C7DDAE = {
 			isa = PBXBuildFile;
 			fileRef = D034082961CD3389534BD788;
+		};
+		3A26B05C098DA5C09A0BABB2 = {
+			isa = PBXBuildFile;
+			fileRef = F1957839EBD6F9B4656C45E0;
 		};
 		3B0A34DFD54D4E894BE1C5A9 = {
 			isa = PBXBuildFile;
@@ -555,6 +563,14 @@
 			isa = PBXBuildFile;
 			fileRef = F00E1DE0C5E84DD4B8406CBA;
 		};
+		C5F70C1A1381816C53ACB5E5 = {
+			isa = PBXBuildFile;
+			fileRef = "8A8BA962DB156C65501F9092";
+		};
+		C69163302B337AE19DF3A57B = {
+			isa = PBXBuildFile;
+			fileRef = "9D10EE799A37940E55BCF5C9";
+		};
 		C73007A0E90BFBADCA552342 = {
 			isa = PBXBuildFile;
 			fileRef = "19F05EF4A9E2EC2BC8BE14D1";
@@ -915,6 +931,12 @@
 			path = NativeAccountingBooks.swift;
 			sourceTree = "<group>";
 		};
+		385800E868F84FDB6F7A7C43 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = NativeScanBulkKit.swift;
+			sourceTree = "<group>";
+		};
 		389982A7642D1AA561384D2B = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
@@ -1245,6 +1267,12 @@
 			path = NativeFileShare.swift;
 			sourceTree = "<group>";
 		};
+		8A8BA962DB156C65501F9092 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = NativeScanBulkView.swift;
+			sourceTree = "<group>";
+		};
 		8CF824039A998B0AEE719E3C = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
@@ -1315,6 +1343,12 @@
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
 			path = NativeTheme.swift;
+			sourceTree = "<group>";
+		};
+		9D10EE799A37940E55BCF5C9 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = NativeScanBulkPreview.swift;
 			sourceTree = "<group>";
 		};
 		9D1B790EDA671C4985DDDFFE = {
@@ -1701,6 +1735,12 @@
 			path = NativeSettingsModels.swift;
 			sourceTree = "<group>";
 		};
+		F1957839EBD6F9B4656C45E0 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = NativePhoneOwnerScanBulk.swift;
+			sourceTree = "<group>";
+		};
 		F276879EB380E7B06FBB4E80 = {
 			isa = PBXFileReference;
 			lastKnownFileType = text.xml;
@@ -1912,6 +1952,7 @@
 				B154CE8F2B099465DD22FBC2,
 				"0F627DB07FC795D18395D777",
 				"9B01D6DFADD4DD97C8632796",
+				F1957839EBD6F9B4656C45E0,
 				"18264DF945F47492573279DF",
 				E7ACD7029007C96C32E98179,
 				"05DEEAB82A56996B8B263558",
@@ -1938,6 +1979,9 @@
 				E1A7ADBE353BB5AAFF29E6A1,
 				D9C6BA6D6F778644F0D1240E,
 				B930ACD796384E865B8B96EF,
+				"385800E868F84FDB6F7A7C43",
+				"9D10EE799A37940E55BCF5C9",
+				"8A8BA962DB156C65501F9092",
 				F40A537EF1A01FA00A0DAAB8,
 				F096351652925FA0CA802553,
 				C4909515CBFAB80D8C0508DE,
@@ -2165,6 +2209,7 @@
 				D8793C977E449CDC8591B028,
 				"1136AE737E872E70A977725A",
 				A14FBA7C9F83D874B4498965,
+				"3A26B05C098DA5C09A0BABB2",
 				AF020F5F5973F53F0D6985E1,
 				"6B04702DF682641E4D9E1172",
 				"9A0C833BF6E635325E822AC1",
@@ -2191,6 +2236,9 @@
 				BED554A8A69A42C7D551E887,
 				A7EC3ADDEA91094ECAE66113,
 				"4FC6989EA74053C418FC0E9D",
+				"052E02D88F904BDF18389A56",
+				C69163302B337AE19DF3A57B,
+				C5F70C1A1381816C53ACB5E5,
 				"74B6124CC057D8542B91BD5F",
 				E610214C90E492055F40208A,
 				E3901044F24B6F77A08FFFFA,

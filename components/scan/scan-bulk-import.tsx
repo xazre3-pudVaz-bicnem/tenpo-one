@@ -33,14 +33,17 @@ import {
 import { extFromFile, validateAttachedFile } from '@/components/invoices/labels';
 import { pdfTextLines, type PdfTextItem } from '@/lib/menu-ocr-parse';
 import {
-  BILL_CATEGORY_LABELS,
+  BILL_CATEGORY_SHORT as CATEGORY_SHORT,
   PAYMENT_LABELS,
-  isCashPayment,
+  SCAN_BILL_CATEGORIES as CATEGORIES,
+  SCAN_BILL_PAYMENTS as BILL_PAYMENTS,
+  SCAN_RECEIPT_PAYMENTS as RECEIPT_PAYMENTS,
   readScan,
   type BillCategory,
   type PaymentMethod,
   type ScanReading,
 } from '@/lib/receipt-read';
+import { scanFilingChoices, type ScanChoice } from '@/lib/scan-filing-choices';
 
 type TessWorker = {
   recognize: (image: Blob | HTMLCanvasElement) => Promise<{ data: { text: string } }>;
@@ -73,11 +76,6 @@ function todayJst(): string {
 }
 
 const MAX_FILES = 50;
-const RECEIPT_PAYMENTS: PaymentMethod[] = ['cash', 'card', 'emoney', 'qr'];
-const BILL_PAYMENTS: PaymentMethod[] = ['transfer', 'debit', 'card', 'cash'];
-const CATEGORIES: BillCategory[] = ['vendor', 'rent', 'electric', 'water', 'gas'];
-const CATEGORY_SHORT: Record<BillCategory, string> = { vendor: '仕入・経費', rent: '家賃', electric: '電気', water: '水道', gas: 'ガス' };
-const yen = (n: number) => `¥${n.toLocaleString('ja-JP')}`;
 const md = (d: string) => `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}`;
 
 function isHeic(f: File): boolean {
@@ -497,29 +495,12 @@ function ConfirmCard({
     return v.trim() === '' || !Number.isFinite(n) ? null : n;
   };
   const isReceipt = r.kind === 'receipt';
-  const cash = isReceipt && isCashPayment(r.payment);
   const payments = isReceipt ? RECEIPT_PAYMENTS : BILL_PAYMENTS;
   const canRegister = !busy && row.action && (row.action !== 'attach' || row.txId);
 
-  type Choice = { key: string; action: ScanAction; txId?: string; label: string; sub?: string };
-  const choices: Choice[] = [];
-  if (isReceipt && cash && plan?.canAttach) {
-    for (const c of plan.candidates) {
-      choices.push({ key: c.id, action: 'attach', txId: c.id, label: `${md(c.businessDate)} の出金 ${yen(c.amount)} に紐付け`, sub: c.label });
-    }
-  }
-  if (isReceipt) {
-    choices.push({
-      key: 'receipt',
-      action: 'receipt',
-      label: cash ? 'レシートとして保存（出金に紐付けない）' : `レシートとして保存（${r.payment ? PAYMENT_LABELS[r.payment] : ''}払い）`,
-    });
-  } else {
-    const cat = r.category ?? 'vendor';
-    choices.push({ key: 'bill', action: 'bill', label: cat === 'vendor' ? '月払いに登録（仕入先の請求書）' : `月払い：${BILL_CATEGORY_LABELS[cat]}（月次清算で反映）` });
-  }
-  choices.push({ key: 'keep', action: 'keep', label: 'あとで（保存ボックスに残す）' });
-  const chosen = (c: Choice) => row.action === c.action && (c.action !== 'attach' || row.txId === c.txId);
+  // 登録先の選択肢（iPad のネイティブと同じ。lib/scan-filing-choices.ts）
+  const choices = scanFilingChoices(r, plan);
+  const chosen = (c: ScanChoice) => row.action === c.action && (c.action !== 'attach' || row.txId === c.txId);
 
   return (
     <li className="rounded-xl border border-iris/40 bg-white p-3">

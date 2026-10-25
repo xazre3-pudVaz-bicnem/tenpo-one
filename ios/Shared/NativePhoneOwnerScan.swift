@@ -6,7 +6,7 @@ import UIKit
 // サーバーは iPad と同じ（返事の形は変えない）：GET ?part=scan&type&tx ／ POST scanUpload（JPEG を本文で。長い辺 2400px・3MB まで）
 //   iPhone のカメラで撮る（写真から選ぶことも）→ 四隅を動かして切り取る・回転 → 保存（出金があれば紐付け）
 //   レシート未添付の出金（本日）・最近のスキャン（日ごとのフォルダ・読み取った金額・仕分けの状態）・種別の絞り込み
-// ScanSnap のまとめて取り込み（/app/scan#scan-bulk）と保存ボックスの仕分け（/app/invoices）は Web のまま。
+// ScanSnap のまとめて取り込み（/app/scan#scan-bulk）は NativePhoneOwnerScanBulk.swift（2026-10-25）。保存ボックスの仕分け（/app/invoices）は Web のまま。
 
 /// GET ?part=scan の中身（使うところだけ）
 struct NOMScan: Decodable {
@@ -489,7 +489,7 @@ struct NativePhoneOwnerScanView: View {
     private func links(_ p: NOMScan) -> some View {
         VStack(spacing: 8) {
             if p.target == nil {
-                NOMWebLink(title: "まとめて取り込む（ScanSnap など）", sub: "金額・日付を読んで自動で出金・月払いに仕分けます（Web）", icon: "square.stack.3d.down.right") {
+                NOMWebLink(title: "まとめて取り込む（ScanSnap など）", sub: "金額・日付を読んで自動で出金・月払いに仕分けます", icon: "square.stack.3d.down.right") {
                     onOpen("/app/scan#scan-bulk")
                 }
             }
@@ -679,7 +679,7 @@ struct NOMShotConfirmView: View {
     }
 }
 
-// MARK: - key "scan" の画面（NativePhoneOwnerScreen から。#scan-bulk は NativePhoneOwnerRegistry で Web のまま）
+// MARK: - key "scan" の画面（NativePhoneOwnerScreen から。#scan-bulk は key "scanBulk"＝NativePhoneOwnerScanBulk.swift）
 
 struct NativePhoneOwnerScanScreen: View {
     let route: NativeModuleRoute

@@ -105,7 +105,7 @@ import { createAnnouncement, deleteAnnouncement, markAnnouncementRead } from '@/
 import { markAllRead } from '@/app/app/notifications/actions';
 import { markNotificationRead } from '@/app/app/actions';
 import { loadReportData } from '@/lib/reports-data-server';
-import { isNativeScanActionType, nativeScanPath, parseNativeScanAction } from '@/lib/native-scan';
+import { isNativeScanActionType, nativeScanDayPath, nativeScanPath, parseNativeScanAction } from '@/lib/native-scan';
 import { loadNativeScan } from '@/lib/native-scan-server';
 import { attachReceiptToCashTransaction, createScanDocument } from '@/app/app/scan/actions';
 import { isNativeCustomerActionType, nativeCustomerPermission, parseNativeCustomerAction } from '@/lib/native-customers';
@@ -1180,11 +1180,14 @@ export async function POST(request: Request) {
     }
     const bytes = Buffer.from(sa.dataBase64, 'base64');
     if (bytes.length === 0) return json({ ok: false, error: '写真が正しくありません' }, 400);
-    const path = nativeScanPath(ctx.organizationId, storeId, sa.mimeType, crypto.randomUUID());
+    // ScanSnap のまとめて取り込み（dayFolder）はその日のフォルダ（…/年/月/日/。Web の ScanBulkImport と同じ）。撮影は …/年/月/
+    const path = sa.dayFolder
+      ? nativeScanDayPath(ctx.organizationId, storeId, sa.mimeType, crypto.randomUUID(), todayJst())
+      : nativeScanPath(ctx.organizationId, storeId, sa.mimeType, crypto.randomUUID());
     const { error: upErr } = await supabase.storage.from('documents').upload(path, bytes, { contentType: sa.mimeType, upsert: false });
     if (upErr) return json({ ok: false, error: 'ストレージへのアップロードに失敗しました' });
     try {
-      const { id } = await createScanDocument({ filePath: path, fileName: sa.fileName, mimeType: sa.mimeType, sizeBytes: bytes.length, storeId });
+      const { id } = await createScanDocument({ filePath: path, fileName: sa.fileName, mimeType: sa.mimeType, sizeBytes: bytes.length, storeId, contentHash: sa.contentHash });
       if (sa.txId && can(ctx.role, 'cash.write')) {
         try {
           await attachReceiptToCashTransaction(sa.txId, id);
@@ -1193,7 +1196,8 @@ export async function POST(request: Request) {
           return json({ ok: false, error: `書類は保存しましたが、出金への紐付けに失敗しました：${errorText(e, '不明なエラー')}` });
         }
       }
-      return json({ ok: true, orderId: id, queued: 0 });
+      // documentId はまとめて取り込み（NativeScanBulkView）が読む。orderId は撮影の画面の今までの名前
+      return json({ ok: true, orderId: id, documentId: id, queued: 0 });
     } catch (e) {
       return json({ ok: false, error: errorText(e, '登録に失敗しました') }, 400);
     }

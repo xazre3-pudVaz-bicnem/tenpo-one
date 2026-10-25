@@ -5,7 +5,7 @@ import UIKit
 // スキャン（レシート撮影・ネイティブ）。Web の /app/scan と同じ（2026-10-24）
 //   撮影・取り込み（カメラ・写真から複数枚）→ 保存ボックスへ。?tx= の出金があればその出金にレシートを紐付ける
 //   レシート未添付の出金（本日）・レシートボックス（日ごとのフォルダ）・種別の絞込
-//   ScanSnap のまとめて取り込み（読み取り・自動仕分け）と保存ボックスの仕分けは Web
+//   ScanSnap のまとめて取り込み（読み取り・自動仕分け）は NativeScanBulkView（2026-10-25）。保存ボックスの仕分けは Web
 
 struct SCNTarget: Codable { let id: String; let main: String; let sub: String?; let date: String; let occurredAt: String; let kindLabel: String; let amount: Int; let hasReceipt: Bool }
 struct SCNNeed: Codable, Identifiable { let id: String; let occurredAt: String; let main: String; let sub: String; let amount: Int; let isAdvance: Bool }
@@ -98,6 +98,8 @@ struct NativeScanView: View {
     let onWeb: (String) -> Void
     let onCashClose: () -> Void
     let onPetty: () -> Void
+    /// ScanSnap のまとめて取り込み（ネイティブ。AppState.openNativeScanBulk）。nil なら Web の道（/app/scan#scan-bulk）へ
+    var onBulk: (() -> Void)? = nil
 
     @State private var showCamera = false
     @State private var picks: [PhotosPickerItem] = []
@@ -124,12 +126,12 @@ struct NativeScanView: View {
                         }
                         if let t = p.target { targetCard(t, p) }
                         if p.target == nil {
-                            Button { onWeb("/app/scan#scan-bulk") } label: {
+                            Button { if let onBulk { onBulk() } else { onWeb("/app/scan#scan-bulk") } } label: {
                                 HStack(spacing: 8) {
                                     Image(systemName: "square.stack.3d.down.right")
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text("まとめて取り込む（ScanSnap など）").font(.system(size: 14, weight: .bold))
-                                        Text("金額・日付を読んで自動で出金・月払いに仕分けます（Web）").font(.system(size: 11.5)).foregroundColor(NFColor.ink3)
+                                        Text("金額・日付を読んで自動で出金・月払いに仕分けます").font(.system(size: 11.5)).foregroundColor(NFColor.ink3)
                                     }
                                     Spacer(); Image(systemName: "chevron.right").foregroundColor(NFColor.ink3)
                                 }

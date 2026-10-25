@@ -130,6 +130,21 @@ struct NativeExpensesView: View {
                                 .background(RoundedRectangle(cornerRadius: 12).fill(NFColor.irisSoft))
                                 .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(style: StrokeStyle(lineWidth: 2, dash: [6])).foregroundColor(NFColor.iris))
                             }.buttonStyle(.plain)
+                            // ScanSnap の書類をまとめて取り込む（Web の仕入・経費の上の ScanBulkImport と同じ。ネイティブの NativeScanBulkView で開く）
+                            Button { onWeb("/app/scan#scan-bulk") } label: {
+                                HStack(spacing: 12) {
+                                    Image(systemName: "square.stack.3d.down.right").font(.system(size: 20))
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("ScanSnap の書類をまとめて取り込む").font(.system(size: 15, weight: .bold))
+                                        Text("ScanSnap Home でスキャン → 共有 →「ファイルに保存」→ ここで選ぶ。読み取った内容を確かめてから出金・月払いに入れます").font(.system(size: 11)).foregroundColor(NFColor.ink3).multilineTextAlignment(.leading)
+                                    }
+                                    Spacer(minLength: 0)
+                                    Image(systemName: "chevron.right").foregroundColor(NFColor.ink3)
+                                }
+                                .foregroundColor(NFColor.royal).padding(14)
+                                .background(RoundedRectangle(cornerRadius: 12).fill(Color.white))
+                                .overlay(RoundedRectangle(cornerRadius: 12).stroke(NFColor.line, lineWidth: 1))
+                            }.buttonStyle(.plain)
                         }
                         if !p.monthTotals.isEmpty {
                             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 5), spacing: 10) {

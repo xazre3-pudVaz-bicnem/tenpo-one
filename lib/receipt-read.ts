@@ -60,6 +60,16 @@ export const BILL_CATEGORY_LABELS: Record<BillCategory, string> = {
   vendor: '仕入・経費の請求書',
 };
 
+// まとめて取り込みの確かめの画面で選べるもの（Web の components/scan/scan-bulk-import.tsx と iPad の NativeScanBulkView で同じ）
+/** レシートの支払い方法の選択肢 */
+export const SCAN_RECEIPT_PAYMENTS: PaymentMethod[] = ['cash', 'card', 'emoney', 'qr'];
+/** 請求書の支払い方法の選択肢 */
+export const SCAN_BILL_PAYMENTS: PaymentMethod[] = ['transfer', 'debit', 'card', 'cash'];
+/** 請求書の費目の選択肢（並び） */
+export const SCAN_BILL_CATEGORIES: BillCategory[] = ['vendor', 'rent', 'electric', 'water', 'gas'];
+/** 費目の短い名前（選択肢の表示） */
+export const BILL_CATEGORY_SHORT: Record<BillCategory, string> = { vendor: '仕入・経費', rent: '家賃', electric: '電気', water: '水道', gas: 'ガス' };
+
 const MAX_AMOUNT = 10_000_000;
 
 const CJK = '\\u3005\\u3040-\\u30ff\\u3400-\\u9fff\\uff66-\\uff9f';
