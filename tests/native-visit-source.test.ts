@@ -28,3 +28,15 @@ describe('来店経路は来店登録では選ばない・会計で選ぶ（2026
     expect(edit).toMatch(/if \(src\) \{\s+const visit = await setOrderVisitSource/);
   });
 });
+
+describe('予約の無い卓の伝票でも来店経路を残す（2026-10-25 御茶ノ水「この伝票には来店経路を残せません」）', () => {
+  it('卓の伝票ならウォークインの予約を作ってから経路を入れる。卓の無い伝票は今まで通り断る', async () => {
+    const { readFileSync } = await import('node:fs');
+    const src = readFileSync(new URL('../lib/native-pos-server.ts', import.meta.url), 'utf8');
+    const fn = src.slice(src.indexOf('export async function setOrderVisitSource'));
+    expect(fn).toContain('createWalkInReservation(');
+    expect(fn.indexOf('if (!order.table_id)')).toBeGreaterThan(0);
+    expect(src).toContain("created_via: 'walk_in'");
+    expect(src).toContain("from('reservation_tables').insert");
+  });
+});
