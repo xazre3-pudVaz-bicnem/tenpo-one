@@ -15,6 +15,7 @@ import { KitchenTicketPanel } from '@/components/settings/kitchen-ticket-panel';
 import { kitchenTicketSettingsFrom, misroutedDrinkCategories } from '@/lib/kitchen-ticket';
 import { normalizeFloorIds } from '@/lib/printer-floors';
 import { ADMIN_ONLY_MESSAGE } from '@/lib/admin-only-settings';
+import { cloudprntPollSeconds } from '@/lib/cloudprnt-setting';
 
 export const metadata: Metadata = { title: 'レジ・プリンター | 設定' };
 
@@ -97,7 +98,7 @@ export default async function PrintersSettingsPage() {
       drawerKick: p.drawer_kick,
       drawerCommand: p.drawer_command ?? '[drawer: 1]',
       paperWidthMm: p.paper_width_mm,
-      pollIntervalSeconds: p.poll_interval_seconds ?? 5,
+      pollIntervalSeconds: cloudprntPollSeconds(p.poll_interval_seconds),
       lastPolledAt: p.last_polled_at ?? null,
       macAddress: p.mac_address ?? null,
       kitchenStations: (p.kitchen_stations ?? ['kitchen']) as string[],
