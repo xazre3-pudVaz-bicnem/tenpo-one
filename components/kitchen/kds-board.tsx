@@ -39,6 +39,7 @@ export function KdsBoard({
   setItemStatusAction,
   markOrderServedAction,
   updateKdsSettingsAction,
+  stationOptions,
 }: {
   storeId: string;
   groups: KdsOrderGroup[];
@@ -50,6 +51,8 @@ export function KdsBoard({
   setItemStatusAction: (orderItemId: string, nextStatus: KitchenStatus) => Promise<void>;
   markOrderServedAction: (orderId: string, onlyItemIds?: string[]) => Promise<void>;
   updateKdsSettingsAction: (storeId: string, settings: KdsSettings) => Promise<void>;
+  /** 上のタブに出す持ち場（ディスプレイ端末で持ち場を決めたとき。省略＝全部。/app/kitchen は省略） */
+  stationOptions?: StationFilter[];
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -68,7 +71,9 @@ export function KdsBoard({
 
   // タブの選択状態はURLパラメータ（?station=）で保持する。10秒ごとの router.refresh() は
   // URLを変更しないため、この値は自動更新をまたいで維持される。
-  const station = parseStation(searchParams.get('station'));
+  const tabs = stationOptions ?? STATION_FILTER_OPTIONS;
+  const parsedStation = parseStation(searchParams.get('station'));
+  const station: StationFilter = tabs.includes(parsedStation) ? parsedStation : 'all';
 
   const setStation = useCallback(
     (next: StationFilter) => {
@@ -135,7 +140,7 @@ export function KdsBoard({
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex gap-1 overflow-x-auto rounded-xl border border-gray-200 bg-white p-1">
-          {STATION_FILTER_OPTIONS.map((s) => (
+          {tabs.map((s) => (
             <button
               key={s}
               type="button"

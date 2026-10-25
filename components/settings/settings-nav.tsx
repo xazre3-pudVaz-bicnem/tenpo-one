@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation';
 import {
   Store, Building2, Clock, UtensilsCrossed, ListPlus, UserRound, ChartColumn, Printer, QrCode, LayoutGrid,
   CalendarClock, Users, CreditCard, Percent, BookOpen, ShieldCheck, Gift, TriangleAlert, Upload, Plug,
-  ScrollText, ChevronRight, Smartphone, ClipboardList, Tags, BookOpenText, Sheet, TrendingUp,
+  ScrollText, ChevronRight, Smartphone, ClipboardList, Tags, BookOpenText, Sheet, TrendingUp, Monitor,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { RegisterReturnBar } from './register-return-bar';
@@ -26,6 +26,7 @@ const ICONS = {
   reports: ChartColumn,
   printers: Printer,
   handy: Smartphone,
+  display: Monitor,
   qr: QrCode,
   tables: LayoutGrid,
   booking: CalendarClock,

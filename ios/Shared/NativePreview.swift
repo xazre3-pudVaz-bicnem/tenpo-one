@@ -53,6 +53,8 @@ enum NativePreview: String {
     case scanBulk, phoneOwnerScanBulk
     /// レシートのプレビュー（iPad・iPhone 店長・オーナー。2026-10-25。NativeReceiptPreview.swift）
     case receiptPad, phoneOwnerReceipt
+    /// ディスプレイ端末：設定 › ディスプレイ端末・呼び出しモニター・キッチンディスプレイ・案内・QR で登録（2026-10-25。NativeDisplayPreview.swift）
+    case displaySettings, displayCall, displayKitchen, displayNotice, displayPair
     /// iPhone 店長・オーナー：設定・スタッフ管理・キッチン・店舗日次締め・返金（2026-10-25。NativePhoneOwnerSettingsPreview.swift）
     case phoneOwnerSettings, phoneOwnerSettingsMenu, phoneOwnerSettingsHours, phoneOwnerSettingsPayments, phoneOwnerStaff, phoneOwnerKitchen, phoneOwnerStoreDay, phoneOwnerRefund
 
@@ -125,6 +127,7 @@ struct NativePreviewView: View {
         case .phoneOwnerPayroll, .phoneOwnerPayrollRun, .phoneOwnerPayslips, .phoneOwnerPayslip, .phoneOwnerNencho, .phoneOwnerManuals, .phoneOwnerCoupons, .phoneOwnerCoupon: NativePhoneOwnerPeoplePreview(kind: kind.rawValue)
         case .scanBulk, .phoneOwnerScanBulk: NativeScanBulkPreview(kind: kind.rawValue)
         case .receiptPad, .phoneOwnerReceipt: NativeReceiptPreview(kind: kind.rawValue)
+        case .displaySettings, .displayCall, .displayKitchen, .displayNotice, .displayPair: NativeDisplayPreview(kind: kind.rawValue)
         case .phoneOwnerSettings, .phoneOwnerSettingsMenu, .phoneOwnerSettingsHours, .phoneOwnerSettingsPayments, .phoneOwnerStaff, .phoneOwnerKitchen, .phoneOwnerStoreDay, .phoneOwnerRefund: NativePhoneOwnerSettingsPreview(kind: kind.rawValue)
         case .options, .price:
             NativeOrderView(model: model)

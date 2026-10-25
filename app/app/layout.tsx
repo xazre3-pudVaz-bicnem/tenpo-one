@@ -41,6 +41,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   // ハンディ端末（QRで登録したスマホ）はハンディ専用。レジ本体（/app）は開かせない
   if (ctx.isHandyDevice) redirect('/handy');
+  // ディスプレイ端末（QRでつないだ店のモニター）は /display だけ
+  if (ctx.isDisplayDevice) redirect('/display');
 
   // 組織に未所属のcypress管理者は運営コンソールへ
   if (!ctx.organizationId) {

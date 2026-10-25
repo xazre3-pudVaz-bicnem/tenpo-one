@@ -14,6 +14,7 @@ import { visitSourcesFrom } from '@/lib/handy-visit';
 import { RegisterSettingsList } from '@/components/pos/register-settings-list';
 import { SettingsSubTabs } from '@/components/settings/settings-nav';
 import { settingsHubOf, settingsHubs } from '@/lib/settings-hubs';
+import { isDisplayMonitorOnForSettings } from '@/lib/display-monitor-server';
 import { DevicePrinterPanel, type DevicePrinterOption } from '@/components/pos/device-printer-panel';
 import { NativePosToggle } from '@/components/pos/native-pos-toggle';
 import { devicePrinterId } from '@/lib/device-printer-server';
@@ -95,7 +96,8 @@ export default async function RegisterSettingsPage({
   const adminPrinterName = adminDevice?.setting.printerConfigId ? (devicePrinters.find((p) => p.id === adminDevice.setting.printerConfigId)?.name ?? null) : null;
 
   // 設定の中と同じ上のタブ（レジの設定／ハードウェア／iPhoneハンディ…）。2026-09-29 Ronnie「設定の中は全部このタブを」
-  const hub = settingsHubOf(settingsHubs(ctx), SELF_HREF);
+  // ディスプレイ端末のタブは運営が企業・店舗の両方で ON にしたときだけ
+  const hub = settingsHubOf(settingsHubs({ ...ctx, displayMonitorOn: await isDisplayMonitorOnForSettings(ctx) }), SELF_HREF);
 
   return (
     <div className="mx-auto max-w-5xl">

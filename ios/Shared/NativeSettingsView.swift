@@ -374,7 +374,7 @@ struct NativeSettingsView: View {
         "/app/settings/company": "building.2", "/app/settings/menu": "fork.knife", "/app/settings/plans": "list.bullet.rectangle", "/app/settings/options": "slider.horizontal.3",
         "/app/settings/categories": "square.grid.2x2", "/app/settings/menu-book": "book", "/app/settings/qr-service": "qrcode.viewfinder", "/app/settings/menu-bulk": "tablecells",
         "/app/settings/dynamic-pricing": "yensign.circle", "/app/pos/sold-out": "nosign", "/app/settings/printers": "printer", "/app/settings/devices": "ipad",
-        "/app/settings/handy-qr": "qrcode", "/app/settings/handy": "iphone", "/app/settings/reservation-book": "calendar.badge.clock", "/app/settings/booking": "calendar",
+        "/app/settings/handy-qr": "qrcode", "/app/settings/handy": "iphone", "/app/settings/displays": "tv", "/app/settings/reservation-book": "calendar.badge.clock", "/app/settings/booking": "calendar",
         "/app/settings/tables": "rectangle.split.3x3", "/app/staff": "person.badge.key", "/app/settings/payments": "creditcard", "/app/settings/tax": "percent",
         "/app/settings/accounts": "list.number", "/app/settings/approvals": "checkmark.seal", "/app/settings/loyalty": "star", "/app/settings/alerts": "bell.badge",
         "/app/settings/import": "square.and.arrow.down", "/app/settings/integrations": "link", "/app/settings/audit": "doc.text.magnifyingglass", "/app/settings/summary": "chart.bar",
