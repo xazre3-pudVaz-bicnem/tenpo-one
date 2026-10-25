@@ -183,7 +183,7 @@ private let nrSampleJSON = #"""
 extension NativeReceiptModel {
     /// 見本の伝票（会計済み・現金とクレジット・会員ポイントあり）
     static func sample(tab: NRTab = .receipt, pad: Bool) -> NativeReceiptModel {
-        let payload = try? JSONDecoder().decode(NRPayload.self, from: Data(nrSampleJSON.utf8))
+        let payload = try? JSONDecoder().decode(NRcptPayload.self, from: Data(nrSampleJSON.utf8))
         return NativeReceiptModel(orderId: payload?.orderId ?? "", tab: tab, fromOrders: true, pad: pad, sample: payload)
     }
 }

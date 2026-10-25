@@ -46,7 +46,7 @@ struct NativePhoneOwnerReceiptView: View {
         .task { await model.load() }
     }
 
-    private func content(_ p: NRPayload) -> some View {
+    private func content(_ p: NRcptPayload) -> some View {
         ScrollView {
             VStack(spacing: 14) {
                 NRTabSwitch(tab: $model.tab, height: 40)
@@ -71,7 +71,7 @@ struct NativePhoneOwnerReceiptView: View {
         .refreshable { await model.load() }
     }
 
-    @ViewBuilder private func actions(_ p: NRPayload) -> some View {
+    @ViewBuilder private func actions(_ p: NRcptPayload) -> some View {
         NPOCard {
             if model.tab == .receipt {
                 if p.canPrint {

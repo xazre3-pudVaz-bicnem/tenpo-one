@@ -8,7 +8,7 @@ import SwiftUI
 // iPad の画面はこのファイル、iPhone は NativePhoneOwnerReceipt.swift（紙の見た目・読み込みはここを使う）。
 
 /// GET ?part=receipt の中身
-struct NRPayload: Decodable {
+struct NRcptPayload: Decodable {
     struct Modifier: Decodable, Hashable { let name: String; let price: Int }
     struct Line: Decodable, Hashable {
         let name: String
@@ -93,7 +93,7 @@ enum NRTab: Hashable { case receipt, invoice }
 
 @MainActor
 final class NativeReceiptModel: ObservableObject {
-    @Published var payload: NRPayload?
+    @Published var payload: NRcptPayload?
     @Published var error: String?
     @Published var toast: String?
     @Published var busy = false
@@ -108,7 +108,7 @@ final class NativeReceiptModel: ObservableObject {
     /// iPad（印刷係を起こす POST）か iPhone か
     let pad: Bool
 
-    init(orderId: String, reissue: Bool = false, tab: NRTab = .receipt, fromOrders: Bool = false, pad: Bool = AppConfig.isPad, sample: NRPayload? = nil) {
+    init(orderId: String, reissue: Bool = false, tab: NRTab = .receipt, fromOrders: Bool = false, pad: Bool = AppConfig.isPad, sample: NRcptPayload? = nil) {
         self.orderId = orderId
         self.reissue = reissue
         self.tab = tab
@@ -147,9 +147,9 @@ final class NativeReceiptModel: ObservableObject {
             error = "レシートが見つかりません"
             return
         }
-        if payload == nil, let saved = NativeModuleAPI.cached(NRPayload.self, part: "receipt", query: query) { payload = saved }
+        if payload == nil, let saved = NativeModuleAPI.cached(NRcptPayload.self, part: "receipt", query: query) { payload = saved }
         do {
-            payload = try await NativeModuleAPI.get(NRPayload.self, part: "receipt", query: query)
+            payload = try await NativeModuleAPI.get(NRcptPayload.self, part: "receipt", query: query)
             error = nil
         } catch {
             if let e = error as? NativeAPIError, e.useWeb { useWeb = true; return }
@@ -235,7 +235,7 @@ struct NRDashed: View {
 }
 
 struct NRReceiptPaper: View {
-    let r: NRPayload.Receipt
+    let r: NRcptPayload.Receipt
     /// 字の大きさ（iPad 1.0・iPhone 少し小さく）
     var scale: CGFloat = 1
 
@@ -410,7 +410,7 @@ enum NRFormat {
 // MARK: - 紙の領収書（印字と同じ座標を描く。lib/classic-invoice.ts の classicInvoiceLayout）
 
 struct NRInvoiceCanvas: View {
-    let layout: NRPayload.Layout
+    let layout: NRcptPayload.Layout
 
     var body: some View {
         let w = CGFloat(max(1, layout.width))
@@ -443,7 +443,7 @@ struct NRInvoiceCanvas: View {
 
 /// 白い紙に載せた領収書（下に小さく押印の注記）
 struct NRInvoicePaper: View {
-    let invoice: NRPayload.Invoice
+    let invoice: NRcptPayload.Invoice
 
     var body: some View {
         VStack(spacing: 6) {
@@ -581,7 +581,7 @@ struct NativeReceiptView: View {
     }
 
     // 左：紙（レシート＝80mm の幅・領収書＝横長）
-    private func paperArea(_ p: NRPayload) -> some View {
+    private func paperArea(_ p: NRcptPayload) -> some View {
         ScrollView {
             VStack(spacing: 14) {
                 if model.tab == .receipt {
@@ -599,7 +599,7 @@ struct NativeReceiptView: View {
     }
 
     // 右：タブ・伝票の要約・操作
-    private func sidePanel(_ p: NRPayload) -> some View {
+    private func sidePanel(_ p: NRcptPayload) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 NRTabSwitch(tab: $model.tab, height: 46)
@@ -612,7 +612,7 @@ struct NativeReceiptView: View {
         .overlay(alignment: .leading) { Rectangle().fill(NT.line).frame(width: 1) }
     }
 
-    private func summary(_ p: NRPayload) -> some View {
+    private func summary(_ p: NRcptPayload) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
                 Image(systemName: "fork.knife").font(.system(size: 13, weight: .bold)).foregroundColor(NT.ink3)
@@ -647,7 +647,7 @@ struct NativeReceiptView: View {
             .padding(.horizontal, 9).padding(.vertical, 3).background(Capsule().fill(color.opacity(0.12)))
     }
 
-    @ViewBuilder private func receiptActions(_ p: NRPayload) -> some View {
+    @ViewBuilder private func receiptActions(_ p: NRcptPayload) -> some View {
         if p.canPrint {
             bigButton(model.busy ? "印刷中…" : "レシートを再印刷", sub: "Reprint receipt", icon: "printer", filled: true) {
                 Task { await model.printReceipt() }
@@ -662,7 +662,7 @@ struct NativeReceiptView: View {
         }
     }
 
-    @ViewBuilder private func invoiceActions(_ p: NRPayload) -> some View {
+    @ViewBuilder private func invoiceActions(_ p: NRcptPayload) -> some View {
         if model.ryoshushoIssued {
             NRIssuedNotice(atLabel: p.ryoshusho.atLabel, count: p.ryoshusho.count, message: p.ryoshusho.message)
         } else if p.canRyoshusho {
