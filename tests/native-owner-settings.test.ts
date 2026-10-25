@@ -1,32 +1,10 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { NATIVE_HANDY_QR_TYPES, parseCashDayQuery, parseNativeHandyQrAction, parseStoreDayClose } from '@/lib/native-owner-settings';
+import { parseCashDayQuery, parseStoreDayClose } from '@/lib/native-owner-settings';
 
 const read = (p: string) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
 
 // 2026-10-25 Ronnie「Make everything 101% native」→ iPhone の店長・オーナーの設定・スタッフ管理・キッチン・残りの ?web=1 もネイティブに
-describe('iPhoneハンディの QR の操作（lib/native-owner-settings.ts）', () => {
-  it('作る・作り直す・お店のWi-Fiだけ・回線の追加／削除だけ受ける', () => {
-    expect(parseNativeHandyQrAction({ type: 'handyQrSetup' })).toEqual({ ok: true, action: { type: 'handyQrSetup' } });
-    expect(parseNativeHandyQrAction({ type: 'handyQrRegenerate' })).toEqual({ ok: true, action: { type: 'handyQrRegenerate' } });
-    expect(parseNativeHandyQrAction({ type: 'handyQrWifiOnly', wifiOnly: true })).toEqual({ ok: true, action: { type: 'handyQrWifiOnly', wifiOnly: true } });
-    expect(parseNativeHandyQrAction({ type: 'handyQrWifiOnly', wifiOnly: 'yes' }).ok).toBe(false);
-    expect(parseNativeHandyQrAction({ type: 'handyQrNetworkAdd', label: '  2階の Wi-Fi  ' })).toEqual({ ok: true, action: { type: 'handyQrNetworkAdd', label: '2階の Wi-Fi' } });
-    expect(parseNativeHandyQrAction({ type: 'handyQrNetworkAdd' })).toEqual({ ok: true, action: { type: 'handyQrNetworkAdd', label: '' } });
-    expect(parseNativeHandyQrAction({ type: 'handyQrNetworkAdd', label: 'あ'.repeat(40) }).ok && 'ok').toBe('ok');
-    expect(parseNativeHandyQrAction({ type: 'handyQrNetworkRemove', key: '203.0.113.5' })).toEqual({ ok: true, action: { type: 'handyQrNetworkRemove', key: '203.0.113.5' } });
-    expect(parseNativeHandyQrAction({ type: 'handyQrNetworkRemove', key: '' })).toEqual({ ok: false, error: '回線を選んでください' });
-    expect(parseNativeHandyQrAction({ type: 'handyQrNetworkRemove', key: 'x'.repeat(65) }).ok).toBe(false);
-    expect(parseNativeHandyQrAction({ type: 'somethingElse' }).ok).toBe(false);
-    expect([...NATIVE_HANDY_QR_TYPES]).toEqual(['handyQrSetup', 'handyQrRegenerate', 'handyQrWifiOnly', 'handyQrNetworkAdd', 'handyQrNetworkRemove']);
-  });
-
-  it('回線の名前は 30 文字まで', () => {
-    const r = parseNativeHandyQrAction({ type: 'handyQrNetworkAdd', label: 'あ'.repeat(40) });
-    expect(r.ok && r.action.type === 'handyQrNetworkAdd' && r.action.label.length).toBe(30);
-  });
-});
-
 describe('店舗日次締め・売上の内訳（lib/native-owner-settings.ts）', () => {
   it('期間：日次は YYYY-MM-DD（無い・壊れていれば今日の営業日）、月次は YYYY-MM。未来は今日にそろえる', () => {
     const today = '2026-10-25';
@@ -50,17 +28,14 @@ describe('店舗日次締め・売上の内訳（lib/native-owner-settings.ts）
 describe('サーバーのつなぎ（GET part・POST type は Web と同じ Server Action）', () => {
   it('registry に 1 行ずつ足してある', () => {
     const registry = read('lib/native-modules/registry.ts');
-    expect(registry).toContain('handyQrInfo: handyQrInfoGet');
     expect(registry).toContain('cashDay: cashDayGet');
     expect(registry).toContain('storeDayClose: storeDayClosePost');
-    expect(registry).toContain('NATIVE_HANDY_QR_TYPES.map((t) => [t, handyQrPost])');
   });
 
-  it('iPhoneハンディの QR は Web の 設定 › iPhoneハンディ と同じ Server Action・同じ権限（store.settings）', () => {
-    const mod = read('lib/native-modules/handy-qr.ts');
-    for (const fn of ['setupHandyQr', 'regenerateHandyQr', 'setHandyWifiOnly', 'addCurrentShopNetwork', 'removeShopNetwork']) expect(mod).toContain(fn);
-    expect(mod).toContain("can(ctx.role, 'store.settings')");
-    expect(read('app/app/settings/handy-qr/page.tsx')).toContain('regenerateAction={regenerateHandyQr}');
+  it('iPhoneハンディの QR は iPad と同じ GET part=handyQrAdmin ／ POST handyQr…（lib/native-modules/handy-qr.ts）', () => {
+    const swift = read('ios/Shared/NativePhoneOwnerSettingsBooking.swift');
+    expect(swift).toContain('part: "handyQrAdmin"');
+    for (const t of ['handyQrSetup', 'handyQrRegenerate', 'handyQrWifiOnly', 'handyQrNetworkAdd', 'handyQrNetworkRemove']) expect(swift).toContain(`"type": "${t}"`);
   });
 
   it('店舗日次締め・チェックリスト・売上の内訳は Web の /app/cash・/app/cash/close と同じ読み込み・同じ実行', () => {
@@ -115,7 +90,7 @@ describe('iPhone の店長・オーナーのネイティブ（Swift）', () => {
     for (const model of ['NativeStoreModel', 'NativeHoursModel', 'NativeSoldOutModel', 'NativeMenuItemsModel', 'NativeOptionsModel', 'NativeCategoriesModel', 'NativeClerksModel', 'NativeStaffModel', 'NativeBookingSettingsModel', 'NativeReservationBookModel', 'NativePaymentsModel', 'NativeTaxModel', 'NativeAlertsModel', 'NativeHandyDevicesModel', 'NativeIntegrationsModel']) {
       expect(swift, model).toContain(model);
     }
-    expect(swift).toContain('part: "handyQrInfo"');
+    expect(swift).toContain('part: "handyQrAdmin"');
     expect(swift).toContain('iPad・PC で設定してください');
   });
 

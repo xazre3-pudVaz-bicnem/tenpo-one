@@ -4,7 +4,7 @@ import SwiftUI
 //   予約受付ルール（/app/settings/booking）・予約台帳設定（/app/settings/reservation-book：通知・リマインダー・タグ・グルメ連携・SNS・Google）
 //   テーブル・フロア（/app/settings/tables：見る・席数などの変更）・ハンディ端末（/app/settings/handy）・iPhoneハンディ（/app/settings/handy-qr）
 // 読み込み・操作は iPad と同じ（NativeBookingSettingsModel・NativeReservationBookModel・NativeTablesModel・NativeHandyDevicesModel）。
-// iPhoneハンディの QR の作り直し・お店の Wi-Fi は新しい GET part=handyQrInfo ／ POST handyQr…（lib/native-modules/handy-qr.ts。Web と同じ Server Action）
+// iPhoneハンディの QR の作り直し・お店の Wi-Fi は iPad と同じ GET part=handyQrAdmin ／ POST handyQr…（lib/native-modules/handy-qr.ts。Web と同じ Server Action）
 
 // MARK: - 予約受付ルール
 
@@ -649,6 +649,8 @@ struct NPSHandyQrInfo: Decodable {
     let networks: [Network]
     let currentNetwork: String?
     let currentIsShop: Bool
+    /// 登録できる回線の数（iPad の設定 › iPhoneハンディ と同じ返事）
+    let maxNetworks: Int?
 }
 
 @MainActor
@@ -659,12 +661,12 @@ final class NPSHandyQrModel: ObservableObject {
     @Published var busy: String?
     @Published var networkLabel = ""
 
-    init() { payload = NativeModuleAPI.cached(NPSHandyQrInfo.self, part: "handyQrInfo") }
+    init() { payload = NativeModuleAPI.cached(NPSHandyQrInfo.self, part: "handyQrAdmin") }
 
     func refresh() async {
         if NPS.preview { return }
         do {
-            payload = try await NativeModuleAPI.get(NPSHandyQrInfo.self, part: "handyQrInfo")
+            payload = try await NativeModuleAPI.get(NPSHandyQrInfo.self, part: "handyQrAdmin")
             error = nil
         } catch {
             if payload == nil { self.error = NativeModuleAPI.message(error) }
@@ -756,7 +758,7 @@ struct NPSHandyQrPage: View {
                             .buttonStyle(.plain).disabled(model.busy != nil)
                     }
                 }
-                if !p.currentIsShop {
+                if !p.currentIsShop && p.networks.count < (p.maxNetworks ?? 99) {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("今この iPhone がつながっている回線を追加（お店の Wi-Fi につないでから）").font(.system(size: 12.5, weight: .bold)).foregroundColor(NT.ink2)
                         TextField("名前（例：お店のWi-Fi・2階）", text: $model.networkLabel).font(.system(size: 15)).npocInputBox()
