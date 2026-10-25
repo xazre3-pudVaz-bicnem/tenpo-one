@@ -162,9 +162,13 @@ struct NativeHomeView: View {
                 // 横（1000pt 以上）は左に操作の列・右に売上。縦（ポートレート）は上から順に並べてスクロール
                 // （2026-10-24 Ronnie「縦にするとオーダー・会計とボタンがくっつく」）
                 if geo.size.width >= 1000 {
+                    // 左の操作の列は、ボタンの数が多くても画面の高さに収まるように 1 つの高さを縮める（76pt → 最小 50pt）
+                    // （2026-10-25 Ronnie「fit to page」SHUNKA 新宿本店：在庫設定・設定 まで 8 つ）
+                    let tools = model.payload?.tools ?? []
+                    let rowH = Self.toolRowHeight(count: tools.count, available: geo.size.height - 18 - 14)
                     HStack(alignment: .top, spacing: 18) {
-                        VStack(spacing: 10) {
-                            ForEach(model.payload?.tools ?? []) { t in toolRow(t) }
+                        VStack(spacing: rowH < 76 ? 8 : 10) {
+                            ForEach(tools) { t in toolRow(t, height: rowH) }
                             Spacer(minLength: 0)
                         }
                         .frame(width: max(240, geo.size.width * 0.20))
@@ -307,7 +311,15 @@ struct NativeHomeView: View {
 
     // MARK: 左の列
 
-    private func toolRow(_ t: NHTool) -> some View {
+    /// 左の操作の列の 1 つの高さ（いつもは 76pt。入りきらないときだけ縮める）
+    private static func toolRowHeight(count: Int, available: CGFloat) -> CGFloat {
+        guard count > 0, available > 0 else { return 76 }
+        let spacing: CGFloat = 8
+        let fit = (available - spacing * CGFloat(count - 1)) / CGFloat(count)
+        return max(50, min(76, floor(fit)))
+    }
+
+    private func toolRow(_ t: NHTool, height: CGFloat = 76) -> some View {
         let (icon, color) = Self.toolIcon(t)
         return Button {
             if t.action == "drawer" { Task { await model.openDrawer() } } else { onWeb(t.href) }
@@ -330,8 +342,8 @@ struct NativeHomeView: View {
                 Image(systemName: "chevron.right").font(.system(size: 14, weight: .bold)).foregroundColor(NFColor.ink3)
             }
             .padding(.horizontal, 12)
-            .frame(maxWidth: .infinity).frame(height: 76)
-            .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Self.tileBg))
+            .frame(maxWidth: .infinity).frame(height: height)
+            .background(RoundedRectangle(cornerRadius: height < 64 ? 14 : 18, style: .continuous).fill(Self.tileBg))
         }
         .buttonStyle(PressableStyle(scale: 0.98))
         .disabled(model.busy && t.action == "drawer")
