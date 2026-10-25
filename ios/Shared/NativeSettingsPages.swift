@@ -23,6 +23,8 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
     case handyQr = "handyqr"
     case accounts = "accounts"
     case handy = "handy"
+    /// ディスプレイ端末（キッチンディスプレイ・呼び出しモニター）。GET は lib/native-modules/display-devices.ts（NativeDisplayDevicesView.swift）
+    case displays = "displayDevices"
     case categories = "categories"
     case menu = "menuItems"
     case plans = "plans"
@@ -62,6 +64,7 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
         case .handyQr: return "/app/settings/handy-qr"
         case .accounts: return "/app/settings/accounts"
         case .handy: return "/app/settings/handy"
+        case .displays: return "/app/settings/displays"
         case .categories: return "/app/settings/categories"
         case .menu: return "/app/settings/menu"
         case .plans: return "/app/settings/plans"
@@ -98,6 +101,7 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
         case .handyQr: return "iPhoneハンディ"
         case .accounts: return "勘定科目"
         case .handy: return "ハンディ端末"
+        case .displays: return "ディスプレイ端末"
         case .categories: return "カテゴリ"
         case .menu: return "メニュー"
         case .plans: return "プラン"
@@ -134,6 +138,7 @@ enum NativeSettingsPageKey: String, CaseIterable, Identifiable {
         case .handyQr: return "Handy QR"
         case .accounts: return "Accounts"
         case .handy: return "Handy devices"
+        case .displays: return "Display monitors"
         case .categories: return "Categories"
         case .menu: return "Menu"
         case .plans: return "Plans"
@@ -184,6 +189,7 @@ struct NativeSettingsPageScreen: View {
         case .handyQr: NativeHandyQrFromSettings()
         case .accounts: NativeAccountsScreen()
         case .handy: NativeHandyDevicesScreen()
+        case .displays: NativeDisplayDevicesScreen()
         case .categories: NativeCategoriesScreen()
         case .menu: NativeMenuItemsScreen(mode: .menu)
         case .plans: NativeMenuItemsScreen(mode: .plan)

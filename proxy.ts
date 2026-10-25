@@ -32,9 +32,11 @@ export default async function proxy(request: NextRequest) {
   // /app・/admin は下のガードで検証し、各ページの requireSession が最終防衛線）。
   // /handy はレジ（/app）とは別URLのハンディ専用画面。長時間開きっぱなしで使うため、
   // ここでもセッションcookieの更新を走らせる
+  // /display（ディスプレイ端末・/display-pair を含む）も店のモニターで開きっぱなしにするので同じ（ログイン画面へは飛ばさない）
   const needsAuth =
     pathname.startsWith('/app') ||
     pathname.startsWith('/handy') ||
+    pathname.startsWith('/display') ||
     pathname.startsWith('/admin') ||
     pathname === '/login';
   if (!needsAuth) {

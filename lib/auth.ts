@@ -32,6 +32,11 @@ export interface SessionContext {
   isHandyDevice?: boolean;
   /** レジ端末（企業番号＋レジ用パスワードで入ったiPad）のアカウントか */
   isRegisterDevice?: boolean;
+  /**
+   * ディスプレイ端末（QRでつないだ店のモニター）の専用アカウントか（app_metadata.display_device。本人は書き換えられない）。
+   * /display だけを開く。role は null にする（権限の要る画面・操作・API は全部断る）
+   */
+  isDisplayDevice?: boolean;
 }
 
 
@@ -106,7 +111,9 @@ export const getSessionContext = cache(async (): Promise<SessionContext | null> 
   const disabledFeatures = new Set<string>();
 
   if (membership) {
-    role = membership.role as Role;
+    // ディスプレイ端末（QRでつないだ店のモニター）の専用アカウントは役割なし＝権限の要る画面・操作・API は全部断る
+    // （/display は端末の表で自分で確かめる。lib/display-monitor-server.ts）
+    role = user.app_metadata?.display_device === true ? null : (membership.role as Role);
     organizationId = membership.organization_id;
     const org = membership.organizations as unknown as { id: string; name: string } | null;
     organizationName = org?.name ?? null;
@@ -164,6 +171,7 @@ export const getSessionContext = cache(async (): Promise<SessionContext | null> 
     disabledFeatures,
     isHandyDevice: user.user_metadata?.handy_device === true,
     isRegisterDevice: user.user_metadata?.register_device === true,
+    isDisplayDevice: user.app_metadata?.display_device === true,
   };
 });
 

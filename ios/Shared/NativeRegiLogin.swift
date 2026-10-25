@@ -137,6 +137,7 @@ struct NativeRegiLoginView: View {
                     .padding(.top, 10)
                 Spacer()
                 Text("お店の iPad をレジとして使います").font(.system(size: 14, weight: .semibold)).foregroundColor(NLStyle.sub)
+                NativeDisplayPairLink() // ディスプレイ端末（KDS・呼び出しモニター）にする（NativeDisplayMode.swift）
             }
             .padding(44)
             .frame(width: 380, alignment: .leading)

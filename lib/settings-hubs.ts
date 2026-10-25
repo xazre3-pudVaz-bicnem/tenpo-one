@@ -15,6 +15,8 @@ export function settingsHubs(ctx: {
   role: Role;
   disabledFeatures: ReadonlySet<string>;
   isRegisterDevice?: boolean;
+  /** ディスプレイ端末（運営が企業・店舗の両方で ON にしたときだけ true。lib/display-monitor-server.ts の isDisplayMonitorOnForSettings） */
+  displayMonitorOn?: boolean;
 }): SettingsNavItem[] {
   const role = ctx.role;
   const featureOn = (href: string) => {
@@ -68,6 +70,8 @@ export function settingsHubs(ctx: {
         { href: '/app/settings/devices', label: 'レジ端末（iPad）', en: 'Register iPads', icon: 'printers', description: 'iPad ごとのレシートの出し先・アプリ画面の ON/OFF・表示名（iPad を触らずに管理画面から）', visible: ctx.isRegisterDevice !== true },
         { href: '/app/settings/handy-qr', label: 'iPhoneハンディ', en: 'Handy QR', icon: 'qr', description: 'お店に1つの固定QRでハンディにログイン（読むだけで開く。お店のWi-Fi限定にもできる）', visible: true },
         { href: '/app/settings/handy', label: 'ハンディ端末', en: 'Handy devices', icon: 'handy', description: 'スマホをQRコードでハンディとして登録・解除する', visible: true },
+        // 店のモニター（キッチンディスプレイ・呼び出しモニター）。運営が企業・店舗の両方で ON にしたときだけ（2026-10-24 Ronnie）
+        { href: '/app/settings/displays', label: 'ディスプレイ端末', en: 'Display monitors', icon: 'display', description: 'モニター・タブレットをQRでつないで、キッチンディスプレイ・呼び出しモニターにする', visible: ctx.displayMonitorOn === true && can(role, 'store.settings') },
       ],
     },
     {

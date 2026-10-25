@@ -6,6 +6,7 @@ import { bluetoothMakerOf, isEpsonMaker, isLanRelayPrinter, isLocalPrinterHost, 
 import { PRINTER_MAKER_LABEL, PRINTER_MODELS } from '@/lib/printer-models';
 import { permissionHint, registerSettingSections } from '@/lib/register-settings';
 import { settingsHubs } from '@/lib/settings-hubs';
+import { loadDisplayMonitorFlag } from '@/lib/display-monitor-server';
 import { devicePrinterId } from '@/lib/device-printer-server';
 import type { NativeSettingsPayload, NativeSettingsPrinter } from '@/lib/native-settings';
 
@@ -77,8 +78,10 @@ export async function loadNativeSettings(ctx: SessionContext, supabase: Supabase
       hint: l.allowed ? null : permissionHint(l.permission),
     })),
   }));
+  // ディスプレイ端末は運営が企業・店舗の両方で ON にしたときだけ デバイス管理 に出す
+  const displayMonitorOn = ctx.organizationId ? (await loadDisplayMonitorFlag(ctx.organizationId, store.id)).on : false;
   const hubs = ctx.role
-    ? settingsHubs({ role: ctx.role, disabledFeatures: ctx.disabledFeatures, isRegisterDevice })
+    ? settingsHubs({ role: ctx.role, disabledFeatures: ctx.disabledFeatures, isRegisterDevice, displayMonitorOn })
         .filter((h) => (h.children?.length ?? 0) > 0)
         .map((h) => ({
           label: h.label,
