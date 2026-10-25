@@ -194,7 +194,10 @@ struct NativeOwnerHomeView: View {
     var onWeb: (String) -> Void = { _ in }
     /// 店舗を切り替えたあと、裏の Web も同じ店で読み直す
     var onStoreSwitched: () -> Void = {}
+    /// ログアウト（Web を見せずにネイティブのログインへ。2026-10-25 09:39 Ronnie）。nil なら出さない
+    var onLogout: (() -> Void)? = nil
     @State private var menuOpen = false
+    @State private var logoutAsk = false
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -651,6 +654,22 @@ struct NativeOwnerHomeView: View {
                     }
                     .buttonStyle(.plain)
                     .overlay(alignment: .bottom) { Rectangle().fill(NOHColor.line.opacity(0.6)).frame(height: 1) }
+                }
+            }
+            if onLogout != nil {
+                Button { logoutAsk = true } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "rectangle.portrait.and.arrow.right").font(.system(size: 17, weight: .semibold)).foregroundColor(Color(hex: 0xC62828)).frame(width: 28)
+                        Text("ログアウト").font(.system(size: 15, weight: .bold)).foregroundColor(Color(hex: 0xC62828))
+                        Spacer()
+                    }
+                    .frame(minHeight: 50)
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 18)
+                .confirmationDialog("ログアウトしますか？", isPresented: $logoutAsk, titleVisibility: .visible) {
+                    Button("ログアウト", role: .destructive) { menuOpen = false; onLogout?() }
+                    Button("やめる", role: .cancel) {}
                 }
             }
         }

@@ -114,59 +114,131 @@ struct HandyLoginView: View {
 
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
-            QRScannerView(embedded: true, onCode: { code in state.handleScanned(code) })
-                .ignoresSafeArea()
+            NativeLoginBackground(glowAt: UnitPoint(x: 0.5, y: 0.55))
             VStack(spacing: 0) {
-                // 上：何をするかだけ（日本語を大きく・英語を小さく）
-                VStack(spacing: 6) {
-                    HStack(spacing: 8) {
-                        Image("BrandMark")
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 26, height: 26)
-                            .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
-                        Text("TENPO ONE ハンディ")
-                            .font(.system(size: 15, weight: .heavy))
-                            .foregroundColor(.white)
-                    }
-                    Text("お店の「ハンディ QR」を読んでください")
-                        .font(.system(size: 20, weight: .bold))
-                        .foregroundColor(.white)
+                // 上：広告の写真と同じ見出し（2026-10-25 09:39 Ronnie「ログインもあの写真のように」）
+                VStack(spacing: 12) {
+                    NativeBrandPill(size: 12)
+                    NativeCatchTitle(first: "QRを読むだけで、", second: "すぐハンディ。", size: 30)
+                    Text("レジ（iPad）の「iPhone ハンディ」の QR を\n下の枠に入れてください")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(NLStyle.sub)
                         .multilineTextAlignment(.center)
-                    Text("レジ（iPad）の「iPhone ハンディ」の QR。読めたらそのままハンディが開きます\nScan the store's Handy QR to sign in.")
-                        .font(.system(size: 12))
-                        .foregroundColor(.white.opacity(0.8))
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 24)
+                        .lineSpacing(3)
                 }
-                .padding(.top, 18)
-                .padding(.bottom, 14)
-                .frame(maxWidth: .infinity)
-                .background(
-                    LinearGradient(colors: [.black.opacity(0.75), .black.opacity(0)], startPoint: .top, endPoint: .bottom)
-                        .ignoresSafeArea(edges: .top)
-                )
-                Spacer()
-                // 下：オーナー・店長だけが使う小さな文字（スタッフは触らない）
+                .padding(.top, 22)
+                .padding(.horizontal, 20)
+
+                // 真ん中：カメラ（角の印つきの枠）
+                ZStack {
+                    QRScannerView(embedded: true, onCode: { code in state.handleScanned(code) })
+                        .id(state.handyScanEpoch)
+                        .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+                    ScanCorners()
+                        .stroke(NLStyle.accent, style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round))
+                        .padding(14)
+                    if state.handyJoining {
+                        VStack(spacing: 10) {
+                            ProgressView().tint(.white).scaleEffect(1.3)
+                            Text("ログイン中…").font(.system(size: 16, weight: .bold)).foregroundColor(.white)
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(RoundedRectangle(cornerRadius: 26, style: .continuous).fill(Color.black.opacity(0.55)))
+                    }
+                }
+                .frame(width: 280, height: 280)
+                .overlay(RoundedRectangle(cornerRadius: 26, style: .continuous).stroke(Color.white.opacity(0.18), lineWidth: 1))
+                .shadow(color: .black.opacity(0.35), radius: 24, y: 12)
+                .padding(.top, 26)
+
+                // QR が使えなかったとき・Wi-Fi の外でログアウトしたとき
+                if let m = state.handyJoinMessage {
+                    HStack(alignment: .top, spacing: 8) {
+                        Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 15)).foregroundColor(Color(hex: 0xFFB4B4))
+                        Text(m).font(.system(size: 13, weight: .semibold)).foregroundColor(.white)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 0)
+                        Button { state.handyJoinMessage = nil } label: {
+                            Image(systemName: "xmark").font(.system(size: 12, weight: .bold)).foregroundColor(.white.opacity(0.7))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(14)
+                    .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color(hex: 0xC62828).opacity(0.35)))
+                    .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Color(hex: 0xFFB4B4).opacity(0.5), lineWidth: 1))
+                    .padding(.horizontal, 22)
+                    .padding(.top, 18)
+                } else {
+                    HStack(spacing: 14) {
+                        stepChip("1", "QR を読む")
+                        stepChip("2", "担当を選ぶ")
+                        stepChip("3", "注文")
+                    }
+                    .padding(.top, 22)
+                }
+
+                Spacer(minLength: 12)
                 // 下：店長・オーナーは自分の ID（メール）・パスワードで（2026-10-25 Ronnie）。見る画面は役割で決まる
                 Button { state.chooseOwnerLogin() } label: {
-                    VStack(spacing: 2) {
-                        Text("店長・オーナーの方").font(.system(size: 15, weight: .bold))
-                        Text("ID・パスワードでログイン").font(.system(size: 12))
+                    HStack(spacing: 10) {
+                        Image(systemName: "person.badge.key.fill").font(.system(size: 18, weight: .bold))
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text("店長・オーナーの方").font(.system(size: 15, weight: .bold))
+                            Text("ID・パスワードでログイン").font(.system(size: 12))
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right").font(.system(size: 13, weight: .bold))
                     }
                     .foregroundColor(.white)
-                    .frame(maxWidth: .infinity).padding(.vertical, 12)
-                    .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.white.opacity(0.16)))
-                    .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Color.white.opacity(0.3), lineWidth: 1))
+                    .padding(.horizontal, 18).frame(height: 60)
+                    .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.white.opacity(0.14)))
+                    .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Color.white.opacity(0.3), lineWidth: 1))
                 }
-                .buttonStyle(.plain)
-                .padding(.horizontal, 24)
-                .padding(.bottom, 18)
+                .buttonStyle(PressableStyle())
+                .padding(.horizontal, 22)
+                .padding(.bottom, 16)
             }
             .frame(maxWidth: 520)
         }
         .preferredColorScheme(.dark)
+    }
+
+    private func stepChip(_ n: String, _ label: String) -> some View {
+        HStack(spacing: 6) {
+            Text(n).font(.system(size: 12, weight: .black)).foregroundColor(NLStyle.navy)
+                .frame(width: 20, height: 20).background(Circle().fill(NLStyle.accent))
+            Text(label).font(.system(size: 12, weight: .bold)).foregroundColor(.white)
+        }
+    }
+}
+
+/// QR の枠の四隅の印
+private struct ScanCorners: Shape {
+    func path(in rect: CGRect) -> Path {
+        let l = min(rect.width, rect.height) * 0.16
+        let r: CGFloat = 18
+        var p = Path()
+        // 左上
+        p.move(to: CGPoint(x: rect.minX, y: rect.minY + l))
+        p.addLine(to: CGPoint(x: rect.minX, y: rect.minY + r))
+        p.addQuadCurve(to: CGPoint(x: rect.minX + r, y: rect.minY), control: CGPoint(x: rect.minX, y: rect.minY))
+        p.addLine(to: CGPoint(x: rect.minX + l, y: rect.minY))
+        // 右上
+        p.move(to: CGPoint(x: rect.maxX - l, y: rect.minY))
+        p.addLine(to: CGPoint(x: rect.maxX - r, y: rect.minY))
+        p.addQuadCurve(to: CGPoint(x: rect.maxX, y: rect.minY + r), control: CGPoint(x: rect.maxX, y: rect.minY))
+        p.addLine(to: CGPoint(x: rect.maxX, y: rect.minY + l))
+        // 右下
+        p.move(to: CGPoint(x: rect.maxX, y: rect.maxY - l))
+        p.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - r))
+        p.addQuadCurve(to: CGPoint(x: rect.maxX - r, y: rect.maxY), control: CGPoint(x: rect.maxX, y: rect.maxY))
+        p.addLine(to: CGPoint(x: rect.maxX - l, y: rect.maxY))
+        // 左下
+        p.move(to: CGPoint(x: rect.minX + l, y: rect.maxY))
+        p.addLine(to: CGPoint(x: rect.minX + r, y: rect.maxY))
+        p.addQuadCurve(to: CGPoint(x: rect.minX, y: rect.maxY - r), control: CGPoint(x: rect.minX, y: rect.maxY))
+        p.addLine(to: CGPoint(x: rect.minX, y: rect.maxY - l))
+        return p
     }
 }
 

@@ -7,6 +7,8 @@ enum NativePreview: String {
     /// iPhone ハンディの卓・注文・注文の確認（2026-10-25）
     case phoneTable, phoneOrder, phoneConfirm, phoneSetup, phoneHome
     case phoneHomeOwner
+    /// ログイン・起動の画面（2026-10-25 09:39。広告の写真と同じ見た目）
+    case handyLogin, bootSplash
     /// App Store の画面写真用：iPad のホーム・テーブル一覧・店舗台帳（2026-10-25。NativeStorePreview.swift）
     case home, floor, ledger
     /// iPad のレジのログイン・担当選択（2026-10-25）
@@ -76,6 +78,8 @@ struct NativePreviewView: View {
                 .statusBarHidden(true)
         case .settings:
             NativeSettingsView(model: NativeSettingsModel.sample(), onHome: {}, onWeb: { _ in })
+        case .handyLogin: HandyLoginView()
+        case .bootSplash: NativeBootSplash()
         case .phoneTable, .phoneOrder, .phoneConfirm, .phoneSetup, .phoneHome, .phoneHomeOwner:
             NativePhoneHandyPreview(kind: kind.rawValue)
         case .home, .floor, .ledger:
@@ -514,7 +518,8 @@ struct NativeHandyHomeScreen: View {
             model: model,
             onWeb: { path in state.leaveNativePhone(to: path) },
             onChangeMode: { state.resetMode() },
-            onSignedOut: { state.leaveNativePhone(to: "/handy") },
+            // ログアウトしたら Web のログインの画面を出さずにすぐ QR のカメラ（店長・オーナーはネイティブのログイン）
+            onSignedOut: { state.handySignedOut() },
             onHome: state.mode == .owner ? { state.leaveNativePhone(to: "/app/dashboard") } : nil
         )
         .onChange(of: state.phoneRefreshTick) { _ in Task { await model.refresh() } }
@@ -532,7 +537,8 @@ struct NativeOwnerHomeScreen: View {
             model: model,
             onWeb: { path in state.leaveNativePhone(to: path) },
             // 店を変えたら裏の Web も同じ店で読み直す（Cookie はもう変わっている）
-            onStoreSwitched: { WebViewController.current?.load(AppConfig.url("/app/dashboard")) }
+            onStoreSwitched: { WebViewController.current?.load(AppConfig.url("/app/dashboard")) },
+            onLogout: { Task { await state.ownerLogout() } }
         )
         .onChange(of: state.phoneRefreshTick) { _ in Task { await model.refresh() } }
         .onChange(of: model.useWeb) { on in if on { state.fallbackPhoneToWeb() } }
