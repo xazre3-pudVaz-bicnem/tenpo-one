@@ -216,6 +216,9 @@ private actor StarPrintSession {
     private var tail: Task<String?, Never>?
     private var queuedPrints = 0
     private var preparing = false
+    // Successful traffic already proves readiness; do not put a status round-trip
+    // in front of the next receipt every two seconds. Uptime is monotonic.
+    private var lastSuccessfulTraffic: TimeInterval?
 
     func printReusing(identifier: String, usb: Bool, data: Data) async -> String? {
         queuedPrints += 1
@@ -233,6 +236,8 @@ private actor StarPrintSession {
     func prepare(identifier: String, usb: Bool) async -> String? {
         // Status probes never queue behind a pending print or another probe.
         guard queuedPrints == 0, !preparing else { return nil }
+        if let c = current, c.id == identifier, c.usb == usb,
+           let last = lastSuccessfulTraffic, ProcessInfo.processInfo.systemUptime - last < 30 { return nil }
         preparing = true
         defer { preparing = false }
         let previous = tail
@@ -246,11 +251,12 @@ private actor StarPrintSession {
 
     private func openAhead(identifier: String, usb: Bool) async -> String? {
         let wasOpen = current.map { $0.id == identifier && $0.usb == usb } ?? false
-        let start = Date()
+        let start = ProcessInfo.processInfo.systemUptime
         do {
             let printer = try await ensureOpen(identifier: identifier, usb: usb)
             _ = try await printer.getStatus()
-            NSLog("[TENPO Bluetooth] prepare_ms=%d reused=%d ready=1", Int(Date().timeIntervalSince(start) * 1000), wasOpen ? 1 : 0)
+            lastSuccessfulTraffic = ProcessInfo.processInfo.systemUptime
+            NSLog("[TENPO Bluetooth] prepare_ms=%d reused=%d ready=1", Int((ProcessInfo.processInfo.systemUptime - start) * 1000), wasOpen ? 1 : 0)
             return nil
         } catch {
             await drop()
@@ -260,7 +266,7 @@ private actor StarPrintSession {
     }
 
     private func send(identifier: String, usb: Bool, data: Data) async -> String? {
-        let start = Date()
+        let start = ProcessInfo.processInfo.systemUptime
         let printer: StarPrinter
         do {
             do { printer = try await ensureOpen(identifier: identifier, usb: usb) }
@@ -273,10 +279,11 @@ private actor StarPrintSession {
             await drop()
             return "connect"
         }
-        let openMilliseconds = Int(Date().timeIntervalSince(start) * 1000)
+        let openMilliseconds = Int((ProcessInfo.processInfo.systemUptime - start) * 1000)
         do {
             try await printer.print(raw: data)
-            NSLog("[TENPO Bluetooth] open_ms=%d total_ms=%d", openMilliseconds, Int(Date().timeIntervalSince(start) * 1000))
+            lastSuccessfulTraffic = ProcessInfo.processInfo.systemUptime
+            NSLog("[TENPO Bluetooth] open_ms=%d total_ms=%d bytes=%d", openMilliseconds, Int((ProcessInfo.processInfo.systemUptime - start) * 1000), data.count)
             return nil
         } catch {
             // Paper may have printed even if its response was lost. Do not resend.
@@ -289,6 +296,9 @@ private actor StarPrintSession {
         if let c = current, c.id == identifier, c.usb == usb { return c.printer }
         await drop()
         let printer = StarPrinter(StarConnectionSettings(interfaceType: usb ? .usb : .bluetooth, identifier: identifier))
+        // Only the readiness probe is bounded. Keep the print-completion timeout
+        // unchanged so long receipts are not falsely reported as failed.
+        printer.getStatusTimeout = 1000
         do { try await printer.open() }
         catch { await printer.close(); throw error }
         current = (identifier, usb, printer)
@@ -298,6 +308,7 @@ private actor StarPrintSession {
     private func drop() async {
         let old = current
         current = nil
+        lastSuccessfulTraffic = nil
         if let c = old { await c.printer.close() }
     }
 }
