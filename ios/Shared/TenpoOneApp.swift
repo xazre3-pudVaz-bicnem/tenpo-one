@@ -41,6 +41,12 @@ struct RootView: View {
                 if state.needsHandyLogin {
                     HandyLoginView()
                 }
+                // 起動したて：最初の画面が決まるまで（Web のログインの画面などを見せない。2026-10-25 09:39 Ronnie）
+                if state.booting && !state.needsHandyLogin && !state.needsRegiLogin && !state.ownerLoginPage {
+                    NativeBootSplash()
+                        .transition(.opacity)
+                        .zIndex(60)
+                }
                 // iPad：レジのネイティブのログイン（いちばん上。2026-10-25 02:29 Ronnie）
                 if state.needsRegiLogin && AppConfig.isPad {
                     NativeRegiLoginView()

@@ -49,19 +49,23 @@ struct NativeOwnerLoginView: View {
 
     var body: some View {
         ZStack {
-            LinearGradient(colors: [Color(hex: 0x171333), Color(hex: 0x1E2A6B), Color(hex: 0x2A6FE6)], startPoint: .top, endPoint: .bottom)
-                .ignoresSafeArea()
-            Circle().fill(Color.white.opacity(0.06)).frame(width: 360).offset(x: 160, y: -320)
+            // 広告の写真と同じ地・見出し（2026-10-25 09:39 Ronnie「ログインもあの写真のように」）
+            NativeLoginBackground(glowAt: UnitPoint(x: 0.5, y: 0.45))
             ScrollView {
                 VStack(spacing: 0) {
                     VStack(spacing: 12) {
-                        Image("BrandMark").resizable().scaledToFit().frame(width: 72, height: 72)
-                            .clipShape(RoundedRectangle(cornerRadius: 17, style: .continuous))
-                            .shadow(color: .black.opacity(0.25), radius: 10, y: 5)
-                        Text("TENPO ONE").font(.system(size: 30, weight: .heavy)).foregroundColor(.white)
-                        Text("店長・オーナー").font(.system(size: 16, weight: .bold)).foregroundColor(.white.opacity(0.8))
+                        HStack(spacing: 10) {
+                            Image("BrandMark").resizable().scaledToFit().frame(width: 40, height: 40)
+                                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                .shadow(color: .black.opacity(0.25), radius: 8, y: 4)
+                            NativeBrandPill(size: 13)
+                        }
+                        NativeCatchTitle(first: "売上も勤怠も、", second: "iPhone で。", size: 32)
+                            .padding(.top, 4)
+                        Text("店長・オーナーの方は ID・パスワードでログイン")
+                            .font(.system(size: 13, weight: .semibold)).foregroundColor(NLStyle.sub)
                     }
-                    .padding(.top, 56).padding(.bottom, 28)
+                    .padding(.top, 44).padding(.bottom, 26).padding(.horizontal, 20)
                     VStack(alignment: .leading, spacing: 14) {
                         Text("ログイン").font(.system(size: 22, weight: .heavy)).foregroundColor(NT.ink)
                         input("ID（メールアドレス）", text: $model.email, secure: false, which: .email)

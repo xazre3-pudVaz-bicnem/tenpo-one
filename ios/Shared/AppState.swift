@@ -23,6 +23,14 @@ final class AppState: ObservableObject {
     @Published var scanning = false
     /// ハンディでまだログインしていない（QR を読むカメラの画面を出す）
     @Published var needsHandyLogin = false
+    /// ハンディの QR ログインをネイティブでしている途中（Web の /handy-join を開かない。2026-10-25 09:39 Ronnie）
+    @Published var handyJoining = false
+    /// QR ログインのエラー・Wi-Fi の外でログアウトしたときの案内（カメラの画面に出す）
+    @Published var handyJoinMessage: String?
+    /// カメラを作り直す（エラーのあと、もう一度 QR を読めるように）
+    @Published var handyScanEpoch = 0
+    /// 起動したて：Web の画面が決まるまでネイティブの起動画面を出す（ログインの Web の画面を見せない。2026-10-25 09:39 Ronnie）
+    @Published var booting = true
     /// Web の画面を作り直す（モードを変えたとき）
     @Published var webSession = UUID()
     /// ネイティブのオーダー・会計画面で開いている伝票（nil＝出していない）
@@ -296,7 +304,10 @@ final class AppState: ObservableObject {
         // まだログインしたことのないハンディは、Web の返事を待たずにすぐカメラを出す（開けていればすぐ消える）
         if mode == .handy, !UserDefaults.standard.bool(forKey: handyLoggedInKey) {
             needsHandyLogin = true
+            booting = false
         }
+        // 起動画面は長くても 6 秒（回線が遅い・オフラインのとき）
+        DispatchQueue.main.asyncAfter(deadline: .now() + 6) { [weak self] in self?.finishBooting() }
     }
 
     /// ハンディの画面（/handy）が開けた＝ログインできている。カメラを消し、次の起動ではすぐハンディへ
@@ -678,6 +689,17 @@ final class AppState: ObservableObject {
         switch mode {
         case .handy:
             nativeOwnerHome = false
+            // Web の /handy-join（Wi-Fi の外で自動ログアウト ?out=1 など）はネイティブの QR のカメラで（Web の画面を見せない）
+            if path == "/handy-join" || path == "/handy-join/" {
+                let out = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.contains { $0.name == "out" && $0.value == "1" } == true
+                UserDefaults.standard.set(false, forKey: handyLoggedInKey)
+                if out { handyJoinMessage = "お店の Wi-Fi の外に出たので、ログアウトしました。お店の Wi-Fi につないで、もう一度 QR を読んでください" }
+                phoneHandy = nil
+                phoneReservations = nil
+                nativeHandyHome = false
+                if !needsHandyLogin { needsHandyLogin = true }
+                return
+            }
             let on = path == "/handy" || path == "/handy/"
             if on { phoneRefreshTick += 1; if phoneHandy != nil { phoneHandy = nil }; if phoneReservations != nil { phoneReservations = nil } }
             if nativeHandyHome != on { nativeHandyHome = on }
@@ -1115,9 +1137,91 @@ final class AppState: ObservableObject {
             WebViewController.current?.showAlert(title: "TENPO ONE の QR ではありません", message: "お店の「ハンディ QR」を読んでください。")
             return false
         }
+        // お店の「ハンディ QR」（/handy-join#<値>）：Web の画面を開かずにネイティブでログイン（2026-10-25 09:39 Ronnie「ブラウザに行かない」）
+        if url.path == "/handy-join" || url.path == "/handy-join/", let token = url.fragment, !token.isEmpty {
+            Task { @MainActor in await self.joinHandyNative(token: token) }
+            return true
+        }
         needsHandyLogin = false
         WebViewController.current?.load(url)
         return true
+    }
+
+    /// QR の値でハンディにログイン（POST /api/app/v1/handy-join。中身は Web の /handy-join と同じ）→ ネイティブのテーブル一覧
+    @MainActor func joinHandyNative(token: String) async {
+        guard !handyJoining else { return }
+        handyJoining = true
+        handyJoinMessage = nil
+        defer { handyJoining = false }
+        var req = URLRequest(url: AppConfig.url("/api/app/v1/handy-join"))
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "content-type")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: ["token": token])
+        do {
+            let data = try await NativeAPI.shared.send(req, kickPrint: false)
+            let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
+            guard json["ok"] as? Bool == true else {
+                failHandyJoin((json["error"] as? String) ?? "ログインできませんでした。もう一度 QR を読んでください")
+                return
+            }
+            UserDefaults.standard.set(true, forKey: handyLoggedInKey)
+            // 先にネイティブのテーブル一覧を出してから裏の Web を読む（Web のハンディの画面を見せない）
+            if mode == .handy { nativeHandyHome = true; phoneRefreshTick += 1 }
+            needsHandyLogin = false
+            WebViewController.current?.load(AppConfig.url("/handy"))
+        } catch {
+            failHandyJoin((error as? NativeAPIError)?.message ?? "通信できませんでした。お店の Wi-Fi につながっているか確かめて、もう一度読んでください")
+        }
+    }
+
+    @MainActor private func failHandyJoin(_ message: String) {
+        handyJoinMessage = message
+        UINotificationFeedbackGenerator().notificationOccurred(.error)
+        // カメラを作り直して、もう一度読めるように
+        handyScanEpoch += 1
+    }
+
+    /// ハンディのログアウト（≡ の「ログアウト」）：Web のログインの画面を出さずに、すぐ QR のカメラへ
+    @MainActor func handySignedOut() {
+        if mode == .owner {
+            // 店長・オーナーがハンディを開いていたとき：店長・オーナーのネイティブのログインへ
+            ownerSignedOut()
+            return
+        }
+        UserDefaults.standard.set(false, forKey: handyLoggedInKey)
+        phoneHandy = nil
+        phoneReservations = nil
+        nativeHandyHome = false
+        handyJoinMessage = nil
+        handyScanEpoch += 1
+        needsHandyLogin = true
+        WebViewController.current?.load(URL(string: "about:blank")!)
+    }
+
+    /// 店長・オーナーのログアウト（ホームの ≡ メニューの「ログアウト」）：Web を見せずにネイティブのログインへ
+    @MainActor func ownerLogout() async {
+        _ = await NSPApi.post(["type": "signOut"])
+        ownerSignedOut()
+    }
+
+    @MainActor private func ownerSignedOut() {
+        // 先にネイティブのログインを出してから、裏で Web の /login を読む
+        ownerLoginPage = true
+        phoneOwnerModule = nil
+        phoneHandy = nil
+        phoneReservations = nil
+        nativeHandyHome = false
+        nativeOwnerHome = false
+        WebViewController.current?.load(AppConfig.url("/login"))
+    }
+
+    /// 起動画面を閉じる（最初の Web の画面が決まった・ネイティブの画面が出た・時間切れ）
+    func finishBooting() {
+        guard booting else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+            guard let self, self.booting else { return }
+            withAnimation(.easeOut(duration: 0.2)) { self.booting = false }
+        }
     }
 }
 

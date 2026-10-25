@@ -71,13 +71,19 @@ final class QRScannerViewController: UIViewController, AVCaptureMetadataOutputOb
             frame.centerYAnchor.constraint(equalTo: view.centerYAnchor),
             frame.widthAnchor.constraint(equalToConstant: 250),
             frame.heightAnchor.constraint(equalToConstant: 250),
-            messageLabel.topAnchor.constraint(equalTo: frame.bottomAnchor, constant: 24),
+            // 埋め込み（iPhone のハンディのログイン）は外の SwiftUI が枠の印を描く。文字はカメラが使えないときだけ真ん中に
+            embedded ? messageLabel.centerYAnchor.constraint(equalTo: view.centerYAnchor, constant: -22) : messageLabel.topAnchor.constraint(equalTo: frame.bottomAnchor, constant: 24),
             messageLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 24),
             messageLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
             settingsButton.topAnchor.constraint(equalTo: messageLabel.bottomAnchor, constant: 16),
             settingsButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
         ])
 
+        if embedded {
+            frame.isHidden = true
+            messageLabel.text = nil
+            messageLabel.font = .systemFont(ofSize: 14, weight: .semibold)
+        }
         if !embedded {
             var closeConfig = UIButton.Configuration.filled()
             closeConfig.title = "閉じる"

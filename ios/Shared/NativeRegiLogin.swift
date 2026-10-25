@@ -97,11 +97,8 @@ struct NativeRegiLoginView: View {
 
     var body: some View {
         ZStack {
-            LinearGradient(colors: [Color(hex: 0x171333), Color(hex: 0x1E2A6B), Color(hex: 0x2A6FE6)], startPoint: .topLeading, endPoint: .bottomTrailing)
-                .ignoresSafeArea()
-            // うすい丸い光（背景の飾り）
-            Circle().fill(Color.white.opacity(0.06)).frame(width: 620).offset(x: 360, y: -300)
-            Circle().fill(Color.white.opacity(0.05)).frame(width: 420).offset(x: -420, y: 320)
+            // 広告の写真と同じ地（2026-10-25 09:39 Ronnie「ログインもあの写真のように」）
+            NativeLoginBackground(glowAt: UnitPoint(x: 0.5, y: 0.72))
             if let clerks = model.clerks {
                 NativeRegiClerkPicker(storeName: model.storeName ?? "", clerks: clerks) { c in
                     state.finishRegiLogin(clerk: c)
@@ -130,13 +127,16 @@ struct NativeRegiLoginView: View {
         HStack(spacing: 0) {
             // 左：ブランド
             VStack(alignment: .leading, spacing: 18) {
-                Image("BrandMark").resizable().scaledToFit().frame(width: 86, height: 86)
-                    .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-                    .shadow(color: .black.opacity(0.25), radius: 12, y: 6)
-                Text("TENPO ONE").font(.system(size: 44, weight: .heavy)).foregroundColor(.white)
-                Text("レジ").font(.system(size: 22, weight: .bold)).foregroundColor(.white.opacity(0.85))
+                HStack(spacing: 12) {
+                    Image("BrandMark").resizable().scaledToFit().frame(width: 56, height: 56)
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .shadow(color: .black.opacity(0.25), radius: 10, y: 5)
+                    NativeBrandPill(size: 15)
+                }
+                NativeCatchTitle(first: "レジも売上も、", second: "この1台で。", size: 36, alignment: .leading)
+                    .padding(.top, 10)
                 Spacer()
-                Text("お店の iPad をレジとして使います").font(.system(size: 14, weight: .semibold)).foregroundColor(.white.opacity(0.7))
+                Text("お店の iPad をレジとして使います").font(.system(size: 14, weight: .semibold)).foregroundColor(NLStyle.sub)
             }
             .padding(44)
             .frame(width: 380, alignment: .leading)

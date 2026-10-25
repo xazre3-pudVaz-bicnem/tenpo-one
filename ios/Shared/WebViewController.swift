@@ -498,6 +498,8 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
             AppState.shared.maybeOpenNativePos(for: url)
             noteHandyOpened(url)
         }
+        // 最初の画面が決まった（ネイティブのログイン・ホームが上に出た）ので起動画面を閉じる
+        AppState.shared.finishBooting()
         if let url = webView.url, AppConfig.isOwnHost(url) {
             let path = url.path
             if path.hasPrefix("/app") || path.hasPrefix("/handy") {
@@ -531,6 +533,7 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         if nsError.domain == NSURLErrorDomain, nsError.code == NSURLErrorCancelled { return }
         if nsError.domain == "WebKitErrorDomain", nsError.code == 102 { return } // frame load interrupted
         errorView.isHidden = false
+        AppState.shared.finishBooting()
     }
 
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
