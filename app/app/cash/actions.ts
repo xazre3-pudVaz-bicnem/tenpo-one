@@ -363,9 +363,13 @@ export async function closeRegister(
   await completeBusinessDayAfterClose(supabase, ctx, sessionId);
 
   let printWarning: string | null = null;
+  // 精算レシートを iPad（印刷係）がつないで出すとき（Bluetooth・USB など、ほかに LAN で動くレシートプリンターが無い店）は、
+  // 出し終わるまでログアウトさせない（すぐログアウトすると印刷係が取りに来られず出なかった。2026-10-25 お店「精算レシートが出てこなかった」）
+  let keepSignedIn = false;
   try {
     const printed = await enqueueRegisterReportPrint(supabase, sessionId, ctx.userId, clerkName);
     if (!printed.ok) printWarning = printed.error ?? 'レジ精算レシートを印刷できませんでした';
+    keepSignedIn = printed.ok && printed.viaDevice === true;
   } catch (err) {
     await captureServerError(err, {
       route: 'cash.close_register.print',
@@ -377,8 +381,9 @@ export async function closeRegister(
   }
   revalidatePath('/app/cash');
   revalidatePath('/app/pos');
-  // レジ端末は締めたら閉店。そのままログアウトしてレジのログイン画面へ戻す（2026-09-24 店舗要望）
-  return { ok: true, printWarning, signOutAfter: ctx.isRegisterDevice === true };
+  // レジ端末は締めたら閉店。そのままログアウトしてレジのログイン画面へ戻す（2026-09-24 店舗要望）。
+  // ただし精算レシートを iPad が出すときはログアウトしない（出たあと、担当者がログアウトする）
+  return { ok: true, printWarning, signOutAfter: ctx.isRegisterDevice === true && !keepSignedIn };
 }
 
 /**

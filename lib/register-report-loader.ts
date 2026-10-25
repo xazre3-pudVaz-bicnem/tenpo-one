@@ -1,5 +1,6 @@
 import 'server-only';
 import { devicePrinterId } from '@/lib/device-printer-server';
+import { pickRegisterReportPrinter, type ReportPrinterRow } from '@/lib/register-report-printer';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { METHOD_LABELS } from '@/components/cash/labels';
 import { formatDateTime, weekdayJa } from '@/lib/format';
@@ -452,6 +453,8 @@ export async function loadRegisterReportData(
 export interface RegisterReportPrintResult {
   ok: boolean;
   error?: string;
+  /** 出し先が iPad（印刷係）がつないで出すプリンター（Bluetooth・USB など）。iPad がログアウトすると出ないので、呼ぶ側はログアウトさせない */
+  viaDevice?: boolean;
 }
 
 /**
@@ -470,20 +473,27 @@ export async function enqueueRegisterReportPrint(
   const loaded = await loadRegisterReportData(supabase, sessionId, clerkName);
   if (!loaded) return { ok: false, error: '対象のレジセッションが見つかりません' };
 
-  const { data: receiptPrinters } = await supabase
-    .from('printer_configs')
-    .select('id, paper_width_mm')
-    .eq('store_id', loaded.storeId)
-    .eq('status', 'active')
-    .eq('cloudprnt_enabled', true)
-    .eq('usage', 'receipt')
-    .order('created_at', { ascending: true })
-    .limit(20);
-  // この iPad で選んだレシートプリンター（レジの設定「このiPadのプリンター」）があればそれ、無ければ今まで通り最初の1台
+  const printerQuery = (columns: string) =>
+    supabase
+      .from('printer_configs')
+      .select(columns)
+      .eq('store_id', loaded.storeId)
+      .eq('status', 'active')
+      .eq('cloudprnt_enabled', true)
+      .eq('usage', 'receipt')
+      .order('created_at', { ascending: true })
+      .limit(20);
+  const full = await printerQuery('id, paper_width_mm, maker, connection_type, last_polled_at');
+  // 読めなかったとき（古いスキーマなど）：今まで通りの列だけで（出し先は選んだもの・最初の 1 台）
+  const receiptPrinters = full.error ? (await printerQuery('id, paper_width_mm')).data : full.data;
+  // この iPad で選んだレシートプリンター（レジの設定「このiPadのプリンター」）が、プリンター自身で取りに来て動いている機械ならそれ。
+  // iPad の Bluetooth・USB なら、同じ店の LAN（CloudPRNT・Server Direct Print）で動いているレシートプリンターへ
+  // （レジ端末はレジ締めのあとすぐログアウトして、iPad の印刷係が取りに来られないため。lib/register-report-printer.ts）
   const preferredId = await devicePrinterId();
-  const rows = (receiptPrinters ?? []) as { id: string; paper_width_mm: number }[];
-  const printer = rows.find((r) => r.id === preferredId) ?? rows[0] ?? null;
-  if (!printer) return { ok: false, error: 'レシートプリンターが未設定のため、レジ精算レシートを印刷できません' };
+  const rows = (receiptPrinters ?? []) as unknown as ReportPrinterRow[];
+  const choice = pickRegisterReportPrinter(rows, preferredId, Date.now());
+  if (!choice) return { ok: false, error: 'レシートプリンターが未設定のため、レジ精算レシートを印刷できません' };
+  const printer = choice.printer;
 
   const paper = printer.paper_width_mm === 58 ? 58 : 80;
   const layout = kind === 'settlement' ? layoutSettlementReport : layoutRegisterReport;
@@ -513,5 +523,5 @@ export async function enqueueRegisterReportPrint(
     ({ error } = await supabase.from('print_jobs').insert(job('receipt')));
   }
   if (error) return { ok: false, error: `印刷ジョブの登録に失敗しました: ${error.message}` };
-  return { ok: true };
+  return { ok: true, viaDevice: choice.viaDevice };
 }
