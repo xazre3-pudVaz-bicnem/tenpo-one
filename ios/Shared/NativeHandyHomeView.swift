@@ -442,7 +442,7 @@ struct NativeHandyHomeView: View {
                             // iPad のネイティブと同じ箱（3D・下の色の帯・残り時間・最終注文から・呼び出し）。押したときの動きはハンディのまま
                             // 箱は小さめに：空いている卓は低く（番号と「4名席 空」だけ）、お客様のいる卓は時間・金額が入る高さ
                             // （2026-10-25 21:24 Ronnie「Handy ko button dherai big」。前は全部 240pt）
-                            NativeTableCard(table: ft, now: model.now.timeIntervalSince1970 * 1000, height: ft.order == nil ? 118 : 196) { _ in tap() }
+                            NativeTableCard(table: ft, now: model.now.timeIntervalSince1970 * 1000, height: Self.phoneCardHeight(ft)) { _ in tap() }
                         } else {
                             Button(action: tap) {
                                 NativeHandyTile(table: t, state: state, now: model.now, callKind: kinds[t.id],
@@ -457,6 +457,12 @@ struct NativeHandyHomeView: View {
             }
         }
         .refreshable { await model.refresh() }
+    }
+
+    /// iPhone の卓の箱の高さ：空いた卓 118pt、お客様のいる卓 196pt（呼び出し・連携の行があればその分だけ高く）
+    static func phoneCardHeight(_ t: NFTable) -> CGFloat {
+        guard t.order != nil else { return 118 }
+        return 196 + (t.calls.isEmpty ? 0 : 20) + (t.linkedNames == nil ? 0 : 20)
     }
 
     /// まとめた卓の名前（T-1+T-2）。組んでいなければ空（Web の groupTableLabel と同じ）
