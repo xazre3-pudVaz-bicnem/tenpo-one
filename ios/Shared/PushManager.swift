@@ -85,6 +85,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
         PushManager.shared.configure()
+        // iPad：数字の入力欄はアプリの 10-key（NativeNumberKeypad.swift。2026-10-25 Ronnie）
+        NativeNumberKeypadInstaller.install()
         return true
     }
 
