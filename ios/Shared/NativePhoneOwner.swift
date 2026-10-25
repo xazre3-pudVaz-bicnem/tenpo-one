@@ -40,6 +40,10 @@ enum NativePhoneOwnerRegistry {
         ("/app/manuals", "manuals"),
         ("/app/coupons", "coupons"),
         ("/app/pos/receipt", "receipt"), // レシートのプレビュー（NativePhoneOwnerReceipt.swift）
+        ("/app/accounting", "accounting"), // 会計（仕訳・月次締め・帳簿・財務レポート・銀行口座・自動仕訳・固定資産。NativePhoneOwnerAccounting*.swift）
+        ("/app/invoices", "invoices"), // 請求書・書類（?tab=inbox|documents。NativePhoneOwnerInvoices*.swift）
+        ("/app/reconciliation", "reconciliation"), // 照合（NativePhoneOwnerReconciliation.swift）
+        ("/app/settlement", "settlement"), // 月次清算（NativePhoneOwnerSettlement.swift）
     ]
     static let paths: [String: String] = Dictionary(entries, uniquingKeysWith: { a, _ in a })
 
@@ -91,6 +95,10 @@ struct NativePhoneOwnerScreen: View {
         case "manuals": NativePhoneManualsScreen(route: route)
         case "coupons": NativePhoneCouponsScreen(route: route)
         case "receipt": NativePhoneOwnerReceiptScreen(route: route)
+        case "accounting": NativePhoneAccountingScreen(route: route)
+        case "invoices": NativePhoneInvoicesScreen(route: route)
+        case "reconciliation": NativePhoneReconciliationScreen(route: route)
+        case "settlement": NativePhoneSettlementScreen(route: route)
         default:
             // 知らない key：Web のまま見せる
             Color.clear.onAppear { state.phoneOwnerModule = nil }
