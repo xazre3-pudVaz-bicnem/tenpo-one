@@ -6,7 +6,7 @@ import SwiftUI
 //   廃棄・在庫差異：7日・30日・90日の廃棄額・品目ごとの廃棄・直近の棚卸の差異
 //   商品を押すとレシピ（NativePhoneOwnerCostingItem.swift）：食材の追加・編集・削除（その場で原価・原価率を計算）
 // サーバーは iPad と同じ：GET part=costing|costingImpact|costingWaste|costingItem ／ POST costingLineAdd・Update・Delete
-// CSV 出力・売価や手入力原価の変更は Web の画面で。
+// CSV はアプリの中で取り出して共有（NPOCsvButton）。売価や手入力原価の変更は 設定 › メニュー（iPhone のネイティブ）で。
 
 // MARK: - 中身（サーバーの返事。使うところだけ）
 
@@ -375,11 +375,9 @@ struct NativePhoneCostingView: View {
                 }
             }
             if p.canExport == true {
-                Button { onOpen("/app/costing?web=1") } label: {
-                    Label("CSV 出力は Web の画面で", systemImage: "square.and.arrow.down").font(.system(size: 12.5, weight: .bold)).foregroundColor(NT.ink2)
-                }
-                .buttonStyle(.plain)
-                .padding(.leading, 4)
+                // CSV もアプリの中で取り出して共有（NativePhoneOwnerCsv.swift。Web の画面には行かない）
+                NPOCsvButton(title: "商品別原価 CSV", path: "/app/costing/export", query: model.itemsQuery(), fileName: "menu_item_costs.csv",
+                             onError: { model.error = $0 })
             }
         }
     }

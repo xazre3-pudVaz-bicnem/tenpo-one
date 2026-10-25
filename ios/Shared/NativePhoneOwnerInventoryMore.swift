@@ -1,7 +1,7 @@
 import SwiftUI
 
 // iPhone の店長・オーナー：在庫の「移動」「発注提案」「予測」タブ（Web の /app/inventory?tab=transfers|reorder|forecast。2026-10-25）
-//   移動：一覧（番号・状態・From→To・品目）・発送・受取（確認あり）。申請・取消・即時移動は Web の画面で
+//   移動：一覧（番号・状態・From→To・品目）・発送・受取（確認あり）・申請・即時移動・取消（NativePhoneOwnerTransfers.swift）
 //   発注提案：推奨発注数・根拠。選んだ品目で発注書を作る（ネイティブの「発注」へ ?items=id:数量）。自動では発注しない
 //   予測：品目を選ぶと明日・今週残り・来週の見込みと曜日別の平均。売れ筋上位10品目の明日見込み
 
@@ -29,20 +29,8 @@ struct NPZTransfersList: View {
             } else {
                 ForEach(rows) { r in card(r) }
             }
-            if p.canTransfer {
-                Button { onOpen("/app/inventory?tab=transfers&web=1") } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "safari").font(.system(size: 13, weight: .bold))
-                        Text("移動の申請・取消は Web の画面で").font(.system(size: 13.5, weight: .bold))
-                        Spacer()
-                        Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold))
-                    }
-                    .foregroundColor(NT.purpleDeep)
-                    .padding(.horizontal, 14).frame(height: 46)
-                    .background(npocCard(14))
-                }
-                .buttonStyle(PressableStyle())
-            }
+            // 移動の申請・即時移動・取消もネイティブで（NativePhoneOwnerTransfers.swift。2026-10-25「101% native」）
+            NPZTransferActions(model: model, p: p)
         }
         .confirmationDialog(confirmTitle, isPresented: Binding(get: { confirm != nil }, set: { if !$0 { confirm = nil } }), titleVisibility: .visible, presenting: confirm) { c in
             Button(c.ship ? "発送する" : "受け取る") { Task { await run(c) } }
@@ -109,6 +97,9 @@ struct NPZTransfersList: View {
             }
             if canReceive {
                 NPOCWideButton(text: "受け取る", icon: "tray.and.arrow.down", kind: .success, busy: model.busy, height: 46) { confirm = Pending(row: r, ship: false) }
+            }
+            if isFrom && r.status == "requested" && p.canTransfer {
+                NPZTransferCancelButton(model: model, row: r)
             }
         }
         .padding(12)

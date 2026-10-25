@@ -809,11 +809,9 @@ struct NativePhoneOwnerRegisterView: View {
         }
     }
 
-    /// 店舗日次締め・売上の内訳・レジ精算のプレビューは Web の画面（?web=1 でネイティブにしない）
+    /// 店舗日次締め・売上の内訳もネイティブで（NativePhoneOwnerStoreDay.swift。レジ精算のプレビュー・再印刷は iPad のレジから）
     private var storeDayLink: some View {
-        NOMWebLink(title: "店舗日次締め・売上の内訳", sub: "店舗日次締めの実行・日次／月次の売上の内訳・レジ精算のプレビューは Web の画面で", icon: "building.columns") {
-            onOpen("/app/cash/close?web=1")
-        }
+        NOMStoreDayLink(onOpen: onOpen)
     }
 
     // MARK: 部品
