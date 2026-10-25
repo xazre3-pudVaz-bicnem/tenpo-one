@@ -20,6 +20,8 @@ import { AddOrgMemberDialog } from '@/components/admin/add-org-member-dialog';
 import { FeatureFlagMatrix } from '@/components/admin/feature-flag-matrix';
 import { DisplayMonitorFlags } from '@/components/admin/display-monitor-flags';
 import { loadOrgDisplayMonitorFlags } from '@/lib/display-monitor-server';
+import { NetworkPrintersAdmin } from '@/components/admin/network-printers-admin';
+import { loadOrgNetworkPrinters, type AdminStoreNetworkPrinters } from '@/lib/admin-network-printers-server';
 import { OrgPlanForm } from '@/components/admin/org-plan-form';
 import { OrganizationRowActions } from '@/components/admin/organization-row-actions';
 import { SubscriptionMockForm } from '@/components/admin/subscription-mock-form';
@@ -145,6 +147,18 @@ export default async function OrganizationDetailPage({ params }: { params: Promi
     storeTableMissing: true,
     activeDevices: new Map<string, number>(),
   }));
+
+  // LAN・Wi-Fi のプリンター（店舗ごと。運営だけが変える。2026-10-25 Ronnie）。読めなくても画面は出す
+  let networkPrinters: AdminStoreNetworkPrinters[] = [];
+  let networkPrintersError: string | null = null;
+  try {
+    networkPrinters = await loadOrgNetworkPrinters(
+      id,
+      (stores ?? []).map((s) => ({ id: s.id as string, name: s.name as string }))
+    );
+  } catch (e) {
+    networkPrintersError = e instanceof Error ? e.message : '読み込みに失敗しました';
+  }
 
   const planNameByCode = new Map((plans ?? []).map((p) => [p.code, p.name]));
   const statusMeta = STATUS_LABEL[org.status] ?? { label: org.status, tone: 'gray' as BadgeTone };
@@ -314,6 +328,19 @@ export default async function OrganizationDetailPage({ params }: { params: Promi
                     </TBody>
                   </Table>
                 </TableWrap>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>プリンター（LAN・Wi-Fi）</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {networkPrintersError ? (
+                <p className="text-sm text-danger">プリンターを読み込めませんでした：{networkPrintersError}</p>
+              ) : (
+                <NetworkPrintersAdmin organizationId={org.id} stores={networkPrinters} />
               )}
             </CardContent>
           </Card>

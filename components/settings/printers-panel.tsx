@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Plus, Pencil, Trash2, Printer as PrinterIcon } from 'lucide-react';
+import { Plus, Pencil, Trash2, Printer as PrinterIcon, Lock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { TableWrap, Table, THead, TBody, Tr, Th, Td } from '@/components/ui/table';
@@ -9,6 +9,7 @@ import { EmptyState } from '@/components/ui/state';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useToast } from '@/components/ui/toast';
 import { deletePrinterConfig } from '@/app/app/settings/printers/actions';
+import { isNetworkConnection, NETWORK_PRINTER_ADMIN_NOTE, STORE_PRINTER_CONNECTIONS } from '@/lib/network-printers';
 import { PrinterDialog, type FloorOption, type PrinterConfigRow } from './printer-dialog';
 import { TestPrintDialog } from './test-print-dialog';
 
@@ -33,6 +34,7 @@ export function PrintersPanel({
   const [deleting, setDeleting] = useState<PrinterConfigRow | null>(null);
   const [testing, setTesting] = useState<PrinterConfigRow | null>(null);
   const { toast } = useToast();
+  const hasNetwork = rows.some((r) => isNetworkConnection(r.connectionType));
 
   return (
     <div className="space-y-3">
@@ -49,6 +51,15 @@ export function PrintersPanel({
           プリンター追加
         </Button>
       </div>
+
+      {/* 有線LAN・Wi-Fi のプリンターは運営（コントロールセンター）で追加・変更する。ここでは見るだけ（2026-10-25 Ronnie） */}
+      <p className="flex items-start gap-1.5 text-xs text-gray-500">
+        <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gray-400" aria-hidden />
+        <span>
+          {NETWORK_PRINTER_ADMIN_NOTE}
+          {hasNetwork ? '（下の一覧の 有線LAN・Wi-Fi のプリンターは見るだけです）' : ''}。ここで追加できるのは Bluetooth・USB・ブラウザ印刷のプリンターです
+        </span>
+      </p>
 
       {rows.length === 0 ? (
         <EmptyState title="プリンターが登録されていません" description="「プリンター追加」から登録してください" />
@@ -81,6 +92,9 @@ export function PrintersPanel({
                     )}
                     {r.cloudprntEnabled && (
                       <Badge tone="success" className="ml-1">実機印字</Badge>
+                    )}
+                    {isNetworkConnection(r.connectionType) && (
+                      <Badge tone="gray" className="ml-1">運営で設定</Badge>
                     )}
                   </Td>
                   <Td>
@@ -123,25 +137,38 @@ export function PrintersPanel({
                       >
                         <PrinterIcon className="h-4 w-4" />
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setEditing(r);
-                          setDialogOpen(true);
-                        }}
-                        aria-label="編集"
-                        className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100"
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setDeleting(r)}
-                        aria-label="削除"
-                        className="rounded-lg p-1.5 text-gray-400 hover:bg-danger-soft hover:text-danger"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                      {isNetworkConnection(r.connectionType) ? (
+                        <span
+                          className="rounded-lg p-1.5 text-gray-300"
+                          title={NETWORK_PRINTER_ADMIN_NOTE}
+                          aria-label={NETWORK_PRINTER_ADMIN_NOTE}
+                          role="img"
+                        >
+                          <Lock className="h-4 w-4" />
+                        </span>
+                      ) : (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditing(r);
+                              setDialogOpen(true);
+                            }}
+                            aria-label="編集"
+                            className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDeleting(r)}
+                            aria-label="削除"
+                            className="rounded-lg p-1.5 text-gray-400 hover:bg-danger-soft hover:text-danger"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </>
+                      )}
                     </div>
                   </Td>
                 </Tr>
@@ -151,7 +178,15 @@ export function PrintersPanel({
         </TableWrap>
       )}
 
-      {dialogOpen && <PrinterDialog storeId={storeId} editing={editing} floors={floors} onClose={() => setDialogOpen(false)} />}
+      {dialogOpen && (
+        <PrinterDialog
+          storeId={storeId}
+          editing={editing}
+          floors={floors}
+          connections={STORE_PRINTER_CONNECTIONS}
+          onClose={() => setDialogOpen(false)}
+        />
+      )}
 
       {testing && (
         <TestPrintDialog

@@ -759,7 +759,7 @@ struct NativeSettingsView: View {
                 }
                 HStack(alignment: .top, spacing: 8) {
                     Image(systemName: "desktopcomputer").font(.system(size: 13, weight: .bold)).foregroundColor(NFColor.iris)
-                    Text("LAN・Wi-Fi のプリンターとレシートの出し先は、管理画面（パソコン）の「設定 › レジ端末」で決めます。iPad でつなぐのは Bluetooth のプリンターだけです")
+                    Text("LAN・Wi-Fi のプリンターは TENPO ONE の運営（コントロールセンター）が決めます。レシートの出し先は管理画面（パソコン）の「設定 › レジ端末」で決めます。iPad でつなぐのは Bluetooth のプリンターだけです")
                         .font(.system(size: 12.5)).foregroundColor(NFColor.ink2).fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(.horizontal, 18).padding(.vertical, 12)
