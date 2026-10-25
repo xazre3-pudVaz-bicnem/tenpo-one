@@ -80,6 +80,8 @@ struct NativeModuleScreen: View {
         case "invoices": NativeInvoicesView(route: route, onHome: { state.goNativeHome() }, onWeb: { state.leaveNativeFloor(to: $0) })
         case "reconciliation": NativeReconciliationView(route: route, onHome: { state.goNativeHome() }, onWeb: { state.leaveNativeFloor(to: $0) })
         case "settlement": NativeSettlementView(route: route, onHome: { state.goNativeHome() }, onWeb: { state.leaveNativeFloor(to: $0) })
+        // ScanSnap のまとめて取り込み（/app/scan#scan-bulk。道は AppState の #scan-bulk の分かれ道で開く。entries には入れない）
+        case "scanBulk": NativeScanBulkView(onBack: { state.goNativeScan() })
         default:
             // 知らない key（古いアプリ）：Web のまま見せる
             Color.clear.onAppear { state.nativeModule = nil }

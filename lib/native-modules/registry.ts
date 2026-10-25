@@ -20,6 +20,7 @@ import { handyFloorGet, handyMenuGet, handyOrderPost, handySetupGet, handyTableG
 import { NATIVE_HANDY_ORDER_TYPES } from '@/lib/native-handy-order';
 import { handyReservationEntryGet, handyReservationMonthGet, handyReservationPost, handyReservationsGet } from '@/lib/native-modules/handy-reservations';
 import { NATIVE_HANDY_RSV_TYPES } from '@/lib/native-handy-reservations';
+import { scanBulkGet, SCAN_BULK_POST } from '@/lib/native-modules/scan-bulk';
 
 /**
  * まだ専用の台が無かった画面（勤怠・日報・タスク …）の iPad ネイティブ用の API をまとめる所
@@ -76,6 +77,7 @@ export const NATIVE_MODULE_GET: Record<string, NativeModuleGet> = {
   handyReservations: handyReservationsGet,
   handyReservationEntry: handyReservationEntryGet,
   handyReservationMonth: handyReservationMonthGet,
+  scanBulk: scanBulkGet,
 };
 
 /** POST の type → handler。追加は 1 行ずつ */
@@ -139,4 +141,5 @@ export const NATIVE_MODULE_POST: Record<string, NativeModulePost> = {
   ...Object.fromEntries(NATIVE_HANDY_ORDER_TYPES.map((t) => [t, handyOrderPost])),
   // iPhone のネイティブのハンディ：予約（来店・キャンセル・テーブル変更・受付管理・登録。2026-10-25 Ronnie）
   ...Object.fromEntries(NATIVE_HANDY_RSV_TYPES.map((t) => [t, handyReservationPost])),
+  ...SCAN_BULK_POST, // ScanSnap のまとめて取り込み（scanBulkCheck・scanBulkPlan・scanBulkFile … lib/native-modules/scan-bulk.ts）
 };

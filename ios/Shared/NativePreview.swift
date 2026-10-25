@@ -47,6 +47,8 @@ enum NativePreview: String {
     case phoneOwnerCostingItem
     /// iPhone 店長・オーナー：給与・歩合（一覧・詳細・給与明細・年末調整）・マニュアル・クーポン（2026-10-25。NativePhoneOwnerPeoplePreview.swift）
     case phoneOwnerPayroll, phoneOwnerPayrollRun, phoneOwnerPayslips, phoneOwnerPayslip, phoneOwnerNencho, phoneOwnerManuals, phoneOwnerCoupons, phoneOwnerCoupon
+    /// ScanSnap のまとめて取り込み（iPad・iPhone。2026-10-25。NativeScanBulkPreview.swift）
+    case scanBulk, phoneOwnerScanBulk
 
     static var current: NativePreview? {
         guard let raw = UserDefaults.standard.string(forKey: "tenpoNativePreview") else { return nil }
@@ -114,6 +116,7 @@ struct NativePreviewView: View {
         case .phoneOwnerCosting: NPZStockPreview(kind: "costing")
         case .phoneOwnerCostingItem: NPZStockPreview(kind: "costingItem")
         case .phoneOwnerPayroll, .phoneOwnerPayrollRun, .phoneOwnerPayslips, .phoneOwnerPayslip, .phoneOwnerNencho, .phoneOwnerManuals, .phoneOwnerCoupons, .phoneOwnerCoupon: NativePhoneOwnerPeoplePreview(kind: kind.rawValue)
+        case .scanBulk, .phoneOwnerScanBulk: NativeScanBulkPreview(kind: kind.rawValue)
         case .options, .price:
             NativeOrderView(model: model)
                 .statusBarHidden(true)
@@ -487,7 +490,8 @@ struct NativeScanScreen: View {
             onHome: { state.goNativeHome() },
             onWeb: { path in state.leaveNativeFloor(to: path) },
             onCashClose: { state.goNativeCash("/app/cash/close") },
-            onPetty: { state.goNativeCashIo(tab: "petty") }
+            onPetty: { state.goNativeCashIo(tab: "petty") },
+            onBulk: { state.openNativeScanBulk() }
         )
         .onAppear { model.tx = state.scanTx }
         .onChange(of: state.scanTx) { tx in model.tx = tx }
