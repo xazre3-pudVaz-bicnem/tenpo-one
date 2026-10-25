@@ -22,6 +22,8 @@ import { DisplayMonitorFlags } from '@/components/admin/display-monitor-flags';
 import { loadOrgDisplayMonitorFlags } from '@/lib/display-monitor-server';
 import { NetworkPrintersAdmin } from '@/components/admin/network-printers-admin';
 import { loadOrgNetworkPrinters, type AdminStoreNetworkPrinters } from '@/lib/admin-network-printers-server';
+import { PrinterConnectionsAdmin } from '@/components/admin/printer-connections-admin';
+import { loadOrgPrinterConnections, type AdminStorePrinterConnections } from '@/lib/admin-printer-connections-server';
 import { OrgPlanForm } from '@/components/admin/org-plan-form';
 import { OrganizationRowActions } from '@/components/admin/organization-row-actions';
 import { SubscriptionMockForm } from '@/components/admin/subscription-mock-form';
@@ -158,6 +160,18 @@ export default async function OrganizationDetailPage({ params }: { params: Promi
     );
   } catch (e) {
     networkPrintersError = e instanceof Error ? e.message : '読み込みに失敗しました';
+  }
+
+  // プリンター接続（CloudPRNT・Server Direct Print・iPad。店舗ごと。運営だけが変える。2026-10-25 Ronnie）。読めなくても画面は出す
+  let printerConnections: AdminStorePrinterConnections[] = [];
+  let printerConnectionsError: string | null = null;
+  try {
+    printerConnections = await loadOrgPrinterConnections(
+      id,
+      (stores ?? []).map((s) => ({ id: s.id as string, name: s.name as string }))
+    );
+  } catch (e) {
+    printerConnectionsError = e instanceof Error ? e.message : '読み込みに失敗しました';
   }
 
   const planNameByCode = new Map((plans ?? []).map((p) => [p.code, p.name]));
@@ -341,6 +355,23 @@ export default async function OrganizationDetailPage({ params }: { params: Promi
                 <p className="text-sm text-danger">プリンターを読み込めませんでした：{networkPrintersError}</p>
               ) : (
                 <NetworkPrintersAdmin organizationId={org.id} stores={networkPrinters} />
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>プリンター接続</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {printerConnectionsError ? (
+                <p className="text-sm text-danger">プリンター接続を読み込めませんでした：{printerConnectionsError}</p>
+              ) : (
+                <PrinterConnectionsAdmin
+                  organizationId={org.id}
+                  siteUrl={process.env.NEXT_PUBLIC_SITE_URL ?? ''}
+                  stores={printerConnections}
+                />
               )}
             </CardContent>
           </Card>

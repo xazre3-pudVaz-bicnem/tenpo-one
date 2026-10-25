@@ -15,7 +15,7 @@ import { KitchenTicketPanel } from '@/components/settings/kitchen-ticket-panel';
 import { kitchenTicketSettingsFrom, misroutedDrinkCategories } from '@/lib/kitchen-ticket';
 import { normalizeFloorIds } from '@/lib/printer-floors';
 import { ADMIN_ONLY_MESSAGE } from '@/lib/admin-only-settings';
-import { cloudprntPollSeconds } from '@/lib/cloudprnt-setting';
+import { canEditPrinterConnection, pendingJobsByPrinter, printerConnectionRows } from '@/lib/printer-connection';
 
 export const metadata: Metadata = { title: 'レジ・プリンター | 設定' };
 
@@ -75,35 +75,16 @@ export default async function PrintersSettingsPage() {
     .eq('store_id', targetStore.id)
     .eq('target', 'cloudprnt')
     .in('status', ['queued', 'claimed']);
-  const pendingByPrinter = new Map<string, number>();
-  for (const j of pendingJobs ?? []) {
-    if (!j.printer_config_id) continue;
-    pendingByPrinter.set(j.printer_config_id, (pendingByPrinter.get(j.printer_config_id) ?? 0) + 1);
-  }
+  const pendingByPrinter = pendingJobsByPrinter(pendingJobs ?? []);
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? '';
-  const cloudPrntRows = (printers ?? [])
-    .filter((p) => p.usage === 'receipt' || p.usage === 'kitchen')
-    // レシート機を先に並べる
-    .sort((a, b) => Number(a.usage !== 'receipt') - Number(b.usage !== 'receipt'))
-    .map((p) => ({
-      id: p.id,
-      name: p.name,
-      maker: p.maker ?? '',
-      model: p.model ?? '',
-      usage: p.usage as 'receipt' | 'kitchen',
-      connectionType: (p.connection_type as string | null) ?? null,
-      cloudprntEnabled: p.cloudprnt_enabled ?? false,
-      cloudprntToken: p.cloudprnt_token ?? null,
-      drawerKick: p.drawer_kick,
-      drawerCommand: p.drawer_command ?? '[drawer: 1]',
-      paperWidthMm: p.paper_width_mm,
-      pollIntervalSeconds: cloudprntPollSeconds(p.poll_interval_seconds),
-      lastPolledAt: p.last_polled_at ?? null,
-      macAddress: p.mac_address ?? null,
-      kitchenStations: (p.kitchen_stations ?? ['kitchen']) as string[],
-      pendingJobs: pendingByPrinter.get(p.id) ?? 0,
-    }));
+  // プリンター接続の設定（接続用URL・再発行・使う／使わない・間隔・ドロア・伝票）は運営（コントロールセンター）だけ（2026-10-25 Ronnie）。
+  // お店のアカウントには接続用URLのトークンを渡さない（画面のデータにも載せない）。テスト印刷・ドロアを開くは今まで通り
+  const canEditConnection = canEditPrinterConnection(ctx);
+  // 並び（レシート機が先）・列は運営コンソールと同じ（lib/printer-connection.ts）
+  const cloudPrntRows = printerConnectionRows(printers ?? [], pendingByPrinter).map((p) =>
+    canEditConnection ? p : { ...p, cloudprntToken: null }
+  );
 
   // スマホで読み取ってポーリングURLをコピーするためのQR（トークンは # 以降に置き、サーバーへ送らない）
   const setupQrById: Record<string, string> = {};
@@ -222,7 +203,13 @@ export default async function PrintersSettingsPage() {
               <PrintersPanel storeId={targetStore.id} initial={printerRows} floors={floors} />
             </CardContent>
           </Card>
-          <CloudPrntPanel storeId={targetStore.id} siteUrl={siteUrl} printers={cloudPrntRows} setupQrById={setupQrById} />
+          <CloudPrntPanel
+            storeId={targetStore.id}
+            siteUrl={siteUrl}
+            printers={cloudPrntRows}
+            setupQrById={setupQrById}
+            canEdit={canEditConnection}
+          />
           <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 px-4 py-3 text-xs text-gray-500">
             レシート印字は上の「プリンター接続」で実機印字に対応します（Star mC-Print3 等の CloudPRNT 対応機、EPSON
             TM-m30III-H 等の Server Direct Print 対応機）。非対応機や未設定時は、レシート画面からのブラウザ印刷が利用できます。

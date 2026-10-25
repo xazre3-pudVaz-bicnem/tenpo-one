@@ -3,7 +3,7 @@
 import { useEffect, useState, useSyncExternalStore, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  Copy, Check, Printer, Inbox, RefreshCw, Loader2, Wifi, WifiOff, CircleAlert, Smartphone, ChefHat, Receipt,
+  Copy, Check, Printer, Inbox, RefreshCw, Loader2, Wifi, WifiOff, CircleAlert, Smartphone, ChefHat, Receipt, Lock,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -16,56 +16,24 @@ import {
   enqueueCloudPrntTest,
 } from '@/app/app/settings/printers/actions';
 import { printerDeliveryOf } from '@/lib/direct-print';
+import {
+  CONNECTION_PROTOCOL as PROTOCOL,
+  drawerFieldOf,
+  drawerPinLabel,
+  KITCHEN_STATION_OPTIONS as STATIONS,
+  kitchenStationsLabel,
+  makerKind,
+  polledAgo as ago,
+  PRINTER_CONNECTION_ADMIN_NOTE,
+  printerConnectionStatus as statusOf,
+  printerConnectionUrl,
+  type PrinterConnectionRow,
+  type PrinterConnectionStatus as Status,
+} from '@/lib/printer-connection';
 
-export interface CloudPrntPrinter {
-  id: string;
-  name: string;
-  /** メーカー名（'EPSON' / 'Star' 等）。接続方式の判定に使う。 */
-  maker: string;
-  model: string;
-  usage: 'receipt' | 'kitchen';
-  /** つなぎ方。'bluetooth' / 'usb' は iPad（TENPO ONE レジ アプリ）とつなぐプリンター（接続用URLは使わない） */
-  connectionType?: string | null;
-  cloudprntEnabled: boolean;
-  cloudprntToken: string | null;
-  drawerKick: boolean;
-  drawerCommand: string;
-  paperWidthMm: number;
-  pollIntervalSeconds: number;
-  lastPolledAt: string | null;
-  macAddress: string | null;
-  kitchenStations: string[];
-  pendingJobs: number;
-}
+/** 1 台ぶん（運営コンソールと同じ形。lib/printer-connection.ts） */
+export type CloudPrntPrinter = PrinterConnectionRow;
 
-const STATIONS: { key: string; label: string }[] = [
-  { key: 'kitchen', label: 'キッチン（フード）' },
-  { key: 'drink', label: 'ドリンク' },
-  { key: 'grill', label: '焼き場（焼き鳥）' },
-  { key: 'dessert', label: 'デザート' },
-];
-
-/**
- * メーカーごとの接続方式。
- * Star は CloudPRNT、EPSON（TM-m30III-H 等のTMインテリジェント機）は Server Direct Print で、
- * どちらも「プリンタが定期的にTENPO ONEへ問い合わせて印刷データを受け取る」同じ考え方。
- */
-function makerKind(maker: string): 'epson' | 'star' {
-  return /epson/i.test(maker) ? 'epson' : 'star';
-}
-
-const PROTOCOL = {
-  star: { path: 'cloudprnt', label: 'CloudPRNT', urlField: 'CloudPRNT「サーバーURL」', app: 'Star Quick Setup Utility' },
-  epson: {
-    path: 'epson',
-    label: 'Server Direct Print',
-    urlField: 'Server Direct Print「サーバー1 URL」',
-    app: 'Epson TM Utility',
-  },
-} as const;
-
-/** 接続中とみなす最終通信からの経過（ポーリング間隔の数倍に余裕を持たせる） */
-const ONLINE_WITHIN_MS = 60_000;
 /** 画面を開いている間、接続状態を取り直す間隔 */
 const REFRESH_MS = 10_000;
 
@@ -86,21 +54,9 @@ function subscribeClock(onChange: () => void) {
 const getClock = () => clockNow;
 const getServerClock = () => 0;
 
-type Status = 'checking' | 'online' | 'offline' | 'never' | 'disabled';
-
-function statusOf(p: CloudPrntPrinter, now: number): Status {
-  if (!p.cloudprntEnabled) return 'disabled';
-  if (!p.lastPolledAt) return 'never';
-  if (now === 0) return 'checking';
-  return now - new Date(p.lastPolledAt).getTime() <= ONLINE_WITHIN_MS ? 'online' : 'offline';
-}
-
-function ago(iso: string, now: number): string {
-  const sec = Math.max(0, Math.round((now - new Date(iso).getTime()) / 1000));
-  if (sec < 60) return `${sec}秒前`;
-  if (sec < 3600) return `${Math.round(sec / 60)}分前`;
-  if (sec < 86400) return `${Math.round(sec / 3600)}時間前`;
-  return new Date(iso).toLocaleString('ja-JP');
+/** 「接続中」「12秒前」の判定に使う今の時刻（5 秒ごと。サーバーで描くときは 0＝確認中）。運営コンソールでも使う */
+export function usePrinterClock(): number {
+  return useSyncExternalStore(subscribeClock, getClock, getServerClock);
 }
 
 export function CloudPrntPanel({
@@ -108,11 +64,17 @@ export function CloudPrntPanel({
   siteUrl,
   printers,
   setupQrById,
+  canEdit = false,
 }: {
   storeId: string;
   siteUrl: string;
   printers: CloudPrntPrinter[];
   setupQrById: Record<string, string>;
+  /**
+   * 接続の設定（使う／使わない・接続用URL・URL再発行・間隔・ドロア・伝票）を変えられるか。運営のアカウントだけ true
+   * （2026-10-25 Ronnie「control centre mai」）。false は見るだけ＋テスト印刷・ドロアを開く
+   */
+  canEdit?: boolean;
 }) {
   const router = useRouter();
   const anyEnabled = printers.some((p) => p.cloudprntEnabled);
@@ -136,7 +98,13 @@ export function CloudPrntPanel({
           プリンタがインターネットにつながっていれば、店内LANの設定は不要です。
           SII RP-F10 など（自分から取りに来られないプリンター）は、レジの iPad（TENPO ONE アプリ）が お店の LAN で送ります。
         </p>
-        {!siteUrl && (
+        {!canEdit && (
+          <p className="flex items-start gap-1.5 text-xs text-gray-500">
+            <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gray-400" aria-hidden />
+            <span>{PRINTER_CONNECTION_ADMIN_NOTE}</span>
+          </p>
+        )}
+        {canEdit && !siteUrl && (
           <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
             公開URL（環境変数 <code className="font-mono">NEXT_PUBLIC_SITE_URL</code>）が未設定のため、接続用URLを生成できません。
           </div>
@@ -146,9 +114,13 @@ export function CloudPrntPanel({
             上の「プリンター」で用途「レシート」または「厨房」のプリンタを登録すると、ここで接続できます。
           </div>
         ) : (
-          printers.map((p) => (
-            <PrinterRow key={p.id} storeId={storeId} siteUrl={siteUrl} printer={p} setupQr={setupQrById[p.id] ?? null} />
-          ))
+          printers.map((p) =>
+            canEdit ? (
+              <PrinterRow key={p.id} storeId={storeId} siteUrl={siteUrl} printer={p} setupQr={setupQrById[p.id] ?? null} />
+            ) : (
+              <ReadOnlyPrinterRow key={p.id} storeId={storeId} printer={p} />
+            )
+          )
         )}
       </CardContent>
     </Card>
@@ -235,7 +207,7 @@ function PrinterRow({
   const [pollInterval, setPollInterval] = useState(printer.pollIntervalSeconds);
   const [stations, setStations] = useState<string[]>(printer.kitchenStations);
   const [copied, setCopied] = useState(false);
-  const now = useSyncExternalStore(subscribeClock, getClock, getServerClock);
+  const now = usePrinterClock();
 
   const isKitchen = printer.usage === 'kitchen';
   // iPad と Bluetooth・USB でつなぐプリンター（2026-10-13 Ronnie「レシート＋ドロアは iPad と Bluetooth」）。接続用URLは使わない
@@ -244,8 +216,7 @@ function PrinterRow({
   const viaLan = !viaIpad && printerDeliveryOf({ maker: printer.maker, connection: printer.connectionType }) === 'ipad-lan';
   const status = statusOf({ ...printer, cloudprntEnabled: enabled }, now);
   const protocol = PROTOCOL[makerKind(printer.maker)];
-  const pollUrl =
-    siteUrl && printer.cloudprntToken ? `${siteUrl}/api/${protocol.path}/${printer.cloudprntToken}` : '';
+  const pollUrl = printerConnectionUrl(siteUrl, printer.maker, printer.cloudprntToken);
 
   const run = (fn: () => Promise<{ error?: string }>, okMsg: string) =>
     startTransition(async () => {
@@ -491,6 +462,143 @@ function PrinterRow({
               <RefreshCw className="h-4 w-4" />
               URLを再発行
             </Button>
+            )}
+          </div>
+          {status !== 'online' && (
+            <p className="text-xs text-gray-500">
+              ※ テスト印刷・ドロアはプリンタが接続されたときに実行されます。長時間つながらない場合は自動で取り消されます
+              （ドロア2分・テスト10分）。接続したとたんに何枚も出ることはありません。
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * お店のアカウント（運営以外）に見せる 1 台：状態・MAC・最終通信と、伝票・問い合わせ間隔・ドロアを文字で。
+ * 接続用URL・URL再発行・入力・保存は出さない（運営コンソールで設定する）。テスト印刷・ドロアを開くは動作確認に使える。
+ */
+function ReadOnlyPrinterRow({ storeId, printer }: { storeId: string; printer: CloudPrntPrinter }) {
+  const { toast } = useToast();
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const now = usePrinterClock();
+
+  const isKitchen = printer.usage === 'kitchen';
+  const viaIpad = printer.connectionType === 'bluetooth' || printer.connectionType === 'usb';
+  const viaLan = !viaIpad && printerDeliveryOf({ maker: printer.maker, connection: printer.connectionType }) === 'ipad-lan';
+  const status = statusOf(printer, now);
+  const drawerField = drawerFieldOf(printer);
+  const enabled = printer.cloudprntEnabled;
+
+  const run = (fn: () => Promise<{ error?: string }>, okMsg: string) =>
+    startTransition(async () => {
+      const res = await fn();
+      if (res.error) toast(res.error, 'error');
+      else {
+        toast(okMsg);
+        router.refresh();
+      }
+    });
+
+  const details: { label: string; value: string }[] = [];
+  if (enabled && isKitchen) details.push({ label: '印刷する伝票', value: kitchenStationsLabel(printer.kitchenStations) });
+  if (enabled && !viaLan && !viaIpad) details.push({ label: '問い合わせ間隔', value: `${printer.pollIntervalSeconds}秒` });
+  if (enabled && drawerField === 'pin') details.push({ label: 'ドロアの接続ピン', value: drawerPinLabel(printer.drawerCommand) });
+  if (enabled && drawerField === 'command') details.push({ label: 'ドロア開放コマンド', value: printer.drawerCommand });
+
+  return (
+    <div className="rounded-xl border border-gray-200 p-4">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="flex items-center gap-1.5 font-semibold text-navy">
+            {isKitchen ? <ChefHat className="h-4 w-4 text-gray-400" /> : <Receipt className="h-4 w-4 text-gray-400" />}
+            {printer.name}
+            <span className="text-xs font-normal text-gray-400">
+              {isKitchen ? '厨房伝票' : 'レシート'}
+              {printer.model ? `・${printer.model}` : ''}
+            </span>
+          </p>
+          <div className="mt-1 flex flex-wrap items-center gap-2">
+            {viaIpad ? (
+              <Badge tone="gray">iPad（{printer.connectionType === 'usb' ? 'USB' : 'Bluetooth'}）でつなぐ</Badge>
+            ) : viaLan ? (
+              <LanStatusBadge status={status} printer={printer} now={now} />
+            ) : (
+              <StatusBadge status={status} printer={printer} now={now} />
+            )}
+            {printer.pendingJobs > 0 && <Badge tone="gray">印刷待ち {printer.pendingJobs}件</Badge>}
+            {printer.macAddress && <span className="text-xs text-gray-400">MAC {printer.macAddress}</span>}
+            {!viaIpad && printer.lastPolledAt && now > 0 && (
+              <span className="text-xs text-gray-400">最終通信 {ago(printer.lastPolledAt, now)}</span>
+            )}
+          </div>
+        </div>
+        <Badge tone={enabled ? 'success' : 'gray'}>{enabled ? '使う' : '使っていない'}</Badge>
+      </div>
+
+      {enabled && (
+        <div className="mt-3 space-y-3">
+          {viaIpad && (
+            <p className="text-xs leading-relaxed text-gray-600">
+              iPad の「TENPO ONE レジ」アプリから {printer.connectionType === 'usb' ? 'USB' : 'Bluetooth'} で印刷します（レジの設定 &gt;
+              このiPadのプリンター）。接続用URLは使いません
+            </p>
+          )}
+          {viaLan && (
+            <p className="text-xs leading-relaxed text-gray-600">
+              レジの iPad（TENPO ONE アプリ）から お店の LAN で送ります。その iPad は TENPO ONE アプリを開いたままにしてください
+              （閉じている間は印刷が待ちになり、開くと出ます）
+            </p>
+          )}
+          {!viaIpad && !viaLan && status === 'never' && (
+            <p className="text-xs leading-relaxed text-gray-600">
+              プリンタからまだ一度も通信がありません。{PRINTER_CONNECTION_ADMIN_NOTE}
+            </p>
+          )}
+          {!viaIpad && !viaLan && status === 'offline' && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-800">
+              以前はつながっていましたが、現在プリンタから通信がありません。電源・LANケーブル・用紙切れ・
+              店舗のインターネット回線を確認してください。復旧すると自動で「接続中」に戻ります。
+            </div>
+          )}
+
+          {details.length > 0 && (
+            <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-xs">
+              {details.map((d) => (
+                <div key={d.label} className="contents">
+                  <dt className="text-gray-500">{d.label}</dt>
+                  <dd className="font-medium text-navy">{d.value}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
+
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => run(() => enqueueCloudPrntTest(printer.id, storeId, 'receipt'), 'テスト印刷を送りました')}
+              disabled={pending}
+              title={status === 'online' ? undefined : 'プリンタが接続されると印刷されます（10分以内）'}
+            >
+              {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}
+              テスト印刷
+            </Button>
+            {!isKitchen && printer.drawerKick && (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => run(() => enqueueCloudPrntTest(printer.id, storeId, 'drawer'), 'ドロア開放を送りました')}
+                disabled={pending}
+              >
+                <Inbox className="h-4 w-4" />
+                ドロアを開く
+              </Button>
             )}
           </div>
           {status !== 'online' && (
