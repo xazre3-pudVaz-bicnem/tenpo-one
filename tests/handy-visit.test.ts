@@ -215,22 +215,26 @@ describe('開始時間（2026-09-21 Ronnie「開始時間を編集できるよ�
     expect(minutesAgoHm(jst('2026-09-21T00:10:00'), 30)).toBe('23:40');
   });
 
-  it('HH:MM をいまに一番近い過去の日時にする（日をまたぐときは前日）', () => {
+  it('HH:MM を「12時間前〜6時間後」に入る日時にする（日をまたぐときは前日・翌日）', () => {
     expect(resolveStartTime('18:10', now)).toBe(jst('2026-09-21T18:10:00'));
-    // 時計のずれは5分まで今日のまま
     expect(resolveStartTime('18:25', now)).toBe(jst('2026-09-21T18:25:00'));
-    expect(resolveStartTime('18:40', now)).toBe(jst('2026-09-20T18:40:00'));
+    // 先の時間（あとから始める。2026-10-25 Ronnie）も今日のまま
+    expect(resolveStartTime('18:40', now)).toBe(jst('2026-09-21T18:40:00'));
+    expect(resolveStartTime('23:30', now)).toBe(jst('2026-09-21T23:30:00'));
+    // 夜中をまたいだ来店は前日、夜中をまたいで先に始めるのは翌日
     expect(resolveStartTime('23:50', jst('2026-09-22T00:30:00'))).toBe(jst('2026-09-21T23:50:00'));
+    expect(resolveStartTime('01:00', jst('2026-09-21T23:30:00'))).toBe(jst('2026-09-22T01:00:00'));
     expect(resolveStartTime('25:00', now)).toBeNull();
   });
 
-  it('12時間前〜今だけ。「今」（null）はいつでも使える', () => {
+  it('12時間前〜6時間後だけ。「今」（null）はいつでも使える', () => {
     expect(startTimeProblem(null, now)).toBeNull();
     expect(startTimeProblem('18:10', now)).toBeNull();
     expect(startTimeProblem('06:30', now)).toBeNull();
-    expect(startTimeProblem('06:00', now)).toMatch(/12時間前から今まで/);
-    // 今より後（19:00）は前日扱いになり、範囲外
-    expect(startTimeProblem('19:00', now)).toMatch(/12時間前から今まで/);
+    expect(startTimeProblem('06:00', now)).toMatch(/12時間前から6時間後まで/);
+    // 今より後（19:00・23:30）も選べる
+    expect(startTimeProblem('19:00', now)).toBeNull();
+    expect(startTimeProblem('23:30', now)).toBeNull();
     expect(startTimeProblem('abc', now)).toMatch(/選び直して/);
   });
 
