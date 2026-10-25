@@ -5,8 +5,9 @@ import { Dialog } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input, Label, Select, FieldError } from '@/components/ui/input';
 import { useToast } from '@/components/ui/toast';
-import { savePrinterConfig } from '@/app/app/settings/printers/actions';
+import { savePrinterConfig, type ActionResult, type PrinterConfigInput } from '@/app/app/settings/printers/actions';
 import { parseLanTarget, printerDeliveryOf } from '@/lib/direct-print';
+import { isNetworkConnection, NETWORK_PRINTER_ADMIN_NOTE, printerConfigError } from '@/lib/network-printers';
 
 export interface PrinterConfigRow {
   id: string;
@@ -47,6 +48,9 @@ const MODEL_SUGGESTIONS: Record<string, string[]> = {
   その他: [],
 };
 
+/** 保存に渡す値（運営は「使う」も一緒に保存する） */
+export type PrinterDialogSaveInput = PrinterConfigInput & { enabled?: boolean };
+
 const CONNECTION_OPTIONS = [
   { value: 'browser', label: 'ブラウザ印刷' },
   { value: 'wifi', label: 'Wi-Fi' },
@@ -60,13 +64,13 @@ const USAGE_OPTIONS = [
   { value: 'label', label: 'ラベル' },
 ];
 
-function emptyPrinter(): PrinterConfigRow {
+function emptyPrinter(connectionType = 'browser'): PrinterConfigRow {
   return {
     id: '',
     name: '',
     maker: 'EPSON',
     model: '',
-    connectionType: 'browser',
+    connectionType,
     ipAddress: '',
     usage: 'receipt',
     paperWidthMm: 80,
@@ -76,19 +80,37 @@ function emptyPrinter(): PrinterConfigRow {
   };
 }
 
+/**
+ * プリンターの追加・編集。
+ *   お店の管理画面（/app/settings/printers）… connections に有線LAN・Wi-Fi を入れない（LAN・Wi-Fi は運営だけ。2026-10-25 Ronnie）
+ *   運営（/admin の企業詳細）… connections=['lan','wifi']・showEnabled・onSave に運営の保存（app/admin/organizations/printer-actions.ts）
+ */
 export function PrinterDialog({
   storeId,
   editing,
   floors = [],
   onClose,
+  connections,
+  showEnabled = false,
+  onSave,
 }: {
   storeId: string;
   editing: PrinterConfigRow | null;
   /** 店舗のフロア（担当フロアの選択肢） */
   floors?: FloorOption[];
   onClose: () => void;
+  /** 選べる接続方式（省略時は全部） */
+  connections?: readonly string[];
+  /** 「このプリンターを使う（実機で印刷する）」を出す（運営） */
+  showEnabled?: boolean;
+  /** 保存（省略時はお店の管理画面の保存） */
+  onSave?: (input: PrinterDialogSaveInput) => Promise<ActionResult>;
 }) {
-  const [form, setForm] = useState<PrinterConfigRow>(editing ?? emptyPrinter());
+  const connectionOptions = connections ? CONNECTION_OPTIONS.filter((c) => connections.includes(c.value)) : CONNECTION_OPTIONS;
+  const networkLocked = connectionOptions.every((c) => !isNetworkConnection(c.value));
+  const [form, setForm] = useState<PrinterConfigRow>(
+    editing ?? emptyPrinter(connectionOptions.some((c) => c.value === 'browser') ? 'browser' : (connectionOptions[0]?.value ?? 'browser'))
+  );
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const { toast } = useToast();
@@ -102,17 +124,14 @@ export function PrinterDialog({
 
   const handleSubmit = () => {
     setError(null);
-    if (!form.name.trim()) {
-      setError('プリンター名を入力してください');
-      return;
-    }
-    // SII RP-F10 など（LAN）は iPad が IP あてに送るので、IP が要る
-    if (delivery === 'ipad-lan' && !lanTarget) {
-      setError('このプリンターはレジの iPad から LAN で送ります。IPアドレス（192.168.…）を入れてください');
+    // プリンター名・SII RP-F10 など（LAN）の IP（サーバーと同じチェック。lib/network-printers.ts）
+    const inputError = printerConfigError(form);
+    if (inputError) {
+      setError(inputError);
       return;
     }
     startTransition(async () => {
-      const result = await savePrinterConfig({
+      const result = await (onSave ?? savePrinterConfig)({
         id: editing?.id,
         storeId,
         name: form.name,
@@ -127,6 +146,7 @@ export function PrinterDialog({
         floorIds: form.usage === 'label' ? [] : (form.floorIds ?? []),
         billSlips: form.usage === 'kitchen' ? !!form.billSlips : false,
         upsideDown: !!form.upsideDown,
+        ...(showEnabled ? { enabled: !!form.cloudprntEnabled } : {}),
       });
       if (result.error) {
         setError(result.error);
@@ -176,30 +196,32 @@ export function PrinterDialog({
         <div>
           <Label htmlFor="printer-connection">接続方式</Label>
           <Select id="printer-connection" value={form.connectionType} onChange={(e) => set('connectionType', e.target.value)}>
-            {CONNECTION_OPTIONS.map((c) => (
+            {connectionOptions.map((c) => (
               <option key={c.value} value={c.value}>
                 {c.label}
               </option>
             ))}
           </Select>
+          {networkLocked && <p className="mt-1.5 text-xs text-gray-500">{NETWORK_PRINTER_ADMIN_NOTE}（厨房・ドリンクのプリンターなど）</p>}
           {(form.connectionType === 'bluetooth' || form.connectionType === 'usb') && (
             <p className="mt-1.5 text-xs text-gray-500">
               レシートプリンター（＋ドロア）を iPad と Bluetooth・USB でつなぎます（Star mC-Print3・EPSON・SII RP-F10・そのほかの ESC/POS）。
               保存したら、iPad の「TENPO ONE レジ」アプリの レジの設定 &gt; このiPadのプリンター で「プリンターを探す」を押してつなぎます。
-              厨房・ドリンクのプリンターは 有線LAN・Wi-Fi にしてください
+              厨房・ドリンクの 有線LAN・Wi-Fi のプリンターは TENPO ONE の運営（コントロールセンター）が設定します
             </p>
           )}
           {form.connectionType !== 'browser' && form.connectionType !== 'bluetooth' && form.connectionType !== 'usb' && (
             <p className="mt-1.5 text-xs text-gray-500">
-              Wi-Fi / 有線LAN のどちらでもOK（有線が安定）。保存後に下の「プリンター接続」で「このプリンタを使う」を ON にします。
-              {delivery === 'cloudprnt' && ' Star は「接続用URL」をプリンターの CloudPRNT に入れます（プリンターがインターネットに取りに来ます）。'}
+              Wi-Fi / 有線LAN のどちらでもOK（有線が安定）。「このプリンターを使う」を ON にすると実機で印刷します。
+              {delivery === 'cloudprnt' &&
+                ' Star は「接続用URL」（お店の管理画面の レジ・プリンター › プリンター接続）をプリンターの CloudPRNT に入れます（プリンターがインターネットに取りに来ます）。'}
               {delivery === 'sdp' &&
-                ' EPSON は「接続用URL」をプリンターの Server Direct Print に入れます（TM-m30III など）。その機能が無い機種は、IPアドレスを入れて、レジの iPad（TENPO ONE アプリ）から LAN で送れます。'}
+                ' EPSON は「接続用URL」（お店の管理画面の レジ・プリンター › プリンター接続）をプリンターの Server Direct Print に入れます（TM-m30III など）。その機能が無い機種は、IPアドレスを入れて、下の「iPad ごと」で送る iPad を選べます。'}
               {delivery === 'ipad-lan' && (
                 <strong className="font-semibold text-primary">
                   {' '}
                   SII RP-F10 などは自分からインターネットに印刷を取りに来られないため、レジの iPad（TENPO ONE アプリ）が お店の LAN で送ります。
-                  IPアドレスを入れて保存し、iPad の レジの設定 &gt; このiPadのプリンター で「このiPadから送る」を ON にしてください。
+                  IPアドレスを入れて保存し、下の「iPad ごと」で「LAN のプリンターへ、この iPad から送る」を選んでください。
                 </strong>
               )}
             </p>
@@ -209,8 +231,8 @@ export function PrinterDialog({
           <Label htmlFor="printer-ip">{delivery === 'ipad-lan' ? 'IPアドレス（必須）' : 'IPアドレス（任意）'}</Label>
           <Input id="printer-ip" value={form.ipAddress} onChange={(e) => set('ipAddress', e.target.value)} placeholder="192.168.1.100" />
           <p className="mt-1.5 text-xs text-gray-500">
-            Star は メモ用（任意）。EPSON は入れておくと、レジの設定「このiPadのプリンター」から
-            <strong>Wi-Fi で直接印刷（速い）</strong>・<strong>LAN で送る</strong>が使えます（EPSON機はこのIPをブラウザで開いて設定画面にも入ります）。
+            Star は メモ用（任意）。EPSON は入れておくと、iPad ごとに
+            <strong>Wi-Fi で直接印刷（速い）</strong>・<strong>LAN で送る</strong>が選べます（EPSON機はこのIPをブラウザで開いて設定画面にも入ります）。
             SII RP-F10 は必須（電源を入れたままフィードボタンを押して出る紙の IP Address）。ポートを変えているときは「192.168.1.100:9100」
           </p>
           {delivery === 'ipad-lan' && form.ipAddress.trim() !== '' && !lanTarget && (
@@ -266,6 +288,18 @@ export function PrinterDialog({
               onChange={(e) => set('billSlips', e.target.checked)}
             />
             会計伝票もこのプリンターから出す（担当フロアの卓の中間伝票・QR注文のお会計伝票）
+          </label>
+        )}
+
+        {showEnabled && (
+          <label className="flex items-center gap-2 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+              checked={!!form.cloudprntEnabled}
+              onChange={(e) => set('cloudprntEnabled', e.target.checked)}
+            />
+            このプリンターを使う（実機で印刷する。OFF のあいだは印刷しません）
           </label>
         )}
 

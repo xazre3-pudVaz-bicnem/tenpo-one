@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { requireSession } from '@/lib/auth';
 import { can } from '@/lib/permissions';
 import { createClient } from '@/lib/supabase/server';
+import { NETWORK_PRINTER_ADMIN_NOTE } from '@/lib/network-printers';
 import {
   BT_MAKERS,
   BT_MAKER_SETTING,
@@ -115,7 +116,7 @@ async function myDeviceReceiptPrinter(
   if (!existing || !inMyStore || existing.status !== 'active') return { ok: false, error: 'プリンターが見つかりません' };
   if (existing.usage !== 'receipt') return { ok: false, error: 'レシートのプリンターではありません（厨房用は管理画面で）' };
   if (existing.connection_type !== 'bluetooth' && existing.connection_type !== 'usb') {
-    return { ok: false, error: 'Wi-Fi・LAN のプリンターは管理画面（設定 > レジ・プリンター）で設定します' };
+    return { ok: false, error: NETWORK_PRINTER_ADMIN_NOTE };
   }
   return { ok: true, row: existing as Record<string, unknown> };
 }

@@ -12,7 +12,8 @@ import {
 import { normalizeVisitSourceIds } from '@/lib/handy-visit';
 // ハードウェア（レジ端末・プリンター・ドロア）の変更は管理画面だけ。レジ端末（iPad）からは断る（2026-09-29 Ronnie）
 import { ADMIN_ONLY_MESSAGE, ADMIN_ONLY_SETTINGS_NOTE } from '@/lib/admin-only-settings';
-import { parseLanTarget, printerDeliveryOf } from '@/lib/direct-print';
+// LAN・Wi-Fi のプリンターは運営（コントロールセンター）だけ（2026-10-25 Ronnie）。入力チェックと列は運営と同じ（lib/network-printers.ts）
+import { isNetworkConnection, NETWORK_PRINTER_ADMIN_NOTE, printerConfigColumns, printerConfigError } from '@/lib/network-printers';
 
 export interface ActionResult {
   error?: string;
@@ -146,16 +147,23 @@ export async function savePrinterConfig(input: PrinterConfigInput): Promise<Acti
   if (ctx.isRegisterDevice) return { error: ADMIN_ONLY_MESSAGE };
   const err = assertStoreAccess(ctx.stores.map((s) => s.id), input.storeId);
   if (err) return { error: err };
-  if (!input.name.trim()) return { error: 'プリンター名を入力してください' };
-  // SII RP-F10 など（LAN）はレジの iPad が IP あてに送るので、お店の中の IP が要る（2026-10-16 Ronnie「LAN で」）
-  if (
-    printerDeliveryOf({ maker: input.maker, connection: input.connectionType }) === 'ipad-lan' &&
-    !parseLanTarget(input.ipAddress)
-  ) {
-    return { error: 'このプリンターはレジの iPad から LAN で送ります。IPアドレス（192.168.…）を入れてください' };
-  }
+  // 有線LAN・Wi-Fi のプリンターは運営（コントロールセンター）で追加・変更する。お店の管理画面からは断る
+  if (isNetworkConnection(input.connectionType)) return { error: NETWORK_PRINTER_ADMIN_NOTE };
+  const inputError = printerConfigError(input);
+  if (inputError) return { error: inputError };
 
   const supabase = await createClient();
+
+  // 今 LAN・Wi-Fi の行は、お店からは変えない（Bluetooth などへの付け替えも運営で）
+  if (input.id) {
+    const { data: current } = await supabase
+      .from('printer_configs')
+      .select('id, connection_type')
+      .eq('id', input.id)
+      .eq('organization_id', ctx.organizationId)
+      .maybeSingle();
+    if (current && isNetworkConnection(current.connection_type)) return { error: NETWORK_PRINTER_ADMIN_NOTE };
+  }
 
   // 担当フロアはこの店舗のフロアだけ受け付ける（他店舗のIDや削除済みは捨てる）。ラベル機は空
   let floorIds: string[] = [];
@@ -171,18 +179,7 @@ export async function savePrinterConfig(input: PrinterConfigInput): Promise<Acti
   const payload = {
     organization_id: ctx.organizationId,
     store_id: input.storeId,
-    name: input.name.trim(),
-    maker: input.maker.trim() || null,
-    model: input.model.trim() || null,
-    connection_type: input.connectionType || null,
-    ip_address: input.ipAddress.trim() || null,
-    usage: input.usage,
-    paper_width_mm: input.paperWidthMm,
-    auto_print: input.autoPrint,
-    drawer_kick: input.drawerKick,
-    floor_ids: floorIds,
-    bill_slips: input.usage === 'kitchen' ? !!input.billSlips : false,
-    upside_down: !!input.upsideDown,
+    ...printerConfigColumns(input, floorIds),
     updated_by: ctx.userId,
   };
 
@@ -221,6 +218,15 @@ export async function deletePrinterConfig(id: string, storeId: string): Promise<
   if (err) return { error: err };
 
   const supabase = await createClient();
+  // 有線LAN・Wi-Fi のプリンターは運営（コントロールセンター）で消す
+  const { data: current } = await supabase
+    .from('printer_configs')
+    .select('id, connection_type')
+    .eq('id', id)
+    .eq('organization_id', ctx.organizationId)
+    .maybeSingle();
+  if (current && isNetworkConnection(current.connection_type)) return { error: NETWORK_PRINTER_ADMIN_NOTE };
+
   const { error } = await supabase
     .from('printer_configs')
     .update({ status: 'deleted', updated_by: ctx.userId })

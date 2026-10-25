@@ -159,7 +159,7 @@ enum NPSPage: String, CaseIterable, Identifiable {
         case .dynamicPricing: return "曜日・時間帯ごとの値段の表は、iPad・PC で設定してください。"
         case .menuScan: return "写真・PDF からまとめて登録するときは、読み取った商品を大きい画面で確かめるため、iPad・PC で行ってください。"
         case .registerSettings: return "レジの設定はレジの iPad そのものの設定です。iPad のレジの「設定」から変えてください。"
-        case .printers: return "プリンターをつなぐのはレジの iPad（Bluetooth）か、PC の管理画面（LAN・Wi-Fi）です。iPhone からはつなぎません。"
+        case .printers: return "プリンターをつなぐのはレジの iPad（Bluetooth）です。LAN・Wi-Fi のプリンターは TENPO ONE の運営（コントロールセンター）が設定します。iPhone からはつなぎません。"
         case .devices: return "レジ端末（iPad）ごとの設定は、PC の管理画面で行ってください。"
         case .displays: return "ディスプレイ端末の設定は、iPad・PC で行ってください。"
         case .accounts: return "勘定科目の表は、PC の管理画面（会計）で編集してください。"
