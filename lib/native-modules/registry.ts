@@ -25,6 +25,7 @@ import { receiptGet } from '@/lib/native-modules/receipt';
 import { displayDevicesGet, DISPLAY_DEVICE_POSTS } from '@/lib/native-modules/display-devices';
 import { handyQrAdminGet, handyQrAdminPost } from '@/lib/native-modules/handy-qr';
 import { NATIVE_HANDY_QR_TYPES } from '@/lib/native-handy-qr';
+import { cashDayGet, storeDayClosePost } from '@/lib/native-modules/cash-day';
 
 /**
  * まだ専用の台が無かった画面（勤怠・日報・タスク …）の iPad ネイティブ用の API をまとめる所
@@ -85,6 +86,7 @@ export const NATIVE_MODULE_GET: Record<string, NativeModuleGet> = {
   receipt: receiptGet, // レシートのプレビュー（iPad・iPhone。2026-10-25 Ronnie）
   displayDevices: displayDevicesGet, // 設定 › ディスプレイ端末（KDS・呼び出しモニター。2026-10-25）
   handyQrAdmin: handyQrAdminGet, // iPad：設定 › iPhoneハンディ（QR の作成・作り直し・お店の Wi-Fi。2026-10-25）
+  cashDay: cashDayGet, // iPhone 店長・オーナー：店舗日次締め・開店チェックリスト・売上の内訳（2026-10-25）
 };
 
 /** POST の type → handler。追加は 1 行ずつ */
@@ -151,4 +153,5 @@ export const NATIVE_MODULE_POST: Record<string, NativeModulePost> = {
   ...Object.fromEntries(NATIVE_HANDY_QR_TYPES.map((t) => [t, handyQrAdminPost])), // iPad：設定 › iPhoneハンディ（2026-10-25）
   ...SCAN_BULK_POST, // ScanSnap のまとめて取り込み（scanBulkCheck・scanBulkPlan・scanBulkFile … lib/native-modules/scan-bulk.ts）
   ...DISPLAY_DEVICE_POSTS, // 設定 › ディスプレイ端末（displayIssue・displayRevoke・displayRename・displayUpdate）
+  storeDayClose: storeDayClosePost, // iPhone 店長・オーナー：店舗日次締め（2026-10-25）
 };

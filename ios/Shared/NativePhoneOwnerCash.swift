@@ -6,7 +6,7 @@ import SwiftUI
 //   小口現金    GET ?part=petty&from&to&status ／ POST pettyAdd・pettyApprove・pettyReject・pettyOpening・pettyCount・pettyCountApprove
 //   締め履歴    GET ?part=closings&from&to ／ POST closingApprove・closingReopen・closingReopenStoreDay
 // レシートの写真は iPhone のスキャンの画面へ（/app/scan?tx=<出金>）。レジクローズ・開局は /app/cash/close・/app/cash/open（どちらもネイティブ）。
-// 現金台帳 CSV は Web（パソコン）の管理画面のまま。小口現金・締め履歴は NativePhoneOwnerPetty.swift
+// 開店チェックリスト・店舗日次締め・現金台帳 CSV は NativePhoneOwnerStoreDay.swift（Web には行かない）。小口現金・締め履歴は NativePhoneOwnerPetty.swift
 
 /// GET ?part=cashio の中身（使うところだけ）
 struct NOMCashIo: Decodable {
@@ -183,9 +183,8 @@ struct NOMRegisterTab: View {
                 }
                 ForEach(p.openAdvances) { a in advanceCard(a, p) }
                 historyCard(p)
-                NOMWebLink(title: "Web の画面で開く", sub: p.canExport == true ? "現金台帳 CSV の取り出し・開店チェックリストは Web の画面で" : "開店チェックリストは Web の画面で") {
-                    onOpen("/app/cash?web=1")
-                }
+                // 開店チェックリスト・店舗日次締め・現金台帳 CSV もネイティブで（NativePhoneOwnerStoreDay.swift・NativePhoneOwnerCsv.swift）
+                NOMCashDayLinks(canExport: p.canExport == true, onOpen: onOpen, onError: { model.error = $0 })
             }
             .padding(.horizontal, 12).padding(.top, 10).padding(.bottom, 40)
         }

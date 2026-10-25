@@ -5,7 +5,7 @@ import SwiftUI
 //   品目を押すと詳細：入出庫（入庫・出庫・廃棄・棚卸調整）・品目の編集・入出庫履歴・仕入価格履歴・発注書を作成
 //   「品切れ・残り数」は在庫設定の画面（key stock・NativePhoneOwnerStock.swift）
 // サーバーは iPad と同じ：GET part=inventory|inventoryCount|inventoryHistory|inventoryPurchases ／ POST inv…（返事の形は変えない）
-// 即時移動・移動の申請・取消・CSV は Web の画面で（?web=1）。
+// 即時移動・移動の申請・取消は NativePhoneOwnerTransfers.swift（Web には行かない）。
 
 // MARK: - 中身（サーバーの返事。使うところだけ）
 
@@ -116,6 +116,8 @@ struct NPZInvPayload: Decodable {
     let reorderList: [String]?
     let counts: [NPZInvCount]?
     let transfers: [NPZInvTransfer]?
+    /// 移動できる品目（移動のタブだけ。申請・即時移動の選択肢。NativePhoneOwnerTransfers.swift）
+    let transferItems: [NPZInvTransferItem]?
     let reorder: [NPZInvReorder]?
     let forecast: NPZInvForecast?
 }

@@ -6,7 +6,7 @@ import SwiftUI
 //   発注書を送る：iPad と同じく発注書を PDF にして共有（メール・FAX のアプリ・印刷）。送る前に必ず確認を出す
 //   作成（?item= ?items=id:数量 ?vendor=）は NativePhoneOwnerPurchaseForms.swift
 // サーバーは iPad と同じ：GET part=purchases|po|poNew ／ POST poCreate・poStatus・poCancel・poReceive（返事の形は変えない）
-// CSV 出力・仕入仕訳一覧は Web の画面で。
+// CSV はアプリの中で取り出して共有（NPOCsvButton）。仕入仕訳一覧は会計の画面で。
 
 // MARK: - 中身（サーバーの返事。使うところだけ）
 
@@ -273,12 +273,6 @@ struct NativePhonePurchasesView: View {
                         Task { await model.refresh() }
                     }
                     Spacer()
-                    if p.canCsv == true {
-                        Button { onOpen("/app/purchases?web=1") } label: {
-                            Label("CSV は Web", systemImage: "square.and.arrow.down").font(.system(size: 12.5, weight: .bold)).foregroundColor(NT.ink2)
-                        }
-                        .buttonStyle(.plain)
-                    }
                 }
                 if p.rows.isEmpty {
                     NPOCEmpty(icon: "doc.text", title: "発注書がありません", note: p.canManage ? "右上の「＋ 作成」から発注書を作れます" : "")
@@ -291,6 +285,11 @@ struct NativePhonePurchasesView: View {
                         } label: { row(r) }
                             .buttonStyle(PressableStyle(scale: 0.985))
                     }
+                }
+                if p.canCsv == true {
+                    // CSV もアプリの中で取り出して共有（NativePhoneOwnerCsv.swift。Web の画面には行かない）
+                    NPOCsvButton(title: "発注 CSV（明細）", path: "/app/purchases/export", query: model.status.isEmpty ? [:] : ["status": model.status],
+                                 fileName: "purchases.csv", onError: { model.error = $0 })
                 }
             }
             .padding(.horizontal, 12).padding(.top, 12).padding(.bottom, 60)
