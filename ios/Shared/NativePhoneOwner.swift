@@ -40,6 +40,10 @@ enum NativePhoneOwnerRegistry {
         ("/app/manuals", "manuals"),
         ("/app/coupons", "coupons"),
         ("/app/pos/receipt", "receipt"), // レシートのプレビュー（NativePhoneOwnerReceipt.swift）
+        ("/app/accounting", "accounting"), // 会計（仕訳・月次締め・帳簿・財務レポート・銀行口座・自動仕訳・固定資産。NativePhoneOwnerAccounting*.swift）
+        ("/app/invoices", "invoices"), // 請求書・書類（?tab=inbox|documents。NativePhoneOwnerInvoices*.swift）
+        ("/app/reconciliation", "reconciliation"), // 照合（NativePhoneOwnerReconciliation.swift）
+        ("/app/settlement", "settlement"), // 月次清算（NativePhoneOwnerSettlement.swift）
         ("/app/settings", "settings"), // 設定（入口・/app/settings/<画面>。NativePhoneOwnerSettings*.swift）
         ("/app/settings-all", "settings"),
         ("/app/pos/settings", "settings"),
@@ -97,6 +101,10 @@ struct NativePhoneOwnerScreen: View {
         case "manuals": NativePhoneManualsScreen(route: route)
         case "coupons": NativePhoneCouponsScreen(route: route)
         case "receipt": NativePhoneOwnerReceiptScreen(route: route)
+        case "accounting": NativePhoneAccountingScreen(route: route)
+        case "invoices": NativePhoneInvoicesScreen(route: route)
+        case "reconciliation": NativePhoneReconciliationScreen(route: route)
+        case "settlement": NativePhoneSettlementScreen(route: route)
         case "settings": NativePhoneOwnerSettingsScreen(route: route)
         case "staff": NativePhoneOwnerStaffScreen(route: route)
         case "kitchen": NativePhoneOwnerKitchenScreen(route: route)
