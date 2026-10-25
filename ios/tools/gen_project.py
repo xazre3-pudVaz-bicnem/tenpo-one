@@ -124,7 +124,7 @@ for t, info in TARGETS.items():
         'INFOPLIST_KEY_UIApplicationSceneManifest_Generation': 'YES',
         'INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents': 'YES',
         'INFOPLIST_KEY_UILaunchScreen_Generation': 'YES',
-        'LD_RUNPATH_SEARCH_PATHS': '$(inherited) @executable_path/Frameworks', 'MARKETING_VERSION': '1.0',
+        'LD_RUNPATH_SEARCH_PATHS': '$(inherited) @executable_path/Frameworks', 'MARKETING_VERSION': '1.1',
         'PRODUCT_BUNDLE_IDENTIFIER': info['bundle'], 'PRODUCT_NAME': '$(TARGET_NAME)',
         'SUPPORTED_PLATFORMS': 'iphoneos iphonesimulator', 'SUPPORTS_MACCATALYST': 'NO',
         'SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD': 'NO', 'SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD': 'NO',
