@@ -119,6 +119,9 @@ final class AppState: ObservableObject {
             }
         }
         needsRegiLogin = false
+        // ログインの画面を閉じたら、すぐネイティブのホームを出す（裏の Web は /register-login のまま。
+        // ホームを読み終わるまで Web のログイン画面が 1 秒見えていた＝2026-10-25 13:50 Ronnie「login garda web ko login page one sec dekhiyo」）
+        if AppConfig.isPad && nativePosEnabled { nativeHome = true }
         // sessionStorage を入れてからホームを読む（Web の担当者のポップアップがもう一度出ないように）
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
             WebViewController.current?.load(AppConfig.url("/app/dashboard"))
@@ -360,6 +363,8 @@ final class AppState: ObservableObject {
 
     /// 店長・オーナーのネイティブのログインができたら、オーナー・店長の画面へ
     @MainActor func finishOwnerLogin() {
+        // 先にネイティブのホームを出してからログインの画面を閉じる（裏の Web の /login を見せない。2026-10-25 13:50 Ronnie）
+        if nativePhoneEnabled { phoneOwnerModule = nil; nativeOwnerHome = true }
         ownerLoginPage = false
         WebViewController.current?.load(AppConfig.url("/app/dashboard"))
     }
