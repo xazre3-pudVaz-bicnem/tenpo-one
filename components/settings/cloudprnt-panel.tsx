@@ -394,6 +394,11 @@ function PrinterRow({
                 value={pollInterval}
                 onChange={(e) => setPollInterval(Number(e.target.value))}
               />
+              {protocol.path !== 'epson' && (
+              <p className="mt-1 text-xs text-gray-500">
+                標準は 1 秒。Star の新しいファームの機械には、電源を入れ直すか 10 分以内にこの間隔が自動で届きます（届かない機械は Star Quick Setup Utility の Polling Time で設定）
+              </p>
+              )}
             </div>
             )}
             {!isKitchen &&
