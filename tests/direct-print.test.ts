@@ -87,8 +87,10 @@ describe('今の印刷は壊さない', () => {
   it('この iPad で選んだプリンター：選んでいなければ今まで通り（店の既定・フロア）', () => {
     const actions = read('app/app/pos/print-actions.ts');
     expect(actions).toContain('const picked = preferred ?? (floor ? pickPrinterForFloor(rows, floor.floorId) : pickDefaultPrinter(rows));');
+    // レジ精算レシート：選んだもの・無ければ最初の 1 台（iPad の Bluetooth なら LAN で動いている機械へ。tests/register-report-printer.test.ts）
     const report = read('lib/register-report-loader.ts');
-    expect(report).toContain('rows.find((r) => r.id === preferredId) ?? rows[0] ?? null');
+    expect(report).toContain('pickRegisterReportPrinter(rows, preferredId, Date.now())');
+    expect(read('lib/register-report-printer.ts')).toContain('rows.find((r) => r.id === preferredId) ?? rows[0]');
     const set = read('app/app/pos/device-printer-actions.ts');
     expect(set).toContain("printer.usage !== 'receipt' && printer.bill_slips !== true");
   });
