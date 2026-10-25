@@ -20,6 +20,7 @@ import { handyFloorGet, handyMenuGet, handyOrderPost, handySetupGet, handyTableG
 import { NATIVE_HANDY_ORDER_TYPES } from '@/lib/native-handy-order';
 import { handyReservationEntryGet, handyReservationMonthGet, handyReservationPost, handyReservationsGet } from '@/lib/native-modules/handy-reservations';
 import { NATIVE_HANDY_RSV_TYPES } from '@/lib/native-handy-reservations';
+import { receiptGet } from '@/lib/native-modules/receipt';
 
 /**
  * まだ専用の台が無かった画面（勤怠・日報・タスク …）の iPad ネイティブ用の API をまとめる所
@@ -76,6 +77,7 @@ export const NATIVE_MODULE_GET: Record<string, NativeModuleGet> = {
   handyReservations: handyReservationsGet,
   handyReservationEntry: handyReservationEntryGet,
   handyReservationMonth: handyReservationMonthGet,
+  receipt: receiptGet, // レシートのプレビュー（iPad・iPhone。2026-10-25 Ronnie）
 };
 
 /** POST の type → handler。追加は 1 行ずつ */

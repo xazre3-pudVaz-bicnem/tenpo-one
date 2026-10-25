@@ -42,6 +42,7 @@ enum NativeModuleRegistry {
         ("/app/invoices", "invoices"),
         ("/app/reconciliation", "reconciliation"),
         ("/app/settlement", "settlement"),
+        ("/app/pos/receipt", "receipt"), // レシートのプレビュー（NativeReceiptView.swift。2026-10-25 Ronnie）
     ]
     static let paths: [String: String] = Dictionary(entries, uniquingKeysWith: { a, _ in a })
 
@@ -80,6 +81,7 @@ struct NativeModuleScreen: View {
         case "invoices": NativeInvoicesView(route: route, onHome: { state.goNativeHome() }, onWeb: { state.leaveNativeFloor(to: $0) })
         case "reconciliation": NativeReconciliationView(route: route, onHome: { state.goNativeHome() }, onWeb: { state.leaveNativeFloor(to: $0) })
         case "settlement": NativeSettlementView(route: route, onHome: { state.goNativeHome() }, onWeb: { state.leaveNativeFloor(to: $0) })
+        case "receipt": NativeReceiptScreen(route: route).id(route.id)
         default:
             // 知らない key（古いアプリ）：Web のまま見せる
             Color.clear.onAppear { state.nativeModule = nil }
