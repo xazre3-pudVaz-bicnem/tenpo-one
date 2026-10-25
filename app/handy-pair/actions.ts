@@ -11,6 +11,9 @@ import {
   PAIRING_FAILURE_MESSAGE,
   pairingFailure,
 } from '@/lib/handy-pairing';
+import { loadStorePolicy } from '@/lib/store-access-server';
+import { gateHandyJoin, handyContractOff, signInApprovedHandy } from '@/lib/handy-device-approval-server';
+import { DEVICE_MESSAGE } from '@/lib/device-control';
 
 /**
  * QRを読み取った端末をこの店舗のハンディとして登録し、そのままログイン状態にする。
@@ -60,6 +63,62 @@ export async function pairHandyDevice(code: string): Promise<{ error?: string; s
     .maybeSingle();
   if (!store || store.status !== 'active') {
     return { error: 'この店舗は現在利用できません。管理者にご連絡ください' };
+  }
+
+  // コントロールセンター（2026-10-25・migration 00104 の後）: 契約 OFF・運営の承認。
+  // 承認制を ON にした店舗（移行期間のあと）の新しい端末は承認待ちで作ってログインさせない。承認済みの端末（端末の鍵 Cookie）・
+  // 承認制 OFF の店舗の新しい端末は、QR を先に使用済みにしてからログイン状態を渡す（1回限り）。
+  // migration の前は legacy → 下の今まで通りの処理
+  const policy = await loadStorePolicy(store.id as string);
+  if (await handyContractOff(store.id as string, policy)) return { error: DEVICE_MESSAGE.contractOff.handy };
+  const gate = await gateHandyJoin(admin, {
+    organizationId: pairing.organization_id as string,
+    storeId: store.id as string,
+    policy,
+    deviceName: pairing.device_name as string,
+    ip,
+    userAgent,
+    createdBy: (pairing.created_by as string | null) ?? null,
+    // 端末ごとの QR は今まで台数を見ていなかった（承認制 ON の店舗だけ見る）
+    legacyLimit: false,
+  });
+  if (gate.kind === 'blocked') return { error: gate.message };
+  if (gate.kind === 'pending' || gate.kind === 'approved') {
+    // QR は1回限り。ログイン状態を渡す前に使用済みにする
+    const { data: used } = await admin
+      .from('handy_pairings')
+      .update({ used_at: new Date().toISOString(), device_id: gate.deviceId })
+      .eq('id', pairing.id as string)
+      .is('used_at', null)
+      .select('id');
+    if (!used || used.length === 0) {
+      // ほぼ同時に別の端末が使った場合。いま作った端末を残さない（使い直しの端末はそのまま）
+      if (gate.kind === 'pending' || gate.created) {
+        await admin.from('handy_devices').delete().eq('id', gate.deviceId);
+        await admin.auth.admin.deleteUser(gate.profileId).catch(() => undefined);
+      }
+      return { error: PAIRING_FAILURE_MESSAGE.USED };
+    }
+    if (gate.kind === 'approved') {
+      const signed = await signInApprovedHandy(admin, gate);
+      if (signed.error) return { error: signed.error };
+    }
+    await admin.rpc('log_audit', {
+      p_org: pairing.organization_id as string,
+      p_store: store.id,
+      p_action: gate.kind === 'pending' ? 'device.handy_request' : gate.created ? 'handy.device_pair' : 'handy.device_rejoin_pair',
+      p_target_table: 'handy_devices',
+      p_target_id: gate.deviceId,
+      p_before: null,
+      p_after:
+        gate.kind === 'pending'
+          ? { name: pairing.device_name, ip, approval_status: 'pending' }
+          : gate.created
+            ? { name: pairing.device_name, ip }
+            : { ip, reactivated: gate.reactivate },
+      p_note: gate.kind === 'pending' ? '新しいハンディ端末（端末ごとのQR）。TENPO ONE 運営の承認待ち' : null,
+    });
+    return gate.kind === 'pending' ? { error: gate.message } : { storeName: store.name as string };
   }
 
   // 端末ごとに専用のログインアカウントを作る（1台ずつ解除できるようにするため）。

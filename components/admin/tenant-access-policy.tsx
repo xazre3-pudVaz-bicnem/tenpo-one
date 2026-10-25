@@ -43,7 +43,13 @@ export function TenantAccessPolicy({
   reissueAction,
   revealAction,
   renameAction,
+  devicesManagedElsewhere = false,
 }: {
+  /**
+   * 台数・端末の一覧は「端末の契約と承認（コントロールセンター）」に出す（2026-10-25）。
+   * true のときはここに台数の入力・レジ端末の一覧を出さず、保存では今の台数（props）をそのまま送る。
+   */
+  devicesManagedElsewhere?: boolean;
   storeId: string;
   orgCode: string | null;
   storeUser: string | null;
@@ -86,8 +92,9 @@ export function TenantAccessPolicy({
         storeId,
         // 回線（IP）の制限はいま使っていない。保存時に今の値をそのまま送る
         ips: networks.map((n) => ({ ip: n.key, label: n.label })),
-        registerLimit: Number(limit) || 0,
-        handyLimit: Number(handy) || 0,
+        // 台数をコントロールセンター側で変える画面では、ここからは今の値をそのまま送る（古い入力値で上書きしない）
+        registerLimit: devicesManagedElsewhere ? registerLimit : Number(limit) || 0,
+        handyLimit: devicesManagedElsewhere ? handyLimit : Number(handy) || 0,
         networkEnforced,
         note: memo,
       });
@@ -113,23 +120,28 @@ export function TenantAccessPolicy({
   return (
     <div className="space-y-5">
       <p className="text-xs leading-relaxed text-gray-500">
-        契約時に、レジ（iPad）とハンディの台数を決めます。レジは 企業番号 ＋ 店舗ユーザー名 ＋ レジ用パスワード で開きます。
-        台数の制限は、この画面で保存した店舗に効きます（0 にすると数えません）。
+        {devicesManagedElsewhere
+          ? 'レジは 企業番号 ＋ 店舗ユーザー名 ＋ レジ用パスワード で開きます。端末の台数・ON/OFF・承認は下の「端末の契約と承認（コントロールセンター）」で決めます。'
+          : '契約時に、レジ（iPad）とハンディの台数を決めます。レジは 企業番号 ＋ 店舗ユーザー名 ＋ レジ用パスワード で開きます。台数の制限は、この画面で保存した店舗に効きます（0 にすると数えません）。'}
       </p>
 
       <div className="flex flex-wrap items-end gap-4">
-        <div>
-          <Label htmlFor="register-limit">レジ端末（iPad）の台数</Label>
-          <Input id="register-limit" value={limit} onChange={(e) => setLimit(e.target.value.replace(/[^0-9]/g, ''))} className="w-24 text-right" inputMode="numeric" />
-          <p className="mt-1 text-xs text-gray-500">0 にすると台数を数えません</p>
-        </div>
-        <div>
-          <Label htmlFor="handy-limit">ハンディの台数</Label>
-          <Input id="handy-limit" value={handy} onChange={(e) => setHandy(e.target.value.replace(/[^0-9]/g, ''))} className="w-24 text-right" inputMode="numeric" />
-          <p className="mt-1 text-xs text-gray-500">
-            いま <span className="tabular-nums">{handyCount}</span> 台つながっています
-          </p>
-        </div>
+        {!devicesManagedElsewhere && (
+          <>
+            <div>
+              <Label htmlFor="register-limit">レジ端末（iPad）の台数</Label>
+              <Input id="register-limit" value={limit} onChange={(e) => setLimit(e.target.value.replace(/[^0-9]/g, ''))} className="w-24 text-right" inputMode="numeric" />
+              <p className="mt-1 text-xs text-gray-500">0 にすると台数を数えません</p>
+            </div>
+            <div>
+              <Label htmlFor="handy-limit">ハンディの台数</Label>
+              <Input id="handy-limit" value={handy} onChange={(e) => setHandy(e.target.value.replace(/[^0-9]/g, ''))} className="w-24 text-right" inputMode="numeric" />
+              <p className="mt-1 text-xs text-gray-500">
+                いま <span className="tabular-nums">{handyCount}</span> 台つながっています
+              </p>
+            </div>
+          </>
+        )}
         <div className="flex-1">
           <Label htmlFor="access-note">メモ（契約内容など）</Label>
           <Input id="access-note" value={memo} onChange={(e) => setMemo(e.target.value)} placeholder="例: 2026-09 契約。固定IP。増設は要相談" />
@@ -161,7 +173,7 @@ export function TenantAccessPolicy({
         </div>
       </div>
 
-      <div>
+      <div hidden={devicesManagedElsewhere}>
         <p className="mb-2 text-sm font-semibold text-navy">
           登録済みのレジ端末 <span className="tabular-nums">{activeCount}</span> / {registerLimit}台
         </p>

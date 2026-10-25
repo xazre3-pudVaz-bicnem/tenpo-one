@@ -18,7 +18,7 @@ function requestTime() {
 /**
  * 設定 › デバイス管理 › ディスプレイ端末（キッチンディスプレイ・呼び出しモニター。2026-10-24 Ronnie）。
  * 一覧（デバイス管理）に出るのは、運営がこの企業・店舗で ON にしたときだけ（lib/settings-hubs.ts）。
- * 直接開いたときは OFF の案内を出す（つないである端末の解除はできる）。
+ * 直接開いたときは OFF の案内を出す（つないである端末の解除はできる）。新しい端末の承認は TENPO ONE 運営（コントロールセンター）。
  */
 export default async function DisplayDevicesSettingsPage() {
   const ctx = await requirePermission('store.settings');
@@ -45,6 +45,7 @@ export default async function DisplayDevicesSettingsPage() {
         payload={payload}
         now={requestTime()}
         issueAction={issueDisplayPairing}
+        // 新しい端末の承認・台数は TENPO ONE 運営（コントロールセンター）。解除・QR の表示・名前・種類・持ち場はここでも（2026-10-25）
         revokeAction={revokeDisplayDevice}
         renameAction={renameDisplayDevice}
         updateAction={updateDisplayDevice}

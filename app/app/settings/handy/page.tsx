@@ -6,6 +6,7 @@ import { EmptyState } from '@/components/ui/state';
 import { SettingsBackLink } from '@/components/settings/back-link';
 import { HandyDevicesPanel, type HandyDeviceRow } from '@/components/settings/handy-devices-panel';
 import { issueHandyPairing, revokeHandyDevice, renameHandyDevice } from './actions';
+import { selectDevicesWithApproval } from '@/lib/device-control-server';
 
 export const metadata: Metadata = { title: 'ハンディ端末 | 設定' };
 
@@ -24,13 +25,13 @@ export default async function HandyDevicesSettingsPage() {
   }
 
   const supabase = await createClient();
-  const { data: devices } = await supabase
-    .from('handy_devices')
-    .select('id, name, status, paired_at, last_seen_at, paired_ip, user_agent')
-    .eq('store_id', store.id)
-    .order('paired_at', { ascending: false });
+  // 承認の列（コントロールセンター・migration 00104）があれば一緒に読む
+  const { rows: devices } = await selectDevicesWithApproval<Record<string, unknown>>(
+    (columns) => supabase.from('handy_devices').select(columns).eq('store_id', store.id).order('paired_at', { ascending: false }),
+    'id, name, status, paired_at, last_seen_at, paired_ip, user_agent'
+  );
 
-  const rows: HandyDeviceRow[] = (devices ?? []).map((d) => ({
+  const rows: HandyDeviceRow[] = devices.map((d) => ({
     id: d.id as string,
     name: d.name as string,
     status: d.status === 'revoked' ? 'revoked' : 'active',
@@ -38,6 +39,7 @@ export default async function HandyDevicesSettingsPage() {
     lastSeenAt: (d.last_seen_at as string | null) ?? null,
     pairedIp: (d.paired_ip as string | null) ?? null,
     userAgent: (d.user_agent as string | null) ?? null,
+    approval: d.approval,
   }));
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? '';
@@ -52,6 +54,7 @@ export default async function HandyDevicesSettingsPage() {
         siteUrl={siteUrl}
         devices={rows}
         issueAction={issueHandyPairing}
+        // 新しい端末の承認・台数は TENPO ONE 運営（コントロールセンター）。なくした端末の解除・名前・QR の表示はここでも（2026-10-25）
         revokeAction={revokeHandyDevice}
         renameAction={renameHandyDevice}
       />

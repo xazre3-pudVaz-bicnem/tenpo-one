@@ -324,6 +324,11 @@ export async function GET(request: Request) {
       const { checkHandyNetwork } = await import('@/lib/handy-device-server');
       const guard = await checkHandyNetwork();
       if (guard.isDevice && guard.decision.kind === 'logout') return json({ ok: false, error: 'お店の回線の外にいます', useWeb: true }, 403);
+      // 端末の鍵（コントロールセンター。自動ログアウトのあと承認し直しにならないように。migration 00104 の後・無いときだけ）
+      if (guard.device) {
+        const { ensureHandyDeviceToken } = await import('@/lib/handy-device-approval-server');
+        await ensureHandyDeviceToken(guard.device.id);
+      }
     }
     // 契約のアクセス制限（お店の回線）。引っかかったら Web の画面（案内が出る）
     const { isRequestFromStoreNetwork } = await import('@/lib/store-access-server');

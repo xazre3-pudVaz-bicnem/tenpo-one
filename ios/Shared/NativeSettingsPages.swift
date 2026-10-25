@@ -2024,8 +2024,10 @@ struct NativeAccountsView: View {
 
 // MARK: - ハンディ端末（Web の /app/settings/handy・components/settings/handy-devices-panel.tsx と同じ）
 
-struct NHVDevice: Codable, Identifiable, Hashable { let id: String; let name: String; let status: String; let pairedAt: String; let lastSeenAt: String?; let pairedIp: String?; let userAgent: String? }
-struct NHVPayload: Codable { let store: NFNamed; let canEdit: Bool; let pairBase: String?; let devices: [NHVDevice] }
+// approval: TENPO ONE 運営の承認（pending / approved / rejected / revoked。古いサーバーは無し＝承認済み）
+// 2026-10-25 Ronnie「端末のことは全部コントロールセンター」: 新しい端末の承認・台数は運営コンソール（なくした端末の解除・名前・QR はここでも）
+struct NHVDevice: Codable, Identifiable, Hashable { let id: String; let name: String; let status: String; let pairedAt: String; let lastSeenAt: String?; let pairedIp: String?; let userAgent: String?; let approval: String? }
+struct NHVPayload: Codable { let store: NFNamed; let canEdit: Bool; let pairBase: String?; let readOnlyNote: String?; let devices: [NHVDevice] }
 
 @MainActor
 final class NativeHandyDevicesModel: NSPModel<NHVPayload> {
@@ -2120,6 +2122,7 @@ struct NativeHandyDevicesView: View {
                         if p.devices.isEmpty { Text("まだ端末がありません").font(.system(size: 14)).foregroundColor(NFColor.ink3).padding(18) }
                         ForEach(p.devices) { d in
                             let revoked = d.status == "revoked"
+                            let waiting = !revoked && d.approval == "pending"
                             HStack(spacing: 12) {
                                 Image(systemName: "iphone").font(.system(size: 16, weight: .semibold)).foregroundColor(revoked ? NFColor.ink3 : NFColor.iris)
                                     .frame(width: 36, height: 36).background(RoundedRectangle(cornerRadius: 10).fill(revoked ? NFColor.lilacSoft : NFColor.irisSoft))
@@ -2131,11 +2134,12 @@ struct NativeHandyDevicesView: View {
                                     VStack(alignment: .leading, spacing: 2) {
                                         HStack(spacing: 6) {
                                             Text(d.name).font(.system(size: 16, weight: .bold)).foregroundColor(revoked ? NFColor.ink3 : NFColor.ink).strikethrough(revoked, color: NFColor.ink3)
-                                            if revoked { Text("解除済み").font(.system(size: 11, weight: .bold)).foregroundColor(NFColor.ink3).padding(.horizontal, 7).padding(.vertical, 2).background(Capsule().fill(NFColor.lilac)) }
+                                            if revoked { Text(d.approval == "rejected" ? "却下（運営）" : d.approval == "revoked" ? "解除（運営）" : "解除済み").font(.system(size: 11, weight: .bold)).foregroundColor(NFColor.ink3).padding(.horizontal, 7).padding(.vertical, 2).background(Capsule().fill(NFColor.lilac)) }
+                                            if waiting { Text("承認待ち").font(.system(size: 11, weight: .bold)).foregroundColor(NFColor.danger).padding(.horizontal, 7).padding(.vertical, 2).background(Capsule().fill(NFColor.lilac)) }
                                         }
                                         // どの端末か（機種・OS）と、いま使っているか（3分以内に通信）
                                         HStack(spacing: 6) {
-                                            if !revoked {
+                                            if !revoked && !waiting {
                                                 let on = Self.isOnline(d.lastSeenAt, now: now)
                                                 Circle().fill(on ? NFColor.success : NFColor.ink3.opacity(0.5)).frame(width: 8, height: 8)
                                                 Text(on ? "使用中" : "未使用").font(.system(size: 12, weight: .bold)).foregroundColor(on ? NFColor.success : NFColor.ink3)
@@ -2154,6 +2158,10 @@ struct NativeHandyDevicesView: View {
                             .padding(.horizontal, 18).frame(minHeight: 62)
                             .overlay(alignment: .bottom) { Rectangle().fill(NFColor.line).frame(height: 1) }
                         }
+                        // 新しい端末の承認・台数は TENPO ONE 運営（コントロールセンター）。なくした端末の解除はここでも
+                        Text(p.readOnlyNote ?? "新しい端末の承認・契約・台数は TENPO ONE 運営（コントロールセンター）で行います（なくした端末の解除はここでもできます）")
+                            .font(.system(size: 12)).foregroundColor(NFColor.ink3)
+                            .frame(maxWidth: .infinity, alignment: .leading).padding(18)
                     }
                 }
             }

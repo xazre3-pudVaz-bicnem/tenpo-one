@@ -22,6 +22,7 @@ import { policyFrom } from '@/lib/store-access';
 import { readStoreRegisterPassword } from '@/lib/tenant-provisioning';
 import { saveStoreAccessPolicy, revokeRegisterDevice, reissueRegisterPassword, revealRegisterPassword, saveStoreRegisterUsername, updateTenantStoreSlug } from '../actions';
 import { StoreSlugEditor } from '@/components/settings/store-slug-editor';
+import { StoreDeviceControl } from '@/components/admin/store-device-control';
 
 export const metadata: Metadata = { title: '店舗導入管理' };
 
@@ -200,8 +201,9 @@ export default async function TenantDetailPage({ params }: { params: Promise<{ s
             registerPassword={registerPassword}
             networks={accessPolicy.networks}
             networkEnforced={accessPolicy.networkEnforced}
-            registerLimit={accessPolicy.registerLimit}
-            handyLimit={accessPolicy.handyLimit}
+            // 台数はコントロールセンターの欄で変える。ここで保存しても今の数え方のまま（行が無い店舗は 0＝数えない。既定の2台を書かない）
+            registerLimit={accessPolicy.exists ? accessPolicy.registerLimit : 0}
+            handyLimit={accessPolicy.exists ? accessPolicy.handyLimit : 0}
             handyCount={handyCount ?? 0}
             note={accessPolicy.note}
             devices={(deviceRows ?? []).map((d) => ({
@@ -217,9 +219,13 @@ export default async function TenantDetailPage({ params }: { params: Promise<{ s
             reissueAction={reissueRegisterPassword}
             revealAction={revealRegisterPassword}
             renameAction={saveStoreRegisterUsername}
+            devicesManagedElsewhere
           />
         </CardContent>
       </Card>
+
+      {/* 端末の契約（ON/OFF・台数）と承認・テーブルQR（コントロールセンター。2026-10-25） */}
+      <StoreDeviceControl storeId={storeId} />
 
       {/* グルメサイト連携（メール取り込み）。店舗の設定画面と同じものを運営からも（2026-10-24） */}
       <TenantGourmet storeId={storeId} storeName={store.name as string} />

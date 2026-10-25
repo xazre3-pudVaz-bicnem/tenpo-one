@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils';
 import { type DeviceSetting } from '@/lib/device-settings';
 import { describeNetworkPrinterIds, NETWORK_PRINTER_ADMIN_NOTE } from '@/lib/network-printers';
 import { saveRegisterDeviceSetting } from '@/app/app/settings/devices/actions';
+import { APPROVAL_LABELS } from '@/lib/device-control';
 
 export interface RegisterDeviceRow {
   id: string;
@@ -16,6 +17,8 @@ export interface RegisterDeviceRow {
   createdAt: string;
   lastSeenAt: string | null;
   status: 'active' | 'revoked';
+  /** TENPO ONE 運営の承認（コントロールセンター。migration 00104 の前は approved） */
+  approval?: 'pending' | 'approved' | 'rejected' | 'revoked';
   setting: DeviceSetting;
 }
 
@@ -46,7 +49,7 @@ export function RegisterDevicesPanel({ storeId, devices, printers, lanPrinters =
   if (devices.length === 0) {
     return (
       <div className="rounded-xl border border-dashed border-line bg-white px-5 py-8 text-center text-sm text-ink-3">
-        この店舗で登録されたレジ端末（iPad）はまだありません。iPad の TENPO ONE でこの店舗にログインすると、ここに出ます
+        この店舗で登録されたレジ端末（iPad）はまだありません。iPad の TENPO ONE でこの店舗にログインすると、ここに出ます（運営が承認制にした店舗では、TENPO ONE 運営の承認のあとで使えます）
       </div>
     );
   }
@@ -112,7 +115,13 @@ function DeviceCard({
           <span className="truncate text-[15px] font-extrabold text-ink">{label.trim() || device.name}</span>
           <span className="text-xs text-ink-3">
             {device.kind}・登録 {fmt(device.createdAt)}・最後に使った {fmt(device.lastSeenAt)}
-            {revoked && '・解除済み'}
+            {revoked && device.approval !== 'rejected' && '・解除済み'}
+            {device.approval && device.approval !== 'approved' && (
+              <span className={cn('ml-1 font-bold', device.approval === 'pending' ? 'text-warning' : 'text-ink-3')}>
+                ・{APPROVAL_LABELS[device.approval]}
+                {device.approval === 'pending' && '（TENPO ONE 運営が承認すると使えます）'}
+              </span>
+            )}
           </span>
         </div>
         <Button type="button" size="sm" onClick={save} disabled={pending || !dirty || revoked}>

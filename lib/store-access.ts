@@ -10,6 +10,7 @@
  */
 import { networkKey } from './handy-pairing';
 import { isIpLiteral } from './handy-qr';
+import { DEVICE_MESSAGE, type DeviceJoinDecision } from './device-control';
 
 export interface AllowedNetwork {
   key: string;
@@ -122,7 +123,55 @@ export type RegisterDeviceDecision =
   | { kind: 'allowed' }
   | { kind: 'register' }
   | { kind: 'limit'; limit: number }
-  | { kind: 'revoked' };
+  /** by = operator（運営が解除。コントロールセンター）/ store・無し（今までの解除） */
+  | { kind: 'revoked'; by?: 'operator' | 'store' }
+  // ここから下はコントロールセンターの承認制（migration 00104 の後だけ。lib/device-control.ts）
+  | { kind: 'pending' }
+  | { kind: 'rejected' }
+  | { kind: 'contract_off' }
+  | { kind: 'too_many_pending' };
+
+/** 端末の判定（lib/device-control.ts の decideDeviceJoin）→ レジの判定 */
+export function registerDecisionFrom(d: DeviceJoinDecision): RegisterDeviceDecision {
+  switch (d.kind) {
+    case 'allow':
+      return { kind: 'allowed' };
+    case 'request':
+    case 'create':
+      return { kind: 'register' };
+    case 'limit':
+      return { kind: 'limit', limit: d.limit };
+    case 'revoked':
+      return { kind: 'revoked', by: d.by };
+    default:
+      return { kind: d.kind };
+  }
+}
+
+/**
+ * レジとして使えないときに出す文（使えるとき・登録の画面を出すときは null）。
+ * approval = コントロールセンターの承認制が ON（移行期間のあと）。上限の文は運営あての文に変わる。
+ * 解除は「運営が解除した」ときだけ運営あての文（店舗の解除・今までの解除は今までの文のまま）。
+ */
+export function registerBlockMessage(d: RegisterDeviceDecision, approval: boolean): string | null {
+  switch (d.kind) {
+    case 'allowed':
+    case 'register':
+      return null;
+    case 'limit':
+      return approval ? DEVICE_MESSAGE.limit.register : ACCESS_MESSAGE.limit;
+    case 'revoked':
+      return d.by === 'operator' ? DEVICE_MESSAGE.revoked : ACCESS_MESSAGE.revoked;
+    case 'pending':
+      return DEVICE_MESSAGE.pendingRegister;
+    case 'rejected':
+      return DEVICE_MESSAGE.rejected;
+    case 'contract_off':
+      return DEVICE_MESSAGE.contractOff.register;
+    case 'too_many_pending':
+      return DEVICE_MESSAGE.tooManyPending;
+  }
+}
 
 /**
  * この端末をレジとして使ってよいか。

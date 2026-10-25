@@ -9,6 +9,8 @@ import { ADMIN_ONLY_MESSAGE } from '@/lib/admin-only-settings';
 import { deviceKind, deviceSettingsFrom, EMPTY_DEVICE_SETTING } from '@/lib/device-settings';
 import { PRINTER_MAKER_LABEL } from '@/lib/printer-models';
 import { NETWORK_PRINTER_ADMIN_NOTE, networkPrinterCandidates, type NetworkPrinterRow } from '@/lib/network-printers';
+import { selectDevicesWithApproval } from '@/lib/device-control-server';
+import { DEVICE_MESSAGE } from '@/lib/device-control';
 
 export const metadata: Metadata = { title: 'レジ端末（iPad） | 設定' };
 
@@ -44,13 +46,12 @@ export default async function RegisterDevicesSettingsPage() {
   }
 
   const supabase = await createClient();
-  const [{ data: deviceRows }, { data: printerRows }, { data: settingsRow }, { data: netRows }] = await Promise.all([
-    supabase
-      .from('register_devices')
-      .select('id, name, user_agent, created_at, last_seen_at, status')
-      .eq('store_id', targetStore.id)
-      .order('status')
-      .order('created_at'),
+  const [{ rows: deviceRows }, { data: printerRows }, { data: settingsRow }, { data: netRows }] = await Promise.all([
+    // 承認の列（コントロールセンター・migration 00104）があれば一緒に読む
+    selectDevicesWithApproval<Record<string, unknown>>(
+      (columns) => supabase.from('register_devices').select(columns).eq('store_id', targetStore.id).order('status').order('created_at'),
+      'id, name, user_agent, created_at, last_seen_at, status'
+    ),
     supabase
       .from('printer_configs')
       .select('id, name, maker, model, usage, bill_slips, connection_type, cloudprnt_enabled')
@@ -76,6 +77,7 @@ export default async function RegisterDevicesSettingsPage() {
     createdAt: d.created_at as string,
     lastSeenAt: (d.last_seen_at as string | null) ?? null,
     status: d.status === 'revoked' ? 'revoked' : 'active',
+    approval: d.approval,
     setting: settings[d.id as string] ?? EMPTY_DEVICE_SETTING,
   }));
   const printers: PrinterOption[] = (printerRows ?? []).map((p) => {
@@ -97,7 +99,7 @@ export default async function RegisterDevicesSettingsPage() {
       />
       <RegisterDevicesPanel storeId={targetStore.id} devices={devices} printers={printers} lanPrinters={lanPrinters} wifiPrinters={wifiPrinters} />
       <p className="mt-4 text-xs text-ink-3">
-        端末の登録・解除（台数）と LAN・Wi-Fi のプリンターは運営（CYPRESS）の設定です。Bluetooth・USB のプリンターの追加・接続は「ハードウェア」から。
+        {DEVICE_MESSAGE.storeReadOnly}（運営が承認制にした店舗では、新しい iPad はレジの画面で登録すると承認待ちになり、承認されると使えます）。LAN・Wi-Fi のプリンターも運営の設定です。Bluetooth・USB のプリンターの追加・接続は「ハードウェア」から。
       </p>
     </div>
   );

@@ -7,6 +7,8 @@ import CoreImage.CIFilterBuiltins
 // 設定の一覧に出るのは、運営が企業・店舗の両方で ON にしたときだけ（lib/settings-hubs.ts）。
 // 読み込み GET ?part=displayDevices ／ 操作 POST displayIssue・displayRevoke・displayRename・displayUpdate
 // （lib/native-modules/display-devices.ts。中身は Web と同じ app/app/settings/displays/actions.ts）
+// 2026-10-25 Ronnie「端末のことは全部コントロールセンター」: 新しい端末の承認・台数は TENPO ONE 運営（運営コンソール）。
+// 承認制を ON にした店舗では、新しくつないだ端末は承認待ち（approval = pending）。解除・QR・名前・種類・持ち場はここでも
 
 struct NDVDevice: Codable, Identifiable, Hashable {
     let id: String
@@ -22,6 +24,8 @@ struct NDVDevice: Codable, Identifiable, Hashable {
     let lastIp: String?
     let userAgent: String?
     let deviceModel: String
+    /// TENPO ONE 運営の承認（pending / approved / rejected / revoked。古いサーバーは無し＝承認済み）
+    var approval: String? = nil
 }
 
 struct NDVPayload: Codable {
@@ -207,12 +211,16 @@ struct NativeDisplayDevicesView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 ForEach(p.devices) { d in deviceRow(p, d) }
+                Text("新しい端末の承認・契約・台数は TENPO ONE 運営（コントロールセンター）で行います（解除はここでもできます）。承認待ちの端末は、承認されると画面が出ます")
+                    .font(.system(size: 12)).foregroundColor(NFColor.ink3)
+                    .frame(maxWidth: .infinity, alignment: .leading).padding(18)
             }
         }
     }
 
     private func deviceRow(_ p: NDVPayload, _ d: NDVDevice) -> some View {
         let revoked = d.status == "revoked"
+        let waiting = !revoked && d.approval == "pending"
         let on = !revoked && Self.isOnline(d.lastSeenAt, now: now)
         let ip = d.lastIp ?? d.pairedIp
         return VStack(alignment: .leading, spacing: 10) {
@@ -234,7 +242,11 @@ struct NativeDisplayDevicesView: View {
                                 .padding(.horizontal, 7).padding(.vertical, 2)
                                 .background(Capsule().fill(revoked ? NFColor.ink3 : NFColor.navy))
                             if revoked {
-                                Text("解除済み").font(.system(size: 11, weight: .bold)).foregroundColor(NFColor.ink3)
+                                Text(d.approval == "rejected" ? "却下（運営）" : d.approval == "revoked" ? "解除（運営）" : "解除済み").font(.system(size: 11, weight: .bold)).foregroundColor(NFColor.ink3)
+                                    .padding(.horizontal, 7).padding(.vertical, 2).background(Capsule().fill(NFColor.lilac))
+                            }
+                            if waiting {
+                                Text("承認待ち").font(.system(size: 11, weight: .bold)).foregroundColor(NFColor.danger)
                                     .padding(.horizontal, 7).padding(.vertical, 2).background(Capsule().fill(NFColor.lilac))
                             }
                         }

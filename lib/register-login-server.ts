@@ -7,7 +7,7 @@ import { networkKey } from '@/lib/handy-pairing';
 import { isAllowedNetwork, isRestricted } from '@/lib/store-access';
 import { verifyRegisterPassword } from '@/lib/register-password';
 import { isOrgCode, normalizeOrgCode } from '@/lib/org-code';
-import { loadStorePolicy } from '@/lib/store-access-server';
+import { gateRegisterLogin, loadStorePolicy } from '@/lib/store-access-server';
 import { REGISTER_LOGIN_MESSAGE, decideRegisterLogin, isStoreUser, normalizeStoreUser } from '@/lib/register-login';
 
 type Admin = ReturnType<typeof createAdminClient>;
@@ -83,6 +83,10 @@ export async function loginRegisterDevice(input: {
   if (decision.kind === 'bad_password') return { error: REGISTER_LOGIN_MESSAGE.badPassword };
 
   const ua = (await headers()).get('user-agent')?.slice(0, 200) ?? null;
+  // コントロールセンター（2026-10-25）：レジの契約 OFF・運営が却下／解除した端末・承認待ちの端末だけログインさせない
+  // （知らない端末・台数はログインでは見ない＝今まで通り。レジの画面で確かめる。migration 00104 の前は何もしない）
+  const gate = await gateRegisterLogin({ storeId, policy });
+  if (gate.error) return { error: gate.error };
   const session = await startRegisterSession(admin, {
     organizationId: org.id as string,
     storeId,

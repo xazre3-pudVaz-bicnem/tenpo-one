@@ -1210,7 +1210,19 @@ export interface NativeHandyDevicesPayload {
   canEdit: boolean;
   /** QR に入れる登録ページ（siteUrl + /handy-pair#code）。無ければ QR を作れない */
   pairBase: string | null;
-  devices: { id: string; name: string; status: 'active' | 'revoked'; pairedAt: string; lastSeenAt: string | null; pairedIp: string | null; userAgent: string | null }[];
+  /** 店舗では一覧を見るだけ（解除・承認・台数は TENPO ONE 運営のコントロールセンター。2026-10-25） */
+  readOnlyNote?: string;
+  devices: {
+    id: string;
+    name: string;
+    status: 'active' | 'revoked';
+    pairedAt: string;
+    lastSeenAt: string | null;
+    pairedIp: string | null;
+    userAgent: string | null;
+    /** TENPO ONE 運営の承認（migration 00104 の前は approved） */
+    approval?: 'pending' | 'approved' | 'rejected' | 'revoked';
+  }[];
 }
 
 /** 勘定科目の画面の読み込み（GET ?part=accounts） */

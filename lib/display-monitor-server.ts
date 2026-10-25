@@ -42,6 +42,9 @@ import {
   type DisplayStation,
 } from '@/lib/display-monitor';
 
+import { DEVICE_MESSAGE } from '@/lib/device-control';
+import { readDeviceApproval, selectDevicesWithApproval } from '@/lib/device-control-server';
+
 export type { DisplayDevice, DisplayRequestState } from '@/lib/display-monitor';
 
 type Admin = ReturnType<typeof createAdminClient>;
@@ -208,6 +211,10 @@ export async function createDisplayDeviceSession(
     ip: string | null;
     userAgent: string | null;
     createdBy: string | null;
+    /** コントロールセンターの承認待ちで作る（migration 00104 の後だけ渡す） */
+    pending?: boolean;
+    /** 承認制の移行期間に作った端末（すぐ使えるが、運営の一覧で「自動承認」と分かるように承認の時刻だけ入れる） */
+    autoApproved?: boolean;
   }
 ): Promise<{ deviceId?: string; profileId?: string; token?: string; error?: string }> {
   const email = displayDeviceEmail(crypto.randomUUID());
@@ -228,7 +235,8 @@ export async function createDisplayDeviceSession(
 
   const { data: membership, error: memErr } = await admin
     .from('memberships')
-    .insert({ organization_id: input.organizationId, profile_id: userId, role: 'part_time', status: 'active', created_by: input.createdBy })
+    // 承認待ちの端末は所属を止めておく（注文などのデータを読めない。運営が承認したときに戻す）
+    .insert({ organization_id: input.organizationId, profile_id: userId, role: 'part_time', status: input.pending ? 'suspended' : 'active', created_by: input.createdBy })
     .select('id')
     .single();
   if (memErr || !membership) return fail(memErr?.message ?? '不明なエラー');
@@ -239,25 +247,25 @@ export async function createDisplayDeviceSession(
   if (storeErr) return fail(storeErr.message);
 
   const token = generateDisplayDeviceToken();
-  const { data: device, error: deviceErr } = await admin
-    .from('display_devices')
-    .insert({
-      organization_id: input.organizationId,
-      store_id: input.storeId,
-      name: input.deviceName,
-      kind: input.kind,
-      stations: input.stations,
-      profile_id: userId,
-      membership_id: membership.id as string,
-      device_token_hash: hashDisplayDeviceToken(token),
-      paired_ip: input.ip,
-      last_ip: input.ip,
-      user_agent: input.userAgent,
-      last_seen_at: new Date().toISOString(),
-      created_by: input.createdBy,
-    })
-    .select('id')
-    .single();
+  const now = new Date().toISOString();
+  const row: Record<string, unknown> = {
+    organization_id: input.organizationId,
+    store_id: input.storeId,
+    name: input.deviceName,
+    kind: input.kind,
+    stations: input.stations,
+    profile_id: userId,
+    membership_id: membership.id as string,
+    device_token_hash: hashDisplayDeviceToken(token),
+    paired_ip: input.ip,
+    last_ip: input.ip,
+    user_agent: input.userAgent,
+    last_seen_at: now,
+    created_by: input.createdBy,
+  };
+  if (input.pending) Object.assign(row, { approval_status: 'pending', approval_requested_at: now });
+  else if (input.autoApproved) Object.assign(row, { approval_status: 'approved', approved_at: now });
+  const { data: device, error: deviceErr } = await admin.from('display_devices').insert(row).select('id').single();
   if (deviceErr || !device) return fail(deviceErr?.message ?? '不明なエラー');
 
   return { deviceId: device.id as string, profileId: userId, token };
@@ -344,6 +352,10 @@ export async function resolveDisplayRequest(): Promise<DisplayRequestState> {
       if (!row) return { kind: 'revoked', name: null };
       const device = deviceFrom(row);
       if (device.status !== 'active') return { kind: 'revoked', name: device.name };
+      // コントロールセンター（migration 00104 の後）: 運営が承認するまで画面を出さない（ログアウトはしない）
+      const approval = await readDeviceApproval(admin, 'display', device.id);
+      if (approval === 'pending') return await pendingState(admin, device);
+      if (approval !== 'approved') return { kind: 'revoked', name: device.name };
       return await readyState(admin, device);
     }
 
@@ -365,6 +377,17 @@ export async function resolveDisplayRequest(): Promise<DisplayRequestState> {
     console.error('[display] resolve failed', e instanceof Error ? e.message : e);
     return { kind: 'transient' };
   }
+}
+
+/** 承認待ちの端末：案内だけ出す（「使用中」の記録は残す＝運営の一覧で最終の通信が分かる） */
+async function pendingState(admin: Admin, device: DisplayDevice): Promise<DisplayRequestState> {
+  const ip = await currentRequestIp();
+  const ua = (await headers()).get('user-agent')?.slice(0, 200) ?? null;
+  const [{ data: store }] = await Promise.all([
+    admin.from('stores').select('name').eq('id', device.storeId).maybeSingle(),
+    touchDisplayDevice(admin, device, ip, ua),
+  ]);
+  return { kind: 'pending', name: device.name, storeName: (store?.name as string | undefined) ?? '' };
 }
 
 async function readyState(admin: Admin, device: DisplayDevice): Promise<DisplayRequestState> {
@@ -447,6 +470,9 @@ export async function requireActiveDisplayDevice(): Promise<{ device: DisplayDev
   if (!row) throw new Error('この端末は解除されました');
   const device = deviceFrom(row);
   if (device.status !== 'active') throw new Error('この端末は解除されました');
+  const approval = await readDeviceApproval(admin, 'display', device.id);
+  if (approval === 'pending') throw new Error(DEVICE_MESSAGE.pending);
+  if (approval !== 'approved') throw new Error('この端末は解除されました');
   const flag = await loadDisplayMonitorFlag(device.organizationId, device.storeId, admin);
   if (!flag.on) throw new Error('この機能は使えません（運営にお問い合わせください）');
   const ip = await currentRequestIp();
@@ -555,11 +581,11 @@ export async function loadDisplayDevicesPayload(
   store: { id: string; name: string }
 ): Promise<DisplayDevicesPayload> {
   const flag = ctx.organizationId ? await loadDisplayMonitorFlag(ctx.organizationId, store.id) : ({ on: false, reason: 'company_off' } as const);
-  const { data, error } = await supabase
-    .from('display_devices')
-    .select('id, name, kind, stations, status, paired_at, last_seen_at, paired_ip, last_ip, user_agent')
-    .eq('store_id', store.id)
-    .order('paired_at', { ascending: false });
+  // 承認の列（migration 00104）があれば一緒に読む。無ければ外して読み直す（承認済みとして出す）
+  const { rows: data, error } = await selectDevicesWithApproval<Record<string, unknown>>(
+    (columns) => supabase.from('display_devices').select(columns).eq('store_id', store.id).order('paired_at', { ascending: false }),
+    'id, name, kind, stations, status, paired_at, last_seen_at, paired_ip, last_ip, user_agent'
+  );
   const notReady = flag.reason === 'not_ready' || (!!error && isMissingTableError(error, 'display_devices'));
   const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL ?? '').replace(/\/$/, '');
   return {
@@ -588,6 +614,7 @@ export async function loadDisplayDevicesPayload(
         lastIp: (d.last_ip as string | null) ?? null,
         userAgent: (d.user_agent as string | null) ?? null,
         deviceModel: deviceModelFromUserAgent(d.user_agent as string | null),
+        approval: d.approval,
       };
     }),
   };

@@ -10,7 +10,8 @@ import type { ClaimResult } from '@/app/app/pos/register-device-actions';
  * レジとして使えない端末に出す画面（2026-09-23 契約のアクセス制限）。
  * - network: 契約で登録した回線の外から開いた
  * - register: まだレジとして登録していない端末（台数に空きがあれば登録できる）
- * - limit / revoked: 台数の上限・解除された端末
+ * - limit / revoked: 台数の上限・解除された端末（契約 OFF・却下もこの画面）
+ * - pending: 登録したが TENPO ONE 運営の承認待ち（コントロールセンター。2026-10-25）
  */
 export function RegisterGate({
   kind,
@@ -20,7 +21,7 @@ export function RegisterGate({
   message,
   claimAction,
 }: {
-  kind: 'network' | 'register' | 'limit' | 'revoked';
+  kind: 'network' | 'register' | 'limit' | 'revoked' | 'pending';
   storeId: string;
   storeName: string;
   limit?: number;
@@ -50,7 +51,13 @@ export function RegisterGate({
           <MonitorSmartphone className="mx-auto h-9 w-9 text-primary" aria-hidden />
         )}
         <p className="mt-3 text-base font-bold text-navy">
-          {kind === 'network' ? 'お店の回線からご利用ください' : kind === 'register' ? 'この端末をレジとして登録します' : 'この端末ではレジを使えません'}
+          {kind === 'network'
+            ? 'お店の回線からご利用ください'
+            : kind === 'register'
+              ? 'この端末をレジとして登録します'
+              : kind === 'pending'
+                ? 'TENPO ONE 運営の承認待ちです'
+                : 'この端末ではレジを使えません'}
         </p>
         <p className="mt-2 text-sm leading-relaxed text-gray-600">{message}</p>
         <p className="mt-2 text-xs text-gray-400">
