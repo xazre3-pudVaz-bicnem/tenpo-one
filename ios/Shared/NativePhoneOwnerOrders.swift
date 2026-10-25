@@ -790,6 +790,11 @@ struct NOSSlipDetailSheet: View {
                 }
                 .buttonStyle(PressableStyle())
                 .disabled(model.busy)
+                // レシート・領収書のプレビュー（ネイティブ。NativePhoneOwnerReceipt.swift。2026-10-25 Ronnie）
+                Button { AppState.shared.leaveNativePhone(to: "/app/pos/receipt/\(d.id)?from=orders") } label: {
+                    actionLabel("レシート・領収書を見る", icon: "doc.text.magnifyingglass", filled: false)
+                }
+                .buttonStyle(PressableStyle())
             }
             if canRyoshusho {
                 if issued {
