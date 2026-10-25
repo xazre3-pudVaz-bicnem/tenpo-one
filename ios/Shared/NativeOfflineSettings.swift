@@ -59,8 +59,8 @@ struct NativeOfflinePrintCard: View {
                                 .lineLimit(3)
                             Spacer(minLength: 0)
                             if o.blocked == true || o.syncTries >= 10 {
-                                // 人が確かめる伝票：Web で直したら、この iPad の分は消す
-                                Button("Web で直したので消す") { discardTarget = o.id }
+                                // 人が確かめる伝票：伝票明細（アプリ）で直したら、この iPad の分は消す（Web には行かない。2026-10-25）
+                                Button("伝票明細で直したので消す") { discardTarget = o.id }
                                     .font(.system(size: 12, weight: .bold)).foregroundColor(NFColor.danger)
                             }
                         }
@@ -135,7 +135,7 @@ struct NativeOfflinePrintCard: View {
             Button("消す", role: .destructive) { if let id = discardTarget { store.discard(id) }; discardTarget = nil }
             Button("キャンセル", role: .cancel) { discardTarget = nil }
         } message: {
-            Text("サーバーには入りません。Web の伝票で品・会計を直してから消してください。")
+            Text("サーバーには入りません。伝票明細・オーダー・会計で品・会計を直してから消してください。")
         }
     }
 

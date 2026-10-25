@@ -263,7 +263,8 @@ struct NativeInventoryView: View {
                         Text(e).font(.system(size: 15, weight: .bold)).foregroundColor(NFColor.danger)
                         HStack(spacing: 10) {
                             Button("もう一度") { Task { await model.refresh() } }
-                            if model.useWeb { Button("Web で開く") { onWeb("/app/inventory") } }
+                            // Web の画面は開かない（同じ画面に戻るだけだった。2026-10-25「101% native」）。使えないときはホームへ
+                            if model.useWeb { Button("ホームへ") { onHome() } }
                         }
                     }
                 } else { ProgressView("読み込み中…").tint(NFColor.iris) }

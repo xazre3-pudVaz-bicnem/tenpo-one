@@ -13,6 +13,8 @@ enum NativePreview: String {
     case home, floor, ledger
     /// iPad のレジのログイン・担当選択（2026-10-25）
     case regiLogin, regiClerks
+    /// iPad の 設定 › iPhoneハンディ（QR の作成・作り直し・お店の Wi-Fi・印刷。2026-10-25。NativeHandyQrAdmin.swift）
+    case handyQrAdmin
     /// iPhone ハンディの予約（一覧・受付管理・メッセージ。2026-10-25）
     case phoneReservations
     /// iPhone の店長・オーナーのログイン（2026-10-25）
@@ -90,6 +92,7 @@ struct NativePreviewView: View {
             NativeStorePreview(kind: kind.rawValue)
         case .regiLogin, .regiClerks:
             NativeRegiLoginView(preview: kind.rawValue)
+        case .handyQrAdmin: NativeHandyQrAdminPreview()
         case .phoneReservations:
             NativePhoneReservationsPreview()
         case .ownerLogin:
