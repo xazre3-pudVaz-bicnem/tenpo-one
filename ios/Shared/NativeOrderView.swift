@@ -36,7 +36,7 @@ struct NativeOrderView: View {
                 let slipW = max(320, geo.size.width * 0.30)
                 let catW = max(150, geo.size.width * 0.13)
                 HStack(alignment: .top, spacing: 12) {
-                    SlipPanel(model: model, onClerk: { pickClerk = true }, onGuestInfo: { guestInfoOpen = true })
+                    SlipPanel(model: model, onBack: onHome, onClerk: { pickClerk = true }, onGuestInfo: { guestInfoOpen = true })
                         .frame(width: slipW)
                     VStack(spacing: 12) {
                         // 上のタブ（ページ）。Web と同じく2つ以上あるときだけ（テイクアウトは出さない）
@@ -337,6 +337,8 @@ struct NativeTopBar: View {
 
 private struct SlipPanel: View {
     @ObservedObject var model: NativeOrderModel
+    /// 卓名の左の ← （上のバーの左のボタンと同じ「戻る」。2026-10-25 19:08 Ronnie「T10 ko left ma vayeko ← button pani click hune banau」）
+    var onBack: () -> Void = {}
     var onClerk: () -> Void = {}
     /// 人数・時間を押したとき（お客様情報の直し。卓のある伝票だけ）
     var onGuestInfo: () -> Void = {}
@@ -347,7 +349,15 @@ private struct SlipPanel: View {
         VStack(spacing: 0) {
             // 卓・人数・伝票番号
             HStack(spacing: 10) {
-                Image(systemName: "arrow.left").font(.system(size: 18, weight: .bold)).foregroundColor(NT.ink2)
+                Button(action: onBack) {
+                    Image(systemName: "arrow.left").font(.system(size: 18, weight: .bold)).foregroundColor(NT.ink2)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(PressableStyle())
+                .padding(.leading, -12)
+                .padding(.trailing, -6)
+                .accessibilityLabel("戻る")
                 Text(model.order.tableName).font(.system(size: 32, weight: .heavy)).foregroundColor(NT.purple)
                 Button(action: onGuestInfo) {
                     HStack(spacing: 4) {
