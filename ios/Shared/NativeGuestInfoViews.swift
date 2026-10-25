@@ -492,9 +492,10 @@ struct NativeSetupSheet: View {
         courseId = o.courseId
         startNow = false
         startDate = Date(timeIntervalSince1970: o.openedAtMs / 1000)
+        // テーブル一覧の終わりは「時間制（＝L.O.）＋30 分」（2026-10-25 #568）。直しの時間制は L.O. までの時間に戻す
         let dur = Int(((o.endAtMs - o.openedAtMs) / 60_000).rounded())
         timed = dur > 0
-        if dur > 0 { duration = dur }
+        if dur > 0 { duration = max(15, dur - NF_LAST_ORDER_WARN_MINUTES) }
         male = e.slip.guestCount
         female = 0
         let labels = (payload?.visitSources ?? []).map(\.label)
@@ -507,7 +508,8 @@ struct NativeSetupSheet: View {
             if let m = v.male, let f = v.female, m + f == e.slip.guestCount { male = m; female = f }
             if let s = v.source, source.isEmpty, labels.contains(s) { source = s }
             timed = v.timed
-            if v.timed, let d = v.duration, dur <= 0 { duration = d }
+            // 来店登録で入れた時間制（＝L.O. までの時間）があれば、それをそのまま
+            if v.timed, let d = v.duration, d > 0 { duration = d }
             warningEnabled = v.warningEnabled
             if let w = v.warningMinutes { warningMinutes = w }
         }
@@ -628,14 +630,10 @@ struct NativeSetupSheet: View {
         .buttonStyle(PressableStyle())
     }
 
-    /// 開始時間を「時・分」で決める。いまより先になるときは前の日（夜中をまたいだ来店）
+    /// 開始時間を「時・分」で決める。前日・今日・翌日のうち「12時間前〜6時間後」に入る日時（サーバーの resolveStartTime と同じ）。
+    /// 先の時間（あとから始める・サービス）も選べる（2026-10-25 19:34 Ronnie「start 時間は先の時間にも設定できるようにして」）
     private func setStart(hour: Int, minute: Int) {
-        let cal = nfJstCalendar
-        var c = cal.dateComponents([.year, .month, .day], from: Date())
-        c.hour = hour; c.minute = minute; c.second = 0
-        var d = cal.date(from: c) ?? Date()
-        if d > Date().addingTimeInterval(60) { d = cal.date(byAdding: .day, value: -1, to: d) ?? d }
-        startDate = d
+        startDate = nfResolveStart(hour: hour, minute: minute)
         startChanged = true
     }
 
@@ -733,8 +731,9 @@ struct NativeGuestInfoSheet: View {
         self.slip = slip
         self.onClose = onClose
         _startDate = State(initialValue: Date(timeIntervalSince1970: order.openedAtMs / 1000))
+        // テーブル一覧の終わりは「時間制（＝L.O.）＋30 分」（#568）。ここで選ぶ時間は L.O. までの時間
         let dur = Int(((order.endAtMs - order.openedAtMs) / 60_000).rounded())
-        _minutes = State(initialValue: dur > 0 ? dur : nil)
+        _minutes = State(initialValue: dur > 0 ? max(15, dur - NF_LAST_ORDER_WARN_MINUTES) : nil)
         _courseId = State(initialValue: order.courseId ?? "")
         _guests = State(initialValue: slip.guestCount)
         _plans = State(initialValue: order.plansOrDefault)
@@ -746,7 +745,8 @@ struct NativeGuestInfoSheet: View {
     private var orderMenuItemIds: [String] { slip.lines.compactMap { $0.menuItemId } }
     private var endLabel: String {
         guard let m = minutes else { return "—" }
-        return nfHm(startDate.addingTimeInterval(Double(m) * 60))
+        // 席の終わり＝L.O.（開始＋時間）＋30 分
+        return nfHm(startDate.addingTimeInterval(Double(m + NF_LAST_ORDER_WARN_MINUTES) * 60))
     }
 
     var body: some View {
@@ -785,7 +785,7 @@ struct NativeGuestInfoSheet: View {
                 VStack(alignment: .leading, spacing: 16) {
                     HStack(spacing: 24) {
                         NFSection("開始時間 / Start") {
-                            DatePicker("", selection: Binding(get: { startDate }, set: { startDate = $0; startChanged = true }), in: Date().addingTimeInterval(-12 * 3600)...Date().addingTimeInterval(300), displayedComponents: .hourAndMinute)
+                            DatePicker("", selection: Binding(get: { startDate }, set: { startDate = $0; startChanged = true }), in: Date().addingTimeInterval(-12 * 3600)...Date().addingTimeInterval(Double(NF_START_MAX_FUTURE_MINUTES) * 60), displayedComponents: .hourAndMinute)
                                 .labelsHidden()
                                 .environment(\.timeZone, TimeZone(identifier: "Asia/Tokyo")!)
                         }
@@ -992,6 +992,23 @@ struct NFStepper: View {
         .disabled(!enabled)
         .opacity(enabled ? 1 : 0.4)
     }
+}
+
+/// 開始時間：先の時間は 6 時間後まで（サーバーの START_MAX_FUTURE_MINUTES と同じ）。前は 12 時間前まで
+let NF_START_MAX_FUTURE_MINUTES = 6 * 60
+let NF_START_MAX_PAST_MINUTES = 12 * 60
+
+/// 「時・分」を、前日・今日・翌日のうち「12時間前〜6時間後」に入る日時に（lib/handy-visit.ts の resolveStartTime と同じ）
+func nfResolveStart(hour: Int, minute: Int, now: Date = Date()) -> Date {
+    let cal = nfJstCalendar
+    var c = cal.dateComponents([.year, .month, .day], from: now)
+    c.hour = hour; c.minute = minute; c.second = 0
+    let base = cal.date(from: c) ?? now
+    let candidates = [-1, 0, 1].compactMap { cal.date(byAdding: .day, value: $0, to: base) }
+    let lo = now.addingTimeInterval(-Double(NF_START_MAX_PAST_MINUTES) * 60)
+    let hi = now.addingTimeInterval(Double(NF_START_MAX_FUTURE_MINUTES + 5) * 60)
+    if let d = candidates.first(where: { $0 >= lo && $0 <= hi }) { return d }
+    return candidates.min { abs($0.timeIntervalSince(now)) < abs($1.timeIntervalSince(now)) } ?? base
 }
 
 /// 日本時間のカレンダー（開始時間の「時・分」選び）

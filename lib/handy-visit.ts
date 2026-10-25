@@ -286,9 +286,15 @@ export function validateVisitDraft(d: VisitDraft, opts: { requireSource?: boolea
  * 伝票の開始時刻（経過時間）と、時間制の終了予定（開始＋席時間）がこの時刻からになる。
  */
 
-/** 開始時間として選べる範囲：12時間前〜今。スマホとサーバーの時計のずれは5分まで許す */
+/** 開始時間として選べる範囲：12時間前〜6時間後。スマホとサーバーの時計のずれは5分まで許す */
 export const START_MAX_PAST_MINUTES = 12 * 60;
+/**
+ * 先の時間（あとから始める）も選べる（2026-10-25 19:34 Ronnie「Default は今だけど start 時間は先の時間にも設定できるようにして」
+ * 「kahile kahi service dinu parxa」）。6時間後まで（12時間前〜6時間後で、その時刻はいつも 1 つに決まる）
+ */
+export const START_MAX_FUTURE_MINUTES = 6 * 60;
 export const START_FUTURE_TOLERANCE_MINUTES = 5;
+export const START_RANGE_MESSAGE = '開始時間は12時間前から6時間後までの間で選んでください';
 
 const START_HM = /^([01]\d|2[0-3]):([0-5]\d)$/;
 const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
@@ -310,16 +316,24 @@ export function minutesAgoHm(nowMs: number, minutes: number): string {
 }
 
 /**
- * 'HH:MM'（日本時間）を、いまに一番近い過去の日時（ms）にする。
- * 今日のその時刻が「今＋5分」より後なら前日（例: 0時30分に 23:50 → 前日の23:50）。読めなければ null。
+ * 'HH:MM'（日本時間）を日時（ms）にする。前日・今日・翌日のうち「12時間前〜6時間後」に入るもの
+ * （例: 0時30分に 23:50 → 前日の23:50、19時30分に 20:00 → 今日の20:00）。
+ * どれも入らなければ、いまに一番近いもの（startTimeProblem が範囲外と言う）。読めなければ null。
  */
 export function resolveStartTime(hm: string, nowMs: number): number | null {
   if (!isStartHm(hm)) return null;
   const [h, m] = hm.split(':').map(Number);
   const today = new Date(nowMs + JST_OFFSET_MS);
-  let t = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate(), h, m) - JST_OFFSET_MS;
-  if (t > nowMs + START_FUTURE_TOLERANCE_MINUTES * 60_000) t -= 24 * 60 * 60_000;
-  return t;
+  const base = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate(), h, m) - JST_OFFSET_MS;
+  const day = 24 * 60 * 60_000;
+  const candidates = [base - day, base, base + day];
+  const inRange = candidates.find((t) => !startOutOfRange(t, nowMs));
+  if (inRange !== undefined) return inRange;
+  return candidates.reduce((a, b) => (Math.abs(b - nowMs) < Math.abs(a - nowMs) ? b : a));
+}
+
+function startOutOfRange(t: number, nowMs: number): boolean {
+  return nowMs - t > START_MAX_PAST_MINUTES * 60_000 || t - nowMs > (START_MAX_FUTURE_MINUTES + START_FUTURE_TOLERANCE_MINUTES) * 60_000;
 }
 
 /** 開始時間として使えない理由。null（今）は常に使える */
@@ -327,9 +341,7 @@ export function startTimeProblem(hm: string | null, nowMs: number): string | nul
   if (hm === null) return null;
   const t = resolveStartTime(hm, nowMs);
   if (t === null) return '開始時間を選び直してください';
-  if (nowMs - t > START_MAX_PAST_MINUTES * 60_000) {
-    return '開始時間は12時間前から今までの間で選んでください';
-  }
+  if (startOutOfRange(t, nowMs)) return START_RANGE_MESSAGE;
   return null;
 }
 
