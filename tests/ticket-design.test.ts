@@ -27,7 +27,7 @@ describe('approved kitchen and cancellation print designs', () => {
   it.each([384, 576] as const)('keeps only the time-row separator black in the actual %s-dot printer payload', async width => {
     const d = kitchenDesign({ ...ticket, lines: [{ ...ticket.lines[0], delta: 12 }] }, { ...opts, textSize: 'normal' });
     const item = d.rows.find(r => r.cells[0].text === 'Mutton Curry')!;
-    expect(item.size).toBeGreaterThanOrEqual(32);
+    expect(item.size).toBeGreaterThanOrEqual(40);
     expect(item.cells[1]).toMatchObject({ text: '12', align: 'right', share: 2 });
     expect(item.rule).toBeUndefined();
     expect(d.rows[0].cells).toEqual([{ text: 'キッチン', align: 'center', share: 1 }]);
