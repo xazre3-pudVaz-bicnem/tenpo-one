@@ -33,6 +33,7 @@ final class NativePrintAgent: ObservableObject {
     @Published private(set) var lastPolledAt: Date?
 
     private var pending: Task<Void, Never>?
+    private var connectionMaintenance: Task<Void, Never>?
     private var kicks: [Task<Void, Never>] = []
     private var ticking = false
     private var kickPending = false
@@ -55,15 +56,46 @@ final class NativePrintAgent: ObservableObject {
                 Task { @MainActor in self?.configChanged() }
             },
         ]
-        schedule(after: 0.8)
+        startConnectionMaintenance()
+        schedule(after: 0)
     }
 
     func stop() {
         running = false
+        connectionMaintenance?.cancel(); connectionMaintenance = nil
         pending?.cancel(); pending = nil
         kicks.forEach { $0.cancel() }; kicks = []
         observers.forEach { NotificationCenter.default.removeObserver($0) }
         observers = []
+    }
+
+    /// Maintain the saved Star connection independently of network printer polling.
+    /// Only one unique target is warmed: the SDK session holds one connection, so
+    /// alternating several printers here would repeatedly disconnect them.
+    private func startConnectionMaintenance() {
+        connectionMaintenance?.cancel()
+        connectionMaintenance = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                guard let self, self.running else { return }
+                if UIApplication.shared.applicationState == .active {
+                    let links = NativePrintConfig.shared.config.appLinks.filter {
+                        $0.maker == "star" && !$0.deviceId.hasPrefix("ea:")
+                    }
+                    let targets = Set(links.map { "\($0.via):\($0.deviceId)" })
+                    if targets.count == 1, let link = links.first {
+                        // No print, feed, or drawer data. The session serializes
+                        // probes with printing and suppresses fresh/busy probes.
+                        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                            BluetoothPrinters.shared.prepare(deviceId: link.deviceId, maker: link.maker, via: link.via) { _, _ in
+                                continuation.resume()
+                            }
+                        }
+                    }
+                }
+                do { try await Task.sleep(nanoseconds: 5_000_000_000) }
+                catch { return }
+            }
+        }
     }
 
     /// 注文・会計が入った：いつもの1秒を待たずに何回か早めに見る（NativeAPI の POST のあと）
