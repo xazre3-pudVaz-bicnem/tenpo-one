@@ -224,11 +224,9 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         let lan = AppConfig.isPad
             ? "lan: { print: function(job){ return call('lanPrint', job || {}); } },"
             : ""
-        // iPad だけ：ネイティブのオーダー・会計画面（試験中）の ON/OFF（レジの設定に出る）
-        let nativePosOn = AppState.shared.nativePosEnabled ? "true" : "false"
-        let nativePos = AppConfig.isPad
-            ? "nativePos: { enabled: \(nativePosOn), set: function(on){ return call('setNativePos', { on: !!on }).then(function(r){ if (r && r.ok && window.TenpoNative && window.TenpoNative.nativePos) { window.TenpoNative.nativePos.enabled = !!r.enabled; } return r; }); } },"
-            : ""
+        // iPad のネイティブの ON/OFF は無くなった（2026-10-25 Ronnie「Web の iPad 版はもう要らない」）。
+        // ブリッジに nativePos を出さない＝Web の「レジの設定」の ON/OFF（NativePosToggle）も出ない
+        let nativePos = ""
         // iPhone だけ：ハンディのテーブル一覧・オーナーのホームをネイティブで出すか（2026-10-24。OFF にすると今までの Web の画面）
         let nativePhoneOn = AppState.shared.nativePhoneEnabled ? "true" : "false"
         let nativePhone = AppConfig.isPad
