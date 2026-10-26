@@ -61,7 +61,10 @@ export type NativeFloorAction =
   /** 品目のない伝票の取消（理由・店長の承認） */
   | { type: 'floorCancelEmpty'; orderId: string; reason: string; approvedByClerkId: string | null }
   /** ホームの「ドロアオープン」 */
-  | { type: 'floorDrawer'; storeId: string };
+  | { type: 'floorDrawer'; storeId: string }
+  /** この iPad をこの店のレジとして登録する（Web の /app/pos の「登録」と同じ。storeId が無ければ今の店）。
+   *  2026-10-26 アプリだけになった iPad（1.2）では登録の画面が無く、テーブル一覧が前の店の保存のまま「テーブルが見つかりません」になった */
+  | { type: 'floorRegisterDevice'; storeId: string | null };
 
 export type NativeFloorActionType = NativeFloorAction['type'];
 
@@ -86,6 +89,7 @@ export const NATIVE_FLOOR_ACTION_TYPES: readonly NativeFloorActionType[] = [
   'floorMove',
   'floorCancelEmpty',
   'floorDrawer',
+  'floorRegisterDevice',
 ];
 
 export function isNativeFloorActionType(v: unknown): v is NativeFloorActionType {
@@ -220,6 +224,9 @@ export function parseNativeFloorAction(raw: unknown): Parsed {
     case 'floorDrawer':
       if (!isUuid(b.storeId)) return bad();
       return { ok: true, action: { type: b.type, storeId: b.storeId } };
+    case 'floorRegisterDevice':
+      if (b.storeId != null && !isUuid(b.storeId)) return bad();
+      return { ok: true, action: { type: 'floorRegisterDevice', storeId: (b.storeId as string | null | undefined) ?? null } };
     case 'floorNewSlip':
       if (!isUuid(b.orderId)) return bad();
       return { ok: true, action: { type: 'floorNewSlip', orderId: b.orderId } };
