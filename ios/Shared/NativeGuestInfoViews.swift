@@ -281,7 +281,7 @@ struct NativeSetupSheet: View {
                         .font(.system(size: 14)).foregroundColor(NFColor.ink2).fixedSize(horizontal: false, vertical: true)
                 } else {
                     Text("\(planNames)のプラン（何個でも。選ぶと伝票に入ります）").font(.system(size: 12)).foregroundColor(NFColor.ink3)
-                    NFChipGrid(items: planItems.map { ($0.id, slipMenuItemIds.contains($0.id) ? "\($0.name)（伝票にあり）" : "\($0.name)  ¥\($0.price)", GIColor.navy, false) }, selected: planItemIds + slipMenuItemIds, columns: 2, height: 56) { id in
+                    NFChipGrid(items: planItems.map { ($0.id, slipMenuItemIds.contains($0.id) ? "\($0.name)（伝票にあり）" : "\($0.name)  ¥\($0.price)", GIColor.navy, false) }, selected: planItemIds + slipMenuItemIds, columns: 2, height: 56, lines: 3) { id in
                         guard !slipMenuItemIds.contains(id) else { return }
                         if planItemIds.contains(id) { planItemIds.removeAll { $0 == id } } else { planItemIds.append(id) }
                         if let item = planItems.first(where: { $0.id == id }), item.kind == "course", let m = item.durationMinutes, m > 0, planItemIds.contains(id) {
@@ -807,7 +807,8 @@ struct NativeGuestInfoSheet: View {
                             NFChipGrid(
                                 items: planItems.map { ($0.id, orderMenuItemIds.contains($0.id) ? "\($0.name)（伝票にあり）" : "\($0.name)  ¥\($0.price)", GIColor.navy, false) },
                                 selected: planPick + orderMenuItemIds,
-                                columns: 3
+                                columns: 3,
+                                lines: 3
                             ) { id in
                                 guard !orderMenuItemIds.contains(id) else { return }
                                 if planPick.contains(id) { planPick.removeAll { $0 == id } } else {
@@ -919,6 +920,8 @@ struct NFChipGrid: View {
     let selected: [String]
     var columns: Int = 4
     var height: CGFloat = 46
+    /// 1 より大きいと折り返して出す（プラン名など長い名前を切らない。2026-10-26 Ronnie「文字 mileko chaina」）
+    var lines: Int = 1
     let onTap: (String) -> Void
 
     var body: some View {
@@ -928,7 +931,10 @@ struct NFChipGrid: View {
                 Button { onTap(it.0) } label: {
                     Text(it.1)
                         .font(.system(size: 14, weight: .bold))
-                        .lineLimit(1).minimumScaleFactor(0.7)
+                        .lineLimit(lines).minimumScaleFactor(lines > 1 ? 0.85 : 0.7)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: lines > 1)
+                        .padding(.vertical, lines > 1 ? 6 : 0)
                         .foregroundColor(on ? (it.3 ? NFColor.ink : .white) : it.2)
                         .frame(maxWidth: .infinity, minHeight: height)
                         .padding(.horizontal, 6)
