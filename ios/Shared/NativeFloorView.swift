@@ -932,7 +932,7 @@ struct NativeFloorGuide: View {
     private func desc(_ st: NFTileState) -> String {
         switch st {
         case .seated: return "お客様が座って、まだ注文なし（店舗台帳の「来店済み」と同じ緑）"
-        case .ordered: return "注文が入った（オーダー・会計のボタンと同じ青）"
+        case .ordered: return "注文が入った"
         case .lo: return "ラストオーダーの時間"
         case .over: return "時間を過ぎた"
         case .pay: return "会計待ち"
