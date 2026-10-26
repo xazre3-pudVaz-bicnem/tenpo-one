@@ -165,7 +165,6 @@ struct NativeHomeView: View {
     // 右の箱（白・細い枠・灰色の線のアイコン）
     private static let pageBg = Color(hex: 0xF6F7F9)
     private static let tileLine = Color(hex: 0xE2E2EA)
-    private static let tileIcon = Color(hex: 0x77738A)
     private static let tileText = Color(hex: 0x403C55)
 
     /// 左のメニューに出す道具（即会計・入出金・ドロア）と、いちばん下の 設定
@@ -189,11 +188,10 @@ struct NativeHomeView: View {
                         topBar
                         VStack(spacing: 16) {
                             tileGrid(columns: 3)
-                            Spacer(minLength: 0)
                             salesCard(narrow: false)
-                            Spacer(minLength: 0)
                             clockRow
                             kpiRow(columns: 4)
+                            Spacer(minLength: 0)
                         }
                         .padding(.horizontal, 20)
                         .padding(.top, 18)
@@ -297,6 +295,7 @@ struct NativeHomeView: View {
 
     private struct NavItem {
         let key: String
+        /// "home" / "floor" / "ledger" / 道具の href（アイコンと色は toolIcon）
         let icon: String
         let label: String
         let en: String
@@ -306,10 +305,10 @@ struct NativeHomeView: View {
     }
 
     private var navItems: [NavItem] {
-        var out: [NavItem] = [NavItem(key: "home", icon: "house", label: "ホーム", en: "Home", active: true, action: {})]
+        var out: [NavItem] = [NavItem(key: "home", icon: "home", label: "ホーム", en: "Home", active: true, action: {})]
         for t in bigTiles {
             let isFloor = t.href == "/app/floor"
-            out.append(NavItem(key: t.href, icon: isFloor ? "square.grid.2x2" : "calendar", label: t.label, en: t.en, action: { isFloor ? onFloor() : onWeb(t.href) }))
+            out.append(NavItem(key: t.href, icon: isFloor ? "floor" : "ledger", label: t.label, en: t.en, action: { isFloor ? onFloor() : onWeb(t.href) }))
         }
         for href in Self.sideTools {
             if let t = tools.first(where: { $0.href == href }) { out.append(navItem(t)) }
@@ -318,8 +317,19 @@ struct NativeHomeView: View {
     }
 
     private func navItem(_ t: NHTool) -> NavItem {
-        let icon = t.href == Self.settingsHref ? "gearshape" : "creditcard"
-        return NavItem(key: t.href, icon: icon, label: t.label, en: t.en, badge: t.badge, action: { toolTap(t) })
+        NavItem(key: t.href, icon: t.href, label: t.label, en: t.en, badge: t.badge, action: { toolTap(t) })
+    }
+
+    @ViewBuilder private func navIcon(_ n: NavItem, size: CGFloat) -> some View {
+        switch n.icon {
+        case "home":
+            Image(systemName: "house").font(.system(size: size * 0.6, weight: .regular)).frame(width: size, height: size)
+        case "floor": bigTileIcon(isFloor: true, size: size)
+        case "ledger": bigTileIcon(isFloor: false, size: size)
+        default:
+            let (sym, color) = Self.toolIcon(n.icon)
+            iconBadge(sym, color: color, size: size)
+        }
     }
 
     private var sidebar: some View {
@@ -354,14 +364,14 @@ struct NativeHomeView: View {
             Group {
                 if tall {
                     VStack(spacing: 5) {
-                        Image(systemName: n.icon).font(.system(size: 26, weight: .regular))
+                        navIcon(n, size: 40)
                         Text(n.label).font(.system(size: 15, weight: .bold)).lineLimit(1).minimumScaleFactor(0.7)
                         Text(n.en).font(.system(size: 10, weight: .medium)).foregroundColor(sub).lineLimit(1).minimumScaleFactor(0.7)
                     }
-                    .frame(maxWidth: .infinity).frame(height: 96)
+                    .frame(maxWidth: .infinity).frame(height: 104)
                 } else {
                     HStack(spacing: 10) {
-                        Image(systemName: n.icon).font(.system(size: 18, weight: .regular)).frame(width: 24)
+                        navIcon(n, size: 34)
                         VStack(alignment: .leading, spacing: 1) {
                             Text(n.label).font(.system(size: 15, weight: .bold)).lineLimit(1).minimumScaleFactor(0.7)
                             Text(n.en).font(.system(size: 10, weight: .medium)).foregroundColor(sub).lineLimit(1).minimumScaleFactor(0.7)
@@ -387,6 +397,37 @@ struct NativeHomeView: View {
         .disabled(model.busy && n.key == "#drawer")
     }
 
+    /// 道具のアイコンと色（今までのホームと同じ。2026-10-27 01:33 Ronnie「clip sign haru pani change nagara ani clip ko color pani change nagara」）
+    private static func toolIcon(_ href: String) -> (String, Color) {
+        switch href {
+        case "/app/quick-pay": return ("yensign.circle", Color(hex: 0x1E8F62))
+        case "/app/orders": return ("doc.text", Color(hex: 0x5C5650))
+        case "/app/cash": return ("arrow.up.arrow.down", Color(hex: 0x1E8F62))
+        case "/app/expenses": return ("cart", Color(hex: 0x1A5AD6))
+        case "#drawer": return ("tray", Color(hex: 0x0F8A8A))
+        case "/app/cash/close": return ("lock", Color(hex: 0x5C5650))
+        case "/app/inventory": return ("shippingbox", Color(hex: 0x8A6100))
+        case "/app/settings": return ("slider.horizontal.3", Color(hex: 0x5C5650))
+        default: return ("square.grid.2x2", Color(hex: 0x5C5650))
+        }
+    }
+
+    /// 白い角丸の中の色つきアイコン（今までのホームの左の列と同じ）
+    private func iconBadge(_ symbol: String, color: Color, size: CGFloat = 40) -> some View {
+        Image(systemName: symbol).font(.system(size: size * 0.45, weight: .semibold)).foregroundColor(color)
+            .frame(width: size, height: size)
+            .background(RoundedRectangle(cornerRadius: size * 0.27, style: .continuous).fill(Color.white))
+    }
+
+    /// オーダー・会計（青）・店舗台帳（紺に黄色）のアイコン（今までの大きい 2 つと同じ）
+    private func bigTileIcon(isFloor: Bool, size: CGFloat = 44) -> some View {
+        Image(systemName: isFloor ? "desktopcomputer" : "calendar")
+            .font(.system(size: size * 0.48, weight: .bold)).foregroundColor(isFloor ? .white : NLColor.yellow)
+            .frame(width: size, height: size)
+            .background(RoundedRectangle(cornerRadius: size * 0.24, style: .continuous).fill(
+                LinearGradient(colors: isFloor ? [Color(hex: 0x2A6FE6), Color(hex: 0x0A3FA8)] : [NLColor.navy2, NLColor.navy], startPoint: .top, endPoint: .bottom)))
+    }
+
     private func toolTap(_ t: NHTool) {
         if t.action == "drawer" { Task { await model.openDrawer() } } else { onWeb(t.href) }
     }
@@ -396,6 +437,7 @@ struct NativeHomeView: View {
     private struct GridTile {
         let key: String
         let icon: String
+        var color = Color(hex: 0x77738A)
         let label: String
         let en: String
         var badge: Int? = nil
@@ -407,9 +449,11 @@ struct NativeHomeView: View {
         let s = model.payload?.sales
         var byKey: [String: GridTile] = [:]
         for t in tools where !Self.sideTools.contains(t.href) && t.href != Self.settingsHref {
-            byKey[t.href] = GridTile(key: t.href, icon: Self.gridIcon(t.href), label: t.label, en: t.en, badge: t.badge, action: { toolTap(t) })
+            let (sym, color) = Self.toolIcon(t.href)
+            byKey[t.href] = GridTile(key: t.href, icon: sym, color: color, label: t.label, en: t.en, badge: t.badge, action: { toolTap(t) })
         }
-        byKey["#handyqr"] = GridTile(key: "#handyqr", icon: "square.grid.2x2", label: "ハンディQR", en: "Handy QR", action: { handyQrOpen = true })
+        // ハンディQR は今までの上のバーと同じ qrcode（紺）
+        byKey["#handyqr"] = GridTile(key: "#handyqr", icon: "qrcode", color: NFColor.navy, label: "ハンディQR", en: "Handy QR", action: { handyQrOpen = true })
         if s?.canAnalytics ?? false {
             byKey["#analytics"] = GridTile(key: "#analytics", icon: "chart.bar", label: "店舗分析", en: "Analytics", action: { onWeb("/app/reports") })
         }
@@ -421,14 +465,6 @@ struct NativeHomeView: View {
         return out
     }
 
-    private static func gridIcon(_ href: String) -> String {
-        switch href {
-        case "/app/orders", "/app/cash/close": return "doc.plaintext"
-        case "/app/expenses", "/app/inventory": return "shippingbox"
-        default: return "square.grid.2x2"
-        }
-    }
-
     private func tileGrid(columns: Int) -> some View {
         let tiles = gridTiles
         // 見本は 3 列・6 つ。在庫設定なども出る店（7 つ以上）は 4 列にして 2 段に収める
@@ -437,7 +473,7 @@ struct NativeHomeView: View {
             ForEach(tiles, id: \.key) { g in
                 Button(action: g.action) {
                     VStack(spacing: 6) {
-                        Image(systemName: g.icon).font(.system(size: 24, weight: .light)).foregroundColor(Self.tileIcon)
+                        Image(systemName: g.icon).font(.system(size: 24, weight: .semibold)).foregroundColor(g.color)
                         VStack(spacing: 0) {
                             Text(g.label).font(.system(size: 16, weight: .semibold)).foregroundColor(Self.tileText).lineLimit(1).minimumScaleFactor(0.7)
                             Text(g.en).font(.system(size: 10, weight: .medium)).foregroundColor(NFColor.ink3).lineLimit(1)
@@ -466,81 +502,84 @@ struct NativeHomeView: View {
         }
     }
 
-    // MARK: 中：達成率・実績売上
+    // MARK: 中：実績売上・予算・客単価（白い箱）＋右に達成率の輪
+    // 2026-10-27 01:32 Ronnie の見本：「layout change hai color pani simple banau yesari but word haru add nagara」
+    // 字は今のまま（実績売上高・Sales・客単価・予算売上高・Target・本日の達成率・Budget・更新の時刻）。色は黒・灰色だけ
+
+    private static let ink = Color(hex: 0x1F2329)
+    private static let inkSub = Color(hex: 0x6B7280)
+    private static let cardLine = Color(hex: 0xE3E5EA)
+    private static let ringColor = Color(hex: 0x8D9BB5)
+    private static let ringTrack = Color(hex: 0xECEEF2)
+    private static let clockBg = Color(hex: 0xEEF1F6)
+
+    private func card<Content: View>(fill: Color = .white, @ViewBuilder _ content: () -> Content) -> some View {
+        content()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(fill))
+            .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(fill == .white ? Self.cardLine : Color.clear, lineWidth: 1))
+    }
 
     private func salesCard(narrow: Bool) -> some View {
         let s = model.payload?.sales
-        return VStack(spacing: 18) {
-            HStack(alignment: .center, spacing: narrow ? 24 : 36) {
-            Spacer(minLength: 0)
-            ring(s)
-            salesNumbers(s)
-            Spacer(minLength: 0)
+        return card {
+            HStack(alignment: .center, spacing: 24) {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(alignment: .firstTextBaseline, spacing: 10) {
+                        Text("実績売上高").font(.system(size: 17, weight: .medium)).foregroundColor(Self.inkSub)
+                        Text("Sales").font(.system(size: 14)).foregroundColor(Self.inkSub)
+                    }
+                    Text(NT.yen(s?.actual ?? 0)).font(.system(size: narrow ? 44 : 52, weight: .heavy)).monospacedDigit().foregroundColor(Self.ink)
+                        .lineLimit(1).minimumScaleFactor(0.6)
+                    HStack(alignment: .top, spacing: 36) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                                Text("予算売上高").font(.system(size: 14, weight: .medium))
+                                Text("Target").font(.system(size: 12))
+                            }
+                            .foregroundColor(Self.inkSub)
+                            // 未設定のときは何も置かない（「予算登録」の箱に赤い「!」）
+                            Text(s?.budget.map { NT.yen($0) } ?? "—").font(.system(size: 26, weight: .bold)).monospacedDigit().foregroundColor(Self.ink)
+                        }
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("客単価").font(.system(size: 14, weight: .medium)).foregroundColor(Self.inkSub)
+                            Text(NT.yen(s?.avgSpend ?? 0)).font(.system(size: 26, weight: .bold)).monospacedDigit().foregroundColor(Self.ink)
+                        }
+                    }
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.clockwise").font(.system(size: 11))
+                        Text(s?.asOf ?? "").font(.system(size: 12))
+                        if let n = s?.note { Text(n).font(.system(size: 12)) }
+                    }
+                    .foregroundColor(Self.inkSub)
+                }
+                Spacer(minLength: 0)
+                ring(s, size: narrow ? 140 : 168)
             }
-            // 店舗分析・予算登録は上の箱へ（2026-10-27 の見本）
+            .padding(.horizontal, 28).padding(.vertical, 22)
         }
-        .padding(.vertical, narrow ? 0 : 6)
     }
 
-    private func ring(_ s: NHSales?) -> some View {
-            ZStack {
-                Circle().stroke(Color(hex: 0xE5E5EA), lineWidth: 22)
-                Circle().trim(from: 0, to: CGFloat(max(0, min(1, (s?.ringPct ?? 0) / 100))))
-                    .stroke(Self.blue, style: StrokeStyle(lineWidth: 22, lineCap: .round))
-                    .rotationEffect(.degrees(-90))
-                VStack(spacing: 2) {
-                    HStack(alignment: .firstTextBaseline, spacing: 1) {
-                        Text(s?.pct.map { "\($0)" } ?? "—").font(.system(size: 40, weight: .heavy))
-                        Text("%").font(.system(size: 18, weight: .bold))
-                    }
-                    .foregroundColor(NFColor.ink)
-                    Text(s?.heading ?? "本日の達成率").font(.system(size: 13, weight: .semibold)).foregroundColor(NFColor.ink2)
-                    Text("Budget").font(.system(size: 11)).foregroundColor(NFColor.ink3)
+    private func ring(_ s: NHSales?, size: CGFloat) -> some View {
+        ZStack {
+            Circle().stroke(Self.ringTrack, lineWidth: 12)
+            Circle().trim(from: 0, to: CGFloat(max(0, min(1, (s?.ringPct ?? 0) / 100))))
+                .stroke(Self.ringColor, style: StrokeStyle(lineWidth: 12, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+            VStack(spacing: 3) {
+                HStack(alignment: .firstTextBaseline, spacing: 1) {
+                    Text(s?.pct.map { "\($0)" } ?? "—").font(.system(size: 36, weight: .heavy)).monospacedDigit()
+                    Text("%").font(.system(size: 15, weight: .bold))
                 }
+                .foregroundColor(Self.ink)
+                Text(s?.heading ?? "本日の達成率").font(.system(size: 12, weight: .medium)).foregroundColor(Self.inkSub)
+                Text("Budget").font(.system(size: 10)).foregroundColor(Self.inkSub)
             }
-            .frame(width: 180, height: 180)
+        }
+        .frame(width: size, height: size)
     }
 
-    private func salesNumbers(_ s: NHSales?) -> some View {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("実績売上高").font(.system(size: 15, weight: .semibold)).foregroundColor(NFColor.ink2)
-                Text("Sales").font(.system(size: 11)).foregroundColor(NFColor.ink3)
-                Text(NT.yen(s?.actual ?? 0)).font(.system(size: 56, weight: .heavy)).monospacedDigit().foregroundColor(Self.blueDeep)
-                    .lineLimit(1).minimumScaleFactor(0.6)
-                HStack(spacing: 6) {
-                    Text("客単価").font(.system(size: 14, weight: .semibold)).foregroundColor(NFColor.ink2)
-                    Text(NT.yen(s?.avgSpend ?? 0)).font(.system(size: 15, weight: .heavy)).foregroundColor(Self.blueDeep)
-                }
-                Rectangle().fill(Color(hex: 0xE5E5EA)).frame(height: 1).padding(.vertical, 6)
-                // 「予算売上高／Target」の 2 行と金額の高さをそろえる（上と下の線を合わせる）・金額は太字にしない
-                // （2026-10-25 00:26 Ronnie「2 行と金額の高さを同じに。金額は太字でなく」）
-                let lineTop: CGFloat = 17, lineBottom: CGFloat = 13
-                HStack(alignment: .center, spacing: 10) {
-                    VStack(alignment: .leading, spacing: 0) {
-                        Text("予算売上高").font(.system(size: 14, weight: .semibold)).foregroundColor(NFColor.ink2).frame(height: lineTop)
-                        Text("Target").font(.system(size: 11)).foregroundColor(NFColor.ink3).frame(height: lineBottom)
-                    }
-                    // 未設定のときはここに何も置かない（空の字を置くと下の隙間が広がる。2026-10-24 14:24 Ronnie「上下の隙間を同じに」）。
-                    // 右の「予算登録」ボタンに赤い丸の「!」だけ（13:47 Ronnie）
-                    if let b = s?.budget {
-                        // 数字の高さ（キャップハイト ≒ 0.71×字の大きさ）を 2 行ぶん（30pt）に合わせる
-                        // 小さくしない（縮むと 2 行より低くなる。00:29 Ronnie「まだ合わない」）。見える字の高さ ≒ 2 行の見える高さ（約 29pt）
-                        Text(NT.yen(b)).font(.system(size: 41, weight: .regular)).monospacedDigit().foregroundColor(NFColor.ink)
-                            .lineLimit(1).fixedSize()
-                            .frame(height: lineTop + lineBottom)
-                    }
-                }
-                HStack(spacing: 4) {
-                    Image(systemName: "arrow.clockwise").font(.system(size: 11))
-                    Text(s?.asOf ?? "").font(.system(size: 12))
-                    if let n = s?.note { Text(n).font(.system(size: 12)) }
-                }
-                .foregroundColor(NFColor.ink3)
-            }
-            .frame(maxWidth: 420, alignment: .leading)
-    }
-
-    // MARK: 下：日付・時計・気温・地名
+    // MARK: 日付・時計・気温・地名（薄い灰色の箱）
 
     private static let dateFmt: DateFormatter = {
         let f = DateFormatter()
@@ -564,70 +603,74 @@ struct NativeHomeView: View {
     }()
 
     private var clockRow: some View {
-        HStack(alignment: .lastTextBaseline, spacing: 16) {
-            Spacer()
-            Text(Self.dateFmt.string(from: model.now)).font(.system(size: 20, weight: .medium)).foregroundColor(Self.blueDeep)
-            HStack(alignment: .lastTextBaseline, spacing: 4) {
-                Text(Self.hmFmt.string(from: model.now)).font(.system(size: 72, weight: .thin, design: .rounded)).monospacedDigit()
-                Text(Self.ssFmt.string(from: model.now)).font(.system(size: 28, weight: .light, design: .rounded)).monospacedDigit().opacity(0.7)
-            }
-            .foregroundColor(Self.blue)
-            Rectangle().fill(Color(hex: 0xC9CDD6)).frame(width: 1, height: 70)
-            if let t = model.payload?.weather.temperature {
-                Text("\(Int(t.rounded()))°").font(.system(size: 64, weight: .thin, design: .rounded)).foregroundColor(Self.blue)
-            }
-            // 天気のアイコン（気温の右。晴れ・くもり・雨・雪・雷、晴れの夜は月。1色の濃い青）
-            if model.payload?.weather.temperature != nil, let sym = model.payload?.weather.symbol {
-                Image(systemName: sym).font(.system(size: 40, weight: .regular)).foregroundColor(Self.blue)
-                    .padding(.bottom, 8)
-            }
-            if let p = model.payload?.weather.place {
-                HStack(spacing: 4) {
-                    Image(systemName: "location.fill").font(.system(size: 11))
-                    Text(p)
+        card(fill: Self.clockBg) {
+            HStack(alignment: .center, spacing: 16) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(Self.dateFmt.string(from: model.now)).font(.system(size: 16, weight: .medium)).foregroundColor(Self.inkSub)
+                    HStack(alignment: .lastTextBaseline, spacing: 4) {
+                        Text(Self.hmFmt.string(from: model.now)).font(.system(size: 44, weight: .heavy)).monospacedDigit()
+                        Text(Self.ssFmt.string(from: model.now)).font(.system(size: 18, weight: .medium)).monospacedDigit().opacity(0.5)
+                    }
+                    .foregroundColor(Self.ink)
                 }
-                .font(.system(size: 15, weight: .medium)).foregroundColor(Self.blueDeep)
+                Spacer(minLength: 0)
+                VStack(alignment: .trailing, spacing: 4) {
+                    HStack(spacing: 8) {
+                        // 天気のアイコン（晴れ・くもり・雨・雪・雷、晴れの夜は月）。今まで通り青
+                        if model.payload?.weather.temperature != nil, let sym = model.payload?.weather.symbol {
+                            Image(systemName: sym).font(.system(size: 26, weight: .regular)).foregroundColor(Self.blue)
+                        }
+                        if let t = model.payload?.weather.temperature {
+                            Text("\(Int(t.rounded()))°").font(.system(size: 36, weight: .regular)).foregroundColor(Self.inkSub)
+                        }
+                    }
+                    if let p = model.payload?.weather.place {
+                        HStack(spacing: 4) {
+                            Image(systemName: "location.fill").font(.system(size: 11))
+                            Text(p)
+                        }
+                        .font(.system(size: 15, weight: .medium)).foregroundColor(Self.inkSub)
+                    }
+                }
             }
-            Spacer()
+            .padding(.horizontal, 28).padding(.vertical, 14)
         }
     }
 
-    // MARK: 来店組数・客数・リピーター・ウォークイン
+    // MARK: 来店組数・客数・リピーター・ウォークイン（白い箱 4 つ）
 
     private func kpiRow(columns: Int) -> some View {
         let k = model.payload?.kpis
-        return LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 0), count: columns), spacing: 0) {
+        return LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 14), count: columns), spacing: 14) {
             kpi(icon: "person.2.fill", color: Color(hex: 0x1A5AD6), "来店組数", en: "Groups", value: k?.groups, unit: "組", diff: k.map { $0.groups - $0.groupsYesterday })
             kpi(icon: "person.fill", color: Color(hex: 0x6E63B8), "客数", en: "Guests", value: k?.guests, unit: "名", diff: k.map { $0.guests - $0.guestsYesterday })
             kpi(icon: "arrow.triangle.2.circlepath", color: Color(hex: 0xE8603C), "リピーター", en: "Repeat", value: k?.repeaters, unit: "組", diff: nil)
             kpi(icon: "figure.walk", color: Color(hex: 0xF2A000), "当日ウォークイン", en: "Walk-in", value: k?.walkIns, unit: "組", diff: nil)
         }
-        .padding(.top, 10)
-        .overlay(alignment: .top) { Rectangle().fill(Color(hex: 0xE5E5EA)).frame(height: 1) }
     }
 
     private func kpi(icon: String, color: Color, _ ja: String, en: String, value: Int?, unit: String, diff: Int?) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 10) {
-                Image(systemName: icon).font(.system(size: 18, weight: .bold)).foregroundColor(.white)
-                    .frame(width: 42, height: 42)
-                    .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(color))
-                VStack(alignment: .leading, spacing: 0) {
-                    Text(ja).font(.system(size: 15, weight: .bold)).foregroundColor(NFColor.ink)
-                    Text(en).font(.system(size: 11)).foregroundColor(NFColor.ink3)
+        card {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 10) {
+                    Image(systemName: icon).font(.system(size: 15, weight: .bold)).foregroundColor(.white)
+                        .frame(width: 32, height: 32)
+                        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(color))
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(ja).font(.system(size: 15, weight: .medium)).foregroundColor(Self.inkSub).lineLimit(1)
+                        Text(en).font(.system(size: 11)).foregroundColor(Self.inkSub).lineLimit(1)
+                    }
+                }
+                HStack(alignment: .lastTextBaseline, spacing: 3) {
+                    Text(value.map { "\($0)" } ?? "—").font(.system(size: 36, weight: .heavy)).monospacedDigit().foregroundColor(Self.ink)
+                    Text(unit).font(.system(size: 14)).foregroundColor(Self.inkSub)
+                    Spacer(minLength: 0)
+                    if let d = diff {
+                        Text("前日比 \(d >= 0 ? "+" : "")\(d)\(unit)").font(.system(size: 12)).foregroundColor(Self.inkSub).lineLimit(1)
+                    }
                 }
             }
-            HStack(alignment: .lastTextBaseline, spacing: 2) {
-                Text(value.map { "\($0)" } ?? "—").font(.system(size: 34, weight: .heavy)).monospacedDigit().foregroundColor(NFColor.ink)
-                Text(unit).font(.system(size: 14)).foregroundColor(NFColor.ink3)
-                Spacer()
-                if let d = diff {
-                    Text("前日比 \(d >= 0 ? "+" : "")\(d)\(unit)").font(.system(size: 13)).foregroundColor(NFColor.ink3)
-                }
-            }
+            .padding(.horizontal, 20).padding(.vertical, 14)
         }
-        .padding(.horizontal, 20).padding(.vertical, 14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .overlay(alignment: .trailing) { Rectangle().fill(Color(hex: 0xE5E5EA)).frame(width: 1).padding(.vertical, 8) }
     }
 }
