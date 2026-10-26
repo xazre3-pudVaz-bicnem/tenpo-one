@@ -494,6 +494,7 @@ struct NativeHomeView: View {
     // MARK: 中：実績売上・予算・客単価（白い箱）＋右に達成率の輪
     // 2026-10-27 01:32 Ronnie の見本：「layout change hai color pani simple banau yesari but word haru add nagara」
     // 字は今のまま（実績売上高・Sales・客単価・予算売上高・Target・本日の達成率・Budget・更新の時刻）。色は黒・灰色だけ
+    // 数字は太すぎない（semibold・medium。01:49 Ronnie「numbers haru dherai bold vayo さわやか banaune ho k alli」）
 
     private static let ink = Color(hex: 0x1F2329)
     private static let inkSub = Color(hex: 0x6B7280)
@@ -519,7 +520,7 @@ struct NativeHomeView: View {
                         Text("実績売上高").font(.system(size: 17, weight: .medium)).foregroundColor(Self.inkSub)
                         Text("Sales").font(.system(size: 14)).foregroundColor(Self.inkSub)
                     }
-                    Text(NT.yen(s?.actual ?? 0)).font(.system(size: narrow ? 44 : 52, weight: .heavy)).monospacedDigit().foregroundColor(Self.ink)
+                    Text(NT.yen(s?.actual ?? 0)).font(.system(size: narrow ? 44 : 52, weight: .semibold)).monospacedDigit().foregroundColor(Self.ink)
                         .lineLimit(1).minimumScaleFactor(0.6)
                     HStack(alignment: .top, spacing: 36) {
                         VStack(alignment: .leading, spacing: 4) {
@@ -529,11 +530,11 @@ struct NativeHomeView: View {
                             }
                             .foregroundColor(Self.inkSub)
                             // 未設定のときは何も置かない（「予算登録」の箱に赤い「!」）
-                            Text(s?.budget.map { NT.yen($0) } ?? "—").font(.system(size: 26, weight: .bold)).monospacedDigit().foregroundColor(Self.ink)
+                            Text(s?.budget.map { NT.yen($0) } ?? "—").font(.system(size: 26, weight: .medium)).monospacedDigit().foregroundColor(Self.ink)
                         }
                         VStack(alignment: .leading, spacing: 4) {
                             Text("客単価").font(.system(size: 14, weight: .medium)).foregroundColor(Self.inkSub)
-                            Text(NT.yen(s?.avgSpend ?? 0)).font(.system(size: 26, weight: .bold)).monospacedDigit().foregroundColor(Self.ink)
+                            Text(NT.yen(s?.avgSpend ?? 0)).font(.system(size: 26, weight: .medium)).monospacedDigit().foregroundColor(Self.ink)
                         }
                     }
                     HStack(spacing: 4) {
@@ -558,7 +559,7 @@ struct NativeHomeView: View {
                 .rotationEffect(.degrees(-90))
             VStack(spacing: 3) {
                 HStack(alignment: .firstTextBaseline, spacing: 1) {
-                    Text(s?.pct.map { "\($0)" } ?? "—").font(.system(size: 36, weight: .heavy)).monospacedDigit()
+                    Text(s?.pct.map { "\($0)" } ?? "—").font(.system(size: 36, weight: .semibold)).monospacedDigit()
                     Text("%").font(.system(size: 15, weight: .bold))
                 }
                 .foregroundColor(Self.ink)
@@ -598,7 +599,7 @@ struct NativeHomeView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(Self.dateFmt.string(from: model.now)).font(.system(size: 16, weight: .medium)).foregroundColor(Self.inkSub)
                     HStack(alignment: .lastTextBaseline, spacing: 4) {
-                        Text(Self.hmFmt.string(from: model.now)).font(.system(size: 44, weight: .heavy)).monospacedDigit()
+                        Text(Self.hmFmt.string(from: model.now)).font(.system(size: 44, weight: .semibold)).monospacedDigit()
                         Text(Self.ssFmt.string(from: model.now)).font(.system(size: 18, weight: .medium)).monospacedDigit().opacity(0.5)
                     }
                     .foregroundColor(Self.ink)
@@ -652,7 +653,7 @@ struct NativeHomeView: View {
                     }
                 }
                 HStack(alignment: .lastTextBaseline, spacing: 3) {
-                    Text(value.map { "\($0)" } ?? "—").font(.system(size: 36, weight: .heavy)).monospacedDigit().foregroundColor(Self.ink)
+                    Text(value.map { "\($0)" } ?? "—").font(.system(size: 36, weight: .semibold)).monospacedDigit().foregroundColor(Self.ink)
                     Text(unit).font(.system(size: 14)).foregroundColor(Self.inkSub)
                     Spacer(minLength: 0)
                     if let d = diff {
