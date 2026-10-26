@@ -412,6 +412,8 @@ final class NativeFloorModel: ObservableObject {
     private var prefetchedAt: [String: Date] = [:]
 
     private var offsetMs: Double = 0
+    /// 今出しているテーブル一覧をこの起動中にサーバーから読めたか（false の間は iPad に保存してあった前のもの）
+    private var confirmed = false
     /// オフラインの伝票が変わった・同期した → 画面を出し直す・読み直す
     private var offlineSinks = Set<AnyCancellable>()
     private var clock: Timer?
@@ -492,8 +494,15 @@ final class NativeFloorModel: ObservableObject {
             NativeDiskCache.save(p, key: "floor")
             offsetMs = p.serverNow - Date().timeIntervalSince1970 * 1000
             now = p.serverNow
-            let first = payload == nil
+            // 保存してあったのが別の店（別のアカウントでログインし直した）なら、初めて読んだのと同じに扱う（フロアの選択を出し直す）。
+            // 前は前の店のフロアを選んだまま＝卓が 1 つも出なかった（2026-10-26 Ronnie「テーブル見つかりません」）
+            let first = payload == nil || payload?.store.id != p.store.id
+            if first, payload != nil {
+                floorFilter = "all"
+                selectedTableId = nil
+            }
             payload = p
+            confirmed = true
             // 金額が変わった伝票・まだ読んでいない伝票を裏で読んでおく（会計・注文を押した瞬間に出る。2026-10-24 Ronnie「会計 ma jada pani 取込み navai」）
             let stale = p.tables.flatMap { $0.order?.slips ?? [] }.filter { s in
                 NativeDiskCache.load(APILive.self, key: "live-\(s.id)")?.order.total != s.total
@@ -506,7 +515,9 @@ final class NativeFloorModel: ObservableObject {
             }
             error = nil
         } catch {
-            if !silent || payload == nil { self.error = (error as? NativeAPIError)?.message ?? "通信できませんでした" }
+            // 保存してあった前の一覧のままサーバーに断られた（店がない・レジ登録など）ときは、黙らずに出す。ネットが無いだけなら出さない
+            let refused = !confirmed && payload != nil && error is NativeAPIError
+            if !silent || payload == nil || refused { self.error = (error as? NativeAPIError)?.message ?? "通信できませんでした" }
         }
         loading = false
     }
@@ -548,6 +559,10 @@ final class NativeFloorModel: ObservableObject {
             let r = try await NativeAPI.shared.floorAct(body)
             if !r.ok {
                 show(error: r.error ?? "うまくいきませんでした")
+                // 卓が消えた・別の店の一覧だった（「テーブルが見つかりません」など）：一覧を読み直しておく（エラーの帯は残す）
+                let shown = error
+                await refresh(silent: true)
+                if error == nil { error = shown }
                 return nil
             }
             if let prints = r.prints, !prints.isEmpty { NativeLanPrint.shared.send(prints) }

@@ -18,6 +18,20 @@ import type { SeatTimeInput } from '@/app/app/pos/actions';
  * ここは純粋な型と検証だけ（DB・Next 非依存・テスト対象）。
  */
 
+/**
+ * テーブル一覧を出す店を決める（GET part=floor）。iPad は前に保存した一覧の店を store に付けてくるが、
+ * 別のアカウントでログインし直すとその店がこの人の店ではないことがある。そのときは今の店（無ければ最初の店）。
+ * 前は 404 で、iPad は前の店のテーブル一覧を出したまま＝来店登録で「テーブルが見つかりません」になった
+ * （2026-10-26 Ronnie「テーブル見つかりません vanxa kina ho」— Ronnies Shop の保存のまま 五反田 のアカウントで開いていた）
+ */
+export function pickNativeFloorStore<S extends { id: string }>(
+  ctx: { stores: S[]; currentStore: S | null | undefined },
+  storeParam: string | null
+): S | null {
+  const asked = isUuid(storeParam) ? ctx.stores.find((s) => s.id === storeParam) : undefined;
+  return asked ?? ctx.currentStore ?? ctx.stores[0] ?? null;
+}
+
 export type NativeFloorAction =
   /** 空席の卓にお客様を通す（お客様情報を入れて伝票を立てる。レジのファーストオーダーと同じ） */
   | { type: 'floorStart'; tableId: string; draft: VisitDraft }
