@@ -720,6 +720,10 @@ struct NativeReservationPanel: View {
     var onLedger: () -> Void
 
     private static let notArrived: Set<String> = ["pending", "confirmed", "waiting"]
+    /// ホームの左のメニューと同じ色（紫紺・黄色・濃い字。2026-10-27 02:30 Ronnie「来店待ち wala lai pani color milau」）
+    private static let menuBg = Color(hex: 0x37324D)
+    private static let yellow = Color(hex: 0xF2D06B)
+    private static let ink = Color(hex: 0x2B2740)
     /// 開始時刻からこの時間を過ぎても来店がなければ「未連絡」
     private static let lateMs: Double = 15 * 60_000
 
@@ -743,33 +747,33 @@ struct NativeReservationPanel: View {
                     Image(systemName: "calendar")
                         .resizable().scaledToFit()
                         .font(.system(size: 20, weight: .semibold))
-                        .foregroundColor(NLColor.yellow)
+                        .foregroundColor(Self.yellow)
                         .frame(height: lineTop + lineBottom)
                     VStack(alignment: .leading, spacing: 0) {
                         Text("ご予約台帳").font(.system(size: 17, weight: .heavy)).foregroundColor(.white).frame(height: lineTop)
-                        Text("Reservation").font(.system(size: 12, weight: .bold)).foregroundColor(NLColor.yellow).frame(height: lineBottom)
+                        Text("Reservation").font(.system(size: 12, weight: .bold)).foregroundColor(Self.yellow).frame(height: lineBottom)
                     }
                     Image(systemName: "chevron.right").font(.system(size: 12, weight: .heavy)).foregroundColor(.white.opacity(0.6))
                 }
                 .frame(maxWidth: .infinity)
                 .frame(height: 60)
-                .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(NLColor.navy))
+                .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Self.menuBg))
             }
             .buttonStyle(PressableStyle())
             .padding(.horizontal, 12)
             .padding(.top, 12)
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text("来店待ち").font(.system(size: 16, weight: .heavy)).foregroundColor(NLColor.navy)
+                Text("来店待ち").font(.system(size: 16, weight: .heavy)).foregroundColor(Self.ink)
                 Spacer(minLength: 4)
-                Text("\(remaining)").font(.system(size: 20, weight: .heavy)).monospacedDigit().foregroundColor(NLColor.navy)
-                Text("組").font(.system(size: 11, weight: .bold)).foregroundColor(NLColor.navy.opacity(0.7))
+                Text("\(remaining)").font(.system(size: 20, weight: .heavy)).monospacedDigit().foregroundColor(Self.ink)
+                Text("組").font(.system(size: 11, weight: .bold)).foregroundColor(Self.ink.opacity(0.7))
                 if waitingPeople > 0 {
-                    Text("\(waitingPeople)").font(.system(size: 15, weight: .heavy)).monospacedDigit().foregroundColor(NLColor.navy).padding(.leading, 4)
-                    Text("名").font(.system(size: 11, weight: .bold)).foregroundColor(NLColor.navy.opacity(0.7))
+                    Text("\(waitingPeople)").font(.system(size: 15, weight: .heavy)).monospacedDigit().foregroundColor(Self.ink).padding(.leading, 4)
+                    Text("名").font(.system(size: 11, weight: .bold)).foregroundColor(Self.ink.opacity(0.7))
                 }
             }
             .padding(.horizontal, 14).frame(height: 48)
-            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(NLColor.yellow))
+            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Self.yellow))
             .padding(.horizontal, 12)
             ScrollView {
                 LazyVStack(spacing: 0) {
@@ -797,11 +801,9 @@ struct NativeReservationPanel: View {
             }
         }
         .frame(maxHeight: .infinity, alignment: .top)
-        .background(
-            RoundedRectangle(cornerRadius: NFColor.tileRadius, style: .continuous).fill(Color.white)
-                .shadow(color: .black.opacity(0.08), radius: 12, x: 0, y: 4)
-        )
-        .overlay(RoundedRectangle(cornerRadius: NFColor.tileRadius, style: .continuous).stroke(Color.black.opacity(0.06), lineWidth: 1))
+        // 平らな白い箱・細いうすい線（卓の箱と同じ。2026-10-27 02:30 Ronnie「来店待ち wala lai pani color milau」）
+        .background(RoundedRectangle(cornerRadius: NFColor.tileRadius, style: .continuous).fill(Color.white))
+        .overlay(RoundedRectangle(cornerRadius: NFColor.tileRadius, style: .continuous).stroke(Color(hex: 0xE3E5EA), lineWidth: 1))
     }
 
     private func chip(_ r: NFReservation) -> (String, Color, Color) {
