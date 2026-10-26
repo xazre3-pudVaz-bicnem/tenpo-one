@@ -183,7 +183,7 @@ struct NativeHomeView: View {
             // 横（1000pt 以上）は左にメニュー・右にホーム。縦は上から順に並べてスクロール
             if root.size.width >= 1000 {
                 HStack(spacing: 0) {
-                    sidebar.frame(width: 190)
+                    sidebar.frame(width: 128)
                     VStack(spacing: 0) {
                         topBar
                         // 箱のあいだは同じだけ空ける（画面が大きい iPad でも下に寄って空かない）
@@ -341,10 +341,10 @@ struct NativeHomeView: View {
     }
 
     private var sidebar: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 10) {
             VStack(spacing: 6) {
-                Text("TENPO ONE").font(.system(size: 21, weight: .heavy)).foregroundColor(Self.sideActive)
-                Text("POS × RESERVE").font(.system(size: 10, weight: .semibold)).tracking(1.6).foregroundColor(Self.sideSub)
+                Text("TENPO ONE").font(.system(size: 17, weight: .heavy)).foregroundColor(Self.sideActive).lineLimit(1).minimumScaleFactor(0.8)
+                Text("POS × RESERVE").font(.system(size: 9, weight: .semibold)).tracking(1.0).foregroundColor(Self.sideSub).lineLimit(1).minimumScaleFactor(0.8)
             }
             // 上は時計・電波の行の下から
             .padding(.top, 30).padding(.bottom, 12)
@@ -359,7 +359,7 @@ struct NativeHomeView: View {
             Spacer(minLength: 0)
             if let st = tools.first(where: { $0.href == Self.settingsHref }) { navTile(navItem(st), tall: true) }
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, 10)
         .padding(.bottom, 14)
         .frame(maxHeight: .infinity)
         .background(Self.sideBg)
@@ -369,18 +369,15 @@ struct NativeHomeView: View {
         let fg = n.active ? Self.sideActiveText : Self.sideText
         let sub = n.active ? Self.sideActiveText.opacity(0.7) : Self.sideSub
         return Button(action: n.action) {
-            // アイコンはどれも左にそろえる（2026-10-27 01:56 Ronnie「clip haru ko イチ milena … sabailai left ma rakhda thik hola」）。
-            // 上の 3 つと 設定 は少し高く
-            HStack(spacing: 12) {
-                navIcon(n, size: tall ? 36 : 32)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(n.label).font(.system(size: tall ? 16 : 15, weight: .bold)).lineLimit(1).minimumScaleFactor(0.7)
-                    Text(n.en).font(.system(size: 10, weight: .medium)).foregroundColor(sub).lineLimit(1).minimumScaleFactor(0.7)
-                }
-                Spacer(minLength: 0)
+            // アイコンは真ん中、字はその下（どれも同じ形）。メニューは細く
+            // （2026-10-27 02:17 Ronnie「clip lai bich ma 文字 lai tala banayera menu bar lai ajai slim banau」）
+            VStack(spacing: 4) {
+                navIcon(n, size: 30)
+                Text(n.label).font(.system(size: 14, weight: .bold)).lineLimit(1).minimumScaleFactor(0.65)
+                Text(n.en).font(.system(size: 9, weight: .medium)).foregroundColor(sub).lineLimit(1).minimumScaleFactor(0.7)
             }
-            .padding(.horizontal, 14)
-            .frame(maxWidth: .infinity).frame(height: tall ? 76 : 62)
+            .padding(.horizontal, 6)
+            .frame(maxWidth: .infinity).frame(height: 84)
             .foregroundColor(fg)
             .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(n.active ? Self.sideActive : Self.sideItem))
             .overlay(alignment: .topTrailing) {
