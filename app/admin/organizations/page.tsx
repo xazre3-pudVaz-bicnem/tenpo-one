@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { EnterStoreAdminButton } from '@/components/admin/enter-store-admin-button';
 import Link from 'next/link';
 import { ChevronRight } from 'lucide-react';
 import { requireCypressAdmin } from '@/lib/auth';
@@ -41,7 +42,7 @@ export default async function OrganizationsPage({
         .order('created_at', { ascending: false }),
       admin.from('plans').select('code, name').eq('is_active', true).order('sort_order'),
       admin.from('stores').select('organization_id'),
-      admin.from('memberships').select('organization_id, profile_id').eq('status', 'active'),
+      admin.from('memberships').select('organization_id, profile_id').eq('status', 'active').or('hourly_note.is.null,hourly_note.neq.__cypress_support__'),
       listAllAuthUsers(admin),
     ]);
 
@@ -142,7 +143,10 @@ export default async function OrganizationsPage({
                     <Td className="text-xs text-gray-500">{formatDateTime(lastLoginByOrg.get(org.id) ?? null)}</Td>
                     <Td>{formatDate(org.created_at)}</Td>
                     <Td>
-                      <OrganizationRowActions organizationId={org.id} status={org.status} />
+                      <div className="flex items-center justify-end gap-2">
+                        {(storeCountByOrg.get(org.id) ?? 0) > 0 && <EnterStoreAdminButton target={`org:${org.id}`} label="管理画面へ" />}
+                        <OrganizationRowActions organizationId={org.id} status={org.status} />
+                      </div>
                     </Td>
                   </Tr>
                 );

@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { EnterStoreAdminButton } from '@/components/admin/enter-store-admin-button';
 import Link from 'next/link';
 import { AlertTriangle } from 'lucide-react';
 import { requireCypressAdmin } from '@/lib/auth';
@@ -192,6 +193,7 @@ export default async function TenantsPage({
                 <Th>進捗</Th>
                 <Th>利用開始</Th>
                 <Th>更新</Th>
+                <Th className="text-right">管理画面</Th>
               </Tr>
             </THead>
             <TBody>
@@ -216,6 +218,11 @@ export default async function TenantsPage({
                   </Td>
                   <Td className="whitespace-nowrap text-gray-600">{r.opened_on ? formatDate(r.opened_on) : '—'}</Td>
                   <Td className="whitespace-nowrap text-gray-500">{formatDate(r.updated_at)}</Td>
+                  <Td className="text-right">
+                    <div className="flex justify-end">
+                      <EnterStoreAdminButton target={r.store_id} />
+                    </div>
+                  </Td>
                 </Tr>
               ))}
             </TBody>

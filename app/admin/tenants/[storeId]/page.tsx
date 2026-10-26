@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { EnterStoreAdminButton } from '@/components/admin/enter-store-admin-button';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ChevronLeft, ExternalLink } from 'lucide-react';
@@ -136,6 +137,7 @@ export default async function TenantDetailPage({ params }: { params: Promise<{ s
             <Badge tone={ENV_TONE[onboarding.environment as Environment]}>{ENVIRONMENT_LABELS[onboarding.environment as Environment]}</Badge>
             <Badge tone={STAGE_TONE[onboarding.stage as Stage]}>{STAGE_LABELS[onboarding.stage as Stage]}</Badge>
             {onboarding.environment === 'pilot' && <Badge tone="warning">パイロット運用中</Badge>}
+            <EnterStoreAdminButton target={store.id} />
           </div>
         }
       />

@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { EnterStoreAdminButton } from '@/components/admin/enter-store-admin-button';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ArrowLeft, AlertTriangle } from 'lucide-react';
@@ -101,6 +102,7 @@ export default async function OrganizationDetailPage({ params }: { params: Promi
         .from('memberships')
         .select('id, profile_id, role, status, created_at, profiles(display_name)')
         .eq('organization_id', id)
+        .or('hourly_note.is.null,hourly_note.neq.__cypress_support__') // 運営のサポートアクセスはメンバーに出さない（lib/support-access.ts）
         .order('created_at'),
       admin.from('feature_flags').select('flag_key, enabled').eq('organization_id', id),
       listAllAuthUsers(admin),
@@ -119,7 +121,7 @@ export default async function OrganizationDetailPage({ params }: { params: Promi
     { data: documentSizeRows },
     { data: subscription },
   ] = await Promise.all([
-    admin.from('memberships').select('id', { count: 'exact', head: true }).eq('organization_id', id).eq('status', 'active'),
+    admin.from('memberships').select('id', { count: 'exact', head: true }).eq('organization_id', id).eq('status', 'active').or('hourly_note.is.null,hourly_note.neq.__cypress_support__'),
     admin
       .from('reservations')
       .select('id', { count: 'exact', head: true })
@@ -283,6 +285,7 @@ export default async function OrganizationDetailPage({ params }: { params: Promi
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
+                <EnterStoreAdminButton target={`org:${org.id}`} label="この企業の管理画面へ（全店舗）" />
                 <CopyStoreMenuDialog
                   organizationId={org.id}
                   stores={(stores ?? []).map((s) => ({ id: s.id as string, name: s.name as string }))}
@@ -303,6 +306,7 @@ export default async function OrganizationDetailPage({ params }: { params: Promi
                         <Th>レジ（iPad）のログイン</Th>
                         <Th>オンライン予約</Th>
                         <Th>作成日</Th>
+                        <Th className="text-right">管理画面</Th>
                       </Tr>
                     </THead>
                     <TBody>
@@ -336,6 +340,11 @@ export default async function OrganizationDetailPage({ params }: { params: Promi
                               </Badge>
                             </Td>
                             <Td>{formatDate(s.created_at)}</Td>
+                            <Td className="text-right">
+                              <div className="flex justify-end">
+                                <EnterStoreAdminButton target={s.id as string} />
+                              </div>
+                            </Td>
                           </Tr>
                         );
                       })}
