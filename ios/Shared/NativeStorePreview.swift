@@ -440,6 +440,12 @@ struct NativeStorePreview: View {
         switch kind {
         case "floor":
             NativeFloorView(model: floorModel, onStock: {})
+                // 見本で卓のポップアップを開いておく（-tenpoPreviewSheet YES。画面の確認用）
+                .onAppear {
+                    if UserDefaults.standard.bool(forKey: "tenpoPreviewSheet") {
+                        floorModel.selectedTableId = floorModel.tables.first { $0.order != nil }?.id
+                    }
+                }
         case "ledger":
             NativeLedgerView(model: ledger)
         default:
