@@ -1109,7 +1109,10 @@ struct NativeLedgerView: View {
                     let out = r.status == "completed"
                     // 来店中はオーダー・会計の卓と同じ色（着席＝緑・注文済＝青・L.O.＝黄・時間超過＝赤・会計待ち＝橙）
                     let fs = out ? nil : floorState(r, p: p)
-                    let ink: Color = fs?.band.ink ?? .white
+                    // 来店中の箱はオーダー・会計の卓と同じ「うすい地・細い色の線・濃い字」
+                    // （2026-10-27 03:06 Ronnie「店舗台帳 ko selected color haru pani table ko jastai same banau light wala」）
+                    let ink: Color = fs == nil ? .white : NLColor.ink
+                    let stateInk: Color = fs.map { $0.band.ink == .white ? $0.band.color : NLColor.navy } ?? .white
                     // 箱は全部同じ色（見出しのネイビーを少し明るく）。入り口の印だけ各社の色で小さく。ウォークインは左の帯が紫
                     Button { selected = r } label: {
                         HStack(spacing: 0) {
@@ -1131,7 +1134,7 @@ struct NativeLedgerView: View {
                                         // フロアと同じ状態と残り時間
                                         Text(fs.band.jp + (fs.left.map { $0 > 0 ? "・残\($0)分" : "・超過\(-$0)分" } ?? ""))
                                             .font(.system(size: 10, weight: .heavy)).monospacedDigit()
-                                            .foregroundColor(ink.opacity(0.9))
+                                            .foregroundColor(stateInk)
                                     } else {
                                         Text(late ? "未連絡" : (p.statusLabels[r.status] ?? r.status)).font(.system(size: 10, weight: .bold))
                                             .foregroundColor(late ? NLColor.yellow : Color.white.opacity(0.8))
@@ -1153,8 +1156,16 @@ struct NativeLedgerView: View {
                             Spacer(minLength: 0)
                         }
                         .frame(width: w, height: rowH - 10)
-                        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(out ? NLColor.gray : (fs?.band.color ?? NLColor.box)))
-                        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(out ? NLColor.gray : (fs.map { $0.band.color.opacity(0.9) } ?? NLColor.navy.opacity(0.5)), lineWidth: 1))
+                        .background {
+                            let shape = RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            if let fs {
+                                // 白の上にうすく（後ろの升目の線が透けない）
+                                ZStack { shape.fill(Color.white); shape.fill(fs.band.color.opacity(0.12)) }
+                            } else {
+                                shape.fill(out ? NLColor.gray : NLColor.box)
+                            }
+                        }
+                        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(out ? NLColor.gray : (fs.map { $0.band.color.opacity(0.45) } ?? NLColor.navy.opacity(0.5)), lineWidth: 1))
                         .clipped()
                         .opacity(out ? 0.5 : 1)
                     }

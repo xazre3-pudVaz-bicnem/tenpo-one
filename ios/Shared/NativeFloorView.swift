@@ -354,24 +354,40 @@ struct NativeTableCard: View {
                         .font(.system(size: 23, weight: .heavy)).monospacedDigit()
                         // 札と席の印は色をつけない（色は下の帯だけ。2026-10-24 21:09 Ronnie「ここは色いらない」）
                         .foregroundColor(empty ? NFColor.ink2 : NFColor.ink)
-                        .lineLimit(1).minimumScaleFactor(0.7)
+                        .lineLimit(1)
                         .padding(.horizontal, 10).frame(height: 36)
                         .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.white))
                         .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(Color.black.opacity(0.10), lineWidth: 1))
-                    // プランと予約の印（飲み放題＝ビールのグラス・誕生日＝ケーキ…。2026-10-24 21:18 Ronnie）
-                    let marks = Self.marks(order)
+                        // 卓の名前は切らない（狭いときは印・席の種類のほうを減らす）
+                        .fixedSize()
+                    // プランと予約の印（飲み放題のグラス・誕生日／記念日のプレート…）。入る数だけ（最大 3）。
+                    // 紫紺の四角に白い印だけ（光らせない。2026-10-27 03:11 Ronnie「nomihoudai ni same color menu bar box vitra
+                    // background なし ma glass matrai」）。食べ放題・コースは出さない
+                    let marks = Self.padMarks(order)
                     if !marks.isEmpty {
-                        HStack(spacing: 4) {
-                            // 印は光るように（色つき・うすい光）。プランを使っているとき・予約のタグがあるときだけ出る
-                            // （2026-10-24 21:31 Ronnie「飲み放題の印は光るように。呼ばれたとき・プランを使うときだけ」）
-                            ForEach(marks.prefix(3), id: \.self) { ic in
-                                let c = Self.markColor(ic)
-                                Image(systemName: ic).font(.system(size: 12, weight: .bold)).foregroundColor(.white)
-                                    .frame(width: 24, height: 24)
-                                    .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(c))
-                                    .shadow(color: c.opacity(0.55), radius: 5, y: 1)
+                        ViewThatFits(in: .horizontal) {
+                            ForEach([3, 2, 1], id: \.self) { n in
+                                HStack(spacing: 4) {
+                                    ForEach(Array(marks.prefix(n)), id: \.self) { ic in
+                                        Image(systemName: ic).font(.system(size: 12, weight: .semibold)).foregroundColor(.white)
+                                            .frame(width: 24, height: 24)
+                                            .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(OV.primary))
+                                    }
+                                }
+                                .fixedSize()
                             }
+                            Color.clear.frame(width: 0, height: 0)
                         }
+                        .layoutPriority(1)
+                    }
+                    // 卓の名前は店が付けたまま（T-1・C-2…）。横に小さく席の種類（テーブル・カウンター・個室）
+                    // （2026-10-27 03:00 Ronnie「clint le table name j lekhxa tyo aaune、side ma sano ma テーブル カウンター 個室」）。
+                    // 残りの幅に入るときだけ
+                    ViewThatFits(in: .horizontal) {
+                        Text(Self.seatKind(table))
+                            .font(.system(size: 11, weight: .semibold)).foregroundColor(NFColor.ink3)
+                            .lineLimit(1).fixedSize()
+                        Color.clear.frame(width: 0, height: 0)
                     }
                     Spacer(minLength: 4)
                     // 人の印と人数は卓の番号と同じ大きさ。「名」は書かず数字だけ。
@@ -390,11 +406,11 @@ struct NativeTableCard: View {
                 if hasCall {
                     let info = Self.callInfo(table.calls, now: now)
                     HStack(spacing: 4) {
-                        Image(systemName: info.checkout ? Self.walletSymbol : "bell.fill").font(.system(size: 11, weight: .bold))
+                        Image(systemName: info.checkout ? Self.yenSymbol : "bell.fill").font(.system(size: 11, weight: .bold))
                         Text(info.label).lineLimit(1)
                     }
                     .font(.system(size: 12, weight: .heavy))
-                    .foregroundColor(Self.callColor(info, border: false))
+                    .foregroundColor(info.late ? Self.callRed : OV.primary)
                 }
                 if let linked {
                     HStack(spacing: 4) {
@@ -419,9 +435,6 @@ struct NativeTableCard: View {
                                 Text(state == .seated || state == .pay ? "注文なし / No order" : state.label)
                             }
                             .font(.system(size: 12, weight: .semibold)).foregroundColor(NFColor.ink3)
-                        }
-                        if table.isPrivateRoom || table.isCounter {
-                            Text(table.isPrivateRoom ? "個室" : "カウンター").font(.system(size: 10.5)).foregroundColor(NFColor.ink3)
                         }
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -507,24 +520,24 @@ struct NativeTableCard: View {
             .overlay {
                 if hasCall {
                     RoundedRectangle(cornerRadius: NFColor.tileRadius, style: .continuous)
-                        .strokeBorder(Self.callColor(Self.callInfo(table.calls, now: now), border: true), lineWidth: 4)
+                        .strokeBorder(Self.padCallFill(Self.callInfo(table.calls, now: now)), lineWidth: 4)
                         .opacity(pulse ? 1 : 0.35)
                 }
             }
             .overlay(alignment: .topTrailing) {
                 if hasCall {
                     let info = Self.callInfo(table.calls, now: now)
+                    // お会計希望（¥）・呼び出し（ベル）は同じ色の四角：はじめは黄色、5 分すぎたら赤
+                    // （2026-10-27 03:11 Ronnie「wallet・ring・会計待ち same、ring yello、suruma yello paxi rato、¥ mark … same color ko square」）
                     HStack(spacing: 4) {
-                        Image(systemName: info.checkout ? Self.walletSymbol : "bell.fill").font(.system(size: 12, weight: .bold))
+                        Image(systemName: info.checkout ? Self.yenSymbol : "bell.fill").font(.system(size: 12, weight: .bold))
                         Text("\(info.count)回").font(.system(size: 12, weight: .heavy)).monospacedDigit()
                         Text("\(info.minutes)分").font(.system(size: 11, weight: .bold)).monospacedDigit().opacity(0.9)
                     }
-                    .foregroundColor(.white)
+                    .foregroundColor(Self.padCallInk(info))
                     .padding(.horizontal, 9).frame(height: 26)
-                    .background(Capsule().fill(Self.callColor(info, border: false)))
-                    .overlay(Capsule().stroke(Color.white, lineWidth: 2))
-                    // 光る（点滅に合わせて光の強さが変わる）
-                    .shadow(color: Self.callColor(info, border: false).opacity(pulse ? 0.8 : 0.3), radius: pulse ? 10 : 4, y: 1)
+                    .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(Self.padCallFill(info)))
+                    .shadow(color: Color.black.opacity(0.12), radius: 3, y: 1)
                     .offset(x: 8, y: -12)
                 }
             }
@@ -583,7 +596,41 @@ struct NativeTableCard: View {
         return (calls.count, minutes, minutes >= 5, checkout, label)
     }
 
-    /// 卓の箱の上に出す印：プラン（伝票のモード）＋予約のタグ（誕生日・記念日…）。同じ印は 1 つ
+    /// お会計希望の印（¥。丸の中に入れない）
+    static let yenSymbol = "yensign"
+
+    /// iPad の卓の呼び出し（お会計希望・ベル）の色：はじめは黄色（ホームの選んだボタンと同じ）、5 分すぎたら赤
+    static func padCallFill(_ info: (count: Int, minutes: Int, late: Bool, checkout: Bool, label: String)) -> Color {
+        info.late ? callRed : OV.yellow
+    }
+
+    static func padCallInk(_ info: (count: Int, minutes: Int, late: Bool, checkout: Bool, label: String)) -> Color {
+        info.late ? .white : OV.primary
+    }
+
+    /// iPad の卓の箱の印（2026-10-27 03:11 Ronnie）：
+    /// 飲み放題＝グラス。食べ放題・コースは出さない。誕生日・記念日は「プレート」を頼んだときだけ（伝票の品か予約のタグに「プレート」）、
+    /// どちらも同じケーキの印。そのほかの予約のタグ（子連れ・VIP・アレルギー…）は今まで通り。同じ印は 1 つ
+    static func padMarks(_ order: NFOrder?) -> [String] {
+        guard let o = order else { return [] }
+        var out: [String] = []
+        let plans = o.plans ?? []
+        if plans.contains("drink") || plans.contains("food") { out.append(NRWKeywordIcon.symbol(for: "飲み放題") ?? "mug.fill") }
+        let tags = o.tags ?? []
+        let plate = tags.contains { $0.contains("プレート") }
+            || o.slips.contains { s in s.lines.contains { $0.name.contains("プレート") || $0.name.lowercased().contains("plate") } }
+        if plate { out.append(NRWKeywordIcon.symbol(for: "誕生日") ?? "gift.fill") }
+        let skip = ["食べ放題", "コース", "誕生日", "記念日", "お祝い", "デート", "プレート"]
+        for t in tags {
+            if t.contains("飲み放題") { out.append(NRWKeywordIcon.symbol(for: "飲み放題") ?? "mug.fill"); continue }
+            if skip.contains(where: { t.contains($0) }) { continue }
+            if let ic = NRWKeywordIcon.symbol(for: t) { out.append(ic) }
+        }
+        var seen = Set<String>()
+        return out.filter { seen.insert($0).inserted }
+    }
+
+    /// 卓の箱の上に出す印：プラン（伝票のモード）＋予約のタグ（誕生日・記念日…）。同じ印は 1 つ（iPhone のハンディ。iPad は padMarks）
     static func marks(_ order: NFOrder?) -> [String] {
         guard let o = order else { return [] }
         var out = NRWKeywordIcon.planSymbols(o.plans ?? [])
@@ -603,6 +650,13 @@ struct NativeTableCard: View {
         case .pay: return ("会計待ち", "Checkout", NFColor.saffron, .white)
         default: return nil
         }
+    }
+
+    /// 席の種類（卓の設定の「個室」「カウンター」。どちらでもなければテーブル）
+    static func seatKind(_ t: NFTable) -> String {
+        if t.isPrivateRoom { return "個室" }
+        if t.isCounter || t.shape == "counter" { return "カウンター" }
+        return "テーブル"
     }
 
     /// 平らな箱の地：状態の色をうすく（空席は白、予約はうすい青、清掃・使用不可はうすい灰色）
@@ -858,14 +912,14 @@ struct NativeFloorGuide: View {
                 row(AnyView(RoundedRectangle(cornerRadius: 4).fill(Color.white).overlay(RoundedRectangle(cornerRadius: 4).stroke(NFColor.line)).frame(width: 34, height: 14)), "空席", "帯なし。まん中にうすく「4名席 空」")
             }
             section("右上の印（お客様から）") {
-                row(icon(NativeTableCard.walletSymbol, NativeTableCard.callGreen), "お会計希望", "QR からお会計を頼まれた（回数・何分前）")
-                row(icon("bell.fill", NFColor.callDeep), "呼び出し", "ベルで呼ばれた（回数・何分前）")
+                row(icon(NativeTableCard.yenSymbol, OV.yellow, ink: OV.primary), "お会計希望", "QR からお会計を頼まれた（回数・何分前）")
+                row(icon("bell.fill", OV.yellow, ink: OV.primary), "呼び出し", "ベルで呼ばれた（回数・何分前）")
                 row(icon("bell.fill", NativeTableCard.callRed), "5分すぎ", "5 分たっても行っていないと赤")
             }
             section("番号の横の印（プラン・予約）") {
-                ForEach(["飲み放題", "食べ放題", "コース", "誕生日", "記念日", "子連れ"], id: \.self) { k in
-                    if let ic = NRWKeywordIcon.symbol(for: k) { row(icon(ic, NativeTableCard.markColor(ic)), k, "伝票のモード・予約のタグから") }
-                }
+                if let ic = NRWKeywordIcon.symbol(for: "飲み放題") { row(icon(ic, OV.primary), "飲み放題", "伝票のモード・予約のタグから") }
+                if let ic = NRWKeywordIcon.symbol(for: "誕生日") { row(icon(ic, OV.primary), "誕生日・記念日", "プレートを頼んだときだけ（伝票の品・予約）") }
+                if let ic = NRWKeywordIcon.symbol(for: "子連れ") { row(icon(ic, OV.primary), "子連れ", "予約のタグから") }
             }
             section("そのほか") {
                 row(AnyView(Text("リピ 2回").font(.system(size: 11, weight: .heavy)).foregroundColor(.white).padding(.horizontal, 6).padding(.vertical, 2).background(RoundedRectangle(cornerRadius: 5).fill(NLColor.blue))), "初回・リピ・常連", "顧客台帳とつながっているお客様の来店回数")
@@ -878,7 +932,7 @@ struct NativeFloorGuide: View {
     private func desc(_ st: NFTileState) -> String {
         switch st {
         case .seated: return "お客様が座って、まだ注文なし（店舗台帳の「来店済み」と同じ緑）"
-        case .ordered: return "注文が入った（オーダー・会計のボタンと同じ青）"
+        case .ordered: return "注文が入った"
         case .lo: return "ラストオーダーの時間"
         case .over: return "時間を過ぎた"
         case .pay: return "会計待ち"
@@ -886,8 +940,8 @@ struct NativeFloorGuide: View {
         }
     }
 
-    private func icon(_ symbol: String, _ color: Color) -> AnyView {
-        AnyView(Image(systemName: symbol).font(.system(size: 12, weight: .bold)).foregroundColor(.white)
+    private func icon(_ symbol: String, _ color: Color, ink: Color = .white) -> AnyView {
+        AnyView(Image(systemName: symbol).font(.system(size: 12, weight: .bold)).foregroundColor(ink)
             .frame(width: 26, height: 26).background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(color)))
     }
 

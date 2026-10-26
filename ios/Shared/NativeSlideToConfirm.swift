@@ -4,7 +4,8 @@ import UIKit
 /// 右へスライドして決めるボタン（Web の SlideToConfirm と同じ決まり。押し間違いで注文が飛ばない。
 /// 2026-09-25 店舗要望「Order 決定はスライドで。3Dで楽しく」・2026-10-24 Ronnie「order lai slide banau」）。
 /// つまみを右端の手前（9割）まで運ぶと onConfirm。途中で離すと戻る。
-/// 色はホームの左のバーで選んだボタンと同じ黄色・濃い字（2026-10-27 02:52 Ronnie「slide button menu bar ma click garda aaune yello style ko color ma」）
+/// 色はホームの左のバーと同じ：バーは紫紺・白い字、つまみは選んだボタンと同じ黄色
+/// （2026-10-27 02:52 Ronnie「yello style」→ 03:03「yesko lable lai same menu bar color banau、sano right slide button lai yello hamro style」）
 struct NativeSlideToConfirm: View {
     let label: String
     var hint: String = "スライドして確定 / Slide"
@@ -25,19 +26,19 @@ struct NativeSlideToConfirm: View {
             ZStack(alignment: .leading) {
                 // 立体の土台（下に少しずらした濃い色）
                 RoundedRectangle(cornerRadius: radius, style: .continuous)
-                    .fill(OV.yellowDeep)
+                    .fill(OV.primaryDeep)
                     .offset(y: 4)
                 RoundedRectangle(cornerRadius: radius, style: .continuous)
-                    .fill(OV.yellow)
+                    .fill(OV.primary)
                 // 進み具合を明るく塗る
                 RoundedRectangle(cornerRadius: radius, style: .continuous)
-                    .fill(Color.white.opacity(0.28))
+                    .fill(Color.white.opacity(0.10))
                     .frame(width: knob + pad * 2 + x)
                 VStack(spacing: 2) {
                     Text(label).font(.system(size: 20, weight: .heavy))
                     Text(hint).font(.system(size: 11, weight: .bold)).opacity(0.8)
                 }
-                .foregroundColor(OV.ink)
+                .foregroundColor(.white)
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
                 .frame(maxWidth: .infinity)
@@ -47,8 +48,8 @@ struct NativeSlideToConfirm: View {
                 // つまみ
                 ZStack {
                     RoundedRectangle(cornerRadius: radius - 4, style: .continuous)
-                        .fill(Color.white)
-                        .shadow(color: .black.opacity(0.18), radius: 4, y: 2)
+                        .fill(OV.yellow)
+                        .shadow(color: .black.opacity(0.22), radius: 4, y: 2)
                     if busy {
                         ProgressView().tint(OV.primary)
                     } else {

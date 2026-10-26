@@ -247,9 +247,10 @@ enum OV {
     static let soft = Color(hex: 0xEFF0F4)
     /// 箱の線
     static let line = Color(hex: 0xE3E5EA)
-    /// Order のスライドの黄色（ホームの左のバーで選んだボタンと同じ）
+    /// 黄色（ホームの左のバーで選んだボタン・Order のスライドのつまみ・ホームのボタン）
     static let yellow = Color(hex: 0xF2D06B)
-    static let yellowDeep = Color(hex: 0xD4B04A)
+    /// Order のスライドの下の影（紫紺を少し濃く）
+    static let primaryDeep = Color(hex: 0x24203A)
 }
 
 // MARK: - 上のバー
@@ -820,7 +821,8 @@ private struct ItemsPanel: View {
             Divider().overlay(NT.line)
 
             ScrollView {
-                let cols = [GridItem(.adaptive(minimum: 170, maximum: 260), spacing: 12)]
+                // 1行に4つ（2026-10-27 03:02 Ronnie「menu items haru yeuta row ma 4 ota banau」）
+                let cols = Array(repeating: GridItem(.flexible(), spacing: 12), count: 4)
                 LazyVGrid(columns: cols, spacing: 12) {
                     ForEach(model.visibleItems) { item in
                         ItemTile(item: item, qty: model.qtyInOrder(item)) { model.add(item) }
