@@ -9,6 +9,8 @@ struct NativeFloorView: View {
     @ObservedObject var model: NativeFloorModel
     var onHome: () -> Void = {}
     var onLedger: () -> Void = {}
+    /// 上のバーの右の「メニュー在庫管理」（本日の残り数。前はホームの「在庫設定」。nil なら出さない）
+    var onStock: (() -> Void)? = nil
     /// 伝票を開く（既存のネイティブのオーダー・会計画面）
     var onOpenOrder: (_ orderId: String, _ checkout: Bool) -> Void = { _, _ in }
     /// この卓の来店登録を開いてほしい（Web の /app/floor/<卓>/setup から。AppState.floorSetupTableId）
@@ -29,7 +31,9 @@ struct NativeFloorView: View {
                 title: "注文・会計",
                 subtitle: "Order & Pay",
                 userName: "",
-                onHome: onHome
+                onHome: onHome,
+                // 2026-10-27 01:45 Ronnie「メニュー在庫管理 name change garera 注文・会計 click garda top menu bar ma aaune banau right patti」
+                accessory: onStock.map { NativeTopBarButton(icon: "shippingbox", label: "メニュー在庫管理", action: $0) }
             )
             GeometryReader { geo in
                 let panelW: CGFloat = geo.size.width >= 1000 ? 300 : 270

@@ -266,6 +266,13 @@ struct NativeHouseShape: Shape {
     }
 }
 
+/// 上のバーの右に出す白いボタン
+struct NativeTopBarButton {
+    let icon: String
+    let label: String
+    let action: () -> Void
+}
+
 struct NativeTopBar: View {
     /// 店名は上のバーには出さない（ホームだけ。2026-10-24 18:55 Ronnie「店舗名は home 画面だけ、ほかはいらない」）。呼び出し側の形はそのまま
     /// 店名のあった場所（左）に画面の名前（店舗台帳・オーダー・会計・設定 …）を出す（18:56 Ronnie）
@@ -279,6 +286,8 @@ struct NativeTopBar: View {
     var backIcon: String = "house.fill"
     /// 今までの（Web の）画面で開く。ライブのときだけ
     var onWeb: (() -> Void)? = nil
+    /// 右の白いボタン（注文・会計の「メニュー在庫管理」など。2026-10-27 01:45 Ronnie の見本）
+    var accessory: NativeTopBarButton? = nil
 
     var body: some View {
         HStack(spacing: 10) {
@@ -299,6 +308,19 @@ struct NativeTopBar: View {
             .padding(.vertical, 8)
             .background(Capsule().fill(Color.white.opacity(0.10)))
             Spacer(minLength: 8)
+            if let a = accessory {
+                Button(action: a.action) {
+                    HStack(spacing: 8) {
+                        Image(systemName: a.icon).font(.system(size: 17, weight: .regular))
+                        Text(a.label).font(.system(size: 15, weight: .medium)).lineLimit(1)
+                    }
+                    .foregroundColor(Color(hex: 0x2B2740))
+                    .padding(.horizontal, 16).frame(height: 40)
+                    .background(Capsule().fill(Color.white))
+                    .overlay(Capsule().stroke(Color(hex: 0xE2E2EA), lineWidth: 1))
+                }
+                .buttonStyle(PressableStyle())
+            }
             HStack(spacing: 6) {
                 Image(systemName: "person")
                 Text(userName).lineLimit(1)

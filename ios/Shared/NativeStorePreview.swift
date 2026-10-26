@@ -439,7 +439,7 @@ struct NativeStorePreview: View {
     @ViewBuilder private var content: some View {
         switch kind {
         case "floor":
-            NativeFloorView(model: floorModel)
+            NativeFloorView(model: floorModel, onStock: {})
         case "ledger":
             NativeLedgerView(model: ledger)
         default:

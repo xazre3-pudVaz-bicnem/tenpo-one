@@ -451,7 +451,8 @@ struct NativeHomeView: View {
     private var gridTiles: [GridTile] {
         let s = model.payload?.sales
         var byKey: [String: GridTile] = [:]
-        for t in tools where !Self.sideTools.contains(t.href) && t.href != Self.settingsHref {
+        // 在庫設定は「メニュー在庫管理」として 注文・会計 の上のバーへ（2026-10-27 01:45 Ronnie）
+        for t in tools where !Self.sideTools.contains(t.href) && t.href != Self.settingsHref && t.href != "/app/inventory" {
             let (sym, color) = Self.toolIcon(t.href)
             byKey[t.href] = GridTile(key: t.href, icon: sym, color: color, label: t.label, en: t.en, badge: t.badge, action: { toolTap(t) })
         }
