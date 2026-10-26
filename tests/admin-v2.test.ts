@@ -65,10 +65,15 @@ describe('新しい管理画面を出す人・出さない人', () => {
     expect(sw).toContain('isIpadDesktopMode(');
   });
 
-  it('ON（cookie=1）のときだけ。OFF・cookie なしは今の管理画面', () => {
+  it('会社のオーナーのパソコンは最初から ON。「元に戻す」（cookie=0）だけ今の管理画面（2026-10-26）', () => {
     expect(adminV2On(owner, '1', MAC)).toBe(true);
-    expect(adminV2On(owner, null, MAC)).toBe(false);
+    expect(adminV2On(owner, null, MAC)).toBe(true);
     expect(adminV2On(owner, '0', MAC)).toBe(false);
+  });
+
+  it('iPad の Safari（Mac を名乗る）は画面側で OFF にする', () => {
+    expect(read('components/admin-v2/admin-v2-touch-guard.tsx')).toContain('isIpadDesktopMode(navigator.userAgent, navigator.maxTouchPoints)');
+    expect(read('app/app/layout.tsx')).toContain('{adminV2 && <AdminV2TouchGuard />}');
   });
 
   it('layout：レジ（isRegi）では新しい左メニューを出さない。OFF の人は今の左メニュー', () => {

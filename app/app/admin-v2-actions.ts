@@ -18,7 +18,8 @@ export async function setAdminV2(
   const ctx = await requireSession();
   const jar = await cookies();
   if (!on) {
-    jar.delete(ADMIN_V2_COOKIE);
+    // 最初から ON になったので、OFF は「0」を覚えておく（2026-10-26）
+    jar.set(ADMIN_V2_COOKIE, '0', { path: '/', httpOnly: true, sameSite: 'lax', maxAge: 60 * 60 * 24 * 365 });
     revalidatePath('/app', 'layout');
     return { ok: true };
   }

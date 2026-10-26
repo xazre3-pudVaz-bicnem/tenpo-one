@@ -58,9 +58,14 @@ export function canTryAdminV2(
   );
 }
 
-/** cookie も見て、新しい管理画面を出すか */
+/**
+ * cookie も見て、新しい管理画面を出すか。
+ * 2026-10-26 Ronnie「企業でログインしたら最初から新しい管理画面」：会社のオーナーのパソコンは最初から ON。
+ * 「元の管理画面に戻す」を押した人（cookie='0'）だけ今の管理画面。レジ・ハンディ・iPad・スマホは今まで通り出さない。
+ * Mac を名乗る iPad の Safari はサーバーで分からないので、画面側（AdminV2TouchGuard）で OFF にして描き直す。
+ */
 export function adminV2On(ctx: ViewerLike, cookieValue: string | null | undefined, userAgent: string | null | undefined): boolean {
-  return cookieValue === '1' && canTryAdminV2(ctx, userAgent);
+  return cookieValue !== '0' && canTryAdminV2(ctx, userAgent);
 }
 
 // =====================================================================
