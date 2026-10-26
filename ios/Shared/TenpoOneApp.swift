@@ -35,6 +35,8 @@ struct RootView: View {
             } else if state.mode == nil {
                 ModeChooserView()
             } else {
+                // iPad レジ：ホーム以外の画面では左に細いメニュー（アイコンだけ）。本文はその右に広く（NativeNavRail.swift）
+                let rail = NativeNavRail.shown(state)
                 WebContainer()
                     .id(state.webSession)
                     .accessibilityHidden(state.nativeOrder != nil)
@@ -103,12 +105,14 @@ struct RootView: View {
                 // ネイティブの店舗台帳。Web の /app/reservations の上に重ねる（2026-10-24）
                 if state.nativeLedger {
                     NativeLedgerScreen()
+                        .railInset(rail)
                         .transition(.opacity)
                         .zIndex(5)
                 }
                 // ネイティブのレジ開局・レジクローズ。Web の /app/cash/open・close の上に重ねる（2026-10-24）
                 if state.nativeReports {
                     NativeReportsScreen()
+                        .railInset(rail)
                         .transition(.opacity)
                         .zIndex(5)
                 }
@@ -124,6 +128,7 @@ struct RootView: View {
                 }
                 if state.nativeBudget {
                     NativeBudgetScreen()
+                        .railInset(rail)
                         .transition(.opacity)
                         .zIndex(5)
                 }
@@ -135,12 +140,14 @@ struct RootView: View {
                 }
                 if state.nativeNotices {
                     NativeNoticesScreen()
+                        .railInset(rail)
                         .transition(.opacity)
                         .zIndex(5)
                 }
                 // ネイティブの設定（このiPadのプリンター・レジの設定）。Web の /app/pos/settings・/app/settings の上に重ねる（2026-10-24）
                 if state.nativeSettings {
                     NativeSettingsScreen()
+                        .railInset(rail)
                         .transition(.opacity)
                         .zIndex(5)
                 }
@@ -148,11 +155,13 @@ struct RootView: View {
                 if let key = state.nativeSettingsPage {
                     NativeSettingsPageScreen(key: key)
                         .id(key)
+                        .railInset(rail)
                         .transition(.opacity)
                         .zIndex(6)
                 }
                 if state.nativeStock {
                     NativeStockScreen()
+                        .railInset(rail)
                         .transition(.opacity)
                         .zIndex(5)
                 }
@@ -185,34 +194,46 @@ struct RootView: View {
                 }
                 if state.nativeExpenses {
                     NativeExpensesScreen()
+                        .railInset(rail)
                         .transition(.opacity)
                         .zIndex(5)
                 }
                 if state.nativeSlips {
                     NativeSlipsScreen()
+                        .railInset(rail)
                         .transition(.opacity)
                         .zIndex(5)
                 }
                 if state.nativeQuick {
                     NativeQuickScreen()
+                        .railInset(rail)
                         .transition(.opacity)
                         .zIndex(5)
                 }
                 if state.nativeCashIo {
                     NativeCashIoScreen()
+                        .railInset(rail)
                         .transition(.opacity)
                         .zIndex(5)
                 }
                 if state.nativeCash {
                     NativeCashScreen()
+                        .railInset(rail)
                         .transition(.opacity)
                         .zIndex(5)
                 }
                 // ネイティブのフロア（テーブル一覧）。Web の /app/floor の上に重ねる（2026-10-24）
                 if state.nativeFloor {
                     NativeFloorScreen()
+                        .railInset(rail)
                         .transition(.opacity)
                         .zIndex(5)
+                }
+                if rail {
+                    NativeNavRail()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+                        .transition(.move(edge: .leading).combined(with: .opacity))
+                        .zIndex(9)
                 }
                 // ネイティブのオーダー・会計画面（レジの設定で ON にした iPad だけ）。
                 // Web の画面の上に重ねる（fullScreenCover だと下の Web が「見えない」扱いになって止まり、
@@ -271,4 +292,12 @@ enum Brand {
     static let purple = Color(red: 0.737, green: 0.349, blue: 0.251) // #bc5940
     static let ink = Color(red: 0.161, green: 0.153, blue: 0.145) // #292725
     static let ink2 = Color(red: 0.361, green: 0.337, blue: 0.314) // #5c5650
+}
+
+extension View {
+    /// iPad レジの左の細いメニューのぶん、本文を右へ（NativeNavRail.swift）。上のバーのホームのロゴは出さない
+    func railInset(_ on: Bool) -> some View {
+        self.padding(.leading, on ? NativeNavRail.width : 0)
+            .environment(\.tenpoNavRail, on)
+    }
 }

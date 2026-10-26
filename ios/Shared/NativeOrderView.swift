@@ -288,10 +288,14 @@ struct NativeTopBar: View {
     var onWeb: (() -> Void)? = nil
     /// 右の白いボタン（注文・会計の「メニュー在庫管理」など。2026-10-27 01:45 Ronnie の見本）
     var accessory: NativeTopBarButton? = nil
+    /// 左に細いメニューが出ているとき（ホームへはメニューから。ホームのロゴは出さない）
+    @Environment(\.tenpoNavRail) private var navRail
 
     var body: some View {
         HStack(spacing: 10) {
-            iconButton(backIcon, label: backIcon == "house.fill" ? "ホーム" : "戻る", action: onHome)
+            if !(navRail && backIcon == "house.fill") {
+                iconButton(backIcon, label: backIcon == "house.fill" ? "ホーム" : "戻る", action: onHome)
+            }
             // TENPO ONE のマークは上のバーに出さない（2026-10-24 19:04 Ronnie「ロゴは要らない」）
             // 画面の名前（店名のあった場所に、同じ丸い枠で）
             ViewThatFits(in: .horizontal) {

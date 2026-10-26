@@ -455,6 +455,10 @@
 			isa = PBXBuildFile;
 			fileRef = "4B5D201C567B93147134C5E9";
 		};
+		87E84E8C9983906306CCCF87 = {
+			isa = PBXBuildFile;
+			fileRef = "16E926F14FF60D3052D7B027";
+		};
 		89F0FC5D043FBBBF84AF8ECB = {
 			isa = PBXBuildFile;
 			fileRef = "627F40489429FE536C5776CA";
@@ -578,6 +582,10 @@
 		B2A1C089D866F2E590C39517 = {
 			isa = PBXBuildFile;
 			fileRef = "6AA2061336D569F1887EA5C0";
+		};
+		B710A3B614D2D189EF3CBB9D = {
+			isa = PBXBuildFile;
+			fileRef = A2C36FBE22CC9CA447281F7C;
 		};
 		B8536478B73145A706D777F8 = {
 			isa = PBXBuildFile;
@@ -899,6 +907,12 @@
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
 			path = NativePhoneOwnerKitchen.swift;
+			sourceTree = "<group>";
+		};
+		16E926F14FF60D3052D7B027 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = NativeNavRail.swift;
 			sourceTree = "<group>";
 		};
 		18264DF945F47492573279DF = {
@@ -1603,6 +1617,12 @@
 			path = NativeCheckoutView.swift;
 			sourceTree = "<group>";
 		};
+		A2C36FBE22CC9CA447281F7C = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = NativeNumberKeypad.swift;
+			sourceTree = "<group>";
+		};
 		A33B001E9138B86048047F4F = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
@@ -2168,7 +2188,9 @@
 				"01501D5EBC3358593D02DD36",
 				"70EA4E009ED16B894C2C3758",
 				"74ECA6564C2380BAF1A08890",
+				"16E926F14FF60D3052D7B027",
 				FEA15291AD341F30A11A10ED,
+				A2C36FBE22CC9CA447281F7C,
 				"342C408BDB47AA24C3D43C91",
 				"08468FEB7E2D64B0D1DAC0B7",
 				"3E54DC20A9B17AB52FD4146D",
@@ -2452,7 +2474,9 @@
 				"775EA7F06494E45148A42D6A",
 				BAF04EC182AA376E071B36D6,
 				"25572CA25778555AF926E68A",
+				"87E84E8C9983906306CCCF87",
 				"3BCDAB884785DA9D717F9261",
+				B710A3B614D2D189EF3CBB9D,
 				"416705E94409FC80A9DAA044",
 				"3299823280EBBE1C9EF11F58",
 				"6B21EC44F7E8EF082BA47285",
@@ -2634,7 +2658,7 @@
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
-				MARKETING_VERSION = "1.1";
+				MARKETING_VERSION = "1.2";
 				PRODUCT_BUNDLE_IDENTIFIER = com.tenpoone.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -2691,7 +2715,7 @@
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
-				MARKETING_VERSION = "1.1";
+				MARKETING_VERSION = "1.2";
 				PRODUCT_BUNDLE_IDENTIFIER = com.tenpoone.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";

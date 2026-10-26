@@ -439,7 +439,12 @@ struct NativeStorePreview: View {
     @ViewBuilder private var content: some View {
         switch kind {
         case "floor":
-            NativeFloorView(model: floorModel, onStock: {})
+            // 左に細いメニュー（アイコンだけ）＋ 広い本文（2026-10-27 02:13 Ronnie）
+            HStack(spacing: 0) {
+                NativeNavRail(previewActive: "floor")
+                NativeFloorView(model: floorModel, onStock: {})
+                    .environment(\.tenpoNavRail, true)
+            }
         case "ledger":
             NativeLedgerView(model: ledger)
         default:
