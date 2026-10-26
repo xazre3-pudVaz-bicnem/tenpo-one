@@ -263,24 +263,14 @@ struct NativeHomeView: View {
 
     private var topBar: some View {
         VStack(spacing: 0) {
-            // 時計・電波・電池の行も本文と同じ色（濃い帯は出さない。2026-10-27 02:31 Ronnie「top ko color row wala pardaina」）。
-            // 時刻は左のメニューの上（濃い地）なので見える。右の電波・電池の白い字は、ホームでは見えにくい
-            Color.clear.frame(height: 20)
+            // 時計・電波・電池の行（白い字）は左のメニューと同じ濃い色の細い帯（2026-10-27 02:36 Ronnie「mathi ko bar color thikai xa vayo do not change」）
+            Self.sideBg.frame(height: 20)
             // 上のバーは本文と同じ色（2026-10-27 01:58 Ronnie「top ko bar ma yo color hudaina hai left patti matrai hunxa top ko bar body color jastai hunxa」）
             HStack(spacing: 10) {
                 // 「ホーム」の字は出さない（ここがホーム。2026-10-24 19:01 Ronnie）
                 Spacer()
-                Button { onWeb("/app/expenses") } label: {
-                    ZStack(alignment: .topTrailing) {
-                        Image(systemName: "bell").font(.system(size: 20, weight: .semibold)).foregroundColor(Self.tileText).padding(8)
-                        if let n = model.payload?.noticeCount, n > 0 {
-                            Text("\(n)").font(.system(size: 11, weight: .heavy)).foregroundColor(.white)
-                                .padding(.horizontal, 5).padding(.vertical, 1)
-                                .background(Capsule().fill(Color(hex: 0xE53935)))
-                        }
-                    }
-                }
-                .buttonStyle(PressableStyle())
+                // お知らせのベルは出さない。お知らせ（仕入・経費）は「仕入・経費」の箱の赤い数字で（無いときは何も出ない）
+                // （2026-10-27 02:34 Ronnie「top ma vayeko ring bell 仕入・経費 ko vayeko hunale notify aauda tei button ma dekhine banau」）
                 // 店名はログアウトの横（2026-10-24 19:03 Ronnie）。ハンディQR は右の箱へ（2026-10-27 の見本）
                 HStack(spacing: 6) {
                     Image(systemName: "storefront")
@@ -293,8 +283,8 @@ struct NativeHomeView: View {
             }
             .padding(.horizontal, 20)
             .frame(height: 52)
+            .background(Self.pageBg)
         }
-        .background(Self.pageBg)
     }
 
     // MARK: 左のメニュー（ホーム・オーダー・会計・店舗台帳・即会計・入出金・ドロア／いちばん下に 設定）
@@ -432,7 +422,9 @@ struct NativeHomeView: View {
         // 在庫設定は「メニュー在庫管理」として 注文・会計 の上のバーへ（2026-10-27 01:45 Ronnie）
         for t in tools where !Self.sideTools.contains(t.href) && t.href != Self.settingsHref && t.href != "/app/inventory" {
             let (sym, color) = Self.toolIcon(t.href)
-            byKey[t.href] = GridTile(key: t.href, icon: sym, color: color, label: t.label, en: t.en, badge: t.badge, action: { toolTap(t) })
+            // 仕入・経費 は前の上のベルのお知らせの数も（多いほう）
+            let badge = t.href == "/app/expenses" ? max(t.badge ?? 0, model.payload?.noticeCount ?? 0) : t.badge
+            byKey[t.href] = GridTile(key: t.href, icon: sym, color: color, label: t.label, en: t.en, badge: badge, action: { toolTap(t) })
         }
         // ハンディQR は今までの上のバーと同じ qrcode（紺）
         byKey["#handyqr"] = GridTile(key: "#handyqr", icon: "qrcode", color: NFColor.navy, label: "ハンディQR", en: "Handy QR", action: { handyQrOpen = true })
