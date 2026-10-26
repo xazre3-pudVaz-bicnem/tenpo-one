@@ -12,10 +12,9 @@ TenpoOne.xcodeproj を作る（Mac に XcodeGen が無いので、ファイル�
   EPSON … ePOS SDK を EPSON のサイトから取って ios/Vendor/libepos2.xcframework に置くと、入れて EPSON_SDK を付ける
 無料の Apple ID（個人のチーム）で自分の iPad・iPhone に入れて試すとき：TENPO_NO_PUSH=1 python3 tools/gen_project.py
   （通知の権限は有料の Apple Developer でないと署名できないため、通知だけ外す）
-App Store に出すとき、Star・EPSON の MFi の承認（PPID）がまだなら：TENPO_NO_MFI=1 python3 tools/gen_project.py
-  （Info.plist から UISupportedExternalAccessoryProtocols を外した App/Info-noMFI.plist で作る。
-   Bluetooth・USB の MFi プリンターは使えないが、LAN・Wi-Fi のプリンター（CloudPRNT・LAN）はそのまま使える。
-   PPID がそろったら、ふつうに作り直して出し直す）
+Star・EPSON の MFi の承認（PPID）は 2026-10-26 にそろった（ios/README.md「MFi の PPID と審査メモ」）。ふつうに作れば MFi あり。
+  TENPO_NO_MFI=1 python3 tools/gen_project.py は v1.0・1.1 で使った MFi なしの作り方（Info.plist から
+  UISupportedExternalAccessoryProtocols を外した App/Info-noMFI.plist）。今は使わない
 """
 import hashlib, os, json
 
