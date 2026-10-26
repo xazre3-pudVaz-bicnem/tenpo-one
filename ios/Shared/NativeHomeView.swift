@@ -365,27 +365,18 @@ struct NativeHomeView: View {
         let fg = n.active ? Self.sideActiveText : Self.sideText
         let sub = n.active ? Self.sideActiveText.opacity(0.7) : Self.sideSub
         return Button(action: n.action) {
-            Group {
-                if tall {
-                    VStack(spacing: 5) {
-                        navIcon(n, size: 40)
-                        Text(n.label).font(.system(size: 15, weight: .bold)).lineLimit(1).minimumScaleFactor(0.7)
-                        Text(n.en).font(.system(size: 10, weight: .medium)).foregroundColor(sub).lineLimit(1).minimumScaleFactor(0.7)
-                    }
-                    .frame(maxWidth: .infinity).frame(height: 104)
-                } else {
-                    HStack(spacing: 10) {
-                        navIcon(n, size: 34)
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(n.label).font(.system(size: 15, weight: .bold)).lineLimit(1).minimumScaleFactor(0.7)
-                            Text(n.en).font(.system(size: 10, weight: .medium)).foregroundColor(sub).lineLimit(1).minimumScaleFactor(0.7)
-                        }
-                        Spacer(minLength: 0)
-                    }
-                    .padding(.horizontal, 12)
-                    .frame(maxWidth: .infinity).frame(height: 64)
+            // アイコンはどれも左にそろえる（2026-10-27 01:56 Ronnie「clip haru ko イチ milena … sabailai left ma rakhda thik hola」）。
+            // 上の 3 つと 設定 は少し高く
+            HStack(spacing: 12) {
+                navIcon(n, size: tall ? 36 : 32)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(n.label).font(.system(size: tall ? 16 : 15, weight: .bold)).lineLimit(1).minimumScaleFactor(0.7)
+                    Text(n.en).font(.system(size: 10, weight: .medium)).foregroundColor(sub).lineLimit(1).minimumScaleFactor(0.7)
                 }
+                Spacer(minLength: 0)
             }
+            .padding(.horizontal, 14)
+            .frame(maxWidth: .infinity).frame(height: tall ? 76 : 62)
             .foregroundColor(fg)
             .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(n.active ? Self.sideActive : Self.sideItem))
             .overlay(alignment: .topTrailing) {
