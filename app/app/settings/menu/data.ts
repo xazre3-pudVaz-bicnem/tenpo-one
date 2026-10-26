@@ -2,6 +2,7 @@ import 'server-only';
 import { isCustomPriceHelper } from '@/lib/custom-price';
 import { createClient } from '@/lib/supabase/server';
 import { courseStepsFrom, type CourseSteps } from '@/lib/course-steps';
+import { isMissingColumnError } from '@/lib/schema-compat';
 import type { MenuItemRow } from '@/components/settings/menu-item-dialog';
 import type { CategoryRow } from '@/components/settings/category-panel';
 
@@ -11,8 +12,11 @@ interface MenuCtx {
 
 export interface MenuSettingsData {
   categoryRows: CategoryRow[];
-  /** カテゴリの厨房ステーション（カテゴリ画面の振り分け用） */
-  stations: { id: string; name: string; station: string }[];
+  /**
+   * カテゴリの厨房ステーション（カテゴリ画面の振り分け用）と「注文時に会計伝票を印刷」。
+   * printBillOnOrder は DB に列が無い（migration 00101 未適用）とき null
+   */
+  stations: { id: string; name: string; station: string; printBillOnOrder: boolean | null }[];
   itemRows: MenuItemRow[];
   taxRates: { id: string; name: string }[];
 }
@@ -24,7 +28,7 @@ export interface MenuSettingsData {
 export async function loadMenuSettingsData(ctx: MenuCtx, storeId: string): Promise<MenuSettingsData> {
   const supabase = await createClient();
 
-  const [{ data: categories }, { data: items }, { data: taxRates }] = await Promise.all([
+  const [{ data: categories }, { data: items }, { data: taxRates }, billRes] = await Promise.all([
     supabase
       .from('menu_categories')
       .select('id, name, name_en, color, sort_order, station')
@@ -48,7 +52,16 @@ export async function loadMenuSettingsData(ctx: MenuCtx, storeId: string): Promi
       .eq('organization_id', ctx.organizationId)
       .eq('status', 'active')
       .order('is_default', { ascending: false }),
+    // 「注文時に会計伝票を印刷」は別に読む（列がまだ無い DB でもカテゴリ画面を止めない）
+    supabase
+      .from('menu_categories')
+      .select('id, print_bill_on_order')
+      .eq('organization_id', ctx.organizationId)
+      .eq('status', 'active')
+      .or(`store_id.is.null,store_id.eq.${storeId}`),
   ]);
+  const billColumnMissing = !!billRes.error && isMissingColumnError(billRes.error.message, 'print_bill_on_order');
+  const billOn = new Map(((billRes.data ?? []) as { id: string; print_bill_on_order: boolean }[]).map((r) => [r.id, r.print_bill_on_order === true]));
 
   const categoryRows: CategoryRow[] = (categories ?? []).map((c) => ({
     id: c.id,
@@ -82,7 +95,12 @@ export async function loadMenuSettingsData(ctx: MenuCtx, storeId: string): Promi
 
   return {
     categoryRows,
-    stations: (categories ?? []).map((c) => ({ id: c.id, name: c.name, station: c.station })),
+    stations: (categories ?? []).map((c) => ({
+      id: c.id,
+      name: c.name,
+      station: c.station,
+      printBillOnOrder: billColumnMissing ? null : (billOn.get(c.id) ?? false),
+    })),
     itemRows,
     taxRates: (taxRates ?? []).map((t) => ({ id: t.id, name: t.name })),
   };
