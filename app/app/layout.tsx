@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation';
+import { AdminV2TouchGuard } from '@/components/admin-v2/admin-v2-touch-guard';
 import { SupportBanner } from '@/components/admin/support-banner';
 import { cookies, headers } from 'next/headers';
 import { requireSession } from '@/lib/auth';
@@ -140,6 +141,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const shell = (
     <CommandPaletteProvider role={ctx.role}>
       <ThemeBody admin={adminV2} />
+      {adminV2 && <AdminV2TouchGuard />}
       <OfflineBanner />
       {/* レジ（iPad）はページ全体を動かさず、この箱の中だけスクロール（Chrome から入れたアプリで上下にゴムのように揺れる・左右にずれるのを止める。app/globals.css の .regi-shell） */}
       {/* 新しい管理画面（パソコン）は theme-admin で管理画面だけの配色（app/globals.css）。レジ・ハンディは theme-regi のまま */}
