@@ -31,6 +31,8 @@ import { SubscriptionMockForm } from '@/components/admin/subscription-mock-form'
 import { ApplyPlanDefaultsButton } from '@/components/admin/apply-plan-defaults-button';
 import type { SaasSubscriptionStatus } from '../actions';
 import { listAllAuthUsers } from '../../_utils';
+import { devicesByMember, type MemberDevice } from '@/lib/member-devices';
+import { deviceSettingsFrom } from '@/lib/device-settings';
 
 const SUBSCRIPTION_STATUS_LABEL: Record<SaasSubscriptionStatus, { label: string; tone: BadgeTone }> = {
   inactive: { label: '未契約', tone: 'gray' },
@@ -181,6 +183,21 @@ export default async function OrganizationDetailPage({ params }: { params: Promi
   const memberRows = (memberships ?? []) as unknown as MembershipRow[];
   const emailById = new Map(authUsers.users.map((u) => [u.id, u.email]));
   const lastLoginById = new Map(authUsers.users.map((u) => [u.id, u.lastSignInAt]));
+
+  // メンバーごとのログイン端末（レジ・ハンディ・ディスプレイ。2026-10-26 Ronnie「何台でログインしているか・端末の名前も」）
+  const [{ data: regDevices }, { data: handyDevices }, { data: displayDevices }, { data: storeSettingRows }] = await Promise.all([
+    admin.from('register_devices').select('id, store_id, name, user_agent, last_seen_at, status').eq('organization_id', id).eq('status', 'active'),
+    admin.from('handy_devices').select('id, profile_id, name, user_agent, last_seen_at, status').eq('organization_id', id).eq('status', 'active'),
+    admin.from('display_devices').select('id, profile_id, name, user_agent, last_seen_at, status').eq('organization_id', id).eq('status', 'active'),
+    admin.from('store_settings').select('store_id, settings').eq('organization_id', id),
+  ]);
+  const memberDevices = devicesByMember({
+    members: memberRows.map((m) => ({ profileId: m.profile_id, email: emailById.get(m.profile_id) ?? null })),
+    register: (regDevices ?? []) as { id: string; store_id: string; name: string | null; user_agent: string | null; last_seen_at: string | null; status: string }[],
+    handy: (handyDevices ?? []) as { id: string; profile_id: string; name: string | null; user_agent: string | null; last_seen_at: string | null; status: string }[],
+    display: (displayDevices ?? []) as { id: string; profile_id: string; name: string | null; user_agent: string | null; last_seen_at: string | null; status: string }[],
+    registerSettings: new Map((storeSettingRows ?? []).map((r) => [(r.store_id as string).toLowerCase(), deviceSettingsFrom(r.settings)])),
+  });
   const disabledFeatureKeys = (flags ?? []).filter((f) => !f.enabled).map((f) => f.flag_key);
 
   const onboarding = (org.onboarding ?? {}) as { step?: number; completed?: boolean };
@@ -402,6 +419,7 @@ export default async function OrganizationDetailPage({ params }: { params: Promi
                         <Th>メールアドレス</Th>
                         <Th>ロール</Th>
                         <Th>状態</Th>
+                        <Th>ログイン端末</Th>
                         <Th>最終ログイン</Th>
                       </Tr>
                     </THead>
@@ -417,6 +435,9 @@ export default async function OrganizationDetailPage({ params }: { params: Promi
                               <Badge tone={m.status === 'active' ? 'success' : m.status === 'invited' ? 'primary' : 'warning'}>
                                 {m.status === 'active' ? '有効' : m.status === 'invited' ? '招待中' : '停止中'}
                               </Badge>
+                            </Td>
+                            <Td>
+                              <MemberDevicesCell devices={memberDevices.get(m.profile_id) ?? []} />
                             </Td>
                             <Td className="text-xs text-gray-500">{formatDateTime(lastLoginById.get(m.profile_id) ?? null)}</Td>
                           </Tr>
@@ -553,5 +574,31 @@ export default async function OrganizationDetailPage({ params }: { params: Promi
         </div>
       </div>
     </div>
+  );
+}
+
+const DEVICE_KIND_LABEL: Record<MemberDevice['kind'], string> = { register: 'レジ', handy: 'ハンディ', display: 'ディスプレイ' };
+
+/** メンバー一覧の「ログイン端末」：台数。押すと端末の名前・種類・最後に使った時刻（ブラウザの details で開閉） */
+function MemberDevicesCell({ devices }: { devices: MemberDevice[] }) {
+  if (devices.length === 0) return <span className="text-xs text-gray-400">—</span>;
+  return (
+    <details className="group">
+      <summary className="inline-flex cursor-pointer list-none items-center gap-1 rounded-full bg-primary-soft px-2.5 py-0.5 text-xs font-bold text-primary-deep">
+        {devices.length}台
+        <span className="text-[10px] transition-transform group-open:rotate-180">▼</span>
+      </summary>
+      <ul className="mt-1.5 space-y-1">
+        {devices.map((d) => (
+          <li key={d.id} className="text-xs whitespace-nowrap">
+            <span className="font-medium text-navy">{d.name}</span>
+            <span className="ml-1.5 text-gray-500">
+              {DEVICE_KIND_LABEL[d.kind]}・{d.model}
+              {d.lastSeenAt ? `・${formatDateTime(d.lastSeenAt)}` : ''}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </details>
   );
 }
