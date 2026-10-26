@@ -346,8 +346,16 @@ struct NativeSlipsView: View {
         reportBusy = true
         defer { reportBusy = false }
         do {
-            let r = try await NativeAPI.shared.act(["type": "periodReport", "from": p.from, "to": p.to], throwOnFail: false)
-            if r.ok { model.toast = "\(periodLabel(p)) の決算レポートを印刷しています" } else { model.error = r.error ?? "決算レポートを印刷できませんでした" }
+            var body: [String: Any] = ["type": "periodReport", "from": p.from, "to": p.to]
+            // Bluetooth・USB のレシートプリンターだけの店は、サーバーが返した紙をこの iPad から出す
+            if let link = await nativeBluetoothLink() { body["bluetoothLink"] = link }
+            let r = try await NativeAPI.shared.act(body, throwOnFail: false)
+            guard r.ok else { model.error = r.error ?? "決算レポートを印刷できませんでした"; return }
+            if let printed = await nativePrintDirect(r.receipt), !printed {
+                model.error = "Bluetooth のプリンターで決算レポートを印刷できませんでした。プリンターの電源と iPad の Bluetooth を確かめてください"
+                return
+            }
+            model.toast = "\(periodLabel(p)) の決算レポートを印刷しています"
         } catch {
             model.error = (error as? NativeAPIError)?.message ?? "決算レポートを印刷できませんでした"
         }

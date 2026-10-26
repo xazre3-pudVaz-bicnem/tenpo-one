@@ -13,6 +13,7 @@
  */
 import { CASH_DENOMINATIONS, type CashDenomination, type DenominationCounts } from './cash-count';
 import type { LayoutLine } from './kitchen-ticket';
+import type { CheckoutReceipt } from './checkout-bluetooth';
 import { colsFor, dispWidth, twoCol, wrapText, yen, type PaperWidth, type WidthOptions } from './receipt-layout';
 
 export interface ReportCountAmount {
@@ -163,8 +164,11 @@ export type DenominationJson = Record<string, number>;
 
 /** レジ締めアクションの結果。締め自体は成功したが精算レシートだけ出せなかったときは printWarning に理由が入る */
 export type CloseRegisterResult =
-  /** signOutAfter: レジ端末はレジ締めのあとログアウトする（2026-09-24 店舗要望） */
-  | { ok: true; printWarning?: string | null; signOutAfter?: boolean }
+  /**
+   * signOutAfter: レジ端末はレジ締めのあとログアウトする（2026-09-24 店舗要望）。
+   * receipt: iPad がそのまま Bluetooth・USB で出す精算レシート（ネイティブ。出してからログアウト）
+   */
+  | { ok: true; printWarning?: string | null; signOutAfter?: boolean; receipt?: CheckoutReceipt }
   | { ok: false; error: string };
 
 /** 金種のレシート表記（dinii と同じ「1円硬貨」「千円紙幣」形式） */

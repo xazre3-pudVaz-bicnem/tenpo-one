@@ -832,7 +832,9 @@ struct NativeCheckoutView: View {
         guard let orderId = model.orderId else { return }
         // ドロア（キャッシュレスは店の設定しだい）
         Task {
-            _ = try? await NativeAPI.shared.act(["type": "drawer", "orderId": orderId, "methods": [r.method ?? "credit"]], throwOnFail: false)
+            var drawerBody: [String: Any] = ["type": "drawer", "orderId": orderId, "methods": [r.method ?? "credit"]]
+            if let link = await nativeBluetoothLink() { drawerBody["bluetoothLink"] = link }
+            if let d = try? await NativeAPI.shared.act(drawerBody, throwOnFail: false), d.ok { _ = await nativePrintDirect(d.receipt) }
         }
         withAnimation(.easeOut(duration: 0.2)) { done = true }
     }

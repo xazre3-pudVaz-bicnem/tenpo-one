@@ -1,6 +1,7 @@
 import { isUuid } from '@/lib/native-pos';
 import { CASH_DENOMINATIONS } from '@/lib/cash-count';
 import { parsePeriodReportRange } from '@/lib/period-report';
+import { parseCheckoutBluetoothLink, type CheckoutBluetoothLink } from '@/lib/checkout-bluetooth';
 
 /**
  * iPad アプリのネイティブのレジ開局・レジクローズとサーバーの決まりごと（2026-10-24 Ronnie「レジの画面は全部ネイティブに」）。
@@ -15,17 +16,17 @@ export type NativeCashAction =
   /** レジ開局（釣銭準備金を金種で数えて開ける） */
   | { type: 'cashOpen'; registerId: string; denominations: NativeDenominations; reason: string | null; clerkName: string | null }
   /** レジクローズ（現金実査して締める。精算レシートが出る） */
-  | { type: 'cashClose'; sessionId: string; denominations: NativeDenominations; reason: string | null; clerkName: string | null }
+  | { type: 'cashClose'; sessionId: string; denominations: NativeDenominations; reason: string | null; clerkName: string | null; bluetoothLink?: CheckoutBluetoothLink }
   /** 精算レシートの再印刷 */
-  | { type: 'cashReprint'; sessionId: string }
+  | { type: 'cashReprint'; sessionId: string; bluetoothLink?: CheckoutBluetoothLink }
   /** 精算情報（釣銭準備金〜金種）だけの紙 */
-  | { type: 'cashSettlement'; sessionId: string }
+  | { type: 'cashSettlement'; sessionId: string; bluetoothLink?: CheckoutBluetoothLink }
   /** レジ端末のログアウト（レジクローズのあと。Web の signOutRegister と同じ） */
   | { type: 'cashSignOut' }
   /** 入出金の登録（Web の CashEntryForm と同じ。買い物は 用途の文をアプリで作る＝buildShoppingPurpose） */
   | { type: 'cashEntry'; sessionId: string; kind: 'deposit' | 'withdrawal'; amount: number; purpose: string }
   /** 期間の決算レポート（伝票明細の 昨日・一昨日・今週・今月・日付）をレシートプリンターへ（2026-10-26 Ronnie） */
-  | { type: 'periodReport'; from: string; to: string; clerkName: string | null };
+  | { type: 'periodReport'; from: string; to: string; clerkName: string | null; bluetoothLink?: CheckoutBluetoothLink };
 
 export type NativeCashActionType = NativeCashAction['type'];
 
@@ -65,6 +66,10 @@ export function sumNativeDenominations(d: NativeDenominations): number {
 export function parseNativeCashAction(raw: unknown): Parsed {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return bad();
   const b = raw as Record<string, unknown>;
+  // この iPad が Bluetooth・USB でつないでいるレシートプリンター（あれば精算レシート・決算レポートをその場で出す。会計と同じ形）
+  const link = b.bluetoothLink == null ? null : parseCheckoutBluetoothLink(b.bluetoothLink);
+  if (b.bluetoothLink != null && !link) return bad();
+  const withLink = link ? { bluetoothLink: link } : {};
   switch (b.type) {
     case 'cashOpen': {
       if (!isUuid(b.registerId)) return bad('レジが正しくありません');
@@ -76,12 +81,12 @@ export function parseNativeCashAction(raw: unknown): Parsed {
       if (!isUuid(b.sessionId)) return bad('レジのセッションが正しくありません');
       const denominations = parseDenominations(b.denominations);
       if (!denominations) return bad('金種ごとの枚数を入れてください（0円のときは1円に0と入れてください）');
-      return { ok: true, action: { type: 'cashClose', sessionId: b.sessionId, denominations, reason: str(b.reason, 200), clerkName: str(b.clerkName, 80) } };
+      return { ok: true, action: { type: 'cashClose', sessionId: b.sessionId, denominations, reason: str(b.reason, 200), clerkName: str(b.clerkName, 80), ...withLink } };
     }
     case 'cashReprint':
     case 'cashSettlement':
       if (!isUuid(b.sessionId)) return bad('レジのセッションが正しくありません');
-      return { ok: true, action: { type: b.type, sessionId: b.sessionId } };
+      return { ok: true, action: { type: b.type, sessionId: b.sessionId, ...withLink } };
     case 'cashSignOut':
       return { ok: true, action: { type: 'cashSignOut' } };
     case 'cashEntry': {
@@ -95,7 +100,7 @@ export function parseNativeCashAction(raw: unknown): Parsed {
     case 'periodReport': {
       const range = parsePeriodReportRange(b.from, b.to);
       if (!range.ok) return bad(range.error);
-      return { ok: true, action: { type: 'periodReport', from: range.from, to: range.to, clerkName: str(b.clerkName, 80) } };
+      return { ok: true, action: { type: 'periodReport', from: range.from, to: range.to, clerkName: str(b.clerkName, 80), ...withLink } };
     }
     default:
       return bad();
