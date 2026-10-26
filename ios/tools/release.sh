@@ -3,8 +3,12 @@
 # 2026-10-17 Ronnie「3日以内にお客様がアプリを使えるように」
 #
 # 使い方（Mac・ios/ で）:
-#   TEAM_ID=XXXXXXXXXX tools/release.sh            # ふつう（Bluetooth・USB の MFi プリンターあり。Star・EPSON の PPID が要る）
-#   TEAM_ID=XXXXXXXXXX TENPO_NO_MFI=1 tools/release.sh   # MFi なし（v1.0。LAN・Wi-Fi・CloudPRNT のプリンターは使える）
+#   TEAM_ID=XXXXXXXXXX tools/release.sh            # ふつう（Bluetooth・USB の MFi プリンターあり。Star・EPSON の PPID は 2026-10-26 にそろった）
+#   TEAM_ID=XXXXXXXXXX TENPO_UPLOAD=0 tools/release.sh   # 上げない：archive と書き出し（.ipa）だけ。MFi の宣言を確かめてから上げるとき
+#   TEAM_ID=XXXXXXXXXX TENPO_NO_MFI=1 tools/release.sh   # MFi なし（v1.0・1.1 で使った。今は使わない）
+#
+# MFi ありのときは、できた archive（と書き出した .ipa）の Info.plist に UISupportedExternalAccessoryProtocols
+# （jp.star-m.starpro・com.epson.escpos）が入っているか確かめ、無ければ止める（審査メモの PPID と食い違わないように）
 #
 # 前もって要るもの:
 #   - Xcode > Settings > Accounts に有料の Apple Developer のチームがある（TEAM_ID はそのチームの ID・10文字）
@@ -56,12 +60,56 @@ else
     DEVELOPMENT_TEAM="$TEAM_ID" CURRENT_PROJECT_VERSION="$BUILD_NO"
 fi
 
-echo "== App Store Connect にアップロード"
+# MFi の宣言（Star・EPSON の外部アクセサリーのプロトコル）が入っているか（MFi なしのときは入っていないか）
+check_mfi() {
+  local plist="$1" where="$2" got
+  got="$(/usr/libexec/PlistBuddy -c 'Print :UISupportedExternalAccessoryProtocols' "$plist" 2>/dev/null || true)"
+  if [ "${TENPO_NO_MFI:-}" = "1" ]; then
+    if [ -n "$got" ]; then echo "!! $where: TENPO_NO_MFI=1 but UISupportedExternalAccessoryProtocols is present"; exit 71; fi
+    echo "== $where: MFi なし（UISupportedExternalAccessoryProtocols なし）"
+    return
+  fi
+  for p in jp.star-m.starpro com.epson.escpos; do
+    if ! printf '%s\n' "$got" | grep -qx "[[:space:]]*$p"; then
+      echo "!! $where: UISupportedExternalAccessoryProtocols に $p がありません"; exit 71
+    fi
+  done
+  if ! /usr/libexec/PlistBuddy -c 'Print :NSBluetoothAlwaysUsageDescription' "$plist" >/dev/null 2>&1; then
+    echo "!! $where: NSBluetoothAlwaysUsageDescription がありません"; exit 71
+  fi
+  echo "== $where: MFi の宣言 OK（jp.star-m.starpro・com.epson.escpos・Bluetooth の説明）"
+}
+APP_DIR="$ARCHIVE/Products/Applications/TenpoOne.app"
+check_mfi "$APP_DIR/Info.plist" "archive"
+if [ "${TENPO_NO_MFI:-}" != "1" ] && [ ! -d "$APP_DIR/Frameworks/StarIO10.framework" ]; then
+  echo "!! archive: StarIO10.framework（StarXpand SDK）が入っていません"; exit 71
+fi
+
 OPTS="$OUT/ExportOptions.plist"
 if [ ! -f "$OPTS" ]; then
   cp tools/ExportOptions-AppStore.plist "$OPTS"
   /usr/libexec/PlistBuddy -c "Add :teamID string $TEAM_ID" "$OPTS"
 fi
+
+if [ "${TENPO_UPLOAD:-1}" = "0" ]; then
+  # 上げない：.ipa を書き出して中の Info.plist も確かめる（上げるのは確かめてから、TENPO_ARCHIVE=… でもう一度）
+  LOCAL_OPTS="$OUT/ExportOptions-local.plist"
+  cp "$OPTS" "$LOCAL_OPTS"
+  /usr/libexec/PlistBuddy -c "Set :destination export" "$LOCAL_OPTS"
+  echo "== 書き出し（上げない）"
+  xcodebuild -exportArchive \
+    -archivePath "$ARCHIVE" -exportOptionsPlist "$LOCAL_OPTS" -exportPath "$OUT/export" \
+    -allowProvisioningUpdates ${AUTH[@]+"${AUTH[@]}"}
+  IPA="$(ls "$OUT"/export/*.ipa | head -1)"
+  TMP_PLIST="$OUT/export/Info-from-ipa.plist"
+  unzip -p "$IPA" 'Payload/*.app/Info.plist' > "$TMP_PLIST"
+  check_mfi "$TMP_PLIST" "ipa"
+  echo "== できた（上げていない）：ビルド $BUILD_NO  $IPA"
+  echo "   上げるとき：TEAM_ID=$TEAM_ID TENPO_ARCHIVE=$ARCHIVE tools/release.sh"
+  exit 0
+fi
+
+echo "== App Store Connect にアップロード"
 if ! xcodebuild -exportArchive \
   -archivePath "$ARCHIVE" -exportOptionsPlist "$OPTS" -exportPath "$OUT/export" \
   -allowProvisioningUpdates ${AUTH[@]+"${AUTH[@]}"}; then

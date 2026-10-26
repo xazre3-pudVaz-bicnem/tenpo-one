@@ -34,13 +34,50 @@
 1. Apple Developer Program（会社：株式会社D&DREAM、¥12,980/年）に登録（Ronnie 本人）
 2. Xcode の Settings > Accounts に Apple ID を入れる（Ronnie 本人）
 3. App Store Connect にアプリを1つ作る（TENPO ONE・com.tenpoone.app）、APNs のキーを作って Vercel に入れる
-4. `TEAM_ID=チームID tools/release.sh`（v1.0 は `TENPO_NO_MFI=1` も付ける）→ archive・App Store Connect へアップロードまで1回で
+4. `TEAM_ID=チームID tools/release.sh` → archive・App Store Connect へアップロードまで1回で（v1.0・1.1 は `TENPO_NO_MFI=1` で出した。1.2 から MFi あり）
+   - 上げる前に確かめたいとき：`TENPO_UPLOAD=0` を付ける → archive と .ipa の書き出しだけ（MFi の宣言を archive・.ipa の両方で確かめる）。
+     上げるときは `TENPO_ARCHIVE=<できた .xcarchive>` を付けてもう一度
    → TestFlight で確かめる → 審査に出す（2026-10-17、Release の archive が通ることを確認ずみ・Xcode 27.1）
    - 審査用のデモアカウント（TENPO ONE DEMO）・スクリーンショット（iPad 13インチ・iPhone 6.9インチ）・プライバシーポリシー（/privacy）
    - プライバシーマニフェスト `Shared/PrivacyInfo.xcprivacy`（追跡なし・UserDefaults CA92.1・集めるデータ）。
      App Store Connect の「App のプライバシー」も同じ答えにする
-   - Star・EPSON の MFi の承認（PPID）がまだなら `TENPO_NO_MFI=1 python3 tools/gen_project.py` で作って出す
-     （Bluetooth・USB の MFi プリンターだけ使えない。LAN・Wi-Fi のプリンターは使える）。PPID がそろったら、ふつうに作って出し直す
+   - Star・EPSON の MFi の承認（PPID）は 2026-10-26 にそろった（下の「MFi の PPID と審査メモ」）。`TENPO_NO_MFI=1` はもう使わない
+
+## MFi の PPID と審査メモ（2026-10-26 承認。登録：TENPO ONE・com.tenpoone.app・1.2・D & DREAM Co., Ltd.）
+各社の承認メールにあった PPID そのまま（勝手に足したり減らしたりしない。TM-m30III-H は 2 つ来た）。
+App Store Connect → そのバージョン → App Review Information → **Notes** に、今のデモアカウントの説明の下へ貼る:
+
+```
+MFi accessories (Bluetooth / USB receipt printers)
+This app prints receipts and opens the cash drawer through MFi printers using the
+External Accessory protocols jp.star-m.starpro (Star Micronics) and com.epson.escpos (Seiko Epson).
+
+Star Micronics
+MFI PPID 121976-0036 (MCP31LB / mC-Print3)
+MFI PPID 121976-0037 (MCP21LB / mC-Print2)
+MFI PPID 121976-284503 (MCP31CBI / mC-Print3)
+MFI PPID 121976-805911 (TSP100IV-UEWB/SK)
+MFI PPID 121976-868316 (TSP100III BI)
+MFI PPID 121976-582212 (mPOP CBI)
+MFI PPID 121976-0025 (TSP650II Bi)
+MFI PPID 121976-0018 (TSP700II Bi)
+MFI PPID 121976-0019 (TSP800II Bi)
+MFI PPID 121976-443675 (SM-S230i)
+MFI PPID 121976-000847 (SM-T300i)
+MFI PPID 121976-639631 (SM-T400i)
+
+Seiko Epson
+MFI PPID 107611-391741 (TM-P20II)
+MFI PPID 107611-391741 (TM-P80II)
+MFI PPID 107611-0012 (TM-m10)
+MFI PPID 107611-0024 (TM-m30II)
+MFI PPID 107611-942892 / 107611-866056 (TM-m30III-H)
+```
+
+- 承認メール：Star（スター精密 プリンター PPIDのご連絡・2026-10-26 09:36）、EPSON（BS-Mfi@exc.epson.co.jp・2026-10-26 14:03）
+- 1.2 が公開されたあとに別のバージョン（1.3 など）で出すとき、各社の登録がバージョンごとか確かめる（登録したのは 1.2）
+- 使っているもの：Star＝StarXpand SDK（StarIO10。Bluetooth・USB・ペアリングずみの Star は External Accessory でも）、
+  EPSON＝SDK なしで External Accessory（`com.epson.escpos`）に ESC/POS を送る（ePOS SDK は入れていない）
 
 ## レシートプリンター（＋ドロア）を iPad と Bluetooth・USB でつなぐ（2026-10-13〜。Ronnie の iPad に入れて試し中）
 Ronnie「レシートプリンター＋ドロアは iPad と Bluetooth、チケットプリンターは LAN・Wi-Fi。ESC/POS・Star・RP-F10 を選べるように。Airレジ・funfo と同じ」
@@ -56,7 +93,8 @@ Ronnie「レシートプリンター＋ドロアは iPad と Bluetooth、チケ�
   印刷は `components/printing/direct-print-agent.tsx` が `/api/print/direct`（next-bt）で受け取り、`window.TenpoNative.bluetooth.print` に渡す
 - アプリ側：`ios/Shared/BluetoothPrinters.swift`、ブリッジは `WebViewController.swift`（btDiscover / btPrint → `window.__tenpoNativeReply`）
 - Info.plist（App/Info.plist）：`UISupportedExternalAccessoryProtocols`（jp.star-m.starpro・com.epson.escpos）、`NSBluetoothAlwaysUsageDescription`
-- **App Store に出すとき**：Bluetooth・USB（MFi）のアプリは各社の承認が要る（EPSON：フォーム → 約5営業日で PPID → 審査メモに書く。Star・SII も申請）
+- **App Store に出すとき**：Bluetooth・USB（MFi）のアプリは各社の承認が要る（EPSON：フォーム → 約5営業日で PPID → 審査メモに書く。Star・SII も申請）。
+  Star・EPSON は 2026-10-26 に承認ずみ（下）。SII はまだ
 - 自分の iPad で試すだけなら、無料の Apple ID で Xcode から入れられる（7日ごとに入れ直し）
 - ネイティブのオーダー・会計（試験中）は Web の上に**重ねて**出す（fullScreenCover にすると下の Web が「見えない」扱いで止まり、
   Bluetooth のレシート・ドロアの印刷＝DirectPrintAgent が出なくなる。#260）
