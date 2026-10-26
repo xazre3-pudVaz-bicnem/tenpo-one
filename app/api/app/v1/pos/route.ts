@@ -33,6 +33,7 @@ import { isNativeGourmetActionType, parseNativeGourmetAction } from '@/lib/nativ
 import { loadNativeGourmet } from '@/lib/native-gourmet-server';
 import { markGourmetSiteRegistered, regenerateGourmetMailToken, resolveGourmetMailImport, setGourmetMailEnabled } from '@/app/app/settings/reservation-book/actions';
 import { isNativeCashActionType, parseNativeCashAction, sumNativeDenominations, type NativeCashAction } from '@/lib/native-cash';
+import { directDrawerBytes } from '@/lib/drawer-bluetooth-server';
 import { loadNativeCash, loadNativeCashIo } from '@/lib/native-cash-server';
 import { isNativeQuickActionType, parseNativeQuickAction, type NativeQuickAction } from '@/lib/native-quick';
 import { loadNativeQuick } from '@/lib/native-quick-server';
@@ -1684,6 +1685,11 @@ export async function POST(request: Request) {
         const d = (st?.settings as { drawer?: { autoOpenOnCash?: boolean; openOnCashless?: boolean } } | null)?.drawer;
         const config = { autoOpenOnCash: d?.autoOpenOnCash ?? true, openOnCashless: d?.openOnCashless ?? false };
         if (!shouldOpenDrawer(action.methods, config)) return json({ ok: true, opened: false });
+        // iPad が Bluetooth・USB でつないでいるレシートプリンターにドロアがつながっていれば、キューに積まずにその場で開く（receipt を返す）
+        if (action.bluetoothLink) {
+          const direct = await directDrawerBytes(supabase, order.store_id as string, action.bluetoothLink).catch(() => null);
+          if (direct) return json({ ok: true, opened: true, receipt: direct });
+        }
         const res = await enqueueDrawerKick(order.store_id as string);
         return json({ ok: true, opened: res.ok, error: res.ok ? undefined : res.error });
       }
@@ -1907,22 +1913,25 @@ async function runCashAction(ctx: SessionContext, action: NativeCashAction): Pro
       const r = await openRegister(store.id, action.registerId, openingFloat, action.denominations, action.reason, action.clerkName);
       return r.ok ? { ok: true, openingFloat } : { ok: false, error: r.error };
     }
+    // receipt＝iPad がそのまま Bluetooth・USB で出す紙（会計の checkout と同じ形。返したときはキューに積んでいない）
     case 'cashClose': {
       const counted = sumNativeDenominations(action.denominations);
-      const r = await closeRegister(action.sessionId, counted, action.reason, action.denominations, action.clerkName);
-      return r.ok ? { ok: true, printWarning: r.printWarning ?? null, signOutAfter: r.signOutAfter === true } : { ok: false, error: r.error };
+      const r = await closeRegister(action.sessionId, counted, action.reason, action.denominations, action.clerkName, action.bluetoothLink ?? null);
+      return r.ok
+        ? { ok: true, printWarning: r.printWarning ?? null, signOutAfter: r.signOutAfter === true, ...(r.receipt ? { receipt: r.receipt } : {}) }
+        : { ok: false, error: r.error };
     }
     case 'cashReprint': {
-      const r = await reprintRegisterReport(action.sessionId);
-      return r.ok ? { ok: true } : { ok: false, error: r.error };
+      const r = await reprintRegisterReport(action.sessionId, action.bluetoothLink ?? null);
+      return r.ok ? { ok: true, ...(r.receipt ? { receipt: r.receipt } : {}) } : { ok: false, error: r.error };
     }
     case 'cashSettlement': {
-      const r = await printSettlementReport(action.sessionId);
-      return r.ok ? { ok: true } : { ok: false, error: r.error };
+      const r = await printSettlementReport(action.sessionId, action.bluetoothLink ?? null);
+      return r.ok ? { ok: true, ...(r.receipt ? { receipt: r.receipt } : {}) } : { ok: false, error: r.error };
     }
     case 'periodReport': {
-      const r = await printPeriodReport(action.from, action.to, action.clerkName);
-      return r.ok ? { ok: true } : { ok: false, error: r.error };
+      const r = await printPeriodReport(action.from, action.to, action.clerkName, action.bluetoothLink ?? null);
+      return r.ok ? { ok: true, ...(r.receipt ? { receipt: r.receipt } : {}) } : { ok: false, error: r.error };
     }
     case 'cashEntry': {
       const store = ctx.currentStore ?? ctx.stores[0];

@@ -10,6 +10,10 @@ import { actionFail, actionOk, type ActionResult } from '@/lib/action-error';
 import { enqueuePeriodReportPrint, enqueueRegisterReportPrint } from '@/lib/register-report-loader';
 import { parsePeriodReportRange } from '@/lib/period-report';
 import { loadStoreClerks } from '@/lib/pos-clerks-server';
+import type { CheckoutBluetoothLink, CheckoutReceipt } from '@/lib/checkout-bluetooth';
+
+/** 精算レシート・決算レポートの印刷の結果。receipt＝iPad がそのまま Bluetooth・USB で出すバイト列（キューには積んでいない） */
+export type ReportPrintResult = { ok: true; receipt?: CheckoutReceipt } | { ok: false; error: string };
 import type { CloseRegisterResult, DenominationJson } from '@/lib/register-report';
 import { expectedCash } from '@/lib/metrics';
 import { registerDayFlowActive } from '@/lib/register-day';
@@ -245,7 +249,9 @@ export async function closeRegister(
   differenceReason: string | null,
   denominations: DenominationJson | null = null,
   /** レジで選んでいる担当者。精算レシートの「担当者」に出す（2026-09-24 店舗要望） */
-  clerkName: string | null = null
+  clerkName: string | null = null,
+  /** この iPad が Bluetooth・USB でつないでいるレシートプリンター（ネイティブ。あれば精算レシートをその場で出すバイト列を返す） */
+  bluetoothLink: CheckoutBluetoothLink | null = null
 ): Promise<CloseRegisterResult> {
   const ctx = await requirePermission('register.operate');
   if (!Number.isInteger(countedCash) || countedCash < 0) {
@@ -372,10 +378,13 @@ export async function closeRegister(
   // 精算レシートを iPad（印刷係）がつないで出すとき（Bluetooth・USB など、ほかに LAN で動くレシートプリンターが無い店）は、
   // 出し終わるまでログアウトさせない（すぐログアウトすると印刷係が取りに来られず出なかった。2026-10-25 お店「精算レシートが出てこなかった」）
   let keepSignedIn = false;
+  let receipt: CheckoutReceipt | undefined;
   try {
-    const printed = await enqueueRegisterReportPrint(supabase, sessionId, ctx.userId, clerkName);
+    const printed = await enqueueRegisterReportPrint(supabase, sessionId, ctx.userId, clerkName, 'main', bluetoothLink);
     if (!printed.ok) printWarning = printed.error ?? 'レジ精算レシートを印刷できませんでした';
-    keepSignedIn = printed.ok && printed.viaDevice === true;
+    receipt = printed.direct;
+    // その場で出すバイト列を返したときは、アプリが出し終えてからログアウトする（ログアウトを止めなくてよい）
+    keepSignedIn = printed.ok && printed.viaDevice === true && !printed.direct;
   } catch (err) {
     await captureServerError(err, {
       route: 'cash.close_register.print',
@@ -389,14 +398,14 @@ export async function closeRegister(
   revalidatePath('/app/pos');
   // レジ端末は締めたら閉店。そのままログアウトしてレジのログイン画面へ戻す（2026-09-24 店舗要望）。
   // ただし精算レシートを iPad が出すときはログアウトしない（出たあと、担当者がログアウトする）
-  return { ok: true, printWarning, signOutAfter: ctx.isRegisterDevice === true && !keepSignedIn };
+  return { ok: true, printWarning, signOutAfter: ctx.isRegisterDevice === true && !keepSignedIn, ...(receipt ? { receipt } : {}) };
 }
 
 /**
  * レジ精算レシートの再印刷（締め済み・開局中どちらでも可。開局中は「途中集計」として出る）。
  * 紙詰まり・プリンター未接続で出なかったときと、本部が控えを取りたいとき用。
  */
-export async function reprintRegisterReport(sessionId: string): Promise<ActionResult> {
+export async function reprintRegisterReport(sessionId: string, bluetoothLink: CheckoutBluetoothLink | null = null): Promise<ReportPrintResult> {
   const ctx = await requirePermission('register.operate');
   const supabase = await createClient();
   const { data: session } = await supabase
@@ -407,16 +416,16 @@ export async function reprintRegisterReport(sessionId: string): Promise<ActionRe
   if (!session || !ctx.stores.some((s) => s.id === session.store_id)) {
     return actionFail('対象のレジセッションが見つかりません');
   }
-  const printed = await enqueueRegisterReportPrint(supabase, sessionId, ctx.userId);
+  const printed = await enqueueRegisterReportPrint(supabase, sessionId, ctx.userId, null, 'main', bluetoothLink);
   if (!printed.ok) return actionFail(printed.error ?? 'レジ精算レシートを印刷できませんでした');
-  return actionOk();
+  return printed.direct ? { ok: true, receipt: printed.direct } : actionOk();
 }
 
 /**
  * 精算情報の紙（釣銭準備金・現金受領・想定金額・在高実績・差額・翌準備金・預入金・金種）を印刷する。
  * 本紙には出さず、要るときだけここから（2026-09-28 Ronnie「精算情報はレジクローズのオプション」）。
  */
-export async function printSettlementReport(sessionId: string): Promise<ActionResult> {
+export async function printSettlementReport(sessionId: string, bluetoothLink: CheckoutBluetoothLink | null = null): Promise<ReportPrintResult> {
   const ctx = await requirePermission('register.operate');
   const supabase = await createClient();
   const { data: session } = await supabase
@@ -427,9 +436,9 @@ export async function printSettlementReport(sessionId: string): Promise<ActionRe
   if (!session || !ctx.stores.some((s) => s.id === session.store_id)) {
     return actionFail('対象のレジセッションが見つかりません');
   }
-  const printed = await enqueueRegisterReportPrint(supabase, sessionId, ctx.userId, null, 'settlement');
+  const printed = await enqueueRegisterReportPrint(supabase, sessionId, ctx.userId, null, 'settlement', bluetoothLink);
   if (!printed.ok) return actionFail(printed.error ?? '精算情報を印刷できませんでした');
-  return actionOk();
+  return printed.direct ? { ok: true, receipt: printed.direct } : actionOk();
 }
 
 /**
@@ -831,14 +840,19 @@ export async function reopenStoreDay(
  * 中身はレジ精算レシートと同じ並びで、店舗全体の営業日 from〜to（lib/register-report-loader.ts の loadPeriodReportData）。
  * 2026-10-26 Ronnie「Yo thau bata native ra web bata 決算レポート nikalna milne banau … rezi printer bata print」
  */
-export async function printPeriodReport(from: string, to: string, clerkName: string | null = null): Promise<ActionResult> {
+export async function printPeriodReport(
+  from: string,
+  to: string,
+  clerkName: string | null = null,
+  bluetoothLink: CheckoutBluetoothLink | null = null
+): Promise<ReportPrintResult> {
   const ctx = await requirePermission('register.operate');
   const store = ctx.currentStore ?? ctx.stores[0] ?? null;
   if (!store) return actionFail('店舗がありません');
   const range = parsePeriodReportRange(from, to);
   if (!range.ok) return actionFail(range.error);
   const supabase = await createClient();
-  const printed = await enqueuePeriodReportPrint(supabase, store.id, range.from, range.to, ctx.userId, clerkName);
+  const printed = await enqueuePeriodReportPrint(supabase, store.id, range.from, range.to, ctx.userId, clerkName, bluetoothLink);
   if (!printed.ok) return actionFail(printed.error ?? '決算レポートを印刷できませんでした');
-  return actionOk();
+  return printed.direct ? { ok: true, receipt: printed.direct } : actionOk();
 }

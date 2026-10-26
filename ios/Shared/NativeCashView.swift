@@ -89,6 +89,26 @@ struct NCActionResult: Decodable {
     let openingFloat: Int?
     let printWarning: String?
     let signOutAfter: Bool?
+    /// iPad がそのまま Bluetooth・USB で出す紙（精算レシート・精算情報。会計のレシートと同じ形。サーバーはキューに積んでいない）
+    let receipt: APICheckoutReceipt?
+}
+
+/// サーバーが返した「iPad がそのまま出す紙」を、この iPad の Bluetooth・USB のプリンターで出す。
+/// nil＝出すものが無い（キューに積まれた・LAN のプリンターが出す）、true＝出せた、false＝出せなかった。
+/// 会計のレシート（NativePosModels の checkout）と同じ送り方。2026-10-26 Ronnie「App bata Bluetooth le rezi chalne」
+@MainActor
+func nativePrintDirect(_ r: APICheckoutReceipt?) async -> Bool? {
+    guard let r, let bytes = Data(base64Encoded: r.data), !bytes.isEmpty,
+          ["star", "epson", "sii", "escpos"].contains(r.maker), ["bluetooth", "usb"].contains(r.via) else { return nil }
+    return await withCheckedContinuation { (cont: CheckedContinuation<Bool, Never>) in
+        WebViewController.printBluetooth(deviceId: r.deviceId, maker: r.maker, via: r.via, data: bytes) { ok, _ in cont.resume(returning: ok) }
+    }
+}
+
+/// この iPad が Bluetooth・USB でつないでいるレシートプリンター（サーバーへ送る形。無ければ nil）
+@MainActor
+func nativeBluetoothLink() async -> [String: Any]? {
+    await WebViewController.current?.checkoutBluetoothLink()
 }
 
 /// 金種（レジのトレイの順。Web の CASH_DENOMINATIONS と同じ）
@@ -513,7 +533,9 @@ struct NativeCashView: View {
             list.append(("レジクローズの担当者を選んでください。", "Please select the staff member who is closing the register."))
         }
         if !list.isEmpty { problems = list; problemOpen = true; return }
-        let body: [String: Any] = ["type": "cashClose", "sessionId": s.id, "denominations": denomJSON, "reason": reason.isEmpty ? NSNull() : reason, "clerkName": clerk?.name ?? NSNull()]
+        var body: [String: Any] = ["type": "cashClose", "sessionId": s.id, "denominations": denomJSON, "reason": reason.isEmpty ? NSNull() : reason, "clerkName": clerk?.name ?? NSNull()]
+        // Bluetooth・USB のレシートプリンターだけの店は、精算レシートをこの iPad からその場で出す（出してからログアウト）
+        if let link = await nativeBluetoothLink() { body["bluetoothLink"] = link }
         guard let r = await model.act(body) else {
             problems = [(model.error ?? "クローズに失敗しました", "The register could not be closed. Please check the message above and try again.")]
             model.error = nil
@@ -522,6 +544,12 @@ struct NativeCashView: View {
         }
         model.toast = r.printWarning.map { "\(s.registerName)をクローズしました。\($0)" } ?? "\(s.registerName)をクローズしました。レジ精算レシートを印刷しています"
         counts = [:]; reason = ""
+        if let printed = await nativePrintDirect(r.receipt), !printed {
+            // 出せなかった：ログアウトせずに残す（下の「レジの履歴」から精算レシートを出し直せる）
+            model.error = "\(s.registerName)はクローズしました。精算レシートを Bluetooth のプリンターで出せませんでした。プリンターの電源と Bluetooth を確かめて、「レジの履歴」から印刷してください"
+            await model.refresh(silent: true)
+            return
+        }
         if r.signOutAfter == true {
             _ = await model.act(["type": "cashSignOut"])
             onSignedOut()
@@ -675,10 +703,10 @@ struct NativeCashView: View {
                 HStack(spacing: 10) {
                     Spacer()
                     smallButton("精算情報を印刷 / Cash count") {
-                        Task { if await model.act(["type": "cashSettlement", "sessionId": c.id]) != nil { model.toast = "精算情報を印刷しています" } }
+                        Task { await printAct("cashSettlement", sessionId: c.id, toast: "精算情報を印刷しています") }
                     }
                     smallButton("精算レシートを再印刷 / Reprint") {
-                        Task { if await model.act(["type": "cashReprint", "sessionId": c.id]) != nil { model.toast = "レジ精算レシートを印刷しています" } }
+                        Task { await printAct("cashReprint", sessionId: c.id, toast: "レジ精算レシートを印刷しています") }
                     }
                 }
             }
@@ -736,16 +764,28 @@ struct NativeCashView: View {
                     Spacer()
                     if !r.isOpen {
                         smallButton("精算情報 / Cash count") {
-                            Task { if await model.act(["type": "cashSettlement", "sessionId": r.id]) != nil { model.toast = "精算情報を印刷しています" } }
+                            Task { await printAct("cashSettlement", sessionId: r.id, toast: "精算情報を印刷しています") }
                         }
                     }
                     smallButton(r.isOpen ? "途中集計を印刷 / Interim" : "精算レシートを印刷 / Reprint") {
-                        Task { if await model.act(["type": "cashReprint", "sessionId": r.id]) != nil { model.toast = r.isOpen ? "途中集計の精算レシートを印刷しています" : "レジ精算レシートを印刷しています" } }
+                        Task { await printAct("cashReprint", sessionId: r.id, toast: r.isOpen ? "途中集計の精算レシートを印刷しています" : "レジ精算レシートを印刷しています") }
                     }
                 }
             }
         }
         .padding(.vertical, 10)
+    }
+
+    /// 精算レシート・精算情報を出す（Bluetooth・USB だけの店はサーバーが返した紙をこの iPad から出す）
+    private func printAct(_ type: String, sessionId: String, toast: String) async {
+        var body: [String: Any] = ["type": type, "sessionId": sessionId]
+        if let link = await nativeBluetoothLink() { body["bluetoothLink"] = link }
+        guard let r = await model.act(body) else { return }
+        if let printed = await nativePrintDirect(r.receipt), !printed {
+            model.error = "Bluetooth のプリンターで印刷できませんでした。プリンターの電源と iPad の Bluetooth を確かめてください"
+            return
+        }
+        model.toast = toast
     }
 
     // MARK: 部品

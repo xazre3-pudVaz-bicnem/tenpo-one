@@ -1,6 +1,9 @@
 import 'server-only';
 import { devicePrinterId } from '@/lib/device-printer-server';
 import { pickRegisterReportPrinter, type ReportPrinterRow } from '@/lib/register-report-printer';
+import type { CheckoutBluetoothLink, CheckoutReceipt } from '@/lib/checkout-bluetooth';
+import { bluetoothMakerOf } from '@/lib/direct-print';
+import { eposXmlToEscPos } from '@/lib/escpos';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { METHOD_LABELS } from '@/components/cash/labels';
 import { formatDateTime, weekdayJa } from '@/lib/format';
@@ -637,6 +640,11 @@ export async function loadPeriodReportData(
 export interface RegisterReportPrintResult {
   ok: boolean;
   error?: string;
+  /**
+   * キューに積まず、iPad がそのまま Bluetooth・USB で出すバイト列（会計のレシートの checkoutBluetoothReceipt と同じ形）。
+   * 出し先が iPad のプリンターで、iPad がつないでいるプリンター（link）を送ってきたときだけ。返したときはキューに積んでいない（2 枚出ない）
+   */
+  direct?: CheckoutReceipt;
   /** 出し先が iPad（印刷係）がつないで出すプリンター（Bluetooth・USB など）。iPad がログアウトすると出ないので、呼ぶ側はログアウトさせない */
   viaDevice?: boolean;
 }
@@ -652,11 +660,13 @@ export async function enqueueRegisterReportPrint(
   /** レジで選んでいる担当者（レジ閉めをした人）。無ければログインアカウントの名前で出す */
   clerkName?: string | null,
   /** 'main'＝レジ精算（本紙）。'settlement'＝精算情報の紙（釣銭準備金〜金種。レジクローズの「精算情報を印刷」） */
-  kind: 'main' | 'settlement' = 'main'
+  kind: 'main' | 'settlement' = 'main',
+  /** この iPad が Bluetooth・USB でつないでいるレシートプリンター（ネイティブのアプリが送る。lib/checkout-bluetooth.ts） */
+  link: CheckoutBluetoothLink | null = null
 ): Promise<RegisterReportPrintResult> {
   const loaded = await loadRegisterReportData(supabase, sessionId, clerkName);
   if (!loaded) return { ok: false, error: '対象のレジセッションが見つかりません' };
-  return enqueueReportJob(supabase, loaded, userId, kind === 'settlement' ? 'settlement' : 'main', sessionId);
+  return enqueueReportJob(supabase, loaded, userId, kind === 'settlement' ? 'settlement' : 'main', sessionId, link);
 }
 
 /**
@@ -669,11 +679,46 @@ export async function enqueuePeriodReportPrint(
   from: string,
   to: string,
   userId: string,
-  clerkName?: string | null
+  clerkName?: string | null,
+  link: CheckoutBluetoothLink | null = null
 ): Promise<RegisterReportPrintResult> {
   const loaded = await loadPeriodReportData(supabase, storeId, from, to, clerkName);
   if (!loaded) return { ok: false, error: '店舗が見つかりません' };
-  return enqueueReportJob(supabase, loaded, userId, 'period', null);
+  return enqueueReportJob(supabase, loaded, userId, 'period', null, link);
+}
+
+/**
+ * iPad が Bluetooth・USB でつないでいるレシートプリンターへ、そのまま送るバイト列（キューに積まない）。
+ * 会計のレシート（lib/checkout-receipt-server.ts の checkoutBluetoothReceipt）と同じ確かめ方：その店の有効なレシートプリンターで、
+ * つなぎ方（bluetooth・usb）とメーカーが iPad の言うものと同じときだけ。使えなければ null（今まで通りキューへ）
+ * 2026-10-26 Ronnie「App bata Bluetooth le rezi chalne tyo pani banau」→「Sabai」
+ */
+async function directReportBytes(
+  supabase: AnyClient,
+  loaded: { data: RegisterReportData; storeId: string },
+  link: CheckoutBluetoothLink,
+  kind: 'main' | 'settlement' | 'period'
+): Promise<CheckoutReceipt | null> {
+  const { data: printer, error } = await supabase
+    .from('printer_configs')
+    .select('id, maker, connection_type, paper_width_mm')
+    .eq('id', link.printerId)
+    .eq('store_id', loaded.storeId)
+    .eq('status', 'active')
+    .eq('usage', 'receipt')
+    .maybeSingle();
+  if (error || !printer) return null;
+  const row = printer as { maker: string | null; connection_type: string | null; paper_width_mm: number | null };
+  if (!['bluetooth', 'usb'].includes(row.connection_type ?? '')) return null;
+  const maker = bluetoothMakerOf(row.maker);
+  if (!maker || maker !== link.maker || row.connection_type !== link.via) return null;
+  const paper = row.paper_width_mm === 58 ? 58 : 80;
+  const layout = kind === 'settlement' ? layoutSettlementReport : layoutRegisterReport;
+  const bytes =
+    maker === 'star'
+      ? kitchenTicketStarPrnt(layout(loaded.data, { paperWidth: paper, ...STAR_WIDTH_OPTIONS }))
+      : Buffer.from(eposXmlToEscPos(kitchenTicketEpos(layout(loaded.data, { columns: eposCols(paper), yenFullWidth: true }))));
+  return { data: bytes.toString('base64'), deviceId: link.deviceId, maker, via: link.via };
 }
 
 /** レポートの紙を 1 枚、レシートプリンターのキューに積む（レジ精算・精算情報・期間の決算レポートで共通） */
@@ -682,7 +727,8 @@ async function enqueueReportJob(
   loaded: { data: RegisterReportData; storeId: string; organizationId: string },
   userId: string,
   kind: 'main' | 'settlement' | 'period',
-  sessionId: string | null
+  sessionId: string | null,
+  link: CheckoutBluetoothLink | null = null
 ): Promise<RegisterReportPrintResult> {
   const printerQuery = (columns: string) =>
     supabase
@@ -707,6 +753,12 @@ async function enqueueReportJob(
     return { ok: false, error: `レシートプリンターが未設定のため、${kind === 'period' ? '決算レポート' : 'レジ精算レシート'}を印刷できません` };
   }
   const printer = choice.printer;
+  // 出し先が iPad のプリンター（Bluetooth・USB だけの店）で、この iPad がつないでいるなら、キューに積まずにその場で出す
+  // （レジ締めのあとすぐログアウトしても出る。会計のレシートと同じ）
+  if (choice.viaDevice && link) {
+    const direct = await directReportBytes(supabase, loaded, link, kind).catch(() => null);
+    if (direct) return { ok: true, viaDevice: true, direct };
+  }
 
   const paper = printer.paper_width_mm === 58 ? 58 : 80;
   const layout = kind === 'settlement' ? layoutSettlementReport : layoutRegisterReport;

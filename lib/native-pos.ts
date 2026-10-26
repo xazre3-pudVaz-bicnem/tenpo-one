@@ -291,7 +291,7 @@ export type NativePosAction =
   | { type: 'steraCheck'; requestId: string }
   | { type: 'steraCancel'; requestId: string }
   /** 会計のあとドロアを開く（店の設定：現金は開く・キャッシュレスは設定しだい。Web のレジと同じ） */
-  | { type: 'drawer'; orderId: string; methods: NativePayMethod[] }
+  | { type: 'drawer'; orderId: string; methods: NativePayMethod[]; bluetoothLink?: CheckoutBluetoothLink }
   /** iPad から LAN で直接出した厨房伝票の結果（/api/print/direct の done と同じ） */
   | { type: 'printDone'; printerId: string; jobId: string; result: 'printed' | 'unreachable' | 'failed'; code: string | null };
 
@@ -454,7 +454,10 @@ export function parseNativePosAction(raw: unknown): Parsed {
     case 'drawer': {
       if (!isUuid(b.orderId) || !Array.isArray(b.methods) || b.methods.length > 10) return bad();
       if (!b.methods.every((m) => (NATIVE_PAY_METHODS as readonly unknown[]).includes(m))) return bad();
-      return { ok: true, action: { type: 'drawer', orderId: b.orderId, methods: b.methods as NativePayMethod[] } };
+      // この iPad が Bluetooth・USB でつないでいるレシートプリンター（あればドロアをその場で開く。2026-10-26 Ronnie）
+      const drawerLink = b.bluetoothLink == null ? null : parseCheckoutBluetoothLink(b.bluetoothLink);
+      if (b.bluetoothLink != null && !drawerLink) return bad();
+      return { ok: true, action: { type: 'drawer', orderId: b.orderId, methods: b.methods as NativePayMethod[], ...(drawerLink ? { bluetoothLink: drawerLink } : {}) } };
     }
     case 'steraCheck':
     case 'steraCancel':

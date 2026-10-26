@@ -844,7 +844,10 @@ final class NativeOrderModel: ObservableObject {
         if r.alreadyPaid == true { notice = "この伝票はすでに会計済みです" }
         // ドロア（店の設定で開くか決める）
         let methods = Array(Set(payments.map { $0.method.rawValue }))
-        _ = try? await NativeAPI.shared.act(["type": "drawer", "orderId": orderId, "methods": methods], throwOnFail: false)
+        // ドロアが Bluetooth・USB のレシートプリンターにつながっていれば、サーバーが返したバイト列をこの iPad から送って開く（2026-10-26 Ronnie）
+        var drawerBody: [String: Any] = ["type": "drawer", "orderId": orderId, "methods": methods]
+        if let link = await nativeBluetoothLink() { drawerBody["bluetoothLink"] = link }
+        if let d = try? await NativeAPI.shared.act(drawerBody, throwOnFail: false), d.ok { _ = await nativePrintDirect(d.receipt) }
         return true
     }
 
