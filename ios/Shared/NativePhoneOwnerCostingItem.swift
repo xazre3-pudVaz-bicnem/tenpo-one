@@ -190,12 +190,12 @@ struct NPZCoItemView: View {
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("原価率").font(.system(size: 12, weight: .bold)).foregroundColor(NT.ink3)
-                    Text(NPZCoMath.pct(p.costRate)).font(.system(size: 36, weight: .heavy)).foregroundColor(tone).monospacedDigit()
+                    Text(NPZCoMath.pct(p.costRate)).font(.system(size: 36, weight: NT.strong)).foregroundColor(tone).monospacedDigit()
                 }
                 Spacer()
                 VStack(alignment: .trailing, spacing: 2) {
                     Text("粗利益").font(.system(size: 12, weight: .bold)).foregroundColor(NT.ink3)
-                    Text(NPZ.yen(p.grossProfit)).font(.system(size: 22, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit()
+                    Text(NPZ.yen(p.grossProfit)).font(.system(size: 22, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit()
                     Text("粗利率 \(NPZCoMath.pct(p.grossProfitRate))").font(.system(size: 11.5, weight: .semibold)).foregroundColor(NT.ink3).monospacedDigit()
                 }
             }
@@ -229,7 +229,7 @@ struct NPZCoItemView: View {
                             if let n = l.note, !n.isEmpty { Text(n).font(.system(size: 11.5)).foregroundColor(NT.ink2).lineLimit(2) }
                         }
                         Spacer(minLength: 6)
-                        Text(NPZ.yen(l.lineCost)).font(.system(size: 15, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit()
+                        Text(NPZ.yen(l.lineCost)).font(.system(size: 15, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit()
                         Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold)).foregroundColor(NT.ink3).padding(.top, 3)
                     }
                     .padding(.vertical, 4)
@@ -271,7 +271,7 @@ struct NPZCoLineSheet: View {
     var body: some View {
         NPOCSheetFrame(title: line == nil ? "食材を追加" : "食材を編集", confirmText: model.busy ? "保存中…" : (line == nil ? "追加する" : "更新する"), busy: model.busy,
                        onCancel: onClose, onConfirm: { Task { await save() } }) {
-            Text(payload.item.name).font(.system(size: 15, weight: .heavy)).foregroundColor(NT.ink2)
+            Text(payload.item.name).font(.system(size: 15, weight: NT.strong)).foregroundColor(NT.ink2)
             NPZPickButton(label: "食材", value: option?.name ?? (ingredientId == line?.inventoryItemId ? line?.ingredientName : nil), placeholder: "食材を選ぶ") { picking = true }
             NPZTextField(label: "使用量（在庫単位）", text: $quantity, placeholder: "例：120", number: true, suffix: unit)
             NPOCField(label: "メモ（任意）") {
@@ -324,7 +324,7 @@ struct NPZCoLineSheet: View {
             HStack(alignment: .firstTextBaseline) {
                 Text("原価率").font(.system(size: 13, weight: .semibold)).foregroundColor(NT.ink3)
                 Spacer()
-                Text(NPZCoMath.pct(pv.rate)).font(.system(size: 22, weight: .heavy)).foregroundColor(NPZCoMath.tone(pv.rate)).monospacedDigit()
+                Text(NPZCoMath.pct(pv.rate)).font(.system(size: 22, weight: NT.strong)).foregroundColor(NPZCoMath.tone(pv.rate)).monospacedDigit()
             }
             NPZInfoRow(label: "粗利益", value: NPZ.yen(pv.profit))
             if pv.missing > 0 {

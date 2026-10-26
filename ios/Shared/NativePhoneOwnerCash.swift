@@ -199,7 +199,7 @@ struct NOMRegisterTab: View {
                 Spacer()
                 Text("営業日 \(NOS.md(p.businessDate))").font(.system(size: 11, weight: .bold)).foregroundColor(.white.opacity(0.75))
             }
-            Text(p.sessions.isEmpty ? "—" : NOS.yen(p.theoretical)).font(.system(size: 32, weight: .heavy)).foregroundColor(.white).monospacedDigit()
+            Text(p.sessions.isEmpty ? "—" : NOS.yen(p.theoretical)).font(.system(size: 32, weight: NT.strong)).foregroundColor(.white).monospacedDigit()
                 .lineLimit(1).minimumScaleFactor(0.5)
             Text(p.sessions.isEmpty ? "開局中のレジがありません" : "釣銭準備金＋現金売上＋入金−出金−現金返金（開局中 \(p.sessions.count)台）")
                 .font(.system(size: 11)).foregroundColor(.white.opacity(0.8))
@@ -234,7 +234,7 @@ struct NOMRegisterTab: View {
         Button(action: action) {
             VStack(spacing: 4) {
                 Image(systemName: icon).font(.system(size: 26, weight: .bold)).foregroundColor(tint)
-                Text(ja).font(.system(size: 18, weight: .heavy)).foregroundColor(NT.ink)
+                Text(ja).font(.system(size: 18, weight: NT.strong)).foregroundColor(NT.ink)
                 Text(en).font(.system(size: 10.5, weight: .semibold)).foregroundColor(NT.ink3)
             }
             .frame(maxWidth: .infinity).frame(height: 104)
@@ -249,7 +249,7 @@ struct NOMRegisterTab: View {
             HStack(spacing: 6) {
                 NOSBadge(text: "仮払い・精算待ち", color: NT.warn)
                 Spacer()
-                Text(NOS.yen(a.amount)).font(.system(size: 17, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit()
+                Text(NOS.yen(a.amount)).font(.system(size: 17, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit()
             }
             Text([a.main, a.sub ?? ""].filter { !$0.isEmpty }.joined(separator: " ・ ")).font(.system(size: 13.5, weight: .semibold)).foregroundColor(NT.ink).lineLimit(3)
             Text("\(a.createdByName ?? "") ・ \(NOM.hm(a.time)) に持ち出し").font(.system(size: 11.5)).foregroundColor(NT.ink3)
@@ -283,7 +283,7 @@ struct NOMRegisterTab: View {
         return HStack(alignment: .top, spacing: 10) {
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
-                    Text(NOM.hm(r.time)).font(.system(size: 12.5, weight: .heavy)).foregroundColor(NT.purpleDeep).monospacedDigit()
+                    Text(NOM.hm(r.time)).font(.system(size: 12.5, weight: NT.strong)).foregroundColor(NT.purpleDeep).monospacedDigit()
                     NOSBadge(text: label, color: color)
                     if r.pending { NOSBadge(text: "承認待ち", color: NT.warn) }
                 }
@@ -298,7 +298,7 @@ struct NOMRegisterTab: View {
             Spacer(minLength: 6)
             VStack(alignment: .trailing, spacing: 6) {
                 Text("\(r.direction == "in" ? "+" : r.direction == "out" ? "−" : "")\(NOS.yen(r.amount))")
-                    .font(.system(size: 16, weight: .heavy)).foregroundColor(r.direction == "in" ? NT.ok : NT.ink).monospacedDigit()
+                    .font(.system(size: 16, weight: NT.strong)).foregroundColor(r.direction == "in" ? NT.ok : NT.ink).monospacedDigit()
                 receipt(r, p)
             }
         }
@@ -509,7 +509,7 @@ struct NOMCashEntrySheet: View {
                 HStack(spacing: 8) {
                     NOMAmountBox(label: "お釣り", value: change, active: target == "change", big: false) { target = "change" }
                     Button { change = "0"; target = "change" } label: {
-                        Text("ちょうど").font(.system(size: 15, weight: .heavy)).foregroundColor(change == "0" ? .white : NT.purpleDeep)
+                        Text("ちょうど").font(.system(size: 15, weight: NT.strong)).foregroundColor(change == "0" ? .white : NT.purpleDeep)
                             .padding(.horizontal, 16).frame(height: 52)
                             .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(change == "0" ? NT.purple : NT.lilac))
                     }
@@ -519,7 +519,7 @@ struct NOMCashEntrySheet: View {
                     Text("使った金額（レジから減る分）").font(.system(size: 12.5, weight: .semibold)).foregroundColor(NT.ink2)
                     Spacer()
                     let ok = taken > 0 && !change.isEmpty && spent > 0
-                    Text(NT.yen(ok ? spent : 0)).font(.system(size: 18, weight: .heavy)).monospacedDigit().foregroundColor(ok ? NT.purpleDeep : NT.ink3)
+                    Text(NT.yen(ok ? spent : 0)).font(.system(size: 18, weight: NT.strong)).monospacedDigit().foregroundColor(ok ? NT.purpleDeep : NT.ink3)
                 }
                 .padding(.horizontal, 4)
             }

@@ -228,10 +228,10 @@ struct NPZCountView: View {
         return VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
                 Image(systemName: "calendar").font(.system(size: 15, weight: .bold)).foregroundColor(NT.purple)
-                Text(NPZ.date(d.countDate)).font(.system(size: 18, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit()
+                Text(NPZ.date(d.countDate)).font(.system(size: 18, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit()
                 NOSBadge(text: st.0, color: st.1)
                 Spacer()
-                Text("\(entered)/\(total)品 入力").font(.system(size: 13, weight: .heavy)).foregroundColor(entered == total ? NT.ok : NT.ink2).monospacedDigit()
+                Text("\(entered)/\(total)品 入力").font(.system(size: 13, weight: NT.strong)).foregroundColor(entered == total ? NT.ok : NT.ink2).monospacedDigit()
             }
             GeometryReader { g in
                 ZStack(alignment: .leading) {
@@ -266,7 +266,7 @@ struct NPZCountView: View {
         let diff = v.map { $0 - it.expectedQuantity }
         return VStack(alignment: .leading, spacing: 9) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(it.name).font(.system(size: 16, weight: .heavy)).foregroundColor(NT.ink).lineLimit(2)
+                Text(it.name).font(.system(size: 16, weight: NT.strong)).foregroundColor(NT.ink).lineLimit(2)
                 Spacer(minLength: 6)
                 Text("理論 \(NPZ.q(it.expectedQuantity))\(it.unit)").font(.system(size: 12.5, weight: .bold)).foregroundColor(NT.ink3).monospacedDigit()
                     .lineLimit(1)
@@ -279,8 +279,8 @@ struct NPZCountView: View {
                                   onMinus: { model.step(it, -1) }, onPlus: { model.step(it, 1) }, onTap: { editing = it })
                     Button { model.set(it.id, it.expectedQuantity) } label: {
                         VStack(spacing: 1) {
-                            Image(systemName: "equal").font(.system(size: 15, weight: .heavy))
-                            Text("理論").font(.system(size: 10, weight: .heavy))
+                            Image(systemName: "equal").font(.system(size: 15, weight: NT.strong))
+                            Text("理論").font(.system(size: 10, weight: NT.strong))
                         }
                         .foregroundColor(v == it.expectedQuantity ? .white : NT.ok)
                         .frame(width: 50, height: 52)
@@ -296,7 +296,7 @@ struct NPZCountView: View {
                 }
             }
             if editable, let diff, diff != 0 {
-                Text("差異 \(NPZ.signed(diff))\(it.unit)").font(.system(size: 12, weight: .heavy)).foregroundColor(diff > 0 ? NT.ok : NT.danger).monospacedDigit()
+                Text("差異 \(NPZ.signed(diff))\(it.unit)").font(.system(size: 12, weight: NT.strong)).foregroundColor(diff > 0 ? NT.ok : NT.danger).monospacedDigit()
             }
         }
         .padding(12)
@@ -307,7 +307,7 @@ struct NPZCountView: View {
     private func cell(_ label: String, _ value: String, _ tone: Color) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(label).font(.system(size: 11, weight: .bold)).foregroundColor(NT.ink3)
-            Text(value).font(.system(size: 18, weight: .heavy)).foregroundColor(tone).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
+            Text(value).font(.system(size: 18, weight: NT.strong)).foregroundColor(tone).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 12).padding(.vertical, 8)

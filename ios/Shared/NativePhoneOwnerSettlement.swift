@@ -299,7 +299,7 @@ struct NPSMRootView: View {
         if let t = p.totals {
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
-                    Text("合計").font(.system(size: 15, weight: .heavy)).foregroundColor(NT.ink)
+                    Text("合計").font(.system(size: 15, weight: NT.strong)).foregroundColor(NT.ink)
                     Spacer()
                     NPSMProfit(value: t.month.profit)
                 }
@@ -331,7 +331,7 @@ struct NPSMRootView: View {
     private func storeCard(_ r: NPSMStoreRow, monthLabel: String) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
-                Text(r.storeName).font(.system(size: 15.5, weight: .heavy)).foregroundColor(NT.ink).lineLimit(1)
+                Text(r.storeName).font(.system(size: 15.5, weight: NT.strong)).foregroundColor(NT.ink).lineLimit(1)
                 Spacer(minLength: 4)
                 NPACPill(title: "開く", icon: "chevron.right", enabled: !model.busy) { Task { await model.openStore(r.storeId) } }
             }
@@ -442,7 +442,7 @@ struct NPSMRootView: View {
                             Text(inv.dateLabel).font(.system(size: 12, weight: .semibold)).foregroundColor(NT.ink2).monospacedDigit()
                             Text(inv.vendor).font(.system(size: 14, weight: .bold)).foregroundColor(NT.ink).lineLimit(1)
                             Spacer(minLength: 4)
-                            Text(NPSMText.yen(inv.amount)).font(.system(size: 14, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit()
+                            Text(NPSMText.yen(inv.amount)).font(.system(size: 14, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit()
                         }
                         HStack(spacing: 8) {
                             NOSBadge(text: inv.statusLabel, color: inv.status == "paid" ? NT.ok : NT.ink3)
@@ -473,7 +473,7 @@ struct NPSMPlCard: View {
             Text(card.label).font(.system(size: 11.5, weight: .bold)).foregroundColor(NT.ink3).lineLimit(1).minimumScaleFactor(0.8)
             HStack(spacing: 4) {
                 if !card.plain { NOSBadge(text: loss ? "赤字" : "黒字", color: loss ? NT.danger : NT.ok) }
-                Text(NPSMText.yen(card.value)).font(.system(size: 18, weight: .heavy)).monospacedDigit().foregroundColor(tone)
+                Text(NPSMText.yen(card.value)).font(.system(size: 18, weight: NT.strong)).monospacedDigit().foregroundColor(tone)
                     .lineLimit(1).minimumScaleFactor(0.55)
             }
             Text(card.sub).font(.system(size: 10.5)).foregroundColor(NT.ink3).fixedSize(horizontal: false, vertical: true)
@@ -496,7 +496,7 @@ struct NPSMProfit: View {
         let loss = value < 0
         return HStack(spacing: 4) {
             NOSBadge(text: loss ? "赤字" : "黒字", color: loss ? NT.danger : NT.ok)
-            Text(NPSMText.yen(value)).font(.system(size: small ? 13.5 : 16, weight: .heavy)).monospacedDigit().foregroundColor(loss ? NT.danger : NT.ok)
+            Text(NPSMText.yen(value)).font(.system(size: small ? 13.5 : 16, weight: NT.strong)).monospacedDigit().foregroundColor(loss ? NT.danger : NT.ok)
                 .lineLimit(1).minimumScaleFactor(0.7)
         }
     }
@@ -619,7 +619,7 @@ struct NPSMCostsForm: View {
                                 Text("入力済み").font(.system(size: 11, weight: .bold)).foregroundColor(NT.ok)
                             } else {
                                 Button { apply(b) } label: {
-                                    Text("入れる").font(.system(size: 11.5, weight: .heavy)).foregroundColor(NT.purpleDeep).underline()
+                                    Text("入れる").font(.system(size: 11.5, weight: NT.strong)).foregroundColor(NT.purpleDeep).underline()
                                 }
                                 .buttonStyle(.plain)
                                 .disabled(saving)
@@ -681,7 +681,7 @@ struct NPSMCostsForm: View {
             HStack(alignment: .firstTextBaseline) {
                 Text("月の合計").font(.system(size: 13.5, weight: .bold)).foregroundColor(NT.ink2)
                 Spacer()
-                Text(NT.yen(fixedTotal + salary)).font(.system(size: 18, weight: .heavy)).monospacedDigit().foregroundColor(NT.ink)
+                Text(NT.yen(fixedTotal + salary)).font(.system(size: 18, weight: NT.strong)).monospacedDigit().foregroundColor(NT.ink)
             }
             Text("固定費 \(NT.yen(fixedTotal)) ＋ 給料 \(NT.yen(salary))").font(.system(size: 11.5)).foregroundColor(NT.ink3)
             if canEdit {

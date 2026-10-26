@@ -147,7 +147,7 @@ struct NOMTitle: View {
     var en: String = ""
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
-            Text(ja).font(.system(size: 15, weight: .heavy)).foregroundColor(NT.ink)
+            Text(ja).font(.system(size: 15, weight: NT.strong)).foregroundColor(NT.ink)
             if !en.isEmpty { Text(en).font(.system(size: 10.5, weight: .semibold)).foregroundColor(NT.ink3) }
         }
     }
@@ -167,7 +167,7 @@ struct NOMButton: View {
         Button(action: action) {
             HStack(spacing: 7) {
                 if !icon.isEmpty { Image(systemName: icon).font(.system(size: 15, weight: .bold)) }
-                Text(title).font(.system(size: 15.5, weight: .heavy)).lineLimit(1).minimumScaleFactor(0.75)
+                Text(title).font(.system(size: 15.5, weight: NT.strong)).lineLimit(1).minimumScaleFactor(0.75)
             }
             .foregroundColor(filled ? .white : (tint == NT.purple ? NT.purpleDeep : tint))
             .frame(maxWidth: .infinity).frame(height: height)
@@ -188,7 +188,7 @@ struct NOMSmallButton: View {
 
     var body: some View {
         Button(action: action) {
-            Text(title).font(.system(size: 12.5, weight: .heavy)).lineLimit(1)
+            Text(title).font(.system(size: 12.5, weight: NT.strong)).lineLimit(1)
                 .foregroundColor(filled ? .white : tint)
                 .padding(.horizontal, 12).frame(height: 34)
                 .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(filled ? tint : tint.opacity(0.1)))
@@ -224,7 +224,7 @@ struct NOMStat: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(label).font(.system(size: 11, weight: .bold)).foregroundColor(NT.ink3).lineLimit(1).minimumScaleFactor(0.8)
-            Text(value).font(.system(size: 18, weight: .heavy)).foregroundColor(tone).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
+            Text(value).font(.system(size: 18, weight: NT.strong)).foregroundColor(tone).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
             if !sub.isEmpty { Text(sub).font(.system(size: 10.5)).foregroundColor(NT.ink3).lineLimit(2).fixedSize(horizontal: false, vertical: true) }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -275,7 +275,7 @@ struct NOMSnapCard: View {
                     .frame(width: 44, height: 44).background(Circle().fill(NT.purple))
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
-                        Text("レシートを撮って保存").font(.system(size: 15, weight: .heavy)).foregroundColor(NT.purpleDeep)
+                        Text("レシートを撮って保存").font(.system(size: 15, weight: NT.strong)).foregroundColor(NT.purpleDeep)
                         Text("Snap receipt").font(.system(size: 10, weight: .semibold)).foregroundColor(NT.ink3)
                     }
                     Text(sub).font(.system(size: 11.5)).foregroundColor(NT.ink2).multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
@@ -309,7 +309,7 @@ struct NOMPeriodCard: View {
         return VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
                 Image(systemName: "calendar").font(.system(size: 15, weight: .bold)).foregroundColor(NT.purple)
-                Text(NOM.period(from, to)).font(.system(size: 17, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit().lineLimit(1).minimumScaleFactor(0.7)
+                Text(NOM.period(from, to)).font(.system(size: 17, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit().lineLimit(1).minimumScaleFactor(0.7)
                 Spacer(minLength: 4)
                 Button(action: onPick) {
                     Text("期間を変える").font(.system(size: 12.5, weight: .bold)).foregroundColor(NT.purpleDeep)
@@ -481,7 +481,7 @@ struct NOMAmountBox: View {
                 Text(label).font(.system(size: 13.5, weight: .bold)).foregroundColor(NT.ink2).lineLimit(1)
                 Spacer(minLength: 6)
                 Text(value.isEmpty ? "0" : NOS.int(Double(value) ?? 0))
-                    .font(.system(size: big ? 30 : 22, weight: .heavy)).monospacedDigit()
+                    .font(.system(size: big ? 30 : 22, weight: NT.strong)).monospacedDigit()
                     .foregroundColor(value.isEmpty ? NT.ink3 : (active ? NT.purpleDeep : NT.ink))
                     .lineLimit(1).minimumScaleFactor(0.6)
                 Text("円").font(.system(size: 13, weight: .semibold)).foregroundColor(NT.ink3)

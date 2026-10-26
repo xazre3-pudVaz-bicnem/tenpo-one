@@ -315,7 +315,7 @@ struct NOMPettyTab: View {
         VStack(alignment: .leading, spacing: 8) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("理論残高").font(.system(size: 12.5, weight: .bold)).foregroundColor(.white.opacity(0.85))
-                Text(NOS.yen(p.theoreticalBalance)).font(.system(size: 30, weight: .heavy)).foregroundColor(.white).monospacedDigit().lineLimit(1).minimumScaleFactor(0.5)
+                Text(NOS.yen(p.theoreticalBalance)).font(.system(size: 30, weight: NT.strong)).foregroundColor(.white).monospacedDigit().lineLimit(1).minimumScaleFactor(0.5)
                 if p.multiStore { Text("基準店舗のみ").font(.system(size: 11)).foregroundColor(.white.opacity(0.8)) }
             }
             .padding(.horizontal, 14).padding(.vertical, 12)
@@ -342,11 +342,11 @@ struct NOMPettyTab: View {
     private func pettyRow(_ r: NOMPetty.Row, _ p: NOMPetty) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
-                Text(NOS.mdw(r.businessDate)).font(.system(size: 13, weight: .heavy)).foregroundColor(NT.purpleDeep).monospacedDigit()
+                Text(NOS.mdw(r.businessDate)).font(.system(size: 13, weight: NT.strong)).foregroundColor(NT.purpleDeep).monospacedDigit()
                 NOSBadge(text: r.kindLabel, color: NT.ink2)
                 if r.kind == "petty_advance" { NOSBadge(text: "現金移動なし", color: NT.ink3) }
                 Spacer(minLength: 4)
-                Text(NOS.yen(r.amount)).font(.system(size: 16, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit()
+                Text(NOS.yen(r.amount)).font(.system(size: 16, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit()
             }
             Text(r.purpose ?? "—").font(.system(size: 13.5, weight: .semibold)).foregroundColor(NT.ink).lineLimit(3)
             HStack(spacing: 6) {
@@ -378,10 +378,10 @@ struct NOMPettyTab: View {
     private func countRow(_ c: NOMPetty.Count, _ p: NOMPetty) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
-                Text(NOS.mdw(c.countDate)).font(.system(size: 13, weight: .heavy)).foregroundColor(NT.purpleDeep).monospacedDigit()
+                Text(NOS.mdw(c.countDate)).font(.system(size: 13, weight: NT.strong)).foregroundColor(NT.purpleDeep).monospacedDigit()
                 NOSBadge(text: c.statusLabel, color: c.status == "approved" ? NT.ok : NT.warn)
                 Spacer(minLength: 4)
-                Text(NOM.signed(c.difference)).font(.system(size: 16, weight: .heavy)).foregroundColor(c.difference != 0 ? NT.danger : NT.ok).monospacedDigit()
+                Text(NOM.signed(c.difference)).font(.system(size: 16, weight: NT.strong)).foregroundColor(c.difference != 0 ? NT.danger : NT.ok).monospacedDigit()
             }
             HStack(spacing: 8) {
                 NOMStat(label: "理論残高", value: NOS.yen(c.expectedAmount))
@@ -686,7 +686,7 @@ struct NOMClosingsTab: View {
             } label: {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 6) {
-                        Text(NOS.mdw(r.businessDate)).font(.system(size: 16, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit()
+                        Text(NOS.mdw(r.businessDate)).font(.system(size: 16, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit()
                         if p.showStore, let s = r.storeName { Text(s).font(.system(size: 12, weight: .semibold)).foregroundColor(NT.ink3).lineLimit(1) }
                         Spacer(minLength: 4)
                         NOSBadge(text: r.statusLabel, color: tone(r.status))
@@ -695,12 +695,12 @@ struct NOMClosingsTab: View {
                     HStack(alignment: .firstTextBaseline) {
                         VStack(alignment: .leading, spacing: 0) {
                             Text("純売上").font(.system(size: 11, weight: .bold)).foregroundColor(NT.ink3)
-                            Text(legacy ? "—" : NOS.yen(r.netSales)).font(.system(size: 24, weight: .heavy)).foregroundColor(NT.purpleDeep).monospacedDigit()
+                            Text(legacy ? "—" : NOS.yen(r.netSales)).font(.system(size: 24, weight: NT.strong)).foregroundColor(NT.purpleDeep).monospacedDigit()
                         }
                         Spacer()
                         VStack(alignment: .trailing, spacing: 0) {
                             Text("現金差異").font(.system(size: 11, weight: .bold)).foregroundColor(NT.ink3)
-                            Text(NOM.signed(r.cashDifference)).font(.system(size: 18, weight: .heavy)).foregroundColor(r.cashDifference != 0 ? NT.danger : NT.ok).monospacedDigit()
+                            Text(NOM.signed(r.cashDifference)).font(.system(size: 18, weight: NT.strong)).foregroundColor(r.cashDifference != 0 ? NT.danger : NT.ok).monospacedDigit()
                         }
                     }
                     HStack(spacing: 10) {
@@ -787,9 +787,9 @@ struct NOMClosingsTab: View {
     private func registerLine(_ l: NOMClosings.Line) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text(l.registerName).font(.system(size: 14, weight: .heavy)).foregroundColor(NT.ink)
+                Text(l.registerName).font(.system(size: 14, weight: NT.strong)).foregroundColor(NT.ink)
                 Spacer()
-                Text("差異 \(NOM.signed(l.difference))").font(.system(size: 13, weight: .heavy)).foregroundColor(l.difference != 0 ? NT.danger : NT.ok).monospacedDigit()
+                Text("差異 \(NOM.signed(l.difference))").font(.system(size: 13, weight: NT.strong)).foregroundColor(l.difference != 0 ? NT.danger : NT.ok).monospacedDigit()
             }
             Group {
                 kv("開始現金", l.openingFloat)

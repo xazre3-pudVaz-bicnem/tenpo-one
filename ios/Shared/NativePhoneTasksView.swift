@@ -316,7 +316,7 @@ struct NativePhoneTasksView: View {
         Button { model.detail = t } label: {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(alignment: .top, spacing: 8) {
-                    Text(t.title).font(.system(size: 16, weight: .heavy)).foregroundColor(NT.ink)
+                    Text(t.title).font(.system(size: 16, weight: NT.strong)).foregroundColor(NT.ink)
                         .multilineTextAlignment(.leading).lineLimit(2)
                     Spacer(minLength: 6)
                     NWKBadge(text: NPOTaskText.status(t.status), color: NPOTaskText.statusColor(t.status))
@@ -384,7 +384,7 @@ struct NPOTaskDetailView: View {
                 NWKBadge(text: "優先度: \(NPOTaskText.priority(task.priority))", color: NPOTaskText.priorityColor(task.priority))
                 if task.overdue { NWKBadge(text: "期限超過", color: NT.danger) }
             }
-            Text(task.title).font(.system(size: 20, weight: .heavy)).foregroundColor(NT.ink).fixedSize(horizontal: false, vertical: true)
+            Text(task.title).font(.system(size: 20, weight: NT.strong)).foregroundColor(NT.ink).fixedSize(horizontal: false, vertical: true)
             VStack(alignment: .leading, spacing: 5) {
                 info("person", "担当：\(task.assigneeName ?? "未割当")")
                 info("calendar", "期限：\(NWKFmt.slash(task.dueDate))", color: task.overdue ? NT.danger : NT.ink3)

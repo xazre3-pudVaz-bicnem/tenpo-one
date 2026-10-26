@@ -317,7 +317,7 @@ struct NPPYNenchoView: View {
     private func statusCard(_ p: NPPYNenchoPayload) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
-                Text("\(String(p.year))年分の申告").font(.system(size: 15, weight: .heavy)).foregroundColor(NT.ink)
+                Text("\(String(p.year))年分の申告").font(.system(size: 15, weight: NT.strong)).foregroundColor(NT.ink)
                 Spacer(minLength: 4)
                 NWKBadge(text: NPPYFmt.nenchoStatus[p.own.status] ?? p.own.status, color: NPPYFmt.nenchoColor(p.own.status))
             }
@@ -339,12 +339,12 @@ struct NPPYNenchoView: View {
         let editable = model.editable
         return VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("扶養家族").font(.system(size: 15, weight: .heavy)).foregroundColor(NT.ink)
+                Text("扶養家族").font(.system(size: 15, weight: NT.strong)).foregroundColor(NT.ink)
                 Spacer()
                 if editable {
                     Button { model.form.dependents.append(NPPYDependentRow(name: "", relation: "", birthDate: "")) } label: {
                         HStack(spacing: 4) {
-                            Image(systemName: "plus").font(.system(size: 12, weight: .heavy))
+                            Image(systemName: "plus").font(.system(size: 12, weight: NT.strong))
                             Text("追加").font(.system(size: 13.5, weight: .bold))
                         }
                         .foregroundColor(NT.purpleDeep)
@@ -411,7 +411,7 @@ struct NPPYNenchoView: View {
     private var spouseCard: some View {
         let editable = model.editable
         return VStack(alignment: .leading, spacing: 0) {
-            Text("配偶者").font(.system(size: 15, weight: .heavy)).foregroundColor(NT.ink).padding(.horizontal, 14).padding(.top, 14).padding(.bottom, 4)
+            Text("配偶者").font(.system(size: 15, weight: NT.strong)).foregroundColor(NT.ink).padding(.horizontal, 14).padding(.top, 14).padding(.bottom, 4)
             Toggle(isOn: $model.form.hasSpouse) {
                 Text("配偶者がいる").font(.system(size: 15, weight: .semibold)).foregroundColor(NT.ink)
             }
@@ -430,7 +430,7 @@ struct NPPYNenchoView: View {
     private var insuranceCard: some View {
         let editable = model.editable
         return VStack(alignment: .leading, spacing: 0) {
-            Text("保険料控除").font(.system(size: 15, weight: .heavy)).foregroundColor(NT.ink).padding(.horizontal, 14).padding(.top, 14).padding(.bottom, 4)
+            Text("保険料控除").font(.system(size: 15, weight: NT.strong)).foregroundColor(NT.ink).padding(.horizontal, 14).padding(.top, 14).padding(.bottom, 4)
             amountRow("生命保険料（年間合計）", text: $model.form.life, editable: editable)
             Rectangle().fill(NT.line).frame(height: 1).padding(.leading, 14)
             amountRow("地震保険料（年間合計）", text: $model.form.earthquake, editable: editable)
@@ -442,7 +442,7 @@ struct NPPYNenchoView: View {
     private var otherCard: some View {
         let editable = model.editable
         return VStack(alignment: .leading, spacing: 0) {
-            Text("その他の申告").font(.system(size: 15, weight: .heavy)).foregroundColor(NT.ink).padding(.horizontal, 14).padding(.top, 14).padding(.bottom, 4)
+            Text("その他の申告").font(.system(size: 15, weight: NT.strong)).foregroundColor(NT.ink).padding(.horizontal, 14).padding(.top, 14).padding(.bottom, 4)
             Toggle(isOn: $model.form.housingLoan) {
                 Text("住宅ローン控除がある").font(.system(size: 15, weight: .semibold)).foregroundColor(NT.ink)
             }

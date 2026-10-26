@@ -262,7 +262,7 @@ struct NativePhoneStockView: View {
                 ForEach(p.groups) { g in
                     VStack(alignment: .leading, spacing: 5) {
                         if p.groups.count > 1 {
-                            Text(g.name).font(.system(size: 12, weight: .heavy)).foregroundColor(NT.ink3).padding(.leading, 4)
+                            Text(g.name).font(.system(size: 12, weight: NT.strong)).foregroundColor(NT.ink3).padding(.leading, 4)
                         }
                         NPZChipRow(items: g.categories.map { ($0.id, $0.name) }, selection: model.category) { model.category = $0 }
                     }
@@ -285,7 +285,7 @@ struct NativePhoneStockView: View {
             HStack(alignment: .center, spacing: 10) {
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 6) {
-                        Text(i.name).font(.system(size: 16, weight: .heavy)).foregroundColor(NT.ink).lineLimit(2)
+                        Text(i.name).font(.system(size: 16, weight: NT.strong)).foregroundColor(NT.ink).lineLimit(2)
                         if soldOut { NOSBadge(text: "品切れ", color: NT.danger) }
                     }
                     Text(i.sold > 0 ? "本日 \(i.sold)食 売れた" : (d.on ? "残りを管理中" : "管理しない（いつでも注文できる）"))
@@ -306,7 +306,7 @@ struct NativePhoneStockView: View {
                     Button { model.set(i, NPZStockDraft(on: true, remaining: 0)) } label: {
                         VStack(spacing: 1) {
                             Image(systemName: "xmark.octagon.fill").font(.system(size: 15, weight: .bold))
-                            Text("品切れ").font(.system(size: 10, weight: .heavy))
+                            Text("品切れ").font(.system(size: 10, weight: NT.strong))
                         }
                         .foregroundColor(soldOut ? .white : NT.danger)
                         .frame(width: 56, height: 52)

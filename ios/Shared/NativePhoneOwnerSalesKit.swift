@@ -146,7 +146,7 @@ struct NOSStateView: View {
                 Image(systemName: "exclamationmark.circle").font(.system(size: 30, weight: .semibold)).foregroundColor(NT.ink3)
                 Text(e).font(.system(size: 14, weight: .semibold)).foregroundColor(NT.ink2).multilineTextAlignment(.center).padding(.horizontal, 28)
                 Button(action: onRetry) {
-                    Text("もう一度読む").font(.system(size: 15, weight: .heavy)).foregroundColor(.white)
+                    Text("もう一度読む").font(.system(size: 15, weight: NT.strong)).foregroundColor(.white)
                         .padding(.horizontal, 22).frame(height: 44)
                         .background(Capsule().fill(NT.purple))
                 }
@@ -194,7 +194,7 @@ struct NOSSegment: View {
             ForEach(items, id: \.0) { it in
                 let on = it.key == selection
                 Button { onSelect(it.key) } label: {
-                    Text(it.label).font(.system(size: 15, weight: .heavy)).foregroundColor(on ? .white : NT.ink2)
+                    Text(it.label).font(.system(size: 15, weight: NT.strong)).foregroundColor(on ? .white : NT.ink2)
                         .frame(maxWidth: .infinity).frame(height: 38)
                         .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(on ? NT.purple : Color.clear))
                         .contentShape(Rectangle())
@@ -219,7 +219,7 @@ struct NOSStepper: View {
         HStack(spacing: 8) {
             arrow("chevron.left", enabled: true, action: onPrev)
             VStack(spacing: 1) {
-                Text(title).font(.system(size: 17, weight: .heavy)).foregroundColor(NT.ink).lineLimit(1).minimumScaleFactor(0.7)
+                Text(title).font(.system(size: 17, weight: NT.strong)).foregroundColor(NT.ink).lineLimit(1).minimumScaleFactor(0.7)
                 if !caption.isEmpty { Text(caption).font(.system(size: 11, weight: .bold)).foregroundColor(NT.purple).lineLimit(1) }
             }
             .frame(maxWidth: .infinity)
@@ -244,7 +244,7 @@ struct NOSBadge: View {
     let text: String
     let color: Color
     var body: some View {
-        Text(text).font(.system(size: 11, weight: .heavy)).foregroundColor(color).lineLimit(1)
+        Text(text).font(.system(size: 11, weight: NT.strong)).foregroundColor(color).lineLimit(1)
             .padding(.horizontal, 8).padding(.vertical, 3)
             .background(Capsule().fill(color.opacity(0.12)))
     }
@@ -263,7 +263,7 @@ struct NOSDelta: View {
         return HStack(spacing: 2) {
             if !label.isEmpty { Text(label).foregroundColor(NT.ink3) }
             if let p = pct {
-                Image(systemName: dir > 0 ? "arrow.up.right" : dir < 0 ? "arrow.down.right" : "minus").font(.system(size: 9, weight: .heavy))
+                Image(systemName: dir > 0 ? "arrow.up.right" : dir < 0 ? "arrow.down.right" : "minus").font(.system(size: 9, weight: NT.strong))
                 Text("\(p >= 0 ? "+" : "")\(String(format: "%.1f", p))%")
             } else {
                 Text("—")
@@ -288,13 +288,13 @@ struct NOSMeterRow: View {
         VStack(alignment: .leading, spacing: 5) {
             HStack(spacing: 8) {
                 if let rank {
-                    Text("\(rank)").font(.system(size: 11, weight: .heavy)).foregroundColor(rank <= 3 ? .white : NT.ink3)
+                    Text("\(rank)").font(.system(size: 11, weight: NT.strong)).foregroundColor(rank <= 3 ? .white : NT.ink3)
                         .frame(width: 20, height: 20).background(Circle().fill(rank <= 3 ? NT.purple : NT.page))
                 }
                 Text(label).font(.system(size: 14, weight: .bold)).foregroundColor(NT.ink).lineLimit(1)
                 Spacer(minLength: 6)
                 if !sub.isEmpty { Text(sub).font(.system(size: 11, weight: .semibold)).foregroundColor(NT.ink3).monospacedDigit() }
-                Text(value).font(.system(size: 14, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit()
+                Text(value).font(.system(size: 14, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit()
             }
             GeometryReader { g in
                 ZStack(alignment: .leading) {
@@ -335,7 +335,7 @@ struct NOSBars: View {
             HStack(spacing: 6) {
                 if let i = sel {
                     Text(bars[i].detail.isEmpty ? bars[i].label : bars[i].detail).font(.system(size: 12, weight: .bold)).foregroundColor(NT.ink2)
-                    Text(NOS.yen(bars[i].value)).font(.system(size: 15, weight: .heavy)).foregroundColor(NT.purpleDeep).monospacedDigit()
+                    Text(NOS.yen(bars[i].value)).font(.system(size: 15, weight: NT.strong)).foregroundColor(NT.purpleDeep).monospacedDigit()
                 } else {
                     Text(summary.isEmpty ? "棒を押すと金額が出ます" : summary).font(.system(size: 11.5, weight: .semibold)).foregroundColor(NT.ink3)
                 }
@@ -418,10 +418,10 @@ struct NOSAmountSheet: View {
             }
             .padding(.horizontal, 18).padding(.top, 14)
             VStack(spacing: 2) {
-                Text(title).font(.system(size: 17, weight: .heavy)).foregroundColor(NT.ink)
+                Text(title).font(.system(size: 17, weight: NT.strong)).foregroundColor(NT.ink)
                 if !caption.isEmpty { Text(caption).font(.system(size: 12, weight: .semibold)).foregroundColor(NT.ink3) }
             }
-            Text(NT.yen(value)).font(.system(size: 38, weight: .heavy)).foregroundColor(text.isEmpty ? NT.ink3 : NT.ink).monospacedDigit()
+            Text(NT.yen(value)).font(.system(size: 38, weight: NT.strong)).foregroundColor(text.isEmpty ? NT.ink3 : NT.ink).monospacedDigit()
                 .lineLimit(1).minimumScaleFactor(0.5).padding(.horizontal, 18)
             if value >= 10_000 {
                 Text("＝ \(NOS.plain((Double(value) / 10_000 * 10).rounded() / 10))万円").font(.system(size: 12, weight: .semibold)).foregroundColor(NT.ink3)
@@ -445,14 +445,14 @@ struct NOSAmountSheet: View {
             HStack(spacing: 8) {
                 if let onNext {
                     Button { onNext(value) } label: {
-                        Text("決定して次の日へ").font(.system(size: 15, weight: .heavy)).foregroundColor(NT.purpleDeep)
+                        Text("決定して次の日へ").font(.system(size: 15, weight: NT.strong)).foregroundColor(NT.purpleDeep)
                             .frame(maxWidth: .infinity).frame(height: 52)
                             .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(NT.lilac))
                     }
                     .buttonStyle(PressableStyle())
                 }
                 Button { onDone(value) } label: {
-                    Text(okLabel).font(.system(size: 16, weight: .heavy)).foregroundColor(.white)
+                    Text(okLabel).font(.system(size: 16, weight: NT.strong)).foregroundColor(.white)
                         .frame(maxWidth: .infinity).frame(height: 52)
                         .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(NT.purple))
                 }
@@ -471,7 +471,7 @@ struct NOSAmountSheet: View {
     private func smallButton(_ title: String, sub: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             VStack(spacing: 0) {
-                Text(title).font(.system(size: 13, weight: .heavy))
+                Text(title).font(.system(size: 13, weight: NT.strong))
                 Text(sub).font(.system(size: 10, weight: .semibold)).opacity(0.75).monospacedDigit()
             }
             .foregroundColor(NT.ink2)

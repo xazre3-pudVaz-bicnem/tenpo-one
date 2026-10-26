@@ -251,10 +251,10 @@ extension NFTable {
 // MARK: - 色（Web のレジの「オーダー・会計」の青。lib/regi-accent.ts の order）
 
 enum NFColor {
-    /// iPad は紫紺・うすい灰色（ホームと同じ。2026-10-27 03:14 Ronnie「rezi ko everywhere color milau」）。iPhone は今まで通り
-    static let iris = AppConfig.isPad ? Color(hex: 0x37324D) : Color(hex: 0x1A5AD6)
-    static let irisDeep = AppConfig.isPad ? Color(hex: 0x24203A) : Color(hex: 0x0A3FA8)
-    static let irisSoft = AppConfig.isPad ? Color(hex: 0xEFF0F4) : Color(hex: 0xE7EFFD)
+    /// 紫紺・うすい灰色（ホームと同じ。iPad も iPhone も。2026-10-27 03:14・03:27 Ronnie）
+    static let iris = Color(hex: 0x37324D)
+    static let irisDeep = Color(hex: 0x24203A)
+    static let irisSoft = Color(hex: 0xEFF0F4)
     static let royal = Color(hex: 0x0A3FA8)
     static let wisteria = Color(hex: 0xBCD0F5)
     static let saffron = Color(hex: 0xB7791F)

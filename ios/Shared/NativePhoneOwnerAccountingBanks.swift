@@ -165,7 +165,7 @@ struct NPACBanksPage: View {
         VStack(alignment: .leading, spacing: 7) {
             HStack(spacing: 8) {
                 Image(systemName: "building.columns").font(.system(size: 15, weight: .bold)).foregroundColor(NT.purple)
-                Text(b.bankName).font(.system(size: 16, weight: .heavy)).foregroundColor(NT.ink).lineLimit(1)
+                Text(b.bankName).font(.system(size: 16, weight: NT.strong)).foregroundColor(NT.ink).lineLimit(1)
                 Spacer(minLength: 4)
                 Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold)).foregroundColor(NT.ink3)
             }
@@ -344,7 +344,7 @@ struct NPACBankDetail: View {
             HStack(alignment: .firstTextBaseline) {
                 Text("現在残高（記帳ベース）").font(.system(size: 12, weight: .bold)).foregroundColor(NT.ink3)
                 Spacer()
-                Text(NT.yen(p.txs.isEmpty ? 0 : p.balance)).font(.system(size: 26, weight: .heavy)).foregroundColor(NT.purpleDeep).monospacedDigit()
+                Text(NT.yen(p.txs.isEmpty ? 0 : p.balance)).font(.system(size: 26, weight: NT.strong)).foregroundColor(NT.purpleDeep).monospacedDigit()
             }
             Text("銀行API連携は行いません（手入力・CSV取込で完結。将来のAPI接続はオプション）。").font(.system(size: 11)).foregroundColor(NT.ink3)
         }
@@ -718,7 +718,7 @@ struct NPACCsvImport: View {
                 HStack(alignment: .top, spacing: 10) {
                     Image(systemName: "checkmark.circle.fill").font(.system(size: 22)).foregroundColor(NT.ok)
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("取込が完了しました").font(.system(size: 15, weight: .heavy)).foregroundColor(NT.ink)
+                        Text("取込が完了しました").font(.system(size: 15, weight: NT.strong)).foregroundColor(NT.ink)
                         Text("新規 \(s.newInserted)件 ・ 完全重複スキップ \(s.exactDuplicateSkipped)件 ・ 要確認 \(suspiciousTotal)件のうち取込 \(s.suspiciousInserted)件")
                             .font(.system(size: 12.5)).foregroundColor(NT.ink2).fixedSize(horizontal: false, vertical: true)
                     }

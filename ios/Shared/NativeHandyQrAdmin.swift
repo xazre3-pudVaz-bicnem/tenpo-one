@@ -281,7 +281,7 @@ struct NativeHandyQrAdminView: View {
                     Text("この iPad の回線：").font(.system(size: 13)).foregroundColor(NFColor.ink2)
                     Text(p.currentNetwork ?? "不明").font(.system(size: 13, weight: .regular, design: .monospaced)).foregroundColor(NFColor.ink)
                     Text(p.currentIsShop ? "登録済み" : "未登録")
-                        .font(.system(size: 11, weight: .heavy)).foregroundColor(p.currentIsShop ? NFColor.success : NFColor.saffron)
+                        .font(.system(size: 11, weight: NT.strong)).foregroundColor(p.currentIsShop ? NFColor.success : NFColor.saffron)
                         .padding(.horizontal, 8).padding(.vertical, 3)
                         .background(Capsule().fill(p.currentIsShop ? NFColor.successSoft : NFColor.saffronSoft))
                     Spacer(minLength: 0)

@@ -193,8 +193,8 @@ struct NPOCustomersView: View {
             if model.payload?.canWrite ?? false {
                 Button { createOpen = true } label: {
                     VStack(spacing: 1) {
-                        Image(systemName: "person.badge.plus").font(.system(size: 16, weight: .heavy))
-                        Text("顧客登録").font(.system(size: 9.5, weight: .heavy)).lineLimit(1)
+                        Image(systemName: "person.badge.plus").font(.system(size: 16, weight: NT.strong))
+                        Text("顧客登録").font(.system(size: 9.5, weight: NT.strong)).lineLimit(1)
                     }
                     .foregroundColor(.white).frame(width: 52, height: 44)
                 }
@@ -210,7 +210,7 @@ struct NPOCustomersView: View {
                 VStack(spacing: 8) {
                     Spacer()
                     Image(systemName: "lock").font(.system(size: 28, weight: .semibold)).foregroundColor(NT.ink3)
-                    Text("閲覧権限がありません").font(.system(size: 16, weight: .heavy)).foregroundColor(NT.ink)
+                    Text("閲覧権限がありません").font(.system(size: 16, weight: NT.strong)).foregroundColor(NT.ink)
                     Text("顧客情報の閲覧には権限が必要です。管理者にお問い合わせください。").font(.system(size: 13)).foregroundColor(NT.ink3)
                         .multilineTextAlignment(.center).padding(.horizontal, 28)
                     Spacer()
@@ -225,7 +225,7 @@ struct NPOCustomersView: View {
                 Image(systemName: "exclamationmark.circle").font(.system(size: 30, weight: .semibold)).foregroundColor(NT.ink3)
                 Text(e).font(.system(size: 14, weight: .semibold)).foregroundColor(NT.ink2).multilineTextAlignment(.center).padding(.horizontal, 28)
                 Button { Task { await model.refresh() } } label: {
-                    Text("もう一度読む").font(.system(size: 15, weight: .heavy)).foregroundColor(.white)
+                    Text("もう一度読む").font(.system(size: 15, weight: NT.strong)).foregroundColor(.white)
                         .padding(.horizontal, 22).frame(height: 44)
                         .background(Capsule().fill(NT.purple))
                 }
@@ -249,7 +249,7 @@ struct NPOCustomersView: View {
                         .frame(maxWidth: .infinity).padding(.vertical, 6).background(RoundedRectangle(cornerRadius: 8).fill(NT.dangerBg))
                 }
                 HStack(spacing: 6) {
-                    Text("\(p.total)件").font(.system(size: 14, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit()
+                    Text("\(p.total)件").font(.system(size: 14, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit()
                     Text(sortLabel).font(.system(size: 11.5)).foregroundColor(NT.ink3)
                     Spacer()
                 }
@@ -257,7 +257,7 @@ struct NPOCustomersView: View {
                 if model.rows.isEmpty {
                     VStack(spacing: 8) {
                         Image(systemName: "person.2").font(.system(size: 28, weight: .semibold)).foregroundColor(NT.ink3)
-                        Text(model.filtered ? "条件に一致する顧客がいません" : "まだ顧客が登録されていません").font(.system(size: 15, weight: .heavy)).foregroundColor(NT.ink)
+                        Text(model.filtered ? "条件に一致する顧客がいません" : "まだ顧客が登録されていません").font(.system(size: 15, weight: NT.strong)).foregroundColor(NT.ink)
                         Text(model.filtered ? "検索や分類・タグを見直してください" : "右上の「顧客登録」から追加できます").font(.system(size: 12)).foregroundColor(NT.ink3)
                     }
                     .frame(maxWidth: .infinity).padding(.vertical, 36)
@@ -275,7 +275,7 @@ struct NPOCustomersView: View {
                     ProgressView().tint(NT.purple).frame(maxWidth: .infinity).padding(.vertical, 12)
                 } else if p.page < p.totalPages {
                     Button { Task { await model.loadMore() } } label: {
-                        Text("続きを読む").font(.system(size: 14, weight: .heavy)).foregroundColor(NT.purple)
+                        Text("続きを読む").font(.system(size: 14, weight: NT.strong)).foregroundColor(NT.purple)
                             .frame(maxWidth: .infinity).frame(height: 44)
                             .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white))
                     }
@@ -343,8 +343,8 @@ struct NPOCustomersView: View {
     private func chip(_ label: String, count: Int?, on: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 4) {
-                Text(label).font(.system(size: 13, weight: .heavy)).lineLimit(1)
-                if let count { Text("\(count)").font(.system(size: 12, weight: .heavy)).monospacedDigit().opacity(0.75) }
+                Text(label).font(.system(size: 13, weight: NT.strong)).lineLimit(1)
+                if let count { Text("\(count)").font(.system(size: 12, weight: NT.strong)).monospacedDigit().opacity(0.75) }
             }
             .foregroundColor(on ? .white : NT.ink2)
             .padding(.horizontal, 12).frame(height: 36)
@@ -381,7 +381,7 @@ struct NPOCustomersView: View {
     private func menuLabel(_ icon: String, _ text: String, on: Bool) -> some View {
         HStack(spacing: 5) {
             Image(systemName: icon).font(.system(size: 12, weight: .bold))
-            Text(text).font(.system(size: 13, weight: .heavy)).lineLimit(1)
+            Text(text).font(.system(size: 13, weight: NT.strong)).lineLimit(1)
             Spacer(minLength: 2)
             Image(systemName: "chevron.down").font(.system(size: 10, weight: .bold))
         }
@@ -396,7 +396,7 @@ struct NPOCustomersView: View {
         let sub = [r.nameKana, r.phone].compactMap { $0?.nilIfEmpty }.joined(separator: "・")
         return VStack(alignment: .leading, spacing: 7) {
             HStack(alignment: .center, spacing: 6) {
-                Text(r.name).font(.system(size: 16, weight: .heavy)).foregroundColor(NT.ink).lineLimit(1)
+                Text(r.name).font(.system(size: 16, weight: NT.strong)).foregroundColor(NT.ink).lineLimit(1)
                 if r.anonymized { NPBadge(text: "匿名化済み", color: NT.ink3) }
                 Spacer(minLength: 4)
                 NPBadge(text: r.rfm.label, color: NCTone.color(r.rfm.tone))
@@ -429,7 +429,7 @@ struct NPOCustomersView: View {
     private func stat(_ label: String, _ value: String) -> some View {
         VStack(alignment: .leading, spacing: 1) {
             Text(label).font(.system(size: 10, weight: .bold)).foregroundColor(NT.ink3).lineLimit(1)
-            Text(value).font(.system(size: 13.5, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit().lineLimit(1).minimumScaleFactor(0.7)
+            Text(value).font(.system(size: 13.5, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit().lineLimit(1).minimumScaleFactor(0.7)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -481,7 +481,7 @@ struct NPOCustomerDetail: View {
                     Spacer()
                     Text(e).font(.system(size: 14, weight: .semibold)).foregroundColor(NT.ink2).multilineTextAlignment(.center).padding(.horizontal, 28)
                     Button { Task { await load() } } label: {
-                        Text("もう一度読む").font(.system(size: 15, weight: .heavy)).foregroundColor(.white)
+                        Text("もう一度読む").font(.system(size: 15, weight: NT.strong)).foregroundColor(.white)
                             .padding(.horizontal, 22).frame(height: 44)
                             .background(Capsule().fill(NT.purple))
                     }
@@ -537,7 +537,7 @@ struct NPOCustomerDetail: View {
                         Image(systemName: "arrow.clockwise")
                         Text("来店回数・累計を再計算")
                     }
-                    .font(.system(size: 13, weight: .heavy)).foregroundColor(NT.ink2)
+                    .font(.system(size: 13, weight: NT.strong)).foregroundColor(NT.ink2)
                     .frame(maxWidth: .infinity).frame(height: 44)
                     .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white))
                     .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(NT.line, lineWidth: 1))
@@ -557,7 +557,7 @@ struct NPOCustomerDetail: View {
         let c = p.customer
         return VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(c.name).font(.system(size: 22, weight: .heavy)).foregroundColor(NT.ink).fixedSize(horizontal: false, vertical: true)
+                Text(c.name).font(.system(size: 22, weight: NT.strong)).foregroundColor(NT.ink).fixedSize(horizontal: false, vertical: true)
                 if c.anonymized { NPBadge(text: "匿名化済み", color: NT.ink3) }
             }
             Text("登録日 \(NPOCustomerText.day(c.createdAt))\(c.nameKana.map { "｜\($0)" } ?? "")").font(.system(size: 12)).foregroundColor(NT.ink3)
@@ -588,7 +588,7 @@ struct NPOCustomerDetail: View {
     private func tile(_ label: String, _ value: String, tone: Color, sub: String?) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(label).font(.system(size: 11, weight: .bold)).foregroundColor(NT.ink3).lineLimit(1)
-            Text(value).font(.system(size: 19, weight: .heavy)).foregroundColor(tone).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
+            Text(value).font(.system(size: 19, weight: NT.strong)).foregroundColor(tone).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
             if let sub { Text(sub).font(.system(size: 10.5)).foregroundColor(NT.ink3).monospacedDigit().lineLimit(1) }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -603,7 +603,7 @@ struct NPOCustomerDetail: View {
         return card("連絡先・会員", en: "Contact") {
             kvRow("電話") {
                 if let phone = c.phone?.nilIfEmpty, let url = NPHRDetailSheet.telURL(phone) {
-                    Link(destination: url) { Text(phone).font(.system(size: 14, weight: .heavy)).foregroundColor(NT.purple).monospacedDigit() }
+                    Link(destination: url) { Text(phone).font(.system(size: 14, weight: NT.strong)).foregroundColor(NT.purple).monospacedDigit() }
                 } else {
                     Text(c.phone?.nilIfEmpty ?? "—")
                 }
@@ -619,7 +619,7 @@ struct NPOCustomerDetail: View {
             kvRow("会員番号") { Text(c.memberNo?.nilIfEmpty ?? "—") }
             kvRow("会員ランク") { Text(p.memberRankLabel ?? "—") }
             if p.loyaltyEnabled {
-                kvRow("ポイント") { Text("\(c.pointBalance) pt").font(.system(size: 14, weight: .heavy)).foregroundColor(NT.purpleDeep).monospacedDigit() }
+                kvRow("ポイント") { Text("\(c.pointBalance) pt").font(.system(size: 14, weight: NT.strong)).foregroundColor(NT.purpleDeep).monospacedDigit() }
             }
         }
     }
@@ -652,7 +652,7 @@ struct NPOCustomerDetail: View {
                         .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(NT.page))
                         .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(NT.line, lineWidth: 1))
                     Button { Task { await addNote() } } label: {
-                        Text("追加").font(.system(size: 14, weight: .heavy)).foregroundColor(.white)
+                        Text("追加").font(.system(size: 14, weight: NT.strong)).foregroundColor(.white)
                             .padding(.horizontal, 14).frame(height: 42)
                             .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(noteReady ? NT.purple : NT.ink3))
                     }
@@ -692,7 +692,7 @@ struct NPOCustomerDetail: View {
                             Text(t.name).font(.system(size: 13, weight: .bold))
                             if p.canWrite {
                                 Button { Task { await act(["type": "customerTagDetach", "id": id, "tagId": t.id], done: "タグを外しました") } } label: {
-                                    Image(systemName: "xmark").font(.system(size: 10, weight: .heavy)).frame(width: 22, height: 22)
+                                    Image(systemName: "xmark").font(.system(size: 10, weight: NT.strong)).frame(width: 22, height: 22)
                                 }
                                 .buttonStyle(.plain)
                                 .accessibilityLabel("\(t.name)を外す")
@@ -712,8 +712,8 @@ struct NPOCustomerDetail: View {
                     }
                 } label: {
                     HStack(spacing: 5) {
-                        Image(systemName: "plus").font(.system(size: 12, weight: .heavy))
-                        Text("タグを付ける").font(.system(size: 13, weight: .heavy))
+                        Image(systemName: "plus").font(.system(size: 12, weight: NT.strong))
+                        Text("タグを付ける").font(.system(size: 13, weight: NT.strong))
                     }
                     .foregroundColor(NT.purple)
                     .padding(.horizontal, 14).frame(height: 38)
@@ -735,7 +735,7 @@ struct NPOCustomerDetail: View {
                 Button { onWeb("/app/reservations?open=\(r.id)") } label: {
                     HStack(spacing: 8) {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(NNoticeTime.fmt(r.startAt)).font(.system(size: 13.5, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit().lineLimit(1)
+                            Text(NNoticeTime.fmt(r.startAt)).font(.system(size: 13.5, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit().lineLimit(1)
                             Text([r.storeName, "\(r.partySize)名", r.cancelReason].compactMap { $0?.nilIfEmpty }.joined(separator: "・"))
                                 .font(.system(size: 11.5)).foregroundColor(NT.ink3).lineLimit(1)
                         }
@@ -761,11 +761,11 @@ struct NPOCustomerDetail: View {
                 Button { onWeb("/app/orders/\(o.id)") } label: {
                     HStack(spacing: 8) {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(NNoticeTime.fmt(o.openedAt)).font(.system(size: 13.5, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit().lineLimit(1)
+                            Text(NNoticeTime.fmt(o.openedAt)).font(.system(size: 13.5, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit().lineLimit(1)
                             if let s = o.storeName { Text(s).font(.system(size: 11.5)).foregroundColor(NT.ink3).lineLimit(1) }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        Text(NT.yen(o.total)).font(.system(size: 14, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit()
+                        Text(NT.yen(o.total)).font(.system(size: 14, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit()
                         Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold)).foregroundColor(NT.ink3)
                     }
                     .padding(.vertical, 6)
@@ -782,12 +782,12 @@ struct NPOCustomerDetail: View {
             HStack(alignment: .top, spacing: 10) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("実績（累計・返金控除後）").font(.system(size: 11, weight: .bold)).foregroundColor(NT.ink3)
-                    Text(NT.yen(p.ltv.actual)).font(.system(size: 19, weight: .heavy)).foregroundColor(NT.purpleDeep).monospacedDigit()
+                    Text(NT.yen(p.ltv.actual)).font(.system(size: 19, weight: NT.strong)).foregroundColor(NT.purpleDeep).monospacedDigit()
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("12ヶ月予測（参考）").font(.system(size: 11, weight: .bold)).foregroundColor(NT.ink3)
-                    Text(p.ltv.projected12m.map { NT.yen($0) } ?? "算出中").font(.system(size: 19, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit()
+                    Text(p.ltv.projected12m.map { NT.yen($0) } ?? "算出中").font(.system(size: 19, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit()
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -805,12 +805,12 @@ struct NPOCustomerDetail: View {
         let inner = content()
         return VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(title).font(.system(size: 15, weight: .heavy)).foregroundColor(NT.ink)
+                Text(title).font(.system(size: 15, weight: NT.strong)).foregroundColor(NT.ink)
                 Text(en).font(.system(size: 11, weight: .medium)).foregroundColor(NT.ink3)
                 Spacer()
                 if editable {
                     Button { attrsOpen = true } label: {
-                        Text("編集").font(.system(size: 13, weight: .heavy)).foregroundColor(NT.purple)
+                        Text("編集").font(.system(size: 13, weight: NT.strong)).foregroundColor(NT.purple)
                             .padding(.horizontal, 12).frame(height: 32)
                             .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(NT.lilac))
                     }
@@ -829,7 +829,7 @@ struct NPOCustomerDetail: View {
         return HStack(alignment: .firstTextBaseline, spacing: 10) {
             Text(label).font(.system(size: 12, weight: .semibold)).foregroundColor(NT.ink3).frame(width: 80, alignment: .leading)
             inner
-                .font(.system(size: 14, weight: strong ? .heavy : .regular))
+                .font(.system(size: 14, weight: strong ? NT.strong : .regular))
                 .foregroundColor(strong ? NT.danger : NT.ink)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -839,7 +839,7 @@ struct NPOCustomerDetail: View {
         HStack(spacing: 8) {
             Text(a).font(.system(size: 13.5, weight: .semibold)).foregroundColor(NT.ink).lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
             Text(b).font(.system(size: 12.5)).foregroundColor(NT.ink2).monospacedDigit()
-            Text(c).font(.system(size: 13.5, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit().frame(minWidth: 72, alignment: .trailing)
+            Text(c).font(.system(size: 13.5, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit().frame(minWidth: 72, alignment: .trailing)
         }
         .padding(.vertical, 3)
     }
@@ -983,8 +983,8 @@ struct NPOCustomerCreateSheet: View {
     private func field(_ label: String, required: Bool, _ placeholder: String, _ text: Binding<String>) -> some View {
         VStack(alignment: .leading, spacing: 5) {
             HStack(spacing: 3) {
-                Text(label).font(.system(size: 12, weight: .heavy)).foregroundColor(NT.ink2)
-                if required { Text("*").font(.system(size: 12, weight: .heavy)).foregroundColor(NT.danger) }
+                Text(label).font(.system(size: 12, weight: NT.strong)).foregroundColor(NT.ink2)
+                if required { Text("*").font(.system(size: 12, weight: NT.strong)).foregroundColor(NT.danger) }
             }
             TextField(placeholder, text: text)
                 .font(.system(size: 16)).foregroundColor(NT.ink)
@@ -1028,7 +1028,7 @@ struct NPOCustomerCreateSheet: View {
 
 private func sheetHead(_ title: String, onClose: @escaping () -> Void) -> some View {
     HStack {
-        Text(title).font(.system(size: 18, weight: .heavy)).foregroundColor(NT.ink)
+        Text(title).font(.system(size: 18, weight: NT.strong)).foregroundColor(NT.ink)
         Spacer()
         Button(action: onClose) {
             Image(systemName: "xmark").font(.system(size: 15, weight: .bold)).foregroundColor(NT.ink2)
@@ -1047,7 +1047,7 @@ private func sheetFoot(error: String?, busy: Bool, ok: String, onCancel: @escapi
         }
         HStack(spacing: 8) {
             Button(action: onCancel) {
-                Text("やめる").font(.system(size: 15, weight: .heavy)).foregroundColor(NT.ink2)
+                Text("やめる").font(.system(size: 15, weight: NT.strong)).foregroundColor(NT.ink2)
                     .frame(maxWidth: .infinity).frame(height: 50)
                     .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white))
                     .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(NT.line, lineWidth: 1))
@@ -1058,7 +1058,7 @@ private func sheetFoot(error: String?, busy: Bool, ok: String, onCancel: @escapi
                     if busy { ProgressView().tint(.white) }
                     Text(ok)
                 }
-                .font(.system(size: 15, weight: .heavy)).foregroundColor(.white)
+                .font(.system(size: 15, weight: NT.strong)).foregroundColor(.white)
                 .frame(maxWidth: .infinity).frame(height: 50)
                 .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(busy ? NT.ink3 : NT.purple))
             }
@@ -1074,7 +1074,7 @@ private func sheetFoot(error: String?, busy: Bool, ok: String, onCancel: @escapi
 
 private func area(_ label: String, _ placeholder: String, _ text: Binding<String>, max: Int) -> some View {
     VStack(alignment: .leading, spacing: 5) {
-        Text(label).font(.system(size: 12, weight: .heavy)).foregroundColor(NT.ink2)
+        Text(label).font(.system(size: 12, weight: NT.strong)).foregroundColor(NT.ink2)
         TextField(placeholder, text: Binding(get: { text.wrappedValue }, set: { text.wrappedValue = String($0.prefix(max)) }), axis: .vertical)
             .lineLimit(2...5)
             .font(.system(size: 15)).foregroundColor(NT.ink)

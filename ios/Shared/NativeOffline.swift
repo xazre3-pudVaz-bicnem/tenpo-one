@@ -123,7 +123,7 @@ struct NativeOfflineBanner: View {
                 }
                 .foregroundColor(.white)
                 .padding(.horizontal, 16).padding(.vertical, 8)
-                .background(Capsule().fill(problem ? Color(hex: 0xB7791F) : Color(hex: 0x1A5AD6)))
+                .background(Capsule().fill(problem ? Color(hex: 0xB7791F) : Color(hex: 0x37324D)))
                 .shadow(color: .black.opacity(0.2), radius: 8, y: 3)
                 .padding(.top, 6)
                 .allowsHitTesting(false)

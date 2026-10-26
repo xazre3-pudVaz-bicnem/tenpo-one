@@ -88,7 +88,7 @@ struct NativePhoneOwnerScanBulkView: View {
                 Button { showFiles = true } label: {
                     VStack(spacing: 3) {
                         if model.running { ProgressView().tint(.white) } else { Image(systemName: "doc.text").font(.system(size: 20, weight: .bold)) }
-                        Text("ファイルから選ぶ").font(.system(size: 14.5, weight: .heavy))
+                        Text("ファイルから選ぶ").font(.system(size: 14.5, weight: NT.strong))
                     }
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity).frame(height: 70)
@@ -98,7 +98,7 @@ struct NativePhoneOwnerScanBulkView: View {
                 PhotosPicker(selection: $picks, maxSelectionCount: info.maxFiles, matching: .images) {
                     VStack(spacing: 3) {
                         Image(systemName: "photo.on.rectangle").font(.system(size: 20, weight: .bold))
-                        Text("写真から選ぶ").font(.system(size: 14.5, weight: .heavy))
+                        Text("写真から選ぶ").font(.system(size: 14.5, weight: NT.strong))
                     }
                     .foregroundColor(NT.purpleDeep)
                     .frame(maxWidth: .infinity).frame(height: 70)
@@ -131,7 +131,7 @@ struct NativePhoneOwnerScanBulkView: View {
 
     private var summaryCard: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label("取り込みが終わりました", systemImage: "checkmark.circle.fill").font(.system(size: 14, weight: .heavy)).foregroundColor(NT.ok)
+            Label("取り込みが終わりました", systemImage: "checkmark.circle.fill").font(.system(size: 14, weight: NT.strong)).foregroundColor(NT.ok)
             Text(model.summaryText).font(.system(size: 13, weight: .bold)).foregroundColor(NT.ink).fixedSize(horizontal: false, vertical: true)
             if let day = model.folderDay {
                 NOMButton(title: "\(NSBText.md(day)) のフォルダを見る", icon: "folder", filled: false, height: 44, action: onFolder)
@@ -154,7 +154,7 @@ struct NativePhoneOwnerScanBulkView: View {
             } label: {
                 HStack(spacing: 7) {
                     if model.savingAll { ProgressView().tint(.white) } else { Image(systemName: "tray.and.arrow.down.fill").font(.system(size: 15, weight: .bold)) }
-                    Text("まとめて登録（\(readyCount)件）").font(.system(size: 16, weight: .heavy))
+                    Text("まとめて登録（\(readyCount)件）").font(.system(size: 16, weight: NT.strong))
                 }
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity).frame(height: 50)
@@ -209,7 +209,7 @@ struct NativePhoneOwnerScanBulkView: View {
                     Text(r.name).font(.system(size: 12.5, weight: .bold)).foregroundColor(NT.ink).lineLimit(2).truncationMode(.middle)
                     kindToggle(r, reading, busy: busy)
                     if let a = reading.amount {
-                        Text(NT.yen(a)).font(.system(size: 20, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit()
+                        Text(NT.yen(a)).font(.system(size: 20, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit()
                     }
                 }
                 Spacer(minLength: 0)
@@ -232,7 +232,7 @@ struct NativePhoneOwnerScanBulkView: View {
                 } label: {
                     HStack(spacing: 7) {
                         if r.state == .saving { ProgressView().tint(.white) }
-                        Text("登録").font(.system(size: 15.5, weight: .heavy))
+                        Text("登録").font(.system(size: 15.5, weight: NT.strong))
                     }
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity).frame(height: 46)
@@ -282,7 +282,7 @@ struct NativePhoneOwnerScanBulkView: View {
                     }
                 } label: {
                     Text(k == "receipt" ? "レシート" : "請求書")
-                        .font(.system(size: 13, weight: .heavy)).foregroundColor(on ? .white : NT.ink2)
+                        .font(.system(size: 13, weight: NT.strong)).foregroundColor(on ? .white : NT.ink2)
                         .frame(maxWidth: .infinity).frame(height: 34)
                         .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(on ? NT.purple : Color.clear))
                 }
@@ -443,7 +443,7 @@ struct NativePhoneOwnerScanBulkView: View {
         VStack(alignment: .leading, spacing: 7) {
             HStack(spacing: 6) {
                 if r.planning { ProgressView().scaleEffect(0.7) }
-                Text("登録先").font(.system(size: 12.5, weight: .heavy)).foregroundColor(NT.ink)
+                Text("登録先").font(.system(size: 12.5, weight: NT.strong)).foregroundColor(NT.ink)
                 Spacer(minLength: 0)
                 if r.dirty {
                     Button("直した内容で確かめ直す") { model.blur(r.id) }

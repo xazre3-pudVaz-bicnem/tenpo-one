@@ -274,7 +274,7 @@ struct NPSReservationBookPage: View {
             Button { model.openSite = open ? nil : site } label: {
                 HStack(spacing: 8) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(site.name).font(.system(size: 15, weight: .heavy)).foregroundColor(NT.ink)
+                        Text(site.name).font(.system(size: 15, weight: NT.strong)).foregroundColor(NT.ink)
                         Text("最新：\(site.lastImportLabel ?? "----/--/-- --:--")\(site.lastKindLabel.map { "（\($0)）" } ?? "")").font(.system(size: 11)).foregroundColor(NT.ink3)
                     }
                     Spacer(minLength: 4)
@@ -319,7 +319,7 @@ struct NPSReservationBookPage: View {
             Button { model.openImport = open ? nil : r.id } label: {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 6) {
-                        Text(r.siteName).font(.system(size: 14, weight: .heavy)).foregroundColor(NT.ink).lineLimit(1)
+                        Text(r.siteName).font(.system(size: 14, weight: NT.strong)).foregroundColor(NT.ink).lineLimit(1)
                         Text(r.kindLabel).font(.system(size: 12)).foregroundColor(NT.ink2)
                         Spacer(minLength: 4)
                         NOSBadge(text: r.resolved ? "対応済み" : r.statusLabel, color: review ? NT.danger : (r.resolved ? NT.ink3 : (r.status == "imported" || r.status == "updated" ? NT.ok : NT.ink2)))
@@ -373,7 +373,7 @@ struct NPSReservationBookPage: View {
                         .padding(4).background(RoundedRectangle(cornerRadius: 8).fill(Color.white)).overlay(RoundedRectangle(cornerRadius: 8).stroke(NT.line, lineWidth: 1))
                 }
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(c.label).font(.system(size: 15, weight: .heavy)).foregroundColor(NT.ink)
+                    Text(c.label).font(.system(size: 15, weight: NT.strong)).foregroundColor(NT.ink)
                     Text("過去30日の予約 \(c.count30d) 件").font(.system(size: 11.5)).foregroundColor(NT.ink3)
                     Text(c.howTo).font(.system(size: 12)).foregroundColor(NT.ink2).fixedSize(horizontal: false, vertical: true)
                 }
@@ -507,7 +507,7 @@ struct NPSTablesPage: View {
         HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
-                    Text(t.name).font(.system(size: 16, weight: .heavy)).foregroundColor(t.available ? NT.ink : NT.ink3)
+                    Text(t.name).font(.system(size: 16, weight: NT.strong)).foregroundColor(t.available ? NT.ink : NT.ink3)
                     if !t.available { NPSTag(text: "利用停止", color: NT.danger) }
                 }
                 HStack(spacing: 5) {
@@ -587,7 +587,7 @@ struct NPSHandyDevicesPage: View {
                                 .padding(10).background(RoundedRectangle(cornerRadius: 12).fill(Color.white)).overlay(RoundedRectangle(cornerRadius: 12).stroke(NT.line, lineWidth: 1))
                         }
                         Text("登録するスマホのカメラでこの QR を読んでください").font(.system(size: 13.5, weight: .bold)).foregroundColor(NT.ink).multilineTextAlignment(.center)
-                        Text("あと \(left / 60):\(String(format: "%02d", left % 60))").font(.system(size: 22, weight: .heavy)).foregroundColor(NT.purple).monospacedDigit()
+                        Text("あと \(left / 60):\(String(format: "%02d", left % 60))").font(.system(size: 22, weight: NT.strong)).foregroundColor(NT.purple).monospacedDigit()
                         NPOCWideButton(text: "一覧を読み直す", icon: "arrow.clockwise", kind: .secondary, height: 40) { Task { await model.refresh() } }
                     }
                     .frame(maxWidth: .infinity)
@@ -606,7 +606,7 @@ struct NPSHandyDevicesPage: View {
                 .frame(width: 34, height: 34).background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(revoked ? NT.page : NT.lilac))
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
-                    Text(d.name).font(.system(size: 15, weight: .heavy)).foregroundColor(revoked ? NT.ink3 : NT.ink).strikethrough(revoked, color: NT.ink3).lineLimit(1)
+                    Text(d.name).font(.system(size: 15, weight: NT.strong)).foregroundColor(revoked ? NT.ink3 : NT.ink).strikethrough(revoked, color: NT.ink3).lineLimit(1)
                     if revoked { NPSTag(text: "解除済み") }
                 }
                 if !revoked {
@@ -728,7 +728,7 @@ struct NPSHandyQrPage: View {
                     .font(.system(size: 12.5, weight: .semibold)).foregroundColor(NT.ink2)
                 } else {
                     Image(systemName: "qrcode").font(.system(size: 40, weight: .semibold)).foregroundColor(NT.ink3)
-                    Text("ハンディの QR がまだ作られていません").font(.system(size: 15, weight: .heavy)).foregroundColor(NT.ink)
+                    Text("ハンディの QR がまだ作られていません").font(.system(size: 15, weight: NT.strong)).foregroundColor(NT.ink)
                     Text("お店の Wi-Fi につないだこの iPhone で「QRコードを作る」を押すと、今の回線をお店の Wi-Fi として登録して QR を作ります。")
                         .font(.system(size: 12.5)).foregroundColor(NT.ink2).multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
                     NPOCWideButton(text: "QRコードを作る", icon: "qrcode", busy: model.busy == "setup", height: 46) {

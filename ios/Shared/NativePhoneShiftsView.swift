@@ -217,7 +217,7 @@ struct NativePhoneShiftsView: View {
                 HStack(alignment: .center, spacing: 10) {
                     VStack(alignment: .leading, spacing: 3) {
                         Text(drafts > 0 ? "下書き \(drafts)件" : "下書きはありません")
-                            .font(.system(size: 16, weight: .heavy)).foregroundColor(drafts > 0 ? NT.warn : NT.ink)
+                            .font(.system(size: 16, weight: NT.strong)).foregroundColor(drafts > 0 ? NT.warn : NT.ink)
                         Text("この週のシフト \(p.shifts.count)件").font(.system(size: 12)).foregroundColor(NT.ink3)
                     }
                     Spacer(minLength: 6)
@@ -301,9 +301,9 @@ struct NativePhoneShiftsView: View {
         let askMine = !p.canManage && selfInStore && !working.contains(p.selfId)
         return VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
-                Text(d.label).font(.system(size: 16, weight: .heavy)).monospacedDigit().foregroundColor(NPSHFmt.dayColor(d))
+                Text(d.label).font(.system(size: 16, weight: NT.strong)).monospacedDigit().foregroundColor(NPSHFmt.dayColor(d))
                 if isToday {
-                    Text("今日").font(.system(size: 11, weight: .heavy)).foregroundColor(.white)
+                    Text("今日").font(.system(size: 11, weight: NT.strong)).foregroundColor(.white)
                         .padding(.horizontal, 8).padding(.vertical, 2)
                         .background(Capsule().fill(NT.purple))
                 }
@@ -316,8 +316,8 @@ struct NativePhoneShiftsView: View {
                         }
                     } label: {
                         HStack(spacing: 4) {
-                            Image(systemName: "plus").font(.system(size: 12, weight: .heavy))
-                            Text("追加").font(.system(size: 13, weight: .heavy))
+                            Image(systemName: "plus").font(.system(size: 12, weight: NT.strong))
+                            Text("追加").font(.system(size: 13, weight: NT.strong))
                         }
                         .foregroundColor(NT.purple)
                         .padding(.horizontal, 12).frame(height: 34)
@@ -342,7 +342,7 @@ struct NativePhoneShiftsView: View {
                     Button { open(p, me, d, []) } label: {
                         HStack(spacing: 8) {
                             Image(systemName: "plus.circle").font(.system(size: 16, weight: .bold))
-                            Text("この日の希望を出す").font(.system(size: 14.5, weight: .heavy))
+                            Text("この日の希望を出す").font(.system(size: 14.5, weight: NT.strong))
                             Spacer(minLength: 0)
                         }
                         .foregroundColor(NT.purple)
@@ -372,14 +372,14 @@ struct NativePhoneShiftsView: View {
         return Button { open(p, staff, d, [s] + others) } label: {
             HStack(spacing: 12) {
                 Text("\(s.startTime)\n\(s.endTime)")
-                    .font(.system(size: 14, weight: .heavy)).monospacedDigit().multilineTextAlignment(.center)
+                    .font(.system(size: 14, weight: NT.strong)).monospacedDigit().multilineTextAlignment(.center)
                     .foregroundColor(st.fg)
                     .frame(width: 62, height: 48)
                     .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(st.bg))
                     .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(st.border, lineWidth: st.width))
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 6) {
-                        Text(staff.name).font(.system(size: 15.5, weight: .heavy)).foregroundColor(NT.ink).lineLimit(1)
+                        Text(staff.name).font(.system(size: 15.5, weight: NT.strong)).foregroundColor(NT.ink).lineLimit(1)
                         if staff.isHelp { NPBadge(text: "ヘルプ", color: NT.purple) }
                         if mine && !p.canManage { NPBadge(text: "自分", color: NT.ink3) }
                     }
@@ -475,13 +475,13 @@ struct NativePhoneShiftsView: View {
         return HStack(alignment: .center, spacing: 10) {
             Text(r.label).font(.system(size: 13.5, weight: .bold)).monospacedDigit().foregroundColor(NT.ink).frame(width: 78, alignment: .leading)
             VStack(alignment: .leading, spacing: 2) {
-                Text(NSHFmt.yen(r.plannedLabor)).font(.system(size: 14.5, weight: .heavy)).monospacedDigit().foregroundColor(NT.ink)
+                Text(NSHFmt.yen(r.plannedLabor)).font(.system(size: 14.5, weight: NT.strong)).monospacedDigit().foregroundColor(NT.ink)
                 Text("\(budget ? "予算" : "過去4週") \(r.salesBasis.map { NSHFmt.yen($0) } ?? "予測不可")")
                     .font(.system(size: 11)).monospacedDigit().foregroundColor(NT.ink3).lineLimit(1)
             }
             Spacer(minLength: 4)
             VStack(alignment: .trailing, spacing: 2) {
-                Text(r.ratio.map { NSHFmt.pct($0) } ?? "—").font(.system(size: 14.5, weight: .heavy)).monospacedDigit()
+                Text(r.ratio.map { NSHFmt.pct($0) } ?? "—").font(.system(size: 14.5, weight: NT.strong)).monospacedDigit()
                     .foregroundColor(over ? NT.danger : NT.ink)
                 if let diff = r.diff {
                     Text(NSHFmt.pt(diff)).font(.system(size: 11, weight: .bold)).monospacedDigit().foregroundColor(plus ? NT.danger : NT.ok)
@@ -501,8 +501,8 @@ struct NativePhoneShiftsView: View {
             NPWSectionTitle(title: "時間帯別 必要人数", count: rows.isEmpty ? "" : "\(rows.count)件") {
                 Button { addingRequirement = true } label: {
                     HStack(spacing: 4) {
-                        Image(systemName: "plus").font(.system(size: 12, weight: .heavy))
-                        Text("追加").font(.system(size: 13, weight: .heavy))
+                        Image(systemName: "plus").font(.system(size: 12, weight: NT.strong))
+                        Text("追加").font(.system(size: 13, weight: NT.strong))
                     }
                     .foregroundColor(NT.purple)
                     .padding(.horizontal, 12).frame(height: 34)
@@ -521,7 +521,7 @@ struct NativePhoneShiftsView: View {
                                 .frame(width: 58, alignment: .leading)
                             Text("\(r.timeFrom)〜\(r.timeTo)").font(.system(size: 14.5)).monospacedDigit().foregroundColor(NT.ink)
                             Spacer(minLength: 6)
-                            Text("\(Int(r.requiredCount))人").font(.system(size: 14.5, weight: .heavy)).monospacedDigit().foregroundColor(NT.ink)
+                            Text("\(Int(r.requiredCount))人").font(.system(size: 14.5, weight: NT.strong)).monospacedDigit().foregroundColor(NT.ink)
                             Button { deletingRequirement = r } label: {
                                 Image(systemName: "trash").font(.system(size: 15, weight: .semibold)).foregroundColor(NT.danger)
                                     .frame(width: 44, height: 44)

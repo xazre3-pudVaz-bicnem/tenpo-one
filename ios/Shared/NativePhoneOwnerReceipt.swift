@@ -103,7 +103,7 @@ struct NativePhoneOwnerReceiptView: View {
     private func actionLabel(_ t: String, icon: String, filled: Bool) -> some View {
         HStack(spacing: 8) {
             Image(systemName: icon).font(.system(size: 15, weight: .bold))
-            Text(t).font(.system(size: 15, weight: .heavy))
+            Text(t).font(.system(size: 15, weight: NT.strong))
         }
         .foregroundColor(filled ? .white : NT.purpleDeep)
         .frame(maxWidth: .infinity).frame(height: 50)

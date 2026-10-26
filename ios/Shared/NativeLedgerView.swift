@@ -112,8 +112,8 @@ enum NLColor {
     static let line = Color(hex: 0xE2E8F0)
     static let ink = Color(hex: 0x212121)
     static let muted = Color(hex: 0x64748B)
-    /// iPad はホームの左のバーで選んだボタンと同じ黄色に（黄色を 1 つに。2026-10-27 03:14 Ronnie）。iPhone は今まで通り
-    static let yellow = AppConfig.isPad ? Color(hex: 0xF2D06B) : Color(hex: 0xFFC634)
+    /// ホームの左のバーで選んだボタンと同じ黄色（黄色を 1 つに。iPad も iPhone も。2026-10-27 03:14・03:27 Ronnie）
+    static let yellow = Color(hex: 0xF2D06B)
     static let blue = Color(hex: 0x1863DC)
     static let blueSoft = Color(hex: 0xDBEAFE)
     static let green = Color(hex: 0x00C689)

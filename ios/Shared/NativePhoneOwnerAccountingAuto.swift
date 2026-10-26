@@ -249,7 +249,7 @@ struct NPACAutoSourceCard: View {
             HStack(alignment: .top, spacing: 8) {
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 6) {
-                        Text(source.title).font(.system(size: 16, weight: .heavy)).foregroundColor(NT.ink)
+                        Text(source.title).font(.system(size: 16, weight: NT.strong)).foregroundColor(NT.ink)
                         if source.negative { NOSBadge(text: "マイナス計上", color: NT.warn) }
                     }
                     Text(source.hint).font(.system(size: 11.5)).foregroundColor(NT.ink3).fixedSize(horizontal: false, vertical: true)
@@ -257,7 +257,7 @@ struct NPACAutoSourceCard: View {
                 Spacer(minLength: 6)
                 VStack(alignment: .trailing, spacing: 1) {
                     Text("対象").font(.system(size: 10.5, weight: .semibold)).foregroundColor(NT.ink3)
-                    Text("\(source.pendingCount)件").font(.system(size: 14, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit()
+                    Text("\(source.pendingCount)件").font(.system(size: 14, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit()
                     Text(NT.yen(source.pendingTotal)).font(.system(size: 12, weight: .bold)).foregroundColor(NT.ink2).monospacedDigit()
                 }
             }
@@ -330,7 +330,7 @@ struct NPACAutoSourceCard: View {
                     Text(c.date == "—" ? "—" : NPACText.date(c.date)).font(.system(size: 12, weight: .semibold)).foregroundColor(NT.ink2).monospacedDigit()
                     Text(c.storeName ?? "全社").font(.system(size: 11.5)).foregroundColor(NT.ink3).lineLimit(1)
                     Spacer(minLength: 4)
-                    Text(NT.yen(c.debit)).font(.system(size: 14, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit()
+                    Text(NT.yen(c.debit)).font(.system(size: 14, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit()
                 }
                 Text(c.description).font(.system(size: 13.5, weight: .bold)).foregroundColor(NT.ink).fixedSize(horizontal: false, vertical: true)
                 ForEach(c.lines) { l in
@@ -474,7 +474,7 @@ struct NPACAssetsPage: View {
     private func card(_ r: NPACAsset) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(r.name).font(.system(size: 16, weight: .heavy)).foregroundColor(NT.ink).lineLimit(2)
+                Text(r.name).font(.system(size: 16, weight: NT.strong)).foregroundColor(NT.ink).lineLimit(2)
                 Spacer(minLength: 6)
                 NOSBadge(text: r.statusLabel, color: NPACText.statusColor(r.status))
             }

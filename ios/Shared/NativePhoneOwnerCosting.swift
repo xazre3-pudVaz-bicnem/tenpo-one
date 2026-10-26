@@ -387,14 +387,14 @@ struct NativePhoneCostingView: View {
         return VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .top, spacing: 10) {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(r.name).font(.system(size: 16, weight: .heavy)).foregroundColor(NT.ink).lineLimit(2).multilineTextAlignment(.leading)
+                    Text(r.name).font(.system(size: 16, weight: NT.strong)).foregroundColor(NT.ink).lineLimit(2).multilineTextAlignment(.leading)
                     Text([r.categoryName ?? "", r.itemTypeLabel ?? ""].filter { !$0.isEmpty }.joined(separator: "・"))
                         .font(.system(size: 11.5, weight: .semibold)).foregroundColor(NT.ink3).lineLimit(1)
                 }
                 Spacer(minLength: 6)
                 VStack(alignment: .trailing, spacing: 1) {
                     Text("原価率").font(.system(size: 10, weight: .bold)).foregroundColor(NT.ink3)
-                    Text(NPZCoMath.pct(r.costRate)).font(.system(size: 22, weight: .heavy)).foregroundColor(tone).monospacedDigit()
+                    Text(NPZCoMath.pct(r.costRate)).font(.system(size: 22, weight: NT.strong)).foregroundColor(tone).monospacedDigit()
                 }
             }
             HStack(spacing: 10) {
@@ -443,9 +443,9 @@ struct NativePhoneCostingView: View {
             if let s = p.selected {
                 NPOCard(title: s.name, trailing: "1\(s.unit)あたり") {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text(NPZ.yen(s.avgCost)).font(.system(size: 18, weight: .heavy)).foregroundColor(NT.ink2).monospacedDigit()
-                        Image(systemName: "arrow.right").font(.system(size: 13, weight: .heavy)).foregroundColor(NT.ink3)
-                        Text(NPZ.yen(s.lastCost)).font(.system(size: 22, weight: .heavy)).foregroundColor(s.lastCost > s.avgCost ? NT.danger : NT.ok).monospacedDigit()
+                        Text(NPZ.yen(s.avgCost)).font(.system(size: 18, weight: NT.strong)).foregroundColor(NT.ink2).monospacedDigit()
+                        Image(systemName: "arrow.right").font(.system(size: 13, weight: NT.strong)).foregroundColor(NT.ink3)
+                        Text(NPZ.yen(s.lastCost)).font(.system(size: 22, weight: NT.strong)).foregroundColor(s.lastCost > s.avgCost ? NT.danger : NT.ok).monospacedDigit()
                         Spacer()
                     }
                     Text("平均仕入単価 → 最終仕入単価で計算した場合").font(.system(size: 11.5)).foregroundColor(NT.ink3)
@@ -473,7 +473,7 @@ struct NativePhoneCostingView: View {
             }
             Spacer(minLength: 6)
             if let r = d.deviationRate {
-                Text((r > 0 ? "+" : "") + String(format: "%.1f", r) + "%").font(.system(size: 16, weight: .heavy)).foregroundColor(r > 0 ? NT.danger : NT.ok).monospacedDigit()
+                Text((r > 0 ? "+" : "") + String(format: "%.1f", r) + "%").font(.system(size: 16, weight: NT.strong)).foregroundColor(r > 0 ? NT.danger : NT.ok).monospacedDigit()
             }
             Image(systemName: selected ? "checkmark.circle.fill" : "chevron.right").font(.system(size: selected ? 18 : 11, weight: .bold))
                 .foregroundColor(selected ? NT.purple : NT.ink3)
@@ -487,7 +487,7 @@ struct NativePhoneCostingView: View {
             HStack(alignment: .firstTextBaseline) {
                 Text(r.menuItemName).font(.system(size: 15, weight: .bold)).foregroundColor(NT.ink).lineLimit(1)
                 Spacer()
-                Text((r.costDelta > 0 ? "+" : "") + NPZ.yen(r.costDelta)).font(.system(size: 15, weight: .heavy))
+                Text((r.costDelta > 0 ? "+" : "") + NPZ.yen(r.costDelta)).font(.system(size: 15, weight: NT.strong))
                     .foregroundColor(r.costDelta > 0 ? NT.danger : (r.costDelta < 0 ? NT.ok : NT.ink)).monospacedDigit()
             }
             HStack(spacing: 8) {
@@ -526,7 +526,7 @@ struct NativePhoneCostingView: View {
                             }
                             Spacer(minLength: 6)
                             VStack(alignment: .trailing, spacing: 2) {
-                                Text(NPZ.yen(r.amount)).font(.system(size: 15, weight: .heavy)).foregroundColor(NT.danger).monospacedDigit()
+                                Text(NPZ.yen(r.amount)).font(.system(size: 15, weight: NT.strong)).foregroundColor(NT.danger).monospacedDigit()
                                 Text(NPZ.q(r.quantity) + r.unit).font(.system(size: 11.5, weight: .semibold)).foregroundColor(NT.ink3).monospacedDigit()
                             }
                         }
@@ -550,7 +550,7 @@ struct NativePhoneCostingView: View {
                                 }
                                 Spacer(minLength: 6)
                                 VStack(alignment: .trailing, spacing: 2) {
-                                    Text(NPZ.signed(r.diff) + r.unit).font(.system(size: 15, weight: .heavy)).foregroundColor(r.diff < 0 ? NT.danger : NT.ok).monospacedDigit()
+                                    Text(NPZ.signed(r.diff) + r.unit).font(.system(size: 15, weight: NT.strong)).foregroundColor(r.diff < 0 ? NT.danger : NT.ok).monospacedDigit()
                                     Text(r.diffAmount.map { ($0 > 0 ? "+" : "") + NPZ.yen($0) } ?? "—").font(.system(size: 11.5, weight: .semibold)).foregroundColor(NT.ink3).monospacedDigit()
                                 }
                             }

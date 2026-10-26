@@ -231,8 +231,8 @@ struct NPBrandTile: View {
     var height: CGFloat = 62
 
     var body: some View {
-        // iPad は色を付けない（白い地に濃い字・選ぶと紫紺。2026-10-27 03:21 Ronnie「sabai ko color milau colorfull pardaina」）。iPhone は各社の色
-        let plain = AppConfig.isPad
+        // 色を付けない（白い地に濃い字・選ぶと紫紺。2026-10-27 03:21 Ronnie「sabai ko color milau colorfull pardaina」）
+        let plain = true
         let c = plain ? OV.primary : (brand.color ?? fallback)
         let bright = plain ? false : brand.isBright
         let ink: Color = on ? (bright ? Color(hex: 0x292725) : .white) : (plain ? OV.ink : (bright ? Color(hex: 0x292725) : c))

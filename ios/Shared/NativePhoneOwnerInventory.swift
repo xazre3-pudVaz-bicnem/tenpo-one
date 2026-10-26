@@ -474,7 +474,7 @@ struct NativePhoneInventoryView: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 6) {
                     Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 13, weight: .bold))
-                    Text("要発注（発注点以下）\(p.stats?.reorderCount ?? list.count)件").font(.system(size: 14, weight: .heavy))
+                    Text("要発注（発注点以下）\(p.stats?.reorderCount ?? list.count)件").font(.system(size: 14, weight: NT.strong))
                     Spacer()
                     Button { model.setTab("reorder") } label: {
                         Text("発注提案へ").font(.system(size: 12.5, weight: .bold)).foregroundColor(NT.purpleDeep)
@@ -493,7 +493,7 @@ struct NativePhoneInventoryView: View {
                         }
                         Spacer(minLength: 6)
                         Button { onOpen("/app/purchases/new?item=\(r.id)") } label: {
-                            Text("発注書").font(.system(size: 13, weight: .heavy)).foregroundColor(.white)
+                            Text("発注書").font(.system(size: 13, weight: NT.strong)).foregroundColor(.white)
                                 .padding(.horizontal, 12).frame(height: 34)
                                 .background(Capsule().fill(NT.purple))
                         }
@@ -547,7 +547,7 @@ struct NativePhoneInventoryView: View {
                         HStack(spacing: 10) {
                             Image(systemName: c.status == "draft" ? "pencil.circle.fill" : "checkmark.seal.fill").font(.system(size: 20))
                                 .foregroundColor(st.1)
-                            Text(NPZ.date(c.countDate)).font(.system(size: 16, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit()
+                            Text(NPZ.date(c.countDate)).font(.system(size: 16, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit()
                             NOSBadge(text: st.0, color: st.1)
                             Spacer()
                             Text(c.status == "draft" ? "入力する" : "見る").font(.system(size: 13, weight: .bold)).foregroundColor(NT.purple)
@@ -598,13 +598,13 @@ struct NPZInvItemRow: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .top, spacing: 10) {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(item.name).font(.system(size: 16, weight: .heavy)).foregroundColor(NT.ink).lineLimit(2).multilineTextAlignment(.leading)
+                    Text(item.name).font(.system(size: 16, weight: NT.strong)).foregroundColor(NT.ink).lineLimit(2).multilineTextAlignment(.leading)
                     Text([NPZInv.kindLabel(item.itemKind), item.category ?? ""].filter { !$0.isEmpty }.joined(separator: "・"))
                         .font(.system(size: 11.5, weight: .semibold)).foregroundColor(NT.ink3).lineLimit(1)
                 }
                 Spacer(minLength: 6)
                 HStack(alignment: .firstTextBaseline, spacing: 2) {
-                    Text(NPZ.q(item.currentQuantity)).font(.system(size: 24, weight: .heavy)).foregroundColor(tone).monospacedDigit()
+                    Text(NPZ.q(item.currentQuantity)).font(.system(size: 24, weight: NT.strong)).foregroundColor(tone).monospacedDigit()
                         .lineLimit(1).minimumScaleFactor(0.6)
                     Text(item.unit).font(.system(size: 12, weight: .bold)).foregroundColor(NT.ink3)
                 }
@@ -681,13 +681,13 @@ struct NPZInvItemSheet: View {
             }
             HStack(alignment: .firstTextBaseline, spacing: 4) {
                 Text("現在庫").font(.system(size: 13, weight: .bold)).foregroundColor(NT.ink3)
-                Text(NPZ.q(it.currentQuantity)).font(.system(size: 38, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit()
+                Text(NPZ.q(it.currentQuantity)).font(.system(size: 38, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit()
                     .lineLimit(1).minimumScaleFactor(0.5)
                 Text(it.unit).font(.system(size: 17, weight: .bold)).foregroundColor(NT.ink2)
                 Spacer()
                 VStack(alignment: .trailing, spacing: 1) {
                     Text("在庫金額").font(.system(size: 11, weight: .bold)).foregroundColor(NT.ink3)
-                    Text(NPZ.yen(it.stockValue)).font(.system(size: 16, weight: .heavy)).foregroundColor(NT.purpleDeep).monospacedDigit()
+                    Text(NPZ.yen(it.stockValue)).font(.system(size: 16, weight: NT.strong)).foregroundColor(NT.purpleDeep).monospacedDigit()
                 }
             }
         }
@@ -749,7 +749,7 @@ struct NPZInvItemSheet: View {
                                 }
                             }
                             Spacer(minLength: 6)
-                            Text(NPZ.signed(r.quantity) + it.unit).font(.system(size: 15, weight: .heavy)).monospacedDigit()
+                            Text(NPZ.signed(r.quantity) + it.unit).font(.system(size: 15, weight: NT.strong)).monospacedDigit()
                                 .foregroundColor(r.quantity < 0 ? NT.danger : NT.ok)
                         }
                         .padding(.horizontal, 14).padding(.vertical, 10)
@@ -783,7 +783,7 @@ struct NPZInvItemSheet: View {
                             }
                             Spacer(minLength: 6)
                             VStack(alignment: .trailing, spacing: 2) {
-                                Text(NPZ.yen(r.unitCost)).font(.system(size: 15, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit()
+                                Text(NPZ.yen(r.unitCost)).font(.system(size: 15, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit()
                                 Text(NPZ.q(r.quantity) + d.unit).font(.system(size: 11.5, weight: .semibold)).foregroundColor(NT.ink3).monospacedDigit()
                             }
                         }
@@ -821,7 +821,7 @@ struct NPZInvMovementSheet: View {
     var body: some View {
         NPOCSheetFrame(title: "入出庫", confirmText: model.busy ? "登録中…" : "登録する", busy: model.busy, onCancel: onClose, onConfirm: { Task { await save() } }) {
             HStack(alignment: .firstTextBaseline) {
-                Text(item.name).font(.system(size: 17, weight: .heavy)).foregroundColor(NT.ink)
+                Text(item.name).font(.system(size: 17, weight: NT.strong)).foregroundColor(NT.ink)
                 Spacer()
                 Text("現在庫 \(NPZ.q(item.currentQuantity))\(item.unit)").font(.system(size: 13, weight: .bold)).foregroundColor(NT.ink3).monospacedDigit()
             }
@@ -980,7 +980,7 @@ struct NPZInvItemFormSheet: View {
 
     private var conversionBox: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("仕入単位（任意）").font(.system(size: 13, weight: .heavy)).foregroundColor(NT.ink)
+            Text("仕入単位（任意）").font(.system(size: 13, weight: NT.strong)).foregroundColor(NT.ink)
             Text("例：kg で仕入れて g で在庫管理 → 係数 1000。レシピは在庫単位で書きます").font(.system(size: 11.5)).foregroundColor(NT.ink3)
             unitField("仕入単位", text: $purchaseUnit) { applySuggestion($0, stockUnit) }
             NPZTextField(label: "変換係数（1仕入単位 ＝ ◯在庫単位）", text: Binding(get: { factor }, set: { factor = $0; factorTouched = true }), number: true)

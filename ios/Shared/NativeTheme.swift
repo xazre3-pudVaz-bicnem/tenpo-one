@@ -11,22 +11,22 @@ enum NT {
     // → 主の色はホームの「オーダー・会計」のボタンと同じ青、地と線はうすい灰色（店舗台帳・テーブル一覧と同じ系統）
     static let page = Color(hex: 0xF4F5F8)          // 画面の地
     static let card = Color.white
-    /// iPad（レジ）はどの画面もホームと同じ色：主の色＝紫紺・うすい灰色・黄色（青をやめる）。iPhone は今まで通り
-    /// （2026-10-27 03:14 Ronnie「rezi ko everywhere color milau fonts styles ra boldness same banau」・03:21「colorfull pardaina」）
-    private static let pad = AppConfig.isPad
-    static let purple = pad ? Color(hex: 0x37324D) : Color(hex: 0x2A6FE6)        // 主の色（名前は昔のまま）
-    static let purpleDeep = pad ? Color(hex: 0x24203A) : Color(hex: 0x0A3FA8)
-    static let lilac = pad ? Color(hex: 0xEFF0F4) : Color(hex: 0xE7EFFD)         // うすい色（チップ・弱いボタン）
-    static let lilacLine = pad ? Color(hex: 0xE3E5EA) : Color(hex: 0xDCE3EF)
-    /// 太い字は iPad では bold まで（heavy・black を使わない。字の太さをそろえる）。iPhone は今まで通り
-    static let strong: Font.Weight = pad ? .bold : .heavy
-    static let strongest: Font.Weight = pad ? .bold : .black
+    /// どの画面も（iPad のレジも iPhone も）ホームと同じ色：主の色＝紫紺・うすい灰色・黄色（青をやめる）
+    /// （2026-10-27 03:14 Ronnie「rezi ko everywhere color milau fonts styles ra boldness same banau」・03:21「colorfull pardaina」・
+    /// 03:27「mobile aap ko pani same style le color milau design sabai same banau」）
+    static let purple = Color(hex: 0x37324D)        // 主の色（名前は昔のまま）
+    static let purpleDeep = Color(hex: 0x24203A)
+    static let lilac = Color(hex: 0xEFF0F4)         // うすい色（チップ・弱いボタン）
+    static let lilacLine = Color(hex: 0xE3E5EA)
+    /// 太い字は bold まで（heavy・black を使わない。字の太さをそろえる）
+    static let strong: Font.Weight = .bold
+    static let strongest: Font.Weight = .bold
     static let ink = Color(hex: 0x292725)
     static let ink2 = Color(hex: 0x50565F)
     static let ink3 = Color(hex: 0x8A909A)
     static let line = Color(hex: 0xE4E7EE)
     /// レジ会計（お会計を確定する）の緑。テーブルのポップアップの「レジ会計」と同じ
-    static let pay = pad ? Color(hex: 0x37324D) : Color(hex: 0x1E8F62)
+    static let pay = Color(hex: 0x37324D)
     static let danger = Color(hex: 0xC62828)
     static let dangerBg = Color(hex: 0xFDECEC)
     static let ok = Color(hex: 0x1E8E5A)

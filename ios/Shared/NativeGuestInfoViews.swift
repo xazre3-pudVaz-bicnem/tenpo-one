@@ -4,8 +4,9 @@ import SwiftUI
 /// 2026-10-25 00:12 Ronnie「これもうちの色に合わせて。デザインはこのままで色だけ」
 enum GIColor {
     static let navy = Color(hex: 0x171333)
-    static let blue = Color(hex: 0x2A6FE6)
-    static let line = Color(hex: 0xDCE3EF)
+    /// 青をやめて紫紺（ホームと同じ。2026-10-27 03:14 Ronnie「rezi ko everywhere color milau」）。名前は昔のまま
+    static let blue = Color(hex: 0x37324D)
+    static let line = Color(hex: 0xE3E5EA)
     /// うすいネイビー（選んだ顧客の行・＋−のボタンの地）
     static let navySoft = Color(hex: 0xECEEF6)
 }

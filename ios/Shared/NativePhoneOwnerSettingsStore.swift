@@ -129,7 +129,7 @@ struct NPSHoursPage: View {
         NPOCard(title: "営業時間") {
             if edit {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("まとめて変更").font(.system(size: 12.5, weight: .heavy)).foregroundColor(NT.purpleDeep)
+                    Text("まとめて変更").font(.system(size: 12.5, weight: NT.strong)).foregroundColor(NT.purpleDeep)
                     HStack(spacing: 6) {
                         timeBox("開店", bulkOpen, NativeHoursModel.openOptions) { bulkOpen = $0 }
                         timeBox("閉店", bulkClose, NativeHoursModel.closeOptions) { bulkClose = $0 }
@@ -145,10 +145,10 @@ struct NPSHoursPage: View {
             ForEach(model.hours, id: \.dayOfWeek) { h in
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 8) {
-                        Text("\(NativeHoursModel.dayLabels[h.dayOfWeek])曜日").font(.system(size: 15, weight: .heavy)).foregroundColor(h.isClosed ? NT.ink3 : NT.ink)
+                        Text("\(NativeHoursModel.dayLabels[h.dayOfWeek])曜日").font(.system(size: 15, weight: NT.strong)).foregroundColor(h.isClosed ? NT.ink3 : NT.ink)
                         Spacer()
                         Button { model.update(h.dayOfWeek) { $0.isClosed.toggle() } } label: {
-                            Text(h.isClosed ? "定休日" : "営業").font(.system(size: 12.5, weight: .heavy)).foregroundColor(h.isClosed ? .white : NT.ok)
+                            Text(h.isClosed ? "定休日" : "営業").font(.system(size: 12.5, weight: NT.strong)).foregroundColor(h.isClosed ? .white : NT.ok)
                                 .frame(width: 70, height: 30)
                                 .background(Capsule().fill(h.isClosed ? NT.ink3 : NT.ok.opacity(0.12)))
                         }
@@ -297,7 +297,7 @@ struct NPSTaxPage: View {
                 if p.rows.isEmpty { NPOCEmpty(icon: "percent", title: "税率がまだ登録されていません") }
                 ForEach(p.rows) { r in
                     HStack(spacing: 12) {
-                        Text(r.rate == r.rate.rounded() ? "\(Int(r.rate))%" : "\(r.rate)%").font(.system(size: 22, weight: .heavy)).foregroundColor(NT.purpleDeep).monospacedDigit()
+                        Text(r.rate == r.rate.rounded() ? "\(Int(r.rate))%" : "\(r.rate)%").font(.system(size: 22, weight: NT.strong)).foregroundColor(NT.purpleDeep).monospacedDigit()
                             .frame(minWidth: 58, alignment: .leading)
                         VStack(alignment: .leading, spacing: 4) {
                             Text(r.name).font(.system(size: 15, weight: .bold)).foregroundColor(NT.ink)
@@ -409,7 +409,7 @@ struct NPSAlertsPage: View {
         let off = (it.effectiveSource == "store" && !it.storeEnabled) || (it.effectiveSource == "org" && !it.orgEnabled)
         return VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline) {
-                Text(it.label).font(.system(size: 15, weight: .heavy)).foregroundColor(NT.ink)
+                Text(it.label).font(.system(size: 15, weight: NT.strong)).foregroundColor(NT.ink)
                 Spacer()
                 if off { NPSTag(text: "無効", color: NT.ink3) }
             }
@@ -469,7 +469,7 @@ struct NPSApprovalsPage: View {
                                 }
                             }
                         }
-                        Text("\(NT.yen(r.minAmount)) 〜 \(r.maxAmount.map { NT.yen($0) } ?? "上限なし")").font(.system(size: 16, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit()
+                        Text("\(NT.yen(r.minAmount)) 〜 \(r.maxAmount.map { NT.yen($0) } ?? "上限なし")").font(.system(size: 16, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit()
                         HStack(spacing: 6) {
                             Text("承認：\(model.label(p.roles, r.approverRole))").font(.system(size: 13, weight: .bold)).foregroundColor(NT.purple)
                             if r.allowSelfApprove { NPSTag(text: "自己承認可", color: NT.warn) }
@@ -589,7 +589,7 @@ struct NPSIntegrationsPage: View {
                     VStack(alignment: .leading, spacing: 6) {
                         HStack(spacing: 8) {
                             Circle().fill(tone(r.tone)).frame(width: 9, height: 9)
-                            Text(r.name).font(.system(size: 15, weight: .heavy)).foregroundColor(NT.ink)
+                            Text(r.name).font(.system(size: 15, weight: NT.strong)).foregroundColor(NT.ink)
                             Spacer(minLength: 4)
                             NOSBadge(text: r.status, color: tone(r.tone))
                         }

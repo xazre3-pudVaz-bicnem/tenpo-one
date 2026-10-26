@@ -293,7 +293,7 @@ struct NativePhoneCouponsView: View {
     private func stat(_ label: String, _ value: String, _ color: Color) -> some View {
         VStack(spacing: 3) {
             Text(label).font(.system(size: 11.5, weight: .bold)).foregroundColor(NT.ink3)
-            Text(value).font(.system(size: 19, weight: .heavy)).foregroundColor(color).monospacedDigit()
+            Text(value).font(.system(size: 19, weight: NT.strong)).foregroundColor(color).monospacedDigit()
         }
         .frame(maxWidth: .infinity)
     }
@@ -365,8 +365,8 @@ struct NPCPValueTile: View {
         let percent = coupon.kind == "percent"
         let big = percent ? "\(NPPYFmt.num(coupon.value))%" : NPPYFmt.yen(coupon.value)
         return VStack(spacing: 0) {
-            Text(big).font(.system(size: size * 0.29, weight: .heavy)).foregroundColor(.white).lineLimit(1).minimumScaleFactor(0.5)
-            Text(percent ? "OFF" : "引き").font(.system(size: size * 0.17, weight: .heavy)).foregroundColor(.white.opacity(0.85))
+            Text(big).font(.system(size: size * 0.29, weight: NT.strong)).foregroundColor(.white).lineLimit(1).minimumScaleFactor(0.5)
+            Text(percent ? "OFF" : "引き").font(.system(size: size * 0.17, weight: NT.strong)).foregroundColor(.white.opacity(0.85))
         }
         .padding(.horizontal, 4)
         .frame(width: size, height: size)
@@ -427,12 +427,12 @@ struct NPCPDetailView: View {
                 NPCPValueTile(coupon: coupon, size: 84)
                 VStack(alignment: .leading, spacing: 6) {
                     NWKBadge(text: NPCPText.status(coupon.status), color: NPCPText.statusColor(coupon.status))
-                    Text(coupon.name).font(.system(size: 19, weight: .heavy)).foregroundColor(NT.ink).fixedSize(horizontal: false, vertical: true)
+                    Text(coupon.name).font(.system(size: 19, weight: NT.strong)).foregroundColor(NT.ink).fixedSize(horizontal: false, vertical: true)
                     Text(NPCPText.value(coupon)).font(.system(size: 14, weight: .bold)).foregroundColor(NT.purpleDeep)
                 }
             }
             HStack(spacing: 8) {
-                Text(coupon.code).font(.system(size: 18, weight: .heavy, design: .monospaced)).foregroundColor(NT.ink)
+                Text(coupon.code).font(.system(size: 18, weight: NT.strong, design: .monospaced)).foregroundColor(NT.ink)
                     .textSelection(.enabled)
                 Spacer(minLength: 6)
                 Button {
@@ -492,7 +492,7 @@ struct NPCPDetailView: View {
         rows.append(("他の値引きと併用", c.stackable == true ? "できる" : "できない"))
         let list = rows
         return VStack(alignment: .leading, spacing: 0) {
-            Text("利用条件").font(.system(size: 15, weight: .heavy)).foregroundColor(NT.ink).padding(.horizontal, 14).padding(.top, 14).padding(.bottom, 6)
+            Text("利用条件").font(.system(size: 15, weight: NT.strong)).foregroundColor(NT.ink).padding(.horizontal, 14).padding(.top, 14).padding(.bottom, 6)
             ForEach(Array(list.enumerated()), id: \.offset) { i, r in
                 if i > 0 { Rectangle().fill(NT.line).frame(height: 1).padding(.leading, 14) }
                 HStack(alignment: .top, spacing: 10) {
@@ -523,7 +523,7 @@ struct NPCPDetailView: View {
                                     Text(u.customerName ?? "—").font(.system(size: 12.5)).foregroundColor(NT.ink3).lineLimit(1)
                                 }
                                 Spacer(minLength: 6)
-                                Text("−\(NPPYFmt.yen(u.discountAmount))").font(.system(size: 15, weight: .heavy)).foregroundColor(NT.danger).monospacedDigit()
+                                Text("−\(NPPYFmt.yen(u.discountAmount))").font(.system(size: 15, weight: NT.strong)).foregroundColor(NT.danger).monospacedDigit()
                                 Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundColor(NT.ink3)
                             }
                             .padding(.horizontal, 14).padding(.vertical, 11)

@@ -173,7 +173,7 @@ struct NativePhoneLeaveView: View {
                     HStack(spacing: 10) {
                         Text(g.staffName).font(.system(size: 15, weight: .bold)).foregroundColor(NT.ink).lineLimit(1)
                         Spacer(minLength: 6)
-                        Text(g.daysLabel).font(.system(size: 14, weight: .heavy)).monospacedDigit().foregroundColor(NT.ink)
+                        Text(g.daysLabel).font(.system(size: 14, weight: NT.strong)).monospacedDigit().foregroundColor(NT.ink)
                         NATBadge(text: "\(g.expiresLabel) 失効", color: NT.warn)
                     }
                     .padding(.horizontal, 14).padding(.vertical, 11)
@@ -197,7 +197,7 @@ struct NativePhoneLeaveView: View {
                         }
                         Spacer(minLength: 6)
                         VStack(alignment: .trailing, spacing: 0) {
-                            Text("\(NATTime.num(b.remaining))日").font(.system(size: 19, weight: .heavy)).monospacedDigit()
+                            Text("\(NATTime.num(b.remaining))日").font(.system(size: 19, weight: NT.strong)).monospacedDigit()
                                 .foregroundColor(b.remaining < 0 ? NT.danger : NT.ink)
                             Text("残り").font(.system(size: 10.5, weight: .bold)).foregroundColor(NT.ink3)
                         }
@@ -218,7 +218,7 @@ struct NativePhoneLeaveView: View {
                 HStack(spacing: 10) {
                     NPWAvatar(name: r.staffName, size: 36, color: NT.warn)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(r.staffName).font(.system(size: 16, weight: .heavy)).foregroundColor(NT.ink).lineLimit(1)
+                        Text(r.staffName).font(.system(size: 16, weight: NT.strong)).foregroundColor(NT.ink).lineLimit(1)
                         Text("\(r.dateLabel)（\(r.fractionLabel)）").font(.system(size: 13.5, weight: .bold)).monospacedDigit().foregroundColor(NT.ink2)
                     }
                     Spacer(minLength: 6)
@@ -279,7 +279,7 @@ struct NativePhoneLeaveView: View {
                             Text("\(g.reasonLabel) ・ 失効 \(g.expiresLabel)").font(.system(size: 11.5)).monospacedDigit().foregroundColor(NT.ink3)
                         }
                         Spacer(minLength: 6)
-                        Text(g.daysLabel).font(.system(size: 15, weight: .heavy)).monospacedDigit().foregroundColor(g.expired ? NT.ink3 : NT.ink)
+                        Text(g.daysLabel).font(.system(size: 15, weight: NT.strong)).monospacedDigit().foregroundColor(g.expired ? NT.ink3 : NT.ink)
                         NATBadge(text: g.expired ? "失効済み" : "有効", color: g.expired ? NT.ink3 : NT.ok)
                     }
                     .padding(.horizontal, 14).padding(.vertical, 10)
@@ -310,7 +310,7 @@ struct NativePhoneLeaveView: View {
     private func requestRow(_ r: NLVRequest) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
-                Text(r.dateLabel).font(.system(size: 15, weight: .heavy)).monospacedDigit().foregroundColor(NT.ink)
+                Text(r.dateLabel).font(.system(size: 15, weight: NT.strong)).monospacedDigit().foregroundColor(NT.ink)
                 Text(r.fractionLabel).font(.system(size: 13, weight: .bold)).foregroundColor(NT.ink2)
                 Spacer(minLength: 6)
                 NATBadge(text: r.statusLabel, color: NLVMineSection.statusColor(r.status))

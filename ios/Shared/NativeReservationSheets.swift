@@ -53,7 +53,7 @@ struct NativeReservationSheet: View {
                         }
                         // 「オーダー・会計」（着席して伝票を開く。色はオーダー・会計のボタンと同じ青）。2026-10-24 21:30 Ronnie「Seat & order ではなく オーダー・会計」
                         if allowed.contains("seated") || r.status == "arrived" || r.status == "seated" {
-                            bigButton("注文・会計", en: "Order & Pay", fill: Color(hex: 0x2A6FE6)) {
+                            bigButton("注文・会計", en: "Order & Pay", fill: Color(hex: 0x37324D)) {
                                 Task {
                                     if let res = await model.act(["type": "ledgerSeat", "reservationId": r.id]), let id = res.orderId {
                                         onOpenOrder(id)

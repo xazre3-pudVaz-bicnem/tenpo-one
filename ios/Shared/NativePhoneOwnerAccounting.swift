@@ -461,7 +461,7 @@ struct NPACSwitcher: View {
                         Button { onSelect(p) } label: {
                             HStack(spacing: 5) {
                                 Image(systemName: p.icon).font(.system(size: 12.5, weight: .bold))
-                                Text(p.label).font(.system(size: 14, weight: .heavy)).lineLimit(1)
+                                Text(p.label).font(.system(size: 14, weight: NT.strong)).lineLimit(1)
                             }
                             .foregroundColor(p == current ? .white : NT.ink2)
                             .padding(.horizontal, 13).frame(height: 36)
@@ -535,7 +535,7 @@ struct NPACPeriodBar: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
                 Image(systemName: "calendar").font(.system(size: 15, weight: .bold)).foregroundColor(NT.purple)
-                Text(NPACText.period(from, to)).font(.system(size: 16.5, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit()
+                Text(NPACText.period(from, to)).font(.system(size: 16.5, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit()
                     .lineLimit(1).minimumScaleFactor(0.7)
                 Spacer(minLength: 4)
                 Button { picking = true } label: {
@@ -648,10 +648,10 @@ struct NPACMoneyRow: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Text(label).font(.system(size: bold ? 14.5 : 13.5, weight: bold ? .heavy : .regular)).foregroundColor(bold ? NT.ink : NT.ink2)
+            Text(label).font(.system(size: bold ? 14.5 : 13.5, weight: bold ? NT.strong : .regular)).foregroundColor(bold ? NT.ink : NT.ink2)
                 .lineLimit(2).fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 8)
-            Text(NT.yen(value)).font(.system(size: bold ? 15 : 13.5, weight: bold ? .heavy : .semibold)).foregroundColor(tone).monospacedDigit()
+            Text(NT.yen(value)).font(.system(size: bold ? 15 : 13.5, weight: bold ? NT.strong : .semibold)).foregroundColor(tone).monospacedDigit()
                 .lineLimit(1).minimumScaleFactor(0.7)
         }
         .padding(.leading, indent)
@@ -704,7 +704,7 @@ struct NPACPager: View {
             NPACPill(title: "前へ", icon: "chevron.left", enabled: page > 1) { onGo(page - 1) }
             Spacer(minLength: 4)
             VStack(spacing: 1) {
-                Text("\(page) / \(totalPages)").font(.system(size: 14, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit()
+                Text("\(page) / \(totalPages)").font(.system(size: 14, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit()
                 Text(caption).font(.system(size: 11)).foregroundColor(NT.ink3).lineLimit(1)
             }
             Spacer(minLength: 4)

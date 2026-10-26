@@ -119,7 +119,7 @@ struct NPOSlipMoneyActions: View {
     private func label(_ t: String, icon: String, danger: Bool) -> some View {
         HStack(spacing: 8) {
             Image(systemName: icon).font(.system(size: 15, weight: .bold))
-            Text(t).font(.system(size: 14.5, weight: .heavy)).lineLimit(1).minimumScaleFactor(0.8)
+            Text(t).font(.system(size: 14.5, weight: NT.strong)).lineLimit(1).minimumScaleFactor(0.8)
         }
         .foregroundColor(danger ? NT.danger : NT.purpleDeep)
         .frame(maxWidth: .infinity).frame(height: 50)
@@ -178,7 +178,7 @@ struct NPORefundSheet: View {
             HStack {
                 Text("返金可能額").font(.system(size: 14, weight: .bold)).foregroundColor(NT.ink2)
                 Spacer()
-                Text(NT.yen(detail.refundable)).font(.system(size: 22, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit()
+                Text(NT.yen(detail.refundable)).font(.system(size: 22, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit()
             }
             .padding(14).background(npocCard(14))
             if !detail.paymentBreakdown.isEmpty {
@@ -188,7 +188,7 @@ struct NPORefundSheet: View {
                             Text(b.label).font(.system(size: 13.5, weight: .bold)).foregroundColor(NT.ink)
                             Spacer()
                             VStack(alignment: .trailing, spacing: 1) {
-                                Text("残 \(NT.yen(b.paid - b.refunded))").font(.system(size: 14, weight: .heavy)).monospacedDigit()
+                                Text("残 \(NT.yen(b.paid - b.refunded))").font(.system(size: 14, weight: NT.strong)).monospacedDigit()
                                 Text("支払 \(NT.yen(b.paid))・返金 \(NT.yen(b.refunded))").font(.system(size: 10.5)).foregroundColor(NT.ink3).monospacedDigit()
                             }
                         }
@@ -257,7 +257,7 @@ struct NPORefundSheet: View {
                             Stepper("数量 \(NPS.num(s.qty))", value: Binding(get: { s.qty }, set: { picked[it.orderItemId] = Pick(qty: min(it.remainingQty, max(1, $0)), restock: s.restock) }),
                                     in: 1...max(1, it.remainingQty))
                                 .font(.system(size: 13.5, weight: .bold))
-                            Text(NT.yen(amountFor(it, s.qty))).font(.system(size: 14, weight: .heavy)).monospacedDigit()
+                            Text(NT.yen(amountFor(it, s.qty))).font(.system(size: 14, weight: NT.strong)).monospacedDigit()
                         }
                         Toggle("在庫を戻す", isOn: Binding(get: { s.restock }, set: { picked[it.orderItemId] = Pick(qty: s.qty, restock: $0) }))
                             .font(.system(size: 12.5)).tint(NT.purple)

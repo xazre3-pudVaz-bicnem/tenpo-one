@@ -266,7 +266,7 @@ struct NativePhoneOwnerExpensesView: View {
                 HStack(spacing: 6) {
                     NOMTitle(ja: "お知らせ&アラート", en: "Notices")
                     if badge > 0 {
-                        Text("\(badge)").font(.system(size: 11, weight: .heavy)).foregroundColor(.white)
+                        Text("\(badge)").font(.system(size: 11, weight: NT.strong)).foregroundColor(.white)
                             .padding(.horizontal, 7).padding(.vertical, 2).background(Capsule().fill(NT.danger))
                     }
                     Spacer()
@@ -290,7 +290,7 @@ struct NativePhoneOwnerExpensesView: View {
                             Button { onOpen(t.href) } label: {
                                 HStack(spacing: 6) {
                                     Text(t.label).font(.system(size: 12.5, weight: .bold))
-                                    Text(t.valueLabel ?? NOS.int(t.count)).font(.system(size: 12, weight: .heavy)).foregroundColor(.white)
+                                    Text(t.valueLabel ?? NOS.int(t.count)).font(.system(size: 12, weight: NT.strong)).foregroundColor(.white)
                                         .padding(.horizontal, 6).padding(.vertical, 1).background(Capsule().fill(NT.purple))
                                 }
                                 .foregroundColor(NT.purpleDeep).padding(.horizontal, 10).frame(height: 34)
@@ -339,7 +339,7 @@ struct NativePhoneOwnerExpensesView: View {
                     HStack {
                         Label("今月の仕入の請求書", systemImage: "doc.text").font(.system(size: 13, weight: .semibold)).foregroundColor(NT.ink2)
                         Spacer()
-                        Text("\(NOS.int(p.billCount))件・\(NOS.yen(p.billTotal))").font(.system(size: 14, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit()
+                        Text("\(NOS.int(p.billCount))件・\(NOS.yen(p.billTotal))").font(.system(size: 14, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit()
                     }
                 }
             }
@@ -388,11 +388,11 @@ struct NativePhoneOwnerExpensesView: View {
     private func row(_ r: NOMExpenses.Row, _ p: NOMExpenses) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
-                Text(NOS.mdw(r.businessDate)).font(.system(size: 13, weight: .heavy)).foregroundColor(NT.purpleDeep).monospacedDigit()
+                Text(NOS.mdw(r.businessDate)).font(.system(size: 13, weight: NT.strong)).foregroundColor(NT.purpleDeep).monospacedDigit()
                 NOSBadge(text: r.accountName, color: NT.ink2)
                 Spacer(minLength: 4)
                 VStack(alignment: .trailing, spacing: 0) {
-                    Text(NOS.yen(r.amount)).font(.system(size: 17, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit()
+                    Text(NOS.yen(r.amount)).font(.system(size: 17, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit()
                     if r.taxAmount > 0 { Text("うち税 \(NOS.yen(r.taxAmount))").font(.system(size: 10.5, weight: .semibold)).foregroundColor(NT.ink3).monospacedDigit() }
                 }
             }
