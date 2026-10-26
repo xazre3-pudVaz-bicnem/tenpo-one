@@ -255,7 +255,8 @@ enum NFColor {
     static let iris = Color(hex: 0x37324D)
     static let irisDeep = Color(hex: 0x24203A)
     static let irisSoft = Color(hex: 0xEFF0F4)
-    static let royal = Color(hex: 0x0A3FA8)
+    /// 濃い青をやめて紫紺（残り時間・ポップアップの字。2026-10-27 03:31 Ronnie「pupup haru sabaiko color milau」）
+    static let royal = Color(hex: 0x37324D)
     static let wisteria = Color(hex: 0xBCD0F5)
     static let saffron = Color(hex: 0xB7791F)
     static let saffronSoft = Color(hex: 0xFBF1D9)

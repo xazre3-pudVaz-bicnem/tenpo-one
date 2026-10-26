@@ -445,6 +445,10 @@ struct NativeStorePreview: View {
                     if UserDefaults.standard.bool(forKey: "tenpoPreviewSheet") {
                         floorModel.selectedTableId = floorModel.tables.first { $0.order != nil }?.id
                     }
+                    // 空いた卓を押したとき（来店登録）を開いておく（-tenpoPreviewSetup YES）
+                    if UserDefaults.standard.bool(forKey: "tenpoPreviewSetup") {
+                        floorModel.selectedTableId = (floorModel.tables.first { $0.order == nil && $0.upcoming.isEmpty } ?? floorModel.tables.first { $0.order == nil })?.id
+                    }
                 }
         case "ledger":
             NativeLedgerView(model: ledger)
