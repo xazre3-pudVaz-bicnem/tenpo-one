@@ -93,7 +93,7 @@ struct NativeOrderView: View {
             if model.loading {
                 ZStack {
                     NT.page.opacity(0.85).ignoresSafeArea()
-                    ProgressView("読み込み中…").font(.system(size: 16, weight: .bold)).tint(NT.purple)
+                    ProgressView("読み込み中…").font(.system(size: 16, weight: .bold)).tint(OV.primary)
                 }
             }
         }
@@ -157,7 +157,7 @@ struct NativeOrderView: View {
                     if model.isLive && !model.hasOrderData {
                         ZStack {
                             NT.page.opacity(0.92).ignoresSafeArea()
-                            ProgressView("読み込み中…").font(.system(size: 16, weight: .bold)).tint(NT.purple)
+                            ProgressView("読み込み中…").font(.system(size: 16, weight: .bold)).tint(OV.primary)
                         }
                     }
                 }
@@ -206,8 +206,18 @@ struct NativeOrderView: View {
         }
     }
 
+    /// Order（スライド）→ 送れたらテーブル一覧へ自動で戻る（2026-10-27 02:52 Ronnie「order garera slide garepaxi table ma 自動 return」）。
+    /// 戻らないとき：卓の無いテイクアウト等（ここで会計するので）・見本・送れなかったとき・厨房伝票の警告が出たとき（読んでもらう）
     private func send() {
-        requireClerk { Task { await model.sendToKitchen() } }
+        requireClerk {
+            Task {
+                let ok = await model.sendToKitchen()
+                guard ok, model.isLive, !model.order.takeoutLike, model.notice == nil else { return }
+                // スライドの ✓ を一瞬見せてから
+                try? await Task.sleep(nanoseconds: 250_000_000)
+                onHome()
+            }
+        }
     }
 
     /// 会計へ：まだ送っていないカートは先に注文確定（伝票に入れて厨房へ）
@@ -223,28 +233,46 @@ struct NativeOrderView: View {
     }
 }
 
+// MARK: - 色（注文・会計の画面だけ）
+
+/// 注文・会計の画面の色。2026-10-27 02:50 Ronnie「yo sabai yesari color ma milau but system ra place haru hoina」
+/// → 青をやめ、ホームと同じ紫紺・うすい灰色・白に（並び・仕組み・言葉はそのまま）。
+/// Order のスライドはホームの左の選んだボタンと同じ黄色（02:52「menu bar ma click garda aaune yello style」）
+enum OV {
+    /// 選んだタブ・カテゴリ（ホームの左のバーと同じ紫紺）
+    static let primary = Color(hex: 0x37324D)
+    /// 濃い字（卓名・合計・値段）
+    static let ink = Color(hex: 0x2B2740)
+    /// うすい灰色（チップ・数量の − ＋ の地）
+    static let soft = Color(hex: 0xEFF0F4)
+    /// 箱の線
+    static let line = Color(hex: 0xE3E5EA)
+    /// Order のスライドの黄色（ホームの左のバーで選んだボタンと同じ）
+    static let yellow = Color(hex: 0xF2D06B)
+    static let yellowDeep = Color(hex: 0xD4B04A)
+}
+
 // MARK: - 上のバー
 
-/// 上のバーの「ホームへ」ボタンの中身＝白い家の中に TENPO ONE のロゴの「1」（バーの色で抜く）
-/// （2026-10-24 19:22 Ronnie「ホームのボタンの中にロゴ」→ 19:24「ロゴの色が合わない・ホームに見えない」）
+/// 上のバーの「ホームへ」ボタンの中身＝家の中に TENPO ONE のロゴの「1」
+/// （2026-10-24 19:22 Ronnie「ホームのボタンの中にロゴ」→ 19:24「ロゴの色が合わない・ホームに見えない」）。
+/// 黄色の箱に濃い家・「1」は黄色で抜く＝ホームの左のバーで選んだボタンと同じ色
+/// （2026-10-27 02:57 Ronnie「left top ma vayeko home button yello ma banaune ki」）
 struct NativeHomeLogo: View {
-    /// 上のバーの色（ロゴの「1」をこの色で抜いて見せる）
-    var ink: Color = NT.topBar
-
     var body: some View {
         ZStack {
-            NativeHouseShape().fill(Color.white)
-                .frame(width: 32, height: 29)
+            NativeHouseShape().fill(OV.ink)
+                .frame(width: 30, height: 27)
             Image("BrandOne")
                 .renderingMode(.template)
                 .resizable()
                 .scaledToFit()
-                .foregroundColor(ink)
-                .frame(height: 15)
+                .foregroundColor(OV.yellow)
+                .frame(height: 14)
                 .offset(y: 6)
         }
         .frame(width: 46, height: 40)
-        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white.opacity(0.12)))
+        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(OV.yellow))
     }
 }
 
@@ -380,7 +408,7 @@ private struct SlipPanel: View {
                 .padding(.leading, -12)
                 .padding(.trailing, -6)
                 .accessibilityLabel("戻る")
-                Text(model.order.tableName).font(.system(size: 32, weight: .heavy)).foregroundColor(NT.purple)
+                Text(model.order.tableName).font(.system(size: 32, weight: .heavy)).foregroundColor(OV.ink)
                 Button(action: onGuestInfo) {
                     HStack(spacing: 4) {
                         Image(systemName: "person.2")
@@ -392,7 +420,7 @@ private struct SlipPanel: View {
                     .font(.system(size: 15, weight: .bold))
                     .foregroundColor(NT.ink2)
                     .padding(.horizontal, 10).padding(.vertical, 6)
-                    .background(Capsule().fill(NT.lilac))
+                    .background(Capsule().fill(OV.soft))
                 }
                 .buttonStyle(PressableStyle())
                 .disabled(!canEditGuest)
@@ -469,7 +497,7 @@ private struct SlipPanel: View {
                 HStack(alignment: .lastTextBaseline) {
                     Text("合計（税込）").font(.system(size: 17, weight: .bold)).foregroundColor(NT.ink)
                     Spacer()
-                    Text(NT.yen(model.total)).font(.system(size: 34, weight: .heavy)).foregroundColor(NT.purple)
+                    Text(NT.yen(model.total)).font(.system(size: 34, weight: .heavy)).foregroundColor(OV.ink)
                         .contentTransition(.numericText())
                         .animation(.easeOut(duration: 0.15), value: model.total)
                 }
@@ -479,7 +507,7 @@ private struct SlipPanel: View {
             .padding(.horizontal, 16).padding(.bottom, 14)
         }
         .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(NT.card))
-        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(NT.lilacLine, lineWidth: 1))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(OV.line, lineWidth: 1))
         // 1品の取消：理由は要らない・担当者を選ぶだけ。毎回選ぶ（2026-10-24 Ronnie「every time 取消 garda 担当選択」）。
         // 店に店長以上がいれば店長以上から（サーバーで承認を確かめる）、いなければ担当者から（「担当: 〇〇」を理由に残す）
         .confirmationDialog(
@@ -529,7 +557,7 @@ private struct SlipPanel: View {
         .font(.system(size: 13, weight: .bold))
         .foregroundColor(NT.ink2)
         .padding(.horizontal, 10).padding(.vertical, 6)
-        .background(Capsule().fill(NT.lilac))
+        .background(Capsule().fill(OV.soft))
     }
 
     private func totalRow(_ label: String, _ value: String) -> some View {
@@ -644,7 +672,7 @@ private struct LineRow: View {
                     Text("\(line.quantity)").font(.system(size: 17, weight: .bold)).foregroundColor(NT.ink).frame(minWidth: 30)
                     stepButton("plus", action: onPlus)
                 }
-                .background(Capsule().fill(NT.lilac))
+                .background(Capsule().fill(OV.soft))
             } else {
                 Text(verbatim: "×\(line.quantity)").font(.system(size: 17, weight: .bold)).foregroundColor(NT.ink2).frame(minWidth: 44)
             }
@@ -653,13 +681,13 @@ private struct LineRow: View {
                 .frame(minWidth: 74, alignment: .trailing)
         }
         .padding(.horizontal, 16).padding(.vertical, 10)
-        .background(highlighted ? NT.lilac.opacity(0.7) : Color.clear)
+        .background(highlighted ? OV.soft : Color.clear)
         .animation(.easeOut(duration: 0.3), value: highlighted)
     }
 
     private func stepButton(_ icon: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Image(systemName: icon).font(.system(size: 14, weight: .heavy)).foregroundColor(NT.purple)
+            Image(systemName: icon).font(.system(size: 14, weight: .heavy)).foregroundColor(OV.ink)
                 .frame(width: 36, height: 34)
         }
         .buttonStyle(PressableStyle(scale: 0.9))
@@ -685,7 +713,7 @@ private struct PageTabsBar: View {
                                     .font(.system(size: 14, weight: .heavy)).monospacedDigit()
                                     .foregroundColor(on ? .white : NT.ink3)
                                     .frame(width: 28, height: 28)
-                                    .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(on ? Color.white.opacity(0.22) : NT.lilac))
+                                    .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(on ? Color.white.opacity(0.18) : OV.soft))
                                 VStack(alignment: .leading, spacing: 1) {
                                     Text(pg.name).font(.system(size: 18, weight: .heavy)).lineLimit(1)
                                     if let sub = pg.sub {
@@ -696,7 +724,7 @@ private struct PageTabsBar: View {
                             }
                             .padding(.horizontal, 16)
                             .frame(minHeight: 58)
-                            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(on ? NT.purple : Color.clear))
+                            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(on ? OV.primary : Color.clear))
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(PressableStyle())
@@ -717,14 +745,14 @@ private struct PageTabsBar: View {
                     .foregroundColor(NT.ink3)
                     .padding(.horizontal, 14)
                     .frame(minHeight: 58)
-                    .background(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(NT.lilacLine, lineWidth: 1))
+                    .background(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(OV.line, lineWidth: 1))
                 }
                 .buttonStyle(PressableStyle())
                 .padding(.trailing, 7)
             }
         }
         .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(NT.card))
-        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(NT.lilacLine, lineWidth: 1))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(OV.line, lineWidth: 1))
     }
 }
 
@@ -752,7 +780,7 @@ private struct CategoryColumn: View {
                         .foregroundColor(selected ? .white : NT.ink)
                         .frame(maxWidth: .infinity, minHeight: 86, alignment: .leading)
                         .padding(.horizontal, 16)
-                        .background(selected ? NT.purple : Color.clear)
+                        .background(selected ? OV.primary : Color.clear)
                     }
                     .buttonStyle(PressableStyle(scale: 0.99))
                     Divider().overlay(NT.line)
@@ -761,7 +789,7 @@ private struct CategoryColumn: View {
         }
         .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(NT.card))
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(NT.lilacLine, lineWidth: 1))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(OV.line, lineWidth: 1))
     }
 }
 
@@ -787,7 +815,7 @@ private struct ItemsPanel: View {
                 }
             }
             .padding(.horizontal, 16).frame(height: 54)
-            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(NT.lilacLine, lineWidth: 1.5))
+            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(OV.line, lineWidth: 1.5))
             .padding(14)
             Divider().overlay(NT.line)
 
@@ -805,10 +833,10 @@ private struct ItemsPanel: View {
                                 Text("Other").font(.system(size: 17, weight: .heavy))
                                 Text("その他・金額入力").font(.system(size: 11, weight: .semibold)).foregroundColor(NT.ink3)
                             }
-                            .foregroundColor(NT.purple)
+                            .foregroundColor(OV.primary)
                             .frame(maxWidth: .infinity, minHeight: 112)
-                            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(NT.lilac.opacity(0.55)))
-                            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(NT.purple.opacity(0.45), style: StrokeStyle(lineWidth: 2, dash: [6, 4])))
+                            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(OV.soft.opacity(0.7)))
+                            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(OV.primary.opacity(0.35), style: StrokeStyle(lineWidth: 2, dash: [6, 4])))
                         }
                         .buttonStyle(PressableStyle(scale: 0.95))
                         .disabled(model.busy)
@@ -846,9 +874,9 @@ private struct ItemsPanel: View {
                         }
                         .lineLimit(1)
                         .minimumScaleFactor(0.6)
-                        .foregroundColor(NT.purple)
+                        .foregroundColor(OV.primary)
                         .frame(maxWidth: .infinity, minHeight: 70)
-                        .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(NT.lilac))
+                        .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(OV.soft))
                     }
                     .buttonStyle(PressableStyle())
                     .disabled(model.total == 0 || model.busy || !model.canCheckout)
@@ -857,7 +885,7 @@ private struct ItemsPanel: View {
             .padding(14)
         }
         .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(NT.card))
-        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(NT.lilacLine, lineWidth: 1))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(OV.line, lineWidth: 1))
     }
 }
 
@@ -880,7 +908,7 @@ private struct ItemTile: View {
                 }
                 Text(NT.yen(item.price))
                     .font(.system(size: 19, weight: .heavy))
-                    .foregroundColor(item.soldOut ? NT.ink3 : NT.purple)
+                    .foregroundColor(item.soldOut ? NT.ink3 : OV.ink)
                 if item.hasOptions || item.openPrice {
                     Text(item.openPrice ? "金額入力" : "オプション").font(.system(size: 11, weight: .bold)).foregroundColor(NT.ink3)
                 }
@@ -888,13 +916,13 @@ private struct ItemTile: View {
             .padding(10)
             .frame(maxWidth: .infinity, minHeight: 112)
             .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(item.soldOut ? Color(hex: 0xF4F2F7) : NT.card))
-            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(qty > 0 ? NT.purple : NT.lilacLine, lineWidth: qty > 0 ? 2 : 1))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(qty > 0 ? OV.primary : OV.line, lineWidth: qty > 0 ? 2 : 1))
             .overlay(alignment: .topTrailing) {
                 if qty > 0 {
                     Text("\(qty)")
                         .font(.system(size: 14, weight: .heavy)).foregroundColor(.white)
                         .frame(minWidth: 26, minHeight: 26)
-                        .background(Circle().fill(NT.purple))
+                        .background(Circle().fill(OV.primary))
                         .offset(x: 6, y: -6)
                 }
             }

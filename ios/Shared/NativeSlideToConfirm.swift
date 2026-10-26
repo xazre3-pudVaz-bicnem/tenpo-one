@@ -4,6 +4,7 @@ import UIKit
 /// 右へスライドして決めるボタン（Web の SlideToConfirm と同じ決まり。押し間違いで注文が飛ばない。
 /// 2026-09-25 店舗要望「Order 決定はスライドで。3Dで楽しく」・2026-10-24 Ronnie「order lai slide banau」）。
 /// つまみを右端の手前（9割）まで運ぶと onConfirm。途中で離すと戻る。
+/// 色はホームの左のバーで選んだボタンと同じ黄色・濃い字（2026-10-27 02:52 Ronnie「slide button menu bar ma click garda aaune yello style ko color ma」）
 struct NativeSlideToConfirm: View {
     let label: String
     var hint: String = "スライドして確定 / Slide"
@@ -24,19 +25,19 @@ struct NativeSlideToConfirm: View {
             ZStack(alignment: .leading) {
                 // 立体の土台（下に少しずらした濃い色）
                 RoundedRectangle(cornerRadius: radius, style: .continuous)
-                    .fill(NT.purpleDeep)
+                    .fill(OV.yellowDeep)
                     .offset(y: 4)
                 RoundedRectangle(cornerRadius: radius, style: .continuous)
-                    .fill(LinearGradient(colors: [NT.purple.opacity(0.92), NT.purple], startPoint: .top, endPoint: .bottom))
+                    .fill(OV.yellow)
                 // 進み具合を明るく塗る
                 RoundedRectangle(cornerRadius: radius, style: .continuous)
-                    .fill(Color.white.opacity(0.16))
+                    .fill(Color.white.opacity(0.28))
                     .frame(width: knob + pad * 2 + x)
                 VStack(spacing: 2) {
                     Text(label).font(.system(size: 20, weight: .heavy))
                     Text(hint).font(.system(size: 11, weight: .bold)).opacity(0.8)
                 }
-                .foregroundColor(.white)
+                .foregroundColor(OV.ink)
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
                 .frame(maxWidth: .infinity)
@@ -49,11 +50,11 @@ struct NativeSlideToConfirm: View {
                         .fill(Color.white)
                         .shadow(color: .black.opacity(0.18), radius: 4, y: 2)
                     if busy {
-                        ProgressView().tint(NT.purple)
+                        ProgressView().tint(OV.primary)
                     } else {
                         Image(systemName: progress >= 0.9 ? "checkmark" : "chevron.right.2")
                             .font(.system(size: 22, weight: .heavy))
-                            .foregroundColor(NT.purple)
+                            .foregroundColor(OV.primary)
                     }
                 }
                 .frame(width: knob, height: max(0, geo.size.height - pad * 2))

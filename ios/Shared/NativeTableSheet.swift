@@ -55,10 +55,10 @@ struct NativeTableSheet: View {
             // 上の端はいつも同じ高さ（中身の高さで出る場所が変わらないように。2026-10-24 21:44 Ronnie「いつも同じ場所に」）
             NFPopoverLayout(width: Self.width, maxHeight: 760, anchor: nil, fixedTop: 150) {
                 popup
-                NFPopoverArrow().fill(.regularMaterial).frame(width: 26, height: 12)
-                NFPopoverArrow().fill(.regularMaterial).frame(width: 26, height: 12).rotationEffect(.degrees(180))
-                NFPopoverArrow().fill(.regularMaterial).frame(width: 26, height: 12).rotationEffect(.degrees(-90)).frame(width: 12, height: 26)
-                NFPopoverArrow().fill(.regularMaterial).frame(width: 26, height: 12).rotationEffect(.degrees(90)).frame(width: 12, height: 26)
+                NFPopoverArrow().fill(Self.sheetBg).frame(width: 26, height: 12)
+                NFPopoverArrow().fill(Self.sheetBg).frame(width: 26, height: 12).rotationEffect(.degrees(180))
+                NFPopoverArrow().fill(Self.sheetBg).frame(width: 26, height: 12).rotationEffect(.degrees(-90)).frame(width: 12, height: 26)
+                NFPopoverArrow().fill(Self.sheetBg).frame(width: 26, height: 12).rotationEffect(.degrees(90)).frame(width: 12, height: 26)
             }
         }
         .alert("テーブルをクリアしますか / Clear this table?", isPresented: $clearConfirm) {
@@ -87,9 +87,9 @@ struct NativeTableSheet: View {
             AnyView(popupInner)
             ScrollView(showsIndicators: false) { AnyView(popupInner) }
         }
-        // iPad のポップオーバーと同じ質感（すりガラス・大きめの角丸・やわらかい影）
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).stroke(Color.white.opacity(0.6), lineWidth: 0.8))
+        // すりガラスにしない（うすい灰色の地・細い線。2026-10-27 02:48 Ronnie「background blur hunu pardaina」）
+        .background(Self.sheetBg, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).stroke(Color(hex: 0xE3E5EA), lineWidth: 1))
         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
         .shadow(color: .black.opacity(0.16), radius: 28, y: 12)
         .disabled(pending)
@@ -134,7 +134,7 @@ struct NativeTableSheet: View {
                 if seated { seatedBody }
                 if groupOpen { groupPanel }
                 if state == .cleaning && slips.isEmpty {
-                    bigButton("清掃完了", en: "Cleaned", fill: NFColor.navy) { Task { await model.act(["type": "floorCleaned", "tableId": table.id]); onClose() } }
+                    bigButton("清掃完了", en: "Cleaned", fill: Self.primary) { Task { await model.act(["type": "floorCleaned", "tableId": table.id]); onClose() } }
                 }
                 if canOperate && slips.isEmpty && state == .unavailable {
                     secondaryButton(icon: "lock.open", "ブロック解除", en: "Unblock") {
@@ -182,7 +182,7 @@ struct NativeTableSheet: View {
 
     // 空席
     @ViewBuilder private var emptyBody: some View {
-        bigButton("注文", en: "Order", fill: NFColor.iris, height: 64, size: 20) { onClose(); onSetup(table) }
+        bigButton("注文", en: "Order", fill: Self.primary, height: 64, size: 20) { onClose(); onSetup(table) }
         divider
         section("テーブル", en: "Table")
         HStack(spacing: 8) {
@@ -200,7 +200,7 @@ struct NativeTableSheet: View {
     @ViewBuilder private var seatedBody: some View {
         // 人数・顧客・来店・金額のまとめは出さない（卓の箱に出ている。2026-10-24 Ronnie「ポップアップに金額などの詳細は要らない」）
         HStack(spacing: 8) {
-            bigButton("注文", en: "Order", fill: NFColor.iris, height: 64, size: 20) {
+            bigButton("注文", en: "Order", fill: Self.primary, height: 64, size: 20) {
                 Task {
                     if let s = selected {
                         onClose(); onOpenOrder(s.id, false)
@@ -210,12 +210,13 @@ struct NativeTableSheet: View {
                 }
             }
             // レジ会計は緑（2026-10-24 Ronnie「緑はレジ会計、会計伝票は黒」）
-            bigButton("レジ会計", en: "Checkout", fill: NFColor.success, height: 64, size: 20, enabled: selected != nil) {
+            // 注文＝紫紺、レジ会計・会計伝票＝白い箱（黒・緑にしない。2026-10-27 02:48 Ronnie「会計伝票 black ma pani pardaina」）
+            bigButton("レジ会計", en: "Checkout", fill: .white, textColor: Self.ink, border: Self.line, height: 64, size: 20, enabled: selected != nil) {
                 if let s = selected { onClose(); onOpenOrder(s.id, true) }
             }
         }
         // 会計伝票をその場で出す（レジ画面へ行かない）。注文・レジ会計のすぐ下に横いっぱい・黒
-        bigButton("会計伝票", en: "Print bill", fill: NFColor.navy, height: 62, size: 19, enabled: selected != nil) {
+        bigButton("会計伝票", en: "Print bill", fill: .white, textColor: Self.ink, border: Self.line, height: 62, size: 19, enabled: selected != nil) {
             Task {
                 guard let s = selected else { return }
                 // ネットあり：どのフロアの卓でもこの iPad のレシートプリンターで（いつも。2026-10-26 Ronnie「default always on」）。
@@ -526,7 +527,13 @@ struct NativeTableSheet: View {
             .overlay(RoundedRectangle(cornerRadius: 12).stroke(NFColor.line, lineWidth: 1))
     }
 
-    private func bigButton(_ ja: String, en: String?, fill: Color, textColor: Color = .white, height: CGFloat = 60, size: CGFloat = 18, enabled: Bool = true, action: @escaping () -> Void) -> some View {
+    /// ポップアップの色（ホームの左のメニューの紫紺・白い箱・うすい灰色の地。2026-10-27 02:48 Ronnie の見本）
+    static let sheetBg = Color(hex: 0xF4F5F7)
+    static let primary = Color(hex: 0x37324D)
+    static let ink = Color(hex: 0x2B2740)
+    static let line = Color(hex: 0xE3E5EA)
+
+    private func bigButton(_ ja: String, en: String?, fill: Color, textColor: Color = .white, border: Color? = nil, height: CGFloat = 60, size: CGFloat = 18, enabled: Bool = true, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             VStack(spacing: 0) {
                 Text(ja).font(.system(size: size, weight: .heavy))
@@ -535,6 +542,7 @@ struct NativeTableSheet: View {
             .foregroundColor(textColor)
             .frame(maxWidth: .infinity).frame(height: height)
             .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(fill))
+            .overlay { if let border { RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(border, lineWidth: 1) } }
         }
         .buttonStyle(PressableStyle())
         .disabled(!enabled)
@@ -570,8 +578,8 @@ struct NativeTableSheet: View {
             .foregroundColor(on ? .white : (danger ? NFColor.danger : NFColor.navy))
             .frame(maxWidth: .infinity).frame(height: 58)
             .padding(.horizontal, 4)
-            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(on ? NFColor.iris : (danger ? NFColor.danger.opacity(0.08) : Color.white.opacity(0.75))))
-            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(on ? Color.clear : (danger ? NFColor.danger.opacity(0.25) : Color.black.opacity(0.06)), lineWidth: 0.8))
+            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(on ? Self.primary : (danger ? NFColor.danger.opacity(0.08) : Color.white)))
+            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(on ? Color.clear : (danger ? NFColor.danger.opacity(0.25) : Self.line), lineWidth: 1))
         }
         .buttonStyle(PressableStyle())
         .disabled(!enabled)

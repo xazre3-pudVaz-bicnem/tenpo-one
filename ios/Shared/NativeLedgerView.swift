@@ -579,7 +579,7 @@ struct NativeLedgerView: View {
             HStack(spacing: 10) {
                 // 左上はホームへのボタン＝ TENPO ONE のロゴ（字なし。2026-10-24 18:57・19:22 Ronnie）
                 Button(action: onHome) {
-                    NativeHomeLogo(ink: NLColor.navy)
+                    NativeHomeLogo()
                 }
                 .buttonStyle(PressableStyle())
                 .accessibilityLabel("ホーム")
