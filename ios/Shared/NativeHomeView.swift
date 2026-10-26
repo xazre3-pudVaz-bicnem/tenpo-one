@@ -512,8 +512,8 @@ struct NativeHomeView: View {
     private static let ink = Color(hex: 0x1F2329)
     private static let inkSub = Color(hex: 0x6B7280)
     private static let cardLine = Color(hex: 0xE3E5EA)
-    /// 達成率の輪は左のメニューの「ホーム」と同じ黄色（2026-10-27 01:39 Ronnie「yesko color round ko ra home ma select vayeko color same banau」）
-    private static let ringColor = Color(hex: 0xF2D06B)
+    /// 達成率の輪は左のメニューの地と同じ紫紺（2026-10-27 01:42 Ronnie「round ko color menu bar ko background color jasto banau」）
+    private static let ringColor = Color(hex: 0x37324D)
     private static let ringTrack = Color(hex: 0xECEEF2)
     private static let clockBg = Color(hex: 0xEEF1F6)
 
