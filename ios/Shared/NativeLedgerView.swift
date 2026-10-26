@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 // ネイティブの店舗台帳（予約のスケジュール。iPad レジ）。Web の /app/reservations（view=day）と同じ機能：
 //   日付の前後／予約登録／卓ごとの時間の帯（予約の箱）／予約の詳細（来店・着席→注文・退店・キャンセル・卓・時間・担当・経路・コース・メモ）
@@ -10,6 +11,22 @@ struct NLTable: Codable, Identifiable, Hashable {
     let capacityMin: Int
     let capacityMax: Int
     let statusLabel: String
+    /// 卓の設定の席の種類（古いサーバーは無し）
+    var isPrivateRoom: Bool? = nil
+    var isCounter: Bool? = nil
+    var smoking: Bool? = nil
+
+    /// 台帳の卓の列に出す小さな印（卓の設定から：個室・カウンター・喫煙）
+    var kindIcons: [String] {
+        var out: [String] = []
+        if isPrivateRoom == true { out.append("door.left.hand.closed") }
+        if isCounter == true { out.append("chair.fill") }
+        if smoking == true { out.append(UIImage(systemName: "smoke") != nil ? "smoke" : "flame") }
+        return out.filter { UIImage(systemName: $0) != nil }
+    }
+
+    /// 「6〜8名席」（同じなら「4名席」）
+    var capacityLabel: String { capacityMin > 0 && capacityMin < capacityMax ? "\(capacityMin)〜\(capacityMax)名席" : "\(capacityMax)名席" }
 }
 
 struct NLReservation: Codable, Identifiable, Hashable {
@@ -160,6 +177,8 @@ struct NLBoardRow {
     var tableId: String? = nil
     let name: String
     let status: String
+    /// 卓の設定の印（個室・カウンター・喫煙）
+    var icons: [String] = []
     let reservations: [NLReservation]
     let lane: [String: Int]
     let height: CGFloat
@@ -407,7 +426,8 @@ struct NativeLedgerView: View {
     /// 時間が重なる予約を下の段に置くときの1段の高さ（箱 54 ＋ すき間）
     private let laneStep: CGFloat = 58
     private let slotW: CGFloat = 96
-    private let nameW: CGFloat = 132
+    /// 卓の列はできるだけ細く（名前・印・何名席が入るだけ。2026-10-27 03:36 Ronnie「台帳 ko table menu lai sake samma slim banau but sign aataunu paryo」）
+    private let nameW: CGFloat = 100
     /// カーソルを止める場所（時間の側の左から 1/4。見えている 6 時間なら 1.5 時間ぶん過去が左に残る）
     private let nowAnchor: CGFloat = 0.25
     private static let nowMarkerId = "nl-now-marker"
@@ -843,26 +863,46 @@ struct NativeLedgerView: View {
         // 卓の上に「ウェイティング」の行（席がまだ決まっていない予約）。待っている予約があるときだけ出す
         // （2026-10-24 Ronnie「ウェイティングはテーブルより上に。言葉もウェイティング」、18:48「waiting ma manxe vaye matra dekhauxa」）
         // 時間が重なる予約は下の段に並べ、行の高さが広がる（18:48「booking dherai vayo vane thau farakilo hudai janxa」）
-        let waiting: [(id: String?, name: String, status: String, reservations: [NLReservation])] =
-            unassigned.isEmpty ? [] : [(nil, "ウェイティング", "\(unassigned.count)組", unassigned)]
-        let tableData: [(id: String?, name: String, status: String, reservations: [NLReservation])] =
-            p.tables.map { t in (t.id, t.name, t.statusLabel.isEmpty ? "\(t.capacityMax)名席" : t.statusLabel, p.reservations.filter { $0.tableIds.contains(t.id) }) }
+        let waiting: [(id: String?, name: String, status: String, icons: [String], reservations: [NLReservation])] =
+            unassigned.isEmpty ? [] : [(nil, "ウェイティング", "\(unassigned.count)組", [], unassigned)]
+        // 卓の列は名前・卓の設定の印・何名席だけ（お客様の名前・来店経路は出さない。2026-10-27 03:36 Ronnie）
+        let tableData: [(id: String?, name: String, status: String, icons: [String], reservations: [NLReservation])] =
+            p.tables.map { t in (t.id, t.name, t.capacityLabel, t.kindIcons, p.reservations.filter { $0.tableIds.contains(t.id) }) }
         let rows: [NLBoardRow] = (waiting + tableData)
             .map { row in
                 let lanes = nlLanes(row.reservations, dayStart: p.date, minMinutes: p.slotMinutes)
-                return NLBoardRow(tableId: row.id, name: row.name, status: row.status, reservations: row.reservations, lane: lanes.lane, height: rowH + CGFloat(lanes.count - 1) * laneStep)
+                return NLBoardRow(tableId: row.id, name: row.name, status: row.status, icons: row.icons, reservations: row.reservations, lane: lanes.lane, height: rowH + CGFloat(lanes.count - 1) * laneStep)
             }
 
         let names = VStack(spacing: 0) {
             Text("テーブル").font(.system(size: 12, weight: .bold)).foregroundColor(NLColor.muted)
-                .frame(width: nameW, height: 34, alignment: .leading).padding(.leading, 12)
+                .frame(width: nameW - 10, height: 34, alignment: .leading).padding(.leading, 10)
             Rectangle().fill(NLColor.line).frame(height: 1)
             ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(row.name).font(.system(size: 15, weight: NT.strong)).foregroundColor(NLColor.ink).lineLimit(1)
-                    Text(row.status).font(.system(size: 11)).foregroundColor(NLColor.muted).lineLimit(1)
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 4) {
+                        Text(row.name).font(.system(size: 15, weight: NT.strong)).foregroundColor(NLColor.ink).lineLimit(1).minimumScaleFactor(0.7)
+                        // お客様の呼び出し・お会計希望（オーダー・会計の卓と同じ：はじめ黄色・5 分で赤。2026-10-27 03:37 Ronnie
+                        // 「customer le bolayeko 会計 mageko sign haru yeha ni aaune banau」）
+                        if p.isToday, let id = row.tableId, let t = floorTables[id], !t.calls.isEmpty {
+                            let info = NativeTableCard.callInfo(t.calls, now: model.now.timeIntervalSince1970 * 1000 + floorOffsetMs)
+                            Image(systemName: info.checkout ? NativeTableCard.yenSymbol : "bell.fill")
+                                .font(.system(size: 10, weight: .bold)).foregroundColor(NativeTableCard.padCallInk(info))
+                                .frame(width: 20, height: 18)
+                                .background(RoundedRectangle(cornerRadius: 5, style: .continuous).fill(NativeTableCard.padCallFill(info)))
+                                .accessibilityLabel(info.label)
+                        }
+                    }
+                    HStack(spacing: 3) {
+                        ForEach(row.icons.prefix(2), id: \.self) { ic in
+                            Image(systemName: ic).font(.system(size: 9, weight: .semibold)).foregroundColor(OV.primary)
+                                .frame(width: 17, height: 15)
+                                .overlay(RoundedRectangle(cornerRadius: 4, style: .continuous).stroke(OV.primary.opacity(0.6), lineWidth: 1))
+                        }
+                        Text(row.status).font(.system(size: 11)).foregroundColor(NLColor.muted).lineLimit(1).minimumScaleFactor(0.75)
+                    }
                 }
-                .padding(.leading, 12)
+                .padding(.leading, 10).padding(.trailing, 4)
                 .frame(width: nameW, height: row.height, alignment: .leading)
                 .overlay(alignment: .bottom) { Rectangle().fill(NLColor.line).frame(height: 1) }
             }
