@@ -8,7 +8,7 @@ describe('ネイティブのレジ開局・レジクローズの操作（2026-10
     expect(parseNativeCashAction(null).ok).toBe(false);
     expect(parseNativeCashAction({ type: 'ledgerSeat' }).ok).toBe(false);
     expect(isNativeCashActionType('cashOpen')).toBe(true);
-    expect(NATIVE_CASH_ACTION_TYPES.length).toBe(6);
+    expect(NATIVE_CASH_ACTION_TYPES.length).toBe(7);
   });
 
   it('金種はレジのトレイの金種だけ・枚数は 0 以上の整数・1 つは入れる', () => {

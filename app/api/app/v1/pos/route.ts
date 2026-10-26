@@ -85,6 +85,7 @@ import {
   approvePettyCashCount,
   closeRegister,
   openRegister,
+  printPeriodReport,
   printSettlementReport,
   recordPettyCashCount,
   rejectPettyCash,
@@ -1917,6 +1918,10 @@ async function runCashAction(ctx: SessionContext, action: NativeCashAction): Pro
     }
     case 'cashSettlement': {
       const r = await printSettlementReport(action.sessionId);
+      return r.ok ? { ok: true } : { ok: false, error: r.error };
+    }
+    case 'periodReport': {
+      const r = await printPeriodReport(action.from, action.to, action.clerkName);
       return r.ok ? { ok: true } : { ok: false, error: r.error };
     }
     case 'cashEntry': {

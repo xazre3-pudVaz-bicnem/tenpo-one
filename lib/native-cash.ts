@@ -1,5 +1,6 @@
 import { isUuid } from '@/lib/native-pos';
 import { CASH_DENOMINATIONS } from '@/lib/cash-count';
+import { parsePeriodReportRange } from '@/lib/period-report';
 
 /**
  * iPad アプリのネイティブのレジ開局・レジクローズとサーバーの決まりごと（2026-10-24 Ronnie「レジの画面は全部ネイティブに」）。
@@ -22,11 +23,13 @@ export type NativeCashAction =
   /** レジ端末のログアウト（レジクローズのあと。Web の signOutRegister と同じ） */
   | { type: 'cashSignOut' }
   /** 入出金の登録（Web の CashEntryForm と同じ。買い物は 用途の文をアプリで作る＝buildShoppingPurpose） */
-  | { type: 'cashEntry'; sessionId: string; kind: 'deposit' | 'withdrawal'; amount: number; purpose: string };
+  | { type: 'cashEntry'; sessionId: string; kind: 'deposit' | 'withdrawal'; amount: number; purpose: string }
+  /** 期間の決算レポート（伝票明細の 昨日・一昨日・今週・今月・日付）をレシートプリンターへ（2026-10-26 Ronnie） */
+  | { type: 'periodReport'; from: string; to: string; clerkName: string | null };
 
 export type NativeCashActionType = NativeCashAction['type'];
 
-export const NATIVE_CASH_ACTION_TYPES: readonly NativeCashActionType[] = ['cashOpen', 'cashClose', 'cashReprint', 'cashSettlement', 'cashSignOut', 'cashEntry'];
+export const NATIVE_CASH_ACTION_TYPES: readonly NativeCashActionType[] = ['cashOpen', 'cashClose', 'cashReprint', 'cashSettlement', 'cashSignOut', 'cashEntry', 'periodReport'];
 
 export function isNativeCashActionType(v: unknown): v is NativeCashActionType {
   return typeof v === 'string' && (NATIVE_CASH_ACTION_TYPES as readonly string[]).includes(v);
@@ -88,6 +91,11 @@ export function parseNativeCashAction(raw: unknown): Parsed {
       const purpose = str(b.purpose, 300);
       if (!purpose) return bad('用途を入力してください');
       return { ok: true, action: { type: 'cashEntry', sessionId: b.sessionId, kind: b.kind, amount: b.amount, purpose } };
+    }
+    case 'periodReport': {
+      const range = parsePeriodReportRange(b.from, b.to);
+      if (!range.ok) return bad(range.error);
+      return { ok: true, action: { type: 'periodReport', from: range.from, to: range.to, clerkName: str(b.clerkName, 80) } };
     }
     default:
       return bad();

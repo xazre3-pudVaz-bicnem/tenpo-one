@@ -7,7 +7,8 @@ import { resolveApprovalRule, checkApproval, type ApprovalRuleLike } from '@/lib
 import type { Role } from '@/lib/permissions';
 import { captureServerError } from '@/lib/observability-server';
 import { actionFail, actionOk, type ActionResult } from '@/lib/action-error';
-import { enqueueRegisterReportPrint } from '@/lib/register-report-loader';
+import { enqueuePeriodReportPrint, enqueueRegisterReportPrint } from '@/lib/register-report-loader';
+import { parsePeriodReportRange } from '@/lib/period-report';
 import { loadStoreClerks } from '@/lib/pos-clerks-server';
 import type { CloseRegisterResult, DenominationJson } from '@/lib/register-report';
 import { expectedCash } from '@/lib/metrics';
@@ -822,5 +823,22 @@ export async function reopenStoreDay(
     return actionFail(error.message);
   }
   revalidatePath('/app/cash');
+  return actionOk();
+}
+
+/**
+ * 期間の決算レポート（伝票明細の 昨日・一昨日・今週・今月・日付）を店のレシートプリンターへ出す。
+ * 中身はレジ精算レシートと同じ並びで、店舗全体の営業日 from〜to（lib/register-report-loader.ts の loadPeriodReportData）。
+ * 2026-10-26 Ronnie「Yo thau bata native ra web bata 決算レポート nikalna milne banau … rezi printer bata print」
+ */
+export async function printPeriodReport(from: string, to: string, clerkName: string | null = null): Promise<ActionResult> {
+  const ctx = await requirePermission('register.operate');
+  const store = ctx.currentStore ?? ctx.stores[0] ?? null;
+  if (!store) return actionFail('店舗がありません');
+  const range = parsePeriodReportRange(from, to);
+  if (!range.ok) return actionFail(range.error);
+  const supabase = await createClient();
+  const printed = await enqueuePeriodReportPrint(supabase, store.id, range.from, range.to, ctx.userId, clerkName);
+  if (!printed.ok) return actionFail(printed.error ?? '決算レポートを印刷できませんでした');
   return actionOk();
 }

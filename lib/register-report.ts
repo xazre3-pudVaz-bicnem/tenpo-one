@@ -132,6 +132,24 @@ export interface RegisterReportData {
   /** 業務履歴（レジ会計・領収書発行・取消・返金・注文減数・注文キャンセル） */
   activity: ReportCountAmount[];
   note: string | null;
+  /**
+   * 期間の決算レポート（伝票明細の 昨日・一昨日・今週・今月・日付）。あるときは 1 つのレジではなく、その期間の店舗全体。
+   * 上は「決算レポート・期間」、入出金は期間の合計・差異の合計、日が 2 日以上なら日別の表（2026-10-26 Ronnie
+   * 「Yo thau bata native ra web bata 決算レポート nikalna milne banau … 昨日 一昨日 選んだ日 今週 今月 … rezi printer bata print」）
+   */
+  period?: PeriodReportInfo;
+}
+
+export interface PeriodReportInfo {
+  /** 例: 2026/10/25 (日) ／ 2026/10/1 (水) 〜 10/26 (月) */
+  label: string;
+  /** 期間のレジ精算の回数・まだ締めていないレジの数 */
+  sessionCount: number;
+  unclosedCount: number;
+  /** 期間のレジ精算の差異の合計（締めたものだけ） */
+  differenceTotal: number;
+  /** 日別（2 日以上のときだけ出す） */
+  days: { label: string; groups: number; guests: number; sales: number }[];
 }
 
 export interface RegisterReportOptions extends WidthOptions {
@@ -299,6 +317,12 @@ function reportHead(t: ReturnType<typeof makeLineTools>, data: RegisterReportDat
   t.center(title, 'large');
   t.center(data.storeName);
   t.blank();
+  if (data.period) {
+    // 期間の決算レポート：営業日・処理番号・締めの代わりに 期間 と レジ精算の回数
+    t.line(`期間: ${data.period.label}`);
+    t.line(`レジ精算: ${data.period.sessionCount}回${data.period.unclosedCount > 0 ? `（未精算 ${data.period.unclosedCount}）` : ''}`);
+    return;
+  }
   const date = `営業日: ${data.businessDateLabel}`;
   const opened = openedNote(data);
   if (!opened) t.line(date);
@@ -344,7 +368,7 @@ export function layoutRegisterReport(data: RegisterReportData, options: Register
   const cnt = (n: number) => `${n}件`;
   const cashLabel = (label: string) => label === '現金';
 
-  reportHead(t, data, 'レジ精算');
+  reportHead(t, data, data.period ? '決算レポート' : 'レジ精算');
   line(t.dotted);
 
   // ---- 客数・売上 ----
@@ -437,8 +461,10 @@ export function layoutRegisterReport(data: RegisterReportData, options: Register
 
   // ---- 入出金情報（件数・明細と現金在高） ----
   starSection('入出金情報');
-  kcv('レジオープン時現金', '1件', yen(data.cash.openingFloat));
-  blank();
+  if (!data.period) {
+    kcv('レジオープン時現金', '1件', yen(data.cash.openingFloat));
+    blank();
+  }
   kcv('入金', cnt(data.cashIns.length), yen(data.cash.cashIn));
   for (const x of data.cashIns) kv(`  ${x.purpose}`, yen(x.amount));
   // 銀行へ預入（Cash to bank）は 出金 に入れず別の行にする（2026-09-28 Ronnie「Cash to bank は 出金の中に入れない」）
@@ -458,13 +484,27 @@ export function layoutRegisterReport(data: RegisterReportData, options: Register
   if (bankOuts.length > 0 && bankTotal !== toBank) kv('  実際の預入', yen(bankTotal));
   // レジ実績入力の「現金」＝数えた在高なので、現金在高の行にまとめる。差異合計はそのすぐ下
   blank();
-  kv('現金在高', data.cash.counted == null ? yen(data.cash.expected) : yen(data.cash.counted));
-  kv('差異合計', data.cash.difference == null ? '未入力' : signedYen(data.cash.difference));
-  kv('差異理由', data.differenceReason?.trim() || '未選択');
-  const dep = data.deposits ?? { bank: 0, safe: 0, security: 0 };
-  kv('銀行振込', yen(dep.bank));
-  kv('貸金庫預け', yen(dep.safe));
-  kv('警備会社預け', yen(dep.security));
+  if (data.period) {
+    // 期間：在高は日ごとに違うので出さない。差異は締めたレジの合計
+    kv('差異合計（期間）', signedYen(data.period.differenceTotal));
+  } else {
+    kv('現金在高', data.cash.counted == null ? yen(data.cash.expected) : yen(data.cash.counted));
+    kv('差異合計', data.cash.difference == null ? '未入力' : signedYen(data.cash.difference));
+    kv('差異理由', data.differenceReason?.trim() || '未選択');
+    const dep = data.deposits ?? { bank: 0, safe: 0, security: 0 };
+    kv('銀行振込', yen(dep.bank));
+    kv('貸金庫預け', yen(dep.safe));
+    kv('警備会社預け', yen(dep.security));
+  }
+
+  // ---- 日別（期間が 2 日以上のとき） ----
+  if (data.period && data.period.days.length > 1) {
+    starSection('日別（税込）');
+    t.table(
+      ['組数', '客数', '売上'],
+      data.period.days.map((d) => ({ label: d.label, cells: [`${d.groups}組`, `${d.guests}客`, yen(d.sales)] }))
+    );
+  }
 
   // ---- 業務履歴 ----
   starSection('業務履歴');

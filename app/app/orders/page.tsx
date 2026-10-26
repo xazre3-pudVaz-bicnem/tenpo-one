@@ -16,6 +16,7 @@ import { LinkChips } from '@/components/orders/link-chips';
 import { Badge } from '@/components/ui/badge';
 import { FileText, Printer, Receipt, Utensils } from 'lucide-react';
 import { METHOD_LABELS } from '@/components/cash/labels';
+import { PeriodReportPrintButton } from '@/components/orders/period-report-print-button';
 import { QUICK_PAY_LINE_NAME, isQuickPayOrder } from '@/lib/quick-pay';
 
 export const metadata: Metadata = { title: '伝票明細' };
@@ -254,7 +255,9 @@ export default async function OrdersPage({
                     <Label htmlFor="q">伝票No（注文番号）</Label>
                     <Input id="q" name="q" defaultValue={q} placeholder="#123" inputMode="numeric" />
                   </div>
-                  <div className="col-span-2 flex justify-end gap-2 pt-1">
+                  <div className="col-span-2 flex flex-wrap justify-end gap-2 pt-1">
+                    {/* 選んだ期間の決算レポートをレシートプリンターへ（2026-10-26 Ronnie「Yo thau bata … 決算レポート … rezi printer bata print」） */}
+                    <PeriodReportPrintButton from={from} to={to} canPrint={can(ctx.role, 'register.operate')} />
                     {(hasAdvanced || multiDay || from !== today) && (
                       <Link href={status ? `/app/orders?status=${status}` : '/app/orders'} className={cn(buttonVariants({ variant: 'ghost' }))}>
                         条件をクリア

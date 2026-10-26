@@ -171,6 +171,7 @@ struct NativeSlipsView: View {
     @State private var fromDate = Date()
     @State private var toDate = Date()
     @State private var filterOpen = false
+    @State private var reportBusy = false
 
     private var p: NSPayload? { model.payload }
     private var multiDay: Bool { (p?.from ?? "") != (p?.to ?? "") }
@@ -263,6 +264,15 @@ struct NativeSlipsView: View {
                 Image(systemName: "calendar").foregroundColor(NFColor.royal)
                 Text(periodLabel(p)).font(.system(size: 17, weight: .heavy)).foregroundColor(NFColor.navy)
                 Spacer()
+                // 選んだ期間（昨日・一昨日・今週・今月・日付）の決算レポートをレシートプリンターへ
+                // （2026-10-26 Ronnie「Yo thau bata native ra web bata 決算レポート nikalna milne banau … rezi printer bata print」）
+                Button { Task { await printPeriodReport(p) } } label: {
+                    HStack(spacing: 6) { Image(systemName: "printer"); Text(reportBusy ? "印刷中…" : "決算レポート") }
+                        .font(.system(size: 14, weight: .bold)).foregroundColor(NFColor.ink)
+                        .padding(.horizontal, 14).frame(height: 40)
+                        .background(RoundedRectangle(cornerRadius: 10).fill(Color.white))
+                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(NFColor.line, lineWidth: 1))
+                }.buttonStyle(PressableStyle()).disabled(reportBusy)
                 Button { Task { await exportCsv(p) } } label: {
                     HStack(spacing: 6) { Image(systemName: "arrow.down.doc"); Text("CSV出力") }
                         .font(.system(size: 14, weight: .bold)).foregroundColor(NFColor.ink)
@@ -327,6 +337,20 @@ struct NativeSlipsView: View {
     private func periodLabel(_ p: NSPayload) -> String {
         if p.from == p.to { return p.from.replacingOccurrences(of: "-", with: "/") }
         return "\(p.from.replacingOccurrences(of: "-", with: "/")) 〜 \(String(p.to.dropFirst(5)).replacingOccurrences(of: "-", with: "/"))"
+    }
+
+    /// 決算レポート（期間の売上・支払・媒体別・入出金・日別）をお店のレシートプリンターへ（POST periodReport。Web と同じ printPeriodReport）
+    private func printPeriodReport(_ p: NSPayload) async {
+        guard !reportBusy else { return }
+        if NativePreview.current != nil { model.toast = "決算レポートを印刷しています"; return }
+        reportBusy = true
+        defer { reportBusy = false }
+        do {
+            let r = try await NativeAPI.shared.act(["type": "periodReport", "from": p.from, "to": p.to], throwOnFail: false)
+            if r.ok { model.toast = "\(periodLabel(p)) の決算レポートを印刷しています" } else { model.error = r.error ?? "決算レポートを印刷できませんでした" }
+        } catch {
+            model.error = (error as? NativeAPIError)?.message ?? "決算レポートを印刷できませんでした"
+        }
     }
 
     private func exportCsv(_ p: NSPayload) async {

@@ -596,3 +596,52 @@ describe('layoutRegisterReport（2026-09-28 Ronnie が選んだ並び）', () =>
     expect(epos).toContain('<cut');
   });
 });
+
+describe('期間の決算レポート（伝票明細の 昨日・一昨日・今週・今月・日付。2026-10-26 Ronnie）', () => {
+  const period = sample({
+    businessDateLabel: '2026/10/1 (水) 〜 10/26 (月)',
+    sessionNo: '—',
+    closedBy: 'Samir',
+    period: {
+      label: '2026/10/1 (水) 〜 10/26 (月)',
+      sessionCount: 25,
+      unclosedCount: 1,
+      differenceTotal: -500,
+      days: [
+        { label: '10/1 (水)', groups: 10, guests: 22, sales: 50000 },
+        { label: '10/2 (木)', groups: 12, guests: 30, sales: 61000 },
+      ],
+    },
+  });
+  const text = layoutRegisterReport(period, { paperWidth: 80 }).map((l) => l.text).join('\n');
+
+  it('上は「決算レポート」・期間・レジ精算の回数（処理番号・締めは出さない）', () => {
+    expect(text).toContain('決算レポート');
+    expect(text).not.toContain('レジ精算\n');
+    expect(text).toContain('期間: 2026/10/1 (水) 〜 10/26 (月)');
+    expect(text).toContain('レジ精算: 25回（未精算 1）');
+    expect(text).not.toContain('処理番号');
+    expect(text).not.toContain('締め:');
+  });
+
+  it('入出金は期間の合計・差異は締めたレジの合計（現金在高・レジオープン時現金は出さない）', () => {
+    expect(text).toContain('差異合計（期間）');
+    expect(text).toContain('-¥500');
+    expect(text).not.toContain('現金在高');
+    expect(text).not.toContain('レジオープン時現金');
+  });
+
+  it('2 日以上なら日別の表', () => {
+    expect(text).toContain('＊日別（税込）＊');
+    expect(text).toContain('10/1 (水)');
+    expect(text).toContain('¥61,000');
+  });
+
+  it('レジ精算レシート（period なし）は今まで通り', () => {
+    const regi = layoutRegisterReport(sample(), { paperWidth: 80 }).map((l) => l.text).join('\n');
+    expect(regi).toContain('処理番号: 4711A2B3');
+    expect(regi).toContain('現金在高');
+    expect(regi).not.toContain('決算レポート');
+    expect(regi).not.toContain('日別');
+  });
+});
