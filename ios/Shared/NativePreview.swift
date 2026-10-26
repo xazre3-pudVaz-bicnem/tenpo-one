@@ -180,11 +180,18 @@ struct NativeFloorScreen: View {
     @StateObject private var model = NativeFloorModel()
     @EnvironmentObject var state: AppState
 
+    static var storeHasStock: Bool {
+        guard let data = NativeDiskCache.load("home"), let p = try? JSONDecoder().decode(NHPayload.self, from: data) else { return true }
+        return p.tools.contains { $0.href == "/app/inventory" }
+    }
+
     var body: some View {
         NativeFloorView(
             model: model,
             onHome: { state.goNativeHome() },
             onLedger: { state.goNativeLedger() },
+            // ホームの道具に「在庫設定」がある店だけ（ホームの保存から。分からなければ出す）
+            onStock: Self.storeHasStock ? { state.goNativeStock() } : nil,
             onOpenOrder: { id, checkout in state.openNativeOrder(id, checkout: checkout) },
             // Web の /app/floor/<卓>/setup から来たら、その卓の来店登録（AppState.floorSetupTableId）
             setupRequest: state.floorSetupTableId,

@@ -115,7 +115,8 @@ export async function loadNativeHome(ctx: SessionContext, supabase: Supabase, st
   const layout = menuLayout(ctx.role, ctx.disabledFeatures, { keepActions: true });
   const bigTiles = REGI_BIG.flatMap((href) => {
     const t = layout.tiles.find((x) => x.href === href);
-    return t ? [{ href: t.href, label: t.label, en: t.en }] : [];
+    // iPad のホームの「オーダー・会計」は漢字で「注文・会計」（2026-10-27 01:38 Ronnie「オーダー・会計 lai 漢字 ma change gara 注文・会計」）
+    return t ? [{ href: t.href, label: t.href === '/app/floor' ? '注文・会計' : t.label, en: t.en }] : [];
   });
   const noticeCount = data.unreadCount + data.alertCount + data.autoNotices.length;
   const tools = [...layout.tiles.filter((t) => !REGI_BIG.includes(t.href)), ...layout.main]

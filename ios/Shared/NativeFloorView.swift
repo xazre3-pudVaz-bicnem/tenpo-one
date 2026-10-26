@@ -9,6 +9,8 @@ struct NativeFloorView: View {
     @ObservedObject var model: NativeFloorModel
     var onHome: () -> Void = {}
     var onLedger: () -> Void = {}
+    /// 上のバーの右の「メニュー在庫管理」（本日の残り数。前はホームの「在庫設定」。nil なら出さない）
+    var onStock: (() -> Void)? = nil
     /// 伝票を開く（既存のネイティブのオーダー・会計画面）
     var onOpenOrder: (_ orderId: String, _ checkout: Bool) -> Void = { _, _ in }
     /// この卓の来店登録を開いてほしい（Web の /app/floor/<卓>/setup から。AppState.floorSetupTableId）
@@ -26,10 +28,12 @@ struct NativeFloorView: View {
         VStack(spacing: 0) {
             NativeTopBar(
                 storeName: model.store?.name ?? "",
-                title: "オーダー・会計",
+                title: "注文・会計",
                 subtitle: "Order & Pay",
                 userName: "",
-                onHome: onHome
+                onHome: onHome,
+                // 2026-10-27 01:45 Ronnie「メニュー在庫管理 name change garera 注文・会計 click garda top menu bar ma aaune banau right patti」
+                accessory: onStock.map { NativeTopBarButton(icon: "shippingbox", label: "メニュー在庫管理", action: $0) }
             )
             GeometryReader { geo in
                 let panelW: CGFloat = geo.size.width >= 1000 ? 300 : 270
@@ -43,6 +47,14 @@ struct NativeFloorView: View {
                                     .padding(.horizontal, 10)
                             }
                             .padding(.horizontal, -10)
+                            // 横にスライドすると隣のフロア（2026-10-27 01:54 Ronnie「table body panel slide garna pani milne banau」）
+                            .simultaneousGesture(
+                                DragGesture(minimumDistance: 30).onEnded { v in
+                                    let dx = v.translation.width, dy = v.translation.height
+                                    guard model.showFloorChips, abs(dx) > 80, abs(dx) > abs(dy) * 1.5 else { return }
+                                    withAnimation(.easeOut(duration: 0.2)) { model.stepFloor(dx < 0 ? 1 : -1) }
+                                }
+                            )
                         }
                         // 色と印の見方はここに出さない（設定 › 使い方 へ。2026-10-24 22:35 Ronnie「ここはいらない」）
                     }
@@ -224,33 +236,43 @@ struct NativeFloorView: View {
         }
     }
 
-    // MARK: フロアのチップ（ALL ／ フロア名 ／ 未分類）
+    // MARK: フロアの切り替え（1F ／ 2F ／ … ／ 未分類）。灰色の枠に、選んだフロアだけ白
+    // 2026-10-27 01:54 Ronnie の見本「1F 2F 3F テラス」。ALL は出さない（受付のフロア＝最初に出すフロアから）
 
     private var floorChips: some View {
-        HStack(spacing: 6) {
-            Spacer(minLength: 0)
-            chip("ALL", on: model.floorFilter == "all") { model.floorFilter = "all" }
+        HStack(spacing: 0) {
             ForEach(model.floors) { f in
-                chip(f.name, on: model.floorFilter == f.id) { model.floorFilter = f.id }
+                segment(f.name, on: model.activeFloor == f.id) { model.floorFilter = f.id }
             }
             if !model.unassigned.isEmpty {
-                chip("未分類", on: model.floorFilter == "_none") { model.floorFilter = "_none" }
+                segment("未分類", on: model.activeFloor == "_none") { model.floorFilter = "_none" }
             }
-            Spacer(minLength: 0)
         }
+        .padding(4)
+        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color(hex: 0xEEEEEF)))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Color(hex: 0xE2E2E4), lineWidth: 1))
+        .animation(.easeOut(duration: 0.15), value: model.activeFloor)
     }
 
-    private func chip(_ text: String, on: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
+    private func segment(_ text: String, on: Bool, action: @escaping () -> Void) -> some View {
+        Button {
+            model.selectedTableId = nil
+            action()
+        } label: {
             Text(text)
-                .font(.system(size: 14, weight: .bold))
-                .foregroundColor(on ? .white : NFColor.ink2)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 9)
-                .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(on ? NFColor.iris : Color.white))
-                .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(on ? Color.clear : NFColor.line, lineWidth: 1))
+                .font(.system(size: 16, weight: on ? .medium : .semibold))
+                .foregroundColor(on ? Color(hex: 0x1F2329) : Color(hex: 0x8E8E93))
+                .lineLimit(1)
+                .padding(.horizontal, 22)
+                .frame(minWidth: 64).frame(height: 40)
+                .background {
+                    if on {
+                        RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white)
+                            .shadow(color: .black.opacity(0.08), radius: 3, y: 1)
+                    }
+                }
         }
-        .buttonStyle(PressableStyle())
+        .buttonStyle(.plain)
     }
 
     // MARK: 卓の箱
