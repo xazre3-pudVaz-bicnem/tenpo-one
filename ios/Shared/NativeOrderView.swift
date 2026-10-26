@@ -254,26 +254,25 @@ enum OV {
 
 // MARK: - 上のバー
 
-/// 上のバーの「ホームへ」ボタンの中身＝白い家の中に TENPO ONE のロゴの「1」（バーの色で抜く）
-/// （2026-10-24 19:22 Ronnie「ホームのボタンの中にロゴ」→ 19:24「ロゴの色が合わない・ホームに見えない」）
+/// 上のバーの「ホームへ」ボタンの中身＝家の中に TENPO ONE のロゴの「1」
+/// （2026-10-24 19:22 Ronnie「ホームのボタンの中にロゴ」→ 19:24「ロゴの色が合わない・ホームに見えない」）。
+/// 黄色の箱に濃い家・「1」は黄色で抜く＝ホームの左のバーで選んだボタンと同じ色
+/// （2026-10-27 02:57 Ronnie「left top ma vayeko home button yello ma banaune ki」）
 struct NativeHomeLogo: View {
-    /// 上のバーの色（ロゴの「1」をこの色で抜いて見せる）
-    var ink: Color = NT.topBar
-
     var body: some View {
         ZStack {
-            NativeHouseShape().fill(Color.white)
-                .frame(width: 32, height: 29)
+            NativeHouseShape().fill(OV.ink)
+                .frame(width: 30, height: 27)
             Image("BrandOne")
                 .renderingMode(.template)
                 .resizable()
                 .scaledToFit()
-                .foregroundColor(ink)
-                .frame(height: 15)
+                .foregroundColor(OV.yellow)
+                .frame(height: 14)
                 .offset(y: 6)
         }
         .frame(width: 46, height: 40)
-        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white.opacity(0.12)))
+        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(OV.yellow))
     }
 }
 
