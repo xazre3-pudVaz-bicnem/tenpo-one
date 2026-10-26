@@ -218,14 +218,19 @@ struct NativeTableSheet: View {
         bigButton("会計伝票", en: "Print bill", fill: NFColor.navy, height: 62, size: 19, enabled: selected != nil) {
             Task {
                 guard let s = selected else { return }
-                // レジ受付の設定が ON（ネットあり）：どのフロアの卓でもこの iPad のレシートプリンターで
-                if NativeRegisterBill.enabled && NativeNet.shared.online {
-                    if let err = await NativeRegisterBill.print(orderId: s.id, clerkName: nil) {
-                        model.show(toast: "お会計伝票：\(err)")
-                    } else {
+                // ネットあり：どのフロアの卓でもこの iPad のレシートプリンターで（いつも。2026-10-26 Ronnie「default always on」）。
+                // この iPad にレシートプリンターが無いときだけ、今まで通りその卓のフロアのプリンター（floorBill）
+                if NativeNet.shared.online {
+                    switch await NativeRegisterBill.print(orderId: s.id, clerkName: nil) {
+                    case .printed:
                         model.show(toast: "お会計伝票を印刷します")
+                        return
+                    case .failed(let err):
+                        model.show(toast: "お会計伝票：\(err)")
+                        return
+                    case .noPrinter:
+                        break
                     }
-                    return
                 }
                 if let _ = await model.act(["type": "floorBill", "orderId": s.id], refreshAfter: false) {
                     model.show(toast: "お会計伝票を印刷します")

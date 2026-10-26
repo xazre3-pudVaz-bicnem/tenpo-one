@@ -868,15 +868,18 @@ final class NativeOrderModel: ObservableObject {
         guard let orderId else { return }
         busy = true
         defer { busy = false }
-        // レジ受付の設定が ON：どのフロアの卓でもこの iPad のレシートプリンターで（設定 › ハードウェア › 会計伝票）
-        if NativeRegisterBill.enabled {
-            if let err = await NativeRegisterBill.print(orderId: orderId, clerkName: clerkName) {
-                notice = "お会計伝票：\(err)"
-            } else {
-                notice = nil
-                toast = "お会計伝票を印刷します"
-            }
+        // どのフロアの卓でもこの iPad のレシートプリンターで（いつも。2026-10-26 Ronnie「default always on」）。
+        // この iPad にレシートプリンターが無いときだけ、今まで通りその卓のフロアのプリンター（floorBill）
+        switch await NativeRegisterBill.print(orderId: orderId, clerkName: clerkName) {
+        case .printed:
+            notice = nil
+            toast = "お会計伝票を印刷します"
             return
+        case .failed(let err):
+            notice = "お会計伝票：\(err)"
+            return
+        case .noPrinter:
+            break
         }
         if let r = try? await NativeAPI.shared.floorAct(["type": "floorBill", "orderId": orderId]) {
             notice = r.ok ? nil : (r.error ?? "お会計伝票の印刷に失敗しました")

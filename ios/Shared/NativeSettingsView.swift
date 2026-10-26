@@ -18,7 +18,6 @@ struct NativeSettingsView: View {
     @State private var sel: Sel = NativeSettingsView.lastSel
     private static var lastSel: Sel = .page(.printer)
     /// どのフロアの卓の会計伝票もこの iPad で出す（レジ受付）
-    @State private var billAtRegister = NativeRegisterBill.enabled
     /// ハードウェアの中のタブ（プリンター／ネットが無いとき）。1 画面に入るように分ける（2026-10-25 00:31 Ronnie）
     /// LAN・Wi-Fi のプリンターは iPad ではつながない＝管理画面で決める（2026-10-25 01:00 Ronnie「iPad は Bluetooth だけ」）
     @State private var hwTab: HWTab = .printer
@@ -256,8 +255,8 @@ struct NativeSettingsView: View {
                 HStack(alignment: .top, spacing: 16) {
                     VStack(spacing: 16) { bluetoothCard }
                         .frame(maxWidth: .infinity, alignment: .top)
+                    // 会計伝票の「どのフロアもこのレジで」はいつも ON（設定に出さない。2026-10-26 Ronnie「default always on」）
                     VStack(spacing: 16) {
-                        billSlipCard
                         networkCard
                     }
                     .frame(maxWidth: .infinity, alignment: .top)
@@ -692,17 +691,6 @@ struct NativeSettingsView: View {
                 .buttonStyle(PressableStyle())
             }
             Spacer(minLength: 0)
-        }
-    }
-
-    /// 会計伝票：どのフロアの卓もこのレジで（レジ受付）。端末ごとの設定
-    private var billSlipCard: some View {
-        card(icon: "doc.text", title: "会計伝票（フロアがある店）", en: "Bill slips",
-             description: "受付のレジで、どのフロアの卓の会計伝票もこの iPad のレシートプリンター（Bluetooth・LAN）で出します。OFF のときは今まで通り、その卓のフロアのプリンターから出ます") {
-            row("どのフロアの会計伝票もこのレジで出す", en: "Print every floor's bill here") {
-                Toggle("", isOn: Binding(get: { billAtRegister }, set: { v in billAtRegister = v; NativeRegisterBill.enabled = v }))
-                    .labelsHidden().tint(NFColor.iris)
-            }
         }
     }
 

@@ -228,6 +228,8 @@ struct OfflineKit: Decodable {
     let items: [String: Item]
     let serviceChargeRate: Double
     let drawer: Drawer
+    /// この iPad のレシートプリンター（管理画面の「設定 › レジ端末」で決めたもの。無ければ nil）
+    let preferredReceiptPrinterId: String?
 }
 
 extension OfflineKit.Printer {
