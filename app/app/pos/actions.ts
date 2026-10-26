@@ -3,13 +3,14 @@
 import { checkoutBluetoothReceipt } from '@/lib/checkout-receipt-server';
 import type { CheckoutBluetoothLink, CheckoutReceipt } from '@/lib/checkout-bluetooth';
 import { revalidatePath } from 'next/cache';
+import { autoOrderSlipAfterSend } from '@/lib/auto-order-slip';
 import { sortOptionGroupLinks } from '@/lib/option-group-order';
 import { after } from 'next/server';
 import { generateKitchenJobsForStore } from '@/lib/print-queue';
 import { assertStoreAccess, requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { isMissingColumnError } from '@/lib/schema-compat';
-import { enqueueCancelSlipPrint, enqueueReceiptPrint } from './print-actions';
+import { enqueueCancelSlipPrint, enqueueReceiptPrint, enqueueOrderSlipPrint } from './print-actions';
 import { allowsTakeoutItem, takeoutMenuFrom } from '@/lib/takeout-menu';
 import { loadMenuStock } from '@/lib/menu-stock-server';
 import { applicableTaxRate } from '@/lib/tax';
@@ -572,8 +573,26 @@ export async function sendOrderToKitchen(orderId: string): Promise<SendOrderResu
   revalidatePath(`/app/pos`);
   revalidatePath(`/app/kitchen`);
   // 送れたときは何も出さない。印刷されていない恐れがあるときだけ知らせる
-  const printWarning = sent > 0 ? await kitchenPrintWarning(supabase, order.store_id) : null;
-  return { sent, printWarning };
+  const orderSlipWarning = await autoOrderSlipAfterSend(sent, async () => {
+    const { data: lines, error: lineError } = await supabase.from('order_items')
+      .select('line_total, menu_items(category_id)').eq('order_id', orderId).eq('status', 'active');
+    if (lineError) throw lineError;
+    if (!(lines ?? []).some((line) => line.line_total > 0)) return false;
+    const ids = [...new Set((lines ?? []).flatMap((line) => {
+      const item = line.menu_items as unknown as { category_id: string | null } | null;
+      return item?.category_id ? [item.category_id] : [];
+    }))];
+    if (!ids.length) return false;
+    const { data, error } = await supabase.from('menu_categories').select('id')
+      .eq('organization_id', ctx.organizationId).eq('status', 'active')
+      .or(`store_id.is.null,store_id.eq.${order.store_id}`).in('id', ids).eq('print_order_slip', true).limit(1);
+    // Before migration is deployed, preserve existing ordering without a new print feature.
+    if (error && isMissingColumnError(error.message, 'print_order_slip')) return false;
+    if (error) throw error;
+    return (data ?? []).length > 0;
+  }, () => enqueueOrderSlipPrint(orderId));
+  const kitchenWarning = sent > 0 ? await kitchenPrintWarning(supabase, order.store_id) : null;
+  return { sent, printWarning: [kitchenWarning, orderSlipWarning].filter(Boolean).join('。') || null };
 }
 
 /**
