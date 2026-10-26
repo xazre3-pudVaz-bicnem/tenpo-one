@@ -186,12 +186,15 @@ struct NativeHomeView: View {
                     sidebar.frame(width: 190)
                     VStack(spacing: 0) {
                         topBar
-                        VStack(spacing: 16) {
+                        // 箱のあいだは同じだけ空ける（画面が大きい iPad でも下に寄って空かない）
+                        VStack(spacing: 0) {
                             tileGrid(columns: 3)
+                            Spacer(minLength: 14)
                             salesCard(narrow: false)
+                            Spacer(minLength: 14)
                             clockRow
+                            Spacer(minLength: 14)
                             kpiRow(columns: 4)
-                            Spacer(minLength: 0)
                         }
                         .padding(.horizontal, 20)
                         .padding(.top, 18)
@@ -479,7 +482,7 @@ struct NativeHomeView: View {
                             Text(g.en).font(.system(size: 10, weight: .medium)).foregroundColor(NFColor.ink3).lineLimit(1)
                         }
                     }
-                    .frame(maxWidth: .infinity).frame(height: 86)
+                    .frame(maxWidth: .infinity).frame(height: 92)
                     .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Color.white))
                     .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Self.tileLine, lineWidth: 1))
                     .overlay(alignment: .topTrailing) {
