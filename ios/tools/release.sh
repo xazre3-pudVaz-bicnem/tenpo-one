@@ -35,7 +35,8 @@ if [ -n "${TENPO_ARCHIVE:-}" ]; then
   # archive は済んでいる：upload だけ
   ARCHIVE="$TENPO_ARCHIVE"
   OUT="$(dirname "$ARCHIVE")"
-  BUILD_NO="$(basename "$OUT" | sed 's/^release-//')"
+  # ビルド番号は archive から（フォルダ名 release-mfi-… からだと「mfi-…」と出た）
+  BUILD_NO="$(/usr/libexec/PlistBuddy -c 'Print :ApplicationProperties:CFBundleVersion' "$ARCHIVE/Info.plist" 2>/dev/null || basename "$OUT" | sed -E 's/^release-(mfi-)?//')"
 else
   BUILD_NO="$(date +%Y%m%d%H%M)"
   OUT="${TENPO_RELEASE_DIR:-$HOME/tenpo-build/release-$BUILD_NO}"
