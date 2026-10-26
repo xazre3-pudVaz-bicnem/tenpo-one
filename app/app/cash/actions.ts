@@ -8,6 +8,7 @@ import type { Role } from '@/lib/permissions';
 import { captureServerError } from '@/lib/observability-server';
 import { actionFail, actionOk, type ActionResult } from '@/lib/action-error';
 import { enqueueRegisterReportPrint } from '@/lib/register-report-loader';
+import { loadStoreClerks } from '@/lib/pos-clerks-server';
 import type { CloseRegisterResult, DenominationJson } from '@/lib/register-report';
 import { expectedCash } from '@/lib/metrics';
 import { registerDayFlowActive } from '@/lib/register-day';
@@ -301,9 +302,13 @@ export async function closeRegister(
     );
   }
 
-  // レジクローズの担当者は必ず選ぶ（精算レシートに出す。2026-09-25 店舗要望）
+  // レジクローズの担当者は必ず選ぶ（精算レシートに出す。2026-09-25 店舗要望）。
+  // ただし担当者を 1 人も登録していない店は選べないので、選ばずに締められる（精算レシートはログインしている人の名前。
+  // 2026-10-26 Ronnie「Shunka ko hijo native ma close garna namilera」：ネイティブは担当者が居ないと選ぶ画面を出さず、ここで止まっていた）
   if (!clerkName || !clerkName.trim()) {
-    return actionFail('レジクローズの担当者を選んでください');
+    const clerks = await loadStoreClerks(supabase, session.store_id).catch(() => null);
+    if (clerks === null || clerks.length > 0) return actionFail('レジクローズの担当者を選んでください');
+    clerkName = null;
   }
 
   // 実査額が理論在高と合っていないと締められない（2026-09-25 店舗要望「レジの金額合わないとできない」）。
