@@ -12,7 +12,7 @@ describe('ネイティブのフロア（テーブル一覧）の操作（2026-10
     expect(parseNativeFloorAction({ type: 'floorOrder', tableId: 'x' }).ok).toBe(false);
     expect(isNativeFloorActionType('floorOrder')).toBe(true);
     expect(isNativeFloorActionType('send')).toBe(false);
-    expect(NATIVE_FLOOR_ACTION_TYPES.length).toBe(20);
+    expect(NATIVE_FLOOR_ACTION_TYPES.length).toBe(21);
   });
 
   it('着席（お客様情報）：モード・人数・来店経路・時間制・開始時間', () => {
@@ -103,5 +103,16 @@ describe('ネイティブのフロア（テーブル一覧）の操作（2026-10
     expect(pickNativeFloorStore({ stores: [], currentStore: null }, other)).toBeNull();
     const route = readFileSync(new URL('../app/api/app/v1/pos/route.ts', import.meta.url), 'utf8');
     expect(route).toContain("const store = pickNativeFloorStore(ctx, url.searchParams.get('store'));");
+  });
+
+  it('この iPad をレジとして登録する操作（2026-10-26 アプリだけの iPad に登録の画面が無かった）', () => {
+    expect(parseNativeFloorAction({ type: 'floorRegisterDevice' })).toEqual({ ok: true, action: { type: 'floorRegisterDevice', storeId: null } });
+    expect(parseNativeFloorAction({ type: 'floorRegisterDevice', storeId: U1 })).toEqual({ ok: true, action: { type: 'floorRegisterDevice', storeId: U1 } });
+    expect(parseNativeFloorAction({ type: 'floorRegisterDevice', storeId: 'x' }).ok).toBe(false);
+    expect(isNativeFloorActionType('floorRegisterDevice')).toBe(true);
+    const route = readFileSync(new URL('../app/api/app/v1/pos/route.ts', import.meta.url), 'utf8');
+    expect(route).toContain('const res = await claimRegisterDevice(store.id);');
+    expect(route).toContain("if (decision.kind !== 'allowed') return registerBlocked(decision, approval, store.name);");
+    expect(route).toContain('useWeb: true, register: true');
   });
 });

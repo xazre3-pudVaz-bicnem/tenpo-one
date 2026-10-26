@@ -93,6 +93,51 @@ struct NativeFloorView: View {
                 }
             }
         }
+        // レジとして使えない（この iPad が未登録など）：理由と「この iPad を登録」（2026-10-26。前は前の店の一覧のまま）
+        .overlay {
+            if let b = model.blocked, !model.loading {
+                ZStack {
+                    NFColor.floorBg.opacity(0.96).ignoresSafeArea()
+                    VStack(spacing: 18) {
+                        Image(systemName: b.canRegister ? "ipad.landscape" : "exclamationmark.triangle.fill")
+                            .font(.system(size: 44, weight: .semibold))
+                            .foregroundColor(b.canRegister ? NFColor.iris : NFColor.danger)
+                        Text(b.message)
+                            .font(.system(size: 19, weight: .bold)).foregroundColor(NFColor.navy)
+                            .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
+                        if b.canRegister {
+                            Text("登録すると、この iPad でテーブル一覧・注文・会計が使えます（店舗の契約の台数まで）")
+                                .font(.system(size: 14, weight: .medium)).foregroundColor(.secondary)
+                                .multilineTextAlignment(.center)
+                        }
+                        HStack(spacing: 12) {
+                            Button { Task { await model.refresh(silent: false) } } label: {
+                                Text("読み直す")
+                                    .font(.system(size: 17, weight: .bold)).foregroundColor(NFColor.navy)
+                                    .frame(width: 180, height: 56)
+                                    .background(RoundedRectangle(cornerRadius: 14).fill(Color.white))
+                                    .overlay(RoundedRectangle(cornerRadius: 14).stroke(NFColor.navy.opacity(0.2), lineWidth: 1))
+                            }
+                            if b.canRegister {
+                                Button { Task { await model.registerDevice() } } label: {
+                                    Text(model.busy ? "登録中…" : "この iPad を登録")
+                                        .font(.system(size: 17, weight: .bold)).foregroundColor(.white)
+                                        .frame(width: 240, height: 56)
+                                        .background(RoundedRectangle(cornerRadius: 14).fill(NFColor.iris))
+                                }
+                                .disabled(model.busy)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(36)
+                    .frame(maxWidth: 620)
+                    .background(RoundedRectangle(cornerRadius: 22).fill(Color.white))
+                    .shadow(color: .black.opacity(0.08), radius: 18, y: 6)
+                }
+            }
+        }
         // 卓のポップアップ（押した卓の近くに出す。Web と同じ）
         .overlay {
             if let t = model.selectedTable {

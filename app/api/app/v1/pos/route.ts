@@ -11,7 +11,7 @@ import { syncOfflineOrder } from '@/lib/native-offline-sync-server';
 import { loadNativeCatalog, loadNativeLive, loadNativeOrder, loadNativePos, setOrderVisitSource } from '@/lib/native-pos-server';
 import { claimLanKitchenPrints, finishLanPrint } from '@/lib/native-print-server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { ACCESS_MESSAGE } from '@/lib/store-access';
+import { ACCESS_MESSAGE, registerBlockMessage, type RegisterDeviceDecision } from '@/lib/store-access';
 import { checkout, splitOrder, divideOrderItem, cancelItem, sendOrderToKitchen, setDiscount, updateQty, addItem, addCustomPriceItem, startTakeout } from '@/app/app/pos/actions';
 import { setOrderClerk } from '@/app/app/pos/clerk-actions';
 import { cancelSteraPayment, checkSteraPayment, startSteraPayment } from '@/app/app/pos/stera-actions';
@@ -170,6 +170,7 @@ import {
 } from '@/app/app/reservations/actions';
 import { addSlipToTable, cancelEmptyOrder, clearTable, mergeOrders, moveTable, setGuestCount, setPaymentMemo, setSeatTime } from '@/app/app/pos/actions';
 import { completeCleaning, goToOrder, releaseFinishedCleaning, setTableAvailability } from '@/app/app/floor/actions';
+import { claimRegisterDevice } from '@/app/app/pos/register-device-actions';
 import { saveTableGroup } from '@/app/app/floor/group-actions';
 import { resolveServiceCall, startRegisterVisit } from '@/app/app/handy/actions';
 import { isNativeTableQrActionType, parseNativeTableQrAction } from '@/lib/native-table-qr';
@@ -249,7 +250,20 @@ const FLOOR_PERMISSION: Record<NativeFloorAction['type'], PermissionAction> = {
   floorMove: 'pos.checkout',
   floorCancelEmpty: 'pos.checkout',
   floorDrawer: 'pos.checkout',
+  floorRegisterDevice: 'pos.order',
 };
+
+/**
+ * レジ端末として使えない iPad への返事。まだ登録していない（台数に空きがある）ときは register: true を付けて、
+ * アプリのテーブル一覧に「この iPad を登録」を出す。ほかは理由（台数の上限・解除・承認待ちなど。Web の登録画面と同じ文）
+ */
+function registerBlocked(decision: RegisterDeviceDecision, approval: boolean, storeName: string | null) {
+  if (decision.kind === 'register') {
+    const where = storeName ? `「${storeName}」の` : '';
+    return json({ ok: false, error: `このiPadを${where}レジとして登録してください`, useWeb: true, register: true }, 403);
+  }
+  return json({ ok: false, error: registerBlockMessage(decision, approval) ?? 'このiPadをレジとして登録してください', useWeb: true }, 403);
+}
 
 const PERMISSION: Record<NativePosAction['type'], PermissionAction> = {
   split: 'pos.checkout',
@@ -855,8 +869,8 @@ export async function GET(request: Request) {
     const { loadStoreAccess, peekRegisterDevice } = await import('@/lib/store-access-server');
     const { policy, onNetwork } = await loadStoreAccess(store.id);
     if (!onNetwork) return json({ ok: false, error: ACCESS_MESSAGE.network, useWeb: true }, 403);
-    const { decision } = await peekRegisterDevice(store.id, policy);
-    if (decision.kind !== 'allowed') return json({ ok: false, error: 'このiPadをレジとして登録してください', useWeb: true }, 403);
+    const { decision, approval } = await peekRegisterDevice(store.id, policy);
+    if (decision.kind !== 'allowed') return registerBlocked(decision, approval, store.name);
     const floor = await loadNativeFloor(ctx, await createClient(), { id: store.id, name: store.name });
     return json({ ok: true, ...floor });
   }
@@ -881,8 +895,8 @@ export async function GET(request: Request) {
     const { loadStoreAccess, peekRegisterDevice } = await import('@/lib/store-access-server');
     const { policy, onNetwork } = await loadStoreAccess(row.store_id as string);
     if (!onNetwork) return json({ ok: false, error: ACCESS_MESSAGE.network, useWeb: true }, 403);
-    const { decision } = await peekRegisterDevice(row.store_id as string, policy);
-    if (decision.kind !== 'allowed') return json({ ok: false, error: 'このiPadをレジとして登録してください', useWeb: true }, 403);
+    const { decision, approval } = await peekRegisterDevice(row.store_id as string, policy);
+    if (decision.kind !== 'allowed') return registerBlocked(decision, approval, null);
   }
 
   const result = await loadNativePos(ctx, orderId);
@@ -1580,6 +1594,13 @@ export async function POST(request: Request) {
     const problem = await networkProblem(ctx);
     if (problem) return json({ ok: false, error: problem }, 403);
     try {
+      if (action.type === 'floorRegisterDevice') {
+        // この iPad を登録（Web の /app/pos の「登録」と同じ claimRegisterDevice。Cookie もこの返事で入る）
+        const store = pickNativeFloorStore(ctx, action.storeId);
+        if (!store) return json({ ok: false, error: '店舗がありません' }, 404);
+        const res = await claimRegisterDevice(store.id);
+        return json(res.error ? { ok: false, error: res.error } : { ok: true });
+      }
       return json(await runFloorAction(action));
     } catch (e) {
       return json({ ok: false, error: errorText(e, 'うまくいきませんでした。もう一度お試しください') }, 400);
@@ -1796,6 +1817,9 @@ async function runFloorAction(action: NativeFloorAction): Promise<Record<string,
       const res = await enqueueDrawerKick(action.storeId);
       return res.ok ? { ok: true } : { ok: false, error: res.error ?? 'ドロアを開けられませんでした' };
     }
+    case 'floorRegisterDevice':
+      // 呼ぶ側（POST）で先に処理する（店を ctx で決めるため）
+      return { ok: false, error: 'うまくいきませんでした' };
   }
 }
 

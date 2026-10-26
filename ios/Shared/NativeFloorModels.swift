@@ -414,6 +414,8 @@ final class NativeFloorModel: ObservableObject {
     private var offsetMs: Double = 0
     /// 今出しているテーブル一覧をこの起動中にサーバーから読めたか（false の間は iPad に保存してあった前のもの）
     private var confirmed = false
+    /// レジとして使えない（この iPad が未登録・台数の上限・お店の回線の外など）。画面いっぱいに理由を出す（2026-10-26）
+    @Published var blocked: NFBlocked?
     /// オフラインの伝票が変わった・同期した → 画面を出し直す・読み直す
     private var offlineSinks = Set<AnyCancellable>()
     private var clock: Timer?
@@ -503,6 +505,7 @@ final class NativeFloorModel: ObservableObject {
             }
             payload = p
             confirmed = true
+            blocked = nil
             // 金額が変わった伝票・まだ読んでいない伝票を裏で読んでおく（会計・注文を押した瞬間に出る。2026-10-24 Ronnie「会計 ma jada pani 取込み navai」）
             let stale = p.tables.flatMap { $0.order?.slips ?? [] }.filter { s in
                 NativeDiskCache.load(APILive.self, key: "live-\(s.id)")?.order.total != s.total
@@ -515,9 +518,17 @@ final class NativeFloorModel: ObservableObject {
             }
             error = nil
         } catch {
-            // 保存してあった前の一覧のままサーバーに断られた（店がない・レジ登録など）ときは、黙らずに出す。ネットが無いだけなら出さない
-            let refused = !confirmed && payload != nil && error is NativeAPIError
-            if !silent || payload == nil || refused { self.error = (error as? NativeAPIError)?.message ?? "通信できませんでした" }
+            if let e = error as? NativeAPIError, e.useWeb {
+                // レジとして使えない（未登録・台数・回線など）：前の一覧（別の店の保存のことがある）は出さず、理由と「登録」を出す。
+                // 前は黙って前の一覧のまま＝来店登録で「テーブルが見つかりません」（2026-10-26 Ronnie）
+                blocked = NFBlocked(message: e.message, canRegister: e.canRegister)
+                if !confirmed { payload = nil }
+                self.error = nil
+            } else {
+                // 保存してあった前の一覧のままサーバーに断られたときは、黙らずに出す。ネットが無いだけなら出さない
+                let refused = !confirmed && payload != nil && error is NativeAPIError
+                if !silent || payload == nil || refused { self.error = (error as? NativeAPIError)?.message ?? "通信できませんでした" }
+            }
         }
         loading = false
     }
@@ -574,13 +585,38 @@ final class NativeFloorModel: ObservableObject {
                 let r = await offlineAct(body)
                 if r.ok { return r }
             }
-            show(error: (error as? NativeAPIError)?.message ?? "通信できませんでした")
+            let text = (error as? NativeAPIError)?.message ?? "通信できませんでした"
+            show(error: text)
+            // サーバーに断られた（卓が消えた・別の店の一覧だった・レジ登録など）：一覧を読み直す（エラーの帯は残す）
+            if error is NativeAPIError {
+                await refresh(silent: true)
+                if blocked == nil, self.error == nil { self.error = text }
+            }
             return nil
         }
     }
 
     func show(error text: String) {
         self.error = text
+    }
+
+    /// この iPad をこの店のレジとして登録する（Web の /app/pos の「登録」と同じ）。できたら読み直す
+    func registerDevice() async {
+        busy = true
+        defer { busy = false }
+        var body: [String: Any] = ["type": "floorRegisterDevice"]
+        if confirmed, let id = payload?.store.id { body["storeId"] = id }
+        do {
+            let r = try await NativeAPI.shared.floorAct(body)
+            if !r.ok {
+                blocked = NFBlocked(message: r.error ?? "登録できませんでした", canRegister: false)
+                return
+            }
+            await refresh(silent: false)
+            if blocked == nil { show(toast: "この iPad をレジとして登録しました") }
+        } catch {
+            blocked = NFBlocked(message: (error as? NativeAPIError)?.message ?? "通信できませんでした", canRegister: blocked?.canRegister ?? false)
+        }
     }
 
     func show(toast text: String) {
@@ -612,4 +648,11 @@ extension NativeAPI {
         let data = try await send(req)
         return try JSONDecoder().decode(NFActionResult.self, from: data)
     }
+}
+
+/// テーブル一覧を出せない理由（レジとして使えない）
+struct NFBlocked: Equatable {
+    let message: String
+    /// 「この iPad を登録」を出す（まだ登録していない・台数に空きあり）
+    let canRegister: Bool
 }

@@ -136,11 +136,15 @@ struct APIResult: Decodable {
     let brand: String?
     // ドロア
     let opened: Bool?
+    /// レジ端末としてまだ登録していない（台数に空きあり）：テーブル一覧に「この iPad を登録」を出す（2026-10-26）
+    let register: Bool?
 }
 
 struct NativeAPIError: LocalizedError {
     let message: String
     let useWeb: Bool
+    /// この iPad をレジとして登録すれば使える（サーバーの register: true）
+    var canRegister: Bool = false
     var errorDescription: String? { message }
 }
 
@@ -196,7 +200,7 @@ final class NativeAPI {
             await saveCookies(from: http, url: url)
             if http.statusCode >= 400 {
                 let r = try? JSONDecoder().decode(APIResult.self, from: data)
-                throw NativeAPIError(message: r?.error ?? "通信できませんでした（\(http.statusCode)）", useWeb: r?.useWeb ?? false)
+                throw NativeAPIError(message: r?.error ?? "通信できませんでした（\(http.statusCode)）", useWeb: r?.useWeb ?? false, canRegister: r?.register ?? false)
             }
             // 画面の読み込み（GET ?part=…）は iPad に保存して、次に開く瞬間に先に出す（Self.cached）
             if (req.httpMethod ?? "GET") == "GET", url.path == path { NativeDiskCache.save(data, key: Self.cacheKey(url)) }
