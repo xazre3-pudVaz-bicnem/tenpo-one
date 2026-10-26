@@ -447,7 +447,7 @@ struct NativeStorePreview: View {
                     }
                     // 空いた卓を押したとき（来店登録）を開いておく（-tenpoPreviewSetup YES）
                     if UserDefaults.standard.bool(forKey: "tenpoPreviewSetup") {
-                        floorModel.selectedTableId = (floorModel.tables.first { $0.order == nil && $0.upcoming.isEmpty } ?? floorModel.tables.first { $0.order == nil })?.id
+                        floorModel.selectedTableId = (floorModel.tables.first { $0.order == nil && $0.currentStatus == "available" && $0.upcoming.isEmpty } ?? floorModel.tables.first { $0.order == nil && $0.currentStatus == "available" })?.id
                     }
                 }
         case "ledger":
