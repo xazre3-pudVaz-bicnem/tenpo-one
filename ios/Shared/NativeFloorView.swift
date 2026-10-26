@@ -358,11 +358,17 @@ struct NativeTableCard: View {
                         .padding(.horizontal, 10).frame(height: 36)
                         .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.white))
                         .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(Color.black.opacity(0.10), lineWidth: 1))
+                        .layoutPriority(2)
                     // 卓の名前は店が付けたまま（T-1・C-2…）。横に小さく席の種類（テーブル・カウンター・個室）
                     // （2026-10-27 03:00 Ronnie「clint le table name j lekhxa tyo aaune、side ma sano ma テーブル カウンター 個室」）
-                    Text(Self.seatKind(table))
-                        .font(.system(size: 11, weight: .semibold)).foregroundColor(NFColor.ink3)
-                        .lineLimit(1).fixedSize()
+                    // 卓の名前・印・人数を先に（名前は切らない）。席の種類は残りの幅に入るときだけ出す
+                    ViewThatFits(in: .horizontal) {
+                        Text(Self.seatKind(table))
+                            .font(.system(size: 11, weight: .semibold)).foregroundColor(NFColor.ink3)
+                            .lineLimit(1).fixedSize()
+                        Color.clear.frame(width: 0, height: 0)
+                    }
+                    .layoutPriority(-1)
                     // プランと予約の印（飲み放題＝ビールのグラス・誕生日＝ケーキ…。2026-10-24 21:18 Ronnie）
                     let marks = Self.marks(order)
                     if !marks.isEmpty {
