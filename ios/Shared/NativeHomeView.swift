@@ -262,34 +262,38 @@ struct NativeHomeView: View {
     // MARK: 上のバー（お知らせ・店名）
 
     private var topBar: some View {
-        HStack(spacing: 10) {
-            // 「ホーム」の字は出さない（ここがホーム。2026-10-24 19:01 Ronnie）
-            Spacer()
-            Button { onWeb("/app/expenses") } label: {
-                ZStack(alignment: .topTrailing) {
-                    Image(systemName: "bell").font(.system(size: 20, weight: .semibold)).foregroundColor(.white).padding(8)
-                    if let n = model.payload?.noticeCount, n > 0 {
-                        Text("\(n)").font(.system(size: 11, weight: .heavy)).foregroundColor(.white)
-                            .padding(.horizontal, 5).padding(.vertical, 1)
-                            .background(Capsule().fill(Color(hex: 0xE53935)))
+        VStack(spacing: 0) {
+            // 時計・電波・電池の行（白い字）だけは左のメニューと同じ濃い色の細い帯（無いと白い字が見えない。2026-10-25 Ronnie「時計・電波が見えない」）
+            Self.sideBg.frame(height: 20)
+            // 上のバーは本文と同じ色（2026-10-27 01:58 Ronnie「top ko bar ma yo color hudaina hai left patti matrai hunxa top ko bar body color jastai hunxa」）
+            HStack(spacing: 10) {
+                // 「ホーム」の字は出さない（ここがホーム。2026-10-24 19:01 Ronnie）
+                Spacer()
+                Button { onWeb("/app/expenses") } label: {
+                    ZStack(alignment: .topTrailing) {
+                        Image(systemName: "bell").font(.system(size: 20, weight: .semibold)).foregroundColor(Self.tileText).padding(8)
+                        if let n = model.payload?.noticeCount, n > 0 {
+                            Text("\(n)").font(.system(size: 11, weight: .heavy)).foregroundColor(.white)
+                                .padding(.horizontal, 5).padding(.vertical, 1)
+                                .background(Capsule().fill(Color(hex: 0xE53935)))
+                        }
                     }
                 }
+                .buttonStyle(PressableStyle())
+                // 店名はログアウトの横（2026-10-24 19:03 Ronnie）。ハンディQR は右の箱へ（2026-10-27 の見本）
+                HStack(spacing: 6) {
+                    Image(systemName: "storefront")
+                    Text(model.payload?.store.name ?? "").lineLimit(1)
+                }
+                .font(.system(size: 15, weight: .semibold)).foregroundColor(Self.tileText)
+                .padding(.horizontal, 14).padding(.vertical, 8)
+                .background(Capsule().fill(Color.white))
+                .overlay(Capsule().stroke(Self.tileLine, lineWidth: 1))
             }
-            .buttonStyle(PressableStyle())
-            // 店名はログアウトの横（2026-10-24 19:03 Ronnie）。ハンディQR は右の箱へ（2026-10-27 の見本）
-            HStack(spacing: 6) {
-                Image(systemName: "storefront")
-                Text(model.payload?.store.name ?? "").lineLimit(1)
-            }
-            .font(.system(size: 15, weight: .semibold)).foregroundColor(.white)
-            .padding(.horizontal, 12).padding(.vertical, 8)
-            .background(Capsule().fill(Color.white.opacity(0.10)))
+            .padding(.horizontal, 20)
+            .frame(height: 52)
+            .background(Self.pageBg)
         }
-        .padding(.horizontal, 16)
-        // 上の 20pt は時計・電波の行（白い字）。その下にお知らせ・店名
-        .frame(height: 46)
-        .padding(.top, 20)
-        .background(Self.sideBg)
     }
 
     // MARK: 左のメニュー（ホーム・オーダー・会計・店舗台帳・即会計・入出金・ドロア／いちばん下に 設定）
