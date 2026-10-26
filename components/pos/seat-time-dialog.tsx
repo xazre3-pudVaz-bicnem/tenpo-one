@@ -247,7 +247,8 @@ export function SeatTimeDialog({
                           on ? 'border-primary bg-primary-soft text-primary-deep' : 'border-gray-200 text-navy hover:bg-gray-50'
                         )}
                       >
-                        <span className="truncate">{item.name}</span>
+                        {/* 名前は切らずに折り返して全部出す（「(AB) 2...」では どのプランか分からない。2026-10-26 御茶ノ水 宮崎さんの写真 / Ronnie「文字 mileko chaina」） */}
+                        <span className="min-w-0 break-words leading-snug">{item.name}</span>
                         <span className="shrink-0 text-xs text-gray-500 tabular-nums">{have ? '伝票にあり' : `¥${item.price.toLocaleString('ja-JP')}`}</span>
                       </button>
                     );
