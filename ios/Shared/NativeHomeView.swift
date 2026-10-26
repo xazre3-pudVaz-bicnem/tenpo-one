@@ -323,16 +323,17 @@ struct NativeHomeView: View {
         NavItem(key: t.href, icon: t.href, label: t.label, en: t.en, badge: t.badge, action: { toolTap(t) })
     }
 
-    @ViewBuilder private func navIcon(_ n: NavItem, size: CGFloat) -> some View {
+    /// 左のメニューのアイコンは「ホーム」と同じ線のアイコンで、字と同じ色（地に合わせる。白い四角・色は付けない）。
+    /// 形は今までのまま（2026-10-27 01:46 Ronnie「clip sign haruko color home button ko jasto background sanga milne … setting ko alali vayeko chhaina」）
+    private func navIcon(_ n: NavItem, size: CGFloat) -> some View {
+        let sym: String
         switch n.icon {
-        case "home":
-            Image(systemName: "house").font(.system(size: size * 0.6, weight: .regular)).frame(width: size, height: size)
-        case "floor": bigTileIcon(isFloor: true, size: size)
-        case "ledger": bigTileIcon(isFloor: false, size: size)
-        default:
-            let (sym, color) = Self.toolIcon(n.icon)
-            iconBadge(sym, color: color, size: size)
+        case "home": sym = "house"
+        case "floor": sym = "desktopcomputer"
+        case "ledger": sym = "calendar"
+        default: sym = Self.toolIcon(n.icon).0
         }
+        return Image(systemName: sym).font(.system(size: size * 0.62, weight: .regular)).frame(width: size, height: size)
     }
 
     private var sidebar: some View {
@@ -413,22 +414,6 @@ struct NativeHomeView: View {
         case "/app/settings": return ("slider.horizontal.3", Color(hex: 0x5C5650))
         default: return ("square.grid.2x2", Color(hex: 0x5C5650))
         }
-    }
-
-    /// 白い角丸の中の色つきアイコン（今までのホームの左の列と同じ）
-    private func iconBadge(_ symbol: String, color: Color, size: CGFloat = 40) -> some View {
-        Image(systemName: symbol).font(.system(size: size * 0.45, weight: .semibold)).foregroundColor(color)
-            .frame(width: size, height: size)
-            .background(RoundedRectangle(cornerRadius: size * 0.27, style: .continuous).fill(Color.white))
-    }
-
-    /// オーダー・会計（青）・店舗台帳（紺に黄色）のアイコン（今までの大きい 2 つと同じ）
-    private func bigTileIcon(isFloor: Bool, size: CGFloat = 44) -> some View {
-        Image(systemName: isFloor ? "desktopcomputer" : "calendar")
-            .font(.system(size: size * 0.48, weight: .bold)).foregroundColor(isFloor ? .white : NLColor.yellow)
-            .frame(width: size, height: size)
-            .background(RoundedRectangle(cornerRadius: size * 0.24, style: .continuous).fill(
-                LinearGradient(colors: isFloor ? [Color(hex: 0x2A6FE6), Color(hex: 0x0A3FA8)] : [NLColor.navy2, NLColor.navy], startPoint: .top, endPoint: .bottom)))
     }
 
     private func toolTap(_ t: NHTool) {
