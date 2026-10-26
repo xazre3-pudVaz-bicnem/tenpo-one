@@ -26,7 +26,7 @@ struct NativeFloorView: View {
         VStack(spacing: 0) {
             NativeTopBar(
                 storeName: model.store?.name ?? "",
-                title: "オーダー・会計",
+                title: "注文・会計",
                 subtitle: "Order & Pay",
                 userName: "",
                 onHome: onHome

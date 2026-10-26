@@ -100,7 +100,7 @@ enum NSPData {
          "serverNow":\##(c.nowMs),
          "today":"\##(c.ymd)",
          "needsOpenRegister":false,
-         "bigTiles":[{"href":"/app/floor","label":"オーダー・会計","en":"Order & Pay"},
+         "bigTiles":[{"href":"/app/floor","label":"注文・会計","en":"Order & Pay"},
                      {"href":"/app/reservations","label":"店舗台帳","en":"Reservation"}],
          "tools":[
           {"href":"/app/quick-pay","label":"即会計","en":"Quick pay","icon":"calculator","action":null,"badge":null},

@@ -28,7 +28,7 @@ struct NativeOrderView: View {
     var body: some View {
         VStack(spacing: 0) {
             NativeTopBar(
-                storeName: model.storeName, title: "オーダー・会計", subtitle: "Order & Pay",
+                storeName: model.storeName, title: "注文・会計", subtitle: "Order & Pay",
                 userName: model.clerkName ?? "担当なし",
                 onHome: onHome
             )

@@ -175,7 +175,7 @@ struct NativeHomeView: View {
 
     private var tools: [NHTool] { model.payload?.tools ?? [] }
     private var bigTiles: [NHNamed] {
-        model.payload?.bigTiles ?? [NHNamed(href: "/app/floor", label: "オーダー・会計", en: "Order & Pay"), NHNamed(href: "/app/reservations", label: "店舗台帳", en: "Reservation")]
+        model.payload?.bigTiles ?? [NHNamed(href: "/app/floor", label: "注文・会計", en: "Order & Pay"), NHNamed(href: "/app/reservations", label: "店舗台帳", en: "Reservation")]
     }
 
     var body: some View {
@@ -512,7 +512,8 @@ struct NativeHomeView: View {
     private static let ink = Color(hex: 0x1F2329)
     private static let inkSub = Color(hex: 0x6B7280)
     private static let cardLine = Color(hex: 0xE3E5EA)
-    private static let ringColor = Color(hex: 0x8D9BB5)
+    /// 達成率の輪は左のメニューの「ホーム」と同じ黄色（2026-10-27 01:39 Ronnie「yesko color round ko ra home ma select vayeko color same banau」）
+    private static let ringColor = Color(hex: 0xF2D06B)
     private static let ringTrack = Color(hex: 0xECEEF2)
     private static let clockBg = Color(hex: 0xEEF1F6)
 

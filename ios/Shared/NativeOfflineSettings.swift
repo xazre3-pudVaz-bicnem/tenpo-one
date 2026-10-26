@@ -135,7 +135,7 @@ struct NativeOfflinePrintCard: View {
             Button("消す", role: .destructive) { if let id = discardTarget { store.discard(id) }; discardTarget = nil }
             Button("キャンセル", role: .cancel) { discardTarget = nil }
         } message: {
-            Text("サーバーには入りません。伝票明細・オーダー・会計で品・会計を直してから消してください。")
+            Text("サーバーには入りません。伝票明細・注文・会計で品・会計を直してから消してください。")
         }
     }
 

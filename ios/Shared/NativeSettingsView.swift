@@ -62,7 +62,7 @@ struct NativeSettingsView: View {
         var description: String {
             switch self {
             case .printer: return "プリンター（Bluetooth・USB・LAN・Wi-Fi）・紙幅・自動印刷・キャッシュドロア・レシートの出し先・ネットが無いときの印刷"
-            case .native: return "ホーム・テーブル・オーダー・会計をアプリの画面で開く（OFF で今までの Web）"
+            case .native: return "ホーム・テーブル・注文・会計をアプリの画面で開く（OFF で今までの Web）"
             case .guide: return "テーブル一覧の色と印の見方"
             }
         }
