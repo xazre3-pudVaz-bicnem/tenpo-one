@@ -358,6 +358,11 @@ struct NativeTableCard: View {
                         .padding(.horizontal, 10).frame(height: 36)
                         .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.white))
                         .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(Color.black.opacity(0.10), lineWidth: 1))
+                    // 卓の名前は店が付けたまま（T-1・C-2…）。横に小さく席の種類（テーブル・カウンター・個室）
+                    // （2026-10-27 03:00 Ronnie「clint le table name j lekhxa tyo aaune、side ma sano ma テーブル カウンター 個室」）
+                    Text(Self.seatKind(table))
+                        .font(.system(size: 11, weight: .semibold)).foregroundColor(NFColor.ink3)
+                        .lineLimit(1).fixedSize()
                     // プランと予約の印（飲み放題＝ビールのグラス・誕生日＝ケーキ…。2026-10-24 21:18 Ronnie）
                     let marks = Self.marks(order)
                     if !marks.isEmpty {
@@ -419,9 +424,6 @@ struct NativeTableCard: View {
                                 Text(state == .seated || state == .pay ? "注文なし / No order" : state.label)
                             }
                             .font(.system(size: 12, weight: .semibold)).foregroundColor(NFColor.ink3)
-                        }
-                        if table.isPrivateRoom || table.isCounter {
-                            Text(table.isPrivateRoom ? "個室" : "カウンター").font(.system(size: 10.5)).foregroundColor(NFColor.ink3)
                         }
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -603,6 +605,13 @@ struct NativeTableCard: View {
         case .pay: return ("会計待ち", "Checkout", NFColor.saffron, .white)
         default: return nil
         }
+    }
+
+    /// 席の種類（卓の設定の「個室」「カウンター」。どちらでもなければテーブル）
+    static func seatKind(_ t: NFTable) -> String {
+        if t.isPrivateRoom { return "個室" }
+        if t.isCounter || t.shape == "counter" { return "カウンター" }
+        return "テーブル"
     }
 
     /// 平らな箱の地：状態の色をうすく（空席は白、予約はうすい青、清掃・使用不可はうすい灰色）
