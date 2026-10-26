@@ -438,15 +438,36 @@ final class NativeFloorModel: ObservableObject {
     var unassigned: [NFTable] { tables.filter { t in !floors.contains { $0.id == t.floorId } } }
 
     var visibleTables: [NFTable] {
-        switch floorFilter {
+        switch activeFloor {
         case "all": return tables
         case "_none": return unassigned
-        default: return tables.filter { $0.floorId == floorFilter }
+        default: return tables.filter { $0.floorId == activeFloor }
         }
     }
 
-    /// フロアのチップを出すか（フロアが 2 つ以上、または未分類がある）
+    /// フロアのチップを出すか（設定 › テーブル・フロア でフロアを作った店だけ：フロアが 2 つ以上、または未分類がある）
     var showFloorChips: Bool { floors.count > 1 || (floors.count > 0 && !unassigned.isEmpty) }
+
+    /// 今出しているフロア。「ALL」は無い（2026-10-27 01:54 Ronnie の見本「1F 2F 3F テラス」）。
+    /// 選んでいなければ 最初に出すフロア（設定 › テーブル・フロア＝受付のフロア）、無ければいちばん上のフロア
+    var activeFloor: String {
+        guard showFloorChips else { return "all" }
+        if floorFilter == "_none", !unassigned.isEmpty { return "_none" }
+        if floors.contains(where: { $0.id == floorFilter }) { return floorFilter }
+        if let d = payload?.defaultFloorId, floors.contains(where: { $0.id == d }) { return d }
+        return floors.first?.id ?? "all"
+    }
+
+    /// フロアの並び（チップの順。未分類は最後）
+    var floorOrder: [String] { floors.map(\.id) + (unassigned.isEmpty ? [] : ["_none"]) }
+
+    /// 卓の欄を横にスライドしたら隣のフロアへ（1＝次・-1＝前）
+    func stepFloor(_ delta: Int) {
+        let order = floorOrder
+        guard let i = order.firstIndex(of: activeFloor), order.indices.contains(i + delta) else { return }
+        floorFilter = order[i + delta]
+        selectedTableId = nil
+    }
 
     func start() {
         if isPreview { return }
