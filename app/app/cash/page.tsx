@@ -29,6 +29,8 @@ import { TodayClosingSummary } from '@/components/cash/today-closing-summary';
 import { ChecklistCard } from '@/components/cash/checklist-card';
 import { StoreDayClosePanel } from '@/components/cash/store-day-close-panel';
 import { CashEntryForm } from '@/components/cash/cash-entry-form';
+import { RegisterHistoryCard } from '@/components/cash/register-history-card';
+import { loadRegisterHistory } from '@/lib/register-history-server';
 import { sortShops } from '@/lib/cash-shops';
 import { loadStoreClerks } from '@/lib/pos-clerks-server';
 import { loadExpectedOpening, loadStoreDay } from '@/lib/register-day-server';
@@ -137,6 +139,7 @@ export default async function CashPage({
           to={sp.to ?? todayJst()}
           canApprove={can(ctx.role, 'register.approve')}
           canReopenStoreDay={STORE_DAY_REOPEN_ROLES.includes(ctx.role ?? '')}
+          canOperate={can(ctx.role, 'register.operate')}
         />
       )}
     </div>
@@ -617,6 +620,7 @@ async function ClosingsTab({
   to,
   canApprove,
   canReopenStoreDay,
+  canOperate,
 }: {
   storeIds: string[];
   showStore: boolean;
@@ -624,8 +628,15 @@ async function ClosingsTab({
   to: string;
   canApprove: boolean;
   canReopenStoreDay: boolean;
+  canOperate: boolean;
 }) {
   const supabase = await createClient();
+  // レジごとの履歴（この期間＋開いたままのレジ）。前の営業日に締められなかったレジをここから精算・精算レシートを出し直す
+  // （2026-10-26 Ronnie「履歴 ma gayera hijo ko レジ決算 garna milne ra 決算レポート nikalna milne」）
+  const [history, clock] = await Promise.all([
+    loadRegisterHistory(supabase, storeIds, from, to),
+    storeIds.length === 1 ? loadStoreDay(supabase, storeIds[0]).then((d) => d.clock) : Promise.resolve(todayJst()),
+  ]);
   const { data: rows } = await supabase
     .from('daily_closings')
     .select(
@@ -651,6 +662,8 @@ async function ClosingsTab({
   return (
     <div className="space-y-5">
       <PeriodFilter action="/app/cash" hidden={{ tab: 'closings' }} from={from} to={to} />
+
+      <RegisterHistoryCard rows={history} clock={clock} canOperate={canOperate} showStore={showStore} />
 
       <div className="rounded-xl border border-primary/20 bg-primary-soft px-4 py-3 text-sm text-primary-deep">
         締めはその時点のスナップショットです。締め後に発生した返金は、返金が発生した営業日側の集計に計上されます（過去の締めの数値は書き換えられません）。行を開くと純売上・返金内訳・小口入出金・理論現金／実現金の詳細を確認できます。

@@ -10,6 +10,8 @@ import { loadRegisterBoard, loadTodayCashRows, receiptStateOf } from '@/app/app/
 import { splitPurpose } from '@/components/cash/cash-history';
 import { IN_KINDS, KIND_LABELS, METHOD_LABELS, METHOD_LABELS_EN, OUT_KINDS } from '@/components/cash/labels';
 import { sortShops } from '@/lib/cash-shops';
+import { historySince, type RegisterHistoryRow } from '@/lib/register-history';
+import { loadRegisterHistory } from '@/lib/register-history-server';
 
 type Supabase = Awaited<ReturnType<typeof createClient>>;
 
@@ -84,6 +86,14 @@ export interface NativeCashPayload {
   canScan: boolean;
   /** レジ端末（締めたらログアウト） */
   isRegisterDevice: boolean;
+  /**
+   * レジの履歴（14 日分＋開いたままのもの。lib/register-history.ts）。前の営業日に締められなかったレジを見つけて精算する・
+   * 精算レシート（開いたままなら途中集計）を出し直す（2026-10-26 Ronnie「履歴 ma gayera hijo ko レジ決算・決算レポート」）。
+   * 古いアプリは読まない（足しただけ）
+   */
+  history: RegisterHistoryRow[];
+  /** 時計の営業日（YYYY-MM-DD）。これより前の日の開いたままのレジ＝締め忘れ */
+  clock: string;
 }
 
 const KIND_FALLBACK: Record<string, string> = { deposit: '入金', withdrawal: '出金' };
@@ -96,6 +106,7 @@ export async function loadNativeCash(ctx: SessionContext, supabase: Supabase, st
     loadStoreClerks(supabase, store.id),
   ]);
   const today = storeDay.businessDate;
+  const history = await loadRegisterHistory(supabase, [store.id], historySince(storeDay.clock, 14));
   // 比べるのは REGISTER_DAY_FLOW_FROM（9/29）から（Web の開局画面と同じ）
   const lastClose = registerDayFlowActive(storeDay.clock) ? lastCloseRaw : { ...lastCloseRaw, expected: null };
 
@@ -207,6 +218,8 @@ export async function loadNativeCash(ctx: SessionContext, supabase: Supabase, st
     canOperate: can(ctx.role, 'register.operate'),
     canScan: can(ctx.role, 'documents.write') && can(ctx.role, 'cash.write'),
     isRegisterDevice: ctx.isRegisterDevice === true,
+    history,
+    clock: storeDay.clock,
   };
 }
 

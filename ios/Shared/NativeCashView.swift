@@ -34,6 +34,19 @@ struct NCClosed: Codable, Identifiable {
 struct NCMethod: Codable, Identifiable { var id: String { method }; let method: String; let label: String; let en: String; let count: Int; let amount: Int }
 struct NCMove: Codable, Identifiable { let id: String; let kind: String; let time: String; let main: String; let sub: String?; let amount: Int }
 struct NCClerk: Codable, Identifiable, Hashable { let id: String; let name: String; let role: String }
+/// レジの履歴（lib/register-history.ts の RegisterHistoryRow）。古いサーバーは送らない（nil）
+struct NCHistory: Codable, Identifiable {
+    let id: String
+    let registerName: String
+    let businessDate: String
+    let status: String
+    let openedAt: String
+    let closedAt: String?
+    let openedByName: String
+    let closedByName: String
+    let difference: Int?
+    var isOpen: Bool { status == "open" }
+}
 
 struct NCPayload: Codable {
     struct Sales: Codable { let grossSales: Int; let refunds: Int; let netSales: Int; let transactionCount: Int; let guests: Int; let avgSpend: Int }
@@ -64,6 +77,10 @@ struct NCPayload: Codable {
     let canOperate: Bool
     let canScan: Bool
     let isRegisterDevice: Bool
+    /// レジの履歴（14 日分＋開いたままのもの）。前の営業日に締められなかったレジ・精算レシートの出し直し（2026-10-26 Ronnie「履歴 ma gayera hijo ko レジ決算・決算レポート」）
+    let history: [NCHistory]?
+    /// 時計の営業日（これより前の日の開いたままのレジ＝締め忘れ）
+    let clock: String?
 }
 
 struct NCActionResult: Decodable {
@@ -171,6 +188,7 @@ struct NativeCashView: View {
                         layout {
                             VStack(spacing: 14) {
                                 if isOpenMode { openCard(p) } else if let s = session { closeCard(p, s) } else { emptyCard(p) }
+                                if let h = p.history, !h.isEmpty { historyCard(p, h) }
                             }
                             .frame(maxWidth: wide ? geo.size.width * 0.54 : .infinity)
                             if !isOpenMode || !p.closedSessions.isEmpty {
@@ -665,6 +683,69 @@ struct NativeCashView: View {
                 }
             }
         }
+    }
+
+    // MARK: 履歴（前の営業日のレジ精算・精算レシートの出し直し）
+
+    /// レジの履歴（Web の 入出金 › 締め履歴 の「レジごとの履歴」と同じ）。開いたままのレジは上の「レジクローズ」で締める・途中集計を出す。
+    /// 締めたレジは日を選んで精算レシート・精算情報を出し直す（2026-10-26 Ronnie「Shunka ko hijo native ma close garna namilera aa rezi khulena」）
+    private func historyCard(_ p: NCPayload, _ rows: [NCHistory]) -> some View {
+        let clock = p.clock ?? p.businessDate
+        let late = rows.filter { $0.isOpen && $0.businessDate < clock }
+        return card {
+            cardTitle("レジの履歴", en: "History")
+            if !late.isEmpty {
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(late.map { "\(ncMd($0.businessDate)) \($0.registerName)" }.joined(separator: "・") + " がまだレジ精算されていません")
+                            .font(.system(size: 14, weight: .heavy))
+                        Text("このレジを締めるまで、同じレジは新しく開局できません。上の「レジクローズ」で現金を数えて締めてください（締めると精算レシートが出ます）。")
+                            .font(.system(size: 12))
+                    }
+                }
+                .foregroundColor(NFColor.danger)
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(RoundedRectangle(cornerRadius: 12).fill(NFColor.dangerSoft))
+            }
+            VStack(spacing: 0) {
+                ForEach(Array(rows.enumerated()), id: \.element.id) { i, r in
+                    if i > 0 { Divider() }
+                    historyRow(r, clock: clock, canOperate: p.canOperate)
+                }
+            }
+        }
+    }
+
+    private func historyRow(_ r: NCHistory, clock: String, canOperate: Bool) -> some View {
+        let lateOpen = r.isOpen && r.businessDate < clock
+        let status = r.isOpen ? (lateOpen ? "未精算（前の営業日）" : "営業中") : (r.status == "approved" ? "承認済み" : "レジ精算済み")
+        let color = r.isOpen ? (lateOpen ? NFColor.danger : Color(hex: 0xC27C0E)) : NFColor.ink2
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Text(ncMd(r.businessDate)).font(.system(size: 15, weight: .heavy)).monospacedDigit()
+                Text(r.registerName).font(.system(size: 15, weight: .bold))
+                badge(status, color: color)
+                Spacer(minLength: 0)
+            }
+            Text("開局 \(ncTime(r.openedAt))｜担当 \(r.openedByName)\(r.closedAt.map { "｜締め \(ncTime($0))｜締め担当 \(r.closedByName)" } ?? "")\(r.isOpen ? "" : r.difference.map { "｜差異 \($0 > 0 ? "+" : "")\(NT.yen($0))" } ?? "")")
+                .font(.system(size: 11)).foregroundColor(NFColor.ink3)
+            if canOperate {
+                HStack(spacing: 10) {
+                    Spacer()
+                    if !r.isOpen {
+                        smallButton("精算情報 / Cash count") {
+                            Task { if await model.act(["type": "cashSettlement", "sessionId": r.id]) != nil { model.toast = "精算情報を印刷しています" } }
+                        }
+                    }
+                    smallButton(r.isOpen ? "途中集計を印刷 / Interim" : "精算レシートを印刷 / Reprint") {
+                        Task { if await model.act(["type": "cashReprint", "sessionId": r.id]) != nil { model.toast = r.isOpen ? "途中集計の精算レシートを印刷しています" : "レジ精算レシートを印刷しています" } }
+                    }
+                }
+            }
+        }
+        .padding(.vertical, 10)
     }
 
     // MARK: 部品
