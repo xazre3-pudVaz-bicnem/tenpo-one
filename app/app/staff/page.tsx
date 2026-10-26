@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { isSupportMembership } from '@/lib/support-access';
 import { requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { ROLES, ROLE_LABELS, HQ_ROLES, type Role } from '@/lib/permissions';
@@ -42,7 +43,7 @@ export default async function StaffPage({
   let query = supabase
     .from('memberships')
     .select(
-      `id, role, status, profile_id,
+      `id, role, status, profile_id, hourly_note,
        profiles ( id, display_name, display_name_kana, has_pin ),
        membership_stores ( store_id, stores ( id, name ) )`
     )
@@ -57,7 +58,8 @@ export default async function StaffPage({
   }
 
   const { data } = await query;
-  let rows = (data ?? []) as unknown as MembershipRow[];
+  // 運営のサポートアクセス（lib/support-access.ts）はお店のスタッフではないので出さない
+  let rows = ((data ?? []) as unknown as (MembershipRow & { hourly_note?: string | null })[]).filter((r) => !isSupportMembership(r)) as MembershipRow[];
 
   if (storeFilter) {
     rows = rows.filter((r) => r.membership_stores.some((ms) => ms.store_id === storeFilter));

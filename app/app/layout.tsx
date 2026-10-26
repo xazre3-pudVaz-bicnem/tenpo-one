@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation';
+import { SupportBanner } from '@/components/admin/support-banner';
 import { cookies, headers } from 'next/headers';
 import { requireSession } from '@/lib/auth';
 import { isPhoneUserAgent, phoneMayOpenApp } from '@/lib/device-kind';
@@ -144,6 +145,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       {/* 新しい管理画面（パソコン）は theme-admin で管理画面だけの配色（app/globals.css）。レジ・ハンディは theme-regi のまま */}
       <div className={isRegi ? 'theme-regi regi-shell min-h-svh bg-lilac' : adminV2 ? 'theme-regi theme-admin min-h-svh bg-lilac' : 'theme-regi min-h-svh bg-lilac'}>
         {/* 上部バー（全幅）→ その下に左メニュー（固定）と本文 */}
+        {ctx.supportMode && <SupportBanner organizationName={ctx.organizationName} storeName={ctx.currentStore?.name ?? null} />}
         <TopBar ctx={ctx} unreadCount={unreadCount ?? 0} showMenuLink={posFullscreen} adminV2={adminV2} />
         {/* 新しいネット予約のチャイム＋バナー（レジ・パソコンどの画面でも） */}
         {ctx.currentStore && <ReservationAlert storeId={ctx.currentStore.id} ledgerHref="/app/reservations" />}

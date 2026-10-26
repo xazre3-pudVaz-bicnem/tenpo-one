@@ -6,9 +6,10 @@ import { cn } from '@/lib/utils';
 
 const ITEMS = [
   { href: '/admin/organizations', label: '企業' },
+  // 全店舗（店舗名で探して、その店の管理画面へ。2026-10-26 Ronnie「企業ごとに入るのは面倒」）
+  { href: '/admin/stores', label: '全店舗' },
   { href: '/admin/tenants', label: '導入店舗' },
   { href: '/admin/devices', label: '端末の承認' },
-  { href: '/admin/stores', label: '店舗' },
   { href: '/admin/users', label: 'ユーザー' },
   { href: '/admin/plans', label: 'プラン' },
   { href: '/admin/feature-flags', label: '機能フラグ' },

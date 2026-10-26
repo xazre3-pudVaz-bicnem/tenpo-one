@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { EnterStoreAdminButton } from '@/components/admin/enter-store-admin-button';
 import Link from 'next/link';
 import { requireCypressAdmin } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -58,7 +59,7 @@ export default async function StoresPage({
 
   return (
     <div>
-      <PageHeader title="全店舗" description="全契約企業の店舗一覧です。" />
+      <PageHeader title="全店舗" description="全契約企業の店舗一覧です。店舗名で探して「当店舗の管理画面へ」で、その店の管理画面に入れます（入ったことは監査ログに残ります）。" />
 
       <form className="mb-4 flex flex-wrap gap-2" method="get">
         <Input name="q" defaultValue={q ?? ''} placeholder="店舗名で検索" className="w-full sm:w-56" />
@@ -85,6 +86,7 @@ export default async function StoresPage({
                 <Th>状態</Th>
                 <Th>オンライン予約</Th>
                 <Th>作成日</Th>
+                <Th className="text-right">管理画面</Th>
               </Tr>
             </THead>
             <TBody>
@@ -108,6 +110,11 @@ export default async function StoresPage({
                       </Badge>
                     </Td>
                     <Td>{formatDate(s.created_at)}</Td>
+                    <Td className="text-right">
+                      <div className="flex justify-end">
+                        <EnterStoreAdminButton target={s.id} />
+                      </div>
+                    </Td>
                   </Tr>
                 );
               })}

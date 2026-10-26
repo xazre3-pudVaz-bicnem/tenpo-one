@@ -1,5 +1,6 @@
 import { cache } from 'react';
 import { cookies, headers } from 'next/headers';
+import { SUPPORT_ORG_COOKIE, isSupportMembership } from '@/lib/support-access';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { can, isHqRole, type PermissionAction, type Role } from '@/lib/permissions';
@@ -17,6 +18,8 @@ export interface SessionContext {
   email: string | null;
   displayName: string;
   isCypressAdmin: boolean;
+  /** 運営がコントロールセンターからこの会社の管理画面に入っている（lib/support-access.ts） */
+  supportMode?: boolean;
   organizationId: string | null;
   organizationName: string | null;
   role: Role | null;
@@ -70,22 +73,28 @@ export const getSessionContext = cache(async (): Promise<SessionContext | null> 
     return null;
   }
 
+  // 運営のサポートアクセス中は、入っている会社のメンバーシップを選ぶ（lib/support-access.ts）
+  const supportOrg = (await cookies()).get(SUPPORT_ORG_COOKIE)?.value ?? null;
+  let membershipQuery = supabase
+    .from('memberships')
+    .select('id, organization_id, role, hourly_note, organizations(id, name, status)')
+    .eq('profile_id', user.id)
+    .eq('status', 'active');
+  if (supportOrg) membershipQuery = membershipQuery.eq('organization_id', supportOrg);
+
   // プロフィールとメンバーシップを並列取得（往復回数削減）
-  const [{ data: profile }, { data: membership }] = await Promise.all([
+  const [{ data: profile }, { data: membershipRow }] = await Promise.all([
     supabase
       .from('profiles')
       .select('id, display_name, is_cypress_admin, status')
       .eq('id', user.id)
       .single(),
-    supabase
-      .from('memberships')
-      .select('id, organization_id, role, organizations(id, name, status)')
-      .eq('profile_id', user.id)
-      .eq('status', 'active')
-      .limit(1)
-      .maybeSingle(),
+    membershipQuery.limit(1).maybeSingle(),
   ]);
   if (!profile) return null;
+  // サポート用のメンバーシップは「入っている」cookie があるときだけ使う（戻るを押し忘れても、運営はふだんコントロールセンターへ）
+  const membership =
+    isSupportMembership(membershipRow as { hourly_note?: string | null } | null) && membershipRow?.organization_id !== supportOrg ? null : membershipRow;
   // 停止ユーザーは既存セッションでも利用不可（次のリクエストで即時遮断）
   if (profile.status === 'suspended') {
     // この端末だけログアウトする（scope:'local'）。
@@ -162,6 +171,7 @@ export const getSessionContext = cache(async (): Promise<SessionContext | null> 
     email: user.email ?? null,
     displayName: profile.display_name,
     isCypressAdmin: profile.is_cypress_admin,
+    supportMode: profile.is_cypress_admin === true && isSupportMembership(membership as { hourly_note?: string | null } | null),
     organizationId,
     organizationName,
     role,
