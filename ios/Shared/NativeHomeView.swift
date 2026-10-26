@@ -155,42 +155,65 @@ struct NativeHomeView: View {
     private static let terracotta = Color(hex: 0xBC5940)
     private static let tileBg = Color(hex: 0xF2F2F5)
 
+    // 左のメニューの色（2026-10-27 01:27 Ronnie の見本：濃い紫紺の地・黄色の「ホーム」・TENPO ONE の黄色い字）
+    private static let sideBg = Color(hex: 0x37324D)
+    private static let sideItem = Color(hex: 0x433E5B)
+    private static let sideText = Color(hex: 0xEDEBF5)
+    private static let sideSub = Color(hex: 0xA9A4BE)
+    private static let sideActive = Color(hex: 0xF2D06B)
+    private static let sideActiveText = Color(hex: 0x2B2740)
+    // 右の箱（白・細い枠・灰色の線のアイコン）
+    private static let pageBg = Color(hex: 0xF6F7F9)
+    private static let tileLine = Color(hex: 0xE2E2EA)
+    private static let tileIcon = Color(hex: 0x77738A)
+    private static let tileText = Color(hex: 0x403C55)
+
+    /// 左のメニューに出す道具（即会計・入出金・ドロア）と、いちばん下の 設定
+    private static let sideTools = ["/app/quick-pay", "/app/cash", "#drawer"]
+    private static let settingsHref = "/app/settings"
+    /// 右の箱の並び（見本の順。ここに無い道具は後ろに足す）
+    private static let gridOrder = ["/app/orders", "#handyqr", "/app/cash/close", "/app/expenses", "#analytics", "#budget"]
+
+    private var tools: [NHTool] { model.payload?.tools ?? [] }
+    private var bigTiles: [NHNamed] {
+        model.payload?.bigTiles ?? [NHNamed(href: "/app/floor", label: "オーダー・会計", en: "Order & Pay"), NHNamed(href: "/app/reservations", label: "店舗台帳", en: "Reservation")]
+    }
+
     var body: some View {
-        VStack(spacing: 0) {
-            topBar
-            GeometryReader { geo in
-                // 横（1000pt 以上）は左に操作の列・右に売上。縦（ポートレート）は上から順に並べてスクロール
-                // （2026-10-24 Ronnie「縦にするとオーダー・会計とボタンがくっつく」）
-                if geo.size.width >= 1000 {
-                    // 左の操作の列は、ボタンの数が多くても画面の高さに収まるように 1 つの高さを縮める（76pt → 最小 50pt）
-                    // （2026-10-25 Ronnie「fit to page」SHUNKA 新宿本店：在庫設定・設定 まで 8 つ）
-                    let tools = model.payload?.tools ?? []
-                    let rowH = Self.toolRowHeight(count: tools.count, available: geo.size.height - 18 - 14)
-                    HStack(alignment: .top, spacing: 18) {
-                        VStack(spacing: rowH < 76 ? 8 : 10) {
-                            ForEach(tools) { t in toolRow(t, height: rowH) }
-                            Spacer(minLength: 0)
-                        }
-                        .frame(width: max(240, geo.size.width * 0.20))
-                        VStack(spacing: 18) {
-                            // 売上の箱は、上（大きいボタン）と下（時計の行）から同じ距離に（2026-10-24 14:24 Ronnie「下の隙間が大きい。上下を同じに」）
+        GeometryReader { root in
+            // 横（1000pt 以上）は左にメニュー・右にホーム。縦は上から順に並べてスクロール
+            if root.size.width >= 1000 {
+                HStack(spacing: 0) {
+                    sidebar.frame(width: 190)
+                    VStack(spacing: 0) {
+                        topBar
+                        VStack(spacing: 16) {
+                            tileGrid(columns: 3)
                             Spacer(minLength: 0)
                             salesCard(narrow: false)
                             Spacer(minLength: 0)
                             clockRow
                             kpiRow(columns: 4)
                         }
+                        .padding(.horizontal, 20)
+                        .padding(.top, 18)
+                        .padding(.bottom, 14)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(Self.pageBg)
                     }
-                    .padding(.horizontal, 18)
-                    .padding(.top, 18)
-                    .padding(.bottom, 14)
-                } else {
+                }
+            } else {
+                VStack(spacing: 0) {
+                    topBar
                     ScrollView(showsIndicators: false) {
                         VStack(spacing: 18) {
                             LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
-                                ForEach(model.payload?.tools ?? []) { t in toolRow(t) }
+                                ForEach(navItems, id: \.key) { n in navTile(n, tall: false) }
+                                if let st = tools.first(where: { $0.href == Self.settingsHref }) { navTile(navItem(st), tall: false) }
                             }
+                            .padding(12)
+                            .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Self.sideBg))
+                            tileGrid(columns: 3)
                             salesCard(narrow: true)
                             clockRow
                             kpiRow(columns: 2)
@@ -199,10 +222,11 @@ struct NativeHomeView: View {
                         .padding(.top, 18)
                         .padding(.bottom, 24)
                     }
+                    .background(Self.pageBg)
                 }
             }
         }
-        .background(Color.white.ignoresSafeArea())
+        .background(Self.sideBg.ignoresSafeArea())
         .overlay(alignment: .bottom) {
             if let t = model.toast {
                 Text(t).font(.system(size: 15, weight: .bold)).foregroundColor(.white)
@@ -234,132 +258,205 @@ struct NativeHomeView: View {
         .onDisappear { model.stop() }
     }
 
-    // MARK: 上のバー（お知らせ・ハンディQR・店名）＋大きい2つ
+    // MARK: 上のバー（お知らせ・店名）
 
     private var topBar: some View {
-        VStack(spacing: 14) {
-            HStack(spacing: 10) {
-                // 「ホーム」の字は出さない（ここがホーム。2026-10-24 19:01 Ronnie）
-                Spacer()
-                Button { onWeb("/app/expenses") } label: {
-                    ZStack(alignment: .topTrailing) {
-                        Image(systemName: "bell").font(.system(size: 20, weight: .semibold)).foregroundColor(.white).padding(8)
-                        if let n = model.payload?.noticeCount, n > 0 {
-                            Text("\(n)").font(.system(size: 11, weight: .heavy)).foregroundColor(.white)
-                                .padding(.horizontal, 5).padding(.vertical, 1)
-                                .background(Capsule().fill(Color(hex: 0xE53935)))
-                        }
+        HStack(spacing: 10) {
+            // 「ホーム」の字は出さない（ここがホーム。2026-10-24 19:01 Ronnie）
+            Spacer()
+            Button { onWeb("/app/expenses") } label: {
+                ZStack(alignment: .topTrailing) {
+                    Image(systemName: "bell").font(.system(size: 20, weight: .semibold)).foregroundColor(.white).padding(8)
+                    if let n = model.payload?.noticeCount, n > 0 {
+                        Text("\(n)").font(.system(size: 11, weight: .heavy)).foregroundColor(.white)
+                            .padding(.horizontal, 5).padding(.vertical, 1)
+                            .background(Capsule().fill(Color(hex: 0xE53935)))
                     }
                 }
-                .buttonStyle(PressableStyle())
-                // テーブルQR は 設定 の中だけ（2026-10-24 19:01 Ronnie「ホームの上にはいらない」）
-                Button { handyQrOpen = true } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "qrcode")
-                        Text("ハンディQR")
-                    }
-                    .font(.system(size: 15, weight: .bold)).foregroundColor(.white)
-                    .padding(.horizontal, 14).padding(.vertical, 9)
-                    .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white.opacity(0.10)))
-                }
-                .buttonStyle(PressableStyle())
-                // TENPO ONE のマークは上のバーに出さない（2026-10-24 19:04 Ronnie「ロゴは要らない」）
-                // 店名はログアウトの横（2026-10-24 19:03 Ronnie）
-                HStack(spacing: 6) {
-                    Image(systemName: "storefront")
-                    Text(model.payload?.store.name ?? "").lineLimit(1)
-                }
-                .font(.system(size: 15, weight: .semibold)).foregroundColor(.white)
-                .padding(.horizontal, 12).padding(.vertical, 8)
-                .background(Capsule().fill(Color.white.opacity(0.10)))
-                // ログアウトは 設定 の一覧のいちばん下へ（2026-10-24 19:16 Ronnie「外にはいらない」）
             }
-            .padding(.horizontal, 16)
-            .frame(height: 64)
-            .background(NT.topBar)
-
-            HStack(spacing: 18) {
-                Spacer(minLength: 0)
-                ForEach(model.payload?.bigTiles ?? [NHNamed(href: "/app/floor", label: "オーダー・会計", en: "Order & Pay"), NHNamed(href: "/app/reservations", label: "店舗台帳", en: "Reservation")], id: \.href) { t in
-                    let isFloor = t.href == "/app/floor"
-                    // 店舗台帳の箱：オーダー・会計と同じ作り（薄い灰色の地・黒い字）で、アイコンの角丸だけ 店舗台帳の画面と同じ Tableo 風（紺に黄色のカレンダー）
-                    // （2026-10-24 16:45 Ronnie「箱全体に色を塗るのではなく、隣のオーダー・会計と同じ感じに」）
-                    Button { isFloor ? onFloor() : onWeb(t.href) } label: {
-                        HStack(spacing: 22) {
-                            Spacer()
-                            Image(systemName: isFloor ? "desktopcomputer" : "calendar")
-                                .font(.system(size: 44, weight: .bold)).foregroundColor(isFloor ? .white : NLColor.yellow)
-                                .frame(width: 92, height: 92)
-                                .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(
-                                    LinearGradient(colors: isFloor ? [Color(hex: 0x2A6FE6), Self.blueDeep] : [NLColor.navy2, NLColor.navy], startPoint: .top, endPoint: .bottom)))
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(t.label).font(.system(size: 30, weight: .heavy)).foregroundColor(NFColor.ink)
-                                Text(t.en).font(.system(size: 16, weight: .medium)).foregroundColor(NFColor.ink3)
-                            }
-                            Spacer()
-                        }
-                        .frame(maxWidth: 640).frame(height: 150)
-                        .background(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(Self.tileBg))
-                    }
-                    .buttonStyle(PressableStyle(scale: 0.98))
-                }
-                Spacer(minLength: 0)
+            .buttonStyle(PressableStyle())
+            // 店名はログアウトの横（2026-10-24 19:03 Ronnie）。ハンディQR は右の箱へ（2026-10-27 の見本）
+            HStack(spacing: 6) {
+                Image(systemName: "storefront")
+                Text(model.payload?.store.name ?? "").lineLimit(1)
             }
-            .padding(.horizontal, 18)
+            .font(.system(size: 15, weight: .semibold)).foregroundColor(.white)
+            .padding(.horizontal, 12).padding(.vertical, 8)
+            .background(Capsule().fill(Color.white.opacity(0.10)))
         }
+        .padding(.horizontal, 16)
+        .frame(height: 56)
+        .background(Self.sideBg)
     }
 
-    // MARK: 左の列
+    // MARK: 左のメニュー（ホーム・オーダー・会計・店舗台帳・即会計・入出金・ドロア／いちばん下に 設定）
+    // 2026-10-27 01:27 Ronnie「start ma home ko left menu bar lai yesto banau … language change nagara just design matrai ra color」
+    // 「word haru add garne yeta uti nagara」：字は今のまま（日本語・英語）。形と色だけ見本に合わせる
 
-    /// 左の操作の列の 1 つの高さ（いつもは 76pt。入りきらないときだけ縮める）
-    private static func toolRowHeight(count: Int, available: CGFloat) -> CGFloat {
-        guard count > 0, available > 0 else { return 76 }
-        let spacing: CGFloat = 8
-        let fit = (available - spacing * CGFloat(count - 1)) / CGFloat(count)
-        return max(50, min(76, floor(fit)))
+    private struct NavItem {
+        let key: String
+        let icon: String
+        let label: String
+        let en: String
+        var active = false
+        var badge: Int? = nil
+        let action: () -> Void
     }
 
-    private func toolRow(_ t: NHTool, height: CGFloat = 76) -> some View {
-        let (icon, color) = Self.toolIcon(t)
-        return Button {
-            if t.action == "drawer" { Task { await model.openDrawer() } } else { onWeb(t.href) }
-        } label: {
-            HStack(spacing: 12) {
-                Image(systemName: icon).font(.system(size: 20, weight: .semibold)).foregroundColor(color)
-                    .frame(width: 44, height: 44)
-                    .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white))
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(t.label).font(.system(size: 18, weight: .heavy)).foregroundColor(NFColor.ink)
-                    Text(t.en).font(.system(size: 12, weight: .medium)).foregroundColor(NFColor.ink3)
+    private var navItems: [NavItem] {
+        var out: [NavItem] = [NavItem(key: "home", icon: "house", label: "ホーム", en: "Home", active: true, action: {})]
+        for t in bigTiles {
+            let isFloor = t.href == "/app/floor"
+            out.append(NavItem(key: t.href, icon: isFloor ? "square.grid.2x2" : "calendar", label: t.label, en: t.en, action: { isFloor ? onFloor() : onWeb(t.href) }))
+        }
+        for href in Self.sideTools {
+            if let t = tools.first(where: { $0.href == href }) { out.append(navItem(t)) }
+        }
+        return out
+    }
+
+    private func navItem(_ t: NHTool) -> NavItem {
+        let icon = t.href == Self.settingsHref ? "gearshape" : "creditcard"
+        return NavItem(key: t.href, icon: icon, label: t.label, en: t.en, badge: t.badge, action: { toolTap(t) })
+    }
+
+    private var sidebar: some View {
+        VStack(spacing: 12) {
+            VStack(spacing: 6) {
+                Text("TENPO ONE").font(.system(size: 21, weight: .heavy)).foregroundColor(Self.sideActive)
+                Text("POS × RESERVE").font(.system(size: 10, weight: .semibold)).tracking(1.6).foregroundColor(Self.sideSub)
+            }
+            .padding(.top, 14).padding(.bottom, 12)
+            .frame(maxWidth: .infinity)
+            .overlay(alignment: .bottom) { Rectangle().fill(Color.white.opacity(0.10)).frame(height: 1) }
+            .padding(.bottom, 6)
+            // 上の 3 つ（ホーム・オーダー・会計・店舗台帳）は大きい箱（アイコンが上）、道具は横長の箱
+            let items = navItems
+            ForEach(Array(items.enumerated()), id: \.element.key) { i, n in
+                navTile(n, tall: i < 1 + bigTiles.count)
+            }
+            Spacer(minLength: 0)
+            if let st = tools.first(where: { $0.href == Self.settingsHref }) { navTile(navItem(st), tall: true) }
+        }
+        .padding(.horizontal, 12)
+        .padding(.bottom, 14)
+        .frame(maxHeight: .infinity)
+        .background(Self.sideBg)
+    }
+
+    private func navTile(_ n: NavItem, tall: Bool) -> some View {
+        let fg = n.active ? Self.sideActiveText : Self.sideText
+        let sub = n.active ? Self.sideActiveText.opacity(0.7) : Self.sideSub
+        return Button(action: n.action) {
+            Group {
+                if tall {
+                    VStack(spacing: 5) {
+                        Image(systemName: n.icon).font(.system(size: 26, weight: .regular))
+                        Text(n.label).font(.system(size: 15, weight: .bold)).lineLimit(1).minimumScaleFactor(0.7)
+                        Text(n.en).font(.system(size: 10, weight: .medium)).foregroundColor(sub).lineLimit(1).minimumScaleFactor(0.7)
+                    }
+                    .frame(maxWidth: .infinity).frame(height: 96)
+                } else {
+                    HStack(spacing: 10) {
+                        Image(systemName: n.icon).font(.system(size: 18, weight: .regular)).frame(width: 24)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(n.label).font(.system(size: 15, weight: .bold)).lineLimit(1).minimumScaleFactor(0.7)
+                            Text(n.en).font(.system(size: 10, weight: .medium)).foregroundColor(sub).lineLimit(1).minimumScaleFactor(0.7)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, 12)
+                    .frame(maxWidth: .infinity).frame(height: 64)
                 }
-                .lineLimit(1)
-                Spacer(minLength: 4)
-                if let b = t.badge, b > 0 {
-                    Text("\(b)").font(.system(size: 13, weight: .heavy)).foregroundColor(.white)
-                        .frame(minWidth: 26).padding(.horizontal, 6).frame(height: 26)
+            }
+            .foregroundColor(fg)
+            .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(n.active ? Self.sideActive : Self.sideItem))
+            .overlay(alignment: .topTrailing) {
+                if let b = n.badge, b > 0 {
+                    Text("\(b)").font(.system(size: 12, weight: .heavy)).foregroundColor(.white)
+                        .frame(minWidth: 22).padding(.horizontal, 5).frame(height: 22)
                         .background(Capsule().fill(Color(hex: 0xE53935)))
+                        .offset(x: 4, y: -4)
                 }
-                Image(systemName: "chevron.right").font(.system(size: 14, weight: .bold)).foregroundColor(NFColor.ink3)
             }
-            .padding(.horizontal, 12)
-            .frame(maxWidth: .infinity).frame(height: height)
-            .background(RoundedRectangle(cornerRadius: height < 64 ? 14 : 18, style: .continuous).fill(Self.tileBg))
         }
-        .buttonStyle(PressableStyle(scale: 0.98))
-        .disabled(model.busy && t.action == "drawer")
+        .buttonStyle(PressableStyle(scale: 0.97))
+        .disabled(model.busy && n.key == "#drawer")
     }
 
-    private static func toolIcon(_ t: NHTool) -> (String, Color) {
-        switch t.href {
-        case "/app/quick-pay": return ("yensign.circle", Color(hex: 0x1E8F62))
-        case "/app/orders": return ("doc.text", Color(hex: 0x5C5650))
-        case "/app/cash": return ("arrow.up.arrow.down", Color(hex: 0x1E8F62))
-        case "/app/expenses": return ("cart", Color(hex: 0x1A5AD6))
-        case "#drawer": return ("tray", Color(hex: 0x0F8A8A))
-        case "/app/cash/close": return ("lock", Color(hex: 0x5C5650))
-        case "/app/inventory": return ("shippingbox", Color(hex: 0x8A6100))
-        case "/app/settings": return ("slider.horizontal.3", Color(hex: 0x5C5650))
-        default: return ("square.grid.2x2", Color(hex: 0x5C5650))
+    private func toolTap(_ t: NHTool) {
+        if t.action == "drawer" { Task { await model.openDrawer() } } else { onWeb(t.href) }
+    }
+
+    // MARK: 右の箱（伝票明細・ハンディQR・レジクローズ・仕入・経費・店舗分析・予算登録／ほかの道具は後ろに）
+
+    private struct GridTile {
+        let key: String
+        let icon: String
+        let label: String
+        let en: String
+        var badge: Int? = nil
+        var alert = false
+        let action: () -> Void
+    }
+
+    private var gridTiles: [GridTile] {
+        let s = model.payload?.sales
+        var byKey: [String: GridTile] = [:]
+        for t in tools where !Self.sideTools.contains(t.href) && t.href != Self.settingsHref {
+            byKey[t.href] = GridTile(key: t.href, icon: Self.gridIcon(t.href), label: t.label, en: t.en, badge: t.badge, action: { toolTap(t) })
+        }
+        byKey["#handyqr"] = GridTile(key: "#handyqr", icon: "square.grid.2x2", label: "ハンディQR", en: "Handy QR", action: { handyQrOpen = true })
+        if s?.canAnalytics ?? false {
+            byKey["#analytics"] = GridTile(key: "#analytics", icon: "chart.bar.xaxis", label: "店舗分析", en: "Analytics", action: { onWeb("/app/reports") })
+        }
+        // 予算が未設定のときは右上に赤い丸の「!」（文字は書かない。2026-10-24 Ronnie）
+        byKey["#budget"] = GridTile(key: "#budget", icon: "chart.bar.xaxis", label: "予算登録", en: "Set budget", alert: s != nil && s?.budget == nil, action: { onWeb("/app/budgets/daily") })
+        var out = Self.gridOrder.compactMap { byKey.removeValue(forKey: $0) }
+        // 見本に無い道具（在庫設定など）は後ろに、サーバーの順で
+        for t in tools { if let g = byKey.removeValue(forKey: t.href) { out.append(g) } }
+        return out
+    }
+
+    private static func gridIcon(_ href: String) -> String {
+        switch href {
+        case "/app/orders", "/app/cash/close": return "doc.plaintext"
+        case "/app/expenses", "/app/inventory": return "shippingbox"
+        default: return "square.grid.2x2"
+        }
+    }
+
+    private func tileGrid(columns: Int) -> some View {
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 14), count: columns), spacing: 14) {
+            ForEach(gridTiles, id: \.key) { g in
+                Button(action: g.action) {
+                    VStack(spacing: 6) {
+                        Image(systemName: g.icon).font(.system(size: 24, weight: .light)).foregroundColor(Self.tileIcon)
+                        VStack(spacing: 0) {
+                            Text(g.label).font(.system(size: 16, weight: .semibold)).foregroundColor(Self.tileText).lineLimit(1).minimumScaleFactor(0.7)
+                            Text(g.en).font(.system(size: 10, weight: .medium)).foregroundColor(NFColor.ink3).lineLimit(1)
+                        }
+                    }
+                    .frame(maxWidth: .infinity).frame(height: 86)
+                    .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Color.white))
+                    .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Self.tileLine, lineWidth: 1))
+                    .overlay(alignment: .topTrailing) {
+                        if let b = g.badge, b > 0 {
+                            Text("\(b)").font(.system(size: 13, weight: .heavy)).foregroundColor(.white)
+                                .frame(minWidth: 26).padding(.horizontal, 6).frame(height: 26)
+                                .background(Capsule().fill(Color(hex: 0xE53935)))
+                                .padding(8)
+                        } else if g.alert {
+                            Text("!").font(.system(size: 14, weight: .heavy)).foregroundColor(.white)
+                                .frame(width: 24, height: 24)
+                                .background(Circle().fill(NFColor.danger))
+                                .overlay(Circle().stroke(Color.white, lineWidth: 2))
+                                .padding(8)
+                        }
+                    }
+                }
+                .buttonStyle(PressableStyle(scale: 0.98))
+            }
         }
     }
 
@@ -372,14 +469,11 @@ struct NativeHomeView: View {
             Spacer(minLength: 0)
             ring(s)
             salesNumbers(s)
-            if !narrow { VStack(spacing: 14) { salesButtons(s) }.frame(width: 200) }
             Spacer(minLength: 0)
             }
-            if narrow {
-                HStack(spacing: 12) { salesButtons(s) }
-            }
+            // 店舗分析・予算登録は上の箱へ（2026-10-27 の見本）
         }
-        .padding(.top, narrow ? 0 : 10)
+        .padding(.vertical, narrow ? 0 : 6)
     }
 
     private func ring(_ s: NHSales?) -> some View {
@@ -438,36 +532,6 @@ struct NativeHomeView: View {
                 .foregroundColor(NFColor.ink3)
             }
             .frame(maxWidth: 420, alignment: .leading)
-    }
-
-    @ViewBuilder private func salesButtons(_ s: NHSales?) -> some View {
-        if s?.canAnalytics ?? false {
-            outlineButton("店舗分析", en: "Analytics") { onWeb("/app/reports") }
-        }
-        // 予算が未設定のときは右上に赤い丸の「!」（文字は書かない。2026-10-24 Ronnie）
-        outlineButton("予算登録", en: "Set budget", alert: s != nil && s?.budget == nil) { onWeb("/app/budgets/daily") }
-    }
-
-    private func outlineButton(_ ja: String, en: String, alert: Bool = false, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            VStack(spacing: 2) {
-                Text(ja).font(.system(size: 18, weight: .heavy)).foregroundColor(NFColor.ink)
-                Text(en).font(.system(size: 12, weight: .medium)).foregroundColor(NFColor.ink3)
-            }
-            .frame(maxWidth: .infinity).frame(height: 76)
-            .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.white))
-            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Color(hex: 0xC9CDD6), lineWidth: 1.5))
-            .overlay(alignment: .topTrailing) {
-                if alert {
-                    Text("!").font(.system(size: 14, weight: .heavy)).foregroundColor(.white)
-                        .frame(width: 24, height: 24)
-                        .background(Circle().fill(NFColor.danger))
-                        .overlay(Circle().stroke(Color.white, lineWidth: 2))
-                        .offset(x: 8, y: -8)
-                }
-            }
-        }
-        .buttonStyle(PressableStyle(scale: 0.98))
     }
 
     // MARK: 下：日付・時計・気温・地名
