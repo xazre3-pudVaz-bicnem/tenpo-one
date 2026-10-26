@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.SteraLink" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="colorPrimary">@color/terracotta</item>
+        <item name="colorPrimaryDark">@color/charcoal</item>
+        <item name="colorAccent">@color/terracotta</item>
+        <item name="android:windowBackground">@color/cream</item>
+        <item name="android:textColorPrimary">@color/charcoal</item>
+        <item name="android:statusBarColor">@color/charcoal</item>
+    </style>
+</resources>
