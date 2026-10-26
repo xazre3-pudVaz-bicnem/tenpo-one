@@ -350,14 +350,13 @@ struct NativeTableCard: View {
                 // （2026-10-24 20:36 Ronnie「unique な形に」）
                 HStack(spacing: 6) {
                     // 卓の番号は少し大きく（人数も同じ大きさ。2026-10-24 21:48 Ronnie）
+                    // 卓の名前は白い札（箱）に入れない。数字はどれも同じ太さ（semibold）
+                    // （2026-10-27 03:28 Ronnie「table number lai sano box vitra … pardaina、sabai number haru ko font style same」）
                     Text(table.name)
-                        .font(.system(size: 23, weight: NT.strong)).monospacedDigit()
-                        // 札と席の印は色をつけない（色は下の帯だけ。2026-10-24 21:09 Ronnie「ここは色いらない」）
+                        .font(.system(size: 23, weight: .semibold)).monospacedDigit()
                         .foregroundColor(empty ? NFColor.ink2 : NFColor.ink)
                         .lineLimit(1)
-                        .padding(.horizontal, 10).frame(height: 36)
-                        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.white))
-                        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(Color.black.opacity(0.10), lineWidth: 1))
+                        .frame(height: 36)
                         // 卓の名前は切らない（狭いときは印・席の種類のほうを減らす）
                         .fixedSize()
                     // プランと予約の印（飲み放題のグラス・誕生日／記念日のプレート…）。入る数だけ（最大 3）。
@@ -397,7 +396,7 @@ struct NativeTableCard: View {
                             Image(systemName: "person.2.fill").font(.system(size: 20, weight: .semibold)).foregroundColor(NFColor.ink3)
                             Text("\(o.guestCount)")
                         }
-                        .font(.system(size: 23, weight: NT.strong)).monospacedDigit().foregroundColor(NFColor.ink)
+                        .font(.system(size: 23, weight: .semibold)).monospacedDigit().foregroundColor(NFColor.ink)
                         .lineLimit(1).fixedSize()
                     }
                 }
@@ -490,8 +489,8 @@ struct NativeTableCard: View {
                             HStack(alignment: .firstTextBaseline, spacing: 8) {
                                 Spacer(minLength: 4)
                                 Text(o.guestCount > 0 ? "\(NT.yen(Int((Double(o.total) / Double(o.guestCount)).rounded())))/人" : "—/人")
-                                    .font(.system(size: 13, weight: .medium)).monospacedDigit().foregroundColor(NFColor.ink2)
-                                Text(NT.yen(o.total)).font(.system(size: 22, weight: .bold)).monospacedDigit().foregroundColor(NFColor.ink)
+                                    .font(.system(size: 13, weight: .semibold)).monospacedDigit().foregroundColor(NFColor.ink2)
+                                Text(NT.yen(o.total)).font(.system(size: 22, weight: .semibold)).monospacedDigit().foregroundColor(NFColor.ink)
                             }
                             .lineLimit(1).minimumScaleFactor(0.7)
                             .padding(.horizontal, 14)
@@ -531,8 +530,8 @@ struct NativeTableCard: View {
                     // （2026-10-27 03:11 Ronnie「wallet・ring・会計待ち same、ring yello、suruma yello paxi rato、¥ mark … same color ko square」）
                     HStack(spacing: 4) {
                         Image(systemName: info.checkout ? Self.yenSymbol : "bell.fill").font(.system(size: 12, weight: .bold))
-                        Text("\(info.count)回").font(.system(size: 12, weight: NT.strong)).monospacedDigit()
-                        Text("\(info.minutes)分").font(.system(size: 11, weight: .bold)).monospacedDigit().opacity(0.9)
+                        Text("\(info.count)回").font(.system(size: 12, weight: .semibold)).monospacedDigit()
+                        Text("\(info.minutes)分").font(.system(size: 11, weight: .semibold)).monospacedDigit().opacity(0.9)
                     }
                     .foregroundColor(Self.padCallInk(info))
                     .padding(.horizontal, 9).frame(height: 26)
@@ -700,7 +699,7 @@ struct NativeTableCard: View {
             Spacer(minLength: 4)
             HStack(alignment: .firstTextBaseline, spacing: 4) {
                 Image(systemName: "hourglass").font(.system(size: 15, weight: .semibold))
-                Text(clock).font(.system(size: 24, weight: NT.strong)).monospacedDigit()
+                Text(clock).font(.system(size: 24, weight: .semibold)).monospacedDigit()
             }
             .foregroundColor(mins < 0 ? NFColor.danger : NFColor.royal)
         }
@@ -720,7 +719,7 @@ struct NativeTableCard: View {
             let alert = since >= 30
             HStack(alignment: .firstTextBaseline, spacing: 3) {
                 Text("最終注文から").font(.system(size: 11, weight: .semibold))
-                Text("\(since)").font(.system(size: 16, weight: NT.strong)).monospacedDigit()
+                Text("\(since)").font(.system(size: 16, weight: .semibold)).monospacedDigit()
                 Text("分").font(.system(size: 11, weight: .bold))
             }
             .foregroundColor(alert ? Self.callRed : NFColor.ink2)
